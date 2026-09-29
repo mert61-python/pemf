@@ -21,23 +21,45 @@ onu SÖKEMİYOR. Yollar üretim koduyla (`utils.path_utils`) doğrulanır, kopya
 import os
 from pathlib import Path
 
+import conftest as _conftest
 import pytest
 
 
 def _gercek_kokler() -> list[Path]:
     """Korunması gereken GERÇEK makine yolları (env monkeypatch'lenmeden ÖNCEki değerler).
 
-    conftest APPDATA'yı test sırasında değiştirir; bu yüzden gerçek değeri toplama anında
-    (modül import'unda) yakalıyoruz.
+    ⚠️ D0Ö.05 (B-10.51): APPDATA'yı conftest süreç başında ezer; bu modül toplanırken
+    `os.environ["APPDATA"]` ZATEN oturum temp köküdür. Gerçek değer conftest'in ezmeden önce
+    sakladığı `_ORIJINAL_APPDATA`'dan alınır (eskiden buradan okunuyordu → sentinel temp
+    dizini izliyor, gerçek hasta dizinine yazan yeni bir yol GÖRÜNMÜYORDU).
     """
     return [k for k in _GERCEK if k is not None]
 
 
-_ham_appdata = os.environ.get("APPDATA")
+_ham_appdata = getattr(_conftest, "_ORIJINAL_APPDATA", None)
 _GERCEK = [
     Path(_ham_appdata) / "PEMF_GUI" if _ham_appdata else None,
     Path(os.path.expanduser("~")) / ".pemf_gui",
 ]
+
+
+def test_KRITIK_gercek_kok_sentineli_conftest_EZMEDEN_ONCEKI_appdata():
+    """D0Ö.05 (B-10.51): "gerçek kök" sentineli conftest'in OTURUM TEMP KÖKÜNÜ değil, conftest'in
+    APPDATA'yı ezmeden önce sakladığı GERÇEK `%APPDATA%\\PEMF_GUI`'yi izlemeli. Aksi hâlde bu
+    dosyanın bütün "gerçek dizine yazılmadı" iddiaları temp dizini ölçer; gerçek hasta DB'sine
+    yazan yeni bir yol (2026-08-08 hasarı sınıfı) GÖRÜNMEZ."""
+    import conftest as _c
+
+    oturum = Path(_c._OTURUM_IZOLE).resolve()
+    if _GERCEK[0] is not None:
+        assert not _GERCEK[0].resolve().is_relative_to(oturum), (
+            f"'gerçek kök' sentineli conftest'in OTURUM TEMP kökünde: {_GERCEK[0]} — gerçek dizin izlenmiyor (kör)"
+        )
+    assert hasattr(_c, "_ORIJINAL_APPDATA"), "conftest APPDATA'nın ezilmeden önceki değerini SAKLAMIYOR"
+    beklenen = Path(_c._ORIJINAL_APPDATA) / "PEMF_GUI" if _c._ORIJINAL_APPDATA else None
+    assert _GERCEK[0] == beklenen, (
+        f"sentinel conftest'in sakladığı gerçek değerden türemiyor: {_GERCEK[0]} != {beklenen}"
+    )
 
 
 def test_izolasyon_yururlukte():

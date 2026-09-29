@@ -44,6 +44,10 @@ if str(_BACKEND_KOKU) not in sys.path:
 # (Regresyonu `test_veri_dizini_izolasyonu.py` kilitliyor.)
 _OTURUM_IZOLE = Path(tempfile.mkdtemp(prefix="pemf_test_veri_"))
 (_OTURUM_IZOLE / "PEMF_GUI").mkdir(parents=True, exist_ok=True)
+# ⚠️ D0Ö.05 (B-10.51): ezilmeden ÖNCEKİ gerçek değer saklanır — `test_veri_dizini_izolasyonu.py`
+# "gerçek kök" sentinelini BURADAN türetir. Test modülü toplanırken APPDATA ZATEN ezilmiştir;
+# oradan okunan değer oturum temp kökünü gösterir ve sentinel gerçek hasta dizinini GÖRMEZ.
+_ORIJINAL_APPDATA = os.environ.get("APPDATA")
 os.environ["PEMF_DATA_DIR"] = str(_OTURUM_IZOLE)
 os.environ["APPDATA"] = str(_OTURUM_IZOLE)
 # ⚠️ DENETİM 2026-08-28 #02: `device_registry_secret` artık VERİ KÖKÜNÜN DIŞINDA, makine
