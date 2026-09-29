@@ -235,12 +235,58 @@ def _teyitsiz_uyarilari(uyarilar):
     return [m for m, _sev in uyarilar if "DOĞRULANAMADI" in m]
 
 
+class _TurBitti(BaseException):
+    """Süre-watchdog döngüsünü tek tur sonra durdurur (BaseException: döngünün `except Exception`ı yakalamaz)."""
+
+
+def _watchdog_tek_tur(api, monkeypatch, seans: dict) -> dict:
+    """Süresi dolmuş seansı kur, süre-watchdog döngüsünü TEST THREAD'İNDE TEK TUR koştur, sonraki hâli döndür.
+
+    ⚠️ D0Ö.10 (B-10.104): bu testler eskiden `with TestClient` lifespan'ıyla GERÇEK `session-watchdog`
+    daemon'ını başlatıp beklerdi; o daemon süreç sonuna dek yaşayıp SONRAKİ testlerin seanslarını
+    durdurabiliyordu. Artık conftest lifespan'ın arka plan başlatıcısını engelliyor; aynı üretim döngüsü
+    burada sınırlı turla koşar (`sleep` yalnız bu thread'de kesilir)."""
+    import threading
+    import time as _time
+
+    ana = threading.current_thread()
+    gercek_uyku = _time.sleep
+
+    def _uyku(sn):
+        if threading.current_thread() is ana:
+            raise _TurBitti
+        return gercek_uyku(sn)
+
+    with api._session_lock:
+        api._active_session.clear()
+        api._active_session.update(seans)
+    monkeypatch.setattr(_time, "sleep", _uyku)  # watchdog `import time as _t` → `_t.sleep` buraya düşer
+    try:
+        with pytest.raises(_TurBitti):
+            api._session_duration_watchdog()
+    finally:
+        monkeypatch.setattr(_time, "sleep", gercek_uyku)
+    with api._session_lock:
+        return dict(api._active_session)
+
+
+def _suresi_dolmus(session_id: str) -> dict:
+    import time as _t
+
+    return {
+        "is_active": True,
+        "session_id": session_id,
+        "coil_ids": sorted(TUM_ESP),
+        "duration_minutes": 1,
+        "start_time": _t.time() - 120,  # süresi çoktan dolmuş
+        "db_session_id": None,
+    }
+
+
 def test_KRITIK_sure_watchdog_teyitsiz_stopta_operatoru_uyarir(api, monkeypatch):
     """Broker ölüyken seans SÜRE DOLARAK biterse: watchdog STOP'ları düşer, seans 'bitti'
     görünür, bobinler ESP'de kendi süresi bitene dek enerjili kalabilir. Operatör AÇIKÇA
     uyarılmalı — /session/stop yolundaki [1.1] düzeltmesinin watchdog ayağı."""
-    import time as _t
-
     uyarilar: list = []
     monkeypatch.setattr(api, "_mqtt_publish", lambda *a, **k: False)  # broker ölü
     monkeypatch.setattr(api.state, "hardware", None)
@@ -248,34 +294,15 @@ def test_KRITIK_sure_watchdog_teyitsiz_stopta_operatoru_uyarir(api, monkeypatch)
 
     with api._session_lock:
         eski = dict(api._active_session)
-    from fastapi.testclient import TestClient as _TC
-
     try:
-        with _TC(api.app):  # lifespan → background threads (watchdog dahil)
-            with api._session_lock:
-                api._active_session.clear()
-                api._active_session.update(
-                    {
-                        "is_active": True,
-                        "session_id": "wd_teyitsiz",
-                        "coil_ids": sorted(TUM_ESP),
-                        "duration_minutes": 1,
-                        "start_time": _t.time() - 120,  # süresi çoktan dolmuş
-                        "db_session_id": None,
-                    }
-                )
-            bulundu = []
-            for _ in range(40):  # watchdog 1 sn'de bir bakar → ~4 sn tavan
-                _t.sleep(0.1)
-                bulundu = _teyitsiz_uyarilari(uyarilar)
-                if bulundu:
-                    break
-            assert bulundu, (
-                f"süre-watchdog teyitsiz STOP'ta operatörü uyarmadı (uyarilar={uyarilar!r}) — "
-                "broker ölüyken 'süre doldu' bitişi sessizce 'bitti' görünür"
-            )
-            # FAZ 4: uyari, kapsamdaki ESP bobinlerini adiyla saymali (elle 6/7 DEGIL).
-            assert all(str(c) in bulundu[0] for c in TUM_ESP), f"hangi bobinler olduğu söylenmiyor: {bulundu[0]!r}"
+        _watchdog_tek_tur(api, monkeypatch, _suresi_dolmus("wd_teyitsiz"))
+        bulundu = _teyitsiz_uyarilari(uyarilar)
+        assert bulundu, (
+            f"süre-watchdog teyitsiz STOP'ta operatörü uyarmadı (uyarilar={uyarilar!r}) — "
+            "broker ölüyken 'süre doldu' bitişi sessizce 'bitti' görünür"
+        )
+        # FAZ 4: uyari, kapsamdaki ESP bobinlerini adiyla saymali (elle 6/7 DEGIL).
+        assert all(str(c) in bulundu[0] for c in TUM_ESP), f"hangi bobinler olduğu söylenmiyor: {bulundu[0]!r}"
     finally:
         with api._session_lock:
             api._active_session.clear()
@@ -284,8 +311,6 @@ def test_KRITIK_sure_watchdog_teyitsiz_stopta_operatoru_uyarir(api, monkeypatch)
 
 def test_KARSIT_KANIT_sure_watchdog_teyitli_stopta_uyari_yok(api, monkeypatch):
     """Mutlu yol: publish'ler doğrulanıyor → teyitsizlik uyarısı YOK (alarm yorgunluğu üretme)."""
-    import time as _t
-
     uyarilar: list = []
     monkeypatch.setattr(api, "_mqtt_publish", lambda *a, **k: True)
     monkeypatch.setattr(api.state, "hardware", None)  # seans yalnız ESP bobinli
@@ -293,33 +318,10 @@ def test_KARSIT_KANIT_sure_watchdog_teyitli_stopta_uyari_yok(api, monkeypatch):
 
     with api._session_lock:
         eski = dict(api._active_session)
-    from fastapi.testclient import TestClient as _TC
-
     try:
-        with _TC(api.app):
-            with api._session_lock:
-                api._active_session.clear()
-                api._active_session.update(
-                    {
-                        "is_active": True,
-                        "session_id": "wd_teyitli",
-                        "coil_ids": sorted(TUM_ESP),
-                        "duration_minutes": 1,
-                        "start_time": _t.time() - 120,
-                        "db_session_id": None,
-                    }
-                )
-            durdu = False
-            for _ in range(40):
-                _t.sleep(0.1)
-                with api._session_lock:
-                    if not api._active_session.get("is_active"):
-                        durdu = True
-                        break
-            assert durdu, "watchdog süresi dolan seansı durdurmadı"
-            assert not _teyitsiz_uyarilari(uyarilar), (
-                f"teyitli durdurma YANLIŞ teyitsizlik uyarısı üretti: {uyarilar!r}"
-            )
+        sonra = _watchdog_tek_tur(api, monkeypatch, _suresi_dolmus("wd_teyitli"))
+        assert not sonra.get("is_active"), "watchdog süresi dolan seansı durdurmadı"
+        assert not _teyitsiz_uyarilari(uyarilar), f"teyitli durdurma YANLIŞ teyitsizlik uyarısı üretti: {uyarilar!r}"
     finally:
         with api._session_lock:
             api._active_session.clear()
