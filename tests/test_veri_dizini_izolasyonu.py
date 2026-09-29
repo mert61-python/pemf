@@ -19,10 +19,15 @@ onu SÖKEMİYOR. Yollar üretim koduyla (`utils.path_utils`) doğrulanır, kopya
 """
 
 import os
+import sys
 from pathlib import Path
 
-import conftest as _conftest
 import pytest
+
+#: pytest'in YÜKLEDİĞİ conftest (`import conftest` DEĞİL: başka bir içe aktarma kipinde ikinci bir kopya
+#: yaratır, bütün modül-düzeyi yan etkileri yeniden koşturur ve kopya-2'nin "orijinal" APPDATA'sı
+#: kopya-1'in temp kökü olurdu → sentinel sessizce kör). Yoksa meta-test KIRMIZI olur.
+_conftest = sys.modules.get("conftest")
 
 
 def _gercek_kokler() -> list[Path]:
@@ -48,18 +53,31 @@ def test_KRITIK_gercek_kok_sentineli_conftest_EZMEDEN_ONCEKI_appdata():
     APPDATA'yı ezmeden önce sakladığı GERÇEK `%APPDATA%\\PEMF_GUI`'yi izlemeli. Aksi hâlde bu
     dosyanın bütün "gerçek dizine yazılmadı" iddiaları temp dizini ölçer; gerçek hasta DB'sine
     yazan yeni bir yol (2026-08-08 hasarı sınıfı) GÖRÜNMEZ."""
-    import conftest as _c
-
+    _c = _conftest
+    assert _c is not None and Path(_c.__file__).resolve() == (Path(__file__).parent / "conftest.py").resolve(), (
+        "pytest'in yüklediği tests/conftest.py bulunamadı (içe aktarma kipi değişmiş olabilir) — sentinel ölçülemez"
+    )
     oturum = Path(_c._OTURUM_IZOLE).resolve()
     if _GERCEK[0] is not None:
         assert not _GERCEK[0].resolve().is_relative_to(oturum), (
             f"'gerçek kök' sentineli conftest'in OTURUM TEMP kökünde: {_GERCEK[0]} — gerçek dizin izlenmiyor (kör)"
         )
+        # Kopyadan bağımsız: hangi conftest kopyası olursa olsun hiçbir oturum temp kökü gerçek sayılmaz.
+        assert not any(p.startswith("pemf_test_veri_") for p in _GERCEK[0].parts), (
+            f"sentinel bir test oturumu temp kökünü izliyor: {_GERCEK[0]}"
+        )
     assert hasattr(_c, "_ORIJINAL_APPDATA"), "conftest APPDATA'nın ezilmeden önceki değerini SAKLAMIYOR"
+    if os.name == "nt":
+        # Windows'ta APPDATA her zaman tanımlıdır; boş/None değer sentineli SESSİZCE düşürürdü.
+        assert _c._ORIJINAL_APPDATA, "conftest'in sakladığı APPDATA BOŞ — gerçek kök sentineli sessizce düştü"
     beklenen = Path(_c._ORIJINAL_APPDATA) / "PEMF_GUI" if _c._ORIJINAL_APPDATA else None
     assert _GERCEK[0] == beklenen, (
         f"sentinel conftest'in sakladığı gerçek değerden türemiyor: {_GERCEK[0]} != {beklenen}"
     )
+    # Tüketiciler de aynı değeri görmeli (davranış testleri `_gercek_kokler()`/`_ham_appdata`'yı kullanır).
+    assert _ham_appdata == _c._ORIJINAL_APPDATA, f"_ham_appdata ({_ham_appdata!r}) conftest'in değerinden türemiyor"
+    if beklenen is not None:
+        assert beklenen in _gercek_kokler(), f"gerçek APPDATA kökü izlenen kökler arasında YOK: {_gercek_kokler()}"
 
 
 def test_izolasyon_yururlukte():
@@ -149,6 +167,14 @@ def test_KRITIK_undo_sonrasi_sir_yazimi_gercek_dizine_GITMEZ(monkeypatch, tmp_pa
 
     monkeypatch.setenv("PEMF_ORNEK_DEGISKEN", "1")
     monkeypatch.undo()
+
+    # ⚠️ YAZIMDAN ÖNCE DUR (inceleme bulgusu): sentinel artık GERÇEK dizini izliyor; izolasyon gerilerse
+    # aşağıdaki `set_secret` sahibin GERÇEK `pemf_secrets.json`'undaki at-rest anahtarını test değeriyle
+    # EZER — kırmızı gelmeden önce hasar olurdu. Yol gerçek bir köke çözülüyorsa hiç yazılmaz.
+    yazilacak = secrets_path()
+    for g in gercekler:
+        if str(yazilacak).lower().startswith(str(g).lower()):
+            pytest.fail(f"undo() sonrası sır yolu GERÇEK veri dizinine çözüldü ({yazilacak}) — YAZILMADAN durduruldu")
 
     set_secret("sqlcipher_key", "TEST-ANAHTARI-DISKE-YAZILMAMALI")
     yazilan = secrets_path()
