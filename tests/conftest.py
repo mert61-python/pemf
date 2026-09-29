@@ -96,11 +96,38 @@ def pytest_report_header(config):
     return None
 
 
+def pytest_configure(config):
+    # Başlık `-q`/`--no-header` altında basılmaz → silme uyarı özetinde de görünsün (her kipte).
+    if _PEMF_SIMULATE_DISARIDAN:
+        config.issue_config_time_warning(
+            pytest.PytestConfigWarning(
+                f"dis ortamdan PEMF_SIMULATE={_PEMF_SIMULATE_DISARIDAN!r} geldi; conftest SILDI (D0O.11)"
+            ),
+            stacklevel=2,
+        )
+
+
+def _canli_hw_sim() -> list:
+    """Adı `hw-sim` olan YA DA hedefi ürünün sanal donanım döngüsü olan canlı thread'ler (çıpa ada değil
+    GERÇEK çağrıya: döngü başka adla başlatılsa da görünür)."""
+    hedef = getattr(sys.modules.get("servers.api_server"), "_hardware_simulation_loop", None)
+    return [
+        t.name
+        for t in threading.enumerate()
+        if t.name == "hw-sim" or (hedef is not None and getattr(t, "_target", None) is hedef)
+    ]
+
+
 @pytest.fixture(autouse=True)
 def _pemf_simulate_sizmaz():
+    # Kurulumda zaten varsa suç BU testin değil: toplama (modül düzeyi yazım) ya da önceki bir kapsamlı
+    # fixture bıraktı — ayrı iletiyle bildir (teşhis ilgisiz testin üstüne kalmasın).
+    once = os.environ.pop("PEMF_SIMULATE", None)
+    if once is not None:
+        pytest.fail(f"PEMF_SIMULATE={once!r} bu test BAŞLAMADAN vardı — toplama/önceki bir fixture bıraktı (D0Ö.11)")
     yield
     kalan = os.environ.pop("PEMF_SIMULATE", None)  # sonraki testlere SIZMASIN
-    sim = [t.name for t in threading.enumerate() if t.name == "hw-sim"] if not _HW_SIM_BILDIRILDI else []
+    sim = _canli_hw_sim() if not _HW_SIM_BILDIRILDI else []
     if sim:
         _HW_SIM_BILDIRILDI.append(sim)  # daemon durdurulamaz: bir kez bildir, zincirleme kırmızı üretme
     if kalan is not None or sim:

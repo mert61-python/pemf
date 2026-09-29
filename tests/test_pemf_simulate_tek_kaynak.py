@@ -39,7 +39,8 @@ import pytest
 _TESTLER = Path(__file__).resolve().parent
 _BU_DOSYA = "tests/test_pemf_simulate_tek_kaynak.py"
 _SONDA_ORTAMI = "D0O11_SIZINTI_SONDASI"
-#: Anahtarı ilk argüman (ya da anahtar sözcük değeri) olarak alan env yazıcıları.
+#: Env yazıcıları: HERHANGİ bir konumsal argümanı ya da anahtar sözcük değeri `PEMF_SIMULATE` ise sayılır
+#: (fail-closed: `setdefault('X', 'PEMF_SIMULATE')` ya da bir env kopyasında `.pop('PEMF_SIMULATE')` da).
 _YAZICILAR = ("setdefault", "pop", "__setitem__", "__delitem__", "putenv", "unsetenv", "setenv", "delenv")
 
 
@@ -177,19 +178,24 @@ def test_KARSIT_KANIT_tarayici_ice_aktarma_anini_GORUR_fonksiyon_govdesini_SAYMA
         "    pass\n"
         "g = lambda x=os.environ.pop('PEMF_SIMULATE', None): os.environ.setdefault('PEMF_SIMULATE', '1')\n"
         "os.environ.update({'BASKA': '1'})\n"
+        "os.unsetenv('PEMF_SIMULATE')\n"
+        "pytest.MonkeyPatch().delenv('PEMF_SIMULATE')\n"
+        "os.environ.update(dict({'PEMF_SIMULATE': '1'}))\n"
+        "h2 = lambda: os.environ.setdefault('PEMF_SIMULATE', '1')\n"
     )
-    beklenen = [2, 4, 6, 9, 10, 12, 15, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 30]
+    # 35: varsayılansız lambda — GÖVDESİ tanım anında koşmaz, sayılmaz (lambda dalı ayrı satırda sınanır).
+    beklenen = [2, 4, 6, 9, 10, 12, 15, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 30, 32, 33, 34]
     assert _modul_duzeyi_yazimlar(ast.parse(kaynak)) == beklenen
 
 
-def _pytest_alt_sureci(dugum: str, ek_env: dict) -> subprocess.CompletedProcess:
+def _pytest_alt_sureci(dugumler: list, ek_env: dict) -> subprocess.CompletedProcess:
     env = dict(os.environ)
     env.pop("PYTEST_ADDOPTS", None)
     env.update(ek_env)
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
     return subprocess.run(
-        [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-p", "no:xdist", "-q", "-rE", dugum],
+        [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-p", "no:xdist", "-q", "-rE", *dugumler],
         cwd=str(_TESTLER.parent),
         env=env,
         capture_output=True,
@@ -206,11 +212,42 @@ def test_SONDA_PEMF_SIMULATE_birakir():
     os.environ["PEMF_SIMULATE"] = "1"
 
 
+@pytest.mark.skipif(os.environ.get(_SONDA_ORTAMI) != "1", reason="yalnız sızıntı kapısının alt sürecinde koşar")
+def test_SONDA_ardindan_PEMF_SIMULATE_YOK():
+    """Bekçinin KAPSAMINI pinler: sızıntı SONRAKİ teste taşınmamalı. Oturum/modül kapsamlı bir bekçi
+    (mutant) hatayı son öğenin sökümüne yazar; bu test o zaman '1' görür ve düşer."""
+    assert os.environ.get("PEMF_SIMULATE") is None, "önceki testin bıraktığı PEMF_SIMULATE SIZDI"
+
+
+@pytest.mark.skipif(os.environ.get(_SONDA_ORTAMI) != "hw", reason="yalnız hw-sim kapısının alt sürecinde koşar")
+def test_SONDA_hw_sim_BASKA_ADLA_birakir():
+    """hw-sim kolunun sondası: ürünün sanal donanım döngüsü BAŞKA ADLI bir daemon'da başlatılır ve
+    bırakılır (çıpa ada değil hedefe). Döngü yalnız bellek içi canlı durum yazar; alt süreç bitince ölür."""
+    import threading
+
+    from servers import api_server
+
+    threading.Thread(target=api_server._hardware_simulation_loop, daemon=True, name="sonda-sim").start()
+
+
 def test_KRITIK_calisma_aninda_birakilan_PEMF_SIMULATE_testi_KIRMIZI_yapar():
-    r = _pytest_alt_sureci(f"{_BU_DOSYA}::test_SONDA_PEMF_SIMULATE_birakir", {_SONDA_ORTAMI: "1"})
-    cikti = (r.stdout or "")[-3000:] + (r.stderr or "")[-1500:]
-    assert r.returncode != 0 and "1 error" in (r.stdout or ""), (
-        f"env'e PEMF_SIMULATE bırakan sonda testi KIRMIZI olmadı — conftest sızıntı bekçisi kör (rc={r.returncode}):\n"
-        f"{cikti}"
+    r = _pytest_alt_sureci(
+        [f"{_BU_DOSYA}::test_SONDA_PEMF_SIMULATE_birakir", f"{_BU_DOSYA}::test_SONDA_ardindan_PEMF_SIMULATE_YOK"],
+        {_SONDA_ORTAMI: "1"},
     )
-    assert "çalışma-anı sızıntısı" in (r.stdout or ""), f"hata sızıntı bekçisinin iletisi değil:\n{cikti}"
+    cikti = (r.stdout or "")[-3000:] + (r.stderr or "")[-1500:]
+    out = r.stdout or ""
+    assert r.returncode != 0 and "2 passed" in out and "1 error" in out, (
+        f"sızıntı bekçisi kör ya da KAPSAMI yanlış (sızıntı sonraki teste taşındı) (rc={r.returncode}):\n{cikti}"
+    )
+    assert "ERROR at teardown of test_SONDA_PEMF_SIMULATE_birakir" in out, f"hata sızdıran teste yazılmadı:\n{cikti}"
+    assert "çalışma-anı sızıntısı" in out, f"hata sızıntı bekçisinin iletisi değil:\n{cikti}"
+
+
+def test_KRITIK_canli_hw_sim_BASKA_ADLA_da_KIRMIZI():
+    r = _pytest_alt_sureci([f"{_BU_DOSYA}::test_SONDA_hw_sim_BASKA_ADLA_birakir"], {_SONDA_ORTAMI: "hw"})
+    cikti = (r.stdout or "")[-3000:] + (r.stderr or "")[-1500:]
+    out = r.stdout or ""
+    assert r.returncode != 0 and "1 error" in out and "sonda-sim" in out, (
+        f"başka adla bırakılan canlı hw-sim döngüsü KIRMIZI olmadı — bekçi ada pinli (rc={r.returncode}):\n{cikti}"
+    )

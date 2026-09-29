@@ -290,7 +290,7 @@ def _bearer_token(request: Request) -> str:
 #   hazirlik (GET)      → self-test/envanter okuma; `_islem_turu` HTTP metodunu görmediği için
 #                         listeye alınmazsa "goruntu" (1 jeton) sınıfına düşerdi
 # ⚠️ 2026-09-08: bu listede `/api/ai/pro/frame` yazıyordu — BÖYLE BİR ROTA HİÇ OLMADI. Gerçek uç
-# `/api/ai/ai_pro/frame` (ai_router.py:1756, tests/test_route_contract.py:20) → eşleşme tutmuyor,
+# `/api/ai/ai_pro/frame` (ai_router.py'deki `@ai_router.post` rotası, tests/test_route_contract.py) → eşleşme tutmuyor,
 # her kare "goruntu" sınıfına düşüyordu. FREE_MODE=true bunu gizliyordu; ücretlendirme açılsaydı
 # 5 jetonluk seans kare başına ücretlenirdi. Ölü girdi düzeltildi (test de gerçek yola pinlendi).
 _SERBEST_AI_UCLARI: frozenset = frozenset(

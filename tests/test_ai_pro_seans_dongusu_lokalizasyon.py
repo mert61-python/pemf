@@ -15,7 +15,7 @@ lokalizasyon hiç çalışmamıştır. Klinikte etkisi: onaylı AI Pro seansı "
 UYGULANMAZ.
 
 NEDEN MEVCUT TESTLER YAKALAMADI: AI Pro süitindeki mock'lar `_localize_organ`ı 6'lı
-(test_ai_pro_safety.py:180) ya da 7'li (test_kalan_regression_gaps.py) SAHTE tuple ile
+(test_ai_pro_safety.py::test_target_lost_stops_coils_after_streak) ya da 7'li (test_kalan_regression_gaps.py) SAHTE tuple ile
 değiştiriyordu — 7 değer 7 isme sorunsuz açılır, kusur maskelenir. Bu dosya sahte uzunluk
 KULLANMAZ: tuple'ı GERÇEK `_extract_organ_target` üretir, böylece imza yarın 9 elemana çıksa da
 kapı doğru kalır (yapısal çıpa kırılganlığı dersi).
