@@ -65,14 +65,19 @@ os.environ["PEMF_DEVICE_IDENTITY_DIR"] = str(_OTURUM_IZOLE / "makine_kimligi")
 # bu satır çift emniyet + testlerin startup davranışını deterministik kılar).
 os.environ.setdefault("PEMF_SCRATCH_WARMUP", "0")
 
-# ⚠️ D0Ö.02 (B-3.6) — GERÇEK KİMLİK KASASI SÜİTTE OKUNMAZ/YAZILMAZ.
+# ⚠️ D0Ö.02 (B-3.6) — GERÇEK KİMLİK KASASI SÜİTTE python-keyring ÜZERİNDEN OKUNMAZ/YAZILMAZ.
 # ÖLÇÜLDÜ: tam süit gerçek Windows kasasına 1603 okuma yapıyordu ve sahibin kasasında
 # `PEMF_GUI/sqlcipher_key` VAR → gerçek at-rest anahtarı test DB'lerine göçüyor, kopyaları
 # %TEMP%'te birikiyor, sonuçlar makinenin kasa durumuna bağlı kalıyordu (B-3.84 bunun kurbanıydı).
 # (1) Süreç-geneli arka uç null: env + `set_keyring` birlikte — env TEK BAŞINA YETMEZ, keyring daha
-#     önce import edilip arka ucunu seçtiyse env'e bir daha bakmaz. Alt süreçler env'i miras alır.
+#     önce import edilip arka ucunu seçtiyse env'e bir daha bakmaz. ⚠️ ENV SATIRI TAŞIYICIDIR:
+#     conftest YÜKLEMEYEN alt süreçler (ör. test_recovery_reachable'ın `backend_service` koşumu)
+#     arka ucu YALNIZ miras aldıkları env'den seçer.
 # (2) Gerçek Windows arka ucu SAYAN bir engelle sarılır: bir test kendi arka ucunu kurup kasaya
 #     uzanırsa çağrı düşer, `_GERCEK_KASA_CAGRILARI`'na yazılır ve o test kırmızı olur.
+# ⚠️ KAPSAM: yalnız python-keyring kanalı. Kasaya `cmdkey` ALT SÜRECİYLE dokunan teardown testleri
+#    (test_teardown_kimlik_dogrulama.py, test_teardown_system_kasasi.py — yalnız geçici PEMF_GATE_*
+#    kayıtları yazıp siler, kasayı listeler) bu bloğun DIŞINDADIR; açık bulgu (DUZELTME-D0O.md).
 # Kapı: tests/test_kasa_yalitimi.py
 os.environ["PYTHON_KEYRING_BACKEND"] = "keyring.backends.null.Keyring"
 _GERCEK_KASA_CAGRILARI: list = []
