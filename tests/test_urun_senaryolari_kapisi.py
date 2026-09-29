@@ -172,3 +172,108 @@ def test_KARSIT_KANIT_calisma_alani_DEPO_AGACINDA_DEGIL():
             )
             return
     raise AssertionError("CALISMA atamasi bulunamadi — kapi bayatlamis")
+
+
+# ── D0Ö.09 (B-10.31 · B-10.77) — EXE ortamı ve anahtar deposu denetimi ────────────────────────────
+# ⚠️ Bu kapılar da EXE BAŞLATMAZ ve GERÇEK kasayı OKUMAZ: Popen, kasa özeti ve cmdkey alt süreci sahtedir.
+
+
+def test_KRITIK_EXE_ortami_cihaz_kimligi_ve_ProgramData_SCRATCH_fw_ve_hotspot_KAPALI(tmp_path, monkeypatch):
+    """B-10.31: 21 EXE açılışı GERÇEK ProgramData cihaz sırrını (`PEMF_System/device_identity.json`) yazıyor ya
+    da okuyordu; oto-firmware ve hotspot açılışta koşulsuz başlıyordu. `kostur` EXE'ye kimlik deposunu ve
+    ProgramData'yı scratch altında, oto-firmware ve hotspot'u KAPALI vermeli."""
+    from exe_kapisi_surucusu import kostur_ortami
+
+    monkeypatch.setenv("PROGRAMDATA", str(tmp_path / "GERCEK_PROGRAMDATA"))
+    env = kostur_ortami(tmp_path, monkeypatch)
+    for ad in ("PEMF_DEVICE_IDENTITY_DIR", "PROGRAMDATA"):
+        deger = env.get(ad, "")
+        assert deger and "GERCEK_" not in deger and Path(deger).resolve().is_relative_to(tmp_path.resolve()), (
+            f"urun_senaryolari EXE'si {ad}={deger!r} ile açılıyor — gerçek makine cihaz sırrına dokunur (B-10.31)"
+        )
+    assert env.get("PEMF_FW_AUTO_UPDATE") == "0", f"PEMF_FW_AUTO_UPDATE={env.get('PEMF_FW_AUTO_UPDATE')!r}"
+    assert env.get("PEMF_HOTSPOT") == "0", f"PEMF_HOTSPOT={env.get('PEMF_HOTSPOT')!r}"
+
+
+def _main_sahteli(tmp_path, monkeypatch):
+    """`main()`i ölçümlerini koşturmadan çağırmak için: nöbet, tohum ve gruplar boş; SONUCLAR boş."""
+    import sys
+
+    from exe_kapisi_surucusu import urun_senaryolari_modulu
+
+    us = urun_senaryolari_modulu()
+    monkeypatch.setattr(us, "bayat_ikili_nobeti", lambda: None)
+    monkeypatch.setattr(us, "CALISMA", tmp_path / "calisma")
+    monkeypatch.setattr(us, "tohum_uret", lambda: True)
+    for grup in ("grup_a", "grup_b", "grup_c", "grup_d"):
+        monkeypatch.setattr(us, grup, lambda: None)
+    monkeypatch.setattr(us, "SONUCLAR", [])
+    monkeypatch.setattr(sys, "argv", ["urun_senaryolari.py", "B"])
+    return us
+
+
+def test_KRITIK_anahtar_deposu_DEGISTIYSE_cikis_SIFIR_DEGIL(tmp_path, monkeypatch):
+    """B-10.77: izolasyon denetimi kaydın EZİLMESİNİ göremiyordu (yalnız SAYI karşılaştırıyordu) ve
+    'DEGISTI' dese bile exit 0 dönüyordu. Aynı SAYIDA ama DEĞERİ değişmiş kasa sahtelenir → main() 1."""
+    from exe_kapisi_surucusu import AltSurecVekili
+
+    us = _main_sahteli(tmp_path, monkeypatch)
+    ozetler = iter([(2, "once-ozeti"), (2, "sonra-ozeti")])  # aynı SAYI, farklı DEĞER (bir kayıt ezildi)
+    monkeypatch.setattr(us, "_anahtar_deposu_ozeti", lambda: next(ozetler), raising=False)
+
+    class _AyniSayi:  # eski kod yolu (powershell cmdkey | say) — gerçek kasa LİSTELENMEZ
+        stdout, stderr, returncode = "2\n", "", 0
+
+    monkeypatch.setattr(us, "subprocess", AltSurecVekili(run=lambda *a, **k: _AyniSayi()))
+    assert us.main() == 1, "anahtar deposu kaydı EZİLDİ (aynı sayı, farklı değer) ama betik exit 0 döndü (B-10.77)"
+
+
+def test_KARSIT_KANIT_anahtar_deposu_DEGISMEDIYSE_cikis_SIFIR(tmp_path, monkeypatch):
+    """Karşıt-kanıt: kasa değişmediyse (ve senaryo yoksa) main() 0 — kapı her durumda 1 döndürmüyor."""
+    from exe_kapisi_surucusu import AltSurecVekili
+
+    us = _main_sahteli(tmp_path, monkeypatch)
+    monkeypatch.setattr(us, "_anahtar_deposu_ozeti", lambda: (2, "ayni-ozet"), raising=False)
+
+    class _AyniSayi:
+        stdout, stderr, returncode = "2\n", "", 0
+
+    monkeypatch.setattr(us, "subprocess", AltSurecVekili(run=lambda *a, **k: _AyniSayi()))
+    assert us.main() == 0
+
+
+def test_KRITIK_anahtar_deposu_ozeti_EZILMIS_kaydi_GORUR(monkeypatch):
+    """`_anahtar_deposu_ozeti` (sayı, özet) döndürür; aynı sayıda ama DEĞERİ değişmiş kayıt özeti DEĞİŞTİRİR.
+    Yalnız PEMF_GUI kayıtları okunur. cmdkey listesi ve CredRead SAHTEDİR — gerçek kasa okunmaz."""
+    from exe_kapisi_surucusu import AltSurecVekili, urun_senaryolari_modulu
+
+    us = urun_senaryolari_modulu()
+    liste = (
+        "Currently stored credentials:\n\n"
+        "    Target: LegacyGeneric:target=sqlcipher_key@PEMF_GUI\n    Type: Generic\n    User: sqlcipher_key\n\n"
+        "    Target: LegacyGeneric:target=patient_fernet_key@PEMF_GUI\n    Type: Generic\n\n"
+        "    Hedef: LegacyGeneric:target=baska-uygulama\n    Type: Generic\n"
+    )
+
+    class _Liste:
+        stdout, stderr, returncode = liste, "", 0
+
+    monkeypatch.setattr(us, "subprocess", AltSurecVekili(run=lambda *a, **k: _Liste()))
+    kasa = {"sqlcipher_key@PEMF_GUI": b"A", "patient_fernet_key@PEMF_GUI": b"B", "baska-uygulama": b"X"}
+    okunan = []
+
+    class _SahteCred:
+        CRED_TYPE_GENERIC = 1
+
+        @staticmethod
+        def CredRead(Type=None, TargetName=None, Flags=0):
+            okunan.append(TargetName)
+            return {"TargetName": TargetName, "CredentialBlob": kasa[TargetName], "LastWritten": "t0"}
+
+    monkeypatch.setattr(us, "_kasa_modulu", lambda: _SahteCred, raising=False)
+    sayi1, ozet1 = us._anahtar_deposu_ozeti()
+    kasa["sqlcipher_key@PEMF_GUI"] = b"EZILDI"
+    sayi2, ozet2 = us._anahtar_deposu_ozeti()
+    assert sayi1 == sayi2 == 2, (sayi1, sayi2)
+    assert ozet1 != ozet2, "aynı sayıda ama DEĞERİ değişmiş kayıt özeti DEĞİŞTİRMEDİ — ezilme görünmez"
+    assert "baska-uygulama" not in okunan, "PEMF_GUI dışındaki bir kasa kaydı OKUNDU"

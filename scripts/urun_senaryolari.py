@@ -25,8 +25,10 @@ EXE yolu: --exe, yoksa PEMF_EXE ortam degiskeni, yoksa depo ici varsayilan build
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -186,6 +188,12 @@ def kostur(veri: Path, sifreli: bool, ek: dict | None = None, sure: int = 180, s
             # COM10) bağlanıp oto-firmware ile YAKMAYA ulaşılabilirdi. 'SIM' gerçek port değil, taramaya düşmez.
             "PEMF_FW_AUTO_UPDATE": "0",
             "PEMF_STM_PORT": "SIM",
+            # ⚠️ D0Ö.09 (B-10.31): makine kapsamlı cihaz sırrı (`ProgramData\PEMF_System\device_identity.json`)
+            # veri kökünü İZLEMEZ → 21 EXE açılışı GERÇEK sırrı yazıyor/okuyordu. Makine düzeyi depolar da
+            # scratch'te (tüm senaryolara ORTAK: sahadaki gibi veri kökü değişse de makine kimliği kalır).
+            "PEMF_DEVICE_IDENTITY_DIR": str(CALISMA / "_makine" / "kimlik"),
+            "PROGRAMDATA": str(CALISMA / "_makine" / "ProgramData"),
+            "PEMF_HOTSPOT": "0",
         }
     )
     ortam.update(ek or {})
@@ -1060,6 +1068,46 @@ def grup_d() -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _kasa_modulu():
+    """Windows kimlik kasası API'si (pywin32 ya da pywin32-ctypes `win32cred`i); yoksa None.
+    ⚠️ Kasaya TEK erişim noktası — kapılar bunu sahteyle değiştirir (gerçek kasa testte OKUNMAZ)."""
+    try:
+        import win32cred  # type: ignore[import-not-found]
+
+        return win32cred
+    except Exception:
+        pass
+    try:
+        from win32ctypes.pywin32 import win32cred  # type: ignore[import-not-found]
+
+        return win32cred
+    except Exception:
+        return None
+
+
+def _anahtar_deposu_ozeti() -> tuple[int, str]:
+    """Makine anahtar deposundaki PEMF_GUI kayıtlarının (SAYI, ÖZET).
+
+    ⚠️ D0Ö.09 (B-10.77): eski denetim yalnız SAYI karşılaştırıyordu → ürün sahibin GERÇEK anahtarını
+    aynı adla EZERSE sayı değişmez ve "DEGISMEDI" yazılırdı. Özet, her kaydın hedef adı + DEĞERİNİN
+    SHA-256'sı + son yazım zamanından türetilir. ⚠️ Değer de özet de ASLA basılmaz (Ö.4-Y6)."""
+    r = subprocess.run(["cmdkey", "/list"], capture_output=True, text=True, errors="replace", timeout=30)
+    hedefler = sorted({m.group(1) for m in re.finditer(r"target=(\S+)", r.stdout or "") if "PEMF_GUI" in m.group(1)})
+    kasa = _kasa_modulu()
+    ozet = hashlib.sha256()
+    for hedef in hedefler:
+        ozet.update(hedef.encode("utf-8") + b"\0")
+        try:
+            kayit = kasa.CredRead(Type=kasa.CRED_TYPE_GENERIC, TargetName=hedef, Flags=0) if kasa else {}
+            deger = kayit.get("CredentialBlob") or b""
+            if isinstance(deger, str):
+                deger = deger.encode("utf-16-le")
+            ozet.update(hashlib.sha256(deger).digest() + str(kayit.get("LastWritten", "")).encode("utf-8"))
+        except Exception as e:  # okunamayan kayıt da özete girer: "ölçülemedi" ≠ "değişmedi"
+            ozet.update(f"<okunamadi:{type(e).__name__}>".encode("utf-8"))
+    return len(hedefler), ozet.hexdigest()
+
+
 def main() -> int:
     # ⚠️ `sys.argv[1]` YETMEZ: `--exe <yol>` once gelirse grup adi orada degildir ve
     # betik sessizce HEPSI'ni kosardi. Bayrak OLMAYAN ilk argumani al.
@@ -1084,19 +1132,10 @@ def main() -> int:
 
     # ⚠️ Anahtar zinciri `PEMF_DATA_DIR` ile IZOLE DEGIL: makine anahtar deposu (keyring)
     # okuma sirasinda ONCE gelir. Olcumden ONCE bos oldugu dogrulandi; SONRA da bakilacak —
-    # urun oraya yazarsa sahibin gercek anahtarini ezme sinifi dogar.
-    baslangic = subprocess.run(
-        [
-            "powershell",
-            "-NoProfile",
-            "-Command",
-            "cmdkey /list | Select-String -Pattern 'PEMF_GUI' | Measure-Object | % Count",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    ).stdout.strip()
-    print(f"[izolasyon] olcum ONCESI makine anahtar deposunda PEMF_GUI kaydi: {baslangic}\n")
+    # urun oraya yazarsa sahibin gercek anahtarini ezme sinifi dogar. D0Ö.09 (B-10.77): SAYI yetmez
+    # (ayni adla EZME gorunmez) → kayit DEGERININ ozeti karsilastirilir.
+    baslangic = _anahtar_deposu_ozeti()
+    print(f"[izolasyon] olcum ONCESI makine anahtar deposunda PEMF_GUI kaydi: {baslangic[0]}\n")
 
     if hangi in ("A", "HEPSI"):
         if not tohum_uret():
@@ -1110,17 +1149,7 @@ def main() -> int:
     if hangi in ("D", "HEPSI"):
         grup_d()
 
-    bitis = subprocess.run(
-        [
-            "powershell",
-            "-NoProfile",
-            "-Command",
-            "cmdkey /list | Select-String -Pattern 'PEMF_GUI' | Measure-Object | % Count",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    ).stdout.strip()
+    bitis = _anahtar_deposu_ozeti()
 
     print("\n" + "═" * 78)
     print("OZET")
@@ -1129,10 +1158,13 @@ def main() -> int:
     for kod, baslik, g, _k in SONUCLAR:
         print(f"  {'✓' if g else '⛔'}  {kod:5s} {baslik}")
     print(f"\n  {gecen}/{len(SONUCLAR)} senaryo GECTI")
+    degisti = baslangic != bitis
     print(
-        f"  [izolasyon] makine anahtar deposu: once={baslangic} sonra={bitis} "
-        f"({'DEGISMEDI' if baslangic == bitis else '⛔ DEGISTI — INCELE'})"
+        f"  [izolasyon] makine anahtar deposu: once={baslangic[0]} sonra={bitis[0]} kayit "
+        f"({'⛔ DEGISTI (sayi ya da DEGER) — INCELE' if degisti else 'DEGISMEDI'})"
     )
+    if degisti:
+        return 1  # D0Ö.09 (B-10.77): kasa degistiyse olcum GECMIS sayilmaz (sahibin anahtari ezilmis olabilir)
     return 0 if gecen == len(SONUCLAR) else 1
 
 
