@@ -182,6 +182,10 @@ def kostur(veri: Path, sifreli: bool, ek: dict | None = None, sure: int = 180, s
             "PEMF_SIMULATE": "1",
             "PEMF_ESP_ENABLED": "0",
             "PYTHONIOENCODING": "utf-8",
+            # ⚠️ D0Ö.03 (D-9.3): PEMF_SIMULATE `stm_bagli`yı ETKİLEMEZ — takılı gerçek STM'e (varsayılan
+            # COM10) bağlanıp oto-firmware ile YAKMAYA ulaşılabilirdi. 'SIM' gerçek port değil, taramaya düşmez.
+            "PEMF_FW_AUTO_UPDATE": "0",
+            "PEMF_STM_PORT": "SIM",
         }
     )
     ortam.update(ek or {})

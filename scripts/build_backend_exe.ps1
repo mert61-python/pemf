@@ -313,7 +313,21 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
     Info "AI hazırlık kapısı: üretilen EXE'de tüm AI modülleri gerçekten import ediliyor mu?"
     $gatePort = 8177
     $gateLog = Join-Path $BuildRoot "ai_hazirlik_kapisi.log"
-    $env:PEMF_SIMULATE = "1"
+    # ⚠️ D0Ö.03 (D-9.3) — GATE EXE FİRMWARE YAKAMAZ, GERÇEK STM'E BAĞLANAMAZ. Eskiden yalnız
+    # PEMF_SIMULATE=1 veriliyordu; o bayrak `stm_bagli`yı ETKİLEMEZ: build makinesinde STM takılıysa
+    # gate EXE COM10'a bağlanıp oto-firmware (varsayılan AÇIK) ile yakmaya ulaşabilirdi — yakma, bobin
+    # sürülürken MCU'yu resetler. 'SIM' gerçek bir port değil; otomatik taramaya DÜŞMEZ.
+    # Değerler blok bitince ESKİ hâline döner. Kapı: tests/test_exe_kapisi_firmware_kapali.py
+    $gateOrtam = [ordered]@{
+        PEMF_SIMULATE       = "1"
+        PEMF_FW_AUTO_UPDATE = "0"
+        PEMF_STM_PORT       = "SIM"
+    }
+    $gateOnceki = @{}
+    foreach ($ad in $gateOrtam.Keys) {
+        $gateOnceki[$ad] = [Environment]::GetEnvironmentVariable($ad, 'Process')
+        [Environment]::SetEnvironmentVariable($ad, $gateOrtam[$ad], 'Process')
+    }
     # ⚠️ --no-mosquitto-ensure: kapı yalnız HTTP uçlarını kullanıyor. Broker'ı başlatırsa,
     # aşağıdaki `finally` yalnız backend'i öldürdüğü için YETİM kalır ve SONRAKİ build'i
     # DLL kilidiyle düşürür (bkz. build başındaki yetim temizliği).
@@ -393,7 +407,12 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
             Warn "Kapı sonrası yetim süreç durduruluyor: $($c.ProcessName) (PID $($c.Id))"
             try { Stop-Process -Id $c.Id -Force -EA 0 } catch { }
         }
-        Remove-Item Env:PEMF_SIMULATE -EA 0
+        foreach ($ad in $gateOnceki.Keys) {
+            # ⚠️ $null'ı SetEnvironmentVariable'a VERME: PowerShell onu "" yapar ve değişken BOŞ olarak
+            # build sürecinde KALIR (ölçüldü). Blok öncesinde yoksa SİL.
+            if ($null -eq $gateOnceki[$ad]) { Remove-Item "Env:$ad" -EA 0 }
+            else { [Environment]::SetEnvironmentVariable($ad, $gateOnceki[$ad], 'Process') }
+        }
     }
 }
 
