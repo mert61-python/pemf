@@ -24,7 +24,6 @@ SÖZLEŞME:
 from __future__ import annotations
 
 import importlib
-import os
 import sys
 from pathlib import Path
 
@@ -56,7 +55,6 @@ class _Istek:
 
 def test_KRITIK_jeton_gate_ai_router_bagimliligi():
     """Modül yazılmış ama bağlanmamışsa bayrak açılınca hiçbir şey olmaz (sessiz no-op tuzağı)."""
-    os.environ.pop("PEMF_SIMULATE", None)
     from servers.ai_router import ai_router
 
     adlar = [getattr(d.dependency, "__name__", "") for d in (ai_router.dependencies or [])]
@@ -91,7 +89,7 @@ def test_KRITIK_uc_eslemesi_belgeyle_AYNI(jeton):
     esle = jeton._islem_turu
     assert esle("/api/ai/pro/stop") is None, "pro/stop kapılanamaz (seans durdurma = güvenlik sınıfı)"
     # ⚠️ GERÇEK rota (2026-09-08): serbest listede `/api/ai/pro/frame` yazıyordu ama böyle bir uç
-    # HİÇ olmadı; canlı rota `/api/ai/ai_pro/frame` (test_route_contract.py:22). Ölü girdi her
+    # HİÇ olmadı; canlı rota `/api/ai/ai_pro/frame` (test_route_contract.py:20). Ölü girdi her
     # kareyi "goruntu" sınıfına düşürüyordu (FREE_MODE gizliyordu). Bu satır artık ÜRETİM yolunu
     # ölçer — yol yanlış yazılırsa KIRMIZI.
     assert esle("/api/ai/ai_pro/frame") is None, "ai_pro/frame seans-içi akış — kare başına ücret olmaz"

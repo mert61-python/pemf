@@ -2,7 +2,7 @@
 """D0Ö.07 (B-10.9) KAPISI — test süiti AĞA ÇIKMAZ; E-stop bulut aynası süitte gerçek broker'a uzanmaz.
 
 ARIZA (ölçüldü, DENETIM-10 B-10.9): `data/cloud_mqtt_provision.json` (git'e girmez) bu makinede
-VAR. Aynayı stub'lamayan E-stop testleri (`test_mqtt_publish_confirmation.py:154-214`,
+VAR. Aynayı stub'lamayan E-stop testleri (`test_mqtt_publish_confirmation.py:150-210`,
 `test_live_state.py`, `test_mqtt_client_id.py`) `_emergency_stop_all` → `_estop_cloud_mirror`
 thread'ini başlatıyordu → `_bundled_cloud` GERÇEK kimliği okuyor → GERÇEK (üretim) bulut
 broker'ına TLS + `pemf/coil/<id>/control` STOP yayını DENENİYORDU (yerel sahte broker ile 4+4 TLS

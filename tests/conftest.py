@@ -73,14 +73,37 @@ os.environ.setdefault("PEMF_AI_WARMUP", "0")
 # belirliyordu: tam süitte toplama sonunda YOK, tek dosya koşumunda '1' → aynı test iki ayrı ortamda
 # koşuyordu (ürün lifespan'de okuyup hw-sim thread'ini başlatır; o thread `stm='online'` yazar).
 # Artık süreç başında TEK normalizasyon: YOK (tam süitin fiilî değeri; dış kabuk/CI '1' ya da ''
-# verse de). Sanal donanım isteyen test bunu KENDİ fixture'ında `monkeypatch.setenv` ile ister.
-# Toplama sonundaki değer kaydedilir. Kapı: tests/test_pemf_simulate_tek_kaynak.py
-os.environ.pop("PEMF_SIMULATE", None)
+# verse de — silinen dolu değer rapor başlığında söylenir). ⚠️ Sanal donanımı ENV İLE İSTEME: lifespan
+# hw-sim'i süreç başına BİR KEZ başlatırdı ve o daemon durdurulamaz (D0Ö.10'dan beri conftest arka plan
+# başlatıcısını engelliyor). Sim davranışı gereken test döngüyü doğrudan ve sınırlı turla koşturur
+# (test_sim_GERCEGI_ASMAZ.py deseni) ya da canlı durumu elle kurar. Toplama sonundaki değer kaydedilir;
+# her testten sonra env'de PEMF_SIMULATE ya da canlı `hw-sim` kalırsa o test KIRMIZI (çalışma-anı
+# sızıntısı — modül düzeyi taramanın görmediği fixture/test gövdesi yazımları).
+# Kapı: tests/test_pemf_simulate_tek_kaynak.py
+_PEMF_SIMULATE_DISARIDAN = os.environ.pop("PEMF_SIMULATE", None)
 _PEMF_SIMULATE_TOPLAMA_SONU: list = []
+_HW_SIM_BILDIRILDI: list = []
 
 
 def pytest_collection_finish(session):
     _PEMF_SIMULATE_TOPLAMA_SONU.append(os.environ.get("PEMF_SIMULATE"))
+
+
+def pytest_report_header(config):
+    if _PEMF_SIMULATE_DISARIDAN:
+        return f"UYARI: dis ortamdan PEMF_SIMULATE={_PEMF_SIMULATE_DISARIDAN!r} geldi; conftest SILDI (D0O.11)"
+    return None
+
+
+@pytest.fixture(autouse=True)
+def _pemf_simulate_sizmaz():
+    yield
+    kalan = os.environ.pop("PEMF_SIMULATE", None)  # sonraki testlere SIZMASIN
+    sim = [t.name for t in threading.enumerate() if t.name == "hw-sim"] if not _HW_SIM_BILDIRILDI else []
+    if sim:
+        _HW_SIM_BILDIRILDI.append(sim)  # daemon durdurulamaz: bir kez bildir, zincirleme kırmızı üretme
+    if kalan is not None or sim:
+        pytest.fail(f"bu test PEMF_SIMULATE={kalan!r} bıraktı / canlı hw-sim: {sim} — çalışma-anı sızıntısı (D0Ö.11)")
 
 
 # ⚠️ D0Ö.02 (B-3.6) — GERÇEK KİMLİK KASASI SÜİTTE python-keyring ÜZERİNDEN OKUNMAZ/YAZILMAZ.

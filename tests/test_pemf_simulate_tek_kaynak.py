@@ -9,23 +9,38 @@ parçacığını başlatıyor (`api_server.py:4132`) ve o iş parçacığı her 
 yazıyor → STM durumuna dayanan kapılar (İG-6.1 / B-1.19) tek dosya koşumunda güvenilmez.
 
 ÇÖZÜM: 72 modül-düzeyi deyim silindi; `tests/conftest.py` süreç başında TEK normalizasyon yapar
-(`os.environ.pop("PEMF_SIMULATE", None)`) ve toplama bitince değeri kaydeder.
+(`os.environ.pop("PEMF_SIMULATE", None)`), toplama bitince değeri kaydeder ve her testten sonra
+env'de `PEMF_SIMULATE` ya da canlı `hw-sim` kaldıysa o testi KIRMIZI yapar (çalışma-anı sızıntısı).
+⚠️ Sanal donanım ENV İLE İSTENMEZ: lifespan hw-sim'i süreç başına BİR KEZ başlatırdı ve o daemon
+durdurulamaz (D0Ö.10'dan beri conftest arka plan başlatıcısını zaten engelliyor). Sim davranışı
+gereken test döngüyü doğrudan ve sınırlı turla koşturur ya da canlı durumu elle kurar.
 
 KAPILAR:
   (1) Davranış: toplama SONUNDA `PEMF_SIMULATE` tanımsız — tek dosya koşumunda da.
-  (2) Yapı (AST): `tests/**/*.py` (conftest.py hariç — tek meşru yer) içe aktarma anında koşan
-      kodunda (modül gövdesi, üst düzey if/try, sınıf gövdesi, varsayılan argüman) `PEMF_SIMULATE`
-      yazımı (setdefault/pop/[]=/del/update) YOK; vakum koruması ≥300 test dosyası.
+  (2) Yapı (AST): `tests/**/*.py` (yalnız `tests/conftest.py` hariç — tek meşru yer) içe aktarma
+      anında koşan kodunda (modül gövdesi, üst düzey if/try, sınıf gövdesi, dekoratör, varsayılan
+      argüman) `PEMF_SIMULATE` yazımı YOK: setdefault/pop/[]=/del/update (sözlük, `dict(...)`,
+      çift listesi, anahtar sözcük)/`|=`/`__setitem__`/`__delitem__`/putenv/unsetenv/setenv/delenv.
+      Vakum koruması ≥300 test dosyası.
+  (3) Çalışma anı: env'e yazıp geri almayan test (sonda, alt süreçte) conftest bekçisince KIRMIZI.
 MUTASYON: herhangi bir test dosyasına modül düzeyinde `os.environ.setdefault("PEMF_SIMULATE", "1")`
-eklemek → (2) KIRMIZI; o dosya tek başına toplanınca (1) de KIRMIZI.
+eklemek → (2) KIRMIZI; o dosya tek başına toplanınca (1) de KIRMIZI. Conftest bekçisi silinirse (3).
 """
 
 import ast
+import os
+import subprocess
 import sys
 import warnings
 from pathlib import Path
 
+import pytest
+
 _TESTLER = Path(__file__).resolve().parent
+_BU_DOSYA = "tests/test_pemf_simulate_tek_kaynak.py"
+_SONDA_ORTAMI = "D0O11_SIZINTI_SONDASI"
+#: Anahtarı ilk argüman (ya da anahtar sözcük değeri) olarak alan env yazıcıları.
+_YAZICILAR = ("setdefault", "pop", "__setitem__", "__delitem__", "putenv", "unsetenv", "setenv", "delenv")
 
 
 def test_KRITIK_PEMF_SIMULATE_toplama_sonu_TANIMSIZ():
@@ -51,6 +66,24 @@ def _modul_duzeyi_yazimlar(agac: ast.Module) -> list[int]:
     def _anahtar_mi(dugum) -> bool:
         return isinstance(dugum, ast.Constant) and dugum.value == "PEMF_SIMULATE"
 
+    def _sozluk_anahtarli_mi(dugum) -> bool:
+        return isinstance(dugum, ast.Dict) and any(_anahtar_mi(k) for k in dugum.keys)
+
+    def _update_anahtarli_mi(cagri: ast.Call) -> bool:
+        if any(k.arg == "PEMF_SIMULATE" for k in cagri.keywords):
+            return True
+        for a in cagri.args:
+            if _sozluk_anahtarli_mi(a):
+                return True
+            if isinstance(a, ast.Call) and getattr(a.func, "id", "") == "dict":
+                if any(k.arg == "PEMF_SIMULATE" for k in a.keywords) or any(_sozluk_anahtarli_mi(x) for x in a.args):
+                    return True
+            if isinstance(a, (ast.List, ast.Tuple, ast.Set)) and any(
+                isinstance(e, (ast.Tuple, ast.List)) and e.elts and _anahtar_mi(e.elts[0]) for e in a.elts
+            ):
+                return True
+        return False
+
     def _tara(dugum):
         if isinstance(dugum, (ast.FunctionDef, ast.AsyncFunctionDef)):
             tanim_aninda = [*dugum.decorator_list, *dugum.args.defaults, *dugum.args.kw_defaults]
@@ -65,14 +98,14 @@ def _modul_duzeyi_yazimlar(agac: ast.Module) -> list[int]:
             return
         if isinstance(dugum, ast.Call) and isinstance(dugum.func, ast.Attribute):
             ad = dugum.func.attr
-            if ad in ("setdefault", "pop", "__setitem__", "__delitem__") and dugum.args and _anahtar_mi(dugum.args[0]):
+            if ad in _YAZICILAR and (
+                any(_anahtar_mi(a) for a in dugum.args) or any(_anahtar_mi(k.value) for k in dugum.keywords)
+            ):
                 satirlar.append(dugum.lineno)
-            if ad == "update":
-                for a in dugum.args:
-                    if isinstance(a, ast.Dict) and any(_anahtar_mi(k) for k in a.keys):
-                        satirlar.append(dugum.lineno)
-                if any(k.arg == "PEMF_SIMULATE" for k in dugum.keywords):
-                    satirlar.append(dugum.lineno)
+            if ad == "update" and _update_anahtarli_mi(dugum):
+                satirlar.append(dugum.lineno)
+        if isinstance(dugum, ast.AugAssign) and _sozluk_anahtarli_mi(dugum.value):  # os.environ |= {...}
+            satirlar.append(dugum.lineno)
         if isinstance(dugum, (ast.Assign, ast.AugAssign, ast.AnnAssign, ast.Delete)):
             hedefler = dugum.targets if isinstance(dugum, (ast.Assign, ast.Delete)) else [dugum.target]
             for h in hedefler:
@@ -83,7 +116,7 @@ def _modul_duzeyi_yazimlar(agac: ast.Module) -> list[int]:
 
     for d in agac.body:
         _tara(d)
-    return satirlar
+    return sorted(set(satirlar))
 
 
 def _ayristir(kaynak: str) -> ast.Module:
@@ -93,24 +126,25 @@ def _ayristir(kaynak: str) -> ast.Module:
 
 
 def test_KRITIK_PEMF_SIMULATE_modul_duzeyinde_YAZILMAZ():
-    # test_*.py VE testlerin içe aktardığı yardımcılar (tests/**/*.py); TEK meşru yer conftest.py
-    dosyalar = sorted(p for p in _TESTLER.rglob("*.py") if p.name != "conftest.py")
-    assert sum(p.name.startswith("test_") for p in dosyalar) >= 300, (
-        f"VAKUM: yalnız {len(dosyalar)} dosya tarandı — tarama bozuk"
-    )
+    # test_*.py VE testlerin içe aktardığı yardımcılar (tests/**/*.py); TEK meşru yer tests/conftest.py
+    tek_mesru = (_TESTLER / "conftest.py").resolve()
+    dosyalar = sorted(p for p in _TESTLER.rglob("*.py") if p.resolve() != tek_mesru)
+    test_sayisi = sum(p.name.startswith("test_") for p in dosyalar)
+    assert test_sayisi >= 300, f"VAKUM: yalnız {test_sayisi} test dosyası tarandı — tarama bozuk"
     ihlal = []
     for p in dosyalar:
         for satir in _modul_duzeyi_yazimlar(_ayristir(p.read_text(encoding="utf-8"))):
             ihlal.append(f"{p.relative_to(_TESTLER).as_posix()}:{satir}")
     assert not ihlal, (
-        f"{len(ihlal)} test modülü MODÜL DÜZEYİNDE PEMF_SIMULATE yazıyor: {ihlal[:12]} — değer toplama "
-        "sırasına bağlı kalır (tek dosya ≠ tam süit). Gerekiyorsa testin KENDİ fixture'ında monkeypatch ile iste."
+        f"{len(ihlal)} yerde MODÜL DÜZEYİNDE PEMF_SIMULATE yazılıyor: {ihlal[:12]} — değer toplama sırasına "
+        "bağlı kalır (tek dosya ≠ tam süit). Sim davranışı gerekiyorsa döngüyü doğrudan ve sınırlı turla "
+        "koştur ya da canlı durumu elle kur; env İLE İSTEME (hw-sim süreç başına bir kez başlar, durmaz)."
     )
 
 
 def test_KARSIT_KANIT_tarayici_ice_aktarma_anini_GORUR_fonksiyon_govdesini_SAYMAZ():
     """Tarayıcının kendisi: içe aktarma anında koşan yazımları SAYAR (üst düzey if/try, sınıf gövdesi,
-    varsayılan argüman); fonksiyon gövdesini ve başka anahtarı SAYMAZ."""
+    dekoratör, varsayılan argüman; tüm yazıcı biçimleri); fonksiyon/lambda gövdesini ve başka anahtarı SAYMAZ."""
     kaynak = (
         "import os\n"
         "os.environ.setdefault('PEMF_SIMULATE', '1')\n"
@@ -129,5 +163,54 @@ def test_KARSIT_KANIT_tarayici_ice_aktarma_anini_GORUR_fonksiyon_govdesini_SAYMA
         "    os.environ.pop('PEMF_SIMULATE', None)\n"
         "    def g(self):\n"
         "        os.environ.pop('PEMF_SIMULATE', None)\n"
+        "os.environ |= {'PEMF_SIMULATE': '1'}\n"
+        "os.environ.update(dict(PEMF_SIMULATE='1'))\n"
+        "os.environ.update([('PEMF_SIMULATE', '1')])\n"
+        "os.environ.update(PEMF_SIMULATE='1')\n"
+        "os.environ.__setitem__('PEMF_SIMULATE', '1')\n"
+        "os.environ.__delitem__('PEMF_SIMULATE')\n"
+        "os.environ.setdefault(key='PEMF_SIMULATE', default='1')\n"
+        "os.putenv('PEMF_SIMULATE', '1')\n"
+        "pytest.MonkeyPatch().setenv('PEMF_SIMULATE', '1')\n"
+        "@dekor(os.environ.pop('PEMF_SIMULATE', None))\n"
+        "def h():\n"
+        "    pass\n"
+        "g = lambda x=os.environ.pop('PEMF_SIMULATE', None): os.environ.setdefault('PEMF_SIMULATE', '1')\n"
+        "os.environ.update({'BASKA': '1'})\n"
     )
-    assert _modul_duzeyi_yazimlar(ast.parse(kaynak)) == [2, 4, 6, 9, 10, 12, 15]
+    beklenen = [2, 4, 6, 9, 10, 12, 15, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 30]
+    assert _modul_duzeyi_yazimlar(ast.parse(kaynak)) == beklenen
+
+
+def _pytest_alt_sureci(dugum: str, ek_env: dict) -> subprocess.CompletedProcess:
+    env = dict(os.environ)
+    env.pop("PYTEST_ADDOPTS", None)
+    env.update(ek_env)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-p", "no:xdist", "-q", "-rE", dugum],
+        cwd=str(_TESTLER.parent),
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=300,
+    )
+
+
+@pytest.mark.skipif(os.environ.get(_SONDA_ORTAMI) != "1", reason="yalnız sızıntı kapısının alt sürecinde koşar")
+def test_SONDA_PEMF_SIMULATE_birakir():
+    """Kapı (3)'ün sondası: env'e monkeypatch'SİZ yazar ve geri ALMAZ → conftest bu testi ERROR yapmalı."""
+    os.environ["PEMF_SIMULATE"] = "1"
+
+
+def test_KRITIK_calisma_aninda_birakilan_PEMF_SIMULATE_testi_KIRMIZI_yapar():
+    r = _pytest_alt_sureci(f"{_BU_DOSYA}::test_SONDA_PEMF_SIMULATE_birakir", {_SONDA_ORTAMI: "1"})
+    cikti = (r.stdout or "")[-3000:] + (r.stderr or "")[-1500:]
+    assert r.returncode != 0 and "1 error" in (r.stdout or ""), (
+        f"env'e PEMF_SIMULATE bırakan sonda testi KIRMIZI olmadı — conftest sızıntı bekçisi kör (rc={r.returncode}):\n"
+        f"{cikti}"
+    )
+    assert "çalışma-anı sızıntısı" in (r.stdout or ""), f"hata sızıntı bekçisinin iletisi değil:\n{cikti}"
