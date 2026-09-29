@@ -10,7 +10,7 @@ state geçişleri sınanır. `state.hardware` None (STM yok) + `_mqtt_publish` m
 donanım/USB gerekmez. Hiç TestClient/thread yok → watchdog kurulan seansı bozamaz (deterministik)."""
 
 import pytest
-from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
+from topoloji import ESP_BOBIN, TUM_ESP, TUM_STM  # faz 4: literal bobin numarasi YASAK
 
 
 @pytest.fixture()
@@ -31,7 +31,9 @@ def api(monkeypatch):
                     "objectTemp": 0.0,
                     "ambientTemp": 0.0,
                     "currentA": 0.0,
-                    "stm32Driven": i < 5,
+                    # D0Ö.14 (B-10.140): üretimdeki gibi topolojiden (faz 4: bobin 1-7 STM); eskiden `i < 5`.
+                    "stm32Driven": (i + 1) in TUM_STM,
+                    "unipolar": None,
                 }
             )
         api_server._live_state["activeTreatment"].update(
@@ -114,18 +116,37 @@ def test_update_live_coil_from_stm_ignores_out_of_range(api):
     assert after == before, "geçersiz coil_id live-state'i değiştirmemeli"
 
 
-# ── update_live_stm_status + _sync_stm_coils_locked: STM bağlantısı → 1-5 bobin ─
+# ── update_live_stm_status + _sync_stm_coils_locked: STM bağlantısı → TÜM STM bobinleri ─
 def test_update_live_stm_status_syncs_stm_coils(api):
+    """D0Ö.14 (B-10.140): kapsam `topoloji.TUM_STM`'den TÜRER ve bobinler kopuştan ÖNCE GERÇEKTEN çalışır.
+
+    Eski hâli `range(5)`e bakıyordu (faz 4'te bobin 6-7 STM'e geçti, görünmüyordu) ve bobinleri hiç
+    çalıştırmıyordu: fixture zaten `running=False` kurduğu için "STM düşünce durur" iddiası
+    kendiliğinden doğruydu — sıfırlamayı `idx < 5` ile sınırlayan mutant YEŞİL kalıyordu. Bobin 6-7
+    kopuşta "çalışıyor" kalsa arayüz onları sürülüyor sanar (İG-6.1 / B-1.19 / B-6.13 önkoşulu).
+    """
     api.update_live_stm_status(connected=True)
     assert api._live_state["stm"] == "online"
-    for idx in range(5):  # bobin 1-5 STM-tahrikli → bağlı olmalı
-        assert api._live_state["coils"][idx]["connected"] is True
+    bagli_degil = [cid for cid in sorted(TUM_STM) if api._live_state["coils"][cid - 1]["connected"] is not True]
+    assert not bagli_degil, f"STM bağlıyken bu STM bobinleri bağlı görünmüyor: {bagli_degil}"
+
+    # Üretim yolu: her STM bobini ACK'le çalışıyor + firmware kipi bildirilmiş (ACK `K=`).
+    for cid in sorted(TUM_STM):
+        api.update_live_coil_from_stm(coil_id=cid, duty=25.0, freq=50, phase=0, duration_min=20, running=True)
+        api.update_live_coil_kip(cid, True)
+    calismayan = [cid for cid in sorted(TUM_STM) if api._live_state["coils"][cid - 1]["running"] is not True]
+    assert not calismayan, f"kurulum: bu bobinler çalışır görünmüyor, kapı anlamsız olur: {calismayan}"
 
     api.update_live_stm_status(connected=False)
     assert api._live_state["stm"] == "warning"
-    for idx in range(5):  # STM düşünce 1-5 kopar + durur (güvenlik)
-        assert api._live_state["coils"][idx]["connected"] is False
-        assert api._live_state["coils"][idx]["running"] is False
+    kalan = {
+        cid: {k: api._live_state["coils"][cid - 1][k] for k in ("connected", "running", "unipolar")}
+        for cid in sorted(TUM_STM)
+        if api._live_state["coils"][cid - 1]["connected"] is not False
+        or api._live_state["coils"][cid - 1]["running"] is not False
+        or api._live_state["coils"][cid - 1]["unipolar"] is not None
+    }
+    assert not kalan, f"STM düşünce bu STM bobinleri kopmadı/durmadı/kipi unutulmadı (güvenlik): {kalan}"
 
 
 # ── _push_notification: baş-ekle + 50-cap + monoton sayaç ────────────────────
@@ -274,17 +295,72 @@ def test_ws_broadcast_closes_dead_clients_and_bounds_backlog(api):
         istemci kendini 'bağlı' sanıp DONMUŞ telemetri gösteriyor, reconnect de tetiklenmiyordu.
     (2) Her yayın için ayrı coroutine planlanıp tek kilitte sıraya giriyordu; yavaş bir istemci
         her turda 5 sn tuttuğu için arkada sınırsız iş + JSON gövdesi birikiyordu.
-    """
-    import inspect
 
+    ⚠️ D0Ö.14 (B-10.141): bu iki iddia artık KAYNAK METNİYLE değil DAVRANIŞLA ölçülür
+    (`test_KRITIK_ws_olu_istemci_KAPATILIR_ve_geri_basinc_sayaci_SIZMAZ`). Eski `".close(" in src`
+    denetimi kapatma satırı yoruma alınınca da yeşildi (yorum metni `.close(` içerir); sayaç
+    denetimi yalnız erken-dönüş yoluna bakıyordu.
+    """
     from servers import live_state
 
-    src = inspect.getsource(live_state._ws_broadcast_sync)
-    assert ".close(" in src, "düşürülen istemcinin soketi kapatılmalı"
-    assert "_WS_MAX_PENDING_BROADCASTS" in src, "yayın kuyruğu sınırlanmalı (geri-basınç)"
     assert live_state._WS_MAX_PENDING_BROADCASTS > 0
 
     # Sayaç sızmamalı: event-loop yokken erken dönüşte artırılmamalı
     before = live_state._ws_pending
     live_state._ws_broadcast_sync({"type": "noop"})
     assert live_state._ws_pending == before, "erken dönüşte bekleyen sayacı sızmamalı"
+
+
+def test_KRITIK_ws_olu_istemci_KAPATILIR_ve_geri_basinc_sayaci_SIZMAZ(monkeypatch):
+    """D0Ö.14 (B-10.141): GERÇEK `_ws_broadcast_sync` yeni bir event loop'a, `send_text`'te hata atan
+    sahte (ölü) istemciye karşı koşar.
+
+    Sınırın bir fazlası kadar yayın: sınırda DURUR (biri düşürülür, sayaç +1), döngü koşunca
+    `_ws_pending` BAŞLANGIÇ değerine döner (her planlanan gönderim `finally`'de geri sayar), ölü
+    istemci listeden ÇIKAR ve soketi 1011 ile KAPATILIR (istemci kopmayı görüp yeniden bağlansın).
+    MUTASYON: `finally`'deki `_ws_pending -= 1` → `-= 0` ya da `await d.close(...)` yoruma → KIRMIZI.
+    """
+    import asyncio
+
+    from servers import live_state
+
+    class _OluIstemci:
+        def __init__(self):
+            self.gonderim = 0
+            self.kapatmalar = []
+
+        async def send_text(self, data):
+            self.gonderim += 1
+            raise ConnectionResetError("d0o14: istemci öldü")
+
+        async def close(self, code=None):
+            self.kapatmalar.append(code)
+
+    olu = _OluIstemci()
+    dongu = asyncio.new_event_loop()
+    monkeypatch.setattr(live_state, "_event_loop", dongu)
+    monkeypatch.setattr(live_state, "_ws_clients", [olu])
+    monkeypatch.setattr(live_state, "_ws_send_lock", None)  # kilit bu döngüde taze kurulsun
+    monkeypatch.setattr(live_state, "_ws_pending", 0)
+    monkeypatch.setattr(live_state, "_ws_dropped_total", live_state._ws_dropped_total)
+    sinir = live_state._WS_MAX_PENDING_BROADCASTS
+    dusen_once = live_state._ws_dropped_total
+    try:
+        for i in range(sinir + 1):
+            live_state._ws_broadcast_sync({"type": "d0o14", "n": i})
+        assert live_state._ws_pending == sinir, f"geri-basınç sınırda durmadı: {live_state._ws_pending} != {sinir}"
+        assert live_state._ws_dropped_total == dusen_once + 1, "sınırı aşan yayın düşürülüp SAYILMADI"
+        for _ in range(200):
+            dongu.run_until_complete(asyncio.sleep(0.005))
+            if live_state._ws_pending == 0:
+                break
+    finally:
+        dongu.close()
+    assert olu.gonderim >= 1, "kurulum: gönderim hiç denenmedi, kapı anlamsız olur"
+    assert live_state._ws_pending == 0, (
+        f"bekleyen yayın sayacı SIZDI: {live_state._ws_pending} (başlangıç 0) — sınıra takılan sunucu "
+        "bundan sonra HER yayını düşürür, istemciler donmuş telemetri görür"
+    )
+    assert olu not in live_state._ws_clients, "ölü istemci yayın listesinden çıkarılmadı"
+    assert olu.kapatmalar, "ölü istemcinin soketi KAPATILMADI — istemci kendini bağlı sanıp yeniden bağlanmaz"
+    assert set(olu.kapatmalar) == {1011}, f"kapatma kodu 1011 (sunucu düşürdü) değil: {set(olu.kapatmalar)}"
