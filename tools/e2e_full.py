@@ -32,6 +32,11 @@ import urllib.request
 from pathlib import Path
 
 GUII = Path(__file__).resolve().parent.parent
+# ⚠️ Gomulu Python dagitimi (._pth) depo kokunu sys.path'e koymaz → ortak ortam kurucusu icin ac.
+if str(GUII) not in sys.path:
+    sys.path.insert(0, str(GUII))
+from tools.e2e_ortam import alt_surec_ortami  # noqa: E402
+
 PY = Path(sys.executable)
 PORT = int(os.environ.get("PEMF_E2E_PORT", "8124"))
 BASE = f"http://127.0.0.1:{PORT}"
@@ -674,32 +679,13 @@ def main():
     # ⚠️ K bolumu (2026-09-20) izole veri kokunde `.acilamadi-*` ariyor — o yuzden gorunur olmali.
     globals()["_DATA_DIR"] = data_dir
 
-    # Alt surecin SAHTE EV DIZINI — masaustu sizintisini keser (bkz. asagidaki not).
-    sahte_ev = data_dir / "sahte_ev"
-    (sahte_ev / "Desktop").mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ)
-    env.update(
-        {
-            "PEMF_SIMULATE": "1",
-            "PEMF_STM_PORT": "SIM",
-            # ══════════════════════════════════════════════════════════════════════
-            # ⚠️ MASAUSTU DA IZOLE EDILMELI (2026-09-11, IKINCI KEZ yasandi)
-            # ══════════════════════════════════════════════════════════════════════
-            # `/api/session/start` her seansta masaustune `PEMF_alan_*.csv` yazar
-            # (apps/backend/servers/seans_alan_kaydi). Bu betik GERCEK bir backend alt sureci baslatir
-            # ve pytest `conftest` izolasyonu BURADA GECERLI DEGILDIR → her kosu sahibin
-            # masaustune bir tomar test dosyasi birakiyordu (olculdu: 3 kosu = 18 dosya,
-            # hasta adlari SyncTest/ParamTest/Minnos/Duman...).
-            #
-            # `masaustu_dizini()` yolu `os.path.expanduser("~")`den cozer → alt surecin
-            # EV DIZINI sahteye cevrilir. ⚠️ Yalniz ALT SURECTE: ana surecteki gercek `~`
-            # dokunulmadan kalir, boylece `tests/test_veri_dizini_izolasyonu.py` gibi
-            # GERCEK ev dizinine bakan kapilar sahte-yesile DONMEZ.
-            #
-            # ⚠️ `Desktop` KLASORU ONCEDEN ACILIR: `masaustu_dizini()` masaustunu bulamazsa
-            # `Path.cwd()`e duser ve bu kez DEPO DIZINI dosyayla dolardi.
-            "USERPROFILE": str(sahte_ev),
-            "HOME": str(sahte_ev),
+    # ⚠️ Alt süreç ortamı (sahte ev, APPDATA/ProgramData/cihaz kimliği, STM portu, bulut) TEK YERDE:
+    # tools/e2e_ortam.py (D0Ö.08) — iki araç ayrışmıştı (e2e_smoke'ta PEMF_STM_PORT düşmüştü).
+    env = alt_surec_ortami(
+        data_dir,
+        PORT,
+        GUII,
+        ek={
             # ⚠️ ESP ALT SISTEMI ACIK KOSULUR (sahip karari 2026-09-11: ESP'ler sokuldu,
             # kod SILINMEDI, `PEMF_ESP_ENABLED` ile kapatildi). Uretim varsayilani KAPALI;
             # ama e2e'nin isi, geri donus yolunun (hibrit/ESP-only kuruluma donus) GERCEKTEN
@@ -707,24 +693,8 @@ def main():
             # sessizce bayatlar ve geri donus gunu kirik cikardi.
             # Varsayilanin KAPALI oldugu `tests/test_internetsiz_ve_esp_kapali.py` ile ayrica kilitli.
             "PEMF_ESP_ENABLED": "1",
-            "PEMF_DATA_DIR": str(data_dir),
-            # ⚠️ APPDATA DA İZOLE EDİLMELİ (2026-08-14). `PEMF_DATA_DIR` tek başına YETMİYOR:
-            # backend açılışta `%APPDATA%\PEMF_GUI`den "eski kullanıcı klasörü → makine geneli"
-            # göçünü çalıştırıyor (apps/backend/utils/path_utils._kullanicidan_makineye_gocur) ve geliştirici
-            # makinesindeki BAYAT, BAŞKA ANAHTARLA şifreli tedavi DB'sini test dizinine
-            # kopyalıyordu → `hmac check failed for pgno=1` → backend HİÇ açılmıyordu.
-            "APPDATA": str(data_dir / "_appdata"),
-            "PEMF_API_HOST": "127.0.0.1",
-            "PEMF_API_PORT": str(PORT),
-            "PEMF_HEADLESS": "1",
-            "PEMF_ENABLE_TUNNEL": "0",
-            "PEMF_LOG_DIR": str(data_dir / "logs"),
-            "PYTHONPATH": str(GUII),
-            "PYTHONIOENCODING": "utf-8",
-        }
+        },
     )
-    for k in ("PEMF_REQUIRE_AUTH", "PEMF_REQUIRE_PATIENT_AUTH", "PEMF_CORS_ORIGINS", "PEMF_MASK_HISTORY_PII"):
-        env.pop(k, None)
 
     log = open(data_dir / "backend.out", "wb")
     print(f"Backend baslatiliyor (port {PORT}, veri {data_dir}) — SANAL STM + ESP ...")

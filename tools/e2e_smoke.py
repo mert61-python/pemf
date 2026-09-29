@@ -32,6 +32,11 @@ from pathlib import Path
 
 # Yollar TASINABILIR: bu dosya guii/tools/ altinda durur.
 GUII = Path(__file__).resolve().parent.parent
+# ⚠️ Gomulu Python dagitimi (._pth) depo kokunu sys.path'e koymaz → ortak ortam kurucusu icin ac.
+if str(GUII) not in sys.path:
+    sys.path.insert(0, str(GUII))
+from tools.e2e_ortam import alt_surec_ortami  # noqa: E402
+
 PY = Path(sys.executable)
 # 8000 KULLANILMAZ - kullanicinin calisan ornegine ve gercek verisine dokunmamak icin alt-port.
 PORT = int(os.environ.get("PEMF_E2E_PORT", "8123"))
@@ -107,52 +112,9 @@ def req(method, path, body=None, headers=None, timeout=30):
 
 def main():
     data_dir = Path(tempfile.mkdtemp(prefix="pemf_e2e_"))
-    # Alt surecin SAHTE EV DIZINI — masaustu sizintisini keser (bkz. asagidaki not).
-    sahte_ev = data_dir / "sahte_ev"
-    (sahte_ev / "Desktop").mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ)
-    env.update(
-        {
-            "PEMF_SIMULATE": "1",  # sanal STM+ESP+8 bobin + sensör
-            "PEMF_DATA_DIR": str(data_dir),  # İZOLE veri dizini
-            # ══════════════════════════════════════════════════════════════════════
-            # ⚠️ MASAUSTU DA IZOLE EDILMELI (2026-09-11, IKINCI KEZ yasandi)
-            # ══════════════════════════════════════════════════════════════════════
-            # `/api/session/start` her seansta masaustune `PEMF_alan_*.csv` yazar
-            # (apps/backend/servers/seans_alan_kaydi). Bu betik GERCEK bir backend alt sureci baslatir
-            # ve pytest `conftest` izolasyonu BURADA GECERLI DEGILDIR → her kosu sahibin
-            # masaustune bir tomar test dosyasi birakiyordu (olculdu: 3 kosu = 18 dosya,
-            # hasta adlari SyncTest/ParamTest/Minnos/Duman...).
-            #
-            # `masaustu_dizini()` yolu `os.path.expanduser("~")`den cozer → alt surecin
-            # EV DIZINI sahteye cevrilir. ⚠️ Yalniz ALT SURECTE: ana surecteki gercek `~`
-            # dokunulmadan kalir, boylece `tests/test_veri_dizini_izolasyonu.py` gibi
-            # GERCEK ev dizinine bakan kapilar sahte-yesile DONMEZ.
-            #
-            # ⚠️ `Desktop` KLASORU ONCEDEN ACILIR: `masaustu_dizini()` masaustunu bulamazsa
-            # `Path.cwd()`e duser ve bu kez DEPO DIZINI dosyayla dolardi.
-            "USERPROFILE": str(sahte_ev),
-            "HOME": str(sahte_ev),
-            # ⚠️ APPDATA DA İZOLE EDİLMELİ (2026-08-14). `PEMF_DATA_DIR` tek başına YETMİYOR:
-            # backend açılışta `%APPDATA%\PEMF_GUI`den "eski kullanıcı klasörü → makine geneli"
-            # göçünü çalıştırıyor (apps/backend/utils/path_utils._kullanicidan_makineye_gocur) ve geliştirici
-            # makinesindeki BAYAT, BAŞKA ANAHTARLA şifreli tedavi DB'sini test dizinine
-            # kopyalıyordu → `hmac check failed for pgno=1` → backend HİÇ açılmıyordu.
-            # (Testin gördüğü hata da yanıltıcıydı; bkz. aşağıdaki log yazdırma notu.)
-            "APPDATA": str(data_dir / "_appdata"),
-            "PEMF_API_HOST": "127.0.0.1",
-            "PEMF_API_PORT": str(PORT),
-            "PEMF_HEADLESS": "1",
-            "PEMF_ENABLE_TUNNEL": "0",
-            "PEMF_LOG_DIR": str(data_dir / "logs"),
-            # Gomulu Python dagitimi (._pth) betik dizinini sys.path'e eklemiyor → acikca ver.
-            "PYTHONPATH": str(GUII),
-            "PYTHONIOENCODING": "utf-8",
-        }
-    )
-    env.pop("PEMF_REQUIRE_AUTH", None)  # LAN muaf → token'sız test
-    env.pop("PEMF_CORS_ORIGINS", None)  # varsayılan CORS davranışını sına
-    env.pop("PEMF_MASK_HISTORY_PII", None)
+    # ⚠️ Alt süreç ortamı (sahte ev, APPDATA/ProgramData/cihaz kimliği, STM portu, bulut) TEK YERDE:
+    # tools/e2e_ortam.py (D0Ö.08) — iki araç ayrışmış, burada PEMF_STM_PORT düşmüştü (varsayılan COM10).
+    env = alt_surec_ortami(data_dir, PORT, GUII)
 
     log = open(data_dir / "backend.out", "wb")
     print(f"Backend baslatiliyor (port {PORT}, veri {data_dir}) ...")
