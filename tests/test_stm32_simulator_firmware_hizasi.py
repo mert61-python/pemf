@@ -12,10 +12,15 @@ ARIZA (DENETIM-10):
 
 KAPI: ürünün GERÇEK paketi (`HardwareController`) simülatöre verilir, dönen ACK ürünün GERÇEK
 ayrıştırıcısıyla (`HeadlessCore._parse_stm_ok`) çözülür: NUM_COILS kadar güncelleme ve her birinde
-`unipolar` anahtarı; değer firmware kuralı `etkin = yetenek | istek`. Her bobine FARKLI
-frekans/duty/faz/süre verilir ve ACK'in her alanı firmware ACK formülüyle (`main.c` ACK döngüsü)
-bobin bobin karşılaştırılır → indis kayması görünür. Banner ürünün
-`stm32_kimlik.banner_ayristir`'ı ile çözülür; kanal/kip/maske `pemf_surus.h`'ye eşit.
+`unipolar` anahtarı; değer firmware kuralı `etkin = (yetenek | istek) & NUM_COILS-bit`. Her bobine
+FARKLI frekans/duty/faz/süre verilir ve ACK'in her alanı firmware ACK formülüyle bobin bobin
+karşılaştırılır → indis kayması görünür. Banner ürünün `stm32_kimlik.banner_ayristir`'ı ile çözülür.
+
+D0Ö.13 ek (bağımsız inceleme tur 4): duty yüzdesi firmware gibi FLOAT32 (`(long)(duty * 100.0f)`;
+double ile 1-100 arası tamsayıların 48'inde 1 eksikti) — %1-100 süpürmesiyle ölçülür; NaN/+inf duty
+firmware gibi NACK'lenir ve bağlantı SÜRER; istek yetenek bitleriyle ÇAKIŞINCA da OR (XOR/toplama
+mutantı görünsün); yetenek de NUM_COILS bite kırpılır; maske okuyucu YORUMA kanmaz ve TEK tanım
+ister; başlık yoksa açık hata; simülatörün "firmware modeli" `main.c` metnine pinli.
 MUTASYON: `_send_ack`'te alan sayısını/indisi bozmak (M3) ya da banner'a "SYM-BIPOLAR" geri yazmak → KIRMIZI.
 """
 
@@ -31,16 +36,25 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from c_soyucu import c_soy
 
-sim = pytest.importorskip("tools.stm32_simulator", reason="simulator yok")
+# ⚠️ importorskip DEĞİL: simülatör depoda izli; yüklenemezse bu kapı SESSİZCE atlanmamalı (Ö.7).
+import tools.stm32_simulator as sim
+
 KOK = Path(__file__).resolve().parents[1]
 BASLIK = KOK / "firmware" / "stm32_pemf" / "Core" / "Inc" / "pemf_surus.h"
+MAIN_C = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
 
 
 def _firmware_yetenek_maskesi() -> int:
-    m = re.search(r"#define\s+PEMF_BOBIN_UNIPOLAR_MASKESI\s+(0x[0-9A-Fa-f]+|\d+)U?", BASLIK.read_text(encoding="utf-8"))
-    assert m, "pemf_surus.h'de PEMF_BOBIN_UNIPOLAR_MASKESI bulunamadı (çıpa kaymış)"
-    return int(m.group(1), 0)
+    """Kapının KENDİ okuması (simülatörden bağımsız): yorumlar soyulur, TEK tanım şart."""
+    bulunan = re.findall(
+        r"^[ \t]*#[ \t]*define[ \t]+PEMF_BOBIN_UNIPOLAR_MASKESI[ \t]+(0x[0-9A-Fa-f]+|\d+)[uU]?\b",
+        c_soy(BASLIK.read_text(encoding="utf-8")),
+        flags=re.M,
+    )
+    assert len(bulunan) == 1, f"pemf_surus.h'de yorum dışı TEK tanım bekleniyordu, {len(bulunan)} bulundu"
+    return int(bulunan[0], 0)
 
 
 def _firmware_kip(maske: int, n: int) -> str:
@@ -59,7 +73,7 @@ def _firmware_ack_duty(duty: float) -> int:
 
 #: bobin → (frekans Hz, duty %, faz °, süre dk). HEPSİ FARKLI: `_send_ack`'te bir indis kayarsa
 #: (ör. `phase[0]`) başka bobinin değeri görünür. Duty'ler float32/double kırpmasında AYNI sonucu
-#: veren değerlerden seçildi (bu testin konusu alan sayısı/indis; yuvarlama ayrı ölçülür).
+#: veren değerlerden seçildi (bu testin konusu alan sayısı/indis; yuvarlama SÜPÜRME kapısında).
 _DEGERLER = {
     1: (100.0, 5.0, 0.0, 1),
     2: (110.0, 10.0, 30.0, 2),
@@ -69,9 +83,9 @@ _DEGERLER = {
     6: (150.0, 30.0, 150.0, 6),
     7: (160.0, 18.0, 180.0, 7),
 }
-#: Sürüş kipi İSTEĞİ: bobin 2 unipolar (yetenek bipolar → istek etkili olmalı) + bit 7 (8. bobin YOK;
-#: firmware yalnız `NUM_COILS` biti sayar → ACK'te görünmemeli).
-_ISTEK = 0x82
+#: Sürüş kipi İSTEKLERİ: 0x82 = bobin 2 + var olmayan 8. bit (firmware yalnız NUM_COILS bit sayar);
+#: 0x7F = TÜM bobinler (yetenek bitleriyle ÇAKIŞIR → OR ile XOR/toplama ayrışır); 0x00 = istek yok.
+_ISTEKLER = (0x82, 0x7F, 0x00)
 
 
 class _SahteCore:
@@ -124,7 +138,33 @@ def _sim_bagla(monkeypatch):
     return istemci, karsi
 
 
-def test_KRITIK_simulator_ACK_NUM_COILS_alan_ve_etkin_KIP_basar(hw, monkeypatch):
+def _son_paket(hw) -> bytes:
+    paket = None
+    while not hw.core._hw_send_queue.empty():
+        paket = bytes(hw.core._hw_send_queue.get_nowait()[0])
+    assert paket is not None, "ürün paket üretmedi"
+    return paket
+
+
+def _ham_paket(duty1: float) -> bytes:
+    """Ürünün ÜRETEMEYECEĞİ (clamp) ama hatta gelebilecek paket: bobin 1 duty'si keyfi, CRC geçerli."""
+    n = sim.NUM_COILS
+    govde = struct.pack(
+        sim.PKT_FMT.rsplit(" ", 1)[0],  # CRC hariç biçim
+        0xAA,
+        0x55,
+        *([duty1] + [0.0] * (n - 1)),
+        *([0.0] * n),
+        *([100.0] * n),
+        *([1] * n),
+        0,
+        0,
+    )
+    return govde + struct.pack("<I", sim.crc32_of(govde))
+
+
+@pytest.mark.parametrize("istek_mask", _ISTEKLER, ids=lambda v: f"istek_{v:#04x}")
+def test_KRITIK_simulator_ACK_NUM_COILS_alan_ve_etkin_KIP_basar(hw, monkeypatch, istek_mask):
     from headless_core import HeadlessCore
 
     n = sim.NUM_COILS
@@ -132,16 +172,14 @@ def test_KRITIK_simulator_ACK_NUM_COILS_alan_ve_etkin_KIP_basar(hw, monkeypatch)
     yetenek = _firmware_yetenek_maskesi()
     istemci, karsi = _sim_bagla(monkeypatch)
     try:
-        hw.surus_kipi_ayarla(_ISTEK)
+        hw.surus_kipi_ayarla(istek_mask)
         for bobin, (frekans, duty_yuzde, faz, sure_dk) in _DEGERLER.items():
             assert hw.update_coil(bobin, frekans, duty_yuzde, faz, sure_dk)
-        paket = None
-        while not hw.core._hw_send_queue.empty():
-            paket = bytes(hw.core._hw_send_queue.get_nowait()[0])
+        paket = _son_paket(hw)
         cozum, sebep = sim.decode_packet(paket)
         assert cozum is not None, f"ürün paketi reddedildi: {sebep}"
         duty, faz, frek, sure, _ref_ms, istek = cozum
-        assert istek == _ISTEK, f"ürün kip isteğini pakete koymadı ({istek:#04x}) — kapı anlamsız"
+        assert istek == istek_mask, f"ürün kip isteğini pakete koymadı ({istek:#04x}) — kapı anlamsız"
         istemci.sendall(paket)
         ack = _satirlar(istemci, "-> STM_OK:", 1, 3.0)
         assert ack, "simülatör ACK dönmedi (D0Ö.12 önkoşulu)"
@@ -155,7 +193,7 @@ def test_KRITIK_simulator_ACK_NUM_COILS_alan_ve_etkin_KIP_basar(hw, monkeypatch)
             g["coil_id"]: (int(g["duty"]), int(g["phase"]), int(g["freq"]), g["duration_min"]) for g in guncellemeler
         }
         assert gelen_alan == beklenen_alan, f"ACK alanları firmware'in basacağıyla uyuşmuyor: {ack[0]!r}"
-        # Firmware `K=` ETKİN maskeyi yalnız NUM_COILS bit üzerinden basar: etkin = yetenek | istek.
+        # Firmware `K=` ETKİN maskeyi yalnız NUM_COILS bit üzerinden basar: etkin = yetenek || istek.
         etkin = (yetenek | istek) & ((1 << n) - 1)
         k = re.search(r"[,\s]K=(\d+)", ack[0])
         assert k and int(k.group(1)) == etkin, f"K= firmware'in etkin maskesi ({etkin}) değil: {ack[0]!r}"
@@ -163,6 +201,59 @@ def test_KRITIK_simulator_ACK_NUM_COILS_alan_ve_etkin_KIP_basar(hw, monkeypatch)
         assert {g["coil_id"]: g["unipolar"] for g in guncellemeler} == beklenen, (
             f"etkin kip firmware kuralı (yetenek|istek = {etkin:#04x}) ile uyuşmuyor: {ack[0]!r}"
         )
+    finally:
+        istemci.close()
+        karsi.close()
+
+
+def test_KRITIK_ACK_duty_FIRMWARE_float32_ile_basilir_yuzde_1_100(hw, monkeypatch):
+    """Ürünün paketiyle %1-100: ACK D= firmware'in `(long)(duty * 100.0f)`sinin AYNISI (double DEĞİL)."""
+    istemci, karsi = _sim_bagla(monkeypatch)
+    uyusmayan = []
+    try:
+        for yuzde in range(1, 101):
+            assert hw.update_coil(1, 100.0, float(yuzde), 0.0, 1)
+            paket = _son_paket(hw)
+            duty_f32 = sim.decode_packet(paket)[0][0][0]
+            istemci.sendall(paket)
+            ack = _satirlar(istemci, "-> STM_OK:", 1, 3.0)
+            assert ack, f"%{yuzde}: ACK gelmedi"
+            gelen = int(re.search(r"D=(-?\d+)", ack[0]).group(1))
+            if gelen != _firmware_ack_duty(duty_f32):
+                uyusmayan.append((yuzde, gelen, _firmware_ack_duty(duty_f32)))
+    finally:
+        istemci.close()
+        karsi.close()
+    assert not uyusmayan, f"(yüzde, simülatör, firmware) uyuşmuyor — {len(uyusmayan)}/100: {uyusmayan[:8]}"
+
+
+@pytest.mark.parametrize("deger", [float("nan"), float("inf")], ids=["nan", "arti_sonsuz"])
+def test_KRITIK_sonlu_olmayan_duty_NACK_ve_baglanti_SURER(hw, monkeypatch, deger):
+    """Firmware `isfinite` ile NACK'ler ve sürer; simülatör eskiden `_send_ack`'te çöküp bağlantıyı KAPATIYORDU."""
+    istemci, karsi = _sim_bagla(monkeypatch)
+    try:
+        istemci.sendall(_ham_paket(deger))
+        nack = _satirlar(istemci, "-> STM_NACK:", 1, 3.0)
+        assert nack and "RANGE coil=1 field=duty value=nonfinite" in nack[0], f"firmware NACK'i yok: {nack}"
+        assert hw.update_coil(1, 100.0, 25.0, 0.0, 1)
+        istemci.sendall(_son_paket(hw))
+        assert _satirlar(istemci, "-> STM_OK:", 1, 3.0), "NACK'ten sonra bağlantı düştü — sonraki pakete STM_OK yok"
+    finally:
+        istemci.close()
+        karsi.close()
+
+
+def test_etkin_kip_YETENEGI_de_NUM_COILS_bite_kirpar(hw, monkeypatch):
+    """Başlıkta 7. bit olsaydı firmware onu kırpardı (main.c:640-641); simülatör de kırpmalı."""
+    monkeypatch.setattr(sim, "UNIPOLAR_YETENEK_MASKESI", 0xE0)
+    istemci, karsi = _sim_bagla(monkeypatch)
+    try:
+        hw.surus_kipi_ayarla(0x00)
+        assert hw.update_coil(1, 100.0, 25.0, 0.0, 1)
+        istemci.sendall(_son_paket(hw))
+        ack = _satirlar(istemci, "-> STM_OK:", 1, 3.0)
+        k = re.search(r"[,\s]K=(\d+)", ack[0] if ack else "")
+        assert k and int(k.group(1)) == 0x60, f"K= NUM_COILS bite kırpılmadı: {ack}"
     finally:
         istemci.close()
         karsi.close()
@@ -184,3 +275,64 @@ def test_KRITIK_simulator_banner_FIRMWARE_maskesinden_turer(monkeypatch):
     finally:
         istemci.close()
         karsi.close()
+
+
+@pytest.mark.parametrize("maske", [0x00, 0x60, 0x7F], ids=lambda v: f"maske_{v:#04x}")
+def test_banner_kipi_UC_dalda_da_firmware_uclusu(monkeypatch, maske):
+    """Banner kipi yalnız bugünkü 0x60'ta (KARMA) değil, main.c üçlüsünün HER dalında firmware'le aynı."""
+    from utils.stm32_kimlik import banner_ayristir
+
+    monkeypatch.setattr(sim, "UNIPOLAR_YETENEK_MASKESI", maske)
+    istemci, karsi = _sim_bagla(monkeypatch)
+    try:
+        banner = _satirlar(istemci, "-> STM_READY:", 1, 3.0)
+        kimlik = banner_ayristir(banner[0]) if banner else None
+        assert kimlik is not None, f"banner ayrıştırılamadı: {banner}"
+        assert (kimlik.maske, kimlik.kip) == (maske, _firmware_kip(maske, sim.NUM_COILS)), banner[0]
+    finally:
+        istemci.close()
+        karsi.close()
+
+
+def test_maske_okuyucu_YORUMA_kanmaz_ve_TEK_tanim_ister():
+    gercek = "#define PEMF_BOBIN_UNIPOLAR_MASKESI 0x60U  /* bit5,6 */\n"
+    yorumlu = (
+        "/* tarihce:\n * #define PEMF_BOBIN_UNIPOLAR_MASKESI 0x00U (eski)\n */\n"
+        "// #define PEMF_BOBIN_UNIPOLAR_MASKESI 0x7FU\n"
+        # ⚠️ satır BAŞINDA #define içeren blok yorum: yalnız satır-başı çıpası bunu ELEYEMEZ
+        "/*\n#define PEMF_BOBIN_UNIPOLAR_MASKESI 0x00U\n*/\n" + gercek
+    )
+    assert sim.maske_tanimi(yorumlu) == 0x60, "yorumdaki eski tanım okundu"
+    with pytest.raises(RuntimeError):
+        sim.maske_tanimi(gercek + "#define PEMF_BOBIN_UNIPOLAR_MASKESI 0x00U\n")  # iki tanım → belirsiz
+    with pytest.raises(RuntimeError):
+        sim.maske_tanimi("/* #define PEMF_BOBIN_UNIPOLAR_MASKESI 0x60U */\n")  # yalnız yorumda → yok
+
+
+def test_baslik_YOKSA_yol_soyleyen_RuntimeError(monkeypatch, tmp_path):
+    yok = tmp_path / "yok" / "pemf_surus.h"
+    monkeypatch.setattr(sim, "_SURUS_BASLIGI", yok)
+    with pytest.raises(RuntimeError) as e:
+        sim._firmware_unipolar_maskesi()
+    assert str(yok) in str(e.value), f"hata yolu söylemiyor: {e.value}"
+
+
+def test_main_c_ACK_ve_banner_METNI_simulator_modeliyle_AYNI():
+    """Simülatör ve bu kapı firmware'i ELLE modelliyor: main.c'nin ilgili ifadeleri değişirse ikisi
+    birlikte bayatlamasın diye metin (yorumlar soyulmuş) pinlenir."""
+    kod = re.sub(r"\s+", " ", c_soy(MAIN_C.read_text(encoding="utf-8", errors="replace")))
+    beklenen = [
+        '{"-> STM_OK: D=", " P=", " F=", " T="}',  # ACK etiketleri
+        '" K="',  # etkin kip alanı
+        "(long)(parsed.coil[ai].duty * 100.0f)",  # float32 duty yüzdesi
+        "(long)parsed.coil[ai].phase",
+        "(long)parsed.coil[ai].freq",
+        "(long)parsed.coil[ai].dur_min",
+        "g_unipolar[i] = (uint8_t)(g_yalniz_unipolar[i] || (((istenen >> i) & 1U) != 0U));",  # yetenek || istek
+        '"SYM-BIPOLAR"',
+        '"UNIPOLAR tek-bacak"',
+        '"KARMA"',
+        "field=duty value=nonfinite",
+    ]
+    eksik = [b for b in beklenen if b not in kod]
+    assert not eksik, f"main.c değişmiş — simülatör modeli ve bu kapı gözden geçirilmeli: {eksik}"

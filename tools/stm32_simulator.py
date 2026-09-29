@@ -46,6 +46,7 @@ YANIT FORMATI (ASCII, \r\n ile biten) — firmware ile HİZALI (D0Ö.13):
 
 import argparse
 import logging
+import math
 import re
 import socket
 import struct
@@ -101,20 +102,66 @@ WATCHDOG_MS = 1500  # ms — main.c ile aynı
 _SURUS_BASLIGI = Path(__file__).resolve().parents[1] / "firmware" / "stm32_pemf" / "Core" / "Inc" / "pemf_surus.h"
 
 
+def _c_yorumsuz(metin: str) -> str:
+    """C yorumlarını boşlukla değiştirir, string literallerini korur.
+
+    ⚠️ D0Ö.13 ek: yorumdaki eski bir `#define PEMF_BOBIN_UNIPOLAR_MASKESI 0x00U` satırı (ör. belge
+    bloğunda tarihçe) naif aramayı KANDIRIRDI — simülatör ve kapısı birlikte yanlış maskeyi okurdu.
+    """
+    return re.sub(
+        r'"(?:\\.|[^"\\\n])*"|/\*.*?\*/|//[^\n]*',
+        lambda m: m.group(0) if m.group(0).startswith('"') else " ",
+        metin,
+        flags=re.S,
+    )
+
+
+def maske_tanimi(baslik_metni: str) -> int:
+    """Başlık metnindeki TEK, yorum DIŞI `#define PEMF_BOBIN_UNIPOLAR_MASKESI` değeri (yoksa/birden çoksa hata)."""
+    bulunan = re.findall(
+        r"^[ \t]*#[ \t]*define[ \t]+PEMF_BOBIN_UNIPOLAR_MASKESI[ \t]+(0x[0-9A-Fa-f]+|\d+)[uU]?\b",
+        _c_yorumsuz(baslik_metni),
+        flags=re.M,
+    )
+    if len(bulunan) != 1:
+        raise RuntimeError(
+            f"PEMF_BOBIN_UNIPOLAR_MASKESI tanim sayisi {len(bulunan)} (1 bekleniyordu) — simulator firmware ile hizalanamaz"
+        )
+    return int(bulunan[0], 0)
+
+
 def _firmware_unipolar_maskesi() -> int:
     """`pemf_surus.h` → `PEMF_BOBIN_UNIPOLAR_MASKESI` (bit i = bobin i+1 YALNIZ unipolar sürülebilir)."""
-    m = re.search(
-        r"#define\s+PEMF_BOBIN_UNIPOLAR_MASKESI\s+(0x[0-9A-Fa-f]+|\d+)U?\b",
-        _SURUS_BASLIGI.read_text(encoding="utf-8", errors="replace"),
-    )
-    if not m:
+    try:
+        metin = _SURUS_BASLIGI.read_text(encoding="utf-8", errors="replace")
+    except OSError as e:
         raise RuntimeError(
-            f"PEMF_BOBIN_UNIPOLAR_MASKESI {_SURUS_BASLIGI} icinde yok — simulator firmware ile hizalanamaz"
-        )
-    return int(m.group(1), 0)
+            f"firmware basligi okunamadi: {_SURUS_BASLIGI} ({e}) — simulator firmware agaci olmadan hizalanamaz"
+        ) from e
+    return maske_tanimi(metin)
 
 
 UNIPOLAR_YETENEK_MASKESI = _firmware_unipolar_maskesi()
+
+
+def firmware_ack_yuzdesi(duty: float) -> int:
+    """`main.c` ACK: `(long)(parsed.coil[i].duty * 100.0f)` — float32 çarpım, sıfıra doğru kırpma.
+
+    ⚠️ D0Ö.13 ek: eskiden double ile `int(duty * 100)` idi — ürünün paketiyle 1-100 arası tamsayı
+    yüzdelerin 48'inde firmware'den 1 EKSİK basıyordu (0.35f → 34, firmware 35; 0.01f → 0 → süre 0
+    iken ürün bobini "durdu" gösterir). `duty` paketten gelen float32 değerdir; çarpım double'da TAM
+    olduğundan float32'ye tek yuvarlama IEEE float32 çarpımının aynısıdır. Taşma/NaN: ARM `VCVT`
+    32-bit doyurur, NaN → 0 (sonsuz/NaN duty zaten `decode_packet`te NACK'lenir).
+    """
+    try:
+        carpim = struct.unpack("<f", struct.pack("<f", duty * 100.0))[0]
+    except OverflowError:  # float32 aralığını aşan sonlu değer → +/-inf
+        carpim = math.copysign(math.inf, duty)
+    if math.isnan(carpim):
+        return 0
+    if math.isinf(carpim):
+        return 2**31 - 1 if carpim > 0 else -(2**31)
+    return max(-(2**31), min(2**31 - 1, int(carpim)))
 
 
 def _banner_kipi(maske: int) -> str:
@@ -177,6 +224,12 @@ def decode_packet(raw: bytes):
         return None, f"ref_ms={ref_ms} > {REF_MS_MAX}"
 
     for i in range(NUM_COILS):
+        # ⚠️ D0Ö.13 ek: firmware (`main.c` Coil_DecodeAndValidatePacket) sonlu-olmayan değeri ÖNCE ve bu
+        # metinle NACK'ler. Eskiden NaN/+inf duty `< DUTY_MIN`'den geçiyor, `_send_ack` çöküyor ve
+        # bağlantı KAPANIYORDU (firmware NACK'leyip sürer).
+        for alan, dizi in (("duty", duty), ("phase", phase), ("freq", freq)):
+            if not math.isfinite(dizi[i]):
+                return None, f"RANGE coil={i + 1} field={alan} value=nonfinite"
         if duty[i] < DUTY_MIN:
             return None, f"coil={i + 1} duty={duty[i]:.3f} < {DUTY_MIN}"
         if not (PHASE_MIN <= phase[i] <= PHASE_MAX):
@@ -229,10 +282,11 @@ class Stm32SimClient:
         # etkin = yetenek | istek). Eskiden 5 alan ve K= yoktu → simülatörle koşan ürün bobin 6-7 için
         # coil_update almaz (onaysız/bayat görünür), kip göstergesi beslenmezdi.
         n = NUM_COILS
-        etkin = UNIPOLAR_YETENEK_MASKESI | (int(kip_istegi) & ((1 << n) - 1))
+        # Firmware etkin kipi yalnız NUM_COILS bit üzerinden kurar (yetenek de kırpılır — main.c:640-641).
+        etkin = (UNIPOLAR_YETENEK_MASKESI | int(kip_istegi)) & ((1 << n) - 1)
         msg = (
             "-> STM_OK: "
-            f"D={','.join(str(int(duty[i] * 100)) for i in range(n))} "
+            f"D={','.join(str(firmware_ack_yuzdesi(duty[i])) for i in range(n))} "
             f"P={','.join(str(int(phase[i])) for i in range(n))} "
             f"F={','.join(str(int(freq[i])) for i in range(n))} "
             f"T={','.join(str(duration[i]) for i in range(n))} "
