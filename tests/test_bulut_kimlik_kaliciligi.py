@@ -211,9 +211,52 @@ def test_depo_okuma_HICBIR_KOSULDA_patlamaz(tmp_path, monkeypatch):
     assert sm._kimlik_deposu_oku() == ""
 
 
-def test_depo_yazimi_HICBIR_KOSULDA_patlamaz(monkeypatch):
-    """Yazılamayan depo (izin yok) akışı KESMEMELİ."""
+def _olmayan_kok_izi():
+    """Eski testin C:\\ köküne bıraktığı `olmayan_kok_12345` (Y39 — temizliği SAHİP eylemi) için iz:
+    varlık + mtime + boyut + SHA-256. İçerik yalnız özetlenir; hiçbir yere yazılmaz/basılmaz."""
+    kok = Path(os.sep).resolve() / "olmayan_kok_12345"
+    if not kok.exists():
+        return ("YOK",)
+    iz = []
+    for p in sorted([kok, *kok.rglob("*")]):
+        st = p.stat()
+        ozet = hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else ""
+        iz.append((str(p), p.is_file(), st.st_mtime_ns, st.st_size if p.is_file() else 0, ozet))
+    return tuple(iz)
+
+
+def test_depo_yazimi_HICBIR_KOSULDA_patlamaz(tmp_path, monkeypatch):
+    """Yazılamayan depo akışı KESMEMELİ — ve bu HATA DALI gerçekten koşmalı.
+
+    ⚠️ D0Ö.04 (B-10.8): hedef eskiden `os.sep/olmayan_kok_12345/alt` idi. Windows'ta bu, geçerli
+    sürücünün köküne çözülür ve C:\\ standart kullanıcıya YAZILABİLİR → mkdir başarıyor, her süit
+    koşumu GERÇEK C:\\ köküne sır biçimli `device_identity.json` yazıyor, iddia edilen hata dalı
+    HİÇ koşmuyordu (`except` → `raise` mutantında test yeşil kalıyordu). Artık hedefin üst
+    bileşeni bir DOSYA: mkdir her makinede düşer ve hiçbir şey tmp dışına yazılmaz.
+    """
     import utils.secrets_manager as sm
 
-    monkeypatch.setenv("PEMF_DEVICE_IDENTITY_DIR", os.path.join(os.sep, "olmayan_kok_12345", "alt"))
+    engel = tmp_path / "dosya"
+    engel.write_text("dizin degil", encoding="utf-8")
+    hedef = engel / "alt"
+    # Yazımdan ÖNCE: hedef tmp içinde olmalı (gerçek köke dönen bir yol, yazmadan kırmızı olur).
+    assert hedef.resolve().is_relative_to(tmp_path.resolve()), f"depo hedefi tmp dışında: {hedef}"
+    once = _olmayan_kok_izi()
+    uyarilar = []
+
+    class _Kaydedici:
+        def warning(self, msg, *a, **k):
+            uyarilar.append(msg % a if a else msg)
+
+        def __getattr__(self, ad):
+            return lambda *a, **k: None
+
+    monkeypatch.setattr(sm, "logger", _Kaydedici())
+    monkeypatch.setenv("PEMF_DEVICE_IDENTITY_DIR", str(hedef))
     sm._kimlik_deposu_yaz("deneme-degeri")  # istisna fırlatırsa test kırmızı
+
+    assert any("yazılamadı" in u for u in uyarilar), (
+        f"hata dalı KOŞMADI — yazılamayan depo kurulamadı, test kör: {uyarilar}"
+    )
+    assert engel.is_file() and not hedef.exists(), "yazılamayan depoya bir şey yazıldı"
+    assert _olmayan_kok_izi() == once, "C:\\olmayan_kok_12345 izi değişti — test gerçek köke yazdı"
