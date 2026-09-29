@@ -15,7 +15,10 @@ ve UC PROFILIN (ev sahibi / veteriner / arastirma) uc-kapsamlari.
 IZOLASYON (bozmayin):
   * Alt-port (varsayilan 8124, PEMF_E2E_PORT ile degisir) — uretimdeki 8000'e DOKUNMAZ.
   * Gecici PEMF_DATA_DIR — gercek hasta/tedavi verisine DOKUNMAZ.
-  * Yalniz 127.0.0.1. PEMF_SIMULATE=1 → sanal STM+ESP+8 bobin; DONANIM GEREKMEZ.
+  * Istemci yalniz 127.0.0.1. PEMF_SIMULATE=1 → sanal STM+ESP+8 bobin; DONANIM GEREKMEZ.
+  * Backend alt surec ortami TEK YERDE: tools/e2e_ortam.py (STM portu SIM, cihaz kimligi/ProgramData/
+    ev/APPDATA gecici kokte, null kasa, Supabase kara-delik, bulut MQTT provizyonsuz, dis PEMF_* mirassiz).
+    ⚠️ Backend yine de GitHub firmware manifestini okur, mDNS/UDP kesif yayini yapar (headless servisler).
 
 Kullanim:  python tools/e2e_full.py     (cikis kodu 0 = hepsi gecti)
 """

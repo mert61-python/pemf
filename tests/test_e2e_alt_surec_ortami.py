@@ -41,12 +41,30 @@ def _istek_yok(*a, **k):
     raise ConnectionRefusedError("e2e kapısı: HTTP isteği yapılmaz")
 
 
+#: Dış ortamda (sahibin kabuğu) bulunabilecek, GERÇEK kaynaklara işaret eden değişkenler (nöbetçi değerler).
+#: D0Ö.08 ek (tur 3): backend alt süreci bunları MİRAS ALMAMALI — PEMF_BACKUP_DIR ilk yedek turunda kurtarma
+#: zarfını gerçek off-site dizine AYNI ADLA yazar; PEMF_MQTT_CLOUD_* E-stop'u gerçek broker'a aynalar.
+_MIRAS_NOBETCILERI = {
+    "PEMF_BACKUP_DIR": "GERCEK_offsite_yedek",
+    "PEMF_MQTT_CLOUD_HOST": "gercek-broker.invalid",
+    "PEMF_SENTRY_DSN": "https://gercek@sentry.invalid/1",
+    "PEMF_REQUIRE_AUTH": "1",
+    "SUPABASE_KEY": "gercek-anahtar",
+}
+
+
 def _arac_ortami(ad: str, tmp_path: Path, monkeypatch) -> tuple[dict, Path]:
     """Aracın `main()`i backend'e hangi ortamı verirdi — backend BAŞLATILMADAN."""
     for d in YALITIM_DEGISKENLERI:
         monkeypatch.delenv(d, raising=False)
-    for d in ("PROGRAMDATA", "APPDATA", "LOCALAPPDATA"):
+    for d in ("PROGRAMDATA", "APPDATA", "LOCALAPPDATA", "USERPROFILE"):
         monkeypatch.setenv(d, str(tmp_path / f"GERCEK_{d}"))
+    for d, deger in _MIRAS_NOBETCILERI.items():
+        monkeypatch.setenv(d, str(tmp_path / deger) if deger.startswith("GERCEK_") else deger)
+    monkeypatch.setenv("PEMF_CLOUD_PATIENT_SYNC", "1")
+    monkeypatch.setenv("PEMF_FW_AUTO_UPDATE", "1")
+    # Koşucu/conftest dış ortamda null arka uç verir → araç onu MİRAS alıp kapıyı maskelerdi.
+    monkeypatch.setenv("PYTHON_KEYRING_BACKEND", "keyring.backends.Windows.WinVaultKeyring")
     monkeypatch.setattr(sys, "path", list(sys.path))  # araç kökü eklerse test sonunda geri gelir
     spec = importlib.util.spec_from_file_location(f"e2e_kapisi_{ad}", KOK / "tools" / f"{ad}.py")
     arac = importlib.util.module_from_spec(spec)
@@ -104,3 +122,20 @@ def test_KRITIK_e2e_backend_ortami_GERCEK_sisteme_DOKUNAMAZ(ad, tmp_path, monkey
     assert saglama and Path(saglama).resolve().is_relative_to(veri.resolve()) and not Path(saglama).exists(), (
         f"{ad}: E-stop bulut aynası GERÇEK broker'a uzanabilir: PEMF_CLOUD_PROVISION_PATH={saglama!r}"
     )
+    # EK (tur 3): oto-firmware, ev/masaüstü, kasa ve dış ortam mirası.
+    assert env.get("PEMF_FW_AUTO_UPDATE") == "0", f"{ad}: PEMF_FW_AUTO_UPDATE={env.get('PEMF_FW_AUTO_UPDATE')!r}"
+    ev_disarida = {
+        d: env.get(d)
+        for d in ("USERPROFILE", "HOME", "LOCALAPPDATA")
+        if not (env.get(d) and "GERCEK_" not in env[d] and Path(env[d]).resolve().is_relative_to(veri.resolve()))
+    }
+    assert not ev_disarida, f"{ad} backend'i GERÇEK ev/masaüstü köküne yazabilir: {ev_disarida}"
+    assert (Path(env["USERPROFILE"]) / "Desktop").is_dir(), (
+        f"{ad}: sahte evin Desktop klasörü yok — masaüstü bulunamazsa ürün DEPO dizinine (cwd) yazar"
+    )
+    assert env.get("PYTHON_KEYRING_BACKEND") == "keyring.backends.null.Keyring", (
+        f"{ad} backend'i sahibin GERÇEK kimlik kasasını okuyabilir: PYTHON_KEYRING_BACKEND="
+        f"{env.get('PYTHON_KEYRING_BACKEND')!r}"
+    )
+    sizan = {d: env[d] for d in _MIRAS_NOBETCILERI if d in env}
+    assert not sizan, f"{ad} backend'i dış ortamın GERÇEK kaynak değişkenlerini MİRAS aldı: {sizan}"

@@ -23,7 +23,11 @@ def alt_surec_ortami(data_dir: Path, port: int, guii: Path, ek: dict | None = No
     # Alt surecin SAHTE EV DIZINI — masaustu sizintisini keser.
     sahte_ev = data_dir / "sahte_ev"
     (sahte_ev / "Desktop").mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ)
+    # ⚠️ İZİN LİSTESİ (D0Ö.08 ek): dış ortamdan HİÇBİR PEMF_*/SUPABASE_* miras alınmaz — ör. PEMF_BACKUP_DIR
+    # backend'in ilk yedek turunda kurtarma zarfını GERÇEK off-site dizindeki aynı adlı zarfın ÜZERİNE
+    # yazdırırdı; PEMF_MQTT_CLOUD_* E-stop'u gerçek broker'a aynalar, PEMF_SENTRY_DSN uzaktan hata izlemeyi
+    # açar; PEMF_REQUIRE_AUTH/CORS/MASK_HISTORY_PII senaryoları bozar. Gereken her şey aşağıda AÇIKÇA verilir.
+    env = {k: v for k, v in os.environ.items() if not k.upper().startswith(("PEMF_", "SUPABASE_"))}
     env.update(
         {
             "PEMF_SIMULATE": "1",  # sanal STM+ESP+8 bobin + sensör
@@ -76,9 +80,13 @@ def alt_surec_ortami(data_dir: Path, port: int, guii: Path, ek: dict | None = No
             # Gomulu Python dagitimi (._pth) betik dizinini sys.path'e eklemiyor → acikca ver.
             "PYTHONPATH": str(guii),
             "PYTHONIOENCODING": "utf-8",
+            # ⚠️ KASA (D0Ö.08 ek): ürünün eski-kaynak okuyucuları önce keyring'e bakar → kaynaktan koşan
+            # backend sahibin GERÇEK Windows kasasındaki PEMF_GUI anahtarlarını (sqlcipher_key dahil) okuyup
+            # e2e köküne göçürüyor, e2e DB'lerini GERÇEK at-rest anahtarıyla şifreliyordu (D0Ö.02 sınıfı).
+            "PYTHON_KEYRING_BACKEND": "keyring.backends.null.Keyring",
         }
     )
-    for k in ("PEMF_REQUIRE_AUTH", "PEMF_REQUIRE_PATIENT_AUTH", "PEMF_CORS_ORIGINS", "PEMF_MASK_HISTORY_PII"):
-        env.pop(k, None)  # LAN muaf → token'sız test; varsayılan CORS/PII davranışı sınanır
+    # LAN muaf → token'sız test; varsayılan CORS/PII davranışı sınanır (izin listesi bunları zaten dışarıda
+    # bırakır — PEMF_REQUIRE_AUTH, PEMF_REQUIRE_PATIENT_AUTH, PEMF_CORS_ORIGINS, PEMF_MASK_HISTORY_PII).
     env.update(ek or {})
     return env
