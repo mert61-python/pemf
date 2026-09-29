@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -70,6 +71,66 @@ UCLAR = [
 
 #: Kabul edilen kodlar. 401/403 auth açıkken normaldir; 404/422 DEĞİLDİR (yanlış yol demektir).
 KABUL = (200, 401, 403)
+
+#: Ürünün canlı telemetri/kontrol kanalı (`api_server` → `@app.websocket("/ws")`). Yerel bağlantıda
+#: auth istemez; bağlanınca `snapshot` yollar, `{"type": "ping"}`e `pong` döner.
+WS_YOLU = "/ws"
+
+
+class _WsIzleyici(threading.Thread):
+    """`/ws`ye soak BOYUNCA bağlı kalır; kopmaları ve bağlanamamaları SAYAR, yeniden bağlanır.
+
+    ⚠️ D0Ö.22 (B-9.26): betik adı ve belgeler "HTTP + WebSocket soak" diyordu ama HİÇ `/ws` açmıyordu —
+    canlı kanalın kopma sınıfı soak'ta GÖRÜNMÜYORDU, yine de "TEMIZ" kaydı düşüldü (VERIFICATION §7).
+    Sayaçlar karara girer (bkz. `main`). Soak'ı DÜŞÜRMEZ: her hata sayılır, 2 sn sonra yeniden denenir.
+    """
+
+    def __init__(self, uri: str, ping_aralik: float = 15.0):
+        super().__init__(name="soak-ws", daemon=True)
+        self.uri = uri
+        self.ping_aralik = ping_aralik
+        self.dur = threading.Event()
+        self.baglanti = 0
+        self.kopma = 0
+        self.baglanamama = 0
+        self.mesaj = 0
+        self.son_hata = ""
+
+    def run(self) -> None:
+        try:
+            from websockets.sync.client import connect
+        except ImportError as e:
+            self.son_hata = f"websockets paketi yuklenemedi ({e})"
+            return
+        while not self.dur.is_set():
+            bagli = False
+            try:
+                with connect(self.uri, open_timeout=5, close_timeout=1) as ws:
+                    bagli = True
+                    self.baglanti += 1
+                    son_ping = time.monotonic()
+                    while not self.dur.is_set():
+                        try:
+                            ws.recv(timeout=1.0)
+                            self.mesaj += 1
+                        except TimeoutError:
+                            pass
+                        if time.monotonic() - son_ping >= self.ping_aralik:
+                            ws.send('{"type": "ping"}')
+                            son_ping = time.monotonic()
+            except Exception as e:  # kopma YA DA bağlanamama — ikisi de sayılır, soak düşmez
+                if self.dur.is_set():
+                    break
+                self.son_hata = f"{type(e).__name__}: {e}"[:200]
+                if bagli:
+                    self.kopma += 1
+                else:
+                    self.baglanamama += 1
+            self.dur.wait(2.0)  # yeniden bağlanma aralığı
+
+    def durdur(self) -> None:
+        self.dur.set()
+        self.join(timeout=10)
 
 
 def _istek(taban: str, yol: str, zaman_asimi: float = 10.0):
@@ -212,7 +273,9 @@ def _db_kb(veri_koku: Path) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--port", type=int, default=8000)
+    # ⚠️ D0Ö.22: ZORUNLU — betik artık `/ws` de açar; varsayılan 8000 (çalışan klinik backend'i)
+    # SESSİZCE hedeflenmesin. Ölçülmesi istenen backend'in portu AÇIKÇA verilir.
+    ap.add_argument("--port", type=int, required=True, help="olculecek backend portu (HTTP + /ws)")
     ap.add_argument("--dakika", type=float, default=20.0)
     ap.add_argument("--aralik", type=float, default=30.0, help="ornekleme araligi (sn)")
     a = ap.parse_args()
@@ -246,7 +309,10 @@ def main() -> int:
     hata = 0
     basla = time.monotonic()
 
-    print(f"soak basladi: {taban}  sure={a.dakika} dk  aralik={a.aralik} sn")
+    ws = _WsIzleyici(f"ws://127.0.0.1:{a.port}{WS_YOLU}")
+    ws.start()
+
+    print(f"soak basladi: {taban}  sure={a.dakika} dk  aralik={a.aralik} sn  (+ WS {WS_YOLU})")
     print(f"  veri koku: {veri_koku}")
     print(f"{'dk':>6} {'RSS(MB)':>9} {'DB(KB)':>8} {'tur':>7} {'hata':>6}")
 
@@ -265,6 +331,7 @@ def main() -> int:
             sonraki_ornek = gecen + a.aralik
         time.sleep(0.25)
 
+    ws.durdur()
     if len(ornekler) < 2:
         print("\nSONUC: ornek sayisi yetersiz — daha uzun kosturun.")
         return 0
@@ -278,6 +345,10 @@ def main() -> int:
     print(f"  istek: {tur}  hata: {hata}")
     print(f"  RSS: {ilk_rss} -> {son_rss} MB  (fark {artis:+.1f} MB, %{oran:+.1f})")
     print(f"  DB : {ilk_db} -> {son_db} KB  (fark {son_db - ilk_db:+d} KB)")
+    print(
+        f"  WS : baglanti {ws.baglanti}, KOPMA {ws.kopma}, baglanamama {ws.baglanamama}, mesaj {ws.mesaj}"
+        + (f"  (son hata: {ws.son_hata})" if ws.son_hata else "")
+    )
 
     # ⚠️ ESIK GEREKCESI: kisa soak'ta birkac MB dalgalanma NORMALDIR (GC, arena, onbellek).
     # Sizinti isareti MONOTON ve ORANSAL artistir. %25 esigi, 20 dk'lik bir kosuda
@@ -288,6 +359,15 @@ def main() -> int:
         return 1
     if hata:
         print(f"\n  ⚠️ {hata} istek basarisiz -> WS/HTTP kararliligi supheli.")
+        return 1
+    # D0Ö.22: WS sonucu KARARA girer — bağlanılamayan kanal "kararlı" sayılamaz.
+    if ws.baglanti == 0:
+        print(f"\n  UYARI: {WS_YOLU} kanalina HIC baglanilamadi -> WS kararliligi OLCULMEDI.")
+        return 1
+    if ws.kopma or ws.baglanamama:
+        print(
+            f"\n  UYARI: WS {ws.kopma} kez KOPTU, {ws.baglanamama} kez yeniden baglanamadi -> WS kararliligi SUPHELI."
+        )
         return 1
     print("\nSONUC: TEMIZ")
     return 0

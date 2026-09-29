@@ -14,7 +14,7 @@ cihaz/dış-kaynak gerektirir — aşağıdaki komutları **cihazda/panelde** ç
 | 5 | Bağımlılık CVE | ✅ **düşük-riskli 3'ü YAPILDI** / ⏳ onnx+torch | ölçüldü: cryptography 50.0.0 · multipart 0.0.31 · zeroconf 0.149.0 |
 | 6 | AI model bütünlüğü | ✅ **DOĞRULANDI (2026-09-13)** | `scripts/model_butunluk.py` — gömülü paket **56/56 bayt-birebir** |
 | 6b | AI model **lisansı** | ⛔ YAPILMAYACAK | ⛔ **SAHİP KARARI 2026-09-21: YAPILMAYACAK.** Envanter işi kapatıldı; AGPL kalemi `docs/AGPL-KARARI.md`'de duruyor |
-| 7 | Yük/soak | ⚠️ **kısa koşu TEMİZ** / ⏳ uzun koşu | 25 dk: RSS +%0,9 (sızıntı YOK), DB sabit. ⚠️ eski betik **MQTT** üzerinden → ESP kapalıyken hiçbir canlı yolu zorlamıyor; yerine `scripts/soak_http_ws.py`. 72 saatlik klinik koşusu sahipte |
+| 7 | Yük/soak | ⚠️ **kısa koşu TEMİZ** / ⏳ uzun koşu | 25 dk: RSS +%0,9 (sızıntı YOK), DB sabit. ⚠️ **O koşu WS AÇMIYORDU** (B-9.26; `/ws` istemcisi 2026-09-30'da eklendi): WS kararlılığı o koşuda ÖLÇÜLMEDİ — yeniden koşulmalı. ⚠️ eski betik **MQTT** üzerinden → ESP kapalıyken hiçbir canlı yolu zorlamıyor; yerine `scripts/soak_http_ws.py`. 72 saatlik klinik koşusu sahipte |
 | 8 | KVKK anonimleştirme | ✅ **DOĞRULANDI** | `tests/test_kvkk_anonymization.py` — 3/3 + `.plain.bak` ACL fix |
 | 9 | firmware `[FIX-1c]` duty geçişi | ⏳ donanım | Bench testi (aşağıda) — **YAYIN ÖNCESİ ZORUNLU** |
 | 16 | ~~STM reflash + doz kalibrasyonu~~ | ⛔ KALDIRILDI | doz kalibrasyonu silindi (sahip 2026-09-21); reflash → otomatik firmware güncellemesi |
@@ -122,6 +122,7 @@ Get-ChildItem "C:\ProgramData\PEMF_GUI\ai_models\*" -Recurse -Include *.onnx,*.p
 
 ```powershell
 # HTTP + WebSocket soak (canlı yolları zorlar) — uzun süre çalıştır:
+# (--port ZORUNLU; /ws kopar ya da hiç bağlanamazsa sonuç SUPHELI / ÖLÇÜLMEDİ ve çıkış ≠0)
 python scripts\soak_http_ws.py --port 8000 --dakika 4320 --aralik 60
 # ⛔ soak_publish_5hz_8coil.py ESP kapalıyken (varsayılan) hiçbir şey ölçmez — kullanmayın.
 # Paralel izleme (her 30sn): süreç belleği + DB büyümesi
