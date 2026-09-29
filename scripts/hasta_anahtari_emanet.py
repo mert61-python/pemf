@@ -87,12 +87,17 @@ def _veri_koku_adaylari() -> list[Path]:
     pd = os.environ.get("PROGRAMDATA", "").strip()
     if pd:
         adaylar.append(Path(pd) / "PEMF_System" / "PEMF_GUI")
+    # ⚠️ D0Ö.20 (B-9.25): import hatası YUTULMAZ. Eskiden `except Exception: pass` idi — yol
+    # bozukken (F4'ten beri tam böyle) PEMF_DATA_DIR kökü aday listesinden SESSİZCE düşüyor ve
+    # araç YANLIŞ kökün anahtarını okuyup emanete koyabiliyordu.
     try:
         from utils.path_utils import get_app_data_directory
-
-        adaylar.append(Path(get_app_data_directory()))
-    except Exception:
-        pass
+    except ImportError as e:
+        raise SystemExit(
+            f"HATA: utils.path_utils yuklenemedi ({e}) — PEMF_DATA_DIR koku bulunamaz ve YANLIS kokun "
+            "anahtari okunabilir. Betigi depodan (scripts/) calistirin; depo/kurulum bozuk olabilir."
+        ) from e
+    adaylar.append(Path(get_app_data_directory()))
     ap = os.environ.get("APPDATA", "").strip()
     if ap:
         adaylar.append(Path(ap) / "PEMF_GUI")
@@ -190,6 +195,17 @@ def disa_aktar(hedef: Path) -> int:
     except ValueError:
         pass  # depo dışında — istenen budur
 
+    # ⚠️ D0Ö.20 (B-9.25, İG-9.16): ACL modülü YAZMADAN ÖNCE yüklenir ve hatası YUTULMAZ. Eskiden
+    # yazımdan SONRA `try/except: pass` içindeydi: modül yüklenemezse (F4'ten beri tam böyle)
+    # düz-metin hasta anahtarı UYARISIZ ve ACL kilidi OLMADAN diske düşüyordu.
+    try:
+        from utils.file_acl import lock_down_file
+    except ImportError as e:
+        raise SystemExit(
+            f"HATA: utils.file_acl yuklenemedi ({e}) — duz-metin emanet ACL kilidi olmadan YAZILMADI. "
+            "Betigi depodan (scripts/) calistirin; depo/kurulum bozuk olabilir."
+        ) from e
+
     cozulmus = _sirlari_oku()
     satirlar = [
         "# PEMF Vet — HASTA VERISI ANAHTARI (EMANET)",
@@ -214,12 +230,14 @@ def disa_aktar(hedef: Path) -> int:
 
     hedef.parent.mkdir(parents=True, exist_ok=True)
     hedef.write_text("\n".join(satirlar) + "\n", encoding="utf-8")
-    try:
-        from utils.file_acl import lock_down_file
-
-        lock_down_file(hedef)
-    except Exception:
-        pass
+    # `lock_down_file` hata ATMAZ, False döner (best-effort) — dönüş OKUNUR; eskiden yok sayılıyordu.
+    if not lock_down_file(hedef):
+        print(
+            f"UYARI: ACL kilidi UYGULANAMADI ({hedef}) — dosya bu makinedeki baska hesaplarca okunabilir "
+            "(FAT/exFAT USB'de ACL yoktur). Yalniz sizin erisebildiginiz bir yerde (sifreli kasa / fiziksel "
+            "olarak korunan USB) tutun.",
+            file=sys.stderr,
+        )
 
     print(f"emanet yazildi: {hedef}")
     for alan, _a in ALANLAR:
