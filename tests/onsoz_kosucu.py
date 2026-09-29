@@ -18,16 +18,27 @@
    F4 taşımasında ölen betikler (emanet, vault tatbikatı, XAI ses kolu, soak veri kökü) açılışta
    SAĞLAM göründü. Bu kipte, gövde KOŞTURULMADAN, betiğin AST'sindeki TÜM birinci-taraf import
    düğümlerinin üst paketi önsözün kurduğu `sys.path` ile `importlib.util.find_spec`'le çözülür
-   ve çözümün DEPO İÇİNE düştüğü denetlenir (site-packages'taki aynı adlı bir paket sayılmaz).
+   ve çözümün deponun KANONİK konumuna (`kok/<ad>` ya da `kok/apps/backend/<ad>`) düştüğü
+   denetlenir (site-packages'taki aynı adlı paket, depo içindeki bayat kopya ve düzenli paketin
+   ad-alanı parçası sayılmaz).
+
+⚠️ KÖR ALANLAR (tasarım gereği; D0Ö.19 ek'te ölçüldü, bugün hiçbiri gerçekleşmiyor):
+   · değişken argümanlı dinamik import (`importlib.import_module(mod_yolu)`, `runpy`, `-c` dizeleri) —
+     yalnız SABİT dize argümanlı `import_module`/`__import__` taranır;
+   · göreli import'lar; alt modülün kendisi (yalnız üst paket çözülür: `utils.x` eksikse görülmez);
+   · modül düzeyinde, yol kurulumundan ÖNCE çağrılan bir fonksiyonun içindeki import;
+   · `dar_yol` betik dizinini yola koyar; gömülü `._pth` çalışma anında koymaz (kapı daha hoşgörülü).
 
 Kullanım:  python tests/onsoz_kosucu.py <depo_koku> <json_dosya_listesi> [--ic-importlar]
-Çıktı   :  son satırda JSON — [[rel, hata_metni], ...]
+Çıktı   :  son satırda JSON — [[rel, hata_metni], ...]; `--ic-importlar` kipinde ondan önce
+           `DENETLENEN_ONEKI` + JSON [[rel, ad], ...] (gerçekten çözülmeye çalışılan çiftler).
 """
 
 from __future__ import annotations
 
 import ast
 import contextlib
+import copy
 import importlib.util
 import io
 import json
@@ -36,6 +47,8 @@ from pathlib import Path
 
 #: `--ic-importlar` bulgularının öneki — kapı yalnız bunları süzer (önsöz hataları ayrı kapıda).
 IC_IMPORT_ONEKI = "COZULEMEYEN_IC_IMPORT"
+#: Denetlenen (betik, ad) çiftleri satırının öneki — kapının VAKUM ölçüsü.
+DENETLENEN_ONEKI = "DENETLENEN_IC_IMPORTLAR "
 
 
 def onsoz_dugumleri(agac: ast.Module) -> list[ast.stmt]:
@@ -88,37 +101,58 @@ def _kullandigi_adlar(d: ast.AST) -> set[str]:
     return {n.id for n in ast.walk(d) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
 
 
+#: Yol diliminin dayanabileceği tanım türleri. ⚠️ Sınıf gövdesi ve bileşik deyim KOŞTURULMAZ.
+_DILIM_TANIMLARI = (ast.Assign, ast.AnnAssign, ast.AugAssign, ast.FunctionDef, ast.AsyncFunctionDef)
+
+
+def _yola_budanmis(d: ast.stmt) -> ast.stmt:
+    """Bileşik deyimin (for/if/while/try/with) gövdelerinde YALNIZ `sys.path`e dokunan alt deyimler kalır.
+
+    ⚠️ D0Ö.19 ek: dilim bileşik deyimi BÜTÜNÜYLE koşturuyordu — `for`un içindeki yan etki (dosya
+    yazma) de koşuyordu. Başlık (koşul, döngü değişkeni) korunur; boşalan gövdeye `pass` konur.
+    """
+    d = copy.deepcopy(d)
+    for sahip in [d, *getattr(d, "handlers", [])]:
+        for alan in ("body", "orelse", "finalbody"):
+            govde = getattr(sahip, alan, None)
+            if not isinstance(govde, list) or not govde or not isinstance(govde[0], ast.stmt):
+                continue
+            kalan = [_yola_budanmis(x) for x in govde if _yola_dokunur(x)]
+            setattr(sahip, alan, kalan or ([] if alan == "orelse" else [ast.Pass()]))
+    return d
+
+
 def yol_kurulumu_dugumleri(agac: ast.Module) -> list[ast.stmt]:
     """ÖNSÖZDEN SONRA gelen üst-düzey `sys.path` kurulumu + YALNIZ onun dayandığı tanımlar.
 
     ⚠️ Betik yolu son import'tan SONRA kurabilir (`KOK = …; sys.path.insert(0, str(KOK))`, ardından
     import yalnız fonksiyonlarda): önsöz o satırı koşturmaz ve fonksiyon içi import'lar SAHTE kırmızı
     olur (ölçüldü: `xai_batch_rapor` → `ai_hub`). Kalan gövdenin TAMAMI KOŞTURULMAZ (make_base_zip
-    dersi): yalnız `sys.path`e dokunan deyimler ve onların (geçişli) kullandığı atama/fonksiyonlar.
+    dersi): yalnız `sys.path`e dokunan deyimler (bileşikse budanmış) ve onların (geçişli) kullandığı,
+    SON `sys.path` deyiminden ÖNCE gelen atama/fonksiyon tanımları (sonradan yeniden atama koşmaz).
     """
     govde = [d for d in agac.body if not _main_blogu_mu(d)]
     son_import = max((i for i, d in enumerate(govde) if isinstance(d, (ast.Import, ast.ImportFrom))), default=-1)
     kalan = govde[son_import + 1 :]
-    secili = {
-        id(d)
-        for d in kalan
+    yol_sira = [
+        i
+        for i, d in enumerate(kalan)
         if not isinstance(d, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and _yola_dokunur(d)
-    }
-    if not secili:
+    ]
+    if not yol_sira:
         return []
-    gereken: set[str] = set()
-    for d in kalan:
-        if id(d) in secili:
-            gereken |= _kullandigi_adlar(d)
+    secili = {i: _yola_budanmis(kalan[i]) for i in yol_sira}
+    gereken: set[str] = set().union(*(_kullandigi_adlar(d) for d in secili.values()))
+    adaylar = [(i, d) for i, d in enumerate(kalan[: yol_sira[-1]]) if isinstance(d, _DILIM_TANIMLARI)]
     degisti = True
     while degisti:
         degisti = False
-        for d in kalan:
-            if id(d) not in secili and _tanimladigi_adlar(d) & gereken:
-                secili.add(id(d))
+        for i, d in adaylar:
+            if i not in secili and _tanimladigi_adlar(d) & gereken:
+                secili[i] = d
                 gereken |= _kullandigi_adlar(d)
                 degisti = True
-    return [d for d in kalan if id(d) in secili]
+    return [secili[i] for i in sorted(secili)]
 
 
 def dar_yol(betik: Path, depo_koku: Path) -> list[str]:
@@ -170,7 +204,14 @@ def ilk_taraf_adlari(kok: Path) -> set[str]:
 
 
 def _depoda_cozuluyor(ad: str, kok: Path) -> bool:
-    """`ad` ŞU ANKİ `sys.path` ile çözülüyor VE çözüm depo içinde mi? (modül KOŞTURULMAZ)"""
+    """`ad` ŞU ANKİ `sys.path` ile çözülüyor VE çözüm deponun KANONİK konumunda mı? (modül KOŞTURULMAZ)
+
+    ⚠️ D0Ö.19 ek: "depo içinde HERHANGİ bir yer" yetmiyordu — betik dizini yolda olduğu için depo
+    içindeki bayat bir kopya (`scripts/utils/`) çözüm sayılıyordu. Kanonik: `kok/<ad>` ya da
+    `kok/apps/backend/<ad>` (paket dizini ya da `<ad>.py`). Depoda DÜZENLİ paket olan bir ad için
+    ad-alanı spec'i de reddedilir: düzenli paket yoldaysa Python ad-alanı döndürmez; dönmesi
+    gerçek paketin yolda OLMADIĞI demektir.
+    """
     mod = sys.modules.get(ad)
     try:
         spec = mod.__spec__ if mod is not None else importlib.util.find_spec(ad)
@@ -178,31 +219,47 @@ def _depoda_cozuluyor(ad: str, kok: Path) -> bool:
         return False
     if spec is None:
         return False
-    konumlar = list(spec.submodule_search_locations or [])
-    if spec.origin and spec.origin not in ("namespace", "built-in", "frozen"):
-        konumlar.append(spec.origin)
-    depo = kok.resolve()
-    for x in konumlar:
-        try:
-            if Path(x).resolve().is_relative_to(depo):
-                return True
-        except (OSError, ValueError):
-            continue
-    return False
+    tabanlar = (kok.resolve(), kok.resolve() / "apps" / "backend")
+    try:
+        if spec.submodule_search_locations is not None:
+            konumlar = {Path(x).resolve() for x in spec.submodule_search_locations}
+            if not konumlar or not konumlar <= {(t / ad).resolve() for t in tabanlar}:
+                return False
+            duzenli = any((t / ad / "__init__.py").is_file() for t in tabanlar)
+            return not (duzenli and spec.origin in (None, "namespace"))
+        return bool(spec.origin) and Path(spec.origin).resolve() in {(t / f"{ad}.py").resolve() for t in tabanlar}
+    except (OSError, ValueError):
+        return False
 
 
-def ic_import_hatalari(agac: ast.Module, kok: Path, ilk_taraf: set[str]) -> list[str]:
-    """GÖVDE KOŞTURULMADAN: fonksiyon/`try` içi dahil TÜM birinci-taraf import'lar çözülüyor mu?"""
+def _import_adlari(d: ast.AST) -> list[str]:
+    """Düğümün import ettiği ÜST-DÜZEY adlar (göreli import ve değişken argümanlı dinamik import: yok)."""
+    if isinstance(d, ast.Import):
+        return [a.name.split(".")[0] for a in d.names]
+    if isinstance(d, ast.ImportFrom) and d.level == 0 and d.module:
+        return [d.module.split(".")[0]]
+    if (
+        isinstance(d, ast.Call)
+        and (getattr(d.func, "id", None) or getattr(d.func, "attr", None)) in ("import_module", "__import__")
+        and d.args
+        and isinstance(d.args[0], ast.Constant)
+        and isinstance(d.args[0].value, str)
+    ):
+        return [d.args[0].value.split(".")[0]]
+    return []
+
+
+def ic_import_hatalari(
+    agac: ast.Module, kok: Path, ilk_taraf: set[str], denetlenen: set[str] | None = None
+) -> list[str]:
+    """GÖVDE KOŞTURULMADAN: fonksiyon/`try` içi dahil TÜM birinci-taraf import'lar çözülüyor mu?
+
+    `denetlenen`: çözülmeye çalışılan adlar buraya eklenir (kapının vakum ölçüsü).
+    """
     hatalar: list[str] = []
-    bakilan: set[str] = set()
+    bakilan: set[str] = set() if denetlenen is None else denetlenen
     for d in ast.walk(agac):
-        if isinstance(d, ast.Import):
-            adlar = [a.name.split(".")[0] for a in d.names]
-        elif isinstance(d, ast.ImportFrom) and d.level == 0 and d.module:
-            adlar = [d.module.split(".")[0]]
-        else:
-            continue  # göreli import: betik paket değil, önsöz kapısının konusu
-        for ad in adlar:
+        for ad in _import_adlari(d):
             if ad not in ilk_taraf or ad in bakilan:
                 continue
             bakilan.add(ad)
@@ -211,7 +268,9 @@ def ic_import_hatalari(agac: ast.Module, kok: Path, ilk_taraf: set[str]) -> list
     return hatalar
 
 
-def bir_betik(kok: Path, rel: str, ic_importlar: bool = False) -> list[tuple[str, str]]:
+def bir_betik(
+    kok: Path, rel: str, ic_importlar: bool = False, denetlenen: list[tuple[str, str]] | None = None
+) -> list[tuple[str, str]]:
     p = kok / rel
     try:
         agac = ast.parse(p.read_text(encoding="utf-8", errors="replace"))
@@ -232,6 +291,10 @@ def bir_betik(kok: Path, rel: str, ic_importlar: bool = False) -> list[tuple[str
             sonuc.append((rel, f"ImportError: {e}"))
         except SystemExit:
             pass
+        except RuntimeError as e:
+            # ⚠️ D0Ö.19 ek: `_depo_koku` işaret bulamayınca RuntimeError atar → betik AÇILIŞTA ölür
+            # ve önsözde ondan sonraki import'lar HİÇ denenmez. Yutulursa kapı YEŞİL kalırdı.
+            sonuc.append((rel, f"RuntimeError: {e}"))
         except Exception:
             # ⚠️ BU KAPININ KONUSU YALNIZ IMPORT. Önsözde ortam/dosya hatası olabilir
             # (ör. eksik ayar dosyası) — o ayrı bir arızadır, burada susturulur.
@@ -240,13 +303,19 @@ def bir_betik(kok: Path, rel: str, ic_importlar: bool = False) -> list[tuple[str
             # Önsözden sonra kurulan yol (yalnız sys.path dilimi — kalan gövde KOŞMAZ).
             dilim = yol_kurulumu_dugumleri(agac)
             if dilim:
+                modul = ast.fix_missing_locations(ast.Module(body=dilim, type_ignores=[]))
                 try:
                     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                        exec(compile(ast.Module(body=dilim, type_ignores=[]), str(p), "exec"), kapsam)  # noqa: S102
-                except Exception:  # noqa: S110 — yol kurulamadıysa import'lar aşağıda KIRMIZI olur
-                    pass
+                        exec(compile(modul, str(p), "exec"), kapsam)  # noqa: S102
+                except Exception as e:
+                    # ⚠️ D0Ö.19 ek: YUTULMAZ — yol kurulamayan betik açılışta ÖLÜR; fonksiyon içi
+                    # import'lar başka bir yoldan (betik dizini) çözülse bile.
+                    sonuc.append((rel, f"{IC_IMPORT_ONEKI}: yol kurulumu DUSTU — {type(e).__name__}: {e}"))
             # ⚠️ `sys.path` HÂLÂ betiğin kurduğu hâlde: betiğin KENDİ yol kurulumu ölçülür.
-            sonuc += [(rel, h) for h in ic_import_hatalari(agac, kok, ilk_taraf_adlari(kok))]
+            bakilan: set[str] = set()
+            sonuc += [(rel, h) for h in ic_import_hatalari(agac, kok, ilk_taraf_adlari(kok), bakilan)]
+            if denetlenen is not None:
+                denetlenen += [(rel, ad) for ad in sorted(bakilan)]
     finally:
         sys.path = eski_yol
         # Betiğin import ettikleri sonraki betiği etkilemesin.
@@ -261,7 +330,10 @@ def main() -> int:
     dosyalar = json.loads(sys.argv[2])
     ic_importlar = "--ic-importlar" in sys.argv[3:]
     _TEMIZ_MODULLER.update(sys.modules)
-    sonuc = [x for rel in dosyalar for x in bir_betik(kok, rel, ic_importlar)]
+    denetlenen: list[tuple[str, str]] = []
+    sonuc = [x for rel in dosyalar for x in bir_betik(kok, rel, ic_importlar, denetlenen)]
+    if ic_importlar:
+        print(DENETLENEN_ONEKI + json.dumps(denetlenen, ensure_ascii=False))
     print(json.dumps(sonuc, ensure_ascii=False))
     return 0
 

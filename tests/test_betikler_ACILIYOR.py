@@ -41,6 +41,14 @@ KOSUCU = Path(__file__).with_name("onsoz_kosucu.py")
 #: MUAFİYET — (dosya, modül): GEREKÇE. ⚠️ Kaba dizin muafiyeti YASAK; dosya+modül çifti.
 MUAF: dict[tuple[str, str], str] = {}
 
+#: F4'te fonksiyon İÇİNDE ölen dört betiğin ölen import'u — her koşumda GERÇEKTEN denetlenmeli.
+NOBETCI_CIFTLER = {
+    ("scripts/hasta_anahtari_emanet.py", "utils"),
+    ("scripts/vault_emanet.py", "database"),
+    ("scripts/xai_batch_rapor.py", "utils"),
+    ("scripts/soak_http_ws.py", "utils"),
+}
+
 
 def _takipli(desenler: list[str]) -> list[str]:
     ham = subprocess.run(["git", "ls-files", "-z"] + desenler, cwd=KOK, capture_output=True, timeout=180).stdout
@@ -51,6 +59,10 @@ def _onsozleri_kostur(
     dosyalar: list[str], kok: Path | None = None, ic_importlar: bool = False
 ) -> list[tuple[str, str]]:
     """Alt-süreçte önsözleri koştur; [(dosya, hata)] döndür. `ic_importlar`: fonksiyon/try içi import'lar da."""
+    return [tuple(x) for x in json.loads(_kosucu_satirlari(dosyalar, kok, ic_importlar)[-1])]
+
+
+def _kosucu_satirlari(dosyalar: list[str], kok: Path | None, ic_importlar: bool) -> list[str]:
     r = subprocess.run(
         [sys.executable, str(KOSUCU), str(kok or KOK), json.dumps(dosyalar)]
         + (["--ic-importlar"] if ic_importlar else []),
@@ -65,7 +77,7 @@ def _onsozleri_kostur(
     assert r.returncode == 0, f"önsöz koşucusu düştü:\n{r.stderr[-1500:]}"
     satirlar = [s for s in r.stdout.strip().splitlines() if s.strip()]
     assert satirlar, f"koşucu çıktı üretmedi:\n{r.stderr[-800:]}"
-    return [tuple(x) for x in json.loads(satirlar[-1])]
+    return satirlar
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -98,6 +110,21 @@ def _ic_importlari_kostur(dosyalar: list[str], kok: Path | None = None) -> list[
     from onsoz_kosucu import IC_IMPORT_ONEKI
 
     return [(r, h) for r, h in _onsozleri_kostur(dosyalar, kok, ic_importlar=True) if h.startswith(IC_IMPORT_ONEKI)]
+
+
+def _ic_importlar_ve_denetlenenler(dosyalar: list[str]) -> tuple[list[tuple[str, str]], set[tuple[str, str]]]:
+    """Bulgular + koşucunun GERÇEKTEN çözmeyi denediği (betik, ad) çiftleri (vakum ölçüsü)."""
+    from onsoz_kosucu import DENETLENEN_ONEKI, IC_IMPORT_ONEKI
+
+    satirlar = _kosucu_satirlari(dosyalar, None, ic_importlar=True)
+    denetlenen = {
+        tuple(x) for s in satirlar if s.startswith(DENETLENEN_ONEKI) for x in json.loads(s[len(DENETLENEN_ONEKI) :])
+    }
+    return [(r, h) for r, h in json.loads(satirlar[-1]) if h.startswith(IC_IMPORT_ONEKI)], denetlenen
+
+
+def _muaf_mi(rel: str, hata: str) -> bool:
+    return (rel, hata.split("'")[1] if "'" in hata else "") in MUAF
 
 
 def test_KARSIT_KANIT_kosucu_FONKSIYON_ICI_olu_importu_GORUYOR(tmp_path):
@@ -141,6 +168,95 @@ def test_KARSIT_KANIT_kosucu_FONKSIYON_ICI_olu_importu_GORUYOR(tmp_path):
     assert not _onsozleri_kostur(["olu_ic.py"], kok=tmp_path), "önsöz kapısı fonksiyon içini zaten görüyormuş"
 
 
+#: `_depo_koku` biçimi (scripts/stm_firmware_kimligi.py) — işaret bulunamayınca RuntimeError.
+_KOK_BULUNAMAZ = (
+    "import sys\nfrom pathlib import Path\n\n\n"
+    "def _depo_koku(bas):\n    raise RuntimeError('depo koku bulunamadi')\n\n\n"
+)
+
+
+def test_KARSIT_KANIT_kosucu_KOK_BULUNAMAYINCA_KIRMIZI(tmp_path):
+    """D0Ö.19 ek: `_depo_koku` RuntimeError atan betik AÇILIŞTA ölür — kapı bunu YUTMAMALI.
+
+    Önsözde yutulursa ondan sonraki import'lar hiç denenmez (yeşil); yol diliminde yutulursa
+    fonksiyon içi import'lar başka bir yoldan (betik dizini) çözülüp yine yeşil kalabilir.
+    """
+    (tmp_path / "kardes.py").write_text("X = 1\n", encoding="utf-8")
+    (tmp_path / "onsozde_olur.py").write_text(
+        _KOK_BULUNAMAZ + "KOK = _depo_koku(Path(__file__))\nsys.path.insert(0, str(KOK))\nimport json\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "dilimde_olur.py").write_text(
+        _KOK_BULUNAMAZ + "KOK = _depo_koku(Path(__file__))\nsys.path.insert(0, str(KOK))\n\n\n"
+        "def f():\n    import kardes\n",
+        encoding="utf-8",
+    )
+    onsoz = {r for r, _ in _onsozleri_kostur(["onsozde_olur.py"], kok=tmp_path)}
+    assert "onsozde_olur.py" in onsoz, "önsözdeki `depo kökü bulunamadı` RuntimeError'ı YUTULDU"
+    dilim = {r for r, _ in _ic_importlari_kostur(["dilimde_olur.py"], kok=tmp_path)}
+    assert "dilimde_olur.py" in dilim, "yol dilimindeki `depo kökü bulunamadı` RuntimeError'ı YUTULDU"
+
+
+def test_KARSIT_KANIT_kosucu_GOLGE_BAYAT_KOPYA_ve_AD_ALANI_KIRMIZI(tmp_path):
+    """D0Ö.19 ek: çözüm deponun KANONİK konumuna (`kok/<ad>`, `kok/apps/backend/<ad>`) düşmeli.
+
+    · depo DIŞI gölge (bu makinede gerçek: site-packages'taki ultralytics `tests`'i),
+    · depo içinde BAYAT kopya (`scripts/arka/` — betik dizini yolda olduğu için önce o bulunur),
+    · depoda DÜZENLİ paket olan adın ad-alanı (namespace) parçası (`kok/arka/` `__init__`siz)
+    üçü de KIRMIZI olmalı. Kanonik çözüm (yolu doğru kuran betik) yeşil kalmalı.
+    """
+    kok = tmp_path / "depo"
+    (kok / "apps" / "backend" / "arka").mkdir(parents=True)
+    (kok / "apps" / "backend" / "arka" / "__init__.py").write_text("", encoding="utf-8")
+    golge = tmp_path / "golge_site" / "arka"
+    golge.mkdir(parents=True)
+    (golge / "__init__.py").write_text("", encoding="utf-8")
+    (kok / "golgeli.py").write_text(
+        f"import sys\nsys.path.insert(0, {str(golge.parent)!r})\nimport json\n\n\ndef f():\n    import arka\n",
+        encoding="utf-8",
+    )
+    (kok / "scripts" / "arka").mkdir(parents=True)
+    (kok / "scripts" / "arka" / "__init__.py").write_text("", encoding="utf-8")
+    (kok / "scripts" / "bayat.py").write_text("import json\n\n\ndef f():\n    import arka\n", encoding="utf-8")
+    (kok / "arka").mkdir()
+    (kok / "arka" / "parca.py").write_text("X = 1\n", encoding="utf-8")
+    (kok / "ad_alani.py").write_text("import json\n\n\ndef f():\n    from arka import parca\n", encoding="utf-8")
+    (kok / "kanonik.py").write_text(
+        "import sys\nfrom pathlib import Path\n\n"
+        "sys.path.insert(0, str(Path(__file__).resolve().parent / 'apps' / 'backend'))\nimport json\n\n\n"
+        "def f():\n    import arka\n",
+        encoding="utf-8",
+    )
+    sonuc = _ic_importlari_kostur(["golgeli.py", "scripts/bayat.py", "ad_alani.py", "kanonik.py"], kok=kok)
+    adlar = {r for r, _ in sonuc}
+    assert "golgeli.py" in adlar, f"depo DIŞI gölge çözüm sayıldı: {sonuc}"
+    assert "scripts/bayat.py" in adlar, f"depo içi BAYAT kopya çözüm sayıldı: {sonuc}"
+    assert "ad_alani.py" in adlar, f"düzenli paketin ad-alanı parçası çözüm sayıldı: {sonuc}"
+    assert "kanonik.py" not in adlar, f"kanonik konuma çözen sağlam betik ölü sayıldı: {sonuc}"
+
+
+def test_KARSIT_KANIT_yol_dilimi_YALNIZ_yol_kurulumunu_kosturur(tmp_path):
+    """D0Ö.19 ek (make_base_zip dersi): dilim, bileşik deyimdeki yan etkiyi ve `sys.path`ten SONRAKİ
+    yeniden atamayı KOŞTURMAMALI; yolu yine de kurmalı (fonksiyon içi import çözülür)."""
+    (tmp_path / "apps" / "backend" / "arka").mkdir(parents=True)
+    (tmp_path / "apps" / "backend" / "arka" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "bilesik.py").write_text(
+        "import sys\nfrom pathlib import Path\n\n"
+        "KOK = Path(__file__).resolve().parent\n"
+        "for _yol in (KOK / 'apps' / 'backend',):\n"
+        "    (KOK / 'YAN_BILESIK.txt').write_text('x')\n"
+        "    if str(_yol) not in sys.path:\n"
+        "        sys.path.insert(0, str(_yol))\n"
+        "KOK = (KOK / 'YAN_SONRADAN.txt').write_text('x')\n\n\n"
+        "def f():\n    import arka\n",
+        encoding="utf-8",
+    )
+    sonuc = _ic_importlari_kostur(["bilesik.py"], kok=tmp_path)
+    assert not sonuc, f"dilim yolu kuramadı: {sonuc}"
+    assert not (tmp_path / "YAN_BILESIK.txt").exists(), "dilim bileşik deyimdeki YAN ETKİYİ koşturdu"
+    assert not (tmp_path / "YAN_SONRADAN.txt").exists(), "dilim `sys.path`ten SONRAKİ yeniden atamayı koşturdu"
+
+
 def test_KRITIK_fonksiyon_ici_ilk_taraf_importlari_COZULUYOR():
     """D0Ö.19/20/21 (B-10.57 · B-10.32 · B-9.25 · B-9.27) — betikler F4'ten beri fonksiyon İÇİNDE ölüydü.
 
@@ -149,11 +265,23 @@ def test_KRITIK_fonksiyon_ici_ilk_taraf_importlari_COZULUYOR():
     önsöz sağlam göründü, iş yapan fonksiyon ilk çağrıda `ModuleNotFoundError` verdi — çoğu
     `except` ile yutuldu (emanet ACL'siz yazıldı, soak yanlış kökü ölçtü, rapor exit 0).
     Tüm birinci-taraf import düğümleri betiğin KENDİ kurduğu `sys.path` ile, conftest yolları
-    olmadan (alt süreç, daraltılmış yol) çözülmeli ve çözüm DEPO İÇİNE düşmeli.
+    olmadan (alt süreç, daraltılmış yol) çözülmeli ve çözüm deponun KANONİK konumuna (kök ya da
+    `apps/backend`) düşmeli.
     """
+    from onsoz_kosucu import ilk_taraf_adlari
+
+    # ⚠️ D0Ö.19 ek — VAKUM NÖBETÇİLERİ: birinci-taraf küme `apps/backend` yoluna bağlı; klasör taşınır
+    # da koşucu güncellenmezse `utils`/`database` kümeden SESSİZCE düşer ve hiçbir fonksiyon içi
+    # import denetlenmez (dosya sayısı yine >30). Hem kümeyi hem gerçekten denetlenen çiftleri ölç.
+    assert {"utils", "database"} <= ilk_taraf_adlari(KOK), (
+        f"birinci-taraf kümede utils/database YOK: {sorted(ilk_taraf_adlari(KOK))} — apps/backend taşındı mı?"
+    )
     dosyalar = _takipli([f"{d}*.py" for d in BETIK_DIZINLERI])
     assert len(dosyalar) > 30, f"VAKUM: yalnız {len(dosyalar)} betik tarandı — tarama bozuk"
-    olu = [(rel, hata) for rel, hata in _ic_importlari_kostur(dosyalar) if (rel, hata.split("'")[1]) not in MUAF]
+    bulgular, denetlenen = _ic_importlar_ve_denetlenenler(dosyalar)
+    eksik = NOBETCI_CIFTLER - denetlenen
+    assert not eksik, f"VAKUM: F4'te ölen şu (betik, ad) çiftleri DENETLENMEDİ: {sorted(eksik)}"
+    olu = [(rel, hata) for rel, hata in bulgular if not _muaf_mi(rel, hata)]
     assert not olu, (
         "FONKSİYON/TRY İÇİNDE ÇÖZÜLEMEYEN BİRİNCİ-TARAF IMPORT:\n  "
         + "\n  ".join(f"{a} -> {b}" for a, b in olu)
@@ -170,11 +298,7 @@ def test_KRITIK_fonksiyon_ici_ilk_taraf_importlari_COZULUYOR():
 def test_KRITIK_giris_betikleri_ACILISTA_patlamiyor():
     dosyalar = _takipli([f"{d}*.py" for d in BETIK_DIZINLERI])
     assert len(dosyalar) > 30, f"VAKUM: yalnız {len(dosyalar)} betik tarandı — tarama bozuk"
-    olu = [
-        (rel, hata)
-        for rel, hata in _onsozleri_kostur(dosyalar)
-        if (rel, hata.split("'")[1] if "'" in hata else "") not in MUAF
-    ]
+    olu = [(rel, hata) for rel, hata in _onsozleri_kostur(dosyalar) if not _muaf_mi(rel, hata)]
     assert not olu, (
         "AÇILIŞTA ÖLÜ BETİK:\n  "
         + "\n  ".join(f"{a} -> {b}" for a, b in olu)
