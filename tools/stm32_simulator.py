@@ -133,9 +133,10 @@ def crc32_of(data: bytes) -> int:
 
 def decode_packet(raw: bytes):
     """
-    `PKT_SIZE` baytlık binary paketi çözer (7 bobin → 120 bayt).
-    Başarıda (duty, phase, freq, duration, ref_ms) tuple döner.
+    `PKT_SIZE` baytlık binary paketi çözer (7 bobin + kip baytı → 121 bayt).
+    Başarıda ((duty, phase, freq, duration, ref_ms, unipolar_maskesi), None) döner — ⚠️ 6'LI.
     Hata durumunda (None, sebep_str) döner.
+    (D0Ö.12: bu satır "5'li dönüş, 120 bayt" diyordu; `run()` 5'e açıp ilk pakette ölüyordu.)
 
     ⚠️ ALAN DİLİMLERİ `NUM_COILS`TEN TÜRER — ELLE YAZILMAZ (2026-09-11 düzeltmesi).
     2026-09-10'da `NUM_COILS` 5→7 ve `PKT_SIZE` 88→120 yapıldı ama BU FONKSİYONDAKİ
@@ -199,6 +200,9 @@ class Stm32SimClient:
         self._coil_start_ms = [None] * NUM_COILS  # datetime.now() veya None
         self._last_pkt_time = time.monotonic()
         self._any_active = False
+        # D0Ö.12 ek: bağlantı bitince bekçi/süre işçileri DURUR (eskiden `while True` idi — her
+        # bağlantı iki kalıcı thread sızdırıyordu). `run()`'ın `finally`'si kurar.
+        self._dur = threading.Event()
 
     def _send(self, msg: str):
         try:
@@ -246,8 +250,7 @@ class Stm32SimClient:
 
     def _watchdog_worker(self):
         """1.5 s iletişim yoksa bobinleri sıfırla — main.c ile aynı davranış."""
-        while True:
-            time.sleep(0.2)
+        while not self._dur.wait(0.2):
             if self._any_active:
                 elapsed_ms = (time.monotonic() - self._last_pkt_time) * 1000
                 if elapsed_ms > WATCHDOG_MS:
@@ -259,8 +262,7 @@ class Stm32SimClient:
 
     def _duration_worker(self):
         """Süre dolduğunda bobinleri kapat — main.c ile aynı davranış."""
-        while True:
-            time.sleep(0.5)
+        while not self._dur.wait(0.5):
             stopped_any = False
             for i in range(NUM_COILS):
                 if self._coil_start_ms[i] is not None and self._coil_duty[i] > 0:
@@ -341,6 +343,7 @@ class Stm32SimClient:
         except Exception as e:
             log.error("Hata: %s", e)
         finally:
+            self._dur.set()  # bekçi/süre işçileri bu bağlantıyla birlikte biter
             try:
                 self.conn.close()
             except Exception:

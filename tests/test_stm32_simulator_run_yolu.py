@@ -11,9 +11,13 @@ bunu göremedi — `run()`ı kimse koşmuyordu. Dalga-0 sanal-STM ölçümlerini
 
 KAPI: `socket.socketpair` üzerinde `Stm32SimClient.run()` thread'de koşar; ürünün GERÇEK
 `HardwareController._send_stm_manual_update` / `update_coil` yolunun ürettiği 121 baytlık paketler
-(sıfır-duty yoklama + sürüş) verilir. İddia: her birine 3 sn içinde `-> STM_OK:` gelir ve
-bağlantı AÇIK kalır (ikinci paket de cevaplanır).
-MUTASYON: `run()` paket dalına `raise RuntimeError` (M2) ya da 6'lı açımı 5'liye geri almak → KIRMIZI.
+(STOP/boşta biçimli paket + sürüş) ve ürünün GERÇEK el sıkışma yoklaması
+(`stm32_transport.build_stm32_zero_duty_packet`) verilir. İddia: her birine 3 sn içinde `-> STM_OK:`
+gelir ve bağlantı AÇIK kalır. D0Ö.12 ek: bekçi/süre işçileri GERÇEKTEN koşar (sürüşten sonra
+suskunlukta `STM_ERR: Watchdog`) ve bağlantı bitince SONLANIR (eskiden `while True` — her bağlantı iki
+kalıcı thread sızdırıyordu).
+MUTASYON: `run()` paket dalına `raise RuntimeError` (M2) ya da 6'lı açımı 5'liye geri almak → KIRMIZI;
+işçi döngüsünü `while True`ya döndürmek ya da `finally`'deki durdurmayı silmek → KIRMIZI.
 """
 
 from __future__ import annotations
@@ -25,7 +29,8 @@ import time
 
 import pytest
 
-sim = pytest.importorskip("tools.stm32_simulator", reason="simulator yok")
+# ⚠️ importorskip DEĞİL: simülatör depoda izli; yüklenemezse bu kapı SESSİZCE atlanmamalı (Ö.7).
+import tools.stm32_simulator as sim
 
 
 class _SahteCore:
@@ -82,9 +87,10 @@ def _satir_bekle(sok: socket.socket, onek: str, sure: float) -> str:
 
 
 def test_KRITIK_simulator_run_URUN_paketine_STM_OK_doner_ve_ACIK_kalir(hw, monkeypatch):
+    from utils.stm32_transport import build_stm32_zero_duty_packet
+
     monkeypatch.setattr(sim, "READY_DELAY_S", 0.0)  # banner beklemesi ölçümü geciktirmesin
-    # Bekçi/süre işçileri `while True` döngüsüdür ve durdurulamaz: test bitince oturum boyunca
-    # yaşarlardı (D0Ö.10 sınıfı daemon sızıntısı). Bu kapı PAKET yolunu ölçer → işçiler boş.
+    # Bu kapı PAKET yolunu ölçer → işçiler boş (işçi davranışı aşağıdaki ayrı kapıda).
     monkeypatch.setattr(sim.Stm32SimClient, "_watchdog_worker", lambda self: None)
     monkeypatch.setattr(sim.Stm32SimClient, "_duration_worker", lambda self: None)
     istemci, sunucu_tarafi = socket.socketpair()
@@ -93,7 +99,7 @@ def test_KRITIK_simulator_run_URUN_paketine_STM_OK_doner_ve_ACIK_kalir(hw, monke
         t = threading.Thread(target=sim_istemci.run, name="d0o12-sim", daemon=True)
         t.start()
 
-        # (1) sıfır-duty YOKLAMA — ürünün boşta gönderdiği paket
+        # (1) HC'nin STOP/boşta biçimli paketi (tüm duty 0) — keep-alive/STOP/E-stop aynı baytı üretir
         assert hw._send_stm_manual_update() is True
         yoklama = _kuyruktan_paket(hw)
         assert len(yoklama) == sim.PKT_SIZE == 121, f"paket boyu {len(yoklama)}"
@@ -107,7 +113,44 @@ def test_KRITIK_simulator_run_URUN_paketine_STM_OK_doner_ve_ACIK_kalir(hw, monke
         istemci.sendall(surus)
         ok2 = _satir_bekle(istemci, "-> STM_OK:", 3.0)
         assert ok2, "ikinci pakete STM_OK gelmedi — simülatör ilk paketten sonra bağlantıyı kapattı"
+
+        # (3) ürünün GERÇEK el sıkışma yoklaması (headless_core → stm32_transport; ping_packet verilmez)
+        istemci.sendall(bytes(build_stm32_zero_duty_packet()))
+        ok3 = _satir_bekle(istemci, "-> STM_OK:", 3.0)
+        assert ok3, "ürünün el sıkışma yoklamasına STM_OK gelmedi"
         assert t.is_alive(), "simülatör istemci thread'i öldü (bağlantı kapandı)"
     finally:
         istemci.close()
         sunucu_tarafi.close()
+
+
+def _istemcinin_iscileri(sim_istemci) -> list[threading.Thread]:
+    """`sim_istemci`nin bağlı yöntemlerini koşturan CANLI thread'ler (bekçi, süre, hazır)."""
+    return [x for x in threading.enumerate() if getattr(getattr(x, "_target", None), "__self__", None) is sim_istemci]
+
+
+def test_KRITIK_bekci_suskunlukta_ERR_basar_ve_isciler_baglantiyla_BITER(hw, monkeypatch):
+    """D0Ö.12 ek: işçiler GERÇEKTEN koşar (firmware ölü-adam davranışı) ve bağlantıyla birlikte biter."""
+    monkeypatch.setattr(sim, "READY_DELAY_S", 0.0)
+    istemci, sunucu_tarafi = socket.socketpair()
+    sim_istemci = sim.Stm32SimClient(sunucu_tarafi, ("socketpair", 0))
+    t = threading.Thread(target=sim_istemci.run, name="d0o12-sim-bekci", daemon=True)
+    t.start()
+    try:
+        assert hw.update_coil(1, 100.0, 25.0, 0.0, 5)
+        istemci.sendall(_kuyruktan_paket(hw))
+        assert _satir_bekle(istemci, "-> STM_OK:", 3.0), "sürüş paketine STM_OK gelmedi"
+        # Sürüşten sonra SUSKUNLUK (keep-alive fixture'da durduruldu): firmware 1,5 sn'de bobinleri 0'lar.
+        err = _satir_bekle(istemci, "-> STM_ERR: Watchdog", sim.WATCHDOG_MS / 1000 + 2.0)
+        assert err, "bekçi suskunlukta bobinleri 0'lamadı / STM_ERR basmadı (ölü-adam davranışı yok)"
+        isciler = _istemcinin_iscileri(sim_istemci)
+        assert len(isciler) >= 2, f"kurulum: bekçi/süre işçileri bulunamadı ({[x.name for x in isciler]})"
+    finally:
+        istemci.close()
+    t.join(timeout=3)
+    sunucu_tarafi.close()
+    bitis = time.monotonic() + 3.0
+    while time.monotonic() < bitis and any(x.is_alive() for x in isciler):
+        time.sleep(0.05)
+    yasayan = [x.name for x in isciler if x.is_alive()]
+    assert not yasayan, f"bağlantı bittiği hâlde simülatör işçileri YAŞIYOR (thread sızıntısı): {yasayan}"
