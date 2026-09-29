@@ -28,6 +28,11 @@ python-multipart==0.0.31
 # dönmemişti (2026-08-12'de teşhis edildi). Ağır AI paketleri gibi lazy DEĞİL — import zamanında
 # gerekir. `[standard]` ekstraları CI'da gereksiz; sade paket yeterli, sürüm shipped ile eşit.
 uvicorn==0.48.0
+# ⚠️ D0Ö.22 ek (2026-09-30): `scripts/soak_http_ws.py` `/ws`yi GERÇEK websockets istemcisiyle açar ve
+# kapıları (tests/test_soak_ws_OLCER.py, test_soak_rss_OLCER.py) onu koşturur. Sade uvicorn onu ÇEKMEZ;
+# yokken CI'da kes/tut kolları koddan bağımsız KIRMIZI, reddet kolu YANLIŞ sebeple yeşil olurdu.
+# Sürüm shipped requirements.txt:26 ile BİREBİR (kapı: test_KRITIK_websockets_CI_test_bagimliliklarinda_URETIMLE_ESIT).
+websockets==15.0.1
 
 # ── Import-zamanı runtime bağımlılıkları (introspeksiyonla saptandı) ──
 numpy==1.26.4

@@ -33,11 +33,18 @@ def _metin_cercevesi(metin: str) -> bytes:
 class SahteBackend:
     """ws_davranis: "kes" → ilk mesajdan sonra TCP'yi kapanış çerçevesiz keser (KOPMA) ·
     "tut" → bağlantıyı açık tutar ve periyodik mesaj yollar · "reddet" → yükseltmeyi 403 ile reddeder
-    (WS'ye HİÇ bağlanılamaz)."""
+    (WS'ye HİÇ bağlanılamaz) · "auth1008" → kabul edip hemen 1008 (politika) ile kapatır (auth açık
+    profil) · "ilk_sonra_reddet" / "ilk_sonra_sessiz" → İLK bağlantı (betiğin ön-uçuşu) "kes" gibi
+    davranır; sonrakiler reddedilir / açık kalıp HİÇ mesaj yollamaz.
+
+    ⚠️ D0Ö.22 ek: yükseltme YALNIZ `/ws` yolunda kabul edilir (Starlette bilinmeyen WS yoluna 403
+    döner); `ws_yukseltme_sayisi` da yalnız `/ws`i sayar — yanlış yol regresyonu kapıdan geçemez."""
 
     def __init__(self, ws_davranis: str):
         self.ws_davranis = ws_davranis
         self.istekler: list[tuple[str, dict]] = []
+        self.ws_sirasi = 0
+        self._kilit = threading.Lock()
         self.dur = threading.Event()
         self.sok = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sok.bind(("127.0.0.1", 0))
@@ -51,7 +58,7 @@ class SahteBackend:
         self.sok.close()
 
     def ws_yukseltme_sayisi(self) -> int:
-        return sum(1 for _yol, b in self.istekler if b.get("upgrade", "").lower() == "websocket")
+        return sum(1 for yol, b in self.istekler if yol == "/ws" and b.get("upgrade", "").lower() == "websocket")
 
     def _dongu(self) -> None:
         while not self.dur.is_set():
@@ -76,10 +83,16 @@ class SahteBackend:
             yol = satirlar[0].split(" ")[1]
             basliklar = {k.strip().lower(): v.strip() for k, v in (s.split(":", 1) for s in satirlar[1:] if ":" in s)}
             self.istekler.append((yol, basliklar))
-            if basliklar.get("upgrade", "").lower() == "websocket" and self.ws_davranis == "reddet":
-                c.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
-                return
             if basliklar.get("upgrade", "").lower() == "websocket":
+                with self._kilit:
+                    self.ws_sirasi += 1
+                    sira = self.ws_sirasi
+                davranis = self.ws_davranis
+                if davranis.startswith("ilk_sonra_"):
+                    davranis = "kes" if sira == 1 else davranis.removeprefix("ilk_sonra_")
+                if yol != "/ws" or davranis == "reddet":
+                    c.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                    return
                 kabul = base64.b64encode(
                     hashlib.sha1((basliklar["sec-websocket-key"] + _GUID).encode("ascii")).digest()
                 ).decode("ascii")
@@ -89,8 +102,16 @@ class SahteBackend:
                         f"Sec-WebSocket-Accept: {kabul}\r\n\r\n"
                     ).encode("ascii")
                 )
+                if davranis == "auth1008":  # api_server: token yoksa accept() sonra close(1008)
+                    c.sendall(bytes([0x88, 2]) + (1008).to_bytes(2, "big"))
+                    time.sleep(0.5)
+                    return
+                if davranis == "sessiz":
+                    while not self.dur.is_set():
+                        time.sleep(0.2)
+                    return
                 c.sendall(_metin_cercevesi('{"type":"snapshot"}'))
-                if self.ws_davranis == "kes":
+                if davranis == "kes":
                     time.sleep(0.3)
                     return  # finally: TCP kapanır, kapanış çerçevesi YOK → istemci için KOPMA
                 while not self.dur.is_set():
@@ -120,6 +141,7 @@ def soak_modulu(monkeypatch):
     """Betiği yükle; ısınma beklemesini (5 sn aralık, 180 sn'ye kadar) anında döndür — ayrı kapıda ölçülür."""
     m = betik_modulu("soak_http_ws")
     monkeypatch.setattr(m, "_rss_oturmasini_bekle", lambda *a, **k: m._backend_rss_mb())
+    monkeypatch.setattr(m, "WS_ON_UCUS_S", 1.0, raising=False)  # sessiz kip ön-uçuşu 5 sn beklemesin
     return m
 
 

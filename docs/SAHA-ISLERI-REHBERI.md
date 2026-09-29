@@ -243,7 +243,7 @@ RSS okunamazsa (psutil yok ya da süreç adı `PEMF_Backend` değil) sonuç **RS
 - **İki backend açıksa RSS toplanır.** 4106 MB'lık korku tam olarak buydu. Betik artık süreç
   sayısını uyarıyor — uyarı çıkarsa önce onu çöz.
 
-25 dakikalık koşu zaten yapıldı ve temizdi; kalan tek şey **süre**.
+25 dakikalık koşu yalnız **HTTP + RSS** ölçtü (sızıntı yok, DB sabit); `/ws` o koşuda HİÇ açılmadı (B-9.26) → **WS kararlılığı ÖLÇÜLMEDİ**. 72 saatlik koşu bunu da ölçecek; betik artık WS'yi soak başlamadan ön-uçuşla denetler (bağlanamaz / auth 1008 / snapshot yok → çıkış 2).
 
 ---
 

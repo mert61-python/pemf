@@ -43,6 +43,8 @@ def test_KRITIK_tek_ornekte_cikis_SIFIR_DEGIL(monkeypatch, capsys):
     finally:
         sunucu.kapat()
     assert rc != 0, f"tek örnekle karar verilemez ama çıkış 0 (B-10.97):\n{cikti[-600:]}"
+    # D0Ö.22 ek: erken dönüş yolunda da WS sayaçları basılır (eskiden bu yolda WS özeti hiç yoktu).
+    assert "baglanti" in cikti and "KOPMA" in cikti, f"tek örnek yolunda WS özeti yok:\n{cikti[-600:]}"
 
 
 def test_KRITIK_RSS_OLCULEMEZKEN_isinma_BEKLENMEZ(monkeypatch):

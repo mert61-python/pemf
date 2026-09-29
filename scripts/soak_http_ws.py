@@ -24,6 +24,10 @@ KULLANIM
 --------
     python scripts/soak_http_ws.py --port 8082 --dakika 20
     python scripts/soak_http_ws.py --port 8000 --dakika 120 --aralik 60
+
+⚠️ ÖN-UÇUŞ: HTTP uçları VE `/ws` (bağlantı + ilk mesaj) soak BAŞLAMADAN denetlenir; biri
+ölçülemeyecekse (yanlış yol, websockets yok, auth açık profil 1008) koşu başlamaz, çıkış 2.
+Çıkış: 0 = TEMIZ · 1 = en az bir neden (hepsi basılır) · 2 = ön-uçuş reddi.
 """
 
 from __future__ import annotations
@@ -72,9 +76,49 @@ UCLAR = [
 #: Kabul edilen kodlar. 401/403 auth açıkken normaldir; 404/422 DEĞİLDİR (yanlış yol demektir).
 KABUL = (200, 401, 403)
 
-#: Ürünün canlı telemetri/kontrol kanalı (`api_server` → `@app.websocket("/ws")`). Yerel bağlantıda
-#: auth istemez; bağlanınca `snapshot` yollar, `{"type": "ping"}`e `pong` döner.
+#: Ürünün canlı telemetri/kontrol kanalı (`api_server` → `@app.websocket("/ws")`). Bağlanınca
+#: `snapshot` yollar, `{"type": "ping"}`e `pong` döner.
+#: ⚠️ D0Ö.22 ek: "yerel bağlantıda auth istemez" YALNIZ klinik profilde doğru — auth açık profilde
+#: (loopback yerel sayılmıyorsa) token'sız bağlantıyı accept() edip 1008 ile kapatır. Betik token
+#: GÖNDERMEZ; ön-uçuş bunu "auth" diye adlandırıp soak'ı BAŞLATMAZ (kopma sayılmaz).
 WS_YOLU = "/ws"
+
+#: WS ön-uçuşunda bağlantı + İLK mesaj (snapshot) için azami bekleme (sn).
+WS_ON_UCUS_S = 5.0
+
+#: RFC 6455 "policy violation" — `api_server` token'sız `/ws`i bununla kapatır.
+_WS_AUTH_KODU = 1008
+
+
+def _ws_on_ucus(uri: str) -> str:
+    """Soak BAŞLAMADAN `/ws`ye bir kez bağlan ve İLK mesajı bekle; sorun varsa nedenini döndür ("" = sağlam).
+
+    ⚠️ D0Ö.22 ek (tur 4): eskiden WS için ön-uçuş yoktu — websockets'siz bir Python ya da token isteyen
+    profil 72 saat koşar, ancak SONDA "ölçülmedi" derdi. HTTP ön-uçuşu (`_uclari_dogrula`) gibi, WS de
+    ölçülemeyecekse koşu HİÇ BAŞLAMAZ.
+    """
+    try:
+        from websockets.sync.client import connect
+    except ImportError as e:
+        return f"websockets paketi yuklenemedi ({e})"
+    try:
+        ws = connect(uri, open_timeout=WS_ON_UCUS_S, close_timeout=1)
+    except Exception as e:
+        return f"baglanilamadi — {type(e).__name__}: {e}"[:240]
+    with ws:
+        try:
+            ws.recv(timeout=WS_ON_UCUS_S)
+        except TimeoutError:
+            return f"baglandi ama {WS_ON_UCUS_S:g} sn icinde ILK mesaj (snapshot) GELMEDI"
+        except Exception as e:
+            kod = getattr(getattr(e, "rcvd", None), "code", None)
+            if kod == _WS_AUTH_KODU:
+                return (
+                    f"sunucu {_WS_AUTH_KODU} (politika) ile kapatti — auth acik profil: /ws token istiyor, "
+                    "betik token GONDERMEZ (auth kapali klinik profilde kosturun)"
+                )
+            return f"ilk mesaj beklenirken koptu — {type(e).__name__}: {e}"[:240]
+    return ""
 
 
 class _WsIzleyici(threading.Thread):
@@ -299,6 +343,13 @@ def main() -> int:
         print("  Bu, URUNUN degil BETIGIN sorunu olabilir (yanlis yol). Uc listesini duzeltin.")
         return 2
 
+    ws_uri = f"ws://127.0.0.1:{a.port}{WS_YOLU}"
+    ws_sorun = _ws_on_ucus(ws_uri)
+    if ws_sorun:
+        print(f"HATA: WS on-ucus BASARISIZ ({ws_uri}): {ws_sorun}")
+        print("  Bu kosuda WS kararliligi OLCULMEDI olurdu — soak baslatilmadi.")
+        return 2
+
     veri_koku = _veri_koku()
 
     # ⚠️ ISINMAYI BEKLE (bkz. _rss_oturmasini_bekle). Taban, AI ısıtması bittikten SONRA
@@ -314,12 +365,13 @@ def main() -> int:
     hata = 0
     basla = time.monotonic()
 
-    ws = _WsIzleyici(f"ws://127.0.0.1:{a.port}{WS_YOLU}")
+    ws = _WsIzleyici(ws_uri)
     ws.start()
 
     print(f"soak basladi: {taban}  sure={a.dakika} dk  aralik={a.aralik} sn  (+ WS {WS_YOLU})")
     print(f"  veri koku: {veri_koku}")
-    print(f"{'dk':>6} {'RSS(MB)':>9} {'DB(KB)':>8} {'tur':>7} {'hata':>6}")
+    # D0Ö.22 ek: WS sayaçları periyodik satırda — kopma 72 saatin SONUNDA değil anında görünür.
+    print(f"{'dk':>6} {'RSS(MB)':>9} {'DB(KB)':>8} {'tur':>7} {'hata':>6} {'ws':>4} {'kop':>4} {'red':>4}")
 
     sonraki_ornek = 0.0
     while time.monotonic() < bitis:
@@ -332,14 +384,20 @@ def main() -> int:
         if gecen >= sonraki_ornek:
             rss, db = _backend_rss_mb(), _db_kb(veri_koku)
             ornekler.append((gecen / 60.0, rss, db, hata))
-            print(f"{gecen / 60:6.1f} {rss:9.1f} {db:8d} {tur:7d} {hata:6d}")
+            print(
+                f"{gecen / 60:6.1f} {rss:9.1f} {db:8d} {tur:7d} {hata:6d} {ws.baglanti:4d} {ws.kopma:4d} {ws.baglanamama:4d}"
+            )
             sonraki_ornek = gecen + a.aralik
         time.sleep(0.25)
 
     ws.durdur()
+    ws_ozeti = f"  WS : baglanti {ws.baglanti}, KOPMA {ws.kopma}, baglanamama {ws.baglanamama}, mesaj {ws.mesaj}" + (
+        f"  (son hata: {ws.son_hata})" if ws.son_hata else ""
+    )
     if len(ornekler) < 2:
         # D0Ö.15 (B-10.97): tek örnekle sızıntı/kararlılık kararı VERİLEMEZ — eskiden 0 dönüyordu.
         print("\nSONUC: ornek sayisi yetersiz — karar VERILEMEDI; daha uzun kosturun.")
+        print(ws_ozeti)  # D0Ö.22 ek: bu yolda da WS sayaçları görünür
         return 1
 
     ilk_rss, son_rss = ornekler[0][1], ornekler[-1][1]
@@ -351,37 +409,41 @@ def main() -> int:
     print(f"  istek: {tur}  hata: {hata}")
     print(f"  RSS: {ilk_rss} -> {son_rss} MB  (fark {artis:+.1f} MB, %{oran:+.1f})")
     print(f"  DB : {ilk_db} -> {son_db} KB  (fark {son_db - ilk_db:+d} KB)")
-    print(
-        f"  WS : baglanti {ws.baglanti}, KOPMA {ws.kopma}, baglanamama {ws.baglanamama}, mesaj {ws.mesaj}"
-        + (f"  (son hata: {ws.son_hata})" if ws.son_hata else "")
-    )
+    print(ws_ozeti)
 
+    # ⚠️ D0Ö.22 ek: TÜM nedenler toplanıp basılır — eskiden ilk başarısız nedende dönülüyordu
+    # (RSS ölçülemeyip WS de koptuysa yalnız RSS söyleniyordu).
+    sorunlar: list[str] = []
     # ⚠️ D0Ö.15 (B-10.97): RSS okunamadıysa (psutil yok / PEMF_Backend süreci yok) oran 0 çıkar ve
     # eskiden sonuç "TEMIZ" oluyordu — bellek sızıntısı hiç ölçülmeden. Ölçülmeyen şey temiz sayılmaz.
     if not ilk_rss or not son_rss:
-        print(
-            "\n  UYARI: RSS ÖLÇÜLMEDİ — psutil yok ya da PEMF_Backend sureci bulunamadi; "
-            "bellek sizintisi DEGERLENDIRILMEDI."
+        sorunlar.append(
+            "UYARI: RSS ÖLÇÜLMEDİ — psutil yok ya da PEMF_Backend sureci bulunamadi; bellek sizintisi DEGERLENDIRILMEDI."
         )
-        return 1
     # ⚠️ ESIK GEREKCESI: kisa soak'ta birkac MB dalgalanma NORMALDIR (GC, arena, onbellek).
     # Sizinti isareti MONOTON ve ORANSAL artistir. %25 esigi, 20 dk'lik bir kosuda
     # gurultuyu eleyip gercek bir sizintiyi yakalayacak kadar genis; daha dar bir esik
     # yanlis alarm uretir ve kapi guvenilmez olur.
-    if ilk_rss and oran > 25.0:
-        print("\n  ⚠️ RSS %25'ten fazla artti -> SIZINTI SUPHESI. Daha uzun kosturup dogrulayin.")
-        return 1
+    elif oran > 25.0:
+        sorunlar.append("⚠️ RSS %25'ten fazla artti -> SIZINTI SUPHESI. Daha uzun kosturup dogrulayin.")
     if hata:
-        print(f"\n  ⚠️ {hata} istek basarisiz -> WS/HTTP kararliligi supheli.")
-        return 1
+        sorunlar.append(f"⚠️ {hata} istek basarisiz -> HTTP kararliligi supheli.")
     # D0Ö.22: WS sonucu KARARA girer — bağlanılamayan kanal "kararlı" sayılamaz.
     if ws.baglanti == 0:
-        print(f"\n  UYARI: {WS_YOLU} kanalina HIC baglanilamadi -> WS kararliligi OLCULMEDI.")
-        return 1
-    if ws.kopma or ws.baglanamama:
-        print(
-            f"\n  UYARI: WS {ws.kopma} kez KOPTU, {ws.baglanamama} kez yeniden baglanamadi -> WS kararliligi SUPHELI."
-        )
+        sorunlar.append(f"UYARI: {WS_YOLU} kanalina HIC baglanilamadi -> WS kararliligi OLCULMEDI.")
+    else:
+        if ws.kopma or ws.baglanamama:
+            sorunlar.append(
+                f"UYARI: WS {ws.kopma} kez KOPTU, {ws.baglanamama} kez yeniden baglanamadi -> WS kararliligi SUPHELI."
+            )
+        if ws.mesaj == 0:
+            # D0Ö.22 ek: açık kalıp snapshot bile almayan bağlantı "kararlı" değildir.
+            sorunlar.append("UYARI: WS bagli kaldi ama HIC mesaj gelmedi (snapshot bile) -> WS kararliligi SUPHELI.")
+    if sorunlar:
+        print()
+        for s in sorunlar:
+            print(f"  {s}")
+        print(f"\nSONUC: SORUNLU ({len(sorunlar)} neden)")
         return 1
     print("\nSONUC: TEMIZ")
     return 0

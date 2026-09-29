@@ -7,57 +7,98 @@ telemetri/kontrol kanalının kopma sınıfı soak'ta GÖRÜNMÜYORDU, yine de "
 (VERIFICATION §7).
 
 KAPI: betiğin GERÇEK `main()`i 127.0.0.1 rastgele porttaki SAHTE backend'e karşı kısa koşar
-(`sahte_soak_backend`); psutil sahtedir, RSS kararlı. WS ortada kesilir → kopma raporlanır ve ≠0;
-sunucu kaydında `Upgrade: websocket` ≥1. Karşıt: WS açık kalır → TEMIZ / 0. `/ws` artık açıldığı için
-varsayılan port 8000 (sahibin backend'i) SESSİZCE hedeflenmez: `--port` zorunlu.
+(`sahte_soak_backend`); psutil sahtedir, RSS kararlı. WS ortada kesilir → kopma SAYISI ≥1 raporlanır
+ve ≠0; sunucu kaydında `/ws` yükseltmesi ≥1. Karşıt: WS açık kalır → TEMIZ / 0. `/ws` artık açıldığı
+için varsayılan port 8000 (sahibin backend'i) SESSİZCE hedeflenmez: `--port` zorunlu.
 MUTASYON: WS istemci bloğunu silmek → KIRMIZI.
+
+⚠️ D0Ö.22 ek (bağımsız inceleme tur 4):
+  · "KOP" alt-dizesi özet satırındaki SABİT `KOPMA {n}` etiketine çarpıyordu (kopma=0 iken de geçerdi) —
+    artık SAYI ve sınıf (SUPHELI / OLCULMEDI) pinlenir ("SABİT anahtar alt-dize" tuzağı).
+  · WS'ye bağlanılamayan / auth isteyen / ilk mesajı yollamayan backend soak BAŞLAMADAN reddedilir
+    (ön-uçuş, çıkış 2) — 72 saatlik koşu sonunda "ölçülmedi" demek yerine.
+  · websockets CI test bağımlılıklarında YOKTU: kes/tut kolları CI'da koddan bağımsız KIRMIZI, reddet
+    kolu "yüklenemedi" yüzünden YANLIŞ sebeple yeşildi → requirements-test.txt'e sabitlendi (kapı).
 """
 
 from __future__ import annotations
 
+import re
 import sys
 
 import pytest
-from betik_alt_sureci import betik_modulu
+from betik_alt_sureci import KOK, betik_modulu
 from sahte_soak_backend import SahteBackend, kos, sahte_psutil, soak_modulu
 
 
+def _kos(monkeypatch, capsys, ws_davranis: str, surec: str = "PEMF_Backend.exe") -> tuple[int, str, SahteBackend]:
+    m = soak_modulu(monkeypatch)
+    monkeypatch.setitem(sys.modules, "psutil", sahte_psutil(surec, 500.0))
+    sunucu = SahteBackend(ws_davranis)
+    try:
+        rc, cikti = kos(m, monkeypatch, capsys, sunucu.port)
+    finally:
+        sunucu.kapat()
+    return rc, cikti, sunucu
+
+
+def _sayac(cikti: str, ad: str) -> int:
+    m = re.search(rf"\b{ad} (\d+)", cikti)
+    assert m, f"özet satırında '{ad} <n>' yok:\n{cikti[-800:]}"
+    return int(m.group(1))
+
+
 def test_KRITIK_soak_GERCEK_WS_acar_ve_KOPMAYI_karara_katar(monkeypatch, capsys):
-    m = soak_modulu(monkeypatch)
-    monkeypatch.setitem(sys.modules, "psutil", sahte_psutil("PEMF_Backend.exe", 500.0))
-    sunucu = SahteBackend("kes")
-    try:
-        rc, cikti = kos(m, monkeypatch, capsys, sunucu.port)
-    finally:
-        sunucu.kapat()
+    rc, cikti, sunucu = _kos(monkeypatch, capsys, "kes")
     assert sunucu.ws_yukseltme_sayisi() >= 1, "soak /ws'ye HİÇ yükseltme isteği atmadı — WS ölçülmüyor (B-9.26)"
-    assert rc != 0, f"WS koptuğu hâlde çıkış {rc} (B-9.26):\n{cikti[-800:]}"
-    assert "TEMIZ" not in cikti and "KOP" in cikti.upper(), f"WS kopması raporlanmadı:\n{cikti[-800:]}"
+    assert rc == 1, f"WS koptuğu hâlde çıkış {rc} (B-9.26):\n{cikti[-800:]}"
+    assert "TEMIZ" not in cikti, f"WS kopması TEMIZ sayıldı:\n{cikti[-800:]}"
+    assert _sayac(cikti, "KOPMA") >= 1, f"kopma SAYILMADI (etiket sabit, sayı 0):\n{cikti[-800:]}"
+    assert "SUPHELI" in cikti, f"kopma 'WS kararlılığı ŞÜPHELİ' diye sınıflanmadı:\n{cikti[-800:]}"
 
 
-def test_KRITIK_WS_ye_HIC_baglanilamazsa_OLCULMEDI_der(monkeypatch, capsys):
-    """Bağlanılamayan kanal "kararlı" sayılamaz — ve "koptu" ile de karıştırılmaz (ölçülmedi)."""
-    m = soak_modulu(monkeypatch)
-    monkeypatch.setitem(sys.modules, "psutil", sahte_psutil("PEMF_Backend.exe", 500.0))
-    sunucu = SahteBackend("reddet")
-    try:
-        rc, cikti = kos(m, monkeypatch, capsys, sunucu.port)
-    finally:
-        sunucu.kapat()
-    assert rc != 0 and "TEMIZ" not in cikti, f"WS'ye hiç bağlanılamadığı hâlde TEMIZ/0 (rc={rc}):\n{cikti[-800:]}"
+def test_KRITIK_WS_on_ucusu_BAGLANAMAZSA_soak_BASLAMAZ(monkeypatch, capsys):
+    """Bağlanılamayan kanal "kararlı" sayılamaz — soak BAŞLAMADAN reddedilir (ölçülmezdi)."""
+    rc, cikti, sunucu = _kos(monkeypatch, capsys, "reddet")
+    assert rc == 2 and "TEMIZ" not in cikti, f"WS'ye bağlanılamadığı hâlde soak başladı/TEMIZ (rc={rc}):\n{cikti}"
+    assert "OLCULMEDI" in cikti and "soak basladi" not in cikti, f"ön-uçuş reddi yok:\n{cikti[-800:]}"
+    assert "403" in cikti and "yuklenemedi" not in cikti, f"ret nedeni 403 değil (paket eksik?):\n{cikti[-800:]}"
+    assert sunucu.ws_yukseltme_sayisi() >= 1, "ön-uçuş /ws'yi hiç denemedi"
+
+
+def test_KRITIK_WS_on_ucusu_AUTH_1008_i_adiyla_soyler(monkeypatch, capsys):
+    """Auth açık profilde `/ws` token ister: accept() sonra 1008 — "koptu" değil, auth diye raporlanır."""
+    rc, cikti, _ = _kos(monkeypatch, capsys, "auth1008")
+    assert rc == 2 and "soak basladi" not in cikti, f"auth reddinde soak başladı (rc={rc}):\n{cikti[-800:]}"
+    assert "1008" in cikti and "auth" in cikti.lower(), f"1008 auth diye adlandırılmadı:\n{cikti[-800:]}"
+
+
+def test_KRITIK_on_ucus_gecti_ama_WS_ye_HIC_baglanilamadi_OLCULMEDI(monkeypatch, capsys):
+    rc, cikti, _ = _kos(monkeypatch, capsys, "ilk_sonra_reddet")
+    assert rc == 1 and "TEMIZ" not in cikti, f"WS'ye hiç bağlanılamadığı hâlde TEMIZ/0 (rc={rc}):\n{cikti[-800:]}"
+    assert _sayac(cikti, "baglanti") == 0 and _sayac(cikti, "baglanamama") >= 1, cikti[-800:]
     assert "OLCULMEDI" in cikti, f"bağlanılamayan WS 'ölçülmedi' diye raporlanmadı:\n{cikti[-800:]}"
 
 
+def test_KRITIK_WS_bagli_ama_HIC_mesaj_yok_SUPHELI(monkeypatch, capsys):
+    """Açık kalan ama snapshot bile almayan bağlantı "kararlı" değildir (eskiden TEMIZ çıkardı)."""
+    rc, cikti, _ = _kos(monkeypatch, capsys, "ilk_sonra_sessiz")
+    assert _sayac(cikti, "baglanti") >= 1 and _sayac(cikti, "mesaj") == 0, cikti[-800:]
+    assert rc == 1 and "TEMIZ" not in cikti and "SUPHELI" in cikti, f"mesajsız WS TEMIZ (rc={rc}):\n{cikti}"
+
+
+def test_KRITIK_TUM_nedenler_basilir(monkeypatch, capsys):
+    """RSS ölçülemedi VE WS koptu: ikisi de söylenir (eskiden yalnız ilki basılıp dönülüyordu)."""
+    rc, cikti, _ = _kos(monkeypatch, capsys, "kes", surec="python.exe")
+    assert rc == 1, cikti[-800:]
+    assert "RSS ÖLÇÜLMEDİ" in cikti and "KOPTU" in cikti, f"nedenlerden biri basılmadı:\n{cikti[-800:]}"
+
+
 def test_KARSIT_KANIT_WS_acik_ve_RSS_kararli_TEMIZ(monkeypatch, capsys):
-    m = soak_modulu(monkeypatch)
-    monkeypatch.setitem(sys.modules, "psutil", sahte_psutil("PEMF_Backend.exe", 500.0))
-    sunucu = SahteBackend("tut")
-    try:
-        rc, cikti = kos(m, monkeypatch, capsys, sunucu.port)
-    finally:
-        sunucu.kapat()
+    rc, cikti, sunucu = _kos(monkeypatch, capsys, "tut")
     assert sunucu.ws_yukseltme_sayisi() >= 1, "karşıt senaryo WS açmadı"
     assert rc == 0 and "TEMIZ" in cikti, f"sağlıklı koşu TEMIZ değil (rc={rc}):\n{cikti[-800:]}"
+    assert _sayac(cikti, "KOPMA") == 0 and _sayac(cikti, "mesaj") >= 1, cikti[-800:]
 
 
 def test_KRITIK_port_ZORUNLU_istek_ATILMAZ(monkeypatch):
@@ -69,3 +110,22 @@ def test_KRITIK_port_ZORUNLU_istek_ATILMAZ(monkeypatch):
         m.main()
     assert e.value.code == 2, f"--port verilmeden çalıştı (çıkış {e.value.code!r})"
     assert not istekler, f"--port verilmeden istek atıldı: {istekler}"
+
+
+def _sabit_surum(dosya: str, paket: str) -> str | None:
+    for satir in (KOK / dosya).read_text(encoding="utf-8").splitlines():
+        m = re.match(rf"^\s*{paket}\s*==\s*([^\s#]+)", satir, re.IGNORECASE)
+        if m:
+            return m.group(1)
+    return None
+
+
+def test_KRITIK_websockets_CI_test_bagimliliklarinda_URETIMLE_ESIT():
+    """Bu kapılar GERÇEK websockets istemcisiyle koşar; CI yalnız requirements-test.txt kurar."""
+    uretim = _sabit_surum("requirements.txt", "websockets")
+    assert uretim, "requirements.txt'te websockets sabiti yok — kapı bayat"
+    test = _sabit_surum("requirements-test.txt", "websockets")
+    assert test == uretim, (
+        f"requirements-test.txt websockets={test!r} (üretim {uretim}): CI'da kes/tut kolları koddan "
+        "bağımsız KIRMIZI, reddet kolu 'yüklenemedi' yüzünden YANLIŞ sebeple yeşil olur."
+    )
