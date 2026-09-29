@@ -10,6 +10,8 @@ KAPI (bloğun GERÇEK metni, `Start-Process` gölgelenerek — `tests/exe_kapisi
 geçecek ortamda veri kökü (PEMF_DATA_DIR/APPDATA/LOCALAPPDATA/PROGRAMDATA) ve PEMF_DEVICE_IDENTITY_DIR
 build'in KENDİ scratch kökü altında; build makinesinin "gerçek" değerleri (tmp nöbetçi) DEĞİL;
 PEMF_HOTSPOT='0'; Supabase adresi loopback kara-delik; bulut MQTT provizyonu var olmayan scratch yol.
+EK (tur 3): tabloda olmayan her PEMF_*/SUPABASE_* build ortamından MİRAS ALINMAZ (izin listesi —
+PEMF_BACKUP_DIR gerçek off-site kurtarma zarfını ezebilirdi); kasa null arka uçta; ESP kapalı.
 Blok bittikten sonra build sürecinin ortamı eski hâline döner (sonraki adımlara sızmaz) ve scratch kök
 silinir (açılışın kopyaladığı eski anahtar dosyaları build ağacında kalmaz).
 MUTASYON: gate ortamından PEMF_FW_AUTO_UPDATE / PEMF_DEVICE_IDENTITY_DIR satırını silmek → KIRMIZI.
@@ -60,6 +62,44 @@ def test_KRITIK_gate_EXE_hotspot_KAPALI_ve_bulut_KARA_DELIK(tmp_path):
     assert saglama and _altinda(saglama, veri["kok"]) and not Path(saglama).exists(), (
         f"gate EXE bulut MQTT provizyonunu okuyabilir: PEMF_CLOUD_PROVISION_PATH={saglama!r}"
     )
+
+
+#: Build makinesinde tanımlı olabilecek, GERÇEK dış kaynaklara işaret eden değişkenler (nöbetçi değerler).
+#: PEMF_BACKUP_DIR: gate EXE'nin ilk yedek turu kurtarma zarfını oraya AYNI ADLA kopyalar → gerçek
+#: off-site zarfın ÜZERİNE yazar (bağımsız inceleme, tur 3).
+_MIRAS_NOBETCILERI = {
+    "PEMF_BACKUP_DIR": "GERCEK_offsite_yedek",
+    "PEMF_MQTT_CLOUD_HOST": "gercek-broker.invalid",
+    "PEMF_SENTRY_DSN": "https://gercek@sentry.invalid/1",
+    "PEMF_LOG_DIR": "GERCEK_log",
+    "PEMF_ENABLE_TUNNEL": "1",
+    "SUPABASE_KEY": "gercek-anahtar",
+}
+
+
+def test_KRITIK_gate_EXE_build_makinesinin_PEMF_ve_SUPABASE_degiskenlerini_MIRAS_ALMAZ(tmp_path):
+    ortam = build_makinesi_ortami(tmp_path)
+    ortam.update({ad: (str(tmp_path / d) if d.startswith("GERCEK_") else d) for ad, d in _MIRAS_NOBETCILERI.items()})
+    ortam["PEMF_ESP_ENABLED"] = "1"
+    ortam["PYTHON_KEYRING_BACKEND"] = "keyring.backends.Windows.WinVaultKeyring"
+    veri = kapi_blogunu_kostur(tmp_path, ortam)
+    env = (veri.get("yakalanan") or {}).get("Env") or {}
+    assert env, f"kapı bloğu EXE'yi başlatmadı: {veri.get('hata')}"
+    sizan = {ad: env[ad] for ad in _MIRAS_NOBETCILERI if ad in env}
+    assert not sizan, f"gate EXE build makinesinin GERÇEK kaynaklara işaret eden değişkenlerini MİRAS aldı: {sizan}"
+    assert env.get("PEMF_ESP_ENABLED") == "0", (
+        f"PEMF_ESP_ENABLED={env.get('PEMF_ESP_ENABLED')!r} (MQTT/ESP yolu açılır)"
+    )
+    assert env.get("PYTHON_KEYRING_BACKEND") == "keyring.backends.null.Keyring", (
+        f"gate EXE sahibin GERÇEK kimlik kasasını okuyabilir: PYTHON_KEYRING_BACKEND={env.get('PYTHON_KEYRING_BACKEND')!r}"
+    )
+    assert env.get("PEMF_FW_AUTO_UPDATE") == "0", f"PEMF_FW_AUTO_UPDATE={env.get('PEMF_FW_AUTO_UPDATE')!r}"
+    geri = {
+        ad: (veri["once"].get(ad), veri["sonra"].get(ad))
+        for ad in (*_MIRAS_NOBETCILERI, "PEMF_ESP_ENABLED", "PYTHON_KEYRING_BACKEND")
+        if veri["once"].get(ad) != veri["sonra"].get(ad)
+    }
+    assert not geri, f"kaldırılan değişkenler blok bitince build sürecine AYNEN geri gelmedi: {geri}"
 
 
 def test_KRITIK_gate_koku_blok_sonunda_SILINIR(tmp_path):

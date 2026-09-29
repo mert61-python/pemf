@@ -325,12 +325,13 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
     # eski `~/.pemf_gui` anahtar dosyalarını buraya KOPYALAR — build ağacında kalmasın).
     # Kapı: tests/test_build_kapisi_yalitimi.py
     $gateKok = Join-Path $BuildRoot "ai_kapisi_kok"
-    Remove-Item -Recurse -Force $gateKok -EA 0
+    Remove-Item -LiteralPath $gateKok -Recurse -Force -EA 0
     $gateOrtam = [ordered]@{
         PEMF_SIMULATE             = "1"
         PEMF_FW_AUTO_UPDATE       = "0"
         PEMF_STM_PORT             = "SIM"
         PEMF_HOTSPOT              = "0"
+        PEMF_ESP_ENABLED          = "0"   # build ortamında 1 olsa bile MQTT/ESP yolu AÇILMAZ
         PEMF_DATA_DIR             = (Join-Path $gateKok "veri")
         APPDATA                   = (Join-Path $gateKok "AppData\Roaming")
         LOCALAPPDATA              = (Join-Path $gateKok "AppData\Local")
@@ -338,18 +339,31 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
         PEMF_DEVICE_IDENTITY_DIR  = (Join-Path $gateKok "kimlik")
         SUPABASE_URL              = "http://127.0.0.1:9"   # kara-delik (discard portu): cihaz kaydı GİTMEZ
         PEMF_CLOUD_PROVISION_PATH = (Join-Path $gateKok "YOK_cloud_mqtt_provision.json")
+        # ⚠️ Kasa: ürünün eski-kaynak okuyucuları önce keyring'e bakar → gate EXE sahibin GERÇEK Windows
+        # kimlik kasasındaki PEMF_GUI anahtarlarını okuyup scratch köke göçürüyordu. Null arka uç pakette.
+        PYTHON_KEYRING_BACKEND    = "keyring.backends.null.Keyring"
     }
+    # ⚠️ İZİN LİSTESİ (bağımsız inceleme): tabloda OLMAYAN her PEMF_*/SUPABASE_* değişkeni build makinesinden
+    # miras kalırdı — ör. PEMF_BACKUP_DIR tanımlıysa gate EXE'nin ilk yedek turu kurtarma zarfını GERÇEK
+    # off-site dizindeki aynı adlı zarfın ÜZERİNE yazar; PEMF_MQTT_CLOUD_*, PEMF_SENTRY_DSN, PEMF_LOG_DIR,
+    # PEMF_ENABLE_TUNNEL gerçek dış kaynaklara uzanır. Blok süresince KALDIRILIR, bitince geri gelir.
     $gateOnceki = @{}
-    foreach ($ad in $gateOrtam.Keys) {
-        $gateOnceki[$ad] = [Environment]::GetEnvironmentVariable($ad, 'Process')
-        [Environment]::SetEnvironmentVariable($ad, $gateOrtam[$ad], 'Process')
-    }
-    # ⚠️ --no-mosquitto-ensure: kapı yalnız HTTP uçlarını kullanıyor. Broker'ı başlatırsa,
-    # aşağıdaki `finally` yalnız backend'i öldürdüğü için YETİM kalır ve SONRAKİ build'i
-    # DLL kilidiyle düşürür (bkz. build başındaki yetim temizliği).
-    $proc = Start-Process -FilePath $exe -ArgumentList "--port", "$gatePort", "--no-mosquitto-ensure" `
-        -RedirectStandardOutput $gateLog -RedirectStandardError "$gateLog.err" -PassThru -WindowStyle Hidden
+    $proc = $null
     try {
+        foreach ($d in @(Get-ChildItem Env: | Where-Object {
+                    ($_.Name -like 'PEMF_*' -or $_.Name -like 'SUPABASE_*') -and ($gateOrtam.Keys -notcontains $_.Name) })) {
+            $gateOnceki[$d.Name] = $d.Value
+            Remove-Item "Env:$($d.Name)" -EA 0
+        }
+        foreach ($ad in $gateOrtam.Keys) {
+            $gateOnceki[$ad] = [Environment]::GetEnvironmentVariable($ad, 'Process')
+            [Environment]::SetEnvironmentVariable($ad, $gateOrtam[$ad], 'Process')
+        }
+        # ⚠️ --no-mosquitto-ensure: kapı yalnız HTTP uçlarını kullanıyor. Broker'ı başlatırsa,
+        # aşağıdaki `finally` yalnız backend'i öldürdüğü için YETİM kalır ve SONRAKİ build'i
+        # DLL kilidiyle düşürür (bkz. build başındaki yetim temizliği).
+        $proc = Start-Process -FilePath $exe -ArgumentList "--port", "$gatePort", "--no-mosquitto-ensure" `
+            -RedirectStandardOutput $gateLog -RedirectStandardError "$gateLog.err" -PassThru -WindowStyle Hidden
         $hazir = $false
         foreach ($i in 1..90) {
             Start-Sleep -Seconds 2
@@ -416,20 +430,29 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
             }
         }
     } finally {
-        try { Stop-Process -Id $proc.Id -Force -EA 0 } catch { }
+        # ⚠️ ÖNCE ORTAM, kendi try'ında: aşağıdaki temizlik düşse de build sürecine (ve betiği `.\` ile
+        # çağıran etkileşimli oturuma) scratch/kara-delik değerleri SIZMAZ.
+        try {
+            foreach ($ad in $gateOnceki.Keys) {
+                # ⚠️ $null'ı SetEnvironmentVariable'a VERME: PowerShell onu "" yapar ve değişken BOŞ olarak
+                # build sürecinde KALIR (ölçüldü). Blok öncesinde yoksa SİL.
+                if ($null -eq $gateOnceki[$ad]) { Remove-Item "Env:$ad" -EA 0 }
+                else { [Environment]::SetEnvironmentVariable($ad, $gateOnceki[$ad], 'Process') }
+            }
+        } catch { Warn "Kapı ortamı geri yüklenemedi: $_" }
+        if ($proc) {
+            try { Stop-Process -Id $proc.Id -Force -EA 0 } catch { }
+            # Kill asenkron: açık log/SQLite dosyaları kök silinirken kilitli kalmasın.
+            try { Wait-Process -Id $proc.Id -Timeout 10 -EA 0 } catch { }
+        }
         # ⚠️ ÇOCUKLARI DA TOPLA: backend'i öldürmek onun başlattığı yardımcıları öldürmez.
         # Yetim broker DLL kilidi tutup SONRAKİ build'i düşürüyordu.
         foreach ($c in @(Get-Process -EA 0 | Where-Object { $_.Path -and $_.Path.StartsWith($dist, [StringComparison]::OrdinalIgnoreCase) })) {
             Warn "Kapı sonrası yetim süreç durduruluyor: $($c.ProcessName) (PID $($c.Id))"
             try { Stop-Process -Id $c.Id -Force -EA 0 } catch { }
         }
-        foreach ($ad in $gateOnceki.Keys) {
-            # ⚠️ $null'ı SetEnvironmentVariable'a VERME: PowerShell onu "" yapar ve değişken BOŞ olarak
-            # build sürecinde KALIR (ölçüldü). Blok öncesinde yoksa SİL.
-            if ($null -eq $gateOnceki[$ad]) { Remove-Item "Env:$ad" -EA 0 }
-            else { [Environment]::SetEnvironmentVariable($ad, $gateOnceki[$ad], 'Process') }
-        }
-        Remove-Item -Recurse -Force $gateKok -EA 0
+        Remove-Item -LiteralPath $gateKok -Recurse -Force -EA 0
+        if (Test-Path -LiteralPath $gateKok) { Warn "Kapı scratch kökü silinemedi (kilitli dosya?): $gateKok" }
     }
 }
 
