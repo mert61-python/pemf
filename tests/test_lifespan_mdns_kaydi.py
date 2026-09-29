@@ -144,13 +144,23 @@ def test_KRITIK_lifespan_SURE_SONUNA_KALAN_daemon_BASLATMAZ(monkeypatch):
 
     _c = _kayitli_conftest()
     monkeypatch.setenv("PEMF_SIMULATE", "1")
+    # Başlatıcı idempotent: süreçte önce bir lifespan koştuysa bayrak True kalır ve koruma olmasa bile
+    # hw-sim bu girişte başlamaz (kol kör olurdu) → bayrak sıfırlanır.
+    monkeypatch.setattr(api_server, "_bg_threads_started", False)
     koruma = getattr(_c, "_ARKA_PLAN_ENGELLENEN", None)
     n0 = len(koruma) if koruma is not None else 0
+    once = set(threading.enumerate())
     with TestClient(api_server.app):
         pass
+    for t in threading.enumerate():  # lifespan'ın kısa ömürlü yardımcıları kendiliğinden biter
+        if t.name in ("PEMFmDNSService", "FastAPIMQTTListener"):
+            t.join(timeout=10)
 
+    # Ad listesine değil FARKA bakılır (tur 3): yeni adlı bir kalıcı daemon da yakalanır.
+    yeni = sorted(t.name for t in set(threading.enumerate()) - once if t.is_alive())
+    assert yeni == [], f"lifespan test bitince de YAŞAYAN thread bıraktı: {yeni}"
     canli = sorted(t.name for t in threading.enumerate() if t.name in ARKA_PLAN_DAEMONLARI)
-    assert canli == [], f"süreçte test bitince de yaşayan lifespan daemon'ları var: {canli}"
+    assert canli == [], f"süreçte lifespan daemon'ları yaşıyor: {canli}"
     assert koruma is not None and len(koruma) > n0, (
         "lifespan arka plan başlatıcısı conftest korumasına ULAŞMADI — senaryo kurulamadı ya da koruma yok"
     )

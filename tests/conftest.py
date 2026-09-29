@@ -66,7 +66,8 @@ os.environ["PEMF_DEVICE_IDENTITY_DIR"] = str(_OTURUM_IZOLE / "makine_kimligi")
 os.environ.setdefault("PEMF_SCRATCH_WARMUP", "0")
 # ⚠️ D0Ö.10 (B-10.105) — aynı sınıf: `ai-warmup` daemon'ı (ses hattı + torch importu) test bitince
 # yaşayıp SONRAKİ testlerle yarışıyordu (A9). Isıtmayı sınayan testler bayrağı kendileri siler/verir.
-os.environ.setdefault("PEMF_AI_WARMUP", "0")
+# ZORLA (setdefault DEĞİL): dış kabuk/CI `PEMF_AI_WARMUP=1` verse de süit ısıtmasız koşar (D0Ö.11 deseni).
+os.environ["PEMF_AI_WARMUP"] = "0"
 
 # ⚠️ D0Ö.11 (B-10.222 = DENETIM-12 P1) — `PEMF_SIMULATE` TEST MODÜLLERİNDE DEĞİL, BURADA TEK YERDE.
 # 72 test modülü modül gövdesinde yazıyordu (16 `setdefault('1')` + 56 `pop`); değeri TOPLAMA SIRASI

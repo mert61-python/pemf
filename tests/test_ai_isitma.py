@@ -60,6 +60,26 @@ def bs():
     return backend_service
 
 
+def test_KRITIK_suitte_isitma_KAPALI_thread_KURULMAZ(bs, monkeypatch):
+    """D0Ö.10 (B-10.105): conftest `PEMF_AI_WARMUP=0`'ı ZORLA verir (dış kabuk 1 verse de) → süitte
+    ai-warmup daemon'ı kurulmaz. Bu test ortamı DEĞİŞTİRMEZ: conftest'in bıraktığı değerle koşar."""
+    import logging
+    import os
+    import threading as _t
+
+    kurulan = []
+
+    class _KayitThread(_t.Thread):
+        def start(self):
+            kurulan.append(self.name)
+
+    monkeypatch.setattr(_t, "Thread", _KayitThread)
+    bs._start_ai_warmup_safe(logging.getLogger("test_ai_isitma"))
+    assert kurulan == [], (
+        f"süit ortamında ai-warmup thread'i KURULDU: {kurulan} (PEMF_AI_WARMUP={os.environ.get('PEMF_AI_WARMUP')!r})"
+    )
+
+
 def test_KRITIK_acilista_CAGRILIYOR(bs):
     """Çağrılmazsa maliyet yine ilk analize biner — düzeltme sessizce ölür."""
     src = inspect.getsource(bs)
