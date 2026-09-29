@@ -211,18 +211,48 @@ def test_depo_okuma_HICBIR_KOSULDA_patlamaz(tmp_path, monkeypatch):
     assert sm._kimlik_deposu_oku() == ""
 
 
-def _olmayan_kok_izi():
+def _olmayan_kok_izi() -> dict:
     """Eski testin C:\\ köküne bıraktığı `olmayan_kok_12345` (Y39 — temizliği SAHİP eylemi) için iz:
-    varlık + mtime + boyut + SHA-256. İçerik yalnız özetlenir; hiçbir yere yazılmaz/basılmaz."""
+    {yol: (dosya mı, mtime, boyut, SHA-256)}; okunamayan giriş 'OKUNAMADI'. İçerik yalnız özetlenir,
+    hiçbir yere yazılmaz; iddia düşerse de özet DEĞİL yalnız değişen YOLLAR basılır (`_iz_farki`)."""
     kok = Path(os.sep).resolve() / "olmayan_kok_12345"
     if not kok.exists():
-        return ("YOK",)
-    iz = []
+        return {}
+    iz = {}
     for p in sorted([kok, *kok.rglob("*")]):
-        st = p.stat()
-        ozet = hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else ""
-        iz.append((str(p), p.is_file(), st.st_mtime_ns, st.st_size if p.is_file() else 0, ozet))
-    return tuple(iz)
+        try:
+            st = p.stat()
+            ozet = hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else ""
+        except OSError as e:
+            iz[str(p)] = ("OKUNAMADI", type(e).__name__)
+            continue
+        iz[str(p)] = (p.is_file(), st.st_mtime_ns, st.st_size if p.is_file() else 0, ozet)
+    return iz
+
+
+def _iz_farki(once: dict, sonra: dict) -> list:
+    return sorted(k for k in set(once) | set(sonra) if once.get(k) != sonra.get(k))
+
+
+def _hata_kaydedicisi(monkeypatch, sm) -> list:
+    """`secrets_manager.logger` yerine: her düzeyi (warning/error/exception…) (düzey, ileti) olarak kaydeder.
+    caplog yerine bu: başka testlerin logging yapılandırması (disable_existing_loggers/propagate) onu
+    körleştiremez."""
+    kayit = []
+
+    class _Kaydedici:
+        def __getattr__(self, duzey):
+            def _yaz(msg, *a, **k):
+                kayit.append((duzey, msg % a if a else msg))
+
+            return _yaz
+
+    monkeypatch.setattr(sm, "logger", _Kaydedici())
+    return kayit
+
+
+def _hata_dali_kostu(kayit: list) -> bool:
+    return any(d in ("warning", "error", "exception", "critical") and "yazılamadı" in m for d, m in kayit)
 
 
 def test_depo_yazimi_HICBIR_KOSULDA_patlamaz(tmp_path, monkeypatch):
@@ -242,21 +272,33 @@ def test_depo_yazimi_HICBIR_KOSULDA_patlamaz(tmp_path, monkeypatch):
     # Yazımdan ÖNCE: hedef tmp içinde olmalı (gerçek köke dönen bir yol, yazmadan kırmızı olur).
     assert hedef.resolve().is_relative_to(tmp_path.resolve()), f"depo hedefi tmp dışında: {hedef}"
     once = _olmayan_kok_izi()
-    uyarilar = []
-
-    class _Kaydedici:
-        def warning(self, msg, *a, **k):
-            uyarilar.append(msg % a if a else msg)
-
-        def __getattr__(self, ad):
-            return lambda *a, **k: None
-
-    monkeypatch.setattr(sm, "logger", _Kaydedici())
+    kayit = _hata_kaydedicisi(monkeypatch, sm)
     monkeypatch.setenv("PEMF_DEVICE_IDENTITY_DIR", str(hedef))
     sm._kimlik_deposu_yaz("deneme-degeri")  # istisna fırlatırsa test kırmızı
 
-    assert any("yazılamadı" in u for u in uyarilar), (
-        f"hata dalı KOŞMADI — yazılamayan depo kurulamadı, test kör: {uyarilar}"
+    assert _hata_dali_kostu(kayit), (
+        "except dalı uyarı üretmedi — ürün hatayı SESSİZCE yutuyor ya da depo yazılabilir kaldı "
+        f"(senaryo kurulamadı): {kayit}"
     )
     assert engel.is_file() and not hedef.exists(), "yazılamayan depoya bir şey yazıldı"
-    assert _olmayan_kok_izi() == once, "C:\\olmayan_kok_12345 izi değişti — test gerçek köke yazdı"
+    degisen = _iz_farki(once, _olmayan_kok_izi())
+    assert not degisen, f"C:\\olmayan_kok_12345 değişti — test gerçek köke yazdı: {degisen}"
+
+
+def test_depo_YAZIM_noktasinda_dusse_de_akisi_KESMEZ(tmp_path, monkeypatch):
+    """İkinci senaryo: depo dizini VAR ama YAZIM düşer — gerçekçi saha arızası (ProgramData/PEMF_System
+    var, yazma izni yok: mkdir `exist_ok` ile geçer, `write_text` düşer). `device_identity.tmp` önceden
+    DİZİN olarak kurulur → yazım her platformda (root dahil) düşer. Birinci senaryo hatayı mkdir'de
+    tetiklediği için yazım satırlarının `try` dışına taşınmasını GÖREMEZDİ; bu test görür."""
+    import utils.secrets_manager as sm
+
+    hedef = tmp_path / "depo"
+    (hedef / "device_identity.tmp").mkdir(parents=True)
+    once = _olmayan_kok_izi()
+    kayit = _hata_kaydedicisi(monkeypatch, sm)
+    monkeypatch.setenv("PEMF_DEVICE_IDENTITY_DIR", str(hedef))
+    sm._kimlik_deposu_yaz("deneme-degeri")  # istisna fırlatırsa test kırmızı
+
+    assert _hata_dali_kostu(kayit), f"yazım noktasındaki hata except dalına ULAŞMADI ya da sessizce yutuldu: {kayit}"
+    assert not (hedef / "device_identity.json").exists(), "yazılamayan depoya kimlik dosyası yazıldı"
+    assert not _iz_farki(once, _olmayan_kok_izi()), "C:\\olmayan_kok_12345 değişti"
