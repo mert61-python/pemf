@@ -44,9 +44,24 @@ import json
 import sys
 from pathlib import Path
 
-KOK = Path(__file__).resolve().parents[1]
-if str(KOK) not in sys.path:
-    sys.path.insert(0, str(KOK))
+
+# ── DEPO KÖKÜ + BACKEND YOLU (D0Ö.19/20 · B-10.57, B-9.25) ──────────────────
+# ⚠️ F4 (`apps/backend/`, 2026-09-18) taşımasından beri `utils` depo kökünde DEĞİL; yalnız kök
+#    eklendiği için `_sirlari_oku` ilk çağrıda `ModuleNotFoundError` veriyordu (önsöz sağlam
+#    görünüyordu) → emanet oluşturulamıyor/doğrulanamıyordu. Kök SABİT DERİNLİKLE (`parents[1]`)
+#    değil İŞARET DOSYASIYLA aranır (scripts/stm_firmware_kimligi.py deseni).
+#    Kapı: tests/test_betikler_ACILIYOR.py::test_KRITIK_fonksiyon_ici_ilk_taraf_importlari_COZULUYOR
+def _depo_koku(bas: Path) -> Path:
+    for aday in (bas, *bas.parents):
+        if (aday / "pyproject.toml").is_file() and (aday / "apps" / "backend").is_dir():
+            return aday
+    raise RuntimeError("depo kökü bulunamadı (işaret: pyproject.toml + apps/backend). Betik depo dışına mı taşındı?")
+
+
+KOK = _depo_koku(Path(__file__).resolve())
+for _yol in (KOK, KOK / "apps" / "backend"):
+    if str(_yol) not in sys.path:
+        sys.path.insert(0, str(_yol))
 
 #: Emanete alınacak alanlar. İkisi de kaybolursa veri okunamaz.
 ALANLAR = (

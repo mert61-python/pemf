@@ -38,9 +38,23 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
-KOK = Path(__file__).resolve().parents[1]
-if str(KOK) not in sys.path:
-    sys.path.insert(0, str(KOK))
+
+# ── DEPO KÖKÜ + BACKEND YOLU (D0Ö.19/21 · B-10.32, B-9.27) ──────────────────
+# ⚠️ F4 taşımasından beri `utils` depo kökünde DEĞİL; yalnız kök eklendiği için ses kolu
+#    (`utils.ses_kalitesi`) her kayıtta `ModuleNotFoundError` verdi, kayıt kayıt yutuldu ve araç
+#    exit 0 ile bitti. Kök İŞARET DOSYASIYLA aranır (scripts/stm_firmware_kimligi.py deseni).
+#    Kapı: tests/test_betikler_ACILIYOR.py::test_KRITIK_fonksiyon_ici_ilk_taraf_importlari_COZULUYOR
+def _depo_koku(bas: Path) -> Path:
+    for aday in (bas, *bas.parents):
+        if (aday / "pyproject.toml").is_file() and (aday / "apps" / "backend").is_dir():
+            return aday
+    raise RuntimeError("depo kökü bulunamadı (işaret: pyproject.toml + apps/backend). Betik depo dışına mı taşındı?")
+
+
+KOK = _depo_koku(Path(__file__).resolve())
+for _yol in (KOK, KOK / "apps" / "backend"):
+    if str(_yol) not in sys.path:
+        sys.path.insert(0, str(_yol))
 
 # Windows konsolu cp1254 olabilir (make_manifest cp1252 tuzağıyla aynı ders):
 # ok/Türkçe karakterli ilerleme satırları UnicodeEncodeError ile akışı düşürmesin.

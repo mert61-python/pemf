@@ -35,6 +35,24 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+
+# ── DEPO KÖKÜ + BACKEND YOLU (D0Ö.19/21 · B-10.32, B-9.27) ──────────────────
+# ⚠️ `_veri_koku` eskiden fonksiyon içinde DEPO KÖKÜNÜ (`parents[1]`) ekliyordu; F4'ten beri
+#    `utils` orada değil → `get_app_data_directory` sessizce düştü ve soak YANLIŞ kökün DB
+#    büyümesini ölçtü. Kök İŞARET DOSYASIYLA aranır (scripts/stm_firmware_kimligi.py deseni).
+#    Kapı: tests/test_betikler_ACILIYOR.py::test_KRITIK_fonksiyon_ici_ilk_taraf_importlari_COZULUYOR
+def _depo_koku(bas: Path) -> Path:
+    for aday in (bas, *bas.parents):
+        if (aday / "pyproject.toml").is_file() and (aday / "apps" / "backend").is_dir():
+            return aday
+    raise RuntimeError("depo kökü bulunamadı (işaret: pyproject.toml + apps/backend). Betik depo dışına mı taşındı?")
+
+
+_KOK = _depo_koku(Path(__file__).resolve())
+for _yol in (_KOK, _KOK / "apps" / "backend"):
+    if str(_yol) not in sys.path:
+        sys.path.insert(0, str(_yol))
+
 #: Yalnız OKUMA uçları — sıra önemli değil, hepsi her turda çağrılır.
 #
 #: ⚠️ İLK YAZIMDA `/api/history/sessions?limit=50` vardı — BÖYLE BİR UÇ YOK. İstek
@@ -169,7 +187,6 @@ def _veri_koku() -> Path:
     if pd:
         adaylar.append(Path(pd) / "PEMF_System" / "PEMF_GUI")
     try:
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
         from utils.path_utils import get_app_data_directory
 
         adaylar.append(Path(get_app_data_directory()))

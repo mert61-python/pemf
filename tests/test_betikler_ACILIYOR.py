@@ -47,10 +47,13 @@ def _takipli(desenler: list[str]) -> list[str]:
     return [x.decode("utf-8") for x in ham.split(b"\x00") if x]
 
 
-def _onsozleri_kostur(dosyalar: list[str], kok: Path | None = None) -> list[tuple[str, str]]:
-    """Alt-süreçte önsözleri koştur; [(dosya, hata)] döndür."""
+def _onsozleri_kostur(
+    dosyalar: list[str], kok: Path | None = None, ic_importlar: bool = False
+) -> list[tuple[str, str]]:
+    """Alt-süreçte önsözleri koştur; [(dosya, hata)] döndür. `ic_importlar`: fonksiyon/try içi import'lar da."""
     r = subprocess.run(
-        [sys.executable, str(KOSUCU), str(kok or KOK), json.dumps(dosyalar)],
+        [sys.executable, str(KOSUCU), str(kok or KOK), json.dumps(dosyalar)]
+        + (["--ic-importlar"] if ic_importlar else []),
         cwd=str(KOK),
         capture_output=True,
         text=True,
@@ -88,6 +91,74 @@ def test_KARSIT_KANIT_kosucu_YOLU_DARALTIYOR(tmp_path):
     assert sonuc and sonuc[0][0] == "backend_isteyen.py", (
         "test süreci `conftest` yüzünden `apps/backend`i taşıyor; koşucu yolu daraltmazsa "
         "ölü betikler ÇÖZÜLÜR görünür ve kapı hiçbir şey ölçmez."
+    )
+
+
+def _ic_importlari_kostur(dosyalar: list[str], kok: Path | None = None) -> list[tuple[str, str]]:
+    from onsoz_kosucu import IC_IMPORT_ONEKI
+
+    return [(r, h) for r, h in _onsozleri_kostur(dosyalar, kok, ic_importlar=True) if h.startswith(IC_IMPORT_ONEKI)]
+
+
+def test_KARSIT_KANIT_kosucu_FONKSIYON_ICI_olu_importu_GORUYOR(tmp_path):
+    """D0Ö.19: fonksiyon/try İÇİNDEKİ birinci-taraf import — gövde koşturulmadan — görülmeli.
+
+    Pozitif (yol kurmadan `apps/backend` paketini fonksiyonda import eden) VE negatif (yolu önsözde
+    kuran; `try` içinde BİLEREK eksik üçüncü-taraf; aynı dizindeki kardeş modül) örneklerle.
+    """
+    (tmp_path / "apps" / "backend" / "arka").mkdir(parents=True)
+    (tmp_path / "apps" / "backend" / "arka" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "kardes.py").write_text("X = 1\n", encoding="utf-8")
+    (tmp_path / "olu_ic.py").write_text(
+        "import json\n\n\ndef f():\n    try:\n        from arka import x\n    except Exception:\n        pass\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "saglam_ic.py").write_text(
+        "import sys\nfrom pathlib import Path\n\n"
+        "sys.path.insert(0, str(Path(__file__).resolve().parent / 'apps' / 'backend'))\n"
+        "import json\n\n\ndef f():\n    import arka\n    import kardes\n"
+        "    try:\n        import kesinlikle_olmayan_ucuncu_taraf_xyz\n    except ImportError:\n        pass\n",
+        encoding="utf-8",
+    )
+    # Yolu son import'tan SONRA kuran sağlam betik (xai_batch_rapor biçimi) — aradaki BAĞIMSIZ yan
+    # etki deyimi KOŞTURULMAMALI (yalnız sys.path dilimi + dayandığı tanımlar koşar; make_base_zip dersi).
+    (tmp_path / "saglam_sonra.py").write_text(
+        "import sys\nfrom pathlib import Path\n\n"
+        "KOK = Path(__file__).resolve().parent\n"
+        "(KOK / 'YAN_ETKI_KOSTU.txt').write_text('x')\n"
+        "if str(KOK / 'apps' / 'backend') not in sys.path:\n"
+        "    sys.path.insert(0, str(KOK / 'apps' / 'backend'))\n\n\n"
+        "def f():\n    import arka\n",
+        encoding="utf-8",
+    )
+    sonuc = _ic_importlari_kostur(["olu_ic.py", "saglam_ic.py", "saglam_sonra.py"], kok=tmp_path)
+    adlar = {r for r, _ in sonuc}
+    assert "olu_ic.py" in adlar, f"koşucu fonksiyon/try içindeki ÖLÜ birinci-taraf import'u görmedi: {sonuc}"
+    assert "saglam_ic.py" not in adlar, f"koşucu yolu önsözde kuran sağlam betiği ölü sandı: {sonuc}"
+    assert "saglam_sonra.py" not in adlar, f"koşucu yolu son import'tan sonra kuran betiği ölü sandı: {sonuc}"
+    assert not (tmp_path / "YAN_ETKI_KOSTU.txt").exists(), "koşucu yol dilimi DIŞINDAKİ üst-düzey deyimi KOŞTURDU"
+    # Önsöz kapısı (bayraksız) bu ölüyü GÖREMEZ — yeni adımın gerekçesi.
+    assert not _onsozleri_kostur(["olu_ic.py"], kok=tmp_path), "önsöz kapısı fonksiyon içini zaten görüyormuş"
+
+
+def test_KRITIK_fonksiyon_ici_ilk_taraf_importlari_COZULUYOR():
+    """D0Ö.19/20/21 (B-10.57 · B-10.32 · B-9.25 · B-9.27) — betikler F4'ten beri fonksiyon İÇİNDE ölüydü.
+
+    `hasta_anahtari_emanet._sirlari_oku` (`utils`), `vault_emanet.tatbikat` (`database`),
+    `xai_batch_rapor` ses kolu (`utils.ses_kalitesi`), `soak_http_ws._veri_koku` (`utils`):
+    önsöz sağlam göründü, iş yapan fonksiyon ilk çağrıda `ModuleNotFoundError` verdi — çoğu
+    `except` ile yutuldu (emanet ACL'siz yazıldı, soak yanlış kökü ölçtü, rapor exit 0).
+    Tüm birinci-taraf import düğümleri betiğin KENDİ kurduğu `sys.path` ile, conftest yolları
+    olmadan (alt süreç, daraltılmış yol) çözülmeli ve çözüm DEPO İÇİNE düşmeli.
+    """
+    dosyalar = _takipli([f"{d}*.py" for d in BETIK_DIZINLERI])
+    assert len(dosyalar) > 30, f"VAKUM: yalnız {len(dosyalar)} betik tarandı — tarama bozuk"
+    olu = [(rel, hata) for rel, hata in _ic_importlari_kostur(dosyalar) if (rel, hata.split("'")[1]) not in MUAF]
+    assert not olu, (
+        "FONKSİYON/TRY İÇİNDE ÇÖZÜLEMEYEN BİRİNCİ-TARAF IMPORT:\n  "
+        + "\n  ".join(f"{a} -> {b}" for a, b in olu)
+        + "\n\nDüzeltme: betiğin önsözünde depo kökünü İŞARET DOSYASIYLA bulup kök + `apps/backend`i "
+        "sys.path'e ekleyin (örnek: scripts/stm_firmware_kimligi.py `_depo_koku`)."
     )
 
 
