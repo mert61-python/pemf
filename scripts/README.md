@@ -6,7 +6,7 @@ Build, yayın, servis-kurulum, gateway/hotspot ve kaldırma scriptleri.
 | Script | Görev |
 |---|---|
 | `firmware_derle.py` | Her iki firmware'i de **gerçekten derler** (arm-none-eabi-gcc + arduino-cli), CubeIDE/Arduino IDE açmadan. ⚠️ Bağlanan ELF'te `_printf_float` sembolünü **ARAR**; yoksa derlemeyi DÜŞÜRÜR — o sembol olmadan tüm STM sensör telemetrisi sessizce ölür (2026-09-11 saha arızası). ⚠️ Bayrağı KENDİ vermez: CubeIDE'nin üreteceği ikiliyi ölçmek için |
-| `stm_workspace_kopyala.py` | Masaüstüne temiz CubeIDE workspace'i çıkarır — derleme artığı TAŞIMAZ (bayat `.elf` flaşlama kazasının kökü) ve kaynağın protokol aşamasını DOĞRULAR: `NUM_COILS=7`, `unipolar_maskesi` (121 bayt), `Coil_KipUygula`, `&_printf_float` |
+| `stm_workspace_kopyala.py` | Masaüstüne temiz CubeIDE workspace'i çıkarır — derleme artığı TAŞIMAZ (bayat `.elf` flaşlama kazasının kökü) ve kaynağın protokol aşamasını DOĞRULAR: `NUM_COILS=7`, `unipolar_maskesi` (121 bayt), `Coil_KipUygula`, `&_printf_float`. Aynı gün yeniden koşumda eski kopyayı SİLMEZ, `<ad>_yedek_<HHMMSS>`e taşır (yedeği CubeIDE'de açmayın/flaşlamayın) |
 | `stm_firmware_kimligi.py` | Karttaki firmware'in açılış banner'ını okur — `7-ch` mi `5-ch` mi (yanlış ikili flaşlandı mı?) |
 | `stm_yak.py` | **STM32 güvenli reflash — CLI yüzü.** ⚠️ Mantık burada DEĞİL: [`../apps/backend/utils/stm_yakma.py`](../apps/backend/utils/README.md). Sevk edilen pakete `scripts/` altından yalnız altı `.ps1` girer (`build_tools/make_base_zip.py::ADD_SCRIPTS`), `scripts/*.py` **hiç gitmez** — mantık burada kalsaydı sahada hiç bulunmazdı |
 

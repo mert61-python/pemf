@@ -20,6 +20,11 @@ CubeIDE'yi yeniden derlemeye ZORLAR ve kopyanın gerçekten 7 bobinlik olduğunu
 KULLANIM:
     python scripts/stm_workspace_kopyala.py                    # masaüstüne, tarihli klasör
     python scripts/stm_workspace_kopyala.py --hedef D:/yedek   # başka yere
+
+AYNI GÜN YENİDEN KOŞUM: var olan tarihli klasör SİLİNMEZ, yanına `<ad>_yedek_<HHMMSS>` adıyla
+TAŞINIR (sahibin o günkü düzenlemeleri ve `.metadata` korunur). ⚠️ Yedek, bayat `Debug/*.elf`
+taşıyabilir: onu CubeIDE'de AÇMAYIN / FLASHLAMAYIN — yalnız farkınızı alın. Yedekler kendiliğinden
+temizlenmez.
 """
 
 from __future__ import annotations
@@ -110,7 +115,16 @@ def main() -> int:
         print(f"[HATA] hedef kok yok: {kok}", file=sys.stderr)
         return 2
 
+    # D0Ö.16 ek: kaynaklar hedefe DOKUNMADAN ÖNCE denetlenir — eskiden denetim taşımadan SONRAYDI:
+    # betik depo dışına kopyalanıp koşulursa sahibin workspace'i yedeğe taşınır, CubeIDE'nin açtığı
+    # yolda boş bir hedef kalırdı.
+    eksik_proje = [str(KOK / "firmware" / p) for p in PROJELER if not (KOK / "firmware" / p).is_dir()]
+    if eksik_proje:
+        print(f"[HATA] proje yok: {eksik_proje} — hedefe DOKUNULMADI", file=sys.stderr)
+        return 2
+
     hedef = kok / f"PEMF_STM32_workspace_{_dt.date.today().isoformat()}"
+    yedek = None
     if hedef.exists():
         # ⚠️ D0Ö.16 (B-10.211): ASLA SİLİNMEZ, YEDEĞE TAŞINIR. Eskiden `shutil.rmtree(hedef)` idi:
         # aynı gün ikinci koşum, sahibin o gün CubeIDE'de yaptığı `main.c` düzenlemesini ve
@@ -130,11 +144,7 @@ def main() -> int:
     hedef.mkdir(parents=True)
 
     for p in PROJELER:
-        kaynak = KOK / "firmware" / p
-        if not kaynak.is_dir():
-            print(f"[HATA] proje yok: {kaynak}", file=sys.stderr)
-            return 2
-        shutil.copytree(kaynak, hedef / p, ignore=_atla)
+        shutil.copytree(KOK / "firmware" / p, hedef / p, ignore=_atla)
         print(f"  kopyalandi: {p}")
 
     # ── DOĞRULAMA — kopyanın kendisi ölçülür, kopyalandığı varsayılmaz ──────────
@@ -173,6 +183,10 @@ def main() -> int:
     print("   4) DOGRULA: UART banner 'STM_READY: ... (7-ch ...' demeli.")
     print("      '5-ch' goruyorsan ESKI ikili yuklenmis demektir.")
     print("      Hizli kontrol:  python scripts/stm_firmware_kimligi.py")
+    if yedek is not None:
+        print()
+        print(f"ONCEKI KOPYA (silinmedi): {yedek}")
+        print("   Bu yedegi CubeIDE'de ACMAYIN / FLASHLAMAYIN (bayat Debug/*.elf tasiyabilir); yalniz farkinizi alin.")
     return 0
 
 
