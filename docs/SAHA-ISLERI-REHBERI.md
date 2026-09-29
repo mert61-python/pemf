@@ -233,7 +233,9 @@ korumasını bekleme; süreyi sen sınırla ve sıcaklığı `STM_TELE`'deki `T=
 python scripts\soak_http_ws.py --port 8000 --dakika 4320 --aralik 60
 ```
 
-Betik **bobin sürmez** — HTTP + WebSocket yollarını zorlar, RSS'i izler.
+Betik **bobin sürmez** — HTTP + WebSocket yollarını zorlar, RSS'i izler. `--port` zorunludur.
+RSS okunamazsa (psutil yok ya da süreç adı `PEMF_Backend` değil) sonuç **RSS ÖLÇÜLMEDİ** ve çıkış ≠0;
+`/ws` koparsa ya da hiç bağlanamazsa **SUPHELI / ÖLÇÜLMEDİ** — ikisi de TEMİZ sayılmaz.
 
 ⚠️ Okuma tuzakları (ikisi de yaşandı):
 - **AI ısınması sızıntı DEĞİL.** Health-200 anında RSS ~254 MB; AI ısınınca ~2310 MB'a çıkar

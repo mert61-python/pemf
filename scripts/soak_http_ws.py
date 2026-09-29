@@ -216,6 +216,11 @@ def _rss_oturmasini_bekle(azami_sn: float = 180.0, kararli_tur: int = 3) -> floa
     Ölçüt: ardışık `kararli_tur` örnekte değişim %1'in altındaysa oturmuştur.
     """
     onceki = _backend_rss_mb()
+    if onceki <= 0:
+        # ⚠️ D0Ö.15 (B-10.97): ÖLÇÜLEMEYEN şey OTURMAZ — eskiden `azami_sn` (180 sn) boşuna beklenip
+        # 0 ile devam ediliyordu; sonuç da TEMIZ çıkıyordu (bkz. `main` kararı).
+        print("  UYARI: backend RSS okunamiyor (psutil yok ya da PEMF_Backend sureci yok) — isinma BEKLENMIYOR.")
+        return 0.0
     kararli = 0
     bitis = time.monotonic() + azami_sn
     while time.monotonic() < bitis:
@@ -301,7 +306,7 @@ def main() -> int:
     _surec_sayisi_uyar()
     print("  AI isitmasinin oturmasi bekleniyor (taban olcumu icin)...")
     oturmus = _rss_oturmasini_bekle()
-    print(f"  taban RSS oturdu: {oturmus} MB")
+    print(f"  taban RSS oturdu: {oturmus} MB" if oturmus > 0 else "  taban RSS: OLCULEMEDI")
 
     bitis = time.monotonic() + a.dakika * 60
     ornekler: list[tuple[float, float, int, int]] = []
@@ -333,8 +338,9 @@ def main() -> int:
 
     ws.durdur()
     if len(ornekler) < 2:
-        print("\nSONUC: ornek sayisi yetersiz — daha uzun kosturun.")
-        return 0
+        # D0Ö.15 (B-10.97): tek örnekle sızıntı/kararlılık kararı VERİLEMEZ — eskiden 0 dönüyordu.
+        print("\nSONUC: ornek sayisi yetersiz — karar VERILEMEDI; daha uzun kosturun.")
+        return 1
 
     ilk_rss, son_rss = ornekler[0][1], ornekler[-1][1]
     ilk_db, son_db = ornekler[0][2], ornekler[-1][2]
@@ -350,6 +356,14 @@ def main() -> int:
         + (f"  (son hata: {ws.son_hata})" if ws.son_hata else "")
     )
 
+    # ⚠️ D0Ö.15 (B-10.97): RSS okunamadıysa (psutil yok / PEMF_Backend süreci yok) oran 0 çıkar ve
+    # eskiden sonuç "TEMIZ" oluyordu — bellek sızıntısı hiç ölçülmeden. Ölçülmeyen şey temiz sayılmaz.
+    if not ilk_rss or not son_rss:
+        print(
+            "\n  UYARI: RSS ÖLÇÜLMEDİ — psutil yok ya da PEMF_Backend sureci bulunamadi; "
+            "bellek sizintisi DEGERLENDIRILMEDI."
+        )
+        return 1
     # ⚠️ ESIK GEREKCESI: kisa soak'ta birkac MB dalgalanma NORMALDIR (GC, arena, onbellek).
     # Sizinti isareti MONOTON ve ORANSAL artistir. %25 esigi, 20 dk'lik bir kosuda
     # gurultuyu eleyip gercek bir sizintiyi yakalayacak kadar genis; daha dar bir esik

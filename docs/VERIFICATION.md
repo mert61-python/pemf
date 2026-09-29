@@ -122,7 +122,8 @@ Get-ChildItem "C:\ProgramData\PEMF_GUI\ai_models\*" -Recurse -Include *.onnx,*.p
 
 ```powershell
 # HTTP + WebSocket soak (canlı yolları zorlar) — uzun süre çalıştır:
-# (--port ZORUNLU; /ws kopar ya da hiç bağlanamazsa sonuç SUPHELI / ÖLÇÜLMEDİ ve çıkış ≠0)
+# (--port ZORUNLU; /ws kopar ya da hiç bağlanamazsa, RSS okunamazsa ya da tek örnek alınırsa
+#  sonuç TEMİZ DEĞİLDİR — SUPHELI / ÖLÇÜLMEDİ — ve çıkış ≠0)
 python scripts\soak_http_ws.py --port 8000 --dakika 4320 --aralik 60
 # ⛔ soak_publish_5hz_8coil.py ESP kapalıyken (varsayılan) hiçbir şey ölçmez — kullanmayın.
 # Paralel izleme (her 30sn): süreç belleği + DB büyümesi
