@@ -168,6 +168,16 @@ def veri_koku(veri: Path) -> Path:
     return veri / "PEMF_GUI"
 
 
+def _guvenlik_ortami() -> dict:
+    """EXE'nin gerçek sisteme dokunmasını engelleyen anahtarlar — `kostur` bunları `ek`ten SONRA yazar."""
+    return {
+        # ⚠️ D0Ö.03 (D-9.3): PEMF_SIMULATE `stm_bagli`yı ETKİLEMEZ — takılı gerçek STM'e (varsayılan
+        # COM10) bağlanıp oto-firmware ile YAKMAYA ulaşılabilirdi. 'SIM' gerçek port değil, taramaya düşmez.
+        "PEMF_FW_AUTO_UPDATE": "0",
+        "PEMF_STM_PORT": "SIM",
+    }
+
+
 def kostur(veri: Path, sifreli: bool, ek: dict | None = None, sure: int = 180, saglik_bekle: bool = True):
     """EXE'yi baslat, /api/health yesillenene kadar bekle. (surec, log_yolu, ayakta_mi, port)"""
     global _port
@@ -184,10 +194,6 @@ def kostur(veri: Path, sifreli: bool, ek: dict | None = None, sure: int = 180, s
             "PEMF_SIMULATE": "1",
             "PEMF_ESP_ENABLED": "0",
             "PYTHONIOENCODING": "utf-8",
-            # ⚠️ D0Ö.03 (D-9.3): PEMF_SIMULATE `stm_bagli`yı ETKİLEMEZ — takılı gerçek STM'e (varsayılan
-            # COM10) bağlanıp oto-firmware ile YAKMAYA ulaşılabilirdi. 'SIM' gerçek port değil, taramaya düşmez.
-            "PEMF_FW_AUTO_UPDATE": "0",
-            "PEMF_STM_PORT": "SIM",
             # ⚠️ D0Ö.09 (B-10.31): makine kapsamlı cihaz sırrı (`ProgramData\PEMF_System\device_identity.json`)
             # veri kökünü İZLEMEZ → 21 EXE açılışı GERÇEK sırrı yazıyor/okuyordu. Makine düzeyi depolar da
             # scratch'te (tüm senaryolara ORTAK: sahadaki gibi veri kökü değişse de makine kimliği kalır).
@@ -197,6 +203,8 @@ def kostur(veri: Path, sifreli: bool, ek: dict | None = None, sure: int = 180, s
         }
     )
     ortam.update(ek or {})
+    # ⚠️ Güvenlik anahtarları `ek`ten SONRA yazılır: bir senaryo onları sessizce EZEMEZ.
+    ortam.update(_guvenlik_ortami())
     log = CALISMA / f"_log_{veri.name}_{port}.txt"
     f = log.open("w", encoding="utf-8", errors="replace")
     p = subprocess.Popen(

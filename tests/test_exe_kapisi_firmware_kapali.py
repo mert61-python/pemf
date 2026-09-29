@@ -21,7 +21,6 @@ MUTASYON: iki betikten birinde `PEMF_FW_AUTO_UPDATE` satırını silmek → KIRM
 
 from __future__ import annotations
 
-import re
 from types import SimpleNamespace
 
 import pytest
@@ -29,8 +28,10 @@ from exe_kapisi_surucusu import PWSH, build_makinesi_ortami, kapi_blogunu_kostur
 
 
 def _gercek_com_mu(port: str) -> bool:
-    p = (port or "").strip().lower()
-    return p == "" or p in ("auto", "otomatik") or re.fullmatch(r"com\d+", p) is not None
+    """BEYAZ LİSTE (tur 3 incelemesi): yalnız 'SIM' ya da pyserial URL'leri (socket://, loop://) güvenli.
+    `\\\\.\\COM10`, boş, 'auto' ya da başka her değer gerçek karta ulaşabilir sayılır."""
+    p = (port or "").strip()
+    return not (p.upper() == "SIM" or p.lower().startswith(("socket://", "loop://")))
 
 
 @pytest.mark.skipif(PWSH is None, reason="pwsh (PowerShell 7) yok — build betiği pwsh ile koşar")
@@ -57,9 +58,11 @@ def test_KRITIK_urun_senaryolari_EXE_ortami_firmware_YAKAMAZ(tmp_path, monkeypat
     )
 
 
-def _yakma_zinciri(monkeypatch, fw_otomatik) -> list:
+def _yakma_zinciri(monkeypatch, fw_otomatik) -> tuple[list, dict]:
     """GERÇEK `_donanim_guncellemesi_safe` → `acilis_denetimi` zinciri: ayrıştırılabilir banner, yakmayı
-    gerektiren sahte manifest. `_firmware_uygula` (indir+yak) KAYDEDİCİYLE değişir — gerçek yakma YOK."""
+    gerektiren sahte manifest. `_firmware_uygula` (indir+yak) KAYDEDİCİYLE değişir — gerçek yakma YOK.
+    (yakılanlar, zincir sonundaki `firmware_manager.durum()`) döner: "yakmadı"nın "zincir çöktü" değil
+    "plan FIRMWARE_GUNCELLE ama uygulanmadı" olduğu ayırt edilebilsin."""
     import backend_service as bs
     from servers import firmware_manager as fm
     from utils.stm32_kimlik import banner_ayristir
@@ -72,7 +75,9 @@ def _yakma_zinciri(monkeypatch, fw_otomatik) -> list:
         "uyumluluk": [{"clientMin": "0.0.0", "firmwareMin": "9.9.9"}],
     }
     yakilan = []
-    monkeypatch.setattr(fm, "_durum", dict(fm._durum))  # modül düzeyi durum sonraki testlere SIZMASIN
+    # Her koşum TEMİZ durumla başlar (önceki koşumun FIRMWARE_GUNCELLE'si "çöktü"yü gizlemesin) ve modül
+    # düzeyi durum sonraki testlere SIZMAZ (monkeypatch geri alır).
+    monkeypatch.setattr(fm, "_durum", {})
     monkeypatch.setattr(fm, "manifest_oku", lambda *a, **k: manifest)
     monkeypatch.setattr(fm, "_firmware_uygula", lambda girdi, plan, backend: yakilan.append(plan.hedef_surum) or {})
     if fw_otomatik is None:
@@ -85,12 +90,14 @@ def _yakma_zinciri(monkeypatch, fw_otomatik) -> list:
             return lambda *a, **k: None
 
     bs._donanim_guncellemesi_safe(SimpleNamespace(stm_kimlik=kimlik, stm_is_connected=True), _Kayit())
-    return yakilan
+    return yakilan, fm.durum()
 
 
 def test_KRITIK_bu_ortamlarla_donanim_guncellemesi_YAKMAZ(tmp_path, monkeypatch):
+    from utils import surum_uyumu as su
+
     # Senaryo gerçekten yakmaya ulaşabiliyor mu (oto-güncelleme AÇIKÇA etkin): ulaşmıyorsa test kör.
-    assert _yakma_zinciri(monkeypatch, "1") == ["9.9.9"], "senaryo yakmaya ULAŞMADI — kapı kör olurdu"
+    assert _yakma_zinciri(monkeypatch, "1")[0] == ["9.9.9"], "senaryo yakmaya ULAŞMADI — kapı kör olurdu"
 
     (tmp_path / "u").mkdir()
     ortamlar = [("urun_senaryolari", kostur_ortami(tmp_path / "u", monkeypatch))]
@@ -99,5 +106,37 @@ def test_KRITIK_bu_ortamlarla_donanim_guncellemesi_YAKMAZ(tmp_path, monkeypatch)
         yakalanan = kapi_blogunu_kostur(tmp_path / "b", build_makinesi_ortami(tmp_path)).get("yakalanan") or {}
         ortamlar.append(("build AI kapısı", yakalanan.get("Env") or {}))
     for ad, env in ortamlar:
-        yakilan = _yakma_zinciri(monkeypatch, env.get("PEMF_FW_AUTO_UPDATE"))
+        yakilan, durum = _yakma_zinciri(monkeypatch, env.get("PEMF_FW_AUTO_UPDATE"))
         assert yakilan == [], f"{ad} ortamıyla açılış donanım güncellemesi firmware YAKTI: {yakilan} (D-9.3)"
+        # "yakmadı" = plan yakmayı GEREKTİRDİ ama oto-güncelleme KAPALI olduğu için uygulanmadı (zincir çökmedi)
+        assert durum.get("eylem") == su.FIRMWARE_GUNCELLE and durum.get("uygulandi") is False, (
+            f"{ad}: zincir planı FIRMWARE_GUNCELLE'ye ulaşmadı ya da uyguladı — 'yakmadı' başka bir sebepten: {durum}"
+        )
+
+
+def test_KRITIK_urun_senaryolari_ek_sozlugu_FW_ve_STM_PORTU_EZEMEZ(tmp_path, monkeypatch):
+    """`kostur(ek=...)` senaryoya özgü değişkenleri verir; güvenlik anahtarlarını SESSİZCE ezmemeli (tur 3)."""
+    import exe_kapisi_surucusu as ks
+
+    yakalanan = {}
+
+    class _SahteSurec:
+        def __init__(self, argv, env=None, **kw):
+            yakalanan["env"] = {k.upper(): v for k, v in (env or {}).items()}
+
+        def poll(self):
+            return 0
+
+    for ad in ks.YALITIM_DEGISKENLERI:
+        monkeypatch.delenv(ad, raising=False)
+    us = ks.urun_senaryolari_modulu()
+    monkeypatch.setattr(us, "subprocess", ks.AltSurecVekili(Popen=_SahteSurec))
+    (tmp_path / "calisma").mkdir()
+    monkeypatch.setattr(us, "CALISMA", tmp_path / "calisma")
+    ek = {"PEMF_FW_AUTO_UPDATE": "1", "PEMF_STM_PORT": "COM10"}
+    us.kostur(tmp_path / "veri", sifreli=False, ek=ek, sure=1, saglik_bekle=False)
+    env = yakalanan["env"]
+    assert env.get("PEMF_FW_AUTO_UPDATE") == "0" and not _gercek_com_mu(env.get("PEMF_STM_PORT", "")), (
+        f"kostur(ek=...) güvenlik anahtarlarını EZDİ: FW={env.get('PEMF_FW_AUTO_UPDATE')!r} "
+        f"STM_PORT={env.get('PEMF_STM_PORT')!r} (D-9.3)"
+    )
