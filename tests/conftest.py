@@ -59,6 +59,51 @@ os.environ["PEMF_DEVICE_IDENTITY_DIR"] = str(_OTURUM_IZOLE / "makine_kimligi")
 # bu satır çift emniyet + testlerin startup davranışını deterministik kılar).
 os.environ.setdefault("PEMF_SCRATCH_WARMUP", "0")
 
+# ⚠️ D0Ö.02 (B-3.6) — GERÇEK KİMLİK KASASI SÜİTTE OKUNMAZ/YAZILMAZ.
+# ÖLÇÜLDÜ: tam süit gerçek Windows kasasına 1603 okuma yapıyordu ve sahibin kasasında
+# `PEMF_GUI/sqlcipher_key` VAR → gerçek at-rest anahtarı test DB'lerine göçüyor, kopyaları
+# %TEMP%'te birikiyor, sonuçlar makinenin kasa durumuna bağlı kalıyordu (B-3.84 bunun kurbanıydı).
+# (1) Süreç-geneli arka uç null: env + `set_keyring` birlikte — env TEK BAŞINA YETMEZ, keyring daha
+#     önce import edilip arka ucunu seçtiyse env'e bir daha bakmaz. Alt süreçler env'i miras alır.
+# (2) Gerçek Windows arka ucu SAYAN bir engelle sarılır: bir test kendi arka ucunu kurup kasaya
+#     uzanırsa çağrı düşer, `_GERCEK_KASA_CAGRILARI`'na yazılır ve o test kırmızı olur.
+# Kapı: tests/test_kasa_yalitimi.py
+os.environ["PYTHON_KEYRING_BACKEND"] = "keyring.backends.null.Keyring"
+_GERCEK_KASA_CAGRILARI: list = []
+try:
+    import keyring as _keyring
+    from keyring.backends import null as _keyring_null
+
+    _keyring.set_keyring(_keyring_null.Keyring())
+except Exception:  # keyring kurulu değilse ürün de kasaya ulaşamaz
+    pass
+try:
+    from keyring.backends import Windows as _keyring_windows
+    from keyring.errors import KeyringError as _KeyringError
+
+    def _gercek_kasa_engeli(ad):
+        def _engel(self, *args, **kwargs):
+            _GERCEK_KASA_CAGRILARI.append((ad, args[:2]))
+            raise _KeyringError(f"TEST SÜİTİ GERÇEK KİMLİK KASASINA UZANDI (engellendi): {ad}{args[:2]!r}")
+
+        return _engel
+
+    for _ad in ("get_password", "set_password", "delete_password", "get_credential"):
+        if hasattr(_keyring_windows.WinVaultKeyring, _ad):
+            setattr(_keyring_windows.WinVaultKeyring, _ad, _gercek_kasa_engeli(_ad))
+except Exception:  # Windows arka ucu yüklenemiyorsa (Windows dışı) sarılacak bir şey yok
+    pass
+
+
+@pytest.fixture(autouse=True)
+def _gercek_kasa_kaydedici():
+    """D0Ö.02: bu testte gerçek kasaya uzanan (engellenen) çağrı varsa test KIRMIZI olur."""
+    once = len(_GERCEK_KASA_CAGRILARI)
+    yield
+    yeni = _GERCEK_KASA_CAGRILARI[once:]
+    if yeni:
+        pytest.fail(f"Bu test GERÇEK kimlik kasasına uzandı (engellendi, D0Ö.02): {yeni}")
+
 
 @pytest.fixture(autouse=True)
 def _gercek_kurulumu_koru(tmp_path):
