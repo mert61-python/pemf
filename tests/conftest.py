@@ -116,19 +116,26 @@ def _gercek_kasa_kaydedici():
         pytest.fail(f"Bu test GERÇEK kimlik kasasına uzandı (engellendi, D0Ö.02): {yeni}")
 
 
-# ⚠️ D0Ö.07 (B-10.9) — SÜİT AĞA ÇIKMAZ. ÖLÇÜLDÜ: `data/cloud_mqtt_provision.json` (git'e girmez)
-# bu makinede VAR; aynayı stub'lamayan E-stop testleri `_estop_cloud_mirror` üzerinden GERÇEK
-# (üretim) bulut broker'ına gerçek kimlikle TLS + STOP yayını DENİYORDU (4+4 TLS ClientHello).
-# E-stop aynasının ÜRÜN kodu DEĞİŞMEZ (Ö.4-Y8); yalnız test aparatı yalıtılır:
-# (1) Provizyon var olmayan bir tmp yola yönlenir → ayna süitte sessizce devre dışı.
-# (2) Ağ bekçisi: loopback dışı connect/connect_ex/DNS ENGELLENİR. Loopback'te yalnız BU SÜREÇTE
-#     bind edilen portlara izin; sahibin servis portları (8000 backend, 1883 broker, …) ne
-#     bağlanılır ne bind edilir — sahip makinesinde 127.0.0.1:8000'de gerçek backend, 1883'te
-#     gerçek broker koşabilir; bind etmek sahibin canlı isteklerini ELE GEÇİRİR (ölçülmüş tuzak).
-#     Engellenen her deneme `_AG_ENGELLENEN`'e yazılır. Katlar: Python sarmalayıcıları + audit
-#     hook (C düzeyi `_socket`) + asyncio IocpProactor.connect (ConnectEx `socket.connect`'e uğramaz).
+# ⚠️ D0Ö.07 (B-10.9) — SÜİT AĞA ÇIKMAZ (TCP connect, UDP sendto, DNS). ÖLÇÜLDÜ:
+# `data/cloud_mqtt_provision.json` (git'e girmez) bu makinede VAR; aynayı stub'lamayan E-stop testleri
+# `_estop_cloud_mirror` üzerinden GERÇEK (üretim) bulut broker'ına gerçek kimlikle TLS + STOP yayını
+# DENİYORDU (4+4 TLS ClientHello). E-stop aynasının ÜRÜN kodu DEĞİŞMEZ (Ö.4-Y8); yalnız test aparatı:
+# (1) Provizyon var olmayan bir tmp yola yönlenir ve `PEMF_MQTT_CLOUD_*` env'leri (provizyondan ÖNCE
+#     okunur) silinir → ayna süitte sessizce devre dışı. ⚠️ Aynı değişken `make_cloud_provision.py`'nin
+#     ÇIKTI yoludur: o yolda dosya belirirse `_bulut_provizyonu_yok_kalir` o testi KIRMIZI yapar.
+# (2) Ağ bekçisi: loopback dışı connect/connect_ex/sendto ve DNS (getaddrinfo; gethostbyname* — yerel
+#     makine adı serbest) ENGELLENİR. Loopback'te yalnız bu süreçte bir kez bind edilmiş port
+#     NUMARALARINA izin (süreç boyunca tutulur, budanmaz); sahibin servis portları (8000 backend,
+#     1883 broker, …) ne bağlanılır ne bind edilir — sahip makinesinde 127.0.0.1:8000'de gerçek
+#     backend, 1883'te gerçek broker koşabilir; bind etmek canlı istekleri ELE GEÇİRİR (ölçülmüş tuzak).
+#     Engellenen her deneme `_AG_ENGELLENEN`'e yazılır. Katlar: Python sarmalayıcıları + audit hook
+#     (C düzeyi `_socket`) + asyncio IocpProactor.connect/sendto (Windows'ta ConnectEx/WSASendTo
+#     `socket.*`'a uğramaz, audit olayı da üretmez — bu yama kurulamazsa conftest DÜŞER).
+# ⚠️ KAPSAM: yalnız bu pytest süreci; alt süreçler bekçiyi MİRAS ALMAZ (yalnız env'i alır).
 # Kapı: tests/test_ag_yalitimi.py
 os.environ["PEMF_CLOUD_PROVISION_PATH"] = str(_OTURUM_IZOLE / "YOK_cloud_mqtt_provision.json")
+for _ad in ("PEMF_MQTT_CLOUD_HOST", "PEMF_MQTT_CLOUD_PORT", "PEMF_MQTT_CLOUD_USER", "PEMF_MQTT_CLOUD_PASS"):
+    os.environ.pop(_ad, None)
 
 import ipaddress as _ipaddress
 import socket as _socket
@@ -137,6 +144,11 @@ _AG_ENGELLENEN: list = []
 _AG_ACILAN_PORTLAR: set = set()
 _AG_SAHIP_PORTLARI = frozenset({8000, 8100, 1883, 5173, 8177, 8200})
 _AG_AILELER = (_socket.AF_INET, _socket.AF_INET6)
+_AG_KANCA_YOKLAMA: list = []  # audit hook'un KAYITLI olduğunun kanıtı (sys.audit ile yoklanır)
+try:
+    _AG_YEREL_AD = _socket.gethostname().lower()
+except Exception:
+    _AG_YEREL_AD = ""
 
 
 def _ag_loopback_mu(host) -> bool:
@@ -171,10 +183,23 @@ def _ag_denetle(adres, tur) -> None:
     raise ConnectionRefusedError(f"TEST SÜİTİ AĞ BEKÇİSİ (D0Ö.07): {tur} {adres[0]}:{port} engellendi — {neden}")
 
 
+def _ag_ad_denetle(ad, tur) -> None:
+    """gethostbyname*/gethostbyaddr: loopback ve YEREL makine adı serbest; diğer her ad ENGEL."""
+    ad = ad.decode() if isinstance(ad, bytes) else str(ad)
+    if _ag_loopback_mu(ad) or (_AG_YEREL_AD and ad.lower() == _AG_YEREL_AD):
+        return
+    _AG_ENGELLENEN.append((tur, ad, -1))
+    raise _socket.gaierror(11001, f"TEST SÜİTİ AĞ BEKÇİSİ (D0Ö.07): {tur} {ad} engellendi")
+
+
 _ag_orj_connect = _socket.socket.connect
 _ag_orj_connect_ex = _socket.socket.connect_ex
+_ag_orj_sendto = _socket.socket.sendto
 _ag_orj_bind = _socket.socket.bind
 _ag_orj_getaddrinfo = _socket.getaddrinfo
+_ag_orj_gethostbyname = _socket.gethostbyname
+_ag_orj_gethostbyname_ex = _socket.gethostbyname_ex
+_ag_orj_gethostbyaddr = _socket.gethostbyaddr
 
 
 def _ag_connect(self, adres):
@@ -190,6 +215,12 @@ def _ag_connect_ex(self, adres):
         except ConnectionRefusedError:
             return 10061  # WSAECONNREFUSED
     return _ag_orj_connect_ex(self, adres)
+
+
+def _ag_sendto(self, veri, *args):
+    if self.family in _AG_AILELER and args:
+        _ag_denetle(args[-1], "sendto")
+    return _ag_orj_sendto(self, veri, *args)
 
 
 def _ag_bind(self, adres):
@@ -218,36 +249,84 @@ def _ag_getaddrinfo(host, *args, **kwargs):
     return _ag_orj_getaddrinfo(host, *args, **kwargs)
 
 
+def _ag_gethostbyname(ad):
+    _ag_ad_denetle(ad, "gethostbyname")
+    return _ag_orj_gethostbyname(ad)
+
+
+def _ag_gethostbyname_ex(ad):
+    _ag_ad_denetle(ad, "gethostbyname_ex")
+    return _ag_orj_gethostbyname_ex(ad)
+
+
+def _ag_gethostbyaddr(ad):
+    _ag_ad_denetle(ad, "gethostbyaddr")
+    return _ag_orj_gethostbyaddr(ad)
+
+
 def _ag_denetim_kancasi(olay, arg):
     if olay == "socket.connect":
         if getattr(arg[0], "family", None) in _AG_AILELER:
             _ag_denetle(arg[1], "audit:connect")
+    elif olay == "socket.sendto":
+        if getattr(arg[0], "family", None) in _AG_AILELER:
+            _ag_denetle(arg[1], "audit:sendto")
     elif olay == "socket.getaddrinfo":
         if arg[0] is not None:
             ad = arg[0].decode() if isinstance(arg[0], bytes) else str(arg[0])
             if not _ag_loopback_mu(ad):
                 _AG_ENGELLENEN.append(("audit:dns", ad, -1))
                 raise _socket.gaierror(11001, f"TEST SÜİTİ AĞ BEKÇİSİ (D0Ö.07): dns {ad} engellendi")
+    elif olay in ("socket.gethostbyname", "socket.gethostbyaddr"):
+        _ag_ad_denetle(arg[0], "audit:" + olay.split(".", 1)[1])
+    elif olay == "pemf.ag_bekcisi.yoklama":
+        _AG_KANCA_YOKLAMA.append(arg)
 
 
 _socket.socket.connect = _ag_connect
 _socket.socket.connect_ex = _ag_connect_ex
+_socket.socket.sendto = _ag_sendto
 _socket.socket.bind = _ag_bind
 _socket.getaddrinfo = _ag_getaddrinfo
+_socket.gethostbyname = _ag_gethostbyname
+_socket.gethostbyname_ex = _ag_gethostbyname_ex
+_socket.gethostbyaddr = _ag_gethostbyaddr
 sys.addaudithook(_ag_denetim_kancasi)
-try:
+if os.name == "nt":
+    # Windows Proactor'ı ConnectEx/WSASendTo ile `socket.*`'ı ve audit olaylarını ATLAR: bu yama tek
+    # kat. Kurulamazsa SESSİZCE geçilmez — içe aktarma hatası conftest'i (dolayısıyla süiti) düşürür.
     import asyncio.windows_events as _ag_we
 
     _ag_orj_iocp_connect = _ag_we.IocpProactor.connect
+    _ag_orj_iocp_sendto = _ag_we.IocpProactor.sendto
 
     def _ag_iocp_connect(self, conn, address):
         if getattr(conn, "family", None) in _AG_AILELER:
             _ag_denetle(address, "iocp.connect")
         return _ag_orj_iocp_connect(self, conn, address)
 
+    def _ag_iocp_sendto(self, conn, buf, flags=0, addr=None):
+        if addr is not None and getattr(conn, "family", None) in _AG_AILELER:
+            _ag_denetle(addr, "iocp.sendto")
+        return _ag_orj_iocp_sendto(self, conn, buf, flags, addr)
+
     _ag_we.IocpProactor.connect = _ag_iocp_connect
-except Exception:  # Windows dışı: Proactor yok
-    pass
+    _ag_we.IocpProactor.sendto = _ag_iocp_sendto
+
+
+@pytest.fixture(autouse=True)
+def _bulut_provizyonu_yok_kalir():
+    """D0Ö.07: yönlendirilen provizyon yolu ASLA var olmamalı — aynı değişken `make_cloud_provision.py`'nin
+    ÇIKTI yolu; orada dosya belirirse ayna sonraki testlerde (üretici gerçek `Secrets.h`'ı okuduysa)
+    GERÇEK kimliği okurdu. Dosya kaldırılır ve onu üreten test KIRMIZI olur."""
+    yield
+    hedef = _OTURUM_IZOLE / "YOK_cloud_mqtt_provision.json"
+    if hedef.exists():
+        try:
+            hedef.unlink()
+        except OSError:
+            pass
+        pytest.fail(f"bu test yönlendirilmiş bulut provizyon yolunda DOSYA oluşturdu ({hedef}) — D0Ö.07")
 
 
 @pytest.fixture(autouse=True)
