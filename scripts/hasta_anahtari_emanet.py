@@ -34,6 +34,14 @@ KULLANIM
 
 ⚠️ EMANET DOSYASI DÜZ METİNDİR. Şifreli bir kasaya (parola yöneticisi, kasadaki USB, kurumsal
 key-vault) koyun. Bilgisayarın kendi diskinde bırakmak riski KALDIRMAZ — amaç makine-dışı kopya.
+
+⚠️ ACL: NTFS/ReFS'te emanet ÖNCE boş oluşturulup kilitlenir (SYSTEM + Administrators + betiği
+çalıştıran hesap; yerel Users grubu OKUYAMAZ), içerik SONRA yazılır. Kilit tutmazsa düz-metin
+emanet YAZILMAZ (çıkış 2). FAT/exFAT USB'de ACL yoktur: yazılır, uyarı basılır.
+
+⚠️ `PEMF_DATA_DIR` tanımlıysa her üç komut da ürünün `get_app_data_directory()`sini çağırır; o,
+kullanıcı kökündeki (%APPDATA%\\PEMF_GUI) sır ve veritabanlarını makine köküne VAR OLANI EZMEDEN
+kopyalayabilir (`_kullanicidan_makineye_gocur`). `--parmak-izi` bu yüzden salt-okur DEĞİLDİR.
 """
 
 from __future__ import annotations
@@ -97,7 +105,14 @@ def _veri_koku_adaylari() -> list[Path]:
             f"HATA: utils.path_utils yuklenemedi ({e}) — PEMF_DATA_DIR koku bulunamaz ve YANLIS kokun "
             "anahtari okunabilir. Betigi depodan (scripts/) calistirin; depo/kurulum bozuk olabilir."
         ) from e
-    adaylar.append(Path(get_app_data_directory()))
+    try:
+        adaylar.append(Path(get_app_data_directory()))
+    except OSError as e:
+        # D0Ö.20 ek: PEMF_DATA_DIR kökünde mkdir/göç izin hatası ham traceback değil, EYLEM söyler.
+        raise SystemExit(
+            f"HATA: veri koku belirlenemedi ({e}) — PEMF_DATA_DIR kokune erisilemiyor olabilir. "
+            "Yonetici olarak calistirin ya da PEMF_DATA_DIR degerini denetleyin."
+        ) from e
     ap = os.environ.get("APPDATA", "").strip()
     if ap:
         adaylar.append(Path(ap) / "PEMF_GUI")
@@ -171,6 +186,26 @@ def _parmak(deger: str) -> str:
     return hashlib.sha256(deger.encode("utf-8")).hexdigest()[:16]
 
 
+#: ACL destekleyen dosya sistemleri — burada kilit tutmazsa düz-metin emanet YAZILMAZ.
+_ACL_DESTEKLI = {"NTFS", "REFS"}
+
+
+def _dosya_sistemi(yol: Path) -> str | None:
+    """`yol`un bulunduğu birimin dosya sistemi ("NTFS", "exFAT", "FAT32"…); Windows dışı/bilinmiyorsa None."""
+    if sys.platform != "win32":
+        return None
+    import ctypes
+
+    k32 = ctypes.windll.kernel32
+    birim = ctypes.create_unicode_buffer(261)
+    ad = ctypes.create_unicode_buffer(261)
+    if not k32.GetVolumePathNameW(str(yol), birim, len(birim)):
+        return None
+    if not k32.GetVolumeInformationW(birim.value, None, 0, None, None, None, ad, len(ad)):
+        return None
+    return ad.value or None
+
+
 def parmak_izi() -> int:
     kok = _veri_koku()
     print(f"  veri koku: {kok}")
@@ -229,17 +264,45 @@ def disa_aktar(hedef: Path) -> int:
         satirlar.append("")
 
     hedef.parent.mkdir(parents=True, exist_ok=True)
-    hedef.write_text("\n".join(satirlar) + "\n", encoding="utf-8")
-    # `lock_down_file` hata ATMAZ, False döner (best-effort) — dönüş OKUNUR; eskiden yok sayılıyordu.
-    if not lock_down_file(hedef):
+    yeni = not hedef.exists()
+    try:
+        hedef.touch()
+    except PermissionError as e:
+        raise SystemExit(
+            f"HATA: hedefe yazilamiyor ({e.strerror}: {hedef}) — onceki bir surumun yalniz-yonetici kilidi "
+            "olabilir. Yonetici olarak calistirin ya da baska bir hedef verin."
+        ) from e
+    # ⚠️ D0Ö.20 ek (tur 4): ÖNCE boş dosya kilitlenir, SONRA içerik yazılır — arada düz-metin anahtar
+    # miras ACL'siyle (Users okur) durmaz. `keep_current_user=True`: yalnız SYSTEM + Administrators
+    # kilidi UAC'li/standart hesabı KENDİ emanetinden dışarı atıyordu (`--dogrula` PermissionError —
+    # ÖLÇÜLDÜ; file_acl: "DENETİM P3 — sahada yaşandı"). Yerel Users grubu yine OKUYAMAZ.
+    # `lock_down_file` hata ATMAZ, False döner (best-effort) — dönüş OKUNUR.
+    kilit_notu = ""
+    if lock_down_file(hedef, keep_current_user=True):
+        kilit_notu = "ACL: yalniz SYSTEM, Administrators ve bu hesap okuyabilir (yerel Users grubu okuyamaz)."
+    else:
+        fs = _dosya_sistemi(hedef)
+        if (fs or "").upper() in _ACL_DESTEKLI:
+            if yeni:
+                hedef.unlink(missing_ok=True)
+            print(
+                f"HATA: ACL kilidi UYGULANAMADI ({hedef}, {fs}) — duz-metin emanet YAZILMADI: bu birim ACL "
+                "destekliyor ve kilitsiz dosya bu makinedeki baska hesaplarca okunabilirdi. Yonetici olarak "
+                "calistirin ya da sifreli kasa / USB hedefi verin.",
+                file=sys.stderr,
+            )
+            return 2
         print(
-            f"UYARI: ACL kilidi UYGULANAMADI ({hedef}) — dosya bu makinedeki baska hesaplarca okunabilir "
-            "(FAT/exFAT USB'de ACL yoktur). Yalniz sizin erisebildiginiz bir yerde (sifreli kasa / fiziksel "
-            "olarak korunan USB) tutun.",
+            f"UYARI: ACL kilidi UYGULANAMADI ({hedef}, {fs or 'dosya sistemi bilinmiyor'}) — dosya bu makinedeki "
+            "baska hesaplarca okunabilir (FAT/exFAT USB'de ACL yoktur). Yalniz sizin erisebildiginiz bir yerde "
+            "(sifreli kasa / fiziksel olarak korunan USB) tutun.",
             file=sys.stderr,
         )
+    hedef.write_text("\n".join(satirlar) + "\n", encoding="utf-8")
 
     print(f"emanet yazildi: {hedef}")
+    if kilit_notu:
+        print(f"  {kilit_notu}")
     for alan, _a in ALANLAR:
         if cozulmus.get(alan):
             print(f"  {alan:28s} parmak={_parmak(cozulmus[alan])}")
@@ -255,7 +318,14 @@ def dogrula(emanet: Path) -> int:
         print(f"HATA: emanet dosyasi yok -> {emanet}")
         return 2
     kayitli: dict[str, str] = {}
-    for satir in emanet.read_text(encoding="utf-8").splitlines():
+    try:
+        metin = emanet.read_text(encoding="utf-8")
+    except PermissionError as e:
+        raise SystemExit(
+            f"HATA: emanet okunamiyor ({e.strerror}: {emanet}) — dosya yalniz yoneticilere kilitli olabilir "
+            "(eski surum). Yonetici olarak calistirin."
+        ) from e
+    for satir in metin.splitlines():
         s = satir.strip()
         if not s or s.startswith("#") or "=" not in s:
             continue

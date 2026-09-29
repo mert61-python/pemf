@@ -10,9 +10,14 @@ NEDEN: `tests/conftest.py` süreç yoluna depo kökü + `apps/backend` ekler; bi
 haftalarca ölü kaldı (D0Ö.19/20/21). Davranış kolları ALT SÜREÇTE koşmalı.
 
 ⚠️ GÜVENLİK: ortam İZİN LİSTESİDİR — tüm `PEMF_*`/`SUPABASE_*` dışarıda; APPDATA, LOCALAPPDATA,
-PROGRAMDATA, USERPROFILE, HOME, TEMP verilen sahte kökte; kasa null. Gerçek
-`C:\\ProgramData\\PEMF_System\\PEMF_GUI` sırları bu süreçten OKUNAMAZ. Test bekçisi alt sürece
+PROGRAMDATA, USERPROFILE, HOME, TEMP verilen sahte kökte; kasa null. Test bekçisi alt sürece
 GEÇMEZ: bu yardımcıyla ağ gerektiren hiçbir şey koşturulmamalı.
+
+⚠️ SINIRI (D0Ö.20 ek): bu bir ORTAM YÖNLENDİRMESİDİR, işletim sistemi engeli DEĞİL — alt süreç aynı
+kullanıcı belirteciyle koşar. Gerçek `C:\\ProgramData\\PEMF_System\\PEMF_GUI` sırlarından yalnız
+yollarını ORTAM DEĞİŞKENLERİNDEN türeten betikler korunur. Yolu SABİT kodlayan betik
+(ör. `scripts/supabase_sql.py` `_sir_dosyalari`) bu yardımcıyla KOŞTURULMAZ. "Kasa null" yalnız
+python-keyring'i kapsar (cmdkey / win32cred kapsam dışı).
 """
 
 from __future__ import annotations
