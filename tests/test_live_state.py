@@ -117,14 +117,21 @@ def test_update_live_coil_from_stm_ignores_out_of_range(api):
 
 
 # ── update_live_stm_status + _sync_stm_coils_locked: STM bağlantısı → TÜM STM bobinleri ─
-def test_update_live_stm_status_syncs_stm_coils(api):
+def test_update_live_stm_status_syncs_stm_coils(api, monkeypatch):
     """D0Ö.14 (B-10.140): kapsam `topoloji.TUM_STM`'den TÜRER ve bobinler kopuştan ÖNCE GERÇEKTEN çalışır.
 
     Eski hâli `range(5)`e bakıyordu (faz 4'te bobin 6-7 STM'e geçti, görünmüyordu) ve bobinleri hiç
     çalıştırmıyordu: fixture zaten `running=False` kurduğu için "STM düşünce durur" iddiası
     kendiliğinden doğruydu — sıfırlamayı `idx < 5` ile sınırlayan mutant YEŞİL kalıyordu. Bobin 6-7
     kopuşta "çalışıyor" kalsa arayüz onları sürülüyor sanar (İG-6.1 / B-1.19 / B-6.13 önkoşulu).
+
+    D0Ö.14 ek (bağımsız inceleme tur 4): istemcinin GÖRDÜĞÜ şey `_live_state` değil WS YÜKÜDÜR —
+    kopuşta her STM bobini için `stm_coil_update` yayını (connected/running False, kip None),
+    `stm_status{connected: False}`tan SONRA. Anlık görüntü sıfırlamadan önce alınsa ya da yayın
+    döngüsü yalnız ilk 5 bobine gitse `_live_state` doğru kalır ama arayüz 6-7'yi çalışıyor görürdü.
     """
+    from servers import live_state
+
     api.update_live_stm_status(connected=True)
     assert api._live_state["stm"] == "online"
     bagli_degil = [cid for cid in sorted(TUM_STM) if api._live_state["coils"][cid - 1]["connected"] is not True]
@@ -134,11 +141,32 @@ def test_update_live_stm_status_syncs_stm_coils(api):
     for cid in sorted(TUM_STM):
         api.update_live_coil_from_stm(coil_id=cid, duty=25.0, freq=50, phase=0, duration_min=20, running=True)
         api.update_live_coil_kip(cid, True)
-    calismayan = [cid for cid in sorted(TUM_STM) if api._live_state["coils"][cid - 1]["running"] is not True]
-    assert not calismayan, f"kurulum: bu bobinler çalışır görünmüyor, kapı anlamsız olur: {calismayan}"
+    kurulmayan = [
+        cid
+        for cid in sorted(TUM_STM)
+        if api._live_state["coils"][cid - 1]["running"] is not True
+        or api._live_state["coils"][cid - 1]["unipolar"] is not True
+    ]
+    assert not kurulmayan, f"kurulum: bu bobinler çalışır/kipli görünmüyor, kapı anlamsız olur: {kurulmayan}"
 
+    yayinlar: list[dict] = []
+    monkeypatch.setattr(live_state, "_ws_broadcast_sync", yayinlar.append)  # modül-içi global: yayın buradan
     api.update_live_stm_status(connected=False)
     assert api._live_state["stm"] == "warning"
+
+    durumlar = [i for i, y in enumerate(yayinlar) if y.get("type") == "stm_status"]
+    assert durumlar and yayinlar[durumlar[0]]["data"]["connected"] is False, f"stm_status yayını yok: {yayinlar}"
+    bobin_yuku = {y["coilId"]: (i, y["data"]) for i, y in enumerate(yayinlar) if y.get("type") == "stm_coil_update"}
+    yayinsiz = sorted(TUM_STM - set(bobin_yuku))
+    assert not yayinsiz, f"kopuşta bu STM bobinleri için stm_coil_update YAYINLANMADI (arayüz bayat kalır): {yayinsiz}"
+    yanlis_yuk = {
+        cid: {k: veri.get(k) for k in ("connected", "running", "unipolar")}
+        for cid, (_i, veri) in bobin_yuku.items()
+        if cid in TUM_STM
+        and (veri.get("connected") is not False or veri.get("running") is not False or veri.get("unipolar") is not None)
+    }
+    assert not yanlis_yuk, f"istemciye giden yük kopmayı/durmayı söylemiyor (arayüz sürülüyor sanar): {yanlis_yuk}"
+    assert all(i > durumlar[0] for i, _veri in bobin_yuku.values()), "bobin yayınları stm_status'tan ÖNCE geldi"
     kalan = {
         cid: {k: api._live_state["coils"][cid - 1][k] for k in ("connected", "running", "unipolar")}
         for cid in sorted(TUM_STM)
@@ -364,3 +392,44 @@ def test_KRITIK_ws_olu_istemci_KAPATILIR_ve_geri_basinc_sayaci_SIZMAZ(monkeypatc
     assert olu not in live_state._ws_clients, "ölü istemci yayın listesinden çıkarılmadı"
     assert olu.kapatmalar, "ölü istemcinin soketi KAPATILMADI — istemci kendini bağlı sanıp yeniden bağlanmaz"
     assert set(olu.kapatmalar) == {1011}, f"kapatma kodu 1011 (sunucu düşürdü) değil: {set(olu.kapatmalar)}"
+
+
+def test_ws_IPTAL_edilen_gonderim_de_sayaci_geri_sayar(monkeypatch):
+    """D0Ö.14 ek: geri sayım `finally`'de olmalı — `CancelledError` (BaseException) gönderimdeki
+    `except Exception`a YAKALANMAZ; sayım `try` gövdesinin sonuna taşınsa iptal/kapanış yolunda
+    sayaç SIZAR ve sunucu sonunda her yayını düşürür. Ölü-istemci kapısı bunu ayırt edemez
+    (orada her hata yakalanır)."""
+    import asyncio
+
+    from servers import live_state
+
+    class _IptalIstemci:
+        def __init__(self):
+            self.gonderim = 0
+
+        async def send_text(self, data):
+            self.gonderim += 1
+            raise asyncio.CancelledError()
+
+        async def close(self, code=None):
+            pass
+
+    istemci = _IptalIstemci()
+    dongu = asyncio.new_event_loop()
+    monkeypatch.setattr(live_state, "_event_loop", dongu)
+    monkeypatch.setattr(live_state, "_ws_clients", [istemci])
+    monkeypatch.setattr(live_state, "_ws_send_lock", None)
+    monkeypatch.setattr(live_state, "_ws_pending", 0)
+    monkeypatch.setattr(live_state, "_ws_dropped_total", live_state._ws_dropped_total)
+    try:
+        for i in range(5):
+            live_state._ws_broadcast_sync({"type": "d0o14-iptal", "n": i})
+        assert live_state._ws_pending == 5
+        for _ in range(200):
+            dongu.run_until_complete(asyncio.sleep(0.005))
+            if live_state._ws_pending == 0:
+                break
+    finally:
+        dongu.close()
+    assert istemci.gonderim >= 1, "kurulum: gönderim hiç denenmedi, kapı anlamsız olur"
+    assert live_state._ws_pending == 0, f"iptal edilen gönderimde sayaç SIZDI: {live_state._ws_pending}"
