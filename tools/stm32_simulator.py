@@ -36,9 +36,9 @@ cozme/CRC/ACK/watchdog'u taklit eder, DALGA BICIMINI MODELLEMEZ — dalga fizigi
 kilitleri tests/test_stm_dalga_sozlesmesi.py'dedir. READY dizesi firmware ile
 hizali tutulur (backend 'STM_READY' alt-dizesini esler; surum eki serbesttir).
 
-YANIT FORMATI (ASCII, \r\n ile biten):
-  -> STM_READY: DDS v2.3 (7-ch SYM-BIPOLAR SIM) Waiting for commands...\r\n
-  -> STM_OK: D=%d,%d,%d,%d,%d P=%d,%d,%d,%d,%d F=%d,%d,%d,%d,%d T=%lu,...\r\n
+YANIT FORMATI (ASCII, \r\n ile biten) — firmware ile HİZALI (D0Ö.13):
+  -> STM_READY: DDS v2.3 (7-ch KARMA uni=0x60 SIM) Waiting for commands...\r\n   (kip/maske pemf_surus.h'den)
+  -> STM_OK: D=<NUM_COILS alan> P=<...> F=<...> T=<...> K=<etkin maske = yetenek | istek>\r\n
   -> STM_NACK: <sebep>\r\n
   -> STM_ERR: Watchdog Timeout! Baglanti koptu, bobinler 0'landi.\r\n
   -> STM_STOPPED: Sure(ler) doldu, bobinler kapatildi.\r\n
@@ -46,11 +46,13 @@ YANIT FORMATI (ASCII, \r\n ile biten):
 
 import argparse
 import logging
+import re
 import socket
 import struct
 import threading
 import time
 import zlib
+from pathlib import Path
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
 # NOT (audit B-5.3): basicConfig MODÜL-DÜZEYİNDE değil — import edildiğinde merkezî
@@ -93,6 +95,35 @@ FREQ_MAX = DDS_ISR_HZ / DDS_MIN_TICKS_PER_PERIOD  # = 25000.0
 DUR_MAX = 9999
 REF_MS_MAX = 999
 WATCHDOG_MS = 1500  # ms — main.c ile aynı
+
+# ⚠️ D0Ö.13 (B-10.268): SÜRÜŞ KİPİ YETENEK MASKESİ firmware'in DERLENEN değerinden TÜRER — elle yazılan
+# "SYM-BIPOLAR" 2026-09-11 karma yapılandırmasında YALAN söylüyordu (firmware "KARMA uni=0x60" basar).
+_SURUS_BASLIGI = Path(__file__).resolve().parents[1] / "firmware" / "stm32_pemf" / "Core" / "Inc" / "pemf_surus.h"
+
+
+def _firmware_unipolar_maskesi() -> int:
+    """`pemf_surus.h` → `PEMF_BOBIN_UNIPOLAR_MASKESI` (bit i = bobin i+1 YALNIZ unipolar sürülebilir)."""
+    m = re.search(
+        r"#define\s+PEMF_BOBIN_UNIPOLAR_MASKESI\s+(0x[0-9A-Fa-f]+|\d+)U?\b",
+        _SURUS_BASLIGI.read_text(encoding="utf-8", errors="replace"),
+    )
+    if not m:
+        raise RuntimeError(
+            f"PEMF_BOBIN_UNIPOLAR_MASKESI {_SURUS_BASLIGI} icinde yok — simulator firmware ile hizalanamaz"
+        )
+    return int(m.group(1), 0)
+
+
+UNIPOLAR_YETENEK_MASKESI = _firmware_unipolar_maskesi()
+
+
+def _banner_kipi(maske: int) -> str:
+    """`main.c` banner üçlüsünün AYNISI: 0 → SYM-BIPOLAR, tüm bobinler → UNIPOLAR tek-bacak, aksi → KARMA."""
+    if maske == 0:
+        return "SYM-BIPOLAR"
+    if maske == (1 << NUM_COILS) - 1:
+        return "UNIPOLAR tek-bacak"
+    return "KARMA"
 
 
 def crc32_of(data: bytes) -> int:
@@ -180,18 +211,28 @@ class Stm32SimClient:
         time.sleep(READY_DELAY_S)  # USB enumerate simülasyonu
         # ⚠️ KANAL SAYISI TÜRETİLİR: elle yazılan "5-ch" 2026-09-10 geçişinde BAYATLADI ve
         # banner okuyan araçlar (scripts/stm_firmware_kimligi.py) simülatörü ESKİ firmware
-        # sanardı. Tek kaynak `NUM_COILS`.
-        msg = f"-> STM_READY: DDS v2.3 ({NUM_COILS}-ch SYM-BIPOLAR SIM) Waiting for commands...\r\n"
+        # sanardı. Tek kaynak `NUM_COILS`. ⚠️ D0Ö.13: kip ve maske de firmware'in derlenen maskesinden
+        # (main.c banner'ı: "%u-ch %s uni=0x%02X"); "SIM" eki gerçek karttan ayırt ettirir.
+        msg = (
+            f"-> STM_READY: DDS v2.3 ({NUM_COILS}-ch {_banner_kipi(UNIPOLAR_YETENEK_MASKESI)} "
+            f"uni=0x{UNIPOLAR_YETENEK_MASKESI:02X} SIM) Waiting for commands...\r\n"
+        )
         self._send(msg)
         log.info("✅ STM_READY gönderildi → %s", self.addr)
 
-    def _send_ack(self, duty, phase, freq, duration):
+    def _send_ack(self, duty, phase, freq, duration, kip_istegi: int = 0):
+        # ⚠️ D0Ö.13 (B-10.267): firmware ACK'i NUM_COILS alan + ` K=<ETKİN maske>` basar (main.c ACK döngüsü;
+        # etkin = yetenek | istek). Eskiden 5 alan ve K= yoktu → simülatörle koşan ürün bobin 6-7 için
+        # coil_update almaz (onaysız/bayat görünür), kip göstergesi beslenmezdi.
+        n = NUM_COILS
+        etkin = UNIPOLAR_YETENEK_MASKESI | (int(kip_istegi) & ((1 << n) - 1))
         msg = (
             "-> STM_OK: "
-            f"D={int(duty[0] * 100)},{int(duty[1] * 100)},{int(duty[2] * 100)},{int(duty[3] * 100)},{int(duty[4] * 100)} "
-            f"P={int(phase[0])},{int(phase[1])},{int(phase[2])},{int(phase[3])},{int(phase[4])} "
-            f"F={int(freq[0])},{int(freq[1])},{int(freq[2])},{int(freq[3])},{int(freq[4])} "
-            f"T={duration[0]},{duration[1]},{duration[2]},{duration[3]},{duration[4]}"
+            f"D={','.join(str(int(duty[i] * 100)) for i in range(n))} "
+            f"P={','.join(str(int(phase[i])) for i in range(n))} "
+            f"F={','.join(str(int(freq[i])) for i in range(n))} "
+            f"T={','.join(str(duration[i]) for i in range(n))} "
+            f"K={etkin}"
             "\r\n"
         )
         self._send(msg)
@@ -280,7 +321,7 @@ class Stm32SimClient:
                     # Burada 5'e açılıyordu → ürünün İLK geçerli paketinde ValueError, genel `except`
                     # bağlantıyı KAPATIYORDU (sanal-STM ilk gerçek pakette ölüyordu). Kapı:
                     # tests/test_stm32_simulator_run_yolu.py
-                    duty, phase, freq, duration, ref_ms, _kip_istegi = result
+                    duty, phase, freq, duration, ref_ms, kip_istegi = result
                     self._last_pkt_time = time.monotonic()
                     self._any_active = any(d > 0 for d in duty)
                     self._coil_duty = list(duty)
@@ -293,7 +334,7 @@ class Stm32SimClient:
                         elif duty[i] == 0:
                             self._coil_start_ms[i] = None
 
-                    self._send_ack(duty, phase, freq, duration)
+                    self._send_ack(duty, phase, freq, duration, kip_istegi)
 
         except ConnectionResetError:
             log.info("🔌 Bağlantı sıfırlandı: %s", self.addr)
