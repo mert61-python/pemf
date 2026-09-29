@@ -11,7 +11,9 @@ Kullanım örnekleri:
     python scripts/xai_batch_rapor.py --modul termal --girdi t.jpg --cikti out_t --xai-method eigencam
     python scripts/xai_batch_rapor.py --modul rna --girdi hasta.csv --cikti out_rna --top-n 10
     python scripts/xai_batch_rapor.py --modul em_fantom --girdi points.csv --cikti out_em
-    (+ --pdf: çıktıdaki görselleri tek PDF'te topla)
+    (--pdf: çıktıdaki görselleri tek PDF'te toplar — ŞİMDİLİK KAPALI, İG-9.50; bkz. main())
+
+Çıkış kodu: kısmi hata 0 (zarif düşüş); TÜM kayıtlar HATA ya da modül yüklenemedi → ≠0.
 
 ⚠️ KLASÖR girdisinde ÇIKTI DİZİNİ GİRDİNİN DIŞINDA OLMALI: girdi klasörünün içine
 yazmak, sonraki koşuda aracın KENDİ çıktısını girdi sanıp özyinelemeli işlemesine
@@ -281,6 +283,14 @@ def _kos_gorsel(modul: str, girdi: Path, cikti: Path, args) -> tuple[list[dict],
                 {"etiket": govde, "gorseller": gorseller, "not": f"yöntem: {sonuc.get('method', '?')} · {sure}s"}
             )
             print(f"[{i}/{len(dosyalar)}] {govde} OK ({sure}s)")
+        except ImportError as e:
+            # ⚠️ D0Ö.21 (B-9.27): import hatası KAYIT hatası değil ARAÇ hatasıdır — her kayıt aynısını
+            # verir. Eskiden kayıt kayıt yutulup summary'ye HATA yazılıyor ve exit 0 dönülüyordu (F4'ten
+            # beri ses kolu tam böyle: `utils.ses_kalitesi` her kayıtta ModuleNotFoundError).
+            raise SystemExit(
+                f"HATA: {modul} modulu yuklenemedi ({type(e).__name__}: {e}) — arac yolu/kurulumu bozuk, "
+                f"islem {i}/{len(dosyalar)}. kayitta DURDURULDU."
+            ) from e
         except Exception as e:  # tek dosya akışı düşürmez
             sure = round(time.time() - t0, 2)
             satirlar.append(
@@ -438,7 +448,7 @@ def _pdf_yaz(cikti: Path, baslik: str, kartlar: list[dict]) -> None:
         print(f"UYARI: PDF üretilemedi (batch çıktıları geçerli): {type(e).__name__}: {e}")
 
 
-def main() -> None:
+def main() -> int:
     ap = argparse.ArgumentParser(
         prog="xai_batch_rapor",
         description="PEMF Mod-2 toplu XAI raporu (görüntü/ses CAM · RNA IG · EM sensitivity+SHAP)",
@@ -460,8 +470,19 @@ def main() -> None:
     ap.add_argument("--top-n", type=int, default=10, help="rna: hasta başına top-N gen")
     ap.add_argument("--no-shap", action="store_true", help="em: SHAP'ı atla (yalnız sensitivity)")
     ap.add_argument("--embed", action="store_true", help="index.html'e görselleri data-URI göm (40MB tavanlı)")
-    ap.add_argument("--pdf", action="store_true", help="çıktı görsellerinden tek PDF derle")
+    ap.add_argument("--pdf", action="store_true", help="çıktı görsellerinden tek PDF derle (şimdilik KAPALI — İG-9.50)")
     args = ap.parse_args()
+    if args.pdf:
+        # ⚠️ D0Ö.21 (İG-9.50): F4 import onarımı `--pdf`i CANLANDIRIRDI — ve PDF üreteci açılışta
+        # veri kökünde tedavi DB'sini açar (göç + yedek); SQLCipher anahtarını sır yöneticisi GERÇEK
+        # kökten/kasadan okur (geçici `app_data_dir` bunu YALITMAZ). Bir rapor aracı klinik veriye
+        # dokunmamalı. F4'ten beri zaten hiç çalışmıyordu; artık sessizce değil AÇIKÇA reddedilir.
+        # İG-9.50 düzeltilince bu ret kaldırılır (aşağıdaki `_pdf_yaz` çağrısı yerinde duruyor).
+        raise SystemExit(
+            "HATA: --pdf simdilik KAPALI (IG-9.50): PDF ureteci acilista veri kokundeki tedavi veritabanini "
+            "acar (goc + yedek) ve anahtari gercek kokten okur; rapor araci klinik veriye dokunmamali. "
+            "Gorseller + summary.csv + index.html --pdf OLMADAN uretilir."
+        )
 
     girdi = Path(args.girdi)
     if not girdi.exists():
@@ -487,7 +508,13 @@ def main() -> None:
     print(f"BİTTİ: {len(satirlar)} kayıt ({len(hatalar)} hata) → {cikti / 'summary.csv'} + index.html")
     if hatalar:
         print("Hatalı kayıtlar summary.csv'de işaretli (akış düşürülmedi — zarif düşüş).")
+    # ⚠️ D0Ö.21 (B-9.27): TÜM kayıtlar HATA ise çıkış ≠0. Kısmi hata zarif düşüştür (0 kalır) ama
+    # hiçbir kaydın işlenemediği bir koşu "başarılı" sayılmaz — eskiden exit 0 dönüyordu.
+    if satirlar and len(hatalar) == len(satirlar):
+        print("HATA: TUM kayitlar hatali — rapor gecerli bir sonuc icermiyor.", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

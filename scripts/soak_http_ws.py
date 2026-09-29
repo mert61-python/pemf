@@ -186,12 +186,16 @@ def _veri_koku() -> Path:
     pd = os.environ.get("PROGRAMDATA", "").strip()
     if pd:
         adaylar.append(Path(pd) / "PEMF_System" / "PEMF_GUI")
+    # ⚠️ D0Ö.21 (B-9.27): import hatası YUTULMAZ — eskiden `except Exception: pass` ile
+    # `get_app_data_directory` sessizce düşüyor ve soak YANLIŞ kökün DB büyümesini ölçüyordu.
     try:
         from utils.path_utils import get_app_data_directory
-
-        adaylar.append(Path(get_app_data_directory()))
-    except Exception:
-        pass
+    except ImportError as e:
+        raise SystemExit(
+            f"HATA: utils.path_utils yuklenemedi ({e}) — veri koku bulunamaz, DB buyumesi YANLIS kokte "
+            "olculur. Betigi depodan (scripts/) calistirin; depo/kurulum bozuk olabilir."
+        ) from e
+    adaylar.append(Path(get_app_data_directory()))
 
     for kok in adaylar:
         if kok.is_dir() and any(kok.glob("*.db")):
