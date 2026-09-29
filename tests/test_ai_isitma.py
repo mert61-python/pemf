@@ -147,12 +147,12 @@ def test_KRITIK_HATA_servisi_DUSURMEZ(bs, monkeypatch):
 
     monkeypatch.delenv("PEMF_AI_WARMUP", raising=False)
 
-    class _SatirIciThread:
-        def __init__(self, target=None, name=None, daemon=None, **kw):
-            self._hedef = target
+    class _SatirIciThread(_t.Thread):
+        """GERÇEK Thread kurucusu (argüman/imza doğrulaması korunur — ör. `Thread(_calistir, ...)`
+        konumsal hatası üretimde açılışı düşürür, burada da düşer); yalnız `start` işi SATIR İÇİ koşar."""
 
         def start(self):
-            self._hedef()  # iş gövdesi test thread'inde: sızan istisna testi DÜŞÜRÜR
+            self.run()  # iş gövdesi test thread'inde: sızan istisna testi DÜŞÜRÜR
 
     def _model_yok(ad, *a, **k):
         raise ImportError(f"sahte: {ad} yüklenemedi (librosa/model yok)")

@@ -64,6 +64,9 @@ os.environ["PEMF_DEVICE_IDENTITY_DIR"] = str(_OTURUM_IZOLE / "makine_kimligi")
 # daemon thread + interpreter kapanışı yarışı — app.py'de find_spec ön-kontrolü de var,
 # bu satır çift emniyet + testlerin startup davranışını deterministik kılar).
 os.environ.setdefault("PEMF_SCRATCH_WARMUP", "0")
+# ⚠️ D0Ö.10 (B-10.105) — aynı sınıf: `ai-warmup` daemon'ı (ses hattı + torch importu) test bitince
+# yaşayıp SONRAKİ testlerle yarışıyordu (A9). Isıtmayı sınayan testler bayrağı kendileri siler/verir.
+os.environ.setdefault("PEMF_AI_WARMUP", "0")
 
 # ⚠️ D0Ö.11 (B-10.222 = DENETIM-12 P1) — `PEMF_SIMULATE` TEST MODÜLLERİNDE DEĞİL, BURADA TEK YERDE.
 # 72 test modülü modül gövdesinde yazıyordu (16 `setdefault('1')` + 56 `pop`); değeri TOPLAMA SIRASI
@@ -344,14 +347,22 @@ def _bulut_provizyonu_yok_kalir():
         pytest.fail(f"bu test yönlendirilmiş bulut provizyon yolunda DOSYA oluşturdu ({hedef}) — D0Ö.07")
 
 
-# ⚠️ D0Ö.10 (B-10.104) — LIFESPAN GERÇEK mDNS KAYDI YAPMAZ. ÖLÇÜLDÜ: `with TestClient(api_server.app)`
-# lifespan'ı `_start_mdns_service` thread'ini başlatıyor → `register_service('PEMF-Vet-…._pemfvet._tcp')`
-# → süit LAN'a ilan yapıyordu; aynı Wi-Fi'deki telefonlar TEST SÜRECİNİ cihaz sanıp keşfeder.
-# (UDP rota hilesi engellense de `_get_local_ip` `ifaddr` ile gerçek LAN IP'sini bulur.) Ürün kodu
-# DEĞİŞMEZ; her testte lifespan'ın başlatıcısı kaydeden bir boş-işlemle değiştirilir. mDNS'i SINAYAN
-# testler `start_mdns`/`get_shared_zeroconf`'u doğrudan çağırır — onlara dokunulmaz.
-# Kapı: tests/test_lifespan_mdns_kaydi.py
+# ⚠️ D0Ö.10 (B-10.104) — LIFESPAN GERÇEK mDNS KAYDI YAPMAZ, SÜRE SONUNA KALAN DAEMON BAŞLATMAZ.
+# ÖLÇÜLDÜ: `with TestClient(api_server.app)` lifespan'ı (1) `_start_mdns_service` thread'ini başlatıyor
+# → `register_service('PEMF-Vet-…._pemfvet._tcp')` → süit LAN'a ilan yapıyordu (aynı Wi-Fi'deki telefonlar
+# TEST SÜRECİNİ cihaz sanıp keşfeder; UDP rota hilesi engellense de `ifaddr` gerçek LAN IP'sini bulur);
+# (2) `_start_background_threads` ile SONSUZ daemon'lar başlatıyordu (session-watchdog, sensor-persist,
+# daily-maintenance, esp-telemetry-watchdog, efield-live; PEMF_SIMULATE ile hw-sim). Bunlar süreç sonuna
+# dek yaşıyor: watchdog her 1 sn SONRAKİ testlerin seansını durdurabiliyor, daily-maintenance 60 sn sonra
+# o an yamalı DB'de retention/yedek koşuyordu. "Beklenemezler" (çıkışsız döngü) → ENGELLENİR.
+# Ürün kodu DEĞİŞMEZ; ikisi de kaydeden bir boş-işlemle değiştirilir. OTURUM kapsamlı: modül/oturum
+# kapsamlı bir `with TestClient` fixture'ı da korunur (fonksiyon kapsamlı yama ondan SONRA kurulurdu).
+# mDNS'i SINAYAN testler `start_mdns`/`get_shared_zeroconf`'u, watchdog'u sınayanlar döngüyü doğrudan
+# (sınırlı turla) çağırır. Ad değişirse `setattr` YÜKSEK SESLE düşer (korumasız süit sessizce koşmasın).
+# Kapılar: tests/test_lifespan_mdns_kaydi.py, tests/test_session_watchdog.py (kablolama)
 _MDNS_ENGELLENEN: list = []
+_ARKA_PLAN_ENGELLENEN: list = []
+_GERCEK_ARKA_PLAN_BASLATICI = None  # kablolama testi gerçek başlatıcıyı Thread kaydediciyle çağırır
 
 
 def _mdns_baslatici_yerine() -> None:
@@ -359,15 +370,23 @@ def _mdns_baslatici_yerine() -> None:
     _MDNS_ENGELLENEN.append(threading.current_thread().name)
 
 
-@pytest.fixture(autouse=True)
-def _lifespan_mdns_kaydini_engelle():
-    mp = pytest.MonkeyPatch()
+def _arka_plan_baslatici_yerine() -> None:
+    """Lifespan'ın `_start_background_threads` yerine: daemon YOK, yalnız çağrı sayılır."""
+    _ARKA_PLAN_ENGELLENEN.append(threading.current_thread().name)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _lifespan_yan_etkilerini_engelle():
+    global _GERCEK_ARKA_PLAN_BASLATICI
     try:
         from servers import api_server as _api
-
-        mp.setattr(_api, "_start_mdns_service", _mdns_baslatici_yerine)
-    except Exception:  # api_server içe aktarılamıyorsa lifespan da koşamaz
-        pass
+    except ImportError:  # api_server içe aktarılamıyorsa lifespan da koşamaz
+        yield
+        return
+    mp = pytest.MonkeyPatch()
+    _GERCEK_ARKA_PLAN_BASLATICI = _api._start_background_threads
+    mp.setattr(_api, "_start_mdns_service", _mdns_baslatici_yerine)
+    mp.setattr(_api, "_start_background_threads", _arka_plan_baslatici_yerine)
     yield
     mp.undo()
 
