@@ -28,7 +28,9 @@ if str(_BACKEND_KOKU) not in sys.path:
 # ⚠️ DENETİM 2026-08-15: aşağıdaki `_gercek_kurulumu_koru` fixture'ı YETMİYOR, çünkü pytest
 # test modüllerini TOPLAMA sırasında import eder ve bu, hiçbir fixture çalışmadan ÖNCE olur.
 # Bazı test modülleri modül seviyesinde üretim modülü import ediyor; zincir şuraya varıyor:
-#     tests/test_patient_encryption.py (import)
+#     tests/test_patient_encryption.py (import)   [2026-08-15 ölçümü; D0Ö.01'den beri bu dosya
+#       toplamada import ETMİYOR — aynı zincir ör. tests/test_esp_ack_roundtrip.py'nin modül düzeyi
+#       `servers.api_server` import'u → `database.patient_database` üzerinden sürer]
 #       → apps/backend/database/patient_database.py  (modül seviyesi)
 #         → pemf_gui/config.py:346      (modül seviyesi SINGLETON)
 #           → Config.__init__ → _get_or_create_key → secrets_manager.get_secret
