@@ -318,10 +318,26 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
     # gate EXE COM10'a bağlanıp oto-firmware (varsayılan AÇIK) ile yakmaya ulaşabilirdi — yakma, bobin
     # sürülürken MCU'yu resetler. 'SIM' gerçek bir port değil; otomatik taramaya DÜŞMEZ.
     # Değerler blok bitince ESKİ hâline döner. Kapı: tests/test_exe_kapisi_firmware_kapali.py
+    # ⚠️ D0Ö.06 (B-10.66) — GATE EXE BUILD'İN KENDİ SCRATCH KÖKÜNDE AÇILIR. Eskiden geri kalan ortam build
+    # makinesininkiydi: her build GERÇEK veri kökünde göç/ACL yapıyor, gerçek ProgramData cihaz sırrını
+    # okuyup yazıyor, gömülü Supabase adresiyle buluta cihaz kaydı gönderiyor, depo içindeki provizyonla
+    # bulut MQTT'ye bağlanabiliyordu. Kök her build'de SIFIRDAN açılır ve blok sonunda silinir (açılış,
+    # eski `~/.pemf_gui` anahtar dosyalarını buraya KOPYALAR — build ağacında kalmasın).
+    # Kapı: tests/test_build_kapisi_yalitimi.py
+    $gateKok = Join-Path $BuildRoot "ai_kapisi_kok"
+    Remove-Item -Recurse -Force $gateKok -EA 0
     $gateOrtam = [ordered]@{
-        PEMF_SIMULATE       = "1"
-        PEMF_FW_AUTO_UPDATE = "0"
-        PEMF_STM_PORT       = "SIM"
+        PEMF_SIMULATE             = "1"
+        PEMF_FW_AUTO_UPDATE       = "0"
+        PEMF_STM_PORT             = "SIM"
+        PEMF_HOTSPOT              = "0"
+        PEMF_DATA_DIR             = (Join-Path $gateKok "veri")
+        APPDATA                   = (Join-Path $gateKok "AppData\Roaming")
+        LOCALAPPDATA              = (Join-Path $gateKok "AppData\Local")
+        PROGRAMDATA               = (Join-Path $gateKok "ProgramData")
+        PEMF_DEVICE_IDENTITY_DIR  = (Join-Path $gateKok "kimlik")
+        SUPABASE_URL              = "http://127.0.0.1:9"   # kara-delik (discard portu): cihaz kaydı GİTMEZ
+        PEMF_CLOUD_PROVISION_PATH = (Join-Path $gateKok "YOK_cloud_mqtt_provision.json")
     }
     $gateOnceki = @{}
     foreach ($ad in $gateOrtam.Keys) {
@@ -413,6 +429,7 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
             if ($null -eq $gateOnceki[$ad]) { Remove-Item "Env:$ad" -EA 0 }
             else { [Environment]::SetEnvironmentVariable($ad, $gateOnceki[$ad], 'Process') }
         }
+        Remove-Item -Recurse -Force $gateKok -EA 0
     }
 }
 

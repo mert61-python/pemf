@@ -33,6 +33,7 @@ YALITIM_DEGISKENLERI = (
     "PEMF_SIMULATE",
     "PEMF_ESP_ENABLED",
     "SUPABASE_URL",
+    "PEMF_CLOUD_PROVISION_PATH",  # conftest (D0Ö.07) test sürecinde verir — build makinesinde YOK
 )
 
 _SURUCU = r"""
@@ -60,6 +61,11 @@ function Start-Process {
     $ortam = @{}
     foreach ($e in [Environment]::GetEnvironmentVariables('Process').GetEnumerator()) { $ortam[[string]$e.Key] = [string]$e.Value }
     $script:yakalanan = [ordered]@{ FilePath = [string]$FilePath; ArgumentList = @($ArgumentList | ForEach-Object { [string]$_ }); Env = $ortam }
+    # EXE'nin veri köküne yazacağı gibi bir iz bırak (blok sonunda kökün silindiği ölçülebilsin).
+    if ($env:PEMF_DATA_DIR) {
+        New-Item -ItemType Directory -Force -Path $env:PEMF_DATA_DIR | Out-Null
+        Set-Content -LiteralPath (Join-Path $env:PEMF_DATA_DIR 'exe_izi.txt') -Value 'iz'
+    }
     [pscustomobject]@{ Id = 0 }
 }
 $BuildRoot = $Kok
