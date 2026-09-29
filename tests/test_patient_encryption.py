@@ -4,11 +4,17 @@
 import base64
 
 from cryptography.fernet import Fernet
-from database.patient_database import PatientDatabase
 
 
 def _db(temp_app_data):
-    return PatientDatabase(str(temp_app_data / "patients.db"))
+    # ⚠️ D0Ö.01 (B-3.84): sınıf ÇAĞRI ANINDA güncel modülden alınır. Modül düzeyinde bağlanınca
+    # (eski :7) test_anahtar_uyusmazligi_karantina.py modülü sys.modules'tan silip yeniden içe
+    # aktardığında testlerin yamaları YENİ modüle gidiyor, bayat sınıf ise yamasız anahtar
+    # kaynağını okuyordu → makinede anahtar varsa ham okuma düşüyor, 'enc:' iddiası hiç koşmuyordu.
+    # Kapı: tests/test_patient_encryption_sira_bagimsiz.py
+    import database.patient_database as pdb
+
+    return pdb.PatientDatabase(str(temp_app_data / "patients.db"))
 
 
 def test_patient_roundtrip_encrypted_at_rest(temp_app_data, monkeypatch):
