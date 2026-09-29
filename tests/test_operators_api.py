@@ -8,10 +8,6 @@ Veri katmanı `test_device_operators.py`'de test edilir. Buradaki asıl risk KAP
   * listenin PIN hash'i sızdırması.
 """
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 

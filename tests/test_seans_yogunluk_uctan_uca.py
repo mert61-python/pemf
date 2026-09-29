@@ -15,12 +15,8 @@ eder. Bu deponun tekrarlayan arıza sınıfı: "her modül doğru, zincir kopuk"
 Tasarım: `_event_loop` None → `_ws_broadcast_sync` yakalanır; CSV tmp_path'e yönlendirilir.
 """
 
-import io
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import csv
+import io
 
 import pytest
 

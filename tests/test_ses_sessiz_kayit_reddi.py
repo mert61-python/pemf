@@ -17,11 +17,8 @@ import base64
 import importlib.util
 import io
 import math
-import os
 import struct
 import wave
-
-os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
 from fastapi.testclient import TestClient

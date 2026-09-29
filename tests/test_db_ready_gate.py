@@ -15,10 +15,6 @@ soruşturması ve yasal saklama yükümlülüğünün tamamı bu kayda dayanır.
 GEÇMEZ — DB çökükken tedaviyi durduramamak asıl tehlike olurdu. Bu dosya iki yönü de kilitler.
 """
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK

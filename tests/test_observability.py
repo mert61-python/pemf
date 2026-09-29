@@ -2,10 +2,6 @@
 """Gözlemlenebilirlik + hata yönetimi (audit B-4.1, B-5.2): global exception handler'lar (tutarlı
 zarf, PII/str(e) sızmaz) + /metrics Prometheus endpoint + opsiyonel telemetri no-op."""
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient

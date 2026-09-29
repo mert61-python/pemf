@@ -19,10 +19,6 @@ aynısı olurdu. Bu dosya ikisinin ayrı kaldığını ve ölçümün seansa KAP
 Tasarım: `_event_loop` None → `_ws_broadcast_sync` no-op; saf state geçişleri sınanır.
 """
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 
 

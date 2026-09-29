@@ -12,10 +12,7 @@ kliniğe göre değişir (KVKK silmeyi ister, açılmış bir dava dosyası sakl
 OPERATÖRÜNDÜR; yazılım onu sessizce almaz.
 """
 
-import os
 from datetime import datetime, timedelta
-
-os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
 from fastapi.testclient import TestClient

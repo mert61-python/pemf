@@ -21,8 +21,6 @@ eksik olan tek şey ona kısmi sözlüğü VERMEKTİ.
 import json
 import os
 
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 

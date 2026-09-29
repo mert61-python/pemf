@@ -65,6 +65,21 @@ os.environ["PEMF_DEVICE_IDENTITY_DIR"] = str(_OTURUM_IZOLE / "makine_kimligi")
 # bu satır çift emniyet + testlerin startup davranışını deterministik kılar).
 os.environ.setdefault("PEMF_SCRATCH_WARMUP", "0")
 
+# ⚠️ D0Ö.11 (B-10.222 = DENETIM-12 P1) — `PEMF_SIMULATE` TEST MODÜLLERİNDE DEĞİL, BURADA TEK YERDE.
+# 72 test modülü modül gövdesinde yazıyordu (16 `setdefault('1')` + 56 `pop`); değeri TOPLAMA SIRASI
+# belirliyordu: tam süitte toplama sonunda YOK, tek dosya koşumunda '1' → aynı test iki ayrı ortamda
+# koşuyordu (ürün lifespan'de okuyup hw-sim thread'ini başlatır; o thread `stm='online'` yazar).
+# Artık süreç başında TEK normalizasyon: YOK (tam süitin fiilî değeri; dış kabuk/CI '1' ya da ''
+# verse de). Sanal donanım isteyen test bunu KENDİ fixture'ında `monkeypatch.setenv` ile ister.
+# Toplama sonundaki değer kaydedilir. Kapı: tests/test_pemf_simulate_tek_kaynak.py
+os.environ.pop("PEMF_SIMULATE", None)
+_PEMF_SIMULATE_TOPLAMA_SONU: list = []
+
+
+def pytest_collection_finish(session):
+    _PEMF_SIMULATE_TOPLAMA_SONU.append(os.environ.get("PEMF_SIMULATE"))
+
+
 # ⚠️ D0Ö.02 (B-3.6) — GERÇEK KİMLİK KASASI SÜİTTE python-keyring ÜZERİNDEN OKUNMAZ/YAZILMAZ.
 # ÖLÇÜLDÜ: tam süit gerçek Windows kasasına 1603 okuma yapıyordu ve sahibin kasasında
 # `PEMF_GUI/sqlcipher_key` VAR → gerçek at-rest anahtarı test DB'lerine göçüyor, kopyaları

@@ -13,10 +13,6 @@ Bunlar LAN'a kimliksiz açıkken at-rest şifreleme HİÇBİR ŞEY korumaz — v
 KURAL: loopback (cihazın kendisi) VEYA geçerli cihaz token'ı. LAN TEK BAŞINA YETMEZ.
 """
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 

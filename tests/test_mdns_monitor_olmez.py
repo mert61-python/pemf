@@ -27,8 +27,6 @@ yeni thread, yeni uyku, yeni bağımlılık YOK. Backoff LOG'a uygulandı, uykuy
 import os
 import threading
 
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 
 

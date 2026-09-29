@@ -26,13 +26,9 @@ gerçek maskeyi kurar, gerçek `hardware_controller` alanına bakar.
 
 from __future__ import annotations
 
-import os
 import queue
 
 import pytest
-
-os.environ.setdefault("PEMF_SIMULATE", "1")
-
 from controllers.hardware_controller import HardwareController  # noqa: E402
 from servers import live_state  # noqa: E402
 

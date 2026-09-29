@@ -6,10 +6,6 @@ Klinik sözleşme: AI çıktısı bir ÖNERİdir. Hekimin kararı kaydın YANINA
 KAYBOLMAZ. Değerlendirilmemiş kayıt "onaylı" GİBİ görünmez.
 """
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 

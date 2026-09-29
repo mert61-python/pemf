@@ -34,7 +34,6 @@ Fixture kaldirilirsa ikinci test KIRMIZI olur (mutasyonla dogrulandi).
 
 from __future__ import annotations
 
-import os
 import sys
 import threading
 import time
@@ -45,8 +44,6 @@ import pytest
 KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
-
-os.environ.setdefault("PEMF_SIMULATE", "1")
 
 
 def _api():

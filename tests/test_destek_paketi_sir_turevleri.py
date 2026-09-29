@@ -28,8 +28,6 @@ da DAR: `sqlcipher_key` var, `sqlcipher` YOK; sürüm/durum teşhisi maskelenmiy
 import os
 from pathlib import Path
 
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from utils.support_bundle import Maskeleyici, _guvenli_mi
 

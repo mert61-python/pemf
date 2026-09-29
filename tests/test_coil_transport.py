@@ -2,10 +2,6 @@
 """Kritik yol: bobin transport yönlendirmesi (STM 1-5 → HardwareController, ESP 6-8 → MQTT) +
 geçersiz bobin reddi + toplu (batch) yönlendirme + durdurma mekanizması. Donanım/broker mock'lanır."""
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: ESP kapsami TUM_ESP'ten turer (literal bobin numarasi YASAK)

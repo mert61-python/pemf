@@ -44,8 +44,6 @@ import base64
 import os
 from pathlib import Path
 
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 

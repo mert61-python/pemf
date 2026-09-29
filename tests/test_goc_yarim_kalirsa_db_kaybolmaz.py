@@ -42,7 +42,6 @@ veri hâlâ okunabiliyor mu?
 
 from __future__ import annotations
 
-import os
 import shutil
 import sqlite3
 import sys
@@ -53,8 +52,6 @@ import pytest
 KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
-
-os.environ.setdefault("PEMF_SIMULATE", "1")
 
 
 def _duz_db_kur(yol: Path, ad: str) -> None:

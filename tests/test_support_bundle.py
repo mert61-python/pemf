@@ -18,10 +18,7 @@ Kilitlenen değişmezler:
 
 import io
 import json
-import os
 import zipfile
-
-os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
 from fastapi.testclient import TestClient

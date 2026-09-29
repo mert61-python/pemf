@@ -29,7 +29,6 @@ BU DOSYA NE ÖLÇER
 
 from __future__ import annotations
 
-import os
 import re
 import sys
 from pathlib import Path
@@ -39,8 +38,6 @@ import pytest
 KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
-
-os.environ.setdefault("PEMF_SIMULATE", "1")
 
 #: Onay parolası — arayüz ile backend AYNI dizgiyi kullanmalı, yoksa düğme sessizce 400 alır.
 ONAY = "DELETE_SELECTED"

@@ -20,11 +20,8 @@ TÜKETEN tarafı kimse kontrol etmemişti. Buradaki kapı sözleşmenin iki ucun
 from __future__ import annotations
 
 import base64
-import os
 import re
 from pathlib import Path
-
-os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
 from fastapi.testclient import TestClient

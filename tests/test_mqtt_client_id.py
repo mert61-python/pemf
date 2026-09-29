@@ -18,8 +18,6 @@ import re
 
 from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
-os.environ.pop("PEMF_SIMULATE", None)  # testlerde sim loop baslatma
-
 
 def _cid(role):
     from servers.api_server import _mqtt_client_id

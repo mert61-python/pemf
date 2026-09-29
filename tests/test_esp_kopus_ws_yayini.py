@@ -30,9 +30,6 @@ yayın olmadan bobin geri geldiğinde kart "Offline"da asılı kalırdı.
 from __future__ import annotations
 
 import json
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
 from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK

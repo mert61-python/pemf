@@ -24,8 +24,6 @@ ve çözümü de aynı: FAIL-CLOSED + operatöre iki açık çıkış yolu.
 import json
 import os
 
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 
 

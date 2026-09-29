@@ -19,10 +19,6 @@ YENİ KURAL (bkz. apps/backend/servers/auth.cozumlenmis_operator):
 masadayken eski bir istemci yüzünden tedaviyi engellerdi.
 """
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK

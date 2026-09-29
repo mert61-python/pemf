@@ -9,10 +9,7 @@ Sınanan sözleşme:
   * Şifresiz build'de yükleyici hiçbir şey bozmaz (geliştirme ortamı etkilenmez).
 """
 
-import os
 import sys
-
-os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
 

@@ -32,7 +32,6 @@ acik kalir (depo kurali: bobinler her seyden once durur). Bunun kendi testi asag
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -41,8 +40,6 @@ import pytest
 KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
-
-os.environ.setdefault("PEMF_SIMULATE", "1")
 
 ESKI_BANNER = "-> STM_READY: DDS v2.3 (5-ch SYM-BIPOLAR uni=0x00 + HW_SYNC@PB1) Waiting for commands..."
 YENI_BANNER = "-> STM_READY: DDS v2.3 (7-ch UNIPOLAR tek-bacak uni=0x60 + HW_SYNC@PB1) Waiting for commands..."

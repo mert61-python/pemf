@@ -9,10 +9,6 @@ Kilitlenen sözleşme:
   * Bağlam yoksa canlı değer ÜRETİLMEZ (eski değeri canlıymış gibi göstermek yanıltıcıdır).
 """
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from servers import efield_live as ef
 

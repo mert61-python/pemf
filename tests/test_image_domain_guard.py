@@ -7,14 +7,10 @@ Sınıflandırıcı softmax'ı, girdi eğitim dağılımının dışında olsa b
 bilmez. Bu testler gerçek test görüntüleriyle (ai_hub/PEMF_AI_Test_Girdileri) korumayı kilitler.
 """
 
-import os
 from pathlib import Path
 
 import cv2
 import pytest
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 from utils import image_domain as dom
 
 GIRDI = Path(__file__).resolve().parent.parent / "ai_hub" / "PEMF_AI_Test_Girdileri"

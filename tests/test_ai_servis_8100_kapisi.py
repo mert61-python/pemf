@@ -31,8 +31,6 @@ import os
 import wave
 from pathlib import Path
 
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 
 KOK = Path(__file__).resolve().parent.parent

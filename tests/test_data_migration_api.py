@@ -10,9 +10,6 @@ Bu testler UÇ NOKTA davranışını kilitler; veri katmanı ayrıca `test_data_
 """
 
 import base64
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
 

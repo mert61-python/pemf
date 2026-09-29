@@ -27,8 +27,6 @@ Offline klinikte bobinler broker'a bağlanamaz → tedavi başlatılamaz.
 import os
 import socket as _stdlib_socket
 
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 
 

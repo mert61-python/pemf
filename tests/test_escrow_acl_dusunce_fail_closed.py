@@ -40,7 +40,6 @@ BU KAPI davranissaldir: gercek bir goc kosturur, `lock_down_file`i BASARISIZ yap
 from __future__ import annotations
 
 import logging
-import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -50,8 +49,6 @@ import pytest
 KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
-
-os.environ.setdefault("PEMF_SIMULATE", "1")
 
 
 def _duz_db_kur(yol: Path, ad: str) -> None:

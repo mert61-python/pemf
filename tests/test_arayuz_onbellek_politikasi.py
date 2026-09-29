@@ -31,10 +31,7 @@ bedel) — bu yüzden testler İKİ YÖNÜ de kilitler.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-
-os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
 from fastapi.staticfiles import StaticFiles

@@ -13,10 +13,6 @@ Bu dosya iki şeyi kilitler: (1) durum arayüze ULAŞIR ve onaylanana kadar UYAR
 (2) kodun KENDİSİ yalnız cihazın kendi ekranından okunur — LAN/tünelden ASLA.
 """
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 

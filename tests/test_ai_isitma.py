@@ -43,7 +43,6 @@ demektir (beklenen: ilk açılışta ~38 sn, sonrakilerde ~4 sn).
 
 import ast
 import inspect
-import os
 import sys
 import textwrap
 from pathlib import Path
@@ -52,8 +51,6 @@ import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(KOK))
-
-os.environ.pop("PEMF_SIMULATE", None)
 
 
 @pytest.fixture(scope="module")

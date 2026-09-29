@@ -9,10 +9,6 @@ değişirse KIRILIR. Özellikle `/api/health` kurulum-doğrulaması (`atRestEncr
 Baseline: 2026-07-06. Client kurulumu test_api_safety ile aynı (PEMF_SIMULATE kapalı).
 """
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 

@@ -17,10 +17,6 @@ Kilitlenen değişmezler:
   4) Denetim yazımı işlemi ENGELLEMEZ (dolu disk veteriner'i kilitlemesin).
 """
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 

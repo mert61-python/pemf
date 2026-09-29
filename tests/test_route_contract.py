@@ -13,8 +13,6 @@ Baseline: 2026-07-06 (refactor ÖNCESİ), PEMF_SIMULATE=1. 67 route → 68 (+1 F
 
 import os
 
-os.environ.setdefault("PEMF_SIMULATE", "1")
-
 _FASTAPI_INTERNAL = {"/docs", "/openapi.json", "/redoc", "/docs/oauth2-redirect"}
 
 # (path, virgülle-birleşik-sıralı-methodlar) — refactor ÖNCESİ dondurulmuş sözleşme.

@@ -3,10 +3,7 @@
 düzeyinde otomatik durdurur (firmware keep-alive tek başına auto-stop OLMAZ). `with TestClient`
 lifespan'i tetikler → watchdog thread'i başlar; süresi geçmiş seans kurulur, tick beklenir."""
 
-import os
 import time
-
-os.environ.pop("PEMF_SIMULATE", None)
 
 from fastapi.testclient import TestClient
 

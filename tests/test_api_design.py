@@ -2,10 +2,6 @@
 """API tasarımı (audit B-8.1, B-8.2): tek versiyon kaynağı + /api/v1 alias + X-API-Version header;
 /api/patients pagination (geriye-uyumlu) + delete_all kazara-silme koruması (confirm)."""
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 

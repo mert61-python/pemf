@@ -11,9 +11,7 @@ ESP-only bobinler (6-8) → STM donanımı gerekmez; MQTT/DB/broker mock'lanır.
 doğrudan çağrı (TestClient YOK → watchdog thread'i kurulan seansı bozmaz, deterministik)."""
 
 import asyncio
-import os
 
-os.environ.pop("PEMF_SIMULATE", None)
 import pytest
 from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 

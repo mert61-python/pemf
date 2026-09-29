@@ -7,10 +7,6 @@ Ayrıca uygulanacak organ/süre, istemcinin gövdesinden DEĞİL onaylanan MÜH�
 "organ 2'yi onaylat, organ 5'i başlat" saldırısı/kazası yapısal olarak imkânsız olmalı.
 """
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 from servers import ai_approval as ap

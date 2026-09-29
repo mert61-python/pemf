@@ -30,8 +30,6 @@ paket iki kez alınırsa satır ATLANIR (ve sayılır), sessizce ÇOĞALTILMAZ.
 import base64
 import os
 
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 

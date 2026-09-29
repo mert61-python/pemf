@@ -4,10 +4,6 @@ davranışsal test edilmiyordu — yalnız route-varlığı. Uçlar kasıtlı au
 tek koruma; süre-clamp bir refactorda düşerse {duration_minutes:999999} gözetimsiz sürüş açar.
 _ai_pro_loop no-op'lanır → kamera/donanım gerekmez."""
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 from topoloji import TUM_ESP  # faz 4: ESP kapsami TUM_ESP'ten turer (literal bobin numarasi YASAK)

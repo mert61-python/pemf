@@ -12,8 +12,6 @@ Aynı sınıf hata `/api/ai/disease` (kedi) ucunda daha önce kapatılmıştı; 
 import os
 from pathlib import Path
 
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 

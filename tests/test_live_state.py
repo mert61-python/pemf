@@ -9,9 +9,6 @@ Tasarım: `_event_loop` None (TestClient yok) → `_ws_broadcast_sync` erken-ret
 state geçişleri sınanır. `state.hardware` None (STM yok) + `_mqtt_publish` mock (broker yok) →
 donanım/USB gerekmez. Hiç TestClient/thread yok → watchdog kurulan seansı bozamaz (deterministik)."""
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
 import pytest
 from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 

@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import csv
 import io
-import os
 import re
 import sys
 from pathlib import Path
@@ -33,8 +32,6 @@ import pytest
 KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
-
-os.environ.setdefault("PEMF_SIMULATE", "1")
 
 _TS = KOK / "apps" / "ui" / "src" / "screens" / "TreatmentHistoryScreen.tsx"
 

@@ -20,10 +20,6 @@ bilinçli açılabilir. Kapalıyken `is_update_in_progress()` False kalmalı —
 başlatmadaki TOCTOU korumaları bu bayrağa DEĞİL, gerçek kurulum penceresine bakar.
 """
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 

@@ -1,10 +1,6 @@
 # Author: mertaygn, cglrgrkn
 """Kritik yol: emergency_stop her zaman çalışır + aynı anda iki seans engeli (409)."""
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)  # testlerde sim loop başlatma
-
 import pytest
 from fastapi.testclient import TestClient
 from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK

@@ -19,8 +19,6 @@ import ast
 import os
 import pathlib
 
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from servers.auto_discovery import get_api_port
 

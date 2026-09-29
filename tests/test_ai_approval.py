@@ -6,10 +6,7 @@ Bu testler HASTA GÜVENLİĞİ sözleşmesini kilitler. Hepsi YOKLUK tarafını 
 olmadan / reddedilmişken / süresi geçmişken / ikinci kez tedavi BAŞLAMAMALI.
 """
 
-import os
 import time
-
-os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
 from servers import ai_approval as ap

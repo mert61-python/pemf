@@ -9,10 +9,6 @@ read-only GÜVENLİK sözleşmesi: yanıtta süre-dolumu göstersе bile GLOBAL 
 Baseline: 2026-07-06 (refactor ÖNCESİ). Client kurulumu test_api_safety ile aynı.
 """
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 

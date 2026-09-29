@@ -27,9 +27,6 @@ sonsuz sürmez. Reddetmek Kontrol Paneli'ni bozardı.
 """
 
 import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import sys
 from pathlib import Path
 

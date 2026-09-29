@@ -11,9 +11,6 @@ extraction'dan önce ve sonra AYNI çalışır.
 En kritik kilit: `_finish_coil_run`'ın per-metrik ortalaması — her metrik KENDİ dolu-örnek sayısına
 bölünür (eksik sensör okuması ortalamayı aşağı çekmesin; klinik doğruluk düzeltmesi)."""
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
 import pytest
 
 

@@ -38,8 +38,6 @@ import os
 import pathlib
 import time
 
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 
 ESKI_GUN = 200

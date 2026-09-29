@@ -12,10 +12,6 @@ Kimlik YOKLUĞU ile "hepsini sil" NİYETİ artık ayrı: klinik-geneli silme `al
 ile AÇIKÇA istenir. Yıkıcı bir işlemin varsayılanı asla "en geniş kapsam" olamaz.
 """
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 

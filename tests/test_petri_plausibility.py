@@ -12,14 +12,11 @@ PetriPredictor'ı çalıştırıp E_cancer/D/P üretiyordu. `apps/backend/utils/
   (b) ENTEGRASYON — gerçek test girdileriyle çapraz yükleme (yalnız YOLO ONNX varsa).
 """
 
-import os
 from pathlib import Path
 
 import cv2
 import numpy as np
 import pytest
-
-os.environ.pop("PEMF_SIMULATE", None)
 
 from ai_hub.inference_petri_dish import plausibility as pl
 

@@ -13,10 +13,6 @@ Bu dosya zinciri iki uçtan da kilitler: taşıma katmanı yalan söylemesin, ve
 `_emergency_stop_all` bunu doğru şekilde `confirmed=False`'a çevirsin.
 """
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 

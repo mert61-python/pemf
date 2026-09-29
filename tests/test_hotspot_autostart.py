@@ -23,11 +23,8 @@ Kilitlenen değişmezler:
 """
 
 import os
-from pathlib import Path
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import sys
+from pathlib import Path
 
 import pytest
 

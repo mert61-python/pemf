@@ -2,10 +2,6 @@
 """Kritik yol (güvenlik B-1.6): uzak (tünel) istekler IP-başı sınırlı; LAN sınırsız;
 acil-durdurma/health muaf (fail-safe). Limit modül-globali monkeypatch ile düşürülür."""
 
-import os
-
-os.environ.pop("PEMF_SIMULATE", None)
-
 import pytest
 from fastapi.testclient import TestClient
 
