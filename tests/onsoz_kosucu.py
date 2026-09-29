@@ -25,7 +25,8 @@
 ⚠️ KÖR ALANLAR (tasarım gereği; D0Ö.19 ek'te ölçüldü, bugün hiçbiri gerçekleşmiyor):
    · değişken argümanlı dinamik import (`importlib.import_module(mod_yolu)`, `runpy`, `-c` dizeleri) —
      yalnız SABİT dize argümanlı `import_module`/`__import__` taranır;
-   · göreli import'lar; alt modülün kendisi (yalnız üst paket çözülür: `utils.x` eksikse görülmez);
+   · göreli import'lar; `from paket import ad`daki `ad` (alt modül mü öznitelik mi statik olarak
+     bilinemez — noktalı adlar `utils.x` ise D0Ö.20 ek'ten beri dosya sisteminde aranır);
    · modül düzeyinde, yol kurulumundan ÖNCE çağrılan bir fonksiyonun içindeki import;
    · `dar_yol` betik dizinini yola koyar; gömülü `._pth` çalışma anında koymaz (kapı daha hoşgörülü).
 
@@ -203,8 +204,10 @@ def ilk_taraf_adlari(kok: Path) -> set[str]:
     return adlar
 
 
-def _depoda_cozuluyor(ad: str, kok: Path) -> bool:
-    """`ad` ŞU ANKİ `sys.path` ile çözülüyor VE çözüm deponun KANONİK konumunda mı? (modül KOŞTURULMAZ)
+def _kanonik_konumlar(ad: str, kok: Path) -> list[Path] | None:
+    """`ad` ŞU ANKİ `sys.path` ile deponun KANONİK konumuna mı çözülüyor? (modül KOŞTURULMAZ)
+
+    Dönüş: paketse arama dizinleri, düz modülse `[]`, çözülmüyor / kanonik değilse `None`.
 
     ⚠️ D0Ö.19 ek: "depo içinde HERHANGİ bir yer" yetmiyordu — betik dizini yolda olduğu için depo
     içindeki bayat bir kopya (`scripts/utils/`) çözüm sayılıyordu. Kanonik: `kok/<ad>` ya da
@@ -216,28 +219,49 @@ def _depoda_cozuluyor(ad: str, kok: Path) -> bool:
     try:
         spec = mod.__spec__ if mod is not None else importlib.util.find_spec(ad)
     except (ImportError, ValueError):
-        return False
+        return None
     if spec is None:
-        return False
+        return None
     tabanlar = (kok.resolve(), kok.resolve() / "apps" / "backend")
     try:
         if spec.submodule_search_locations is not None:
             konumlar = {Path(x).resolve() for x in spec.submodule_search_locations}
             if not konumlar or not konumlar <= {(t / ad).resolve() for t in tabanlar}:
-                return False
+                return None
             duzenli = any((t / ad / "__init__.py").is_file() for t in tabanlar)
-            return not (duzenli and spec.origin in (None, "namespace"))
-        return bool(spec.origin) and Path(spec.origin).resolve() in {(t / f"{ad}.py").resolve() for t in tabanlar}
+            return None if duzenli and spec.origin in (None, "namespace") else sorted(konumlar)
+        dosya = bool(spec.origin) and Path(spec.origin).resolve() in {(t / f"{ad}.py").resolve() for t in tabanlar}
+        return [] if dosya else None
     except (OSError, ValueError):
-        return False
+        return None
+
+
+def _depoda_cozuluyor(ad: str, kok: Path) -> bool:
+    return _kanonik_konumlar(ad, kok) is not None
+
+
+def _alt_modul_var(tam_ad: str, konumlar: list[Path]) -> bool:
+    """`a.b.c`: üst paketin kanonik dizinlerinden başlayarak her parça dosya sisteminde var mı?
+
+    ⚠️ D0Ö.20 ek (tur 4): yalnız üst paket çözülüyordu — `utils.file_acl` taşınsa kapı YEŞİL kalırdı.
+    Modül KOŞTURULMAZ: alt paket dizini (`__init__`li ya da ad-alanı) ya da SON parça için `<parça>.py`.
+    """
+    parcalar = tam_ad.split(".")[1:]
+    for i, parca in enumerate(parcalar):
+        dizinler = [k / parca for k in konumlar if (k / parca).is_dir()]
+        if dizinler:
+            konumlar = dizinler
+            continue
+        return i == len(parcalar) - 1 and any((k / f"{parca}.py").is_file() for k in konumlar)
+    return True
 
 
 def _import_adlari(d: ast.AST) -> list[str]:
-    """Düğümün import ettiği ÜST-DÜZEY adlar (göreli import ve değişken argümanlı dinamik import: yok)."""
+    """Düğümün import ettiği TAM (noktalı) adlar (göreli import ve değişken argümanlı dinamik import: yok)."""
     if isinstance(d, ast.Import):
-        return [a.name.split(".")[0] for a in d.names]
+        return [a.name for a in d.names]
     if isinstance(d, ast.ImportFrom) and d.level == 0 and d.module:
-        return [d.module.split(".")[0]]
+        return [d.module]
     if (
         isinstance(d, ast.Call)
         and (getattr(d.func, "id", None) or getattr(d.func, "attr", None)) in ("import_module", "__import__")
@@ -245,7 +269,7 @@ def _import_adlari(d: ast.AST) -> list[str]:
         and isinstance(d.args[0], ast.Constant)
         and isinstance(d.args[0].value, str)
     ):
-        return [d.args[0].value.split(".")[0]]
+        return [d.args[0].value]
     return []
 
 
@@ -254,17 +278,26 @@ def ic_import_hatalari(
 ) -> list[str]:
     """GÖVDE KOŞTURULMADAN: fonksiyon/`try` içi dahil TÜM birinci-taraf import'lar çözülüyor mu?
 
-    `denetlenen`: çözülmeye çalışılan adlar buraya eklenir (kapının vakum ölçüsü).
+    Üst paket `sys.path` ile (kanonik konum), noktalı alt modül dosya sisteminde aranır.
+    `denetlenen`: çözülmeye çalışılan adlar (üst ve noktalı) buraya eklenir (kapının vakum ölçüsü).
+    ⚠️ `from paket import ad`daki `ad` alt modül mü öznitelik mi statik olarak bilinemez: denetlenmez.
     """
     hatalar: list[str] = []
     bakilan: set[str] = set() if denetlenen is None else denetlenen
+    konumlar: dict[str, list[Path] | None] = {}
     for d in ast.walk(agac):
-        for ad in _import_adlari(d):
-            if ad not in ilk_taraf or ad in bakilan:
+        for tam in _import_adlari(d):
+            ad = tam.split(".")[0]
+            if ad not in ilk_taraf or tam in bakilan:
                 continue
-            bakilan.add(ad)
-            if not _depoda_cozuluyor(ad, kok):
-                hatalar.append(f"{IC_IMPORT_ONEKI}: No module named '{ad}' (satir {d.lineno})")
+            bakilan.add(tam)
+            if ad not in konumlar:
+                bakilan.add(ad)
+                konumlar[ad] = _kanonik_konumlar(ad, kok)
+                if konumlar[ad] is None:
+                    hatalar.append(f"{IC_IMPORT_ONEKI}: No module named '{ad}' (satir {d.lineno})")
+            if konumlar[ad] is not None and tam != ad and not _alt_modul_var(tam, konumlar[ad]):
+                hatalar.append(f"{IC_IMPORT_ONEKI}: No module named '{tam}' (satir {d.lineno})")
     return hatalar
 
 

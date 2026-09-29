@@ -235,6 +235,35 @@ def test_KARSIT_KANIT_kosucu_GOLGE_BAYAT_KOPYA_ve_AD_ALANI_KIRMIZI(tmp_path):
     assert "kanonik.py" not in adlar, f"kanonik konuma çözen sağlam betik ölü sayıldı: {sonuc}"
 
 
+def test_KARSIT_KANIT_kosucu_ALT_MODUL_tasininca_KIRMIZI(tmp_path):
+    """D0Ö.20 ek (tur 4): yalnız ÜST paket çözülüyordu — `utils.file_acl` taşınsa ya da silinse kapı
+    YEŞİL kalırdı (`utils` hâlâ çözülüyor). Noktalı adın her parçası paket konumlarında aranır."""
+    arka = tmp_path / "apps" / "backend" / "arka"
+    (arka / "alt").mkdir(parents=True)
+    (arka / "__init__.py").write_text("", encoding="utf-8")
+    (arka / "var.py").write_text("X = 1\n", encoding="utf-8")
+    (arka / "alt" / "__init__.py").write_text("", encoding="utf-8")
+    (arka / "alt" / "derin.py").write_text("X = 1\n", encoding="utf-8")
+    onsoz = (
+        "import sys\nfrom pathlib import Path\n\n"
+        "sys.path.insert(0, str(Path(__file__).resolve().parent / 'apps' / 'backend'))\nimport json\n\n\n"
+    )
+    govdeler = {
+        "tasinmis.py": "def f():\n    from arka.olmayan import x\n",
+        "derin_tasinmis.py": "def f():\n    import arka.alt.yok\n",
+        "modul_paket_degil.py": "def f():\n    from arka.var.ic import x\n",
+        "sabit_dinamik.py": "import importlib\n\n\ndef f():\n    importlib.import_module('arka.yok_dinamik')\n",
+        "saglam_alt.py": "def f():\n    from arka.var import X\n    import arka.alt.derin\n    from arka import var\n",
+    }
+    for ad, govde in govdeler.items():
+        (tmp_path / ad).write_text(onsoz + govde, encoding="utf-8")
+    sonuc = _ic_importlari_kostur(list(govdeler), kok=tmp_path)
+    adlar = {r for r, _ in sonuc}
+    olu = {"tasinmis.py", "derin_tasinmis.py", "modul_paket_degil.py", "sabit_dinamik.py"}
+    assert olu <= adlar, f"taşınmış/olmayan ALT MODÜL görülmedi: {sorted(olu - adlar)} ({sonuc})"
+    assert "saglam_alt.py" not in adlar, f"var olan alt modüller ölü sayıldı: {sonuc}"
+
+
 def test_KARSIT_KANIT_yol_dilimi_YALNIZ_yol_kurulumunu_kosturur(tmp_path):
     """D0Ö.19 ek (make_base_zip dersi): dilim, bileşik deyimdeki yan etkiyi ve `sys.path`ten SONRAKİ
     yeniden atamayı KOŞTURMAMALI; yolu yine de kurmalı (fonksiyon içi import çözülür)."""
