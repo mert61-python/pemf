@@ -69,42 +69,164 @@ def test_KRITIK_tatbikat_CLIye_BAGLI():
     )
 
 
+#: Sirrin tutuldugu ad (tatbikat icinde).
+SIR = "anahtar"
+#: logging/logger yontemleri — alici ne olursa olsun (logging.x, log.x, logger.x) cikti sayilir.
+_LOG_YONTEMLERI = {"debug", "info", "warning", "warn", "error", "exception", "critical", "fatal", "log"}
+#: Sirrin AKABILECEGI tek yerler: uzunlugu, veritabanini acan cagri ve bos-mu denetimi.
+_IZINLI_CAGRILAR = {"len", "open_encrypted_conn"}
+
+
+def _ebeveynler(kok: ast.AST) -> dict:
+    e = {}
+    for n in ast.walk(kok):
+        for c in ast.iter_child_nodes(n):
+            e[c] = n
+    return e
+
+
+def _cagri_adi(c: ast.Call) -> str | None:
+    return getattr(c.func, "id", None) or getattr(c.func, "attr", None)
+
+
+def _cikti_cagrisi_mi(c: ast.Call) -> bool:
+    """print / sys.stdout|stderr(.buffer).write(lines) / logging ve logger yontemleri."""
+    if getattr(c.func, "id", None) == "print":
+        return True
+    if isinstance(c.func, ast.Attribute):
+        if c.func.attr in _LOG_YONTEMLERI:
+            return True
+        if c.func.attr in ("write", "writelines"):
+            zincir = {getattr(d, "attr", None) or getattr(d, "id", None) for d in ast.walk(c.func.value)}
+            return bool(zincir & {"stdout", "stderr", "__stdout__", "__stderr__"})
+    return False
+
+
+def _sir_gecisleri(fn: ast.AST) -> list:
+    """Sirrin OKUNDUGU her gecis (atama hedefi haric) — ebeveyniyle birlikte."""
+    e = _ebeveynler(fn)
+    return [(d, e) for d in ast.walk(fn) if isinstance(d, ast.Name) and d.id == SIR and isinstance(d.ctx, ast.Load)]
+
+
+def _len_icinde_mi(d: ast.Name, e: dict) -> bool:
+    """⚠️ HER GECIS KENDI EBEVEYNIYLE: `len(anahtar)` ile ayni f-string'deki `{anahtar}` serbest KALMAZ."""
+    p = e.get(d)
+    return isinstance(p, ast.Call) and getattr(p.func, "id", None) == "len" and d in p.args
+
+
+def _cikti_atasi(d: ast.Name, e: dict, fn: ast.AST) -> ast.Call | None:
+    """Gecisi saran en yakin CIKTI cagrisi (argumanlar VE anahtar sozcukler dahil), yoksa None."""
+    ata = e.get(d)
+    while ata is not None and ata is not fn:
+        if isinstance(ata, ast.Call) and _cikti_cagrisi_mi(ata):
+            return ata
+        ata = e.get(ata)
+    return None
+
+
+def cikti_ihlalleri(fn: ast.AST) -> list[str]:
+    """Bir cikti cagrisinin icinde `len(...)` sarmali DISINDA gecen sir."""
+    ihlal = []
+    for d, e in _sir_gecisleri(fn):
+        cikti = _cikti_atasi(d, e, fn)
+        if cikti is not None and not _len_icinde_mi(d, e):
+            ihlal.append(f":{d.lineno} {ast.unparse(cikti)[:90]}")
+    return ihlal
+
+
+def akis_ihlalleri(fn: ast.AST) -> list[str]:
+    """Sir yalniz `len(...)`, `open_encrypted_conn(...)` ve `not`/kosul icinde gecebilir.
+
+    Cikti cagrisina bakan kapi ARA DEGISKENI goremez (`m = f"{anahtar}"; print(m)`); bu kol her
+    yeni kullanimi (kopya, dilim, istisna metni, dosyaya yazma) yakalar.
+    """
+    ihlal = []
+    for d, e in _sir_gecisleri(fn):
+        p = e.get(d)
+        cagri = e.get(p) if isinstance(p, ast.keyword) else p
+        if (
+            isinstance(cagri, ast.Call)
+            and _cagri_adi(cagri) in _IZINLI_CAGRILAR
+            and (d in cagri.args or p is not cagri)
+        ):
+            continue
+        if isinstance(p, ast.UnaryOp) and isinstance(p.op, ast.Not):
+            continue
+        if isinstance(p, (ast.If, ast.While, ast.IfExp)) and p.test is d:
+            continue
+        ihlal.append(f":{d.lineno} {ast.unparse(p)[:90]}")
+    return ihlal
+
+
 def test_KRITIK_ANAHTAR_asla_YAZDIRILMAZ():
     """⚠️ Bu kapinin korudugu sey bir SIR.
 
-    `anahtar` degiskeni `print(...)` icinde yalniz `len(anahtar)` olarak gecebilir. Dogrudan
-    basmak (ya da dilimlemek: `anahtar[:8]`) sirri terminal gecmisine ve log'a dusurur.
+    `anahtar` degiskeni bir CIKTI cagrisinda (print, sys.stdout/stderr.write, logging) yalniz
+    `len(anahtar)` olarak gecebilir. Dogrudan basmak (ya da dilimlemek: `anahtar[:8]`) sirri
+    terminal gecmisine ve log'a dusurur.
+
+    ⚠️ D0Ö.18 (B-10.20): eski surum "argumanin HERHANGI bir yerinde `len(anahtar)` var mi" diye
+    bakiyordu → `f"... {len(anahtar)} ... {anahtar}"` YESILDI; yalniz `print`in konumsal
+    argumanlarini tariyordu → `sys.stdout.write(anahtar)` ve `print(..., sep=anahtar)` YESILDI.
+    Artik HER GECIS kendi ebeveyniyle denetlenir.
     """
     fn = _fonksiyon("tatbikat")
-    ihlaller = []
-    for c in ast.walk(fn):
-        if not isinstance(c, ast.Call):
-            continue
-        if getattr(c.func, "id", None) != "print":
-            continue
-        for arg in c.args:
-            # f-string dahil TUM alt dugumleri tara
-            for d in ast.walk(arg):
-                if not (isinstance(d, ast.Name) and d.id == "anahtar"):
-                    continue
-                # `len(anahtar)` sarmali serbest; baska her kullanim ihlal.
-                sarmalli = any(
-                    isinstance(u, ast.Call)
-                    and getattr(u.func, "id", None) == "len"
-                    and any(isinstance(x, ast.Name) and x.id == "anahtar" for x in u.args)
-                    for u in ast.walk(arg)
-                )
-                dilim = any(
-                    isinstance(u, ast.Subscript) and isinstance(u.value, ast.Name) and u.value.id == "anahtar"
-                    for u in ast.walk(arg)
-                )
-                if dilim or not sarmalli:
-                    ihlaller.append(ast.unparse(arg)[:90])
+    ihlaller = cikti_ihlalleri(fn)
     assert not ihlaller, (
         f"tatbikat ANAHTARI YAZDIRIYOR: {ihlaller}. Bu arac hasta veritabanini acan anahtari "
         "tutar; degeri (kismi bile olsa) ekrana basmak onu terminal gecmisine ve log'a dusurur. "
         "Yalniz `len(anahtar)` serbesttir."
     )
+
+
+def test_KRITIK_ANAHTAR_yalniz_IZINLI_yerlere_akar():
+    fn = _fonksiyon("tatbikat")
+    ihlaller = akis_ihlalleri(fn)
+    assert not ihlaller, (
+        f"tatbikat'ta sir IZINSIZ bir yere akiyor: {ihlaller}. Izinli: len(anahtar), "
+        "open_encrypted_conn(..., anahtar, ...), `if not anahtar`. Ara degisken/kopya/dilim/istisna "
+        "metni sirri ciktiya tasiyabilir; yeni bir kullanim gerekiyorsa once bu kapiyi gerekcesiyle guncelleyin."
+    )
+
+
+def test_KAPI_TARAYICISI_gercek_gecisleri_GORUYOR():
+    """Tarayici bos donerek yesil olamaz: gercek tatbikattaki uc izinli gecis gorulmeli."""
+    fn = _fonksiyon("tatbikat")
+    gecisler = _sir_gecisleri(fn)
+    ebeveyn_turleri = {type(e.get(d)).__name__ for d, e in gecisler}
+    assert len(gecisler) >= 3 and {"Call", "UnaryOp"} <= ebeveyn_turleri, (
+        f"`{SIR}` gecisleri beklenenden az ({len(gecisler)}; {ebeveyn_turleri}) — ad degismis olabilir, kapi KOR"
+    )
+    assert any(_len_icinde_mi(d, e) and _cikti_atasi(d, e, fn) is not None for d, e in gecisler), (
+        "tatbikat'taki `print(... len(anahtar) ...)` cikti cagrisi olarak GORULMUYOR — tarayici kor"
+    )
+
+
+_OZ_DENETIM = [
+    # (kaynak govdesi, cikti kolu ihlal, akis kolu ihlal)
+    ('print(f"u {len(anahtar)}")', False, False),
+    ("c = open_encrypted_conn(k, anahtar, m)\nif not anahtar:\n    pass", False, False),
+    ('print(f"u {len(anahtar)} {anahtar}")', True, True),  # plan mutanti 1
+    ("sys.stdout.write(anahtar)", True, True),  # plan mutanti 2
+    ('sys.stderr.write(f"{anahtar}")', True, True),
+    ('print("x", sep=anahtar)', True, True),
+    ('logging.getLogger(__name__).info("k=%s", anahtar)', True, True),
+    ('log.warning(f"{anahtar[:4]}")', True, True),
+    ('print(f"{len(anahtar[:8])}")', True, True),
+    ('m = f"{anahtar}"\nprint(m)', False, True),  # ara degisken: yalniz akis kolu gorur
+    ("raise RuntimeError(anahtar)", False, True),
+]
+
+
+def test_KAPI_TARAYICISI_oz_denetim():
+    """Tarayicinin kendisi mutantlarla olculur (plan mutantlari + print disi cikti yollari)."""
+    yanlis = []
+    for govde, cikti_beklenen, akis_beklenen in _OZ_DENETIM:
+        girintili = "\n".join("    " + s for s in govde.splitlines())
+        fn = ast.parse(f"def tatbikat():\n    anahtar = oku()\n{girintili}\n").body[0]
+        if bool(cikti_ihlalleri(fn)) != cikti_beklenen or bool(akis_ihlalleri(fn)) != akis_beklenen:
+            yanlis.append((govde, cikti_ihlalleri(fn), akis_ihlalleri(fn)))
+    assert not yanlis, f"tarayici oz-denetimi TUTMADI: {yanlis}"
 
 
 def test_KRITIK_KARSIT_KANIT_sonuca_BAGLI():
