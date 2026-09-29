@@ -276,7 +276,11 @@ class Stm32SimClient:
                         log.warning("❌ NACK: %s", err)
                         continue
 
-                    duty, phase, freq, duration, ref_ms = result
+                    # ⚠️ D0Ö.12 (B-10.176): `decode_packet` 2026-09-11'den beri 6'lı döner (kip maskesi).
+                    # Burada 5'e açılıyordu → ürünün İLK geçerli paketinde ValueError, genel `except`
+                    # bağlantıyı KAPATIYORDU (sanal-STM ilk gerçek pakette ölüyordu). Kapı:
+                    # tests/test_stm32_simulator_run_yolu.py
+                    duty, phase, freq, duration, ref_ms, _kip_istegi = result
                     self._last_pkt_time = time.monotonic()
                     self._any_active = any(d > 0 for d in duty)
                     self._coil_duty = list(duty)
