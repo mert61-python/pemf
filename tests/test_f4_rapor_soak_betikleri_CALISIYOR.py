@@ -12,8 +12,9 @@ Bu dosya DAVRANIŞI ölçer:
   · `--pdf` gerçek veri köküne DOKUNMADAN reddedilir (İG-9.50): import onarılınca PDF üreteci açılışta
     veri kökünde tedavi DB'sini açar (göç + yedek); sır yöneticisi anahtarı gerçek kökten/keyring'den
     okur — geçici `app_data_dir` bunu YALITMAZ.
-  · `soak_http_ws._veri_koku()` ALT SÜREÇTE sahte `APPDATA/PEMF_GUI/sahte.db` ile APPDATA kökünü seçer
-    (eskiden `utils.path_utils` sessizce düşüyor, soak yanlış kökün DB büyümesini ölçüyordu).
+  · `soak_http_ws._veri_koku()` ALT SÜREÇTE ürünün kullanıcı kökündeki (Windows `%APPDATA%\\PEMF_GUI`,
+    Linux `~/.local/share/PEMF_GUI`) sahte .db ile o kökü seçer; iki kökte de .db varken makine kökü
+    kazanır (eskiden `utils.path_utils` sessizce düşüyor, soak yanlış kökün DB büyümesini ölçüyordu).
 
 ⚠️ Sessiz WAV sessizlik kapısında durur → model YÜKLENMEZ, ağ gerekmez (bkz. betik_alt_sureci).
 """
@@ -57,7 +58,11 @@ def test_KRITIK_xai_ses_kolu_ALT_SURECTE_calisir_ve_tum_HATA_cikis_SIFIR_DEGIL(t
     hata = ozet[0].get("hata", "")
     assert "No module named" not in hata, f"ses kolu import'ta ÖLÜ (B-9.27): {hata}"
     assert "sessizlik" in hata, f"sessiz kayıt sessizlik kapısında durmalıydı: {hata!r}"
-    assert r.returncode != 0, f"tüm kayıtlar HATA iken exit 0 (B-9.27):\n{r.stdout[-600:]}"
+    # ⚠️ D0Ö.21 ek (tur 4): yalnız "≠0" pinlemek yetmez — summary'den SONRAKİ herhangi bir çökme de 1
+    # verir; o varken tüm-HATA kuralı silinse kapı yeşil kalırdı. Kuralın KENDİSİ ve tam koşu pinlenir.
+    assert r.returncode == 1, f"tüm kayıtlar HATA iken çıkış 1 değil (rc={r.returncode}):\n{r.stderr[-600:]}"
+    assert "TUM kayitlar hatali" in r.stderr, f"çıkış kodu tüm-HATA kuralından gelmiyor:\n{r.stderr[-600:]}"
+    assert (cikti / "index.html").is_file(), "koşu summary'den sonra düştü (index.html yok)"
 
 
 _KUCUK_JPG = base64.b64encode(b"\xff\xd8\xff\xd9").decode("ascii")
@@ -139,19 +144,46 @@ def test_KRITIK_soak_veri_koku_path_utils_YUKLENEMEZSE_SESSIZ_devam_etmez(monkey
     assert "path_utils" in str(e.value.code), f"hata iletisi ne olduğunu söylemiyor: {e.value.code!r}"
 
 
-def test_KRITIK_soak_veri_koku_ALT_SURECTE_APPDATA_kokunu_secer(tmp_path):
+#: Alt süreç: betiği yükler, ÜRÜNÜN kullanıcı kökünü (`get_app_data_directory()`, PEMF_DATA_DIR yok)
+#: SORAR, oraya sahte .db koyar, sonra `_veri_koku()`nu basar.
+#: ⚠️ D0Ö.21 ek (tur 4, ORTA): beklenen kök eskiden `APPDATA/PEMF_GUI` diye SABİTTİ — Linux'ta ürün
+#: `~/.local/share` (macOS `~/Library/Application Support`) kullanır; kapı ubuntu CI'da her koşuda
+#: kırmızı olurdu. Kök artık ürünün kendisinden alınır → platformdan bağımsız.
+_SOAK_KOK_KODU = (
+    "import importlib.util, sys\n"
+    "s = importlib.util.spec_from_file_location('soak_kapi', sys.argv[1])\n"
+    "m = importlib.util.module_from_spec(s)\n"
+    "s.loader.exec_module(m)\n"
+    "from utils.path_utils import get_app_data_directory\n"
+    "k = get_app_data_directory()\n"
+    "(k / 'sahte.db').write_bytes(b'sahte')\n"
+    "print('KULLANICI=' + str(k))\n"
+    "print('VERI_KOKU=' + str(m._veri_koku()))\n"
+)
+
+
+def _soak_veri_koku_alt_surecte(tmp_path: Path, programdata_db: bool) -> tuple[Path, Path, Path]:
+    """(kullanıcı kökü, makine kökü, seçilen kök) — hepsi sahte ortam altında."""
     env = yalitik_ortam(tmp_path / "ortam")
-    appdata_kok = Path(env["APPDATA"]) / "PEMF_GUI"
-    appdata_kok.mkdir(parents=True)
-    (appdata_kok / "sahte.db").write_bytes(b"sahte")
-    kod = (
-        "import importlib.util, sys\n"
-        "s = importlib.util.spec_from_file_location('soak_kapi', sys.argv[1])\n"
-        "m = importlib.util.module_from_spec(s)\n"
-        "s.loader.exec_module(m)\n"
-        "print('VERI_KOKU=' + str(m._veri_koku()))\n"
-    )
-    r = kostur(["-c", kod, str(BETIKLER / "soak_http_ws.py")], tmp_path, env, 120)
-    assert f"VERI_KOKU={appdata_kok}" in r.stdout, (
-        f"soak veri kökü APPDATA'yı seçmedi (rc={r.returncode}) — B-9.27:\n{(r.stdout + r.stderr)[-900:]}"
-    )
+    makine = Path(env["PROGRAMDATA"]) / "PEMF_System" / "PEMF_GUI"
+    if programdata_db:
+        makine.mkdir(parents=True)
+        (makine / "sahte.db").write_bytes(b"sahte")
+    r = kostur(["-c", _SOAK_KOK_KODU, str(BETIKLER / "soak_http_ws.py")], tmp_path, env, 120)
+    degerler = dict(s.split("=", 1) for s in r.stdout.splitlines() if s.startswith(("KULLANICI=", "VERI_KOKU=")))
+    assert set(degerler) == {"KULLANICI", "VERI_KOKU"}, f"alt süreç düştü (rc={r.returncode}):\n{r.stderr[-900:]}"
+    kullanici = Path(degerler["KULLANICI"])
+    assert kullanici.resolve().is_relative_to((tmp_path / "ortam").resolve()), f"GERÇEK kullanıcı kökü: {kullanici}"
+    return kullanici, makine, Path(degerler["VERI_KOKU"])
+
+
+def test_KRITIK_soak_veri_koku_ALT_SURECTE_APPDATA_kokunu_secer(tmp_path):
+    """Yalnız kullanıcı kökünde .db varken onu seçer (eskiden path_utils sessizce düşüyordu, B-9.27)."""
+    kullanici, _makine, secilen = _soak_veri_koku_alt_surecte(tmp_path, programdata_db=False)
+    assert secilen == kullanici, f"soak veri kökü kullanıcı kökünü seçmedi: {secilen} != {kullanici}"
+
+
+def test_KARSIT_KANIT_soak_veri_koku_MAKINE_kokunu_ONCE_secer(tmp_path):
+    """İki kökte de .db varken launcher'ın makine kökü (`PEMF_DATA_DIR=%PROGRAMDATA%\\PEMF_System`) kazanır."""
+    _kullanici, makine, secilen = _soak_veri_koku_alt_surecte(tmp_path, programdata_db=True)
+    assert secilen == makine, f"makine kökü öncelikli değil: {secilen} != {makine}"

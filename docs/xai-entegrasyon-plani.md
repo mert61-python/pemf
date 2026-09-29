@@ -245,6 +245,8 @@ Efor tahminleri kod-okuma temellidir; her kalem proje test disipliniyle (RED→G
 > dediği için Faz-5 beklemeden `scripts/xai_batch_rapor.py` TEK-CLI olarak yapıldı (görüntü/ses
 > CAM · RNA IG işaretli-CSV · EM sensitivity+SHAP; summary.csv + index.html + `--pdf`
 > → `PDFReportGenerator.generate_xai_report`; çıktı-dizini-girdi-dışında bekçisi bulgu-19'a karşı).
+> ⚠️ **`--pdf` ŞİMDİLİK KAPALI (İG-9.50, D0Ö.21):** PDF üreteci açılışta veri kökündeki tedavi
+> DB'sini açar (göç + yedek + yaş filtresiz `recover_stale_active_sessions`) — reddedilir.
 > Kalan tek bilinçli-borç: D bölümü (kapsam-dışı) + cat_llm (sabah tartışması).
 >
 > **DÜŞMAN-DOĞRULAMA TURU (2026-08-27 gece, 4 denetçi + çürütme ajanları — 25 ham → 17
@@ -281,7 +283,7 @@ Tek CLI: `--modul {ct,histopat,termal,retikulosit,ses,rna,em_fantom,em_petri,em_
 `--girdi <dosya|klasör> --cikti <dizin>` (+`--limit/--xai-method/--top-n/--no-shap/--embed/--pdf`).
 Çıktılar: XAI PNG/JPG'ler + `summary.csv` + `index.html` (galeri; `report_html._esc` tek-kaynak
 kaçırma) + opsiyonel `rapor.pdf` (`PDFReportGenerator.generate_xai_report` — yeni, bozuk görüntü
-raporu düşürmez). RNA yolu C-kalemindeki **işaretli CSV**'yi üretir (`rna_top_genler.csv`:
+raporu düşürmez; ⚠️ `--pdf` ŞİMDİLİK KAPALI — İG-9.50, bkz. `main()`). RNA yolu C-kalemindeki **işaretli CSV**'yi üretir (`rna_top_genler.csv`:
 patient_id/sıra/gene/attribution/yön ↑↓). EM yolu modülün `_run_xai_em` tam paketini çağırır
 (sample_id'li). Bulgu-19 tuzağına karşı **çıktı-girdi-dışında bekçisi** (SystemExit). Duman:
 em_fantom 4 nokta 0.87s · RNA 2 hasta IG 4.2s · retikülosit 2 görüntü. Not: cp1254 konsolda

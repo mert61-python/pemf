@@ -3,7 +3,7 @@
 """xai_batch_rapor.py — Mod-2 toplu XAI raporu (docs/xai-entegrasyon-plani.md §KALAN B).
 
 TEK CLI: klasör/dosya tara → modülün TEK-KAYNAK explain fonksiyonunu çağır →
-PNG/JPG + summary.csv + index.html (+ opsiyonel --pdf). Canlı döngüye ağır XAI
+PNG/JPG + summary.csv + index.html (--pdf ŞİMDİLİK KAPALI — İG-9.50). Canlı döngüye ağır XAI
 asla girmez (plan değişmezi) — bu araç SEANS-SONRASI/araştırma yüzeyidir.
 
 Kullanım örnekleri:
@@ -284,9 +284,12 @@ def _kos_gorsel(modul: str, girdi: Path, cikti: Path, args) -> tuple[list[dict],
             )
             print(f"[{i}/{len(dosyalar)}] {govde} OK ({sure}s)")
         except ImportError as e:
-            # ⚠️ D0Ö.21 (B-9.27): import hatası KAYIT hatası değil ARAÇ hatasıdır — her kayıt aynısını
-            # verir. Eskiden kayıt kayıt yutulup summary'ye HATA yazılıyor ve exit 0 dönülüyordu (F4'ten
-            # beri ses kolu tam böyle: `utils.ses_kalitesi` her kayıtta ModuleNotFoundError).
+            # ⚠️ D0Ö.21 (B-9.27): import hatası KAYIT hatası değil ARAÇ hatasıdır. Eskiden kayıt kayıt
+            # yutulup summary'ye HATA yazılıyor ve exit 0 dönülüyordu (F4'ten beri ses kolu tam böyle:
+            # `utils.ses_kalitesi` her kayıtta ModuleNotFoundError).
+            # ⚠️ D0Ö.21 ek: "her kayıt aynısını verir" HER ZAMAN doğru değil — ses kolunda torch/cv2/
+            # grad_cam importu yalnız sessizlik kapısını GEÇEN kayıtta yapılır; o ana kadarki (sessiz)
+            # kayıtların satırları summary/index'e YAZILMADAN durulur. Hata gürültülü (çıkış ≠0): bilerek.
             raise SystemExit(
                 f"HATA: {modul} modulu yuklenemedi ({type(e).__name__}: {e}) — arac yolu/kurulumu bozuk, "
                 f"islem {i}/{len(dosyalar)}. kayitta DURDURULDU."
@@ -445,6 +448,9 @@ def _pdf_yaz(cikti: Path, baslik: str, kartlar: list[dict]) -> None:
         yol = get_pdf_generator().generate_xai_report(baslik, ogeler, str(cikti / "rapor.pdf"))
         print(f"PDF: {yol}")
     except Exception as e:  # PDF opsiyonel — hatası batch'i düşürmez
+        # ⚠️ D0Ö.21 ek: şu an ERİŞİLEMEZ (`--pdf` main()'de reddediliyor). İG-9.50 reddi kaldırılırken
+        # bu geniş yutma (ImportError dahil) PDF hatasını exit 0'a çevirir: çıkış koduna bağlayın ve
+        # kapıya bu kolu ekleyin.
         print(f"UYARI: PDF üretilemedi (batch çıktıları geçerli): {type(e).__name__}: {e}")
 
 
@@ -477,6 +483,10 @@ def main() -> int:
         # veri kökünde tedavi DB'sini açar (göç + yedek); SQLCipher anahtarını sır yöneticisi GERÇEK
         # kökten/kasadan okur (geçici `app_data_dir` bunu YALITMAZ). Bir rapor aracı klinik veriye
         # dokunmamalı. F4'ten beri zaten hiç çalışmıyordu; artık sessizce değil AÇIKÇA reddedilir.
+        # ⚠️ D0Ö.21 ek: en ağır yan etki — TreatmentHistoryDB açılışı `recover_stale_active_sessions(
+        # max_age_hours=0)` çağırır ve YAŞ FİLTRESİZ tüm `active` seansları kapatır ("yalnız backend
+        # açılışında çağrılır" varsayımı). Aynı kökte canlı backend varken CANLI seansın kaydı
+        # kapanırdı. `generate_xai_report` DB'yi hiç kullanmaz: düzeltme yönü DB açmayan bir kurucu.
         # İG-9.50 düzeltilince bu ret kaldırılır (aşağıdaki `_pdf_yaz` çağrısı yerinde duruyor).
         raise SystemExit(
             "HATA: --pdf simdilik KAPALI (IG-9.50): PDF ureteci acilista veri kokundeki tedavi veritabanini "
