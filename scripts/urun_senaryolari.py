@@ -175,6 +175,21 @@ def _guvenlik_ortami() -> dict:
         # COM10) bağlanıp oto-firmware ile YAKMAYA ulaşılabilirdi. 'SIM' gerçek port değil, taramaya düşmez.
         "PEMF_FW_AUTO_UPDATE": "0",
         "PEMF_STM_PORT": "SIM",
+        # ⚠️ D0Ö.09 (B-10.31): makine kapsamlı cihaz sırrı (`ProgramData\PEMF_System\device_identity.json`)
+        # veri kökünü İZLEMEZ → 21 EXE açılışı GERÇEK sırrı yazıyor/okuyordu. Makine düzeyi depolar da
+        # scratch'te (tüm senaryolara ORTAK: sahadaki gibi veri kökü değişse de makine kimliği kalır).
+        "PEMF_DEVICE_IDENTITY_DIR": str(CALISMA / "_makine" / "kimlik"),
+        "PROGRAMDATA": str(CALISMA / "_makine" / "ProgramData"),
+        "PEMF_HOTSPOT": "0",
+        # ⚠️ D0Ö.09 ek — BULUT: scratch kimlik + GERÇEK device_id (MAC türevi) canlı Supabase'e mühürlenirdi
+        # (sonradan kurulan gerçek ürün kalıcı secret_mismatch alır); C1/C6/C6b acil durdurmaları da bulut
+        # aynasıyla GERÇEK broker'a STOP yayınlardı (sahadaki bir seansı kesebilir). Kara-delik + provizyonsuz.
+        "SUPABASE_URL": "http://127.0.0.1:9",
+        "PEMF_CLOUD_PATIENT_SYNC": "0",
+        "PEMF_CLOUD_PROVISION_PATH": str(CALISMA / "_makine" / "YOK_cloud_mqtt_provision.json"),
+        # ⚠️ KASA: ürünün eski-kaynak okuyucuları önce keyring'e bakar → EXE sahibin GERÇEK kasasındaki
+        # PEMF_GUI anahtarlarını okuyup senaryo köküne göçürürdü (A1 "sıfırdan kurulum" da sıfırdan olmazdı).
+        "PYTHON_KEYRING_BACKEND": "keyring.backends.null.Keyring",
     }
 
 
@@ -183,9 +198,11 @@ def kostur(veri: Path, sifreli: bool, ek: dict | None = None, sure: int = 180, s
     global _port
     _port += 1
     port = _port
-    ortam = dict(os.environ)
-    for k in ("PEMF_KEEP_PLAIN_BACKUP", "PEMF_KEEP_PLAIN_BAK", "PEMF_JETON_ENFORCED"):
-        ortam.pop(k, None)
+    # ⚠️ İZİN LİSTESİ (D0Ö.09 ek): dış ortamdan HİÇBİR PEMF_*/SUPABASE_* miras alınmaz — ör. PEMF_BACKUP_DIR
+    # EXE'nin kurtarma zarfını GERÇEK off-site dizine (aynı adla) yazdırırdı; PEMF_MQTT_CLOUD_* E-stop'u
+    # gerçek broker'a aynalardı; PEMF_KEEP_PLAIN_*/PEMF_JETON_ENFORCED senaryoları bozardı. Senaryonun
+    # istediği her şey aşağıda ya da `ek` ile AÇIKÇA verilir.
+    ortam = {k: v for k, v in os.environ.items() if not k.upper().startswith(("PEMF_", "SUPABASE_"))}
     ortam.update(
         {
             "PEMF_DATA_DIR": str(veri),
@@ -194,12 +211,6 @@ def kostur(veri: Path, sifreli: bool, ek: dict | None = None, sure: int = 180, s
             "PEMF_SIMULATE": "1",
             "PEMF_ESP_ENABLED": "0",
             "PYTHONIOENCODING": "utf-8",
-            # ⚠️ D0Ö.09 (B-10.31): makine kapsamlı cihaz sırrı (`ProgramData\PEMF_System\device_identity.json`)
-            # veri kökünü İZLEMEZ → 21 EXE açılışı GERÇEK sırrı yazıyor/okuyordu. Makine düzeyi depolar da
-            # scratch'te (tüm senaryolara ORTAK: sahadaki gibi veri kökü değişse de makine kimliği kalır).
-            "PEMF_DEVICE_IDENTITY_DIR": str(CALISMA / "_makine" / "kimlik"),
-            "PROGRAMDATA": str(CALISMA / "_makine" / "ProgramData"),
-            "PEMF_HOTSPOT": "0",
         }
     )
     ortam.update(ek or {})
@@ -1093,27 +1104,51 @@ def _kasa_modulu():
         return None
 
 
-def _anahtar_deposu_ozeti() -> tuple[int, str]:
-    """Makine anahtar deposundaki PEMF_GUI kayıtlarının (SAYI, ÖZET).
+def _urun_kasa_hedefi_mi(hedef: str) -> bool:
+    """python-keyring'in ürün için yazdığı hedefler: düz `PEMF_GUI` (ilk kayıt) ya da `<kullanıcı>@PEMF_GUI`.
+    Süitin geçici `PEMF_GATE_*@PEMF_GUI` kayıtları HARİÇ (paralel koşumda sahte 'DEGISTI' üretmesin)."""
+    return hedef == "PEMF_GUI" or (hedef.endswith("@PEMF_GUI") and not hedef.upper().startswith("PEMF_GATE_"))
+
+
+def _anahtar_deposu_ozeti() -> tuple[int, str] | None:
+    """Makine anahtar deposundaki ürün (PEMF_GUI) kayıtlarının (SAYI, ÖZET); ÖLÇÜLEMEZSE None.
 
     ⚠️ D0Ö.09 (B-10.77): eski denetim yalnız SAYI karşılaştırıyordu → ürün sahibin GERÇEK anahtarını
     aynı adla EZERSE sayı değişmez ve "DEGISMEDI" yazılırdı. Özet, her kaydın hedef adı + DEĞERİNİN
-    SHA-256'sı + son yazım zamanından türetilir. ⚠️ Değer de özet de ASLA basılmaz (Ö.4-Y6)."""
+    SHA-256'sından (pywin32 kuruluysa son yazım zamanı da; pywin32-ctypes bu alanı vermez) türetilir.
+    ⚠️ Değer de özet de ASLA basılmaz (Ö.4-Y6).
+    ⚠️ ÖLÇÜM DÜŞERSE "DEĞİŞMEDİ" DENMEZ (B-10.77'nin 3. bileşeni): cmdkey hata dönerse, kasa API'si
+    yoksa ya da bir kayıt okunamazsa None döner → `main` KIRMIZI çıkar."""
     r = subprocess.run(["cmdkey", "/list"], capture_output=True, text=True, errors="replace", timeout=30)
-    hedefler = sorted({m.group(1) for m in re.finditer(r"target=(\S+)", r.stdout or "") if "PEMF_GUI" in m.group(1)})
+    if r.returncode != 0:
+        return None
+    hedefler = sorted(
+        {m.group(1) for m in re.finditer(r"target=(\S+)", r.stdout or "") if _urun_kasa_hedefi_mi(m.group(1))}
+    )
     kasa = _kasa_modulu()
+    if hedefler and kasa is None:
+        return None
     ozet = hashlib.sha256()
     for hedef in hedefler:
         ozet.update(hedef.encode("utf-8") + b"\0")
         try:
-            kayit = kasa.CredRead(Type=kasa.CRED_TYPE_GENERIC, TargetName=hedef, Flags=0) if kasa else {}
-            deger = kayit.get("CredentialBlob") or b""
-            if isinstance(deger, str):
-                deger = deger.encode("utf-16-le")
-            ozet.update(hashlib.sha256(deger).digest() + str(kayit.get("LastWritten", "")).encode("utf-8"))
-        except Exception as e:  # okunamayan kayıt da özete girer: "ölçülemedi" ≠ "değişmedi"
-            ozet.update(f"<okunamadi:{type(e).__name__}>".encode("utf-8"))
+            kayit = kasa.CredRead(Type=kasa.CRED_TYPE_GENERIC, TargetName=hedef, Flags=0)
+        except Exception:
+            return None
+        deger = kayit.get("CredentialBlob") or b""
+        if isinstance(deger, str):
+            deger = deger.encode("utf-16-le")
+        ozet.update(hashlib.sha256(deger).digest() + str(kayit.get("LastWritten", "")).encode("utf-8"))
     return len(hedefler), ozet.hexdigest()
+
+
+def _kasa_karari(baslangic, bitis) -> tuple[bool, str]:
+    """(temiz_mi, açıklama) — yalnız sayı ve AYNI/DEĞİŞTİ/ÖLÇÜLEMEDİ basılır, özet ASLA."""
+    if baslangic is None or bitis is None:
+        return False, "⛔ OLCULEMEDI (cmdkey/kasa okunamadi) — kasa temiz SAYILMAZ"
+    if baslangic != bitis:
+        return False, f"once={baslangic[0]} sonra={bitis[0]} kayit (⛔ DEGISTI (sayi ya da DEGER) — INCELE)"
+    return True, f"once={baslangic[0]} sonra={bitis[0]} kayit (DEGISMEDI)"
 
 
 def main() -> int:
@@ -1139,15 +1174,21 @@ def main() -> int:
     CALISMA.mkdir(parents=True, exist_ok=True)
 
     # ⚠️ Anahtar zinciri `PEMF_DATA_DIR` ile IZOLE DEGIL: makine anahtar deposu (keyring)
-    # okuma sirasinda ONCE gelir. Olcumden ONCE bos oldugu dogrulandi; SONRA da bakilacak —
-    # urun oraya yazarsa sahibin gercek anahtarini ezme sinifi dogar. D0Ö.09 (B-10.77): SAYI yetmez
-    # (ayni adla EZME gorunmez) → kayit DEGERININ ozeti karsilastirilir.
+    # okuma sirasinda ONCE gelir; sahibin kasasinda PEMF_GUI kayitlari OLABILIR (bos oldugu
+    # varsayilmaz). EXE'ler null kasa arka ucuyla acilir (D0Ö.09 ek); yine de once/sonra
+    # karsilastirilir — urun oraya yazarsa sahibin gercek anahtarini ezme sinifi dogar.
+    # D0Ö.09 (B-10.77): SAYI yetmez (ayni adla EZME gorunmez) → kayit DEGERININ ozeti karsilastirilir.
     baslangic = _anahtar_deposu_ozeti()
-    print(f"[izolasyon] olcum ONCESI makine anahtar deposunda PEMF_GUI kaydi: {baslangic[0]}\n")
+    print(
+        "[izolasyon] olcum ONCESI makine anahtar deposunda PEMF_GUI kaydi: "
+        f"{baslangic[0] if baslangic else 'OLCULEMEDI'}\n"
+    )
 
     if hangi in ("A", "HEPSI"):
         if not tohum_uret():
             print("[DUR] tohum uretilemedi")
+            # Tohum kosumu da EXE acar: kasaya dokunduysa erken donuste de GORUNSUN.
+            print(f"  [izolasyon] makine anahtar deposu: {_kasa_karari(baslangic, _anahtar_deposu_ozeti())[1]}")
             return 1
         grup_a()
     if hangi in ("B", "HEPSI"):
@@ -1166,13 +1207,12 @@ def main() -> int:
     for kod, baslik, g, _k in SONUCLAR:
         print(f"  {'✓' if g else '⛔'}  {kod:5s} {baslik}")
     print(f"\n  {gecen}/{len(SONUCLAR)} senaryo GECTI")
-    degisti = baslangic != bitis
-    print(
-        f"  [izolasyon] makine anahtar deposu: once={baslangic[0]} sonra={bitis[0]} kayit "
-        f"({'⛔ DEGISTI (sayi ya da DEGER) — INCELE' if degisti else 'DEGISMEDI'})"
-    )
-    if degisti:
-        return 1  # D0Ö.09 (B-10.77): kasa degistiyse olcum GECMIS sayilmaz (sahibin anahtari ezilmis olabilir)
+    temiz, aciklama = _kasa_karari(baslangic, bitis)
+    print(f"  [izolasyon] makine anahtar deposu: {aciklama}")
+    if not temiz:
+        # D0Ö.09 (B-10.77): kasa degistiyse ya da OLCULEMEDIYSE olcum GECMIS sayilmaz
+        # (sahibin anahtari ezilmis olabilir; "olculemedi" asla "degismedi" yerine gecmez).
+        return 1
     return 0 if gecen == len(SONUCLAR) else 1
 
 
