@@ -202,53 +202,57 @@ def _uclari_dogrula(taban: str) -> list[str]:
     return kotu
 
 
-def _backend_surecleri() -> list:
+def _port_sureci(port: int):
+    """(`port`u LISTEN eden süreç, "") ya da (None, NEDEN + EYLEM).
+
+    ⚠️ D0Ö.15 ek (tur 4, ORTA): RSS eskiden ADA göre (`pemf_backend*`) seçiliyordu ve `--port` ile bağı
+    yoktu. Hedef kaynaktan koşan dev backend (`python.exe`) iken makinede başka bir PEMF_Backend (ör.
+    sahibin 8000'deki backend'i) varsa RSS O süreçten okunuyor, hedef ÖLÇÜLMEDEN "TEMIZ" çıkıyordu
+    (ölçüldü: iki senaryoda da `SONUC: TEMIZ`). Birden çok instance'ın TOPLANMASI (2026-09-13: 4106 MB
+    "1,8 GB sızıntı" yanılgısı) da böylece biter: yalnız hedef portun süreci okunur.
+    """
     try:
         import psutil
-    except Exception:
-        return []
-    bulunan = []
-    for p in psutil.process_iter(["name", "memory_info"]):
-        try:
-            if (p.info["name"] or "").lower().startswith("pemf_backend"):
-                bulunan.append(p)
-        except Exception:
-            continue
-    return bulunan
+    except ImportError:
+        return None, "psutil yuklu degil (kurun: pip install psutil)"
+    try:
+        for b in psutil.net_connections(kind="tcp"):
+            if b.laddr and b.laddr.port == port and b.status == psutil.CONN_LISTEN and b.pid:
+                return psutil.Process(b.pid), ""
+    except Exception as e:
+        return None, f"baglanti tablosu okunamadi ({type(e).__name__}: {e}) — yonetici olarak calistirin"
+    return None, f"{port} portunu dinleyen surec gorulemedi (psutil PID vermedi) — yonetici olarak calistirin"
 
 
-def _backend_rss_mb() -> float:
-    """Backend süreç(ler)inin TOPLAM RSS'i (MB). psutil yoksa 0 döner (ölçüm atlanır).
-
-    ⚠️ TOPLAR. Makinede birden çok backend koşuyorsa (test instance'ları, launcher'ın
-    kendi backend'i) sayı onların TOPLAMIDIR. Ölçüldü (2026-09-13): iki instance varken
-    4106 MB okundu ve bir an "1,8 GB sızıntı" gibi göründü — oysa tek instance'ın oturmuş
-    tabanı ~2310 MB idi. `_surec_sayisi_uyar` bu yanılgıyı görünür kılar.
-    """
-    sur = _backend_surecleri()
-    if not sur:
+def _backend_rss_mb(port: int) -> float:
+    """`port`u LISTEN eden backend sürecinin RSS'i (MB). Ölçülemezse 0 (neden: `_port_sureci`)."""
+    p, _neden = _port_sureci(port)
+    if p is None:
         return 0.0
-    toplam = 0
-    for p in sur:
-        try:
-            toplam += p.info["memory_info"].rss
-        except Exception:
-            continue
-    return round(toplam / 1024 / 1024, 1)
+    try:
+        return round(p.memory_info().rss / 1024 / 1024, 1)
+    except Exception:
+        return 0.0
 
 
-def _surec_sayisi_uyar() -> int:
-    """Birden çok backend varsa RSS okuması TOPLAMDIR — kullanıcıya söyle."""
-    n = len(_backend_surecleri())
-    if n > 1:
+def _rss_kaynagini_bildir(port: int) -> bool:
+    """Hangi sürecin ölçüleceğini (ya da NEDEN ölçülemeyeceğini) koşu BAŞINDA söyle."""
+    p, neden = _port_sureci(port)
+    if p is None:
         print(
-            f"  ⚠️ {n} adet PEMF_Backend sureci calisiyor — RSS okumasi bunlarin TOPLAMIDIR.\n"
-            "     Sizinti olcumu icin TEK instance birakin, yoksa sayi yaniltir."
+            f"  UYARI: RSS OLCULEMIYOR — {neden}. Bu kosu bellek sizintisi icin KARAR VEREMEZ "
+            "(sonuc RSS OLCULMEDI olur)."
         )
-    return n
+        return False
+    try:
+        ad = p.name()
+    except Exception:
+        ad = "?"
+    print(f"  RSS kaynagi: PID {p.pid} ({ad}) — {port} portunu dinleyen surec")
+    return True
 
 
-def _rss_oturmasini_bekle(azami_sn: float = 180.0, kararli_tur: int = 3) -> float:
+def _rss_oturmasini_bekle(port: int, azami_sn: float = 180.0, kararli_tur: int = 3) -> float:
     """AI ısıtması bitene kadar bekle; oturmuş RSS'i döndür.
 
     ⚠️ BU BEKLEME OLMADAN KAPI YANLIŞ ALARM VERİR. Ölçüldü (2026-09-13):
@@ -259,17 +263,17 @@ def _rss_oturmasini_bekle(azami_sn: float = 180.0, kararli_tur: int = 3) -> floa
 
     Ölçüt: ardışık `kararli_tur` örnekte değişim %1'in altındaysa oturmuştur.
     """
-    onceki = _backend_rss_mb()
+    onceki = _backend_rss_mb(port)
     if onceki <= 0:
         # ⚠️ D0Ö.15 (B-10.97): ÖLÇÜLEMEYEN şey OTURMAZ — eskiden `azami_sn` (180 sn) boşuna beklenip
         # 0 ile devam ediliyordu; sonuç da TEMIZ çıkıyordu (bkz. `main` kararı).
-        print("  UYARI: backend RSS okunamiyor (psutil yok ya da PEMF_Backend sureci yok) — isinma BEKLENMIYOR.")
+        print("  UYARI: backend RSS okunamiyor — isinma BEKLENMIYOR.")
         return 0.0
     kararli = 0
     bitis = time.monotonic() + azami_sn
     while time.monotonic() < bitis:
         time.sleep(5)
-        simdi = _backend_rss_mb()
+        simdi = _backend_rss_mb(port)
         if onceki <= 0:
             onceki = simdi
             continue
@@ -354,9 +358,9 @@ def main() -> int:
 
     # ⚠️ ISINMAYI BEKLE (bkz. _rss_oturmasini_bekle). Taban, AI ısıtması bittikten SONRA
     # alınmalı; yoksa ısıtmanın kendisi "sızıntı" diye raporlanır.
-    _surec_sayisi_uyar()
+    _rss_kaynagini_bildir(a.port)
     print("  AI isitmasinin oturmasi bekleniyor (taban olcumu icin)...")
-    oturmus = _rss_oturmasini_bekle()
+    oturmus = _rss_oturmasini_bekle(a.port)
     print(f"  taban RSS oturdu: {oturmus} MB" if oturmus > 0 else "  taban RSS: OLCULEMEDI")
 
     bitis = time.monotonic() + a.dakika * 60
@@ -382,7 +386,7 @@ def main() -> int:
                 hata += 1
         gecen = time.monotonic() - basla
         if gecen >= sonraki_ornek:
-            rss, db = _backend_rss_mb(), _db_kb(veri_koku)
+            rss, db = _backend_rss_mb(a.port), _db_kb(veri_koku)
             ornekler.append((gecen / 60.0, rss, db, hata))
             print(
                 f"{gecen / 60:6.1f} {rss:9.1f} {db:8d} {tur:7d} {hata:6d} {ws.baglanti:4d} {ws.kopma:4d} {ws.baglanamama:4d}"
@@ -404,21 +408,27 @@ def main() -> int:
     ilk_db, son_db = ornekler[0][2], ornekler[-1][2]
     artis = son_rss - ilk_rss
     oran = (artis / ilk_rss * 100) if ilk_rss else 0.0
+    rss_olculdu = bool(ilk_rss and son_rss)
 
     print("\n=== OZET ===")
     print(f"  istek: {tur}  hata: {hata}")
-    print(f"  RSS: {ilk_rss} -> {son_rss} MB  (fark {artis:+.1f} MB, %{oran:+.1f})")
+    # D0Ö.15 ek: ölçülmeyen RSS "0.0 -> 0.0 MB (%+0.0)" diye ÖLÇÜLMÜŞ bir %0 gibi basılmaz.
+    print(
+        f"  RSS: {ilk_rss} -> {son_rss} MB  (fark {artis:+.1f} MB, %{oran:+.1f})" if rss_olculdu else "  RSS: OLCULMEDI"
+    )
     print(f"  DB : {ilk_db} -> {son_db} KB  (fark {son_db - ilk_db:+d} KB)")
     print(ws_ozeti)
 
     # ⚠️ D0Ö.22 ek: TÜM nedenler toplanıp basılır — eskiden ilk başarısız nedende dönülüyordu
     # (RSS ölçülemeyip WS de koptuysa yalnız RSS söyleniyordu).
     sorunlar: list[str] = []
-    # ⚠️ D0Ö.15 (B-10.97): RSS okunamadıysa (psutil yok / PEMF_Backend süreci yok) oran 0 çıkar ve
-    # eskiden sonuç "TEMIZ" oluyordu — bellek sızıntısı hiç ölçülmeden. Ölçülmeyen şey temiz sayılmaz.
-    if not ilk_rss or not son_rss:
+    # ⚠️ D0Ö.15 (B-10.97): RSS okunamadıysa (psutil yok / hedef portu dinleyen süreç yok) oran 0 çıkar
+    # ve eskiden sonuç "TEMIZ" oluyordu — bellek sızıntısı hiç ölçülmeden. Ölçülmeyen şey temiz sayılmaz.
+    # D0Ö.15 ek: jeton ASCII (`RSS OLCULMEDI` — günlükte tek jetonla aranır), neden + eylem yanında.
+    if not rss_olculdu:
+        _p, neden = _port_sureci(a.port)
         sorunlar.append(
-            "UYARI: RSS ÖLÇÜLMEDİ — psutil yok ya da PEMF_Backend sureci bulunamadi; bellek sizintisi DEGERLENDIRILMEDI."
+            f"UYARI: RSS OLCULMEDI — {neden or 'hedef surecin RSS okumasi 0 dondu'}; bellek sizintisi DEGERLENDIRILMEDI."
         )
     # ⚠️ ESIK GEREKCESI: kisa soak'ta birkac MB dalgalanma NORMALDIR (GC, arena, onbellek).
     # Sizinti isareti MONOTON ve ORANSAL artistir. %25 esigi, 20 dk'lik bir kosuda

@@ -31,10 +31,12 @@ from betik_alt_sureci import KOK, betik_modulu
 from sahte_soak_backend import SahteBackend, kos, sahte_psutil, soak_modulu
 
 
-def _kos(monkeypatch, capsys, ws_davranis: str, surec: str = "PEMF_Backend.exe") -> tuple[int, str, SahteBackend]:
+def _kos(monkeypatch, capsys, ws_davranis: str, rss_olculur: bool = True) -> tuple[int, str, SahteBackend]:
+    """`rss_olculur=False`: sahte psutil'de hedef portu dinleyen süreç YOK → RSS ÖLÇÜLEMEZ."""
     m = soak_modulu(monkeypatch)
-    monkeypatch.setitem(sys.modules, "psutil", sahte_psutil(surec, 500.0))
     sunucu = SahteBackend(ws_davranis)
+    port = sunucu.port if rss_olculur else None
+    monkeypatch.setitem(sys.modules, "psutil", sahte_psutil("PEMF_Backend.exe", 500.0, port=port))
     try:
         rc, cikti = kos(m, monkeypatch, capsys, sunucu.port)
     finally:
@@ -89,9 +91,9 @@ def test_KRITIK_WS_bagli_ama_HIC_mesaj_yok_SUPHELI(monkeypatch, capsys):
 
 def test_KRITIK_TUM_nedenler_basilir(monkeypatch, capsys):
     """RSS ölçülemedi VE WS koptu: ikisi de söylenir (eskiden yalnız ilki basılıp dönülüyordu)."""
-    rc, cikti, _ = _kos(monkeypatch, capsys, "kes", surec="python.exe")
+    rc, cikti, _ = _kos(monkeypatch, capsys, "kes", rss_olculur=False)
     assert rc == 1, cikti[-800:]
-    assert "RSS ÖLÇÜLMEDİ" in cikti and "KOPTU" in cikti, f"nedenlerden biri basılmadı:\n{cikti[-800:]}"
+    assert "RSS OLCULMEDI" in cikti and "KOPTU" in cikti, f"nedenlerden biri basılmadı:\n{cikti[-800:]}"
 
 
 def test_KARSIT_KANIT_WS_acik_ve_RSS_kararli_TEMIZ(monkeypatch, capsys):

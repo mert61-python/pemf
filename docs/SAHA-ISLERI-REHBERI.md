@@ -230,12 +230,15 @@ korumasını bekleme; süreyi sen sınırla ve sıcaklığı `STM_TELE`'deki `T=
 ## B-7 · 72 saatlik klinik soak  ⏱️ 3 gün (pasif)
 
 ```powershell
+python -c "import psutil, websockets"   # ön-denetim: ikisi de yoksa koşu KARAR VEREMEZ
 python scripts\soak_http_ws.py --port 8000 --dakika 4320 --aralik 60
 ```
 
 Betik **bobin sürmez** — HTTP + WebSocket yollarını zorlar, RSS'i izler. `--port` zorunludur.
-RSS okunamazsa (psutil yok ya da süreç adı `PEMF_Backend` değil) sonuç **RSS ÖLÇÜLMEDİ** ve çıkış ≠0;
-`/ws` koparsa ya da hiç bağlanamazsa **SUPHELI / ÖLÇÜLMEDİ** — ikisi de TEMİZ sayılmaz.
+RSS, `--port`u **dinleyen süreçten** okunur (aynı makinedeki başka bir PEMF_Backend karışmaz); psutil
+yoksa ya da o süreç görülemezse başta `RSS OLCULEMIYOR` uyarısı basılır, sonuç **RSS OLCULMEDI** ve
+çıkış ≠0. `/ws`ye bağlanılamazsa (403 / auth 1008 / snapshot yok) koşu HİÇ BAŞLAMAZ (çıkış 2);
+koşu sırasında koparsa **SUPHELI** — hiçbiri TEMİZ sayılmaz, bütün nedenler birlikte basılır.
 
 ⚠️ Okuma tuzakları (ikisi de yaşandı):
 - **AI ısınması sızıntı DEĞİL.** Health-200 anında RSS ~254 MB; AI ısınınca ~2310 MB'a çıkar

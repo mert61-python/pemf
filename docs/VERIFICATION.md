@@ -122,16 +122,19 @@ Get-ChildItem "C:\ProgramData\PEMF_GUI\ai_models\*" -Recurse -Include *.onnx,*.p
 
 ```powershell
 # HTTP + WebSocket soak (canlı yolları zorlar) — uzun süre çalıştır:
-# (--port ZORUNLU; /ws kopar ya da hiç bağlanamazsa, RSS okunamazsa ya da tek örnek alınırsa
-#  sonuç TEMİZ DEĞİLDİR — SUPHELI / ÖLÇÜLMEDİ — ve çıkış ≠0)
+# (--port ZORUNLU; RSS o portu DİNLEYEN süreçten okunur. /ws ön-uçuşu geçmezse koşu başlamaz (2);
+#  /ws koparsa, RSS okunamazsa ya da tek örnek alınırsa sonuç TEMİZ DEĞİLDİR — SUPHELI /
+#  OLCULMEDI — ve çıkış ≠0. Ön-denetim: python -c "import psutil, websockets")
 python scripts\soak_http_ws.py --port 8000 --dakika 4320 --aralik 60
 # ⛔ soak_publish_5hz_8coil.py ESP kapalıyken (varsayılan) hiçbir şey ölçmez — kullanmayın.
 # Paralel izleme (her 30sn): süreç belleği + DB büyümesi
+# ⚠️ D0Ö.15 ek: eski döngü "PEMF*" ile launcher'ı da eşliyordu (birden çok süreçte WorkingSet64
+#    dizi olur, /1MB hata verir) ve birden çok .db varken Length boyut değil DOSYA SAYISI dönüyordu.
 while ($true) {
-  $p = Get-Process -Name "PEMF*" -EA SilentlyContinue
-  "{0}  RAM={1}MB  DB={2}KB" -f (Get-Date -Format HH:mm:ss),
-    [int]($p.WorkingSet64/1MB),
-    [int]((Get-Item "C:\ProgramData\PEMF_System\PEMF_GUI\*.db").Length/1KB)
+  $ram = (Get-Process -Name PEMF_Backend -EA SilentlyContinue | Measure-Object WorkingSet64 -Sum).Sum
+  $db  = (Get-ChildItem "C:\ProgramData\PEMF_System\PEMF_GUI\*.db" -EA SilentlyContinue |
+          Measure-Object Length -Sum).Sum
+  "{0}  RAM={1}MB  DB={2}KB" -f (Get-Date -Format HH:mm:ss), [int]($ram/1MB), [int]($db/1KB)
   Start-Sleep 30
 }
 ```

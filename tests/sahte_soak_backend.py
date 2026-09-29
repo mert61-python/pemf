@@ -15,8 +15,10 @@ import base64
 import hashlib
 import socket
 import sys
+import tempfile
 import threading
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 from betik_alt_sureci import betik_modulu
@@ -131,17 +133,63 @@ class SahteBackend:
             c.close()
 
 
-def sahte_psutil(ad: str, rss_mb: float):
-    """`process_iter` tek bir süreç döndürür: `ad` PEMF_Backend değilse RSS ÖLÇÜLEMEZ."""
-    surec = SimpleNamespace(info={"name": ad, "memory_info": SimpleNamespace(rss=int(rss_mb * 1024 * 1024))})
-    return SimpleNamespace(process_iter=lambda attrs=None: iter([surec]))
+def sahte_psutil(ad: str, rss_mb, port: int | None = None, digerleri: tuple = ()):
+    """Sahte psutil. `ad` adlı süreç (pid 4242) `port`u LISTEN eder — `port` verilmezse HİÇBİR portu
+    dinlemez → betik RSS'i ÖLÇEMEZ. `rss_mb`: sabit sayı ya da okuma sırasından MB veren `f(n)`.
+    `digerleri`: (ad, rss_mb, port) — BAŞKA portu dinleyen süreçler (D0Ö.15 ek: yanlış-süreç senaryosu).
+    Eski (ada göre seçen) `process_iter` API'si de verilir: eski betikle karşılaştırma için."""
+    tanim = {4242: (ad, rss_mb, port), **{4243 + i: d for i, d in enumerate(digerleri)}}
+    okuma = dict.fromkeys(tanim, 0)
+
+    def _rss(pid: int):
+        r = tanim[pid][1]
+        mb = r(okuma[pid]) if callable(r) else r
+        okuma[pid] += 1
+        return SimpleNamespace(rss=int(mb * 1024 * 1024))
+
+    class _Surec:
+        def __init__(self, pid: int):
+            if pid not in tanim:
+                raise LookupError(pid)
+            self.pid = pid
+
+        def name(self) -> str:
+            return tanim[self.pid][0]
+
+        def memory_info(self):
+            return _rss(self.pid)
+
+    def _baglantilar(kind: str = "inet"):
+        return [
+            SimpleNamespace(laddr=SimpleNamespace(ip="127.0.0.1", port=p), status="LISTEN", pid=pid)
+            for pid, (_a, _r, p) in tanim.items()
+            if p
+        ]
+
+    def _process_iter(attrs=None):
+        for pid, (a, _r, _p) in tanim.items():
+            yield SimpleNamespace(info={"name": a, "memory_info": _rss(pid)})
+
+    return SimpleNamespace(
+        process_iter=_process_iter,
+        net_connections=_baglantilar,
+        Process=_Surec,
+        CONN_LISTEN="LISTEN",
+        NoSuchProcess=LookupError,
+        AccessDenied=PermissionError,
+    )
 
 
 def soak_modulu(monkeypatch):
-    """Betiği yükle; ısınma beklemesini (5 sn aralık, 180 sn'ye kadar) anında döndür — ayrı kapıda ölçülür."""
+    """Betiği yükle; ısınma beklemesini (5 sn aralık, 180 sn'ye kadar) anında döndür — ayrı kapıda ölçülür.
+
+    ⚠️ D0Ö.15 ek: `_veri_koku` yalıtılır — süreç içi `main()` aksi hâlde GERÇEK
+    `C:\\ProgramData\\PEMF_System\\PEMF_GUI` kökünü seçip .db dosyalarını stat'lıyordu (conftest
+    PROGRAMDATA'yı yalıtmaz). Veri kökü ayrı kapıda ölçülür (test_f4_rapor_soak_betikleri_CALISIYOR)."""
     m = betik_modulu("soak_http_ws")
-    monkeypatch.setattr(m, "_rss_oturmasini_bekle", lambda *a, **k: m._backend_rss_mb())
+    monkeypatch.setattr(m, "_rss_oturmasini_bekle", lambda *a, **k: m._backend_rss_mb(*a[:1]))
     monkeypatch.setattr(m, "WS_ON_UCUS_S", 1.0, raising=False)  # sessiz kip ön-uçuşu 5 sn beklemesin
+    monkeypatch.setattr(m, "_veri_koku", lambda: Path(tempfile.gettempdir()) / "d0o_soak_veri_koku_YOK")
     return m
 
 
