@@ -329,6 +329,34 @@ def _bulut_provizyonu_yok_kalir():
         pytest.fail(f"bu test yönlendirilmiş bulut provizyon yolunda DOSYA oluşturdu ({hedef}) — D0Ö.07")
 
 
+# ⚠️ D0Ö.10 (B-10.104) — LIFESPAN GERÇEK mDNS KAYDI YAPMAZ. ÖLÇÜLDÜ: `with TestClient(api_server.app)`
+# lifespan'ı `_start_mdns_service` thread'ini başlatıyor → `register_service('PEMF-Vet-…._pemfvet._tcp')`
+# → süit LAN'a ilan yapıyordu; aynı Wi-Fi'deki telefonlar TEST SÜRECİNİ cihaz sanıp keşfeder.
+# (UDP rota hilesi engellense de `_get_local_ip` `ifaddr` ile gerçek LAN IP'sini bulur.) Ürün kodu
+# DEĞİŞMEZ; her testte lifespan'ın başlatıcısı kaydeden bir boş-işlemle değiştirilir. mDNS'i SINAYAN
+# testler `start_mdns`/`get_shared_zeroconf`'u doğrudan çağırır — onlara dokunulmaz.
+# Kapı: tests/test_lifespan_mdns_kaydi.py
+_MDNS_ENGELLENEN: list = []
+
+
+def _mdns_baslatici_yerine() -> None:
+    """Lifespan'ın `_start_mdns_service` yerine: kayıt YOK, yalnız çağrı sayılır."""
+    _MDNS_ENGELLENEN.append(threading.current_thread().name)
+
+
+@pytest.fixture(autouse=True)
+def _lifespan_mdns_kaydini_engelle():
+    mp = pytest.MonkeyPatch()
+    try:
+        from servers import api_server as _api
+
+        mp.setattr(_api, "_start_mdns_service", _mdns_baslatici_yerine)
+    except Exception:  # api_server içe aktarılamıyorsa lifespan da koşamaz
+        pass
+    yield
+    mp.undo()
+
+
 @pytest.fixture(autouse=True)
 def _gercek_kurulumu_koru(tmp_path):
     """⚠️ HİÇBİR TEST GERÇEK KURULUMA DOKUNAMAZ — 2026-08-08 denetiminde bulundu.

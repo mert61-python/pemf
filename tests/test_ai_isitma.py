@@ -135,12 +135,46 @@ def test_KRITIK_MODELIN_KENDI_on_islemesini_cagirir(bs):
 
 
 def test_KRITIK_HATA_servisi_DUSURMEZ(bs, monkeypatch):
-    """Isıtma bir optimizasyondur; librosa/model yoksa servis normal açılmaya devam etmeli."""
-    import logging
+    """Isıtma bir optimizasyondur; librosa/model yoksa servis normal açılmaya devam etmeli.
+
+    ⚠️ D0Ö.10 (B-10.105): eskiden GERÇEK bir daemon thread başlatılıp BEKLENMİYORDU ("bitmesini bekle"
+    diyen yorum yanlıştı). İş gövdesindeki istisna yalnız `PytestUnhandledThreadExceptionWarning` olarak
+    kalıyordu — `_calistir`'in except gövdesine `raise` eklense bile test YEŞİL — ve ağır ses-hattı
+    importu SONRAKİ testlerle yarışıyordu (A9 sınıfı). Artık iş gövdesi SATIR İÇİ koşar; "model/librosa
+    yok" durumu sahte `agir_import` ile kurulur → istisna sızarsa bu test düşer ve test bitince yaşayan
+    bir iş parçacığı kalmaz.
+    """
+    import threading as _t
+
+    import utils.agir_import as _ai
 
     monkeypatch.delenv("PEMF_AI_WARMUP", raising=False)
-    # Gerçek thread'de çalıştır ve bitmesini bekle — istisna sızarsa test düşer.
-    bs._start_ai_warmup_safe(logging.getLogger("t"))  # istisna ATMAMALI
+
+    class _SatirIciThread:
+        def __init__(self, target=None, name=None, daemon=None, **kw):
+            self._hedef = target
+
+        def start(self):
+            self._hedef()  # iş gövdesi test thread'inde: sızan istisna testi DÜŞÜRÜR
+
+    def _model_yok(ad, *a, **k):
+        raise ImportError(f"sahte: {ad} yüklenemedi (librosa/model yok)")
+
+    monkeypatch.setattr(_t, "Thread", _SatirIciThread)
+    monkeypatch.setattr(_ai, "agir_import", _model_yok)
+    kayit = []
+
+    class _Kaydedici:
+        def __getattr__(self, duzey):
+            def _yaz(msg, *a, **k):
+                kayit.append((duzey, msg % a if a else msg))
+
+            return _yaz
+
+    bs._start_ai_warmup_safe(_Kaydedici())  # istisna ATMAMALI
+    assert any(d in ("warning", "error", "exception") and "BAŞARISIZ" in m for d, m in kayit), (
+        f"hata dalı uyarı üretmedi — ürün hatayı SESSİZCE yutuyor ya da senaryo kurulamadı: {kayit}"
+    )
 
     # Yapısal: iş gövdesi geniş bir `except` ile sarılı olmalı (thread içindeki istisna
     # sessizce kaybolur ama `finally` temizliği ve log yolu korunmalı).
