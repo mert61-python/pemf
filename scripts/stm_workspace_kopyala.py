@@ -89,6 +89,17 @@ def _protokol_eksikleri(main_c: Path) -> list[str]:
     return [aciklama for isaret, aciklama in PROTOKOL_ISARETLERI if isaret not in kaynak]
 
 
+def _yedek_yolu(hedef: Path) -> Path:
+    """Var olan hedefin TAŞINACAĞI, henüz VAR OLMAYAN yol (aynı kök, saat damgalı)."""
+    damga = _dt.datetime.now().strftime("%H%M%S")
+    aday = hedef.with_name(f"{hedef.name}_yedek_{damga}")
+    n = 1
+    while aday.exists():
+        n += 1
+        aday = hedef.with_name(f"{hedef.name}_yedek_{damga}_{n}")
+    return aday
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--hedef", default=None, help="hedef kök (varsayılan: Masaüstü)")
@@ -101,7 +112,21 @@ def main() -> int:
 
     hedef = kok / f"PEMF_STM32_workspace_{_dt.date.today().isoformat()}"
     if hedef.exists():
-        shutil.rmtree(hedef)
+        # ⚠️ D0Ö.16 (B-10.211): ASLA SİLİNMEZ, YEDEĞE TAŞINIR. Eskiden `shutil.rmtree(hedef)` idi:
+        # aynı gün ikinci koşum, sahibin o gün CubeIDE'de yaptığı `main.c` düzenlemesini ve
+        # `.metadata`yı onaysız ve GERİ DÖNÜŞSÜZ siliyordu. Taşınamazsa (ör. CubeIDE klasörü
+        # açık tutuyor) silmeye DÜŞÜLMEZ — durulur. Kapı: tests/test_stm_workspace_kopyala_korur.py
+        yedek = _yedek_yolu(hedef)
+        try:
+            hedef.rename(yedek)
+        except OSError as e:
+            print(
+                f"[HATA] {hedef} zaten var ve yedege tasinamadi ({e}). HICBIR SEY SILINMEDI. "
+                "CubeIDE bu klasoru aciksa kapatip yeniden deneyin ya da --hedef ile baska bir kok verin.",
+                file=sys.stderr,
+            )
+            return 2
+        print(f"  onceki kopya YEDEGE tasindi (silinmedi): {yedek}")
     hedef.mkdir(parents=True)
 
     for p in PROJELER:
