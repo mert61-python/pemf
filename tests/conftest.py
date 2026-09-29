@@ -105,6 +105,140 @@ def _gercek_kasa_kaydedici():
         pytest.fail(f"Bu test GERÇEK kimlik kasasına uzandı (engellendi, D0Ö.02): {yeni}")
 
 
+# ⚠️ D0Ö.07 (B-10.9) — SÜİT AĞA ÇIKMAZ. ÖLÇÜLDÜ: `data/cloud_mqtt_provision.json` (git'e girmez)
+# bu makinede VAR; aynayı stub'lamayan E-stop testleri `_estop_cloud_mirror` üzerinden GERÇEK
+# (üretim) bulut broker'ına gerçek kimlikle TLS + STOP yayını DENİYORDU (4+4 TLS ClientHello).
+# E-stop aynasının ÜRÜN kodu DEĞİŞMEZ (Ö.4-Y8); yalnız test aparatı yalıtılır:
+# (1) Provizyon var olmayan bir tmp yola yönlenir → ayna süitte sessizce devre dışı.
+# (2) Ağ bekçisi: loopback dışı connect/connect_ex/DNS ENGELLENİR. Loopback'te yalnız BU SÜREÇTE
+#     bind edilen portlara izin; sahibin servis portları (8000 backend, 1883 broker, …) ne
+#     bağlanılır ne bind edilir — sahip makinesinde 127.0.0.1:8000'de gerçek backend, 1883'te
+#     gerçek broker koşabilir; bind etmek sahibin canlı isteklerini ELE GEÇİRİR (ölçülmüş tuzak).
+#     Engellenen her deneme `_AG_ENGELLENEN`'e yazılır. Katlar: Python sarmalayıcıları + audit
+#     hook (C düzeyi `_socket`) + asyncio IocpProactor.connect (ConnectEx `socket.connect`'e uğramaz).
+# Kapı: tests/test_ag_yalitimi.py
+os.environ["PEMF_CLOUD_PROVISION_PATH"] = str(_OTURUM_IZOLE / "YOK_cloud_mqtt_provision.json")
+
+import ipaddress as _ipaddress
+import socket as _socket
+
+_AG_ENGELLENEN: list = []
+_AG_ACILAN_PORTLAR: set = set()
+_AG_SAHIP_PORTLARI = frozenset({8000, 8100, 1883, 5173, 8177, 8200})
+_AG_AILELER = (_socket.AF_INET, _socket.AF_INET6)
+
+
+def _ag_loopback_mu(host) -> bool:
+    h = str(host).strip().strip("[]").split("%")[0]
+    if h.lower() in ("localhost", ""):
+        return True
+    try:
+        ip = _ipaddress.ip_address(h)
+    except ValueError:
+        return False
+    if isinstance(ip, _ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return ip.is_loopback or ip.is_unspecified
+
+
+def _ag_denetle(adres, tur) -> None:
+    if not (isinstance(adres, tuple) and len(adres) >= 2):
+        return
+    try:
+        port = int(adres[1])
+    except (TypeError, ValueError):
+        port = -1
+    if not _ag_loopback_mu(adres[0]):
+        neden = "loopback dışı"
+    elif port in _AG_SAHIP_PORTLARI:
+        neden = "sahibin servis portu"
+    elif port not in _AG_ACILAN_PORTLAR:
+        neden = "bu süreçte açılmamış loopback portu"
+    else:
+        return
+    _AG_ENGELLENEN.append((tur, str(adres[0]), port))
+    raise ConnectionRefusedError(f"TEST SÜİTİ AĞ BEKÇİSİ (D0Ö.07): {tur} {adres[0]}:{port} engellendi — {neden}")
+
+
+_ag_orj_connect = _socket.socket.connect
+_ag_orj_connect_ex = _socket.socket.connect_ex
+_ag_orj_bind = _socket.socket.bind
+_ag_orj_getaddrinfo = _socket.getaddrinfo
+
+
+def _ag_connect(self, adres):
+    if self.family in _AG_AILELER:
+        _ag_denetle(adres, "connect")
+    return _ag_orj_connect(self, adres)
+
+
+def _ag_connect_ex(self, adres):
+    if self.family in _AG_AILELER:
+        try:
+            _ag_denetle(adres, "connect_ex")
+        except ConnectionRefusedError:
+            return 10061  # WSAECONNREFUSED
+    return _ag_orj_connect_ex(self, adres)
+
+
+def _ag_bind(self, adres):
+    if self.family in _AG_AILELER and isinstance(adres, tuple) and len(adres) >= 2:
+        try:
+            port = int(adres[1])
+        except (TypeError, ValueError):
+            port = -1
+        if port in _AG_SAHIP_PORTLARI:
+            _AG_ENGELLENEN.append(("bind", str(adres[0]), port))
+            raise PermissionError(f"TEST SÜİTİ AĞ BEKÇİSİ (D0Ö.07): bind {adres[0]}:{port} — sahibin servis portu")
+    sonuc = _ag_orj_bind(self, adres)
+    try:
+        _AG_ACILAN_PORTLAR.add(int(self.getsockname()[1]))
+    except Exception:
+        pass
+    return sonuc
+
+
+def _ag_getaddrinfo(host, *args, **kwargs):
+    if host is not None:
+        ad = host.decode() if isinstance(host, bytes) else str(host)
+        if not _ag_loopback_mu(ad):
+            _AG_ENGELLENEN.append(("dns", ad, -1))
+            raise _socket.gaierror(11001, f"TEST SÜİTİ AĞ BEKÇİSİ (D0Ö.07): dns {ad} engellendi")
+    return _ag_orj_getaddrinfo(host, *args, **kwargs)
+
+
+def _ag_denetim_kancasi(olay, arg):
+    if olay == "socket.connect":
+        if getattr(arg[0], "family", None) in _AG_AILELER:
+            _ag_denetle(arg[1], "audit:connect")
+    elif olay == "socket.getaddrinfo":
+        if arg[0] is not None:
+            ad = arg[0].decode() if isinstance(arg[0], bytes) else str(arg[0])
+            if not _ag_loopback_mu(ad):
+                _AG_ENGELLENEN.append(("audit:dns", ad, -1))
+                raise _socket.gaierror(11001, f"TEST SÜİTİ AĞ BEKÇİSİ (D0Ö.07): dns {ad} engellendi")
+
+
+_socket.socket.connect = _ag_connect
+_socket.socket.connect_ex = _ag_connect_ex
+_socket.socket.bind = _ag_bind
+_socket.getaddrinfo = _ag_getaddrinfo
+sys.addaudithook(_ag_denetim_kancasi)
+try:
+    import asyncio.windows_events as _ag_we
+
+    _ag_orj_iocp_connect = _ag_we.IocpProactor.connect
+
+    def _ag_iocp_connect(self, conn, address):
+        if getattr(conn, "family", None) in _AG_AILELER:
+            _ag_denetle(address, "iocp.connect")
+        return _ag_orj_iocp_connect(self, conn, address)
+
+    _ag_we.IocpProactor.connect = _ag_iocp_connect
+except Exception:  # Windows dışı: Proactor yok
+    pass
+
+
 @pytest.fixture(autouse=True)
 def _gercek_kurulumu_koru(tmp_path):
     """⚠️ HİÇBİR TEST GERÇEK KURULUMA DOKUNAMAZ — 2026-08-08 denetiminde bulundu.
