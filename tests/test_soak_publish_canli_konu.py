@@ -14,6 +14,9 @@ olmasa da kapı KOŞAR; ağ ve broker YOK). (i) Canlı `pemf/` öneki + onay yok
 MQTT v5 + QoS 1 ile PUBACK reason code okur — başta tüketici YOK (16) ya da ÖLÇÜLEMEDİ (PUBACK yok)
 → yük HİÇ basılmadan 3; sonda tüketici düştüyse 3. Karşıt: tüketici VAR + rc=0 → 0; `--canli-onay`
 ile canlı önek YAYINLANIR. Ürünün GERÇEK `on_connect` filtreleri betiğin ad alanına pinlidir.
+D0Ö.17 ek-2 (tur 5): SONDALAR dahil tüm yayınlar ad alanına pinli; sonda ürünün yok saydığı bobin 0
+konusuna gider; önce rastgele konuda KALİBRASYON (broker abonesizliği bildirmiyorsa ya da joker abone
+varsa ÖLÇÜLEMEZ → 3); 0/16 dışı PUBACK kodu ÖLÇÜLEMEDİ.
 MUTASYON: onay denetimini ya da rc okumasını kaldırmak → KIRMIZI.
 """
 
@@ -53,7 +56,10 @@ class _SahteIstemci:
         mid = len(self.kayit["yayin"]) + 1
         self.kayit["yayin"].append((topic, qos, self.protokol))
         if qos == 1:  # tüketim sondası: PUBACK geri çağrısı
-            kod = self.ayar["sonda_kodlari"].pop(0) if self.ayar["sonda_kodlari"] else None
+            if topic.startswith("soak-kalibrasyon/"):  # kimsenin abone olmadığı rastgele konu
+                kod = self.ayar["kalibrasyon_kodu"]
+            else:
+                kod = self.ayar["sonda_kodlari"].pop(0) if self.ayar["sonda_kodlari"] else None
             if kod is not None and self.on_publish is not None:
                 # Gerçek paho 2.x: v3.1.1 PUBACK'inde reason code YOK → geri çağrı hep "Success" (0) verir;
                 # yani v3 sondası abone olmasa da "VAR" der. Yalnız v5 broker'ın 16'sını taşır.
@@ -64,8 +70,9 @@ class _SahteIstemci:
         return SimpleNamespace(rc=self.ayar["yuk_rc"](i), mid=mid)
 
 
-def _betik(monkeypatch, yuk_rc=lambda i: 0, sonda_kodlari=(0, 0)) -> tuple:
-    ayar = {"yuk_rc": yuk_rc, "sonda_kodlari": list(sonda_kodlari)}
+def _betik(monkeypatch, yuk_rc=lambda i: 0, sonda_kodlari=(0, 0), kalibrasyon_kodu=16) -> tuple:
+    """`kalibrasyon_kodu`: rastgele konudaki sondanın PUBACK kodu (16 = broker abonesizliği BİLDİRİYOR)."""
+    ayar = {"yuk_rc": yuk_rc, "sonda_kodlari": list(sonda_kodlari), "kalibrasyon_kodu": kalibrasyon_kodu}
     kayit = {"istemci": [], "baglanti": 0, "yayin": [], "yuk": 0}
     client = types.ModuleType("paho.mqtt.client")
     client.Client = lambda *a, **k: _SahteIstemci(ayar, kayit, *a, **k)
@@ -148,6 +155,43 @@ def test_KARSIT_KANIT_test_oneki_TUKETICI_ve_basarili_yayinda_cikis_SIFIR(monkey
     m, kayit = _betik(monkeypatch)
     assert _kos(m, monkeypatch, "--topic-prefix", "test/pemf/coil") == 0
     assert _yuk(kayit) and all(t.startswith("test/pemf/coil/") for t in _yuk(kayit))
+    # D0Ö.17 ek-2 (tur 5, ORTA): QoS 1 SONDALAR dahil TÜM yayınlar — ek-1 bu pini yalnız QoS 0 yüke
+    # daraltmıştı; sonda konusunu önekten koparan mutant ("pemf/coil/1/sensors") 12 testte YEŞİLDİ ve
+    # önekli, ONAYSIZ bir koşu canlı ürüne sahte telemetri basardı.
+    tum = [t for t, _q, _p in kayit["yayin"]]
+    urunde = [t for t in tum if t.split("/", 1)[0] == m.URUN_AD_ALANI]
+    assert not urunde, f"onaysız test önekli koşu ÜRÜN ad alanına yayın yaptı: {urunde}"
+    oneksiz = [t for t in tum if not t.startswith(("test/pemf/coil/", "soak-kalibrasyon/"))]
+    assert not oneksiz, f"önek (ya da kalibrasyon) dışı yayın: {oneksiz}"
+
+
+def test_KRITIK_sonda_URUNUN_YOK_SAYDIGI_bobin_0_konusuna_yapilir(monkeypatch):
+    """`--canli-onay`da sonda canlı konuya gider: bobin 1'e değil `<önek>/0/sensors`e — aynı
+    `pemf/coil/+/sensors` filtresiyle eşleşir (abone ölçümü aynı) ama ürün bobin 0'ı damga, kayıt ve durum
+    yazımından ÖNCE erken döndürür (`api_server` sensör işleyicisi: `0 <= coil_index < 8` değilse `return`)."""
+    m, kayit = _betik(monkeypatch)
+    assert _kos(m, monkeypatch, "--canli-onay") == 0
+    sondalar = [t for t, q, _p in kayit["yayin"] if q == 1 and not t.startswith("soak-kalibrasyon/")]
+    assert sondalar == ["pemf/coil/0/sensors", "pemf/coil/0/sensors"], f"sonda konusu: {sondalar}"
+
+
+def test_KRITIK_KALIBRASYON_broker_abonesizligi_BILDIRMIYORSA_OLCULEMEZ(monkeypatch, capsys):
+    """MQTT 5 §3.4.2.1'de 16 göndermek MAY; 16 yerine 0 dönen broker ya da bir joker (`#`) abone ürün
+    konusunda sahte 'VAR' üretir. Kimsenin abone olmadığı rastgele konu önce sondalanır: orada da 'VAR'
+    çıkarsa tüketim ÖLÇÜLEMEZ → yük basılmaz, 3."""
+    m, kayit = _betik(monkeypatch, kalibrasyon_kodu=0)
+    rc = _kos(m, monkeypatch, "--topic-prefix", "test/pemf/coil")
+    assert rc == 3 and not _yuk(kayit), f"kalibrasyon 'VAR' dediği hâlde rc={rc}, {len(_yuk(kayit))} yük"
+    assert "kalibrasyon" in capsys.readouterr().err.lower()
+
+
+def test_KRITIK_beklenmeyen_PUBACK_kodu_OLCULEMEDI(monkeypatch, capsys):
+    """0/16 dışı kod (135 Not authorized, 151 Quota…) ÖLÇÜLEMEDİ'dir — 'VAR' değil (ACL reddinde v3 QoS 0
+    yük broker'da sessizce düşer)."""
+    m, kayit = _betik(monkeypatch, sonda_kodlari=(135,))
+    rc = _kos(m, monkeypatch, "--topic-prefix", "test/pemf/coil")
+    assert rc == 3 and not _yuk(kayit), f"PUBACK 135 iken rc={rc}"
+    assert "OLCULEMEDI" in capsys.readouterr().err
 
 
 def test_KRITIK_TUKETICI_YOKSA_yuk_BASILMAZ_ve_cikis_SIFIR_DEGIL(monkeypatch, capsys):
@@ -179,7 +223,7 @@ def test_KRITIK_sonda_MQTTv5_ve_QoS1_ile_yapilir(monkeypatch):
     m, kayit = _betik(monkeypatch)
     assert _kos(m, monkeypatch, "--topic-prefix", "test/pemf/coil") == 0
     sondalar = [(q, p) for _t, q, p in kayit["yayin"] if q == 1]
-    assert sondalar == [(1, V5), (1, V5)], f"sonda v5 + QoS1 değil / başta-sonda iki kez yapılmadı: {sondalar}"
+    assert sondalar == [(1, V5)] * 3, f"sonda v5 + QoS1 değil / kalibrasyon + başta + sonda yapılmadı: {sondalar}"
 
 
 def test_KRITIK_urunun_GERCEK_abonelikleri_betigin_AD_ALANINDA(monkeypatch):

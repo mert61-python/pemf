@@ -13,6 +13,10 @@ Bu yüzden `pemf/` önekli konuya yalnız `--canli-onay` ile yayın yapılır (v
 tüketim DEĞİLDİR. Ayrı bir MQTT v5 istemcisi başta ve sonda TEK bir QoS 1 sonda yayınlar; broker
 konuya abone yoksa PUBACK'te 16 (No matching subscribers) döner. Başta tüketici YOKSA ya da bu
 ÖLÇÜLEMEZSE (broker v5 desteklemiyor, PUBACK gelmedi) yük HİÇ basılmaz. Yük QoS 0 kalır.
+D0Ö.17 ek-2: 16 göndermek MAY olduğu için önce abonesi olmayan RASTGELE bir konu sondalanır
+(kalibrasyon); orada 16 gelmezse (broker bildirmiyor ya da joker `#` abone var) sonuç ÖLÇÜLEMEZ.
+Sonda `<önek>/0/sensors`e gider: ürün bobin 0'ı yok sayar, abonelik filtresi yine eşleşir —
+tüketici bu yüzden `<önek>/+/sensors` (ya da `#`) filtresiyle abone olmalıdır.
 
 ÇIKIŞ KODU: 0 = her yük yayını istemci kuyruğuna KABUL edildi VE sondalar başta/sonda tüketici
 VAR dedi · 1 = reddedilen yayın ya da hiç yayın yok · 2 = onaysız canlı önek · 3 = tüketici YOK /
@@ -25,6 +29,7 @@ import math
 import sys
 import threading
 import time
+import uuid
 
 try:
     import paho.mqtt.client as mqtt
@@ -85,7 +90,7 @@ def tuketim_sondasi(host: str, port: int, konu: str) -> str:
     except Exception as e:
         return f"OLCULEMEDI: sonda baglanamadi ({type(e).__name__}: {e})"
     try:
-        info = sonda.publish(konu, build_payload(1, -1, time.time()), qos=1, retain=False)
+        info = sonda.publish(konu, build_payload(0, -1, time.time()), qos=1, retain=False)
         if info.rc != mqtt.MQTT_ERR_SUCCESS:
             return f"OLCULEMEDI: sonda yayini reddedildi rc={info.rc}"
         if not olay.wait(SONDA_ZAMAN_ASIMI_S):
@@ -134,10 +139,26 @@ def main() -> int:
     coils = max(1, args.coils)
     tick_interval = 1.0 / hz
     progress_sec = max(1, int(args.progress_sec))
-    sonda_konusu = f"{args.topic_prefix}/1/sensors"
+    # D0Ö.17 ek-2 (tur 5): sonda bobin 1'e DEĞİL bobin 0'a — aynı `<önek>/+/sensors` filtresiyle eşleşir
+    # (abone ölçümü aynı) ama ürün bobin 0'ı damga/kayıt/durum yazımından ÖNCE yok sayar (`api_server`
+    # sensör işleyicisi `0 <= coil_index < 8`). `--canli-onay`da canlı bobin 1'e sahte telemetri basılmaz.
+    sonda_konusu = f"{args.topic_prefix}/0/sensors"
 
     if unknown_args:
         print(f"Ignored extra args: {unknown_args}", flush=True)
+
+    # D0Ö.17 ek-2: KALİBRASYON — MQTT 5 §3.4.2.1'de abonesizlikte 16 göndermek MAY; 16 yerine 0 dönen broker
+    # ya da bir joker (`#`) abone ürün konusunda SAHTE 'VAR' üretir. Kimsenin abone olmadığı rastgele bir
+    # konu (ürün ad alanı DIŞI) önce sondalanır: orada 'YOK' gelmiyorsa tüketim ÖLÇÜLEMEZ.
+    kalibrasyon = tuketim_sondasi(args.host, args.port, f"soak-kalibrasyon/{uuid.uuid4().hex}/0/sensors")
+    print(f"Tuketim sondasi kalibrasyonu (rastgele konu): {kalibrasyon}", flush=True)
+    if kalibrasyon != "YOK":
+        print(
+            f"[HATA] TUKETIM OLCULEMEZ: kalibrasyon sondasi (abonesi olmayan rastgele konu) '{kalibrasyon}' dedi — "
+            "broker abonesizligi bildirmiyor ya da joker (#) bir abone var. Soak YAPILMADI.",
+            file=sys.stderr,
+        )
+        return 3
 
     # D0Ö.17 ek: TÜKETİCİ yoksa yük boşluğa gider — soak hiçbir şey ölçmez; başlamadan söyle.
     bastaki = tuketim_sondasi(args.host, args.port, sonda_konusu)
