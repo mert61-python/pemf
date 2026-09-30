@@ -10,10 +10,12 @@ YOKTUR, bu yuzden bu dosya tatbikati KOSTURMAZ. Korudugu sey uc degismez:
 
   2. ⚠️ ANAHTAR ASLA YAZDIRILMAZ. Bu arac hasta veritabanini ACAN anahtari elinde tutar.
      Bir gun tanilama icin `print(anahtar)` eklenirse, sir terminal gecmisine / CI log'una /
-     ekran goruntusune duser. Dort kol: CIKTI (print/write/logging; `anahtar` yalniz dogrudan
+     ekran goruntusune duser. Bes kol: CIKTI (print/write/logging; `anahtar` yalniz dogrudan
      `len(...)`ta), AKIS (sir tasiyan adlar `anahtar`/`d`/`t` yalniz izinli yerlere), IC GOZLEM
-     (locals/vars/globals/cerceve, global, izinli adlarin golgelenmesi YASAK), SABIT (emanet
-     alani tek turetimde). Tarayicinin kendisi ~30 bicimle oz-denetlenir (D0Ö.18 + ek).
+     (locals/vars/globals/cerceve, eval/exec/compile, global/nonlocal, capture_locals, izinli adlarin
+     atama/parametre/oznitelik/import/def ile golgelenmesi YASAK), SABIT (emanet alani tek
+     turetimde), KAYNAK (siri URETEN cagrilar yalniz TEK bilinen baglamda; D0Ö.18 ek-2). Tarayicinin
+     kendisi `_OZ_DENETIM`deki butun bicimlerle oz-denetlenir (D0Ö.18 + ek + ek-2).
 
   3. ⚠️ KARSIT KANIT KARARA GIRER. Tatbikat "acildi" demekle yetinemez: YANLIS anahtarin
      REDDEDILDIGINI de olcer. O olcum sonuca baglanmazsa, binding anahtari sessizce yok sayan
@@ -82,12 +84,28 @@ _D_TURETIM = "((d.get('data') or {}).get('data') or {}).get('auto.sqlcipher_key'
 _LOG_YONTEMLERI = {"debug", "info", "warning", "warn", "error", "exception", "critical", "fatal", "log"}
 #: `anahtar`in AKABILECEGI tek yerler: uzunlugu, veritabanini acan cagri ve bos-mu denetimi.
 _IZINLI_CAGRILAR = {"len", "open_encrypted_conn"}
-#: Yerel ad alanini TOPTAN doken cagrilar/nitelikler — siri ADSIZ tasir.
-_IC_GOZLEM = {"locals", "vars", "globals", "_getframe", "currentframe"}
+#: Yerel ad alanini TOPTAN doken ya da dizeden kod calistiran adlar — siri ADSIZ tasir. D0Ö.18 ek-2:
+#: yalniz CAGRI degil her ADI (`f = locals; print(f())`); eval/exec/compile/__import__/setattr da.
+_IC_GOZLEM = {
+    "locals",
+    "vars",
+    "globals",
+    "_getframe",
+    "currentframe",
+    "eval",
+    "exec",
+    "compile",
+    "__import__",
+    "setattr",
+}
 #: Izinli akislarin dayandigi adlar — golgelenirse (`len = print`) izin listesi kor olur.
 _GOLGELENEMEZ = {"len", "open_encrypted_conn", "_istek", "print"}
 #: Korunan bir adi BAGLAYABILEN tek import (modul + ad birebir); baska kaynaktan baglamak golgelemedir.
 _KANONIK_IMPORT = {"open_encrypted_conn": ("database.sqlcipher_util", "open_encrypted_conn")}
+#: Siri URETEN cagrilar ve TEK izinli baglamlari (atama hedef adlari) — D0Ö.18 ek-2 (tur 5, ORTA).
+_KAYNAK_BAGLAMLARI = {"_kok_token": ["t"], "_istek": ["kod", "d"]}
+#: Tatbikatta HIC cagrilamayan sir kaynaklari (unseal anahtarlari + kok token, cozulmus hasta anahtarlari).
+_YASAK_KAYNAKLAR = {"_kurtarma", "_sirlari_oku", "geri_al", "token_uret"}
 
 
 def _ebeveynler(kok: ast.AST) -> dict:
@@ -158,12 +176,13 @@ def _d_turetim_mi(d: ast.Name, e: dict, fn: ast.AST) -> bool:
 
 
 def _t_izinli_mi(d: ast.Name, e: dict) -> bool:
+    """`t` YALNIZ `_istek(..., token=t)` anahtar sözcüğü olarak. D0Ö.18 ek-2 (tur 5): her konumsal argüman
+    serbestti — sıra hatası (`_istek(t, yol)`) kök token'ı URL'ye, oradan izinli hata çıktısına taşıyabilirdi."""
     p = e.get(d)
-    if isinstance(p, ast.keyword) and p.arg == "token":
-        p = e.get(p)
-    return (
-        isinstance(p, ast.Call) and _cagri_adi(p) == "_istek" and (d in p.args or any(k.value is d for k in p.keywords))
-    )
+    if not (isinstance(p, ast.keyword) and p.arg == "token"):
+        return False
+    cagri = e.get(p)
+    return isinstance(cagri, ast.Call) and getattr(cagri.func, "id", None) == "_istek"
 
 
 def cikti_ihlalleri(fn: ast.AST) -> list[str]:
@@ -194,9 +213,10 @@ def akis_ihlalleri(fn: ast.AST) -> list[str]:
         p = e.get(d)
         if d.id == "anahtar":
             cagri = e.get(p) if isinstance(p, ast.keyword) else p
+            # D0Ö.18 ek-2: izinli çağrı YALNIZ çıplak ad (`len(...)`); öznitelik adlı `x.len(anahtar)` DEĞİL.
             if (
                 isinstance(cagri, ast.Call)
-                and _cagri_adi(cagri) in _IZINLI_CAGRILAR
+                and getattr(cagri.func, "id", None) in _IZINLI_CAGRILAR
                 and (d in cagri.args or p is not cagri)
             ):
                 continue
@@ -214,14 +234,24 @@ def akis_ihlalleri(fn: ast.AST) -> list[str]:
 
 
 def ic_gozlem_ihlalleri(fn: ast.AST) -> list[str]:
-    """Ad alanini toptan dokenler (locals/vars/globals/cerceve), sirri kapsam disina tasiyan
-    `global`/`nonlocal` ve izinli akislarin dayandigi adlari GOLGELEYEN atamalar."""
+    """Ad alanini toptan dokenler (locals/vars/globals/cerceve) ve dizeden kod calistiranlar (eval/exec/
+    compile/__import__/setattr) — CAGRI olsun olmasin her ADI; sirri kapsam disina tasiyan `global`/
+    `nonlocal`; `capture_locals`/cgitb (yerelleri basan izleme); izinli akislarin dayandigi adlari
+    GOLGELEYEN atama, PARAMETRE, OZNITELIK atamasi, import ve def/class (D0Ö.18 ek-2: son uc yeni)."""
     ihlal = []
     for n in ast.walk(fn):
-        if isinstance(n, ast.Call) and _cagri_adi(n) in _IC_GOZLEM:
+        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id in _IC_GOZLEM:
+            ihlal.append(f":{n.lineno} {n.id} (ad alani / dinamik kod)")
+        elif isinstance(n, ast.Attribute) and n.attr in _IC_GOZLEM:
             ihlal.append(f":{n.lineno} {ast.unparse(n)[:60]}")
         elif isinstance(n, ast.Attribute) and n.attr in ("f_locals", "f_globals"):
             ihlal.append(f":{n.lineno} {ast.unparse(n)[:60]}")
+        elif isinstance(n, ast.Attribute) and isinstance(n.ctx, ast.Store) and n.attr in _GOLGELENEMEZ:
+            ihlal.append(f":{n.lineno} {ast.unparse(n)[:60]} = … korunan adi golgeliyor")
+        elif isinstance(n, ast.arg) and n.arg in _GOLGELENEMEZ:
+            ihlal.append(f":{n.lineno} parametre {n.arg} korunan adi golgeliyor")
+        elif isinstance(n, ast.keyword) and n.arg == "capture_locals":
+            ihlal.append(f":{getattr(n, 'lineno', '?')} capture_locals (yerelleri basar)")
         elif isinstance(n, (ast.Global, ast.Nonlocal)) and set(n.names) & set(SIRLAR):
             ihlal.append(f":{n.lineno} {type(n).__name__.lower()} {n.names}")
         elif isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store) and n.id in _GOLGELENEMEZ:
@@ -232,9 +262,52 @@ def ic_gozlem_ihlalleri(fn: ast.AST) -> list[str]:
                 kanonik = isinstance(n, ast.ImportFrom) and _KANONIK_IMPORT.get(bagli) == (n.module, a.name)
                 if bagli in _GOLGELENEMEZ and not kanonik:
                     ihlal.append(f":{n.lineno} {ast.unparse(n)[:60]} korunan adi golgeliyor")
+                kaynak_modul = n.module if isinstance(n, ast.ImportFrom) else a.name
+                if (kaynak_modul or "").split(".")[0] == "cgitb":
+                    ihlal.append(f":{n.lineno} cgitb (istisnada yerelleri basar)")
         elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n is not fn:
             if n.name in _GOLGELENEMEZ:
                 ihlal.append(f":{n.lineno} def {n.name} golgeledi")
+    return ihlal
+
+
+def _hedef_adlari(hedef: ast.AST) -> list[str]:
+    if isinstance(hedef, ast.Name):
+        return [hedef.id]
+    if isinstance(hedef, (ast.Tuple, ast.List)):
+        return [getattr(x, "id", "?") for x in hedef.elts]
+    return ["?"]
+
+
+def kaynak_ihlalleri(fn: ast.AST) -> list[str]:
+    """Siri URETEN cagrilar: `_kok_token()` yalniz `t = _kok_token()`, `_istek(...)` yalniz
+    `kod, d = _istek(...)` — TAM BIR KEZ; `_kurtarma`/`_sirlari_oku`/`geri_al`/`token_uret` HIC.
+
+    ⚠️ D0Ö.18 ek-2 (bagimsiz inceleme tur 5, ORTA): adlari izleyen kollar siri ureten CAGRININ kendisini
+    gormuyordu — `print(_kok_token())`, `print(_sirlari_oku())` ya da `_istek` donusunu yeni bir ada
+    baglamak dort kolu da atlatiyor, kok token'i ya da iki hasta anahtarini basiyordu.
+    """
+    e = _ebeveynler(fn)
+    ihlal: list[str] = []
+    sayim = dict.fromkeys(_KAYNAK_BAGLAMLARI, 0)
+    for n in ast.walk(fn):
+        if not isinstance(n, ast.Call):
+            continue
+        ad = _cagri_adi(n)
+        if ad in _YASAK_KAYNAKLAR:
+            ihlal.append(f":{n.lineno} {ad}() tatbikatta CAGRILAMAZ")
+        elif ad in _KAYNAK_BAGLAMLARI:
+            sayim[ad] += 1
+            p = e.get(n)
+            beklenen = _KAYNAK_BAGLAMLARI[ad]
+            if not (
+                isinstance(p, ast.Assign)
+                and p.value is n
+                and len(p.targets) == 1
+                and _hedef_adlari(p.targets[0]) == beklenen
+            ):
+                ihlal.append(f":{n.lineno} {ad}() yalniz `{', '.join(beklenen)} = {ad}(...)` biciminde")
+    ihlal += [f"{ad}() {k} kez (tam 1 bekleniyor)" for ad, k in sayim.items() if k != 1]
     return ihlal
 
 
@@ -255,6 +328,7 @@ def tum_ihlaller(fn: ast.AST) -> dict[str, list[str]]:
         "akis": akis_ihlalleri(fn),
         "icgozlem": ic_gozlem_ihlalleri(fn),
         "sabit": sabit_ihlalleri(fn),
+        "kaynak": kaynak_ihlalleri(fn),
     }
 
 
@@ -283,9 +357,11 @@ def test_KRITIK_ANAHTAR_yalniz_IZINLI_yerlere_akar():
     fn = _fonksiyon("tatbikat")
     ihlaller = akis_ihlalleri(fn)
     assert not ihlaller, (
-        f"tatbikat'ta sir IZINSIZ bir yere akiyor: {ihlaller}. Izinli: len(anahtar), "
-        "open_encrypted_conn(..., anahtar, ...), `if not anahtar`, `(d or {}).get('errors')`, anahtarin "
-        "TEK turetimi, `_istek(..., token=t)`. Yeni bir kullanim gerekiyorsa once bu kapiyi gerekcesiyle guncelleyin."
+        f"tatbikat'ta sir IZINSIZ bir yere akiyor: {ihlaller}. Izinli: `len(anahtar)`, "
+        "`open_encrypted_conn(..., anahtar | key=anahtar, ...)` (ciplak adla), `not anahtar`, "
+        "`if/while anahtar`, `x if anahtar else y`, `(d or {}).get('errors')`, anahtarin TEK turetimi, "
+        "`_istek(..., token=t)` (yalniz anahtar sozcugu). Yeni bir kullanim gerekiyorsa once bu kapiyi "
+        "gerekcesiyle guncelleyin."
     )
 
 
@@ -299,6 +375,14 @@ def test_KRITIK_anahtar_ALANI_yalniz_TEK_turetimde():
     fn = _fonksiyon("tatbikat")
     ihlaller = sabit_ihlalleri(fn)
     assert not ihlaller, f"tatbikat emanetten anahtari birden cok yoldan okuyor: {ihlaller}"
+
+
+def test_KRITIK_sir_KAYNAKLARI_yalniz_TEK_baglamda():
+    """D0Ö.18 ek-2 (tur 5, ORTA): siri URETEN cagrilar (`_kok_token`, `_istek`) yalniz bilinen TEK atamada;
+    kurtarma/hasta-anahtari kaynaklari tatbikatta HIC. Sayim 0 donerse de KIRMIZI (tarayici kor olamaz)."""
+    fn = _fonksiyon("tatbikat")
+    ihlaller = kaynak_ihlalleri(fn)
+    assert not ihlaller, f"tatbikat'ta sir KAYNAGI izinsiz baglamda: {ihlaller}"
 
 
 def test_KAPI_TARAYICISI_gercek_gecisleri_GORUYOR():
@@ -336,7 +420,8 @@ _OZ_DENETIM = [
     ("c = open_encrypted_conn(k, anahtar, m)\nif not anahtar:\n    pass", set()),
     ("if anahtar:\n    pass", set()),
     ("c = open_encrypted_conn(k, key=anahtar)", set()),
-    ("_istek('/v1/y', token=t)", set()),
+    # D0Ö.18 ek-2: ikinci `_istek` KAYNAK ihlalidir (t'nin token= izni tabandaki çağrıyla ölçülür).
+    ("_istek('/v1/y', token=t)", {"kaynak"}),
     ('print(f"u {len(anahtar)} {anahtar}")', {"cikti", "akis"}),  # plan mutanti 1
     ("sys.stdout.write(anahtar)", {"cikti", "akis"}),  # plan mutanti 2
     ("sys.stdout.buffer.write(anahtar.encode())", {"cikti", "akis"}),
@@ -368,6 +453,30 @@ _OZ_DENETIM = [
     ("import print", {"icgozlem"}),
     ("x = 'auto.sqlcipher_key'", {"sabit"}),
     ("y = 'auto.patient_fernet_key'", {"sabit"}),
+    # ── D0Ö.18 ek-2 (bağımsız inceleme tur 5) ──
+    ("print(_kok_token())", {"kaynak"}),  # ORTA: kaynak çağrısı ada bağlanmadan basılır
+    ("print(_sirlari_oku())", {"kaynak"}),
+    ("y = _istek('/v1/x', token=t)[1]\nprint(y)", {"kaynak"}),
+    ("x = _kurtarma()", {"kaynak"}),
+    ("_istek(t)", {"akis", "kaynak"}),  # t konumsal: sıra hatası token'ı URL'ye taşır
+    ("_istek(t, '/v1/x')", {"akis", "kaynak"}),
+    ("types.SimpleNamespace(len=print).len(anahtar)", {"akis"}),  # öznitelik adlı "izinli" çağrı
+    ("def len(x):\n    return x", {"icgozlem"}),
+    ("class print:\n    pass", {"icgozlem"}),
+    ("g = globals()", {"icgozlem"}),
+    ("f = inspect.currentframe()", {"icgozlem"}),
+    ("x = inspect.stack()[0].frame.f_locals", {"icgozlem"}),
+    ("x = fr.f_globals", {"icgozlem"}),
+    ("def _ic():\n    nonlocal anahtar", {"icgozlem"}),
+    ("def _yaz(len=print):\n    len(anahtar)", {"icgozlem"}),  # parametre gölgelemesi
+    ("(lambda len: len(anahtar))(print)", {"icgozlem"}),
+    ("import builtins\nbuiltins.len = print", {"icgozlem"}),  # öznitelik yaması
+    ("setattr(builtins, 'len', print)", {"icgozlem"}),
+    ("print(eval('anahtar'))", {"icgozlem"}),
+    ("exec('print(anahtar)')", {"icgozlem"}),
+    ("f = locals\nprint(f())", {"icgozlem"}),  # çağrısız referans
+    ("traceback.TracebackException.from_exception(e, capture_locals=True)", {"icgozlem"}),
+    ("import cgitb\ncgitb.enable()", {"icgozlem"}),
 ]
 
 
