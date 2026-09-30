@@ -184,6 +184,57 @@ def test_KRITIK_sonda_URUNUN_YOK_SAYDIGI_bobin_0_konusuna_yapilir(monkeypatch):
     assert sondalar == ["pemf/coil/0/sensors", "pemf/coil/0/sensors"], f"sonda konusu: {sondalar}"
 
 
+class _SahteMesaj:
+    """paho `MQTTMessage` yerine minimum yüzey (bkz. test_esp_kopus_ws_yayini)."""
+
+    def __init__(self, topic: str, yuk: str, retain: bool = False):
+        self.topic = topic
+        self.payload = yuk.encode("utf-8")
+        self.retain = retain
+
+
+def test_KRITIK_URUN_bobin_0_sondasini_YAN_ETKISIZ_duser(monkeypatch):
+    """D0Ö.17 ek-3 (tur 6): `--canli-onay` sondasının güvenliği ürünün bobin 0'ı damga / kayıt / canlı durum /
+    WS yayınından ÖNCE düşürmesine dayanıyor (api_server `0 <= coil_index < 8`) — bu varsayım ürün tarafında
+    KAPISIZDI ("geçersiz mesajları da kaydet" ya da 0 tabanlı bobin kimliği sondayı sessizce canlı yan etkiye
+    çevirirdi). GERÇEK `_on_mqtt_message_api`, betiğin GERÇEK sonda yüküyle sürülür. Karşıt: aynı yük bobin
+    1'de yan etki yapar (kapı ölçüyor). Kaydedici casustur — diske yazılmaz; bobin 1 durumu geri yüklenir."""
+    import copy
+
+    from servers import api_server as api
+
+    spec = importlib.util.spec_from_file_location("soak_publish_gercek", KOK / "scripts" / "soak_publish_5hz_8coil.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)  # gerçek paho (requirements-test.txt'te sabit); bağlantı KURULMAZ
+    yuk = m.build_payload(0, -1, 1.0)
+
+    yayinlar: list = []
+    kayitlar: list = []
+    monkeypatch.setattr(api, "_ws_broadcast_sync", lambda msg: yayinlar.append(msg))
+    monkeypatch.setattr(api, "_push_notification", lambda *a, **k: None)
+    monkeypatch.setattr(api._sensor_kaydedici, "kaydet", lambda *a, **k: kayitlar.append(a))
+    monkeypatch.setattr(api, "_coil_last_telemetry", {})
+    with api._live_state_lock:
+        bobinler_once = copy.deepcopy(api._live_state["coils"])
+    try:
+        api._on_mqtt_message_api(None, None, _SahteMesaj(f"{m.URUN_AD_ALANI}/coil/0/sensors", yuk))
+        with api._live_state_lock:
+            bobinler_sonra = copy.deepcopy(api._live_state["coils"])
+        assert not kayitlar, f"bobin 0 sondası SENSÖR KAYDINA yazıldı: {kayitlar}"
+        assert not api._coil_last_telemetry, f"bobin 0 sondası telemetri DAMGASINI tazeledi: {api._coil_last_telemetry}"
+        assert not yayinlar, f"bobin 0 sondası WS'ye yayınlandı: {yayinlar}"
+        assert bobinler_sonra == bobinler_once, "bobin 0 sondası canlı bobin durumunu DEĞİŞTİRDİ"
+
+        # Karşıt: aynı yük bobin 1'de GERÇEKTEN yan etki yapar — kapı ölçüm yapıyor, kör değil.
+        api._on_mqtt_message_api(None, None, _SahteMesaj(f"{m.URUN_AD_ALANI}/coil/1/sensors", yuk))
+        assert kayitlar and api._coil_last_telemetry and yayinlar, "karşıt: bobin 1 mesajı yan etki yapmadı"
+    finally:
+        with api._live_state_lock:  # `coils` = {indeks: bobin sözlüğü} (live_state); nesneler yerinde geri yüklenir
+            for indeks, once in bobinler_once.items():
+                api._live_state["coils"][indeks].clear()
+                api._live_state["coils"][indeks].update(once)
+
+
 def test_KRITIK_KALIBRASYON_broker_abonesizligi_BILDIRMIYORSA_OLCULEMEZ(monkeypatch, capsys):
     """MQTT 5 §3.4.2.1'de 16 göndermek MAY; 16 yerine 0 dönen broker ya da bir joker (`#`) abone ürün
     konusunda sahte 'VAR' üretir. Kimsenin abone olmadığı rastgele konu önce sondalanır: orada da 'VAR'
