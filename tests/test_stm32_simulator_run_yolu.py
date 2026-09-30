@@ -144,7 +144,10 @@ def test_KRITIK_bekci_suskunlukta_ERR_basar_ve_isciler_baglantiyla_BITER(hw, mon
         err = _satir_bekle(istemci, "-> STM_ERR: Watchdog", sim.WATCHDOG_MS / 1000 + 2.0)
         assert err, "bekçi suskunlukta bobinleri 0'lamadı / STM_ERR basmadı (ölü-adam davranışı yok)"
         isciler = _istemcinin_iscileri(sim_istemci)
-        assert len(isciler) >= 2, f"kurulum: bekçi/süre işçileri bulunamadı ({[x.name for x in isciler]})"
+        # D0Ö.12 ek-2 (tur 5): `run()` thread'i de `sim_istemci`nin bağlı yöntemi — "≥2" tek işçiyle de
+        # geçiyordu. İki işçi ADLARIYLA istenir.
+        adlar = {getattr(x._target, "__name__", "") for x in isciler}
+        assert {"_watchdog_worker", "_duration_worker"} <= adlar, f"kurulum: bekçi/süre işçileri yok ({sorted(adlar)})"
     finally:
         istemci.close()
     t.join(timeout=3)

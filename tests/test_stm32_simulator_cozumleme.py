@@ -35,7 +35,8 @@ if str(KOK) not in sys.path:
 
 from utils.stm32_transport import STM_PAKET_BOBIN_SAYISI, STM_PAKET_BOYU, STM_PAKET_FMT  # noqa: E402
 
-sim = pytest.importorskip("tools.stm32_simulator", reason="simulator yok")
+# D0Ö.12 ek-2 (tur 5): `importorskip` DEĞİL — simülatör izli; yüklenemezse kapı sessizce ATLANMAZ.
+import tools.stm32_simulator as sim  # noqa: E402
 
 
 def _backend_paketi(duty, phase, freq, dur, ref_ms=123, kip=0) -> bytes:
