@@ -43,7 +43,9 @@ import copy
 import importlib.util
 import io
 import json
+import os
 import sys
+import traceback
 from pathlib import Path
 
 #: `--ic-importlar` bulgularının öneki — kapı yalnız bunları süzer (önsöz hataları ayrı kapıda).
@@ -240,6 +242,13 @@ def _depoda_cozuluyor(ad: str, kok: Path) -> bool:
     return _kanonik_konumlar(ad, kok) is not None
 
 
+def _depo_ici_mi(dosya: str, kok: Path) -> bool:
+    try:
+        return Path(dosya).resolve().is_relative_to(kok.resolve())
+    except (OSError, ValueError):
+        return False
+
+
 def _alt_modul_var(tam_ad: str, konumlar: list[Path]) -> bool:
     """`a.b.c`: üst paketin kanonik dizinlerinden başlayarak her parça dosya sisteminde var mı?
 
@@ -248,12 +257,24 @@ def _alt_modul_var(tam_ad: str, konumlar: list[Path]) -> bool:
     """
     parcalar = tam_ad.split(".")[1:]
     for i, parca in enumerate(parcalar):
-        dizinler = [k / parca for k in konumlar if (k / parca).is_dir()]
+        dizinler = [k / parca for k in konumlar if _girdi_birebir(k, parca) and (k / parca).is_dir()]
         if dizinler:
             konumlar = dizinler
             continue
-        return i == len(parcalar) - 1 and any((k / f"{parca}.py").is_file() for k in konumlar)
+        return i == len(parcalar) - 1 and any(
+            _girdi_birebir(k, f"{parca}.py") and (k / f"{parca}.py").is_file() for k in konumlar
+        )
     return True
+
+
+def _girdi_birebir(dizin: Path, ad: str) -> bool:
+    """`ad` dizinde HARFİ HARFİNE var mı? D0Ö.19 ek-2 (tur 5): import harfe DUYARLI (Windows'ta da;
+    FileFinder dizin listesini birebir karşılaştırır), `Path.is_file()` NTFS'te DUYARSIZ — harfi yanlış
+    alt modül Windows'ta çözülmüş sayılıyordu."""
+    try:
+        return ad in os.listdir(dizin)
+    except OSError:
+        return False
 
 
 def _import_adlari(d: ast.AST) -> list[str]:
@@ -327,7 +348,12 @@ def bir_betik(
         except RuntimeError as e:
             # ⚠️ D0Ö.19 ek: `_depo_koku` işaret bulamayınca RuntimeError atar → betik AÇILIŞTA ölür
             # ve önsözde ondan sonraki import'lar HİÇ denenmez. Yutulursa kapı YEŞİL kalırdı.
-            sonuc.append((rel, f"RuntimeError: {e}"))
+            # D0Ö.19 ek-2 (tur 5): yalnız DEPO kodundan (betik ya da birinci-taraf modül) gelen sayılır —
+            # üçüncü-taraf içinden gelen (bu koşucu modülleri silip yeniden import ettiği için bir C uzantısının
+            # ikinci yüklenişi gibi) ortam/koşucu artefaktıdır; sıraya bağlı sahte KIRMIZI üretmesin.
+            cerceveler = traceback.extract_tb(e.__traceback__)
+            if cerceveler and _depo_ici_mi(cerceveler[-1].filename, kok):
+                sonuc.append((rel, f"RuntimeError: {e}"))
         except Exception:
             # ⚠️ BU KAPININ KONUSU YALNIZ IMPORT. Önsözde ortam/dosya hatası olabilir
             # (ör. eksik ayar dosyası) — o ayrı bir arızadır, burada susturulur.

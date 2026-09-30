@@ -42,12 +42,19 @@ KOSUCU = Path(__file__).with_name("onsoz_kosucu.py")
 MUAF: dict[tuple[str, str], str] = {}
 
 #: F4'te fonksiyon İÇİNDE ölen dört betiğin ölen import'u — her koşumda GERÇEKTEN denetlenmeli.
+#: D0Ö.19 ek-2 (tur 5): her BETIK_DIZINLERI dizininden en az bir çift + `ai_hub` — yalnız scripts/ ve
+#: utils/database pinliyken ai_hub ya da tools/ taşınınca küme sessizce düşer, nöbetçi yeşil kalırdı.
 NOBETCI_CIFTLER = {
     ("scripts/hasta_anahtari_emanet.py", "utils"),
     ("scripts/vault_emanet.py", "database"),
     ("scripts/xai_batch_rapor.py", "utils"),
     ("scripts/soak_http_ws.py", "utils"),
+    ("scripts/xai_batch_rapor.py", "ai_hub"),
+    ("tools/kurtarma.py", "utils"),
+    ("build_tools/source_crypto.py", "utils"),
 }
+#: Betiklerin fonksiyon içinde import ettiği birinci-taraf kök adlar — kümede OLMALI (klasör taşıma nöbetçisi).
+NOBETCI_KUME = {"utils", "database", "ai_hub", "scripts", "tools", "build_tools"}
 
 
 def _takipli(desenler: list[str]) -> list[str]:
@@ -235,6 +242,42 @@ def test_KARSIT_KANIT_kosucu_GOLGE_BAYAT_KOPYA_ve_AD_ALANI_KIRMIZI(tmp_path):
     assert "kanonik.py" not in adlar, f"kanonik konuma çözen sağlam betik ölü sayıldı: {sonuc}"
 
 
+def test_KARSIT_KANIT_kosucu_UCUNCU_TARAF_RuntimeError_betik_KUSURU_sayilmaz(tmp_path):
+    """D0Ö.19 ek-2 (tur 5): önsözdeki RuntimeError yalnız DEPO kodundan geliyorsa bulgudur (`_depo_koku`).
+    Üçüncü-taraf içinden gelen (ör. tek süreçte modüller silinip C uzantısı yeniden import edilince) bir
+    ortam/koşucu artefaktıdır — sıraya bağlı sahte KIRMIZI üretmemeli (önsöz kapısının konusu import)."""
+    site = tmp_path / "site_disi"
+    (site / "ucuncu_taraf_xyz").mkdir(parents=True)
+    (site / "ucuncu_taraf_xyz" / "__init__.py").write_text("raise RuntimeError('yeniden import artefakti')\n")
+    kok = tmp_path / "depo"
+    kok.mkdir()
+    (kok / "ucuncu_kullanan.py").write_text(f"import sys\nsys.path.insert(0, {str(site)!r})\nimport ucuncu_taraf_xyz\n")
+    (kok / "kendi_kok_hatasi.py").write_text(
+        _KOK_BULUNAMAZ + "KOK = _depo_koku(Path(__file__))\nsys.path.insert(0, str(KOK))\nimport json\n"
+    )
+    adlar = {r for r, _ in _onsozleri_kostur(["ucuncu_kullanan.py", "kendi_kok_hatasi.py"], kok=kok)}
+    assert "ucuncu_kullanan.py" not in adlar, "üçüncü-taraf içinden gelen RuntimeError betik kusuru sayıldı"
+    assert "kendi_kok_hatasi.py" in adlar, "betiğin KENDİ RuntimeError'ı yutuldu"
+
+
+def test_KARSIT_KANIT_kosucu_ALT_MODUL_HARFE_DUYARLI(tmp_path):
+    """D0Ö.19 ek-2 (tur 5): import harfe DUYARLIDIR (Windows'ta da, PYTHONCASEOK yokken); `is_file()` NTFS'te
+    duyarsız olduğu için harfi yanlış noktalı import Windows'ta YEŞİL kalıyordu (Linux CI yakalardı)."""
+    arka = tmp_path / "apps" / "backend" / "arka"
+    arka.mkdir(parents=True)
+    (arka / "__init__.py").write_text("", encoding="utf-8")
+    (arka / "Buyuk.py").write_text("X = 1\n", encoding="utf-8")
+    onsoz = (
+        "import sys\nfrom pathlib import Path\n\n"
+        "sys.path.insert(0, str(Path(__file__).resolve().parent / 'apps' / 'backend'))\nimport json\n\n\n"
+    )
+    (tmp_path / "harf_yanlis.py").write_text(onsoz + "def f():\n    import arka.buyuk\n", encoding="utf-8")
+    (tmp_path / "harf_dogru.py").write_text(onsoz + "def f():\n    import arka.Buyuk\n", encoding="utf-8")
+    adlar = {r for r, _ in _ic_importlari_kostur(["harf_yanlis.py", "harf_dogru.py"], kok=tmp_path)}
+    assert "harf_yanlis.py" in adlar, "harfi yanlış alt modül (arka.buyuk ↔ Buyuk.py) çözülmüş sayıldı"
+    assert "harf_dogru.py" not in adlar, "harfi doğru alt modül ölü sayıldı"
+
+
 def test_KARSIT_KANIT_kosucu_ALT_MODUL_tasininca_KIRMIZI(tmp_path):
     """D0Ö.20 ek (tur 4): yalnız ÜST paket çözülüyordu — `utils.file_acl` taşınsa ya da silinse kapı
     YEŞİL kalırdı (`utils` hâlâ çözülüyor). Noktalı adın her parçası paket konumlarında aranır."""
@@ -302,8 +345,9 @@ def test_KRITIK_fonksiyon_ici_ilk_taraf_importlari_COZULUYOR():
     # ⚠️ D0Ö.19 ek — VAKUM NÖBETÇİLERİ: birinci-taraf küme `apps/backend` yoluna bağlı; klasör taşınır
     # da koşucu güncellenmezse `utils`/`database` kümeden SESSİZCE düşer ve hiçbir fonksiyon içi
     # import denetlenmez (dosya sayısı yine >30). Hem kümeyi hem gerçekten denetlenen çiftleri ölç.
-    assert {"utils", "database"} <= ilk_taraf_adlari(KOK), (
-        f"birinci-taraf kümede utils/database YOK: {sorted(ilk_taraf_adlari(KOK))} — apps/backend taşındı mı?"
+    kume = ilk_taraf_adlari(KOK)
+    assert NOBETCI_KUME <= kume, (
+        f"birinci-taraf kümede YOK: {sorted(NOBETCI_KUME - kume)} — klasör (apps/backend, ai_hub, tools…) taşındı mı?"
     )
     dosyalar = _takipli([f"{d}*.py" for d in BETIK_DIZINLERI])
     assert len(dosyalar) > 30, f"VAKUM: yalnız {len(dosyalar)} betik tarandı — tarama bozuk"
