@@ -86,6 +86,9 @@ def test_KRITIK_on_ucus_gecti_ama_WS_ye_HIC_baglanilamadi_OLCULMEDI(monkeypatch,
     # "OLCULMEDI" iddiasını HER koşuda karşılıyordu (süreç içi kapılarda veri kökü yok) → sınıf etiketi korumasızdı.
     ozet = cikti.split("=== OZET ===", 1)[1] if "=== OZET ===" in cikti else ""
     assert "WS kararliligi OLCULMEDI" in ozet, f"bağlanılamayan WS 'ölçülmedi' diye sınıflanmadı:\n{ozet}"
+    # D0Ö.22+15 ek-4 (tur 7): sınıf DIŞLAYICI — `else:` kaybolursa (girinti kayması) hiç bağlanılamayan koşu
+    # OLCULMEDI ile birlikte iki SUPHELI de basıyordu ve varlık iddiası yine yeşildi.
+    assert "WS kararliligi SUPHELI" not in ozet, f"hiç bağlanılamayan WS aynı anda ŞÜPHELİ de sayıldı:\n{ozet}"
 
 
 def test_KRITIK_WS_bagli_ama_HIC_mesaj_yok_SUPHELI(monkeypatch, capsys):

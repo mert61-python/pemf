@@ -84,6 +84,9 @@ def test_KRITIK_RSS_HEDEF_PORTU_dinleyen_surecten_okunur(monkeypatch, capsys):
     rc, cikti, _ = _kos(monkeypatch, capsys, _psutil)
     assert rc == 1 and "TEMIZ" not in cikti, f"hedefin sızıntısı görülmedi (rc={rc}):\n{cikti[-800:]}"
     assert "SIZINTI" in cikti, f"RSS hedef portu dinleyen süreçten okunmadı:\n{cikti[-800:]}"
+    # D0Ö.22+15 ek-4 (tur 7): özetteki KAYNAK da çeldiriciyle ölçülür — yalnız bildirim port süzgecini kaybederse
+    # (ada ya da ilk LISTEN'e göre seçerse) özet 4242'yi söylerken RSS 4243'ten okunurdu; iki kapı da yeşildi.
+    assert "RSS kaynagi: PID 4243 (python.exe)" in _ozet(cikti), f"özette hedefin kaynağı yok:\n{_ozet(cikti)}"
 
 
 def test_KRITIK_hedef_portu_dinleyen_surec_YOKSA_RSS_OLCULMEDI(monkeypatch, capsys):
@@ -127,35 +130,102 @@ def test_KRITIK_veri_koku_REDDI_on_ucus_gibi_cikis_2(monkeypatch, capsys):
     )
 
 
-def test_KRITIK_veri_koku_OSError_da_EYLEMLI_on_ucus_reddi(monkeypatch, tmp_path):
+@pytest.mark.parametrize("hata", [PermissionError, FileNotFoundError, NotADirectoryError])
+def test_KRITIK_veri_koku_OSError_da_EYLEMLI_on_ucus_reddi(monkeypatch, tmp_path, hata):
     """D0Ö.22+15 ek-3 (tur 6): `get_app_data_directory()` kökü mkdir'ler; izin/yol hatası (OSError) SystemExit'e
     çevrilmiyor, soak traceback + çıkış 1 ile bitiyordu ('en az bir neden' ile karışır). Artık eylem söyleyen
-    SystemExit → `main` bunu ön-uçuş reddi (2) sayar. Gerçek kök OLUŞTURULMAZ: ürün çağrısı yamalı, PROGRAMDATA tmp."""
+    SystemExit → `main` bunu ön-uçuş reddi (2) sayar. Gerçek kök OLUŞTURULMAZ: ürün çağrısı yamalı, PROGRAMDATA tmp.
+    D0Ö.22+15 ek-4 (tur 7): yalnız PermissionError sınanıyordu — `except PermissionError` daraltması yeşildi;
+    olmayan sürücü (FileNotFoundError) ve dosya engeli (NotADirectoryError) da aynı sınıf."""
     import utils.path_utils as pu
 
     m = betik_modulu("soak_http_ws")
     monkeypatch.setenv("PROGRAMDATA", str(tmp_path / "pd"))
 
-    def _izin_yok():
-        raise PermissionError(13, "d0o: erisim engellendi", str(tmp_path / "kisitli" / "PEMF_GUI"))
+    def _acilamaz():
+        raise hata(13, "d0o: kok acilamadi", str(tmp_path / "kisitli" / "PEMF_GUI"))
 
-    monkeypatch.setattr(pu, "get_app_data_directory", _izin_yok)
+    monkeypatch.setattr(pu, "get_app_data_directory", _acilamaz)
     with pytest.raises(SystemExit) as e:
         m._veri_koku()
     assert isinstance(e.value.code, str) and "APPDATA yazilabilir mi" in e.value.code, f"eylem yok: {e.value.code!r}"
-    assert "PermissionError" in e.value.code, f"neden (hata türü) yok: {e.value.code!r}"
+    assert hata.__name__ in e.value.code, f"neden (hata türü) yok: {e.value.code!r}"
 
 
-def test_KRITIK_BOZUK_psutil_importu_RSS_OLCULEMEZ_nedeni_olur(monkeypatch, tmp_path):
-    """D0Ö.22+15 ek-3 (tur 6): `_port_sureci` yalnız ImportError yakalıyordu — kurulu ama bozuk psutil'in import
-    hatası (RuntimeError/OSError) traceback + çıkış 1 veriyordu. Artık "RSS ölçülemez" nedeni + eylem olur."""
-    (tmp_path / "psutil.py").write_text("raise RuntimeError('d0o: bozuk kurulum')\n", encoding="utf-8")
+def test_KRITIK_veri_koku_TARANAMAZSA_da_EYLEMLI_on_ucus_reddi(monkeypatch, tmp_path):
+    """D0Ö.22+15 ek-4 (tur 7): aday taraması sarılı değildi — listelenemeyen bir kök (ör. ACL'li
+    %PROGRAMDATA%\\PEMF_System) `is_dir`/`glob`'da PermissionError atıp yine traceback + 1 veriyordu."""
+    import pathlib
+
+    import utils.path_utils as pu
+
+    m = betik_modulu("soak_http_ws")
+    pd = tmp_path / "pd"
+    monkeypatch.setenv("PROGRAMDATA", str(pd))
+    monkeypatch.setattr(pu, "get_app_data_directory", lambda: tmp_path / "kullanici" / "PEMF_GUI")
+    gercek_is_dir = pathlib.Path.is_dir
+
+    def _is_dir(self):
+        if "PEMF_System" in str(self):
+            raise PermissionError(13, "d0o: listelenemez", str(self))
+        return gercek_is_dir(self)
+
+    monkeypatch.setattr(pathlib.Path, "is_dir", _is_dir)
+    with pytest.raises(SystemExit) as e:
+        m._veri_koku()
+    assert isinstance(e.value.code, str) and "taranamadi (PermissionError" in e.value.code, f"{e.value.code!r}"
+
+
+def test_KRITIK_veri_koku_RET_SATIRI_cp1254_KONSOLDA_da_cikis_2(monkeypatch, capsys):
+    """D0Ö.22+15 ek-4 (tur 7): ret NEDENİ (istisna metni + yol) stdout'a da basılıyor; cp1254'e yönlendirilmiş
+    (katı) stdout'ta cp1254 dışı bir karakter UnicodeEncodeError ile ret satırını ve çıkış 2'yi düşürüyordu
+    (traceback + 1). Kapı gerçek `main`i cp1254-katı bir stdout ile koşturur."""
+    import io
+
+    m = soak_modulu(monkeypatch)
+    sunucu = SahteBackend("tut")
+    monkeypatch.setitem(sys.modules, "psutil", sahte_psutil("PEMF_Backend.exe", 500.0, port=sunucu.port))
+
+    def _dusen_kok():
+        raise SystemExit("HATA: veri koku acilamadi (PermissionError: Журнал) — sahte")
+
+    monkeypatch.setattr(m, "_veri_koku", _dusen_kok)
+    ham = io.BytesIO()
+    konsol = io.TextIOWrapper(ham, encoding="cp1254", errors="strict", newline="\n")
+    monkeypatch.setattr(sys, "stdout", konsol)
+    monkeypatch.setattr(
+        sys, "argv", ["soak_http_ws.py", "--port", str(sunucu.port), "--dakika", "0.06", "--aralik", "1.0"]
+    )
+    try:
+        rc = m.main()
+    finally:
+        sunucu.kapat()
+    konsol.flush()
+    cikti = ham.getvalue().decode("cp1254")
+    assert rc == 2, f"cp1254 konsolda ret satırı çıkışı bozdu (rc={rc})"
+    assert "Veri koku belirlenemedi" in cikti and "?????" in cikti, f"ret satırı basılmadı/kodlanmadı:\n{cikti}"
+
+
+@pytest.mark.parametrize(
+    ("hata_kodu", "tur"),
+    [
+        ("raise RuntimeError('d0o: bozuk kurulum')", "RuntimeError"),
+        # D0Ö.22+15 ek-4 (tur 7): gerçek Windows örneği ImportError'dur (ModuleNotFoundError DEĞİL) — eski kod onu
+        # yakalıyor ama "yuklu degil / pip install" (yanlış eylem) diyordu; `except ImportError` mutantı yeşildi.
+        ("raise ImportError('DLL load failed while importing _psutil_windows: d0o')", "ImportError"),
+    ],
+    ids=["runtimeerror", "dll_importerror"],
+)
+def test_KRITIK_BOZUK_psutil_importu_RSS_OLCULEMEZ_nedeni_olur(monkeypatch, tmp_path, hata_kodu, tur):
+    """D0Ö.22+15 ek-3 (tur 6): kurulu ama bozuk psutil'in import hatası traceback + çıkış 1 veriyordu (RuntimeError)
+    ya da yanlış eylem söylüyordu (DLL = ImportError → "yuklu degil"). Artık "RSS ölçülemez" nedeni + doğru eylem."""
+    (tmp_path / "psutil.py").write_text(hata_kodu + "\n", encoding="utf-8")
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.delitem(sys.modules, "psutil", raising=False)
     m = betik_modulu("soak_http_ws")
     surec, neden = m._port_sureci(1)
-    assert surec is None and "psutil yuklenemedi (RuntimeError" in neden, f"bozuk psutil nedeni yok: {neden!r}"
-    assert "force-reinstall" in neden, f"eylem yok: {neden!r}"
+    assert surec is None and f"psutil yuklenemedi ({tur}" in neden, f"bozuk psutil nedeni yok: {neden!r}"
+    assert "force-reinstall" in neden and "yuklu degil" not in neden, f"eylem yanlış: {neden!r}"
 
 
 def test_KRITIK_tek_ornekte_cikis_SIFIR_DEGIL(monkeypatch, capsys):

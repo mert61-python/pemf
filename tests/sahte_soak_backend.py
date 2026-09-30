@@ -200,4 +200,21 @@ def kos(m, monkeypatch, capsys, port: int, dakika: float = 0.06, aralik: float =
         sys, "argv", ["soak_http_ws.py", "--port", str(port), "--dakika", str(dakika), "--aralik", str(aralik)]
     )
     rc = m.main()
-    return rc, capsys.readouterr().out
+    cikti = capsys.readouterr().out
+    cp1254_basilir(cikti)
+    return rc, cikti
+
+
+def cp1254_basilir(cikti: str) -> None:
+    """D0Ö.22+15 ek-4 (tur 7): betiğin KENDİ metni cp1254'e yönlendirilen konsolda basılabilmeli — emoji'li neden
+    satırı UnicodeEncodeError ile döngüyü SONUC satırından önce kesiyordu; ek-2 ASCII'ye çevirmişti ama kapısızdı
+    (capsys str yakalar, kodlama hatası doğmaz). TEMP yolu çıkarılır: ASCII/cp1254 dışı bir TEMP ya da kullanıcı adı
+    sahte KIRMIZI üretmesin (veri kökü yalıtımı TEMP altında)."""
+    temiz = cikti.replace(tempfile.gettempdir(), "<TEMP>")
+    try:
+        temiz.encode("cp1254")
+    except UnicodeEncodeError as e:
+        raise AssertionError(
+            f"soak çıktısı cp1254'te basılamaz ({e}) — yönlendirilen konsolda SONUC kesilir: "
+            f"{temiz[max(0, e.start - 60) : e.end + 60]!r}"
+        ) from e

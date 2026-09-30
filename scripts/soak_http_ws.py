@@ -226,7 +226,9 @@ def _port_sureci(port: int):
     except ModuleNotFoundError:
         return None, "psutil yuklu degil (kurun: pip install psutil)"
     except Exception as e:
-        # D0Ö.22+15 ek-3 (tur 6): kurulu ama BOZUK psutil (DLL yüklenemedi vb.) yakalanmıyordu → traceback + 1.
+        # D0Ö.22+15 ek-3 (tur 6), ek-4 (tur 7) düzeltilmiş gerekçe: DLL yüklenemedi (ImportError) eskiden de
+        # yakalanıyordu ama "yuklu degil / pip install" deniyordu (yanlış eylem); RuntimeError/OSError gibi
+        # import-dışı hatalar hiç yakalanmıyordu → traceback + 1. Artık ikisi de "yuklenemedi + yeniden kur".
         return (
             None,
             f"psutil yuklenemedi ({type(e).__name__}: {e}) — yeniden kurun: pip install --force-reinstall psutil",
@@ -340,10 +342,29 @@ def _veri_koku() -> Path:
             "Soak bir veri koku SECEMEDEN baslatilmaz."
         ) from e
 
-    for kok in adaylar:
-        if kok.is_dir() and any(kok.glob("*.db")):
-            return kok
+    # D0Ö.22+15 ek-4 (tur 7): aday taraması da sarılır — listelenemeyen bir kök (ör. ACL'li %PROGRAMDATA%\PEMF_System)
+    # `is_dir`/`glob`'da PermissionError atıp yine traceback + 1 veriyordu.
+    try:
+        for kok in adaylar:
+            if kok.is_dir() and any(kok.glob("*.db")):
+                return kok
+    except OSError as e:
+        raise SystemExit(
+            f"HATA: veri koku taranamadi ({type(e).__name__}: {e}) — %PROGRAMDATA%\\PEMF_System ve PEMF_DATA_DIR "
+            "okunabilir mi? Soak bir veri koku SECEMEDEN baslatilmaz."
+        ) from e
     return adaylar[0] if adaylar else Path(".")
+
+
+def _konsola_guvenli(metin: str) -> str:
+    """stdout'un kodlamasına sığmayan karakterler '?' olur. D0Ö.22+15 ek-4 (tur 7): ret nedeni (istisna metni +
+    yol) stdout'a da basılınca cp1254'e yönlendirilmiş konsolda UnicodeEncodeError, ret satırını ve çıkış 2'yi
+    düşürüp traceback + 1 veriyordu (stderr zaten backslashreplace kullanır)."""
+    kod = getattr(sys.stdout, "encoding", None) or "utf-8"
+    try:
+        return metin.encode(kod, "replace").decode(kod, "replace")
+    except LookupError:
+        return metin
 
 
 def _db_kb(veri_koku: Path) -> int:
@@ -391,7 +412,7 @@ def main() -> int:
         # D0Ö.22+15 ek-3 (tur 6): neden stdout'a da basılır — `> log` yönlendirmesinde yalnız stderr'deydi.
         neden = e.code if isinstance(e.code, str) else f"HATA: veri koku belirlenemedi ({e.code!r})"
         print(neden, file=sys.stderr)
-        print(f"  Veri koku belirlenemedi — soak baslatilmadi. {neden}")
+        print(_konsola_guvenli(f"  Veri koku belirlenemedi — soak baslatilmadi. {neden}"))
         return 2
 
     # ⚠️ ISINMAYI BEKLE (bkz. _rss_oturmasini_bekle). Taban, AI ısıtması bittikten SONRA
