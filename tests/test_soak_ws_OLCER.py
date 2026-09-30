@@ -63,7 +63,8 @@ def test_KRITIK_WS_on_ucusu_BAGLANAMAZSA_soak_BASLAMAZ(monkeypatch, capsys):
     """Bağlanılamayan kanal "kararlı" sayılamaz — soak BAŞLAMADAN reddedilir (ölçülmezdi)."""
     rc, cikti, sunucu = _kos(monkeypatch, capsys, "reddet")
     assert rc == 2 and "TEMIZ" not in cikti, f"WS'ye bağlanılamadığı hâlde soak başladı/TEMIZ (rc={rc}):\n{cikti}"
-    assert "OLCULMEDI" in cikti and "soak basladi" not in cikti, f"ön-uçuş reddi yok:\n{cikti[-800:]}"
+    # D0Ö.22+15 ek-3 (tur 6): tam ifade — çıplak "OLCULMEDI" başka satırlardan (DB/RSS) da gelebilir.
+    assert "WS kararliligi OLCULMEDI olurdu" in cikti and "soak basladi" not in cikti, f"ön-uçuş reddi yok:\n{cikti}"
     # D0Ö.15 ek-2: çıplak "403" rastgele port numarasına (ör. 54030) da çarpabilirdi.
     assert "HTTP 403" in cikti and "yuklenemedi" not in cikti, f"ret nedeni 403 değil (paket eksik?):\n{cikti}"
     assert sunucu.ws_yukseltme_sayisi() >= 1, "ön-uçuş /ws'yi hiç denemedi"
@@ -73,14 +74,18 @@ def test_KRITIK_WS_on_ucusu_AUTH_1008_i_adiyla_soyler(monkeypatch, capsys):
     """Auth açık profilde `/ws` token ister: accept() sonra 1008 — "koptu" değil, auth diye raporlanır."""
     rc, cikti, _ = _kos(monkeypatch, capsys, "auth1008")
     assert rc == 2 and "soak basladi" not in cikti, f"auth reddinde soak başladı (rc={rc}):\n{cikti[-800:]}"
-    assert "1008" in cikti and "auth" in cikti.lower(), f"1008 auth diye adlandırılmadı:\n{cikti[-800:]}"
+    # D0Ö.22+15 ek-3 (tur 6): çıplak "1008" HATA satırındaki rastgele porta (ör. 51008) da çarpabilirdi.
+    assert "sunucu 1008 (politika)" in cikti and "auth" in cikti.lower(), f"1008 auth diye adlandırılmadı:\n{cikti}"
 
 
 def test_KRITIK_on_ucus_gecti_ama_WS_ye_HIC_baglanilamadi_OLCULMEDI(monkeypatch, capsys):
     rc, cikti, _ = _kos(monkeypatch, capsys, "ilk_sonra_reddet")
     assert rc == 1 and "TEMIZ" not in cikti, f"WS'ye hiç bağlanılamadığı hâlde TEMIZ/0 (rc={rc}):\n{cikti[-800:]}"
     assert _sayac(cikti, "baglanti") == 0 and _sayac(cikti, "baglanamama") >= 1, cikti[-800:]
-    assert "OLCULMEDI" in cikti, f"bağlanılamayan WS 'ölçülmedi' diye raporlanmadı:\n{cikti[-800:]}"
+    # D0Ö.22+15 ek-3 (tur 6 — f00d9c3 regresyonu): ek-2'nin yeni "DB : OLCULMEDI" özet satırı çıplak
+    # "OLCULMEDI" iddiasını HER koşuda karşılıyordu (süreç içi kapılarda veri kökü yok) → sınıf etiketi korumasızdı.
+    ozet = cikti.split("=== OZET ===", 1)[1] if "=== OZET ===" in cikti else ""
+    assert "WS kararliligi OLCULMEDI" in ozet, f"bağlanılamayan WS 'ölçülmedi' diye sınıflanmadı:\n{ozet}"
 
 
 def test_KRITIK_WS_bagli_ama_HIC_mesaj_yok_SUPHELI(monkeypatch, capsys):
@@ -103,6 +108,11 @@ def test_KARSIT_KANIT_WS_acik_ve_RSS_kararli_TEMIZ(monkeypatch, capsys):
     rc, cikti, sunucu = _kos(monkeypatch, capsys, "tut")
     assert sunucu.ws_yukseltme_sayisi() >= 1, "karşıt senaryo WS açmadı"
     assert rc == 0 and "TEMIZ" in cikti, f"sağlıklı koşu TEMIZ değil (rc={rc}):\n{cikti[-800:]}"
+    # D0Ö.22+15 ek-3 (tur 6): ek-2'nin görünürlük satırları pinli — veri kökünde .db yok (yalıtım) → "DB : OLCULMEDI"
+    # (ölçülmüş "0 -> 0 KB" değil); ölçülen koşuda RSS kaynağı PID + ad ile özette.
+    ozet = cikti.split("=== OZET ===", 1)[1] if "=== OZET ===" in cikti else ""
+    assert "DB : OLCULMEDI" in ozet and "KB  (fark" not in ozet, f"ölçülmeyen DB ölçülmüş gibi basıldı:\n{ozet}"
+    assert "RSS kaynagi: PID 4242 (PEMF_Backend.exe)" in ozet, f"özette RSS kaynağı yok:\n{ozet}"
     assert _sayac(cikti, "KOPMA") == 0 and _sayac(cikti, "mesaj") >= 1, cikti[-800:]
 
 
