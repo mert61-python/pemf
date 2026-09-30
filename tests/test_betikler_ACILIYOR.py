@@ -334,6 +334,10 @@ def test_KARSIT_KANIT_kosucu_FROM_PAKET_import_ALT_MODUL_tasininca_KIRMIZI(tmp_p
     (arka / "dolu_paket" / "__init__.py").write_text("OZNITELIK = 1\n", encoding="utf-8")
     (arka / "gelecek_paket").mkdir()
     (arka / "gelecek_paket" / "__init__.py").write_text("from __future__ import annotations\n", encoding="utf-8")
+    # D0Ö.19 ek-4 (tur 7): BOM'lu (Notepad UTF-8) yalnız-docstring `__init__` — CPython import eder; karar düşmemeli.
+    (arka / "bom_paket").mkdir()
+    (arka / "bom_paket" / "__init__.py").write_text('"""bom"""\n', encoding="utf-8-sig")
+    (arka / "bom_paket" / "var3.py").write_text("X = 1\n", encoding="utf-8")
     onsoz = (
         "import sys\nfrom pathlib import Path\n\n"
         "sys.path.insert(0, str(Path(__file__).resolve().parent / 'apps' / 'backend'))\nimport json\n\n\n"
@@ -342,9 +346,10 @@ def test_KARSIT_KANIT_kosucu_FROM_PAKET_import_ALT_MODUL_tasininca_KIRMIZI(tmp_p
         "from_tasinmis.py": "def f():\n    from bos_paket import secrets_yok as sm\n",
         "from_adalani_tasinmis.py": "def f():\n    from adalani_paket import yok2\n",
         "from_alt_paket_tasinmis.py": "def f():\n    from bos_paket.alt import yok3\n",
+        "from_bom_tasinmis.py": "def f():\n    from bom_paket import yok4\n",
         "from_saglam.py": (
             "def f():\n    from bos_paket import var_modul as vm\n    from adalani_paket import var2\n"
-            "    from bos_paket.alt import derin\n    from bos_paket import alt\n"
+            "    from bos_paket.alt import derin\n    from bos_paket import alt\n    from bom_paket import var3\n"
         ),
         "from_dolu_oznitelik.py": (
             "def f():\n    from dolu_paket import OZNITELIK\n    from dolu_paket import belki_modul\n"
@@ -355,7 +360,7 @@ def test_KARSIT_KANIT_kosucu_FROM_PAKET_import_ALT_MODUL_tasininca_KIRMIZI(tmp_p
         (tmp_path / ad).write_text(onsoz + govde, encoding="utf-8")
     sonuc = _ic_importlari_kostur(list(govdeler), kok=tmp_path)
     adlar = {r for r, _ in sonuc}
-    olu = {"from_tasinmis.py", "from_adalani_tasinmis.py", "from_alt_paket_tasinmis.py"}
+    olu = {"from_tasinmis.py", "from_adalani_tasinmis.py", "from_alt_paket_tasinmis.py", "from_bom_tasinmis.py"}
     assert olu <= adlar, f"`from paket import <taşınmış alt modül>` görülmedi: {sorted(olu - adlar)} ({sonuc})"
     assert any("'bos_paket.secrets_yok'" in h for r, h in sonuc if r == "from_tasinmis.py"), sonuc
     assert "from_saglam.py" not in adlar, f"var olan alt modüller ölü sayıldı: {sonuc}"

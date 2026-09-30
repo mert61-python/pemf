@@ -287,7 +287,9 @@ def _init_ad_baglamaz(dizin: Path) -> bool:
     if not ini.is_file():
         return True
     try:
-        govde = ast.parse(ini.read_text(encoding="utf-8", errors="replace")).body
+        # D0Ö.19 ek-4 (tur 7): `utf-8-sig` — BOM'lu (Notepad) bir `__init__` str olarak ast'e verilince U+FEFF
+        # SyntaxError üretir; CPython onu sorunsuz import ettiği hâlde karar SESSİZCE düşüyordu (yanlış-yeşil yön).
+        govde = ast.parse(ini.read_text(encoding="utf-8-sig", errors="replace")).body
     except (OSError, SyntaxError, ValueError):
         return False
     return all(isinstance(d, ast.Expr) and isinstance(d.value, ast.Constant) for d in govde)
