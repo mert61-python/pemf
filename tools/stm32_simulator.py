@@ -119,9 +119,12 @@ def _c_yorumsuz(metin: str) -> str:
 def maske_tanimi(baslik_metni: str) -> int:
     """Başlık metnindeki TEK, yorum DIŞI `#define PEMF_BOBIN_UNIPOLAR_MASKESI` değeri (yoksa/birden çoksa hata).
 
-    ⚠️ Önişlemciyi GÖRMEZ: `#if/#else` ya da `#ifndef` varsayılan dalındaki ikinci tanım bilerek HATA verir
-    (hangi dalın derlendiğini bilemez); `.cproject`'te `-D` ile ezilen değeri de göremez. Bugün başlıkta tek
-    düz tanım var (`pemf_surus.h`); desen değişirse bu okuyucu da güncellenmeli.
+    ⚠️ Önişlemciyi GÖRMEZ — yalnız metinde ÇİFT tanım (ör. `#if/#else`in iki dalında birer tanım) gürültülü
+    HATA verir (hangi dalın derlendiğini bilemez). `.cproject`'te `-D` ile ezme ve TEK tanımlı `#if`/`#ifndef`
+    varsayılan dalı (kardeş `PEMF_BOBIN_TERS_MASKESI`nin deseni) ise SESSİZCE başlıktaki değeri okur —
+    simülatör ve hizalama kapısı birlikte YEŞİL kalır (D0Ö.13 ek-3, tur 6). Bugün (2026-09-30) başlıkta tek
+    düz tanım var (`pemf_surus.h`, koşullu blok yalnız include koruması) ve `.cproject`'te `-D` yok; desen
+    değişirse bu okuyucu da güncellenmeli.
     """
     bulunan = re.findall(
         r"^[ \t]*#[ \t]*define[ \t]+PEMF_BOBIN_UNIPOLAR_MASKESI[ \t]+(0x[0-9A-Fa-f]+|\d+)[uU]?\b",
