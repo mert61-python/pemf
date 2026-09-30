@@ -194,12 +194,12 @@ def _kayitli_mqtt_isleyicisi(monkeypatch, api) -> tuple:
 
     class _KayitliIstemci:
         def __init__(self, *a, **k):
-            self.cagrilar: list[str] = []
+            self.cagrilar: list[tuple] = []
 
         def __getattr__(self, ad):
             if ad.startswith("on_"):
                 raise AttributeError(ad)
-            return lambda *a, **k: self.cagrilar.append(ad)
+            return lambda *a, **k: self.cagrilar.append((ad, a))
 
     kurulan: list = []
     client = types.ModuleType("paho.mqtt.client")
@@ -216,7 +216,17 @@ def _kayitli_mqtt_isleyicisi(monkeypatch, api) -> tuple:
     api._start_mqtt_for_api()
     assert kurulan, "ürün MQTT dinleyicisini kurmadı (kayıt yolu değişti mi?)"
     istemci = kurulan[-1]
-    assert "message_callback_add" not in istemci.cagrilar, f"konu ayrı işleyiciye yönlendirildi: {istemci.cagrilar}"
+    adlar = [ad for ad, _a in istemci.cagrilar]
+    # D0Ö.17 ek-5 (tur 7 kısa kontrolü): kayıt yolunun SONUNA varıldı mı — `_start_mqtt_for_api`'nin `except Exception`'ı
+    # sahte paho'da olmayan bir adla düşen erken çıkışı YUTAR; ondan sonraki bir yönlendirme testte hiç koşmazdı.
+    assert adlar and adlar[-1] == "loop_start", f"kayıt yolu sonuna varmadı (except yuttu mu?): {adlar}"
+    # ... ve bağlantı kurulunca (`on_connect`: abonelikler) da ayrı işleyici yönlendirmesi yok; sensör filtresine abone.
+    monkeypatch.setattr(api, "_push_notification", lambda *a, **k: None)
+    monkeypatch.setitem(api._live_state, "mqtt", api._live_state.get("mqtt"))
+    istemci.on_connect(istemci, None, {}, 0)
+    adlar = [ad for ad, _a in istemci.cagrilar]
+    assert "message_callback_add" not in adlar, f"konu ayrı işleyiciye yönlendirildi: {istemci.cagrilar}"
+    assert ("subscribe", ("pemf/coil/+/sensors",)) in istemci.cagrilar, f"sensör aboneliği yok: {istemci.cagrilar}"
     return istemci.on_message, istemci
 
 
