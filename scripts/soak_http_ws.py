@@ -34,8 +34,11 @@ Yakalanmayan bir istisna da Python gereği 1 + traceback verir — "1" tek baş�
 `PEMF_DATA_DIR` YOKSA kullanıcı kökünü (`%APPDATA%\\PEMF_GUI`), VARSA YALNIZ `PEMF_DATA_DIR\\PEMF_GUI`yi
 açar (yoksa oluşturur). İkinci dalda, yalnız Windows'ta ve süreç başına BİR kez, kullanıcı kökündeki 3 DB'yi
 ve SQLCipher anahtarını hedefte YOKSA kopyalar (anahtar hedefteki `pemf_secrets.json`a eklenir; var olan
-ezilmez, kaynak silinmez). Betik bu yüzden veri kökü açısından salt-okur DEĞİLDİR (bobin/DB içeriğine
-dokunmaz). Kök ölçülen backend'den değil .db varlığından seçilir — sıra `%PROGRAMDATA%\\PEMF_System\\PEMF_GUI`,
+ezilmez, kaynak silinmez). D0Ö.21 ek-4 (tur 7) kesinlik: anahtar yalnız bu makinede çözülebiliyorsa taşınır;
+şifreli iki DB yalnız ham anahtarlar eşitse kopyalanır; hedefte `pemf_secrets.json` YOKSA dosya OLUŞTURULUR
+(`.json.goc-tmp` ara dosyası + `os.replace`). `%APPDATA%\\PEMF_GUI` Windows biçimidir (APPDATA boşsa
+`~\\AppData\\Roaming`; Linux'ta `~/.local/share/PEMF_GUI`, macOS'ta `~/Library/Application Support/PEMF_GUI`).
+Betik bu yüzden veri kökü açısından salt-okur DEĞİLDİR (bobin/DB içeriğine dokunmaz). Kök ölçülen backend'den değil .db varlığından seçilir — sıra `%PROGRAMDATA%\\PEMF_System\\PEMF_GUI`,
 sonra `get_app_data_directory()`: klon backend ölçülürken saha kökünün DB büyümesi basılabilir (DB karara
 girmez).
 """
