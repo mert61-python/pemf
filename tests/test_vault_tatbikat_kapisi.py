@@ -103,6 +103,9 @@ _IC_GOZLEM = {
 #: KIRMIZI). Varsayilan KATI kalir: her alicida `x.eval`/`x.compile` sayilir (ornegin pandas `df.eval('@yerel')`
 #: yereli DIZEYLE okur); yalniz ad alanina dokunmadigi bilinen cift GEREKCEYLE eklenir, kural gevsetilmez.
 _IC_GOZLEM_ZARARSIZ = {("re", "compile")}  # desen derler; kod calistirmaz, cerceveye dokunmaz
+#: Istisnada YERELLERI basan modul adlari — D0Ö.18 ek-3 (tur 6): yalniz tatbikat ICINDEKI import dugumu
+#: yakalaniyordu; olagan yer modul ustu `import cgitb` + tatbikatta `cgitb.enable()` idi (her Load ihlal).
+_YEREL_BASANLAR = {"cgitb"}
 #: Izinli akislarin dayandigi adlar — golgelenirse (`len = print`) izin listesi kor olur.
 _GOLGELENEMEZ = {"len", "open_encrypted_conn", "_istek", "print"}
 #: Korunan bir adi BAGLAYABILEN tek import (modul + ad birebir); baska kaynaktan baglamak golgelemedir.
@@ -247,6 +250,16 @@ def ic_gozlem_ihlalleri(fn: ast.AST) -> list[str]:
     for n in ast.walk(fn):
         if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id in _IC_GOZLEM:
             ihlal.append(f":{n.lineno} {n.id} (ad alani / dinamik kod)")
+        elif isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id in _YEREL_BASANLAR:
+            ihlal.append(f":{n.lineno} {n.id} (istisnada yerelleri basar)")
+        elif (
+            isinstance(n, ast.Call)
+            and _cagri_adi(n) in ("import_module", "__import__")
+            and n.args
+            and isinstance(n.args[0], ast.Constant)
+            and str(n.args[0].value).split(".")[0] in _YEREL_BASANLAR
+        ):
+            ihlal.append(f":{n.lineno} {ast.unparse(n)[:60]} (istisnada yerelleri basar)")
         elif (
             isinstance(n, ast.Attribute)
             and n.attr in _IC_GOZLEM
@@ -496,6 +509,9 @@ _OZ_DENETIM = [
     ("x = compile('1', 's', 'eval')", {"icgozlem"}),
     ("x = builtins.eval('anahtar')", {"icgozlem"}),
     ("x = df.eval('@anahtar')", {"icgozlem"}),  # pandas: yereli DİZEYLE okur — varsayılan katı kalmalı
+    ("cgitb.enable()", {"icgozlem"}),  # modül üstünde import edilmiş cgitb (olağan yer) — import düğümü yok
+    ("importlib.import_module('cgitb').enable()", {"icgozlem"}),
+    ("m = importlib.import_module('json')", set()),  # karşıt: sabit adlı başka modül temiz
 ]
 
 
