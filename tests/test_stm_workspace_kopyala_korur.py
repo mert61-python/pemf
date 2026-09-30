@@ -140,8 +140,10 @@ def test_onceki_kopya_YEDEGE_tasinir_ve_TAZE_kopya_uretilir(betik, tmp_path, mon
     assert "FLASHLAMAYIN" in cikti, "yedeğin (bayat .elf taşıyabilir) flaşlanmaması uyarısı basılmadı"
     # D0Ö.16 ek-3 (tur 6): ek-2'nin ASCII düzeltmesi pinli — çıktı cp1254'e yönlendirilince emoji
     # UnicodeEncodeError atıp sonraki satırları (FLASH adımları) kesiyordu. capsys str yakalar: açıkça kodla.
+    # D0Ö.16 ek-4 (tur 7): yollar ÇIKARILIR — kodlanan betiğin KENDİ metni; cp1254 dışı karakter taşıyan bir TEMP ya da
+    # kullanıcı adı (Kiril, CJK) sahte KIRMIZI üretmesin (o makinede yönlendirme kodlaması zaten cp1254 değildir).
     try:
-        cikti.encode("cp1254")
+        cikti.replace(str(tmp_path), "<TMP>").encode("cp1254")
     except UnicodeEncodeError as e:
         pytest.fail(f"çıktı cp1254'te basılamaz ({e}) — yönlendirilen konsolda FLASH adımları kesilir")
     assert not silinenler, f"betik SİLME çağırdı: {silinenler}"
@@ -248,15 +250,20 @@ def test_KRITIK_DUNKU_workspace_ve_ESKI_yedekler_YASA_TARIHE_gore_BUDANMAZ(betik
     """D0Ö.16 ek-3 (tur 6): fikstürdeki bütün yedekler BUGÜNÜN adını ve taze mtime'ı taşıyordu — "N günden eski
     yedekleri sil" (mtime) ya da "bugünden eski tarihli PEMF_STM32_workspace_* klasörlerini temizle" budaması
     silecek bir şey bulmaz, kapılar YEŞİL kalırdı (B-10.211 sınıfı: sahibin eski düzenlemeleri onaysız gider).
-    Dünkü workspace + onun yedeği + bugünkü eski yedek 40 gün eski mtime'la kurulur; iki koşumdan sonra bayt bayt."""
+    Dünkü workspace + onun yedeği + bugünkü eski yedek eski mtime'la kurulur; iki koşumdan sonra bayt bayt.
+    D0Ö.16 ek-4 (tur 7): zarf mutant eşiğine yakındı (40 gün / 1 gün) — "90 günden eski yedekleri sil" ya da ad
+    tarihine göre "7 günden eski workspace'leri temizle" yine YEŞİLDİ. Artık mtime ~10 yıl ve ad tarihi 2020-01-01
+    olan bir workspace + yedeği de var (oluşturma zamanı — st_ctime/birthtime — kolu kurulmadı: 'Açık kalan')."""
     hedef = _sahip_calismasi(tmp_path)
     dun = (_dt.date.today() - _dt.timedelta(days=1)).isoformat()
-    eski_ts = _dt.datetime.now().timestamp() - 40 * 86400
+    eski_ts = _dt.datetime.now().timestamp() - 3650 * 86400
     korunacak = {
         tmp_path / f"PEMF_STM32_workspace_{dun}" / "sahip_notu.txt": b"dunku-sahip-notu",
         tmp_path / f"PEMF_STM32_workspace_{dun}" / "stm32_pemf" / "Debug" / "PEMF.elf": b"\x7fELF-dunku",
         tmp_path / f"PEMF_STM32_workspace_{dun}_yedek_235959" / "not.txt": b"dunku-yedek",
         tmp_path / f"{hedef.name}_yedek_000001" / "not.txt": b"bugunku-eski-yedek",
+        tmp_path / "PEMF_STM32_workspace_2020-01-01" / "sahip_notu.txt": b"2020-sahip-notu",
+        tmp_path / "PEMF_STM32_workspace_2020-01-01_yedek_120000" / "not.txt": b"2020-yedek",
     }
     for yol, icerik in korunacak.items():
         yol.parent.mkdir(parents=True, exist_ok=True)
