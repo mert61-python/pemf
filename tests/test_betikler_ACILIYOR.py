@@ -52,6 +52,9 @@ NOBETCI_CIFTLER = {
     ("scripts/xai_batch_rapor.py", "ai_hub"),
     ("tools/kurtarma.py", "utils"),
     ("build_tools/source_crypto.py", "utils"),
+    # D0Ö.19 ek-3 (tur 6): `from utils import secrets_manager` — `ad` artık alt modül olarak aranıyor.
+    ("scripts/hasta_anahtari_emanet.py", "utils.secrets_manager"),
+    ("tools/kurtarma.py", "utils.secrets_manager"),
 }
 #: Betiklerin fonksiyon içinde import ettiği birinci-taraf kök adlar — kümede OLMALI (klasör taşıma nöbetçisi).
 NOBETCI_KUME = {"utils", "database", "ai_hub", "scripts", "tools", "build_tools"}
@@ -248,12 +251,19 @@ def test_KARSIT_KANIT_kosucu_UCUNCU_TARAF_RuntimeError_betik_KUSURU_sayilmaz(tmp
     ortam/koşucu artefaktıdır — sıraya bağlı sahte KIRMIZI üretmemeli (önsöz kapısının konusu import)."""
     site = tmp_path / "site_disi"
     (site / "ucuncu_taraf_xyz").mkdir(parents=True)
-    (site / "ucuncu_taraf_xyz" / "__init__.py").write_text("raise RuntimeError('yeniden import artefakti')\n")
+    # D0Ö.19 ek-3 (tur 6): encoding AÇIK — koşucu UTF-8 okur; platform kodlamasıyla (cp1254) yazılan ASCII
+    # olmayan TEMP yolu (repr kaçışlamaz) okunurken bozulur ve betik sahte KIRMIZI olurdu.
+    (site / "ucuncu_taraf_xyz" / "__init__.py").write_text(
+        "raise RuntimeError('yeniden import artefakti')\n", encoding="utf-8"
+    )
     kok = tmp_path / "depo"
     kok.mkdir()
-    (kok / "ucuncu_kullanan.py").write_text(f"import sys\nsys.path.insert(0, {str(site)!r})\nimport ucuncu_taraf_xyz\n")
+    (kok / "ucuncu_kullanan.py").write_text(
+        f"import sys\nsys.path.insert(0, {str(site)!r})\nimport ucuncu_taraf_xyz\n", encoding="utf-8"
+    )
     (kok / "kendi_kok_hatasi.py").write_text(
-        _KOK_BULUNAMAZ + "KOK = _depo_koku(Path(__file__))\nsys.path.insert(0, str(KOK))\nimport json\n"
+        _KOK_BULUNAMAZ + "KOK = _depo_koku(Path(__file__))\nsys.path.insert(0, str(KOK))\nimport json\n",
+        encoding="utf-8",
     )
     adlar = {r for r, _ in _onsozleri_kostur(["ucuncu_kullanan.py", "kendi_kok_hatasi.py"], kok=kok)}
     assert "ucuncu_kullanan.py" not in adlar, "üçüncü-taraf içinden gelen RuntimeError betik kusuru sayıldı"
@@ -305,6 +315,51 @@ def test_KARSIT_KANIT_kosucu_ALT_MODUL_tasininca_KIRMIZI(tmp_path):
     olu = {"tasinmis.py", "derin_tasinmis.py", "modul_paket_degil.py", "sabit_dinamik.py"}
     assert olu <= adlar, f"taşınmış/olmayan ALT MODÜL görülmedi: {sorted(olu - adlar)} ({sonuc})"
     assert "saglam_alt.py" not in adlar, f"var olan alt modüller ölü sayıldı: {sonuc}"
+
+
+def test_KARSIT_KANIT_kosucu_FROM_PAKET_import_ALT_MODUL_tasininca_KIRMIZI(tmp_path):
+    """D0Ö.19 ek-3 (tur 6): `from paket import ad`daki `ad` hiç denetlenmiyordu — `utils/secrets_manager.py`
+    taşınsa `from utils import secrets_manager` (emanet, kurtarma) YEŞİL kalırdı. `__init__`i ad BAĞLAMAYAN
+    (yalnız docstring/yorum ya da hiç yok = ad-alanı) pakette `ad` YALNIZ alt modül olabilir → aranır.
+    Karşıt: `__init__` bir şey bağlıyorsa `ad` öznitelik olabilir → karar VERİLMEZ (sahte KIRMIZI yok)."""
+    arka = tmp_path / "apps" / "backend"
+    (arka / "bos_paket" / "alt").mkdir(parents=True)
+    (arka / "bos_paket" / "__init__.py").write_text('"""yalniz docstring"""\n# yorum\n', encoding="utf-8")
+    (arka / "bos_paket" / "var_modul.py").write_text("X = 1\n", encoding="utf-8")
+    (arka / "bos_paket" / "alt" / "__init__.py").write_text("", encoding="utf-8")
+    (arka / "bos_paket" / "alt" / "derin.py").write_text("X = 1\n", encoding="utf-8")
+    (arka / "adalani_paket").mkdir()
+    (arka / "adalani_paket" / "var2.py").write_text("X = 1\n", encoding="utf-8")
+    (arka / "dolu_paket").mkdir()
+    (arka / "dolu_paket" / "__init__.py").write_text("OZNITELIK = 1\n", encoding="utf-8")
+    (arka / "gelecek_paket").mkdir()
+    (arka / "gelecek_paket" / "__init__.py").write_text("from __future__ import annotations\n", encoding="utf-8")
+    onsoz = (
+        "import sys\nfrom pathlib import Path\n\n"
+        "sys.path.insert(0, str(Path(__file__).resolve().parent / 'apps' / 'backend'))\nimport json\n\n\n"
+    )
+    govdeler = {
+        "from_tasinmis.py": "def f():\n    from bos_paket import secrets_yok as sm\n",
+        "from_adalani_tasinmis.py": "def f():\n    from adalani_paket import yok2\n",
+        "from_alt_paket_tasinmis.py": "def f():\n    from bos_paket.alt import yok3\n",
+        "from_saglam.py": (
+            "def f():\n    from bos_paket import var_modul as vm\n    from adalani_paket import var2\n"
+            "    from bos_paket.alt import derin\n    from bos_paket import alt\n"
+        ),
+        "from_dolu_oznitelik.py": (
+            "def f():\n    from dolu_paket import OZNITELIK\n    from dolu_paket import belki_modul\n"
+            "    from gelecek_paket import annotations\n"
+        ),
+    }
+    for ad, govde in govdeler.items():
+        (tmp_path / ad).write_text(onsoz + govde, encoding="utf-8")
+    sonuc = _ic_importlari_kostur(list(govdeler), kok=tmp_path)
+    adlar = {r for r, _ in sonuc}
+    olu = {"from_tasinmis.py", "from_adalani_tasinmis.py", "from_alt_paket_tasinmis.py"}
+    assert olu <= adlar, f"`from paket import <taşınmış alt modül>` görülmedi: {sorted(olu - adlar)} ({sonuc})"
+    assert any("'bos_paket.secrets_yok'" in h for r, h in sonuc if r == "from_tasinmis.py"), sonuc
+    assert "from_saglam.py" not in adlar, f"var olan alt modüller ölü sayıldı: {sonuc}"
+    assert "from_dolu_oznitelik.py" not in adlar, f"`__init__`i ad bağlayan pakette öznitelik ölü sayıldı: {sonuc}"
 
 
 def test_KARSIT_KANIT_yol_dilimi_YALNIZ_yol_kurulumunu_kosturur(tmp_path):

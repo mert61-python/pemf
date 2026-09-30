@@ -25,8 +25,11 @@
 ⚠️ KÖR ALANLAR (tasarım gereği; D0Ö.19 ek'te ölçüldü, bugün hiçbiri gerçekleşmiyor):
    · değişken argümanlı dinamik import (`importlib.import_module(mod_yolu)`, `runpy`, `-c` dizeleri) —
      yalnız SABİT dize argümanlı `import_module`/`__import__` taranır;
-   · göreli import'lar; `from paket import ad`daki `ad` (alt modül mü öznitelik mi statik olarak
-     bilinemez — noktalı adlar `utils.x` ise D0Ö.20 ek'ten beri dosya sisteminde aranır);
+   · göreli import'lar; `from modul import ad`daki öznitelik `ad`; `from paket import ad`daki `ad`
+     yalnız paketin `__init__`i bir şey BAĞLIYORSA (öznitelik olabilir — karar için `__init__` AST'si
+     çözümlenmeli, yapılmadı). `__init__`i yalnız docstring olan ya da hiç olmayan (ad-alanı) pakette
+     `ad` YALNIZ alt modül olabilir → D0Ö.19 ek-3'ten beri dosya sisteminde aranır
+     (`from utils import secrets_manager`); noktalı adlar (`utils.x`) D0Ö.20 ek'ten beri aranır;
    · modül düzeyinde, yol kurulumundan ÖNCE çağrılan bir fonksiyonun içindeki import;
    · `dar_yol` betik dizinini yola koyar; gömülü `._pth` çalışma anında koymaz (kapı daha hoşgörülü).
 
@@ -267,6 +270,53 @@ def _alt_modul_var(tam_ad: str, konumlar: list[Path]) -> bool:
     return True
 
 
+def _paket_dizinleri(tam_ad: str, konumlar: list[Path]) -> list[Path]:
+    """`a.b` bir PAKETSE (dizin) arama dizinleri; düz modül ya da yoksa `[]`."""
+    for parca in tam_ad.split(".")[1:]:
+        konumlar = [k / parca for k in konumlar if _girdi_birebir(k, parca) and (k / parca).is_dir()]
+    return konumlar
+
+
+def _init_ad_baglamaz(dizin: Path) -> bool:
+    """Paket dizininin `__init__`i HİÇBİR ad bağlayamaz mı? (yok = ad-alanı parçası; yalnız docstring)
+
+    ⚠️ Temkinli: docstring dışında TEK deyim (`from __future__` bile — `annotations` adını bağlar) varsa
+    hayır → çağıran karar vermez (ad öznitelik olabilir). Yorumlar AST'de yoktur.
+    """
+    ini = dizin / "__init__.py"
+    if not ini.is_file():
+        return True
+    try:
+        govde = ast.parse(ini.read_text(encoding="utf-8", errors="replace")).body
+    except (OSError, SyntaxError, ValueError):
+        return False
+    return all(isinstance(d, ast.Expr) and isinstance(d.value, ast.Constant) for d in govde)
+
+
+def _from_ad_hatalari(d: ast.ImportFrom, konumlar: list[Path], bakilan: set[str]) -> list[str]:
+    """`from paket import ad`: `__init__`i ad bağlamayan pakette `ad` YALNIZ alt modül olabilir.
+
+    ⚠️ D0Ö.19 ek-3 (tur 6): `ad` hiç denetlenmiyordu — `utils/secrets_manager.py` taşınsa
+    `from utils import secrets_manager` (emanet, kurtarma) kapıda YEŞİL kalırdı. `__init__` bir şey
+    bağlıyorsa `ad` öznitelik olabilir: karar VERİLMEZ (kör alan, modül başlığında yazılı).
+    """
+    dizinler = _paket_dizinleri(d.module, konumlar)
+    hatalar: list[str] = []
+    for a in d.names:
+        tam = f"{d.module}.{a.name}"
+        if a.name == "*" or not dizinler or tam in bakilan:
+            continue
+        if _alt_modul_var(tam, konumlar):
+            bakilan.add(tam)
+        elif all(_init_ad_baglamaz(k) for k in dizinler):
+            bakilan.add(tam)
+            hatalar.append(
+                f"{IC_IMPORT_ONEKI}: No module named '{tam}' (satir {d.lineno}; `{d.module}` __init__'i ad "
+                "baglamiyor — `ad` yalniz alt modul olabilir)"
+            )
+    return hatalar
+
+
 def _girdi_birebir(dizin: Path, ad: str) -> bool:
     """`ad` dizinde HARFİ HARFİNE var mı? D0Ö.19 ek-2 (tur 5): import harfe DUYARLI (Windows'ta da;
     FileFinder dizin listesini birebir karşılaştırır), `Path.is_file()` NTFS'te DUYARSIZ — harfi yanlış
@@ -301,7 +351,8 @@ def ic_import_hatalari(
 
     Üst paket `sys.path` ile (kanonik konum), noktalı alt modül dosya sisteminde aranır.
     `denetlenen`: çözülmeye çalışılan adlar (üst ve noktalı) buraya eklenir (kapının vakum ölçüsü).
-    ⚠️ `from paket import ad`daki `ad` alt modül mü öznitelik mi statik olarak bilinemez: denetlenmez.
+    ⚠️ `from paket import ad`daki `ad`: alt modülse ya da `__init__`i ad bağlamayan pakette aranır
+    (`_from_ad_hatalari`); `__init__` bir şey bağlıyorsa öznitelik olabilir → denetlenmez.
     """
     hatalar: list[str] = []
     bakilan: set[str] = set() if denetlenen is None else denetlenen
@@ -319,6 +370,8 @@ def ic_import_hatalari(
                     hatalar.append(f"{IC_IMPORT_ONEKI}: No module named '{ad}' (satir {d.lineno})")
             if konumlar[ad] is not None and tam != ad and not _alt_modul_var(tam, konumlar[ad]):
                 hatalar.append(f"{IC_IMPORT_ONEKI}: No module named '{tam}' (satir {d.lineno})")
+        if isinstance(d, ast.ImportFrom) and d.level == 0 and d.module and konumlar.get(d.module.split(".")[0]):
+            hatalar += _from_ad_hatalari(d, konumlar[d.module.split(".")[0]], bakilan)
     return hatalar
 
 
