@@ -147,14 +147,14 @@ def _son_paket(hw) -> bytes:
     return paket
 
 
-def _ham_paket(duty1: float, phase1: float = 0.0, freq1: float = 100.0) -> bytes:
-    """Ürünün ÜRETEMEYECEĞİ (clamp) ama hatta gelebilecek paket: bobin 1 alanları keyfi, CRC geçerli."""
+def _ham_paket(duty1: float, phase1: float = 0.0, freq1: float = 100.0, duty2: float = 0.0) -> bytes:
+    """Ürünün ÜRETEMEYECEĞİ (clamp) ama hatta gelebilecek paket: bobin 1 alanları (ve bobin 2 duty'si) keyfi, CRC geçerli."""
     n = sim.NUM_COILS
     govde = struct.pack(
         sim.PKT_FMT.rsplit(" ", 1)[0],  # CRC hariç biçim
         0xAA,
         0x55,
-        *([duty1] + [0.0] * (n - 1)),
+        *([duty1, duty2] + [0.0] * (n - 2)),
         *([phase1] + [0.0] * (n - 1)),
         *([freq1] + [100.0] * (n - 1)),
         *([1] * n),
@@ -260,18 +260,25 @@ def test_KRITIK_sonlu_olmayan_phase_freq_NACK_METNI_firmware_ile_AYNI(hw, monkey
 
 
 @pytest.mark.parametrize(
-    ("duty", "phase", "freq", "ilk"),
-    [(math.nan, math.nan, 100.0, "duty"), (0.5, math.nan, math.nan, "phase")],
-    ids=["duty_ve_phase", "phase_ve_freq"],
+    ("duty", "phase", "freq", "duty2", "ilk"),
+    [
+        (math.nan, math.nan, 100.0, 0.0, "coil=1 field=duty"),
+        (0.5, math.nan, math.nan, 0.0, "coil=1 field=phase"),
+        # D0Ö.13 ek-4 (tur 7): bobinler arası sıra — firmware BOBİN-öncelikli (bobin 1'in üç alanı, sonra bobin 2);
+        # alan-öncelikli bir simülatör (önce tüm duty'ler) "coil=2 field=duty" derdi ve iki kol yine yeşildi.
+        (0.5, math.nan, 100.0, math.nan, "coil=1 field=phase"),
+    ],
+    ids=["duty_ve_phase", "phase_ve_freq", "bobin1_phase_bobin2_duty"],
 )
-def test_KRITIK_birden_cok_sonlu_olmayan_alan_FIRMWARE_SIRASIYLA_NACK(hw, monkeypatch, duty, phase, freq, ilk):
-    """D0Ö.13 ek-3 (tur 6): tek alanı NaN yapan kapı döngü SIRASINI görmüyordu; `main.c` duty → phase → freq
-    sırasıyla denetler (:764/:770/:776) ve İLK sonlu-olmayanı söyler. Sırayı ters çeviren mutant yeşildi."""
+def test_KRITIK_birden_cok_sonlu_olmayan_alan_FIRMWARE_SIRASIYLA_NACK(hw, monkeypatch, duty, phase, freq, duty2, ilk):
+    """D0Ö.13 ek-3 (tur 6): tek alanı NaN yapan kapı döngü SIRASINI görmüyordu; `main.c` her bobin için duty → phase →
+    freq sırasıyla denetler ve İLK sonlu-olmayanı söyler. Sırayı ters çeviren mutant yeşildi. ⚠️ Bu kol SİMÜLATÖRÜ
+    ölçer; `main.c`'nin kendi sırası ayrı kapıda pinli (`test_main_c_sonlu_olmayan_denetim_SIRASI`, ek-4)."""
     istemci, karsi = _sim_bagla(monkeypatch)
     try:
-        istemci.sendall(_ham_paket(duty, phase1=phase, freq1=freq))
+        istemci.sendall(_ham_paket(duty, phase1=phase, freq1=freq, duty2=duty2))
         nack = _satirlar(istemci, "-> STM_NACK:", 1, 3.0)
-        assert nack and f"RANGE coil=1 field={ilk} value=nonfinite" in nack[0], f"firmware sırası değil: {nack}"
+        assert nack and f"RANGE {ilk} value=nonfinite" in nack[0], f"firmware sırası değil: {nack}"
     finally:
         istemci.close()
         karsi.close()
@@ -279,8 +286,10 @@ def test_KRITIK_birden_cok_sonlu_olmayan_alan_FIRMWARE_SIRASIYLA_NACK(hw, monkey
 
 def test_KRITIK_sonlu_ama_2_31_i_ASAN_carpim_ACK_da_KIRPILIR(hw, monkeypatch):
     """D0Ö.13 ek-3 (tur 6): 1e37 kapısı yalnız float32'nin TAŞTIĞI (+inf) kolu koşuyordu. Sonlu ama 2^31'i
-    aşan çarpım (3e7 × 100 = 3e9, float32'de tam) firmware'de `VCVT` ile 2147483647'ye doyar; simülatörün
-    `max/min` kırpması hiçbir kapıda koşmuyordu (silen mutant `D=3000000000` basar, kapılar yeşildi)."""
+    aşan çarpım (3e7 × 100 = 3e9, float32'de tam); simülatörün `max/min` kırpması hiçbir kapıda koşmuyordu (silen
+    mutant `D=3000000000` basar, kapılar yeşildi). ⚠️ D0Ö.13 ek-4 (tur 7): firmware'in 2147483647 basması bir
+    VARSAYIMDIR — C'de `(long)` taşması tanımsız davranış; hard-float Cortex-M4 + -Os'ta `vcvt.s32.f32` doyurması
+    beklenir ama objdump/tezgâhla ÖLÇÜLMEDİ (yayın öncesi / tezgâh listesinde). Bu kapı simülatörü o varsayıma pinler."""
     istemci, karsi = _sim_bagla(monkeypatch)
     try:
         istemci.sendall(_ham_paket(3e7))
@@ -292,8 +301,9 @@ def test_KRITIK_sonlu_ama_2_31_i_ASAN_carpim_ACK_da_KIRPILIR(hw, monkeypatch):
 
 
 def test_KRITIK_tasan_duty_ACK_da_DOYAR_ve_baglanti_SURER(hw, monkeypatch):
-    """Sonlu ama float32 çarpımında taşan duty (1e37 × 100): firmware NACK'lemez (DUTY_MAX yok), `VCVT`
-    doyurur → `D=2147483647`. Simülatör eskiden `struct.pack` OverflowError'ında bağlantıyı KAPATABİLİRDİ."""
+    """Sonlu ama float32 çarpımında taşan duty (1e37 × 100): firmware NACK'lemez (DUTY_MAX yok); `VCVT` doyurması
+    → `D=2147483647` VARSAYIMDIR (tanımsız davranış; ölçülmedi — bkz. üstteki kol). Simülatör eskiden
+    `struct.pack` OverflowError'ında bağlantıyı KAPATABİLİRDİ."""
     istemci, karsi = _sim_bagla(monkeypatch)
     try:
         istemci.sendall(_ham_paket(1e37))
@@ -404,3 +414,19 @@ def test_main_c_ACK_ve_banner_METNI_simulator_modeliyle_AYNI():
     ]
     eksik = [b for b in beklenen if b not in kod]
     assert not eksik, f"main.c değişmiş — simülatör modeli ve bu kapı gözden geçirilmeli: {eksik}"
+
+
+def test_main_c_sonlu_olmayan_denetim_SIRASI_bobin_oncelikli_ve_araliktan_ONCE():
+    """D0Ö.13 ek-4 (tur 7): çift-NaN kapısı yalnız SİMÜLATÖRÜN sırasını ölçüyordu; `main.c`'de phase/freq `isfinite`
+    blokları yer değiştirse ya da biri aralık denetiminin arkasına taşınsa simülatör, metin pini ve dosyanın bütün
+    kapıları yeşil kalırdı (test adı "FIRMWARE_SIRASIYLA" sessizce yanlış olurdu). Pin: paket çözümünün bobin
+    döngüsünde üç `nonfinite` NACK'i duty → phase → freq sırasıyla ve ilk aralık NACK'inden ÖNCE, döngü içinde
+    başka döngü yok (bobin-öncelikli)."""
+    kod = re.sub(r"\s+", " ", c_soy(MAIN_C.read_text(encoding="utf-8", errors="replace")))
+    bas = kod.index("out->ref_ms = pkt->ref_ms;")
+    dongu = kod.index("for (uint32_t i = 0U; i < NUM_COILS; i++) {", bas)
+    konumlar = [kod.index(f"field={alan} value=nonfinite", dongu) for alan in ("duty", "phase", "freq")]
+    aralik = kod.index("field=duty value_milli=", dongu)
+    assert konumlar == sorted(konumlar), f"main.c sonlu-olmayan denetim sırası duty→phase→freq değil: {konumlar}"
+    assert konumlar[-1] < aralik, "main.c'de bir isfinite denetimi aralık denetiminin ARKASINA taşınmış"
+    assert "for (" not in kod[dongu + 5 : aralik], "sonlu-olmayan denetimler bobin-öncelikli tek döngüde değil"

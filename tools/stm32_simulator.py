@@ -120,10 +120,13 @@ def maske_tanimi(baslik_metni: str) -> int:
     """Başlık metnindeki TEK, yorum DIŞI `#define PEMF_BOBIN_UNIPOLAR_MASKESI` değeri (yoksa/birden çoksa hata).
 
     ⚠️ Önişlemciyi GÖRMEZ — yalnız metinde ÇİFT tanım (ör. `#if/#else`in iki dalında birer tanım) gürültülü
-    HATA verir (hangi dalın derlendiğini bilemez). `.cproject`'te `-D` ile ezme ve TEK tanımlı `#if`/`#ifndef`
-    varsayılan dalı (kardeş `PEMF_BOBIN_TERS_MASKESI`nin deseni) ise SESSİZCE başlıktaki değeri okur —
-    simülatör ve hizalama kapısı birlikte YEŞİL kalır (D0Ö.13 ek-3, tur 6). Bugün (2026-09-30) başlıkta tek
-    düz tanım var (`pemf_surus.h`, koşullu blok yalnız include koruması) ve `.cproject`'te `-D` yok; desen
+    HATA verir (hangi dalın derlendiğini bilemez). TEK tanımlı `#if`/`#ifndef` varsayılan dalı (kardeş
+    `PEMF_BOBIN_TERS_MASKESI`nin deseni) ise SESSİZCE başlıktaki değeri okur; `-D` ile birleşince (`#ifndef` + `-D`)
+    derlenen değer başlıktakinden sapar — simülatör ve hizalama kapısı birlikte YEŞİL kalır (D0Ö.13 ek-3, tur 6).
+    D0Ö.13 ek-4 (tur 7) kesinlik: `-D` tek başına bugünkü DÜZ tanımı ezemez (GCC önce `-D`'yi işler, başlıktaki
+    sonraki `#define` "redefined" uyarısıyla onu değiştirir — başlık kazanır). Bugün (2026-09-30) başlıkta tek düz
+    tanım var (`pemf_surus.h`; tanımı saran koşullu blok yalnız include koruması, :148-150'de ayrı bir `#ifndef`
+    bloğu var) ve `.cproject`'te PEMF_* için `-D` yok (yalnız DEBUG, USE_HAL_DRIVER, STM32F429xx); desen
     değişirse bu okuyucu da güncellenmeli.
     """
     bulunan = re.findall(
@@ -159,7 +162,9 @@ def firmware_ack_yuzdesi(duty: float) -> int:
     yüzdelerin 48'inde firmware'den 1 EKSİK basıyordu (0.35f → 34, firmware 35; 0.01f → 0 → süre 0
     iken ürün bobini "durdu" gösterir). `duty` paketten gelen float32 değerdir; çarpım double'da TAM
     olduğundan float32'ye tek yuvarlama IEEE float32 çarpımının aynısıdır. Taşma/NaN: ARM `VCVT`
-    32-bit doyurur, NaN → 0 (sonsuz/NaN duty zaten `decode_packet`te NACK'lenir).
+    32-bit doyurur, NaN → 0 (sonsuz/NaN duty zaten `decode_packet`te NACK'lenir). ⚠️ D0Ö.13 ek-4 (tur 7): doyurma bir
+    VARSAYIMDIR — C'de `(long)` taşması tanımsız davranış; hard-float Cortex-M4 + -Os'ta `vcvt.s32.f32` beklenir ama
+    objdump/tezgâhla ÖLÇÜLMEDİ (yayın öncesi / tezgâh listesinde).
     """
     try:
         carpim = struct.unpack("<f", struct.pack("<f", duty * 100.0))[0]
