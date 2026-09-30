@@ -140,17 +140,22 @@ def test_KRITIK_GERCEK_kilit_AYNI_HESABA_acik_Users_grubuna_KAPALI(tmp_path, mon
     hedef.write_text("eski emanet\n", encoding="utf-8")
     # Temp dizini Users'ı zaten miras VERMEZ: açık bir Users ACE'si konur ki kilidin onu kaldırdığı ölçülsün.
     subprocess.run(["icacls", str(hedef), "/grant", "*S-1-5-32-545:(R)"], capture_output=True, check=True)
-    # D0Ö.20 ek-2 (tur 5): TR arayüz "BUILTIN\Kullanıcılar" basar — yalnız İngilizce ad aranırsa boşa döner.
+    # D0Ö.20 ek-2 (tur 5) / ek-4 (tur 7): ACE ADLARI Windows GÖRÜNTÜ diline bağlıdır — bu makine TR yerel ayarda
+    # "BUILTIN\Users" basıyor (ölçüldü); TR adı ("\kullan") bu makinede görülmedi, doğrulanmadı. SID girdileri
+    # çözülemeyen hesaplar için. Ön-koşul (aşağıda) listenin bu makinedeki adı GÖRDÜĞÜNÜ kanıtlar.
     yasak = ("builtin\\users", "s-1-5-32-545", "\\kullan", "authenticated users", "s-1-5-11")
+    # D0Ö.20 ek-4 (tur 7): çıktı `errors="replace"` ile okunur — TR kurulumda icacls OEM (cp857) yazarsa ASCII dışı
+    # ad (ör. 'Kullanıcılar'daki ı = 0x8D) ANSI cp1254 katı çözmede UnicodeDecodeError ile HER koşuda sahte KIRMIZI
+    # olurdu; yasak listesinin girdileri ASCII önekler olduğu için yer değiştiren karakter eşleşmeyi bozmaz.
     # D0Ö.20 ek-3 (tur 6): ÖN-KOŞUL — yasak listesi konan Users ACE'sini kilitten ÖNCE GÖRMELİ; başka arayüz
     # dilinde (ör. "VORDEFINIERT\Benutzer") liste boşa döner ve kilit hiç ölçülmeden yeşil kalırdı.
-    once = subprocess.run(["icacls", str(hedef)], capture_output=True, text=True).stdout
+    once = subprocess.run(["icacls", str(hedef)], capture_output=True, text=True, errors="replace").stdout
     once = once.replace(str(hedef), "").lower()
     assert [y for y in yasak if y in once], f"ön-koşul: yasak listesi Users ACE'sini görmüyor (arayüz dili?): {once!r}"
     try:
         assert m.disa_aktar(hedef) == 0
         assert m.dogrula(hedef) == 0
-        aceler = subprocess.run(["icacls", str(hedef)], capture_output=True, text=True).stdout
+        aceler = subprocess.run(["icacls", str(hedef)], capture_output=True, text=True, errors="replace").stdout
         aceler = aceler.replace(str(hedef), "").lower()
         assert f"\\{getpass.getuser().lower()}:" in aceler, f"çalıştıran hesap ACE'lerde YOK: {aceler!r}"
         assert not [y for y in yasak if y in aceler], f"Users / Authenticated Users okuyabilir: {aceler!r}"
