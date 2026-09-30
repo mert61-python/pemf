@@ -26,6 +26,7 @@ MUTASYON: `_send_ack`'te alan sayısını/indisi bozmak (M3) ya da banner'a "SYM
 
 from __future__ import annotations
 
+import math
 import queue
 import re
 import socket
@@ -258,6 +259,38 @@ def test_KRITIK_sonlu_olmayan_phase_freq_NACK_METNI_firmware_ile_AYNI(hw, monkey
         karsi.close()
 
 
+@pytest.mark.parametrize(
+    ("duty", "phase", "freq", "ilk"),
+    [(math.nan, math.nan, 100.0, "duty"), (0.5, math.nan, math.nan, "phase")],
+    ids=["duty_ve_phase", "phase_ve_freq"],
+)
+def test_KRITIK_birden_cok_sonlu_olmayan_alan_FIRMWARE_SIRASIYLA_NACK(hw, monkeypatch, duty, phase, freq, ilk):
+    """D0Ö.13 ek-3 (tur 6): tek alanı NaN yapan kapı döngü SIRASINI görmüyordu; `main.c` duty → phase → freq
+    sırasıyla denetler (:764/:770/:776) ve İLK sonlu-olmayanı söyler. Sırayı ters çeviren mutant yeşildi."""
+    istemci, karsi = _sim_bagla(monkeypatch)
+    try:
+        istemci.sendall(_ham_paket(duty, phase1=phase, freq1=freq))
+        nack = _satirlar(istemci, "-> STM_NACK:", 1, 3.0)
+        assert nack and f"RANGE coil=1 field={ilk} value=nonfinite" in nack[0], f"firmware sırası değil: {nack}"
+    finally:
+        istemci.close()
+        karsi.close()
+
+
+def test_KRITIK_sonlu_ama_2_31_i_ASAN_carpim_ACK_da_KIRPILIR(hw, monkeypatch):
+    """D0Ö.13 ek-3 (tur 6): 1e37 kapısı yalnız float32'nin TAŞTIĞI (+inf) kolu koşuyordu. Sonlu ama 2^31'i
+    aşan çarpım (3e7 × 100 = 3e9, float32'de tam) firmware'de `VCVT` ile 2147483647'ye doyar; simülatörün
+    `max/min` kırpması hiçbir kapıda koşmuyordu (silen mutant `D=3000000000` basar, kapılar yeşildi)."""
+    istemci, karsi = _sim_bagla(monkeypatch)
+    try:
+        istemci.sendall(_ham_paket(3e7))
+        ack = _satirlar(istemci, "-> STM_OK:", 1, 3.0)
+        assert ack and "D=2147483647," in ack[0], f"2^31'i aşan sonlu çarpım ACK'te kırpılmadı: {ack}"
+    finally:
+        istemci.close()
+        karsi.close()
+
+
 def test_KRITIK_tasan_duty_ACK_da_DOYAR_ve_baglanti_SURER(hw, monkeypatch):
     """Sonlu ama float32 çarpımında taşan duty (1e37 × 100): firmware NACK'lemez (DUTY_MAX yok), `VCVT`
     doyurur → `D=2147483647`. Simülatör eskiden `struct.pack` OverflowError'ında bağlantıyı KAPATABİLİRDİ."""
@@ -364,6 +397,10 @@ def test_main_c_ACK_ve_banner_METNI_simulator_modeliyle_AYNI():
         '"UNIPOLAR tek-bacak"',
         '"KARMA"',
         "field=duty value=nonfinite",
+        # D0Ö.13 ek-3 (tur 6): ek-2'nin phase/freq kapısının firmware tarafı da pinli (main.c metni değişirse
+        # simülatör ve kapı birlikte yeşil kalıyordu).
+        "field=phase value=nonfinite",
+        "field=freq value=nonfinite",
     ]
     eksik = [b for b in beklenen if b not in kod]
     assert not eksik, f"main.c değişmiş — simülatör modeli ve bu kapı gözden geçirilmeli: {eksik}"
