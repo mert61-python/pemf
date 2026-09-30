@@ -263,6 +263,15 @@ def disa_aktar(hedef: Path) -> int:
         satirlar.append(f"{alan} = {deger}")
         satirlar.append("")
 
+    # D0Ö.20 ek-2 (tur 5, ORTA — ek-1'in getirdiği regresyon): var olan bir KLASÖR hedefte `touch` geçer ve
+    # kilit klasörün ACL'sini yazım düşmeden ÖNCE yeniden yazar (POSIX'te chmod 0600: sahip klasörü dolaşamaz).
+    if hedef.exists() and not hedef.is_file():
+        print(
+            f"HATA: hedef bir DOSYA yolu olmali (klasor ya da ozel dosya verildi: {hedef}) — hicbir seye "
+            'DOKUNULMADI. Ornek: --disa-aktar "D:/kasa/pemf-hasta-anahtari.txt"',
+            file=sys.stderr,
+        )
+        return 2
     hedef.parent.mkdir(parents=True, exist_ok=True)
     yeni = not hedef.exists()
     try:
@@ -279,7 +288,12 @@ def disa_aktar(hedef: Path) -> int:
     # `lock_down_file` hata ATMAZ, False döner (best-effort) — dönüş OKUNUR.
     kilit_notu = ""
     if lock_down_file(hedef, keep_current_user=True):
-        kilit_notu = "ACL: yalniz SYSTEM, Administrators ve bu hesap okuyabilir (yerel Users grubu okuyamaz)."
+        # D0Ö.20 ek-2: not DOĞRULANMADAN "yalniz" demez — file_acl yalnız Users/Authenticated Users'ı kaldırır.
+        kilit_notu = (
+            "ACL: SYSTEM, Administrators ve bu hesap tam erisimli; yerel Users / Authenticated Users kaldirildi."
+            if sys.platform == "win32"
+            else "ACL: dosya izni 0600 istendi (yalniz sahip) — ACL'siz baglamada (vfat) etkisiz olabilir."
+        )
     else:
         fs = _dosya_sistemi(hedef)
         if (fs or "").upper() in _ACL_DESTEKLI:
@@ -287,8 +301,10 @@ def disa_aktar(hedef: Path) -> int:
                 hedef.unlink(missing_ok=True)
             print(
                 f"HATA: ACL kilidi UYGULANAMADI ({hedef}, {fs}) — duz-metin emanet YAZILMADI: bu birim ACL "
-                "destekliyor ve kilitsiz dosya bu makinedeki baska hesaplarca okunabilirdi. Yonetici olarak "
-                "calistirin ya da sifreli kasa / USB hedefi verin.",
+                "destekliyor ve kilitsiz dosya bu makinedeki baska hesaplarca okunabilirdi. "
+                + ("" if yeni else "Onceki dosya DEGISTIRILMEDI (icerigi ve ACL'si oldugu gibi; ACL'si denetlenmedi). ")
+                + "Olasi nedenler: yetki (yonetici olarak calistirin) ya da hesap adi cozulemedi (etki alani / "
+                "Entra ID hesabi). Sifreli kasa ya da FAT/exFAT USB hedefi de verilebilir.",
                 file=sys.stderr,
             )
             return 2
@@ -307,7 +323,8 @@ def disa_aktar(hedef: Path) -> int:
         if cozulmus.get(alan):
             print(f"  {alan:28s} parmak={_parmak(cozulmus[alan])}")
     print(
-        "\n⚠️ SIMDI: bu dosyayi bu bilgisayarin DISINA tasiyin (kasadaki USB / parola yoneticisi).\n"
+        # D0Ö.20 ek-2: ASCII — çıktı cp1254'e yönlendirilince emoji UnicodeEncodeError atıp rc'yi 1 yapıyordu.
+        "\nUYARI - SIMDI: bu dosyayi bu bilgisayarin DISINA tasiyin (kasadaki USB / parola yoneticisi).\n"
         "   Ayni diskte durursa risk KALKMAZ — amac makine-disi kopya."
     )
     return 0

@@ -146,9 +146,82 @@ def test_KRITIK_GERCEK_kilit_AYNI_HESABA_acik_Users_grubuna_KAPALI(tmp_path, mon
         aceler = subprocess.run(["icacls", str(hedef)], capture_output=True, text=True).stdout
         aceler = aceler.replace(str(hedef), "").lower()
         assert f"\\{getpass.getuser().lower()}:" in aceler, f"çalıştıran hesap ACE'lerde YOK: {aceler!r}"
-        assert "builtin\\users" not in aceler and "s-1-5-32-545" not in aceler, f"Users okuyabilir: {aceler!r}"
+        # D0Ö.20 ek-2 (tur 5): TR arayüz "BUILTIN\Kullanıcılar" basar — yalnız İngilizce ad aranırsa boşa döner.
+        yasak = ("builtin\\users", "s-1-5-32-545", "\\kullan", "authenticated users", "s-1-5-11")
+        assert not [y for y in yasak if y in aceler], f"Users / Authenticated Users okuyabilir: {aceler!r}"
     finally:
         subprocess.run(["icacls", str(hedef), "/reset", "/q"], capture_output=True)
+
+
+def test_KRITIK_disa_aktar_hedef_KLASORSE_kilide_DOKUNMAZ(tmp_path, monkeypatch, capsys):
+    """D0Ö.20 ek-2 (tur 5, ORTA — ek-1'in getirdiği regresyon): hedef var olan bir KLASÖRse yeni sıra
+    (touch → kilit → yazım) klasörün ACL'sini yazım düşmeden ÖNCE yeniden yazıyordu (POSIX'te chmod 0600:
+    sahip klasörü dolaşamaz). Eski sırada yazım hemen düşer, kilide hiç varılmazdı."""
+    m = betik_modulu("hasta_anahtari_emanet")
+    monkeypatch.setattr(m, "_sirlari_oku", lambda: {_ALAN: _SAHTE})
+    import utils.file_acl as acl
+
+    kilitler: list[str] = []
+    monkeypatch.setattr(acl, "lock_down_file", lambda yol, **k: kilitler.append(str(yol)) or True)
+    klasor = tmp_path / "kasa"
+    klasor.mkdir()
+    (klasor / "baska_dosya.txt").write_text("sahibin", encoding="utf-8")
+    rc = m.disa_aktar(klasor)
+    assert rc != 0, "klasör hedefte emanet başarılı sayıldı"
+    assert not kilitler, f"klasör hedefte lock_down_file ÇAĞRILDI (klasörün ACL'si değişir): {kilitler}"
+    assert klasor.is_dir() and (klasor / "baska_dosya.txt").read_text(encoding="utf-8") == "sahibin"
+    assert "DOSYA yolu" in capsys.readouterr().err, "hata ne yapılacağını söylemiyor"
+
+
+def test_KRITIK_dosya_sistemi_GERCEK_birimi_OKUR(tmp_path):
+    """D0Ö.20 ek-2 (tur 5): `_dosya_sistemi`nin gerçek ctypes yolu hiçbir kolda koşmuyordu (kollar onu yamıyor);
+    None'a bozulursa NTFS reddi sessizce kapanır (fail-open), kapılar yeşil kalırdı."""
+    m = betik_modulu("hasta_anahtari_emanet")
+    fs = m._dosya_sistemi(tmp_path)
+    if sys.platform == "win32":
+        assert (fs or "").upper() in {"NTFS", "REFS"}, f"tmp_path birimi okunamadı ya da beklenmedik: {fs!r}"
+    else:
+        assert fs is None
+
+
+def test_KRITIK_NTFS_te_kilit_TUTMAZSA_ONCEKI_emanet_DEGISMEZ(tmp_path, monkeypatch, capsys):
+    """D0Ö.20 ek-2 (tur 5): var olan (önceki) emanette kilit tutmazsa ne silinir ne üzerine yazılır — rc 2.
+    `if yeni:` silinse ya da ret yalnız yeni dosyaya uygulansa tek emanet kopyası silinir / kilitsiz
+    düz metin yazılırdı; tüm kollar yeni dosya kullandığı için kapısızdı."""
+    m = betik_modulu("hasta_anahtari_emanet")
+    monkeypatch.setattr(m, "_sirlari_oku", lambda: {_ALAN: _SAHTE})
+    monkeypatch.setattr(m, "_dosya_sistemi", lambda yol: "NTFS", raising=False)
+    import utils.file_acl as acl
+
+    monkeypatch.setattr(acl, "lock_down_file", lambda *a, **k: False)
+    hedef = tmp_path / "kasa" / "emanet.txt"
+    hedef.parent.mkdir()
+    hedef.write_text("onceki-emanet\n", encoding="utf-8")
+    rc = m.disa_aktar(hedef)
+    cikti = capsys.readouterr()
+    assert rc == 2, f"NTFS'te kilit tutmadığı hâlde rc={rc}"
+    assert hedef.read_text(encoding="utf-8") == "onceki-emanet\n", "ÖNCEKİ emanet silindi ya da üzerine yazıldı"
+    assert "DEGISTIRILMEDI" in cikti.err, f"önceki dosyanın durumu söylenmedi: {cikti.err!r}"
+
+
+def test_KRITIK_ikinci_disa_aktar_IZIN_hatasi_ne_yapilacagini_SOYLER(tmp_path, monkeypatch):
+    """Eski sürümün yalnız-yönetici kilidindeki hedefe ikinci `--disa-aktar`: ham traceback değil EYLEM."""
+    m = betik_modulu("hasta_anahtari_emanet")
+    monkeypatch.setattr(m, "_sirlari_oku", lambda: {_ALAN: _SAHTE})
+    hedef = tmp_path / "kasa" / "emanet.txt"
+    hedef.parent.mkdir()
+    hedef.write_text("onceki-emanet\n", encoding="utf-8")
+    gercek_touch = Path.touch
+
+    def _kilitli_touch(self, *a, **k):
+        if Path(self) == hedef:
+            raise PermissionError(13, "Erisim engellendi")
+        return gercek_touch(self, *a, **k)
+
+    monkeypatch.setattr(Path, "touch", _kilitli_touch)
+    with pytest.raises(SystemExit) as e:
+        m.disa_aktar(hedef)
+    assert "yonetici" in str(e.value.code).lower(), f"izin hatası eylem söylemiyor: {e.value.code!r}"
 
 
 def test_KRITIK_dogrula_IZIN_hatasi_ne_yapilacagini_SOYLER(tmp_path, monkeypatch):
