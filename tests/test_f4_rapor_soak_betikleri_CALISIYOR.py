@@ -151,25 +151,34 @@ def test_KRITIK_soak_veri_koku_path_utils_YUKLENEMEZSE_SESSIZ_devam_etmez(monkey
 #: kırmızı olurdu. Kök artık ürünün kendisinden alınır → platformdan bağımsız.
 _SOAK_KOK_KODU = (
     "import importlib.util, sys\n"
+    "from pathlib import Path\n"
     "s = importlib.util.spec_from_file_location('soak_kapi', sys.argv[1])\n"
     "m = importlib.util.module_from_spec(s)\n"
     "s.loader.exec_module(m)\n"
     "from utils.path_utils import get_app_data_directory\n"
     "k = get_app_data_directory()\n"
+    # D0Ö.21 ek-2 (tur 5): sahte kök denetimi YAZIMDAN ÖNCE — ürün yol çözümü ortamı okumayan bir yönteme
+    # geçerse sahte .db GERÇEK kullanıcı kökünde yazılıp ancak sonra kırmızıya düşülürdü.
+    "if not k.resolve().is_relative_to(Path(sys.argv[2]).resolve()):\n"
+    "    raise SystemExit('GERCEK KOK: ' + str(k))\n"
     "(k / 'sahte.db').write_bytes(b'sahte')\n"
     "print('KULLANICI=' + str(k))\n"
     "print('VERI_KOKU=' + str(m._veri_koku()))\n"
 )
 
 
-def _soak_veri_koku_alt_surecte(tmp_path: Path, programdata_db: bool) -> tuple[Path, Path, Path]:
-    """(kullanıcı kökü, makine kökü, seçilen kök) — hepsi sahte ortam altında."""
+def _soak_veri_koku_alt_surecte(
+    tmp_path: Path, programdata_db: bool, makine_klasoru: bool = False
+) -> tuple[Path, Path, Path]:
+    """(kullanıcı kökü, makine kökü, seçilen kök) — hepsi sahte ortam altında. `makine_klasoru`: makine kökü
+    VAR ama içinde .db YOK."""
     env = yalitik_ortam(tmp_path / "ortam")
     makine = Path(env["PROGRAMDATA"]) / "PEMF_System" / "PEMF_GUI"
-    if programdata_db:
+    if programdata_db or makine_klasoru:
         makine.mkdir(parents=True)
+    if programdata_db:
         (makine / "sahte.db").write_bytes(b"sahte")
-    r = kostur(["-c", _SOAK_KOK_KODU, str(BETIKLER / "soak_http_ws.py")], tmp_path, env, 120)
+    r = kostur(["-c", _SOAK_KOK_KODU, str(BETIKLER / "soak_http_ws.py"), str(tmp_path / "ortam")], tmp_path, env, 120)
     degerler = dict(s.split("=", 1) for s in r.stdout.splitlines() if s.startswith(("KULLANICI=", "VERI_KOKU=")))
     assert set(degerler) == {"KULLANICI", "VERI_KOKU"}, f"alt süreç düştü (rc={r.returncode}):\n{r.stderr[-900:]}"
     kullanici = Path(degerler["KULLANICI"])
@@ -181,6 +190,14 @@ def test_KRITIK_soak_veri_koku_ALT_SURECTE_APPDATA_kokunu_secer(tmp_path):
     """Yalnız kullanıcı kökünde .db varken onu seçer (eskiden path_utils sessizce düşüyordu, B-9.27)."""
     kullanici, _makine, secilen = _soak_veri_koku_alt_surecte(tmp_path, programdata_db=False)
     assert secilen == kullanici, f"soak veri kökü kullanıcı kökünü seçmedi: {secilen} != {kullanici}"
+
+
+def test_KRITIK_soak_veri_koku_DBsiz_makine_kokunu_ATLAR(tmp_path):
+    """D0Ö.21 ek-2 (tur 5): ölçüt '.db VAR mı', 'klasör var mı' değil — makine kökü VAR ama boşken (ör.
+    launcher'sız dev makinesi) kullanıcı kökü seçilmeli. '.db' koşulunu düşüren mutant iki kolda da yeşildi."""
+    kullanici, makine, secilen = _soak_veri_koku_alt_surecte(tmp_path, programdata_db=False, makine_klasoru=True)
+    assert makine.is_dir() and not any(makine.glob("*.db")), "kurulum: makine kökü var ve boş olmalı"
+    assert secilen == kullanici, f"DB'siz makine kökü seçildi (soak boş kökün büyümesini ölçer): {secilen}"
 
 
 def test_KARSIT_KANIT_soak_veri_koku_MAKINE_kokunu_ONCE_secer(tmp_path):

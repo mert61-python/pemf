@@ -28,6 +28,12 @@ KULLANIM
 ⚠️ ÖN-UÇUŞ: HTTP uçları VE `/ws` (bağlantı + ilk mesaj) soak BAŞLAMADAN denetlenir; biri
 ölçülemeyecekse (yanlış yol, websockets yok, auth açık profil 1008) koşu başlamaz, çıkış 2.
 Çıkış: 0 = TEMIZ · 1 = en az bir neden (hepsi basılır) · 2 = ön-uçuş reddi.
+
+⚠️ VERİ KÖKÜ (D0Ö.21 ek-2): `_veri_koku` ürünün `get_app_data_directory()`sini çağırır — kullanıcı kökünde
+dizin açar; `PEMF_DATA_DIR` tanımlıysa makine kökünü de açar ve kullanıcı kökündeki sır/DB'leri oraya VAR
+OLANI EZMEDEN kopyalayabilir. Betik bu yüzden veri kökü açısından salt-okur DEĞİLDİR (bobin/DB içeriğine
+dokunmaz). Kök ölçülen backend'den değil makine/kullanıcı .db varlığından seçilir: klon backend ölçülürken
+saha kökünün DB büyümesi basılabilir (DB karara girmez).
 """
 
 from __future__ import annotations
