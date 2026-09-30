@@ -15,12 +15,13 @@ konuya abone yoksa PUBACK'te 16 (No matching subscribers) döner. Başta tüketi
 ÖLÇÜLEMEZSE (broker v5 desteklemiyor, PUBACK gelmedi) yük HİÇ basılmaz. Yük QoS 0 kalır.
 D0Ö.17 ek-2: 16 göndermek MAY olduğu için önce abonesi olmayan RASTGELE bir konu sondalanır
 (kalibrasyon, `soak-kalibrasyon/<hex>/0/sensors`); orada 16 gelmezse sonuç ÖLÇÜLEMEZ ve ileti NEDENİ
-söyler (D0Ö.17 ek-3): 0 = broker abonesizliği bildirmiyor ya da KÖK düzeyinde joker abone var (`#`,
-`+/…`) · bağlanamadı = broker kapalı / `--host`/`--port` · PUBACK yok = broker MQTT v5 konuşmuyor ·
-135 = ACL reddi.
-⚠️ Kalibrasyon YALNIZ kök jokerlerini yakalar: ad alanı jokeri (ör. `mosquitto_sub -t "pemf/#"`,
-docs/PEMF_SISTEM_RAPORU.md) kalibrasyon konusunu kapsamaz — `--canli-onay`da backend kapalıyken böyle
-bir izleyici açıksa sonda sahte 'VAR' der (tüketen backend değil izleyicidir).
+söyler (D0Ö.17 ek-3): 0 = broker abonesizliği bildirmiyor ya da kalibrasyon konusuyla DA eşleşen KÖK düzeyinde
+joker abone var (`#`, `+/#`, `+/+/+/sensors`) · bağlanamadı = broker kapalı / `--host`/`--port` · PUBACK yok =
+broker MQTT v5 konuşmuyor YA DA bağlantıyı reddetti (kimlik: betik kimlik göndermez) · 135 = ACL reddi.
+⚠️ Kalibrasyon YALNIZ kalibrasyon konusuyla da eşleşen jokerleri yakalar (D0Ö.17 ek-4): ad alanı jokeri (ör.
+`mosquitto_sub -t "pemf/#"`, docs/PEMF_SISTEM_RAPORU.md) ya da sonraki seviyeleri sabit kök jokeri
+(`+/coil/+/sensors`) kalibrasyon konusunu kapsamaz — `--canli-onay`da ürün ABONE DEĞİLKEN (backend kapalı ya da
+ESP devre dışı: HEAD varsayılanı) böyle bir izleyici açıksa sonda sahte 'VAR' der (tüketen ürün değil izleyicidir).
 Sonda `<önek>/0/sensors`e gider: ürün bobin 0'ı yok sayar, abonelik filtresi yine eşleşir —
 tüketici bu yüzden `<önek>/+/sensors` (ya da `<önek>/#`) filtresiyle abone olmalıdır; kök `#` ile abone
 olan izleyici kalibrasyon konusunu da tüketir → ÖLÇÜLEMEZ (3).
@@ -125,11 +126,19 @@ def kalibrasyon_nedeni(sonuc: str) -> str:
     en sık hata olan KAPALI broker yanlış nedenle bildiriliyordu (gerçek neden yalnız tırnak içindeydi).
     """
     if sonuc == "VAR":
-        return "broker abonesizligi (16) bildirmiyor ya da KOK duzeyinde joker bir abone var (`#`, `+/...`)"
+        return (
+            "broker abonesizligi (16) bildirmiyor ya da kalibrasyon konusuyla da eslesen KOK duzeyinde joker bir "
+            "abone var (`#`, `+/#`)"
+        )
     if sonuc.startswith("OLCULEMEDI: sonda baglanamadi"):
         return "broker'a baglanilamadi — broker calisiyor mu, --host/--port dogru mu?"
     if sonuc.startswith("OLCULEMEDI: ") and "PUBACK gelmedi" in sonuc:
-        return "PUBACK gelmedi — broker MQTT v5 konusuyor mu?"
+        # D0Ö.17 ek-4 (tur 7): kimlik isteyen broker (allow_anonymous false) CONNECT'i reddeder, PUBACK hiç gelmez —
+        # betik kimlik göndermediği için bu durum "v5 değil" diye YANLIŞ nedenle bildiriliyordu.
+        return (
+            "PUBACK gelmedi — broker MQTT v5 konusuyor mu, ya da baglantiyi reddetti mi (kimlik gerekli mi? "
+            "allow_anonymous false / password_file; bu betik kimlik gondermez)?"
+        )
     if sonuc == f"OLCULEMEDI: PUBACK reason code {YETKISIZ_KODU}":
         return f"PUBACK {YETKISIZ_KODU} (yetkisiz) — broker ACL'si sonda yayinini reddediyor"
     return "beklenmeyen sonda sonucu"
@@ -174,7 +183,7 @@ def main() -> int:
         print(f"Ignored extra args: {unknown_args}", flush=True)
 
     # D0Ö.17 ek-2: KALİBRASYON — MQTT 5 §3.4.2.1'de abonesizlikte 16 göndermek MAY; 16 yerine 0 dönen broker
-    # ya da KÖK düzeyinde joker (`#`, `+/…`) bir abone ürün konusunda SAHTE 'VAR' üretir. Kimsenin abone
+    # ya da kalibrasyon konusuyla da eşleşen KÖK düzeyinde joker (`#`, `+/#`) bir abone ürün konusunda SAHTE 'VAR' üretir. Kimsenin abone
     # olmadığı rastgele bir konu (ürün ad alanı DIŞI) önce sondalanır: orada 'YOK' gelmiyorsa tüketim
     # ÖLÇÜLEMEZ. ⚠️ Ad alanı jokeri (`pemf/#`) kalibrasyon konusunu KAPSAMAZ (modül başlığı).
     kalibrasyon = tuketim_sondasi(args.host, args.port, f"soak-kalibrasyon/{uuid.uuid4().hex}/0/sensors")

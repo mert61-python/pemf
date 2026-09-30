@@ -17,7 +17,9 @@ ile canlı önek YAYINLANIR. Ürünün GERÇEK `on_connect` filtreleri betiğin 
 D0Ö.17 ek-2 (tur 5): SONDALAR dahil tüm yayınlar ad alanına pinli; sonda ürünün yok saydığı bobin 0
 konusuna gider; önce rastgele konuda KALİBRASYON (broker abonesizliği bildirmiyorsa ya da joker abone
 varsa ÖLÇÜLEMEZ → 3); 0/16 dışı PUBACK kodu ÖLÇÜLEMEDİ. D0Ö.17 ek-3 (tur 6): kalibrasyonun ÖLÇÜLEMEDİ
-kolları (bağlanamadı / PUBACK yok / 135) da yük basmadan 3 ve ileti GERÇEK nedeni söyler.
+kolları (bağlanamadı / PUBACK yok / 135) da yük basmadan 3 ve ileti GERÇEK nedeni söyler. D0Ö.17 ek-4 (tur 7):
+neden yalnız karar satırının neden parçasında aranır (ham sonda yankısı iddiayı karşılamasın); PUBACK-yok kimlik
+reddini de anar; ürün pini işleyiciyi GERÇEK kayıt yolundan (`_start_mqtt_for_api` → atanan `on_message`) alır.
 MUTASYON: onay denetimini ya da rc okumasını kaldırmak → KIRMIZI.
 """
 
@@ -184,6 +186,40 @@ def test_KRITIK_sonda_URUNUN_YOK_SAYDIGI_bobin_0_konusuna_yapilir(monkeypatch):
     assert sondalar == ["pemf/coil/0/sensors", "pemf/coil/0/sensors"], f"sonda konusu: {sondalar}"
 
 
+def _kayitli_mqtt_isleyicisi(monkeypatch, api) -> tuple:
+    """Ürünün GERÇEK kayıt yolunu (`_start_mqtt_for_api`) sahte bir paho istemcisiyle koşturur ve istemciye ATANAN
+    `on_message`'ı döndürür. D0Ö.17 ek-4 (tur 7): işleyici adla (`api._on_mqtt_message_api`) çağrılıyordu — ürün
+    `on_message`'ı bir sarmalayıcıya bağlasa ya da `message_callback_add` ile sensör konusunu başka işleyiciye
+    yönlendirse kapı yine yeşil kalırdı. Bağlantı KURULMAZ (connect_async/loop_start kayıt tutan boş çağrılar)."""
+
+    class _KayitliIstemci:
+        def __init__(self, *a, **k):
+            self.cagrilar: list[str] = []
+
+        def __getattr__(self, ad):
+            if ad.startswith("on_"):
+                raise AttributeError(ad)
+            return lambda *a, **k: self.cagrilar.append(ad)
+
+    kurulan: list = []
+    client = types.ModuleType("paho.mqtt.client")
+    client.Client = lambda *a, **k: kurulan.append(_KayitliIstemci()) or kurulan[-1]
+    client.CallbackAPIVersion = SimpleNamespace(VERSION1=1, VERSION2=2)
+    paho, mqtt_paket = types.ModuleType("paho"), types.ModuleType("paho.mqtt")
+    paho.mqtt, mqtt_paket.client = mqtt_paket, client
+    for ad, mod in (("paho", paho), ("paho.mqtt", mqtt_paket), ("paho.mqtt.client", client)):
+        monkeypatch.setitem(sys.modules, ad, mod)
+    monkeypatch.setattr(api.live_state, "esp_etkin", lambda: True)
+    monkeypatch.setattr(api, "_mqtt_credentials", lambda: ("", ""))
+    monkeypatch.setattr(api, "_mqtt_client_id", lambda *a, **k: "d0o-test")
+    monkeypatch.setattr(api, "_mqtt_client_api", None)
+    api._start_mqtt_for_api()
+    assert kurulan, "ürün MQTT dinleyicisini kurmadı (kayıt yolu değişti mi?)"
+    istemci = kurulan[-1]
+    assert "message_callback_add" not in istemci.cagrilar, f"konu ayrı işleyiciye yönlendirildi: {istemci.cagrilar}"
+    return istemci.on_message, istemci
+
+
 class _SahteMesaj:
     """paho `MQTTMessage` yerine minimum yüzey (bkz. test_esp_kopus_ws_yayini)."""
 
@@ -203,10 +239,11 @@ def test_KRITIK_URUN_bobin_0_sondasini_YAN_ETKISIZ_duser(monkeypatch):
 
     from servers import api_server as api
 
-    spec = importlib.util.spec_from_file_location("soak_publish_gercek", KOK / "scripts" / "soak_publish_5hz_8coil.py")
-    m = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(m)  # gerçek paho (requirements-test.txt'te sabit); bağlantı KURULMAZ
+    # D0Ö.17 ek-4 (tur 7): betik SAHTE paho ile yüklenir (dosya başlığının sözü: paho kurulu olmasa da kapı koşar);
+    # yük paho'dan bağımsız.
+    m, _ = _betik(monkeypatch)
     yuk = m.build_payload(0, -1, 1.0)
+    isleyici, istemci = _kayitli_mqtt_isleyicisi(monkeypatch, api)
 
     yayinlar: list = []
     kayitlar: list = []
@@ -217,7 +254,7 @@ def test_KRITIK_URUN_bobin_0_sondasini_YAN_ETKISIZ_duser(monkeypatch):
     with api._live_state_lock:
         bobinler_once = copy.deepcopy(api._live_state["coils"])
     try:
-        api._on_mqtt_message_api(None, None, _SahteMesaj(f"{m.URUN_AD_ALANI}/coil/0/sensors", yuk))
+        isleyici(istemci, None, _SahteMesaj(f"{m.URUN_AD_ALANI}/coil/0/sensors", yuk))
         with api._live_state_lock:
             bobinler_sonra = copy.deepcopy(api._live_state["coils"])
         assert not kayitlar, f"bobin 0 sondası SENSÖR KAYDINA yazıldı: {kayitlar}"
@@ -225,9 +262,12 @@ def test_KRITIK_URUN_bobin_0_sondasini_YAN_ETKISIZ_duser(monkeypatch):
         assert not yayinlar, f"bobin 0 sondası WS'ye yayınlandı: {yayinlar}"
         assert bobinler_sonra == bobinler_once, "bobin 0 sondası canlı bobin durumunu DEĞİŞTİRDİ"
 
-        # Karşıt: aynı yük bobin 1'de GERÇEKTEN yan etki yapar — kapı ölçüm yapıyor, kör değil.
-        api._on_mqtt_message_api(None, None, _SahteMesaj(f"{m.URUN_AD_ALANI}/coil/1/sensors", yuk))
+        # Karşıt: aynı yük bobin 1'de GERÇEKTEN yan etki yapar — kapı ölçüm yapıyor, kör değil (dört kanalın hepsi).
+        isleyici(istemci, None, _SahteMesaj(f"{m.URUN_AD_ALANI}/coil/1/sensors", yuk))
+        with api._live_state_lock:
+            bobinler_bobin1 = copy.deepcopy(api._live_state["coils"])
         assert kayitlar and api._coil_last_telemetry and yayinlar, "karşıt: bobin 1 mesajı yan etki yapmadı"
+        assert bobinler_bobin1 != bobinler_once, "karşıt: bobin 1 mesajı canlı durumu değiştirmedi (kol kör)"
     finally:
         with api._live_state_lock:  # `coils` = {indeks: bobin sözlüğü} (live_state); nesneler yerinde geri yüklenir
             for indeks, once in bobinler_once.items():
@@ -242,12 +282,16 @@ def test_KRITIK_KALIBRASYON_broker_abonesizligi_BILDIRMIYORSA_OLCULEMEZ(monkeypa
     m, kayit = _betik(monkeypatch, kalibrasyon_kodu=0)
     rc = _kos(m, monkeypatch, "--topic-prefix", "test/pemf/coil")
     assert rc == 3 and not _yuk(kayit), f"kalibrasyon 'VAR' dediği hâlde rc={rc}, {len(_yuk(kayit))} yük"
-    karar = _kalibrasyon_karari(capsys.readouterr().err)
-    assert "KOK duzeyinde joker" in karar, f"VAR kolunun nedeni söylenmedi: {karar!r}"
+    neden = _kalibrasyon_nedeni(capsys.readouterr().err)
+    assert "KOK duzeyinde joker" in neden, f"VAR kolunun nedeni söylenmedi: {neden!r}"
 
 
-def _kalibrasyon_karari(hata: str) -> str:
-    return next((s for s in hata.splitlines() if "TUKETIM OLCULEMEZ" in s), "")
+def _kalibrasyon_nedeni(hata: str) -> str:
+    """Karar satırının YALNIZ neden parçası ("… dedi — <neden>. Soak YAPILMADI."). D0Ö.17 ek-4 (tur 7): satır ham
+    sonda sonucunu da yankılıyor — jeton ham metne girerse (sınıflama 'beklenmeyen'e düşse bile) iddia oradan
+    karşılanırdı ("SABİT anahtar alt-dize" tuzağı)."""
+    karar = next((s for s in hata.splitlines() if "TUKETIM OLCULEMEZ" in s), "")
+    return karar.split("' dedi — ", 1)[1] if "' dedi — " in karar else ""
 
 
 def test_KRITIK_KALIBRASYON_OLCULEMEDI_kollari_GERCEK_NEDENLE_3(monkeypatch, capsys):
@@ -255,17 +299,19 @@ def test_KRITIK_KALIBRASYON_OLCULEMEDI_kollari_GERCEK_NEDENLE_3(monkeypatch, cap
     "abonesizliği bildirmiyor ya da joker abone var" diyordu; en sık hata olan KAPALI broker yanlış nedenle
     bildiriliyordu. Ayrıca `if kalibrasyon == "VAR": return 3` daraltması bu kollarda YÜK basardı."""
     durumlar = {
-        "baglanamadi": ({"baglanti_hatasi": True}, "--host/--port"),
-        "puback_yok": ({"kalibrasyon_kodu": None}, "MQTT v5"),
-        "acl_135": ({"kalibrasyon_kodu": 135}, "ACL"),
+        "baglanamadi": ({"baglanti_hatasi": True}, ("--host/--port",)),
+        # D0Ö.17 ek-4 (tur 7): kimlik isteyen broker da PUBACK göndermez — neden yalnız "v5" demesin.
+        "puback_yok": ({"kalibrasyon_kodu": None}, ("MQTT v5", "kimlik")),
+        "acl_135": ({"kalibrasyon_kodu": 135}, ("ACL",)),
     }
-    for ad, (ayar, beklenen) in durumlar.items():
+    for ad, (ayar, beklenenler) in durumlar.items():
         m, kayit = _betik(monkeypatch, **ayar)
         monkeypatch.setattr(m, "SONDA_ZAMAN_ASIMI_S", 0.05)  # PUBACK beklemesi 5 sn sürmesin
         rc = _kos(m, monkeypatch, "--topic-prefix", "test/pemf/coil")
-        karar = _kalibrasyon_karari(capsys.readouterr().err)
+        neden = _kalibrasyon_nedeni(capsys.readouterr().err)
         assert rc == 3 and not _yuk(kayit), f"{ad}: kalibrasyon ölçülemediği hâlde rc={rc}, {len(_yuk(kayit))} yük"
-        assert beklenen in karar and "joker" not in karar, f"{ad}: neden yanlış/eksik: {karar!r}"
+        assert all(b in neden for b in beklenenler), f"{ad}: neden yanlış/eksik: {neden!r}"
+        assert "joker" not in neden and "beklenmeyen" not in neden, f"{ad}: sınıflama düştü: {neden!r}"
 
 
 def test_KRITIK_beklenmeyen_PUBACK_kodu_OLCULEMEDI(monkeypatch, capsys):
