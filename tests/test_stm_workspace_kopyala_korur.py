@@ -16,6 +16,8 @@ D0Ö.16 ek (bağımsız inceleme tur 4): HER testte `rmtree` casusu; sabit saatl
 "rotasyonu" KIRMIZI); kaynak proje yoksa hedefe DOKUNULMAZ; yedeğin flaşlanmaması uyarısı ve
 başarısız taşımada "HICBIR SEY SILINMEDI" iletisi; izli proje yoksa kapı ATLAMAZ, KIRMIZI olur.
 MUTASYON: koruma dalını kaldırıp koşulsuz `shutil.rmtree(hedef)`e dönmek → KIRMIZI.
+D0Ö.16 ek-3 (tur 6): protokolü eksik bayat kaynak, dünkü workspace + 40 gün eski yedekler (yaş/tarih
+budaması), taşımadan SONRA düşen kopyada yedek yolu + FLASHLAMAYIN ve çıktının cp1254'te basılabilirliği pinli.
 """
 
 from __future__ import annotations
@@ -136,6 +138,12 @@ def test_onceki_kopya_YEDEGE_tasinir_ve_TAZE_kopya_uretilir(betik, tmp_path, mon
     cikti = capsys.readouterr().out
     assert str(yedekler[0]) in cikti, "yedeğin yeri kullanıcıya söylenmedi"
     assert "FLASHLAMAYIN" in cikti, "yedeğin (bayat .elf taşıyabilir) flaşlanmaması uyarısı basılmadı"
+    # D0Ö.16 ek-3 (tur 6): ek-2'nin ASCII düzeltmesi pinli — çıktı cp1254'e yönlendirilince emoji
+    # UnicodeEncodeError atıp sonraki satırları (FLASH adımları) kesiyordu. capsys str yakalar: açıkça kodla.
+    try:
+        cikti.encode("cp1254")
+    except UnicodeEncodeError as e:
+        pytest.fail(f"çıktı cp1254'te basılamaz ({e}) — yönlendirilen konsolda FLASH adımları kesilir")
     assert not silinenler, f"betik SİLME çağırdı: {silinenler}"
 
 
@@ -215,18 +223,76 @@ def test_KRITIK_tasima_basarisizsa_HICBIR_SEY_SILINMEZ_ve_durur(betik, tmp_path,
     assert "--hedef" in err, "başka bir kök (--hedef) önerisi söylenmedi"
 
 
-def test_KRITIK_BAYAT_kaynakta_hedefe_DOKUNULMAZ(betik, tmp_path, monkeypatch, capsys, silinenler):
+@pytest.mark.parametrize("bayatlik", ["num_coils_5", "protokol_eksik"])
+def test_KRITIK_BAYAT_kaynakta_hedefe_DOKUNULMAZ(betik, tmp_path, monkeypatch, capsys, silinenler, bayatlik):
     """D0Ö.16 ek-2 (tur 5): kaynak VAR ama BAYAT (ör. eski dal: NUM_COILS 5) — içerik doğrulaması eskiden
     taşımadan SONRAYDI: sahibin workspace'i yedeğe taşınır, CubeIDE'nin açtığı yolda bayat kopya kalırdı
-    (rc 1). Artık kaynak içeriği hedefe DOKUNMADAN denetlenir."""
+    (rc 1). Artık kaynak içeriği hedefe DOKUNMADAN denetlenir.
+    D0Ö.16 ek-3 (tur 6): ikinci kol — NUM_COILS 7 ama protokol işareti eksik (120 baytlık eski paket, kip alanı
+    yok); ön-denetimin `else` kolunu silen mutant gerçek main.c'de dört işaret de var diye YEŞİLDİ."""
     hedef = _sahip_calismasi(tmp_path)
-    monkeypatch.setattr(betik, "_bobin_sayisi", lambda main_c: 5)
+    if bayatlik == "num_coils_5":
+        monkeypatch.setattr(betik, "_bobin_sayisi", lambda main_c: 5)
+    else:
+        monkeypatch.setattr(betik, "_protokol_eksikleri", lambda main_c: ["kip alani YOK (120 bayt eski protokol)"])
     rc = _kos(betik, tmp_path, monkeypatch)
     assert rc != 0
     assert (hedef / "sahip_notu.txt").read_text(encoding="utf-8") == NOT_METNI, "sahibin klasörü yerinden oynatıldı"
     assert (hedef / "stm32_pemf" / "Core" / "Src" / "main.c").read_text(encoding="utf-8") == DUZENLEME
     assert not [p for p in tmp_path.iterdir() if "_yedek_" in p.name], "bayat kaynakta hedef yedeğe TAŞINDI"
     assert "DOKUNULMADI" in capsys.readouterr().err
+    assert not silinenler, f"betik SİLME çağırdı: {silinenler}"
+
+
+def test_KRITIK_DUNKU_workspace_ve_ESKI_yedekler_YASA_TARIHE_gore_BUDANMAZ(betik, tmp_path, monkeypatch, silinenler):
+    """D0Ö.16 ek-3 (tur 6): fikstürdeki bütün yedekler BUGÜNÜN adını ve taze mtime'ı taşıyordu — "N günden eski
+    yedekleri sil" (mtime) ya da "bugünden eski tarihli PEMF_STM32_workspace_* klasörlerini temizle" budaması
+    silecek bir şey bulmaz, kapılar YEŞİL kalırdı (B-10.211 sınıfı: sahibin eski düzenlemeleri onaysız gider).
+    Dünkü workspace + onun yedeği + bugünkü eski yedek 40 gün eski mtime'la kurulur; iki koşumdan sonra bayt bayt."""
+    hedef = _sahip_calismasi(tmp_path)
+    dun = (_dt.date.today() - _dt.timedelta(days=1)).isoformat()
+    eski_ts = _dt.datetime.now().timestamp() - 40 * 86400
+    korunacak = {
+        tmp_path / f"PEMF_STM32_workspace_{dun}" / "sahip_notu.txt": b"dunku-sahip-notu",
+        tmp_path / f"PEMF_STM32_workspace_{dun}" / "stm32_pemf" / "Debug" / "PEMF.elf": b"\x7fELF-dunku",
+        tmp_path / f"PEMF_STM32_workspace_{dun}_yedek_235959" / "not.txt": b"dunku-yedek",
+        tmp_path / f"{hedef.name}_yedek_000001" / "not.txt": b"bugunku-eski-yedek",
+    }
+    for yol, icerik in korunacak.items():
+        yol.parent.mkdir(parents=True, exist_ok=True)
+        yol.write_bytes(icerik)
+    for kok_klasor in {next(p for p in [y, *y.parents] if p.parent == tmp_path) for y in korunacak}:
+        for q in [*kok_klasor.rglob("*"), kok_klasor]:
+            os.utime(q, (eski_ts, eski_ts))
+
+    assert _kos(betik, tmp_path, monkeypatch) == 0
+    assert _kos(betik, tmp_path, monkeypatch) == 0
+    kayip = [
+        str(y.relative_to(tmp_path)) for y, icerik in korunacak.items() if not y.is_file() or y.read_bytes() != icerik
+    ]
+    assert not kayip, f"eski tarihli/yaşlı workspace ya da yedek BUDANDI/değişti (onaysız silme): {kayip}"
+    assert not silinenler, f"betik SİLME çağırdı: {silinenler}"
+
+
+def test_KRITIK_tasimadan_SONRA_kopya_duserse_yedek_yolu_ve_FLASHLAMAYIN_gorunur(
+    betik, tmp_path, monkeypatch, capsys, silinenler
+):
+    """D0Ö.16 ek-3 (tur 6): taşıma anındaki uyarının asıl gerekçesi — taşımadan SONRA düşen yol (copytree
+    istisnası) — hiç sınanmıyordu; `FLASHLAMAYIN` iddiası HAZIR bloğundaki aynı metinle de karşılanıyordu.
+    Kopya düşünce HAZIR bloğuna varılmaz: yedeğin yeri ve uyarı taşıma anında basılmış olmalı."""
+    hedef = _sahip_calismasi(tmp_path)
+
+    def _duser(*a, **k):
+        raise OSError(28, "d0o16: disk dolu")
+
+    monkeypatch.setattr(shutil, "copytree", _duser)
+    with pytest.raises(OSError):
+        _kos(betik, tmp_path, monkeypatch)
+    cikti = capsys.readouterr().out
+    yedekler = [p for p in tmp_path.iterdir() if p.name.startswith(f"{hedef.name}_yedek_")]
+    assert len(yedekler) == 1 and (yedekler[0] / "sahip_notu.txt").read_text(encoding="utf-8") == NOT_METNI
+    assert str(yedekler[0]) in cikti and "FLASHLAMAYIN" in cikti, f"düşen koşuda yedek yeri/uyarı yok:\n{cikti}"
+    assert "HAZIR" not in cikti, "senaryo: kopya düşmeliydi"
     assert not silinenler, f"betik SİLME çağırdı: {silinenler}"
 
 
