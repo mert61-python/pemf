@@ -126,9 +126,11 @@ def test_update_live_stm_status_syncs_stm_coils(api, monkeypatch):
     kopuşta "çalışıyor" kalsa arayüz onları sürülüyor sanar (İG-6.1 / B-1.19 / B-6.13 önkoşulu).
 
     D0Ö.14 ek (bağımsız inceleme tur 4): istemcinin GÖRDÜĞÜ şey `_live_state` değil WS YÜKÜDÜR —
-    kopuşta her STM bobini için `stm_coil_update` yayını (connected/running False, kip None),
-    `stm_status{connected: False}`tan SONRA. Anlık görüntü sıfırlamadan önce alınsa ya da yayın
-    döngüsü yalnız ilk 5 bobine gitse `_live_state` doğru kalır ama arayüz 6-7'yi çalışıyor görürdü.
+    kopuşta `stm_status{connected: False}` ve her STM bobini için `stm_coil_update` yayını
+    (connected/running False, kip None). Anlık görüntü sıfırlamadan önce alınsa ya da yayın döngüsü
+    yalnız ilk 5 bobine gitse `_live_state` doğru kalır ama arayüz 6-7'yi çalışıyor görürdü.
+    ⚠️ D0Ö.14 ek-2 (tur 5): yayın SIRASI bu kapının konusu DEĞİL — bugünkü sıra İG-6.1'in tetik
+    dizisidir ve düzeltmesi onu değiştirecek (bkz. `test_KARAKTERIZASYON_kopus_yayin_SIRASI`).
     """
     from servers import live_state
 
@@ -159,14 +161,20 @@ def test_update_live_stm_status_syncs_stm_coils(api, monkeypatch):
     bobin_yuku = {y["coilId"]: (i, y["data"]) for i, y in enumerate(yayinlar) if y.get("type") == "stm_coil_update"}
     yayinsiz = sorted(TUM_STM - set(bobin_yuku))
     assert not yayinsiz, f"kopuşta bu STM bobinleri için stm_coil_update YAYINLANMADI (arayüz bayat kalır): {yayinsiz}"
+    # D0Ö.14 ek-2: `unipolar` anahtarı YOKSA da kırmızı — istemci `{...coil, ...data}` birleştirir, anahtarsız
+    # yük önceki `unipolar: true`yu KORUR (kopuşta kip unutulmaz).
     yanlis_yuk = {
-        cid: {k: veri.get(k) for k in ("connected", "running", "unipolar")}
+        cid: {k: veri.get(k, "ANAHTAR-YOK") for k in ("connected", "running", "unipolar")}
         for cid, (_i, veri) in bobin_yuku.items()
         if cid in TUM_STM
-        and (veri.get("connected") is not False or veri.get("running") is not False or veri.get("unipolar") is not None)
+        and (
+            veri.get("connected") is not False
+            or veri.get("running") is not False
+            or "unipolar" not in veri
+            or veri["unipolar"] is not None
+        )
     }
     assert not yanlis_yuk, f"istemciye giden yük kopmayı/durmayı söylemiyor (arayüz sürülüyor sanar): {yanlis_yuk}"
-    assert all(i > durumlar[0] for i, _veri in bobin_yuku.values()), "bobin yayınları stm_status'tan ÖNCE geldi"
     kalan = {
         cid: {k: api._live_state["coils"][cid - 1][k] for k in ("connected", "running", "unipolar")}
         for cid in sorted(TUM_STM)
@@ -175,6 +183,28 @@ def test_update_live_stm_status_syncs_stm_coils(api, monkeypatch):
         or api._live_state["coils"][cid - 1]["unipolar"] is not None
     }
     assert not kalan, f"STM düşünce bu STM bobinleri kopmadı/durmadı/kipi unutulmadı (güvenlik): {kalan}"
+
+
+def test_KARAKTERIZASYON_kopus_yayin_SIRASI(api, monkeypatch):
+    """KARAKTERİZASYON — kapı DEĞİL (D0Ö.14 ek-2, bağımsız inceleme tur 5): bugünkü kopuş yayın sırası
+    önce `stm_status{connected: False}`, sonra her STM bobini için `stm_coil_update`.
+
+    ⚠️ Bu sıra İG-6.1'in TETİK DİZİSİDİR (plan :458): arayüz sonradan gelen bobin yükünü birleştirirken
+    STM'i yeniden "online" gösterebilir (`LiveDataContext.tsx` stm_coil_update dalı). İG-6.1 / B-1.19
+    düzeltmesi bu sırayı BİLİNÇLİ değiştirir ve bu testi günceller — o zaman kırmızı bir REGRESYON değil,
+    davranış değişikliğinin kaydıdır. (Tur 4'te bu iddia ana kapıda "ÖNCE geldi = kusur" diye yazılmıştı;
+    geçerli bir İG-6.1 hafifletmesini regresyon diye adlandırırdı.)
+    """
+    from servers import live_state
+
+    api.update_live_stm_status(connected=True)
+    yayinlar: list[dict] = []
+    monkeypatch.setattr(live_state, "_ws_broadcast_sync", yayinlar.append)
+    api.update_live_stm_status(connected=False)
+    turler = [y.get("type") for y in yayinlar if y.get("type") in ("stm_status", "stm_coil_update")]
+    assert turler and turler[0] == "stm_status" and set(turler[1:]) == {"stm_coil_update"}, (
+        f"kopuş yayın SIRASI değişti: {turler} — İG-6.1/B-1.19 düzeltmesi mi? Bu karakterizasyonu bilinçli güncelleyin."
+    )
 
 
 # ── _push_notification: baş-ekle + 50-cap + monoton sayaç ────────────────────
@@ -396,9 +426,10 @@ def test_KRITIK_ws_olu_istemci_KAPATILIR_ve_geri_basinc_sayaci_SIZMAZ(monkeypatc
 
 def test_ws_IPTAL_edilen_gonderim_de_sayaci_geri_sayar(monkeypatch):
     """D0Ö.14 ek: geri sayım `finally`'de olmalı — `CancelledError` (BaseException) gönderimdeki
-    `except Exception`a YAKALANMAZ; sayım `try` gövdesinin sonuna taşınsa iptal/kapanış yolunda
-    sayaç SIZAR ve sunucu sonunda her yayını düşürür. Ölü-istemci kapısı bunu ayırt edemez
-    (orada her hata yakalanır)."""
+    `except Exception`a YAKALANMAZ; sayım `try` gövdesinin sonuna taşınsa İPTAL yolunda (ör. döngü
+    kapanışında görev iptali) sayaç SIZAR. Ölü-istemci kapısı bunu ayırt edemez (orada her hata
+    yakalanır). (D0Ö.14 ek-2: çalışma sırasında tekrarlanan bir iptal kaynağı GÖSTERİLMEDİ — iptal
+    yalnız kapanıştaysa sızıntının etkisi sınırlıdır; kapı `finally` yerleşimini pinler.)"""
     import asyncio
 
     from servers import live_state
@@ -433,3 +464,59 @@ def test_ws_IPTAL_edilen_gonderim_de_sayaci_geri_sayar(monkeypatch):
         dongu.close()
     assert istemci.gonderim >= 1, "kurulum: gönderim hiç denenmedi, kapı anlamsız olur"
     assert live_state._ws_pending == 0, f"iptal edilen gönderimde sayaç SIZDI: {live_state._ws_pending}"
+
+
+def test_ws_bekleyen_sayaci_HER_gonderimde_BIRER_azalir(monkeypatch):
+    """D0Ö.14 ek-2 (bağımsız inceleme tur 5): geri sayım `-= 1` olmalı. `finally`'de sayacı SIFIRLAYAN
+    mutant (`_ws_pending = 0`) iki WS kapısında da yeşildi — ikisi de yalnız SON değere (0) bakıyordu.
+    O mutantta her tamamlanan gönderim sayacı sıfırlar; yavaş istemcide sınır her turda 64 yeni yer açar
+    ve P2'nin sınırsız birikimi geri gelir. İstemci her gönderimde bir izin bekler: her izinde TAM BİR
+    gönderim tamamlanır ve sayaç TAM BİR azalır."""
+    import asyncio
+
+    from servers import live_state
+
+    class _KademeliIstemci:
+        def __init__(self):
+            self.izin = asyncio.Event()
+            self.gonderim = 0
+
+        async def send_text(self, data):
+            await self.izin.wait()
+            self.izin.clear()
+            self.gonderim += 1
+
+        async def close(self, code=None):
+            pass
+
+    istemci = _KademeliIstemci()
+    dongu = asyncio.new_event_loop()
+    monkeypatch.setattr(live_state, "_event_loop", dongu)
+    monkeypatch.setattr(live_state, "_ws_clients", [istemci])
+    monkeypatch.setattr(live_state, "_ws_send_lock", None)
+    monkeypatch.setattr(live_state, "_ws_pending", 0)
+    monkeypatch.setattr(live_state, "_ws_dropped_total", live_state._ws_dropped_total)
+    n = 4
+    gorulen = []
+    try:
+        for i in range(n):
+            live_state._ws_broadcast_sync({"type": "d0o14-kademe", "n": i})
+        dongu.run_until_complete(asyncio.sleep(0.02))
+        gorulen.append(live_state._ws_pending)
+        for _ in range(n):
+            istemci.izin.set()
+            dongu.run_until_complete(asyncio.sleep(0.02))
+            gorulen.append(live_state._ws_pending)
+    finally:
+        istemci.izin.set()
+        for _ in range(50):
+            if live_state._ws_pending <= 0:
+                break
+            istemci.izin.set()
+            dongu.run_until_complete(asyncio.sleep(0.005))
+        dongu.close()
+    assert istemci.gonderim == n, f"kurulum: {istemci.gonderim}/{n} gönderim tamamlandı"
+    assert gorulen == list(range(n, -1, -1)), (
+        f"bekleyen sayacı her gönderimde BİRER azalmadı: {gorulen} (beklenen {list(range(n, -1, -1))}) — "
+        "sayaç sıfırlanıyorsa sınır yavaş istemcide sürekli yeniden açılır (P2 birikimi)"
+    )
