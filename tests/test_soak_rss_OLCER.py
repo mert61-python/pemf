@@ -152,9 +152,35 @@ def test_KRITIK_veri_koku_OSError_da_EYLEMLI_on_ucus_reddi(monkeypatch, tmp_path
     assert hata.__name__ in e.value.code, f"neden (hata türü) yok: {e.value.code!r}"
 
 
+def test_KRITIK_veri_koku_LISTELENEMEZSE_SESSIZCE_atlanmaz(monkeypatch, tmp_path):
+    """D0Ö.22+15 ek-5 (tur 7 kısa kontrolü): `Path.glob` listeleme reddini (PermissionError) CPython 3.10'da YUTAR —
+    ACL'li ama stat edilebilen makine kökü (`is_dir` True) sessizce atlanıp soak kullanıcı köküne (YANLIŞ DB'ler)
+    düşüyordu. Artık açık `os.scandir` reddi eylem söyleyen ön-uçuş reddine (SystemExit → çıkış 2) çevrilir."""
+    import os
+
+    import utils.path_utils as pu
+
+    m = betik_modulu("soak_http_ws")
+    pd = tmp_path / "pd"
+    (pd / "PEMF_System" / "PEMF_GUI").mkdir(parents=True)
+    monkeypatch.setenv("PROGRAMDATA", str(pd))
+    monkeypatch.setattr(pu, "get_app_data_directory", lambda: tmp_path / "kullanici" / "PEMF_GUI")
+    gercek_scandir = os.scandir
+
+    def _scandir(yol="."):
+        if "PEMF_System" in str(yol):
+            raise PermissionError(13, "d0o: listeleme reddedildi", str(yol))
+        return gercek_scandir(yol)
+
+    monkeypatch.setattr(os, "scandir", _scandir)
+    with pytest.raises(SystemExit) as e:
+        m._veri_koku()
+    assert isinstance(e.value.code, str) and "taranamadi (PermissionError" in e.value.code, f"{e.value.code!r}"
+
+
 def test_KRITIK_veri_koku_TARANAMAZSA_da_EYLEMLI_on_ucus_reddi(monkeypatch, tmp_path):
-    """D0Ö.22+15 ek-4 (tur 7): aday taraması sarılı değildi — listelenemeyen bir kök (ör. ACL'li
-    %PROGRAMDATA%\\PEMF_System) `is_dir`/`glob`'da PermissionError atıp yine traceback + 1 veriyordu."""
+    """D0Ö.22+15 ek-4 (tur 7): aday taraması sarılı değildi — `is_dir` OSError'u yine traceback + 1 veriyordu.
+    (ek-5 düzeltmesi: `glob` kolu ayrı — reddi kendisi yutar; bkz. `..._LISTELENEMEZSE_SESSIZCE_atlanmaz`.)"""
     import pathlib
 
     import utils.path_utils as pu

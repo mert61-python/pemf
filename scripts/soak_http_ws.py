@@ -345,11 +345,13 @@ def _veri_koku() -> Path:
             "Soak bir veri koku SECEMEDEN baslatilmaz."
         ) from e
 
-    # D0Ö.22+15 ek-4 (tur 7): aday taraması da sarılır — listelenemeyen bir kök (ör. ACL'li %PROGRAMDATA%\PEMF_System)
-    # `is_dir`/`glob`'da PermissionError atıp yine traceback + 1 veriyordu.
+    # D0Ö.22+15 ek-4 (tur 7): aday taraması da sarılır — `is_dir` OSError'u traceback + 1 veriyordu.
+    # D0Ö.22+15 ek-5 (tur 7 kısa kontrolü) düzeltilmiş gerekçe: `Path.glob` listeleme reddini (PermissionError)
+    # CPython 3.10'da kendisi YUTAR — ACL'li ama stat edilebilen bir kök (ör. %PROGRAMDATA%\PEMF_System\PEMF_GUI)
+    # sessizce atlanıp soak YANLIŞ köke düşüyordu. Artık `_db_var_mi` açıkça `os.scandir` ile listeler; ret SystemExit.
     try:
         for kok in adaylar:
-            if kok.is_dir() and any(kok.glob("*.db")):
+            if kok.is_dir() and _db_var_mi(kok):
                 return kok
     except OSError as e:
         raise SystemExit(
@@ -357,6 +359,15 @@ def _veri_koku() -> Path:
             "okunabilir mi? Soak bir veri koku SECEMEDEN baslatilmaz."
         ) from e
     return adaylar[0] if adaylar else Path(".")
+
+
+def _db_var_mi(kok: Path) -> bool:
+    """`kok` altında `*.db` var mı? `Path.glob`'un aksine listeleme reddini (PermissionError) YUTMAZ — çağıran onu
+    eylem söyleyen ön-uçuş reddine çevirir (D0Ö.22+15 ek-5)."""
+    import os
+
+    with os.scandir(kok) as girdiler:
+        return any(g.name.lower().endswith(".db") for g in girdiler)
 
 
 def _konsola_guvenli(metin: str) -> str:
