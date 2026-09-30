@@ -64,7 +64,8 @@ def test_KRITIK_WS_on_ucusu_BAGLANAMAZSA_soak_BASLAMAZ(monkeypatch, capsys):
     rc, cikti, sunucu = _kos(monkeypatch, capsys, "reddet")
     assert rc == 2 and "TEMIZ" not in cikti, f"WS'ye bağlanılamadığı hâlde soak başladı/TEMIZ (rc={rc}):\n{cikti}"
     assert "OLCULMEDI" in cikti and "soak basladi" not in cikti, f"ön-uçuş reddi yok:\n{cikti[-800:]}"
-    assert "403" in cikti and "yuklenemedi" not in cikti, f"ret nedeni 403 değil (paket eksik?):\n{cikti[-800:]}"
+    # D0Ö.15 ek-2: çıplak "403" rastgele port numarasına (ör. 54030) da çarpabilirdi.
+    assert "HTTP 403" in cikti and "yuklenemedi" not in cikti, f"ret nedeni 403 değil (paket eksik?):\n{cikti}"
     assert sunucu.ws_yukseltme_sayisi() >= 1, "ön-uçuş /ws'yi hiç denemedi"
 
 
@@ -93,7 +94,9 @@ def test_KRITIK_TUM_nedenler_basilir(monkeypatch, capsys):
     """RSS ölçülemedi VE WS koptu: ikisi de söylenir (eskiden yalnız ilki basılıp dönülüyordu)."""
     rc, cikti, _ = _kos(monkeypatch, capsys, "kes", rss_olculur=False)
     assert rc == 1, cikti[-800:]
-    assert "RSS OLCULMEDI" in cikti and "KOPTU" in cikti, f"nedenlerden biri basılmadı:\n{cikti[-800:]}"
+    # D0Ö.15 ek-2: yalnız KARAR bölümünde — baştaki 'RSS OLCULEMIYOR … RSS OLCULMEDI olur' uyarısı sayılmaz.
+    ozet = cikti.split("=== OZET ===", 1)[1] if "=== OZET ===" in cikti else ""
+    assert "RSS OLCULMEDI" in ozet and "KOPTU" in ozet, f"nedenlerden biri karar bölümünde basılmadı:\n{ozet}"
 
 
 def test_KARSIT_KANIT_WS_acik_ve_RSS_kararli_TEMIZ(monkeypatch, capsys):

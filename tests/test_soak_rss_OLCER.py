@@ -24,11 +24,24 @@ MUTASYON: RSS=0'da denetimi atlayıp TEMIZ dönmek → KIRMIZI.
 
 from __future__ import annotations
 
+import re
 import sys
 from types import SimpleNamespace
 
 from betik_alt_sureci import betik_modulu
 from sahte_soak_backend import SahteBackend, kos, sahte_psutil, soak_modulu
+
+
+def _ozet(cikti: str) -> str:
+    """Kullanıcının GÖRDÜĞÜ karar bölümü. D0Ö.15 ek-2 (tur 5): koşu başındaki 'RSS OLCULEMIYOR … RSS
+    OLCULMEDI olur' uyarısı karar satırı yerine iddiaları karşılıyordu (sabit anahtar alt-dize tuzağı)."""
+    return cikti.split("=== OZET ===", 1)[1] if "=== OZET ===" in cikti else ""
+
+
+def _sayac(metin: str, ad: str) -> int:
+    m = re.search(rf"\b{ad} (\d+)", metin)
+    assert m, f"'{ad} <n>' yok:\n{metin[-600:]}"
+    return int(m.group(1))
 
 
 def _kos(monkeypatch, capsys, psutil_fn, **kw) -> tuple[int, str, SahteBackend]:
@@ -45,11 +58,14 @@ def _kos(monkeypatch, capsys, psutil_fn, **kw) -> tuple[int, str, SahteBackend]:
 
 def test_KRITIK_RSS_OLCULEMEZSE_TEMIZ_DEMEZ(monkeypatch, capsys):
     rc, cikti, sunucu = _kos(monkeypatch, capsys, lambda port: sahte_psutil("python.exe", 80.0))  # port dinlenmez
+    ozet = _ozet(cikti)
     assert rc != 0 and "TEMIZ" not in cikti, f"RSS hiç ölçülmeden TEMIZ/0 (B-10.97, rc={rc}):\n{cikti[-800:]}"
-    assert "RSS OLCULMEDI" in cikti, f"'RSS OLCULMEDI' denmedi:\n{cikti[-800:]}"
+    assert "RSS OLCULMEDI" in ozet and "RSS: OLCULMEDI" in ozet, f"karar bölümünde 'RSS OLCULMEDI' yok:\n{ozet}"
     assert "0.0 -> 0.0" not in cikti, f"ölçülmeyen RSS ölçülmüş %0 gibi basıldı:\n{cikti[-800:]}"
-    assert "KARAR VEREMEZ" in cikti, f"koşunun RSS için karar veremeyeceği BAŞTA söylenmedi:\n{cikti[-800:]}"
-    assert sunucu.ws_yukseltme_sayisi() >= 1, "soak /ws açmadı — 'HTTP + WebSocket soak' iddiası boş (B-10.97)"
+    bas = cikti.split("soak basladi", 1)[0]
+    assert "KARAR VEREMEZ" in bas, f"koşunun RSS için karar veremeyeceği BAŞTA söylenmedi:\n{bas[-800:]}"
+    # D0Ö.15 ek-2: ön-uçuş tek başına bir /ws yükseltmesi yapar — soak İZLEYİCİSİ ayrıca pinlenir.
+    assert sunucu.ws_yukseltme_sayisi() >= 2 and _sayac(ozet, "baglanti") >= 1, f"soak /ws izleyicisi yok:\n{ozet}"
 
 
 def test_KRITIK_RSS_HEDEF_PORTU_dinleyen_surecten_okunur(monkeypatch, capsys):
@@ -58,8 +74,10 @@ def test_KRITIK_RSS_HEDEF_PORTU_dinleyen_surecten_okunur(monkeypatch, capsys):
     Ada göre seçen eski betik kararlı olanı okuyup TEMIZ/0 derdi — hedef hiç ölçülmeden."""
 
     def _psutil(port):
+        # D0Ö.15 ek-2 (tur 5): ÇELDİRİCİ ÖNCE listelenir — gerçek psutil'de sıra keyfidir; hedef hep ilk
+        # olsaydı "ilk LISTEN'i al" (port filtresi yok) mutantı bu kapıdan geçerdi.
         return sahte_psutil(
-            "python.exe", lambda n: 100.0 * 2**n, port=port, digerleri=(("PEMF_Backend.exe", 500.0, port + 1),)
+            "PEMF_Backend.exe", 500.0, port=port + 1, digerleri=(("python.exe", lambda n: 100.0 * 2**n, port),)
         )
 
     rc, cikti, _ = _kos(monkeypatch, capsys, _psutil)
@@ -70,14 +88,37 @@ def test_KRITIK_RSS_HEDEF_PORTU_dinleyen_surecten_okunur(monkeypatch, capsys):
 def test_KRITIK_hedef_portu_dinleyen_surec_YOKSA_RSS_OLCULMEDI(monkeypatch, capsys):
     """Yalnız BAŞKA portta bir PEMF_Backend var: hedefin RSS'i ÖLÇÜLMEDİ (onunki değil)."""
     rc, cikti, _ = _kos(monkeypatch, capsys, lambda port: sahte_psutil("PEMF_Backend.exe", 500.0, port=port + 1))
+    ozet = _ozet(cikti)
     assert rc == 1 and "TEMIZ" not in cikti, f"başka sürecin RSS'i hedefinki sayıldı (rc={rc}):\n{cikti[-800:]}"
-    assert "RSS OLCULMEDI" in cikti and "dinleyen" in cikti, f"neden söylenmedi:\n{cikti[-800:]}"
+    # Neden KARAR SATIRININ kendisinde (özetteki "RSS kaynagi" satırı da nedeni taşır; iddia onunla karşılanmasın).
+    assert re.search(r"RSS OLCULMEDI — [^\n]*dinleyen", ozet), f"karar satırında neden söylenmedi:\n{ozet}"
 
 
 def test_KRITIK_psutil_YOKSA_eylemi_SOYLER(monkeypatch, capsys):
     rc, cikti, _ = _kos(monkeypatch, capsys, lambda port: None)  # import psutil → ImportError
-    assert rc == 1 and "RSS OLCULMEDI" in cikti, f"(rc={rc}):\n{cikti[-800:]}"
-    assert "pip install psutil" in cikti, f"psutil eksikliğinin eylemi söylenmedi:\n{cikti[-800:]}"
+    ozet = _ozet(cikti)
+    assert rc == 1 and "RSS OLCULMEDI" in ozet, f"(rc={rc}):\n{cikti[-800:]}"
+    assert re.search(r"RSS OLCULMEDI — [^\n]*pip install psutil", ozet), f"karar satırında eylem yok:\n{ozet}"
+    assert "RSS kaynagi: YOK" in ozet, f"özette RSS kaynağı (YOK + neden) basılmadı:\n{ozet}"
+
+
+def test_KRITIK_veri_koku_REDDI_on_ucus_gibi_cikis_2(monkeypatch, capsys):
+    """D0Ö.15 ek-2 (tur 5): `_veri_koku` soak BAŞLAMADAN düşerse (path_utils yüklenemez) bu da bir ön-uçuş
+    reddidir — docstring sözleşmesi '2 = ön-uçuş reddi'; dize SystemExit eskiden 1 veriyordu ('en az bir
+    neden' ile karışıyordu)."""
+    m = soak_modulu(monkeypatch)
+    sunucu = SahteBackend("tut")
+    monkeypatch.setitem(sys.modules, "psutil", sahte_psutil("PEMF_Backend.exe", 500.0, port=sunucu.port))
+
+    def _dusen_kok():
+        raise SystemExit("HATA: utils.path_utils yuklenemedi (sahte) — veri koku bulunamaz")
+
+    monkeypatch.setattr(m, "_veri_koku", _dusen_kok)
+    try:
+        rc, cikti = kos(m, monkeypatch, capsys, sunucu.port)
+    finally:
+        sunucu.kapat()
+    assert rc == 2 and "soak basladi" not in cikti, f"veri kökü reddi ön-uçuş gibi değil (rc={rc}):\n{cikti}"
 
 
 def test_KRITIK_tek_ornekte_cikis_SIFIR_DEGIL(monkeypatch, capsys):

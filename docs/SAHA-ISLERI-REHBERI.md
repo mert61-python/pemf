@@ -230,7 +230,7 @@ korumasını bekleme; süreyi sen sınırla ve sıcaklığı `STM_TELE`'deki `T=
 ## B-7 · 72 saatlik klinik soak  ⏱️ 3 gün (pasif)
 
 ```powershell
-python -c "import psutil, websockets"   # ön-denetim: ikisi de yoksa koşu KARAR VEREMEZ
+python -c "import psutil, websockets"   # ön-denetim: biri bile yoksa sorun var (websockets yok → çıkış 2; psutil yok → RSS OLCULMEDI)
 python scripts\soak_http_ws.py --port 8000 --dakika 4320 --aralik 60
 ```
 
@@ -243,10 +243,12 @@ koşu sırasında koparsa **SUPHELI** — hiçbiri TEMİZ sayılmaz, bütün ned
 ⚠️ Okuma tuzakları (ikisi de yaşandı):
 - **AI ısınması sızıntı DEĞİL.** Health-200 anında RSS ~254 MB; AI ısınınca ~2310 MB'a çıkar
   (+%809). Betik artık RSS'in oturmasını bekliyor, ama erken bakarsan yanlış alarm verirsin.
-- **İki backend açıksa RSS toplanır.** 4106 MB'lık korku tam olarak buydu. Betik artık süreç
-  sayısını uyarıyor — uyarı çıkarsa önce onu çöz.
+- **İki backend açıksa RSS toplanırdı.** 4106 MB'lık korku tam olarak buydu. Betik artık RSS'i
+  YALNIZ `--port`u dinleyen süreçten okur (toplama yok; kaynak PID özette basılır). ⚠️ VERIFICATION
+  §7'deki paralel izleme döngüsü ise tüm PEMF_Backend süreçlerini TOPLAR — iki backend açıksa o
+  döngünün RAM sayısı yanıltır.
 
-25 dakikalık koşu yalnız **HTTP + RSS** ölçtü (sızıntı yok, DB sabit); `/ws` o koşuda HİÇ açılmadı (B-9.26) → **WS kararlılığı ÖLÇÜLMEDİ**. 72 saatlik koşu bunu da ölçecek; betik artık WS'yi soak başlamadan ön-uçuşla denetler (bağlanamaz / auth 1008 / snapshot yok → çıkış 2).
+25 dakikalık koşu yalnız **RSS + DB** ölçtü (sızıntı yok, DB sabit; HTTP hata sayısının kaydı yok); `/ws` o koşuda HİÇ açılmadı (B-9.26) → **WS kararlılığı ÖLÇÜLMEDİ**. 72 saatlik koşu bunu da ölçecek; betik artık WS'yi soak başlamadan ön-uçuşla denetler (bağlanamaz / auth 1008 / snapshot yok → çıkış 2).
 
 ---
 

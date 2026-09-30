@@ -241,21 +241,26 @@ def _backend_rss_mb(port: int) -> float:
         return 0.0
 
 
-def _rss_kaynagini_bildir(port: int) -> bool:
-    """Hangi sürecin ölçüleceğini (ya da NEDEN ölçülemeyeceğini) koşu BAŞINDA söyle."""
+def _rss_kaynagini_bildir(port: int) -> str:
+    """Hangi sürecin ölçüleceğini (ya da NEDEN ölçülemeyeceğini) koşu BAŞINDA söyle; tanımı döndür.
+
+    D0Ö.15 ek-2 (tur 5): tanım ÖZETTE de basılır — portu dinleyen süreç backend değilse (ör. Docker/WSL
+    port yönlendiricisi) karar satırının hangi sürece dayandığı görünsün.
+    """
     p, neden = _port_sureci(port)
     if p is None:
         print(
             f"  UYARI: RSS OLCULEMIYOR — {neden}. Bu kosu bellek sizintisi icin KARAR VEREMEZ "
             "(sonuc RSS OLCULMEDI olur)."
         )
-        return False
+        return f"YOK ({neden})"
     try:
         ad = p.name()
     except Exception:
         ad = "?"
-    print(f"  RSS kaynagi: PID {p.pid} ({ad}) — {port} portunu dinleyen surec")
-    return True
+    tanim = f"PID {p.pid} ({ad}) — {port} portunu dinleyen surec"
+    print(f"  RSS kaynagi: {tanim}")
+    return tanim
 
 
 def _rss_oturmasini_bekle(port: int, azami_sn: float = 180.0, kararli_tur: int = 3) -> float:
@@ -360,11 +365,18 @@ def main() -> int:
         print("  Bu kosuda WS kararliligi OLCULMEDI olurdu — soak baslatilmadi.")
         return 2
 
-    veri_koku = _veri_koku()
+    try:
+        veri_koku = _veri_koku()
+    except SystemExit as e:
+        # D0Ö.15 ek-2 (tur 5): soak BAŞLAMADAN düşen bir ön-koşul da ön-uçuş reddidir (çıkış 2) — dize
+        # argümanlı SystemExit süreci 1 ile bitirir ve "en az bir neden" ile karışırdı.
+        print(e.code if isinstance(e.code, str) else f"HATA: veri koku belirlenemedi ({e.code!r})", file=sys.stderr)
+        print("  Veri koku belirlenemedi — soak baslatilmadi.")
+        return 2
 
     # ⚠️ ISINMAYI BEKLE (bkz. _rss_oturmasini_bekle). Taban, AI ısıtması bittikten SONRA
     # alınmalı; yoksa ısıtmanın kendisi "sızıntı" diye raporlanır.
-    _rss_kaynagini_bildir(a.port)
+    rss_kaynagi = _rss_kaynagini_bildir(a.port)
     print("  AI isitmasinin oturmasi bekleniyor (taban olcumu icin)...")
     oturmus = _rss_oturmasini_bekle(a.port)
     print(f"  taban RSS oturdu: {oturmus} MB" if oturmus > 0 else "  taban RSS: OLCULEMEDI")
@@ -422,7 +434,13 @@ def main() -> int:
     print(
         f"  RSS: {ilk_rss} -> {son_rss} MB  (fark {artis:+.1f} MB, %{oran:+.1f})" if rss_olculdu else "  RSS: OLCULMEDI"
     )
-    print(f"  DB : {ilk_db} -> {son_db} KB  (fark {son_db - ilk_db:+d} KB)")
+    print(f"  RSS kaynagi: {rss_kaynagi}")
+    # D0Ö.15 ek-2 (tur 5): RSS'te kapatılan kalıbın DB ikizi — kökte .db yoksa "0 -> 0 KB" ölçülmüş gibi basılmaz
+    # (DB karara girmez; yalnız görünürlük).
+    if any(veri_koku.glob("*.db")):
+        print(f"  DB : {ilk_db} -> {son_db} KB  (fark {son_db - ilk_db:+d} KB)")
+    else:
+        print(f"  DB : OLCULMEDI ({veri_koku} altinda .db yok)")
     print(ws_ozeti)
 
     # ⚠️ D0Ö.22 ek: TÜM nedenler toplanıp basılır — eskiden ilk başarısız nedende dönülüyordu
@@ -441,9 +459,11 @@ def main() -> int:
     # gurultuyu eleyip gercek bir sizintiyi yakalayacak kadar genis; daha dar bir esik
     # yanlis alarm uretir ve kapi guvenilmez olur.
     elif oran > 25.0:
-        sorunlar.append("⚠️ RSS %25'ten fazla artti -> SIZINTI SUPHESI. Daha uzun kosturup dogrulayin.")
+        # D0Ö.15 ek-2: neden satırları ASCII — çıktı cp1254'e yönlendirilince emoji UnicodeEncodeError atıp
+        # "tüm nedenler" döngüsünü SONUC satırından önce kesiyordu.
+        sorunlar.append("UYARI: RSS %25'ten fazla artti -> SIZINTI SUPHESI. Daha uzun kosturup dogrulayin.")
     if hata:
-        sorunlar.append(f"⚠️ {hata} istek basarisiz -> HTTP kararliligi supheli.")
+        sorunlar.append(f"UYARI: {hata} istek basarisiz -> HTTP kararliligi supheli.")
     # D0Ö.22: WS sonucu KARARA girer — bağlanılamayan kanal "kararlı" sayılamaz.
     if ws.baglanti == 0:
         sorunlar.append(f"UYARI: {WS_YOLU} kanalina HIC baglanilamadi -> WS kararliligi OLCULMEDI.")

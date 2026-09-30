@@ -106,7 +106,9 @@ class SahteBackend:
                 )
                 if davranis == "auth1008":  # api_server: token yoksa accept() sonra close(1008)
                     c.sendall(bytes([0x88, 2]) + (1008).to_bytes(2, "big"))
-                    time.sleep(0.5)
+                    # D0Ö.15 ek-2 (tur 5): websockets 15 `recv()` soket KAPANINCA atar — 0,5 sn bekleme, 1 sn'lik
+                    # ön-uçuş penceresinde yüklü CI'da "ilk mesaj GELMEDI"ye kayabilirdi. Hemen kapat.
+                    time.sleep(0.05)
                     return
                 if davranis == "sessiz":
                     while not self.dur.is_set():
