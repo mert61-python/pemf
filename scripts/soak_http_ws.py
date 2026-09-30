@@ -29,11 +29,14 @@ KULLANIM
 ölçülemeyecekse (yanlış yol, websockets yok, auth açık profil 1008) koşu başlamaz, çıkış 2.
 Çıkış: 0 = TEMIZ · 1 = en az bir neden (hepsi basılır) · 2 = ön-uçuş reddi.
 
-⚠️ VERİ KÖKÜ (D0Ö.21 ek-2): `_veri_koku` ürünün `get_app_data_directory()`sini çağırır — kullanıcı kökünde
-dizin açar; `PEMF_DATA_DIR` tanımlıysa makine kökünü de açar ve kullanıcı kökündeki sır/DB'leri oraya VAR
-OLANI EZMEDEN kopyalayabilir. Betik bu yüzden veri kökü açısından salt-okur DEĞİLDİR (bobin/DB içeriğine
-dokunmaz). Kök ölçülen backend'den değil makine/kullanıcı .db varlığından seçilir: klon backend ölçülürken
-saha kökünün DB büyümesi basılabilir (DB karara girmez).
+⚠️ VERİ KÖKÜ (D0Ö.21 ek-2; ek-3 daraltması): `_veri_koku` ürünün `get_app_data_directory()`sini çağırır —
+`PEMF_DATA_DIR` YOKSA kullanıcı kökünü (`%APPDATA%\\PEMF_GUI`), VARSA YALNIZ `PEMF_DATA_DIR\\PEMF_GUI`yi
+açar (yoksa oluşturur). İkinci dalda, yalnız Windows'ta ve süreç başına BİR kez, kullanıcı kökündeki 3 DB'yi
+ve SQLCipher anahtarını hedefte YOKSA kopyalar (anahtar hedefteki `pemf_secrets.json`a eklenir; var olan
+ezilmez, kaynak silinmez). Betik bu yüzden veri kökü açısından salt-okur DEĞİLDİR (bobin/DB içeriğine
+dokunmaz). Kök ölçülen backend'den değil .db varlığından seçilir — sıra `%PROGRAMDATA%\\PEMF_System\\PEMF_GUI`,
+sonra `get_app_data_directory()`: klon backend ölçülürken saha kökünün DB büyümesi basılabilir (DB karara
+girmez).
 """
 
 from __future__ import annotations
