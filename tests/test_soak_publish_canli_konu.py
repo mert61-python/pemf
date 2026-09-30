@@ -16,7 +16,8 @@ MQTT v5 + QoS 1 ile PUBACK reason code okur — başta tüketici YOK (16) ya da 
 ile canlı önek YAYINLANIR. Ürünün GERÇEK `on_connect` filtreleri betiğin ad alanına pinlidir.
 D0Ö.17 ek-2 (tur 5): SONDALAR dahil tüm yayınlar ad alanına pinli; sonda ürünün yok saydığı bobin 0
 konusuna gider; önce rastgele konuda KALİBRASYON (broker abonesizliği bildirmiyorsa ya da joker abone
-varsa ÖLÇÜLEMEZ → 3); 0/16 dışı PUBACK kodu ÖLÇÜLEMEDİ.
+varsa ÖLÇÜLEMEZ → 3); 0/16 dışı PUBACK kodu ÖLÇÜLEMEDİ. D0Ö.17 ek-3 (tur 6): kalibrasyonun ÖLÇÜLEMEDİ
+kolları (bağlanamadı / PUBACK yok / 135) da yük basmadan 3 ve ileti GERÇEK nedeni söyler.
 MUTASYON: onay denetimini ya da rc okumasını kaldırmak → KIRMIZI.
 """
 
@@ -41,6 +42,8 @@ class _SahteIstemci:
         kayit["istemci"].append(self.protokol)
 
     def connect(self, *a, **k):
+        if self.ayar["baglanti_hatasi"]:  # broker kapalı (ör. mosquitto çalışmıyor)
+            raise ConnectionRefusedError(10061, "hedef makine baglantiyi reddetti")
         self.kayit["baglanti"] += 1
 
     def loop_start(self):
@@ -70,9 +73,15 @@ class _SahteIstemci:
         return SimpleNamespace(rc=self.ayar["yuk_rc"](i), mid=mid)
 
 
-def _betik(monkeypatch, yuk_rc=lambda i: 0, sonda_kodlari=(0, 0), kalibrasyon_kodu=16) -> tuple:
-    """`kalibrasyon_kodu`: rastgele konudaki sondanın PUBACK kodu (16 = broker abonesizliği BİLDİRİYOR)."""
-    ayar = {"yuk_rc": yuk_rc, "sonda_kodlari": list(sonda_kodlari), "kalibrasyon_kodu": kalibrasyon_kodu}
+def _betik(monkeypatch, yuk_rc=lambda i: 0, sonda_kodlari=(0, 0), kalibrasyon_kodu=16, baglanti_hatasi=False) -> tuple:
+    """`kalibrasyon_kodu`: rastgele konudaki sondanın PUBACK kodu (16 = broker abonesizliği BİLDİRİYOR;
+    None = PUBACK hiç gelmez). `baglanti_hatasi`: her `connect()` reddedilir (broker kapalı)."""
+    ayar = {
+        "yuk_rc": yuk_rc,
+        "sonda_kodlari": list(sonda_kodlari),
+        "kalibrasyon_kodu": kalibrasyon_kodu,
+        "baglanti_hatasi": baglanti_hatasi,
+    }
     kayit = {"istemci": [], "baglanti": 0, "yayin": [], "yuk": 0}
     client = types.ModuleType("paho.mqtt.client")
     client.Client = lambda *a, **k: _SahteIstemci(ayar, kayit, *a, **k)
@@ -182,7 +191,30 @@ def test_KRITIK_KALIBRASYON_broker_abonesizligi_BILDIRMIYORSA_OLCULEMEZ(monkeypa
     m, kayit = _betik(monkeypatch, kalibrasyon_kodu=0)
     rc = _kos(m, monkeypatch, "--topic-prefix", "test/pemf/coil")
     assert rc == 3 and not _yuk(kayit), f"kalibrasyon 'VAR' dediği hâlde rc={rc}, {len(_yuk(kayit))} yük"
-    assert "kalibrasyon" in capsys.readouterr().err.lower()
+    karar = _kalibrasyon_karari(capsys.readouterr().err)
+    assert "KOK duzeyinde joker" in karar, f"VAR kolunun nedeni söylenmedi: {karar!r}"
+
+
+def _kalibrasyon_karari(hata: str) -> str:
+    return next((s for s in hata.splitlines() if "TUKETIM OLCULEMEZ" in s), "")
+
+
+def test_KRITIK_KALIBRASYON_OLCULEMEDI_kollari_GERCEK_NEDENLE_3(monkeypatch, capsys):
+    """D0Ö.17 ek-3 (tur 6): kalibrasyon ÖLÇÜLEMEDİ dönünce de yük basılmaz ve 3 — ileti her sonuçta sabit
+    "abonesizliği bildirmiyor ya da joker abone var" diyordu; en sık hata olan KAPALI broker yanlış nedenle
+    bildiriliyordu. Ayrıca `if kalibrasyon == "VAR": return 3` daraltması bu kollarda YÜK basardı."""
+    durumlar = {
+        "baglanamadi": ({"baglanti_hatasi": True}, "--host/--port"),
+        "puback_yok": ({"kalibrasyon_kodu": None}, "MQTT v5"),
+        "acl_135": ({"kalibrasyon_kodu": 135}, "ACL"),
+    }
+    for ad, (ayar, beklenen) in durumlar.items():
+        m, kayit = _betik(monkeypatch, **ayar)
+        monkeypatch.setattr(m, "SONDA_ZAMAN_ASIMI_S", 0.05)  # PUBACK beklemesi 5 sn sürmesin
+        rc = _kos(m, monkeypatch, "--topic-prefix", "test/pemf/coil")
+        karar = _kalibrasyon_karari(capsys.readouterr().err)
+        assert rc == 3 and not _yuk(kayit), f"{ad}: kalibrasyon ölçülemediği hâlde rc={rc}, {len(_yuk(kayit))} yük"
+        assert beklenen in karar and "joker" not in karar, f"{ad}: neden yanlış/eksik: {karar!r}"
 
 
 def test_KRITIK_beklenmeyen_PUBACK_kodu_OLCULEMEDI(monkeypatch, capsys):

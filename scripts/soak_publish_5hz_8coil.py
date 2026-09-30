@@ -14,9 +14,16 @@ tüketim DEĞİLDİR. Ayrı bir MQTT v5 istemcisi başta ve sonda TEK bir QoS 1 
 konuya abone yoksa PUBACK'te 16 (No matching subscribers) döner. Başta tüketici YOKSA ya da bu
 ÖLÇÜLEMEZSE (broker v5 desteklemiyor, PUBACK gelmedi) yük HİÇ basılmaz. Yük QoS 0 kalır.
 D0Ö.17 ek-2: 16 göndermek MAY olduğu için önce abonesi olmayan RASTGELE bir konu sondalanır
-(kalibrasyon); orada 16 gelmezse (broker bildirmiyor ya da joker `#` abone var) sonuç ÖLÇÜLEMEZ.
+(kalibrasyon, `soak-kalibrasyon/<hex>/0/sensors`); orada 16 gelmezse sonuç ÖLÇÜLEMEZ ve ileti NEDENİ
+söyler (D0Ö.17 ek-3): 0 = broker abonesizliği bildirmiyor ya da KÖK düzeyinde joker abone var (`#`,
+`+/…`) · bağlanamadı = broker kapalı / `--host`/`--port` · PUBACK yok = broker MQTT v5 konuşmuyor ·
+135 = ACL reddi.
+⚠️ Kalibrasyon YALNIZ kök jokerlerini yakalar: ad alanı jokeri (ör. `mosquitto_sub -t "pemf/#"`,
+docs/PEMF_SISTEM_RAPORU.md) kalibrasyon konusunu kapsamaz — `--canli-onay`da backend kapalıyken böyle
+bir izleyici açıksa sonda sahte 'VAR' der (tüketen backend değil izleyicidir).
 Sonda `<önek>/0/sensors`e gider: ürün bobin 0'ı yok sayar, abonelik filtresi yine eşleşir —
-tüketici bu yüzden `<önek>/+/sensors` (ya da `#`) filtresiyle abone olmalıdır.
+tüketici bu yüzden `<önek>/+/sensors` (ya da `<önek>/#`) filtresiyle abone olmalıdır; kök `#` ile abone
+olan izleyici kalibrasyon konusunu da tüketir → ÖLÇÜLEMEZ (3).
 
 ÇIKIŞ KODU: 0 = her yük yayını istemci kuyruğuna KABUL edildi VE sondalar başta/sonda tüketici
 VAR dedi · 1 = reddedilen yayın ya da hiç yayın yok · 2 = onaysız canlı önek · 3 = tüketici YOK /
@@ -40,6 +47,8 @@ except ImportError as exc:
 URUN_AD_ALANI = "pemf"
 #: MQTT 5.0 §3.4.2.1 PUBACK reason code: "No matching subscribers".
 ABONE_YOK_KODU = 16
+#: MQTT 5.0 PUBACK reason code: "Not authorized" (ACL reddi).
+YETKISIZ_KODU = 135
 SONDA_ZAMAN_ASIMI_S = 5.0
 
 
@@ -109,6 +118,23 @@ def tuketim_sondasi(host: str, port: int, konu: str) -> str:
             pass
 
 
+def kalibrasyon_nedeni(sonuc: str) -> str:
+    """Kalibrasyon sondası 'YOK' dışında ne döndüyse GERÇEK nedeni ve eylemi.
+
+    D0Ö.17 ek-3 (tur 6): ileti her sonuçta sabit "abonesizliği bildirmiyor ya da joker abone var" diyordu —
+    en sık hata olan KAPALI broker yanlış nedenle bildiriliyordu (gerçek neden yalnız tırnak içindeydi).
+    """
+    if sonuc == "VAR":
+        return "broker abonesizligi (16) bildirmiyor ya da KOK duzeyinde joker bir abone var (`#`, `+/...`)"
+    if sonuc.startswith("OLCULEMEDI: sonda baglanamadi"):
+        return "broker'a baglanilamadi — broker calisiyor mu, --host/--port dogru mu?"
+    if sonuc.startswith("OLCULEMEDI: ") and "PUBACK gelmedi" in sonuc:
+        return "PUBACK gelmedi — broker MQTT v5 konusuyor mu?"
+    if sonuc == f"OLCULEMEDI: PUBACK reason code {YETKISIZ_KODU}":
+        return f"PUBACK {YETKISIZ_KODU} (yetkisiz) — broker ACL'si sonda yayinini reddediyor"
+    return "beklenmeyen sonda sonucu"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Publish synthetic sensor data for soak testing")
     parser.add_argument("--host", default="127.0.0.1")
@@ -148,14 +174,15 @@ def main() -> int:
         print(f"Ignored extra args: {unknown_args}", flush=True)
 
     # D0Ö.17 ek-2: KALİBRASYON — MQTT 5 §3.4.2.1'de abonesizlikte 16 göndermek MAY; 16 yerine 0 dönen broker
-    # ya da bir joker (`#`) abone ürün konusunda SAHTE 'VAR' üretir. Kimsenin abone olmadığı rastgele bir
-    # konu (ürün ad alanı DIŞI) önce sondalanır: orada 'YOK' gelmiyorsa tüketim ÖLÇÜLEMEZ.
+    # ya da KÖK düzeyinde joker (`#`, `+/…`) bir abone ürün konusunda SAHTE 'VAR' üretir. Kimsenin abone
+    # olmadığı rastgele bir konu (ürün ad alanı DIŞI) önce sondalanır: orada 'YOK' gelmiyorsa tüketim
+    # ÖLÇÜLEMEZ. ⚠️ Ad alanı jokeri (`pemf/#`) kalibrasyon konusunu KAPSAMAZ (modül başlığı).
     kalibrasyon = tuketim_sondasi(args.host, args.port, f"soak-kalibrasyon/{uuid.uuid4().hex}/0/sensors")
     print(f"Tuketim sondasi kalibrasyonu (rastgele konu): {kalibrasyon}", flush=True)
     if kalibrasyon != "YOK":
         print(
             f"[HATA] TUKETIM OLCULEMEZ: kalibrasyon sondasi (abonesi olmayan rastgele konu) '{kalibrasyon}' dedi — "
-            "broker abonesizligi bildirmiyor ya da joker (#) bir abone var. Soak YAPILMADI.",
+            f"{kalibrasyon_nedeni(kalibrasyon)}. Soak YAPILMADI.",
             file=sys.stderr,
         )
         return 3
