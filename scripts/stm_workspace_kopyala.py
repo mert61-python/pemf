@@ -122,6 +122,21 @@ def main() -> int:
     if eksik_proje:
         print(f"[HATA] proje yok: {eksik_proje} — hedefe DOKUNULMADI", file=sys.stderr)
         return 2
+    # D0Ö.16 ek-2 (tur 5): kaynağın İÇERİĞİ de hedefe dokunmadan denetlenir — varlık yetmiyordu: bayat
+    # (ör. eski dal, NUM_COILS 5) ya da kısmi kaynakta sahibin workspace'i yedeğe taşınıyor, CubeIDE'nin
+    # açtığı yolda bayat kopya kalıyordu. Kopyanın kendisi aşağıda YİNE doğrulanır.
+    kaynak_sorun: list[str] = []
+    for p in PROJELER:
+        ana = KOK / "firmware" / p / "Core" / "Src" / "main.c"
+        n = _bobin_sayisi(ana)
+        if n != 7:
+            kaynak_sorun.append(f"{p}: NUM_COILS={n} (7 bekleniyordu)")
+        else:
+            kaynak_sorun += [f"{p}: {e}" for e in _protokol_eksikleri(ana)]
+    if kaynak_sorun:
+        for s in kaynak_sorun:
+            print(f"[HATA] KAYNAK BAYAT/KISMI: {s} — hedefe DOKUNULMADI", file=sys.stderr)
+        return 1
 
     hedef = kok / f"PEMF_STM32_workspace_{_dt.date.today().isoformat()}"
     yedek = None
@@ -141,6 +156,8 @@ def main() -> int:
             )
             return 2
         print(f"  onceki kopya YEDEGE tasindi (silinmedi): {yedek}")
+        # D0Ö.16 ek-2: uyarı TAŞIMA ANINDA da basılır — sonraki bir adım düşse bile görünsün.
+        print("   Bu yedegi CubeIDE'de ACMAYIN / FLASHLAMAYIN (bayat Debug/*.elf tasiyabilir); yalniz farkinizi alin.")
     hedef.mkdir(parents=True)
 
     for p in PROJELER:
@@ -176,7 +193,8 @@ def main() -> int:
 
     print(f"HAZIR: {hedef}")
     print()
-    print("⚠️ CubeIDE'de FLASH ETMEDEN ONCE:")
+    # D0Ö.16 ek-2: ASCII — çıktı cp1254'e yönlendirilince emoji UnicodeEncodeError atıp sonraki satırları kesiyordu.
+    print("UYARI: CubeIDE'de FLASH ETMEDEN ONCE:")
     print("   1) Project -> Clean...   (bayat nesne dosyasi kalmasin)")
     print("   2) Project -> Build      (yeni .elf URETILSIN)")
     print("   3) Run/Debug ile yukle")

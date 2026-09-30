@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import importlib.util
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -55,16 +56,29 @@ def betik():
 
 
 @pytest.fixture()
-def silinenler(monkeypatch) -> list[str]:
-    """HER testte `shutil.rmtree` casusu: betik hiçbir yolda silmemeli (gerçek rmtree yine koşar)."""
+def silinenler(monkeypatch, tmp_path) -> list[str]:
+    """HER testte SİLME casusu: betik hiçbir yolda silmemeli (gerçek çağrı yine koşar).
+
+    D0Ö.16 ek-2 (tur 5): yalnız `shutil.rmtree` izleniyordu — bayat `.elf`i `os.remove`/`Path.unlink` ile
+    silen bir "budama" kapıdan kaçardı. Artık rmtree + os.remove/unlink/rmdir + Path.unlink/rmdir izlenir.
+    Kayıt yalnız `tmp_path` altını tutar (başka thread'lerin geçici dosya temizliği sahte KIRMIZI üretmesin).
+    """
     kayit: list[str] = []
-    gercek = shutil.rmtree
+    kok = str(tmp_path)
 
-    def _kaydet(yol, *a, **k):
-        kayit.append(str(yol))
-        return gercek(yol, *a, **k)
+    def _casus(gercek):
+        def _kaydet(yol, *a, **k):
+            if str(yol).startswith(kok):
+                kayit.append(str(yol))
+            return gercek(yol, *a, **k)
 
-    monkeypatch.setattr(shutil, "rmtree", _kaydet)
+        return _kaydet
+
+    monkeypatch.setattr(shutil, "rmtree", _casus(shutil.rmtree))
+    for ad in ("remove", "unlink", "rmdir"):
+        monkeypatch.setattr(os, ad, _casus(getattr(os, ad)))
+    for ad in ("unlink", "rmdir"):
+        monkeypatch.setattr(Path, ad, _casus(getattr(Path, ad)))
     return kayit
 
 
@@ -106,7 +120,7 @@ def test_KRITIK_ayni_gun_yeniden_kosum_SAHIBIN_dosyalarini_SILMEZ(betik, tmp_pat
     rc = _kos(betik, tmp_path, monkeypatch)
     assert _notlar(tmp_path), f"betik hedefteki SAHİBİN dosyasını SİLDİ (rc={rc}) — onaysız ve yedeksiz (B-10.211)"
     assert _duzenlemeler(tmp_path), f"sahibin main.c düzenlemesi KAYBOLDU (rc={rc}) (B-10.211)"
-    assert not silinenler, f"betik rmtree çağırdı: {silinenler}"
+    assert not silinenler, f"betik SİLME çağırdı: {silinenler}"
 
 
 def test_onceki_kopya_YEDEGE_tasinir_ve_TAZE_kopya_uretilir(betik, tmp_path, monkeypatch, capsys, silinenler):
@@ -122,15 +136,27 @@ def test_onceki_kopya_YEDEGE_tasinir_ve_TAZE_kopya_uretilir(betik, tmp_path, mon
     cikti = capsys.readouterr().out
     assert str(yedekler[0]) in cikti, "yedeğin yeri kullanıcıya söylenmedi"
     assert "FLASHLAMAYIN" in cikti, "yedeğin (bayat .elf taşıyabilir) flaşlanmaması uyarısı basılmadı"
-    assert not silinenler, f"betik rmtree çağırdı: {silinenler}"
+    assert not silinenler, f"betik SİLME çağırdı: {silinenler}"
 
 
 def test_KRITIK_ikinci_ve_ucuncu_kosum_ONCEKI_yedekleri_bayt_bayt_KORUR(betik, tmp_path, monkeypatch, silinenler):
     """Aynı saniyede çakışan yedek adı + önceden var olan yedek + sahibin `.metadata`sı: hiçbiri
-    silinmez/budanmaz, yeni yedekler `_2`, `_3` alır (sabit ad + eskiyi silme 'rotasyonu' YASAK)."""
+    silinmez/budanmaz, yeni yedekler `_2`, `_3` alır (sabit ad + eskiyi silme 'rotasyonu' YASAK).
+
+    D0Ö.16 ek-2 (tur 5): en fazla 3 yedek kuruluyordu — "son N yedeği tut" (N≥3) rotasyonu ve yedekteki
+    bayat `Debug/*.elf`i budayan bir değişiklik YEŞİL kalırdı. Artık 20 eski yedek + sahibin `Debug/PEMF.elf`i.
+    """
     hedef = _sahip_calismasi(tmp_path)
     (hedef / ".metadata").mkdir()
     (hedef / ".metadata" / "ayar.prefs").write_text("sahip-ayari", encoding="utf-8")
+    (hedef / "stm32_pemf" / "Debug").mkdir()
+    (hedef / "stm32_pemf" / "Debug" / "PEMF.elf").write_bytes(b"\x7fELF-sahip-derlemesi")
+    eskiler = {}
+    for i in range(1, 21):
+        eski = tmp_path / f"{hedef.name}_yedek_0000{i:02d}"
+        (eski / "stm32_pemf" / "Debug").mkdir(parents=True)
+        (eski / "stm32_pemf" / "Debug" / "PEMF.elf").write_bytes(f"eski-{i}".encode())
+        eskiler[eski] = f"eski-{i}".encode()
     damga = _sabit_saat(betik, monkeypatch)
     dunku = tmp_path / f"{hedef.name}_yedek_{damga}"
     (dunku / ".metadata").mkdir(parents=True)
@@ -138,13 +164,18 @@ def test_KRITIK_ikinci_ve_ucuncu_kosum_ONCEKI_yedekleri_bayt_bayt_KORUR(betik, t
 
     assert _kos(betik, tmp_path, monkeypatch) == 0
     assert _kos(betik, tmp_path, monkeypatch) == 0
-    yedekler = sorted(p.name for p in tmp_path.iterdir() if p.name.startswith(f"{hedef.name}_yedek_"))
+    yedekler = sorted(p.name for p in tmp_path.iterdir() if p.name.startswith(f"{hedef.name}_yedek_{damga}"))
     assert yedekler == [dunku.name, f"{dunku.name}_2", f"{dunku.name}_3"], f"yedek zinciri beklenmedik: {yedekler}"
     assert (dunku / ".metadata" / "ayar.prefs").read_text(encoding="utf-8") == "onceki-yedek"
     ikinci = tmp_path / f"{dunku.name}_2"
     assert (ikinci / ".metadata" / "ayar.prefs").read_text(encoding="utf-8") == "sahip-ayari", "sahibin .metadata'sı"
     assert (ikinci / "sahip_notu.txt").read_text(encoding="utf-8") == NOT_METNI
-    assert not silinenler, f"betik rmtree çağırdı: {silinenler}"
+    assert (ikinci / "stm32_pemf" / "Debug" / "PEMF.elf").read_bytes() == b"\x7fELF-sahip-derlemesi", "yedekte .elf"
+    kayip = [
+        e.name for e, icerik in eskiler.items() if (e / "stm32_pemf" / "Debug" / "PEMF.elf").read_bytes() != icerik
+    ]
+    assert not kayip, f"ESKİ yedekler budandı/değişti (rotasyon YASAK): {kayip}"
+    assert not silinenler, f"betik SİLME çağırdı: {silinenler}"
 
 
 def test_KRITIK_kaynak_proje_YOKSA_hedefe_DOKUNULMAZ(betik, tmp_path, monkeypatch, capsys, silinenler):
@@ -156,27 +187,47 @@ def test_KRITIK_kaynak_proje_YOKSA_hedefe_DOKUNULMAZ(betik, tmp_path, monkeypatc
     assert (hedef / "sahip_notu.txt").read_text(encoding="utf-8") == NOT_METNI, "sahibin klasörü yerinden oynatıldı"
     assert not [p for p in tmp_path.iterdir() if "_yedek_" in p.name], "kaynak yokken hedef yedeğe taşındı"
     assert "DOKUNULMADI" in capsys.readouterr().err
-    assert not silinenler, f"betik rmtree çağırdı: {silinenler}"
+    assert not silinenler, f"betik SİLME çağırdı: {silinenler}"
 
 
 def test_KRITIK_tasima_basarisizsa_HICBIR_SEY_SILINMEZ_ve_durur(betik, tmp_path, monkeypatch, capsys, silinenler):
     """CubeIDE klasörü açık tutarken (Windows `PermissionError`) betik silmeye DÜŞMEMELİ."""
     hedef = _sahip_calismasi(tmp_path)
 
-    def _tasinamaz(self, *a, **k):
-        if Path(self) != hedef:  # yalnız HEDEFİN taşınması başarısız (başka thread'lere dokunma)
-            return _gercek_rename(self, *a, **k)
-        raise PermissionError(13, "d0o16: klasor baska bir surecte acik", str(self))
+    def _tasinamaz(gercek):
+        def _yama(self, *a, **k):
+            if Path(self) != hedef:  # yalnız HEDEFİN taşınması başarısız (başka çağrılar GERÇEK işlevine gider)
+                return gercek(self, *a, **k)
+            raise PermissionError(13, "d0o16: klasor baska bir surecte acik", str(self))
 
-    _gercek_rename = Path.rename
-    monkeypatch.setattr(Path, "rename", _tasinamaz)
-    monkeypatch.setattr(Path, "replace", _tasinamaz)
+        return _yama
+
+    # D0Ö.16 ek-2 (tur 5): `replace` yaması hedef dışındaki çağrıları `rename`e yönlendiriyordu (anlam farkı).
+    monkeypatch.setattr(Path, "rename", _tasinamaz(Path.rename))
+    monkeypatch.setattr(Path, "replace", _tasinamaz(Path.replace))
     rc = _kos(betik, tmp_path, monkeypatch)
     assert rc != 0, "hedef yedeğe taşınamadığı hâlde betik devam etti (0 döndü)"
-    assert not [s for s in silinenler if s.startswith(str(tmp_path))], f"betik SİLMEYE düştü: {silinenler}"
+    assert not silinenler, f"betik SİLMEYE düştü: {silinenler}"
     assert (hedef / "sahip_notu.txt").read_text(encoding="utf-8") == NOT_METNI
     assert (hedef / "stm32_pemf" / "Core" / "Src" / "main.c").read_text(encoding="utf-8") == DUZENLEME
-    assert "HICBIR SEY SILINMEDI" in capsys.readouterr().err, "kullanıcıya 'hiçbir şey silinmedi' denmedi"
+    err = capsys.readouterr().err
+    assert "HICBIR SEY SILINMEDI" in err, "kullanıcıya 'hiçbir şey silinmedi' denmedi"
+    assert "--hedef" in err, "başka bir kök (--hedef) önerisi söylenmedi"
+
+
+def test_KRITIK_BAYAT_kaynakta_hedefe_DOKUNULMAZ(betik, tmp_path, monkeypatch, capsys, silinenler):
+    """D0Ö.16 ek-2 (tur 5): kaynak VAR ama BAYAT (ör. eski dal: NUM_COILS 5) — içerik doğrulaması eskiden
+    taşımadan SONRAYDI: sahibin workspace'i yedeğe taşınır, CubeIDE'nin açtığı yolda bayat kopya kalırdı
+    (rc 1). Artık kaynak içeriği hedefe DOKUNMADAN denetlenir."""
+    hedef = _sahip_calismasi(tmp_path)
+    monkeypatch.setattr(betik, "_bobin_sayisi", lambda main_c: 5)
+    rc = _kos(betik, tmp_path, monkeypatch)
+    assert rc != 0
+    assert (hedef / "sahip_notu.txt").read_text(encoding="utf-8") == NOT_METNI, "sahibin klasörü yerinden oynatıldı"
+    assert (hedef / "stm32_pemf" / "Core" / "Src" / "main.c").read_text(encoding="utf-8") == DUZENLEME
+    assert not [p for p in tmp_path.iterdir() if "_yedek_" in p.name], "bayat kaynakta hedef yedeğe TAŞINDI"
+    assert "DOKUNULMADI" in capsys.readouterr().err
+    assert not silinenler, f"betik SİLME çağırdı: {silinenler}"
 
 
 def test_KARSIT_KANIT_temiz_kokte_kopya_URETILIR(betik, tmp_path, monkeypatch, silinenler):
@@ -184,4 +235,4 @@ def test_KARSIT_KANIT_temiz_kokte_kopya_URETILIR(betik, tmp_path, monkeypatch, s
     main_c = _hedef(tmp_path) / "stm32_pemf" / "Core" / "Src" / "main.c"
     assert main_c.is_file() and "NUM_COILS" in main_c.read_text(encoding="utf-8", errors="replace")
     assert not [p for p in tmp_path.iterdir() if "_yedek_" in p.name], "temiz kökte yedek klasörü açılmamalı"
-    assert not silinenler, f"betik rmtree çağırdı: {silinenler}"
+    assert not silinenler, f"betik SİLME çağırdı: {silinenler}"
