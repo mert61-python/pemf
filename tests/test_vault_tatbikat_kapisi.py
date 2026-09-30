@@ -16,7 +16,8 @@ YOKTUR, bu yuzden bu dosya tatbikati KOSTURMAZ. Korudugu sey uc degismez:
      atama/parametre/oznitelik/import/def ile golgelenmesi YASAK), SABIT (emanet alani tek
      turetimde), KAYNAK (siri URETEN cagrilar yalniz TEK bilinen baglamda; D0Ö.18 ek-2). Tarayicinin
      kendisi `_OZ_DENETIM`deki butun bicimlerle oz-denetlenir (D0Ö.18 + ek + ek-2 + ek-3; ek-3: oznitelik
-     bicimi her alicida sayilir, yalniz `_IC_GOZLEM_ZARARSIZ`daki gerekceli ciftler — `re.compile` — haric).
+     bicimi her alicida sayilir, yalniz `_IC_GOZLEM_ZARARSIZ`daki gerekceli ciftler — `re.compile` — haric; ek-4:
+     cgitb sinifindan `show_locals`, `sys.excepthook =`, `settrace`/`setprofile` da).
 
   3. ⚠️ KARSIT KANIT KARARA GIRER. Tatbikat "acildi" demekle yetinemez: YANLIS anahtarin
      REDDEDILDIGINI de olcer. O olcum sonuca baglanmazsa, binding anahtari sessizce yok sayan
@@ -98,7 +99,14 @@ _IC_GOZLEM = {
     "compile",
     "__import__",
     "setattr",
+    # D0Ö.18 ek-4 (tur 7): izleme kancası her çerçeveyi (f_locals) görür — cgitb ile aynı sınıf.
+    "settrace",
+    "setprofile",
 }
+#: Istisnada/izlemede YERELLERI basan anahtar sozcukler (traceback `capture_locals`, rich `show_locals`) — ek-4.
+_YEREL_BASAN_ANAHTARLAR = {"capture_locals", "show_locals"}
+#: Atanmasi yerelleri basan bir kanca kurabilecek oznitelikler (`sys.excepthook = ...`) — D0Ö.18 ek-4 (tur 7).
+_KANCA_OZNITELIKLERI = {"excepthook"}
 #: Oznitelik biciminde ZARARSIZ oldugu bilinen (alici, ad) ciftleri — D0Ö.18 ek-3 (tur 6: `re.compile` sahte
 #: KIRMIZI). Varsayilan KATI kalir: her alicida `x.eval`/`x.compile` sayilir (ornegin pandas `df.eval('@yerel')`
 #: yereli DIZEYLE okur); yalniz ad alanina dokunmadigi bilinen cift GEREKCEYLE eklenir, kural gevsetilmez.
@@ -270,10 +278,12 @@ def ic_gozlem_ihlalleri(fn: ast.AST) -> list[str]:
             ihlal.append(f":{n.lineno} {ast.unparse(n)[:60]}")
         elif isinstance(n, ast.Attribute) and isinstance(n.ctx, ast.Store) and n.attr in _GOLGELENEMEZ:
             ihlal.append(f":{n.lineno} {ast.unparse(n)[:60]} = … korunan adi golgeliyor")
+        elif isinstance(n, ast.Attribute) and isinstance(n.ctx, ast.Store) and n.attr in _KANCA_OZNITELIKLERI:
+            ihlal.append(f":{n.lineno} {ast.unparse(n)[:60]} = … (istisnada yerelleri basabilir)")
         elif isinstance(n, ast.arg) and n.arg in _GOLGELENEMEZ:
             ihlal.append(f":{n.lineno} parametre {n.arg} korunan adi golgeliyor")
-        elif isinstance(n, ast.keyword) and n.arg == "capture_locals":
-            ihlal.append(f":{getattr(n, 'lineno', '?')} capture_locals (yerelleri basar)")
+        elif isinstance(n, ast.keyword) and n.arg in _YEREL_BASAN_ANAHTARLAR:
+            ihlal.append(f":{getattr(n, 'lineno', '?')} {n.arg} (yerelleri basar)")
         elif isinstance(n, (ast.Global, ast.Nonlocal)) and set(n.names) & set(SIRLAR):
             ihlal.append(f":{n.lineno} {type(n).__name__.lower()} {n.names}")
         elif isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store) and n.id in _GOLGELENEMEZ:
@@ -512,6 +522,12 @@ _OZ_DENETIM = [
     ("cgitb.enable()", {"icgozlem"}),  # modül üstünde import edilmiş cgitb (olağan yer) — import düğümü yok
     ("importlib.import_module('cgitb').enable()", {"icgozlem"}),
     ("m = importlib.import_module('json')", set()),  # karşıt: sabit adlı başka modül temiz
+    # ── D0Ö.18 ek-4 (tur 7): cgitb ile AYNI sınıf — istisnada/izlemede yerelleri basan kancalar ──
+    ("rich.traceback.install(show_locals=True)", {"icgozlem"}),
+    ("sys.excepthook = kanca", {"icgozlem"}),
+    ("sys.settrace(izleyici)", {"icgozlem"}),
+    ("threading.setprofile(izleyici)", {"icgozlem"}),
+    ("traceback.print_exc()", set()),  # karşıt: yerelsiz traceback temiz
 ]
 
 
