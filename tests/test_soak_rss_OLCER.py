@@ -176,10 +176,14 @@ def test_KRITIK_veri_koku_TARANAMAZSA_da_EYLEMLI_on_ucus_reddi(monkeypatch, tmp_
     assert isinstance(e.value.code, str) and "taranamadi (PermissionError" in e.value.code, f"{e.value.code!r}"
 
 
-def test_KRITIK_veri_koku_RET_SATIRI_cp1254_KONSOLDA_da_cikis_2(monkeypatch, capsys):
+def test_KRITIK_veri_koku_RET_SATIRI_cp1254_KONSOLDA_da_cikis_2(monkeypatch):
     """D0Ö.22+15 ek-4 (tur 7): ret NEDENİ (istisna metni + yol) stdout'a da basılıyor; cp1254'e yönlendirilmiş
     (katı) stdout'ta cp1254 dışı bir karakter UnicodeEncodeError ile ret satırını ve çıkış 2'yi düşürüyordu
-    (traceback + 1). Kapı gerçek `main`i cp1254-katı bir stdout ile koşturur."""
+    (traceback + 1). Kapı gerçek `main`i cp1254-katı bir stdout ile koşturur.
+
+    ⚠️ D0Ö.22+15 ek-5 (tur 7 kontrolü): `capsys` İSTENMEZ — capsys + `monkeypatch.setattr(sys, "stdout", …)`
+    birlikteyken söküm sırası (önce capsys, sonra monkeypatch) `sys.stdout`'u KAPANMIŞ capsys akışına geri
+    yüklüyordu; varsayılan yakalama bunu maskeliyor, `pytest -s`'te sonraki testler ve pytest'in özeti bozuluyordu."""
     import io
 
     m = soak_modulu(monkeypatch)
