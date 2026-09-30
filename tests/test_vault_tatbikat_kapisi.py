@@ -15,7 +15,8 @@ YOKTUR, bu yuzden bu dosya tatbikati KOSTURMAZ. Korudugu sey uc degismez:
      (locals/vars/globals/cerceve, eval/exec/compile, global/nonlocal, capture_locals, izinli adlarin
      atama/parametre/oznitelik/import/def ile golgelenmesi YASAK), SABIT (emanet alani tek
      turetimde), KAYNAK (siri URETEN cagrilar yalniz TEK bilinen baglamda; D0Ö.18 ek-2). Tarayicinin
-     kendisi `_OZ_DENETIM`deki butun bicimlerle oz-denetlenir (D0Ö.18 + ek + ek-2).
+     kendisi `_OZ_DENETIM`deki butun bicimlerle oz-denetlenir (D0Ö.18 + ek + ek-2 + ek-3; ek-3: oznitelik
+     bicimi her alicida sayilir, yalniz `_IC_GOZLEM_ZARARSIZ`daki gerekceli ciftler — `re.compile` — haric).
 
   3. ⚠️ KARSIT KANIT KARARA GIRER. Tatbikat "acildi" demekle yetinemez: YANLIS anahtarin
      REDDEDILDIGINI de olcer. O olcum sonuca baglanmazsa, binding anahtari sessizce yok sayan
@@ -98,6 +99,10 @@ _IC_GOZLEM = {
     "__import__",
     "setattr",
 }
+#: Oznitelik biciminde ZARARSIZ oldugu bilinen (alici, ad) ciftleri — D0Ö.18 ek-3 (tur 6: `re.compile` sahte
+#: KIRMIZI). Varsayilan KATI kalir: her alicida `x.eval`/`x.compile` sayilir (ornegin pandas `df.eval('@yerel')`
+#: yereli DIZEYLE okur); yalniz ad alanina dokunmadigi bilinen cift GEREKCEYLE eklenir, kural gevsetilmez.
+_IC_GOZLEM_ZARARSIZ = {("re", "compile")}  # desen derler; kod calistirmaz, cerceveye dokunmaz
 #: Izinli akislarin dayandigi adlar — golgelenirse (`len = print`) izin listesi kor olur.
 _GOLGELENEMEZ = {"len", "open_encrypted_conn", "_istek", "print"}
 #: Korunan bir adi BAGLAYABILEN tek import (modul + ad birebir); baska kaynaktan baglamak golgelemedir.
@@ -242,8 +247,12 @@ def ic_gozlem_ihlalleri(fn: ast.AST) -> list[str]:
     for n in ast.walk(fn):
         if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id in _IC_GOZLEM:
             ihlal.append(f":{n.lineno} {n.id} (ad alani / dinamik kod)")
-        elif isinstance(n, ast.Attribute) and n.attr in _IC_GOZLEM:
-            ihlal.append(f":{n.lineno} {ast.unparse(n)[:60]}")
+        elif (
+            isinstance(n, ast.Attribute)
+            and n.attr in _IC_GOZLEM
+            and (getattr(n.value, "id", None), n.attr) not in _IC_GOZLEM_ZARARSIZ
+        ):
+            ihlal.append(f":{n.lineno} {ast.unparse(n)[:60]} (zararsiz ise _IC_GOZLEM_ZARARSIZ'a GEREKCEYLE)")
         elif isinstance(n, ast.Attribute) and n.attr in ("f_locals", "f_globals"):
             ihlal.append(f":{n.lineno} {ast.unparse(n)[:60]}")
         elif isinstance(n, ast.Attribute) and isinstance(n.ctx, ast.Store) and n.attr in _GOLGELENEMEZ:
@@ -368,7 +377,11 @@ def test_KRITIK_ANAHTAR_yalniz_IZINLI_yerlere_akar():
 def test_KRITIK_ad_alani_DOKULMEZ_ve_izinli_adlar_GOLGELENMEZ():
     fn = _fonksiyon("tatbikat")
     ihlaller = ic_gozlem_ihlalleri(fn)
-    assert not ihlaller, f"tatbikat'ta sirri ADSIZ tasiyabilecek yapi: {ihlaller}"
+    assert not ihlaller, (
+        f"tatbikat'ta ad alanini doken / dizeden kod calistiran / izinli adi golgeleyen yapi: {ihlaller} — "
+        "mesru ve ZARARSIZ bir oznitelik cagrisiysa (alici, ad) ciftini _IC_GOZLEM_ZARARSIZ'a gerekceyle "
+        "ekleyin; kurali gevsetmeyin (D0Ö.18 ek-3)"
+    )
 
 
 def test_KRITIK_anahtar_ALANI_yalniz_TEK_turetimde():
@@ -477,6 +490,12 @@ _OZ_DENETIM = [
     ("f = locals\nprint(f())", {"icgozlem"}),  # çağrısız referans
     ("traceback.TracebackException.from_exception(e, capture_locals=True)", {"icgozlem"}),
     ("import cgitb\ncgitb.enable()", {"icgozlem"}),
+    # ── D0Ö.18 ek-3 (tur 6 sonrası): alıcıya bakan öznitelik kuralı — dar muafiyet, katı varsayılan ──
+    ("p = re.compile('x')", set()),  # sahte KIRMIZI idi: desen derler, ad alanına dokunmaz
+    ("m = __import__('os')", {"icgozlem"}),
+    ("x = compile('1', 's', 'eval')", {"icgozlem"}),
+    ("x = builtins.eval('anahtar')", {"icgozlem"}),
+    ("x = df.eval('@anahtar')", {"icgozlem"}),  # pandas: yereli DİZEYLE okur — varsayılan katı kalmalı
 ]
 
 
