@@ -117,7 +117,12 @@ def _c_yorumsuz(metin: str) -> str:
 
 
 def maske_tanimi(baslik_metni: str) -> int:
-    """Başlık metnindeki TEK, yorum DIŞI `#define PEMF_BOBIN_UNIPOLAR_MASKESI` değeri (yoksa/birden çoksa hata)."""
+    """Başlık metnindeki TEK, yorum DIŞI `#define PEMF_BOBIN_UNIPOLAR_MASKESI` değeri (yoksa/birden çoksa hata).
+
+    ⚠️ Önişlemciyi GÖRMEZ: `#if/#else` ya da `#ifndef` varsayılan dalındaki ikinci tanım bilerek HATA verir
+    (hangi dalın derlendiğini bilemez); `.cproject`'te `-D` ile ezilen değeri de göremez. Bugün başlıkta tek
+    düz tanım var (`pemf_surus.h`); desen değişirse bu okuyucu da güncellenmeli.
+    """
     bulunan = re.findall(
         r"^[ \t]*#[ \t]*define[ \t]+PEMF_BOBIN_UNIPOLAR_MASKESI[ \t]+(0x[0-9A-Fa-f]+|\d+)[uU]?\b",
         _c_yorumsuz(baslik_metni),

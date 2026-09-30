@@ -146,16 +146,16 @@ def _son_paket(hw) -> bytes:
     return paket
 
 
-def _ham_paket(duty1: float) -> bytes:
-    """Ürünün ÜRETEMEYECEĞİ (clamp) ama hatta gelebilecek paket: bobin 1 duty'si keyfi, CRC geçerli."""
+def _ham_paket(duty1: float, phase1: float = 0.0, freq1: float = 100.0) -> bytes:
+    """Ürünün ÜRETEMEYECEĞİ (clamp) ama hatta gelebilecek paket: bobin 1 alanları keyfi, CRC geçerli."""
     n = sim.NUM_COILS
     govde = struct.pack(
         sim.PKT_FMT.rsplit(" ", 1)[0],  # CRC hariç biçim
         0xAA,
         0x55,
         *([duty1] + [0.0] * (n - 1)),
-        *([0.0] * n),
-        *([100.0] * n),
+        *([phase1] + [0.0] * (n - 1)),
+        *([freq1] + [100.0] * (n - 1)),
         *([1] * n),
         0,
         0,
@@ -238,6 +238,37 @@ def test_KRITIK_sonlu_olmayan_duty_NACK_ve_baglanti_SURER(hw, monkeypatch, deger
         assert hw.update_coil(1, 100.0, 25.0, 0.0, 1)
         istemci.sendall(_son_paket(hw))
         assert _satirlar(istemci, "-> STM_OK:", 1, 3.0), "NACK'ten sonra bağlantı düştü — sonraki pakete STM_OK yok"
+    finally:
+        istemci.close()
+        karsi.close()
+
+
+@pytest.mark.parametrize("alan", ["phase", "freq"])
+def test_KRITIK_sonlu_olmayan_phase_freq_NACK_METNI_firmware_ile_AYNI(hw, monkeypatch, alan):
+    """D0Ö.13 ek-2 (tur 5): `main.c` sırası duty → phase → freq; phase/freq NaN'ı da AYNI metinle NACK'ler.
+    Döngüyü yalnız duty'ye indiren mutant NaN'ı aralık denetimine düşürür — metin firmware'den farklı olur."""
+    istemci, karsi = _sim_bagla(monkeypatch)
+    try:
+        nan = float("nan")
+        istemci.sendall(_ham_paket(0.5, phase1=nan) if alan == "phase" else _ham_paket(0.5, freq1=nan))
+        nack = _satirlar(istemci, "-> STM_NACK:", 1, 3.0)
+        assert nack and f"RANGE coil=1 field={alan} value=nonfinite" in nack[0], f"firmware NACK metni yok: {nack}"
+    finally:
+        istemci.close()
+        karsi.close()
+
+
+def test_KRITIK_tasan_duty_ACK_da_DOYAR_ve_baglanti_SURER(hw, monkeypatch):
+    """Sonlu ama float32 çarpımında taşan duty (1e37 × 100): firmware NACK'lemez (DUTY_MAX yok), `VCVT`
+    doyurur → `D=2147483647`. Simülatör eskiden `struct.pack` OverflowError'ında bağlantıyı KAPATABİLİRDİ."""
+    istemci, karsi = _sim_bagla(monkeypatch)
+    try:
+        istemci.sendall(_ham_paket(1e37))
+        ack = _satirlar(istemci, "-> STM_OK:", 1, 3.0)
+        assert ack and "D=2147483647," in ack[0], f"taşan duty ACK'te doymadı: {ack}"
+        assert hw.update_coil(1, 100.0, 25.0, 0.0, 1)
+        istemci.sendall(_son_paket(hw))
+        assert _satirlar(istemci, "-> STM_OK:", 1, 3.0), "taşan duty'den sonra bağlantı düştü"
     finally:
         istemci.close()
         karsi.close()
