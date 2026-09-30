@@ -27,7 +27,8 @@ KULLANIM
 
 ⚠️ ÖN-UÇUŞ: HTTP uçları VE `/ws` (bağlantı + ilk mesaj) soak BAŞLAMADAN denetlenir; biri
 ölçülemeyecekse (yanlış yol, websockets yok, auth açık profil 1008) koşu başlamaz, çıkış 2.
-Çıkış: 0 = TEMIZ · 1 = en az bir neden (hepsi basılır) · 2 = ön-uçuş reddi.
+Çıkış: 0 = TEMIZ · 1 = en az bir neden (hepsi basılır) · 2 = ön-uçuş reddi (veri kökü seçilemedi dahil).
+Yakalanmayan bir istisna da Python gereği 1 + traceback verir — "1" tek başına "ölçüldü, sorun var" demek değildir.
 
 ⚠️ VERİ KÖKÜ (D0Ö.21 ek-2; ek-3 daraltması): `_veri_koku` ürünün `get_app_data_directory()`sini çağırır —
 `PEMF_DATA_DIR` YOKSA kullanıcı kökünü (`%APPDATA%\\PEMF_GUI`), VARSA YALNIZ `PEMF_DATA_DIR\\PEMF_GUI`yi
@@ -222,8 +223,14 @@ def _port_sureci(port: int):
     """
     try:
         import psutil
-    except ImportError:
+    except ModuleNotFoundError:
         return None, "psutil yuklu degil (kurun: pip install psutil)"
+    except Exception as e:
+        # D0Ö.22+15 ek-3 (tur 6): kurulu ama BOZUK psutil (DLL yüklenemedi vb.) yakalanmıyordu → traceback + 1.
+        return (
+            None,
+            f"psutil yuklenemedi ({type(e).__name__}: {e}) — yeniden kurun: pip install --force-reinstall psutil",
+        )
     try:
         for b in psutil.net_connections(kind="tcp"):
             if b.laddr and b.laddr.port == port and b.status == psutil.CONN_LISTEN and b.pid:
@@ -323,7 +330,15 @@ def _veri_koku() -> Path:
             f"HATA: utils.path_utils yuklenemedi ({e}) — veri koku bulunamaz, DB buyumesi YANLIS kokte "
             "olculur. Betigi depodan (scripts/) calistirin; depo/kurulum bozuk olabilir."
         ) from e
-    adaylar.append(Path(get_app_data_directory()))
+    # D0Ö.22+15 ek-3 (tur 6): ürün çağrısı kökü mkdir'ler (path_utils) — izin/yol hatası (OSError) traceback +
+    # çıkış 1 ile bitiyordu ("en az bir neden" ile karışır). Emanet betiğinin deseni: eylem söyleyen ön-uçuş reddi.
+    try:
+        adaylar.append(Path(get_app_data_directory()))
+    except OSError as e:
+        raise SystemExit(
+            f"HATA: veri koku acilamadi ({type(e).__name__}: {e}) — PEMF_DATA_DIR / APPDATA yazilabilir mi? "
+            "Soak bir veri koku SECEMEDEN baslatilmaz."
+        ) from e
 
     for kok in adaylar:
         if kok.is_dir() and any(kok.glob("*.db")):
@@ -373,8 +388,10 @@ def main() -> int:
     except SystemExit as e:
         # D0Ö.15 ek-2 (tur 5): soak BAŞLAMADAN düşen bir ön-koşul da ön-uçuş reddidir (çıkış 2) — dize
         # argümanlı SystemExit süreci 1 ile bitirir ve "en az bir neden" ile karışırdı.
-        print(e.code if isinstance(e.code, str) else f"HATA: veri koku belirlenemedi ({e.code!r})", file=sys.stderr)
-        print("  Veri koku belirlenemedi — soak baslatilmadi.")
+        # D0Ö.22+15 ek-3 (tur 6): neden stdout'a da basılır — `> log` yönlendirmesinde yalnız stderr'deydi.
+        neden = e.code if isinstance(e.code, str) else f"HATA: veri koku belirlenemedi ({e.code!r})"
+        print(neden, file=sys.stderr)
+        print(f"  Veri koku belirlenemedi — soak baslatilmadi. {neden}")
         return 2
 
     # ⚠️ ISINMAYI BEKLE (bkz. _rss_oturmasini_bekle). Taban, AI ısıtması bittikten SONRA
