@@ -22,6 +22,7 @@ korunur; bu dosya yalnız BAŞLATMA yolunu ölçer.
 from __future__ import annotations
 
 import pytest
+from topoloji import TUM_STM
 
 ESKI_BANNER = "-> STM_READY: DDS v2.3 (5-ch SYM-BIPOLAR uni=0x00 + HW_SYNC@PB1) Waiting for commands..."
 YENI_BANNER = "-> STM_READY: DDS v2.3 (7-ch UNIPOLAR tek-bacak uni=0x60 + HW_SYNC@PB1) Waiting for commands..."
@@ -91,26 +92,35 @@ _GOVDE = {
     "patient_name": "UyumDavranis",
 }
 
+#: 1-B bağımsız inceleme (i4): bobin kümeleri TOPOLOJİDEN (D1.31 deseni) — kapı yalnız [1, 2] ile sınanıyordu;
+#: `min(stm_coils) < 6` koşulu eklenince UYUMSUZ (5-ch) kartta yalnız 6–7'lik seans — tam da o kartın SÜREMEDİĞİ
+#: bobinler — 200 alıyordu, kapı YEŞİLDİ.
+STM_KUMELERI = [[min(TUM_STM)], [max(TUM_STM)], sorted(TUM_STM)[-2:], sorted(TUM_STM)]
+STM_KUME_ID = ["ilk", "son", "son_iki", "tumu"]
 
+
+@pytest.mark.parametrize("kume", STM_KUMELERI, ids=STM_KUME_ID)
 @pytest.mark.parametrize("banner", [YENI_BANNER, SAHA_BANNER], ids=["repo_7ch", "SAHA_Y7"])
-def test_KRITIK_UYUMLU_banner_STM_seansini_GERCEKTEN_baslatir(seans_ortami, monkeypatch, banner):
+def test_KRITIK_UYUMLU_banner_STM_seansini_GERCEKTEN_baslatir(seans_ortami, monkeypatch, banner, kume):
     api, istemci, hc = seans_ortami
     uyumlu, sebep = _karar(banner)
     assert uyumlu is True, f"ön koşul: {banner!r} uyumlu sayılmalı (karar {uyumlu}, {sebep!r}) — D1.103"
     monkeypatch.setattr(api.state, "core", _Cekirdek(uyumlu, sebep), raising=False)
-    r = istemci.post("/api/session/start", json=_GOVDE)
+    r = istemci.post("/api/session/start", json={**_GOVDE, "coil_ids": kume})
     assert r.status_code == 200, f"UYUMLU firmware'de STM seansı {r.status_code}: {r.text[:200]} — kapı hep reddediyor"
-    assert sorted(set(hc.baslatilan)) == [1, 2], f"seans bobinleri sürmedi: {hc.baslatilan}"
+    assert sorted(set(hc.baslatilan)) == kume, f"seans bobinleri sürmedi: {hc.baslatilan}"
 
 
-def test_KARSIT_UYUMSUZ_banner_ayni_aparatla_409_ve_bobin_SURULMEZ(seans_ortami, monkeypatch):
-    """Aynı aparatın kapıyı GERÇEKTEN çalıştırdığının kanıtı (yukarıdaki 200 'kapı yok' demek değil)."""
+@pytest.mark.parametrize("kume", STM_KUMELERI, ids=STM_KUME_ID)
+def test_KARSIT_UYUMSUZ_banner_ayni_aparatla_409_ve_bobin_SURULMEZ(seans_ortami, monkeypatch, kume):
+    """Aynı aparatın kapıyı GERÇEKTEN çalıştırdığının kanıtı (yukarıdaki 200 'kapı yok' demek değil) — HER STM
+    bobin kümesinde (yalnız 6–7 dahil)."""
     api, istemci, hc = seans_ortami
     uyumlu, sebep = _karar(ESKI_BANNER)
     assert uyumlu is False
     monkeypatch.setattr(api.state, "core", _Cekirdek(uyumlu, sebep), raising=False)
-    r = istemci.post("/api/session/start", json=_GOVDE)
-    assert r.status_code == 409, r.text[:200]
+    r = istemci.post("/api/session/start", json={**_GOVDE, "coil_ids": kume})
+    assert r.status_code == 409, f"{kume}: {r.status_code} {r.text[:200]}"
     assert hc.baslatilan == [], f"uyumsuz kartta bobin sürülmeye çalışıldı: {hc.baslatilan}"
 
 
