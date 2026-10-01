@@ -27,6 +27,7 @@ logger = logging.getLogger("ai_router")
 # (A9) modul-duzeyi `import threading` KALDIRILDI: _model_lock artik utils.agir_import._KILIT.
 import time
 
+from utils.dongu_guvenligi import dongu_hatasini_bildir
 from utils.model_downloader import download_model_sync
 from utils.ses_kalitesi import guvenilir_mi as ses_guvenilir_mi
 from utils.ses_kalitesi import normalize_entropi as ses_normalize_entropi
@@ -1351,7 +1352,9 @@ def _ai_hazirlik_loop():
                             }
                         )
                 except Exception as le:
-                    logger.error("Hazırlık cat_organ lokalizasyon hatası: %s", le)
+                    dongu_hatasini_bildir(  # D1.19 (B-10.121)
+                        "Hazırlık cat_organ lokalizasyon hatası: %s", le, logger=logger, exc_info=False
+                    )
                     with _ai_cache_lock:
                         _ai_organ_cache["localized"] = False
             # ── Önizleme yayını (B3): cache'li overlay (varsa) yoksa ham kare → web paneli ──
@@ -1403,7 +1406,7 @@ def _ai_hazirlik_loop():
                         }
                     )
                 except Exception as wse:
-                    logger.error("Hazırlık önizleme WS yayın hatası: %s", wse)
+                    dongu_hatasini_bildir("Hazırlık önizleme WS yayın hatası: %s", wse, logger=logger, exc_info=False)
             time.sleep(0.05)  # CPU nefes payı (lokalizasyon zaten ~1-4 sn'de bir)
     finally:
         cap.release()
@@ -1482,7 +1485,9 @@ def _ai_pro_loop():
                 _ai_loop_active = False
                 break
         except Exception:
-            logger.debug("AI Pro loop: seans durum kontrolü hatası (yok sayıldı)", exc_info=True)  # B-4.2
+            dongu_hatasini_bildir(  # B-4.2 · D1.19 (B-10.121)
+                "AI Pro loop: seans durum kontrolü hatası (yok sayıldı)", logger=logger, seviye=logging.DEBUG
+            )
         ret, frame = cap.read()
         if not ret:
             time.sleep(0.5)
@@ -1681,7 +1686,9 @@ def _ai_pro_loop():
                 logger.error(f"WS broadcast error in AI loop: {wse}")
 
         except Exception as e:
-            logger.error(f"AI Loop iteration error: {e}")
+            # D1.19 (B-10.121): bildirim fırlatırsa AI Pro sürüş döngüsü ölür (bobinler seans süresince
+            # son ayarda kalır, süre bekçisi keser).
+            dongu_hatasini_bildir("AI Loop iteration error: %s", e, logger=logger, exc_info=False)
 
         elapsed = time.time() - start_time
         sleep_time = max(0.1, 1.0 - elapsed)

@@ -53,8 +53,10 @@ from utils.dongu_guvenligi import dongu_hatasini_bildir  # noqa: E402
 TARANAN = "apps/backend"
 
 #: ⚠️ VAKUM KAPISI: tarama sıfır döngü bulursa sonsuza kadar yeşil kalırdı.
-#: 2026-09-19'da ölçülen sayı 6; tavan değil TABAN (yeni döngü eklenebilir).
-ASGARI_DONGU = 5
+#: 2026-09-19'da (yalnız `while True`) ölçülen 6. 2026-10-01 (D1.19, olay + bayrak döngüleri de
+#: sayılınca) ölçülen 22 = 9 sabit + 10 olay + 3 bayrak. Tavan değil TABAN; tarayıcı yeniden
+#: `while True`'ya daralırsa (9) bu taban da KIRMIZI olur.
+ASGARI_DONGU = 20
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════
@@ -154,52 +156,113 @@ def test_KRITIK_stderr_YOKSA_firlatmaz(monkeypatch):
 
 
 def _sonsuz_mu(d: ast.While) -> bool:
+    """Daemon döngüsü biçimleri (D1.19/D1.17 — B-10.121, B-1.36: eskiden YALNIZ `while True`):
+
+    * sabit: `while True` / `while 1`
+    * olay: `while not X.is_set()` / `while not X.wait(...)` (keep-alive, HWSender, servisler)
+    * bayrak: `while _aktif` / `while self._running` (AI Pro döngüleri, mDNS izleyici)
+
+    Karşılaştırmalı/çağrılı koşullar (`while n < 5`, `while time.monotonic() < son`) sınırlıdır →
+    kapsam dışı (orada bildirim düşse akış zaten biter)."""
     t = d.test
-    return (isinstance(t, ast.Constant) and t.value is True) or (isinstance(t, ast.Name) and t.id == "True")
+    if isinstance(t, ast.Constant) and t.value in (True, 1):
+        return True
+    if isinstance(t, ast.Name) and t.id == "True":
+        return True
+    if isinstance(t, ast.UnaryOp) and isinstance(t.op, ast.Not) and isinstance(t.operand, ast.Call):
+        f = t.operand.func
+        if isinstance(f, ast.Attribute) and f.attr in ("is_set", "wait"):
+            return True
+    return isinstance(t, (ast.Name, ast.Attribute))
 
 
-def _ciplak_logging(govde: list[ast.stmt]) -> list[str]:
-    """Handler gövdesindeki KORUMASIZ logging çağrıları.
+_LOG_METOTLARI = frozenset({"debug", "info", "warning", "warn", "error", "exception", "critical", "log"})
 
-    "Korumalı" = gövdede bir `try` var (yani bildirimin kendisi sarılmış).
-    """
-    if any(isinstance(x, ast.Try) for x in govde):
-        return []
-    bulunan = []
-    for st in govde:
-        if not isinstance(st, ast.Expr) or not isinstance(st.value, ast.Call):
-            continue
-        f, parcalar = st.value.func, []
-        while isinstance(f, ast.Attribute):
+
+def _log_cagrisi(c: ast.AST) -> str | None:
+    """Günlük çağrısıysa yolunu döndürür. Ölçüt: metot bir logging metodu VE alıcı ifadesinin adında
+    'log' geçer — `logging.x`, `log.x`, `logger.x`, `self.logger.x`, `self._log.x`, `_LOG.x`,
+    `logging.getLogger(__name__).x` (eskiden yalnız sabit kök adları: `self.logger` GÖRÜNMÜYORDU)."""
+    if not isinstance(c, ast.Call) or not isinstance(c.func, ast.Attribute) or c.func.attr not in _LOG_METOTLARI:
+        return None
+    parcalar: list[str] = []
+    f = c.func.value
+    while True:
+        if isinstance(f, ast.Attribute):
             parcalar.append(f.attr)
             f = f.value
-        if isinstance(f, ast.Name):
+        elif isinstance(f, ast.Call):
+            f = f.func
+        elif isinstance(f, ast.Name):
             parcalar.append(f.id)
-        yol = ".".join(reversed(parcalar))
-        if yol.split(".")[0] in ("logging", "log", "logger", "_log", "LOG"):
-            bulunan.append(yol)
-    return bulunan
+            break
+        else:
+            return None
+    alici = ".".join(reversed(parcalar))
+    return f"{alici}.{c.func.attr}" if "log" in alici.lower() else None
+
+
+def _genis_try(t: ast.Try) -> bool:
+    """`Exception`/`BaseException`/çıplak `except` taşıyan try — günlük hatasını (ValueError,
+    PermissionError, OSError) yakalar. `except OSError:` gibi DAR bir sarma koruma SAYILMAZ."""
+    for h in t.handlers:
+        if h.type is None:
+            return True
+        tipler = h.type.elts if isinstance(h.type, ast.Tuple) else [h.type]
+        if any(isinstance(x, ast.Name) and x.id in ("Exception", "BaseException") for x in tipler):
+            return True
+    return False
+
+
+_GOVDE_ALANLARI = ("body", "orelse", "handlers", "finalbody")
+
+
+def _korumasiz_bildirimler(govde: list[ast.stmt], korunan: bool, isleyicide: bool, bulgu: list) -> None:
+    """Döngü gövdesini İÇ İÇE yürür: bir `except` gövdesinde (isleyicide) olup döngü gövdesi içinde
+    geniş bir `try` GÖVDESİYLE sarılmamış (korunan değil) her günlük çağrısı bulgudur — fırlarsa
+    istisna döngüden çıkar. İç fonksiyon/sınıf ve iç daemon döngüsü atlanır (o kendi başına taranır)."""
+    for st in govde:
+        if isinstance(st, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        if isinstance(st, ast.While) and _sonsuz_mu(st):
+            continue
+        if isinstance(st, ast.Try):
+            _korumasiz_bildirimler(st.body, korunan or _genis_try(st), isleyicide, bulgu)
+            for h in st.handlers:
+                _korumasiz_bildirimler(h.body, korunan, True, bulgu)
+            _korumasiz_bildirimler(st.orelse, korunan, isleyicide, bulgu)
+            _korumasiz_bildirimler(st.finalbody, korunan, isleyicide, bulgu)
+            continue
+        if isleyicide and not korunan:
+            for alan, deger in ast.iter_fields(st):
+                if alan in _GOVDE_ALANLARI:
+                    continue
+                for dugum in deger if isinstance(deger, list) else [deger]:
+                    if not isinstance(dugum, ast.AST):
+                        continue
+                    for c in ast.walk(dugum):
+                        yol = _log_cagrisi(c)
+                        if yol:
+                            bulgu.append((c.lineno, [yol]))
+        for alan in ("body", "orelse"):
+            alt = getattr(st, alan, None)
+            if isinstance(alt, list):
+                _korumasiz_bildirimler(alt, korunan, isleyicide, bulgu)
 
 
 def _tara(kaynak: str) -> tuple[int, list[tuple[int, list[str]]]]:
-    """(sonsuz döngü sayısı, [(satır, çıplak çağrılar)])"""
+    """(daemon döngüsü sayısı, [(satır, [korumasız günlük çağrısı])])"""
     try:
         agac = ast.parse(kaynak)
     except SyntaxError:
         return 0, []
     dongu = 0
-    bulgu = []
+    bulgu: list[tuple[int, list[str]]] = []
     for d in ast.walk(agac):
         if not isinstance(d, ast.While) or not _sonsuz_mu(d):
             continue
         dongu += 1
-        for st in d.body:
-            if not isinstance(st, ast.Try):
-                continue
-            for h in st.handlers:
-                c = _ciplak_logging(h.body)
-                if c:
-                    bulgu.append((h.lineno, c))
+        _korumasiz_bildirimler(d.body, False, False, bulgu)
     return dongu, bulgu
 
 
@@ -236,7 +299,7 @@ def test_KRITIK_sevk_edilen_donguler_CIPLAK_logging_KULLANMAZ():
             bulgu.setdefault(rel, []).append(f"{satir}: {cagrilar}")
 
     assert not bulgu, (
-        "Sonsuz döngünün en-dış `except` bloğu ÇIPLAK logging çağırıyor — bildirim "
+        "Daemon döngüsünün bir `except` bloğu KORUMASIZ günlük çağırıyor — bildirim "
         "fırlatırsa döngü ölür:\n"
         + "\n".join(f"  {k}\n    " + "\n    ".join(v) for k, v in sorted(bulgu.items()))
         + "\nÇözüm: `utils.dongu_guvenligi.dongu_hatasini_bildir(...)`"
@@ -323,6 +386,76 @@ def test_KARSIT_KANIT_SINIRLI_dongu_yanlis_kirmizi_vermiyor():
     assert _tara(sinirli) == (0, []), "sınırlı döngü sonsuz sayılıyor"
 
 
+def test_KARSIT_KANIT_tarayici_OLAY_ve_BAYRAK_dongulerini_ve_self_logger_GORUR():
+    """D1.19 (B-10.121): `hardware_controller._keep_alive_loop` biçimi — eski tarayıcı 'bulgu yok' diyordu."""
+    olay = (
+        "class C:\n"
+        "    def d(self):\n"
+        "        while not self._stop.is_set():\n"
+        "            try:\n"
+        "                self._tick()\n"
+        "            except Exception:\n"
+        '                self.logger.exception("keep-alive tick hatasi")\n'
+    )
+    assert _tara(olay) == (1, [(7, ["self.logger.exception"])]), _tara(olay)
+    bayrak = (
+        "import logging\n"
+        "def d():\n"
+        "    while _aktif:\n"
+        "        try:\n"
+        "            pass\n"
+        "        except Exception:\n"
+        '            logging.getLogger(__name__).error("x")\n'
+    )
+    assert _tara(bayrak) == (1, [(7, ["logging.getLogger.error"])]), _tara(bayrak)
+
+
+def test_KARSIT_KANIT_tarayici_IC_ICE_handleri_ve_DAR_sarmayi_GORUR():
+    """Handler `with`/`if` içinde de olsa bulgudur; `except OSError` gibi DAR sarma koruma değildir
+    (kapalı stderr'de `handleError` ValueError atar — D0)."""
+    ic_ice = (
+        "def d(self):\n"
+        "    while True:\n"
+        "        with self._kilit:\n"
+        "            try:\n"
+        "                pass\n"
+        "            except Exception as e:\n"
+        "                if e:\n"
+        '                    self.logger.warning("x %s", e)\n'
+    )
+    assert _tara(ic_ice)[1] == [(8, ["self.logger.warning"])], _tara(ic_ice)
+    dar = (
+        "import logging\n"
+        "def d():\n"
+        "    while True:\n"
+        "        try:\n"
+        "            pass\n"
+        "        except Exception:\n"
+        "            try:\n"
+        '                logging.exception("x")\n'
+        "            except OSError:\n"
+        "                pass\n"
+    )
+    assert _tara(dar)[1] == [(8, ["logging.exception"])], "DAR sarma koruma sayıldı"
+
+
+def test_KARSIT_KANIT_dis_GENIS_try_ic_handleri_KORUR():
+    """Gövde içindeki geniş `try` iç handler'ın bildirimini sarar → istisna döngüden ÇIKMAZ (yanlış kırmızı yok)."""
+    korunan = (
+        "import logging\n"
+        "def d():\n"
+        "    while True:\n"
+        "        try:\n"
+        "            try:\n"
+        "                pass\n"
+        "            except ValueError as e:\n"
+        '                logging.error("ic %s", e)\n'
+        "        except Exception:\n"
+        '            dongu_hatasini_bildir("dis")\n'
+    )
+    assert _tara(korunan) == (1, []), _tara(korunan)
+
+
 def test_KARSIT_KANIT_ALTI_dongu_GERCEKTEN_baglandi():
     """Düzeltmenin ÖZNESİ hâlâ orada mı — yoksa kapı boş bir ağacı tarıyor olabilir."""
     hedefler = {
@@ -333,3 +466,73 @@ def test_KARSIT_KANIT_ALTI_dongu_GERCEKTEN_baglandi():
         metin = (KOK / rel).read_text(encoding="utf-8")
         n = metin.count("dongu_hatasini_bildir(")
         assert n >= beklenen, f"{rel}: {n} bağlanma var, beklenen ≥{beklenen} — döngüler yardımcıdan koparılmış"
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════
+# 4. DAVRANIŞ — GERÇEK keep-alive döngüsü tick + günlük hatasında YAŞAR (D1.19 · B-10.121)
+# ═════════════════════════════════════════════════════════════════════════════════════════
+
+
+class _KosulluLogger:
+    """Sağlamken sayar; `patlat` kurulunca her çağrıda fırlatır (kilitli log / kapalı akış)."""
+
+    def __init__(self):
+        import threading
+
+        self.patlat = threading.Event()
+        self.cagri = 0
+
+    def _cagir(self, *a, **k):
+        self.cagri += 1
+        if self.patlat.is_set():
+            raise PermissionError(13, "log dosyasi kilitli (test)")
+
+    debug = info = warning = error = exception = critical = log = _cagir
+
+
+@pytest.mark.parametrize("patlak", [False, True], ids=["KONTROL_logger_saglam", "logger_PATLAK"])
+def test_KRITIK_GERCEK_keep_alive_dongusu_tick_ve_LOG_hatasinda_YASAR(patlak, monkeypatch):
+    """Keep-alive iş parçacığı bobin-başı süre sınırını ve keep-alive'ı taşır. Eskiden `_tick` hatası
+    + fırlatan `self.logger.exception` onu SÜREÇ ÖMRÜ BOYUNCA öldürüyordu (firmware ölü-adam devresi
+    1,5 sn'de keser — güvenli yön — ama yol cihaz yeniden başlayana dek ölü kalır). GERÇEK
+    `HardwareController._keep_alive_loop`; yalnız `_tick` ve aralık test için değiştirilir."""
+    import threading
+    import time
+    import types
+
+    from controllers.hardware_controller import HardwareController
+
+    durum = types.SimpleNamespace(tik=0, hata=threading.Event())
+
+    class _HC(HardwareController):
+        KEEP_ALIVE_INTERVAL_S = 0.01
+
+        def _tick(self):
+            durum.tik += 1
+            if durum.hata.is_set():
+                raise RuntimeError("TICK-HATASI (test)")
+
+    def bekle(kosul, sure=5.0):
+        son = time.monotonic() + sure
+        while time.monotonic() < son and not kosul():
+            time.sleep(0.005)
+        return kosul()
+
+    monkeypatch.setattr(sys, "__stderr__", io.StringIO())
+    hc = _HC(types.SimpleNamespace())
+    lg = _KosulluLogger()
+    hc.logger = lg
+    try:
+        assert bekle(lambda: durum.tik >= 1), "keep-alive hiç dönmedi (aparat)"
+        if patlak:
+            lg.patlat.set()
+        durum.hata.set()
+        n0 = durum.tik
+        dondu = bekle(lambda: durum.tik >= n0 + 3)
+        canli = hc._keep_alive_thread.is_alive()
+    finally:
+        lg.patlat.clear()
+        hc._keep_alive_stop.set()
+        hc._keep_alive_thread.join(timeout=2)
+    assert dondu and canli, f"keep-alive tick{' + LOG' if patlak else ''} hatasında ÖLDÜ ({durum.tik - n0} tur)"
+    assert lg.cagri >= 1, "hata yolu günlüğe uğramadı — kapı vakumda"

@@ -6,6 +6,7 @@ import threading
 import time
 import zlib
 
+from utils.dongu_guvenligi import dongu_hatasini_bildir
 from utils.stm32_protocol_limits import (
     DURATION_MAX_MINUTES,
     duty_percent_to_ratio,
@@ -109,7 +110,9 @@ class HardwareController:
             try:
                 self._tick()
             except Exception:
-                self.logger.exception("keep-alive tick hatasi")
+                # D1.19 (B-10.121): bildirim fırlatırsa keep-alive + bobin-başı süre sınırı iş parçacığı
+                # cihaz yeniden başlayana dek ölürdü (firmware ölü-adam 1,5 sn'de keser — güvenli yön).
+                dongu_hatasini_bildir("keep-alive tick hatasi", logger=self.logger)
             time.sleep(self.KEEP_ALIVE_INTERVAL_S)
 
     def _tick(self):

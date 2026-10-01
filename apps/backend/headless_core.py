@@ -14,6 +14,7 @@ from database.patient_database import get_patient_database
 from database.session_manager import get_session_manager
 from event_bus import EventPriority, get_event_bus
 from services.headless_services import MosquittoSupervisor, NetworkStatusService, UdpDiscoveryService
+from utils.dongu_guvenligi import dongu_hatasini_bildir
 from utils.simple_signal import SimpleSignal
 from utils.stm32_transport import Stm32SerialTransport
 
@@ -645,7 +646,9 @@ class HeadlessCore:
                             break
                         line = conn.readline()
                     except Exception as exc:
-                        self.logger.warning("[STM32 READER] %s", exc)
+                        dongu_hatasini_bildir(  # D1.19 (B-10.121)
+                            "[STM32 READER] %s", exc, logger=self.logger, seviye=logging.WARNING, exc_info=False
+                        )
                         break
                     if line:
                         decoded = line.decode("utf-8", errors="ignore").strip()
@@ -732,7 +735,11 @@ class HeadlessCore:
                         last_payload[1] = time.monotonic()
                     _yaz_conn.write(stm_msg if isinstance(stm_msg, bytes) else stm_msg.encode("utf-8"))
                 except Exception as exc:
-                    self.logger.warning("[STM32 SEND] %s", exc)
+                    # D1.19 (B-10.121): bildirim fırlatırsa HWSender ölür → sonraki STM paketleri (STOP dahil)
+                    # "kuyruğa verildi" ama HİÇ yazılmaz (B-1.23 sahte teyidinin bir kaynağı).
+                    dongu_hatasini_bildir(
+                        "[STM32 SEND] %s", exc, logger=self.logger, seviye=logging.WARNING, exc_info=False
+                    )
                     # Paylaşılan durumu YALNIZ hâlâ bu bağlantıysa düşür (araya yeni bir
                     # bağlantı girmiş olabilir — eski yazma hatası onu öldürmemeli).
                     _benim = baglanti.aktif() is _yaz_conn
@@ -758,7 +765,9 @@ class HeadlessCore:
                 try:
                     udp_sock.sendto(udp_pkt, (esp_ip, esp_port))
                 except Exception as exc:
-                    self.logger.warning("[UDP SEND] %s", exc)
+                    dongu_hatasini_bildir(
+                        "[UDP SEND] %s", exc, logger=self.logger, seviye=logging.WARNING, exc_info=False
+                    )
 
         _son = baglanti.gecersizle()
         if _son is not None:
