@@ -46,8 +46,14 @@ export type EslesmeSonuc =
   /** Bağlandı ama kod token'a çevrilemedi → istekler 401 olurdu; dürüstçe bildir. */
   | { durum: "kod_reddedildi" };
 
+/** Mesajın söylendiği an uygulamanın bağlantı durumu (Y42). */
+export type EslesmeBaglami = {
+  /** Uygulama ŞU AN bir cihaza bağlı mı (WS canlı)? Yalnız `true` iken "bağlantı önceki cihazda kaldı" denir. */
+  oncekiCihazaBagli?: boolean;
+};
+
 /** Kullanıcıya gösterilecek metin — TEK KAYNAK (iki ekran da aynısını söylesin). */
-export function eslesmeMesaji(s: EslesmeSonuc): string {
+export function eslesmeMesaji(s: EslesmeSonuc, baglam: EslesmeBaglami = {}): string {
   switch (s.durum) {
     case "ok":
       return "Cihaz eşleştirildi ve bağlanıldı ✓";
@@ -79,7 +85,12 @@ export function eslesmeMesaji(s: EslesmeSonuc): string {
     case "gecersiz_adres":
       return "Geçersiz cihaz adresi biçimi.";
     case "kod_reddedildi":
-      return "Cihaz bulundu ama eşleştirme kodu kabul edilmedi — bağlantı önceki cihazda kaldı. Kodu kontrol edip tekrar deneyin.";
+      // ⚠️ Y42 (sahip, 2026-10-01): A-52 cümlesi ("bağlantı önceki cihazda kaldı") YALNIZ bir cihaza
+      // bağlıyken doğrudur. Çevrimdışı rehberde "önceki cihaz" yoktur; bağlam bilinmiyorsa da iddia edilmez.
+      if (baglam.oncekiCihazaBagli === true) {
+        return "Cihaz bulundu ama eşleştirme kodu kabul edilmedi — bağlantı önceki cihazda kaldı. Kodu kontrol edip tekrar deneyin.";
+      }
+      return "Eşleştirme kodu kabul edilmedi. Bağlantı ayarı değiştirilmedi; kodu kontrol edip yeniden deneyin.";
     default:
       // ⚠️ DÜRÜST MESAJ (denetim 2026-08-17): bu dal YALNIZ "kod yanlış" demek DEĞİL. Sunucudaki
       // `resolve_device` tazelik penceresi dışında kalan (uzun süredir kapalı) cihaz da buraya

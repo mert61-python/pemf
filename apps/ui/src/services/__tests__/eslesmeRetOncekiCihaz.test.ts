@@ -139,7 +139,8 @@ describe("D1.E01 · A-52 — reddedilen eşleştirme bağlantıyı ÖNCEKİ ciha
   });
 
   it("KRİTİK: ret mesajı bağlantının ÖNCEKİ cihazda kaldığını söyler", async () => {
-    const m = eslesmeMesaji(await cihazaBaglan(B_KOD));
+    // Senaryo A'ya BAĞLIYKEN B'nin kodu (Y42: A-52 metni yalnız bağlıyken)
+    const m = eslesmeMesaji(await cihazaBaglan(B_KOD), { oncekiCihazaBagli: true });
     expect(m).toMatch(/önceki cihazda kaldı/i);
     expect(m).toMatch(/kabul edilmedi/i);
   });

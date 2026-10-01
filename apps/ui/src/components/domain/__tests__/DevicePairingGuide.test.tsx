@@ -10,14 +10,16 @@
  * Biri kaybolursa kullanıcı yine çıkmaza girer; bu testler ikisini de kilitler.
  */
 const mockCihazaBaglan = jest.fn();
+const mockMesaj = jest.fn((..._a: unknown[]) => "mesaj");
+let mockWsBagli = false;
 jest.mock("@/services/pairing", () => ({
   cihazaBaglan: (...a: unknown[]) => mockCihazaBaglan(...a),
-  eslesmeMesaji: () => "mesaj",
+  eslesmeMesaji: (...a: unknown[]) => mockMesaj(...a),
   KOD_MAX_UZUNLUK: 8,
 }));
 const mockReconnect = jest.fn();
 jest.mock("@/context/LiveDataContext", () => ({
-  useLiveData: () => ({ reconnect: mockReconnect }),
+  useLiveData: () => ({ reconnect: mockReconnect, wsConnected: mockWsBagli }),
 }));
 const mockToast = jest.fn();
 jest.mock("@/components/ui/ToastProvider", () => ({ useToast: () => ({ showToast: mockToast }) }));
@@ -44,6 +46,7 @@ const setup = async (onClose = jest.fn()) => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockWsBagli = false; // rehber ÇEVRİMDIŞIYKEN açılır (AppShell bağlantı şeridi)
   mockTani.mockResolvedValue({ durum: "bilinmiyor" }); // varsayılan: sebep bilinmiyor → kutu YOK
 });
 
@@ -140,5 +143,28 @@ describe("eşleştirme rehberi", () => {
     u.rerender(<DevicePairingGuide visible onClose={jest.fn()} />);
     await act(async () => {});
     expect(u.queryByTestId("tani-kutusu")).toBeNull();
+  });
+});
+
+
+// ── Y42 (sahip, 2026-10-01): ret metni bağlama göre ───────────────────────────────────────────
+describe("Y42 — rehberde kod reddi", () => {
+  it("KRİTİK: bağlantı YOKKEN ret mesajı 'önceki cihaz' bağlamı OLMADAN istenir", async () => {
+    mockCihazaBaglan.mockResolvedValue({ durum: "kod_reddedildi" });
+    const u = await setup();
+    fireEvent.changeText(u.getByLabelText("Eşleştirme kodu"), "MVPDDN");
+    fireEvent.press(u.getByText("Cihaza Bağlan"));
+    await waitFor(() => expect(mockToast).toHaveBeenCalledWith("mesaj", "error"));
+    expect(mockMesaj).toHaveBeenCalledWith({ durum: "kod_reddedildi" }, { oncekiCihazaBagli: false });
+  });
+
+  it("KARŞIT: rehber açıkken bağlantı GELMİŞSE (WS bağlı) A-52 bağlamı geçilir", async () => {
+    mockWsBagli = true;
+    mockCihazaBaglan.mockResolvedValue({ durum: "kod_reddedildi" });
+    const u = await setup();
+    fireEvent.changeText(u.getByLabelText("Eşleştirme kodu"), "MVPDDN");
+    fireEvent.press(u.getByText("Cihaza Bağlan"));
+    await waitFor(() => expect(mockToast).toHaveBeenCalled());
+    expect(mockMesaj).toHaveBeenCalledWith({ durum: "kod_reddedildi" }, { oncekiCihazaBagli: true });
   });
 });

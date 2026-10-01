@@ -36,7 +36,7 @@ import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
  */
 export function DevicePairingGuide({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { showToast } = useToast();
-  const { reconnect } = useLiveData();
+  const { reconnect, wsConnected } = useLiveData();
   const [kod, setKod] = useState("");
   const [baglaniyor, setBaglaniyor] = useState(false);
   const [tani, setTani] = useState<AgTanisi | null>(null);
@@ -69,7 +69,8 @@ export function DevicePairingGuide({ visible, onClose }: { visible: boolean; onC
         setKod("");
         onClose();
       } else {
-        showToast(eslesmeMesaji(sonuc), "error");
+        // Y42: rehber çevrimdışıyken açılır → "önceki cihazda kaldı" yalnız bağlantı GERÇEKTEN varsa
+        showToast(eslesmeMesaji(sonuc, { oncekiCihazaBagli: wsConnected }), "error");
       }
     } finally {
       setBaglaniyor(false);

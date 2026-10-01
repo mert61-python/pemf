@@ -25,7 +25,7 @@ import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 
 export function SettingsScreen() {
   const { setUserMode, isExpert, isResearcher } = useUserMode();
-  const { reconnect: liveReconnect } = useLiveData();
+  const { reconnect: liveReconnect, wsConnected } = useLiveData();
   const guardTeardown = useTeardownGuard();
   // "Ayarlar kaydedildi" mesajını 3sn sonra silen zamanlayıcı — unmount'ta temizlenmesi için ref'te.
   const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -364,7 +364,8 @@ export function SettingsScreen() {
         showToast(eslesmeMesaji(sonuc), "success");
       } else {
         setConnectionStatus("fail");
-        showToast(eslesmeMesaji(sonuc), "error");
+        // Y42: "bağlantı önceki cihazda kaldı" yalnız uygulama gerçekten bir cihaza bağlıyken
+        showToast(eslesmeMesaji(sonuc, { oncekiCihazaBagli: wsConnected }), "error");
       }
     } finally {
       setConnecting(false);
