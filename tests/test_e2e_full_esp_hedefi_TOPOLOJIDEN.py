@@ -32,6 +32,8 @@ import re
 import sys
 from pathlib import Path
 
+import pytest
+
 KOK = Path(__file__).resolve().parents[1]
 KAYNAK = KOK / "tools" / "e2e_full.py"
 _YOL = re.compile(r"^/api/coil/(\d+)/control$")
@@ -420,3 +422,120 @@ def test_KRITIK_broker_sondasi_URUNUN_sondasiyla_AYNI_hedef(monkeypatch):
     monkeypatch.setattr(socket, "create_connection", _reddet)
     assert arac.broker_erisilebilir() is False
     assert cagrilar == [(("127.0.0.1", 1883), 0.3)] * 2, cagrilar
+
+
+# ── 1-B bağımsız inceleme (i1/B5): kara liste yerine ANLAM — doğruluk tablosu ve izin listesi ───────────────
+#
+# Eski `_sabit_mi` kara listesi `status != "error"`, `"status" in be` gibi ESP dalında HER ZAMAN doğru koşulları
+# görmüyordu (ölçüldü: 3 mutant, 7/7 YEŞİL); alt sistem kontrolüne `or bool(esp_slotlari(sn))` eklemek (yeniden
+# topoloji) de yeşildi. Artık: yayın sonucu kontrolü sentetik ESP yanıtları × iki broker durumu ile DEĞERLENDİRİLİR
+# ve tam olarak `status == beklenen` gibi davranmalıdır; alt sistem kontrolü yalnız `esp_alt_sistemi_acik(<ad>)`.
+
+
+def _yanit_adlari(kosul) -> set[str]:
+    """Koşulda SÖZLÜK gibi kullanılan adlar: `x.get(…)`, `x[…]`, `… in x`."""
+    adlar = set()
+    for n in ast.walk(kosul):
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "get":
+            if isinstance(n.func.value, ast.Name):
+                adlar.add(n.func.value.id)
+        elif isinstance(n, ast.Subscript) and isinstance(n.value, ast.Name):
+            adlar.add(n.value.id)
+        elif isinstance(n, ast.Compare):
+            for op, sag in zip(n.ops, n.comparators):
+                if isinstance(op, (ast.In, ast.NotIn)) and isinstance(sag, ast.Name):
+                    adlar.add(sag.id)
+    return adlar
+
+
+def yayin_dogruluk_sorunlari(kaynak: str) -> list:
+    """ESP yolundaki `status` okuyan her kontrol: {transport: mqtt, status: S} × beklenen B için sonuç == (S == B)."""
+    agac = ast.parse(kaynak)
+    sorunlar = []
+    for fonk in [d for d in agac.body if isinstance(d, ast.FunctionDef)]:
+        for c in ast.walk(fonk):
+            if not (
+                isinstance(c, ast.Call) and isinstance(c.func, ast.Name) and c.func.id == "check" and len(c.args) > 1
+            ):
+                continue
+            etiket = _etiket(c.args[0])
+            kosul = c.args[1]
+            if "ESP" not in etiket or "yayin" not in etiket.lower():
+                continue
+            yanit = _yanit_adlari(kosul)
+            adlar = {n.id for n in ast.walk(kosul) if isinstance(n, ast.Name)}
+            kod = compile(ast.Expression(kosul), "<kosul>", "eval")
+            tablo = {}
+            for s in sorted(_YAYIN_SONUCLARI):
+                for b in sorted(_YAYIN_SONUCLARI):
+                    ns = {a: ({"transport": "mqtt", "status": s} if a in yanit else b) for a in adlar}
+                    try:
+                        tablo[(s, b)] = bool(eval(kod, {"__builtins__": {"bool": bool, "str": str}}, ns))  # noqa: S307
+                    except Exception as e:  # noqa: BLE001 — değerlendirilemeyen koşul da kusurdur
+                        tablo[(s, b)] = f"HATA {type(e).__name__}"
+            beklenen = {(s, b): s == b for s in _YAYIN_SONUCLARI for b in _YAYIN_SONUCLARI}
+            if not yanit or tablo != beklenen:
+                sorunlar.append((fonk.name, c.lineno, etiket, tablo))
+    return sorunlar
+
+
+def alt_sistem_izin_listesi_sorunlari(kaynak: str) -> list:
+    sorunlar = []
+    for fonk in [d for d in ast.parse(kaynak).body if isinstance(d, ast.FunctionDef)]:
+        for c in ast.walk(fonk):
+            if isinstance(c, ast.Call) and isinstance(c.func, ast.Name) and c.func.id == "check" and len(c.args) > 1:
+                if "alt sistem" not in _etiket(c.args[0]).lower():
+                    continue
+                k = c.args[1]
+                tam = (
+                    isinstance(k, ast.Call)
+                    and isinstance(k.func, ast.Name)
+                    and k.func.id == "esp_alt_sistemi_acik"
+                    and len(k.args) == 1
+                    and isinstance(k.args[0], ast.Name)
+                )
+                if not tam:
+                    sorunlar.append((fonk.name, c.lineno, ast.unparse(k)))
+    return sorunlar
+
+
+def test_KRITIK_ESP_yayin_kontrolu_DOGRULUK_TABLOSUYLA_yanlislanabilir():
+    kaynak = KAYNAK.read_text(encoding="utf-8")
+    sorunlar = yayin_dogruluk_sorunlari(kaynak)
+    assert sorunlar == [], (
+        f"ESP yayın kontrolü `status == beklenen` gibi DAVRANMIYOR (her yanıtta doğru/yanlış): {sorunlar}"
+    )
+    sayi = sum(
+        1
+        for c in ast.walk(ast.parse(kaynak))
+        if isinstance(c, ast.Call)
+        and getattr(c.func, "id", "") == "check"
+        and len(c.args) > 1
+        and "yayin sonucu" in _etiket(c.args[0])
+    )
+    assert sayi >= 2, f"tarayıcı vakumda: 'yayin sonucu' kontrolü {sayi}"
+
+
+def test_KRITIK_alt_sistem_kontrolu_YALNIZ_canli_cagri():
+    kaynak = KAYNAK.read_text(encoding="utf-8")
+    assert alt_sistem_izin_listesi_sorunlari(kaynak) == [], (
+        "'alt sistem' kontrolü tam olarak `esp_alt_sistemi_acik(<anlik>)` olmalı (topolojiyle `or` = sabit): "
+        f"{alt_sistem_izin_listesi_sorunlari(kaynak)}"
+    )
+
+
+@pytest.mark.parametrize(
+    "kosul",
+    ['be.get("status") != "error"', '"status" in be', 'be.get("transport") == "mqtt"', 'bool(be.get("status"))'],
+    ids=["esit_degil_error", "anahtar_var", "yalniz_transport", "bool_status"],
+)
+def test_ARAC_dogruluk_tablosu_SABIT_kosulu_YAKALAR(kosul):
+    ornek = f'def f():\n    check("ESP komutu, yayin sonucu durust", {kosul}, "")\n'
+    assert yayin_dogruluk_sorunlari(ornek), kosul
+
+
+def test_ARAC_dogruluk_tablosu_DOGRU_kosulu_KABUL_eder():
+    ornek = 'def f():\n    check("ESP komutu, yayin sonucu durust", be.get("transport") == "mqtt" and be.get("status") == yayin, "")\n'
+    assert yayin_dogruluk_sorunlari(ornek) == []
+    ornek2 = 'def f():\n    check("ESP alt sistemi acik", esp_alt_sistemi_acik(sn) or bool(esp_slotlari(sn)), "")\n'
+    assert alt_sistem_izin_listesi_sorunlari(ornek2)
