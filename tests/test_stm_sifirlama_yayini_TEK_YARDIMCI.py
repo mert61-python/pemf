@@ -69,8 +69,12 @@ def test_P4_A_satir_TUM_STM_bobinlerinin_sifirlamasini_yayinlar(kaynak, olay):
     c = _core()
     c._handle_stm_line(satir)
 
-    kritik = [(t, p) for t, _d, p in c.event_bus.olaylar if t == olay]
-    assert kritik == [(olay, EventPriority.CRITICAL)], f"{kaynak}: CRITICAL {olay} tek kez yayınlanmadı: {kritik}"
+    # Bağımsız inceleme (r5): olaylar eskiden TÜRE göre süzülüyordu — termal dala ek bir CRITICAL
+    # `watchdog_timeout` (api_server onu E-stop'a çevirir = termal KESME, A-47 yasak) eklense yeşil
+    # kalıyordu. Tam dizi pinlenir: tek CRITICAL olay + her STM bobini için bir sıfırlama, BAŞKA olay yok.
+    dizi = [(t, p) for t, _d, p in c.event_bus.olaylar]
+    beklenen = [(olay, EventPriority.CRITICAL)] + [("hardware.stm.coil_update", EventPriority.HIGH)] * len(TUM_STM)
+    assert dizi == beklenen, f"{kaynak}: olay dizisi değişti (A-47: termal dal davranışı DEĞİŞMEZ): {dizi}"
     sifirlar = [(d, p) for t, d, p in c.event_bus.olaylar if t == "hardware.stm.coil_update"]
     assert sorted(d["coil_id"] for d, _p in sifirlar) == sorted(TUM_STM), (
         f"{kaynak}: sıfırlanan bobinler {sorted(d['coil_id'] for d, _p in sifirlar)} ≠ STM bobinleri {sorted(TUM_STM)}"
