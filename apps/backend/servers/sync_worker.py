@@ -208,8 +208,13 @@ class CloudSyncWorker:
         from utils.path_utils import get_app_data_directory
 
         app_data_dir = get_app_data_directory()
-        patient_db = get_patient_database(app_data_dir)
-        session_db = get_treatment_db(app_data_dir)
+        # ⚠️ D1.15 (B-4.15): DB'ler eskiden BURADA — döngüden önce ve `try` dışında — açılıyordu. Tek
+        # bir açılış hatası (yarım göç → GocBekliyorHatasi, anahtar uyuşmazlığı → RuntimeError) iş
+        # parçacığını öldürüyor, cihaz kayıt defteri / uzaktan erişim yayını süreç ömrü boyunca
+        # SESSİZCE duruyordu — hasta senkronu kapalıyken (varsayılan) bile. Artık DB'ler YALNIZ hasta
+        # senkronu için, döngü İÇİNDE ve `try` içinde açılır; açılamazsa o tur senkron atlanır, yayın
+        # sürer ve bir sonraki turda yeniden denenir.
+        patient_db = session_db = None
 
         if not self.patient_sync_enabled:
             logger.warning(
@@ -237,6 +242,9 @@ class CloudSyncWorker:
                 ok = False
             if self.patient_sync_enabled:
                 try:
+                    if patient_db is None or session_db is None:
+                        patient_db = get_patient_database(app_data_dir)
+                        session_db = get_treatment_db(app_data_dir)
                     self._sync_patients(patient_db)
                     self._sync_sessions(session_db)
                 except Exception as e:
