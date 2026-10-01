@@ -19,7 +19,14 @@ from controllers.hardware_controller import (
     STM_BOBIN_SAYISI,  # faz 4: ESP kapsami TUM_ESP'ten turer (literal bobin numarasi YASAK)
     HardwareController,
 )
+from topoloji import TUM_STM
 from utils.stm32_protocol_limits import DURATION_MAX_MINUTES
+
+#: D1.05 (B-10.42): bobin kümesi TOPOLOJİDEN (`live_state.STM_COIL_IDS`) — literal 1..5 aralığı
+#: DEĞİL (faz 4'te bobin 6-7 STM'e geçti; eski literal 6-7'yi hiç ölçmüyordu: on_disconnect'i
+#: 1-5'e daraltan mutant YEŞİL kalıyordu) ve HC'nin KENDİ sabitinden de DEĞİL (sabit 5'e düşse
+#: test onu izler, yine kör kalırdı).
+_STM_BOBINLERI = sorted(TUM_STM)
 
 
 class _FakeCore:
@@ -135,16 +142,16 @@ def test_start_all_duration_zero_capped(hw, monkeypatch):
     clk = [0.0]
     _fake_clock(monkeypatch, clk)
     hw.start_all_coils(duration=0)
-    for i in range(1, 6):
+    for i in _STM_BOBINLERI:
         assert hw._coil_deadline[i] == pytest.approx(GOZETIMSIZ_VARSAYILAN_DAKIKA * 60)
         assert hw.coils_state[i]["is_running"] is True
 
 
 def test_on_disconnect_resets_and_prevents_refire(hw):
     hw.start_all_coils(freq=100.0, duty=40.0, duration=30)
-    assert any(hw.coils_state[i]["is_running"] for i in range(1, 6))
+    assert any(hw.coils_state[i]["is_running"] for i in _STM_BOBINLERI)
     hw.on_disconnect()
-    for i in range(1, 6):
+    for i in _STM_BOBINLERI:
         assert hw.coils_state[i]["is_running"] is False
         assert hw.coils_state[i]["duty"] == 0.0
         assert hw.coils_state[i]["duration"] == 0
@@ -153,10 +160,33 @@ def test_on_disconnect_resets_and_prevents_refire(hw):
     assert hw._force_send_left == 0
 
 
+def test_KRITIK_kopus_sonrasi_keep_alive_HICBIR_STM_bobinini_yeniden_ATESLEMEZ(hw):
+    """D1.05: STM kopup geri gelince keep-alive ESKİ duty ile yeniden ateşlememeli — bobin 6-7 DAHİL.
+    Durum alanlarına değil, keep-alive'ın ÜRETTİĞİ pakete bakar."""
+    hw.start_all_coils(freq=100.0, duty=40.0, duration=30)
+    hw.on_disconnect()
+    while not hw.core._hw_send_queue.empty():
+        hw.core._hw_send_queue.get_nowait()
+    for _ in range(3):
+        hw._tick()
+    assert hw.core._hw_send_queue.empty(), "STM kopuşundan sonra keep-alive paket üretti (ESKİ duty ile re-fire)"
+
+
+def test_KRITIK_start_all_TUM_STM_bobinleri_sure_dolunca_DURUR(hw, monkeypatch):
+    """D1.05: start_all'ın deadline'ı 6-7'ye de yazılmalı; yoksa onlar süre dolsa da sürer."""
+    clk = [0.0]
+    _fake_clock(monkeypatch, clk)
+    assert hw.start_all_coils(freq=100.0, duty=40.0, duration=1) is True
+    clk[0] = 61.0
+    hw._tick()
+    calisan = [i for i in _STM_BOBINLERI if hw.coils_state[i]["is_running"]]
+    assert calisan == [], f"süre dolduğu hâlde çalışan STM bobini: {calisan}"
+
+
 def test_stop_all_sets_force_send(hw):
     hw.start_all_coils(duration=30)
     hw.stop_all_coils()
-    for i in range(1, 6):
+    for i in _STM_BOBINLERI:
         assert hw.coils_state[i]["is_running"] is False
         assert hw.coils_state[i]["duty"] == 0.0
         assert hw._coil_deadline[i] is None
@@ -229,14 +259,14 @@ def test_start_all_coils_does_not_partially_apply_on_bad_param(hw, monkeypatch):
     clk = [1000.0]
     _fake_clock(monkeypatch, clk)
     assert hw.start_all_coils(freq=10.0, duty=20.0, phase=0.0, duration=30) is True
-    before = {i: dict(hw.coils_state[i]) for i in range(1, 6)}
+    before = {i: dict(hw.coils_state[i]) for i in _STM_BOBINLERI}
     before_dl = dict(hw._coil_deadline)
 
     clk[0] = 1100.0  # deadline yeniden yazılırsa yakalanacak kadar ilerlet
     ok = hw.start_all_coils(freq=90.0, duty="bozuk-duty", phase=0.0, duration=30)
 
     assert ok is False, "geçersiz parametre False dönmeli (istisna SIZMAMALI)"
-    for i in range(1, 6):
+    for i in _STM_BOBINLERI:
         assert hw.coils_state[i] == before[i], f"bobin {i} kısmi güncellendi (atomik yazım yok)"
         assert hw._coil_deadline[i] == before_dl[i], f"bobin {i} deadline değişti"
 
@@ -255,7 +285,7 @@ def test_start_all_coils_bad_param_leaves_no_capless_running_coil(hw, monkeypatc
     ok = hw.start_all_coils(freq=90.0, duty=None, phase=0.0, duration=30)
 
     assert ok is False
-    for i in range(1, 6):
+    for i in _STM_BOBINLERI:
         assert hw.coils_state[i]["is_running"] is False, f"bobin {i} 'çalışıyor' takıldı"
         # KAPAKSIZ ÇALIŞAN BOBİN OLAMAZ: is_running=True iken deadline None YASAK
         assert not (hw.coils_state[i]["is_running"] and hw._coil_deadline[i] is None), (
@@ -271,7 +301,7 @@ def test_start_all_coils_bad_param_leaves_no_capless_running_coil(hw, monkeypatc
     assert hw.core._hw_send_queue.empty(), "hiçbir bobin sürülmemeliyken keep-alive paket üretti"
 
 
-def test_start_all_coils_basarili_yolda_5_bobin_de_istenen_degeri_ALIR(hw, monkeypatch):
+def test_start_all_coils_basarili_yolda_TUM_STM_bobinleri_istenen_degeri_ALIR(hw, monkeypatch):
     """⚠️ SAHİP KARARI KAPISI: freq/duty Python tarafında CLAMP EDİLMEZ.
 
     `stm32_protocol_limits.py:12-14` → `STM32_DUTY_MAX_RATIO = None` ("firmware/timer fiziksel
@@ -282,7 +312,7 @@ def test_start_all_coils_basarili_yolda_5_bobin_de_istenen_degeri_ALIR(hw, monke
     clk = [0.0]
     _fake_clock(monkeypatch, clk)
     assert hw.start_all_coils(freq=90.0, duty=200.0, phase=0.0, duration=30) is True
-    for i in range(1, 6):
+    for i in _STM_BOBINLERI:
         assert hw.coils_state[i]["freq"] == pytest.approx(90.0), f"bobin {i} 90 Hz'e alınmadı"
         assert hw.coils_state[i]["duty"] == pytest.approx(2.0), "Python tarafı duty clamp'i GERİ EKLENMİŞ"
         assert hw.coils_state[i]["is_running"] is True
