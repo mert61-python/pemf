@@ -35,6 +35,7 @@ import re
 from pathlib import Path
 
 import pytest
+from c_soyucu import c_soy
 
 KOK = Path(__file__).resolve().parents[1]
 ESP8266 = KOK / "firmware" / "esp8266_pemf_coil"
@@ -52,7 +53,8 @@ def _oku(p: Path) -> str:
 
 
 def _sabit(kaynak: str, ad: str) -> float | None:
-    m = re.search(r"#define\s+" + ad + r"\s+([0-9]+(?:\.[0-9]+)?)f?", kaynak)
+    # D1.48: YORUMU SOYULMUŞ metinde, satır başı `#define` (yorumdaki eski/kopya tanım değeri karşılamaz).
+    m = re.search(r"^\s*#define\s+" + ad + r"\s+([0-9]+(?:\.[0-9]+)?)f?", c_soy(kaynak), re.M)
     return float(m.group(1)) if m else None
 
 
@@ -122,7 +124,8 @@ def string_literalleri(kaynak: str) -> list[tuple[int, str]]:
 
 
 #: "48C", "100 C", ">=48C" gibi SICAKLIK gibi görünen sabit sayı (format belirteci DEĞİL).
-SICAKLIK_SAYISI = re.compile(r"[0-9]{2,3}\s?C(?![a-zA-Z0-9_])")
+#: D1.48: `°` işaretli biçim (`(>48°C)`, `48 °C`) de sayılır — eskiden kaçıyordu.
+SICAKLIK_SAYISI = re.compile(r"[0-9]{2,3}\s?(?:°\s?)?C(?![a-zA-Z0-9_])")
 
 
 def sabit_esik_tasiyan_mesajlar(kaynak: str) -> list[tuple[int, str]]:

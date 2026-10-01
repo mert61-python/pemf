@@ -72,16 +72,22 @@ def test_A1_sureli_seans_yolu_wrap_GUVENLI():
     eski `millis() >= _endTime` hep-açık klinik makinede seansı anında kesebilirdi)."""
     s3 = (KOK / "firmware" / "esps3_pemf_coil" / "CoilController.cpp").read_text(encoding="utf-8", errors="replace")
     e8 = (KOK / "firmware" / "esp8266_pemf_coil" / "CoilController.cpp").read_text(encoding="utf-8", errors="replace")
+    # D1.48: alt-dize araması öneki eşliyordu (`>= _duration * 2` YEŞİLDİ) — artık YORUMSUZ metinde TAM ifade,
+    # kapanış parantezine kadar (`test_esp_firmware_kapilari_YORUMSUZ` ayrıca bellek içi mutantla sınar).
+    from c_soyucu import c_soy
+    from test_esp_firmware_kapilari_YORUMSUZ import ag_kosullu_durdurmalar
+
+    s3, e8 = c_soy(s3), c_soy(e8)
     # S3: fark tabanlı karşılaştırma; eski mutlak-zaman formu GERİ GELMEMELİ
-    assert "_active && _hasDuration && (millis() - _startTime) >= _duration" in s3
+    assert "if (_active && _hasDuration && (millis() - _startTime) >= _duration) {" in s3
     assert "millis() >= _endTime" not in s3.replace("`millis() >= _endTime`", ""), (
         "S3 süreli dal mutlak-zaman karşılaştırmasına dönmüş (wrap'ta seans kesilir)"
     )
     # getState kalan-süre de fark tabanlı
     assert "(_duration > gecen) ? (_duration - gecen)" in s3, "S3 kalan-süre hesabı wrap-güvenli değil"
-    assert "_pwmActive && _pwmDuration > 0" in e8
-    # 8266'nın değişmez yorumu yerinde (ağ PWM'i etkilemez)
-    assert "PWM'i ASLA ETK" in e8, "8266 ağ-bağımsızlık değişmez yorumu kaybolmuş"
+    assert "if (safeMillisDiff(millis(), _pwmStartTime) >= _pwmDuration) {" in e8
+    # 8266 ağ-bağımsızlık DEĞİŞMEZİ (eskiden yalnız YORUMU aranıyordu): ağ durumuna koşullu durdurma YOK
+    assert ag_kosullu_durdurmalar(e8) == [], "8266 PWM yolunda ağ durumuna bağlı durdurma var"
 
 
 def test_KRITIK_A1_tavan_KUMULATIF_crash_loop_delemez():
