@@ -304,6 +304,38 @@ def test_KRITIK_c_A23_esikler_BAGIMSIZ_birinden_turemez():
         )
 
 
+# A-23 bağımsızlığı KARAR YERİNDE (bağımsız inceleme r3): yukarıdaki AST kapısı yalnız ATAMAYA bakıyordu;
+# araştırma kararı `from servers.ai_router import _MIN_RELIABILITY` ile kedi eşiğine bağlansa (MIN_GUVEN
+# literal kalırken) 237 test YEŞİL kalıyordu. Her kol önce yamanın KENDİ hattında etkili olduğunu ölçer
+# (aparat canlı), sonra ÖTEKİ hattın kararının değişmediğini.
+
+
+def test_KRITIK_c_A23_kedi_esigi_degisince_ARASTIRMA_karari_DEGISMEZ(monkeypatch):
+    import servers.ai_router as air
+
+    monkeypatch.setattr(air, "_MIN_RELIABILITY", 0.9)
+    assert _hedef_tuple(air, 0.31)[0] is False, "aparat kör: kedi eşiği yaması kedi kararına ulaşmıyor"
+    sonuc = _arastirma_saglayici(0.31).localize(np.zeros((8, 8, 3), dtype=np.uint8), 0)
+    assert sonuc[0] is True, (
+        "kedi eşiği 0,9 yapılınca araştırma hattı güveni 0,31 olan hedefi REDDETTİ — araştırma kararı kedi "
+        "eşiğine bağlı (A-23: biri değişince öteki SESSİZCE değişmez)"
+    )
+
+
+def test_KRITIK_c_A23_arastirma_esigi_degisince_KEDI_surusu_DEGISMEZ(kare_ucu, monkeypatch):
+    from servers import ai_pro_hedef
+
+    monkeypatch.setattr(ai_pro_hedef, "MIN_GUVEN", 0.9)
+    aparat = _arastirma_saglayici(0.31).localize(np.zeros((8, 8, 3), dtype=np.uint8), 0)
+    assert aparat[0] is False, "aparat kör: araştırma eşiği yaması araştırma kararına ulaşmıyor"
+    kare, hw = kare_ucu
+    j = kare(0.31)
+    assert j["driven"] is True and hw.baslat, (
+        f"araştırma eşiği 0,9 yapılınca kedi /frame güven 0,31'de SÜRMEDİ (driven={j['driven']}, "
+        f"STM başlatmaları {hw.baslat}) — kedi kararı araştırma eşiğine bağlı (A-23)"
+    )
+
+
 # ── (d) :8100 kare ölçüsü ─────────────────────────────────────────────────────────
 
 
