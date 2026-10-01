@@ -205,18 +205,77 @@ def izole_sim(monkeypatch):
             api._live_state.update(yedek)
 
 
-def _tek_tur(api, monkeypatch) -> list[dict]:
-    """Sim döngüsünü BİR TUR koştur, yayınları döndür."""
+def _tek_tur(api, monkeypatch, yayin_kancasi=None) -> list[dict]:
+    """Sim döngüsünü BİR TUR koştur, yayınları döndür.
+
+    ⚠️ D1.41 (B-10.257): `time.sleep` eskiden SÜREÇ GENELİNDE `KeyboardInterrupt` fırlatan bir lambdaya
+    yamanıyordu — yama penceresinde uyumaya giren HER iş parçacığı (çalışıyorsa gerçek `session-watchdog`:
+    süre dolunca bobini durduran TEK yazılım mekanizması) KeyboardInterrupt ile ÖLÜYOR, sonraki testler
+    watchdog'suz koşuyordu. Artık yalnız BU iş parçacığının uykusu turu bitirir; diğerleri gerçek uykuyu görür.
+    Kapı: `test_KRITIK_tek_tur_yamasi_BASKA_is_parcacigini_OLDURMEZ`."""
+    import threading
     import time as _gercek_time
 
+    ana = threading.current_thread()
+    gercek_uyku = _gercek_time.sleep
+
+    def _uyku(sn):
+        if threading.current_thread() is ana:
+            raise KeyboardInterrupt
+        return gercek_uyku(sn)
+
     yayinlar: list[dict] = []
-    monkeypatch.setattr(api, "_ws_broadcast_sync", lambda m: yayinlar.append(m))
-    monkeypatch.setattr(_gercek_time, "sleep", lambda _s: (_ for _ in ()).throw(KeyboardInterrupt))
+
+    def _yayin(m):
+        yayinlar.append(m)
+        if yayin_kancasi:
+            yayin_kancasi()
+
+    monkeypatch.setattr(api, "_ws_broadcast_sync", _yayin)
+    monkeypatch.setattr(_gercek_time, "sleep", _uyku)
     try:
         api._hardware_simulation_loop()
     except KeyboardInterrupt:
         pass
+    finally:
+        monkeypatch.setattr(_gercek_time, "sleep", gercek_uyku)
     return yayinlar
+
+
+def test_KRITIK_tek_tur_yamasi_BASKA_is_parcacigini_OLDURMEZ(izole_sim, monkeypatch):
+    """D1.41: yama penceresinde UYUYAN başka bir iş parçacığı (watchdog yerine geçen döngü) YAŞAMALI.
+
+    Senkron: tur, ilk yayında, nöbetçi iş parçacığı yama altında en az iki uyku tamamlayana (ya da ölene)
+    kadar bekletilir — eski süreç geneli yamada nöbetçi ilk uykuda KeyboardInterrupt ile ölür (ölçüldü)."""
+    import threading
+    import time as _t
+
+    api, _ls = izole_sim
+    durum = {"tur": 0, "dur": False}
+
+    def _nobetci():
+        while not durum["dur"]:
+            _t.sleep(0.005)
+            durum["tur"] += 1
+
+    th = threading.Thread(target=_nobetci, daemon=True, name="d141-nobetci")
+    th.start()
+    while durum["tur"] < 1:  # nöbetçi ÇALIŞIYOR (yama öncesi)
+        _t.perf_counter()
+
+    def _kanca():
+        hedef = durum["tur"] + 2
+        bitis = _t.perf_counter() + 2.0
+        while durum["tur"] < hedef and th.is_alive() and _t.perf_counter() < bitis:
+            pass
+
+    try:
+        yayinlar = _tek_tur(api, monkeypatch, yayin_kancasi=_kanca)
+        assert yayinlar, "aparat: sim turu hiç yayın yapmadı (kanca koşmadı)"
+        assert th.is_alive(), "sim tek-tur yaması BAŞKA bir iş parçacığını öldürdü (süreç geneli sleep yaması)"
+    finally:
+        durum["dur"] = True
+        th.join(timeout=2)
 
 
 def test_DAVRANIS_sim_STM_bobinine_sicaklik_VERMEZ(izole_sim, monkeypatch):

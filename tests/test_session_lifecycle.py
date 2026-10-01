@@ -167,3 +167,15 @@ def test_start_ai_session_takes_over_active_manual(api):
     assert s["session_id"].startswith("ai_")
     assert s["coil_ids"] == [6]
     assert s["is_active"] is True
+
+
+@pytest.fixture(autouse=True)
+def _aktif_seans_SIZMAZ():
+    """D1.41 (B-10.243): bu dosyanın testleri seansı AKTİF bırakıyordu (tam süitte ölçüldü) — sonraki dosyanın
+    ilk seans testi 409 alır, çalışan bir süre-watchdog'u başka testin seansını durdururdu. Test sonrası
+    seans durumu temizlenir; `conftest._seans_ve_watchdog_nobeti` bunu doğrular."""
+    yield
+    from servers import api_server as _api
+
+    with _api._session_lock:
+        _api._active_session.clear()

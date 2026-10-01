@@ -520,3 +520,15 @@ def test_ws_bekleyen_sayaci_HER_gonderimde_BIRER_azalir(monkeypatch):
         f"bekleyen sayacı her gönderimde BİRER azalmadı: {gorulen} (beklenen {list(range(n, -1, -1))}) — "
         "sayaç sıfırlanıyorsa sınır yavaş istemcide sürekli yeniden açılır (P2 birikimi)"
     )
+
+
+@pytest.fixture(autouse=True)
+def _aktif_seans_SIZMAZ():
+    """D1.41 (B-10.243): bu dosyanın testleri seansı AKTİF bırakıyordu (tam süitte ölçüldü) — sonraki dosyanın
+    ilk seans testi 409 alır, çalışan bir süre-watchdog'u başka testin seansını durdururdu. Test sonrası
+    seans durumu temizlenir; `conftest._seans_ve_watchdog_nobeti` bunu doğrular."""
+    yield
+    from servers import api_server as _api
+
+    with _api._session_lock:
+        _api._active_session.clear()

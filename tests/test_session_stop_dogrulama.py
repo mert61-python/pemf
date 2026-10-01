@@ -353,3 +353,15 @@ def test_KRITIK_ai_pro_stop_teyitsizken_operatoru_uyarir(api, client, monkeypatc
     assert r.status_code == 200
     bulundu = _teyitsiz_uyarilari(uyarilar)
     assert bulundu, f"AI Pro stop teyitsizken uyarı yok (uyarilar={uyarilar!r})"
+
+
+@pytest.fixture(autouse=True)
+def _aktif_seans_SIZMAZ():
+    """D1.41 (B-10.243): bu dosyanın testleri seansı AKTİF bırakıyordu (tam süitte ölçüldü) — sonraki dosyanın
+    ilk seans testi 409 alır, çalışan bir süre-watchdog'u başka testin seansını durdururdu. Test sonrası
+    seans durumu temizlenir; `conftest._seans_ve_watchdog_nobeti` bunu doğrular."""
+    yield
+    from servers import api_server as _api
+
+    with _api._session_lock:
+        _api._active_session.clear()

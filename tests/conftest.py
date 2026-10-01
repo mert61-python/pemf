@@ -692,3 +692,47 @@ def _ack_bekcilerini_bosalt():
                 _t.join(timeout=2.5)
             except Exception:
                 pass
+
+
+# ── D1.41 · B-10.243 · B-10.257: SEANS ve WATCHDOG NÖBETİ (ack bekçisi deseni) ─────────────────────────
+#
+# ÖLÇÜLEN (2026-10-01, tam süit + tanı eklentisi): 16 test `_active_session["is_active"]=True` bırakıyordu
+# (test_session_lifecycle 6 · test_session_stop_dogrulama 9 · test_live_state 1) — sonraki dosyanın ilk
+# seans testi 409 alır ve "kararsız test" sanılır; süre-watchdog'u (bobini süre dolunca durduran TEK yazılım
+# mekanizması) çalışıyorsa ARTIK BAŞKA bir testin seansını durdurur. Süreç geneli `time.sleep` yaması
+# (test_sim_GERCEGI_ASMAZ, B-10.257) ise o an uyuyan `session-watchdog`u KeyboardInterrupt ile öldürüyordu.
+# Arka plan iş parçacıkları bugün süitte BAŞLAMIYOR (ölçüldü: `_bg_threads_started` hiçbir testte True
+# değil) — ikinci kol bugün uykuda ama başlatan bir test eklendiğinde geçerlidir.
+_WATCHDOG_OLUMU_BILDIRILDI = {"evet": False}
+
+
+def seans_watchdog_nobet_sorunlari(api, is_parcaciklari) -> list[str]:
+    """Nöbetin denetimi (test edilebilir saf işlev). `api`: servers.api_server benzeri; sızan aktif seans
+    KAPATILIR (sonraki teste taşınmasın) ve raporlanır; watchdog ölümü süreçte YALNIZ BİR KEZ raporlanır."""
+    sorunlar: list[str] = []
+    try:
+        with api._session_lock:
+            if api._active_session.get("is_active") is True:
+                api._active_session["is_active"] = False
+                sorunlar.append(
+                    f"aktif seans SIZDI (session_id={api._active_session.get('session_id')!r}) — test kendi seansını kapatmalı"
+                )
+    except Exception as e:  # noqa: BLE001
+        sorunlar.append(f"seans durumu okunamadı: {e!r}")
+    if getattr(api, "_bg_threads_started", False) and not _WATCHDOG_OLUMU_BILDIRILDI["evet"]:
+        if not any(getattr(t, "name", "") == "session-watchdog" and t.is_alive() for t in is_parcaciklari):
+            _WATCHDOG_OLUMU_BILDIRILDI["evet"] = True
+            sorunlar.append("session-watchdog ÖLDÜ — bu testten sonra süre dolunca bobini durduran mekanizma YOK")
+    return sorunlar
+
+
+@pytest.fixture(autouse=True)
+def _seans_ve_watchdog_nobeti():
+    """Teardown'da (testin kendi fikstürleri yıkıldıktan SONRA): sızan aktif seans ya da ölü watchdog → KIRMIZI."""
+    yield
+    api = sys.modules.get("servers.api_server")
+    if api is None:
+        return
+    sorunlar = seans_watchdog_nobet_sorunlari(api, threading.enumerate())
+    if sorunlar:
+        pytest.fail("D1.41 nöbeti: " + " · ".join(sorunlar), pytrace=False)
