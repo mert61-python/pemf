@@ -371,6 +371,11 @@ typedef struct {
  * AYNI belirti, bambaska sebep). Derleme zamaninda yakala. */
 _Static_assert(BINARY_PKT_SIZE == (2U + NUM_COILS * 16U + 2U + 1U + 4U),
                "BinaryCmdPacket_t DOLGU aldi -> #pragma pack(1) kaybolmus (paket 121 olmali)");
+/* D1.21 (B-8.19, 2026-10-01): alim tamponu TAM paketi tasimali. Pakete alan eklenip (ornegin bir
+ * protokol isareti) tampon buyutulmezse UART durum makinesi paketi keser ve HER paket NACK'lenir —
+ * kart hicbir komutu almaz. Yalniz ana makine testine degil DERLEYICIYE bagli (CubeIDE de durur). */
+_Static_assert(UART_RX_BUF_SZ >= BINARY_PKT_SIZE,
+               "UART_RX_BUF_SZ paketten kucuk -> paket tampona sigmaz (her paket NACK)");
 
 uint32_t calculate_crc32(const uint8_t *data, size_t length) {
   uint32_t crc = 0xFFFFFFFF;

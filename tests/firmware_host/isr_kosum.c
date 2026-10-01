@@ -1,0 +1,146 @@
+/* tests/firmware_host/isr_kosum.c — ANA MAKİNE ISR KOŞUM TAKIMI (Dalga 1 · 1-B: D1.21, D1.25–D1.28).
+ *
+ * GERÇEK firmware/stm32_pemf/Core/Src/main.c bu çeviri birimine #include edilir (aparat yalnız iki satır
+ * biçimini değiştirir: `X->BSRR = v;` → pemf_host_bsrr(X, v) ve `__asm volatile("nop");` → pemf_host_nop();
+ * anlam aynı, yazım SIRASI kaydedilir). TIM1 ISR'ı (HAL_TIM_PeriodElapsedCallback) doğrudan, tick tick çağrılır.
+ * Donanıma DOKUNMAZ. MSVC (`cl /std:c11`) ve gcc (`-std=c11`) ile derlenir; KAYNAK makrosu dönüştürülmüş
+ * main.c'nin yoludur.
+ *
+ * Kipler (stdout satırları ayrıştırıcı içindir):
+ *   harita                → "H <i> <portA> <pinA> <portB> <pinB>" (main.c'nin coil_gpio tablosu) + "K <i> <unipolar>"
+ *   ofset                 → "O <alan> <offsetof>" (BinaryCmdPacket_t) + "Z <sizeof>" + "R <UART_RX_BUF_SZ>"
+ *   isr N bobin_maske f d p [t2 f2 d2 p2]
+ *                         → "B <tick> <port> <bsrr_hex> <onceki_nop>" her BSRR yazımı;
+ *                           "S <tick> <i> <tpp> <duty_ticks> <hedef>" parametre uygulandıktan sonraki ilk tick'te
+ *                           ve t2'den hemen önce. Bobin maskesindeki bobinler (f, d, p) ile sürülür, diğerleri duty 0.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "main.h"
+
+GPIO_TypeDef g_gpioa, g_gpiob, g_gpioc, g_gpiod, g_gpioe;
+TIM_TypeDef g_tim1;
+USART_TypeDef g_usart3;
+RCC_TypeDef g_rcc;
+ADC_TypeDef g_adc1;
+ADC_Common_TypeDef g_adc_common;
+
+static unsigned long long g_tick = 0;
+static unsigned g_nop = 0;
+static int g_gunluk = 0;
+
+static const char *port_adi(GPIO_TypeDef *p) {
+  if (p == &g_gpioa) return "A";
+  if (p == &g_gpiob) return "B";
+  if (p == &g_gpioc) return "C";
+  if (p == &g_gpiod) return "D";
+  if (p == &g_gpioe) return "E";
+  return "?";
+}
+
+void pemf_host_bsrr(GPIO_TypeDef *port, uint32_t deger) {
+  if (g_gunluk) printf("B %llu %s %08x %u\n", g_tick, port_adi(port), (unsigned)deger, g_nop);
+  g_nop = 0;
+}
+void pemf_host_nop(void) { g_nop++; }
+
+/* ---- HAL taklidi (davranış: stub/main.h başlığı) ---- */
+HAL_StatusTypeDef HAL_Init(void) { return HAL_OK; }
+uint32_t HAL_GetTick(void) { return (uint32_t)(g_tick / 50ULL); } /* 50 kHz tick → ms */
+HAL_StatusTypeDef HAL_UART_Init(UART_HandleTypeDef *h) { h->gState = HAL_UART_STATE_READY; h->RxState = HAL_UART_STATE_READY; return HAL_OK; }
+HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *h, const uint8_t *p, uint16_t n, uint32_t t) { (void)h; (void)p; (void)n; (void)t; return HAL_OK; }
+HAL_StatusTypeDef HAL_UART_Transmit_IT(UART_HandleTypeDef *h, const uint8_t *p, uint16_t n) { (void)h; (void)p; (void)n; return HAL_OK; }
+HAL_StatusTypeDef HAL_UART_Receive_IT(UART_HandleTypeDef *h, uint8_t *p, uint16_t n) { (void)h; (void)p; (void)n; return HAL_OK; }
+HAL_StatusTypeDef HAL_UART_AbortReceive(UART_HandleTypeDef *h) { (void)h; return HAL_OK; }
+void HAL_NVIC_SetPriority(int irq, uint32_t a, uint32_t b) { (void)irq; (void)a; (void)b; }
+void HAL_NVIC_EnableIRQ(int irq) { (void)irq; }
+HAL_StatusTypeDef HAL_TIM_Base_Init(TIM_HandleTypeDef *h) { (void)h; return HAL_OK; }
+HAL_StatusTypeDef HAL_TIM_Base_Start_IT(TIM_HandleTypeDef *h) { (void)h; return HAL_OK; }
+void HAL_TIM_IRQHandler(TIM_HandleTypeDef *h) { (void)h; }
+void HAL_GPIO_Init(GPIO_TypeDef *p, GPIO_InitTypeDef *i) { (void)p; (void)i; }
+void HAL_GPIO_WritePin(GPIO_TypeDef *p, uint16_t pin, GPIO_PinState s) { (void)p; (void)pin; (void)s; }
+void HAL_GPIO_TogglePin(GPIO_TypeDef *p, uint16_t pin) { (void)p; (void)pin; }
+HAL_StatusTypeDef HAL_RCC_OscConfig(RCC_OscInitTypeDef *o) { (void)o; return HAL_OK; }
+HAL_StatusTypeDef HAL_RCC_ClockConfig(RCC_ClkInitTypeDef *c, uint32_t l) { (void)c; (void)l; return HAL_OK; }
+
+/* ---- sensör/akım modülleri: ISR'a ilgisiz, boş gövde (prototipler Core/Inc başlıklarından) ---- */
+#include "pemf_akim.h"
+#include "pemf_sensor.h"
+void PEMF_Akim_Init(void) {}
+bool PEMF_Akim_Poll(void) { return false; }
+void PEMF_Akim_Oku(uint32_t sira, PEMF_AkimVerisi_t *hedef) { (void)sira; memset(hedef, 0, sizeof(*hedef)); }
+uint32_t PEMF_Sensor_BobinId(uint32_t sira) { return sira + 6U; }
+void PEMF_Sensor_Init(void) {}
+bool PEMF_Sensor_Poll(uint32_t simdi_ms) { (void)simdi_ms; return false; }
+void PEMF_Sensor_Oku(uint32_t sira, PEMF_SensorVerisi_t *hedef) { (void)sira; memset(hedef, 0, sizeof(*hedef)); }
+void PEMF_Sensor_Rapor(uint32_t sira, uint8_t *sicaklik_adres, uint8_t *alan_adres) { (void)sira; (void)sicaklik_adres; (void)alan_adres; }
+int _printf_float(void) { return 0; }
+
+#define main fw_main
+#include KAYNAK
+#undef main
+
+static void parametre(unsigned maske, float f, float d, float p) {
+  for (uint32_t i = 0U; i < NUM_COILS; i++) {
+    int sec = (int)((maske >> i) & 1U);
+    g_shadow.coil[i].freq = sec ? f : 100.0f;
+    g_shadow.coil[i].duty = sec ? d : 0.0f;
+    g_shadow.coil[i].phase = sec ? p : 0.0f;
+    g_shadow.coil[i].dur_min = sec ? 60U : 0U;
+  }
+  g_shadow.ref_ms_valid = 0U;
+  g_shadow.pending = 1U;
+}
+
+static void durum_bas(void) {
+  for (uint32_t i = 0U; i < NUM_COILS; i++)
+    printf("S %llu %u %u %d %d\n", g_tick, (unsigned)i, (unsigned)g_tpp[i], (int)g_duty_ticks[i], (int)g_target_duty_ticks[i]);
+}
+
+int main(int argc, char **argv) {
+  if (argc < 2) return 2;
+  Coil_StateInit();
+  if (strcmp(argv[1], "harita") == 0) {
+    for (uint32_t i = 0U; i < NUM_COILS; i++) {
+      printf("H %u %s %u %s %u\n", (unsigned)i, port_adi(coil_gpio[i].portA), (unsigned)coil_gpio[i].pinA,
+             port_adi(coil_gpio[i].portB), (unsigned)coil_gpio[i].pinB);
+      printf("K %u %u\n", (unsigned)i, (unsigned)g_unipolar[i]);
+    }
+    return 0;
+  }
+  if (strcmp(argv[1], "ofset") == 0) {
+    printf("O header %u\n", (unsigned)offsetof(BinaryCmdPacket_t, header));
+    printf("O duty %u\n", (unsigned)offsetof(BinaryCmdPacket_t, duty));
+    printf("O phase %u\n", (unsigned)offsetof(BinaryCmdPacket_t, phase));
+    printf("O freq %u\n", (unsigned)offsetof(BinaryCmdPacket_t, freq));
+    printf("O duration %u\n", (unsigned)offsetof(BinaryCmdPacket_t, duration));
+    printf("O ref_ms %u\n", (unsigned)offsetof(BinaryCmdPacket_t, ref_ms));
+    printf("O unipolar_maskesi %u\n", (unsigned)offsetof(BinaryCmdPacket_t, unipolar_maskesi));
+    printf("O crc32 %u\n", (unsigned)offsetof(BinaryCmdPacket_t, crc32));
+    printf("Z %u\n", (unsigned)sizeof(BinaryCmdPacket_t));
+    printf("R %u\n", (unsigned)UART_RX_BUF_SZ);
+    printf("N %u\n", (unsigned)NUM_COILS);
+    return 0;
+  }
+  if (strcmp(argv[1], "isr") == 0 && (argc == 7 || argc == 11)) {
+    unsigned long long n = strtoull(argv[2], NULL, 10);
+    unsigned maske = (unsigned)strtoul(argv[3], NULL, 0);
+    unsigned long long t2 = (argc == 11) ? strtoull(argv[7], NULL, 10) : 0ULL;
+    htim1.Instance = TIM1;
+    g_pwm_started = 1U;
+    parametre(maske, (float)atof(argv[4]), (float)atof(argv[5]), (float)atof(argv[6]));
+    g_gunluk = 1;
+    for (g_tick = 0ULL; g_tick < n; g_tick++) {
+      if (t2 && g_tick == t2) {
+        durum_bas();
+        parametre(maske, (float)atof(argv[8]), (float)atof(argv[9]), (float)atof(argv[10]));
+      }
+      HAL_TIM_PeriodElapsedCallback(&htim1);
+      if (g_tick == 0ULL || (t2 && g_tick == t2)) durum_bas();
+    }
+    return 0;
+  }
+  return 2;
+}
