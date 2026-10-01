@@ -245,3 +245,40 @@ def test_KARSIT_surum_ayniyken_acilista_indeks_yeniden_KURULMAZ(hasta_db, temp_a
     sayac = _kurulum_sayaci(monkeypatch)
     _yeniden_ac(temp_app_data)
     assert not sayac, "sürüm/anahtar değişmeden indeks yeniden kuruldu"
+
+
+def test_KRITIK_norm_surumu_TEK_KAYNAK_turkce_metin_SURUM_izlenir(tmp_path):
+    """Bağımsız inceleme (r5): yukarıdaki kol sınıf niteliğini yamalıyor — `_SEARCH_NORM_VERSION`'ın
+    `utils.turkce_metin.SURUM`'a bağı koparılıp literale çevrilse (`= 3`) yeşil kalıyordu; o zaman SURUM
+    artırılsa da parmak izi değişmez ve sahadaki hastalar Türkçe aramada bulunamaz (B-10.129'un zararı).
+    AYRI süreçte (sınıf ilk kez yüklenir; süreç içi reload diğer testlerin sınıf kimliğini bozardı)
+    SURUM artırılır → sınıf niteliği onu İZLEMELİ. Çocuk ağ bekçili."""
+    import json
+    from pathlib import Path
+
+    from betik_alt_sureci import kostur, yalitik_ortam
+
+    kok = Path(__file__).resolve().parents[1]
+    testler = Path(__file__).resolve().parent
+    kod = (
+        "import json, sys\n"
+        f"sys.path.insert(0, {str(testler)!r})\n"
+        "import alt_surec_ag_bekcisi as _ag\n"
+        f"sys.path.remove({str(testler)!r})\n"
+        f"sys.path[:0] = [{str(kok)!r}, {str(kok / 'apps' / 'backend')!r}]\n"
+        "import utils.turkce_metin as tm\n"
+        "tm.SURUM = tm.SURUM + 1\n"
+        "import database.patient_database as pdb\n"
+        'print("SONUC " + json.dumps({"sinif": pdb.PatientDatabase._SEARCH_NORM_VERSION, '
+        '"surum": tm.SURUM, "ag": _ag.ENGELLENEN}))\n'
+    )
+    (tmp_path / "surum_bagi.py").write_text(kod, encoding="utf-8")
+    p = kostur([str(tmp_path / "surum_bagi.py")], cwd=tmp_path, env=yalitik_ortam(tmp_path), sure=120)
+    satir = [s for s in p.stdout.splitlines() if s.startswith("SONUC ")]
+    assert p.returncode == 0 and satir, p.stderr[-600:]
+    s = json.loads(satir[-1][len("SONUC ") :])
+    assert s["ag"] == [], s
+    assert s["sinif"] == s["surum"], (
+        f"PatientDatabase._SEARCH_NORM_VERSION={s['sinif']} turkce_metin.SURUM={s['surum']}'ı İZLEMİYOR — "
+        "tek kaynak bağı kopmuş: SURUM artışı indeksi yeniden kurdurmaz"
+    )
