@@ -31,21 +31,34 @@ def _bekle(kosul, sure=5.0) -> bool:
     return kosul()
 
 
-@pytest.fixture
-def senkron_aparati(monkeypatch):
+#: Bağımsız inceleme (r4): aparat eskiden yalnız TEDAVİ DB'sini patlatıyordu — hasta DB'si yine döngü
+#: öncesinde ve try dışında açılsa (mutant) kapı yeşil kalıyordu. B-4.15 "tek bir DB açılış hatası (yarım
+#: göç, anahtar uyuşmazlığı)" der: açılamayan DB ve hata türü ayrı ayrı denenir.
+_DUSEN = {"tedavi": {"tedavi"}, "hasta": {"hasta"}, "ikisi": {"tedavi", "hasta"}}
+_HATALAR = ("goc_bekliyor", "anahtar_runtime")
+
+
+@pytest.fixture(params=[(d, h) for d in _DUSEN for h in _HATALAR], ids=lambda p: f"{p[0]}-{p[1]}")
+def senkron_aparati(request, monkeypatch):
     import servers.sync_worker as sw
     from database.sqlcipher_util import GocBekliyorHatasi
 
+    dusen_db, hata_turu = request.param
     durum = types.SimpleNamespace(yayin=0, db_deneme=0, senkron=0, db_acilsin=threading.Event())
 
-    def tedavi_db(*_a, **_k):
-        durum.db_deneme += 1
-        if not durum.db_acilsin.is_set():
-            raise GocBekliyorHatasi("DB duz-metin, at-rest gocu bekliyor (test)")
-        return object()
+    def _fabrika(ad):
+        def ac(*_a, **_k):
+            if ad in _DUSEN[dusen_db] and not durum.db_acilsin.is_set():
+                durum.db_deneme += 1
+                if hata_turu == "goc_bekliyor":
+                    raise GocBekliyorHatasi("DB duz-metin, at-rest gocu bekliyor (test)")
+                raise RuntimeError("SQLCipher anahtar uyusmazligi (test)")
+            return object()
 
-    monkeypatch.setattr(sw, "get_treatment_db", tedavi_db)
-    monkeypatch.setattr(sw, "get_patient_database", lambda *_a, **_k: object())
+        return ac
+
+    monkeypatch.setattr(sw, "get_treatment_db", _fabrika("tedavi"))
+    monkeypatch.setattr(sw, "get_patient_database", _fabrika("hasta"))
     w = sw.CloudSyncWorker("", "", interval_sec=0.01)  # boş yapılandırma: gerçek istemci KURULMAZ
     w.client = object()
     w.supabase_url, w.supabase_key = "https://ornek.invalid", "x"
