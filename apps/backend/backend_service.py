@@ -77,6 +77,22 @@ class _JsonLogFormatter(logging.Formatter):
         return _json.dumps(doc, ensure_ascii=False)
 
 
+#: Y41 (sahip, 2026-10-01): yığın izinin (ve `stack_info`'nun) HER satırı bu önekle yazılır. İzin son satırı
+#: istisna METNİNİ taşır; metne gömülü satır sonu (`RuntimeError("a\n2026-… CRITICAL …")`) günlükte zaman
+#: damgasıyla başlayan SAHTE bir kayıt satırı gibi görünüyordu. Önekle iz okunur kalır, sahte satır üretemez.
+#: Mesaj satırının CR/LF nötrlemesinin (`formatMessage`, 5589d4a) tamamlayıcısıdır.
+_IZ_ONEKI = "  | "
+
+
+def _iz_onekle(metin: str) -> str:
+    """Çok satırlı izi önekli satırlara çevirir; ham CR görünür kaçışa (`\\r`) döner (satır kesmesin)."""
+    return "\n".join(_IZ_ONEKI + s for s in metin.replace("\r", "\\r").split("\n"))
+
+
+def _iz_onekli_mi(metin: str) -> bool:
+    return "\r" not in metin and all(s.startswith(_IZ_ONEKI) for s in metin.split("\n"))
+
+
 class _PlainLogFormatter(logging.Formatter):
     """Düz-metin (insan-okur, varsayılan) log + request-correlation-id (O-2). `rid` artık yalnız
     JSON-log'da değil, varsayılan formatta da her satıra [rid] olarak eklenir → 7/24 saha-cihazında
@@ -90,7 +106,17 @@ class _PlainLogFormatter(logging.Formatter):
                 record.rid = get_request_id() or "-"
             except Exception:
                 record.rid = "-"
+        # Y41: logging izi kayıtta (`record.exc_text`) ÖNBELLEĞE alır — aynı kaydı önce başka bir handler'ın
+        # düz biçimleyicisi işlediyse iz öneksiz gelir; burada öneklenir.
+        if record.exc_text and not _iz_onekli_mi(record.exc_text):
+            record.exc_text = _iz_onekle(record.exc_text)
         return super().format(record)
+
+    def formatException(self, ei) -> str:
+        return _iz_onekle(super().formatException(ei))
+
+    def formatStack(self, stack_info: str) -> str:
+        return _iz_onekle(super().formatStack(stack_info))
 
     def formatMessage(self, record: logging.LogRecord) -> str:
         # Audit P2: mesajdaki CR/LF'yi nötralize et — güvenilmez girdi (ör. anonim-broker MQTT topic'i
