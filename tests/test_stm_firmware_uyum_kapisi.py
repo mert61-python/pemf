@@ -245,14 +245,31 @@ def uyumsuz_cekirdek(monkeypatch):
     return u, s
 
 
-def test_KRITIK_UYUMSUZ_firmware_ACIL_DURDURMAYI_engellemez(istemci, uyumsuz_cekirdek):
+def test_KRITIK_UYUMSUZ_firmware_ACIL_DURDURMAYI_engellemez(istemci, uyumsuz_cekirdek, monkeypatch):
     """⚠️ EN ONEMLI TEST. Uyumsuz kartta tedaviyi DURDURAMAMAK, cozdugumuz sorundan
-    kat kat tehlikelidir. Kapi YALNIZCA BASLATMADADIR."""
-    y = istemci.post("/api/hardware/emergency_stop", json={})
-    assert y.status_code == 200, (
-        f"UYUMSUZ firmware'de ACIL DURDURMA {y.status_code} dondu — bu kapi STOP yolunu "
-        "ASLA kapatmamali (depo degismezi: bobinler her seyden once durur)"
-    )
+    kat kat tehlikelidir. Kapi YALNIZCA BASLATMADADIR.
+
+    ⚠️ D1.04 (B-10.50): eskiden yalniz HTTP 200'e bakiyordu ve `_SahteDonanim.stop_all_coils`
+    hic sayilmiyordu — "uyumsuzlukta STM STOP'u atla" mutantinda YESIL kaliyordu (kor). Artik
+    GERCEK `HardwareController` STOP'u verir, paket donanim kuyruguna gider (firmware aynasiyla
+    cozulur, duty 0) ve yanit `stmStopped` der. Teyit (`confirmed`) BILEREK olculmez (A-63 → D1.105)."""
+    from kayitci_donanim import gercek_hc, paket_coz
+    from servers import api_server
+
+    # ESP yayini olculmez; False → ack-bekcisi is parcacigi DOGMAZ (test sonrasina tasmasin).
+    monkeypatch.setattr(api_server, "_mqtt_publish", lambda topic, payload: False)
+    with gercek_hc() as hc:
+        monkeypatch.setattr(api_server.state, "hardware", hc)
+        y = istemci.post("/api/hardware/emergency_stop", json={})
+        assert y.status_code == 200, (
+            f"UYUMSUZ firmware'de ACIL DURDURMA {y.status_code} dondu — bu kapi STOP yolunu "
+            "ASLA kapatmamali (depo degismezi: bobinler her seyden once durur)"
+        )
+        assert hc.stop_all_cagri >= 1, "UYUMSUZ firmware'de acil durdurma STM'e STOP VERMEDI (yalniz 200 dondu)"
+        assert y.json().get("stmStopped") is True, f"yanit STM STOP'unu bildirmiyor: {y.json()!r}"
+        assert hc.core._hw_send_queue.paketler, "STOP paketi donanim kuyruguna HIC gitmedi"
+        duty = paket_coz(hc.core._hw_send_queue.paketler[-1])[0]
+        assert all(d == 0.0 for d in duty), f"son paket STOP degil (duty): {duty}"
 
 
 def test_KRITIK_UYUMSUZ_firmware_SEANS_BASLATMAYI_reddediyor(istemci, uyumsuz_cekirdek):

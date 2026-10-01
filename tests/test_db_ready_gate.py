@@ -130,11 +130,38 @@ def test_DB_hazirsa_seans_NORMAL_baslar(client, api, monkeypatch):
 
 
 def test_KRITIK_DB_bozukken_ACIL_DURDURMA_CALISIR(client, api, db_bozuk, monkeypatch):
-    """DB arızası acil durdurmayı engellerse hasta bobinlerin altında kalır."""
-    monkeypatch.setattr(api, "_mqtt_publish", lambda topic, payload: True)
-    monkeypatch.setattr(api.state, "hardware", None)
-    r = client.post("/api/hardware/emergency_stop")
-    assert r.status_code == 200, f"DB bozukken acil durdurma reddedildi: {r.status_code}"
+    """DB arızası acil durdurmayı engellerse hasta bobinlerin altında kalır.
+
+    ⚠️ D1.04 (B-10.36): bu test eskiden yalnız HTTP 200'e bakıyordu ve `state.hardware=None`
+    kuruyordu — "DB yoksa erken 200 dön" mutantında YEŞİL kalıyordu (kör). Artık GERÇEK
+    `HardwareController`'ın STOP'u verdiği, paketin donanım kuyruğuna gittiği (firmware aynasıyla
+    çözülür, 7 STM bobininde duty 0) ve her ESP bobinine STOP yayınının DENENDİĞİ ölçülür.
+    Teyit (`confirmed`) BİLEREK ölçülmez: ölçütü A-63 belirler (D1.105, B-1.23'ten sonra)."""
+    from kayitci_donanim import gercek_hc, paket_coz
+
+    yayinlar = []
+
+    # Kayıtçı False döner: iddia "yayın DENENDİ mi" (Y8), başarı değil. True dönseydi her ESP bobini
+    # için 2 sn'lik ack-bekçisi iş parçacığı doğar ve test bittikten sonra bildirim yazardı (sızıntı).
+    def _kaydet(topic, payload):
+        yayinlar.append((topic, payload))
+        return False
+
+    monkeypatch.setattr(api, "_mqtt_publish", _kaydet)
+    with gercek_hc() as hc:
+        monkeypatch.setattr(api.state, "hardware", hc)
+        r = client.post("/api/hardware/emergency_stop")
+        assert r.status_code == 200, f"DB bozukken acil durdurma reddedildi: {r.status_code}"
+        assert hc.stop_all_cagri >= 1, "DB bozukken acil durdurma donanıma STOP VERMEDİ (yalnız 200 döndü)"
+        assert r.json().get("stmStopped") is True, f"yanıt STM STOP'unu bildirmiyor: {r.json()!r}"
+        assert hc.core._hw_send_queue.paketler, "STOP paketi donanım kuyruğuna HİÇ gitmedi"
+        duty = paket_coz(hc.core._hw_send_queue.paketler[-1])[0]
+        assert all(d == 0.0 for d in duty), f"son paket STOP değil (duty): {duty}"
+    for cid in TUM_ESP:
+        assert any(
+            t == f"pemf/coil/{cid}/control" and p.get("command") == "stop" and p.get("emergency") is True
+            for t, p in yayinlar
+        ), f"ESP bobin {cid}'e acil STOP yayını DENENMEDİ (Y8: gönderim azaltılamaz)"
 
 
 def test_KRITIK_DB_bozukken_SEANS_DURDURMA_CALISIR(client, api, db_bozuk, monkeypatch):
