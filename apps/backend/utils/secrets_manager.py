@@ -712,7 +712,10 @@ def get_secret(key: str, default: str = "", generate: bool = True) -> str:
     section, dpapi, generator, legacy = _REGISTRY[key]
     with _lock:
         doc = _load()
-        raw = (doc.get(section, {}).get(key) or "").strip()
+        # ⚠️ D1.16 (B-3.104): dosya ELLE doldurulabiliyor — tırnaksız `"mqtt_cloud_port": 8883` JSON
+        # SAYIDIR; eskiden `.strip()` AttributeError atıyor, E-stop bulut aynası her seferinde düşüyordu.
+        # `or ""` önce: eksik/boş değer ('None'/'0' METNİ değil) eskisi gibi boş sayılır (`_bundled_cloud` deseni).
+        raw = str(doc.get(section, {}).get(key) or "").strip()
         if raw:
             try:
                 _cozulen = _dec(raw)

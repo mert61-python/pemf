@@ -590,3 +590,108 @@ def test_KARSIT_KANIT_A2_estop_ayna_threadi_KODDA():
     i = src.index('name="estop-cloud-mirror"')
     # yerel yoldan ÖNCE başlatılıyor (paralel; yerel yolu bloklamaz)
     assert "_cf.ThreadPoolExecutor" in src[i : i + 800], "ayna, yerel E-stop havuzunun yanında değil"
+
+
+# ── A-2 · D1.16 (B-3.104): ELLE girilmiş SAYISAL sır aynayı düşürmez ───────────────────────────
+# `pemf_secrets.json` operatörün elle doldurmasına açık (`_empty_doc` `_comment`'i davet ediyor);
+# `"mqtt_cloud_port": 8883` (tırnaksız) JSON SAYIDIR. `get_secret` değeri `.strip()` ile okuyordu →
+# `AttributeError: 'int' object has no attribute 'strip'` → aynanın dış `except`'i yalnız UYARI yazar,
+# buluta göçmüş ESP'ye STOP HİÇ gitmez (DENETİM-12 K4). Gerçek dosya + GERÇEK `get_secret` + GERÇEK ayna.
+
+
+def _sir_dosyasi_yaz(kok: Path, operator: dict) -> None:
+    import json as _json
+
+    from utils import secrets_manager as sm
+
+    sm._cache = None
+    assert sm.secrets_path().resolve().is_relative_to(kok.resolve()), f"sır yolu izole kökte değil: {sm.secrets_path()}"
+    sm.secrets_path().write_text(
+        _json.dumps({"_version": 1, "auto": {}, "operator": operator, "embedded": {}}), encoding="utf-8"
+    )
+    sm._cache = None
+
+
+def test_KRITIK_D116_get_secret_SAYISAL_degeri_str_DONDURUR(temp_app_data):
+    from utils import secrets_manager as sm
+
+    _sir_dosyasi_yaz(temp_app_data, {"mqtt_cloud_port": 8883, "mqtt_cloud_user": 4242})
+    assert sm.get_secret("mqtt_cloud_port", default="8883", generate=False) == "8883"
+    assert sm.get_secret("mqtt_cloud_user", default="", generate=False) == "4242"
+
+
+def test_KARSIT_D116_eksik_ve_bos_sir_VARSAYILANA_duser(temp_app_data):
+    """str() dönüşümü "yok"u METNE çevirmesin: eksik anahtar 'None', boş sayı '0' DÖNMEZ (eski davranış)."""
+    from utils import secrets_manager as sm
+
+    _sir_dosyasi_yaz(temp_app_data, {"mqtt_cloud_port": 0})
+    assert sm.get_secret("mqtt_cloud_port", default="8883", generate=False) == "8883"
+    assert sm.get_secret("mqtt_cloud_host", default="", generate=False) == ""
+
+
+def test_KRITIK_D116_sayisal_port_ile_GERCEK_ayna_buluta_STOP_yayinlar(temp_app_data, monkeypatch, caplog):
+    import logging as _logging
+    import sys
+    import types
+
+    _sir_dosyasi_yaz(
+        temp_app_data,
+        {
+            "mqtt_cloud_host": "ornek.hivemq.cloud",
+            "mqtt_cloud_user": "u",
+            "mqtt_cloud_pass": "p",
+            "mqtt_cloud_port": 8883,
+        },
+    )
+    baglanti, yayinlar = [], []
+
+    class _Info:
+        def wait_for_publish(self, timeout=None):
+            pass
+
+        def is_published(self):
+            return True
+
+    class _SahteIstemci:
+        def __init__(self, *a, **k):
+            pass
+
+        def username_pw_set(self, u, p):
+            pass
+
+        def tls_set(self, *a, **k):
+            pass
+
+        def connect(self, host, port, keepalive=10):
+            baglanti.append((host, port))
+
+        def loop_start(self):
+            pass
+
+        def loop_stop(self):
+            pass
+
+        def disconnect(self):
+            pass
+
+        def publish(self, topic, payload, qos=0):
+            yayinlar.append(topic)
+            return _Info()
+
+    sahte_paho = types.ModuleType("paho.mqtt.client")
+    sahte_paho.Client = _SahteIstemci
+    sahte_paho.CallbackAPIVersion = types.SimpleNamespace(VERSION2=2)
+    sahte_mqtt = types.ModuleType("paho.mqtt")
+    sahte_mqtt.client = sahte_paho
+    sahte_kok = types.ModuleType("paho")
+    sahte_kok.mqtt = sahte_mqtt
+    monkeypatch.setitem(sys.modules, "paho", sahte_kok)
+    monkeypatch.setitem(sys.modules, "paho.mqtt", sahte_mqtt)
+    monkeypatch.setitem(sys.modules, "paho.mqtt.client", sahte_paho)
+
+    with caplog.at_level(_logging.WARNING, logger="servers.api_server"):
+        api._estop_cloud_mirror(sorted(TUM_ESP), "d116")
+    assert not any("basarisiz" in r.getMessage() for r in caplog.records), [r.getMessage() for r in caplog.records]
+    assert baglanti == [("ornek.hivemq.cloud", 8883)], baglanti
+    for cid in sorted(TUM_ESP):
+        assert f"pemf/coil/{cid}/control" in yayinlar, f"bobin {cid} bulut STOP'u YAYINLANMADI: {yayinlar}"
