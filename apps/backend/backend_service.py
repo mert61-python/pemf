@@ -90,16 +90,19 @@ class _PlainLogFormatter(logging.Formatter):
                 record.rid = get_request_id() or "-"
             except Exception:
                 record.rid = "-"
-        # Audit P2: mesaj + string arg'lardaki CR/LF'yi nötralize et — güvenilmez girdi (ör. anonim-broker
-        # MQTT topic'i on_message except'inde loglanınca) kalıcı denetim-loguna SAHTE SATIR ekleyip
-        # kayıt-forgery yapabilirdi. Traceback (exc_text) etkilenmez.
-        if isinstance(record.msg, str) and ("\r" in record.msg or "\n" in record.msg):
-            record.msg = record.msg.replace("\r", "\\r").replace("\n", "\\n")
-        if isinstance(record.args, tuple):
-            record.args = tuple(
-                (a.replace("\r", "\\r").replace("\n", "\\n") if isinstance(a, str) else a) for a in record.args
-            )
         return super().format(record)
+
+    def formatMessage(self, record: logging.LogRecord) -> str:
+        # Audit P2: mesajdaki CR/LF'yi nötralize et — güvenilmez girdi (ör. anonim-broker MQTT topic'i
+        # on_message except'inde loglanınca) kalıcı denetim-loguna SAHTE SATIR ekleyip kayıt-forgery
+        # yapabilirdi. ⚠️ Bağımsız inceleme (r4, 2026-10-01): nötrleme eskiden getMessage() ÖNCESİNDE
+        # yalnız `record.msg`'ye ve *str* argümanlara uygulanıyordu; istisna NESNESİ argümanda
+        # (`"…: %s", e`) nötrlenmeden geçiyordu. Artık BİRLEŞMİŞ mesaja (argüman türünden bağımsız)
+        # uygulanır. Traceback (exc_text) etkilenmez — `format()` onu bu adımdan SONRA ekler.
+        m = record.message
+        if "\r" in m or "\n" in m:
+            record.message = m.replace("\r", "\\r").replace("\n", "\\n")
+        return super().formatMessage(record)
 
 
 def _configure_logging(app_data_dir: Path, level: str) -> None:
