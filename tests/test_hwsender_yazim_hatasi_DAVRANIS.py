@@ -143,7 +143,10 @@ def test_KARSIT_yazim_basariliyken_NACK_yeniden_oynatmasi_paketi_KUYRUGA_koyar(a
     core._hw_send_queue.put(_paket(b"P1"))
     assert _bekle(lambda: a.yazilan == [b"P1"]), f"aparat: paket yazılmadı {a.yazilan}"
     d.geri_cagri()
-    assert _paket(b"P1") in core._hw_send_queue.konan, "yeniden oynatma hiç çalışmıyor (aparat ya da ürün)"
+    # D1.72 (B-1.17): kuyruğa paketin kendisi değil `_NackTekrari` işareti girer (kararı gönderici verir).
+    assert any(getattr(x, "paket", x) == _paket(b"P1") for x in core._hw_send_queue.konan), (
+        "yeniden oynatma hiç çalışmıyor (aparat ya da ürün)"
+    )
     assert _bekle(lambda: a.yazilan == [b"P1", b"P1"]), "yeniden oynatılan paket yazılmadı"
 
 

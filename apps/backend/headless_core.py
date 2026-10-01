@@ -23,6 +23,29 @@ from utils.stm32_transport import Stm32SerialTransport
 # (0.5 sn) biraz genis tutuldu; daha eskisi 'guncel niyet' sayilmaz.
 _RETRY_MAX_AGE_S = 0.75
 
+#: D1.72 (B-1.17): kalıcı NACK'te AYNI RUN paketinin en çok kaç kez yeniden oynatılacağı. Eskiden sınır yoktu:
+#: her yazım bir NACK, her NACK bir yeniden oynatma doğuruyordu (ölçüldü: 1,5 sn'de 96 yazım). Keep-alive güncel
+#: durumu zaten her turda yeni bir paketle gönderir. ⚠️ STOP (tüm duty 0) için sınır YOK — Ö.4-Y8: STOP'un yeniden
+#: gönderimi azaltılmaz.
+_NACK_RUN_TEKRAR_SINIRI = 1
+
+
+class _NackTekrari:
+    """STM_NACK yeniden oynatma İSTEĞİ (D1.72 · B-1.17): kuyruğa paketin KENDİSİ değil bu işaret girer.
+
+    ⚠️ NEDEN: eskiden okuyucu iş parçacığı NACK'lenen son paketi kuyruğa KENDİSİ koyuyordu. Gönderici meşgulken
+    araya bir STOP girdiyse sıra [STOP, eski RUN] oluyor ve bobin acil durdurmadan SONRA eski duty ile yeniden
+    enerjileniyordu (ölçüldü: son paket RUN, ~0,48 sn — bir sonraki keep-alive'a dek). Kararı artık TEK tüketici
+    (gönderici) işareti işlerken verir: porta son yazılan paket hâlâ bu RUN değilse ya da kuyrukta daha yeni bir
+    niyet bekliyorsa eski RUN OYNATILMAZ. Tek tüketici karar verdiği için denetle-sonra-yap aralığı yoktur: işaret
+    işlendikten sonra konan paket her zaman tekrarın ARDINDAN yazılır. STOP her koşulda yeniden oynatılır (Y8)."""
+
+    __slots__ = ("paket", "tekrar")
+
+    def __init__(self, paket: Any, tekrar: int) -> None:
+        self.paket = paket
+        self.tekrar = tekrar
+
 
 class SeriBaglantiDurumu:
     """Paylaşılan seri bağlantı + **NESİL** damgası (thread-güvenli).
@@ -712,9 +735,10 @@ class HeadlessCore:
 
     def _hw_sender_worker(self) -> None:
         udp_sock = None
-        # [0]=son yazilan paket, [1]=yazildigi monotonic an (bkz. retry_last_payload yas siniri)
+        # [0]=son yazilan paket, [1]=yazildigi monotonic an (bkz. retry_last_payload yas siniri),
+        # [2]=bu paketin kacinci NACK tekrari oldugu (D1.72; 0 = ilk yazim)
         # ⚠️ `payload_lock` ile korunur: reader thread'i (retry_last_payload) okur, sender yazar.
-        last_payload: list[Any] = [None, 0.0]
+        last_payload: list[Any] = [None, 0.0, 0]
         payload_lock = threading.Lock()
         last_reconnect_time = 0.0
         transport = Stm32SerialTransport(self.logger)
@@ -742,8 +766,11 @@ class HeadlessCore:
             # SENDER thread'i yazar. Kilitsiz okumada paket ile zaman damgası FARKLI turlardan
             # gelebilir → bayat bir paket "taze" sanılıp yeniden oynatılır (STOP'tan sonra
             # yeniden enerjileme riski; yaş sınırının koruduğu şeyin ta kendisi).
+            # ⚠️ D1.72 (B-1.17): yaş sınırı (0,75 sn) keep-alive turundan (0,5 sn) GENİŞ olduğu için [P_stop, P_run]
+            # sırasını KAPATMIYORDU (ölçüldü: E-stop'tan sonra son paket RUN). Artık paketin kendisi değil
+            # `_NackTekrari` işareti kuyruğa girer; "daha yeni niyet var mı" kararını gönderici verir.
             with payload_lock:
-                payload, ts = last_payload[0], last_payload[1]
+                payload, ts, tekrar = last_payload[0], last_payload[1], last_payload[2]
             if payload is None:
                 return
             if (time.monotonic() - ts) > _RETRY_MAX_AGE_S:
@@ -755,11 +782,19 @@ class HeadlessCore:
                     if last_payload[0] is payload:  # arada tazelenmişse DOKUNMA
                         last_payload[0] = None
                 return
+            if tekrar >= _NACK_RUN_TEKRAR_SINIRI and not _tum_duty_sifir_mi(payload[0]):
+                # Kalıcı NACK: aynı RUN bir kez yeniden oynatıldı ve yine reddedildi → bırak (keep-alive güncel
+                # durumu yeni paketle tazeler; sistematik red ayrıca STM_RED kapısında ele alınır). STOP'a uygulanmaz.
+                dongu_hatasini_bildir(
+                    "[STM32 NACK] ayni RUN paketi %d kez yeniden oynatildi ve yine reddedildi → tekrar BIRAKILDI.",
+                    tekrar,
+                    logger=self.logger,
+                    seviye=logging.WARNING,
+                    exc_info=False,
+                )
+                return
             try:
-                self._hw_send_queue.put_nowait(payload)
-                with payload_lock:
-                    if last_payload[0] is payload:
-                        last_payload[0] = None
+                self._hw_send_queue.put_nowait(_NackTekrari(payload, tekrar + 1))
             except queue.Full:
                 pass
 
@@ -914,6 +949,21 @@ class HeadlessCore:
                 except queue.Empty:
                     continue
 
+                _tekrar = 0
+                if isinstance(payload_tuple, _NackTekrari):
+                    # ⚠️ D1.72 (B-1.17): NACK yeniden oynatmasının kararı BURADA, tek tüketicide verilir. Eski RUN
+                    # ancak (a) porta son yazılan paket hâlâ oysa (arada STOP ya da yeni komut YAZILMADIYSA ve bağlantı
+                    # kopup paket düşürülmediyse) ve (b) kuyrukta daha yeni bir niyet BEKLEMİYORSA yeniden yazılır
+                    # (tekrar sınırı işaret kurulurken `retry_last_payload`ta uygulanır). STOP (tüm duty 0) her
+                    # koşulda yeniden yazılır — Ö.4-Y8: STOP'un yeniden gönderimi azaltılmaz.
+                    _isaret = payload_tuple
+                    if not _tum_duty_sifir_mi(_isaret.paket[0]):
+                        with payload_lock:
+                            _son_yazilan = last_payload[0]
+                        if _son_yazilan is not _isaret.paket or not self._hw_send_queue.empty():
+                            continue
+                    payload_tuple, _tekrar = _isaret.paket, _isaret.tekrar
+
                 stm_msg, udp_pkt, esp_ip, esp_port = payload_tuple
                 _yaz_conn = _aktif_baglanti()
                 if _yaz_conn is not None and _yaz_conn.is_open and stm_msg:
@@ -921,6 +971,7 @@ class HeadlessCore:
                         with payload_lock:
                             last_payload[0] = payload_tuple
                             last_payload[1] = time.monotonic()
+                            last_payload[2] = _tekrar
                         _yaz_conn.write(stm_msg if isinstance(stm_msg, bytes) else stm_msg.encode("utf-8"))
                     except Exception as exc:
                         # D1.19 (B-10.121): bildirim fırlatırsa HWSender ölür → sonraki STM paketleri (STOP dahil)

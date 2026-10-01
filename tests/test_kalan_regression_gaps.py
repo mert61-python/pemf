@@ -319,7 +319,8 @@ def test_bayat_payload_TEKRAR_gonderilmez():
         o = _Self()
         o.logger = logging.getLogger("test-retry")
         o._hw_send_queue = queue.Queue(maxsize=4)
-        lp = [("STM_PAKET", b"udp", "1.2.3.4", 5000), time.monotonic() - yas_s]
+        # [paket, yazım anı, NACK tekrar sayısı] — D1.72 (B-1.17) üçüncü alanı ekledi.
+        lp = [("STM_PAKET", b"udp", "1.2.3.4", 5000), time.monotonic() - yas_s, 0]
         # ⚠️ HÜCRELER `co_freevars` SIRASINDAN TÜRETİLİR (2026-09-11): burada sabit
         # `(_hucre(lp), _hucre(o))` ikilisi vardı. Closure'a `payload_lock` eklenince
         # `ValueError: requires closure of length 3, not 2` ile patladı — davranış
