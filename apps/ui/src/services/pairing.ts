@@ -16,10 +16,13 @@
  *      kimlik uyuşmazlığında BAĞLANILMAZ — yanlış hastaya komut gönderme riski.
  *   3. Kod yolunda token TAKASI yapılır ve SONUCU denetlenir. Eskiden sonuç yok sayılıyordu →
  *      "bağlandı ✓" deniyor ama sonraki her istek 401 alıyordu (audit P0/#25).
+ *   4. Oturum içi bağlantı (`updateServiceConfig`) YALNIZ takas başarılıysa değişir. Kod
+ *      reddedilirse ya da takas sürerken bağlantı ÖNCEKİ cihazda kalır — ACİL DURDUR dahil her
+ *      istek oraya gider (A-52 / İG-6.3).
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { setStoredDeviceId, updateServiceConfig } from "@/services/config";
+import { servisTabanlariniCoz, setStoredDeviceId, updateServiceConfig } from "@/services/config";
 import { uzakCihaziKimlikleCoz, uzakCihaziKodlaCoz } from "@/services/deviceRegistry";
 import { checkHealth, exchangeCodeForToken } from "@/services/discovery";
 
@@ -76,7 +79,7 @@ export function eslesmeMesaji(s: EslesmeSonuc): string {
     case "gecersiz_adres":
       return "Geçersiz cihaz adresi biçimi.";
     case "kod_reddedildi":
-      return "Cihaz bulundu ama eşleştirme kodu kabul edilmedi — kodu kontrol edip tekrar deneyin.";
+      return "Cihaz bulundu ama eşleştirme kodu kabul edilmedi — bağlantı önceki cihazda kaldı. Kodu kontrol edip tekrar deneyin.";
     default:
       // ⚠️ DÜRÜST MESAJ (denetim 2026-08-17): bu dal YALNIZ "kod yanlış" demek DEĞİL. Sunucudaki
       // `resolve_device` tazelik penceresi dışında kalan (uzun süredir kapalı) cihaz da buraya
@@ -125,10 +128,11 @@ export async function cihazaBaglan(girdi: string): Promise<EslesmeSonuc> {
     // Kalıcı kimlik yazımı yalnız takas başarılıysa aşağıdaki setStoredDeviceId'de.
     if (!(await checkHealth(url, deviceId, { kimligiKaydet: false }))) return { durum: "ulasilamiyor" };
 
-    // Geçersiz adres mevcut ayarı BOZMASIN.
-    if (!updateServiceConfig(url)) return { durum: "gecersiz_adres" };
+    // Geçersiz adres mevcut ayarı BOZMASIN — burada YALNIZ doğrulanır, uygulanmaz (değişmez 4).
+    if (!servisTabanlariniCoz(url)) return { durum: "gecersiz_adres" };
 
-    // (3) Kod yolunda token takası — sonucu DENETLE.
+    // (3) Kod yolunda token takası — sonucu DENETLE. Takas açık `url` ile yapılır; oturum içi
+    // bağlantı bu sırada DEĞİŞMEZ.
     const tokenOk = kodMu ? await exchangeCodeForToken(url, input) : true;
 
     // ⚠️ TOKEN YOKSA KALICI YAZIM YOK (denetim 2026-08-17). Eskiden takas düşse de adres+device_id
@@ -136,9 +140,15 @@ export async function cihazaBaglan(girdi: string): Promise<EslesmeSonuc> {
     // telefon A cihazıyla LAN'da çalışırken B'nin kodu girilir, health+device_id geçer ama takas
     // 429/404 ile düşer → adres B-TÜNELİNE yazılır, A'nın LAN adresi diskten SİLİNMİŞ olur,
     // token yoktur → REST 401 / WS 1008. Kullanıcı Ayarlar'dan kodu tekrar girmeden düzelmez.
-    // Oturum içi config (`updateServiceConfig`, yukarıda) DEĞİŞMEZ → kullanıcı hemen tekrar
-    // deneyebilir; tek cihazlı klinikte keşif merdiveni bir sonraki turda kendini onarır.
+    // ⚠️ A-52 / İG-6.3 (2026-10-01): OTURUM İÇİ bağlantı da DEĞİŞMEZ. Eskiden `updateServiceConfig`
+    // takastan ÖNCE çağrılıyor ve ret sonrası geri alınmıyordu → oturum B'de kalıyor, A'nın ACİL
+    // DURDUR'u B'ye gidiyordu (ölçüldü: 7/7 istek B'ye, uç auth-muaf olduğu için B'de YÜRÜTÜLDÜ;
+    // A'nın bobinleri sürdü). Takas sürerken basılan ACİL DURDUR da A'ya gider: eşleştirme
+    // doğrulanmadan operatörün durdurmak istediği cihaz hâlâ A'dır.
     if (!tokenOk) return { durum: "kod_reddedildi" };
+
+    // Takas başarılı (ya da kimlik yolu) → bağlantı ŞİMDİ yeni cihaza geçer.
+    if (!updateServiceConfig(url)) return { durum: "gecersiz_adres" };
 
     await setStoredDeviceId(deviceId);
     try {

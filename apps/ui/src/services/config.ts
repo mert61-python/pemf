@@ -106,18 +106,22 @@ export async function loadStoredApiToken(): Promise<void> {
 }
 
 /**
- * Yerel IP veya Cloudflare tünel URL'si ile tüm ayarları günceller.
- * Tünel URL'si http/https veya doğrudan IP olabilir.
- * Örn: "192.168.1.147" veya "https://abcd-xyz.trycloudflare.com"
+ * Adresten REST/WS tabanlarını HESAPLAR ama UYGULAMAZ; geçersizse `null`.
+ * `updateServiceConfig` ile eşleştirme (`pairing.cihazaBaglan`) AYNI kuralı kullanır: eşleştirme
+ * adresi önce yalnız doğrular, oturum içi bağlantıyı ancak kod takası başarılı olunca değiştirir
+ * (A-52 / İG-6.3 — reddedilen kodda bağlantı ÖNCEKİ cihazda kalır).
  */
-export const updateServiceConfig = (serverAddress: string): boolean => {
+export function servisTabanlariniCoz(
+  serverAddress: string,
+): { apiBaseUrl: string; websocketUrl: string; bridgeBaseUrl: string } | null {
   let apiBase: string;
   let wsBase: string;
 
   // #63: trim + temel doğrulama — kullanıcı-girdisi adres trim'siz/doğrulamasız base-URL'e
-  // çevriliyordu. Boş/geçersiz ise ayarı DEĞİŞTİRME + false dön (çağıran kullanıcıya hata gösterir).
+  // çevriliyordu. Boş/geçersiz ise null → `updateServiceConfig` ayarı DEĞİŞTİRMEDEN false döner
+  // (çağıran kullanıcıya hata gösterir).
   const addr = (serverAddress || "").trim();
-  if (!addr) return false;
+  if (!addr) return null;
 
   // Cloudflare/ngrok tünelleri genelde https ile başlar. Local IP'ler http veya düz IP olabilir.
   // Eğer düz IP veya hostname verilmişse (örn: 192.168.1.147), varsayılan olarak http ve 8000 portunu ekle.
@@ -133,7 +137,7 @@ export const updateServiceConfig = (serverAddress: string): boolean => {
   // "192.168.1.1/evil" → "http://192.168.1.1/evil:8000" bozuk base URL üretilirdi). Boşluk/kontrol/
   // kaçış da yasak. Hassas Bearer ayrıca apiClient.isSafeBackendBase ile https/RFC1918-taban'a geçitli.
   const _authority = baseUrl.replace(/^https?:\/\//, "");
-  if (!_authority || !/^[A-Za-z0-9._:-]+$/.test(_authority)) return false;
+  if (!_authority || !/^[A-Za-z0-9._:-]+$/.test(_authority)) return null;
 
   // URL'i oluştur
   apiBase = `${baseUrl}/api`;
@@ -145,10 +149,20 @@ export const updateServiceConfig = (serverAddress: string): boolean => {
     wsBase = baseUrl.replace(/^http:\/\//, "ws://") + "/ws";
   }
 
+  return { apiBaseUrl: apiBase, websocketUrl: wsBase, bridgeBaseUrl: apiBase };
+}
+
+/**
+ * Yerel IP veya Cloudflare tünel URL'si ile tüm ayarları günceller.
+ * Tünel URL'si http/https veya doğrudan IP olabilir.
+ * Örn: "192.168.1.147" veya "https://abcd-xyz.trycloudflare.com"
+ */
+export const updateServiceConfig = (serverAddress: string): boolean => {
+  const tabanlar = servisTabanlariniCoz(serverAddress);
+  if (!tabanlar) return false;
+
   serviceConfig = {
-    apiBaseUrl: apiBase,
-    websocketUrl: wsBase,
-    bridgeBaseUrl: apiBase,
+    ...tabanlar,
     apiToken: serviceConfig.apiToken || "",
   };
   return true;

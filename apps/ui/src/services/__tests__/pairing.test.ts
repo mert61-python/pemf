@@ -19,6 +19,7 @@ const mockCozKimlik = jest.fn();
 const mockHealth = jest.fn();
 const mockExchange = jest.fn();
 const mockUpdateCfg = jest.fn();
+const mockTabanCoz = jest.fn();
 const mockSetDeviceId = jest.fn();
 
 jest.mock("@/services/deviceRegistry", () => ({
@@ -31,6 +32,7 @@ jest.mock("@/services/discovery", () => ({
 }));
 jest.mock("@/services/config", () => ({
   updateServiceConfig: (...a: unknown[]) => mockUpdateCfg(...a),
+  servisTabanlariniCoz: (...a: unknown[]) => mockTabanCoz(...a),
   setStoredDeviceId: (...a: unknown[]) => mockSetDeviceId(...a),
 }));
 
@@ -43,7 +45,7 @@ const ID_ = "140936350360443";
 const bulundu = { durum: "bulundu", url: URL_, device: { device_id: ID_ } };
 
 beforeEach(() => {
-  for (const m of [mockCozKod, mockCozKimlik, mockHealth, mockExchange, mockUpdateCfg, mockSetDeviceId]) {
+  for (const m of [mockCozKod, mockCozKimlik, mockHealth, mockExchange, mockUpdateCfg, mockTabanCoz, mockSetDeviceId]) {
     m.mockReset();
   }
   // ⚠️ ZORUNLU: `AsyncStorage.setItem` çağrıları dosya boyunca BİRİKİYOR. Sıfırlanmazsa aşağıdaki
@@ -52,6 +54,7 @@ beforeEach(() => {
   mockHealth.mockResolvedValue(true);
   mockExchange.mockResolvedValue(true);
   mockUpdateCfg.mockReturnValue(true);
+  mockTabanCoz.mockReturnValue({ apiBaseUrl: `${URL_}/api`, websocketUrl: "wss://x/ws", bridgeBaseUrl: `${URL_}/api` });
   mockSetDeviceId.mockResolvedValue(undefined);
 });
 
@@ -92,10 +95,13 @@ describe("cihazaBaglan", () => {
     expect((await cihazaBaglan("MVPDDN")).durum).toBe("kod_reddedildi");
   });
 
-  it("geçersiz adres mevcut ayarı BOZMAZ", async () => {
+  it("geçersiz adres mevcut ayarı BOZMAZ (takas da denenmez)", async () => {
     mockCozKod.mockResolvedValue(bulundu);
-    mockUpdateCfg.mockReturnValue(false);
+    mockTabanCoz.mockReturnValue(null);
     expect((await cihazaBaglan("MVPDDN")).durum).toBe("gecersiz_adres");
+    expect(mockTabanCoz).toHaveBeenCalledWith(URL_);
+    expect(mockExchange).not.toHaveBeenCalled();
+    expect(mockUpdateCfg).not.toHaveBeenCalled();
     expect(mockSetDeviceId).not.toHaveBeenCalled();
   });
 
@@ -163,13 +169,23 @@ it("POZİTİF KAPI: takas BAŞARILIYSA adres kalıcı yazılmaya devam eder", as
   expect(adresYazildiMi()).toBe(true);
 });
 
-it("takas düşse de OTURUM İÇİ config güncellenmiş kalır (kullanıcı hemen tekrar deneyebilir)", async () => {
-  // ⚠️ Erken dönüş `updateServiceConfig`ten SONRA olmalı: oturum içi bağlantı korunur, yalnız
-  // KALICI yazım atlanır. Erken dönüşü yukarı taşıyan bir yama bu testi kırar.
+it("KRİTİK (A-52): takas düşerse OTURUM İÇİ config de DEĞİŞMEZ — bağlantı önceki cihazda kalır", async () => {
+  // ⚠️ Bu test eskiden TERSİNİ kilitliyordu ("takas düşse de oturum içi config güncellenmiş
+  // kalır"). Ölçülen sonuç (İG-6.3): oturum B'de kalıyor, A'nın ACİL DURDUR'u B'ye gidiyor ve
+  // B'de yürütülüyordu; A'nın bobinleri sürüyordu. Uçtan uca kapı: eslesmeRetOncekiCihaz.test.ts.
   mockCozKod.mockResolvedValue(bulundu);
   mockExchange.mockResolvedValue(false);
 
-  await cihazaBaglan("MVPDDN");
+  expect((await cihazaBaglan("MVPDDN")).durum).toBe("kod_reddedildi");
+
+  expect(mockUpdateCfg).not.toHaveBeenCalled();
+});
+
+it("POZİTİF: takas BAŞARILIYSA oturum içi config yeni cihaza geçer", async () => {
+  mockCozKod.mockResolvedValue(bulundu);
+  mockExchange.mockResolvedValue(true);
+
+  expect((await cihazaBaglan("MVPDDN")).durum).toBe("ok");
 
   expect(mockUpdateCfg).toHaveBeenCalledWith(URL_);
 });

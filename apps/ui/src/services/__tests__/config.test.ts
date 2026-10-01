@@ -50,6 +50,23 @@ describe("updateServiceConfig — URL çözümü", () => {
     expect(config.updateServiceConfig("192.168.1.40")).toBe(true);
     expect(config.updateServiceConfig("https://x-y.trycloudflare.com")).toBe(true);
   });
+
+  // A-52 / İG-6.3: eşleştirme adresi takastan ÖNCE yalnız DOĞRULAR; bağlantıyı ancak takas
+  // başarılıysa değiştirir. Doğrulayıcı uygulasaydı ya da kuralı ayrışsaydı bu değişmez delinirdi.
+  it("A-52: servisTabanlariniCoz HESAPLAR ama UYGULAMAZ; sonucu updateServiceConfig ile aynıdır", () => {
+    for (const a of ["192.168.1.40", "https://x-y.trycloudflare.com", "http://10.0.0.5:8000/", "192.168.1.1/evil", "", "a<b>c"]) {
+      config.updateServiceConfig("192.168.1.147");
+      const once = { ...config.serviceConfig };
+      const t = config.servisTabanlariniCoz(a);
+      expect(config.serviceConfig).toEqual(once); // yalnız hesaplamak bağlantıyı DEĞİŞTİRMEZ
+      expect(config.updateServiceConfig(a)).toBe(t !== null);
+      if (t) {
+        expect(config.serviceConfig.apiBaseUrl).toBe(t.apiBaseUrl);
+        expect(config.serviceConfig.websocketUrl).toBe(t.websocketUrl);
+        expect(config.serviceConfig.bridgeBaseUrl).toBe(t.bridgeBaseUrl);
+      }
+    }
+  });
 });
 
 describe("API token kalıcılığı", () => {
