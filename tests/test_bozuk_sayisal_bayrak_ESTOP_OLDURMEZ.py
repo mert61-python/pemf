@@ -299,3 +299,78 @@ def test_KARSIT_bekci_gercek_ESTOP_bulut_aynasi_denemesini_GORUR(tmp_path):
     assert p.returncode == 0 and s is not None, p.stderr[-600:]
     assert s["durum"] == 200 and s["stop"] >= 1, s
     assert any(adres == "0.0.0.0" for _, adres, _ in s["ag"]), f"bekçi aynanın ağ denemesini GÖRMEDİ: {s['ag']}"
+
+
+# ── 1-A açık madde 6 · `PEMF_API_PORT` (bu sınıfın 9. bayrağı) ─────────────────────────────────────
+#
+# ÖLÇÜLEN (2026-10-01): port `build_arg_parser()` İÇİNDE korumasız `int(os.environ.get("PEMF_API_PORT", "8000"))`
+# ile okunuyordu → bozuk değer parser KURULURKEN `ValueError`; launcher `--port` ile başlatsa bile
+# (`launcher/core/src/backend.rs`) backend ve ACİL DURDUR ucu HİÇ açılmıyordu.
+
+_PORT_COCUK = (
+    _BEKCI_GIRIS
+    + r"""
+import json
+sys.path[:0] = [{kok!r}, {backend!r}]
+import backend_service as bs
+sonuc = {{"ag": _ag.ENGELLENEN}}
+try:
+    sonuc["cli_port"] = bs.build_arg_parser().parse_args(["--port", "51998"]).port
+except Exception as e:
+    sonuc["kacan"] = type(e).__name__ + ": " + str(e)
+try:
+    sonuc["ortam"] = list(bs.ortam_portu())
+except Exception as e:
+    sonuc["ortam_kacan"] = type(e).__name__ + ": " + str(e)
+print("SONUC " + json.dumps(sonuc))
+"""
+)
+
+
+@pytest.mark.parametrize(
+    ("deger", "beklenen", "uyari"),
+    [("80O0", 8000, True), ("70000", 8000, True), ("0", 8000, True), ("8123", 8123, False), (None, 8000, False)],
+    ids=["harf", "aralik_ustu", "sifir", "gecerli", "yok"],
+)
+def test_KRITIK_bozuk_PEMF_API_PORT_parseri_OLDURMEZ_CLI_portu_ve_ortam_portu(tmp_path, deger, beklenen, uyari):
+    env = yalitik_ortam(tmp_path / "ev")
+    if deger is not None:
+        env["PEMF_API_PORT"] = deger
+    kod = _PORT_COCUK.format(testler=str(TESTLER), kok=str(KOK), backend=str(KOK / "apps" / "backend"))
+    (tmp_path / "port.py").write_text(kod, encoding="utf-8")
+    p = kostur([str(tmp_path / "port.py")], cwd=tmp_path, env=env, sure=120)
+    s = _sonuc(p.stdout)
+    assert s is not None, f"çocuk sonuç basmadı (rc={p.returncode}): {p.stderr[-800:]}"
+    assert "kacan" not in s, (
+        f"PEMF_API_PORT={deger!r}: parser KURULAMADI — `--port` verilse de backend açılmaz: {s['kacan']}"
+    )
+    assert s["cli_port"] == 51998, f"`--port` ortamı EZMEDİ: {s}"
+    assert "ortam_kacan" not in s, s
+    port, mesaj = s["ortam"]
+    assert port == beklenen, f"PEMF_API_PORT={deger!r} → {port} (beklenen {beklenen})"
+    assert bool(mesaj) is uyari and (not uyari or "PEMF_API_PORT" in mesaj), (
+        f"uyarı {mesaj!r} — bozuk değer bayrağın ADIYLA bildirilmeli, geçerli/eksik değerde uyarı olmamalı"
+    )
+    assert s["ag"] == [], s
+
+
+def test_KRITIK_bozuk_PEMF_API_PORT_ile_GERCEK_acilis_ACIL_DURDUR_calisir(tmp_path):
+    """Launcher biçimi: `main(["--port", …])` + ortamda bozuk `PEMF_API_PORT` → GERÇEK açılış `server.run()`'a
+    ulaşır, ACİL DURDUR donanıma STOP verir (D1.37 açılış aparatı, `bozuk_port` senaryosu)."""
+    from test_acilis_DB_acilamasa_ACIL_DURDUR_yasar import _kos as _acilis_kos
+    from test_acilis_DB_acilamasa_ACIL_DURDUR_yasar import _ortak_iddialar
+
+    s, _app = _acilis_kos(tmp_path, "bozuk_port")
+    _ortak_iddialar(s)
+
+
+def test_KRITIK_bozuk_PEMF_API_PORT_portsuz_acilista_8000_ve_UYARI_GUNLUKTE(tmp_path):
+    """`--port` VERİLMEDEN (elle/servis açılışı) bozuk ortam portu → açılış sürer, ACİL DURDUR çalışır ve uyarı
+    günlüğe bayrağın ADIYLA yazılır (sessiz yutma yok). Aparat sunucuyu BAĞLAMAZ (`run()` TestClient'tır)."""
+    from test_acilis_DB_acilamasa_ACIL_DURDUR_yasar import _kos as _acilis_kos
+    from test_acilis_DB_acilamasa_ACIL_DURDUR_yasar import _ortak_iddialar
+
+    s, _app = _acilis_kos(tmp_path, "bozuk_port", argv=["--host", "127.0.0.1", "--no-headless-services"])
+    _ortak_iddialar(s)
+    gunluk = (tmp_path / "log" / "backend_service.log").read_text(encoding="utf-8", errors="replace")
+    assert "PEMF_API_PORT='80O0'" in gunluk and "8000" in gunluk, "bozuk port uyarısı günlükte YOK (sessiz yutma)"

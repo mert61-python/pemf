@@ -207,10 +207,36 @@ def publish_bind_port(port: int) -> int:
     return int(port)
 
 
+_VARSAYILAN_PORT = 8000
+
+
+def ortam_portu() -> tuple[int, str | None]:
+    """`--port` VERİLMEDİĞİNDE `PEMF_API_PORT` → (port, uyarı metni | None).
+
+    ⚠️ 1-A açık madde 6 · D1.14 (B-2.17) sınıfı: port eskiden `build_arg_parser()` İÇİNDE korumasız
+    `int(os.environ.get("PEMF_API_PORT", "8000"))` ile okunuyordu — bozuk değer (`80O0`, `sekizbin`) parser
+    KURULURKEN `ValueError` atıyor, launcher `--port` ile başlatsa bile (`launcher/core/src/backend.rs`)
+    backend — dolayısıyla ACİL DURDUR ucu — HİÇ açılmıyordu. Artık env yalnız `--port` yoksa okunur; bozuk ya da
+    aralık dışı değer → 8000 ve bayrağın ADIYLA uyarı (günlüğe yazılır)."""
+    ham = os.environ.get("PEMF_API_PORT")
+    if ham is None:
+        return _VARSAYILAN_PORT, None
+    try:
+        port = int(ham)
+    except (TypeError, ValueError):
+        port = None
+    if port is not None and 1 <= port <= 65535:
+        return port, None
+    return _VARSAYILAN_PORT, (
+        f"PEMF_API_PORT={ham!r} gecersiz (1-65535 arasi tamsayi bekleniyor) -> varsayilan {_VARSAYILAN_PORT} kullaniliyor"
+    )
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="PEMF headless backend service")
     parser.add_argument("--host", default=os.environ.get("PEMF_API_HOST", "0.0.0.0"))
-    parser.add_argument("--port", type=int, default=int(os.environ.get("PEMF_API_PORT", "8000")))
+    # Port ortamdan parser KURULURKEN okunmaz (bkz. `ortam_portu`); None → main() korumalı okur.
+    parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--log-level", default=os.environ.get("PEMF_LOG_LEVEL", "INFO"))
     parser.add_argument(
         "--no-headless-services",
@@ -945,6 +971,9 @@ def main(argv: list[str] | None = None) -> int:
         return _kurtarma_main(kurtarma_argv)
 
     args = build_arg_parser().parse_args(argv)
+    _port_uyarisi = None
+    if args.port is None:
+        args.port, _port_uyarisi = ortam_portu()
     os.environ.setdefault("PEMF_HEADLESS", "1")
     publish_bind_host(args.host)
     publish_bind_port(args.port)
@@ -953,6 +982,8 @@ def main(argv: list[str] | None = None) -> int:
     _configure_logging(app_data_dir, args.log_level)
     _install_crash_handler(app_data_dir)
     logger = logging.getLogger("backend_service")
+    if _port_uyarisi:
+        logger.warning(_port_uyarisi)
     logger.info("PEMF backend service starting: host=%s port=%s", args.host, args.port)
 
     # Opsiyonel uzaktan hata-izleme (audit B-5.1) — yalnız PEMF_SENTRY_DSN set + sentry-sdk varsa.

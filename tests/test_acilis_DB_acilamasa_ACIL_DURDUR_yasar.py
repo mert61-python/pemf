@@ -127,7 +127,7 @@ class _Casus:
 
 bs._build_server = lambda app, args: _Casus()
 try:
-    sonuc["rc"] = bs.main(["--host", "127.0.0.1", "--port", "51999", "--no-headless-services"])
+    sonuc["rc"] = bs.main({argv!r})
 except BaseException as e:
     sonuc["kacan"] = type(e).__name__ + ": " + str(e)[:300]
     sonuc["iz"] = traceback.format_exc()[-1500:]
@@ -177,12 +177,25 @@ def _kur(tmp_path: Path, senaryo: str) -> tuple[dict, Path]:
     elif senaryo == "bozuk_ikisi":
         for ad in ("patients.db", "pemf_treatment_history.db"):
             (app / ad).write_bytes(b"BU BIR SQLITE DOSYASI DEGIL " * 64)
+    elif senaryo == "bozuk_port":
+        # 1-A açık madde 6 (kol D1.14 kapısında): launcher `--port` verir; ortamdaki bozuk port açılışı öldürmemeli.
+        env["PEMF_API_PORT"] = "80O0"
     return env, app
 
 
-def _kos(tmp_path: Path, senaryo: str) -> tuple[dict, Path]:
+#: Launcher biçimi (`launcher/core/src/backend.rs`: `--port` HER ZAMAN verilir).
+ARGV_LAUNCHER = ["--host", "127.0.0.1", "--port", "51999", "--no-headless-services"]
+
+
+def _kos(tmp_path: Path, senaryo: str, argv: list[str] | None = None) -> tuple[dict, Path]:
     env, app = _kur(tmp_path, senaryo)
-    kod = _SURUCU.format(testler=str(TESTLER), kok=str(KOK), backend=str(KOK / "apps" / "backend"), senaryo=senaryo)
+    kod = _SURUCU.format(
+        testler=str(TESTLER),
+        kok=str(KOK),
+        backend=str(KOK / "apps" / "backend"),
+        senaryo=senaryo,
+        argv=list(ARGV_LAUNCHER if argv is None else argv),
+    )
     (tmp_path / "surucu.py").write_text(kod, encoding="utf-8")
     p = kostur([str(tmp_path / "surucu.py")], cwd=tmp_path, env=env, sure=420)
     for satir in p.stdout.splitlines():
