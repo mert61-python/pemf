@@ -46,10 +46,34 @@ class _YakalayanBus:
         self.olaylar.append((event_type, data, priority))
 
 
+class _KaydedenLogger:
+    """Hata/istisna günlüklerini kaydeder: aparat eksikliği (AttributeError) bir `try/except: logger.exception` ile
+    yutulup kol yanlışlıkla YEŞİL kalmasın."""
+
+    def __init__(self):
+        self.hatalar = []
+
+    def _hata(self, msg, *a, **k):
+        self.hatalar.append(str(msg) % a if a else str(msg))
+
+    error = exception = critical = _hata
+
+    def _sessiz(self, *a, **k):
+        pass
+
+    debug = info = warning = log = _sessiz
+
+
 def _core():
+    import queue
+
     c = HeadlessCore.__new__(HeadlessCore)  # yalnız `_handle_stm_line`'ın ihtiyacı alanlar
-    c.logger = logging.getLogger("test-p4")
+    c.logger = _KaydedenLogger()
     c.event_bus = _YakalayanBus()
+    # 1-B bağımsız inceleme (i6): GERÇEK HWSender kuyruğu — termal dala donanıma giden bir STOP (A-47'nin yasakladığı
+    # termal KESME) eklense kapı olay veriyolunu görüp kuyruğu GÖREMİYORDU (aparatta kuyruk yoktu; AttributeError
+    # mutantın kendi try'ı ile yutuldu → 41/41 YEŞİL).
+    c._hw_send_queue = queue.Queue()
     return c
 
 
@@ -73,6 +97,11 @@ def test_P4_A_satir_TUM_STM_bobinlerinin_sifirlamasini_yayinlar(kaynak, olay):
     # `watchdog_timeout` (api_server onu E-stop'a çevirir = termal KESME, A-47 yasak) eklense yeşil
     # kalıyordu. Tam dizi pinlenir: tek CRITICAL olay + her STM bobini için bir sıfırlama, BAŞKA olay yok.
     dizi = [(t, p) for t, _d, p in c.event_bus.olaylar]
+    assert c._hw_send_queue.empty(), (
+        f"{kaynak}: donanım kuyruğuna komut verildi ({c._hw_send_queue.qsize()}) — termal/watchdog satırı backend'de "
+        "bobin KESMESİNE dönmez (A-47: termal kesme YOK; firmware kendi durdurur)"
+    )
+    assert c.logger.hatalar == [], f"{kaynak}: işleyici hata günlüğüne düştü (aparat/ürün): {c.logger.hatalar}"
     beklenen = [(olay, EventPriority.CRITICAL)] + [("hardware.stm.coil_update", EventPriority.HIGH)] * len(TUM_STM)
     assert dizi == beklenen, f"{kaynak}: olay dizisi değişti (A-47: termal dal davranışı DEĞİŞMEZ): {dizi}"
     sifirlar = [(d, p) for t, d, p in c.event_bus.olaylar if t == "hardware.stm.coil_update"]
