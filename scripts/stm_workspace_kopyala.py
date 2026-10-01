@@ -61,9 +61,21 @@ def _atla(dizin: str, adlar: list[str]) -> set[str]:
     return atlanan
 
 
+def _yorumsuz(metin: str) -> str:
+    """C yorumlarını soy (dize sabitleri korunur) — TEK KAYNAK `tests/c_soyucu.py` (bu betik geliştirici aracıdır,
+    depo içinden koşar). ⚠️ D1.29 (B-10.220): işaretler eskiden HAM metinde aranıyordu; `Coil_KipUygula` tanımı
+    ve çağrısı silinip yorumu kalan bir kaynak "tam protokol" sayılıp masaüstüne çıkarılıyordu."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("_c_soyucu", KOK / "tests" / "c_soyucu.py")
+    modul = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modul)
+    return modul.c_soy(metin)
+
+
 def _bobin_sayisi(main_c: Path) -> int | None:
     try:
-        m = re.search(r"#define\s+NUM_COILS\s+(\d+)", main_c.read_text(encoding="utf-8", errors="replace"))
+        m = re.search(r"#define\s+NUM_COILS\s+(\d+)", _yorumsuz(main_c.read_text(encoding="utf-8", errors="replace")))
         return int(m.group(1)) if m else None
     except OSError:
         return None
@@ -88,7 +100,7 @@ PROTOKOL_ISARETLERI = (
 
 def _protokol_eksikleri(main_c: Path) -> list[str]:
     try:
-        kaynak = main_c.read_text(encoding="utf-8", errors="replace")
+        kaynak = _yorumsuz(main_c.read_text(encoding="utf-8", errors="replace"))
     except OSError:
         return ["main.c okunamadi"]
     return [aciklama for isaret, aciklama in PROTOKOL_ISARETLERI if isaret not in kaynak]

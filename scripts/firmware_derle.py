@@ -186,21 +186,8 @@ def derle_stm() -> int:
             # OLCMEZ. Tek kaynak main.c'deki `g_printf_float_zorla` basvurusudur; burasi
             # yalniz URUNU olcer.
             nm = shutil.which("arm-none-eabi-nm") or str(Path(gcc).with_name("arm-none-eabi-nm.exe"))
-            if Path(nm).is_file():
-                r = subprocess.run([nm, str(elf)], capture_output=True, text=True, errors="replace")
-                if "_printf_float" not in (r.stdout or ""):
-                    print(
-                        "[STM32] ### BAGLANDI AMA KULLANILAMAZ: `_printf_float` ELF'te YOK.\n"
-                        "[STM32]     newlib-nano float printf'i baglanmamis -> TUM STM_TELE\n"
-                        "[STM32]     satirlari sayisiz gider (B=, T=, A=, I=) ve backend onlari\n"
-                        "[STM32]     reddeder: sicaklik/alan/akim ARAYUZE HIC ULASMAZ.\n"
-                        "[STM32]     Duzeltme: main.c'deki `g_printf_float_zorla` basvurusu\n"
-                        "[STM32]     silinmis olmali — geri koyun (bkz. oradaki not)."
-                    )
-                    return 1
-                print("[STM32] printf float destegi: BAGLI (_printf_float ELF'te).")
-            else:
-                print("[STM32] UYARI: arm-none-eabi-nm yok -> printf-float kapisi KOSULAMADI.")
+            if printf_float_kapisi(elf, nm):
+                return 1
 
             boyut = shutil.which("arm-none-eabi-size") or str(Path(gcc).with_name("arm-none-eabi-size.exe"))
             if Path(boyut).is_file():
@@ -237,8 +224,41 @@ def derle_stm() -> int:
                     print(f"[STM32] cikti: {ad}  {p.stat().st_size} bayt  sha256={ozet[:16]}…")
                 print(f"[STM32] ✓ yakilabilir cikti hazir: {_CIKTI_DIZINI}")
         else:
-            print("[STM32] NOT: startup/linker betigi yok — yalniz derleme yapildi, baglama ATLANDI.")
+            # ⚠️ D1.29 (B-10.215): eskiden "NOT … baglama ATLANDI" deyip 0 donuyor, sonra "SONUC: TEMIZ"
+            # basiliyordu — baglanmamis bir urun icin printf-float kapisi hic kosmamisken.
+            print(
+                "[STM32] ### startup/linker betigi YOK -> baglama YAPILAMADI; ELF uretilmedi ve OLCULMEDI.\n"
+                "[STM32]     Yalniz-derleme sonucu 'TEMIZ' SAYILMAZ (_printf_float kapisi kosmadi)."
+            )
+            return 1
     print(f"[STM32] ✓ {len(kaynaklar)} kaynak temiz derlendi (-Wall -Wextra).")
+    return 0
+
+
+def printf_float_kapisi(elf: Path, nm: str | None) -> int:
+    """`_printf_float` ELF'te mi? 0 = bagli · 1 = YOK ya da OLCULEMEDI (nm yok).
+
+    ⚠️ D1.29 (B-10.215): nm yokken eskiden yalniz "UYARI … KOSULAMADI" basilip derleme TEMIZ sayiliyordu →
+    `_printf_float`'siz (tum sensor telemetrisi sessizce olu) bir ELF yakilabilirdi. Olculemeyen urun
+    temiz SAYILMAZ."""
+    if not nm or not Path(nm).is_file():
+        print(
+            "[STM32] ### arm-none-eabi-nm YOK -> printf-float kapisi KOSULAMADI; urun OLCULMEDI.\n"
+            "[STM32]     Bu sonuc 'TEMIZ' SAYILMAZ: arm-none-eabi araclarini (nm dahil) PATH'e ekleyin."
+        )
+        return 1
+    r = subprocess.run([nm, str(elf)], capture_output=True, text=True, errors="replace")
+    if "_printf_float" not in (r.stdout or ""):
+        print(
+            "[STM32] ### BAGLANDI AMA KULLANILAMAZ: `_printf_float` ELF'te YOK.\n"
+            "[STM32]     newlib-nano float printf'i baglanmamis -> TUM STM_TELE\n"
+            "[STM32]     satirlari sayisiz gider (B=, T=, A=, I=) ve backend onlari\n"
+            "[STM32]     reddeder: sicaklik/alan/akim ARAYUZE HIC ULASMAZ.\n"
+            "[STM32]     Duzeltme: main.c'deki `g_printf_float_zorla` basvurusu\n"
+            "[STM32]     silinmis olmali — geri koyun (bkz. oradaki not)."
+        )
+        return 1
+    print("[STM32] printf float destegi: BAGLI (_printf_float ELF'te).")
     return 0
 
 

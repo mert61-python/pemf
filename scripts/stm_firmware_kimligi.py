@@ -70,12 +70,25 @@ for _yol in (_KOK, _KOK / "apps" / "backend"):
     if str(_yol) not in sys.path:
         sys.path.insert(0, str(_yol))
 
-from utils.stm32_kimlik import banner_ayristir  # noqa: E402
+from utils.stm32_kimlik import banner_ayristir, uyum_denetle  # noqa: E402
 
 # ⚠️ Paket boyu ELLE YAZILMAZ: 2026-09-11 protokol degisiminde (120 -> 121) betik
 #    120'de kaldi ve operatore YANLIS sayi gosterdi. Tek kaynak stm32_transport.
 #    Kapi: tests/test_stm_kimlik_betigi_PAKET_BOYU_BAYATLAMAZ.py
-from utils.stm32_transport import STM_PAKET_BOYU  # noqa: E402
+from utils.stm32_transport import STM_PAKET_BOBIN_SAYISI, STM_PAKET_BOYU  # noqa: E402
+
+
+def firmware_karari(satirlar: list[str]):
+    """Kart uyumlu mu? → (True | False | None, sebep, kimlik). BACKEND'IN UYUM KAPISININ AYNISI.
+
+    ⚠️ D1.29 (B-10.219, plan C1b-89): betik eskiden kendi `kanal >= 7` esigiyle karar veriyordu; backend
+    (`utils.stm32_kimlik.uyum_denetle`) ise `kanal == paket genisligi` der. 8 kanalli bir kart icin betik
+    "YENI FIRMWARE YUKLU", HEAD derlemesi ayni karti 409 ile reddederdi — sahip Y7 sorusuna YANLIS cevap alirdi.
+    Artik karar TEK yerde: bu fonksiyon yalniz backend kuralini cagirir."""
+    kimlik = next((k for k in (banner_ayristir(s) for s in satirlar if "STM_READY" in s) if k), None)
+    uyumlu, sebep = uyum_denetle(kimlik, STM_PAKET_BOBIN_SAYISI)
+    return uyumlu, sebep, kimlik
+
 
 # ⚠️ UART OKUMA ARTIK TEK KAYNAKTAN: `apps/backend/utils/stm32_uart.py`.
 #    Sebep (olculdu 2026-09-22): sevk edilen pakete `scripts/*.py` HIC girmiyor; firmware
@@ -127,21 +140,35 @@ def main() -> int:
             print(f"[{port}] STM_READY duyulmadi. RESET'e basip tekrar dene (ya da bu port STM degil).")
             continue
 
+        uyumlu, sebep, _kimlik = firmware_karari(satirlar)
         print()
         print("=" * 72)
-        if kanal >= 7:
-            print(f"  ✅ YENI FIRMWARE YUKLU  ({kanal}-kanal, {STM_PAKET_BOYU} baytlik paket)")
+        if uyumlu is True:
+            print(f"  ✅ UYUMLU FIRMWARE YUKLU  ({kanal}-kanal, {STM_PAKET_BOYU} baytlik paket)")
             print("     Bobinler baslamiyorsa sebep firmware DEGIL — baska yere bakilmali.")
-        else:
-            print(f"  ❌ ESKI FIRMWARE YUKLU  ({kanal}-kanal, 88 baytlik paket bekliyor)")
-            print(f"     Yeni client {STM_PAKET_BOYU} bayt gonderiyor -> CRC uyusmuyor -> STM_NACK ->")
+        elif uyumlu is False:
+            # ⚠️ ESKI (az kanalli) firmware'in teshis satiri KORUNUR: 88 bayt, 5 bobinli eski firmware'in
+            # ayirt edici gercegidir (kapi: test_stm_kimlik_betigi_PAKET_BOYU_BAYATLAMAZ). Fazla kanalli kart
+            # da artik uyumsuz (D1.29) — o durumda "eski" denmez.
+            if kanal < STM_PAKET_BOBIN_SAYISI:
+                print(
+                    f"  ❌ ESKI FIRMWARE YUKLU  ({kanal}-kanal, {'88 baytlik' if kanal == 5 else 'eski boyda'} paket bekliyor)"
+                )
+            else:
+                print(
+                    f"  ❌ UYUMSUZ FIRMWARE YUKLU  ({kanal}-kanal; uygulama {STM_PAKET_BOBIN_SAYISI}-kanal gonderiyor)"
+                )
+            print(f"     Uygulama {STM_PAKET_BOYU} bayt gonderiyor -> CRC uyusmuyor -> STM_NACK ->")
+            print(f"     {sebep}")
             print("     HICBIR BOBIN BASLAMAZ (1-5 dahil), ama uygulama STM'i BAGLI GORUR.")
             print("     COZUM: masaustundeki PEMF_STM32_workspace_2026-09-11 projesini")
             print("            CubeIDE ile karta yukle (reflash).")
+        else:
+            print(f"  ❓ FIRMWARE KIMLIGI OKUNAMADI — {sebep}")
         print("=" * 72)
         if any("STM_NACK" in s for s in satirlar):
             print("  NOT: STM_NACK satiri da goruldu -> paket REDDEDILIYOR (teshis dogrulandi).")
-        return 0 if kanal >= 7 else 1
+        return 0 if uyumlu is True else (1 if uyumlu is False else 2)
 
     print("\n[SONUC] Hicbir portta STM_READY duyulmadi — firmware kimligi BELIRLENEMEDI.")
     return 2
