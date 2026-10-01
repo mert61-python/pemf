@@ -170,6 +170,39 @@ def test_import_FK_kopyasi_ayri_ADLA_hala_raporlanir(client):
     assert "patients_fk_kopya" in r.json()["counts"], "FK sayacı büsbütün kayboldu (tanı bilgisi kaybı)"
 
 
+def test_KRITIK_import_yaniti_SEANS_ANALIZ_sayaclarini_ve_GERCEK_eklenen_hastayi_verir(client):
+    """D1.20 (B-10.174): arayüz geri yüklemede `Geri yüklendi: <patients> hasta, <treatment_sessions> seans,
+    <ai_analyses> analiz` gösterir. Bu iki sayacı ve `patients`ın POZİTİF değerini hiçbir test ölçmüyordu:
+    `**_n_disari` silinince ya da `patients` 0'a sabitlenince süit YEŞİL kalıyor, arayüz "0 seans, 0 analiz"
+    / "0 hasta" diyordu. Senaryo: kaynakta seans + AI analizi + hasta; hasta hedefte silinir → geri
+    yüklemede GERÇEKTEN eklenir."""
+    from servers.api_server import _get_treatment_db
+
+    thdb = _get_treatment_db()
+    hid = _hasta_ekle(client, "SayacTest-GeriYukle")
+    assert thdb.start_session("Manual", patient_name="SayacTest-GeriYukle", operator_email="sayac@test") is not None
+    assert thdb.add_ai_analysis(mode="test", module_id="sayac", patient_name="SayacTest-GeriYukle") is not None
+    paket = _disa_aktar(client)
+    kaynak = paket["counts"]
+    assert kaynak.get("treatment_sessions", 0) >= 1 and kaynak.get("ai_analyses", 0) >= 1, f"kurulum: {kaynak}"
+    assert client.delete(f"/api/patients/{hid}").status_code == 200  # hedefte YOK → geri yüklemede eklenir
+
+    r = client.post(
+        "/api/data/import",
+        json={"passphrase": PAROLA, "blob_b64": paket["data_b64"], "confirm": "REPLACE_ALL"},
+    )
+    assert r.status_code == 200, r.text[:300]
+    c = r.json()["counts"]
+
+    eksik = _arayuzun_okudugu_anahtarlar() - set(c)
+    assert not eksik, f"Arayüz bu sayaçları okuyor ama import dönmüyor → sessizce 0 gösterilir: {sorted(eksik)}"
+    assert c["treatment_sessions"] == kaynak["treatment_sessions"], f"seans sayacı yalan: {c} / kaynak {kaynak}"
+    assert c["ai_analyses"] == kaynak["ai_analyses"], f"analiz sayacı yalan: {c} / kaynak {kaynak}"
+    assert c["patients"] >= 1 and c["patients"] == c["patient_db"], (
+        f"silinen hasta geri eklendi ama 'patients' {c['patients']} (patient_db={c['patient_db']})"
+    )
+
+
 def test_base64_paketi_gercekten_cozulebiliyor_karsit_kanit(client):
     """Karşı-kanıt: sayaç düzeltmesi yedek DOSYASINA dokunmadı."""
     ham = base64.b64decode(_disa_aktar(client)["data_b64"])
