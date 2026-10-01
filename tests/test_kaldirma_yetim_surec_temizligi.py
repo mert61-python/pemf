@@ -63,12 +63,19 @@ def _makensis() -> str | None:
 
 
 def _yorumsuz(satir: str) -> str:
-    """NSIS satır-yorumunu (`;`) at. Tırnak içindeki `;` korunur."""
-    disarida = True
+    """NSIS satır-yorumunu (`;` VE `#`) at. Tırnak (`'` `"` `` ` ``) içindeki işaretler korunur.
+
+    ⚠️ D1.47 (B-10.133): eskiden yalnız `;` (ve yalnız `'` tırnağı) tanınıyordu — NSIS `#`'i de satır yorumu
+    sayar; `# nsExec::Exec … taskkill …` biçiminde yoruma alınmış bir kill satırı KOD sayılıp kapı YEŞİL kalıyordu."""
+    tirnak = None
     for i, ch in enumerate(satir):
-        if ch == "'":
-            disarida = not disarida
-        elif ch == ";" and disarida:
+        if tirnak:
+            if ch == tirnak:
+                tirnak = None
+            continue
+        if ch in "'\"`":
+            tirnak = ch
+        elif ch in ";#":
             return satir[:i]
     return satir
 
