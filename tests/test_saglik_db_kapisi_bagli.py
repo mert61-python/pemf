@@ -31,6 +31,7 @@ import re
 from pathlib import Path
 
 import pytest
+from launcher_onay_karari import db_kapisi_denetle, onay_sirasi_denetle
 
 _KOK = Path(__file__).resolve().parents[1]
 _MAIN = _KOK / "launcher" / "app" / "src" / "main.rs"
@@ -48,31 +49,27 @@ def backend_rs() -> str:
 
 
 def test_KRITIK_onaylamadan_ONCE_dbReady_okunur(main_rs):
-    """🔴 Mekanizma yazilip baglanmazsa sessiz no-op'tur (bu depoda jetonla yasandi)."""
-    i = main_rs.find("flow::guncellemeyi_onayla(&root2, &geri)")
-    assert i > 0, "onaylama dali bulunamadi — main.rs bicimi degismis olabilir"
-    blok = main_rs[max(0, i - 1200) : i]
-    assert "db_hazir_mi" in blok, (
-        "guncelleme ONAYLANMADAN once `dbReady` OKUNMUYOR — DB'yi bozan bir yayin 'saglikli' "
-        "sayilip onaylanir, runtime.old SILINIR ve klinik hicbir seans acamaz (bulgu C5)"
-    )
+    """🔴 Mekanizma yazilip baglanmazsa sessiz no-op'tur (bu depoda jetonla yasandi).
+
+    ⚠️ D1.35 (B-10.47): eskiden onayin 1200 karakter oncesinde `db_hazir_mi` ADINI ariyordu —
+    `if backend::db_hazir_mi(port) == Some(false) && false {` mutantinda YESIL kaliyordu. Artik
+    yorumu soyulmus main.rs'te start_backend Ok kolunun UST DUZEYINDE tam kosul ifadesi, onayin o
+    dalin DISINDA ve SONRASINDA oldugu aranir (`tests/launcher_onay_karari.py`)."""
+    onay_sirasi_denetle(main_rs)
 
 
 def test_KRITIK_dbReady_FALSE_ise_GERI_ALINIR(main_rs):
-    i = main_rs.find("db_hazir_mi")
-    assert i > 0, "db_hazir_mi cagrisi yok"
-    blok = main_rs[i : i + 900]
-    assert "Some(false)" in blok, (
-        "yalniz `false` degeri geri almayi tetiklemeli — `None` (bilinmiyor) tetiklerse eski "
-        "backend'lere guncelleme HIC uygulanamaz"
-    )
-    assert "guncellemeyi_geri_al" in blok, "dbReady=false oldugunda guncelleme GERI ALINMIYOR"
+    """Yalniz `Some(false)` geri alir (`None` = bilinmiyor → onay); dal E-stop'lu sokum, deneme
+    sayaci, geri alma ve GeriAlindi donusunu UST DUZEYDE tasir (D1.35)."""
+    db_kapisi_denetle(main_rs)
 
 
 def test_KRITIK_operatore_SEBEP_soylenir(main_rs):
-    """Sessizce geri almak, sebebi anlasilmaz bir 'guncelleme basarisiz'a cevirir."""
-    i = main_rs.find("db_hazir_mi")
-    blok = main_rs[i : i + 900]
+    """Sessizce geri almak, sebebi anlasilmaz bir 'guncelleme basarisiz'a cevirir.
+
+    D1.35: sebep metni dbReady=false DALININ ICINDE aranir (dosyadaki baska bir yerde degil)."""
+    k, _ok, (if_bas, if_son) = db_kapisi_denetle(main_rs)
+    blok = k.soy[if_bas:if_son]
     assert re.search(r"(seans|kayıt|kayit|veritaban)", blok, re.IGNORECASE), (
         "geri alma sebebi operatore anlasilir bicimde soylenmiyor (metinde seans/kayit gecmiyor)"
     )

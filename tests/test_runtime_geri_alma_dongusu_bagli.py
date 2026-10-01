@@ -22,6 +22,7 @@ import re
 from pathlib import Path
 
 import pytest
+from launcher_onay_karari import err_kolu_denetle, onay_sirasi_denetle
 
 _KOK = Path(__file__).resolve().parents[1]
 _MAIN = _KOK / "launcher" / "app" / "src" / "main.rs"
@@ -45,16 +46,13 @@ def ui() -> str:
 
 
 def test_KRITIK_1_geri_almada_sayac_ARTAR(main_rs):
-    """Saglik kapisi dusup geri alinirken deneme kaydedilmezse dongu hic sayilmaz."""
-    # Geri alma dalini bul: `guncellemeyi_geri_al` cagrisinin bulundugu blok.
-    i = main_rs.find("flow::guncellemeyi_geri_al(&root2, &geri)")
-    assert i > 0, "geri alma dali bulunamadi — main.rs bicimi degismis olabilir"
-    blok = main_rs[max(0, i - 900) : i]
-    assert "geri_almayi_kaydet" in blok, (
-        "geri alma aninda deneme sayaci ARTIRILMIYOR — bozuk bir yayin her acilista backend'i "
-        "oldurup ~1,19 GB acip 180 sn bekletip geri alir; tek cikis yolu yayincinin rollout:0 "
-        "yazmasidir (bulgu C2)"
-    )
+    """Saglik kapisi dusup geri alinirken deneme kaydedilmezse dongu hic sayilmaz.
+
+    ⚠️ D1.35 (B-10.46): eskiden `guncellemeyi_geri_al`in ILK gectigi yerin 900 karakter oncesine
+    bakiyordu — ilk gecis dbReady dali; saglik kapisi DUSTUGUNDEKI (start_backend Err kolu) sayac
+    silinse KAPI YESIL kaliyordu. Artik yorumu soyulmus main.rs'te Err KOLUNUN UST DUZEYINDE tam
+    ifade ve sira aranir (`tests/launcher_onay_karari.py`)."""
+    err_kolu_denetle(main_rs)
 
 
 def test_KRITIK_1b_IC_YOL_deterministik_hata_SAYILIR(main_rs, flow_rs):
@@ -84,14 +82,10 @@ def test_KRITIK_1b_IC_YOL_deterministik_hata_SAYILIR(main_rs, flow_rs):
 
 
 def test_KRITIK_2_basarida_sayac_TEMIZLENIR(main_rs):
-    """Temizlenmezse eski basarisizliklarin kalintisi GERCEK bir guncellemeyi bloklar."""
-    i = main_rs.find("flow::guncellemeyi_onayla(&root2, &geri)")
-    assert i > 0, "onaylama dali bulunamadi"
-    blok = main_rs[i : i + 500]
-    assert "clear_runtime_attempt" in blok, (
-        "basarili guncellemeden sonra sayac SIFIRLANMIYOR — birikmis denemeler bir sonraki "
-        "gercek guncellemeyi kalici olarak engelleyebilir"
-    )
+    """Temizlenmezse eski basarisizliklarin kalintisi GERCEK bir guncellemeyi bloklar.
+
+    D1.35: onaydan SONRA, ayni (Ok) kolun ust duzeyinde tam ifade (yorumdaki kopya sayilmaz)."""
+    onay_sirasi_denetle(main_rs)
 
 
 def test_KRITIK_3_kararda_sayac_OKUNUR(flow_rs):
