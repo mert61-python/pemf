@@ -102,9 +102,28 @@ def test_KRITIK_dusen_STOP_sonraki_turlarda_YENIDEN_gonderilir(hc):
     assert all(_bobin_duty(p, 1) == 0.0 for p in k.kabul), "yeniden gönderilen paket STOP (duty 0) değil"
 
 
+def test_KRITIK_kuyruga_VERILEN_STOP_da_tazelenir(hc):
+    """Bağımsız inceleme (r1): kuyruğa VERİLMİŞ bir STOP da sonradan düşebilir — dolu kuyrukta
+    `_send_stm_manual_update` "en eskiyi at" yapar ve kodun kendi yorumu telafiyi `_force_send_left`'e
+    bırakır. Sayaç yalnız kuyruğa koyma BAŞARISIZKEN kurulsaydı (mutant) yukarıdaki kol yeşil
+    kalıyordu: başarılı STOP'tan sonra da `STOP_RESEND_TICKS` tur STOP tazelenmeli."""
+    k = hc.core._hw_send_queue
+    assert hc.update_coil(1, 100.0, 30.0, 0.0, duration=1) is True
+    assert hc.update_coil(1, 100.0, 0.0, 0.0, duration=0, start=False) is True  # STOP kuyruğa VERİLDİ
+    k.kabul.clear()
+    for _ in range(hc.STOP_RESEND_TICKS):
+        hc._tick()
+    assert len(k.kabul) == hc.STOP_RESEND_TICKS, (
+        f"kuyruğa verilen STOP'tan sonra {hc.STOP_RESEND_TICKS} turda {len(k.kabul)} tazeleme paketi gitti"
+    )
+    assert all(_bobin_duty(p, 1) == 0.0 for p in k.kabul), "tazelenen paket STOP (duty 0) değil"
+
+
 def test_KARSIT_telafi_SONLUDUR_ve_bosta_trafik_uretmez(hc):
-    """Telafi penceresi bitince boştaki keep-alive paket göndermez (sonsuz UART trafiği yok).
-    Bu, telafinin süresini değil yalnız BİTTİĞİNİ ölçer; süreyi uzatmak güvenli yöndür."""
+    """Telafi penceresi bitince boştaki keep-alive paket göndermez (istemsiz sonsuz UART trafiği yok).
+    Bu, telafinin süresini değil yalnız BİTTİĞİNİ ölçer; süreyi uzatmak güvenli yöndür. ⚠️ Güvenli yönde
+    SÜREKLİ tazeleme (ör. E-stop mandalı süresince) bilinçli bir karar olursa bu karşıt o kararla
+    birlikte güncellenir — Ö.4-Y8: STOP gönderimini ARTIRAN bir değişiklik bu kapıyla engellenmez."""
     k = hc.core._hw_send_queue
     assert hc.update_coil(1, 100.0, 30.0, 0.0, duration=1) is True
     hc.update_coil(1, 100.0, 0.0, 0.0, duration=0, start=False)
