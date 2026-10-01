@@ -26,6 +26,7 @@ sahibin portlarına yalnız SAHTE soket).
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -76,7 +77,7 @@ for t in threading.enumerate():
     if t.name == "estop-cloud-mirror":
         t.join(20)
 deger = getattr(importlib.import_module({modul!r}), {oznitelik!r})
-print("SONUC " + json.dumps({{"durum": r.status_code, "stop": _HW.stop, "deger": deger, "ag": _ag.ENGELLENEN}}))
+print("SONUC " + json.dumps({{"durum": r.status_code, "stop": _HW.stop, "deger": deger, "ag": _ag.ENGELLENEN, "alt": _ag.ALT_SURECLER}}))
 """
 )
 
@@ -140,12 +141,35 @@ def oz_boru():
         a.close()
         b.close()
 
+# Bağımsız inceleme (r3) katmanları — kanca birimi çağrıları GERÇEK ağa hiç çıkmaz:
+def ters_dns_kanca():
+    _ag._kanca("socket.gethostbyaddr", ("192.0.2.1",))
+
+def nameinfo_kanca():
+    _ag._kanca("socket.getnameinfo", (("192.0.2.1", 9),))
+
+def ham_bind_kanca():
+    _ag._kanca("socket.bind", (_Sahte(), ("127.0.0.1", 8000)))
+
 for ad, fn in [("tcp", tcp), ("ham", ham), ("udp", udp), ("dns", dns), ("sahip_connect", sahip_connect),
-               ("sahip_bind", sahip_bind), ("iocp", iocp), ("oz_boru", oz_boru)]:
+               ("sahip_bind", sahip_bind), ("iocp", iocp), ("oz_boru", oz_boru),
+               ("ters_dns_kanca", ters_dns_kanca), ("nameinfo_kanca", nameinfo_kanca),
+               ("ham_bind_kanca", ham_bind_kanca)]:
     dene(ad, fn)
-print("SONUC " + json.dumps({{"sonuc": sonuc, "ag": _ag.ENGELLENEN}}))
+sarmalayici = socket.gethostbyaddr is _ag._gethostbyaddr and socket.getnameinfo is _ag._getnameinfo
+_ag._kanca("subprocess.Popen", (None, ["ornek_program.exe", "/x"], None, None))
+print("SONUC " + json.dumps({{"sonuc": sonuc, "ag": _ag.ENGELLENEN, "sarmalayici": sarmalayici, "alt": _ag.ALT_SURECLER}}))
 """
 )
+
+
+#: Çocuğun başlatmasına izin verilen alt süreçler (torunlar bekçisizdir). Windows `platform` sürüm sorgusu
+#: `cmd.exe /c "ver"` çalıştırır (ağ yok) — ölçüldü (bağımsız inceleme r3 sonrası, 2026-10-01).
+_IZINLI_ALT_SUREC = re.compile(r'cmd\.exe /c "?ver"?$', re.IGNORECASE)
+
+
+def _izinli_alt_surec(kayit: str) -> bool:
+    return bool(_IZINLI_ALT_SUREC.search(kayit))
 
 
 def _ortam(tmp_path) -> dict:
@@ -195,6 +219,7 @@ def test_KRITIK_bozuk_bayrak_backendi_OLDURMEZ_ACIL_DURDUR_calisir(
         f"stderr sonu: {p.stderr[-600:]}"
     )
     assert s["ag"] == [], f"alt süreç AĞA çıkmayı denedi (bekçi engelledi): {s['ag']}"
+    assert all(_izinli_alt_surec(a) for a in s["alt"]), f"çocuk izin listesi DIŞI alt süreç başlattı: {s['alt']}"
     assert s["durum"] == 200 and s["stop"] >= 1, f"{bayrak}={bozuk!r}: acil durdurma {s}"
     assert s["deger"] == pytest.approx(varsayilan), f"{bayrak}={bozuk!r}: değer {s['deger']} (varsayılan {varsayilan})"
     assert bayrak in p.stderr, f"{bayrak}: bozuk değer SESSİZCE yutuldu — uyarı günlüğü yok"
@@ -231,11 +256,25 @@ def test_ARAC_alt_surec_ag_bekcisi_her_KATI_engeller_ve_KAYDEDER(tmp_path):
     p = kostur([str(tmp_path / "arac.py")], cwd=tmp_path, env=yalitik_ortam(tmp_path), sure=60)
     s = _sonuc(p.stdout)
     assert p.returncode == 0 and s is not None, p.stderr[-600:]
-    engellenmeli = ["tcp", "ham", "udp", "dns", "sahip_connect", "sahip_bind", "iocp"]
+    engellenmeli = [
+        "tcp",
+        "ham",
+        "udp",
+        "dns",
+        "sahip_connect",
+        "sahip_bind",
+        "iocp",
+        "ters_dns_kanca",
+        "nameinfo_kanca",
+        "ham_bind_kanca",
+    ]
     assert {ad: s["sonuc"][ad] for ad in engellenmeli} == dict.fromkeys(engellenmeli, "BEKCI"), s
     assert s["sonuc"]["oz_boru"] == "GECTI", f"bekçi kendi açtığı loopback portunu da kesiyor: {s}"
     katmanlar = {k for k, _, _ in s["ag"]}
     assert {"connect", "audit:connect", "sendto", "dns", "bind", "iocp.connect"} <= katmanlar, s["ag"]
+    assert {"audit:gethostbyaddr", "audit:getnameinfo", "audit:bind"} <= katmanlar, s["ag"]
+    assert s["sarmalayici"] is True, "ters DNS sarmalayıcıları (gethostbyaddr/getnameinfo) KURULMAMIŞ"
+    assert s["alt"] and s["alt"][-1] == "subprocess.Popen:ornek_program.exe", f"alt süreç kaydı çalışmıyor: {s['alt']}"
 
 
 def test_KARSIT_bekci_gercek_ESTOP_bulut_aynasi_denemesini_GORUR(tmp_path):

@@ -9,7 +9,7 @@ NEDEN: süitin ağ bekçisi (`tests/conftest.py`, D0Ö.07) alt sürece GEÇMEZ (
 uyarısı). Çocukta conftest'i içe aktarmak da çözüm değil: ortamı (PEMF_* yönlendirmeleri) değiştirir,
 ölçülen şey bozulur. Bu modül YALNIZ ağı keser, ortama dokunmaz.
 
-KURAL (conftest ile aynı): IPv4/IPv6 soketlerde loopback DIŞI connect / connect_ex / sendto / DNS
+KURAL (conftest ile aynı): IPv4/IPv6 soketlerde loopback DIŞI connect / connect_ex / sendto / DNS (ters DNS dahil)
 ENGELLENİR; loopback'te yalnız BU SÜREÇTE bind edilmiş portlar serbest (asyncio öz-borusu) — sahibin
 servis portlarına (8000/1883/…) bağlanılamaz. Her engel `ENGELLENEN`'e yazılır; çağıran sonunda
 listenin BOŞ olduğunu ölçer. Katlar: Python sarmalayıcıları + audit hook (C düzeyi `_socket`) +
@@ -28,6 +28,9 @@ ENGELLENEN: list[tuple[str, str, int]] = []
 #: Sahibin servis portları (conftest `_AG_SAHIP_PORTLARI` ile aynı) — ne bağlanılır ne bind edilir.
 SAHIP_PORTLARI = frozenset({8000, 8100, 1883, 5173, 8177, 8200})
 _ACILAN: set[int] = set()
+#: Çocuğun başlattığı alt süreçler (TORUNLAR bekçisizdir) — ENGELLENMEZ, kaydedilir; çağıran izin listesine
+#: bakar (bağımsız inceleme r3: torun süreçler kapsam dışıydı).
+ALT_SURECLER: list[str] = []
 _AILELER = (socket.AF_INET, socket.AF_INET6)
 try:
     _YEREL_AD = socket.gethostname().lower()
@@ -75,6 +78,8 @@ _orj_bind = socket.socket.bind
 _orj_getaddrinfo = socket.getaddrinfo
 _orj_gethostbyname = socket.gethostbyname
 _orj_gethostbyname_ex = socket.gethostbyname_ex
+_orj_gethostbyaddr = socket.gethostbyaddr
+_orj_getnameinfo = socket.getnameinfo
 
 
 def _connect(self, adres):
@@ -130,12 +135,42 @@ def _gethostbyname_ex(ad):
     return _orj_gethostbyname_ex(ad)
 
 
+def _gethostbyaddr(ad):
+    _dns_denetle(ad, "gethostbyaddr")
+    return _orj_gethostbyaddr(ad)
+
+
+def _getnameinfo(sockaddr, flags):
+    _dns_denetle(sockaddr[0] if isinstance(sockaddr, tuple) and sockaddr else sockaddr, "getnameinfo")
+    return _orj_getnameinfo(sockaddr, flags)
+
+
 def _kanca(olay, arg):
     if olay in ("socket.connect", "socket.sendto"):
         if getattr(arg[0], "family", None) in _AILELER:
             _denetle(arg[1], "audit:" + olay.split(".", 1)[1])
     elif olay == "socket.getaddrinfo":
         _dns_denetle(arg[0], "audit:dns")
+    elif olay == "socket.gethostbyaddr":  # ters DNS (getfqdn dahil) — bağımsız inceleme r3
+        _dns_denetle(arg[0], "audit:gethostbyaddr")
+    elif olay == "socket.getnameinfo":
+        sa = arg[0]
+        _dns_denetle(sa[0] if isinstance(sa, tuple) and sa else sa, "audit:getnameinfo")
+    elif olay == "socket.bind":  # ham `_socket` ile sahip portuna bind (sarmalayıcıyı atlar)
+        adres = arg[1]
+        if getattr(arg[0], "family", None) in _AILELER and isinstance(adres, tuple) and len(adres) >= 2:
+            try:
+                port = int(adres[1])
+            except (TypeError, ValueError):
+                port = -1
+            if port in SAHIP_PORTLARI:
+                ENGELLENEN.append(("audit:bind", str(adres[0]), port))
+                raise PermissionError(f"ALT SÜREÇ AĞ BEKÇİSİ: bind {adres[0]}:{port} — sahibin servis portu")
+    elif olay in ("subprocess.Popen", "os.system", "os.spawn", "os.posix_spawn", "os.startfile"):
+        program = arg[0] if arg and arg[0] else (arg[1] if len(arg) > 1 else "")
+        if isinstance(program, (list, tuple)):
+            program = program[0] if program else ""
+        ALT_SURECLER.append(f"{olay}:{program}")
 
 
 socket.socket.connect = _connect
@@ -145,6 +180,8 @@ socket.socket.bind = _bind
 socket.getaddrinfo = _getaddrinfo
 socket.gethostbyname = _gethostbyname
 socket.gethostbyname_ex = _gethostbyname_ex
+socket.gethostbyaddr = _gethostbyaddr
+socket.getnameinfo = _getnameinfo
 sys.addaudithook(_kanca)
 if os.name == "nt":
     import asyncio.windows_events as _we
