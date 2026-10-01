@@ -11,7 +11,7 @@
  * Kural: "önceki cihazda kaldı" yalnız çağıran `oncekiCihazaBagli: true` derse söylenir; belirtilmezse
  * (yeni bir çağıran unutursa) DÜRÜST varsayılan Y42 metnidir.
  */
-import { eslesmeMesaji } from "@/services/pairing";
+import { eslesmeMesaji, type EslesmeSonuc } from "@/services/pairing";
 
 const Y42 = "Eşleştirme kodu kabul edilmedi. Bağlantı ayarı değiştirilmedi; kodu kontrol edip yeniden deneyin.";
 
@@ -32,9 +32,23 @@ describe("Y42 — kod reddi metni", () => {
     expect(m).toMatch(/kabul edilmedi/i);
   });
 
-  it("KARŞIT: bağlam yalnız ret metnini değiştirir, diğer sebepler aynı kalır", () => {
-    for (const s of [{ durum: "yok" } as const, { durum: "bayat" } as const, { durum: "hata" } as const]) {
+  it("KARŞIT: bağlam yalnız ret metnini değiştirir, diğer TÜM sebepler aynı kalır", () => {
+    // 1-B inceleme i5: yalnız yok/bayat/hata taranıyordu. Record anahtarı `EslesmeSonuc`'un TÜM dallarını ister
+    // (yeni bir sebep eklenince tür denetimi bu listeyi de güncelletir).
+    const tumu: Record<Exclude<EslesmeSonuc["durum"], "kod_reddedildi">, EslesmeSonuc[]> = {
+      ok: [{ durum: "ok", url: "https://ornek.invalid", deviceId: "PEMF-SAHTE" }],
+      yok: [{ durum: "yok" }],
+      adres_yok: [{ durum: "adres_yok" }, { durum: "adres_yok", sonGorulme: "2026-01-01T00:00:00Z" }],
+      bayat: [{ durum: "bayat" }],
+      hata: [{ durum: "hata" }],
+      ulasilamiyor: [{ durum: "ulasilamiyor" }],
+      gecersiz_adres: [{ durum: "gecersiz_adres" }],
+    };
+    const hepsi = Object.values(tumu).flat();
+    expect(hepsi).toHaveLength(8);
+    for (const s of hepsi) {
       expect(eslesmeMesaji(s, { oncekiCihazaBagli: false })).toBe(eslesmeMesaji(s, { oncekiCihazaBagli: true }));
+      expect(eslesmeMesaji(s, { oncekiCihazaBagli: true })).not.toMatch(/önceki cihazda kaldı/i);
     }
   });
 });
