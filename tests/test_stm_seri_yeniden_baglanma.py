@@ -174,6 +174,165 @@ def test_KRITIK_esZAMANLI_birakma_TEK_kazanan_uretir():
     )
 
 
+# ============================================================================
+# ÇAĞRI YERİ — GERÇEK `_hw_sender_worker` (D1.54 · B-1.15)
+# ============================================================================
+
+
+def test_KRITIK_GERCEK_HWSender_ESKI_okuyucu_YENI_baglantiyi_DUSUREMEZ(monkeypatch):
+    """D1.54 · B-1.15 — kapı ÇAĞRI YERİNİ ölçer (09-11 saha şikâyetinin kökü).
+
+    Bu dosyadaki diğer testler `SeriBaglantiDurumu`'nu TEK BAŞINA sınar; `reader`'ın `finally`'sindeki
+    çağrı yerini görmezler. Ölçüldü (plan tv-F4_2): `benim = baglanti.birak(conn, nesil)` satırı koşulsuz
+    `baglanti.gecersizle(); benim = True` yapılınca (M1) ya da tarihî hâle döndürülünce (M1b: paylaşılan
+    bağlantıyı kimliksiz kapatıp bırakmak) hepsi YEŞİL kalıyordu.
+
+    Burada GERÇEK `_hw_sender_worker` koşar; sahte olan yalnız taşıma (TEK ERİŞİMLİ: önceki bağlantı açıkken
+    port yeniden açılamaz — Windows COM portu gibi), modülün `socket`'i ve durum bildirimi kaydedicisi.
+    Yarış zamanlamaya bırakılmaz, ELLE kurulur:
+      1) ESKİ okuyucu `readline()` içinde bekletilir (kablo çekildi ama okuyucu henüz uyanmadı),
+      2) kablo çekilir → gönderici portun numaralandırmadan düştüğünü görür, ESKİ bağlantıyı düşürür,
+      3) yeniden bağlanma YENİ bağlantıyı kurar ve onun okuyucusunu başlatır,
+      4) ESKİ okuyucu ANCAK ŞİMDİ uyanır ve `finally`'ye girer.
+    İddia: YENİ bağlantı paylaşılan durumda kalır, açık kalır, kapatılmaz ve "STM kopuk" bildirilmez.
+    """
+    import queue
+    import socket as _gercek_socket
+    import time
+    import types
+
+    import headless_core as hcm
+
+    d = types.SimpleNamespace(acilan=[], kapanan=[], stm=[], baglanti=[], kablo_cekildi=False)
+    eski_okumada = threading.Event()
+    eski_uyan = threading.Event()
+
+    class _GozlemciBaglanti(hcm.SeriBaglantiDurumu):
+        def __init__(self):
+            super().__init__()
+            d.baglanti.append(self)
+
+    class _Conn:
+        def __init__(self, ad: str):
+            self.ad = ad
+            self.port = "COM_TEST"
+            self.is_open = True
+
+        def readline(self):
+            if self.ad == "ESKI":
+                eski_okumada.set()
+                eski_uyan.wait(10)
+                raise OSError("test: kablo cekildi — ESKI okuyucu GEC uyandi")
+            time.sleep(0.02)
+            return b""
+
+        def write(self, _b):
+            pass
+
+        def close(self):
+            self.is_open = False
+
+        def __repr__(self) -> str:
+            return f"<conn {self.ad} acik={self.is_open}>"
+
+    class _Tasima:
+        def __init__(self, *a, **k):
+            pass
+
+        def open_and_handshake(self, stop_event=None, on_line=None):
+            if any(c.is_open for c in d.acilan):
+                return None  # tek erişim: önceki tutamak kapanmadan port açılamaz
+            c = _Conn("ESKI" if not d.acilan else f"YENI{len(d.acilan)}")
+            d.acilan.append(c)
+            return types.SimpleNamespace(serial=c)
+
+        def close_serial(self, c):
+            d.kapanan.append(c)
+            c.close()
+
+        def port_hala_var(self, _port):
+            if d.kablo_cekildi:  # tek seferlik: çekilen kablo bir sonraki numaralandırmada geri gelir
+                d.kablo_cekildi = False
+                return False
+            return True
+
+    def _soket_yok(*_a, **_k):
+        raise OSError("test: UDP soketi kurulmaz")
+
+    monkeypatch.setattr(hcm, "SeriBaglantiDurumu", _GozlemciBaglanti)
+    monkeypatch.setattr(hcm, "Stm32SerialTransport", _Tasima)
+    monkeypatch.setattr(hcm, "_PORT_CHECK_S", 0.05)
+    monkeypatch.setattr(
+        hcm,
+        "socket",
+        types.SimpleNamespace(
+            socket=_soket_yok,
+            AF_INET=_gercek_socket.AF_INET,
+            SOCK_DGRAM=_gercek_socket.SOCK_DGRAM,
+            SOL_SOCKET=_gercek_socket.SOL_SOCKET,
+            SO_BROADCAST=_gercek_socket.SO_BROADCAST,
+        ),
+    )
+    core = hcm.HeadlessCore.__new__(hcm.HeadlessCore)
+    core.logger = __import__("logging").getLogger("test-seri-yeniden-baglanma-cagri-yeri")
+    core._hw_sender_stop = threading.Event()
+    core._hw_send_queue = queue.Queue()
+    core._set_stm_connected = lambda v: d.stm.append(v)
+    core._handle_stm_line = lambda *a, **k: None
+
+    def bekle(kosul, sure=8.0):
+        son = time.monotonic() + sure
+        while time.monotonic() < son and not kosul():
+            time.sleep(0.01)
+        return kosul()
+
+    t = threading.Thread(target=core._hw_sender_worker, daemon=True, name="test-HWSender-cagri-yeri")
+    t.start()
+    try:
+        assert bekle(lambda: d.acilan and eski_okumada.is_set()), f"aparat: ESKI baglanti/okuyucu kurulmadi {d}"
+        eski = d.acilan[0]
+        baglanti = d.baglanti[0]
+        assert baglanti.aktif() is eski
+
+        d.kablo_cekildi = True
+        assert bekle(lambda: eski in d.kapanan), "aparat: kablo cekildi ama gonderici ESKI baglantiyi dusurmedi"
+        # `yerlestir(YENİ)` ile "bağlı" bildirimi arasında kısa bir pencere var → ikisi birlikte beklenir.
+        assert bekle(lambda: len(d.acilan) == 2 and baglanti.aktif() is d.acilan[1] and d.stm[-1:] == [True]), (
+            f"aparat: yeniden baglanma YENI baglantiyi kurmadi / 'bagli' bildirmedi {d}"
+        )
+        yeni = d.acilan[1]
+        stm_yeni_sonrasi = len(d.stm)
+
+        eski_uyan.set()  # ESKİ okuyucu ANCAK ŞİMDİ uyanır → finally
+        assert bekle(lambda: d.kapanan.count(eski) >= 2), (
+            "aparat: ESKI okuyucu finally'ye girmedi (kendi conn'unu kapatmadi)"
+        )
+        time.sleep(0.3)
+
+        # ⚠️ Ölçümler çalışan DURDURULMADAN yakalanır: kapanışta çalışan son bağlantıyı (YENİ) meşru olarak
+        # geçersizleyip kapatır — durdurduktan sonra bakmak her koşulda "kapatıldı" görür (aparat hatası).
+        aktif = baglanti.aktif()
+        yeni_acik = yeni.is_open
+        kapanan = list(d.kapanan)
+        sonraki_bildirim = d.stm[stm_yeni_sonrasi:]
+        canli = t.is_alive()
+    finally:
+        eski_uyan.set()
+        core._hw_sender_stop.set()
+        t.join(3)
+
+    assert aktif is yeni, (
+        f"ESKI okuyucu YENI baglantiyi paylasilan durumdan DUSURDU (aktif={aktif!r}) — "
+        "kablo takili ve firmware saglam ama uygulama 'kopuk' gosterir, dongu tekrarlar (09-11 saha sikayeti)"
+    )
+    assert yeni_acik and yeni not in kapanan, f"ESKI okuyucu YENI baglantiyi KAPATTI ({yeni!r}, kapanan={kapanan})"
+    assert False not in sonraki_bildirim, (
+        f"ESKI okuyucu YENI baglanti kurulduktan sonra 'STM kopuk' bildirdi {sonraki_bildirim} — "
+        "bobinler arayuzde offline gorunur, STM seansi durdurulur"
+    )
+    assert canli, "HWSender oldu"
+
+
 def test_KRITIK_gecersizleme_sayaci_HER_CAGRIDA_ilerler():
     """Nesil sayacı eş zamanlı çağrılarda da MONOTON ve eksiksiz ilerlemeli.
 
