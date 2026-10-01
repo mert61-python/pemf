@@ -2924,12 +2924,12 @@ async def start_session(payload: SessionStartPayload, request: Request):
     # "bobinler komut almicak bildirimi gelmesine ... rağmen seans başlatınca gerçekten
     # başlıyormuş gibi her şey sorunsuz devam ediyor."
     #
-    # ⚠️ NEDEN ÜSTTEKİ KONTROLLER YETMİYOR: `state.hardware` VAR ve `_stm_surus_hazir()`
-    # TRUE — çünkü seri port AÇIK ve yazma BAŞARILI. Paketi reddeden kartın KENDİSİDİR ve
-    # bunu asenkron `STM_NACK: CRC` ile söyler. "Yazabildim" ile "bobin çalıştı" arasındaki
-    # boşluk tam buraya düşüyordu: seans başlıyor, sayaç işliyor, geçmişe "Tamamlandı"
-    # yazılıyordu — hiçbir bobin enerjilenmemişken. Hastanın aldığı doz kayıtta VAR,
-    # gerçekte YOK.
+    # ⚠️ NEDEN ÜSTTEKİ KONTROLLER YETMİYORDU: `state.hardware` VAR ve seri port AÇIK, yazma
+    # BAŞARILI. Paketi reddeden kartın KENDİSİDİR ve bunu asenkron `STM_NACK: CRC` ile söyler.
+    # "Yazabildim" ile "bobin çalıştı" arasındaki boşluk tam buraya düşüyordu: seans başlıyor,
+    # sayaç işliyor, geçmişe "Tamamlandı" yazılıyordu — hiçbir bobin enerjilenmemişken.
+    # D1.52 (B-1.4): aynı iki kapı (red + uyumsuz firmware) artık `HardwareController`ın başlatma
+    # kapısında da var (tekil/batch/hardware-command/AI yolları); burada önden 409 + neden verilir.
     #
     # ⚠️ YALNIZ STM BOBİNİ İSTENDİĞİNDE KAPILANIR: ESP bobini (varsa) ayrı bir yoldan gider
     # ve bu reddin konusu değildir. Ayrıca kapı SADECE BAŞLATMADADIR — durdurma/E-stop

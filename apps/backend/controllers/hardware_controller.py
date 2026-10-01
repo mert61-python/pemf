@@ -186,13 +186,37 @@ class HardwareController:
         ⚠️ Gecikmeli (lazy) import: bu modülün import grafiğini `servers` katmanına
         bağlamamak için. `live_state` yalnız stdlib+fastapi+utils kullanır → döngü yok.
         """
-        try:
-            from servers.live_state import stm_surus_hazir
+        return not self._stm_baslatma_engeli()
 
-            return bool(stm_surus_hazir())
+    def _stm_baslatma_engeli(self) -> str:
+        """START'ı engelleyen STM durumu; "" = engel yok. ⚠️ STOP / E-stop bu kapıdan HİÇ geçmez (Ö.4-Y8).
+
+        Üç engel (her biri fail-open: durum okunamazsa ENGELLEMEZ — bkz. `_stm_surus_hazir`):
+          1. STM bağlı değil (canlı durum, arayüzün gördüğü alan).
+          2. D1.52 (B-1.4): firmware KESİN uyumsuz (`core.stm_uyumlu is False`; `None` = banner tanınmadı,
+             ENGELLEMEZ). Eskiden yalnız `/api/session/start` bakıyordu; tekil/batch/`hardware/command`/AI (Auto)
+             200 "success" dönüp koşu kaydı açıyordu — kart paketi reddederken.
+          3. D1.52: kart komutları SİSTEMATİK reddediyor (`stm_komutlari_reddediyor`, NACK kapısı)."""
+        try:
+            from servers.live_state import stm_komutlari_reddediyor, stm_surus_hazir
         except Exception:
             self.logger.debug("STM surus durumu okunamadi → baslatma ENGELLENMEDI", exc_info=True)
-            return True
+            return ""
+        try:
+            if not stm_surus_hazir():
+                return "STM32 bağlı değil. USB (ST-Link) kablosunu takın; bağlantı gelince komutu yeniden verin."
+        except Exception:
+            self.logger.debug("STM baglanti durumu okunamadi → baslatma ENGELLENMEDI", exc_info=True)
+        core = getattr(self, "core", None)
+        if getattr(core, "stm_uyumlu", None) is False:
+            sebep = getattr(core, "stm_uyumsuzluk_sebebi", "") or "kanal sayısı paket genişliğiyle uyuşmuyor"
+            return f"STM32 firmware'i bu sürümle UYUMSUZ ({sebep}). Kartı güncel firmware ile yeniden programlayın."
+        try:
+            if stm_komutlari_reddediyor():
+                return "STM32 kartı komutları sistematik olarak REDDEDİYOR (firmware/protokol uyuşmazlığı)."
+        except Exception:
+            self.logger.debug("STM red durumu okunamadi → baslatma ENGELLENMEDI", exc_info=True)
+        return ""
 
     def _gonderici_canli(self) -> bool:
         """HWSender (kuyruk → seri port) canlı mı? Ölüyse bir kez yeniden başlatmayı dener (D1.55 · B-1.23).
@@ -245,13 +269,11 @@ class HardwareController:
         # `start` kontrolü ŞART: STOP/E-stop kayıtlı sahip kararıyla hiçbir koşulda
         # kapılanmaz, ayrıca kopuk bağlantıda STOP'u reddetmek yeniden bağlanınca
         # bobinlerin ESKİ duty ile canlanmasına yol açar (keep-alive eski state'i sürer).
-        if start and not self._stm_surus_hazir():
-            self.logger.warning(
-                "Bobin %s BAŞLATILMADI: STM32 bağlı değil. USB (ST-Link) kablosunu takın; "
-                "bağlantı gelince komutu yeniden verin.",
-                coil_id,
-            )
-            return False
+        if start:
+            _engel = self._stm_baslatma_engeli()
+            if _engel:
+                self.logger.warning("Bobin %s BAŞLATILMADI: %s", coil_id, _engel)
+                return False
         # ⚠️ D1.55 (B-1.23): gönderici ÖLÜYKEN (ve yeniden başlatılamıyorken) BAŞLATMA da reddedilir — durum
         # yazılırsa "başarılı" denir ama komut porta gitmez (sahte başarılı seans), gönderici dönünce de
         # keep-alive bobini HABERSİZ enerjilerdi. Durdurma ASLA kapılanmaz (Ö.4-Y8).
@@ -344,8 +366,9 @@ class HardwareController:
         # yorumun anlattığı "BURAYA TAŞINMAMIŞTI" arızasının aynı sınıfı). Yalnız `update_coil`
         # kapatılsa seans ve AI yolları STM kopukken hâlâ sessizce "başarılı" dönerdi —
         # kısmi düzeltme, düzeltilmemiş demektir.
-        if not self._stm_surus_hazir():
-            self.logger.warning("TÜM bobinler BAŞLATILMADI: STM32 bağlı değil. USB (ST-Link) kablosunu takın.")
+        _engel = self._stm_baslatma_engeli()
+        if _engel:
+            self.logger.warning("TÜM bobinler BAŞLATILMADI: %s", _engel)
             return False
         if not self._gonderici_canli():  # D1.55 (B-1.23) — gerekçe update_coil'de
             self.logger.warning("TÜM bobinler BAŞLATILMADI: donanım gönderici iş parçacığı çalışmıyor.")

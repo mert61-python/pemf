@@ -253,7 +253,8 @@ ESP_COIL_IDS = {8}
 # gelmesine ve gerçekten bobinlere komut gitmemesine rağmen seans başlatınca gerçekten
 # başlıyormuş gibi her şey sorunsuz devam ediyor."
 #
-# ⚠️ NEDEN MEVCUT KAPILAR YAKALAMIYORDU: `_stm_surus_hazir()` yalnız SERİ PORTUN AÇIK olup
+# ⚠️ NEDEN MEVCUT KAPILAR YAKALAMIYORDU (D1.52'den beri `HardwareController._stm_baslatma_engeli`
+# bu kararı TÜM başlatma yollarında okur): `_stm_surus_hazir()` yalnız SERİ PORTUN AÇIK olup
 # olmadığına bakar. Firmware uyuşmazlığında port AÇIKTIR, yazma BAŞARILIDIR — paketi reddeden
 # KARTIN KENDİSİDİR ve bunu ASENKRON bir `STM_NACK: CRC` satırıyla söyler. Yani "yazabildim"
 # ile "bobin çalıştı" arasındaki fark tam buraya düşüyordu: seans başlıyor, sayaç işliyor,
