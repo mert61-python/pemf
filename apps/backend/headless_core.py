@@ -4,6 +4,7 @@ import logging
 import queue
 import re
 import socket
+import struct
 import threading
 import time
 from pathlib import Path
@@ -99,6 +100,21 @@ class SeriBaglantiDurumu:
 _PORT_CHECK_S = 2.0
 
 
+def _tum_duty_sifir_mi(stm_msg: Any) -> bool:
+    """Porta yazılan STM paketi bir STOP mu (TÜM bobinlerin duty alanı 0)? (D1.55 · B-1.23)
+
+    Paket biçimi `utils.stm32_transport.STM_PAKET_FMT`: `<BB` başlık (0xAA 0x55), ardından bobin başına
+    duty (`f`). Biçim tanınmazsa False — "STOP yazıldı" iddiası ancak paket gerçekten okunabiliyorsa kurulur."""
+    from utils.stm32_transport import STM_PAKET_BOBIN_SAYISI
+
+    n = STM_PAKET_BOBIN_SAYISI
+    if not isinstance(stm_msg, (bytes, bytearray)) or len(stm_msg) < 2 + 4 * n:
+        return False
+    if stm_msg[0] != 0xAA or stm_msg[1] != 0x55:
+        return False
+    return all(d == 0.0 for d in struct.unpack_from(f"<{n}f", stm_msg, 2))
+
+
 class HeadlessCore:
     """Qt-free backend core for STM32 communication and shared services."""
 
@@ -156,6 +172,7 @@ class HeadlessCore:
 
         self._hw_send_queue: Queue = Queue(maxsize=4)
         self._hw_sender_stop = threading.Event()
+        self._hw_izlemeyi_kur()
         self._hw_sender_thread = threading.Thread(
             target=self._hw_sender_worker,
             daemon=True,
@@ -163,6 +180,104 @@ class HeadlessCore:
         )
         self._hw_sender_thread.start()
         self._publish_event("system.core.started", {"appDataDir": str(self.app_data_dir)})
+
+    # ── HWSender DENETİMİ (D1.55 · B-1.23) ─────────────────────────────────────────────────────
+    # ⚠️ NEDEN: HWSender (kuyruk → seri port) ölürse `HardwareController._send_stm_manual_update` paketi
+    # kuyruğa koyup "kuyruğa verildi=True" diyordu; E-stop bunu `stmStopped` diye yayınlıyor, porta ise
+    # 0 bayt gidiyordu (ölçüldü: ölü göndericide stop_all ×5 True, yazım sayısı 4→4). Tek koruma firmware
+    # ölü-adam devresiydi (1,5 sn). Artık: (1) döngü tur hatasında ÖLMEZ, (2) ölü gönderici yeniden
+    # başlatılır, (3) çağıran canlılığı sorar, (4) E-stop "STOP porta YAZILDI" bilgisini yazım izinden okur.
+    # Y8: hiçbiri STOP'u kapılamaz ya da gönderimini azaltmaz — yalnız RAPORLANAN teyit dürüstleşir.
+
+    #: Ölü HWSender en sık bu aralıkta yeniden başlatılır (sn): başlar başlamaz ölen bir çalışan
+    #: (ör. iş parçacığı tükenmesi) saniyede onlarca iş parçacığı doğurmasın.
+    _HW_CANLANDIRMA_ARALIGI_S = 3.0
+
+    def _hw_izlemeyi_kur(self) -> None:
+        """Canlandırma kilidi ve yazım izi. İdempotent: `__new__` ile kurulan çekirdekler (testler) bunu
+        `_hw_sender_worker` başlarken alır; üretimde `__init__` iş parçacığından ÖNCE kurar."""
+        if getattr(self, "_hw_yazim_kosulu", None) is None:
+            self._hw_yazim_kosulu = threading.Condition()
+            self._hw_yazim_sayaci = 0  # porta başarıyla yazılan paket sayısı
+            self._hw_son_stop_yazimi = 0  # son tüm-duty-0 (STOP) yazımının sayaç değeri
+        if getattr(self, "_hw_canlandirma_kilidi", None) is None:
+            self._hw_canlandirma_kilidi = threading.Lock()
+            self._hw_son_canlandirma = 0.0
+
+    def hw_gonderici_canli(self) -> bool:
+        """HWSender iş parçacığı yaşıyor mu?"""
+        t = getattr(self, "_hw_sender_thread", None)
+        return bool(t is not None and t.is_alive())
+
+    def hw_gondericiyi_canlandir(self) -> bool:
+        """Ölü HWSender'ı yeniden başlatır. @return gönderici ŞİMDİ canlı mı.
+
+        Kapanışta (`_hw_sender_stop` kurulu) başlatmaz; en sık `_HW_CANLANDIRMA_ARALIGI_S`'de bir dener.
+        Yeni çalışan aynı `_seri_baglanti`yı devralır: `connect_serial` önce eski bağlantıyı geçersizleyip
+        KAPATIR — ölü çalışanın okuyucusu portu tutuyor olabilir ve COM portu tek erişimlidir."""
+        if self.hw_gonderici_canli():
+            return True
+        self._hw_izlemeyi_kur()
+        with self._hw_canlandirma_kilidi:
+            if self.hw_gonderici_canli():
+                return True
+            if self._hw_sender_stop.is_set():
+                return False
+            simdi = time.monotonic()
+            if simdi - self._hw_son_canlandirma < self._HW_CANLANDIRMA_ARALIGI_S:
+                return False
+            self._hw_son_canlandirma = simdi
+            try:
+                t = threading.Thread(target=self._hw_sender_worker, daemon=True, name="HWSender")
+                t.start()
+            except Exception:
+                dongu_hatasini_bildir(
+                    "[HWSender] ÖLÜ ve yeniden BAŞLATILAMADI — STM'e paket yazılamıyor (firmware ölü-adam 1,5 sn'de keser).",
+                    logger=self.logger,
+                )
+                return False
+            self._hw_sender_thread = t
+        dongu_hatasini_bildir(
+            "[HWSender] ÖLÜ bulundu → yeniden başlatıldı (seri bağlantı yeniden kurulacak).",
+            logger=self.logger,
+            exc_info=False,
+        )
+        return t.is_alive()
+
+    def hw_yazim_isareti(self) -> int:
+        """Şimdiye dek porta yazılan paket sayısı — `hw_stop_yazildi_bekle` ile birlikte kullanılır."""
+        self._hw_izlemeyi_kur()
+        with self._hw_yazim_kosulu:
+            return self._hw_yazim_sayaci
+
+    def hw_stop_yazildi_bekle(self, isaret: int, zaman_asimi: float) -> bool:
+        """`isaret` alındıktan SONRA porta tüm-duty-0 (STOP) paketi YAZILDI mı? En çok `zaman_asimi` sn bekler.
+
+        Kuyruğa vermek yetmez: gönderici ölüyse ya da bağlantı yoksa paket porta hiç gitmez."""
+        self._hw_izlemeyi_kur()
+        bitis = time.monotonic() + max(0.0, float(zaman_asimi))
+        with self._hw_yazim_kosulu:
+            while self._hw_son_stop_yazimi <= isaret:
+                kalan = bitis - time.monotonic()
+                if kalan <= 0:
+                    return False
+                self._hw_yazim_kosulu.wait(kalan)
+            return True
+
+    def _hw_yazimi_kaydet(self, stm_msg: Any) -> None:
+        """Gönderici: porta BAŞARIYLA yazılan paketi say; tüm duty alanları 0 ise STOP yazımı olarak işaretle."""
+        try:
+            stop_mu = _tum_duty_sifir_mi(stm_msg)
+        except Exception:
+            stop_mu = False
+        kosul = getattr(self, "_hw_yazim_kosulu", None)
+        if kosul is None:
+            return
+        with kosul:
+            self._hw_yazim_sayaci += 1
+            if stop_mu:
+                self._hw_son_stop_yazimi = self._hw_yazim_sayaci
+            kosul.notify_all()
 
     #: `db_acilis_hatalari` anahtarı → operatöre gösterilen ad.
     _DB_ADI = {"hasta": "Hasta veritabanı", "tedavi": "Tedavi kaydı veritabanı"}
@@ -603,11 +718,17 @@ class HeadlessCore:
         payload_lock = threading.Lock()
         last_reconnect_time = 0.0
         transport = Stm32SerialTransport(self.logger)
+        self._hw_izlemeyi_kur()
 
         # ⚠️ Seri bağlantı PAYLAŞILAN durumdur: sender (bu thread), reader ve reconnect
         # thread'leri birlikte erişir. `nesil`, eski bir reader'ın YENİ bağlantıyı
         # kapatmasını engelleyen kimlik damgasıdır (bkz. connect_serial gerekçesi).
-        baglanti = SeriBaglantiDurumu()
+        # D1.55: yeniden başlatılan çalışan AYNI durumu devralır (`hw_gondericiyi_canlandir`) — ölü
+        # çalışanın okuyucusu portu hâlâ tutuyorsa `connect_serial` onu geçersizleyip kapatır.
+        baglanti = getattr(self, "_seri_baglanti", None)
+        if baglanti is None:
+            baglanti = SeriBaglantiDurumu()
+            self._seri_baglanti = baglanti
 
         def retry_last_payload() -> None:
             # DENETIM P2: STM_NACK gelince EN SON YAZILAN ham paket kosulsuz yeniden kuyruga
@@ -716,7 +837,14 @@ class HeadlessCore:
                 except Exception:
                     pass
 
-        connect_serial()
+        try:
+            connect_serial()
+        except Exception:
+            # D1.55 (B-1.23): ilk bağlantı denemesi (okuyucu iş parçacığı başlatma dahil) fırlatsa da çalışan
+            # DÖNGÜYE girer — döngü kopuk bağlantıyı yeniden bağlanma ile toparlar; eskiden çalışan ölürdü.
+            dongu_hatasini_bildir(
+                "[STM32] ilk baglanti denemesi basarisiz — dongu yeniden deneyecek", logger=self.logger
+            )
 
         try:
             udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -728,105 +856,121 @@ class HeadlessCore:
         reconnect_thread = None  # tek eşzamanlı non-blocking reconnect
         last_port_check = 0.0  # kablo-çıktı yoklamasının son anı (monotonic)
         while not self._hw_sender_stop.is_set():
-            # DENETIM P3: geri-cekilme DUVAR SAATI ile olculuyordu. Saat GERI alinirsa
-            # (NTP duzeltmesi, DST, elle ayar) `now - last_reconnect_time` negatife duser ve
-            # 3 sn kosulu saatlerce saglanmaz → STM kopuk kalir, hicbir yeniden-baglanma
-            # DENENMEZ. Monotonik saat geri gitmez.
-            now = time.monotonic()
-            _conn = _aktif_baglanti()
-
-            # ── KABLO ÇIKTI MI? (port hâlâ enumerate ediliyor mu) ────────────────────────
-            # ⚠️ NEDEN SESSİZLİK BEKÇİSİ DEĞİL: keep-alive KOŞULSUZ DEĞİL — hiçbir bobin
-            # çalışmıyorken paket gönderilmez (`hardware_controller._tick`: `need_send =
-            # any_running or ...`) ve firmware de ilk paketten sonra ping'i keser. Yani BOŞTA
-            # UART tamamen sessizdir; "N saniyedir satır gelmedi" kuralı boşta YANLIŞ tetikler.
-            # Port varlığı ise kesin bir ölçüttür: USB çekilince COM portu numaralandırmadan
-            # DÜŞER. Böylece hiçbir yazma/okuma denemesi olmadan da kopuş ANINDA görülür ve
-            # bobinler arayüzde offline'a döner (sahip talebi 2026-09-11).
-            if _conn is not None and (now - last_port_check > _PORT_CHECK_S):
-                last_port_check = now
-                if not transport.port_hala_var(getattr(_conn, "port", None)):
-                    # ⚠️ D1.19 inceleme (r4): ÖNCE durum geçişleri, SONRA bildirim — ve bildirim döngüyü
-                    # öldüremez. Eskiden çıplak uyarı geçişlerden önceydi: fırlatırsa HWSender ölür, kopuş
-                    # bildirilmez (bayat "bağlı"), yeniden bağlanma olmaz, kuyruktaki STOP yazılmazdı.
-                    _kaybolan_port = getattr(_conn, "port", "?")
-                    if baglanti.aktif() is _conn:
-                        baglanti.gecersizle()
-                    self._set_stm_connected(False)
-                    try:
-                        transport.close_serial(_conn)
-                    except Exception:
-                        pass
-                    with payload_lock:
-                        last_payload[0] = None  # kopuk hatta BAYAT paketi tekrar oynatma
-                    _conn = None
-                    dongu_hatasini_bildir(
-                        "[STM32] Seri port kayboldu (%s) → bağlantı düşürülüyor, bobinler çevrimdışı.",
-                        _kaybolan_port,
-                        logger=self.logger,
-                        seviye=logging.WARNING,
-                        exc_info=False,
-                    )
-
-            _reconnecting = reconnect_thread is not None and reconnect_thread.is_alive()
-            _kopuk = _conn is None or not _conn.is_open
-            if _kopuk and not _reconnecting and (now - last_reconnect_time > 3.0):
-                last_reconnect_time = now
-                # NON-BLOCKING reconnect: `connect_serial()` handshake'i ~14 sn BLOKLAR →
-                # sender döngüsü + UDP/ESP komut yolu + kuyruk tüketimi o süre DONARDI.
-                # ⚠️ Yarış artık VARSAYIMLA değil KİMLİKLE çözülüyor: her reader kendi
-                # connection'ını ve nesil numarasını taşır, paylaşılan durumu yalnız hâlâ
-                # kendisininse temizler (bkz. `connect_serial`/`reader`).
-                reconnect_thread = threading.Thread(target=connect_serial, daemon=True, name="STM32Reconnect")
-                reconnect_thread.start()
-
             try:
-                payload_tuple = self._hw_send_queue.get(timeout=0.5)
-            except queue.Empty:
-                continue
+                # DENETIM P3: geri-cekilme DUVAR SAATI ile olculuyordu. Saat GERI alinirsa
+                # (NTP duzeltmesi, DST, elle ayar) `now - last_reconnect_time` negatife duser ve
+                # 3 sn kosulu saatlerce saglanmaz → STM kopuk kalir, hicbir yeniden-baglanma
+                # DENENMEZ. Monotonik saat geri gitmez.
+                now = time.monotonic()
+                _conn = _aktif_baglanti()
 
-            stm_msg, udp_pkt, esp_ip, esp_port = payload_tuple
-            _yaz_conn = _aktif_baglanti()
-            if _yaz_conn is not None and _yaz_conn.is_open and stm_msg:
-                try:
-                    with payload_lock:
-                        last_payload[0] = payload_tuple
-                        last_payload[1] = time.monotonic()
-                    _yaz_conn.write(stm_msg if isinstance(stm_msg, bytes) else stm_msg.encode("utf-8"))
-                except Exception as exc:
-                    # D1.19 (B-10.121): bildirim fırlatırsa HWSender ölür → sonraki STM paketleri (STOP dahil)
-                    # "kuyruğa verildi" ama HİÇ yazılmaz (B-1.23 sahte teyidinin bir kaynağı).
-                    dongu_hatasini_bildir(
-                        "[STM32 SEND] %s", exc, logger=self.logger, seviye=logging.WARNING, exc_info=False
-                    )
-                    # Paylaşılan durumu YALNIZ hâlâ bu bağlantıysa düşür (araya yeni bir
-                    # bağlantı girmiş olabilir — eski yazma hatası onu öldürmemeli).
-                    _benim = baglanti.aktif() is _yaz_conn
-                    if _benim:
-                        baglanti.gecersizle()
-                    if _benim:
+                # ── KABLO ÇIKTI MI? (port hâlâ enumerate ediliyor mu) ────────────────────────
+                # ⚠️ NEDEN SESSİZLİK BEKÇİSİ DEĞİL: keep-alive KOŞULSUZ DEĞİL — hiçbir bobin
+                # çalışmıyorken paket gönderilmez (`hardware_controller._tick`: `need_send =
+                # any_running or ...`) ve firmware de ilk paketten sonra ping'i keser. Yani BOŞTA
+                # UART tamamen sessizdir; "N saniyedir satır gelmedi" kuralı boşta YANLIŞ tetikler.
+                # Port varlığı ise kesin bir ölçüttür: USB çekilince COM portu numaralandırmadan
+                # DÜŞER. Böylece hiçbir yazma/okuma denemesi olmadan da kopuş ANINDA görülür ve
+                # bobinler arayüzde offline'a döner (sahip talebi 2026-09-11).
+                if _conn is not None and (now - last_port_check > _PORT_CHECK_S):
+                    last_port_check = now
+                    if not transport.port_hala_var(getattr(_conn, "port", None)):
+                        # ⚠️ D1.19 inceleme (r4): ÖNCE durum geçişleri, SONRA bildirim — ve bildirim döngüyü
+                        # öldüremez. Eskiden çıplak uyarı geçişlerden önceydi: fırlatırsa HWSender ölür, kopuş
+                        # bildirilmez (bayat "bağlı"), yeniden bağlanma olmaz, kuyruktaki STOP yazılmazdı.
+                        _kaybolan_port = getattr(_conn, "port", "?")
+                        if baglanti.aktif() is _conn:
+                            baglanti.gecersizle()
                         self._set_stm_connected(False)
-                    # DENETIM P2: port KAPATILMIYORDU. Yeniden-baglanma kosulu
-                    # `not serial_conn or not serial_conn.is_open` oldugundan, yalnizca
-                    # "baglanti koptu" BAYRAGINI dusurmek hicbir zaman reconnect tetiklemiyordu →
-                    # USB yarim-kopmasinda (kablo gevsemesi/surucu hatasi) port sonsuza dek acik
-                    # ama olu kaliyor, bobin komutlari sessizce kayboluyordu. Acikca kapat →
-                    # dongu basindaki reconnect devreye girer. (Bu arada keep-alive kesildigi icin
-                    # firmware olu-adam devresi 1.5 sn'de bobinleri sifirlar = fail-safe yon.)
-                    try:
-                        transport.close_serial(_yaz_conn)
-                    except Exception:
-                        pass
-                    with payload_lock:
-                        last_payload[0] = None  # kopuk baglantida BAYAT paketi tekrar oynatma
+                        try:
+                            transport.close_serial(_conn)
+                        except Exception:
+                            pass
+                        with payload_lock:
+                            last_payload[0] = None  # kopuk hatta BAYAT paketi tekrar oynatma
+                        _conn = None
+                        dongu_hatasini_bildir(
+                            "[STM32] Seri port kayboldu (%s) → bağlantı düşürülüyor, bobinler çevrimdışı.",
+                            _kaybolan_port,
+                            logger=self.logger,
+                            seviye=logging.WARNING,
+                            exc_info=False,
+                        )
 
-            if udp_sock and udp_pkt:
+                _reconnecting = reconnect_thread is not None and reconnect_thread.is_alive()
+                _kopuk = _conn is None or not _conn.is_open
+                if _kopuk and not _reconnecting and (now - last_reconnect_time > 3.0):
+                    last_reconnect_time = now
+                    # NON-BLOCKING reconnect: `connect_serial()` handshake'i ~14 sn BLOKLAR →
+                    # sender döngüsü + UDP/ESP komut yolu + kuyruk tüketimi o süre DONARDI.
+                    # ⚠️ Yarış artık VARSAYIMLA değil KİMLİKLE çözülüyor: her reader kendi
+                    # connection'ını ve nesil numarasını taşır, paylaşılan durumu yalnız hâlâ
+                    # kendisininse temizler (bkz. `connect_serial`/`reader`).
+                    reconnect_thread = threading.Thread(target=connect_serial, daemon=True, name="STM32Reconnect")
+                    reconnect_thread.start()
+
                 try:
-                    udp_sock.sendto(udp_pkt, (esp_ip, esp_port))
-                except Exception as exc:
-                    dongu_hatasini_bildir(
-                        "[UDP SEND] %s", exc, logger=self.logger, seviye=logging.WARNING, exc_info=False
-                    )
+                    payload_tuple = self._hw_send_queue.get(timeout=0.5)
+                except queue.Empty:
+                    continue
+
+                stm_msg, udp_pkt, esp_ip, esp_port = payload_tuple
+                _yaz_conn = _aktif_baglanti()
+                if _yaz_conn is not None and _yaz_conn.is_open and stm_msg:
+                    try:
+                        with payload_lock:
+                            last_payload[0] = payload_tuple
+                            last_payload[1] = time.monotonic()
+                        _yaz_conn.write(stm_msg if isinstance(stm_msg, bytes) else stm_msg.encode("utf-8"))
+                    except Exception as exc:
+                        # D1.19 (B-10.121): bildirim fırlatırsa HWSender ölür → sonraki STM paketleri (STOP dahil)
+                        # "kuyruğa verildi" ama HİÇ yazılmaz (B-1.23 sahte teyidinin bir kaynağı).
+                        dongu_hatasini_bildir(
+                            "[STM32 SEND] %s", exc, logger=self.logger, seviye=logging.WARNING, exc_info=False
+                        )
+                        # Paylaşılan durumu YALNIZ hâlâ bu bağlantıysa düşür (araya yeni bir
+                        # bağlantı girmiş olabilir — eski yazma hatası onu öldürmemeli).
+                        _benim = baglanti.aktif() is _yaz_conn
+                        if _benim:
+                            baglanti.gecersizle()
+                        if _benim:
+                            self._set_stm_connected(False)
+                        # DENETIM P2: port KAPATILMIYORDU. Yeniden-baglanma kosulu
+                        # `not serial_conn or not serial_conn.is_open` oldugundan, yalnizca
+                        # "baglanti koptu" BAYRAGINI dusurmek hicbir zaman reconnect tetiklemiyordu →
+                        # USB yarim-kopmasinda (kablo gevsemesi/surucu hatasi) port sonsuza dek acik
+                        # ama olu kaliyor, bobin komutlari sessizce kayboluyordu. Acikca kapat →
+                        # dongu basindaki reconnect devreye girer. (Bu arada keep-alive kesildigi icin
+                        # firmware olu-adam devresi 1.5 sn'de bobinleri sifirlar = fail-safe yon.)
+                        try:
+                            transport.close_serial(_yaz_conn)
+                        except Exception:
+                            pass
+                        with payload_lock:
+                            last_payload[0] = None  # kopuk baglantida BAYAT paketi tekrar oynatma
+                    else:
+                        # D1.55: yazım izi — E-stop "STOP porta YAZILDI" bilgisini buradan okur
+                        # (`hw_stop_yazildi_bekle`). `else`: izin kendisi yazım hatası sayılmaz.
+                        self._hw_yazimi_kaydet(stm_msg)
+
+                if udp_sock and udp_pkt:
+                    try:
+                        udp_sock.sendto(udp_pkt, (esp_ip, esp_port))
+                    except Exception as exc:
+                        dongu_hatasini_bildir(
+                            "[UDP SEND] %s", exc, logger=self.logger, seviye=logging.WARNING, exc_info=False
+                        )
+            except Exception:
+                # ⚠️ D1.55 (B-1.23): TUR HATASI HWSender'I ÖLDÜREMEZ. Eskiden döngü gövdesi korumasızdı:
+                # port yoklaması, kuyruk, paket çözme ya da yeniden bağlanma iş parçacığı başlatma (tükenme)
+                # bir kez fırlatınca gönderici ÖLÜYOR, sonraki her paket (STOP dahil) "kuyruğa verildi"
+                # sayılıp porta HİÇ yazılmıyordu. Tur atlanır (o turun paketi düşer — STOP'u
+                # `STOP_RESEND_TICKS` telafi eder), kısa geri çekilmeyle döngü SÜRER.
+                dongu_hatasini_bildir(
+                    "[HWSender] tur hatasi — dongu SURUYOR (kuyruktaki STOP dahil paketler yazilmaya devam eder)",
+                    logger=self.logger,
+                )
+                self._hw_sender_stop.wait(0.05)
 
         _son = baglanti.gecersizle()
         if _son is not None:

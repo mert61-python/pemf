@@ -194,6 +194,35 @@ class HardwareController:
             self.logger.debug("STM surus durumu okunamadi → baslatma ENGELLENMEDI", exc_info=True)
             return True
 
+    def _gonderici_canli(self) -> bool:
+        """HWSender (kuyruk → seri port) canlı mı? Ölüyse bir kez yeniden başlatmayı dener (D1.55 · B-1.23).
+
+        ⚠️ NEDEN: gönderici ölüyken paket kuyruğa GİRER ama porta HİÇ yazılmaz. Eskiden STOP yolu bu durumda
+        "kuyruğa verildi=True" dönüyor, E-stop `stmStopped` diye yayınlıyordu (porta 0 bayt).
+
+        Çekirdek canlılık BİLDİRMİYORSA (`_hw_send_queue` taşıyan yalın test vekilleri) True — eski davranış;
+        üretim çekirdeği (`HeadlessCore`) her zaman bildirir ve kapı gerçek çekirdekle ölçülür. Sorgu
+        fırlatırsa False: "kuyruğa verildi" iddiası doğrulanamadı."""
+        core = getattr(self, "core", None)
+        canli = getattr(core, "hw_gonderici_canli", None)
+        if not callable(canli):
+            return True
+        try:
+            if canli():
+                return True
+            canlandir = getattr(core, "hw_gondericiyi_canlandir", None)
+            if callable(canlandir) and canlandir():
+                return True
+        except Exception:
+            dongu_hatasini_bildir("HWSender canlilik denetimi basarisiz → gonderici OLU sayildi", logger=self.logger)
+            return False
+        dongu_hatasini_bildir(
+            "ACİL: HWSender ÖLÜ ve yeniden başlatılamadı — paketler porta YAZILMIYOR (firmware ölü-adam 1,5 sn'de keser).",
+            logger=self.logger,
+            exc_info=False,
+        )
+        return False
+
     def update_coil(
         self,
         coil_id: int,
@@ -222,6 +251,12 @@ class HardwareController:
                 "bağlantı gelince komutu yeniden verin.",
                 coil_id,
             )
+            return False
+        # ⚠️ D1.55 (B-1.23): gönderici ÖLÜYKEN (ve yeniden başlatılamıyorken) BAŞLATMA da reddedilir — durum
+        # yazılırsa "başarılı" denir ama komut porta gitmez (sahte başarılı seans), gönderici dönünce de
+        # keep-alive bobini HABERSİZ enerjilerdi. Durdurma ASLA kapılanmaz (Ö.4-Y8).
+        if start and not self._gonderici_canli():
+            self.logger.warning("Bobin %s BAŞLATILMADI: donanım gönderici iş parçacığı çalışmıyor.", coil_id)
             return False
 
         # DENETIM P2 (kismi uygulama): normalize_* cagrilari ESKIDEN state'e YAZARKEN
@@ -312,6 +347,9 @@ class HardwareController:
         if not self._stm_surus_hazir():
             self.logger.warning("TÜM bobinler BAŞLATILMADI: STM32 bağlı değil. USB (ST-Link) kablosunu takın.")
             return False
+        if not self._gonderici_canli():  # D1.55 (B-1.23) — gerekçe update_coil'de
+            self.logger.warning("TÜM bobinler BAŞLATILMADI: donanım gönderici iş parçacığı çalışmıyor.")
+            return False
         # DENETIM P2 (kismi uygulama) — update_coil:144-169'daki AYNI desen, gerekcesi orada.
         # Buraya TASINMAMISTI (git kaniti: 1413235 tek hunk, yalniz update_coil bolgesi).
         # normalize_* cagrilari dongu icinde, state'e YAZARKEN calisiyordu. duty TEK skalerdir
@@ -372,8 +410,10 @@ class HardwareController:
             # Eski hâli, paket kuyruğa HİÇ alınamamış olsa bile True dönüyordu; `_emergency_stop_all`
             # bunu `stmStopped` olarak yayınlıyor, arayüz de "çıktılar kesildi" diyordu. Yani
             # STOP'un düştüğü durum ile başarılı durum operatöre AYNI görünüyordu.
-            # Bu dönüş "STOP paketi donanım kuyruğuna VERİLDİ" demektir (fiziksel teyit değil);
-            # False ise STOP kesinlikle gönderilmemiştir → çağıran fail-closed davranmalıdır.
+            # Bu dönüş "STOP paketi donanım kuyruğuna VERİLDİ ve gönderici CANLI" demektir (fiziksel teyit
+            # değil — D1.55'ten beri ölü gönderici "verildi" sayılmaz); False ise STOP porta gitmemiştir →
+            # çağıran fail-closed davranmalıdır. "Porta YAZILDI" bilgisi E-stop'ta ayrıca ölçülür
+            # (`HeadlessCore.hw_stop_yazildi_bekle`).
             kuyruga_verildi = self._send_stm_manual_update()
             if kuyruga_verildi:
                 self.logger.info("Tüm bobinler (1-5) durduruldu.")
@@ -485,11 +525,14 @@ class HardwareController:
         for _attempt in range(3):
             try:
                 self.core._hw_send_queue.put_nowait(_pkt)
-                return True
             except queue.Full:
                 try:
                     self.core._hw_send_queue.get_nowait()  # en eskiyi at, yer ac
                 except queue.Empty:
                     pass
+                continue
+            # ⚠️ D1.55 (B-1.23): paket KUYRUKTA ama gönderici ölüyse porta HİÇ yazılmaz → "verildi" denmez.
+            # Paket yine de kuyrukta KALIR (Y8: gönderim azaltılmaz) — gönderici yeniden başlarsa yazılır.
+            return self._gonderici_canli()
         self.logger.warning("HW kuyrugu dolu — paket kuyruga alinamadi (keep-alive sonraki turda tazeleyecek).")
         return False
