@@ -221,6 +221,54 @@ def _yontem_tavani(method: str) -> float:
     return YONTEM_TAVANI.get((method or "").strip().lower(), YONTEM_TAVANI_VARSAYILAN)
 
 
+def kabin_yari_boyut_mm():
+    """Kabin YARI boyutları (mm) — TEK KAYNAK: kedi hattının (`catorgan_predictor`) yüklediği AYNI paketli kabin
+    yapılandırması (`geometry.cabin_extent_cm`; bugün [65, 50, 50] cm → (325, 250, 250) mm). Literal YAZILMAZ: kabin
+    yeniden ölçülünce (A-17) sınır kendiliğinden izler. Okunamaz / geçersizse None (çağıran FAIL-CLOSED davranır)."""
+    import math
+
+    try:
+        from ai_hub.inference_cat_organ.lib.cabin_config import load_cabin_config, varsayilan_kabin_yaml
+
+        ext = (load_cabin_config(varsayilan_kabin_yaml()).get("geometry") or {}).get("cabin_extent_cm")
+        yari = tuple(float(v) * 10.0 / 2.0 for v in ext)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).warning("Kabin boyutu okunamadı (kabin yapılandırması)", exc_info=True)
+        return None
+    if len(yari) != 3 or not all(math.isfinite(v) and v > 0 for v in yari):
+        return None
+    return yari
+
+
+def hedef_kabin_disi_nedeni(x_mm, y_mm, z_mm) -> str:
+    """D1.85 (B-5.11): 3B hedef sürülebilir mi? "" = sonlu ve kabin İÇİNDE; değilse operatöre/günlüğe NEDEN.
+
+    ⚠️ NEDEN: kedi hattında cm→mm ±300 kıskacı kabin DIŞI hedefi (Y/Z sınırı 250 mm) sessizce kenara çekip
+    SÜRÜYORDU (telde 51/51 çerçeve (300,-300,-300) mm); NaN `min/max`tan 300 mm olarak çıkıyordu; araştırma
+    sağlayıcılarında sınır denetimi hiç yoktu. Bu bir HEDEF GEÇERLİLİK (lokalizasyon) denetimidir — tedavi doz
+    kıskacı değil (Ö.4-Y9 temiz); `normalize_*` değişmez. Kabin boyutu bilinmiyorsa hedef doğrulanamaz → red."""
+    import math
+
+    try:
+        v = (float(x_mm), float(y_mm), float(z_mm))
+    except (TypeError, ValueError):
+        return "kabin denetimi: koordinat sayı değil"
+    if not all(math.isfinite(a) for a in v):
+        return f"kabin denetimi: sonlu olmayan koordinat {v}"
+    yari = kabin_yari_boyut_mm()
+    if yari is None:
+        return "kabin boyutu okunamadı (kabin yapılandırması) — hedef doğrulanamadı"
+    disari = [eksen for eksen, a, s in zip("xyz", v, yari) if abs(a) > s]
+    if disari:
+        return (
+            f"kabin DIŞI hedef {tuple(round(a, 1) for a in v)} mm (kabin yarı boyutu {yari} mm, eksen "
+            f"{''.join(disari)})"
+        )
+    return ""
+
+
 def _hedef_tel(aday: dict, kare_w: int, kare_h: int) -> dict:
     """Aday → TEL SÖZLEŞMESİ sözlüğü; `pxn` = kare oranına göre 0..1 merkez.
 
@@ -490,6 +538,11 @@ class _EmCvSaglayici:
         dokum = {"yontem": yontem, "yontem_tavani": tavan, "ham_guven": ham, "kalibre": yontem == "aruco_pnp"}
         with self._kilit:
             self._meta = meta
+        # ⚠️ D1.85 (B-5.11): araştırma hattında da kabin DIŞI / sonlu olmayan hedef SÜRÜLMEZ (kedi hattıyla aynı kural).
+        _neden = hedef_kabin_disi_nedeni(x_mm, y_mm, z_mm)
+        if _neden:
+            air.logger.warning("%s hedefi kabin/geçerlilik denetiminde REDDEDİLDİ: %s", self.ad, _neden)
+            return (False, 0.0, 0.0, 0.0, guven, overlay, ozne_var, dokum)
         # ⚠️ ArUco ZORUNLU (karar #4): tavan 0.25 < MIN_GUVEN 0.3 olduğundan ölçek/piksel modunda
         # bu koşul YAPISAL olarak sağlanamaz — eşik + tavan çift emniyet.
         return (guven >= MIN_GUVEN, x_mm, y_mm, z_mm, guven, overlay, ozne_var, dokum)

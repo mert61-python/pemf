@@ -744,6 +744,10 @@ import threading as _ai_threading
 # kamera loop'u acip VideoCapture(0)'i cakistiramasin / bobinleri cift suremesin.
 _ai_loop_lock = _ai_threading.Lock()
 _ai_thread = None
+#: İG-5.1: `/frame`'de ARDIŞIK hedef kaybı sayacı — mühürdeki onaya bağlı (yeni seans sıfırlar). Döngünün
+#: `_lost_streak` kuralının mobil kare karşılığı; eskiden `/frame`'de hiç yoktu (bkz. `_frame_hedef_durumu`).
+_frame_kayip = {"onay": None, "seri": 0}
+_frame_kayip_kilit = _ai_threading.Lock()
 # 3. tur denetimi — WEB KAPALI-DÖNGÜ (2026-08-25): web/sunucu-kameralı yolda öneri ÖNCESİ
 # lokalizasyon için HAZIRLIK önizleme loop'u. Kamerayı açar + seçili organı periyodik lokalize
 # eder (cache'i günceller) ama BOBİN SÜRMEZ ve SEANS BAŞLATMAZ. Gerçek seans (/ai/pro/start)
@@ -877,11 +881,24 @@ def _extract_organ_target(organs_by_id, organ_id, overlay):
     coord = o.get("coord_cabin_cm") or o.get("coord_3d_cm") or [0.0, 0.0, 0.0]
     rel = float(o.get("reliability") or 0.0)
     dokum = o.get("reliability_components") if isinstance(o.get("reliability_components"), dict) else None
+    # ⚠️ D1.85 (B-5.11): kabin DIŞI ya da sonlu olmayan hedef REDDEDİLİR (WARNING) — kıskaçtan ÖNCE. Eskiden aşağıdaki
+    # ±300 mm kıskacı onu kabin kenarına çekip SÜRÜYORDU (Y/Z kabin sınırı 250 mm; NaN → 300 mm). Kabin sınırı kabin
+    # yapılandırmasından (`ai_pro_hedef.kabin_yari_boyut_mm`). Reddedilen hedef "bulunamadı"dır → döngü/`/frame` hedef
+    # kaybı kuralıyla bobinleri durdurur (İG-5.1).
+    try:
+        ham_mm = tuple(float(v) * 10.0 for v in coord[:3])
+    except (TypeError, ValueError):
+        ham_mm = (float("nan"),) * 3
+    _neden = ai_pro_hedef.hedef_kabin_disi_nedeni(*ham_mm) if len(ham_mm) == 3 else "kabin denetimi: eksik koordinat"
+    if _neden:
+        logger.warning("AI Pro hedefi kabin/geçerlilik denetiminde REDDEDİLDİ (organ %s): %s", organ_id, _neden)
+        return False, 0.0, 0.0, 0.0, rel, overlay, kedi_var, dokum
 
     def _mm(v):
-        return max(-300.0, min(300.0, float(v) * 10.0))  # cm→mm + em_kedi aralığı
+        # em_kedi eğitim aralığı ±300 mm. Kabin İÇİNDE kalan tek kısılan bant x ∈ (300, 325] mm (bkz. rapor, Açık).
+        return max(-300.0, min(300.0, v))
 
-    return (rel >= _MIN_RELIABILITY), _mm(coord[0]), _mm(coord[1]), _mm(coord[2]), rel, overlay, kedi_var, dokum
+    return (rel >= _MIN_RELIABILITY), _mm(ham_mm[0]), _mm(ham_mm[1]), _mm(ham_mm[2]), rel, overlay, kedi_var, dokum
 
 
 # E3-b (denetim 2026-08-24): cat_organ SEGMENTASYON aşaması başarısız olursa (kedi kadrajda YOK)
@@ -2513,6 +2530,40 @@ def ai_pro_status():
     }
 
 
+def _frame_hedef_durumu(muhur, bulundu: bool) -> bool:
+    """İG-5.1: `/frame` hedef durumunu kare kare sayar; ARDIŞIK `_AI_LOST_STOP_STREAK` kayıpta True (STOP zamanı).
+
+    ⚠️ ÖLÇÜLDÜ: `/frame`'de hedef kaybının (`localized:false`) else dalı yoktu — 70 sn kedisiz karede telde 159 duty>0
+    paket, STOP 0; son sürüşten 65,8 sn sonra hâlâ enerjili (sürüş deadline'a dek keep-alive ile sürüyordu).
+    Döngünün kuralıyla AYNI: tek kare kaybında durdurmaz (tespit anlık sekebilir); hedef yeniden bulununca sayaç
+    sıfırlanır ve sürüş sürer — seans BİTMEZ, sürüş yetkisi (nesil) kesilmez."""
+    with _frame_kayip_kilit:
+        if _frame_kayip["onay"] != muhur["onay"]:
+            _frame_kayip.update(onay=muhur["onay"], seri=0)
+        if bulundu:
+            _frame_kayip["seri"] = 0
+            return False
+        _frame_kayip["seri"] += 1
+        return _frame_kayip["seri"] == _AI_LOST_STOP_STREAK
+
+
+async def _frame_kayip_stopu(neden: str) -> None:
+    """İG-5.1: AI'nın sürdüğü bobinlere STOP (döngünün hedef-kaybı durdurmasıyla aynı kapsam). STOP yalnız artar (Ö.4-Y8)."""
+    try:
+        import servers.api_server as _apx
+
+        _teyitsiz = await asyncio.to_thread(_apx._stop_session_coils, range(1, 8))
+        _apx._bildir_teyitsiz_stop(_teyitsiz, "AI Pro hedef-kaybı durdurması (mobil kare)")
+    except Exception:
+        logger.exception("AI Pro /frame: hedef-kayıp STOP hatası")
+    logger.warning(
+        "AI Pro /frame: hedef %d ardışık karedir bulunamadı (%s) → bobinler DURDURULDU (hedef yeniden bulunursa sürüş "
+        "sürer).",
+        _AI_LOST_STOP_STREAK,
+        neden,
+    )
+
+
 @ai_router.post("/api/ai/ai_pro/frame")
 async def ai_pro_frame(
     file: UploadFile = File(None),
@@ -2558,7 +2609,17 @@ async def ai_pro_frame(
             _oid = _ai_organ_id
             _ai_relocalize = False
             # *l_ek: 8. eleman guven_dokumu (2026-08-26) — geriye-uyumlu acilim (7'li tuple'da None).
-            lz, lx, ly, lzz, lrel, lov, lkedi, *l_ek = await asyncio.to_thread(_localize_organ, img, _oid)
+            try:
+                lz, lx, ly, lzz, lrel, lov, lkedi, *l_ek = await asyncio.to_thread(_localize_organ, img, _oid)
+            except Exception:
+                # ⚠️ İG-5.1 (istisna kolu): lokalizasyon hatası (ör. fantom karesi → pose/PnP) = hedef KAYBI. Ölçüldü:
+                # yanıt 500 dönüyor (12/12), cache ESKİ "bulundu" kalıyor ve STOP yok — enerji sürüyordu. Döngüyle aynı:
+                # cache geçersiz kılınır ve kayıp sayılır (N'de STOP); yanıt eskisi gibi hata döner (istemci görsün).
+                with _ai_cache_lock:
+                    _ai_organ_cache["localized"] = False
+                if _muhur is not None and not is_foreign and _frame_hedef_durumu(_muhur, False):
+                    await _frame_kayip_stopu("lokalizasyon hatası")
+                raise
             with _ai_cache_lock:
                 _ai_organ_cache.update(
                     {
@@ -2608,6 +2669,11 @@ async def ai_pro_frame(
         except Exception:
             logger.exception("ai_pro_frame: aktif-seans kontrolü hatası")
             session_active = False
+
+        # İG-5.1: sürülebilir seansta SAHİBİN karesi hedefi kaybettiyse kayıp sayılır; ARDIŞIK N kayıpta AI'nın sürdüğü
+        # bobinlere STOP (döngünün `_lost_streak` kuralı). Yabancı kare sayılmaz (sahibin seansını durdurtamaz).
+        if session_active and not is_foreign and _frame_hedef_durumu(_muhur, bool(localized)):
+            await _frame_kayip_stopu("hedef bulunamadı")
 
         D, P, e_field = [0.0] * 7, [0.0] * 7, 0.0
         _surdu = False
