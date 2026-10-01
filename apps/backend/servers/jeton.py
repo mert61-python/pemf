@@ -48,9 +48,25 @@ def _flag(name: str, default: bool = False) -> bool:
     return os.getenv(name, "1" if default else "0").strip().lower() in ("1", "true", "yes", "on")
 
 
+def _sayi(name: str, default, tip=int):
+    """Sayısal bayrak; BOZUK değer (ör. 'elli', '4,5') VARSAYILANA düşer ve uyarı yazılır.
+
+    ⚠️ D1.14 (B-2.17): eskiden modül düzeyinde `int(os.getenv(...))` ValueError atıyordu →
+    `ai_router` → `api_server` içe aktarımı ölüyor, backend (dolayısıyla ACİL DURDUR ucu) HİÇ
+    açılmıyordu. Ticari bir ayarın yazım hatası E-stop'un VAR OLMASINI belirleyemez (Ö.4-Y8 ruhu)."""
+    ham = (os.getenv(name) or "").strip()
+    if not ham:
+        return default
+    try:
+        return tip(ham)
+    except ValueError:
+        logger.warning("Gecersiz %s=%r -> varsayilan %r kullaniliyor", name, ham, default)
+        return default
+
+
 # ── Yapılandırma ────────────────────────────────────────────────────────────
 JETON_ENFORCED: bool = _flag("PEMF_JETON_ENFORCED", False)
-OFFLINE_TAVAN: int = max(0, int(os.getenv("PEMF_JETON_OFFLINE_TAVAN", "50") or 50))
+OFFLINE_TAVAN: int = max(0, _sayi("PEMF_JETON_OFFLINE_TAVAN", 50))
 
 # KULLANDIKÇA ÖDE (sahip isteği 2026-08-20): önden ödeme/jeton alımı OLMAYAN üyelik. Aylık ücret
 # yok; harcanan jeton birikir ve dönem sonunda (ya da eşik aşılınca) faturalanır. Hiç kullanılmazsa
@@ -58,7 +74,7 @@ OFFLINE_TAVAN: int = max(0, int(os.getenv("PEMF_JETON_OFFLINE_TAVAN", "50") or 5
 #
 # ⚠️ Neden tavan var: ödeme alınamayan sınırsız kullanım (kartı düşen/vazgeçen hesap) riski.
 # Tavan TİCARİ bir sınırdır — aşılsa bile tedavi yolu serbest kalır (aşağıdaki GUVENLIK_YOLLARI).
-BORC_TAVANI: int = max(0, int(os.getenv("PEMF_JETON_BORC_TAVANI", "300") or 300))
+BORC_TAVANI: int = max(0, _sayi("PEMF_JETON_BORC_TAVANI", 300))
 
 # ⚠️ TEK KAYNAK EŞLEŞMESİ: bu tablo `apps/web/src/config.ts::JETON.maliyet` ile BİREBİR
 # aynı olmalıdır — kullanıcı sitede "1 jeton" okuyup cihazda 3 harcarsa güven biter.
@@ -268,7 +284,7 @@ class JetonYoneticisi:
 
 from fastapi import HTTPException, Request  # noqa: E402  (bölüm-yerel import, üst blok dokunulmadı)
 
-_SUPABASE_TIMEOUT: float = max(1.0, float(os.getenv("PEMF_JETON_TIMEOUT", "4") or "4"))
+_SUPABASE_TIMEOUT: float = max(1.0, _sayi("PEMF_JETON_TIMEOUT", 4.0, float))
 
 
 def _bearer_token(request: Request) -> str:

@@ -39,6 +39,22 @@ def _flag(name: str, default: bool = False) -> bool:
     return os.getenv(name, "1" if default else "0").strip().lower() in ("1", "true", "yes", "on")
 
 
+def _sayi(name: str, default, tip=int):
+    """Sayısal bayrak; BOZUK değer (ör. 'bir', '4,5') VARSAYILANA düşer ve uyarı yazılır.
+
+    ⚠️ D1.14 (B-2.17): eskiden modül düzeyinde `int/float(os.getenv(...))` ValueError atıyordu →
+    `ai_router` → `api_server` içe aktarımı ölüyor, backend (dolayısıyla ACİL DURDUR ucu) HİÇ
+    açılmıyordu. Kuyruk/abonelik ayarının yazım hatası E-stop'un VAR OLMASINI belirleyemez."""
+    ham = (os.getenv(name) or "").strip()
+    if not ham:
+        return default
+    try:
+        return tip(ham)
+    except ValueError:
+        logger.warning("Gecersiz %s=%r -> varsayilan %r kullaniliyor", name, ham, default)
+        return default
+
+
 # ── Yapılandırma (env) ──────────────────────────────────────────────────────
 # Enforcement ana anahtarı — Supabase + Stripe hazır olana kadar KAPALI.
 TIER_ENFORCED: bool = _flag("PEMF_TIER_ENFORCED", False)
@@ -62,12 +78,12 @@ if DEFAULT_TIER not in VALID_TIERS:
     DEFAULT_TIER = "pro_plus"
 
 # Non-realtime (Pro/Başlangıç) eşzamanlı AI limiti — üstündeki istekler bekler (= kuyruk). Pro+ bypass.
-AI_QUEUE_CONCURRENCY: int = max(1, int(os.getenv("PEMF_AI_QUEUE_CONCURRENCY", "1") or "1"))
+AI_QUEUE_CONCURRENCY: int = max(1, _sayi("PEMF_AI_QUEUE_CONCURRENCY", 1))
 # Kuyrukta MAKS bekleme (sn) — aşılırsa fail-open (ağır analiz bile süresiz beklemesin — bulgu #1). 0=sınırsız.
-AI_QUEUE_MAX_WAIT: float = max(0.0, float(os.getenv("PEMF_AI_QUEUE_MAX_WAIT", "30") or "30"))
+AI_QUEUE_MAX_WAIT: float = max(0.0, _sayi("PEMF_AI_QUEUE_MAX_WAIT", 30.0, float))
 # Supabase doğrulama sonucu cache TTL (sn) + REST zaman aşımı (sn).
-_CACHE_TTL: float = max(5.0, float(os.getenv("PEMF_ENTITLEMENT_CACHE_TTL", "60") or "60"))
-_SUPABASE_TIMEOUT: float = max(1.0, float(os.getenv("PEMF_ENTITLEMENT_TIMEOUT", "4") or "4"))
+_CACHE_TTL: float = max(5.0, _sayi("PEMF_ENTITLEMENT_CACHE_TTL", 60.0, float))
+_SUPABASE_TIMEOUT: float = max(1.0, _sayi("PEMF_ENTITLEMENT_TIMEOUT", 4.0, float))
 
 # TEDAVİ kontrol/sürüş uçları ASLA kuyruğa girmez (tıbbi güvenlik — bulgu #1): AI Pro başlat/durdur/
 # durum/organ/kalibrasyon + gerçek-zamanlı sürüş döngüsü (ai_pro/frame) + bobin süren landmark.

@@ -16,7 +16,15 @@ import httpx
 logger = logging.getLogger("ai_client")
 
 AI_SERVICE_URL = os.environ.get("PEMF_AI_SERVICE_URL", "").rstrip("/")
-_TIMEOUT = float(os.environ.get("PEMF_AI_SERVICE_TIMEOUT", "180"))
+# ⚠️ D1.14 (B-2.17): BOZUK değer (ör. 'yuzseksen') eskiden modül içe aktarımında ValueError atıyordu
+# → `ai_router` → `api_server` ölüyor, backend (dolayısıyla ACİL DURDUR ucu) HİÇ açılmıyordu.
+try:
+    _TIMEOUT = float(os.environ.get("PEMF_AI_SERVICE_TIMEOUT", "180").strip() or "180")
+except ValueError:
+    logger.warning(
+        "Gecersiz PEMF_AI_SERVICE_TIMEOUT=%r -> varsayilan 180 sn", os.environ.get("PEMF_AI_SERVICE_TIMEOUT")
+    )
+    _TIMEOUT = 180.0
 
 
 def ai_service_enabled() -> bool:
