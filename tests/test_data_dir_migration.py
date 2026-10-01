@@ -129,6 +129,39 @@ def test_KRITIK_goc_hatasi_BACKENDI_DUSURMEZ(ortam, monkeypatch):
     _goc(monkeypatch, eski_kok, hedef)  # istisna SIZMAMALI
 
 
+def test_KRITIK_tek_dosya_kopyalanamazsa_DIGERLERI_yine_TASINIR(ortam, monkeypatch):
+    """D1.20 (B-10.118): KURAL "tek dosya kopyalanamazsa diğerleri denenir". Sıradaki İLK dosya
+    (`pemf_treatment_history.db`) kopyalanamazken hasta ve kullanıcı DB'leri YİNE taşınmalı — yoksa
+    vardiyalı klinik "boş klinik" görür. Yukarıdaki test yalnız istisna sızmasına bakıyor
+    (assert'siz): iç `try` kaldırılınca (ilk hatada göç durur) YEŞİL kalıyordu."""
+    import shutil
+    from pathlib import Path
+
+    eski_kok, eski, hedef = ortam
+    icerik = {"pemf_treatment_history.db": b"SEANS", "patients.db": b"HASTALAR", "auth_users.db": b"KULLANICILAR"}
+    for ad, ic in icerik.items():
+        (eski / ad).write_bytes(_duz_db(ic))
+    gercek = shutil.copy2
+    denenen: list[str] = []
+
+    def secici(kaynak, varis, *a, **k):
+        denenen.append(Path(kaynak).name)
+        if Path(kaynak).name == "pemf_treatment_history.db":
+            raise OSError("izin yok (test)")
+        return gercek(kaynak, varis, *a, **k)
+
+    monkeypatch.setattr(shutil, "copy2", secici)
+    _goc(monkeypatch, eski_kok, hedef)  # istisna SIZMAMALI
+
+    assert denenen and denenen[0] == "pemf_treatment_history.db", f"senaryo kurulamadı (ilk denenen): {denenen}"
+    assert not (hedef / "pemf_treatment_history.db").exists()
+    assert (hedef / "patients.db").read_bytes() == _duz_db(b"HASTALAR"), (
+        "ilk dosyanın kopyalanamaması HASTA DB göçünü DURDURDU — klinik boş görünür"
+    )
+    assert (hedef / "auth_users.db").read_bytes() == _duz_db(b"KULLANICILAR")
+    assert (eski / "pemf_treatment_history.db").read_bytes() == _duz_db(b"SEANS"), "kaynak silinmemeli"
+
+
 def test_get_app_data_directory_override_ile_goc_TETIKLER(tmp_path, monkeypatch):
     """Uçtan uca: `PEMF_DATA_DIR` verildiğinde göç gerçekten çalışıyor mu."""
     from utils.path_utils import get_app_data_directory
