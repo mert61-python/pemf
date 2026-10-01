@@ -55,11 +55,12 @@ def test_KRITIK_update_coil_duty_PAKETE_AYNEN_gider(bobin_kumesi, duty):
     )
 
 
-def test_KRITIK_Y20_bipolar_tavan_USTU_duty_update_coil_backendden_AYNEN_gecer():
+@pytest.mark.parametrize("bobin", sorted({_BIPOLAR[0], _BIPOLAR[-1]}))
+def test_KRITIK_Y20_bipolar_tavan_USTU_duty_update_coil_backendden_AYNEN_gecer(bobin):
     """Bağımsız inceleme (r2): bipolar kol yalnız tavan ALTI (40) kullanıyordu — YALNIZ bipolar bobinlere
     backend tavanı (`min(duty, 0.45)`) eklense kapı yeşil kalıyordu. Y20 tam bunu yasaklar: tavan üstünü
-    firmware NACK'ler (D1.101), backend kırpmaz."""
-    bobin = _BIPOLAR[0]
+    firmware NACK'ler (D1.101), backend kırpmaz. 1-B inceleme (i7): yalnız `_BIPOLAR[0]` ölçülüyordu — ilk ve
+    son bipolar bobin."""
     with gercek_hc() as hc:
         assert hc.update_coil(bobin, 100.0, 90.0, 0.0, duration=1) is True
         paket_duty = paket_coz(hc.core._hw_send_queue.paketler[-1])[0][bobin - 1]
@@ -253,3 +254,37 @@ def test_KRITIK_ESP_toplu_kontrol_duty_AYNEN_frekans_TASIYICI_sinirda(esp_ortami
     assert yuk["freq"] == pytest.approx(1000.0), (
         f"batch ESP yayınında freq {yuk['freq']} — taşıyıcı ESP protokol sınırı kaldırılmış (8266 REDDEDER)"
     )
+
+
+# ── 1-B inceleme (i7): STM API katmanı — `/api/coil/{id}/control` ve `/api/coil/batch` STM dalları ────────
+# Plan D1.10'un mutasyon beklentisi "API katmanına `duty=min(duty,50)` → KIRMIZI" idi; r2 düzeltmesi batch'in
+# yalnız ESP dalını kapatmıştı. İki STM dalına `min(payload.duty, 50.0)` konunca TAM SÜİT yeşildi (tekil uçtaki
+# mevcut testler duty 25 kullanıyor — tavanın altı). Unipolar (Y9) ve bipolar tavan üstü (Y20) iki uçta da.
+
+
+def _stm_api_istegi(istemci, uc: str, bobin: int, duty: float):
+    if uc == "tekil":
+        return istemci.post(
+            f"/api/coil/{bobin}/control",
+            json={"freq": 100.0, "duty": duty, "phase": 0.0, "duration": 1, "start": True},
+        )
+    return istemci.post(
+        "/api/coil/batch",
+        json={"coil_ids": [bobin], "freq": 100.0, "duty": duty, "phase": 0.0, "duration": 60, "start": True},
+    )
+
+
+@pytest.mark.parametrize("uc", ["tekil", "batch"])
+@pytest.mark.parametrize("kip", ["unipolar_Y9", "bipolar_Y20"])
+def test_KRITIK_STM_API_duty_PAKETE_AYNEN_gider(seans_ortami, uc, kip):
+    istemci, _db, hc = seans_ortami
+    bobin = (_UNIPOLAR if kip == "unipolar_Y9" else _BIPOLAR)[0]
+    r = _stm_api_istegi(istemci, uc, bobin, 90.0)
+    assert r.status_code == 200, r.text[:300]
+    paket_duty = paket_coz(hc.core._hw_send_queue.paketler[-1])[0][bobin - 1]
+    assert paket_duty == pytest.approx(0.90), (
+        f"{uc} STM ucu ({kip}) bobin {bobin}: duty 90 → pakette {paket_duty * 100:.1f} — API katmanına duty "
+        "tavanı EKLENMİŞ (Ö.4-Y9/Y20: tek sınır firmware)"
+    )
+    # Koşu kaydı İDDİA EDİLMEZ: seans dışı bu iki uç `session_coil_runs` açmıyor (1-B'de ölçüldü: iki uçta da
+    # `[]`) — "kayıt 90" iddiası boş kümede KÖR olurdu. Seans yolundaki kayıt yukarıdaki kollarda ölçülür.
