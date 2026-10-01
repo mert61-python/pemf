@@ -43,13 +43,19 @@ __all__ = ["dongu_hatasini_bildir"]
 
 def dongu_hatasini_bildir(
     mesaj: str,
-    *,
+    *args,
     logger: logging.Logger | None = None,
     seviye: int = logging.ERROR,
+    exc_info: bool = True,
 ) -> str:
     """Sonsuz döngünün yakaladığı hatayı bildirir ve **HİÇBİR KOŞULDA fırlatmaz**.
 
     `except Exception:` bloğunun İÇİNDEN çağrılmalıdır — geçerli istisnayı kendisi okur.
+
+    `*args` logging'in `%` biçim argümanlarıdır (biçimleme logging'e bırakılır — çağrı yerindeki
+    `logger.warning("... %s", e)` AYNEN taşınır). `exc_info=False`: logger kaydı yığın izi
+    TAŞIMAZ (eski çağrı da taşımıyorsa günlük içeriği değişmesin — D1.18). Son çare (stderr)
+    kanalı yığın izini her durumda basar: oraya düşüldüyse günlük zaten çalışmıyordur.
 
     Dönüş: hangi kanalın çalıştığı — ``"logger"`` · ``"stderr"`` · ``"sessiz"``.
     Dönüş değeri test edilebilirlik içindir; çağıran okumak zorunda değildir.
@@ -59,7 +65,7 @@ def dongu_hatasini_bildir(
     bilgi = sys.exc_info()
 
     try:
-        (logger or logging.getLogger(__name__)).log(seviye, mesaj, exc_info=bilgi)
+        (logger or logging.getLogger(__name__)).log(seviye, mesaj, *args, exc_info=bilgi if exc_info else False)
         return "logger"
     except Exception:
         pass
@@ -69,7 +75,11 @@ def dongu_hatasini_bildir(
     try:
         akis = sys.__stderr__
         if akis is not None:
-            print(f"[DONGU HATASI] {mesaj}  (logging BASARISIZ)", file=akis)
+            try:
+                metin = mesaj % args if args else mesaj
+            except Exception:
+                metin = f"{mesaj} {args!r}"
+            print(f"[DONGU HATASI] {metin}  (logging BASARISIZ)", file=akis)
             if bilgi[0] is not None:
                 traceback.print_exception(bilgi[0], bilgi[1], bilgi[2], file=akis)
             akis.flush()

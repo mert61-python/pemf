@@ -27,6 +27,8 @@ import threading
 import time
 from typing import Optional
 
+from utils.dongu_guvenligi import dongu_hatasini_bildir
+
 logger = logging.getLogger(__name__)
 
 # mDNS servis adı — tüm cihazlar bu adı arar
@@ -274,12 +276,18 @@ class MDNSService:
                     hata_sayisi = 0
                 except Exception:
                     hata_sayisi += 1
+                    # D1.18 (B-4.17): bu bildirimler fırlatırsa mDNS izleyicisi süreç ömrü boyunca ölürdü.
                     if hata_sayisi == 1:
-                        logger.exception("mDNS arka plan kurulum hatasi (30 sn'de bir yeniden denenecek):")
+                        dongu_hatasini_bildir(
+                            "mDNS arka plan kurulum hatasi (30 sn'de bir yeniden denenecek):", logger=logger
+                        )
                     elif hata_sayisi % 10 == 0:
-                        logger.warning(
+                        dongu_hatasini_bildir(
                             "mDNS kurulumu hala basarisiz (%d. deneme) - arayuz monitoru CALISIYOR.",
                             hata_sayisi,
+                            logger=logger,
+                            seviye=logging.WARNING,
+                            exc_info=False,
                         )
 
             try:
@@ -306,7 +314,7 @@ class MDNSService:
 
             except Exception as e:
                 if self._running:
-                    logger.error(f"mDNS arayüz-monitör hatası: {e}")
+                    dongu_hatasini_bildir("mDNS arayüz-monitör hatası: %s", e, logger=logger, exc_info=False)
 
     def _reregister_mqtt(self) -> None:
         """Zeroconf arayüz/IP değişimiyle YENİDEN yaratıldığında _mqtt servisini yeni instance'a

@@ -31,6 +31,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from utils.dongu_guvenligi import dongu_hatasini_bildir
+
 logger = logging.getLogger(__name__)
 
 # exe branch manifest'i (mobil ayrı branch'te; karışmaz). raw.githubusercontent → API rate-limit yok.
@@ -748,7 +750,7 @@ def start_update_checker(interval_sec: int = 6 * 3600) -> None:
                         "Yeni backend sürümü mevcut: %s (kurulu %s)", r.get("latestVersion"), r.get("currentVersion")
                     )
             except Exception:
-                logger.exception("update checker döngü hatası")
+                dongu_hatasini_bildir("update checker döngü hatası", logger=logger)  # D1.18 (B-4.17)
             _stop.wait(interval_sec)
 
     _check_thread = threading.Thread(target=_loop, daemon=True, name="PemfUpdateChecker")

@@ -15,6 +15,7 @@ from typing import Optional
 from database.patient_database import get_patient_database
 from database.sqlcipher_util import dict_satir_fabrikasi
 from database.treatment_history_db import get_treatment_db
+from utils.dongu_guvenligi import dongu_hatasini_bildir
 
 logger = logging.getLogger(__name__)
 
@@ -229,14 +230,17 @@ class CloudSyncWorker:
                 if not self._publish_device_registry():
                     ok = False
             except Exception as e:
-                logger.debug(f"Device registry publish hatasi: {e}")
+                # D1.18 (B-4.17): bildirim fırlatırsa cihaz kaydı/uzaktan erişim yayını süreç ömrü boyunca ölürdü.
+                dongu_hatasini_bildir(
+                    "Device registry publish hatasi: %s", e, logger=logger, seviye=logging.DEBUG, exc_info=False
+                )
                 ok = False
             if self.patient_sync_enabled:
                 try:
                     self._sync_patients(patient_db)
                     self._sync_sessions(session_db)
                 except Exception as e:
-                    logger.error(f"Sync sirasinda beklenmeyen hata: {e}")
+                    dongu_hatasini_bildir("Sync sirasinda beklenmeyen hata: %s", e, logger=logger, exc_info=False)
                     ok = False
 
             # BACKOFF (reconnect-audit): başarılı→interval_sec'e SIFIRLA; ağ-down→×2 (üst 300sn) → uzun

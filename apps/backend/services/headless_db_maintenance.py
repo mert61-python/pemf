@@ -14,6 +14,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from utils.dongu_guvenligi import dongu_hatasini_bildir
+
 logger = logging.getLogger(__name__)
 
 # DENETIM P2: off-machine yedeklerin YANINA birakilan kurtarma notu. Kurtarma anindaki kisi
@@ -127,7 +129,8 @@ class HeadlessDBMaintenance:
                 elif first:
                     logger.info("Acilis yedegi ATLANDI: diskte taze yedek var (restart-dongusu korumasi).")
             except Exception:
-                logger.exception("DB bakim turu hatasi")
+                # D1.18 (B-4.17): bildirim fırlatırsa bakım/yedek/disk denetimi süreç ömrü boyunca ölürdü.
+                dongu_hatasini_bildir("DB bakim turu hatasi", logger=logger)
             first = False
             self._stop.wait(60)
 

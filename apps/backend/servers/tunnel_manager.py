@@ -24,6 +24,8 @@ import threading
 import urllib.request
 from pathlib import Path
 
+from utils.dongu_guvenligi import dongu_hatasini_bildir
+
 logger = logging.getLogger(__name__)
 
 # ── Durum ──────────────────────────────────────────────────────────────────────
@@ -425,7 +427,8 @@ def start_tunnel_watchdog(port: int = 8000, check_interval: int = 20) -> None:
                     _watchdog_stop.wait(backoff)
                     backoff = min(backoff * 2, max_backoff)
             except Exception:
-                logger.exception("Tünel watchdog döngü hatası (devam ediliyor).")
+                # D1.18 (B-4.17): bildirim fırlatırsa uzaktan erişim tüneli süreç ömrü boyunca ölürdü.
+                dongu_hatasini_bildir("Tünel watchdog döngü hatası (devam ediliyor).", logger=logger)
                 _watchdog_stop.wait(check_interval)
 
     _watchdog_thread = threading.Thread(target=_loop, daemon=True, name="CloudflareTunnelWatchdog")

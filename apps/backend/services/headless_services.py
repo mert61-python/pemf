@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from event_bus import EventPriority, get_event_bus
+from utils.dongu_guvenligi import dongu_hatasini_bildir
 
 logger = logging.getLogger(__name__)
 
@@ -291,7 +292,10 @@ class MosquittoSupervisor:
                 else:
                     fails = 0
             except Exception as exc:
-                logger.warning("Mosquitto monitor error: %s", exc)
+                # D1.18 (B-4.17): bildirim fırlatırsa broker gözetimi süreç ömrü boyunca ölürdü.
+                dongu_hatasini_bildir(
+                    "Mosquitto monitor error: %s", exc, logger=logger, seviye=logging.WARNING, exc_info=False
+                )
             self._stop_event.wait(self.interval_seconds)
 
     def _mosquitto_bundle_dirs(self) -> list[Path]:
@@ -527,7 +531,9 @@ class NetworkStatusService:
             try:
                 self.check_once()
             except Exception as exc:
-                logger.warning("Network monitor error: %s", exc)
+                dongu_hatasini_bildir(  # D1.18 (B-4.17)
+                    "Network monitor error: %s", exc, logger=logger, seviye=logging.WARNING, exc_info=False
+                )
             self._stop_event.wait(self.interval_seconds)
 
     def _check_internet(self) -> bool:
@@ -722,7 +728,14 @@ class UdpDiscoveryService:
             self.logger.info("UDP kesif soketi yeniden kuruldu (port %s).", self.discovery_port)
             return True
         except Exception as exc:
-            self.logger.warning("UDP kesif soketi yeniden kurulamadi: %s", exc)
+            # D1.18: döngünün except yolundan çağrılır — buradaki bildirim de döngüyü öldüremez.
+            dongu_hatasini_bildir(
+                "UDP kesif soketi yeniden kurulamadi: %s",
+                exc,
+                logger=self.logger,
+                seviye=logging.WARNING,
+                exc_info=False,
+            )
             return False
 
     def _run(self) -> None:
@@ -745,7 +758,13 @@ class UdpDiscoveryService:
                     # hatasi (ag arayuzu degisimi, hotspot yeniden kurulmasi, uyku/uyanma)
                     # kesif servisini surec omru boyunca kapatiyordu; yeniden baslatma YOK.
                     # Soketi yeniden kurmayi dene; olmazsa kisa bekleyip tekrar dene.
-                    self.logger.warning("UDP kesif soket hatasi: %s → soket yeniden kuruluyor.", _oe)
+                    dongu_hatasini_bildir(  # D1.18 (B-4.17)
+                        "UDP kesif soket hatasi: %s → soket yeniden kuruluyor.",
+                        _oe,
+                        logger=self.logger,
+                        seviye=logging.WARNING,
+                        exc_info=False,
+                    )
                     if not self._reopen_socket():
                         if self._stop_event.wait(5.0):
                             break
