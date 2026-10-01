@@ -184,14 +184,9 @@ def _sonsuz_mu(d: ast.While) -> bool:
 _LOG_METOTLARI = frozenset({"debug", "info", "warning", "warn", "error", "exception", "critical", "log"})
 
 
-def _log_cagrisi(c: ast.AST) -> str | None:
-    """Günlük çağrısıysa yolunu döndürür. Ölçüt: metot bir logging metodu VE alıcı ifadesinin adında
-    'log' geçer — `logging.x`, `log.x`, `logger.x`, `self.logger.x`, `self._log.x`, `_LOG.x`,
-    `logging.getLogger(__name__).x` (eskiden yalnız sabit kök adları: `self.logger` GÖRÜNMÜYORDU)."""
-    if not isinstance(c, ast.Call) or not isinstance(c.func, ast.Attribute) or c.func.attr not in _LOG_METOTLARI:
-        return None
+def _alici_metni(f: ast.AST) -> str | None:
+    """`self.logger` / `logging.getLogger(...)` gibi alıcı ifadesinin noktalı metni (çağrı argümanları hariç)."""
     parcalar: list[str] = []
-    f = c.func.value
     while True:
         if isinstance(f, ast.Attribute):
             parcalar.append(f.attr)
@@ -200,11 +195,35 @@ def _log_cagrisi(c: ast.AST) -> str | None:
             f = f.func
         elif isinstance(f, ast.Name):
             parcalar.append(f.id)
-            break
+            return ".".join(reversed(parcalar))
         else:
             return None
-    alici = ".".join(reversed(parcalar))
-    return f"{alici}.{c.func.attr}" if "log" in alici.lower() else None
+
+
+def _log_cagrisi(c: ast.AST, takma_adlar: frozenset[str] = frozenset()) -> str | None:
+    """Günlük çağrısıysa yolunu döndürür. Ölçüt: metot bir logging metodu VE alıcı ifadesinin adında
+    'log' geçer — `logging.x`, `log.x`, `logger.x`, `self.logger.x`, `self._log.x`, `_LOG.x`,
+    `logging.getLogger(__name__).x` (eskiden yalnız sabit kök adları: `self.logger` GÖRÜNMÜYORDU) — YA DA
+    alıcının kökü bir logger TAKMA ADIDIR (`lg = self.logger`; bağımsız inceleme r4)."""
+    if not isinstance(c, ast.Call) or not isinstance(c.func, ast.Attribute) or c.func.attr not in _LOG_METOTLARI:
+        return None
+    alici = _alici_metni(c.func.value)
+    if alici is None:
+        return None
+    if "log" in alici.lower() or alici.split(".")[0] in takma_adlar:
+        return f"{alici}.{c.func.attr}"
+    return None
+
+
+def _logger_takma_adlari(agac: ast.AST) -> frozenset[str]:
+    """Dosyadaki `ad = <logger ifadesi>` atamaları (`lg = self.logger`, `x = logging.getLogger(...)`)."""
+    adlar: set[str] = set()
+    for d in ast.walk(agac):
+        if isinstance(d, ast.Assign) and len(d.targets) == 1 and isinstance(d.targets[0], ast.Name):
+            metin = _alici_metni(d.value)
+            if metin and "log" in metin.lower():
+                adlar.add(d.targets[0].id)
+    return frozenset(adlar)
 
 
 def _genis_try(t: ast.Try) -> bool:
@@ -219,13 +238,15 @@ def _genis_try(t: ast.Try) -> bool:
     return False
 
 
-_GOVDE_ALANLARI = ("body", "orelse", "handlers", "finalbody")
+_GOVDE_ALANLARI = ("body", "orelse", "handlers", "finalbody", "cases")
 
 
 _DONGUYU_BITIREN = (ast.Break, ast.Return, ast.Raise)
 
 
-def _korumasiz_bildirimler(govde: list[ast.stmt], korunan: bool, bulgu: list) -> None:
+def _korumasiz_bildirimler(
+    govde: list[ast.stmt], korunan: bool, bulgu: list, takma_adlar: frozenset[str] = frozenset()
+) -> None:
     """Döngü gövdesini İÇ İÇE yürür: döngü gövdesi içinde geniş bir `try` GÖVDESİYLE sarılmamış (korunan
     değil) her günlük çağrısı bulgudur — fırlarsa istisna döngüden çıkar. ⚠️ Bağımsız inceleme (r4):
     eskiden yalnız `except` gövdeleri taranıyordu; HWSender'ın NORMAL yolundaki (kablo-çıktı dalı)
@@ -237,12 +258,15 @@ def _korumasiz_bildirimler(govde: list[ast.stmt], korunan: bool, bulgu: list) ->
         if isinstance(st, ast.While) and _sonsuz_mu(st):
             continue
         if isinstance(st, ast.Try):
-            _korumasiz_bildirimler(st.body, korunan or _genis_try(st), bulgu)
+            _korumasiz_bildirimler(st.body, korunan or _genis_try(st), bulgu, takma_adlar)
             for h in st.handlers:
-                _korumasiz_bildirimler(h.body, korunan, bulgu)
-            _korumasiz_bildirimler(st.orelse, korunan, bulgu)
-            _korumasiz_bildirimler(st.finalbody, korunan, bulgu)
+                _korumasiz_bildirimler(h.body, korunan, bulgu, takma_adlar)
+            _korumasiz_bildirimler(st.orelse, korunan, bulgu, takma_adlar)
+            _korumasiz_bildirimler(st.finalbody, korunan, bulgu, takma_adlar)
             continue
+        if isinstance(st, ast.Match):  # bağımsız inceleme (r4): `case` gövdeleri de yürünür
+            for vaka in st.cases:
+                _korumasiz_bildirimler(vaka.body, korunan, bulgu, takma_adlar)
         sonraki = govde[i + 1] if i + 1 < len(govde) else None
         if not korunan and not isinstance(sonraki, _DONGUYU_BITIREN):
             for alan, deger in ast.iter_fields(st):
@@ -252,13 +276,13 @@ def _korumasiz_bildirimler(govde: list[ast.stmt], korunan: bool, bulgu: list) ->
                     if not isinstance(dugum, ast.AST):
                         continue
                     for c in ast.walk(dugum):
-                        yol = _log_cagrisi(c)
+                        yol = _log_cagrisi(c, takma_adlar)
                         if yol:
                             bulgu.append((c.lineno, [yol]))
         for alan in ("body", "orelse"):
             alt = getattr(st, alan, None)
             if isinstance(alt, list):
-                _korumasiz_bildirimler(alt, korunan, bulgu)
+                _korumasiz_bildirimler(alt, korunan, bulgu, takma_adlar)
 
 
 def _tara(kaynak: str) -> tuple[int, list[tuple[int, list[str]]]]:
@@ -269,11 +293,12 @@ def _tara(kaynak: str) -> tuple[int, list[tuple[int, list[str]]]]:
         return 0, []
     dongu = 0
     bulgu: list[tuple[int, list[str]]] = []
+    takma_adlar = _logger_takma_adlari(agac)
     for d in ast.walk(agac):
         if not isinstance(d, ast.While) or not _sonsuz_mu(d):
             continue
         dongu += 1
-        _korumasiz_bildirimler(d.body, False, bulgu)
+        _korumasiz_bildirimler(d.body, False, bulgu, takma_adlar)
     return dongu, bulgu
 
 
@@ -470,6 +495,49 @@ def test_KARSIT_KANIT_tarayici_NORMAL_yol_gunlugunu_GORUR_dongu_bitireni_MUAF_tu
         "            break\n"
     )
     assert _tara(bitiren) == (1, []), _tara(bitiren)
+
+
+def test_KARSIT_KANIT_tarayici_MATCH_CASE_ve_logger_TAKMA_ADINI_gorur():
+    """Bağımsız inceleme (r4): `match/case` içindeki handler ve `lg = self.logger` takma adı görünmüyordu.
+    `case` gövdesi İNİLEREK yürünür (eskiden `cases` alanı düz `ast.walk` ile taranıyordu: korunmuş ve
+    döngüyü bitiren bildirim de bulgu sayılıyordu — aşırı katı)."""
+    eslesme = (
+        "import logging\n"
+        "def d(x):\n"
+        "    while True:\n"
+        "        match x:\n"
+        "            case 1:\n"
+        "                try:\n"
+        "                    pass\n"
+        "                except Exception:\n"
+        "                    logging.error(\"x\")\n"
+    )
+    assert _tara(eslesme) == (1, [(9, ["logging.error"])]), _tara(eslesme)
+    korunmus = (
+        "import logging\n"
+        "def d(x):\n"
+        "    while True:\n"
+        "        match x:\n"
+        "            case 1:\n"
+        "                try:\n"
+        "                    logging.error(\"x\")\n"
+        "                except Exception:\n"
+        "                    pass\n"
+        "            case 2:\n"
+        "                logging.error(\"bitti\")\n"
+        "                break\n"
+    )
+    assert _tara(korunmus) == (1, []), _tara(korunmus)
+    takma = (
+        "def d(self):\n"
+        "    lg = self.logger\n"
+        "    while not self._stop.is_set():\n"
+        "        try:\n"
+        "            pass\n"
+        "        except Exception:\n"
+        "            lg.warning(\"x\")\n"
+    )
+    assert _tara(takma) == (1, [(7, ["lg.warning"])]), _tara(takma)
 
 
 def test_KARSIT_KANIT_dis_GENIS_try_ic_handleri_KORUR():
