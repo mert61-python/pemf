@@ -157,6 +157,12 @@ def test_KRITIK_import_sayaci_FK_kopyasini_DEGIL_eklenen_hastayi_verir(client):
     # Üç-sonuç ayrımı KORUNMALI: arayüz "0 hasta"nın anlamını bu alanlardan çözer.
     for alan in ("patient_db_zaten_vardi", "patient_db_basarisiz"):
         assert alan in c, f"üç-sonuç ayrımı kayboldu: '{alan}' yok"
+    # Bağımsız inceleme (r5): `patients == patient_db` iki alanı da AYNI değişkenden okur (döngüsel). Hedef
+    # dolu → GERÇEKTEN eklenen 0, paketteki her hasta "zaten vardı" — bağımsız gerçek değerle iddia edilir.
+    assert c["patient_db"] == 0 and c["patients"] == 0, f"hedef dolu iken 'eklenen' hasta {c}"
+    assert c["patient_db_zaten_vardi"] == paket["counts"]["patients"], (
+        f"zaten-var sayısı paketteki hasta sayısıyla tutmuyor: {c} / paket {paket['counts']}"
+    )
 
 
 def test_import_FK_kopyasi_ayri_ADLA_hala_raporlanir(client):
@@ -198,8 +204,11 @@ def test_KRITIK_import_yaniti_SEANS_ANALIZ_sayaclarini_ve_GERCEK_eklenen_hastayi
     assert not eksik, f"Arayüz bu sayaçları okuyor ama import dönmüyor → sessizce 0 gösterilir: {sorted(eksik)}"
     assert c["treatment_sessions"] == kaynak["treatment_sessions"], f"seans sayacı yalan: {c} / kaynak {kaynak}"
     assert c["ai_analyses"] == kaynak["ai_analyses"], f"analiz sayacı yalan: {c} / kaynak {kaynak}"
-    assert c["patients"] >= 1 and c["patients"] == c["patient_db"], (
-        f"silinen hasta geri eklendi ama 'patients' {c['patients']} (patient_db={c['patient_db']})"
+    # Bağımsız inceleme (r5): `patients == patient_db` döngüseldi (ikisi de `eklenen_hasta`); "zaten var" hasta
+    # "eklendi" sayılsa yeşil kalıyordu. TAM 1 hasta silindi → TAM 1 eklenir, kalanlar "zaten vardı".
+    assert c["patients"] == 1 and c["patient_db"] == 1, f"silinen TEK hasta geri eklendi ama sayaç {c}"
+    assert c["patient_db_zaten_vardi"] == kaynak["patients"] - 1, (
+        f"zaten-var sayısı {c['patient_db_zaten_vardi']} ≠ paketteki {kaynak['patients']} − 1"
     )
 
 
