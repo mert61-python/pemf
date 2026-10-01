@@ -123,10 +123,12 @@ MUAF: dict[tuple[str, str], tuple[int, str]] = {
         "apps/backend/database/sqlcipher_util.py",
         "migrate_to_encrypted_if_needed",
     ): (
-        2,
+        3,
         "(a) PROB: 'şifreli açılıyor mu' denemesi — başarısızlık BEKLENEN sinyaldir "
         "(açılmadı → göç et). (b) geri-alma sonrası `.enc.tmp` temizliği — sonraki göç "
-        "onu `_kilit_direncli_sil` ile zaten siler",
+        "onu `_kilit_direncli_sil` ile zaten siler. (c) `return  # bilinmeyen format -> DOKUNMA` "
+        "(D1.20 · B-10.157 genişletmesiyle görünür oldu): düz-metin olarak da açılamayan dosyaya "
+        "DOKUNULMAZ, göç atlanır — sahip kararı 'düz-metin DB karantina YOK'; raise'e ÇEVRİLMEZ",
     ),
     (
         "apps/backend/servers/ai_router.py",
@@ -151,8 +153,35 @@ MUAF: dict[tuple[str, str], tuple[int, str]] = {
 # ═════════════════════════════════════════════════════════════════════════════════════════
 
 
+def _sessiz_govde(govde: list[ast.stmt]) -> bool:
+    """Tek deyimli "hiçbir şey yapma" gövdesi: `pass`, `...`, `continue`, `return`, `return <sabit>`.
+
+    ⚠️ D1.20 (B-10.157): eskiden YALNIZ `pass` sayılıyordu — aynı yutma `...`, `return None` ya da
+    `continue` ile yazılınca riskli bağlamda `shutil.move` yutulsa da kapı YEŞİL kalıyordu."""
+    if len(govde) != 1:
+        return False
+    s = govde[0]
+    if isinstance(s, (ast.Pass, ast.Continue)):
+        return True
+    if isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant) and s.value.value is Ellipsis:
+        return True
+    return isinstance(s, ast.Return) and (s.value is None or isinstance(s.value, ast.Constant))
+
+
 def _sessiz_mi(h: ast.ExceptHandler) -> bool:
-    return len(h.body) == 1 and isinstance(h.body[0], ast.Pass)
+    return _sessiz_govde(h.body)
+
+
+def _suppress_mi(w: ast.With | ast.AsyncWith) -> bool:
+    """`with contextlib.suppress(...)` / `with suppress(...)` — gövdesi SESSİZ yutulan bir `try`dır."""
+    for oge in w.items:
+        c = oge.context_expr
+        if isinstance(c, ast.Call):
+            f = c.func
+            ad = f.attr if isinstance(f, ast.Attribute) else f.id if isinstance(f, ast.Name) else None
+            if ad == "suppress":
+                return True
+    return False
 
 
 def _cagrilar(govde: list[ast.stmt]) -> list[str]:
@@ -210,12 +239,14 @@ def tara(kaynak: str, rel: str) -> list[tuple[str, str, int, str]]:
                 ad.setdefault(id(alt), d.name)
     out = []
     for d in ast.walk(agac):
-        if not isinstance(d, ast.Try):
-            continue
-        for h in d.handlers:
-            if _sessiz_mi(h):
-                fn = ad.get(id(h), "<modul>")
-                out.append((rel, fn, h.lineno, siniflandir(d.body, fn)))
+        if isinstance(d, ast.Try):
+            for h in d.handlers:
+                if _sessiz_mi(h):
+                    fn = ad.get(id(h), "<modul>")
+                    out.append((rel, fn, h.lineno, siniflandir(d.body, fn)))
+        elif isinstance(d, (ast.With, ast.AsyncWith)) and _suppress_mi(d):
+            fn = ad.get(id(d), "<modul>")
+            out.append((rel, fn, d.lineno, siniflandir(d.body, fn)))
     return out
 
 
@@ -333,8 +364,58 @@ def test_KRITIK_muafiyetler_GERCEKTEN_var_ve_gerekceli():
             "BELIRSIZ",
             "İÇ handler ele alıyor → dış sessizlik tehlikeli DEĞİL",
         ),
+        # ── D1.20 (B-10.157): `pass` dışındaki sessiz gövde biçimleri ──
+        (
+            "\n".join(
+                ["def goc_yap():", "    try:", "        shutil.move(a, b)", "    except Exception:", "        ..."]
+            ),
+            "TEHLIKELI",
+            "Ellipsis gövdesi",
+        ),
+        (
+            "\n".join(
+                [
+                    "def goc_yap():",
+                    "    try:",
+                    "        shutil.move(a, b)",
+                    "    except Exception:",
+                    "        return None",
+                ]
+            ),
+            "TEHLIKELI",
+            "return-sabit gövdesi",
+        ),
+        (
+            "\n".join(
+                [
+                    "def yedek_al(dosyalar):",
+                    "    for f in dosyalar:",
+                    "        try:",
+                    "            shutil.move(f, h)",
+                    "        except Exception:",
+                    "            continue",
+                ]
+            ),
+            "TEHLIKELI",
+            "continue gövdesi",
+        ),
+        (
+            "\n".join(["def goc_yap():", "    with contextlib.suppress(Exception):", "        shutil.move(a, b)"]),
+            "TEHLIKELI",
+            "contextlib.suppress bloğu",
+        ),
     ],
-    ids=["tehlikeli", "kaynak_birakma", "opsiyonel_import", "notr_baglam", "ic_handler_var"],
+    ids=[
+        "tehlikeli",
+        "kaynak_birakma",
+        "opsiyonel_import",
+        "notr_baglam",
+        "ic_handler_var",
+        "ellipsis",
+        "return_sabit",
+        "continue",
+        "suppress",
+    ],
 )
 def test_KARSIT_KANIT_siniflandirici_AYIRIYOR(kaynak: str, beklenen: str, aciklama: str):
     """Kapının tamamı bu ayrıma dayanıyor; ayrım bozulursa kapı ya kör ya da gürültü olur."""
@@ -362,3 +443,23 @@ def test_KARSIT_KANIT_DUZELTILEN_dortu_artik_sessiz_DEGIL():
         metin = (KOK / rel).read_text(encoding="utf-8")
         for iz in izler:
             assert iz in metin, f"{rel}: '{iz}' log'u kaybolmuş — sessiz yutma geri gelmiş olabilir"
+
+
+def test_KARSIT_KANIT_sabit_OLMAYAN_return_ve_cok_deyimli_govde_SESSIZ_sayilmaz():
+    """D1.20: genişletme "her kısa handler sessizdir" biçiminde bozulmasın — sonuç döndüren ya da iş
+    yapan gövde (ör. yedeğe düşüş) sessiz yutma DEĞİLDİR."""
+    yedege_dusus = "\n".join(
+        ["def goc_yap():", "    try:", "        shutil.move(a, b)", "    except Exception:", "        return yedek(a)"]
+    )
+    loglayan = "\n".join(
+        [
+            "def goc_yap():",
+            "    try:",
+            "        shutil.move(a, b)",
+            "    except Exception:",
+            "        log.warning(1)",
+            "        return None",
+        ]
+    )
+    assert tara(yedege_dusus, "<sinav>") == []
+    assert tara(loglayan, "<sinav>") == []
