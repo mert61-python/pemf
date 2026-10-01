@@ -233,3 +233,23 @@ def test_KRITIK_ESP_seans_yolu_duty_AYNEN_frekans_TASIYICI_ve_KAYIT_ayni(esp_ort
     assert kayit == [(ESP_BOBIN, pytest.approx(90.0), pytest.approx(1000.0))], (
         f"ESP koşu kaydı {kayit!r} — kayıt, ESP'ye GİDEN değerle aynı olmalı"
     )
+
+
+def test_KRITIK_ESP_toplu_kontrol_duty_AYNEN_frekans_TASIYICI_sinirda(esp_ortami):
+    """Bağımsız inceleme (r2): üç ESP yayın yolundan `/api/coil/batch` kapsanmıyordu — batch yüküne
+    `min(payload.duty, 50)` ya da ham `payload.freq` konunca TAM SÜİT yeşil kalıyordu. Tekil yolla aynı
+    iddia: duty AYNEN (Ö.4-Y9), freq taşıyıcı ESP sınırında (1000 Hz). Kayıtçı yayın `False` döndüğü
+    için koşu kaydı açılmaz (doğrulanmamış yayın) — bu kol kaydı İDDİA ETMEZ."""
+    from topoloji import ESP_BOBIN
+
+    istemci, _db, yayinlar = esp_ortami
+    r = istemci.post(
+        "/api/coil/batch",
+        json={"coil_ids": [ESP_BOBIN], "freq": 5000.0, "duty": 90.0, "phase": 0.0, "duration": 60, "start": True},
+    )
+    assert r.status_code == 200, r.text[:300]
+    yuk = _baslat_yuku(yayinlar, ESP_BOBIN)
+    assert yuk["duty"] == pytest.approx(90.0), f"batch ESP yayınında duty {yuk['duty']} — backend tavanı (Ö.4-Y9)"
+    assert yuk["freq"] == pytest.approx(1000.0), (
+        f"batch ESP yayınında freq {yuk['freq']} — taşıyıcı ESP protokol sınırı kaldırılmış (8266 REDDEDER)"
+    )
