@@ -200,10 +200,28 @@ def test_KRITIK_bozuk_bayrak_backendi_OLDURMEZ_ACIL_DURDUR_calisir(
     assert bayrak in p.stderr, f"{bayrak}: bozuk değer SESSİZCE yutuldu — uyarı günlüğü yok"
 
 
-def test_KARSIT_gecerli_bayrak_DEGERI_kullanilir(tmp_path):
-    """Varsayılana düşüş "her şeyi yok say" biçiminde bozulmasın: geçerli değer AYNEN okunur."""
-    s = _sonuc(_kos(tmp_path, "PEMF_JETON_OFFLINE_TAVAN", "7", "servers.jeton", "OFFLINE_TAVAN").stdout)
-    assert s and s["deger"] == 7 and s["durum"] == 200 and s["ag"] == [], s
+#: (bayrak, geçerli değer, beklenen) — varsayılandan FARKLI ve `max()` tabanlarının üstünde.
+GECERLI = {
+    "PEMF_JETON_OFFLINE_TAVAN": ("7", 7),
+    "PEMF_JETON_BORC_TAVANI": ("11", 11),
+    "PEMF_JETON_TIMEOUT": ("7.5", 7.5),
+    "PEMF_AI_QUEUE_CONCURRENCY": ("3", 3),
+    "PEMF_AI_QUEUE_MAX_WAIT": ("12.5", 12.5),
+    "PEMF_ENTITLEMENT_CACHE_TTL": ("90", 90.0),
+    "PEMF_ENTITLEMENT_TIMEOUT": ("7.5", 7.5),
+    "PEMF_AI_SERVICE_TIMEOUT": ("33", 33.0),
+}
+
+
+@pytest.mark.parametrize(("bayrak", "_bozuk", "modul", "oznitelik", "_v"), BAYRAKLAR, ids=[b[0] for b in BAYRAKLAR])
+def test_KARSIT_gecerli_bayrak_DEGERI_kullanilir(tmp_path, bayrak, _bozuk, modul, oznitelik, _v):
+    """Varsayılana düşüş "her şeyi yok say" biçiminde bozulmasın: geçerli değer AYNEN okunur. ⚠️ Bağımsız
+    inceleme (r3): eskiden yalnız `OFFLINE_TAVAN` ölçülüyordu — `entitlement._sayi` geçerli değeri yok sayıp
+    varsayılanı dönse (4 bayrak sessizce etkisiz) kapı yeşil kalıyordu. Artık sekiz bayrağın hepsi."""
+    gecerli, beklenen = GECERLI[bayrak]
+    s = _sonuc(_kos(tmp_path, bayrak, gecerli, modul, oznitelik).stdout)
+    assert s and s["durum"] == 200 and s["ag"] == [], s
+    assert s["deger"] == pytest.approx(beklenen), f"{bayrak}={gecerli!r} → {s['deger']} (geçerli değer YOK SAYILDI)"
 
 
 def test_ARAC_alt_surec_ag_bekcisi_her_KATI_engeller_ve_KAYDEDER(tmp_path):
