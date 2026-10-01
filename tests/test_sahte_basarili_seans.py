@@ -257,6 +257,23 @@ def test_KRITIK_TEK_nack_seansi_engellemez(istemci, monkeypatch, seans_kapat):
     assert _seans_baslat(istemci).status_code == 200
 
 
+def test_KRITIK_red_esigi_SABIT_UC_NACKte_pinli():
+    """D1.50 · B-1.37 — eşiğin DEĞERİ pinli (3). Bu dosyadaki diğer testler NACK sayısını eşiğin KENDİSİNDEN
+    okuyor (`range(live_state.STM_RED_ESIGI)`): `STM_RED_ESIGI = 1000` mutantında da yeşil kalıyorlardı (ölçüldü,
+    plan k-K3.2) — reddeden kart 1000 NACK'e dek "sağlam" sayılır, her seans sahte "Tamamlandı" olurdu.
+    Burada GERÇEK `stm_komut_reddi_bildir`e SABİT sayıda NACK basılır; eşik kaynaktan OKUNMAZ.
+
+    MUTASYON: `STM_RED_ESIGI` 3 → 1000 / 4 / 2 → KIRMIZI (alt sınır 1 ayrıca `TEK_nack` karşıtında)."""
+    from servers import live_state
+
+    ilk_iki = [live_state.stm_komut_reddi_bildir("STM_NACK: CRC") for _ in range(2)]
+    assert ilk_iki == [False, False], f"2 NACK'te sistematik red kenari olustu: {ilk_iki}"
+    assert live_state.stm_komutlari_reddediyor() is False, "2 NACK sistematik red sayildi"
+    assert live_state.stm_komut_reddi_bildir("STM_NACK: CRC") is True, "3. NACK sistematik red KENARI uretmedi"
+    assert live_state.stm_komutlari_reddediyor() is True, "3 ard arda NACK'ten sonra kart 'reddetmiyor' sayildi"
+    assert live_state.stm_red_ozeti()["reddediyor"] is True
+
+
 def test_KRITIK_KABUL_gelince_red_karari_SIFIRLANIR():
     """⚠️ Sıfırlama olmazsa eski bir gürültü NACK'i sayacı sonsuza dek yukarıda tutar ve
     sağlam kartta seans başlatmak KALICI olarak engellenir.
