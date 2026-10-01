@@ -117,6 +117,85 @@ def test_KRITIK_reddedilen_seans_AKTIF_SAYILMAZ(client, api, db_bozuk):
         assert api._active_session.get("is_active") is not True
 
 
+# ── STM gövdeli ikiz (D1.34 · B-10.35) ───────────────────────────────────────
+#
+# Yukarıdaki iki kapı ESP bobiniyle (sahte MQTT) kuruluyor. ESP kapalı olduğundan sahadaki ASIL yol
+# STM-only'dir: kapı `if not _db_ok and esp_coils:` diye ESP'li seanslara daraltılsa 32 dosya yeşil
+# kalıyordu (kör kapı). Bu ikiz GERÇEK `HardwareController`ı (kayıtçı donanım kuyruğu) kullanır.
+#
+# ⚠️ 503'ün SEBEBİ ayırt edilir: STM seansı DB kapısına varmadan "STM32 donanım kontrolcüsü hazır
+# değil" 503'üne de düşebilir (state.hardware yoksa) — o 503 kapıyı ölçmez, bedava yeşildir.
+
+
+def _stm_govdesi(bobinler):
+    govde = dict(_seans_govdesi())
+    govde.update({"coil_ids": list(bobinler), "frequency": 100, "duty": 40, "phase": 0})
+    return govde
+
+
+_STM_KUMELERI = [[min(TUM_STM)], [max(TUM_STM)], sorted(TUM_STM)]
+
+
+@pytest.fixture
+def stm_hc(api, monkeypatch):
+    """GERÇEK HC + `update_coil` sayacı; red sayacı ve uyum kapısı önceki testten sızmaz."""
+    from kayitci_donanim import gercek_hc
+    from servers import live_state
+
+    live_state.stm_komut_kabulu_bildir()
+    monkeypatch.setattr(api, "_ws_broadcast_sync", lambda *a, **k: None)
+    with gercek_hc() as hc:
+        hc.update_cagri = []
+        _orj = hc.update_coil
+
+        def _sayan(coil_id, *a, **k):
+            hc.update_cagri.append((coil_id, a, k))
+            return _orj(coil_id, *a, **k)
+
+        hc.update_coil = _sayan
+        monkeypatch.setattr(api.state, "hardware", hc)
+        yield hc
+    live_state.stm_komut_kabulu_bildir()
+
+
+@pytest.mark.parametrize("bobinler", _STM_KUMELERI, ids=lambda b: "stm_" + "_".join(map(str, b)))
+def test_KRITIK_DB_hazir_degilse_STM_seansi_BOBIN_ENERJILEMEZ(client, api, db_bozuk, stm_hc, bobinler):
+    """D1.34: DB hazır değilken STM gövdeli seans 503 (DB sebebiyle) ve donanıma TEK komut gitmez."""
+    from kayitci_donanim import paket_coz
+
+    r = client.post("/api/session/start", json=_stm_govdesi(bobinler))
+    assert r.status_code == 503, f"DB hazır değilken STM seansı reddedilmedi ({r.status_code}): {r.text[:200]}"
+    assert "kayıt" in r.json()["detail"].lower(), (
+        f"503 DB kapısından değil (bedava yeşil — DB kapısına hiç varılmadı): {r.json()['detail']!r}"
+    )
+    assert stm_hc.update_cagri == [], f"reddedilen seansta STM bobini sürülmeye çalışıldı: {stm_hc.update_cagri}"
+    enerjili = [p for p in stm_hc.core._hw_send_queue.paketler if any(d > 0 for d in paket_coz(p)[0])]
+    assert enerjili == [], f"reddedilen seansta donanım kuyruğuna enerjili paket gitti ({len(enerjili)})"
+    with api._session_lock:
+        assert api._active_session.get("is_active") is not True, "reddedilen STM seansı aktif kaldı"
+
+
+def test_KARSIT_DB_hazirken_ayni_STM_govdesi_GERCEKTEN_surer(client, api, stm_hc, tmp_path, monkeypatch):
+    """Aparat canlılığı: aynı gövde DB hazırken 200 alır ve bobini GERÇEKTEN sürer. Bu kol düşerse
+    yukarıdaki ikizin yeşili 'kapı tuttu' değil 'seans zaten hiç başlamıyordu' demektir."""
+    from database.treatment_history_db import TreatmentHistoryDB
+    from kayitci_donanim import paket_coz
+    from servers import coil_run_tracker
+
+    db = TreatmentHistoryDB(tmp_path)
+    monkeypatch.setattr(api, "_get_treatment_db", lambda: db)
+    monkeypatch.setattr(coil_run_tracker, "_treatment_db_getter", lambda: db)
+    bobin = min(TUM_STM)
+    try:
+        r = client.post("/api/session/start", json=_stm_govdesi([bobin]))
+        assert r.status_code == 200, r.text[:300]
+        assert any(c[0] == bobin for c in stm_hc.update_cagri), f"seans STM bobinini sürmedi: {stm_hc.update_cagri}"
+        assert paket_coz(stm_hc.core._hw_send_queue.paketler[-1])[0][bobin - 1] > 0, "pakette bobin enerjili değil"
+    finally:
+        client.post("/api/session/stop", json={})
+        db.close_connections()
+
+
 def test_DB_hazirsa_seans_NORMAL_baslar(client, api, monkeypatch):
     """Regresyon kapısı: kapı sağlıklı kurulumda tedaviyi ENGELLEMEMELİ."""
     monkeypatch.setattr(api, "_mqtt_publish", lambda topic, payload: True)
