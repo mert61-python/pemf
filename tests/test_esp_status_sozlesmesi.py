@@ -314,7 +314,11 @@ def test_KARSIT_KANIT_retained_status_hicbir_sey_yazmaz(api):
 
 
 def _fw_oku(*parcalar: str) -> str:
-    return (REPO.joinpath(*parcalar)).read_text(encoding="utf-8", errors="replace")
+    """YORUMU SOYULMUŞ firmware kaynağı (dize sabitleri korunur). ⚠️ D1.49 (B-10.237): eskiden ham metin
+    okunuyordu — S3 `doc["pwm_duty"] = …;` satırı yoruma alınsa (alan artık YAYINLANMAZ) parite kapısı YEŞİLDİ."""
+    from c_soyucu import c_soy
+
+    return c_soy((REPO.joinpath(*parcalar)).read_text(encoding="utf-8", errors="replace"))
 
 
 def _fonksiyon_govdesi(kaynak: str, imza: str) -> str:

@@ -23,6 +23,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 from c_soyucu import c_soy
 
 KOK = Path(__file__).resolve().parents[1]
@@ -32,8 +33,52 @@ NMH = ESP / "NetworkManager.h"
 NMC = ESP / "NetworkManager.cpp"
 INO = ESP / "esp8266_pemf_coil.ino"
 
-PWM_SIZE = 24  # sizeof(PWMStateEEPROM), xtensa 4-bayt hizalı (magic+bool+pad+2int+2ulong+checksum+pad)
-BROKER_SIZE = 4  # BrokerType enum (int) — konservatif üst sınır
+#: ESP8266 (xtensa-lx106, GCC) C ABI: tür → (boyut, hizalama). `enum` = int. Tabloda olmayan tür → kapı KIRMIZI.
+XTENSA_ABI: dict[str, tuple[int, int]] = {
+    "uint8_t": (1, 1),
+    "int8_t": (1, 1),
+    "char": (1, 1),
+    "bool": (1, 1),
+    "uint16_t": (2, 2),
+    "int16_t": (2, 2),
+    "short": (2, 2),
+    "int": (4, 4),
+    "unsigned": (4, 4),
+    "unsigned int": (4, 4),
+    "uint32_t": (4, 4),
+    "int32_t": (4, 4),
+    "long": (4, 4),
+    "unsigned long": (4, 4),
+    "float": (4, 4),
+    "double": (8, 8),
+    "uint64_t": (8, 8),
+    "int64_t": (8, 8),
+}
+
+
+def c_struct_boyutu(soy: str, ad: str, abi: dict[str, tuple[int, int]] = XTENSA_ABI) -> int:
+    """`struct AD { … };` (YORUMU SOYULMUŞ) → sizeof: alan sırası, hizalama dolgusu ve sondaki dolgu dahil.
+
+    ⚠️ D1.49 (B-10.231): sizeof eskiden ELLE (`PWM_SIZE = 24`) yazılıydı — struct'a 4 baytlık bir alan
+    eklenince PWM span'i [512,540) BROKER'ı (536) örterken bu dosya YEŞİL kalıyordu."""
+    m = re.search(rf"\bstruct\s+{re.escape(ad)}\s*\{{(.*?)\}}\s*;", soy, re.S)
+    assert m, f"struct {ad} (yorum dışı) bulunamadı"
+    ofset, en_hizali = 0, 1
+    for bildirim in (b.strip() for b in m.group(1).split(";")):
+        if not bildirim:
+            continue
+        a = re.fullmatch(r"((?:unsigned\s+|signed\s+)?[A-Za-z_]\w*)\s+([A-Za-z_]\w*)\s*(?:\[\s*(\d+)\s*\])?", bildirim)
+        assert a, f"struct {ad}: ayrıştırılamayan alan {bildirim!r} — kapıyı güncelle"
+        tur = " ".join(a.group(1).split())
+        assert tur in abi, f"struct {ad}: ABI tablosunda olmayan tür {tur!r}"
+        boyut, hiza = abi[tur]
+        ofset = (ofset + hiza - 1) // hiza * hiza + boyut * int(a.group(3) or 1)
+        en_hizali = max(en_hizali, hiza)
+    return (ofset + en_hizali - 1) // en_hizali * en_hizali
+
+
+PWM_SIZE = c_struct_boyutu(c_soy(SHARED.read_text(encoding="utf-8", errors="replace")), "PWMStateEEPROM")
+BROKER_SIZE = 4  # BrokerType enum (int) — xtensa ABI'de 4 bayt
 
 
 def _define(soy: str, ad: str) -> int:
@@ -165,7 +210,7 @@ def test_KARSIT_KANIT_D4_wifi_slot_stride_degismedi():
 def test_KARSIT_KANIT_D4_PWMStateEEPROM_layout_degismedi():
     """PWM struct küçültüp çakışmayı 'çözme' regresyonunu yakalar: [1.3] magic/checksum + 24-bayt
     ikili düzen korunmalı."""
-    s = SHARED.read_text(encoding="utf-8", errors="replace")
+    s = _shared()  # D1.49: yorumu soyulmuş — yoruma alınmış alan "var" sayılmaz
     i = s.index("struct PWMStateEEPROM")
     govde = s[i : s.index("};", i)]
     for alan in ("magic", "active", "frequency", "dutyCycle", "duration", "elapsed", "checksum"):
@@ -183,3 +228,38 @@ def test_KARSIT_KANIT_D4_wifi_clear_bolge_sonuyla_sinirli():
         "ezilir, WiFi-temizleme migrasyonu yeniden tetikler (D4)"
     )
     assert "EEPROM_WIFI_REGION_END" in govde, "clearAll WiFi bölge-sonuyla sınırlanmamış"
+
+
+# ═══════════════════════ D1.49 · sizeof KAYNAKTAN ═════════════════════════════════════════════
+def test_D149_PWMStateEEPROM_boyutu_KAYNAKTAN_ve_bilincli_PIN():
+    """Bugünkü düzen 24 bayt [512,536). Değişirse EEPROM düzeni değişmiştir: CONFIG_VERSION ve adres haritası
+    BİLİNÇLİ güncellenmeli (sahadaki kayıtlı PWM durumu yeni struct'la yanlış okunur)."""
+    assert PWM_SIZE == 24, f"sizeof(PWMStateEEPROM) kaynaktan {PWM_SIZE} — EEPROM düzeni değişti"
+
+
+def test_ARAC_D149_struct_boyutu_hizalama_ve_dolgu():
+    assert c_struct_boyutu("struct A { uint8_t a; int b; };", "A") == 8
+    assert c_struct_boyutu("struct A { uint8_t a; uint8_t b; };", "A") == 2
+    assert c_struct_boyutu("struct A { int a; uint8_t b; };", "A") == 8
+    assert c_struct_boyutu("struct A { char s[33]; bool v; };", "A") == 34
+    assert (
+        c_struct_boyutu(
+            "struct A { uint8_t m; bool a; int f; int d; unsigned long u; unsigned long e; uint8_t c; };", "A"
+        )
+        == 24
+    )
+    with pytest.raises(AssertionError, match="ABI"):
+        c_struct_boyutu("struct A { Foo x; };", "A")
+
+
+def test_ARAC_D149_struct_a_4_baytlik_alan_eklenince_harita_KIRMIZI():
+    """Plan mutantı: PWMStateEEPROM'a 4 baytlık alan → sizeof 28 → PWM span [512,540) BROKER'ı (536) örter."""
+    soy = _shared()
+    capa = "uint8_t checksum;"
+    assert soy.count(capa) == 1
+    mutant = soy.replace(capa, "uint32_t ekAlan; " + capa)
+    boyut = c_struct_boyutu(mutant, "PWMStateEEPROM")
+    assert boyut == 28
+    pwm = (_define(mutant, "EEPROM_PWM_STATE_ADDR"), boyut)
+    broker = (_define(mutant, "EEPROM_BROKER_STATE_ADDR"), BROKER_SIZE)
+    assert _cakisir(pwm, broker), "4 baytlık alan eklenince PWM span'i BROKER ile çakışmalıydı — model kör"

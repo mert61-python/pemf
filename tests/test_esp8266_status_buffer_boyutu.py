@@ -30,6 +30,7 @@ import re
 from pathlib import Path
 
 import pytest
+from c_soyucu import c_soy
 
 KOK = Path(__file__).resolve().parents[1]
 NM = KOK / "firmware" / "esp8266_pemf_coil" / "NetworkManager.cpp"
@@ -57,8 +58,14 @@ def _literalleri_birlestir(ham: str) -> str:
     return "".join(ham.split('"')[1::2]).replace(yer, '"')
 
 
+def _nm_yorumsuz() -> str:
+    """D1.49 (B-10.234): YORUMU SOYULMUŞ NetworkManager.cpp (dize sabitleri korunur). Eskiden ham metin aranıyordu:
+    `static_assert` ya da taşma `return;` yoruma alınsa da bu dosya YEŞİL kalıyordu."""
+    return c_soy(io.open(NM, encoding="utf-8", errors="replace").read())
+
+
 def _bicim_ve_buffer() -> tuple[str, int]:
-    satirlar = io.open(NM, encoding="utf-8", errors="replace").read().splitlines()
+    satirlar = _nm_yorumsuz().splitlines()
     i = next(n for n, s in enumerate(satirlar) if "void NetworkManager::publishStatus" in s)
 
     m = None
@@ -115,7 +122,7 @@ def test_KRITIK_MQTT_tavani_PAYLOAD_topic_ve_EKI_kapsiyor():
     `static_assert` kilitler; bu test o `static_assert`ın VARLIĞINI ve sayıların tutarlılığını
     ölçer (derleyici burada koşmadığı için).
     """
-    kaynak = io.open(NM, encoding="utf-8", errors="replace").read()
+    kaynak = _nm_yorumsuz()
     sabitler = {
         ad: int(d)
         for ad, d in re.findall(
@@ -124,7 +131,11 @@ def test_KRITIK_MQTT_tavani_PAYLOAD_topic_ve_EKI_kapsiyor():
     }
     eksik = {"STATUS_JSON_BUF", "MQTT_BUFFER_BYTES", "MQTT_TOPIC_MAKS", "MQTT_PROTOKOL_EK"} - set(sabitler)
     assert not eksik, f"bu sabitler tanimli degil: {sorted(eksik)}"
-    assert "static_assert(" in kaynak, "derleme-ani tutarlilik kontrolu (static_assert) YOK"
+    # D1.49: VARLIK değil İFADE — yorum dışında ve dört sabiti doğru yönde bağlayan static_assert
+    assert re.search(
+        r"static_assert\(\s*STATUS_JSON_BUF\s*\+\s*MQTT_TOPIC_MAKS\s*\+\s*MQTT_PROTOKOL_EK\s*<=\s*MQTT_BUFFER_BYTES\s*,",
+        kaynak,
+    ), "derleme-ani tutarlilik kontrolu (static_assert: payload+topic+ek <= tavan) YORUM DISINDA YOK"
     toplam = sabitler["STATUS_JSON_BUF"] + sabitler["MQTT_TOPIC_MAKS"] + sabitler["MQTT_PROTOKOL_EK"]
     assert toplam <= sabitler["MQTT_BUFFER_BYTES"], (
         f"MQTT tavani ({sabitler['MQTT_BUFFER_BYTES']}) payload+topic+ek ({toplam}) icin YETERSIZ"
@@ -137,7 +148,7 @@ def test_MQTT_tavani_SABITTEN_okunuyor():
     Eski kod `setBufferSize(768)` yazıyor ve yorumunda status'u 640 sanıyordu; iki sayı ayrı
     yerlerde durduğu için biri güncellenip diğeri unutuldu.
     """
-    kaynak = io.open(NM, encoding="utf-8", errors="replace").read()
+    kaynak = _nm_yorumsuz()
     m = re.search(r"setBufferSize\(\s*([A-Za-z0-9_]+)\s*\)", kaynak)
     assert m, "setBufferSize cagrisi bulunamadi -> kapi BAYAT"
     assert not m.group(1).isdigit(), (
@@ -151,10 +162,17 @@ def test_TASMA_mesaji_ATIYOR_kirpmiyor():
 
     Karşıt kanıt: mevcut davranış doğru; buffer büyütülürken bu koruma kaldırılmasın.
     """
-    kaynak = io.open(NM, encoding="utf-8", errors="replace").read()
+    kaynak = _nm_yorumsuz()
     i = kaynak.index("void NetworkManager::publishStatus")
-    blok = kaynak[i : i + 2600]
-    assert "jsonLen >= (int)sizeof(jsonBuffer)" in blok, "tasma kontrolu YOK/degismis"
-    assert "return" in blok.split("jsonLen >= (int)sizeof(jsonBuffer)")[1][:200], (
-        "tasmada erken donus YOK -> kirpilmis JSON yayinlanir"
-    )
+    blok = kaynak[i : kaynak.index("\nvoid ", i + 10)]
+    m = re.search(r"if\s*\(\s*jsonLen\s*<\s*0\s*\|\|\s*jsonLen\s*>=\s*\(int\)sizeof\(jsonBuffer\)\s*\)\s*\{", blok)
+    assert m, "tasma kontrolu YOK/degismis"
+    # D1.49: gövde dengeli parantezle; `return;` DEYİM olarak (yorumdaki `// return;` sayılmaz — metin soyuldu)
+    d, j = 0, m.end() - 1
+    for j in range(m.end() - 1, len(blok)):
+        d += {"{": 1, "}": -1}.get(blok[j], 0)
+        if d == 0:
+            break
+    govde = blok[m.end() : j]
+    assert re.search(r"\breturn\s*;", govde), "tasmada erken donus YOK -> kirpilmis JSON yayinlanir"
+    assert blok.index("_mqttClient.publish(_statusTopic", m.end()) > j, "publish tasma kontrolunden ONCE"
