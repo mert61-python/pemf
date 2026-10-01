@@ -178,3 +178,105 @@ def test_KRITIK_STM_watchdog_aktif_STM_seansini_DURDURUR(ortam, bobinler):
     estop, olaylar = _estop_olayi(db, sid, "stm_watchdog_timeout")
     assert estop, f"denetim izinde stm_watchdog_timeout sebepli emergency_stop yok: {olaylar!r}"
     assert hw.stop_all >= 1, "donanıma STOP denenmedi"
+
+
+# ── D1.51 · B-1.1: sistematik-NACK kenarı SÜREÇ ÖMRÜNDE BİR KEZ değil — bayat karardan sonraki YENİ dizide de ──
+
+
+class _SeansDonanimi(_KaydediciDonanim):
+    """`/api/session/start` için: STM bobinlerini KABUL eder (kart reddi ancak ASENKRON NACK ile gelir)."""
+
+    def update_coil(self, coil_id, freq, duty, phase, duration, start=True, duration_seconds=None):
+        return True
+
+    def get_all_coils_state(self):
+        return {}
+
+
+def _ham_nack(core, n: int) -> None:
+    """GERÇEK `HeadlessCore._handle_stm_line`'a firmware'in ham NACK satırı (sayı SABİT; eşik kaynaktan OKUNMAZ)."""
+    for _ in range(n):
+        core._handle_stm_line("-> STM_NACK: CRC hatasi", None)
+
+
+def _seans_baslat(c):
+    r = c.post(
+        "/api/session/start",
+        json={
+            "mode": "Manuel",
+            "frequency": 100,
+            "duty": 30,
+            "phase": 0,
+            "intensity": 0.0,
+            "duration_minutes": 20,
+            "coil_ids": _STM[:2],
+            "patient_name": "Pamuk",
+        },
+    )
+    assert r.status_code == 200, f"seans baslamadi: {r.status_code} {r.text[:300]}"
+    return r
+
+
+def test_KRITIK_bayat_red_kararindan_sonra_YENI_NACK_dizisi_seansi_YINE_DURDURUR(ortam, monkeypatch):
+    """Plan D1.51 (probe_f12c): seans A → 3 NACK → durur → karar BAYATLAR (son NACK'ten bu yana geçerlilik + 1 sn)
+    → seans B başlar (bayat karar engellemez) → 3 NACK. Eskiden kenar `ard_arda`'nın <3→≥3 geçişiydi ve sayaç
+    yalnız KABUL'de sıfırlanıyordu: reddeden kartta B'nin NACK'leri 4,5,6 sayılıp HİÇ kenar üretmiyor, B "aktif"
+    kalıp sahte "Tamamlandı" yazılıyordu. Bayatlık süreç saati yamasıyla değil son NACK anını geriye alarak kurulur
+    (süreç geneli `time` yaması diğer iş parçacıklarını da etkilerdi)."""
+    import logging
+
+    import headless_core as hcm
+    from database.treatment_history_db import SEANS_DURUMU_ACIL_DURDURMA
+    from fastapi.testclient import TestClient
+    from servers import coil_run_tracker
+    from servers import live_state as ls
+
+    api, db, _hw, _b = ortam
+    monkeypatch.setattr(api.state, "hardware", _SeansDonanimi())
+    monkeypatch.setattr(coil_run_tracker, "_treatment_db_getter", lambda: db)
+    import event_bus as eb
+
+    core = hcm.HeadlessCore.__new__(hcm.HeadlessCore)
+    core.logger = logging.getLogger("test-d151")
+    core.event_bus = eb.get_event_bus()
+    c = TestClient(api.app)
+
+    _seans_baslat(c)
+    with api._session_lock:
+        sid_a = api._active_session.get("db_session_id")
+    _ham_nack(core, 3)
+    assert _estop_bekle(), "aparat: seans A icin sistematik red E-stop'u HIC baslamadi"
+    with api._session_lock:
+        assert api._active_session.get("is_active") is False, "aparat: seans A durmadi"
+    assert _durum(db, sid_a) == SEANS_DURUMU_ACIL_DURDURMA
+
+    with ls._stm_red_lock:
+        ls._stm_red["son_an"] -= ls.STM_RED_GECERLILIK_S + 1.0
+    assert ls.stm_komutlari_reddediyor() is False, "aparat: red karari bayatlamadi"
+
+    _seans_baslat(c)
+    with api._session_lock:
+        sid_b = api._active_session.get("db_session_id")
+    assert sid_b and sid_b != sid_a
+    _ham_nack(core, 3)
+    gorulen = _estop_bekle()
+    with api._session_lock:
+        aktif_b = api._active_session.get("is_active")
+    assert gorulen, "bayat karardan sonraki YENI NACK dizisi E-stop yolunu HIC baslatmadi (kenar surecte bir kez)"
+    assert aktif_b is False, "kart hala reddediyor ama seans B 'aktif' kaldi — sahte 'Tamamlandi' yazilir"
+    assert _durum(db, sid_b) == SEANS_DURUMU_ACIL_DURDURMA, f"seans B kaydi {_durum(db, sid_b)!r}"
+    estop, olaylar = _estop_olayi(db, sid_b, "stm_komut_reddi")
+    assert estop, f"seans B denetim izinde stm_komut_reddi sebepli emergency_stop yok: {olaylar!r}"
+
+
+def test_KARSIT_TAZE_red_kararinda_her_NACK_YENI_kenar_URETMEZ():
+    """Kenar her NACK'te tekrarlanmasın: kart reddettikçe keep-alive 2 Hz NACK üretir; taze kararda 4., 5., 6. NACK
+    yeni "sistematik red" sayılırsa seans başına saniyede iki E-stop ve bildirim seli doğar."""
+    from servers import live_state as ls
+
+    ls.stm_komut_kabulu_bildir()
+    try:
+        sonuc = [ls.stm_komut_reddi_bildir("STM_NACK: CRC") for _ in range(6)]
+        assert sonuc == [False, False, True, False, False, False], f"taze kararda kenar tekrarlandi: {sonuc}"
+    finally:
+        ls.stm_komut_kabulu_bildir()

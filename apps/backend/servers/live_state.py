@@ -277,9 +277,16 @@ def stm_komut_reddi_bildir(mesaj: str = "") -> bool:
     import time as _t
 
     with _stm_red_lock:
+        simdi_an = _t.monotonic()
+        # ⚠️ D1.51 (B-1.1): son NACK'ten bu yana karar geçerliliği dolduysa bu NACK YENİ bir dizi başlatır. Eskiden
+        # sayaç yalnız KABUL'de sıfırlanıyordu: kart hiç kabul etmezse kenar (<3 → ≥3) SÜREÇ ÖMRÜNDE BİR KEZ
+        # oluşuyor, karar bayatlayıp yeni seans başladıktan sonra gelen NACK'ler 4, 5, 6… sayılıp seansı HİÇ
+        # durdurmuyordu (sahte "Tamamlandı"). Taze kararda yeni NACK yeni kenar ÜRETMEZ (bildirim/E-stop seli yok).
+        if (simdi_an - _stm_red["son_an"]) > STM_RED_GECERLILIK_S:
+            _stm_red["ard_arda"] = 0
         onceki = _stm_red["ard_arda"] >= STM_RED_ESIGI
         _stm_red["ard_arda"] += 1
-        _stm_red["son_an"] = _t.monotonic()
+        _stm_red["son_an"] = simdi_an
         _stm_red["son_mesaj"] = str(mesaj or "")[:200]
         simdi = _stm_red["ard_arda"] >= STM_RED_ESIGI
     return simdi and not onceki
