@@ -11,10 +11,14 @@ aynı şekle sahipti:
             logging.exception("...")     # <-- BU fırlatırsa `while`dan ÇIKILIR
         time.sleep(N)
 
-`logging` fırlatabilir ve bu varsayımsal değil: Windows'ta dönen (rotating) log dosyası
-başka bir süreç tarafından kilitliyse `PermissionError`, disk dolduysa `OSError`, handler
-kapatılmışsa `ValueError: I/O operation on closed file`. O an thread **sessizce ölür ve
-bir daha dönmez** — hiçbir yere de yazılmaz, çünkü yazmaya çalışan şey zaten patlamıştır.
+`logging` NE ZAMAN fırlatır — ÖLÇÜLEN model (DENETİM-01 B-1.36, DENETİM-04 B-4.17 öncülü D0;
+D1.17'de düzeltildi — eski metin "kilitli log → PermissionError, disk dolu → OSError" diyordu):
+ürünün yapılandırmasında (stdlib `RotatingFileHandler`, `backend_service._configure_logging`)
+kilitli dosyada devir hatası, dolu disk, kapalı handler ve `sys.stderr = None` FIRLATMAZ —
+`Handler.emit` hatayı `handleError`'a verir, o da `sys.stderr`'e yazıp yutar. Ölçülen tek
+fırlatma: `sys.stderr` KAPALI bir akış nesnesiyken `handleError`'ın kendi yazımı (`ValueError:
+I/O operation on closed file`); standart dışı bir handler/filtre de fırlatabilir. Tetik NADİR —
+ama olursa thread **sessizce ölür ve bir daha dönmez**, hiçbir yere de yazılmaz.
 
 **En ağır sonucu `session-watchdog`ta:** o döngü seans süresi dolunca bobinlere DONANIM
 düzeyinde STOP üretir. Kendi belgesi diyor ki *"firmware keep-alive süreyi her sn

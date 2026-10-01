@@ -10,11 +10,16 @@ NE BULUNDU (2026-09-19). Backend'in altı sonsuz döngüsünün **altısı da** 
             logging.exception("...")     # <-- BU fırlatırsa `while`dan ÇIKILIR
         time.sleep(N)
 
-`logging` fırlatabilir: Windows'ta dönen log dosyası kilitliyse `PermissionError`, disk
-doluysa `OSError`, handler kapanmışsa `ValueError: I/O operation on closed file`. O anda
-thread **sessizce ölür** — üstelik hiçbir yere yazılmaz, çünkü yazmaya çalışan şey zaten
-patlamıştır. Ölüm iki hata ister (gövde + bildirim), ama bu depo Windows dosya-kilidi
-sınıfını bu oturumda zaten bir kez yaşadı (karantina taşıma arızası).
+`logging` NE ZAMAN fırlatır — ÖLÇÜLEN model (DENETİM-01 B-1.36 · DENETİM-04 B-4.17 öncülü D0;
+D1.17 ile düzeltildi): ürünün yapılandırmasında (stdlib `RotatingFileHandler`,
+`backend_service._configure_logging`) kilitli dosyada devir `PermissionError`'ı, dolu disk
+`OSError`'ı, kapalı handler ve `sys.stderr = None` FIRLATMAZ — `Handler.emit` hatayı
+`handleError`'a verir, o da `sys.stderr`'e yazıp yutar. Ölçülen tek fırlatma: `sys.stderr`
+KAPALI bir akış nesnesiyken `handleError`'ın kendi yazımı (`ValueError: I/O operation on closed
+file`); standart dışı bir handler/filtre de fırlatabilir. Yani tetik NADİR — ama olursa thread
+**sessizce ölür** ve hiçbir yere yazılmaz (yazmaya çalışan şey zaten patlamıştır). Ölüm iki
+hata ister (gövde + bildirim). Aşağıdaki birim testleri bu yüzden yardımcıyı her istisna
+türüyle sınar (sahte logger) — üretimde hangi tür gelirse gelsin döngü yaşamalı.
 
 **En ağır sonucu `session-watchdog`ta:** o döngü seans süresi dolunca DONANIM düzeyinde
 STOP üretir ve kendi belgesi *"firmware keep-alive süreyi her sn tazelediğinden tek başına
@@ -456,16 +461,76 @@ def test_KARSIT_KANIT_dis_GENIS_try_ic_handleri_KORUR():
     assert _tara(korunan) == (1, []), _tara(korunan)
 
 
-def test_KARSIT_KANIT_ALTI_dongu_GERCEKTEN_baglandi():
-    """Düzeltmenin ÖZNESİ hâlâ orada mı — yoksa kapı boş bir ağacı tarıyor olabilir."""
-    hedefler = {
-        "apps/backend/servers/api_server.py": 5,
-        "apps/backend/servers/efield_live.py": 1,
-    }
-    for rel, beklenen in hedefler.items():
-        metin = (KOK / rel).read_text(encoding="utf-8")
-        n = metin.count("dongu_hatasini_bildir(")
-        assert n >= beklenen, f"{rel}: {n} bağlanma var, beklenen ≥{beklenen} — döngüler yardımcıdan koparılmış"
+def test_KARSIT_KANIT_M1_M2_bicimleri_TEK_BASINA_yakalanir():
+    """D1.17 (B-1.36): eski tarayıcı M1 (`while True` + `self.logger`) ve M2 (`is_set` + `logging`) biçimlerine
+    TEK BAŞINA kördü (yalnız ikisi birden yakalanıyordu — v-A20)."""
+    m1 = (
+        "def d(self):\n"
+        "    while True:\n"
+        "        try:\n"
+        "            self._tick()\n"
+        "        except Exception:\n"
+        '            self.logger.exception("x")\n'
+    )
+    m2 = (
+        "import logging\n"
+        "def d(self):\n"
+        "    while not self._stop.is_set():\n"
+        "        try:\n"
+        "            self._tick()\n"
+        "        except Exception:\n"
+        '            logging.exception("x")\n'
+    )
+    assert _tara(m1) == (1, [(6, ["self.logger.exception"])]), _tara(m1)
+    assert _tara(m2) == (1, [(7, ["logging.exception"])]), _tara(m2)
+
+
+_YARDIMCI_ADLARI = frozenset({"dongu_hatasini_bildir", "_dongu_hatasini_bildir"})
+
+
+def _yardimci_cagrisi_sayisi(kaynak: str) -> int:
+    """`dongu_hatasini_bildir` için GERÇEK çağrı sayısı (AST). D1.17 (B-1.36): eski sayaç metin araması
+    yapıyordu — yoruma eklenen `dongu_hatasini_bildir(` dizesi onu kandırdı (k-K4.6c: 344 passed)."""
+    n = 0
+    for c in ast.walk(ast.parse(kaynak)):
+        if isinstance(c, ast.Call):
+            f = c.func
+            ad = f.id if isinstance(f, ast.Name) else f.attr if isinstance(f, ast.Attribute) else None
+            if ad in _YARDIMCI_ADLARI:
+                n += 1
+    return n
+
+
+def test_KARSIT_KANIT_sayac_YORUM_ve_DIZE_ile_kandirilmaz():
+    assert _yardimci_cagrisi_sayisi('# dongu_hatasini_bildir("x")\nX = "dongu_hatasini_bildir("\n') == 0
+    assert (
+        _yardimci_cagrisi_sayisi('dongu_hatasini_bildir("x")\n_dongu_hatasini_bildir("y")\nm.dongu_hatasini_bildir()\n')
+        == 3
+    )
+
+
+#: Yardımcıya bağlı döngü bildirimi sayısı (2026-10-01 ölçüldü: 26). Taban — ekleme serbest.
+BAGLI_BILDIRIMLER = {
+    "apps/backend/servers/api_server.py": 5,
+    "apps/backend/servers/efield_live.py": 1,
+    "apps/backend/servers/tunnel_manager.py": 1,
+    "apps/backend/servers/sync_worker.py": 2,
+    "apps/backend/servers/update_manager.py": 1,
+    "apps/backend/services/headless_services.py": 4,
+    "apps/backend/services/headless_db_maintenance.py": 1,
+    "apps/backend/services/mdns_service.py": 3,
+    "apps/backend/controllers/hardware_controller.py": 1,
+    "apps/backend/headless_core.py": 3,
+    "apps/backend/servers/ai_router.py": 4,
+}
+
+
+def test_KARSIT_KANIT_baglanan_donguler_GERCEKTEN_cagiriyor():
+    """Düzeltmenin ÖZNESİ hâlâ orada mı — yoksa kapı boş bir ağacı tarıyor olabilir. Sayım AST ile:
+    yorumdaki ya da dizedeki ad sayılmaz."""
+    for rel, beklenen in BAGLI_BILDIRIMLER.items():
+        n = _yardimci_cagrisi_sayisi((KOK / rel).read_text(encoding="utf-8"))
+        assert n >= beklenen, f"{rel}: {n} gerçek çağrı var, beklenen ≥{beklenen} — döngüler yardımcıdan koparılmış"
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════
