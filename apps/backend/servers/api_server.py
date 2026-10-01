@@ -1808,6 +1808,21 @@ def _yeni_seans_muhru() -> str:
         return f"react_{int(time.time() * 1000)}_{_seans_muhru_sayac}"
 
 
+def _surus_parametrelerini_dogrula_422(freq, duty, phase, duration_dk, duration_s=None) -> None:
+    """D1.95 (B-1.13 · B-1.16): donanım paketine SIĞMAYAN START parametresi → 422; bobin durumu ve deadline DEĞİŞMEZ.
+
+    ⚠️ Eskiden taşan süre (`duration` ~10**309 sn) ve duty (≥ 3,4e40 %) durum YAZILDIKTAN SONRA patlıyordu: biri
+    bobini deadline'sız (süresiz) enerjili bırakıp 500 dönüyor, öteki sonraki HER paketi (STOP dahil) düşürüyordu.
+    `HardwareController` da aynı yardımcıyla reddeder (False); uçta 422 verilir ki çağıran "donanım reddetti"
+    (503) ile "girdi geçersiz"i ayırt edebilsin. Duty/frekans ÜST sınırı EKLENMEZ (Ö.4-Y9)."""
+    from controllers.hardware_controller import ParametreGecersiz, surus_parametrelerini_hazirla
+
+    try:
+        surus_parametrelerini_hazirla(freq, duty, phase, duration_dk, duration_s)
+    except ParametreGecersiz as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 def _duration_seconds_to_stm_minutes(duration_seconds: int) -> int:
     """Convert web/API ESP duration seconds to STM firmware duration minutes."""
     try:
@@ -2632,6 +2647,14 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     _sifir_hz = bool(payload.start) and sifir_hz_durdurma_mi(payload.freq)
     if _sifir_hz:
         payload.start = False
+    if payload.start:  # D1.95: taşan girdi durum yazılmadan 422
+        _surus_parametrelerini_dogrula_422(
+            payload.freq,
+            payload.duty,
+            payload.phase,
+            _duration_seconds_to_stm_minutes(payload.duration),
+            payload.duration,
+        )
 
     command_id = f"react_{coil_id}_{int(time.time() * 1000)}"
 
@@ -2796,6 +2819,14 @@ async def control_batch_coils(payload: BatchCoilPayload):
     _sifir_hz = bool(payload.start) and sifir_hz_durdurma_mi(payload.freq)
     if _sifir_hz:
         payload.start = False
+    if payload.start:  # D1.95: taşan girdi HİÇBİR bobin sürülmeden 422
+        _surus_parametrelerini_dogrula_422(
+            payload.freq,
+            payload.duty,
+            payload.phase,
+            _duration_seconds_to_stm_minutes(payload.duration),
+            payload.duration,
+        )
 
     results = []
     # Audit P3: coil_ids'i max 8 BENZERSİZE sınırla — {coil_ids:[6]*5000} her ID için sıralı
@@ -2911,6 +2942,8 @@ async def start_session(payload: SessionStartPayload, request: Request):
     from servers.auth import cozumlenmis_operator
 
     _operator_kimligi = cozumlenmis_operator(request, payload.operator_email)
+    # D1.95 (B-1.13 · B-1.16): taşan parametre seans KURULMADAN 422 (eskiden bobin başına patlayıp seansı yarım bırakırdı).
+    _surus_parametrelerini_dogrula_422(payload.frequency, payload.duty, payload.phase, payload.duration_minutes)
     # Derinlemesine savunma (Pydantic max_length=8 sinirda zaten reddeder): tekrarlari at ve
     # gecerli bobin araligina (1-8) filtrele → /api/coil/batch'teki `_seen[:8]` deseniyle ayni.
     _seen_coils = []

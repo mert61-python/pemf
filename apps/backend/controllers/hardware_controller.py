@@ -42,6 +42,48 @@ STM_BOBIN_SAYISI = 7
 GOZETIMSIZ_VARSAYILAN_DAKIKA = 120
 
 
+class ParametreGecersiz(ValueError):
+    """START parametresi donanım paketine çevrilemiyor (sayı değil / float32'ye sığmıyor / süre taşıyor).
+
+    D1.95 (B-1.13 · B-1.16): API uçları bunu 422'ye çevirir; `HardwareController` reddeder ve durum DEĞİŞMEZ.
+    Metin HAM GİRDİYİ taşımaz (422 zarfında ham değer dönmesin — B-10.148)."""
+
+
+def surus_parametrelerini_hazirla(freq, duty, phase, duration, duration_seconds=None) -> dict:
+    """START parametrelerini donanıma GİDECEK değerlere çevirir — DURUM YAZILMADAN ÖNCE (D1.95 · B-1.13/B-1.16).
+
+    ⚠️ NEDEN: süre (`float(duration_seconds)`) ve paket dönüşümü (`struct.pack`) eskiden durum YAZILDIKTAN SONRA
+    yapılıyordu. 310 haneli süre `is_running=True` yazıp deadline'ı None bırakıyordu (keep-alive bobini SÜRESİZ
+    enerjili tutar, API 500); duty ≥ 3,4e40 (%) durumu yazıp sonraki HER paketi — STOP ve keep-alive dahil —
+    `OverflowError` ile düşürüyordu (hayalet 'completed' seans). Duty ÜST sınırı EKLENMEZ (Ö.4-Y9, Y20): yalnız
+    paketin `f` (float32) alanına SIĞMAYAN değer reddedilir; protokol `normalize_*` sınırları aynen uygulanır.
+
+    @return {"freq": Hz, "duty": oran, "duty_yuzde": %, "faz": derece, "sure_dk": dk, "son_tarih_s": sn}
+    @raises ParametreGecersiz"""
+    try:
+        sure_dk = normalize_duration_minutes(duration)
+        f = normalize_frequency_hz(freq)
+        d = duty_percent_to_ratio(duty)
+        faz = normalize_phase_deg(phase)
+        struct.pack("<fff", d, faz, f)  # paketin float32 alanlarına SIĞIYOR mu (OverflowError)
+        if duration_seconds and duration_seconds > 0:
+            son_tarih_s = min(float(duration_seconds), DURATION_MAX_MINUTES * 60.0)
+        else:
+            son_tarih_s = float((sure_dk if sure_dk > 0 else GOZETIMSIZ_VARSAYILAN_DAKIKA) * 60)
+    except (TypeError, ValueError, OverflowError, struct.error) as exc:
+        raise ParametreGecersiz(
+            f"Sürüş parametresi donanım paketine çevrilemiyor ({type(exc).__name__}: sayı değil ya da taşıyor)."
+        ) from exc
+    return {
+        "freq": f,
+        "duty": d,
+        "duty_yuzde": d * 100.0,
+        "faz": faz,
+        "sure_dk": sure_dk,
+        "son_tarih_s": son_tarih_s,
+    }
+
+
 def sifir_hz_durdurma_mi(freq) -> bool:
     """A-05 (sahip kararı): 0 Hz BAŞLATMA = o bobin için STOP — arayüzün "bobini parkla" niyeti (D1.53 · B-1.10).
 
@@ -311,32 +353,30 @@ class HardwareController:
         # ederken API 'basarisiz' donuyordu — operator komutun uygulanmadigini saniyor.
         # Cozum: TUM degerleri state'e DOKUNMADAN once hesapla; biri patlarsa hicbir sey
         # degismez ve cagirana durustce hata gider (bobin eski, tutarli durumunda kalir).
+        # D1.95 (B-1.13 · B-1.16): süre ve paket dönüşümleri de (float(), struct.pack) BURADA, durumdan ÖNCE.
         if start:
             try:
-                _dur_min = normalize_duration_minutes(duration)
-                _freq = normalize_frequency_hz(freq)
-                # duty birimi her zaman yüzde kabul edilir; ust limit firmware/timer tarafinda saturate olur.
-                _duty = duty_percent_to_ratio(duty)
-                _phase = normalize_phase_deg(phase)
-            except Exception:
+                _p = surus_parametrelerini_hazirla(freq, duty, phase, duration, duration_seconds)
+            except ParametreGecersiz:
                 self.logger.exception(
-                    "Coil %s parametre normalizasyonu basarisiz (freq=%r duty=%r phase=%r dur=%r) "
-                    "→ bobin durumu DEGISTIRILMEDI.",
+                    "Coil %s parametre normalizasyonu basarisiz (freq=%.40r duty=%.40r phase=%.40r dur=%.40r "
+                    "dur_s=%.40r) → bobin durumu DEGISTIRILMEDI.",
                     coil_id,
                     freq,
                     duty,
                     phase,
                     duration,
+                    duration_seconds,
                 )
                 return False
 
         with self._state_lock:
             if start:
-                dur_min = _dur_min
+                dur_min = _p["sure_dk"]
                 self.coils_state[coil_id]["is_running"] = True
-                self.coils_state[coil_id]["freq"] = _freq
-                self.coils_state[coil_id]["duty"] = _duty
-                self.coils_state[coil_id]["phase"] = _phase
+                self.coils_state[coil_id]["freq"] = _p["freq"]
+                self.coils_state[coil_id]["duty"] = _p["duty"]
+                self.coils_state[coil_id]["phase"] = _p["faz"]
                 self.coils_state[coil_id]["duration"] = dur_min
                 # Audit P2: dur_min<=0'da deadline=None → keep-alive firmware timer'ini SINIRSIZ tazeler
                 # + _active_session yoksa sure-watchdog da yok → KAPAKSIZ enerjileme.
@@ -345,18 +385,13 @@ class HardwareController:
                 # sinriridir (test_stm32_source_parity onu firmware kaynagiyla esler). Ust-kapak
                 # olarak kullanilinca sure verilmeyen bobin ~6,9 GUN sürebiliyordu — olculdu.
                 # "Protokol maksimumu" ile "guvenli gozetimsiz varsayilan" ayri seylerdir.
-                _dl_min = dur_min if dur_min > 0 else GOZETIMSIZ_VARSAYILAN_DAKIKA
                 # DENETIM P3 (fazla-tedavi): STM firmware suresi DAKIKA granulerliginde oldugundan
                 # saniye→dakika donusumu YUKARI yuvarlanir (30 sn → 1 dk). Firmware icin bu dogru
                 # (tedaviyi yarida kesmez), ama YAZILIM deadline'i monotonik SANIYE tutar → gercek
                 # sureyi tam uygulayabilir. Cagiran hassas saniyeyi verirse onu kullan; vermezse
-                # eski davranis (dakika x 60). Boylece 30 sn'lik komut 30 sn surer, 60 sn degil;
-                # firmware yine 1 dk'lik yedek kapak olarak kalir.
-                if duration_seconds and duration_seconds > 0:
-                    _dl_secs = min(float(duration_seconds), DURATION_MAX_MINUTES * 60.0)
-                else:
-                    _dl_secs = _dl_min * 60
-                self._coil_deadline[coil_id] = time.monotonic() + _dl_secs
+                # eski davranis (dakika x 60; dakika <= 0 → GOZETIMSIZ_VARSAYILAN_DAKIKA). Hesap
+                # `surus_parametrelerini_hazirla`da — durum yazilmadan ONCE (D1.95).
+                self._coil_deadline[coil_id] = time.monotonic() + _p["son_tarih_s"]
             else:
                 self.coils_state[coil_id]["is_running"] = False
                 self.coils_state[coil_id]["duty"] = 0.0
@@ -412,15 +447,12 @@ class HardwareController:
         # ⚠️ Bu bir freq/duty GUVENLIK-LIMITI DEGIL — onlar sahip karariyla kaldirildi ve GERI
         # EKLENMEZ (bkz. :30-31 ve stm32_protocol_limits.py:12-14). Burada YALNIZ yazma
         # ATOMIKLIGI saglanir: BASARILI cagri 5 bobini de istenen freq/duty'ye almaya devam eder.
+        # D1.95 (B-1.13 · B-1.16): paket dönüşümü (float32 sığma) de durumdan ÖNCE — gerekçe `surus_parametrelerini_hazirla`.
         try:
-            _dur_min = normalize_duration_minutes(duration)
-            _freq = normalize_frequency_hz(freq)
-            # duty birimi her zaman yüzde kabul edilir; ust limit firmware/timer tarafinda saturate olur.
-            _duty = duty_percent_to_ratio(duty)
-            _phase = normalize_phase_deg(phase)
-        except Exception:
+            _p = surus_parametrelerini_hazirla(freq, duty, phase, duration)
+        except ParametreGecersiz:
             self.logger.exception(
-                "start_all_coils parametre normalizasyonu basarisiz (freq=%r duty=%r phase=%r dur=%r) "
+                "start_all_coils parametre normalizasyonu basarisiz (freq=%.40r duty=%.40r phase=%.40r dur=%.40r) "
                 "→ HICBIR bobin durumu DEGISTIRILMEDI.",
                 freq,
                 duty,
@@ -430,17 +462,16 @@ class HardwareController:
             return False
 
         with self._state_lock:
-            dur_min = _dur_min
+            dur_min = _p["sure_dk"]
             # Audit P2: dur_min<=0'da kapaksiz kalmasin. ⚠️ Kapak PROTOKOL TAVANI DEGIL, klinik
             # varsayilan (bkz. GOZETIMSIZ_VARSAYILAN_DAKIKA ve update_coil'deki gerekce). TUM
             # bobinleri ayni anda surdugu icin burada kapaksizlik daha da agir sonuc dogururdu.
-            _dl_min = dur_min if dur_min > 0 else GOZETIMSIZ_VARSAYILAN_DAKIKA
-            deadline = time.monotonic() + _dl_min * 60
+            deadline = time.monotonic() + _p["son_tarih_s"]
             for i in range(1, STM_BOBIN_SAYISI + 1):
                 self.coils_state[i]["is_running"] = True
-                self.coils_state[i]["freq"] = _freq
-                self.coils_state[i]["duty"] = _duty
-                self.coils_state[i]["phase"] = _phase
+                self.coils_state[i]["freq"] = _p["freq"]
+                self.coils_state[i]["duty"] = _p["duty"]
+                self.coils_state[i]["phase"] = _p["faz"]
                 self.coils_state[i]["duration"] = dur_min
                 self._coil_deadline[i] = deadline
 
