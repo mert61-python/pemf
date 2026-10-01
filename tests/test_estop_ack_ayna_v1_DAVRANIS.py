@@ -155,3 +155,57 @@ def test_KRITIK_c_v1_takma_adi_AUTH_ZORUNLUYKEN_tokensiz_DURDURUR(estop, monkeyp
     assert r.status_code == 200, f"/api/v1 takma adında ACİL DURDUR {r.status_code} (Ö.4-Y8: kapılanamaz)"
     assert hw.stop_all >= 1, "/api/v1 ACİL DURDUR 200 döndü ama donanıma STOP denenmedi"
     _ack_bekcilerini_bekle()
+
+
+# ── Bağımsız inceleme (r3) ekleri ─────────────────────────────────────────────────────────────
+
+
+def test_KRITIK_a_HIZLI_ESP_onayi_YAYIN_SIRASINDA_gelirse_ALARM_YOK(estop, monkeypatch):
+    """(a)'nın SIRA yarısı: kayıt yayından ÖNCE açılmalı. `_mqtt_publish` PUBACK'i senkron bekler; hızlı
+    bir ESP'nin onayı yayın çağrısı DÖNMEDEN gelebilir. Kayıt yayından SONRA açılsaydı (mutant) onay
+    kaybolur, her E-stop'ta sahte "onay gelmedi" alarmı çıkar — eski kol onayı E-stop DÖNDÜKTEN sonra
+    verdiği için bunu göremiyordu."""
+    from topoloji import esp_yolu_gerekir
+
+    esp_yolu_gerekir()
+    api, _hw, bildirimler, yayinlar = estop
+    cozulen: list = []
+
+    def _hizli_yayin(topic, payload):
+        yayinlar.append((topic, dict(payload)))
+        cid = payload.get("command_id")
+        if cid and payload.get("emergency") and topic.endswith("/control"):
+            cozulen.append(cid)
+            api._resolve_ack(cid, True)  # ESP onayı yayın çağrısı dönmeden geldi
+        return True
+
+    monkeypatch.setattr(api, "_mqtt_publish", _hizli_yayin)
+    gercek_bekle = api._wait_ack
+    monkeypatch.setattr(api, "_wait_ack", lambda cid, timeout: gercek_bekle(cid, 0.3))
+    api._emergency_stop_all(reason="d113-hizli")
+    _ack_bekcilerini_bekle()
+    assert cozulen, "aparat: hiç acil STOP yayını görülmedi"
+    alarmlar = [m for m, _t in bildirimler if "ONAYI GELM" in m.upper() or "acil durdurma" in m.lower()]
+    assert alarmlar == [], f"ESP yayın sırasında onayladı ama 'onay gelmedi' alarmı üretildi: {alarmlar}"
+
+
+def test_KRITIK_b_ayna_YALNIZ_STM_seansinda_da_TUM_ESP_bobinlerini_hedefler(estop, monkeypatch):
+    """(b)'nin HEDEF yarısı: ayna seans kapsamıyla sınırlanmaz — buluta failover etmiş ESP, seans onu
+    içermese de STOP almalı (DENETİM P0 sınıfı). Eski kol yalnız iş parçacığının ADINI ölçüyordu."""
+    from topoloji import TUM_ESP, TUM_STM, esp_yolu_gerekir
+
+    esp_yolu_gerekir()
+    api, _hw, _b, _y = estop
+    monkeypatch.setattr(api, "_mqtt_publish", lambda topic, payload: False)  # ack-bekçisi doğmasın
+    aynalanan: list = []
+    monkeypatch.setattr(api, "_estop_cloud_mirror", lambda bobinler, sebep: aynalanan.append(list(bobinler)))
+    with api._session_lock:
+        api._active_session.update({"is_active": True, "coil_ids": sorted(TUM_STM)[:3]})
+    api._emergency_stop_all(reason="d113-ayna-hedef")
+    bitis = time.monotonic() + 5
+    while not aynalanan and time.monotonic() < bitis:
+        time.sleep(0.01)
+    assert aynalanan, "bulut aynası çağrılmadı"
+    assert set(TUM_ESP) <= set(aynalanan[0]), (
+        f"ayna yalnız {aynalanan[0]} bobinlerini hedefliyor — seans kapsamıyla SINIRLANMIŞ (TUM_ESP={sorted(TUM_ESP)})"
+    )
