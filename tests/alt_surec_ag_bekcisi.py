@@ -31,6 +31,8 @@ _ACILAN: set[int] = set()
 #: Çocuğun başlattığı alt süreçler (TORUNLAR bekçisizdir) — ENGELLENMEZ, kaydedilir; çağıran izin listesine
 #: bakar (bağımsız inceleme r3: torun süreçler kapsam dışıydı).
 ALT_SURECLER: list[str] = []
+#: Kaydı yapılmış ama `_winapi.CreateProcess` olayı henüz gelmemiş `subprocess.Popen` sayısı (eşleştirme).
+_POPEN_BEKLEYEN = [0]
 _AILELER = (socket.AF_INET, socket.AF_INET6)
 try:
     _YEREL_AD = socket.gethostname().lower()
@@ -166,11 +168,23 @@ def _kanca(olay, arg):
             if port in SAHIP_PORTLARI:
                 ENGELLENEN.append(("audit:bind", str(adres[0]), port))
                 raise PermissionError(f"ALT SÜREÇ AĞ BEKÇİSİ: bind {adres[0]}:{port} — sahibin servis portu")
-    elif olay in ("subprocess.Popen", "os.system", "os.spawn", "os.posix_spawn", "os.startfile"):
+    elif olay in ("subprocess.Popen", "os.system", "os.spawn", "os.posix_spawn", "os.startfile", "os.exec"):
         program = arg[0] if arg and arg[0] else (arg[1] if len(arg) > 1 else "")
         if isinstance(program, (list, tuple)):
             program = program[0] if program else ""
         ALT_SURECLER.append(f"{olay}:{program}")
+        if olay == "subprocess.Popen":
+            _POPEN_BEKLEYEN[0] += 1
+    elif olay == "_winapi.CreateProcess":
+        # 1-B inceleme (i6): multiprocessing'in Windows süreç başlatma yolu (`_winapi.CreateProcess`)
+        # `subprocess.Popen` olayını HİÇ üretmez. ⚠️ Python 3.10.2'de bu olayın komut satırı argümanı BOZUK
+        # gelir (ölçüldü: `(None, '\x03', None)`) — komut satırı kaydedilemez. Bu yüzden EŞLEŞTİRME: her
+        # `subprocess.Popen` olayının ardından gelen tek CreateProcess o Popen'ındır (kaydı zaten var); Popen'sız
+        # CreateProcess izin listesine UYMAYAN bir kayıt olarak yazılır.
+        if _POPEN_BEKLEYEN[0] > 0:
+            _POPEN_BEKLEYEN[0] -= 1
+        else:
+            ALT_SURECLER.append(f"{olay}:EŞLENMEMİŞ (Popen'sız süreç başlatma)")
 
 
 socket.socket.connect = _connect

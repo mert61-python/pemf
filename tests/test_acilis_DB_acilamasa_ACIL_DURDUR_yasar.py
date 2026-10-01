@@ -125,7 +125,15 @@ class _Casus:
         sonuc["sayac"] = dict(sayac)
 
 
-bs._build_server = lambda app, args: _Casus()
+def _sunucu_casusu(app, args):
+    # 1-B inceleme (i1/B2): GERÇEKTEN dinlenecek port ve keşfe yayınlanan port kaydedilir (launcher `--port`
+    # önceliği main() düzeyinde ölçülür — yalnız parser değil).
+    sonuc["dinlenen_port"] = args.port
+    sonuc["yayinlanan_port"] = os.environ.get("PEMF_API_PORT")
+    return _Casus()
+
+
+bs._build_server = _sunucu_casusu
 try:
     sonuc["rc"] = bs.main({argv!r})
 except BaseException as e:
@@ -205,7 +213,7 @@ def _kos(tmp_path: Path, senaryo: str, argv: list[str] | None = None) -> tuple[d
 
 
 #: Çocuğun başlatmasına izin verilen alt süreçler (D1.14 ile aynı: `platform` sürüm sorgusu).
-_IZINLI_ALT_SUREC = re.compile(r'cmd\.exe /c "?ver"?$', re.IGNORECASE)
+_IZINLI_ALT_SUREC = re.compile(r'subprocess\.Popen:(?:[A-Za-z]:\\(?:[^"\\]+\\)*)?cmd\.exe /c "?ver"?', re.IGNORECASE)
 
 
 def _sqlcipher_var() -> bool:
@@ -230,11 +238,24 @@ def _ortak_iddialar(s: dict) -> None:
         "ONAYLAR; olay döngüsü bloklandığı için ACİL DURDUR da gecikir (açılışta açılamayan DB yeniden deneniyor)"
     )
     assert s["ag"] == [], f"çocuk AĞA çıkmayı denedi (bekçi engelledi): {s['ag']}"
-    assert all(_IZINLI_ALT_SUREC.search(a) for a in s["alt"]), f"izin listesi dışı alt süreç: {s['alt']}"
+    assert all(_IZINLI_ALT_SUREC.fullmatch(a) for a in s["alt"]), f"izin listesi dışı alt süreç: {s['alt']}"
     assert s.get("rc") == 0, f"main() dönüş kodu {s.get('rc')}"
 
 
-def _db_yok_iddialari(s: dict, sebep_kalibi: str) -> None:
+#: Kimliksiz uçlara (auth-muaf `/api/health`, seans 503 detayı) ÇIKMAMASI gerekenler: dosya yolu ve ham istisna metni.
+_SIZINTI = (
+    "\\",
+    "/",
+    ".db",
+    "WinError",
+    "PermissionError",
+    "initialization failed",
+    "file is not a database",
+    "Traceback",
+)
+
+
+def _db_yok_iddialari(s: dict, sebep_kalibi: str, kok: Path) -> None:
     for h in s["saglik"]:
         assert h["dbReady"] is False, (
             f"DB açılamadı ama dbReady={h['dbReady']} — launcher güncellemeyi ONAYLAR: {s['saglik']}"
@@ -247,6 +268,16 @@ def _db_yok_iddialari(s: dict, sebep_kalibi: str) -> None:
     assert s["sayac"]["update"] == 0, f"DB'siz kipte STM bobini sürülmeye çalışıldı ({s['sayac']['update']})"
     assert s["hastalar"]["sure"] < SAGLIK_SURE_SINIRI_SN, (
         f"/api/patients {s['hastalar']['sure']:.1f} sn — açılışta açılamayan hasta DB'si her istekte yeniden deneniyor"
+    )
+    # 1-B bağımsız inceleme (i2): metin operatör içindir — YOL ve istisna ayrıntısı kimliksiz uca SIZMAZ (ölçüldü:
+    # `{exc}` / `@ {app_data_dir}` eklenince kapı yeşildi) …
+    for metin in [h["dbSebep"] for h in s["saglik"]] + [s["seans"]["detail"]]:
+        sizan = [p for p in _SIZINTI if p in metin] + ([str(kok)] if str(kok) in metin else [])
+        assert not sizan, f"dbSebep/seans detayı ayrıntı SIZDIRIYOR {sizan}: {metin!r}"
+    # … ve kök neden zinciri YALNIZ günlüktedir: o satır silinirse saha teşhisi kaybolur (ölçüldü: kapı yeşildi).
+    gunluk = (kok / "log" / "backend_service.log").read_text(encoding="utf-8", errors="replace")
+    assert "DB'SİZ (kısıtlı) açılıyor" in gunluk and "Traceback" in gunluk, (
+        "açılış DB hatası günlüğe izle (Traceback) YAZILMADI — sebep metni bilinçli ayrıntısız, teşhis yalnız günlükte"
     )
 
 
@@ -269,7 +300,7 @@ def test_KRITIK_goc_bekleyen_DB_backendi_OLDURMEZ_dbReady_FALSE_karantina_YOK(tm
         pytest.skip("sqlcipher3 yok — göç senaryosu kurulamaz (GENEL kol bozuk_ikisi'nde koşar)")
     s, app = _kos(tmp_path, senaryo)
     _ortak_iddialar(s)
-    _db_yok_iddialari(s, r"g[öo]ç")
+    _db_yok_iddialari(s, r"g[öo]ç", tmp_path)
     _duz_metin_yerinde(app, "patients.db" if senaryo == "goc_hasta" else "pemf_treatment_history.db")
 
 
@@ -278,7 +309,7 @@ def test_KRITIK_GENEL_bozuk_DB_RuntimeError_de_backendi_OLDURMEZ(tmp_path):
     backend'i (ve E-stop'u) öldürmeye devam ederdi."""
     s, app = _kos(tmp_path, "bozuk_ikisi")
     _ortak_iddialar(s)
-    _db_yok_iddialari(s, r"a[çc][ıi]lamad[ıi]")
+    _db_yok_iddialari(s, r"a[çc][ıi]lamad[ıi]", tmp_path)
     for ad in ("patients.db", "pemf_treatment_history.db"):
         assert (app / ad).read_bytes().startswith(b"BU BIR SQLITE"), f"{ad}: bozuk dosyaya DOKUNULDU"
 

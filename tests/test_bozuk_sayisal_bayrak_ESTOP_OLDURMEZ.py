@@ -157,7 +157,10 @@ for ad, fn in [("tcp", tcp), ("ham", ham), ("udp", udp), ("dns", dns), ("sahip_c
                ("ham_bind_kanca", ham_bind_kanca)]:
     dene(ad, fn)
 sarmalayici = socket.gethostbyaddr is _ag._gethostbyaddr and socket.getnameinfo is _ag._getnameinfo
+_ag._kanca("_winapi.CreateProcess", (None, "x.exe", None))  # Popen'sız (multiprocessing yolu)
 _ag._kanca("subprocess.Popen", (None, ["ornek_program.exe", "/x"], None, None))
+_ag._kanca("_winapi.CreateProcess", (None, "bozuk_komut_satiri", None))  # Popen'ın eşi — ikinci kayıt YOK
+_ag._kanca("os.exec", ("ornek_exec.exe", ["ornek_exec.exe"], None))
 print("SONUC " + json.dumps({{"sonuc": sonuc, "ag": _ag.ENGELLENEN, "sarmalayici": sarmalayici, "alt": _ag.ALT_SURECLER}}))
 """
 )
@@ -165,11 +168,12 @@ print("SONUC " + json.dumps({{"sonuc": sonuc, "ag": _ag.ENGELLENEN, "sarmalayici
 
 #: Çocuğun başlatmasına izin verilen alt süreçler (torunlar bekçisizdir). Windows `platform` sürüm sorgusu
 #: `cmd.exe /c "ver"` çalıştırır (ağ yok) — ölçüldü (bağımsız inceleme r3 sonrası, 2026-10-01).
-_IZINLI_ALT_SUREC = re.compile(r'cmd\.exe /c "?ver"?$', re.IGNORECASE)
+#: 1-B inceleme (i6): desen başa çapalı değildi (`…; cmd.exe /c "ver"` ile BİTEN her komut izinliydi) → TAM eşleşme.
+_IZINLI_ALT_SUREC = re.compile(r'subprocess\.Popen:(?:[A-Za-z]:\\(?:[^"\\]+\\)*)?cmd\.exe /c "?ver"?', re.IGNORECASE)
 
 
 def _izinli_alt_surec(kayit: str) -> bool:
-    return bool(_IZINLI_ALT_SUREC.search(kayit))
+    return bool(_IZINLI_ALT_SUREC.fullmatch(kayit))
 
 
 def _ortam(tmp_path) -> dict:
@@ -225,28 +229,38 @@ def test_KRITIK_bozuk_bayrak_backendi_OLDURMEZ_ACIL_DURDUR_calisir(
     assert bayrak in p.stderr, f"{bayrak}: bozuk değer SESSİZCE yutuldu — uyarı günlüğü yok"
 
 
-#: (bayrak, geçerli değer, beklenen) — varsayılandan FARKLI ve `max()` tabanlarının üstünde.
+#: bayrak → [(geçerli değer, beklenen)] — varsayılandan FARKLI, `max()` tabanlarının üstünde; 1-B inceleme (i6):
+#: her bayrakta varsayılanın İKİ YANI (altı ve üstü). Tek yan ölçülünce "varsayılanda tavan/taban" mutantı
+#: (`min(float(env), 180.0)`) sekiz bayrağın dördünde KÖRDÜ. `AI_QUEUE_CONCURRENCY`'de varsayılan = taban (1):
+#: altı geçerli değer YOK, yalnız üstü.
 GECERLI = {
-    "PEMF_JETON_OFFLINE_TAVAN": ("7", 7),
-    "PEMF_JETON_BORC_TAVANI": ("11", 11),
-    "PEMF_JETON_TIMEOUT": ("7.5", 7.5),
-    "PEMF_AI_QUEUE_CONCURRENCY": ("3", 3),
-    "PEMF_AI_QUEUE_MAX_WAIT": ("12.5", 12.5),
-    "PEMF_ENTITLEMENT_CACHE_TTL": ("90", 90.0),
-    "PEMF_ENTITLEMENT_TIMEOUT": ("7.5", 7.5),
-    "PEMF_AI_SERVICE_TIMEOUT": ("33", 33.0),
+    "PEMF_JETON_OFFLINE_TAVAN": [("7", 7), ("500", 500)],
+    "PEMF_JETON_BORC_TAVANI": [("11", 11), ("900", 900)],
+    "PEMF_JETON_TIMEOUT": [("2.5", 2.5), ("7.5", 7.5)],
+    "PEMF_AI_QUEUE_CONCURRENCY": [("3", 3)],
+    "PEMF_AI_QUEUE_MAX_WAIT": [("12.5", 12.5), ("90", 90.0)],
+    "PEMF_ENTITLEMENT_CACHE_TTL": [("15", 15.0), ("90", 90.0)],
+    "PEMF_ENTITLEMENT_TIMEOUT": [("2.5", 2.5), ("7.5", 7.5)],
+    "PEMF_AI_SERVICE_TIMEOUT": [("33", 33.0), ("600", 600.0)],
 }
+_GECERLI_KOLLAR = [(b, m, o, deger, beklenen) for b, _z, m, o, _v in BAYRAKLAR for deger, beklenen in GECERLI[b]]
 
 
-@pytest.mark.parametrize(("bayrak", "_bozuk", "modul", "oznitelik", "_v"), BAYRAKLAR, ids=[b[0] for b in BAYRAKLAR])
-def test_KARSIT_gecerli_bayrak_DEGERI_kullanilir(tmp_path, bayrak, _bozuk, modul, oznitelik, _v):
+@pytest.mark.parametrize(
+    ("bayrak", "modul", "oznitelik", "gecerli", "beklenen"),
+    _GECERLI_KOLLAR,
+    ids=[f"{k[0]}={k[3]}" for k in _GECERLI_KOLLAR],
+)
+def test_KARSIT_gecerli_bayrak_DEGERI_kullanilir(tmp_path, bayrak, modul, oznitelik, gecerli, beklenen):
     """Varsayılana düşüş "her şeyi yok say" biçiminde bozulmasın: geçerli değer AYNEN okunur. ⚠️ Bağımsız
     inceleme (r3): eskiden yalnız `OFFLINE_TAVAN` ölçülüyordu — `entitlement._sayi` geçerli değeri yok sayıp
-    varsayılanı dönse (4 bayrak sessizce etkisiz) kapı yeşil kalıyordu. Artık sekiz bayrağın hepsi."""
-    gecerli, beklenen = GECERLI[bayrak]
-    s = _sonuc(_kos(tmp_path, bayrak, gecerli, modul, oznitelik).stdout)
+    varsayılanı dönse (4 bayrak sessizce etkisiz) kapı yeşil kalıyordu. Artık sekiz bayrağın hepsi, iki yanda."""
+    p = _kos(tmp_path, bayrak, gecerli, modul, oznitelik)
+    s = _sonuc(p.stdout)
     assert s and s["durum"] == 200 and s["ag"] == [], s
     assert s["deger"] == pytest.approx(beklenen), f"{bayrak}={gecerli!r} → {s['deger']} (geçerli değer YOK SAYILDI)"
+    # Ana kolun kanıtı (`bayrak in stderr`) ayırt edici kalsın: geçerli değerde uyarı YOK (her değerde uyaran mutant).
+    assert bayrak not in p.stderr, f"{bayrak}={gecerli!r}: GEÇERLİ değerde uyarı basıldı: {p.stderr[-400:]}"
 
 
 def test_ARAC_alt_surec_ag_bekcisi_her_KATI_engeller_ve_KAYDEDER(tmp_path):
@@ -274,7 +288,21 @@ def test_ARAC_alt_surec_ag_bekcisi_her_KATI_engeller_ve_KAYDEDER(tmp_path):
     assert {"connect", "audit:connect", "sendto", "dns", "bind", "iocp.connect"} <= katmanlar, s["ag"]
     assert {"audit:gethostbyaddr", "audit:getnameinfo", "audit:bind"} <= katmanlar, s["ag"]
     assert s["sarmalayici"] is True, "ters DNS sarmalayıcıları (gethostbyaddr/getnameinfo) KURULMAMIŞ"
-    assert s["alt"] and s["alt"][-1] == "subprocess.Popen:ornek_program.exe", f"alt süreç kaydı çalışmıyor: {s['alt']}"
+    assert s["alt"][-3:] == [
+        "_winapi.CreateProcess:EŞLENMEMİŞ (Popen'sız süreç başlatma)",
+        "subprocess.Popen:ornek_program.exe",
+        "os.exec:ornek_exec.exe",
+    ], f"alt süreç kaydı çalışmıyor (Popen'sız CreateProcess / os.exec / eşleştirme): {s['alt']}"
+    # İzin deseni TAM eşleşir: yalnız `cmd.exe /c "ver"` (yollu ya da yolsuz); sonuna/başına ek yapılmış komut DEĞİL.
+    assert _izinli_alt_surec(r'subprocess.Popen:C:\WINDOWS\system32\cmd.exe /c "ver"')
+    assert _izinli_alt_surec('subprocess.Popen:cmd.exe /c ver')
+    for kotu in (
+        'subprocess.Popen:kotu.exe; cmd.exe /c "ver"',
+        r'subprocess.Popen:C:\x\cmd.exe /c "ver" & kotu.exe',
+        "_winapi.CreateProcess:EŞLENMEMİŞ (Popen'sız süreç başlatma)",
+        'os.exec:cmd.exe /c "ver"',
+    ):
+        assert not _izinli_alt_surec(kotu), kotu
 
 
 def test_KARSIT_bekci_gercek_ESTOP_bulut_aynasi_denemesini_GORUR(tmp_path):
@@ -362,6 +390,9 @@ def test_KRITIK_bozuk_PEMF_API_PORT_ile_GERCEK_acilis_ACIL_DURDUR_calisir(tmp_pa
 
     s, _app = _acilis_kos(tmp_path, "bozuk_port")
     _ortak_iddialar(s)
+    # 1-B inceleme (i1/B2): `--port` ortamı main() düzeyinde de EZER (yalnız parser değil): dinlenen ve keşfe
+    # yayınlanan port launcher'ınki — bozuk ortam değeri ya da 8000 DEĞİL.
+    assert (s.get("dinlenen_port"), s.get("yayinlanan_port")) == (51999, "51999"), s
 
 
 def test_KRITIK_bozuk_PEMF_API_PORT_portsuz_acilista_8000_ve_UYARI_GUNLUKTE(tmp_path):
@@ -372,5 +403,6 @@ def test_KRITIK_bozuk_PEMF_API_PORT_portsuz_acilista_8000_ve_UYARI_GUNLUKTE(tmp_
 
     s, _app = _acilis_kos(tmp_path, "bozuk_port", argv=["--host", "127.0.0.1", "--no-headless-services"])
     _ortak_iddialar(s)
+    assert (s.get("dinlenen_port"), s.get("yayinlanan_port")) == (8000, "8000"), s
     gunluk = (tmp_path / "log" / "backend_service.log").read_text(encoding="utf-8", errors="replace")
     assert "PEMF_API_PORT='80O0'" in gunluk and "8000" in gunluk, "bozuk port uyarısı günlükte YOK (sessiz yutma)"
