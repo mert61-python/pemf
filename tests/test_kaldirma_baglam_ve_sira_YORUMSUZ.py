@@ -78,28 +78,38 @@ def baglam_ihlalleri(metin: str) -> list[str]:
         if m:
             baglam = m.group(1).lower()
     ihlal = []
-    yigin: list[str] = []  # POSTUNINSTALL ${If} dal bağlamları
+    # YOLA DUYARLI izleme (1-B inceleme i5): bir dalın içindeki `SetShellVarContext` yalnız O DALIN bağlamını
+    # değiştirir. `${EndIf}`'te birleşim TUTUCU: dal sonlarından (ve `${Else}` yoksa If'e GİRİŞ bağlamından)
+    # biri `all` ise sonuç `all`; yalnız TÜM yollar `current` ile biterse `current`. Eski izleyici dal içindeki
+    # `current`'ı `${EndIf}` sonrasına SIZDIRIYORDU → `${If} $UpdateMode = 1 / SetShellVarContext current /
+    # ${EndIf}` ardından gelen silme (güncelleme-değil yolunda `all` → C:\ProgramData) YEŞİLDİ.
+    yigin: list[dict] = []  # her açık ${If}: {"giris": bağlam, "sonlar": [dal sonu bağlamları], "else": bool}
     for no, s in enumerate(makro_govdesi(satirlar, "NSIS_HOOK_POSTUNINSTALL")):
         m = re.match(r"SetShellVarContext\s+(all|current)\b", s, re.I)
         if m:
             baglam = m.group(1).lower()
-            if yigin:
-                yigin[-1] = baglam
             continue
-        if re.match(r"^\$\{If(Not)?\}", s):
-            yigin.append("current" if _KUTU_DALI.match(s) else baglam)
+        if re.match(r"^\$\{(If|IfNot|Unless)\}", s):
+            yigin.append({"giris": baglam, "sonlar": [], "else": False})
+            baglam = "current" if _KUTU_DALI.match(s) else baglam
             continue
         if re.match(r"^\$\{(ElseIf|Else)\}", s):
-            if yigin:
-                yigin[-1] = "current" if _KUTU_DALI.match(s) else baglam
+            assert yigin, f"POSTUNINSTALL+{no}: eşsiz {s!r}"
+            cerceve = yigin[-1]
+            cerceve["sonlar"].append(baglam)
+            if re.match(r"^\$\{Else\}", s):
+                cerceve["else"] = True
+            baglam = "current" if _KUTU_DALI.match(s) else cerceve["giris"]
             continue
         if re.match(r"^\$\{EndIf\}", s):
-            if yigin:
-                yigin.pop()
+            assert yigin, f"POSTUNINSTALL+{no}: eşsiz ${{EndIf}}"
+            cerceve = yigin.pop()
+            yollar = cerceve["sonlar"] + [baglam] + ([] if cerceve["else"] else [cerceve["giris"]])
+            baglam = "all" if "all" in yollar else "current"
             continue
-        etkin = yigin[-1] if yigin else baglam
-        if _SIL.match(s) and etkin == "all":
+        if _SIL.match(s) and baglam == "all":
             ihlal.append(f"POSTUNINSTALL+{no}: {s}  [bağlam all → C:\\ProgramData]")
+    assert not yigin, "POSTUNINSTALL: kapanmayan ${If}"
     return ihlal
 
 
@@ -126,6 +136,7 @@ def test_ARAC_nsis_ayiklayici_iki_yorum_bicimini_ve_bloku_tanir():
 
 
 _SATIR = '    RMDir /r "$LOCALAPPDATA\\PEMF_System"\n'
+_ISARETSIZ = "  ${Else}\n    DetailPrint \"PEMF: 'uygulama verisini sil' işaretsiz"  # POSTUNINSTALL'ın ${Else}'i
 _MUTANTLAR = {
     "M1_satir_dalin_DISINA": lambda m: m.replace(_SATIR, "", 1).replace(
         "  ${EndIf}\n  ; ── KVKK AÇIKLIĞI",
@@ -137,7 +148,34 @@ _MUTANTLAR = {
     ),
     "silme_YORUMA_alindi_noktali_virgul": lambda m: m.replace(_SATIR, "    ; " + _SATIR.lstrip(), 1),
     "silme_YORUMA_alindi_diyez": lambda m: m.replace(_SATIR, "    # " + _SATIR.lstrip(), 1),
+    # i5 nsis_sizan_baglam_son: dal içindeki `current` ${EndIf} SONRASINA sızmamalı.
+    "SIZAN_baglam_EndIf_sonrasi": lambda m: m.replace(_SATIR, "", 1).replace(
+        "uninstaller'ının işi.\n!macroend",
+        "uninstaller'ının işi.\n  ${If} $UpdateMode = 1\n    SetShellVarContext current\n  ${EndIf}\n"
+        + _SATIR
+        + "!macroend",
+        1,
+    ),
+    "SIZAN_baglam_ElseIf_dalina": lambda m: m.replace(
+        "  ${If} ${Silent}\n  ${OrIf} $UpdateMode = 1\n",
+        "  ${If} ${Silent}\n  ${OrIf} $UpdateMode = 1\n    SetShellVarContext current\n",
+        1,
+    ).replace(_ISARETSIZ, "  ${Else}\n" + _SATIR + _ISARETSIZ.split("\n", 1)[1], 1),
 }
+
+
+def test_ARAC_baglam_izleyici_YOLA_duyarli_ve_tum_yollar_current_ise_current():
+    """Karşıt: TÜM yollar `current` ile biterse sonrası `current` (yanlış kırmızı yok); biri `all` ise `all`."""
+    on = "!macro NSIS_HOOK_PREUNINSTALL\n  SetShellVarContext all\n!macroend\n!macro NSIS_HOOK_POSTUNINSTALL\n"
+    son = '  RMDir /r "$LOCALAPPDATA\\PEMF_System"\n!macroend\n'
+    tum_current = (
+        "  ${If} $X = 1\n    SetShellVarContext current\n  ${Else}\n    SetShellVarContext current\n  ${EndIf}\n"
+    )
+    else_yok = "  ${If} $X = 1\n    SetShellVarContext current\n  ${EndIf}\n"
+    biri_all = "  SetShellVarContext current\n  ${If} $X = 1\n    SetShellVarContext all\n  ${EndIf}\n"
+    assert baglam_ihlalleri(on + tum_current + son) == []
+    assert baglam_ihlalleri(on + else_yok + son), "Else yokken If'e giriş bağlamı (all) birleşime girmeli"
+    assert baglam_ihlalleri(on + biri_all + son), "bir dal `all` ile biterse sonrası `all`"
 
 
 @pytest.mark.parametrize("ad", list(_MUTANTLAR))
@@ -247,7 +285,9 @@ _PS_STOP = "    if (Test-Path $NssmExe) { & $NssmExe stop $ServiceBackend *>$nul
 )
 def test_KRITIK_D147a_denetleyici_mutantta_KIRMIZI(ad):
     src = SETUP.read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
-    assert src.count(_PS_STOP) == 1
+    # Çapa çürürse AÇIK hata (1-B inceleme i5 ek notu: ValueError'lu "kırmızı" algılamayı kanıtlamaz).
+    assert src.count(_PS_STOP) == 1, "ÇAPA ÇÜRÜDÜ: nssm stop satırı — öz-denetim ölçmüyor"
+    assert "    for ($i = 0; $i -lt 40" in src, "ÇAPA ÇÜRÜDÜ: bekleme döngüsü başlığı — öz-denetim ölçmüyor"
     if ad == "kill_ONE_ALINDI":
         src = src.replace(_PS_STOP, "    Stop-AppProcs\n" + _PS_STOP, 1)
     elif ad == "nssm_stop_YORUMDA":
