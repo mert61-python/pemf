@@ -30,10 +30,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from topoloji import TUM_STM  # noqa: E402  (literal bobin numarası YAZILMAZ)
+from topoloji import TUM_ESP, TUM_STM  # noqa: E402  (literal bobin numarası YAZILMAZ)
 
 _STM = sorted(TUM_STM)
-SEANS_KUMELERI = {"ilk_STM": _STM[:1], "son_STM": _STM[-1:], "tum_STM": _STM}
+# 1-B inceleme (i7): yalnız-STM kümeleri `any(…)` → `all(…)` mutantını göremiyordu; karışık + boş (varsayılan 1..8).
+SEANS_KUMELERI = {"ilk_STM": _STM[:1], "son_STM": _STM[-1:], "tum_STM": _STM, "varsayilan_BOS": []}
+if TUM_ESP:
+    SEANS_KUMELERI["karisik_STM_ESP"] = _STM[-1:] + sorted(TUM_ESP)
 
 
 class _KaydediciDonanim:

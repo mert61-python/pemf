@@ -25,12 +25,16 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from topoloji import TUM_STM  # noqa: E402  (literal bobin numarası YAZILMAZ)
+from topoloji import TUM_ESP, TUM_STM  # noqa: E402  (literal bobin numarası YAZILMAZ)
 
 _STM = sorted(TUM_STM)
 #: Bağımsız inceleme (r1): kapı yalnız `[1, 2]` ile kuruluyordu — kopuş koşulu eski 5-bobin
 #: topolojisine (`range(1, 6)`) dönse de YEŞİL kalıyordu (B-10.42 sınıfı). Kümeler topolojiden türer.
-SEANS_KUMELERI = {"ilk_iki_STM": _STM[:2], "son_STM": _STM[-1:], "son_iki_STM": _STM[-2:]}
+#: 1-B inceleme (i7): kümelerin HEPSİ yalnız-STM'ydi — koşul `any(…)` → `all(…)` olunca (STM+ESP karışık seans
+#: ve `coil_ids` boşken varsayılan 1..8 seansı STM kopunca DURMAZ) tam süit YEŞİLDİ. Karışık + boş küme eklendi.
+SEANS_KUMELERI = {"ilk_iki_STM": _STM[:2], "son_STM": _STM[-1:], "son_iki_STM": _STM[-2:], "varsayilan_BOS": []}
+if TUM_ESP:
+    SEANS_KUMELERI["karisik_STM_ESP"] = _STM[-1:] + sorted(TUM_ESP)
 
 
 class _KaydediciDonanim:
