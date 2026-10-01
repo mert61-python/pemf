@@ -16,6 +16,7 @@ GEÇMEZ — DB çökükken tedaviyi durduramamak asıl tehlike olurdu. Bu dosya 
 """
 
 import pytest
+from dongu_tek_tur import bir_tur_kos  # D1.36 → D1.42: ortak yardımcı (yalnız test iş parçacığında uyku)
 from fastapi.testclient import TestClient
 from topoloji import ESP_BOBIN, TUM_ESP, TUM_STM  # faz 4: literal bobin numarasi YASAK
 
@@ -258,58 +259,6 @@ def test_KRITIK_DB_bozukken_SEANS_DURDURMA_CALISIR(client, api, db_bozuk, monkey
     assert r.status_code == 200, f"DB bozukken seans durdurma reddedildi: {r.status_code}"
 
 
-class _TurBitti(BaseException):
-    """Döngü `sleep`e vardı → bir tur tamam. BaseException: döngünün `except Exception`'ı yutmasın."""
-
-
-def _bir_tur_kos(fonk, dakika_atla=False):
-    """`while True` arka plan döngüsünün gövdesini AYRI bir iş parçacığında TAM BİR TUR koşturur.
-
-    `time.sleep` (ve istenirse `time.time`) YALNIZ bu iş parçacığında değişir; diğer iş parçacıkları
-    (çalışıyorsa gerçek session-watchdog) özgün işlevleri görür — süreç genelinde sleep yaması
-    uyuyan watchdog'u öldürüyordu (B-10.257, D1.41). `dakika_atla`: her `time.time()` çağrısı 61 sn
-    ileri gider → sensör döngüsü ilk turda dakika sınırına (emit + flush) varır.
-    Dönüş: (uyku_sayisi, hatalar)."""
-    import threading
-    import time as _time
-
-    orj_sleep, orj_time = _time.sleep, _time.time
-    durum = {"ident": None, "uyku": 0, "zaman": 0}
-
-    def _sleep(s):
-        if threading.get_ident() == durum["ident"]:
-            durum["uyku"] += 1
-            raise _TurBitti()
-        return orj_sleep(s)
-
-    def _zaman():
-        if dakika_atla and threading.get_ident() == durum["ident"]:
-            durum["zaman"] += 1
-            return orj_time() + 61.0 * (durum["zaman"] - 1)
-        return orj_time()
-
-    hatalar = []
-
-    def _kos():
-        durum["ident"] = threading.get_ident()
-        try:
-            fonk()
-        except _TurBitti:
-            pass
-        except BaseException as e:  # noqa: BLE001 — iddia edilecek
-            hatalar.append(e)
-
-    _time.sleep, _time.time = _sleep, _zaman
-    try:
-        th = threading.Thread(target=_kos, daemon=True, name="d136-tek-tur")
-        th.start()
-        th.join(10)
-    finally:
-        _time.sleep, _time.time = orj_sleep, orj_time
-    assert not th.is_alive(), f"{fonk.__name__} bir turda sleep'e varmadı (10 sn)"
-    return durum["uyku"], hatalar
-
-
 def test_KRITIK_seans_ORTASINDA_DB_duserse_tedavi_KESILMEZ(client, api, monkeypatch):
     """Kapı yalnız başlatmada. Süren tedaviyi DB yüzünden kesmek hastaya zarar verir.
 
@@ -328,9 +277,9 @@ def test_KRITIK_seans_ORTASINDA_DB_duserse_tedavi_KESILMEZ(client, api, monkeypa
         _orj_flush = api._flush_sensor_buffer_if_active
         monkeypatch.setattr(api, "_flush_sensor_buffer_if_active", lambda: flush.append(1) or _orj_flush())
 
-        uyku, hatalar = _bir_tur_kos(api._session_duration_watchdog)
+        uyku, hatalar = bir_tur_kos(api._session_duration_watchdog)
         assert (uyku, hatalar) == (1, []), f"session-watchdog bir turu tamamlamadı: uyku={uyku} hata={hatalar}"
-        uyku, hatalar = _bir_tur_kos(api._sensor_persistence_loop, dakika_atla=True)
+        uyku, hatalar = bir_tur_kos(api._sensor_persistence_loop, dakika_atla=True)
         assert (uyku, hatalar) == (1, []), f"sensor-persist bir turu tamamlamadı: uyku={uyku} hata={hatalar}"
         assert flush, "sensör döngüsü dakika sınırına varmadı (tur, aktif seans dalını koşmadı)"
         assert hata_bildirimi == [], f"döngüler DB yokken hata yoluna düştü: {hata_bildirimi}"

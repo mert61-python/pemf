@@ -139,6 +139,12 @@ def test_kapatilan_seans_ACIL_DURDURMADAN_ayirt_edilebilir(tmp_path):
     assert r["session_status"] not in ("completed", "active"), (
         f"durum '{r['session_status']}' → kesintiyle biten seans normal bitmis gibi gorunuyor"
     )
+    # ⚠️ D1.42 (B-10.116): yalnız "completed/active değil" demek KÖRDÜ — kurtarma `EMERGENCY_STOPPED` diye
+    # mühürlese (yaşanmamış bir ACİL DURDURMA tıbbi kayda uydurulur) yeşil kalıyordu. Durum TAM pinli.
+    from database.treatment_history_db import SEANS_DURUMU_ACIL_DURDURMA
+
+    assert r["session_status"] == "ABORTED_DUE_TO_POWER", f"kurtarılan seans durumu {r['session_status']!r}"
+    assert r["session_status"] != SEANS_DURUMU_ACIL_DURDURMA
 
 
 def test_CALISAN_seansa_DOKUNULMAZ_karsit_kanit(tmp_path):
