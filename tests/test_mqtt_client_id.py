@@ -116,3 +116,79 @@ def test_KRITIK_estop_cloud_id_7_haneli_PID_de_broker_sinirinda(monkeypatch):
         cid = api._mqtt_client_id(role)
         assert len(cid) <= 23, f"{role}: 7-haneli PID'de kimlik {len(cid)} karakter: {cid}"
         assert re.fullmatch(r"[A-Za-z0-9_-]+", cid), f"{role}: gecersiz karakter: {cid}"
+
+
+# ── D1.65 · B-10.44: kimliği ÇAĞRI YERİ üretmeli — yalnız `_mqtt_client_id`'yi ölçmek kördü ─────────────────
+# Yukarıdaki testler kimlik ÜRETİCİSİNİ sınar; `_mqtt_publish` ve `_estop_cloud_mirror` `client_id=` olarak SABİT bir
+# değer verse de hepsi yeşil kalıyordu (plan: mutantta 83 test YEŞİL). Sahip kararı: "client_id SABİT OLAMAZ" (art
+# arda iki E-stop'ta broker önceki oturumu düşürür → STOP kaybı). ESP kapalı olduğu için bugün gizli; A-04 (ESP
+# dönüşünde kimlikli broker) öncesi kapanmalı. Gerçek ağ YOK: paho istemcisi sahte, broker sondası yamalı.
+
+
+def test_KRITIK_GERCEK_yayinci_ve_bulut_aynasi_client_idyi_CAGRI_BASINA_uretir(monkeypatch):
+    import socket
+    import types
+
+    import paho.mqtt.client as pm
+    import utils.secrets_manager as sm
+    from servers import api_server as api
+    from servers import live_state
+
+    kimlikler: list = []
+
+    class _SahteIstemci:
+        def __init__(self, *a, client_id=None, **k):
+            kimlikler.append(client_id)
+
+        def username_pw_set(self, *a, **k):
+            pass
+
+        def tls_set(self, *a, **k):
+            pass
+
+        def connect(self, *a, **k):
+            pass
+
+        def loop_start(self):
+            pass
+
+        def loop_stop(self):
+            pass
+
+        def disconnect(self):
+            pass
+
+        def publish(self, *a, **k):
+            return types.SimpleNamespace(wait_for_publish=lambda timeout=None: None, is_published=lambda: True)
+
+    sirlar = {
+        "mqtt_cloud_host": "bulut.invalid",
+        "mqtt_cloud_user": "u",
+        "mqtt_cloud_pass": "p",
+        "mqtt_cloud_port": "8883",
+    }
+    monkeypatch.setattr(pm, "Client", _SahteIstemci)
+    monkeypatch.setattr(live_state, "esp_etkin", lambda: True)  # ESP kapalıyken yayıncı istemci HİÇ kurulmaz
+    monkeypatch.setattr(api, "_mqtt_credentials", lambda: (None, None))
+    monkeypatch.setattr(api, "_kaydet_esp_komut_niyeti", lambda *a, **k: None)  # niyet kaydı başka teste sızmasın
+    # Broker sondası: GERÇEK 127.0.0.1:1883'e (sahibin broker'ı) bağlanılmaz.
+    monkeypatch.setattr(socket, "create_connection", lambda *a, **k: types.SimpleNamespace(close=lambda: None))
+    monkeypatch.setattr(sm, "get_secret", lambda ad, default="", generate=False: sirlar.get(ad, default))
+
+    for _ in range(2):
+        assert api._mqtt_publish(f"pemf/coil/{ESP_BOBIN}/control", {"command": "stop"}) is True
+    yayinci = list(kimlikler)
+    for _ in range(2):
+        api._estop_cloud_mirror([ESP_BOBIN], "test")
+    ayna = kimlikler[len(yayinci) :]
+
+    assert len(yayinci) == 2 and len(ayna) == 2, f"aparat: istemci sayisi beklenmedik {kimlikler}"
+    pid = os.getpid()
+    assert all(re.fullmatch(rf"pemf_pub_{pid}_\d+", k or "") for k in yayinci), (
+        f"_mqtt_publish client_id'yi _mqtt_client_id('pub') ile URETMIYOR: {yayinci}"
+    )
+    assert len(set(yayinci)) == 2, f"art arda iki yayin AYNI client_id ile baglandi (broker ilkini dusurur): {yayinci}"
+    assert all(re.fullmatch(rf"pemf_esc_{pid % 100000}_\d+", k or "") for k in ayna), (
+        f"_estop_cloud_mirror client_id'yi _mqtt_client_id('estop-cloud') ile URETMIYOR: {ayna}"
+    )
+    assert len(set(ayna)) == 2, f"cifte E-stop'ta iki ayna oturumu AYNI kimlikle baglandi: {ayna}"
