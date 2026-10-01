@@ -32,8 +32,15 @@ FW = Path(__file__).resolve().parent.parent / "firmware" / "stm32_pemf" / "Core"
 
 @pytest.fixture(scope="module")
 def src():
+    """⚠️ D1.23 (B-10.40): YORUMU SOYULMUŞ kaynak (`tests/c_soyucu.c_soy`; dize sabitleri korunur).
+
+    Eskiden ham metin aranıyordu: `/* PEMF_ForceAllCoilOutputsLow(); */` (Error_Handler bobini kesmez), parça-1
+    STOP kısayolunun yoruma alınması ya da parça-2'nin yalnız yorumda kopya kalması — üçü de 17 dosya / 182
+    testte YEŞİL kalıyordu (fault anında bobin son duty'de kilitli; STOP periyot sonunu bekler)."""
+    from c_soyucu import c_soy
+
     assert FW.exists(), f"firmware kaynağı yok: {FW}"
-    return FW.read_text(encoding="utf-8", errors="replace")
+    return c_soy(FW.read_text(encoding="utf-8", errors="replace"))
 
 
 def _sabit(src, ad):
@@ -209,4 +216,6 @@ def test_fault_yamasi_BELGELENMIS(src):
     assert "stm32f4xx_it.c" in metin and "PEMF_ForceAllCoilOutputsLow" in metin, (
         "fault işleyici yama talimatı README'de yok → adım sessizce atlanır"
     )
-    assert "stm32f4xx_it.c" in src, "main.c yamanın nereye uygulanacağını belirtmiyor"
+    # Talimat main.c'de YORUMDA durur (belge iddiası) → burada bilerek HAM metin; `src` yorumsuzdur (D1.23).
+    ham = FW.read_text(encoding="utf-8", errors="replace")
+    assert "stm32f4xx_it.c" in ham, "main.c yamanın nereye uygulanacağını belirtmiyor"
