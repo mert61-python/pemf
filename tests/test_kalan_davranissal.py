@@ -43,16 +43,12 @@ def test_bayat_ESP_bobinine_GERCEK_stop_yayinlanir(monkeypatch):
         api._live_state["coils"][idx]["running"] = True
     api._coil_last_telemetry[idx] = time.monotonic() - (api.ESP_STALE_SEC + 10)
 
-    # Sonsuz döngüyü TEK tur çalıştır: sleep `try` bloğunun DIŞINDA → oradan çık.
-    class _Dur(Exception):
-        pass
+    # Sonsuz döngüyü TEK tur çalıştır — İŞ PARÇACIĞINA YEREL (1-B inceleme i4/D1.41: süreç geneli sleep yaması
+    # uyuyan iş parçacıklarını öldürüyordu).
+    from dongu_tek_tur import bir_tur_kos
 
-    def _sleep(_s):
-        raise _Dur()
-
-    monkeypatch.setattr(api.time, "sleep", _sleep)
-    with pytest.raises(_Dur):
-        api._esp_telemetry_watchdog()
+    uyku, hatalar = bir_tur_kos(api._esp_telemetry_watchdog)
+    assert (uyku, hatalar) == (1, []), f"ESP watchdog turu: uyku={uyku} hata={hatalar}"
 
     stoplar = [(t, p) for t, p in yayinlar if p.get("command") == "stop"]
     assert stoplar, (

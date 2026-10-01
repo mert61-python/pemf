@@ -706,6 +706,38 @@ def _ack_bekcilerini_bosalt():
 _WATCHDOG_OLUMU_BILDIRILDI = {"evet": False}
 
 
+def uyku_nobetcisi_dongusu(uyku=None) -> None:
+    """Sonsuza dek `time.sleep` ile uyur. Süreç geneli, FIRLATAN bir sleep yaması bu iş parçacığını öldürür —
+    1-B bağımsız inceleme (i4): nöbetin watchdog kolu `_bg_threads_started` False iken (süitte HEP) uykudaydı;
+    üç dosyadaki süreç geneli yama ölçülen biçimde uyuyan iş parçacığını öldürüyor ama nöbet susuyordu. Fırlatmayan
+    yama (anında dönen sahte sleep) döngüyü döndürmesin diye kısa dönüşte olaya göre beklenir."""
+    import time as _t
+
+    bekle = threading.Event()
+    while True:
+        t0 = _t.monotonic()
+        (uyku or _t.sleep)(0.005)  # kısa: testin kısa süreli yama penceresine denk gelsin
+        if _t.monotonic() - t0 < 0.001:
+            bekle.wait(0.005)
+
+
+_UYKU_NOBETCISI = threading.Thread(target=uyku_nobetcisi_dongusu, daemon=True, name="nobetci-uyku")
+_UYKU_NOBETCISI.start()
+_UYKU_OLUMU_BILDIRILDI = {"evet": False}
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _uyku_nobetcisi_OTURUM_SONU():
+    """Ölüm SON testin teardown denetiminden sonra olursa da görünür olsun (oturum sonunda bir tur beklenir)."""
+    yield
+    _UYKU_NOBETCISI.join(0.05)
+    if not _UYKU_NOBETCISI.is_alive() and not _UYKU_OLUMU_BILDIRILDI["evet"]:
+        _UYKU_OLUMU_BILDIRILDI["evet"] = True
+        pytest.fail(
+            "D1.41 nöbeti (oturum sonu): süreç geneli `time.sleep` yaması nobetci-uyku'yu öldürdü", pytrace=False
+        )
+
+
 def seans_watchdog_nobet_sorunlari(api, is_parcaciklari) -> list[str]:
     """Nöbetin denetimi (test edilebilir saf işlev). `api`: servers.api_server benzeri; sızan aktif seans
     KAPATILIR (sonraki teste taşınmasın) ve raporlanır; watchdog ölümü süreçte YALNIZ BİR KEZ raporlanır."""
@@ -730,20 +762,28 @@ def seans_watchdog_nobet_sorunlari(api, is_parcaciklari) -> list[str]:
 def _seans_ve_watchdog_nobeti():
     """Teardown'da (testin kendi fikstürleri yıkıldıktan SONRA): sızan aktif seans ya da ölü watchdog → KIRMIZI."""
     yield
+    sorunlar: list[str] = []
+    if not _UYKU_NOBETCISI.is_alive() and not _UYKU_OLUMU_BILDIRILDI["evet"]:
+        _UYKU_OLUMU_BILDIRILDI["evet"] = True
+        sorunlar.append(
+            "süreç geneli `time.sleep` yaması UYUYAN iş parçacığını öldürdü (nobetci-uyku) — yamayı iş parçacığına "
+            "yerel yap (`dongu_tek_tur.bir_tur_kos`)"
+        )
     api = sys.modules.get("servers.api_server")
-    if api is None:
-        return
-    sorunlar = seans_watchdog_nobet_sorunlari(api, threading.enumerate())
+    if api is not None:
+        sorunlar += seans_watchdog_nobet_sorunlari(api, threading.enumerate())
     if sorunlar:
         pytest.fail("D1.41 nöbeti: " + " · ".join(sorunlar), pytrace=False)
 
 
 # ── 1-B (iii) · 1-A açık madde 13: ACL-KİLİTLİ düz-metin yedek ARTIĞI testin tmp'sinde KALMAZ ──────────────
 #
-# ÖLÇÜLEN (2026-10-01): emanet açıkken ürün `.plain.bak`'ı yalnız SYSTEM + Administrators'a kilitler; testin
-# tmp'sinde kalan bu dosyayı kullanıcı silemez → pytest tmp rotasyonu o dizinleri silemez, `pytest-of-<kullanıcı>`
-# birikir. Teardown'da testin KENDİ tmp_path'i altındaki `*.plain.bak*` dosyaları (gerekirse DACL sıfırlanarak)
-# silinir; silinemeyen kalırsa test KIRMIZI (sessiz artık yok). Yalnız tmp_path İSTEYEN testlerde çalışır.
+# ÖLÇÜLEN (2026-10-01): emanet açıkken ürün `.plain.bak`'ı yalnız SYSTEM + Administrators'a kilitler; kullanıcı
+# dosyayı OKUYAMAZ ve PowerShell `Remove-Item` onu SİLEMEZ (1-A temizliği bu yüzden `icacls /reset` istedi). Üst dizin
+# kullanıcıya tam yetki verdiği için `os.unlink` / pytest `rm_rf` SİLER — "tmp rotasyonu kilitlenir" öncülü ölçümde
+# DOĞRULANMADI; bu temizlik hijyendir (TEMP'te açılamayan düz-metin-biçimli yedek kalmasın). Teardown'da testin KENDİ
+# tmp_path'i altındaki `*.plain.bak*` dosyaları silinir; silinemeyen kalırsa test KIRMIZI (sessiz artık yok).
+# Yalnız tmp_path İSTEYEN testlerde çalışır.
 @pytest.fixture(autouse=True)
 def _acl_kilitli_duz_metin_yedek_ARTIGI_kalmaz(request):
     tmp = request.getfixturevalue("tmp_path") if "tmp_path" in request.fixturenames else None

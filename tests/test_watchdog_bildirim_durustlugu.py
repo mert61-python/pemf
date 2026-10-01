@@ -20,10 +20,6 @@ import pytest
 from topoloji import ESP_BOBIN  # faz 4: literal bobin numarasi YASAK
 
 
-class _Dur(Exception):
-    pass
-
-
 # FAZ 4 (2026-09-10): varsayilan indeks 5 (bobin 6) idi; bobin 6 STM'e tasindi ve
 # `_esp_telemetry_watchdog` YALNIZ `ESP_COIL_IDS`i tarar → o indeksle bu test ARTIK
 # HICBIR SEY olcmuyordu (bekci bobini atliyor, hic bildirim cikmiyor). Cipa ESP_BOBIN'e bagli.
@@ -38,12 +34,11 @@ def _tek_tur_watchdog(api, monkeypatch, publish, coil_idx=ESP_BOBIN - 1):
         api._live_state["coils"][coil_idx]["running"] = True
     api._coil_last_telemetry[coil_idx] = time.monotonic() - (api.ESP_STALE_SEC + 10)
 
-    def _sleep(_s):
-        raise _Dur()
+    # 1-B inceleme (i4/D1.41): tek tur İŞ PARÇACIĞINA YEREL — süreç geneli sleep yaması yok.
+    from dongu_tek_tur import bir_tur_kos
 
-    monkeypatch.setattr(api.time, "sleep", _sleep)
-    with pytest.raises(_Dur):
-        api._esp_telemetry_watchdog()
+    uyku, hatalar = bir_tur_kos(api._esp_telemetry_watchdog)
+    assert (uyku, hatalar) == (1, []), f"ESP watchdog turu: uyku={uyku} hata={hatalar}"
     return bildirimler
 
 

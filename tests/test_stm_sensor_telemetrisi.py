@@ -297,10 +297,11 @@ def test_KRITIK_dakika_akumulatoru_OLCULMEYEN_alani_BIRIKTIRMEZ(kur, monkeypatch
     with api._session_lock:
         api._active_session["is_active"] = True
     try:
-        _Dur = type("_Dur", (Exception,), {})
-        monkeypatch.setattr(api.time, "sleep", lambda _s: (_ for _ in ()).throw(_Dur()))
-        with pytest.raises(_Dur):
-            api._sensor_persistence_loop()
+        # 1-B inceleme (i4/D1.41): tek tur İŞ PARÇACIĞINA YEREL (süreç geneli sleep yaması uyuyan iş parçacıklarını öldürür)
+        from dongu_tek_tur import bir_tur_kos
+
+        uyku, hatalar = bir_tur_kos(api._sensor_persistence_loop)
+        assert (uyku, hatalar) == (1, []), f"sensör döngüsü turu: uyku={uyku} hata={hatalar}"
     finally:
         with api._session_lock:
             api._active_session["is_active"] = False
