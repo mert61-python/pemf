@@ -20,6 +20,20 @@ from utils.stm32_protocol_limits import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _esp_kosu_kaydi_SIZMAZ():
+    """D1.40 (B-10.124) nöbeti: bu dosyanın testleri ESP bobininin koşu kaydını AÇIK bırakmaz.
+
+    Eskiden seans testi temizlikte `_finish_coil_run(6)` diyordu — faz 4'ten beri bobin 6 STM; başlatılan
+    ESP bobininin (8) koşu kaydı süreç geneli `_active_coil_runs`ta kalıp sonraki testlere sızıyordu."""
+    yield
+    from servers import api_server as api
+
+    with api._active_coil_runs_lock:
+        sizan = sorted(c for c in api._active_coil_runs if c == ESP_BOBIN)
+    assert sizan == [], f"ESP bobini {ESP_BOBIN} koşu kaydı test sonrası AÇIK kaldı (temizlik yanlış bobini kapatıyor)"
+
+
 def test_KRITIK_esp_tavani_8266_firmware_ile_BIREBIR():
     """ESP tavanı 8266 firmware constrain/validation sınırı (1000) ile aynı olmalı."""
     assert ESP_FREQ_MAX_HZ == 1000.0, (
@@ -112,7 +126,7 @@ def _seans_baslat_ve_esp_payloadini_yakala(monkeypatch, frequency: float):
             api._active_session.update(eski_sess)
         # start'ın açtığı per-bobin run kaydını kapat (modül durumu sonraki testlere sızmasın)
         try:
-            api._finish_coil_run(6)
+            api._finish_coil_run(ESP_BOBIN)  # D1.40: eskiden literal 6 (faz 4'ten beri STM) — ESP kaydı sızıyordu
         except Exception:
             pass
 

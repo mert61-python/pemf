@@ -54,9 +54,27 @@ def kur(monkeypatch):
     monkeypatch.setattr(api, "_push_notification", lambda *a, **k: None)
 
     with api._live_state_lock:
-        api._live_state["coils"][ESP_BOBIN - 1]["connected"] = True
-        api._live_state["coils"][ESP_BOBIN - 1]["running"] = True
-    return api, yayinlar
+        bobin = api._live_state["coils"][ESP_BOBIN - 1]
+        eski = {k: bobin.get(k) for k in ("connected", "running")}
+        bobin["connected"] = True
+        bobin["running"] = True
+    yield api, yayinlar
+    # D1.40 (B-10.124): eskiden geri alınmıyordu → ESP bobini sonraki testlerde "bağlı + ÇALIŞIYOR" görünürdü.
+    with api._live_state_lock:
+        api._live_state["coils"][ESP_BOBIN - 1].update(eski)
+
+
+@pytest.fixture(autouse=True)
+def _esp_canli_durum_SIZMAZ():
+    """D1.40 nöbeti: dosyanın her testinden sonra ESP bobininin canlı durumu test ÖNCESİNE döner."""
+    from servers import api_server as api
+
+    with api._live_state_lock:
+        once = {k: api._live_state["coils"][ESP_BOBIN - 1].get(k) for k in ("connected", "running")}
+    yield
+    with api._live_state_lock:
+        sonra = {k: api._live_state["coils"][ESP_BOBIN - 1].get(k) for k in ("connected", "running")}
+    assert sonra == once, f"ESP bobini {ESP_BOBIN} canlı durumu sızdı: {once} → {sonra}"
 
 
 def _coil_status(yayinlar: list[dict], coil_id: int) -> dict | None:

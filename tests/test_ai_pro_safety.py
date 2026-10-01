@@ -155,8 +155,11 @@ def test_external_stop_runs_teardown_and_stops_coils(client, monkeypatch):
 
     assert air._ai_loop_active is False, "dış durdurma bayrağı temizlemeli (yoksa teardown atlanır)"
     assert stopped["stm"] == 1, "teardown STM bobinlerini durdurmalıydı (guard yanlış atladı)"
-    assert any("/6/" in t or "/7/" in t or "/8/" in t for t in stopped["esp"]), (
-        "teardown ESP 6-8'e STOP publish etmeliydi"
+    # ⚠️ D1.40 (B-10.112): eskiden `'/6/' or '/7/' or '/8/'` — yalnız bobin 8'e giden STOP bile yetiyordu;
+    # teardown kapsamı `(6, 7)`ye daralsa (ESP bobini 8 hiç durmaz) YEŞİL kalıyordu. Kapsam TOPOLOJİDEN.
+    beklenen = {f"pemf/coil/{c}/control" for c in TUM_ESP}
+    assert beklenen <= set(stopped["esp"]), (
+        f"teardown her ESP bobinine STOP publish etmeliydi: eksik {sorted(beklenen - set(stopped['esp']))}"
     )
 
 
