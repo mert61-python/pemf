@@ -334,6 +334,30 @@ def test_KRITIK_deadline_kapisi_import_hatasini_SKIPe_CEVIRMEZ():
         if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute) and c.func.attr == "importorskip"
     ]
     assert importorskip == [], f"deadline kapısı importorskip kullanıyor: {importorskip}"
+    # 1-B bağımsız inceleme (i4): yalnız `except … pytest.skip` aranıyordu — import `try/except Exception: return`
+    # (sessizce PASSED) ve çıplak `skip(...)` / `pytestmark = skipif` biçimleri yeşildi. Artık ürün importunu saran
+    # HER `try` ve deadline testinde/modülde HER atlama çağrısı/işareti yasak.
+    sarilan = [
+        ast.unparse(t).splitlines()[0]
+        for t in ast.walk(fn)
+        if isinstance(t, ast.Try)
+        and any(isinstance(i, (ast.Import, ast.ImportFrom)) for b in t.body for i in ast.walk(b))
+    ]
+    assert sarilan == [], f"deadline kapısında import bir `try` içinde (hata yutulabilir): {sarilan}"
+    atla = [
+        ast.unparse(c)
+        for c in ast.walk(fn)
+        if isinstance(c, ast.Call) and getattr(c.func, "id", getattr(c.func, "attr", "")) in ("skip", "xfail", "skipif")
+    ]
+    assert atla == [], f"deadline kapısında atlama çağrısı: {atla}"
+    modul_isareti = [
+        ast.unparse(n)
+        for n in agac.body
+        if isinstance(n, ast.Assign) and any(getattr(h, "id", "") == "pytestmark" for h in n.targets)
+    ]
+    assert not any("skip" in m for m in modul_isareti), f"modül düzeyi atlama işareti: {modul_isareti}"
+    isaretler = [ast.unparse(d) for d in fn.decorator_list]
+    assert not any(("skip" in d or "xfail" in d) for d in isaretler), f"deadline kapısı işaretli: {isaretler}"
 
 
 def test_firmware_sure_sayaci_keep_alive_ile_resetleniyor_BELGELI(fw_src):
