@@ -26,6 +26,7 @@ import { UpdateBanner } from "@/components/ui/UpdateBanner";
 import { MobileUpdateBanner } from "@/components/domain/MobileUpdateBanner";
 import { RecoveryCodeBanner } from "@/components/domain/RecoveryCodeBanner";
 import { SurumFarkiBanner } from "@/components/domain/SurumFarkiBanner";
+import { KayitDbBandi } from "@/components/domain/KayitDbBandi";
 import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
 import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
 import { JetonRozeti } from "@/components/ui/JetonRozeti";
@@ -431,6 +432,9 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
         )}
         <DevicePairingGuide visible={rehberAcik} onClose={() => setRehberAcik(false)} />
 
+        {/* D1.37: kayıt DB'si açılamadıysa (göç bekliyor / bozuk) seanstan ÖNCE söyle — 503'ü hasta masadayken
+            öğrenmek yerine. Hiçbir şeyi kapılamaz; ACİL DURDUR çalışır. */}
+        <KayitDbBandi />
         <UpdateBanner />
         {/* Mobil oto-güncelleme (2026-08-08): Android'de yeni APK varsa tek dokunuşla
             indirip kurar — kullanıcı siteden tekrar indirmez. Seans sürerken gizlenir. */}
