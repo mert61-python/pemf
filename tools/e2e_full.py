@@ -142,6 +142,27 @@ def esp_slotlari(snapshot):
     )
 
 
+def esp_alt_sistemi_acik(snapshot):
+    """ESP alt sistemi CALISMA ZAMANINDA acik mi (`PEMF_ESP_ENABLED`) — canli `mqtt` alani; ESP kapaliyken
+    'devre_disi'. ⚠️ D1.09 inceleme (r2): eskiden "ESP alt sistemi acik" kontrolu `esp_slotlari`'ni
+    (stm32Driven = SABIT topoloji) okuyordu — ESP kapaliyken de dogruydu."""
+    return snapshot.get("mqtt") not in (None, "", "devre_disi")
+
+
+def broker_erisilebilir():
+    """Yerel MQTT broker'i (127.0.0.1:1883) TCP'de erisilebilir mi — urunun `_mqtt_publish` hizli
+    sondasinin AYNISI. ESP yayin kontrolunun BEKLENEN sonucunu secer: broker varken `success`, yokken
+    durust `mqtt_unavailable`. ⚠️ D1.09 inceleme (r2): kontrol eskiden yalniz `transport`'u okuyordu;
+    ESP dali yanitinda `"transport": "mqtt"` SABIT oldugundan hicbir sey yayinlanmasa da YESILDI."""
+    import socket
+
+    try:
+        socket.create_connection(("127.0.0.1", 1883), timeout=0.3).close()
+        return True
+    except OSError:
+        return False
+
+
 def wait_until(fn, timeout=12, step=0.5):
     """fn() dogru olana kadar bekle (sim dongusu ~1 sn araliklarla yayin yapar)."""
     end = time.time() + timeout
@@ -1150,13 +1171,22 @@ def f_coil_control():
 
     # D1.09 (B-10.266): ESP slotu TOPOLOJIDEN (eskiden literal bobin 7 — faz 4'ten beri STM'di) ve
     # yayin iddiasi GERCEK: eski `... or bool(b7.get("status"))` her yanitta dogruydu (totoloji).
-    esp_l = esp_slotlari(snap())
-    check("snapshot: en az bir ESP slotu var (ESP alt sistemi acik)", bool(esp_l), str(esp_l))
+    # D1.09 inceleme (r2): "alt sistem acik" CANLI durumdan (topoloji degil); yayin sonucu broker'a gore
+    # YANLISLANABILIR (`transport` ESP dalinda sabit — tek basina hicbir sey kanitlamaz).
+    sn = snap()
+    check("ESP alt sistemi acik (canli mqtt durumu 'devre_disi' degil)", esp_alt_sistemi_acik(sn), str(sn.get("mqtt")))
+    esp_l = esp_slotlari(sn)
+    check("snapshot: topolojide en az bir ESP slotu var", bool(esp_l), str(esp_l))
     if esp_l:
         esp = esp_l[0]
+        yayin = "success" if broker_erisilebilir() else "mqtt_unavailable"
         s, be, _ = req("POST", f"/api/coil/{esp}/control", {"freq": 15.0, "duty": 40.0, "duration": 60, "start": True})
         check(f"tekil ESP bobin ({esp}) baslat komutu kabul edildi", s == 200, f"HTTP {s}")
-        check("ESP komutu MQTT yolundan gitti (transport=mqtt)", be.get("transport") == "mqtt", str(be)[:120])
+        check(
+            f"ESP komutu MQTT yolundan gitti, yayin sonucu durust (beklenen status={yayin})",
+            be.get("transport") == "mqtt" and be.get("status") == yayin,
+            str(be)[:120],
+        )
         s, _b, _ = req("POST", f"/api/coil/{esp}/control", {"start": False})
         check("tekil ESP bobin durdurma komutu kabul edildi", s == 200, f"HTTP {s}")
 
@@ -1201,9 +1231,14 @@ def f2_donanim_uyum():
     check("D-3: snapshot'ta ESP slotu var", bool(esp_l), str(esp_l))
     esp = esp_l[0] if esp_l else None
     if esp is not None:
+        yayin = "success" if broker_erisilebilir() else "mqtt_unavailable"
         s, b, _ = req("POST", f"/api/coil/{esp}/control", {"freq": 5000.0, "duty": 20.0, "duration": 30, "start": True})
         check("D-3: ESP bobine freq=5000 komutu 200 (iceride 1000'e normalize)", s == 200, f"HTTP {s} {str(b)[:100]}")
-        check("D-3: komut ESP (MQTT) yolundan gitti", b.get("transport") == "mqtt", str(b)[:100])
+        check(
+            f"D-3: komut ESP (MQTT) yolundan gitti, yayin sonucu durust (beklenen status={yayin})",
+            b.get("transport") == "mqtt" and b.get("status") == yayin,
+            str(b)[:100],
+        )
         s, b, _ = req("POST", f"/api/coil/{esp}/control", {"freq": -3.0, "duty": 20.0, "duration": 30, "start": True})
         check("D-3: ESP bobine negatif freq 200 (1'e clamp, 500 yok)", s == 200, f"HTTP {s}")
         req("POST", f"/api/coil/{esp}/control", {"start": False})
