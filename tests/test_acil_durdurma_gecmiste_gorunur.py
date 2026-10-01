@@ -104,6 +104,76 @@ def test_KRITIK_KPI_SORGUSU_durum_sabitini_ICERIR():
     assert SEANS_DURUMU_ACIL_DURDURMA == "EMERGENCY_STOPPED", "sabit degistiyse gecmis kayitlar da gozden gecirilmeli"
 
 
+# ── D1.08 (B-10.55): ÜRETİM YOLU — gerçek acil durdurma ucu kaydı EMERGENCY_STOPPED yazar ──────
+# Yukarıdaki testler `end_session(session_status=...)`ı DOĞRUDAN çağırıyor; asıl yazımı yapan zincir
+# (`_emergency_stop_all` → `_finalize_session_db(reason="acil-durdurma:…")` → sebep→durum eşlemesi)
+# hiçbir testte koşmuyordu: eşlemeyi 'completed'e sabitleyen (M2a) ya da 'acil-durdurma:' önekini
+# kaldıran (M2c) mutant YEŞİL kalıyordu (plan: 48 dosya).
+
+
+class _DurduranDonanim:
+    def stop_all_coils(self):
+        return True
+
+
+@pytest.fixture
+def aktif_kayitli_seans(tmp_path, monkeypatch):
+    import time as _t
+
+    from servers import api_server as api
+
+    db = TreatmentHistoryDB(tmp_path)
+    monkeypatch.setattr(api, "_get_treatment_db", lambda: db)
+    monkeypatch.setattr(api.state, "hardware", _DurduranDonanim())
+    monkeypatch.setattr(api, "_ws_broadcast_sync", lambda *a, **k: None)
+    monkeypatch.setattr(api, "_push_notification", lambda *a, **k: None)
+    monkeypatch.setattr(api, "_mqtt_publish", lambda topic, payload: False)  # ack-bekçisi doğmasın
+    sid = _seans_baslat(db, "AcilKayit")
+    with api._session_lock:
+        eski = dict(api._active_session)
+        api._active_session.clear()
+        api._active_session.update(
+            {
+                "is_active": True,
+                "session_id": "d108",
+                "coil_ids": [1],
+                "db_session_id": sid,
+                "started_epoch": _t.time() - 120,
+                "start_mono": _t.monotonic() - 120,
+            }
+        )
+    try:
+        yield api, db, sid
+    finally:
+        with api._session_lock:
+            api._active_session.clear()
+            api._active_session.update(eski)
+
+
+def _durum(db, sid):
+    with db._get_connection() as conn:
+        return conn.execute("SELECT session_status FROM treatment_sessions WHERE id=?", (sid,)).fetchone()[0]
+
+
+def test_KRITIK_GERCEK_acil_durdurma_ucu_gecmise_EMERGENCY_STOPPED_yazar(aktif_kayitli_seans):
+    from fastapi.testclient import TestClient
+
+    api, db, sid = aktif_kayitli_seans
+    assert _durum(db, sid) == "active"  # senaryo: kayıt gerçekten açık
+    r = TestClient(api.app, client=("127.0.0.1", 51236)).post("/api/hardware/emergency_stop")
+    assert r.status_code == 200, r.text[:300]
+    assert _durum(db, sid) == SEANS_DURUMU_ACIL_DURDURMA, (
+        f"acil durdurma ile biten seans geçmişte {_durum(db, sid)!r} görünüyor — güvenlik olayı tıbbi kayıtta gizli"
+    )
+
+
+def test_KARSIT_acil_olmayan_sonlandirma_COMPLETED_kalir(aktif_kayitli_seans):
+    """Eşleme "her şeyi acil say" biçiminde bozulursa normal bitiş de EMERGENCY_STOPPED görünür."""
+    api, db, sid = aktif_kayitli_seans
+    api._finalize_session_db(sid, None, coil_ids=[1], reason="auto")
+    assert _durum(db, sid) == "completed"
+
+
 if __name__ == "__main__":
     import os
 
