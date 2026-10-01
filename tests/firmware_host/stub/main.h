@@ -125,7 +125,10 @@ extern ADC_Common_TypeDef g_adc_common;
 #define __HAL_UART_CLEAR_OREFLAG(h) ((void)(h))
 #define __HAL_UART_CLEAR_NEFLAG(h) ((void)(h))
 #define __HAL_UART_CLEAR_FEFLAG(h) ((void)(h))
-#define __disable_irq() ((void)0)
+/* 1-B inceleme (i3): `Error_Handler` davranışla ölçülebilsin diye kancalı — aparat `hata` kipinde buradan
+ * longjmp ile çıkar (gerçek kod sonsuz döngüye girer). Diğer kiplerde etkisiz. */
+void pemf_host_disable_irq(void);
+#define __disable_irq() pemf_host_disable_irq()
 #define __enable_irq() ((void)0)
 
 HAL_StatusTypeDef HAL_Init(void);

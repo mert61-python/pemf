@@ -18,6 +18,8 @@ yapısını koruyacak biçimde boşlukla değiştirilir (dizin-tabanlı dilimlem
 
 from __future__ import annotations
 
+import re
+
 
 def c_soy(src: str) -> str:
     """Yorumları söker; string/char literalleri (içerik dahil) aynen korur."""
@@ -76,4 +78,45 @@ def c_soy(src: str) -> str:
                 continue
             out.append("\n" if c == "\n" else " ")
         i += 1
-    return "".join(out)
+    return _if0_soy("".join(out))
+
+
+_IF0 = re.compile(r"^\s*#\s*if\s+\(?\s*0\s*\)?\s*$")
+_IF_DIGER = re.compile(r"^\s*#\s*(if|ifdef|ifndef)\b")
+_ELSE = re.compile(r"^\s*#\s*(else|elif)\b")
+_ENDIF = re.compile(r"^\s*#\s*endif\b")
+
+
+def _if0_soy(metin: str) -> str:
+    """Önişlemciyle ÖLÜ kodu (`#if 0` … `#else`/`#elif`/`#endif`) da boşlukla değiştirir (uzunluk ve satırlar korunur).
+
+    ⚠️ 1-B bağımsız inceleme (i3): yorum soyucu `#if 0` içine alınmış kodu CANLI sayıyordu — Error_Handler'daki bobin
+    kesme çağrısı `#if 0 … #endif` içine alınınca 29 STM kapı dosyası 300/300 YEŞİLDİ. `#else`/`#elif` dalı CANLI
+    kabul edilir (tutucu: koşullu kod kaybolmaz); iç içe `#if`'ler ölü bölgede ölü kalır."""
+    satirlar = metin.split("\n")
+    yigin: list[bool] = []  # her açık #if çerçevesi için: bu çerçevede kod ÖLÜ mü
+    for k, satir in enumerate(satirlar):
+        ust_olu = any(yigin)
+        if _IF0.match(satir):
+            yigin.append(True)
+            satirlar[k] = " " * len(satir)
+            continue
+        if _IF_DIGER.match(satir):
+            yigin.append(False)
+            if ust_olu:
+                satirlar[k] = " " * len(satir)
+            continue
+        if _ELSE.match(satir) and yigin:
+            disari_olu = any(yigin[:-1])
+            yigin[-1] = False
+            if disari_olu:
+                satirlar[k] = " " * len(satir)
+            continue
+        if _ENDIF.match(satir) and yigin:
+            yigin.pop()
+            if any(yigin) or ust_olu:
+                satirlar[k] = " " * len(satir)
+            continue
+        if ust_olu:
+            satirlar[k] = " " * len(satir)
+    return "\n".join(satirlar)

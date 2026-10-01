@@ -104,11 +104,22 @@ def test_KRITIK_D121_UART_tamponu_DERLEME_ZAMANINDA_kilitli():
 # ── D1.25 · D1.26 · D1.28: kararlı durumda köprü değişmezleri ─────────────────
 
 
+#: (frekans Hz, faz °) — 1-B bağımsız inceleme (i3): kararlı-durum kapıları yalnız faz=0'da koşuyordu; faz sarması
+#: (`if (adj < 0) adj += tpp;`) silinince faz=90'da A/B boşluğu 0 tick'e iniyor ve darbeler asimetrikleşiyordu, kapı
+#: YEŞİLDİ. Faz 90/270 ve tek tpp'li bir frekans (33 Hz → tpp 1515) eklendi.
+KARARLI = [(100, 0), (100, 90), (100, 270), (33, 0)]
+KARARLI_ID = ["100Hz_faz0", "100Hz_faz90", "100Hz_faz270", "33Hz_tek_tpp"]
+_KARARLI_ONBELLEK: dict = {}
+
+
 def _kararli(exe, harita, frek=100, duty=0.9, faz=0):
-    pinler, _uni = harita
-    n = 30000  # 60 periyot @100 Hz; slew en geç ~18 periyotta tavana varır
-    olaylar = fw.bsrr_olaylari(fw.kos(exe, "isr", n, hex(_GENIS), frek, duty, faz))
-    return fw.bacak_analizi(olaylar, pinler, sorted(pinler), baslangic_tick=15000)
+    anahtar = (str(exe), frek, duty, faz)
+    if anahtar not in _KARARLI_ONBELLEK:
+        pinler, _uni = harita
+        n = 30000  # 100 Hz'de 60 periyot (33 Hz'de ~20); slew en geç ~18 periyotta (33 Hz: ~6) tavana varır
+        olaylar = fw.bsrr_olaylari(fw.kos(exe, "isr", n, hex(_GENIS), frek, duty, faz))
+        _KARARLI_ONBELLEK[anahtar] = fw.bacak_analizi(olaylar, pinler, sorted(pinler), baslangic_tick=15000)
+    return _KARARLI_ONBELLEK[anahtar]
 
 
 def _darbe_genislikleri(kenarlar, bacak):
@@ -124,16 +135,18 @@ def _darbe_genislikleri(kenarlar, bacak):
     return genis
 
 
-def test_KRITIK_D125_iki_bacak_ASLA_ayni_anda_HIGH(exe, harita):
-    sonuc = _kararli(exe, harita)
+@pytest.mark.parametrize(("frek", "faz"), KARARLI, ids=KARARLI_ID)
+def test_KRITIK_D125_iki_bacak_ASLA_ayni_anda_HIGH(exe, harita, frek, faz):
+    sonuc = _kararli(exe, harita, frek=frek, faz=faz)
     cakisma = {i + 1: r["cakisma"][:3] for i, r in sonuc.items() if r["cakisma"]}
     assert cakisma == {}, f"SHOOT-THROUGH: aynı anda A ve B HIGH (bobin: ilk tick'ler) {cakisma}"
     assert all(r["kenarlar"] for r in sonuc.values()), "aparat: bazı bobinler hiç sürülmedi (vakum)"
 
 
-def test_KRITIK_D126_her_acilista_ONCE_karsi_bacak_kapanir_ve_NOP_olu_zaman(exe, harita, sabitler):
+@pytest.mark.parametrize(("frek", "faz"), KARARLI, ids=KARARLI_ID)
+def test_KRITIK_D126_her_acilista_ONCE_karsi_bacak_kapanir_ve_NOP_olu_zaman(exe, harita, sabitler, frek, faz):
     pinler, uni = harita
-    sonuc = _kararli(exe, harita)
+    sonuc = _kararli(exe, harita, frek=frek, faz=faz)
     ihlal = []
     for i, r in sonuc.items():
         pa, ia, pb, ib = pinler[i]
@@ -147,10 +160,13 @@ def test_KRITIK_D126_her_acilista_ONCE_karsi_bacak_kapanir_ve_NOP_olu_zaman(exe,
     assert ihlal == [], f"break-before-make/NOP ihlali (bobin, tick, bacak, nop, önce-kapandı): {ihlal[:5]}"
 
 
-def test_KRITIK_D126_D128_karsi_bacak_dususu_ile_yukselis_arasi_GAP_ve_darbeler_SIMETRIK(exe, harita, sabitler):
+@pytest.mark.parametrize(("frek", "faz"), KARARLI, ids=KARARLI_ID)
+def test_KRITIK_D126_D128_karsi_bacak_dususu_ile_yukselis_arasi_GAP_ve_darbeler_SIMETRIK(
+    exe, harita, sabitler, frek, faz
+):
     pinler, uni = harita
-    sonuc = _kararli(exe, harita)
-    tpp, gap = 500, sabitler["GAP"]
+    sonuc = _kararli(exe, harita, frek=frek, faz=faz)
+    tpp, gap = int(50000 / frek), sabitler["GAP"]  # firmware: g_tpp = (uint32_t)(50000.0f / f)
     tavan_bipolar = tpp // 2 - gap
     for i, r in sonuc.items():
         A, B = _darbe_genislikleri(r["kenarlar"], "A"), _darbe_genislikleri(r["kenarlar"], "B")
@@ -220,16 +236,18 @@ def test_KRITIK_D125_frekans_artisinda_klemp_ANINDA_periyot_sonunu_BEKLEMEZ(exe,
 
 
 @pytest.mark.parametrize("bobin", [0, 5], ids=["bipolar_1", "tek_bacak_6"])
-def test_KRITIK_D127_frekans_ARTISINDA_duty_ORANI_korunur(exe, bobin):
-    """1 Hz %30 (slew tamamlanmış) → 2 Hz: g_duty_ticks / g_tpp aynı kalmalı. Ölçeklemesiz eski tick yeni periyodun
-    %60'ı olur ve klempe kadar şişer (hekimin %30'u yerine ~%50 / ~%60)."""
-    sat = fw.kos(exe, "isr", 100010, hex(1 << bobin), 1, 0.3, 0, 100000, 2, 0.3, 0)
+@pytest.mark.parametrize(("f1", "f2"), [(1, 2), (2, 1)], ids=["artis_1_2Hz", "dusus_2_1Hz"])
+def test_KRITIK_D127_frekans_DEGISIMINDE_duty_ORANI_korunur(exe, bobin, f1, f2):
+    """%30 (slew tamamlanmış) f1 → f2: g_duty_ticks / g_tpp aynı kalmalı. Ölçeklemesiz eski tick ARTIŞTA yeni
+    periyodun %60'ı olur ve klempe kadar şişer (hekimin %30'u yerine ~%50 / ~%60); 1-B bağımsız inceleme (i3):
+    DÜŞÜŞ yönü kapısızdı (`!=` → `<` mutantı yeşildi) — orada oran %15'e düşer (eksik doz) ve slew'le geri tırmanır."""
+    sat = fw.kos(exe, "isr", 100010, hex(1 << bobin), f1, 0.3, 0, 100000, f2, 0.3, 0)
     s = [d for d in fw.durumlar(sat) if d[1] == bobin]
     once, sonra = s[1], s[2]  # (tick, i, tpp, duty_ticks, hedef): [0]=ilk tick, [1]=t2 öncesi, [2]=t2 sonrası
-    assert once[2] == 50000 and abs(once[3] / once[2] - 0.3) < 1e-3, f"aparat: 1 Hz %30 kararlı değil: {once}"
-    assert sonra[2] == 25000, f"aparat: 2 Hz uygulanmadı: {sonra}"
+    assert once[2] == 50000 // f1 and abs(once[3] / once[2] - 0.3) < 1e-3, f"aparat: {f1} Hz %30 kararlı değil: {once}"
+    assert sonra[2] == 50000 // f2, f"aparat: {f2} Hz uygulanmadı: {sonra}"
     assert abs(sonra[3] / sonra[2] - 0.3) < 1e-3, (
-        f"frekans artışında duty oranı {sonra[3] / sonra[2]:.4f} (beklenen 0,30) — [FIX-1c] ölçeklemesi YOK"
+        f"{f1}→{f2} Hz'de duty oranı {sonra[3] / sonra[2]:.4f} (beklenen 0,30) — [FIX-1c] ölçeklemesi YOK"
     )
 
 
@@ -267,3 +285,39 @@ def test_ACIK_IG828_periyot_ORTASI_faz_degisiminde_de_GAP_ve_cakisma_yok(exe, ha
 )
 def test_TEZGAH_gercek_bacak_araligi_ve_NOP_suresi_osiloskopla():
     raise AssertionError("tezgâhta ölçülecek")
+
+
+# ── D1.23 davranış kolu: hata anında bobin kesme (1-B bağımsız inceleme i3) ─────────────────────────────
+#
+# D1.23 kapısı Error_Handler'daki ÇAĞRIYI yorumsuz metinde arıyordu; `PEMF_ForceAllCoilOutputsLow` GÖVDESİ yoruma
+# alınınca (çağrı durur, hiçbir pin kesilmez) ve çağrı `#if 0` içine alınınca 29 STM kapı dosyası 300/300 YEŞİLDİ.
+# Artık GERÇEK fonksiyonlar aparatta koşar: bobinler sürülürken çağrılır, BSRR günlüğünde 7 bobinin 14 bacağına da
+# RESET yazımı ve `g_prev_state == 2` (IDLE) iddia edilir; Error_Handler kesmeleri kapatmaya ÖNCE kesip varmalı.
+
+
+@pytest.mark.parametrize("kip", ["zorla", "hata"], ids=["ForceAllCoilOutputsLow", "Error_Handler"])
+def test_KRITIK_D123_hata_aninda_TUM_bobin_bacaklari_LOW(exe, harita, kip):
+    pinler, _uni = harita
+    sat = fw.kos(exe, kip, 15100, hex(_GENIS), 100, 0.9, 0)
+    assert "BASLA" in sat, f"aparat: {kip} kipi koşmadı"
+    bas = sat.index("BASLA")
+    once = fw.bacak_analizi(fw.bsrr_olaylari(sat[:bas]), pinler, sorted(pinler))
+    assert all(r["kenarlar"] for r in once.values()), "aparat: çağrıdan önce bobinler sürülmüyordu (vakum)"
+    olaylar = fw.bsrr_olaylari(sat[bas:])
+    resetlenen = {
+        (port, pin)
+        for _t, port, deger, _n in olaylar
+        for (pa, ia, pb, ib) in pinler.values()
+        for (p, pin) in ((pa, ia), (pb, ib))
+        if port == p and (deger >> 16) & pin
+    }
+    beklenen = {(p, pin) for (pa, ia, pb, ib) in pinler.values() for (p, pin) in ((pa, ia), (pb, ib))}
+    assert resetlenen == beklenen, f"{kip}: LOW'a çekilmeyen bacak(lar): {sorted(beklenen - resetlenen)}"
+    durum = {int(p[1]): int(p[2]) for p in (s.split() for s in sat[bas:]) if p and p[0] == "P"}
+    assert durum == {i: 2 for i in pinler}, f"{kip}: g_prev_state IDLE (2) değil: {durum}"
+    if kip == "hata":
+        assert "IRQ" in sat[bas:], "Error_Handler kesmeleri kapatmaya varmadı (aparat kancası)"
+        irq = sat.index("IRQ")
+        assert all(sat.index(s) < irq for s in sat[bas:irq] if s.startswith("B ")), (
+            "bobin kesme kesmeler kapatıldıktan SONRA"
+        )

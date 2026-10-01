@@ -13,7 +13,11 @@
  *                         → "B <tick> <port> <bsrr_hex> <onceki_nop>" her BSRR yazımı;
  *                           "S <tick> <i> <tpp> <duty_ticks> <hedef>" parametre uygulandıktan sonraki ilk tick'te
  *                           ve t2'den hemen önce. Bobin maskesindeki bobinler (f, d, p) ile sürülür, diğerleri duty 0.
+ *   zorla|hata N bobin_maske f d p
+ *                         → N tick sürülür, "BASLA", sonra zorla: PEMF_ForceAllCoilOutputsLow() · hata: Error_Handler()
+ *                           (BSRR günlüklü); "P <i> <g_prev_state>"; hata kipinde "IRQ" (kesmeler kapatılmaya varıldı).
  */
+#include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,6 +49,16 @@ void pemf_host_bsrr(GPIO_TypeDef *port, uint32_t deger) {
   g_nop = 0;
 }
 void pemf_host_nop(void) { g_nop++; }
+
+/* `hata` kipi: Error_Handler `__disable_irq()`'a varınca buradan dönülür (sonsuz döngüye girilmez). */
+static jmp_buf g_hata_jmp;
+static int g_hata_bekle = 0;
+void pemf_host_disable_irq(void) {
+  if (g_hata_bekle) {
+    g_hata_bekle = 0;
+    longjmp(g_hata_jmp, 1);
+  }
+}
 
 /* ---- HAL taklidi (davranış: stub/main.h başlığı) ---- */
 HAL_StatusTypeDef HAL_Init(void) { return HAL_OK; }
@@ -140,6 +154,32 @@ int main(int argc, char **argv) {
       HAL_TIM_PeriodElapsedCallback(&htim1);
       if (g_tick == 0ULL || (t2 && g_tick == t2)) durum_bas();
     }
+    return 0;
+  }
+  /* zorla|hata N bobin_maske f d p → N tick sürülür (günlüklü), sonra "BASLA" ve
+   * zorla: PEMF_ForceAllCoilOutputsLow() · hata: Error_Handler() (`__disable_irq` kancasından dönülür);
+   * ardından "P <i> <g_prev_state>" ve hata kipinde "IRQ" (kesmeler kapatılmaya varıldı). */
+  if ((strcmp(argv[1], "zorla") == 0 || strcmp(argv[1], "hata") == 0) && argc == 7) {
+    unsigned long long n = strtoull(argv[2], NULL, 10);
+    unsigned maske = (unsigned)strtoul(argv[3], NULL, 0);
+    htim1.Instance = TIM1;
+    g_pwm_started = 1U;
+    parametre(maske, (float)atof(argv[4]), (float)atof(argv[5]), (float)atof(argv[6]));
+    g_gunluk = 1; /* sürüş de günlüklü: çağrı anında bobinlerin GERÇEKTEN sürüldüğü görülsün */
+    for (g_tick = 0ULL; g_tick < n; g_tick++) HAL_TIM_PeriodElapsedCallback(&htim1);
+    printf("BASLA\n");
+    if (strcmp(argv[1], "zorla") == 0) {
+      PEMF_ForceAllCoilOutputsLow();
+    } else {
+      g_hata_bekle = 1;
+      if (setjmp(g_hata_jmp) == 0) {
+        Error_Handler();
+        printf("DONDU\n"); /* Error_Handler kesmeleri kapatmadan döndü */
+      } else {
+        printf("IRQ\n");
+      }
+    }
+    for (uint32_t i = 0U; i < NUM_COILS; i++) printf("P %u %u\n", (unsigned)i, (unsigned)g_prev_state[i]);
     return 0;
   }
   return 2;
