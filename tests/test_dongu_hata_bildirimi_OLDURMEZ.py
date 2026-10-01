@@ -205,6 +205,8 @@ def _log_cagrisi(c: ast.AST, takma_adlar: frozenset[str] = frozenset()) -> str |
     'log' geçer — `logging.x`, `log.x`, `logger.x`, `self.logger.x`, `self._log.x`, `_LOG.x`,
     `logging.getLogger(__name__).x` (eskiden yalnız sabit kök adları: `self.logger` GÖRÜNMÜYORDU) — YA DA
     alıcının kökü bir logger TAKMA ADIDIR (`lg = self.logger`; bağımsız inceleme r4)."""
+    if isinstance(c, ast.Call) and isinstance(c.func, ast.Name) and _METOT_ONEKI + c.func.id in takma_adlar:
+        return f"{c.func.id}()"  # bağlı metot takma adı: `uyar = self.logger.warning` … `uyar("x")`
     if not isinstance(c, ast.Call) or not isinstance(c.func, ast.Attribute) or c.func.attr not in _LOG_METOTLARI:
         return None
     alici = _alici_metni(c.func.value)
@@ -215,14 +217,38 @@ def _log_cagrisi(c: ast.AST, takma_adlar: frozenset[str] = frozenset()) -> str |
     return None
 
 
-def _logger_takma_adlari(agac: ast.AST) -> frozenset[str]:
-    """Dosyadaki `ad = <logger ifadesi>` atamaları (`lg = self.logger`, `x = logging.getLogger(...)`)."""
-    adlar: set[str] = set()
+#: Bağlı metot takma adları (`uyar = self.logger.warning`) aynı kümede bu önekle tutulur.
+_METOT_ONEKI = "()"
+
+
+def _ad_atamalari(agac: ast.AST):
+    """(hedef ad, değer) — `x = v`, `x: T = v` (AnnAssign) ve `(x := v)` (NamedExpr). 1-B inceleme (i6): yalnız
+    tek hedefli `ast.Assign` toplanıyordu; tip notlu ve mors atamalı takma adlar KÖRDÜ."""
     for d in ast.walk(agac):
         if isinstance(d, ast.Assign) and len(d.targets) == 1 and isinstance(d.targets[0], ast.Name):
-            metin = _alici_metni(d.value)
-            if metin and "log" in metin.lower():
-                adlar.add(d.targets[0].id)
+            yield d.targets[0].id, d.value
+        elif isinstance(d, ast.AnnAssign) and d.value is not None and isinstance(d.target, ast.Name):
+            yield d.target.id, d.value
+        elif isinstance(d, ast.NamedExpr) and isinstance(d.target, ast.Name):
+            yield d.target.id, d.value
+
+
+def _logger_takma_adlari(agac: ast.AST) -> frozenset[str]:
+    """Dosyadaki `ad = <logger ifadesi>` atamaları (`lg = self.logger`, `x = logging.getLogger(...)`) ve
+    bağlı günlük metodu takma adları (`uyar = self.logger.warning` → `_METOT_ONEKI + "uyar"`)."""
+    adlar: set[str] = set()
+    for ad, deger in _ad_atamalari(agac):
+        metin = _alici_metni(deger)
+        if metin and "log" in metin.lower():
+            if isinstance(deger, ast.Attribute) and deger.attr in _LOG_METOTLARI:
+                adlar.add(_METOT_ONEKI + ad)
+            else:
+                adlar.add(ad)
+    for ad, deger in _ad_atamalari(agac):  # takma adın metodu: `lg = self.logger; uyar = lg.warning`
+        if isinstance(deger, ast.Attribute) and deger.attr in _LOG_METOTLARI:
+            kok = _alici_metni(deger.value)
+            if kok and kok.split(".")[0] in adlar:
+                adlar.add(_METOT_ONEKI + ad)
     return frozenset(adlar)
 
 
@@ -540,6 +566,31 @@ def test_KARSIT_KANIT_tarayici_MATCH_CASE_ve_logger_TAKMA_ADINI_gorur():
     assert _tara(takma) == (1, [(7, ["lg.warning"])]), _tara(takma)
 
 
+@pytest.mark.parametrize(
+    ("atama", "cagri", "beklenen"),
+    [
+        ('lg: "logging.Logger" = self.logger', 'lg.warning("x")', "lg.warning"),  # AnnAssign
+        ("uyar = self.logger.warning", 'uyar("x")', "uyar()"),  # bağlı metot
+        ("lg = self.logger\n    uyar = lg.warning", 'uyar("x")', "uyar()"),  # takma adın bağlı metodu
+        ("if (lg := self.logger):\n        pass", 'lg.error("x")', "lg.error"),  # NamedExpr
+    ],
+    ids=["AnnAssign", "bagli_metot", "takma_adin_metodu", "NamedExpr"],
+)
+def test_KARSIT_KANIT_tarayici_TUM_takma_ad_bicimlerini_gorur(atama, cagri, beklenen):
+    """1-B inceleme (i6): tip notlu atama ve bağlı metot takma adı KÖRDÜ (gerçek dosyaya eklenince 22 passed)."""
+    kaynak = (
+        "def d(self):\n"
+        f"    {atama}\n"
+        "    while not self._stop.is_set():\n"
+        "        try:\n"
+        "            pass\n"
+        "        except Exception:\n"
+        f"            {cagri}\n"
+    )
+    dongu, bulgu = _tara(kaynak)
+    assert dongu == 1 and [b[1] for b in bulgu] == [[beklenen]], (dongu, bulgu)
+
+
 def test_KARSIT_KANIT_dis_GENIS_try_ic_handleri_KORUR():
     """Gövde içindeki geniş `try` iç handler'ın bildirimini sarar → istisna döngüden ÇIKMAZ (yanlış kırmızı yok)."""
     korunan = (
@@ -765,8 +816,21 @@ def test_KRITIK_GERCEK_HWSender_kablo_cikinca_LOG_hatasinda_YASAR_ve_kopusu_bild
     core.logger = lg
     core._hw_sender_stop = threading.Event()
     core._hw_send_queue = queue.Queue()
-    core._set_stm_connected = lambda v: durum.baglanti.append(v)
     core._handle_stm_line = lambda *a, **k: None
+    # ⚠️ 1-B inceleme (i1/B1): kopuş zinciri GERÇEK — `_set_stm_connected` → `stm_connected_signal` →
+    # `_on_stm_connected_slot` → `_publish_event`; sahte olan yalnız olay veriyolu (yayınlananları kaydeder).
+    # Eskiden `_set_stm_connected` bir lambda ile değiştiriliyordu: slot günlüğü olaydan ÖNCE yazıyordu ve günlük
+    # fırlatınca `SimpleSignal.emit` istisnayı yuttuğu için `hardware.stm.disconnected` HİÇ yayınlanmıyordu
+    # (api_server o olayla canlı durumu düşürür ve STM seansını ACİL DURDURUR) — kapı bunu görmüyordu.
+    core._stm_state_lock = threading.RLock()
+    core.stm_is_connected = False
+    core.stm_connected_signal = hcm.SimpleSignal()
+    core.stm_connected_signal.connect(core._on_stm_connected_slot)
+    core.event_bus = types.SimpleNamespace(
+        publish=lambda olay, veri, priority=None, source=None: durum.baglanti.append(
+            {"hardware.stm.connected": True, "hardware.stm.disconnected": False}.get(olay, olay)
+        )
+    )
 
     def bekle(kosul, sure=5.0):
         son = time.monotonic() + sure
@@ -791,4 +855,7 @@ def test_KRITIK_GERCEK_HWSender_kablo_cikinca_LOG_hatasinda_YASAR_ve_kopusu_bild
         core._hw_sender_stop.set()
         t.join(3)
     assert canli, f"HWSender kablo-çıktı dalında ÖLDÜ (günlük hatası) — {durum}"
-    assert bildirildi, f"kablo çekildi ama kopuş BİLDİRİLMEDİ (bayat 'bağlı') — {durum}"
+    assert bildirildi, (
+        f"kablo çekildi ama `hardware.stm.disconnected` YAYINLANMADI (bayat 'bağlı', STM seansı durmaz) — {durum}"
+    )
+    assert core.stm_is_connected is False

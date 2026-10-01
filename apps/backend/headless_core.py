@@ -316,11 +316,21 @@ class HeadlessCore:
     def _on_stm_connected_slot(self, is_connected: bool) -> None:
         with self._stm_state_lock:
             self.stm_is_connected = bool(is_connected)
-        self.logger.info("STM32 connection state updated: %s", self.stm_is_connected)
+        # ⚠️ 1-B bağımsız inceleme (i1/B1): olay ÖNCE yayınlanır, bildirim SONRA ve fırlatamaz. Eskiden günlük
+        # olaydan önceydi: günlük fırlatınca (kilitli dosya, disk dolu) `SimpleSignal.emit` istisnayı yutuyor ve
+        # `hardware.stm.disconnected` HİÇ yayınlanmıyordu — api_server o olayla canlı durumu düşürür,
+        # `on_disconnect()` çağırır ve STM kullanan seansı ACİL DURDURUR (Y8: bu zincir günlüğe bağlı olamaz).
         self._publish_event(
             "hardware.stm.connected" if is_connected else "hardware.stm.disconnected",
             {"connected": bool(is_connected)},
             priority=EventPriority.HIGH,
+        )
+        dongu_hatasini_bildir(
+            "STM32 connection state updated: %s",
+            bool(is_connected),
+            logger=self.logger,
+            seviye=logging.INFO,
+            exc_info=False,
         )
 
     def _parse_stm_ok(self, decoded: str) -> list[dict[str, Any]]:
