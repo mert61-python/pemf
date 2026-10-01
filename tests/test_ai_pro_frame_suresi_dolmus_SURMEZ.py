@@ -13,6 +13,12 @@ Karşıt kol aynı karenin süre DOLMAMIŞ seansta gerçekten sürdüğünü gö
 ulaşıyor — "hiç sürmeyen" bir kurulum kapıyı sahte yeşil yapamaz).
 
 İlişkili: D1.12 (B-5.19) aynı değişmezi AI Pro sürüş değişmezleri dörtlüsünün (b) kolu olarak anar.
+
+⚠️ Bağımsız inceleme (r2): karşıt kol eskiden "bobin 6-7'ye ESP START yayını" İSTİYORDU — yani
+6-7'nin MQTT'den sürülmesini (S-1.1/B-5.2 kusuru; D1.83/D1.84 değiştirecek) "doğru" diye kilitliyordu.
+Artık "sürüş denendi" = STM başlatması VEYA ESP START; hangi bobinin hangi yoldan sürüleceğini bu
+kapı PİNLEMEZ. Seans bobinleri topolojiden türer (literal yok). Fikstür `live_state`'i de geri yükler
+(`activeTreatment` sonraki testlere sızıyordu — ölçüldü).
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ import time
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
+from topoloji import TUM_ESP, TUM_STM
 
 
 class _KayitciDonanim:
@@ -40,9 +47,14 @@ class _KayitciDonanim:
 
 @pytest.fixture
 def ai_pro(monkeypatch):
+    import copy
+
     import servers.ai_router as air
     import servers.api_server as apis
+    from servers import live_state as ls
 
+    with ls._live_state_lock:
+        canli_anlik = copy.deepcopy(ls._live_state)
     anlik = {
         "cache": dict(air._ai_organ_cache),
         "owner": air._ai_owner_client,
@@ -77,7 +89,7 @@ def ai_pro(monkeypatch):
     air._ai_relocalize = True
     with apis._session_lock:
         apis._active_session.clear()
-        apis._active_session.update({"is_active": True, "mode": "AI Pro", "coil_ids": list(range(1, 8))})
+        apis._active_session.update({"is_active": True, "mode": "AI Pro", "coil_ids": sorted(TUM_STM | TUM_ESP)})
     try:
         yield air, TestClient(apis.app), hw, yayinlar
     finally:
@@ -91,6 +103,9 @@ def ai_pro(monkeypatch):
         with apis._session_lock:
             apis._active_session.clear()
             apis._active_session.update(seans_anlik)
+        with ls._live_state_lock:
+            ls._live_state.clear()
+            ls._live_state.update(canli_anlik)
 
 
 def _kare(istemci):
@@ -118,5 +133,5 @@ def test_KARSIT_suresi_DOLMAMIS_seansta_ayni_kare_SURER(ai_pro):
     air._ai_started_at = time.monotonic()
     j = _kare(istemci)
     assert j["driven"] is True, "aparat sürüş yoluna ulaşmıyor — kapı sahte yeşil olabilir"
-    assert hw.baslat, "süre dolmamış seansta STM bobinleri sürülmedi (aparat kör)"
-    assert _esp_baslatmalari(yayinlar), "süre dolmamış seansta ESP 6-7 START yayını denenmedi"
+    # Topolojiden BAĞIMSIZ: 6-7'nin STM'den mi MQTT'den mi sürüleceği D1.83/D1.84'ün konusu.
+    assert hw.baslat or _esp_baslatmalari(yayinlar), "süre dolmamış seansta HİÇBİR bobin sürülmedi (aparat kör)"
