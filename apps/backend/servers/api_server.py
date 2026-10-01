@@ -2624,6 +2624,15 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     if coil_id < 1 or coil_id > 8:
         raise HTTPException(status_code=400, detail="Geçersiz bobin ID (1-8)")
 
+    # ⚠️ D1.53 (B-1.10 · A-05): 0 Hz BAŞLATMA = bu bobin için STOP (arayüzün "parkla" isteği) — STM ve ESP
+    # dallarının İKİSİNDE de, protokol sınırına (`normalize_*_frequency_hz`, Ö.4-Y9 — KALDIRILMAZ) ULAŞMADAN.
+    # Eskiden 1 Hz'e çekilip istenen duty ile SÜRÜLÜYOR ve koşu kaydı "0 Hz" açılıyordu.
+    from controllers.hardware_controller import sifir_hz_durdurma_mi
+
+    _sifir_hz = bool(payload.start) and sifir_hz_durdurma_mi(payload.freq)
+    if _sifir_hz:
+        payload.start = False
+
     command_id = f"react_{coil_id}_{int(time.time() * 1000)}"
 
     if coil_id in STM_COIL_IDS:
@@ -2653,11 +2662,14 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
                 _begin_coil_run(coil_id, payload.freq, payload.duty, payload.phase, None, "stm")
         else:
             _finish_coil_run(coil_id)
-        return {
+        _stm_yanit = {
             "status": "success" if _stm_kabul else "error",
             "command_id": command_id,
             "transport": "stm32",
         }
+        if _sifir_hz:
+            _stm_yanit["sifirHzDurdurma"] = True  # D1.53: istek DURDURMA olarak uygulandı
+        return _stm_yanit
 
     if payload.start:
         # D-3 (2026-08-19): ESP DDS 1000 Hz üstünü süremez (firmware constrain) → önden normalize.
@@ -2720,6 +2732,8 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     _yanit = {"status": "success" if ok else "mqtt_unavailable", "command_id": command_id, "transport": "mqtt"}
     if _sync_uyari:
         _yanit["sync_warning"] = _sync_uyari
+    if _sifir_hz:
+        _yanit["sifirHzDurdurma"] = True  # D1.53: istek DURDURMA olarak uygulandı
     return _yanit
 
 
@@ -2775,6 +2789,13 @@ async def control_batch_coils(payload: BatchCoilPayload):
     - STM32 firmware duration is minutes, converted only for HardwareController.
     """
     import time
+
+    # D1.53 (A-05): 0 Hz BAŞLATMA = seçili bobinler için STOP (tekil uçla AYNI kural ve gerekçe).
+    from controllers.hardware_controller import sifir_hz_durdurma_mi
+
+    _sifir_hz = bool(payload.start) and sifir_hz_durdurma_mi(payload.freq)
+    if _sifir_hz:
+        payload.start = False
 
     results = []
     # Audit P3: coil_ids'i max 8 BENZERSİZE sınırla — {coil_ids:[6]*5000} her ID için sıralı
@@ -2873,6 +2894,8 @@ async def control_batch_coils(payload: BatchCoilPayload):
         if _b_uyari:
             _satir["sync_warning"] = _b_uyari
         results.append(_satir)
+    if _sifir_hz:
+        return {"status": "success", "results": results, "sifirHzDurdurma": True}
     return {"status": "success", "results": results}
 
 
@@ -3267,6 +3290,14 @@ async def start_session(payload: SessionStartPayload, request: Request):
         # thread'lerden çağrılır, event-loop'tan DEĞİL" der (SQLite yazımları event-loop'u
         # bloklar). Bu uç `async` olduğu için geri alma thread'e taşınır.
         await asyncio.to_thread(_seansi_geri_al, "donanim-reddi:hicbir-bobin-surulmedi")
+        from controllers.hardware_controller import sifir_hz_durdurma_mi
+
+        if sifir_hz_durdurma_mi(payload.frequency):
+            # D1.53 (A-05): 0 Hz = DURDURMA — bobinler durduruldu; neden firmware DEĞİL, girilen frekans.
+            raise HTTPException(
+                status_code=503,
+                detail="Frekans 0 Hz = DURDURMA (A-05): bobinler durduruldu, seans BAŞLATILMADI. Frekans girin.",
+            )
         raise HTTPException(
             status_code=503,
             detail=("Hiçbir bobin komutu kabul etmedi; seans BAŞLATILMADI. " + STM_RED_MESAJI),

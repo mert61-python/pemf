@@ -42,6 +42,19 @@ STM_BOBIN_SAYISI = 7
 GOZETIMSIZ_VARSAYILAN_DAKIKA = 120
 
 
+def sifir_hz_durdurma_mi(freq) -> bool:
+    """A-05 (sahip kararı): 0 Hz BAŞLATMA = o bobin için STOP — arayüzün "bobini parkla" niyeti (D1.53 · B-1.10).
+
+    YALNIZ tam sıfır. Sıfır olmayan her değer (negatif ve 0 < f < 1 dahil) protokol sınırına gider
+    (`normalize_frequency_hz` / `normalize_esp_frequency_hz`, 1 Hz tabanı — Ö.4-Y9 TAŞIYICI, KALDIRILMAZ).
+    Eskiden 0 Hz o sınırda sessizce 1 Hz'e çekilip istenen duty ile SÜRÜLÜYORDU: operatör bobini parkladığını
+    sanırken bobin enerjili, kayıt "0 Hz". Okunamayan değer (None, metin) durdurma SAYILMAZ (eski yol)."""
+    try:
+        return float(freq) == 0.0
+    except (TypeError, ValueError):
+        return False
+
+
 class HardwareController:
     """
     Headless donanım kontrolcüsü. Eski PyQt tabanlı unified_control_window.py
@@ -265,6 +278,15 @@ class HardwareController:
             self.logger.warning(f"Geçersiz bobin ID: {coil_id}")
             return False
 
+        # ⚠️ D1.53 (B-1.10 · A-05): 0 Hz BAŞLATMA = bu bobin için STOP — başlatma kapılarından ve protokol
+        # sınırından ÖNCE (STOP hiçbir kapıya takılmaz, Ö.4-Y8). START YAPILMADIĞI için dönüş False: seans,
+        # AI ve legacy çağıranlar bunu "başlamadı" okur ve koşu kaydı AÇMAZ. (Tekil/batch uçları arayüzün
+        # "parkla" isteğini kendileri STOP olarak işler.)
+        _sifir_hz_durdurma = bool(start) and sifir_hz_durdurma_mi(freq)
+        if _sifir_hz_durdurma:
+            self.logger.warning("Bobin %s: 0 Hz başlatma = DURDURMA (A-05) — bobin durduruluyor.", coil_id)
+            start = False
+
         # ⚠️ STM KOPUKSA BAŞLATMA REDDEDİLİR — ama DURDURMA ASLA (bkz. `_stm_surus_hazir`).
         # `start` kontrolü ŞART: STOP/E-stop kayıtlı sahip kararıyla hiçbir koşulda
         # kapılanmaz, ayrıca kopuk bağlantıda STOP'u reddetmek yeniden bağlanınca
@@ -357,11 +379,16 @@ class HardwareController:
         # "parametre reddedildi, state DEGISMEDI" anlamiyla "gecici kuyruk dolulugu"nu
         # karistirirdi. Kilit: tests/test_session_stop_dogrulama.py (karsit-kanit dahil).
         if not start:
-            return bool(_kuyruga_verildi)
+            # D1.53: 0 Hz isteğinde STOP gönderildi ama istenen START YAPILMADI → False.
+            return False if _sifir_hz_durdurma else bool(_kuyruga_verildi)
         return True
 
     def start_all_coils(self, freq=100.0, duty=25.0, phase=0.0, duration=30):
         """Tüm STM bobinlerini başlatır. duration birimi dakikadır."""
+        if sifir_hz_durdurma_mi(freq):  # D1.53 (A-05): 0 Hz = TÜM bobinler için STOP; START yapılmadı → False
+            self.logger.warning("TÜM bobinler: 0 Hz başlatma = DURDURMA (A-05) — bobinler durduruluyor.")
+            self.stop_all_coils()
+            return False
         # ⚠️ AYNI KAPI BURADA DA OLMAK ZORUNDA: bu metot `update_coil`i ÇAĞIRMAZ (aşağıdaki
         # yorumun anlattığı "BURAYA TAŞINMAMIŞTI" arızasının aynı sınıfı). Yalnız `update_coil`
         # kapatılsa seans ve AI yolları STM kopukken hâlâ sessizce "başarılı" dönerdi —

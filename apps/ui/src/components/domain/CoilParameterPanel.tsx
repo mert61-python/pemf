@@ -112,6 +112,7 @@ export function CoilParameterPanel({
     try {
       // NaN-guard (|| DEĞİL): kullanıcı bilerek 0 yazarsa (bobini parkla) 0 KORUNSUN — eskiden
       // `parseFloat("0") || defaultFreq` 0'ı falsy sayıp default'a döndürüp bobini süründürüyordu.
+      // Arka uç 0 Hz BAŞLATMAYI o bobin için DURDURMA olarak işler (A-05, D1.53; yanıtta `sifirHzDurdurma`).
       const pf = parseFloat(freq);   let f = Number.isNaN(pf) ? defaultFreq : pf;
       const pd = parseFloat(duty);   let d = Number.isNaN(pd) ? defaultDuty : pd;
       const pp = parseFloat(phase);  let ph = Number.isNaN(pp) ? defaultPhase : pp;
