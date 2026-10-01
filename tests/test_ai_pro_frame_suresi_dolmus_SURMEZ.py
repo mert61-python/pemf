@@ -26,6 +26,7 @@ from __future__ import annotations
 import base64
 import time
 
+import ai_pro_aparati as ap
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
@@ -87,9 +88,8 @@ def ai_pro(monkeypatch):
     air._ai_duration_min = 20
     air._ai_organ_id = 0
     air._ai_relocalize = True
-    with apis._session_lock:
-        apis._active_session.clear()
-        apis._active_session.update({"is_active": True, "mode": "AI Pro", "coil_ids": sorted(TUM_STM | TUM_ESP)})
+    # D1.80: `/frame` yalnız MÜHÜRLÜ AI Pro seansında sürer (tür + onay + nesil); süre de MÜHÜRDEN (İG-5.9).
+    ap.muhurlu_seans_yaz(apis, sure_dk=20, coil_ids=sorted(TUM_STM | TUM_ESP))
     try:
         yield air, TestClient(apis.app), hw, yayinlar
     finally:
@@ -119,8 +119,13 @@ def _esp_baslatmalari(yayinlar):
 
 
 def test_KRITIK_suresi_DOLMUS_seansta_frame_bobin_SURMEZ(ai_pro):
+    import servers.api_server as apis
+
     air, istemci, hw, yayinlar = ai_pro
-    air._ai_started_at = time.monotonic() - (air._ai_duration_min * 60 + 1)  # onaylı süre 1 sn önce doldu
+    # Onaylı süre 1 sn önce doldu — MÜHÜRDE (seans başlangıcı); İG-5.9'dan beri sürüş kapısı globale değil mühre bakar.
+    with apis._session_lock:
+        apis._active_session["start_mono"] = time.monotonic() - (20 * 60 + 1)
+    air._ai_started_at = time.monotonic() - (air._ai_duration_min * 60 + 1)
     j = _kare(istemci)
     assert j["driven"] is False, "süresi dolmuş AI Pro seansında /frame bobin SÜRDÜ (onaylı süre aşıldı)"
     assert j["sessionActive"] is False

@@ -17,6 +17,7 @@ import type { ComponentType } from "react";
 import { colors, spacing, radius, typography, rf, rs, touch } from "@/theme/tokens";
 import { passwordChecks, isPasswordValid, isEmailValid, isResearchEmail } from "@/services/authApi";
 import { signUpUser, signInUser, sendPasswordReset } from "@/services/supabaseAuth";
+import { EstopMandalBandi } from "@/components/ui/EstopMandalBandi";
 
 const LOGO = require("../../assets/icon.png");
 
@@ -196,6 +197,9 @@ export function AuthScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {/* D1.81 · Y4 (Y23 ile tutarlı): oturum açılmamışken de mandal durumu ve "Sıfırla" görünür
+              (masaüstü yerel istemcidir: sıfırlama ucu oturum istemez). */}
+          <EstopMandalBandi />
           <View style={styles.card}>
             {/* Logo + marka */}
             <View style={styles.brand}>

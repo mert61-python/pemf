@@ -30,6 +30,7 @@ import type {
   CoilStatus,
   ConnectionState,
   DashboardSnapshot,
+  EstopMandali,
 } from "@/types/domain";
 
 // ─── History max length ────────────────────────────────────────────────────
@@ -418,6 +419,12 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
           snapshotRef.current = updated;
           return updated;
         });
+        break;
+      }
+
+      // D1.81 · Y4: acil durdurma MANDALI kuruldu / sıfırlandı → bant ("Sıfırla") bundan çizilir.
+      case "estop_mandali": {
+        updateSnapshot({ estopMandali: msg.data as EstopMandali });
         break;
       }
 

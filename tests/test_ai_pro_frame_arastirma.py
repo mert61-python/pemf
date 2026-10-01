@@ -20,6 +20,7 @@ model değiştirilebilseydi, onaylanan modelden BAŞKA bir modelin dozu sürüle
 import io
 import time
 
+import ai_pro_aparati as ap
 import pytest
 from fastapi.testclient import TestClient
 
@@ -122,9 +123,8 @@ def env(monkeypatch):
         air._ai_started_at = time.monotonic()
         air._ai_duration_min = 20
         air._ai_relocalize = True
-        with apis._session_lock:
-            apis._active_session.clear()
-            apis._active_session.update({"is_active": True, "mode": "AI Pro"})
+        # D1.80: `/frame` yalnız MÜHÜRLÜ seansta (tür + onay + nesil) ve mühürdeki MODELLE sürer.
+        ap.muhurlu_seans_yaz(apis, sure_dk=20, model=model)
 
     yield air, TestClient(apis.app), seans, izler, kedi_izi, surus
 

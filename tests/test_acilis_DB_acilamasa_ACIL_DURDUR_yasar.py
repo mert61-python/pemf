@@ -117,6 +117,10 @@ class _Casus:
         t0 = time.perf_counter()
         r = c.post("/api/hardware/emergency_stop")
         sonuc["estop"] = {{"kod": r.status_code, "sure": time.perf_counter() - t0}}
+        # D1.81 · Y4: acil durdurma MANDALLAR — yeni START'tan önce operatörün "Sıfırla"sı gerekir; DB'siz kipte de
+        # çalışmalı (denetim izi yazılamaz, sıfırlama yine olur).
+        r = c.post("/api/hardware/estop_mandali/sifirla")
+        sonuc["sifirla"] = {{"kod": r.status_code}}
         if SENARYO != "saglam":
             r = c.post("/api/session/start", json={{"mode": "Manuel", "frequency": 100, "duty": 40, "phase": 0,
                        "intensity": 0, "duration_minutes": 5, "coil_ids": [1], "patient_name": "D137"}})
@@ -231,6 +235,7 @@ def _ortak_iddialar(s: dict) -> None:
     assert s["estop"]["kod"] == 200 and s["sayac"]["stop"] >= 1, (
         f"ACİL DURDUR donanıma STOP vermedi: {s['estop']} {s['sayac']}"
     )
+    assert s["sifirla"]["kod"] == 200, f"mandal 'Sıfırla' bu kipte çalışmadı (D1.81 · Y4): {s['sifirla']}"
     assert all(h["kod"] == 200 for h in s["saglik"]), f"sağlık ucu düştü: {s['saglik']}"
     yavas = [round(h["sure"], 2) for h in s["saglik"] if h["sure"] >= SAGLIK_SURE_SINIRI_SN]
     assert not yavas, (

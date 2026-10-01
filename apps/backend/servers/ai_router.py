@@ -27,6 +27,7 @@ logger = logging.getLogger("ai_router")
 # (A9) modul-duzeyi `import threading` KALDIRILDI: _model_lock artik utils.agir_import._KILIT.
 import time
 
+from utils import estop_mandali  # D1.81 · Y4: acil durdurma mandalı + sürüş nesli
 from utils.dongu_guvenligi import dongu_hatasini_bildir
 from utils.model_downloader import download_model_sync
 from utils.ses_kalitesi import guvenilir_mi as ses_guvenilir_mi
@@ -433,6 +434,9 @@ async def analyze_landmark(
     request: Request, file: UploadFile = File(None), image_base64: str = Form(None), auto_adjust: bool = Form(False)
 ):
     """YOLO Pose + FGS Ağrı Skoru + Otonom Biyogeribildirim"""
+    # D1.81 (B-5.3 · Y4): otonom sürüş NİYETİ istek girişinde neslini alır — çıkarım (saniyeler) sırasında gelen
+    # durdurma/acil durdurma bu isteğin START'ını `HardwareController`da kilit altında geçersiz kılar.
+    _niyet_nesli = estop_mandali.nesil()
     try:
         if ai_service_enabled():
             # NOT: auto_adjust (donanım biofeedback) mikroservis modunda çekirdekte kalır;
@@ -560,14 +564,24 @@ async def analyze_landmark(
                     if _ai_loop_active:
                         logger.info("AI (Auto): AI Pro aktif → donanim SURULMEDI (catisma onlendi).")
                         return "skipped_session_active", {}
+                    # D1.81 · Y4: mandal ya da bayat niyet → seans AÇILMADAN dön (aşağıdaki kapı da reddederdi ama
+                    # önce seans yazılır ve geri alınırdı; mandallıyken hiçbir AI seansı açılmamalı).
+                    _engel = estop_mandali.baslatma_engeli(_niyet_nesli)
+                    if _engel:
+                        logger.warning("AI (Auto): donanim SURULMEDI — %s", _engel)
+                        return "skipped_estop_latched", {}
                     try:
                         import servers.api_server as _apx3
 
                         with _apx3._session_lock:
                             _cur_mode = str(_apx3._active_session.get("mode", ""))
                             _cur_active = bool(_apx3._active_session.get("is_active"))
-                        # Farkli modda AKTIF bir seans (Manuel/Otomatik/AI Pro) varsa devralma.
-                        if _cur_active and _cur_mode != "AI (Auto)":
+                            _cur_tur = _apx3._active_session.get("tur")
+                        # Farkli TÜRDE AKTIF bir seans (elle/AI Pro) varsa devralma. D1.80: TÜR bakılır, `mode`
+                        # metnine değil — "AI (Auto)" adlı bir ELLE seans artık AI (Auto) sayılıp devralınmaz.
+                        # (Türü olmayan eski kayıt: önceki kural.)
+                        _ai_auto_mu = _cur_tur == "ai_auto" or (_cur_tur is None and _cur_mode == "AI (Auto)")
+                        if _cur_active and not _ai_auto_mu:
                             logger.info("AI (Auto): '%s' seansi aktif → donanim SURULMEDI.", _cur_mode)
                             return "skipped_session_active", {}
                     except Exception:
@@ -586,13 +600,17 @@ async def analyze_landmark(
                         range(1, 9),
                         "AI (Auto)",
                         operator_email=_landmark_operator,
+                        tur="ai_auto",
+                        surus_nesli=_niyet_nesli,
                     )
                     # ⚠️ SAHTE "BAŞARILI" OTONOM SEANS (denetim 2026-09-12, İş 11'in AI tarafı):
                     # `start_all_coils` reddi False ile bildirir (STM kopuk / firmware uyuşmaz) ve
                     # bu dönüş HİÇ OKUNMUYORDU. Seans `_active_session`a yazılmış, DB satırı
                     # açılmış, "AI (Auto)" canlı durum yayınlanmış oluyordu — hiçbir bobin
                     # enerjilenmemişken. Manuel seans yolundaki arızanın birebir aynısı.
-                    if not state.hardware.start_all_coils(target_freq, target_duty, 0.0, 30):
+                    with estop_mandali.surus_baglami(_niyet_nesli):  # D1.81: nesil kilit altında denetlenir
+                        _hepsi_basladi = state.hardware.start_all_coils(target_freq, target_duty, 0.0, 30)
+                    if not _hepsi_basladi:
                         logger.error(
                             "AI (Auto): donanim komutu REDDETTI → seans geri aliniyor (sahte 'aktif' yazilmasin)."
                         )
@@ -611,8 +629,9 @@ async def analyze_landmark(
                         # tasindi ve zaten `start_all_coils` ile suruluyor → buradaki
                         # MQTT yayini onlara BOSA gidiyordu. Tek kaynak: ESP_COIL_IDS.
                         for _cid in sorted(_api_esp.ESP_COIL_IDS):
-                            _api_esp._mqtt_publish(
-                                f"pemf/coil/{_cid}/control",
+                            # D1.81 · Y4: mandal/nesil kapılı START yayını (telafi STOP'u dahil).
+                            _api_esp._esp_start_yayinla(
+                                _cid,
                                 {
                                     "command": "start",
                                     "command_id": f"aiauto_{_cid}_{int(time.time() * 1000)}",
@@ -621,11 +640,17 @@ async def analyze_landmark(
                                     "phase": 0,
                                     "duration": 30 * 60,
                                 },
+                                _niyet_nesli,
                             )
                     except Exception as _ee:
                         logger.warning("AI (Auto) ESP 6-8 publish hatasi: %s", _ee)
                     update_live_session_state(
-                        is_active=True, mode="AI (Auto)", freq=target_freq, intensity=target_duty, duration_sec=30 * 60
+                        is_active=True,
+                        mode="AI (Auto)",
+                        freq=target_freq,
+                        intensity=target_duty,
+                        duration_sec=30 * 60,
+                        surus_nesli=_niyet_nesli,  # D1.81 (İG-5.36): bayat niyet "aktif" yazamaz
                     )
                     return "updated", {"freq": target_freq, "duty": target_duty}
                 except Exception as e:
@@ -658,6 +683,10 @@ async def analyze_landmark(
 
 # ── AI Pro durumu (modül seviyesi) ──
 _ai_loop_active = False
+#: D1.81 (İG-5.11): her `/ai/pro/start` döngüye YENİ bir numara verir (yalnız `_ai_loop_lock` altında yazılır).
+#: Eski döngü bayrak `/stop`→`/start` ile ms içinde yeniden True olsa da numarası eskidiği için ÇIKAR; ölçüldü:
+#: 15 hızlı stop/start'ta 14 döngü aynı anda canlıydı (tel sürüş hızı 2,5×).
+_ai_dongu_no = 0
 #: Otonom seansı BAŞLATAN istemcinin kimliği.
 #
 # ⚠️ DENETİM 2026-08-17: yalnız "durdurma yetkisini BASTIRMAK" için var, ASLA yetkilendirmek için
@@ -1081,6 +1110,81 @@ def _hazirlik_hata_sinifi(exc: Exception, saglayici) -> "tuple[str, str]":
     )
 
 
+def _ai_seansi_mi(seans: dict) -> bool:
+    """DURDURMA yönü (pasife alma) için: oturum bir AI seansı mı? Türe bakılır; türü olmayan eski kayıtta `mode`
+    öneki. ⚠️ Bu YETKİ VERMEZ — sürüş yetkisi YALNIZ `_ai_pro_surus_muhru` (D1.80). Durdurma yönünde geniş olmak
+    güvenlidir (pasif seans hiçbir şeyi enerjilemez)."""
+    tur = seans.get("tur")
+    if tur is not None:
+        return tur in ("ai_pro", "ai_auto")
+    return str(seans.get("mode", "")).startswith("AI")
+
+
+def _ai_pro_surus_muhru():
+    """D1.80 · D1.81 · İG-5.9 — sürülebilir AI Pro seansının MÜHRÜ (anlık görüntü) ya da None.
+
+    Sürüş YALNIZ `/api/ai/pro/start`ın açtığı, hekim onayı TÜKETİLMİŞ seansta: `tur == "ai_pro"`, onay kimliği ve
+    sürüş nesli dolu. `mode` (serbest metin; `/api/session/start` "AI…" önekini de kabul eder) ARTIK YETKİ VERMEZ —
+    ölçüldü: önekli elle seans 17/17 onaysız AI dozu açıyordu, önek daraltılınca bile 1/17 (İG-5.2).
+    SÜRE MÜHÜRDEN: seans başlangıcı (`start_mono`) + onaylanan süre. AI Pro globalleri (`_ai_duration_min`,
+    `_ai_started_at`) bayat kalabilir — ölçüldü: önceki 1 dk'lık seansın globali 3 dk'lık seansı 58. sn'de kesiyor,
+    telde süre 1 dk gidiyordu (İG-5.9)."""
+    try:
+        import servers.api_server as _api
+
+        with _api._session_lock:
+            s = dict(_api._active_session)
+    except Exception:
+        logger.exception("AI Pro: seans mührü okunamadı → SÜRÜLMEZ")
+        return None
+    if not (
+        s.get("is_active") and s.get("tur") == "ai_pro" and s.get("onay_kimligi") and s.get("surus_nesli") is not None
+    ):
+        return None
+    try:
+        kalan_s = float(s.get("duration_minutes") or 0) * 60.0 - (time.monotonic() - float(s["start_mono"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+    if kalan_s <= 0:
+        return None
+    return {
+        "nesil": s["surus_nesli"],
+        "onay": s["onay_kimligi"],
+        "model": str(s.get("model") or ""),
+        "kalan_s": kalan_s,
+        "bitis_mono": time.monotonic() + kalan_s,
+    }
+
+
+def _muhur_surulebilir_mi(muhur) -> bool:
+    """Mühür VAR + etkin sağlayıcı MÜHÜRDEKİ model + (araştırma modeliyse) bayrak AÇIK (D1.80 · B-5.10).
+
+    Bayrak SÜRÜŞ ANINDA denetlenir: bayrak açıkken alınmış onay, bayrak kapatıldıktan sonra sürülmez (`/start` yalnız
+    başlangıçta bakıyordu). Model mühürden ayrıştıysa (hazırlık ya da başka bir yol değiştirdi) sürülmez."""
+    if not muhur:
+        return False
+    sag = _aktif_saglayici()
+    if muhur.get("model") and getattr(sag, "ad", "") != muhur["model"]:
+        logger.warning("AI Pro: etkin model %r mühürdeki %r değil → SÜRÜLMEZ", getattr(sag, "ad", ""), muhur["model"])
+        return False
+    try:
+        _arastirma_aipro_kapisi(sag)
+    except HTTPException:
+        logger.warning("AI Pro: araştırma bayrağı kapalı → '%s' ile SÜRÜLMEZ", getattr(sag, "ad", ""))
+        return False
+    return True
+
+
+def _dongu_bayragini_indir(dongu_muhru) -> None:
+    """`_ai_loop_active`i YALNIZ bu döngü hâlâ GÜNCEL döngüyse indir (D1.81 · İG-5.11).
+
+    Eski döngü bayrağı koşulsuz False yazsaydı, `/stop`→`/start` ile başlamış YENİ döngüyü öldürürdü."""
+    global _ai_loop_active
+    with _ai_loop_lock:
+        if dongu_muhru is None or dongu_muhru.get("dongu") == _ai_dongu_no:
+            _ai_loop_active = False
+
+
 def _ai_seansi_pasife_al(neden: str) -> None:
     """Seans loop'u BAŞLAMADAN öldüyse `_active_session`i pasife çek (teardown paritesi).
 
@@ -1093,7 +1197,7 @@ def _ai_seansi_pasife_al(neden: str) -> None:
         import servers.api_server as _api3
 
         with _api3._session_lock:
-            if str(_api3._active_session.get("mode", "")).startswith("AI"):
+            if _ai_seansi_mi(_api3._active_session):
                 _api3._active_session["is_active"] = False
         _api3.update_live_session_state(is_active=False, mode="Sistem Hazır")
         logger.error("AI Pro seansı başlatılamadı (%s) — oturum pasife alındı.", neden)
@@ -1204,8 +1308,20 @@ def _drive_coils_ai_pro(D, P):
       - ESP bobin 6-7: _mqtt_publish pemf/coil/{cid}/control (per-coil duty/phase)
       - Bobin 8: SÜRÜLMEZ (kapalı).
     Limit/clamp EKLENMEZ — yalnız mevcut normalize_* yardımcıları (yüzde dönüşümü/0..360 faz).
+
+    D1.81 / İG-5.9: SÜRE seans MÜHRÜNDEN (kalan süre) — bayat `_ai_duration_min` globali telde yanlış süre ve erken /
+    geç kesilme demekti. Sürülebilir mühür yoksa HİÇ sürülmez. Niyet nesli çağıranın `estop_mandali.surus_baglami`
+    bağlamından gelir ve `update_coil` onu DURUM KİLİDİ ALTINDA denetler (acil durdurma/durdurma sonrası uçuştaki tur
+    reddedilir).
     """
     from servers.api_server import state
+
+    _muhur = _ai_pro_surus_muhru()
+    if _muhur is None:
+        logger.warning("AI Pro sürüşü ATLANDI: sürülebilir (onaylı, süresi dolmamış) AI Pro seansı yok.")
+        return
+    _kalan_s = _muhur["kalan_s"]
+    _kalan_dk = max(1, _math.ceil(_kalan_s / 60.0))  # firmware dakika granülerliği (yukarı); yazılım deadline'ı saniye
 
     # STM bobin 1-5 (indeks 0-4)
     if state and state.hardware:
@@ -1219,8 +1335,9 @@ def _drive_coils_ai_pro(D, P):
                     freq=_AI_PRO_FREQ_HZ,
                     duty=duty_pct,
                     phase=phase_i,
-                    duration=_ai_duration_min,
+                    duration=_kalan_dk,
                     start=True,
+                    duration_seconds=_kalan_s,
                 )
             except Exception as _he:
                 logger.warning("AI Pro STM bobin %d sürüş hatası: %s", cid, _he)
@@ -1233,16 +1350,18 @@ def _drive_coils_ai_pro(D, P):
             cid = idx + 1
             duty_pct = round(normalize_ai_pro_duty_ratio(D[idx]) * 100.0, 1)
             phase_i = round(normalize_phase_deg(P[idx]), 1)
-            _api_esp._mqtt_publish(
-                f"pemf/coil/{cid}/control",
+            # D1.81 · Y4: mandal/nesil kapılı START yayını (niyet nesli çağıranın bağlamından; telafi STOP'u dahil).
+            _api_esp._esp_start_yayinla(
+                cid,
                 {
                     "command": "start",
                     "command_id": f"aipro_{cid}_{int(time.time() * 1000)}",
                     "freq": round(_AI_PRO_FREQ_HZ, 1),
                     "duty": duty_pct,
                     "phase": phase_i,
-                    "duration": int(_ai_duration_min * 60),
+                    "duration": int(_math.ceil(_kalan_s)),
                 },
+                estop_mandali.baglam_nesli(),
             )
     except Exception as _ee:
         logger.warning("AI Pro ESP 6-7 publish hatası: %s", _ee)
@@ -1431,9 +1550,23 @@ def _ai_hazirlik_durdur_ic():
     _ai_hazirlik_thread = None
 
 
-def _ai_pro_loop():
+def _ai_pro_loop(dongu_muhru=None):
+    """Sunucu kameralı AI Pro kapalı döngüsü.
+
+    `dongu_muhru` (D1.81 · İG-5.11/5.29/5.3): `{"nesil", "onay", "dongu"}` — `/ai/pro/start` verir. Döngü YALNIZ
+    nesli geçerli (durdurma/acil durdurma yok, mandal yok) VE kendi numarası güncel iken sürer; her sürüşü bu nesille
+    yapar (`update_coil` kilit altında denetler). Böylece (a) tahmin/lokalizasyon sırasında (damla serviste dakikalar)
+    gelen acil durdurmadan sonra tur bobini yeniden enerjileyemez, (b) `/stop`→`/start` ms içinde gelse de eski döngü
+    çıkar (birikmez). `None` = eski çağıranlar (yalnız mandal denetlenir)."""
     global _ai_loop_active, _ai_relocalize
     logger.info("AI Pro Closed-Loop (cat_organ organ-lokalizasyon + em_kedi) arkaplan görevi BAŞLADI.")
+    _nesil = dongu_muhru.get("nesil") if dongu_muhru else None
+
+    def _dongu_gecerli() -> bool:
+        if dongu_muhru is None:
+            return True
+        return dongu_muhru.get("dongu") == _ai_dongu_no and not estop_mandali.baslatma_engeli(_nesil)
+
     # WEB handoff (2026-08-25): hazırlık önizlemesi kamerayı henüz bırakıyor olabilir (join,
     # kesintisiz ~4 sn'lik bir lokalizasyonu aşabilir) → açılışı birkaç kez DENE (0,5 sn arayla) ki
     # çift-open yüzünden doktor-ONAYLI seans sessizce ölmesin (adversaryal inceleme MAJOR savunması).
@@ -1443,7 +1576,7 @@ def _ai_pro_loop():
         _aktif_saglayici().yukle()
     except Exception as e:
         logger.error("AI Pro modeli yüklenemedi (kamera hiç açılmadı): %s", e)
-        _ai_loop_active = False
+        _dongu_bayragini_indir(dongu_muhru)
         _ai_seansi_pasife_al("model yüklenemedi")
         return
 
@@ -1457,14 +1590,14 @@ def _ai_pro_loop():
     if not cap.isOpened():
         logger.error("Kamera açılamadı (VideoCapture(0), tekrarlı denemeye rağmen). AI Pro durduruluyor.")
         cap.release()
-        _ai_loop_active = False
+        _dongu_bayragini_indir(dongu_muhru)
         # `start_ai_session` bu thread spawn edilmeden ÖNCE çağrıldı → oturum AI modunda AKTİF.
         # Pasife almazsak panel/geçmiş seansı "sürüyor" gösterir (bobin sürülmediği hâlde).
         _ai_seansi_pasife_al("kamera açılamadı")
         return
 
     _lost_streak = 0  # ardisik hedef-kaybi sayaci (bkz. _AI_LOST_STOP_STREAK)
-    while _ai_loop_active:
+    while _ai_loop_active and _dongu_gecerli():
         start_time = time.time()
         # Dış STOP (acil-durdur / süre-watchdog / STM-disconnect / /session/stop) AI loop'u da durdursun.
         try:
@@ -1482,7 +1615,8 @@ def _ai_pro_loop():
                 # yol asimetrikti. start_ai_pro atomik check-and-set yaptigindan (:775-778)
                 # bayrak True iken ikinci loop zaten baslayamaz → burada temizlemek guvenli;
                 # bundan SONRA yeni loop baslarsa teardown guard'i onu dogru korur.
-                _ai_loop_active = False
+                # D1.81: yalnız bu döngü hâlâ güncelse (yeni döngünün bayrağı ezilmesin).
+                _dongu_bayragini_indir(dongu_muhru)
                 break
         except Exception:
             dongu_hatasini_bildir(  # B-4.2 · D1.19 (B-10.121)
@@ -1585,10 +1719,18 @@ def _ai_pro_loop():
                 with _apx._session_lock:
                     _still = bool(_apx._active_session.get("is_active"))
                 if not _still:
-                    _ai_loop_active = False
+                    _dongu_bayragini_indir(dongu_muhru)
                     break
                 D, P, e_field = _predict_and_drive(x_mm, y_mm, z_mm, _ai_organ_id)
-                _drive_coils_ai_pro(D, P)
+                # ⚠️ D1.81 (İG-5.3/5.29): yukarıdaki "seans hâlâ aktif mi" bakışı TAHMİNDEN ÖNCEDİR; tahmin (CPU 0,3–2,2
+                # sn, yanıtsız AI servisinde dakikalar) sırasında gelen acil durdurmayı göremez — ölçüldü: döngü 40'ta 11,
+                # damla serviste 36,5 sn sonra yeniden enerjiledi. Sürüş bu döngünün NESLİYLE yapılır; `update_coil` onu
+                # DURUM KİLİDİ ALTINDA denetler → bayatsa reddedilir. Sonra döngü de çıkar.
+                with estop_mandali.surus_baglami(_nesil):
+                    _drive_coils_ai_pro(D, P)
+                if not _dongu_gecerli():
+                    logger.warning("AI Pro: sürüş sırasında durdurma/acil durdurma geldi → döngü sonlandırılıyor.")
+                    break
                 _lost_streak = 0  # hedef yeniden bulundu
             else:
                 D, P, e_field = [0.0] * 7, [0.0] * 7, 0.0
@@ -1624,7 +1766,7 @@ def _ai_pro_loop():
                 max(0, int(_ai_duration_min * 60 - (time.monotonic() - _ai_started_at))) if _ai_started_at else 0
             )
             if _ai_started_at and remaining <= 0:
-                _ai_loop_active = False  # süre doldu → otomatik durdur
+                _dongu_bayragini_indir(dongu_muhru)  # süre doldu → otomatik durdur
 
             # Canlı seans göstergesi: bobin-1 AI duty'sini temsil değer olarak ver.
             rep_duty = round(normalize_ai_pro_duty_ratio(D[0]) * 100.0, 1) if localized else 0.0
@@ -1635,6 +1777,7 @@ def _ai_pro_loop():
                 intensity=rep_duty,
                 remaining_min=remaining // 60,
                 duration_sec=_ai_duration_min * 60,
+                surus_nesli=_nesil,  # D1.81 (İG-5.36): bayat tur acil durdurmadan sonra "aktif" yazamaz
             )
 
             # ── Telemetri yayını: cache'li organ overlay + per-coil (React buradan dinler) ──
@@ -1698,33 +1841,51 @@ def _ai_pro_loop():
     # Audit P2 (teardown-race seal): süre-doldu ile bu teardown arasındaki ~1sn'de yeni bir
     # start_ai_pro başlamış olabilir (_ai_loop_active tekrar True + yeni seans). O durumda YENİ seans
     # bobinlere sahiptir → bu ESKİ thread'in teardown'ı onları DURDURMASIN + is_active'ini EZMESİN.
-    if _ai_loop_active:
+    # D1.81 (İG-5.11): "yeni döngü" DÖNGÜ NUMARASIYLA bilinir — bayrak, eski döngünün bayat tur denetimi ile yeni
+    # döngünün `/start`'ı arasında ms içinde değişebildiği için tek başına güvenilmez.
+    with _ai_loop_lock:
+        _yeni_dongu = dongu_muhru is not None and dongu_muhru.get("dongu") != _ai_dongu_no
+        if dongu_muhru is not None and not _yeni_dongu:
+            _ai_loop_active = False  # bu (güncel) döngü bitiyor
+    if _yeni_dongu or (dongu_muhru is None and _ai_loop_active):
         logger.info("AI Pro teardown atlandı: yeni loop başlamış (bobinler yeni seansa ait).")
         return
     # Loop bittiğinde (süre doldu / durduruldu / hata) bobinleri DONANIM düzeyinde durdur —
     # keep-alive ile sonsuza sürmesin (AI artık sürmüyor).
+    # ⚠️ D1.81: döngünün sürüş yetkisi bir durdurma / acil durdurma ile ZATEN kesildiyse (nesil bayat) o durdurma
+    # STOP'unu GÖNDERDİ ve döngü sonrasında hiçbir şey süremedi → burada tekrar STOP gönderilmez: aradaki
+    # "Sıfırla + yeni elle seans/tekil sürüş"ün bobinlerini bu ESKİ döngü durduramaz. Yetki hâlâ geçerliyse
+    # (süre doldu, hata) bobinler bu döngünündür → durdurulur.
+    _yetki_gecerli = dongu_muhru is None or not estop_mandali.baslatma_engeli(_nesil)
     try:
         import servers.api_server as _api2
 
-        if _api2.state and _api2.state.hardware:
-            _api2.state.hardware.stop_all_coils()
-        # ESP 6-8'i de durdur (AI bunları da sürüyordu — audit #13).
-        # ⚠️ FAZ 4: kapsam elle yaziliydi (yukaridaki ile ayni sinif). Tek kaynak.
-        for _cid in sorted(_api2.ESP_COIL_IDS):
-            try:
-                _api2._mqtt_publish(
-                    f"pemf/coil/{_cid}/control",
-                    {
-                        "command": "stop",
-                        "command_id": f"ai_stop_{_cid}_{int(time.time() * 1000)}",
-                    },
-                )
-            except Exception:
-                logger.warning("AI Pro stop: bobin %s STOP publish hatası", _cid, exc_info=True)  # B-4.2
+        if _yetki_gecerli:
+            if _api2.state and _api2.state.hardware:
+                _api2.state.hardware.stop_all_coils()
+            # ESP 6-8'i de durdur (AI bunları da sürüyordu — audit #13).
+            # ⚠️ FAZ 4: kapsam elle yaziliydi (yukaridaki ile ayni sinif). Tek kaynak.
+            for _cid in sorted(_api2.ESP_COIL_IDS):
+                try:
+                    _api2._mqtt_publish(
+                        f"pemf/coil/{_cid}/control",
+                        {
+                            "command": "stop",
+                            "command_id": f"ai_stop_{_cid}_{int(time.time() * 1000)}",
+                        },
+                    )
+                except Exception:
+                    logger.warning("AI Pro stop: bobin %s STOP publish hatası", _cid, exc_info=True)  # B-4.2
         with _api2._session_lock:
-            if str(_api2._active_session.get("mode", "")).startswith("AI"):
-                _api2._active_session["is_active"] = False
-        _api2.update_live_session_state(is_active=False, mode="Sistem Hazır")
+            _s = _api2._active_session
+            # Yalnız KENDİ seansını kapatır (mühürdeki onay kimliği); eski çağıranda önceki kural.
+            _kendi = _s.get("onay_kimligi") == dongu_muhru.get("onay") if dongu_muhru is not None else _ai_seansi_mi(_s)
+            if _kendi:
+                _s["is_active"] = False
+            _baskasi_aktif = bool(_s.get("is_active")) and not _kendi
+        if not _baskasi_aktif:
+            # Mandal kuruluyken "Sistem Hazır" yazılmaz, "Acil Durdurma" kalır (live_state kuralı, İG-5.36).
+            _api2.update_live_session_state(is_active=False, mode="Sistem Hazır")
         # Canlı E bağlamını TEMİZLE (2026-09-09): fantom/petri seansı bağlamı kuruyor; seans
         # bitince temizlenmezse bir sonraki (kedi) seansta E barı ESKİ hedefin değerini "canlı"
         # göstermeye devam ederdi.
@@ -1951,7 +2112,12 @@ def _kaydet_onay_izi(olay: str, rec: dict) -> None:
 @ai_router.post("/api/ai/pro/start")
 def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     global _ai_loop_active, _ai_thread, _ai_organ_id, _ai_duration_min, _ai_started_at, _ai_relocalize, _ai_hedef_modeli
-    global _ai_owner_client
+    global _ai_owner_client, _ai_dongu_no
+    # ⚠️ D1.81 (B-5.3 · Y4): START NİYETİ İSTEK GİRİŞİNDE neslini alır; seans mührüne yazılır ve döngü / `/frame`
+    # bütün sürüşlerini bu nesille yapar. Başlatma sürerken gelen durdurma/acil durdurma bu seansı doğmadan bayatlatır.
+    _niyet_nesli = estop_mandali.nesil()
+    if estop_mandali.mandalli_mi():
+        raise HTTPException(status_code=409, detail=estop_mandali.MANDAL_MESAJI)
     # Güncelleme uygulanıyorken otonom AI Pro tedavisi BAŞLATMA: installer servisi durdurup
     # EXE'yi değiştirebilir → bobinler kontrolcüsüz kalır (update TOCTOU guard'ının ters yönü).
     try:
@@ -1966,76 +2132,48 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     except Exception:
         pass
     # ── SERT KAPI (2026-08-06 sahip kararı): ONAYSIZ OTONOM TEDAVİ BAŞLAMAZ ────────────
-    # Onay TÜKETİLİR (tek kullanımlık + süreli) ve uygulanacak parametreler onaylananın
-    # MÜHÜRLÜ kopyasından okunur → "onayı al, başka parametreyle sür" yapısal olarak imkânsız.
-    # Kilit ALINMADAN ÖNCE doğrulanır: reddedilen istek `_ai_loop_active`'i kirletmemeli.
+    # Uygulanacak parametreler onaylananın MÜHÜRLÜ kopyasından okunur → "onayı al, başka parametreyle sür"
+    # yapısal olarak imkânsız.
+    # ⚠️ D1.E06 (İG-5.16): onay önce YALNIZ DOĞRULANIR, EN SON (bütün denetimlerden sonra) ve `_ai_loop_lock`
+    # ALTINDA tüketilir. Eskiden ilk satırda tüketiliyordu → döngü sürerken gelen ikinci `/start` ("Already
+    # running"), eşzamanlı ikinci istek, STM reddi (409), desteklenmeyen hedef (422) ve araştırma bayrağı (409)
+    # BAŞLAMAYAN tedavi için hekimin tek kullanımlık onayını yakıyordu; STM reddinde globaller de (süre 2 → 7 dk)
+    # başlamayan seansın değerinde kalıyordu (İG-5.9'un bayat globali).
     from servers import ai_approval
 
     try:
-        _onay = ai_approval.consume(payload.proposal_id)
+        _onay = ai_approval.dogrula(payload.proposal_id)
     except ValueError as e:
         raise HTTPException(status_code=428, detail=str(e)) from None
     _spec = _onay.get("specs") or {}
 
-    # ATOMIK check-and-set: iki es-zamanli start ikinci loop'u ACMASIN (TOCTOU).
-    with _ai_loop_lock:
-        if _ai_loop_active:
-            # [B1]: MEVCUT sahibi döndür (çağıranı DEĞİL) → çağıran ownedRef'i yanlışça true yapıp
-            # panelini kapatınca başkasının seansına /stop göndermesin (ownedRef <3sn drift kapanır).
-            return {"status": "success", "message": "Already running", "ownerClientId": _ai_owner_client}
-        _ai_loop_active = True
-        # Sahiplik kilidin İÇİNDE yazılır: iki eş-zamanlı start'ta kazanan ile sahip AYNI olur.
-        _ai_owner_client = str(payload.client_id or "")[:64]
-
     # Audit P2: em_kedi yalnız organ 0-6'yı TEDAVİ eder; 7-10 (Kalp/Dalak/Akciğer) cat_organ ile
     # lokalize olur ama _build_input ValueError→D=P=0 (sessiz sıfır-tedavi) YİNE 'aktif+lokalize·Kalp'
-    # gösterir → klinisyeni 'kalp tedavi ediliyor' diye yanıltır. Desteklenmeyeni reddet + loop'u geri al.
+    # gösterir → klinisyeni 'kalp tedavi ediliyor' diye yanıltır. Desteklenmeyeni reddet.
     # Organ ve süre ONAYLANAN mühürden okunur; istemcinin gövdede gönderdiği değer YOK SAYILIR
     # (aksi halde "organ 2'yi onaylat, organ 5'i başlat" mümkün olurdu — enerji YANLIŞ ORGANA).
     # MODEL de MÜHÜRDEN okunur (Faz 1, 2026-09-08): gövdedeki `model` YOK SAYILIR — "fantom
     # önerisini onaylat, kediyi başlat" (ya da tersi) yapısal olarak imkânsız. Mühürsüz eski
     # kayıtlar (Faz 1 öncesi onaylar) varsayılan "kedi" ile açılır → geriye-uyum korunur.
+    # D1.E06: bu denetimlerin HİÇBİRİ global yazmaz; globaller yalnız onay tüketildikten sonra (kilit altında).
     try:
         _saglayici = ai_pro_hedef.saglayici_al(_spec.get("model"))
     except ValueError as _me:
-        with _ai_loop_lock:
-            _ai_loop_active = False
         raise HTTPException(status_code=422, detail=str(_me)) from None
     # Bayrak MÜHÜRLÜ model için de denetlenir: bayrak açıkken alınmış bir onay, bayrak
     # kapatıldıktan sonra (ör. tezgâh sonucu olumsuz çıktı) SÜRÜLMEMELİ.
-    try:
-        _arastirma_aipro_kapisi(_saglayici)
-    except HTTPException:
-        with _ai_loop_lock:
-            _ai_loop_active = False
-        raise
+    _arastirma_aipro_kapisi(_saglayici)
     _organ_req = int(_spec.get("organ_id", payload.organ_id))
     if _organ_req not in _saglayici.hedef_idleri():
-        with _ai_loop_lock:
-            _ai_loop_active = False
         _gecerli = ", ".join(str(i) for i in sorted(_saglayici.hedef_idleri()))
         raise HTTPException(
             status_code=422,
             detail=f"Hedef {_organ_req} '{_saglayici.title}' için desteklenmiyor (geçerli: {_gecerli}).",
         )
-    _ai_organ_id = _organ_req
-    with _ai_loop_lock:
-        _ai_hedef_modeli = _saglayici.ad  # döngü ve /frame bu modeli kullanır
     # Süreyi klinik üst sınıra kapla (Audit P1) — aksi halde {duration_minutes: 999999} uzaktan
-    # kabul ediliyordu. Bu değer hem STM/watchdog'a hem ESP MQTT yüküne (_ai_duration_min*60) gider.
+    # kabul ediliyordu. Bu değer hem STM/watchdog'a hem ESP MQTT yüküne gider.
     # Süre de MÜHÜRDEN okunur (organ ile aynı gerekçe: "20 dk onayla, 180 dk başlat" olmasın).
-    _ai_duration_min = max(
-        1, min(_AI_PRO_MAX_DURATION_MIN, int(_spec.get("duration_minutes", payload.duration_minutes)))
-    )
-    # DENETIM P2: DUVAR SAATI idi. AI Pro sure siniri gecen-sure farkiyla hesaplandigindan
-    # NTP duzeltmesi/DST/elle saat degisimi GERI giderse maruziyet UZAR (donanim deadline'i
-    # keep-alive ile her saniye tazelendigi icin onu da kesmez). Dort kullanimin hepsi delta
-    # oldugundan monotonic'e gecildi (epoch olarak hicbir yerde gosterilmiyor).
-    _ai_started_at = time.monotonic()
-    _ai_relocalize = True  # başlangıçta hemen cat_organ lokalizasyonu yap
-    _ai_organ_cache["localized"] = False
-    # Seansı baştan _active_session'a yaz → süre-watchdog + emergency-stop AI Pro'yu da kapsar.
-    # 1-7: STM 1-5 + ESP 6-7 (bobin 8 KAPALI; em_kedi 7 bobinlik per-coil duty/phase üretir).
+    _sure_dk = max(1, min(_AI_PRO_MAX_DURATION_MIN, int(_spec.get("duration_minutes", payload.duration_minutes))))
     # ⚠️ FIRMWARE UYUŞMAZLIĞI KAPISI (denetim 2026-09-12): kart komutları sistematik
     # reddediyorken otonom seans başlatmak, manuel yolda düzeltilen sahte-başarının aynısını
     # AI Pro'da yaşatırdı — üstelik burada operatör ekranın başında bile durmuyor olabilir.
@@ -2044,37 +2182,92 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
         from servers import live_state as _ls_red
 
         if _ls_red.stm_komutlari_reddediyor():
-            _ai_loop_active = False
             raise HTTPException(status_code=409, detail=_api_red.STM_RED_MESAJI)
     except HTTPException:
         raise
     except Exception:
         logger.debug("AI Pro STM red kontrolu yapilamadi (engellenmedi).", exc_info=True)
 
+    # ── ATOMİK: döngü denetimi + mandal/nesil + onay TÜKETİMİ + globaller, AYNI kilit altında ──
+    # İki eşzamanlı start ikinci loop'u AÇMAZ ve kaybedenin onayı tüketilmez (D1.E06 (c)).
+    with _ai_loop_lock:
+        if _ai_loop_active:
+            # [B1]: MEVCUT sahibi döndür (çağıranı DEĞİL) → çağıran ownedRef'i yanlışça true yapıp
+            # panelini kapatınca başkasının seansına /stop göndermesin (ownedRef <3sn drift kapanır).
+            # D1.E06 (b): onay TÜKETİLMEZ (başlamayan tedavi).
+            return {"status": "success", "message": "Already running", "ownerClientId": _ai_owner_client}
+        _engel = estop_mandali.baslatma_engeli(_niyet_nesli)
+        if _engel:
+            raise HTTPException(status_code=409, detail=_engel)
+        try:
+            _onay = ai_approval.consume(payload.proposal_id)
+        except ValueError as e:
+            raise HTTPException(status_code=428, detail=str(e)) from None
+        _ai_loop_active = True
+        _ai_dongu_no += 1
+        _dongu_muhru = {"nesil": _niyet_nesli, "onay": str(payload.proposal_id), "dongu": _ai_dongu_no}
+        # Sahiplik kilidin İÇİNDE yazılır: iki eş-zamanlı start'ta kazanan ile sahip AYNI olur.
+        _ai_owner_client = str(payload.client_id or "")[:64]
+        _ai_organ_id = _organ_req
+        _ai_hedef_modeli = _saglayici.ad  # döngü ve /frame bu modeli kullanır (mühürle aynı)
+        _ai_duration_min = _sure_dk
+        # DENETIM P2: DUVAR SAATI idi. AI Pro sure siniri gecen-sure farkiyla hesaplandigindan
+        # NTP duzeltmesi/DST/elle saat degisimi GERI giderse maruziyet UZAR (donanim deadline'i
+        # keep-alive ile her saniye tazelendigi icin onu da kesmez). Dort kullanimin hepsi delta
+        # oldugundan monotonic'e gecildi (epoch olarak hicbir yerde gosterilmiyor).
+        _ai_started_at = time.monotonic()
+        _ai_relocalize = True  # başlangıçta hemen cat_organ lokalizasyonu yap
+        # Kilit sırası _ai_loop_lock → _ai_cache_lock (hazırlık ucuyla aynı; ters sıra depoda YOK).
+        with _ai_cache_lock:
+            _ai_organ_cache["localized"] = False
+
+    # Seansı baştan _active_session'a yaz → süre-watchdog + emergency-stop AI Pro'yu da kapsar.
+    # 1-7: STM 1-5 + ESP 6-7 (bobin 8 KAPALI; em_kedi 7 bobinlik per-coil duty/phase üretir).
     try:
         from servers.api_server import start_ai_session
 
-        # ⚠️ "AI" ÖN EKİ KORUNUR: api_server ve ai_router'da `startswith("AI")` kontrolleri var.
         # ⚠️ SAHİP ONAY MÜHRÜNDEN OKUNUR, İSTEMCİ GÖVDESİNDEN DEĞİL: organ/süre/model ile
         # AYNI ilke. Seansın sahibi, otonom sürüşü ONAYLAYAN hekimdir — sorumluluğu üstlenen
         # kişi odur. İstemciden ayrı bir alan istemek, "başkasının adına seans açma"yı mümkün
         # kılardı. (Mühür `ai_approval.approve(pid, operator)` ile damgalanır.)
+        # D1.80: seans TÜRÜ + tüketilen ONAY + niyet NESLİ + MODEL mühre yazılır — `/frame` yalnız bunlarla sürer
+        # (`mode` metni artık yetki vermez).
         start_ai_session(
             0.0,
             0.0,
-            _ai_duration_min,
+            _sure_dk,
             range(1, 8),
             f"AI Pro · {_saglayici.title}",
             operator_email=str(_onay.get("operator") or ""),
+            tur="ai_pro",
+            onay_kimligi=str(payload.proposal_id),
+            surus_nesli=_niyet_nesli,
+            model=_saglayici.ad,
         )
     except Exception:
         logger.exception("start_ai_session failed")
+    # D1.81: başlatma sürerken durdurma / acil durdurma geldiyse döngü BAŞLATILMAZ (seans doğmadan bayat). Onay
+    # tüketildi: durdurmadan sonra eski onayla yeniden başlatılamaması güvenli yöndür (yeni öneri gerekir).
+    _engel = estop_mandali.baslatma_engeli(_niyet_nesli)
+    if _engel:
+        _dongu_bayragini_indir(_dongu_muhru)
+        try:
+            import servers.api_server as _api_geri
+
+            with _api_geri._session_lock:
+                if _api_geri._active_session.get("onay_kimligi") == _dongu_muhru["onay"]:
+                    _api_geri._active_session["is_active"] = False
+        except Exception:
+            logger.exception("AI Pro: başlatma iptalinde seans pasife alınamadı")
+        raise HTTPException(
+            status_code=409, detail="Başlatma sırasında durdurma/acil durdurma geldi; AI Pro BAŞLATILMADI."
+        )
     import threading
 
     # WEB kapalı-döngü (2026-08-25): hazırlık önizlemesi kamerayı tutuyor olabilir → seans loop'u
     # VideoCapture(0)'ı açmadan ÖNCE önizlemeyi durdur ve kameranın bırakılmasını BEKLE (join).
     _ai_hazirlik_durdur_ic()
-    _ai_thread = threading.Thread(target=_ai_pro_loop, daemon=True)
+    _ai_thread = threading.Thread(target=_ai_pro_loop, args=(_dongu_muhru,), daemon=True, name="ai-pro-dongu")
     _ai_thread.start()
     return {
         "status": "success",
@@ -2122,13 +2315,15 @@ def stop_ai_pro():
     try:
         # Denetim 2. tur [1.1]: teyitsiz STOP'lar operatore bildirilir — broker oluyken
         # bu uc "success" donerken bobinlerin durmadigi sessiz kaliyordu.
-        _api._bildir_teyitsiz_stop(_api._stop_session_coils(range(1, 9)), "AI Pro durdurma")
+        # D1.81 (İG-5.3 "/ai/pro/stop kolu"): yetki KESİLİR (nesil++) → tahmindeki uçuştaki `/frame`/döngü turu bu
+        # STOP'tan sonra bobini yeniden enerjileyemez (ölçüldü: 20'de 2, zorlanmış zamanlamada 30'da 30).
+        _api._bildir_teyitsiz_stop(_api._stop_session_coils(range(1, 9), yetkiyi_kes=True), "AI Pro durdurma")
     except Exception:
         logger.exception("stop_ai_pro: _stop_session_coils hatası")
     # AI seansını da kapat → süre-watchdog ve frame-geçidi 'seans aktif değil' görsün.
     try:
         with _api._session_lock:
-            if str(_api._active_session.get("mode", "")).startswith("AI"):
+            if _ai_seansi_mi(_api._active_session):
                 _api._active_session["is_active"] = False
     except Exception:
         logger.exception("stop_ai_pro: _active_session reset hatası")
@@ -2226,8 +2421,12 @@ def ai_pro_hazirlik_baslat(payload: AiProStartPayload = AiProStartPayload()):
     # ⚠️ ATOMİK (adversaryal inceleme MAJOR-2 TOCTOU): _ai_loop_active + _ai_hazirlik_active kontrolü
     # VE thread spawn'ı AYNI _ai_loop_lock içinde. Eskiden _ai_loop_active kilit DIŞINDA okunuyordu →
     # eş-zamanlı /ai/pro/start ile çift VideoCapture(0) açılabiliyordu (kilit tam bunu önlemek içindi).
+    # ⚠️ D1.80 (B-5.10): sunucu kamerası döngüsü çalışmasa da (mobil `/frame` seansı) MÜHÜRLÜ bir AI Pro seansı
+    # sürerken model/hedef DEĞİŞTİRİLEMEZ — bayrak yalnız döngüye bakıyordu. (Mühür, kilit sırası tersine dönmesin
+    # diye kilitten ÖNCE okunur; hazırlık bobin sürmez, aradaki pencere zararsız.)
+    _muhurlu_seans = _ai_pro_surus_muhru() is not None
     with _ai_loop_lock:
-        if _ai_loop_active:
+        if _ai_loop_active or _muhurlu_seans:
             raise HTTPException(
                 status_code=409,
                 detail="Seans sürerken hedef değiştirilemez — önce AI Pro'yu durdurun.",
@@ -2329,6 +2528,11 @@ async def ai_pro_frame(
     Organ/süre AKTİF AI Pro seansından okunur (web ile aynı state). FE bu çağrıdan
     ÖNCE /api/ai/pro/start çağırır; mobilde kareler bu endpoint'ten, web'de sunucu kamerasından.
     """
+    # ⚠️ D1.80 · D1.81: sürüş NİYETİ İSTEK GİRİŞİNDE seans MÜHRÜNDEN alınır (tür = ai_pro + tüketilmiş onay + nesil +
+    # model + kalan süre). Lokalizasyon/tahmin 0,3–2,2 sn sürer; arada gelen acil durdurma / durdurma (ve ardından
+    # "Sıfırla + yeni seans") nesli bayatlatır → sürüş `update_coil`da DURUM KİLİDİ ALTINDA reddedilir. Eskiden seans
+    # tahminden ÖNCE bir kez ve `mode.startswith("AI")` ile denetleniyordu (İG-5.2/5.3: onaysız seans + yeniden enerji).
+    _muhur = _ai_pro_surus_muhru()
     try:
         img = await _decode_image(file, image_base64, label="ai_pro_frame")
 
@@ -2394,20 +2598,19 @@ async def ai_pro_frame(
         # GÜVENLİK (Audit P0): bobin YALNIZCA süre-watchdog kapsamındaki AKTİF AI Pro seansı
         # varken sürülür. /start çağrılmadan (veya süre dolduktan / durdurulduktan sonra) gelen
         # kare bobin SÜRMEZ → watchdog'un izlemediği gözetimsiz/uzayan PEMF maruziyetini engeller.
+        # D1.80: "aktif AI Pro seansı" = istek girişindeki MÜHÜR (tür + onay + nesil), süresi MÜHÜRDEN (İG-5.9),
+        # model mühürdeki ve (araştırma modeliyse) bayrak SÜRÜŞ ANINDA açık.
         session_active = False
         try:
-            import servers.api_server as _api
-
-            with _api._session_lock:
-                _sess = _api._active_session
-                session_active = bool(_sess.get("is_active")) and str(_sess.get("mode", "")).startswith("AI")
-            if session_active and _ai_started_at and (time.monotonic() - _ai_started_at) >= _ai_duration_min * 60:
-                session_active = False  # süre dolmuş (watchdog henüz kapatmamış olsa da) → sürme
+            session_active = (
+                _muhur is not None and _muhur["bitis_mono"] > time.monotonic() and _muhur_surulebilir_mi(_muhur)
+            )
         except Exception:
             logger.exception("ai_pro_frame: aktif-seans kontrolü hatası")
             session_active = False
 
         D, P, e_field = [0.0] * 7, [0.0] * 7, 0.0
+        _surdu = False
         # GERÇEK donanımı sür (loop ile aynı yol) — organ bulundu VE aktif AI Pro seansı varsa VE
         # kare seansın SAHİBİNDEN geliyorsa. Bobin 1-7. [B1]: yabancı kare ASLA sürmez (yanlış
         # kameradan hesaplanan hedefe onaylı seansta enerji verilmesini önler).
@@ -2415,24 +2618,30 @@ async def ai_pro_frame(
             D, P, e_field = await asyncio.to_thread(_predict_and_drive, x_mm, y_mm, z_mm, _ai_organ_id)
             # Audit P2: _drive_coils_ai_pro senkron MQTT publish yapar (ESP probe/connect/wait ~sn) →
             # event-loop'u bloklardi (es-zamanli /emergency_stop yaniti gecikir). to_thread'e al.
-            await asyncio.to_thread(_drive_coils_ai_pro, D, P)
-            remaining = (
-                max(0, int(_ai_duration_min * 60 - (time.monotonic() - _ai_started_at))) if _ai_started_at else 0
-            )
-            try:
-                from servers.api_server import update_live_session_state
+            # D1.81: niyet nesli bağlamı `to_thread` iş parçacığına kopyalanır; `update_coil` onu kilit altında denetler.
+            with estop_mandali.surus_baglami(_muhur["nesil"]):
+                await asyncio.to_thread(_drive_coils_ai_pro, D, P)
+            # Sürüş GEÇERLİ kaldı mı (tahmin/sürüş sırasında durdurma geldiyse donanım reddetti) → yanıt ve canlı durum.
+            _surdu = not estop_mandali.baslatma_engeli(_muhur["nesil"])
+            if _surdu:
+                remaining = max(0, int(_muhur["bitis_mono"] - time.monotonic()))
+                try:
+                    from servers.api_server import update_live_session_state
 
-                rep_duty = round(normalize_ai_pro_duty_ratio(D[0]) * 100.0, 1)
-                update_live_session_state(
-                    is_active=True,
-                    mode=f"AI Pro · {_aktif_saglayici().title} · {_aktif_saglayici().hedef_adi(_ai_organ_id)}",
-                    freq=_AI_PRO_FREQ_HZ,
-                    intensity=rep_duty,
-                    remaining_min=remaining // 60,
-                    duration_sec=_ai_duration_min * 60,
-                )
-            except Exception:
-                logger.exception("AI Pro frame: live state update hatası")
+                    rep_duty = round(normalize_ai_pro_duty_ratio(D[0]) * 100.0, 1)
+                    update_live_session_state(
+                        is_active=True,
+                        mode=f"AI Pro · {_aktif_saglayici().title} · {_aktif_saglayici().hedef_adi(_ai_organ_id)}",
+                        freq=_AI_PRO_FREQ_HZ,
+                        intensity=rep_duty,
+                        remaining_min=remaining // 60,
+                        duration_sec=_ai_duration_min * 60,
+                        surus_nesli=_muhur["nesil"],  # İG-5.36: kilit altında yeniden denetlenir
+                    )
+                except Exception:
+                    logger.exception("AI Pro frame: live state update hatası")
+            else:
+                session_active = False
 
         # Organ overlay (yoksa ham kare) — mobil için küçült. [B1]: yabancı izleyiciye SAHİBİN
         # overlay'ini gösterme (kendi ham karesini görür, "yalnız görüntüleme" bandı paneldedir).
@@ -2461,7 +2670,7 @@ async def ai_pro_frame(
                 "catDetected": kedi_var and not is_foreign,
                 # F2: lokalizasyon damgası — panel ardisik sayacını eko-karelerden AYIRIR.
                 "localizedAt": localized_at,
-                "driven": bool(localized and session_active and not is_foreign),
+                "driven": bool(localized and session_active and not is_foreign and _surdu),
                 "sessionActive": session_active,
                 "reliability": round(rel, 3),
                 # Sunum-katmanı XAI (2026-08-26): web/mobil paritesi — güven dökümü.

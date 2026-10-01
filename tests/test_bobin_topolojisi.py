@@ -204,9 +204,10 @@ def esp_kapsam_noktalari(kaynak: str) -> list[tuple[str, object]]:
         if isinstance(n, ast.ListComp) and "_stop_esp" in ast.unparse(n.elt):
             sonuc.append(("kapanis_esp_stop", n.generators[0].iter))
         # AI (Auto) başlatma / AI Pro teardown: for _cid in <X>: _mqtt_publish(f"pemf/coil/{_cid}/control", {... aiauto_ / ai_stop_ ...})
+        # D1.81: START yayını artık mandal/nesil kapılı `_esp_start_yayinla(<bobin>, {...})` üzerinden (konu içeride kurulur).
         if isinstance(n, ast.For) and isinstance(n.target, ast.Name):
             govde = ast.unparse(ast.Module(body=n.body, type_ignores=[]))
-            if "pemf/coil/{" + n.target.id + "}/control" in govde:
+            if "pemf/coil/{" + n.target.id + "}/control" in govde or f"_esp_start_yayinla({n.target.id}," in govde:
                 if "aiauto_" in govde:
                     sonuc.append(("ai_auto_esp_start", n.iter))
                 elif "ai_stop_" in govde:

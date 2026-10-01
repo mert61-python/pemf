@@ -44,7 +44,8 @@ def test_stop_devralinan_seansin_TAZE_bobinlerini_DURDURMAZ(api, monkeypatch):
     UI 'sürüyor' sanır, coil-run/sensör kayıtları bozulur.
     """
     durdurulan = []
-    monkeypatch.setattr(api, "_stop_session_coils", lambda ids: durdurulan.append(list(ids)))
+    # D1.81: `/session/stop` ikinci argümanla (yetkiyi_kes=True) çağırır — kayıtçı imzası buna açık.
+    monkeypatch.setattr(api, "_stop_session_coils", lambda ids, *a, **k: durdurulan.append(list(ids)))
 
     with api._session_lock:
         api._active_session.update(
@@ -83,7 +84,8 @@ def test_devralma_YOKSA_bobinler_normal_durdurulur(api, monkeypatch):
     """Mühür fazla-koruyucu olmamalı: devralma yoksa donanım STOP'u ÇALIŞMALI.
     (Aksi halde 'hiç durdurma' ile testi geçen bozuk bir düzeltme fark edilmezdi.)"""
     durdurulan = []
-    monkeypatch.setattr(api, "_stop_session_coils", lambda ids: durdurulan.append(list(ids)))
+    # D1.81: `/session/stop` ikinci argümanla (yetkiyi_kes=True) çağırır — kayıtçı imzası buna açık.
+    monkeypatch.setattr(api, "_stop_session_coils", lambda ids, *a, **k: durdurulan.append(list(ids)))
 
     with api._session_lock:
         api._active_session.update(

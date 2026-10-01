@@ -52,6 +52,7 @@ function Probe() {
       <Text testID="running">{String((snapshot.coils ?? []).filter((c: any) => c.running).length)}</Text>
       <Text testID="ack1">{JSON.stringify((snapshot.coils ?? []).find((c: any) => c.id === 1)?.deviceAck ?? null)}</Text>
       <Text testID="internet">{String(snapshot.internet ?? "yok")}</Text>
+      <Text testID="mandal">{String(snapshot.estopMandali?.aktif ?? "yok")}</Text>
     </>
   );
 }
@@ -143,6 +144,17 @@ it("KRİTİK #11: emergency_stop AI karesini TEMİZLER ve tüm bobinleri durduru
   expect(getByTestId("aiData").props.children).toBe("yok");
   expect(getByTestId("aiFresh").props.children).toBe("false");
   expect(getByTestId("running").props.children).toBe("0");
+});
+
+it("KRİTİK D1.81 · Y4: estop_mandali iletisi mandal durumunu snapshot'a yazar (kuruldu → sıfırlandı)", async () => {
+  const { getByTestId } = await setup();
+  await setConnected(true);
+  await send(busySnapshot);
+  expect(getByTestId("mandal").props.children).toBe("yok");
+  await send({ type: "estop_mandali", data: { aktif: true, neden: "manual", nesil: 7 } });
+  expect(getByTestId("mandal").props.children).toBe("true");
+  await send({ type: "estop_mandali", data: { aktif: false, nesil: 7 } });
+  expect(getByTestId("mandal").props.children).toBe("false");
 });
 
 it("E-stop sticky: acil durdurmadan HEMEN SONRA gelen geç tick bobini yeniden çalışır göstermez", async () => {

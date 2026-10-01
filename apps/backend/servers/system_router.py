@@ -301,7 +301,17 @@ async def health_check(request: Request):
         # log'a dusuyordu; operator uzaktan erisimin neden sessizce guncellenmedigini goremiyordu.
         "cloudRegistry": _cloud_registry_status(),
         "services": service_status,
+        # D1.81 · Y4 (yalnız-ek): ACİL DURDURMA MANDALI — kuruluyken hiçbir START kabul edilmez; arayüz (oturumsuz
+        # Karşılama/Giriş ekranları dahil) durumu ve "Sıfırla"yı buradan/WS'ten gösterir. Neden/zaman ayrıntısı
+        # yalnız yerel/LAN'a (bu uç auth-muaf ve tünelden erişilebilir); uzak istemci yalnız `aktif`i görür.
+        "estopMandali": (_estop_mandali_durumu() if _local else {"aktif": _estop_mandali_durumu().get("aktif")}),
     }
+
+
+def _estop_mandali_durumu() -> dict:
+    from utils import estop_mandali
+
+    return estop_mandali.durum()
 
 
 @router.get("/favicon.ico")

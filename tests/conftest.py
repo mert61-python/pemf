@@ -185,6 +185,22 @@ def _gercek_kasa_kaydedici():
         pytest.fail(f"Bu test GERÇEK kimlik kasasına uzandı (engellendi, D0Ö.02): {yeni}")
 
 
+@pytest.fixture(autouse=True)
+def _estop_mandali_sizmaz():
+    """D1.81 · Y4: acil durdurma MANDALI süreç-geneldir (ürün böyle olmalı: sıfırlanana dek hiçbir START geçmez).
+    Testler arası SIZMASIN — E-stop yapan bir testten sonra ilgisiz bir testin START'ı reddedilmesin. Her testin
+    başında ve sonunda operatörün 'Sıfırla'sıyla AYNI işlev çağrılır (nesil artmaya devam eder; bayat niyetler
+    bayat kalır)."""
+    try:
+        from utils import estop_mandali
+    except ImportError:
+        yield
+        return
+    estop_mandali.sifirla("pytest-izolasyon")
+    yield
+    estop_mandali.sifirla("pytest-izolasyon")
+
+
 # ⚠️ D0Ö.07 (B-10.9) — SÜİT AĞA ÇIKMAZ (TCP connect, UDP sendto, DNS). ÖLÇÜLDÜ:
 # `data/cloud_mqtt_provision.json` (git'e girmez) bu makinede VAR; aynayı stub'lamayan E-stop testleri
 # `_estop_cloud_mirror` üzerinden GERÇEK (üretim) bulut broker'ına gerçek kimlikle TLS + STOP yayını

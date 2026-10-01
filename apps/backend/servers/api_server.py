@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.gzip import GZipMiddleware
+from utils import estop_mandali  # D1.81 · Y4: acil durdurma mandalı + sürüş nesli
 from utils.path_utils import get_app_version, get_build_id  # audit B-8.1: tek versiyon kaynağı
 
 from servers import (
@@ -1938,6 +1939,12 @@ def _mqtt_publish(topic: str, payload: dict) -> bool:
     if not live_state.esp_etkin():
         logging.getLogger(__name__).debug("ESP kapali -> MQTT publish ATLANDI: %s", topic)
         return False
+    # ⚠️ D1.81 · Y4 — SON SAVUNMA HATTI (tek boğaz noktası): acil durdurma MANDALLIYKEN hiçbir ESP START yayını
+    # gitmez — bir çağrı yeri `_esp_start_yayinla`yı unutsa bile. YALNIZ "start": STOP / selftest / status bu kapıdan
+    # GEÇMEZ (Ö.4-Y8: durdurma hiçbir şeye kapılanmaz).
+    if str((payload or {}).get("command", "")).strip().lower() == "start" and estop_mandali.mandalli_mi():
+        logging.getLogger(__name__).warning("ESP START yayini REDDEDILDI (acil durdurma mandalli): %s", topic)
+        return False
     # HG-6 (Plan A-3): backend'in ESP'ye komutladığı NİYET tek boğaz noktasında kaydedilir.
     # ASİMETRİK (review F4): STOP burada HEMEN (başarısız STOP'ta bile niyet False olmalı ki
     # ESP görününce reconcile denesin); START ise yalnız publish DOĞRULANINCA (aşağıda) —
@@ -2042,6 +2049,31 @@ _komut_sira = _itertools.count(1)
 def _komut_kimligi(on_ek: str, coil_id: int) -> str:
     """ESP komut kimliği `{on_ek}_{bobin}_{ms}_{sıra}` — aynı ms'de bile benzersiz, ≤35 karakter."""
     return f"{on_ek}_{coil_id}_{int(time.time() * 1000)}_{next(_komut_sira) % 1_000_000}"
+
+
+def _esp_start_yayinla(coil_id: int, payload: dict, nesil: int | None = None) -> bool:
+    """ESP START yayını — acil durdurma MANDALI ve sürüş NESLİ kapılı (D1.81 · B-5.3 · Y4).
+
+    ⚠️ STM'deki gibi kilit TUTULAMAZ: yayın saniyeler sürebilir ve STOP'u bekletmek Ö.4-Y8'e aykırıdır. Bu yüzden
+    (1) yayından ÖNCE denetlenir (mandal ya da bayat niyet → yayın YOK), (2) yayın SIRASINDA durdurma / acil durdurma
+    geldiyse (nesil değişti ya da mandal kuruldu) bu START o STOP'tan SONRA ulaşmış olabilir → ardından TELAFİ STOP'u
+    gönderilir. STOP gönderimi yalnız ARTAR. `nesil`: START niyetinin nesli (yoksa yalnız mandal denetlenir).
+    @return START yayını doğrulandı VE geçerli kaldı."""
+    _nesil_once = estop_mandali.nesil()
+    _engel = estop_mandali.baslatma_engeli(nesil)
+    if _engel:
+        logging.getLogger(__name__).warning("ESP bobin %s START YAYINLANMADI: %s", coil_id, _engel)
+        return False
+    ok = _mqtt_publish(f"pemf/coil/{coil_id}/control", payload)
+    if estop_mandali.mandalli_mi() or estop_mandali.nesil() != _nesil_once:
+        logging.getLogger(__name__).warning(
+            "ESP bobin %s: START yayını sürerken durdurma/acil durdurma geldi → TELAFİ STOP'u gönderiliyor.", coil_id
+        )
+        _mqtt_publish(
+            f"pemf/coil/{coil_id}/control", {"command": "stop", "command_id": _komut_kimligi("telafi", coil_id)}
+        )
+        return False
+    return ok
 
 
 def _register_ack(command_id: str) -> None:
@@ -2569,6 +2601,10 @@ async def hardware_command(payload: CommandPayload):
     """
     if not state.core or not state.hardware:
         raise HTTPException(status_code=503, detail="Headless Core veya HardwareController hazır değil.")
+    # D1.81 · Y4: START komutları mandallıyken 409 (try'ın DIŞINDA — aşağıdaki geniş except onu 500'e çevirirdi).
+    # Asıl kapı `HardwareController`dadır; stop_coil / stop_all_coils buraya ASLA takılmaz (Ö.4-Y8).
+    if str(payload.command or "").lower() in ("start_coil", "start_all_coils") and estop_mandali.mandalli_mi():
+        raise HTTPException(status_code=409, detail=estop_mandali.MANDAL_MESAJI)
 
     try:
         cmd = payload.command.lower()
@@ -2685,6 +2721,10 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     _sifir_hz = bool(payload.start) and sifir_hz_durdurma_mi(payload.freq)
     if _sifir_hz:
         payload.start = False
+    # D1.81 · Y4: acil durdurma MANDALLIYKEN START 409 + eylem (Sıfırla). Asıl kapı donanım düzeyindedir
+    # (`HardwareController`, `_esp_start_yayinla`); bu yalnız operatöre nedeni söyler. STOP buraya ASLA takılmaz.
+    if payload.start and estop_mandali.mandalli_mi():
+        raise HTTPException(status_code=409, detail=estop_mandali.MANDAL_MESAJI)
     _uyg: dict = {}
     if payload.start:  # D1.95: taşan girdi durum yazılmadan 422 · D1.99: kayıt GİDEN değeri yazar
         _uyg = _surus_parametrelerini_dogrula_422(
@@ -2778,7 +2818,11 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     if payload.start:
         _register_ack(command_id)
     # P0 audit 2026-06-28: senkron _mqtt_publish (~7sn worst-case) event-loop'u bloklamasin → to_thread.
-    ok = await asyncio.to_thread(_mqtt_publish, f"pemf/coil/{coil_id}/control", mqtt_payload)
+    # D1.81 · Y4: START mandal/nesil kapılı yayından geçer (telafi STOP'u dahil); STOP doğrudan.
+    if payload.start:
+        ok = await asyncio.to_thread(_esp_start_yayinla, coil_id, mqtt_payload)
+    else:
+        ok = await asyncio.to_thread(_mqtt_publish, f"pemf/coil/{coil_id}/control", mqtt_payload)
     # Asama-2: per-bobin run logging (ESP/MQTT dali). Loglanan freq = ESP'ye GİDEN (normalize) değer.
     # [4.5]: kosu kaydi yalniz DOGRULANMIS publish'te — broker oluyken komut KESIN gitmedi;
     # "kostu" yazmak hic kosmamis bobini tedavi gecmisine sokar. STOP'ta finish her halde.
@@ -2856,6 +2900,8 @@ async def control_batch_coils(payload: BatchCoilPayload):
     _sifir_hz = bool(payload.start) and sifir_hz_durdurma_mi(payload.freq)
     if _sifir_hz:
         payload.start = False
+    if payload.start and estop_mandali.mandalli_mi():  # D1.81 · Y4 — gerekçe tekil uçta; STOP asla takılmaz
+        raise HTTPException(status_code=409, detail=estop_mandali.MANDAL_MESAJI)
     _b_uyg: dict = {}
     if payload.start:  # D1.95: taşan girdi HİÇBİR bobin sürülmeden 422 · D1.99: kayıt GİDEN değeri yazar
         _b_uyg = _surus_parametrelerini_dogrula_422(
@@ -2948,7 +2994,11 @@ async def control_batch_coils(payload: BatchCoilPayload):
         if payload.start:
             _register_ack(command_id)
         # P0 audit 2026-06-28: senkron _mqtt_publish event-loop'u bloklamasin → to_thread.
-        ok = await asyncio.to_thread(_mqtt_publish, f"pemf/coil/{coil_id}/control", mqtt_payload)
+        # D1.81 · Y4: START mandal/nesil kapılı yayından geçer (telafi STOP'u dahil); STOP doğrudan.
+        if payload.start:
+            ok = await asyncio.to_thread(_esp_start_yayinla, coil_id, mqtt_payload)
+        else:
+            ok = await asyncio.to_thread(_mqtt_publish, f"pemf/coil/{coil_id}/control", mqtt_payload)
         # Asama-2: per-bobin run logging (ESP/MQTT dali) — loglanan freq = ESP'ye GIDEN (normalize).
         # [4.5]: kosu kaydi yalniz DOGRULANMIS publish'te (tekil yolla ayni gerekce).
         if payload.start:
@@ -2973,6 +3023,13 @@ async def control_batch_coils(payload: BatchCoilPayload):
 async def start_session(payload: SessionStartPayload, request: Request):
     """Start a new treatment session."""
     import time
+
+    # ⚠️ D1.81 (B-5.3 · Y4): START NİYETİ İSTEK GİRİŞİNDE neslini alır. Aşağıdaki DB yazımı (await) sırasında gelen bir
+    # durdurma ya da acil durdurma nesli artırır → bobin START'ları `HardwareController`da DURUM KİLİDİ ALTINDA reddedilir
+    # (mevcut `_still_active` denetimi bunu yalnız denetim ANINA kadar kapatıyordu: denetle-sonra-yap).
+    _niyet_nesli = estop_mandali.nesil()
+    if estop_mandali.mandalli_mi():
+        raise HTTPException(status_code=409, detail=estop_mandali.MANDAL_MESAJI)
 
     # ⚠️ 2026-08-09 (Tier 1): kaydın SAHİBİNE sunucu karar verir (bkz. auth.cozumlenmis_operator).
     # Beyanı doğrudan yazmak, cihaza erişen herkesin başka bir hekim adına seans açmasına izin
@@ -3121,6 +3178,10 @@ async def start_session(payload: SessionStartPayload, request: Request):
                 "coil_ids": coil_ids,
                 "db_session_id": None,  # Asama-2: seans BASINDA olusan gercek int DB session_id
                 "db_patient_id": None,
+                # D1.80 (B-5.1): seansın TÜRÜ — `mode` serbest metindir ve YETKİ VERMEZ ("AI…" önekli elle seans
+                # `/frame`'i AÇMAZ). D1.81: niyet nesli (bu seansın sürüşleri ona bağlı).
+                "tur": "manuel",
+                "surus_nesli": _niyet_nesli,
             }
         )
 
@@ -3302,9 +3363,8 @@ async def start_session(payload: SessionStartPayload, request: Request):
         if _esp_broker_ok:
             _register_ack(command_id)
         # ESP publish arka planda → broker yavaş/erişilemezse seans başlatmayı bekletme (snappy start).
-        _threading.Thread(
-            target=_mqtt_publish, args=(f"pemf/coil/{coil_id}/control", mqtt_payload), daemon=True
-        ).start()
+        # D1.81 · Y4: mandal/nesil kapılı START yayını (niyet nesli istek girişinden; telafi STOP'u dahil).
+        _threading.Thread(target=_esp_start_yayinla, args=(coil_id, mqtt_payload, _niyet_nesli), daemon=True).start()
         # Asama-2: seans-baslangic bobini icin per-bobin run kaydi. /session/start bobinleri
         # KENDI dongusuyle baslattigindan control_single/batch hook'u buraya ULASMAZ → burada ac.
         # ⚠️ KOSULSUZ (8. parti bilincli karari: fire-and-forget publish → sonuc bilinemez; broker-olu
@@ -3349,7 +3409,9 @@ async def start_session(payload: SessionStartPayload, request: Request):
 
     _stm_kabul: list = []
     if stm_coils:
-        _stm_kabul = await asyncio.to_thread(_start_stm_coils) or []
+        # D1.81: niyet nesli bağlamı `to_thread` iş parçacığına kopyalanır → `update_coil` onu kilit altında denetler.
+        with estop_mandali.surus_baglami(_niyet_nesli):
+            _stm_kabul = await asyncio.to_thread(_start_stm_coils) or []
 
     # ⚠️ HİÇBİR BOBİN SÜRÜLMEDİYSE SEANS YOKTUR — geri al ve DÜRÜSTÇE söyle.
     # Sahip bildirimi: "bobinlere komut gitmemesine rağmen seans başlatınca gerçekten
@@ -3365,6 +3427,10 @@ async def start_session(payload: SessionStartPayload, request: Request):
         await asyncio.to_thread(_seansi_geri_al, "donanim-reddi:hicbir-bobin-surulmedi")
         from controllers.hardware_controller import sifir_hz_durdurma_mi
 
+        _surus_engeli = estop_mandali.baslatma_engeli(_niyet_nesli)
+        if _surus_engeli:
+            # D1.81: neden firmware DEĞİL — başlatma sürerken durdurma / acil durdurma geldi.
+            raise HTTPException(status_code=409, detail=_surus_engeli)
         if sifir_hz_durdurma_mi(payload.frequency):
             # D1.53 (A-05): 0 Hz = DURDURMA — bobinler durduruldu; neden firmware DEĞİL, girilen frekans.
             raise HTTPException(
@@ -3456,9 +3522,14 @@ async def start_session(payload: SessionStartPayload, request: Request):
     return resp
 
 
-def _stop_session_coils(coil_ids):
+def _stop_session_coils(coil_ids, yetkiyi_kes: bool = False):
     """Verilen bobinlere donanım STOP gönderir (ESP→MQTT, STM→update_coil start=False).
     is_running=False yapar → HWKeepAlive tazelemeyi keser → bobinler fiziksel olarak durur.
+
+    `yetkiyi_kes` (D1.81 · B-5.3): SEANSI BİTİREN durdurmalar (`/api/session/stop`, `/api/ai/pro/stop`, süre bekçisi)
+    STOP'tan ÖNCE sürüş neslini artırır → uçuştaki START niyetleri (tahmin/lokalizasyondaki `/frame`, döngü turu)
+    bu STOP'tan sonra bobini YENİDEN enerjileyemez. Seansın KENDİ ara durdurması (AI Pro hedef kaybı) bunu yapmaz:
+    hedef yeniden bulununca sürüş sürmelidir.
 
     DENETIM 2. TUR [1.1] (2026-08-20): DOĞRULANAMAYAN bobinlerin listesini DÖNER.
     Eskiden publish/update_coil sonuçları YOK SAYILIYORDU → broker ölüyken /api/session/stop
@@ -3468,6 +3539,9 @@ def _stop_session_coils(coil_ids):
     STM kontrolcüsü hiç yok (STOP denen(e)medi — sessiz atlama da teyitsizliktir).
     Dönüş listesi bilgidir; durdurma denemeleri her hâlükârda yapılır (best-effort korunur)."""
     import time as _t
+
+    if yetkiyi_kes:
+        estop_mandali.nesil_artir()
 
     teyitsiz: list = []
     for coil_id in [cid for cid in coil_ids if cid in ESP_COIL_IDS]:
@@ -3508,6 +3582,34 @@ def _stop_session_coils(coil_ids):
     return sorted(teyitsiz)
 
 
+def _seanssiz_durdur() -> list:
+    """`/api/session/stop` AKTİF SEANS YOKKEN (D1.81 · İG-5.3): yetkiyi kes + TÜM STM bobinlerine tek STOP paketi
+    (`stop_all_coils`), ESP açıksa ESP bobinlerine STOP; seanssız (tekil/batch) açılmış koşu kayıtları kapanır.
+    Dönen: STOP'u DOĞRULANAMAYAN bobinler (STM kontrolcüsü yoksa STM tarafında durdurulacak bir şey de yoktur)."""
+    estop_mandali.nesil_artir()
+    teyitsiz: list = []
+    if state.hardware:
+        try:
+            ok = bool(state.hardware.stop_all_coils())
+        except Exception:
+            logging.getLogger(__name__).warning("seanssiz stop: STM stop_all hatasi", exc_info=True)
+            ok = False
+        if not ok:
+            teyitsiz.extend(sorted(STM_COIL_IDS))
+    if live_state.esp_etkin():
+        for coil_id in sorted(ESP_COIL_IDS):
+            if not _mqtt_publish(
+                f"pemf/coil/{coil_id}/control", {"command": "stop", "command_id": _komut_kimligi("stop", coil_id)}
+            ):
+                teyitsiz.append(coil_id)
+    for coil_id in range(1, 9):
+        try:
+            _finish_coil_run(coil_id)
+        except Exception:
+            logging.getLogger(__name__).debug("seanssiz stop: _finish_coil_run hatasi", exc_info=True)
+    return teyitsiz
+
+
 def _bildir_teyitsiz_stop(teyitsiz, kaynak: str) -> None:
     """DENETIM 2. TUR [1.1] tamamlamasi (adversaryal review #2): /session/stop yaniti teyitsizligi
     tasirken sure-watchdog / AI durdurma / sahipsiz-bobin yollari onu YUTUYORDU — broker oluyken
@@ -3526,15 +3628,40 @@ def _bildir_teyitsiz_stop(teyitsiz, kaynak: str) -> None:
         logging.getLogger(__name__).warning("teyitsiz-stop bildirimi gonderilemedi (%s)", kaynak, exc_info=True)
 
 
-def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI", operator_email: str = ""):
+def start_ai_session(
+    freq,
+    duty,
+    duration_minutes,
+    coil_ids,
+    mode="AI",
+    operator_email: str = "",
+    tur: str = "ai_auto",
+    onay_kimligi: str = "",
+    surus_nesli: int | None = None,
+    model: str = "",
+):
     """AI biofeedback donanım sürerken seansı _active_session'a YAZAR → süre-watchdog onu da
     izler ve süresi dolunca DURDURUR; emergency_stop/STM-disconnect de AI'yı kapsar. Parametre
-    CLAMP'i YOK (sadece seans takibi). Tekrarlı AI çağrılarında ilk start_time/session_id korunur."""
+    CLAMP'i YOK (sadece seans takibi). Tekrarlı AI çağrılarında ilk start_time/session_id korunur.
+
+    D1.80 (B-5.1 · B-5.10): seans MÜHRÜ — `tur` ("ai_auto" | "ai_pro"), `onay_kimligi` (AI Pro: tüketilen hekim
+    onayı), `surus_nesli` (D1.81: niyet nesli), `model` (AI Pro: onaylanan sağlayıcı). `/frame` YALNIZ
+    `tur == "ai_pro"` + onay + nesil taşıyan seansta sürer; `mode` metni yetki VERMEZ. Varsayılan tür en az
+    yetkili olandır ("ai_auto": `/frame` sürmez)."""
     import time as _t
 
     with _session_lock:
         prev = dict(_active_session)  # devralma kararı için ESKİ seansın snapshot'ı (clear'dan ÖNCE)
-        cont = bool(prev.get("is_active")) and str(prev.get("mode", "")).startswith("AI")
+        # Devam (aynı seans satırı/başlangıcı) YALNIZ AI (Auto)'nun KENDİ tekrarlı çağrısında (landmark her istekte
+        # çağırır). AI Pro her başlatmada YENİ mühürlü seanstır: önceki AI (Auto) seansının başlangıcını/satırını
+        # devralsaydı mühürdeki süre (başlangıç + onaylanan dk) yanlış hesaplanırdı. Türü olmayan eski kayıt AI
+        # (Auto) sayılır (yalnız kayıt sürekliliği — yetki değil).
+        cont = (
+            bool(prev.get("is_active"))
+            and str(prev.get("mode", "")).startswith("AI")
+            and tur == "ai_auto"
+            and prev.get("tur", "ai_auto") == "ai_auto"
+        )
         # B-2.2: REBIND yerine IN-PLACE (clear+update) → dict kimliği sabit; davranış aynı.
         _active_session.clear()
         _new_session_id = prev.get("session_id") if cont else f"ai_{int(_t.time())}"
@@ -3558,6 +3685,10 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI", operator
                 "db_session_id": prev.get("db_session_id") if cont else None,
                 "db_patient_id": prev.get("db_patient_id") if cont else None,
                 "started_epoch": prev.get("started_epoch") if cont else _t.time(),
+                "tur": tur,
+                "onay_kimligi": str(onay_kimligi or ""),
+                "surus_nesli": surus_nesli,
+                "model": str(model or ""),
             }
         )
         _started_epoch_ai = _active_session["started_epoch"]
@@ -3801,7 +3932,7 @@ def _session_duration_watchdog():
                     if not _still_same:
                         continue  # seans devralındı/durduruldu → bayat watchdog turu dokunmasın
                     _bildir_teyitsiz_stop(
-                        _stop_session_coils(sess.get("coil_ids", list(range(1, 9)))),
+                        _stop_session_coils(sess.get("coil_ids", list(range(1, 9))), yetkiyi_kes=True),  # D1.81
                         "Süre doldu — otomatik durdurma",
                     )
                     with _session_lock:
@@ -4272,14 +4403,24 @@ async def stop_session():
     sensor buffer'i gercek db_session_id ile flush edilir ve end_session ile GERCEK
     wall-clock sure yazilir. Hepsi best-effort (DB hatasi donanim durdurmayi engellemez)."""
     with _session_lock:
-        if not _active_session.get("is_active"):
-            return {"status": "ok", "message": "Aktif seans yok."}
-        coil_ids = _active_session.get("coil_ids", list(range(1, 9)))
-        db_session_id = _active_session.get("db_session_id")
-        started_epoch = _active_session.get("started_epoch") or _active_session.get("start_time")
-        start_mono = _active_session.get("start_mono")  # kayıt süresi DST-güvenli (bkz. _kayit_suresi_dk)
-        _stopping_session_id = _active_session.get("session_id")  # TOCTOU muhru (asagi bkz.)
-        _active_session["is_active"] = False
+        _seans_var = bool(_active_session.get("is_active"))
+        if _seans_var:
+            coil_ids = _active_session.get("coil_ids", list(range(1, 9)))
+            db_session_id = _active_session.get("db_session_id")
+            started_epoch = _active_session.get("started_epoch") or _active_session.get("start_time")
+            start_mono = _active_session.get("start_mono")  # kayıt süresi DST-güvenli (bkz. _kayit_suresi_dk)
+            _stopping_session_id = _active_session.get("session_id")  # TOCTOU muhru (asagi bkz.)
+            _active_session["is_active"] = False
+    if not _seans_var:
+        # ⚠️ D1.81 (B-5.3 · İG-5.3): "Aktif seans yok" ARTIK STOP'SUZ DÖNMEZ. Ölçüldü: E-stop'un yarışında uçuştaki AI
+        # turu bobinleri yeniden enerjiledikten sonra operatörün /session/stop'u "Aktif seans yok" deyip telde 0 STOP
+        # bırakıyordu (keep-alive sürmeye devam). Seanssız sürüş (tekil/batch, eski bir AI turu) de durdurulmalı:
+        # TÜM bobinlere STOP + yetki kesme. STOP idempotenttir (Ö.4-Y8: yalnız artar).
+        _teyitsiz = await asyncio.to_thread(_seanssiz_durdur) or []
+        _yanit_yok = {"status": "ok", "message": "Aktif seans yok. Çalışan bobin kalmasın diye STOP gönderildi."}
+        if _teyitsiz:
+            _yanit_yok["hardware_stop_unconfirmed"] = _teyitsiz
+        return _yanit_yok
 
     # (a) Bekleyen kismi dakikayi emit et — acik run-ozetine de katki saglar (finish'ten ONCE).
     try:
@@ -4308,7 +4449,8 @@ async def stop_session():
             _active_session.get("session_id"),
         )
     else:
-        _stop_teyitsiz = await asyncio.to_thread(_stop_session_coils, coil_ids) or []
+        # D1.81: seansı bitiren durdurma → yetki kesilir (uçuştaki START'lar bu STOP'tan sonra enerjileyemez).
+        _stop_teyitsiz = await asyncio.to_thread(_stop_session_coils, coil_ids, True) or []
         update_live_session_state(is_active=False, mode="Sistem Hazır")
 
     # (b) Sensor buffer'i gercek db_session_id ile FLUSH et + (c) end_session (gercek wall-clock sure).
@@ -5132,6 +5274,14 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     NOT: backend bir sıcaklık/parametre EŞİĞİ dayatmaz; donanımın/operatörün kararına tepki verir."""
     import time as _t
 
+    # ⚠️ D1.81 · Y4 — MANDAL HER ŞEYDEN ÖNCE (bütün kaynaklar: düğme, STM kopması/reddi/watchdog'u, ESP alarmı). STOP'tan
+    # ÖNCE kurulur: arada kabul edilen bir START, bu E-stop'un STOP'undan sonra keep-alive ile sürerdi. Kurmak yalnız
+    # bir bayrak + sayaç (beklemez, hiçbir şeye kapılanmaz); başarısız olsa bile E-stop'un geri kalanı KOŞAR (Ö.4-Y8).
+    try:
+        estop_mandali.mandalla(reason)
+    except Exception:
+        logging.getLogger(__name__).exception("E-stop: mandal kurulamadi (durdurma SURUYOR)")
+
     with _session_lock:
         coil_ids = _active_session.get("coil_ids") or list(range(1, 9))
         _was_active = bool(_active_session.get("is_active"))
@@ -5229,6 +5379,8 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     for coil in snapshots:
         _ws_broadcast_sync({"type": "coil_status", "coilId": coil["id"], "data": coil})
     _ws_broadcast_sync({"type": "emergency_stop", "data": {"timestamp": _t.time(), "reason": reason}})
+    # D1.81 · Y4: arayüz (Karşılama/Giriş dahil) mandalı ve "Sıfırla"yı gösterir.
+    _ws_broadcast_sync({"type": "estop_mandali", "data": estop_mandali.durum()})
     # DENETIM P2: acil durdurma seansi DB'de KAPATMIYOR, acik coil-run'lari ve son dakikanin
     # sensor verisini kaybediyordu → guvenlik olayinin telemetri KANITI yok oluyordu. Bobinler
     # ZATEN durduruldu (yukarida); bu blok yalnizca kaydi tamamlar, durdurmayi geciktirmez.
@@ -5264,6 +5416,8 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
         "reason": reason,
         # Denetim izi: acil-durdurma ANINDAKI seans kapsami (STOP kapsamini ARTIK belirlemez).
         "sessionCoilIds": list(coil_ids),
+        # D1.81 · Y4 (yalnız-ek): mandal kuruldu — yeni START için operatörün "Sıfırla"sı gerekir.
+        "estopMandali": estop_mandali.durum(),
     }
 
 
@@ -5288,6 +5442,45 @@ async def emergency_stop():
     result = await asyncio.to_thread(_emergency_stop_all, "manual")
     _push_notification("Acil durdurma uygulandı", "error")
     return result
+
+
+@app.post("/api/hardware/estop_mandali/sifirla")
+async def estop_mandalini_sifirla(request: Request):
+    """Y4 (sahip kararı) — operatörün AYRI ve BİLİNÇLİ "Sıfırla" eylemi: acil durdurma MANDALINI kaldırır.
+
+    ⚠️ HİÇBİR ŞEYİ BAŞLATMAZ: mandallıyken reddedilen START'lar diriltilmez, seans açılmaz; ardından ayrıca yeni bir
+    START gerekir. Sürüş nesli DEĞİŞMEZ → acil durdurmadan ÖNCE kurulmuş (tahmindeki `/frame`, döngü turu) niyetler
+    sıfırlamadan sonra da bayattır (D1.81).
+    Yetki: `/api/hardware/*` ile aynı — muaf DEĞİL (`auth._EXEMPT_EXACT` yalnız `/api/hardware/emergency_stop`'u TAM
+    yol olarak muaf tutar): yerel ya da LAN (A-01) ya da jeton. Masaüstü Karşılama/Giriş ekranları yerel istemcidir.
+    Kim sıfırladı → denetim izi (`session_events`, append-only)."""
+    from servers.auth import cozumlenmis_operator
+
+    _kim = cozumlenmis_operator(request, "") or ""
+    _onceki = estop_mandali.durum()
+    _kurulu = estop_mandali.sifirla(_kim or "operator")
+    _durum = estop_mandali.durum()
+    if _kurulu:
+        try:
+            await asyncio.to_thread(
+                lambda: _get_treatment_db().record_session_event(
+                    None,
+                    "estop_mandali_sifirlandi",
+                    payload={"operator": _kim, "neden": _onceki.get("neden"), "mandal_zamani": _onceki.get("zaman")},
+                    severity="warning",
+                )
+            )
+        except Exception:
+            logging.getLogger(__name__).warning("Mandal sıfırlama denetim izi yazılamadı.", exc_info=True)
+        _push_notification(
+            "Acil durdurma mandalı SIFIRLANDI — bobinler başlatılmadı; tedavi için başlatmayı ayrıca verin.", "warning"
+        )
+        with _session_lock:
+            _aktif = bool(_active_session.get("is_active"))
+        if not _aktif:
+            update_live_session_state(is_active=False, mode="Sistem Hazır")
+    _ws_broadcast_sync({"type": "estop_mandali", "data": _durum})
+    return {"status": "success", "mandalKuruluydu": _kurulu, "estopMandali": _durum}
 
 
 # --- PATIENT DATABASE ENDPOINTS ---

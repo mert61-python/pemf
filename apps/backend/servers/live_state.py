@@ -16,6 +16,7 @@ import threading
 from datetime import datetime
 
 from fastapi import WebSocket
+from utils import estop_mandali
 from utils.path_utils import HARDWARE_VERSION, get_app_version
 
 _APP_VERSION = get_app_version()
@@ -436,6 +437,8 @@ def _build_ws_snapshot() -> dict:
             # CANLI E-ALANI (2026-08-06): yalnız ÖNBELLEK okunur — ONNX bu istek yolunda
             # ÇALIŞMAZ (bkz. servers/efield_live.py). Bağlam/seans yoksa None → UI bar'ı gizler.
             "eField": _efield_snapshot(),
+            # D1.81 · Y4 (yalnız-ek): acil durdurma mandalı — arayüz (Karşılama/Giriş dahil) "Sıfırla"yı gösterir.
+            "estopMandali": estop_mandali.durum(),
         }
 
 
@@ -484,9 +487,23 @@ def update_live_session_state(
     remaining_min: int = 0,
     elapsed_sec: int = 0,
     duration_sec: int = 0,
+    surus_nesli: int | None = None,
 ) -> None:
-    """React/WebSocket tarafındaki aktif tedavi özetini günceller."""
+    """React/WebSocket tarafındaki aktif tedavi özetini günceller.
+
+    D1.81 (İG-5.36) — iki kural, durum kilidi altında (acil durdurmanın yazımıyla sıralı):
+      * Mandal kuruluyken ya da çağıranın `surus_nesli` bayatken "AKTİF" yazımı YAPILMAZ: ölçüldü, uçuştaki AI turu
+        acil durdurmadan SONRA `isActive:true` yayınlıyordu (8'de 3) ve etiketi eziyordu.
+      * Mandal kuruluyken "Sistem Hazır" yazılmaz → "Acil Durdurma" kalır (döngü sonu / AI durdurma / seans durdurma
+        etiketi eziyordu, 8'de 7). Mandal operatörün "Sıfırla"sıyla kalkınca normal etiket döner."""
     with _live_state_lock:
+        if is_active and estop_mandali.baslatma_engeli(surus_nesli):
+            logging.getLogger(__name__).info(
+                "Canli durum 'aktif' yazimi ATLANDI (acil durdurma mandali / bayat surus nesli): %s", mode
+            )
+            return
+        if not is_active and mode == "Sistem Hazır" and estop_mandali.mandalli_mi():
+            mode = "Acil Durdurma"
         _live_state["activeTreatment"].update(
             {
                 "isActive": bool(is_active),

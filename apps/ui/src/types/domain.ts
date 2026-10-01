@@ -190,6 +190,22 @@ export interface DashboardSnapshot {
   system: SystemInfo;
   /** Canlı E-alanı (yoksa null — bkz. EFieldLive) */
   eField?: EFieldLive | null;
+  /** D1.81 · Y4: acil durdurma MANDALI (yoksa eski backend → bant çizilmez). */
+  estopMandali?: EstopMandali | null;
+}
+
+/**
+ * ACİL DURDURMA MANDALI (D1.81 · sahip kararı Y4) — backend `utils/estop_mandali.durum()`.
+ * `aktif` iken hiçbir START kabul edilmez; yalnız operatörün ayrı "Sıfırla" eylemi kaldırır ve sıfırlama
+ * kendi başına BAŞLATMAZ. `neden` acil durdurmanın kaynağıdır ("manual", "stm_disconnected", "esp_alarm_…").
+ */
+export interface EstopMandali {
+  aktif: boolean;
+  neden?: string;
+  /** Mandalın kurulduğu an (epoch sn). */
+  zaman?: number;
+  sifirlamaZamani?: number;
+  nesil?: number;
 }
 
 // ─── WebSocket live data ──────────────────────────────────────────────────────

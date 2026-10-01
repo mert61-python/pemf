@@ -105,26 +105,41 @@ def reject(pid: str, operator: str = "", reason: str = "") -> dict:
     return _decide(pid, REJECTED, operator, reason)
 
 
+def _kullanilabilir_locked(pid: str, now: float) -> dict:
+    """`_lock` ALTINDA: kayıt tüketilebilir mi — değilse ValueError (metinler `consume` ile aynı)."""
+    r = _store.get(str(pid or ""))
+    if not r:
+        raise ValueError("Onay bulunamadı. Önce AI önerisini alıp onaylayın.")
+    if r["status"] == CONSUMED:
+        raise ValueError("Bu onay zaten kullanıldı. Yeni öneri alın.")
+    if r["status"] == REJECTED:
+        raise ValueError("Bu öneri REDDEDİLDİ; uygulanamaz.")
+    if r["status"] == PENDING:
+        raise ValueError("Öneri henüz onaylanmadı.")
+    if now > r["expires_at"]:
+        r["status"] = EXPIRED
+        raise ValueError("Onayın süresi doldu; yeniden öneri alın.")
+    return r
+
+
+def dogrula(pid: str) -> dict:
+    """Onayı TÜKETMEDEN doğrula ve mühürün kopyasını dön (D1.E06 · İG-5.16). Uygun değilse ValueError.
+
+    Başlatma yolu önce BUNUNLA mühürü okuyup bütün denetimlerini (döngü, STM, hedef, bayrak, mandal) yapar; onay
+    EN SON `consume` ile tüketilir. Eskiden önce tüketiliyordu: başlamayan tedavi (409/422, "Already running",
+    eşzamanlı ikinci istek) hekimin tek kullanımlık onayını yakıyordu."""
+    with _lock:
+        return dict(_kullanilabilir_locked(pid, time.time()))
+
+
 def consume(pid: str) -> dict:
     """Onaylı öneriyi TÜKET ve mühürlenen parametreleri dön. Uygun değilse ValueError.
 
     Donanımı sürecek yol BUNU çağırmak ZORUNDA — böylece 'onaysız sürüş' ve 'onaylanandan
     farklı parametreyle sürüş' ikisi de yapısal olarak imkânsız olur.
     """
-    now = time.time()
     with _lock:
-        r = _store.get(str(pid or ""))
-        if not r:
-            raise ValueError("Onay bulunamadı. Önce AI önerisini alıp onaylayın.")
-        if r["status"] == CONSUMED:
-            raise ValueError("Bu onay zaten kullanıldı. Yeni öneri alın.")
-        if r["status"] == REJECTED:
-            raise ValueError("Bu öneri REDDEDİLDİ; uygulanamaz.")
-        if r["status"] == PENDING:
-            raise ValueError("Öneri henüz onaylanmadı.")
-        if now > r["expires_at"]:
-            r["status"] = EXPIRED
-            raise ValueError("Onayın süresi doldu; yeniden öneri alın.")
+        r = _kullanilabilir_locked(pid, time.time())
         r["status"] = CONSUMED
         return dict(r)
 

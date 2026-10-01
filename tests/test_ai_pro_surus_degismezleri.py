@@ -25,6 +25,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import ai_pro_aparati as ap
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
@@ -193,9 +194,8 @@ def kare_ucu(monkeypatch):
     air._ai_started_at = time.monotonic()
     air._ai_duration_min = 20
     air._ai_organ_id = 2
-    with apis._session_lock:
-        apis._active_session.clear()
-        apis._active_session.update({"is_active": True, "mode": "AI Pro", "coil_ids": list(range(1, 8))})
+    # D1.80: `/frame` yalnız MÜHÜRLÜ AI Pro seansında sürer (tür + onay + nesil); `mode` öneki yetki vermez.
+    ap.muhurlu_seans_yaz(apis, sure_dk=20)
 
     def kare(guven: float):
         monkeypatch.setattr(air, "_localize_organ", lambda f, o: _hedef_tuple(air, guven))

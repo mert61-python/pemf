@@ -14,6 +14,7 @@ import { useEntitlement } from "@/context/EntitlementContext";
 import { TIER_LABEL } from "@/config/entitlement";
 import { installedModes } from "@/services/installedProfiles";
 import { useTeardownGuard } from "@/hooks/useTeardownGuard";
+import { EstopMandalBandi } from "@/components/ui/EstopMandalBandi";
 
 export function WelcomeScreen() {
   const { setUserMode } = useUserMode();
@@ -48,6 +49,9 @@ export function WelcomeScreen() {
         ]}
         bounces={false}
       >
+        {/* D1.81 · Y4 (A-58 ile tutarlı): uygulama acil durdurmadan sonra yeniden açılırsa ilk ekranda da mandal
+            durumu ve "Sıfırla" görünür. */}
+        <EstopMandalBandi />
         <View style={styles.topBar}>
           <Text style={styles.topEmail} numberOfLines={1}>{session?.email ?? ""}</Text>
           {/* HASTA GÜVENLİĞİ: bu ekrana seans sürerken de gelinebilir (Ayarlar → "Farklı Bir

@@ -87,6 +87,7 @@ GOLDEN_ROUTES = {
     ("/api/hardware/cleanup_esp", "POST"),
     ("/api/hardware/command", "POST"),
     ("/api/hardware/emergency_stop", "POST"),
+    ("/api/hardware/estop_mandali/sifirla", "POST"),
     ("/api/hardware/reset_pwm", "POST"),
     ("/api/hardware/selftest", "POST"),
     ("/api/health", "GET"),
@@ -214,4 +215,5 @@ def test_route_contract_unchanged():
     # → 98 (+1 AI hazırlık self-testi: ai/hazirlik GET), 2026-08-27 saha bulgusu
     # → 99 (+1 bipolar/unipolar sürüş kipi: coil/surus_kipi POST), 2026-09-11
     # → 100 (+1 seans-ortası parametre güncelleme: session/parametre_guncelle POST), 2026-09-11
-    assert len(current) == len(beklenen) == 104 - (0 if _simulator_mountlu() else 1)
+    # → 105 (+1 acil durdurma mandalını sıfırla: hardware/estop_mandali/sifirla POST — D1.81 · Y4), 2026-10-01
+    assert len(current) == len(beklenen) == 105 - (0 if _simulator_mountlu() else 1)

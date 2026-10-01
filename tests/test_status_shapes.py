@@ -73,6 +73,10 @@ GOLDEN_SHAPES = {
         # (uydurma kimlik URETILMEZ). Bkz. tests/test_version_visibility.py.
         "version",
         "buildId",
+        # D1.81 · Y4 (2026-10-01, BILINCLI sekil degisikligi): ACIL DURDURMA MANDALI — kuruluyken hicbir START kabul
+        # edilmez; arayuz (oturumsuz Karsilama/Giris ekranlari dahil) durumu ve "Sifirla"yi gosterir. Uzak istemci
+        # yalniz `aktif`i gorur. Bkz. tests/test_estop_MANDALI_Y4_hicbir_START_gecmez.py.
+        "estopMandali",
     },
     "/api/discovery": {"capabilities", "localIp", "port", "service", "tunnelUrl", "version"},
     "/api/system/info": {

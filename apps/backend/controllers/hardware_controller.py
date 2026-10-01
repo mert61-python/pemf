@@ -6,6 +6,7 @@ import threading
 import time
 import zlib
 
+from utils import estop_mandali
 from utils.dongu_guvenligi import dongu_hatasini_bildir
 from utils.stm32_protocol_limits import (
     DURATION_MAX_MINUTES,
@@ -311,10 +312,12 @@ class HardwareController:
         duration: int,
         start: bool = True,
         duration_seconds: float | None = None,
+        nesil: int | None = None,
     ):
         """
         Belirli bir bobinin durumunu günceller ve STM32'ye yeni komut paketini fırlatır.
         duration birimi STM32 firmware ile uyumlu olarak dakikadır.
+        `nesil`: START niyetinin sürüş nesli (D1.81); verilmezse `estop_mandali.surus_baglami` bağlamındaki değer.
         """
         if coil_id < 1 or coil_id > STM_BOBIN_SAYISI:
             self.logger.warning(f"Geçersiz bobin ID: {coil_id}")
@@ -372,6 +375,15 @@ class HardwareController:
 
         with self._state_lock:
             if start:
+                # ⚠️ D1.81 (B-5.3 · Y4): ACİL DURDURMA MANDALI ve SÜRÜŞ NESLİ — DURUM KİLİDİ ALTINDA, durum yazımıyla
+                # aynı kritik bölgede. Kilidin dışında denetlemek (ya da çağıranda "tahmin sonrası seans hâlâ aktif mi"
+                # bakmak) denetle-sonra-yap aralığı bırakır: o aralıkta gelen E-stop STOP'unu gönderir, ardından bu START
+                # bobini YENİDEN enerjilerdi (İG-5.3/5.4). Burada ya E-stop'tan önce yazılırız (E-stop'un STOP'u bizden
+                # SONRA gider) ya da sonra denetleriz (mandal/bayat nesil → red). STOP bu kapıdan geçmez (Ö.4-Y8).
+                _engel = estop_mandali.baslatma_engeli(nesil if nesil is not None else estop_mandali.baglam_nesli())
+                if _engel:
+                    self.logger.warning("Bobin %s BAŞLATILMADI: %s", coil_id, _engel)
+                    return False
                 dur_min = _p["sure_dk"]
                 self.coils_state[coil_id]["is_running"] = True
                 self.coils_state[coil_id]["freq"] = _p["freq"]
@@ -418,8 +430,8 @@ class HardwareController:
             return False if _sifir_hz_durdurma else bool(_kuyruga_verildi)
         return True
 
-    def start_all_coils(self, freq=100.0, duty=25.0, phase=0.0, duration=30):
-        """Tüm STM bobinlerini başlatır. duration birimi dakikadır."""
+    def start_all_coils(self, freq=100.0, duty=25.0, phase=0.0, duration=30, nesil: int | None = None):
+        """Tüm STM bobinlerini başlatır. duration birimi dakikadır. `nesil`: bkz. `update_coil` (D1.81)."""
         if sifir_hz_durdurma_mi(freq):  # D1.53 (A-05): 0 Hz = TÜM bobinler için STOP; START yapılmadı → False
             self.logger.warning("TÜM bobinler: 0 Hz başlatma = DURDURMA (A-05) — bobinler durduruluyor.")
             self.stop_all_coils()
@@ -462,6 +474,11 @@ class HardwareController:
             return False
 
         with self._state_lock:
+            # D1.81 (B-5.3 · Y4): mandal + sürüş nesli DURUM KİLİDİ ALTINDA — gerekçe `update_coil`'de (AI (Auto) bu yolu kullanır).
+            _engel = estop_mandali.baslatma_engeli(nesil if nesil is not None else estop_mandali.baglam_nesli())
+            if _engel:
+                self.logger.warning("TÜM bobinler BAŞLATILMADI: %s", _engel)
+                return False
             dur_min = _p["sure_dk"]
             # Audit P2: dur_min<=0'da kapaksiz kalmasin. ⚠️ Kapak PROTOKOL TAVANI DEGIL, klinik
             # varsayilan (bkz. GOZETIMSIZ_VARSAYILAN_DAKIKA ve update_coil'deki gerekce). TUM
@@ -481,6 +498,9 @@ class HardwareController:
 
     def stop_all_coils(self):
         with self._state_lock:
+            # D1.81 (B-5.3): her TAM durdurma uçuştaki START niyetlerini geçersiz kılar (nesil++) — durum kilidi altında,
+            # böylece kilide takılı bir START ya bu STOP'tan önce yazılır (STOP sonra gider) ya da bayat nesille reddedilir.
+            estop_mandali.nesil_artir()
             for i in range(1, STM_BOBIN_SAYISI + 1):
                 self.coils_state[i]["is_running"] = False
                 self.coils_state[i]["duty"] = 0.0
@@ -507,6 +527,8 @@ class HardwareController:
         (1) keep-alive artık 'çalışıyor' paketi tazelemesin, (2) bağlantı dönünce ESKİ
         freq/duty ile otomatik RE-FIRE olmasın (firmware watchdog'u geçersiz kılınmasın)."""
         with self._state_lock:
+            # D1.81: bağlantı kopmadan ÖNCE kurulmuş START niyeti, bağlantı dönünce bobini ESKİ niyetle enerjilemesin.
+            estop_mandali.nesil_artir()
             for i in range(1, STM_BOBIN_SAYISI + 1):
                 self.coils_state[i]["is_running"] = False
                 self.coils_state[i]["duty"] = 0.0
