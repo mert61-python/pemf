@@ -30,7 +30,7 @@ if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
 
 from controllers.hardware_controller import STM_BOBIN_SAYISI, HardwareController  # noqa: E402
-from utils.stm32_protocol_limits import FREQ_MAX_HZ, PHASE_MAX_DEG, PHASE_MIN_DEG  # noqa: E402
+from utils.stm32_protocol_limits import FREQ_MAX_HZ, FREQ_MIN_HZ, PHASE_MAX_DEG, PHASE_MIN_DEG  # noqa: E402
 
 # `importorskip` DEĞİL — simülatör izli; yüklenemezse kapı sessizce ATLANMAZ (D0Ö.12 ek-2 dersi).
 import tools.stm32_simulator as sim  # noqa: E402
@@ -122,6 +122,33 @@ def test_KRITIK_start_all_coils_AYNI_sinira_ceker(hc):
     for i in range(STM_BOBIN_SAYISI):
         assert freq[i] == pytest.approx(FREQ_MAX_HZ), f"bobin {i + 1} freq={freq[i]}"
         assert faz[i] == pytest.approx(PHASE_MAX_DEG), f"bobin {i + 1} faz={faz[i]}"
+
+
+@pytest.mark.parametrize("bobin", [1, STM_BOBIN_SAYISI])
+def test_KRITIK_update_coil_ALT_UCLAR_da_TASIYICI_frekans_ve_duty(hc, bobin):
+    """Bağımsız inceleme (r1): kapı yalnız ÜST uçları ölçüyordu — `_freq = min(float(freq), 25000.0)`
+    (1 Hz tabanı kalkar) yeşil kalıyordu. Firmware alt uçları da NACK'ler (`freq < FREQ_MIN`,
+    `duty < DUTY_MIN`). 0 < f < 1 Hz → `FREQ_MIN_HZ`; negatif duty → 0. 0 Hz bilerek ölçülmez
+    (A-05 → D1.53: o uç orada değişecek; bu kol 0,5 Hz ile o maddeyi kilitlemez)."""
+    assert hc.update_coil(bobin, 0.5, 30.0, 0.0, duration=1) is True
+    sonuc, sebep = _firmware_cozer(_son_paket(hc))
+    assert sonuc is not None, f"0,5 Hz paketi firmware'ce NACK'lenir: {sebep!r} — frekans ALT sınırı kaldırılmış"
+    _duty, _faz, freq, *_ = sonuc
+    assert freq[bobin - 1] == pytest.approx(FREQ_MIN_HZ)
+
+    assert hc.update_coil(bobin, 100.0, -10.0, 0.0, duration=1) is True
+    sonuc, sebep = _firmware_cozer(_son_paket(hc))
+    assert sonuc is not None, f"negatif duty paketi firmware'ce NACK'lenir: {sebep!r} — duty ALT sınırı kaldırılmış"
+    assert sonuc[0][bobin - 1] == 0.0
+
+
+def test_KRITIK_start_all_coils_ALT_frekans_ucunu_da_ceker(hc):
+    assert hc.start_all_coils(freq=0.5, duty=30.0, phase=0.0, duration=1) is True
+    sonuc, sebep = _firmware_cozer(_son_paket(hc))
+    assert sonuc is not None, f"start_all_coils 0,5 Hz paketi firmware'ce NACK'lenir: {sebep!r}"
+    _duty, _faz, freq, *_ = sonuc
+    for i in range(STM_BOBIN_SAYISI):
+        assert freq[i] == pytest.approx(FREQ_MIN_HZ), f"bobin {i + 1} freq={freq[i]}"
 
 
 def test_KARSIT_aralik_ICINDEKI_deger_DEGISMEDEN_gider(hc):
