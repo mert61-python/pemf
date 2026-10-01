@@ -736,3 +736,22 @@ def _seans_ve_watchdog_nobeti():
     sorunlar = seans_watchdog_nobet_sorunlari(api, threading.enumerate())
     if sorunlar:
         pytest.fail("D1.41 nöbeti: " + " · ".join(sorunlar), pytrace=False)
+
+
+# ── 1-B (iii) · 1-A açık madde 13: ACL-KİLİTLİ düz-metin yedek ARTIĞI testin tmp'sinde KALMAZ ──────────────
+#
+# ÖLÇÜLEN (2026-10-01): emanet açıkken ürün `.plain.bak`'ı yalnız SYSTEM + Administrators'a kilitler; testin
+# tmp'sinde kalan bu dosyayı kullanıcı silemez → pytest tmp rotasyonu o dizinleri silemez, `pytest-of-<kullanıcı>`
+# birikir. Teardown'da testin KENDİ tmp_path'i altındaki `*.plain.bak*` dosyaları (gerekirse DACL sıfırlanarak)
+# silinir; silinemeyen kalırsa test KIRMIZI (sessiz artık yok). Yalnız tmp_path İSTEYEN testlerde çalışır.
+@pytest.fixture(autouse=True)
+def _acl_kilitli_duz_metin_yedek_ARTIGI_kalmaz(request):
+    tmp = request.getfixturevalue("tmp_path") if "tmp_path" in request.fixturenames else None
+    yield
+    if tmp is None:
+        return
+    from acl_artik_temizligi import acl_kilitli_artiklari_temizle
+
+    kalan = acl_kilitli_artiklari_temizle(tmp)
+    if kalan:
+        pytest.fail(f"1-B (iii): testin tmp'sinde SİLİNEMEYEN düz-metin yedek artığı: {kalan}", pytrace=False)
