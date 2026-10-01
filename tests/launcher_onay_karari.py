@@ -20,6 +20,7 @@ oturumda YAPILMADI: Rust/cargo testleri gerçek ProgramData'ya yazıyor (B-8.7 �
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from rs_soyucu import blok_sonu, ifade_deseni, rs_soy, ust_duzey_eslesmeler
@@ -101,3 +102,10 @@ def onay_sirasi_denetle(src: str) -> None:
     gbas, gson = start_backend_kollari(src)[3]
     toplam = len(list(ifade_deseni(ONAYLA).finditer(k.soy, gbas, gson)))
     assert toplam == 1, f"`{ONAYLA}` start_backend eşlemesinde {toplam} kez (yalnız Ok kolunda 1 olmalı)"
+    # 1-B bağımsız inceleme (i2): sayım eşleme gövdesiyle sınırlıydı — `match` ÖNCESİNE eklenen bir onay
+    # (`runtime.old` backend başlamadan silinir, geri dönüş imkânsız) kapıda YEŞİLDİ. Dosyanın TAMAMINDA (yorum
+    # ve dize dışı) herhangi bir argümanla TEK onay çağrısı olmalı ve o da yukarıdaki konum.
+    genel = [m.start() for m in re.finditer(r"\bguncellemeyi_onayla\s*\(", k.maske)]
+    assert len(genel) == 1 and onay <= genel[0] < onay + len(ONAYLA), (
+        f"`guncellemeyi_onayla(` main.rs genelinde {len(genel)} kez — yalnız Ok kolundaki dbReady sonrası tek çağrı olmalı"
+    )

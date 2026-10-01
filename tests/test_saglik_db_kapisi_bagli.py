@@ -100,3 +100,33 @@ def test_KARSIT_KANIT_bilinmiyorsa_guncelleme_DURMAZ(backend_rs):
     assert "unwrap_or(false)" not in g, (
         "alan yokken `false` varsayiliyor — eski backend'lerde her guncelleme geri alinir"
     )
+
+
+def launcher_db_alani(backend_rs_kaynak: str) -> list[str]:
+    """`db_hazir_govdeden` gövdesinde (yorumsuz) okunan JSON alan adları."""
+    from rs_soyucu import blok_sonu, rs_soy
+
+    soy, maske = rs_soy(backend_rs_kaynak), rs_soy(backend_rs_kaynak, dizeleri_bosalt=True)
+    m = re.search(r"\bfn\s+db_hazir_govdeden\s*\([^)]*\)[^{]*\{", soy)
+    assert m, "launcher `db_hazir_govdeden` (yorum dışı) bulunamadı"
+    govde = soy[m.end() : blok_sonu(maske, m.end() - 1)]
+    return re.findall(r'\.get\(\s*"([^"]+)"\s*\)', govde)
+
+
+def test_KRITIK_launcher_okudugu_ALAN_backend_saglik_yanitinda_VAR(backend_rs):
+    """1-B bağımsız inceleme (i2): zincirin iki ucu ayrı dilde — launcher `.get("dbReady")` bir harf değişse
+    (`db_ready`) sonuç hep `None` olur ve launcher bilinmeyeni ONAYLAR (DB'yi bozan yayın onaylanır); Rust testi
+    cargo koşmadığı için (B-8.7 → D5.41) Python'da 181 test yeşil kalıyordu. Alan adı GERÇEK sağlık yanıtından."""
+    import servers.api_server as api
+    from fastapi.testclient import TestClient
+
+    alanlar = launcher_db_alani(backend_rs)
+    assert len(alanlar) == 1, f"launcher dbReady okuyucusu {alanlar}"
+    yanit = TestClient(api.app).get("/api/health").json()
+    assert alanlar[0] in yanit and isinstance(yanit[alanlar[0]], bool), (
+        f"launcher `{alanlar[0]}` okuyor ama backend sağlık yanıtında bool olarak YOK: {sorted(yanit)}"
+    )
+
+
+def test_ARAC_alan_cikarici_MUTANTI_gorur(backend_rs):
+    assert launcher_db_alani(backend_rs.replace('.get("dbReady")', '.get("db_ready")')) == ["db_ready"]
