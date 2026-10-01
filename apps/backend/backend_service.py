@@ -84,13 +84,27 @@ class _JsonLogFormatter(logging.Formatter):
 _IZ_ONEKI = "  | "
 
 
+#: `str.splitlines()`'ın satır SAYDIĞI, LF DIŞINDAKİ ayırıcılar → görünür kaçış. 1-B bağımsız inceleme (i1/B4):
+#: yalnız CR/LF nötrleniyordu; VT, FF, FS/GS/RS, NEL, U+2028/U+2029 gömülü metin `splitlines()` tabanlı okuyucularda
+#: (Python araçları, bazı editörler) zaman damgalı SAHTE kayıt satırı üretiyordu.
+_LF_DISI_AYIRICILAR = {
+    ord(c): ("\\r" if c == "\r" else f"\\x{ord(c):02x}" if ord(c) < 0x100 else f"\\u{ord(c):04x}")
+    for c in "\r\x0b\x0c\x1c\x1d\x1e\x85  "
+}
+
+
+def _satir_notrle(metin: str) -> str:
+    """Tek satır kalması gereken metinde TÜM satır ayırıcılarını (LF dahil) görünür kaçışa çevirir."""
+    return metin.translate(_LF_DISI_AYIRICILAR).replace("\n", "\\n")
+
+
 def _iz_onekle(metin: str) -> str:
-    """Çok satırlı izi önekli satırlara çevirir; ham CR görünür kaçışa (`\\r`) döner (satır kesmesin)."""
-    return "\n".join(_IZ_ONEKI + s for s in metin.replace("\r", "\\r").split("\n"))
+    """Çok satırlı izi önekli satırlara çevirir; LF dışı ayırıcılar görünür kaçışa döner (satır kesmesin)."""
+    return "\n".join(_IZ_ONEKI + s for s in metin.translate(_LF_DISI_AYIRICILAR).split("\n"))
 
 
 def _iz_onekli_mi(metin: str) -> bool:
-    return "\r" not in metin and all(s.startswith(_IZ_ONEKI) for s in metin.split("\n"))
+    return metin.translate(_LF_DISI_AYIRICILAR) == metin and all(s.startswith(_IZ_ONEKI) for s in metin.split("\n"))
 
 
 class _PlainLogFormatter(logging.Formatter):
@@ -125,9 +139,11 @@ class _PlainLogFormatter(logging.Formatter):
         # yalnız `record.msg`'ye ve *str* argümanlara uygulanıyordu; istisna NESNESİ argümanda
         # (`"…: %s", e`) nötrlenmeden geçiyordu. Artık BİRLEŞMİŞ mesaja (argüman türünden bağımsız)
         # uygulanır. Traceback (exc_text) etkilenmez — `format()` onu bu adımdan SONRA ekler.
+        # 1-B inceleme (i1/B4): CR/LF ile birlikte `splitlines()`'ın saydığı TÜM ayırıcılar (bkz. `_satir_notrle`).
         m = record.message
-        if "\r" in m or "\n" in m:
-            record.message = m.replace("\r", "\\r").replace("\n", "\\n")
+        n = _satir_notrle(m)
+        if n != m:
+            record.message = n
         return super().formatMessage(record)
 
 

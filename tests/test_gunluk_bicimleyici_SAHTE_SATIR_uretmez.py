@@ -96,6 +96,31 @@ def test_KRITIK_guvenilmez_metin_TEK_SATIR_kalir(bicim):
     assert "SAHTE SATIR" in cikti and ("\\n" in cikti or "\\r" in cikti), cikti
 
 
+#: `str.splitlines()`'ın LF/CR DIŞINDA da satır saydığı ayırıcılar (1-B bağımsız inceleme i1/B4: VT/FF/FS/NEL/LS/PS ile
+#: gömülü metin `splitlines()` tabanlı okuyucularda zaman damgalı SAHTE satır üretiyordu; LF/CR kapalıydı).
+DIGER_AYIRICILAR = {
+    "VT": "\x0b",
+    "FF": "\x0c",
+    "FS": "\x1c",
+    "GS": "\x1d",
+    "RS": "\x1e",
+    "NEL": "\x85",
+    "LS": " ",
+    "PS": " ",
+}
+
+
+@pytest.mark.parametrize("ayirici", list(DIGER_AYIRICILAR.values()), ids=list(DIGER_AYIRICILAR))
+def test_KRITIK_splitlines_AYIRICILARI_mesajda_SAHTE_SATIR_uretmez(ayirici):
+    for cagri in (
+        lambda lg: lg.error("hata: %s", _istisna(f"upsert{ayirici}{SAHTE}")),
+        lambda lg: lg.warning(f"dogrudan{ayirici}{SAHTE}"),
+    ):
+        cikti = _yaz(cagri)
+        assert len(cikti.splitlines()) == 1, f"{ayirici!r}: günlüğe SAHTE SATIR yazıldı: {cikti!r}"
+        assert "SAHTE SATIR" in cikti, cikti
+
+
 def test_KRITIK_yigin_izli_cagrida_mesaj_TEK_SATIR_iz_KORUNUR():
     def cagri(lg):
         try:
@@ -136,7 +161,10 @@ def _istisnayla(metin: str):
 
 
 @pytest.mark.parametrize(
-    "metin", [f"satir1\n{SAHTE}", f"satir1\r\n{SAHTE}", f"satir1\r{SAHTE}"], ids=["LF", "CRLF", "CR"]
+    "metin",
+    [f"satir1\n{SAHTE}", f"satir1\r\n{SAHTE}", f"satir1\r{SAHTE}"]
+    + [f"satir1{a}{SAHTE}" for a in DIGER_AYIRICILAR.values()],
+    ids=["LF", "CRLF", "CR", *DIGER_AYIRICILAR],
 )
 def test_KRITIK_Y41_istisna_METNINDEKI_satir_sonu_yigin_izinde_SAHTE_SATIR_uretmez(metin):
     satirlar = _iz_satirlari_denetle(_yaz(_istisnayla(metin)))
