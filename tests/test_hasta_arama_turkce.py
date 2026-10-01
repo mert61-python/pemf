@@ -194,6 +194,54 @@ def test_norm_surumu_parmak_izinde():
     i = src.find("_fp = hashlib.sha256(")
     assert i != -1
     govde = src[i : i + 220]
-    assert "_SEARCH_NORM_VERSION" in govde or "norm" in govde, (
+    # D1.20 (B-10.129): eskiden `... or "norm" in govde` idi — `b"|norm"` (sürümsüz) de geçiyordu (TOTOLOJİ).
+    assert "_SEARCH_NORM_VERSION" in govde, (
         "normalize sürümü parmak-izine katılmıyor → mevcut hastalarda indeks tazelenmez"
     )
+
+
+def _yeniden_ac(temp_app_data):
+    import database.patient_database as pdb
+
+    return pdb.PatientDatabase(str(temp_app_data / "patients.db"))
+
+
+def _kurulum_sayaci(monkeypatch):
+    import database.patient_database as pdb
+
+    sayac: list[int] = []
+    gercek = pdb.PatientDatabase._rebuild_search_index
+
+    def say(self, cursor):
+        sayac.append(1)
+        return gercek(self, cursor)
+
+    monkeypatch.setattr(pdb.PatientDatabase, "_rebuild_search_index", say)
+    return sayac
+
+
+def test_KRITIK_norm_surumu_ARTINCA_mevcut_indeks_acilista_YENIDEN_KURULUR(hasta_db, temp_app_data, monkeypatch):
+    """D1.20 (B-10.129) DAVRANIŞ: `utils.turkce_metin.SURUM` artınca GERÇEK açılış yolu
+    (`_ensure_search_index`) parmak izini değiştirmeli ve MEVCUT hastanın indeksini yeniden kurmalı;
+    yoksa normalize kuralı değişse de sahadaki hastalar Türkçe aramada bulunamaz."""
+    import database.patient_database as pdb
+
+    hasta_db.add_patient({"name": "İhsan", "owner": "T", "species": "Kedi"})
+    fp_dosyasi = hasta_db._key_dir / ".patient_search_keyfp"
+    once = fp_dosyasi.read_text(encoding="utf-8").strip()
+    sayac = _kurulum_sayaci(monkeypatch)
+    monkeypatch.setattr(pdb.PatientDatabase, "_SEARCH_NORM_VERSION", pdb.PatientDatabase._SEARCH_NORM_VERSION + 1)
+
+    yeni_db = _yeniden_ac(temp_app_data)
+
+    assert fp_dosyasi.read_text(encoding="utf-8").strip() != once, "normalize sürümü parmak izini DEĞİŞTİRMİYOR"
+    assert sayac, "sürüm artınca mevcut hastanın arama indeksi açılışta YENİDEN KURULMADI"
+    assert "İhsan" in _adlar(yeni_db.search_patients("ihsan")), "yeniden kurulan indeks hastayı bulmuyor"
+
+
+def test_KARSIT_surum_ayniyken_acilista_indeks_yeniden_KURULMAZ(hasta_db, temp_app_data, monkeypatch):
+    """Tazeleme "her açılışta kur" biçiminde bozulmasın (dolu tabloda gereksiz yeniden kurulum)."""
+    hasta_db.add_patient({"name": "İpek", "owner": "T", "species": "Kedi"})
+    sayac = _kurulum_sayaci(monkeypatch)
+    _yeniden_ac(temp_app_data)
+    assert not sayac, "sürüm/anahtar değişmeden indeks yeniden kuruldu"
