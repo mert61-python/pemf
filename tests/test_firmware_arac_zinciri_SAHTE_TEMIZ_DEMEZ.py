@@ -141,3 +141,27 @@ def test_KARSIT_220_gercek_main_c_TAM_sayilir():
     kopya = betik_modulu("stm_workspace_kopyala")
     assert kopya._protokol_eksikleri(MAIN_C) == []
     assert kopya._bobin_sayisi(MAIN_C) == 7
+
+
+# ── 1-B bağımsız inceleme (i3): araç zinciri YOKKEN açıkça istenen hedef TEMİZ sayılmaz ─────────────────
+
+
+def test_KRITIK_215_stm_ACIKCA_istenip_derleyici_YOKKEN_1_ve_TEMIZ_DEMEZ(monkeypatch, capsys):
+    fd = betik_modulu("firmware_derle")
+    monkeypatch.setattr(fd, "_stm_gcc", lambda: None)
+    monkeypatch.setattr(fd, "_ATLANAN", [])
+    monkeypatch.setattr(sys, "argv", ["firmware_derle.py", "--stm"])
+    assert fd.main() == 1, "`--stm` istendi, derleyici yok → 0 döndü (stm_yak'a ölçülmemiş ikili gider)"
+    cikti = capsys.readouterr().out
+    assert "SONUC: TEMIZ" not in cikti.replace("SONUC: TEMIZ DEGIL", ""), cikti[-400:]
+
+
+def test_KARSIT_215_hepsi_kipinde_atlanan_RC0_ama_SONUC_TEMIZ_DEGIL(monkeypatch, capsys):
+    fd = betik_modulu("firmware_derle")
+    monkeypatch.setattr(fd, "_stm_gcc", lambda: None)
+    monkeypatch.setattr(fd, "_s3_cli", lambda: None)
+    monkeypatch.setattr(fd, "_ATLANAN", [])
+    monkeypatch.setattr(sys, "argv", ["firmware_derle.py"])
+    assert fd.main() == 0
+    cikti = capsys.readouterr().out
+    assert "SONUC: TEMIZ DEGIL" in cikti and "STM32" in cikti.split("SONUC:")[-1], cikti[-400:]

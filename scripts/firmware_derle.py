@@ -89,14 +89,27 @@ def _s3_cli() -> Path | None:
     return None
 
 
-def derle_stm() -> int:
+#: Ölçülmeden atlanan hedefler (SONUC satırı "TEMIZ" diyemez). 1-B bağımsız inceleme (i3): araç zinciri yokken
+#: `--stm` AÇIKÇA istense de "ATLANDI" + 0 → "SONUC: TEMIZ" basılıyordu (stm_yak.py'nin `--bin` girdisi bu kipte üretilir).
+_ATLANAN: list[str] = []
+
+
+def _atla(hedef: str, sebep: str, zorunlu: bool) -> int:
+    """Ölçülemeyen hedef: açıkça istendiyse (`--stm`/`--s3`) 1, `hepsi` kipinde 0 — ama kayda geçer."""
+    _ATLANAN.append(hedef)
+    if zorunlu:
+        print(f"[{hedef}] ### {sebep} -> ACIKCA istenen hedef OLCULEMEDI (TEMIZ DEGIL).")
+        return 1
+    print(f"[{hedef}] ATLANDI — {sebep}.")
+    return 0
+
+
+def derle_stm(zorunlu: bool = False) -> int:
     gcc = _stm_gcc()
     if gcc is None:
-        print("[STM32] ATLANDI — arm-none-eabi-gcc bulunamadi (CubeIDE kurulu degil).")
-        return 0
+        return _atla("STM32", "arm-none-eabi-gcc bulunamadi (CubeIDE kurulu degil)", zorunlu)
     if not STM_PROJE.is_dir():
-        print("[STM32] ATLANDI — proje dizini yok.")
-        return 0
+        return _atla("STM32", "proje dizini yok", zorunlu)
     print(f"[STM32] derleyici: {gcc}")
     inc = [
         "-I" + str(STM_PROJE / "Core" / "Inc"),
@@ -106,8 +119,7 @@ def derle_stm() -> int:
     ]
     kaynaklar = sorted((STM_PROJE / "Core" / "Src").rglob("*.c")) + sorted((STM_PROJE / "Drivers").rglob("*.c"))
     if not kaynaklar:
-        print("[STM32] ATLANDI — kaynak bulunamadi.")
-        return 0
+        return _atla("STM32", "kaynak bulunamadi", zorunlu)
     hata = 0
     with tempfile.TemporaryDirectory() as td:
         nesneler = []
@@ -262,14 +274,12 @@ def printf_float_kapisi(elf: Path, nm: str | None) -> int:
     return 0
 
 
-def derle_s3() -> int:
+def derle_s3(zorunlu: bool = False) -> int:
     cli = _s3_cli()
     if cli is None:
-        print("[ESP-S3] ATLANDI — arduino-cli bulunamadi (Arduino IDE kurulu degil).")
-        return 0
+        return _atla("ESP-S3", "arduino-cli bulunamadi (Arduino IDE kurulu degil)", zorunlu)
     if not S3_PROJE.is_dir():
-        print("[ESP-S3] ATLANDI — proje dizini yok.")
-        return 0
+        return _atla("ESP-S3", "proje dizini yok", zorunlu)
     print(f"[ESP-S3] arduino-cli: {cli}")
     with tempfile.TemporaryDirectory() as td:
         r = subprocess.run(
@@ -314,11 +324,16 @@ def main() -> int:
     hepsi = not (a.stm or a.s3)
     kod = 0
     if hepsi or a.stm:
-        kod |= derle_stm()
+        kod |= derle_stm(zorunlu=a.stm)
     if hepsi or a.s3:
-        kod |= derle_s3()
+        kod |= derle_s3(zorunlu=a.s3)
     print()
-    print("SONUC: " + ("TEMIZ" if kod == 0 else "BASARISIZ"))
+    if kod:
+        print("SONUC: BASARISIZ")
+    elif _ATLANAN:
+        print("SONUC: TEMIZ DEGIL — olculmeden atlanan: " + ", ".join(_ATLANAN))
+    else:
+        print("SONUC: TEMIZ")
     return kod
 
 
