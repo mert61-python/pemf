@@ -878,6 +878,19 @@ class PatientDatabase:
 
 _patient_db = None
 _patient_db_lock = threading.Lock()
+#: D1.37 (B-3.8): backend AÇILIŞINDA açılamayan hasta DB yolu → neden. O süreçte YENİDEN DENENMEZ
+#: (bkz. `treatment_history_db._acilis_kilidi` — aynı gerekçe: her istekte ≥6 sn göç denemesi).
+_acilis_kilidi: dict[str, str] = {}
+
+
+def _kilit_anahtari(db_path) -> str:
+    return os.path.normcase(os.path.abspath(str(db_path)))
+
+
+def acilis_hatasini_kilitle(app_data_dir, exc: BaseException) -> None:
+    """Bu süreçte bu hasta DB'sini açmayı bırak: sonraki `get_patient_database` HEMEN `RuntimeError` verir."""
+    with _patient_db_lock:
+        _acilis_kilidi[_kilit_anahtari(Path(app_data_dir) / "patients.db")] = type(exc).__name__
 
 
 def get_patient_database(app_data_dir=None) -> PatientDatabase:
@@ -894,5 +907,10 @@ def get_patient_database(app_data_dir=None) -> PatientDatabase:
                     app_data_dir = Path.home() / ".pemf_gui"
 
             db_file = app_data_dir / "patients.db"
+            kilit = _acilis_kilidi.get(_kilit_anahtari(db_file))
+            if kilit is not None:
+                raise RuntimeError(
+                    f"Hasta DB'si acilista ACILAMADI ({kilit}); bu oturumda yeniden denenmez — cihazi yeniden baslatin."
+                )
             _patient_db = PatientDatabase(str(db_file))
     return _patient_db

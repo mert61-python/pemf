@@ -135,8 +135,18 @@ class HeadlessCore:
         self._stm_state_lock = threading.RLock()
         self.stm_connected_signal.connect(self._on_stm_connected_slot)
 
-        self.patient_db = get_patient_database(self.app_data_dir)
-        self.session_manager = get_session_manager(self.app_data_dir)
+        # ⚠️ D1.37 (B-3.8): DB AÇILAMASA DA ÇEKİRDEK KURULUR — backend DB'siz (kısıtlı) açılır.
+        # Eskiden iki açılış SARMASIZDI: at-rest göçü dosya kilidine takılınca düz-metin DB
+        # `GocBekliyorHatasi` verir (sahip kararı 3903ea9: karantinaya ALINMAZ), istisna `main()`'den
+        # kaçar ve HİÇBİR uç açılmazdı — ACİL DURDUR dahil. GENEL yakalanır (plan C1-7): Karar-6
+        # fail-closed ve bozuk dosya `RuntimeError`ları da aynı sonucu doğuruyordu. Neden
+        # `db_acilis_hatalari`na yazılır → `/api/health` `dbReady=false` + `dbSebep`, seans 503.
+        # Açılamayan DB bu süreçte YENİDEN DENENMEZ (`acilis_hatasini_kilitle`): sağlık ucu async;
+        # her çağrıda göçü (kalıcı kilitte ≥6 sn) yeniden denemek olay döngüsünü — ACİL DURDUR'u —
+        # bloklar ve launcher'ın 3 sn'lik dbReady okuması "bilinmiyor"a düşüp güncellemeyi onaylardı.
+        self.db_acilis_hatalari: dict[str, str] = {}
+        self.patient_db = self._db_ac("hasta", lambda: get_patient_database(self.app_data_dir))
+        self.session_manager = self._db_ac("tedavi", lambda: get_session_manager(self.app_data_dir))
 
         self.mosquitto_supervisor = None
         self.network_status_service = None
@@ -153,6 +163,41 @@ class HeadlessCore:
         )
         self._hw_sender_thread.start()
         self._publish_event("system.core.started", {"appDataDir": str(self.app_data_dir)})
+
+    #: `db_acilis_hatalari` anahtarı → operatöre gösterilen ad.
+    _DB_ADI = {"hasta": "Hasta veritabanı", "tedavi": "Tedavi kaydı veritabanı"}
+
+    def _db_ac(self, ad: str, ac: Callable[[], Any]):
+        """DB'yi aç; açılamazsa None döndür, nedeni kaydet ve bu süreçte yeniden denemeyi kilitle (D1.37).
+
+        Neden metni `/api/health`'e gider (auth-muaf, tünelden erişilebilir) → dosya YOLU ya da istisna
+        ayrıntısı İÇERMEZ; tam zincir yalnız günlüğe yazılır."""
+        try:
+            return ac()
+        except Exception as exc:  # noqa: BLE001 — GENEL (C1-7): göç, Karar-6 fail-closed, bozuk dosya
+            from database import patient_database as _pdb
+            from database import treatment_history_db as _thdb
+            from database.sqlcipher_util import GocBekliyorHatasi
+
+            ad_metni = self._DB_ADI.get(ad, ad)
+            if isinstance(exc, GocBekliyorHatasi):
+                sebep = (
+                    f"{ad_metni} göç bekliyor: at-rest şifreleme göçü tamamlanmadı (dosya kilitli olabilir); "
+                    "dosya korunuyor, karantinaya alınmadı. Cihazı yeniden başlatın — göç yeniden denenecek."
+                )
+            else:
+                sebep = (
+                    f"{ad_metni} açılamadı ({type(exc).__name__}). Cihazı yeniden başlatın; "
+                    "sorun sürerse teknik desteğe başvurun."
+                )
+            self.db_acilis_hatalari[ad] = sebep
+            (_pdb if ad == "hasta" else _thdb).acilis_hatasini_kilitle(self.app_data_dir, exc)
+            self.logger.error(
+                "%s — backend DB'SİZ (kısıtlı) açılıyor: ACİL DURDUR ve STOP çalışır, yeni seans 503.",
+                sebep,
+                exc_info=True,
+            )
+            return None
 
     def start_headless_services(self, *, ensure_mosquitto: bool = True) -> None:
         """Start Qt-free support services used by production service mode."""

@@ -2412,8 +2412,17 @@ def _kayit_db_hazir():
     ⚠️ DENETİM 2026-08-09 (ENGEL) — bu, `/api/health`'in `dbReady` alanının ve seans-başlatma
     kapısının TEK KAYNAĞIDIR. İkisinin ayrı hesaplaması, "sağlık yeşil ama seans reddediliyor"
     (ya da tersi) gibi teşhis edilemez bir tutarsızlık üretirdi.
+
+    ⚠️ D1.37 (B-3.8): backend açılışında hasta YA DA tedavi DB'si açılamadıysa (göç bekliyor /
+    fail-closed / bozuk) backend DB'siz açılır ve burası O NEDENLE `False` döner — HASTA DB'si tek
+    başına açılamasa da. Launcher güncelleme onayında yalnız `dbReady`e bakar (`main.rs`
+    `db_hazir_mi`); hasta DB'si göç beklerken `true` kalsaydı güncellemeyi onaylayıp `runtime.old`u
+    silerdi (plan D1.37 orkestratör notu).
     """
     try:
+        acilis = _db_acilis_hatasi()
+        if acilis:
+            return False, acilis
         db = _get_treatment_db()
         if db is None:
             return False, "veritabani acilamadi"
@@ -2421,6 +2430,17 @@ def _kayit_db_hazir():
     except Exception as e:
         logging.getLogger(__name__).error("DB hazirlik kontrolu basarisiz: %s", e, exc_info=True)
         return False, str(e)[:200]
+
+
+def _db_acilis_hatasi() -> str:
+    """Backend açılışında açılamayan DB'lerin operatöre gösterilecek nedeni ('' = yok). D1.37.
+
+    Kaynak `HeadlessCore.db_acilis_hatalari` (yol / istisna ayrıntısı İÇERMEZ — `/api/health`
+    auth-muaftır ve tünelden erişilebilir)."""
+    hatalar = getattr(state.core, "db_acilis_hatalari", None)
+    if not isinstance(hatalar, dict):  # çekirdek yok / sahte çekirdek (ör. MagicMock) → açılış hatası YOK
+        return ""
+    return " ".join(hatalar[k] for k in ("hasta", "tedavi") if isinstance(hatalar.get(k), str) and hatalar.get(k))
 
 
 def _lookup_owner_email(patient_uuid: str) -> str:
@@ -2948,14 +2968,15 @@ async def start_session(payload: SessionStartPayload, request: Request):
     _db_ok, _db_sebep = _kayit_db_hazir()
     if not _db_ok:
         logging.getLogger(__name__).error("Seans REDDEDILDI — tibbi kayit DB'si hazir degil: %s", _db_sebep)
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "Tıbbi kayıt veritabanı açılamadı; seans başlatılamaz. Tedavi kaydı "
-                "tutulamayacağı için işlem güvenli değildir. Cihazı yeniden başlatın, "
-                "sorun sürerse teknik desteğe başvurun."
-            ),
+        _acilis_sebebi = _db_acilis_hatasi()  # D1.37: göç bekliyorsa operatör NEDENİ görür
+        _detay = (
+            "Tıbbi kayıt veritabanı açılamadı; seans başlatılamaz. Tedavi kaydı "
+            "tutulamayacağı için işlem güvenli değildir. Cihazı yeniden başlatın, "
+            "sorun sürerse teknik desteğe başvurun."
         )
+        if _acilis_sebebi:
+            _detay += f" Neden: {_acilis_sebebi}"
+        raise HTTPException(status_code=503, detail=_detay)
 
     # Güncelleme uygulanıyorken YENİ seans başlatma: installer servisi durdurup EXE'yi
     # değiştirebilir → başlayan tedavi bobinleri kontrolcüsüz bırakabilir. (update_manager

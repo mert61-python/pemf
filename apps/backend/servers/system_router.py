@@ -196,6 +196,14 @@ async def health_check(request: Request):
         db_ready = bool(_api._kayit_db_hazir()[0])
     except Exception:
         db_ready = False
+    # D1.37 (B-3.8): DB'siz (kısıtlı) açılışta NEDEN — ör. "Hasta veritabanı göç bekliyor …".
+    # Yalnız açılış kaydından (yol/istisna ayrıntısı yok: bu uç auth-muaf ve tünelden erişilebilir).
+    db_sebep = None
+    if not db_ready:
+        try:
+            db_sebep = _api._db_acilis_hatasi() or "Tıbbi kayıt veritabanı hazır değil; yeni seans başlatılamaz."
+        except Exception:
+            db_sebep = "Tıbbi kayıt veritabanı hazır değil; yeni seans başlatılamaz."
     # ── DENETİM 2026-08-04 (P2 #13): LAUNCHER NONCE'U ────────────────────────────────────
     # SORUN: launcher `find_free_port` ile portu bind edip HEMEN BIRAKIYOR; frozen backend'in
     # o portu gerçekten bind etmesi onlarca saniye sürüyor. Bu pencerede loopback'e bağlanabilen
@@ -286,6 +294,8 @@ async def health_check(request: Request):
         "atRestEncrypted": at_rest_encrypted,
         # Tıbbi kayıt yazılabilir mi. false → yeni seans REDDEDİLİR (bkz. /api/session/start).
         "dbReady": db_ready,
+        # dbReady false iken nedeni (true iken null). Launcher yalnız `dbReady`e bakar.
+        "dbSebep": db_sebep,
         # DENETIM P2: bulut cihaz-registry'sinin son yayin durumu. 'secret_mismatch' KALICI bir
         # durumdur (TOFU muhru — yeniden kurulum sonrasi device_secret degisti) ve eskiden yalnizca
         # log'a dusuyordu; operator uzaktan erisimin neden sessizce guncellenmedigini goremiyordu.

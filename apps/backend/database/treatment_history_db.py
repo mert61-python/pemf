@@ -666,6 +666,22 @@ class TreatmentHistoryDB(
 # Singleton instance
 _treatment_db_instance = None
 _treatment_db_lock = threading.Lock()
+#: D1.37 (B-3.8): backend AÇILIŞINDA açılamayan tedavi DB yolu → neden. O süreçte YENİDEN DENENMEZ
+#: ("sonraki açılış göçü yeniden dener" — `GocBekliyorHatasi` sözleşmesi). Yalnız `HeadlessCore`
+#: açılışı başarısız olunca kurulur. Kilitsiz her `get_treatment_db` (async `/api/health` dahil) göçü
+#: kalıcı kilitte ≥6 sn tekrar dener → olay döngüsü, dolayısıyla ACİL DURDUR bloklanır.
+_acilis_kilidi: dict[str, str] = {}
+
+
+def _kilit_anahtari(db_path) -> str:
+    return os.path.normcase(os.path.abspath(str(db_path)))
+
+
+def acilis_hatasini_kilitle(app_data_dir, exc: BaseException) -> None:
+    """Bu süreçte bu tedavi DB'sini açmayı bırak: sonraki `get_treatment_db` HEMEN `RuntimeError` verir."""
+    anahtar = _kilit_anahtari(os.path.join(str(app_data_dir), "pemf_treatment_history.db"))
+    with _treatment_db_lock:
+        _acilis_kilidi[anahtar] = type(exc).__name__
 
 
 def get_treatment_db(app_data_dir):
@@ -676,5 +692,10 @@ def get_treatment_db(app_data_dir):
         current_db_path = getattr(_treatment_db_instance, 'db_path', None)
 
         if _treatment_db_instance is None or current_db_path != requested_db_path:
+            kilit = _acilis_kilidi.get(_kilit_anahtari(requested_db_path))
+            if kilit is not None:
+                raise RuntimeError(
+                    f"Tedavi kaydi DB'si acilista ACILAMADI ({kilit}); bu oturumda yeniden denenmez — cihazi yeniden baslatin."
+                )
             _treatment_db_instance = TreatmentHistoryDB(app_data_dir)
     return _treatment_db_instance

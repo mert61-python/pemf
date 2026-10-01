@@ -60,6 +60,10 @@ GOLDEN_SHAPES = {
         # reddedilir; bu alan olmadan ariza ancak veteriner seans baslatmayi DENEYINCE, yani hasta
         # masadayken gorunuyordu. Bkz. api_server._kayit_db_hazir + tests/test_db_ready_gate.py.
         "dbReady",
+        # D1.37 · B-3.8 (2026-10-01, BILINCLI sekil degisikligi): DB acilista acilamazsa backend artik
+        # OLMUYOR, DB'siz (kisitli) aciliyor. `dbReady` false iken NEDENI ("Hasta veritabani goc bekliyor …");
+        # true iken null. Yol/istisna ayrintisi tasimaz (bu uc auth-muaf). Bkz. test_acilis_DB_acilamasa_ACIL_DURDUR_yasar.
+        "dbSebep",
         # DENETIM 2026-08-09 Tier 3 (BILINCLI sekil degisikligi): SURUM GORUNURLUGU.
         # `/api/health` saha teshisinin ilk duragi ama surumu HIC soylemiyordu; destek telefonda
         # "hangi surum" diye sorup operatore menu tarif etmek zorunda kaliyordu. `buildId` ise
