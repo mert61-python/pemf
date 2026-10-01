@@ -154,18 +154,34 @@ MUAF: dict[tuple[str, str], tuple[int, str]] = {
 
 
 def _sessiz_govde(govde: list[ast.stmt]) -> bool:
-    """Tek deyimli "hiçbir şey yapma" gövdesi: `pass`, `...`, `continue`, `return`, `return <sabit>`.
+    """Tek deyimli "hiçbir şey yapma" gövdesi: `pass`, `...`/tek sabit ifade, `continue`, `break`, `return`,
+    `return <sabit>` (`-1` gibi tekli işaretli sabit ve `[]`/`{}`/`()` gibi yalnız sabit içeren kaplar dahil).
 
     ⚠️ D1.20 (B-10.157): eskiden YALNIZ `pass` sayılıyordu — aynı yutma `...`, `return None` ya da
-    `continue` ile yazılınca riskli bağlamda `shutil.move` yutulsa da kapı YEŞİL kalıyordu."""
+    `continue` ile yazılınca riskli bağlamda `shutil.move` yutulsa da kapı YEŞİL kalıyordu. Bağımsız
+    inceleme (r5): `break`, `return []` ve `return -1` biçimleri de kör kalıyordu."""
     if len(govde) != 1:
         return False
     s = govde[0]
-    if isinstance(s, (ast.Pass, ast.Continue)):
+    if isinstance(s, (ast.Pass, ast.Continue, ast.Break)):
         return True
-    if isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant) and s.value.value is Ellipsis:
+    if isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant):
         return True
-    return isinstance(s, ast.Return) and (s.value is None or isinstance(s.value, ast.Constant))
+    return isinstance(s, ast.Return) and (s.value is None or _sabit_deger(s.value))
+
+
+def _sabit_deger(d: ast.expr) -> bool:
+    """Çalışma anı bilgisi taşımayan dönüş değeri: sabit, tekli işaretli sabit (`-1`), yalnız sabit
+    içeren kap (`[]`, `{}`, `()`, `[0]`)."""
+    if isinstance(d, ast.Constant):
+        return True
+    if isinstance(d, ast.UnaryOp) and isinstance(d.operand, ast.Constant):
+        return True
+    if isinstance(d, (ast.List, ast.Tuple, ast.Set)):
+        return all(_sabit_deger(e) for e in d.elts)
+    if isinstance(d, ast.Dict):
+        return all(k is not None and _sabit_deger(k) for k in d.keys) and all(_sabit_deger(v) for v in d.values)
+    return False
 
 
 def _sessiz_mi(h: ast.ExceptHandler) -> bool:
@@ -404,6 +420,47 @@ def test_KRITIK_muafiyetler_GERCEKTEN_var_ve_gerekceli():
             "TEHLIKELI",
             "contextlib.suppress bloğu",
         ),
+        # ── Bağımsız inceleme (r5): break, sabit kap dönüşü, tekli işaretli sabit ──
+        (
+            "\n".join(
+                [
+                    "def yedek_al(dosyalar):",
+                    "    for f in dosyalar:",
+                    "        try:",
+                    "            shutil.move(f, h)",
+                    "        except Exception:",
+                    "            break",
+                ]
+            ),
+            "TEHLIKELI",
+            "break gövdesi",
+        ),
+        (
+            "\n".join(
+                [
+                    "def goc_yap():",
+                    "    try:",
+                    "        shutil.move(a, b)",
+                    "    except Exception:",
+                    "        return []",
+                ]
+            ),
+            "TEHLIKELI",
+            "boş liste dönüşü",
+        ),
+        (
+            "\n".join(
+                [
+                    "def anahtar_gocu():",
+                    "    try:",
+                    "        os.replace(a, b)",
+                    "    except Exception:",
+                    "        return -1",
+                ]
+            ),
+            "TEHLIKELI",
+            "eksi bir dönüşü",
+        ),
     ],
     ids=[
         "tehlikeli",
@@ -415,6 +472,9 @@ def test_KRITIK_muafiyetler_GERCEKTEN_var_ve_gerekceli():
         "return_sabit",
         "continue",
         "suppress",
+        "break",
+        "bos_liste_donus",
+        "eksi_bir_donus",
     ],
 )
 def test_KARSIT_KANIT_siniflandirici_AYIRIYOR(kaynak: str, beklenen: str, aciklama: str):
