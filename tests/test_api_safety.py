@@ -73,19 +73,43 @@ def test_session_start_rejects_oversized_coil_ids(client):
     assert r.status_code == 422, "8'den uzun bobin listesi sınırda reddedilmeli"
 
 
-def test_session_start_dedups_coil_ids(client):
-    """Tekrarlı/aralık-dışı bobin id'leri normalize edilmeli (derinlemesine savunma)."""
-    try:
-        r = client.post(
-            "/api/session/start",
-            json={
-                "coil_ids": [1, 1, 2, 2],
-                "duration_minutes": 1,
-                "patient_name": "T",
-            },
-        )
-        # STM donanımı yoksa 503 dönebilir; o durumda normalizasyon zaten uygulanmıştır.
-        if r.status_code == 200:
+def test_session_start_dedups_coil_ids(client, tmp_path, monkeypatch):
+    """Tekrarlı/aralık-dışı bobin id'leri normalize edilmeli (derinlemesine savunma).
+
+    ⚠️ D1.36 (B-10.110): bu test eskiden `state.hardware` olmadan koşuyordu → STM bobinli seans
+    503 alıyor, `if r.status_code == 200:` iddiayı hiç koşturmuyordu (dedup filtresi `if True:`
+    yapılsa YEŞİL). Artık GERÇEK HardwareController (kayıtçı kuyruk) + tmp tedavi DB'si ile 200'e
+    ULAŞILIR; aralık dışı (9) ve tekrarlar düşer, her bobin donanıma TEK KEZ başlatılır."""
+    from database.treatment_history_db import TreatmentHistoryDB
+    from kayitci_donanim import gercek_hc
+    from servers import api_server as api
+    from servers import coil_run_tracker, live_state
+
+    db = TreatmentHistoryDB(tmp_path)
+    monkeypatch.setattr(api, "_get_treatment_db", lambda: db)
+    monkeypatch.setattr(coil_run_tracker, "_treatment_db_getter", lambda: db)
+    monkeypatch.setattr(api, "_ws_broadcast_sync", lambda *a, **k: None)
+    live_state.stm_komut_kabulu_bildir()
+    with gercek_hc() as hc:
+        baslatilan = []
+        _orj = hc.update_coil
+
+        def _sayan(coil_id, *a, **k):
+            baslatilan.append(coil_id)
+            return _orj(coil_id, *a, **k)
+
+        hc.update_coil = _sayan
+        monkeypatch.setattr(api.state, "hardware", hc)
+        try:
+            r = client.post(
+                "/api/session/start",
+                json={"coil_ids": [1, 1, 2, 2, 9], "duration_minutes": 1, "patient_name": "T"},
+            )
+            assert r.status_code == 200, f"seans başlamadı — dedup iddiası koşmaz: {r.status_code} {r.text[:200]}"
             assert r.json()["session"]["coil_ids"] == [1, 2]
-    finally:
-        client.post("/api/session/stop")
+            with api._session_lock:
+                assert api._active_session.get("coil_ids") == [1, 2]
+            assert sorted(baslatilan) == [1, 2], f"donanıma başlatılan bobinler {baslatilan} (her biri TEK kez olmalı)"
+        finally:
+            client.post("/api/session/stop")
+            db.close_connections()

@@ -52,9 +52,26 @@ def test_patients_pagination_backward_compatible(client):
 
 
 def test_patients_pagination_limits(client):
-    r = client.get("/api/patients?limit=1&offset=0")
-    assert r.status_code == 200
-    assert len(r.json()["data"]) <= 1
+    """⚠️ D1.36 (B-10.110): eskiden `len(data) <= 1` hasta YOKKEN de doğruydu (0 ≤ 1) — sayfalama
+    hiç ölçülmüyordu (`limit` yok sayılsa YEŞİL). Artık ≥2 hasta oluşturulur; limit=1 TAM 1 kayıt,
+    limit=2 TAM 2 kayıt (her şeyi 1'e kesen mutanta karşı), offset bir sonraki kaydı verir."""
+    eklenen = []
+    try:
+        for ad in ("SayfaA", "SayfaB"):
+            r = client.post("/api/patients", json={"name": ad, "species": "kedi"})
+            assert r.status_code == 200 and r.json()["status"] == "success", r.text[:200]
+            eklenen.append(r.json()["patient_id"])
+        r1 = client.get("/api/patients?limit=1&offset=0")
+        assert r1.status_code == 200
+        assert r1.json()["total"] >= 2
+        assert len(r1.json()["data"]) == 1, f"limit=1 → {len(r1.json()['data'])} kayıt"
+        r2 = client.get("/api/patients?limit=2&offset=0").json()["data"]
+        assert len(r2) == 2, f"limit=2 → {len(r2)} kayıt"
+        r3 = client.get("/api/patients?limit=1&offset=1").json()["data"]
+        assert len(r3) == 1 and r3[0]["id"] != r1.json()["data"][0]["id"], "offset sonraki kaydı vermiyor"
+    finally:
+        for pid in eklenen:
+            client.delete(f"/api/patients/{pid}")
 
 
 def test_delete_all_requires_confirmation(client):
