@@ -163,6 +163,12 @@ def test_KRITIK_import_sayaci_FK_kopyasini_DEGIL_eklenen_hastayi_verir(client):
     assert c["patient_db_zaten_vardi"] == paket["counts"]["patients"], (
         f"zaten-var sayısı paketteki hasta sayısıyla tutmuyor: {c} / paket {paket['counts']}"
     )
+    # 1-B bağımsız inceleme (i6): `patient_db_basarisiz` yalnız VARLIKLA ölçülüyordu — zaten var olan hasta
+    # AYRICA "aktarılamadı" sayılınca (arayüz başarılı geri yüklemede "N hasta AKTARILAMADI" + error) kapı yeşildi.
+    assert c["patient_db_basarisiz"] == 0, f"başarılı geri yüklemede 'aktarılamadı' sayacı {c}"
+    assert c["patient_db"] + c["patient_db_zaten_vardi"] + c["patient_db_basarisiz"] == paket["counts"]["patients"], (
+        f"üç sonuç toplamı paketteki hasta sayısına eşit değil: {c} / paket {paket['counts']}"
+    )
 
 
 def test_import_FK_kopyasi_ayri_ADLA_hala_raporlanir(client):
@@ -210,6 +216,8 @@ def test_KRITIK_import_yaniti_SEANS_ANALIZ_sayaclarini_ve_GERCEK_eklenen_hastayi
     assert c["patient_db_zaten_vardi"] == kaynak["patients"] - 1, (
         f"zaten-var sayısı {c['patient_db_zaten_vardi']} ≠ paketteki {kaynak['patients']} − 1"
     )
+    assert c["patient_db_basarisiz"] == 0, f"başarılı geri yüklemede 'aktarılamadı' sayacı {c} (i6)"
+    assert c["patient_db"] + c["patient_db_zaten_vardi"] + c["patient_db_basarisiz"] == kaynak["patients"], c
 
 
 def test_base64_paketi_gercekten_cozulebiliyor_karsit_kanit(client):

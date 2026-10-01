@@ -181,7 +181,14 @@ def _sabit_deger(d: ast.expr) -> bool:
         return all(_sabit_deger(e) for e in d.elts)
     if isinstance(d, ast.Dict):
         return all(k is not None and _sabit_deger(k) for k in d.keys) and all(_sabit_deger(v) for v in d.values)
+    # 1-B inceleme (i6): `set()`, `dict()` gibi yerleşik BOŞ-KAP/sabit çağrıları da sabittir (`return set()` /
+    # `return dict()` taşıma handler'ı `tara()` çıktısına HİÇ girmiyordu).
+    if isinstance(d, ast.Call) and isinstance(d.func, ast.Name) and d.func.id in _SABIT_CAGRILAR and not d.keywords:
+        return all(_sabit_deger(a) for a in d.args)
     return False
+
+
+_SABIT_CAGRILAR = frozenset({"set", "dict", "list", "tuple", "frozenset", "str", "int", "float", "bool", "bytes"})
 
 
 def _sessiz_mi(h: ast.ExceptHandler) -> bool:
@@ -461,6 +468,32 @@ def test_KRITIK_muafiyetler_GERCEKTEN_var_ve_gerekceli():
             "TEHLIKELI",
             "eksi bir dönüşü",
         ),
+        (
+            "\n".join(
+                [
+                    "def yedek_goc():",
+                    "    try:",
+                    "        shutil.move(a, b)",
+                    "    except Exception:",
+                    "        return set()",
+                ]
+            ),
+            "TEHLIKELI",
+            "boş set() çağrısı dönüşü",
+        ),
+        (
+            "\n".join(
+                [
+                    "def anahtar_goc():",
+                    "    try:",
+                    "        os.replace(a, b)",
+                    "    except Exception:",
+                    "        return dict()",
+                ]
+            ),
+            "TEHLIKELI",
+            "boş dict() çağrısı dönüşü",
+        ),
     ],
     ids=[
         "tehlikeli",
@@ -475,6 +508,8 @@ def test_KRITIK_muafiyetler_GERCEKTEN_var_ve_gerekceli():
         "break",
         "bos_liste_donus",
         "eksi_bir_donus",
+        "bos_set_cagrisi",
+        "bos_dict_cagrisi",
     ],
 )
 def test_KARSIT_KANIT_siniflandirici_AYIRIYOR(kaynak: str, beklenen: str, aciklama: str):
@@ -523,3 +558,6 @@ def test_KARSIT_KANIT_sabit_OLMAYAN_return_ve_cok_deyimli_govde_SESSIZ_sayilmaz(
     )
     assert tara(yedege_dusus, "<sinav>") == []
     assert tara(loglayan, "<sinav>") == []
+    # Yerleşik çağrı ama ÇALIŞMA ANI bilgisi taşıyor (`set(kalanlar)`) → sabit değil, sessiz sayılmaz.
+    bilgili = yedege_dusus.replace("return yedek(a)", "return set(kalanlar)")
+    assert tara(bilgili, "<sinav>") == []
