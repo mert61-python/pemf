@@ -25,6 +25,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from topoloji import TUM_STM  # noqa: E402  (literal bobin numarası YAZILMAZ)
+
+_STM = sorted(TUM_STM)
+#: Bağımsız inceleme (r1): kapı yalnız `[1, 2]` ile kuruluyordu — kopuş koşulu eski 5-bobin
+#: topolojisine (`range(1, 6)`) dönse de YEŞİL kalıyordu (B-10.42 sınıfı). Kümeler topolojiden türer.
+SEANS_KUMELERI = {"ilk_iki_STM": _STM[:2], "son_STM": _STM[-1:], "son_iki_STM": _STM[-2:]}
+
 
 class _KaydediciDonanim:
     def __init__(self):
@@ -109,13 +116,14 @@ def _durum(db, sid):
         return conn.execute("SELECT session_status FROM treatment_sessions WHERE id=?", (sid,)).fetchone()[0]
 
 
-def test_KRITIK_STM_kopusu_aktif_STM_seansini_ACIL_DURDURUR_ve_KAYDA_yazar(ortam):
+@pytest.mark.parametrize("bobinler", list(SEANS_KUMELERI.values()), ids=list(SEANS_KUMELERI))
+def test_KRITIK_STM_kopusu_aktif_STM_seansini_ACIL_DURDURUR_ve_KAYDA_yazar(ortam, bobinler):
     import event_bus as eb
     from database.treatment_history_db import SEANS_DURUMU_ACIL_DURDURMA
 
     api, db, hw, bildirimler = ortam
     api._register_event_bus_handlers()
-    sid = _aktif_seans_kur(api, db, [1, 2])
+    sid = _aktif_seans_kur(api, db, bobinler)
     assert _durum(db, sid) == "active"  # senaryo: kayıt gerçekten açık
 
     assert eb.publish("hardware.stm.disconnected", {"connected": False}) is True
