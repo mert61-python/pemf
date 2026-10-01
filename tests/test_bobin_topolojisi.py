@@ -149,10 +149,29 @@ def test_KARSIT_KANIT_elle_sayma_kapisi_GERCEKTEN_yakalar():
 # yerine `(8,)`, `[8]`, `(6, 7)` yazılsa (ESP kapsamı daralır ya da yanlış bobine gider) YEŞİL kalıyordu.
 
 
-def _esp_turevli_mi(ifade) -> bool:
+def _esp_adi_mi(d) -> bool:
     import ast
 
-    return "ESP_COIL_IDS" in ast.unparse(ifade)
+    return (isinstance(d, ast.Name) and d.id.lstrip("_") == "ESP_COIL_IDS") or (
+        isinstance(d, ast.Attribute) and d.attr == "ESP_COIL_IDS"
+    )
+
+
+def _esp_turevli_mi(ifade) -> bool:
+    """İZİN LİSTESİ: yalnız `ESP_COIL_IDS` adı ya da `sorted/list/tuple/set(<o ad>)`. 1-B bağımsız inceleme (i4):
+    eskiden `"ESP_COIL_IDS" in ast.unparse(...)` alt-dize denetimiydi — `sorted(ESP_COIL_IDS | {6, 7})` (AI Auto STM
+    bobinlerine MQTT START, FAZ-4 hatası) YEŞİLDİ; birleşim, dilim ve kavrama artık reddedilir."""
+    import ast
+
+    if _esp_adi_mi(ifade):
+        return True
+    return (
+        isinstance(ifade, ast.Call)
+        and getattr(ifade.func, "id", "") in ("sorted", "list", "tuple", "set")
+        and len(ifade.args) == 1
+        and not ifade.keywords
+        and _esp_adi_mi(ifade.args[0])
+    )
 
 
 def _literal_tamsayi_kumesi(ifade) -> bool:
@@ -264,15 +283,31 @@ def test_ACIK_D184_AI_Pro_6_7_MQTT_indeks_bicimi_KALDIRILDI():
         ("apps/backend/servers/ai_router.py", "for _cid in sorted(_api_esp.ESP_COIL_IDS):", "for _cid in (8,):"),
         ("apps/backend/servers/ai_router.py", "for _cid in sorted(_api2.ESP_COIL_IDS):", "for _cid in (6, 7):"),
         ("apps/backend/backend_service.py", "for c in sorted(_ESP_COIL_IDS)", "for c in [8]"),
+        (
+            "apps/backend/servers/ai_router.py",
+            "for _cid in sorted(_api_esp.ESP_COIL_IDS):",
+            "for _cid in sorted(_api_esp.ESP_COIL_IDS | {6, 7}):",
+        ),
+        (
+            "apps/backend/servers/ai_router.py",
+            "for _cid in sorted(_api2.ESP_COIL_IDS):",
+            "for _cid in sorted(_api2.ESP_COIL_IDS)[:1]:",
+        ),
     ],
-    ids=["ai_auto_TEK_ELEMANLI_demet", "ai_teardown_IKI_bobin", "kapanis_LISTE"],
+    ids=[
+        "ai_auto_TEK_ELEMANLI_demet",
+        "ai_teardown_IKI_bobin",
+        "kapanis_LISTE",
+        "ai_auto_BIRLESIM_6_7",
+        "teardown_DILIM",
+    ],
 )
 def test_ARAC_D140_AST_kolu_mutantta_KIRMIZI(dosya, eski, yeni):
     """Öz-denetim: regex kapısının KÖR kaldığı biçimler AST kolunda yakalanır (bellek içi mutant)."""
     import ast
 
     kaynak = (KOK / dosya).read_text(encoding="utf-8")
-    assert kaynak.count(eski) == 1
+    assert kaynak.count(eski) == 1, f"ÇAPA ÇÜRÜDÜ (aparat, kapı değil): {eski!r} {kaynak.count(eski)} kez"
     noktalar = esp_kapsam_noktalari(kaynak.replace(eski, yeni))
     assert [ad for ad, it in noktalar if not _esp_turevli_mi(it)], (
         f"mutant yakalanmadı: {[(a, ast.unparse(i)) for a, i in noktalar]}"
