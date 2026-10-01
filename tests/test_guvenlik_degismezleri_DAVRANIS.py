@@ -192,6 +192,19 @@ def _sahte_istek(yol: str):
     )
 
 
+#: Bobin SÜREN ya da durduran AI uçları. ⚠️ Bağımsız inceleme (r3): kol eskiden var olmayan bir yolu
+#: (`/api/ai/landmark/auto`) deniyordu — bypass parçası `/landmark/` yapılınca gerçek rota
+#: `/api/ai/vision/landmark` dolu kuyrukta bekliyor ama kapı yeşil kalıyordu. Yollar artık GERÇEK rotalar
+#: ve rota tablosunda VAR oldukları ayrıca iddia edilir.
+TEDAVI_UCLARI = ("/api/ai/pro/start", "/api/ai/pro/stop", "/api/ai/ai_pro/frame", "/api/ai/vision/landmark")
+
+
+def test_KRITIK_M32_tedavi_uclari_GERCEK_rotalar(api):
+    rotalar = {getattr(r, "path", None) for r in api.app.routes}
+    eksik = [y for y in TEDAVI_UCLARI if y not in rotalar]
+    assert not eksik, f"M32 kapısı var olmayan yolları deniyor: {eksik} — kapı kör olur"
+
+
 def test_KRITIK_M32_tedavi_uclari_DOLU_kuyrukta_BEKLEMEDEN_gecer(monkeypatch):
     from servers import entitlement as ent
 
@@ -201,7 +214,7 @@ def test_KRITIK_M32_tedavi_uclari_DOLU_kuyrukta_BEKLEMEDEN_gecer(monkeypatch):
         monkeypatch.setattr(ent, "_ai_semaphore", sem)
         monkeypatch.setattr(ent, "TIER_ENFORCED", True)
         monkeypatch.setattr(ent, "AI_QUEUE_MAX_WAIT", 5.0)
-        for yol in ("/api/ai/pro/stop", "/api/ai/ai_pro/frame", "/api/ai/landmark/auto"):
+        for yol in TEDAVI_UCLARI:
             gen = ent.ai_queue_gate(_sahte_istek(yol))
             try:
                 await asyncio.wait_for(gen.__anext__(), 0.5)
