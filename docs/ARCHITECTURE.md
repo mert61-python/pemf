@@ -77,7 +77,7 @@ Bileşen etkileşimi, veri akışı ve güven sınırları. Kod referansları `g
 - **STM disconnect / ESP alarm** → `_emergency_stop_all` (tüm transport'lar).
 - **Açılış mutabakatı** (`backend_service`) — çökme sonrası tüm bobinlere STOP.
 - **Tünel → auth zorla** (`_force_auth_for_tunnel`) — internete kimliksiz erişim engeli.
-- **Backend safety-clamp YOK** (bilinçli, B-1.5) — freq/duty/sıcaklık firmware'de satüre eder.
+- **Backend tedavi safety-clamp'i YOK** (bilinçli, B-1.5; geri eklenmez) — duty'nin üst sınırı yoktur, firmware/timer doyurur. ⚠️ **Protokol-geçerlilik sınırı AYRI ve TAŞIYICIDIR** (`utils/stm32_protocol_limits`: freq 1–25000 Hz, faz 0–360°, ESP freq ≤1000 Hz): firmware aralık dışını NACK'ler; kaldırılırsa bobin sessizce sürülmez (kapı `tests/test_hc_protokol_siniri_TASIYICI.py`).
 
 ## Tek giriş noktası
 

@@ -7,7 +7,7 @@ STM32 bobin komutlarının **tek geçiş noktası** (choke-point). API katmanı 
 ## Dosyalar
 | Dosya | Görev |
 |---|---|
-| `hardware_controller.py` | **`HardwareController`** — STM32 bobin paketlerini kurar/normalize eder ve core kuyruğuna iter. Bellek-içi **7-bobin** durumunu (`STM_BOBIN_SAYISI = 7`) `RLock` altında tutar; **2 Hz keep-alive** (`KEEP_ALIVE_INTERVAL_S = 0.5`) thread'i çalıştırır — firmware'in 1500 ms ölü-adam watchdog'una ~1000 ms pay bırakır, düşürmeyin; **bobin-başı monotonik süre-deadline'ı** (donanım-tarafı güvenlik watchdog'u) uygular; STOP teslimini **garanti eder** (düşen STOP çerçevelerini yeniden gönderir). Sınırlar için [`../utils/stm32_protocol_limits.py`](../utils/README.md) kullanır. |
+| `hardware_controller.py` | **`HardwareController`** — STM32 bobin paketlerini kurar/normalize eder ve core kuyruğuna iter. Bellek-içi **7-bobin** durumunu (`STM_BOBIN_SAYISI = 7`) `RLock` altında tutar; **2 Hz keep-alive** (`KEEP_ALIVE_INTERVAL_S = 0.5`) thread'i çalıştırır — firmware'in 1500 ms ölü-adam watchdog'una ~1000 ms pay bırakır, düşürmeyin; **bobin-başı monotonik süre-deadline'ı** (donanım-tarafı güvenlik watchdog'u) uygular; düşen STOP çerçevelerini `STOP_RESEND_TICKS` tur (≈3 sn) **yeniden göndermeyi DENER**. ⚠️ `stop_all_coils` / `update_coil(start=False)` dönüşü "STOP paketi donanım **kuyruğuna VERİLDİ**" demektir — porta teslim ya da fiziksel teyit DEĞİL (kuyruk alamazsa `False`; gönderici iş parçacığı ölmüşken de `True` dönebilir — B-1.23, açık madde). Sınırlar için [`../utils/stm32_protocol_limits.py`](../utils/README.md) kullanır. |
 
 ## Sistemdeki yeri
 ```
@@ -19,7 +19,8 @@ servers/api_server.py  →  HardwareController  →  HeadlessCore HW kuyruğu  �
 
 ## ⚠️ Dikkat
 - **Süre-deadline ve keep-alive hasta güvenliğidir** — bu davranışları zayıflatma. `emergency_stop` / süre-watchdog ile birlikte katmanlı korumadır.
-- Duty/freq/faz **Python-tarafı satürasyon yok** (bilinçli, B-1.5); firmware sınırda doyurur. Sınır sabitleri `utils/stm32_protocol_limits.py`'de.
+- **Tedavi güvenlik-sınırı (safety clamp) YOK** (bilinçli, B-1.5; Ö.4-Y9 — geri EKLENMEZ): duty'nin üst sınırı yoktur, firmware/timer doyurur.
+- ⚠️ **Protokol-geçerlilik sınırı AYRIDIR ve TAŞIYICIDIR — kaldırmayın:** `update_coil` / `start_all_coils` çağrı yerinde `normalize_frequency_hz` (1–25000 Hz), `normalize_phase_deg` (0–360°) ve `duty_percent_to_ratio` (alt sınır 0) uygulanır (`utils/stm32_protocol_limits.py`). Firmware aralık dışı freq/fazı NACK'ler (`main.c` `RANGE coil=… field=freq|phase`) → sınır kaldırılırsa paket reddedilir ve bobin SESSİZCE sürülmez. ESP yolu (slot 8) ayrıca `normalize_esp_frequency_hz` (≤1000 Hz) kullanır. Kapı: `tests/test_hc_protokol_siniri_TASIYICI.py` (D1.01).
 
 ---
 İlgili: [servers/](../servers/README.md) · [utils/](../utils/README.md) · [firmware/](../../../firmware/README.md) · [mimari](../../../docs/ARCHITECTURE.md)
