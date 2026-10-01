@@ -1,0 +1,124 @@
+# -*- coding: utf-8 -*-
+# Author: mertaygn, cglrgrkn
+"""D1.30 · P4 — watchdog ve termal (STM_EVT) dallarının bobin sıfırlama yayını TEK yardımcıda.
+
+ÖLÇÜLEN (DENETİM-12 §3.1-§3.2 P4): `headless_core._handle_stm_line`'da "Watchdog Timeout" ve
+"STM_EVT" dalları birebir İKİZ 7-bobin sıfırlama bloğu taşıyordu; watchdog kopyası KAPISIZDI
+(bobin 7'yi atlayan mutantta 179/179 yeşil). B-1.18 (D1.73) watchdog sonrası donanım sıfırlamasını
+eklerken bir kopyaya yapılan düzeltme diğerinde kalırdı → önce tek yardımcı.
+
+⚠️ A-47 (sahip, KAPALI KARAR): termal kesme YOK — termal dal yalnız firmware'in (bugün kapalı)
+NTC satırını AYRIŞTIRIR; bu madde o dalın davranışını DEĞİŞTİRMEZ (aşağıdaki A kolu pinler).
+
+A (davranış): satır gerçek `_handle_stm_line`'a verilir; watchdog satırı FIRMWARE KAYNAĞINDAN okunur
+(literal değil). B (yapı): anahtarları sıfırlama şeması VE değerleri sabit-sıfır sözlük modülde TAM
+1 yerde kurulur — ACK ayrıştırmasının aynı şemalı CANLI yükü sayılmaz (öz-denetim kolu).
+"""
+
+from __future__ import annotations
+
+import ast
+import logging
+import re
+from pathlib import Path
+
+import pytest
+from event_bus import EventPriority
+from headless_core import HeadlessCore
+from topoloji import TUM_STM
+
+KOK = Path(__file__).resolve().parents[1]
+MAIN_C = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
+HEADLESS_CORE = KOK / "apps" / "backend" / "headless_core.py"
+SIFIRLAMA_SEMASI = frozenset(
+    {"coil_id", "duty", "duty_cycle", "freq", "frequency", "phase", "duration_min", "running", "pwm_active"}
+)
+#: Termal satır firmware'de `snprintf` biçimi (eşik sayısı çalışma anında basılır) — dal yalnız
+#: "STM_EVT" alt dizesine bakar; mevcut M2 kapısıyla aynı dize.
+STM_EVT_TERMAL = "-> STM_EVT: TERMAL kesme (>=48C) - bobin(ler) durduruldu, sogumada kilitli."
+
+
+class _YakalayanBus:
+    def __init__(self):
+        self.olaylar = []  # (olay, veri, öncelik)
+
+    def publish(self, event_type, data, priority=None, source=None):
+        self.olaylar.append((event_type, data, priority))
+
+
+def _core():
+    c = HeadlessCore.__new__(HeadlessCore)  # yalnız `_handle_stm_line`'ın ihtiyacı alanlar
+    c.logger = logging.getLogger("test-p4")
+    c.event_bus = _YakalayanBus()
+    return c
+
+
+def _firmware_watchdog_satiri() -> str:
+    metin = MAIN_C.read_text(encoding="utf-8", errors="replace")
+    adaylar = re.findall(r'"([^"\n]*Watchdog Timeout[^"\n]*)"', metin)
+    assert len(adaylar) == 1, f"firmware watchdog satırı tekil bulunamadı: {adaylar}"
+    return adaylar[0].replace("\\r", "").replace("\\n", "").strip()
+
+
+@pytest.mark.parametrize(
+    ("kaynak", "olay"),
+    [("watchdog", "hardware.stm.watchdog_timeout"), ("termal", "hardware.stm.thermal_cutoff")],
+)
+def test_P4_A_satir_TUM_STM_bobinlerinin_sifirlamasini_yayinlar(kaynak, olay):
+    satir = _firmware_watchdog_satiri() if kaynak == "watchdog" else STM_EVT_TERMAL
+    c = _core()
+    c._handle_stm_line(satir)
+
+    kritik = [(t, p) for t, _d, p in c.event_bus.olaylar if t == olay]
+    assert kritik == [(olay, EventPriority.CRITICAL)], f"{kaynak}: CRITICAL {olay} tek kez yayınlanmadı: {kritik}"
+    sifirlar = [(d, p) for t, d, p in c.event_bus.olaylar if t == "hardware.stm.coil_update"]
+    assert sorted(d["coil_id"] for d, _p in sifirlar) == sorted(TUM_STM), (
+        f"{kaynak}: sıfırlanan bobinler {sorted(d['coil_id'] for d, _p in sifirlar)} ≠ STM bobinleri {sorted(TUM_STM)}"
+    )
+    for d, p in sifirlar:
+        assert set(d) == SIFIRLAMA_SEMASI, f"{kaynak}: sıfırlama şeması değişti: {sorted(d)}"
+        sifir = {k: v for k, v in d.items() if k != "coil_id"}
+        assert all(v == 0 for v in sifir.values()) and d["running"] is False and d["pwm_active"] is False, (
+            f"{kaynak}: bobin {d['coil_id']} SIFIRLANMADI: {d}"
+        )
+        assert p == EventPriority.HIGH
+
+
+def _sabit_sifir(v: ast.expr) -> bool:
+    return isinstance(v, ast.Constant) and not isinstance(v.value, str) and v.value is not None and v.value == 0
+
+
+def _sifirlama_sozlukleri(kaynak: str) -> list[int]:
+    """Anahtarları sıfırlama şeması VE (coil_id dışındaki) değerleri sabit-sıfır sözlük literallerinin satırları."""
+    satirlar = []
+    for d in ast.walk(ast.parse(kaynak)):
+        if not isinstance(d, ast.Dict) or not all(isinstance(k, ast.Constant) for k in d.keys):
+            continue
+        if {k.value for k in d.keys} != SIFIRLAMA_SEMASI:
+            continue
+        if all(_sabit_sifir(v) for k, v in zip(d.keys, d.values) if k.value != "coil_id"):
+            satirlar.append(d.lineno)
+    return satirlar
+
+
+def test_P4_B_sifirlama_yuku_TEK_yerde_kurulur():
+    satirlar = _sifirlama_sozlukleri(HEADLESS_CORE.read_text(encoding="utf-8"))
+    assert len(satirlar) == 1, (
+        f"bobin sıfırlama yükü headless_core'da {len(satirlar)} yerde kuruluyor (satır {satirlar}) — "
+        "watchdog ve termal dalları `_tum_bobinleri_sifirla_yayinla`'yı paylaşmalı (bir kopyaya yapılan "
+        "düzeltme diğerinde kalır)"
+    )
+
+
+def test_P4_B_ozdenetim_CANLI_yuk_sayilmaz_sifir_yuk_sayilir():
+    canli = (
+        "d = {'coil_id': c, 'duty': duty, 'duty_cycle': duty, 'freq': f, 'frequency': f, 'phase': ph,"
+        " 'duration_min': dk, 'running': r, 'pwm_active': r}\n"
+    )
+    sifir = (
+        "d = {'coil_id': c, 'duty': 0.0, 'duty_cycle': 0.0, 'freq': 0.0, 'frequency': 0.0, 'phase': 0.0,"
+        " 'duration_min': 0, 'running': False, 'pwm_active': False}\n"
+    )
+    assert _sifirlama_sozlukleri(canli) == []
+    assert _sifirlama_sozlukleri(sifir) == [1]
+    assert _sifirlama_sozlukleri(canli + sifir + sifir) == [2, 3]

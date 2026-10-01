@@ -427,6 +427,33 @@ class HeadlessCore:
             return None  # yalniz C (ve/veya X) geldi → tasinacak olcum yok
         return govde
 
+    def _tum_bobinleri_sifirla_yayinla(self) -> None:
+        """Watchdog ve termal (STM_EVT) dallarının ORTAK bobin sıfırlama yayını (P4 · D1.30).
+
+        Her STM bobini için arayüz durumunu sıfırlar (duty/frekans/faz/süre 0, running/pwm_active
+        False). Eskiden iki dalda birebir İKİZ blok vardı ve watchdog kopyası kapısızdı (bobin 7'yi
+        atlayan mutantta 179/179 yeşil) — bir kopyaya yapılan düzeltme diğerinde kalırdı.
+
+        ⚠️ YALNIZ YAYIN: donanım (HardwareController) sıfırlaması B-1.18'in (D1.73) konusudur. Oraya
+        eklenecek her davranış PARAMETREYLE yalnız watchdog dalına açılmalı — termal dalın davranışı
+        sahip kararı olmadan DEĞİŞMEZ (A-47: termal kesme YOK, dal yalnız firmware satırını ayrıştırır)."""
+        for coil_id in range(1, self.STM_COIL_COUNT + 1):
+            self._publish_event(
+                "hardware.stm.coil_update",
+                {
+                    "coil_id": coil_id,
+                    "duty": 0.0,
+                    "duty_cycle": 0.0,
+                    "freq": 0.0,
+                    "frequency": 0.0,
+                    "phase": 0.0,
+                    "duration_min": 0,
+                    "running": False,
+                    "pwm_active": False,
+                },
+                priority=EventPriority.HIGH,
+            )
+
     def _handle_stm_line(
         self,
         decoded: str,
@@ -488,22 +515,7 @@ class HeadlessCore:
                 {"message": decoded},
                 priority=EventPriority.CRITICAL,
             )
-            for coil_id in range(1, self.STM_COIL_COUNT + 1):
-                self._publish_event(
-                    "hardware.stm.coil_update",
-                    {
-                        "coil_id": coil_id,
-                        "duty": 0.0,
-                        "duty_cycle": 0.0,
-                        "freq": 0.0,
-                        "frequency": 0.0,
-                        "phase": 0.0,
-                        "duration_min": 0,
-                        "running": False,
-                        "pwm_active": False,
-                    },
-                    priority=EventPriority.HIGH,
-                )
+            self._tum_bobinleri_sifirla_yayinla()
             return
 
         if "STM_EVT" in decoded:
@@ -518,22 +530,7 @@ class HeadlessCore:
                 {"message": decoded},
                 priority=EventPriority.CRITICAL,
             )
-            for coil_id in range(1, self.STM_COIL_COUNT + 1):
-                self._publish_event(
-                    "hardware.stm.coil_update",
-                    {
-                        "coil_id": coil_id,
-                        "duty": 0.0,
-                        "duty_cycle": 0.0,
-                        "freq": 0.0,
-                        "frequency": 0.0,
-                        "phase": 0.0,
-                        "duration_min": 0,
-                        "running": False,
-                        "pwm_active": False,
-                    },
-                    priority=EventPriority.HIGH,
-                )
+            self._tum_bobinleri_sifirla_yayinla()
             return
 
         if "STM_ERR" in decoded:
