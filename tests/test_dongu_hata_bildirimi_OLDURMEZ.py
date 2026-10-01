@@ -222,23 +222,29 @@ def _genis_try(t: ast.Try) -> bool:
 _GOVDE_ALANLARI = ("body", "orelse", "handlers", "finalbody")
 
 
-def _korumasiz_bildirimler(govde: list[ast.stmt], korunan: bool, isleyicide: bool, bulgu: list) -> None:
-    """Döngü gövdesini İÇ İÇE yürür: bir `except` gövdesinde (isleyicide) olup döngü gövdesi içinde
-    geniş bir `try` GÖVDESİYLE sarılmamış (korunan değil) her günlük çağrısı bulgudur — fırlarsa
-    istisna döngüden çıkar. İç fonksiyon/sınıf ve iç daemon döngüsü atlanır (o kendi başına taranır)."""
-    for st in govde:
+_DONGUYU_BITIREN = (ast.Break, ast.Return, ast.Raise)
+
+
+def _korumasiz_bildirimler(govde: list[ast.stmt], korunan: bool, bulgu: list) -> None:
+    """Döngü gövdesini İÇ İÇE yürür: döngü gövdesi içinde geniş bir `try` GÖVDESİYLE sarılmamış (korunan
+    değil) her günlük çağrısı bulgudur — fırlarsa istisna döngüden çıkar. ⚠️ Bağımsız inceleme (r4):
+    eskiden yalnız `except` gövdeleri taranıyordu; HWSender'ın NORMAL yolundaki (kablo-çıktı dalı)
+    korumasız uyarı görünmüyordu. Muaf: hemen ardından `break`/`return`/`raise` gelen çağrı (döngü zaten
+    çıkıyor). İç fonksiyon/sınıf ve iç daemon döngüsü atlanır (o kendi başına taranır)."""
+    for i, st in enumerate(govde):
         if isinstance(st, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             continue
         if isinstance(st, ast.While) and _sonsuz_mu(st):
             continue
         if isinstance(st, ast.Try):
-            _korumasiz_bildirimler(st.body, korunan or _genis_try(st), isleyicide, bulgu)
+            _korumasiz_bildirimler(st.body, korunan or _genis_try(st), bulgu)
             for h in st.handlers:
-                _korumasiz_bildirimler(h.body, korunan, True, bulgu)
-            _korumasiz_bildirimler(st.orelse, korunan, isleyicide, bulgu)
-            _korumasiz_bildirimler(st.finalbody, korunan, isleyicide, bulgu)
+                _korumasiz_bildirimler(h.body, korunan, bulgu)
+            _korumasiz_bildirimler(st.orelse, korunan, bulgu)
+            _korumasiz_bildirimler(st.finalbody, korunan, bulgu)
             continue
-        if isleyicide and not korunan:
+        sonraki = govde[i + 1] if i + 1 < len(govde) else None
+        if not korunan and not isinstance(sonraki, _DONGUYU_BITIREN):
             for alan, deger in ast.iter_fields(st):
                 if alan in _GOVDE_ALANLARI:
                     continue
@@ -252,7 +258,7 @@ def _korumasiz_bildirimler(govde: list[ast.stmt], korunan: bool, isleyicide: boo
         for alan in ("body", "orelse"):
             alt = getattr(st, alan, None)
             if isinstance(alt, list):
-                _korumasiz_bildirimler(alt, korunan, isleyicide, bulgu)
+                _korumasiz_bildirimler(alt, korunan, bulgu)
 
 
 def _tara(kaynak: str) -> tuple[int, list[tuple[int, list[str]]]]:
@@ -267,7 +273,7 @@ def _tara(kaynak: str) -> tuple[int, list[tuple[int, list[str]]]]:
         if not isinstance(d, ast.While) or not _sonsuz_mu(d):
             continue
         dongu += 1
-        _korumasiz_bildirimler(d.body, False, False, bulgu)
+        _korumasiz_bildirimler(d.body, False, bulgu)
     return dongu, bulgu
 
 
@@ -304,7 +310,7 @@ def test_KRITIK_sevk_edilen_donguler_CIPLAK_logging_KULLANMAZ():
             bulgu.setdefault(rel, []).append(f"{satir}: {cagrilar}")
 
     assert not bulgu, (
-        "Daemon döngüsünün bir `except` bloğu KORUMASIZ günlük çağırıyor — bildirim "
+        "Daemon döngüsünde KORUMASIZ günlük çağrısı (except bloğu ya da normal yol) — bildirim "
         "fırlatırsa döngü ölür:\n"
         + "\n".join(f"  {k}\n    " + "\n    ".join(v) for k, v in sorted(bulgu.items()))
         + "\nÇözüm: `utils.dongu_guvenligi.dongu_hatasini_bildir(...)`"
@@ -442,6 +448,28 @@ def test_KARSIT_KANIT_tarayici_IC_ICE_handleri_ve_DAR_sarmayi_GORUR():
         "                pass\n"
     )
     assert _tara(dar)[1] == [(8, ["logging.exception"])], "DAR sarma koruma sayıldı"
+
+
+def test_KARSIT_KANIT_tarayici_NORMAL_yol_gunlugunu_GORUR_dongu_bitireni_MUAF_tutar():
+    """Bağımsız inceleme (r4): HWSender'ın kablo-çıktı dalı gibi NORMAL yoldaki korumasız uyarı da
+    döngüyü öldürür. Ardından `break` gelen çağrı muaftır (döngü zaten çıkıyor)."""
+    normal = (
+        "def d(self):\n"
+        "    while not self._stop.is_set():\n"
+        "        if not self._port_var():\n"
+        "            self.logger.warning(\"port kayboldu\")\n"
+        "            self._kopus()\n"
+    )
+    assert _tara(normal) == (1, [(4, ["self.logger.warning"])]), _tara(normal)
+    bitiren = (
+        "import logging\n"
+        "def d():\n"
+        "    while _aktif:\n"
+        "        if _tavan_doldu():\n"
+        "            logging.info(\"tavan\")\n"
+        "            break\n"
+    )
+    assert _tara(bitiren) == (1, []), _tara(bitiren)
 
 
 def test_KARSIT_KANIT_dis_GENIS_try_ic_handleri_KORUR():
@@ -601,3 +629,98 @@ def test_KRITIK_GERCEK_keep_alive_dongusu_tick_ve_LOG_hatasinda_YASAR(patlak, mo
         hc._keep_alive_thread.join(timeout=2)
     assert dondu and canli, f"keep-alive tick{' + LOG' if patlak else ''} hatasında ÖLDÜ ({durum.tik - n0} tur)"
     assert lg.cagri >= 1, "hata yolu günlüğe uğramadı — kapı vakumda"
+
+
+@pytest.mark.parametrize("patlak", [False, True], ids=["KONTROL_logger_saglam", "logger_PATLAK"])
+def test_KRITIK_GERCEK_HWSender_kablo_cikinca_LOG_hatasinda_YASAR_ve_kopusu_bildirir(patlak, monkeypatch):
+    """Bağımsız inceleme (r4): HWSender'ın kablo-çıktı dalındaki uyarı durum geçişlerinden ÖNCE ve çıplaktı;
+    günlük fırlatırsa GERÇEK `_hw_sender_worker` ölüyor, kopuş bildirilmiyor (bayat "bağlı"), yeniden bağlanma
+    olmuyor, kuyruktaki STOP dahil komutlar yazılmıyordu (fiziksel güvenlik ağı: firmware ölü-adam 1,5 sn).
+    Sahte olan yalnız taşıma, `headless_core` modülünün `socket`'i ve logger."""
+    import queue
+    import socket as _gercek_socket
+    import threading
+    import time
+    import types
+
+    import headless_core as hcm
+
+    durum = types.SimpleNamespace(port_var=True, baglanti=[], acilis=0)
+
+    class _Conn:
+        port = "COM_TEST"
+
+        def __init__(self):
+            self.is_open = True
+
+        def readline(self):
+            time.sleep(0.02)
+            return b""
+
+        def write(self, _b):
+            pass
+
+        def close(self):
+            self.is_open = False
+
+    class _Tasima:
+        def __init__(self, *a, **k):
+            pass
+
+        def open_and_handshake(self, stop_event=None, on_line=None):
+            durum.acilis += 1
+            return types.SimpleNamespace(serial=_Conn()) if durum.port_var else None
+
+        def close_serial(self, c):
+            c.close()
+
+        def port_hala_var(self, _port):
+            return durum.port_var
+
+    def _soket_yok(*_a, **_k):
+        raise OSError("test: UDP soketi kurulmaz")
+
+    sahte_socket = types.SimpleNamespace(
+        socket=_soket_yok,
+        AF_INET=_gercek_socket.AF_INET,
+        SOCK_DGRAM=_gercek_socket.SOCK_DGRAM,
+        SOL_SOCKET=_gercek_socket.SOL_SOCKET,
+        SO_BROADCAST=_gercek_socket.SO_BROADCAST,
+    )
+    monkeypatch.setattr(hcm, "Stm32SerialTransport", _Tasima)
+    monkeypatch.setattr(hcm, "_PORT_CHECK_S", 0.05)
+    monkeypatch.setattr(hcm, "socket", sahte_socket)
+    monkeypatch.setattr(sys, "__stderr__", io.StringIO())
+
+    lg = _KosulluLogger()
+    core = hcm.HeadlessCore.__new__(hcm.HeadlessCore)
+    core.logger = lg
+    core._hw_sender_stop = threading.Event()
+    core._hw_send_queue = queue.Queue()
+    core._set_stm_connected = lambda v: durum.baglanti.append(v)
+    core._handle_stm_line = lambda *a, **k: None
+
+    def bekle(kosul, sure=5.0):
+        son = time.monotonic() + sure
+        while time.monotonic() < son and not kosul():
+            time.sleep(0.01)
+        return kosul()
+
+    t = threading.Thread(target=core._hw_sender_worker, daemon=True, name="test-HWSender")
+    t.start()
+    try:
+        assert bekle(lambda: True in durum.baglanti and lg.cagri >= 1), f"aparat: STM bağlanmadı {durum}"
+        time.sleep(0.2)
+        assert t.is_alive(), "aparat: HWSender döngü öncesinde öldü"
+        if patlak:
+            lg.patlat.set()
+        durum.port_var = False  # kablo çekildi
+        bildirildi = bekle(lambda: durum.baglanti[-1] is False, 3.0)
+        time.sleep(0.3)
+        canli = t.is_alive()
+    finally:
+        lg.patlat.clear()
+        core._hw_sender_stop.set()
+        t.join(3)
+    assert canli, f"HWSender kablo-çıktı dalında ÖLDÜ (günlük hatası) — {durum}"
+    assert bildirildi, f"kablo çekildi ama kopuş BİLDİRİLMEDİ (bayat 'bağlı') — {durum}"

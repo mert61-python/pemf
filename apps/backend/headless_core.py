@@ -691,10 +691,10 @@ class HeadlessCore:
             if _conn is not None and (now - last_port_check > _PORT_CHECK_S):
                 last_port_check = now
                 if not transport.port_hala_var(getattr(_conn, "port", None)):
-                    self.logger.warning(
-                        "[STM32] Seri port kayboldu (%s) → bağlantı düşürülüyor, bobinler çevrimdışı.",
-                        getattr(_conn, "port", "?"),
-                    )
+                    # ⚠️ D1.19 inceleme (r4): ÖNCE durum geçişleri, SONRA bildirim — ve bildirim döngüyü
+                    # öldüremez. Eskiden çıplak uyarı geçişlerden önceydi: fırlatırsa HWSender ölür, kopuş
+                    # bildirilmez (bayat "bağlı"), yeniden bağlanma olmaz, kuyruktaki STOP yazılmazdı.
+                    _kaybolan_port = getattr(_conn, "port", "?")
                     if baglanti.aktif() is _conn:
                         baglanti.gecersizle()
                     self._set_stm_connected(False)
@@ -705,6 +705,13 @@ class HeadlessCore:
                     with payload_lock:
                         last_payload[0] = None  # kopuk hatta BAYAT paketi tekrar oynatma
                     _conn = None
+                    dongu_hatasini_bildir(
+                        "[STM32] Seri port kayboldu (%s) → bağlantı düşürülüyor, bobinler çevrimdışı.",
+                        _kaybolan_port,
+                        logger=self.logger,
+                        seviye=logging.WARNING,
+                        exc_info=False,
+                    )
 
             _reconnecting = reconnect_thread is not None and reconnect_thread.is_alive()
             _kopuk = _conn is None or not _conn.is_open
