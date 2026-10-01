@@ -232,3 +232,89 @@ def test_ARAC_c_parite_denetleyici_mutantta_KIRMIZI(eski, yeni):
     assert s3.count(eski) == 1
     with pytest.raises(AssertionError):
         s3_parite_denetle(s3.replace(eski, yeni))
+
+
+# ── 1-B bağımsız inceleme (i3): EYLEM kapısı — koşul değil, durdurma DEYİMİ ─────────────────────────────
+#
+# (a)/(b) kolları yalnız `if` İFADELERİNİ pinliyordu: Y40 termal dalındaki `coil->stop();` ya da 8266 süreli
+# daldaki `stop();` yoruma alınınca (karşılaştırma ve kilit yerinde, bobin DURMUYOR) 29 ESP kapı dosyası 264/264
+# YEŞİLDİ; `_pwmActive && _pwmDuration > 0` dış koşulu da hiçbir testte kalmamıştı. Artık dengeli küme
+# ayrıştırıcıyla gövdelerde durdurma deyimi ve döngüden çağrı aranır.
+
+
+def _govde(soy: str, desen: str, bas: int = 0) -> tuple[str, int]:
+    """`desen` (sonu `{`) ile başlayan ilk bloğun gövdesi ve gövde başı dizini (yorumsuz metinde)."""
+    m = re.compile(desen).search(soy, bas)
+    assert m, f"blok bulunamadı: {desen}"
+    ac = m.end() - 1
+    assert soy[ac] == "{", desen
+    return soy[ac + 1 : _eslesen_kapanis(soy, ac, "{", "}")], ac + 1
+
+
+def _deyim_var(govde: str, deyim: str) -> bool:
+    return re.search(r"(?:^|[;{}\s])" + re.escape(deyim), govde) is not None
+
+
+def termal_eylem_denetle(ino: str) -> None:
+    soy = c_soy(ino)
+    sensor, _ = _govde(soy, r"if\s*\(\s*td\.temp_sensor_ok\s*\)\s*\{")
+    termal, _ = _govde(sensor, r"if\s*\(\s*td\.tempObject\s*>=\s*TERMAL_KESME_C\s*\)\s*\{")
+    aktif, _ = _govde(termal, r"if\s*\(\s*coil->isActive\(\)\s*\)\s*\{")
+    assert _deyim_var(aktif, "coil->stop();"), "Y40 termal dalında bobini DURDURAN `coil->stop();` (yorum dışı) YOK"
+    assert _deyim_var(termal, "g_thermalLock = true;"), "Y40 termal kilidi (`g_thermalLock = true;`) YOK"
+
+
+def sureli_eylem_denetle(s3: str, e8: str) -> None:
+    e8s, s3s = c_soy(e8), c_soy(s3)
+    kontrol, _ = _govde(e8s, r"void\s+CoilController::_checkPWMDuration\s*\(\s*\)\s*\{")
+    dis, _ = _govde(kontrol, r"if\s*\(\s*_pwmActive\s*&&\s*_pwmDuration\s*>\s*0\s*\)\s*\{")
+    sure, _ = _govde(
+        dis, r"if\s*\(\s*safeMillisDiff\(\s*millis\(\)\s*,\s*_pwmStartTime\s*\)\s*>=\s*_pwmDuration\s*\)\s*\{"
+    )
+    assert _deyim_var(sure, "stop();"), "8266 süreli dalında `stop();` (yorum dışı) YOK — süre dolunca bobin durmaz"
+    guncelle, _ = _govde(e8s, r"void\s+CoilController::update\s*\(\s*\)\s*\{")
+    assert _deyim_var(guncelle, "_checkPWMDuration();"), "8266 update() süre denetimini ÇAĞIRMIYOR"
+    sure3, _ = _govde(
+        s3s,
+        r"if\s*\(\s*_active\s*&&\s*_hasDuration\s*&&\s*\(\s*millis\(\)\s*-\s*_startTime\s*\)\s*>=\s*_duration\s*\)\s*\{",
+    )
+    assert _deyim_var(sure3, "_stopPWM();"), "S3 süreli dalında `_stopPWM();` (yorum dışı) YOK"
+
+
+def test_KRITIK_Y40_termal_kesme_EYLEMI_coil_stop():
+    termal_eylem_denetle(_oku(_INO))
+
+
+def test_KRITIK_sureli_durma_EYLEMI_8266_ve_S3():
+    sureli_eylem_denetle(_oku(S3 / "CoilController.cpp"), _oku(E8 / "CoilController.cpp"))
+
+
+@pytest.mark.parametrize(
+    ("dosya", "eski", "yeni"),
+    [
+        ("ino", "                    coil->stop();\n", "                    // coil->stop();\n"),
+        ("ino", "                g_thermalLock = true;\n", "                // g_thermalLock = true;\n"),
+        (
+            "e8",
+            "            stop();  // stop() içinde EEPROM'a kaydedilir",
+            "            // stop();  // stop() içinde EEPROM'a kaydedilir",
+        ),
+        ("e8", "    _checkPWMDuration();\n", "    // _checkPWMDuration();\n"),
+        ("s3", 'durduruluyor");\n        _stopPWM();', 'durduruluyor");\n        // _stopPWM();'),
+    ],
+    ids=[
+        "termal_stop_YORUM",
+        "termal_kilit_YORUM",
+        "8266_sure_stop_YORUM",
+        "8266_update_cagri_YORUM",
+        "s3_sure_stop_YORUM",
+    ],
+)
+def test_ARAC_eylem_denetleyicisi_mutantta_KIRMIZI(dosya, eski, yeni):
+    kaynak = {"ino": _oku(_INO), "e8": _oku(E8 / "CoilController.cpp"), "s3": _oku(S3 / "CoilController.cpp")}
+    metin = kaynak[dosya].replace("\r\n", "\n")
+    assert metin.count(eski) == 1, f"ÇAPA ÇÜRÜDÜ (kapı değil aparat): {eski!r} {metin.count(eski)} kez"
+    kaynak[dosya] = metin.replace(eski, yeni)
+    with pytest.raises(AssertionError) as hata:
+        termal_eylem_denetle(kaynak["ino"]) if dosya == "ino" else sureli_eylem_denetle(kaynak["s3"], kaynak["e8"])
+    assert "blok bulunamadı" not in str(hata.value), f"mutant bloğu bozdu, eylem denetimi değil: {hata.value}"
