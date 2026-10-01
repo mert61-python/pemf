@@ -23,6 +23,8 @@ SÖZLEŞME (üç parça):
 
 ⚠️ BU İŞ GÜVENLİK LİMİTİ İŞİ DEĞİLDİR: backend'e freq/duty clamp'i EKLENMEZ (sahip kararı,
 pemf-production-readiness — geri ekleme YASAK). Yalnız görünürlük + kayıt doğruluğu.
+⚠️ D1.10 (B-10.199): yukarıdaki cümle bir KİLİT DEĞİLDİR (docstring; clamp mutantlarında bu dosya
+yeşil kalıyordu). Ö.4-Y9'un DAVRANIŞ kilidi: tests/test_y9_duty_tavani_GERI_EKLENMEZ.py.
 """
 
 from __future__ import annotations

@@ -106,3 +106,91 @@ def test_KRITIK_seans_baslat_duty_PAKETE_ve_KOSU_KAYDINA_aynen_gider(seans_ortam
     assert kayit == [(bobin, pytest.approx(duty))], (
         f"koşu kaydı {kayit!r} — kaydedilen doz istenen/uygulanan dozdan farklı (kategori 1)"
     )
+
+
+# ── D1.10 · B-10.199 (D1.06 ile BİRLEŞİK kapı — orkestratör notu) — ESP yayın yolu ────────────
+# Y9'un "kilidi" eskiden `test_nack_gorunurlugu.py`'nin docstring CÜMLESİYDİ (test değil): ESP
+# yayın yoluna `min(duty, 50)` eklenince süit YEŞİL kalıyordu. Ayrıca Ö.4-Y9'un ikinci yarısı:
+# `normalize_esp_frequency_hz` (≤1000 Hz) TAŞIYICIDIR — 8266 1000 Hz üstünü REDDEDER, kaldırılırsa
+# ESP bobini sessizce ölür. ESP slotunun bugün donanımı yok (PEMF_ESP_ENABLED=0) ama kod canlı
+# (Ö.4-Y7); kapı ESP alt sistemini AÇIK kurar ve yayını KAYITÇIYA yönlendirir (ağ yok).
+
+
+@pytest.fixture
+def esp_ortami(seans_ortami, monkeypatch):
+    from servers import api_server as api
+    from topoloji import esp_yolu_gerekir
+
+    esp_yolu_gerekir()
+    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
+    monkeypatch.setattr(api, "_broker_reachable", lambda *a, **k: False)  # 127.0.0.1:1883 sondası YOK
+    monkeypatch.setattr(api, "_push_notification", lambda *a, **k: None)
+    yayinlar: list = []
+
+    def _kaydet(topic, payload):
+        yayinlar.append((topic, dict(payload)))
+        return False  # ack-bekçisi DOĞMAZ (teste sızmaz)
+
+    monkeypatch.setattr(api, "_mqtt_publish", _kaydet)
+    istemci, db, _hc = seans_ortami
+    return istemci, db, yayinlar
+
+
+def _baslat_yuku(yayinlar, bobin, sure: float = 3.0):
+    import time as _t
+
+    bitis = _t.monotonic() + sure
+    while _t.monotonic() < bitis:  # seans yolu yayını ARKA PLAN iş parçacığında yapar
+        for t, p in yayinlar:
+            if t == f"pemf/coil/{bobin}/control" and p.get("command") == "start":
+                return p
+        _t.sleep(0.02)
+    raise AssertionError(f"bobin {bobin} için START yayını DENENMEDİ: {yayinlar!r}")
+
+
+def test_KRITIK_ESP_tekil_kontrol_duty_AYNEN_frekans_TASIYICI_sinirda(esp_ortami):
+    from topoloji import ESP_BOBIN
+
+    istemci, _db, yayinlar = esp_ortami
+    r = istemci.post(
+        f"/api/coil/{ESP_BOBIN}/control",
+        json={"freq": 5000.0, "duty": 90.0, "phase": 45.0, "duration": 1, "start": True},
+    )
+    assert r.status_code == 200, r.text[:300]
+    yuk = _baslat_yuku(yayinlar, ESP_BOBIN)
+    assert yuk["duty"] == pytest.approx(90.0), f"ESP yayınında duty {yuk['duty']} — backend tavanı (Ö.4-Y9)"
+    assert yuk["freq"] == pytest.approx(1000.0), (
+        f"ESP yayınında freq {yuk['freq']} — taşıyıcı ESP protokol sınırı (normalize_esp_frequency_hz) "
+        "kaldırılmış: 8266 1000 Hz üstünü REDDEDER, bobin sessizce sürülmez"
+    )
+
+
+def test_KRITIK_ESP_seans_yolu_duty_AYNEN_frekans_TASIYICI_ve_KAYIT_ayni(esp_ortami):
+    from topoloji import ESP_BOBIN
+
+    istemci, db, yayinlar = esp_ortami
+    r = istemci.post(
+        "/api/session/start",
+        json={
+            "mode": "Manuel",
+            "frequency": 5000,
+            "duty": 90,
+            "phase": 0,
+            "intensity": 0.0,
+            "duration_minutes": 5,
+            "coil_ids": [ESP_BOBIN],
+            "patient_name": "Y9EspKapisi",
+        },
+    )
+    assert r.status_code == 200, r.text[:300]
+    yuk = _baslat_yuku(yayinlar, ESP_BOBIN)
+    assert yuk["duty"] == pytest.approx(90.0), f"seans ESP yayınında duty {yuk['duty']} (Ö.4-Y9)"
+    assert yuk["freq"] == pytest.approx(1000.0), f"seans ESP yayınında freq {yuk['freq']} (taşıyıcı sınır)"
+    with db._get_connection() as conn:
+        kayit = [
+            tuple(s)
+            for s in conn.execute("SELECT coil_id, duty_percent, frequency_hz FROM session_coil_runs").fetchall()
+        ]
+    assert kayit == [(ESP_BOBIN, pytest.approx(90.0), pytest.approx(1000.0))], (
+        f"ESP koşu kaydı {kayit!r} — kayıt, ESP'ye GİDEN değerle aynı olmalı"
+    )
