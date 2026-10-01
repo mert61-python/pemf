@@ -336,6 +336,65 @@ def test_KRITIK_c_A23_arastirma_esigi_degisince_KEDI_surusu_DEGISMEZ(kare_ucu, m
     )
 
 
+# A-23 BAĞIMLILIK (1-B inceleme i6): yukarıdaki iki kol MODÜL NİTELİĞİNİ yamar — öteki eşiğin DEĞER KOPYASI
+# (`from servers.ai_pro_hedef import MIN_GUVEN as _X`, içe aktarma anında bağlanır) yamadan etkilenmez ve
+# `conf >= max(_MIN_RELIABILITY, _X)` kararı iki kolda da YEŞİLDİ; kaynakta MIN_GUVEN 0,5 olunca kedi eşiği de
+# sessizce 0,5 olurdu. Bağımlılık AST'de ölçülür: (1) bir modül ötekinin eşiğine ad/nitelik/içe aktarma/getattr
+# dizesiyle HİÇ dokunmaz; (2) kendi eşiği karşılaştırmalarda ÇIPLAK ad olarak durur (ifade içine sarılmaz);
+# (3) karar yerlerinin sayısı düşmez (eşik başka bir ada taşınıp karşılaştırma oradan yapılamaz).
+_ESIK_MODULLERI = (
+    ("apps/backend/servers/ai_router.py", "_MIN_RELIABILITY", "MIN_GUVEN", 2),
+    ("apps/backend/servers/ai_pro_hedef.py", "MIN_GUVEN", "_MIN_RELIABILITY", 1),
+)
+
+
+def esik_bagimlilik_ihlalleri(kaynak: str, kendi: str, oteki: str, asgari_karar: int) -> list[str]:
+    agac = ast.parse(kaynak)
+    ihlal, karar = [], 0
+    for n in ast.walk(agac):
+        if isinstance(n, (ast.ImportFrom, ast.Import)) and any(a.name.split(".")[-1] == oteki for a in n.names):
+            ihlal.append(f"satır {n.lineno}: öteki eşik `{oteki}` İÇE AKTARILIYOR (değer kopyası)")
+        elif isinstance(n, ast.Name) and n.id == oteki:
+            ihlal.append(f"satır {n.lineno}: öteki eşik `{oteki}` adıyla okunuyor")
+        elif isinstance(n, ast.Attribute) and n.attr == oteki:
+            ihlal.append(f"satır {n.lineno}: öteki eşik `.{oteki}` niteliğiyle okunuyor")
+        elif isinstance(n, ast.Constant) and n.value == oteki:
+            ihlal.append(f"satır {n.lineno}: öteki eşik `{oteki!r}` dizesiyle (getattr) okunuyor")
+        elif isinstance(n, ast.Compare):
+            for t in (n.left, *n.comparators):
+                if isinstance(t, ast.Name) and t.id == kendi:
+                    karar += 1
+                elif any(isinstance(x, ast.Name) and x.id == kendi for x in ast.walk(t)):
+                    ihlal.append(f"satır {n.lineno}: `{kendi}` karşılaştırmada bir İFADEYE sarılı ({ast.unparse(t)})")
+    if karar < asgari_karar:
+        ihlal.append(f"`{kendi}` ile çıplak karşılaştırma {karar} < {asgari_karar} — karar yeri başka eşiğe taşınmış")
+    return ihlal
+
+
+@pytest.mark.parametrize(("yol", "kendi", "oteki", "asgari"), _ESIK_MODULLERI, ids=["kedi", "arastirma"])
+def test_KRITIK_c_A23_esik_BAGIMLILIGI_yok_karar_CIPLAK_esikle(yol, kendi, oteki, asgari):
+    assert esik_bagimlilik_ihlalleri((KOK / yol).read_text(encoding="utf-8"), kendi, oteki, asgari) == []
+
+
+_A23_DOGRU = "ok = conf >= _MIN_RELIABILITY\nok2 = rel >= _MIN_RELIABILITY\n"
+
+
+@pytest.mark.parametrize(
+    "mutant",
+    [
+        "from servers.ai_pro_hedef import MIN_GUVEN as _ARASTIRMA_ESIGI\n"
+        "ok = conf >= max(_MIN_RELIABILITY, _ARASTIRMA_ESIGI)\nok2 = rel >= _MIN_RELIABILITY\n",
+        "import servers.ai_pro_hedef as h\nok = conf >= _MIN_RELIABILITY\nok2 = rel >= max(_MIN_RELIABILITY, h.MIN_GUVEN)\n",
+        "ok = conf >= _MIN_RELIABILITY\nok2 = rel >= getattr(h, 'MIN_GUVEN')\n",
+        "_ESIK = 0.5\nok = conf >= _ESIK\nok2 = rel >= _MIN_RELIABILITY\n",
+    ],
+    ids=["ice_aktarma_kopyasi_max", "nitelik_max", "getattr_dizesi", "karar_baska_esige_tasindi"],
+)
+def test_ARAC_A23_bagimlilik_denetleyicisi_mutantta_KIRMIZI(mutant):
+    assert esik_bagimlilik_ihlalleri(mutant, "_MIN_RELIABILITY", "MIN_GUVEN", 2)
+    assert esik_bagimlilik_ihlalleri(_A23_DOGRU, "_MIN_RELIABILITY", "MIN_GUVEN", 2) == []
+
+
 # ── (d) :8100 kare ölçüsü ─────────────────────────────────────────────────────────
 
 
