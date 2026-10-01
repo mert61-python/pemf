@@ -228,6 +228,31 @@ def test_KRITIK_pending_blogu_duty_tickI_YENI_periyoda_olcekler(src):
         "yeniden olcekleme icin ESKI tpp saklanmiyor → yalniz klemplemek etki (b)'yi (ilk 500 ms'de "
         "4,78x doz asimi) COZMEZ; oran korunmalidir."
     )
+    # ⚠️ D1.27 (B-10.37): yukarıdaki iki iddia ölçekleme ATAMASI silinip `eski_tpp` bildirimi ve `if` kalınca
+    # YEŞİL kalıyordu (klemp satırları da `g_duty_ticks` içeriyor). Kapı gerçek atamaya pinli.
+    assert olcekleme_kodu_var(FW.read_text(encoding="utf-8", errors="replace")), (
+        "pending blogunda `g_duty_ticks[i] = …g_duty_ticks[i] / eski_tpp … * g_tpp[i]` ORAN-KORUYAN atamasi "
+        "(yorum disi) YOK → frekans artisinda duty orani korunmaz"
+    )
+
+
+_OLCEKLEME = re.compile(
+    r"g_duty_ticks\[i\]\s*=\s*\(\s*int32_t\s*\)\s*\(\s*\(\s*\(\s*float\s*\)\s*g_duty_ticks\[i\]\s*/\s*"
+    r"\(\s*float\s*\)\s*eski_tpp\s*\)\s*\*\s*\(\s*float\s*\)\s*g_tpp\[i\]\s*\)\s*;"
+)
+
+
+def olcekleme_kodu_var(fw_metni: str) -> bool:
+    """[FIX-1c] ölçekleme KODU (yorum etiketi değil) `pending` bloğunda var mı — YORUMU SOYULMUŞ metinde (D1.24/D1.27)."""
+    from c_soyucu import c_soy
+
+    soy = c_soy(fw_metni)
+    try:
+        bas = soy.index("if (g_shadow.pending)")
+        son = soy.index("if (period_reset)", bas)
+    except ValueError:
+        return False
+    return bool(_OLCEKLEME.search(soy[bas:son]))
 
 
 if __name__ == "__main__":
@@ -251,8 +276,11 @@ def test_TEZGAH_DOGRULAMASI_UYARISI_sessizce_KAYBOLAMAZ():
     kalmaz) — yani belgeyi gereksiz yere kilitlemez.
     """
     fw = FW.read_text(encoding="utf-8", errors="replace")
-    if "[FIX-1c]" not in fw:
-        pytest.skip("firmware duzeltmesi kaldirilmis → tezgah uyarisinin konusu kalmadi")
+    # ⚠️ D1.24 (B-10.207): atlama koşulu eskiden YORUM ETİKETİNE (`"[FIX-1c]" in fw`) bakıyordu — firmware'e dokunan
+    # bir düzeltme etiketi silince (kod yerinde kalsa da) bu kapı SESSİZCE atlanıyor, tezgâh uyarısı belgeden
+    # düşebiliyordu. Artık koşul ölçekleme KODUNUN kendisi (yorum dışı). Meta-kapı: aşağıda (AST).
+    if not olcekleme_kodu_var(fw):
+        pytest.skip("firmware duzeltmesi (olcekleme KODU) kaldirilmis → tezgah uyarisinin konusu kalmadi")
 
     belge = Path(__file__).resolve().parent.parent / "docs" / "VERIFICATION.md"
     assert belge.exists(), "docs/VERIFICATION.md YOK"
@@ -273,4 +301,40 @@ def test_TEZGAH_DOGRULAMASI_UYARISI_sessizce_KAYBOLAMAZ():
         f"docs/VERIFICATION.md'de tezgah dogrulama prosedurunun parcalari EKSIK: {eksik}. "
         "Bu uyari sessizce kaybolursa bir sonraki gelistirici yesil suiti 'dogrulanmis' sanip "
         "tibbi cihazi tezgah olcumu olmadan yayinlar."
+    )
+
+
+def test_KRITIK_D124_tezgah_kapisinin_atlama_kosulu_YORUM_ETIKETINE_bagli_DEGIL():
+    """Meta-kapı (D1.24): `test_TEZGAH_DOGRULAMASI_UYARISI_sessizce_KAYBOLAMAZ`ın atlama koşulu `olcekleme_kodu_var`
+    çağrısıdır; `"[FIX-1c]" in …` gibi bir METİN karşılaştırmasına geri dönerse KIRMIZI."""
+    import ast
+
+    agac = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    fn = next(
+        n
+        for n in ast.walk(agac)
+        if isinstance(n, ast.FunctionDef) and n.name == "test_TEZGAH_DOGRULAMASI_UYARISI_sessizce_KAYBOLAMAZ"
+    )
+    kosullar = [
+        n.test
+        for n in ast.walk(fn)
+        if isinstance(n, ast.If)
+        and any(isinstance(c, ast.Call) and getattr(c.func, "attr", "") == "skip" for c in ast.walk(n))
+    ]
+    assert kosullar, "tezgâh kapısında atlama dalı bulunamadı (yapı değişti)"
+    for k in kosullar:
+        metin = ast.unparse(k)
+        assert "olcekleme_kodu_var(" in metin and "[FIX-1c]" not in metin, (
+            f"atlama koşulu kod yerine etikete bakıyor: {metin}"
+        )
+
+
+def test_ARAC_D124_etiket_silinse_de_KOD_gorulur_kod_silinince_gorulmez():
+    fw = FW.read_text(encoding="utf-8", errors="replace")
+    assert olcekleme_kodu_var(fw)
+    assert olcekleme_kodu_var(fw.replace("[FIX-1c]", "[ETIKET-YOK]")), "etiket silinince kod 'yok' sayıldı"
+    m = _OLCEKLEME.search(fw)
+    assert m, "aparat: ölçekleme ataması ham metinde bulunamadı"
+    assert not olcekleme_kodu_var(fw[: m.start()] + "/* " + fw[m.start() : m.end()] + " */" + fw[m.end() :]), (
+        "yoruma alınmış atama KOD sayıldı"
     )
