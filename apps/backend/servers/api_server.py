@@ -16,7 +16,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.gzip import GZipMiddleware
 from utils.path_utils import get_app_version, get_build_id  # audit B-8.1: tek versiyon kaynağı
 
@@ -1724,6 +1724,9 @@ class AutoPresetPayload(BaseModel):
 
 
 class SessionStartPayload(BaseModel):
+    # D1.99 (S-1.6): NaN/Infinity 422 — eskiden koşu kaydına inf yazıp detay ucunu kalıcı 500 yapıyor, NaN WS'i bozuyordu.
+    model_config = ConfigDict(allow_inf_nan=False)
+
     patient_id: str = ""
     patient_name: str = ""
     operator_name: str = ""  # denetim izi — seansı başlatan operatör (audit P1)
@@ -1754,6 +1757,8 @@ class SessionStartPayload(BaseModel):
 # anlamsizdir ve 422 ile geri cevrilir. (Seans modeli zaten `Field(ge=1)` ile dogruluyordu; bobin
 # yolu bu korumadan yoksundu.)
 class CoilControlPayload(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)  # D1.99 (S-1.6): NaN/Infinity 422
+
     freq: float = 50.0
     duty: float = 25.0
     phase: float = 0.0
@@ -1777,6 +1782,8 @@ class SurusKipiPayload(BaseModel):
 
 
 class BatchCoilPayload(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)  # D1.99 (S-1.6): NaN/Infinity 422
+
     coil_ids: list[int]  # e.g. [1,2,3]
     freq: float = 50.0
     duty: float = 25.0
@@ -1808,17 +1815,22 @@ def _yeni_seans_muhru() -> str:
         return f"react_{int(time.time() * 1000)}_{_seans_muhru_sayac}"
 
 
-def _surus_parametrelerini_dogrula_422(freq, duty, phase, duration_dk, duration_s=None) -> None:
+def _surus_parametrelerini_dogrula_422(freq, duty, phase, duration_dk, duration_s=None) -> dict:
     """D1.95 (B-1.13 · B-1.16): donanım paketine SIĞMAYAN START parametresi → 422; bobin durumu ve deadline DEĞİŞMEZ.
 
     ⚠️ Eskiden taşan süre (`duration` ~10**309 sn) ve duty (≥ 3,4e40 %) durum YAZILDIKTAN SONRA patlıyordu: biri
     bobini deadline'sız (süresiz) enerjili bırakıp 500 dönüyor, öteki sonraki HER paketi (STOP dahil) düşürüyordu.
     `HardwareController` da aynı yardımcıyla reddeder (False); uçta 422 verilir ki çağıran "donanım reddetti"
-    (503) ile "girdi geçersiz"i ayırt edebilsin. Duty/frekans ÜST sınırı EKLENMEZ (Ö.4-Y9)."""
+    (503) ile "girdi geçersiz"i ayırt edebilsin. Duty/frekans ÜST sınırı EKLENMEZ (Ö.4-Y9).
+
+    D1.99 (B-1.9 · S-1.2): dönüş = donanıma GİDECEK (normalize) değerler. `HardwareController.update_coil` AYNI saf
+    fonksiyonu uygular; koşu kaydı ve seans kartı bu değeri yazar (30000 Hz istenip 25000 sürülürken kayıt 30000
+    diyordu). `update_coil`'in bool sözleşmesi bilerek DEĞİŞTİRİLMEDİ (plan C1-20: truthiness bekleyen çağıranlar
+    ve sahte donanımlar)."""
     from controllers.hardware_controller import ParametreGecersiz, surus_parametrelerini_hazirla
 
     try:
-        surus_parametrelerini_hazirla(freq, duty, phase, duration_dk, duration_s)
+        return surus_parametrelerini_hazirla(freq, duty, phase, duration_dk, duration_s)
     except ParametreGecersiz as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -2647,8 +2659,9 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     _sifir_hz = bool(payload.start) and sifir_hz_durdurma_mi(payload.freq)
     if _sifir_hz:
         payload.start = False
-    if payload.start:  # D1.95: taşan girdi durum yazılmadan 422
-        _surus_parametrelerini_dogrula_422(
+    _uyg: dict = {}
+    if payload.start:  # D1.95: taşan girdi durum yazılmadan 422 · D1.99: kayıt GİDEN değeri yazar
+        _uyg = _surus_parametrelerini_dogrula_422(
             payload.freq,
             payload.duty,
             payload.phase,
@@ -2682,7 +2695,7 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
         _stm_kabul = bool(_stm_sonuc)
         if payload.start:
             if _stm_kabul:
-                _begin_coil_run(coil_id, payload.freq, payload.duty, payload.phase, None, "stm")
+                _begin_coil_run(coil_id, _uyg["freq"], _uyg["duty_yuzde"], _uyg["faz"], None, "stm")  # D1.99
         else:
             _finish_coil_run(coil_id)
         _stm_yanit = {
@@ -2819,8 +2832,9 @@ async def control_batch_coils(payload: BatchCoilPayload):
     _sifir_hz = bool(payload.start) and sifir_hz_durdurma_mi(payload.freq)
     if _sifir_hz:
         payload.start = False
-    if payload.start:  # D1.95: taşan girdi HİÇBİR bobin sürülmeden 422
-        _surus_parametrelerini_dogrula_422(
+    _b_uyg: dict = {}
+    if payload.start:  # D1.95: taşan girdi HİÇBİR bobin sürülmeden 422 · D1.99: kayıt GİDEN değeri yazar
+        _b_uyg = _surus_parametrelerini_dogrula_422(
             payload.freq,
             payload.duty,
             payload.phase,
@@ -2865,7 +2879,7 @@ async def control_batch_coils(payload: BatchCoilPayload):
             _b_stm_kabul = bool(_b_stm_sonuc)
             if payload.start:
                 if _b_stm_kabul:
-                    _begin_coil_run(coil_id, payload.freq, payload.duty, payload.phase, None, "stm")
+                    _begin_coil_run(coil_id, _b_uyg["freq"], _b_uyg["duty_yuzde"], _b_uyg["faz"], None, "stm")  # D1.99
             else:
                 _finish_coil_run(coil_id)
             results.append(
@@ -2943,7 +2957,9 @@ async def start_session(payload: SessionStartPayload, request: Request):
 
     _operator_kimligi = cozumlenmis_operator(request, payload.operator_email)
     # D1.95 (B-1.13 · B-1.16): taşan parametre seans KURULMADAN 422 (eskiden bobin başına patlayıp seansı yarım bırakırdı).
-    _surus_parametrelerini_dogrula_422(payload.frequency, payload.duty, payload.phase, payload.duration_minutes)
+    _s_uyg = _surus_parametrelerini_dogrula_422(
+        payload.frequency, payload.duty, payload.phase, payload.duration_minutes
+    )
     # Derinlemesine savunma (Pydantic max_length=8 sinirda zaten reddeder): tekrarlari at ve
     # gecerli bobin araligina (1-8) filtrele → /api/coil/batch'teki `_seen[:8]` deseniyle ayni.
     _seen_coils = []
@@ -3302,7 +3318,8 @@ async def start_session(payload: SessionStartPayload, request: Request):
                 kabul.append(coil_id)
                 # ⚠️ KOŞU KAYDI YALNIZ KABULDE: reddedilen bobin için satır açmak, hiç
                 # uygulanmamış bir dozu tıbbi kayda yazmak olurdu.
-                _begin_coil_run(coil_id, payload.frequency, payload.duty, payload.phase, payload.intensity, "stm")
+                # D1.99 (S-1.2): GİDEN (normalize) değer — update_coil aynı `surus_parametrelerini_hazirla`yı uygular.
+                _begin_coil_run(coil_id, _s_uyg["freq"], _s_uyg["duty_yuzde"], _s_uyg["faz"], payload.intensity, "stm")
             else:
                 logging.getLogger(__name__).error("Seans: bobin %s komutu REDDEDILDI (surulmedi).", coil_id)
         return kabul
@@ -3336,10 +3353,14 @@ async def start_session(payload: SessionStartPayload, request: Request):
             detail=("Hiçbir bobin komutu kabul etmedi; seans BAŞLATILMADI. " + STM_RED_MESAJI),
         )
 
+    # D1.99 (B-1.9): kart donanıma GİDEN frekansı gösterir (STM kabul ettiyse STM'in, yoksa ESP'nin normalize değeri).
+    from utils.stm32_protocol_limits import normalize_esp_frequency_hz as _kart_esp_hz
+
+    _kart_freq = _s_uyg["freq"] if _stm_kabul else _kart_esp_hz(payload.frequency)
     update_live_session_state(
         is_active=True,
         mode=payload.mode,
-        freq=payload.frequency,
+        freq=_kart_freq,
         intensity=payload.intensity,
         remaining_min=payload.duration_minutes,
         duration_sec=payload.duration_minutes * 60,

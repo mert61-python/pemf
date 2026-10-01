@@ -13,7 +13,7 @@ human-review batch'inde ayrica ele alinacak.
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 router = APIRouter(tags=["session"])
 
@@ -165,6 +165,9 @@ class ParametreGuncellePayload(BaseModel):
     ikinci kez uygulamayı gerektirirdi ve o kopya kaçınılmaz olarak ayrışırdı.
     """
 
+    # D1.99 (S-1.6): NaN/Infinity 422 — kart ve doz kaydına sonlu olmayan değer girmesin (WS/JSON bozulur).
+    model_config = ConfigDict(allow_inf_nan=False)
+
     frequency: float | None = None
     duty: float | None = None
     phase: float | None = None
@@ -195,8 +198,27 @@ def parametre_guncelle(payload: ParametreGuncellePayload):
     with _api._session_lock:
         aktif = bool(_api._active_session.get("is_active"))
         sid = _api._active_session.get("db_session_id")
+        seans_bobinleri = list(_api._active_session.get("coil_ids") or [])
     if not aktif:
         raise HTTPException(status_code=409, detail="Aktif seans yok — güncellenecek parametre yok.")
+
+    # ── D1.99 (B-1.9 · S-1.2): kart ve doz kaydı donanıma GİDEN (normalize) değeri yazar ─────────────────
+    # Bobinlere yeni parametre `/api/coil/batch`la gider ve orada protokol sınırından (Ö.4-Y9 — taşıyıcı,
+    # KALDIRILMAZ) geçer: 30000 Hz → 25000 (STM), 0,5 Hz → 1, duty −50 → 0. Kayıt ham isteği yazarsa
+    # "kaydedilen ≠ uygulanan" olur. STM bobini hedefteyse STM sınırı, yalnız ESP ise ESP sınırı uygulanır.
+    from utils.stm32_protocol_limits import (
+        duty_percent_to_ratio,
+        normalize_esp_frequency_hz,
+        normalize_frequency_hz,
+        normalize_phase_deg,
+    )
+
+    _hedef = [int(c) for c in (payload.coil_ids or seans_bobinleri)] or list(_api.STM_COIL_IDS)
+    _stm_hedef = any(c in _api.STM_COIL_IDS for c in _hedef)
+    _f_norm = normalize_frequency_hz if _stm_hedef else normalize_esp_frequency_hz
+    frekans = None if payload.frequency is None else float(_f_norm(payload.frequency))
+    duty = None if payload.duty is None else float(duty_percent_to_ratio(payload.duty) * 100.0)
+    faz = None if payload.phase is None else float(normalize_phase_deg(payload.phase))
 
     # ── 1) Aktif seans kartı (arayüzün üstünde duran özet) ──────────────────────────
     # ⚠️ YALNIZ `frequencyHz`: seans özet kartı duty GÖSTERMEZ (alanları için bkz.
@@ -204,8 +226,8 @@ def parametre_guncelle(payload: ParametreGuncellePayload):
     # okunmayan veri eklemek olurdu; duty zaten bobin kartlarında ACK'ten geliyor.
     with _api._live_state_lock:
         at = _api._live_state["activeTreatment"]
-        if payload.frequency is not None:
-            at["frequencyHz"] = float(payload.frequency)
+        if frekans is not None:
+            at["frequencyHz"] = frekans
         anlik = dict(at)
     _api.live_state._ws_broadcast_sync({"type": "session_update", "data": anlik})
 
@@ -223,9 +245,10 @@ def parametre_guncelle(payload: ParametreGuncellePayload):
 
             damga = int(_t.time())
             for ad, deger, birim in (
-                ("degisiklik_frekans_hz", payload.frequency, "Hz"),
-                ("degisiklik_duty_yuzde", payload.duty, "%"),
-                ("degisiklik_faz_derece", payload.phase, "°"),
+                ("degisiklik_frekans_hz", frekans, "Hz"),
+                ("degisiklik_duty_yuzde", duty, "%"),
+                ("degisiklik_faz_derece", faz, "°"),
+                # Süre: Y5 (girilen = KALAN süre) D1.70'in konusu — burada değişmedi.
                 ("degisiklik_sure_dk", payload.duration_minutes, "dk"),
             ):
                 if deger is not None:
