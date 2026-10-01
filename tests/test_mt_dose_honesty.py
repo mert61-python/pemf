@@ -74,10 +74,10 @@ def test_KRITIK_STM_paketi_mT_TASIMIYOR():
 def test_KRITIK_ESP_komutu_mT_TASIMIYOR():
     api = (KOK / "apps" / "backend" / "servers" / "api_server.py").read_text(encoding="utf-8")
     # Seans başlatmada ESP'ye giden mqtt_payload gövdesi. (3. tur E1: command_id artık değişkene
-    # çıkarıldı — `command_id = f"sess_{coil_id}...`; anchor o atamaya pinlenir, gövde mqtt_payload
-    # dict'idir. `payload.intensity` DB-run kaydında geçer ama tırnaksızdır; kapı '"intensity"'
-    # JSON-anahtarını arar → yalnız komut gövdesine eklenirse düşer.)
-    i = api.find('command_id = f"sess_{coil_id}')
+    # çıkarıldı — D1.E10'dan beri `command_id = _komut_kimligi("sess", coil_id)`; anchor o atamaya
+    # pinlenir, gövde mqtt_payload dict'idir. `payload.intensity` DB-run kaydında geçer ama tırnaksızdır;
+    # kapı '"intensity"' JSON-anahtarını arar → yalnız komut gövdesine eklenirse düşer.)
+    i = api.find('command_id = _komut_kimligi("sess", coil_id)')
     assert i > 0, "ESP seans komutu bulunamadi"
     j = api.index("mqtt_payload = {", i)  # seans yolundaki komut gövdesi (bu satırdan hemen sonra)
     govde = api[j : api.index("}", j)]  # dict'in kapanışına kadar (değerlerde iç içe süslü yok)

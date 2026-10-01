@@ -2030,6 +2030,19 @@ import itertools as _itertools
 
 _estop_sira = _itertools.count(1)
 
+# D1.E10 (DUZELTME-D1B §4 · NACK-D2 kökü): manuel/batch/seans kimlikleri de aynı türden sıra eki taşır.
+# Windows saati 64 Hz'e yuvarlanınca aynı bobine iki hızlı start aynı ms'yi alıyordu → _register_ack
+# ikinci kaydı EZİYOR, start#1'in geciken NACK'i start#2'nin bekçisini uyandırıp KABUL edilmiş koşuyu
+# "REDDEDİLDİ" diye kapatıyordu (ölçüldü: 64 Hz saatte 40 denemede 36). Aynı kimlik ESP8266 tekrar
+# önbelleğinde de ikinci start'ı SESSİZCE düşürür (STOP dışı tekrar ACK'siz yutulur).
+# Ek mod 10^6: en uzun `react_batch_{bobin}_{13 haneli ms}_{≤6 hane}` = 34 karakter (S3 sınırı ≤35, üstte).
+_komut_sira = _itertools.count(1)
+
+
+def _komut_kimligi(on_ek: str, coil_id: int) -> str:
+    """ESP komut kimliği `{on_ek}_{bobin}_{ms}_{sıra}` — aynı ms'de bile benzersiz, ≤35 karakter."""
+    return f"{on_ek}_{coil_id}_{int(time.time() * 1000)}_{next(_komut_sira) % 1_000_000}"
+
 
 def _register_ack(command_id: str) -> None:
     """Publish'ten ÖNCE çağrılır (ack yarışı kaybolmasın): command_id için bekleme kaydı aç."""
@@ -2661,8 +2674,6 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     - API/MQTT payload duration is seconds (ESP-compatible).
     - STM32 firmware duration is minutes, converted only for HardwareController.
     """
-    import time
-
     if coil_id < 1 or coil_id > 8:
         raise HTTPException(status_code=400, detail="Geçersiz bobin ID (1-8)")
 
@@ -2684,7 +2695,7 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
             payload.duration,
         )
 
-    command_id = f"react_{coil_id}_{int(time.time() * 1000)}"
+    command_id = _komut_kimligi("react", coil_id)  # D1.E10: ms tek başına çakışır
 
     if coil_id in STM_COIL_IDS:
         if not state.hardware:
@@ -2839,8 +2850,6 @@ async def control_batch_coils(payload: BatchCoilPayload):
     - API/MQTT payload duration is seconds (ESP-compatible).
     - STM32 firmware duration is minutes, converted only for HardwareController.
     """
-    import time
-
     # D1.53 (A-05): 0 Hz BAŞLATMA = seçili bobinler için STOP (tekil uçla AYNI kural ve gerekçe).
     from controllers.hardware_controller import sifir_hz_durdurma_mi
 
@@ -2869,7 +2878,7 @@ async def control_batch_coils(payload: BatchCoilPayload):
         if coil_id < 1 or coil_id > 8:
             results.append({"coilId": coil_id, "status": "invalid"})
             continue
-        command_id = f"react_batch_{coil_id}_{int(time.time() * 1000)}"
+        command_id = _komut_kimligi("react_batch", coil_id)  # D1.E10
         if coil_id in STM_COIL_IDS:
             if not state.hardware:
                 results.append({"coilId": coil_id, "status": "stm_unavailable"})
@@ -3261,7 +3270,6 @@ async def start_session(payload: SessionStartPayload, request: Request):
         return {"status": "cancelled", "message": "Seans başlatma sırasında durduruldu (bobinler açılmadı)."}
 
     # Session API accepts minutes; ESP/MQTT duration remains seconds.
-    import time as _t
 
     # DENETIM 2. TUR [4.4] (2026-08-20): D-3 duzeltmesi (ffd4406) uc ham yayin sitesinden yalniz
     # IKISINI (tek-bobin + batch) kapatmisti; SEANS yolu ESP'ye HAM freq gondermeye devam ediyordu
@@ -3277,7 +3285,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
     # uyari uretmesin (8. parti bilincli karari: broker-olu yarisi snappy-start + esp_unreachable).
     _esp_broker_ok = bool(esp_coils) and _broker_reachable()
     for coil_id in esp_coils:
-        command_id = f"sess_{coil_id}_{int(_t.time() * 1000)}"
+        command_id = _komut_kimligi("sess", coil_id)  # D1.E10
         mqtt_payload = {
             "command": "start",
             "command_id": command_id,
