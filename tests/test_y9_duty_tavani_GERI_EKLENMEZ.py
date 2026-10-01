@@ -13,9 +13,10 @@ tmp tedavi DB'sinin `session_coil_runs` tablosundan okunur.
 ⚠️ Orkestratör notu (plan D1.06): bipolar bobinlerde firmware duty'yi yarım periyot altında
 klempler (Karar-5, Ö.4-Y9 TAŞIYICI firmware sınırı — kapıda "clamp" SAYILMAZ). Bu yüzden yüksek
 duty (90) yalnız UNIPOLAR bobinde, bipolar bobinde tavan altı duty (40) kullanılır; aksi hâlde
-kapı "kaydedilen ≠ uygulanan" hâlini kilitlerdi. Bipolar tavan üstü istek: Y20 (firmware NACK'ler,
-D1.101) — bu kapının konusu değil. Unipolar/bipolar ayrımı literalle değil firmware başlığındaki
-yetenek maskesinden (`tools/stm32_simulator.UNIPOLAR_YETENEK_MASKESI`) türer.
+kapı "kaydedilen ≠ uygulanan" hâlini kilitlerdi. Bipolar tavan ÜSTÜ istek (Y20: firmware NACK'ler →
+D1.101; backend'e ve arayüze duty sınırı EKLENMEZ) ayrı kollarda ölçülür: yalnız PAKETTEKİ duty'nin
+aynen geçtiği iddia edilir, koşu kaydı İDDİA EDİLMEZ (NACK anlamı D1.101'in konusu). Unipolar/bipolar
+ayrımı literalle değil firmware başlığındaki yetenek maskesinden (`tools/stm32_simulator.UNIPOLAR_YETENEK_MASKESI`) türer.
 """
 
 from __future__ import annotations
@@ -51,6 +52,20 @@ def test_KRITIK_update_coil_duty_PAKETE_AYNEN_gider(bobin_kumesi, duty):
     assert paket_duty == pytest.approx(duty / 100.0), (
         f"bobin {bobin}: istenen duty {duty} → pakette {paket_duty * 100:.1f} — backend'e duty tavanı "
         "GERİ EKLENMİŞ (Ö.4-Y9: tek sınır firmware)"
+    )
+
+
+def test_KRITIK_Y20_bipolar_tavan_USTU_duty_update_coil_backendden_AYNEN_gecer():
+    """Bağımsız inceleme (r2): bipolar kol yalnız tavan ALTI (40) kullanıyordu — YALNIZ bipolar bobinlere
+    backend tavanı (`min(duty, 0.45)`) eklense kapı yeşil kalıyordu. Y20 tam bunu yasaklar: tavan üstünü
+    firmware NACK'ler (D1.101), backend kırpmaz."""
+    bobin = _BIPOLAR[0]
+    with gercek_hc() as hc:
+        assert hc.update_coil(bobin, 100.0, 90.0, 0.0, duration=1) is True
+        paket_duty = paket_coz(hc.core._hw_send_queue.paketler[-1])[0][bobin - 1]
+    assert paket_duty == pytest.approx(0.90), (
+        f"bipolar bobin {bobin}: duty 90 → pakette {paket_duty * 100:.1f} — backend'e bipolar duty tavanı "
+        "EKLENMİŞ (Y20: tek sınır firmware NACK)"
     )
 
 
@@ -105,6 +120,30 @@ def test_KRITIK_seans_baslat_duty_PAKETE_ve_KOSU_KAYDINA_aynen_gider(seans_ortam
         kayit = [tuple(s) for s in conn.execute("SELECT coil_id, duty_percent FROM session_coil_runs").fetchall()]
     assert kayit == [(bobin, pytest.approx(duty))], (
         f"koşu kaydı {kayit!r} — kaydedilen doz istenen/uygulanan dozdan farklı (kategori 1)"
+    )
+
+
+def test_KRITIK_Y20_bipolar_tavan_USTU_duty_seans_yolunda_backendden_AYNEN_gecer(seans_ortami):
+    """Seans yolu da bipolar tavan üstünü kırpmaz (Y20). Koşu kaydı BİLEREK iddia edilmez (D1.101)."""
+    istemci, _db, hc = seans_ortami
+    bobin = _BIPOLAR[0]
+    r = istemci.post(
+        "/api/session/start",
+        json={
+            "mode": "Manuel",
+            "frequency": 100,
+            "duty": 90,
+            "phase": 0,
+            "intensity": 0.0,
+            "duration_minutes": 5,
+            "coil_ids": [bobin],
+            "patient_name": "Y20Kapisi",
+        },
+    )
+    assert r.status_code == 200, r.text[:300]
+    paket_duty = paket_coz(hc.core._hw_send_queue.paketler[-1])[0][bobin - 1]
+    assert paket_duty == pytest.approx(0.90), (
+        f"seans yolu bipolar bobin {bobin}: duty 90 → pakette {paket_duty * 100:.1f} (backend tavanı — Y20)"
     )
 
 
