@@ -91,20 +91,26 @@ def test_KRITIK_audit_ref_GERCEK_seans_baslatmada_muhurle_YAZILIR(ortam):
     assert satir[0] == muhur, f"audit_ref {satir[0]!r} ≠ seans mührü {muhur!r}"
 
 
-def test_KRITIK_session_stop_suresi_MONOTONIC_duvar_saati_sicramasi_YAZILMAZ(ortam, monkeypatch):
-    """Seans ~0 dk sürer; durdurmadan önce duvar saati +1 saat sıçrar (NTP/DST). Kayıt 0 dk kalmalı (60 değil)."""
+@pytest.mark.parametrize(("mono_geri_sn", "beklenen_dk"), [(0, 0), (120, 2)], ids=["sifir_dk", "pozitif_2dk"])
+def test_KRITIK_session_stop_suresi_MONOTONIC_duvar_saati_sicramasi_YAZILMAZ(
+    ortam, monkeypatch, mono_geri_sn, beklenen_dk
+):
+    """Kayıtlı süre MONOTONIC başlangıçtan. 1-B bağımsız inceleme (i4): kapı eskiden yalnız `time.time`'ı +1 saat
+    kaydırıyordu — süre `datetime.now().timestamp()` (yine duvar saati) ile hesaplanınca YEŞİLDİ. Artık duvar-saati
+    başlangıcı 1 saat GERİDE kurulur (HER duvar-saati hesabı ≥ 60 dk verir), monotonic başlangıç `mono_geri_sn`
+    geride: kayıt TAM beklenen dakika olmalı (pozitif kontrol 120 sn → 2 dk: monotonic GERÇEKTEN kullanılıyor)."""
     api, istemci, db = ortam
     _baslat(istemci)
     with api._session_lock:
         sid = api._active_session.get("db_session_id")
-    gercek = time.time
-    monkeypatch.setattr(time, "time", lambda: gercek() + 3600.0)
+        api._active_session["started_epoch"] = float(api._active_session["started_epoch"]) - 3600.0
+        api._active_session["start_time"] = float(api._active_session.get("start_time") or time.time()) - 3600.0
+        api._active_session["start_mono"] = time.monotonic() - mono_geri_sn
     r = istemci.post("/api/session/stop", json={})
-    monkeypatch.setattr(time, "time", gercek)
     assert r.status_code == 200, r.text[:200]
     _durum, sure = _seans_satiri(db, sid)
-    assert sure is not None and int(sure) <= 1, (
-        f"kayıtlı süre {sure} dk — duvar saati sıçraması süreye yazıldı (monotonic olmalı; gerçek ~0 dk)"
+    assert sure is not None and int(sure) == beklenen_dk, (
+        f"kayıtlı süre {sure} dk (beklenen {beklenen_dk}) — süre duvar saatinden hesaplanıyor (monotonic olmalı)"
     )
 
 
@@ -124,8 +130,9 @@ def test_KRITIK_sure_watchdog_finalize_suresi_MONOTONIC(ortam):
                 "duration_minutes": 1,
                 "db_session_id": sid,
                 "start_mono": simdi_m - 61,
-                "started_epoch": simdi_e - 61,
-                "start_time": simdi_e - 61,
+                # 1-B inceleme (i4): duvar-saati başlangıcı 1 saat DAHA geride — her duvar-saati hesabı ≥ 61 dk verir
+                "started_epoch": simdi_e - 3661,
+                "start_time": simdi_e - 3661,
             }
         )
     uyku, hatalar = bir_tur_kos(api._session_duration_watchdog, zaman_kaydir=3600.0)
