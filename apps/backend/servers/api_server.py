@@ -1451,11 +1451,26 @@ def _handle_backend_event(event) -> None:
         # STM firmware watchdog'u ateşledi → STM PWM'i BİLİNMEYEN/durmuş durumda (komuta uymuyor). Bu bir
         # donanım-fault EVENT'i (backend EŞİK DAYATMAZ; donanımın kararına tepki verir) → STM kullanan aktif
         # seansı güvenli durdur + state'i eşitle. Aksi halde UI 'çalışıyor' gösterir ama STM durmuştur (desync).
-        _push_notification("⚠️ STM32 watchdog zaman aşımı — seans güvenlik için durduruldu", "error")
         with _session_lock:
             _sess_active = bool(_active_session.get("is_active"))
             _sess_coils = _active_session.get("coil_ids") or list(range(1, 9))
-        if _sess_active and any(c in STM_COIL_IDS for c in _sess_coils):
+        _seans_durduruluyor = _sess_active and any(c in STM_COIL_IDS for c in _sess_coils)
+        # ⚠️ D1.73 (B-1.18): firmware watchdog'u çıkışları SIFIRLADI ama HardwareController durumu "çalışıyor" kalıyordu →
+        # keep-alive bir sonraki turda ESKİ duty ile bobini YENİDEN ENERJİLİYORDU (seanssız sürüşte host 1,5 sn takılınca;
+        # operatöre "durdu" denirken). Durum `stop_all_coils` ile sıfırlanır (STOP da gider — Ö.4-Y8 yalnız artırır).
+        # YALNIZ watchdog dalı: termal (`STM_EVT`) dalın davranışı A-47 gereği DEĞİŞMEZ (termal kesme YOK).
+        if state.hardware:
+            try:
+                state.hardware.stop_all_coils()
+            except Exception:
+                logging.exception("STM watchdog sonrasi HC sifirlama basarisiz")
+        _push_notification(
+            "⚠️ STM32 watchdog zaman aşımı — seans güvenlik için durduruldu"
+            if _seans_durduruluyor
+            else "⚠️ STM32 watchdog zaman aşımı — bobin çıkışları durduruldu (aktif seans yoktu)",
+            "error",
+        )
+        if _seans_durduruluyor:
             try:
                 _emergency_stop_async(reason="stm_watchdog_timeout", mode="STM Watchdog")
             except Exception:
