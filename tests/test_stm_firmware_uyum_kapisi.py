@@ -255,11 +255,20 @@ def test_KRITIK_UYUMSUZ_firmware_ACIL_DURDURMAYI_engellemez(istemci, uyumsuz_cek
     cozulur, duty 0) ve yanit `stmStopped` der. Teyit (`confirmed`) BILEREK olculmez (A-63 → D1.105)."""
     from kayitci_donanim import gercek_hc, paket_coz
     from servers import api_server
+    from topoloji import TUM_STM
 
     # ESP yayini olculmez; False → ack-bekcisi is parcacigi DOGMAZ (test sonrasina tasmasin).
     monkeypatch.setattr(api_server, "_mqtt_publish", lambda topic, payload: False)
     with gercek_hc() as hc:
         monkeypatch.setattr(api_server.state, "hardware", hc)
+        # Bağımsız inceleme (r1): E-stop'tan ÖNCE bobinler GERÇEKTEN sürülüyor olmalı — yoksa "son paket
+        # duty 0" her pakette zaten doğrudur ve `stop_all_coils` bobin durumunu sıfırlamasa da kapı
+        # yeşil kalırdı (eski duty ile giden E-stop paketi).
+        surulen = sorted({1, max(TUM_STM)})
+        for b in surulen:
+            assert hc.update_coil(b, 100.0, 30.0, 0.0, duration=1) is True
+        once = paket_coz(hc.core._hw_send_queue.paketler[-1])[0]
+        assert all(once[b - 1] == pytest.approx(0.30) for b in surulen), f"senaryo: bobinler sürülmüyor {once}"
         y = istemci.post("/api/hardware/emergency_stop", json={})
         assert y.status_code == 200, (
             f"UYUMSUZ firmware'de ACIL DURDURMA {y.status_code} dondu — bu kapi STOP yolunu "

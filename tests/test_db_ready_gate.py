@@ -17,7 +17,7 @@ GEÇMEZ — DB çökükken tedaviyi durduramamak asıl tehlike olurdu. Bu dosya 
 
 import pytest
 from fastapi.testclient import TestClient
-from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
+from topoloji import ESP_BOBIN, TUM_ESP, TUM_STM  # faz 4: literal bobin numarasi YASAK
 
 
 @pytest.fixture(autouse=True)
@@ -150,6 +150,14 @@ def test_KRITIK_DB_bozukken_ACIL_DURDURMA_CALISIR(client, api, db_bozuk, monkeyp
     monkeypatch.setattr(api, "_mqtt_publish", _kaydet)
     with gercek_hc() as hc:
         monkeypatch.setattr(api.state, "hardware", hc)
+        # Bağımsız inceleme (r1): E-stop'tan ÖNCE bobinler GERÇEKTEN sürülüyor olmalı — yoksa "son paket
+        # duty 0" her pakette zaten doğrudur ve `stop_all_coils` bobin durumunu sıfırlamasa da kapı
+        # yeşil kalırdı (eski duty ile giden E-stop paketi).
+        surulen = sorted({1, max(TUM_STM)})
+        for b in surulen:
+            assert hc.update_coil(b, 100.0, 30.0, 0.0, duration=1) is True
+        once = paket_coz(hc.core._hw_send_queue.paketler[-1])[0]
+        assert all(once[b - 1] == pytest.approx(0.30) for b in surulen), f"senaryo: bobinler sürülmüyor {once}"
         r = client.post("/api/hardware/emergency_stop")
         assert r.status_code == 200, f"DB bozukken acil durdurma reddedildi: {r.status_code}"
         assert hc.stop_all_cagri >= 1, "DB bozukken acil durdurma donanıma STOP VERMEDİ (yalnız 200 döndü)"
