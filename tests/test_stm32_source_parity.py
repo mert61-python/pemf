@@ -265,10 +265,11 @@ def test_host_tarafi_sure_deadlineI_hala_uygulaniyor():
     import time as _t
     from unittest.mock import patch
 
-    try:
-        from controllers.hardware_controller import HardwareController
-    except Exception as e:  # donanım bağımlılığı yoksa atla (CI'da import edilebilir olmalı)
-        pytest.skip(f"HardwareController import edilemedi: {e}")
+    # ⚠️ D1.39 (B-10.210): içe aktarma hatası eskiden `pytest.skip`e çevriliyordu — `hardware_controller`
+    # import'ta kırılınca bobin süresini sınırlayan TEK mekanizmanın kapısı sessizce ATLANIYORDU (sarı,
+    # kırmızı değil). Modül süitte her yerde içe aktarılıyor; aktarılamıyorsa bu bir HATADIR.
+    # Kapı: test_KRITIK_deadline_kapisi_import_hatasini_SKIPe_CEVIRMEZ (AST).
+    from controllers.hardware_controller import HardwareController
 
     # Keep-alive thread'i başlatmadan örnekle (yan etki istemiyoruz).
     with patch.object(HardwareController, "_keep_alive_loop", lambda self: None):
@@ -303,6 +304,36 @@ def test_host_tarafi_sure_deadlineI_hala_uygulaniyor():
             hc.stop()
         except Exception:
             pass
+
+
+def test_KRITIK_deadline_kapisi_import_hatasini_SKIPe_CEVIRMEZ():
+    """D1.39 meta-kapısı (B-10.210): süre-deadline davranış testinde içe aktarma hatasını yutup atlayan
+    bir `try/except … pytest.skip` YOK. Geri konursa `hardware_controller` import'ta kırıldığında bu
+    güvenlik kapısı yeniden SESSİZCE atlanır (ölçüldü: mutantta SKIPPED)."""
+    import ast
+
+    agac = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    fn = next(
+        n
+        for n in ast.walk(agac)
+        if isinstance(n, ast.FunctionDef) and n.name == "test_host_tarafi_sure_deadlineI_hala_uygulaniyor"
+    )
+    atlayanlar = [
+        ast.unparse(c)
+        for h in ast.walk(fn)
+        if isinstance(h, ast.ExceptHandler)
+        for c in ast.walk(h)
+        if isinstance(c, ast.Call)
+        and isinstance(c.func, ast.Attribute)
+        and c.func.attr in ("skip", "xfail", "importorskip")
+    ]
+    assert atlayanlar == [], f"deadline kapısı istisnayı ATLAMAYA çeviriyor: {atlayanlar}"
+    importorskip = [
+        ast.unparse(c)
+        for c in ast.walk(fn)
+        if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute) and c.func.attr == "importorskip"
+    ]
+    assert importorskip == [], f"deadline kapısı importorskip kullanıyor: {importorskip}"
 
 
 def test_firmware_sure_sayaci_keep_alive_ile_resetleniyor_BELGELI(fw_src):

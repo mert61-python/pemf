@@ -175,12 +175,24 @@ def test_target_lost_stops_coils_after_streak(client, monkeypatch):
     assert air._AI_LOST_STOP_STREAK >= 2, "tek kare kaybında durdurmak tedaviyi kırılgan yapar"
 
     stopped = []
+    surulen = []
     monkeypatch.setattr(api, "_stop_session_coils", lambda ids: stopped.append(list(ids)))
     monkeypatch.setattr(air.cv2, "VideoCapture", _FakeCap)
     monkeypatch.setattr(air, "_get_or_load_kedi", lambda: None)
     monkeypatch.setattr(air, "_get_or_load_catorgan", lambda: None)
-    # Lokalizasyon HER ZAMAN başarısız → ardışık kayıp
-    monkeypatch.setattr(air, "_localize_organ", lambda *a, **k: (False, 0.0, 0.0, 0.0, 0.0, None))
+    # ⚠️ D1.39 (B-10.226): sahte lokalizatör eskiden 6'LI demet dönüyordu; gerçek çağıran en az 7 değer
+    # açtığı için her tur `ValueError` → `except` yolu cache'i False yapıyordu — test "hedef kaybında dur"
+    # davranışını değil İSTİSNA yolunu ölçüyordu (hedef-yok dönüşü cache'e yazılmasa YEŞİL). Artık dönüş
+    # GERÇEK `_extract_organ_target`ın "kedi/organ yok" demeti (8'li sözleşme) ve cache BAYAT `localized=True`
+    # ile başlar: durdurma yalnız gerçek hedef-yok dönüşünün cache'e yazılmasıyla gelebilir.
+    monkeypatch.setattr(air, "_localize_organ", lambda frame, organ_id: air._extract_organ_target({}, organ_id, None))
+    monkeypatch.setattr(air, "_predict_and_drive", lambda *a, **k: ([0.0] * 7, [0.0] * 7, 0.0))
+    monkeypatch.setattr(air, "_drive_coils_ai_pro", lambda D, P: surulen.append((list(D), list(P))))
+    with air._ai_cache_lock:
+        eski_cache = dict(air._ai_organ_cache)
+        air._ai_organ_cache.update({"localized": True, "at": 0.0})
+    hatalar = []
+    monkeypatch.setattr(air.logger, "error", lambda msg, *a, **k: hatalar.append(str(msg) % a if a else str(msg)))
 
     with api._session_lock:
         api._active_session.clear()
@@ -208,8 +220,16 @@ def test_target_lost_stops_coils_after_streak(client, monkeypatch):
     air._ai_loop_active = False
     t.join(timeout=5)
 
+    with air._ai_cache_lock:
+        air._ai_organ_cache.clear()
+        air._ai_organ_cache.update(eski_cache)
+
     assert stopped, "ardışık hedef kaybından sonra bobinlere STOP gönderilmeliydi"
     assert set(stopped[0]) == set(range(1, 8)), f"AI Pro bobinleri (1-7) durdurulmalı: {stopped[0]}"
+    assert surulen == [], f"hedef YOKKEN bobinler sürüldü (bayat cache): {len(surulen)} tur"
+    assert not [h for h in hatalar if "lokalizasyon hatası" in h], (
+        f"test hedef-yok DÖNÜŞÜNÜ değil istisna yolunu ölçüyor: {hatalar}"
+    )
 
     with api._session_lock:
         api._active_session.clear()
