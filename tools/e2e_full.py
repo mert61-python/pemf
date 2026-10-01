@@ -9,7 +9,7 @@ dogruluyordu — yani gecen her testin anlami daralmisti.
 
 e2e_smoke.py denetim-regresyonlarini kilitler; BU betik KULLANICI AKISLARINI sinar:
 hasta kayitlari (CRUD + sayfalama + toplu-silme koruma), seans yasam dongusu
-(STM 1-5 / ESP 6-8 / 8-bobin), bobin kontrolu, canli telemetri (WS), gecmis + KPI
+(STM 1-7 / ESP slot 8 / 8-bobin), bobin kontrolu, canli telemetri (WS), gecmis + KPI
 ve UC PROFILIN (ev sahibi / veteriner / arastirma) uc-kapsamlari.
 
 IZOLASYON (bozmayin):
@@ -129,6 +129,17 @@ def running_ids(snapshot):
         if c.get("running"):
             out.append(int(c.get("id") or c.get("coilId") or 0))
     return sorted(out)
+
+
+def esp_slotlari(snapshot):
+    """ESP/MQTT yolundan surulen slotlar — CALISAN backend'in topolojisinden (`stm32Driven` false).
+
+    ⚠️ D1.09 (B-10.266): ESP etiketli kontroller bobin numarasini ELLE YAZMAZ. Faz 4'te (2026-09-10)
+    bobin 6-7 STM'e gecince "ESP" diye bobin 7'yi sinayan kontroller sessizce STM yolunu olcmeye
+    baslamisti. Kapi: tests/test_e2e_full_esp_hedefi_TOPOLOJIDEN.py."""
+    return sorted(
+        int(c.get("id") or c.get("coilId") or 0) for c in snapshot.get("coils", []) if not c.get("stm32Driven")
+    )
 
 
 def wait_until(fn, timeout=12, step=0.5):
@@ -932,7 +943,7 @@ def b_patients():
     check("toplu silme sonrasi liste bos", lst5.get("total") == 0, str(lst5.get("total")))
 
 
-# ── C) SEANS — STM bobinleri (1-5) ─────────────────────────────────────────
+# ── C) SEANS — STM bobinleri (1-7) ─────────────────────────────────────────
 def c_session_stm():
     section("C. Seans — STM bobinleri (1-7)")
     _s, pb, _ = req(
@@ -1137,11 +1148,17 @@ def f_coil_control():
     s, _b, _ = req("POST", "/api/coil/1/control", {"start": False})
     check("tekil STM bobin durdurma komutu kabul edildi", s == 200, f"HTTP {s}")
 
-    s, b7, _ = req("POST", "/api/coil/7/control", {"freq": 15.0, "duty": 40.0, "duration": 60, "start": True})
-    check("tekil ESP bobin (7) baslat komutu kabul edildi", s == 200, f"HTTP {s}")
-    check("ESP komutu MQTT'ye yayinlandi", "mqtt" in json.dumps(b7).lower() or bool(b7.get("status")), str(b7)[:120])
-    s, _b, _ = req("POST", "/api/coil/7/control", {"start": False})
-    check("tekil ESP bobin durdurma komutu kabul edildi", s == 200, f"HTTP {s}")
+    # D1.09 (B-10.266): ESP slotu TOPOLOJIDEN (eskiden literal bobin 7 — faz 4'ten beri STM'di) ve
+    # yayin iddiasi GERCEK: eski `... or bool(b7.get("status"))` her yanitta dogruydu (totoloji).
+    esp_l = esp_slotlari(snap())
+    check("snapshot: en az bir ESP slotu var (ESP alt sistemi acik)", bool(esp_l), str(esp_l))
+    if esp_l:
+        esp = esp_l[0]
+        s, be, _ = req("POST", f"/api/coil/{esp}/control", {"freq": 15.0, "duty": 40.0, "duration": 60, "start": True})
+        check(f"tekil ESP bobin ({esp}) baslat komutu kabul edildi", s == 200, f"HTTP {s}")
+        check("ESP komutu MQTT yolundan gitti (transport=mqtt)", be.get("transport") == "mqtt", str(be)[:120])
+        s, _b, _ = req("POST", f"/api/coil/{esp}/control", {"start": False})
+        check("tekil ESP bobin durdurma komutu kabul edildi", s == 200, f"HTTP {s}")
 
     s, bb, _ = req(
         "POST", "/api/coil/batch", {"coil_ids": [1, 2, 6], "freq": 30.0, "duty": 20.0, "duration": 60, "start": True}
@@ -1179,11 +1196,17 @@ def f2_donanim_uyum():
 
     # D-3: ESP freq tavani — asiri deger 500'e degil sessiz 200'e (iceride 1000'e normalize;
     # 8266 REDDETMEZ cunku backend onden clampler). Robustluk: negatif de kabul (1'e clamp).
-    s, b, _ = req("POST", "/api/coil/7/control", {"freq": 5000.0, "duty": 20.0, "duration": 30, "start": True})
-    check("D-3: ESP bobine freq=5000 komutu 200 (iceride 1000'e normalize)", s == 200, f"HTTP {s} {str(b)[:100]}")
-    s, b, _ = req("POST", "/api/coil/7/control", {"freq": -3.0, "duty": 20.0, "duration": 30, "start": True})
-    check("D-3: negatif freq 200 (1'e clamp, 500 yok)", s == 200, f"HTTP {s}")
-    req("POST", "/api/coil/7/control", {"start": False})
+    # D1.09 (B-10.266): ESP slotu TOPOLOJIDEN (eskiden literal bobin 7 → STM'in 25000 Hz yolunu olcuyordu).
+    esp_l = esp_slotlari(snap())
+    check("D-3: snapshot'ta ESP slotu var", bool(esp_l), str(esp_l))
+    esp = esp_l[0] if esp_l else None
+    if esp is not None:
+        s, b, _ = req("POST", f"/api/coil/{esp}/control", {"freq": 5000.0, "duty": 20.0, "duration": 30, "start": True})
+        check("D-3: ESP bobine freq=5000 komutu 200 (iceride 1000'e normalize)", s == 200, f"HTTP {s} {str(b)[:100]}")
+        check("D-3: komut ESP (MQTT) yolundan gitti", b.get("transport") == "mqtt", str(b)[:100])
+        s, b, _ = req("POST", f"/api/coil/{esp}/control", {"freq": -3.0, "duty": 20.0, "duration": 30, "start": True})
+        check("D-3: ESP bobine negatif freq 200 (1'e clamp, 500 yok)", s == 200, f"HTTP {s}")
+        req("POST", f"/api/coil/{esp}/control", {"start": False})
 
     # E-stop kapsami: yanit TUM ESP bobinlerini icermeli (P0 kapsam fix'i — eskiden
     # seans coil_ids'iyle sinirlaniyordu ve bos kalabiliyordu).

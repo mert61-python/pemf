@@ -74,8 +74,21 @@ def aktif_seans(api, monkeypatch):
 
 
 def test_KRITIK_broker_ulasilmazken_yanit_teyitsiz_bobinleri_soyler(api, client, aktif_seans, monkeypatch):
-    """Broker ölü → ESP STOP publish'leri düşer → yanıt bunu AÇIKÇA söylemeli."""
-    aktif_seans([6, 7])
+    """Broker ölü → ESP STOP publish'leri düşer → yanıt bunu AÇIKÇA söylemeli.
+
+    ⚠️ D1.09 (B-10.255): bu test eskiden seansı `[6, 7]` ile kuruyordu. Faz 4'te (2026-09-10)
+    bobin 6-7 STM'e geçti → test ESP dalını HİÇ koşmuyordu ve sonucu broker'dan BAĞIMSIZDI
+    (`hardware=None` yüzünden STM dalı "teyitsiz" diyordu). `_stop_session_coils`'in ESP
+    teyitsizlik dalını etkisizleştiren mutantta bu test YEŞİL kalıyordu. Artık seans ESP
+    bobinleriyle kurulur ve ESP alt sistemi AÇIKTIR; seansta STM bobini yok → teyitsizliğin
+    tek kaynağı broker. ESP bilerek KAPALIYKEN slot 8'in nasıl sayılacağı ayrı karar
+    (A-63 → D1.98); bu test onu ölçmez."""
+    from topoloji import TUM_ESP, TUM_STM
+
+    esp = sorted(TUM_ESP)
+    assert esp and not set(esp) & TUM_STM, f"senaryo: seans bobinleri ESP yolunda olmalı, gelen {esp}"
+    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
+    aktif_seans(esp)
     monkeypatch.setattr(api, "_mqtt_publish", lambda topic, payload: False)  # broker ölü
     monkeypatch.setattr(api.state, "hardware", None)
 
@@ -97,8 +110,8 @@ def test_KRITIK_broker_ulasilmazken_yanit_teyitsiz_bobinleri_soyler(api, client,
         "ve bobinler çalışırken 'durduruldu' gösterir (bulgu [1.1]'in nüksü)"
     )
     gövde = r.json()
-    assert gövde.get("hardware_stop_unconfirmed") == [6, 7], (
-        f"STOP hiçbir bobine ulaşmadı ama yanıt bunu söylemiyor: {gövde!r}"
+    assert gövde.get("hardware_stop_unconfirmed") == esp, (
+        f"STOP hiçbir ESP bobinine ulaşmadı ama yanıt bunu söylemiyor: {gövde!r}"
     )
     # Eski istemcinin ekrana basabildiği TEK alan (apiClient: showError('Sunucu Hatası', detail)).
     assert "ACİL DURDUR" in (gövde.get("detail") or ""), (
