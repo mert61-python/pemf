@@ -1804,7 +1804,12 @@ def _ai_pro_loop(dongu_muhru=None):
                 z_mm = _ai_organ_cache["z_mm"]
                 rel = _ai_organ_cache["reliability"]
                 kayip_damgasi = _ai_organ_cache.get("kayip_damgasi")
+                # ⚠️ D1.59 (B-5.4): koordinatın ORGANI — aynı anlık görüntüden. Global `_ai_organ_id` lokalizasyon
+                # sırasında değişmiş olabilir; tahmine o verilirse yeni organın deseni eski organın konumuna gider.
+                _c_oid = _ai_organ_cache.get("organ_id")
             kedi_var = bool(_ai_organ_cache.get("kedi_var"))
+            # Gösterilen organ = sürülen organ (koordinat bulunduysa); yoksa seçili hedef.
+            _gosterim_oid = _c_oid if (localized and isinstance(_c_oid, int) and _c_oid >= 0) else _ai_organ_id
             # ⚠️ 1-C inceleme i7-F-1: bir hedef-kaybı STOP'undan ESKİ "bulundu" gözlemi (ör. STOP'tan sonra biten uçuştaki
             # lokalizasyon) BULUNDU SAYILMAZ: sürülmez, kayıp sayılır. Asıl kapı sürüşte (HC, durum kilidi altında).
             _bulundu = bool(localized) and not estop_mandali.gozlem_engeli(kayip_damgasi)
@@ -1820,7 +1825,7 @@ def _ai_pro_loop(dongu_muhru=None):
                 if not _still:
                     _dongu_bayragini_indir(dongu_muhru)
                     break
-                D, P, e_field = _predict_and_drive(x_mm, y_mm, z_mm, _ai_organ_id)
+                D, P, e_field = _predict_and_drive(x_mm, y_mm, z_mm, _c_oid)
                 # ⚠️ D1.81 (İG-5.3/5.29): yukarıdaki "seans hâlâ aktif mi" bakışı TAHMİNDEN ÖNCEDİR; tahmin (CPU 0,3–2,2
                 # sn, yanıtsız AI servisinde dakikalar) sırasında gelen acil durdurmayı göremez — ölçüldü: döngü 40'ta 11,
                 # damla serviste 36,5 sn sonra yeniden enerjiledi. Sürüş bu döngünün NESLİYLE yapılır; `update_coil` onu
@@ -1880,7 +1885,7 @@ def _ai_pro_loop(dongu_muhru=None):
             rep_duty = round(normalize_ai_pro_duty_ratio(D[0]) * 100.0, 1) if localized else 0.0
             update_live_session_state(
                 is_active=True,
-                mode=f"AI Pro · {_aktif_saglayici().title} · {_aktif_saglayici().hedef_adi(_ai_organ_id)}",
+                mode=f"AI Pro · {_aktif_saglayici().title} · {_aktif_saglayici().hedef_adi(_gosterim_oid)}",
                 freq=_AI_PRO_FREQ_HZ,
                 intensity=rep_duty,
                 remaining_min=remaining // 60,
@@ -1917,13 +1922,13 @@ def _ai_pro_loop(dongu_muhru=None):
                 "reliability": round(rel, 3),
                 "target": {"x": round(x_mm, 1), "y": round(y_mm, 1), "z": round(z_mm, 1)},
                 "eField": round(e_field, 4),
-                "organId": _ai_organ_id,
-                "organName": _aktif_saglayici().hedef_adi(_ai_organ_id),
+                "organId": _gosterim_oid,
+                "organName": _aktif_saglayici().hedef_adi(_gosterim_oid),
                 # YALNIZ-EK (Faz 1): mevcut anahtarlar aynen kalır (sürüm kayması deseni).
                 "model": _aktif_saglayici().ad,
                 "modelName": _aktif_saglayici().title,
                 "subjectLabel": _aktif_saglayici().subject_label,
-                "targetName": _aktif_saglayici().hedef_adi(_ai_organ_id),
+                "targetName": _aktif_saglayici().hedef_adi(_gosterim_oid),
                 "targets": _ai_organ_cache.get("targets") or [],
                 "method": _ai_organ_cache.get("method") or "",
                 "targetLabel": _ai_organ_cache.get("target_label") or "",
@@ -2785,6 +2790,8 @@ async def ai_pro_frame(
             kedi_var = bool(_ai_organ_cache.get("kedi_var"))
             guven_dokumu = _ai_organ_cache.get("guven_dokumu")  # snapshot (yirtik-okuma politikasi)
             kayip_damgasi = _ai_organ_cache.get("kayip_damgasi")  # i7-F-1: gözlemin damgası (lokalizasyon başı)
+            # ⚠️ D1.59 (B-5.4): koordinatın ORGANI aynı anlık görüntüden (await sırasında global değişmiş olabilir).
+            _c_oid = _ai_organ_cache.get("organ_id")
             # F2 (denetim 2026-08-24): bir LOKALİZASYONUN kimliği (cache 'at'; istek-başı `now` DEĞİL).
             # Kareler 1,5 sn'de, lokalizasyon en fazla 10 sn'de bir → eko karelerde update bloğuna
             # girilmez, `at` önceki ölçümün damgasını korur. Panel ARDISIK_ONAY sayacını yalnız YENİ
@@ -2808,6 +2815,8 @@ async def ai_pro_frame(
         # ⚠️ 1-C inceleme i7-F-1: bir hedef-kaybı STOP'undan ESKİ "bulundu" gözlemi (STOP'tan sonra biten uçuştaki
         # lokalizasyonun önbelleğe yazdığı) BULUNDU SAYILMAZ — sürülmez ve kayıp sayılır.
         _bulundu = bool(localized) and not estop_mandali.gozlem_engeli(kayip_damgasi)
+        # Gösterilen organ = sürülen organ (koordinat bulunduysa); yoksa seçili hedef.
+        _gosterim_oid = _c_oid if (localized and isinstance(_c_oid, int) and _c_oid >= 0) else _ai_organ_id
         # İG-5.1: sürülebilir seansta SAHİBİN karesi hedefi kaybettiyse kayıp sayılır; ARDIŞIK N kayıpta (ve sonrasında her
         # kayıp karede — i7-F-1 arka kalkanı) AI'nın sürdüğü bobinlere STOP. Yabancı kare sayılmaz.
         if session_active and not is_foreign:
@@ -2821,7 +2830,7 @@ async def ai_pro_frame(
         # kare seansın SAHİBİNDEN geliyorsa. Bobin 1-7. [B1]: yabancı kare ASLA sürmez (yanlış
         # kameradan hesaplanan hedefe onaylı seansta enerji verilmesini önler).
         if _bulundu and session_active and not is_foreign:
-            D, P, e_field = await asyncio.to_thread(_predict_and_drive, x_mm, y_mm, z_mm, _ai_organ_id)
+            D, P, e_field = await asyncio.to_thread(_predict_and_drive, x_mm, y_mm, z_mm, _c_oid)
             # Audit P2: _drive_coils_ai_pro senkron MQTT publish yapar (ESP probe/connect/wait ~sn) →
             # event-loop'u bloklardi (es-zamanli /emergency_stop yaniti gecikir). to_thread'e al.
             # D1.81: niyet nesli bağlamı `to_thread` iş parçacığına kopyalanır; `update_coil` onu kilit altında denetler.
@@ -2838,7 +2847,7 @@ async def ai_pro_frame(
                     rep_duty = round(normalize_ai_pro_duty_ratio(D[0]) * 100.0, 1)
                     update_live_session_state(
                         is_active=True,
-                        mode=f"AI Pro · {_aktif_saglayici().title} · {_aktif_saglayici().hedef_adi(_ai_organ_id)}",
+                        mode=f"AI Pro · {_aktif_saglayici().title} · {_aktif_saglayici().hedef_adi(_gosterim_oid)}",
                         freq=_AI_PRO_FREQ_HZ,
                         intensity=rep_duty,
                         remaining_min=remaining // 60,
@@ -2885,13 +2894,13 @@ async def ai_pro_frame(
                 "perCoil": _build_ai_pro_percoil(D, P),
                 "target": {"x": round(x_mm, 1), "y": round(y_mm, 1), "z": round(z_mm, 1)},
                 "eField": round(e_field, 4),
-                "organId": _ai_organ_id,
-                "organName": _aktif_saglayici().hedef_adi(_ai_organ_id),
+                "organId": _gosterim_oid,
+                "organName": _aktif_saglayici().hedef_adi(_gosterim_oid),
                 # YALNIZ-EK (Faz 1): mevcut anahtarlar aynen kalır (sürüm kayması deseni).
                 "model": _aktif_saglayici().ad,
                 "modelName": _aktif_saglayici().title,
                 "subjectLabel": _aktif_saglayici().subject_label,
-                "targetName": _aktif_saglayici().hedef_adi(_ai_organ_id),
+                "targetName": _aktif_saglayici().hedef_adi(_gosterim_oid),
                 "targets": _ai_organ_cache.get("targets") or [],
                 "method": _ai_organ_cache.get("method") or "",
                 "targetLabel": _ai_organ_cache.get("target_label") or "",
