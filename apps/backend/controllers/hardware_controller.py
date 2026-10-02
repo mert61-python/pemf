@@ -274,6 +274,28 @@ class HardwareController:
             self.logger.debug("STM red durumu okunamadi → baslatma ENGELLENMEDI", exc_info=True)
         return ""
 
+    def _gonderici_baslatmaya_hazir(self) -> bool:
+        """START kapısı: HWSender ŞU AN canlı mı? Ölüyse canlandırmayı DENER (sonraki STOP'lar yazılsın) ama bu START'ı
+        REDDEDER (False).
+
+        ⚠️ 1-C inceleme i5-F-3 (ölçüldü 30/30): ölü göndericiyi canlandıran START, canlandırmanın KENDİ kopuş olayıyla
+        yarışıyordu — yeni çalışan bağlantıyı yeniden kurarken `on_disconnect` HC'yi "durdu"ya çeker; START durumu bundan
+        ÖNCE yazmışsa "başarılı" dönüp koşu kaydı açılıyor ama keep-alive susuyordu (bobin yalnız ölü-adama dek). STM
+        yeniden bağlanırken başlatma zaten anlamsızdır: operatör "gönderici yeniden başlatıldı — yeniden deneyin" görür.
+        STOP yolları bu kapıdan GEÇMEZ (Ö.4-Y8): `_gonderici_canli` canlandırıp gönderimi sürdürür."""
+        core = getattr(self, "core", None)
+        canli = getattr(core, "hw_gonderici_canli", None)
+        if not callable(canli):
+            return True
+        try:
+            if canli():
+                return True
+        except Exception:
+            dongu_hatasini_bildir("HWSender canlilik denetimi basarisiz → gonderici OLU sayildi", logger=self.logger)
+            return False
+        self._gonderici_canli()  # canlandırmayı dene (sonraki STOP'lar için); bu START yine de reddedilir
+        return False
+
     def _gonderici_canli(self) -> bool:
         """HWSender (kuyruk → seri port) canlı mı? Ölüyse bir kez yeniden başlatmayı dener (D1.55 · B-1.23).
 
@@ -344,7 +366,7 @@ class HardwareController:
         # ⚠️ D1.55 (B-1.23): gönderici ÖLÜYKEN (ve yeniden başlatılamıyorken) BAŞLATMA da reddedilir — durum
         # yazılırsa "başarılı" denir ama komut porta gitmez (sahte başarılı seans), gönderici dönünce de
         # keep-alive bobini HABERSİZ enerjilerdi. Durdurma ASLA kapılanmaz (Ö.4-Y8).
-        if start and not self._gonderici_canli():
+        if start and not self._gonderici_baslatmaya_hazir():
             self.logger.warning("Bobin %s BAŞLATILMADI: donanım gönderici iş parçacığı çalışmıyor.", coil_id)
             return False
 
@@ -444,7 +466,7 @@ class HardwareController:
         if _engel:
             self.logger.warning("TÜM bobinler BAŞLATILMADI: %s", _engel)
             return False
-        if not self._gonderici_canli():  # D1.55 (B-1.23) — gerekçe update_coil'de
+        if not self._gonderici_baslatmaya_hazir():  # D1.55 (B-1.23) + i5-F-3 — gerekçe update_coil'de
             self.logger.warning("TÜM bobinler BAŞLATILMADI: donanım gönderici iş parçacığı çalışmıyor.")
             return False
         # DENETIM P2 (kismi uygulama) — update_coil:144-169'daki AYNI desen, gerekcesi orada.
