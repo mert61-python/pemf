@@ -528,7 +528,12 @@ def update_live_session_state(
             # yolları buradan geçtiği için hasta temizliği tek noktada garanti (kilit içinde, hafif).
             _live_state["patient"] = None
         snapshot = dict(_live_state["activeTreatment"])
-    _ws_broadcast_sync({"type": "session_update", "data": snapshot})
+        # ⚠️ 1-C inceleme i2-F4: yayın YAZIMLA AYNI kilit altında PLANLANIR (`call_soon_threadsafe` FIFO + gönderim kilidi
+        # FIFO → istemci yazım sırasını görür). Eskiden kilit bırakıldıktan SONRA planlanıyordu: E-stop'tan ÖNCE denetimi
+        # geçen bir "aktif" yazımının yayını E-stop'un "Acil Durdurma" yayınından SONRAYA kalabiliyor, istemcinin aldığı
+        # son ileti `isActive:true` oluyordu (ölçüldü 30/30, zorlanmış zamanlama). Kilit sırası güvenli: `_ws_broadcast_sync`
+        # yalnız `_ws_pending_lock` / `_ws_lock` alır, onları tutup `_live_state_lock` alan yol yok.
+        _ws_broadcast_sync({"type": "session_update", "data": snapshot})
     if not is_active:
         # patient session_update ile TAŞINMAZ → tam snapshot yayınla ki kart canlı temizlensin.
         _ws_broadcast_sync({"type": "snapshot", "data": _build_ws_snapshot()})
