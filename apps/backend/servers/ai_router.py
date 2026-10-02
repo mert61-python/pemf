@@ -895,13 +895,69 @@ def _extract_organ_target(organs_by_id, organ_id, overlay):
     _neden = ai_pro_hedef.hedef_kabin_disi_nedeni(*ham_mm) if len(ham_mm) == 3 else "kabin denetimi: eksik koordinat"
     if _neden:
         logger.warning("AI Pro hedefi kabin/geçerlilik denetiminde REDDEDİLDİ (organ %s): %s", organ_id, _neden)
+        if _neden.startswith("kabin boyutu okunamadı"):
+            _kabin_okunamaz_bildir()
         return False, 0.0, 0.0, 0.0, rel, overlay, kedi_var, dokum
 
     def _mm(v):
         # em_kedi eğitim aralığı ±300 mm. Kabin İÇİNDE kalan tek kısılan bant x ∈ (300, 325] mm (bkz. rapor, Açık).
         return max(-300.0, min(300.0, v))
 
-    return (rel >= _MIN_RELIABILITY), _mm(ham_mm[0]), _mm(ham_mm[1]), _mm(ham_mm[2]), rel, overlay, kedi_var, dokum
+    _kisik = (_mm(ham_mm[0]), _mm(ham_mm[1]), _mm(ham_mm[2]))
+    if _kisik != ham_mm:
+        _kiskac_izi(organ_id, ham_mm, _kisik)
+    return (rel >= _MIN_RELIABILITY), _kisik[0], _kisik[1], _kisik[2], rel, overlay, kedi_var, dokum
+
+
+#: 1-C inceleme i7-F-9: (300, 325] mm bandı kısma izi — organ + cm değeri başına bu aralıkta en çok BİR WARNING.
+_KISKAC_IZ_ARALIK_S = 60.0
+_kiskac_iz_son: dict = {}
+#: 1-C inceleme i7-F-8: kabin yapılandırması okunamazken eylem bildirimi — seans (onay) başına BİR KEZ.
+_kabin_okunamaz_bildirilen: dict = {"anahtar": None}
+
+
+def _kiskac_izi(organ_id, ham_mm, kisik_mm) -> None:
+    """i7-F-9: kabin İÇİ ama em_kedi eğitim aralığı (±300 mm) DIŞI hedef kısılınca İZ bırak. Ölçüldü: x ∈ (300, 325] mm
+    iz bırakmadan (WARNING yok, yanıtta kısılmış değer) ±300'e kısılıp sürülüyordu. Ö.4-Y9: YENİ kıskaç DEĞİL —
+    mevcut ±300 kıskacının görünürlüğü (kısma kararı sahip/model işi, rapor "Açık")."""
+    try:
+        anahtar = (int(organ_id), tuple(round(a / 10.0) for a in ham_mm))
+        simdi = time.monotonic()
+        if simdi - _kiskac_iz_son.get(anahtar, -1e9) < _KISKAC_IZ_ARALIK_S:
+            return
+        if len(_kiskac_iz_son) > 256:
+            _kiskac_iz_son.clear()
+        _kiskac_iz_son[anahtar] = simdi
+        logger.warning(
+            "AI Pro hedefi (organ %s) kabin İÇİNDE ama em_kedi eğitim aralığı (±300 mm) DIŞINDA: %s mm → %s mm'ye "
+            "kısıldı (doz tahmini kısılmış konumla yapılır).",
+            organ_id,
+            tuple(round(a, 1) for a in ham_mm),
+            tuple(round(a, 1) for a in kisik_mm),
+        )
+    except Exception:
+        logger.debug("kıskaç izi yazılamadı", exc_info=True)
+
+
+def _kabin_okunamaz_bildir() -> None:
+    """i7-F-8: kabin yapılandırması okunamıyorsa HER hedef reddedilir; yanıt "hedef bulunamadı" olur ve panel "açıyı
+    değiştirin" der — operatör hayvanı boşuna yeniden konumlar ("hata mesajı EYLEM söylesin"). Seans başına BİR KEZ
+    eylem söyleyen bildirim (her karede değil — alarm yorgunluğu yok). Güvenli yön korunur: hedef yine REDDEDİLİR."""
+    try:
+        import servers.api_server as _apx
+
+        with _apx._session_lock:
+            _anahtar = _apx._active_session.get("onay_kimligi") or _apx._active_session.get("session_id") or ""
+        if _kabin_okunamaz_bildirilen.get("anahtar") == _anahtar:
+            return
+        _kabin_okunamaz_bildirilen["anahtar"] = _anahtar
+        _apx._push_notification(
+            "⚠️ AI Pro: kabin yapılandırması okunamıyor — hedef doğrulanamadığı için bobinler SÜRÜLMEZ. Hayvanı yeniden "
+            "konumlamak çözmez: kabin yapılandırma dosyasını (kurulum) kontrol edin ya da teknik desteğe başvurun.",
+            "error",
+        )
+    except Exception:
+        logger.debug("kabin okunamaz bildirimi gönderilemedi", exc_info=True)
 
 
 # E3-b (denetim 2026-08-24): cat_organ SEGMENTASYON aşaması başarısız olursa (kedi kadrajda YOK)
