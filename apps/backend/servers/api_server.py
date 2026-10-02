@@ -2151,6 +2151,11 @@ def _komut_kimligi(on_ek: str, coil_id: int) -> str:
     return f"{on_ek}_{coil_id}_{int(time.time() * 1000)}_{next(_komut_sira) % 1_000_000}"
 
 
+#: 1-C inceleme i1-F4: telafi STOP'u deneme sayısı ve denemeler arası bekleme (geçici broker hatasını aşmak için).
+_TELAFI_STOP_DENEME = 3
+_TELAFI_STOP_ARA_S = 0.2
+
+
 def _esp_start_yayinla(coil_id: int, payload: dict, nesil: int | None = None) -> bool:
     """ESP START yayını — acil durdurma MANDALI ve sürüş NESLİ kapılı (D1.81 · B-5.3 · Y4).
 
@@ -2176,9 +2181,19 @@ def _esp_start_yayinla(coil_id: int, payload: dict, nesil: int | None = None) ->
         logging.getLogger(__name__).warning(
             "ESP bobin %s: START yayını sürerken durdurma/acil durdurma geldi → TELAFİ STOP'u gönderiliyor.", coil_id
         )
-        _mqtt_publish(
-            f"pemf/coil/{coil_id}/control", {"command": "stop", "command_id": _komut_kimligi("telafi", coil_id)}
-        )
+        # ⚠️ 1-C inceleme i1-F4: telafi STOP'unun sonucu OKUNUR. Eskiden dönüş yok sayılıyordu — düşerse (geçici broker
+        # hatası) telde son başarılı komut START kalıyor, operatöre hiçbir şey söylenmiyordu (ölçüldü). En çok
+        # `_TELAFI_STOP_DENEME` kez denenir (her deneme YENİ kimlikle — 8266 tekrar önbelleği yutmasın); hepsi düşerse
+        # "STOP doğrulanamadı" bildirimi. Bu işlev iş parçacığında koşar (bekleme olay döngüsünü bloklamaz). Ö.4-Y8.
+        for _deneme in range(_TELAFI_STOP_DENEME):
+            if _deneme:
+                time.sleep(_TELAFI_STOP_ARA_S)
+            if _mqtt_publish(
+                f"pemf/coil/{coil_id}/control", {"command": "stop", "command_id": _komut_kimligi("telafi", coil_id)}
+            ):
+                break
+        else:
+            _bildir_teyitsiz_stop([coil_id], "Telafi STOP'u (START yayını sürerken durdurma geldi)")
         return False
     return ok
 
