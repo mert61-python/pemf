@@ -10,11 +10,12 @@ hiçbir START kabul edilmez." Kapsam: elle başlatma, AI (Auto), AI Pro `/frame`
   * MANDAL — her acil durdurma (`api_server._emergency_stop_all`, bütün kaynakları: düğme, STM kopması, STM reddi,
     STM watchdog'u, ESP alarmı) kurar; YALNIZ `sifirla()` (operatörün `POST /api/hardware/estop_mandali/sifirla`
     eylemi) kaldırır. Mandal kuruluyken her START reddedilir.
-  * SÜRÜŞ NESLİ — her durdurma (acil durdurma, `stop_all_coils`, seans / AI Pro durdurma, STM kopması) nesli bir
-    artırır. Bir START niyeti nesli NİYET ANINDA alır (istek girişi ya da seans mührü); sürüş anında nesil
-    değişmişse START REDDEDİLİR. Böylece tahmin/lokalizasyon sırasında (0,3–2,2 sn) gelen durdurma ve
-    "durdur → sıfırla → yeni seans" (ABA) sırası uçuştaki ESKİ niyeti diriltemez — "seans aktif mi" yeniden
-    denetimi bunu yakalayamaz (yeni seans aktiftir), mandal da yakalayamaz (sıfırlandı).
+  * SÜRÜŞ NESLİ — her durdurma (acil durdurma, `stop_all_coils`, seans / AI Pro durdurma, STM kopması) ve mandal
+    kuruluyken yapılan Sıfırla nesli bir artırır. Bir START niyeti nesli NİYET ANINDA alır (istek girişi ya da seans
+    mührü); sürüş anında nesil değişmişse START REDDEDİLİR. Böylece tahmin/lokalizasyon sırasında (0,3–2,2 sn) gelen
+    durdurma ve "durdur → sıfırla → yeni seans" (ABA) sırası uçuştaki ESKİ niyeti diriltemez — "seans aktif mi"
+    yeniden denetimi bunu yakalayamaz (yeni seans aktiftir), mandal da yakalayamaz (sıfırlandı). Mandal KURULUYKEN
+    alınmış niyet de Sıfırla'dan sonra bayattır (Sıfırla'nın kendi artırımı).
 
 ⚠️ DENETİM YERİ: kontrol `HardwareController.update_coil` / `start_all_coils` içinde DURUM KİLİDİ ALTINDA yapılır.
 "Tahmin sonrası yeniden denetim" denetle-sonra-yap aralığı bırakır (İG-5.3: yama F 30'da 1 kaçırdı). ESP yayınında
@@ -82,14 +83,21 @@ def nesil_artir() -> int:
 
 
 def sifirla(kaynak: str = "") -> bool:
-    """Operatörün bilinçli eylemi: mandalı KALDIR. HİÇBİR ŞEYİ BAŞLATMAZ; nesil DEĞİŞMEZ (uçuştaki eski niyetler
-    acil durdurmanın artırdığı nesille zaten bayattır). @return mandal kurulu muydu."""
+    """Operatörün bilinçli eylemi: mandalı KALDIR. HİÇBİR ŞEYİ BAŞLATMAZ. @return mandal kurulu muydu.
+
+    ⚠️ Mandal kuruluyken NESLİ DE ARTIRIR (1-C inceleme i1-F1): E-stop ÖNCESİ alınmış niyetler E-stop'un artırdığı
+    nesille zaten bayattır; ama mandal KURULUYKEN alınmış bir niyetin nesli E-stop SONRASI nesildir — artırılmasa
+    Sıfırla'dan sonra "taze" görünür ve yeni bir START olmadan sürerdi (ölçüldü: çıkarım sürerken basılan Sıfırla ile
+    AI (Auto) 30/30 sürdü; Y4: "sıfırlama kendi başına yeniden başlatmaz"). Mandal yokken Sıfırla nesle DOKUNMAZ
+    (boş Sıfırla uçuştaki geçerli niyetleri öldürmesin). STOP göndermez, STOP'u kapılamaz (Ö.4-Y8)."""
+    global _nesil
     with _kilit:
         onceki = bool(_durum["aktif"])
         _durum["aktif"] = False
         if onceki:
             _durum["sifirlama_zamani"] = time.time()
             _durum["sifirlayan"] = str(kaynak or "")[:80]
+            _nesil += 1
         return onceki
 
 
