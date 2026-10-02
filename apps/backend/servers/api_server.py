@@ -774,6 +774,9 @@ STM_RED_MESAJI = (
     "programlayın (CubeIDE: Project → Clean → Build → Run). Açılış satırı '7-ch' demeli."
 )
 
+#: D1.53 (A-05): 0 Hz seans isteğinin nedeni — tek kaynak (mandallı ve mandalsız yol AYNI metni verir; 1-C i3-F-4).
+SIFIR_HZ_SEANS_MESAJI = "Frekans 0 Hz = DURDURMA (A-05): bobinler durduruldu, seans BAŞLATILMADI. Frekans girin."
+
 
 def _seansi_geri_al(sebep: str, seans_kimligi=None) -> None:
     """Başlatılmış ama HİÇ SÜRÜLEMEMİŞ seansı geri al (kayıt YALAN olmasın).
@@ -2699,7 +2702,13 @@ async def hardware_command(payload: CommandPayload):
         raise HTTPException(status_code=503, detail="Headless Core veya HardwareController hazır değil.")
     # D1.81 · Y4: START komutları mandallıyken 409 (try'ın DIŞINDA — aşağıdaki geniş except onu 500'e çevirirdi).
     # Asıl kapı `HardwareController`dadır; stop_coil / stop_all_coils buraya ASLA takılmaz (Ö.4-Y8).
-    if str(payload.command or "").lower() in ("start_coil", "start_all_coils"):
+    # 1-C inceleme i3-F-4 (A-05): 0 Hz BAŞLATMA = STOP — mandal 409'u ona UYGULANMAZ (HC onu STOP olarak işler; eskiden
+    # mandallıyken 0 Hz start_coil/start_all_coils 409 ile STOP'suz dönüyordu).
+    from controllers.hardware_controller import sifir_hz_durdurma_mi
+
+    if str(payload.command or "").lower() in ("start_coil", "start_all_coils") and not sifir_hz_durdurma_mi(
+        (payload.params or {}).get("freq", 100.0)
+    ):
         _engel = estop_mandali.baslatma_engeli(estop_mandali.niyet_nesli())  # varış damgası (i1-F2)
         if _engel:
             raise HTTPException(status_code=409, detail=_engel)
@@ -3139,6 +3148,19 @@ async def start_session(payload: SessionStartPayload, request: Request):
     _niyet_nesli = estop_mandali.niyet_nesli()
     _giris_engeli = estop_mandali.baslatma_engeli(_niyet_nesli)
     if _giris_engeli:
+        # ⚠️ 1-C inceleme i3-F-4 (A-05 · Y4): 0 Hz isteği bir DURDURMADIR — mandal yalnız START'ı engeller. Eskiden
+        # mandallıyken 0 Hz seans isteği 409 ile STOP'SUZ dönüyordu (ölçüldü: mandal öncesi 2 STOP paketi → 0). İstenen
+        # bobinlere STOP gönderilir (STOP gönderimi yalnız ARTAR, Ö.4-Y8); seans AÇILMAZ, DB satırı yazılmaz.
+        from controllers.hardware_controller import sifir_hz_durdurma_mi
+
+        if sifir_hz_durdurma_mi(payload.frequency):
+            _durdur = [c for c in dict.fromkeys(payload.coil_ids or []) if 1 <= c <= 8] or list(range(1, 9))
+            if not live_state.esp_etkin():  # seans yoluyla aynı: ESP kapalıyken hayalet bobin 8'e STOP/alarm yok
+                _durdur = [c for c in _durdur if c not in ESP_COIL_IDS]
+            _bildir_teyitsiz_stop(
+                await asyncio.to_thread(_stop_session_coils, _durdur), "0 Hz seans isteği (A-05) — mandallıyken"
+            )
+            raise HTTPException(status_code=503, detail=SIFIR_HZ_SEANS_MESAJI)
         raise HTTPException(status_code=409, detail=_giris_engeli)
 
     # ⚠️ 2026-08-09 (Tier 1): kaydın SAHİBİNE sunucu karar verir (bkz. auth.cozumlenmis_operator).
@@ -3568,10 +3590,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
             raise HTTPException(status_code=409, detail=_surus_engeli)
         if sifir_hz_durdurma_mi(payload.frequency):
             # D1.53 (A-05): 0 Hz = DURDURMA — bobinler durduruldu; neden firmware DEĞİL, girilen frekans.
-            raise HTTPException(
-                status_code=503,
-                detail="Frekans 0 Hz = DURDURMA (A-05): bobinler durduruldu, seans BAŞLATILMADI. Frekans girin.",
-            )
+            raise HTTPException(status_code=503, detail=SIFIR_HZ_SEANS_MESAJI)
         raise HTTPException(
             status_code=503,
             detail=("Hiçbir bobin komutu kabul etmedi; seans BAŞLATILMADI. " + STM_RED_MESAJI),
