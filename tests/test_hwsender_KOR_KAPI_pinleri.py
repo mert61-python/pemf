@@ -7,11 +7,14 @@ mutantta bobin 6 RUN'ı "STOP yazıldı" sayılıyordu (E-stop teyidi yalanı; D
 belirler) ve D1.55 + D1.72 kapıları dahil ilgili 827 test YEŞİL kalıyordu.
 KAPI: i5 aparatı (GERÇEK HeadlessCore + HC); bobin 6 ve 7 yalnız sürülürken yazılan RUN STOP SAYILMAZ, ardından gelen
 `stop_all_coils` STOP'u SAYILIR.
+i5-F-7: kapanışta gönderici canlandırılmaz, COM portu yeniden açılmaz.
 """
 
 from __future__ import annotations
 
-from test_hwsender_CANLANDIRMA_bayat_RUN_yazmaz import _aparat, _bekle, _duty, _stop_mu
+import time
+
+from test_hwsender_CANLANDIRMA_bayat_RUN_yazmaz import _OLUM, _aparat, _bekle, _calisan_gondericiler, _duty, _stop_mu
 
 
 def test_KRITIK_i5F6_yazim_izi_bobin_6_ve_7_RUN_STOP_SAYILMAZ(tmp_path):
@@ -31,3 +34,21 @@ def test_KRITIK_i5F6_yazim_izi_bobin_6_ve_7_RUN_STOP_SAYILMAZ(tmp_path):
             isaret2 = core.hw_yazim_isareti()
             assert hc.stop_all_coils() is True
             assert core.hw_stop_yazildi_bekle(isaret2, 3.0) is True
+
+
+@_OLUM
+def test_KRITIK_i5F7_kapanista_gonderici_CANLANDIRILMAZ_port_ACILMAZ(tmp_path):
+    """i5-F-7: kapanışta (`_hw_sender_stop` kurulu) gelen bir STOP/E-stop HWSender'ı yeniden BAŞLATMAZ ve COM portunu
+    yeniden AÇMAZ (denetim silinince port yeniden açılıyor, 2 sn tutuluyor — yeni örneğin ilk açılışı "port meşgul";
+    D1.55 kapısı 9/9 ve ilgili 827 test yeşil kalıyordu). STOP kuyruğa yine girer (Y8) ama "porta yazıldı" denmez."""
+    with _aparat(tmp_path / "m4") as (core, hc, d, api):
+        t = core._hw_sender_thread
+        core._hw_sender_stop.set()
+        t.join(3)
+        assert not t.is_alive()
+        n = len(d.acilan)
+        ok = hc.stop_all_coils()
+        time.sleep(0.3)
+        assert not _calisan_gondericiler(core), "kapanışta HWSender yeniden başlatıldı"
+        assert len(d.acilan) == n, f"kapanışta seri port YENİDEN AÇILDI ({n}->{len(d.acilan)})"
+        assert ok is False
