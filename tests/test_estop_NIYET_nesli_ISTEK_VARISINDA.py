@@ -94,7 +94,7 @@ def _batch_tur(o, monkeypatch, *, sifirla: bool):
     o.api._emergency_stop_all("manual")
     sonra = ap.paket_sayisi(o)
     if sifirla:
-        assert o.c.post(_SIFIRLA).status_code == 200
+        assert o.c.post(_SIFIRLA, json={"onay": True}).status_code == 200
     birak.set()
     t.join(15)
     assert not t.is_alive(), "aparat: batch isteği bitmedi"
@@ -325,7 +325,9 @@ def test_KRITIK_mandalliyken_VARAN_START_govdesi_SIFIRLAdan_sonra_bitse_de_SURUL
         t = threading.Thread(target=_gonder, daemon=True, name=f"test-varis-{ad}")
         t.start()
         assert girdi.wait(10), f"aparat: {ad} isteği gövde okumasına ulaşmadı"
-        assert o.c.post(_SIFIRLA).status_code == 200  # operatörün Sıfırla'sı — istek VARDIKTAN SONRA
+        assert (
+            o.c.post(_SIFIRLA, json={"onay": True}).status_code == 200
+        )  # operatörün Sıfırla'sı — istek VARDIKTAN SONRA
         engel.set()
         t.join(15)
         assert not t.is_alive(), f"aparat: {ad} isteği bitmedi"
@@ -356,7 +358,7 @@ def test_KARSIT_SIFIRLAdan_SONRA_varan_ayni_akisli_START_SURER(lm, ad, yol, uret
     o = lm
     _temizle(o)
     o.api._emergency_stop_all("manual")
-    assert o.c.post(_SIFIRLA).status_code == 200
+    assert o.c.post(_SIFIRLA, json={"onay": True}).status_code == 200
     sonra = ap.paket_sayisi(o)
     girdi, engel = threading.Event(), threading.Event()
     engel.set()

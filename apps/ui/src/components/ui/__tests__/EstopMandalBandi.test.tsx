@@ -58,6 +58,8 @@ describe("EstopMandalBandi — Y4 mandal ve 'Sıfırla'", () => {
     expect(String(mockConfirm.mock.calls[0][1])).toMatch(/BAŞLATMAZ/);
     expect(mockPost.mock.calls.map((c) => c[0])).toEqual([SIFIRLA_YOLU]);
     expect(SIFIRLA_YOLU).toBe("/hardware/estop_mandali/sifirla");
+    // 1-C inceleme i3-F-6: uç yalnız BİLİNÇLİ JSON isteği kabul eder ({"onay": true}; gövdesiz/çapraz köken POST reddedilir).
+    expect(mockPost.mock.calls[0][1]).toEqual({ onay: true });
     await waitFor(() => expect(mockToast).toHaveBeenCalled());
   });
 

@@ -147,7 +147,7 @@ def test_KRITIK_mandalliyken_istenen_AI_Auto_START_SIFIRLA_sonrasi_SURULMEZ_N30(
         y0 = len(o.yayin)
         t, kutu = _landmark_arka_planda(o)  # MANDALLIYKEN istenen otonom START; çıkarım sürüyor
         assert o.lm.girdi.wait(10), "aparat: istek çıkarıma ulaşmadı"
-        r = o.c.post(_SIFIRLA)  # operatörün Sıfırla'sı (bu istekten SONRA)
+        r = o.c.post(_SIFIRLA, json={"onay": True})  # operatörün Sıfırla'sı (bu istekten SONRA)
         assert r.status_code == 200, r.text[:200]
         o.lm.engel.set()
         t.join(15)

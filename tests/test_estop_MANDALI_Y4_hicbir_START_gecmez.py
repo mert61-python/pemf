@@ -328,7 +328,7 @@ def test_KRITIK_SIFIRLA_hicbir_seyi_BASLATMAZ_sonra_YENI_START_calisir(ortam):
     o = ortam
     sonra = _estop(o)
     o.c.post("/api/coil/1/control", json={"start": True, "freq": 100, "duty": 40, "phase": 0, "duration": 60})
-    r = o.c.post(_SIFIRLA_YOLU)
+    r = o.c.post(_SIFIRLA_YOLU, json={"onay": True})
     assert r.status_code == 200, f"Sıfırla ucu {r.status_code}: {r.text[:200]}"
     assert not _surus_paketleri(o, sonra), "Sıfırla mandallıyken reddedilen START'ı DİRİLTTİ (kendi başına başlattı)"
     assert _calisan(o) == []
@@ -356,7 +356,7 @@ def test_KRITIK_mandal_DURUMU_saglik_ve_WS_anlik_goruntusunde_gorunur(ortam):
     assert any(m.get("type") == "estop_mandali" and (m.get("data") or {}).get("aktif") for m in o.ws), (
         "mandal kurulunca WS yayını yok"
     )
-    o.c.post(_SIFIRLA_YOLU)
+    o.c.post(_SIFIRLA_YOLU, json={"onay": True})
     assert (o.c.get("/api/health").json().get("estopMandali") or {}).get("aktif") is False, (
         "Sıfırla sonrası hâlâ mandallı"
     )

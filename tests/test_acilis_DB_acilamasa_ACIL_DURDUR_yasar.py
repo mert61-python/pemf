@@ -119,7 +119,7 @@ class _Casus:
         sonuc["estop"] = {{"kod": r.status_code, "sure": time.perf_counter() - t0}}
         # D1.81 · Y4: acil durdurma MANDALLAR — yeni START'tan önce operatörün "Sıfırla"sı gerekir; DB'siz kipte de
         # çalışmalı (denetim izi yazılamaz, sıfırlama yine olur).
-        r = c.post("/api/hardware/estop_mandali/sifirla")
+        r = c.post("/api/hardware/estop_mandali/sifirla", json={{"onay": True}})  # 1-C i3-F-6: bilinçli JSON (şablon: {{}} kaçış)
         sonuc["sifirla"] = {{"kod": r.status_code}}
         if SENARYO != "saglam":
             r = c.post("/api/session/start", json={{"mode": "Manuel", "frequency": 100, "duty": 40, "phase": 0,

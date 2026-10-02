@@ -62,7 +62,7 @@ def mandal_modulu():
 
 def mandali_sifirla(c) -> None:
     """Operatörün 'Sıfırla' eylemi (uç yoksa — önce-kırmızı — sessiz)."""
-    c.post("/api/hardware/estop_mandali/sifirla")
+    c.post("/api/hardware/estop_mandali/sifirla", json={"onay": True})
 
 
 def kur(monkeypatch, tmp_path, *, dongu_noop: bool = True):

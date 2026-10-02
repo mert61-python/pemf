@@ -255,7 +255,7 @@ def test_KRITIK_bayat_red_kararindan_sonra_YENI_NACK_dizisi_seansi_YINE_DURDURUR
     assert ls.stm_komutlari_reddediyor() is False, "aparat: red karari bayatlamadi"
 
     # D1.81 · Y4: seans A'nın sistematik-red E-stop'u MANDALLADI — yeni seanstan önce operatörün "Sıfırla"sı gerekir.
-    assert c.post("/api/hardware/estop_mandali/sifirla").status_code == 200
+    assert c.post("/api/hardware/estop_mandali/sifirla", json={"onay": True}).status_code == 200
     _seans_baslat(c)
     with api._session_lock:
         sid_b = api._active_session.get("db_session_id")

@@ -52,7 +52,7 @@ export function EstopMandalBandi() {
     );
     if (!onay) return;
     setMesgul(true);
-    const r = await apiPost<{ status?: string } | null>(SIFIRLA_YOLU, {}, null);
+    const r = await apiPost<{ status?: string } | null>(SIFIRLA_YOLU, { onay: true }, null);
     setMesgul(false);
     if (r?.status === "success") {
       emitToast("Mandal sıfırlandı — başlatma yeniden mümkün (bobinler başlatılmadı)", "success");

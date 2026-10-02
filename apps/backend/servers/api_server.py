@@ -5718,13 +5718,27 @@ async def estop_mandalini_sifirla(request: Request):
     """Y4 (sahip kararı) — operatörün AYRI ve BİLİNÇLİ "Sıfırla" eylemi: acil durdurma MANDALINI kaldırır.
 
     ⚠️ HİÇBİR ŞEYİ BAŞLATMAZ: mandallıyken reddedilen START'lar diriltilmez, seans açılmaz; ardından ayrıca yeni bir
-    START gerekir. Sürüş nesli DEĞİŞMEZ → acil durdurmadan ÖNCE kurulmuş (tahmindeki `/frame`, döngü turu) niyetler
-    sıfırlamadan sonra da bayattır (D1.81).
+    START gerekir. Acil durdurmadan ÖNCE kurulmuş niyetler E-stop'un artırdığı nesille bayattır; mandal KURULUYKEN
+    alınmış niyetler de bayat kalsın diye Sıfırla nesli bir artırır (`estop_mandali.sifirla`, 1-C inceleme i1-F1).
     Yetki: `/api/hardware/*` ile aynı — muaf DEĞİL (`auth._EXEMPT_EXACT` yalnız `/api/hardware/emergency_stop`'u TAM
     yol olarak muaf tutar): yerel ya da LAN (A-01) ya da jeton. Masaüstü Karşılama/Giriş ekranları yerel istemcidir.
-    Kim sıfırladı → denetim izi (`session_events`, append-only)."""
+    ⚠️ 1-C inceleme i3-F-6: yalnız BİLİNÇLİ istek — `Content-Type: application/json` + `{"onay": true}`. Eskiden
+    gövdesiz/JSON'suz POST kabul ediliyordu → LAN'da ya da cihazda açılan HERHANGİ bir sayfa "basit" (ön-uçuşsuz)
+    POST ile mandalı kaldırabiliyordu (ölçüldü: `Origin: http://kotu.example`, `text/plain` → 200). Tarayıcı çapraz
+    kökenden JSON'u ön-uçuşsuz gönderemez (ön-uçuş CORS'ta düşer); içerik türsüz gövde de reddedilir. Origin listesi
+    denetimi SEÇİLMEDİ: tünelden açılan web arayüzünün kendi kökeni LAN listesinde değildir (meşru uzaktan Sıfırla 403).
+    Kim sıfırladı → denetim izi (`session_events`, append-only): operatör + istemci adresi + köken (oturumsuz ekranda
+    `operator` boştur)."""
     from servers.auth import cozumlenmis_operator
 
+    if "application/json" not in (request.headers.get("content-type") or "").lower():
+        raise HTTPException(status_code=415, detail='Sıfırla yalnız JSON gövdeyle yapılabilir: {"onay": true}.')
+    try:
+        _govde = await request.json()
+    except Exception:
+        _govde = None
+    if not isinstance(_govde, dict) or _govde.get("onay") is not True:
+        raise HTTPException(status_code=400, detail='Sıfırla bilinçli onay ister: {"onay": true}.')
     _kim = cozumlenmis_operator(request, "") or ""
     _onceki = estop_mandali.durum()
     _kurulu = estop_mandali.sifirla(_kim or "operator")
@@ -5735,7 +5749,13 @@ async def estop_mandalini_sifirla(request: Request):
                 lambda: _get_treatment_db().record_session_event(
                     None,
                     "estop_mandali_sifirlandi",
-                    payload={"operator": _kim, "neden": _onceki.get("neden"), "mandal_zamani": _onceki.get("zaman")},
+                    payload={
+                        "operator": _kim,
+                        "neden": _onceki.get("neden"),
+                        "mandal_zamani": _onceki.get("zaman"),
+                        "istemci": getattr(request.client, "host", "") or "",  # i3-F-6: NEREDEN (oturumsuz ekran)
+                        "koken": request.headers.get("origin", ""),
+                    },
                     severity="warning",
                 )
             )

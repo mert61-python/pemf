@@ -223,10 +223,12 @@ def test_KRITIK_i4F06_SIFIRLA_ucu_UZAK_jetonsuz_istemciye_KAPALI_jetonla_ACIK(o,
     monkeypatch.setattr(auth, "get_api_token", lambda: "inc-sahte-jeton")
     o.api._emergency_stop_all("manual")
     uzak = {"cf-connecting-ip": "203.0.113.9"}
-    r = o.c.post("/api/hardware/estop_mandali/sifirla", headers=uzak)
+    r = o.c.post("/api/hardware/estop_mandali/sifirla", headers=uzak, json={"onay": True})
     assert r.status_code == 401, f"uzak JETONSUZ Sıfırla {r.status_code} döndü (401 bekleniyor): {r.text[:160]}"
     assert _m().mandalli_mi(), "uzak JETONSUZ istek mandalı KALDIRDI"
-    r2 = o.c.post("/api/hardware/estop_mandali/sifirla", headers={**uzak, "X-API-Key": "inc-sahte-jeton"})
+    r2 = o.c.post(
+        "/api/hardware/estop_mandali/sifirla", headers={**uzak, "X-API-Key": "inc-sahte-jeton"}, json={"onay": True}
+    )
     assert r2.status_code == 200 and not _m().mandalli_mi(), f"KARŞIT: jetonlu Sıfırla çalışmadı: {r2.status_code}"
 
 
@@ -454,8 +456,10 @@ def test_KRITIK_i4F12_SIFIRLA_denetim_izi_session_events_e_YAZILIR(o):
     """Tasarım (Sıfırla ucu): "Kim sıfırladı → denetim izi (`session_events`, append-only)". Mandal KURULUYKEN
     Sıfırla bir `estop_mandali_sifirlandi` olayı yazar (neden = mandalın kaynağı); mandal yokken Sıfırla iz YAZMAZ."""
     o.api._emergency_stop_all("stm_watchdog_timeout")
-    assert o.c.post("/api/hardware/estop_mandali/sifirla").status_code == 200
-    assert o.c.post("/api/hardware/estop_mandali/sifirla").status_code == 200  # mandal yokken: iz yazılmaz
+    assert o.c.post("/api/hardware/estop_mandali/sifirla", json={"onay": True}).status_code == 200
+    assert (
+        o.c.post("/api/hardware/estop_mandali/sifirla", json={"onay": True}).status_code == 200
+    )  # mandal yokken: iz yazılmaz
 
     with o.db._get_connection() as conn:
         satirlar = conn.execute(
