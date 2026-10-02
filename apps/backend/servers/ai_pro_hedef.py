@@ -28,6 +28,7 @@ SÖZLEŞMELER (kedi yolundan türetildi, DEĞİŞTİRİLMEDİ):
 
 from __future__ import annotations
 
+import functools
 from typing import Protocol, runtime_checkable
 
 # Kedi kapalı döngüsünün ekstra EM girdileri (ai_router'daki tarihsel sabitler; DEĞİŞMEDİ).
@@ -115,12 +116,28 @@ class KediSaglayici:
         ⚠️ Gövde `_localize_organ`ın 2026-08-25'teki hâlidir; fallback deseni korunmuştur."""
         from servers import ai_router as air
 
+        sonuc = None
         if air.ai_service_enabled():
             try:
-                return air._localize_organ_gpu(frame_bgr, hedef_id)
+                sonuc = air._localize_organ_gpu(frame_bgr, hedef_id)
             except Exception as e:
                 air.logger.warning("AI Pro cat_organ GPU delegasyonu başarısız → CPU-yerel: %s", e)
-        return air._localize_organ_cpu(frame_bgr, hedef_id)
+        if sonuc is None:
+            sonuc = air._localize_organ_cpu(frame_bgr, hedef_id)
+        self._ood_isaretle(sonuc)
+        return sonuc
+
+    def _ood_isaretle(self, sonuc) -> None:
+        """İG-5.22: hedef em_kedi'nin eğitim aralığı DIŞINDA mı? Eskiden kedi meta'sı hep boştu → `/propose` `ood` kedi
+        hattında HEP false (D0: 50 rastgele hedefin 36'sı |z| > 2,5 iken). ⚠️ Y49: yalnız GÖSTERİM/İZ — `sonuc` değişmez,
+        hedef aynen sürülür (yeni red ya da kıskaç YOK, Ö.4-Y9). Lokalize edilemeyen karede işaret YOK (bayat kalmaz)."""
+        try:
+            ood = bool(sonuc[0]) and _aralik_disi(
+                _kedi_egitim_araligi(), float(sonuc[1]), float(sonuc[2]), float(sonuc[3])
+            )
+        except Exception:
+            ood = False
+        self._meta = {"ood": ood}
 
     def predict(self, x_mm: float, y_mm: float, z_mm: float, hedef_id: int) -> tuple:
         """em_kedi ile D/P/E üret (GPU → CPU fallback). Duty kırpması ZARFTA yapılır."""
@@ -147,10 +164,9 @@ class KediSaglayici:
         return "Kamerayı hastaya doğrultun; hayvan kadrajda görünmüyor."
 
     def son_lokalizasyon_meta(self) -> dict:
-        """Kedi hattı kare üstü HEDEF ADAYI üretmez (organ seçimi çiplerden yapılır) → boş meta.
-        Araştırma sağlayıcıları burada targets/method/ood/E döndürür; tel sözleşmesi ORTAK ve
-        kedi tarafında yalnız-ek alanlar BOŞ kalır (veteriner sözleşmesi değişmez)."""
-        return {}
+        """Kedi hattı kare üstü HEDEF ADAYI üretmez (organ seçimi çiplerden yapılır) → targets/method/E YOK.
+        İG-5.22: yalnız `ood` (eğitim aralığı dışı — onay ekranı uyarısı) taşınır; veteriner sözleşmesi değişmez."""
+        return dict(getattr(self, "_meta", None) or {})
 
     def xai_sensitivity(self, x_mm: float, y_mm: float, z_mm: float, hedef_id: int):
         from ai_hub.em_kedi import inference_em_kedi as _iek
@@ -251,6 +267,27 @@ def kabin_yari_boyut_mm():
     if len(yari) != 3 or not all(math.isfinite(v) and v > 0 for v in yari):
         return None
     return yari
+
+
+def _aralik_disi(aralik, x_mm: float, y_mm: float, z_mm: float) -> bool:
+    """Konum (x, y, z) verilen [(alt, üst)] eğitim aralığının DIŞINDA mı? Aralık yoksa False (bilinmiyor ≠ dışarıda).
+    TEK ölçüt: araştırma sağlayıcıları ve (İG-5.22) kedi hattı aynı kuralı kullanır. Sürüşü ENGELLEMEZ (gösterim/iz)."""
+    if not aralik:
+        return False
+    for deger, (alt, ust) in zip((x_mm, y_mm, z_mm), aralik):
+        if deger < alt or deger > ust:
+            return True
+    return False
+
+
+@functools.lru_cache(maxsize=1)
+def _kedi_egitim_araligi():
+    """em_kedi'nin (x, y, z) eğitim aralığı — modülün `xai_ref_stats()` referans örnekleminden OKUNUR (sabit yazılmaz;
+    model yeniden eğitilirse kendiliğinden güncellenir)."""
+    from ai_hub.em_kedi import inference_em_kedi as iek
+
+    bg = iek.xai_ref_stats()["background"]
+    return tuple((float(bg[:, i].min()), float(bg[:, i].max())) for i in range(3))
 
 
 def hedef_kabin_disi_nedeni(x_mm, y_mm, z_mm) -> str:
@@ -475,12 +512,7 @@ class _EmCvSaglayici:
             arali = self._egitim_araligi()
         except Exception:
             return False
-        if not arali:
-            return False
-        for deger, (alt, ust) in zip((x_mm, y_mm, z_mm), arali):
-            if deger < alt or deger > ust:
-                return True
-        return False
+        return _aralik_disi(arali, x_mm, y_mm, z_mm)  # İG-5.22: kedi hattıyla TEK ölçüt
 
     def localize(self, frame_bgr, hedef_id: int) -> tuple:
         """Kareden hedefi bul → kedi ile AYNI 8'li tuple sözleşmesi."""

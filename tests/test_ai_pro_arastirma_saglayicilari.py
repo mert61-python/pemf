@@ -353,11 +353,13 @@ def test_KRITIK_saglayici_metasi_STATUS_ucuna_akar(monkeypatch):
 
 
 def test_KRITIK_kedi_hattinda_meta_alanlari_BOS_kalir():
-    """Veteriner tel sözleşmesi değişmez: kedi sağlayıcısı kare üstü aday üretmez."""
+    """Veteriner tel sözleşmesi değişmez: kedi sağlayıcısı kare üstü aday üretmez. İG-5.22 (1-D): kedi meta'sı YALNIZ
+    `ood` (eğitim aralığı dışı uyarısı) taşıyabilir — targets/method/E yine YOK."""
     import servers.ai_pro_hedef as hedef
 
-    assert hedef.saglayici_al("kedi").son_lokalizasyon_meta() == {}, (
-        "kedi sağlayıcısı meta üretiyor — veteriner panelinde beklenmeyen hedef adayları görünür"
+    meta = hedef.saglayici_al("kedi").son_lokalizasyon_meta()
+    assert set(meta) <= {"ood"}, (
+        f"kedi sağlayıcısı ood dışında meta üretiyor ({sorted(meta)}) — veteriner panelinde beklenmeyen hedef adayları görünür"
     )
 
 
