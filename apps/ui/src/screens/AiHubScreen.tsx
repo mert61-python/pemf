@@ -19,7 +19,7 @@ import { colors, radius, spacing, typography, rf, rs, layoutMax, touch } from "@
 import { EmDozSatiri, pikselKipiNotu } from "@/components/domain/EmDozSatiri";
 import { useToast } from "@/components/ui/ToastProvider";
 import { webIcinKucult } from "@/services/gorselKucult";
-import { apiGet, apiPost, authHeaders, platformAlert, platformConfirm, AI_TIMEOUT_MS, aiHataMesaji } from "@/services/apiClient";
+import { apiGet, apiPost, authHeaders, platformAlert, AI_TIMEOUT_MS, aiHataMesaji } from "@/services/apiClient";
 import { aiDetayCumlesi } from "@/utils/aiHataDetayi";
 import { ckdOnKontrol } from "@/utils/ckdOnKontrol"; // B5: CKD gönderim-öncesi eyleme dönük ön-kontrol (klinik_asgari paritesi)
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -66,6 +66,14 @@ async function shrinkForUpload(uri: string): Promise<{ uri: string; base64: stri
   } catch {
     return { uri, base64: null };
   }
+}
+
+/** Otonom Biofeedback yönlendirmesi — canlı ve elle analizde AYNI metin (D1.88 · A-19: onay akışı AI Pro'da).
+ *  Terminoloji (karar #12): araştırmacı bir HEKİM değildir; "hekim onayı" metni araştırma modunda yanlış rol atfeder. */
+function otonomYonlendirmeMetni(): string {
+  return currentAiMode === "researcher"
+    ? "Otonom Biofeedback onay gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın."
+    : "Otonom Biofeedback hekim onayı gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın.";
 }
 
 /** AI teşhis sonucunu kalıcı audit loguna gönderir (hasta + modül + özet). */
@@ -157,6 +165,7 @@ interface AiResult {
   image_w?: number; image_h?: number;
   // disease vision (FGS / termal / segmentasyon / retikülosit / AI-Pro donanım)
   fgs_total?: number | null; detected?: boolean; raw_fgs?: FgsRaw;
+  nokta_gorunurlugu_dogrulanmadi?: boolean; // D1.E09: model nokta görünürlüğünü bildirmiyor
   prediction?: ThermalPrediction; cat_count?: number; counts?: Record<string, number>;
   hw_status?: string; hw_params?: { freq?: number; duty?: number };
   // em_fantom (tümör) / em_petri (kuyucuk)
@@ -1259,14 +1268,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
     // dolayısıyla kapatma yalnız onPress'te yapılamaz. Tek ek render, yanlış "aktif" izleniminin
     // ekranda kalmasından yeğdir.
     setAutoAdjust(false);
-    // Terminoloji (karar #12): araştırmacı bir HEKİM değildir; "hekim onayı" metni araştırma
-    // modunda yanlış rol atfediyordu. Kapının kendisi AYNI (onaysız otonom seans yok).
-    showToast(
-      currentAiMode === "researcher"
-        ? "Otonom Biofeedback onay gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın."
-        : "Otonom Biofeedback hekim onayı gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın.",
-      "info",
-    );
+    showToast(otonomYonlendirmeMetni(), "info");
     // `showToast` deps'te GÜVENLE durabilir: ToastProvider onu `useCallback(..., [])` ile stabil
     // veriyor (eski "KARARSIZ referans" notu bayattı).
   }, [isLive, autoAdjust, showToast]);
@@ -1472,22 +1474,15 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
       // rozeti açıkken galeriden seçilen bir fotoğrafta da (canlı kamera hiç açılmadan) SESSİZCE
       // oluyordu: onay yok, hasta kontrolü yok, süre girişi yok, geri sayım yok — üstelik sonuç
       // kartı `!autoAdjust` ile gizlendiğinden EKRANDA HİÇBİR geri bildirim de çıkmıyordu.
-      // ARTIK: canlı otonom döngü dışındaki her sürüş için AÇIK ONAY şart.
-      let driveHw = false;
+      // ⚠️ D1.88 (B-6.30 · A-19, sahip kararı): Otonom Biofeedback AI Pro MÜHRÜNE bağlı — bu ekran cihazı SÜRMEZ.
+      // Bir ara "AÇIK ONAY" (platformConfirm) eklenmişti; ama onay penceresi hekim onayı → mühür akışı DEĞİLDİR ve
+      // aynı durumda AI Pro 428 veriyordu (onay asimetrisi). Otonom açıksa kullanıcı onay akışına yönlendirilir;
+      // istek HER ZAMAN salt analizdir (backend `auto_adjust=true`yu 428 ile reddeder).
       if (autoAdjustRef.current) {
-        if (isLive) {
-          driveHw = true;                       // canlı kapalı-döngü: zaten bilinçli başlatıldı
-        } else {
-          driveHw = await platformConfirm(
-            "Cihaz otonom sürülsün mü?",
-            `Bu analizin sonucuna göre 8 bobin ${patientName ? `"${patientName}" hastasında ` : ""}30 dakika boyunca otomatik sürülecek. ` +
-            "Hayvanın kabinde ve gözetim altında olduğundan emin olun.",
-            "Evet, seansı başlat"
-          );
-          if (!mountedRef.current) return;
-        }
+        setAutoAdjust(false);
+        showToast(otonomYonlendirmeMetni(), "info");
       }
-      formData.append("auto_adjust", driveHw ? "true" : "false");
+      formData.append("auto_adjust", "false");
       // Sunum-katmanı XAI: yalnız MANUEL analizde ve kullanıcı açıkça istediyse (canlı
       // döngüde ASLA — kare başına sn'lerce Grad-CAM akışı kilitler).
       if (explainDestegi && isiHaritasi) formData.append("explain", "true");
@@ -1533,7 +1528,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
               accessibilityRole="switch"
               accessibilityState={{ checked: autoAdjust }}
               accessibilityLabel="Otonom biofeedback"
-              accessibilityHint="Açıkken analiz sonucuna göre bobinler otomatik sürülür"
+              accessibilityHint="Otonom sürüş yalnız Kontrol → AI Pro onay akışıyla başlar; bu ekran cihazı sürmez"
             >
               <Activity color={autoAdjust ? colors.white : colors.primary} size={16} />
               <Text style={[styles.autoAdjustText, autoAdjust ? {color: colors.white} : null]}>
@@ -1754,6 +1749,12 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
           {result.fgs_total != null && result.fgs_total >= 0 && (
             <View>
               <Text style={styles.resultText}>FGS Skoru: <Text style={{fontWeight:'bold'}}>{result.fgs_total} / 10</Text></Text>
+              {/* D1.E09 (İG-5.31): model nokta görünürlüğünü bildirmiyor → örtülü yüzde skor yanıltıcı olabilir. */}
+              {result.nokta_gorunurlugu_dogrulanmadi ? (
+                <Text style={[styles.resultText, { fontSize: typography.small, color: colors.textMuted }]}>
+                  ℹ️ Bu model yüz noktalarının görünürlüğünü bildirmiyor: kulak, göz gibi bir bölge örtülüyse skor yanıltıcı olabilir — yüzün tamamen açık göründüğü bir fotoğraf kullanın.
+                </Text>
+              ) : null}
               {result.raw_fgs?.action_units && (
                 <View style={{ marginTop: spacing.sm, paddingLeft: spacing.md, borderLeftWidth: 2, borderLeftColor: colors.primarySoft }}>
                   <Text style={[styles.resultText, {fontSize: typography.small}]}>• Kulak Pozisyonu: {result.raw_fgs.action_units["AU1_Ear_Position"]?.score ?? "-"}</Text>

@@ -429,16 +429,27 @@ async def analyze_disease(data: DiseaseInput):
         raise _ai_fail("Hastalık analizi hatası", e)
 
 
+#: D1.88 (B-6.30 · A-19): Otonom Biofeedback'in ONAY yolu — eylem söyleyen TEK metin (uç 428 detayı).
+OTONOM_FGS_ONAY_MESAJI = (
+    "Otonom Biofeedback yalnız onaylı AI Pro seansında çalışır: Kontrol → AI Pro'dan öneri alıp onaylayın. "
+    "Bu analiz cihazı sürmez — otonom anahtarını kapatıp yeniden analiz edin."
+)
+
+
 @ai_router.post("/api/ai/vision/landmark")
 async def analyze_landmark(
     request: Request, file: UploadFile = File(None), image_base64: str = Form(None), auto_adjust: bool = Form(False)
 ):
-    """YOLO Pose + FGS Ağrı Skoru + Otonom Biyogeribildirim"""
-    # D1.81 (B-5.3 · Y4): otonom sürüş NİYETİ isteğin VARIŞ anındaki nesli taşır (görüntü gövdesi okunmadan önce —
-    # `api_server._SurusNiyetiVarisDamgasi`, i1-F2) — çıkarım (saniyeler) sırasında gelen durdurma/acil durdurma ya da
-    # mandallıyken gönderilmiş isteğin ardından basılan Sıfırla bu START'ı `HardwareController`da kilit altında
-    # geçersiz kılar.
-    _niyet_nesli = estop_mandali.niyet_nesli()
+    """YOLO Pose + FGS Ağrı Skoru — SALT ANALİZ (D1.88: bu uç cihazı SÜRMEZ)."""
+    # ⚠️ D1.88 (B-6.30 · A-19, sahip kararı): FGS "Otonom Biofeedback" AI Pro MÜHRÜNE bağlıdır — öneri → hekim onayı →
+    # mühür akışından geçmeden sürüş YOK. Eskiden `auto_adjust=true` (galeri fotoğrafı + istemcideki onay penceresi
+    # yeterdi) 30 dk 8 bobinli "AI (Auto)" seansı açıyordu: `start_ai_session(…, range(1,9))` + ESP START yayını —
+    # aynı durumda AI Pro 428 veriyor (onay asimetrisi ölçüldü, D0). Mühürlü seans varken de bu yol zaten sürmüyordu
+    # (`_ai_loop_active` / aktif seans türü denetimi) → sürüş yolu KALDIRILDI. Sürüm kayması: eski istemci bayrağı
+    # göndermeye devam edebilir → analiz yapılmadan 428 + eylem metni (çıkarım saniyelerini boşa harcamaz).
+    # Mikroservis profilinde de AYNI (kapı devretmeden önce).
+    if auto_adjust:
+        raise HTTPException(status_code=428, detail=OTONOM_FGS_ONAY_MESAJI)
     try:
         if ai_service_enabled():
             # NOT: auto_adjust (donanım biofeedback) mikroservis modunda çekirdekte kalır;
@@ -472,6 +483,11 @@ async def analyze_landmark(
 
         fgs_result = {}
         detected = False
+        # D1.E09 (İG-5.31): sevk edilen model (`kpt_shape [48,2]`) nokta başına GÜVEN/GÖRÜNÜRLÜK kanalı vermez → örtülü
+        # nokta (ör. kulak) da tahmin edilir ve FGS'yi değiştirebilir (ölçüldü: üst %30 örtülü → FGS 1→2, kabul). Görüntü
+        # temelli görünürlük ölçütleri gerçek fotoğrafta yanlış ret / kaçırma verdi (D1D raporu §4 D1.E09) → skor
+        # REDDEDİLMEZ, yanıt bunu AÇIKÇA söyler; arayüz uyarı satırı gösterir.
+        _nokta_guveni_yok = False
         if results and len(results) > 0:
             r = results[0]
             if r.keypoints is not None and len(r.keypoints.xy) > 0 and r.boxes is not None and len(r.boxes) > 0:
@@ -483,6 +499,7 @@ async def analyze_landmark(
                         kp_conf = r.keypoints.conf[0].cpu().numpy()
                 except Exception:
                     kp_conf = None
+                _nokta_guveni_yok = kp_conf is None
                 x1, y1, x2, y2 = r.boxes[0].xyxy[0].cpu().numpy()
                 bw = max(x2 - x1, 1.0)
                 bh = max(y2 - y1, 1.0)
@@ -515,152 +532,9 @@ async def analyze_landmark(
             total = None
             pain_level = "Kedi yüzü tespit edilemedi"
 
-        # Otonom Biofeedback — YALNIZCA geçerli tespit varsa donanım sür (gürültüde sürme yok).
+        # ⚠️ D1.88 (A-19): bu uç cihazı SÜRMEZ (sürüş isteği yukarıda 428). Alanlar eski istemciler için sabit kalır.
         hw_status = "idle"
         hw_params = {}
-        # Audit P1: auto_adjust DONANIM SÜRÜŞÜ salt-analiz muafiyetini AŞAR → yalnız YEREL/LAN veya
-        # geçerli-token'lı istekte sür (tünelden kimliksiz 8-bobin 30dk tedavisini engelle). Analiz muaf kalır.
-        _drive_ok = False
-        try:
-            from servers.auth import check_token, is_local_request
-
-            _h = request.headers
-            _via_proxy = bool(_h.get("cf-connecting-ip") or _h.get("cf-ray") or _h.get("x-forwarded-for"))
-            _drive_ok = is_local_request(request.client.host if request.client else "", _via_proxy) or check_token(
-                _h.get("X-API-Key") or request.query_params.get("token") or ""
-            )
-        except Exception:
-            logger.exception("landmark auto_adjust yetki kontrolü hatası")
-            _drive_ok = False
-        if auto_adjust and not detected:
-            hw_status = "skipped_no_detection"
-        elif auto_adjust and detected and not _drive_ok:
-            hw_status = "skipped_unauthenticated"  # Audit P1: kimliksiz uzak istekte donanım SÜRÜLMEZ
-        elif auto_adjust and detected:
-            # Audit P2 #3: bloklayan donanım/MQTT çağrılarını (socket-probe 0.3s + connect 5s +
-            # wait_for_publish 2s, 3× ESP) event-loop'tan ÇIKAR → to_thread (ai_pro_frame ile aynı
-            # desen). Aksi halde her auto_adjust isteği loop'u saniyelerce kilitler → AI Pro kapalı-
-            # döngü sürüş inference'ı ve /health dahil tüm async uçlar gecikir.
-            # ⚠️ KİMLİK THREAD'DEN ÖNCE ÇÖZÜLÜR: `request` istek kapsamına aittir, arka plan
-            # thread'inde okumak kırılgandır.
-            try:
-                from servers.auth import cozumlenmis_operator as _coz_op
-
-                _landmark_operator = _coz_op(request, "") or ""
-            except Exception:
-                _landmark_operator = ""
-
-            def _drive_landmark_auto():
-                try:
-                    from servers.api_server import start_ai_session, state, update_live_session_state
-
-                    if not (state and state.hardware):
-                        return "idle", {}
-                    # DENETIM P2: BASKA bir otonom surucu calisirken donanima DOKUNMA.
-                    # Eskiden kosulsuz start_ai_session + start_all_coils cagriliyordu; AI Pro
-                    # suruyorken gelen bir landmark auto_adjust istegi (ikinci istemci / dogrudan
-                    # API) AI Pro'nun per-bobin duty/fazinin uzerine TEK-TIP degerler yaziyor,
-                    # AI Pro'nun surmedigi BOBIN 8'i de enerjilendiriyor ve seans meta-verisini
-                    # ("AI (Auto)", 30 dk, coil_ids 1-8) sessizce DEVRALIYORDU — iki otonom surucu
-                    # ayni donanimda catisiyor, kayitta yanlis mod gorunuyordu.
-                    if _ai_loop_active:
-                        logger.info("AI (Auto): AI Pro aktif → donanim SURULMEDI (catisma onlendi).")
-                        return "skipped_session_active", {}
-                    # D1.81 · Y4: mandal ya da bayat niyet → seans AÇILMADAN dön (aşağıdaki kapı da reddederdi ama
-                    # önce seans yazılır ve geri alınırdı; mandallıyken hiçbir AI seansı açılmamalı).
-                    _engel = estop_mandali.baslatma_engeli(_niyet_nesli)
-                    if _engel:
-                        logger.warning("AI (Auto): donanim SURULMEDI — %s", _engel)
-                        return "skipped_estop_latched", {}
-                    try:
-                        import servers.api_server as _apx3
-
-                        with _apx3._session_lock:
-                            _cur_mode = str(_apx3._active_session.get("mode", ""))
-                            _cur_active = bool(_apx3._active_session.get("is_active"))
-                            _cur_tur = _apx3._active_session.get("tur")
-                        # Farkli TÜRDE AKTIF bir seans (elle/AI Pro) varsa devralma. D1.80: TÜR bakılır, `mode`
-                        # metnine değil — "AI (Auto)" adlı bir ELLE seans artık AI (Auto) sayılıp devralınmaz.
-                        # (Türü olmayan eski kayıt: önceki kural.)
-                        _ai_auto_mu = _cur_tur == "ai_auto" or (_cur_tur is None and _cur_mode == "AI (Auto)")
-                        if _cur_active and not _ai_auto_mu:
-                            logger.info("AI (Auto): '%s' seansi aktif → donanim SURULMEDI.", _cur_mode)
-                            return "skipped_session_active", {}
-                    except Exception:
-                        logger.warning("AI (Auto): aktif-seans kontrolu basarisiz", exc_info=True)
-                    target_freq = min(100.0, 10.0 + (total * 5.0))
-                    target_duty = min(50.0, 25.0 + (total * 3.0))
-                    # Seansı _active_session'a yaz → süre-watchdog + emergency-stop AI'yı da kapsar.
-                    # ⚠️ Sahip, isteği yapan operatörün ÇÖZÜMLENMİŞ kimliğidir (istemcinin
-                    # beyanı değil; bkz. auth.cozumlenmis_operator). Kimlik çözülemezse "" kalır
-                    # ve kayıt sahipsiz olur — bu DOĞRUDUR: kanıtsız bir beyanı sahiplik diye
-                    # yazmak, "Benim Seanslarım"ı yalancı yapardı.
-                    _ai_seans_kimligi = start_ai_session(
-                        target_freq,
-                        target_duty,
-                        30,
-                        range(1, 9),
-                        "AI (Auto)",
-                        operator_email=_landmark_operator,
-                        tur="ai_auto",
-                        surus_nesli=_niyet_nesli,
-                    )
-                    # ⚠️ SAHTE "BAŞARILI" OTONOM SEANS (denetim 2026-09-12, İş 11'in AI tarafı):
-                    # `start_all_coils` reddi False ile bildirir (STM kopuk / firmware uyuşmaz) ve
-                    # bu dönüş HİÇ OKUNMUYORDU. Seans `_active_session`a yazılmış, DB satırı
-                    # açılmış, "AI (Auto)" canlı durum yayınlanmış oluyordu — hiçbir bobin
-                    # enerjilenmemişken. Manuel seans yolundaki arızanın birebir aynısı.
-                    with estop_mandali.surus_baglami(_niyet_nesli):  # D1.81: nesil kilit altında denetlenir
-                        _hepsi_basladi = state.hardware.start_all_coils(target_freq, target_duty, 0.0, 30)
-                    if not _hepsi_basladi:
-                        logger.error(
-                            "AI (Auto): donanim komutu REDDETTI → seans geri aliniyor (sahte 'aktif' yazilmasin)."
-                        )
-                        try:
-                            import servers.api_server as _api_geri
-
-                            # 1-C inceleme i1-F3: YALNIZ bu isteğin açtığı seans (arada açılmış başka seansa dokunma).
-                            _api_geri._seansi_geri_al("donanim-reddi:ai-auto", _ai_seans_kimligi)
-                        except Exception:
-                            logger.exception("AI (Auto) seans geri alma basarisiz")
-                        return "skipped_hardware_rejected", {}
-                    # ESP 6-8'i de sür (audit #13, kullanıcı onaylı 8-bobin) — tek-atış publish.
-                    try:
-                        import servers.api_server as _api_esp
-
-                        # ⚠️ FAZ 4: kapsam elle (6, 7, 8) yaziliydi; bobin 6-7 STM'e
-                        # tasindi ve zaten `start_all_coils` ile suruluyor → buradaki
-                        # MQTT yayini onlara BOSA gidiyordu. Tek kaynak: ESP_COIL_IDS.
-                        for _cid in sorted(_api_esp.ESP_COIL_IDS):
-                            # D1.81 · Y4: mandal/nesil kapılı START yayını (telafi STOP'u dahil).
-                            _api_esp._esp_start_yayinla(
-                                _cid,
-                                {
-                                    "command": "start",
-                                    "command_id": f"aiauto_{_cid}_{int(time.time() * 1000)}",
-                                    "freq": round(target_freq, 1),
-                                    "duty": round(target_duty, 1),
-                                    "phase": 0,
-                                    "duration": 30 * 60,
-                                },
-                                _niyet_nesli,
-                            )
-                    except Exception as _ee:
-                        logger.warning("AI (Auto) ESP 6-8 publish hatasi: %s", _ee)
-                    update_live_session_state(
-                        is_active=True,
-                        mode="AI (Auto)",
-                        freq=target_freq,
-                        intensity=target_duty,
-                        duration_sec=30 * 60,
-                        surus_nesli=_niyet_nesli,  # D1.81 (İG-5.36): bayat niyet "aktif" yazamaz
-                    )
-                    return "updated", {"freq": target_freq, "duty": target_duty}
-                except Exception as e:
-                    logger.error(f"Otonom biofeedback hatası: {e}")
-                    return "idle", {}
-
-            hw_status, hw_params = await asyncio.to_thread(_drive_landmark_auto)
 
         return JSONResponse(
             content={
@@ -675,6 +549,8 @@ async def analyze_landmark(
                 "pain_level": pain_level,
                 "raw_fgs": fgs_result if detected else None,
                 "action_units": fgs_result.get("action_units") if detected else None,
+                # D1.E09: model nokta görünürlüğünü bildirmiyor → örtülü yüzde skor yanıltıcı olabilir (arayüz söyler).
+                "nokta_gorunurlugu_dogrulanmadi": bool(detected and _nokta_guveni_yok),
                 "hw_status": hw_status,
                 "hw_params": hw_params,
             }
@@ -2504,6 +2380,7 @@ def stop_ai_pro():
     # Boylece acik STOP komutundan sonra bobin 8, ESP'de 30 dk enerjili kaliyordu; onu durduracak
     # baska yazilim katmani da yok (sure-watchdog ve /session/stop 'aktif seans yok' diye erken doner).
     # Calismayan bobine STOP gondermek zararsiz/idempotenttir → kapsami TUM 8 bobine cikar.
+    # (D1.88: AI (Auto) landmark surus yolu KALDIRILDI; tum bobinlere STOP yine dogru — idempotent.)
     import servers.api_server as _api
 
     try:

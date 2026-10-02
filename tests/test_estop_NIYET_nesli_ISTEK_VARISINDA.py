@@ -242,7 +242,7 @@ UCLAR = [
         _JSON,
     ),
     ("ai_pro_start", "/api/ai/pro/start", lambda: {"proposal_id": _ai_pro_onayi(), "client_id": ""}, _JSON),
-    ("landmark_ai_auto", "/api/ai/vision/landmark", None, _FORM),
+    # D1.88 (A-19): "landmark_ai_auto" kaldırıldı — landmark ucu artık START üretmez (428; A19 kapısı).
 ]
 
 

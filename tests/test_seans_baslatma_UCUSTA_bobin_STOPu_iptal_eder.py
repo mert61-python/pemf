@@ -180,6 +180,62 @@ def test_KRITIK_SURUS_sirasinda_bobin_STOPu_kalan_bobini_SURDURMEZ(o, monkeypatc
         )
 
 
+def test_KRITIK_1C9_5_ILK_bobinden_ONCE_gelen_STOP_satiri_IPTAL_EDILDI_kapatir(o, monkeypatch):
+    """1-C §9 #5: DB yazımı bitti, sürüş başladı, İLK bobin sürülmeden ÖNCE bobin STOP'u → hiçbir bobin kabul edilmez.
+    Yanıt 409 (doğru) ama satır "Donanım Reddetti" yazılıyordu — donanım reddetmedi, başlatma İPTAL edildi."""
+    gercek = o.hc.update_coil
+    durum: dict = {}
+
+    def _kancali(bobin, *a, **k):
+        if k.get("start") and not durum.get("tetik"):
+            durum["tetik"] = True
+            th = threading.Thread(target=lambda: durum.update(stop=_stop(o, "tekil")), daemon=True)
+            th.start()
+            th.join(10)
+        return gercek(bobin, *a, **k)
+
+    monkeypatch.setattr(o.hc, "update_coil", _kancali)
+    gozlem = []
+    for _ in range(TEKRAR):
+        _temizle(o)
+        durum.clear()
+        o.engel["ev"] = None
+        o.engel["sidler"].clear()
+        r = _baslat(o)
+        assert durum.get("tetik") and durum.get("stop") is not None and durum["stop"].status_code == 200, (
+            f"aparat: kanca/STOP {durum}"
+        )
+        sid = o.engel["sidler"][-1] if o.engel["sidler"] else None
+        gozlem.append(
+            {
+                "yanit": r.status_code,
+                "calisan": ap.calisan(o),
+                "db": (o.db.get_session_details(sid) or {}).get("session_status") if sid else None,
+            }
+        )
+    _temizle(o)
+    for g in gozlem:
+        assert g["yanit"] == 409 and not g["calisan"], (
+            f"aparat/ön koşul: başlatma reddedilmedi ya da bobin enerjili: {g}"
+        )
+        assert g["db"] == "cancelled", f"iptal edilen başlatmanın satırı 'İptal Edildi' değil: {g}"
+
+
+def test_KARSIT_1C9_5_gercek_DONANIM_reddi_satiri_DONANIM_REDDETTI_kalir(o, monkeypatch):
+    """Durdurma YOKKEN tüm bobinler reddedilirse (kart reddi) satır "Donanım Reddetti" kalır (ayrım korunur)."""
+    from database.treatment_history_db import SEANS_DURUMU_DONANIM_REDDI
+
+    monkeypatch.setattr(o.hc, "update_coil", lambda *a, **k: False)
+    _temizle(o)
+    o.engel["ev"] = None
+    o.engel["sidler"].clear()
+    r = _baslat(o)
+    sid = o.engel["sidler"][-1] if o.engel["sidler"] else None
+    durum = (o.db.get_session_details(sid) or {}).get("session_status") if sid else None
+    _temizle(o)
+    assert r.status_code == 503 and durum == SEANS_DURUMU_DONANIM_REDDI, (r.status_code, durum)
+
+
 def test_KRITIK_Y8_iptal_mekanizmasi_HATA_verse_de_bobin_STOPu_GIDER(o):
     """Ö.4-Y8: uçuştaki-başlatma iptali (nesil artırımı) istisna atsa bile bobin STOP'u reddedilmez — tekil, batch ve
     legacy uçların üçü de STOP paketini kuyruğa verir ve 200 döner (iptalin hatası STOP isteğini 500'e çevirmez)."""

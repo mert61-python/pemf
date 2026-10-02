@@ -220,9 +220,8 @@ def _esp_nokta_ihlalleri() -> list[str]:
     for rel in _ESP_KAPSAM_HEDEFLERI:
         noktalar += [(rel, ad, it) for ad, it in esp_kapsam_noktalari((KOK / rel).read_text(encoding="utf-8"))]
     adlar = sorted(ad for _r, ad, _i in noktalar)
-    assert adlar == ["ai_auto_esp_start", "ai_teardown_esp_stop", "kapanis_esp_stop"], (
-        f"ESP kapsam noktaları bulunamadı: {adlar}"
-    )
+    # D1.88 (A-19): AI (Auto) landmark sürüş yolu (`ai_auto_esp_start`) KALDIRILDI — geri gelirse liste uyuşmaz.
+    assert adlar == ["ai_teardown_esp_stop", "kapanis_esp_stop"], f"ESP kapsam noktaları bulunamadı: {adlar}"
     import ast
 
     return [f"{rel} {ad}: {ast.unparse(it)}" for rel, ad, it in noktalar if not _esp_turevli_mi(it)]
@@ -281,14 +280,8 @@ def test_ACIK_D184_AI_Pro_6_7_MQTT_indeks_bicimi_KALDIRILDI():
 @pytest.mark.parametrize(
     ("dosya", "eski", "yeni"),
     [
-        ("apps/backend/servers/ai_router.py", "for _cid in sorted(_api_esp.ESP_COIL_IDS):", "for _cid in (8,):"),
         ("apps/backend/servers/ai_router.py", "for _cid in sorted(_api2.ESP_COIL_IDS):", "for _cid in (6, 7):"),
         ("apps/backend/backend_service.py", "for c in sorted(_ESP_COIL_IDS)", "for c in [8]"),
-        (
-            "apps/backend/servers/ai_router.py",
-            "for _cid in sorted(_api_esp.ESP_COIL_IDS):",
-            "for _cid in sorted(_api_esp.ESP_COIL_IDS | {6, 7}):",
-        ),
         (
             "apps/backend/servers/ai_router.py",
             "for _cid in sorted(_api2.ESP_COIL_IDS):",
@@ -296,10 +289,8 @@ def test_ACIK_D184_AI_Pro_6_7_MQTT_indeks_bicimi_KALDIRILDI():
         ),
     ],
     ids=[
-        "ai_auto_TEK_ELEMANLI_demet",
         "ai_teardown_IKI_bobin",
         "kapanis_LISTE",
-        "ai_auto_BIRLESIM_6_7",
         "teardown_DILIM",
     ],
 )

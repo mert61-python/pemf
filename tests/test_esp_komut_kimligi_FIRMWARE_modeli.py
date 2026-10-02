@@ -213,7 +213,6 @@ _BICIMLER = [
     ("apps/backend/servers/api_server.py", "reconcile_{coil_id}_{int(time.time() * 1000)}"),
     ("apps/backend/servers/api_server.py", "estopcloud_{cid}_{int(time.time() * 1000)}"),
     ("apps/backend/servers/api_server.py", "stop_{coil_id}_{int(_t.time() * 1000)}"),
-    ("apps/backend/servers/ai_router.py", "aiauto_{_cid}_{int(time.time() * 1000)}"),
     ("apps/backend/servers/ai_router.py", "aipro_{cid}_{int(time.time() * 1000)}"),
     ("apps/backend/servers/ai_router.py", "ai_stop_{_cid}_{int(time.time() * 1000)}"),
     ("apps/backend/backend_service.py", "service_stop_{coil_id}_{int(time.time() * 1000)}"),
@@ -309,7 +308,7 @@ def test_KRITIK_TUM_kimlik_bicimleri_FIRMWARE_tamponlarina_sigar_ve_ACK_yankisi_
             "duration": 9999999999,
         }
         yukler[ek] = len(json.dumps(yuk))
-    for ek in ("aiauto", "aipro"):
+    for ek in ("aipro",):  # D1.88 (A-19): `aiauto_` START'ı kaldırıldı
         yuk = {
             "command": "start",
             "command_id": _en_uzun(ek + "_{_cid}_{int(time.time() * 1000)}", ""),

@@ -56,22 +56,6 @@ def _tekil_start(o, bobin: int = 2):
     )
 
 
-def _landmark_surucusu(air, **degerler):
-    """`analyze_landmark` içindeki GERÇEK `_drive_landmark_auto` kapanışı (kod nesnesinden; test_kalan_regression_gaps
-    ile aynı teknik). Serbest değişkenler adla verilir; kapanış imzası değişirse aparat KIRMIZI olur (sessiz değil)."""
-    kodlar = [
-        c
-        for c in air.analyze_landmark.__code__.co_consts
-        if isinstance(c, types.CodeType) and c.co_name == "_drive_landmark_auto"
-    ]
-    assert len(kodlar) == 1, f"aparat: _drive_landmark_auto kod nesnesi sayısı {len(kodlar)}"
-    kod = kodlar[0]
-    eksik = set(kod.co_freevars) - set(degerler)
-    assert not eksik, f"aparat: kapanışın serbest değişkenleri değişti: {sorted(eksik)}"
-    hucreler = tuple(types.CellType(degerler[ad]) for ad in kod.co_freevars)
-    return types.FunctionType(kod, air.__dict__, "_drive_landmark_auto", None, hucreler)
-
-
 def _esp_komutlari(o, bobin: int = 8, once: int = 0) -> list:
     return [str(p.get("command")) for t, p in o.yayin[once:] if t == f"pemf/coil/{bobin}/control"]
 
@@ -147,34 +131,8 @@ def test_KRITIK_i4F10_stop_all_coils_SURERKEN_eski_niyetli_START_STOPtan_sonra_G
 
 
 # ── P4: _esp_start_yayinla niyet neslini denetler (AI (Auto) ESP yolu) ───────────────────────────────
-def test_KRITIK_i4F07_AI_Auto_STM_basladiktan_sonra_gelen_DURDURMA_ESP_START_yayinini_ENGELLER(o, monkeypatch):
-    """GERÇEK AI (Auto) kapanışı: STM `start_all_coils` kabul edildikten hemen sonra operatör DURDUR'a basar
-    (`/api/session/stop` → yetki kesilir, ESP bobin 8'e STOP). Kapanış ardından ESP bobin 8'e START yayınlar —
-    bayat niyet: yayınlanmamalı. Ölçüt: bobin 8 telinde operatörün STOP'undan (İLK STOP) sonra HİÇ START yok.
-    (1-C: i4'ün "SON STOP'tan sonra START yok" ölçütü i1-F2 sonrası KÖRDÜ — telafi STOP'u bayat START'ı izleyince tel
-    `stop, start, stop` olur ve son komut STOP görünür; oysa bayat START yine yayınlanmış ve bobin kısa süre enerjilenmiştir.)"""
-    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
-    m = _m()
-    o.air._ai_loop_active = False
-    tok = m.nesil()
-    orj = o.hc.start_all_coils
-    durdurma: dict = {}
-
-    def _sarili(*a, **k):
-        r = orj(*a, **k)
-        durdurma["r"] = o.c.post("/api/session/stop")  # operatör tam bu anda DURDUR
-        return r
-
-    monkeypatch.setattr(o.hc, "start_all_coils", _sarili)
-    once = len(o.yayin)
-    durum, _ = _landmark_surucusu(o.air, total=4.0, _niyet_nesli=tok, _landmark_operator="")()
-    assert durdurma.get("r") is not None and durdurma["r"].status_code == 200, f"aparat: durdurma koşmadı ({durum})"
-    kom = _esp_komutlari(o, 8, once)
-    assert "stop" in kom, f"aparat: durdurma ESP bobin 8'e STOP göndermedi: {kom}"
-    ilk_stop = kom.index("stop")
-    assert "start" not in kom[ilk_stop + 1 :], (
-        f"DURDURMADAN SONRA ESP bobin 8'e START yayınlandı (bayat AI (Auto) niyeti): {kom}"
-    )
+# i4F07 (D1.88 (A-19)): AI (Auto) kapanışının ESP START'ı yolu KALDIRILDI; landmark ucu artık hiç START üretmez —
+# kapı `test_fgs_otonom_biofeedback_AI_Pro_MUHRUNE_bagli_A19.py`. Durdurma → ESP START engeli kalan yollarda i4F08.
 
 
 # ── P5: ESP START yayını sürerken MANDALSIZ durdurma → telafi STOP'u ───────────────────────────────────
@@ -251,38 +209,20 @@ def test_KRITIK_i4F14_saglik_ucu_UZAK_istemciye_YALNIZ_aktif_yerel_istemciye_AYR
 
 
 # ── P8: mandal, niyet nesli VERİLMİŞ (taze) START'ı da reddeder ─────────────────────────────────────
-def test_KRITIK_i4F02_mandalliyken_TAZE_nesilli_START_REDDEDILIR_HC_ve_AI_Auto(o):
+def test_KRITIK_i4F02_mandalliyken_TAZE_nesilli_START_REDDEDILIR_HC(o):
     """Mandal kuruluyken alınmış (E-stop'tan SONRA gelen) niyetin nesli günceldir — yalnız mandal ayırt eder.
-    Mevcut kapılar HC'yi yalnız nesilsiz çağırır; nesil taşıyan yollar (AI (Auto)) ön denetimleri de aynı
-    `baslatma_engeli`ne dayandığından HTTP 409 katmanı yoktur."""
+    Mevcut kapılar HC'yi yalnız nesilsiz çağırır. (D1.88 (A-19): AI (Auto) kolu yolla birlikte kaldırıldı.)"""
     m = _m()
-    o.api._emergency_stop_all("manual")
-    n = ap.paket_sayisi(o)
-    taze = m.nesil()
-    o.air._ai_loop_active = False
-    durum, _ = _landmark_surucusu(o.air, total=4.0, _niyet_nesli=taze, _landmark_operator="")()
-    with o.api._session_lock:
-        _aktif_iz = bool(o.api._active_session.get("is_active"))
-    paketler_ai_auto = ap.surus_paketleri(o, n)
-    calisan_ai_auto = ap.calisan(o)
-    o.hc.stop_all_coils()  # AI (Auto) kolu ayrı ölçüldü; HC kolu temiz durumdan
-    with o.api._session_lock:
-        o.api._active_session["is_active"] = False
     o.api._emergency_stop_all("manual")
     n2 = ap.paket_sayisi(o)
     taze2 = m.nesil()
     hc_tek = o.hc.update_coil(3, 100.0, 40.0, 0.0, 5, start=True, nesil=taze2)
     with m.surus_baglami(taze2):
         hc_hepsi = o.hc.start_all_coils(100.0, 40.0, 0.0, 5)
-    assert not paketler_ai_auto, f"mandallıyken AI (Auto) bobinleri SÜRDÜ ({durum}): {paketler_ai_auto}"
-    assert calisan_ai_auto == [] and not _aktif_iz, (
-        f"mandallıyken AI (Auto): çalışan {calisan_ai_auto}, seans {_aktif_iz}"
-    )
     assert hc_tek is False, "mandallıyken TAZE nesilli update_coil KABUL edildi"
     assert hc_hepsi is False, "mandallıyken bağlamdaki taze nesil (start_all_coils) KABUL edildi"
     assert not ap.surus_paketleri(o, n2), f"mandallıyken HC taze nesille sürdü: {ap.surus_paketleri(o, n2)}"
     assert ap.calisan(o) == [], f"mandallıyken çalışan bobin: {ap.calisan(o)}"
-    assert durum == "skipped_estop_latched", durum
 
 
 # ── P9: _mqtt_publish son savunması büyük/küçük harf duyarsız (S3 firmware `toUpperCase`) ──────────────

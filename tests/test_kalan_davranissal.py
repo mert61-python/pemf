@@ -135,36 +135,8 @@ def test_kapanis_STM_flush_butcesi_kuyrugu_GERCEKTEN_bekler(monkeypatch):
     )
 
 
-def test_landmark_auto_AI_Pro_aktifken_donanima_DOKUNMAZ():
-    """Kaçan mutasyon: `if _ai_loop_active:` gövdesindeki return `pass` yapıldı — ama
-    `return "skipped_session_active", {}` kaynakta İKİNCİ kez geçtiği için dizge iddiası
-    yeşil kaldı. Konumu bağlayan YAPISAL (AST) iddia gerekiyor.
-
-    `_drive_landmark_auto` iç-içe bir closure olduğundan doğrudan çağrılamıyor.
-    """
-    import ast
-    import inspect
-
-    from servers import ai_router
-
-    tree = ast.parse(inspect.getsource(ai_router))
-    hedef = [
-        n
-        for n in ast.walk(tree)
-        if isinstance(n, ast.If) and isinstance(n.test, ast.Name) and n.test.id == "_ai_loop_active"
-    ]
-    assert hedef, "`if _ai_loop_active:` koruması KAYBOLMUŞ"
-
-    korumali = False
-    for n in hedef:
-        for s in n.body:
-            if isinstance(s, ast.Return) and "skipped_session_active" in ast.unparse(s):
-                korumali = True
-    assert korumali, (
-        "AI Pro aktifken landmark-auto ERKEN DÖNMÜYOR → iki otonom sürücü aynı donanımda "
-        "çatışır, AI Pro'nun per-bobin duty/fazı tek-tip değerlerle ezilir, sürmediği bobin 8 "
-        "enerjilenir ve seans meta-verisi sessizce devralınır"
-    )
+# D1.88 (A-19): `test_landmark_auto_AI_Pro_aktifken_donanima_DOKUNMAZ` kaldırıldı — korunan `_drive_landmark_auto`
+# yolu yok; AI Pro sürerken landmark isteğinin donanıma dokunmadığı DAVRANIŞSAL olarak A19 kapısında.
 
 
 # ───────────────────── VERİ BÜTÜNLÜĞÜ ─────────────────────

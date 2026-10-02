@@ -722,6 +722,8 @@ def infer_landmark(file: UploadFile = File(...)):
             "fgs_bantlari": _fgs_bantlari_tek(),
             "raw_fgs": (fgs if detected else None),
             "action_units": (fgs.get("action_units") if detected else None),
+            # D1.E09 (router paritesi): model nokta görünürlüğünü bildirmiyor → arayüz uyarı satırı gösterir.
+            "nokta_gorunurlugu_dogrulanmadi": bool(detected and kp_conf is None),
             "pain_level": (fgs.get("pain_level", "Unknown") if detected else "Kedi yüzü tespit edilemedi"),
             "image_base64": _jpg_b64(img),
             **_kare_olcusu(img),

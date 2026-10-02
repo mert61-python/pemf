@@ -3690,13 +3690,20 @@ async def start_session(payload: SessionStartPayload, request: Request):
     # ⚠️ `stm_coils` KOŞULU YOK: ESP kapalıyken yalnız bobin 8 istenen bir seansta
     # `stm_coils` boştur ve eski koşul HİÇ tetiklenmezdi — seans yine sahte başarılı olurdu.
     if not _stm_kabul and not esp_coils:
-        # ⚠️ `to_thread`: `_finalize_session_db` SENKRONDUR ve kendi sözleşmesinde "yalnız
-        # thread'lerden çağrılır, event-loop'tan DEĞİL" der (SQLite yazımları event-loop'u
-        # bloklar). Bu uç `async` olduğu için geri alma thread'e taşınır.
-        await asyncio.to_thread(_seansi_geri_al, "donanim-reddi:hicbir-bobin-surulmedi", _benim_seans)
         from controllers.hardware_controller import sifir_hz_durdurma_mi
 
         _surus_engeli = estop_mandali.baslatma_engeli(_niyet_nesli)
+        # ⚠️ `to_thread`: `_finalize_session_db` SENKRONDUR ve kendi sözleşmesinde "yalnız
+        # thread'lerden çağrılır, event-loop'tan DEĞİL" der (SQLite yazımları event-loop'u
+        # bloklar). Bu uç `async` olduğu için geri alma thread'e taşınır.
+        # ⚠️ 1-C §9 #5: sürüş penceresinde, İLK bobinden önce gelen durdurma (bobin STOP'u / acil durdurma) nesli artırır
+        # ve TÜM bobinler reddedilir — donanım REDDETMEDİ, başlatma İPTAL edildi → satır "İptal Edildi" (eskiden
+        # "Donanım Reddetti"; yanıt zaten 409'du). Engel yoksa gerçek donanım reddidir.
+        await asyncio.to_thread(
+            _seansi_geri_al,
+            "iptal:surus-oncesi-durdurma" if _surus_engeli else "donanim-reddi:hicbir-bobin-surulmedi",
+            _benim_seans,
+        )
         if _surus_engeli:
             # D1.81: neden firmware DEĞİL — başlatma sürerken durdurma / acil durdurma geldi.
             raise HTTPException(status_code=409, detail=_surus_engeli)
@@ -4054,9 +4061,9 @@ def start_ai_session(
             # seansin tibbi kaydina karisiyordu. (2) `ended_epoch` yazilmiyordu. Ikisi de
             # `_finalize_session_db`de zaten dogru: coil-run'lari kapatir, kismi dakikayi DOGRU
             # (eski) db_session_id'ye doker, buffer'i flush eder, end_session + ended_epoch yazar.
-            # ⚠️ SENKRON DB isi: `start_ai_session`in iki cagricisi da event-loop DISINDA
-            # (`asyncio.to_thread(_drive_landmark_auto)` ve senkron `def start_ai_pro` → FastAPI
-            # threadpool'u) → `_finalize_session_db`in "yalniz thread'lerden" sozlesmesi korunur.
+            # ⚠️ SENKRON DB isi: `start_ai_session`in cagricisi event-loop DISINDA (senkron
+            # `def start_ai_pro` → FastAPI threadpool'u; D1.88'e kadar AI (Auto) landmark yolu da
+            # `to_thread` ile cagiriyordu) → `_finalize_session_db`in "yalniz thread'lerden" sozlesmesi korunur.
             # ⚠️ Coil-run kapatma BURADA kalir, `_finalize_session_db`e devredilmez: finalize
             # `if not db_session_id: return 0` ile ilk satirda doner, yani DB satiri hic acilmamis
             # bir seansta acik coil-run'lar kapatilmadan kalirdi (eski davranis kapatiyordu).
@@ -4215,6 +4222,9 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
                     # ⚠️ Donanım komutu reddetti → seans HİÇ başlamadı. "completed" yazmak,
                     # uygulanmamış bir tedaviyi uygulanmış olarak belgelemek olurdu.
                     _durum = SEANS_DURUMU_DONANIM_REDDI
+                elif _sebep.startswith("iptal"):
+                    # 1-C §9 #5: başlatma bobin sürülmeden İPTAL edildi (durdurma geldi) → "İptal Edildi".
+                    _durum = "cancelled"
                 else:
                     _durum = "completed"
                 db.end_session(db_session_id, duration_minutes=dur_min, session_status=_durum)
