@@ -4,30 +4,33 @@
  *
  * Panelin kendi notu "yalnız TEYİTLİ başarıda 'durduruldu' de" derken yüklem `status !== "error"`
  * idi. Backend, publish broker'a ulaşamayınca HTTP 200 + {status:"mqtt_unavailable"} döner
- * (servers/api_server.py — ESP tek-bobin STOP yolu); eski yüklem bunu TEYİT sayıyordu.
- * En ağır yüzeyi aşırı-ısınma interlock'u: yanık riski anında durdurma komutu hiç ulaşmamışken
- * panel "bobin otomatik durduruldu" diyordu — sahte güvence, korumasızlıktan tehlikelidir.
+ * (servers/api_server.py — ESP tek-bobin STOP yolu); eski yüklem bunu TEYİT sayıyordu → durdurma
+ * komutu hiç ulaşmamışken panel "durduruldu" der (sahte güvence, korumasızlıktan tehlikelidir).
+ *
+ * ⚠️ 2026-10-02 (A-47, 1-D): bu dosya eskiden iddiayı 48 °C OTOMATİK durdurması üzerinden ölçüyordu.
+ * Sahip kararıyla o otomatik durdurma KALDIRILDI (yalnız görsel uyarı — CoilSicaklikUyarisi.A47.test.tsx).
+ * İddia DEĞİŞMEDİ, yalnız tetik operatörün "⏹ Durdur"una taşındı: aynı `sendCommand(false)` yolu.
  *
  * ⚠️ Testler DAVRANIŞSAL: gerçek bileşen çizilir, apiPost'un backend-gerçeği yanıtlarıyla
- * interlock'un hangi metni bastığı ölçülür.
+ * panelin hangi metni bastığı ölçülür.
  */
 jest.mock("@/services/apiClient", () => ({ apiPost: jest.fn() }));
 jest.mock("@/services/therapyLimits", () => ({
   clampTherapyParams: (p: unknown) => p,
 }));
 
-import { act, render } from "@testing-library/react-native";
+import { act, fireEvent, render } from "@testing-library/react-native";
 import { CoilParameterPanel } from "@/components/domain/CoilParameterPanel";
 
 const { apiPost } = jest.requireMock("@/services/apiClient");
 const mockApiPost = apiPost as jest.Mock;
 
-// ESP bobini (7), çalışıyor, sıcaklık kesme eşiğinin (48) ÜSTÜNDE → interlock tetiklenir.
-const asiriIsinan = {
-  coilId: 7,
+// ESP bobini (8), çalışıyor — operatör ⏹ Durdur'a basar.
+const calisan = {
+  coilId: 8,
   connected: true,
   running: true,
-  objectTemp: 50.2,
+  objectTemp: 30.0,
   frequencyHz: 50,
   dutyCycle: 25,
   magneticMt: 1,
@@ -40,9 +43,13 @@ beforeEach(() => {
   mockApiPost.mockReset();
 });
 
-async function ciz() {
-  const u = render(<CoilParameterPanel {...asiriIsinan} />);
-  await act(async () => {}); // interlock'un async sendCommand'i tamamlansın
+async function durdur() {
+  const u = render(<CoilParameterPanel {...calisan} />);
+  await act(async () => {
+    fireEvent.press(u.getByLabelText("Bobini durdur"));
+  });
+  expect(mockApiPost).toHaveBeenCalledTimes(1);
+  expect(mockApiPost.mock.calls[0][1].start).toBe(false);
   return u;
 }
 
@@ -50,25 +57,24 @@ it("KRİTİK: durdurma yanıtı mqtt_unavailable → 'DURDURMA ONAYLANAMADI' (sa
   // Backend'in GERÇEK broker-ölü yanıtı: HTTP 200 + mqtt_unavailable (apiPost bunu aynen döndürür).
   mockApiPost.mockResolvedValue({ status: "mqtt_unavailable", transport: "mqtt" });
 
-  const u = await ciz();
+  const u = await durdur();
 
-  expect(u.queryByText(/otomatik durduruldu/)).toBeNull();
+  expect(u.queryByText(/durduruldu/)).toBeNull();
   expect(u.getByText(/DURDURMA ONAYLANAMADI/)).toBeTruthy();
 });
 
-it("KARŞIT-KANIT: teyitli başarıda 'otomatik durduruldu' denir (yanlış alarm üretme)", async () => {
+it("KARŞIT-KANIT: teyitli başarıda uyarı ÇIKMAZ (yanlış alarm üretme)", async () => {
   mockApiPost.mockResolvedValue({ status: "success", transport: "mqtt" });
 
-  const u = await ciz();
+  const u = await durdur();
 
-  expect(u.getByText(/otomatik durduruldu/)).toBeTruthy();
   expect(u.queryByText(/DURDURMA ONAYLANAMADI/)).toBeNull();
 });
 
 it("mevcut davranış korunur: yanıt null (ağ hatası) → yine 'DURDURMA ONAYLANAMADI'", async () => {
   mockApiPost.mockResolvedValue(null);
 
-  const u = await ciz();
+  const u = await durdur();
 
   expect(u.getByText(/DURDURMA ONAYLANAMADI/)).toBeTruthy();
 });

@@ -7,8 +7,10 @@
  *               yayınlamaz → `objectTemp` hiçbir zaman gelmez (`live_state` varsayılanı 0.0).
  *   Bobin 6-8 → ESP32/MQTT `pemf/coil/<id>/sensors` → `object_temp` gelir.
  *
- * Tek termal kesme mantığı BU BİLEŞENDEDİR (`objectTemp > SAFE_TEMP_CUTOFF`). Yani 8 bobinin
- * 5'i hastanın üzerinde HİÇBİR sıcaklık koruması olmadan enerjilenir.
+ * ⚠️ 2026-10-02 (A-47 + Y2, sahip kararı): istemcideki 48 °C OTOMATİK durdurma KALDIRILDI; hiçbir
+ * katmanda termal kesme yok (bobin 1–7). 48 °C üstünde yalnız GÖRSEL uyarı (CoilSicaklikUyarisi.A47.test.tsx).
+ * Bu dosyanın iddiası değişmedi: ölçülmeyen sıcaklık "serin" diye okunmasın, metin "otomatik termal
+ * durdurma uygulanmaz" gerçeğini söylesin.
  *
  * ARIZA: sıcaklık yokken rozet HİÇ ÇİZİLMİYORDU → operatör bunu "sorun yok" diye okuyabiliyordu
  * ve firmware/README de "termal koruma sensör/ESP tarafındadır" diyerek yanlış güvence veriyordu.
@@ -106,13 +108,12 @@ it("yüksek sıcaklık uyarısı YALNIZ-RENK değil (⚠ + metin)", () => {
 });
 
 /**
- * ⚠️ EN ÖNEMLİ KAPI: interlock'un kapsamı. Bu test korumanın 1-5 için ÇALIŞMADIĞINI
- * belgeler — düzeltilmiş sanılıp donanım önlemi ertelenmesin diye.
+ * ⚠️ BELGELENMİŞ SINIR: panel hiçbir sıcaklıkta kendiliğinden durdurma GÖNDERMEZ (A-47). Ölçüm
+ * yokken de (bu kol) yoktur; ölçülen yüksek sıcaklık kolu CoilSicaklikUyarisi.A47.test.tsx'te.
  */
-it("BELGELENMİŞ SINIR: sıcaklık gelmeyen bobinde interlock tetiklenemez", () => {
+it("BELGELENMİŞ SINIR: sıcaklık gelmeyen bobinde otomatik durdurma yok", () => {
   const { apiPost } = require("@/services/apiClient");
   (apiPost as jest.Mock).mockClear();
   ciz({ objectTemp: 0, running: true });     // STM bobini, ölçüm yok
-  // Interlock `objectTemp > 48` ile çalışır; 0 asla geçmez → durdurma komutu GİTMEZ.
   expect(apiPost).not.toHaveBeenCalled();
 });

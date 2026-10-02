@@ -9,10 +9,10 @@ sözleşmesi eklendi:
 
     -> STM_TELE: C=6,T=34.20,A=27.10,B=1.842
 
-⚠️ **NEDEN BU KAPI GÜVENLİK KAPISI:** sahip kararıyla bobin 6-7'de **cihaz-taraflı termal
-kesme YOK**. Kalan tek otomatik katman arayüzdeki 48 °C istemci interlock'u
-(`apps/ui/src/components/domain/CoilParameterPanel.tsx:21,143`) ve o interlock `objectTemp`in
-arayüze **ULAŞMASINA** bağlı. Bu zincir kopunca hiçbir hata görünmez: kart sıcaklığı okur,
+⚠️ **NEDEN BU KAPI GÜVENLİK KAPISI:** sahip kararıyla (A-47 + Y2) bobin 1-7'de HİÇBİR katmanda
+**termal kesme YOK** — 48 °C istemci interlock'u da 2026-10-02'de kaldırıldı; 48 °C üstünde yalnız
+GÖRSEL uyarı var (`CoilParameterPanel.tsx` `SICAKLIK_UYARI_ESIGI_C`). Operatörün sıcaklığı görebilmesi
+`objectTemp`in arayüze **ULAŞMASINA** bağlı. Bu zincir kopunca hiçbir hata görünmez: kart sıcaklığı okur,
 kimse duymaz, bobin ısınmaya devam eder. Zincirin her halkası burada ölçülüyor.
 
 ⚠️ **İKİNCİ İDDİA — ÖLÇÜLMEYEN ALAN GÖNDERİLMEZ:** akım sensörü (ACS712) taşınmıyor
@@ -172,8 +172,8 @@ def test_KRITIK_olay_live_state_e_YAZAR_ve_YAYINLAR(kur):
     """Zincirin son halkası: olay → `_live_state` → `coil_status` + `sensor_data`.
 
     MUTASYON: `_ws_broadcast_sync` çağrılarını sil → KIRMIZI. Sahadaki etki: sıcaklık
-    sunucuda durur, arayüze HİÇ gitmez → 48 °C istemci interlock'u ASLA tetiklenmez ve
-    bobin 6-7 tamamen korumasız kalır (cihaz-taraflı kesme sahip kararıyla yok).
+    sunucuda durur, arayüze HİÇ gitmez → operatör sıcaklığı ve 48 °C görsel uyarısını
+    ASLA görmez (termal kesme sahip kararıyla hiçbir katmanda yok — A-47).
     """
     api, yayinlar = kur
     api._handle_backend_event(_Olay({"coil_id": 6, "object_temp": 41.7, "ambient_temp": 26.3, "magnetic_field": 1.842}))

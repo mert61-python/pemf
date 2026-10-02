@@ -5,7 +5,7 @@
  * Python unified_control_window'daki per-coil kontrol panelinin karşılığı.
  * Frekans, duty, faz, süre girişleri ve start/stop butonu içerir.
  */
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, AccessibilityInfo } from "react-native";
+import { StyleSheet, Text, View, TextInput, TouchableOpacity } from "react-native";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { colors, spacing, typography, rf, rs, touch } from "@/theme/tokens";
 import { apiPost } from "@/services/apiClient";
@@ -17,8 +17,13 @@ const COIL_COLORS = [
   "#536DFE", "#448AFF", "#40C4FF", "#18FFFF",
 ];
 
-// Bobin yüzey sıcaklığı güvenlik kesme eşiği (°C) — üstünde otomatik durdurma (yanık riski).
-const SAFE_TEMP_CUTOFF = 48;
+// Bobin yüzey sıcaklığı UYARI eşiği (°C) — üstünde YALNIZ görsel uyarı.
+// ⚠️ SAHİP KARARI A-47 + Y2 (2026-09-29): 48 °C'de otomatik durdurma/engelleme KALDIRILDI; hiçbir
+// katmanda (firmware, backend, istemci) termal kesme yok (bobin 1–7; 8266'nın kendi 100 °C kesmesi
+// firmware'de kalır, Y40). Eskiden bu eşiğin üstünde panel kendiliğinden STOP gönderiyordu.
+// Geri eklenecekse sahip kararıyla ("istersek sonradan ekleriz"). Kapı:
+// __tests__/CoilSicaklikUyarisi.A47.test.tsx.
+const SICAKLIK_UYARI_ESIGI_C = 48;
 
 interface Props {
   coilId: number;
@@ -150,9 +155,9 @@ export function CoilParameterPanel({
       }, null);
       // Denetim 2. tur [1.1] (2026-08-20): teyit yalnız AÇIK "success". Backend broker'a
       // ulaşamayınca HTTP 200 + {status:"mqtt_unavailable"} döner; eski yüklem (`!== "error"`)
-      // onu teyit sayıyordu → aşırı-ısınma interlock'u komut hiç ulaşmamışken "bobin otomatik
-      // durduruldu" diyordu (sahte güvence, korumasızlıktan tehlikeli). Kilit:
-      // __tests__/coilDurdurmaOnayi.test.tsx.
+      // onu teyit sayıyordu → durdurma komutu hiç ulaşmamışken "durduruldu" deniyordu (sahte güvence,
+      // korumasızlıktan tehlikeli; o zamanki en ağır yüzey A-47 ile kaldırılan 48 °C otomatik
+      // durdurmasıydı). Kilit: __tests__/coilDurdurmaOnayi.test.tsx.
       const ok = !!res && res.status === "success";
       // ESP bobini: broker aldı (PUBACK) ≠ cihaz uyguladı. Yanıttaki command_id ile `coil_ack` eşlenir;
       // eski backend command_id vermezse bekleme durumu hiç açılmaz (sessiz geriye-uyum). STM bobinleri
@@ -172,35 +177,16 @@ export function CoilParameterPanel({
     }
   }, [coilId, freq, duty, phase, duration, defaultFreq, defaultDuty, defaultPhase, defaultDuration]);
 
-  // Güvenlik interlock: aşırı ısınmada bobini otomatik durdur (yanık riski).
-  // YÜKSEK fix: (1) sendCommand'i AWAIT et → yalnız TEYİTLİ başarıda "durduruldu" de (sessiz stop-hatasında
-  // sahte güvence verme). (2) tek-atış ref → aşırı-ısınma sürerken her telemetri-tick'inde durdurma-spam etme.
-  const overheatHandledRef = useRef(false);
-  useEffect(() => {
-    const overheating = running && objectTemp > SAFE_TEMP_CUTOFF;
-    if (!overheating) {
-      overheatHandledRef.current = false; // durum normale döndü → yeni episode için guard sıfırla
-      return;
-    }
-    if (overheatHandledRef.current) return; // bu episode zaten ele alındı
-    overheatHandledRef.current = true;
-    const t = objectTemp;
-    (async () => {
-      const ok = await sendCommand(false);
-      const msg = ok
-        ? `Aşırı ısınma (${t.toFixed(1)}°C) — bobin otomatik durduruldu.`
-        : `⚠️ AŞIRI ISINMA (${t.toFixed(1)}°C) — otomatik DURDURMA ONAYLANAMADI! ACİL DURDUR'a basın veya cihazı fiziksel güç düğmesinden kapatın.`;
-      setError(msg);
-      // A11y (#68): yanık-riski uyarısını ekran-okuyucuya AÇIKÇA duyur (live-region'a ek güvence).
-      AccessibilityInfo.announceForAccessibility(msg);
-    })();
-  }, [running, objectTemp, sendCommand]);
-
   /** Bu alan GERÇEKTEN ölçülüyor mu? (bkz. readings bloğundaki gerekçe) */
   const olcum = useCallback(
     (alan: string) => Array.isArray(measuredFields) && measuredFields.includes(alan),
     [measuredFields]
   );
+
+  // A-47: 48 °C üstü YALNIZ görsel uyarı — istek GÖNDERİLMEZ, seans engellenmez/durdurulmaz.
+  // Yalnız GERÇEKTEN ölçülen (taze) sıcaklıkta: susan sensörün donmuş değeri backend'de
+  // `measuredFields`ten düşer (D1.67) → ne sayı ne uyarı (Y6: '—').
+  const sicaklikUyarisi = olcum("objectTemp") && objectTemp > SICAKLIK_UYARI_ESIGI_C;
 
   const isDisabled = disabled || !connected || (stm32Driven && !stmConnected);
 
@@ -249,8 +235,8 @@ export function CoilParameterPanel({
                Eskiden sıcaklık yoksa rozet HİÇ çizilmiyordu; operatör bunu "sorun yok" diye
                okuyabiliyordu. Oysa STM üzerinden sürülen bobiller (`live_state.STM_COIL_IDS`)
                için STM protokolünde SICAKLIK ALANI YOKTUR — o bobinlerden hiçbir zaman ölçüm
-               gelmez. Aşağıdaki termal interlock (`objectTemp > SAFE_TEMP_CUTOFF`) bu yüzden
-               onlar için HİÇBİR ZAMAN tetiklenemez.
+               gelmez. (A-47 ile 48 °C otomatik durdurması TÜM bobinlerden kaldırıldı; ölçülen
+               bobinde de yalnız görsel uyarı vardır — `SICAKLIK_UYARI_ESIGI_C`.)
                ⚠️ BURAYA SAYI YAZMAYIN. 2026-09-10'a kadar bu yorumda sabit bir bobin sayısı
                duruyordu; bobin 6-7 ESP'den STM'e taşınınca yorum sessizce BAYATLADI. Kapsam tek
                kaynak `live_state.STM_COIL_IDS`'tedir. Kapı: tests/test_sim_GERCEGI_ASMAZ.py Koruma donanım tarafında yapılana kadar bu sınır GÖRÜNÜR olmalı;
@@ -328,8 +314,22 @@ export function CoilParameterPanel({
         />
       </View>
 
-      {/* A11y (#68): aşırı-ısınma/otomatik-kesme-başarısız gibi güvenlik uyarıları ekran-okuyucuya
-          DUYURULSUN (yanık riski). accessibilityLiveRegion='assertive' + role='alert'. */}
+      {/* A-47: 48 °C üstü YALNIZ GÖRSEL UYARI. Otomatik durdurma YOK (sahip kararı) — metin bunu
+          AÇIKÇA söyler ki operatör var olmayan bir korumaya güvenmesin; durdurma kararı operatörde
+          (⏹ Durdur / ACİL DURDUR). A11y (#68): yanık riski ekran-okuyucuya duyurulur. */}
+      {sicaklikUyarisi ? (
+        <Text
+          style={styles.errorText}
+          testID="sicaklik-uyarisi"
+          accessibilityRole="alert"
+          accessibilityLiveRegion="assertive"
+        >
+          {`⚠ Sıcaklık ${SICAKLIK_UYARI_ESIGI_C} °C üstünde (${objectTemp.toFixed(1)} °C) — otomatik durdurma yok; bobini kontrol edin, gerekirse ⏹ Durdur.`}
+        </Text>
+      ) : null}
+
+      {/* A11y (#68): komut/durdurma-onaylanamadı gibi güvenlik uyarıları ekran-okuyucuya
+          DUYURULSUN. accessibilityLiveRegion='assertive' + role='alert'. */}
       {error ? (
         <Text style={styles.errorText} accessibilityRole="alert" accessibilityLiveRegion="assertive">
           {error}

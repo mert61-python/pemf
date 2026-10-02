@@ -595,8 +595,8 @@ class HeadlessCore:
         return updates
 
     #: Bobin 6-7 sensor telemetrisi (faz 3, 2026-09-10). ⚠️ Bu, o iki bobinin sicakliginin
-    #: arayuze ulastigi TEK yoldur; arayuzdeki 48 °C istemci interlock'u buna bagimlidir
-    #: (cihaz-tarafli termal kesme sahip karariyla YOK). Sozlesme:
+    #: arayuze ulastigi TEK yoldur; arayuzdeki 48 °C GORSEL uyarisi buna bagimlidir
+    #: (termal kesme sahip karariyla hicbir katmanda YOK — A-47). Sozlesme:
     #:     -> STM_TELE: C=6,T=34.20,A=27.10,B=1.842
     #: ⚠️ ALANLAR OPSIYONEL ve bu KASITLIDIR: olculmeyen alan HIC GONDERILMEZ (0.0
     #: gondermek "olculdu" gibi kaydedilir — gecmiste ayni desen PDF'e "0.0 °C olculdu"

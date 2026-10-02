@@ -28,10 +28,10 @@ kurulduğu için etkilenmedi. Arıza bu yüzden "cihaz çalışıyor ama sensör
 gibi göründü ve sensör/kablo/I2C tarafında arandı. Tek bir eksik bağlayıcı ayarı,
 ölçüm zincirinin TAMAMINI sessizce kesiyordu.
 
-⚠️ İKİNCİ ZARAR: bobin 6-7'deki tek otomatik termal koruma arayüzdeki 48 °C istemci
-interlock'udur (cihaz-taraflı kesme sahip kararıyla YOK) ve o da `T=` alanının
-ulaşmasına bağlıdır. Yani bu arıza sürerken o iki bobinde **hiçbir** termal koruma
-katmanı çalışmıyordu.
+⚠️ İKİNCİ ZARAR: bobin 6-7'nin sıcaklığını operatöre gösteren tek yol `T=` alanıdır
+(termal kesme sahip kararıyla hiçbir katmanda YOK — A-47; 48 °C üstü yalnız görsel uyarı,
+o da bu alanın ulaşmasına bağlı). Yani bu arıza sürerken operatör o iki bobinin
+sıcaklığını hiç göremiyordu.
 
 ===============================================================================
 BU DOSYA NE ÖLÇER

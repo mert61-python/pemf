@@ -695,10 +695,10 @@ export function ControlScreen() {
               ÇALIŞIYORKEN mutlaka görünür — görünmeyen bobin durdurulamıyordu
               (2026-09-11 saha arızası).
 
-              ⚠️ TERMAL: bobin 6-7'de artık CİHAZ-TARAFLI termal kesme YOK (sahip
-              kararı). Sensörler henüz bağlı değil → `objectTemp` gelmiyor → paneldeki
-              48 °C istemci interlock'u bu bobinlerde TETİKLENEMEZ ve rozet "ölçüm yok"
-              gösterir. Bu, bobin 1-5'in bugünkü durumuyla AYNI; bilinçli. */}
+              ⚠️ TERMAL: hiçbir katmanda termal kesme YOK (sahip kararı A-47 + Y2;
+              istemcideki 48 °C otomatik durdurması da 2026-10-02'de kaldırıldı). Panel
+              48 °C üstünde YALNIZ görsel uyarı verir; ölçüm gelmeyen bobinde rozet
+              "ölçüm yok" (—) gösterir. Bilinçli. */}
           <Text style={styles.subTitle}>
             {espSlotuGorunur(coils) ? "🔌 Bobinler (1–8)" : "🔌 Bobinler (1–7)"}
           </Text>

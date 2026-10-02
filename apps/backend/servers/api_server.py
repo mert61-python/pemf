@@ -725,12 +725,55 @@ def _on_mqtt_disconnect_api(client, userdata, rc):
 # yazılır → PEMF_SIMULATE modda sözlük boş kalır, watchdog no-op (sim coil'lerini bozmaz).
 _coil_last_telemetry: dict = {}
 
-#: bobin indeksi → GERCEKTEN olculmus `_live_state` alan adlari (`{"currentA", ...}`).
+#: bobin indeksi → {GERCEKTEN olculmus `_live_state` alan adi: son gelis ani (monotonic)}.
 #: ⚠️ NEDEN ALAN BAZINDA: bobin bazinda "telemetri geldi mi" bilgisi 2026-09-10'da YETERSIZ
 #: kaldi. Bobin 1-5 yalniz AKIM gonderiyor (ACS712), bobin 6-7 yalniz SICAKLIK/ALAN
 #: gonderecek. Bobin bazinda damgayla yetinmek, gonderilmeyen alanin 0.0 baslangic degerini
 #: "olculdu" sayip DB'ye yazdirir (PDF'te "0.0 °C olculdu" arizasinin ta kendisi).
+#: ⚠️ D1.67 (B-1.3) — NEDEN DAMGA: eskiden bir KUMEYDI ve yalniz `add` ile buyuyordu. Sensor
+#: susunca (kablo/I2C/MLX arizasi) son deger `_live_state`te DONUYOR, alan "olculuyor" kaliyor,
+#: arayuz donmus sayiyi CANLI gosteriyor ve dakika akumulatoru onu her turda DB'ye yaziyordu.
+#: Artik "olculuyor" = son `ALAN_TAZELIK_S` icinde GELDI (`_taze_alanlar_locked`).
 _coil_olculen_alanlar: dict = {}
+
+#: D1.67 — firmware'in `STM_TELE` basma periyodu (sn): `pemf_sensor.c` `SENSOR_ZIRVE_PENCERE_MS`
+#: (1000 ms; sicaklik da ayni pencerede okunur, ayri periyodu yok). Kapi ikisini ESLER:
+#: tests/test_telemetri_TAZELIGI_bayat_alan_OLCULMUS_SAYILMAZ.py.
+STM_TELE_PERIYOT_S = 1.0
+#: Bir alan bu sure icinde yeniden gelmezse "olculuyor" SAYILMAZ: `measuredFields`ten duser (arayuz
+#: '—' gosterir, Y6) ve akumulatore/dakika satirina/run ozetine girmez. 5 periyot: firmware UART
+#: mesgulken turu ATLAR — iki-uc atlanan satir '—' titresimi uretmesin.
+#: ⚠️ YALNIZ GOSTERIM VE KAYIT (A-47, Y2): bayat/olculmeyen alan HICBIR durdurma ya da engelleme
+#: tetiklemez — termal kesme hicbir katmanda YOK.
+ALAN_TAZELIK_S = 5 * STM_TELE_PERIYOT_S
+
+
+def _taze_alanlar_locked(idx: int, simdi: float) -> set:
+    """Bobin `idx`in son `ALAN_TAZELIK_S` icinde GERCEKTEN gelen alanlari. Cagiran `_live_state_lock` tutar."""
+    damga = _coil_olculen_alanlar.get(idx) or {}
+    return {alan for alan, t in damga.items() if simdi - t <= ALAN_TAZELIK_S}
+
+
+def _olculen_alanlari_tazele() -> None:
+    """D1.67: susan sensorun alanini `measuredFields`ten DUSURUR ve istemciye `coil_status` ile bildirir.
+
+    Yalniz yeni telemetride hesaplanan tazelik, sensor TAMAMEN sustugunda (hic satir yok) isimez:
+    liste guncellenmez, arayuz son listeyle donmus degeri canli gosterir. Bu yuzden sensor dongusu
+    (`_sensor_persistence_loop`) her turda bunu cagirir. Durdurma/engelleme YOK (A-47)."""
+    simdi = time.monotonic()
+    degisen = []
+    with _live_state_lock:
+        for idx in list(_coil_olculen_alanlar):
+            if not (0 <= idx < 8):
+                continue
+            coil = _live_state["coils"][idx]
+            taze = sorted(_taze_alanlar_locked(idx, simdi))
+            if taze != list(coil.get("measuredFields") or []):
+                coil["measuredFields"] = taze
+                degisen.append((idx + 1, dict(coil)))
+    for cid, snap in degisen:
+        _ws_broadcast_sync({"type": "coil_status", "coilId": cid, "data": snap})
+
 
 #: bobin indeksi → son bilinen ADC doygunluk durumu (bildirimi yalniz GECISTE basmak icin).
 _akim_doygun_son: dict = {}
@@ -1454,17 +1497,19 @@ def _handle_backend_event(event) -> None:
             "current": ("currentA", 3),
         }
         _t_yazildi = False
+        _t_simdi = time.monotonic()
         with _live_state_lock:
             _t_coil = _live_state["coils"][_t_idx]
-            _t_kume = _coil_olculen_alanlar.setdefault(_t_idx, set())
+            _t_damga = _coil_olculen_alanlar.setdefault(_t_idx, {})
             for _kaynak, (_hedef, _basamak) in _t_alanlar.items():
                 if _kaynak not in data:
                     continue
                 _t_coil[_hedef] = round(float(data[_kaynak]), _basamak)
-                _t_kume.add(_hedef)
+                _t_damga[_hedef] = _t_simdi
                 _t_yazildi = True
             if _t_yazildi:
-                _t_coil["measuredFields"] = sorted(_t_kume)
+                # D1.67: liste = TAZE alanlar (bu satirda gelmeyen ama pencere icindekiler dahil).
+                _t_coil["measuredFields"] = sorted(_taze_alanlar_locked(_t_idx, _t_simdi))
             _t_snap = dict(_t_coil)
         if not _t_yazildi:
             return
@@ -4410,12 +4455,19 @@ def _sensor_persistence_loop():
 
     minute_start = _t.time()
     while True:
+        # D1.67: susan sensorun alani seans olsun olmasin '—'ye duser (yalniz gosterim; durdurma YOK).
+        try:
+            _olculen_alanlari_tazele()
+        except Exception:
+            _dongu_hatasini_bildir("olculen alan tazelik denetimi hatasi")
         try:
             with _session_lock:
                 active = bool(_active_session.get("is_active"))
             if active:
+                _simdi_m = time.monotonic()
                 with _live_state_lock:
                     coils = [dict(_live_state["coils"][i]) for i in range(8)]
+                    _taze = {i: _taze_alanlar_locked(i, _simdi_m) for i in range(8)}
                 with _minute_acc_lock:
                     for coil in coils:
                         if not coil.get("running"):
@@ -4441,7 +4493,9 @@ def _sensor_persistence_loop():
                         # ⚠️ ALAN BAZINDA KAPI (2026-09-10): yukaridaki bobin-bazinda kapi
                         # ARTIK YETMEZ. Bobin 1-5 yalniz AKIM olcuyor, 6-7 yalniz sicaklik/
                         # alan. Olculmeyen alani biriktirmek DB'ye "0.0 olculdu" yazar.
-                        _olculen = _coil_olculen_alanlar.get(cid - 1) or set()
+                        # D1.67: yalniz TAZE alan — susan sensorun donmus degeri dakika satirina/run
+                        # ozetine "olculdu" diye GIRMEZ.
+                        _olculen = _taze.get(cid - 1) or set()
                         temp = coil.get("objectTemp")
                         cur = coil.get("currentA")
                         fld = coil.get("magneticMt")
