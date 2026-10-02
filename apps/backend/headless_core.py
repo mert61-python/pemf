@@ -250,6 +250,7 @@ class HeadlessCore:
             if simdi - self._hw_son_canlandirma < self._HW_CANLANDIRMA_ARALIGI_S:
                 return False
             self._hw_son_canlandirma = simdi
+            self._hw_kuyrugu_ayikla()
             try:
                 t = threading.Thread(target=self._hw_sender_worker, daemon=True, name="HWSender")
                 t.start()
@@ -266,6 +267,34 @@ class HeadlessCore:
             exc_info=False,
         )
         return t.is_alive()
+
+    def _hw_kuyrugu_ayikla(self) -> int:
+        """Canlandırmadan ÖNCE: ölü dönemde kuyruğa konmuş RUN paketlerini ve NACK işaretlerini AT, STOP'ları sırasıyla
+        KORU. @return atılan öğe sayısı.
+
+        ⚠️ 1-C inceleme i5-F-1 (ölçüldü 30/30): ölü göndericinin kuyruğunda kalan RUN (keep-alive turu, START) hiç
+        porta gitmemişti; yeni çalışan önce `connect_serial` ile bağlantıyı yeniden kurar → kopuş olayı → HC
+        `on_disconnect` bütün bobinleri "durdu"ya çeker (oturum varsa acil durdurma + mandal). Ardından kuyruğu FIFO
+        boşaltınca BAYAT RUN porta yazılıyordu: HC "durdu" derken bobin eski duty ile sürülüyor; E-stop canlandırma
+        sırasında geldiyse `stop_all_coils` döndükten SONRA porta duty>0 paket gidiyordu. Geçerli kalan tek niyet
+        STOP'tur. Ö.4-Y8: STOP paketlerine dokunulmaz (gönderim azalmaz); kıskaç/sınır yok (Y9)."""
+        q = self._hw_send_queue
+        with q.mutex:
+            eski = list(q.queue)
+            kalan = [
+                o for o in eski if not isinstance(o, _NackTekrari) and isinstance(o, tuple) and _tum_duty_sifir_mi(o[0])
+            ]
+            atilan = len(eski) - len(kalan)
+            if atilan:
+                q.queue.clear()
+                q.queue.extend(kalan)
+                q.unfinished_tasks = max(0, q.unfinished_tasks - atilan)
+                q.not_full.notify_all()
+        if atilan:
+            self.logger.warning(
+                "[HWSender] canlandırma: ölü dönemden kalan %d RUN/NACK öğesi atıldı (STOP'lar korundu).", atilan
+            )
+        return atilan
 
     def hw_yazim_isareti(self) -> int:
         """Şimdiye dek porta yazılan paket sayısı — `hw_stop_yazildi_bekle` ile birlikte kullanılır."""
