@@ -312,10 +312,22 @@ class HeadlessCore:
         with self._hw_yazim_kosulu:
             while self._hw_son_stop_yazimi <= isaret:
                 kalan = bitis - time.monotonic()
-                if kalan <= 0:
+                if kalan <= 0 or not self._hw_stop_yazilabilir_mi():  # i3-F-5: yazılamayacaksa bekleme
                     return False
-                self._hw_yazim_kosulu.wait(kalan)
+                self._hw_yazim_kosulu.wait(min(kalan, 0.05))
             return True
+
+    def _hw_stop_yazilabilir_mi(self) -> bool:
+        """Bir STOP ŞU AN porta yazılabilir mi: gönderici canlı VE açık seri bağlantı var.
+
+        ⚠️ 1-C inceleme i3-F-5 / i5-F-4: kablo çıkık ya da gönderici ölüyken E-stop teyit beklemesi üst sınıra dek
+        sürüyordu (~1 sn); istemcinin yedek adımları sıralı olduğu için 3. adım ~2 sn gecikiyordu (A-63: yedekler her
+        zaman ve gecikmeden koşmalı). Yazılamayacağı belli olan STOP için beklenmez — teyit dürüstçe False."""
+        if not self.hw_gonderici_canli():
+            return False
+        baglanti = getattr(self, "_seri_baglanti", None)
+        conn = baglanti.aktif() if baglanti is not None else None
+        return conn is not None and bool(getattr(conn, "is_open", True))
 
     def hw_stop_sirasi_yazildi_bekle(self, sira: int, zaman_asimi: float) -> bool:
         """Kuyruk sırası `sira` OLAN ya da ondan SONRA kuyruğa girmiş bir STOP porta YAZILDI mı? En çok `zaman_asimi` sn.
@@ -328,9 +340,9 @@ class HeadlessCore:
         with self._hw_yazim_kosulu:
             while self._hw_son_stop_sirasi < int(sira):
                 kalan = bitis - time.monotonic()
-                if kalan <= 0:
+                if kalan <= 0 or not self._hw_stop_yazilabilir_mi():  # i3-F-5: yazılamayacaksa bekleme
                     return False
-                self._hw_yazim_kosulu.wait(kalan)
+                self._hw_yazim_kosulu.wait(min(kalan, 0.05))
             return True
 
     def _hw_yazimi_kaydet(self, stm_msg: Any, sira: int = 0) -> None:

@@ -5356,7 +5356,10 @@ async def import_clinic_data(payload: DataImportPayload, request: Request):
 #: D1.55 (B-1.23): E-stop yanıtındaki `stmStopped` için STOP baytlarının porta YAZILMASINI bekleme
 #: üst sınırı (sn). Bekleme tüm gönderimlerden (STM kuyruğu, ESP yayınları) ve kayıttan SONRA yapılır →
 #: durdurmayı geciktirmez; sağlıklı göndericide yazım ms içinde olur, bekleme hemen döner.
-_ESTOP_STM_YAZIM_BEKLEME_S = 1.0
+#: ⚠️ 1-C inceleme i3-F-5 / i5-F-4: 1,0 sn idi ve yazılamayan STOP'ta (kablo çıkık / ölü gönderici) yanıtı o kadar
+#: geciktiriyordu; istemcinin yedek adımları sıralı → 3. adım ~2 sn sonra. Artık 0,5 sn ve STOP'un şu an yazılamayacağı
+#: belliyse hiç beklenmez (`hw_*_bekle` erken çıkar). Teyitsizlik yalnız istemcinin yedek adımlarını çalıştırır (A-63).
+_ESTOP_STM_YAZIM_BEKLEME_S = 0.5
 
 
 def _stm_yazim_isareti_al():
