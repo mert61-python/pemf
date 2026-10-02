@@ -972,6 +972,13 @@ def _is_cat_absent_error(exc) -> bool:
     return isinstance(exc, RuntimeError) and str(exc).startswith(_CAT_ABSENT_ERR_PREFIX)
 
 
+def _cat_kabin_uyarisi(result) -> str | None:
+    """D1.E08: kabin yapılandırması yüklenemediyse operatör metni (tek kaynak `catorgan_predictor.kabin_uyarisi`)."""
+    from ai_hub.inference_cat_organ.catorgan_predictor import kabin_uyarisi
+
+    return kabin_uyarisi(result)
+
+
 def _localize_organ_cpu(frame, organ_id):
     """cat_organ'ı YEREL (in-process, CPU) çalıştır → hedef organ. (tek-EXE klinik + GPU-fallback yolu)."""
     import tempfile
@@ -995,6 +1002,15 @@ def _localize_organ_cpu(frame, organ_id):
             os.unlink(tmp.name)
         except Exception:
             pass
+    # ⚠️ D1.E08 (İG-5.27): kabin yapılandırması yüklenemediyse sonuç kalibrasyonsuzdur (kabin koordinatı yok, güven
+    # tavanlı) → hedef DOĞRULANAMAZ ve sürülmez; operatöre 1-C'nin EYLEM söyleyen kabin bildirimi (seans başına bir kez).
+    if (result.get("kabin_yapilandirmasi") or {}).get("yuklendi") is False:
+        logger.warning(
+            "AI Pro: kabin yapılandırması yüklenemedi (%s) — hedef doğrulanamaz, SÜRÜLMEZ",
+            (result.get("kabin_yapilandirmasi") or {}).get("hata"),
+        )
+        _kabin_okunamaz_bildir()
+        return False, 0.0, 0.0, 0.0, 0.0, result.get("_overlay_bgr"), bool(result.get("organs")), None
     return _extract_organ_target(result.get("organs") or {}, organ_id, result.get("_overlay_bgr"))
 
 
@@ -1029,6 +1045,11 @@ def _localize_organ_gpu(frame, organ_id):
             overlay = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         except Exception:
             overlay = None
+    # D1.E08: GPU servisi aynı öngörücüyü koşar ve aynı `kabin_uyarisi`nı döner (parite) → CPU yoluyla AYNI davranış.
+    if resp.get("kabin_uyarisi"):
+        logger.warning("AI Pro (GPU): kabin yapılandırması yüklenemedi — hedef doğrulanamaz, SÜRÜLMEZ")
+        _kabin_okunamaz_bildir()
+        return False, 0.0, 0.0, 0.0, 0.0, overlay, bool(organs_by_id), None
     return _extract_organ_target(organs_by_id, organ_id, overlay)
 
 
@@ -4211,6 +4232,9 @@ async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = F
             # ihlalleri — pipeline üretiyordu, yanıt taşımıyordu.
             "mirror_warning": bool((result.get("pnp_fit") or {}).get("mirror_warning")),
             "anatomic_consistency": result.get("anatomic_consistency"),
+            # D1.E08 (İG-5.27): kabin yapılandırması yüklenemediyse sonuç KALİBRASYONSUZ — operatöre söylenir (yalnız-ek;
+            # metin tek kaynakta, GPU servisi de aynısını döner — parite kapısı).
+            "kabin_uyarisi": _cat_kabin_uyarisi(result),
         }
     except Exception as e:
         logger.error(f"cat_organ inference error: {e}", exc_info=True)

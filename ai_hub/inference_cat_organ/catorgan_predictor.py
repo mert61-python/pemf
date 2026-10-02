@@ -30,6 +30,17 @@ from .lib.cabin_config import load_cabin_config, varsayilan_kabin_yaml
 # organ_id → TR ad (canonical ORGAN_IDS ile birebir)
 ORGAN_NAMES = dict(ORGAN_IDS)  # {1:"mide", 2:"bobrek", ...}
 
+#: D1.E08 (İG-5.27): kabin yapılandırması yüklenemediğinde operatöre giden TEK metin (gömülü uç + GPU servisi aynı).
+KABIN_UYARISI = (
+    "Kabin yapılandırması yüklenemedi — organ konumları KALİBRASYONSUZ (kabin koordinatı yok, güven sınırlı). "
+    "Kabin yapılandırma dosyasını (kurulum) kontrol edin ya da teknik desteğe başvurun."
+)
+
+
+def kabin_uyarisi(result: dict) -> str | None:
+    """Sonuç kalibrasyonsuzsa (kabin yapılandırması yüklenemedi) operatör metni, değilse None."""
+    return KABIN_UYARISI if ((result or {}).get("kabin_yapilandirmasi") or {}).get("yuklendi") is False else None
+
 _MODEL_FILES = {
     "yolo": "yolov8m-seg.onnx",
     "det":  "superanimal_quadruped_fasterrcnn_mobilenet_v3_large_fpn.onnx",
@@ -53,11 +64,24 @@ class CatOrganPredictor:
         # to_marker YOK → `has_perspective_data` False → ArUco/perspektif yolu uygulamada HİÇ
         # çalışmıyordu (yaml güncellemeleri etkisizdi). Dosya yok/bozuksa eski davranış (DEFAULT,
         # kalibrasyonsuz kanonik) korunur — analiz düşmez. Kapı: tests/test_kabin_config_65x50x50.py
+        # ⚠️ D1.E08 (İG-5.27): DEFAULT'a düşüş artık SESSİZ ve "kalibre" DEĞİL. Eskiden `cabin_active` yalnız ArUco'ya
+        # bağlıydı → YAML yok/bozukken sonuç `calibrated=True`, güven tavansız ve kabin koordinatı DEFAULT geometriden
+        # ~84 cm kayık çıkıyordu (ölçüldü). Artık `kabin_yuklendi=False` → pipeline kabini KALİBRE SAYMAZ (calibrated
+        # False, kalibrasyonsuz güven tavanı, DEFAULT geometriden kabin koordinatı yok) ve sonuç bunu `kabin_yapilandirmasi`
+        # ile bildirir (AI Pro: hedef doğrulanamaz → sürülmez + operatöre eylem; AI Hub: yanıtta uyarı).
+        self.kabin_yuklendi = True
+        self.kabin_hatasi = None
         try:
             self.cabin_cfg = load_cabin_config(varsayilan_kabin_yaml())
         except Exception as e:  # noqa: BLE001 — bozuk yaml analizi düşürmesin
-            print(f"  ! cabin_config yüklenemedi ({e}); DEFAULT (kalibrasyonsuz) kullanılıyor")
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Kabin yapılandırması yüklenemedi (%s) — kedi-organ sonuçları KALİBRASYONSUZ (kabin koordinatı yok)", e
+            )
             self.cabin_cfg = load_cabin_config(None)
+            self.kabin_yuklendi = False
+            self.kabin_hatasi = f"{type(e).__name__}: {e}"[:200]
         # ArUco sabitleri TEK kaynaktan (yaml) — basılı marker sayfasıyla aynı: DICT_5X5_50 / 10 cm
         _qr.ARUCO_REAL_CM = float((self.cabin_cfg.get("aruco") or {}).get("real_cm", 10.0))
         _qr.ARUCO_DICT = str((self.cabin_cfg.get("aruco") or {}).get("dict", "DICT_5X5_50"))
@@ -106,6 +130,8 @@ class CatOrganPredictor:
             "axes_def": "x=right,y=down,z=depth",
             "extent_cm": list(_geo.get("cabin_extent_cm") or [0.0, 0.0, 0.0]),
             "config": self.cabin_cfg,
+            # D1.E08: yapılandırma YÜKLENMEDİYSE ArUco bulunsa da kabin kalibre SAYILMAZ (DEFAULT geometri gerçek değil).
+            "kabin_yuklendi": bool(getattr(self, "kabin_yuklendi", True)),
         }
         organs = estimate_organs_pnp(kp_d, kp[:, 2], bbox, pose_info,
                                      mask_xy=seg.get("mask_xy"),
@@ -144,6 +170,11 @@ class CatOrganPredictor:
             "t_vec": organs.get("t_vec"),
             "fitted_keypoints_2d": organs.get("fitted_keypoints_2d"),
             "morphology": morph,
+            # D1.E08 (İG-5.27): kabin yapılandırmasının durumu — tüketiciler (AI Pro, AI Hub) operatöre SÖYLER.
+            "kabin_yapilandirmasi": {
+                "yuklendi": bool(getattr(self, "kabin_yuklendi", True)),
+                "hata": getattr(self, "kabin_hatasi", None),
+            },
         }
 
         if render:

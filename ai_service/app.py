@@ -796,6 +796,13 @@ def infer_thermal(file: UploadFile = File(...), explain: str = Form(None), xai_m
             os.unlink(tmp)
 
 
+def _cat_kabin_uyarisi(result) -> Optional[str]:
+    """D1.E08: kabin yapılandırması yüklenemediyse operatör metni (tek kaynak `catorgan_predictor.kabin_uyarisi`)."""
+    from ai_hub.inference_cat_organ.catorgan_predictor import kabin_uyarisi
+
+    return kabin_uyarisi(result)
+
+
 @app.post("/infer/cat_organ")
 def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(None)):
     """Kedi görüntüsü → 10 organ 3B lokalizasyon (3 ONNX) + overlay (GPU).
@@ -855,6 +862,8 @@ def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(None)):
             # burada YOKTU -> GPU dagitiminda ayna/anatomik uyarilar hic gorunmuyordu.
             "mirror_warning": bool((result.get("pnp_fit") or {}).get("mirror_warning")),
             "anatomic_consistency": result.get("anatomic_consistency"),
+            # D1.E08 (İG-5.27) parite: kabin yapılandırması yüklenemediyse KALİBRASYONSUZ uyarısı (gömülü uçla AYNI metin).
+            "kabin_uyarisi": _cat_kabin_uyarisi(result),
             "image_base64": image_b64,
             **_cat_boyut,
         }

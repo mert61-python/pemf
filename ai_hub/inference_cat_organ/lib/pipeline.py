@@ -234,7 +234,10 @@ def estimate_organs_pnp(kp_dict: dict, kp_conf: np.ndarray,
     cm_per_px = None
     qr_center_px = None
     qr_origin_offset = [0.0, 0.0, 0.0]
-    if cabin_params is not None and image_path is not None:
+    # D1.E08 (İG-5.27): kabin yapılandırması YÜKLENMEDİYSE (DEFAULT geometri) ArUco bulunsa da kabin KALİBRE SAYILMAZ:
+    # `calibrated` False, kalibrasyonsuz güven tavanı (`guven_dokumu_hesapla`), DEFAULT ofsetten kabin koordinatı YOK.
+    # Anahtar yoksa (eski çağıranlar, CLI) davranış aynı.
+    if cabin_params is not None and image_path is not None and cabin_params.get("kabin_yuklendi", True):
         try:
             qr_inf = detect_aruco_marker(image_path)
             if not qr_inf.get("error"):
