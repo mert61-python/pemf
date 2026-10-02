@@ -127,7 +127,9 @@ def test_KARSIT_KANIT_hazirlik_karesi_BOBIN_SURMEZ(router):
     # 3. tur B1: kapı `... and not is_foreign:` ile SIKILAŞTIRILDI (yabancı kare de sürmez).
     # `localized and session_active` şartı KORUNUYOR → renksiz koşula (iki-koşul ÖN-EK) pinle;
     # gevşetme (koşulun kaldırılması) yine kırmızı verir, meşru sıkılaştırma yeşil kalır.
-    assert "if localized and session_active" in router, (
+    # 1-C inceleme i7-F-1: `localized` → `_bulundu` (= `localized` VE gözlem bir kayıp STOP'undan eski değil) — yine
+    # SIKILAŞTIRMA; `_bulundu`'nun `localized`ı ŞART koştuğu tanımıyla birlikte pinlenir.
+    assert "if _bulundu and session_active" in router and "_bulundu = bool(localized) and " in router, (
         "bobin surus kapisi degismis — hazirlik karesi bobin surebilir (P0 ihlali)"
     )
     # Sıkılaştırmanın gevşemeye dönüşmediğini de doğrula: kapı hâlâ `session_active`'i ŞART koşmalı.

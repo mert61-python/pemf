@@ -426,7 +426,12 @@ class HardwareController:
                 # bakmak) denetle-sonra-yap aralığı bırakır: o aralıkta gelen E-stop STOP'unu gönderir, ardından bu START
                 # bobini YENİDEN enerjilerdi (İG-5.3/5.4). Burada ya E-stop'tan önce yazılırız (E-stop'un STOP'u bizden
                 # SONRA gider) ya da sonra denetleriz (mandal/bayat nesil → red). STOP bu kapıdan geçmez (Ö.4-Y8).
-                _engel = estop_mandali.baslatma_engeli(nesil if nesil is not None else estop_mandali.baglam_nesli())
+                # ⚠️ 1-C inceleme i7-F-1: AI Pro hedef GÖZLEMİ kayıp STOP'undan eskiyse (bağlamdaki damga) aynı kritik
+                # bölgede red — kayıp STOP'u ya bu yazımdan SONRA gider ya da yazım reddedilir.
+                _engel = (
+                    estop_mandali.baslatma_engeli(nesil if nesil is not None else estop_mandali.baglam_nesli())
+                    or estop_mandali.gozlem_engeli()
+                )
                 if _engel:
                     self.logger.warning("Bobin %s BAŞLATILMADI: %s", coil_id, _engel)
                     return False
@@ -521,6 +526,7 @@ class HardwareController:
 
         with self._state_lock:
             # D1.81 (B-5.3 · Y4): mandal + sürüş nesli DURUM KİLİDİ ALTINDA — gerekçe `update_coil`'de (AI (Auto) bu yolu kullanır).
+            # (i7-F-1 hedef gözlemi damgası burada YOK: AI Pro bobinleri tek tek `update_coil` ile sürer.)
             _engel = estop_mandali.baslatma_engeli(nesil if nesil is not None else estop_mandali.baglam_nesli())
             if _engel:
                 self.logger.warning("TÜM bobinler BAŞLATILMADI: %s", _engel)

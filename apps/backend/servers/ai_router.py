@@ -1479,6 +1479,7 @@ def _ai_hazirlik_loop():
                 # denetim P2): işlem sırasında gelen organ/relocalize isteği YUTULMAZ.
                 _oid = _ai_organ_id
                 _ai_relocalize = False
+                _kayip_damgasi = estop_mandali.kayip_nesli()  # i7-F-1: gözlem LOKALİZASYON BAŞINDA damgalanır
                 try:
                     # *l_ek: 8. eleman guven_dokumu (2026-08-26) — eski 7'li tuple'lar (test
                     # mock'lari dahil) KIRILMADAN acilir (l_ek bos kalir, dokum None yazilir).
@@ -1491,6 +1492,7 @@ def _ai_hazirlik_loop():
                                 "z_mm": lzz,
                                 "reliability": lrel,
                                 "localized": lz,
+                                "kayip_damgasi": _kayip_damgasi,
                                 "overlay_bgr": lov,
                                 "at": now,
                                 "organ_id": _oid,
@@ -1698,6 +1700,8 @@ def _ai_pro_loop(dongu_muhru=None):
                     # localized=False kalıyor ve bobin HİÇ sürülmüyordu (onaylı seans "aktif"
                     # görünürken tedavi uygulanmıyor; 3. turda yanıltıcı "hedef kaybı" STOP'u).
                     # Kapı: tests/test_ai_pro_seans_dongusu_lokalizasyon.py (yıldızsız açılım → KIRMIZI).
+                    # 1-C inceleme i7-F-1: gözlem LOKALİZASYON BAŞINDAKİ kayıp nesliyle damgalanır (kare bu andan).
+                    _kayip_damgasi = estop_mandali.kayip_nesli()
                     lz, lx, ly, lzz, lrel, lov, lkedi, *l_ek = _localize_organ(frame, _oid)
                     with _ai_cache_lock:
                         _ai_organ_cache.update(
@@ -1707,6 +1711,7 @@ def _ai_pro_loop(dongu_muhru=None):
                                 "z_mm": lzz,
                                 "reliability": lrel,
                                 "localized": lz,
+                                "kayip_damgasi": _kayip_damgasi,
                                 "overlay_bgr": lov,
                                 "at": now,
                                 "organ_id": _oid,  # SNAPSHOT: global yeniden okunmaz
@@ -1742,10 +1747,14 @@ def _ai_pro_loop(dongu_muhru=None):
                 y_mm = _ai_organ_cache["y_mm"]
                 z_mm = _ai_organ_cache["z_mm"]
                 rel = _ai_organ_cache["reliability"]
+                kayip_damgasi = _ai_organ_cache.get("kayip_damgasi")
             kedi_var = bool(_ai_organ_cache.get("kedi_var"))
+            # ⚠️ 1-C inceleme i7-F-1: bir hedef-kaybı STOP'undan ESKİ "bulundu" gözlemi (ör. STOP'tan sonra biten uçuştaki
+            # lokalizasyon) BULUNDU SAYILMAZ: sürülmez, kayıp sayılır. Asıl kapı sürüşte (HC, durum kilidi altında).
+            _bulundu = bool(localized) and not estop_mandali.gozlem_engeli(kayip_damgasi)
 
             # ── em_kedi → per-coil → sür (YALNIZCA organ bulunduysa; el yerine organ-tespiti koşulu) ──
-            if localized:
+            if _bulundu:
                 # Audit P1: E-stop/stop lokalizasyon (~1-4s) sırasında gelmiş olabilir → SÜRMEDEN ÖNCE
                 # is_active'i yeniden doğrula (E-stop'un ~1 iterasyon geçersiz kılınmasını engelle).
                 import servers.api_server as _apx
@@ -1760,7 +1769,8 @@ def _ai_pro_loop(dongu_muhru=None):
                 # sn, yanıtsız AI servisinde dakikalar) sırasında gelen acil durdurmayı göremez — ölçüldü: döngü 40'ta 11,
                 # damla serviste 36,5 sn sonra yeniden enerjiledi. Sürüş bu döngünün NESLİYLE yapılır; `update_coil` onu
                 # DURUM KİLİDİ ALTINDA denetler → bayatsa reddedilir. Sonra döngü de çıkar.
-                with estop_mandali.surus_baglami(_nesil):
+                # i7-F-1: gözlem damgası da taşınır — tahmin sırasında kayıp STOP'u geldiyse `update_coil` kilit altında reddeder.
+                with estop_mandali.surus_baglami(_nesil), estop_mandali.gozlem_baglami(kayip_damgasi):
                     _drive_coils_ai_pro(D, P)
                 if not _dongu_gecerli():
                     logger.warning("AI Pro: sürüş sırasında durdurma/acil durdurma geldi → döngü sonlandırılıyor.")
@@ -1779,20 +1789,28 @@ def _ai_pro_loop(dongu_muhru=None):
                 # ARDISIK _AI_LOST_STOP_STREAK kayiptan sonra durdur, tekrar bulununca surmeye
                 # devam eder (seansi bitirmez; sure-watchdog + teardown kendi isini gorur).
                 _lost_streak += 1
-                if _lost_streak == _AI_LOST_STOP_STREAK:
+                # ⚠️ 1-C inceleme i7-F-1 (arka kalkan): STOP eskiden yalnız `== N` turunda gidiyordu — kayıp STOP'unu atlatan
+                # bir sürüşten sonra hedef kayıp kaldıkça bir daha STOP gelmiyordu. N ve sonrasındaki HER kayıp turunda STOP
+                # yinelenir (idempotent; Ö.4-Y8: STOP yalnız artar); bildirim/günlük N turda bir (alarm yorgunluğu yok).
+                if _lost_streak >= _AI_LOST_STOP_STREAK:
+                    _bildir = _lost_streak % _AI_LOST_STOP_STREAK == 0
+                    try:
+                        estop_mandali.kayip_nesli_artir()  # uçuştaki "bulundu" gözlemleri bu STOP'tan SONRA süremez
+                    except Exception:
+                        logger.exception("AI Pro: kayıp nesli artırılamadı (STOP yine gönderilir)")
                     try:
                         import servers.api_server as _apx2
 
                         # Denetim 2. tur [1.1]: teyitsiz STOP'lar operatore bildirilir
                         # (broker oluyken hedef-kaybi durdurmasi sessizce dusuyordu).
-                        _apx2._bildir_teyitsiz_stop(
-                            _apx2._stop_session_coils(range(1, 8)), "AI Pro hedef-kaybı durdurması"
-                        )
-                        logger.warning(
-                            "AI Pro: hedef %d ardisik iterasyondur bulunamadi → bobinler DURDURULDU "
-                            "(hedef yeniden bulunursa surus devam eder).",
-                            _lost_streak,
-                        )
+                        _teyitsiz2 = _apx2._stop_session_coils(range(1, 8))
+                        if _bildir:
+                            _apx2._bildir_teyitsiz_stop(_teyitsiz2, "AI Pro hedef-kaybı durdurması")
+                            logger.warning(
+                                "AI Pro: hedef %d ardisik iterasyondur bulunamadi → bobinler DURDURULDU "
+                                "(hedef yeniden bulunursa surus devam eder).",
+                                _lost_streak,
+                            )
                     except Exception:
                         logger.exception("AI Pro: hedef-kayip STOP hatasi")
 
@@ -2562,38 +2580,52 @@ def ai_pro_status():
     }
 
 
-def _frame_hedef_durumu(muhur, bulundu: bool) -> bool:
-    """İG-5.1: `/frame` hedef durumunu kare kare sayar; ARDIŞIK `_AI_LOST_STOP_STREAK` kayıpta True (STOP zamanı).
+def _frame_hedef_durumu(muhur, bulundu: bool) -> int:
+    """İG-5.1: `/frame` hedef durumunu kare kare sayar; ARDIŞIK kayıp sayısını döndürür (bulunduysa 0). Çağıran
+    `>= _AI_LOST_STOP_STREAK` iken STOP gönderir.
 
     ⚠️ ÖLÇÜLDÜ: `/frame`'de hedef kaybının (`localized:false`) else dalı yoktu — 70 sn kedisiz karede telde 159 duty>0
     paket, STOP 0; son sürüşten 65,8 sn sonra hâlâ enerjili (sürüş deadline'a dek keep-alive ile sürüyordu).
     Döngünün kuralıyla AYNI: tek kare kaybında durdurmaz (tespit anlık sekebilir); hedef yeniden bulununca sayaç
-    sıfırlanır ve sürüş sürer — seans BİTMEZ, sürüş yetkisi (nesil) kesilmez."""
+    sıfırlanır ve sürüş sürer — seans BİTMEZ, sürüş yetkisi (nesil) kesilmez.
+    ⚠️ 1-C inceleme i7-F-1 (arka kalkan): STOP eskiden yalnız `seri == N` anında gidiyordu — kayıp STOP'unu atlatan bir
+    sürüşten sonra hedef kayıp kaldıkça bir daha STOP gelmiyordu. Artık N ve sonrasındaki HER kayıp karede yinelenir."""
     with _frame_kayip_kilit:
         if _frame_kayip["onay"] != muhur["onay"]:
             _frame_kayip.update(onay=muhur["onay"], seri=0)
         if bulundu:
             _frame_kayip["seri"] = 0
-            return False
+            return 0
         _frame_kayip["seri"] += 1
-        return _frame_kayip["seri"] == _AI_LOST_STOP_STREAK
+        return _frame_kayip["seri"]
 
 
-async def _frame_kayip_stopu(neden: str) -> None:
-    """İG-5.1: AI'nın sürdüğü bobinlere STOP (döngünün hedef-kaybı durdurmasıyla aynı kapsam). STOP yalnız artar (Ö.4-Y8)."""
+async def _frame_kayip_stopu(neden: str, seri: int = _AI_LOST_STOP_STREAK) -> None:
+    """İG-5.1: AI'nın sürdüğü bobinlere STOP (döngünün hedef-kaybı durdurmasıyla aynı kapsam). STOP yalnız artar (Ö.4-Y8).
+
+    ⚠️ 1-C inceleme i7-F-1: STOP'tan ÖNCE hedef-kaybı nesli artar → bu STOP'tan önce başlamış bir "bulundu" gözlemi
+    (tahminde bekleyen uçuştaki kare) artık SÜREMEZ (`update_coil` kilit altında reddeder). Sürüş yetkisi KESİLMEZ:
+    hedef yeniden bulununca (yeni gözlem) sürüş sürer. Yinelenen STOP'ta bildirim/günlük N karede bir."""
+    _bildir = seri % _AI_LOST_STOP_STREAK == 0
+    try:
+        estop_mandali.kayip_nesli_artir()
+    except Exception:
+        logger.exception("AI Pro /frame: kayıp nesli artırılamadı (STOP yine gönderilir)")
     try:
         import servers.api_server as _apx
 
         _teyitsiz = await asyncio.to_thread(_apx._stop_session_coils, range(1, 8))
-        _apx._bildir_teyitsiz_stop(_teyitsiz, "AI Pro hedef-kaybı durdurması (mobil kare)")
+        if _bildir:
+            _apx._bildir_teyitsiz_stop(_teyitsiz, "AI Pro hedef-kaybı durdurması (mobil kare)")
     except Exception:
         logger.exception("AI Pro /frame: hedef-kayıp STOP hatası")
-    logger.warning(
-        "AI Pro /frame: hedef %d ardışık karedir bulunamadı (%s) → bobinler DURDURULDU (hedef yeniden bulunursa sürüş "
-        "sürer).",
-        _AI_LOST_STOP_STREAK,
-        neden,
-    )
+    if _bildir:
+        logger.warning(
+            "AI Pro /frame: hedef %d ardışık karedir bulunamadı (%s) → bobinler DURDURULDU (hedef yeniden bulunursa "
+            "sürüş sürer).",
+            seri,
+            neden,
+        )
 
 
 @ai_router.post("/api/ai/ai_pro/frame")
@@ -2640,17 +2672,20 @@ async def ai_pro_frame(
             # bayragini ONCE tuket (islem sirasinda gelen yeni istek yutulmasin).
             _oid = _ai_organ_id
             _ai_relocalize = False
+            _kayip_damgasi = estop_mandali.kayip_nesli()  # i7-F-1: gözlem LOKALİZASYON BAŞINDA damgalanır
             # *l_ek: 8. eleman guven_dokumu (2026-08-26) — geriye-uyumlu acilim (7'li tuple'da None).
             try:
                 lz, lx, ly, lzz, lrel, lov, lkedi, *l_ek = await asyncio.to_thread(_localize_organ, img, _oid)
             except Exception:
                 # ⚠️ İG-5.1 (istisna kolu): lokalizasyon hatası (ör. fantom karesi → pose/PnP) = hedef KAYBI. Ölçüldü:
                 # yanıt 500 dönüyor (12/12), cache ESKİ "bulundu" kalıyor ve STOP yok — enerji sürüyordu. Döngüyle aynı:
-                # cache geçersiz kılınır ve kayıp sayılır (N'de STOP); yanıt eskisi gibi hata döner (istemci görsün).
+                # cache geçersiz kılınır ve kayıp sayılır (N'de ve sonrasında STOP); yanıt eskisi gibi hata döner.
                 with _ai_cache_lock:
                     _ai_organ_cache["localized"] = False
-                if _muhur is not None and not is_foreign and _frame_hedef_durumu(_muhur, False):
-                    await _frame_kayip_stopu("lokalizasyon hatası")
+                if _muhur is not None and not is_foreign:
+                    _seri = _frame_hedef_durumu(_muhur, False)
+                    if _seri >= _AI_LOST_STOP_STREAK:
+                        await _frame_kayip_stopu("lokalizasyon hatası", _seri)
                 raise
             with _ai_cache_lock:
                 _ai_organ_cache.update(
@@ -2660,6 +2695,7 @@ async def ai_pro_frame(
                         "z_mm": lzz,
                         "reliability": lrel,
                         "localized": lz,
+                        "kayip_damgasi": _kayip_damgasi,
                         "overlay_bgr": lov,
                         "at": now,
                         "organ_id": _oid,
@@ -2682,6 +2718,7 @@ async def ai_pro_frame(
             rel = _ai_organ_cache["reliability"]
             kedi_var = bool(_ai_organ_cache.get("kedi_var"))
             guven_dokumu = _ai_organ_cache.get("guven_dokumu")  # snapshot (yirtik-okuma politikasi)
+            kayip_damgasi = _ai_organ_cache.get("kayip_damgasi")  # i7-F-1: gözlemin damgası (lokalizasyon başı)
             # F2 (denetim 2026-08-24): bir LOKALİZASYONUN kimliği (cache 'at'; istek-başı `now` DEĞİL).
             # Kareler 1,5 sn'de, lokalizasyon en fazla 10 sn'de bir → eko karelerde update bloğuna
             # girilmez, `at` önceki ölçümün damgasını korur. Panel ARDISIK_ONAY sayacını yalnız YENİ
@@ -2702,25 +2739,31 @@ async def ai_pro_frame(
             logger.exception("ai_pro_frame: aktif-seans kontrolü hatası")
             session_active = False
 
-        # İG-5.1: sürülebilir seansta SAHİBİN karesi hedefi kaybettiyse kayıp sayılır; ARDIŞIK N kayıpta AI'nın sürdüğü
-        # bobinlere STOP (döngünün `_lost_streak` kuralı). Yabancı kare sayılmaz (sahibin seansını durdurtamaz).
-        if session_active and not is_foreign and _frame_hedef_durumu(_muhur, bool(localized)):
-            await _frame_kayip_stopu("hedef bulunamadı")
+        # ⚠️ 1-C inceleme i7-F-1: bir hedef-kaybı STOP'undan ESKİ "bulundu" gözlemi (STOP'tan sonra biten uçuştaki
+        # lokalizasyonun önbelleğe yazdığı) BULUNDU SAYILMAZ — sürülmez ve kayıp sayılır.
+        _bulundu = bool(localized) and not estop_mandali.gozlem_engeli(kayip_damgasi)
+        # İG-5.1: sürülebilir seansta SAHİBİN karesi hedefi kaybettiyse kayıp sayılır; ARDIŞIK N kayıpta (ve sonrasında her
+        # kayıp karede — i7-F-1 arka kalkanı) AI'nın sürdüğü bobinlere STOP. Yabancı kare sayılmaz.
+        if session_active and not is_foreign:
+            _seri = _frame_hedef_durumu(_muhur, _bulundu)
+            if _seri >= _AI_LOST_STOP_STREAK:
+                await _frame_kayip_stopu("hedef bulunamadı", _seri)
 
         D, P, e_field = [0.0] * 7, [0.0] * 7, 0.0
         _surdu = False
         # GERÇEK donanımı sür (loop ile aynı yol) — organ bulundu VE aktif AI Pro seansı varsa VE
         # kare seansın SAHİBİNDEN geliyorsa. Bobin 1-7. [B1]: yabancı kare ASLA sürmez (yanlış
         # kameradan hesaplanan hedefe onaylı seansta enerji verilmesini önler).
-        if localized and session_active and not is_foreign:
+        if _bulundu and session_active and not is_foreign:
             D, P, e_field = await asyncio.to_thread(_predict_and_drive, x_mm, y_mm, z_mm, _ai_organ_id)
             # Audit P2: _drive_coils_ai_pro senkron MQTT publish yapar (ESP probe/connect/wait ~sn) →
             # event-loop'u bloklardi (es-zamanli /emergency_stop yaniti gecikir). to_thread'e al.
             # D1.81: niyet nesli bağlamı `to_thread` iş parçacığına kopyalanır; `update_coil` onu kilit altında denetler.
-            with estop_mandali.surus_baglami(_muhur["nesil"]):
+            # i7-F-1: gözlem damgası da taşınır — tahmin sırasında kayıp STOP'u geldiyse sürüş kilit altında reddedilir.
+            with estop_mandali.surus_baglami(_muhur["nesil"]), estop_mandali.gozlem_baglami(kayip_damgasi):
                 await asyncio.to_thread(_drive_coils_ai_pro, D, P)
-            # Sürüş GEÇERLİ kaldı mı (tahmin/sürüş sırasında durdurma geldiyse donanım reddetti) → yanıt ve canlı durum.
-            _surdu = not estop_mandali.baslatma_engeli(_muhur["nesil"])
+            # Sürüş GEÇERLİ kaldı mı (tahmin/sürüş sırasında durdurma ya da kayıp STOP'u geldiyse donanım reddetti).
+            _surdu = not (estop_mandali.baslatma_engeli(_muhur["nesil"]) or estop_mandali.gozlem_engeli(kayip_damgasi))
             if _surdu:
                 remaining = max(0, int(_muhur["bitis_mono"] - time.monotonic()))
                 try:

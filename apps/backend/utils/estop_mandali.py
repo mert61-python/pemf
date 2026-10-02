@@ -52,10 +52,15 @@ MANDAL_MESAJI = (
 )
 NESIL_MESAJI = "Komut bir durdurma ya da acil durdurmadan ÖNCEYE ait (bayat sürüş niyeti) — uygulanmadı. Gerekirse yeniden başlatın."
 
+KAYIP_MESAJI = "Hedef gözlemi bir hedef-kaybı durdurmasından ÖNCEYE ait (bayat gözlem) — sürülmedi."
+
 _kilit = threading.Lock()
 _durum = {"aktif": False, "neden": "", "zaman": 0.0, "sifirlama_zamani": 0.0, "sifirlayan": ""}
 _nesil = 0
 _baglam: contextvars.ContextVar = contextvars.ContextVar("pemf_surus_nesli", default=None)
+# 1-C inceleme i7-F-1: HEDEF-KAYBI nesli (AI Pro) — sürüş neslinden AYRI (bkz. `kayip_nesli_artir`).
+_kayip_nesli = 0
+_kayip_baglam: contextvars.ContextVar = contextvars.ContextVar("pemf_kayip_damgasi", default=None)
 
 
 def nesil() -> int:
@@ -151,3 +156,48 @@ def niyet_nesli() -> int:
     `api_server._SurusNiyetiVarisDamgasi`), bağlam yoksa şimdiki nesil."""
     n = _baglam.get()
     return nesil() if n is None else n
+
+
+# ── HEDEF-KAYBI NESLİ (1-C inceleme i7-F-1) ─────────────────────────────────────────────────────────────────────────
+# ÖLÇÜLDÜ (i7 Kol A 30/30, gerçek döngüyle Kol C 30/30, doğal zamanlamada ~%16): AI Pro'da hedef kaybı STOP'u sürüş
+# yetkisini BİLEREK kesmez (sahip: hedef yeniden bulununca sürüş sürer) → bulunmuş ama TAHMİNDE bekleyen (uçuştaki) bir
+# kare, kayıp STOP'undan SONRA geçerli nesille sürüyor ve bobini yeniden enerjiliyordu; STOP yalnız N. kayıpta gittiği
+# için hedef kayıp kaldıkça bir daha STOP gelmiyordu — bobinler seans son tarihine dek enerjili.
+# Her kayıp STOP'u bu nesli artırır; "bulundu" gözlemi LOKALİZASYON BAŞINDA damgalanır ve sürüş, damga ≠ güncel ise
+# `HardwareController`da DURUM KİLİDİ ALTINDA reddedilir (sürüş nesliyle aynı kritik bölge — denetle-sonra-yap yok).
+# Mandala ve sürüş nesline DOKUNMAZ: yeni (kayıptan sonraki) gözlem sürer. Bağlam yoksa (AI Pro dışı) denetim yok.
+
+
+def kayip_nesli() -> int:
+    """Şu anki hedef-kaybı nesli ("bulundu" gözlemi lokalizasyon başında bunu alır)."""
+    with _kilit:
+        return _kayip_nesli
+
+
+def kayip_nesli_artir() -> int:
+    """Hedef-kaybı STOP'u: uçuştaki "bulundu" gözlemlerini geçersiz kıl. STOP'tan ÖNCE çağrılır; mandala ve sürüş
+    nesline dokunmaz; STOP'u kapılamaz (Ö.4-Y8)."""
+    global _kayip_nesli
+    with _kilit:
+        _kayip_nesli += 1
+        return _kayip_nesli
+
+
+@contextlib.contextmanager
+def gozlem_baglami(kayip_damgasi):
+    """Blok içindeki (ve `asyncio.to_thread` ile açılan) sürüş çağrıları bu hedef gözleminin kayıp damgasını taşır."""
+    jeton = _kayip_baglam.set(kayip_damgasi)
+    try:
+        yield
+    finally:
+        _kayip_baglam.reset(jeton)
+
+
+def gozlem_engeli(kayip_damgasi=None) -> str:
+    """Hedef gözlemi bir kayıp STOP'undan ESKİYSE engel; "" = engel yok. Damga verilmezse bağlamdaki; ikisi de yoksa
+    denetim yok (AI Pro dışı sürüşler). ⚠️ YALNIZ START için çağrılır. STOP yolları bunu ÇAĞIRMAZ (Ö.4-Y8)."""
+    d = _kayip_baglam.get() if kayip_damgasi is None else kayip_damgasi
+    if d is None:
+        return ""
+    with _kilit:
+        return "" if d == _kayip_nesli else KAYIP_MESAJI
