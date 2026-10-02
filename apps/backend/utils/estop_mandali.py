@@ -26,8 +26,10 @@ durdurma geldiyse ardından TELAFİ STOP'u gönderilir (`api_server._esp_start_y
 nesil onları kapılayamaz. Durdurmalar yalnız nesli artırır (gönderim azalmaz).
 
 NİYET BAĞLAMI (`surus_baglami`): sürüş çağrıları imza değiştirmeden nesli taşır — `contextvars` değişkeni
-`asyncio.to_thread` iş parçacığına KOPYALANIR. Bağlam yoksa yalnız mandal denetlenir (elle tekil/batch: niyet ile
-sürüş arasında await yok).
+`asyncio.to_thread` iş parçacığına KOPYALANIR. Her HTTP isteği, isteğin VARIŞ anındaki nesille bağlam içinde koşar
+(`api_server._SurusNiyetiVarisDamgasi`; gövde okunmadan önce) — tekil/batch/legacy de bu nesli taşır. İç bir
+`surus_baglami` (seans mührü: `/frame`, AI Pro döngüsü) onu geçersiz kılar. Bağlam yoksa (istek dışı iş parçacığı)
+yalnız mandal denetlenir.
 
 BELLEKTE tutulur: süreç yeniden başlarsa mandal kalkar. Yeniden başlatma uçuştaki her niyeti ve döngüyü zaten
 öldürür; çekirdek bütün bobinleri durmuş başlatır, firmware ölü-adam devresi de keser.
@@ -138,3 +140,10 @@ def surus_baglami(niyet_nesli):
 def baglam_nesli():
     """Geçerli bağlamdaki niyet nesli (yoksa None → yalnız mandal denetlenir)."""
     return _baglam.get()
+
+
+def niyet_nesli() -> int:
+    """Bir START niyetinin nesli: bağlamdaki nesil (HTTP isteklerinde isteğin VARIŞ anında damgalanır —
+    `api_server._SurusNiyetiVarisDamgasi`), bağlam yoksa şimdiki nesil."""
+    n = _baglam.get()
+    return nesil() if n is None else n

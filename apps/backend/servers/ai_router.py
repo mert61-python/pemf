@@ -434,9 +434,11 @@ async def analyze_landmark(
     request: Request, file: UploadFile = File(None), image_base64: str = Form(None), auto_adjust: bool = Form(False)
 ):
     """YOLO Pose + FGS Ağrı Skoru + Otonom Biyogeribildirim"""
-    # D1.81 (B-5.3 · Y4): otonom sürüş NİYETİ istek girişinde neslini alır — çıkarım (saniyeler) sırasında gelen
-    # durdurma/acil durdurma bu isteğin START'ını `HardwareController`da kilit altında geçersiz kılar.
-    _niyet_nesli = estop_mandali.nesil()
+    # D1.81 (B-5.3 · Y4): otonom sürüş NİYETİ isteğin VARIŞ anındaki nesli taşır (görüntü gövdesi okunmadan önce —
+    # `api_server._SurusNiyetiVarisDamgasi`, i1-F2) — çıkarım (saniyeler) sırasında gelen durdurma/acil durdurma ya da
+    # mandallıyken gönderilmiş isteğin ardından basılan Sıfırla bu START'ı `HardwareController`da kilit altında
+    # geçersiz kılar.
+    _niyet_nesli = estop_mandali.niyet_nesli()
     try:
         if ai_service_enabled():
             # NOT: auto_adjust (donanım biofeedback) mikroservis modunda çekirdekte kalır;
@@ -2130,11 +2132,13 @@ def _kaydet_onay_izi(olay: str, rec: dict) -> None:
 def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     global _ai_loop_active, _ai_thread, _ai_organ_id, _ai_duration_min, _ai_started_at, _ai_relocalize, _ai_hedef_modeli
     global _ai_owner_client, _ai_dongu_no
-    # ⚠️ D1.81 (B-5.3 · Y4): START NİYETİ İSTEK GİRİŞİNDE neslini alır; seans mührüne yazılır ve döngü / `/frame`
-    # bütün sürüşlerini bu nesille yapar. Başlatma sürerken gelen durdurma/acil durdurma bu seansı doğmadan bayatlatır.
-    _niyet_nesli = estop_mandali.nesil()
-    if estop_mandali.mandalli_mi():
-        raise HTTPException(status_code=409, detail=estop_mandali.MANDAL_MESAJI)
+    # ⚠️ D1.81 (B-5.3 · Y4): START NİYETİ isteğin VARIŞ anındaki nesli taşır (`api_server._SurusNiyetiVarisDamgasi`,
+    # i1-F2); seans mührüne yazılır ve döngü / `/frame` bütün sürüşlerini bu nesille yapar. Başlatma sürerken gelen
+    # durdurma/acil durdurma bu seansı doğmadan bayatlatır.
+    _niyet_nesli = estop_mandali.niyet_nesli()
+    _giris_engeli = estop_mandali.baslatma_engeli(_niyet_nesli)
+    if _giris_engeli:
+        raise HTTPException(status_code=409, detail=_giris_engeli)
     # Güncelleme uygulanıyorken otonom AI Pro tedavisi BAŞLATMA: installer servisi durdurup
     # EXE'yi değiştirebilir → bobinler kontrolcüsüz kalır (update TOCTOU guard'ının ters yönü).
     try:

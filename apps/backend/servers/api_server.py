@@ -625,6 +625,34 @@ async def _rate_limit_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+class _SurusNiyetiVarisDamgasi:
+    """D1.81 · Y4 (1-C inceleme i1-F2 + F1 notu): bir HTTP isteğinin START NİYETİ, isteğin VARIŞ anındaki sürüş
+    neslini taşır — gövde (landmark görüntüsü, JSON) OKUNMADAN ve handler'a girmeden ÖNCE.
+
+    ⚠️ NEDEN: nesil handler GİRİŞİNDE alınınca iki açık kalıyordu (ölçüldü): (1) `/api/coil/batch` niyet nesli
+    taşımıyordu — ESP yayını (saniyeler) sürerken gelen E-stop + Sıfırla'dan sonra kalan STM bobinleri E-stop ÖNCESİ
+    niyetle sürülüyordu (30/30); (2) FastAPI gövdeyi handler'dan önce okur — mandallıyken gönderilmiş bir START'ın
+    gövdesi Sıfırla'dan SONRA biterse handler yeni nesli alıp sürerdi (Y4: mandal kuruluyken hiçbir START). Damga
+    `estop_mandali.surus_baglami` bağlamına yazılır; `HardwareController` ve `_esp_start_yayinla` (`asyncio.to_thread`
+    bağlamı kopyalar) onu kilit altında denetler. Handler'lar `estop_mandali.niyet_nesli()` ile aynı damgayı okur.
+
+    ⚠️ En DIŞTAKİ ara katmandır (en son eklenir). YALNIZ START'ı etkiler; STOP / acil durdurma nesle bakmaz (Ö.4-Y8).
+    Saf ASGI: isteğin kendi görevinde koşar (bağlam alt katmanlara kesin geçer). WebSocket'e dokunmaz."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        with estop_mandali.surus_baglami(estop_mandali.nesil()):
+            await self.app(scope, receive, send)
+
+
+app.add_middleware(_SurusNiyetiVarisDamgasi)
+
+
 app.include_router(ai_router)
 app.include_router(history_router)
 app.include_router(settings_router)
@@ -2057,9 +2085,12 @@ def _esp_start_yayinla(coil_id: int, payload: dict, nesil: int | None = None) ->
     ⚠️ STM'deki gibi kilit TUTULAMAZ: yayın saniyeler sürebilir ve STOP'u bekletmek Ö.4-Y8'e aykırıdır. Bu yüzden
     (1) yayından ÖNCE denetlenir (mandal ya da bayat niyet → yayın YOK), (2) yayın SIRASINDA durdurma / acil durdurma
     geldiyse (nesil değişti ya da mandal kuruldu) bu START o STOP'tan SONRA ulaşmış olabilir → ardından TELAFİ STOP'u
-    gönderilir. STOP gönderimi yalnız ARTAR. `nesil`: START niyetinin nesli (yoksa yalnız mandal denetlenir).
+    gönderilir. STOP gönderimi yalnız ARTAR. `nesil`: START niyetinin nesli; verilmezse bağlamdaki (HTTP isteğinin
+    VARIŞ damgası — `asyncio.to_thread` bağlamı kopyalar; i1-F2) nesil, o da yoksa yalnız mandal denetlenir.
     @return START yayını doğrulandı VE geçerli kaldı."""
-    _nesil_once = estop_mandali.nesil()
+    if nesil is None:
+        nesil = estop_mandali.baglam_nesli()
+    _nesil_once = estop_mandali.nesil() if nesil is None else nesil
     _engel = estop_mandali.baslatma_engeli(nesil)
     if _engel:
         logging.getLogger(__name__).warning("ESP bobin %s START YAYINLANMADI: %s", coil_id, _engel)
@@ -2603,8 +2634,10 @@ async def hardware_command(payload: CommandPayload):
         raise HTTPException(status_code=503, detail="Headless Core veya HardwareController hazır değil.")
     # D1.81 · Y4: START komutları mandallıyken 409 (try'ın DIŞINDA — aşağıdaki geniş except onu 500'e çevirirdi).
     # Asıl kapı `HardwareController`dadır; stop_coil / stop_all_coils buraya ASLA takılmaz (Ö.4-Y8).
-    if str(payload.command or "").lower() in ("start_coil", "start_all_coils") and estop_mandali.mandalli_mi():
-        raise HTTPException(status_code=409, detail=estop_mandali.MANDAL_MESAJI)
+    if str(payload.command or "").lower() in ("start_coil", "start_all_coils"):
+        _engel = estop_mandali.baslatma_engeli(estop_mandali.niyet_nesli())  # varış damgası (i1-F2)
+        if _engel:
+            raise HTTPException(status_code=409, detail=_engel)
 
     try:
         cmd = payload.command.lower()
@@ -2721,10 +2754,13 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     _sifir_hz = bool(payload.start) and sifir_hz_durdurma_mi(payload.freq)
     if _sifir_hz:
         payload.start = False
-    # D1.81 · Y4: acil durdurma MANDALLIYKEN START 409 + eylem (Sıfırla). Asıl kapı donanım düzeyindedir
-    # (`HardwareController`, `_esp_start_yayinla`); bu yalnız operatöre nedeni söyler. STOP buraya ASLA takılmaz.
-    if payload.start and estop_mandali.mandalli_mi():
-        raise HTTPException(status_code=409, detail=estop_mandali.MANDAL_MESAJI)
+    # D1.81 · Y4: acil durdurma MANDALLIYKEN ya da isteğin VARIŞINDAN sonra durdurma geldiyse START 409 + neden.
+    # Asıl kapı donanım düzeyindedir (`HardwareController`, `_esp_start_yayinla` — varış damgasıyla, kilit altında);
+    # bu yalnız operatöre nedeni söyler. STOP buraya ASLA takılmaz.
+    if payload.start:
+        _engel = estop_mandali.baslatma_engeli(estop_mandali.niyet_nesli())
+        if _engel:
+            raise HTTPException(status_code=409, detail=_engel)
     _uyg: dict = {}
     if payload.start:  # D1.95: taşan girdi durum yazılmadan 422 · D1.99: kayıt GİDEN değeri yazar
         _uyg = _surus_parametrelerini_dogrula_422(
@@ -2900,8 +2936,10 @@ async def control_batch_coils(payload: BatchCoilPayload):
     _sifir_hz = bool(payload.start) and sifir_hz_durdurma_mi(payload.freq)
     if _sifir_hz:
         payload.start = False
-    if payload.start and estop_mandali.mandalli_mi():  # D1.81 · Y4 — gerekçe tekil uçta; STOP asla takılmaz
-        raise HTTPException(status_code=409, detail=estop_mandali.MANDAL_MESAJI)
+    if payload.start:  # D1.81 · Y4 — gerekçe tekil uçta (varış damgası); STOP asla takılmaz
+        _engel = estop_mandali.baslatma_engeli(estop_mandali.niyet_nesli())
+        if _engel:
+            raise HTTPException(status_code=409, detail=_engel)
     _b_uyg: dict = {}
     if payload.start:  # D1.95: taşan girdi HİÇBİR bobin sürülmeden 422 · D1.99: kayıt GİDEN değeri yazar
         _b_uyg = _surus_parametrelerini_dogrula_422(
@@ -3024,12 +3062,14 @@ async def start_session(payload: SessionStartPayload, request: Request):
     """Start a new treatment session."""
     import time
 
-    # ⚠️ D1.81 (B-5.3 · Y4): START NİYETİ İSTEK GİRİŞİNDE neslini alır. Aşağıdaki DB yazımı (await) sırasında gelen bir
-    # durdurma ya da acil durdurma nesli artırır → bobin START'ları `HardwareController`da DURUM KİLİDİ ALTINDA reddedilir
-    # (mevcut `_still_active` denetimi bunu yalnız denetim ANINA kadar kapatıyordu: denetle-sonra-yap).
-    _niyet_nesli = estop_mandali.nesil()
-    if estop_mandali.mandalli_mi():
-        raise HTTPException(status_code=409, detail=estop_mandali.MANDAL_MESAJI)
+    # ⚠️ D1.81 (B-5.3 · Y4): START NİYETİ isteğin VARIŞ anındaki nesli taşır (`_SurusNiyetiVarisDamgasi`; gövde
+    # okunmadan önce — i1-F2). Aşağıdaki DB yazımı (await) sırasında gelen bir durdurma ya da acil durdurma nesli
+    # artırır → bobin START'ları `HardwareController`da DURUM KİLİDİ ALTINDA reddedilir (mevcut `_still_active`
+    # denetimi bunu yalnız denetim ANINA kadar kapatıyordu: denetle-sonra-yap).
+    _niyet_nesli = estop_mandali.niyet_nesli()
+    _giris_engeli = estop_mandali.baslatma_engeli(_niyet_nesli)
+    if _giris_engeli:
+        raise HTTPException(status_code=409, detail=_giris_engeli)
 
     # ⚠️ 2026-08-09 (Tier 1): kaydın SAHİBİNE sunucu karar verir (bkz. auth.cozumlenmis_operator).
     # Beyanı doğrudan yazmak, cihaza erişen herkesin başka bir hekim adına seans açmasına izin
