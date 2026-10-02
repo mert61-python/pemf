@@ -255,26 +255,25 @@ def test_KRITIK_stop_aktif_modeli_VARSAYILANA_dondurur(muhur_env):
     )
 
 
-def test_KARSIT_KANIT_model_ALANI_YOKKEN_kedi_akisi_AYNI(muhur_env):
+def test_KARSIT_KANIT_model_ALANI_YOKKEN_kedi_akisi_AYNI(muhur_env, monkeypatch):
     """Geriye-uyum: `model` göndermeyen eski istemci bugünkü kedi davranışını sürdürür."""
     air, apis, client, taze_cache, izler = muhur_env
     taze_cache("kedi", hedef_id=2)
     izler_kedi = {"predict": 0}
 
-    def _sahte_predict(x, y, z, oid):
+    def _sahte_predict(self, x, y, z, oid):
         izler_kedi["predict"] += 1
         return [0.2] * 7, [0.0] * 7, 0.1
 
     import servers.ai_pro_hedef as hedef
 
-    monkey = hedef.SAGLAYICILAR["kedi"]
-    eski = monkey.predict
-    monkey.predict = _sahte_predict  # type: ignore[assignment]
-    try:
-        r = client.post("/api/ai/pro/propose", json={"organ_id": 2, "duration_minutes": 5})
-        assert r.status_code == 200, r.text[:200]
-        assert r.json()["specs"]["model"] == "kedi", "model alanı yokken varsayılan kedi olmadı"
-        assert izler_kedi["predict"] == 1, "kedi doz modeli çağrılmadı"
-        assert not izler["predict"], "sahte model çağrıldı"
-    finally:
-        monkey.predict = eski  # type: ignore[assignment]
+    # ⚠️ SINIF düzeyinde yamalanır. Eskiden ÖRNEĞE `predict = sahte` yazılıp `finally`de `predict = eski` geri
+    # konuyordu; `eski` BAĞLI gerçek metottu → örnekte kalıcı bir `predict` özniteliği kalıyor, sonraki testlerin
+    # `KediSaglayici.predict` (sınıf) yamalarını GÖLGELİYORDU (1-D'de ölçüldü: geniş kümede iki AI Pro kapısı gerçek
+    # modele gidip yanlış nedenle kırmızı/yeşil oldu).
+    monkeypatch.setattr(type(hedef.SAGLAYICILAR["kedi"]), "predict", _sahte_predict)
+    r = client.post("/api/ai/pro/propose", json={"organ_id": 2, "duration_minutes": 5})
+    assert r.status_code == 200, r.text[:200]
+    assert r.json()["specs"]["model"] == "kedi", "model alanı yokken varsayılan kedi olmadı"
+    assert izler_kedi["predict"] == 1, "kedi doz modeli çağrılmadı"
+    assert not izler["predict"], "sahte model çağrıldı"
