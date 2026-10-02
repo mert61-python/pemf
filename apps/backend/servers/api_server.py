@@ -838,6 +838,38 @@ def _iptal_seans_satirini_kapat(db_session_id) -> None:
         )
 
 
+def _ucustaki_baslatmayi_gecersiz_kil(bobinler) -> bool:
+    """Bobin-başı STOP UÇUŞTAKİ seans başlatmasını iptal ettirir. STOP gönderiminden ÖNCE çağrılır; istisna atmaz.
+
+    ⚠️ 1-C inceleme i1-F5 (ölçüldü 3/3): `/session/start` DB yazımındayken (await) ya da bobinleri sürerken gelen bobin
+    STOP'u (tekil / batch / legacy `stop_coil`; 0 Hz "parkla" dahil) henüz sürülmemiş bobinde no-op'tu — başlatma
+    ardından o bobini ENERJİLİYOR ve "success" dönüyordu (arayüzde bobin kartının "⏹ Durdur"u başlatma sürerken
+    basılabilir). Nesil yalnız seans / acil durdurma / `stop_all_coils` durdurmasında artıyordu.
+    Başlatma uçuştaysa (`baslatma_ucusta`: seans kuruldu, sürüş sonrası denetim bitmedi) ve STOP o seansın bobinlerinden
+    birini kapsıyorsa nesil artar → başlatma bobin sürmeden iptal edilir ya da kalan sürüşü `HardwareController`da
+    kilit altında reddedilir ve seans durdurulur.
+    ⚠️ Başlatma BİTTİKTEN sonra ve AI (Auto) / AI Pro seansında nesle DOKUNMAZ: bobin STOP'u yalnız o bobini durdurur
+    (nesil artsaydı tek bobin STOP'u seansın / AI Pro'nun bütün sürüş yetkisini keserdi).
+    ⚠️ Bayrak denetimi ve artırım `_session_lock` ALTINDA; başlatma bayrağı aynı kilit altında indirir → STOP ya bayrak
+    inmeden nesli artırır (başlatma iptal) ya da bayrak indikten sonra yalnız o bobini durdurur.
+    Ö.4-Y8: STOP'u kapılamaz, geciktirmez; yalnız START'ı reddettirir. @return nesil artırıldı mı."""
+    try:
+        hedef = {int(b) for b in bobinler}
+        with _session_lock:
+            if not (_active_session.get("is_active") and _active_session.get("baslatma_ucusta")):
+                return False
+            if not hedef & set(_active_session.get("coil_ids") or ()):
+                return False
+            estop_mandali.nesil_artir()
+        logging.getLogger(__name__).warning(
+            "Seans baslatma surerken bobin STOP'u %s → ucustaki baslatma iptal (nesil artirildi).", sorted(hedef)
+        )
+        return True
+    except Exception:
+        logging.getLogger(__name__).exception("Ucustaki baslatma iptali basarisiz (STOP yine gonderilir).")
+        return False
+
+
 def _stm_red_aktif_seansi_durdur(ham: str) -> None:
     """Kart komutları sistematik reddetmeye başladı → AKTİF SEANSI durdur.
 
@@ -2687,6 +2719,7 @@ async def hardware_command(payload: CommandPayload):
 
         elif cmd == "stop_coil":
             coil_id = p.get("coil_id", 1)
+            _ucustaki_baslatmayi_gecersiz_kil([coil_id])  # 1-C inceleme i1-F5 (STOP'tan ÖNCE; istisna atmaz)
             success = state.hardware.update_coil(coil_id, 0, 0, 0, 0, start=False)
             return {"status": "success" if success else "error", "command": cmd, "coil_id": coil_id}
 
@@ -2787,6 +2820,8 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     _sifir_hz = bool(payload.start) and sifir_hz_durdurma_mi(payload.freq)
     if _sifir_hz:
         payload.start = False
+    if not payload.start:  # 1-C inceleme i1-F5: bobin STOP'u uçuştaki seans başlatmasını iptal ettirir (STOP'tan ÖNCE)
+        _ucustaki_baslatmayi_gecersiz_kil([coil_id])
     # D1.81 · Y4: acil durdurma MANDALLIYKEN ya da isteğin VARIŞINDAN sonra durdurma geldiyse START 409 + neden.
     # Asıl kapı donanım düzeyindedir (`HardwareController`, `_esp_start_yayinla` — varış damgasıyla, kilit altında);
     # bu yalnız operatöre nedeni söyler. STOP buraya ASLA takılmaz.
@@ -2969,6 +3004,8 @@ async def control_batch_coils(payload: BatchCoilPayload):
     _sifir_hz = bool(payload.start) and sifir_hz_durdurma_mi(payload.freq)
     if _sifir_hz:
         payload.start = False
+    if not payload.start:  # 1-C inceleme i1-F5 — tekil uçla aynı
+        _ucustaki_baslatmayi_gecersiz_kil(payload.coil_ids)
     if payload.start:  # D1.81 · Y4 — gerekçe tekil uçta (varış damgası); STOP asla takılmaz
         _engel = estop_mandali.baslatma_engeli(estop_mandali.niyet_nesli())
         if _engel:
@@ -3255,6 +3292,9 @@ async def start_session(payload: SessionStartPayload, request: Request):
                 # `/frame`'i AÇMAZ). D1.81: niyet nesli (bu seansın sürüşleri ona bağlı).
                 "tur": "manuel",
                 "surus_nesli": _niyet_nesli,
+                # 1-C inceleme i1-F5: başlatma UÇUŞTA — bu seansın bobinine gelen STOP nesli artırır; sürüş sonrası
+                # denetimde `_session_lock` altında iner (bkz. `_ucustaki_baslatmayi_gecersiz_kil`).
+                "baslatma_ucusta": True,
             }
         )
         # ⚠️ 1-C inceleme i1-F3 / i2-F1: bu başlatmanın MÜHRÜ. Aşağıdaki DB await'i sırasında Durdur (ya da E-stop +
@@ -3390,12 +3430,24 @@ async def start_session(payload: SessionStartPayload, request: Request):
     # sensör/dakika tamponlarını siliyordu. İptalde bu başlatmanın KENDİ DB satırı "İptal Edildi" kapatılır (i2-F7).
     with _session_lock:
         _still_active = bool(_active_session.get("is_active")) and _active_session.get("session_id") == _benim_seans
+        # ⚠️ 1-C inceleme i1-F5: seansı BİTİRMEYEN bir durdurma (bu seansın bobinine STOP, `stop_all_coils`) DB yazımı
+        # sırasında nesli artırdıysa başlatma burada — bobin sürülmeden, tampon temizlenmeden — iptal edilir; kendi
+        # satırı "İptal Edildi" kapanır (sürüş yolundaki "Donanım Reddetti" DEĞİL — donanım reddetmedi).
+        _erken_engel = estop_mandali.baslatma_engeli(_niyet_nesli) if _still_active else ""
+        if _erken_engel:
+            _active_session["is_active"] = False
     if not _still_active:
         logging.getLogger(__name__).warning(
             "Seans başlatma İPTAL: enerjilemeden önce durdurma algılandı (bobinler açılmadı)."
         )
         await asyncio.to_thread(_iptal_seans_satirini_kapat, sid)
         return {"status": "cancelled", "message": "Seans başlatma sırasında durduruldu (bobinler açılmadı)."}
+    if _erken_engel:
+        logging.getLogger(__name__).warning(
+            "Seans başlatma İPTAL: DB yazımı sırasında bobin durdurması geldi (nesil) — bobinler açılmadı."
+        )
+        await asyncio.to_thread(_iptal_seans_satirini_kapat, sid)
+        raise HTTPException(status_code=409, detail=_erken_engel)
 
     # Yeni seans → önceki (kaydedilmemiş) sensör buffer'ını temizle.
     with _sensor_sample_buffer_lock:
@@ -3544,7 +3596,10 @@ async def start_session(payload: SessionStartPayload, request: Request):
 
     with _session_lock:
         _hala_benim = bool(_active_session.get("is_active")) and _active_session.get("session_id") == _benim_seans
-    _sonra_engel = estop_mandali.baslatma_engeli(_niyet_nesli)
+        _sonra_engel = estop_mandali.baslatma_engeli(_niyet_nesli)
+        if _hala_benim and not _sonra_engel:
+            # i1-F5: başlatma uçuşu BİTTİ — bundan sonra bobin STOP'u yalnız o bobini durdurur (nesle dokunmaz).
+            _active_session["baslatma_ucusta"] = False
     if not _hala_benim or _sonra_engel:
         await _baslatma_sirasinda_durduruldu(_sonra_engel)
 
