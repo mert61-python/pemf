@@ -213,3 +213,36 @@ def test_KRITIK_pencere_FIRMWARE_periyodundan_turer():
     )
     # En az iki ardışık atlanmış satırı tolere et (UART meşgulken firmware turu atlar), en çok 10 periyot.
     assert 3 * api.STM_TELE_PERIYOT_S <= api.ALAN_TAZELIK_S <= 10 * api.STM_TELE_PERIYOT_S, api.ALAN_TAZELIK_S
+
+
+# ── 1-D inceleme i2-F-4: işleyicinin KENDİ yayını ve seanssız/duran bobin ──────────────────────────────────────────
+def test_KRITIK_isleyici_YAYINI_bayat_sicakligi_olculuyor_DEMEZ_supurgeden_ONCE(kur):
+    """Kapının öteki kolları yalnız SÜPÜRGEDEN SONRAKİ durumu ölçüyordu: işleyici her yeni satırda bayat alanı
+    "ölçülüyor" diye yayınlasa (süpürge 2 sn'de bir düşürür, sonraki B satırı geri yazar) yeşil kalıyordu. MLX (T) susar,
+    manyetik sensör (B) 1 Hz akmaya devam eder → işleyicinin `coil_status` + `sensor_data` yayınında sıcaklık YOK."""
+    api, saat, yayinlar = kur
+    api._handle_backend_event(_Olay({"coil_id": 6, "object_temp": 45.0, "magnetic_field": 1.8}))
+    saat.ek += 10.0  # sıcaklık 10 sn'dir gelmiyor (pencere 5 sn); süpürge turu HENÜZ koşmadı
+    yayinlar.clear()
+    api._handle_backend_event(_Olay({"coil_id": 6, "magnetic_field": 1.81}))
+    for tip in ("coil_status", "sensor_data"):
+        m = [y for y in yayinlar if y.get("type") == tip and y.get("coilId") == 6]
+        assert m, f"işleyici {tip} yayınlamadı"  # ARA DOĞRULAMA
+        mf = m[-1]["data"].get("measuredFields") or []
+        assert "objectTemp" not in mf and "magneticMt" in mf, f"{tip} bayat sıcaklığı ölçülüyor diyor: {mf}"
+
+
+@pytest.mark.parametrize("calisiyor", [False, True], ids=["duran_bobin", "calisan_bobin"])
+def test_KRITIK_SEANSSIZ_duran_ya_da_calisan_bobinde_bayat_sicaklik_DUSER(kur, calisiyor):
+    """Süpürge "seans olsun olmasın" her turda koşar (kod sözleşmesi); `_tur` yardımcısı her turda seansı ve bobini
+    aktif yaptığı için "seanssız / duran bobin" kolu ölçülmüyordu."""
+    api, saat, yayinlar = kur
+    api._handle_backend_event(_Olay({"coil_id": 6, "object_temp": 47.0}))
+    with api._live_state_lock:
+        api._live_state["coils"][5]["running"] = calisiyor
+    saat.ek += 30.0
+    yayinlar.clear()
+    uyku, hatalar = bir_tur_kos(api._sensor_persistence_loop)
+    assert (uyku, hatalar) == (1, []), f"sensör döngüsü turu: uyku={uyku} hata={hatalar}"
+    assert _olculen(api, 6) == [], f"running={calisiyor}, seans yok: 30 sn'dir gelmeyen sıcaklık hâlâ ölçülüyor"
+    assert any(y.get("type") == "coil_status" and y.get("coilId") == 6 for y in yayinlar), "istemciye yayın yok"
