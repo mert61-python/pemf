@@ -775,7 +775,7 @@ STM_RED_MESAJI = (
 )
 
 
-def _seansi_geri_al(sebep: str) -> None:
+def _seansi_geri_al(sebep: str, seans_kimligi=None) -> None:
     """Başlatılmış ama HİÇ SÜRÜLEMEMİŞ seansı geri al (kayıt YALAN olmasın).
 
     ⚠️ NEDEN GEREKLİ: `_active_session` ve DB satırı, bobinler sürülmeden ÖNCE oluşur
@@ -786,9 +786,21 @@ def _seansi_geri_al(sebep: str) -> None:
 
     ⚠️ BOBİNLERE DOKUNULMAZ: hiçbiri enerjilenmedi (kabul listesi boş). Buradan bir STOP
     göndermek, aynı anda başlamış BAŞKA bir seansın bobinlerini düşürme riski taşırdı.
+
+    ⚠️ YALNIZ KENDİ SEANSI (1-C inceleme i1-F3 / i2-F1): `seans_kimligi` verilirse geri alma YALNIZ o kimlikli seans
+    HÂLÂ aktifse yapılır. Ölçüldü: bayat bir başlatma (DB yazımı sürerken Durdur — ya da E-stop + Sıfırla — ve YENİ
+    seans) sürüşte nesille doğru reddediliyor ama bu geri alma O AN AKTİF olan YENİ seansı pasife çekip "Sistem
+    Hazır" yazıyordu (30/30) — yeni seansın bobini enerjiliyken, süre bekçisinin göremeyeceği biçimde.
     """
     try:
         with _session_lock:
+            if seans_kimligi is not None and not (
+                _active_session.get("is_active") and _active_session.get("session_id") == seans_kimligi
+            ):
+                logging.getLogger(__name__).warning(
+                    "Seans geri alma ATLANDI (%s): aktif seans artik bu baslatmanin degil.", sebep
+                )
+                return
             db_session_id = _active_session.get("db_session_id")
             started_epoch = _active_session.get("started_epoch") or _active_session.get("start_time")
             start_mono = _active_session.get("start_mono")
@@ -803,6 +815,27 @@ def _seansi_geri_al(sebep: str) -> None:
         logging.getLogger(__name__).error("Seans GERI ALINDI (%s): hicbir bobin surulmedi.", sebep)
     except Exception:
         logging.getLogger(__name__).exception("Seans geri alma basarisiz (%s)", sebep)
+
+
+def _iptal_seans_satirini_kapat(db_session_id) -> None:
+    """Enerjilemeden ÖNCE durdurulan (iptal edilen) başlatmanın KENDİ DB satırını `cancelled` ("İptal Edildi") kapat.
+
+    ⚠️ 1-C inceleme i2-F7 (ölçüldü 30/30): başlatmanın DB yazımı sürerken gelen durdurma/acil durdurma seansı
+    "cancelled" bitiriyor ama açtığı satır 'active' kalıyordu — uygulanmamış bir tedavi geçmişte "sürüyor" görünür.
+    ⚠️ `_finalize_session_db` KULLANILMAZ: o KÜRESEL dakika/sensör tamponlarını boşaltır; arada açılmış YENİ seansın
+    telemetrisi bu satıra yazılırdı. Satır sürmemiş bir başlatmaya aittir: süre 0, koşu kaydı yok. SENKRON (thread)."""
+    if not db_session_id:
+        return
+    try:
+        db = _get_treatment_db()
+        if db is None:
+            return
+        db.end_session(db_session_id, duration_minutes=0, session_status="cancelled")
+        db.set_session_meta(db_session_id, ended_epoch=time.time())
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "Iptal edilen seansin DB satiri kapatilamadi (db_id=%s).", db_session_id, exc_info=True
+        )
 
 
 def _stm_red_aktif_seansi_durdur(ham: str) -> None:
@@ -3224,6 +3257,10 @@ async def start_session(payload: SessionStartPayload, request: Request):
                 "surus_nesli": _niyet_nesli,
             }
         )
+        # ⚠️ 1-C inceleme i1-F3 / i2-F1: bu başlatmanın MÜHRÜ. Aşağıdaki DB await'i sırasında Durdur (ya da E-stop +
+        # Sıfırla) ve YENİ bir seans gelebilir; await sonrasındaki HER adım (DB damgası, tampon temizliği, iptal, geri
+        # alma) yalnız `_active_session` hâlâ BU mühürse koşar — başka seansın durumuna dokunmaz.
+        _benim_seans = _active_session["session_id"]
 
     # Denetim izi (audit P1) — seansı HEMEN kalıcılaştır: kim (operatör) + ne zaman + hangi
     # parametreler. Eskiden seans yalnız SONDA DB'ye yazılıyordu → backend seans ortasında
@@ -3331,16 +3368,34 @@ async def start_session(payload: SessionStartPayload, request: Request):
             logging.getLogger(__name__).debug("set_session_parameter(audit_ref) hatasi", exc_info=True)
         return _sid, _pid
 
+    sid = None
     try:
         sid, patient_id = await asyncio.to_thread(_persist_session_start)
         if sid is not None:
             with _session_lock:
-                # Yalniz hala bu seans aktifse yaz (arada /stop gelmis olabilir).
-                if _active_session.get("is_active"):
+                # Yalniz hala BU seans aktifse yaz (arada /stop — ya da Durdur/E-stop + Sifirla + YENI seans — gelmis
+                # olabilir; i1-F3: kimlik bakilmadan yeni seansin db_session_id'si bu satirla EZILIYORDU).
+                if _active_session.get("is_active") and _active_session.get("session_id") == _benim_seans:
                     _active_session["db_session_id"] = sid
                     _active_session["db_patient_id"] = patient_id
     except Exception:
         logging.getLogger(__name__).warning("Seans DB satiri olusturulamadi (db_session_id=None).", exc_info=True)
+
+    # Audit P1 (TOCTOU): DB-persist await'i sırasında eşzamanlı /stop is_active=False yapmış olabilir.
+    # Bobinleri ENERJİLEMEDEN ÖNCE yeniden doğrula — aksi halde bobinler fiziksel açılır ama
+    # _active_session.is_active=False kalır → süre-watchdog ASLA durdurmaz (gözetimsiz sürüş; setin en
+    # zararlısı). Henüz hiç bobin enerjilenmediği için burada iptal güvenli (yarım-açık kalmaz).
+    # ⚠️ 1-C inceleme i1-F3 / i2-F1: denetim KİMLİKLİDİR ve tampon temizliğinden ÖNCE yapılır — arada açılmış YENİ
+    # seans "aktif" göründüğü için eski denetim bu bayat isteği sürdürüyor, YENİ seansın koşu kaydını ve
+    # sensör/dakika tamponlarını siliyordu. İptalde bu başlatmanın KENDİ DB satırı "İptal Edildi" kapatılır (i2-F7).
+    with _session_lock:
+        _still_active = bool(_active_session.get("is_active")) and _active_session.get("session_id") == _benim_seans
+    if not _still_active:
+        logging.getLogger(__name__).warning(
+            "Seans başlatma İPTAL: enerjilemeden önce durdurma algılandı (bobinler açılmadı)."
+        )
+        await asyncio.to_thread(_iptal_seans_satirini_kapat, sid)
+        return {"status": "cancelled", "message": "Seans başlatma sırasında durduruldu (bobinler açılmadı)."}
 
     # Yeni seans → önceki (kaydedilmemiş) sensör buffer'ını temizle.
     with _sensor_sample_buffer_lock:
@@ -3357,18 +3412,6 @@ async def start_session(payload: SessionStartPayload, request: Request):
     # SONRAKI hastanin ilk dakika-ortalamasina karisirdi (tibbi kayit kirlenmesi).
     with _minute_acc_lock:
         _minute_acc.clear()
-
-    # Audit P1 (TOCTOU): DB-persist await'i sırasında eşzamanlı /stop is_active=False yapmış olabilir.
-    # Bobinleri ENERJİLEMEDEN ÖNCE yeniden doğrula — aksi halde bobinler fiziksel açılır ama
-    # _active_session.is_active=False kalır → süre-watchdog ASLA durdurmaz (gözetimsiz sürüş; setin en
-    # zararlısı). Henüz hiç bobin enerjilenmediği için burada iptal güvenli (yarım-açık kalmaz).
-    with _session_lock:
-        _still_active = bool(_active_session.get("is_active"))
-    if not _still_active:
-        logging.getLogger(__name__).warning(
-            "Seans başlatma İPTAL: enerjilemeden önce durdurma algılandı (bobinler açılmadı)."
-        )
-        return {"status": "cancelled", "message": "Seans başlatma sırasında durduruldu (bobinler açılmadı)."}
 
     # Session API accepts minutes; ESP/MQTT duration remains seconds.
 
@@ -3464,7 +3507,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
         # ⚠️ `to_thread`: `_finalize_session_db` SENKRONDUR ve kendi sözleşmesinde "yalnız
         # thread'lerden çağrılır, event-loop'tan DEĞİL" der (SQLite yazımları event-loop'u
         # bloklar). Bu uç `async` olduğu için geri alma thread'e taşınır.
-        await asyncio.to_thread(_seansi_geri_al, "donanim-reddi:hicbir-bobin-surulmedi")
+        await asyncio.to_thread(_seansi_geri_al, "donanim-reddi:hicbir-bobin-surulmedi", _benim_seans)
         from controllers.hardware_controller import sifir_hz_durdurma_mi
 
         _surus_engeli = estop_mandali.baslatma_engeli(_niyet_nesli)
@@ -3704,7 +3747,10 @@ def start_ai_session(
         )
         # B-2.2: REBIND yerine IN-PLACE (clear+update) → dict kimliği sabit; davranış aynı.
         _active_session.clear()
-        _new_session_id = prev.get("session_id") if cont else f"ai_{int(_t.time())}"
+        # 1-C inceleme i1-F3: kimlik BENZERSİZ olmalı (eskiden `ai_<epoch SANİYE>`: aynı saniyedeki iki AI seansı aynı
+        # kimliği alıyor, kimlik denetimli geri alma / DB damgası yanlış seansı "kendi" sanabiliyordu). Elle seans
+        # mührüyle aynı üretici (ms + süreç-içi sayaç), `ai_` öneki korunur.
+        _new_session_id = prev.get("session_id") if cont else "ai_" + _yeni_seans_muhru().split("_", 1)[1]
         _active_session.update(
             {
                 "is_active": True,
@@ -3844,6 +3890,8 @@ def start_ai_session(
                         _active_session["db_session_id"] = _ai_sid
         except Exception:
             logging.getLogger(__name__).exception("AI seansi DB satiri acilamadi (tedavi surer).")
+    # 1-C inceleme i1-F3: çağıran (AI (Auto) landmark) geri almayı bu kimliğe bağlar (`_seansi_geri_al(..., kimlik)`).
+    return _new_session_id
 
 
 def _kayit_suresi_dk(start_mono, started_epoch):

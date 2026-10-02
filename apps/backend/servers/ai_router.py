@@ -595,7 +595,7 @@ async def analyze_landmark(
                     # beyanı değil; bkz. auth.cozumlenmis_operator). Kimlik çözülemezse "" kalır
                     # ve kayıt sahipsiz olur — bu DOĞRUDUR: kanıtsız bir beyanı sahiplik diye
                     # yazmak, "Benim Seanslarım"ı yalancı yapardı.
-                    start_ai_session(
+                    _ai_seans_kimligi = start_ai_session(
                         target_freq,
                         target_duty,
                         30,
@@ -619,7 +619,8 @@ async def analyze_landmark(
                         try:
                             import servers.api_server as _api_geri
 
-                            _api_geri._seansi_geri_al("donanim-reddi:ai-auto")
+                            # 1-C inceleme i1-F3: YALNIZ bu isteğin açtığı seans (arada açılmış başka seansa dokunma).
+                            _api_geri._seansi_geri_al("donanim-reddi:ai-auto", _ai_seans_kimligi)
                         except Exception:
                             logger.exception("AI (Auto) seans geri alma basarisiz")
                         return "skipped_hardware_rejected", {}
