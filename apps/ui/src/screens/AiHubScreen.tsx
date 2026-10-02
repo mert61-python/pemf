@@ -40,6 +40,11 @@ import { hastaninSonAnalizi, hastayaGoreSonAnaliz, kapsamda, sonAnalizOzeti, typ
 
 type AiModule = "disease" | "landmark" | "segmentation" | "thermal" | "reticulocytes" | "em_fantom" | "em_petri" | "kidney_rna" | "kidney_disease" | "cat_sound" | "kidney_ct" | "histopath" | "cat_organ" | "cell_scratch";
 
+// D1.E09 (İG-5.31): model nokta görünürlüğünü bildirmiyor → örtülü yüzde skor yanıltıcı olabilir. TEK KAYNAK: hekim/araştırma
+// kartı ve hayvan sahibi kartı aynı metni gösterir (1-D inceleme i3-F-2: sahip kartında uyarı yoktu).
+const NOKTA_GORUNURLUGU_UYARISI =
+  "ℹ️ Bu model yüz noktalarının görünürlüğünü bildirmiyor: kulak, göz gibi bir bölge örtülüyse skor yanıltıcı olabilir — yüzün tamamen açık göründüğü bir fotoğraf kullanın.";
+
 const SYMPTOMS = [
   "İştah Kaybı", "Kusma", "İshal", "Öksürük", "Solunum Güçlüğü",
   "Topallık", "Deri Lezyonları", "Burun Akıntısı", "Göz Akıntısı",
@@ -674,6 +679,12 @@ function PetOwnerAiScreen() {
                 <Text style={styles.body}>Ağrı Skoru (FGS):</Text>
                 <Text style={[styles.title, { color: notDetected ? colors.textMuted : score > 3 ? colors.danger : colors.success }]}>{notDetected ? "—" : `${score} / 10`}</Text>
               </View>
+              {/* D1.E09 · 1-D inceleme i3-F-2: hekimsiz kullanıcıya örtülü yüzde uyarısız "ağrı yok" güvencesi verilmez. */}
+              {!notDetected && result.nokta_gorunurlugu_dogrulanmadi ? (
+                <Text style={[styles.body, { fontSize: typography.small, color: colors.textMuted, marginBottom: spacing.sm }]}>
+                  {NOKTA_GORUNURLUGU_UYARISI}
+                </Text>
+              ) : null}
 
               <View style={[styles.recommendationBox, requiresVet && { backgroundColor: colors.danger + "22", borderColor: colors.danger }]}>
                 <Text style={[styles.recommendationText, requiresVet && { color: colors.danger, fontWeight: 'bold' }]}>
@@ -1752,7 +1763,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
               {/* D1.E09 (İG-5.31): model nokta görünürlüğünü bildirmiyor → örtülü yüzde skor yanıltıcı olabilir. */}
               {result.nokta_gorunurlugu_dogrulanmadi ? (
                 <Text style={[styles.resultText, { fontSize: typography.small, color: colors.textMuted }]}>
-                  ℹ️ Bu model yüz noktalarının görünürlüğünü bildirmiyor: kulak, göz gibi bir bölge örtülüyse skor yanıltıcı olabilir — yüzün tamamen açık göründüğü bir fotoğraf kullanın.
+                  {NOKTA_GORUNURLUGU_UYARISI}
                 </Text>
               ) : null}
               {result.raw_fgs?.action_units && (

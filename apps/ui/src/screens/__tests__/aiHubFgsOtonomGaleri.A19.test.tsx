@@ -148,3 +148,11 @@ it("KARŞIT E09: güven kanalı olan modelde uyarı YOK", async () => {
   const { u } = await galeridenAnaliz(false, { nokta_gorunurlugu_dogrulanmadi: false });
   expect(duz(u.toJSON())).not.toMatch(/görünürlüğünü bildirmiyor/);
 });
+
+it("KRİTİK E09 (1-D inceleme i3-F-6): FGS 0 ('ağrı yok') iken de örtü uyarısı görünür", async () => {
+  // Örtü en yanıltıcı olduğu yerde: örtülü kulak/göz skoru DÜŞÜRÜR → 0 / 10 "ağrı yok" güvencesi. Uyarı skora bağlanmaz.
+  const { u } = await galeridenAnaliz(false, { fgs_total: 0, pain_level: "None", nokta_gorunurlugu_dogrulanmadi: true });
+  const metin = duz(u.toJSON());
+  expect(metin).toMatch(/FGS Skoru: 0 \/ 10/); // ARA DOĞRULAMA: kart çizildi
+  expect(metin).toMatch(/görünürlüğünü bildirmiyor/);
+});

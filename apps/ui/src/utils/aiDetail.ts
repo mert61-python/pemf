@@ -44,6 +44,8 @@ export const DETAIL_LABELS: Record<string, string> = {
   detected: "Yüz tespit edildi",
   fgs_total: "FGS ağrı skoru", fgs_score: "FGS ağrı skoru",
   pain: "Ağrı belirtisi", pain_level: "Ağrı seviyesi",
+  // D1.E09 (1-D inceleme i3-F-8): landmark modeli nokta görünürlüğünü bildirmiyor (örtülü yüzde skor yanıltıcı olabilir).
+  nokta_gorunurlugu_dogrulanmadi: "Nokta görünürlüğü doğrulanmadı",
   n_tumor: "Tümör sayısı", n_wells: "Kuyu sayısı", n_cancer: "Kanserli kuyu", n_healthy: "Sağlıklı kuyu",
   n_wells_cancer: "Kanserli kuyu", n_detections: "Tespit sayısı", n_organs: "Lokalize organ",
   n_patients: "Örnek/hasta sayısı", n_masks: "Maske sayısı", cat_count: "Kedi sayısı",
