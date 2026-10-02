@@ -314,3 +314,79 @@ def test_KARSIT_AI_Pro_seansinda_bobin_STOPu_nesle_DOKUNMAZ(o):
     n1 = estop_mandali.nesil()
     _temizle(o)
     assert n1 == n0, f"AI Pro seansında tek bobin STOP'u nesli artırdı ({n0}->{n1}) — AI Pro sürüş yetkisi kesilirdi"
+
+
+def _surus_penceresinde_seans_DURDUR(o, monkeypatch, bobin_sonrasi):
+    """1-D inceleme i3-F-1: sürüş penceresinde SEANS Durdur'u (`/api/session/stop`) — bobin_sonrasi None: İLK bobinden
+    ÖNCE; 1: bobin 1 kabul edildikten SONRA. Durdurma `stop_session` yolundan geçer (bobin STOP'u değil)."""
+    gercek = o.hc.update_coil
+    durum: dict = {}
+
+    def _durdur():
+        durum["tetik"] = True
+        th = threading.Thread(target=lambda: durum.update(stop=o.c.post("/api/session/stop")), daemon=True)
+        th.start()
+        th.join(15)
+
+    def _kancali(bobin, *a, **k):
+        if k.get("start") and bobin_sonrasi is None and not durum.get("tetik"):
+            _durdur()
+        sonuc = gercek(bobin, *a, **k)
+        if k.get("start") and bobin == bobin_sonrasi and not durum.get("tetik"):
+            _durdur()
+        return sonuc
+
+    monkeypatch.setattr(o.hc, "update_coil", _kancali)
+    gozlem = []
+    try:
+        for _ in range(TEKRAR):
+            _temizle(o)
+            durum.clear()
+            o.engel["ev"] = None
+            o.engel["sidler"].clear()
+            r = _baslat(o)
+            assert durum.get("tetik") and durum.get("stop") is not None and durum["stop"].status_code == 200, (
+                f"aparat: kanca/Durdur {durum}"
+            )
+            sid = o.engel["sidler"][-1] if o.engel["sidler"] else None
+            gozlem.append(
+                {
+                    "yanit": r.status_code,
+                    "govde": r.text[:120],
+                    "calisan": ap.calisan(o),
+                    "db": (o.db.get_session_details(sid) or {}).get("session_status") if sid else None,
+                }
+            )
+    finally:
+        monkeypatch.setattr(o.hc, "update_coil", gercek)
+        _temizle(o)
+    return gozlem
+
+
+@pytest.mark.parametrize("bobin_sonrasi", [None, 1], ids=["ilk_bobinden_ONCE", "bobin1_kabulden_SONRA"])
+def test_KRITIK_surus_penceresinde_SEANS_DURDURu_satiri_TAMAMLANDI_yazmaz_iptal_eder(o, monkeypatch, bobin_sonrasi):
+    """1-D inceleme i3-F-1 (ölçüldü 3/3): 1-C §9 #5 düzeltmesi yalnız BOBİN STOP'u kolunu kapatıyordu. Sürüş penceresinde
+    SEANS Durdur'u geldiğinde başlatma 409 "BAŞLATILMADI" dönüyor ama `stop_session` satırı varsayılan "completed"
+    ("Tamamlandı") kapatıyordu — uygulanmamış bir tedavi geçmişte tamamlanmış görünüyordu; aynı Durdur DB yazımı
+    sırasında gelince "İptal Edildi" yazıyordu (kayıt milisaniye zamanlamasına bağlıydı)."""
+    for g in _surus_penceresinde_seans_DURDUR(o, monkeypatch, bobin_sonrasi):
+        assert g["yanit"] == 409 and not g["calisan"], (
+            f"aparat/ön koşul: başlatma reddedilmedi ya da bobin enerjili: {g}"
+        )
+        assert g["db"] == "cancelled", (
+            f"başlatması 409 'BAŞLATILMADI' dönen seansın satırı 'İptal Edildi' değil (Tamamlandı = sahte başarı): {g}"
+        )
+
+
+def test_KARSIT_baslatma_BITTIKTEN_sonra_seans_DURDURu_satiri_TAMAMLANDI_kalir(o):
+    """Başarıyla başlamış seansın Durdur'u "completed" yazmaya devam eder (iptal yalnız uçuştaki başlatmanın kaydıdır)."""
+    _temizle(o)
+    o.engel["ev"] = None
+    o.engel["sidler"].clear()
+    r = _baslat(o)
+    assert r.status_code == 200 and r.json().get("status") == "success", r.text[:300]
+    assert o.c.post("/api/session/stop").status_code == 200
+    sid = o.engel["sidler"][-1] if o.engel["sidler"] else None
+    durum = (o.db.get_session_details(sid) or {}).get("session_status") if sid else None
+    _temizle(o)
+    assert durum == "completed", f"başlamış seansın normal Durdur'u 'Tamamlandı' yazmadı: {durum}"

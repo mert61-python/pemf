@@ -4755,6 +4755,9 @@ async def stop_session():
             started_epoch = _active_session.get("started_epoch") or _active_session.get("start_time")
             start_mono = _active_session.get("start_mono")  # kayıt süresi DST-güvenli (bkz. _kayit_suresi_dk)
             _stopping_session_id = _active_session.get("session_id")  # TOCTOU muhru (asagi bkz.)
+            # 1-D inceleme i3-F-1: başlatma hâlâ UÇUŞTAYSA (sürüş sonrası denetim bitmedi) bu Durdur başlatmayı iptal
+            # eder — başlatma 409 "BAŞLATILMADI" döner; satır "Tamamlandı" değil "İptal Edildi" kapanır.
+            _ucustaki_baslatma = bool(_active_session.get("baslatma_ucusta"))
             _active_session["is_active"] = False
     if not _seans_var:
         # ⚠️ D1.81 (B-5.3 · İG-5.3): "Aktif seans yok" ARTIK STOP'SUZ DÖNMEZ. Ölçüldü: E-stop'un yarışında uçuştaki AI
@@ -4825,7 +4828,11 @@ async def stop_session():
                     try:
                         _now = time.time()
                         dur_min = _kayit_suresi_dk(start_mono, started_epoch)
-                        db.end_session(db_session_id, duration_minutes=dur_min)
+                        db.end_session(
+                            db_session_id,
+                            duration_minutes=dur_min,
+                            session_status="cancelled" if _ucustaki_baslatma else "completed",
+                        )
                         # Yeni kolon: gercek wall-clock bitis epoch'u (end_session bunu yazmaz).
                         db.set_session_meta(db_session_id, ended_epoch=_now)
                     except Exception:
