@@ -85,4 +85,18 @@ describe("EstopMandalBandi — Y4 mandal ve 'Sıfırla'", () => {
     expect(mandalNedeni("stm_watchdog_timeout")).toMatch(/watchdog/);
     expect(mandalNedeni("bilinmeyen_ic_ad")).toBe("acil durdurma");
   });
+
+  // 1-C inceleme i3-F-2: bant "Bobinler durduruldu" GÜVENCESİ vermez — mandal iletisi teyit taşımaz; E-stop teyitsiz
+  // bitebilir (kablo çıkık / ölü gönderici → stmStopped=false; ESP kapalı kurulumda confirmed hep false). Ekranda
+  // kalan tek durum mesajı yanlış güvence olmamalı: bant EYLEM söyler (cihazda kontrol edin).
+  it.each(["manual", "stm_disconnected", "stm_komut_reddi"])(
+    "KRITIK: neden=%s — bant teyitsiz 'Bobinler durduruldu' YAZMAZ, kontrol EYLEMİNİ söyler",
+    (neden) => {
+      mockSnapshot = { ...MANDALLI, estopMandali: { aktif: true, neden } };
+      const u = render(<EstopMandalBandi />);
+      expect(u.queryByText(/durduruldu/i)).toBeNull();
+      expect(u.getByText(/kontrol edin/)).toBeTruthy();
+      expect(u.getByLabelText("Acil durdurma mandalını sıfırla")).toBeTruthy();
+    }
+  );
 });

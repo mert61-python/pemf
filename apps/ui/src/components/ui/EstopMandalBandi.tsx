@@ -66,9 +66,11 @@ export function EstopMandalBandi() {
       <Lock color={colors.danger} size={rs(18)} />
       <View style={{ flex: 1 }}>
         <Text style={styles.baslik}>ACİL DURDURMA MANDALLI — yeni başlatma kapalı</Text>
+        {/* 1-C inceleme i3-F-2: "Bobinler durduruldu" GÜVENCESİ yazılmaz — mandal iletisi teyit taşımaz, E-stop teyitsiz
+            bitebilir (kablo çıkık / ölü gönderici). Bant EYLEM söyler. */}
         <Text style={styles.alt}>
-          {`Neden: ${mandalNedeni(mandal.neden)}. Bobinler durduruldu. Yeniden başlatmak için önce "Sıfırla"; ` +
-            "sıfırlama bobinleri başlatmaz."}
+          {`Neden: ${mandalNedeni(mandal.neden)}. Bobinlerin durduğunu cihazda kontrol edin. Yeniden başlatmak için ` +
+            'önce "Sıfırla"; sıfırlama bobinleri başlatmaz.'}
         </Text>
       </View>
       <Pressable
