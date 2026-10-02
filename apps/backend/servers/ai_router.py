@@ -2645,7 +2645,17 @@ def _frame_hedef_durumu(muhur, bulundu: bool) -> int:
     Döngünün kuralıyla AYNI: tek kare kaybında durdurmaz (tespit anlık sekebilir); hedef yeniden bulununca sayaç
     sıfırlanır ve sürüş sürer — seans BİTMEZ, sürüş yetkisi (nesil) kesilmez.
     ⚠️ 1-C inceleme i7-F-1 (arka kalkan): STOP eskiden yalnız `seri == N` anında gidiyordu — kayıp STOP'unu atlatan bir
-    sürüşten sonra hedef kayıp kaldıkça bir daha STOP gelmiyordu. Artık N ve sonrasındaki HER kayıp karede yinelenir."""
+    sürüşten sonra hedef kayıp kaldıkça bir daha STOP gelmiyordu. Artık N ve sonrasındaki HER kayıp karede yinelenir.
+    ⚠️ 1-C inceleme i7-F-2: sayaç GÜNCEL seansın onayına aittir. Eski seansın mührüyle girmiş, hâlâ işlenen (ör.
+    lokalizasyonda bekleyen) kare — `/ai/pro/stop` → yeni `/start` arasında — sayacı ESKİ onaya çevirip sıfırlıyordu;
+    yeni seansın sonraki karesi onu yeniden sıfırlıyor, kayıp STOP'u gecikiyordu (ölçüldü 30/30: 3. yerine 5. karede).
+    Mührü güncel aktif seansın onayı OLMAYAN kare sayaca DOKUNMAZ (0 döner; sürüşü zaten mühür/nesil kapısıyla reddedilir)."""
+    import servers.api_server as _apx
+
+    with _apx._session_lock:
+        _guncel = _apx._active_session.get("onay_kimligi") if _apx._active_session.get("is_active") else None
+    if muhur.get("onay") != _guncel:
+        return 0
     with _frame_kayip_kilit:
         if _frame_kayip["onay"] != muhur["onay"]:
             _frame_kayip.update(onay=muhur["onay"], seri=0)
