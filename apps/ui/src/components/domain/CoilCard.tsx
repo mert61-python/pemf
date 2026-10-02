@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { colors, spacing, typography, rs } from "@/theme/tokens";
 import { CoilStatus } from "@/types/domain";
+import { alanGosterilebilir } from "@/utils/olculenAlan";
 
 /** Güvenli sayı biçimlendirme: sayı değilse (undefined / "44.5" / NaN) çökmek yerine "—". */
 function num(v: unknown, digits = 0): string {
@@ -37,8 +38,9 @@ export function CoilCard({ coil }: { coil: CoilStatus }) {
             donanım çalışırken durdurma kontrolünü kaybeder. Bileşen kendi girdisini de doğrular. */}
         <MiniMetric icon={<RadioTower color={colors.primary} size={16} />} label="Frekans" value={`${num(coil.frequencyHz)} Hz`} />
         <MiniMetric icon={<Zap color={colors.warning} size={16} />} label="Duty" value={`${num(coil.dutyCycle)}%`} />
-        <MiniMetric icon={<Activity color={colors.cyan} size={16} />} label="Alan" value={`${num(coil.magneticMt, 2)} mT`} />
-        <MiniMetric icon={<Thermometer color={colors.danger} size={16} />} label="Sıcaklık" value={`${num(coil.objectTemp, 1)} C`} />
+        {/* D1.67 · Y6 (1-D inceleme i2-F-3): bayat / hiç ölçülmemiş alan sayı olarak gösterilmez ('—'). */}
+        <MiniMetric icon={<Activity color={colors.cyan} size={16} />} label="Alan" value={alanGosterilebilir(coil, "magneticMt") ? `${num(coil.magneticMt, 2)} mT` : "—"} />
+        <MiniMetric icon={<Thermometer color={colors.danger} size={16} />} label="Sıcaklık" value={alanGosterilebilir(coil, "objectTemp") ? `${num(coil.objectTemp, 1)} C` : "—"} />
       </View>
     </Card>
   );

@@ -13,6 +13,7 @@ import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet } from "@/services/apiClient";
 import { BarChart, PieChart } from "react-native-chart-kit";
 import { barBolumSayisi } from "@/utils/kpiGrafik";
+import { alanGosterilebilir } from "@/utils/olculenAlan";
 import { gorunurBobinler, STM_BOBIN_SAYISI, type GorunurlukGirdisi } from "@/services/bobinGorunurlugu";
 
 /**
@@ -334,13 +335,18 @@ export function KpiDashboardScreen() {
               const temp = latest?.objectTemp ?? c.objectTemp;
               const cur = latest?.currentA ?? c.currentA;
               const power = cur * cur * COIL_R;
+              // D1.67 · Y6 (1-D inceleme i2-F-3): bayat / hiç ölçülmemiş alan sayı olarak gösterilmez ('—'); geçmişin SON
+              // noktası da sensör sustuğundan beri bayattır — ölçüt bobinin GÜNCEL `measuredFields`'i.
+              const magVar = alanGosterilebilir(c, "magneticMt");
+              const tempVar = alanGosterilebilir(c, "objectTemp");
+              const curVar = alanGosterilebilir(c, "currentA");
               return (
                 <View key={c.id} style={[styles.tableRow, !c.connected && styles.tableRowOff]}>
                   <Text style={styles.tableCell} numberOfLines={1} adjustsFontSizeToFit>{c.id}</Text>
-                  <Text style={[styles.tableCell, { color: "#22c55e" }]} numberOfLines={1} adjustsFontSizeToFit>{mag.toFixed(2)}</Text>
-                  <Text style={[styles.tableCell, { color: temp > 45 ? "#ef4444" : "#fb923c" }]} numberOfLines={1} adjustsFontSizeToFit>{temp.toFixed(1)}</Text>
-                  <Text style={[styles.tableCell, { color: "#60a5fa" }]} numberOfLines={1} adjustsFontSizeToFit>{cur.toFixed(3)}</Text>
-                  <Text style={[styles.tableCell, { color: "#a78bfa" }]} numberOfLines={1} adjustsFontSizeToFit>{cur > 0 ? power.toFixed(2) : "—"}</Text>
+                  <Text style={[styles.tableCell, { color: "#22c55e" }]} numberOfLines={1} adjustsFontSizeToFit>{magVar ? mag.toFixed(2) : "—"}</Text>
+                  <Text style={[styles.tableCell, { color: tempVar && temp > 45 ? "#ef4444" : "#fb923c" }]} numberOfLines={1} adjustsFontSizeToFit>{tempVar ? temp.toFixed(1) : "—"}</Text>
+                  <Text style={[styles.tableCell, { color: "#60a5fa" }]} numberOfLines={1} adjustsFontSizeToFit>{curVar ? cur.toFixed(3) : "—"}</Text>
+                  <Text style={[styles.tableCell, { color: "#a78bfa" }]} numberOfLines={1} adjustsFontSizeToFit>{curVar && cur > 0 ? power.toFixed(2) : "—"}</Text>
                   <Text style={styles.tableCell} numberOfLines={1} adjustsFontSizeToFit>{c.frequencyHz > 0 ? c.frequencyHz : "—"}</Text>
                 </View>
               );
@@ -429,10 +435,16 @@ const styles = StyleSheet.create({
  * Kilit: `__tests__/kpiSicaklikDurustlugu.test.tsx`.
  */
 export function hesaplaOrtSicaklik(
-  bagliBobinler: { connected?: boolean; objectTemp?: number }[],
+  bagliBobinler: { connected?: boolean; objectTemp?: number; measuredFields?: string[] }[],
 ): { olcumVar: boolean; deger: number; olcenSayisi: number } {
+  // D1.67 · Y6 (1-D inceleme i2-F-3): `measuredFields` varsa ölçüt O'dur — susan sensörün DONMUŞ değeri (> 0) ölçüm değil.
   const olcenler = (bagliBobinler || []).filter(
-    (c) => c && c.connected !== false && typeof c.objectTemp === "number" && c.objectTemp > 0,
+    (c) =>
+      c &&
+      c.connected !== false &&
+      alanGosterilebilir(c, "objectTemp") &&
+      typeof c.objectTemp === "number" &&
+      c.objectTemp > 0,
   );
   if (olcenler.length === 0) return { olcumVar: false, deger: 0, olcenSayisi: 0 };
   const toplam = olcenler.reduce((s, c) => s + (c.objectTemp as number), 0);
