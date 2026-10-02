@@ -198,5 +198,10 @@ def test_YAPISAL_frame_yaniti_dokumu_tasir():
 
     src = Path(air.__file__).read_text(encoding="utf-8", errors="replace")
     i = src.index('post("/api/ai/ai_pro/frame")')
-    govde = src[i : i + 12000]
+    # ⚠️ 1-D (2026-10-02, kendi yan etkim): pencere eskiden SABİT 12000 karakterdi; `/frame` gövdesi büyüyünce (D1.60
+    # yorumları) anahtar 12340. karaktere kaydı ve çapa — ürün doğruyken — KIRMIZI oldu. Pencere artık işlevin TAMAMI:
+    # bir sonraki rota dekoratörüne kadar (gövde büyüse de küçülse de aynı kapsam; başka işleve TAŞMAZ).
+    j = src.find("\n@ai_router.", i + 1)
+    govde = src[i : (j if j != -1 else len(src))]
+    assert "async def ai_pro_frame(" in govde, "aparat: /frame işlev gövdesi bulunamadı"
     assert '"guvenDokumu"' in govde, "mobil /frame yanıtı güven dökümünü taşımıyor (web/mobil paritesi)"
