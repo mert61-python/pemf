@@ -1863,26 +1863,39 @@ def _ai_pro_loop(dongu_muhru=None):
     # bobinlere sahiptir → bu ESKİ thread'in teardown'ı onları DURDURMASIN + is_active'ini EZMESİN.
     # D1.81 (İG-5.11): "yeni döngü" DÖNGÜ NUMARASIYLA bilinir — bayrak, eski döngünün bayat tur denetimi ile yeni
     # döngünün `/start`'ı arasında ms içinde değişebildiği için tek başına güvenilmez.
+    # Loop bittiğinde (süre doldu / durduruldu / hata) bobinleri DONANIM düzeyinde durdur —
+    # keep-alive ile sonsuza sürmesin (AI artık sürmüyor).
+    # ⚠️ D1.81: döngünün sürüş yetkisi bir durdurma ile ZATEN kesildiyse (nesil bayat) o durdurma STOP'unu GÖNDERDİ ve
+    # döngü sonrasında hiçbir şey süremedi → burada tekrar STOP gönderilmez: aradaki "yeni elle seans/tekil sürüş"ün
+    # bobinlerini bu ESKİ döngü durduramaz. Yetki hâlâ geçerliyse (süre doldu, hata) bobinler bu döngünündür → durdurulur.
+    # ⚠️ 1-C inceleme i3-F-1 (A-63 · Ö.4-Y8): mandal KURULUYKEN hiçbir START geçemez → "yeni seans" yoktur; STOP her
+    # zaman gider (eskiden mandal da `baslatma_engeli`ni doldurduğu için E-stop sonrası teardown STOP'u atlanıyordu:
+    # STM stop_all 2→1, ESP STOP 3→2 — yedek gönderim azaltılamaz).
+    # ⚠️ 1-C inceleme i2-F5: "yeni döngü yok" kararı ile STM STOP'u AYNI kritik bölgede (`_ai_loop_lock`). Eskiden kilit
+    # bırakıldıktan SONRA gönderiliyordu → arada başlayan YENİ onaylı seansın bobinleri durup nesli artıyor, yeni döngü
+    # "bayat" sayılıp sessizce çıkıyordu (onayı yanmış, 30/30). STM STOP yalnız kuyruğa konur — beklemez (Ö.4-Y8);
+    # ESP yayınları (saniyeler) kilidin DIŞINDA kalır. Kilit sırası `_ai_loop_lock` → HC `_state_lock` (ters yön yok).
     with _ai_loop_lock:
         _yeni_dongu = dongu_muhru is not None and dongu_muhru.get("dongu") != _ai_dongu_no
         if dongu_muhru is not None and not _yeni_dongu:
             _ai_loop_active = False  # bu (güncel) döngü bitiyor
-    if _yeni_dongu or (dongu_muhru is None and _ai_loop_active):
+        _atla = _yeni_dongu or (dongu_muhru is None and _ai_loop_active)
+        _yetki_gecerli = dongu_muhru is None or estop_mandali.mandalli_mi() or not estop_mandali.baslatma_engeli(_nesil)
+        if not _atla and _yetki_gecerli:
+            try:
+                import servers.api_server as _api_k
+
+                if _api_k.state and _api_k.state.hardware:
+                    _api_k.state.hardware.stop_all_coils()
+            except Exception:
+                logger.exception("AI Pro loop sonu STM STOP hatasi")
+    if _atla:
         logger.info("AI Pro teardown atlandı: yeni loop başlamış (bobinler yeni seansa ait).")
         return
-    # Loop bittiğinde (süre doldu / durduruldu / hata) bobinleri DONANIM düzeyinde durdur —
-    # keep-alive ile sonsuza sürmesin (AI artık sürmüyor).
-    # ⚠️ D1.81: döngünün sürüş yetkisi bir durdurma / acil durdurma ile ZATEN kesildiyse (nesil bayat) o durdurma
-    # STOP'unu GÖNDERDİ ve döngü sonrasında hiçbir şey süremedi → burada tekrar STOP gönderilmez: aradaki
-    # "Sıfırla + yeni elle seans/tekil sürüş"ün bobinlerini bu ESKİ döngü durduramaz. Yetki hâlâ geçerliyse
-    # (süre doldu, hata) bobinler bu döngünündür → durdurulur.
-    _yetki_gecerli = dongu_muhru is None or not estop_mandali.baslatma_engeli(_nesil)
     try:
         import servers.api_server as _api2
 
         if _yetki_gecerli:
-            if _api2.state and _api2.state.hardware:
-                _api2.state.hardware.stop_all_coils()
             # ESP 6-8'i de durdur (AI bunları da sürüyordu — audit #13).
             # ⚠️ FAZ 4: kapsam elle yaziliydi (yukaridaki ile ayni sinif). Tek kaynak.
             for _cid in sorted(_api2.ESP_COIL_IDS):
