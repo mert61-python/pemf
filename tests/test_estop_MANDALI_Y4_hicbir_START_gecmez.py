@@ -43,8 +43,8 @@ class _SahteAlanKaydi:
 
 @pytest.fixture
 def ortam(monkeypatch, tmp_path):
+    from ai_pro_aparati import istemci  # eşzamanlı istek: Selector döngülü istemci (bkz. ISTEMCI_SECENEKLERI)
     from database.treatment_history_db import TreatmentHistoryDB
-    from fastapi.testclient import TestClient
     from kayitci_donanim import gercek_hc
     from servers import api_server as api
     from servers import coil_run_tracker as crt
@@ -89,7 +89,7 @@ def ortam(monkeypatch, tmp_path):
             yield types.SimpleNamespace(
                 api=api,
                 hc=hc,
-                c=TestClient(api.app),
+                c=istemci(api.app),
                 yayin=yayin,
                 ws=ws,
                 bildirim=bildirim,

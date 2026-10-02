@@ -13,7 +13,9 @@ DB (tmp), yayın/bildirim/WS (kaydedilir). Sürüş (`_drive_coils_ai_pro`), don
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import sys
 import threading
 import time
 import types
@@ -21,6 +23,25 @@ import types
 import numpy as np
 
 D_AI = 0.30  # sahte doz modelinin bobin başı duty oranı (seans duty'lerinden ayırt edilir)
+
+# ⚠️ TEST İSTEMCİSİ OLAY DÖNGÜSÜ (1-C, ölçüldü): TestClient her istekte AYRI bir iş parçacığında YENİ bir asyncio
+# döngüsü açıp kapatır; bu aparatın kapıları aynı istemciye birden çok iş parçacığından EŞZAMANLI istek atar.
+# Windows'ta (gömülü Python 3.10.2) varsayılan Proactor döngüsünde bu desen CPython'un kendi uyarısını üretiyordu —
+# "<_overlapped.Overlapped …> still has pending operation at deallocation, the process may crash"
+# (`asyncio\windows_events.py`, `select`) — ve test süreci ara sıra GC sırasında "Windows fatal exception: access
+# violation" ile ÖLÜYORDU (bir günde ≥9 koşu: tam süit, mutasyon ve inceleme koşuları; çökme izi hep TestClient portal
+# iş parçacığında "Garbage-collecting"). Aynı kapılar 10 koşuda Proactor ile 3 uyarı, Selector ile 0 uyarı / 0 çökme.
+# Ürün (uvicorn) tek ve uzun ömürlü döngüde çalışır; istek başına döngü açıp kapatma yalnız TestClient'a özgüdür →
+# yalnız bu aparatın istemcisi Selector döngüsüyle kurulur (ürün kodu ve süitin geri kalanı değişmez; Linux'ta zaten
+# Selector).
+ISTEMCI_SECENEKLERI = {"loop_factory": asyncio.SelectorEventLoop} if sys.platform == "win32" else {}
+
+
+def istemci(app):
+    """Eşzamanlı istek atan kapılar için TestClient (bkz. ISTEMCI_SECENEKLERI)."""
+    from fastapi.testclient import TestClient
+
+    return TestClient(app, backend_options=dict(ISTEMCI_SECENEKLERI))
 
 
 class _SahteAlanKaydi:
@@ -47,7 +68,6 @@ def mandali_sifirla(c) -> None:
 def kur(monkeypatch, tmp_path, *, dongu_noop: bool = True):
     """Ortamı kurar ve bir isim alanı döner. Çağıran `with gercek_hc()` bloğunu kendisi açar ve `ns.hc`yi atar."""
     from database.treatment_history_db import TreatmentHistoryDB
-    from fastapi.testclient import TestClient
     from servers import ai_approval, live_state
     from servers import ai_router as air
     from servers import api_server as api
@@ -136,7 +156,7 @@ def kur(monkeypatch, tmp_path, *, dongu_noop: bool = True):
         air=air,
         ls=live_state,
         db=db,
-        c=TestClient(api.app),
+        c=istemci(api.app),
         ws=ws,
         yayin=yayin,
         bildirim=bildirim,
