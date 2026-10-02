@@ -32,8 +32,12 @@ IMG = os.path.join(KOK, "ai_hub", "inference_cat_organ", "test_img", "synthetic_
 
 @pytest.fixture
 def ongorucu(monkeypatch, tmp_path):
-    """kol ∈ {"var", "yok", "bozuk"} → GERÇEK CatOrganPredictor (yalnız ONNX koşucuları sahte)."""
+    """kol ∈ {"var", "yok", "bozuk", "gercek_yok"} → GERÇEK CatOrganPredictor (yalnız ONNX koşucuları sahte).
+
+    ⚠️ İNCELEME-2 i5-F-1: "yok" kolu `varsayilan_kabin_yaml`ı var OLMAYAN BİR YOLA yamalar (istisna dalı); üründe paketli
+    dosya gerçekten yoksa işlev None döner ve istisna HİÇ oluşmaz → "gercek_yok" modülün KENDİ varsayılan yolunu yok eder."""
     from ai_hub.inference_cat_organ import catorgan_predictor as cp
+    from ai_hub.inference_cat_organ.lib import cabin_config as lcc
     from ai_hub.inference_cat_organ.lib import runners
     from ai_hub.inference_cat_organ.lib.canonical import KEYPOINT_NAMES
     from ai_hub.inference_cat_organ.lib.geometry import CANONICAL_CAT_3D
@@ -52,7 +56,10 @@ def ongorucu(monkeypatch, tmp_path):
     gercek_yaml = cp.varsayilan_kabin_yaml()
 
     def _kur(kol: str):
-        if kol == "yok":
+        if kol == "gercek_yok":
+            monkeypatch.setattr(lcc, "DEFAULT_CONFIG_YAML", tmp_path / "paketli_yok" / "cabin_config_example.yaml")
+            assert cp.varsayilan_kabin_yaml() is None, "aparat: paketli kabin YAML yolu hâlâ çözülüyor"
+        elif kol == "yok":
             monkeypatch.setattr(cp, "varsayilan_kabin_yaml", lambda: str(tmp_path / "yok_kabin.yaml"))
         elif kol == "bozuk":
             bozuk = tmp_path / "bozuk_kabin.yaml"
@@ -65,7 +72,7 @@ def ongorucu(monkeypatch, tmp_path):
     return _kur
 
 
-@pytest.mark.parametrize("kol", ["yok", "bozuk"])
+@pytest.mark.parametrize("kol", ["yok", "bozuk", "gercek_yok"])
 def test_KRITIK_DE08_yaml_YUKLENEMEZSE_kalibrasyonsuz_tavanli_ve_bildirir(ongorucu, kol):
     p = ongorucu(kol)
     r = p.predict(IMG, render=False)
@@ -90,7 +97,7 @@ def test_KARSIT_DE08_yaml_VARSA_kalibre_ve_kabin_koordinati_var(ongorucu):
     assert (r.get("kabin_yapilandirmasi") or {}).get("yuklendi") is True
 
 
-@pytest.mark.parametrize("kol", ["yok", "bozuk"])
+@pytest.mark.parametrize("kol", ["yok", "bozuk", "gercek_yok"])
 def test_KRITIK_DE08_AI_Pro_hedefi_DOGRULANAMAZ_ve_operatore_EYLEM_soylenir(ongorucu, monkeypatch, kol):
     """AI Pro lokalizasyonu: hedef SÜRÜLEMEZ (localized False) ve 1-C'nin kabin bildirimi (eylem söyler) çıkar."""
     from servers import ai_router as air
@@ -106,7 +113,7 @@ def test_KRITIK_DE08_AI_Pro_hedefi_DOGRULANAMAZ_ve_operatore_EYLEM_soylenir(ongo
     assert any("kabin yapılandırması" in m for m, _t in bildirim), f"operatöre bildirim yok: {bildirim}"
 
 
-@pytest.mark.parametrize("kol", ["yok", "bozuk"])
+@pytest.mark.parametrize("kol", ["yok", "bozuk", "gercek_yok"])
 def test_KRITIK_DE08_AI_Hub_yaniti_KALIBRASYONSUZ_oldugunu_soyler(ongorucu, monkeypatch, kol):
     from fastapi.testclient import TestClient
     from servers import ai_router as air

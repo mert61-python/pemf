@@ -72,7 +72,13 @@ class CatOrganPredictor:
         self.kabin_yuklendi = True
         self.kabin_hatasi = None
         try:
-            self.cabin_cfg = load_cabin_config(varsayilan_kabin_yaml())
+            _kabin_yolu = varsayilan_kabin_yaml()
+            if _kabin_yolu is None:
+                # ⚠️ İNCELEME-2 i5-F-1: paketli dosya YOKSA `varsayilan_kabin_yaml()` None döner ve
+                # `load_cabin_config(None)` istisnasız DEFAULT verir → "yüklendi" sanılıyor, operatöre hiçbir şey
+                # söylenmiyordu (ölçüldü: `kabin_yapilandirmasi.yuklendi` True, AI Hub `kabin_uyarisi` yok).
+                raise FileNotFoundError("paketli kabin yapılandırması (cabin_config_example.yaml) bulunamadı")
+            self.cabin_cfg = load_cabin_config(_kabin_yolu)
         except Exception as e:  # noqa: BLE001 — bozuk yaml analizi düşürmesin
             import logging
 

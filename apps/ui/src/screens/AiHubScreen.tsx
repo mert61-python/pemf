@@ -4042,6 +4042,11 @@ function CatOrganModule({ patientName }: { patientName: string }) {
           {(result as any).anatomic_consistency && (result as any).anatomic_consistency.passed === false ? (
             <Text style={styles.scUyari}>⚠ Anatomik tutarlılık uyarısı: organ dizilimi beklenen anatomiyle çelişiyor — lokalizasyona temkinli yaklaşın.</Text>
           ) : null}
+          {/* İNCELEME-2 i5-F-2 (D1.E08 · İG-5.27): kabin yapılandırması yüklenemediyse organ konumları KALİBRASYONSUZDUR —
+              backend metni (tek kaynak `catorgan_predictor.KABIN_UYARISI`) operatöre GÖSTERİLİR (eskiden yalnız yanıtta). */}
+          {(result as any).kabin_uyarisi ? (
+            <Text style={styles.scUyari}>⚠ {(result as any).kabin_uyarisi}</Text>
+          ) : null}
           {(() => {
             const organs = result.organs || [];
             if (organs.length === 0) {
