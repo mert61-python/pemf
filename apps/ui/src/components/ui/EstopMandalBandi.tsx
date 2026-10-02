@@ -5,10 +5,13 @@
  * Y4: "E-stop MANDALLANIR; operatörün ayrı ve bilinçli 'sıfırla' eylemi olmadan hiçbir START kabul edilmez.
  * Sıfırlama kendi başına yeniden başlatmaz; sıfırlamadan sonra yeni bir START ayrıca gerekir."
  *
- * Backend mandalı her acil durdurmada (düğme, STM kopması/reddi/watchdog'u, ESP alarmı) kurar; kuruluyken elle
+ * Backend mandalı her acil durdurmada kurar (düğme, ESP alarmı; STM kopması/reddi/watchdog'u AKTİF STM seansında —
+ * seanssız kopma/watchdog E-stop koşmaz, mandal KURMAZ: 1-C inceleme i3-F-7, sahip sorusu); kuruluyken elle
  * başlatma, AI (Auto), AI Pro (`/frame` ve döngü), mobil ve legacy START'ları REDDEDİLİR (409). Operatör nedenini
- * görmeli ve mandalı kaldırabilmeli — oturum açılmamışken de (Karşılama/Giriş ekranları; A-58/Y23 ile tutarlı:
- * ACİL DURDUR'un olduğu her yerde mandal durumu ve "Sıfırla" da olmalı).
+ * görmeli ve mandalı kaldırabilmeli — oturum açılmamışken de (Karşılama/Giriş ekranları; 1-C oturum talimatı).
+ * ⚠️ 1-C inceleme i3-F-3: bu iki ekranda ACİL DURDUR düğmesi HENÜZ YOK (A-58 Karşılama / Y23 Giriş → D1.87). Bant
+ * orada mandal durumunu ve "Sıfırla"yı verir; "ACİL DURDUR'un olduğu her yerde" eşleşmesi bu ekranlar için D1.87 ile
+ * tamamlanır (o zamana dek sıra ters: ekran durduramadan mandalı kaldırabilir — açık madde).
  *
  * Durum WS anlık görüntüsünden/`estop_mandali` iletisinden gelir (`snapshot.estopMandali`). Alan yoksa (eski
  * backend) bant YOK. "Sıfırla" onay ister (bilinçli eylem) ve yalnız mandalı kaldırır — bobin BAŞLATMAZ.

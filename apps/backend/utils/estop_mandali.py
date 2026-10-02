@@ -10,6 +10,10 @@ hiçbir START kabul edilmez." Kapsam: elle başlatma, AI (Auto), AI Pro `/frame`
   * MANDAL — her acil durdurma (`api_server._emergency_stop_all`, bütün kaynakları: düğme, STM kopması, STM reddi,
     STM watchdog'u, ESP alarmı) kurar; YALNIZ `sifirla()` (operatörün `POST /api/hardware/estop_mandali/sifirla`
     eylemi) kaldırır. Mandal kuruluyken her START reddedilir.
+    ⚠️ 1-C inceleme i3-F-7 (ölçüldü): STM kopması / reddi / watchdog'u `_emergency_stop_all`'a YALNIZ AKTİF STM
+    SEANSINDA gider. Seanssız kopma / watchdog mandal KURMAZ: HC durumu sıfırlanır ve nesil artar (uçuştaki eski
+    niyetler yine reddedilir), ama yeni START Sıfırla'sız kabul edilir. Sahip sorusu: Y4'ün "E-stop" kapsamına seanssız
+    STM kopması / firmware watchdog'u girer mi? (Evet ise bu dallar da `mandalla` çağırmalı — STOP'tan önce, kapısız.)
   * SÜRÜŞ NESLİ — her durdurma (acil durdurma, `stop_all_coils`, seans / AI Pro durdurma, STM kopması) ve mandal
     kuruluyken yapılan Sıfırla nesli bir artırır. Bir START niyeti nesli NİYET ANINDA alır (istek girişi ya da seans
     mührü); sürüş anında nesil değişmişse START REDDEDİLİR. Böylece tahmin/lokalizasyon sırasında (0,3–2,2 sn) gelen
