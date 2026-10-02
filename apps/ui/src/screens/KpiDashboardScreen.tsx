@@ -104,9 +104,13 @@ export function KpiDashboardScreen() {
   const COIL_R = 0.5;
   const instantPowerW = runningCoils.reduce((sum, c) => sum + c.currentA * c.currentA * COIL_R, 0);
   const sicaklik = hesaplaOrtSicaklik(connectedCoils);
-  const avgMag = runningCoils.length > 0
-    ? runningCoils.reduce((s, c) => s + c.magneticMt, 0) / runningCoils.length
-    : 0;
+  // ⚠️ İNCELEME-2 i6-F-1 (D1.76 · B-1.24 · Y6): ortalama YALNIZ alanı ÖLÇÜLEN çalışan bobinlerden (`alanGosterilebilir`).
+  // Ölçülmeyen bobinin 0.0'ı (ya da bayat değeri) ortalamaya girerse 7 bobin çalışırken yalnız bobin 6 ölçüyorsa (1,842 mT)
+  // kart "0.26 mT" diyordu (ölçüldü — D1.76'nın E-alanında düzelttiği sayının aynısı); hiçbiri ölçmezken "0.00 mT".
+  const alanOlcenler = runningCoils.filter((c) => alanGosterilebilir(c, "magneticMt"));
+  const avgMag = alanOlcenler.length > 0
+    ? alanOlcenler.reduce((s, c) => s + c.magneticMt, 0) / alanOlcenler.length
+    : null;
 
   const completionRate = kpi.totalSessions > 0
     ? Math.round((kpi.completedSessions / kpi.totalSessions) * 100)
@@ -308,7 +312,11 @@ export function KpiDashboardScreen() {
             value={sicaklik.olcumVar ? `${sicaklik.deger.toFixed(1)} °C` : "ölçüm yok"}
             tone={colors.warning}
           />
-          <MetricCard label="Ort. Manyetik" value={`${avgMag.toFixed(2)} mT`} tone={colors.cyan} />
+          <MetricCard
+            label={avgMag !== null ? `Ort. Manyetik (${alanOlcenler.length} bobin)` : "Ort. Manyetik"}
+            value={avgMag !== null ? `${avgMag.toFixed(2)} mT` : "ölçüm yok"}
+            tone={colors.cyan}
+          />
         </ResponsiveGrid>
       </View>
 
