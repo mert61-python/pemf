@@ -548,6 +548,16 @@ class HardwareController:
             self._send_stm_manual_update()
         return True
 
+    def calisan_bobin_durumu(self) -> dict:
+        """Şu an ÇALIŞAN (keep-alive'ın sürdüğü) bobinler → {bobin: {"freq", "duty" (oran), "phase"}} — durum kilidi altında
+        anlık görüntü. Yalnız okuma (İNCELEME-2 i1-F-1: AI Pro tablosu sürüş komutu verilmeyen karede teldeki gerçeği gösterir)."""
+        with self._state_lock:
+            return {
+                i: {"freq": s["freq"], "duty": s["duty"], "phase": s["phase"]}
+                for i, s in self.coils_state.items()
+                if s.get("is_running")
+            }
+
     def stop_all_coils(self):
         with self._state_lock:
             # D1.81 (B-5.3): her TAM durdurma uçuştaki START niyetlerini geçersiz kılar (nesil++) — durum kilidi altında,

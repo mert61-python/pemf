@@ -1376,13 +1376,44 @@ def _drive_coils_ai_pro(D, P) -> list:
     return surulen
 
 
-def _build_ai_pro_percoil(D, P, surulen=()):
+def _teldeki_ai_pro_bobinleri() -> dict:
+    """İNCELEME-2 i1-F-1 (Y25 · B-5.2): AI Pro bobinlerinden şu an TELDE çalışanlar → {bobin: (freq Hz, duty %, faz °)}.
+
+    ⚠️ NEDEN: sürüş komutu verilmeyen karede/turda — hedef-kaybı serisi N'den küçükken (kayıp STOP'u henüz yok) ya da
+    yabancı izleyicinin karesinde — bobinler önceki komutla keep-alive'da ÇALIŞIR; ölçüldü: telde 7 bobin çalışırken yanıt/WS
+    7 bobini "sürülmedi" (duty 0) diyordu. Okunamazsa boş (eski gösterim). Yalnız okuma: hiçbir şeyi durdurmaz/engellemez."""
+    try:
+        import servers.api_server as _api
+
+        _hw = _api.state.hardware
+        _durum = _hw.calisan_bobin_durumu() if _hw is not None and hasattr(_hw, "calisan_bobin_durumu") else {}
+    except Exception:
+        logger.debug("AI Pro: teldeki bobin durumu okunamadı (eski gösterim)", exc_info=True)
+        return {}
+    _ai = set(_ai_pro_bobinleri())
+    return {
+        int(c): (float(s["freq"]), float(s["duty"]) * 100.0, float(s["phase"]))
+        for c, s in _durum.items()
+        if int(c) in _ai
+    }
+
+
+def _build_ai_pro_percoil(D, P, surulen=(), teldeki=None):
     """7-bobinlik perCoil yükü (PLANLANAN per-coil AI duty/phase, yüzde) + `suruldu` (telde GERÇEKTEN sürüldü mü).
     Bobin 8 yok (kapalı). D1.84 (B-5.2): eskiden plan değeri "uygulandı" diye okunuyordu (6-7 telde 0'ken); `suruldu`
-    yalnız `_drive_coils_ai_pro`'nun kabul ettiği bobinlerde True — ekran 6-7 (ve herhangi bir bobin) için gerçeği gösterir."""
+    yalnız `_drive_coils_ai_pro`'nun kabul ettiği bobinlerde True — ekran 6-7 (ve herhangi bir bobin) için gerçeği gösterir.
+    `teldeki` (İNCELEME-2 i1-F-1): bu karede sürülmeyen ama telde ÇALIŞAN bobin TELDEKİ değerle `suruldu: True` döner —
+    enerjili bobin "sürülmedi" gösterilmez (`_teldeki_ai_pro_bobinleri`; yalnız AI Pro seansı varken verilir)."""
     _s = set(surulen or ())
+    _t = teldeki or {}
     out = []
     for idx in range(7):
+        if (idx + 1) not in _s and (idx + 1) in _t:
+            _f, _d, _ph = _t[idx + 1]
+            out.append(
+                {"id": idx + 1, "freq": round(_f, 1), "duty": round(_d, 1), "phase": round(_ph, 1), "suruldu": True}
+            )
+            continue
         out.append(
             {
                 "id": idx + 1,
@@ -1844,7 +1875,7 @@ def _ai_pro_loop(dongu_muhru=None):
                 _kodlanan_kare = frame
                 _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
             b64_image = base64.b64encode(buffer).decode('utf-8')
-            per_coil = _build_ai_pro_percoil(D, P, _surulen)
+            per_coil = _build_ai_pro_percoil(D, P, _surulen, _teldeki_ai_pro_bobinleri())
             ws_data = {
                 "imageBase64": b64_image,
                 # [S7 adım 4] Kare boyutu istemcinin oran kilidi için (yalnız-ek).
@@ -2873,7 +2904,10 @@ async def ai_pro_frame(
                 "reliability": round(rel, 3),
                 # Sunum-katmanı XAI (2026-08-26): web/mobil paritesi — güven dökümü.
                 "guvenDokumu": guven_dokumu,
-                "perCoil": _build_ai_pro_percoil(D, P, _surulen if _surdu else ()),
+                # İNCELEME-2 i1-F-1: AI Pro seansı (mühür) varken sürülmeyen ama telde çalışan bobin "sürülmedi" denmez.
+                "perCoil": _build_ai_pro_percoil(
+                    D, P, _surulen if _surdu else (), _teldeki_ai_pro_bobinleri() if _muhur is not None else None
+                ),
                 "target": {"x": round(x_mm, 1), "y": round(y_mm, 1), "z": round(z_mm, 1)},
                 "eField": round(e_field, 4),
                 "organId": _gosterim_oid,
