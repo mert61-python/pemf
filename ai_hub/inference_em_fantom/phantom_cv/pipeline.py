@@ -32,7 +32,7 @@ import numpy as np
 from .cabin_config import CabinConfig, load_cabin_config
 from .coord_transform import (
     CameraIntrinsics, CabinPose, MarkerDetection,
-    detect_aruco_marker, solve_cabin_pose, pixel_to_cabin_mm,
+    detect_aruco_marker, solve_cabin_pose, pixel_to_cabin_mm, KesisimGecersiz,
     undistort_image, approx_intrinsics_from_marker,
 )
 from .color_segment import (
@@ -56,8 +56,10 @@ class RegionPrediction:
     organ_id: int
     label: str
     centroid_px: tuple[float, float]
-    centroid_cabin_mm: tuple[float, float, float]
-    centroid_cabin_cm: tuple[float, float, float]
+    # D1.100 (B-5.16 · İG-5.72): ArUco kipinde ışın hedef düzlemi geçerli noktada kesmiyorsa (kameranın arkası,
+    # paralel, kabin dışı) konum ÜRETİLMEZ → None (+ `konum_hatasi`); doz da hesaplanmaz.
+    centroid_cabin_mm: tuple[float, float, float] | None
+    centroid_cabin_cm: tuple[float, float, float] | None
     area_px: int
     # D1.E07 (İG-5.76): fiziksel alan BİLİNMİYORSA (piksel kipi: ölçek yok; ArUco kipi: perspektif alanı
     # hesaplanmıyor) None — eskiden piksel kipinde px² "mm²" diye, ArUco kipinde 0.0 ("ölçüldü, sıfır") yazılıyordu.
@@ -69,6 +71,7 @@ class RegionPrediction:
     E_healthy: float | None = None
     E_cancer: float | None = None
     E_avg: float | None = None
+    konum_hatasi: str | None = None
 
 
 @dataclass
@@ -300,16 +303,21 @@ class PhantomCvPipeline:
         _doz_hesaplanir = result.method != "pixel"
 
         def _make(r: Region, predict: bool) -> RegionPrediction:
-            xyz_mm = _to_mm(r.centroid_px)
+            konum_hatasi = None
+            try:
+                xyz_mm = _to_mm(r.centroid_px)
+            except KesisimGecersiz as e:  # D1.100: geçersiz kesişim → konum yok, doz yok
+                xyz_mm, konum_hatasi = None, str(e)
             area_mm2 = r.area_px * (result.mm_per_px ** 2) if _fiziksel_olcek else None
             rp = RegionPrediction(
                 organ_id=r.organ_id, label=r.label,
                 centroid_px=r.centroid_px,
                 centroid_cabin_mm=xyz_mm,
-                centroid_cabin_cm=(xyz_mm[0]/10, xyz_mm[1]/10, xyz_mm[2]/10),
+                centroid_cabin_cm=(xyz_mm[0]/10, xyz_mm[1]/10, xyz_mm[2]/10) if xyz_mm is not None else None,
                 area_px=r.area_px, area_mm2=area_mm2, bbox_px=r.bbox_px,
+                konum_hatasi=konum_hatasi,
             )
-            if predict and _doz_hesaplanir and r.organ_id in (0, 1):
+            if predict and _doz_hesaplanir and xyz_mm is not None and r.organ_id in (0, 1):
                 pr = self.predictor.predict(
                     x=xyz_mm[0], y=xyz_mm[1], z=xyz_mm[2],
                     organ_id=r.organ_id, achieved_B=B, duty_sum=duty,

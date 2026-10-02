@@ -32,7 +32,7 @@ import numpy as np
 from .cabin_config import CabinConfig, load_cabin_config
 from .coord_transform import (
     CameraIntrinsics, CabinPose,
-    detect_aruco_marker, solve_cabin_pose, pixel_to_cabin_mm,
+    detect_aruco_marker, solve_cabin_pose, pixel_to_cabin_mm, KesisimGecersiz,
     undistort_image, approx_intrinsics_from_marker,
 )
 from .petri_detector import PetriYoloDetector, PetriDetection
@@ -63,8 +63,9 @@ class WellPrediction:
     conf: float                                   # YOLO conf
     reliability: float                            # solidity * conf (kedi gibi)
     centroid_px: tuple[float, float]
-    centroid_cabin_mm: tuple[float, float, float]
-    centroid_cabin_cm: tuple[float, float, float]
+    # D1.100 (B-5.16 · İG-5.72): ArUco kipinde geçersiz kesişim → konum ÜRETİLMEZ (None + `konum_hatasi`), doz yok.
+    centroid_cabin_mm: tuple[float, float, float] | None
+    centroid_cabin_cm: tuple[float, float, float] | None
     bbox_px: tuple[int, int, int, int]            # x, y, w, h
     area_px: int
     # D1.E07 (İG-5.76): PİKSEL kipinde (ölçek yok) None — eskiden px² "mm²" diye yazılıyordu.
@@ -78,6 +79,7 @@ class WellPrediction:
     E_healthy: float | None = None
     E_cancer: float | None = None
     E_avg: float | None = None
+    konum_hatasi: str | None = None
 
 
 @dataclass
@@ -440,10 +442,18 @@ class PetriCvPipeline:
             organ_id = TUMOR if n_cancer >= self.cancer_pixel_threshold else HEALTHY
             label = "cancer" if organ_id == TUMOR else "healthy"
 
-            xyz = _to_mm(det.centroid_px)
+            # D1.100: ArUco kipinde geçersiz kesişim (kameranın arkası / paralel / kabin dışı) → konum ve alan YOK.
+            konum_hatasi = None
+            try:
+                xyz = _to_mm(det.centroid_px)
+            except KesisimGecersiz as e:
+                xyz, konum_hatasi = None, str(e)
             # Alan: ArUco modunda contour cabin-frame integration,
             #       diger modlarda area_px * mm_per_px^2
-            area_mm2 = _contour_area_mm2(det.contour) if _fiziksel_olcek else None
+            try:
+                area_mm2 = _contour_area_mm2(det.contour) if (_fiziksel_olcek and xyz is not None) else None
+            except KesisimGecersiz:
+                area_mm2 = None
 
             # PetriPredictor
             pr = (
@@ -451,7 +461,7 @@ class PetriCvPipeline:
                     x=xyz[0], y=xyz[1], z=xyz[2],
                     organ_id=organ_id, achieved_B=B, duty_sum=duty,
                 )
-                if _fiziksel_olcek
+                if _fiziksel_olcek and xyz is not None
                 else None
             )
 
@@ -471,7 +481,8 @@ class PetriCvPipeline:
                 reliability=reliability,
                 centroid_px=det.centroid_px,
                 centroid_cabin_mm=xyz,
-                centroid_cabin_cm=(xyz[0] / 10, xyz[1] / 10, xyz[2] / 10),
+                centroid_cabin_cm=(xyz[0] / 10, xyz[1] / 10, xyz[2] / 10) if xyz is not None else None,
+                konum_hatasi=konum_hatasi,
                 bbox_px=(int(x1), int(y1), int(x2 - x1), int(y2 - y1)),
                 area_px=det.area_px, area_mm2=area_mm2,
                 n_cancer_pixels=n_cancer,

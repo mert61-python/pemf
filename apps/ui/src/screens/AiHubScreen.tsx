@@ -16,7 +16,7 @@ import { GorselSahne } from "@/components/ui/GorselSahne";
 import { sahneSayfalari } from "@/utils/gorselSahneSayfalari";
 import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
 import { colors, radius, spacing, typography, rf, rs, layoutMax, touch } from "@/theme/tokens";
-import { EmDozSatiri, pikselKipiNotu } from "@/components/domain/EmDozSatiri";
+import { EmDozSatiri, konumMetni, pikselKipiNotu } from "@/components/domain/EmDozSatiri";
 import { useToast } from "@/components/ui/ToastProvider";
 import { webIcinKucult } from "@/services/gorselKucult";
 import { apiGet, apiPost, authHeaders, platformAlert, AI_TIMEOUT_MS, aiHataMesaji } from "@/services/apiClient";
@@ -134,8 +134,8 @@ function errorMessage(e: unknown): string {
 // (display render; tsc-doğrulanabilir). Sonuç CONTAINER state'i (useState) heterojen per-model
 // backend yanıtı olduğundan permissive bırakıldı (tam tipleme backend response-sözleşmesi ister).
 // D1.E07 (İG-5.76): piksel kipinde E/alan hesaplanmaz → null (bkz. EmDozSatiri).
-interface AiTumorRegion { area_mm2?: number | null; area_px?: number; centroid_cabin_mm?: number[]; D?: number[]; E_cancer?: number | null; E_healthy?: number | null; }
-interface AiWell { area_mm2?: number | null; area_px?: number; centroid_cabin_mm?: number[]; D?: number[]; label?: string; organ_id?: number; well_id?: number; E_cancer?: number | null; E_healthy?: number | null; }
+interface AiTumorRegion { area_mm2?: number | null; area_px?: number; centroid_cabin_mm?: number[] | null; konum_hatasi?: string | null; D?: number[]; E_cancer?: number | null; E_healthy?: number | null; }
+interface AiWell { area_mm2?: number | null; area_px?: number; centroid_cabin_mm?: number[] | null; konum_hatasi?: string | null; D?: number[]; label?: string; organ_id?: number; well_id?: number; E_cancer?: number | null; E_healthy?: number | null; }
 interface AiPrediction { confidence?: number; patient_id?: string; prediction?: string; [k: `prob_${string}`]: number | undefined; }
 interface AiTopK { class: string; prob: number; }
 interface AiDetection { class_name: string; conf?: number; bbox_xyxy?: number[]; index?: number; }
@@ -2109,11 +2109,10 @@ function PhantomModule({ patientName }: { patientName: string }) {
               })()}
               <Text style={styles.resultText}>Tespit edilen tümör: <Text style={{ fontWeight: "bold" }}>{result.n_tumor}</Text>   ·   Ölçek: <Text style={{ fontWeight: "bold" }}>{method === "pixel" ? "piksel" : `${result.mm_per_px} mm/px`}</Text></Text>
               {(result.tumor_regions || []).map((t: AiTumorRegion, i: number) => {
-                const c = t.centroid_cabin_mm || [0, 0, 0];
                 const D: number[] = Array.isArray(t.D) ? t.D : [];
                 return (
                   <View key={i} style={styles.tumorRow}>
-                    <Text style={styles.tumorHeader}>Tümör {i + 1}   ·   ({Number(c[0]).toFixed(1)}, {Number(c[1]).toFixed(1)}, {Number(c[2]).toFixed(1)}) {unit}</Text>
+                    <Text style={styles.tumorHeader}>Tümör {i + 1}   ·   {konumMetni(t.centroid_cabin_mm, unit)}</Text>
                     <EmDozSatiri r={t} style={[styles.resultText, { fontSize: typography.small }]} />
                     {D.length > 0 && (
                       <View style={styles.dBarRow}>
@@ -2496,13 +2495,12 @@ function PetriModule({ patientName }: { patientName: string }) {
               </Text>
               <Text style={[styles.resultText, { fontSize: typography.small }]}>Ölçek: {method === "pixel" ? "piksel" : `${result.mm_per_px} mm/px`}</Text>
               {(result.wells || []).map((w: AiWell, i: number) => {
-                const c = w.centroid_cabin_mm || [0, 0, 0];
                 const D: number[] = Array.isArray(w.D) ? w.D : [];
                 const isCancer = w.label === "cancer" || w.organ_id === 1;
                 return (
                   <View key={i} style={styles.tumorRow}>
                     <Text style={styles.tumorHeader}>
-                      {w.well_id}   ·   <Text style={{ color: isCancer ? colors.danger : colors.success }}>{isCancer ? "Kanser" : "Sağlıklı"}</Text>   ·   ({Number(c[0]).toFixed(1)}, {Number(c[1]).toFixed(1)}, {Number(c[2]).toFixed(1)}) {unit}
+                      {w.well_id}   ·   <Text style={{ color: isCancer ? colors.danger : colors.success }}>{isCancer ? "Kanser" : "Sağlıklı"}</Text>   ·   {konumMetni(w.centroid_cabin_mm, unit)}
                       {isCancer && (w as any).n_cancer_pixels != null ? <Text style={{ color: colors.textMuted, fontSize: typography.small }}>{`  — gerekçe: ${(w as any).n_cancer_pixels} mavi piksel (eşik ≥30)`}</Text> : null}
                     </Text>
                     <EmDozSatiri r={w} style={[styles.resultText, { fontSize: typography.small }]} />

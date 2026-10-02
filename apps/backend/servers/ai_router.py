@@ -3203,18 +3203,22 @@ async def analyze_em_fantom(
         try:
             from servers import efield_live as _ef
 
-            _ef.set_context((payload.get("tumor_regions") or []) if _fiziksel else [])
+            # D1.100: konumu çözülemeyen bölge bağlam kuramaz; ilk bölge çözülemediyse eski bağlam KALMAZ (boş → temizler).
+            _konumlu = [r for r in (payload.get("tumor_regions") or []) if r.get("centroid_cabin_mm")]
+            _ef.set_context(_konumlu if _fiziksel else [])
         except Exception:
             logger.debug("canlı E-alanı bağlamı kurulamadı", exc_info=True)
         # §KALAN A5 (em_kedi paritesi): "tahmini en cok ne surukledi" meta'si — ILK
         # tumor bolgesi icin hafif duyarlilik. Aciklama IKINCIL: hatasi analizi dusurmez.
         _xai_meta = {}
-        if result.success and _fiziksel and payload.get("tumor_regions"):
+        # D1.100: XAI yalnız konumu ÇÖZÜLMÜŞ ilk bölgede (eskiden konum yoksa (0, 0, 0)'da üretilirdi).
+        _xai_r0 = next((r for r in (payload.get("tumor_regions") or []) if r.get("centroid_cabin_mm")), None)
+        if result.success and _fiziksel and _xai_r0 is not None:
             try:
                 from ai_hub.inference_em_fantom import inference_em_fantom as _ief
 
-                _r0 = payload["tumor_regions"][0]
-                _c = list(_r0.get("centroid_cabin_mm") or (0.0, 0.0, 0.0))
+                _r0 = _xai_r0
+                _c = list(_r0["centroid_cabin_mm"])
                 _xai_meta["xaiSensitivity"] = await asyncio.to_thread(
                     _ief.xai_hizli_sensitivity,
                     cache["predictor"],
@@ -3405,12 +3409,13 @@ async def analyze_em_petri(
         # §KALAN A5: em_kedi paritesi — ilk kuyu icin hafif duyarlilik meta'si (zarif).
         _xai_meta = {}
         # ⚠️ D1.E07 (İG-5.76): PİKSEL kipinde koordinat piksel farkıdır → XAI duyarlılığı üretilmez (fantomla aynı).
-        if result.success and wells and result.method != "pixel":
+        _xai_w0 = next((w for w in wells if w.get("centroid_cabin_mm")), None)  # D1.100: konumu çözülmüş ilk kuyu
+        if result.success and _xai_w0 is not None and result.method != "pixel":
             try:
                 from ai_hub.inference_em_petri import inference_em_petri as _iep
 
-                _w0 = wells[0]
-                _c = list(_w0.get("centroid_cabin_mm") or (0.0, 0.0, 0.0))
+                _w0 = _xai_w0
+                _c = list(_w0["centroid_cabin_mm"])
                 _xai_meta["xaiSensitivity"] = await asyncio.to_thread(
                     _iep.xai_hizli_sensitivity,
                     cache["predictor"],

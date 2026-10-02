@@ -36,6 +36,11 @@ _PNP_METHOD_MAP = {
 }
 
 
+class KesisimGecersiz(ValueError):
+    """D1.100 (B-5.16 · İG-5.72): pikselin ışını hedef düzlemi GEÇERLİ bir noktada kesmiyor — kameranın arkasında,
+    düzleme paralel ya da kesişim kabin DIŞINDA. Konum ÜRETİLMEZ (çağıran o bölgeyi "konum çözülemedi" sayar)."""
+
+
 @dataclass
 class CameraIntrinsics:
     K: np.ndarray                       # (3, 3)
@@ -204,8 +209,10 @@ def pixel_to_cabin_mm(px: tuple[float, float],
         1. Piksel undistort -> normalize image plane
         2. Camera-frame ray (K^-1 ile)
         3. Camera -> marker frame: P_marker = R^T(P_cam - tvec)
-        4. Marker -> cabin: P_cabin = P_marker + marker_pos_cabin (+ plane_offset)
-        5. Cabin'de plate_z = plate_z_mm duzlemine ray-plane intersection
+        4. Marker -> cabin: P_cabin = R_axis @ P_marker + marker_pos_cabin (+ plane_offset) — isin VE kamera orijini
+        5. Cabin'de hedef duzlemine ray-plane intersection
+
+    Gecersiz kesisim (kameranin ARKASI, duzleme paralel, kabin DISI) -> `KesisimGecersiz` (ValueError).
     """
     u, v = px
     # 1) Undistort tek nokta
@@ -233,7 +240,6 @@ def pixel_to_cabin_mm(px: tuple[float, float],
         _axis_vec(cfg.aruco.normal_axis_in_cabin), dtype=np.float64
     ) * (cfg.aruco.plane_offset_cm * 10.0)
 
-    cam_origin_cabin = cam_origin_marker + pose.marker_pos_cabin_mm + plane_off_vec
     # ray_marker -> ray_cabin: MARKER EKSENLERI KABIN EKSENLERI DEGILDIR.
     # 2026-09-09 (karar #6): eskiden `ray_cabin = ray_marker` yaziliydi, yani marker cercevesi
     # kabin cercevesiyle AYNI varsayiliyordu. Marker arka duvarda ve normali -Z oldugundan bu
@@ -242,7 +248,11 @@ def pixel_to_cabin_mm(px: tuple[float, float],
     # hizalidir ama isaretler farklidir -> dogru donusum bir isaret/permutasyon matrisidir.
     R_axis = _marker_to_cabin_R(cfg)
     ray_cabin = R_axis @ ray_marker
-    cam_origin_marker = R_axis @ cam_origin_marker
+    # ⚠️ D1.100 (B-5.16): kamera ORIJINI de ayni donusumle kabine tasinir. Eskiden `cam_origin_cabin` donduruLMEDEN
+    # hesaplaniyor, donduruLMUS orijin bir satir sonra OLU bir degiskene yaziliyordu → fiziksel tutarli pozda hedef
+    # ~1,5 m kayiyordu (olculdu: 1472 mm; karakterizasyon golden'inin R = I pozu kamerayi marker'in ARKASINA koydugu
+    # icin bunu goremiyordu).
+    cam_origin_cabin = R_axis @ cam_origin_marker + pose.marker_pos_cabin_mm + plane_off_vec
 
     # 5) HEDEF DUZLEMI ile ray-plane intersection (2026-09-09, karar #6)
     # Duzlem ARTIK YAPILANDIRILABILIR: fantom/petri kabinde YATAY duruyorsa dogru duzlem
@@ -251,11 +261,22 @@ def pixel_to_cabin_mm(px: tuple[float, float],
     # davranis (eksen "Z", plate_z_cm) AYNEN korunur.
     eksen = cfg.phantom_plate.hedef_duzlem_indeksi
     duzlem = cfg.phantom_plate.hedef_duzlem_mm
+    # ⚠️ D1.100 + İG-5.72: gecersiz kesisim SAYI OLARAK DONMEZ. Eskiden paralel isinda `s = 1e6` (~1 km uzak nokta),
+    # kameranin ARKASINDAKI kesisim (s ≤ 0) ve kabin DISI nokta (olculdu: gercek ArUco pozunda pikselin %9'u > 5 m)
+    # oldugu gibi donuyor, oneriye/surus hedefine gidebiliyordu. Kabin siniri D1.85 ile ayni olcut: kabin orijin
+    # merkezli, yari boyut = `cabin_extent_cm` / 2; `|a| > yari` → DISARI.
     if abs(ray_cabin[eksen]) < 1e-9:
-        s = 1e6                                     # isin duzleme paralel — uzak nokta
-    else:
-        s = (duzlem - cam_origin_cabin[eksen]) / ray_cabin[eksen]
+        raise KesisimGecersiz("isin hedef duzlemine paralel — kesisim yok")
+    s = (duzlem - cam_origin_cabin[eksen]) / ray_cabin[eksen]
+    if s <= 0:
+        raise KesisimGecersiz(f"isin hedef duzlemini kameranin ARKASINDA kesiyor (s={s:.1f} mm)")
     p_cabin = cam_origin_cabin + s * ray_cabin
+    yari = [float(v) * 10.0 / 2.0 for v in cfg.geometry.cabin_extent_cm]
+    disari = [e for e, a, h in zip("xyz", p_cabin, yari) if abs(float(a)) > h]
+    if disari:
+        raise KesisimGecersiz(
+            f"kesisim kabin DISINDA {tuple(round(float(a), 1) for a in p_cabin)} mm (eksen {''.join(disari)})"
+        )
     return p_cabin.astype(np.float64)
 
 

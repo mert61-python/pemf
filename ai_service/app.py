@@ -1148,12 +1148,14 @@ def infer_em_fantom(
         # oldugundan dogrudan cagri yeterli; 7+1 ONNX forward ~ms mertebesi.
         _xai_meta = {}
         # D1.E07 (İG-5.76, router paritesi): piksel kipinde XAI üretilmez.
-        if result.success and result.method != "pixel" and payload.get("tumor_regions"):
+        # D1.100 (router paritesi): XAI yalnız konumu ÇÖZÜLMÜŞ ilk bölgede.
+        _xai_r0 = next((r for r in (payload.get("tumor_regions") or []) if r.get("centroid_cabin_mm")), None)
+        if result.success and result.method != "pixel" and _xai_r0 is not None:
             try:
                 from ai_hub.inference_em_fantom import inference_em_fantom as _ief
 
-                _r0 = payload["tumor_regions"][0]
-                _c = list(_r0.get("centroid_cabin_mm") or (0.0, 0.0, 0.0))
+                _r0 = _xai_r0
+                _c = list(_r0["centroid_cabin_mm"])
                 # Baz-nokta = tahminin FIILEN kullandigi nokta (dusman-dogrulama 2026-08-27:
                 # 'or 0.0' cfg-default'la [B=0.001, duty=2.4] celisiyordu — pipeline ikamesiyle birebir).
                 _B = achieved_B if achieved_B is not None else float(c["cfg"].phantom.achieved_B)
@@ -1262,12 +1264,13 @@ def infer_em_petri(
         # §KALAN A5 (router paritesi): ilk kuyu icin hafif duyarlilik meta'si (zarif).
         _xai_meta = {}
         # D1.E07 (İG-5.76, router paritesi): piksel kipinde XAI üretilmez.
-        if result.success and wells and result.method != "pixel":
+        _xai_w0 = next((w for w in wells if w.get("centroid_cabin_mm")), None)  # D1.100: konumu çözülmüş ilk kuyu
+        if result.success and _xai_w0 is not None and result.method != "pixel":
             try:
                 from ai_hub.inference_em_petri import inference_em_petri as _iep
 
-                _w0 = wells[0]
-                _c = list(_w0.get("centroid_cabin_mm") or (0.0, 0.0, 0.0))
+                _w0 = _xai_w0
+                _c = list(_w0["centroid_cabin_mm"])
                 _B = achieved_B if achieved_B is not None else float(c["cfg"].phantom.achieved_B)
                 _D = duty_sum if duty_sum is not None else float(c["cfg"].phantom.duty_sum)
                 _xai_meta["xaiSensitivity"] = _iep.xai_hizli_sensitivity(

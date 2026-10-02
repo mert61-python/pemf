@@ -654,6 +654,8 @@ class FantomSaglayici(_EmCvSaglayici):
         ham = max(0.0, min(1.0, solidity * mavi))
         out = []
         for r in list(getattr(result, "tumor_regions", []) or []):
+            if r.centroid_cabin_mm is None:  # D1.100: geçersiz kesişim → konum yok → hedef olamaz
+                continue
             out.append(
                 {
                     "px": tuple(float(v) for v in r.centroid_px),
@@ -733,6 +735,8 @@ class PetriSaglayici(_EmCvSaglayici):
         (kontrol dozu, sahip kararı #2: kapalı-varsayılan anahtar)."""
         out = []
         for w in list(getattr(result, "wells", []) or []):
+            if w.centroid_cabin_mm is None:  # D1.100: geçersiz kesişim → konum yok → hedef olamaz
+                continue
             kanser = int(getattr(w, "organ_id", 0) or 0) == 1
             guven = max(0.0, min(1.0, float(getattr(w, "reliability", 0.0) or 0.0)))
             out.append(

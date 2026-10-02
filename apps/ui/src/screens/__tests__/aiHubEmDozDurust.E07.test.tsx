@@ -149,3 +149,20 @@ describe.each([
     expect(m).not.toContain("hesaplanmadı");
   });
 });
+
+// D1.100 (B-5.16 · İG-5.72): ArUco kipinde ışın hedef düzlemini geçerli noktada kesmiyorsa backend konum ÜRETMEZ
+// (`centroid_cabin_mm: null` + `konum_hatasi`). Eski kart `|| [0, 0, 0]` ile "(0.0, 0.0, 0.0) mm" yazıyordu.
+describe.each([
+  ["Fantom Tümör", "tumor_regions", (y: any) => ({ ...y, method: "aruco_pnp", mm_per_px: 0 })],
+  ["Petri Kuyu", "wells", (y: any) => ({ ...y, method: "aruco_pnp", mm_per_px: 0 })],
+] as const)("%s konum çözülemedi (D1.100)", (modul, alan, aruco) => {
+  it("KRİTİK: konumsuz bölge (0.0, 0.0, 0.0) DEĞİL 'konum çözülemedi' gösterir", async () => {
+    const taban = modul === "Fantom Tümör" ? fantomYaniti(false) : petriYaniti(false);
+    const y: any = aruco(taban);
+    y[alan] = [{ ...y[alan][0], centroid_cabin_mm: null, konum_hatasi: "kesisim kabin DISINDA", D: [], E_cancer: null, E_healthy: null }];
+    const u = await analizEt(modul, y);
+    const m = metin(u);
+    expect(m).toContain("konum çözülemedi");
+    expect(m).not.toMatch(/\(0\.0, 0\.0, 0\.0\)/);
+  });
+});

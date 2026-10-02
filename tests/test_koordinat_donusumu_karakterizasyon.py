@@ -1,27 +1,24 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn, cglrgrkn
-"""FANTOM/PETRİ KOORDİNAT DÖNÜŞÜMÜ — KARAKTERİZASYON GOLDEN'I (2026-09-08).
+"""FANTOM/PETRİ KOORDİNAT DÖNÜŞÜMÜ — yapısal kapılar (2026-09-08; D1.100 ile yenilendi 2026-10-02).
 
-BU DOSYA DOĞRULUK İDDİA ETMEZ. `phantom_cv`/`petri_cv` `pixel_to_cabin_mm`in BUGÜN ne
-ürettiğini sabitler ki dönüşüm değiştiğinde bu SESSİZ olmasın.
+⚠️ D1.100 (B-5.16): bu dosyadaki KARAKTERİZASYON GOLDEN'I (R = I, t = (0, 0, 500) pozunda "bugün ne üretiyor"
+tablosu) KALDIRILDI ve bir DOĞRULUK testiyle değiştirildi: `test_koordinat_donusumu_FIZIKSEL_poz_DOGRULUK_ve_RED.py`.
+Golden'ın pozu kamerayı marker'ın ARKASINA koyuyordu (fiziksel değil) ve dönüşümün kamera orijinini döndürmeme
+hatasını (fiziksel pozda ~1,5 m kayma) gizliyordu. "Sahadaki yatay düzlem (Y = −20 cm) sayısal olarak kötü
+koşullanmış; sentetik ışınlarda kesişim 10⁶ mm'ye fırlıyor" ölçüm kaydı da aynı hatanın ürünüydü: düzeltilmiş
+dönüşüm aynı düzlemi fiziksel pozda < 5 mm çözüyor (doğruluk testinin "yaml" kolu). Gerçek kabinde kabul (±2 cm,
+VERIFICATION §15) ve A-17 yeniden ölçümü TEZGÂHTADIR (Oturum 13) — burada ölçüm uydurulmaz.
 
-NEDEN GEREKLİ (docs/arastirma-ai-pro-fantom-petri-plani.md, karar #6 — hoca):
-  · `coord_transform.py` ArUco modunda marker→kabin ROTASYONUNU uygulamıyor (`ray_cabin =
-    ray_marker`; kodun kendi yorumu bunu kısıt olarak itiraf ediyor) ve kesişimi kabin
-    Z=`plate_z` düzleminde alıyor.
-  · Kedi hattı (cat_organ) kabin-merkezli PnP kullanıyor. İki hattın AYNI 3B çerçeveyi ürettiği
-    KANITLANMADI → araştırma AI Pro'da fantom/petri sürüşü tezgâh doğrulaması geçene kadar
-    bayrak arkasında kalır.
-  · Dönüşüm YAMALANIRSA yalnız AI Pro değil, BUGÜN KULLANILAN AI Hub tek-foto analizleri
-    (`/api/ai/vision/em_fantom`, `/api/ai/vision/em_petri`) ve Docker `ai_service` de kayar —
-    aynı fonksiyon. Değişim CHANGELOG'a "araştırma fotoğraf analizi koordinatları değişti"
-    olarak yazılmalı ve bu golden bilinçli güncellenmelidir.
+Dönüşüm değişince bunun SESSİZ olmaması hâlâ önemli: aynı fonksiyon AI Hub tek-foto analizlerini
+(`/api/ai/vision/em_fantom`, `/api/ai/vision/em_petri`) ve Docker `ai_service`i de besler.
 
 Girdiler SENTETİKTİR (ağırlık/fotoğraf gerekmez) → bu kapı CI'da da koşar.
 """
 
 import numpy as np
 import pytest
+from kabin_fiziksel_poz import fiziksel_poz, genis_aci_ic_parametre, izdusur
 
 _TOL_MM = 1e-6
 
@@ -32,105 +29,19 @@ def donusum():
     from ai_hub.inference_em_fantom.phantom_cv.cabin_config import load_cabin_config
 
     cfg = load_cabin_config(None)  # depoya gömülü kabin geometrisi (65x50x50)
-    # ⚠️ GOLDEN DÜZLEMİ SABİTLENİR: bu dosya DÖNÜŞÜMÜ karakterize eder, sahadaki hedef düzlemi
-    # seçimini DEĞİL. 2026-09-09'da yaml "Y / -20 cm"e (sahip ölçüsü: tabandan 5 cm) geçti; o
-    # düzlemde sentetik ışınlar düzleme neredeyse PARALEL olduğu için sonuç 10^6 mm'ye fırlıyor
-    # (aşağıdaki ayrı karakterizasyon bunu ölçer). Dönüşümün kendisi eski düzlemde ölçülmeye
-    # devam eder ki gerçek bir regresyon bu gürültünün altında kaybolmasın.
-    cfg.phantom_plate.hedef_duzlem_eksen = "Z"
-    cfg.phantom_plate.hedef_duzlem_cm = 0.0
-    intr = ct.CameraIntrinsics(
-        K=np.array([[900.0, 0.0, 640.0], [0.0, 900.0, 360.0], [0.0, 0.0, 1.0]]),
-        D=np.zeros((1, 5)),
-        image_size=(1280, 720),
-        rms=0.0,
-    )
-    pose = ct.CabinPose(
-        marker_id=0,
-        rvec=np.zeros((3, 1)),
-        tvec=np.array([[0.0], [0.0], [500.0]]),  # kamera markerdan 500 mm uzakta
-        R=np.eye(3),  # marker kameraya paralel
-        reproj_error_px=0.0,
-        # ⚠️ YAML'DAN TÜRETİLİR, elle yazılmaz: marker konumu = -qr_to_origin (cm -> mm).
-        # 2026-09-09'da işaret 15 cm'e çıkınca köşe yerleşimi 8/8 -> 11/11 cm taşındı; sabit yazılsaydı
-        # golden yaml'dan sessizce ayrışırdı.
-        marker_pos_cabin_mm=np.array([-float(v) * 10.0 for v in cfg.geometry.qr_to_origin_cm]),
-    )
-    return ct, cfg, intr, pose
+    intr = genis_aci_ic_parametre(ct)
+    poz, R_kk, C = fiziksel_poz(ct, cfg)
+    return ct, cfg, intr, poz, R_kk, C
 
 
-# (piksel, bugün üretilen kabin mm) — kesişim düzlemi "Z"/0 cm'de SABİTLENMİŞ fixture ile.
-# ⚠️ YENİDEN TEMELLENDİ 2026-09-09 (sahip ölçüsü): kabin işareti 10 -> 15 cm büyüdü ve köşe
-# yerleşimi 8/8 -> 11/11 cm taşındı (15 cm'lik işaretin sessiz bölgesi 8 cm'lik merkezde duvardan
-# taşıyordu). Marker konumu (-21,5 / +14 / +25 cm) değiştiği için TÜM golden değerleri kaydı —
-# dönüşüm mantığı DEĞİŞMEDİ. Önceki temel: marker (-24,5 / +17 / +25) cm.
-# ⚠️ Sahip notu (2026-09-09): kamera ile fantom/petri konumları SAHADA tekrar düzeltilecek →
-# bu tablo o ölçümden sonra bir kez daha yeniden temellenecektir.
-_GOLDEN = [
-    ((640.0, 360.0), (-215.000000, 140.000000, 0.0)),  # görüntü merkezi = marker merkezi hizası
-    ((740.0, 360.0), (-187.222222, 140.000000, 0.0)),  # +100 px sağ
-    ((640.0, 460.0), (-215.000000, 112.222222, 0.0)),  # +100 px aşağı
-    ((300.0, 200.0), (-309.444444, 184.444444, 0.0)),  # sol üst
-]
+def test_KRITIK_marker_KABIN_rotasyonu_UYGULANIR(donusum, monkeypatch):
+    """Karar #6: marker çerçevesinden kabin çerçevesine İŞARET/PERMUTASYON dönüşümü uygulanır. Marker arka duvarda
+    (normal −Z) ve "üst" oku tavana baktığında beklenen matris diag(−1, +1, −1).
 
-
-@pytest.mark.parametrize("px,beklenen", _GOLDEN)
-def test_KARAKTERIZASYON_pixel_to_cabin_mm_bugunku_davranis(donusum, px, beklenen):
-    """Golden değişirse KIRMIZI. Değişim bilinçliyse: bu tabloyu güncelleyin, iki kopyayı
-    (phantom_cv + petri_cv) birlikte yamalayın ve CHANGELOG'a analiz etkisini yazın."""
-    ct, cfg, intr, pose = donusum
-    p = ct.pixel_to_cabin_mm(px, pose, intr, cfg)
-    assert np.allclose(p, np.array(beklenen), atol=_TOL_MM), (
-        f"koordinat dönüşümü değişti: {px} -> {p.tolist()} (golden {list(beklenen)}). "
-        "Bu fonksiyon AI Hub fantom/petri FOTOĞRAF analizinde de kullanılıyor — mevcut sonuçlar "
-        "kayar. Bilinçliyse golden'ı güncelleyin ve CHANGELOG'a yazın."
-    )
-
-
-def test_KRITIK_marker_KABIN_rotasyonu_UYGULANIR(donusum):
-    """Karar #6 sonrası: marker çerçevesinden kabin çerçevesine İŞARET/PERMUTASYON dönüşümü
-    uygulanır. Marker arka duvarda (normal −Z) ve "üst" oku tavana baktığında beklenen matris
-    diag(−1, +1, −1)'dir: eksenler hizalı, X ve Z İŞARETLERİ ters.
-
-    Eskiden `ray_cabin = ray_marker` (birim matris) yazılıydı → ışın ters yöne gidiyor ve kesişim
-    yanlış noktada bulunuyordu. MUTASYON: `R_axis`i birim matrise döndürün → KIRMIZI."""
-    ct, cfg, intr, pose = donusum
-    merkez = ct.pixel_to_cabin_mm((640.0, 360.0), pose, intr, cfg)
-
-    # Marker'ı kendi normali etrafında 90 derece çevir: kabin çerçevesinde ışın DÖNMELİYDİ.
-    aci = np.pi / 2
-    R90 = np.array([[np.cos(aci), -np.sin(aci), 0.0], [np.sin(aci), np.cos(aci), 0.0], [0.0, 0.0, 1.0]])
-    pose_dondurulmus = ct.CabinPose(
-        marker_id=pose.marker_id,
-        rvec=pose.rvec,
-        tvec=pose.tvec,
-        R=R90,
-        reproj_error_px=0.0,
-        marker_pos_cabin_mm=pose.marker_pos_cabin_mm,
-    )
-    dondurulmus = ct.pixel_to_cabin_mm((740.0, 360.0), pose_dondurulmus, intr, cfg)
-    duz = ct.pixel_to_cabin_mm((740.0, 360.0), pose, intr, cfg)
-
-    assert not np.allclose(dondurulmus, duz, atol=1e-3), (
-        "marker yönelimi sonucu hiç etkilemiyor — beklenmedik; kapıyı gözden geçirin"
-    )
-    # ⚠️ KULLANIMI ölç, varlığı değil: matrisi doğrulamak yetmiyordu — `pixel_to_cabin_mm` içindeki
-    # çağrıyı birim matrise çeviren mutasyon bu kapıdan GEÇİYORDU (ölçüldü). Marker normalini
-    # değiştirmek sonucu DEĞİŞTİRMELİ; değişmiyorsa dönüşüm ışına uygulanmıyor demektir.
-    eski_normal = cfg.aruco.normal_axis_in_cabin
-    try:
-        cfg.aruco.normal_axis_in_cabin = "+X"
-        farkli_normal = ct.pixel_to_cabin_mm((740.0, 360.0), pose, intr, cfg)
-    finally:
-        cfg.aruco.normal_axis_in_cabin = eski_normal
-    assert not np.allclose(farkli_normal, duz, atol=1e-3), (
-        "marker normali değiştiği hâlde sonuç aynı — marker→kabin dönüşümü ışına UYGULANMIYOR "
-        "(eski `ray_cabin = ray_marker` davranışı geri gelmiş olabilir)"
-    )
-
-    # ⚠️ ÖZEL AD, ORTAK MODÜLDEN (A2, 2026-09-19): `from ... import *` alt çizgiyle
-    # başlayan adları TAŞIMAZ, bu yüzden profil kabuğunda `_marker_to_cabin_R` yoktur.
-    # Özel bir ada erişen test, yeniden-dışa-aktarıma değil UYGULAMAYA bakmalıdır.
+    ⚠️ KULLANIMI ölç, varlığı değil: matris doğruysa yetmez — dönüşüm ışına VE kamera orijinine (D1.100) uygulanmalı.
+    Birim matrise çevrilince fiziksel pozdaki bilinen nokta artık doğru geri dönmemeli."""
+    ct, cfg, intr, poz, R_kk, C = donusum
+    from ai_hub.cv_ortak import coord_transform as ortak
     from ai_hub.cv_ortak.coord_transform import _marker_to_cabin_R
 
     beklenen_R = np.diag([-1.0, 1.0, -1.0])
@@ -139,9 +50,24 @@ def test_KRITIK_marker_KABIN_rotasyonu_UYGULANIR(donusum):
         "— marker arka duvarda (normal -Z) ve üst oku tavana bakıyor varsayımı bozulduysa "
         "KABIN_KURULUM_KILAVUZU ile birlikte gözden geçirin"
     )
-    assert abs(merkez[cfg.phantom_plate.hedef_duzlem_indeksi] - cfg.phantom_plate.hedef_duzlem_mm) < _TOL_MM, (
-        "kesişim yapılandırılan hedef düzleminde değil — yaml `hedef_duzlem_eksen`/`hedef_duzlem_cm` "
-        "ile kod ayrışmış olabilir"
+    eksen = cfg.phantom_plate.hedef_duzlem_indeksi
+    P = np.zeros(3)
+    P[eksen] = cfg.phantom_plate.hedef_duzlem_mm
+    px = izdusur(intr.K, R_kk, C, P)
+    assert px is not None
+    p = ct.pixel_to_cabin_mm(px, poz, intr, cfg)
+    assert abs(p[eksen] - cfg.phantom_plate.hedef_duzlem_mm) < _TOL_MM, (
+        "kesişim yapılandırılan hedef düzleminde değil — yaml `hedef_duzlem_eksen`/`hedef_duzlem_cm` ile kod ayrışmış olabilir"
+    )
+    assert np.linalg.norm(p - P) < 5.0
+
+    monkeypatch.setattr(ortak, "_marker_to_cabin_R", lambda c: np.eye(3))
+    try:
+        bozuk = ct.pixel_to_cabin_mm(px, poz, intr, cfg)
+    except ValueError:
+        return  # birim matrisle kesişim geçersiz → dönüşüm KULLANILIYOR
+    assert np.linalg.norm(bozuk - P) > 50.0, (
+        "marker→kabin dönüşümü birim matrise çevrildiği hâlde sonuç aynı — dönüşüm UYGULANMIYOR"
     )
 
 
@@ -172,26 +98,27 @@ def test_KRITIK_iki_profil_AYNI_uygulamayi_kullanir(donusum):
 
 
 def test_KRITIK_hedef_duzlemi_YAPILANDIRILABILIR(donusum):
-    """Karar #6: fantom/petri kabinde YATAY duruyorsa doğru kesişim düzlemi "Y = taban + kalınlık"
-    olmalı; eski kod her zaman kabin Z=0 (DİKEY orta düzlem) ile kesişiyordu.
-
-    Bu kapı yaml'ın DEĞERİNİ değil, kodun o değeri GERÇEKTEN kullandığını ölçer (yaml şu an eski
-    davranışta bırakıldı: yatay düzlem mevcut kamera konumuyla sayısal olarak dayanıksız).
-    MUTASYON: kesişimi sabit `plate_z`/eksen 2'ye döndürün → KIRMIZI."""
-    ct, cfg, intr, pose = donusum
+    """Karar #6: fantom/petri kabinde YATAY duruyorsa doğru kesişim düzlemi "Y = taban + kalınlık" olmalı; eski kod
+    her zaman kabin Z=0 (DİKEY orta düzlem) ile kesişiyordu. Kodun yapılandırılan değeri GERÇEKTEN kullandığı ölçülür
+    (fiziksel pozda, o düzlemdeki bilinen nokta). MUTASYON: kesişimi sabit `plate_z`/eksen 2'ye döndürün → KIRMIZI."""
+    ct, cfg, intr, poz, R_kk, C = donusum
 
     cfg.phantom_plate.hedef_duzlem_eksen = "Y"
     cfg.phantom_plate.hedef_duzlem_cm = -24.0
-    yatay = ct.pixel_to_cabin_mm((640.0, 460.0), pose, intr, cfg)
-    assert abs(yatay[1] - (-240.0)) < 1e-6, (
-        f"yatay düzlem yapılandırması uygulanmadı: Y={yatay[1]} (beklenen -240 mm) — yatay yerleşimde "
-        "hedef kabin ortasındaki dikey perdeye yansıtılır ve konum yanlış çıkar"
+    Py = np.array([0.0, -240.0, 0.0])
+    yatay = ct.pixel_to_cabin_mm(izdusur(intr.K, R_kk, C, Py), poz, intr, cfg)
+    assert abs(yatay[1] - (-240.0)) < 1e-6 and np.linalg.norm(yatay - Py) < 5.0, (
+        f"yatay düzlem yapılandırması uygulanmadı: {np.round(yatay, 1).tolist()} (beklenen {Py.tolist()}) — "
+        "yatay yerleşimde hedef kabin ortasındaki dikey perdeye yansıtılır ve konum yanlış çıkar"
     )
 
     cfg.phantom_plate.hedef_duzlem_eksen = "Z"
     cfg.phantom_plate.hedef_duzlem_cm = 0.0
-    dikey = ct.pixel_to_cabin_mm((640.0, 460.0), pose, intr, cfg)
-    assert abs(dikey[2] - 0.0) < 1e-6, "eksen 'Z' seçilince eski davranış (dikey orta düzlem) dönmüyor"
+    Pz = np.array([0.0, 0.0, 0.0])
+    dikey = ct.pixel_to_cabin_mm(izdusur(intr.K, R_kk, C, Pz), poz, intr, cfg)
+    assert abs(dikey[2] - 0.0) < 1e-6 and np.linalg.norm(dikey - Pz) < 5.0, (
+        "eksen 'Z' seçilince dikey orta düzlem kullanılmıyor"
+    )
     assert not np.allclose(yatay, dikey), "iki düzlem aynı sonucu veriyor — yapılandırma etkisiz"
 
 
@@ -222,31 +149,3 @@ def test_KRITIK_yaml_ve_parser_hedef_duzlemini_TASIYOR():
         # ⚠️ Kabuk gerçekten ORTAK ayrıştırıcıya bağlı mı — yoksa yukarıdaki iddia boşa düşer.
         kabuk = (kok / "ai_hub" / kok_dizin / "cabin_config.py").read_text(encoding="utf-8")
         assert "cv_ortak" in kabuk, f"{kok_dizin}: kabuk ortak ayrıştırıcıya bağlı değil"
-
-
-def test_KARAKTERIZASYON_SAHADAKI_yatay_duzlem_KOTU_KOSULLANMIS(donusum):
-    """ÖLÇÜM KAYDI (2026-09-09): sahaya yazılan hedef düzlemi (tabandan 5 cm = kabin `Y = -20` cm)
-    mevcut kamera konumuyla SAYISAL OLARAK DAYANIKSIZ.
-
-    Kamera lensi taban hizasında (Y = -25 cm); hedef düzlemi onun yalnız 5 cm üstünde. Işın düzlemi
-    çok sığ bir açıyla keser → küçük piksel hatası metrelere döner. Sentetik ışınlarda kesişim
-    10^6 mm'ye fırlıyor, gerçek ArUco'lu fotoğrafta kuyu (-48,3 · -20,0 · +445,4) cm = KABİN DIŞI.
-
-    ⚠️ BU KAPI BİLİNÇLİDİR ve bir HEDEFİ değil bir DURUMU sabitler: `PEMF_ARASTIRMA_AIPRO`ın neden
-    0 kaldığının ölçülmüş gerekçesidir. Sahada kamera/hedef konumu düzeltilince (sahip notu) bu
-    test KIRMIZI olacak — o zaman düzeltmenin İŞE YARADIĞI anlaşılır ve kapı yenilenir.
-    Ayrıntı: ai_hub/KABIN_KURULUM_KILAVUZU.md §0.5 · docs/VERIFICATION.md §15.
-    """
-    ct, cfg, intr, pose = donusum
-    cfg.phantom_plate.hedef_duzlem_eksen = "Y"
-    cfg.phantom_plate.hedef_duzlem_cm = -20.0
-
-    p = ct.pixel_to_cabin_mm((740.0, 360.0), pose, intr, cfg)
-
-    kabin_yarim = [float(v) * 10.0 / 2 for v in cfg.geometry.cabin_extent_cm]
-    disarida = any(abs(float(p[i])) > kabin_yarim[i] for i in range(3))
-    assert disarida, (
-        f"yatay düzlem artık kabin İÇİNDE sonuç veriyor: {p.tolist()} — kamera/hedef konumu "
-        "düzeltilmiş olabilir. Ölçümü tekrarlayıp bu kapıyı ve KABIN_KURULUM_KILAVUZU §0.5'i "
-        "güncelleyin; bayrak açılabilir hâle gelmiş olabilir."
-    )

@@ -231,9 +231,6 @@ def estimate_organs_pnp(kp_dict: dict, kp_conf: np.ndarray,
 
     # Kabin koord donusumu (QR varken)
     cabin_active = False
-    cm_per_px = None
-    qr_center_px = None
-    qr_origin_offset = [0.0, 0.0, 0.0]
     # D1.E08 (İG-5.27): kabin yapılandırması YÜKLENMEDİYSE (DEFAULT geometri) ArUco bulunsa da kabin KALİBRE SAYILMAZ:
     # `calibrated` False, kalibrasyonsuz güven tavanı (`guven_dokumu_hesapla`), DEFAULT ofsetten kabin koordinatı YOK.
     # Anahtar yoksa (eski çağıranlar, CLI) davranış aynı.
@@ -241,14 +238,17 @@ def estimate_organs_pnp(kp_dict: dict, kp_conf: np.ndarray,
         try:
             qr_inf = detect_aruco_marker(image_path)
             if not qr_inf.get("error"):
-                cm_per_px = qr_inf["cm_per_px"]
-                qr_center_px = qr_inf["center_px"]
-                qr_origin_offset = cabin_params.get("qr_to_origin_cm",
-                                                                [0.0, 0.0, 0.0])
                 cabin_active = True
         except Exception:
             pass
 
+    # ⚠️ 1-C §9 #10 O-1 (D1.100): kabin KOORDİNATI yalnız PERSPEKTİF çözümünden (marker pozu + kedi PnP) gelir. Eski
+    # "zayıf-perspektif yedek yolu" (perspektif yokken pixel → cm → QR ofseti) görüntü eksenlerini kabin eksenleri
+    # sayıyordu (görüntüde y AŞAĞI), marker→orijin ofsetini ÇIKARMAK yerine EKLİYORDU ve derinliği gövde modelinin
+    # göreli z'sinden alıyordu → çerçeve doğrulanamazdı (organların ~yarısı kabin denetiminde kalıcı red, diğer yarısı
+    # doğrulanmamış çerçeveyle kabul). Perspektif kabin çözümü yoksa organ KALİBRASYONSUZ: `calibrated=False`, mevcut tek
+    # formülün tavanı (0,25 < güven eşiği → sürülmez), kabin koordinatı ÜRETİLMEZ. Gerçek kabinde doğrulama: Oturum 13.
+    kabin_kalibre = bool(cabin_active and perspective is not None and "organs_cabin_cm" in perspective)
     z_mid = float(np.mean(org_z))
     for i, (oid, (name, x3, y3, z3)) in enumerate(org_items):
         rel_z = float(org_z[i] - z_mid)
@@ -265,7 +265,7 @@ def estimate_organs_pnp(kp_dict: dict, kp_conf: np.ndarray,
         # Formul TEK kaynakta (guven_dokumu_hesapla) — bilesenler entry'ye de yazilir ki
         # operator dusuk guvenin NEDENINI gorebilsin (sunum-katmani XAI, 2026-08-26).
         rel_unc, guven_dokumu = guven_dokumu_hesapla(
-            pose_info["confidence"], depth_factor, in_mask, cm_sd, cabin_active
+            pose_info["confidence"], depth_factor, in_mask, cm_sd, kabin_kalibre
         )
         entry = {
             "name": name,
@@ -284,7 +284,7 @@ def estimate_organs_pnp(kp_dict: dict, kp_conf: np.ndarray,
             "in_body_mask": in_mask,
             "reliability": round(rel_unc, 3),
             "reliability_components": guven_dokumu,  # sunum-katmani XAI: guvenin NEDENI (2026-08-26)
-            "calibrated": bool(cabin_active),  # Audit P2: ArUco/kabin kalibrasyonu var mi (coord olculmus mu)
+            "calibrated": kabin_kalibre,  # Audit P2 + O-1: kabin koordinatı PERSPEKTİF çözümüyle ölçüldü mü
         }
         # Level 3: perspektif sonuc varsa cabin mutlak 3D koord ekle
         if perspective is not None and "organs_cabin_cm" in perspective:
@@ -296,18 +296,7 @@ def estimate_organs_pnp(kp_dict: dict, kp_conf: np.ndarray,
                 round(float(perspective["organs_pixel"][i, 0]), 1),
                 round(float(perspective["organs_pixel"][i, 1]), 1)]
             entry["cabin_origin"] = "perspective_solvePnP"
-        # Cabin koord (QR varken, weak-perspective fallback):
-        # Perspektif yoksa veya basarisizsa pixel -> cm -> cabin offset
-        if cabin_active and "coord_cabin_cm" not in entry:
-            dx_cm = (float(org_xy[i, 0]) - qr_center_px[0]) * cm_per_px
-            dy_cm = (float(org_xy[i, 1]) - qr_center_px[1]) * cm_per_px
-            cabin_x = dx_cm + qr_origin_offset[0]
-            cabin_y = dy_cm + qr_origin_offset[1]
-            cabin_z = rel_z + qr_origin_offset[2]                 # depth proxy
-            entry["coord_cabin_cm"] = [round(cabin_x, 2),
-                                                round(cabin_y, 2),
-                                                round(cabin_z, 2)]
-            entry["cabin_origin"] = "QR_marker_center + qr_to_origin_cm"
+        # O-1: zayıf-perspektif yedek yolu KALDIRILDI (yukarıdaki not) — perspektif yoksa kabin koordinatı yok.
         organs_out[oid] = entry
 
     # Head/tail axis (canonical -> projected)

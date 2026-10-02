@@ -263,8 +263,11 @@ def panel_05_coords(img, wells, lang="tr", method=""):
         col = _well_color(well.organ_id)
         px = (int(well.centroid_px[0]), int(well.centroid_px[1]))
         cv2.circle(out, px, style.dot_med, col, -1)
-        x, y, _z = well.centroid_cabin_mm
-        txt = f"{well.well_id} ({x:+.1f},{y:+.1f}){_birim(method)}"
+        if well.centroid_cabin_mm is None:  # D1.100: konum çözülemedi
+            txt = f"{well.well_id} " + ("konum yok" if lang == "tr" else "no position")
+        else:
+            x, y, _z = well.centroid_cabin_mm
+            txt = f"{well.well_id} ({x:+.1f},{y:+.1f}){_birim(method)}"
         _put_text(out, txt, (px[0] + style.dot_med + 3, px[1]), style,
                   color=col, scale=style.font_small)
     return _header(out, f"05 - {L['coords']}", style)
@@ -291,9 +294,13 @@ def panel_06_predictions(img, wells, lang="tr", method=""):
     for i, well in enumerate(wells[:n_show]):
         y0 = 10 + i * row_h
         col = _well_color(well.organ_id)
-        x, y, _z = well.centroid_cabin_mm
+        if well.centroid_cabin_mm is None:  # D1.100: konum çözülemedi
+            konum = "(konum yok)" if lang == "tr" else "(no position)"
+        else:
+            x, y, _z = well.centroid_cabin_mm
+            konum = f"({x:+.1f},{y:+.1f}){_birim(method)}"
         head = (f"{well.well_id} {well.label[:1].upper()} "
-                f"({x:+.1f},{y:+.1f}){_birim(method)} E={_sayi_metni(well.E_cancer, 3)}")
+                f"{konum} E={_sayi_metni(well.E_cancer, 3)}")
         _put_text(out, head, (style.text_pad, y0 + int(row_h * 0.30)),
                   style, color=col,
                   scale=style.font_small, thickness=style.thick_thin)

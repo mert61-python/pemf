@@ -30,6 +30,14 @@ export function alanMetni(r: EmBolge): string {
   return "—";
 }
 
+/** D1.100 (B-5.16): konum çözülemediyse (ışın hedef düzlemini geçerli noktada kesmiyor) "(0, 0, 0)" değil açıkça söylenir. */
+export function konumMetni(c: number[] | null | undefined, birim: string): string {
+  if (!Array.isArray(c) || c.length < 3 || !c.every((v) => typeof v === "number" && Number.isFinite(v))) {
+    return "konum çözülemedi (kabin dışı / geçersiz kesişim)";
+  }
+  return `(${c[0].toFixed(1)}, ${c[1].toFixed(1)}, ${c[2].toFixed(1)}) ${birim}`;
+}
+
 /** Piksel kipinde sonuç kartının açıklaması; `olcekGirdisi` ölçeği hangi alanın verdiğini söyler. */
 export function pikselKipiNotu(olcekGirdisi: string): string {
   return (

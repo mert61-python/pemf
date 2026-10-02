@@ -241,8 +241,11 @@ def panel_05_coords(img, phantoms, regions_pred, lang="tr", method=""):
         col = COLOR_TUMOR
         px = (int(rp.centroid_px[0]), int(rp.centroid_px[1]))
         cv2.circle(out, px, style.dot_med, col, -1)
-        x, y, _ = rp.centroid_cabin_mm
-        txt = f"({x:+.1f}, {y:+.1f}) {_birim(method)}"
+        if rp.centroid_cabin_mm is None:  # D1.100: konum çözülemedi
+            txt = "konum yok" if lang == "tr" else "no position"
+        else:
+            x, y, _ = rp.centroid_cabin_mm
+            txt = f"({x:+.1f}, {y:+.1f}) {_birim(method)}"
         _put_text(out, txt, (px[0] + style.dot_med + 3, px[1]), style,
                   color=col, scale=style.font_small)
     return _header(out, f"05 - {L['coords']}", style)
@@ -268,8 +271,12 @@ def panel_06_predictions(img, regions_pred, lang="tr", method=""):
     box_h = max(80, (h - 20) // max(len(tumors), 1))
     for i, r in enumerate(tumors[:5]):
         y0 = 10 + i * box_h
-        x, y, z = r.centroid_cabin_mm
-        head = f"T{i+1} ({x:+.1f},{y:+.1f}){_birim(method)}  {L['E_cancer']}={_sayi_metni(r.E_cancer, 4)}"
+        if r.centroid_cabin_mm is None:  # D1.100: konum çözülemedi
+            konum = "(konum yok)" if lang == "tr" else "(no position)"
+        else:
+            x, y, z = r.centroid_cabin_mm
+            konum = f"({x:+.1f},{y:+.1f}){_birim(method)}"
+        head = f"T{i+1} {konum}  {L['E_cancer']}={_sayi_metni(r.E_cancer, 4)}"
         _put_text(out, head,
                   (style.text_pad, y0 + int(box_h * 0.25)), style,
                   color=COLOR_TUMOR, scale=style.font_normal,
