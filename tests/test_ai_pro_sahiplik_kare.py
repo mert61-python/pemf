@@ -215,7 +215,7 @@ def test_B1_start_yaniti_ownerClientId_tasir(monkeypatch):
     import servers.ai_router as air
     from servers import ai_approval
 
-    monkeypatch.setattr(air, "_ai_pro_loop", lambda: None)
+    monkeypatch.setattr(air, "_ai_pro_loop", lambda *a, **k: None)
     client = TestClient(__import__("servers.api_server", fromlist=["app"]).app)
     try:
         rec = ai_approval.create("ai_pro", {"organ_id": 0, "duration_minutes": 20})

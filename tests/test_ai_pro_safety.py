@@ -33,7 +33,7 @@ def _onayli(specs: dict) -> str:
 def test_ai_pro_duration_capped_to_clinical_max(client, monkeypatch):
     import servers.ai_router as air
 
-    monkeypatch.setattr(air, "_ai_pro_loop", lambda: None)  # loop no-op → kamera/donanım yok
+    monkeypatch.setattr(air, "_ai_pro_loop", lambda *a, **k: None)  # loop no-op → kamera/donanım yok
     try:
         pid = _onayli({"organ_id": 0, "duration_minutes": 999999})
         r = client.post("/api/ai/pro/start", json={"proposal_id": pid})
@@ -59,7 +59,7 @@ def test_ai_pro_double_start_is_idempotent(client, monkeypatch):
     bir onayla yapılır — aksi halde kapı zaten 428 verir, loop guard'ı sınanmamış olurdu.)"""
     import servers.ai_router as air
 
-    monkeypatch.setattr(air, "_ai_pro_loop", lambda: None)
+    monkeypatch.setattr(air, "_ai_pro_loop", lambda *a, **k: None)
     try:
         r1 = client.post("/api/ai/pro/start", json={"proposal_id": _onayli({"organ_id": 0, "duration_minutes": 20})})
         assert r1.status_code == 200

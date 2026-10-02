@@ -31,7 +31,7 @@ def _kamerasiz(monkeypatch):
     Loop'un kendisi `test_kalan_regression_gaps.py`de sahte kamerayla davranışsal olarak sürülüyor."""
     from servers import ai_router
 
-    monkeypatch.setattr(ai_router, "_ai_pro_loop", lambda: None)
+    monkeypatch.setattr(ai_router, "_ai_pro_loop", lambda *a, **k: None)
 
 
 @pytest.fixture(autouse=True)

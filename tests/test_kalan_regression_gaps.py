@@ -626,7 +626,7 @@ def test_ai_pro_sure_olcumu_MONOTONIC(monkeypatch):
     saat = _KayanSaat()
     monkeypatch.setattr(ai_router, "time", saat)
     # Kamera/model açılmasın: süre ölçümünü sınıyoruz, kapalı-döngüyü değil.
-    monkeypatch.setattr(ai_router, "_ai_pro_loop", lambda: None)
+    monkeypatch.setattr(ai_router, "_ai_pro_loop", lambda *a, **k: None)
     monkeypatch.setattr(api_server, "start_ai_session", lambda *a, **k: None)
 
     client = TestClient(api_server.app)
