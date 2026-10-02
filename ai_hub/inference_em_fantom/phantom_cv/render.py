@@ -110,6 +110,26 @@ def _put_text(img, text, org, style: Style, *,
                 scale, color, thickness, cv2.LINE_AA)
 
 
+def _sayi_metni(v, basamak: int) -> str:
+    """D1.E07 (İG-5.76): hesaplanmamış değer (None/NaN) "--" yazılır; 0.0 "hesaplandı, sıfır" diye okunurdu.
+    (Hershey yazı tipi yalnız ASCII basar.)"""
+    import math
+
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return "--"
+    return f"{f:.{basamak}f}" if math.isfinite(f) else "--"
+
+
+def _birim(method: str) -> str:
+    return "px" if method == "pixel" else "mm"
+
+
+def _doz_yok_metni(lang: str) -> str:
+    return "olcek yok: doz hesaplanmadi" if lang == "tr" else "no scale: dose not computed"
+
+
 def _header(img, title, style: Style):
     h, w = img.shape[:2]
     band = np.full((style.header_h, w, 3), COLOR_BG, dtype=np.uint8)
@@ -197,7 +217,7 @@ def panel_04_tumors(img, regions, lang="tr"):
     return _header(out, f"04 - {L['tumor']}", style)
 
 
-def panel_05_coords(img, phantoms, regions_pred, lang="tr"):
+def panel_05_coords(img, phantoms, regions_pred, lang="tr", method=""):
     L = LANG[lang]
     style = Style(img.shape)
     out = img.copy()
@@ -222,13 +242,13 @@ def panel_05_coords(img, phantoms, regions_pred, lang="tr"):
         px = (int(rp.centroid_px[0]), int(rp.centroid_px[1]))
         cv2.circle(out, px, style.dot_med, col, -1)
         x, y, _ = rp.centroid_cabin_mm
-        txt = f"({x:+.1f}, {y:+.1f}) mm"
+        txt = f"({x:+.1f}, {y:+.1f}) {_birim(method)}"
         _put_text(out, txt, (px[0] + style.dot_med + 3, px[1]), style,
                   color=col, scale=style.font_small)
     return _header(out, f"05 - {L['coords']}", style)
 
 
-def panel_06_predictions(img, regions_pred, lang="tr"):
+def panel_06_predictions(img, regions_pred, lang="tr", method=""):
     L = LANG[lang]
     style = Style(img.shape)
     h, w = img.shape[:2]
@@ -249,7 +269,7 @@ def panel_06_predictions(img, regions_pred, lang="tr"):
     for i, r in enumerate(tumors[:5]):
         y0 = 10 + i * box_h
         x, y, z = r.centroid_cabin_mm
-        head = f"T{i+1} ({x:+.1f},{y:+.1f})mm  {L['E_cancer']}={r.E_cancer:.4f}"
+        head = f"T{i+1} ({x:+.1f},{y:+.1f}){_birim(method)}  {L['E_cancer']}={_sayi_metni(r.E_cancer, 4)}"
         _put_text(out, head,
                   (style.text_pad, y0 + int(box_h * 0.25)), style,
                   color=COLOR_TUMOR, scale=style.font_normal,
@@ -258,6 +278,9 @@ def panel_06_predictions(img, regions_pred, lang="tr"):
         bar_y = y0 + int(box_h * 0.50)
         bar_w = (w - 2 * style.text_pad) // 7
         bar_h_max = int(box_h * 0.35)
+        if not r.D:
+            _put_text(out, _doz_yok_metni(lang), (style.text_pad, bar_y + bar_h_max // 2), style,
+                      color=(180, 180, 180), scale=style.font_small)
         for k, dv in enumerate(r.D):
             bh = max(2, int(bar_h_max * dv))
             bx = style.text_pad + k * bar_w
@@ -312,8 +335,8 @@ def render_all_panels(image_bgr, *, phantoms=None, phantom=None,
     p02 = panel_02_phantom(image_bgr, phantoms, method, mm_per_px, lang)
     p03 = panel_03_mask(image_bgr, phantoms, lang)
     p04 = panel_04_tumors(image_bgr, regions, lang)
-    p05 = panel_05_coords(image_bgr, phantoms, regions_pred, lang)
-    p06 = panel_06_predictions(image_bgr, regions_pred, lang)
+    p05 = panel_05_coords(image_bgr, phantoms, regions_pred, lang, method=method)
+    p06 = panel_06_predictions(image_bgr, regions_pred, lang, method=method)
     p07 = panel_07_combined([p01, p02, p03, p04, p05, p06], lang)
     return {
         "01_input":           p01,

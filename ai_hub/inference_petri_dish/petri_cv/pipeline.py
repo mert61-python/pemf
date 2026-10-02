@@ -67,15 +67,17 @@ class WellPrediction:
     centroid_cabin_cm: tuple[float, float, float]
     bbox_px: tuple[int, int, int, int]            # x, y, w, h
     area_px: int
-    area_mm2: float
+    # D1.E07 (İG-5.76): PİKSEL kipinde (ölçek yok) None — eskiden px² "mm²" diye yazılıyordu.
+    area_mm2: float | None
     n_cancer_pixels: int = 0                      # HSV mavi piksel sayisi
     # Kontur (simplifie, kedi `segmentation.mask_xy` gibi):
     mask_xy: list[list[float]] = field(default_factory=list)
     D: list[float] = field(default_factory=list)
     P: list[float] = field(default_factory=list)
-    E_healthy: float = 0.0
-    E_cancer: float = 0.0
-    E_avg: float = 0.0
+    # D1.E07: doz hesaplanmadıysa (piksel kipi) None — 0.0 "hesaplandı, sıfır" diye okunur (Y6).
+    E_healthy: float | None = None
+    E_cancer: float | None = None
+    E_avg: float | None = None
 
 
 @dataclass
@@ -422,6 +424,9 @@ class PetriCvPipeline:
         t1 = time.perf_counter()
         B = self.cfg.phantom.achieved_B if achieved_B is None else achieved_B
         duty = self.cfg.phantom.duty_sum if duty_sum is None else duty_sum
+        # ⚠️ D1.E07 (İG-5.76): PİKSEL kipinde (ölçek yok) koordinat piksel farkıdır — doz modeline mm diye verilmez,
+        # doz/E hesaplanmaz (None) ve alan mm² sayılmaz. ArUco ve petri çapı kipleri fiziksel ölçek taşır.
+        _fiziksel_olcek = result.method != "pixel"
 
         # YOLO sonuclari sol-ust -> sag-alt sirala (well_id atamasi icin)
         dets_sorted = sorted(dets, key=lambda d: (d.centroid_px[1] // 50,
@@ -438,12 +443,16 @@ class PetriCvPipeline:
             xyz = _to_mm(det.centroid_px)
             # Alan: ArUco modunda contour cabin-frame integration,
             #       diger modlarda area_px * mm_per_px^2
-            area_mm2 = _contour_area_mm2(det.contour)
+            area_mm2 = _contour_area_mm2(det.contour) if _fiziksel_olcek else None
 
             # PetriPredictor
-            pr = self.predictor.predict(
-                x=xyz[0], y=xyz[1], z=xyz[2],
-                organ_id=organ_id, achieved_B=B, duty_sum=duty,
+            pr = (
+                self.predictor.predict(
+                    x=xyz[0], y=xyz[1], z=xyz[2],
+                    organ_id=organ_id, achieved_B=B, duty_sum=duty,
+                )
+                if _fiziksel_olcek
+                else None
             )
 
             x1, y1, x2, y2 = det.bbox_xyxy
@@ -467,11 +476,11 @@ class PetriCvPipeline:
                 area_px=det.area_px, area_mm2=area_mm2,
                 n_cancer_pixels=n_cancer,
                 mask_xy=mask_xy,
-                D=[pr[f"D{k}"] for k in range(1, 8)],
-                P=[pr[f"P{k}"] for k in range(1, 8)],
-                E_healthy=pr["result_E_healthy"],
-                E_cancer=pr["result_E_cancer"],
-                E_avg=pr["result_E_avg"],
+                D=[pr[f"D{k}"] for k in range(1, 8)] if pr else [],
+                P=[pr[f"P{k}"] for k in range(1, 8)] if pr else [],
+                E_healthy=pr["result_E_healthy"] if pr else None,
+                E_cancer=pr["result_E_cancer"] if pr else None,
+                E_avg=pr["result_E_avg"] if pr else None,
             )
             result.wells.append(wp)
 

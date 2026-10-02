@@ -1102,6 +1102,15 @@ def _prov_dev(session):
         return "?"
 
 
+def _sonlu_degilse_422(e):
+    """D1.E07 (İG-5.80, router paritesi): sonlu olmayan girdi / bozuk ölçekleyici → 422 (500 değil)."""
+    from ai_hub.em_girdi import SonluOlmayanGirdi
+
+    if isinstance(e, SonluOlmayanGirdi):
+        return JSONResponse({"error": str(e)}, status_code=422)
+    return None
+
+
 @app.post("/infer/em_fantom")
 def infer_em_fantom(
     file: UploadFile = File(...),
@@ -1136,7 +1145,8 @@ def infer_em_fantom(
         # Aciklama IKINCIL — hatasi analizi ASLA dusurmez (zarif). Sync uc (threadpool)
         # oldugundan dogrudan cagri yeterli; 7+1 ONNX forward ~ms mertebesi.
         _xai_meta = {}
-        if result.success and payload.get("tumor_regions"):
+        # D1.E07 (İG-5.76, router paritesi): piksel kipinde XAI üretilmez.
+        if result.success and result.method != "pixel" and payload.get("tumor_regions"):
             try:
                 from ai_hub.inference_em_fantom import inference_em_fantom as _ief
 
@@ -1176,7 +1186,7 @@ def infer_em_fantom(
             **_xai_meta,
         }
     except Exception as e:
-        return _err500(e)
+        return _sonlu_degilse_422(e) or _err500(e)
 
 
 @app.post("/infer/em_petri")
@@ -1249,7 +1259,8 @@ def infer_em_petri(
         wells = [asdict(w) for w in result.wells]
         # §KALAN A5 (router paritesi): ilk kuyu icin hafif duyarlilik meta'si (zarif).
         _xai_meta = {}
-        if result.success and wells:
+        # D1.E07 (İG-5.76, router paritesi): piksel kipinde XAI üretilmez.
+        if result.success and wells and result.method != "pixel":
             try:
                 from ai_hub.inference_em_petri import inference_em_petri as _iep
 
@@ -1292,25 +1303,45 @@ def infer_em_petri(
             **_xai_meta,
         }
     except Exception as e:
-        return _err500(e)
+        return _sonlu_degilse_422(e) or _err500(e)
 
 
 @app.post("/infer/em_kedi")
 def infer_em_kedi(payload: dict = Body(...)):
     """AI Pro bobin-sürüş: em_kedi (BiLSTM_XXL_Raw ONNX, GPU) → D1-7/P1-7/result_E.
-    JSON: x,y,z (mm) + organ_id + achieved_B(ops) + duty_sum(ops). AI Pro loop/frame'in AĞIR
-    sürüş-inference'ını GPU'ya devreder (çekirdek _predict_and_drive ai_service_enabled'da çağırır)."""
+    JSON: x,y,z (mm) + organ_id + achieved_B + duty_sum — HEPSİ ZORUNLU. AI Pro loop/frame'in AĞIR
+    sürüş-inference'ını GPU'ya devreder (çekirdek _predict_and_drive ai_service_enabled'da çağırır).
+
+    ⚠️ D1.86 (B-5.9): eksik alan eskiden VARSAYILANLA dolduruluyordu (`duty_sum` 2,0 — çekirdeğin 1,5'i DEĞİL; `{}` →
+    konum (0,0,0)) ve 200 dönüyordu: doz ölçeği sessizce 2×. Artık eksik / sonlu olmayan alan → 422, model çağrılmaz."""
+    _gerekli = ("x", "y", "z", "organ_id", "achieved_B", "duty_sum")
+    _eksik = [k for k in _gerekli if k not in (payload or {})]
+    if _eksik:
+        return JSONResponse({"error": f"eksik girdi: {', '.join(_eksik)}"}, status_code=422)
     try:
+        from ai_hub.em_girdi import SonluOlmayanGirdi, sonlu_dogrula
+
+        _g = {k: payload.get(k) for k in _gerekli}
+        try:
+            _g = {k: (None if v is None else float(v)) for k, v in _g.items()}
+            sonlu_dogrula(**_g)
+        except (TypeError, ValueError) as _ge:
+            return JSONResponse(
+                {"error": str(_ge) if isinstance(_ge, SonluOlmayanGirdi) else "girdi sayı değil"}, status_code=422
+            )
         pred = predictors.get("em_kedi")
         t0 = time.time()
-        result = pred.predict(
-            x=float(payload.get("x", 0.0)),
-            y=float(payload.get("y", 0.0)),
-            z=float(payload.get("z", 0.0)),
-            organ_id=int(payload.get("organ_id", 0)),
-            achieved_B=float(payload.get("achieved_B", 0.001)),
-            duty_sum=float(payload.get("duty_sum", 2.0)),
-        )
+        try:
+            result = pred.predict(
+                x=_g["x"],
+                y=_g["y"],
+                z=_g["z"],
+                organ_id=int(_g["organ_id"]),
+                achieved_B=_g["achieved_B"],
+                duty_sum=_g["duty_sum"],
+            )
+        except SonluOlmayanGirdi as _se:  # bozuk ölçekleyici / sonlu olmayan model çıktısı (İG-5.15)
+            return JSONResponse({"error": str(_se)}, status_code=422)
         # numpy skalerlerini JSON-serileştirilebilir float'a çevir (aksi halde json.dumps patlar).
         out = {}
         for k, v in result.items():

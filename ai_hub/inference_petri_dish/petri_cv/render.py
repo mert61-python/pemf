@@ -115,6 +115,26 @@ def _put_text(img, text, org, style: Style, *,
                 scale, color, thickness, cv2.LINE_AA)
 
 
+def _sayi_metni(v, basamak: int) -> str:
+    """D1.E07 (İG-5.76): hesaplanmamış değer (None/NaN) "--" yazılır; 0.0 "hesaplandı, sıfır" diye okunurdu.
+    (Hershey yazı tipi yalnız ASCII basar.)"""
+    import math
+
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return "--"
+    return f"{f:.{basamak}f}" if math.isfinite(f) else "--"
+
+
+def _birim(method: str) -> str:
+    return "px" if method == "pixel" else "mm"
+
+
+def _doz_yok_metni(lang: str) -> str:
+    return "olcek yok: doz hesaplanmadi" if lang == "tr" else "no scale: dose not computed"
+
+
 def _header(img, title, style: Style):
     h, w = img.shape[:2]
     band = np.full((style.header_h, w, 3), COLOR_BG, dtype=np.uint8)
@@ -219,7 +239,7 @@ def panel_04_classify(img, wells, lang="tr"):
     return _header(out, f"04 - {L['classify']}", style)
 
 
-def panel_05_coords(img, wells, lang="tr"):
+def panel_05_coords(img, wells, lang="tr", method=""):
     """Her kuyucuk mm koordinat (kedi'deki organ koord gibi)."""
     L = LANG[lang]
     style = Style(img.shape)
@@ -244,13 +264,13 @@ def panel_05_coords(img, wells, lang="tr"):
         px = (int(well.centroid_px[0]), int(well.centroid_px[1]))
         cv2.circle(out, px, style.dot_med, col, -1)
         x, y, _z = well.centroid_cabin_mm
-        txt = f"{well.well_id} ({x:+.1f},{y:+.1f})mm"
+        txt = f"{well.well_id} ({x:+.1f},{y:+.1f}){_birim(method)}"
         _put_text(out, txt, (px[0] + style.dot_med + 3, px[1]), style,
                   color=col, scale=style.font_small)
     return _header(out, f"05 - {L['coords']}", style)
 
 
-def panel_06_predictions(img, wells, lang="tr"):
+def panel_06_predictions(img, wells, lang="tr", method=""):
     """Her kuyucuk icin D[7] bar + E_kanser ozeti."""
     L = LANG[lang]
     style = Style(img.shape)
@@ -273,7 +293,7 @@ def panel_06_predictions(img, wells, lang="tr"):
         col = _well_color(well.organ_id)
         x, y, _z = well.centroid_cabin_mm
         head = (f"{well.well_id} {well.label[:1].upper()} "
-                f"({x:+.1f},{y:+.1f})mm E={well.E_cancer:.3f}")
+                f"({x:+.1f},{y:+.1f}){_birim(method)} E={_sayi_metni(well.E_cancer, 3)}")
         _put_text(out, head, (style.text_pad, y0 + int(row_h * 0.30)),
                   style, color=col,
                   scale=style.font_small, thickness=style.thick_thin)
@@ -281,6 +301,9 @@ def panel_06_predictions(img, wells, lang="tr"):
         bar_y = y0 + int(row_h * 0.55)
         bar_w = max(3, (w - 2 * style.text_pad) // 7)
         bar_h_max = max(8, int(row_h * 0.30))
+        if not well.D:
+            _put_text(out, _doz_yok_metni(lang), (style.text_pad, bar_y + bar_h_max // 2), style,
+                      color=(180, 180, 180), scale=style.font_small, bg=False)
         for k, dv in enumerate(well.D):
             bh = max(2, int(bar_h_max * dv))
             bx = style.text_pad + k * bar_w
@@ -337,8 +360,8 @@ def render_all_panels(image_bgr, *, detections=None, marker=None,
     p02 = panel_02_yolo(image_bgr, detections, wells, method, mm_per_px, lang)
     p03 = panel_03_masks(image_bgr, detections, wells, lang)
     p04 = panel_04_classify(image_bgr, wells, lang)
-    p05 = panel_05_coords(image_bgr, wells, lang)
-    p06 = panel_06_predictions(image_bgr, wells, lang)
+    p05 = panel_05_coords(image_bgr, wells, lang, method=method)
+    p06 = panel_06_predictions(image_bgr, wells, lang, method=method)
     p07 = panel_07_combined([p01, p02, p03, p04, p05, p06], lang)
     return {
         "01_input":         p01,

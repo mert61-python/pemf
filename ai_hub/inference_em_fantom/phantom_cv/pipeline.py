@@ -59,13 +59,16 @@ class RegionPrediction:
     centroid_cabin_mm: tuple[float, float, float]
     centroid_cabin_cm: tuple[float, float, float]
     area_px: int
-    area_mm2: float
+    # D1.E07 (İG-5.76): fiziksel alan BİLİNMİYORSA (piksel kipi: ölçek yok; ArUco kipi: perspektif alanı
+    # hesaplanmıyor) None — eskiden piksel kipinde px² "mm²" diye, ArUco kipinde 0.0 ("ölçüldü, sıfır") yazılıyordu.
+    area_mm2: float | None
     bbox_px: tuple[int, int, int, int]
     D: list[float] = field(default_factory=list)
     P: list[float] = field(default_factory=list)
-    E_healthy: float = 0.0
-    E_cancer: float = 0.0
-    E_avg: float = 0.0
+    # D1.E07: doz hesaplanmadıysa (piksel kipi) None — 0.0 "hesaplandı, sıfır" diye okunur (Y6).
+    E_healthy: float | None = None
+    E_cancer: float | None = None
+    E_avg: float | None = None
 
 
 @dataclass
@@ -291,9 +294,14 @@ class PhantomCvPipeline:
             dy_mm = (ph_cy - px[1]) * result.mm_per_px
             return float(dx_mm), float(dy_mm), 0.0
 
+        # ⚠️ D1.E07 (İG-5.76): PİKSEL kipinde (ölçek yok) koordinat piksel farkıdır — doz modeline mm diye verilmez
+        # (ölçüldü: x=9,32 "mm" → eğitim dağılımının +6,8σ dışı) ve alan mm² sayılmaz. Doz/E hesaplanmaz (None).
+        _fiziksel_olcek = result.method == "phantom_length" and bool(result.mm_per_px)
+        _doz_hesaplanir = result.method != "pixel"
+
         def _make(r: Region, predict: bool) -> RegionPrediction:
             xyz_mm = _to_mm(r.centroid_px)
-            area_mm2 = r.area_px * (result.mm_per_px ** 2) if result.mm_per_px else 0.0
+            area_mm2 = r.area_px * (result.mm_per_px ** 2) if _fiziksel_olcek else None
             rp = RegionPrediction(
                 organ_id=r.organ_id, label=r.label,
                 centroid_px=r.centroid_px,
@@ -301,7 +309,7 @@ class PhantomCvPipeline:
                 centroid_cabin_cm=(xyz_mm[0]/10, xyz_mm[1]/10, xyz_mm[2]/10),
                 area_px=r.area_px, area_mm2=area_mm2, bbox_px=r.bbox_px,
             )
-            if predict and r.organ_id in (0, 1):
+            if predict and _doz_hesaplanir and r.organ_id in (0, 1):
                 pr = self.predictor.predict(
                     x=xyz_mm[0], y=xyz_mm[1], z=xyz_mm[2],
                     organ_id=r.organ_id, achieved_B=B, duty_sum=duty,

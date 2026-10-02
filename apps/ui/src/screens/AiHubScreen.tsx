@@ -16,6 +16,7 @@ import { GorselSahne } from "@/components/ui/GorselSahne";
 import { sahneSayfalari } from "@/utils/gorselSahneSayfalari";
 import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
 import { colors, radius, spacing, typography, rf, rs, layoutMax, touch } from "@/theme/tokens";
+import { EmDozSatiri, pikselKipiNotu } from "@/components/domain/EmDozSatiri";
 import { useToast } from "@/components/ui/ToastProvider";
 import { webIcinKucult } from "@/services/gorselKucult";
 import { apiGet, apiPost, authHeaders, platformAlert, platformConfirm, AI_TIMEOUT_MS, aiHataMesaji } from "@/services/apiClient";
@@ -124,8 +125,9 @@ function errorMessage(e: unknown): string {
 // audit B-2.4: AI-sonuç eleman şekilleri — .map/.filter/.reduce callback'lerini tiplemek için
 // (display render; tsc-doğrulanabilir). Sonuç CONTAINER state'i (useState) heterojen per-model
 // backend yanıtı olduğundan permissive bırakıldı (tam tipleme backend response-sözleşmesi ister).
-interface AiTumorRegion { area_mm2?: number; centroid_cabin_mm?: number[]; D?: number[]; E_cancer?: number; E_healthy?: number; }
-interface AiWell { area_mm2?: number; centroid_cabin_mm?: number[]; D?: number[]; label?: string; organ_id?: number; well_id?: number; E_cancer?: number; E_healthy?: number; }
+// D1.E07 (İG-5.76): piksel kipinde E/alan hesaplanmaz → null (bkz. EmDozSatiri).
+interface AiTumorRegion { area_mm2?: number | null; area_px?: number; centroid_cabin_mm?: number[]; D?: number[]; E_cancer?: number | null; E_healthy?: number | null; }
+interface AiWell { area_mm2?: number | null; area_px?: number; centroid_cabin_mm?: number[]; D?: number[]; label?: string; organ_id?: number; well_id?: number; E_cancer?: number | null; E_healthy?: number | null; }
 interface AiPrediction { confidence?: number; patient_id?: string; prediction?: string; [k: `prob_${string}`]: number | undefined; }
 interface AiTopK { class: string; prob: number; }
 interface AiDetection { class_name: string; conf?: number; bbox_xyxy?: number[]; index?: number; }
@@ -2101,7 +2103,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
               {(() => {
                 const n = result.n_tumor || 0;
                 return <ResultInterpretation tone={n > 0 ? "alert" : "info"} emoji="🎯" title={`${n} tümör odağı bulundu`}
-                  text="Her tümör için kanserli ve sağlıklı dokuya düşen elektrik alanı (E) hesaplandı; 7 PEMF bobininin duty ayarı (D1–D7) buna göre üretildi."
+                  text={method === "pixel" ? pikselKipiNotu("fantom boyunu (cm)") : "Her tümör için kanserli ve sağlıklı dokuya düşen elektrik alanı (E) hesaplandı; 7 PEMF bobininin duty ayarı (D1–D7) buna göre üretildi."}
                   points={["E_kanser yüksekse alan o bölgeye daha odaklıdır.", "D1–D7 çubukları her bobinin sürüş oranını (duty %) gösterir.", "3B koordinat: tümör merkezinin ölçek/kabin çerçevesindeki konumu."]} />;
               })()}
               <Text style={styles.resultText}>Tespit edilen tümör: <Text style={{ fontWeight: "bold" }}>{result.n_tumor}</Text>   ·   Ölçek: <Text style={{ fontWeight: "bold" }}>{method === "pixel" ? "piksel" : `${result.mm_per_px} mm/px`}</Text></Text>
@@ -2111,9 +2113,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
                 return (
                   <View key={i} style={styles.tumorRow}>
                     <Text style={styles.tumorHeader}>Tümör {i + 1}   ·   ({Number(c[0]).toFixed(1)}, {Number(c[1]).toFixed(1)}, {Number(c[2]).toFixed(1)}) {unit}</Text>
-                    <Text style={[styles.resultText, { fontSize: typography.small }]}>
-                      E_kanser: <Text style={{ fontWeight: "bold", color: colors.danger }}>{Number(t.E_cancer).toFixed(4)}</Text>   ·   E_sağlıklı: {Number(t.E_healthy).toFixed(4)}   ·   Alan: {Number(t.area_mm2).toFixed(1)} mm²
-                    </Text>
+                    <EmDozSatiri r={t} style={[styles.resultText, { fontSize: typography.small }]} />
                     {D.length > 0 && (
                       <View style={styles.dBarRow}>
                         {D.map((d: number, j: number) => (
@@ -2485,7 +2485,7 @@ function PetriModule({ patientName }: { patientName: string }) {
                 const nc = result.n_cancer || 0;
                 return <ResultInterpretation tone={nc > 0 ? "alert" : "positive"} emoji="🧫"
                   title={`${result.n_wells} kuyu · ${nc} kanser, ${result.n_healthy} sağlıklı`}
-                  text={nc > 0
+                  text={method === "pixel" ? pikselKipiNotu("petri çapını (cm)") : nc > 0
                     ? `${nc} kuyuda kanser sınıflandırıldı. Her kuyu için 3B konum, elektrik alanı (E) ve 7 bobinin duty ayarı (D1–D7) aşağıda listelenir.`
                     : "Kuyularda kanser bulgusu sınıflandırılmadı; yine de her kuyu için hesaplanan E-alanı ve bobin ayarı aşağıda."}
                   points={["Kırmızı = kanser, yeşil = sağlıklı sınıflandırma.", "D1–D7 çubukları her bobinin sürüş oranını (duty %) gösterir."]} />;
@@ -2504,9 +2504,7 @@ function PetriModule({ patientName }: { patientName: string }) {
                       {w.well_id}   ·   <Text style={{ color: isCancer ? colors.danger : colors.success }}>{isCancer ? "Kanser" : "Sağlıklı"}</Text>   ·   ({Number(c[0]).toFixed(1)}, {Number(c[1]).toFixed(1)}, {Number(c[2]).toFixed(1)}) {unit}
                       {isCancer && (w as any).n_cancer_pixels != null ? <Text style={{ color: colors.textMuted, fontSize: typography.small }}>{`  — gerekçe: ${(w as any).n_cancer_pixels} mavi piksel (eşik ≥30)`}</Text> : null}
                     </Text>
-                    <Text style={[styles.resultText, { fontSize: typography.small }]}>
-                      E_kanser: <Text style={{ fontWeight: "bold", color: colors.danger }}>{Number(w.E_cancer).toFixed(4)}</Text>   ·   E_sağlıklı: {Number(w.E_healthy).toFixed(4)}   ·   Alan: {Number(w.area_mm2).toFixed(1)} mm²
-                    </Text>
+                    <EmDozSatiri r={w} style={[styles.resultText, { fontSize: typography.small }]} />
                     {D.length > 0 && (
                       <View style={styles.dBarRow}>
                         {D.map((d: number, j: number) => (

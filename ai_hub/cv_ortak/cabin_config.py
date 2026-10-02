@@ -258,6 +258,22 @@ def _hsv(d: dict[str, int]) -> HsvRange:
     )
 
 
+def _sonlu_yapilandirma(kaynak, alanlar: dict) -> None:
+    """D1.E07 (İG-5.80): sayısal kabin alanları SONLU olmalı. None = isteğe bağlı alan verilmemiş (geçer)."""
+    import math
+
+    for ad, v in alanlar.items():
+        if v is None:
+            continue
+        for x in v if isinstance(v, (list, tuple)) else [v]:
+            try:
+                sonlu = math.isfinite(float(x))
+            except (TypeError, ValueError):
+                sonlu = False
+            if not sonlu:
+                raise ValueError(f"Kabin yapılandırması geçersiz ({kaynak}): '{ad}' sonlu bir sayı değil ({x!r})")
+
+
 def load_cabin_config(
     yaml_path: str | os.PathLike | None = None,
     *,
@@ -370,6 +386,30 @@ def load_cabin_config(
         mqtt_topic_cmd=mq["topic_cmd"],
         mqtt_username=mq.get("username"),
         mqtt_password=mq.get("password"),
+    )
+
+    # ⚠️ D1.E07 (İG-5.80): `.nan` / `.inf` YAML değeri YÜKLEMEDE reddedilir. `float(.nan)` sessizce geçiyordu; B/duty
+    # ya da geometri NaN iken öngörücü "makul görünen" bir doz üretiyordu (ölçüldü). Hata, bozuk ANAHTARI söyler.
+    _sonlu_yapilandirma(
+        p,
+        {
+            "aruco.real_cm": aruco.real_cm,
+            "aruco.plane_offset_cm": aruco.plane_offset_cm,
+            "geometry.qr_to_origin_cm": geom.qr_to_origin_cm,
+            "geometry.cabin_extent_cm": geom.cabin_extent_cm,
+            "camera.fixed_position_cm": cam.fixed_position_cm,
+            "camera.look_at_cm": cam.look_at_cm,
+            "camera.up_cabin": cam.up_cabin,
+            "camera.to_marker_cm": cam.to_marker_cm,
+            "camera.to_origin_cm": cam.to_origin_cm,
+            "phantom_plate.plate_z_cm": plate.plate_z_cm,
+            "phantom_plate.hedef_duzlem_cm": plate.hedef_duzlem_cm,
+            "phantom_plate.width_cm": plate.width_cm,
+            "phantom_plate.height_cm": plate.height_cm,
+            "pnp.reprojection_error_px": pnp.reprojection_error_px,
+            "phantom.achieved_B": ph.achieved_B,
+            "phantom.duty_sum": ph.duty_sum,
+        },
     )
 
     return CabinConfig(

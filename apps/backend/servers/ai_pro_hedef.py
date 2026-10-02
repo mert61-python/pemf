@@ -221,6 +221,17 @@ def _yontem_tavani(method: str) -> float:
     return YONTEM_TAVANI.get((method or "").strip().lower(), YONTEM_TAVANI_VARSAYILAN)
 
 
+def _sayi_ya_da_none(v):
+    """D1.E07: hesaplanmamış (None) ya da sonlu olmayan değer None kalır; sayı float'a çevrilir (0.0 uydurulmaz, Y6)."""
+    import math
+
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if math.isfinite(f) else None
+
+
 def kabin_yari_boyut_mm():
     """Kabin YARI boyutları (mm) — TEK KAYNAK: kedi hattının (`catorgan_predictor`) yüklediği AYNI paketli kabin
     yapılandırması (`geometry.cabin_extent_cm`; bugün [65, 50, 50] cm → (325, 250, 250) mm). Literal YAZILMAZ: kabin
@@ -529,8 +540,8 @@ class _EmCvSaglayici:
                 "secili_id": secili.get("id"),
                 "target_label": secili.get("label"),
                 "secili_organ_id": int(secili.get("organ_id", 1)),
-                "e_cancer": float(secili.get("E_cancer", 0.0)),
-                "e_healthy": float(secili.get("E_healthy", 0.0)),
+                "e_cancer": _sayi_ya_da_none(secili.get("E_cancer")),
+                "e_healthy": _sayi_ya_da_none(secili.get("E_healthy")),
                 "ood": self._egitim_araligi_disi(x_mm, y_mm, z_mm),
                 "guven_ham": ham,
             }
@@ -653,8 +664,9 @@ class FantomSaglayici(_EmCvSaglayici):
                     "organ_id": int(r.organ_id or 1),
                     "reliability": ham,
                     "oncelik": float(r.area_px or 0),  # otomatik seçim: EN BÜYÜK odak
-                    "E_cancer": float(getattr(r, "E_cancer", 0.0) or 0.0),
-                    "E_healthy": float(getattr(r, "E_healthy", 0.0) or 0.0),
+                    # D1.E07 (İG-5.76): doz hesaplanmadıysa (piksel kipi) None kalır — 0.0 "hesaplandı, sıfır" okunur.
+                    "E_cancer": _sayi_ya_da_none(getattr(r, "E_cancer", None)),
+                    "E_healthy": _sayi_ya_da_none(getattr(r, "E_healthy", None)),
                     "label": "",
                     "id": 0,
                 }
@@ -733,8 +745,8 @@ class PetriSaglayici(_EmCvSaglayici):
                     "organ_id": 1 if kanser else 0,
                     "reliability": guven,
                     "oncelik": (1000.0 if kanser else 0.0) + guven,
-                    "E_cancer": float(getattr(w, "E_cancer", 0.0) or 0.0),
-                    "E_healthy": float(getattr(w, "E_healthy", 0.0) or 0.0),
+                    "E_cancer": _sayi_ya_da_none(getattr(w, "E_cancer", None)),
+                    "E_healthy": _sayi_ya_da_none(getattr(w, "E_healthy", None)),
                     "label": "",
                     "id": 0,
                 }

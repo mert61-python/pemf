@@ -960,6 +960,31 @@ def _kabin_okunamaz_bildir() -> None:
         logger.debug("kabin okunamaz bildirimi gönderilemedi", exc_info=True)
 
 
+#: D1.E07 (İG-5.15): doz modeli hata verdiğinde eylem bildirimi — seans (onay) başına BİR KEZ.
+_doz_hatasi_bildirilen: dict = {"anahtar": None}
+
+
+def _doz_hatasi_bildir() -> None:
+    """D1.E07 (İG-5.15, seans ortası): doz modeli geçerli doz üretmedi (zarf `[0]*7`) → bobinler SÜRÜLMEZ ve hedef-kaybı
+    gibi sayılır (N turda STOP). Eskiden sıfır doz "sürüş" olarak gönderiliyordu — bildirimsiz, panel "sürüldü". Seans
+    başına BİR KEZ eylem söyleyen bildirim (alarm yorgunluğu yok)."""
+    try:
+        import servers.api_server as _apx
+
+        with _apx._session_lock:
+            _anahtar = _apx._active_session.get("onay_kimligi") or _apx._active_session.get("session_id") or ""
+        if _doz_hatasi_bildirilen.get("anahtar") == _anahtar:
+            return
+        _doz_hatasi_bildirilen["anahtar"] = _anahtar
+        _apx._push_notification(
+            "⚠️ AI Pro: doz modeli geçerli doz üretmedi — bobinler bu karede SÜRÜLMEDİ (sürerse durdurulur). AI Pro'yu "
+            "durdurup yeniden başlatın; tekrarlarsa teknik desteğe başvurun.",
+            "error",
+        )
+    except Exception:
+        logger.debug("doz hatası bildirimi gönderilemedi", exc_info=True)
+
+
 # E3-b (denetim 2026-08-24): cat_organ SEGMENTASYON aşaması başarısız olursa (kedi kadrajda YOK)
 # catorgan_predictor RuntimeError("segmentasyon: ...") atar. Bu, "kedi yok" durumudur; pose/PnP
 # hatası (kedi VAR ama organ okluzyon/açı) FARKLI bir şeydir. ⚠️ Mesaj-prefix'e bağlı — kaynak
@@ -1853,18 +1878,26 @@ def _ai_pro_loop(dongu_muhru=None):
                     _dongu_bayragini_indir(dongu_muhru)
                     break
                 D, P, e_field = _predict_and_drive(x_mm, y_mm, z_mm, _c_oid)
-                # ⚠️ D1.81 (İG-5.3/5.29): yukarıdaki "seans hâlâ aktif mi" bakışı TAHMİNDEN ÖNCEDİR; tahmin (CPU 0,3–2,2
-                # sn, yanıtsız AI servisinde dakikalar) sırasında gelen acil durdurmayı göremez — ölçüldü: döngü 40'ta 11,
-                # damla serviste 36,5 sn sonra yeniden enerjiledi. Sürüş bu döngünün NESLİYLE yapılır; `update_coil` onu
-                # DURUM KİLİDİ ALTINDA denetler → bayatsa reddedilir. Sonra döngü de çıkar.
-                # i7-F-1: gözlem damgası da taşınır — tahmin sırasında kayıp STOP'u geldiyse `update_coil` kilit altında reddeder.
-                with estop_mandali.surus_baglami(_nesil), estop_mandali.gozlem_baglami(kayip_damgasi):
-                    _drive_coils_ai_pro(D, P)
-                if not _dongu_gecerli():
-                    logger.warning("AI Pro: sürüş sırasında durdurma/acil durdurma geldi → döngü sonlandırılıyor.")
-                    break
-                _lost_streak = 0  # hedef yeniden bulundu
-            else:
+                if not any(D):
+                    # ⚠️ D1.E07 (İG-5.15, seans ortası): doz modeli hata verdi (zarf `[0]*7` döndürür) — eskiden bu "sürüş"
+                    # olarak gönderiliyordu (bildirimsiz; panel "sürüldü"). SÜRÜLMEZ, operatöre söylenir ve hedef-kaybı
+                    # gibi sayılır (N turda STOP — mevcut kural; yeni durdurma türü değil).
+                    _doz_hatasi_bildir()
+                    _surulebilir_hedef = False
+                else:
+                    # ⚠️ D1.81 (İG-5.3/5.29): yukarıdaki "seans hâlâ aktif mi" bakışı TAHMİNDEN ÖNCEDİR; tahmin (CPU 0,3–2,2
+                    # sn, yanıtsız AI servisinde dakikalar) sırasında gelen acil durdurmayı göremez — ölçüldü: döngü 40'ta
+                    # 11, damla serviste 36,5 sn sonra yeniden enerjiledi. Sürüş bu döngünün NESLİYLE yapılır; `update_coil`
+                    # onu DURUM KİLİDİ ALTINDA denetler → bayatsa reddedilir. Sonra döngü de çıkar.
+                    # i7-F-1: gözlem damgası da taşınır — tahmin sırasında kayıp STOP'u geldiyse `update_coil` kilit altında
+                    # reddeder.
+                    with estop_mandali.surus_baglami(_nesil), estop_mandali.gozlem_baglami(kayip_damgasi):
+                        _drive_coils_ai_pro(D, P)
+                    if not _dongu_gecerli():
+                        logger.warning("AI Pro: sürüş sırasında durdurma/acil durdurma geldi → döngü sonlandırılıyor.")
+                        break
+                    _lost_streak = 0  # hedef yeniden bulundu
+            if not _surulebilir_hedef:
                 D, P, e_field = [0.0] * 7, [0.0] * 7, 0.0
                 # DENETIM P2: bu dalda YALNIZCA yeni komut gonderilmiyordu; halihazirda enerjili
                 # bobinlere STOP GITMIYORDU. STM keep-alive son duty paketini saniyede bir
@@ -2875,8 +2908,10 @@ async def ai_pro_frame(
         _surulebilir_hedef = _bulundu and _muhur is not None and _c_oid == _muhur.get("hedef")
         # İG-5.1: sürülebilir seansta SAHİBİN karesi hedefi kaybettiyse kayıp sayılır; ARDIŞIK N kayıpta (ve sonrasında her
         # kayıp karede — i7-F-1 arka kalkanı) AI'nın sürdüğü bobinlere STOP. Yabancı kare sayılmaz.
-        if session_active and not is_foreign:
-            _seri = _frame_hedef_durumu(_muhur, _surulebilir_hedef)
+        # D1.E07: "bulundu" sayacı sıfırlaması tahminden SONRA (aşağıda) — doz modeli her karede hata verirse sayaç
+        # sıfırlanıp STOP hiç gelmezdi (önceki doz keep-alive ile sürerdi).
+        if session_active and not is_foreign and not _surulebilir_hedef:
+            _seri = _frame_hedef_durumu(_muhur, False)
             if _seri >= _AI_LOST_STOP_STREAK:
                 await _frame_kayip_stopu("hedef bulunamadı", _seri)
 
@@ -2887,6 +2922,15 @@ async def ai_pro_frame(
         # kameradan hesaplanan hedefe onaylı seansta enerji verilmesini önler).
         if _surulebilir_hedef and session_active and not is_foreign:
             D, P, e_field = await asyncio.to_thread(_predict_and_drive, x_mm, y_mm, z_mm, _c_oid)
+        if _surulebilir_hedef and session_active and not is_foreign and not any(D):
+            # ⚠️ D1.E07 (İG-5.15, seans ortası): doz modeli hata verdi (zarf `[0]*7`) → SÜRÜLMEZ, operatöre söylenir ve
+            # bu kare hedef-kaybı sayılır (N karede STOP — mevcut kural). Eskiden sıfır doz "sürüldü" diye gönderiliyordu.
+            _doz_hatasi_bildir()
+            _seri = _frame_hedef_durumu(_muhur, False)
+            if _seri >= _AI_LOST_STOP_STREAK:
+                await _frame_kayip_stopu("doz modeli hatası", _seri)
+        elif _surulebilir_hedef and session_active and not is_foreign:
+            _frame_hedef_durumu(_muhur, True)  # hedef bulundu VE geçerli doz → kayıp sayacı sıfırlanır
             # Audit P2: _drive_coils_ai_pro senkron MQTT publish yapar (ESP probe/connect/wait ~sn) →
             # event-loop'u bloklardi (es-zamanli /emergency_stop yaniti gecikir). to_thread'e al.
             # D1.81: niyet nesli bağlamı `to_thread` iş parçacığına kopyalanır; `update_coil` onu kilit altında denetler.
@@ -3276,16 +3320,19 @@ async def analyze_em_fantom(
         # CANLI E-ALANI bağlamı (2026-08-06): tümör konumu + organ seans boyunca DEĞİŞMEZ.
         # Bunu saklarsak tedavi sürerken E'yi AYNI vekil modelle canlı B/duty'den türetebiliriz
         # → bar'daki değer bu paneldeki E ile aynı kaynaktan gelir (bkz. servers/efield_live.py).
+        # ⚠️ D1.E07 (İG-5.76): PİKSEL kipinde koordinat piksel farkıdır (mm DEĞİL) ve doz hesaplanmaz → canlı E bağlamı
+        # ve XAI duyarlılığı KURULMAZ (bağlam piksel konumuyla kurulsaydı E barı anlamsız konumdan E üretirdi).
+        _fiziksel = result.method != "pixel"
         try:
             from servers import efield_live as _ef
 
-            _ef.set_context(payload.get("tumor_regions") or [])
+            _ef.set_context((payload.get("tumor_regions") or []) if _fiziksel else [])
         except Exception:
             logger.debug("canlı E-alanı bağlamı kurulamadı", exc_info=True)
         # §KALAN A5 (em_kedi paritesi): "tahmini en cok ne surukledi" meta'si — ILK
         # tumor bolgesi icin hafif duyarlilik. Aciklama IKINCIL: hatasi analizi dusurmez.
         _xai_meta = {}
-        if result.success and payload.get("tumor_regions"):
+        if result.success and _fiziksel and payload.get("tumor_regions"):
             try:
                 from ai_hub.inference_em_fantom import inference_em_fantom as _ief
 
@@ -3326,6 +3373,13 @@ async def analyze_em_fantom(
             **_xai_meta,
         }
     except Exception as e:
+        # D1.E07 (İG-5.80): sonlu olmayan girdi (ör. achieved_B=nan) ya da bozuk ölçekleyici → 422 (istemci girdisi;
+        # eskiden "makul" bir doz dönüyordu). Metin yalnız hangi alanın geçersiz olduğunu söyler (iç ayrıntı yok).
+        from ai_hub.em_girdi import SonluOlmayanGirdi as _SonluDegil
+
+        if isinstance(e, _SonluDegil):
+            logger.warning("em_fantom: geçersiz girdi reddedildi: %s", e)
+            raise HTTPException(status_code=422, detail=f"Fantom analizi: {e}") from None
         logger.error(f"em_fantom inference error: {e}", exc_info=True)
         raise _ai_fail("Fantom analiz hatası", e)
 
@@ -3473,7 +3527,8 @@ async def analyze_em_petri(
         wells = [asdict(w) for w in result.wells]
         # §KALAN A5: em_kedi paritesi — ilk kuyu icin hafif duyarlilik meta'si (zarif).
         _xai_meta = {}
-        if result.success and wells:
+        # ⚠️ D1.E07 (İG-5.76): PİKSEL kipinde koordinat piksel farkıdır → XAI duyarlılığı üretilmez (fantomla aynı).
+        if result.success and wells and result.method != "pixel":
             try:
                 from ai_hub.inference_em_petri import inference_em_petri as _iep
 
@@ -3516,6 +3571,12 @@ async def analyze_em_petri(
             **_xai_meta,
         }
     except Exception as e:
+        # D1.E07 (İG-5.80): sonlu olmayan girdi / bozuk ölçekleyici → 422 (fantomla aynı sözleşme).
+        from ai_hub.em_girdi import SonluOlmayanGirdi as _SonluDegil
+
+        if isinstance(e, _SonluDegil):
+            logger.warning("em_petri: geçersiz girdi reddedildi: %s", e)
+            raise HTTPException(status_code=422, detail=f"Petri analizi: {e}") from None
         logger.error(f"em_petri inference error: {e}", exc_info=True)
         raise _ai_fail("Petri analiz hatası", e)
 

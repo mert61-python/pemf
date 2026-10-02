@@ -25,6 +25,20 @@ import numpy as np
 import onnxruntime as ort
 import pandas as pd
 
+# D1.E07 (İG-5.80 · İG-5.15): sonlu olmayan girdi/çıktı REDDİ — tek kaynak `ai_hub/em_girdi.py`. Modül tek başına
+# (CLI, `ai_hub` paketi yolda değilken) yüklenirse aynı dosya yoldan yüklenir (kopya tanım YOK).
+try:
+    from ai_hub.em_girdi import SonluOlmayanGirdi, sonlu_dizi_dogrula, sonlu_dogrula  # noqa: F401
+except ImportError:  # pragma: no cover - yalnız bağımsız CLI kullanımı
+    import importlib.util as _ilu
+
+    _sp = _ilu.spec_from_file_location(
+        "ai_hub_em_girdi", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "em_girdi.py")
+    )
+    _m = _ilu.module_from_spec(_sp)
+    _sp.loader.exec_module(_m)
+    SonluOlmayanGirdi, sonlu_dizi_dogrula, sonlu_dogrula = _m.SonluOlmayanGirdi, _m.sonlu_dizi_dogrula, _m.sonlu_dogrula
+
 _DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_NAME = "BiLSTM_XXL_Raw"
 ONNX_PATH = os.path.join(_DIR, f"{MODEL_NAME}.onnx")
@@ -78,6 +92,8 @@ class PhantomPredictor:
         self.session.run(None, {self.input_name: np.zeros((1, IN_DIM), dtype=np.float32)})
 
     def _build_input(self, x, y, z, organ_id, achieved_B, duty_sum):
+        # D1.E07: NaN/None/±inf girdi "makul" bir doza dönüşmesin — `np.asarray(None, float)` NaN olurdu.
+        sonlu_dogrula(x=x, y=y, z=z, organ_id=organ_id, achieved_B=achieved_B, duty_sum=duty_sum)
         x = np.atleast_1d(np.asarray(x, dtype=np.float64))
         y = np.atleast_1d(np.asarray(y, dtype=np.float64))
         z = np.atleast_1d(np.asarray(z, dtype=np.float64))
@@ -93,6 +109,8 @@ class PhantomPredictor:
         extras_sc = self.se.transform(
             np.column_stack([achieved_B, duty_sum]).astype(np.float32)).astype(np.float32)
         organ_raw = organ_id.reshape(-1, 1).astype(np.float32)
+        # İG-5.15: bozuk ölçekleyici (ör. ortalaması NaN) ölçeklenmiş girdiyi NaN yapar → reddedilir.
+        sonlu_dizi_dogrula("ölçeklenmiş girdi (ölçekleyici bozuk olabilir)", np.hstack([coords_sc, extras_sc]))
         return np.hstack([coords_sc, organ_raw, extras_sc]).astype(np.float32)
 
     def _unscale(self, y_sc):
@@ -115,6 +133,8 @@ class PhantomPredictor:
         X_sc = self._build_input(x, y, z, organ_id, achieved_B, duty_sum)
         y_sc = self._run_onnx(X_sc)
         D, P_deg, E_h, E_c = self._unscale(y_sc)
+        # İG-5.15: model çıktısı sonlu değilse doz ÜRETİLMEZ (çağıran sürmez, uç 422).
+        sonlu_dizi_dogrula("model çıktısı", np.concatenate([np.ravel(D), np.ravel(P_deg), np.ravel(E_h), np.ravel(E_c)]))
         out = {}
         for i, col in enumerate(D_COLS):
             out[col] = float(D[0, i])
