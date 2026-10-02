@@ -155,17 +155,21 @@ export interface SystemInfo {
  *  elektrik alanı. AI panelindeki E_cancer/E_healthy ile AYNI modelden gelir (tutarlılık).
  *  `null` = analiz bağlamı yok ya da seans pasif → UI bar'ı HİÇ göstermez (uydurma değer yok). */
 export interface EFieldLive {
-  /** Sağlıklı dokuda öngörülen alan */
-  healthy: number;
-  /** Tümör/hedef dokuda öngörülen alan */
-  cancer: number;
-  /** Ortalama */
-  avg: number;
+  /** Sağlıklı dokuda öngörülen alan. `null` = HESAPLANMADI (aşağıdaki neden alanları) → UI '—' (Y6). */
+  healthy: number | null;
+  /** Tümör/hedef dokuda öngörülen alan (`null` → '—') */
+  cancer: number | null;
+  /** Ortalama (`null` → '—') */
+  avg: number | null;
   /** Hesaba giren ÇALIŞAN bobin sayısı (0 → bobinler durdu, değerler sıfır) */
   activeCoils: number;
-  /** Modele verilen canlı girdiler — şeffaflık/teşhis için */
-  achievedB_T: number;
+  /** Modele verilen canlı girdiler — şeffaflık/teşhis için. B yalnız alanı ÖLÇÜLEN bobinlerden; `null` = ölçülmüyor. */
+  achievedB_T: number | null;
   dutySum: number;
+  /** D1.76 · İG-5.83: E neden hesaplanmadı (yalnız-ek alanlar; eski backend göndermez). */
+  egitimAraligiDisi?: boolean;
+  bOlculmuyor?: boolean;
+  egitimAraligiBilinmiyor?: boolean;
   /** Hesap zamanı (epoch sn) — tazelik denetimi için */
   ts: number;
 }

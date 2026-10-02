@@ -29,10 +29,12 @@ export function EFieldBar() {
   // yüksek değeri tavan tut. Yalnız BÜYÜR; küçülürse bar her tikte zıplar ve okunamaz olur.
   const peakRef = useRef(0);
   const [, force] = useState(0);
-  const cancer = Number.isFinite(e?.cancer) ? (e as EFieldLive).cancer : 0;
-  const healthy = Number.isFinite(e?.healthy) ? (e as EFieldLive).healthy : 0;
+  // ⚠️ D1.76 · İG-5.83 · Y6: sayı OLMAYAN değer (backend E'yi hesaplamadı: B eğitim aralığı dışında / alan
+  // ölçülmüyor) `null` kalır ve '—' çizilir. Eskiden 0'a çevrilip "0.0000" yazılıyordu — "ölçüldü, sıfır" okunur.
+  const cancer = Number.isFinite(e?.cancer) ? (e as EFieldLive).cancer as number : null;
+  const healthy = Number.isFinite(e?.healthy) ? (e as EFieldLive).healthy as number : null;
   useEffect(() => {
-    const m = Math.max(cancer, healthy);
+    const m = Math.max(cancer ?? 0, healthy ?? 0);
     if (m > peakRef.current * 1.02) {
       peakRef.current = m;
       force((n) => n + 1);
@@ -50,8 +52,17 @@ export function EFieldBar() {
 
   const stale = e.ts > 0 && now / 1000 - e.ts > 5;
   const peak = peakRef.current || 1;
-  const pct = (v: number) => Math.max(0, Math.min(100, (v / peak) * 100));
-  const fmt = (v: number) => (v >= 1 ? v.toFixed(3) : v.toFixed(4));
+  const pct = (v: number | null) => (v === null ? 0 : Math.max(0, Math.min(100, (v / peak) * 100)));
+  const fmt = (v: number | null) => (v === null ? "—" : v >= 1 ? v.toFixed(3) : v.toFixed(4));
+  const bMetni = Number.isFinite(e.achievedB_T) ? ((e.achievedB_T as number) * 1000).toFixed(2) : "—";
+  const dutyMetni = Number.isFinite(e.dutySum) ? e.dutySum.toFixed(2) : "—";
+  const neden = e.egitimAraligiDisi
+    ? "Ölçülen B, modelin eğitim aralığı dışında — E hesaplanmadı (model orada güvenilir değil)."
+    : e.bOlculmuyor
+      ? "Çalışan bobinlerde alan (B) ölçülmüyor — E hesaplanmadı."
+      : e.egitimAraligiBilinmiyor
+        ? "Modelin eğitim aralığı okunamadı — E hesaplanmadı."
+        : null;
 
   return (
     <View style={styles.card} accessibilityLabel="Canlı elektrik alanı göstergesi">
@@ -65,8 +76,9 @@ export function EFieldBar() {
       <Row label="Sağlıklı" value={healthy} pct={pct(healthy)} tint={colors.success} fmt={fmt} />
 
       <Text style={styles.foot}>
-        {e.activeCoils} bobin · B={(e.achievedB_T * 1000).toFixed(2)} mT · Σduty={e.dutySum.toFixed(2)}
+        {e.activeCoils} bobin · B={bMetni} mT · Σduty={dutyMetni}
       </Text>
+      {neden ? <Text style={styles.foot}>{neden}</Text> : null}
       {e.activeCoils === 0 && (
         <Text style={styles.foot}>Bobinler durdu — alan üretilmiyor.</Text>
       )}
@@ -75,7 +87,7 @@ export function EFieldBar() {
 }
 
 function Row({ label, value, pct, tint, fmt }: {
-  label: string; value: number; pct: number; tint: string; fmt: (v: number) => string;
+  label: string; value: number | null; pct: number; tint: string; fmt: (v: number | null) => string;
 }) {
   return (
     <View style={styles.row} accessibilityLabel={`${label} alan ${fmt(value)}`}>

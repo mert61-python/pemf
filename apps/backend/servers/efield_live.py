@@ -91,22 +91,80 @@ def get_context() -> dict | None:
         return dict(_ctx) if _ctx else None
 
 
-def telemetry_inputs(coils: list[dict]) -> tuple[float, float, int]:
+def seans_basladi(tur: str = "", model: str | None = None) -> None:
+    """D1.61 · B-1.25 — YENİ seans başlarken analiz bağlamı yalnız AYNI modelin araştırma AI Pro seansında KALIR.
+
+    Bağlamı fantom/petri ANALİZİ kurar (bir tümör konumu). Ölçüldü (plan, 20 olayın 17'si): elle ya da kedi seansında
+    bağlam duruyordu → E barı BAŞKA hedefin (önceki analizin) E'sini "● canlı" gösteriyordu. Analiz ucu bağlamı modelsiz
+    kurar → fantom vekili (bkz. `_predictor`), bu yüzden modelsiz bağlam "fantom" sayılır."""
+    ctx = get_context()
+    if ctx is None:
+        return
+    m = (model or "").strip().lower()
+    if tur == "ai_pro" and m in ("fantom", "petri") and m == (ctx.get("model") or "fantom"):
+        return
+    logger.info("Canlı E bağlamı yeni seans başlangıcında temizlendi (tür=%s, model=%s)", tur or "-", m or "-")
+    set_context([])
+
+
+def seans_bitti() -> None:
+    """D1.61: seans biterken (durdurma, acil durdurma) bağlam ve son değer TEMİZLENİR — sonraki seansa sızmaz."""
+    set_context([])
+
+
+_aralik_lock = threading.Lock()
+_aralik: dict = {}
+
+
+def egitim_b_araligi_T(model: str | None = None) -> tuple[float, float] | None:
+    """İG-5.83 — vekil modelin `achieved_B` EĞİTİM aralığı (Tesla): modülün XAI referans örnekleminden (`xai_ref_stats`,
+    sütun 4) OKUNUR, sabit yazılmaz → model yeniden eğitilirse kendiliğinden güncellenir. Okunamazsa None."""
+    _anahtar = "petri" if (model or "").strip().lower() == "petri" else "fantom"
+    with _aralik_lock:
+        if _anahtar in _aralik:
+            return _aralik[_anahtar]
+    try:
+        if _anahtar == "petri":
+            from ai_hub.inference_em_petri import inference_em_petri as _mod
+        else:
+            from ai_hub.inference_em_fantom import inference_em_fantom as _mod
+        bg = _mod.xai_ref_stats()["background"]
+        deger = (float(bg[:, 4].min()), float(bg[:, 4].max()))
+    except Exception:
+        logger.warning("E-alanı: %s modelinin eğitim B aralığı okunamadı (E gösterilmez)", _anahtar, exc_info=True)
+        deger = None
+    with _aralik_lock:
+        _aralik[_anahtar] = deger
+    return deger
+
+
+def telemetry_inputs(coils: list[dict]) -> tuple[float | None, float, int]:
     """Canlı bobin listesinden (``achieved_B`` Tesla, ``duty_sum``, çalışan bobin sayısı).
 
     YALNIZ ÇALIŞAN bobinler sayılır: duran bobin alan üretmez, ortalamaya katılırsa
     B'yi yapay olarak düşürür. Çalışan yoksa (0.0, 0.0, 0) → çağıran E'yi sıfırlar.
+
+    ⚠️ D1.76 (B-1.24): B yalnız alanı GERÇEKTEN ölçülen (`measuredFields`te `magneticMt` olan, D1.67: taze) bobinlerin
+    ortalamasıdır. Ölçülmeyen bobinin `magneticMt`i 0.0 başlangıç değeridir; ortalamaya girerse B yapay düşer (7 bobin
+    çalışırken yalnız bobin 6 ölçüyorsa 1,842 mT → 0,263 mT). Hiçbir bobin ölçmüyorsa B = None (Y6: ölçülmeyen '—').
     """
     run = [c for c in (coils or []) if c.get("running")]
     if not run:
         return 0.0, 0.0, 0
-    b_mt = sum(float(c.get("magneticMt") or 0.0) for c in run) / len(run)
+    olculen = [c for c in run if "magneticMt" in (c.get("measuredFields") or [])]
+    b_t = (sum(float(c.get("magneticMt") or 0.0) for c in olculen) / len(olculen) / 1000.0) if olculen else None
     duty_sum = sum(float(c.get("dutyCycle") or 0.0) for c in run) / 100.0
-    return b_mt / 1000.0, duty_sum, len(run)
+    return b_t, duty_sum, len(run)
 
 
 def compute(coils: list[dict]) -> dict | None:
-    """Canlı bobin durumundan E değerlerini üret. Bağlam yoksa/bobin çalışmıyorsa None."""
+    """Canlı bobin durumundan E değerlerini üret. Bağlam yoksa/bobin çalışmıyorsa None.
+
+    E HESAPLANMAZ (değerler None, arayüz '—'; Ö.4-Y9: kıskaç/tavan DEĞİL, yalnız gösterim) — D1.76 · İG-5.83:
+      * alan hiçbir çalışan bobinde ölçülmüyorsa (`bOlculmuyor`),
+      * ölçülen B modelin eğitim aralığı dışındaysa (`egitimAraligiDisi`) — model orada anlamsız sayı üretir
+        (ölçüldü: E(0 mT)/E(1 mT) = 5,5, monoton değil),
+      * aralık okunamıyorsa (`egitimAraligiBilinmiyor`)."""
     ctx = get_context()
     if not ctx:
         return None
@@ -119,6 +177,26 @@ def compute(coils: list[dict]) -> dict | None:
             "activeCoils": 0,
             "achievedB_T": 0.0,
             "dutySum": 0.0,
+            "ts": time.time(),
+        }
+    _hesapsiz = None
+    if achieved_b is None:
+        _hesapsiz = "bOlculmuyor"
+    else:
+        _aralik_t = egitim_b_araligi_T((ctx or {}).get("model"))
+        if _aralik_t is None:
+            _hesapsiz = "egitimAraligiBilinmiyor"
+        elif not (_aralik_t[0] <= achieved_b <= _aralik_t[1]):
+            _hesapsiz = "egitimAraligiDisi"
+    if _hesapsiz is not None:
+        return {
+            "healthy": None,
+            "cancer": None,
+            "avg": None,
+            "activeCoils": n,
+            "achievedB_T": achieved_b,
+            "dutySum": duty_sum,
+            _hesapsiz: True,
             "ts": time.time(),
         }
     try:

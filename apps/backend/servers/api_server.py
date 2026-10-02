@@ -79,6 +79,14 @@ def update_live_session_state(*args, **kwargs):
                 _push_notification(f"📄 Seans alan kaydı masaüstüne yazıldı: {_yol.name}", "info")
         except Exception:
             logging.exception("seans alan kaydı kapatılamadı (seans akışı etkilenmez)")
+        # D1.61 (B-5.7 · B-1.25): canlı E bağlamı seansa aittir — aynı tek noktada temizlenir (durdurma, süre bekçisi,
+        # STM watchdog'u, acil durdurma); sonraki seansta başka hedefin E'si "● canlı" görünmez.
+        try:
+            from servers import efield_live as _ef_bitis
+
+            _ef_bitis.seans_bitti()
+        except Exception:
+            logging.exception("canlı E bağlamı temizlenemedi (seans akışı etkilenmez)")
     return live_state.update_live_session_state(*args, **kwargs)
 
 
@@ -762,17 +770,29 @@ def _olculen_alanlari_tazele() -> None:
     (`_sensor_persistence_loop`) her turda bunu cagirir. Durdurma/engelleme YOK (A-47)."""
     simdi = time.monotonic()
     degisen = []
+    alani_dusen = []
     with _live_state_lock:
         for idx in list(_coil_olculen_alanlar):
             if not (0 <= idx < 8):
                 continue
             coil = _live_state["coils"][idx]
+            eski = list(coil.get("measuredFields") or [])
             taze = sorted(_taze_alanlar_locked(idx, simdi))
-            if taze != list(coil.get("measuredFields") or []):
+            if taze != eski:
                 coil["measuredFields"] = taze
                 degisen.append((idx + 1, dict(coil)))
+                if "magneticMt" in eski and "magneticMt" not in taze:
+                    alani_dusen.append(idx + 1)
+        _anlik_bobin = _live_state["activeTreatment"].get("measuredIntensityCoil")
     for cid, snap in degisen:
         _ws_broadcast_sync({"type": "coil_status", "coilId": cid, "data": snap})
+    # D1.76 (D1.67 açık-2): seans kartının ANLIK ölçülen yoğunluğu o bobinin alan sensöründen gelir — sensör susunca
+    # son değer "anlık" kalmaz ('—'); seans TEPESİ ölçülmüş bir kayıttır, korunur.
+    if _anlik_bobin in alani_dusen:
+        try:
+            update_measured_intensity(None, None, _seans_alan.zirve())
+        except Exception:
+            logging.exception("susan alan sensörünün anlık yoğunluğu temizlenemedi")
 
 
 #: bobin indeksi → son bilinen ADC doygunluk durumu (bildirimi yalniz GECISTE basmak icin).
@@ -3714,6 +3734,14 @@ async def start_session(payload: SessionStartPayload, request: Request):
     if not _hala_benim or _sonra_engel:
         await _baslatma_sirasinda_durduruldu(_sonra_engel)
 
+    # D1.61 (B-5.7): elle seansta fantom/petri analizinin canlı E bağlamı (başka bir hedef) GÖSTERİLMEZ.
+    try:
+        from servers import efield_live as _ef_bas
+
+        _ef_bas.seans_basladi("manuel")
+    except Exception:
+        logging.exception("canlı E bağlamı temizlenemedi (seans akışı etkilenmez)")
+
     # D1.99 (B-1.9): kart donanıma GİDEN frekansı gösterir (STM kabul ettiyse STM'in, yoksa ESP'nin normalize değeri).
     from utils.stm32_protocol_limits import normalize_esp_frequency_hz as _kart_esp_hz
 
@@ -3992,6 +4020,16 @@ def start_ai_session(
             for c in (prev.get("coil_ids") or [])
             if prev.get("is_active") and int(c) not in set(int(x) for x in coil_ids)
         ]
+    # D1.61 (B-5.7): AI (Auto) / kedi AI Pro seansında fantom/petri analizinin canlı E bağlamı (başka hedef) GÖSTERİLMEZ;
+    # yalnız AYNI modelin araştırma AI Pro seansı bağlamı korur (`efield_live.seans_basladi`). AI (Auto)'nun kendi tekrarı
+    # (`cont`) yeni seans değildir.
+    if not cont:
+        try:
+            from servers import efield_live as _ef_ai
+
+            _ef_ai.seans_basladi(tur, model)
+        except Exception:
+            logging.getLogger(__name__).exception("canlı E bağlamı temizlenemedi (seans akışı etkilenmez)")
     if _orphan_coils:
         try:
             _bildir_teyitsiz_stop(_stop_session_coils(_orphan_coils), "Sahipsiz bobin durdurması")

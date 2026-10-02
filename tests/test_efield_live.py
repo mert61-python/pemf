@@ -23,8 +23,11 @@ def _temiz():
 # ── telemetri → model girdisi ölçeği ────────────────────────────────────────
 def test_olcek_uretim_varsayilanlariyla_tutar():
     """5 bobin × %30 duty, 1 mT  →  achieved_B=0.001 T, duty_sum=1.5.
-    Bu tam olarak ai_router._AI_ACHIEVED_B / _AI_DUTY_SUM varsayılanlarıdır."""
-    coils = [{"running": True, "magneticMt": 1.0, "dutyCycle": 30.0} for _ in range(5)]
+    Bu tam olarak ai_router._AI_ACHIEVED_B / _AI_DUTY_SUM varsayılanlarıdır.
+    (D1.76: B yalnız alanı ÖLÇÜLEN bobinlerden — `measuredFields`; ölçülmeyen kol test_canli_E_alani_ve_olculen_alan_DURUST'ta.)"""
+    coils = [
+        {"running": True, "magneticMt": 1.0, "dutyCycle": 30.0, "measuredFields": ["magneticMt"]} for _ in range(5)
+    ]
     b, duty, n = ef.telemetry_inputs(coils)
     assert n == 5
     assert b == pytest.approx(0.001), f"achieved_B Tesla olmalı: {b}"
@@ -34,9 +37,9 @@ def test_olcek_uretim_varsayilanlariyla_tutar():
 def test_yalniz_CALISAN_bobinler_sayilir():
     """Duran bobin alan üretmez; ortalamaya katılırsa B yapay olarak düşer."""
     coils = [
-        {"running": True, "magneticMt": 2.0, "dutyCycle": 40.0},
-        {"running": False, "magneticMt": 0.0, "dutyCycle": 0.0},
-        {"running": False, "magneticMt": 0.0, "dutyCycle": 0.0},
+        {"running": True, "magneticMt": 2.0, "dutyCycle": 40.0, "measuredFields": ["magneticMt"]},
+        {"running": False, "magneticMt": 0.0, "dutyCycle": 0.0, "measuredFields": ["magneticMt"]},
+        {"running": False, "magneticMt": 0.0, "dutyCycle": 0.0, "measuredFields": ["magneticMt"]},
     ]
     b, duty, n = ef.telemetry_inputs(coils)
     assert n == 1
@@ -87,14 +90,19 @@ def test_gercek_model_ile_E_uretir_ve_duty_ile_DEGISIR():
     if ef._predictor() is None:
         pytest.skip("vekil model yok (ai_models kurulu değil)")
     ef.set_context([{"centroid_cabin_mm": [0.0, 0.0, 0.0], "organ_id": 1}])
-
-    dusuk = ef.compute([{"running": True, "magneticMt": 1.0, "dutyCycle": 10.0}])
-    yuksek = ef.compute([{"running": True, "magneticMt": 4.0, "dutyCycle": 80.0}])
+    # ⚠️ İG-5.83 (D1.61/D1.76, 2026-10-02): B modelin EĞİTİM aralığında tutulur (eskiden 4 mT kullanılıyordu — aralık
+    # dışı, model orada anlamsız E üretir ve bar artık '—' gösterir). Tepkiyi duty değişimi ölçer.
+    alt, ust = ef.egitim_b_araligi_T()
+    b_mt = (alt + ust) / 2 * 1000.0
+    olc = ["magneticMt"]
+    dusuk = ef.compute([{"running": True, "magneticMt": b_mt, "dutyCycle": 10.0, "measuredFields": olc}])
+    yuksek = ef.compute([{"running": True, "magneticMt": b_mt, "dutyCycle": 80.0, "measuredFields": olc}])
     assert dusuk and yuksek
     for v in (dusuk, yuksek):
         assert set(["healthy", "cancer", "avg", "activeCoils", "achievedB_T", "dutySum"]) <= set(v)
+    assert dusuk["cancer"] is not None and yuksek["cancer"] is not None
     assert dusuk["cancer"] != yuksek["cancer"], "E canlı girdiye tepki vermiyor — bar sabit kalırdı"
-    assert yuksek["achievedB_T"] == pytest.approx(0.004)
+    assert yuksek["achievedB_T"] == pytest.approx(b_mt / 1000.0)
     assert yuksek["dutySum"] == pytest.approx(0.8)
 
 

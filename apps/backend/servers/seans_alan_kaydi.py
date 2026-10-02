@@ -122,7 +122,10 @@ class SeansAlanKaydi:
     # ── yaşam döngüsü ────────────────────────────────────────────────────────
     def seans_basladi(self, seans_id: str, meta: dict | None = None) -> Path | None:
         """Yeni seans için CSV açar. Dosya açılamazsa None döner — SEANS ENGELLENMEZ."""
-        self.seans_bitti("yeni seans başladı")  # savunma: yarım kalan kaydı kapat
+        # savunma: yarım kalan kaydı kapat. ⚠️ D1.76 (B-1.26): son/zirve değerini `seans_bitti` SIFIRLAR — CSV'si
+        # açılamayan bu seansta önceki seansın tepesi "ölçülen yoğunluk" görünmez (eskiden sıfırlama yalnız dosya
+        # açılınca, aşağıda, yapılıyordu). `_aktif`i yalnız `seans_bitti` kapattığı için ayrı bir sıfırlama gerekmez.
+        self.seans_bitti("yeni seans başladı")
         meta = meta or {}
         try:
             dizin, _gerekce = masaustu_dizini()
@@ -172,6 +175,11 @@ class SeansAlanKaydi:
             dosya, yazici, yol = self._dosya, self._yazici, self._yol
             zirve, bobin, satir, doygun = self._zirve, self._zirve_bobin, self._satir, self._doygun_goruldu
             self._dosya = self._yazici = None
+            # ⚠️ D1.76 (B-1.26): özet için okunduktan SONRA sıfırlanır — CSV'siz sonraki seans (AI) önceki seansın
+            # son/zirve değerini "ölçülen yoğunluk" diye göstermesin.
+            self._zirve = None
+            self._zirve_bobin = None
+            self._son = None
         try:
             if yazici is not None:
                 yazici.writerow([])
