@@ -1316,12 +1316,23 @@ def _predict_and_drive(x_mm, y_mm, z_mm, organ_id):
     )
 
 
-def _drive_coils_ai_pro(D, P):
+def _ai_pro_bobinleri() -> list:
+    """D1.83 (S-1.1 · Y25): AI Pro planının (em_kedi D[7]) SÜRÜLEBİLİR bobinleri — TEK KAYNAK `live_state.STM_COIL_IDS`
+    (faz 4'ten beri 1-7 STM'de, 8 ESP'de). Topoloji değişirse plan bobini burada görünmez → "sürülmedi" (ölü yayın YOK)."""
+    from servers.live_state import STM_COIL_IDS
+
+    return [c for c in range(1, 8) if c in STM_COIL_IDS]
+
+
+def _drive_coils_ai_pro(D, P) -> list:
     """
-    em_kedi çıktısı D[7]/P[7] ile bobin 1-7'yi PER-COIL sürer (paylaşımlı tek faz YOK).
-      - STM bobin 1-5: hardware_controller.update_coil (duty yüzde olarak, freq=1Hz, per-coil phase)
-      - ESP bobin 6-7: _mqtt_publish pemf/coil/{cid}/control (per-coil duty/phase)
+    em_kedi çıktısı D[7]/P[7] ile bobin 1-7'yi PER-COIL sürer (paylaşımlı tek faz YOK) → GERÇEKTEN sürülen bobinler.
+      - Bobin 1-7: `STM_COIL_IDS` tek kaynağından `hardware_controller.update_coil` (duty yüzde, freq=1 Hz, per-coil faz).
+        ⚠️ D1.83/D1.84 (S-1.1 · B-5.2 · Y25): 6-7 eskiden `for idx in (5, 6)` → MQTT `pemf/coil/{6,7}/control`
+        yayınıyla "sürülüyordu"; faz 4'ten beri 6-7 STM'de → telde duty 0, konular ÖLÜ (1-C §9 #3), panel/kayıt ise 7
+        bobini uygulanmış gösteriyordu. `update_coil`'in dönüşü artık OKUNUR (İG-5.32): reddedilen bobin "sürülmedi".
       - Bobin 8: SÜRÜLMEZ (kapalı).
+    Döner: kabul edilen bobin kimlikleri (mühür yoksa / donanım yoksa boş liste).
     Limit/clamp EKLENMEZ — yalnız mevcut normalize_* yardımcıları (yüzde dönüşümü/0..360 faz).
 
     D1.81 / İG-5.9: SÜRE seans MÜHRÜNDEN (kalan süre) — bayat `_ai_duration_min` globali telde yanlış süre ve erken /
@@ -1334,56 +1345,42 @@ def _drive_coils_ai_pro(D, P):
     _muhur = _ai_pro_surus_muhru()
     if _muhur is None:
         logger.warning("AI Pro sürüşü ATLANDI: sürülebilir (onaylı, süresi dolmamış) AI Pro seansı yok.")
-        return
+        return []
     _kalan_s = _muhur["kalan_s"]
     _kalan_dk = max(1, _math.ceil(_kalan_s / 60.0))  # firmware dakika granülerliği (yukarı); yazılım deadline'ı saniye
 
-    # STM bobin 1-5 (indeks 0-4)
-    if state and state.hardware:
-        for idx in range(5):
-            cid = idx + 1
-            duty_pct = normalize_ai_pro_duty_ratio(D[idx]) * 100.0  # ratio→% (eski 0.50 cap)
-            phase_i = normalize_phase_deg(P[idx])
-            try:
-                state.hardware.update_coil(
-                    cid,
-                    freq=_AI_PRO_FREQ_HZ,
-                    duty=duty_pct,
-                    phase=phase_i,
-                    duration=_kalan_dk,
-                    start=True,
-                    duration_seconds=_kalan_s,
-                )
-            except Exception as _he:
-                logger.warning("AI Pro STM bobin %d sürüş hatası: %s", cid, _he)
-
-    # ESP bobin 6-7 (indeks 5-6) — per-coil duty/phase (eski paylaşımlı duty + phase:0 DEĞİL).
-    try:
-        import servers.api_server as _api_esp
-
-        for idx in (5, 6):
-            cid = idx + 1
-            duty_pct = round(normalize_ai_pro_duty_ratio(D[idx]) * 100.0, 1)
-            phase_i = round(normalize_phase_deg(P[idx]), 1)
-            # D1.81 · Y4: mandal/nesil kapılı START yayını (niyet nesli çağıranın bağlamından; telafi STOP'u dahil).
-            _api_esp._esp_start_yayinla(
+    surulen: list = []
+    if not (state and state.hardware):
+        return surulen
+    for cid in _ai_pro_bobinleri():
+        idx = cid - 1
+        duty_pct = normalize_ai_pro_duty_ratio(D[idx]) * 100.0  # ratio→% (eski 0.50 cap)
+        phase_i = normalize_phase_deg(P[idx])
+        try:
+            kabul = state.hardware.update_coil(
                 cid,
-                {
-                    "command": "start",
-                    "command_id": f"aipro_{cid}_{int(time.time() * 1000)}",
-                    "freq": round(_AI_PRO_FREQ_HZ, 1),
-                    "duty": duty_pct,
-                    "phase": phase_i,
-                    "duration": int(_math.ceil(_kalan_s)),
-                },
-                estop_mandali.baglam_nesli(),
+                freq=_AI_PRO_FREQ_HZ,
+                duty=duty_pct,
+                phase=phase_i,
+                duration=_kalan_dk,
+                start=True,
+                duration_seconds=_kalan_s,
             )
-    except Exception as _ee:
-        logger.warning("AI Pro ESP 6-7 publish hatası: %s", _ee)
+        except Exception as _he:
+            logger.warning("AI Pro bobin %d sürüş hatası (sürülmedi): %s", cid, _he)
+            continue
+        if kabul:
+            surulen.append(cid)
+        else:
+            logger.warning("AI Pro bobin %d SÜRÜLMEDİ: donanım komutu reddetti (ya da sürüş yetkisi geçersiz).", cid)
+    return surulen
 
 
-def _build_ai_pro_percoil(D, P):
-    """7-bobinlik perCoil yükü (gerçek per-coil AI duty/phase, yüzde). Bobin 8 yok (kapalı)."""
+def _build_ai_pro_percoil(D, P, surulen=()):
+    """7-bobinlik perCoil yükü (PLANLANAN per-coil AI duty/phase, yüzde) + `suruldu` (telde GERÇEKTEN sürüldü mü).
+    Bobin 8 yok (kapalı). D1.84 (B-5.2): eskiden plan değeri "uygulandı" diye okunuyordu (6-7 telde 0'ken); `suruldu`
+    yalnız `_drive_coils_ai_pro`'nun kabul ettiği bobinlerde True — ekran 6-7 (ve herhangi bir bobin) için gerçeği gösterir."""
+    _s = set(surulen or ())
     out = []
     for idx in range(7):
         out.append(
@@ -1392,6 +1389,7 @@ def _build_ai_pro_percoil(D, P):
                 "freq": round(_AI_PRO_FREQ_HZ, 1),
                 "duty": round(normalize_ai_pro_duty_ratio(D[idx]) * 100.0, 1),
                 "phase": round(normalize_phase_deg(P[idx]), 1),
+                "suruldu": (idx + 1) in _s,
             }
         )
     return out
@@ -1741,6 +1739,7 @@ def _ai_pro_loop(dongu_muhru=None):
             # ⚠️ D1.60 (A-16, 2. katman): yalnız ONAYLANAN hedef sürülür (`/start`ın döngü mührü). Mühür dışı hedefin
             # koordinatı "hedef yok" sayılır → sürülmez, N turda STOP. Mühürsüz eski çağıranlar (`dongu_muhru` None) aynen.
             _surulebilir_hedef = _bulundu and (dongu_muhru is None or _c_oid == dongu_muhru.get("hedef"))
+            _surulen: list = []  # D1.84: bu turda telde GERÇEKTEN sürülen bobinler (perCoil `suruldu`)
 
             # ── em_kedi → per-coil → sür (YALNIZCA organ bulunduysa; el yerine organ-tespiti koşulu) ──
             if _surulebilir_hedef:
@@ -1768,7 +1767,7 @@ def _ai_pro_loop(dongu_muhru=None):
                     # i7-F-1: gözlem damgası da taşınır — tahmin sırasında kayıp STOP'u geldiyse `update_coil` kilit altında
                     # reddeder.
                     with estop_mandali.surus_baglami(_nesil), estop_mandali.gozlem_baglami(kayip_damgasi):
-                        _drive_coils_ai_pro(D, P)
+                        _surulen = _drive_coils_ai_pro(D, P) or []
                     if not _dongu_gecerli():
                         logger.warning("AI Pro: sürüş sırasında durdurma/acil durdurma geldi → döngü sonlandırılıyor.")
                         break
@@ -1845,7 +1844,7 @@ def _ai_pro_loop(dongu_muhru=None):
                 _kodlanan_kare = frame
                 _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
             b64_image = base64.b64encode(buffer).decode('utf-8')
-            per_coil = _build_ai_pro_percoil(D, P)
+            per_coil = _build_ai_pro_percoil(D, P, _surulen)
             ws_data = {
                 "imageBase64": b64_image,
                 # [S7 adım 4] Kare boyutu istemcinin oran kilidi için (yalnız-ek).
@@ -1933,7 +1932,9 @@ def _ai_pro_loop(dongu_muhru=None):
                         f"pemf/coil/{_cid}/control",
                         {
                             "command": "stop",
-                            "command_id": f"ai_stop_{_cid}_{int(time.time() * 1000)}",
+                            # 1-C §9 #4 (D1.E10 deseni): süreç-içi sıra eki — yalnız ms'de aynı ms'deki iki STOP'tan
+                            # ikincisi 8266 tekrar önbelleğinde yutulabiliyordu.
+                            "command_id": _api2._komut_kimligi("ai_stop", _cid),
                         },
                     )
                 except Exception:
@@ -2291,7 +2292,7 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
             _ai_organ_cache["localized"] = False
 
     # Seansı baştan _active_session'a yaz → süre-watchdog + emergency-stop AI Pro'yu da kapsar.
-    # 1-7: STM 1-5 + ESP 6-7 (bobin 8 KAPALI; em_kedi 7 bobinlik per-coil duty/phase üretir).
+    # 1-7: STM (D1.83: `STM_COIL_IDS` tek kaynak; bobin 8 KAPALI; em_kedi 7 bobinlik per-coil duty/phase üretir).
     try:
         from servers.api_server import start_ai_session
 
@@ -2794,6 +2795,7 @@ async def ai_pro_frame(
 
         D, P, e_field = [0.0] * 7, [0.0] * 7, 0.0
         _surdu = False
+        _surulen: list = []  # D1.84: telde GERÇEKTEN sürülen bobinler
         # GERÇEK donanımı sür (loop ile aynı yol) — organ bulundu VE aktif AI Pro seansı varsa VE
         # kare seansın SAHİBİNDEN geliyorsa. Bobin 1-7. [B1]: yabancı kare ASLA sürmez (yanlış
         # kameradan hesaplanan hedefe onaylı seansta enerji verilmesini önler).
@@ -2808,14 +2810,17 @@ async def ai_pro_frame(
                 await _frame_kayip_stopu("doz modeli hatası", _seri)
         elif _surulebilir_hedef and session_active and not is_foreign:
             _frame_hedef_durumu(_muhur, True)  # hedef bulundu VE geçerli doz → kayıp sayacı sıfırlanır
-            # Audit P2: _drive_coils_ai_pro senkron MQTT publish yapar (ESP probe/connect/wait ~sn) →
-            # event-loop'u bloklardi (es-zamanli /emergency_stop yaniti gecikir). to_thread'e al.
+            # Audit P2: _drive_coils_ai_pro senkron seri port yazımı yapar (bobin başına ~onlarca ms; D1.83'e kadar 6-7
+            # için MQTT de) → event-loop'u bloklardi (es-zamanli /emergency_stop yaniti gecikir). to_thread'e al.
             # D1.81: niyet nesli bağlamı `to_thread` iş parçacığına kopyalanır; `update_coil` onu kilit altında denetler.
             # i7-F-1: gözlem damgası da taşınır — tahmin sırasında kayıp STOP'u geldiyse sürüş kilit altında reddedilir.
             with estop_mandali.surus_baglami(_muhur["nesil"]), estop_mandali.gozlem_baglami(kayip_damgasi):
-                await asyncio.to_thread(_drive_coils_ai_pro, D, P)
+                _surulen = await asyncio.to_thread(_drive_coils_ai_pro, D, P) or []
             # Sürüş GEÇERLİ kaldı mı (tahmin/sürüş sırasında durdurma ya da kayıp STOP'u geldiyse donanım reddetti).
-            _surdu = not (estop_mandali.baslatma_engeli(_muhur["nesil"]) or estop_mandali.gozlem_engeli(kayip_damgasi))
+            # D1.84: en az bir bobin telde KABUL edilmediyse "sürüldü" denmez.
+            _surdu = bool(_surulen) and not (
+                estop_mandali.baslatma_engeli(_muhur["nesil"]) or estop_mandali.gozlem_engeli(kayip_damgasi)
+            )
             if _surdu:
                 remaining = max(0, int(_muhur["bitis_mono"] - time.monotonic()))
                 try:
@@ -2868,7 +2873,7 @@ async def ai_pro_frame(
                 "reliability": round(rel, 3),
                 # Sunum-katmanı XAI (2026-08-26): web/mobil paritesi — güven dökümü.
                 "guvenDokumu": guven_dokumu,
-                "perCoil": _build_ai_pro_percoil(D, P),
+                "perCoil": _build_ai_pro_percoil(D, P, _surulen if _surdu else ()),
                 "target": {"x": round(x_mm, 1), "y": round(y_mm, 1), "z": round(z_mm, 1)},
                 "eField": round(e_field, 4),
                 "organId": _gosterim_oid,

@@ -70,7 +70,9 @@ const HAZIRLIK_TAVAN_MS = 120000;
 /** Bu değerin altındaki güven "sınırda" sayılır ve operatöre ayrıca işaretlenir. */
 const DUSUK_GUVEN = 0.5;
 
-type Coil = { id: number; freq: number; duty: number; phase: number };
+// D1.84 (B-5.2 · Y25): `suruldu` — bobin telde GERÇEKTEN sürüldü mü (backend `update_coil` kabulü). Opsiyonel: eski backend
+// göndermez → eski gösterim (sürüm kayması). `false` → "sürülmedi" (plan değeri parantezde).
+type Coil = { id: number; freq: number; duty: number; phase: number; suruldu?: boolean };
 type FrameResult = {
   image_base64?: string;
   /** [S7 adım 4] Kodlanan karenin gerçek boyutu (oran kilidi). Eski backend göndermez. */
@@ -1271,11 +1273,13 @@ export function AiProPanel({
           <Text style={[styles.th, { flex: 1 }]}>Duty</Text>
           <Text style={[styles.th, { flex: 1 }]}>Faz</Text>
         </View>
-        {(perCoil.length ? perCoil : Array.from({ length: 7 }, (_, i) => ({ id: i + 1, freq: 0, duty: 0, phase: 0 }))).map((c) => (
+        {(perCoil.length ? perCoil : Array.from({ length: 7 }, (_, i): Coil => ({ id: i + 1, freq: 0, duty: 0, phase: 0 }))).map((c) => (
           <View key={c.id} style={styles.tr}>
             <Text style={[styles.td, { flex: 1 }]}>{c.id}</Text>
             <Text style={[styles.td, { flex: 1 }]}>{c.freq} Hz</Text>
-            <Text style={[styles.td, { flex: 1 }]}>{c.duty}%</Text>
+            <Text style={[styles.td, { flex: 1 }]}>
+              {c.suruldu === false ? (c.duty > 0 ? `sürülmedi (plan ${c.duty}%)` : "sürülmedi") : `${c.duty}%`}
+            </Text>
             <Text style={[styles.td, { flex: 1 }]}>{c.phase}°</Text>
           </View>
         ))}

@@ -78,7 +78,8 @@ def owned(monkeypatch):
     monkeypatch.setattr(air, "_localize_organ", _loc)
     driven = []
     monkeypatch.setattr(air, "_predict_and_drive", lambda x, y, z, o: ([1.0] * 7, [0.0] * 7, 0.07))
-    monkeypatch.setattr(air, "_drive_coils_ai_pro", lambda D, P: driven.append((D, P)))
+    # D1.84: sözleşme — `_drive_coils_ai_pro` KABUL edilen bobinleri döndürür; boş dönüş "sürüldü" sayılmaz.
+    monkeypatch.setattr(air, "_drive_coils_ai_pro", lambda D, P: driven.append((D, P)) or [1, 2, 3, 4, 5, 6, 7])
 
     yield air, apis, TestClient(apis.app), driven, localize_calls
 

@@ -210,7 +210,7 @@ def esp_kapsam_noktalari(kaynak: str) -> list[tuple[str, object]]:
             if "pemf/coil/{" + n.target.id + "}/control" in govde or f"_esp_start_yayinla({n.target.id}," in govde:
                 if "aiauto_" in govde:
                     sonuc.append(("ai_auto_esp_start", n.iter))
-                elif "ai_stop_" in govde:
+                elif "ai_stop" in govde:  # D1.83: kimlik `_komut_kimligi("ai_stop", …)` (1-C §9 #4)
                     sonuc.append(("ai_teardown_esp_stop", n.iter))
     return sonuc
 
@@ -263,16 +263,12 @@ def test_KRITIK_D140_coil_konusu_yayinlayan_dongu_LITERAL_kumeyle_donmez():
             )
             if konu and _literal_tamsayi_kumesi(n.iter) and (rel, ast.unparse(n.iter)) not in izinli:
                 ihlal.append(f"{rel}:{n.iter.lineno} for {n.target.id} in {ast.unparse(n.iter)}")
-    bilinen = [i for i in ihlal if i.startswith("apps/backend/servers/ai_router.py") and "(5, 6)" in i]
-    assert [i for i in ihlal if i not in bilinen] == [], ihlal
+    # D1.84: ai_router'ın bilinen `(5, 6)` istisnası kalktı (6-7 STM'e yönlendirildi) — artık istisna YOK.
+    assert ihlal == [], ihlal
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="AÇIK (S-1.1/B-5.2 → D1.83/D1.84, Y25): AI Pro bobin 6-7'yi hâlâ MQTT'ye `for idx in (5, 6)` ile "
-    "sürüyor; 6-7 STM'e yönlendirilince bu kol GEÇER ve strict xfail KIRMIZI olur → işareti kaldırın.",
-)
-def test_ACIK_D184_AI_Pro_6_7_MQTT_indeks_bicimi_KALDIRILDI():
+def test_KRITIK_D184_AI_Pro_6_7_MQTT_indeks_bicimi_KALDIRILDI():
+    """D1.83/D1.84 (Y25, 1-D): 6-7 STM'e yönlendirildi — strict xfail işareti KALDIRILDI (kol artık kapıdır)."""
     src = (KOK / "apps/backend/servers/ai_router.py").read_text(encoding="utf-8")
     assert "for idx in (5, 6):" not in src
 

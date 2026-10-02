@@ -59,7 +59,7 @@ export interface AiVisionData {
   eField?: number;
   organId?: number;
   organName?: string;
-  perCoil?: { id: number; freq: number; duty: number; phase: number }[];
+  perCoil?: { id: number; freq: number; duty: number; phase: number; suruldu?: boolean }[]; // D1.84: telde sürüldü mü
   remainingSec?: number;
   durationMin?: number;
   // ── Araştırma hattı (Faz 2/3) YALNIZ-EK alanları: fantom/petri hedefi kare ÜSTÜNDEN seçilir.

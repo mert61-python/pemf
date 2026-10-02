@@ -113,7 +113,10 @@ def env(monkeypatch):
     monkeypatch.setattr(apis, "update_live_session_state", lambda *a, **k: None)
     monkeypatch.setattr(apis, "_mqtt_publish", lambda *a, **k: True)
     surus = {"n": 0}
-    monkeypatch.setattr(air, "_drive_coils_ai_pro", lambda D, P: surus.__setitem__("n", surus["n"] + 1))
+    # D1.84: sözleşme — `_drive_coils_ai_pro` KABUL edilen bobinleri döndürür; boş dönüş "sürüldü" sayılmaz.
+    monkeypatch.setattr(
+        air, "_drive_coils_ai_pro", lambda D, P: surus.__setitem__("n", surus["n"] + 1) or [1, 2, 3, 4, 5, 6, 7]
+    )
 
     def seans(model: str, sahip: str, hedef_id: int = 1):
         """Onaylanmış AI Pro seansı: mühürlenen model aktif, süre-watchdog kapsamında."""

@@ -213,8 +213,7 @@ _BICIMLER = [
     ("apps/backend/servers/api_server.py", "reconcile_{coil_id}_{int(time.time() * 1000)}"),
     ("apps/backend/servers/api_server.py", "estopcloud_{cid}_{int(time.time() * 1000)}"),
     ("apps/backend/servers/api_server.py", "stop_{coil_id}_{int(_t.time() * 1000)}"),
-    ("apps/backend/servers/ai_router.py", "aipro_{cid}_{int(time.time() * 1000)}"),
-    ("apps/backend/servers/ai_router.py", "ai_stop_{_cid}_{int(time.time() * 1000)}"),
+    # D1.83/D1.84 (1-D): `aipro_` START'ı kalktı (6-7 STM'e); `ai_stop_` artık `_komut_kimligi("ai_stop", …)` (sıra ekli).
     ("apps/backend/backend_service.py", "service_stop_{coil_id}_{int(time.time() * 1000)}"),
     ("apps/backend/backend_service.py", "startup_reconcile_{_cid}_{int(_t.time() * 1000)}"),
 ]
@@ -259,7 +258,7 @@ def test_KRITIK_TUM_kimlik_bicimleri_FIRMWARE_tamponlarina_sigar_ve_ACK_yankisi_
     bulunan, on_ekler, yayin_ekleri = _kaynak_bicimlerini_topla()
     beklenen = set(_BICIMLER)
     assert bulunan == beklenen, f"kaynakta LISTEDE OLMAYAN/eksik kimlik bicimi: {sorted(bulunan ^ beklenen)}"
-    assert on_ekler == {"react", "react_batch", "sess", "telafi", "stop"}, on_ekler
+    assert on_ekler == {"react", "react_batch", "sess", "telafi", "stop", "ai_stop"}, on_ekler
     assert yayin_ekleri == {"selftest", "reset"}, yayin_ekleri
 
     from servers.live_state import ESP_COIL_IDS, STM_COIL_IDS
@@ -308,16 +307,7 @@ def test_KRITIK_TUM_kimlik_bicimleri_FIRMWARE_tamponlarina_sigar_ve_ACK_yankisi_
             "duration": 9999999999,
         }
         yukler[ek] = len(json.dumps(yuk))
-    for ek in ("aipro",):  # D1.88 (A-19): `aiauto_` START'ı kaldırıldı
-        yuk = {
-            "command": "start",
-            "command_id": _en_uzun(ek + "_{_cid}_{int(time.time() * 1000)}", ""),
-            "freq": en_kotu_sayi,
-            "duty": en_kotu_sayi,
-            "phase": en_kotu_sayi,
-            "duration": 9999999999,
-        }
-        yukler[ek] = len(json.dumps(yuk))
+    # D1.83/D1.84: AI Pro artık ESP START yayınlamaz (`aipro_` yükü yok).
     # ArduinoJson 6 havuzu (ESP8266: slot 16 bayt; const char* girdi → anahtar+deger dizeleri kopyalanir)
     en_uzun_start = _en_uzun(
         "{on_ek}_{coil_id}_{int(time.time() * 1000)}_{next(_komut_sira) % 1_000_000}", "react_batch"
