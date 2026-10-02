@@ -172,6 +172,9 @@ def muhurlu_seans_yaz(apis, *, sure_dk: int = 20, model: str = "kedi", baslangic
     koşmaya gerek olmayan (yalnız `/frame` kapısının BAŞKA bir özelliğini ölçen) testler için. Ek alanlar `ek` ile."""
     from utils import estop_mandali
 
+    # D1.60 (A-16): mühür ONAYLANAN hedefi taşır (`start_ai_session(onay_hedefi=…)` gibi). Verilmezse o anki seçili
+    # hedef — testler hedefi mühürden ÖNCE kurar; sonradan değiştiren mühür dışına çıkar (sürülmez).
+    hedef = ek.pop("onay_hedefi") if "onay_hedefi" in ek else _secili_hedef()
     with apis._session_lock:
         apis._active_session.clear()
         apis._active_session.update(
@@ -186,9 +189,16 @@ def muhurlu_seans_yaz(apis, *, sure_dk: int = 20, model: str = "kedi", baslangic
                 "duration_minutes": int(sure_dk),
                 "start_mono": time.monotonic() if baslangic_mono is None else baslangic_mono,
                 "coil_ids": list(coil_ids) if coil_ids is not None else list(range(1, 8)),
+                "onay_hedefi": hedef,
                 **ek,
             }
         )
+
+
+def _secili_hedef():
+    from servers import ai_router as air
+
+    return air._ai_organ_id
 
 
 def onayli_baslat(o, *, sure_dk: int = 5, organ: int = 0, model: str = "kedi", istemci: str = ""):

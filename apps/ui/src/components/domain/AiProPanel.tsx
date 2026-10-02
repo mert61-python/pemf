@@ -231,6 +231,12 @@ export function AiProPanel({
   const { aiVisionData: v } = useLiveData();
 
   const [organId, setOrganId] = useState(0);
+  // D1.60 (A-16): reddedilen/ulaşmayan organ değişiminde seçimi GERİ almak için son değer (boş bağımlılıklı
+  // `changeOrgan` state'i kapanışta bayat görür → ref).
+  const organIdRef = useRef(0);
+  useEffect(() => {
+    organIdRef.current = organId;
+  }, [organId]);
   // AKTİF HEDEF MODELİ: liste tek elemanlıysa (veteriner → "kedi") doğrudan o; araştırma modunda
   // araştırmacı Adım 1'de kartlardan seçer (seçilmeden hazırlık başlatılamaz).
   const [hedefModeli, setHedefModeli] = useState<HedefModeli | "">(
@@ -755,20 +761,32 @@ export function AiProPanel({
   }, []);
 
   const changeOrgan = useCallback(async (id: number) => {
+    const onceki = organIdRef.current;
     setOrganId(id);
     // DÜŞÜK fix: sessiz yutma yerine başarısızlıkta uyar (komut ulaşmadıysa kullanıcı bilsin).
     // [B1]: client_id ile → backend YABANCI (sahip dışı) istemcinin mid-seans organ değişimini
     // (onaylanmamış organa enerji) reddeder. Sahip kendi id'siyle çağırır → izin.
+    // ⚠️ D1.60 (A-16, İG-6.10): seans sürerken MÜHÜRDE OLMAYAN organa geçiş backend'de 409 (yeni onay gerekir).
+    // Seçim istekten ÖNCE değiştiği için red sonrası ekran yeni organı gösteriyordu (bobinler onaylı organı sürerken)
+    // ve "sunucuya ulaşmadı" deniyordu. Artık her başarısızlıkta seçim GERİ alınır; HTTP reddinde sunucunun
+    // gerekçesi (eylem söyler) gösterilir — genel "Sunucu Hatası" kutusu ikinci kez açılmasın diye `silent`.
+    let red: { durum: number; detay?: string } | null = null;
     const res = await apiPost<AiProAction | null>(
       "/ai/pro/organ",
       { organ_id: id, client_id: clientIdRef.current, model: hedefModeliRef.current },
-      null
+      null,
+      { silent: true, onHttpError: (durum, detay) => { red = { durum, detay }; } }
     );
     if (!res) {
+      setOrganId(onceki);
       // Araştırmada "Organ" kelimesi yanıltıcıdır (hedef bir tümör odağı / kuyudur). Ref'ten
       // okunur ki bu callback'in boş bağımlılık dizisi korunsun.
       const ad = hedefModeliRef.current && hedefModeliRef.current !== "kedi" ? "Hedef" : "Organ";
-      platformAlert(`${ad} değiştirilemedi`, "Komut sunucuya ulaşmadı — tekrar deneyin.");
+      const r = red as { durum: number; detay?: string } | null;
+      platformAlert(
+        `${ad} değiştirilemedi`,
+        r ? r.detay || `Sunucu isteği reddetti (${r.durum}).` : "Komut sunucuya ulaşmadı — tekrar deneyin."
+      );
     }
   }, []);
 

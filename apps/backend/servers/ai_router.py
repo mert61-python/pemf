@@ -1227,6 +1227,9 @@ def _ai_pro_surus_muhru():
         "nesil": s["surus_nesli"],
         "onay": s["onay_kimligi"],
         "model": str(s.get("model") or ""),
+        # D1.60 (A-16): hekimin ONAYLADIĞI hedef — sürüş yalnız bunu sürer, başka hedefe geçiş yeni onay ister.
+        # Mühürde yoksa (None) hiçbir hedef "onaylı" sayılmaz (fail-closed).
+        "hedef": s.get("onay_hedefi"),
         "kalan_s": kalan_s,
         "bitis_mono": time.monotonic() + kalan_s,
     }
@@ -1813,9 +1816,12 @@ def _ai_pro_loop(dongu_muhru=None):
             # ⚠️ 1-C inceleme i7-F-1: bir hedef-kaybı STOP'undan ESKİ "bulundu" gözlemi (ör. STOP'tan sonra biten uçuştaki
             # lokalizasyon) BULUNDU SAYILMAZ: sürülmez, kayıp sayılır. Asıl kapı sürüşte (HC, durum kilidi altında).
             _bulundu = bool(localized) and not estop_mandali.gozlem_engeli(kayip_damgasi)
+            # ⚠️ D1.60 (A-16, 2. katman): yalnız ONAYLANAN hedef sürülür (`/start`ın döngü mührü). Mühür dışı hedefin
+            # koordinatı "hedef yok" sayılır → sürülmez, N turda STOP. Mühürsüz eski çağıranlar (`dongu_muhru` None) aynen.
+            _surulebilir_hedef = _bulundu and (dongu_muhru is None or _c_oid == dongu_muhru.get("hedef"))
 
             # ── em_kedi → per-coil → sür (YALNIZCA organ bulunduysa; el yerine organ-tespiti koşulu) ──
-            if _bulundu:
+            if _surulebilir_hedef:
                 # Audit P1: E-stop/stop lokalizasyon (~1-4s) sırasında gelmiş olabilir → SÜRMEDEN ÖNCE
                 # is_active'i yeniden doğrula (E-stop'un ~1 iterasyon geçersiz kılınmasını engelle).
                 import servers.api_server as _apx
@@ -2333,7 +2339,12 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
             raise HTTPException(status_code=428, detail=str(e)) from None
         _ai_loop_active = True
         _ai_dongu_no += 1
-        _dongu_muhru = {"nesil": _niyet_nesli, "onay": str(payload.proposal_id), "dongu": _ai_dongu_no}
+        _dongu_muhru = {
+            "nesil": _niyet_nesli,
+            "onay": str(payload.proposal_id),
+            "dongu": _ai_dongu_no,
+            "hedef": _organ_req,  # D1.60 (A-16): döngü yalnız ONAYLANAN hedefi sürer
+        }
         # Sahiplik kilidin İÇİNDE yazılır: iki eş-zamanlı start'ta kazanan ile sahip AYNI olur.
         _ai_owner_client = str(payload.client_id or "")[:64]
         _ai_organ_id = _organ_req
@@ -2371,6 +2382,7 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
             onay_kimligi=str(payload.proposal_id),
             surus_nesli=_niyet_nesli,
             model=_saglayici.ad,
+            onay_hedefi=_organ_req,
         )
     except Exception:
         logger.exception("start_ai_session failed")
@@ -2481,6 +2493,26 @@ def set_ai_pro_organ(payload: AiProStartPayload = AiProStartPayload()):
         raise HTTPException(
             status_code=422,
             detail=f"Hedef {_organ_req} '{_saglayici.title}' için desteklenmiyor (geçerli: {_gecerli}).",
+        )
+    # ⚠️ D1.60 (B-5.5 · İG-6.10) — SAHİP KARARI A-16: seans sürerken MÜHÜRDE OLMAYAN hedefe geçiş YENİ ONAY ister.
+    # Onay mührü bir hedefe verilir; mühür dışı hedefe sürüş onaysız tedavidir. Ölçüldü (İG-6.10): sahip istemcinin
+    # `/organ {2}`'si onaylı organ-0 seansında 200 dönüyor, teldeki duty/faz yeni organın desenine geçiyordu.
+    # Küresel hedef DEĞİŞMEZ; sürüş de ayrıca yalnız mühürdeki hedefi sürer (2. katman: `/frame`, döngü).
+    _muhur = _ai_pro_surus_muhru()
+    if _muhur is not None and _organ_req != _muhur.get("hedef"):
+        _onayli = _muhur.get("hedef")
+        _onayli_ad = _saglayici.hedef_adi(_onayli) if isinstance(_onayli, int) else "bilinmiyor"
+        logger.warning(
+            "AI Pro: seans sürerken mühür dışı hedefe geçiş REDDEDİLDİ (onaylı %s, istenen %s) — A-16",
+            _onayli,
+            _organ_req,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Seans sürerken onaylanmamış hedefe geçilemez: bu seansın onaylı hedefi «{_onayli_ad}». "
+                "Başka hedef için AI Pro'yu durdurun, yeni öneri alın ve hekimin yeni onayıyla başlatın."
+            ),
         )
     _ai_organ_id = _organ_req
     _ai_relocalize = True  # yeni hedef için lokalizasyonu hemen yeniden çalıştır
@@ -2817,10 +2849,13 @@ async def ai_pro_frame(
         _bulundu = bool(localized) and not estop_mandali.gozlem_engeli(kayip_damgasi)
         # Gösterilen organ = sürülen organ (koordinat bulunduysa); yoksa seçili hedef.
         _gosterim_oid = _c_oid if (localized and isinstance(_c_oid, int) and _c_oid >= 0) else _ai_organ_id
+        # ⚠️ D1.60 (A-16, 2. katman): yalnız MÜHÜRDEKİ hedef sürülür. Küresel hedef `/organ` dışında bir yolla değişse
+        # de (409 1. katmandır) mühür dışı hedefin koordinatı sürülmez; o kare "hedef yok" sayılır (N'de STOP).
+        _surulebilir_hedef = _bulundu and _muhur is not None and _c_oid == _muhur.get("hedef")
         # İG-5.1: sürülebilir seansta SAHİBİN karesi hedefi kaybettiyse kayıp sayılır; ARDIŞIK N kayıpta (ve sonrasında her
         # kayıp karede — i7-F-1 arka kalkanı) AI'nın sürdüğü bobinlere STOP. Yabancı kare sayılmaz.
         if session_active and not is_foreign:
-            _seri = _frame_hedef_durumu(_muhur, _bulundu)
+            _seri = _frame_hedef_durumu(_muhur, _surulebilir_hedef)
             if _seri >= _AI_LOST_STOP_STREAK:
                 await _frame_kayip_stopu("hedef bulunamadı", _seri)
 
@@ -2829,7 +2864,7 @@ async def ai_pro_frame(
         # GERÇEK donanımı sür (loop ile aynı yol) — organ bulundu VE aktif AI Pro seansı varsa VE
         # kare seansın SAHİBİNDEN geliyorsa. Bobin 1-7. [B1]: yabancı kare ASLA sürmez (yanlış
         # kameradan hesaplanan hedefe onaylı seansta enerji verilmesini önler).
-        if _bulundu and session_active and not is_foreign:
+        if _surulebilir_hedef and session_active and not is_foreign:
             D, P, e_field = await asyncio.to_thread(_predict_and_drive, x_mm, y_mm, z_mm, _c_oid)
             # Audit P2: _drive_coils_ai_pro senkron MQTT publish yapar (ESP probe/connect/wait ~sn) →
             # event-loop'u bloklardi (es-zamanli /emergency_stop yaniti gecikir). to_thread'e al.

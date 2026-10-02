@@ -3918,6 +3918,7 @@ def start_ai_session(
     onay_kimligi: str = "",
     surus_nesli: int | None = None,
     model: str = "",
+    onay_hedefi: int | None = None,
 ):
     """AI biofeedback donanım sürerken seansı _active_session'a YAZAR → süre-watchdog onu da
     izler ve süresi dolunca DURDURUR; emergency_stop/STM-disconnect de AI'yı kapsar. Parametre
@@ -3926,7 +3927,9 @@ def start_ai_session(
     D1.80 (B-5.1 · B-5.10): seans MÜHRÜ — `tur` ("ai_auto" | "ai_pro"), `onay_kimligi` (AI Pro: tüketilen hekim
     onayı), `surus_nesli` (D1.81: niyet nesli), `model` (AI Pro: onaylanan sağlayıcı). `/frame` YALNIZ
     `tur == "ai_pro"` + onay + nesil taşıyan seansta sürer; `mode` metni yetki VERMEZ. Varsayılan tür en az
-    yetkili olandır ("ai_auto": `/frame` sürmez)."""
+    yetkili olandır ("ai_auto": `/frame` sürmez).
+    D1.60 (A-16): `onay_hedefi` = hekimin ONAYLADIĞI hedef (organ) kimliği. Seans sürerken başka hedefe geçiş
+    yeni onay ister (`/ai/pro/organ` 409) ve sürüş yalnız bu hedefi sürer."""
     import time as _t
 
     with _session_lock:
@@ -3971,6 +3974,7 @@ def start_ai_session(
                 "onay_kimligi": str(onay_kimligi or ""),
                 "surus_nesli": surus_nesli,
                 "model": str(model or ""),
+                "onay_hedefi": onay_hedefi,
             }
         )
         _started_epoch_ai = _active_session["started_epoch"]

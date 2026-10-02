@@ -117,7 +117,11 @@ def test_KRITIK_frame_tahmine_KOORDINATIN_organi_gider(o, yazici):
 
 
 def test_KARSIT_frame_organ_degisimi_SONRAKI_karede_yeni_organi_surer(o):
-    """KARŞIT: düzeltme organ değişimini YUTMAZ — sonraki kare yeni organı lokalize edip onu sürer."""
+    """KARŞIT: düzeltme organ değişimini YUTMAZ — sonraki kare yeni organı lokalize eder.
+
+    ⚠️ D1.60 (A-16) ile netleşti: organ-2 mühürlü seansta organ 5 lokalize edilir ama SÜRÜLMEZ (mühür dışı = onaysız
+    tedavi; o kol `test_ai_pro_organ_MUHUR_DISI_yeni_onay_ister_A16.py`). Mühürdeki organa dönülünce sonraki kare onu
+    lokalize edip SÜRER — değişimler hiçbir yönde yutulmaz."""
     _pid, r = ap.onayli_baslat(o, organ=2)
     assert r.status_code == 200, r.text[:200]
     o.lok.bekle = threading.Event()
@@ -126,10 +130,16 @@ def test_KARSIT_frame_organ_degisimi_SONRAKI_karede_yeni_organi_surer(o):
     o.air._ai_organ_id = 5
     o.lok.bekle.set()
     t.join(10)
+    n_tahmin = len(o.tah.cagrilar)
     j2 = ap.kare(o).json()
     assert o.lok.cagrilar[-1] == 5, f"organ değişimi sonraki karede lokalize edilmedi: {o.lok.cagrilar}"
-    assert o.tah.cagrilar[-1] == (*_koord(5), 5), o.tah.cagrilar
-    assert j2["organId"] == 5
+    assert j2["organId"] == 5 and j2.get("driven") is not True, j2
+    assert len(o.tah.cagrilar) == n_tahmin, f"mühür dışı organ 5 tahmine/sürüşe gitti: {o.tah.cagrilar}"
+    o.air._ai_organ_id = 2
+    j3 = ap.kare(o).json()
+    assert o.lok.cagrilar[-1] == 2, f"mühürdeki organa dönüş lokalize edilmedi: {o.lok.cagrilar}"
+    assert o.tah.cagrilar[-1] == (*_koord(2), 2), o.tah.cagrilar
+    assert j3["organId"] == 2 and j3.get("driven") is True, j3
 
 
 def test_KRITIK_frame_yeniden_konumla_istegi_lokalizasyon_UCARKEN_YUTULMAZ(o):

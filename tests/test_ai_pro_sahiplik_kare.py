@@ -188,10 +188,16 @@ def test_KRITIK_B1_YABANCI_organ_DEGISTIREMEZ(owned):
 
 
 def test_B1_SAHIP_organ_degistirebilir(owned):
+    """⚠️ SAHİP KARARI A-16 (D1.60, 2026-10-02) — eski iddia ("sahip seans içinde HER organa geçer") TERSİNE döndü:
+    sahip bile seans sürerken MÜHÜRDE OLMAYAN organa geçemez (409, yeni onay); mühürdeki organı seçmek serbest.
+    Seans yokken seçim serbestliği `test_KRITIK_B1_seans_BITINCE_stale_owner_KILITLEMEZ`te. Ayrıntılı kapı:
+    tests/test_ai_pro_organ_MUHUR_DISI_yeni_onay_ister_A16.py."""
     air, apis, client, driven, localize_calls = owned
     r = client.post("/api/ai/pro/organ", json={"organ_id": 3, "client_id": "A"})
-    assert r.status_code == 200
-    assert air._ai_organ_id == 3
+    assert r.status_code == 409, f"sahip mühür dışı organa (3) geçti: {r.status_code}"
+    assert air._ai_organ_id == 0
+    r0 = client.post("/api/ai/pro/organ", json={"organ_id": 0, "client_id": "A"})
+    assert r0.status_code == 200, r0.text[:200]
 
 
 def test_KRITIK_B1_YABANCI_calibrate_REDDEDILIR(owned):
