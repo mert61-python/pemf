@@ -47,3 +47,22 @@ def test_KRITIK_yazim_takilmisken_ESTOP_yaniti_UST_SINIRDA_kalir(tmp_path):
                 d.kapi.set()
             assert govde["stmStopped"] is False, "yazılmamış STOP 'yazıldı' sayıldı"
             assert sure <= 0.8, f"yazım takılıyken E-stop yanıtı {sure:.3f} sn (üst sınır aşıldı)"
+
+
+def test_KRITIK_i5F5_yazim_takilmisken_ESP_STOPu_BEKLEMEDEN_gider(tmp_path):
+    """i5-F-5 (kör kapı · Ö.4-Y8): bekleme TÜM gönderimlerden SONRA yapılır — STM STOP'u yazılamazken bile ESP STOP
+    yayınları bekleme süresi kadar gecikmez (bekleme ESP havuzunun önüne alınınca ESP STOP 0,001 → 1,016 sn gecikiyordu
+    ve ilgili 827 test yeşil kalıyordu). "Yazım takıldı" senaryosu: bekleme gerçekten üst sınıra dek sürer."""
+    for n in range(3):
+        with _aparat(tmp_path / f"e{n}") as (core, hc, d, api):
+            _surulen_bobin(hc, d)
+            d.kapi = threading.Event()
+            d.mqtt.clear()
+            try:
+                t0 = time.perf_counter()
+                api._emergency_stop_all("manual")
+            finally:
+                d.kapi.set()
+            assert d.mqtt, "ESP STOP yayını hiç denenmedi"
+            ilk = min(t for t, _ in d.mqtt) - t0
+            assert ilk <= 0.3, f"ESP STOP yayını STM yazım beklemesinin ARDINDAN gitti ({ilk:.3f} sn)"
