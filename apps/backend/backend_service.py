@@ -495,9 +495,14 @@ def _start_startup_reconcile(api_server, logger: logging.Logger) -> None:
                     return
             if api_server.state.hardware:
                 api_server.state.hardware.stop_all_coils()
+            # ⚠️ 1-C inceleme i6-F-1: kimlik SÜREÇ BAŞINA benzersiz (ms eki; ≤ S3 sınırı 35 kr). SABİT
+            # `startup_reconcile_{bobin}` iken 8266 tekrar önbelleği (8 girdilik halka, yalnız ESP açılışında sıfırlanır)
+            # önceki sürecin AYNI kimlikli STOP'unu hatırlıyor ve bu STOP'u UYGULAMADAN yalnız ACK(true) dönüyordu —
+            # önceki süreç seans ortasında öldüyse bobin enerjili kalırdı (araya ≤7 komut girdiyse; ölçüldü).
             for _cid in range(1, 9):
                 api_server._mqtt_publish(
-                    f"pemf/coil/{_cid}/control", {"command": "stop", "command_id": f"startup_reconcile_{_cid}"}
+                    f"pemf/coil/{_cid}/control",
+                    {"command": "stop", "command_id": f"startup_reconcile_{_cid}_{int(_t.time() * 1000)}"},
                 )
             logger.info("Başlangıç donanım mutabakatı: tüm bobinlere STOP (orphan/ghost temizliği).")
         except Exception:
