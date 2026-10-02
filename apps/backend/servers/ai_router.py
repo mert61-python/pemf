@@ -1205,20 +1205,34 @@ def _dongu_bayragini_indir(dongu_muhru) -> None:
             _ai_loop_active = False
 
 
-def _ai_seansi_pasife_al(neden: str) -> None:
+def _ai_seansi_pasife_al(neden: str, dongu_muhru=None) -> None:
     """Seans loop'u BAŞLAMADAN öldüyse `_active_session`i pasife çek (teardown paritesi).
 
     2026-09-09 düzeltmesi: /ai/pro/start `start_ai_session(...)`i thread spawn'indan ÖNCE
     çağırıyor. Loop kamerayı açamaz ya da modeli yükleyemezse `_ai_loop_active=False` yapıp
     dönüyordu ama oturum AI modunda AKTİF kalıyordu → panel/geçmiş seansı "sürüyor" gösteriyor,
     süre-watchdog dolana kadar kapanmıyordu. Bobin sürülmediği için tedavi yok; görünen durum
-    ile gerçek durum AYRIŞIYORDU."""
+    ile gerçek durum AYRIŞIYORDU.
+
+    ⚠️ YALNIZ KENDİ SEANSI (1-C inceleme i2-F6, teardown'daki `_kendi` kuralının aynısı): mühür verilirse yalnız onay
+    kimliği eşleşen seans pasife alınır ve canlı durum yalnız o zaman yazılır. Ölçüldü: eski döngü modeli yüklerken
+    operatör onu durdurup YENİ onaylı seans açınca, eski döngünün başlangıç hatası O AN AKTİF olan yeni seansı pasife
+    çekiyordu (30/30) — yeni döngü bir sonraki turda çıkıyor, onayı tüketilmiş tedavi operatör bir şey yapmadan bitiyordu."""
     try:
         import servers.api_server as _api3
 
         with _api3._session_lock:
-            if _ai_seansi_mi(_api3._active_session):
-                _api3._active_session["is_active"] = False
+            _s = _api3._active_session
+            if dongu_muhru is not None:
+                _kendi = _s.get("onay_kimligi") == dongu_muhru.get("onay")
+            else:
+                _kendi = _ai_seansi_mi(_s)
+            if _kendi:
+                _s["is_active"] = False
+            _baskasi_aktif = bool(_s.get("is_active")) and not _kendi
+        if _baskasi_aktif:
+            logger.error("AI Pro döngüsü başlatılamadı (%s) — aktif seans bu döngünün değil, ona DOKUNULMADI.", neden)
+            return
         _api3.update_live_session_state(is_active=False, mode="Sistem Hazır")
         logger.error("AI Pro seansı başlatılamadı (%s) — oturum pasife alındı.", neden)
     except Exception:
@@ -1597,7 +1611,7 @@ def _ai_pro_loop(dongu_muhru=None):
     except Exception as e:
         logger.error("AI Pro modeli yüklenemedi (kamera hiç açılmadı): %s", e)
         _dongu_bayragini_indir(dongu_muhru)
-        _ai_seansi_pasife_al("model yüklenemedi")
+        _ai_seansi_pasife_al("model yüklenemedi", dongu_muhru)
         return
 
     cap = cv2.VideoCapture(0)
@@ -1613,7 +1627,7 @@ def _ai_pro_loop(dongu_muhru=None):
         _dongu_bayragini_indir(dongu_muhru)
         # `start_ai_session` bu thread spawn edilmeden ÖNCE çağrıldı → oturum AI modunda AKTİF.
         # Pasife almazsak panel/geçmiş seansı "sürüyor" gösterir (bobin sürülmediği hâlde).
-        _ai_seansi_pasife_al("kamera açılamadı")
+        _ai_seansi_pasife_al("kamera açılamadı", dongu_muhru)
         return
 
     _lost_streak = 0  # ardisik hedef-kaybi sayaci (bkz. _AI_LOST_STOP_STREAK)
