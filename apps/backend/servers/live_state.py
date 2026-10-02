@@ -488,20 +488,22 @@ def update_live_session_state(
     elapsed_sec: int = 0,
     duration_sec: int = 0,
     surus_nesli: int | None = None,
-) -> None:
-    """React/WebSocket tarafındaki aktif tedavi özetini günceller.
+) -> bool:
+    """React/WebSocket tarafındaki aktif tedavi özetini günceller. @return yazıldı mı (False = "aktif" yazımı ATLANDI).
 
     D1.81 (İG-5.36) — iki kural, durum kilidi altında (acil durdurmanın yazımıyla sıralı):
       * Mandal kuruluyken ya da çağıranın `surus_nesli` bayatken "AKTİF" yazımı YAPILMAZ: ölçüldü, uçuştaki AI turu
         acil durdurmadan SONRA `isActive:true` yayınlıyordu (8'de 3) ve etiketi eziyordu.
       * Mandal kuruluyken "Sistem Hazır" yazılmaz → "Acil Durdurma" kalır (döngü sonu / AI durdurma / seans durdurma
-        etiketi eziyordu, 8'de 7). Mandal operatörün "Sıfırla"sıyla kalkınca normal etiket döner."""
+        etiketi eziyordu, 8'de 7). Mandal operatörün "Sıfırla"sıyla kalkınca normal etiket döner.
+    1-C inceleme i2-F3: dönüş değeri, "aktif" yazımının kilit ALTINDA reddedildiğini çağırana söyler — seans başlatma
+    buna göre CSV açmaz ve "success" demez (denetim ile yazım arasındaki durdurma da tek karar noktasında görülür)."""
     with _live_state_lock:
         if is_active and estop_mandali.baslatma_engeli(surus_nesli):
             logging.getLogger(__name__).info(
                 "Canli durum 'aktif' yazimi ATLANDI (acil durdurma mandali / bayat surus nesli): %s", mode
             )
-            return
+            return False
         if not is_active and mode == "Sistem Hazır" and estop_mandali.mandalli_mi():
             mode = "Acil Durdurma"
         _live_state["activeTreatment"].update(
@@ -530,6 +532,7 @@ def update_live_session_state(
     if not is_active:
         # patient session_update ile TAŞINMAZ → tam snapshot yayınla ki kart canlı temizlensin.
         _ws_broadcast_sync({"type": "snapshot", "data": _build_ws_snapshot()})
+    return True
 
 
 def update_measured_intensity(mt: float | None, coil_id: int | None, tepe: float | None = None) -> bool:

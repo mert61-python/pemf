@@ -3525,18 +3525,48 @@ async def start_session(payload: SessionStartPayload, request: Request):
             detail=("Hiçbir bobin komutu kabul etmedi; seans BAŞLATILMADI. " + STM_RED_MESAJI),
         )
 
+    # ⚠️ 1-C inceleme i2-F3: STM sürüşü (to_thread) SIRASINDA durdurma gelmiş olabilir — bobin 1 kabul edildikten SONRA,
+    # bobin 2'den ÖNCE. Ölçüldü (30/30): bobin 2 nesille doğru reddediliyor ama `_stm_kabul=[1]` boş olmadığı için akış
+    # canlı durumu "AKTİF" yazıyor, seans CSV'sini AÇIYOR ve "success" dönüyordu — seans da bobin de yokken; operatörün
+    # sonraki Durdur'u (seanssız dal) göstergeyi temizlemiyordu. "Aktif" yazımından, CSV'den, hasta kartından ve
+    # yanıttan ÖNCE: bu başlatma hâlâ KENDİ seansı mı ve sürüş yetkisi geçerli mi?
+    async def _baslatma_sirasinda_durduruldu(engel: str):
+        with _session_lock:
+            _hala = bool(_active_session.get("is_active")) and _active_session.get("session_id") == _benim_seans
+        if _hala:
+            # Kendi seansı aktif ama başlatma sürerken seansı BİTİRMEYEN bir durdurma (ör. `stop_all_coils`) geldi:
+            # kabul edilen bobinler o durdurmayla durdu → seans normal durdurma yoluyla kapatılır (STOP'lar yalnız artar).
+            logging.getLogger(__name__).warning("Seans başlatma sürerken durdurma geldi → seans durduruluyor.")
+            await stop_session()
+        raise HTTPException(
+            status_code=409, detail=engel or "Seans başlatma sürerken durduruldu; bu seans BAŞLATILMADI."
+        )
+
+    with _session_lock:
+        _hala_benim = bool(_active_session.get("is_active")) and _active_session.get("session_id") == _benim_seans
+    _sonra_engel = estop_mandali.baslatma_engeli(_niyet_nesli)
+    if not _hala_benim or _sonra_engel:
+        await _baslatma_sirasinda_durduruldu(_sonra_engel)
+
     # D1.99 (B-1.9): kart donanıma GİDEN frekansı gösterir (STM kabul ettiyse STM'in, yoksa ESP'nin normalize değeri).
     from utils.stm32_protocol_limits import normalize_esp_frequency_hz as _kart_esp_hz
 
     _kart_freq = _s_uyg["freq"] if _stm_kabul else _kart_esp_hz(payload.frequency)
-    update_live_session_state(
-        is_active=True,
-        mode=payload.mode,
-        freq=_kart_freq,
-        intensity=payload.intensity,
-        remaining_min=payload.duration_minutes,
-        duration_sec=payload.duration_minutes * 60,
-    )
+    # i2-F3: yazım nesli KİLİT ALTINDA denetler; denetim ile yazım arasında gelen durdurmada yazım atlanır (False) →
+    # CSV açılmaz, "success" denmez (tek karar noktası). `is False`: dönüşsüz eski sahte uygulamalar "yazıldı" sayılır.
+    if (
+        update_live_session_state(
+            is_active=True,
+            mode=payload.mode,
+            freq=_kart_freq,
+            intensity=payload.intensity,
+            remaining_min=payload.duration_minutes,
+            duration_sec=payload.duration_minutes * 60,
+            surus_nesli=_niyet_nesli,
+        )
+        is False
+    ):
+        await _baslatma_sirasinda_durduruldu(estop_mandali.baslatma_engeli(_niyet_nesli))
 
     # ── SEANSA ÖZEL ALAN KAYDI (masaüstü CSV) ────────────────────────────────────────
     # ⚠️ `update_live_session_state`ten SONRA: o çağrı `isActive`i true yapar ve ölçülen
@@ -4505,6 +4535,10 @@ async def stop_session():
         # bırakıyordu (keep-alive sürmeye devam). Seanssız sürüş (tekil/batch, eski bir AI turu) de durdurulmalı:
         # TÜM bobinlere STOP + yetki kesme. STOP idempotenttir (Ö.4-Y8: yalnız artar).
         _teyitsiz = await asyncio.to_thread(_seanssiz_durdur) or []
+        # 1-C inceleme i2-F3: seans yokken canlı durum "aktif" kalmasın (bayat bir yazımın takılı göstergesi ve açık seans
+        # CSV'si — `update_live_session_state` sarmalayıcısı "aktif değil" yazımında CSV'yi kapatır). Mandal kuruluyken
+        # "Acil Durdurma" kalır (live_state kuralı).
+        update_live_session_state(is_active=False, mode="Sistem Hazır")
         _yanit_yok = {"status": "ok", "message": "Aktif seans yok. Çalışan bobin kalmasın diye STOP gönderildi."}
         if _teyitsiz:
             _yanit_yok["hardware_stop_unconfirmed"] = _teyitsiz
