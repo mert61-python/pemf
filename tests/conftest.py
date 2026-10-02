@@ -708,6 +708,11 @@ def _ack_bekcilerini_bosalt():
                 _t.join(timeout=2.5)
             except Exception:
                 pass
+    try:  # 1-C i6-F-2/F-3: bobin başına "son START kimliği" haritası da sızmasın (bekçiler bittikten SONRA)
+        with _api._pending_acks_lock:
+            getattr(_api, "_son_start_kimligi", {}).clear()
+    except Exception:
+        pass
 
 
 # ── D1.41 · B-10.243 · B-10.257: SEANS ve WATCHDOG NÖBETİ (ack bekçisi deseni) ─────────────────────────

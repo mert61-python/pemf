@@ -2118,6 +2118,10 @@ def _mqtt_publish(topic: str, payload: dict) -> bool:
 # operatöre AÇIK uyarı gider. Onay yokluğu artık SESSİZ değil.
 _pending_acks: dict = {}
 _pending_acks_lock = threading.Lock()
+# 1-C inceleme i6-F-2/F-3: bobin başına GERÇEKTEN yayınlanan SON START'ın kimliği (`_esp_start_yayinla`, yayından ÖNCE;
+# `_pending_acks_lock` ile). Geciken bir NACK bobinin GÜNCEL START'ına ait değilse (sonraki START devraldı) koşu
+# kapatılmaz ve "bobin ÇALIŞMIYOR" denmez — o NACK bobinin ŞİMDİKİ durumunu söylemez.
+_son_start_kimligi: dict = {}
 
 # DENETIM 2. TUR [3.2] (2026-08-20): command_id YALNIZ ms çözünürlüklüydü — aynı bobine aynı
 # milisaniyede iki E-stop tetiği (manuel buton + ESP alarmı; alarm dalında debounce yok) AYNI
@@ -2163,6 +2167,10 @@ def _esp_start_yayinla(coil_id: int, payload: dict, nesil: int | None = None) ->
     if _engel:
         logging.getLogger(__name__).warning("ESP bobin %s START YAYINLANMADI: %s", coil_id, _engel)
         return False
+    _kimlik = str(payload.get("command_id") or "")
+    if _kimlik:
+        with _pending_acks_lock:
+            _son_start_kimligi[coil_id] = _kimlik  # i6-F-3: bobinin GÜNCEL START'ı (yayından ÖNCE — hızlı NACK yarışı)
     ok = _mqtt_publish(f"pemf/coil/{coil_id}/control", payload)
     if estop_mandali.mandalli_mi() or estop_mandali.nesil() != _nesil_once:
         logging.getLogger(__name__).warning(
@@ -2258,6 +2266,26 @@ def _start_ack_watch(coil_id: int, command_id: str, run_id=None) -> None:
         return
     if confirmed is False:
         _ack_yayinla(False, "nack")
+        # ⚠️ 1-C inceleme i6-F-3: NACK'lenen komut bobinin GÜNCEL START'ı değilse (sonraki START devraldı — çalışıyor
+        # olabilir) bobinin şimdiki durumunu SÖYLEMEZ: koşu kapatılmaz, "ÇALIŞMIYOR" denmez (ölçüldü: kabul edilmiş start#2
+        # sürerken geciken NACK#1 `error` bildirimi üretiyordu). Kayıt yoksa (eski yol / doğrudan çağrı) GÜNCEL sayılır.
+        with _pending_acks_lock:
+            _guncel = _son_start_kimligi.get(coil_id, command_id) == command_id
+        if not _guncel:
+            logging.getLogger(__name__).warning(
+                "start bobin %s: ONCEKI start %s reddedildi (NACK); sonraki komut gecerli — kosu kapatilmadi",
+                coil_id,
+                command_id,
+            )
+            try:
+                _push_notification(
+                    f"⚠️ Bobin {coil_id}: önceki start komutu reddedildi — sonraki komut geçerli; durumu panelden "
+                    "doğrulayın",
+                    "warning",
+                )
+            except Exception:
+                pass
+            return
         # Kesin red: kosu kaydi hayalet — kapat. Sebep metni command_error eventiyle ayrica gelir.
         logging.getLogger(__name__).error(
             "start bobin %s: ESP komutu REDDETTI (NACK) — kosu kaydi kapatiliyor (hic kosmamis bobin)",
@@ -2265,13 +2293,17 @@ def _start_ack_watch(coil_id: int, command_id: str, run_id=None) -> None:
         )
         try:
             # D2: yalniz BU start'in run'ini kapat (araya giren yeni start run'i devraldiysa dokunma).
-            _finish_coil_run(coil_id, only_run_id=run_id)
+            # ⚠️ 1-C inceleme i6-F-2: bu START koşu AÇMADIYSA (`run_id` None — seanssız tekil START, DB hıçkırığı)
+            # kapatacağı koşu YOKTUR; `only_run_id=None` KOŞULSUZ kapat demekti → o an açık olan BAŞKA START'ın (ör.
+            # arada açılan seansın) koşusu kapanıyordu (ölçüldü).
+            if run_id is not None:
+                _finish_coil_run(coil_id, only_run_id=run_id)
         except Exception:
             logging.getLogger(__name__).debug("NACK sonrasi run kapatma hatasi", exc_info=True)
         try:
             _push_notification(
-                f"⚠️ Bobin {coil_id}: start komutu cihaz tarafından REDDEDİLDİ — bobin ÇALIŞMIYOR; "
-                "koşu kaydı düzeltildi",
+                f"⚠️ Bobin {coil_id}: start komutu cihaz tarafından REDDEDİLDİ — bobin ÇALIŞMIYOR"
+                + ("; koşu kaydı düzeltildi" if run_id is not None else ""),
                 "error",
             )
         except Exception:

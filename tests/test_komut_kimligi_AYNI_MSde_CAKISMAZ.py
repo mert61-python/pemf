@@ -145,3 +145,18 @@ def test_KRITIK_ayni_tikte_iki_seans_kimligi_FARKLI(ortam, monkeypatch):
     assert all(len(k) <= S3_KIMLIK_AZAMI for k in kimlikler), f"S3 tamponuna sigmayan seans kimligi: {kimlikler}"
     for k in kimlikler:
         api._resolve_ack(k, True)
+
+
+def test_KRITIK_i6F4_DONMUS_saatte_1000_ardisik_kimlik_BENZERSIZ(monkeypatch):
+    """1-C bağımsız inceleme i6-F-4 (kör kapı): yukarıdaki kollar yalnız ARDIŞIK İKİ kimliği karşılaştırır → sıra ekinin
+    modülünü küçülten her mutant (`% 2`, `% 10` …) YEŞİL kalıyordu. `% 2` ölçülmüş GERÇEK bir gerilemedir: aynı tikte ÜÇ
+    hızlı start'ta #1 ile #3 aynı kimliği alır ve geciken NACK#1 kabul edilmiş koşu#3'ü kapatır (D1.E10 kusurunun kendisi).
+    Donmuş saatte 1000 ardışık kimlik BENZERSİZ olmalı (1000'den küçük her modül yakalanır) ve S3 tamponuna sığmalı."""
+    import servers.api_server as api
+
+    sabit = _time.time()
+    monkeypatch.setattr(_time, "time", lambda: sabit)
+    for on_ek in ("react", "react_batch", "sess"):
+        kimlikler = [api._komut_kimligi(on_ek, ESP_BOBIN) for _ in range(1000)]
+        assert len(set(kimlikler)) == 1000, f"{on_ek}: donmuş saatte 1000 kimlikten {len(set(kimlikler))} benzersiz"
+        assert max(map(len, kimlikler)) <= S3_KIMLIK_AZAMI, f"{on_ek}: S3 tamponuna sığmayan kimlik"
