@@ -41,6 +41,7 @@ import time
 import uuid
 from pathlib import Path
 
+import kayitci_cmdkey
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
@@ -61,83 +62,18 @@ _PROGRAMDATA = Path(os.environ.get("ProgramData", r"C:\ProgramData"))
 
 
 # ── KAYITÇI cmdkey: bu dosya GERÇEK kimlik kasasına YAZMAZ, ondan OKUMAZ ───────────────────────────────────
-# Sürücü, stub ve kasa.ps1 `cmdkey`i ADIYLA çağırır → PowerShell PATH sırasıyla çözer → PATH'in başındaki kayıtçı
-# `cmdkey.cmd` gerçek `System32\cmdkey.exe`den ÖNCE bulunur. Kayıtçı sahte kasa dosyası üzerinde gerçek cmdkey'in tel
-# sözleşmesini taklit eder (kasa.ps1 ve ana betik bunlara bakar — ölçülen gerçek davranış, bkz. pemf_teardown.ps1):
-#   /generic:<ad> → ekler (rc 0) · /delete:<ad> → varsa siler (rc 0), yoksa "CMDKEY: Element not found." (rc 1) ·
-#   /list:<ad> → varsa ad 2 KEZ (başlık + "Target:"), yoksa "* NONE *" (ad 1 kez).
-# Her çağrı satır olarak kaydedilir: kasa.ps1'in çağrılarının KAYITÇIYA geldiği iddia edilir (gelmeseydi gerçek kasaya
-# gitmiş olurdu). Python tarafı kayıtçıyı TAM YOLLA çağırır — Windows CreateProcess System32'yi PATH'ten ÖNCE arar, yalın
-# "cmdkey" GERÇEK aracı bulurdu; bu modülde Python'dan yalın `cmdkey` süreci başlatılırsa test KIRMIZI (bekçi).
-_KAYITCI_CMD = (
-    "@echo off\r\n"
-    'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0kayitci_cmdkey.ps1" %*\r\n'
-    "exit /b %ERRORLEVEL%\r\n"
-)
-_KAYITCI_PS1 = r"""
-param([Parameter(ValueFromRemainingArguments=$true)][string[]]$a)
-$kasa = $env:PEMF_SAHTE_KASA
-$kayit = $env:PEMF_CMDKEY_KAYIT
-if (-not $kasa -or -not $kayit) { 'kayitci: PEMF_SAHTE_KASA / PEMF_CMDKEY_KAYIT yok'; exit 99 }
-if (-not $a) { $a = @() }
-Add-Content -LiteralPath $kayit -Value ($a -join ' ') -Encoding UTF8
-$var = @()
-if (Test-Path -LiteralPath $kasa) { $var = @(Get-Content -LiteralPath $kasa -Encoding UTF8 | Where-Object { $_ -ne '' }) }
-$ilk = if ($a.Count -gt 0) { $a[0] } else { '' }
-if ($ilk -like '/generic:*') {
-    $ad = $ilk.Substring(9)
-    if ($var -notcontains $ad) { Add-Content -LiteralPath $kasa -Value $ad -Encoding UTF8 }
-    'CMDKEY: Credential added successfully.'; exit 0
-}
-if ($ilk -like '/delete:*') {
-    $ad = $ilk.Substring(8)
-    if ($var -contains $ad) {
-        Set-Content -LiteralPath $kasa -Value @($var | Where-Object { $_ -ne $ad }) -Encoding UTF8
-        'CMDKEY: Credential deleted successfully.'; exit 0
-    }
-    'CMDKEY: Element not found.'; exit 1
-}
-if ($ilk -like '/list:*') {
-    $ad = $ilk.Substring(6)
-    "Currently stored credentials for ${ad}:"
-    ''
-    if ($var -contains $ad) { "    Target: $ad"; '    Type: Generic'; '    User: x' } else { '* NONE *' }
-    exit 0
-}
-'kayitci: bilinmeyen cmdkey komutu'; exit 2
-"""
+# Kayıtçı (tel sözleşmesi taklidi + Python'dan yalın `cmdkey` bekçisi) ORTAK aparatta: `tests/kayitci_cmdkey.py`
+# (1-D: `test_teardown_kimlik_dogrulama` da aynı kayıtçıya geçti).
 
 
 @pytest.fixture(autouse=True)
 def kayitci_kasa(tmp_path, monkeypatch):
     """Her test: PATH başında kayıtçı cmdkey + boş sahte kasa + çağrı kaydı; Python'dan yalın `cmdkey` YASAK."""
-    import types
-
-    kok = tmp_path / "kayitci_cmdkey"
-    kok.mkdir()
-    (kok / "cmdkey.cmd").write_text(_KAYITCI_CMD, encoding="ascii", newline="")
-    (kok / "kayitci_cmdkey.ps1").write_text(_KAYITCI_PS1, encoding="utf-8-sig")
-    kasa = tmp_path / "sahte_kasa.txt"
-    kasa.write_text("", encoding="utf-8")
-    cagri = tmp_path / "cmdkey_cagrilari.txt"
-    monkeypatch.setenv("PATH", f"{kok}{os.pathsep}{os.environ.get('PATH', '')}")
-    monkeypatch.setenv("PEMF_SAHTE_KASA", str(kasa))
-    monkeypatch.setenv("PEMF_CMDKEY_KAYIT", str(cagri))
-    monkeypatch.setenv("PEMF_KAYITCI_CMDKEY", str(kok / "cmdkey.cmd"))
-    gercek_run = subprocess.run
-
-    def _bekci_run(args, *a, **k):
-        ilk = args[0] if isinstance(args, (list, tuple)) else str(args).split()[0]
-        if os.path.basename(str(ilk)).lower() in ("cmdkey", "cmdkey.exe"):
-            raise AssertionError(f"bu test GERÇEK cmdkey'i (kimlik kasası) çağırdı: {args!r} — kayıtçı kullanılmalı")
-        return gercek_run(args, *a, **k)
-
-    monkeypatch.setattr(subprocess, "run", _bekci_run)
-    return types.SimpleNamespace(kok=kok, kasa=kasa, cagri=cagri)
+    return kayitci_cmdkey.kur(tmp_path, monkeypatch)
 
 
 def _kayitci_cagrilari(kayitci) -> list[str]:
-    return kayitci.cagri.read_text(encoding="utf-8-sig").splitlines() if kayitci.cagri.exists() else []
+    return kayitci_cmdkey.cagrilar(kayitci)
 
 
 # ── schtasks STUB: argümanları kaydeder; /Run'da kasa.ps1'i mevcut kullanıcı olarak koşturur ──
@@ -245,10 +181,8 @@ def _ps(kabuk: str, *args: str, timeout: int = 120) -> subprocess.CompletedProce
 
 
 def _cmdkey(*args: str) -> subprocess.CompletedProcess:
-    """KAYITÇI cmdkey (TAM YOL) — gerçek kasaya ASLA gitmez; kayıtçı kurulmamışsa KIRMIZI (sessiz geri düşüş yok)."""
-    kayitci = os.environ.get("PEMF_KAYITCI_CMDKEY", "")
-    assert kayitci and Path(kayitci).exists(), "kayıtçı cmdkey kurulmamış — gerçek kasaya düşülmez"
-    return subprocess.run(["cmd.exe", "/c", kayitci, *args], capture_output=True, timeout=30)
+    """KAYITÇI cmdkey (TAM YOL) — gerçek kasaya ASLA gitmez (ortak aparat)."""
+    return kayitci_cmdkey.cmdkey(*args)
 
 
 def _kimlik_var(ad: str) -> bool:

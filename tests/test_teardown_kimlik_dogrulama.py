@@ -14,10 +14,15 @@ raporu, hiçbir şey silinmemişken "kimlik silindi" diyordu. Ağırlaştırıc�
 sahte "silindi" üretiyordu.
 
 Bu dosya iki şeyi ÖLÇER (metin grep'i değil, davranış):
-  1. Remove-PemfCredentials gerçek pwsh'te, GERÇEK bir geçici kimlikle: silinen → "silindi";
+  1. Remove-PemfCredentials gerçek pwsh'te, KAYITÇI kasadaki geçici kimlikle: silinen → "silindi";
      var-olmayan → "yoktu" (başarısızlık DEĞİL); cmdkey başka hata → PemfFailed büyür + "SİLİNEMEDİ".
   2. pemf_footprint.ps1 Credentials listesi (pwsh'te değerlendirilir) runtime'ın keyring'e
      yazdığı/okuduğu HER adı "<ad>@PEMF_GUI" biçiminde içerir.
+
+⚠️ GERÇEK KİMLİK KASASINA DOKUNULMAZ (1-C §9 #16 → 1-D hijyen): eskiden Python yalın `cmdkey /add:PEMF_GATE_<uuid>`
+ile GERÇEK kasaya yazıp `finally`de siliyordu (her tam süitte 8 çağrı; süreç arada ölürse sahte kayıt kalırdı). Artık
+fonksiyonun `& cmdkey` çağrıları PATH başındaki KAYITÇIYA gider (`tests/kayitci_cmdkey.py`, e035b25 deseni), Python
+tarafı kayıtçıyı TAM YOLLA çağırır ve yalın `cmdkey` süreci başlatılırsa test KIRMIZI olur (bekçi).
 
 Çalıştırma: yalnız Windows + pwsh (cmdkey Windows'a özgü). Fonksiyon AST ile ÇIKARILIR;
 pemf_teardown.ps1 bütün olarak asla dot-source edilmez (footprint'i yükler ama zararsız —
@@ -33,6 +38,7 @@ import sys
 import uuid
 from pathlib import Path
 
+import kayitci_cmdkey
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
@@ -85,8 +91,15 @@ def _pwsh(*args: str, timeout: int = 90) -> subprocess.CompletedProcess:
     return r
 
 
+@pytest.fixture(autouse=True)
+def kayitci_kasa(tmp_path, monkeypatch):
+    """Her test: PATH başında kayıtçı cmdkey + boş sahte kasa + çağrı kaydı; Python'dan yalın `cmdkey` YASAK."""
+    return kayitci_cmdkey.kur(tmp_path, monkeypatch)
+
+
 def _cmdkey(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["cmdkey", *args], capture_output=True, timeout=30)
+    """KAYITÇI cmdkey (TAM YOL) — gerçek kasaya ASLA gitmez."""
+    return kayitci_cmdkey.cmdkey(*args)
 
 
 def _kimlik_listede(ad: str) -> bool:
@@ -117,8 +130,9 @@ def _failed_count(stdout: str) -> int:
 # ── 1) Davranış: gerçek geçici kimlik silinir ve DOĞRU raporlanır ─────────────
 
 
-def test_KRITIK_gercek_kimlik_silinir_ve_silindi_denir(tmp_path):
-    """(a) Gerçek kayıt: cmdkey /add ile yaratılır, fonksiyon siler, /list'ten kaybolur, log 'silindi'."""
+def test_KRITIK_gercek_kimlik_silinir_ve_silindi_denir(tmp_path, kayitci_kasa):
+    """(a) Kayıt (KAYITÇI kasada): cmdkey /add ile yaratılır, fonksiyon siler, /list'ten kaybolur, log 'silindi'.
+    Fonksiyonun `cmdkey /delete` çağrısı KAYITÇIYA gelir (gelmeseydi gerçek kasaya gitmiş olurdu)."""
     ad = f"PEMF_GATE_{uuid.uuid4().hex}"
     try:
         ekle = _cmdkey(f"/add:{ad}", "/user:x", "/pass:y")
@@ -130,8 +144,11 @@ def test_KRITIK_gercek_kimlik_silinir_ve_silindi_denir(tmp_path):
         assert not _kimlik_listede(ad), f"Remove-PemfCredentials kimliği SİLMEDİ: {ad} hâlâ /list'te"
         assert any("kimlik silindi (KVKK)" in s and ad in s for s in log), f"silinen kimlik için 'silindi' yok:\n{log}"
         assert _failed_count(stdout) == 0, f"başarılı silme PemfFailed'i büyüttü:\n{stdout}"
+        assert f"/delete:{ad}" in kayitci_cmdkey.cagrilar(kayitci_kasa), (
+            f"fonksiyonun cmdkey çağrısı KAYITÇIYA gelmedi (gerçek kasaya gitmiş olabilir): {kayitci_cmdkey.cagrilar(kayitci_kasa)}"
+        )
     finally:
-        _cmdkey(f"/delete:{ad}")  # kalıntı bırakma (zaten silinmişse exit 1 — zararsız)
+        _cmdkey(f"/delete:{ad}")  # kayıtçı kasada kalıntı bırakma (zaten silinmişse exit 1 — zararsız)
 
 
 def test_KRITIK_var_olmayan_kimlik_silindi_DENMEZ_yoktu_denir(tmp_path):
@@ -184,8 +201,8 @@ def test_KRITIK_cmdkey_hatasi_PemfFailed_buyutur_ve_SILINEMEDI_der(tmp_path):
     )
 
 
-def test_dry_run_cmdkey_cagirmaz_ve_DRY_loglar(tmp_path):
-    """-DryRun: gerçek kayıt DOKUNULMAZ, log '[DRY] kimlik'."""
+def test_dry_run_cmdkey_cagirmaz_ve_DRY_loglar(tmp_path, kayitci_kasa):
+    """-DryRun: kayıt DOKUNULMAZ (kayıtçıya /delete gelmez), log '[DRY] kimlik'."""
     ad = f"PEMF_GATE_DRY_{uuid.uuid4().hex}"
     try:
         assert _cmdkey(f"/add:{ad}", "/user:x", "/pass:y").returncode == 0
@@ -194,6 +211,7 @@ def test_dry_run_cmdkey_cagirmaz_ve_DRY_loglar(tmp_path):
         assert any("[DRY] kimlik" in s and ad in s for s in log), f"DryRun '[DRY]' loglamadı:\n{log}"
         assert not any("kimlik silindi" in s for s in log), "DryRun 'silindi' raporladı"
         assert _failed_count(stdout) == 0
+        assert f"/delete:{ad}" not in kayitci_cmdkey.cagrilar(kayitci_kasa), "DryRun cmdkey /delete çağırdı"
     finally:
         _cmdkey(f"/delete:{ad}")
 
