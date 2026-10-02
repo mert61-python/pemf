@@ -34,6 +34,7 @@ def o(monkeypatch, tmp_path):
             ns.hc = hc
             yield ns
     finally:
+        ns.api._finish_coil_run(8)  # karşıt kolun başarılı START'ı koşu açabilir — sonraki teste SIZMAZ
         ns.geri()
 
 

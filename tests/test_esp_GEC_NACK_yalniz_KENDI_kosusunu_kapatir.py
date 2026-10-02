@@ -60,8 +60,12 @@ def ortam(monkeypatch):
 
     monkeypatch.setattr(crt, "_treatment_db_getter", lambda: _DB())
     yield types.SimpleNamespace(api=api, bildirimler=bildirimler, ws=ws, sid=sid, basarisiz=basarisiz)
+    # Test hijyeni: ESP bobininin koşu kaydı ve gerçek seansın DB kimliği sonraki teste SIZMAZ (sızan `db_session_id`
+    # ile sonraki testin başarılı START'ı koşu açıp kapatmıyordu → `test_esp_freq_clamp` nöbeti 11 hata).
+    api._finish_coil_run(int(ESP_BOBIN))
     with api._session_lock:
         api._active_session["is_active"] = False
+        api._active_session.pop("db_session_id", None)
 
 
 def _acik_run(api):
