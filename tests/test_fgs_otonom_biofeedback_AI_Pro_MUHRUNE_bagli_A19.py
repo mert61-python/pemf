@@ -176,13 +176,35 @@ def test_KRITIK_A19_SUREN_seans_varken_otonom_istek_428_ve_seans_DEGISMEZ(o, sea
 
 
 def test_KARSIT_A19_salt_analiz_CALISIR_ve_surmez(o):
-    once = ap.paket_sayisi(o)
+    once, y0 = ap.paket_sayisi(o), len(o.yayin)
     r = _landmark(o, False)
     assert r.status_code == 200, r.text[:200]
     j = r.json()
     assert j["detected"] is True and isinstance(j["fgs_total"], int), j
     assert j["hw_status"] == "idle" and j["hw_params"] == {}
     assert not ap.surus_paketleri(o, once) and not o.seans
+    # 1-D inceleme i3-F-3: salt analiz ESP (bobin 8) START yayını da üretmez — STM paketi ve `start_ai_session` yalnız
+    # 1-7'yi görür; ESP START denetimi yalnız `auto_adjust=true` kolundaydı (orada 428 analizden önce döner).
+    esp = [(t, p.get("command")) for t, p in o.yayin[y0:] if str(p.get("command", "")).lower() == "start"]
+    assert not esp, f"salt analiz ESP START yayınladı: {esp}"
+
+
+def test_KRITIK_A19_GERCEK_muhurlu_AI_Pro_surerken_otonom_istek_428_ve_frame_SURMEYE_devam_eder(o):
+    """1-D inceleme i3-F-4: `muhurlu_seans_yaz` gerçek `/ai/pro/start`'ın kurduğu döngü bayrağını (`_ai_loop_active`)
+    kurmaz; "428 yalnız AI Pro döngüsü KAPALIYKEN" mutantı o kolda görünmüyordu. GERÇEK öner → onayla → başlat: 428,
+    seans (A-16 `onay_hedefi` dahil) birebir aynı, 428 SONRASI `/frame` meşru sürüşe devam eder."""
+    _pid, r = ap.onayli_baslat(o)
+    assert r.status_code == 200 and o.air._ai_loop_active is True, r.text[:200]  # ARA DOĞRULAMA: gerçek mühürlü koşu
+    with o.api._session_lock:
+        once = dict(o.api._active_session)
+    r_l = _landmark(o, True)
+    with o.api._session_lock:
+        sonra = dict(o.api._active_session)
+    n = ap.paket_sayisi(o)
+    j = ap.kare(o).json()
+    assert r_l.status_code == 428, f"AI Pro döngüsü açıkken otonom FGS isteği reddedilmedi: {r_l.status_code}"
+    assert once == sonra, f"428 süren mühürlü seansı değiştirdi: {once} → {sonra}"
+    assert j.get("driven") is True and ap.surus_paketleri(o, n), "428 mühürlü seansın meşru sürüşünü kırdı"
 
 
 def test_KRITIK_E09_guven_kanali_YOK_modelde_yanit_bunu_SOYLER(o):
@@ -220,3 +242,26 @@ def test_KRITIK_E09_GPU_servisi_ayni_alani_dondurur_parite(monkeypatch):
     j = a.infer_landmark(file=_Dosya())
     assert isinstance(j, dict) and j.get("detected") is True, str(j)[:200]
     assert j.get("nokta_gorunurlugu_dogrulanmadi") is True, sorted(j)
+
+
+def test_KARSIT_E09_GPU_servisi_guven_kanali_OLAN_modelde_alan_False(monkeypatch):
+    """1-D inceleme i3-F-5: servis paritesinin KARŞIT kolu (servis "her zaman uyar" mutantı yeşil kalıyordu)."""
+    import io
+
+    import cv2
+
+    import ai_service.app as a
+
+    m = _Model()
+    m.conf = 0.9
+    monkeypatch.setattr(a.predictors, "get", lambda ad: m)
+    monkeypatch.setattr(a, "_kapi", lambda data, label: None)
+    ok, buf = cv2.imencode(".jpg", np.full((64, 64, 3), 120, np.uint8))
+
+    class _Dosya:
+        file = io.BytesIO(buf.tobytes())
+        filename = "kare.jpg"
+
+    j = a.infer_landmark(file=_Dosya())
+    assert isinstance(j, dict) and j.get("detected") is True, str(j)[:200]
+    assert j.get("nokta_gorunurlugu_dogrulanmadi") is False, j.get("nokta_gorunurlugu_dogrulanmadi")
