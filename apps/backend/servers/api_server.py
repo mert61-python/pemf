@@ -5371,15 +5371,36 @@ def _stm_yazim_isareti_al():
         return None
 
 
-def _stm_stop_yazildi_mi(kuyruga_verildi: bool, isaret) -> bool:
+def _stm_son_stop_sirasi_al():
+    """`stop_all_coils`'tan HEMEN sonra: bu E-stop'un kuyruğa koyduğu STOP'un sırası (i5-F-2; bildirmeyen HC'de None)."""
+    _sira = getattr(state.hardware, "son_stop_sirasi", None)
+    if not callable(_sira):
+        return None
+    try:
+        return int(_sira()) or None
+    except Exception:
+        logging.getLogger(__name__).warning("E-stop: STM STOP sirasi okunamadi", exc_info=True)
+        return None
+
+
+def _stm_stop_yazildi_mi(kuyruga_verildi: bool, isaret, stop_sirasi=None) -> bool:
     """`stmStopped`: STOP porta GERÇEKTEN yazıldı mı (D1.55 · B-1.23).
 
     ⚠️ Kuyruğa vermek YETMEZ: gönderici ölüyse ya da seri bağlantı yoksa paket porta hiç gitmez; eskiden
     bu durumda da `stmStopped=True` yayınlanıyordu (ölçüldü: porta 0 bayt). Çekirdek yazım izi bildirmiyorsa
     (test vekilleri) eski anlam ("kuyruğa verildi") korunur. Bu yalnız RAPORLANAN teyittir — STOP'u
-    kapılamaz, gönderimi azaltmaz (Ö.4-Y8); teyitsizlik istemcinin yedek adımlarını çalıştırır."""
+    kapılamaz, gönderimi azaltmaz (Ö.4-Y8); teyitsizlik istemcinin yedek adımlarını çalıştırır.
+    ⚠️ 1-C inceleme i5-F-2: teyit bu E-stop'un KENDİ STOP'una (kuyruk sırası) bağlıdır — E-stop'tan ÖNCE kuyruğa girmiş
+    başka bir STOP'un yazılması sayılmaz (önceki STOP + RUN sırasında E-stop'un STOP'u yazılamazsa yalan "True" oluyordu)."""
     if not kuyruga_verildi or isaret is None:
         return bool(kuyruga_verildi)
+    _sirali = getattr(getattr(state.hardware, "core", None), "hw_stop_sirasi_yazildi_bekle", None)
+    if stop_sirasi and callable(_sirali):
+        try:
+            return bool(_sirali(stop_sirasi, _ESTOP_STM_YAZIM_BEKLEME_S))
+        except Exception:
+            logging.getLogger(__name__).warning("E-stop: STM STOP yazimi dogrulanamadi", exc_info=True)
+            return False
     _bekle = getattr(getattr(state.hardware, "core", None), "hw_stop_yazildi_bekle", None)
     if not callable(_bekle):
         return True
@@ -5413,12 +5434,14 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
         _active_session["is_active"] = False
     stm_stopped = False
     _stm_isaret = None
+    _stm_stop_sirasi = None
     if state.hardware:
         _stm_isaret = _stm_yazim_isareti_al()
         try:
             stm_stopped = bool(state.hardware.stop_all_coils())
         except Exception:
             logging.exception("STM emergency stop failed")
+        _stm_stop_sirasi = _stm_son_stop_sirasi_al()  # i5-F-2: teyit bu STOP'a bağlanır
 
     # P0 audit 2026-06-28: ESP stop publish'lerini PARALEL gonder (eskiden bobin basina 2 senkron
     # publish sirayla → acil-durdurma N-bobin x ~7sn gecikiyordu). _emergency_stop_all DAIMA bir
@@ -5527,7 +5550,7 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     # varsayimi "dogrulanmadi"yi "basarili" sayiyordu. Kapsam artik daima tum ESP bobinleri
     # oldugundan liste bos olamaz; yine de bos-liste FAIL-CLOSED yorumlanir (bos = dogrulanmadi).
     _esp_ok = bool(mqtt_results) and all(r.get("mqtt") == "success" for r in mqtt_results)
-    stm_stopped = _stm_stop_yazildi_mi(stm_stopped, _stm_isaret)  # D1.55: kuyruk değil PORT
+    stm_stopped = _stm_stop_yazildi_mi(stm_stopped, _stm_isaret, _stm_stop_sirasi)  # D1.55: kuyruk değil PORT
     _stm_ok = stm_stopped or state.hardware is None  # STM yoksa STM-basarisizligi sayma
     _status = "success" if (_stm_ok and _esp_ok) else ("error" if (not _stm_ok and not _esp_ok) else "partial")
     return {

@@ -223,6 +223,7 @@ class HeadlessCore:
             self._hw_yazim_kosulu = threading.Condition()
             self._hw_yazim_sayaci = 0  # porta başarıyla yazılan paket sayısı
             self._hw_son_stop_yazimi = 0  # son tüm-duty-0 (STOP) yazımının sayaç değeri
+            self._hw_son_stop_sirasi = 0  # porta yazılmış STOP'ların EN YÜKSEK kuyruk sırası (i5-F-2)
         if getattr(self, "_hw_canlandirma_kilidi", None) is None:
             self._hw_canlandirma_kilidi = threading.Lock()
             self._hw_son_canlandirma = 0.0
@@ -316,8 +317,25 @@ class HeadlessCore:
                 self._hw_yazim_kosulu.wait(kalan)
             return True
 
-    def _hw_yazimi_kaydet(self, stm_msg: Any) -> None:
-        """Gönderici: porta BAŞARIYLA yazılan paketi say; tüm duty alanları 0 ise STOP yazımı olarak işaretle."""
+    def hw_stop_sirasi_yazildi_bekle(self, sira: int, zaman_asimi: float) -> bool:
+        """Kuyruk sırası `sira` OLAN ya da ondan SONRA kuyruğa girmiş bir STOP porta YAZILDI mı? En çok `zaman_asimi` sn.
+
+        ⚠️ 1-C inceleme i5-F-2: `hw_stop_yazildi_bekle(isaret)` E-stop'tan ÖNCE kuyruğa girmiş BAŞKA bir STOP'u da sayıyordu.
+        Kuyruk FIFO'dur: sırası ≥ `sira` olan bir STOP yazıldıysa E-stop'un STOP'u ya yazılmış ya da daha yeni bir STOP
+        tarafından ezilmiştir (yine yazılan son komut STOP'tur)."""
+        self._hw_izlemeyi_kur()
+        bitis = time.monotonic() + max(0.0, float(zaman_asimi))
+        with self._hw_yazim_kosulu:
+            while self._hw_son_stop_sirasi < int(sira):
+                kalan = bitis - time.monotonic()
+                if kalan <= 0:
+                    return False
+                self._hw_yazim_kosulu.wait(kalan)
+            return True
+
+    def _hw_yazimi_kaydet(self, stm_msg: Any, sira: int = 0) -> None:
+        """Gönderici: porta BAŞARIYLA yazılan paketi say; tüm duty alanları 0 ise STOP yazımı olarak işaretle (ve kuyruk
+        sırasını kaydet — i5-F-2)."""
         try:
             stop_mu = _tum_duty_sifir_mi(stm_msg)
         except Exception:
@@ -329,6 +347,7 @@ class HeadlessCore:
             self._hw_yazim_sayaci += 1
             if stop_mu:
                 self._hw_son_stop_yazimi = self._hw_yazim_sayaci
+                self._hw_son_stop_sirasi = max(getattr(self, "_hw_son_stop_sirasi", 0), int(sira or 0))
             kosul.notify_all()
 
     #: `db_acilis_hatalari` anahtarı → operatöre gösterilen ad.
@@ -1031,7 +1050,7 @@ class HeadlessCore:
                     else:
                         # D1.55: yazım izi — E-stop "STOP porta YAZILDI" bilgisini buradan okur
                         # (`hw_stop_yazildi_bekle`). `else`: izin kendisi yazım hatası sayılmaz.
-                        self._hw_yazimi_kaydet(stm_msg)
+                        self._hw_yazimi_kaydet(stm_msg, getattr(payload_tuple, "sira", 0))
 
                 if udp_sock and udp_pkt:
                     try:

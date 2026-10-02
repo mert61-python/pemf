@@ -1,4 +1,5 @@
 # Author: mertaygn, cglrgrkn
+import itertools
 import logging
 import queue
 import struct
@@ -98,6 +99,21 @@ def sifir_hz_durdurma_mi(freq) -> bool:
         return False
 
 
+class _SiraliPaket(tuple):
+    """HWSender kuyruk öğesi `(stm_msg, udp_pkt, ip, port)` + kuyruğa giriş SIRASI (`sira`).
+
+    ⚠️ 1-C inceleme i5-F-2: E-stop'un "STOP porta YAZILDI" teyidi eskiden "işaretten sonra HERHANGİ bir tüm-duty-0 paket
+    yazıldı mı"ya bakıyordu → E-stop'tan ÖNCE kuyruğa girmiş başka bir STOP sayılıyor, ardından RUN yazılıp E-stop'un
+    KENDİ STOP'u yazılamadığında `stmStopped=True` yalanı oluşuyordu (30/30). Sıra numarası teyidi bu E-stop'un STOP'una
+    (ya da ondan SONRA kuyruğa girmiş bir STOP'a — FIFO: ondan önceki her şey yazılmıştır) bağlar. Demet olduğu için
+    gönderici (`stm_msg, udp_pkt, ip, port = öğe`) değişmeden açar; sırayı `getattr(öğe, "sira", 0)` ile okur."""
+
+    def __new__(cls, ogeler, sira: int):
+        oge = super().__new__(cls, ogeler)
+        oge.sira = int(sira)
+        return oge
+
+
 class HardwareController:
     """
     Headless donanım kontrolcüsü. Eski PyQt tabanlı unified_control_window.py
@@ -107,6 +123,10 @@ class HardwareController:
     def __init__(self, core_instance):
         self.core = core_instance
         self.logger = logging.getLogger(self.__class__.__name__)
+        # i5-F-2: kuyruğa konan her pakete artan sıra (`_SiraliPaket`); son kuyruğa giren STOP'un sırası E-stop
+        # teyidinde kullanılır (`son_stop_sirasi`). `itertools.count` CPython'da iş parçacığı güvenlidir.
+        self._paket_sayaci = itertools.count(1)
+        self._son_stop_sirasi = 0
 
         # 5 Bobin için bellek içi (In-Memory) state
         # Arayüz olmadığı için (Headless), parametreler burada tutulur
@@ -273,6 +293,10 @@ class HardwareController:
         except Exception:
             self.logger.debug("STM red durumu okunamadi → baslatma ENGELLENMEDI", exc_info=True)
         return ""
+
+    def son_stop_sirasi(self) -> int:
+        """Kuyruğa en son giren STOP paketinin sırası (0 = henüz yok). E-stop `stop_all_coils`'tan HEMEN sonra okur."""
+        return int(getattr(self, "_son_stop_sirasi", 0) or 0)
 
     def _gonderici_baslatmaya_hazir(self) -> bool:
         """START kapısı: HWSender ŞU AN canlı mı? Ölüyse canlandırmayı DENER (sonraki STOP'lar yazılsın) ama bu START'ı
@@ -646,7 +670,13 @@ class HardwareController:
         # hic gonderilmez. Guvenlik yolunda (STOP) istisna sizmasi kabul edilemez.
         # Yeni davranis: kisa bir yeniden-deneme, sonra SESSIZ-DEGIL kayip (keep-alive/
         # _force_send_left zaten sonraki tur telafi eder — bkz. STOP_RESEND_TICKS).
-        _pkt = (stm_msg, udp_pkt, ESP32_IP, ESP32_PORT)
+        _sayac = getattr(self, "_paket_sayaci", None)
+        if _sayac is None:  # `__new__` ile kurulan (init'siz) test kontrolcüleri
+            _sayac = self._paket_sayaci = itertools.count(1)
+        _sira = next(_sayac)
+        _pkt = _SiraliPaket((stm_msg, udp_pkt, ESP32_IP, ESP32_PORT), _sira)
+        if all(d == 0.0 for d in stm32_duties):
+            self._son_stop_sirasi = _sira  # i5-F-2: E-stop teyidi bu STOP'a (ya da sonrakine) bağlanır
         for _attempt in range(3):
             try:
                 self.core._hw_send_queue.put_nowait(_pkt)
