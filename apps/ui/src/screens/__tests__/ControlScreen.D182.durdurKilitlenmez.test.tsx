@@ -129,6 +129,26 @@ describe("D1.82 / Y47 — durdurma düğmeleri istek sürerken kilitlenmez", () 
     expect(yollar().slice(sonStart + 1)).toContain("/session/stop");
   });
 
+  it("KRİTİK: başlatma uçuştayken Durdur verildiyse, başlatma yanıtı BAŞARISIZ/BOŞ (zaman aşımı) dönse de STOP YENİDEN gider", async () => {
+    // 1-E incelemesi (i-5.1): "yalnız başarılı yanıtta yinele" mutantı bu kol olmadan 508/508 YEŞİL kalıyordu. Zaman aşımı
+    // sunucunun isteği işlemediği anlamına gelmez (geç işlenen START durdurmadan SONRA başlatabilir).
+    const u = await ekran();
+    await act(async () => {
+      fireEvent.press(u.getByText("▶ Başlat"));
+    });
+    await act(async () => {
+      fireEvent.press(u.getByText("⏹ Durdur"));
+    });
+    const onceki = say("/session/stop");
+    await act(async () => {
+      startCoz!(null); // apiClient: boş/başarısız yanıt → null (zaman aşımıyla aynı dal)
+    });
+    await act(async () => {});
+    expect(say("/session/stop")).toBeGreaterThan(onceki);
+    const sonStart = yollar().lastIndexOf("/session/start");
+    expect(yollar().slice(sonStart + 1)).toContain("/session/stop");
+  });
+
   it("KRİTİK: seans kartının '⏹ Durdur'u /session/stop ASKIDAYKEN de basılabilir (ikinci basış yeni istek)", async () => {
     const u = await ekran();
     await act(async () => {

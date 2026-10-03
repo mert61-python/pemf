@@ -76,6 +76,23 @@ it("KRİTİK: START yanıtı durdurmadan SONRA 'success' dönerse STOP YENİDEN 
   expect(istekler.map((i) => i.start)).toEqual([true, false, false]);
 });
 
+it("KRİTİK: START yanıtı BAŞARISIZ/BOŞ (zaman aşımı, ret) dönse de durdurma istendiyse STOP YENİDEN gider", async () => {
+  // 1-E incelemesi (i-5.1): "yalnız başarılı yanıtta yinele" mutantı bu kol olmadan 414/414 YEŞİL kalıyordu. İstemcinin zaman
+  // aşımı sunucunun isteği İŞLEMEDİĞİ anlamına gelmez — geç işlenen START bobini durdurmadan SONRA başlatabilir.
+  const u = render(<CoilParameterPanel {...bobin} />);
+  await act(async () => {
+    fireEvent.press(u.getByLabelText("Bobini başlat"));
+  });
+  await act(async () => {
+    fireEvent.press(u.getByLabelText("Bobini durdur"));
+  });
+  await act(async () => {
+    startCoz!(null); // apiClient: boş/başarısız yanıt → null (zaman aşımıyla aynı dal)
+  });
+  await act(async () => {});
+  expect(istekler.map((i) => i.start)).toEqual([true, false, false]);
+});
+
 it("KARŞIT: durdurma istenmediyse START yanıtından sonra STOP GÖNDERİLMEZ (gereksiz durdurma yok)", async () => {
   const u = render(<CoilParameterPanel {...bobin} />);
   await act(async () => {
