@@ -71,3 +71,27 @@ def test_KARSIT_diger_alarm_turleri_TAM_acil_durdurma_ve_retained_yok_sayilir(or
     assert o.estoplar and o.estoplar[-1].startswith(f"esp_alarm_{ESP_BOBIN}_overcurrent"), (
         f"overcurrent alarmi tam acil durdurma YAPMADI (O.4-Y8): {o.estoplar}"
     )
+
+
+@pytest.mark.parametrize(
+    "tur", ["overtemp", "over_temperature", "OverTemp", "overtemp_kesme", "sicaklik_asimi", "AŞIRI_SICAKLIK"]
+)
+def test_KRITIK_asiri_sicaklik_adlari_YALNIZ_bobin8i_durdurur(ortam, tur):
+    o = ortam
+    _alarm(o, tur)
+    assert o.estoplar == [], f"'{tur}' asiri sicaklik alarmi GENEL acil durdurma tetikledi"
+    assert o.hc.coils_state[_B]["is_running"] is True
+
+
+@pytest.mark.parametrize(
+    "tur",
+    ["attempt_failed", "overcurrent_temp", "overtemp_overcurrent", "temp_sensor_fault", "contempt", "safety_violation"],
+)
+def test_KARSIT_asiri_sicaklik_OLMAYAN_tur_TAM_acil_durdurma(ortam, tur):
+    """1-E incelemesi (i-11.1): sınıflama "temp" ALT DİZESİNE bakıyordu → bu türler (ölçüldü) TAM acil durdurma yerine yalnız
+    bobin 8'i durduruyordu. Y53 yalnız aşırı sıcaklığı daraltır; şüphede durdurma DARALMAZ (Ö.4-Y8)."""
+    o = ortam
+    _alarm(o, tur)
+    assert o.estoplar and o.estoplar[-1].startswith(f"esp_alarm_{ESP_BOBIN}_"), (
+        f"'{tur}' alarmi TAM acil durdurma YAPMADI (yalniz bobin {ESP_BOBIN} yoluna dustu): {o.estoplar}"
+    )

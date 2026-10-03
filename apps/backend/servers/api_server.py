@@ -1067,10 +1067,22 @@ def _esp_telemetry_watchdog():
         time.sleep(ESP_WATCHDOG_INTERVAL_SEC)
 
 
+#: Y53 — YALNIZ aşırı sıcaklık adları (overtemp / over_temperature / aşırı sıcaklık / sıcaklık aşımı). ⚠️ 1-E incelemesi
+#: (i-11.1): eskiden "temp" ALT DİZESİ yetiyordu → "attempt_failed", "overcurrent_temp", "temp_sensor_fault" TAM acil durdurma
+#: yerine yalnız kendi bobinini durduruyordu (ölçüldü). Şüphede durdurma DARALMAZ (Ö.4-Y8): tanınmayan tür TAM acil durdurma.
+_Y53_ASIRI_SICAKLIK = re.compile(
+    r"(?<![a-z])(over[_\- ]?temp(erature)?|a[sş][iı]r[iı][_\- ]?s[iı]cak(l[iı]k)?|s[iı]cakl[iı]k[_\- ]?a[sş][iı]m[iı])(?![a-z])"
+)
+#: Başka bir alarm sınıfının izini taşıyan tür (birleşik alarm) → TAM acil durdurma.
+_Y53_DIGER_ALARM = ("current", "akim", "akım", "safety", "violation", "guvenlik", "güvenlik", "ihlal")
+
+
 def _esp_asiri_sicaklik_alarmi_mi(atype) -> bool:
-    """Y53: ESP alarm türü aşırı sıcaklık sınıfında mı (overtemp / over_temp / overtemperature / sıcaklık)?"""
+    """Y53: ESP alarm türü YALNIZ aşırı sıcaklık mı (overtemp / over_temperature / aşırı sıcaklık)?"""
     t = str(atype or "").lower()
-    return "temp" in t or "sicak" in t or "sıcak" in t
+    if any(k in t for k in _Y53_DIGER_ALARM):
+        return False
+    return bool(_Y53_ASIRI_SICAKLIK.search(t))
 
 
 def _y53_yalniz_kendi_bobinini_durdur(coil_id: int, atype: str) -> None:
