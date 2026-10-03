@@ -12,6 +12,9 @@
  *
  * Kapı: donanım çalışıyorsa ONAY iste; onaylanırsa ÖNCE durdur, sonra sökmeye izin ver.
  * Durdurma teyit edilemezse eylemi İPTAL et (operatör durdurma kontrolünü kaybetmesin).
+ * ⚠️ Y55 (sahip, S-E1): STM BAĞLI DEĞİLKEN teyit hiç gelemez (kart sökülü / kablo çıkık) — eskiden çıkış her seferinde
+ * iptal oluyordu. ACİL DURDUR yine ÖNCE gönderilir (atlanmaz, kapılanmaz — Ö.4-Y8); teyit gelmezse İKİNCİ onayla çıkılır.
+ * Mandal ve "teyitsiz" durumu BACKEND'dedir (`estopTeyit`, mandal dosyası) — bu kapı Sıfırla çağırmaz, çıkış onları silmez.
  */
 import { useCallback } from "react";
 import { platformAlert, platformConfirm } from "@/services/apiClient";
@@ -59,6 +62,9 @@ export function useTeardownGuard() {
       // Eskiden kopuşta bobinler `running:false` göründüğü için profil değişimi onaysız, çıkış yalnız genel onayla
       // kabuğu söküyordu — kayan ACİL DURDUR "(bağlantı yok)" gösterirken (ölçüldü). E-stop kapılanmaz; kapılanan söküm.
       const belirsiz = donanimBelirsiz === true && !running && !active;
+      // Y55: STM bağlantısı AÇIKÇA yok → STOP'un porta yazıldığı hiç teyit edilemez (beklemek çıkışı sonsuza dek
+      // kilitler). Durum hiç bildirilmediyse (alan yok) bugünkü gibi İPTAL — bilinmeyen "bağlı değil" sayılmaz.
+      const stmBagliDegil = typeof snapshot.stm === "string" && snapshot.stm !== "online";
       if (!running && !active && !belirsiz) {
         // Boşta: tıbbi risk YOK. Yalnız çağıran açıkça istediyse (kazara dokunuş koruması) sor.
         if (!opts?.confirmWhenIdle) return true;
@@ -84,6 +90,15 @@ export function useTeardownGuard() {
       if (!ok) return false;
 
       const { confirmed } = await performEmergencyStop();
+      if (!confirmed && stmBagliDegil) {
+        // Y55: ACİL DURDUR GÖNDERİLDİ (yukarıda); STM paket gelmeyince bobinleri kendi bekçisiyle ~1,5 sn'de durdurur
+        // (DENETİM-08 ölçümü). Operatör bilerek İKİNCİ kez onaylarsa çıkılır; vazgeçerse ekranda kalır.
+        return platformConfirm(
+          "ACİL DURDUR teyit edilemedi",
+          "ACİL DURDUR teyit edilemedi — STM bağlı değil, bobinleri kontrol edin. Yine de çıkılsın mı?",
+          "Yine de çık"
+        );
+      }
       if (!confirmed) {
         // Durdurma teyit edilemedi → kabuğu SÖKME. Operatörün elinde ACİL DURDUR kalsın.
         platformAlert(

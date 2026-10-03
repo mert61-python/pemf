@@ -17,8 +17,9 @@
 const mockSira: string[] = [];
 const mockConfirm = jest.fn(async (title: string, _body: string, _ok?: string) => {
   mockSira.push(`onay:${title}`);
-  return true;
+  return !(mockIkinciHayir && title === "ACİL DURDUR teyit edilemedi");
 });
+let mockIkinciHayir = false;
 let mockTeyit = true;
 jest.mock("@/services/apiClient", () => ({
   apiGet: jest.fn(async (_p: string, fb: unknown) => fb),
@@ -83,6 +84,7 @@ beforeEach(() => {
   mockSira.length = 0;
   mockConfirm.mockClear();
   mockTeyit = true;
+  mockIkinciHayir = false;
 });
 
 describe("D1.E03 / A-59 — STM belirsizken kabuk sökümü", () => {
@@ -101,17 +103,21 @@ describe("D1.E03 / A-59 — STM belirsizken kabuk sökümü", () => {
     expect(sonuc).toBe(true);
   });
 
-  it("KRİTİK: durdurma teyit edilemezse (STM kopuk) söküm İPTAL — operatör durdurma kontrolünü kaybetmez", async () => {
+  it("KRİTİK: durdurma teyit edilemezse (STM kopuk) söküm İKİNCİ ONAY OLMADAN yapılmaz — operatör durdurma kontrolünü kaybetmez", async () => {
+    // Y55 (sahip, S-E1): eskiden bu durumda söküm HER ZAMAN iptal ediliyordu (kalıcı kopuklukta çıkış imkânsızdı); artık
+    // ikinci, açık bir onay sorulur — onaylanmazsa söküm yine YOK (evet kolu: useTeardownGuard.Y55.ikinciOnay.test.tsx).
     mockTeyit = false;
+    mockIkinciHayir = true;
     await kur(dizi);
     let sonuc: boolean | undefined;
     await act(async () => {
       sonuc = await guard("Çıkış yapmak", { confirmWhenIdle: { title: "Çıkış Yap", body: "genel" } });
     });
     // Güvenlik onayı GENEL çıkış onayının yerine geçer (boşta sorulan genel onay DEĞİL).
-    expect(mockConfirm).toHaveBeenCalledTimes(1);
+    expect(mockConfirm).toHaveBeenCalledTimes(2);
     expect(mockConfirm.mock.calls[0][0]).toMatch(/çalışıyor olabilir/i);
-    expect(mockSira).toContain("estop");
+    expect(mockConfirm.mock.calls[1][0]).toBe("ACİL DURDUR teyit edilemedi");
+    expect(mockSira.indexOf("estop")).toBe(1);
     expect(sonuc).toBe(false);
   });
 
