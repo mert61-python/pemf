@@ -145,6 +145,56 @@ def test_KARSIT_tek_seferlik_iletiler_sinir_ASILSA_da_hicbiri_dusmez(ortam):
     assert ls._ws_dropped_total == 0
 
 
+@pytest.mark.parametrize(
+    "tur",
+    ["stm_status", "emergency_stop", "estop_teyit", "estop_mandali", "session_update", "notification", "coil_ack"],
+)
+def test_KRITIK_guvenlik_iletisi_kuyrugun_EN_ESKISI_olsa_da_DUSMEZ(ortam, tur):
+    """1-E incelemesi (i-4.1): tür sınıflaması davranışla pinlenir. Güvenlik/geçiş iletisi kuyruğun EN ESKİ kaydıyken
+    arkasından sınırı iki kez aşan periyodik akış gelir: ileti yanlışlıkla `_WS_PERIYODIK_TURLER`e girerse "en eski
+    periyodik" olarak ilk o düşer (eski kapılar yalnız stm_status / notification / session_update kullanıyordu;
+    `emergency_stop` / `estop_teyit` / `estop_mandali`'yı periyodik sayan mutant 21/21 YEŞİL kalıyordu)."""
+    ls, dongu, tikanan, saglikli = ortam
+    ls._ws_broadcast_sync(_sensor(0))
+    _adim(dongu)  # ilk gönderim tıkanan istemcide asılı → sonraki her şey kuyrukta
+    ls._ws_broadcast_sync({"type": tur, "data": {"isaret": tur}})
+    for n in range(1, 2 * ls._WS_MAX_PENDING_BROADCASTS + 2):
+        ls._ws_broadcast_sync(_sensor(n))
+    assert ls._ws_dropped_total > 0, "aparat: hic dusurme olmadi, kapi anlamsiz"
+    _bosalt(ls, dongu, tikanan)
+    gelen = [m for m in saglikli.alinan if m.get("type") == tur]
+    assert gelen and gelen[-1]["data"] == {"isaret": tur}, f"'{tur}' iletisi geri-basinc sinirinda DUSTU"
+
+
+def test_KRITIK_seans_bitisinin_TAM_anlik_goruntusu_hasta_temizligi_DUSMEZ(ortam):
+    """1-E incelemesi (i-4.2): `snapshot` periyodik DEĞİL — backend onu yalnız geçişte yayınlar (seans bitişi: "Aktif hasta
+    yok", `set_live_patient`). `session_update` hastayı TAŞIMAZ; düşen anlık görüntü yerine yenisi gelmez → sağlıklı
+    istemcide Hasta Özeti biten seansın hastasını göstermeye devam ederdi. GERÇEK `set_live_patient` +
+    `update_live_session_state(is_active=False)` yolu."""
+    ls, dongu, tikanan, saglikli = ortam
+    with ls._live_state_lock:
+        eski_tedavi = dict(ls._live_state["activeTreatment"])
+        eski_hasta = ls._live_state["patient"]
+    try:
+        ls.set_live_patient({"name": "Pamuk", "species": "kedi"})
+        ls._ws_broadcast_sync(_sensor(0))
+        _adim(dongu)  # tıkanan istemci kilidi tutuyor
+        for n in range(1, ls._WS_MAX_PENDING_BROADCASTS + 5):
+            ls._ws_broadcast_sync(_sensor(n))
+        ls.update_live_session_state(is_active=False, mode="Sistem Hazır")  # GERÇEK seans bitişi
+        for n in range(1000, 1000 + 2 * ls._WS_MAX_PENDING_BROADCASTS):
+            ls._ws_broadcast_sync(_sensor(n))
+        assert ls._ws_dropped_total > 0, "aparat: hic dusurme olmadi"
+        _bosalt(ls, dongu, tikanan)
+        anlik = [m for m in saglikli.alinan if m.get("type") == "snapshot"]
+        assert anlik, "seans bitisinin TAM anlik goruntusu geri-basinc sinirinda DUSTU (Hasta Ozeti bayat kalir)"
+        assert anlik[-1]["data"]["patient"] is None, anlik[-1]["data"].get("patient")
+    finally:
+        with ls._live_state_lock:
+            ls._live_state["activeTreatment"].update(eski_tedavi)
+            ls._live_state["patient"] = eski_hasta
+
+
 def test_KARSIT_yalniz_periyodik_dolulukta_sinir_KORUNUR(ortam):
     ls, dongu, tikanan, saglikli = ortam
     ls._ws_broadcast_sync(_sensor(0))

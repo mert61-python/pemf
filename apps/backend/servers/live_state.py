@@ -61,9 +61,9 @@ def _ws_send_lock_get():
 _WS_MAX_PENDING_BROADCASTS = 64
 #: Yenisi eskisinin YERINI TUTAN periyodik anlik goruntuler (her biri o anin TAM durumunu tasir). Bilinmeyen tur
 #: DUSURULMEZ (yeni bir tek-seferlik tur sessizce dusmesin diye varsayilan guvenli taraftadir).
-_WS_PERIYODIK_TURLER = frozenset(
-    {"sensor_data", "coil_status", "stm_coil_update", "ai_vision", "snapshot", "gateway_status"}
-)
+#: ⚠️ 1-E incelemesi (i-4.2): `snapshot` periyodik DEGIL — yalniz geciste yayinlanir (seans bitisi "Aktif hasta yok",
+#: `set_live_patient`); dusen anlik goruntunun yerine yenisi gelmez (olculdu: Hasta Ozeti biten seansin hastasinda kaldi).
+_WS_PERIYODIK_TURLER = frozenset({"sensor_data", "coil_status", "stm_coil_update", "ai_vision", "gateway_status"})
 _ws_pending = 0
 _ws_pending_lock = threading.Lock()
 _ws_dropped_total = 0
