@@ -302,6 +302,8 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
             ambientTemp: _num(d.ambientTemp),
             currentA: _num(d.currentA),
             timestamp: _num(msg.timestamp, Date.now() / 1000),
+            // D1.90 · İG-6.90: ölçülmeyen alan 0.0 gelir — hangi alanın ölçüldüğü noktayla BİRLİKTE saklanır.
+            olculen: Array.isArray(d.measuredFields) ? [...d.measuredFields] : undefined,
           };
           const next = arr.length >= MAX_HISTORY ? [...arr.slice(1), point] : [...arr, point];
           return { ...prev, [coilId]: next };

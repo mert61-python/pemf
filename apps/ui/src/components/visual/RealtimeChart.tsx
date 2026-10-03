@@ -12,6 +12,16 @@ import { View, StyleSheet, Platform, Text } from "react-native";
 import Svg, { Line, Polyline, Rect, Text as SvgText, G, Circle } from "react-native-svg";
 import type { CoilSensorHistory, SensorDataPoint } from "@/types/domain";
 import { hesaplaPad, cizimAlani, canvasBoyutla, type TuvalGibi, type BaglamGibi } from "@/components/visual/chartLayout";
+import { alanGosterilebilir } from "@/utils/olculenAlan";
+
+/**
+ * D1.90 · B-6.22 + İG-6.90 — nokta bu alanı ÖLÇTÜ mü? Ölçülmeyen alan WS'te 0.0 gelir (bobin 7 alan ölçmez); eskiden
+ * eksen min/max'ına ve eğriye girip mT eksenini 0'a çekiyordu (bobin 6: 12,2–12,4 → 0,0–12,3; ölçüldü). Ölçüt TEK
+ * KAYNAK `alanGosterilebilir` (`measuredFields` üyeliği); alanı göndermeyen eski backend'de eski davranış.
+ */
+function noktaOlculdu(p: SensorDataPoint, alan: "magneticMt" | "objectTemp"): boolean {
+  return alanGosterilebilir({ measuredFields: p.olculen }, alan);
+}
 
 // 8 bobin için yüksek kontrastlı, kategorik (birbirinden barizce ayrık) palet.
 // Üst üste binen çizgiler ayırt edilebilsin diye kırmızı/mavi/yeşil/turuncu/mor/turkuaz/pembe/sarı.
@@ -90,11 +100,11 @@ export function RealtimeChart({
       const pts = history[coilId] ?? [];
       if (pts.length > maxPoints) maxPoints = pts.length;
       for (const p of pts) {
-        if (showMagnetic) {
+        if (showMagnetic && noktaOlculdu(p, "magneticMt")) {
           if (p.magneticMt < magMin) magMin = p.magneticMt;
           if (p.magneticMt > magMax) magMax = p.magneticMt;
         }
-        if (showTemp) {
+        if (showTemp && noktaOlculdu(p, "objectTemp")) {
           if (p.objectTemp < tempMin) tempMin = p.objectTemp;
           if (p.objectTemp > tempMax) tempMax = p.objectTemp;
         }
@@ -156,21 +166,26 @@ export function RealtimeChart({
         ctx.lineWidth = 1.5;
         ctx.setLineDash([]);
         ctx.beginPath();
+        // D1.90: ölçülmeyen nokta çizilmez; kalem kalkar, sonraki ölçülen noktada yeniden iner (0'a düşen sahte çizgi yok).
+        let kalem = false;
         for (let i = 0; i < pts.length; i++) {
+          if (!noktaOlculdu(pts[i], "magneticMt")) { kalem = false; continue; }
           const x = xOf(pts[i], i, pts.length);
           const y = PAD.top + plotH - ((pts[i].magneticMt - magMin) / magRange) * plotH;
-          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          if (!kalem) { ctx.moveTo(x, y); kalem = true; } else ctx.lineTo(x, y);
         }
         ctx.stroke();
         // Son-değer ucu: artık SABİT sağ uçta değil, serinin GERÇEK son zamanında. Böylece veri
         // akışı durmuş bobinin ucu geride kalır ve "canlı" gibi görünmez.
         const last = pts[pts.length - 1];
-        const lx = xOf(last, pts.length - 1, pts.length);
-        const ly = PAD.top + plotH - ((last.magneticMt - magMin) / magRange) * plotH;
-        ctx.fillStyle = color + "40";
-        ctx.beginPath(); ctx.arc(lx, ly, 6, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = color;
-        ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2); ctx.fill();
+        if (noktaOlculdu(last, "magneticMt")) {
+          const lx = xOf(last, pts.length - 1, pts.length);
+          const ly = PAD.top + plotH - ((last.magneticMt - magMin) / magRange) * plotH;
+          ctx.fillStyle = color + "40";
+          ctx.beginPath(); ctx.arc(lx, ly, 6, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = color;
+          ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2); ctx.fill();
+        }
       }
 
       // Temperature — dashed line (right axis)
@@ -179,10 +194,12 @@ export function RealtimeChart({
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
+        let kalemT = false;
         for (let i = 0; i < pts.length; i++) {
+          if (!noktaOlculdu(pts[i], "objectTemp")) { kalemT = false; continue; }
           const x = xOf(pts[i], i, pts.length);
           const y = PAD.top + plotH - ((pts[i].objectTemp - tempMin) / tempRange) * plotH;
-          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          if (!kalemT) { ctx.moveTo(x, y); kalemT = true; } else ctx.lineTo(x, y);
         }
         ctx.stroke();
         ctx.setLineDash([]);
@@ -272,8 +289,9 @@ function NativeRealtimeChart({
     series.push({ id: coilId, pts });
     if (pts.length > maxPoints) maxPoints = pts.length;
     for (const p of pts) {
-      if (showMagnetic) { if (p.magneticMt < magMin) magMin = p.magneticMt; if (p.magneticMt > magMax) magMax = p.magneticMt; }
-      if (showTemp) { if (p.objectTemp < tempMin) tempMin = p.objectTemp; if (p.objectTemp > tempMax) tempMax = p.objectTemp; }
+      // D1.90 · İG-6.90: native yol da AYNI ölçüt (web canvas ile ikiz; ölçülmeyen alan eksene girmez).
+      if (showMagnetic && noktaOlculdu(p, "magneticMt")) { if (p.magneticMt < magMin) magMin = p.magneticMt; if (p.magneticMt > magMax) magMax = p.magneticMt; }
+      if (showTemp && noktaOlculdu(p, "objectTemp")) { if (p.objectTemp < tempMin) tempMin = p.objectTemp; if (p.objectTemp > tempMax) tempMax = p.objectTemp; }
     }
   }
 
@@ -329,15 +347,17 @@ function NativeRealtimeChart({
           if (pts.length < 2) return null;
           const color = COIL_COLORS[(id - 1) % 8];
           const n = pts.length;
-          const magStr = pts.map((p, i) => `${xAt(i, n, p)},${yMag(p.magneticMt)}`).join(" ");
-          const tempStr = pts.map((p, i) => `${xAt(i, n, p)},${yTemp(p.objectTemp)}`).join(" ");
+          // D1.90: ölçülmeyen nokta çizgiye girmez (0'a düşen sahte çizgi yok); son-değer ucu yalnız ölçülmüşse.
+          const magStr = pts.flatMap((p, i) => (noktaOlculdu(p, "magneticMt") ? [`${xAt(i, n, p)},${yMag(p.magneticMt)}`] : [])).join(" ");
+          const tempStr = pts.flatMap((p, i) => (noktaOlculdu(p, "objectTemp") ? [`${xAt(i, n, p)},${yTemp(p.objectTemp)}`] : [])).join(" ");
           const lastMag = pts[pts.length - 1];
+          const sonOlculdu = noktaOlculdu(lastMag, "magneticMt");
           return (
             <G key={id}>
-              {showMagnetic ? <Polyline points={magStr} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" /> : null}
-              {showTemp ? <Polyline points={tempStr} fill="none" stroke={color} strokeWidth={1} strokeDasharray="4,4" strokeLinecap="round" strokeLinejoin="round" /> : null}
-              {showMagnetic ? <Circle cx={xAt(n - 1, n, lastMag)} cy={yMag(lastMag.magneticMt)} r={5.5} fill={color} opacity={0.25} /> : null}
-              {showMagnetic ? <Circle cx={xAt(n - 1, n, lastMag)} cy={yMag(lastMag.magneticMt)} r={3} fill={color} /> : null}
+              {showMagnetic && magStr ? <Polyline points={magStr} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" /> : null}
+              {showTemp && tempStr ? <Polyline points={tempStr} fill="none" stroke={color} strokeWidth={1} strokeDasharray="4,4" strokeLinecap="round" strokeLinejoin="round" /> : null}
+              {showMagnetic && sonOlculdu ? <Circle cx={xAt(n - 1, n, lastMag)} cy={yMag(lastMag.magneticMt)} r={5.5} fill={color} opacity={0.25} /> : null}
+              {showMagnetic && sonOlculdu ? <Circle cx={xAt(n - 1, n, lastMag)} cy={yMag(lastMag.magneticMt)} r={3} fill={color} /> : null}
             </G>
           );
         })}

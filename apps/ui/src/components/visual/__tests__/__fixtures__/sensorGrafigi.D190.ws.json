@@ -1,0 +1,131 @@
+[
+ {
+  "coilId": 6,
+  "data": {
+   "ambientTemp": 0.0,
+   "currentA": 0.0,
+   "magneticMt": 12.3,
+   "measuredFields": [
+    "magneticMt",
+    "objectTemp"
+   ],
+   "objectTemp": 34.2
+  },
+  "timestamp": 1000,
+  "type": "sensor_data"
+ },
+ {
+  "coilId": 7,
+  "data": {
+   "ambientTemp": 0.0,
+   "currentA": 0.0,
+   "magneticMt": 0.0,
+   "measuredFields": [
+    "objectTemp"
+   ],
+   "objectTemp": 33.1
+  },
+  "timestamp": 1001,
+  "type": "sensor_data"
+ },
+ {
+  "coilId": 1,
+  "data": {
+   "ambientTemp": 0.0,
+   "currentA": 0.42,
+   "magneticMt": 0.0,
+   "measuredFields": [
+    "currentA"
+   ],
+   "objectTemp": 0.0
+  },
+  "timestamp": 1002,
+  "type": "sensor_data"
+ },
+ {
+  "coilId": 6,
+  "data": {
+   "ambientTemp": 0.0,
+   "currentA": 0.0,
+   "magneticMt": 12.2,
+   "measuredFields": [
+    "magneticMt",
+    "objectTemp"
+   ],
+   "objectTemp": 34.3
+  },
+  "timestamp": 1003,
+  "type": "sensor_data"
+ },
+ {
+  "coilId": 7,
+  "data": {
+   "ambientTemp": 0.0,
+   "currentA": 0.0,
+   "magneticMt": 0.0,
+   "measuredFields": [
+    "objectTemp"
+   ],
+   "objectTemp": 33.2
+  },
+  "timestamp": 1004,
+  "type": "sensor_data"
+ },
+ {
+  "coilId": 1,
+  "data": {
+   "ambientTemp": 0.0,
+   "currentA": 0.43,
+   "magneticMt": 0.0,
+   "measuredFields": [
+    "currentA"
+   ],
+   "objectTemp": 0.0
+  },
+  "timestamp": 1005,
+  "type": "sensor_data"
+ },
+ {
+  "coilId": 6,
+  "data": {
+   "ambientTemp": 0.0,
+   "currentA": 0.0,
+   "magneticMt": 12.4,
+   "measuredFields": [
+    "magneticMt",
+    "objectTemp"
+   ],
+   "objectTemp": 34.4
+  },
+  "timestamp": 1006,
+  "type": "sensor_data"
+ },
+ {
+  "coilId": 7,
+  "data": {
+   "ambientTemp": 0.0,
+   "currentA": 0.0,
+   "magneticMt": 0.0,
+   "measuredFields": [
+    "objectTemp"
+   ],
+   "objectTemp": 33.3
+  },
+  "timestamp": 1007,
+  "type": "sensor_data"
+ },
+ {
+  "coilId": 1,
+  "data": {
+   "ambientTemp": 0.0,
+   "currentA": 0.41,
+   "magneticMt": 0.0,
+   "measuredFields": [
+    "currentA"
+   ],
+   "objectTemp": 0.0
+  },
+  "timestamp": 1008,
+  "type": "sensor_data"
+ }
+]

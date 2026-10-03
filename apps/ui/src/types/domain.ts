@@ -236,6 +236,11 @@ export interface SensorDataPoint {
   ambientTemp: number;
   currentA: number;
   timestamp: number;
+  /**
+   * D1.90 · İG-6.90: noktanın geldiği yayındaki `measuredFields` (o an GERÇEKTEN ölçülen alanlar). Ölçülmeyen alan WS'te
+   * 0.0 gelir; grafik onu ölçüm sanıp ekseni 0'a çekiyordu. `undefined` = alanı göndermeyen eski backend (eski davranış).
+   */
+  olculen?: string[];
 }
 
 // Per-coil history: last 2000 samples
