@@ -37,7 +37,7 @@ jest.mock("@/services/wsClient", () => ({
 
 import React from "react";
 import { act, render } from "@testing-library/react-native";
-import { Polyline, Text as SvgText } from "react-native-svg";
+import { Circle, Polyline, Text as SvgText } from "react-native-svg";
 import { LiveDataProvider, useLiveData } from "@/context/LiveDataContext";
 import { RealtimeChart } from "@/components/visual/RealtimeChart";
 
@@ -94,6 +94,14 @@ describe("D1.90 / İG-6.90 — native grafik: ölçülmeyen alan eksene ve eğri
   it("KRİTİK: bobin 7'nin ölçülmeyen 0 mT'si EĞRİ olarak çizilmez (yalnız bobin 6'nın mT eğrisi)", async () => {
     const u = await ciz([6, 7]);
     expect(mTEgrileri(u)).toHaveLength(1);
+  });
+
+  it("KRİTİK: bobin 7'nin ölçülmeyen mT'si için SON-DEĞER noktası çizilmez (yalnız bobin 6'nın ucu)", async () => {
+    // 1-E incelemesi (i-14.1): "son-değer ucu yalnız ölçülmüşse" kuralını kaldıran mutant native ve web'de 628/628 YEŞİL
+    // kalıyordu — ölçülmeyen alan grafiğin sağ ucunda "şu anki değer" noktası olarak çiziliyordu.
+    const u = await ciz([6, 7]);
+    const uclar = u.UNSAFE_queryAllByType(Circle).filter((c) => c.props.r === 3);
+    expect(uclar).toHaveLength(1);
   });
 
   it("KRİTİK: sıcaklık ekseni, sıcaklık ölçmeyen bobin 1 yüzünden 0'a ÇEKİLMEZ", async () => {
