@@ -152,3 +152,24 @@ def test_KARSIT_bostayken_kopma_ve_watchdog_mandal_KURMAZ(ortam):
     o.core._handle_stm_line(_watchdog_satiri(), None)
     assert o.mandal.mandalli_mi() is False, "bostayken watchdog mandal kurdu"
     assert o.hc.update_coil(_B, 100.0, 40.0, 0.0, 5, start=True) is True
+
+
+def test_KRITIK_calisan_bobin_durumu_OKUNAMAZSA_kopmada_mandal_KURULUR(ortam, monkeypatch):
+    """1-E incelemesi (i-2.1): `_herhangi_bobin_calisiyor` durumu okuyamazsa ÇALIŞIYOR saymalı (fail-safe: yanlış mandalın
+    bedeli bir Sıfırla, kaçan mandal Y4'ü deler). "Okunamazsa çalışmıyor" mutantı mevcut 26 dosyada 295/295 YEŞİL kalıyordu."""
+
+    class _OkunamayanHC:
+        @property
+        def coils_state(self):
+            raise RuntimeError("bobin durumu okunamadi (aparat)")
+
+        def on_disconnect(self):
+            return True
+
+        def stop_all_coils(self):
+            return True
+
+    o = ortam
+    monkeypatch.setattr(o.api.state, "hardware", _OkunamayanHC())
+    o.core._set_stm_connected(False)
+    assert o.mandal.mandalli_mi() is True, "calisan bobin durumu okunamadi ve mandal KURULMADI (fail-open)"

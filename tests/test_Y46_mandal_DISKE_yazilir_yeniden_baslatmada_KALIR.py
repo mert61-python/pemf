@@ -101,9 +101,9 @@ def ortam(monkeypatch, tmp_path):
 
     orj_yaz = estop_mandali._diske_yaz
 
-    def _kayitli_yaz():
+    def _kayitli_yaz(*a, **k):
         olaylar.append(("yaz", "disk"))
-        return orj_yaz()
+        return orj_yaz(*a, **k)
 
     monkeypatch.setattr(estop_mandali, "_diske_yaz", _kayitli_yaz)
     monkeypatch.setattr(api.state, "hardware", _SahteHC())
@@ -155,6 +155,42 @@ def test_KRITIK_Sifirla_diske_yazilir_yeniden_baslatmada_mandal_GELMEZ(ortam, tm
     sonuc = _yeniden_baslat(o.veri, tmp_path)
     assert sonuc["durum"]["aktif"] is False, "Sifirla'dan sonra yeniden baslatmada mandal GERI GELDI"
     assert sonuc["engel"] == ""
+
+
+def test_KRITIK_GECIKMIS_kurulu_yazimi_arkadan_gelen_Sifirla_yazimini_EZMEZ(ortam, monkeypatch, tmp_path):
+    """1-E incelemesi (i-2.2): yazıcı iş parçacıkları çalışma sırasıyla değil zamanlama sırasıyla biter. E-stop'un yazıcısı
+    (zamanlanmış ama gecikmiş — yavaş disk, iş parçacığı zamanlaması) Sıfırla'nın yazıcısından SONRA koşarsa, YAZIM ANINDAKİ
+    durumu yazmalı (mandal yok) — çağrı anının "kurulu" anlık görüntüsünü değil. Yoksa operatörün Sıfırla'sı diskte ezilir,
+    sonraki açılış mandallı gelir ve bant "sıfırlanmadı" der. Yazıcılar ertelenir ve TERS sırada (Sıfırla'nınki önce)
+    elle koşturulur — belirlenimci."""
+    o = ortam
+    bekleyen: list = []
+
+    class _Ertelenen:
+        def __init__(self, target=None, args=(), kwargs=None, name=None, daemon=None):
+            self._is = (target, tuple(args), dict(kwargs or {}))
+
+        def start(self):
+            bekleyen.append(self)
+
+        def kos(self):
+            hedef, a, k = self._is
+            return hedef(*a, **k)
+
+    monkeypatch.setattr(o.mandal, "threading", SimpleNamespace(Thread=_Ertelenen))
+    o.api._emergency_stop_all("manual")
+    assert len(bekleyen) == 1, f"aparat: E-stop yazicisi ertelenmedi ({len(bekleyen)})"
+    c = TestClient(o.api.app)
+    r = c.post("/api/hardware/estop_mandali/sifirla", json={"onay": True})
+    assert r.status_code == 200, r.text
+    assert len(bekleyen) == 2, f"aparat: Sifirla yazicisi ertelenmedi ({len(bekleyen)})"
+    assert o.mandal.mandalli_mi() is False
+    bekleyen[1].kos()  # Sıfırla'nın yazıcısı ÖNCE biter
+    assert _dosya_aktif(o) is False, "aparat: Sifirla yazimi diske gitmedi"
+    bekleyen[0].kos()  # E-stop'un gecikmiş yazıcısı SONRA
+    assert _dosya_aktif(o) is False, "gecikmis E-stop yazimi bayat 'kurulu' durumu yazdi — Sifirla diskte EZILDI"
+    sonuc = _yeniden_baslat(o.veri, tmp_path)
+    assert sonuc["durum"]["aktif"] is False, "Sifirla'dan sonra yeniden baslatmada mandal GERI GELDI (gecikmis yazim)"
 
 
 def test_KRITIK_yazma_HATASI_ve_ASILI_disk_acil_durdurmayi_GECIKTIRMEZ_ENGELLEMEZ(ortam, monkeypatch):
