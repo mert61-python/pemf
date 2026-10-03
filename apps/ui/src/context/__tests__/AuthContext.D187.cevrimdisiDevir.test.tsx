@@ -20,14 +20,14 @@ jest.mock("react-native", () => {
 });
 // Sahte JWT ÇALIŞMA ANINDA kurulur (sır taraması literal jetonu sır sanmasın; imza yok, süresi dolmuş: exp=1).
 const _b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64").replace(/=+$/, "");
-const DEVIR = {
+const mockDevir = {
   access_token: [_b64({ alg: "none" }), _b64({ email: "op@klinik.com", exp: 1 }), "sahte"].join("."),
   refresh_token: "yenileme",
   email: "op@klinik.com",
   expires_at: 1,
 };
 jest.mock("@/services/apiClient", () => ({
-  apiGet: jest.fn(async () => DEVIR),
+  apiGet: jest.fn(async () => mockDevir),
   apiPost: jest.fn(async () => null),
   apiDelete: jest.fn(async () => null),
 }));
