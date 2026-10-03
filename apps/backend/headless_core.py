@@ -180,12 +180,21 @@ class HeadlessCore:
         # kaçar ve HİÇBİR uç açılmazdı — ACİL DURDUR dahil. GENEL yakalanır (plan C1-7): Karar-6
         # fail-closed ve bozuk dosya `RuntimeError`ları da aynı sonucu doğuruyordu. Neden
         # `db_acilis_hatalari`na yazılır → `/api/health` `dbReady=false` + `dbSebep`, seans 503.
-        # Açılamayan DB bu süreçte YENİDEN DENENMEZ (`acilis_hatasini_kilitle`): sağlık ucu async;
+        # Açılamayan DB İSTEK YOLUNDA yeniden denenmez (`acilis_hatasini_kilitle`): sağlık ucu async;
         # her çağrıda göçü (kalıcı kilitte ≥6 sn) yeniden denemek olay döngüsünü — ACİL DURDUR'u —
         # bloklar ve launcher'ın 3 sn'lik dbReady okuması "bilinmiyor"a düşüp güncellemeyi onaylardı.
+        # ⚠️ Y43 (sahip — D1.37 devamı): bunun yerine ARKA PLANDA (ayrı iş parçacığı, olay döngüsü dışı) artan
+        # aralıklarla yeniden açılır (`_db_yeniden_deneme_dongusu`); açılınca `dbReady` kendiliğinden true olur.
         self.db_acilis_hatalari: dict[str, str] = {}
         self.patient_db = self._db_ac("hasta", lambda: get_patient_database(self.app_data_dir))
         self.session_manager = self._db_ac("tedavi", lambda: get_session_manager(self.app_data_dir))
+        self._db_yeniden_dur = threading.Event()
+        self._db_yeniden_thread: threading.Thread | None = None
+        if self.db_acilis_hatalari:
+            self._db_yeniden_thread = threading.Thread(
+                target=self._db_yeniden_deneme_dongusu, name="db-yeniden-ac", daemon=True
+            )
+            self._db_yeniden_thread.start()
 
         self.mosquitto_supervisor = None
         self.network_status_service = None
@@ -365,8 +374,13 @@ class HeadlessCore:
     #: `db_acilis_hatalari` anahtarı → operatöre gösterilen ad.
     _DB_ADI = {"hasta": "Hasta veritabanı", "tedavi": "Tedavi kaydı veritabanı"}
 
+    #: Y43 (sahip): açılışta açılamayan DB'nin ARKA PLANDA yeniden açılma aralıkları (sn): 5 sn → 30 sn → 2 dk,
+    #: sonra 2 dk'da sürer. Testler sınıf özniteliğini kısaltır.
+    DB_YENIDEN_DENEME_ARALIKLARI_SN: tuple[float, ...] = (5.0, 30.0, 120.0)
+
     def _db_ac(self, ad: str, ac: Callable[[], Any]):
-        """DB'yi aç; açılamazsa None döndür, nedeni kaydet ve bu süreçte yeniden denemeyi kilitle (D1.37).
+        """DB'yi aç; açılamazsa None döndür, nedeni kaydet ve İSTEK YOLUNDA yeniden denemeyi kilitle (D1.37);
+        yeniden deneme yalnız arka plandadır (Y43, `_db_yeniden_deneme_dongusu`).
 
         Neden metni `/api/health`'e gider (auth-muaf, tünelden erişilebilir) → dosya YOLU ya da istisna
         ayrıntısı İÇERMEZ; tam zincir yalnız günlüğe yazılır."""
@@ -381,12 +395,13 @@ class HeadlessCore:
             if isinstance(exc, GocBekliyorHatasi):
                 sebep = (
                     f"{ad_metni} göç bekliyor: at-rest şifreleme göçü tamamlanmadı (dosya kilitli olabilir); "
-                    "dosya korunuyor, karantinaya alınmadı. Cihazı yeniden başlatın — göç yeniden denenecek."
+                    "dosya korunuyor, karantinaya alınmadı. Göç arka planda yeniden deneniyor; "
+                    "düzelmezse cihazı yeniden başlatın."
                 )
             else:
                 sebep = (
-                    f"{ad_metni} açılamadı ({type(exc).__name__}). Cihazı yeniden başlatın; "
-                    "sorun sürerse teknik desteğe başvurun."
+                    f"{ad_metni} açılamadı ({type(exc).__name__}). Arka planda yeniden deneniyor; "
+                    "sürerse cihazı yeniden başlatın, yine sürerse teknik desteğe başvurun."
                 )
             self.db_acilis_hatalari[ad] = sebep
             (_pdb if ad == "hasta" else _thdb).acilis_hatasini_kilitle(self.app_data_dir, exc)
@@ -396,6 +411,45 @@ class HeadlessCore:
                 exc_info=True,
             )
             return None
+
+    def _db_yeniden_deneme_dongusu(self) -> None:
+        """Y43 (sahip — D1.37 devamı): açılışta açılamayan DB'leri ARKA PLANDA artan aralıklarla yeniden aç.
+
+        Olay döngüsü DIŞINDA (kendi iş parçacığı) koşar; kurucu (göç, açılış kurtarması) modül kilidi DIŞINDA çalışır
+        → bu sürede `get_*` (sağlık ucu dahil) açılış kilidini görüp HEMEN döner, ACİL DURDUR beklemez. Açılış
+        kuralları açılıştakiyle AYNI kurucudan gelir (yeni anahtar üretilmez, düz-metin karantinaya alınmaz). Açılınca
+        nedeni `db_acilis_hatalari`ndan düşer — sözlük ATOMİK değiştirilir (okuyan uç tutarlı bir kopya görür) →
+        `dbReady` kendiliğinden true, arayüz bandı kalkar. Çekirdek `quit` edince durur."""
+        from database import patient_database as _pdb
+        from database import treatment_history_db as _thdb
+
+        araliklar = tuple(self.DB_YENIDEN_DENEME_ARALIKLARI_SN) or (120.0,)
+        deneme = 0
+        while any(self.db_acilis_hatalari.get(k) for k in ("hasta", "tedavi")):
+            if self._db_yeniden_dur.wait(araliklar[min(deneme, len(araliklar) - 1)]):
+                return
+            deneme += 1
+            for ad in ("hasta", "tedavi"):
+                if not self.db_acilis_hatalari.get(ad) or self._db_yeniden_dur.is_set():
+                    continue
+                ad_metni = self._DB_ADI.get(ad, ad)
+                try:
+                    if ad == "hasta":
+                        self.patient_db = _pdb.acilista_acilamayani_yeniden_ac(self.app_data_dir)
+                    else:
+                        _thdb.acilista_acilamayani_yeniden_ac(self.app_data_dir)
+                        self.session_manager = get_session_manager(self.app_data_dir)
+                except Exception as exc:  # noqa: BLE001 — açılıştaki kadar GENEL; ilk hata izi açılışta günlüğe yazıldı
+                    self.logger.warning(
+                        "%s arka planda yeniden açılamadı (deneme %d: %s); sonraki deneme %.0f sn sonra.",
+                        ad_metni,
+                        deneme,
+                        type(exc).__name__,
+                        araliklar[min(deneme, len(araliklar) - 1)],
+                    )
+                    continue
+                self.db_acilis_hatalari = {k: v for k, v in self.db_acilis_hatalari.items() if k != ad}
+                self.logger.warning("%s ARKA PLANDA AÇILDI (deneme %d) — DB'siz kısıtlı kip kalktı.", ad_metni, deneme)
 
     def start_headless_services(self, *, ensure_mosquitto: bool = True) -> None:
         """Start Qt-free support services used by production service mode."""
@@ -1108,9 +1162,20 @@ class HeadlessCore:
     def quit(self) -> None:
         """Clean up worker threads and optional legacy services."""
         self._publish_event("system.core.stopping", {})
+        _db_dur = getattr(self, "_db_yeniden_dur", None)
+        if _db_dur is not None:
+            _db_dur.set()  # Y43: arka plan DB yeniden açma döngüsü
         self._hw_sender_stop.set()
         if self._hw_sender_thread.is_alive():
             self._hw_sender_thread.join(timeout=2.0)
+        # Y43: süren bir göç denemesinin BİTMESİ beklenir (sınırlı) — göçün yer-değiştirme penceresinde (`db` →
+        # `.plain.bak`, kilitliyken ≤ ~6 sn) süreç biterse DB bir sonraki açılışa dek `.plain.bak`ta kalır
+        # (`_yarim_goc_toparla` geri koyar). `quit` bobin STOP'undan SONRA çağrılır (`_shutdown` sırası) → E-stop beklemez.
+        _db_t = getattr(self, "_db_yeniden_thread", None)
+        if _db_t is not None and _db_t.is_alive():
+            _db_t.join(timeout=10.0)
+            if _db_t.is_alive():
+                self.logger.warning("DB yeniden açma denemesi 10 sn'de bitmedi; kapanış sürüyor.")
 
         if self.udp_discovery_service:
             try:

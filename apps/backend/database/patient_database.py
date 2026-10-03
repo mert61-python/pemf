@@ -878,8 +878,9 @@ class PatientDatabase:
 
 _patient_db = None
 _patient_db_lock = threading.Lock()
-#: D1.37 (B-3.8): backend AÇILIŞINDA açılamayan hasta DB yolu → neden. O süreçte YENİDEN DENENMEZ
-#: (bkz. `treatment_history_db._acilis_kilidi` — aynı gerekçe: her istekte ≥6 sn göç denemesi).
+#: D1.37 (B-3.8): backend AÇILIŞINDA açılamayan hasta DB yolu → neden. İSTEK YOLUNDA yeniden DENENMEZ
+#: (bkz. `treatment_history_db._acilis_kilidi` — aynı gerekçe: her istekte ≥6 sn göç denemesi); Y43: yalnız arka
+#: plan yeniden açması (`acilista_acilamayani_yeniden_ac`) başarıyla KALDIRIR.
 _acilis_kilidi: dict[str, str] = {}
 
 
@@ -888,7 +889,8 @@ def _kilit_anahtari(db_path) -> str:
 
 
 def acilis_hatasini_kilitle(app_data_dir, exc: BaseException) -> None:
-    """Bu süreçte bu hasta DB'sini açmayı bırak: sonraki `get_patient_database` HEMEN `RuntimeError` verir."""
+    """İstek yolunda bu hasta DB'sini açmayı bırak: sonraki `get_patient_database` HEMEN `RuntimeError` verir
+    (arka plan yeniden açması başarılı olana dek — Y43)."""
     with _patient_db_lock:
         _acilis_kilidi[_kilit_anahtari(Path(app_data_dir) / "patients.db")] = type(exc).__name__
 
@@ -910,7 +912,24 @@ def get_patient_database(app_data_dir=None) -> PatientDatabase:
             kilit = _acilis_kilidi.get(_kilit_anahtari(db_file))
             if kilit is not None:
                 raise RuntimeError(
-                    f"Hasta DB'si acilista ACILAMADI ({kilit}); bu oturumda yeniden denenmez — cihazi yeniden baslatin."
+                    f"Hasta DB'si acilista ACILAMADI ({kilit}); istek yolunda denenmez, arka planda yeniden deneniyor."
                 )
             _patient_db = PatientDatabase(str(db_file))
     return _patient_db
+
+
+def acilista_acilamayani_yeniden_ac(app_data_dir) -> PatientDatabase:
+    """Y43 (sahip — D1.37 devamı): açılışta açılamamış hasta DB'sini ARKA PLAN iş parçacığından yeniden aç.
+    Kurucu `_patient_db_lock` DIŞINDA koşar (bkz. `treatment_history_db.acilista_acilamayani_yeniden_ac`)."""
+    global _patient_db
+    db_file = Path(app_data_dir) / "patients.db"
+    with _patient_db_lock:
+        if _patient_db is not None:
+            _acilis_kilidi.pop(_kilit_anahtari(db_file), None)
+            return _patient_db
+    yeni = PatientDatabase(str(db_file))
+    with _patient_db_lock:
+        if _patient_db is None:
+            _patient_db = yeni
+        _acilis_kilidi.pop(_kilit_anahtari(db_file), None)
+        return _patient_db

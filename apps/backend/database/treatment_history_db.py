@@ -11,6 +11,7 @@ import sqlite3
 import threading
 import weakref
 from contextlib import contextmanager
+from pathlib import Path
 
 try:
     import keyring
@@ -679,10 +680,10 @@ class TreatmentHistoryDB(
 # Singleton instance
 _treatment_db_instance = None
 _treatment_db_lock = threading.Lock()
-#: D1.37 (B-3.8): backend AÇILIŞINDA açılamayan tedavi DB yolu → neden. O süreçte YENİDEN DENENMEZ
-#: ("sonraki açılış göçü yeniden dener" — `GocBekliyorHatasi` sözleşmesi). Yalnız `HeadlessCore`
-#: açılışı başarısız olunca kurulur. Kilitsiz her `get_treatment_db` (async `/api/health` dahil) göçü
-#: kalıcı kilitte ≥6 sn tekrar dener → olay döngüsü, dolayısıyla ACİL DURDUR bloklanır.
+#: D1.37 (B-3.8): backend AÇILIŞINDA açılamayan tedavi DB yolu → neden. İSTEK YOLUNDA yeniden DENENMEZ:
+#: kilitsiz her `get_treatment_db` (async `/api/health` dahil) göçü kalıcı kilitte ≥6 sn tekrar dener → olay
+#: döngüsü, dolayısıyla ACİL DURDUR bloklanır. Yalnız `HeadlessCore` açılışı başarısız olunca kurulur; Y43: yalnız
+#: arka plan yeniden açması (`acilista_acilamayani_yeniden_ac`) başarıyla KALDIRIR.
 _acilis_kilidi: dict[str, str] = {}
 
 
@@ -691,7 +692,8 @@ def _kilit_anahtari(db_path) -> str:
 
 
 def acilis_hatasini_kilitle(app_data_dir, exc: BaseException) -> None:
-    """Bu süreçte bu tedavi DB'sini açmayı bırak: sonraki `get_treatment_db` HEMEN `RuntimeError` verir."""
+    """İstek yolunda bu tedavi DB'sini açmayı bırak: sonraki `get_treatment_db` HEMEN `RuntimeError` verir
+    (arka plan yeniden açması başarılı olana dek — Y43)."""
     anahtar = _kilit_anahtari(os.path.join(str(app_data_dir), "pemf_treatment_history.db"))
     with _treatment_db_lock:
         _acilis_kilidi[anahtar] = type(exc).__name__
@@ -724,7 +726,7 @@ def get_treatment_db(app_data_dir):
             kilit = _acilis_kilidi.get(_kilit_anahtari(requested_db_path))
             if kilit is not None:
                 raise RuntimeError(
-                    f"Tedavi kaydi DB'si acilista ACILAMADI ({kilit}); bu oturumda yeniden denenmez — cihazi yeniden baslatin."
+                    f"Tedavi kaydi DB'si acilista ACILAMADI ({kilit}); istek yolunda denenmez, arka planda yeniden deneniyor."
                 )
             eski = _treatment_db_instance
             _treatment_db_instance = TreatmentHistoryDB(app_data_dir)
@@ -736,3 +738,30 @@ def get_treatment_db(app_data_dir):
                 except Exception:
                     logging.getLogger(__name__).warning("eski tedavi DB ornegi kapatilamadi", exc_info=True)
     return _treatment_db_instance
+
+
+def acilista_acilamayani_yeniden_ac(app_data_dir):
+    """Y43 (sahip — D1.37 devamı): açılışta açılamamış tedavi DB'sini ARKA PLAN iş parçacığından yeniden aç.
+
+    Kurucu (göç, açılış kurtarması — kalıcı kilitte saniyeler) `_treatment_db_lock` DIŞINDA koşar: o sürede
+    `get_treatment_db` (sağlık ucu dahil) açılış kilidini görüp HEMEN `RuntimeError` verir, beklemez. Başarılıysa örnek
+    kurulur ve açılış kilidi KALKAR; başarısızsa istisna yükselir, kilit yerinde kalır. Kurucu açılıştakiyle AYNI
+    (yeni anahtar üretimi / karantina kuralları değişmez)."""
+    global _treatment_db_instance
+    istenen = Path(app_data_dir) / "pemf_treatment_history.db"
+    with _treatment_db_lock:
+        mevcut = _treatment_db_instance
+        if mevcut is not None and _ayni_db_yolu(getattr(mevcut, "db_path", None), istenen):
+            _acilis_kilidi.pop(_kilit_anahtari(istenen), None)
+            return mevcut
+    yeni = TreatmentHistoryDB(Path(app_data_dir))
+    with _treatment_db_lock:
+        eski = _treatment_db_instance
+        _treatment_db_instance = yeni
+        _acilis_kilidi.pop(_kilit_anahtari(istenen), None)
+    if eski is not None and eski is not yeni:
+        try:
+            eski.close()
+        except Exception:
+            logging.getLogger(__name__).warning("eski tedavi DB ornegi kapatilamadi", exc_info=True)
+    return yeni

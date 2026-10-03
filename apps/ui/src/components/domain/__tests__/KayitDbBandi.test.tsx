@@ -18,7 +18,7 @@ import { KAYIT_DB_YOKLAMA_MS, KayitDbBandi, kayitDbBandiMetni } from "@/componen
 const mockGet = apiGet as jest.Mock;
 const GOC =
   "Hasta veritabanı göç bekliyor: at-rest şifreleme göçü tamamlanmadı (dosya kilitli olabilir); dosya " +
-  "korunuyor, karantinaya alınmadı. Cihazı yeniden başlatın — göç yeniden denenecek.";
+  "korunuyor, karantinaya alınmadı. Göç arka planda yeniden deneniyor; düzelmezse cihazı yeniden başlatın.";
 
 beforeEach(() => {
   mockGet.mockReset();

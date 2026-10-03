@@ -15,10 +15,15 @@ SÖZLEŞME (bu dosya ölçer, her senaryo AYRI çocuk süreçte, GERÇEK `main()
   2. `/api/health` 200, `dbReady` **false** ve `dbSebep` nedeni söyler ("göç bekliyor"). HASTA DB'si
      tek başına göç beklese de `dbReady` false olur — launcher (`main.rs` `db_hazir_mi`) güncellemeyi
      ancak böyle GERİ ALIR; aksi hâlde onaylayıp `runtime.old`'u siler (plan D1.37 orkestratör notu).
-  3. Sağlık yanıtı **launcher'ın 3 sn zaman aşımının çok altında** (< 2 sn): açılışta açılamayan DB
-     süreç ömrü boyunca YENİDEN DENENMEZ. Denenseydi kalıcı kilitte her `/api/health` (async — olay
+  3. Sağlık yanıtı **launcher'ın 3 sn zaman aşımının çok altında** (< 2,5 sn): açılışta açılamayan DB
+     İSTEK YOLUNDA yeniden denenmez. Denenseydi kalıcı kilitte her `/api/health` (async — olay
      döngüsünde) göçü ≥6 sn tekrar dener; launcher `None` ("bilinmiyor") alıp güncellemeyi ONAYLAR ve
      olay döngüsü bloklandığı için ACİL DURDUR isteği de gecikir.
+     ⚠️ Y43 (sahip, D1.37 devamı): DB ARKA PLANDA (olay döngüsü dışı iş parçacığı) artan aralıklarla yeniden
+     açılmaya çalışılır; bu dosyada aralıklar kısaltılır (çocukta sınıf özniteliği) → kalıcı kilit
+     senaryolarında sağlık/E-stop ölçümleri arka plan denemeleri SÜRERKEN alınır. Geçici kilit senaryosu
+     (`goc_gecici_*`): kilit kalkınca `dbReady` YENİDEN BAŞLATMADAN true olur, seans başlar, veri aynı
+     anahtarla okunur, yeni anahtar üretilmez, karantina yok.
   4. STM seansı **503** (kayıtsız tedavi başlamaz) ve donanıma `update_coil` GİTMEZ.
   5. Düz-metin DB **yerinde ve düz-metin** kalır; `.acilamadi-*` karantina kopyası YOK.
   6. Karşıt: sağlam kurulumda aynı aparatla `dbReady` TRUE (aparat ve kilit yanlış alarm vermez).
@@ -60,13 +65,35 @@ SENARYO = {senaryo!r}
 sonuc = {{"run": False, "senaryo": SENARYO}}
 
 gercek_move = shutil.move
+KILIT = {{"aktif": True}}
 if SENARYO.startswith("goc"):
     def _kalici_kilit(src, dst, *a, **k):
-        # .enc.tmp -> db tasimasi HER denemede duser (Windows gecici kilit sinifinin KALICI hali)
-        if str(src).endswith(".enc.tmp"):
+        # .enc.tmp -> db tasimasi HER denemede duser (Windows gecici kilit sinifinin KALICI hali);
+        # goc_gecici_*: kilidi tutan (AV / yedekleme) KILIT["aktif"]=False olunca birakir.
+        if str(src).endswith(".enc.tmp") and KILIT["aktif"]:
             raise PermissionError(32, "The process cannot access the file because it is being used by another process")
         return gercek_move(src, dst, *a, **k)
     shutil.move = _kalici_kilit
+
+# Y43: goc girisimleri sayilir — bir girisim = `.enc.tmp -> db` tasimasi (girisimde 3 tasima var: db->.plain.bak,
+# .enc.tmp->db, geri alma). sqlcipher_util ici GLOBAL arama -> modul ozniteligi yamasi tutar.
+import database.sqlcipher_util as _su
+GOC = {{"deneme": 0, "suruyor": False}}
+_o_tasi = _su._tasi_yeniden_dene
+def _sayan_tasi(*a, **k):
+    if not str(a[0] if a else k.get("kaynak", "")).endswith(".enc.tmp"):
+        return _o_tasi(*a, **k)
+    GOC["deneme"] += 1
+    GOC["suruyor"] = True
+    try:
+        return _o_tasi(*a, **k)
+    finally:
+        GOC["suruyor"] = False
+_su._tasi_yeniden_dene = _sayan_tasi
+# Y43: arka plan yeniden deneme araliklari kisaltilir (urunde 5 sn -> 30 sn -> 2 dk) — kalici kilit
+# senaryolarinda saglik/E-stop olcumleri denemeler SURERKEN alinir.
+import headless_core as _hc
+_hc.HeadlessCore.DB_YENIDEN_DENEME_ARALIKLARI_SN = (0.1, 0.2, 0.3)
 
 import backend_service as bs
 yan = []
@@ -102,6 +129,8 @@ class _Casus:
             sayac["update"] += 1
             return _o_upd(*a, **k)
         hw.stop_all_coils, hw.update_coil = _stop, _upd
+        if SENARYO.startswith("goc"):
+            _getter_olc(api)
         sonuc["saglik"] = []
         for _ in range(3):
             t0 = time.perf_counter()
@@ -127,6 +156,69 @@ class _Casus:
             sonuc["seans"] = {{"kod": r.status_code, "detail": (r.json() or {{}}).get("detail", "")}}
             c.post("/api/session/stop", json={{}})
         sonuc["sayac"] = dict(sayac)
+        if SENARYO.startswith("goc_gecici"):
+            _y43(c, api, sayac)
+
+
+def _getter_olc(api):
+    # Y43: arka plan goc denemesi SURERKEN (kilitli tasima beklemesinde) DB alicilari BEKLEMEMELI — kurucu modul
+    # kilidi altinda kossaydi her get_* (olay dongusundeki cagiranlar dahil) ~6 sn bloklanirdi.
+    son = time.monotonic() + 20
+    while not GOC["suruyor"] and time.monotonic() < son:
+        time.sleep(0.02)
+    sonuc["deneme_surerken"] = GOC["suruyor"]
+    from database.patient_database import get_patient_database
+    t0 = time.perf_counter()
+    try:
+        get_patient_database()
+    except Exception:
+        pass
+    sonuc["pdb_sure"] = round(time.perf_counter() - t0, 3)
+    t0 = time.perf_counter()
+    api._get_treatment_db()
+    sonuc["tdb_sure"] = round(time.perf_counter() - t0, 3)
+    sonuc["deneme_sonra_hala"] = GOC["suruyor"]
+
+
+def _saglik_olc(c):
+    t0 = time.perf_counter()
+    r = c.get("/api/health")
+    g = r.json() if r.status_code == 200 else {{}}
+    return {{"kod": r.status_code, "sure": round(time.perf_counter() - t0, 3), "dbReady": g.get("dbReady")}}
+
+
+def _y43(c, api, sayac):
+    y = sonuc["y43"] = {{"once": [], "sonra": []}}
+    # Kilit SURERKEN: arka plan en az 2 kez yeniden denesin (acilis + 2). Saglik her an hizli, dbReady false.
+    son = time.monotonic() + 30
+    while GOC["deneme"] < 3 and time.monotonic() < son:
+        y["once"].append(_saglik_olc(c))
+        time.sleep(0.2)
+    y["deneme_once"] = GOC["deneme"]
+    KILIT["aktif"] = False  # kilidi tutan birakti — backend YENIDEN BASLATILMAZ
+    son = time.monotonic() + 30
+    while time.monotonic() < son:
+        y["sonra"].append(_saglik_olc(c))
+        if y["sonra"][-1]["dbReady"] is True:
+            break
+        time.sleep(0.2)
+    y["deneme_sonra"] = GOC["deneme"]
+    r = c.post("/api/session/start", json={{"mode": "Manuel", "frequency": 100, "duty": 40, "phase": 0,
+               "intensity": 0, "duration_minutes": 5, "coil_ids": [1], "patient_name": "Y43"}})
+    y["seans"] = {{"kod": r.status_code, "detail": str((r.json() or {{}}).get("detail", ""))[:200]}}
+    y["update"] = sayac["update"]
+    c.post("/api/session/stop", json={{}})
+    # Goc edilen veri AYNI anahtarla okunur (yeni anahtar uretilmedi, dosya kaybolmadi)
+    try:
+        if SENARYO.endswith("hasta"):
+            from database.patient_database import get_patient_database
+            db = get_patient_database()
+        else:
+            db = api._get_treatment_db()
+        with db._get_connection() as cn:
+            y["veri"] = cn.execute("SELECT ad FROM kayit").fetchone()[0]
+    except Exception as e:
+        y["veri"] = "HATA " + type(e).__name__ + ": " + str(e)[:200]
 
 
 def _sunucu_casusu(app, args):
@@ -182,9 +274,9 @@ def _kur(tmp_path: Path, senaryo: str) -> tuple[dict, Path]:
             "PEMF_ENCRYPT_AT_REST": "1" if senaryo.startswith("goc") or senaryo == "saglam" else "0",
         }
     )
-    if senaryo == "goc_hasta":
+    if senaryo in ("goc_hasta", "goc_gecici_hasta"):
         _duz_db(app / "patients.db")
-    elif senaryo == "goc_tedavi":
+    elif senaryo in ("goc_tedavi", "goc_gecici_tedavi"):
         _duz_db(app / "pemf_treatment_history.db")
     elif senaryo == "bozuk_ikisi":
         for ad in ("patients.db", "pemf_treatment_history.db"):
@@ -235,6 +327,7 @@ def _ortak_iddialar(s: dict) -> None:
     assert s["estop"]["kod"] == 200 and s["sayac"]["stop"] >= 1, (
         f"ACİL DURDUR donanıma STOP vermedi: {s['estop']} {s['sayac']}"
     )
+    assert s["estop"]["sure"] < SAGLIK_SURE_SINIRI_SN, f"ACİL DURDUR yanıtı {s['estop']['sure']:.2f} sn (bloklandı)"
     assert s["sifirla"]["kod"] == 200, f"mandal 'Sıfırla' bu kipte çalışmadı (D1.81 · Y4): {s['sifirla']}"
     assert all(h["kod"] == 200 for h in s["saglik"]), f"sağlık ucu düştü: {s['saglik']}"
     yavas = [round(h["sure"], 2) for h in s["saglik"] if h["sure"] >= SAGLIK_SURE_SINIRI_SN]
@@ -258,6 +351,20 @@ _SIZINTI = (
     "file is not a database",
     "Traceback",
 )
+
+
+def _deneme_surerken_iddialari(s: dict) -> None:
+    """Y43: ölçüm, arka plan göç denemesi kilitli taşımada BEKLERKEN alındı ve DB alıcıları beklemedi."""
+    assert s["deneme_surerken"], "arka planda yeniden deneme BAŞLAMADI (20 sn içinde göç girişimi yok)"
+    sureler = {k: s[k] for k in ("pdb_sure", "tdb_sure")}
+    assert s["deneme_sonra_hala"], (
+        f"DB alıcısı arka plan göç denemesi BİTENE KADAR BEKLEDİ {sureler} — kurucu modül kilidi altında koşuyor "
+        "(olay döngüsündeki her `get_*` çağıranı ~6 sn bloklanır)"
+    )
+    yavas = {k: s[k] for k in ("pdb_sure", "tdb_sure") if s[k] >= SAGLIK_SURE_SINIRI_SN}
+    assert not yavas, (
+        f"arka plan göç denemesi sürerken DB alıcısı BEKLEDİ {yavas} — kurucu modül kilidi altında koşuyor"
+    )
 
 
 def _db_yok_iddialari(s: dict, sebep_kalibi: str, kok: Path) -> None:
@@ -306,6 +413,7 @@ def test_KRITIK_goc_bekleyen_DB_backendi_OLDURMEZ_dbReady_FALSE_karantina_YOK(tm
     s, app = _kos(tmp_path, senaryo)
     _ortak_iddialar(s)
     _db_yok_iddialari(s, r"g[öo]ç", tmp_path)
+    _deneme_surerken_iddialari(s)
     _duz_metin_yerinde(app, "patients.db" if senaryo == "goc_hasta" else "pemf_treatment_history.db")
 
 
@@ -346,3 +454,86 @@ def test_KARSIT_saglam_kurulumda_dbReady_TRUE(tmp_path):
     _ortak_iddialar(s)
     assert all(h["dbReady"] is True for h in s["saglik"]), f"sağlam kurulumda dbReady: {s['saglik']}"
     assert not any(h["dbSebep"] for h in s["saglik"]), s["saglik"]
+
+
+@pytest.mark.parametrize("senaryo", ["goc_gecici_hasta", "goc_gecici_tedavi"])
+def test_KRITIK_Y43_acilista_acilamayan_DB_ARKA_PLANDA_acilir_dbReady_YENIDEN_BASLATMADAN_true(tmp_path, senaryo):
+    """Y43 (sahip): açılışta göç kilide takıldı → backend DB'siz açıldı (D1.37). Kilit sonradan kalkınca DB arka
+    planda açılır; `dbReady` kendiliğinden true, seans başlar. Eskiden "bu süreçte yeniden denenmez" kilidi
+    cihazı YENİDEN BAŞLATMADAN tedaviye dönülemiyordu."""
+    if not _sqlcipher_var():
+        pytest.skip("sqlcipher3 yok")
+    s, app = _kos(tmp_path, senaryo)
+    _ortak_iddialar(s)
+    _db_yok_iddialari(s, r"g[öo]ç", tmp_path)  # kilit sürerken: DB'siz kısıtlı kip (D1.37 sözleşmesi aynen)
+    _deneme_surerken_iddialari(s)
+    y = s["y43"]
+    assert y["deneme_once"] >= 3, (
+        f"açılışta açılamayan DB ARKA PLANDA yeniden DENENMEDİ (göç girişimi {y['deneme_once']}; açılış + ≥2 beklenirdi)"
+    )
+    olcumler = y["once"] + y["sonra"]
+    yavas = [h["sure"] for h in olcumler if h["kod"] != 200 or h["sure"] >= SAGLIK_SURE_SINIRI_SN]
+    assert not yavas, f"arka plan yeniden denemesi SÜRERKEN /api/health yavaş/düştü: {yavas} (olay döngüsü bloklandı)"
+    assert not any(h["dbReady"] for h in y["once"]), f"kilit sürerken dbReady true: {y['once']}"
+    assert y["sonra"] and y["sonra"][-1]["dbReady"] is True, (
+        f"kilit kalktı ama DB arka planda AÇILMADI — dbReady {[h['dbReady'] for h in y['sonra']][-3:]} "
+        f"(göç girişimi {y['deneme_once']}→{y['deneme_sonra']}; cihaz yeniden başlatılmadan tedavi başlamaz)"
+    )
+    # Kayıt kapısı GEÇİLDİ: bobin sürülmeye çalışıldı. (Çocukta STM kartı yok → ürün "hiçbir bobin komutu kabul
+    # etmedi" 503'ü verir; kayıt/DB nedeni OLMAMALI.)
+    assert y["update"] >= 1, f"DB açıldı ama seans kayıt kapısında kaldı (bobin sürülmedi): {y['seans']}"
+    assert not re.search(r"kay[ıi]t|g[öo][çc]|veritaban", y["seans"]["detail"], re.IGNORECASE), (
+        f"DB açıldıktan sonra seans hâlâ KAYIT nedeniyle reddedildi: {y['seans']}"
+    )
+    assert y["veri"] == "GocBekleyenHasta", f"göç edilen veri okunamadı: {y['veri']}"
+    ad = "patients.db" if senaryo.endswith("hasta") else "pemf_treatment_history.db"
+    assert (app / ad).read_bytes()[:16] != _SQLITE_BASLIK, f"{ad} hâlâ düz-metin — göç arka planda tamamlanmadı"
+    assert sorted(p.name for p in app.glob("*.acilamadi-*")) == [], "karantina kopyası oluştu"
+    gunluk = (tmp_path / "log" / "backend_service.log").read_text(encoding="utf-8", errors="replace")
+    assert gunluk.count("Yeni SQLCipher anahtari uretildi") <= 1, "arka plan denemesi YENİ anahtar üretti"
+
+
+def test_Y43_yeniden_deneme_ARALIKLARI_artar_son_aralikta_surer_durdurulunca_biter(monkeypatch, tmp_path):
+    """Döngü sınıf özniteliğindeki aralıkları SIRAYLA bekler (5 sn → 30 sn → 2 dk), sonra son aralıkta sürer;
+    açılamayan DB'yi her turda dener; durdurma olayı (çekirdek `quit`) döngüyü bitirir."""
+    import logging
+    import types
+
+    import headless_core as hc
+    from database import treatment_history_db as thdb
+
+    araliklar = hc.HeadlessCore.DB_YENIDEN_DENEME_ARALIKLARI_SN
+    assert araliklar[0] >= 1 and list(araliklar) == sorted(araliklar) and araliklar[-1] > araliklar[0], araliklar
+    assert araliklar[-1] <= 300, f"son aralık {araliklar[-1]} sn — düzelen DB çok geç fark edilir"
+
+    class _Dur:
+        def __init__(self):
+            self.bekleyisler = []
+
+        def is_set(self):
+            return False
+
+        def wait(self, sn):
+            self.bekleyisler.append(sn)
+            return len(self.bekleyisler) >= 6  # 6. beklemede çekirdek kapanıyor
+
+    denemeler = []
+
+    def _acilmaz(app_data_dir):
+        denemeler.append(app_data_dir)
+        raise RuntimeError("hala kilitli")
+
+    monkeypatch.setattr(thdb, "acilista_acilamayani_yeniden_ac", _acilmaz)
+    sahte = types.SimpleNamespace(
+        DB_YENIDEN_DENEME_ARALIKLARI_SN=araliklar,
+        db_acilis_hatalari={"tedavi": "Tedavi kaydı veritabanı göç bekliyor"},
+        _db_yeniden_dur=_Dur(),
+        app_data_dir=tmp_path,
+        logger=logging.getLogger("y43"),
+        _DB_ADI=hc.HeadlessCore._DB_ADI,
+    )
+    hc.HeadlessCore._db_yeniden_deneme_dongusu(sahte)
+    beklenen = list(araliklar) + [araliklar[-1]] * (6 - len(araliklar))
+    assert sahte._db_yeniden_dur.bekleyisler == beklenen, sahte._db_yeniden_dur.bekleyisler
+    assert len(denemeler) == 5, f"her bekleyişten sonra (durdurulan hariç) bir deneme beklenirdi: {len(denemeler)}"
+    assert sahte.db_acilis_hatalari.get("tedavi"), "açılamayan DB'nin nedeni silindi (dbReady yanlışlıkla true olur)"

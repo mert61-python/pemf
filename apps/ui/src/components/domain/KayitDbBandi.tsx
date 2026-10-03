@@ -26,7 +26,8 @@ export interface KayitDbSagligi {
   dbSebep?: string | null;
 }
 
-/** Yoklama aralığı: göç ancak yeniden başlatmayla denenir — sık yoklamaya gerek yok. */
+/** Yoklama aralığı: backend açılamayan DB'yi arka planda 5 sn → 30 sn → 2 dk aralıkla yeniden dener (Y43);
+ *  açılınca bant en geç bu aralıkta kalkar. */
 export const KAYIT_DB_YOKLAMA_MS = 30_000;
 
 const VARSAYILAN_SEBEP = "Tıbbi kayıt veritabanı hazır değil; yeni seans başlatılamaz.";
