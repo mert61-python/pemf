@@ -22,6 +22,7 @@ import { discoverBackend } from "@/services/discovery";
 import { mockSnapshot } from "@/services/mockData";
 import { useNetworkReachability } from "@/hooks/useNetworkReachability";
 import { useForegroundReconnect } from "@/hooks/useForegroundReconnect";
+import { useStmBelirsiz } from "@/hooks/useStmBelirsiz";
 import type {
   ActiveTreatment,
   AppNotification,
@@ -169,6 +170,9 @@ export interface LiveDataContextValue {
   /** AI Pro kare yayını GERÇEKTEN akıyor mu (son kare <6sn). aiVisionData tek başına yeterli DEĞİL:
    *  son kare kalıcıdır → yayın dursa bile "canlı" görünürdü. Yalnız otonom panelde kullanılır. */
   aiVisionFresh: boolean;
+  /** D1.E03 · A-59: bobin durumu BİLİNMİYOR (bir kez çalıştı, STM şimdi çevrimdışı) — "çalışıyor" sayılır.
+   *  Kural `useStmBelirsiz`'de; kilit sağlayıcıda (uygulama boyu). Kabuk söküm kapısı bunu okur. */
+  donanimBelirsiz?: boolean;
 }
 
 const LiveDataContext = createContext<LiveDataContextValue>({
@@ -184,6 +188,7 @@ const LiveDataContext = createContext<LiveDataContextValue>({
   haveRealData: false,
   reconnect: () => {},
   aiVisionFresh: false,
+  donanimBelirsiz: false,
 });
 
 // ─── Provider ─────────────────────────────────────────────────────────────
@@ -611,6 +616,9 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   // olduğunda tüketiciler gereksiz render OLMASIN. (Not: snapshot/sensorHistory yüksek
   // frekansta değiştiğinden telemetri sırasındaki render'ları tam elemek için ileride
   // context'i canlı-veri / durağan-API olarak İKİYE bölmek gerekir — bu ayrı bir refactor.)
+  // D1.E03 · A-59: STM belirsizliği uygulama boyu kilitli (kabuk söküm kapısı ekran değişse de görür).
+  const donanimBelirsiz = useStmBelirsiz(snapshot);
+
   const value = useMemo(
     () => ({
       snapshot,
@@ -626,10 +634,11 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       reconnect,
       aiVisionData,
       aiVisionFresh,
+      donanimBelirsiz,
     }),
     [snapshot, sensorHistory, wsConnected, unreadCount, markAllRead,
      clearNotifications, refresh, connectionQuality, telemetryStale, haveRealData, reconnect,
-     aiVisionData, aiVisionFresh]
+     aiVisionData, aiVisionFresh, donanimBelirsiz]
   );
 
   return <LiveDataContext.Provider value={value}>{children}</LiveDataContext.Provider>;

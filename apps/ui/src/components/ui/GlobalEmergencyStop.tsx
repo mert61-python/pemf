@@ -14,7 +14,7 @@
  * bu yüzden yalnız `activeTreatment.isActive`e bakmak yanıltıcıdır (DashboardScreen'deki
  * `hardwareRunning` mantığının aynısı).
  */
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
@@ -26,6 +26,7 @@ import {
   EMERGENCY_STOP_UNCONFIRMED_BODY,
 } from "@/services/emergencyStop";
 import { emitToast } from "@/services/toastBridge";
+import { useStmBelirsiz } from "@/hooks/useStmBelirsiz";
 
 export function GlobalEmergencyStop({
   bottomOffset = 0,
@@ -62,13 +63,8 @@ export function GlobalEmergencyStop({
   // çalışmıyor" sayıp acil durdurma düğmesini TAM DA operatörün en çok ihtiyaç duyduğu anda
   // gizliyordu. KURAL: bir kez "çalışıyor" gördüysek, STM yeniden çevrimiçi olup "durdu" diyene
   // kadar düğme EKRANDA KALIR. Hiç çalışmamışsa (donanımsız/demo makine) gürültü yapmaz.
-  const stmBelirsiz = snapshot.stm !== "online";
-  const [belirsizKilit, setBelirsizKilit] = useState(false);
-  useEffect(() => {
-    if (running > 0 || active) setBelirsizKilit(true);
-    else if (!stmBelirsiz) setBelirsizKilit(false);
-  }, [running, active, stmBelirsiz]);
-  const belirsiz = stmBelirsiz && belirsizKilit && running === 0 && !active;
+  // D1.E03: kural TEK kaynakta (`useStmBelirsiz`) — kabuk söküm kapısı (`useTeardownGuard`) aynı ölçütü kullanır.
+  const belirsiz = useStmBelirsiz(snapshot);
 
   if (gizle) return null;
   if (!running && !active && !belirsiz) return null;

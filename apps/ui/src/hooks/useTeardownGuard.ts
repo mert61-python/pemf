@@ -41,7 +41,7 @@ export interface TeardownOpts {
 }
 
 export function useTeardownGuard() {
-  const { snapshot } = useLiveData();
+  const { snapshot, donanimBelirsiz } = useLiveData();
 
   /**
    * @param actionLabel Kullanıcıya gösterilecek eylem adı ("Çıkış yapmak", "Profil değiştirmek").
@@ -55,20 +55,32 @@ export function useTeardownGuard() {
       // `hardwareRunning` mantığının aynısı).
       const running = (snapshot.coils ?? []).filter((c) => c?.running).length;
       const active = snapshot.activeTreatment?.isActive === true;
-      if (!running && !active) {
+      // ⚠️ D1.E03 · A-59 (sahip): STM "BELİRSİZ"ken (bir kez çalıştı, kart şimdi çevrimdışı) durum ÇALIŞIYOR sayılır.
+      // Eskiden kopuşta bobinler `running:false` göründüğü için profil değişimi onaysız, çıkış yalnız genel onayla
+      // kabuğu söküyordu — kayan ACİL DURDUR "(bağlantı yok)" gösterirken (ölçüldü). E-stop kapılanmaz; kapılanan söküm.
+      const belirsiz = donanimBelirsiz === true && !running && !active;
+      if (!running && !active && !belirsiz) {
         // Boşta: tıbbi risk YOK. Yalnız çağıran açıkça istediyse (kazara dokunuş koruması) sor.
         if (!opts?.confirmWhenIdle) return true;
         const { title, body, confirmLabel } = opts.confirmWhenIdle;
         return platformConfirm(title, body, confirmLabel ?? "Devam et");
       }
 
-      const ok = await platformConfirm(
-        "Seans sürüyor",
-        `${running > 0 ? `${running} bobin ÇALIŞIYOR. ` : "Aktif bir seans var. "}` +
-          `${actionLabel} tüm durdurma kontrollerini ekrandan kaldırır.\n\n` +
-          "Devam edilirse bobinler ÖNCE durdurulacak.",
-        "Durdur ve devam et"
-      );
+      const ok = belirsiz
+        ? await platformConfirm(
+            "Bobinler çalışıyor olabilir",
+            "STM bağlantısı yok — bobinlerin durumu BİLİNMİYOR (çalışıyor olabilir). " +
+              `${actionLabel} tüm durdurma kontrollerini ekrandan kaldırır.\n\n` +
+              "Devam edilirse ÖNCE ACİL DURDUR gönderilecek.",
+            "Durdur ve devam et"
+          )
+        : await platformConfirm(
+            "Seans sürüyor",
+            `${running > 0 ? `${running} bobin ÇALIŞIYOR. ` : "Aktif bir seans var. "}` +
+              `${actionLabel} tüm durdurma kontrollerini ekrandan kaldırır.\n\n` +
+              "Devam edilirse bobinler ÖNCE durdurulacak.",
+            "Durdur ve devam et"
+          );
       if (!ok) return false;
 
       const { confirmed } = await performEmergencyStop();
@@ -82,6 +94,6 @@ export function useTeardownGuard() {
       }
       return true;
     },
-    [snapshot]
+    [snapshot, donanimBelirsiz]
   );
 }

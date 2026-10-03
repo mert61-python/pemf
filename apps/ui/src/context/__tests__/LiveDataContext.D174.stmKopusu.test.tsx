@@ -50,7 +50,6 @@ import { Text } from "react-native";
 import { LiveDataProvider, useLiveData } from "@/context/LiveDataContext";
 import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const dizi: any[] = require("./__fixtures__/stmKopusuManuelBobin.ws.json");
 
 function Probe() {
