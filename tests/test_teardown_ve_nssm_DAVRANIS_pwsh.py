@@ -185,14 +185,14 @@ switch -Wildcard ($Senaryo) {
         . Yukle $Teardown $estop_islevleri -Varsa
         $pd = Join-Path $Kok 'profil\AppData\Local\PEMF Vet Client'
         New-Item -ItemType Directory -Force $pd | Out-Null
-        $pf = Join-Path $pd 'backend.port'
+        $portDosyasi = Join-Path $pd 'backend.port'
         switch ($Senaryo) {
-            'estop_basari' { Set-Content -LiteralPath $pf -Value '48123'; $script:AcikPortlar = @(48123) }
-            'estop_hata' { Set-Content -LiteralPath $pf -Value '48123'; $script:AcikPortlar = @(48123); $script:HttpDavranis = 'hata' }
-            'estop_zaman' { Set-Content -LiteralPath $pf -Value '48123'; $script:AcikPortlar = @(48123); $script:HttpDavranis = 'zaman' }
+            'estop_basari' { Set-Content -LiteralPath $portDosyasi -Value '48123'; $script:AcikPortlar = @(48123) }
+            'estop_hata' { Set-Content -LiteralPath $portDosyasi -Value '48123'; $script:AcikPortlar = @(48123); $script:HttpDavranis = 'hata' }
+            'estop_zaman' { Set-Content -LiteralPath $portDosyasi -Value '48123'; $script:AcikPortlar = @(48123); $script:HttpDavranis = 'zaman' }
             'estop_portyok' { }
-            'estop_sira' { Set-Content -LiteralPath $pf -Value '48123'; $script:AcikPortlar = @(8001, 8002) }
-            'estop_bozukdosya' { Set-Content -LiteralPath $pf -Value '8000; KANARYA'; $script:AcikPortlar = @(8000) }
+            'estop_sira' { Set-Content -LiteralPath $portDosyasi -Value '48123'; $script:AcikPortlar = @(8001, 8002) }
+            'estop_bozukdosya' { Set-Content -LiteralPath $portDosyasi -Value '8000; KANARYA'; $script:AcikPortlar = @(8000) }
         }
         $script:Servis['mosquitto'] = 'Running'; $script:Servis['PemfBackend'] = 'Running'
         $script:PemfFailed = @()
