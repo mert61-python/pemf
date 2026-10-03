@@ -2998,6 +2998,41 @@ async def auto_preset(payload: AutoPresetPayload):
         raise HTTPException(status_code=500, detail="AI öneri hatası")
 
 
+def _eski_komut_baslatma_parametreleri(p: dict, varsayilan_sure_dk: int) -> dict:
+    """D1.96 (B-1.33 · S-1.5): eski `/api/hardware/command` START parametrelerini TİPLİ doğrular → 422 (yanıtta ham
+    değer yok, B-10.148). Eskiden ham `params` sözlüğü doğrudan `update_coil`'e gidiyordu: 0,5 dk `int()` ile 0'a
+    kesilip HC'nin 120 dk'lık GÖZETİMSİZ kapağına düşüyordu (30 sn istenip 120 dk), sayı olmayan frekans sessizce
+    100 Hz oluyordu, kesirli bobin kimliği 500 veriyordu.
+    Süre: TAM dakika [0, protokol üstü] (0 = gözetimsiz varsayılan — eski sözleşme). Bobin: STM aralığında tam sayı.
+    Frekans/duty/faz: sonlu sayı; donanıma gidecek değerler TEK kaynaktan (`_surus_parametrelerini_dogrula_422`).
+    ⚠️ YALNIZ START: STOP yolları (stop_coil, stop_all_coils, 0 Hz = STOP) bu doğrulamadan GEÇMEZ (Ö.4-Y8)."""
+    import math as _m
+
+    from utils.stm32_protocol_limits import DURATION_MAX_MINUTES
+
+    def _sayi(ad, varsayilan):
+        v = p.get(ad, varsayilan)
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not _m.isfinite(float(v)):
+            raise HTTPException(status_code=422, detail=f"Geçersiz '{ad}': sonlu bir sayı olmalı.")
+        return float(v)
+
+    def _tam(ad, varsayilan, alt, ust):
+        f = _sayi(ad, varsayilan)
+        if f != int(f) or not (alt <= f <= ust):
+            raise HTTPException(status_code=422, detail=f"Geçersiz '{ad}': {alt}..{ust} arasında TAM sayı olmalı.")
+        return int(f)
+
+    v = {
+        "coil_id": _tam("coil_id", 1, 1, max(STM_COIL_IDS)),
+        "freq": _sayi("freq", 100.0),
+        "duty": _sayi("duty", 25.0),
+        "phase": _sayi("phase", 0.0),
+        "sure_dk": _tam("duration", varsayilan_sure_dk, 0, DURATION_MAX_MINUTES),
+    }
+    v["uyg"] = _surus_parametrelerini_dogrula_422(v["freq"], v["duty"], v["phase"], v["sure_dk"])
+    return v
+
+
 @app.post("/api/hardware/command")
 async def hardware_command(payload: CommandPayload):
     """
@@ -3026,10 +3061,15 @@ async def hardware_command(payload: CommandPayload):
         if cmd == "start_coil":
             coil_id = p.get("coil_id", 1)
             freq = p.get("freq", 100.0)
-            duty = p.get("duty", 25.0)
-            phase = p.get("phase", 0.0)
-            duration = p.get("duration", 0)
-            success = state.hardware.update_coil(coil_id, freq, duty, phase, duration, start=True)
+            if sifir_hz_durdurma_mi(freq):  # A-05: 0 Hz = STOP — tipli doğrulamaya TAKILMAZ (Ö.4-Y8); eski yol aynen
+                success = state.hardware.update_coil(coil_id, freq, 0, 0, 0, start=True)
+                return {"status": "success" if success else "error", "command": cmd, "coil_id": coil_id}
+            # D1.96 (B-1.33): tipli parametre (422) + kabul edilen başlatma KOŞU KAYDI açar (aktif seansta; tekil uçla aynı).
+            v = _eski_komut_baslatma_parametreleri(p, 0)
+            coil_id = v["coil_id"]
+            success = state.hardware.update_coil(coil_id, v["freq"], v["duty"], v["phase"], v["sure_dk"], start=True)
+            if success:
+                _begin_coil_run(coil_id, v["uyg"]["freq"], v["uyg"]["duty_yuzde"], v["uyg"]["faz"], None, "stm")
             return {"status": "success" if success else "error", "command": cmd, "coil_id": coil_id}
 
         elif cmd == "stop_coil":
@@ -3053,15 +3093,21 @@ async def hardware_command(payload: CommandPayload):
 
         elif cmd == "start_all_coils":
             freq = p.get("freq", 100.0)
-            duty = p.get("duty", 25.0)
-            phase = p.get("phase", 0.0)
-            duration = p.get("duration", 30)
-            success = state.hardware.start_all_coils(freq, duty, phase, duration)
+            if sifir_hz_durdurma_mi(freq):  # A-05: 0 Hz = TÜM bobinler için STOP — doğrulamaya TAKILMAZ (Ö.4-Y8)
+                success = state.hardware.start_all_coils(freq, 0, 0, 0)
+                return {"status": "success" if success else "error", "command": cmd}
+            v = _eski_komut_baslatma_parametreleri({**p, "coil_id": 1}, 30)  # D1.96: tipli (bobin kimliği yok)
+            success = state.hardware.start_all_coils(v["freq"], v["duty"], v["phase"], v["sure_dk"])
+            if success:  # D1.96: aktif seansta TÜM STM bobinlerinin koşusu kaydedilir (eskiden 7 bobin kayıtsız)
+                for _cid in sorted(STM_COIL_IDS):
+                    _begin_coil_run(_cid, v["uyg"]["freq"], v["uyg"]["duty_yuzde"], v["uyg"]["faz"], None, "stm")
             return {"status": "success" if success else "error", "command": cmd}
 
         else:
             return {"status": "error", "message": f"Bilinmeyen komut: {cmd}"}
 
+    except HTTPException:
+        raise  # D1.96: 422 geçersiz parametre — aşağıdaki genel 500'e çevrilmesin
     except Exception:
         # B3 güvenlik-fix: ham str(e) SIZMAZ — sunucuda logla, generic dön.
         logging.getLogger(__name__).exception("Donanım komutu başarısız")

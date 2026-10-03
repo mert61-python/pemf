@@ -87,6 +87,13 @@ def normalize_esp_frequency_hz(freq) -> float:
 
 
 def normalize_duration_minutes(duration) -> int:
+    # D1.96 (B-1.33 · S-1.5): 0 < süre < 1 dk YUKARI yuvarlanır (1 dk). `int()` 0,5'i 0'a kesiyordu → çağıran "süre
+    # verilmedi" sayıp 120 dk'lık GÖZETİMSİZ kapağı uyguluyordu (30 sn istenip 120 dk). Protokol sınırları DEĞİŞMEDİ.
+    try:
+        if 0.0 < float(duration) < 1.0:
+            return max(DURATION_MIN_MINUTES, 1)
+    except (TypeError, ValueError, OverflowError):
+        pass
     try:
         numeric = int(duration)
     except (TypeError, ValueError, OverflowError):
