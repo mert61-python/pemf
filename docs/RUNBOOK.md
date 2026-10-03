@@ -1,15 +1,29 @@
 # PEMF Backend — Operasyon Runbook (audit B-11.2)
 
-Saha olay-müdahale rehberi. Klinik PC = Windows, servis `PemfBackend` (NSSM), LocalSystem.
+Saha olay-müdahale rehberi. Klinik PC = Windows. **Sahada backend, PEMF Vet Client'ın (launcher) başlattığı
+süreçtir** (`PEMFVetClient.exe` → `PEMF_Backend.exe` → `mosquitto.exe`); **`PemfBackend` Windows servisi YOKTUR**
+(saha ölçümü 2026-09-30, Y36). Servis komutları (`nssm`, `PemfBackend`) yalnız Inno / `setup_services.ps1` ile servis
+kurulmuş cihazlar içindir ve aşağıda AYRI gösterilir — sahada `nssm stop` hiçbir şeyi durdurmaz. **ACİL DURDUR her
+kipte:** `curl -X POST http://127.0.0.1:8000/api/hardware/emergency_stop`.
 Veri kökü `C:\ProgramData\PEMF_System\PEMF_GUI` (= `PEMF_DATA_DIR` + `\PEMF_GUI`; `PEMF_DATA_DIR` klinikte `C:\ProgramData\PEMF_System`'dir). Aşağıda `<data>` = **veri kökü**.
 
 ## Hızlı komutlar (Yönetici PowerShell)
 
 ```powershell
-# Servis durumu / yeniden başlat / durdur
+# ── SAHA (launcher kipi) ──
+Get-Process PEMF_Backend -ErrorAction SilentlyContinue        # backend süreci ayakta mı
+curl -X POST http://127.0.0.1:8000/api/hardware/emergency_stop  # ACİL DURDUR — bobinler HEMEN durur (auth-muaf)
+# Durdur: launcher penceresini kapatın — launcher ÖNCE ACİL DURDUR gönderir, SONRA backend'i sonlandırır.
+# Yeniden başlat: launcher'ı kapatıp yeniden açın (⚠️ aşağıdaki FİRMWARE uyarısı).
+
+# ── YALNIZ servis kurulumu (Inno / setup_services.ps1 — sahada YOK) ──
 Get-Service PemfBackend
+nssm stop PemfBackend         # graceful kapanış bobinlere STOP gönderir (servis kipinde)
 nssm restart PemfBackend      # veya: Restart-Service PemfBackend
-nssm stop PemfBackend
+# ⚠️ FİRMWARE (Y1/Y2): HEAD tabanlı derlemede PEMF_FW_AUTO_UPDATE varsayılanı 1 — backend'in HER açılışı
+#    (nssm restart ya da launcher'ı yeniden açma) oto-firmware denetimini koşar ve koşullar oluşursa STM'e firmware
+#    YAKMAYI dener (sahadaki 1.9.50'de bu zincir yok). Y1 kararıyla varsayılan 0'a çekilene dek (D1.120) yeniden
+#    başlatmadan önce ortamda PEMF_FW_AUTO_UPDATE=0 olduğunu doğrulayın.
 
 # Sağlık + sürüm + şifreleme durumu
 curl http://127.0.0.1:8000/api/health        # atRestEncrypted, pairingCode, tunnelUrl
@@ -80,8 +94,10 @@ kanalı yayında değil, `previousStable` hiç dolmaz → **`/api/update/rollbac
    önbellekten tekrar dener (**yeniden indirme yok**).
 2. Sorun sağlık kapısından geçtiyse (servis ayakta ama davranış bozuk) klinikte geri alma
    **yoktur** — kurtarma yayıncı tarafındadır (aşağıya bakın). Bu arada cihazı çalışır tutmak
-   için: seansı bitirin, gerekiyorsa `nssm stop PemfBackend` ile durdurun (bobinlere önce STOP
-   gider) ve yayıncıyı arayın.
+   için: seansı bitirin, gerekiyorsa durdurun ve yayıncıyı arayın. **Sahada (launcher kipi):** önce
+   `curl -X POST http://127.0.0.1:8000/api/hardware/emergency_stop` (ACİL DURDUR), sonra launcher penceresini
+   kapatın (launcher da kapanırken ACİL DURDUR gönderir). **Yalnız servis kurulumunda:** `nssm stop PemfBackend`
+   (graceful kapanış bobinlere STOP gönderir) — sahada servis YOK, bu komut hiçbir şeyi durdurmaz.
 3. Teşhis için `runtime.bozuk` dizini varsa **silmeyin** — başarısız sürüm oradadır.
 
 **Yayıncı tarafı (`scripts/make_manifest.py`):**
@@ -99,7 +115,7 @@ monotonluğu olmadığı için bu **bilinçli** bir işlemdir ve yayın kaydına
 ## Anahtar / veri kurtarma (KRİTİK)
 - **SQLCipher anahtarı** `<data>\.sqlcipher_key` (+ keyring). **KAYBI = şifreli hasta verisi KALICI OKUNAMAZ.** ACL: yalnız SYSTEM+Administrators.
 - Sırlar tek dosyada: `<data>\pemf_secrets.json` (kripto anahtarları DPAPI'li).
-- **Aynı makinede yedekten dönüş**: servisi durdur → `<data>\backups\pemf_*_YYYYMMDD.db` dosyasını aktif DB üzerine kopyala (aynı anahtarla şifreli) → servisi başlat.
+- **Aynı makinede yedekten dönüş**: backend'i durdur (sahada: ACİL DURDUR `curl -X POST http://127.0.0.1:8000/api/hardware/emergency_stop` + launcher'ı kapat; servis kurulumunda: servisi durdur) → `<data>\backups\pemf_*_YYYYMMDD.db` dosyasını aktif DB üzerine kopyala (aynı anahtarla şifreli) → backend'i başlat (launcher'ı aç / servisi başlat).
 
 ### Kurtarma kodu — donanım arızası / makine değişimi
 Kripto anahtarları DPAPI `CRYPTPROTECT_LOCAL_MACHINE` ile **makineye bağlıdır**. Bu nedenle
@@ -116,19 +132,25 @@ dahil — tek başına **açılamaz**. Bunun için kurulum bir kez **150-bit kur
 yedek dizinine kopyalanmaz; regresyon testiyle kilitlidir.
 
 **Yeni makinede geri yükleme:**
-1. PEMF'i kur, **servisi henüz BAŞLATMA** (başlatırsan yeni bir `sqlcipher_key` üretilir ve yedekler açılmaz).
+1. PEMF'i kur, **backend'i henüz BAŞLATMA** — launcher'ı açma (servis kurulumunda: servisi henüz BAŞLATMA);
+   başlatırsan yeni bir `sqlcipher_key` üretilir ve yedekler açılmaz.
 2. `python tools\kurtarma.py --zarf <yedek>\kurtarma-zarfi.enc --kod <KOD> --yaz`
    Makinede zaten anahtar varsa araç **durur** (üzerine yazmak mevcut şifreli veriyi kalıcı kaybettirir);
    gerçekten taze kurulumsa `PEMF_KURTARMA_USTUNE_YAZ=1` ile zorla.
 3. En yeni yedeği kopyala: `pemf_treatment_history_<tarih>.db` → `pemf_treatment_history.db`,
    `pemf_patients_<tarih>.db` → `patients.db`  ← ⚠️ hedef ad `patients.db`; uygulama
    `pemf_patients.db` adını **hiç açmaz** (yedek dosya ön-eki ile karıştırmayın)
-4. Servisi başlat.
+4. Backend'i başlat: launcher'ı aç (servis kurulumunda: servisi başlat).
 
 **Kod kaybolursa** yedekler yalnız orijinal makinede açılır. Kod, kaybı geri alınamaz tek şeydir.
 
 ## Güvenli kapanış
-Servis durdurulunca backend tüm bobinlere STOP gönderir (STM kuyruğu boşalana kadar bekler + ESP MQTT stop). Elle acil-durdur: `curl -X POST http://127.0.0.1:8000/api/hardware/emergency_stop` (auth-muaf, fail-safe).
+**Sahada (launcher kipi):** launcher penceresi kapanınca launcher ÖNCE ACİL DURDUR ucunu çağırır (STM + ESP STOP;
+yanıttan sonra seri kuyruğun boşalması için ~1,6 sn bekler), SONRA backend sürecini sonlandırır. Sonlandırma
+sinyalsizdir: backend'in kendi kapanış adımları bu yolda KOŞMAZ — süren seans kaydı bir sonraki açılışta kesinti
+olarak kapanır; mümkünse seansı önce bitirin. **Yalnız servis kurulumunda:** servis durdurulunca backend tüm bobinlere
+STOP gönderir (STM kuyruğu boşalana kadar bekler + ESP MQTT stop) ve seansı "Kesintiye Uğradı" olarak kapatır.
+**Her iki kipte** elle acil-durdur: `curl -X POST http://127.0.0.1:8000/api/hardware/emergency_stop` (auth-muaf, fail-safe).
 
 ## Gözlemlenebilirlik
 - Metrikler: `/metrics` (Prometheus scrape; LAN-muaf). Sağlık: `/api/health`.
