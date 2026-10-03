@@ -18,6 +18,7 @@ import { colors, spacing, radius, typography, rf, rs, touch } from "@/theme/toke
 import { passwordChecks, isPasswordValid, isEmailValid, isResearchEmail } from "@/services/authApi";
 import { signUpUser, signInUser, sendPasswordReset } from "@/services/supabaseAuth";
 import { EstopMandalBandi } from "@/components/ui/EstopMandalBandi";
+import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
 
 const LOGO = require("../../assets/icon.png");
 
@@ -421,6 +422,10 @@ export function AuthScreen() {
           <Text style={styles.footer}>PEMF Vet · Yalnız yetkili operatör kullanımı içindir.</Text>
         </ScrollView>
       </KeyboardAvoidingView>
+      {/* D1.87 · A-58 / Y23 (sahip) + 1-C §9 #1: oturum açılmamışken / internet yokken de çalışan bobin DURDURULABİLİR.
+          Eskiden burada yalnız mandal bandı ("Sıfırla") vardı — ekran durduramadan mandalı kaldırabiliyordu. Görünürlük
+          kuralı kabukla AYNI (çalışan bobin / seans / STM belirsiz / teyitsiz). */}
+      <GlobalEmergencyStop />
     </View>
   );
 }

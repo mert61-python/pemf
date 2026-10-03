@@ -15,6 +15,7 @@ import { TIER_LABEL } from "@/config/entitlement";
 import { installedModes } from "@/services/installedProfiles";
 import { useTeardownGuard } from "@/hooks/useTeardownGuard";
 import { EstopMandalBandi } from "@/components/ui/EstopMandalBandi";
+import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
 
 export function WelcomeScreen() {
   const { setUserMode } = useUserMode();
@@ -150,6 +151,10 @@ export function WelcomeScreen() {
           )}
         </View>
       </ScrollView>
+      {/* D1.87 · A-58 / Y23 (sahip) + 1-C §9 #1: oturum açılmamışken / internet yokken de çalışan bobin DURDURULABİLİR.
+          Eskiden burada yalnız mandal bandı ("Sıfırla") vardı — ekran durduramadan mandalı kaldırabiliyordu. Görünürlük
+          kuralı kabukla AYNI (çalışan bobin / seans / STM belirsiz / teyitsiz). */}
+      <GlobalEmergencyStop />
     </View>
   );
 }

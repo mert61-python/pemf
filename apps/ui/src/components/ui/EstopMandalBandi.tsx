@@ -10,9 +10,8 @@
  * (Y46): bant o zaman "önceki oturumda ACİL DURDUR — sıfırlanmadı" der. Kuruluyken elle
  * başlatma, AI (Auto), AI Pro (`/frame` ve döngü), mobil ve legacy START'ları REDDEDİLİR (409). Operatör nedenini
  * görmeli ve mandalı kaldırabilmeli — oturum açılmamışken de (Karşılama/Giriş ekranları; 1-C oturum talimatı).
- * ⚠️ 1-C inceleme i3-F-3: bu iki ekranda ACİL DURDUR düğmesi HENÜZ YOK (A-58 Karşılama / Y23 Giriş → D1.87). Bant
- * orada mandal durumunu ve "Sıfırla"yı verir; "ACİL DURDUR'un olduğu her yerde" eşleşmesi bu ekranlar için D1.87 ile
- * tamamlanır (o zamana dek sıra ters: ekran durduramadan mandalı kaldırabilir — açık madde).
+ * 1-C inceleme i3-F-3 KAPANDI (D1.87, 1-E): bu iki ekranda artık kayan ACİL DURDUR da var (A-58 Karşılama / Y23 Giriş) —
+ * ekran mandalı kaldırabildiği her yerde durdurabilir de.
  *
  * Durum WS anlık görüntüsünden/`estop_mandali` iletisinden gelir (`snapshot.estopMandali`). Alan yoksa (eski
  * backend) bant YOK. "Sıfırla" onay ister (bilinçli eylem) ve yalnız mandalı kaldırır — bobin BAŞLATMAZ.

@@ -9,15 +9,16 @@
  * backend'e devrettiğinde uygulama açılışta onu devralır ve login ekranını ATLAR (çift giriş yok).
  * Devir yoksa/başarısızsa AKIŞ DEĞİŞMEZ — sessizce normal login gösterilir. Bkz. services/desktopSession.
  */
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { AuthSession, isResearchEmail } from "@/services/authApi";
 import { supabaseAuth, getCurrentSession, signOutUser } from "@/services/supabaseAuth";
 import {
   isDesktopHost,
-  hydrateFromDesktopSession,
+  hydrateFromDesktopSessionDetayli,
   clearDesktopSession,
   pushDesktopSession,
+  type DesktopSession,
 } from "@/services/desktopSession";
 
 interface AuthContextValue {
@@ -49,6 +50,26 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
  */
 const HYDRATE_SPLASH_CEILING_MS = 6000;
 
+/** JWT gövdesindeki e-posta (imza DOĞRULANMAZ — yalnız görüntü; jeton launcher'ın doğruladığı devirden gelir). */
+function jwtEposta(jeton: string): string {
+  try {
+    const govde = jeton.split(".")[1] ?? "";
+    const b64 = govde.replace(/-/g, "+").replace(/_/g, "/");
+    const ham = typeof atob === "function" ? atob(b64) : "";
+    const e = (JSON.parse(ham) as { email?: unknown }).email;
+    return typeof e === "string" ? e : "";
+  } catch {
+    return "";
+  }
+}
+
+/** D1.87 · A-70: Supabase'e ulaşılamadığında launcher devrinden ÇEVRİMDIŞI oturum (yalnız auth; profil/userMode diske yazılmaz). */
+function cevrimdisiOturum(d: DesktopSession): AuthSession | null {
+  const email = d.email || jwtEposta(d.access_token);
+  if (!email) return null;
+  return { email, token: d.access_token, profile: undefined, cevrimdisi: true };
+}
+
 function toAuthSession(s: Session | null): AuthSession | null {
   if (!s || !s.user?.email) return null;
   // Kayıtta girilen veteriner/klinik profili user_metadata'da → session'a taşı (uygulama her yerden okur).
@@ -79,15 +100,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // kalmalı: `loading` tek başına yetmez, çünkü onAuthStateChange abone olur olmaz INITIAL_SESSION
   // yayınlar → loading false olur ve devir bitmeden AuthScreen bir an "yanıp" çift-giriş hissi verir.
   const [hydrating, setHydrating] = useState(() => isDesktopHost());
+  // D1.87 · A-70: Supabase'e ulaşılamadığı için devirden açılan çevrimdışı oturum. Gerçek oturum gelince yerini alır;
+  // `INITIAL_SESSION(null)` gibi "oturum yok" olayları onu DÜŞÜRMEZ — yalnız açık çıkış (SIGNED_OUT / logout).
+  const cevrimdisiRef = useRef<AuthSession | null>(null);
 
   useEffect(() => {
     let alive = true;
     // Splash TAVANI — bkz. HYDRATE_SPLASH_CEILING_MS: devir/oturum-okuma asılı kalsa da açılış
     // sonsuza dek spinner'da kilitlenmesin (ACİL DURDUR uygulamanın İÇİNDE yaşıyor).
-    const tavan = setTimeout(() => { if (alive) setHydrating(false); }, HYDRATE_SPLASH_CEILING_MS);
+    // ⚠️ D1.87: tavan MOBİLDE de splash'i bitirir (`loading`). Eskiden yalnız masaüstü `hydrating`ini kapatıyordu; mobilde
+    // süresi dolmuş saklı oturumun yenilemesi ağ reddinde asılı kalınca splash ~51 sn sürüyordu (ölçüldü).
+    const tavan = setTimeout(() => {
+      if (!alive) return;
+      setHydrating(false);
+      setLoading(false);
+    }, HYDRATE_SPLASH_CEILING_MS);
     // ÖNCE abone ol: hidrasyonun tetikleyeceği setSession olayı KAÇMASIN.
     const { data: sub } = supabaseAuth.auth.onAuthStateChange((_event, s) => {
-      setSession(toAuthSession(s));
+      const yeni = toAuthSession(s);
+      if (!yeni && cevrimdisiRef.current && _event !== "SIGNED_OUT") {
+        setLoading(false);
+        return; // D1.87: çevrimdışı açılış "oturum yok" olayıyla düşmez
+      }
+      if (yeni || _event === "SIGNED_OUT") cevrimdisiRef.current = null;
+      setSession(yeni);
       setLoading(false);
       // 🔴 SAHA ARIZASI (2026-08-24) — "Beni hatırla" bozuluyordu.
       // supabase-js jetonu arka planda yeniler (`autoRefreshToken: true`) ve Supabase yenilemede
@@ -111,15 +147,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // hata verirse NORMALDİR → sessizce mevcut login akışına düşülür (kullanıcı hata görmez).
       if (isDesktopHost()) {
         try {
-          await hydrateFromDesktopSession();
+          const devir = await hydrateFromDesktopSessionDetayli();
+          if (devir.durum === "cevrimdisi") cevrimdisiRef.current = cevrimdisiOturum(devir.oturum);
         } catch {
           /* sessiz — normal login */
         }
       }
+      if (cevrimdisiRef.current && alive) {
+        // D1.87 · A-70: ağ yokken `getCurrentSession` de asılabilir — çevrimdışı oturum onu BEKLEMEDEN açılır.
+        setSession(cevrimdisiRef.current);
+        setLoading(false);
+        setHydrating(false);
+      }
       // Sonra saklı/devralınmış oturumu oku (ilk açılış).
       const s = await getCurrentSession();
       if (!alive) return;
-      setSession(toAuthSession(s));
+      const gercek = toAuthSession(s);
+      if (gercek) cevrimdisiRef.current = null;
+      setSession(gercek ?? cevrimdisiRef.current);
       setLoading(false);
       setHydrating(false);
     })();
@@ -131,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    cevrimdisiRef.current = null; // D1.87: çevrimdışı açılış da açık çıkışla kapanır
     // ÖNCE backend'in bellekteki devir oturumunu sil: aksi halde sayfa yenilenince uygulama
     // kendini tekrar hydrate eder ve masaüstünde çıkış İŞLEMEZ. En-iyi-çaba (hata yutulur).
     await clearDesktopSession();

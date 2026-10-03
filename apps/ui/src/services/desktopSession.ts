@@ -23,6 +23,7 @@
 import { Platform } from "react-native";
 import { apiDelete, apiGet, apiPost } from "@/services/apiClient";
 import { supabaseAuth } from "@/services/supabaseAuth";
+import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 
 /** Tek devir isteği için SERT zaman aşımı: backend takılırsa splash'te sonsuza dek beklenmesin. */
 export const DESKTOP_SESSION_TIMEOUT_MS = 3000;
@@ -79,36 +80,69 @@ export async function fetchDesktopSession(): Promise<DesktopSession | null> {
  * Token süresi geçmiş/iptal edilmişse setSession hata döner → sessizce false (normal login).
  */
 export async function hydrateFromDesktopSession(): Promise<boolean> {
+  return (await hydrateFromDesktopSessionDetayli()).durum === "kabul";
+}
+
+/**
+ * D1.87 · A-70 (sahip: çevrimdışı açılış GEREKSİNİM) — devrin SONUCU: "ULAŞAMADIM ≠ HAYIR" (launcher OFFLINE KARARI ile aynı).
+ *   kabul      — Supabase oturumu kurdu.
+ *   cevrimdisi — Supabase'e ULAŞILAMADI (ağ hatası / asılı istek bütçeyi aştı); devralınan oturum çevrimdışı açılabilir:
+ *                launcher onu bu makinede daha önce doğruladı ve DPAPI ile sakladı.
+ *   red        — Supabase AÇIKÇA reddetti (iptal/geçersiz jeton) → normal giriş.
+ *   yok        — devir yok (mobil, uç boş, okunamadı).
+ * Eskiden ağ hatası da ret de `false`tı: internetsiz klinikte giriş ekranına düşülüyor, uygulama içi ACİL DURDUR'a
+ * erişilemiyordu (ölçüldü, İG-6.17).
+ */
+export type DevirSonucu =
+  | { durum: "kabul" }
+  | { durum: "cevrimdisi"; oturum: DesktopSession }
+  | { durum: "red" | "yok" };
+
+export async function hydrateFromDesktopSessionDetayli(): Promise<DevirSonucu> {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const okunan: { s: DesktopSession | null } = { s: null };
   try {
-    // Bütçe yarışı: uzayan devir açılışı kilitlemesin (bkz. DESKTOP_SESSION_BUDGET_MS).
-    const butce = new Promise<boolean>((res) => {
-      timer = setTimeout(() => res(false), DESKTOP_SESSION_BUDGET_MS);
+    // Bütçe yarışı: uzayan devir açılışı kilitlemesin (bkz. DESKTOP_SESSION_BUDGET_MS). Devir OKUNMUŞ ama `setSession`
+    // asılıysa (yarı-açık ağ / captive portal) bu da "ulaşamadım"dır → çevrimdışı.
+    const butce = new Promise<DevirSonucu>((res) => {
+      timer = setTimeout(
+        () => res(okunan.s ? { durum: "cevrimdisi", oturum: okunan.s } : { durum: "yok" }),
+        DESKTOP_SESSION_BUDGET_MS,
+      );
     });
-    return await Promise.race([_hydrate(), butce]);
+    return await Promise.race([_hydrate(okunan), butce]);
   } catch {
-    return false;
+    return { durum: "yok" };
   } finally {
     if (timer) clearTimeout(timer);
   }
 }
 
-async function _hydrate(): Promise<boolean> {
+/** Ağ hatası mı (fırlatılan `TypeError: Failed to fetch / Network request failed` ya da supabase'in yeniden denenebilir hatası)? */
+function agHatasiMi(e: unknown): boolean {
+  if (isAuthRetryableFetchError(e)) return true;
+  return e instanceof TypeError;
+}
+
+async function _hydrate(okunan: { s: DesktopSession | null }): Promise<DevirSonucu> {
+  const s = await fetchDesktopSession().catch(() => null);
+  if (!s) return { durum: "yok" };
+  okunan.s = s;
   try {
-    const s = await fetchDesktopSession();
-    if (!s) return false;
     const { error } = await supabaseAuth.auth.setSession({
       access_token: s.access_token,
       refresh_token: s.refresh_token,
     });
-    if (error) {
-      // Token/e-posta ASLA loglanmaz — yalnız "devir kullanılamadı" bilgisi.
-      console.warn("Masaüstü oturum devri kullanılamadı (normal giriş akışına düşülüyor).");
-      return false;
+    if (!error) return { durum: "kabul" };
+    if (agHatasiMi(error)) {
+      console.warn("Masaüstü oturum devri: Supabase'e ulaşılamadı — çevrimdışı açılış (A-70).");
+      return { durum: "cevrimdisi", oturum: s };
     }
-    return true;
-  } catch {
-    return false;
+    // Token/e-posta ASLA loglanmaz — yalnız "devir kullanılamadı" bilgisi.
+    console.warn("Masaüstü oturum devri kullanılamadı (normal giriş akışına düşülüyor).");
+    return { durum: "red" };
+  } catch (e) {
+    return agHatasiMi(e) ? { durum: "cevrimdisi", oturum: s } : { durum: "red" };
   }
 }
 

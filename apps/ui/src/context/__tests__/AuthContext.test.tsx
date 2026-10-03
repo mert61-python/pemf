@@ -20,6 +20,12 @@ jest.mock("@/services/supabaseAuth", () => ({
 jest.mock("@/services/desktopSession", () => ({
   isDesktopHost: jest.fn(() => true),
   hydrateFromDesktopSession: jest.fn(async () => false),
+  // D1.87: AuthContext ayrıntılı sonucu kullanır — bu dosyanın boolean sahtesi ona eşlenir (true → "kabul", false → "yok").
+  hydrateFromDesktopSessionDetayli: jest.fn(async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ok = await require("@/services/desktopSession").hydrateFromDesktopSession();
+    return { durum: ok ? "kabul" : "yok" };
+  }),
   clearDesktopSession: jest.fn(async () => undefined),
 }));
 

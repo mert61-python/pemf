@@ -36,6 +36,8 @@ export interface AuthSession {
   email: string;
   token: string;
   profile?: VetProfile;
+  /** D1.87 · A-70: Supabase'e ulaşılamadan, launcher'ın devrettiği (bu makinede doğrulanmış) oturumla AÇILDI. */
+  cevrimdisi?: boolean;
 }
 
 // ── Doğrulama (UI + kayıt öncesi) ─────────────────────────────────────────────
