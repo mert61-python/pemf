@@ -83,6 +83,7 @@ export function ControlScreen() {
     // satırının hemen ardından bu render'ın closure'ında HENÜZ güncel değildi → uyarı kutusu
     // bir ÖNCEKİ hatayı (ilk denemede de null) gösteriyordu.
     loading, starting, sessionStopping, stopping, lastError, startSession, stopSession, emergencyStop,
+    dbSessionId,
   } = useSessionControl();
 
   const [activeTab, setActiveTab] = useState<TabKey>("manual");
@@ -474,7 +475,11 @@ export function ControlScreen() {
   };
 
   // ── Seans-sonrası gözlem notu prompt'u (PyQt observation-notes) ──
-  type ObsSess = { patientName?: string; mode?: string; frequency?: number; intensity?: number; durationMinutes?: number; obsKey?: number };
+  type ObsSess = {
+    patientName?: string; mode?: string; frequency?: number; intensity?: number; durationMinutes?: number; obsKey?: number;
+    /** D1.66: notun yazılacağı seansın DB kimliği. */
+    dbSessionId?: number | null;
+  };
   const [obsSession, setObsSession] = useState<ObsSess | null>(null);
   // Durdurma turu KAPISI. Ref senkron (iki hızlı basış aynı batch'te state'i görmez); state
   // YALNIZ etiket için. ⚠️ Butonun `disabled`ına EKLENMEZ (sahip kararı: durdurma kontrolü
@@ -500,9 +505,10 @@ export function ControlScreen() {
         frequency: treatment.frequencyHz,
         intensity: treatment.intensityMt,
         durationMinutes: Math.round((treatment.durationSec ?? 0) / 60),
+        dbSessionId, // D1.66: not O seansın satırına gider (sunucu son seansı TAHMİN etmez)
       };
     }
-  }, [isActive, treatment, patientName]);
+  }, [isActive, treatment, patientName, dbSessionId]);
 
   useEffect(() => {
     if (prevActiveRef.current && !isActive && lastSessionRef.current) {

@@ -541,6 +541,43 @@ class SeansKarisimi:
             self.logger.error(f"İstatistik getirme hatası: {e}")
             raise
 
+    def son_biten_seans_kimligi(self, patient_name: str, en_cok_yas_s: float = 12 * 3600, simdi: float = None):
+        """D1.66 / D1.78: seans kimliği GÖNDERMEYEN (eski) istemcinin gözlem notunun bağlanacağı seans — bu hastanın
+        (birebir aynı ad) en son BAŞLAYAN, artık AKTİF OLMAYAN seansı (son `en_cok_yas_s` içinde). Yoksa None.
+
+        Eskiden kimliksiz not her çağrıda YENİ bir 'completed' satır açıyordu (yeniden başlatma sonrası kurtarılmış
+        "Elektrik Kesintisi" satırının yanında ikinci, koşusuz bir tedavi). Aktif seans HARİÇ: süren seans başka bir
+        hastanındır (eski istemci notu seansı BİTTİKTEN sonra gönderir)."""
+        import time as _time
+
+        ad = (patient_name or "").strip()
+        if not ad:
+            return None
+        sinir = (_time.time() if simdi is None else float(simdi)) - float(en_cok_yas_s)
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    "SELECT id FROM treatment_sessions WHERE patient_name = ? AND session_status != 'active' "
+                    "AND started_epoch IS NOT NULL AND started_epoch >= ? ORDER BY started_epoch DESC, id DESC LIMIT 1",
+                    (ad, sinir),
+                ).fetchone()
+        except _DB_ERROR as e:
+            self.logger.error(f"son_biten_seans_kimligi hatası: {e}")
+            return None
+        return int(row[0]) if row else None
+
+    def seans_ozeti(self, session_id: int):
+        """D1.66: not yönlendirmesi için seansın durumu (var mı, aktif mi). Yoksa None."""
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    "SELECT id, session_status, patient_name FROM treatment_sessions WHERE id = ?", (int(session_id),)
+                ).fetchone()
+        except _DB_ERROR as e:
+            self.logger.error(f"seans_ozeti hatası: {e}")
+            return None
+        return {"id": int(row[0]), "session_status": row[1], "patient_name": row[2]} if row else None
+
     def update_session_finalized_extras(
         self, session_id: int, notes: str = None, frequency_hz=None, intensity_mt=None
     ) -> None:

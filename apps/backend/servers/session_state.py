@@ -30,6 +30,11 @@ def is_active() -> bool:
 
 def current_db_session_id():
     """Aktif seansın gerçek DB satır-id'si (`db_session_id`) veya None — kilitli okuma.
-    coil_run_tracker'a enjekte edilir; in-place normalizasyon sayesinde çağrı-anında günceldir."""
+    coil_run_tracker'a enjekte edilir; in-place normalizasyon sayesinde çağrı-anında günceldir.
+
+    ⚠️ D1.66 (B-1.2): seans AKTİF DEĞİLSE None. Eskiden `/stop`tan sonra da bitmiş seansın kimliği dönüyordu →
+    seanssız (tekil) sürüşün koşusu BİTMİŞ seansa bağlanıyordu (kayıt: seans bittikten sonra "sürüldü")."""
     with _session_lock:
+        if not _active_session.get("is_active"):
+            return None
         return _active_session.get("db_session_id")

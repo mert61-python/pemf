@@ -384,3 +384,26 @@ it("KARSIT-KANIT stopSession null (ag yok): seans ACIK kalir + genel uyari (409'
   expect(ret).toBe(false); // sunucuya ULASILAMADI: kayit kapanmadi, seans acik kalmali
   expect(result.current.isActive).toBe(true);
 });
+
+// ── D1.66 · B-1.2: seansın DB kimliği (gözlem notu O seansa yazılsın) ────────────────────────────────
+it("KRİTİK D1.66: başlatma yanıtındaki seans DB kimliği tutulur ve seans BİTİNCE de korunur", async () => {
+  mockApiPost.mockResolvedValueOnce({ status: "success", session: { db_session_id: 42 } }); // start
+  mockApiPost.mockResolvedValueOnce({ status: "success" }); // stop
+  const { result } = renderHook(() => useSessionControl());
+  await act(async () => {
+    await result.current.startSession(START);
+  });
+  expect((result.current as unknown as { dbSessionId?: number | null }).dbSessionId).toBe(42);
+  await act(async () => {
+    await result.current.stopSession();
+  });
+  expect(result.current.isActive).toBe(false);
+  expect((result.current as unknown as { dbSessionId?: number | null }).dbSessionId).toBe(42);
+});
+
+it("KRİTİK D1.66: başka istemcinin seansına bağlanınca (mount hidrasyonu) seans DB kimliği alınır", async () => {
+  mockApiGet.mockResolvedValue({ is_active: true, duration_minutes: 20, elapsed_sec: 60, db_session_id: 7 });
+  const { result } = renderHook(() => useSessionControl());
+  await waitFor(() => expect(result.current.isActive).toBe(true));
+  expect((result.current as unknown as { dbSessionId?: number | null }).dbSessionId).toBe(7);
+});

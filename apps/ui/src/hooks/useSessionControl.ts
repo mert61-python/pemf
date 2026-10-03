@@ -51,6 +51,9 @@ export interface SessionControlResult {
   startSession: (params: SessionStartParams) => Promise<boolean>;
   stopSession: () => Promise<boolean>;
   emergencyStop: () => Promise<void>;
+  /** ⚠️ D1.66 (B-1.2): son seansın DB satır kimliği — seans BİTİNCE de korunur (gözlem notu bitişten SONRA yazılır).
+   *  Not `/api/session/notes`'a bununla gider; sunucu YALNIZ o satıra yazar. Bilinmiyorsa null (eski sunucu). */
+  dbSessionId: number | null;
 }
 
 // Backend yanıt sözleşmeleri (audit B-10.1: apiPost/apiGet<any> yerine) — alanlar opsiyonel.
@@ -63,6 +66,8 @@ interface SessionActiveResponse {
   duration_minutes?: number;
   elapsed_sec?: number;
   remaining_sec?: number;
+  /** D1.66: seansın DB satır kimliği (gözlem notu O satıra yazılsın). */
+  db_session_id?: number | null;
 }
 /** POST /api/session/start|stop + /api/hardware/command ortak yanıt zarfı. */
 interface SessionActionResponse {
@@ -79,6 +84,7 @@ export function useSessionControl(): SessionControlResult {
   const [treatment, setTreatment] = useState<ActiveTreatment | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [remainingSec, setRemainingSec] = useState(0);
+  const [dbSessionId, setDbSessionId] = useState<number | null>(null);
   // ⚠️ D1.82 · Y47: başlatma ve durdurma yükü AYRI. Eskiden tek `loading` vardı ve Kontrol ekranının ana Durdur'u ile
   // seans kartının Durdur'u `disabled={loading}`du → `/session/start` askıdayken (≤ 8 sn) durdurma basılamıyordu.
   const [starting, setStarting] = useState(false);
@@ -152,6 +158,7 @@ export function useSessionControl(): SessionControlResult {
       if (cancelled) return;
       if (sess?.is_active) {
         setIsActive(true);
+        if (typeof sess.db_session_id === "number") setDbSessionId(sess.db_session_id); // D1.66
         const totalSec = (sess.duration_minutes ?? 0) * 60;
         const elapsed = sess.elapsed_sec ?? 0;
         setTreatment({
@@ -309,6 +316,9 @@ export function useSessionControl(): SessionControlResult {
       }
 
       if (result?.status === "success" || result?.session) {
+        // D1.66: seansın DB kimliği (yanıt `session.db_session_id`); yoksa null — eski kimlik TAŞINMAZ.
+        const _db = (result?.session as { db_session_id?: unknown } | undefined)?.db_session_id;
+        setDbSessionId(typeof _db === "number" ? _db : null);
         const totalSec = params.durationMinutes * 60;
         setIsActive(true);
         setTreatment({
@@ -371,5 +381,6 @@ export function useSessionControl(): SessionControlResult {
     startSession,
     stopSession,
     emergencyStop,
+    dbSessionId,
   };
 }

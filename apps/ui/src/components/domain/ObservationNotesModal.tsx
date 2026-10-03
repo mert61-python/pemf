@@ -25,6 +25,9 @@ export interface ObsSession {
    *  anahtarı yalnız hasta ADI olunca aynı isimli iki hastada ("Boncuk" klinikte gerçekçi)
    *  A'nın kaydedilmemiş notu B'nin modalında duruyor ve B'nin TIBBİ KAYDINA gidebiliyordu. */
   obsKey?: number;
+  /** ⚠️ D1.66 (B-1.2): notun yazılacağı seansın DB kimliği. Gönderilmezse sunucu süreçteki SON seansı hedef alıyordu →
+   *  A'nın notu arada başlamış B'nin satırına düşüyordu. Bilinmiyorsa alan gönderilmez (sunucu eski istemci dalı). */
+  dbSessionId?: number | null;
 }
 
 export function ObservationNotesModal({
@@ -99,6 +102,7 @@ export function ObservationNotesModal({
         frequency: session?.frequency ?? 0,
         intensity: session?.intensity ?? 0,
         duration_minutes: session?.durationMinutes ?? 0,
+        ...(typeof session?.dbSessionId === "number" ? { session_id: session.dbSessionId } : {}),
       },
       null,
       {

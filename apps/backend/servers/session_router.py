@@ -26,7 +26,10 @@ class SessionNotesPayload(BaseModel):
     frequency: float = 0.0
     intensity: float = 0.0
     duration_minutes: int = 0
-    operator_email: str = ""  # klinik-içi sahiplik (fallback start_session için)
+    operator_email: str = ""  # klinik-içi sahiplik (eski alan; D1.78'den beri yeni satır AÇILMAZ)
+    #: D1.66 (B-1.2): notun yazılacağı seansın DB kimliği (`/api/session/start` yanıtı `session.db_session_id`).
+    #: Eski istemci (APK 2.3.34) göndermez → geriye uyum dalı (`_not_hedefi`).
+    session_id: int | None = None
 
 
 @router.get("/api/session/active")
@@ -68,87 +71,83 @@ def get_active_session():
     return sess
 
 
+def _not_hedefi(payload: "SessionNotesPayload", db, bellek: dict) -> tuple[int, str]:
+    """D1.66 · D1.78: gözlem notunun yazılacağı seans → (db kimliği, yol). Bulunamazsa HTTPException; YENİ satır AÇILMAZ.
+
+    Eskiden hedef süreçteki SON `db_session_id`'ydi: A'nın notu arada başlamış B'nin satırına düşüyor (B sürerken onu
+    `end_session` ile KAPATIYORDU), bellekte seans yoksa (yeniden başlatma) her çağrı YENİ bir 'completed' satır açıyordu.
+      1) İstemci kimliği verdiyse (yeni istemci) YALNIZ o satır; yoksa 404.
+      2) Kimliksiz (eski istemci, APK 2.3.34): bellekteki seans BİTMİŞSE ve hastası aynıysa o (bugünkü akış).
+      3) Değilse bu hastanın SON BİTMİŞ seansı (12 sa) — süren seans başka hastanındır, kurtarılmış satır dahil.
+      4) Hiçbiri yoksa 409: not kaydedilmez (istemci notu tutar, operatör görür)."""
+    if payload.session_id is not None:
+        ozet = db.seans_ozeti(int(payload.session_id))
+        if not ozet:
+            raise HTTPException(status_code=404, detail="Seans kaydı bulunamadı — not kaydedilmedi.")
+        return int(payload.session_id), "kimlik"
+    b_sid = bellek.get("db_session_id")
+    b_hasta = (bellek.get("patient_name") or "").strip()
+    p_hasta = (payload.patient_name or "").strip()
+    if b_sid and not bellek.get("is_active") and (not p_hasta or not b_hasta or p_hasta == b_hasta):
+        return int(b_sid), "bellek"
+    sid = db.son_biten_seans_kimligi(p_hasta)
+    if sid:
+        return int(sid), "hasta"
+    raise HTTPException(
+        status_code=409,
+        detail="Notun ait olduğu seans belirlenemedi — not kaydedilmedi (yeni seans kaydı AÇILMAZ).",
+    )
+
+
 @router.post("/api/session/notes")
 def save_session_notes(payload: SessionNotesPayload, request: Request):
-    from servers.auth import cozumlenmis_operator
+    """Seans-sonrası gözlem notu + not ekranındaki doz parametreleri → seansın KENDİ satırına (yeni satır AÇILMAZ).
 
-    """Seans-sonrası gözlem notu + seansı history'ye yaz (PyQt observation_notes karşılığı).
-
-    Asama-2 (1c): seans BASINDA gercek db_session_id olustuysa ARTIK YENI satir ACMAZ →
-    o satiri GUNCELLER (notlar + parametreler). Sensor buffer zaten /api/session/stop'ta
-    flush edildiginden burada tekrar flush ETMEZ (cift-kayit onlenir). db_session_id yoksa
-    eski start_session+end_session fallback'i korunur (geriye uyumlu)."""
+    Hedef: `_not_hedefi` (D1.66 · D1.78). Seans DB'de zaten kapandıysa (stop / bekçi / E-stop / kurtarma) YALNIZ not ve
+    parametre güncellenir — gerçek süre ve durum EZİLMEZ (DENETİM P1). Bellekteki BİTMİŞ seans DB'de henüz kapanmadıysa
+    (eski akış: `/stop` hiç çağrılmadı) normal finalize. SÜREN seansa not yazılır ama seans KAPATILMAZ.
+    Sensör tamponu `/api/session/stop`'ta flush edilir; burada tekrar flush edilmez."""
     from servers import api_server as _api
 
+    db = _api._get_treatment_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Tedavi kaydı veritabanı hazır değil — not kaydedilmedi.")
+    with _api._session_lock:
+        bellek = dict(_api._active_session)
+    sid, yol = _not_hedefi(payload, db, bellek)
     try:
-        from database.treatment_history_db import get_treatment_db
-
-        app_data = _api._app_data_dir()
-        db = get_treatment_db(app_data)
-
-        # Aktif seansin DB durumunu al (varsa).
-        with _api._session_lock:
-            existing_sid = _api._active_session.get("db_session_id")
-            already_final = bool(_api._active_session.get("db_finalized"))
-
-        if existing_sid:
-            if already_final:
-                # DENETIM P1: /api/session/stop GERCEK sureyi (now - started_epoch) + end_time'i
-                # zaten yazdi ve db_finalized bayragini dikti. Burada end_session'i TEKRAR
-                # cagirmak o alanlari EZIYORDU: istemci PLANLANAN sureyi gonderdiginde 4 dk'lik
-                # seans 20 dk gorunuyor; alan hic gelmezse (0 → None) end_session sureyi
-                # `now - start` ile yeniden hesapliyor → notu 45 dk sonra yazan operatorde
-                # 65 dk cikiyordu. db_finalized tam bunun icin yaziliyordu ama HIC OKUNMUYORDU.
-                # Artik yalniz not + parametre guncellenir; zaman/durum alanlarina dokunulmaz.
-                db.update_session_finalized_extras(
-                    existing_sid,
-                    notes=(payload.notes or None),
-                    frequency_hz=(payload.frequency or None),
-                    intensity_mt=(payload.intensity or None),
-                )
-                return {
-                    "status": "success",
-                    "session_id": existing_sid,
-                    "sensor_samples": 0,
-                    "updated": True,
-                    "durationPreserved": True,
-                }
-            # Seans DB'de henuz kapatilmamis (ör. /stop hic cagrilmadi) → normal finalize.
+        bellek_bu = bellek.get("db_session_id") == sid
+        ozet = db.seans_ozeti(sid) or {}
+        if (
+            bellek_bu
+            and not bellek.get("is_active")
+            and not bellek.get("db_finalized")
+            and ozet.get("session_status") == "active"
+        ):
+            # Seans bellekte bitti ama DB'de kapanmadı (ör. /stop hiç çağrılmadı) → normal finalize.
             db.end_session(
-                existing_sid,
+                sid,
                 parameters={"frequency_hz": payload.frequency, "intensity_mt": payload.intensity},
                 patient_notes=payload.notes or None,
                 duration_minutes=(int(payload.duration_minutes) if payload.duration_minutes else None),
             )
-            # Buffer zaten /stop'ta flush edildi; tekrar flush etme (idempotent).
-            return {"status": "success", "session_id": existing_sid, "sensor_samples": 0, "updated": True}
-
-        # Eski yol (db_session_id yok): tek-seferlik start+end fallback'i.
-        sid = db.start_session(
-            treatment_mode=payload.mode,
-            target_condition=payload.target_condition or None,
-            patient_name=payload.patient_name or None,
-            # ⚠️ 2026-08-09 (Tier 1): sahibi sunucu belirler (bkz. auth.cozumlenmis_operator).
-            operator_email=cozumlenmis_operator(request, payload.operator_email) or None,
-        )
-        db.end_session(
+            return {"status": "success", "session_id": sid, "sensor_samples": 0, "updated": True, "hedef": yol}
+        # DENETIM P1: kapanmış seansta end_session TEKRAR çağrılmaz (gerçek süreyi planlananla ezerdi); süren seans da
+        # burada kapatılmaz. Yalnız not + parametre.
+        db.update_session_finalized_extras(
             sid,
-            parameters={"frequency_hz": payload.frequency, "intensity_mt": payload.intensity},
-            patient_notes=payload.notes or None,
-            duration_minutes=int(payload.duration_minutes),
+            notes=(payload.notes or None),
+            frequency_hz=(payload.frequency or None),
+            intensity_mt=(payload.intensity or None),
         )
-        # Seans boyunca toplanan sensör örneklerini gerçek session_id ile kalıcı kaydet.
-        pending_count = 0
-        try:
-            with _api._sensor_sample_buffer_lock:
-                pending = list(_api._sensor_sample_buffer)
-                _api._sensor_sample_buffer.clear()
-            if pending:
-                pending_count = db.add_sensor_samples_batch(sid, pending)
-                logging.info("Sensör örnekleri kaydedildi: %d satır (session_id=%s)", pending_count, sid)
-        except Exception:
-            logging.exception("Sensör örnekleri kaydedilemedi")
-        return {"status": "success", "session_id": sid, "sensor_samples": pending_count}
+        return {
+            "status": "success",
+            "session_id": sid,
+            "sensor_samples": 0,
+            "updated": True,
+            "durationPreserved": True,
+            "hedef": yol,
+        }
     except Exception:
         # B3 güvenlik-fix: ham str(e) SIZMAZ (zaten loglanıyor) — generic detail.
         logging.exception("save_session_notes failed")

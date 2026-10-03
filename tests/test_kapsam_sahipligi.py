@@ -131,8 +131,11 @@ def _start_session_cagrilari(bagil: str):
 
 
 def test_KRITIK_seans_satiri_acan_HER_yol_sahiplik_tasiyor():
-    """⚠️ ARIZA TEK BİR ÇAĞRIDAYDI ama sınıf üç çağrıyı kapsıyor (manuel / AI / fallback).
-    Birini elle düzeltmek, dördüncüsünü bir sonraki geliştiriciye bırakırdı.
+    """⚠️ ARIZA TEK BİR ÇAĞRIDAYDI ama sınıf her seans-açan çağrıyı kapsıyor (manuel / AI).
+    Birini elle düzeltmek, ötekini bir sonraki geliştiriciye bırakırdı.
+    ⚠️ D1.78 (B-3.26): üçüncü yol (gözlem notu ucunun "seans yoksa start+end" fallback'i) KALDIRILDI — not ucu
+    YENİ seans satırı AÇMAZ (kurtarılmış satırın yanına koşusuz ikinci 'completed' tedavi yazıyordu). Not ucunda
+    `start_session` çağrısı geri gelirse aşağıdaki ikinci iddia KIRMIZI.
 
     Çıpa AST'ye pinli: yorum metni ya da benzer isimli bir fonksiyon kapıyı kandıramaz.
 
@@ -146,7 +149,12 @@ def test_KRITIK_seans_satiri_acan_HER_yol_sahiplik_tasiyor():
             toplam += 1
             if not any(kw.arg == "operator_email" for kw in cagri.keywords):
                 eksik.append(f"{bagil}:{cagri.lineno}")
-    assert toplam >= 3, f"onkosul: beklenenden az start_session cagrisi bulundu ({toplam}) -> capa bayatladi"
+    assert toplam >= 2, f"onkosul: beklenenden az start_session cagrisi bulundu ({toplam}) -> capa bayatladi"
+    not_ucu = list(_start_session_cagrilari("apps/backend/servers/session_router.py"))
+    assert not not_ucu, (
+        "D1.78: gözlem notu ucu YENİ seans satırı açıyor (start_session) — kurtarılmış/bitmiş seansın yanına ikinci "
+        f"'completed' tedavi: satır {[c.lineno for c in not_ucu]}"
+    )
     assert not eksik, (
         "Seans satiri acan su cagri(lar) SAHIPLIK yazmiyor -> o seanslar 'sahipsiz' olur ve "
         f"kliniginin HER hekimine 'Benim Seanslarim'da gorunur: {eksik}"
