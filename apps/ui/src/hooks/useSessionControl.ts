@@ -131,7 +131,8 @@ export function useSessionControl(): SessionControlResult {
       elapsedRef.current += 1;
       setElapsedSec(elapsedRef.current);
       if (indefinite) return; // süresiz: bitiş kontrolü YOK (kör kalma önlenir)
-      const remaining = Math.max(0, totalSec - elapsedRef.current);
+      // D1.70 (Y5): toplam REF'ten okunur — seans ortası süre değişikliğini mutabakat günceller (kapanışta sabit DEĞİL).
+      const remaining = Math.max(0, durationSecRef.current - elapsedRef.current);
       setRemainingSec(remaining);
       if (remaining === 0) {
         stopTimer();
@@ -188,6 +189,12 @@ export function useSessionControl(): SessionControlResult {
         return;
       }
       if (typeof sess.elapsed_sec === "number") {
+        // ⚠️ D1.70 (sahip kararı Y5): seans ORTASINDA girilen süre KALAN süredir; backend bitişi taşır ve kalan süreyi
+        // yeni bitişten verir. Toplam = geçen + kalan. Eskiden toplam başlangıçta sabitti → uzatmada sayaç ESKİ bitişte
+        // 0'a inip süren seansı yerelde "bitti" sayıyordu (mutabakat da duruyordu), kısaltmada kalan yanlış görünüyordu.
+        if (typeof sess.remaining_sec === "number" && durationSecRef.current > 0) {
+          durationSecRef.current = sess.elapsed_sec + sess.remaining_sec;
+        }
         const total = durationSecRef.current || (sess.duration_minutes ?? 0) * 60;
         elapsedRef.current = sess.elapsed_sec;
         setElapsedSec(sess.elapsed_sec);

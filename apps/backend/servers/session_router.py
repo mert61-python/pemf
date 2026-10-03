@@ -42,6 +42,9 @@ def get_active_session():
         elapsed = int(time.time() - sess.get("start_time", time.time()))
         total = sess.get("duration_minutes", 0) * 60
         remaining = max(0, total - elapsed)
+        # D1.70 (Y5): seans ortası süre değişikliği kesin bitiş anını yazar — kalan süre ondan (bekçiyle AYNI ölçüt).
+        if sess.get("bitis_mono") is not None:
+            remaining = max(0, int(float(sess["bitis_mono"]) - time.monotonic()))
         sess["elapsed_sec"] = elapsed
         sess["remaining_sec"] = remaining
         sess["remaining_min"] = remaining // 60
@@ -199,8 +202,43 @@ def parametre_guncelle(payload: ParametreGuncellePayload):
         aktif = bool(_api._active_session.get("is_active"))
         sid = _api._active_session.get("db_session_id")
         seans_bobinleri = list(_api._active_session.get("coil_ids") or [])
+        seans_kimligi = _api._active_session.get("session_id")
+        _seans_anlik = dict(_api._active_session)
     if not aktif:
         raise HTTPException(status_code=409, detail="Aktif seans yok — güncellenecek parametre yok.")
+
+    # ── D1.70 (B-1.8 · sahip kararı Y5): girilen süre KALAN süredir (şimdiden itibaren) ───────────────────────
+    # Arayüz yeni süreyi bobinlere "şimdiden itibaren" gönderir (`/coil/batch` duration = dk × 60). Eskiden burada
+    # yalnız parametre satırı yazılıp "success" dönülüyordu; seansın süresine ve süre bekçisine İŞLENMİYORDU:
+    # kısaltmada bobinler yeni sürede durup seans eski sürede "completed 20" kapanıyor, uzatmada bekçi seansı eski
+    # sürede kesiyordu. Kayda GERÇEK sürüş süresi yazılır (bekçi/durdurma `_kayit_suresi_dk` — monotonik geçen süre).
+    if payload.duration_minutes is not None:
+        if int(payload.duration_minutes) <= 0:
+            raise HTTPException(
+                status_code=422, detail="Kalan süre en az 1 dakika olmalı — süre değişikliği UYGULANMADI."
+            )
+        from servers.ai_router import _ai_seansi_mi
+
+        if _ai_seansi_mi(_seans_anlik):
+            raise HTTPException(
+                status_code=409,
+                detail="AI seansının süresi hekim onayının mührüdür — buradan DEĞİŞTİRİLMEDİ (yeni öneri/onay gerekir).",
+            )
+        import math as _m
+        import time as _tm
+
+        with _api._session_lock:
+            s = _api._active_session
+            if not (s.get("is_active") and s.get("session_id") == seans_kimligi):
+                raise HTTPException(status_code=409, detail="Seans bu sırada değişti — süre değişikliği UYGULANMADI.")
+            _simdi = _tm.monotonic()
+            _kalan_s = int(payload.duration_minutes) * 60
+            s["bitis_mono"] = _simdi + _kalan_s
+            _sm = s.get("start_mono")
+            _gecen = (_simdi - _sm) if _sm is not None else 0.0
+            # Planlanan TOPLAM (gösterim): geçen + kalan, dakikaya yukarı yuvarlı. Bekçi `bitis_mono`yu esas alır.
+            s["duration_minutes"] = int(_m.ceil((_gecen + _kalan_s) / 60.0))
+            s["girilen_kalan_dk"] = int(payload.duration_minutes)
 
     # ── D1.99 (B-1.9 · S-1.2): kart ve doz kaydı donanıma GİDEN (normalize) değeri yazar ─────────────────
     # Bobinlere yeni parametre `/api/coil/batch`la gider ve orada protokol sınırından (Ö.4-Y9 — taşıyıcı,
@@ -235,9 +273,7 @@ def parametre_guncelle(payload: ParametreGuncellePayload):
     yazildi = False
     if sid:
         try:
-            from database.treatment_history_db import get_treatment_db
-
-            db = get_treatment_db(_api._app_data_dir())
+            db = _api._get_treatment_db()  # seans yaşam döngüsüyle AYNI erişim (eskiden ayrı `get_treatment_db` yolu)
             # ⚠️ ARTAN ANAHTAR: her değişiklik AYRI satır olarak birikir. Tek bir
             # "guncel_frekans" anahtarını üzerine yazmak, seans içindeki değişim
             # GEÇMİŞİNİ siler — "10. dakikada 150'ye çıktık" bilgisi kaybolurdu.
@@ -248,8 +284,8 @@ def parametre_guncelle(payload: ParametreGuncellePayload):
                 ("degisiklik_frekans_hz", frekans, "Hz"),
                 ("degisiklik_duty_yuzde", duty, "%"),
                 ("degisiklik_faz_derece", faz, "°"),
-                # Süre: Y5 (girilen = KALAN süre) D1.70'in konusu — burada değişmedi.
-                ("degisiklik_sure_dk", payload.duration_minutes, "dk"),
+                # Süre: Y5 — girilen değer KALAN süredir (yukarıda seansa işlendi); girilen değer de saklanır.
+                ("degisiklik_sure_dk", payload.duration_minutes, "dk (kalan)"),
             ):
                 if deger is not None:
                     db.set_session_parameter(sid, f"{ad}@{damga}", str(deger), birim)

@@ -4568,7 +4568,11 @@ def _session_duration_watchdog():
                 _elapsed = (
                     (_t.monotonic() - _sm) if _sm is not None else (_t.time() - sess.get("start_time", _t.time()))
                 )
-                if total > 0 and _elapsed >= total:
+                # ⚠️ D1.70 (B-1.8 · sahip kararı Y5): seans ORTASINDA girilen süre KALAN süredir —
+                # `parametre_guncelle` kesin bitiş anını (`bitis_mono`) yazar; varsa o esastır (yoksa planlanan toplam).
+                _bm = sess.get("bitis_mono")
+                _doldu = (_t.monotonic() >= float(_bm)) if _bm is not None else (total > 0 and _elapsed >= total)
+                if _doldu:
                     # Audit P2 (TOCTOU seal): fiziksel STOP'tan HEMEN önce seansın HÂLÂ aynı olduğunu
                     # doğrula — aksi halde operatör A'yı durdurup B'yi aynı bobinlerde başlattıysa bayat
                     # snapshot B'nin TAZE bobinlerini durdurur + coil-run'larını bozar (pencere ~µs'e iner).
