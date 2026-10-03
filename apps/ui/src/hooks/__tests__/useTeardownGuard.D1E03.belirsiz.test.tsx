@@ -115,6 +115,26 @@ describe("D1.E03 / A-59 — STM belirsizken kabuk sökümü", () => {
     expect(sonuc).toBe(false);
   });
 
+  it("KRİTİK: bobin güncellemesi HİÇ görülmeden AKTİF SEANS + STM kopuşu da belirsizdir (kural: 'bobin YA DA aktif tedavi')", async () => {
+    // 1-E incelemesi (i-7.1): kilidi yalnız çalışan bobinle kuran mutant (aktif seansı saymayan) 455/455 YEŞİL kalıyordu.
+    // Periyodik `stm_coil_update`ler geri-basınçta düşebilir (D1.71) — o zaman aktif seans tek "çalışıyordu" kanıtıdır.
+    const ilk = { ...dizi[0], data: { ...dizi[0].data, stm: "online" } };
+    await kur([
+      ilk,
+      { type: "session_update", data: { isActive: true, mode: "Manuel Seans" } },
+      { type: "stm_status", data: { stm: "warning", connected: false } },
+      { type: "session_update", data: { isActive: false, mode: "Acil Durdurma" } },
+    ]);
+    let sonuc: boolean | undefined;
+    await act(async () => {
+      sonuc = await guard("Profil değiştirmek");
+    });
+    expect(mockConfirm).toHaveBeenCalledTimes(1);
+    expect(mockConfirm.mock.calls[0][0]).toMatch(/çalışıyor olabilir/i);
+    expect(mockSira).toContain("estop");
+    expect(sonuc).toBe(true);
+  });
+
   it("KARŞIT: hiç çalışmamış donanımsız makinede (STM çevrimdışı) güvenlik onayı ve E-stop YOK — gürültü yok", async () => {
     await kur(dizi.slice(0, 1)); // yalnız ilk anlık görüntü: stm 'warning', hiçbir bobin hiç çalışmadı
     let sonuc: boolean | undefined;
