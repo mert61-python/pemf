@@ -684,6 +684,19 @@ def acilis_hatasini_kilitle(app_data_dir, exc: BaseException) -> None:
         _acilis_kilidi[anahtar] = type(exc).__name__
 
 
+def _ayni_db_yolu(a, b) -> bool:
+    """D1.57 (B-3.75): iki yol AYNI DB dosyası mı — yazımdan bağımsız (`kök/x/..`, 8.3 kısa ad, ayraç/harf farkı).
+    Dosyalar varsa `samefile` (gerçek kimlik), yoksa normalize mutlak yol."""
+    if a is None or b is None:
+        return False
+    try:
+        if os.path.exists(a) and os.path.exists(b):
+            return os.path.samefile(a, b)
+    except OSError:
+        pass
+    return _kilit_anahtari(a) == _kilit_anahtari(b)
+
+
 def get_treatment_db(app_data_dir):
     """Tedavi geçmişi veritabanı singleton instance'ını getir"""
     global _treatment_db_instance
@@ -691,11 +704,22 @@ def get_treatment_db(app_data_dir):
         requested_db_path = app_data_dir / "pemf_treatment_history.db"
         current_db_path = getattr(_treatment_db_instance, 'db_path', None)
 
-        if _treatment_db_instance is None or current_db_path != requested_db_path:
+        # ⚠️ D1.57 (B-3.75): karşılaştırma YAZIMDAN bağımsız. Eskiden ham `Path` eşitsizliğiydi: aynı dosyaya giden başka
+        # bir yazım YENİ örnek kuruyor, kurucunun açılış kurtarması (`recover_stale_active_sessions(max_age_hours=0)`)
+        # SÜREN seansı ve açık koşuları `ABORTED_DUE_TO_POWER` mühürlüyor, eski örneğin havuzu da açık kalıyordu.
+        if _treatment_db_instance is None or not _ayni_db_yolu(current_db_path, requested_db_path):
             kilit = _acilis_kilidi.get(_kilit_anahtari(requested_db_path))
             if kilit is not None:
                 raise RuntimeError(
                     f"Tedavi kaydi DB'si acilista ACILAMADI ({kilit}); bu oturumda yeniden denenmez — cihazi yeniden baslatin."
                 )
+            eski = _treatment_db_instance
             _treatment_db_instance = TreatmentHistoryDB(app_data_dir)
+            if eski is not None:
+                # Gerçekten BAŞKA bir DB'ye geçiş: eski örneğin bağlantı havuzu kapatılır (sızmasın). Eski örneği tutan
+                # bir iş parçacığı yeni kuşakta taze bağlantı açar (`close_connections` sözleşmesi).
+                try:
+                    eski.close()
+                except Exception:
+                    logging.getLogger(__name__).warning("eski tedavi DB ornegi kapatilamadi", exc_info=True)
     return _treatment_db_instance
