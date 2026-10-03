@@ -116,26 +116,37 @@ _aralik_lock = threading.Lock()
 _aralik: dict = {}
 
 
-def egitim_b_araligi_T(model: str | None = None) -> tuple[float, float] | None:
-    """İG-5.83 — vekil modelin `achieved_B` EĞİTİM aralığı (Tesla): modülün XAI referans örnekleminden (`xai_ref_stats`,
-    sütun 4) OKUNUR, sabit yazılmaz → model yeniden eğitilirse kendiliğinden güncellenir. Okunamazsa None."""
+def _egitim_sutun_araligi(model: str | None, sutun: int, ad: str) -> tuple[float, float] | None:
+    """Vekil modelin bir girdisinin EĞİTİM aralığı: modülün XAI referans örnekleminden (`xai_ref_stats`) OKUNUR, sabit
+    yazılmaz → model yeniden eğitilirse kendiliğinden güncellenir. Girdi sırası `x, y, z, organ_id, achieved_B, duty_sum`
+    (modül başlığı). Okunamazsa None."""
     _anahtar = "petri" if (model or "").strip().lower() == "petri" else "fantom"
     with _aralik_lock:
-        if _anahtar in _aralik:
-            return _aralik[_anahtar]
+        if (_anahtar, sutun) in _aralik:
+            return _aralik[(_anahtar, sutun)]
     try:
         if _anahtar == "petri":
             from ai_hub.inference_em_petri import inference_em_petri as _mod
         else:
             from ai_hub.inference_em_fantom import inference_em_fantom as _mod
         bg = _mod.xai_ref_stats()["background"]
-        deger = (float(bg[:, 4].min()), float(bg[:, 4].max()))
+        deger = (float(bg[:, sutun].min()), float(bg[:, sutun].max()))
     except Exception:
-        logger.warning("E-alanı: %s modelinin eğitim B aralığı okunamadı (E gösterilmez)", _anahtar, exc_info=True)
+        logger.warning("E-alanı: %s modelinin eğitim %s aralığı okunamadı", _anahtar, ad, exc_info=True)
         deger = None
     with _aralik_lock:
-        _aralik[_anahtar] = deger
+        _aralik[(_anahtar, sutun)] = deger
     return deger
+
+
+def egitim_b_araligi_T(model: str | None = None) -> tuple[float, float] | None:
+    """İG-5.83 — vekil modelin `achieved_B` EĞİTİM aralığı (Tesla; sütun 4). Okunamazsa None (E gösterilmez)."""
+    return _egitim_sutun_araligi(model, 4, "B")
+
+
+def egitim_duty_araligi(model: str | None = None) -> tuple[float, float] | None:
+    """Y51 (sahip) — vekil modelin `duty_sum` EĞİTİM aralığı (sütun 5; fantom ≈ 1,94–2,90). Okunamazsa None."""
+    return _egitim_sutun_araligi(model, 5, "duty_sum")
 
 
 def telemetry_inputs(coils: list[dict]) -> tuple[float | None, float, int]:
@@ -207,7 +218,7 @@ def compute(coils: list[dict]) -> dict | None:
     except Exception:
         logger.debug("canlı E hesabı başarısız", exc_info=True)
         return None
-    return {
+    sonuc = {
         "healthy": float(out.get("result_E_healthy") or 0.0),
         "cancer": float(out.get("result_E_cancer") or 0.0),
         "avg": float(out.get("result_E_avg") or 0.0),
@@ -216,6 +227,15 @@ def compute(coils: list[dict]) -> dict | None:
         "dutySum": duty_sum,
         "ts": time.time(),
     }
+    # Y51 (sahip): toplam duty modelin EĞİTİM aralığı DIŞINDAYSA E yine GÖSTERİLİR ama "eğitim aralığı dışı — güvenilmez"
+    # etiketi taşır (B kuralı — İG-5.83, E '—' — AYNEN kalır; bu yalnız gösterim etiketi, sürüş etkilenmez: araştırma hattı
+    # sürmez). Tipik seans (5 bobin × %30 = 1,5) fantom aralığının (≈1,94–2,90) dışındadır. Aralık okunamazsa etiket
+    # konmaz (bilinmiyor ≠ dışarıda; B okunamazsa zaten E hesaplanmaz).
+    _d_aralik = egitim_duty_araligi((ctx or {}).get("model"))
+    if _d_aralik is not None and not (_d_aralik[0] <= duty_sum <= _d_aralik[1]):
+        sonuc["dutyEgitimAraligiDisi"] = True
+        sonuc["dutyEgitimAraligi"] = [round(_d_aralik[0], 2), round(_d_aralik[1], 2)]
+    return sonuc
 
 
 _pred_lock = threading.Lock()

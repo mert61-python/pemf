@@ -1,0 +1,25 @@
+{
+ "disarida": {
+  "achievedB_T": 0.001,
+  "activeCoils": 5,
+  "avg": 0.038,
+  "cancer": 0.055,
+  "dutyEgitimAraligi": [
+   1.94,
+   2.9
+  ],
+  "dutyEgitimAraligiDisi": true,
+  "dutySum": 1.5,
+  "healthy": 0.021,
+  "ts": 0
+ },
+ "icerde": {
+  "achievedB_T": 0.001,
+  "activeCoils": 7,
+  "avg": 0.038,
+  "cancer": 0.055,
+  "dutySum": 2.38,
+  "healthy": 0.021,
+  "ts": 0
+ }
+}

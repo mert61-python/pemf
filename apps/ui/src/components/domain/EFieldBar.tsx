@@ -78,6 +78,13 @@ export function EFieldBar() {
       <Text style={styles.foot}>
         {e.activeCoils} bobin · B={bMetni} mT · Σduty={dutyMetni}
       </Text>
+      {/* Y51 (sahip): Σduty modelin eğitim aralığı dışında → değer GÖSTERİLİR, yanında güvenilmezlik etiketi. */}
+      {e.dutyEgitimAraligiDisi ? (
+        <Text style={styles.uyari} testID="efield-duty-araligi-disi" accessibilityRole="text">
+          ⚠️ Σduty eğitim aralığı dışı — güvenilmez
+          {e.dutyEgitimAraligi ? ` (model ${e.dutyEgitimAraligi[0].toFixed(2)}–${e.dutyEgitimAraligi[1].toFixed(2)} ile eğitildi)` : ""}
+        </Text>
+      ) : null}
       {neden ? <Text style={styles.foot}>{neden}</Text> : null}
       {e.activeCoils === 0 && (
         <Text style={styles.foot}>Bobinler durdu — alan üretilmiyor.</Text>
@@ -125,4 +132,5 @@ const styles = StyleSheet.create({
   fill: { height: "100%", borderRadius: rs(5) },
   value: { width: rs(66), textAlign: "right", fontSize: rf(12), fontWeight: "700" },
   foot: { color: colors.textMuted, fontSize: rf(11) },
+  uyari: { color: colors.warning, fontSize: rf(11), fontWeight: "700" },
 });

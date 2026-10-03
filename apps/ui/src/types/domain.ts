@@ -175,6 +175,12 @@ export interface EFieldLive {
   egitimAraligiDisi?: boolean;
   bOlculmuyor?: boolean;
   egitimAraligiBilinmiyor?: boolean;
+  /**
+   * Y51 (sahip): toplam duty vekil modelin eğitim aralığı DIŞINDA — E yine gösterilir, yanında "eğitim aralığı dışı —
+   * güvenilmez" etiketi. `dutyEgitimAraligi` = [alt, üst] (modelin referans örnekleminden). Eski backend göndermez.
+   */
+  dutyEgitimAraligiDisi?: boolean;
+  dutyEgitimAraligi?: [number, number];
   /** Hesap zamanı (epoch sn) — tazelik denetimi için */
   ts: number;
 }
