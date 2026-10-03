@@ -192,16 +192,22 @@ async def health_check(request: Request):
     # "sağlık yeşil ama seans 503" gibi teşhis edilemez bir tutarsızlık çıkardı. Bu alan olmadan
     # DB arızası ancak veteriner seans başlatmayı DENEYİNCE, yani hasta masadayken görülüyordu.
     # Sağlığın kendisini DÜŞÜRMEZ: backend ayakta ve acil durdurma yolu çalışıyor.
+    _hazir_sebep = ""
     try:
-        db_ready = bool(_api._kayit_db_hazir()[0])
+        _hazir, _hazir_sebep = _api._kayit_db_hazir()
+        db_ready = bool(_hazir)
     except Exception:
         db_ready = False
     # D1.37 (B-3.8): DB'siz (kısıtlı) açılışta NEDEN — ör. "Hasta veritabanı göç bekliyor …".
     # Yalnız açılış kaydından (yol/istisna ayrıntısı yok: bu uç auth-muaf ve tünelden erişilebilir).
+    # D1.77 (B-3.9): disk kritikse o nedenin KENDİSİ (sabit metin + MB; yol/istisna içermez — `is_ready`).
     db_sebep = None
     if not db_ready:
         try:
-            db_sebep = _api._db_acilis_hatasi() or "Tıbbi kayıt veritabanı hazır değil; yeni seans başlatılamaz."
+            _disk = str(_hazir_sebep or "") if str(_hazir_sebep or "").startswith("Disk boş alanı kritik") else ""
+            db_sebep = (
+                _api._db_acilis_hatasi() or _disk or "Tıbbi kayıt veritabanı hazır değil; yeni seans başlatılamaz."
+            )
         except Exception:
             db_sebep = "Tıbbi kayıt veritabanı hazır değil; yeni seans başlatılamaz."
     # ── DENETİM 2026-08-04 (P2 #13): LAUNCHER NONCE'U ────────────────────────────────────

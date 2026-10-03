@@ -508,10 +508,23 @@ class TreatmentHistoryDB(
         try:
             with self._get_connection() as conn:
                 conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
-            return True, ""
         except Exception as e:
             self.logger.error("Tibbi kayit DB'si HAZIR DEGIL: %s", e, exc_info=True)
             return False, str(e)[:200]
+        # ⚠️ D1.77 (B-3.9): YAZMA korkuluğu kritikse (`_ensure_write_guardrail` her yazımı reddeder) kayıt YAZILAMAZ →
+        # hazır DEĞİL. Eskiden yalnız SELECT denendiği için seans 200 dönüp bobinler SÜRÜLÜYOR, seans/doz/olay kaydı 0
+        # kalıyordu (kaydedilen ≠ uygulanan). Metin yol/istisna içermez (`/api/health` auth-muaf, tünelden erişilir).
+        try:
+            disk = self.get_disk_space_status()
+        except Exception:
+            self.logger.warning("Disk alani okunamadi (hazirlik engellenmedi)", exc_info=True)
+            return True, ""
+        if bool(disk.get("critical")):
+            return False, (
+                f"Disk boş alanı kritik ({disk.get('free_mb')} MB < {disk.get('threshold_mb')} MB) — tıbbi kayıt "
+                "yazılamaz; yeni seans başlatılamaz. Disk alanı açın."
+            )
+        return True, ""
 
     def _init_database(self):
         """Veritabanı tablolarını oluştur (HIGH FIX: WAL mode enabled).

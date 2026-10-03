@@ -3624,6 +3624,9 @@ async def start_session(payload: SessionStartPayload, request: Request):
         )
         if _acilis_sebebi:
             _detay += f" Neden: {_acilis_sebebi}"
+        elif str(_db_sebep or "").startswith("Disk boş alanı kritik"):
+            # D1.77 (B-3.9): disk doluyken "yeniden başlatın" YANLIŞ eylemdir — operatöre gerçek nedeni ve eylemi söyle.
+            _detay = f"Seans başlatılamaz: {_db_sebep}"
         raise HTTPException(status_code=503, detail=_detay)
 
     # Güncelleme uygulanıyorken YENİ seans başlatma: installer servisi durdurup EXE'yi

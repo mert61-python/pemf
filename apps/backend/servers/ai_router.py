@@ -2375,6 +2375,14 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
         raise
     except Exception:
         logger.debug("AI Pro STM red kontrolu yapilamadi (engellenmedi).", exc_info=True)
+    # ⚠️ D1.77 (B-3.9 · İG-5.12, orkestratör notu): "kayıtsız tedavi başlamaz" — elle seansla AYNI kapı
+    # (`_kayit_db_hazir`: DB açılamadı / disk kritik). Eskiden AI Pro "DB satırı açılamadı (tedavi sürer)" deyip
+    # otonom sürüşe başlıyordu. Onay TÜKETİLMEDEN (aşağıdaki kilitli bölgeden önce) → düzelince aynı onayla başlar.
+    import servers.api_server as _api_kayit
+
+    _kayit_ok, _kayit_sebep = _api_kayit._kayit_db_hazir()
+    if not _kayit_ok:
+        raise HTTPException(status_code=503, detail=f"AI Pro BAŞLATILMADI — {_kayit_sebep}")
 
     # ── ATOMİK: döngü denetimi + mandal/nesil + onay TÜKETİMİ + globaller, AYNI kilit altında ──
     # İki eşzamanlı start ikinci loop'u AÇMAZ ve kaybedenin onayı tüketilmez (D1.E06 (c)).
