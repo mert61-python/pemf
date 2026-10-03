@@ -904,6 +904,22 @@ def _iptal_seans_satirini_kapat(db_session_id) -> None:
         )
 
 
+def _ai_pro_plandan_cikar(bobinler) -> None:
+    """Y54 (sahip): AI Pro sürerken operatörün bobin-başı STOP'u o bobini seans sonuna dek AI Pro PLANINDAN çıkarır ve
+    ekranda söylenir. STOP gönderiminden ÖNCE çağrılır; STOP'u kapılamaz, geciktirmez (Ö.4-Y8); istisna atmaz."""
+    try:
+        from servers import ai_router as _air
+
+        for b in _air.ai_pro_bobinlerini_plandan_cikar(bobinler):
+            _push_notification(
+                f"Bobin {b} AI Pro planından çıkarıldı — operatör durdurdu; seans sonuna kadar AI Pro bu bobini sürmez, "
+                "diğer bobinler sürüyor.",
+                "warning",
+            )
+    except Exception:
+        logging.getLogger(__name__).exception("Y54: AI Pro plan disi kaydi yapilamadi (STOP suruyor)")
+
+
 def _ucustaki_baslatmayi_gecersiz_kil(bobinler) -> bool:
     """Bobin-başı STOP UÇUŞTAKİ seans başlatmasını iptal ettirir. STOP gönderiminden ÖNCE çağrılır; istisna atmaz.
 
@@ -2973,6 +2989,7 @@ async def hardware_command(payload: CommandPayload):
 
         elif cmd == "stop_coil":
             coil_id = p.get("coil_id", 1)
+            _ai_pro_plandan_cikar([coil_id])  # Y54 (STOP'tan ÖNCE; istisna atmaz)
             _ucustaki_baslatmayi_gecersiz_kil([coil_id])  # 1-C inceleme i1-F5 (STOP'tan ÖNCE; istisna atmaz)
             success = state.hardware.update_coil(coil_id, 0, 0, 0, 0, start=False)
             return {"status": "success" if success else "error", "command": cmd, "coil_id": coil_id}
@@ -3083,6 +3100,7 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     if _sifir_hz:
         payload.start = False
     if not payload.start:  # 1-C inceleme i1-F5: bobin STOP'u uçuştaki seans başlatmasını iptal ettirir (STOP'tan ÖNCE)
+        _ai_pro_plandan_cikar([coil_id])  # Y54: AI Pro bu bobini sonraki karede yeniden sürmesin
         _ucustaki_baslatmayi_gecersiz_kil([coil_id])
     # D1.81 · Y4: acil durdurma MANDALLIYKEN ya da isteğin VARIŞINDAN sonra durdurma geldiyse START 409 + neden.
     # Asıl kapı donanım düzeyindedir (`HardwareController`, `_esp_start_yayinla` — varış damgasıyla, kilit altında);
@@ -3267,6 +3285,7 @@ async def control_batch_coils(payload: BatchCoilPayload):
     if _sifir_hz:
         payload.start = False
     if not payload.start:  # 1-C inceleme i1-F5 — tekil uçla aynı
+        _ai_pro_plandan_cikar(payload.coil_ids)  # Y54 — tekil uçla aynı
         _ucustaki_baslatmayi_gecersiz_kil(payload.coil_ids)
     if payload.start:  # D1.81 · Y4 — gerekçe tekil uçta (varış damgası); STOP asla takılmaz
         _engel = estop_mandali.baslatma_engeli(estop_mandali.niyet_nesli())

@@ -72,7 +72,8 @@ const DUSUK_GUVEN = 0.5;
 
 // D1.84 (B-5.2 · Y25): `suruldu` — bobin telde GERÇEKTEN sürüldü mü (backend `update_coil` kabulü). Opsiyonel: eski backend
 // göndermez → eski gösterim (sürüm kayması). `false` → "sürülmedi" (plan değeri parantezde).
-type Coil = { id: number; freq: number; duty: number; phase: number; suruldu?: boolean };
+// Y54 (sahip): `planDisi` — operatör bu bobini AI Pro sürerken durdurdu; seans sonuna dek AI Pro onu SÜRMEZ.
+type Coil = { id: number; freq: number; duty: number; phase: number; suruldu?: boolean; planDisi?: boolean };
 type FrameResult = {
   image_base64?: string;
   /** [S7 adım 4] Kodlanan karenin gerçek boyutu (oran kilidi). Eski backend göndermez. */
@@ -1266,6 +1267,15 @@ export function AiProPanel({
 
       {/* Per-coil diagnostik tablo (7 bobin; bobin 8 kapalı) */}
       <Text style={styles.label}>📊 Bobin Diagnostiği</Text>
+      {/* Y54 (sahip): operatörün durdurduğu bobin otomasyona yenilmez — neden AÇIKÇA yazılır ("sürülmedi" yetmez). */}
+      {perCoil.some((c) => c.planDisi) ? (
+        <Text style={styles.note} testID="ai-pro-plan-disi">
+          {perCoil
+            .filter((c) => c.planDisi)
+            .map((c) => `Bobin ${c.id} AI Pro planından çıkarıldı`)
+            .join(" · ")}
+        </Text>
+      ) : null}
       <View style={styles.table}>
         <View style={styles.tr}>
           <Text style={[styles.th, { flex: 1 }]}>Bobin</Text>
@@ -1278,7 +1288,13 @@ export function AiProPanel({
             <Text style={[styles.td, { flex: 1 }]}>{c.id}</Text>
             <Text style={[styles.td, { flex: 1 }]}>{c.freq} Hz</Text>
             <Text style={[styles.td, { flex: 1 }]}>
-              {c.suruldu === false ? (c.duty > 0 ? `sürülmedi (plan ${c.duty}%)` : "sürülmedi") : `${c.duty}%`}
+              {c.planDisi
+                ? "plandan çıkarıldı"
+                : c.suruldu === false
+                  ? c.duty > 0
+                    ? `sürülmedi (plan ${c.duty}%)`
+                    : "sürülmedi"
+                  : `${c.duty}%`}
             </Text>
             <Text style={[styles.td, { flex: 1 }]}>{c.phase}°</Text>
           </View>

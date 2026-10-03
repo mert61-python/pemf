@@ -1324,6 +1324,61 @@ def _ai_pro_bobinleri() -> list:
     return [c for c in range(1, 8) if c in STM_COIL_IDS]
 
 
+# ── Y54 (sahip, İNCELEME-2 i1-F-2): operatörün tekil STOP'u o bobini AI Pro PLANINDAN çıkarır ─────────────────────────
+# Ölçüldü: AI Pro sürerken `/api/coil/{id}/control start:false` bir sonraki karede (≤ 1 sn) geri alınıyordu — bobin yeniden
+# enerjileniyordu. Operatörün durdurma isteği otomasyona YENİLMEZ: bobin o AI Pro seansının (hekim onay kimliği) SONUNA KADAR
+# sürülmez; diğer bobinler sürer. STOP'un kendisi kapılanmaz (Ö.4-Y8) — bu küme yalnız otomasyonun yeniden START'ını keser.
+# Yeni AI Pro seansı (yeni onay) temiz başlar.
+_ai_pro_plan_disi: dict = {"onay": None, "bobinler": set()}
+_ai_pro_plan_disi_kilit = _ai_threading.Lock()
+
+
+def _ai_pro_seans_onayi():
+    """Etkin AI Pro seansının onay kimliği (yoksa None) — plan-dışı kümesinin anahtarı."""
+    try:
+        import servers.api_server as _api
+
+        with _api._session_lock:
+            s = dict(_api._active_session)
+    except Exception:
+        return None
+    if s.get("is_active") and s.get("tur") == "ai_pro" and s.get("onay_kimligi"):
+        return s["onay_kimligi"]
+    return None
+
+
+def ai_pro_bobinlerini_plandan_cikar(bobinler) -> list:
+    """Y54: operatör bu bobinleri durdurdu — etkin AI Pro seansı varsa planından ÇIKAR. @return yeni çıkarılanlar.
+    STOP gönderiminden ÖNCE çağrılır (sonraki kare çıkarılmış bobini görür); istisna atmaz."""
+    onay = _ai_pro_seans_onayi()
+    if onay is None:
+        return []
+    plan = set(_ai_pro_bobinleri())
+    yeni = []
+    with _ai_pro_plan_disi_kilit:
+        if _ai_pro_plan_disi["onay"] != onay:
+            _ai_pro_plan_disi["onay"] = onay
+            _ai_pro_plan_disi["bobinler"] = set()
+        for b in bobinler:
+            try:
+                b = int(b)
+            except (TypeError, ValueError):
+                continue
+            if b in plan and b not in _ai_pro_plan_disi["bobinler"]:
+                _ai_pro_plan_disi["bobinler"].add(b)
+                yeni.append(b)
+    return yeni
+
+
+def _ai_pro_plan_disi_bobinler(onay=None) -> set:
+    """Y54: ETKİN AI Pro seansının plan dışı bobinleri (başka / bitmiş seansınki sayılmaz)."""
+    onay = _ai_pro_seans_onayi() if onay is None else onay
+    with _ai_pro_plan_disi_kilit:
+        if onay is None or _ai_pro_plan_disi["onay"] != onay:
+            return set()
+        return set(_ai_pro_plan_disi["bobinler"])
+
+
 def _drive_coils_ai_pro(D, P) -> list:
     """
     em_kedi çıktısı D[7]/P[7] ile bobin 1-7'yi PER-COIL sürer (paylaşımlı tek faz YOK) → GERÇEKTEN sürülen bobinler.
@@ -1352,7 +1407,10 @@ def _drive_coils_ai_pro(D, P) -> list:
     surulen: list = []
     if not (state and state.hardware):
         return surulen
+    _plan_disi = _ai_pro_plan_disi_bobinler(_muhur["onay"])  # Y54: operatörün durdurduğu bobin SÜRÜLMEZ
     for cid in _ai_pro_bobinleri():
+        if cid in _plan_disi:
+            continue
         idx = cid - 1
         duty_pct = normalize_ai_pro_duty_ratio(D[idx]) * 100.0  # ratio→% (eski 0.50 cap)
         phase_i = normalize_phase_deg(P[idx])
@@ -1406,8 +1464,21 @@ def _build_ai_pro_percoil(D, P, surulen=(), teldeki=None):
     enerjili bobin "sürülmedi" gösterilmez (`_teldeki_ai_pro_bobinleri`; yalnız AI Pro seansı varken verilir)."""
     _s = set(surulen or ())
     _t = teldeki or {}
+    _disi = _ai_pro_plan_disi_bobinler()  # Y54: panel "Bobin X AI Pro planından çıkarıldı" der
     out = []
     for idx in range(7):
+        if (idx + 1) in _disi:
+            out.append(
+                {
+                    "id": idx + 1,
+                    "freq": 0.0,
+                    "duty": 0.0,
+                    "phase": 0.0,
+                    "suruldu": False,
+                    "planDisi": True,
+                }
+            )
+            continue
         if (idx + 1) not in _s and (idx + 1) in _t:
             _f, _d, _ph = _t[idx + 1]
             out.append(
