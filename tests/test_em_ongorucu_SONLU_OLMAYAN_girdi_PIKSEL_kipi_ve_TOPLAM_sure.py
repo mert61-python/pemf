@@ -436,6 +436,11 @@ def test_KARSIT_IG529_hizli_servis_SONUC_doner_ve_422_GOVDESI_korunur(damla_sunu
     assert not asili and kutu.get("sonuc") == {"tamam": 1}, f"{cagri}: hızlı servis sonucu dönmedi: {kutu}"
     # Zamanlayıcı İPTAL edilmeli: edilmezse her çağrı T sn (varsayılan 180) yaşayan bir iş parçacığı bırakır — AI Pro
     # döngüsünde ~1 Hz çağrıyla yüzlerce uyuyan iş parçacığı birikir.
+    # İNCELEME-2 i4-F-2: `cancel()` yalnız olayı kurar; zamanlayıcı iş parçacığı birkaç ms SONRA çıkar — ölçüldü: 300 hızlı
+    # çağrının 8'inde dönüşten HEMEN sonra canlıydı (tam süitte yalancı kırmızı), 0,2 sn sonra 0. Kısa bekleme kolu
+    # körleştirmez: İPTAL EDİLMEYEN zamanlayıcı T = 1 sn yaşar (yukarıda `_TIMEOUT` 1,0), 0,2 sn sonra hâlâ canlıdır.
+    for _t in [t for t in threading.enumerate() if isinstance(t, threading.Timer)]:
+        _t.join(0.2)
     _canli = [t for t in threading.enumerate() if isinstance(t, threading.Timer) and t.is_alive()]
     assert not _canli, f"{cagri}: başarılı çağrıdan sonra toplam-süre zamanlayıcısı hâlâ canlı: {_canli}"
     # Zamanlayıcı iptal edilmezse T sonra istemciyi kapatır; sonraki çağrının etkilenmediğini de göster.
