@@ -142,12 +142,21 @@ class AiGecmisiKarisimi:
             self.logger.exception("AI analiz kaydı silinemedi (id=%s).", analysis_id)
             return False
 
-    def clear_ai_analyses(self, operator_email: Optional[str] = None) -> int:
-        """AI analiz geçmişini TOPLU siler; silinen kayıt sayısını döner.
+    #: D1.58: ertelenmiş KVKK VACUUM'u — `system_settings`te KALICI (yeniden başlatmada kaybolmaz).
+    VACUUM_BEKLIYOR_ANAHTARI = "kvkk_vacuum_bekliyor"
+
+    def clear_ai_analyses(self, operator_email: Optional[str] = None, vacuum_ertele: bool = False) -> int:
+        """AI analiz geçmişini TOPLU siler; silinen kayıt sayısını döner (DELETE hatasında -1).
 
         ⚠️ VACUUM ŞART: `DELETE` satırları yalnız serbest listeye bırakır — hasta adı ve analiz
         özeti dosyada OKUNABİLİR kalır. `clear_all_patients` ile aynı kural (audit P3).
         VACUUM tüm dosyayı yeniden yazdığı için silinen kişisel veri gerçekten gider.
+
+        ⚠️ D1.58 (B-3.88): `vacuum_ertele=True` (AKTİF SEANS sürüyor) → VACUUM ŞİMDİ YAPILMAZ, kalıcı olarak "bekliyor"
+        işaretlenir; seans bitince / bakımda `bekleyen_vacuum_calistir` koşar. VACUUM tüm DB'yi yeniden yazıp yazım kilidi
+        tutar (2–2,6 sn ölçülmüş) → tedavi sırasında sensör/koşu (DOZ) yazımları düşebiliyordu.
+        ⚠️ B-3.87 (aynı işlev — plan "uyandırır"): DELETE commit'lendikten SONRA VACUUM düşerse -1 DÖNÜLMEZ (kayıtlar
+        gitti; "temizlenemedi" demek yanlış ve yeniden deneme 0 siler) → VACUUM aynı erteleme yoluna alınır.
         """
         try:
             with self._get_connection() as conn:
@@ -170,11 +179,45 @@ class AiGecmisiKarisimi:
                     n = int(cursor.fetchone()[0] or 0)
                     cursor.execute("DELETE FROM ai_analyses")
                 conn.commit()
-                cursor.execute("VACUUM")
-                return n
         except Exception:
             self.logger.exception("AI analiz geçmişi temizlenemedi.")
             return -1
+        if vacuum_ertele:
+            self._vacuum_beklet("aktif seans — tedavi kaydını kilitlememek için")
+            return n
+        try:
+            with self._get_connection() as conn:
+                conn.cursor().execute("VACUUM")
+        except Exception:
+            self.logger.warning("KVKK VACUUM'u şimdi yapılamadı → ERTELENDİ (kayıtlar silindi)", exc_info=True)
+            self._vacuum_beklet("VACUUM hatası")
+        return n
+
+    def _vacuum_beklet(self, neden: str) -> None:
+        try:
+            self._set_system_setting(self.VACUUM_BEKLIYOR_ANAHTARI, "1", f"KVKK VACUUM ertelendi: {neden}")
+        except Exception:
+            self.logger.error("KVKK VACUUM bekleme isareti YAZILAMADI (%s)", neden, exc_info=True)
+
+    def vacuum_bekliyor_mu(self) -> bool:
+        try:
+            return self._get_system_setting(self.VACUUM_BEKLIYOR_ANAHTARI) == "1"
+        except Exception:
+            return False
+
+    def bekleyen_vacuum_calistir(self) -> bool:
+        """D1.58: ertelenmiş KVKK VACUUM'u koş (ÇAĞIRAN seans olmadığını denetler). @return koştu mu."""
+        if not self.vacuum_bekliyor_mu():
+            return False
+        try:
+            with self._get_connection() as conn:
+                conn.cursor().execute("VACUUM")
+        except Exception:
+            self.logger.warning("Ertelenmis KVKK VACUUM'u yine yapilamadi (bekliyor)", exc_info=True)
+            return False
+        self._set_system_setting(self.VACUUM_BEKLIYOR_ANAHTARI, "0", "KVKK VACUUM tamamlandi")
+        self.logger.info("Ertelenmis KVKK VACUUM'u tamamlandi.")
+        return True
 
     def ai_analiz_kimliklerini_doldur(self, ad_kimlik: dict) -> dict:
         """ESKİ AI analizlerine hasta KİMLİĞİ yazar (tek seferlik taşıma, idempotent).

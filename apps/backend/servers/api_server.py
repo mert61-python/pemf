@@ -4557,7 +4557,29 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
         logging.info("Seans DB'de kapatildi (%s): db_id=%s, %d sensor satiri", reason, db_session_id, flushed)
     except Exception:
         logging.exception("finalize: kalici kayit hatasi")
+    _bekleyen_vacuumu_arka_planda()  # D1.58: ertelenmiş KVKK VACUUM'u (seans bitti)
     return flushed
+
+
+def _bekleyen_vacuumu_arka_planda() -> None:
+    """D1.58 (B-3.88): seans bittiğinde ertelenmiş KVKK VACUUM'u AYRI iş parçacığında koş (durdurma yanıtını bekletmez);
+    o arada yeni seans başladıysa YAPILMAZ (bir sonraki seans sonunda / bakımda)."""
+
+    def _kos():
+        try:
+            with _session_lock:
+                if _active_session.get("is_active"):
+                    return
+            db = _get_treatment_db()
+            if db is not None and hasattr(db, "bekleyen_vacuum_calistir"):
+                db.bekleyen_vacuum_calistir()
+        except Exception:
+            logging.getLogger(__name__).warning("Ertelenmis KVKK VACUUM'u calistirilamadi", exc_info=True)
+
+    try:
+        threading.Thread(target=_kos, name="kvkk-vacuum", daemon=True).start()
+    except Exception:
+        logging.getLogger(__name__).warning("KVKK VACUUM is parcacigi acilamadi (bakimda denenecek)")
 
 
 def kapanis_seansi_pasife_al() -> dict | None:
@@ -5037,6 +5059,12 @@ def _daily_maintenance_loop():
                         _sess_active = bool(_active_session.get("is_active"))
                 except Exception:
                     _sess_active = True  # emin degilsek VACUUM YAPMA (fail-safe)
+                # D1.58 (B-3.88): ertelenmiş KVKK VACUUM'u (AI geçmişi silindiğinde seans sürüyordu) — seans yokken HER tur.
+                if not _sess_active and hasattr(db, "bekleyen_vacuum_calistir"):
+                    try:
+                        db.bekleyen_vacuum_calistir()
+                    except Exception:
+                        log.warning("Ertelenmis KVKK VACUUM'u (bakim) hatasi", exc_info=True)
                 if run_count > 0 and run_count % 7 == 0 and not _sess_active:
                     try:
                         if hasattr(db, "run_maintenance"):
@@ -5206,6 +5234,7 @@ async def stop_session():
                 return _flushed
 
             flushed = await asyncio.to_thread(_persist_session_stop)
+            _bekleyen_vacuumu_arka_planda()  # D1.58: ertelenmiş KVKK VACUUM'u (seans bitti)
             # Bu seansin DB satiri kapandi → notes endpoint cift-kayit yapmasin.
             # YARIS FIX: kilit birakilip yeniden alindi; ARADA yeni bir seans BASLAMIS olabilir
             # (_active_session yeni dict ile degismis). db_finalized'i YENI seansa damgalama →
@@ -5673,7 +5702,12 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
             detail="Silme kapsamı belirsiz. Kendi kayıtlarınız için operatör seçin; kliniğin "
             "tamamını silmek için isteğe {\"all_operators\": true} ekleyin.",
         )
-    n = await asyncio.to_thread(db.clear_ai_analyses, op)
+    # ⚠️ D1.58 (B-3.88): AKTİF SEANS sürüyorsa tüm-DB VACUUM ERTELENİR (yazım kilidi tedavi kaydını düşürebilir);
+    # silme hemen yapılır, VACUUM seans bitince / bakımda (`_bekleyen_vacuumu_arka_planda`).
+    with _session_lock:
+        _seans_suruyor = bool(_active_session.get("is_active"))
+    n = await asyncio.to_thread(db.clear_ai_analyses, op, _seans_suruyor)
+    _vacuum_bekliyor = bool(getattr(db, "vacuum_bekliyor_mu", lambda: False)())
     from servers import audit_log as _iz
 
     if n < 0:
@@ -5688,7 +5722,10 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
         raise HTTPException(status_code=500, detail="Geçmiş temizlenemedi")
     # KVKK "sildim" kanıtı: kapsam + sayı loglanır (kayıt İÇERİĞİ loglanmaz).
     logging.getLogger(__name__).warning(
-        "KVKK: AI analiz geçmişi TOPLU silindi (kapsam=%s, %d kayıt, VACUUM uygulandı).", op or "TÜM KLİNİK", n
+        "KVKK: AI analiz geçmişi TOPLU silindi (kapsam=%s, %d kayıt, VACUUM %s).",
+        op or "TÜM KLİNİK",
+        n,
+        "ERTELENDİ (seans sonu/bakım)" if _vacuum_bekliyor else "uygulandı",
     )
     # ⚠️ Denetim izi SİLİNMEZ (ekleme-only mühür): "hepsini sil" bu satırı da silseydi, silmenin
     # olduğunu gösteren tek kanıt kaybolurdu.
@@ -5698,9 +5735,9 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
         beyan=payload.operator_email or "",
         scope=(op or "TUM_KLINIK"),
         item_count=n,
-        detail={"all_operators": bool(payload.all_operators), "vacuum": True},
+        detail={"all_operators": bool(payload.all_operators), "vacuum": not _vacuum_bekliyor},
     )
-    return {"status": "success", "deleted": n}
+    return {"status": "success", "deleted": n, "vacuumErtelendi": _vacuum_bekliyor}
 
 
 # ─────────────────── CİHAZ TAŞIMA: şifreli dışa/içe aktarma (2026-08-08) ───────────────────
