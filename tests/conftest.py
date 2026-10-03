@@ -196,8 +196,10 @@ def _estop_mandali_sizmaz():
     except ImportError:
         yield
         return
+    estop_mandali.kalicilik_kapat()  # Y46: bir testin bağladığı mandal dosyası sonrakine sızmasın
     estop_mandali.sifirla("pytest-izolasyon")
     yield
+    estop_mandali.kalicilik_kapat()
     estop_mandali.sifirla("pytest-izolasyon")
 
 

@@ -473,6 +473,14 @@ def _wire_api_server(core: HeadlessCore):
 
     api_server.state.core = core
     api_server.state.hardware = HardwareController(core)
+    # ⚠️ Y46 (sahip): ACİL DURDUR mandalı diskten — yeniden başlatmada "Sıfırla"ya basılana kadar kurulu kalır. API
+    # START kabul etmeden ÖNCE yüklenir. Hata açılışı düşürmez (mandal bellekte; dosya okunamazsa KURULU sayılır).
+    try:
+        from utils import estop_mandali
+
+        estop_mandali.kalicilik_kur(Path(core.app_data_dir) / "estop_mandali.json")
+    except Exception:
+        logging.getLogger(__name__).exception("ACIL DURDUR mandal kaliciligi kurulamadi")
     api_server._register_event_bus_handlers()
     return api_server
 

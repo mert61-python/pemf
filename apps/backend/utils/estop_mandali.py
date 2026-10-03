@@ -10,10 +10,9 @@ hiçbir START kabul edilmez." Kapsam: elle başlatma, AI (Auto), AI Pro `/frame`
   * MANDAL — her acil durdurma (`api_server._emergency_stop_all`, bütün kaynakları: düğme, STM kopması, STM reddi,
     STM watchdog'u, ESP alarmı) kurar; YALNIZ `sifirla()` (operatörün `POST /api/hardware/estop_mandali/sifirla`
     eylemi) kaldırır. Mandal kuruluyken her START reddedilir.
-    ⚠️ 1-C inceleme i3-F-7 (ölçüldü): STM kopması / reddi / watchdog'u `_emergency_stop_all`'a YALNIZ AKTİF STM
-    SEANSINDA gider. Seanssız kopma / watchdog mandal KURMAZ: HC durumu sıfırlanır ve nesil artar (uçuştaki eski
-    niyetler yine reddedilir), ama yeni START Sıfırla'sız kabul edilir. Sahip sorusu: Y4'ün "E-stop" kapsamına seanssız
-    STM kopması / firmware watchdog'u girer mi? (Evet ise bu dallar da `mandalla` çağırmalı — STOP'tan önce, kapısız.)
+    ⚠️ Y45 (sahip, 1-C inceleme i3-F-7'nin cevabı): STM kopması / firmware watchdog'u anında HERHANGİ bir bobin
+    çalışıyorsa — seans olsun olmasın — mandal KURULUR (STOP'tan ÖNCE, kapısız; `api_server._y45_mandal_kur`). Aktif STM
+    seansında kurulum `_emergency_stop_all`'dan gelir. Boştayken kartın çıkıp takılması mandal KURMAZ.
   * SÜRÜŞ NESLİ — her durdurma (acil durdurma, `stop_all_coils`, seans / AI Pro durdurma, STM kopması) ve mandal
     kuruluyken yapılan Sıfırla nesli bir artırır. Bir START niyeti nesli NİYET ANINDA alır (istek girişi ya da seans
     mührü); sürüş anında nesil değişmişse START REDDEDİLİR. Böylece tahmin/lokalizasyon sırasında (0,3–2,2 sn) gelen
@@ -35,16 +34,28 @@ NİYET BAĞLAMI (`surus_baglami`): sürüş çağrıları imza değiştirmeden n
 `surus_baglami` (seans mührü: `/frame`, AI Pro döngüsü) onu geçersiz kılar. Bağlam yoksa (istek dışı iş parçacığı)
 yalnız mandal denetlenir.
 
-BELLEKTE tutulur: süreç yeniden başlarsa mandal kalkar. Yeniden başlatma uçuştaki her niyeti ve döngüyü zaten
-öldürür; çekirdek bütün bobinleri durmuş başlatır, firmware ölü-adam devresi de keser.
+KALICILIK (sahip kararı Y46, 1-C §9 S2): mandal DİSKE yazılır; çökme, launcher/servis yeniden başlatması ya da güncelleme
+sonrasında "Sıfırla"ya basılana kadar kurulu kalır. Eskiden yalnız bellekteydi: süreç yeniden başlayınca mandal
+Sıfırla'sız kalkıyordu. Kurallar:
+  * Dosya STOP'lar gönderildikten SONRA, ARKA PLANDA yazılır (`diske_yaz_arka_planda`); yazma başarısız olursa yalnız
+    günlüğe yazılır — ACİL DURDUR'u ASLA geciktirmez ya da engellemez (Ö.4-Y8). Yazıcı, YAZIM ANINDAKİ durumu yazar
+    (kuyrukta gecikmiş bir "kurulu" yazımı, arkadan gelen Sıfırla'yı ezemez).
+  * Açılışta (`kalicilik_kur`) dosya kuruluysa mandal KURULU başlar; neden "önceki oturumda ACİL DURDUR — sıfırlanmadı".
+  * Dosya VAR ama okunamıyor/bozuksa mandal KURULU başlar (güvenli taraf: yanlış mandalın bedeli bir Sıfırla). Dosya
+    YOKSA mandal yok (ilk kurulum / hiç E-stop olmamış).
+  * Kalıcılık kurulmadıysa (testler, araçlar) davranış eskisi gibi bellekte.
 """
 
 from __future__ import annotations
 
 import contextlib
 import contextvars
+import json
+import logging
+import os
 import threading
 import time
+from pathlib import Path
 
 MANDAL_MESAJI = (
     "ACİL DURDURMA MANDALLI — yeni başlatma reddedildi. Bobinleri kontrol edin, ekrandaki 'Sıfırla' ile "
@@ -55,7 +66,7 @@ NESIL_MESAJI = "Komut bir durdurma ya da acil durdurmadan ÖNCEYE ait (bayat sü
 KAYIP_MESAJI = "Hedef gözlemi bir hedef-kaybı durdurmasından ÖNCEYE ait (bayat gözlem) — sürülmedi."
 
 _kilit = threading.Lock()
-_durum = {"aktif": False, "neden": "", "zaman": 0.0, "sifirlama_zamani": 0.0, "sifirlayan": ""}
+_durum = {"aktif": False, "neden": "", "zaman": 0.0, "sifirlama_zamani": 0.0, "sifirlayan": "", "onceki_oturum": False}
 _nesil = 0
 _baglam: contextvars.ContextVar = contextvars.ContextVar("pemf_surus_nesli", default=None)
 # 1-C inceleme i7-F-1: HEDEF-KAYBI nesli (AI Pro) — sürüş neslinden AYRI (bkz. `kayip_nesli_artir`).
@@ -81,6 +92,7 @@ def mandalla(neden: str = "") -> int:
         _durum["aktif"] = True
         _durum["neden"] = str(neden or "")[:80]
         _durum["zaman"] = time.time()
+        _durum["onceki_oturum"] = False
         _nesil += 1
         return _nesil
 
@@ -105,6 +117,7 @@ def sifirla(kaynak: str = "") -> bool:
     with _kilit:
         onceki = bool(_durum["aktif"])
         _durum["aktif"] = False
+        _durum["onceki_oturum"] = False
         if onceki:
             _durum["sifirlama_zamani"] = time.time()
             _durum["sifirlayan"] = str(kaynak or "")[:80]
@@ -121,7 +134,95 @@ def durum() -> dict:
             "zaman": _durum["zaman"],
             "sifirlamaZamani": _durum["sifirlama_zamani"],
             "nesil": _nesil,
+            # Y46: mandal önceki süreçten (diskten) geldi — arayüz "önceki oturumda ACİL DURDUR — sıfırlanmadı" der.
+            "oncekiOturum": bool(_durum["onceki_oturum"]),
         }
+
+
+# ── KALICILIK (Y46) ─────────────────────────────────────────────────────────────────────────────────────────────────
+_log = logging.getLogger(__name__)
+_kalici_yol: Path | None = None
+_yazim_kilidi = threading.Lock()
+ONCEKI_OTURUM_NEDENI = "onceki_oturum"
+
+
+def kalicilik_kur(yol) -> dict:
+    """Açılışta BİR KEZ: mandal dosyasının yolunu bağla ve diskteki mandalı yükle. @return `durum()`.
+
+    Dosya kuruluysa ya da okunamıyorsa mandal KURULU başlar (bkz. modül başlığı); yoksa dokunulmaz."""
+    global _kalici_yol, _nesil
+    yol = Path(yol)
+    _kalici_yol = yol
+    kurulu, onceki_neden = False, ""
+    if yol.exists():
+        try:
+            veri = json.loads(yol.read_text(encoding="utf-8"))
+            kurulu = bool(veri.get("aktif"))
+            onceki_neden = str(veri.get("neden") or "")
+            if onceki_neden.startswith(ONCEKI_OTURUM_NEDENI + ":"):  # birden çok yeniden başlatma: iç neden korunur
+                onceki_neden = onceki_neden.split(":", 1)[1]
+            onceki_neden = onceki_neden[:60]
+        except Exception:
+            _log.error(
+                "ACIL DURDUR mandal dosyasi okunamadi (%s) -> mandal KURULU kabul edildi (guvenli taraf)",
+                yol,
+                exc_info=True,
+            )
+            kurulu, onceki_neden = True, "dosya_okunamadi"
+    if kurulu:
+        with _kilit:
+            _durum["aktif"] = True
+            _durum["neden"] = f"{ONCEKI_OTURUM_NEDENI}:{onceki_neden}"[:80]
+            _durum["zaman"] = time.time()
+            _durum["onceki_oturum"] = True
+            _nesil += 1
+        _log.warning("ACIL DURDUR mandali onceki oturumdan KURULU (sifirlanmadi): %s", onceki_neden)
+    return durum()
+
+
+def kalicilik_kapat() -> None:
+    """Kalıcılığı çöz (testler arası yalıtım). Bellekteki durum değişmez."""
+    global _kalici_yol
+    _kalici_yol = None
+
+
+def _diske_yaz() -> bool:
+    """Güncel durumu (YAZIM ANINDA okunur) atomik yaz: geçici dosya + `os.replace`. Asla fırlatmaz."""
+    yol = _kalici_yol
+    if yol is None:
+        return False
+    try:
+        with _yazim_kilidi:
+            with _kilit:
+                veri = {
+                    "aktif": bool(_durum["aktif"]),
+                    "neden": _durum["neden"],
+                    "zaman": _durum["zaman"],
+                    "nesil": _nesil,
+                }
+            yol.parent.mkdir(parents=True, exist_ok=True)
+            gecici = yol.with_name(yol.name + ".tmp")
+            gecici.write_text(json.dumps(veri, ensure_ascii=False), encoding="utf-8")
+            os.replace(gecici, yol)
+        return True
+    except Exception:
+        _log.error(
+            "ACIL DURDUR mandali diske YAZILAMADI (%s) — mandal bellekte kurulu; durdurma etkilenmedi",
+            yol,
+            exc_info=True,
+        )
+        return False
+
+
+def diske_yaz_arka_planda() -> None:
+    """STOP'lar gönderildikten SONRA çağrılır: yazım ayrı bir iş parçacığında — ACİL DURDUR'u ve yanıtını bekletmez.
+    İş parçacığı açılamazsa satır içi denenir (yine fırlatmaz)."""
+    if _kalici_yol is None:
+        return
+    try:
+        threading.Thread(target=_diske_yaz, name="estop-mandal-disk", daemon=True).start()
+    except Exception:
+        _diske_yaz()
 
 
 def baslatma_engeli(niyet_nesli=None) -> str:

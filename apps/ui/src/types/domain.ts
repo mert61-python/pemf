@@ -210,6 +210,8 @@ export interface EstopMandali {
   zaman?: number;
   sifirlamaZamani?: number;
   nesil?: number;
+  /** Y46: mandal önceki süreçten (diskten) yüklendi — "Sıfırla"ya basılmadan yeniden başlatıldı. */
+  oncekiOturum?: boolean;
 }
 
 // ─── WebSocket live data ──────────────────────────────────────────────────────

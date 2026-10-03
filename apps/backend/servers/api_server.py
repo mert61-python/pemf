@@ -1460,6 +1460,54 @@ def _stm_cevrimici_iyilestir() -> None:
             update_live_stm_status(True)
 
 
+def _herhangi_bobin_calisiyor() -> bool:
+    """Y45: kopma / watchdog ANINDA herhangi bir bobin çalışıyor mu (seans olsun olmasın, elle başlatılmış dahil)?
+
+    Ölçüt: HardwareController'ın KOMUT durumu (STM bobinleri; ACK gelmeden önce de "sürülüyor") VEYA canlı durum (ACK /
+    telemetri; ESP slotu dahil). Durum SIFIRLANMADAN önce okunmalı (`on_disconnect` / `stop_all_coils` / kopuşun canlı
+    durumu `running:false` yapması). ⚠️ Okunamazsa ÇALIŞIYOR sayılır (fail-safe: yanlış mandal yalnız bir Sıfırla
+    maliyeti; kaçan mandal Y4'ü deler)."""
+    try:
+        _hc_durum = getattr(state.hardware, "coils_state", None) or {}
+        if any(bool((v or {}).get("is_running")) for v in _hc_durum.values()):
+            return True
+        with _live_state_lock:
+            return any(bool(c.get("running")) for c in _live_state["coils"].values())
+    except Exception:
+        logging.getLogger(__name__).exception("Y45: calisan bobin durumu okunamadi -> CALISIYOR sayildi (mandal)")
+        return True
+
+
+def _y45_mandal_kur(neden: str) -> bool:
+    """Y45 (sahip, 1-C §9 S1): kopma / watchdog anında bobin çalışıyorsa ACİL DURDUR MANDALI — STOP'tan ÖNCE, kapısız.
+    Aktif STM seansında `_emergency_stop_all` zaten kurar; bu yol SEANSSIZ (elle) sürüşü kapsar. Boştayken KURULMAZ
+    (kartın çıkıp takılması). Kurmak bir bayrak + sayaç: hiçbir STOP'u bekletmez; hata olsa da STOP yolu sürer (Ö.4-Y8).
+    @return mandal bu çağrıyla kuruldu mu."""
+    try:
+        if not _herhangi_bobin_calisiyor():
+            return False
+        estop_mandali.mandalla(neden)
+        return True
+    except Exception:
+        logging.getLogger(__name__).exception("Y45: mandal kurulamadi (durdurma SURUYOR)")
+        return False
+
+
+def _y45_mandal_sonrasi(neden: str) -> None:
+    """STOP'lar gönderildikten SONRA: diske yaz (Y46, arka planda), arayüze yayınla, operatöre söyle."""
+    try:
+        estop_mandali.diske_yaz_arka_planda()
+        _ws_broadcast_sync({"type": "estop_mandali", "data": estop_mandali.durum()})
+        _push_notification(
+            "🔒 Bobin çalışırken "
+            + ("STM32 bağlantısı koptu" if neden == "stm_disconnected" else "STM32 watchdog zaman aşımı")
+            + " — ACİL DURDUR mandalı kuruldu. Bobinleri kontrol edin; yeniden başlatmak için önce \"Sıfırla\".",
+            "error",
+        )
+    except Exception:
+        logging.getLogger(__name__).exception("Y45: mandal bildirimi yapilamadi")
+
+
 def _handle_backend_event(event) -> None:
     """Route core EventBus events into FastAPI live-state/WebSocket."""
     data = event.data or {}
@@ -1467,6 +1515,8 @@ def _handle_backend_event(event) -> None:
         update_live_stm_status(True)
         return
     if event.event_type == "hardware.stm.disconnected":
+        # ⚠️ Y45: çalışan bobin bilgisi canlı durum ve HC SIFIRLANMADAN önce okunur; mandal STOP'tan ÖNCE kurulur.
+        _y45_mandal = _y45_mandal_kur("stm_disconnected")
         update_live_stm_status(False)
         # GÜVENLİK: STM koptu → bobin durumunu sıfırla (reconnect'te eski freq/duty ile RE-FIRE
         # etmesin) + STM kullanan aktif seansı durdur (kontrolsüz bobin kalmasın).
@@ -1475,6 +1525,8 @@ def _handle_backend_event(event) -> None:
                 state.hardware.on_disconnect()
         except Exception:
             logging.exception("STM on_disconnect failed")
+        if _y45_mandal:
+            _y45_mandal_sonrasi("stm_disconnected")
         with _session_lock:
             _sess_active = bool(_active_session.get("is_active"))
             _sess_coils = _active_session.get("coil_ids") or list(range(1, 9))
@@ -1643,6 +1695,8 @@ def _handle_backend_event(event) -> None:
             _sess_active = bool(_active_session.get("is_active"))
             _sess_coils = _active_session.get("coil_ids") or list(range(1, 9))
         _seans_durduruluyor = _sess_active and any(c in STM_COIL_IDS for c in _sess_coils)
+        # ⚠️ Y45: bobin çalışırken (seans olsun olmasın) mandal — STOP'tan ÖNCE, HC sıfırlanmadan okunarak.
+        _y45_mandal = _y45_mandal_kur("stm_watchdog_timeout")
         # ⚠️ D1.73 (B-1.18): firmware watchdog'u çıkışları SIFIRLADI ama HardwareController durumu "çalışıyor" kalıyordu →
         # keep-alive bir sonraki turda ESKİ duty ile bobini YENİDEN ENERJİLİYORDU (seanssız sürüşte host 1,5 sn takılınca;
         # operatöre "durdu" denirken). Durum `stop_all_coils` ile sıfırlanır (STOP da gider — Ö.4-Y8 yalnız artırır).
@@ -1652,6 +1706,8 @@ def _handle_backend_event(event) -> None:
                 state.hardware.stop_all_coils()
             except Exception:
                 logging.exception("STM watchdog sonrasi HC sifirlama basarisiz")
+        if _y45_mandal:
+            _y45_mandal_sonrasi("stm_watchdog_timeout")
         _push_notification(
             "⚠️ STM32 watchdog zaman aşımı — seans güvenlik için durduruldu"
             if _seans_durduruluyor
@@ -5790,6 +5846,12 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
 
     with _cf.ThreadPoolExecutor(max_workers=max(1, len(_estop_coils))) as _ex:
         mqtt_results = list(_ex.map(_estop_one, _estop_coils))
+    # ⚠️ Y46: mandal DİSKE — STM ve ESP STOP'ları gönderildikten SONRA, arka planda. Yazma hatası E-stop'u geciktirmez
+    # ya da engellemez (yalnız günlük; Ö.4-Y8).
+    try:
+        estop_mandali.diske_yaz_arka_planda()
+    except Exception:
+        logging.getLogger(__name__).exception("E-stop: mandal diske yazdirilamadi (durdurma tamam)")
     with _live_state_lock:
         for idx in range(8):
             coil = _live_state["coils"][idx]
@@ -5894,6 +5956,7 @@ async def estop_mandalini_sifirla(request: Request):
     _kim = cozumlenmis_operator(request, "") or ""
     _onceki = estop_mandali.durum()
     _kurulu = estop_mandali.sifirla(_kim or "operator")
+    estop_mandali.diske_yaz_arka_planda()  # Y46: yeniden başlatmada mandal geri gelmesin
     _durum = estop_mandali.durum()
     if _kurulu:
         try:

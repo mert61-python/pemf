@@ -5,8 +5,9 @@
  * Y4: "E-stop MANDALLANIR; operatörün ayrı ve bilinçli 'sıfırla' eylemi olmadan hiçbir START kabul edilmez.
  * Sıfırlama kendi başına yeniden başlatmaz; sıfırlamadan sonra yeni bir START ayrıca gerekir."
  *
- * Backend mandalı her acil durdurmada kurar (düğme, ESP alarmı; STM kopması/reddi/watchdog'u AKTİF STM seansında —
- * seanssız kopma/watchdog E-stop koşmaz, mandal KURMAZ: 1-C inceleme i3-F-7, sahip sorusu); kuruluyken elle
+ * Backend mandalı her acil durdurmada kurar (düğme, ESP alarmı, STM reddi; STM kopması / watchdog'u bobin ÇALIŞIRKEN —
+ * seans olsun olmasın, sahip kararı Y45; boştayken kurmaz). Mandal DİSKE yazılır ve yeniden başlatmada kurulu kalır
+ * (Y46): bant o zaman "önceki oturumda ACİL DURDUR — sıfırlanmadı" der. Kuruluyken elle
  * başlatma, AI (Auto), AI Pro (`/frame` ve döngü), mobil ve legacy START'ları REDDEDİLİR (409). Operatör nedenini
  * görmeli ve mandalı kaldırabilmeli — oturum açılmamışken de (Karşılama/Giriş ekranları; 1-C oturum talimatı).
  * ⚠️ 1-C inceleme i3-F-3: bu iki ekranda ACİL DURDUR düğmesi HENÜZ YOK (A-58 Karşılama / Y23 Giriş → D1.87). Bant
@@ -32,6 +33,12 @@ export const SIFIRLA_YOLU = "/hardware/estop_mandali/sifirla";
 /** Acil durdurmanın kaynağı → operatörün anlayacağı metin. Bilinmeyen kaynak olduğu gibi gösterilmez (iç ad). */
 export function mandalNedeni(neden?: string): string {
   const n = String(neden || "");
+  // Y46: mandal önceki süreçten (diskten) geldi — `onceki_oturum:<asıl neden>`; dosya okunamadıysa güvenli tarafta kurulu.
+  if (n.startsWith("onceki_oturum:")) {
+    const ic = n.slice("onceki_oturum:".length);
+    const asil = ic === "dosya_okunamadi" ? "mandal dosyası okunamadı" : mandalNedeni(ic);
+    return `önceki oturumda ACİL DURDUR — sıfırlanmadı (${asil})`;
+  }
   if (n === "manual") return "ACİL DURDUR düğmesi";
   if (n === "stm_disconnected") return "STM32 bağlantı kaybı";
   if (n === "stm_komut_reddi") return "kart komutları reddetti";
