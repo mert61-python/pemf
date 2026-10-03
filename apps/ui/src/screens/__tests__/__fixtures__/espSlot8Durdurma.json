@@ -1,0 +1,54 @@
+{
+  "espKapali": {
+    "tekil": {
+      "status": "devre_disi",
+      "transport": "mqtt"
+    },
+    "batch": {
+      "status": "success",
+      "results": [
+        {
+          "status": "success",
+          "transport": "stm32",
+          "coilId": 1
+        },
+        {
+          "status": "success",
+          "transport": "stm32",
+          "coilId": 2
+        },
+        {
+          "status": "success",
+          "transport": "stm32",
+          "coilId": 3
+        },
+        {
+          "status": "success",
+          "transport": "stm32",
+          "coilId": 4
+        },
+        {
+          "status": "success",
+          "transport": "stm32",
+          "coilId": 5
+        },
+        {
+          "status": "success",
+          "transport": "stm32",
+          "coilId": 6
+        },
+        {
+          "status": "success",
+          "transport": "stm32",
+          "coilId": 7
+        }
+      ]
+    }
+  },
+  "espAcikBrokerOlu": {
+    "tekil": {
+      "status": "mqtt_unavailable",
+      "transport": "mqtt"
+    }
+  }
+}

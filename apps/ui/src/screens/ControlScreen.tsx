@@ -32,7 +32,7 @@ import { PatientGate } from "@/components/domain/PatientGate";
 import { ObservationNotesModal } from "@/components/domain/ObservationNotesModal";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { SurusKipiSecici } from "@/components/domain/SurusKipiSecici";
-import { gorunurBobinler, espSlotuGorunur } from "@/services/bobinGorunurlugu";
+import { gorunurBobinler, espSlotuGorunur, STM_BOBIN_SAYISI } from "@/services/bobinGorunurlugu";
 import { KendiDurdurmaIsareti } from "@/components/ui/KendiDurdurmaKontrolu";
 
 // ─── Tab types ────────────────────────────────────────────────────────────────
@@ -176,11 +176,19 @@ export function ControlScreen() {
   // hiç seçilmemiş/hiçbiri bağlı değilse uyarıp null döner. Manuel + Auto + AI AYNI filtreyi kullansın →
   // offline bobinin seansa girip "sahte aktif tedavi" göstermesi (ve "en az bir bobin" guard eksikliği) önlenir.
   const resolveEffectiveCoils = (): number[] | null => {
-    if (selectedCoils.size === 0) {
+    // ⚠️ D1.98 · İG-6.45: BAŞLATMA seçimi GÖRÜNÜR bobinlerle sınırlıdır (`gorunurBobinler`, tek kaynak). Varsayılan
+    // seçim `{1..8}` gizli slot 8'i (ESP kapalı, cihaz yok) içeriyordu: her Başlat "Bazı bobinler çevrimdışı" diyor,
+    // görünür 7 bobin seçimden çıkarılınca STM çevrimiçiyken "Bağlantı yok" yanlış tanısı veriliyordu (ölçüldü).
+    // STM bobinleri daima görünür (yedek: snapshot'ta bobin listesi yoksa da). Durdurma kümesi bundan ETKİLENMEZ.
+    const gorunurIdler = new Set<number>([
+      ...Array.from({ length: STM_BOBIN_SAYISI }, (_, i) => i + 1),
+      ...gorunurBobinler(snapshot.coils ?? []).map((c) => c.id),
+    ]);
+    const requested = Array.from(selectedCoils).filter((id) => gorunurIdler.has(id));
+    if (requested.length === 0) {
       platformAlert("Uyarı", "En az bir bobin seçin.");
       return null;
     }
-    const requested = Array.from(selectedCoils);
     // `?? []` — aynı dosyanın render'ı zaten bunu kullanıyordu; başlatma yolu guard'sızdı ve
     // `coils` alanı olmayan bir snapshot geldiğinde "Seans Başlat" ekranı çökertiyordu.
     const coilsById = new Map((snapshot.coils ?? []).map((c) => [c.id, c]));
@@ -401,7 +409,10 @@ export function ControlScreen() {
     // "Durdur" o bobine hiç komut göndermiyordu → hayvanın üzerinde sessizce enerjili kalıyordu.
     // Çalışmayan bobine STOP göndermek idempotent ve zararsızdır; eksik göndermek değildir.
     const runningIds = (snapshot.coils ?? []).filter((c) => c?.running).map((c) => c.id);
-    const targets = Array.from(new Set<number>([...Array.from(selectedCoils), ...runningIds]));
+    // ⚠️ D1.98 (sahip kararı "slot 8 kalsın" + Ö.4-Y8): ESP slotu STOP kümesinde SEÇİMDEN BAĞIMSIZ, KOŞULSUZ kalır —
+    // başlatma seçimi görünür bobinlerle sınırlandı ama durdurma gönderimi azaltılmaz.
+    const espSlotlari = (snapshot.coils ?? []).map((c) => c.id).filter((id) => id > STM_BOBIN_SAYISI);
+    const targets = Array.from(new Set<number>([...Array.from(selectedCoils), ...runningIds, ...espSlotlari]));
     const stmCoils = targets.filter((id) => id <= 7);
     const espCoils = targets.filter((id) => id > 7);
     // #74: durdurma yanıtlarını DOĞRULA — apiPost hata/timeout'ta null döner (throw etmez); eskiden
@@ -436,8 +447,12 @@ export function ControlScreen() {
     // (stm_unavailable/mqtt_unavailable/invalid). Eski yüklem (`status !== "error"`) ikisini de
     // teyit sayıyordu → broker ölüyken STOP hiçbir bobine ulaşmamışken aşağıdaki uyarı HİÇ
     // çıkmıyordu. Teyit yalnız AÇIK "success"tir; batch'te satırlar da tek tek sayılır.
+    // ⚠️ D1.98 · A-63: ESP BİLEREK kapalıyken (`PEMF_ESP_ENABLED` ayarsız) backend slot 8 için `devre_disi` döner — ESP
+    // alt sistemi yok, komut yayınlanmadı (denendi). Eskiden bu `mqtt_unavailable`dı ve her başarılı Durdur sahte
+    // "HÂLÂ ÇALIŞIYOR" alarmı veriyordu (alarm körlüğü). Teyit A-63 gereği STM'e göre: `devre_disi` alarm SEBEBİ değildir
+    // (ama "success" de sayılmaz — başka hiçbir yüklemde). ESP AÇIKKEN başarısız yayın `mqtt_unavailable` → alarm KALIR.
     const satirOnaylandi = (r: { status?: string } | null | undefined): boolean =>
-      !!r && r.status === "success";
+      !!r && (r.status === "success" || r.status === "devre_disi");
     const allOk = sonuclar.every((r) => {
       if (!satirOnaylandi(r)) return false;
       const satirlar = r?.results;

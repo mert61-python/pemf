@@ -63,6 +63,8 @@ def izleyiciler(api, monkeypatch):
 
 def test_KRITIK_esp_publish_dusunce_kosu_kaydi_ACILMAZ(api, client, izleyiciler, monkeypatch):
     beginler, _f = izleyiciler
+    # D1.98: "broker ölü" ESP AÇIKKEN olur; ESP bilerek kapalıyken yanıt `devre_disi`dir (ayrı test dosyası).
+    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
     monkeypatch.setattr(api, "_mqtt_publish", lambda t, p: False)  # broker ölü — komut KESİN gitmedi
 
     r = client.post(

@@ -2106,6 +2106,19 @@ def _mqtt_credentials():
     return (u or None, p or None)
 
 
+def _esp_yanit_durumu(ok: bool) -> str:
+    """D1.98 (B-6.9): ESP bobin ucunun yanıt durumu — "ESP BİLEREK kapalı" ile "broker ölü" AYRILIR.
+
+    Eskiden ikisi de `mqtt_unavailable`dı: `PEMF_ESP_ENABLED` ayarsızken (HEAD varsayılanı) Kontrol ekranının her
+    "⏹ Durdur"u slot 8 yanıtı yüzünden sahte "bobinler HÂLÂ ÇALIŞIYOR olabilir" alarmı veriyordu (alarm körlüğü, K4).
+    `devre_disi` = ESP alt sistemi kurulu/etkin değil, komut YAYINLANMADI (yine de `_mqtt_publish` denendi — gönderim
+    azaltılmaz, Ö.4-Y8). ⚠️ "success" DEĞİLDİR: hiçbir yüklem bunu teyit saymaz; teyit A-63 gereği STM'e göre verilir.
+    ESP açıkken başarısız yayın `mqtt_unavailable` KALIR (gerçek arıza alarmı)."""
+    if ok:
+        return "success"
+    return "mqtt_unavailable" if live_state.esp_etkin() else "devre_disi"
+
+
 def _mqtt_publish(topic: str, payload: dict) -> bool:
     """Publish a JSON payload to the local MQTT broker. Returns success.
 
@@ -3086,7 +3099,7 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
         _start_ack_izle_arka_planda(coil_id, command_id, ok, _esp_run_id)
     else:
         _finish_coil_run(coil_id)
-    _yanit = {"status": "success" if ok else "mqtt_unavailable", "command_id": command_id, "transport": "mqtt"}
+    _yanit = {"status": _esp_yanit_durumu(ok), "command_id": command_id, "transport": "mqtt"}
     if _sync_uyari:
         _yanit["sync_warning"] = _sync_uyari
     if _sifir_hz:
@@ -3264,7 +3277,7 @@ async def control_batch_coils(payload: BatchCoilPayload):
             _start_ack_izle_arka_planda(coil_id, command_id, ok, _b_run_id)
         else:
             _finish_coil_run(coil_id)
-        _satir = {"coilId": coil_id, "status": "success" if ok else "mqtt_unavailable", "transport": "mqtt"}
+        _satir = {"coilId": coil_id, "status": _esp_yanit_durumu(ok), "transport": "mqtt"}
         if _b_uyari:
             _satir["sync_warning"] = _b_uyari
         results.append(_satir)
