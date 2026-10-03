@@ -191,3 +191,56 @@ def test_arayuz_fiksturu_GERCEK_yanitlarla_AYNI(kayit, monkeypatch, tmp_path):
     assert json.loads(_FIKSTUR.read_text(encoding="utf-8")) == json.loads(metin), (
         "arayuz fiksturu BAYAT: gercek backend yaniti degisti (D189_FIKSTUR_YAZ=1 ile yeniden uret ve jest kapisini kos)"
     )
+
+
+def test_KRITIK_AI_Pro_DONGUSU_de_duty_mT_alanina_YAZMAZ(monkeypatch, tmp_path):
+    """1-E incelemesi (i-10.1): D1.89 AI Pro'nun İKİ yazım noktasını düzeltti (`/frame` + masaüstü döngüsü `_ai_pro_loop`) ama
+    kapı yalnız `/frame`'i koşuyordu — döngünün yazımını `intensity=rep_duty`'ye geri alan mutant 15 dosyada 133/133 YEŞİL
+    kaldı. GERÇEK onay akışı + GERÇEK `_ai_pro_loop` (sahte kamera + sahte doz planı) + GERÇEK `live_state`."""
+    import numpy as np
+    from kayitci_donanim import gercek_hc
+    from servers import ai_pro_hedef
+    from servers import live_state as ls
+
+    ns = ap.kur(monkeypatch, tmp_path, dongu_noop=False)
+    monkeypatch.setattr(ns.air, "_predict_and_drive", lambda *a, **k: ([0.37] * 7, [0.0] * 7, 0.5))
+    monkeypatch.setattr(ai_pro_hedef.KediSaglayici, "yukle", lambda self: None)  # em_kedi ağırlığı depoda yok
+
+    class _Kamera:
+        def __init__(self, *a, **k):
+            pass
+
+        def isOpened(self):  # noqa: N802
+            return True
+
+        def read(self):
+            return True, np.zeros((8, 8, 3), dtype=np.uint8)
+
+        def release(self):
+            pass
+
+    monkeypatch.setattr(ns.air.cv2, "VideoCapture", _Kamera)
+    hc_ctx = gercek_hc()
+    ns.hc = hc_ctx.__enter__()
+    monkeypatch.setattr(ns.api.state, "hardware", ns.hc)
+    try:
+        _pid, r = ap.onayli_baslat(ns, organ=2)
+        assert r.status_code == 200, r.text[:200]
+
+        def _dongu_yazdi():
+            with ls._live_state_lock:
+                at = dict(ls._live_state["activeTreatment"])
+            return at if at.get("dutyTemsilYuzde") else None
+
+        assert ap.bekle(lambda: _dongu_yazdi() is not None, 8), "aparat: dongu canli seans durumunu yazmadi"
+        at = _dongu_yazdi()
+        assert str(at.get("mode", "")).startswith("AI Pro"), at
+        assert not at.get("intensityMt"), (
+            f"AI Pro DONGUSU duty'yi mT recete alanina yazdi: intensityMt={at.get('intensityMt')}"
+        )
+    finally:
+        ns.air._ai_loop_active = False
+        ap.bekle(lambda: False, 1.5)
+        ns.hc.stop_all_coils()
+        hc_ctx.__exit__(None, None, None)
+        ns.geri()
