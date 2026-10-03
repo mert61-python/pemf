@@ -281,8 +281,10 @@ def _safe_stop_outputs(api_server_module) -> None:
 
             _q = getattr(getattr(api_server_module.state, "core", None), "_hw_send_queue", None)
             if _q is not None:
-                _deadline = _t.time() + _STM_FLUSH_BUDGET_S
-                while not _q.empty() and _t.time() < _deadline:
+                # D1.75 (B-1.29): bütçe MONOTONİK saatle — duvar saati (NTP/DST/elle) geri giderse `time.time` ile
+                # ölçülen 1,5 sn'lik bütçe saniyelerce uzuyordu (ölçüldü 6,53 sn) → servis durdurma zaman aşımı aşılır.
+                _deadline = _t.monotonic() + _STM_FLUSH_BUDGET_S
+                while not _q.empty() and _t.monotonic() < _deadline:
                     _t.sleep(0.05)
     except Exception:
         logger.exception("STM safe stop failed")
@@ -496,18 +498,33 @@ def _start_startup_reconcile(api_server, logger: logging.Logger) -> None:
         try:
             import time as _t
 
+            from servers import live_state as _ls
+
             _t.sleep(3.0)  # broker + STM bağlantısının oturması için
+            # ⚠️ D1.75 (B-1.28): "aktif seans yok" KARARI ile STM STOP'u AYNI kritik bölgede. Eskiden karar kilit altında
+            # verilip kilit BIRAKILIYOR, `stop_all_coils` SONRA çağrılıyordu → aradaki anda başlayan seansın bobinleri
+            # durduruluyordu (seans "sürüyor" görünür, tel STOP). `stop_all_coils` yalnız kuyruğa koyar — beklemez.
             with api_server._session_lock:
                 if api_server._active_session.get("is_active"):
                     logger.info("Başlangıç mutabakatı atlandı: bu arada aktif seans başlatılmış.")
                     return
-            if api_server.state.hardware:
-                api_server.state.hardware.stop_all_coils()
+                if api_server.state.hardware:
+                    api_server.state.hardware.stop_all_coils()
             # ⚠️ 1-C inceleme i6-F-1: kimlik SÜREÇ BAŞINA benzersiz (ms eki; ≤ S3 sınırı 35 kr). SABİT
             # `startup_reconcile_{bobin}` iken 8266 tekrar önbelleği (8 girdilik halka, yalnız ESP açılışında sıfırlanır)
             # önceki sürecin AYNI kimlikli STOP'unu hatırlıyor ve bu STOP'u UYGULAMADAN yalnız ACK(true) dönüyordu —
             # önceki süreç seans ortasında öldüyse bobin enerjili kalırdı (araya ≤7 komut girdiyse; ölçüldü).
-            for _cid in range(1, 9):
+            # D1.75 (B-1.28): kapsam TEK KAYNAKTAN (topoloji; elle `range(1, 9)` değil). Yayın saniyeler sürebilir →
+            # oturum kilidi altında YAPILMAZ (E-stop ve seans başlatma o kilidi bekler); her bobinden hemen önce bakılır:
+            # o arada başlamış seansın KENDİ bobinine STOP gitmez (bobin seansındır), seans dışı bobinlere gider.
+            for _cid in _ls.mqtt_mutabakat_bobinleri():
+                with api_server._session_lock:
+                    _s = api_server._active_session
+                    # coil_ids yoksa seans tüm bobinlerin sayılır (E-stop'la aynı varsayılan).
+                    _seansin = bool(_s.get("is_active")) and _cid in (_s.get("coil_ids") or list(range(1, 9)))
+                if _seansin:
+                    logger.info("Başlangıç mutabakatı: bobin %s yeni seansın — STOP gönderilmedi.", _cid)
+                    continue
                 api_server._mqtt_publish(
                     f"pemf/coil/{_cid}/control",
                     {"command": "stop", "command_id": f"startup_reconcile_{_cid}_{int(_t.time() * 1000)}"},
@@ -922,10 +939,34 @@ def _shutdown(logger: logging.Logger, api_server, core: HeadlessCore, event_bus)
     biri hata verse de diğerleri denenir). Zeroconf EN SON kapanır (servisler kendi kayıtlarını
     önce unregister etti)."""
     logger.info("PEMF backend service stopping")
+    # ⚠️ D1.75 (B-1.22) — SIRA: (1) kapanış: süreç sonuna dek START reddi + nesil++ (1-C mandalının ikinci durumu;
+    # ayrı mandal YOK — `estop_mandali.kapanis_kur`), (2) aktif seans bellekte kapanır (AI Pro döngü bayrağı iner),
+    # (3) donanım STOP'u, (4) seans kaydı "Kesintiye Uğradı" (DB yazımı STOP'u geciktirmesin diye STOP'tan SONRA).
+    # Eskiden seans hiç kapanmıyordu (satır 'active' → sonraki açılışta "Elektrik Kesintisi") ve niyet bağlamı olmayan
+    # bir START kapanış sürerken geçebiliyordu. Her adım best-effort: biri patlasa da STOP KOŞAR (Ö.4-Y8).
+    _kapanis_seansi = None
+    try:
+        from utils import estop_mandali
+
+        estop_mandali.kapanis_kur()
+    except Exception:
+        logger.exception("Kapanis mandali kurulamadi (durdurma SURUYOR)")
+    try:
+        _pasife_al = getattr(api_server, "kapanis_seansi_pasife_al", None)
+        if callable(_pasife_al):
+            _kapanis_seansi = _pasife_al()
+    except Exception:
+        logger.exception("Kapanista aktif seans pasife alinamadi (durdurma SURUYOR)")
     try:
         _safe_stop_outputs(api_server)
     except Exception:
         logger.exception("Safe output shutdown failed")
+    try:
+        _kaydi_kapat = getattr(api_server, "kapanis_seans_kaydini_kapat", None)
+        if callable(_kaydi_kapat) and _kapanis_seansi:
+            _kaydi_kapat(_kapanis_seansi)
+    except Exception:
+        logger.exception("Kapanista seans kaydi kapatilamadi")
     try:
         if api_server.state.hardware:
             api_server.state.hardware.stop()

@@ -312,6 +312,16 @@ STM_COIL_IDS = set(range(1, 8))
 ESP_COIL_IDS = {8}
 
 
+def mqtt_mutabakat_bobinleri() -> list:
+    """Açılış mutabakatının (çökme-kurtarma) MQTT STOP kapsamı — TEK KAYNAK (D1.75 · B-1.28), çağrı anında topolojiden.
+
+    Topolojinin TAMAMI (STM ∪ ESP), ESP_COIL_IDS'e DARALTILMAZ: bugün MQTT START yalnız ESP bobinlerine gider ama ÖNCEKİ
+    süreç eski bir sürüm olabilir (1.9.50 AI Pro bobin 6-7'ye `pemf/coil/{6,7}/control` START yayınlıyordu). Dinleyeni
+    olmayan konuya STOP zararsızdır (Ö.4-Y8: STOP yalnız artar). Eskiden elle `range(1, 9)` idi — topoloji büyüyünce
+    sessizce eksik kalırdı."""
+    return sorted(set(STM_COIL_IDS) | set(ESP_COIL_IDS))
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # STM KOMUT REDDİ — "komut gitmiyor ama seans başlamış gibi görünüyor" (sahip, 2026-09-12)
 # ══════════════════════════════════════════════════════════════════════════════

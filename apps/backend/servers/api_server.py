@@ -4438,6 +4438,11 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
                 elif _sebep.startswith("iptal"):
                     # 1-C §9 #5: başlatma bobin sürülmeden İPTAL edildi (durdurma geldi) → "İptal Edildi".
                     _durum = "cancelled"
+                elif _sebep.startswith("kapanis"):
+                    # D1.75 (B-1.22): backend seans ortasında KAPANDI (servis durdurma / Ctrl+C) → "Kesintiye Uğradı".
+                    # "completed" planlanan süre dolmamışken yanlış; satırı açık bırakmak ise sonraki açılışta
+                    # "Elektrik Kesintisi" (ABORTED_DUE_TO_POWER) mühürlüyordu — olmamış bir güç kaybı.
+                    _durum = "interrupted"
                 else:
                     _durum = "completed"
                 db.end_session(db_session_id, duration_minutes=dur_min, session_status=_durum)
@@ -4452,6 +4457,47 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
     except Exception:
         logging.exception("finalize: kalici kayit hatasi")
     return flushed
+
+
+def kapanis_seansi_pasife_al() -> dict | None:
+    """D1.75 (B-1.22): backend KAPANIRKEN aktif seansı bellekte kapat — donanım STOP'undan ÖNCE, yalnız bellek (beklemez).
+
+    Çağıran (`backend_service._shutdown`) önce `estop_mandali.kapanis_kur()` ile START'ı reddeder, sonra bunu çağırır,
+    sonra STOP'u gönderir, EN SON `kapanis_seans_kaydini_kapat` ile DB satırını kapatır (DB yazımı STOP'u geciktirmez).
+    AI Pro döngüsü pasif seansı ve kapanışı görüp çıkar; teardown'ı kapanışta da STOP gönderir (`mandalli_mi`).
+    @return DB kapanışı için anlık görüntü; seans yoksa None."""
+    with _session_lock:
+        if not _active_session.get("is_active"):
+            return None
+        anlik = {
+            "db_session_id": _active_session.get("db_session_id"),
+            "started_epoch": _active_session.get("started_epoch") or _active_session.get("start_time"),
+            "start_mono": _active_session.get("start_mono"),
+            "coil_ids": list(_active_session.get("coil_ids") or list(range(1, 9))),
+            "mode": _active_session.get("mode"),
+        }
+        _active_session["is_active"] = False
+    return anlik
+
+
+def kapanis_seans_kaydini_kapat(anlik) -> None:
+    """D1.75: `kapanis_seansi_pasife_al`ın görüntüsüyle DB satırını "Kesintiye Uğradı" kapatır (STOP'tan SONRA)."""
+    if not anlik or not anlik.get("db_session_id"):
+        return
+    _db_sid = anlik["db_session_id"]
+    try:
+        _get_treatment_db().record_session_event(
+            _db_sid, "service_shutdown", payload={"mode": anlik.get("mode"), "coil_ids": anlik.get("coil_ids")}
+        )
+    except Exception:
+        logging.getLogger(__name__).warning("kapanis: session_event yazilamadi", exc_info=True)
+    _finalize_session_db(
+        _db_sid,
+        anlik.get("started_epoch"),
+        coil_ids=anlik.get("coil_ids"),
+        reason="kapanis",
+        start_mono=anlik.get("start_mono"),
+    )
 
 
 def _session_duration_watchdog():

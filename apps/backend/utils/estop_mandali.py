@@ -25,6 +25,10 @@ hiçbir START kabul edilmez." Kapsam: elle başlatma, AI (Auto), AI Pro `/frame`
 kilit tutulamaz (yayın saniyeler sürer; STOP'u bekletemez) → ESP START'ı yayından ÖNCE denetlenir, yayın SIRASINDA
 durdurma geldiyse ardından TELAFİ STOP'u gönderilir (`api_server._esp_start_yayinla`).
 
+KAPANIŞ (D1.75 · B-1.22): backend kapanırken `kapanis_kur` aynı mandalı ikinci bir durumla (süreç sonuna dek START reddi)
+kurar — ayrı bir "kapanış mandalı" YOK (plan: iki mandal yan yana doğarsa biri ötekini atlatabilir). Sıfırla kaldırmaz,
+diske yazılmaz (bkz. `kapanis_kur`).
+
 ⚠️ Ö.4-Y8: Bu modül YALNIZ START'ı reddeder. STOP / acil durdurma hiçbir koşulda buradan geçmez; mandal ya da
 nesil onları kapılayamaz. Durdurmalar yalnız nesli artırır (gönderim azalmaz).
 
@@ -65,8 +69,19 @@ NESIL_MESAJI = "Komut bir durdurma ya da acil durdurmadan ÖNCEYE ait (bayat sü
 
 KAYIP_MESAJI = "Hedef gözlemi bir hedef-kaybı durdurmasından ÖNCEYE ait (bayat gözlem) — sürülmedi."
 
+KAPANIS_MESAJI = "Backend KAPANIYOR — yeni başlatma reddedildi (bobinler durduruluyor)."
+
 _kilit = threading.Lock()
-_durum = {"aktif": False, "neden": "", "zaman": 0.0, "sifirlama_zamani": 0.0, "sifirlayan": "", "onceki_oturum": False}
+_durum = {
+    "aktif": False,
+    "neden": "",
+    "zaman": 0.0,
+    "sifirlama_zamani": 0.0,
+    "sifirlayan": "",
+    "onceki_oturum": False,
+    # D1.75 (B-1.22): KAPANIŞ — bu mandalın ikinci durumu (aşağıda `kapanis_kur`). Diske YAZILMAZ, Sıfırla KALDIRMAZ.
+    "kapanis": False,
+}
 _nesil = 0
 _baglam: contextvars.ContextVar = contextvars.ContextVar("pemf_surus_nesli", default=None)
 # 1-C inceleme i7-F-1: HEDEF-KAYBI nesli (AI Pro) — sürüş neslinden AYRI (bkz. `kayip_nesli_artir`).
@@ -81,8 +96,10 @@ def nesil() -> int:
 
 
 def mandalli_mi() -> bool:
+    """START mandalı kurulu mu: acil durdurma mandalı YA DA kapanış (D1.75). Bu işleve bakan her START savunması
+    (ESP yayınının son savunması, telafi STOP'u, döngü teardown'ı) kapanışı da görür — yan yana ikinci bir mandal yok."""
     with _kilit:
-        return bool(_durum["aktif"])
+        return bool(_durum["aktif"] or _durum["kapanis"])
 
 
 def mandalla(neden: str = "") -> int:
@@ -123,6 +140,29 @@ def sifirla(kaynak: str = "") -> bool:
             _durum["sifirlayan"] = str(kaynak or "")[:80]
             _nesil += 1
         return onceki
+
+
+def kapanis_kur() -> int:
+    """D1.75 (B-1.22): backend KAPANIYOR — süreç sonuna dek her START'ı reddet ve nesli artır (uçuştaki niyetler bayat).
+
+    Bu mandalın ikinci durumudur, ayrı bir mandal DEĞİL: aynı kilit, aynı nesil, aynı kapı (`baslatma_engeli`,
+    `mandalli_mi`) → mandala bakan her START yolu kapanışı da görür; biri ötekini atlatamaz. Farkları bilinçli:
+      * Sıfırla KALDIRMAZ (operatörün E-stop sıfırlaması kapanan sürece START açmamalı).
+      * Diske YAZILMAZ (`_diske_yaz` yalnız `aktif`i yazar): temiz kapanış bir acil durdurma değildir; yeniden
+        başlatmada "önceki oturumda ACİL DURDUR" bandı ve Sıfırla'sız START reddi doğurmamalı.
+      * Arayüz durumu (`durum()["aktif"]`) değişmez — kapanışta sunucu zaten yanıt vermez.
+    ⚠️ Ö.4-Y8: YALNIZ START. STOP / acil durdurma / mutabakat STOP'u bu durumdan GEÇMEZ. @return yeni nesil."""
+    global _nesil
+    with _kilit:
+        _durum["kapanis"] = True
+        _nesil += 1
+        return _nesil
+
+
+def kapanis_kaldir() -> None:
+    """YALNIZ test yalıtımı (süreç geneli durum testler arası sızmasın). Üründe çağıran YOK: kapanış süreçle biter."""
+    with _kilit:
+        _durum["kapanis"] = False
 
 
 def durum() -> dict:
@@ -230,6 +270,8 @@ def baslatma_engeli(niyet_nesli=None) -> str:
 
     ⚠️ YALNIZ START için çağrılır. STOP yolları bunu ÇAĞIRMAZ (Ö.4-Y8)."""
     with _kilit:
+        if _durum["kapanis"]:
+            return KAPANIS_MESAJI
         if _durum["aktif"]:
             return MANDAL_MESAJI
         if niyet_nesli is not None and niyet_nesli != _nesil:

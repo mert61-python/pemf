@@ -196,10 +196,14 @@ def _estop_mandali_sizmaz():
     except ImportError:
         yield
         return
+    # D1.75: kapanış durumu (backend `_shutdown`) da süreç geneli — Sıfırla onu kaldırmaz (bilerek); ayrıca kaldırılır.
+    _kapanis_kaldir = getattr(estop_mandali, "kapanis_kaldir", lambda: None)
     estop_mandali.kalicilik_kapat()  # Y46: bir testin bağladığı mandal dosyası sonrakine sızmasın
+    _kapanis_kaldir()
     estop_mandali.sifirla("pytest-izolasyon")
     yield
     estop_mandali.kalicilik_kapat()
+    _kapanis_kaldir()
     estop_mandali.sifirla("pytest-izolasyon")
 
 
