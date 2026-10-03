@@ -141,8 +141,12 @@ def test_active_session_shared_with_session_state_module(api):
     assert api._session_lock is session_state._session_lock
     # coil_run_tracker'a enjekte edilen getter da session_state üzerinden okur
     with api._session_lock:
-        api._active_session["db_session_id"] = 99
+        api._active_session.update({"is_active": True, "db_session_id": 99})
     assert session_state.current_db_session_id() == 99
+    # D1.66 (B-1.2): seans bitince (is_active False) kimlik koşuya VERİLMEZ (bitmiş seansa koşu bağlanmasın).
+    with api._session_lock:
+        api._active_session["is_active"] = False
+    assert session_state.current_db_session_id() is None
 
 
 def test_start_ai_session_takes_over_active_manual(api):

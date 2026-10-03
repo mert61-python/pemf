@@ -49,10 +49,23 @@ def api(monkeypatch):
         api_server._coil_run_stats.clear()
     with api_server._session_lock:
         api_server._active_session.clear()
-    return api_server, fake
+    yield api_server, fake
+    # D1.66: testler seansı AKTİF kurar (koşu yalnız aktif seansa) → sızmasın (D1.41 nöbeti)
+    with api_server._session_lock:
+        api_server._active_session.clear()
 
 
 # ── _begin_coil_run: yalnız aktif DB-seansı varken run açar ───────────────────
+def test_KRITIK_D166_begin_coil_run_BITMIS_seansa_kosu_ACMAZ(api):
+    """D1.66 (B-1.2): seans bitti (is_active False) ama bellekte kimliği duruyor → /stop SONRASI sürüşün koşusu BİTMİŞ
+    seansa bağlanmaz (eskiden bağlanıyordu: kayıt seans bittikten sonra "sürüldü")."""
+    api_server, fake = api
+    with api_server._session_lock:
+        api_server._active_session.update({"is_active": False, "db_session_id": 7})
+    api_server._begin_coil_run(3, freq=50, duty=25, phase=0, intensity=2.0, hw_type="stm")
+    assert fake.started == [] and 3 not in api_server._active_coil_runs
+
+
 def test_begin_coil_run_noop_without_db_session(api):
     api_server, fake = api
     # db_session_id YOK → best-effort no-op (DB'ye yazma, run kaydetme)
@@ -64,7 +77,7 @@ def test_begin_coil_run_noop_without_db_session(api):
 def test_begin_coil_run_starts_and_tracks_run(api):
     api_server, fake = api
     with api_server._session_lock:
-        api_server._active_session["db_session_id"] = 7
+        api_server._active_session.update({"is_active": True, "db_session_id": 7})  # D1.66: koşu YALNIZ aktif seansa
     api_server._begin_coil_run(6, freq=40, duty=30, phase=0, intensity=1.5, hw_type="esp")
     # DB'de coil-run açıldı (doğru session_id + coil_id + parametreler)
     assert len(fake.started) == 1
@@ -79,7 +92,7 @@ def test_begin_coil_run_starts_and_tracks_run(api):
 def test_begin_coil_run_closes_previous_open_run_for_same_coil(api):
     api_server, fake = api
     with api_server._session_lock:
-        api_server._active_session["db_session_id"] = 7
+        api_server._active_session.update({"is_active": True, "db_session_id": 7})  # D1.66: koşu YALNIZ aktif seansa
     api_server._begin_coil_run(6, 40, 30, 0, 1.5, "esp")  # run 100 açılır
     api_server._begin_coil_run(6, 55, 20, 0, 2.0, "esp")  # aynı bobin → önce 100 kapanmalı
     # İlk run (100) end_coil_run ile kapatıldı; ikinci run (101) şimdi açık
@@ -91,7 +104,7 @@ def test_begin_coil_run_closes_previous_open_run_for_same_coil(api):
 def test_finish_coil_run_writes_per_metric_averages(api):
     api_server, fake = api
     with api_server._session_lock:
-        api_server._active_session["db_session_id"] = 7
+        api_server._active_session.update({"is_active": True, "db_session_id": 7})  # D1.66: koşu YALNIZ aktif seansa
     api_server._begin_coil_run(3, 50, 25, 0, 2.0, "stm")  # run 100
     run_id = api_server._active_coil_runs[3]
     # Akümülatörü elle doldur: her metriğin FARKLI dolu-örnek sayısı var (eksik okuma senaryosu)
@@ -130,7 +143,7 @@ def test_finish_coil_run_zero_fill_count_is_safe(api):
     """Bir metrik hiç okunmadıysa (fill count 0) → sıfıra-bölme YOK, avg None (D1.89: 0.0 "ölçüldü" okunuyordu)."""
     api_server, fake = api
     with api_server._session_lock:
-        api_server._active_session["db_session_id"] = 7
+        api_server._active_session.update({"is_active": True, "db_session_id": 7})  # D1.66: koşu YALNIZ aktif seansa
     api_server._begin_coil_run(4, 50, 25, 0, 2.0, "stm")
     run_id = api_server._active_coil_runs[4]
     with api_server._coil_run_stats_lock:
