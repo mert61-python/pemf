@@ -47,12 +47,18 @@ def test_KRITIK_control_ekraninda_estop_sekme_cubugundan_ONCE():
 
 
 def test_KRITIK_kayan_estop_stm_belirsizken_gizlenmez():
-    """`!running && !active` erken-dönüşü belirsizlik durumunu da kapsamamalı."""
+    """`!running && !active` erken-dönüşü belirsizlik (ve D1.E04 teyitsizlik) durumunu da kapsamamalı.
+
+    D1.E03 (1-E): belirsizlik kuralı TEK kaynağa taşındı (`hooks/useStmBelirsiz.ts`; kabuk söküm kapısı da kullanır) —
+    GES onu çağırır, kalıcılık (kilit) kancadadır. Davranışsal kapı: `GlobalEmergencyStop.belirsizlik.test.tsx` (jest)."""
     src = _oku(_GES)
-    assert "stmBelirsiz" in src, "GlobalEmergencyStop STM belirsizliğini hiç okumuyor"
-    assert "belirsizKilit" in src, "Kalıcılık (bir kez çalışır görüldüyse düğme kalır) kaldırılmış: `belirsizKilit` yok"
-    assert "if (!running && !active && !belirsiz) return null;" in src, (
-        "Erken dönüş belirsizlik durumunu KAPSAMIYOR → STM koptuğunda düğme yine gizlenir"
+    kanca = _oku(_KOK / "apps" / "ui" / "src" / "hooks" / "useStmBelirsiz.ts")
+    assert "useStmBelirsiz(snapshot)" in src, "GlobalEmergencyStop STM belirsizliğini hiç okumuyor"
+    assert "stmBelirsiz" in kanca and "setKilit(true)" in kanca, (
+        "Kalıcılık (bir kez çalışır görüldüyse düğme kalır) kaldırılmış: kancada kilit yok"
+    )
+    assert "if (!running && !active && !belirsiz && !teyitsiz) return null;" in src, (
+        "Erken dönüş belirsizlik/teyitsizlik durumunu KAPSAMIYOR → STM koptuğunda düğme yine gizlenir"
     )
 
 
