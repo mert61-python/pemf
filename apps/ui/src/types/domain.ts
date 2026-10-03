@@ -196,6 +196,16 @@ export interface DashboardSnapshot {
   eField?: EFieldLive | null;
   /** D1.81 · Y4: acil durdurma MANDALI (yoksa eski backend → bant çizilmez). */
   estopMandali?: EstopMandali | null;
+  /** D1.E04 · İG-6.7: son ACİL DURDUR'un teyit durumu (backend `estop_teyit`). null = bu süreçte E-stop yok. */
+  estopTeyit?: EstopTeyit | null;
+}
+
+/** D1.E04: "durdu" (`running:false`) ile "teyit edildi" AYRI — teyit yalnız backend'in teyidi ya da kartın tüm-sıfır ACK'i. */
+export interface EstopTeyit {
+  teyitli: boolean;
+  /** "estop" (E-stop yanıtının teyidi) | "stm_ack" (kartın sonradan gelen tüm-sıfır ACK'i). */
+  kaynak?: string;
+  zaman?: number;
 }
 
 /**

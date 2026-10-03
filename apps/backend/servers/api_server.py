@@ -1687,6 +1687,10 @@ def _handle_backend_event(event) -> None:
             }
         )
         return
+    if event.event_type == "hardware.stm.stop_onayi":
+        # D1.E04: kart GERÇEK ACK'le tüm çıkışları sıfır bildirdi → bekleyen teyitsiz E-stop STM'ce teyit edilir (A-63).
+        live_state.estop_teyidi_stm_ack()
+        return
     if event.event_type == "hardware.stm.watchdog_timeout":
         # STM firmware watchdog'u ateşledi → STM PWM'i BİLİNMEYEN/durmuş durumda (komuta uymuyor). Bu bir
         # donanım-fault EVENT'i (backend EŞİK DAYATMAZ; donanımın kararına tepki verir) → STM kullanan aktif
@@ -2940,8 +2944,16 @@ async def hardware_command(payload: CommandPayload):
             return {"status": "success" if success else "error", "command": cmd, "coil_id": coil_id}
 
         elif cmd == "stop_all_coils":
+            _isaret, _sira_once = _stm_yazim_isareti_al(), _stm_son_stop_sirasi_al()
             success = state.hardware.stop_all_coils()
-            return {"status": "success" if success else "error", "command": cmd}
+            # 1-C §9 #2 (A-63): teyit = STOP porta YAZILDI (E-stop'la aynı ölçüt). Kuyruğa verildi ama yazılamadıysa
+            # (kablo çıkık / ölü gönderici) "success" DENMEZ — "partial" + `stmStopped:false`. Yalnız RAPOR.
+            _yazildi = bool(success) and await asyncio.to_thread(_stm_stop_porta_yazildi_mi, _isaret, _sira_once)
+            return {
+                "status": ("success" if _yazildi else "partial") if success else "error",
+                "command": cmd,
+                "stmStopped": _yazildi,
+            }
 
         elif cmd == "start_all_coils":
             freq = p.get("freq", 100.0)
@@ -3953,6 +3965,7 @@ def _stop_session_coils(coil_ids, yetkiyi_kes: bool = False):
         estop_mandali.nesil_artir()
 
     teyitsiz: list = []
+    _esp_acik = live_state.esp_etkin()
     for coil_id in [cid for cid in coil_ids if cid in ESP_COIL_IDS]:
         ok = _mqtt_publish(
             f"pemf/coil/{coil_id}/control",
@@ -3961,10 +3974,16 @@ def _stop_session_coils(coil_ids, yetkiyi_kes: bool = False):
                 "command_id": f"stop_{coil_id}_{int(_t.time() * 1000)}",
             },
         )
-        if not ok:
+        # ⚠️ A-63 (İG-5.10): ESP BİLEREK kapalıyken STOP yine DENENİR ama teyit STM'e göre verilir — ESP slotu "teyitsiz"
+        # sayılmaz (eskiden bobin 8'li her seans durdurması 409 "HÂLÂ ÇALIŞIYOR olabilirler" diyordu).
+        if not ok and _esp_acik:
             teyitsiz.append(coil_id)
     _stm_hedef = [cid for cid in coil_ids if cid in STM_COIL_IDS]
     if state.hardware:
+        # ⚠️ 1-C §9 #2 (A-63): teyit "kuyruğa verildi" DEĞİL, STOP PORTA YAZILDI (E-stop'la aynı ölçüt, D1.55). Eskiden
+        # kablo çıkıkken (porta 0 bayt) seans / AI Pro / süre bekçisi durdurması "teyitli" sayılıyordu. Yalnız RAPOR.
+        _isaret, _sira_once = _stm_yazim_isareti_al(), _stm_son_stop_sirasi_al()
+        _kuyrukta = []
         for coil_id in _stm_hedef:
             try:
                 ok = bool(state.hardware.update_coil(coil_id, 0.0, 0.0, 0.0, 0, start=False))
@@ -3975,6 +3994,10 @@ def _stop_session_coils(coil_ids, yetkiyi_kes: bool = False):
                 ok = False
             if not ok:
                 teyitsiz.append(coil_id)
+            else:
+                _kuyrukta.append(coil_id)
+        if _kuyrukta and not _stm_stop_porta_yazildi_mi(_isaret, _sira_once):
+            teyitsiz.extend(_kuyrukta)
     else:
         teyitsiz.extend(_stm_hedef)
     # Asama-2: durdurulan tum bobinlerin acik run'larini kapat (acik kalmasin).
@@ -3998,12 +4021,14 @@ def _seanssiz_durdur() -> list:
     estop_mandali.nesil_artir()
     teyitsiz: list = []
     if state.hardware:
+        _isaret, _sira_once = _stm_yazim_isareti_al(), _stm_son_stop_sirasi_al()
         try:
             ok = bool(state.hardware.stop_all_coils())
         except Exception:
             logging.getLogger(__name__).warning("seanssiz stop: STM stop_all hatasi", exc_info=True)
             ok = False
-        if not ok:
+        # 1-C §9 #2 (A-63): kuyruğa verildi ≠ porta yazıldı (kablo çıkık → teyitsiz). Yalnız RAPOR; STOP gitti.
+        if not ok or not _stm_stop_porta_yazildi_mi(_isaret, _sira_once):
             teyitsiz.extend(sorted(STM_COIL_IDS))
     if live_state.esp_etkin():
         for coil_id in sorted(ESP_COIL_IDS):
@@ -5715,6 +5740,15 @@ def _stm_son_stop_sirasi_al():
         return None
 
 
+def _stm_stop_porta_yazildi_mi(isaret, sira_once) -> bool:
+    """E-stop DIŞI durdurmalar için (1-C §9 #2 · A-63): STOP'tan ÖNCE alınan yazım işareti ve STOP sırasıyla, bu çağrının
+    STOP'u porta yazıldı mı? Yeni bir tüm-sıfır paketi sıralandıysa ona bağlanır (önceki bir STOP'un yazımı sayılmaz);
+    sıralanmadıysa (başka bobin hâlâ sürülüyor) işaretten sonraki herhangi bir yazım. Yalnız RAPOR — STOP'u kapılamaz."""
+    sira_sonra = _stm_son_stop_sirasi_al()
+    sira = sira_sonra if sira_sonra and sira_sonra != sira_once else None
+    return _stm_stop_yazildi_mi(True, isaret, sira)
+
+
 def _stm_stop_yazildi_mi(kuyruga_verildi: bool, isaret, stop_sirasi=None) -> bool:
     """`stmStopped`: STOP porta GERÇEKTEN yazıldı mı (D1.55 · B-1.23).
 
@@ -5817,7 +5851,8 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
         else:
             with _pending_acks_lock:
                 _pending_acks.pop(command_id, None)
-        return {"coilId": coil_id, "mqtt": "success" if ok or legacy_ok else "mqtt_unavailable"}
+        # D1.98 / A-63: ESP BİLEREK kapalıyken satır `devre_disi` (yayın yine denendi); broker ölü `mqtt_unavailable`.
+        return {"coilId": coil_id, "mqtt": _esp_yanit_durumu(ok or legacy_ok)}
 
     # DENETIM P0: kapsam `[cid for cid in coil_ids if cid in ESP_COIL_IDS]` idi → ESP STOP'lari
     # AKTIF SEANSIN bobin listesiyle sinirlaniyordu. STM tarafi ise kosulsuz stop_all_coils()
@@ -5887,10 +5922,18 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     # DENETIM P0 (yukaridaki kapsam fix'inin ikinci yarisi): mqtt_results BOS iken _esp_ok=True
     # varsayimi "dogrulanmadi"yi "basarili" sayiyordu. Kapsam artik daima tum ESP bobinleri
     # oldugundan liste bos olamaz; yine de bos-liste FAIL-CLOSED yorumlanir (bos = dogrulanmadi).
-    _esp_ok = bool(mqtt_results) and all(r.get("mqtt") == "success" for r in mqtt_results)
+    # ⚠️ D1.105 · A-63 (sahip): ESP BİLEREK kapalıyken teyit STM onayına göre — `devre_disi` ESP satırı teyidi düşürmez.
+    # ESP STOP'ları yine GÖNDERİLDİ (yukarıda, koşulsuz); istemcinin yedek adımları da teyitten bağımsız koşar
+    # (emergencyStop.ts) → gönderim AZALMAZ (Ö.4-Y8). ESP açıkken başarısız yayın teyidi düşürür (eskisi gibi).
+    _esp_ok = bool(mqtt_results) and all(r.get("mqtt") in ("success", "devre_disi") for r in mqtt_results)
     stm_stopped = _stm_stop_yazildi_mi(stm_stopped, _stm_isaret, _stm_stop_sirasi)  # D1.55: kuyruk değil PORT
     _stm_ok = stm_stopped or state.hardware is None  # STM yoksa STM-basarisizligi sayma
     _status = "success" if (_stm_ok and _esp_ok) else ("error" if (not _stm_ok and not _esp_ok) else "partial")
+    # D1.E04 · İG-6.7: teyit durumu `running:false` sıfırlamasından AYRI yayınlanır (istemci teyitsizken durdurmayı tutar).
+    try:
+        live_state.estop_teyidi_yaz(bool(_stm_ok and _esp_ok), "estop")
+    except Exception:
+        logging.getLogger(__name__).exception("E-stop: teyit durumu yayinlanamadi (durdurma tamam)")
     return {
         "status": _status,
         "confirmed": bool(_stm_ok and _esp_ok),

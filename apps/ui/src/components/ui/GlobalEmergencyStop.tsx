@@ -14,7 +14,7 @@
  * bu yüzden yalnız `activeTreatment.isActive`e bakmak yanıltıcıdır (DashboardScreen'deki
  * `hardwareRunning` mantığının aynısı).
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
@@ -76,8 +76,19 @@ export function GlobalEmergencyStop({
   // D1.E03: kural TEK kaynakta (`useStmBelirsiz`) — kabuk söküm kapısı (`useTeardownGuard`) aynı ölçütü kullanır.
   const belirsiz = useStmBelirsiz(snapshot);
 
+  // ⚠️ D1.E04 · İG-6.7: TEYİTSİZ acil durdurmadan sonra düğme EKRANDA KALIR. Backend teyitten bağımsız `running:false`
+  // yayınlar (canlı durumu sıfırlar) — bu "durdu" kanıtı DEĞİLDİR; eskiden düğme tam burada kalkıyordu (ölçüldü). Teyit:
+  // backend `estop_teyit` (E-stop teyidi ya da kartın tüm-sıfır ACK'i). Yerel bayrak: bu düğmenin teyitsiz basışı (backend
+  // iletisi gelmezse de); teyitli basış ya da backend teyidiyle kalkar.
+  const [yerelTeyitsiz, setYerelTeyitsiz] = useState(false);
+  const backendTeyitli = snapshot.estopTeyit?.teyitli === true;
+  useEffect(() => {
+    if (backendTeyitli) setYerelTeyitsiz(false);
+  }, [backendTeyitli, snapshot.estopTeyit?.zaman]);
+  const teyitsiz = snapshot.estopTeyit?.teyitli === false || yerelTeyitsiz;
+
   if (gizle) return null;
-  if (!running && !active && !belirsiz) return null;
+  if (!running && !active && !belirsiz && !teyitsiz) return null;
 
   const onPress = async () => {
     // Çift-tık koruması YOK (bilinçli): panik anındaki ikinci dokunuş yutulmamalı. `busy` yalnız
@@ -86,6 +97,7 @@ export function GlobalEmergencyStop({
     emitToast("Acil durdurma gönderiliyor…", "info");
     const { confirmed } = await performEmergencyStop();
     setBusy(false);
+    setYerelTeyitsiz(!confirmed);
     if (confirmed) emitToast("Tüm bobinler durduruldu ✓", "success");
     else platformAlert(EMERGENCY_STOP_UNCONFIRMED_TITLE, EMERGENCY_STOP_UNCONFIRMED_BODY);
   };
@@ -116,9 +128,11 @@ export function GlobalEmergencyStop({
           <Text style={styles.text} numberOfLines={1} adjustsFontSizeToFit>
             {busy
               ? "🚨 DURDURULUYOR…"
-              : belirsiz
-                ? "🚨 ACİL DURDUR (bağlantı yok)"
-                : `🚨 ACİL DURDUR${running > 0 ? ` (${running} bobin)` : ""}`}
+              : teyitsiz
+                ? "🚨 ACİL DURDUR (teyitsiz)"
+                : belirsiz
+                  ? "🚨 ACİL DURDUR (bağlantı yok)"
+                  : `🚨 ACİL DURDUR${running > 0 ? ` (${running} bobin)` : ""}`}
           </Text>
         </Pressable>
       </View>

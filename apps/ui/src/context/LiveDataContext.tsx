@@ -32,6 +32,7 @@ import type {
   ConnectionState,
   DashboardSnapshot,
   EstopMandali,
+  EstopTeyit,
 } from "@/types/domain";
 
 // ─── History max length ────────────────────────────────────────────────────
@@ -429,6 +430,13 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       // D1.81 · Y4: acil durdurma MANDALI kuruldu / sıfırlandı → bant ("Sıfırla") bundan çizilir.
       case "estop_mandali": {
         updateSnapshot({ estopMandali: msg.data as EstopMandali });
+        break;
+      }
+
+      // D1.E04 · İG-6.7: acil durdurmanın TEYİT durumu — `running:false` "durdu" kanıtı DEĞİL; kayan ACİL DURDUR teyitsizken
+      // ekranda kalır (kartın tüm-sıfır ACK'i ya da teyitli bir E-stop gelene dek).
+      case "estop_teyit": {
+        updateSnapshot({ estopTeyit: msg.data as EstopTeyit });
         break;
       }
 

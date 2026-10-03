@@ -14,9 +14,12 @@ on:
     branches: [ main, master, production-hardening, "feature/**", "fix/**" ]
     # ⚠️ YOL FILTRESI (monorepo): backend/launcher/firmware degisikligi Expo+jest hattini
     # tetiklemesin. Filtre YOKKEN tek satirlik bir Python degisikligi bu isi de kosturuyordu.
-    paths: [ "apps/ui/**", ".github/workflows/frontend.yml" ]
+    # ⚠️ ISTISNA (D1.105, Y8 bekcisi): acil durdurma TEYIT sozlesmesini tasiyan backend dosyalari (api_server: confirmed /
+    # ESP satiri; live_state: WS) degisince istemcinin "yedek adimlar teyitten bagimsiz" jest kapisi KOSMALI.
+    # Kapi: tests/test_D1105_Y8_jest_bekcisi_backend_teyit_degisince_KOSAR.py
+    paths: [ "apps/ui/**", ".github/workflows/frontend.yml", "apps/backend/servers/api_server.py", "apps/backend/servers/live_state.py" ]
   pull_request:
-    paths: [ "apps/ui/**", ".github/workflows/frontend.yml" ]
+    paths: [ "apps/ui/**", ".github/workflows/frontend.yml", "apps/backend/servers/api_server.py", "apps/backend/servers/live_state.py" ]
   workflow_dispatch:
 
 # Ayni dal icin eski kosuyu iptal et (tests.yml'de zaten vardi, burada YOKTU).

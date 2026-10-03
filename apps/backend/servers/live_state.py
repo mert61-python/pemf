@@ -216,6 +216,9 @@ _live_state = {
         "durationSec": 0,
         "isActive": False,
     },
+    # D1.E04 (İG-6.7): son ACİL DURDUR'un TEYİT durumu — "durdu" (`running:false`) ile "teyit edildi" AYRI. None = süreç
+    # açıldığından beri E-stop yok. {"teyitli": bool, "kaynak": "estop" | "stm_ack", "zaman": epoch}.
+    "estopTeyit": None,
     # Dashboard 'Hasta Özeti' kartının okuduğu aktif-seans hastası. None → aktif hasta yok.
     # Seans başlat/durdur'da set_live_patient/update_live_session_state ile güncellenir.
     "patient": None,
@@ -439,7 +442,33 @@ def _build_ws_snapshot() -> dict:
             "eField": _efield_snapshot(),
             # D1.81 · Y4 (yalnız-ek): acil durdurma mandalı — arayüz (Karşılama/Giriş dahil) "Sıfırla"yı gösterir.
             "estopMandali": estop_mandali.durum(),
+            # D1.E04 (yalnız-ek): son E-stop teyitsizse arayüz kayan ACİL DURDUR'u "(teyitsiz)" ile ekranda tutar.
+            "estopTeyit": _live_state.get("estopTeyit"),
         }
+
+
+def estop_teyidi_yaz(teyitli: bool, kaynak: str = "estop") -> dict:
+    """D1.E04 · İG-6.7: ACİL DURDUR'un TEYİT durumunu yaz ve yayınla (`estop_teyit`). Teyitten BAĞIMSIZ `running:false`
+    yayını (canlı durum sıfırlaması) "durdu" kanıtı DEĞİLDİR; istemci görünür durdurmayı bu alana göre tutar.
+    Yalnız RAPOR — STOP'u kapılamaz, gönderimi azaltmaz (Ö.4-Y8)."""
+    import time as _t
+
+    veri = {"teyitli": bool(teyitli), "kaynak": str(kaynak), "zaman": _t.time()}
+    with _live_state_lock:
+        _live_state["estopTeyit"] = veri
+        _ws_broadcast_sync({"type": "estop_teyit", "data": dict(veri)})
+    return veri
+
+
+def estop_teyidi_stm_ack() -> bool:
+    """Kart GERÇEK bir ACK'le TÜM çıkışlarını sıfır bildirdi: bekleyen (teyitsiz) E-stop STM tarafından teyit edilir.
+    Yalnız ESP kapalıyken (A-63: teyit STM'e göre) — ESP açıkken STM ACK'i ESP'yi teyit etmez. @return teyit verildi mi."""
+    with _live_state_lock:
+        mevcut = _live_state.get("estopTeyit")
+        if not mevcut or mevcut.get("teyitli") or esp_etkin():
+            return False
+    estop_teyidi_yaz(True, "stm_ack")
+    return True
 
 
 def update_live_stm_status(connected: bool) -> None:

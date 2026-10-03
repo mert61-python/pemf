@@ -161,6 +161,8 @@ def test_birim_stop_session_coils_teyitsiz_listesi(api, monkeypatch):
     # Iddia AYNI: karisik sonuclarda liste TAM OLARAK basarisiz olanlari icerir.
     # 4 → STM (sahte donanim False dondurur) · ESP_BOBIN → MQTT False.
     sonuc = {f"pemf/coil/{ESP_BOBIN}/control": False}
+    # D1.105 · A-63: ESP yayın başarısızlığı yalnız ESP AÇIKKEN teyitsizliktir (kapalıyken slot 8 teyidi düşürmez).
+    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
     monkeypatch.setattr(api, "_mqtt_publish", lambda topic, payload: sonuc.get(topic, True))
     monkeypatch.setattr(api.state, "hardware", _SahteStm(sonuc=False))
 
@@ -301,6 +303,7 @@ def test_KRITIK_sure_watchdog_teyitsiz_stopta_operatoru_uyarir(api, monkeypatch)
     görünür, bobinler ESP'de kendi süresi bitene dek enerjili kalabilir. Operatör AÇIKÇA
     uyarılmalı — /session/stop yolundaki [1.1] düzeltmesinin watchdog ayağı."""
     uyarilar: list = []
+    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")  # D1.105 · A-63: "broker ölü" ESP AÇIKKEN olur
     monkeypatch.setattr(api, "_mqtt_publish", lambda *a, **k: False)  # broker ölü
     monkeypatch.setattr(api.state, "hardware", None)
     monkeypatch.setattr(api, "_push_notification", lambda msg, sev="info": uyarilar.append((msg, sev)))

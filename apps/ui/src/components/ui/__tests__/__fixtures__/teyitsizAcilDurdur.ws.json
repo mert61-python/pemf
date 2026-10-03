@@ -1,0 +1,78 @@
+[
+  {
+    "type": "session_update",
+    "data": {
+      "isActive": false,
+      "mode": "Acil Durdurma"
+    }
+  },
+  {
+    "type": "coil_status",
+    "coilId": 1,
+    "data": {
+      "running": false
+    }
+  },
+  {
+    "type": "coil_status",
+    "coilId": 2,
+    "data": {
+      "running": false
+    }
+  },
+  {
+    "type": "coil_status",
+    "coilId": 3,
+    "data": {
+      "running": false
+    }
+  },
+  {
+    "type": "coil_status",
+    "coilId": 4,
+    "data": {
+      "running": false
+    }
+  },
+  {
+    "type": "coil_status",
+    "coilId": 5,
+    "data": {
+      "running": false
+    }
+  },
+  {
+    "type": "coil_status",
+    "coilId": 6,
+    "data": {
+      "running": false
+    }
+  },
+  {
+    "type": "coil_status",
+    "coilId": 7,
+    "data": {
+      "running": false
+    }
+  },
+  {
+    "type": "coil_status",
+    "coilId": 8,
+    "data": {
+      "running": false
+    }
+  },
+  {
+    "type": "emergency_stop",
+    "data": {
+      "reason": "manual"
+    }
+  },
+  {
+    "type": "estop_teyit",
+    "data": {
+      "teyitli": false,
+      "kaynak": "estop"
+    }
+  }
+]

@@ -7,11 +7,15 @@
  * hook ise mount'ta `/session/active` çekip 2sn'lik mutabakat interval'i kuruyor → her tüketici
  * fazladan bir poll döngüsü demek. Mantık buraya alındı: hook'suz, yan-etkisiz, her yerden çağrılabilir.
  *
- * İki katman:
- *   1) Bridge ucu  POST /api/hardware/emergency_stop  → STM 1-5 + ESP 6-8'i tek seferde durdurur.
- *   2) Yedek       POST /api/session/stop + /api/hardware/command{stop_all_coils}
- * Her ikisi de zaman aşımlıdır; hiçbiri teyit veremezse `confirmed:false` döner ve ÇAĞIRAN
- * kullanıcıyı "fiziksel güç düğmesi" uyarısıyla bilgilendirmek ZORUNDADIR.
+ * Üç adım:
+ *   1) Bridge ucu  POST /api/hardware/emergency_stop  → STM + ESP tek seferde durdurulur.
+ *   2) Yedek       aynı yetkili uç standart istemciyle (farklı taşıma yolu)
+ *   3) Son çare    POST /api/session/stop + /api/hardware/command{stop_all_coils}
+ * ⚠️ D1.105 · A-63 (sahip): 2. ve 3. adım teyitten BAĞIMSIZ, HER ZAMAN koşar — gönderim AZALTILAMAZ (Ö.4-Y8). Eskiden
+ * 1. adım teyitliyse erken dönülüyordu (zincir C1-13); ESP kapalıyken teyit artık STM'e bağlı olduğu için bu, her
+ * başarılı basışta yedek STOP'ların kaybı demekti. Teyit = 1. VEYA 2. adımın backend teyidi; 3. adım teyit vermez.
+ * Hiçbiri teyit veremezse `confirmed:false` döner ve ÇAĞIRAN kullanıcıyı "fiziksel güç düğmesi" uyarısıyla
+ * bilgilendirmek ZORUNDADIR.
  */
 import { apiPost, authHeaders } from "@/services/apiClient";
 import { serviceConfig } from "@/services/config";
@@ -39,6 +43,7 @@ const BRIDGE_TIMEOUT_MS = 5000;
  *          `false` ise bobinler hâlâ çalışıyor OLABİLİR; çağıran mutlaka uyarmalıdır.
  */
 export async function performEmergencyStop(): Promise<{ confirmed: boolean }> {
+  let teyitli = false;
   // 1) Bridge (tek atışta STM + ESP).
   try {
     const ctrl = new AbortController();
@@ -67,8 +72,8 @@ export async function performEmergencyStop(): Promise<{ confirmed: boolean }> {
     // (`confirmed` = tüm transport'lar) zaten gönderiyordu; istemci onu yok sayıp kendi
     // gevşek kuralını uyguluyordu. Bir bobin hastanın üzerinde çalışmaya devam ederken
     // operatöre "kesildi" demek, bu ekrandaki en ağır hata sınıfıdır.
-      if (data?.confirmed === true) return { confirmed: true };
-      // 2xx ama teyit YOK (kısmi/başarısız) → yedek yolu da dene (aşağı düş).
+      // ⚠️ D1.105 · A-63: teyitli olsa da ERKEN DÖNÜLMEZ — 2. ve 3. adım koşulsuz (Ö.4-Y8).
+      if (data?.confirmed === true) teyitli = true;
     } finally {
       clearTimeout(timer);
     }
@@ -82,14 +87,13 @@ export async function performEmergencyStop(): Promise<{ confirmed: boolean }> {
   try {
     const r = await apiPost<EmergencyStopResponse | null>(
       "/hardware/emergency_stop", {}, null, { silent: true });
-    if (r?.confirmed === true) return { confirmed: true };
+    if (r?.confirmed === true) teyitli = true;
   } catch {
     /* aşağıdaki son çareye düş */
   }
 
-  // 3) Son çare: seansı kapat + STM'e STOP. ⚠️ Bu yol ESP 6-8'i KAPSAMAZ (yalnız STM 1-5).
-  // Bu yüzden başarılı olsa bile `confirmed: false` döner: komutlar gönderilir ama ESP bobinlerinin
-  // durduğuna dair HİÇBİR kanıt yoktur. Eskiden burada `status === "success"` teyit sayılıyordu —
+  // 3) Son çare: seansı kapat + STM'e STOP — 1./2. adım teyitli olsa da GÖNDERİLİR (A-63). ⚠️ Bu yol ESP'yi KAPSAMAZ
+  // ve porta yazımı teyit etmez: kendi başına `confirmed` VERMEZ. Eskiden burada `status === "success"` teyit sayılıyordu —
   // STM'in durması, ESP bobinleri hastanın üzerinde çalışırken "hepsi kesildi" diye raporlanıyordu.
   try {
     await apiPost<CommandResponse | null>("/session/stop", {}, null, { silent: true });
@@ -100,9 +104,9 @@ export async function performEmergencyStop(): Promise<{ confirmed: boolean }> {
       { silent: true }
     );
   } catch {
-    /* yut — zaten teyitsiz dönüyoruz */
+    /* yut — teyit 1./2. adımdan gelir */
   }
-  return { confirmed: false };
+  return { confirmed: teyitli };
 }
 
 /** Teyit edilemeyen durdurma için ORTAK uyarı metni (tüm çağıranlar aynı sözü versin). */

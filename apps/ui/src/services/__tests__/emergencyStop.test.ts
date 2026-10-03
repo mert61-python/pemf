@@ -40,11 +40,12 @@ beforeEach(() => {
 
 // ── teyit yalnız backend'den ──────────────────────────────────────────────────
 
-it("backend confirmed:true → confirmed:true ve YEDEK yol ÇAĞRILMAZ", async () => {
+it("backend confirmed:true → confirmed:true ve YEDEK yollar YİNE gönderilir (D1.105 · A-63 kısıtı, Ö.4-Y8)", async () => {
+  // Eskiden bu test erken dönüşü ("gereksiz ikinci tur yok") PİNLİYORDU; A-63: yedek gönderimler teyitten bağımsız.
   bridge({ status: "success", confirmed: true, stmStopped: true, mqttResults: [{ mqtt: "success" }] });
   const res = await performEmergencyStop();
   expect(res.confirmed).toBe(true);
-  expect(mockApiPost).not.toHaveBeenCalled(); // gereksiz ikinci tur yok
+  expect(mockApiPost.mock.calls.map((c) => c[0])).toEqual(["/hardware/emergency_stop", "/session/stop", "/hardware/command"]);
 });
 
 it("KRİTİK: STM durdu ama ESP bobinleri DURMADI → teyit YOK", async () => {

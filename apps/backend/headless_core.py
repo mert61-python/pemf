@@ -745,8 +745,13 @@ class HeadlessCore:
 
         if "STM_OK:" in decoded:
             try:
-                for update in self._parse_stm_ok(decoded):
+                guncellemeler = self._parse_stm_ok(decoded)
+                for update in guncellemeler:
                     self._publish_event("hardware.stm.coil_update", update)
+                # D1.E04 (İG-6.7): kart GERÇEK bir ACK'le TÜM çıkışları sıfır bildirdi — teyitsiz bir ACİL DURDUR'un STM
+                # teyidi (sentetik sıfırlama yayını bu değildir; o, satır değil olay üretir).
+                if guncellemeler and all(float(u["duty"]) == 0.0 and not u["running"] for u in guncellemeler):
+                    self._publish_event("hardware.stm.stop_onayi", {"bobin_sayisi": len(guncellemeler)})
             except Exception as exc:
                 self.logger.error("STM_OK parse error: %s", exc)
                 self._publish_event(
