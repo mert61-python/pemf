@@ -28,8 +28,18 @@ from typing import Dict, List, Optional
 from database.db_hatalari import _DB_ERROR, _DB_INTEGRITY  # noqa: F401
 
 
+class KanitOkunamadi(Exception):
+    """D1.79 (B-3.73): seansın kanıtı GEÇİCİ bir hatayla okunamadı — "kanıt yok" DEĞİL; seans bu açılışta mühürlenmez."""
+
+
+def _eski_sema_hatasi_mi(exc) -> bool:
+    """Kanıt tablosu/sütunu eski şemada YOK mu (gerçekten "kanıt yok"). Başka her hata geçici sayılır."""
+    m = str(exc).lower()
+    return "no such table" in m or "no such column" in m
+
+
 class TelemetriKarisimi:
-    def _seansin_son_kaniti(self, cursor, session_id: int, baslangic_epoch: float):
+    def _seansin_son_kaniti(self, cursor, session_id: int, baslangic_epoch: float, simdi: float | None = None):
         """Seansın DİSKTE İZ BIRAKAN son anı (epoch) — yoksa None.
 
         ⚠️ Bitişi `datetime.now()` yazmak YANLIŞ TIBBİ KAYIT üretir: cihaz günlerce kapalı
@@ -38,17 +48,27 @@ class TelemetriKarisimi:
         çalışması ve son sensör örneği (ikisinin en büyüğü).
         """
         en_son = None
+        # ⚠️ D1.79 (B-3.74): ÜST sınır — şimdiden İLERİ tarihli kanıt (saat sıçraması / bozuk satır) güvenilmez; o satırlar
+        # yok sayılır. Eskiden yalnız alt sınır vardı → 3 gün ileri kanıt "4380 dk seans, 262800 sn koşu" yazdırıyordu.
+        import time as _time
+
+        simdi = _time.time() if simdi is None else float(simdi)
         for sorgu, parametre in (
             (
-                "SELECT MAX(COALESCE(ended_epoch, started_epoch)) FROM session_coil_runs WHERE session_id = ?",
-                (session_id,),
+                "SELECT MAX(COALESCE(ended_epoch, started_epoch)) FROM session_coil_runs WHERE session_id = ? "
+                "AND COALESCE(ended_epoch, started_epoch) <= ?",
+                (session_id, simdi),
             ),
-            ("SELECT MAX(sample_ts) FROM sensor_samples WHERE session_id = ?", (session_id,)),
+            ("SELECT MAX(sample_ts) FROM sensor_samples WHERE session_id = ? AND sample_ts <= ?", (session_id, simdi)),
         ):
             try:
                 deger = cursor.execute(sorgu, parametre).fetchone()[0]
-            except Exception:
-                deger = None  # tablo/sütun yoksa (eski şema) kanıt aramayı BOZMA
+            except Exception as exc:
+                # ⚠️ D1.79 (B-3.73): YALNIZ eski şema (tablo/sütun yok) "kanıt yok" demektir. Geçici hata (disk I/O,
+                # kilit) "kanıt yok" sayılınca seans 0 dk ile MÜHÜRLENİYORDU (geri dönüşsüz) → çağırana bildirilir.
+                if not _eski_sema_hatasi_mi(exc):
+                    raise KanitOkunamadi(f"seans {session_id} kaniti okunamadi: {type(exc).__name__}") from exc
+                deger = None
             if deger is not None and (en_son is None or float(deger) > en_son):
                 en_son = float(deger)
         # Kanıt seans başlangıcından ÖNCEYSE güvenilmez (saat değişimi / bozuk satır).

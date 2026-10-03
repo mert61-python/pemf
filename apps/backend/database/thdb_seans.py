@@ -36,6 +36,7 @@ from typing import Dict, List, Optional
 # tasinan `except` dallarinda kullanilir; goturulmezse `NameError` olur ve TAM SUIT bunu
 # GOREMEZ (o dallar yalnizca gercek bir DB hatasinda kosar). Bkz. database/db_hatalari.py.
 from database.db_hatalari import _DB_ERROR
+from database.thdb_telemetri import KanitOkunamadi
 
 
 class SeansKarisimi:
@@ -83,7 +84,17 @@ class SeansKarisimi:
 
                     # Bitiş: KANITTAN (bkz. `_seansin_son_kaniti`); kanıt yoksa başlangıç.
                     baslangic_epoch = started_at.timestamp()
-                    son_kanit = self._seansin_son_kaniti(cursor, session_id, baslangic_epoch)
+                    try:
+                        son_kanit = self._seansin_son_kaniti(cursor, session_id, baslangic_epoch)
+                    except KanitOkunamadi:
+                        # D1.79 (B-3.73): geçici okuma hatası → bu seans MÜHÜRLENMEZ (0 dk / 0 sn koşu yazılmaz); 'active'
+                        # kalır, sonraki açılışın kurtarması kanıtla yeniden dener.
+                        self.logger.error(
+                            "Kurtarma: seans %s kaniti OKUNAMADI (gecici hata) — muhurlenmedi, sonraki acilista denenecek",
+                            session_id,
+                            exc_info=True,
+                        )
+                        continue
                     bitis_epoch = son_kanit if son_kanit is not None else baslangic_epoch
                     bitis_dt = datetime.fromtimestamp(bitis_epoch)
                     duration_minutes = max(0, int((bitis_epoch - baslangic_epoch) / 60))
