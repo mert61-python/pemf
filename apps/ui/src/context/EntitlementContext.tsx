@@ -36,7 +36,12 @@ type Ctx = {
   entitlement: Entitlement;
   loading: boolean;
   refresh: () => Promise<void>;
+  /** Y58: bu oturumda GERÇEK hak hiç öğrenilemedi (ilk açılış internetsiz) — `entitlement` yalnız yer tutucudur. */
+  dogrulanamadi: boolean;
 };
+
+/** Y58: hak bilinmiyorken yeniden deneme aralığı — internet gelince gerçek hak kendiliğinden görünür. */
+export const HAK_YENIDEN_DENEME_MS = 30_000;
 
 const EntitlementContext = createContext<Ctx | undefined>(undefined);
 
@@ -95,6 +100,11 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   const [entitlement, setEntitlement] = useState<Entitlement>(defaultEntitlement());
   const [loading, setLoading] = useState(true);
+  // ⚠️ Y58 (sahip, S-E5): ilk açılış internetsizse ve bilinen son hak YOKSA rozet "abonelik doğrulanamadı (internet yok)"
+  // der; "Başlangıç"/deneme gösterilmez, `X-PEMF-Tier` gönderilmez, cihaza hiçbir şey YAZILMAZ (profil kalıcılığı geri
+  // eklenmez — Ö.4). Bilinen hak varsa (D1.63) o korunur ve bu bayrak kalkmaz.
+  const [dogrulanamadi, setDogrulanamadi] = useState(false);
+  const bilinenRef = useRef(false);
 
   // NESİL SAYACI: uçuştaki bir refresh, kullanıcı ÇIKIŞ yaptıktan (veya hesap değiştirdikten) sonra
   // çözülürse önceki kullanıcının tier'ını ve X-PEMF-Tier header'ını GERİ YÜKLÜYORDU — yani B
@@ -113,8 +123,12 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
     if (gen !== genRef.current) return; // bayat sonuç — oturum değişti
     const eff = e === UNKNOWN ? null : e;
     if (eff) {
+      bilinenRef.current = true;
+      setDogrulanamadi(false);
       setEntitlement(eff);
       setEntitlementHeaders(eff.tier, [...eff.addons]); // apiClient AI isteklerinde X-PEMF-Tier/Addons yollasın
+    } else if (!bilinenRef.current) {
+      setDogrulanamadi(true); // Y58: yer tutucu hak GÖSTERİLMEZ, başlık YOLLANMAZ
     }
     // Backend Supabase-doğrulaması için erişim JWT'si (spoof-proof tier). Enforce kapalıyken zararsız.
     try {
@@ -133,6 +147,8 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
       refresh();
     } else {
       genRef.current++; // uçuştaki refresh'i geçersiz kıl (önceki kullanıcının hakkı geri gelmesin)
+      bilinenRef.current = false;
+      setDogrulanamadi(false);
       setEntitlement(defaultEntitlement());
       setEntitlementHeaders(null);
       setAuthBearer(null);
@@ -140,7 +156,19 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
     }
   }, [session, refresh]);
 
-  const value = useMemo(() => ({ entitlement, loading, refresh }), [entitlement, loading, refresh]);
+  // Y58: hak bilinmiyorken periyodik yeniden deneme (oturum nesnesi değişmeden internet geri gelebilir).
+  useEffect(() => {
+    if (!session || !dogrulanamadi) return undefined;
+    const t = setInterval(() => {
+      void refresh();
+    }, HAK_YENIDEN_DENEME_MS);
+    return () => clearInterval(t);
+  }, [session, dogrulanamadi, refresh]);
+
+  const value = useMemo(
+    () => ({ entitlement, loading, refresh, dogrulanamadi }),
+    [entitlement, loading, refresh, dogrulanamadi]
+  );
   return <EntitlementContext.Provider value={value}>{children}</EntitlementContext.Provider>;
 }
 
@@ -153,6 +181,7 @@ export function useEntitlement() {
   return {
     ...ctx,
     tier: e.tier,
+    dogrulanamadi: ctx.dogrulanamadi,
     active: isActive(e, now),
     trialing: isTrialActive(e, now),
     trialDaysLeft: trialDaysLeft(e, now),

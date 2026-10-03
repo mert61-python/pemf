@@ -39,6 +39,20 @@ export const TIER_LABEL: Record<Tier, string> = {
   pro_plus: "Pro+",
 };
 
+/** Y58 (sahip): hak BİLİNMİYORKEN (ilk açılış internetsiz, bilinen son hak yok) rozet metni. */
+export const ABONELIK_DOGRULANAMADI = "Abonelik doğrulanamadı (internet yok)";
+
+/** Karşılama rozeti: hak bilinmiyorsa "doğrulanamadı" — "Başlangıç"/deneme UYDURULMAZ (Y58). */
+export function planRozetiMetni(p: {
+  dogrulanamadi?: boolean;
+  trialing: boolean;
+  trialDaysLeft: number;
+  tier: Tier;
+}): string {
+  if (p.dogrulanamadi) return ABONELIK_DOGRULANAMADI;
+  return p.trialing ? `Deneme · ${p.trialDaysLeft} gün kaldı` : TIER_LABEL[p.tier];
+}
+
 /** Abonelik satırı yoksa varsayılan: 14 günlük deneme (hesap oluşturma anından). */
 export function defaultEntitlement(accountCreatedAt?: string | null): Entitlement {
   let start = accountCreatedAt ? new Date(accountCreatedAt) : new Date();

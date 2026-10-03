@@ -11,7 +11,7 @@ import { useUserMode } from "@/context/UserModeContext";
 import { useAuth } from "@/context/AuthContext";
 import { Heart, Stethoscope, FlaskConical, LogOut, Sparkles, Zap } from "lucide-react-native";
 import { useEntitlement } from "@/context/EntitlementContext";
-import { TIER_LABEL } from "@/config/entitlement";
+import { planRozetiMetni } from "@/config/entitlement";
 import { installedModes } from "@/services/installedProfiles";
 import { useTeardownGuard } from "@/hooks/useTeardownGuard";
 import { EstopMandalBandi } from "@/components/ui/EstopMandalBandi";
@@ -22,7 +22,7 @@ export function WelcomeScreen() {
   // `.edu` gate KALDIRILDI — araştırma modu tüm hesaplarda görünür. (Erişim, client-kurulumu +
   // aboneliğe göre belirlenecek; app tarafında e-posta şartı yok.)
   const { session, logout } = useAuth();
-  const { tier, trialing, trialDaysLeft, realtime, research } = useEntitlement();
+  const { tier, trialing, trialDaysLeft, realtime, research, dogrulanamadi } = useEntitlement();
   // [S2 adım 7 / ekranA-13] Kendi `width < 768` eşiği yerine ortak kabuk kararı.
   // Welcome kabuk DIŞINDA olduğu için contentWidth = pencere genişliği → anlam AYNI.
   const { width, layout, isCompact } = useResponsive();
@@ -75,10 +75,10 @@ export function WelcomeScreen() {
             <View style={styles.planPill}>
               <Sparkles size={13} color={colors.primary} />
               <Text style={styles.planPillText}>
-                {trialing ? `Deneme · ${trialDaysLeft} gün kaldı` : TIER_LABEL[tier]}
+                {planRozetiMetni({ dogrulanamadi, trialing, trialDaysLeft, tier })}
               </Text>
             </View>
-            {realtime && (
+            {realtime && !dogrulanamadi && (
               <View style={styles.rtPill}>
                 <Zap size={12} color={colors.primary} />
                 <Text style={styles.rtPillText}>Gerçek-zamanlı</Text>
@@ -140,7 +140,8 @@ export function WelcomeScreen() {
                   <Text style={styles.cardDesc}>
                     Kamera destekli klinik kanser araştırma analizleri: fantom tümör, petri kuyu ve böbrek (RNA · CT · patoloji · hastalık) modelleriyle detaylı sonuç kaydı.
                   </Text>
-                  {!research && (
+                  {/* Y58: hak doğrulanamadıysa yer tutucu hakka dayalı "eklenti gerekir" iddiası YAZILMAZ */}
+                  {!research && !dogrulanamadi && (
                     <View style={styles.addonNote}>
                       <Text style={styles.addonNoteText}>Araştırma eklentisi gerektirir</Text>
                     </View>
