@@ -82,6 +82,15 @@ describe("D1.87 / A-70 — masaüstü devri: ulaşamadım ≠ hayır", () => {
     expect(durum(result.current)).toBe("app:op@klinik.com");
   });
 
+  it("KRİTİK: setSession ASILI kalırsa (yarı-açık ağ / captive portal) devir bütçesi dolunca çevrimdışı açılış", async () => {
+    // 1-E incelemesi (i-9.1): bütçe dolduğunda "yok" döndüren mutant bu kol olmadan 70 süitte (533 test) YEŞİL kalıyordu —
+    // `desktopSession` yorumu "devir OKUNMUŞ ama setSession asılıysa bu da ulaşamadım'dır" der; kapısı yoktu.
+    mockSetSession.mockReturnValue(new Promise(() => undefined));
+    const { result } = kur();
+    await waitFor(() => expect(durum(result.current)).not.toBe("splash"), { timeout: 8000 });
+    expect(durum(result.current)).toBe("app:op@klinik.com");
+  }, 15000);
+
   it("KARŞIT: Supabase AÇIKÇA REDDEDERSE (AuthApiError 400) giriş ekranı KALIR", async () => {
     mockSetSession.mockResolvedValue({
       data: { session: null },
