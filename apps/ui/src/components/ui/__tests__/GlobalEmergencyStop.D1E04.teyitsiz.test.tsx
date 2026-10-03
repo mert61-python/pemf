@@ -105,6 +105,21 @@ describe("D1.E04 / İG-6.7 — teyitsiz E-stop'tan sonra kayan ACİL DURDUR kal�
     expect(u.queryByText(/teyitsiz/)).not.toBeNull();
   });
 
+  it("KRİTİK: backend `estop_teyit` GÖNDERMESE de (eski backend / ileti yok) kendi teyitsiz basışından sonra running:false düğmeyi KALDIRMAZ", async () => {
+    // 1-E incelemesi (i-3.1): yerel bayrak (`yerelTeyitsiz`) kaldırılınca bu kol dışındaki her kapı YEŞİL kalıyordu —
+    // backend dizisindeki `estop_teyit {teyitli:false}` düğmeyi zaten tutuyordu. Sürüm kaymasında (`estop_teyit`'i bilmeyen
+    // backend) teyitsiz basıştan sonraki `running:false` yayını durdurma kontrolünü yine kaldırırdı (İG-6.7'nin kusuru).
+    const u = await kur();
+    await act(async () => {
+      fireEvent.press(u.getByLabelText("Acil durdur"));
+    });
+    const teyitsizIletisiz = dizi.filter((m) => m.type !== "estop_teyit");
+    expect(teyitsizIletisiz.length).toBeLessThan(dizi.length); // aparat: dizide estop_teyit VARDI, çıkarıldı
+    await gonder(teyitsizIletisiz);
+    expect(u.queryByLabelText("Acil durdur")).not.toBeNull();
+    expect(u.queryByText(/teyitsiz/)).not.toBeNull();
+  });
+
   it("KARŞIT: kartın tüm-sıfır ACK'iyle gelen teyit (estop_teyit teyitli:true) düğmeyi KALDIRIR (bobin çalışmıyor)", async () => {
     const u = await kur();
     await act(async () => {
