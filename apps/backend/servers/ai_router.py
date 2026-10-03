@@ -3277,6 +3277,24 @@ async def analyze_reticulocytes(
                 pass
 
 
+def _y51_duty_etiketi(model: str, duty_sum, cfg) -> dict:
+    """1-E inceleme i-15.1 · Y51 (sahip): araştırma ucuna verilen (ya da kabin YAML'ından gelen) `duty_sum` vekil modelin
+    EĞİTİM aralığı DIŞINDAYSA sonuç "eğitim aralığı dışı — güvenilmez" etiketi taşır (canlı E barıyla AYNI yardımcı ve
+    alanlar: `efield_live.egitim_duty_araligi`). Değer gizlenmez/kırpılmaz (Ö.4-Y9: kıskaç değil, gösterim). Aralık
+    okunamazsa etiket konmaz (bilinmiyor ≠ dışarıda)."""
+    try:
+        from servers.efield_live import egitim_duty_araligi
+
+        etkin = float(duty_sum) if duty_sum is not None else float(cfg.phantom.duty_sum)
+        aralik = egitim_duty_araligi(model)
+    except Exception:
+        logger.debug("Y51 duty etiketi hesaplanamadi (%s)", model, exc_info=True)
+        return {}
+    if aralik is None or aralik[0] <= etkin <= aralik[1]:
+        return {}
+    return {"dutyEgitimAraligiDisi": True, "dutyEgitimAraligi": [round(aralik[0], 2), round(aralik[1], 2)]}
+
+
 @ai_router.post("/api/ai/vision/em_fantom")
 async def analyze_em_fantom(
     _res=Depends(require_research),
@@ -3392,6 +3410,7 @@ async def analyze_em_fantom(
             "healthy_regions": payload["healthy_regions"],
             "timing_ms": result.timing_ms,
             **_xai_meta,
+            **_y51_duty_etiketi("fantom", duty_sum, cache["cfg"]),  # i-15.1 · Y51
         }
     except Exception as e:
         # D1.E07 (İG-5.80): sonlu olmayan girdi (ör. achieved_B=nan) ya da bozuk ölçekleyici → 422 (istemci girdisi;
@@ -3591,6 +3610,7 @@ async def analyze_em_petri(
             "resize": result.resize,
             "plausibility": result.plausibility,
             **_xai_meta,
+            **_y51_duty_etiketi("petri", duty_sum, cache["cfg"]),  # i-15.1 · Y51
         }
     except Exception as e:
         # D1.E07 (İG-5.80): sonlu olmayan girdi / bozuk ölçekleyici → 422 (fantomla aynı sözleşme).
