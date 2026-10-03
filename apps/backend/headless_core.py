@@ -770,7 +770,10 @@ class HeadlessCore:
         self,
         decoded: str,
         retry_last_payload: Callable[[], None] | None = None,
+        baglanti_etkin: Callable[[], bool] | None = None,
     ) -> None:
+        """STM satırını işle. `baglanti_etkin` (okuyucu verir): satırı okuyan bağlantı HÂLÂ etkin mi — değilse satır
+        bağlantı durumunu DEĞİŞTİRMEZ (1-E O-1.1). El sıkışma yolu vermez (bağlantı henüz yerleşmedi)."""
         if not decoded:
             return
 
@@ -786,7 +789,15 @@ class HeadlessCore:
         self.logger.info("[STM32] %s", decoded)
 
         if "STM_READY" in decoded or "STM_OK:" in decoded:
-            self._set_stm_connected(True)
+            # ⚠️ 1-E inceleme O-1.1: port kaybı dalı bağlantıyı geçersizleyip "kopuk" yazdıktan SONRA, elinde satır olan
+            # ESKİ okuyucunun STM_OK'u koşulsuz "bağlı" yazıyordu (kablo çıkıkken; yeniden bağlanma başarısızsa KALICI).
+            # Geçiş yalnız okuyucunun bağlantısı hâlâ etkinse yazılır. ACK'in kendisi (aşağıda) işlenmeye devam eder.
+            if baglanti_etkin is None or baglanti_etkin():
+                self._set_stm_connected(True)
+            else:
+                self.logger.warning(
+                    "[STM32] gecersiz baglantinin okuyucusundan '%s' — baglanti durumu DEGISMEDI", decoded[:40]
+                )
 
         # ⚠️ UYUM KAPISI (2026-09-18) — "BAGLI" ile "UYUMLU" AYRI SEYLERDIR.
         # Eskiden yalnizca yukaridaki satir vardi: `STM_READY` gorulunce baglanti YESIL
@@ -984,7 +995,9 @@ class HeadlessCore:
                         break
                     if line:
                         decoded = line.decode("utf-8", errors="ignore").strip()
-                        self._handle_stm_line(decoded, retry_last_payload)
+                        self._handle_stm_line(
+                            decoded, retry_last_payload, baglanti_etkin=lambda: baglanti.aktif() is conn
+                        )
             finally:
                 # ⚠️ KİMLİK KONTROLÜ — bu blok olmadan eski reader YENİ bağlantıyı öldürür.
                 benim = baglanti.birak(conn, nesil)

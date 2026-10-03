@@ -119,7 +119,7 @@ def aparat(monkeypatch):
     core._hw_send_queue = _KayitciKuyruk()
     core._set_stm_connected = lambda v: d.stm.append(v)
 
-    def _satir(line, retry):
+    def _satir(line, retry, **_k):  # O-1.1: okuyucu `baglanti_etkin=` de verir (aparat imzası)
         d.geri_cagri = retry
 
     core._handle_stm_line = _satir
