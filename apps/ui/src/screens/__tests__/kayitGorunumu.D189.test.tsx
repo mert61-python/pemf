@@ -162,4 +162,12 @@ describe("D1.89 — Seans Detayı (GERÇEK SessionDetailModal)", () => {
     const u = await detay();
     expect(u.getByTestId("seans-bobin-olculen-alan-2").props.children).toBe("—");
   });
+
+  it("KRİTİK D1.69 (Y6): dakika satırlarında sıcaklık ÖLÇÜLMEDİ (null) → grafik yerine 'sensör verisi yok' (0 °C çizgisi YOK)", async () => {
+    // aparat: GERÇEK yanıt — bobin A yalnız alan, B yalnız akım ölçtü; sıcaklık hiç ölçülmedi (Y6: NULL, 0.0 DEĞİL).
+    expect(F.detay.sensor_samples.length).toBeGreaterThan(0);
+    expect(F.detay.sensor_samples.every((s: any) => s.temperature_c === null)).toBe(true);
+    const u = await detay();
+    expect(u.queryByText(/Bu seansta sensör verisi yok/)).not.toBeNull();
+  });
 });

@@ -4794,17 +4794,19 @@ def _emit_minute_averages(now=None):
         _in = acc.get("i_n", 0)
         _bn = acc.get("b_n", 0)
         _an = acc.get("amb_n", 0)
-        # Metrik o dakika HIC okunmadiysa 0.0 — ESKI davranisla birebir ayni (t_sum/n zaten
-        # 0.0 verirdi); asagi-akista (grafik/rapor) yeni None/NULL riski OLUSTURMAZ.
-        amb_avg = (acc["amb_sum"] / _an) if _an else 0.0
+        # ⚠️ D1.69 (B-1.7 · S-1.3 · sahip kararı Y6): metrik o dakika HİÇ ölçülmediyse NULL — 0.0 DEĞİL. Eskiden "eski
+        # davranışla birebir" diye 0.0 yazılıyordu: bobin 1-5 (yalnız akım ölçer) her dakika "0,0 °C / 0,0 mT ölçüldü",
+        # seans grafiği 0 °C çizgisi çizip "sensör verisi yok"u bastırıyordu. Tüketiciler NULL'a hazır (şema REAL NULL,
+        # `/api/history/details`, arayüz grafiği `Number.isFinite` ile atlar). Ölçülen gerçek 0 → 0.0 (ayırt edilir).
+        amb_avg = (acc["amb_sum"] / _an) if _an else None
         rows.append(
             {
                 "coil_id": str(coil_id),
                 "sample_ts": now,
-                "temperature_c": (acc["t_sum"] / _tn) if _tn else 0.0,
+                "temperature_c": (acc["t_sum"] / _tn) if _tn else None,
                 "ambient_temp_c": amb_avg,
-                "current_a": (acc["i_sum"] / _in) if _in else 0.0,
-                "magnetic_field_mt": (acc["b_sum"] / _bn) if _bn else 0.0,
+                "current_a": (acc["i_sum"] / _in) if _in else None,
+                "magnetic_field_mt": (acc["b_sum"] / _bn) if _bn else None,
                 "pwm_frequency_hz": acc.get("freq"),
                 "pwm_duty_percent": acc.get("duty"),
                 "phase": acc.get("phase"),
