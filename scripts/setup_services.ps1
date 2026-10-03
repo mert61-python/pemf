@@ -131,6 +131,14 @@ if ($Uninstall) {
         Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -and $_.ExecutablePath -like "$AppDir\*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
         Get-Process cloudflared, nssm, mosquitto, PEMF_Backend -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     }
+    # ⚠️ D1.92 (B-9.23): aşağıdaki force-kill döngüsü ADINA göre TÜM `PEMF_Backend` süreçlerini öldürür — launcher'ın
+    # doğurduğu backend dahil (onun servisi yoktur, `nssm stop` onu durdurmaz). Bobin HER kill'den önce durur: birleşik
+    # teardown'ın ACİL DURDUR yardımcısı (backend.port → 8000 → 8001..8049) EN BAŞTA. Hatası kaldırmayı DURDURMAZ.
+    $teardownScript = Join-Path $AppDir 'pemf_teardown.ps1'
+    if (Test-Path $teardownScript) {
+        . $teardownScript
+        try { [void](Send-PemfAcilDurdur) } catch { Log "UYARI: ACİL DURDUR gönderilemedi ($_) — kaldırma sürüyor." "Yellow" }
+    }
     # TIBBİ GÜVENLİK: kaldırmadan ÖNCE servisi GRACEFUL durdur — nssm stop → NSSM Ctrl+C
     # (AppStopMethodConsole 15s) → backend signal-handler → bobin STOP + STM kuyruk-flush. Servis
     # STOPPED olana kadar BEKLE ki bobinler (hasta üzerindeyse) güvene alınsın. Force-kill'i ÖNCE

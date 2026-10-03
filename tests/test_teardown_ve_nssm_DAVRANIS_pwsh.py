@@ -77,6 +77,16 @@ function Get-Process { [CmdletBinding()] param([Parameter(ValueFromRemainingArgu
 function Get-CimInstance { [CmdletBinding()] param([Parameter(ValueFromRemainingArguments = $true)]$R) K "CIM"; @() }
 function Set-Location { [CmdletBinding()] param([Parameter(ValueFromRemainingArguments = $true)]$R) K "Set-Location" }
 function Start-Sleep { [CmdletBinding()] param([Parameter(ValueFromRemainingArguments = $true)]$R) K "SLEEP" }
+# D1.92/D1.93: ACİL DURDUR isteği GERÇEK ağa ÇIKMAZ — kayıtçı. Davranış senaryodan: basari | hata | zaman.
+$script:HttpDavranis = 'basari'; $script:AcikPortlar = @()
+function Invoke-RestMethod {
+    [CmdletBinding()] param([string]$Uri, [string]$Method, $TimeoutSec, [Parameter(ValueFromRemainingArguments = $true)]$R)
+    K ("HTTP " + $Method + " " + $Uri)
+    if ($script:HttpDavranis -eq 'hata') { throw "sahte: baglanti reddedildi" }
+    if ($script:HttpDavranis -eq 'zaman') { throw [System.TimeoutException]::new("sahte: zaman asimi") }
+    [pscustomobject]@{ status = 'success'; confirmed = $true }
+}
+function Invoke-WebRequest { [CmdletBinding()] param([Parameter(ValueFromRemainingArguments = $true)]$R) K "HTTP-IWR"; throw "sahte: IWR kullanilmamali" }
 function Get-Service {
     [CmdletBinding()] param([string]$Name)
     if (-not $script:Servis.ContainsKey($Name)) { K ("GS " + $Name + " YOK"); return }
@@ -86,7 +96,7 @@ function Get-Service {
     K ("GS " + $Name + " " + $script:Servis[$Name])
     [pscustomobject]@{ Name = $Name; Status = $script:Servis[$Name] }
 }
-$golgeler = 'sc.exe','sc','cmdkey','cmdkey.exe','schtasks','schtasks.exe','nssm','nssm.exe','icacls','icacls.exe','Stop-Service','Remove-Item','Stop-Process','Get-Process','Start-Sleep','Get-Service','Get-CimInstance','Set-Location'
+$golgeler = 'sc.exe','sc','cmdkey','cmdkey.exe','schtasks','schtasks.exe','nssm','nssm.exe','icacls','icacls.exe','Stop-Service','Remove-Item','Stop-Process','Get-Process','Start-Sleep','Get-Service','Get-CimInstance','Set-Location','Invoke-RestMethod','Invoke-WebRequest'
 foreach ($ad in $golgeler) {
     $c = Get-Command $ad -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $c -or $c.CommandType -ne 'Function') { [Console]::Out.WriteLine("APARAT_HATASI golgelenemedi: $ad"); exit 3 }
@@ -99,8 +109,8 @@ $script:Kayit.Clear()
 # fonksiyon, ya da salt-okur yerleşik olmalı. Gölge listesi bir YASAK listesi gibi çalışıyordu: fonksiyona
 # `taskkill.exe`, tam yollu `sc.exe` ya da `[Diagnostics.Process]::…Kill()` eklense test GERÇEK süreçleri
 # öldürürdü. Denetim KOŞTURMADAN ÖNCE yapılır; ihlalde hiçbir şey çağrılmadan çıkılır (çıkış 3).
-$kayitcilar = 'Write-PemfLog','Remove-PemfCredentials','Remove-PemfSystemCredentials','Remove-PemfTasks','Remove-PemfFirewall','Remove-PemfEnv','Remove-PemfRegistry','Get-PemfProfileRoots','Get-PemfFootprint','Log','Invoke-PemfTeardown'
-$yuklenenler = 'Test-PemfScope','Assert-PemfRemoved','Remove-PemfPaths','Stop-PemfProcessesAndServices','Invoke-PemfTeardown','Stop-AppProcs'
+$kayitcilar = 'Write-PemfLog','Remove-PemfCredentials','Remove-PemfSystemCredentials','Remove-PemfTasks','Remove-PemfFirewall','Remove-PemfEnv','Remove-PemfRegistry','Get-PemfProfileRoots','Get-PemfFootprint','Log','Invoke-PemfTeardown','Test-PemfPortAcik'
+$yuklenenler = 'Test-PemfScope','Assert-PemfRemoved','Remove-PemfPaths','Stop-PemfProcessesAndServices','Invoke-PemfTeardown','Stop-AppProcs','Send-PemfAcilDurdur','Get-PemfBackendPortAdaylari','Invoke-PemfAcilDurdurIstegi'
 $salt_okur = 'Test-Path','Join-Path','Split-Path','Sort-Object','ForEach-Object','Where-Object','Select-Object','Get-Content'
 $izinli = @($golgeler) + $kayitcilar + $yuklenenler + $salt_okur
 $izinli_degisken = 'NssmExe','teardownScript'
@@ -124,12 +134,13 @@ function Denetle($agac, [string]$ne) {
 }
 
 # ── 2) GERÇEK fonksiyonlar YALNIZ izin listesinden, AST'den (dosya dot-source EDİLMEZ) ──
-function Yukle([string]$Dosya, [string[]]$Adlar) {
+function Yukle([string]$Dosya, [string[]]$Adlar, [switch]$Varsa) {
     $t = $null; $e = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($Dosya, [ref]$t, [ref]$e)
     if ($e) { throw "parse hatasi: $Dosya" }
     foreach ($ad in $Adlar) {
         $f = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $ad }, $true) | Select-Object -First 1
+        if (-not $f -and $Varsa) { K ("YUKLENMEDI " + $ad); continue }
         if (-not $f) { throw "fonksiyon yok: $ad" }
         Denetle $f $ad
         . ([ScriptBlock]::Create($f.Extent.Text))
@@ -144,6 +155,8 @@ function Remove-PemfFirewall { param($Rx, [switch]$DryRun) K "FIREWALL" }
 function Remove-PemfEnv { param($Rx, [switch]$DryRun) K "ENV" }
 function Remove-PemfRegistry { param($Registry, $Scope, [switch]$DryRun) K "REGISTRY" }
 function Get-PemfProfileRoots { @(Join-Path $Kok 'profil') }
+function Test-PemfPortAcik([int]$Port) { K ("PROBE " + $Port); return ($script:AcikPortlar -contains $Port) }
+$estop_islevleri = @('Send-PemfAcilDurdur', 'Get-PemfBackendPortAdaylari', 'Invoke-PemfAcilDurdurIstegi')
 
 $sonuc = [ordered]@{ senaryo = $Senaryo }
 switch -Wildcard ($Senaryo) {
@@ -161,6 +174,26 @@ switch -Wildcard ($Senaryo) {
     }
     'servis_sirasi' {
         . Yukle $Teardown @('Stop-PemfProcessesAndServices')
+        . Yukle $Teardown $estop_islevleri -Varsa
+        $script:Servis['mosquitto'] = 'Running'; $script:Servis['PemfBackend'] = 'Running'
+        $script:PemfFailed = @()
+        Stop-PemfProcessesAndServices -Services @('mosquitto', 'PemfBackend')
+    }
+    'estop_*' {
+        # D1.92/D1.93: GERÇEK Stop-PemfProcessesAndServices + GERÇEK E-stop yardımcıları; ağ ve soket SAHTE.
+        . Yukle $Teardown @('Stop-PemfProcessesAndServices')
+        . Yukle $Teardown $estop_islevleri -Varsa
+        $pd = Join-Path $Kok 'profil\AppData\Local\PEMF Vet Client'
+        New-Item -ItemType Directory -Force $pd | Out-Null
+        $pf = Join-Path $pd 'backend.port'
+        switch ($Senaryo) {
+            'estop_basari' { Set-Content -LiteralPath $pf -Value '48123'; $script:AcikPortlar = @(48123) }
+            'estop_hata' { Set-Content -LiteralPath $pf -Value '48123'; $script:AcikPortlar = @(48123); $script:HttpDavranis = 'hata' }
+            'estop_zaman' { Set-Content -LiteralPath $pf -Value '48123'; $script:AcikPortlar = @(48123); $script:HttpDavranis = 'zaman' }
+            'estop_portyok' { }
+            'estop_sira' { Set-Content -LiteralPath $pf -Value '48123'; $script:AcikPortlar = @(8001, 8002) }
+            'estop_bozukdosya' { Set-Content -LiteralPath $pf -Value '8000; KANARYA'; $script:AcikPortlar = @(8000) }
+        }
         $script:Servis['mosquitto'] = 'Running'; $script:Servis['PemfBackend'] = 'Running'
         $script:PemfFailed = @()
         Stop-PemfProcessesAndServices -Services @('mosquitto', 'PemfBackend')
@@ -193,7 +226,7 @@ switch -Wildcard ($Senaryo) {
         function Log { param($m, $c) }
         . $blok
     }
-    'kaldirma_blogu' {
+    'kaldirma_blogu*' {
         # setup_services.ps1 `if ($Uninstall) { … }` gövdesi AST'den; sondaki `exit 0` dışında AYNEN koşar.
         $t = $null; $e = $null
         $ast = [System.Management.Automation.Language.Parser]::ParseFile($Setup, [ref]$t, [ref]$e)
@@ -207,6 +240,11 @@ switch -Wildcard ($Senaryo) {
         $AppDir = Join-Path $Kok 'app'
         New-Item -ItemType Directory -Force $AppDir | Out-Null
         if (Test-Path (Join-Path $AppDir 'pemf_teardown.ps1')) { throw "sahte AppDir'de teardown var — dot-source edilirdi" }
+        if ($Senaryo -eq 'kaldirma_blogu_estop') {
+            # Kayıtçı modül: yalnız iki işlev, gerçek dünyaya dokunmaz (gerçek E-stop yardımcısını estop_* senaryoları koşar).
+            $stub = 'function Send-PemfAcilDurdur { K "ESTOP"; 1 }' + "`n" + 'function Invoke-PemfTeardown { param($Scope, [switch]$IncludePatientData) K "TEARDOWN"; $true }'
+            Set-Content -LiteralPath (Join-Path $AppDir 'pemf_teardown.ps1') -Encoding UTF8 -Value $stub
+        }
         Set-Content -LiteralPath (Join-Path (Get-Location) 'nssm') -Value '' # Test-Path $NssmExe → gölge `nssm`
         $NssmExe = 'nssm'; $ServiceBackend = 'PemfBackend'; $ServiceMosq = 'mosquitto'; $PurgeData = $false
         $script:Servis['PemfBackend'] = 'Running'; $script:Servis['mosquitto'] = 'Running'
@@ -457,4 +495,84 @@ def test_KRITIK_D144_nssm_env_device_env_ve_temel_uclu_ve_SON_stop_butcesi(tmp_p
     assert son_ms > butce_ms, (
         f"SON AppStopMethodConsole {son_ms} ms ≤ backend kapanış bütçesi {butce_ms:.0f} ms — NSSM graceful bobin "
         "STOP'u bitmeden süreci SERT öldürür"
+    )
+
+
+# ── D1.92 · D1.93 (B-9.23 · B-10.58) — teardown ACİL DURDUR'u kill'den ÖNCE ─────────────────────
+# Bağımsız kaldırıcı PEMF_Backend'i `Stop-Process -Force` ile öldürüyordu; öncesinde ACİL DURDUR YOKTU (launcher
+# dağıtımında servis yok → `sc stop` hiçbir şeyi durdurmaz, `_safe_stop_outputs` koşmaz). Ağ/soket SAHTE: istek
+# `Invoke-RestMethod` gölgesine, port sondası `Test-PemfPortAcik` kayıtçısına gider (8000'e ASLA bağlanılmaz).
+
+
+def _ilk(kayit: list[str], onek: str) -> int:
+    return next((i for i, k in enumerate(kayit) if k.startswith(onek)), -1)
+
+
+def _sondalar(kayit: list[str]) -> list[int]:
+    return [int(k.split()[1]) for k in kayit if k.startswith("PROBE ")]
+
+
+def test_KRITIK_D192_teardown_ACIL_DURDURU_servis_durdurma_ve_KILLden_ONCE_gonderir(tmp_path):
+    s = _kos(tmp_path, "estop_basari")
+    k = s["kayit"]
+    post = _ilk(k, "HTTP Post http://127.0.0.1:48123/api/hardware/emergency_stop")
+    assert post >= 0, f"teardown ACİL DURDUR GÖNDERMEDİ (backend.port 48123 açık): {k[:14]}"
+    stop, kill = _ilk(k, "sc stop "), _ilk(k, "Stop-Process")
+    assert kill > post and stop > post, (
+        f"ACİL DURDUR (#{post}) servis durdurma (#{stop}) / force-kill'den (#{kill}) SONRA — bobin kill anında enerjili"
+    )
+    assert _ilk(k, "HTTP-IWR") < 0 and _yasakli(k) == []
+
+
+@pytest.mark.parametrize("senaryo", ["estop_hata", "estop_zaman"])
+def test_KRITIK_D192_ACIL_DURDUR_HATASI_ya_da_ZAMAN_ASIMI_kill_i_ENGELLEMEZ(tmp_path, senaryo):
+    s = _kos(tmp_path, senaryo)
+    k = s["kayit"]
+    post = _ilk(k, "HTTP Post http://127.0.0.1:48123/")
+    assert post >= 0, f"aparat: ACİL DURDUR denenmedi: {k[:14]}"
+    assert "Stop-Process" in k and k.index("Stop-Process") > post, (
+        f"{senaryo}: ACİL DURDUR başarısız olunca kaldırma DURDU — E-stop KAPIYA dönüştü (kill/temizlik yok)"
+    )
+    assert [x.split()[2] for x in k if x.startswith("sc stop ")] == ["PemfBackend", "mosquitto"]
+    assert any(x.startswith("LOG ACİL DURDUR başarısız: 127.0.0.1:48123") for x in k), "E-stop hatası günlüğe yazılmadı"
+
+
+def test_KRITIK_D192_backend_BULUNAMAZSA_adaylar_SIRAYLA_denenir_GUNLUGE_yazilir_kill_SURER(tmp_path):
+    s = _kos(tmp_path, "estop_portyok")
+    k = s["kayit"]
+    assert _sondalar(k) == list(range(8000, 8050)), f"aday portlar 8000..8049 sırayla denenmedi: {_sondalar(k)[:6]}…"
+    assert _ilk(k, "HTTP ") < 0, "açık port yokken istek gönderildi"
+    assert any(x.startswith("LOG ACİL DURDUR: çalışan PEMF backend'i bulunamadı") for x in k), "sonuç günlüğe yazılmadı"
+    assert "Stop-Process" in k, "backend bulunamayınca kaldırma durdu"
+
+
+def test_KRITIK_D192_port_SIRASI_backend_port_8000_8001_ve_ILK_basarida_durur(tmp_path):
+    s = _kos(tmp_path, "estop_sira")
+    k = s["kayit"]
+    sonda = _sondalar(k)
+    assert sonda[:3] == [48123, 8000, 8001], f"port sırası backend.port → 8000 → 8001 değil: {sonda[:5]}"
+    http = [x for x in k if x.startswith("HTTP ")]
+    assert http == ["HTTP Post http://127.0.0.1:8001/api/hardware/emergency_stop"], http
+    assert 8002 not in sonda, "ilk başarılı ACİL DURDUR'dan sonra taramaya devam edildi (yabancı servislere istek)"
+
+
+def test_KRITIK_D192_bozuk_backend_port_dosyasi_KULLANILMAZ_tarama_SURER(tmp_path):
+    """`backend.port` kullanıcı-yazılabilir: sayı olmayan içerik aday olmaz (Inno/NSIS ikizleriyle aynı denetim), yardımcı
+    çökmez, tarama 8000'den sürer."""
+    s = _kos(tmp_path, "estop_bozukdosya")
+    k = s["kayit"]
+    assert _sondalar(k)[:1] == [8000], _sondalar(k)[:3]
+    assert [x for x in k if x.startswith("HTTP ")] == ["HTTP Post http://127.0.0.1:8000/api/hardware/emergency_stop"]
+
+
+def test_KRITIK_D192_setup_services_kaldirma_ACIL_DURDURU_nssm_stop_ve_KILLden_ONCE(tmp_path):
+    """`setup_services.ps1 -Uninstall` force-kill döngüsü ADINA göre TÜM PEMF_Backend'leri (launcher'ınki dahil)
+    öldürür → birleşik teardown'ın ACİL DURDUR'u en başta. (Gerçek yardımcıyı estop_* senaryoları koşar; burada
+    sahte AppDir'deki kayıtçı modül.)"""
+    s = _kos(tmp_path, "kaldirma_blogu_estop", bekleme=_K)
+    k = s["kayit"]
+    assert "ESTOP" in k, f"-Uninstall ACİL DURDUR çağırmadı: {k[:12]}"
+    e = k.index("ESTOP")
+    assert e < k.index("nssm stop PemfBackend") and e < k.index("Stop-Process"), (
+        "-Uninstall: ACİL DURDUR nssm stop / force-kill'den SONRA"
     )

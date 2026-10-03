@@ -57,12 +57,78 @@ function Test-PemfScope([string]$Owner, [string]$Scope) {
     return $false
 }
 
-# Servisleri durdur + kaldır. TIBBİ GÜVENLİK: önce GRACEFUL sc-stop (→ NSSM Ctrl+C → backend
-# bobin-STOP + STM kuyruk-flush) + servis STOPPED olana kadar BEKLE ki bobinler (hasta üzerindeyse)
+# ⚠️ D1.92 · D1.93 (B-9.23 · B-10.58) — SAHİP DEĞİŞMEZİ: "bobin HER kill'den önce durur".
+# Bu modül PEMF_Backend'i `Stop-Process -Force` (TerminateProcess) ile öldürüyordu ve ÖNCESİNDE HİÇ ACİL DURDUR
+# yoktu. Launcher dağıtımında servis YOKTUR (sahada ölçüldü, Y36) → `sc stop` hiçbir şeyi durdurmaz, backend'in
+# `_safe_stop_outputs`'u koşmaz: bobin 1-7 STM ölü-adamına (~1,5 sn) dek, ESP açıksa ESP bobini watchdog'suz enerjili
+# kalırdı. Inno (`PemfBobinleriGuveneAl`) ve NSIS ikizleri E-stop gönderiyordu; bağımsız kaldırıcı göndermiyordu.
+# KURALLAR: (1) ACİL DURDUR EN BAŞTA — servis durdurma ve broker kapanmadan ÖNCE (backend'in ESP STOP'u broker'a
+# ulaşsın). (2) HİÇBİR KOŞULDA kill'i ENGELLEMEZ (Ö.4-Y8: durdurma kapı değildir) — hata/zaman aşımı yalnız günlüğe.
+# (3) Port sırası: her profildeki `backend.port` (launcher yazar) → 8000 → 8001..8049 (launcher
+# `find_free_port(8000, 50)`); ilk başarılı gönderimde durur. Sonuç günlüğe yazılır, backend bulunamazsa o da.
+function Get-PemfBackendPortAdaylari {
+    $adaylar = [System.Collections.Generic.List[int]]::new()
+    foreach ($kok in @(Get-PemfProfileRoots)) {
+        $dosya = Join-Path $kok 'AppData\Local\PEMF Vet Client\backend.port'
+        if (-not (Test-Path -LiteralPath $dosya)) { continue }
+        $ham = Get-Content -LiteralPath $dosya -Raw -ErrorAction SilentlyContinue
+        $p = 0
+        # Dosya KULLANICI-YAZILABİLİR: yalnız 1..65535 tamsayısı kabul (Inno/NSIS ikizleriyle aynı denetim).
+        if ($ham -and [int]::TryParse($ham.Trim(), [ref]$p) -and $p -ge 1 -and $p -le 65535 -and -not $adaylar.Contains($p)) {
+            $adaylar.Add($p)
+        }
+    }
+    foreach ($p in 8000..8049) { if (-not $adaylar.Contains($p)) { $adaylar.Add($p) } }
+    return , $adaylar.ToArray()
+}
+
+# Portta dinleyen var mı — kısa zaman aşımıyla (Windows'ta kapalı loopback portuna bağlanma ~1 sn sürebilir; 50 aday).
+function Test-PemfPortAcik([int]$Port) {
+    $c = [System.Net.Sockets.TcpClient]::new()
+    try { return [bool]($c.ConnectAsync('127.0.0.1', $Port).Wait(250) -and $c.Connected) }
+    catch { return $false }
+    finally { $c.Dispose() }
+}
+
+function Invoke-PemfAcilDurdurIstegi([int]$Port) {
+    Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/hardware/emergency_stop" -Method Post -TimeoutSec 5
+}
+
+# @return gönderilen ACİL DURDUR sayısı (yalnız RAPOR — çağıran buna göre kill'i ATLAMAZ).
+function Send-PemfAcilDurdur {
+    $gonderildi = 0
+    foreach ($p in (Get-PemfBackendPortAdaylari)) {
+        $acik = $false
+        try { $acik = [bool](Test-PemfPortAcik $p) } catch { $acik = $false }
+        if (-not $acik) { continue }
+        try {
+            $r = Invoke-PemfAcilDurdurIstegi $p
+            Write-PemfLog "ACİL DURDUR gönderildi: 127.0.0.1:$p (status=$($r.status) confirmed=$($r.confirmed))" 'Yellow'
+            $gonderildi++
+            break
+        } catch {
+            Write-PemfLog "ACİL DURDUR başarısız: 127.0.0.1:$p — $($_.Exception.Message) (kaldırma sürüyor)" 'Red'
+        }
+    }
+    if ($gonderildi -eq 0) {
+        Write-PemfLog "ACİL DURDUR: çalışan PEMF backend'i bulunamadı (backend.port → 8000 → 8001..8049) — kaldırma sürüyor; bobinleri ELLE kontrol edin" 'Yellow'
+    } else {
+        # STM STOP'unun seri kuyruktan porta yazılması için (backend flush bütçesi 1,5 sn; Inno ikizi 1800 ms).
+        Start-Sleep -Milliseconds 1800
+    }
+    return $gonderildi
+}
+
+# Servisleri durdur + kaldır. TIBBİ GÜVENLİK: önce ACİL DURDUR (yukarıda), sonra GRACEFUL sc-stop (→ NSSM Ctrl+C →
+# backend bobin-STOP + STM kuyruk-flush) + servis STOPPED olana kadar BEKLE ki bobinler (hasta üzerindeyse)
 # güvene alınsın; force-kill'i ÖNCE yaparsak bu graceful bobin-STOP ATLANIR. SONRA sc-delete +
 # kalan için force-kill (fallback: graceful asılıysa dosya kilidi kalmasın). (mosquitto'da
 # Stop-Service -Force StartPending'de ASILIR → sc + süreç-kill kullanılır.)
 function Stop-PemfProcessesAndServices([string[]]$Services) {
+    # D1.92/D1.93: ACİL DURDUR EN BAŞTA ve KOŞULSUZ — servis durdurma, broker kapanması ve force-kill'den ÖNCE.
+    # Hatası (istisna dahil) kaldırmayı DURDURMAZ.
+    try { [void](Send-PemfAcilDurdur) }
+    catch { Write-PemfLog "ACİL DURDUR yardımcısı hata verdi: $($_.Exception.Message) — kaldırma sürüyor" 'Red' }
     # ⚠️ TIBBİ GÜVENLİK — SIRA ÖNEMLİ (denetim 2026-08-04, P2).
     # ESKİ HÂLİ: ilk döngü TÜM servislere milisaniyeler içinde `sc.exe stop` gönderiyor, beklemeyi
     # AYRI bir döngüde SONRA yapıyordu. mosquitto <1 sn'de kapanır; backend ise `_safe_stop_outputs`
