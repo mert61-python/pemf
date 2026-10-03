@@ -46,9 +46,16 @@ _MANIFEST_URL = f"https://raw.githubusercontent.com/{_UPDATE_REPO}/exe/latest.js
 # sağlık kapılı geri alma, `rollout` ve `min_supported_version`. Bu modül ONDAN ÖNCEKİ
 # Inno/`exe` kanalıdır ve iki nedenle açık kalmamalı:
 #
-#   1) ÖLÜ: `exe/latest.json` bugün 404 döner (ölçüldü 2026-08-10). Denetleyici 6 saatte bir
-#      boşuna ağa çıkar, `previousStable` hiç dolmaz → `/api/update/rollback` HİÇBİR ZAMAN
-#      çalışamaz. RUNBOOK'un "kötü güncelleme" satırı tam da bu ölü komutu gösteriyordu.
+#   1) BAYAT: `exe/latest.json` 200 döner (ölçüldü 2026-09-24, DENETIM-04 B-4.25; 2026-08-10'daki "404"
+#      ölçümü artık geçersiz) ama içerik 2026-07-01'den beri değişmemiş bir 1.4.0 taslağıdır: `installerUrl`
+#      boş, `previousStable`/`firmware`/`uyumluluk` YOK. Kanal açıkken denetleyici 6 saatte bir boşuna okur,
+#      `previousStable` hiç dolmaz → `/api/update/rollback` HİÇBİR ZAMAN çalışamaz. RUNBOOK'un "kötü
+#      güncelleme" satırı tam da bu ölü komutu gösteriyordu.
+#      ⚠️ OKUYAN VAR: oto-firmware zinciri (`servers/firmware_manager.manifest_oku`) AYNI dosyayı (bu
+#      `_MANIFEST_URL`) okur — kanal kapalıyken de. Bugünkü taslakta uyum kuralı olmadığından açılış denetimi
+#      "uyumluluk kuralı YOK → karar verilmiyor" der (eylem `yok`); dosya OKUNAMAZSA eylem `bekle`dir — iki durum
+#      AYRI raporlanır (kilit: tests/test_firmware_manifest_KURAL_YOK_ayrimi_D156.py). Sahip Y17: firmware uyum
+#      kuralları bu dosyaya DEĞİL, AYRI bir yayın varlığına yazılır (D1.120).
 #   2) TEHLİKELİ: bir gün o dosya yeniden yayınlanırsa, Inno installer'ı LAUNCHER'IN yönettiği
 #      kurulumun YANINA ikinci bir backend + ikinci bir veri kökü kurar. Sonuç SPLIT-BRAIN
 #      HASTA VERİTABANI: seanslar iki ayrı DB'ye bölünür, ikisi de "eksiksiz" görünür.
