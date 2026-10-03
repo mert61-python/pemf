@@ -1919,12 +1919,15 @@ def _ai_pro_loop(dongu_muhru=None):
                 _dongu_bayragini_indir(dongu_muhru)  # süre doldu → otomatik durdur
 
             # Canlı seans göstergesi: bobin-1 AI duty'sini temsil değer olarak ver.
+            # ⚠️ D1.89 (İNCELEME-2 §10 #5): duty AYRI alanda (`duty_temsil`, %) — mT reçete alanına (`intensity`) YAZILMAZ;
+            # AI Pro'nun mT reçetesi yok (0 = reçete yok). Eskiden kart "%37 duty"yi "YOĞUNLUK (kayıt) 37 mT" gösteriyordu.
             rep_duty = round(normalize_ai_pro_duty_ratio(D[0]) * 100.0, 1) if localized else 0.0
             update_live_session_state(
                 is_active=True,
                 mode=f"AI Pro · {_aktif_saglayici().title} · {_aktif_saglayici().hedef_adi(_gosterim_oid)}",
                 freq=_AI_PRO_FREQ_HZ,
-                intensity=rep_duty,
+                intensity=0.0,
+                duty_temsil=rep_duty,
                 remaining_min=remaining // 60,
                 duration_sec=_ai_duration_min * 60,
                 surus_nesli=_nesil,  # D1.81 (İG-5.36): bayat tur acil durdurmadan sonra "aktif" yazamaz
@@ -2933,7 +2936,8 @@ async def ai_pro_frame(
                         is_active=True,
                         mode=f"AI Pro · {_aktif_saglayici().title} · {_aktif_saglayici().hedef_adi(_gosterim_oid)}",
                         freq=_AI_PRO_FREQ_HZ,
-                        intensity=rep_duty,
+                        intensity=0.0,  # D1.89: duty mT alanına yazılmaz
+                        duty_temsil=rep_duty,
                         remaining_min=remaining // 60,
                         duration_sec=_ai_duration_min * 60,
                         surus_nesli=_muhur["nesil"],  # İG-5.36: kilit altında yeniden denetlenir

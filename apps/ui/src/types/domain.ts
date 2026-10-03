@@ -114,6 +114,11 @@ export interface ActiveTreatment {
    * ⚠️ null = hiç ölçüm gelmedi (0.0 DEĞİL).
    */
   measuredPeakMt?: number | null;
+  /**
+   * D1.89 (İNCELEME-2 §10 #5): duty GÜDÜMLÜ seansın (AI Pro) TEMSİL duty'si (%, bobin 1 plan duty'si). mT DEĞİLDİR —
+   * eskiden `intensityMt`e yazılıp "37 mT" görünüyordu. null/yok = elle seans (reçete `intensityMt`).
+   */
+  dutyTemsilYuzde?: number | null;
   remainingMin: number;
   elapsedSec: number;
   durationSec: number;

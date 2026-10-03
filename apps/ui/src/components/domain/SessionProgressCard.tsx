@@ -7,6 +7,7 @@
 import { StyleSheet, Text, View, TouchableOpacity, Animated as RNAnimated, Easing as RNEasing } from "react-native";
 import { useEffect as useEff, useRef as useR } from "react";
 import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
+import { canliYogunluk, YOGUNLUK_ETIKETI_BUYUK } from "@/utils/yogunlukGosterimi";
 
 interface Props {
   isActive: boolean;
@@ -28,6 +29,8 @@ interface Props {
    * ⚠️ null/undefined = ölçüm YOK → tepe rozeti HİÇ çizilmez (0 gösterilmez).
    */
   measuredPeakMt?: number | null;
+  /** D1.89: AI Pro'nun bobin 1 plan duty'si (%) — mT DEĞİL; reçete ve ölçüm yokken "DUTY" etiketiyle gösterilir. */
+  dutyTemsilYuzde?: number | null;
   onStop: () => void;
   onEmergencyStop: () => void;
   loading?: boolean;
@@ -70,6 +73,7 @@ export function SessionProgressCard({
   intensityMt,
   measuredIntensityMt = null,
   measuredPeakMt = null,
+  dutyTemsilYuzde = null,
   onStop,
   onEmergencyStop,
   loading = false,
@@ -79,6 +83,7 @@ export function SessionProgressCard({
   const progress = durationSec > 0 ? Math.min(1, elapsedSec / durationSec) : 0;
   const indefinite = durationSec <= 0; // #72: süresiz seans → 00:00/%0 yerine "Süresiz"
   const pulseAnim = useR(new RNAnimated.Value(1)).current;
+  const yogunluk = canliYogunluk({ intensityMt, measuredIntensityMt, dutyTemsilYuzde });
 
   useEff(() => {
     // Bayat veride nabız animasyonunu DURDUR: "canlı çalışıyor" izlenimi verme.
@@ -160,12 +165,10 @@ export function SessionProgressCard({
             uygulanan doz sanıyordu → "(kayıt)" etiketi o beklentiyi düzeltir.
             2026-09-11 (sahip): STM'e MLX90393 bağlandı → GERÇEK ölçüm varken onu göster ve
             etiketi "(ölçülen)" yap. ⚠️ Ölçüm yokken 0 GÖSTERİLMEZ: reçeteye düşülür ve
-            etiket yine "(kayıt)" olur — "0 mT ölçtük" demek, ölçmediğimizi ölçtük demektir. */}
-        {measuredIntensityMt != null ? (
-          <ParamChip label="YOĞUNLUK (ölçülen)" value={`${measuredIntensityMt.toFixed(2)} mT`} />
-        ) : (
-          <ParamChip label="YOĞUNLUK (kayıt)" value={`${intensityMt} mT`} />
-        )}
+            etiket yine "(kayıt)" olur — "0 mT ölçtük" demek, ölçmediğimizi ölçtük demektir.
+            D1.89: kural TEK KAYNAKTA (`canliYogunluk`): reçete yoksa "—" (eskiden "0 mT"); AI Pro'nun bobin 1 duty'si
+            "DUTY … %x" (eskiden "YOĞUNLUK (kayıt) 37 mT"). */}
+        <ParamChip label={YOGUNLUK_ETIKETI_BUYUK[yogunluk.tur]} value={yogunluk.deger} />
         {/* SEANS TEPESİ — ayrı rozet, ayrı soru.
             "Şu an ne veriyoruz" (ölçülen, saniyelik) ile "bu seansta en fazla ne verdik"
             (tepe) farklı sayılardır: anlık değer darbe fazına ve ayar değişimine göre

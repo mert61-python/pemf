@@ -13,6 +13,7 @@ import { colors, spacing, typography, rf, rs, layoutMax, radius } from "@/theme/
 import { useLiveData } from "@/context/LiveDataContext";
 import { useSessionControl } from "@/hooks/useSessionControl";
 import { gorunurBobinler } from "@/services/bobinGorunurlugu";
+import { canliYogunluk, YOGUNLUK_ETIKETI } from "@/utils/yogunlukGosterimi";
 import { KendiDurdurmaIsareti } from "@/components/ui/KendiDurdurmaKontrolu";
 
 export function DashboardScreen() {
@@ -30,6 +31,7 @@ export function DashboardScreen() {
   // sunuluyor, üstelik payda hiçbir zaman dolmadığı için sistem daima eksik görünüyordu.
   // Kural TEK KAYNAKTA: `gorunurBobinler` (STM 1-7 daima + ESP slotu YALNIZ ortaya çıkınca).
   const coils = gorunurBobinler(snapshot.coils ?? []);
+  const yogunluk = canliYogunluk(at);
   const connectedCount = coils.filter((c) => c.connected).length;
   // Payda SABİT DEĞİL: ESP geri takılırsa slot 8 görünür olur ve payda kendiliğinden 8 olur.
   const coilTotal = coils.length;
@@ -78,7 +80,8 @@ export function DashboardScreen() {
       {/* Metrics */}
       <ResponsiveGrid>
         <MetricCard label="Aktif Frekans" value={`${at.frequencyHz || 0} Hz`} tone={colors.primary} />
-        <MetricCard label="Yoğunluk" value={`${at.intensityMt || 0} mT`} tone={colors.warning} />
+        {/* D1.89 · B-6.27: etiket HANGİ sayının gösterildiğini söyler (ölçülen / kayıt / AI Pro duty); yoksa "—". */}
+        <MetricCard label={YOGUNLUK_ETIKETI[yogunluk.tur]} value={yogunluk.deger} tone={colors.warning} />
         <MetricCard label="Kalan Süre" value={`${at.remainingMin || 0} dk`} tone={colors.success} />
         <MetricCard label="Bağlı Bobin" value={`${connectedCount} / ${coilTotal}`} tone={colors.magenta} />
       </ResponsiveGrid>

@@ -127,7 +127,7 @@ def test_finish_coil_run_writes_per_metric_averages(api):
 
 
 def test_finish_coil_run_zero_fill_count_is_safe(api):
-    """Bir metrik hiç okunmadıysa (fill count 0) → sıfıra-bölme YOK, avg 0.0 (eski davranış)."""
+    """Bir metrik hiç okunmadıysa (fill count 0) → sıfıra-bölme YOK, avg None (D1.89: 0.0 "ölçüldü" okunuyordu)."""
     api_server, fake = api
     with api_server._session_lock:
         api_server._active_session["db_session_id"] = 7
@@ -147,8 +147,8 @@ def test_finish_coil_run_zero_fill_count_is_safe(api):
         )
     api_server._finish_coil_run(4)
     rid, kw = fake.summaries[0]
-    assert kw["temp_avg"] == 0.0  # 0-bölme değil
-    assert kw["field_avg"] == 0.0
+    assert kw["temp_avg"] is None  # 0-bölme değil; ölçülmedi = None (0.0 "ölçüldü" demek olurdu)
+    assert kw["field_avg"] is None
     assert kw["current_avg"] == pytest.approx(3.0)
 
 

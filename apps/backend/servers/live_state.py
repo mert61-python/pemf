@@ -197,6 +197,10 @@ _live_state = {
         # REÇETE yoğunluğu: operatörün yazdığı sayı. Cihaza GÖNDERİLMEZ (STM/ESP paketi mT
         # taşımaz), yalnız DB'ye kaydedilir → arayüzde "(kayıt)" etiketiyle gösterilir.
         "intensityMt": 0.0,
+        # D1.89 (İNCELEME-2 §10 #5 · İG-6.47 sınıfı): duty GÜDÜMLÜ seansın (AI Pro) TEMSİL duty'si (%; bobin 1'in plan
+        # duty'si). Eskiden `intensityMt`e yazılıyordu → arayüz "%37 duty"yi "37 mT" diye gösteriyordu. mT DEĞİLDİR;
+        # None = bu seans duty temsil değeri taşımıyor (elle seans: reçete `intensityMt`).
+        "dutyTemsilYuzde": None,
         # ÖLÇÜLEN yoğunluk: STM'e bağlı MLX90393'ün seans boyunca gördüğü TEPE |B| (mT).
         # ⚠️ None = HİÇ ÖLÇÜM YOK (sensör bağlı değil / seans yok). 0.0 KOYULMAZ: aşağı
         # akış 0.0'ı "ölçüldü" sayar — bu deponun tekrarlayan arızası. Arayüz None iken
@@ -522,6 +526,7 @@ def update_live_session_state(
     elapsed_sec: int = 0,
     duration_sec: int = 0,
     surus_nesli: int | None = None,
+    duty_temsil: float | None = None,
 ) -> bool:
     """React/WebSocket tarafındaki aktif tedavi özetini günceller. @return yazıldı mı (False = "aktif" yazımı ATLANDI).
 
@@ -546,6 +551,7 @@ def update_live_session_state(
                 "mode": mode,
                 "frequencyHz": freq,
                 "intensityMt": intensity,
+                "dutyTemsilYuzde": duty_temsil,  # D1.89: duty mT alanına YAZILMAZ (bkz. ilk durum)
                 "remainingMin": remaining_min,
                 "elapsedSec": elapsed_sec,
                 "durationSec": duration_sec,

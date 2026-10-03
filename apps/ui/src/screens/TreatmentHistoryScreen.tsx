@@ -18,6 +18,7 @@ import { downloadFileWithAuth } from "@/services/dosyaIndir";
 import { useCokluSecim } from "@/hooks/useCokluSecim";
 import { SecimCubugu } from "@/components/ui/SecimCubugu";
 import { TOPLU_SILME_ONAYI } from "@/services/topluSilme";
+import { kayitYogunlugu } from "@/utils/yogunlukGosterimi";
 
 // Backend ham seans durumlarını (İngilizce) görüntüleme için Türkçeye çevirir.
 // NOT: Yalnızca gösterim amaçlıdır; backend ham değerleri (renk/durum mantığı) değiştirilmez.
@@ -481,7 +482,8 @@ function SessionCard({
         <Detail label="Hedef" value={session.target_condition || "-"} />
         <Detail label="Süre" value={`${session.duration_minutes || 0} dk`} />
         <Detail label="Frekans" value={`${session.frequency_hz || 0} Hz`} />
-        <Detail label="Yoğunluk" value={`${session.intensity_mt || 0} mT`} />
+        {/* D1.89 · B-6.27: reçete CİHAZA GÖNDERİLMEZ → "(kayıt)"; reçetesiz seans "0 mT" değil "—". */}
+        <Detail label="Yoğunluk (kayıt)" value={kayitYogunlugu(session.intensity_mt)} />
       </View>
       <View style={styles.notesContainer}>
         <View style={styles.notesHeader}>

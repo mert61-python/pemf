@@ -25,6 +25,7 @@ import {
 import Svg, { Line, Polyline, Rect, Text as SvgText } from "react-native-svg";
 import { colors, spacing, typography, rs, layoutMax } from "@/theme/tokens";
 import { apiGet } from "@/services/apiClient";
+import { kayitYogunlugu, olculenAlanOrt } from "@/utils/yogunlukGosterimi";
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 
 // Grafik/tablo renkleriyle BİREBİR aynı kategorik palet (RealtimeChart COIL_COLORS).
@@ -317,7 +318,9 @@ function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
               <Text style={[styles.th, styles.colDur]} {...BASLIK_HUCRE}>Süre</Text>
               <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Frekans</Text>
               <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Duty</Text>
-              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Şiddet</Text>
+              {/* D1.89 · B-6.27: reçete (kayıt) ile koşunun ÖLÇÜLEN alan ortalaması (summary.field_avg) AYRI sütun. */}
+              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Şiddet (kayıt)</Text>
+              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Alan (ölçülen)</Text>
               <Text style={[styles.th, styles.colHw]} {...BASLIK_HUCRE}>Donanım</Text>
               <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Ort. °C</Text>
               <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Maks. °C</Text>
@@ -351,7 +354,10 @@ function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
                     {run.duty_percent != null ? `%${run.duty_percent}` : "—"}
                   </Text>
                   <Text style={[styles.td, styles.colNum]} {...VERI_HUCRE}>
-                    {run.intensity_mt != null ? `${run.intensity_mt} mT` : "—"}
+                    {kayitYogunlugu(run.intensity_mt)}
+                  </Text>
+                  <Text style={[styles.td, styles.colNum]} {...VERI_HUCRE} testID={`seans-bobin-olculen-alan-${coilId}`}>
+                    {olculenAlanOrt(summary?.field_avg)}
                   </Text>
                   <Text style={[styles.td, styles.colHw]} {...VERI_HUCRE}>{hwLabel(run.hw_type)}</Text>
                   <Text style={[styles.td, styles.colNum]} {...VERI_HUCRE}>

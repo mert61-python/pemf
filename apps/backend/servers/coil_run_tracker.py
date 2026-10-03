@@ -133,6 +133,9 @@ def _finish_coil_run(coil_id, only_run_id=None):
             n = st["n"]
             # Her metrik KENDI dolu-ornek sayisina bolunur (eksik sensor okumalari
             # ortalamayi asagi cekmesin); metrik hic okunmadiysa None.
+            # ⚠️ D1.89 (B-6.27): eskiden yorum "None" derken kod 0.0 yaziyordu → Seans Detayi "olculen alan" sutunu
+            # olculmemis metrigi "0.00 mT olculdu" diye gosterirdi. None: kayit/PDF '-', CSV bos hucre (tuketiciler None'a
+            # hazir: pdf `_fmt_num`, csv.writer, arayuz `fmtNum`). Dakika satirlari (sensor_samples) AYRI karar — degismedi.
             _tn = st.get("t_n", 0)
             _in = st.get("i_n", 0)
             _bn = st.get("b_n", 0)
@@ -142,9 +145,9 @@ def _finish_coil_run(coil_id, only_run_id=None):
                     sample_count=n,
                     temp_min=st.get("t_min"),
                     temp_max=st.get("t_max"),
-                    temp_avg=(st["t_sum"] / _tn) if _tn else 0.0,
-                    current_avg=(st["i_sum"] / _in) if _in else 0.0,
-                    field_avg=(st["b_sum"] / _bn) if _bn else 0.0,
+                    temp_avg=(st["t_sum"] / _tn) if _tn else None,
+                    current_avg=(st["i_sum"] / _in) if _in else None,
+                    field_avg=(st["b_sum"] / _bn) if _bn else None,
                 )
             except Exception:
                 logging.getLogger(__name__).debug("add_sensor_run_summary hatasi", exc_info=True)

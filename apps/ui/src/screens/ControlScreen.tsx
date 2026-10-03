@@ -72,6 +72,8 @@ const AUTO_TARGETS = [
 // ─── Component ────────────────────────────────────────────────────────────────
 export function ControlScreen() {
   const { snapshot, telemetryStale } = useLiveData();
+  // D1.89: WS'teki AKTİF seans (ölçülen yoğunluk + AI Pro duty temsili bunun alanlarıdır). Etkin değilse null.
+  const wsSeans = snapshot.activeTreatment?.isActive === true ? snapshot.activeTreatment : null;
   const { selectedPatient } = useAppNav();
   const { session } = useAuth();
   const { operatorEmail } = useOperator();
@@ -543,8 +545,11 @@ export function ControlScreen() {
         durationSec={treatment?.durationSec ?? 0}
         frequencyHz={treatment?.frequencyHz ?? 0}
         intensityMt={treatment?.intensityMt ?? 0}
-        measuredIntensityMt={treatment?.measuredIntensityMt ?? null}
-        measuredPeakMt={treatment?.measuredPeakMt ?? null}
+        // D1.89 · İG-6.11 (b): ölçülen yoğunluk/tepe ve AI Pro duty temsili WS `activeTreatment`ten gelir — yerel kopya
+        // (`useSessionControl`) bunları HİÇ doldurmuyordu, "(ölçülen)" rozeti üretimde çizilmiyordu.
+        measuredIntensityMt={treatment?.measuredIntensityMt ?? (wsSeans ? wsSeans.measuredIntensityMt ?? null : null)}
+        measuredPeakMt={treatment?.measuredPeakMt ?? (wsSeans ? wsSeans.measuredPeakMt ?? null : null)}
+        dutyTemsilYuzde={wsSeans ? wsSeans.dutyTemsilYuzde ?? null : null}
         onStop={stopSession}
         onEmergencyStop={emergencyStop}
         loading={sessionStopping}
