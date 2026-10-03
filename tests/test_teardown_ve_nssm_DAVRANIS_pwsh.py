@@ -110,7 +110,7 @@ $script:Kayit.Clear()
 # `taskkill.exe`, tam yollu `sc.exe` ya da `[Diagnostics.Process]::…Kill()` eklense test GERÇEK süreçleri
 # öldürürdü. Denetim KOŞTURMADAN ÖNCE yapılır; ihlalde hiçbir şey çağrılmadan çıkılır (çıkış 3).
 $kayitcilar = 'Write-PemfLog','Remove-PemfCredentials','Remove-PemfSystemCredentials','Remove-PemfTasks','Remove-PemfFirewall','Remove-PemfEnv','Remove-PemfRegistry','Get-PemfProfileRoots','Get-PemfFootprint','Log','Invoke-PemfTeardown','Test-PemfPortAcik'
-$yuklenenler = 'Test-PemfScope','Assert-PemfRemoved','Remove-PemfPaths','Stop-PemfProcessesAndServices','Invoke-PemfTeardown','Stop-AppProcs','Send-PemfAcilDurdur','Get-PemfBackendPortAdaylari','Invoke-PemfAcilDurdurIstegi'
+$yuklenenler = 'Test-PemfScope','Assert-PemfRemoved','Remove-PemfPaths','Stop-PemfProcessesAndServices','Invoke-PemfTeardown','Stop-AppProcs','Send-PemfAcilDurdur','Get-PemfBackendPortAdaylari','Invoke-PemfAcilDurdurIstegi','Get-PemfProfilEnvDosyasi','Read-PemfProfilEnv'
 $salt_okur = 'Test-Path','Join-Path','Split-Path','Sort-Object','ForEach-Object','Where-Object','Select-Object','Get-Content'
 $izinli = @($golgeler) + $kayitcilar + $yuklenenler + $salt_okur
 $izinli_degisken = 'NssmExe','teardownScript'
@@ -224,6 +224,8 @@ switch -Wildcard ($Senaryo) {
         Set-Content -LiteralPath $blok -Value $metin -Encoding UTF8
         $NssmExe = 'nssm'; $ServiceBackend = 'PemfBackend'; $AppDir = Join-Path $Kok 'app'; $LogDir = Join-Path $Kok 'log'; $Mode = 'device'
         function Log { param($m, $c) }
+        # Y44: profil dosyası bulma + ayrıştırma işlevleri (ön doğrulamayla ORTAK) AST'den, izin listesiyle.
+        . Yukle $Setup @('Get-PemfProfilEnvDosyasi', 'Read-PemfProfilEnv')
         . $blok
     }
     'kaldirma_blogu*' {

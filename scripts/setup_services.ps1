@@ -111,6 +111,53 @@ function Ensure-PemfMosquittoFirewallRule {
     }
     return $MosqFirewallOk
 }
+# ⚠️ Y44 (sahip — 1-B açık madde 5, i1-B3): `PEMF_API_PORT` backend'le AYNI kuralla doğrulanır
+# (`backend_service.ortam_portu`: Python `int()` — baş/son boşluk, isteğe bağlı +/-, rakamlar arasında tek `_`,
+# Unicode ondalık rakamlar — ve 1..65535). Eskiden hiç doğrulanmıyordu: servis bozuk değerle kuruluyor (backend uyarıyla
+# 8000'e düşer) ve sağlık sondası HAM değeri URL'ye koyup "CİHAZ ÇALIŞMIYOR" diyordu. Eşlik Python'a karşı ÖLÇÜLÜR
+# (`tests/test_setup_services_API_PORT_Y44.py`). Çalışma anındaki uyarılı 8000'e düşüş AYNEN kalır (ACİL DURDUR ucu).
+function Test-PemfApiPortDegeri([AllowNull()][string]$Ham) {
+    $sonuc = [pscustomobject]@{ Port = $null; Hata = "" }
+    $m = [regex]::Match([string]$Ham, '^\s*([+-]?)(\d+(?:_\d+)*)\s*$')
+    $deger = $null
+    if ($m.Success) {
+        $deger = [long]0
+        foreach ($ch in $m.Groups[2].Value.ToCharArray()) {
+            if ($ch -eq '_') { continue }
+            $deger = $deger * 10 + [long][char]::GetNumericValue($ch)
+            if ($deger -gt 65535) { break }
+        }
+        if ($m.Groups[1].Value -eq '-') { $deger = -$deger }
+    }
+    if ($null -ne $deger -and $deger -ge 1 -and $deger -le 65535) {
+        $sonuc.Port = [int]$deger
+    } else {
+        $sonuc.Hata = "PEMF_API_PORT geçersiz: '$Ham' — 1-65535 arası tamsayı olmalı (backend bu değerde uyarıyla " +
+            "8000'e düşer, kurulumun sağlık sondası yanlış porta bakar). Profil dosyasında düzeltin ya da satırı silin (varsayılan 8000)."
+    }
+    $sonuc
+}
+
+# Dağıtım profili dosyası (deploy\<Mode>.env) — ön doğrulama ve servis env'i AYNI dosyayı AYNI ayrıştırmayla okur (Y44).
+function Get-PemfProfilEnvDosyasi([string]$AppDir, [string]$Mode, [string]$BetikDizini) {
+    @(
+        (Join-Path $AppDir "_internal\deploy\$Mode.env"),
+        (Join-Path $AppDir "deploy\$Mode.env"),
+        (Join-Path $BetikDizini "..\deploy\$Mode.env")
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+
+function Read-PemfProfilEnv([string]$Dosya) {
+    $d = [ordered]@{}
+    foreach ($ln in (Get-Content $Dosya)) {
+        $t = $ln.Trim()
+        if ($t -and -not $t.StartsWith("#") -and $t.Contains("=")) {
+            $k, $v = $t.Split("=", 2); $d[$k.Trim()] = $v.Trim()
+        }
+    }
+    $d
+}
+
 $MosqFirewallOk = $false   # server/staging modunda ve mosquitto yoksa da tanımlı olsun (özet + .install_verified)
 $BackendExe     = Join-Path $AppDir "PEMF_Backend.exe"
 
@@ -177,6 +224,18 @@ if ($Uninstall) {
         & sc.exe delete $ServiceMosq *>$null
     }
     exit 0
+}
+
+# ───────────────────── 0. ÖN DOĞRULAMA (Y44) ─────────────────────
+# Bozuk `PEMF_API_PORT` → kurulum servis/broker/NSSM/güvenlik duvarı adımlarına BAŞLAMADAN açık hatayla durur
+# (eski servis kaldırılıp yarım kurulum bırakılmaz). Kaldırma (-Uninstall) bu kapıya takılmaz.
+$OnEnvFile = Get-PemfProfilEnvDosyasi $AppDir $Mode (Split-Path -Parent $MyInvocation.MyCommand.Path)
+if ($OnEnvFile) {
+    $OnProfil = Read-PemfProfilEnv $OnEnvFile
+    if ($OnProfil.Contains("PEMF_API_PORT")) {
+        $OnPort = Test-PemfApiPortDegeri $OnProfil["PEMF_API_PORT"]
+        if ($OnPort.Hata) { Log "HATA: $($OnPort.Hata) Dosya: $OnEnvFile — kurulum DURDU, hiçbir servis değiştirilmedi." "Red"; exit 1 }
+    }
 }
 
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
@@ -348,19 +407,11 @@ if (-not $installed) { Log "HATA: Backend servisi KURULAMADI (nssm install exit=
 # Dağıtım profili env'leri: deploy\<Mode>.env (device=klinik / server=demo). Bulunamazsa
 # yalnız temel env yazılır. Profil değerleri temel değerleri override eder (aynı KEY → profil).
 $EnvMap = [ordered]@{ "PYTHONUNBUFFERED" = "1"; "PEMF_HEADLESS" = "1"; "PEMF_LOG_DIR" = $LogDir }
-$EnvFile = @(
-    (Join-Path $AppDir "_internal\deploy\$Mode.env"),
-    (Join-Path $AppDir "deploy\$Mode.env"),
-    (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "..\deploy\$Mode.env")
-) | Where-Object { Test-Path $_ } | Select-Object -First 1
+$EnvFile = Get-PemfProfilEnvDosyasi $AppDir $Mode (Split-Path -Parent $MyInvocation.MyCommand.Path)
 if ($EnvFile) {
     Log "Profil yükleniyor ($Mode): $EnvFile" "Cyan"
-    foreach ($ln in (Get-Content $EnvFile)) {
-        $t = $ln.Trim()
-        if ($t -and -not $t.StartsWith("#") -and $t.Contains("=")) {
-            $k, $v = $t.Split("=", 2); $EnvMap[$k.Trim()] = $v.Trim()
-        }
-    }
+    $Profil = Read-PemfProfilEnv $EnvFile
+    foreach ($k in $Profil.Keys) { $EnvMap[$k] = $Profil[$k] }
 } else {
     Log "UYARI: deploy\$Mode.env bulunamadı; yalnız temel env yazıldı." "Yellow"
 }
@@ -385,7 +436,8 @@ foreach ($r in @(@{n = "PEMF Backend API"; p = "TCP"; port = 8000 }, @{n = "PEMF
 # ── GERÇEK fonksiyonel doğrulama (sessiz-başarıyı kapat) ──────────────────────────
 # nssm status TEK BAŞINA yetmez: AppThrottle/Restart ile crash-loop'ta bile RUNNING görünür.
 # Bu yüzden /api/health 200 esas kanıt. (device=0.0.0.0, server=127.0.0.1 → localhost ikisinde de çalışır.)
-$probePort = if ($EnvMap['PEMF_API_PORT']) { $EnvMap['PEMF_API_PORT'] } else { 8000 }
+# Y44: sonda DOĞRULANMIŞ portu kullanır (ön doğrulama geçti; `+8000`/`08000` gibi geçerli yazımlar URL'yi bozmasın).
+$probePort = if ($EnvMap.Contains('PEMF_API_PORT')) { (Test-PemfApiPortDegeri $EnvMap['PEMF_API_PORT']).Port } else { 8000 }
 $healthOk = $false
 for ($i = 1; $i -le 8; $i++) {
     Start-Sleep 3
