@@ -80,7 +80,7 @@ export function ControlScreen() {
     // `error` state'i YERİNE `lastError()`: state, onu tetikleyen `await startSession(...)`
     // satırının hemen ardından bu render'ın closure'ında HENÜZ güncel değildi → uyarı kutusu
     // bir ÖNCEKİ hatayı (ilk denemede de null) gösteriyordu.
-    loading, stopping, lastError, startSession, stopSession, emergencyStop,
+    loading, starting, sessionStopping, stopping, lastError, startSession, stopSession, emergencyStop,
   } = useSessionControl();
 
   const [activeTab, setActiveTab] = useState<TabKey>("manual");
@@ -403,7 +403,8 @@ export function ControlScreen() {
     stopRoundRef.current = true;
     setStopRound(true);
     try {
-    if (isActive) await stopSession().catch(() => {});
+    // D1.82: başlatma UÇUŞTAYKEN de seans durdurulur — kanca, geç gelen başlatma yanıtından SONRA STOP'u yeniden gönderir.
+    if (isActive || starting) await stopSession().catch(() => {});
     // DURDURULACAK KÜME: "o an SEÇİLİ olanlar" DEĞİL, "gerçekten ÇALIŞANLAR + seçili olanlar".
     // Kullanıcı bir bobini başlattıktan sonra seçimden çıkarırsa (ör. başka bobinlere geçmek için),
     // "Durdur" o bobine hiç komut göndermiyordu → hayvanın üzerinde sessizce enerjili kalıyordu.
@@ -546,7 +547,7 @@ export function ControlScreen() {
         measuredPeakMt={treatment?.measuredPeakMt ?? null}
         onStop={stopSession}
         onEmergencyStop={emergencyStop}
-        loading={loading}
+        loading={sessionStopping}
         stopping={stopping}
         stale={isActive && telemetryStale}
       />
@@ -690,13 +691,13 @@ export function ControlScreen() {
                 </View>
               )}
               <View style={{ flex: 1 }}>
-                {/* ⚠️ `disabled` DEĞİŞMEDİ: durdurma kontrolü kilitlenmez (sahip kararı).
-                    Etiket, sessizce yutulan dokunuş yerine geri bildirim verir —
-                    `SessionProgressCard`'daki emsalin aynısı. */}
+                {/* ⚠️ D1.82 · Y47 (sahip): durdurma kontrolü HİÇBİR istek sürerken kilitlenmez. Eskiden
+                    `disabled={loading}` idi: `/session/start` askıdayken (≤ 8 sn) Durdur basılamıyordu (ölçüldü).
+                    Etiket, sessizce yutulan dokunuş yerine geri bildirim verir. */}
                 <StartButton
                   label={stopRound ? "⏳ Durduruluyor…" : "⏹ Durdur"}
                   onPress={handleStopManual}
-                  disabled={loading}
+                  disabled={false}
                   color="#ef4444"
                 />
               </View>

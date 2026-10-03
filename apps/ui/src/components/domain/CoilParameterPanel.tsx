@@ -108,10 +108,21 @@ export function CoilParameterPanel({
   // Cihaz onayı beklenen START'ın command_id'si (saha 2026-09-08: "butona dokundum, PWM başladı mı?").
   // Saat karşılaştırması DEĞİL, command_id eşleşmesi: tablet/backend saat kayması sonucu etkilemez.
   const [bekleyenKomut, setBekleyenKomut] = useState<string | null>(null);
+  // ⚠️ D1.82 · İG-6.8 · Y47: Durdur, kendi START isteği askıdayken de basılabilir. Elle tekil yolda START'ın niyeti ile
+  // sürüşü arasında nesil denetimi yok (1-C bilinçli kapsam): istek backend'e STOP'tan SONRA ulaşırsa bobin yeniden
+  // başlar → START yanıtından sonra STOP YİNELENİR (idempotent; gönderim yalnız artar, Ö.4-Y8). Ref: aynı render'da da görülsün.
+  const startUcustaRef = useRef(false);
+  const startSonrasiDurdurRef = useRef(false);
 
   const color = COIL_COLORS[(coilId - 1) % 8];
 
   const sendCommand = useCallback(async (start: boolean): Promise<boolean> => {
+    if (start) {
+      startUcustaRef.current = true;
+      startSonrasiDurdurRef.current = false;
+    } else if (startUcustaRef.current) {
+      startSonrasiDurdurRef.current = true;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -153,6 +164,21 @@ export function CoilParameterPanel({
         duration: durMin * 60,
         start,
       }, null);
+      if (start) {
+        startUcustaRef.current = false;
+        if (startSonrasiDurdurRef.current) {
+          // D1.82: START uçuştayken operatör DURDUR'a bastı → yanıt ne olursa olsun STOP yinelenir; son söz durdurmanın.
+          startSonrasiDurdurRef.current = false;
+          const dur = await apiPost<{ status?: string } | null>(`/coil/${coilId}/control`, {
+            freq: 0, duty: 0, phase: 0, duration: 0, start: false,
+          }, null);
+          setBekleyenKomut(null);
+          if (!dur || dur.status !== "success") {
+            setError("DURDURMA ONAYLANAMADI — bobin HÂLÂ ÇALIŞIYOR olabilir. ACİL DURDUR'a basın.");
+          }
+          return false;
+        }
+      }
       // Denetim 2. tur [1.1] (2026-08-20): teyit yalnız AÇIK "success". Backend broker'a
       // ulaşamayınca HTTP 200 + {status:"mqtt_unavailable"} döner; eski yüklem (`!== "error"`)
       // onu teyit sayıyordu → durdurma komutu hiç ulaşmamışken "durduruldu" deniyordu (sahte güvence,
@@ -173,6 +199,7 @@ export function CoilParameterPanel({
       setError("Komut gönderilemedi");
       return false;
     } finally {
+      if (start) startUcustaRef.current = false;
       setLoading(false);
     }
   }, [coilId, freq, duty, phase, duration, defaultFreq, defaultDuty, defaultPhase, defaultDuration]);
@@ -371,10 +398,11 @@ export function CoilParameterPanel({
             normalize ettiğinden (bağlantı yokken "çalışıyor" gösterme kuralı), bobin gerçekte
             sürülüyor olsa bile Durdur butonu DEVRE DIŞI kalıyordu — yani telemetri kaybı, durdurma
             yeteneğini de götürüyordu. Durdurma komutu idempotenttir; her zaman gönderilebilmeli. */}
+        {/* ⚠️ D1.82 · Y47: `disabled={loading}` KALKTI — kendi START isteği askıdayken (≤ 8 sn) durdurma basılamıyordu
+            (ölçüldü: STOP isteği 0, bobin sürmeye devam etti). `loading` yalnız görünüm. */}
         <TouchableOpacity
           style={[styles.btnStop, loading && styles.btnDisabled]}
           onPress={() => sendCommand(false)}
-          disabled={loading}
           accessibilityRole="button"
           accessibilityLabel="Bobini durdur"
         >

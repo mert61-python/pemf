@@ -179,10 +179,11 @@ export function SessionProgressCard({
 
       {/* Buttons */}
       <View style={styles.btnRow}>
-        {/* Buton `loading` iken disabled'dı ama GÖRSEL OLARAK aynıydı → dokunuş sessizce yutuluyor,
-            operatör "çalışmıyor" sanıp tekrar tekrar basıyordu. Durumu görünür kıl. */}
-        <TouchableOpacity style={[styles.btnStop, loading && styles.btnBusy]} onPress={onStop} disabled={loading}
-          accessibilityRole="button" accessibilityState={{ disabled: loading, busy: loading }}
+        {/* ⚠️ D1.82 · Y47 (sahip): durdurma düğmesi istek sürerken KİLİTLENMEZ. Eskiden `disabled={loading}` idi:
+            başlatma ya da durdurma isteği askıdayken (≤ 8 sn) ikinci basış yutuluyordu. `loading` yalnız etikettir;
+            ikinci basış yeni bir `/session/stop` gönderir (idempotent). */}
+        <TouchableOpacity style={[styles.btnStop, loading && styles.btnBusy]} onPress={onStop}
+          accessibilityRole="button" accessibilityState={{ busy: loading }}
           accessibilityLabel="Seansı durdur">
           <Text style={styles.btnStopText} numberOfLines={1} adjustsFontSizeToFit>
             {loading ? "⏳ Durduruluyor…" : "⏹ Durdur"}

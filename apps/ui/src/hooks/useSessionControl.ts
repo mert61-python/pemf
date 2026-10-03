@@ -34,7 +34,13 @@ export interface SessionControlResult {
   treatment: ActiveTreatment | null;
   elapsedSec: number;
   remainingSec: number;
+  /** Başlatma YA DA seans durdurma isteği uçuşta. ⚠️ D1.82 · Y47: YALNIZ başlatma/uygulama düğmelerini kilitler —
+   *  hiçbir DURDURMA düğmesi buna (ya da başka bir isteğe) bağlanmaz. */
   loading: boolean;
+  /** `/session/start` uçuşta (D1.82): Durdur bu sırada da basılabilir; başlatma yanıtından SONRA STOP yeniden gider. */
+  starting: boolean;
+  /** `/session/stop` uçuşta — yalnız ETİKET için ("⏳ Durduruluyor…"); düğmeyi kilitlemez. */
+  sessionStopping: boolean;
   error: string | null;
   /** Acil durdurma komutu uçuşta mı — buton "Durduruluyor…" gösterebilsin (~21sn sürebilir). */
   stopping: boolean;
@@ -73,7 +79,16 @@ export function useSessionControl(): SessionControlResult {
   const [treatment, setTreatment] = useState<ActiveTreatment | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [remainingSec, setRemainingSec] = useState(0);
-  const [loading, setLoading] = useState(false);
+  // ⚠️ D1.82 · Y47: başlatma ve durdurma yükü AYRI. Eskiden tek `loading` vardı ve Kontrol ekranının ana Durdur'u ile
+  // seans kartının Durdur'u `disabled={loading}`du → `/session/start` askıdayken (≤ 8 sn) durdurma basılamıyordu.
+  const [starting, setStarting] = useState(false);
+  const [sessionStopping, setSessionStopping] = useState(false);
+  const loading = starting || sessionStopping;
+  // Başlatma uçuştayken durdurma istendi mi (ref: aynı render'daki basış da görülsün). Geç gelen START, durdurmadan
+  // SONRA bobini başlatabilir (İG-5.3 sınıfı: istek backend'e STOP'tan sonra ulaşırsa nesil kapısı onu tanımaz) →
+  // başlatma yanıtından sonra STOP YENİDEN gönderilir (STOP idempotent; gönderim yalnız ARTAR, Ö.4-Y8).
+  const startUcustaRef = useRef(false);
+  const startSonrasiDurdurRef = useRef(false);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // `error` state'inin SENKRON ikizi (stale-closure okumaları için — bkz. lastError).
@@ -189,55 +204,10 @@ export function useSessionControl(): SessionControlResult {
     };
   }, [isActive, stopTimer]);
 
-  const startSession = useCallback(async (params: SessionStartParams): Promise<boolean> => {
-    setLoading(true);
-    setErrorBoth(null);
-    // ⚠️ 2026-08-09: sunucunun REDDETME GEREKÇESİ. En kritik hâli, tıbbi kayıt DB'si açılamadığında
-    // dönen 503'tür: eskiden ekranda yalnız "Seans başlatılamadı." yazıyordu ve veteriner, hasta
-    // masadayken sebebi anlayamıyordu. Gerekçe varsa AYNEN gösterilir.
-    let sunucuGerekce = "";
-    try {
-      const result = await apiPost<SessionActionResponse | null>("/session/start", {
-        patient_id: params.patientId ?? "",
-        patient_name: params.patientName ?? "",
-        mode: params.mode,
-        target_condition: params.targetCondition ?? "",
-        frequency: params.frequency,
-        duty: params.duty,
-        intensity: params.intensity,
-        phase: params.phase ?? 0,
-        duration_minutes: params.durationMinutes,
-        coil_ids: params.coilIds ?? [],
-        operator_email: params.operatorEmail ?? "",
-      }, null, { onHttpError: (_s, detail) => { sunucuGerekce = detail || ""; } });
-
-      if (result?.status === "success" || result?.session) {
-        const totalSec = params.durationMinutes * 60;
-        setIsActive(true);
-        setTreatment({
-          mode: params.mode,
-          frequencyHz: params.frequency,
-          intensityMt: params.intensity,
-          remainingMin: params.durationMinutes,
-          elapsedSec: 0,
-          durationSec: totalSec,
-          isActive: true,
-        });
-        startTimer(totalSec);
-        return true;
-      }
-      setErrorBoth(sunucuGerekce || "Seans başlatılamadı.");
-      return false;
-    } catch (e) {
-      setErrorBoth(e instanceof Error ? e.message : "Hata oluştu.");
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  }, [startTimer, setErrorBoth]);
-
   const stopSession = useCallback(async (): Promise<boolean> => {
-    setLoading(true);
+    // D1.82: başlatma uçuştaysa geç gelen yanıttan sonra STOP yeniden gönderilsin (aşağıda startSession).
+    if (startUcustaRef.current) startSonrasiDurdurRef.current = true;
+    setSessionStopping(true);
     try {
       // P1 audit 2026-06-28: apiPost ağ-hatası/non-2xx'te THROW ETMEZ → fallback(null) döner.
       // Eskiden yanıt kontrol edilmeden 'durduruldu' deniyordu → backend erişilemezken UI seansı
@@ -293,9 +263,69 @@ export function useSessionControl(): SessionControlResult {
     } catch {
       return false;
     } finally {
-      setLoading(false);
+      setSessionStopping(false);
     }
   }, [stopTimer]);
+
+  const startSession = useCallback(async (params: SessionStartParams): Promise<boolean> => {
+    startUcustaRef.current = true;
+    startSonrasiDurdurRef.current = false;
+    setStarting(true);
+    setErrorBoth(null);
+    // ⚠️ 2026-08-09: sunucunun REDDETME GEREKÇESİ. En kritik hâli, tıbbi kayıt DB'si açılamadığında
+    // dönen 503'tür: eskiden ekranda yalnız "Seans başlatılamadı." yazıyordu ve veteriner, hasta
+    // masadayken sebebi anlayamıyordu. Gerekçe varsa AYNEN gösterilir.
+    let sunucuGerekce = "";
+    try {
+      const result = await apiPost<SessionActionResponse | null>("/session/start", {
+        patient_id: params.patientId ?? "",
+        patient_name: params.patientName ?? "",
+        mode: params.mode,
+        target_condition: params.targetCondition ?? "",
+        frequency: params.frequency,
+        duty: params.duty,
+        intensity: params.intensity,
+        phase: params.phase ?? 0,
+        duration_minutes: params.durationMinutes,
+        coil_ids: params.coilIds ?? [],
+        operator_email: params.operatorEmail ?? "",
+      }, null, { onHttpError: (_s, detail) => { sunucuGerekce = detail || ""; } });
+
+      startUcustaRef.current = false;
+      if (startSonrasiDurdurRef.current) {
+        // ⚠️ D1.82: başlatma uçuştayken operatör DURDUR'a bastı. Yanıt ne olursa olsun (başarı, ret, zaman aşımı —
+        // sunucu isteği yine işlemiş olabilir) STOP YENİDEN gider; seans açık GÖSTERİLMEZ. Son söz durdurmanındır.
+        startSonrasiDurdurRef.current = false;
+        await stopSession();
+        setErrorBoth("Başlatma, uçuştayken verilen DURDUR ile geri alındı.");
+        return false;
+      }
+
+      if (result?.status === "success" || result?.session) {
+        const totalSec = params.durationMinutes * 60;
+        setIsActive(true);
+        setTreatment({
+          mode: params.mode,
+          frequencyHz: params.frequency,
+          intensityMt: params.intensity,
+          remainingMin: params.durationMinutes,
+          elapsedSec: 0,
+          durationSec: totalSec,
+          isActive: true,
+        });
+        startTimer(totalSec);
+        return true;
+      }
+      setErrorBoth(sunucuGerekce || "Seans başlatılamadı.");
+      return false;
+    } catch (e) {
+      setErrorBoth(e instanceof Error ? e.message : "Hata oluştu.");
+      return false;
+    } finally {
+      startUcustaRef.current = false;
+      setStarting(false);
+    }
+  }, [startTimer, setErrorBoth, stopSession]);
 
   const emergencyStop = useCallback(async (): Promise<void> => {
     // GERİ BİLDİRİM (#17): en kötü durumda bridge 5sn + iki yedek istek 8+8sn = ~21sn sürebilir.
@@ -326,6 +356,8 @@ export function useSessionControl(): SessionControlResult {
     elapsedSec,
     remainingSec,
     loading,
+    starting,
+    sessionStopping,
     stopping,
     error,
     lastError: () => lastErrorRef.current,
