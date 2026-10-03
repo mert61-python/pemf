@@ -1431,6 +1431,24 @@ def _drive_coils_ai_pro(D, P) -> list:
             surulen.append(cid)
         else:
             logger.warning("AI Pro bobin %d SÜRÜLMEDİ: donanım komutu reddetti (ya da sürüş yetkisi geçersiz).", cid)
+    # ⚠️ 1-E incelemesi (i-6.1, Y54): plan-dışı kümesi döngüden ÖNCE okunur. Operatörün tekil STOP'u döngü ORTASINA düşerse
+    # (küme okunduktan sonra, o bobinin START'ından önce) bu karenin START'ı bobini yeniden enerjiliyordu ve sonraki kareler
+    # onu yalnız ATLADIĞI için bobin seans boyunca telde kalıyordu — ekran "plandan çıkarıldı, sürülmedi" derken (ölçüldü).
+    # Döngüden SONRA küme yeniden okunur: plan dışı olup telde ÇALIŞAN bobine STOP gider (yalnız ARTAR, Ö.4-Y8).
+    _plan_disi_son = _ai_pro_plan_disi_bobinler(_muhur["onay"])
+    if _plan_disi_son:
+        try:
+            _teldeki = state.hardware.calisan_bobin_durumu()
+        except Exception:
+            _teldeki = dict.fromkeys(_plan_disi_son)  # okunamazsa STOP gönderilir (güvenli taraf)
+        for cid in sorted(_plan_disi_son):
+            if cid not in _teldeki:
+                continue
+            try:
+                state.hardware.update_coil(cid, 0.0, 0.0, 0.0, 0, start=False)
+            except Exception:
+                logger.exception("AI Pro: plan dışı bobin %d STOP'u gönderilemedi", cid)
+        surulen = [c for c in surulen if c not in _plan_disi_son]
     return surulen
 
 

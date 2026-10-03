@@ -87,3 +87,34 @@ def test_KARSIT_AI_Pro_YOKKEN_tekil_STOP_hicbir_seyi_plandan_cikarmaz(o):
     r = o.c.post("/api/coil/2/control", json={"freq": 0, "duty": 0, "phase": 0, "duration": 0, "start": False})
     assert r.status_code == 200
     assert not o.air._ai_pro_plan_disi_bobinler(), "AI Pro yokken plan disi listesi doldu"
+
+
+def test_KRITIK_kare_ORTASINDA_tekil_STOP_ayni_karenin_STARTi_ile_GERI_ALINMAZ(o, monkeypatch):
+    """1-E incelemesi (i-6.1): kare sürüşü plan-dışı kümesini döngüden ÖNCE okur. Operatörün tekil STOP'u döngü ORTASINA —
+    bobin 2'nin START'ından hemen önce — düşerse (GERÇEK uç, ayrı istek) aynı karenin START'ı bobini yeniden enerjiliyordu;
+    sonraki kareler onu yalnız atladığı için bobin seans boyunca TELDE kalıyordu, panel "plandan çıkarıldı / sürülmedi"
+    derken (ölçüldü: duty 0,3). Enjeksiyon noktası gerçek `update_coil` çağrısı."""
+    _ai_pro_suruyor(o)
+    orj = o.hc.update_coil
+    d = {"kurulu": True, "stop": None}
+
+    def _araya_stop(coil_id, *a, **k):
+        if d["kurulu"] and coil_id == 2 and k.get("start") is True:
+            d["kurulu"] = False
+            d["stop"] = o.c.post(
+                "/api/coil/2/control", json={"freq": 0, "duty": 0, "phase": 0, "duration": 0, "start": False}
+            )
+        return orj(coil_id, *a, **k)
+
+    monkeypatch.setattr(o.hc, "update_coil", _araya_stop)
+    assert ap.kare(o).status_code == 200
+    monkeypatch.setattr(o.hc, "update_coil", orj)
+    assert d["stop"] is not None and d["stop"].json().get("status") == "success", "aparat: STOP kare ortasina dusmedi"
+    assert 2 not in ap.calisan(o), "kare ortasindaki tekil STOP ayni karenin START'i ile GERI ALINDI (bobin 2 telde)"
+    for _ in range(3):
+        k = ap.kare(o)
+        assert k.status_code == 200
+        assert 2 not in ap.calisan(o), "plan disi bobin 2 sonraki karelerde TELDE calisiyor"
+    assert sorted(ap.calisan(o)) == [1, 3, 4, 5, 6, 7], f"diger bobinler surmeye devam etmeli: {ap.calisan(o)}"
+    per = {c["id"]: c for c in k.json().get("perCoil", [])}
+    assert per[2].get("planDisi") is True and per[2].get("suruldu") is False, per[2]
