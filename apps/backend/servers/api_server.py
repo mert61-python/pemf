@@ -1051,6 +1051,34 @@ def _esp_telemetry_watchdog():
         time.sleep(ESP_WATCHDOG_INTERVAL_SEC)
 
 
+def _esp_asiri_sicaklik_alarmi_mi(atype) -> bool:
+    """Y53: ESP alarm türü aşırı sıcaklık sınıfında mı (overtemp / over_temp / overtemperature / sıcaklık)?"""
+    t = str(atype or "").lower()
+    return "temp" in t or "sicak" in t or "sıcak" in t
+
+
+def _y53_yalniz_kendi_bobinini_durdur(coil_id: int, atype: str) -> None:
+    """Y53: aşırı sıcaklık alarmı veren ESP kartının YALNIZ kendi bobinine STOP (kapısız, Ö.4-Y8) + görsel uyarı.
+    Genel ACİL DURDUR, mandal ve STM bobinlerine dokunulmaz. Bugün ölü yol (alarm yayınlayan firmware yok, ESP kapalı)."""
+    logging.getLogger(__name__).error("ESP ALARM bobin %s: %s -> YALNIZ bu bobin durduruluyor (Y53)", coil_id, atype)
+    try:
+        _teyitsiz = _stop_session_coils([coil_id])
+    except Exception:
+        logging.getLogger(__name__).exception("Y53: bobin %s STOP basarisiz", coil_id)
+        _teyitsiz = [coil_id]
+    idx = coil_id - 1
+    if 0 <= idx < 8:
+        with _live_state_lock:
+            _live_state["coils"][idx]["running"] = False
+            _snap = dict(_live_state["coils"][idx])
+        _ws_broadcast_sync({"type": "coil_status", "coilId": coil_id, "data": _snap})
+    _push_notification(
+        f"🌡️ Bobin {coil_id} kartı AŞIRI SICAKLIK bildirdi ({atype}) — yalnız bobin {coil_id} durduruldu; "
+        "diğer bobinler sürüyor. Bobini kontrol edin." + (" ⚠️ Bu bobinin STOP'u DOĞRULANAMADI." if _teyitsiz else ""),
+        "warning",
+    )
+
+
 def _on_mqtt_message_api(client, userdata, msg):
     try:
         topic_parts = msg.topic.split("/")
@@ -1338,6 +1366,12 @@ def _on_mqtt_message_api(client, userdata, msg):
                     )
                     return
                 atype = payload.get("type") or payload.get("alarm") or payload.get("reason") or "alarm"
+                # ⚠️ Y53 (sahip): ESP'nin "aşırı sıcaklık" alarmı YALNIZ kendi kartının bobinini durdurur ve uyarır; bobin
+                # 1–7 SÜRER, genel ACİL DURDUR ve mandal KURULMAZ (A-47: bobin 1–7'de termal durdurma yok; Y40: kartın kendi
+                # 100 °C kesmesi kalır). Diğer alarm türleri (overcurrent / safety_violation) aşağıda TAM acil durdurma.
+                if _esp_asiri_sicaklik_alarmi_mi(atype):
+                    _y53_yalniz_kendi_bobinini_durdur(int(coil_id_str), str(atype))
+                    return
                 logging.error("ESP ALARM bobin %s: %s -> tum bobinler durduruluyor", coil_id_str, atype)
                 _push_notification(f"🚨 Bobin {coil_id_str} ALARM ({atype}) — seans güvenlik için durduruldu", "error")
                 try:

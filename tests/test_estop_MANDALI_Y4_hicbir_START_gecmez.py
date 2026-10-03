@@ -21,7 +21,15 @@ import types
 
 import pytest
 
-_E_STOP_KAYNAKLARI = ["manual", "stm_disconnected", "stm_komut_reddi", "stm_watchdog_timeout", "esp_alarm_8_overtemp"]
+# Y53 (sahip): ESP'nin aşırı-sıcaklık alarmı ARTIK acil durdurma kaynağı DEĞİL (yalnız kendi bobinini durdurur, mandal
+# kurmaz — `test_Y53_esp_overtemp_alarmi_YALNIZ_bobin8i_durdurur.py`); diğer ESP alarmları (overcurrent) kaynak olarak kalır.
+_E_STOP_KAYNAKLARI = [
+    "manual",
+    "stm_disconnected",
+    "stm_komut_reddi",
+    "stm_watchdog_timeout",
+    "esp_alarm_8_overcurrent",
+]
 _SIFIRLA_YOLU = "/api/hardware/estop_mandali/sifirla"
 
 
