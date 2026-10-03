@@ -161,8 +161,9 @@ def test_KRITIK_GECIKMIS_kurulu_yazimi_arkadan_gelen_Sifirla_yazimini_EZMEZ(orta
     """1-E incelemesi (i-2.2): yazıcı iş parçacıkları çalışma sırasıyla değil zamanlama sırasıyla biter. E-stop'un yazıcısı
     (zamanlanmış ama gecikmiş — yavaş disk, iş parçacığı zamanlaması) Sıfırla'nın yazıcısından SONRA koşarsa, YAZIM ANINDAKİ
     durumu yazmalı (mandal yok) — çağrı anının "kurulu" anlık görüntüsünü değil. Yoksa operatörün Sıfırla'sı diskte ezilir,
-    sonraki açılış mandallı gelir ve bant "sıfırlanmadı" der. Yazıcılar ertelenir ve TERS sırada (Sıfırla'nınki önce)
-    elle koşturulur — belirlenimci."""
+    sonraki açılış mandallı gelir ve bant "sıfırlanmadı" der. E-stop'un yazıcısı ertelenir ve Sıfırla'nın yazımından SONRA
+    elle koşturulur — belirlenimci. (Y59: Sıfırla artık EŞZAMANLI yazar — sonucunu yanıtta söylemek için; ertelenen tek
+    yazıcı E-stop'unkidir.)"""
     o = ortam
     bekleyen: list = []
 
@@ -183,10 +184,9 @@ def test_KRITIK_GECIKMIS_kurulu_yazimi_arkadan_gelen_Sifirla_yazimini_EZMEZ(orta
     c = TestClient(o.api.app)
     r = c.post("/api/hardware/estop_mandali/sifirla", json={"onay": True})
     assert r.status_code == 200, r.text
-    assert len(bekleyen) == 2, f"aparat: Sifirla yazicisi ertelenmedi ({len(bekleyen)})"
+    assert len(bekleyen) == 1, f"aparat: beklenmeyen ertelenmis yazici ({len(bekleyen)})"
     assert o.mandal.mandalli_mi() is False
-    bekleyen[1].kos()  # Sıfırla'nın yazıcısı ÖNCE biter
-    assert _dosya_aktif(o) is False, "aparat: Sifirla yazimi diske gitmedi"
+    assert _dosya_aktif(o) is False, "aparat: Sifirla yazimi diske gitmedi"  # Y59: Sıfırla eşzamanlı yazdı
     bekleyen[0].kos()  # E-stop'un gecikmiş yazıcısı SONRA
     assert _dosya_aktif(o) is False, "gecikmis E-stop yazimi bayat 'kurulu' durumu yazdi — Sifirla diskte EZILDI"
     sonuc = _yeniden_baslat(o.veri, tmp_path)

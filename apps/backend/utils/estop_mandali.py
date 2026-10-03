@@ -48,6 +48,10 @@ Sıfırla'sız kalkıyordu. Kurallar:
   * Dosya VAR ama okunamıyor/bozuksa mandal KURULU başlar (güvenli taraf: yanlış mandalın bedeli bir Sıfırla). Dosya
     YOKSA mandal yok (ilk kurulum / hiç E-stop olmamış).
   * Kalıcılık kurulmadıysa (testler, araçlar) davranış eskisi gibi bellekte.
+  * Y59 (sahip, 1-E S-İ1): dosya YAZILAMAZSA operatöre SÖYLENİR (`yazim_durumu`, `yazim_hatasi_kancasi_bagla`): Sıfırla
+    ve ACİL DURDUR yanıtı + ekran bildirimi "yeniden başlatmada mandal geri gelecek / KORUNMAYACAK". Davranış AYNEN:
+    E-stop yazımı beklemez (yanıt SON BİLİNEN durumu taşır — açılış yoklaması ya da önceki yazım), Sıfırla mandalı her
+    durumda kaldırır (Y56).
 """
 
 from __future__ import annotations
@@ -184,6 +188,55 @@ _log = logging.getLogger(__name__)
 _kalici_yol: Path | None = None
 _yazim_kilidi = threading.Lock()
 ONCEKI_OTURUM_NEDENI = "onceki_oturum"
+#: Y59: son bilinen yazım durumu. `disk_kurulu` = yeniden başlatmada diskten okunacak mandal (okunamayan dosya → kurulu,
+#: `kalicilik_kur` kuralı); `yazilamadi` açılış yoklamasından (salt-okunur öznitelik / dosyanın yerinde dizin — HİÇBİR
+#: ŞEY YAZILMADAN) ya da son yazım denemesinden gelir.
+_yazim: dict = {"yazilamadi": False, "neden": "", "disk_kurulu": False}
+_yazim_hatasi_kancasi = None
+
+
+def yazim_hatasi_kancasi_bagla(fn) -> None:
+    """Y59: yazım BAŞARISIZ olunca çağrılır (`fn(yazim_durumu(yol_dahil=True))`) — ekran bildirimi için. Asla fırlatmaz."""
+    global _yazim_hatasi_kancasi
+    _yazim_hatasi_kancasi = fn
+
+
+def yazim_durumu(yol_dahil: bool = False) -> dict:
+    """Y59: mandal dosyası yazılamıyorsa operatör metni + yeniden başlatmadaki sonuç. Yol yalnız `yol_dahil` ile (ACİL
+    DURDUR ucu auth-muaf — yanıtında dosya yolu olmaz; kimlikli bildirim ve Sıfırla yanıtı yolu verir)."""
+    yol = _kalici_yol
+    if yol is None or not _yazim["yazilamadi"]:
+        return {"yazilamadi": False}
+    with _kilit:
+        hedef = bool(_durum["aktif"])
+    disk = bool(_yazim["disk_kurulu"])
+    if disk and not hedef:
+        sonuc = "geri gelecek"
+    elif hedef and not disk:
+        sonuc = "KORUNMAYACAK"
+    elif hedef:
+        sonuc = "kurulu gelecek (dosya güncellenemedi)"
+    else:
+        sonuc = "gelmeyecek (dosya güncellenemedi)"
+    yer = f" ({yol})" if yol_dahil else ""
+    return {
+        "yazilamadi": True,
+        "yenidenBaslatmada": sonuc,
+        "mesaj": f"Mandal dosyası yazılamadı{yer} — yeniden başlatmada mandal {sonuc}; dosya iznini düzeltin.",
+    }
+
+
+def _yazim_yoklamasi(yol: Path) -> str:
+    """Açılışta, HİÇBİR ŞEY YAZMADAN: dosya değiştirilemez görünüyor mu ("" = engel görülmedi). ACL reddi burada
+    görülmez — ilk yazım denemesinde ortaya çıkar."""
+    try:
+        if yol.is_dir():
+            return "dosyanın yerinde dizin var"
+        if yol.exists() and not os.access(yol, os.W_OK):
+            return "dosya salt-okunur"
+    except OSError:
+        return "dosya denetlenemedi"
+    return ""
 
 
 def kalicilik_kur(yol) -> dict:
@@ -209,6 +262,11 @@ def kalicilik_kur(yol) -> dict:
                 exc_info=True,
             )
             kurulu, onceki_neden = True, "dosya_okunamadi"
+    _yazim.update(yazilamadi=False, neden="", disk_kurulu=kurulu)
+    _engel = _yazim_yoklamasi(yol)
+    if _engel:
+        _yazim.update(yazilamadi=True, neden=_engel)
+        _log.error("ACIL DURDUR mandal dosyasi YAZILAMAZ gorunuyor (%s): %s", yol, _engel)
     if kurulu:
         with _kilit:
             _durum["aktif"] = True
@@ -224,6 +282,12 @@ def kalicilik_kapat() -> None:
     """Kalıcılığı çöz (testler arası yalıtım). Bellekteki durum değişmez."""
     global _kalici_yol
     _kalici_yol = None
+    _yazim.update(yazilamadi=False, neden="", disk_kurulu=False)
+
+
+def diske_yaz() -> bool:
+    """Y59: Sıfırla'nın EŞZAMANLI yazımı (sonucu yanıtta söylenir). ACİL DURDUR bunu KULLANMAZ (arka planda yazar)."""
+    return _diske_yaz()
 
 
 def _diske_yaz() -> bool:
@@ -244,13 +308,21 @@ def _diske_yaz() -> bool:
             gecici = yol.with_name(yol.name + ".tmp")
             gecici.write_text(json.dumps(veri, ensure_ascii=False), encoding="utf-8")
             os.replace(gecici, yol)
+            _yazim.update(yazilamadi=False, neden="", disk_kurulu=bool(veri["aktif"]))
         return True
-    except Exception:
+    except Exception as exc:
         _log.error(
             "ACIL DURDUR mandali diske YAZILAMADI (%s) — mandal bellekte kurulu; durdurma etkilenmedi",
             yol,
             exc_info=True,
         )
+        _yazim.update(yazilamadi=True, neden=type(exc).__name__)
+        _kanca = _yazim_hatasi_kancasi
+        if _kanca is not None:
+            try:
+                _kanca(yazim_durumu(yol_dahil=True))
+            except Exception:
+                _log.warning("mandal yazim hatasi bildirimi yapilamadi", exc_info=True)
         return False
 
 

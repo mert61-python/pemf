@@ -6237,6 +6237,9 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
         "sessionCoilIds": list(coil_ids),
         # D1.81 · Y4 (yalnız-ek): mandal kuruldu — yeni START için operatörün "Sıfırla"sı gerekir.
         "estopMandali": estop_mandali.durum(),
+        # Y59: mandal dosyası yazılamıyorsa (SON BİLİNEN durum — disk yazımı BEKLENMEZ, Y46) yeniden başlatmada ne olacağı.
+        # Uç auth-muaf → dosya YOLU yok (yol kimlikli bildirimde).
+        "mandalDosyasi": estop_mandali.yazim_durumu(),
     }
 
 
@@ -6292,7 +6295,12 @@ async def estop_mandalini_sifirla(request: Request):
     _kim = cozumlenmis_operator(request, "") or ""
     _onceki = estop_mandali.durum()
     _kurulu = estop_mandali.sifirla(_kim or "operator")
-    estop_mandali.diske_yaz_arka_planda()  # Y46: yeniden başlatmada mandal geri gelmesin
+    # Y46: yeniden başlatmada mandal geri gelmesin. Y59: yazım EŞZAMANLI (iş parçacığında, ≤ 2 sn) — sonucu yanıtta
+    # söylenir; yazılamazsa mandal yine KALKAR (Y56) ve ekran bildirimi gider (`yazim_hatasi_kancasi`).
+    try:
+        await asyncio.wait_for(asyncio.to_thread(estop_mandali.diske_yaz), timeout=2.0)
+    except asyncio.TimeoutError:
+        logging.getLogger(__name__).warning("Sıfırla: mandal dosyası yazımı 2 sn'de bitmedi (arka planda sürüyor)")
     _durum = estop_mandali.durum()
     if _kurulu:
         try:
@@ -6320,7 +6328,17 @@ async def estop_mandalini_sifirla(request: Request):
         if not _aktif:
             update_live_session_state(is_active=False, mode="Sistem Hazır")
     _ws_broadcast_sync({"type": "estop_mandali", "data": _durum})
-    return {"status": "success", "mandalKuruluydu": _kurulu, "estopMandali": _durum}
+    return {
+        "status": "success",
+        "mandalKuruluydu": _kurulu,
+        "estopMandali": _durum,
+        "mandalDosyasi": estop_mandali.yazim_durumu(yol_dahil=True),  # Y59 (kimlikli uç — yol verilir)
+    }
+
+
+# Y59: mandal dosyası yazılamazsa ekran bildirimi (her yazım yolu: E-stop arka plan yazımı, Sıfırla, Y45). Geç bağlama:
+# `_push_notification` çağrı anında çözülür.
+estop_mandali.yazim_hatasi_kancasi_bagla(lambda d: _push_notification("⚠️ " + d.get("mesaj", ""), "error"))
 
 
 # --- PATIENT DATABASE ENDPOINTS ---
