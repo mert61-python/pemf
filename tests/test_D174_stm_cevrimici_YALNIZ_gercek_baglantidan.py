@@ -99,6 +99,12 @@ def ortam(monkeypatch):
     with ls._live_state_lock:
         eski_stm = ls._live_state["stm"]
         eski_bobinler = copy.deepcopy(ls._live_state["coils"])
+        eski_tedavi = copy.deepcopy(ls._live_state["activeTreatment"])
+        # Bilinen zemin: önceki testlerin bıraktığı bobin / tedavi durumu fikstür dizisine SIZMASIN (toplu koşuda ölçüldü:
+        # slot 8 ya da tedavi kipi başka testten kalınca bayatlık kapısı yalancı kırmızı veriyordu).
+        for _c in ls._live_state["coils"].values():
+            _c.update({"connected": False, "running": False})
+        ls._live_state["activeTreatment"].update({"isActive": False, "mode": "Sistem Hazır"})
     with ls._stm_red_lock:
         eski_red = dict(ls._stm_red)
     core = _cekirdek(yeni_bus)
@@ -116,6 +122,7 @@ def ortam(monkeypatch):
         with ls._live_state_lock:
             ls._live_state["stm"] = eski_stm
             ls._live_state["coils"] = eski_bobinler
+            ls._live_state["activeTreatment"] = eski_tedavi
         with ls._stm_red_lock:
             ls._stm_red.clear()
             ls._stm_red.update(eski_red)
