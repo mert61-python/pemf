@@ -44,6 +44,18 @@ STM_BOBIN_SAYISI = 7
 GOZETIMSIZ_VARSAYILAN_DAKIKA = 120
 
 
+#: D1.68 (B-1.6): yazılım süre kapağı (`_tick`) bobini durdurunca çağrılan kanca — `servers` katmanı bağlar
+#: (`api_server`: koşu kaydını kapatır). Controller servers'a import ETMEZ (katman yönü). `None` = kanca yok.
+_sure_doldu_kancasi = None
+
+
+def sure_doldu_kancasi_bagla(fn) -> None:
+    """D1.68: süre kapağı kancasını bağla. ⚠️ Kanca keep-alive iş parçacığında, durum kilidi DIŞINDA ve HIZLI çağrılır:
+    DB yazımını kendisi arka plana atmalıdır (keep-alive gecikirse firmware ölü-adamı 1,5 sn'de TÜM bobinleri keser)."""
+    global _sure_doldu_kancasi
+    _sure_doldu_kancasi = fn
+
+
 class ParametreGecersiz(ValueError):
     """START parametresi donanım paketine çevrilemiyor (sayı değil / float32'ye sığmıyor / süre taşıyor).
 
@@ -217,6 +229,15 @@ class HardwareController:
                 self._force_send_left -= 1
             if need_send:
                 self._send_stm_manual_update()
+        # ⚠️ D1.68 (B-1.6): süre kapağı bobini durdurdu → koşu kaydı da ŞİMDİ kapanmalı. Eskiden kayıt açık kalıyor,
+        # seans sonunda kapanıyordu (60 sn sürülen bobin kayıtta seans boyu "sürüldü"). Kilit DIŞINDA; kanca hata verse
+        # de keep-alive sürer.
+        kanca = _sure_doldu_kancasi
+        if expired and kanca is not None:
+            try:
+                kanca(list(expired))
+            except Exception:
+                dongu_hatasini_bildir("sure kapagi kancasi hata verdi (kosu kaydi acik kalabilir)", logger=self.logger)
 
     def stop(self):
         self._keep_alive_stop.set()

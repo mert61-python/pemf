@@ -2929,6 +2929,39 @@ _begin_coil_run = coil_run_tracker._begin_coil_run
 _finish_coil_run = coil_run_tracker._finish_coil_run
 
 
+def _bobin_suresi_doldu(bobinler) -> None:
+    """D1.68 (B-1.6): HC yazılım süre kapağı bobini durdurdu → koşu kaydı da kapanır (kaydedilen = uygulanan).
+
+    Keep-alive iş parçacığından çağrılır: yalnız o anki koşu kimliklerini alır (bellek), DB yazımı AYRI iş parçacığında
+    (yavaş DB keep-alive'ı bekletirse firmware ölü-adamı seansın diğer bobinlerini keser). Yalnız O koşu kapanır
+    (`only_run_id`): araya aynı bobine yeni bir START girmişse yeni koşuya dokunulmaz."""
+    with _active_coil_runs_lock:
+        hedef = [(int(c), _active_coil_runs.get(int(c))) for c in bobinler]
+    hedef = [(c, r) for c, r in hedef if r is not None]
+    if not hedef:
+        return
+
+    def _kapat():
+        for c, r in hedef:
+            try:
+                _finish_coil_run(c, only_run_id=r)
+            except Exception:
+                logging.getLogger(__name__).warning("sure kapagi: kosu kaydi kapatilamadi (bobin %s)", c, exc_info=True)
+
+    try:
+        threading.Thread(target=_kapat, name="sure-kapagi-kayit", daemon=True).start()
+    except Exception:
+        logging.getLogger(__name__).error("sure kapagi: kayit is parcacigi acilamadi (kosu kaydi acik kalabilir)")
+
+
+try:
+    from controllers import hardware_controller as _hc_modul
+
+    _hc_modul.sure_doldu_kancasi_bagla(_bobin_suresi_doldu)
+except Exception:
+    logging.getLogger(__name__).warning("D1.68: sure kapagi kancasi baglanamadi", exc_info=True)
+
+
 @app.post("/api/hardware/auto_preset")
 async def auto_preset(payload: AutoPresetPayload):
     """
@@ -3759,6 +3792,25 @@ async def start_session(payload: SessionStartPayload, request: Request):
     with _sensor_sample_buffer_lock:
         _sensor_sample_buffer.clear()
     # Asama-2: onceki seanstan artmis acik coil-run / istatistik kalmasin.
+    # ⚠️ D1.68 (B-1.6): artık koşu haritadan SESSİZCE SİLİNMEZ, KAPATILIR (`end_coil_run` + özet). Eskiden `.clear()`
+    # önceki seansın açık koşusunu (ör. seans sırasında tekil başlatılmış, seans durdurmasının kapsamı dışındaki bobin)
+    # `ended_epoch=NULL` kalıcı bırakıyordu. Bitiş bilinmiyor → bu başlatma anı (üst sınır); bobin hâlâ sürülüyorsa günlüğe.
+    with _active_coil_runs_lock:
+        _artik_kosular = list(_active_coil_runs.keys())
+    if _artik_kosular:
+        logging.getLogger(__name__).warning(
+            "Seans başlatma: önceki seanstan AÇIK koşu kaydı kapatılıyor (bobin %s; bobin hâlâ çalışıyor olabilir).",
+            _artik_kosular,
+        )
+
+        def _artiklari_kapat():
+            for _cid in _artik_kosular:
+                try:
+                    _finish_coil_run(_cid)
+                except Exception:
+                    logging.getLogger(__name__).warning("artik kosu kapatilamadi (bobin %s)", _cid, exc_info=True)
+
+        await asyncio.to_thread(_artiklari_kapat)
     with _active_coil_runs_lock:
         _active_coil_runs.clear()
     with _coil_run_stats_lock:
@@ -6055,6 +6107,16 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
         _finalize_session_db(
             _db_sid, _started_ep, coil_ids=coil_ids, reason=f"acil-durdurma:{reason}", start_mono=_start_mono_es
         )
+    # ⚠️ D1.68 (B-1.6): finalize kapsamı STOP kapsamıyla EŞLEŞİR — `stop_all_coils` TÜM bobinleri durdurdu; seansın bobin
+    # listesi dışındaki (seans sırasında tekil başlatılmış) bobinlerin AÇIK koşuları da kapanır. Eskiden yalnız seansın
+    # bobinleri kapanıyor, ötekiler `ended_epoch=NULL` kalıcı kalıyordu. Seans yokken de (önceki seanstan kalan koşu).
+    with _active_coil_runs_lock:
+        _acik_kosular = list(_active_coil_runs.keys())
+    for _cid in _acik_kosular:
+        try:
+            _finish_coil_run(_cid)
+        except Exception:
+            logging.getLogger(__name__).warning("estop: kosu kaydi kapatilamadi (bobin %s)", _cid, exc_info=True)
     # Audit P2: ust-seviye status'u transport sonuclarindan TURET — eskiden kosulsuz 'success'
     # donuyordu (STM hatasi + broker cokuk olsa bile UI 'ciktilar kesildi' saniyordu). Bir transport
     # dogrulanamadiysa 'partial'/'error' don + confirmed=False (keep-alive/firmware fiziksel-telafi P2).
