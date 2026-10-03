@@ -3499,6 +3499,33 @@ async def control_batch_coils(payload: BatchCoilPayload):
 
 
 # ── Session management ────────────────────────────────────────────────────────
+async def _baslatma_hatasinda_kapat(benim_seans, neden: str, teyitli_ek: str) -> None:
+    """`/session/start` beklenmeyen istisnasında seansı TUTARLI kapat ve 503 FIRLAT (İNC-2 §10 #2 + 1-E açık #9).
+
+    KENDİ seansı hâlâ aktifse NORMAL durdurma yolu (`stop_session`: uçuştaki başlatma → TÜM seans bobinlerine STOP, satır
+    `cancelled` / "İptal Edildi"); Ö.4-Y8: STOP yalnız artar, kapılanmaz. ⚠️ 1-E incelemesi (i-18.1): `stop_session` teyitsiz
+    STOP'ta FIRLATMAZ, 409 yanıtı DÖNDÜRÜR — eskiden yok sayılıp "durduruldu" deniyordu (ölçüldü) → teyitsizse yanıt ACİL
+    DURDUR'u söyler."""
+    with _session_lock:
+        _hala_benim = bool(_active_session.get("is_active")) and _active_session.get("session_id") == benim_seans
+    _teyitsiz = False
+    if _hala_benim:
+        _durdurma = await stop_session()
+        _teyitsiz = getattr(_durdurma, "status_code", 200) == 409
+    with _session_lock:
+        if _active_session.get("session_id") == benim_seans:
+            _active_session["baslatma_ucusta"] = False  # başlatma bitti (başarısız) — bayrak da TUTARLI iner
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            f"{neden}. Sürülen bobinlerin STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da "
+            "cihazın fiziksel güç düğmesini kullanın."
+            if _teyitsiz
+            else f"{neden} ve {teyitli_ek}"
+        ),
+    )
+
+
 @app.post("/api/session/start")
 async def start_session(payload: SessionStartPayload, request: Request):
     """Start a new treatment session."""
@@ -3689,234 +3716,250 @@ async def start_session(payload: SessionStartPayload, request: Request):
         # Sıfırla) ve YENİ bir seans gelebilir; await sonrasındaki HER adım (DB damgası, tampon temizliği, iptal, geri
         # alma) yalnız `_active_session` hâlâ BU mühürse koşar — başka seansın durumuna dokunmaz.
         _benim_seans = _active_session["session_id"]
-
-    # Denetim izi (audit P1) — seansı HEMEN kalıcılaştır: kim (operatör) + ne zaman + hangi
-    # parametreler. Eskiden seans yalnız SONDA DB'ye yazılıyordu → backend seans ortasında
-    # çökerse hiçbir kayıt kalmıyordu ve operatör kimliği hiç tutulmuyordu. session_events
-    # append-only olduğundan bu, ana seans satırı sonradan yazılsa da bağımsız kanıt sağlar.
+    # ⚠️ 1-E açık #9 (İNCELEME-2 §10 #2 devamı): başlatma bayrağı kurulduktan SONRA, bobin sürüşünden ÖNCEKİ bölgede
+    # (denetim izi, sahip e-postası, DB satırı, artık koşular, ESP döngüsü) beklenmeyen istisna uçtan 500'le kaçıyor,
+    # seans `is_active` + `baslatma_ucusta` KALIYORDU (sonraki seans 409, açılmış DB satırı `active`). Sürüş hatasıyla
+    # AYNI kapanış: KENDİ seansı hâlâ aktifse normal durdurma yolu (TÜM seans bobinlerine STOP, satır `cancelled`), 503.
+    # Bilinçli HTTPException'lar (409 vb.) ve `return`ler etkilenmez.
     try:
-        # P1 audit 2026-06-28: get_treatment_db() ARGUMANSIZ cagriliyordu (imza app_data_dir
-        # zorunlu) → TypeError → except yutuyordu → session_started AUDIT IZI HIC yazilmazdi.
-        # _get_treatment_db() sarmalayicisi app_data_dir gecer (dosyadaki diger cagrilarla tutarli).
-        _get_treatment_db().record_session_event(
-            None,
-            "session_started",
-            payload={
-                "ref": _active_session["session_id"],
-                "operator_name": payload.operator_name,
-                "operator_email": _operator_kimligi,
-                "patient_id": payload.patient_id,
-                "mode": payload.mode,
-                "frequency": payload.frequency,
-                "duty": payload.duty,
-                "intensity": payload.intensity,
-                "phase": payload.phase,
-                "duration_minutes": payload.duration_minutes,
-                "coil_ids": coil_ids,
-            },
-            severity="info",
-        )
-    except Exception:
-        logging.getLogger(__name__).warning("Seans başlangıç audit kaydı yapılamadı.", exc_info=True)
-
-    # Asama-2 (1a): seans BASINDA gercek DB satirini ac (coil-run + sensor ona baglanir).
-    # Sahip e-postasini hasta kayittan (patient_id=UUID) cek — "raporu sahibe e-posta gonder"
-    # icin history'de session.owner_email dolu gelsin. Best-effort (yoksa bos string).
-    owner_email = _lookup_owner_email(payload.patient_id)
-    # KVKK retention (2026-06-28): bu tedavi icin hastanin last_treatment_at'ini guncelle
-    # (inaktiflik sayaci → 5 yil sonra anonimlestirme bunu baz alir).
-    if payload.patient_id:
+        # Denetim izi (audit P1) — seansı HEMEN kalıcılaştır: kim (operatör) + ne zaman + hangi
+        # parametreler. Eskiden seans yalnız SONDA DB'ye yazılıyordu → backend seans ortasında
+        # çökerse hiçbir kayıt kalmıyordu ve operatör kimliği hiç tutulmuyordu. session_events
+        # append-only olduğundan bu, ana seans satırı sonradan yazılsa da bağımsız kanıt sağlar.
         try:
-            _pdb = get_patient_database()
-            if _pdb is not None:
-                _pdb.touch_last_treatment(payload.patient_id)
+            # P1 audit 2026-06-28: get_treatment_db() ARGUMANSIZ cagriliyordu (imza app_data_dir
+            # zorunlu) → TypeError → except yutuyordu → session_started AUDIT IZI HIC yazilmazdi.
+            # _get_treatment_db() sarmalayicisi app_data_dir gecer (dosyadaki diger cagrilarla tutarli).
+            _get_treatment_db().record_session_event(
+                None,
+                "session_started",
+                payload={
+                    "ref": _active_session["session_id"],
+                    "operator_name": payload.operator_name,
+                    "operator_email": _operator_kimligi,
+                    "patient_id": payload.patient_id,
+                    "mode": payload.mode,
+                    "frequency": payload.frequency,
+                    "duty": payload.duty,
+                    "intensity": payload.intensity,
+                    "phase": payload.phase,
+                    "duration_minutes": payload.duration_minutes,
+                    "coil_ids": coil_ids,
+                },
+                severity="info",
+            )
         except Exception:
-            logging.getLogger(__name__).debug("touch_last_treatment hatasi", exc_info=True)
+            logging.getLogger(__name__).warning("Seans başlangıç audit kaydı yapılamadı.", exc_info=True)
 
-    # Best-effort: DB hatasi seansi/donanimi DURDURMASIN → db_session_id=None kalir (eski davranis).
-    # P-1 fix: senkron SQLCipher yazimlari (upsert_patient/start_session/set_meta/set_param) event-loop'u
-    # BLOKLAMASIN → tumu tek to_thread'de; hizli lock-update (db_session_id) async'te sonrasinda yapilir.
-    _started_epoch_snap = _active_session.get("started_epoch")
-
-    def _persist_session_start():
-        db = _get_treatment_db()
-        if db is None:
-            return None, None
-        _pid = None
-        if payload.patient_name:
+        # Asama-2 (1a): seans BASINDA gercek DB satirini ac (coil-run + sensor ona baglanir).
+        # Sahip e-postasini hasta kayittan (patient_id=UUID) cek — "raporu sahibe e-posta gonder"
+        # icin history'de session.owner_email dolu gelsin. Best-effort (yoksa bos string).
+        owner_email = _lookup_owner_email(payload.patient_id)
+        # KVKK retention (2026-06-28): bu tedavi icin hastanin last_treatment_at'ini guncelle
+        # (inaktiflik sayaci → 5 yil sonra anonimlestirme bunu baz alir).
+        if payload.patient_id:
             try:
-                _pid = db.upsert_patient(
-                    {
-                        "name": payload.patient_name,
-                        "patient_uuid": (payload.patient_id or None),
-                        "owner_email": (owner_email or None),
-                    }
-                )
+                _pdb = get_patient_database()
+                if _pdb is not None:
+                    _pdb.touch_last_treatment(payload.patient_id)
             except Exception:
-                logging.getLogger(__name__).debug("upsert_patient hatasi", exc_info=True)
-        _sid = db.start_session(
-            treatment_mode=payload.mode,
-            target_condition=payload.target_condition or None,
-            operator_name=payload.operator_name or None,
-            patient_name=payload.patient_name or None,
-            # ⚠️ 2026-08-09 (Tier 1): e-posta İSTEMCİ BEYANINDAN değil, doğrulanmış operatör
-            # jetonundan gelir. Beyan yalnız cihazda kayıtlı operatör YOKKEN kabul edilir.
-            operator_email=_operator_kimligi or None,
-        )
-        # Yeni kolonlar (start_session bunlari yazmaz): gercek baslangic epoch + patient_id FK.
-        try:
-            db.set_session_meta(_sid, started_epoch=_started_epoch_snap, patient_id=_pid)
-        except Exception:
-            logging.getLogger(__name__).debug("set_session_meta(start) hatasi", exc_info=True)
-        # Sahip e-postasini seans-parametresi olarak yaz (history JOIN'i bunu okur).
-        if owner_email:
-            try:
-                db.set_session_parameter(_sid, "patient_owner_email", owner_email, "")
-            except Exception:
-                logging.getLogger(__name__).debug("set_session_parameter(owner_email) hatasi", exc_info=True)
-        # ⚠️ DENETİM İZİNİ SEANSA BAĞLA (kampanya bulgusu S11, 2026-08-15).
-        # `session_started` olaylarında `session_events.session_id` NULL'dur ve bu KASITLIDIR:
-        # olay, DB seans satırı OLUŞMADAN ÖNCE yazılır (önce-iz-sonra-satır). Ama bağlantı
-        # hiçbir yerde kurulmuyordu → "bu denetim kaydı hangi seansa ait?" cevapsız kalıyordu.
-        #
-        # ⚠️ BAĞLANTI TERS YÖNDE KURULUR: `session_events`e SONRADAN UPDATE ATILMAZ — o tablo
-        # append-only'dir ve sıralama bilinçlidir. Bunun yerine mühür seans satırına yazılır.
-        # Böylece yeni DB metodu, denetim tablosuna UPDATE ve `delete_session` semantiğinde
-        # değişiklik GEREKMEZ. Join: session_parameters.parameter_value ==
-        # json_extract(session_events.payload,'$.ref').
-        #
-        # ⚠️ DÜRÜST SINIR: bu, silinen bir seansın `session_events` payload'unda kalan
-        # patient_id/operator_email artığını (KVKK) ÇÖZMEZ — "iz seansla birlikte silinsin mi?"
-        # ayrı bir sahip kararıdır ve bu düzeltme onu cevaplamadan uygulanabilir.
-        try:
-            _ref = (_active_session or {}).get("session_id")
-            if _ref:
-                db.set_session_parameter(_sid, "audit_ref", str(_ref), "")
-        except Exception:
-            logging.getLogger(__name__).debug("set_session_parameter(audit_ref) hatasi", exc_info=True)
-        return _sid, _pid
+                logging.getLogger(__name__).debug("touch_last_treatment hatasi", exc_info=True)
 
-    sid = None
-    try:
-        sid, patient_id = await asyncio.to_thread(_persist_session_start)
-        if sid is not None:
-            with _session_lock:
-                # Yalniz hala BU seans aktifse yaz (arada /stop — ya da Durdur/E-stop + Sifirla + YENI seans — gelmis
-                # olabilir; i1-F3: kimlik bakilmadan yeni seansin db_session_id'si bu satirla EZILIYORDU).
-                if _active_session.get("is_active") and _active_session.get("session_id") == _benim_seans:
-                    _active_session["db_session_id"] = sid
-                    _active_session["db_patient_id"] = patient_id
-    except Exception:
-        logging.getLogger(__name__).warning("Seans DB satiri olusturulamadi (db_session_id=None).", exc_info=True)
+        # Best-effort: DB hatasi seansi/donanimi DURDURMASIN → db_session_id=None kalir (eski davranis).
+        # P-1 fix: senkron SQLCipher yazimlari (upsert_patient/start_session/set_meta/set_param) event-loop'u
+        # BLOKLAMASIN → tumu tek to_thread'de; hizli lock-update (db_session_id) async'te sonrasinda yapilir.
+        _started_epoch_snap = _active_session.get("started_epoch")
 
-    # Audit P1 (TOCTOU): DB-persist await'i sırasında eşzamanlı /stop is_active=False yapmış olabilir.
-    # Bobinleri ENERJİLEMEDEN ÖNCE yeniden doğrula — aksi halde bobinler fiziksel açılır ama
-    # _active_session.is_active=False kalır → süre-watchdog ASLA durdurmaz (gözetimsiz sürüş; setin en
-    # zararlısı). Henüz hiç bobin enerjilenmediği için burada iptal güvenli (yarım-açık kalmaz).
-    # ⚠️ 1-C inceleme i1-F3 / i2-F1: denetim KİMLİKLİDİR ve tampon temizliğinden ÖNCE yapılır — arada açılmış YENİ
-    # seans "aktif" göründüğü için eski denetim bu bayat isteği sürdürüyor, YENİ seansın koşu kaydını ve
-    # sensör/dakika tamponlarını siliyordu. İptalde bu başlatmanın KENDİ DB satırı "İptal Edildi" kapatılır (i2-F7).
-    with _session_lock:
-        _still_active = bool(_active_session.get("is_active")) and _active_session.get("session_id") == _benim_seans
-        # ⚠️ 1-C inceleme i1-F5: seansı BİTİRMEYEN bir durdurma (bu seansın bobinine STOP, `stop_all_coils`) DB yazımı
-        # sırasında nesli artırdıysa başlatma burada — bobin sürülmeden, tampon temizlenmeden — iptal edilir; kendi
-        # satırı "İptal Edildi" kapanır (sürüş yolundaki "Donanım Reddetti" DEĞİL — donanım reddetmedi).
-        _erken_engel = estop_mandali.baslatma_engeli(_niyet_nesli) if _still_active else ""
-        if _erken_engel:
-            _active_session["is_active"] = False
-    if not _still_active:
-        logging.getLogger(__name__).warning(
-            "Seans başlatma İPTAL: enerjilemeden önce durdurma algılandı (bobinler açılmadı)."
-        )
-        await asyncio.to_thread(_iptal_seans_satirini_kapat, sid)
-        return {"status": "cancelled", "message": "Seans başlatma sırasında durduruldu (bobinler açılmadı)."}
-    if _erken_engel:
-        logging.getLogger(__name__).warning(
-            "Seans başlatma İPTAL: DB yazımı sırasında bobin durdurması geldi (nesil) — bobinler açılmadı."
-        )
-        await asyncio.to_thread(_iptal_seans_satirini_kapat, sid)
-        raise HTTPException(status_code=409, detail=_erken_engel)
-
-    # Yeni seans → önceki (kaydedilmemiş) sensör buffer'ını temizle.
-    with _sensor_sample_buffer_lock:
-        _sensor_sample_buffer.clear()
-    # Asama-2: onceki seanstan artmis acik coil-run / istatistik kalmasin.
-    # ⚠️ D1.68 (B-1.6): artık koşu haritadan SESSİZCE SİLİNMEZ, KAPATILIR (`end_coil_run` + özet). Eskiden `.clear()`
-    # önceki seansın açık koşusunu (ör. seans sırasında tekil başlatılmış, seans durdurmasının kapsamı dışındaki bobin)
-    # `ended_epoch=NULL` kalıcı bırakıyordu. Bitiş bilinmiyor → bu başlatma anı (üst sınır); bobin hâlâ sürülüyorsa günlüğe.
-    with _active_coil_runs_lock:
-        _artik_kosular = list(_active_coil_runs.keys())
-    if _artik_kosular:
-        logging.getLogger(__name__).warning(
-            "Seans başlatma: önceki seanstan AÇIK koşu kaydı kapatılıyor (bobin %s; bobin hâlâ çalışıyor olabilir).",
-            _artik_kosular,
-        )
-
-        def _artiklari_kapat():
-            for _cid in _artik_kosular:
+        def _persist_session_start():
+            db = _get_treatment_db()
+            if db is None:
+                return None, None
+            _pid = None
+            if payload.patient_name:
                 try:
-                    _finish_coil_run(_cid)
+                    _pid = db.upsert_patient(
+                        {
+                            "name": payload.patient_name,
+                            "patient_uuid": (payload.patient_id or None),
+                            "owner_email": (owner_email or None),
+                        }
+                    )
                 except Exception:
-                    logging.getLogger(__name__).warning("artik kosu kapatilamadi (bobin %s)", _cid, exc_info=True)
+                    logging.getLogger(__name__).debug("upsert_patient hatasi", exc_info=True)
+            _sid = db.start_session(
+                treatment_mode=payload.mode,
+                target_condition=payload.target_condition or None,
+                operator_name=payload.operator_name or None,
+                patient_name=payload.patient_name or None,
+                # ⚠️ 2026-08-09 (Tier 1): e-posta İSTEMCİ BEYANINDAN değil, doğrulanmış operatör
+                # jetonundan gelir. Beyan yalnız cihazda kayıtlı operatör YOKKEN kabul edilir.
+                operator_email=_operator_kimligi or None,
+            )
+            # Yeni kolonlar (start_session bunlari yazmaz): gercek baslangic epoch + patient_id FK.
+            try:
+                db.set_session_meta(_sid, started_epoch=_started_epoch_snap, patient_id=_pid)
+            except Exception:
+                logging.getLogger(__name__).debug("set_session_meta(start) hatasi", exc_info=True)
+            # Sahip e-postasini seans-parametresi olarak yaz (history JOIN'i bunu okur).
+            if owner_email:
+                try:
+                    db.set_session_parameter(_sid, "patient_owner_email", owner_email, "")
+                except Exception:
+                    logging.getLogger(__name__).debug("set_session_parameter(owner_email) hatasi", exc_info=True)
+            # ⚠️ DENETİM İZİNİ SEANSA BAĞLA (kampanya bulgusu S11, 2026-08-15).
+            # `session_started` olaylarında `session_events.session_id` NULL'dur ve bu KASITLIDIR:
+            # olay, DB seans satırı OLUŞMADAN ÖNCE yazılır (önce-iz-sonra-satır). Ama bağlantı
+            # hiçbir yerde kurulmuyordu → "bu denetim kaydı hangi seansa ait?" cevapsız kalıyordu.
+            #
+            # ⚠️ BAĞLANTI TERS YÖNDE KURULUR: `session_events`e SONRADAN UPDATE ATILMAZ — o tablo
+            # append-only'dir ve sıralama bilinçlidir. Bunun yerine mühür seans satırına yazılır.
+            # Böylece yeni DB metodu, denetim tablosuna UPDATE ve `delete_session` semantiğinde
+            # değişiklik GEREKMEZ. Join: session_parameters.parameter_value ==
+            # json_extract(session_events.payload,'$.ref').
+            #
+            # ⚠️ DÜRÜST SINIR: bu, silinen bir seansın `session_events` payload'unda kalan
+            # patient_id/operator_email artığını (KVKK) ÇÖZMEZ — "iz seansla birlikte silinsin mi?"
+            # ayrı bir sahip kararıdır ve bu düzeltme onu cevaplamadan uygulanabilir.
+            try:
+                _ref = (_active_session or {}).get("session_id")
+                if _ref:
+                    db.set_session_parameter(_sid, "audit_ref", str(_ref), "")
+            except Exception:
+                logging.getLogger(__name__).debug("set_session_parameter(audit_ref) hatasi", exc_info=True)
+            return _sid, _pid
 
-        await asyncio.to_thread(_artiklari_kapat)
-    with _active_coil_runs_lock:
-        _active_coil_runs.clear()
-    with _coil_run_stats_lock:
-        _coil_run_stats.clear()
-    # DENETIM P2 (hasta-verisi karismasi): _minute_acc bu temizlikte YOKTU. Tek temizleme
-    # noktasi _emit_minute_averages'ti; onu ise SADECE dakika-loop'u ve /api/session/stop
-    # cagiriyor. Sure-watchdog otomatik bitisi ve acil-durdurma is_active=False yaptigindan
-    # /stop "Aktif seans yok" ile erken doner → birikmis kismi dakika HIC bosaltilmaz ve
-    # SONRAKI hastanin ilk dakika-ortalamasina karisirdi (tibbi kayit kirlenmesi).
-    with _minute_acc_lock:
-        _minute_acc.clear()
+        sid = None
+        try:
+            sid, patient_id = await asyncio.to_thread(_persist_session_start)
+            if sid is not None:
+                with _session_lock:
+                    # Yalniz hala BU seans aktifse yaz (arada /stop — ya da Durdur/E-stop + Sifirla + YENI seans — gelmis
+                    # olabilir; i1-F3: kimlik bakilmadan yeni seansin db_session_id'si bu satirla EZILIYORDU).
+                    if _active_session.get("is_active") and _active_session.get("session_id") == _benim_seans:
+                        _active_session["db_session_id"] = sid
+                        _active_session["db_patient_id"] = patient_id
+        except Exception:
+            logging.getLogger(__name__).warning("Seans DB satiri olusturulamadi (db_session_id=None).", exc_info=True)
 
-    # Session API accepts minutes; ESP/MQTT duration remains seconds.
+        # Audit P1 (TOCTOU): DB-persist await'i sırasında eşzamanlı /stop is_active=False yapmış olabilir.
+        # Bobinleri ENERJİLEMEDEN ÖNCE yeniden doğrula — aksi halde bobinler fiziksel açılır ama
+        # _active_session.is_active=False kalır → süre-watchdog ASLA durdurmaz (gözetimsiz sürüş; setin en
+        # zararlısı). Henüz hiç bobin enerjilenmediği için burada iptal güvenli (yarım-açık kalmaz).
+        # ⚠️ 1-C inceleme i1-F3 / i2-F1: denetim KİMLİKLİDİR ve tampon temizliğinden ÖNCE yapılır — arada açılmış YENİ
+        # seans "aktif" göründüğü için eski denetim bu bayat isteği sürdürüyor, YENİ seansın koşu kaydını ve
+        # sensör/dakika tamponlarını siliyordu. İptalde bu başlatmanın KENDİ DB satırı "İptal Edildi" kapatılır (i2-F7).
+        with _session_lock:
+            _still_active = bool(_active_session.get("is_active")) and _active_session.get("session_id") == _benim_seans
+            # ⚠️ 1-C inceleme i1-F5: seansı BİTİRMEYEN bir durdurma (bu seansın bobinine STOP, `stop_all_coils`) DB yazımı
+            # sırasında nesli artırdıysa başlatma burada — bobin sürülmeden, tampon temizlenmeden — iptal edilir; kendi
+            # satırı "İptal Edildi" kapanır (sürüş yolundaki "Donanım Reddetti" DEĞİL — donanım reddetmedi).
+            _erken_engel = estop_mandali.baslatma_engeli(_niyet_nesli) if _still_active else ""
+            if _erken_engel:
+                _active_session["is_active"] = False
+        if not _still_active:
+            logging.getLogger(__name__).warning(
+                "Seans başlatma İPTAL: enerjilemeden önce durdurma algılandı (bobinler açılmadı)."
+            )
+            await asyncio.to_thread(_iptal_seans_satirini_kapat, sid)
+            return {"status": "cancelled", "message": "Seans başlatma sırasında durduruldu (bobinler açılmadı)."}
+        if _erken_engel:
+            logging.getLogger(__name__).warning(
+                "Seans başlatma İPTAL: DB yazımı sırasında bobin durdurması geldi (nesil) — bobinler açılmadı."
+            )
+            await asyncio.to_thread(_iptal_seans_satirini_kapat, sid)
+            raise HTTPException(status_code=409, detail=_erken_engel)
 
-    # DENETIM 2. TUR [4.4] (2026-08-20): D-3 duzeltmesi (ffd4406) uc ham yayin sitesinden yalniz
-    # IKISINI (tek-bobin + batch) kapatmisti; SEANS yolu ESP'ye HAM freq gondermeye devam ediyordu
-    # → >1000 Hz'lik seansta STM bobinleri istenen frekansta, ESP'ler sessizce 1000'de: karma
-    # dizide tutarsiz doz ("kismi duzeltme, duzeltilmemis demektir"). Tek-bobin/batch ile AYNI
-    # normalize; run-log da ESP'ye GIDEN degeri yazar (o iki yolun kuraliyla birebir).
-    from utils.stm32_protocol_limits import normalize_esp_frequency_hz as _sess_nesp
+        # Yeni seans → önceki (kaydedilmemiş) sensör buffer'ını temizle.
+        with _sensor_sample_buffer_lock:
+            _sensor_sample_buffer.clear()
+        # Asama-2: onceki seanstan artmis acik coil-run / istatistik kalmasin.
+        # ⚠️ D1.68 (B-1.6): artık koşu haritadan SESSİZCE SİLİNMEZ, KAPATILIR (`end_coil_run` + özet). Eskiden `.clear()`
+        # önceki seansın açık koşusunu (ör. seans sırasında tekil başlatılmış, seans durdurmasının kapsamı dışındaki bobin)
+        # `ended_epoch=NULL` kalıcı bırakıyordu. Bitiş bilinmiyor → bu başlatma anı (üst sınır); bobin hâlâ sürülüyorsa günlüğe.
+        with _active_coil_runs_lock:
+            _artik_kosular = list(_active_coil_runs.keys())
+        if _artik_kosular:
+            logging.getLogger(__name__).warning(
+                "Seans başlatma: önceki seanstan AÇIK koşu kaydı kapatılıyor (bobin %s; bobin hâlâ çalışıyor olabilir).",
+                _artik_kosular,
+            )
 
-    _esp_sess_freq = _sess_nesp(payload.frequency)
-    mqtt_duration_seconds = payload.duration_minutes * 60
-    # [E1] (denetim 2026-08-24): NACK bekcisi yalniz broker CANLIYKEN baglanir. Broker oluyken NACK
-    # gelemez (publish gitmedi) ve `esp_unreachable` (asagida) zaten uyarir; bekci timeout'u cift
-    # uyari uretmesin (8. parti bilincli karari: broker-olu yarisi snappy-start + esp_unreachable).
-    _esp_broker_ok = bool(esp_coils) and _broker_reachable()
-    for coil_id in esp_coils:
-        command_id = _komut_kimligi("sess", coil_id)  # D1.E10
-        mqtt_payload = {
-            "command": "start",
-            "command_id": command_id,
-            "freq": _esp_sess_freq,
-            "duty": payload.duty,
-            "phase": payload.phase,
-            "duration": mqtt_duration_seconds,
-        }
-        # [E1]: 18. parti ack-mimarisi tekil+batch yollarina baglandi ama SEANS yolu DISARIDA
-        # kalmisti — termal-kilitli 8266 seans-start'i NACK'lerse (command_error) hayalet kosu kaydi
-        # seans boyu acik kalir, kapanista TAM SURELI muhurlenir. Onay kaydi publish'ten ONCE acilir
-        # (hizli ack yarisi kaybolmasin — HG-4 deseni; bekci publish sonucundan BAGIMSIZ, NACK ESP'nin
-        # command_error event'iyle gelir). Tekil/batch yoluyla ayni sozlesme.
-        if _esp_broker_ok:
-            _register_ack(command_id)
-        # ESP publish arka planda → broker yavaş/erişilemezse seans başlatmayı bekletme (snappy start).
-        # D1.81 · Y4: mandal/nesil kapılı START yayını (niyet nesli istek girişinden; telafi STOP'u dahil).
-        _threading.Thread(target=_esp_start_yayinla, args=(coil_id, mqtt_payload, _niyet_nesli), daemon=True).start()
-        # Asama-2: seans-baslangic bobini icin per-bobin run kaydi. /session/start bobinleri
-        # KENDI dongusuyle baslattigindan control_single/batch hook'u buraya ULASMAZ → burada ac.
-        # ⚠️ KOSULSUZ (8. parti bilincli karari: fire-and-forget publish → sonuc bilinemez; broker-olu
-        # seans zaten esp_unreachable tasir). [4.4]: loglanan freq = ESP'ye GIDEN (normalize) deger.
-        _begin_coil_run(coil_id, _esp_sess_freq, payload.duty, payload.phase, payload.intensity, "esp")
-        _sess_run_id = _active_coil_runs.get(coil_id)  # D2: bekçiye BU start'ın run'ını taşı
-        # NACK gelirse bekci bu kaydi kapatir (hayalet kayit) + operatore bildirir; ack TIMEOUT'unda
-        # kayit KORUNUR (ack QoS-0, kayip ack gercek kosunun dozunu silmemeli). Tekil yolla ayni.
-        if _esp_broker_ok:
-            _start_ack_izle_arka_planda(coil_id, command_id, True, _sess_run_id)
+            def _artiklari_kapat():
+                for _cid in _artik_kosular:
+                    try:
+                        _finish_coil_run(_cid)
+                    except Exception:
+                        logging.getLogger(__name__).warning("artik kosu kapatilamadi (bobin %s)", _cid, exc_info=True)
+
+            await asyncio.to_thread(_artiklari_kapat)
+        with _active_coil_runs_lock:
+            _active_coil_runs.clear()
+        with _coil_run_stats_lock:
+            _coil_run_stats.clear()
+        # DENETIM P2 (hasta-verisi karismasi): _minute_acc bu temizlikte YOKTU. Tek temizleme
+        # noktasi _emit_minute_averages'ti; onu ise SADECE dakika-loop'u ve /api/session/stop
+        # cagiriyor. Sure-watchdog otomatik bitisi ve acil-durdurma is_active=False yaptigindan
+        # /stop "Aktif seans yok" ile erken doner → birikmis kismi dakika HIC bosaltilmaz ve
+        # SONRAKI hastanin ilk dakika-ortalamasina karisirdi (tibbi kayit kirlenmesi).
+        with _minute_acc_lock:
+            _minute_acc.clear()
+
+        # Session API accepts minutes; ESP/MQTT duration remains seconds.
+
+        # DENETIM 2. TUR [4.4] (2026-08-20): D-3 duzeltmesi (ffd4406) uc ham yayin sitesinden yalniz
+        # IKISINI (tek-bobin + batch) kapatmisti; SEANS yolu ESP'ye HAM freq gondermeye devam ediyordu
+        # → >1000 Hz'lik seansta STM bobinleri istenen frekansta, ESP'ler sessizce 1000'de: karma
+        # dizide tutarsiz doz ("kismi duzeltme, duzeltilmemis demektir"). Tek-bobin/batch ile AYNI
+        # normalize; run-log da ESP'ye GIDEN degeri yazar (o iki yolun kuraliyla birebir).
+        from utils.stm32_protocol_limits import normalize_esp_frequency_hz as _sess_nesp
+
+        _esp_sess_freq = _sess_nesp(payload.frequency)
+        mqtt_duration_seconds = payload.duration_minutes * 60
+        # [E1] (denetim 2026-08-24): NACK bekcisi yalniz broker CANLIYKEN baglanir. Broker oluyken NACK
+        # gelemez (publish gitmedi) ve `esp_unreachable` (asagida) zaten uyarir; bekci timeout'u cift
+        # uyari uretmesin (8. parti bilincli karari: broker-olu yarisi snappy-start + esp_unreachable).
+        _esp_broker_ok = bool(esp_coils) and _broker_reachable()
+        for coil_id in esp_coils:
+            command_id = _komut_kimligi("sess", coil_id)  # D1.E10
+            mqtt_payload = {
+                "command": "start",
+                "command_id": command_id,
+                "freq": _esp_sess_freq,
+                "duty": payload.duty,
+                "phase": payload.phase,
+                "duration": mqtt_duration_seconds,
+            }
+            # [E1]: 18. parti ack-mimarisi tekil+batch yollarina baglandi ama SEANS yolu DISARIDA
+            # kalmisti — termal-kilitli 8266 seans-start'i NACK'lerse (command_error) hayalet kosu kaydi
+            # seans boyu acik kalir, kapanista TAM SURELI muhurlenir. Onay kaydi publish'ten ONCE acilir
+            # (hizli ack yarisi kaybolmasin — HG-4 deseni; bekci publish sonucundan BAGIMSIZ, NACK ESP'nin
+            # command_error event'iyle gelir). Tekil/batch yoluyla ayni sozlesme.
+            if _esp_broker_ok:
+                _register_ack(command_id)
+            # ESP publish arka planda → broker yavaş/erişilemezse seans başlatmayı bekletme (snappy start).
+            # D1.81 · Y4: mandal/nesil kapılı START yayını (niyet nesli istek girişinden; telafi STOP'u dahil).
+            _threading.Thread(
+                target=_esp_start_yayinla, args=(coil_id, mqtt_payload, _niyet_nesli), daemon=True
+            ).start()
+            # Asama-2: seans-baslangic bobini icin per-bobin run kaydi. /session/start bobinleri
+            # KENDI dongusuyle baslattigindan control_single/batch hook'u buraya ULASMAZ → burada ac.
+            # ⚠️ KOSULSUZ (8. parti bilincli karari: fire-and-forget publish → sonuc bilinemez; broker-olu
+            # seans zaten esp_unreachable tasir). [4.4]: loglanan freq = ESP'ye GIDEN (normalize) deger.
+            _begin_coil_run(coil_id, _esp_sess_freq, payload.duty, payload.phase, payload.intensity, "esp")
+            _sess_run_id = _active_coil_runs.get(coil_id)  # D2: bekçiye BU start'ın run'ını taşı
+            # NACK gelirse bekci bu kaydi kapatir (hayalet kayit) + operatore bildirir; ack TIMEOUT'unda
+            # kayit KORUNUR (ack QoS-0, kayip ack gercek kosunun dozunu silmemeli). Tekil yolla ayni.
+            if _esp_broker_ok:
+                _start_ack_izle_arka_planda(coil_id, command_id, True, _sess_run_id)
+    except HTTPException:
+        raise
+    except Exception:
+        logging.getLogger(__name__).exception("Seans baslatma: surus ONCESI bolgede HATA → seans iptal ediliyor.")
+        await _baslatma_hatasinda_kapat(
+            _benim_seans,
+            "Seans hazırlığı sırasında hata oluştu; seans BAŞLATILMADI",
+            "bobinlere STOP gönderildi. Yeniden deneyin; sürerse teknik desteğe başvurun.",
+        )
 
     # event-loop-blok fix: update_coil = STM32'ye SENKRON seri-port yazımı (bobin başına ~onlarca ms) →
     # async-uçta doğrudan çalışınca event-loop'u bloklar; STM bobin döngüsünü thread'e offload et.
@@ -3962,25 +4005,10 @@ async def start_session(payload: SessionStartPayload, request: Request):
             # kapanır: KENDİ seansı hâlâ aktifse normal durdurma yolu (uçuştaki başlatma → TÜM seans bobinlerine STOP,
             # satır "İptal Edildi"); Ö.4-Y8: STOP yalnız artar, kapılanmaz.
             logging.getLogger(__name__).exception("Seans baslatma: bobin surusu HATA verdi → seans iptal ediliyor.")
-            with _session_lock:
-                _hala_benim_hata = (
-                    bool(_active_session.get("is_active")) and _active_session.get("session_id") == _benim_seans
-                )
-            _durdurma_teyitsiz = False
-            if _hala_benim_hata:
-                _durdurma = await stop_session()
-                # ⚠️ 1-E incelemesi (i-18.1): `stop_session` teyitsiz STOP'ta FIRLATMAZ, 409 yanıtı DÖNDÜRÜR — eskiden yok
-                # sayılıp "sürülen bobinler durduruldu" deniyordu (STOP porta yazılamamışken; ölçüldü).
-                _durdurma_teyitsiz = getattr(_durdurma, "status_code", 200) == 409
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "Bobin sürüşü sırasında hata oluştu; seans BAŞLATILMADI. Sürülen bobinlerin STOP'u DOĞRULANAMADI — "
-                    "HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
-                    if _durdurma_teyitsiz
-                    else "Bobin sürüşü sırasında hata oluştu; seans BAŞLATILMADI ve sürülen bobinler durduruldu. "
-                    "Bağlantıyı kontrol edip yeniden deneyin."
-                ),
+            await _baslatma_hatasinda_kapat(
+                _benim_seans,
+                "Bobin sürüşü sırasında hata oluştu; seans BAŞLATILMADI",
+                "sürülen bobinler durduruldu. Bağlantıyı kontrol edip yeniden deneyin.",
             )
 
     # ⚠️ HİÇBİR BOBİN SÜRÜLMEDİYSE SEANS YOKTUR — geri al ve DÜRÜSTÇE söyle.
