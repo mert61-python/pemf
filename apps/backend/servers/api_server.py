@@ -3839,8 +3839,29 @@ async def start_session(payload: SessionStartPayload, request: Request):
     _stm_kabul: list = []
     if stm_coils:
         # D1.81: niyet nesli bağlamı `to_thread` iş parçacığına kopyalanır → `update_coil` onu kilit altında denetler.
-        with estop_mandali.surus_baglami(_niyet_nesli):
-            _stm_kabul = await asyncio.to_thread(_start_stm_coils) or []
+        try:
+            with estop_mandali.surus_baglami(_niyet_nesli):
+                _stm_kabul = await asyncio.to_thread(_start_stm_coils) or []
+        except Exception:
+            # ⚠️ İNCELEME-2 §10 #2 (i3-F-10 genişlemesi): sürüş İSTİSNA atarsa (ör. bobin 1 kabul edildi, bobin 2'de
+            # `update_coil` fırladı) uç 500'le çıkıyor, seans `is_active` + `baslatma_ucusta` kalıyor, kabul edilen bobin
+            # TELDE kalıyordu; sonraki normal Durdur satırı "İptal Edildi" yazıyordu. Başlatma bayrağı ve seans TUTARLI
+            # kapanır: KENDİ seansı hâlâ aktifse normal durdurma yolu (uçuştaki başlatma → TÜM seans bobinlerine STOP,
+            # satır "İptal Edildi"); Ö.4-Y8: STOP yalnız artar, kapılanmaz.
+            logging.getLogger(__name__).exception("Seans baslatma: bobin surusu HATA verdi → seans iptal ediliyor.")
+            with _session_lock:
+                _hala_benim_hata = (
+                    bool(_active_session.get("is_active")) and _active_session.get("session_id") == _benim_seans
+                )
+            if _hala_benim_hata:
+                await stop_session()
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Bobin sürüşü sırasında hata oluştu; seans BAŞLATILMADI ve sürülen bobinler durduruldu. "
+                    "Bağlantıyı kontrol edip yeniden deneyin."
+                ),
+            )
 
     # ⚠️ HİÇBİR BOBİN SÜRÜLMEDİYSE SEANS YOKTUR — geri al ve DÜRÜSTÇE söyle.
     # Sahip bildirimi: "bobinlere komut gitmemesine rağmen seans başlatınca gerçekten
