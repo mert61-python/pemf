@@ -15,7 +15,7 @@
  * `hardwareRunning` mantığının aynısı).
  */
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
@@ -27,6 +27,16 @@ import {
 } from "@/services/emergencyStop";
 import { emitToast } from "@/services/toastBridge";
 import { useStmBelirsiz } from "@/hooks/useStmBelirsiz";
+import { UstKatman } from "@/components/ui/UstKatman";
+
+/**
+ * WEB KATMANI (D1.E05 · İG-6.6): düğme `document.body`'ye portalla, `position: fixed` ve bu katmanla çizilir.
+ * react-native-web her açık Modal'ı body düzeyinde `z-index: 9999` ile çizer; uygulama kökünün içindeki düğme o
+ * katmanın ALTINDA kalıyordu (Modal açıkken dokunuş Modal'a gidiyordu, ölçüldü). Değer 32 bit tamsayının üst
+ * sınırına yakın: başka bir tam ekran örtü (Modal, bildirim, rehber) kayan ACİL DURDUR'un üstüne çıkamaz.
+ */
+export const GES_WEB_KATMAN = 2147483000;
+const webUstKatman = { position: "fixed", zIndex: GES_WEB_KATMAN } as unknown as ViewStyle;
 
 export function GlobalEmergencyStop({
   bottomOffset = 0,
@@ -80,35 +90,39 @@ export function GlobalEmergencyStop({
     else platformAlert(EMERGENCY_STOP_UNCONFIRMED_TITLE, EMERGENCY_STOP_UNCONFIRMED_BODY);
   };
 
+  // D1.E05: web'de body düzeyine portal + en üst katman (her açık Modal'ın üstünde); native'de yerinde.
   return (
-    <View
-      style={[
-        styles.wrap,
-        compact && styles.wrapCompact,
-        {
-          bottom: bottomOffset + insets.bottom + spacing.md,
-          left: Math.max(spacing.md, insets.left),
-          right: Math.max(spacing.md, insets.right),
-        },
-      ]}
-      pointerEvents="box-none"
-    >
-      <Pressable
-        onPress={onPress}
-        style={[styles.btn, compact && styles.btnCompact]}
-        accessibilityRole="button"
-        accessibilityLabel="Acil durdur"
-        accessibilityHint="Tüm bobinleri anında durdurur ve aktif seansı sonlandırır"
+    <UstKatman>
+      <View
+        style={[
+          styles.wrap,
+          compact && styles.wrapCompact,
+          Platform.OS === "web" && webUstKatman,
+          {
+            bottom: bottomOffset + insets.bottom + spacing.md,
+            left: Math.max(spacing.md, insets.left),
+            right: Math.max(spacing.md, insets.right),
+          },
+        ]}
+        pointerEvents="box-none"
       >
-        <Text style={styles.text} numberOfLines={1} adjustsFontSizeToFit>
-          {busy
-            ? "🚨 DURDURULUYOR…"
-            : belirsiz
-              ? "🚨 ACİL DURDUR (bağlantı yok)"
-              : `🚨 ACİL DURDUR${running > 0 ? ` (${running} bobin)` : ""}`}
-        </Text>
-      </Pressable>
-    </View>
+        <Pressable
+          onPress={onPress}
+          style={[styles.btn, compact && styles.btnCompact]}
+          accessibilityRole="button"
+          accessibilityLabel="Acil durdur"
+          accessibilityHint="Tüm bobinleri anında durdurur ve aktif seansı sonlandırır"
+        >
+          <Text style={styles.text} numberOfLines={1} adjustsFontSizeToFit>
+            {busy
+              ? "🚨 DURDURULUYOR…"
+              : belirsiz
+                ? "🚨 ACİL DURDUR (bağlantı yok)"
+                : `🚨 ACİL DURDUR${running > 0 ? ` (${running} bobin)` : ""}`}
+          </Text>
+        </Pressable>
+      </View>
+    </UstKatman>
   );
 }
 
