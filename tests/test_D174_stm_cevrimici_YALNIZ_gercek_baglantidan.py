@@ -232,6 +232,37 @@ def test_KARSIT_kacirilan_baglanti_olayi_GERCEK_ACK_ile_iyilesir(ortam):
     assert o.ls.stm_surus_hazir() is True, "gercek STM_OK, bagli cekirdekte canli durumu iyilestirmedi"
 
 
+def test_KRITIK_ACK_islenirken_araya_KOPUS_girerse_canli_durum_online_OLMAZ(ortam, monkeypatch):
+    """1-E incelemesi (i-1.1): okuyucu iş parçacığı `STM_OK` satırında ÖNCE `_set_stm_connected(True)`, SONRA satırı
+    ayrıştırıp `coil_update` yayınlar. Arada ana döngü kopuşu işlerse (port kayboldu / yazım hatası →
+    `_set_stm_connected(False)`), geç gelen GERÇEK ACK olayı canlı durumu yeniden "online" yapmamalı: iyileştirme
+    çekirdeğin bağlantı gerçeğine (durum kilidi altında) bakar. Bakmasaydı yeniden bağlanma döngüsü (zaten False → geçiş
+    yok, olay yok) durumu hiç düzeltmez, kart takılana dek kart yokken START kabul edilirdi.
+    Yarış penceresi GERÇEK koddan üretilir: kopuş, `_handle_stm_line`'ın iki adımı arasında çağrılan `_parse_stm_ok`a
+    enjekte edilir."""
+    from utils.stm32_transport import build_stm32_zero_duty_packet
+
+    o = ortam
+    o.core._set_stm_connected(True)
+    assert o.ls.stm_surus_hazir() is True, "aparat: gercek baglanti STM'i cevrimici yapmadi"
+    gercek_ayristir = o.core._parse_stm_ok
+
+    def _araya_kopus(satir):
+        o.core._set_stm_connected(False)  # ana döngü: port kayboldu (yarış penceresi)
+        return gercek_ayristir(satir)
+
+    monkeypatch.setattr(o.core, "_parse_stm_ok", _araya_kopus)
+    o.core._handle_stm_line(_ack_satiri(build_stm32_zero_duty_packet()), None)
+    monkeypatch.setattr(o.core, "_parse_stm_ok", gercek_ayristir)
+    assert o.core.stm_is_connected is False, "aparat: kopus cekirdekte kalmadi"
+    assert any(m.get("type") == "stm_coil_update" for m in o.yayinlar), "aparat: gec ACK olayi islenmedi"
+
+    o.core._set_stm_connected(False)  # yeniden bağlanma döngüsünün başı (başarısız el sıkışma): geçiş yok
+    assert o.ls.stm_surus_hazir() is False, "kopustan sonra islenen gec ACK STM'i 'online' yapti (cekirdek bagli degil)"
+    assert o.api._build_ws_snapshot()["stm"] == "warning", "anlik goruntu kopuk STM'i 'online' gosteriyor"
+    assert o.hc.update_coil(_B, 100.0, 40.0, 0.0, 5, start=True) is False, "kart yokken START kabul edildi"
+
+
 # ── Arayüz fikstürü (İG-6.1): GERÇEK backend'in seanssız manuel bobin + STM kopuşu WS dizisi ────────────────────────
 _ALANLAR = ("stm", "connected", "running")
 
