@@ -13,6 +13,7 @@ in-place mutasyon → çağrı yerleri değişmez). WS broadcast event-loop'a ba
 import json
 import logging
 import threading
+from collections import deque
 from datetime import datetime
 
 from fastapi import WebSocket
@@ -52,32 +53,72 @@ def _ws_send_lock_get():
 # arkada sinirsiz coroutine + JSON gövdesi birikiyordu (bellek + gecikme). Telemetri yayinlari
 # PERIYODIK ANLIK GORUNTU oldugundan bekleyen is birikince ESKISINI dusurmek dogru davranistir:
 # istemci bir sonraki turda zaten guncel durumu alir. Sinir normalde asla tetiklenmez.
+# ⚠️ D1.71 (B-1.11): yorum "ESKISINI dusur" diyordu ama kod sinirda GELEN YENI iletiyi atiyordu — takilan bir istemci
+# kuyrugu doldurunca saglikli istemciler de STM kopmasini, E-stop'u, seans bitisini HIC gormuyordu (11/11 kayip, durum
+# kendiliginden duzelmez). Artik sinirda kuyruktaki EN ESKI PERIYODIK ileti dusurulur; TEK SEFERLIK gecis iletileri
+# (asagidaki kume DISINDA kalan her tur: stm_status, session_update, emergency_stop, estop_*, notification…) ASLA
+# dusmez — gerekirse sinir asilir (seyrek; bellek sinirli kalir).
 _WS_MAX_PENDING_BROADCASTS = 64
+#: Yenisi eskisinin YERINI TUTAN periyodik anlik goruntuler (her biri o anin TAM durumunu tasir). Bilinmeyen tur
+#: DUSURULMEZ (yeni bir tek-seferlik tur sessizce dusmesin diye varsayilan guvenli taraftadir).
+_WS_PERIYODIK_TURLER = frozenset(
+    {"sensor_data", "coil_status", "stm_coil_update", "ai_vision", "snapshot", "gateway_status"}
+)
 _ws_pending = 0
 _ws_pending_lock = threading.Lock()
 _ws_dropped_total = 0
+#: Henuz gonderilmeye BASLAMAMIS yayin kayitlari (FIFO; `_ws_pending_lock` altinda). Ucustaki ileti buradan cikar ve
+#: artik dusurulemez. Kayit: {"periyodik": bool, "dusuruldu": bool}.
+_ws_bekleyenler: deque = deque()
+
+
+def _ws_dusurme_kaydi(neden: str) -> None:
+    """`_ws_pending_lock` ALTINDA çağrılır: düşürme sayacı + seyrek uyarı (log seli olmasın)."""
+    global _ws_dropped_total
+    _ws_dropped_total += 1
+    if _ws_dropped_total % 100 == 1:
+        logging.getLogger(__name__).warning(
+            "WS yayin kuyrugu dolu (%d bekleyen) → %s (toplam %d). Yavas/yari-acik istemci olabilir.",
+            _ws_pending,
+            neden,
+            _ws_dropped_total,
+        )
 
 
 def _ws_broadcast_sync(message: dict) -> None:
     """Thread-safe senkron broadcast (MQTT callback'lerinden çağrılır)."""
     import asyncio
 
-    global _ws_pending, _ws_dropped_total
+    global _ws_pending
     if not _event_loop or not _ws_clients:
         return
+    # D1.71 (B-1.27): serileştirme sayaçtan ÖNCE. Eskiden sayaç artırılıp `json.dumps` fırlatınca geri alınmıyordu: 64
+    # serileştirilemeyen yayından sonra sınır kalıcı dolu kalıyor, bütün canlı akış ölüyordu (hata çağırana da —
+    # ör. acil durdurma yoluna — sızıyordu). Serileştirilemeyen ileti günlüğe yazılıp ATLANIR.
+    try:
+        data = json.dumps(message, ensure_ascii=False)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "WS yayini serilestirilemedi, atlandi (tur=%s)",
+            (message or {}).get("type") if isinstance(message, dict) else "?",
+        )
+        return
+    kayit = {"periyodik": message.get("type") in _WS_PERIYODIK_TURLER, "dusuruldu": False}
     with _ws_pending_lock:
         if _ws_pending >= _WS_MAX_PENDING_BROADCASTS:
-            _ws_dropped_total += 1
-            if _ws_dropped_total % 100 == 1:  # log seli olmasin
-                logging.getLogger(__name__).warning(
-                    "WS yayin kuyrugu dolu (%d bekleyen) → anlik goruntu dusuruldu "
-                    "(toplam %d). Yavas/yari-acik istemci olabilir.",
-                    _ws_pending,
-                    _ws_dropped_total,
-                )
-            return
+            # D1.71 (B-1.11): sınırda GELEN ileti değil, kuyruktaki EN ESKİ periyodik ileti düşer.
+            kurban = next((k for k in _ws_bekleyenler if k["periyodik"]), None)
+            if kurban is not None:
+                kurban["dusuruldu"] = True
+                _ws_bekleyenler.remove(kurban)
+                _ws_pending -= 1
+                _ws_dusurme_kaydi("en eski periyodik anlik goruntu dusuruldu")
+            elif kayit["periyodik"]:
+                _ws_dusurme_kaydi("kuyrukta yalniz tek-seferlik ileti var, yeni periyodik ileti dusuruldu")
+                return
+            # Tek seferlik geçiş iletisi: sınır aşılsa da KABUL edilir (asla düşmez).
         _ws_pending += 1
-    data = json.dumps(message, ensure_ascii=False)
+        _ws_bekleyenler.append(kayit)
     with _ws_lock:
         clients = list(_ws_clients)
 
@@ -86,6 +127,13 @@ def _ws_broadcast_sync(message: dict) -> None:
         try:
             dead = []
             async with _ws_send_lock_get():
+                with _ws_pending_lock:
+                    if kayit["dusuruldu"]:
+                        return  # sınırda düşürüldü (sayaç düşürmede geri sayıldı)
+                    try:
+                        _ws_bekleyenler.remove(kayit)  # artık UÇUŞTA: düşürülemez
+                    except ValueError:
+                        pass
                 for ws in clients:
                     try:
                         # P-2: per-send timeout — yavaş/yarı-açık istemci tüm broadcast'i (→ tüm filoyu)
@@ -112,13 +160,23 @@ def _ws_broadcast_sync(message: dict) -> None:
                         pass
         finally:
             with _ws_pending_lock:
-                _ws_pending -= 1
+                if not kayit["dusuruldu"]:
+                    _ws_pending -= 1
+                try:
+                    _ws_bekleyenler.remove(kayit)  # iptal edilen (hiç başlamamış) gönderim kuyrukta kalmasın
+                except ValueError:
+                    pass
 
     try:
         _event_loop.call_soon_threadsafe(lambda: asyncio.ensure_future(_send_all(), loop=_event_loop))
     except Exception:
         with _ws_pending_lock:
-            _ws_pending -= 1  # planlanamadi → sayaci geri al (sizinti olmasin)
+            if not kayit["dusuruldu"]:
+                _ws_pending -= 1  # planlanamadi → sayaci geri al (sizinti olmasin)
+            try:
+                _ws_bekleyenler.remove(kayit)
+            except ValueError:
+                pass
 
 
 # ══════════════════════════════════════════════════════════════════════════════

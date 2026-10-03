@@ -413,8 +413,10 @@ def test_KRITIK_ws_olu_istemci_KAPATILIR_ve_geri_basinc_sayaci_SIZMAZ(monkeypatc
     sinir = live_state._WS_MAX_PENDING_BROADCASTS
     dusen_once = live_state._ws_dropped_total
     try:
+        # D1.71: sınırda düşen artık EN ESKİ PERİYODİK iletidir; bilinmeyen/tek seferlik tür ASLA düşmez → kapı periyodik
+        # türle (telemetri) doldurur. İddia aynı: sınırda durur, düşürme sayılır, sayaç sızmaz.
         for i in range(sinir + 1):
-            live_state._ws_broadcast_sync({"type": "d0o14", "n": i})
+            live_state._ws_broadcast_sync({"type": "sensor_data", "n": i})
         assert live_state._ws_pending == sinir, f"geri-basınç sınırda durmadı: {live_state._ws_pending} != {sinir}"
         assert live_state._ws_dropped_total == dusen_once + 1, "sınırı aşan yayın düşürülüp SAYILMADI"
         for _ in range(200):
