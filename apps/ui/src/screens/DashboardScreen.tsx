@@ -13,6 +13,7 @@ import { colors, spacing, typography, rf, rs, layoutMax, radius } from "@/theme/
 import { useLiveData } from "@/context/LiveDataContext";
 import { useSessionControl } from "@/hooks/useSessionControl";
 import { gorunurBobinler } from "@/services/bobinGorunurlugu";
+import { KendiDurdurmaIsareti } from "@/components/ui/KendiDurdurmaKontrolu";
 
 export function DashboardScreen() {
   const { snapshot, wsConnected } = useLiveData();
@@ -138,6 +139,8 @@ export function DashboardScreen() {
               >
                 <Text style={styles.emergencyBtnText}>🚨 ACİL DURDUR</Text>
               </TouchableOpacity>
+              {/* D1.E02 · A-51: düğme ÇİZİLDİĞİ sürece kayan ACİL DURDUR gizlenir (aynı koşulun içinde). */}
+              <KendiDurdurmaIsareti />
             </>
           ) : (
             <Text style={styles.body}>Kontrol panelinden seans başlatabilirsiniz.</Text>

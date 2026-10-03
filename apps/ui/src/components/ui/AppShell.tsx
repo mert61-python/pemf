@@ -29,6 +29,7 @@ import { SurumFarkiBanner } from "@/components/domain/SurumFarkiBanner";
 import { KayitDbBandi } from "@/components/domain/KayitDbBandi";
 import { EstopMandalBandi } from "@/components/ui/EstopMandalBandi";
 import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
+import { useKendiDurdurmaKaydi } from "@/components/ui/KendiDurdurmaKontrolu";
 import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
 import { JetonRozeti } from "@/components/ui/JetonRozeti";
 
@@ -47,24 +48,14 @@ interface NavItem {
  *  başlık/render dalı eklemeyi gerektirir, (b) alt barda kaydırarak KAZARA oturum kapatmayı
  *  mümkün kılar. Aksiyon-ögesi ikisini de kapatır (swipe yalnız rota ögelerini gezer). */
 /**
- * KENDİ ACİL DURDURMA DÜĞMESİNİ ÇİZEN ROTALAR — kayan düğme burada GİZLENİR.
+ * KAYAN ACİL DURDUR'UN GİZLENMESİ — D1.E02 · A-51 (sahip): YALNIZ ekran GERÇEKTEN kendi durdurma düğmesini çiziyorsa.
  *
- * ⚠️ SAHİP BİLDİRİMİ (2026-09-12): "seans başlatınca şu sol altta çıkan acil durdurma
- * kutusunu kaldır zaten bir sürü var uygulama içinde."
- * Haklı: Kontrol ekranında aynı anda ÜÇ durdurma görünüyordu (seans kartı · "TÜM BOBİNLERİ
- * ACİL DURDUR" · kayan kutu). Ana Ekran'da da kart-içi bir düğme var.
- *
- * ⚠️ KÜME BİLEREK KISA: geri kalan 8 rotada (Akıllı Teşhis, Ayarlar, Tedavi Geçmişi,
- * Hastalar, Raporlar, Sensörler, AI Geçmişi, Simülasyon) bu düğme TEK durdurma kontrolüdür
- * — üstelik otonom sürüş Akıllı Teşhis'ten başlatılabiliyor. Buraya rota eklemek, fazlalığı
- * değil ERİŞİMİ kaldırmak olur.
- *
- * ⚠️ BİLİNEN ÖDÜNÇ: Kontrol ekranındaki düğmeler sayfa içindedir, yani uzun listede aşağı
- * kaydırınca ekrandan çıkabilir. Kayan düğme tam da bunu çözmek için eklenmişti. Sahibin
- * isteği fazlalığı gidermek olduğu için ödünç BİLEREK alındı; kaydırınca da erişim istenirse
- * çözüm, Kontrol ekranındaki düğmeyi sabitlemektir (bu dosyayı değiştirmeden).
+ * ⚠️ ROTA ADINA GÖRE GİZLEME KALKTI. Eskiden "control"/"dashboard" rotalarında koşulsuz gizleniyordu (sahip bildirimi
+ * 2026-09-12: "zaten bir sürü var" — fazlalık haklıydı). Ama ekran hata kartına düşünce ya da Ana Ekran'ın kendi
+ * düğmesi STM kopunca kaybolunca ekranda HİÇ durdurma kontrolü kalmıyordu (ölçüldü, İG-6.2). Artık ekran düğmesinin
+ * yanına `<KendiDurdurmaIsareti />` takar; işaret takılı değilse kayan düğme görünür (Ö.4-Y8: durdurma kaybolmaz).
+ * Kapı: `AppShell.D1E02.gorunurDurdurma.test.tsx` (her rota + hata kartı + STM kopuşu + fazlalık karşıtı).
  */
-const KENDI_DURDURMASI_OLAN_ROTALAR: ReadonlySet<RouteKey> = new Set<RouteKey>(["control", "dashboard"]);
 
 type NavEntry = { kind: "route"; item: NavItem } | { kind: "action"; id: "logout"; label: string; icon: LucideIcon };
 
@@ -132,6 +123,8 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
   const [rehberAcik, setRehberAcik] = useState(false);
   const { showToast } = useToast();
   const guardTeardown = useTeardownGuard();
+  // D1.E02 · A-51: içerikteki ekran kendi acil durdurma düğmesini GERÇEKTEN çiziyor mu (işaret takılı mı).
+  const { takili: kendiDurdurmasiVar, Saglayici: KendiDurdurmaSaglayici } = useKendiDurdurmaKaydi();
   // Masaüstü client'ın kurduğu profiller (WelcomeScreen ile AYNI kaynak). null → kısıt yok (mobil).
   const installed = installedModes();
   // [S2/S5] Kabuk türü artık İÇERİK ve YÜKSEKLİK farkında: bottom (telefon) · rail (ikon şeridi:
@@ -461,7 +454,9 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
           // [S2] Gerçek içerik genişliği (kap − iki kat iç boşluk) ölçülür ve aşağı taşınır.
           onLayout={(e) => setIcerikGenislik(Math.max(0, Math.round(e.nativeEvent.layout.width) - 2 * spacing.xl))}
         >
-          <ShellLayoutProvider value={icerikGenislik}>{children}</ShellLayoutProvider>
+          <ShellLayoutProvider value={icerikGenislik}>
+            <KendiDurdurmaSaglayici>{children}</KendiDurdurmaSaglayici>
+          </ShellLayoutProvider>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -474,7 +469,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
           desktop ? 0 : klavye.acik ? klavye.yukseklik : responsive.isShort ? rs(60) : rs(76)
         }
         compact={responsive.isShort}
-        gizle={KENDI_DURDURMASI_OLAN_ROTALAR.has(activeRoute)}
+        gizle={kendiDurdurmasiVar}
       />
 
       {/* [S4] Klavye açıkken alt bar UNMOUNT edilir: edge-to-edge'de zaten klavyenin altında

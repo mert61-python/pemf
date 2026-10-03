@@ -16,8 +16,9 @@
  * OTONOM SÜRÜŞ tam da Akıllı Teşhis'ten başlatılabiliyor. Oralarda gizlemek, fazlalığı
  * değil ERİŞİMİ kaldırmak olurdu — bileşenin var olma sebebinin tersi.
  *
- * Bu yüzden gizleme ROTA BAZLIDIR ve küme bilerek kısadır. Kapı, kümenin sessizce
- * büyümesini engeller.
+ * D1.E02 · A-51 (sahip, 2026-10-01): gizleme artık ROTA ADINA DEĞİL, ekranın GERÇEKTEN kendi durdurma düğmesini
+ * çizmesine bağlı (`KendiDurdurmaIsareti`). Eski "küme sessizce büyümesin" pini davranışsal kapıya devredildi:
+ * `AppShell.D1E02.gorunurDurdurma.test.tsx` her rotayı boş içerikle çizer ve kayan kutuyu arar.
  */
 import { render } from "@testing-library/react-native";
 import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
@@ -61,23 +62,4 @@ test("KRITIK: KENDI dugmesi OLMAYAN ekranda kayan kutu GORUNUR (donanim kosarken
   // MUTASYON: `gizle` varsayılanını `true` yap → KIRMIZI.
   const api = render(<GlobalEmergencyStop />);
   expect(api.toJSON()).not.toBeNull();
-});
-
-test("KRITIK: gizleme KUMESI sessizce BUYUMESIN (yalniz kendi dugmesi olan iki rota)", () => {
-  // ⚠️ Küme `AppShell`te tanımlı ve bir satır eklemek 8 rotanın birinde durdurmayı
-  // sessizce kaldırabilir. Kapı, KAYNAĞA pinli sabit bir liste ölçer.
-  //
-  // MUTASYON: kümeye "ai" ekle → KIRMIZI (Akıllı Teşhis'te durdurma kaybolurdu).
-  /* eslint-disable @typescript-eslint/no-require-imports */
-  const fs = require("fs");
-  const path = require("path");
-  /* eslint-enable @typescript-eslint/no-require-imports */
-  const src = fs.readFileSync(
-    path.join(__dirname, "..", "AppShell.tsx"),
-    "utf-8",
-  ) as string;
-  const m = src.match(/KENDI_DURDURMASI_OLAN_ROTALAR[^=]*=\s*new Set<RouteKey>\(\[([^\]]*)\]\)/);
-  expect(m).toBeTruthy();
-  const rotalar = (m![1].match(/"([a-z_]+)"/g) ?? []).map((x) => x.replace(/"/g, ""));
-  expect(rotalar.sort()).toEqual(["control", "dashboard"]);
 });

@@ -33,6 +33,7 @@ import { ObservationNotesModal } from "@/components/domain/ObservationNotesModal
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { SurusKipiSecici } from "@/components/domain/SurusKipiSecici";
 import { gorunurBobinler, espSlotuGorunur } from "@/services/bobinGorunurlugu";
+import { KendiDurdurmaIsareti } from "@/components/ui/KendiDurdurmaKontrolu";
 
 // ─── Tab types ────────────────────────────────────────────────────────────────
 type TabKey = "automatic" | "manual" | "aipro";
@@ -552,6 +553,8 @@ export function ControlScreen() {
         accessibilityHint="Tüm bobinleri anında durdurur ve aktif seansı sonlandırır">
         <Text style={styles.emergencyBtnText} numberOfLines={2} adjustsFontSizeToFit>🚨 TÜM BOBİNLERİ ACİL DURDUR</Text>
       </TouchableOpacity>
+      {/* D1.E02 · A-51: bu düğme ÇİZİLDİĞİ sürece kayan ACİL DURDUR gizlenir; ekran çökerse işaret de sökülür. */}
+      <KendiDurdurmaIsareti />
 
       {/* ── Tab bar ───────────────────────────────────────────── */}
       <View style={styles.tabBar}>
