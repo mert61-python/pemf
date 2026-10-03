@@ -14,6 +14,7 @@ import React, {
   useRef,
   ReactNode,
 } from "react";
+import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { supabaseAuth } from "@/services/supabaseAuth";
 import { setEntitlementHeaders, setAuthBearer } from "@/services/apiClient";
 import { useAuth } from "@/context/AuthContext";
@@ -45,15 +46,23 @@ type FetchResult = Entitlement | typeof UNKNOWN;
 
 async function fetchEntitlement(): Promise<FetchResult> {
   try {
+    // ⚠️ D1.63 (B-6.7): supabase-js `getUser()` ağ hatasında FIRLATMAZ — `{data:{user:null}, error: AuthRetryableFetchError}`
+    // DÖNER. Eskiden `!user` dalı bunu "kullanıcı yok" sayıp `defaultEntitlement()` dönüyordu: aşağıdaki `catch` (UNKNOWN)
+    // gerçek istemcide HİÇ koşmuyordu, internetsiz açılışta ücretli kullanıcı "Başlangıç/deneme"ye düşüyordu (kapı da
+    // fırlatan sahte getUser kullandığı için kördü). Açık RET (oturum yok / 401) yine varsayılandır.
     const {
       data: { user },
+      error: kullaniciHatasi,
     } = await supabaseAuth.auth.getUser();
+    if (kullaniciHatasi && isAuthRetryableFetchError(kullaniciHatasi)) return UNKNOWN;
     if (!user) return defaultEntitlement();
-    const { data, error } = await supabaseAuth
+    const { data, error, status: httpDurum } = await supabaseAuth
       .from("subscriptions")
       .select("tier,status,addons,trial_ends_at,current_period_end")
       .eq("user_id", user.id)
       .maybeSingle();
+    // postgrest-js istek reddini (ağ) `status: 0` ile döndürür — o da "bilinmiyor"dur, abonelik satırı YOK değil.
+    if (error && httpDurum === 0) return UNKNOWN;
     if (error || !data) return defaultEntitlement(user.created_at);
     // Şekil doğrula (backend gibi savunmacı): bilinmeyen tier/status → güvenli varsayılan;
     // addons dizi değilse [] (aksi halde [...e.addons] / includes çökerdi).
@@ -92,11 +101,15 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
   // kullanıcısı, A'nın abonelik hakkıyla istek atabiliyordu. Her etki bir nesil alır; nesil
   // değiştiyse sonuç YOK SAYILIR.
   const genRef = useRef(0);
+  // D1.63 · D1.87 (A-70): çevrimdışı açılan oturumun (launcher devri, Supabase'e ulaşılamadı) hakkı SORGULANMAZ — supabase-js'te
+  // oturum kurulamadığı için `getUser` "oturum yok" (açık ret gibi) döner ve hak varsayılana düşerdi. Bilinen SON hak korunur.
+  const cevrimdisiRef = useRef(false);
+  cevrimdisiRef.current = !!session?.cevrimdisi;
 
   const refresh = useCallback(async () => {
     const gen = ++genRef.current;
     setLoading(true);
-    const e = await fetchEntitlement();
+    const e = cevrimdisiRef.current ? UNKNOWN : await fetchEntitlement();
     if (gen !== genRef.current) return; // bayat sonuç — oturum değişti
     const eff = e === UNKNOWN ? null : e;
     if (eff) {

@@ -68,12 +68,17 @@ it("abonelik satırı okunur ve tier uygulanır", async () => {
 });
 
 it("KRİTİK #98: Supabase ERİŞİLEMEZSE ücretli tier SIFIRLANMAZ (internetsiz klinik)", async () => {
-  const { getByTestId } = setup();
+  const { getByTestId, rerender } = setup();
   await waitFor(() => expect(getByTestId("tier").props.children).toBe("pro_plus"));
 
-  // Ağ koptu → sonraki refresh patlıyor.
+  // Ağ koptu → sonraki refresh patlıyor (fırlatan yol; gerçek supabase-js'in DÖNDÜRDÜĞÜ ağ hatası
+  // `EntitlementContext.D163.cevrimdisiHak.test.tsx`te). ⚠️ D1.63: eskiden burada yeniden RENDER EDİLMİYORDU —
+  // refresh hiç koşmuyor, kapı her mutantta yeşildi. Artık refresh'in koştuğu çağrı sayısıyla kanıtlanır.
   mockSb.auth.getUser.mockRejectedValue(new Error("network"));
-  mockSession = { email: "vet@klinik.com" };          // aynı oturum, yeniden tetikle
+  const once = mockSb.auth.getUser.mock.calls.length;
+  mockSession = { email: "vet@klinik.com" };          // aynı oturum, YENİ nesne → etki refresh'i koşturur
+  rerender(<EntitlementProvider><Probe /></EntitlementProvider>);
+  await waitFor(() => expect(mockSb.auth.getUser.mock.calls.length).toBe(once + 1));
   await act(async () => { await Promise.resolve(); });
 
   expect(getByTestId("tier").props.children).toBe("pro_plus"); // "baslangic"a DÜŞMEDİ
