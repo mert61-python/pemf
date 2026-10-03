@@ -253,6 +253,16 @@ if os.path.exists(ver_json):
 # DEMA simülatör (FastAPI '/simulator')
 sim_dir = os.path.join(project_path, 'dema-terapi-simülatörü', 'dist')
 if os.path.exists(sim_dir):
+    # D1.91 · A-37 (sahip): dist depoda TAKİPSİZ (yerelde derlenir) — kaynak düzeltilse de bayat bir dist dayanaksız
+    # "ISO 13485" / "Canlı" V/m iddialarını pakete taşırdı. Gömmeden önce denetlenir; sorun varsa derleme DURUR.
+    from build_tools.dema_iddia_denetimi import denetle as _dema_denetle
+
+    _dema_sorun = _dema_denetle(sim_dir)
+    if _dema_sorun:
+        raise SystemExit(
+            "DEMA simülatör dist'i A-37 ile çelişiyor (dema-terapi-simülatörü içinde `npm run build` ile yeniden "
+            "derleyin): " + "; ".join(_dema_sorun)
+        )
     datas.append((sim_dir, os.path.join('dema-terapi-simülatörü', 'dist')))
 
 # web_static / templates (varsa servis edilebilir küçük kaynaklar)

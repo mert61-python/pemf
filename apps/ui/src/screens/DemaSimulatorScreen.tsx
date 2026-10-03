@@ -40,8 +40,9 @@ export function DemaSimulatorScreen() {
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>DEMA Terapi Simülatörü</Text>
+            {/* D1.91 · A-37 (sahip): simülatör tanıtım/eğitim aracıdır — "canlı izleme" demez. */}
             <Text style={styles.muted}>
-              Manyetik alan etkileşimlerini canlı olarak izleyebilirsiniz.
+              Tanıtım/eğitim amaçlıdır, cihaz davranışını temsil etmez.
             </Text>
           </View>
           <TouchableOpacity style={styles.refreshBtn} onPress={reload} accessibilityRole="button" accessibilityLabel="Simülatörü yeniden yükle">

@@ -107,9 +107,11 @@ export default function App() {
       <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl shadow-slate-200/50 overflow-hidden border border-slate-100">
         {/* Header */}
         <header className="bg-blue-50 p-4 md:p-6 text-slate-800 border-b border-blue-100 text-center">
-          <h1 className="text-sm md:text-xl font-bold leading-tight">
-            EU ISO 13485 Tıbbi Cihazlar yönetmeliğine uyumlu tek DEMA terapi cihazıdır.
-          </h1>
+          {/* D1.91 · A-37 (sahip): dayanaksız uyumluluk iddiası KALDIRILDI; açık tanıtım/eğitim etiketi. */}
+          <h1 className="text-sm md:text-xl font-bold leading-tight">DEMA Terapi Simülatörü</h1>
+          <p className="mt-1 text-[11px] md:text-xs font-semibold text-amber-700">
+            Tanıtım/eğitim amaçlıdır, cihaz davranışını temsil etmez.
+          </p>
         </header>
 
         {/* Visualization Section - Diagram Style */}
@@ -291,8 +293,8 @@ export default function App() {
         {/* Footer Info */}
         <footer className="p-4 bg-white border-t border-slate-100">
           <p className="text-[10px] text-slate-400 text-center leading-relaxed">
-            Bu simülatör eğitim amaçlıdır. DEMA terapisi uygulamadan önce mutlaka bir sağlık profesyoneline danışın.
-            ISO 13485 standartları cihaz üretim kalitesini temsil eder.
+            Bu simülatör tanıtım/eğitim amaçlıdır, cihaz davranışını temsil etmez. DEMA terapisi uygulamadan önce mutlaka
+            bir sağlık profesyoneline danışın.
           </p>
         </footer>
       </div>
@@ -898,66 +900,8 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
         </g>
       </svg>
 
-      {/* Dose-Meter (Tahmini İndüklenen Elektrik Alan - V/m) */}
-      <div className="absolute right-2 md:right-4 top-2 md:top-4 bottom-2 md:bottom-4 w-12 md:w-20 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-xl md:rounded-2xl p-1 md:p-3 flex flex-col items-center shadow-2xl overflow-hidden scale-90 md:scale-100 origin-right">
-        <div className="flex flex-col items-center gap-1.5 mb-4">
-          <div className="p-1.5 bg-amber-500/10 rounded-lg">
-            <Zap className="w-4 h-4 text-amber-400 animate-pulse" />
-          </div>
-          <div className="flex flex-col items-center">
-            <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.15em] text-center leading-tight">İndüklenen</span>
-            <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.15em] text-center leading-tight">E-Alan</span>
-          </div>
-        </div>
-
-        <div className="flex-1 w-full flex gap-1">
-          {/* Gauge Ticks */}
-          <div className="flex flex-col justify-between h-full py-1">
-            {[...Array(11)].map((_, i) => (
-              <div key={i} className="flex items-center gap-1">
-                <div className={`h-[1px] ${i % 5 === 0 ? 'w-2 bg-slate-500' : 'w-1 bg-slate-700'}`} />
-                {i % 5 === 0 && (
-                  <span className="text-[6px] font-mono text-slate-500">{(10 - i) * 10}</span>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="flex-1 h-full bg-slate-800/50 rounded-lg relative overflow-hidden border border-slate-700/50">
-            {/* Active Bar with Segmented Look */}
-            <motion.div
-              className="absolute bottom-0 w-full bg-gradient-to-t from-blue-500 via-emerald-500 via-amber-500 to-red-500"
-              initial={{ height: 0 }}
-              animate={{
-                height: `${Math.min(100, (frequency * intensity) / 5)}%`,
-              }}
-              transition={{ type: "spring", stiffness: 80, damping: 15 }}
-            >
-              {/* Scanline Effect */}
-              <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[size:100%_4px]" />
-
-              {/* Top Glow */}
-              <div className="absolute top-0 left-0 right-0 h-4 bg-white/20 blur-sm" />
-            </motion.div>
-
-            {/* Glass Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-transparent pointer-events-none" />
-          </div>
-        </div>
-
-        <div className="mt-4 w-full bg-slate-800 rounded-lg p-2 border border-slate-700 flex flex-col items-center">
-          <span className="font-mono text-xs font-bold text-emerald-400 tracking-tighter">
-            {((frequency * intensity) / 100).toFixed(2)}
-          </span>
-          <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest">V/m</span>
-        </div>
-
-        {/* Status Indicator */}
-        <div className="mt-2 flex items-center gap-1">
-          <div className={`w-1 h-1 rounded-full ${isAnimating ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : 'bg-slate-600'}`} />
-          <span className="text-[6px] font-bold text-slate-500 uppercase">Canlı</span>
-        </div>
-      </div>
+      {/* D1.91 · A-37 (sahip): "İndüklenen E-Alan" ölçeri (birimli sayı + "canlı" rozeti) KALDIRILDI — fiziksel modeli
+          yoktu (frekans × yoğunluk / 100), gerçek ölçüm gibi okunuyordu. Simülatör tanıtım/eğitim aracıdır. */}
 
       {/* Signal Monitor Overlay */}
       <div className="absolute top-2 md:top-4 left-2 md:left-4 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-xl p-2 md:p-3 shadow-sm w-24 md:w-32 scale-90 md:scale-100 origin-top-left">
