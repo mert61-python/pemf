@@ -3865,12 +3865,19 @@ async def start_session(payload: SessionStartPayload, request: Request):
                 _hala_benim_hata = (
                     bool(_active_session.get("is_active")) and _active_session.get("session_id") == _benim_seans
                 )
+            _durdurma_teyitsiz = False
             if _hala_benim_hata:
-                await stop_session()
+                _durdurma = await stop_session()
+                # ⚠️ 1-E incelemesi (i-18.1): `stop_session` teyitsiz STOP'ta FIRLATMAZ, 409 yanıtı DÖNDÜRÜR — eskiden yok
+                # sayılıp "sürülen bobinler durduruldu" deniyordu (STOP porta yazılamamışken; ölçüldü).
+                _durdurma_teyitsiz = getattr(_durdurma, "status_code", 200) == 409
             raise HTTPException(
                 status_code=503,
                 detail=(
-                    "Bobin sürüşü sırasında hata oluştu; seans BAŞLATILMADI ve sürülen bobinler durduruldu. "
+                    "Bobin sürüşü sırasında hata oluştu; seans BAŞLATILMADI. Sürülen bobinlerin STOP'u DOĞRULANAMADI — "
+                    "HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
+                    if _durdurma_teyitsiz
+                    else "Bobin sürüşü sırasında hata oluştu; seans BAŞLATILMADI ve sürülen bobinler durduruldu. "
                     "Bağlantıyı kontrol edip yeniden deneyin."
                 ),
             )

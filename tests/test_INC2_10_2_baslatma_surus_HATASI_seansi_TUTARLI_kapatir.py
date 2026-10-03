@@ -83,6 +83,7 @@ def test_KRITIK_surus_istisnasi_seansi_IPTAL_eder_kabul_edilen_bobin_DURUR(ortam
     gercek = _ikinci_bobinde_patla(mp, hc)
     r = _baslat(c, [_B1, _B2])
     assert r.status_code == 503, f"surus hatasi durust 503 donmeli (500 degil): {r.status_code} {r.text[:200]}"
+    assert "durduruldu" in r.json().get("detail", ""), "teyitli durdurmada yanit durdurmayi soylemiyor (KARSIT)"
     with api._session_lock:
         aktif = bool(api._active_session.get("is_active"))
     assert not aktif, "surus hatasindan sonra seans AKTIF kaldi (yarim seans)"
@@ -102,3 +103,26 @@ def test_KARSIT_sonraki_seans_normal_baslar_ve_normal_Durdur_TAMAMLANDI_yazar(or
         assert api._active_session.get("baslatma_ucusta") is False, "yeni seansin baslatma bayragi inmedi"
     assert c.post("/api/session/stop").status_code == 200
     assert _durumlar(db)[-1] == "completed", f"normal Durdur satiri yanlis kapandi: {_durumlar(db)}"
+
+
+def test_KRITIK_ic_durdurma_TEYITSIZse_yanit_durduruldu_DEMEZ(ortam):
+    """1-E incelemesi (i-18.1): `stop_session` teyitsiz STOP'ta FIRLATMAZ, 409 yanıtı DÖNDÜRÜR; başlatma ucu onu yok sayıp
+    "sürülen bobinler durduruldu" diyordu — STOP porta yazılamamışken (ölçüldü). STOP GERÇEKTEN gönderilir (gerçek
+    `_stop_session_coils`); yalnız teyit sonucu "porta yazılamadı" olarak döner."""
+    api, hc, db, c, mp = ortam
+    gercek = _ikinci_bobinde_patla(mp, hc)
+    gercek_dur = api._stop_session_coils
+
+    def _teyitsiz_dur(coil_ids, yetkiyi_kes=False):
+        gercek_dur(coil_ids, yetkiyi_kes)
+        return [_B1]
+
+    mp.setattr(api, "_stop_session_coils", _teyitsiz_dur)
+    r = _baslat(c, [_B1, _B2])
+    mp.setattr(hc, "update_coil", gercek)
+    assert r.status_code == 503, r.text[:200]
+    detay = r.json().get("detail", "")
+    assert "DOĞRULANAMADI" in detay and "durduruldu" not in detay, (
+        f"teyitsiz STOP 'durduruldu' diye bildirildi: {detay}"
+    )
+    assert hc.coils_state[_B1]["is_running"] is False, "aparat: gercek STOP gitmedi"
