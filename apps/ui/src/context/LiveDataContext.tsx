@@ -388,13 +388,12 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         let d = msg.data as CoilStatus;
         // E-stop sticky: geç coil-update bobini yeniden running:true göstermesin (donanım durmuş).
         if ((d as any)?.running && Date.now() - emergencyStopTsRef.current < 3000) d = { ...d, running: false };
+        // ⚠️ D1.74 (İG-6.1): `snapshot.stm` BURADA YAZILMAZ — yalnız `stm_status`/`snapshot`tan gelir. Eskiden bobin
+        // güncellemesi STM'i "online" yapıyordu: kopuşta backend ÖNCE `stm_status{warning}`, SONRA her STM bobini için
+        // `stm_coil_update{connected:false}` yayınlar → son yazan "online" olunca kayan ACİL DURDUR'un "(bağlantı yok)"
+        // dalı ölüyor, düğme seanssız manuel sürüşte kayboluyor ve Donanım "çevrimiçi" görünüyordu (ölçüldü).
         setSnapshot((prev) => {
-          const updated = mergeCoilIntoSnapshot(
-            prev,
-            coilId,
-            { ...d, stm32Driven: true },
-            isStmCoil(coilId) ? { stm: "online" } : {}
-          );
+          const updated = mergeCoilIntoSnapshot(prev, coilId, { ...d, stm32Driven: true });
           snapshotRef.current = updated;
           return updated;
         });

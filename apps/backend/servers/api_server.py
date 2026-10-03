@@ -1438,6 +1438,28 @@ def _start_mqtt_for_api() -> None:
 _event_bus_registered = False
 
 
+def _stm_cevrimici_iyilestir() -> None:
+    """D1.74: gerçek bir STM ACK'i geldiğinde canlı durum, ÇEKİRDEĞİN bağlantı gerçeğinden iyileşir.
+
+    `update_live_coil_from_stm` artık STM'i "online" yazmıyor (sentetik yayınlar başlatma kapısını açıyordu). Ama
+    açılışta çekirdek kartla `hardware.stm.connected` olayı api işleyicileri kaydolmadan el sıkışırsa olay kaçar; eskiden
+    bunu her STM_OK örtüyordu. Ölçüt `core.stm_is_connected`dır (yalnız gerçek STM_READY/STM_OK ve kopuş yazar) ve
+    çekirdeğin durum kilidi ALTINDA okunur: bağlantı geçişleri aynı kilitte yayınlandığından araya giren bir kopuş
+    "online" ile ezilemez. Çekirdek bağlı değilse hiçbir şey yazılmaz."""
+    core = getattr(state, "core", None)
+    kilit = getattr(core, "_stm_state_lock", None)
+    if core is None or kilit is None:
+        return
+    with kilit:
+        if not getattr(core, "stm_is_connected", False):
+            return
+        with _live_state_lock:
+            zaten = _live_state["stm"] == "online"
+        if not zaten:
+            logging.warning("STM canli durumu cekirdekle esitlendi (kacirilan baglanti olayi): online")
+            update_live_stm_status(True)
+
+
 def _handle_backend_event(event) -> None:
     """Route core EventBus events into FastAPI live-state/WebSocket."""
     data = event.data or {}
@@ -1465,9 +1487,13 @@ def _handle_backend_event(event) -> None:
                 logging.exception("STM disconnect STOP failed")
         return
     if event.event_type == "hardware.stm.coil_update":
-        # ⚠️ KART KOMUTU KABUL ETTİ: `STM_OK` ayrıştırıldı → "sistematik red" sayacı sıfırlanır.
-        # Sıfırlama olmadan, eski bir gürültü NACK'i seans başlatmayı sonsuza dek engellerdi.
-        live_state.stm_komut_kabulu_bildir()
+        _sentetik = bool(data.get("sentetik"))
+        if not _sentetik:
+            # ⚠️ KART KOMUTU KABUL ETTİ: `STM_OK` ayrıştırıldı → "sistematik red" sayacı sıfırlanır.
+            # Sıfırlama olmadan, eski bir gürültü NACK'i seans başlatmayı sonsuza dek engellerdi.
+            # ⚠️ D1.74: firmware watchdog'unun SENTETİK sıfırlama yayını kabul DEĞİLDİR (kararı silmez).
+            live_state.stm_komut_kabulu_bildir()
+            _stm_cevrimici_iyilestir()
         update_live_coil_from_stm(
             coil_id=int(data.get("coil_id", 0)),
             duty=float(data.get("duty", data.get("duty_cycle", 0.0))),

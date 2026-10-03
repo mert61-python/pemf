@@ -33,6 +33,9 @@ HEADLESS_CORE = KOK / "apps" / "backend" / "headless_core.py"
 SIFIRLAMA_SEMASI = frozenset(
     {"coil_id", "duty", "duty_cycle", "freq", "frequency", "phase", "duration_min", "running", "pwm_active"}
 )
+#: D1.74 (B-1.19): sıfırlama yayını SENTETİKTİR — kartın bir paketi kabul ettiğinin (STM_OK) kanıtı değil; api_server
+#: bununla ne sistematik-NACK kararını siler ne de STM'i "bağlı" sayar. İşaret yükte `True` olarak bulunmalı.
+SENTETIK = "sentetik"
 #: Termal satır firmware'de `snprintf` biçimi (eşik sayısı çalışma anında basılır) — dal yalnız
 #: "STM_EVT" alt dizesine bakar; mevcut M2 kapısıyla aynı dize.
 STM_EVT_TERMAL = "-> STM_EVT: TERMAL kesme (>=48C) - bobin(ler) durduruldu, sogumada kilitli."
@@ -109,8 +112,9 @@ def test_P4_A_satir_TUM_STM_bobinlerinin_sifirlamasini_yayinlar(kaynak, olay):
         f"{kaynak}: sıfırlanan bobinler {sorted(d['coil_id'] for d, _p in sifirlar)} ≠ STM bobinleri {sorted(TUM_STM)}"
     )
     for d, p in sifirlar:
-        assert set(d) == SIFIRLAMA_SEMASI, f"{kaynak}: sıfırlama şeması değişti: {sorted(d)}"
-        sifir = {k: v for k, v in d.items() if k != "coil_id"}
+        assert set(d) == SIFIRLAMA_SEMASI | {SENTETIK}, f"{kaynak}: sıfırlama şeması değişti: {sorted(d)}"
+        assert d[SENTETIK] is True, f"{kaynak}: sıfırlama yayını SENTETİK işaretini taşımıyor (D1.74): {d}"
+        sifir = {k: v for k, v in d.items() if k not in ("coil_id", SENTETIK)}
         assert all(v == 0 for v in sifir.values()) and d["running"] is False and d["pwm_active"] is False, (
             f"{kaynak}: bobin {d['coil_id']} SIFIRLANMADI: {d}"
         )
@@ -127,9 +131,10 @@ def _sifirlama_sozlukleri(kaynak: str) -> list[int]:
     for d in ast.walk(ast.parse(kaynak)):
         if not isinstance(d, ast.Dict) or not all(isinstance(k, ast.Constant) for k in d.keys):
             continue
-        if {k.value for k in d.keys} != SIFIRLAMA_SEMASI:
+        # D1.74: SENTETİK işareti olan ve olmayan kopya AYNI sayılır (işaretsiz ikinci bir kopya da yakalanır).
+        if {k.value for k in d.keys} - {SENTETIK} != SIFIRLAMA_SEMASI:
             continue
-        if all(_sabit_sifir(v) for k, v in zip(d.keys, d.values) if k.value != "coil_id"):
+        if all(_sabit_sifir(v) for k, v in zip(d.keys, d.values) if k.value not in ("coil_id", SENTETIK)):
             satirlar.append(d.lineno)
     return satirlar
 
@@ -155,3 +160,6 @@ def test_P4_B_ozdenetim_CANLI_yuk_sayilmaz_sifir_yuk_sayilir():
     assert _sifirlama_sozlukleri(canli) == []
     assert _sifirlama_sozlukleri(sifir) == [1]
     assert _sifirlama_sozlukleri(canli + sifir + sifir) == [2, 3]
+    isaretli = sifir.replace("'pwm_active': False}", "'pwm_active': False, 'sentetik': True}")
+    assert isaretli != sifir
+    assert _sifirlama_sozlukleri(isaretli + sifir) == [1, 2]

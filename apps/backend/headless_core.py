@@ -689,7 +689,11 @@ class HeadlessCore:
 
         ⚠️ YALNIZ YAYIN: donanım (HardwareController) sıfırlaması B-1.18'in (D1.73) konusudur. Oraya
         eklenecek her davranış PARAMETREYLE yalnız watchdog dalına açılmalı — termal dalın davranışı
-        sahip kararı olmadan DEĞİŞMEZ (A-47: termal kesme YOK, dal yalnız firmware satırını ayrıştırır)."""
+        sahip kararı olmadan DEĞİŞMEZ (A-47: termal kesme YOK, dal yalnız firmware satırını ayrıştırır).
+
+        ⚠️ D1.74 (B-1.19): yayın `sentetik: True` taşır — kartın bir paketi KABUL ETTİĞİNİN (STM_OK) kanıtı DEĞİLDİR.
+        api_server bu olayla ne sistematik-NACK kararını siler ne de STM'i "bağlı" sayar (kopuştan sonra ya da başarısız
+        el sıkışmada okunan satır başlatma kapısını açıyordu)."""
         for coil_id in range(1, self.STM_COIL_COUNT + 1):
             self._publish_event(
                 "hardware.stm.coil_update",
@@ -703,6 +707,7 @@ class HeadlessCore:
                     "duration_min": 0,
                     "running": False,
                     "pwm_active": False,
+                    "sentetik": True,
                 },
                 priority=EventPriority.HIGH,
             )

@@ -456,16 +456,22 @@ def update_live_stm_status(connected: bool) -> None:
 def update_live_coil_from_stm(
     coil_id: int, duty: float, freq: float, phase: float, duration_min: int, running: bool
 ) -> None:
-    """STM32 USB verisiyle bobin durumunu günceller."""
+    """STM32 USB verisiyle bobin durumunu günceller.
+
+    ⚠️ D1.74 (B-1.19): STM BAĞLANTI DURUMUNA DOKUNMAZ. Eskiden her `coil_update` `_live_state["stm"] = "online"`
+    yazıp `stm_status{online}` yayınlıyordu; firmware watchdog satırının SENTETİK sıfırlama yayını da `coil_update`
+    olduğundan STM koptuktan sonra (ya da başarısız bir el sıkışmada) okunan bir satır başlatma kapısını
+    (`stm_surus_hazir`) yeniden açıyordu — kart yokken START kabul ediliyordu (ölçüldü). "online" yalnız
+    `update_live_stm_status(True)`'dan gelir (gerçek `STM_READY`/`STM_OK` → `hardware.stm.connected`). Bobinin
+    `connected` alanı da canlı STM durumundan türer (`_sync_stm_coils_locked` ile aynı ölçüt)."""
     coil_index = coil_id - 1
     if not (0 <= coil_index < 8):
         return
     with _live_state_lock:
-        _live_state["stm"] = "online"
         coil = _live_state["coils"][coil_index]
         coil.update(
             {
-                "connected": True,
+                "connected": _live_state["stm"] == "online",
                 "running": running,
                 "frequencyHz": int(freq),
                 "dutyCycle": float(duty),
@@ -475,7 +481,6 @@ def update_live_coil_from_stm(
             }
         )
         snapshot = dict(coil)
-    _ws_broadcast_sync({"type": "stm_status", "data": {"stm": "online", "connected": True}})
     _ws_broadcast_sync({"type": "stm_coil_update", "coilId": coil_id, "data": snapshot})
 
 

@@ -97,6 +97,10 @@ def test_update_live_session_state_deactivates(api):
 
 # ── update_live_coil_from_stm: STM USB → bobin durumu ────────────────────────
 def test_update_live_coil_from_stm_updates_coil(api):
+    """D1.74 (B-1.19): bobin verisi STM BAĞLANTI DURUMUNU YAZMAZ — "online" yalnız `update_live_stm_status(True)`'dan
+    gelir; bobinin `connected` alanı canlı STM durumundan türer. Bu test eskiden koşulsuz "online" yazımını PİNLİYORDU:
+    kopuştan sonra firmware watchdog satırının SENTETİK sıfırlama yayını başlatma kapısını yeniden açıyordu."""
+    api.update_live_stm_status(True)
     api.update_live_coil_from_stm(coil_id=3, duty=25.0, freq=50, phase=0, duration_min=20, running=True)
     coil = api._live_state["coils"][2]  # coil_id 3 → index 2
     assert coil["connected"] is True
@@ -104,7 +108,12 @@ def test_update_live_coil_from_stm_updates_coil(api):
     assert coil["frequencyHz"] == 50
     assert coil["dutyCycle"] == 25.0
     assert coil["stm32Driven"] is True
-    assert api._live_state["stm"] == "online", "STM verisi gelince stm 'online' olmalı"
+    assert api._live_state["stm"] == "online"
+
+    api.update_live_stm_status(False)
+    api.update_live_coil_from_stm(coil_id=3, duty=0.0, freq=0, phase=0, duration_min=0, running=False)
+    assert api._live_state["stm"] == "warning", "bobin verisi kopuk STM'i 'online' yapmamali (D1.74)"
+    assert api._live_state["coils"][2]["connected"] is False, "kopuk STM'de bobin 'bagli' gorundu"
 
 
 def test_update_live_coil_from_stm_ignores_out_of_range(api):

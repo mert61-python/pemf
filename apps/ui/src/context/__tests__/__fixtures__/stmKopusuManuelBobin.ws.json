@@ -1,0 +1,237 @@
+[
+  {
+    "type": "snapshot",
+    "data": {
+      "stm": "warning",
+      "activeTreatment": {
+        "isActive": false,
+        "mode": "Sistem Hazır"
+      },
+      "coils": [
+        {
+          "id": 1,
+          "connected": false,
+          "running": false
+        },
+        {
+          "id": 2,
+          "connected": false,
+          "running": false
+        },
+        {
+          "id": 3,
+          "connected": false,
+          "running": false
+        },
+        {
+          "id": 4,
+          "connected": false,
+          "running": false
+        },
+        {
+          "id": 5,
+          "connected": false,
+          "running": false
+        },
+        {
+          "id": 6,
+          "connected": false,
+          "running": false
+        },
+        {
+          "id": 7,
+          "connected": false,
+          "running": false
+        },
+        {
+          "id": 8,
+          "connected": false,
+          "running": false
+        }
+      ],
+      "notifications": []
+    }
+  },
+  {
+    "type": "stm_status",
+    "data": {
+      "stm": "online",
+      "connected": true
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 1,
+    "data": {
+      "connected": true,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 2,
+    "data": {
+      "connected": true,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 3,
+    "data": {
+      "connected": true,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 4,
+    "data": {
+      "connected": true,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 5,
+    "data": {
+      "connected": true,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 6,
+    "data": {
+      "connected": true,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 7,
+    "data": {
+      "connected": true,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 1,
+    "data": {
+      "connected": true,
+      "running": true
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 2,
+    "data": {
+      "connected": true,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 3,
+    "data": {
+      "connected": true,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 4,
+    "data": {
+      "connected": true,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 5,
+    "data": {
+      "connected": true,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 6,
+    "data": {
+      "connected": true,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 7,
+    "data": {
+      "connected": true,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_status",
+    "data": {
+      "stm": "warning",
+      "connected": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 1,
+    "data": {
+      "connected": false,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 2,
+    "data": {
+      "connected": false,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 3,
+    "data": {
+      "connected": false,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 4,
+    "data": {
+      "connected": false,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 5,
+    "data": {
+      "connected": false,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 6,
+    "data": {
+      "connected": false,
+      "running": false
+    }
+  },
+  {
+    "type": "stm_coil_update",
+    "coilId": 7,
+    "data": {
+      "connected": false,
+      "running": false
+    }
+  }
+]
