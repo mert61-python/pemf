@@ -53,13 +53,18 @@ class TelemetriKarisimi:
         import time as _time
 
         simdi = _time.time() if simdi is None else float(simdi)
+        # ⚠️ 1-F inceleme (A-73: saat kayması İKİ yönde): üst sınır YALNIZ saat makulken (şimdi ≥ seans başlangıcı).
+        # Açılışta saat seans başlangıcından GERİDEYSE (RTC pili yok/bitik + internetsiz klinik: elektrik kesintisinden sonra
+        # saat BIOS tarihine döner) GERÇEK kanıtın TAMAMI "ileri tarihli" görünür → seans 0 dk / koşular 0 sn mühürleniyordu
+        # (ölçüldü; D1.79 öncesi 8 dk). Saat geride iken "ileri tarih" yargısı yapılamaz → üst sınır uygulanmaz.
+        ust = simdi if simdi >= float(baslangic_epoch) else float("inf")
         for sorgu, parametre in (
             (
                 "SELECT MAX(COALESCE(ended_epoch, started_epoch)) FROM session_coil_runs WHERE session_id = ? "
                 "AND COALESCE(ended_epoch, started_epoch) <= ?",
-                (session_id, simdi),
+                (session_id, ust),
             ),
-            ("SELECT MAX(sample_ts) FROM sensor_samples WHERE session_id = ? AND sample_ts <= ?", (session_id, simdi)),
+            ("SELECT MAX(sample_ts) FROM sensor_samples WHERE session_id = ? AND sample_ts <= ?", (session_id, ust)),
         ):
             try:
                 deger = cursor.execute(sorgu, parametre).fetchone()[0]

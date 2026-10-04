@@ -135,3 +135,18 @@ def test_KRITIK_B374_ILERI_tarihli_kanit_GUNLERCE_suren_doz_kaydi_URETMEZ(db):
     assert k["duration_seconds"] is not None and k["duration_seconds"] <= (time.time() - bas) + 60, (
         f"koşu {k['duration_seconds']} sn — ileri tarihli kanıtla kapatıldı"
     )
+
+
+def test_KRITIK_acilista_saat_GERIDE_GERCEK_kanit_yok_sayilip_seans_0_dk_MUHURLENMEZ(db, monkeypatch):
+    """1-F inceleme (A-73: saat kayması İKİ yönde): elektrik kesintisinden sonra RTC pili yok/bitik kartta saat BIOS
+    tarihine döner; internetsiz klinikte NTP de yoksa kurtarma anında saat seans başlangıcından GERİDEDİR. B-3.74'ün üst
+    sınırı o zaman GERÇEK kanıtın tamamını "ileri tarihli" sayıp seansı 0 dk mühürlüyordu (ölçüldü; D1.79 öncesi 8 dk)."""
+    sid, _bas = _seans_ve_kosu(db, 8 * 60)
+    gercek = time.time
+    monkeypatch.setattr(time, "time", lambda: gercek() - 2 * 365 * 86400)  # saat 2 yıl geride (RTC sıfırlanmış)
+    db.recover_stale_active_sessions(max_age_hours=0)
+    monkeypatch.undo()
+    durum, sure = _durum(db, sid)
+    assert durum == "ABORTED_DUE_TO_POWER" and sure == 8, (
+        f"açılışta saat geride: 8 dk'lık GERÇEK kanıt yok sayıldı, seans {durum!r} / {sure} dk mühürlendi"
+    )
