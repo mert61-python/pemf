@@ -218,3 +218,130 @@ def test_KARSIT_yazilabilir_dosyada_E_stop_ve_Sifirla_UYARMAZ(ortam):
     assert not (r.json().get("mandalDosyasi") or {}).get("yazilamadi")
     assert not (sonuc.get("mandalDosyasi") or {}).get("yazilamadi")
     assert not _uyari_bildirimi(o, ""), o.bildirimler
+
+
+# ── 1-F inceleme (B-1.1 · B-1.2 · B-1.3) ─────────────────────────────────────────────────────────────────────────────
+# Asılı disk: mandal dosyasının `os.replace`'i bırakılana dek bekler (yalnız `estop_mandali` modülünde — başka modül ve
+# gerçek disk etkilenmez). Tek olay döngüsü (üretimdeki uvicorn gibi): httpx.ASGITransport + asyncio.run — TestClient her
+# istekte yeni döngü açar, ortak varsayılan iş parçacığı havuzunu ölçemezdi.
+
+
+class _AsiliOs:
+    def __init__(self):
+        import threading
+
+        self._olay = threading.Event()
+        self.bekleyen = 0
+
+    def replace(self, a, b):
+        self.bekleyen += 1
+        self._olay.wait(30)
+        return os.replace(a, b)
+
+    def birak(self):
+        self._olay.set()
+
+    def __getattr__(self, ad):
+        return getattr(os, ad)
+
+
+def _tek_dongude(o, govde):
+    import asyncio
+
+    import httpx
+
+    async def _kos():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=o.api.app), base_url="http://cihaz") as c:
+            return await govde(c)
+
+    return asyncio.run(_kos())
+
+
+def test_KRITIK_asili_diskte_Sifirla_yaniti_TEMIZ_DEMEZ_mandal_yine_KALKAR(ortam, monkeypatch):
+    """B-1.1: yazım 2 sn'de bitmezse Sıfırla eskiden `mandalDosyasi: {yazilamadi: false}` dönüyordu (ölçüldü) — dosya
+    güncellenmemişken "sorun yok". Y56 aynen: mandal o oturumda kalkar."""
+    o = ortam
+    o.mandal.kalicilik_kur(o.dosya)
+    _sonuc, sure = _estop_olc(o)
+    _estop_beklemedi(o, sure)
+    assert _bekle(lambda: o.dosya.exists() and json.loads(o.dosya.read_text(encoding="utf-8")).get("aktif") is True)
+    asili = _AsiliOs()
+    monkeypatch.setattr(o.mandal, "os", asili)
+
+    async def _govde(c):
+        try:
+            return await c.post("/api/hardware/estop_mandali/sifirla", json={"onay": True})
+        finally:
+            asili.birak()
+
+    r = _tek_dongude(o, _govde)
+    assert asili.bekleyen >= 1, "aparat: yazım asılı diske ulaşmadı"
+    assert r.status_code == 200 and o.mandal.mandalli_mi() is False, f"Y56: Sıfırla mandalı kaldırmalı: {r.text[:200]}"
+    md = r.json().get("mandalDosyasi") or {}
+    assert md.get("yazilamadi") is True and "bitmedi" in md.get("mesaj", ""), (
+        f"yazım 2 sn'de BİTMEDİ ama Sıfırla yanıtı dosyanın güncellendiğini varsayıyor: {md}"
+    )
+    assert _bekle(lambda: bool(_uyari_bildirimi(o, "bitmedi"))), f"ekran bildirimi yok: {o.bildirimler}"
+
+
+def test_KRITIK_asili_diskte_tekrarli_Sifirla_ACIL_DURDURu_BEKLETMEZ(ortam, monkeypatch):
+    """B-1.2 (Ö.4-Y8): Sıfırla'nın yazımı olay döngüsünün ORTAK havuzunda (`asyncio.to_thread`) koşuyordu; asılı diskte
+    her basış bir işçiyi kalıcı tutuyor, havuz dolunca ACİL DURDUR ucunun `to_thread`'i SIRA bekliyordu — ölçüldü:
+    20 Sıfırla'dan sonra ACİL DURDUR 6 sn'de yanıt VERMEDİ (1-E'de 0,0 sn). Havuz boyu Python varsayılanı."""
+    import asyncio
+
+    o = ortam
+    o.mandal.kalicilik_kur(o.dosya)
+    asili = _AsiliOs()
+    monkeypatch.setattr(o.mandal, "os", asili)
+    n = min(32, (os.cpu_count() or 1) + 4) + 2  # ThreadPoolExecutor varsayılan işçi sayısı + pay
+
+    async def _govde(c):
+        try:
+            r0 = await c.post("/api/hardware/emergency_stop")  # E-stop'un arka plan yazıcısı asılır
+            # İlk Sıfırla (mandal KURULU → denetim izi DB yazımı da havuzda) TEK başına; kalanlar eşzamanlı (her biri
+            # 2 sn'lik zaman aşımıyla döner) — ölçüm yalnız mandal yazımının havuz kullanımını görür.
+            r1 = await c.post("/api/hardware/estop_mandali/sifirla", json={"onay": True})
+            assert r1.status_code == 200 and not o.mandal.mandalli_mi(), f"aparat: ilk Sıfırla {r1.status_code}"
+            t_s = time.monotonic()
+            rs = await asyncio.gather(
+                *[c.post("/api/hardware/estop_mandali/sifirla", json={"onay": True}) for _ in range(n - 1)]
+            )
+            assert {x.status_code for x in rs} == {200} and time.monotonic() - t_s < 10, "aparat: Sıfırla'lar dönmedi"
+            t0 = time.monotonic()
+            try:
+                r = await asyncio.wait_for(c.post("/api/hardware/emergency_stop"), timeout=4.0)
+                return r0, r.status_code, time.monotonic() - t0
+            except asyncio.TimeoutError:
+                return r0, None, time.monotonic() - t0
+        finally:
+            asili.birak()
+
+    r0, kod, sure = _tek_dongude(o, _govde)
+    assert r0.status_code == 200 and asili.bekleyen >= 1, "aparat: ilk E-stop ya da asılı yazım olmadı"
+    assert kod == 200 and sure < 1.0, (
+        f"asılı diskte {n} Sıfırla'dan sonra ACİL DURDUR {sure:.1f} sn'de yanıt vermedi (kod={kod}) — Sıfırla'nın yazımı "
+        "ortak iş parçacığı havuzunu tüketti"
+    )
+
+
+def test_KRITIK_izin_DUZELTILINCE_uyari_KALKAR_ve_sonuc_DISKTEKI_durumu_soyler(ortam):
+    """B-1.3: başarılı yazım hem uyarıyı kaldırmalı hem diskteki durumu güncellemeli. Mevcut kollar dosyayı açılıştan
+    önce bozuyordu; ikisini silen mutantlar 35/35 YEŞİL kaldı (ölçüldü)."""
+    o = ortam
+    o.mandal.kalicilik_kur(o.dosya)
+    _sonuc, sure = _estop_olc(o)
+    _estop_beklemedi(o, sure)
+    assert _bekle(lambda: o.dosya.exists() and json.loads(o.dosya.read_text(encoding="utf-8")).get("aktif") is True)
+    os.chmod(o.dosya, stat.S_IREAD)  # sonradan salt-okunur (yedekleme / güvenlik aracı)
+    r = _sifirla(o)
+    md = r.json().get("mandalDosyasi") or {}
+    assert md.get("yazilamadi") is True and "geri gelecek" in md.get("mesaj", ""), (
+        f"diskte KURULU mandal varken Sıfırla yazamadı — yanıt yeniden başlatmada mandalın GERİ GELECEĞİNİ söylemiyor: {md}"
+    )
+    os.chmod(o.dosya, stat.S_IREAD | stat.S_IWRITE)  # operatör izni düzeltir
+    r2 = _sifirla(o)
+    assert json.loads(o.dosya.read_text(encoding="utf-8")).get("aktif") is False, "aparat: yazım diske gitmedi"
+    assert not (r2.json().get("mandalDosyasi") or {}).get("yazilamadi"), (
+        f"izin düzeltilip yazım BAŞARILI olduktan sonra yanıt hâlâ 'yazılamadı' diyor: {r2.json().get('mandalDosyasi')}"
+    )

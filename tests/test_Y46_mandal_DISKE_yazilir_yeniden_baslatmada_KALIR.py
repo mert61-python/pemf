@@ -163,15 +163,22 @@ def test_KRITIK_GECIKMIS_kurulu_yazimi_arkadan_gelen_Sifirla_yazimini_EZMEZ(orta
     durumu yazmalı (mandal yok) — çağrı anının "kurulu" anlık görüntüsünü değil. Yoksa operatörün Sıfırla'sı diskte ezilir,
     sonraki açılış mandallı gelir ve bant "sıfırlanmadı" der. E-stop'un yazıcısı ertelenir ve Sıfırla'nın yazımından SONRA
     elle koşturulur — belirlenimci. (Y59: Sıfırla artık EŞZAMANLI yazar — sonucunu yanıtta söylemek için; ertelenen tek
-    yazıcı E-stop'unkidir.)"""
+    yazıcı E-stop'unkidir. 1-F inceleme B-1.2: Sıfırla'nın yazıcısı da kendi iş parçacığında — aparat yalnız E-stop'un
+    yazıcısını (`estop-mandal-disk`) erteler, ötekini GERÇEK iş parçacığında koşturur.)"""
     o = ortam
     bekleyen: list = []
+    gercek_thread = threading.Thread
 
     class _Ertelenen:
         def __init__(self, target=None, args=(), kwargs=None, name=None, daemon=None):
             self._is = (target, tuple(args), dict(kwargs or {}))
+            self._ad = name
 
         def start(self):
+            if self._ad != "estop-mandal-disk":
+                hedef, a, k = self._is
+                gercek_thread(target=hedef, args=a, kwargs=k, name=self._ad, daemon=True).start()
+                return
             bekleyen.append(self)
 
         def kos(self):

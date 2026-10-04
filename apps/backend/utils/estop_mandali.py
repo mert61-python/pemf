@@ -201,11 +201,12 @@ def yazim_hatasi_kancasi_bagla(fn) -> None:
     _yazim_hatasi_kancasi = fn
 
 
-def yazim_durumu(yol_dahil: bool = False) -> dict:
+def yazim_durumu(yol_dahil: bool = False, bitmedi: bool = False) -> dict:
     """Y59: mandal dosyası yazılamıyorsa operatör metni + yeniden başlatmadaki sonuç. Yol yalnız `yol_dahil` ile (ACİL
-    DURDUR ucu auth-muaf — yanıtında dosya yolu olmaz; kimlikli bildirim ve Sıfırla yanıtı yolu verir)."""
+    DURDUR ucu auth-muaf — yanıtında dosya yolu olmaz; kimlikli bildirim ve Sıfırla yanıtı yolu verir).
+    `bitmedi`: Sıfırla'nın yazımı süresinde BİTMEDİ (asılı disk) — dosya güncellenmemiş sayılır (1-F inceleme B-1.1)."""
     yol = _kalici_yol
-    if yol is None or not _yazim["yazilamadi"]:
+    if yol is None or not (_yazim["yazilamadi"] or bitmedi):
         return {"yazilamadi": False}
     with _kilit:
         hedef = bool(_durum["aktif"])
@@ -219,6 +220,8 @@ def yazim_durumu(yol_dahil: bool = False) -> dict:
     else:
         sonuc = "gelmeyecek (dosya güncellenemedi)"
     yer = f" ({yol})" if yol_dahil else ""
+    if bitmedi:
+        yer += " — yazım 2 sn'de bitmedi, disk yanıt vermiyor"
     return {
         "yazilamadi": True,
         "yenidenBaslatmada": sonuc,
@@ -288,6 +291,25 @@ def kalicilik_kapat() -> None:
 def diske_yaz() -> bool:
     """Y59: Sıfırla'nın EŞZAMANLI yazımı (sonucu yanıtta söylenir). ACİL DURDUR bunu KULLANMAZ (arka planda yazar)."""
     return _diske_yaz()
+
+
+def diske_yaz_ayri_is_parcaciginda():
+    """Y59 Sıfırla yazımı KENDİ daemon iş parçacığında; sonuç `concurrent.futures.Future`'da (çağıran zaman aşımıyla
+    bekler). ⚠️ 1-F inceleme B-1.2 (Ö.4-Y8): olay döngüsünün ORTAK havuzunda (`asyncio.to_thread`) koşmaz — asılı diskte
+    her Sıfırla bir işçiyi kalıcı tutuyor, havuz dolunca ACİL DURDUR ucunun `to_thread`'i sıra bekliyordu (ölçüldü).
+    Bekleyen zaman aşımına düşse de yazım sürer (mandal diskte kalkmalı)."""
+    import concurrent.futures as _cf
+
+    fut: _cf.Future = _cf.Future()
+
+    def _kos() -> None:
+        fut.set_running_or_notify_cancel()
+        sonuc = _diske_yaz()
+        with contextlib.suppress(Exception):
+            fut.set_result(sonuc)
+
+    threading.Thread(target=_kos, name="estop-mandal-sifirla-disk", daemon=True).start()
+    return fut
 
 
 def _diske_yaz() -> bool:

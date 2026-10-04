@@ -6323,12 +6323,19 @@ async def estop_mandalini_sifirla(request: Request):
     _kim = cozumlenmis_operator(request, "") or ""
     _onceki = estop_mandali.durum()
     _kurulu = estop_mandali.sifirla(_kim or "operator")
-    # Y46: yeniden başlatmada mandal geri gelmesin. Y59: yazım EŞZAMANLI (iş parçacığında, ≤ 2 sn) — sonucu yanıtta
-    # söylenir; yazılamazsa mandal yine KALKAR (Y56) ve ekran bildirimi gider (`yazim_hatasi_kancasi`).
+    # Y46: yeniden başlatmada mandal geri gelmesin. Y59: yazım EŞZAMANLI (≤ 2 sn) — sonucu yanıtta söylenir; yazılamazsa
+    # mandal yine KALKAR (Y56) ve ekran bildirimi gider (`yazim_hatasi_kancasi`). ⚠️ 1-F inceleme: yazım KENDİ iş
+    # parçacığında — `asyncio.to_thread` DEĞİL (asılı diskte ortak havuzu tüketip ACİL DURDUR'u bekletiyordu, B-1.2);
+    # süresinde bitmezse yanıt ve bildirim bunu söyler ("sorun yok" demez, B-1.1).
+    _yazim_bitmedi = False
     try:
-        await asyncio.wait_for(asyncio.to_thread(estop_mandali.diske_yaz), timeout=2.0)
-    except asyncio.TimeoutError:
+        await asyncio.wait_for(asyncio.wrap_future(estop_mandali.diske_yaz_ayri_is_parcaciginda()), timeout=2.0)
+    except Exception:  # asyncio.TimeoutError dahil (iş parçacığı açılamadı da "bitmedi")
+        _yazim_bitmedi = True
         logging.getLogger(__name__).warning("Sıfırla: mandal dosyası yazımı 2 sn'de bitmedi (arka planda sürüyor)")
+        _md_bitmedi = estop_mandali.yazim_durumu(yol_dahil=True, bitmedi=True)
+        if _md_bitmedi.get("mesaj"):
+            _push_notification("⚠️ " + _md_bitmedi["mesaj"], "error")
     _durum = estop_mandali.durum()
     if _kurulu:
         try:
@@ -6360,7 +6367,7 @@ async def estop_mandalini_sifirla(request: Request):
         "status": "success",
         "mandalKuruluydu": _kurulu,
         "estopMandali": _durum,
-        "mandalDosyasi": estop_mandali.yazim_durumu(yol_dahil=True),  # Y59 (kimlikli uç — yol verilir)
+        "mandalDosyasi": estop_mandali.yazim_durumu(yol_dahil=True, bitmedi=_yazim_bitmedi),  # Y59 (kimlikli — yol var)
     }
 
 
