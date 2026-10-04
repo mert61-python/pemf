@@ -90,17 +90,21 @@ function Test-PemfPortAcik([int]$Port) {
     finally { $c.Dispose() }
 }
 
+# 10 sn: Inno (`PemfEstopPortaGonder`) ve NSIS (`hooks.nsi`) ikizleriyle AYNI — backend bu ucu "senkron MQTT publish
+# ~7 sn worst-case" diye belgeler; daha kısa değer ESP STOP'ları yayınlanmadan doluyordu (NSIS ikizinde ölçüldü).
 function Invoke-PemfAcilDurdurIstegi([int]$Port) {
-    Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/hardware/emergency_stop" -Method Post -TimeoutSec 5
+    Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/hardware/emergency_stop" -Method Post -TimeoutSec 10
 }
 
 # @return gönderilen ACİL DURDUR sayısı (yalnız RAPOR — çağıran buna göre kill'i ATLAMAZ).
 function Send-PemfAcilDurdur {
     $gonderildi = 0
+    $denendi = 0
     foreach ($p in (Get-PemfBackendPortAdaylari)) {
         $acik = $false
         try { $acik = [bool](Test-PemfPortAcik $p) } catch { $acik = $false }
         if (-not $acik) { continue }
+        $denendi++
         try {
             $r = Invoke-PemfAcilDurdurIstegi $p
             Write-PemfLog "ACİL DURDUR gönderildi: 127.0.0.1:$p (status=$($r.status) confirmed=$($r.confirmed))" 'Yellow'
@@ -110,7 +114,9 @@ function Send-PemfAcilDurdur {
             Write-PemfLog "ACİL DURDUR başarısız: 127.0.0.1:$p — $($_.Exception.Message) (kaldırma sürüyor)" 'Red'
         }
     }
-    if ($gonderildi -eq 0) {
+    if ($gonderildi -eq 0 -and $denendi -gt 0) {
+        Write-PemfLog "ACİL DURDUR TEYİT EDİLEMEDİ: $denendi açık portta istek başarısız/zaman aşımı — kaldırma sürüyor; bobinleri ELLE kontrol edin" 'Red'
+    } elseif ($gonderildi -eq 0) {
         Write-PemfLog "ACİL DURDUR: çalışan PEMF backend'i bulunamadı (backend.port → 8000 → 8001..8049) — kaldırma sürüyor; bobinleri ELLE kontrol edin" 'Yellow'
     } else {
         # STM STOP'unun seri kuyruktan porta yazılması için (backend flush bütçesi 1,5 sn; Inno ikizi 1800 ms).

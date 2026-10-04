@@ -82,6 +82,7 @@ $script:HttpDavranis = 'basari'; $script:AcikPortlar = @()
 function Invoke-RestMethod {
     [CmdletBinding()] param([string]$Uri, [string]$Method, $TimeoutSec, [Parameter(ValueFromRemainingArguments = $true)]$R)
     K ("HTTP " + $Method + " " + $Uri)
+    K ("HTTP-SURE " + $TimeoutSec)
     if ($script:HttpDavranis -eq 'hata') { throw "sahte: baglanti reddedildi" }
     if ($script:HttpDavranis -eq 'zaman') { throw [System.TimeoutException]::new("sahte: zaman asimi") }
     [pscustomobject]@{ status = 'success'; confirmed = $true }
@@ -129,6 +130,15 @@ function Denetle($agac, [string]$ne) {
     foreach ($m in $agac.FindAll({ param($n) $n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] }, $true)) {
         if ($m.Member.Extent.Text -match '^(Kill|Delete|Terminate|CredDelete|SetEnvironmentVariable|Remove|RemoveAll|Move|Stop|Start)$') {
             [Console]::Out.WriteLine("APARAT_HATASI tehlikeli uye cagrisi ($ne): " + $m.Extent.Text); exit 3
+        }
+        # 1-F inceleme: gölgelenen `Invoke-RestMethod`'u atlayan .NET AĞ çağrısı (D1.92 modüle TcpClient sondası getirdi).
+        if ($m.Member.Extent.Text -match '^(Connect|ConnectAsync|BeginConnect|GetAsync|PostAsync|PutAsync|SendAsync|GetStringAsync|UploadString|UploadData|DownloadString|DownloadData|DownloadFile|OpenRead|OpenWrite|GetResponse|GetRequestStream)$') {
+            [Console]::Out.WriteLine("APARAT_HATASI ag uye cagrisi ($ne): " + $m.Extent.Text); exit 3
+        }
+    }
+    foreach ($t in $agac.FindAll({ param($n) $n -is [System.Management.Automation.Language.TypeExpressionAst] -or $n -is [System.Management.Automation.Language.TypeConstraintAst] }, $true)) {
+        if ($t.TypeName.FullName -match '^(System\.)?Net\.') {
+            [Console]::Out.WriteLine("APARAT_HATASI ag tipi ($ne): " + $t.Extent.Text); exit 3
         }
     }
 }
@@ -413,6 +423,11 @@ def test_KRITIK_D147a_kaldirma_DURMAYAN_serviste_SINIRLI_bekleme_sonra_kill(tmp_
         ("golgesiz_komut", "    taskkill_KANARYA_yok.exe /F /IM PEMF_Backend.exe\n"),
         ("tam_yollu_komut", "    & 'C:\\Windows\\KANARYA_yok\\sc.exe' stop PemfBackend\n"),
         ("uye_Kill", "    [PemfKanaryaYokTip]::Kill()\n"),
+        # 1-F inceleme: D1.92 bu modüle .NET AĞ kodu getirdi (TcpClient sondası). Gölgelenen `Invoke-RestMethod`'u
+        # atlayan doğrudan .NET ağ çağrısı yüklenen işleve eklenirse gerçek 127.0.0.1:8000'e (sahibin backend'i)
+        # bağlanılırdı. Kanaryalar: VAR OLMAYAN tip / `$null` üzerinde üye — denetim kırık olsa da bağlantı açılamaz.
+        ("net_tip", "    [System.Net.Sockets.PemfKanaryaYokIstemci]::new()\n"),
+        ("net_uye", "    $null.ConnectAsync('127.0.0.1', 9)\n"),
     ],
 )
 def test_ARAC_aparat_IZIN_LISTESI_disindaki_komutu_KOSTURMADAN_reddeder(tmp_path, ad, satir):
@@ -537,6 +552,44 @@ def test_KRITIK_D192_ACIL_DURDUR_HATASI_ya_da_ZAMAN_ASIMI_kill_i_ENGELLEMEZ(tmp_
     )
     assert [x.split()[2] for x in k if x.startswith("sc stop ")] == ["PemfBackend", "mosquitto"]
     assert any(x.startswith("LOG ACİL DURDUR başarısız: 127.0.0.1:48123") for x in k), "E-stop hatası günlüğe yazılmadı"
+    # 1-F inceleme: backend BULUNDU ve istek denendi — özet "bulunamadı" demez (yanlış teşhis), teyitsizliği söyler.
+    assert not any("bulunamadı" in x for x in k if x.startswith("LOG ")), (
+        f"{senaryo}: backend bulunup istek BAŞARISIZ olduğu hâlde günlük 'backend bulunamadı' diyor"
+    )
+    assert any(x.startswith("LOG ACİL DURDUR TEYİT EDİLEMEDİ") for x in k), f"{senaryo}: teyitsizlik özeti yok"
+
+
+def _ikiz_zaman_asimi(yol: Path) -> int:
+    """İkizin (Inno / NSIS) emergency_stop komut satırındaki `-TimeoutSec` değeri — kaynaktan (kopya sürüklenmesin)."""
+    import re
+
+    # YORUM satırları sayılmaz (iki ikizde de yorum "-TimeoutSec 10" der — yorum kapıyı yeşil tutmasın).
+    kod = [
+        x
+        for x in yol.read_text(encoding="utf-8", errors="replace").splitlines()
+        if not x.strip().startswith(("//", ";"))
+    ]
+    satirlar = [x for x in kod if "-TimeoutSec" in x]
+    degerler = [int(m.group(1)) for x in satirlar for m in [re.search(r"-TimeoutSec\s+(\d+)", x)] if m]
+    assert degerler, f"aparat: {yol.name} içinde E-stop -TimeoutSec bulunamadı (çapa çürüdü)"
+    return max(degerler)
+
+
+def test_KRITIK_D192_ACIL_DURDUR_zaman_asimi_INNO_ve_NSIS_ikizleriyle_AYNI(tmp_path):
+    """1-F inceleme: ikizler `-TimeoutSec 10` kullanır ve gerekçesi ÖLÇÜLMÜŞTÜR ("backend bu ucu senkron MQTT publish ~7 sn
+    worst-case diye belgeliyor; daha kısa değer ESP bobinleri yayınlanmadan dolabiliyordu — NSIS ikizinde ölçüldü").
+    PowerShell yardımcısı 5 sn ile başarılı bir E-stop'u "başarısız" sayıp flush beklemesini atlıyordu."""
+    kok = Path(__file__).resolve().parent.parent
+    ikiz = max(
+        _ikiz_zaman_asimi(kok / "build_tools" / "PEMF_Backend_Setup.iss"),
+        _ikiz_zaman_asimi(kok / "launcher" / "app" / "windows" / "hooks.nsi"),
+    )
+    s = _kos(tmp_path, "estop_basari")
+    sure = [x.split()[1] for x in s["kayit"] if x.startswith("HTTP-SURE ")]
+    assert sure, f"aparat: ACİL DURDUR isteği kaydedilmedi: {s['kayit'][:10]}"
+    assert all(float(x) >= ikiz for x in sure), (
+        f"ACİL DURDUR isteğinin zaman aşımı {sure} sn < ikizlerin {ikiz} sn'si — yavaş (ESP) E-stop 'başarısız' sayılır"
+    )
 
 
 def test_KRITIK_D192_backend_BULUNAMAZSA_adaylar_SIRAYLA_denenir_GUNLUGE_yazilir_kill_SURER(tmp_path):
