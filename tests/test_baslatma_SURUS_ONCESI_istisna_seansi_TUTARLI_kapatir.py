@@ -119,3 +119,57 @@ def test_KARSIT_istisnadan_sonra_SONRAKI_seans_normal_baslar(ortam):
     assert r.status_code == 200 and r.json().get("status") == "success", r.text[:200]
     assert c.post("/api/session/stop").status_code == 200
     assert _durumlar(db)[-1] == "completed", _durumlar(db)
+
+
+def test_KRITIK_istisna_yardimcisi_BASKA_seansin_ucustaki_baslatma_bayragini_INDIRMEZ(ortam):
+    """1-F inceleme (#9 çürütme sorusu): A'nın sürüş-öncesi istisnası, A durdurulup B'nin başlatması UÇUŞTAYKEN
+    yardımcıya ulaşırsa yalnız A'nın bayrağı iner. B'nin `baslatma_ucusta`'sı inerse B'nin bobinine gelen tekil STOP nesli
+    artırmaz ve B o bobini STOP'tan SONRA enerjiler (1-C i1-F5 sınıfı; Ö.4-Y8). GERÇEK uçlar; B kendi
+    `_lookup_owner_email`'inde (uçuşta, bayrak kurulu) bekletilir."""
+    import threading
+
+    api, hc, db, c, mp = ortam
+    b_ucusta, b_birak = threading.Event(), threading.Event()
+    b_yanit: dict = {}
+
+    def _b_baslat():
+        b_yanit["r"] = c.post(
+            "/api/session/start",
+            json={
+                "mode": "Manuel", "frequency": 100, "duty": 40, "phase": 0, "duration_minutes": 5,
+                "coil_ids": [_B1], "patient_name": "Boncuk", "patient_id": "p-B",
+            },
+        )  # fmt: skip
+
+    def _sahip(hasta_id, *_a, **_k):
+        if hasta_id == "p-B":
+            b_ucusta.set()
+            b_birak.wait(20)
+            return None
+        # A: önce A durdurulur, B başlar ve UÇUŞTA bekler; sonra A'nın beklenmeyen istisnası.
+        assert c.post("/api/session/stop").status_code == 200, "aparat: A durdurulamadı"
+        threading.Thread(target=_b_baslat, daemon=True).start()
+        assert b_ucusta.wait(20), "aparat: B'nin başlatması uçuşa girmedi"
+        raise RuntimeError("acik-9: A'nin beklenmeyen istisnasi (B ucusta)")
+
+    mp.setattr(api, "_lookup_owner_email", _sahip)
+    try:
+        r = _baslat(c)
+        assert r.status_code == 503, f"aparat: A'nın istisnası 503 vermedi: {r.status_code} {r.text[:200]}"
+        with api._session_lock:
+            b_aktif = bool(api._active_session.get("is_active"))
+            b_ucusta_bayragi = bool(api._active_session.get("baslatma_ucusta"))
+            b_hasta = api._active_session.get("patient_name")
+        assert b_aktif and b_hasta == "Boncuk", f"aparat: B uçuşta değil ({b_aktif}, {b_hasta})"
+        assert b_ucusta_bayragi, (
+            "A'nın istisna kapanışı B'nin UÇUŞTAKİ başlatma bayrağını İNDİRDİ — B'nin bobinine gelen STOP artık "
+            "başlatmayı iptal etmez (bobin STOP'tan sonra enerjilenir)"
+        )
+    finally:
+        b_birak.set()
+        for _ in range(200):
+            if "r" in b_yanit:
+                break
+            import time
+
+            time.sleep(0.05)
