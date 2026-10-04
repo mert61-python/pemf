@@ -280,6 +280,35 @@ def test_KRITIK_kapanis_baslamisken_BAGLAMSIZ_START_HC_ve_ESP_yolunda_REDDEDILIR
     assert not niyet, f"kapanış sürerken `_mqtt_publish` son savunması START'ı geçirdi (niyet kaydı): {niyet}"
 
 
+def test_KRITIK_kapanis_STOPtan_ONCE_kurulur_STOP_aninda_gelen_BAGLAMSIZ_START_REDDEDILIR(k, monkeypatch):
+    """1-F inceleme: `_shutdown` sırası (1) kapanış → (3) donanım STOP'u. Kapanış STOP'tan SONRA kurulsa mevcut kollar
+    YEŞİL kalıyordu (ölçüldü): son-paket kolunu 1-C'nin nesli korur, bağlamsız-START kolu START'ı `_shutdown` BİTTİKTEN
+    sonra dener. Burada bağlamsız START, `_shutdown`ın donanım STOP'u gönderilir gönderilmez (STOP ile kapanış arasındaki
+    pencerede) denenir — geçerse bobin STOP'tan SONRA yeniden enerjilenir (firmware ölü-adamına dek)."""
+    sonuc: dict = {}
+    gercek_stop = k.hc.stop_all_coils  # `gercek_hc`in sayaç sarmalayıcısı (örnek özniteliği) — üstüne sarılır
+
+    def _stop_ardindan_baglamsiz_start(*a, **kw):
+        r = gercek_stop(*a, **kw)
+        if "tekil" not in sonuc:
+            sonuc["once"] = len(k.hc.core._hw_send_queue.paketler)
+            t = threading.Thread(
+                target=lambda: sonuc.update(tekil=k.hc.update_coil(1, 100, 40, 0, 5, start=True)), name="baglamsiz"
+            )
+            t.start()
+            t.join(10)
+        return r
+
+    monkeypatch.setattr(k.hc, "stop_all_coils", _stop_ardindan_baglamsiz_start)
+    _kapat(k)
+    assert "tekil" in sonuc, "aparat: _shutdown donanım STOP'unu (stop_all_coils) çağırmadı"
+    run = [p for p in k.hc.core._hw_send_queue.paketler[sonuc["once"] :] if not _tum_sifir(p)]
+    assert sonuc["tekil"] is False and not run, (
+        f"kapanışın donanım STOP'u ile kapanış durumu arasındaki pencerede bağlamsız START GEÇTİ: tekil={sonuc['tekil']}, "
+        f"RUN paketi={len(run)} — kapanış STOP'tan ÖNCE kurulmalı"
+    )
+
+
 def test_KRITIK_kapanis_Sifirla_ile_KALKMAZ(k):
     """Kapanış operatörün E-stop 'Sıfırla'sı DEĞİLDİR: Sıfırla kapanışı kaldırırsa kapanış penceresinde START geçerdi."""
     _kapat(k)
