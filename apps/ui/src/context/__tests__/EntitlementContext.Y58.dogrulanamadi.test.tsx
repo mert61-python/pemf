@@ -112,3 +112,31 @@ it("KARŞIT: çevrimiçi ve abonelik satırı YOK → gerçek varsayılan deneme
   const u = kur();
   await waitFor(() => expect(rozet(u)).toMatch(/Deneme · \d+ gün kaldı/));
 });
+
+it("KRİTİK (1-F inceleme): A'nın hakkı BİLİNİYORKEN A ÇIKAR, B internetsiz GİRER → B için 'doğrulanamadı' (deneme DEĞİL)", async () => {
+  // Çıkış "bilinen hak" işaretini sıfırlamazsa B'nin ağ hatası "bilinen hak korunur" (D1.63) sayılır; çıkış hakkı zaten
+  // varsayılana döndürdüğü için B'ye uydurma "Başlangıç · deneme" gösterilir (Y58'in kapattığı kusur, ikinci yoldan).
+  sb.auth.getUser.mockResolvedValue(KULLANICI);
+  const u = kur();
+  await waitFor(() => expect(rozet(u)).toBe("Pro"));
+  await act(async () => {
+    mockSession = null; // A çıkış yaptı
+    u.rerender(
+      <EntitlementProvider>
+        <Rozet />
+      </EntitlementProvider>
+    );
+  });
+  sb.auth.getUser.mockResolvedValue(AG_HATASI); // B internetsiz
+  await act(async () => {
+    mockSession = { email: "baska@klinik.com" };
+    u.rerender(
+      <EntitlementProvider>
+        <Rozet />
+      </EntitlementProvider>
+    );
+  });
+  await waitFor(() => expect(sb.auth.getUser).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(rozet(u)).toBe(ABONELIK_DOGRULANAMADI));
+  expect(rozet(u)).not.toMatch(/Başlangıç|Deneme|gün kaldı|Pro/);
+});
