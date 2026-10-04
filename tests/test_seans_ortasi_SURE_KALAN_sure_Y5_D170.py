@@ -137,3 +137,32 @@ def test_KRITIK_Y5_AI_Pro_onayli_SURESI_buradan_DEGISMEZ_409(o):
     ap.muhurlu_seans_yaz(o.api, sure_dk=20)
     r = o.c.post("/api/session/parametre_guncelle", json={"duration_minutes": 5})
     assert r.status_code == 409, f"AI Pro seansında süre değişikliği kabul edildi: {r.status_code} {r.text[:200]}"
+
+
+def test_KRITIK_Y5_sure_degisikligi_ARADA_baslayan_YENI_seansa_YAZILMAZ(o, monkeypatch):
+    """1-F inceleme: uç seansın anlık görüntüsünü alıp süreyi KİLİT ALTINDA ve AYNI seans kimliğiyle yazar. Arada A durup B
+    başlarsa A için girilen kalan süre B'nin bitişine YAZILMAMALI (B'nin hastası farklı süre alırdı). Pencere GERÇEK uçlarla
+    zorlanır: anlık görüntüden SONRA çağrılan `_ai_seansi_mi` içinde A durdurulur, B başlatılır."""
+    import servers.ai_router as air
+
+    _seans(o, 20)
+    a_kimlik = o.api._active_session.get("session_id")
+    gercek = air._ai_seansi_mi
+    durum: dict = {}
+
+    def _arada_seans_degisir(seans):
+        if "b" not in durum:
+            assert o.c.post("/api/session/stop").status_code == 200, "aparat: A durdurulamadı"
+            _seans(o, 30)
+            durum["b"] = o.api._active_session.get("session_id")
+        return gercek(seans)
+
+    monkeypatch.setattr(air, "_ai_seansi_mi", _arada_seans_degisir)
+    r = o.c.post("/api/session/parametre_guncelle", json={"duration_minutes": 5, "coil_ids": [1]})
+    assert durum.get("b") and durum["b"] != a_kimlik, "aparat: B başlamadı"
+    b = dict(o.api._active_session)
+    assert b.get("bitis_mono") is None and b.get("duration_minutes") == 30, (
+        f"A için girilen kalan süre (5 dk) ARADA başlayan B seansına YAZILDI: bitis_mono={b.get('bitis_mono')}, "
+        f"duration_minutes={b.get('duration_minutes')} (yanıt {r.status_code})"
+    )
+    assert r.status_code == 409, f"değişiklik uygulanmadığı hâlde yanıt {r.status_code}: {r.text[:200]}"
