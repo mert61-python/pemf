@@ -88,7 +88,10 @@ def _not_hedefi(payload: "SessionNotesPayload", db, bellek: dict) -> tuple[int, 
     b_sid = bellek.get("db_session_id")
     b_hasta = (bellek.get("patient_name") or "").strip()
     p_hasta = (payload.patient_name or "").strip()
-    if b_sid and not bellek.get("is_active") and (not p_hasta or not b_hasta or p_hasta == b_hasta):
+    # ⚠️ 1-F inceleme: istemci hasta adı gönderdiyse bellek dalı YALNIZ AYNI ad için — hastası bilinmeyen (anonim) bellek
+    # seansı başka hastanın notunu almaz (ölçüldü: "Rex" notu başka istemcinin hastasız seansına yazılıyordu); o durumda
+    # hastanın kendi son bitmiş seansı adla aranır (3).
+    if b_sid and not bellek.get("is_active") and (not p_hasta or p_hasta == b_hasta):
         return int(b_sid), "bellek"
     sid = db.son_biten_seans_kimligi(p_hasta)
     if sid:

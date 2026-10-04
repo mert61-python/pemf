@@ -170,3 +170,44 @@ def test_KRITIK_D166_stop_SONRASI_bobin_kosusu_BITMIS_seansa_BAGLANMAZ(o):
     r = o.c.post("/api/coil/2/control", json={"start": True, "freq": 100, "duty": 40, "phase": 0, "duration": 60})
     assert r.status_code == 200 and r.json().get("status") == "success", r.text[:200]
     assert len(o.db.get_session_coil_runs(sid)) == once, "seanssız sürüşün koşusu BİTMİŞ seansa bağlandı"
+
+
+def test_KRITIK_D166_kimliksiz_not_ayni_hastanin_EN_SON_bitmis_seansina_yazilir(o):
+    """1-F inceleme (çürütme: 12 sa penceresinde AYNI hastanın iki bitmiş seansı): yeniden başlatma sonrası (bellek boş)
+    kimliksiz not hastanın EN SON başlayan bitmiş seansına gider, eskisine DEĞİL. Hepsi tek bitmiş seansla kurulduğu için
+    "en ESKİ bitmiş seans" mutantı (`ORDER BY started_epoch ASC`) mevcut 24 kolda YEŞİL kalıyordu."""
+    import time
+
+    sid_1 = _baslat(o, "Pamuk")
+    _durdur(o)
+    sid_2 = _baslat(o, "Pamuk")
+    _durdur(o)
+    simdi = time.time()
+    with o.db._get_connection() as conn:  # gerçekçi başlangıçlar (eşit damga sıralamayı belirsizleştirmesin)
+        conn.execute("UPDATE treatment_sessions SET started_epoch = ? WHERE id = ?", (simdi - 3 * 3600, sid_1))
+        conn.execute("UPDATE treatment_sessions SET started_epoch = ? WHERE id = ?", (simdi - 600, sid_2))
+        conn.commit()
+    _bellegi_sil(o)
+    r = _not(o, notes="son seansin notu", patient_name="Pamuk")
+    assert r.status_code == 200 and r.json().get("session_id") == sid_2, (
+        f"kimliksiz not hastanın EN SON bitmiş seansına ({sid_2}) değil {r.json().get('session_id')}'e gitti: {r.text[:200]}"
+    )
+    assert _satir(o, sid_2)["patient_notes"] == "son seansin notu" and not _satir(o, sid_1)["patient_notes"]
+
+
+def test_KRITIK_D166_kimliksiz_not_bellekteki_HASTASIZ_seansa_DUSMEZ_kendi_hastasinin_seansina_gider(o):
+    """1-F inceleme: eski istemci (kimliksiz) A="Rex" notunu, arada başka bir istemcinin HASTASIZ (anonim) seansı bitmişken
+    gönderir. Bellek dalı yalnız aynı hasta için geçerlidir; hastası bilinmeyen bellek seansı Rex'in notunu ALMAMALI —
+    Rex'in son bitmiş seansı adla bulunur."""
+    sid_rex = _baslat(o, "Rex")
+    _durdur(o)
+    sid_anonim = _baslat(o, "")
+    _durdur(o)
+    r = _not(o, notes="Rex notu (eski istemci)", patient_name="Rex", frequency=50, intensity=2)
+    assert r.status_code == 200, r.text[:300]
+    assert not _satir(o, sid_anonim)["patient_notes"], (
+        f"Rex'in notu HASTASIZ (başka istemcinin) seansına yazıldı: {r.json()}"
+    )
+    assert _satir(o, sid_rex)["patient_notes"] == "Rex notu (eski istemci)", (
+        f"not Rex'in seansına yazılmadı: {r.json()}"
+    )
