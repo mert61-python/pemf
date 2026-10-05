@@ -146,8 +146,14 @@ int main(int argc, char **argv) {
     htim1.Instance = TIM1;
     g_pwm_started = 1U;
     parametre(maske, (float)atof(argv[4]), (float)atof(argv[5]), (float)atof(argv[6]));
-    g_gunluk = 1;
+    /* 1-G inceleme G-5.1: ISR_GUNLUK_BAS=<tick> verilirse "B" satırları o tick'ten itibaren basılır (ISR baştan AYNEN
+     * koşar; yalnız günlük kısalır). Verilmezse davranış değişmez. Kullanan, önceki seviyeler bilinmediği için
+     * analizi en az bir tam periyot sonra başlatır (her sürülen bacak bir periyotta bir kez düşer → seviye eşitlenir). */
+    const char *gunluk_bas_s = getenv("ISR_GUNLUK_BAS");
+    const unsigned long long gunluk_bas = gunluk_bas_s ? strtoull(gunluk_bas_s, NULL, 10) : 0ULL;
+    g_gunluk = (gunluk_bas == 0ULL);
     for (g_tick = 0ULL; g_tick < n; g_tick++) {
+      if (!g_gunluk && g_tick >= gunluk_bas) g_gunluk = 1;
       if (t2 && g_tick == t2) {
         durum_bas();
         parametre(maske, (float)atof(argv[8]), (float)atof(argv[9]), (float)atof(argv[10]));

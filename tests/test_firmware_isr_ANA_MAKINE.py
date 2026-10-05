@@ -358,6 +358,67 @@ def test_KRITIK_1GYB2_uc_frekansta_bipolar_IKI_bacak_surulur_bosluk_TASARIMDAN_k
         assert ihlal == [], f"bobin {i + 1}: çakışma ya da boşluk tasarım değerinin ({gerekli}) altında: {ihlal[:4]}"
 
 
+# ── 1-G inceleme G-5.1: UÇ FREKANSTA periyot ORTASI süreksizlik ───────────────────────────────────────────────────
+#: Yukarıdaki İG-8.28 rastgele kolu yalnız 33–400 Hz (tpp ≥ 125), YB2 kolu uç frekansta yalnız KARARLI dalgayı ölçer.
+#: Kılıfın tpp < 6'daki isteği (`yarım − 1`) kapısızdı: o dalı 0'a çeviren mutant 29/29 yeşil kaldı; uç frekansta
+#: faz/frekans değişiminde karşı bacak düşüşü → yükseliş aynı tick'e indi (ölçüldü). Kararlı tasarım boşluğu
+#: (`_tasarim_boslugu`) değişimin iki yanındakinin küçüğü kadar korunmalı; çakışma 0. N = 2000; denemeler bağımsız
+#: alt süreçler olduğundan paralel koşar. Süre: tam günlük deneme başına ~15 bin tick × 7 bobin satırı ayrıştırır
+#: (2000 denemede 15 dk) → "B" günlüğü değişimden 8 periyot önce başlar (`gunluk_bas`; ISR yine baştan koşar), analiz
+#: 5 periyot önce: aradaki 3 periyotta sürülen her bacak en az bir kez düşer → seviye eşitlenir. Bunun eşdeğerliği
+#: aşağıda ilk `_G51_TAM_KARSILASTIR` denemede TAM günlükle kenar kenar karşılaştırılır (araç önce kanıtlanır).
+_UC_RASTGELE_FREK = [5000, 6250, 8333, 10000, 12500, 16666, 25000]  # tpp 10, 8, 6, 5, 4, 3, 2
+_G51_TAM_KARSILASTIR = 30
+
+
+def test_KRITIK_G51_UC_FREKANSTA_periyot_ORTASI_degisimde_tasarim_boslugu_RASTGELE_2000(exe, harita, sabitler):
+    import os
+    import random
+    from concurrent.futures import ThreadPoolExecutor
+
+    pinler, uni = harita
+    bipolar = [i for i in sorted(pinler) if not uni[i]]
+    assert bipolar, "aparat: bipolar bobin yok (kip haritası?)"
+    rnd = random.Random(5128)
+    denemeler = []
+    for k in range(_IG828_N):
+        f1, f2 = rnd.choice(_UC_RASTGELE_FREK), rnd.choice(_UC_RASTGELE_FREK)
+        d1, d2 = round(rnd.uniform(0.2, 0.95), 4), round(rnd.uniform(0.2, 0.95), 4)
+        p1, p2 = round(rnd.uniform(0.0, 359.9), 2), round(rnd.uniform(0.0, 359.9), 2)
+        tpp1, tpp2 = int(50000 / f1), int(50000 / f2)
+        t2 = 15000 + rnd.randrange(2 * tpp1)
+        ek = [rnd.randrange(0, 100000)] if k % 3 == 0 else []
+        denemeler.append((f1, d1, p1, f2, d2, p2, tpp1, tpp2, t2, ek))
+
+    def _analiz(d, gunluk_bas):
+        f1, d1, p1, f2, d2, p2, tpp1, tpp2, t2, ek = d
+        arg = ("isr", t2 + 40 * tpp2 + 50, hex(_GENIS), f1, d1, p1, t2, f2, d2, p2, *ek)
+        sat = fw.kos(exe, *arg, gunluk_bas=gunluk_bas)
+        return fw.bacak_analizi(fw.bsrr_olaylari(sat), pinler, bipolar, baslangic_tick=t2 - 5 * tpp1)
+
+    def _bir(d):
+        tpp1, tpp2, t2 = d[6], d[7], d[8]
+        sonuc = _analiz(d, t2 - 8 * tpp1)
+        gerekli = min(_tasarim_boslugu(tpp1, sabitler["GAP"]), _tasarim_boslugu(tpp2, sabitler["GAP"]))
+        return d, gerekli, _kopru_ihlalleri(sonuc, t2, gerekli), sonuc
+
+    with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 4)) as ex:
+        sonuclar = list(ex.map(_bir, denemeler))
+        tam = list(ex.map(lambda d: _analiz(d, None), denemeler[:_G51_TAM_KARSILASTIR]))
+    farkli = [sonuclar[j][0][:9] for j in range(_G51_TAM_KARSILASTIR) if sonuclar[j][3] != tam[j]]
+    assert not farkli, (
+        f"aparat: kısaltılmış günlük TAM günlükle aynı kenarları vermedi (kapı KÖR olabilir): {farkli[:3]}"
+    )
+    assert sum(len(r["kenarlar"]) for r in tam[0].values()) > 0, "aparat: karşılaştırma kenarsız (boş günlük)"
+    sonuclar = [s[:3] for s in sonuclar]
+    kotu = [(d[:6], d[8], d[9], g, ih[:2]) for d, g, ih in sonuclar if ih]
+    print(f"G51_UC_ORAN kirmizi={len(kotu)}/{_IG828_N} ornek={kotu[:3]}")
+    assert not kotu, (
+        f"uç frekansta periyot ortası parametre değişiminde {len(kotu)}/{_IG828_N} denemede köprü boşluğu kararlı "
+        f"dalganınkinin altına indi ya da A+B birlikte HIGH — örnek ((f1,d1,p1,f2,d2,p2),t2,ref_ms,gerekli,ihlal): {kotu[:3]}"
+    )
+
+
 # ── AÇIK işaretler (uydurma ölçüm yok) ───────────────────────────────────────
 
 

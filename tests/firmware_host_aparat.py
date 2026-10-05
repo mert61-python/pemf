@@ -139,8 +139,10 @@ def derle(kaynak: str, dizin: Path) -> Path:
     return exe
 
 
-def kos(exe: Path, *args) -> list[str]:
-    r = subprocess.run([str(exe), *map(str, args)], capture_output=True, text=True, timeout=300)
+def kos(exe: Path, *args, gunluk_bas: int | None = None) -> list[str]:
+    """`gunluk_bas`: "B" günlüğü bu tick'ten başlar (isr kipi; ISR yine baştan koşar — isr_kosum.c ISR_GUNLUK_BAS)."""
+    env = None if gunluk_bas is None else {**os.environ, "ISR_GUNLUK_BAS": str(int(gunluk_bas))}
+    r = subprocess.run([str(exe), *map(str, args)], capture_output=True, text=True, timeout=300, env=env)
     assert r.returncode == 0, f"koşum takımı rc={r.returncode}: {r.stderr[-800:]}"
     return r.stdout.splitlines()
 
