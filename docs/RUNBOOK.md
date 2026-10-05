@@ -4,7 +4,10 @@ Saha olay-müdahale rehberi. Klinik PC = Windows. **Sahada backend, PEMF Vet Cli
 süreçtir** (`PEMFVetClient.exe` → `PEMF_Backend.exe` → `mosquitto.exe`); **`PemfBackend` Windows servisi YOKTUR**
 (saha ölçümü 2026-09-30, Y36). Servis komutları (`nssm`, `PemfBackend`) yalnız Inno / `setup_services.ps1` ile servis
 kurulmuş cihazlar içindir ve aşağıda AYRI gösterilir — sahada `nssm stop` hiçbir şeyi durdurmaz. **ACİL DURDUR her
-kipte:** `curl -X POST http://127.0.0.1:8000/api/hardware/emergency_stop`.
+kipte:** `curl.exe -X POST http://127.0.0.1:8000/api/hardware/emergency_stop` — ⚠️ **`curl.exe`** yazın: Windows
+PowerShell 5.1'de çıplak `curl` = `Invoke-WebRequest` takma adıdır, `-X`'i tanımaz ve komut DÜŞER (ölçüldü). ⚠️ **Port:**
+launcher 8000 doluysa backend 8001..8049'dan birini kullanır; gerçek port `%LOCALAPPDATA%\PEMF Vet Client\backend.port`
+dosyasındadır (O-16.1) — aşağıdaki "Hızlı komutlar"daki tek satır portu oradan okur, dosya yoksa 8000'i dener.
 Veri kökü `C:\ProgramData\PEMF_System\PEMF_GUI` (= `PEMF_DATA_DIR` + `\PEMF_GUI`; `PEMF_DATA_DIR` klinikte `C:\ProgramData\PEMF_System`'dir). Aşağıda `<data>` = **veri kökü**.
 
 ## Hızlı komutlar (Yönetici PowerShell)
@@ -12,7 +15,9 @@ Veri kökü `C:\ProgramData\PEMF_System\PEMF_GUI` (= `PEMF_DATA_DIR` + `\PEMF_GU
 ```powershell
 # ── SAHA (launcher kipi) ──
 Get-Process PEMF_Backend -ErrorAction SilentlyContinue        # backend süreci ayakta mı
-curl -X POST http://127.0.0.1:8000/api/hardware/emergency_stop  # ACİL DURDUR — bobinler HEMEN durur (auth-muaf)
+# ACİL DURDUR — bobinler HEMEN durur (auth-muaf). Port backend.port'tan (launcher 8000 doluysa 8001..8049); dosya yoksa
+# 8000. Launcher'ı başlatan KULLANICININ oturumunda çalıştırın (başka hesapta %LOCALAPPDATA% farklıdır → 8000 denenir).
+$p = "$(Get-Content "$env:LOCALAPPDATA\PEMF Vet Client\backend.port" -ErrorAction SilentlyContinue)".Trim(); if (-not $p) { $p = '8000' }; curl.exe -X POST "http://127.0.0.1:$p/api/hardware/emergency_stop"
 # Durdur: launcher penceresini kapatın — launcher ÖNCE ACİL DURDUR gönderir, SONRA backend'i sonlandırır.
 # Yeniden başlat: launcher'ı kapatıp yeniden açın (⚠️ aşağıdaki FİRMWARE uyarısı).
 
@@ -26,8 +31,8 @@ nssm restart PemfBackend      # veya: Restart-Service PemfBackend
 #    başlatmadan önce ortamda PEMF_FW_AUTO_UPDATE=0 olduğunu doğrulayın.
 
 # Sağlık + sürüm + şifreleme durumu
-curl http://127.0.0.1:8000/api/health        # atRestEncrypted, pairingCode, tunnelUrl
-curl http://127.0.0.1:8000/metrics           # Prometheus metrikleri
+curl.exe http://127.0.0.1:8000/api/health        # atRestEncrypted, pairingCode, tunnelUrl (port: yukarıdaki $p)
+curl.exe http://127.0.0.1:8000/metrics           # Prometheus metrikleri
 
 # Loglar (döndürmeli, 10MB×5) + çökme kaydı
 Get-Content C:\ProgramData\PEMF_System\logs\backend_service.log -Tail 100 -Wait
@@ -40,7 +45,7 @@ Klinikten log istemek yerine **PII maskelenmiş tek bir zip** üretin:
 
 ```powershell
 # Backend ayaktaysa (tercih edilen — hasta adları GERÇEKTEN maskelenir):
-curl -X POST http://127.0.0.1:8000/api/support/bundle   # base64 zip + OZET.json
+curl.exe -X POST http://127.0.0.1:8000/api/support/bundle   # base64 zip + OZET.json (port: backend.port, yukarıya bakın)
 
 # Backend çökmüşse:
 python tools\destek_paketi.py            # Masaüstüne yazar
@@ -95,7 +100,8 @@ kanalı yayında değil, `previousStable` hiç dolmaz → **`/api/update/rollbac
 2. Sorun sağlık kapısından geçtiyse (servis ayakta ama davranış bozuk) klinikte geri alma
    **yoktur** — kurtarma yayıncı tarafındadır (aşağıya bakın). Bu arada cihazı çalışır tutmak
    için: seansı bitirin, gerekiyorsa durdurun ve yayıncıyı arayın. **Sahada (launcher kipi):** önce
-   `curl -X POST http://127.0.0.1:8000/api/hardware/emergency_stop` (ACİL DURDUR), sonra launcher penceresini
+   `curl.exe -X POST http://127.0.0.1:8000/api/hardware/emergency_stop` (ACİL DURDUR; port `backend.port`, "Hızlı
+   komutlar"daki tek satır), sonra launcher penceresini
    kapatın (launcher da kapanırken ACİL DURDUR gönderir). **Yalnız servis kurulumunda:** `nssm stop PemfBackend`
    (graceful kapanış bobinlere STOP gönderir) — sahada servis YOK, bu komut hiçbir şeyi durdurmaz.
 3. Teşhis için `runtime.bozuk` dizini varsa **silmeyin** — başarısız sürüm oradadır.
@@ -115,7 +121,7 @@ monotonluğu olmadığı için bu **bilinçli** bir işlemdir ve yayın kaydına
 ## Anahtar / veri kurtarma (KRİTİK)
 - **SQLCipher anahtarı** `<data>\.sqlcipher_key` (+ keyring). **KAYBI = şifreli hasta verisi KALICI OKUNAMAZ.** ACL: yalnız SYSTEM+Administrators.
 - Sırlar tek dosyada: `<data>\pemf_secrets.json` (kripto anahtarları DPAPI'li).
-- **Aynı makinede yedekten dönüş**: backend'i durdur (sahada: ACİL DURDUR `curl -X POST http://127.0.0.1:8000/api/hardware/emergency_stop` + launcher'ı kapat; servis kurulumunda: servisi durdur) → `<data>\backups\pemf_*_YYYYMMDD.db` dosyasını aktif DB üzerine kopyala (aynı anahtarla şifreli) → backend'i başlat (launcher'ı aç / servisi başlat).
+- **Aynı makinede yedekten dönüş**: backend'i durdur (sahada: ACİL DURDUR `curl.exe -X POST http://127.0.0.1:8000/api/hardware/emergency_stop` — port `backend.port`, "Hızlı komutlar" — + launcher'ı kapat; servis kurulumunda: servisi durdur) → `<data>\backups\pemf_*_YYYYMMDD.db` dosyasını aktif DB üzerine kopyala (aynı anahtarla şifreli) → backend'i başlat (launcher'ı aç / servisi başlat).
 
 ### Kurtarma kodu — donanım arızası / makine değişimi
 Kripto anahtarları DPAPI `CRYPTPROTECT_LOCAL_MACHINE` ile **makineye bağlıdır**. Bu nedenle
@@ -150,7 +156,8 @@ yanıttan sonra seri kuyruğun boşalması için ~1,6 sn bekler), SONRA backend 
 sinyalsizdir: backend'in kendi kapanış adımları bu yolda KOŞMAZ — süren seans kaydı bir sonraki açılışta kesinti
 olarak kapanır; mümkünse seansı önce bitirin. **Yalnız servis kurulumunda:** servis durdurulunca backend tüm bobinlere
 STOP gönderir (STM kuyruğu boşalana kadar bekler + ESP MQTT stop) ve seansı "Kesintiye Uğradı" olarak kapatır.
-**Her iki kipte** elle acil-durdur: `curl -X POST http://127.0.0.1:8000/api/hardware/emergency_stop` (auth-muaf, fail-safe).
+**Her iki kipte** elle acil-durdur: `curl.exe -X POST http://127.0.0.1:8000/api/hardware/emergency_stop` (auth-muaf,
+fail-safe; port `backend.port` — "Hızlı komutlar"daki tek satır onu okur; Windows PowerShell 5.1'de çıplak `curl` DÜŞER).
 
 ## Gözlemlenebilirlik
 - Metrikler: `/metrics` (Prometheus scrape; LAN-muaf). Sağlık: `/api/health`.
