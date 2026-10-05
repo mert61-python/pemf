@@ -9,8 +9,9 @@
  * Kipler (stdout satırları ayrıştırıcı içindir):
  *   harita                → "H <i> <portA> <pinA> <portB> <pinB>" (main.c'nin coil_gpio tablosu) + "K <i> <unipolar>"
  *   ofset                 → "O <alan> <offsetof>" (BinaryCmdPacket_t) + "Z <sizeof>" + "R <UART_RX_BUF_SZ>"
- *   isr N bobin_maske f d p [t2 f2 d2 p2]
- *                         → "B <tick> <port> <bsrr_hex> <onceki_nop>" her BSRR yazımı;
+ *   isr N bobin_maske f d p [t2 f2 d2 p2 [ref_ms]]
+ *                         → (ref_ms: ikinci set HW_SYNC hizalamasını da taşır — 1-G İG-8.28)
+ *                           "B <tick> <port> <bsrr_hex> <onceki_nop>" her BSRR yazımı;
  *                           "S <tick> <i> <tpp> <duty_ticks> <hedef>" parametre uygulandıktan sonraki ilk tick'te
  *                           ve t2'den hemen önce. Bobin maskesindeki bobinler (f, d, p) ile sürülür, diğerleri duty 0.
  *   zorla|hata N bobin_maske f d p
@@ -138,10 +139,10 @@ int main(int argc, char **argv) {
     printf("N %u\n", (unsigned)NUM_COILS);
     return 0;
   }
-  if (strcmp(argv[1], "isr") == 0 && (argc == 7 || argc == 11)) {
+  if (strcmp(argv[1], "isr") == 0 && (argc == 7 || argc == 11 || argc == 12)) {
     unsigned long long n = strtoull(argv[2], NULL, 10);
     unsigned maske = (unsigned)strtoul(argv[3], NULL, 0);
-    unsigned long long t2 = (argc == 11) ? strtoull(argv[7], NULL, 10) : 0ULL;
+    unsigned long long t2 = (argc >= 11) ? strtoull(argv[7], NULL, 10) : 0ULL;
     htim1.Instance = TIM1;
     g_pwm_started = 1U;
     parametre(maske, (float)atof(argv[4]), (float)atof(argv[5]), (float)atof(argv[6]));
@@ -150,6 +151,12 @@ int main(int argc, char **argv) {
       if (t2 && g_tick == t2) {
         durum_bas();
         parametre(maske, (float)atof(argv[8]), (float)atof(argv[9]), (float)atof(argv[10]));
+        if (argc == 12) {
+          /* 1-G İG-8.28: ikinci parametre seti HW_SYNC `ref_ms` hizalamasını da taşır (paket ayrıştırıcının yaptığı gibi
+           * gölgeye) → ISR `g_dds_tick`i periyot ORTASINDA yeniden konumlandırır (ikinci süreksizlik kaynağı). */
+          g_shadow.ref_ms = (uint32_t)strtoul(argv[11], NULL, 10);
+          g_shadow.ref_ms_valid = 1U;
+        }
       }
       HAL_TIM_PeriodElapsedCallback(&htim1);
       if (g_tick == 0ULL || (t2 && g_tick == t2)) durum_bas();

@@ -9,13 +9,16 @@ D1.26 · B-10.49 köprü geçişi: her açılışta önce karşı bacak kapanır
                 karşı bacağın düşüşü ile bu bacağın yükselişi arası ≥ DDS_BIPOLAR_GAP_TICKS.
 D1.27 · B-10.37 [FIX-1c] frekans artışında duty ORANI korunur (1 Hz %30 → 2 Hz).
 D1.28 · B-10.159 klemp üst sınırında A ve B darbeleri SİMETRİK ve tavana eşit; sabitler main.c'den (yorum dışı).
+İG-8.28 (1-G)   periyot ORTASINDA parametre değişiminde (faz / frekans / `ref_ms` hizalaması) de karşı bacak düşüşü →
+                yükseliş ≥ GAP ve A+B asla birlikte HIGH değil (önce 2000 rastgele denemede 817 ihlal; eski strict-xfail
+                normal kapı oldu). İG-8.29 "önce karşı bacağı kapat" yazımları ve İG-8.9 klemp UYGULAMA satırları
+                D1.26 / D1.25 / D1.28 kollarıyla kapılı (mutantlar: DUZELTME-D1G).
 
 Aparat: `tests/firmware_host_aparat.py` + `tests/firmware_host/` (BSRR yazım sırası ve NOP sayısı kaydedilir;
 pin haritası main.c'nin kendi `coil_gpio` tablosundan). ⚠️ Derleyici yoksa FAIL (SKIP değil).
 
-⚠️ AÇIK (uydurma ölçüm YOK): periyot ORTASINDA parametre değişimi (İG-8.28) bugün köprü değişmezini bozabiliyor —
-o kol `xfail(strict=True)` (İG-8.28 düzeltilince XPASS → KIRMIZI, işaret kaldırılır). Gerçek bacak aralığı ve NOP
-SÜRESİ (ns) yalnız tezgâhta osiloskopla ölçülür (Oturum 13) — ana makine aparatı tick ve sayı ölçer, süre değil.
+⚠️ AÇIK (uydurma ölçüm YOK): gerçek bacak aralığı ve NOP SÜRESİ (ns) yalnız tezgâhta osiloskopla ölçülür
+(Oturum 13) — ana makine aparatı tick ve sayı ölçer, süre değil.
 """
 
 from __future__ import annotations
@@ -251,32 +254,78 @@ def test_KRITIK_D127_frekans_DEGISIMINDE_duty_ORANI_korunur(exe, bobin, f1, f2):
     )
 
 
-# ── AÇIK işaretler (uydurma ölçüm yok) ───────────────────────────────────────
+# ── İG-8.28 (1-G): periyot ORTASI parametre değişiminde köprü boşluğu ─────────────────────────────────────────────
+#
+# ÖLÇÜLEN (1-G önce-kırmızı, `f65402b`): `g_shadow.pending` bloğu yeni parametre setini TIM1 ISR'ında periyot ORTASINDA
+# uygular — faz değişimi `g_phase_ticks`'i, `ref_ms` hizalaması `g_dds_tick`'i, frekans değişimi `g_tpp`'yi SIÇRATIR →
+# `adj` A penceresinden B penceresine (ya da tersine) TEK tick'te geçebilir: kod önce karşı bacağı kapatıp NOP bekler ama
+# karşı bacağın DÜŞÜŞÜ ile bu bacağın YÜKSELİŞİ aynı tick'e iner (yapısal boşluk DDS_BIPOLAR_GAP_TICKS = 2 tick İHLAL).
+# Sözleşme: süreksizlikte de karşı bacak düşüşü → yükseliş ≥ GAP ve iki bacak ASLA birlikte HIGH değil. N = 2000 rastgele
+# deneme (frekans, duty, faz, değişim anı, `ref_ms`); kararlı-durum dalgası değişmez (yukarıdaki kapılar).
+
+#: Rastgele deneme sayısı (yarış/zamanlama kapısı: ≥ 2000 rastgele faz) ve frekans kümesi (tek tpp'li 33 Hz dahil).
+_IG828_N = 2000
+_IG828_FREK = [33, 50, 100, 200, 400]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="AÇIK İG-8.28 (tezgâh, Oturum 13): periyot ORTASINDA faz değişimi bugün köprü değişmezini bozabiliyor "
-    "(plan ölçümü: faz 0→180'de 57/100). Düzeltilince XPASS → KIRMIZI: işareti kaldırın.",
-)
-def test_ACIK_IG828_periyot_ORTASI_faz_degisiminde_de_GAP_ve_cakisma_yok(exe, harita, sabitler):
+def _kopru_ihlalleri(sonuc: dict, ilk_tick: int, gap: int) -> list:
+    """(bobin, tick, bacak, boşluk) — karşı bacak düşüşü → bu bacak yükselişi < GAP, ya da iki bacak birlikte HIGH."""
+    ihlal = []
+    for i, r in sonuc.items():
+        son = {"A": None, "B": None}
+        for tick, bacak, seviye, _n, _o in r["kenarlar"]:
+            if seviye == 0:
+                son[bacak] = tick
+                continue
+            karsi = son["B" if bacak == "A" else "A"]
+            if karsi is not None and tick - karsi < gap and tick >= ilk_tick:
+                ihlal.append((i + 1, tick, bacak, tick - karsi))
+        ihlal += [(i + 1, c, "AB", 0) for c in r["cakisma"] if c >= ilk_tick]
+    return ihlal
+
+
+def test_KRITIK_IG828_periyot_ORTASI_faz_180_degisiminde_GAP_ve_cakisma_YOK(exe, harita, sabitler):
+    """Deterministik kol (eski strict-xfail'in ölçtüğü durum): bobin 1, 100 Hz %90, faz 0 → 180, 10 farklı değişim anı."""
     pinler, _uni = harita
     ihlal = []
     for k in range(10):
         t2 = 15000 + 37 * k + 123
         olaylar = fw.bsrr_olaylari(fw.kos(exe, "isr", t2 + 2000, hex(1), 100, 0.9, 0, t2, 100, 0.9, 180))
-        r = fw.bacak_analizi(olaylar, pinler, [0], baslangic_tick=t2)[0]
-        son = {"A": None, "B": None}
-        for tick, bacak, seviye, _n, _o in r["kenarlar"]:
-            if seviye == 0:
-                son[bacak] = tick
-            elif (
-                son["B" if bacak == "A" else "A"] is not None
-                and tick - son["B" if bacak == "A" else "A"] < sabitler["GAP"]
-            ):
-                ihlal.append((t2, tick))
-        ihlal += [(t2, c) for c in r["cakisma"]]
-    assert ihlal == [], f"periyot ortası değişimde köprü ihlali: {ihlal[:5]}"
+        r = fw.bacak_analizi(olaylar, pinler, [0], baslangic_tick=t2 - 500)
+        ihlal += [(t2, *x) for x in _kopru_ihlalleri(r, t2, sabitler["GAP"])]
+    assert ihlal == [], f"periyot ortası faz değişiminde köprü ihlali (t2, bobin, tick, bacak, boşluk): {ihlal[:5]}"
+
+
+def test_KRITIK_IG828_periyot_ORTASI_parametre_degisiminde_GAP_RASTGELE_2000(exe, harita, sabitler):
+    import random
+
+    pinler, uni = harita
+    bipolar = [i for i in sorted(pinler) if not uni[i]]
+    assert bipolar, "aparat: bipolar bobin yok (kip haritası?)"
+    rnd = random.Random(828)
+    kotu, ornek = 0, []
+    for k in range(_IG828_N):
+        f1, f2 = rnd.choice(_IG828_FREK), rnd.choice(_IG828_FREK)
+        d1, d2 = round(rnd.uniform(0.2, 0.95), 4), round(rnd.uniform(0.2, 0.95), 4)
+        p1, p2 = round(rnd.uniform(0.0, 359.9), 2), round(rnd.uniform(0.0, 359.9), 2)
+        tpp1, tpp2 = int(50000 / f1), int(50000 / f2)
+        t2 = 15000 + rnd.randrange(2 * tpp1)
+        ek = [rnd.randrange(0, 100000)] if k % 3 == 0 else []  # her 3 denemeden biri HW_SYNC ref_ms hizalaması
+        sat = fw.kos(exe, "isr", t2 + 3 * tpp2 + 50, hex(_GENIS), f1, d1, p1, t2, f2, d2, p2, *ek)
+        sonuc = fw.bacak_analizi(fw.bsrr_olaylari(sat), pinler, bipolar, baslangic_tick=t2 - tpp1)
+        ih = _kopru_ihlalleri(sonuc, t2, sabitler["GAP"])
+        if ih:
+            kotu += 1
+            if len(ornek) < 3:
+                ornek.append(((f1, d1, p1), (f2, d2, p2), t2, ek, ih[:2]))
+    print(f"IG828_ORAN kirmizi={kotu}/{_IG828_N} ornek={ornek}")
+    assert kotu == 0, (
+        f"periyot ortası parametre değişiminde {kotu}/{_IG828_N} rastgele denemede köprü boşluğu (GAP={sabitler['GAP']}) "
+        f"ihlali ya da A+B birlikte HIGH — örnek ((f1,d1,p1),(f2,d2,p2),t2,ref_ms,ihlal): {ornek}"
+    )
+
+
+# ── AÇIK işaretler (uydurma ölçüm yok) ───────────────────────────────────────
 
 
 @pytest.mark.skip(

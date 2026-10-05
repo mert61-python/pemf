@@ -515,6 +515,16 @@ static int32_t g_phase_ticks[NUM_COILS] = {0};
 static uint8_t g_prev_state[NUM_COILS] = {0}; /* 255 (init) Coil_StateInit'te */
 
 /**
+ * İG-8.28 (1-G) — KÖPRÜ BOŞLUĞU SÜREKSİZLİKTE DE: son AÇIK bacak (0 = hiç açılmadı · 1 = IN_A · 2 = IN_B; polarite
+ * terslemesinden SONRA fiziksel bacak) ve o bacak kapandıktan beri geçen ISR tick'i (255'te doyar). Bir bacak, KARŞI
+ * bacak en az DDS_BIPOLAR_GAP_TICKS tick kapalı kalmadan AÇILMAZ (bkz. çıkış döngüsü). Sıfır başlangıç = "hiçbir bacak
+ * açılmadı" → elle başlatıcı listesi YOK (NUM_COILS'e bağlı liste eksik elemanı SESSİZCE sıfırlar).
+ */
+static uint8_t g_son_acik_bacak[NUM_COILS] = {0};
+static uint8_t g_kapali_tick[NUM_COILS] = {0};
+_Static_assert(DDS_BIPOLAR_GAP_TICKS < 255, "g_kapali_tick 8 bit: DDS_BIPOLAR_GAP_TICKS 255'in altinda olmali");
+
+/**
  * Bobin başına sürüş kipi — `PEMF_BOBIN_UNIPOLAR_MASKESI`ten ÖNCEDEN ÇÖZÜLÜR.
  * 1 = tek-bacak (unipolar, yalnız IN_A) · 0 = simetrik bipolar (IN_A + IN_B aynalı)
  *
@@ -1805,6 +1815,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
         coil_gpio[i].portB->BSRR = (uint32_t)coil_gpio[i].pinB << 16U;
         g_prev_state[i] = 2U; // 2 = IDLE (Kapalı)
       }
+      if (g_kapali_tick[i] < 255U) {
+        g_kapali_tick[i]++; /* İG-8.28: IDLE de kapalı süredir (boşluk sayılır) */
+      }
       continue;
     }
 
@@ -1852,6 +1865,25 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       state ^= 1U;
     }
 
+    /* ⚠️ İG-8.28 (1-G) — KÖPRÜ BOŞLUĞU SÜREKSİZLİKTE DE KORUNUR. Kararlı durumda A ve B pencereleri arasında yapısal
+     * boşluk (klemp: duty ≤ yarım − DDS_BIPOLAR_GAP_TICKS) vardır; ama gölge parametre seti periyot ORTASINDA uygulanınca
+     * (faz → `g_phase_ticks`, `ref_ms` hizalaması → `g_dds_tick`, frekans → `g_tpp`) `adj` sıçrar ve durum A→B (ya da
+     * B→A) TEK tick'te geçebiliyordu: aşağıdaki "önce karşı bacağı kapat + NOP" çakışmayı önler ama karşı bacağın DÜŞÜŞÜ
+     * ile bu bacağın YÜKSELİŞİ aynı tick'e iniyordu (ölçüldü, ana makine takımı: 2000 rastgele denemede 817 ihlal,
+     * boşluk 0). Kural: bir bacak, KARŞI bacak en az DDS_BIPOLAR_GAP_TICKS tick kapalı kalmadan AÇILMAZ — o tick'ler
+     * İKİSİ DE LOW (3) beklenir. YALNIZ AÇILIŞI geciktirir (en çok GAP tick = 40 µs, yalnız süreksizlikte); kapatmayı ve
+     * STOP'u ASLA geciktirmez (IDLE yolu yukarıda döner). Kararlı-durum dalgası değişmez (orada boşluk zaten ≥ GAP).
+     * Tek-bacak bobinde hep aynı bacak açılır → etkisiz. Karşı bacak bir önceki tick'te hâlâ açıksa sayaç 0'dır (aynı
+     * tick'te A↔B de bu kuralla kapanır; `PEMF_ForceAllCoilOutputsLow` sayaca dokunmaz → onun ardından da boşluk
+     * beklenir). ⚠️ TEZGÂH: gerçek kenar aralığı osiloskopla (Oturum 13). */
+    if (state < 2U) {
+      const uint8_t bacak = (state == 1U) ? 1U : 2U; /* 1 = IN_A, 2 = IN_B (fiziksel, terslemeden SONRA) */
+      if ((g_son_acik_bacak[i] != 0U) && (g_son_acik_bacak[i] != bacak) &&
+          (g_kapali_tick[i] < (uint8_t)DDS_BIPOLAR_GAP_TICKS)) {
+        state = 3U;
+      }
+    }
+
     if (state != g_prev_state[i]) {
       if (state == 1U) {
         /* A açılıyor: ÖNCE B'yi kapat (savunma), dead-time bekle, SONRA A'yı aç */
@@ -1873,6 +1905,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
         coil_gpio[i].portB->BSRR = (uint32_t)coil_gpio[i].pinB << 16U;
       }
       g_prev_state[i] = state;
+    }
+    /* İG-8.28: açık bacağı ve kapalı geçen tick'i izle (yukarıdaki açılış kuralının girdisi). */
+    if (state < 2U) {
+      g_son_acik_bacak[i] = (state == 1U) ? 1U : 2U;
+      g_kapali_tick[i] = 0U;
+    } else if (g_kapali_tick[i] < 255U) {
+      g_kapali_tick[i]++;
     }
   }
 }
