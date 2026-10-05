@@ -497,17 +497,20 @@ void processControlCommand(JsonDocument& doc) {
 
     // DUPLICATE COMMAND CHECK
     // ⚠️ STOP İSTİSNASI (2026-08-19): aynı command_id'li STOP tekrarı eskiden SESSİZCE
-    // yutuluyordu (ACK yenilenmeden) — backend teslimden emin olamazdı. STOP idempotent:
-    // tekrarında ACK yeniden gönderilir.
+    // yutuluyordu (ACK yenilenmeden) — backend teslimden emin olamazdı.
+    // ⚠️ Y48 (sahip, S4): STOP IDEMPOTENT — aynı kimlikli STOP tekrarı aşağıdaki NORMAL STOP yolundan YENİDEN
+    // UYGULANIR (bobin durdurulur, ACK = !isActive). Eskiden yalnız ACK(true) yenilenip dönülüyordu: önceki STOP'tan
+    // sonra araya bir START girdiyse (önbellek 8 girdilik halka) bobin ENERJİLİ kalır, ACK "durdu" derdi (ölçüldü,
+    // ana makine komut aparatı). Önbelleğe yeniden EKLENMEZ (zaten var). STOP dışı tekrarlar eskisi gibi YUTULUR.
+    // Ö.4-Y8: STOP yalnız artar — hız sınırı STOP'a zaten uygulanmaz.
     if (isCommandProcessed(command_id)) {
         LOG_PRINTF("[CMD] Duplicate command: %s\n", command_id);
-        if (isStop && network && strlen(command_id) > 0) {
-            network->sendCommandAck(command_id, true);
+        if (!isStop) {
+            return;
         }
-        return;
+    } else {
+        addCommandToCache(command_id);
     }
-
-    addCommandToCache(command_id);
     bool success = false;
 
     feedWatchdog();

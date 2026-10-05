@@ -11,6 +11,10 @@ i6-F-1 (ölçüldü): backend'in çökme-kurtarma STOP'u (`backend_service._star
 kimlikli STOP'u UYGULAMAZ, yalnız ACK(success=true) yeniden gönderir → önceki süreç seans ortasında öldüyse (taskkill /F)
 yeni sürecin açılış STOP'u yutulur, bobin ENERJİLİ kalır, firmware "durdu" ACK'i döner (araya ≤7 komut girdiyse).
 DÜZELTME: açılış kimliği süreç başına benzersiz (`startup_reconcile_{bobin}_{ms}`; ≤ S3 sınırı).
+
+⚠️ Y48 (sahip, 1-G): 8266 artık aynı kimlikli STOP'u YENİDEN UYGULAR (STOP idempotent; firmware değişti — kod silinmedi,
+yakma ESP dönüşünde). Çapa ve model buna göre güncellendi; davranış GERÇEK kaynaktan kesilen aparatla da ölçülür
+(`test_esp8266_ayni_kimlikli_STOP_YENIDEN_uygulanir_Y48.py`). Benzersiz açılış kimliği (i6-F-1) yine doğru ve korunur.
 """
 
 from __future__ import annotations
@@ -55,10 +59,10 @@ _8266_CAPALARI = {
     # gelen kimlik static char command_id[64]'e strlcpy edilir.
     "kimlik_kopya": r"const char\* cmdIdStr = doc\[\"command_id\"\] \| \"\";\s*strlcpy\(command_id, cmdIdStr, sizeof\(command_id\)\);\s*"
     r"const bool isStop = \(strcmp\(command, \"stop\"\) == 0\);",
-    # TEKRAR: STOP ise YALNIZ ACK(true) yeniden gonderilir ve DONULUR — STOP YENIDEN UYGULANMAZ; STOP disi sessiz.
+    # TEKRAR (Y48): STOP dışı tekrar sessizce YUTULUR (dönülür); STOP tekrarı aşağıdaki NORMAL yoldan YENİDEN uygulanır;
+    # yeni kimlik önbelleğe eklenir, tekrar EKLENMEZ.
     "tekrar_dali": r"if \(isCommandProcessed\(command_id\)\) \{\s*LOG_PRINTF\(\"\[CMD\] Duplicate command: %s\\n\", command_id\);\s*"
-    r"if \(isStop && network && strlen\(command_id\) > 0\) \{\s*network->sendCommandAck\(command_id, true\);\s*\}\s*"
-    r"return;\s*\}\s*addCommandToCache\(command_id\);",
+    r"if \(!isStop\) \{\s*return;\s*\}\s*\} else \{\s*addCommandToCache\(command_id\);\s*\}",
     # STOP'un bobini durduran dali (tekrar dalindan SONRA gelir).
     "stop_dali": r"\} else if \(strcmp\(command, \"stop\"\) == 0\) \{\s*if \(coil\) \{\s*ControlCommand cmd;\s*"
     r"cmd\.type = CMD_STOP;\s*coil->handleCommand\(cmd\);",
@@ -164,11 +168,12 @@ class Esp8266Modeli:
         cid = _strlcpy(str(doc.get("command_id", "")), self.sab["e8266_id_tampon"])
         dur = komut == "stop"
         if self._islendi_mi(cid):
-            self.yutulan.append((komut, cid))
-            if dur and cid:
-                self.acklar.append((cid, True))  # STOP UYGULANMADAN "basarili" ACK
-            return
-        self._ekle(cid)
+            if not dur:
+                self.yutulan.append((komut, cid))
+                return
+            # Y48: aynı kimlikli STOP aşağıdaki NORMAL yoldan YENİDEN uygulanır; önbelleğe yeniden eklenmez
+        else:
+            self._ekle(cid)
         if not dur and not self._hiz_izni(komut, t_ms):
             if cid:
                 self.acklar.append((cid, False))

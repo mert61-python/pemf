@@ -82,6 +82,7 @@ class EspClass {
   void wdtFeed() {}
   uint32_t getFreeHeap() { return 40000u; }
   uint32_t getMaxFreeBlockSize() { return 30000u; }
+  void restart() { printf("R RESTART\n"); }
 };
 extern EspClass ESP;
 
