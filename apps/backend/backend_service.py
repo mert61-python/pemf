@@ -918,12 +918,62 @@ def _build_server(app, args: argparse.Namespace) -> uvicorn.Server:
     return uvicorn.Server(config)
 
 
-def _install_signal_handlers(server: uvicorn.Server, logger: logging.Logger) -> None:
-    """SIGINT/SIGTERM/SIGBREAK'i yakala → uvicorn'a temiz kapanış (should_exit) sinyali ver."""
+def _kapanis_erken_durdurma(api_server, logger: logging.Logger) -> None:
+    """1-G inceleme G-1.1 (Ö.4-Y8): kapanış İSTENİR İSTENMEZ — `server.run()`'ın dönmesini BEKLEMEDEN — kapanış durumu
+    (START reddi) + donanım STOP'u. `_shutdown` (`main()`'in `finally`'si) yalnız `server.run()` döndükten sonra koşar;
+    uvicorn'un `asyncio_run` kapanışı (`shutdown_default_executor`) olay döngüsünün ortak havuzundaki BİTMEYEN bir
+    `to_thread` işini (asılı disk: DB yazımı) SÜRESİZ bekliyordu → `_shutdown` hiç koşmuyor, bobinler NSSM'in sert
+    sonlandırmasına (15 sn) + firmware ölü-adamına dek sürülüyordu (ölçüldü). Sıra D1.75 ile aynı: kapanış STOP'tan
+    ÖNCE. `_shutdown` koşarsa aynısını yineler (STOP idempotent; seans kaydını o kapatır)."""
+    try:
+        from utils import estop_mandali
+
+        estop_mandali.kapanis_kur()
+    except Exception:
+        logger.exception("Kapanis (erken) mandali kurulamadi (durdurma SURUYOR)")
+    try:
+        _safe_stop_outputs(api_server)
+    except Exception:
+        logger.exception("Kapanis (erken) donanim STOP'u basarisiz")
+
+
+def _install_signal_handlers(server: uvicorn.Server, logger: logging.Logger, api_server=None) -> None:
+    """SIGINT/SIGTERM/SIGBREAK'i yakala → uvicorn'a temiz kapanış (should_exit) sinyali ver.
+
+    `api_server` verilirse (G-1.1) ilk kapanış isteğinde donanım STOP'u KENDİ iş parçacığında hemen başlar. ⚠️ uvicorn
+    `serve()` sürerken sinyalleri KENDİ `handle_exit`'iyle yakalar (`capture_signals` — aşağıdaki işleyiciler o sırada
+    çağrılmaz) → onun işleyicisi de sarılır (`signal.signal(sig, self.handle_exit)` örnek özniteliğini görür)."""
+    import threading
+
+    _erken = threading.Event()
+
+    def _erken_durdur() -> None:
+        if api_server is None or _erken.is_set():
+            return
+        _erken.set()
+        try:
+            threading.Thread(
+                target=_kapanis_erken_durdurma, args=(api_server, logger), name="kapanis-erken-stop", daemon=True
+            ).start()
+        except Exception:
+            logger.exception("Kapanis (erken) STOP is parcacigi acilamadi — STOP _shutdown'a kaldi")
 
     def request_shutdown(signum=None, frame=None) -> None:
         logger.info("Shutdown requested%s", f" by signal {signum}" if signum else "")
         server.should_exit = True
+        _erken_durdur()
+
+    _uvicorn_handle_exit = getattr(server, "handle_exit", None)
+    if callable(_uvicorn_handle_exit):  # açılış ASLA bu adımda düşmez (ACİL DURDUR ucu ayakta kalmalı)
+
+        def handle_exit(sig, frame) -> None:
+            _erken_durdur()
+            _uvicorn_handle_exit(sig, frame)
+
+        try:
+            server.handle_exit = handle_exit
+        except Exception:
+            logger.warning("uvicorn kapanis isleyicisi sarilamadi — erken STOP yalniz sinyal isleyicisinden")
 
     for sig_name in ("SIGINT", "SIGTERM", "SIGBREAK"):
         sig = getattr(signal, sig_name, None)
@@ -1130,7 +1180,7 @@ def main(argv: list[str] | None = None) -> int:
     _start_ai_warmup_safe(logger)
 
     server = _build_server(api_server.app, args)
-    _install_signal_handlers(server, logger)
+    _install_signal_handlers(server, logger, api_server)
 
     try:
         server.run()
