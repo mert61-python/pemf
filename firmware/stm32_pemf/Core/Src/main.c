@@ -602,6 +602,116 @@ static volatile uint8_t g_pktReady = 0;
 static volatile uint32_t g_rxLastByteMs = 0;
 
 /* ============================================================================
+ * UART TX ZAMANLAYICISI (D1.106 · B-8.2 · B-8.3 · B-8.4, 1-G)
+ * ----------------------------------------------------------------------------
+ * ⚠️ ÖLÇÜLDÜ (ana makine döngü takımı: gerçek main.c + HAL 1.8.5, USART bayt süresi BRR'den): tek TX'i
+ * paylaşan satırlar "TX boşsa bas, değilse ATLA" deseniyle yazılıyordu. Akım turu (~1,2 ms) her turda TX
+ * boşsa YALNIZ bobin 1'i basıyor (`gState != READY → break`), C2..C5 HİÇ gitmiyordu ve TX neredeyse hep
+ * meşguldü → 40 paketin yalnız 14-17'sine STM_OK; READY ping'i, Watchdog Timeout satırı, STM_STOPPED
+ * `HAL_UART_Transmit_IT`'in HAL_BUSY'sinde, NACK bloklayan Transmit'in HAL_BUSY'sinde SESSİZCE düşüyordu;
+ * I2C1'in T= satırı TX'i meşgul edince I2C2'nin B= satırı ve MAGCHK HİÇ basılamıyordu.
+ *
+ * YENİ KURAL: her satır türünün KENDİ yuvası (tamponu) vardır; üretici yuvaya yazar ("bekliyor"),
+ * `Tx_Pompala` TX boşaldıkça yuvayı TEK uçuş tamponuna KOPYALAYIP gönderir → uçuştaki bayt asla ezilmez,
+ * hiçbir satır "TX meşgul" diye atılmaz. Bekleyen yuva yeniden yazılırsa EN YENİSİ kazanır (eski ACK/
+ * telemetri değeri değil son durum gider). ÖNCELİK: Watchdog > STOPPED > NACK > ACK > READY > MAGCHK;
+ * sonra telemetri (sensör + akım) DÖNÜŞÜMLÜ (hiçbiri aç kalmaz). Akım telemetrisine hız sınırı
+ * (AKIM_TELE_PERIYOT_MS). Bobin kesme yolları (ölü adam, süre, ACİL) bu sıraya BAĞLI DEĞİL — satır
+ * yalnız bildirimdir; termal kesme EKLENMEZ (sahip kararı).
+ * Kapı: tests/test_firmware_ANA_DONGU_UART_teslimi_D1106.py. ⚠️ TEZGÂH (Oturum 13): gerçek UART.
+ */
+#define AKIM_TELE_PERIYOT_MS 500U /**< bobin başına akım satırı en çok 2 Hz (backend tazelik penceresi 5 sn) */
+typedef enum {
+  TX_WDT = 0, /* STM_ERR Watchdog Timeout — ölü adam bobinleri 0'ladı */
+  TX_DURDU,   /* STM_STOPPED — süre doldu */
+  TX_NACK,
+  TX_ACK,
+  TX_READY,
+  TX_MAGCHK,
+  TX_TELE_0, /* sensör hattı başına (I2C1, I2C2) */
+  TX_AKIM_0 = TX_TELE_0 + PEMF_SENSOR_BOBIN_SAYISI, /* bobin 1..5 akım */
+  TX_YUVA_SAYISI = TX_AKIM_0 + PEMF_AKIM_BOBIN_SAYISI
+} TxYuva_e;
+typedef struct {
+  char *metin;
+  uint16_t kapasite;
+  uint16_t uzunluk; /* 0 = boş; > 0 = gönderilmeyi bekliyor */
+} TxYuva_t;
+static char g_tx_wdt[80], g_tx_durdu[64], g_tx_nack[160], g_tx_ready[128], g_tx_magchk[176];
+/* ACK yuvası: adı `ack_msg` KALIR — ACK biçimi kapıları (test_stm_ack_firmwareden_TURETILIR) yorumsuz kaynaktan
+ * `Coil_AckMetin(ack_msg, sizeof(ack_msg), …)` çağrılarını okur; dizi olduğu için sizeof doğru boyu verir. */
+static char ack_msg[420];
+static char g_tx_tele[PEMF_SENSOR_BOBIN_SAYISI][192];
+static char g_tx_akim[PEMF_AKIM_BOBIN_SAYISI][80];
+static char g_tx_ucan[420]; /* HAL_UART_Transmit_IT'in okuduğu TEK tampon */
+static TxYuva_t g_tx[TX_YUVA_SAYISI];
+static uint32_t g_tx_telem_sira = 0U;
+_Static_assert(sizeof(g_tx_ucan) >= sizeof(ack_msg), "ucan tampon en buyuk yuvadan kucuk olamaz");
+
+static void Tx_Kur(void) {
+  g_tx[TX_WDT] = (TxYuva_t){g_tx_wdt, (uint16_t)sizeof(g_tx_wdt), 0U};
+  g_tx[TX_DURDU] = (TxYuva_t){g_tx_durdu, (uint16_t)sizeof(g_tx_durdu), 0U};
+  g_tx[TX_NACK] = (TxYuva_t){g_tx_nack, (uint16_t)sizeof(g_tx_nack), 0U};
+  g_tx[TX_ACK] = (TxYuva_t){ack_msg, (uint16_t)sizeof(ack_msg), 0U};
+  g_tx[TX_READY] = (TxYuva_t){g_tx_ready, (uint16_t)sizeof(g_tx_ready), 0U};
+  g_tx[TX_MAGCHK] = (TxYuva_t){g_tx_magchk, (uint16_t)sizeof(g_tx_magchk), 0U};
+  for (uint32_t i = 0U; i < PEMF_SENSOR_BOBIN_SAYISI; i++) {
+    g_tx[TX_TELE_0 + i] = (TxYuva_t){g_tx_tele[i], (uint16_t)sizeof(g_tx_tele[i]), 0U};
+  }
+  for (uint32_t i = 0U; i < PEMF_AKIM_BOBIN_SAYISI; i++) {
+    g_tx[TX_AKIM_0 + i] = (TxYuva_t){g_tx_akim[i], (uint16_t)sizeof(g_tx_akim[i]), 0U};
+  }
+}
+
+/** Yuvanın tamponuna YAZILMIŞ `uzunluk` baytı gönderime işaretle (kesik/negatif uzunluk gönderilmez). */
+static void Tx_Kuyrukla(uint32_t yuva, int uzunluk) {
+  if ((yuva < (uint32_t)TX_YUVA_SAYISI) && (uzunluk > 0) && (uzunluk < (int)g_tx[yuva].kapasite)) {
+    g_tx[yuva].uzunluk = (uint16_t)uzunluk;
+  }
+}
+
+static void Tx_Metin(uint32_t yuva, const char *metin) {
+  const size_t n = strlen(metin);
+  if ((yuva < (uint32_t)TX_YUVA_SAYISI) && (n > 0U) && (n < g_tx[yuva].kapasite)) {
+    memcpy(g_tx[yuva].metin, metin, n);
+    g_tx[yuva].uzunluk = (uint16_t)n;
+  }
+}
+
+/** TX boşsa en öncelikli bekleyen yuvayı gönder (ana döngüden; ISR'dan ÇAĞRILMAZ). */
+static void Tx_Pompala(void) {
+  if (huart3.gState != HAL_UART_STATE_READY) {
+    return;
+  }
+  uint32_t sec = (uint32_t)TX_YUVA_SAYISI;
+  for (uint32_t y = 0U; y < (uint32_t)TX_TELE_0; y++) {
+    if (g_tx[y].uzunluk != 0U) {
+      sec = y;
+      break;
+    }
+  }
+  if (sec == (uint32_t)TX_YUVA_SAYISI) {
+    const uint32_t n = (uint32_t)TX_YUVA_SAYISI - (uint32_t)TX_TELE_0;
+    for (uint32_t k = 0U; k < n; k++) {
+      const uint32_t y = (uint32_t)TX_TELE_0 + ((g_tx_telem_sira + k) % n);
+      if (g_tx[y].uzunluk != 0U) {
+        sec = y;
+        g_tx_telem_sira = (y - (uint32_t)TX_TELE_0 + 1U) % n;
+        break;
+      }
+    }
+  }
+  if (sec == (uint32_t)TX_YUVA_SAYISI) {
+    return;
+  }
+  const uint16_t n = g_tx[sec].uzunluk;
+  memcpy(g_tx_ucan, g_tx[sec].metin, n);
+  if (HAL_UART_Transmit_IT(&huart3, (uint8_t *)g_tx_ucan, n) == HAL_OK) {
+    g_tx[sec].uzunluk = 0U;
+  }
+}
+
+/* ============================================================================
  * FONKSİYON PROTOTİPLERİ
  * ============================================================================
  */
@@ -718,15 +828,16 @@ static int Coil_AckSayi(char *buf, size_t cap, int pos, long deger) {
 }
 
 static void Coil_SendNack(const char *reason) {
-  static char msg[160];
-  int len = snprintf(msg, sizeof(msg), "-> STM_NACK: %s\r\n", reason);
+  /* D1.106: bloklayan HAL_UART_Transmit TX IT ile meşgulken HAL_BUSY dönüp NACK'i SESSİZCE düşürüyordu → yuva. */
+  int len = snprintf(g_tx_nack, sizeof(g_tx_nack), "-> STM_NACK: %s\r\n", reason);
   if (len < 0) {
     return;
   }
-  if (len >= (int)sizeof(msg)) {
-    len = (int)sizeof(msg) - 1;
+  if (len >= (int)sizeof(g_tx_nack)) {
+    len = (int)sizeof(g_tx_nack) - 1;
   }
-  HAL_UART_Transmit(&huart3, (uint8_t *)msg, (uint16_t)len, 50U);
+  Tx_Kuyrukla(TX_NACK, len);
+  Tx_Pompala();
 }
 
 static long Coil_FloatMilliForLog(float value) {
@@ -974,6 +1085,8 @@ static void Coil_NtcTermalPoll(uint32_t simdi_ms) {
  * ============================================================================
  */
 int main(void) {
+  Tx_Kur(); /* D1.106: UART TX yuvaları */
+
   /* HAL ve Sistem Saati */
   HAL_Init();
   SystemClock_Config();
@@ -1075,8 +1188,11 @@ int main(void) {
    * Bu döngü sadece UART paketlerini işler.
    * Tüm gerçek zamanlı DDS güncellemeleri TIM1 Update ISR'ındadır.
    * =================================================================== */
+  uint32_t son_akim_tele_ms = HAL_GetTick() - AKIM_TELE_PERIYOT_MS; /* D1.106: ilk akım turu hemen basılır */
+
   while (1) {
     uint32_t current_time = HAL_GetTick();
+    Tx_Pompala(); /* D1.106: TX boşaldıysa sıradaki satır */
 
     /* ── BOBIN 6-7 SENSOR TELEMETRISI (STM_TELE) ────────────────────────────────────
      * ⚠️ Bu satir, bobin 6-7'nin sicakligini arayuze tasiyan TEK yoldur ve arayuzdeki
@@ -1111,36 +1227,37 @@ int main(void) {
         if (!sv.sicaklik_ok && !sv.alan_ok) {
           continue; /* olcum YOK → satir hic basilmaz (sahte 0.0 uretilmez) */
         }
-        if (huart3.gState != HAL_UART_STATE_READY) {
-          break; /* ACK ucuyor → bu turu atla, telemetri periyodiktir */
-        }
-        /* ⚠️ 192: `B=`/`N=` yaninda uc eksenin ISARETLI UCLARI da tasiniyor
+        /* ⚠️ D1.106: burada `gState != READY → break` vardı — I2C1'in satırı TX'i meşgul edince I2C2'nin B=
+         * satırı (sahadaki TEK manyetik sensör) HER pencerede düşüyordu (ölçüldü). Satır hat başına YUVAYA
+         * yazılır; TX boşaldıkça gider.
+         * ⚠️ 192: `B=`/`N=` yaninda uc eksenin ISARETLI UCLARI da tasiniyor
          * (6 alan). Tasarsa snprintf keser ve satir SESSIZCE eksik gider (asagidaki
          * uzunluk kontrolleri kirpilmis satiri de gecerli sayar).
          * Olculen en uzun satir ~130 bayt; pay bilerek genis. */
-        static char tele_msg[192];
+        char *const tele_msg = g_tx_tele[si];
+        const size_t tele_kap = sizeof(g_tx_tele[si]);
         /* ⚠️ Bobin kimligi TABLODAN gelir, `ILK_BOBIN_ID + si` DEGIL: sahadaki tek
          * manyetik sensor I2C2'de ama arayuzde bobin 6'da gorunmeli (sahip karari). */
-        int tl = snprintf(tele_msg, sizeof(tele_msg), "-> STM_TELE: C=%lu",
+        int tl = snprintf(tele_msg, tele_kap, "-> STM_TELE: C=%lu",
                           (unsigned long)PEMF_Sensor_BobinId(si));
-        if (sv.sicaklik_ok && (tl > 0) && (tl < (int)sizeof(tele_msg))) {
-          tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl, ",T=%.2f,A=%.2f",
+        if (sv.sicaklik_ok && (tl > 0) && (tl < (int)tele_kap)) {
+          tl += snprintf(tele_msg + tl, tele_kap - (size_t)tl, ",T=%.2f,A=%.2f",
                          (double)sv.nesne_c, (double)sv.ortam_c);
         }
-        if (sv.alan_ok && (tl > 0) && (tl < (int)sizeof(tele_msg))) {
-          tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl,
+        if (sv.alan_ok && (tl > 0) && (tl < (int)tele_kap)) {
+          tl += snprintf(tele_msg + tl, tele_kap - (size_t)tl,
                          ",B=%.3f,N=%u,XN=%.3f,XP=%.3f,YN=%.3f,YP=%.3f,ZN=%.3f,ZP=%.3f",
                          (double)sv.alan_mt, (unsigned)sv.alan_ornek,
                          (double)sv.uc_x_min, (double)sv.uc_x_max,
                          (double)sv.uc_y_min, (double)sv.uc_y_max,
                          (double)sv.uc_z_min, (double)sv.uc_z_max);
-          if (sv.alan_doygun && (tl > 0) && (tl < (int)sizeof(tele_msg))) {
-            tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl, ",S=1");
+          if (sv.alan_doygun && (tl > 0) && (tl < (int)tele_kap)) {
+            tl += snprintf(tele_msg + tl, tele_kap - (size_t)tl, ",S=1");
           }
         }
-        if ((tl > 0) && (tl < (int)sizeof(tele_msg) - 3)) {
-          tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl, "\r\n");
-          (void)HAL_UART_Transmit_IT(&huart3, (uint8_t *)tele_msg, (uint16_t)tl);
+        if ((tl > 0) && (tl < (int)tele_kap - 3)) {
+          tl += snprintf(tele_msg + tl, tele_kap - (size_t)tl, "\r\n");
+          Tx_Kuyrukla(TX_TELE_0 + si, tl);
         }
 
         /* ── BOSTA REFERANS OLCUMU (bir kez, ilk gecerli pencerede) ───────────────────
@@ -1161,8 +1278,10 @@ int main(void) {
          * ⚠️ Bu satir yalniz ACILISTAKI ilk penceredir; "bosta" olmasi kullanicinin
          * o an bobin baslatmamis olmasina baglidir. Kart, karar veremeyecegi bir sey
          * hakkinda kesin konusmaz: etiket "ILK PENCERE", "garantili bosta" degil. */
-        if (sv.alan_ok && ((g_magchk_basildi & (1U << si)) == 0U) &&
-            (huart3.gState == HAL_UART_STATE_READY)) {
+        /* D1.106: koşul eskiden `gState == READY` idi — hemen yukarıdaki TELE satırı TX'i meşgul ettiği için
+         * MAGCHK HİÇ basılamıyordu (ölçüldü). Yuva boşsa kuyruklanır; doluysa (öteki hattın MAGCHK'ı bekliyor)
+         * bit kurulmaz → bir sonraki pencerede. */
+        if (sv.alan_ok && ((g_magchk_basildi & (1U << si)) == 0U) && (g_tx[TX_MAGCHK].uzunluk == 0U)) {
           g_magchk_basildi |= (uint8_t)(1U << si);
           const float bosta_ut = sv.alan_mt * 1000.0f;
           const char *yorum;
@@ -1173,14 +1292,11 @@ int main(void) {
           } else {
             yorum = "YUKSEK DC OFSET (yakinda demir/miknatis) -> B= sapar, pp_* SAPMAZ";
           }
-          static char chk_msg[176];
-          int cl = snprintf(chk_msg, sizeof(chk_msg),
+          int cl = snprintf(g_tx_magchk, sizeof(g_tx_magchk),
                             "-> STM_MAGCHK: C=%lu ilk-pencere |B|=%.3fmT N=%u -> %s\r\n",
                             (unsigned long)PEMF_Sensor_BobinId(si),
                             (double)sv.alan_mt, (unsigned)sv.alan_ornek, yorum);
-          if ((cl > 0) && (cl < (int)sizeof(chk_msg))) {
-            (void)HAL_UART_Transmit_IT(&huart3, (uint8_t *)chk_msg, (uint16_t)cl);
-          }
+          Tx_Kuyrukla(TX_MAGCHK, cl);
         }
       }
     }
@@ -1196,26 +1312,29 @@ int main(void) {
      *
      * ⚠️ `X=1` = ADC TAVANINA DAYANDI (bolucusuz ~12 A ustu, bkz. pemf_akim.h).
      * Deger yine gonderilir ama GUVENILMEZ isaretlidir; sessizce yanlis sayi gondermek
-     * yasak. Backend bunu bildirime cevirir. */
-    if (PEMF_Akim_Poll()) {
+     * yasak. Backend bunu bildirime cevirir.
+     *
+     * ⚠️ D1.106: akım turu (~1,2 ms) eskiden HER turda basılıyor ve `gState != READY → break` ile yalnız C1
+     * gidiyordu: TX neredeyse hep meşguldü (ACK/READY/NACK/Watchdog düşüyordu), C2..C5 HİÇ gitmiyordu (ölçüldü).
+     * Artık en çok AKIM_TELE_PERIYOT_MS'de bir, bobin başına YUVAYA yazılır; Poll her turda koşmaya devam eder. */
+    if (PEMF_Akim_Poll() && ((current_time - son_akim_tele_ms) >= AKIM_TELE_PERIYOT_MS)) {
+      son_akim_tele_ms = current_time;
       for (uint32_t ai = 0U; ai < PEMF_AKIM_BOBIN_SAYISI; ai++) {
         PEMF_AkimVerisi_t av;
         PEMF_Akim_Oku(ai, &av);
         if (!av.ok) {
           continue; /* kalibrasyon/kanal arizasi → alan HIC gonderilmez */
         }
-        if (huart3.gState != HAL_UART_STATE_READY) {
-          break; /* ACK ucuyor → bu turu atla, telemetri periyodiktir */
+        char *const akim_msg = g_tx_akim[ai];
+        const size_t akim_kap = sizeof(g_tx_akim[ai]);
+        int al = snprintf(akim_msg, akim_kap, "-> STM_TELE: C=%lu,I=%.3f", (unsigned long)(ai + 1U),
+                          (double)av.amper);
+        if (av.doygun && (al > 0) && (al < (int)akim_kap)) {
+          al += snprintf(akim_msg + al, akim_kap - (size_t)al, ",X=1");
         }
-        static char akim_msg[80];
-        int al = snprintf(akim_msg, sizeof(akim_msg), "-> STM_TELE: C=%lu,I=%.3f",
-                          (unsigned long)(ai + 1U), (double)av.amper);
-        if (av.doygun && (al > 0) && (al < (int)sizeof(akim_msg))) {
-          al += snprintf(akim_msg + al, sizeof(akim_msg) - (size_t)al, ",X=1");
-        }
-        if ((al > 0) && (al < (int)sizeof(akim_msg) - 3)) {
-          al += snprintf(akim_msg + al, sizeof(akim_msg) - (size_t)al, "\r\n");
-          (void)HAL_UART_Transmit_IT(&huart3, (uint8_t *)akim_msg, (uint16_t)al);
+        if ((al > 0) && (al < (int)akim_kap - 3)) {
+          al += snprintf(akim_msg + al, akim_kap - (size_t)al, "\r\n");
+          Tx_Kuyrukla(TX_AKIM_0 + ai, al);
         }
       }
     }
@@ -1228,7 +1347,7 @@ int main(void) {
      * paket gelmediyse her 2 saniyede bir ping at (Handshake Time-out önlemi)
      */
     if (g_pwm_started == 0 && (current_time - last_ping_ms >= 2000U)) {
-      HAL_UART_Transmit_IT(&huart3, (uint8_t *)init_msg, strlen(init_msg));
+      Tx_Metin(TX_READY, init_msg); /* D1.106: TX meşgulken HAL_BUSY'de DÜŞÜYORDU (20 sn'de 4/10) */
       last_ping_ms = current_time;
     }
 
@@ -1324,10 +1443,10 @@ int main(void) {
          * DENETIM 2026-08-04: `static ack_msg` HAL_UART_Transmit_IT ile KESME-tabanli
          * gonderiliyor; fonksiyon donduğunde baytlar HALA tampondan okunuyordur. Bir sonraki
          * paket islenirken snprintf AYNI tamponu YENIDEN yaziyordu → ucusan ACK bozuluyordu.
-         * Ustelik donus degeri (HAL_BUSY) hic kontrol edilmiyordu. ACK yalnizca TANI amaclidir:
-         * TX mesgulse bu turu ATLA (tamponu bozma), bosalinca bir sonraki ACK zaten gider. */
-        static char ack_msg[420];
-        if (huart3.gState == HAL_UART_STATE_READY) {
+         * ⚠️ D1.106: o düzeltme "TX meşgulse ACK'i ATLA" oldu — telemetri TX'i hep meşgul tuttuğu için 40 paketin
+         * yalnız 17'sine STM_OK gidiyordu (ölçüldü; backend ACK'siz paketi teyitsiz sayar). Artık ACK yuvaya
+         * yazılır; TX'e `Tx_Pompala` AYRI uçuş tamponundan verir → uçan bayt yine ezilmez, ACK de atlanmaz. */
+        {
         /* ⚠️ ALAN SAYISI FORMAT DIZESINE ELLE YAZILMAZ. Eskiden dize bobin basina bir
          * "%d" tasiyordu (bes tane, elle) — NUM_COILS degisince ACK sessizce EKSIK basar,
          * backend ayristiricisi da uzunluk kontrolu yaptigi icin satiri komple REDDEDERDI
@@ -1385,9 +1504,8 @@ int main(void) {
         if (len >= (int)sizeof(ack_msg)) {
           len = (int)sizeof(ack_msg) - 1;
         }
-        if (len > 0) {
-          (void)HAL_UART_Transmit_IT(&huart3, (uint8_t *)ack_msg, (uint16_t)len);
-        }
+        Tx_Kuyrukla(TX_ACK, len);
+        Tx_Pompala();
         }
 
         HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_0);
@@ -1419,9 +1537,9 @@ int main(void) {
       }
 
       if (duration_stopped) {
-        static char stop_msg[] =
-            "-> STM_STOPPED: Sure(ler) doldu, bobinler kapatildi.\r\n";
-        HAL_UART_Transmit_IT(&huart3, (uint8_t *)stop_msg, strlen(stop_msg));
+        /* D1.106: TX meşgulken HAL_BUSY'de sessizce DÜŞÜYORDU → yuva (öncelikli). */
+        Tx_Metin(TX_DURDU, "-> STM_STOPPED: Sure(ler) doldu, bobinler kapatildi.\r\n");
+        Tx_Pompala();
       }
     }
 
@@ -1444,9 +1562,10 @@ int main(void) {
 
       last_communication_ms = current_time;
 
-      static char tout_msg[] =
-          "-> STM_ERR: Watchdog Timeout! Baglanti koptu, bobinler 0'landi.\r\n";
-      HAL_UART_Transmit_IT(&huart3, (uint8_t *)tout_msg, strlen(tout_msg));
+      /* D1.106: TX meşgulken HAL_BUSY'de sessizce DÜŞÜYORDU (ölçüldü) → EN öncelikli yuva. Bobinler yukarıda
+       * zaten 0'landı; satır yalnız bildirimdir (backend onu kritik olaya çevirir). */
+      Tx_Metin(TX_WDT, "-> STM_ERR: Watchdog Timeout! Baglanti koptu, bobinler 0'landi.\r\n");
+      Tx_Pompala();
     }
   }
 }
