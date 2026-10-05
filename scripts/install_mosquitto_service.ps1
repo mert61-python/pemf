@@ -70,6 +70,14 @@ Write-Status "Bundle bulundu: $BundledDir" "Green"
 foreach ($d in @($InstallDir, $DataDir, $LogDir, $ConfDir)) {
     if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
 }
+# ⚠️ 1-G inceleme G-3.3: BOŞ include_dir'de mosquitto 2.0.18 (Windows) AÇILMAZ ("Unable to open include_dir", ölçüldü —
+# bu betiğin yapılandırmasıyla da). conf.d yalnız oluşturulursa hazırlanmamış her kurulumda servis düşer (ESP STOP yolu
+# backend'in yedek broker'ına kalır). Yalnız yorumdan oluşan yer tutucu dizini boş bırakmaz (setup_services.ps1 ile aynı);
+# yerel broker kimliği (A-04 · D1.104 `--mqtt-kimlik hazirla`) bu dizine pemf_kimlik.conf yazar.
+$TabanParca = Join-Path $ConfDir "00_pemf_taban.conf"
+if (-not (Test-Path $TabanParca)) {
+    Set-Content -Path $TabanParca -Value "# PEMF: include_dir bos kalmasin (mosquitto Windows'ta bos dizinde ACILMAZ). Kimlik parcasi: pemf_kimlik.conf" -Encoding ASCII
+}
 Write-Status "Dizinler hazır (Program Files + ProgramData)." "Green"
 
 # --- 3. Bundled ikilileri Install dizinine kopyala (varolan servisi durdurarak) ---
