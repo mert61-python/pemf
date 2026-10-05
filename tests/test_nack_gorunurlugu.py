@@ -105,12 +105,26 @@ def istemci(api, monkeypatch):
     monkeypatch.setattr(api_mod, "_mqtt_publish", lambda topic, payload: True)
     # Bekçi timeout'u testte kısa (gerçek değer 2.0 sn — sözleşme ayrı testte kilitli).
     monkeypatch.setattr(api_mod, "_START_ACK_TIMEOUT", 0.3, raising=True)
+    with api_mod._active_coil_runs_lock:
+        eski_runlar = dict(api_mod._active_coil_runs)
+    with api_mod._coil_run_stats_lock:
+        eski_istatistik = dict(api_mod._coil_run_stats)
     yield TestClient(api_mod.app), api_mod, bildirimler
     # TEARDOWN: seans testleri `_active_session`i acik birakabilir (koşu kaydini kapatir ama seansi
     # degil) → sonraki seans testleri "Zaten aktif seans" (409) alir. Global durumu temizle
     # (test izolasyonu; `_active_session` modul-genel).
     with api_mod._session_lock:
         api_mod._active_session["is_active"] = False
+    # ⚠️ 1-G (ölçüldü): "ack zaman aşımında kayıt KALIR" kolu bobin 8'in koşu kaydını BİLEREK açık bırakır; run-map
+    # modül-geneldir (`coil_run_tracker`) → sonraki testlere SIZIYORDU. Y63'ten beri "Seansı Durdur" açık koşu kaydı olan
+    # bobini de durdurduğu için `test_p2p3…devralma_YOKSA` bu dosyadan sonra koşunca kırmızıydı ([1, 2, 8]); tam süitte
+    # araya giren bir seans başlatması (`.clear()`) maskeliyordu. Kayıt haritaları yerinde geri yüklenir (takma adlar).
+    with api_mod._active_coil_runs_lock:
+        api_mod._active_coil_runs.clear()
+        api_mod._active_coil_runs.update(eski_runlar)
+    with api_mod._coil_run_stats_lock:
+        api_mod._coil_run_stats.clear()
+        api_mod._coil_run_stats.update(eski_istatistik)
 
 
 def _acik_run_var(api, coil_id: int) -> bool:
