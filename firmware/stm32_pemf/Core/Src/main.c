@@ -521,7 +521,8 @@ static uint8_t g_prev_state[NUM_COILS] = {0}; /* 255 (init) Coil_StateInit'te */
 /**
  * İG-8.28 (1-G) — KÖPRÜ BOŞLUĞU SÜREKSİZLİKTE DE: son AÇIK bacak (0 = hiç açılmadı · 1 = IN_A · 2 = IN_B; polarite
  * terslemesinden SONRA fiziksel bacak) ve o bacak kapandıktan beri geçen ISR tick'i (255'te doyar). Bir bacak, KARŞI
- * bacak en az DDS_BIPOLAR_GAP_TICKS tick kapalı kalmadan AÇILMAZ (bkz. çıkış döngüsü). Sıfır başlangıç = "hiçbir bacak
+ * bacak en az DDS_BIPOLAR_GAP_TICKS tick (tpp < 6'da kararlı dalganın boşluğu: yarım − 1 — 1G-YB2) kapalı kalmadan
+ * AÇILMAZ (bkz. çıkış döngüsü). Sıfır başlangıç = "hiçbir bacak
  * açılmadı" → elle başlatıcı listesi YOK (NUM_COILS'e bağlı liste eksik elemanı SESSİZCE sıfırlar).
  */
 static uint8_t g_son_acik_bacak[NUM_COILS] = {0};
@@ -2025,14 +2026,22 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
      * ile bu bacağın YÜKSELİŞİ aynı tick'e iniyordu (ölçüldü, ana makine takımı: 2000 rastgele denemede 817 ihlal,
      * boşluk 0). Kural: bir bacak, KARŞI bacak en az DDS_BIPOLAR_GAP_TICKS tick kapalı kalmadan AÇILMAZ — o tick'ler
      * İKİSİ DE LOW (3) beklenir. YALNIZ AÇILIŞI geciktirir (en çok GAP tick = 40 µs, yalnız süreksizlikte); kapatmayı ve
-     * STOP'u ASLA geciktirmez (IDLE yolu yukarıda döner). Kararlı-durum dalgası değişmez (orada boşluk zaten ≥ GAP).
+     * STOP'u ASLA geciktirmez (IDLE yolu yukarıda döner). Kararlı-durum dalgası değişmez (boşluk = kararlı dalganınki).
      * Tek-bacak bobinde hep aynı bacak açılır → etkisiz. Karşı bacak bir önceki tick'te hâlâ açıksa sayaç 0'dır (aynı
      * tick'te A↔B de bu kuralla kapanır; `PEMF_ForceAllCoilOutputsLow` sayaca dokunmaz → onun ardından da boşluk
-     * beklenir). ⚠️ TEZGÂH: gerçek kenar aralığı osiloskopla (Oturum 13). */
+     * beklenir). ⚠️ TEZGÂH: gerçek kenar aralığı osiloskopla (Oturum 13).
+     * ⚠️ 1G-YB2 (1-G): istenen boşluk = min(GAP, yarım − 1) — kararlı dalganın KENDİ boşluğu. tpp < 6'da (f > 8,33 kHz)
+     * klemp `max_d < 1 → 1` olduğundan o boşluk GAP'ten küçüktür (orada tek katman NOP dead-time'dır, bkz.
+     * DDS_BIPOLAR_GAP_TICKS notu); kural her tpp'de GAP isteyince B bacağı HİÇ açılmıyordu (ölçüldü: 10 kHz %50'de B
+     * darbesi 3000 → 0; sürüş tek bacağa düşüyor, ACK `K=` bipolar diyordu). tpp ≥ 6'da istenen = GAP (değişmedi). */
     if (state < 2U) {
       const uint8_t bacak = (state == 1U) ? 1U : 2U; /* 1 = IN_A, 2 = IN_B (fiziksel, terslemeden SONRA) */
+      const int32_t yarim_tick = tpp / 2;
+      const int32_t istenen_bosluk = (yarim_tick > (int32_t)DDS_BIPOLAR_GAP_TICKS)
+                                         ? (int32_t)DDS_BIPOLAR_GAP_TICKS
+                                         : ((yarim_tick > 0) ? (yarim_tick - 1) : 0);
       if ((g_son_acik_bacak[i] != 0U) && (g_son_acik_bacak[i] != bacak) &&
-          (g_kapali_tick[i] < (uint8_t)DDS_BIPOLAR_GAP_TICKS)) {
+          ((int32_t)g_kapali_tick[i] < istenen_bosluk)) {
         state = 3U;
       }
     }

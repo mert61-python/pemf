@@ -325,6 +325,39 @@ def test_KRITIK_IG828_periyot_ORTASI_parametre_degisiminde_GAP_RASTGELE_2000(exe
     )
 
 
+# ── 1G-YB2 (1-G yeni bulgu — İG-8.28'in yan etkisi): UÇ FREKANSTA bipolar iki bacak da sürülür ─────────────────
+#: tpp < 6'da (f > 8,33 kHz) klemp `max_d < 1 → 1` → kararlı dalganın KENDİ boşluğu GAP'ten küçüktür (yarım − 1). İG-8.28
+#: kuralı her tpp'de GAP istediği için B bacağı HİÇ açılmıyordu (ölçüldü: f5f417e öncesi 10 kHz %50'de 3000 B darbesi,
+#: sonrası 0) — sürüş tek bacağa düşüyor, ACK `K=` bipolar diyordu. KARARLI listesi yalnız 33-100 Hz idi. (Hz, tpp)
+UC_FREKANS = [(8333, 6), (10000, 5), (12500, 4), (16666, 3), (25000, 2)]
+
+
+def _tasarim_boslugu(tpp: int, gap: int) -> int:
+    """Klemp sonrası KARARLI bipolar dalganın karşı bacak düşüşü → yükseliş boşluğu (tick): yarım − max(1, yarım − GAP)."""
+    yarim = tpp // 2
+    return yarim - max(1, yarim - gap)
+
+
+@pytest.mark.parametrize(("frek", "tpp"), UC_FREKANS, ids=[f"{f}Hz_tpp{t}" for f, t in UC_FREKANS])
+def test_KRITIK_1GYB2_uc_frekansta_bipolar_IKI_bacak_surulur_bosluk_TASARIMDAN_kisa_degil(
+    exe, harita, sabitler, frek, tpp
+):
+    assert int(50000.0 / frek) == tpp, "aparat: frekans → tpp eşlemesi"
+    _pinler, uni = harita
+    sonuc = _kararli(exe, harita, frek=frek, duty=0.5)
+    gerekli = _tasarim_boslugu(tpp, sabitler["GAP"])
+    for i, r in sonuc.items():
+        A, B = _darbe_genislikleri(r["kenarlar"], "A"), _darbe_genislikleri(r["kenarlar"], "B")
+        if uni[i]:
+            assert A and not B, f"bobin {i + 1} (tek-bacak): A={len(A)} B={len(B)}"
+            continue
+        assert A and B and abs(len(A) - len(B)) <= 1, (
+            f"bobin {i + 1} @ {frek} Hz (tpp {tpp}): A darbesi {len(A)}, B darbesi {len(B)} — bipolar TEK bacağa düştü"
+        )
+        ihlal = _kopru_ihlalleri({i: r}, 0, gerekli)
+        assert ihlal == [], f"bobin {i + 1}: çakışma ya da boşluk tasarım değerinin ({gerekli}) altında: {ihlal[:4]}"
+
+
 # ── AÇIK işaretler (uydurma ölçüm yok) ───────────────────────────────────────
 
 
