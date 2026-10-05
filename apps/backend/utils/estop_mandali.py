@@ -201,17 +201,21 @@ def yazim_hatasi_kancasi_bagla(fn) -> None:
     _yazim_hatasi_kancasi = fn
 
 
-def yazim_durumu(yol_dahil: bool = False, bitmedi: bool = False) -> dict:
+def yazim_durumu(yol_dahil: bool = False, bitmedi: bool = False, acilis: bool = False) -> dict:
     """Y59: mandal dosyası yazılamıyorsa operatör metni + yeniden başlatmadaki sonuç. Yol yalnız `yol_dahil` ile (ACİL
     DURDUR ucu auth-muaf — yanıtında dosya yolu olmaz; kimlikli bildirim ve Sıfırla yanıtı yolu verir).
-    `bitmedi`: Sıfırla'nın yazımı süresinde BİTMEDİ (asılı disk) — dosya güncellenmemiş sayılır (1-F inceleme B-1.1)."""
+    `bitmedi`: Sıfırla'nın yazımı süresinde BİTMEDİ (asılı disk) — dosya güncellenmemiş sayılır (1-F inceleme B-1.1).
+    `acilis` (Y64): açılış yoklamasının ÖNGÖRÜSÜ — diskte kurulu (ya da okunamayan) mandal Sıfırla'yla silinemeyeceği için
+    her açılışta "geri gelecek"; kurulu değilse ACİL DURDUR'un mandalı yazılamayacağı için "KORUNMAYACAK"."""
     yol = _kalici_yol
     if yol is None or not (_yazim["yazilamadi"] or bitmedi):
         return {"yazilamadi": False}
     with _kilit:
         hedef = bool(_durum["aktif"])
     disk = bool(_yazim["disk_kurulu"])
-    if disk and not hedef:
+    if acilis:
+        sonuc = "geri gelecek" if disk else "KORUNMAYACAK"
+    elif disk and not hedef:
         sonuc = "geri gelecek"
     elif hedef and not disk:
         sonuc = "KORUNMAYACAK"
@@ -278,6 +282,11 @@ def kalicilik_kur(yol) -> dict:
             _durum["onceki_oturum"] = True
             _nesil += 1
         _log.warning("ACIL DURDUR mandali onceki oturumdan KURULU (sifirlanmadi): %s", onceki_neden)
+    if _engel:
+        # ⚠️ Y64 (sahip, 1-F S-F4): yazılamaz görünen dosya AÇILIŞTA ekran bildirimiyle söylenir — Y59 metni (dosyaya
+        # YAZILMAZ; ACİL DURDUR akışı değişmez). Eskiden yalnız günlükteydi; operatör ilk E-stop / Sıfırla'ya dek bilmiyordu.
+        # ACL reddi yazmadan görülemez: onu ilk E-stop / Sıfırla söyler (Y59).
+        _yazim_hatasini_bildir(yazim_durumu(yol_dahil=True, acilis=True))
     return durum()
 
 
@@ -339,13 +348,18 @@ def _diske_yaz() -> bool:
             exc_info=True,
         )
         _yazim.update(yazilamadi=True, neden=type(exc).__name__)
-        _kanca = _yazim_hatasi_kancasi
-        if _kanca is not None:
-            try:
-                _kanca(yazim_durumu(yol_dahil=True))
-            except Exception:
-                _log.warning("mandal yazim hatasi bildirimi yapilamadi", exc_info=True)
+        _yazim_hatasini_bildir(yazim_durumu(yol_dahil=True))
         return False
+
+
+def _yazim_hatasini_bildir(d: dict) -> None:
+    """Y59 / Y64: bağlı kancaya (ekran bildirimi) yazım durumunu ilet. Asla fırlatmaz."""
+    _kanca = _yazim_hatasi_kancasi
+    if _kanca is not None:
+        try:
+            _kanca(d)
+        except Exception:
+            _log.warning("mandal yazim hatasi bildirimi yapilamadi", exc_info=True)
 
 
 def diske_yaz_arka_planda() -> None:
