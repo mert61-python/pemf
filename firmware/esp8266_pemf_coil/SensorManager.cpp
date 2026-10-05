@@ -55,7 +55,12 @@ SensorManager::SensorManager(int currentPin, int sdaPin, int sclPin) {
     _data.maxCurrent = 0.0;
     _data.temp_sensor_ok = false;
     _data.magnetic_sensor_ok = false;
-    _data.current_sensor_ok = true;
+    /* D1.62 (B-8.12): akim bayragi DONANIMA gore — kalibrasyon ACS712'yi gorene dek 0 (eskiden kosulsuz true:
+     * sensor yokken yuzen A0'dan hesaplanan akim "olculdu" diye yayinlaniyordu). */
+    _data.current_sensor_ok = false;
+    for (int i = 0; i < 6; i++) {
+        _lastGoodValues[i] = NAN;  // D1.62: "hic saglikli okuma yok" — gecici arizada NaN doner, sabit DEGIL
+    }
     _data.sensorsOK = false;
     _data.allSensorsOk = false;
 }
@@ -158,8 +163,10 @@ SensorData SensorManager::getData() {
         _data.tempAmbient = NAN;
     } else if (!_data.temp_sensor_ok) {
         // Kritik deÄŸil ama baÅŸarÄ±sÄ±z - fallback kullan (geÃ§ici hata)
-        _data.tempObject = _tempObjectFiltered;
-        _data.tempAmbient = _tempAmbientFiltered;
+        /* D1.62: SON SAGLIKLI deger (hic yoksa NaN). Eskiden `_*Filtered` yapici sabitleri (30,0 / 25,0) donuyordu —
+         * hic guncellenmiyorlardi; gecici arizada 36,50 dururken 30,00 "olculdu" gibi yayinlaniyordu. */
+        _data.tempObject = _lastGoodValues[0];
+        _data.tempAmbient = _lastGoodValues[1];
         LOG_PRINTLN("[SENSOR] âš ï¸ SÄ±caklÄ±k sensÃ¶rÃ¼ baÅŸarÄ±sÄ±z, fallback deÄŸerler kullanÄ±lÄ±yor");
     }
 
@@ -172,7 +179,12 @@ SensorData SensorManager::getData() {
         _data.magZ = NAN;
     } else if (!_data.magnetic_sensor_ok) {
         // Kritik deÄŸil ama baÅŸarÄ±sÄ±z - fallback kullan (geÃ§ici hata)
-        _data.magneticField = _magFieldFiltered / 1000.0f;
+        /* D1.62: son saglikli eksenler (uT) ve onlardan buyukluk (mT) — eskiden 0,000 mT + BAYAT eksenler. */
+        _data.magX = _lastGoodValues[2] / 1000.0f;
+        _data.magY = _lastGoodValues[3] / 1000.0f;
+        _data.magZ = _lastGoodValues[4] / 1000.0f;
+        _data.magneticField = sqrt(_lastGoodValues[2] * _lastGoodValues[2] + _lastGoodValues[3] * _lastGoodValues[3] +
+                                   _lastGoodValues[4] * _lastGoodValues[4]) / 1000.0f;
         LOG_PRINTLN("[SENSOR] âš ï¸ Manyetik sensÃ¶r baÅŸarÄ±sÄ±z, fallback deÄŸerler kullanÄ±lÄ±yor");
     }
 
@@ -180,7 +192,7 @@ SensorData SensorManager::getData() {
         _data.current = NAN;
     } else if (!_data.current_sensor_ok) {
         // Kritik deÄŸil ama baÅŸarÄ±sÄ±z - fallback kullan (geÃ§ici hata)
-        _data.current = _currentFiltered;
+        _data.current = _lastGoodValues[5];  // D1.62: son saglikli deger (hic yoksa / sensor yoksa NaN)
         LOG_PRINTLN("[SENSOR] âš ï¸ AkÄ±m sensÃ¶rÃ¼ baÅŸarÄ±sÄ±z, fallback deÄŸerler kullanÄ±lÄ±yor");
     }
 
@@ -342,16 +354,32 @@ void SensorManager::_calibrateACS712() {
 
     // 100 okuma al ve ortalamasÄ±nÄ± hesapla
     float sumVoltage = 0;
+    float v0 = 0, sumD = 0, sumD2 = 0;  // D1.62: sapma icin (ilk ornege gore kaydirilmis toplamlar, dizi YOK)
     for (int i = 0; i < 100; i++) {
         int rawValue = analogRead(_currentPin);
         float voltage = (rawValue / 1023.0) * 3.3;
         sumVoltage += voltage;
+        if (i == 0) {
+            v0 = voltage;
+        }
+        sumD += voltage - v0;
+        sumD2 += (voltage - v0) * (voltage - v0);
         delay(10);
         ESP.wdtFeed();
     }
 
     _acs712Offset = sumVoltage / 100.0;
     _acs712Calibrated = true;
+    /* D1.62 (B-8.12): ACS712 VAR MI — akimsiz cikis bolucu ile 2,5·k V civarinda ve KARARLI (gurultu birkac mV).
+     * Toprak (0 V) ve 3,3 V bandin disinda; YUZEN pin bant icinde kalabilir ama oynak (olculdu: sapma ~0,16 V) →
+     * standart sapma esigi ayirir. Yoksa akim OLCULMEZ: bayrak 0, deger NaN (eskiden kosulsuz "ok"). */
+    const float ortD = sumD / 100.0f;
+    const float varyans = sumD2 / 100.0f - ortD * ortD;
+    const float sigma = sqrt(varyans > 0.0f ? varyans : 0.0f);
+    _acs712Present = (_acs712Offset > ACS712_OFSET_MIN_V) && (_acs712Offset < ACS712_OFSET_MAX_V) &&
+                     (sigma < ACS712_SIGMA_MAX_V);
+    LOG_PRINTF("[ACS712] ofset %.3f V, sapma %.4f V -> %s\n", _acs712Offset, sigma,
+               _acs712Present ? "sensor VAR" : "sensor YOK/belirsiz (akim olculmez, NaN)");
 
     LOG_PRINTF("[ACS712] Kalibrasyon tamamlandÄ±, offset: %.3fV\n", _acs712Offset);
 }
@@ -493,10 +521,16 @@ void SensorManager::_triggerSensorStateMachines() {
 
     _data.sensorsOK = (_mlx90614Initialized ? _data.temp_sensor_ok : true) &&
                       (_mlx90393Initialized ? _data.magnetic_sensor_ok : true) &&
-                      _data.current_sensor_ok;
+                      (_acs712Present ? _data.current_sensor_ok : true);  // D1.62: takili degilse MLX'ler gibi
 }
 
 void SensorManager::_readCurrent() {
+    if (!_acs712Present) {
+        // D1.62: ACS712 yok/belirsiz → akim OLCULMEZ (eskiden yuzen A0'dan hesaplanip "ok" diye yayinlaniyordu)
+        _data.current = NAN;
+        _data.current_sensor_ok = false;
+        return;
+    }
     // AKIM Ã–LÃ‡ÃœMÃœ (10 Ã¶rnek al ve RMS hesapla)
     float sumOfSquares = 0.0;
     int sampleCount = 10;
@@ -505,7 +539,9 @@ void SensorManager::_readCurrent() {
         int rawValue = analogRead(_currentPin);
         float voltage = (rawValue / 1023.0) * 3.3;  // 3.3V referans (0-1023 ADC)
         // ACS712-30A: 66mV/A, kalibre edilmiÅŸ offset kullan
-        float current = (voltage - _acs712Offset) / 0.066;
+        /* D1.62: TURETILEN hassasiyet (0,066·k V/A, `_deriveSensitivity`) — sabit 0,066 bolucu (k) olan kartta
+         * okumayi ×k cikariyordu (k = 0,716'da 5 A → 3,57 A). */
+        float current = (voltage - _acs712Offset) / _acsSensitivity;
         sumOfSquares += current * current;
         delayMicroseconds(100); // Ã–rnekler arasÄ±na Ã§ok az bekleme ekle (~100Âµs)
     }
@@ -803,7 +839,7 @@ void SensorManager::_checkSensorHealth() {
     }
 
     // AkÄ±m sensÃ¶rÃ¼ saÄŸlÄ±k kontrolÃ¼ (ACS712 genelde her zaman Ã§alÄ±ÅŸÄ±r, ama kontrol edelim)
-    if (!_data.current_sensor_ok) {
+    if (_acs712Present && !_data.current_sensor_ok) {  // D1.62: takili olmayan sensor "offline" sayilmaz
         _currentSensorFailCount++;
         if (_currentSensorFailCount > MAX_CONSECUTIVE_FAILS && !_currentSensorCritical) {
             _currentSensorCritical = true;

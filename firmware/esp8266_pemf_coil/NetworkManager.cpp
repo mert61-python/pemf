@@ -1,5 +1,6 @@
 #include "NetworkManager.h"
 #include "Secrets.h"  // 2026-08-19: DEFAULT_LOCAL_MQTT_* + MQTT_LOCAL_MAX_RETRIES burada tanimli - include eksikti, dosya derlenmiyordu
+#include "JsonSayi.h"  // D1.62: sensor alanlari NaN iken `null` (gecersiz "nan" JSON'u yerine)
 #include <limits.h>  // ULONG_MAX iÃ§in gerekli
 
 // Diagnostics sistemi kaldırıldı
@@ -242,13 +243,17 @@ void NetworkManager::publishSensorData(const SensorData& data) {
     // 384 byte'lik buffer, eski yontemde 256 (Doc) + 256 (Buf) = 512+ kullaniyordu.
     char jsonBuffer[384];
 
+    /* D1.62 (B-8.12): olcum YOKKEN (sensor takili degil / hic saglikli okuma yok) SensorManager NaN doner;
+     * `%.2f` NaN'i `nan` yazar = GECERSIZ JSON → backend iletinin TAMAMINI atar (sicaklik dahil). Sonlu olmayan
+     * alan `null` yazilir (S3/ArduinoJson ile ayni sozlesme). Basamaklar eskisiyle ayni (2/2/3/2). */
+    char sNesne[16], sOrtam[16], sAlan[16], sAkim[16];
     int jsonLen = snprintf_P(jsonBuffer, sizeof(jsonBuffer),
-        PSTR("{\"coil_id\":%d,\"timestamp\":%lu,\"object_temp\":%.2f,\"ambient_temp\":%.2f,"
-             "\"magnetic_field\":%.3f,\"current\":%.2f,\"temp_sensor_ok\":%s,\"magnetic_sensor_ok\":%s,"
+        PSTR("{\"coil_id\":%d,\"timestamp\":%lu,\"object_temp\":%s,\"ambient_temp\":%s,"
+             "\"magnetic_field\":%s,\"current\":%s,\"temp_sensor_ok\":%s,\"magnetic_sensor_ok\":%s,"
              "\"current_sensor_ok\":%s,\"sensors_ok\":%s}"),
         _coilId, millis(),
-        data.tempObject, data.tempAmbient,
-        data.magneticField, data.current,
+        jsonSayi(sNesne, sizeof(sNesne), data.tempObject, 2), jsonSayi(sOrtam, sizeof(sOrtam), data.tempAmbient, 2),
+        jsonSayi(sAlan, sizeof(sAlan), data.magneticField, 3), jsonSayi(sAkim, sizeof(sAkim), data.current, 2),
         data.temp_sensor_ok ? "true" : "false",
         data.magnetic_sensor_ok ? "true" : "false",
         data.current_sensor_ok ? "true" : "false",

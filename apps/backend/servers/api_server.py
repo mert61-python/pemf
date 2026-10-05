@@ -1207,12 +1207,30 @@ def _on_mqtt_message_api(client, userdata, msg):
                 _sensor_kaydedici.kaydet(coil_id_str, msg_type, payload)
 
             if msg_type == "sensors" and not is_retained:
+                # ⚠️ D1.62 (B-8.12): 8266 ölçüm YOKKEN (sensör takılı değil / hiç sağlıklı okuma yok) alanı `null`
+                # yayınlar — eskiden yapıcı sabitini "ölçüldü" diye ya da GEÇERSİZ `nan` yazıyordu. `float(None)` burada
+                # iletinin geri kalanını düşürüyordu (bağlantı ve yayın atlanırdı). status dalıyla AYNI kural: okunamayan
+                # alan yalnız KENDİNİ düşürür; 0 nöbetçisi yazılmaz (0 "ölçüldü, serin" okunur).
+                def _olcum(anahtar):
+                    import math as _math
+
+                    try:
+                        deger = float(payload[anahtar])
+                    except (KeyError, TypeError, ValueError):
+                        return None
+                    return deger if _math.isfinite(deger) else None
+
                 with _live_state_lock:
                     coil = _live_state["coils"][coil_index]
-                    coil["objectTemp"] = round(float(payload.get("object_temp", 0.0)), 1)
-                    coil["ambientTemp"] = round(float(payload.get("ambient_temp", 0.0)), 1)
-                    coil["currentA"] = round(float(payload.get("current", 0.0)), 3)
-                    coil["magneticMt"] = round(float(payload.get("magnetic_field", 0.0)), 2)
+                    for _anahtar, _alan, _basamak in (
+                        ("object_temp", "objectTemp", 1),
+                        ("ambient_temp", "ambientTemp", 1),
+                        ("current", "currentA", 3),
+                        ("magnetic_field", "magneticMt", 2),
+                    ):
+                        _deger = _olcum(_anahtar)
+                        if _deger is not None:
+                            coil[_alan] = round(_deger, _basamak)
                     coil["connected"] = True
                     snapshot = dict(coil)
                 _ws_broadcast_sync(

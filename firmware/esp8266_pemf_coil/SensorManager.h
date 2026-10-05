@@ -45,14 +45,22 @@ private:
 
     // 2026-08-19: cpp bu diziyi kullanıyordu ama başlıkta TANIMLI DEĞİLDİ (h/cpp farklı
     // anlık görüntülerden — dosya bu hâliyle hiç derlenmemişti). Geçici okuma arızasında
-    // son sağlıklı değer döner: [0]=tempObj [1]=tempAmb [2..4]=magXYZ [5]=akım
+    // son sağlıklı değer döner: [0]=tempObj [1]=tempAmb [2..4]=magXYZ (µT) [5]=akım.
+    // D1.62 (B-8.12): bu iddia artık KODDA doğru — `getData()` geçici arızada bu diziyi döner (eskiden yapıcı
+    // sabitlerini: 30,0 °C); hiç sağlıklı okuma yoksa NaN (yapıcı NaN ile doldurur), sabit DEĞİL.
     float _lastGoodValues[6] = {0};
     bool _pwmActive = false;
 
     // ACS712 kalibrasyon
     float _acs712Offset;
-    float _acsSensitivity;   // [V/A] — runtime'da türetilir
+    float _acsSensitivity;   // [V/A] — runtime'da türetilir (D1.62: okumada KULLANILIR)
     bool _acs712Calibrated;
+    // D1.62 (B-8.12): ACS712 takılı mı — kalibrasyonun ortalama (bant) + standart sapma (kararlılık) ölçütü.
+    // Yoksa akım ölçülmez: `current_sensor_ok = false`, değer NaN. ⚠️ TEZGÂH: gerçek kablolama BİLİNMİYOR.
+    bool _acs712Present = false;
+    static constexpr float ACS712_OFSET_MIN_V = 0.5f;   // _initACS712Safely'nin bandıyla AYNI
+    static constexpr float ACS712_OFSET_MAX_V = 3.0f;
+    static constexpr float ACS712_SIGMA_MAX_V = 0.05f;  // akımsız ACS712 birkaç mV; yüzen pin ~0,16 V
 
     // Sensör başlatma durumu
     bool _mlx90614Initialized;
