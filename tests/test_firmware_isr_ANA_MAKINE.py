@@ -13,6 +13,8 @@ D1.28 · B-10.159 klemp üst sınırında A ve B darbeleri SİMETRİK ve tavana 
                 yükseliş ≥ GAP ve A+B asla birlikte HIGH değil (önce 2000 rastgele denemede 817 ihlal; eski strict-xfail
                 normal kapı oldu). İG-8.29 "önce karşı bacağı kapat" yazımları ve İG-8.9 klemp UYGULAMA satırları
                 D1.26 / D1.25 / D1.28 kollarıyla kapılı (mutantlar: DUZELTME-D1G).
+G-5.1 / G-5.2 (1-G inceleme) uç frekansta (tpp < 6) periyot ortası değişim ve ÇALIŞIRKEN KİP DEĞİŞİMİ (bipolar ↔
+                unipolar) de kılıftan geçer — iki kol da 2000 rastgele deneme (DUZELTME-D1G-INCELEME §7).
 
 Aparat: `tests/firmware_host_aparat.py` + `tests/firmware_host/` (BSRR yazım sırası ve NOP sayısı kaydedilir;
 pin haritası main.c'nin kendi `coil_gpio` tablosundan). ⚠️ Derleyici yoksa FAIL (SKIP değil).
@@ -417,6 +419,91 @@ def test_KRITIK_G51_UC_FREKANSTA_periyot_ORTASI_degisimde_tasarim_boslugu_RASTGE
         f"uç frekansta periyot ortası parametre değişiminde {len(kotu)}/{_IG828_N} denemede köprü boşluğu kararlı "
         f"dalganınkinin altına indi ya da A+B birlikte HIGH — örnek ((f1,d1,p1,f2,d2,p2),t2,ref_ms,gerekli,ihlal): {kotu[:3]}"
     )
+
+
+# ── 1-G inceleme G-5.2: ÇALIŞIRKEN KİP DEĞİŞİMİ (bipolar ↔ unipolar) ─────────────────────────────────────────────────
+#: Backend bobin çalışırken kipi HEMEN gönderir (`HardwareController.surus_kipi_ayarla`); firmware `Coil_KipUygula`
+#: `g_unipolar[i]`yi ana döngüden GÖLGESİZ yazar → ISR yeni kiple bir sonraki tick'te sürer. İG-8.28 kılıfının denetimi ve
+#: izlemesi İKİ kipte de ortak olmalı: kılıf denetimini ya da izlemesini yalnız bipolara kısıtlayan iki mutant mevcut 30
+#: ISR kapısında YEŞİL kaldı (1-G yorumu: "tek-bacak bobinde hep aynı bacak açılır → etkisiz" — kip DEĞİŞİMİNDE değil);
+#: ölçüldü: bipolar→unipolar'da B kapanır kapanmaz A (39/2000), unipolar→bipolar'da A kapanır kapanmaz B (85/2000) açıldı.
+#: Sözleşme: kip değişiminden itibaren karşı bacak düşüşü → yükseliş ≥ tasarım boşluğu, A+B birlikte HIGH yok; unipolara
+#: geçince B bir daha AÇILMAZ; bipolara geçince (hedef ≥ 1 tick) B darbesi başlar. Kip değişimi parametre setiyle aynı
+#: tick'te ya da 1-3 tick önce (paket işleme ISR'la kesilebilir); denemelerin yarısı yalnız kip (keep-alive), yarısı kip +
+#: yeni frekans/duty/faz. N = 2000; günlük G-5.1 gibi kısaltılır ve ilk denemelerde TAM günlükle karşılaştırılır.
+_G52_FREK = [50, 100, 200, 400, 1000, 2500, 5000, 8333, 12500, 25000]
+
+
+def _yukselisler(r: dict, bacak: str, bas: int) -> list:
+    return [k[0] for k in r["kenarlar"] if k[1] == bacak and k[2] == 1 and k[0] >= bas]
+
+
+def test_KRITIK_G52_CALISIRKEN_KIP_DEGISIMI_kopru_boslugu_ve_kip_RASTGELE_2000(exe, harita, sabitler):
+    import os
+    import random
+    from concurrent.futures import ThreadPoolExecutor
+
+    pinler, uni = harita
+    yetenekli = [i for i in sorted(pinler) if not uni[i]]  # açılışta bipolar (yetenekli) bobinler; 6-7 hep tek-bacak
+    assert yetenekli, "aparat: bipolar yetenekli bobin yok (kip haritası?)"
+    ymaske = sum(1 << i for i in yetenekli)
+    rnd = random.Random(5252)
+    denemeler = []
+    for k in range(_IG828_N):
+        ayni = k % 2 == 0
+        f1 = rnd.choice(_G52_FREK)
+        f2 = f1 if ayni else rnd.choice(_G52_FREK)
+        d1 = round(rnd.uniform(0.2, 0.95), 4)
+        d2 = d1 if ayni else round(rnd.uniform(0.2, 0.95), 4)
+        p1 = round(rnd.uniform(0.0, 359.9), 2)
+        p2 = p1 if ayni else round(rnd.uniform(0.0, 359.9), 2)
+        tpp1, tpp2 = int(50000 / f1), int(50000 / f2)
+        t2 = 15000 + rnd.randrange(2 * tpp1)
+        yon = rnd.choice(("bi2uni", "uni2bi"))
+        kip_bas, kip_son = (0, ymaske) if yon == "bi2uni" else (ymaske, 0)
+        denemeler.append((f1, d1, p1, f2, d2, p2, tpp1, tpp2, t2, yon, kip_bas, kip_son, t2 - rnd.randrange(0, 4)))
+
+    def _analiz(d, pencere):
+        f1, d1, p1, f2, d2, p2, tpp1, tpp2, t2, _yon, kip_bas, kip_son, kip_t = d
+        sat = fw.kos(
+            exe,
+            *("isr", t2 + max(3 * tpp2, 200) + 50, hex(_GENIS), f1, d1, p1, t2, f2, d2, p2),
+            gunluk_bas=(kip_t - 4 * tpp1) if pencere else None,
+            kip_bas=kip_bas,
+            kip=(kip_t, kip_son),
+        )
+        hedef = {i: h for (tk, i, _tpp, _dt, h) in fw.durumlar(sat) if tk == t2}  # t2'deki SON satır = uygulanmış set
+        return fw.bacak_analizi(fw.bsrr_olaylari(sat), pinler, yetenekli, baslangic_tick=kip_t - 2 * tpp1), hedef
+
+    def _bir(d):
+        tpp1, tpp2, t2, yon, kip_t = d[6], d[7], d[8], d[9], d[12]
+        sonuc, hedef = _analiz(d, True)
+        gerekli = min(_tasarim_boslugu(tpp1, sabitler["GAP"]), _tasarim_boslugu(tpp2, sabitler["GAP"]))
+        kip_hata = []
+        for i in yetenekli:
+            if yon == "bi2uni" and _yukselisler(sonuc[i], "B", kip_t):
+                kip_hata.append((i + 1, "unipolarda B açıldı"))
+            if yon == "uni2bi" and hedef.get(i, 0) >= 1 and not _yukselisler(sonuc[i], "B", t2 + tpp2):
+                kip_hata.append((i + 1, "bipolarda B HİÇ açılmadı"))
+        return d, gerekli, _kopru_ihlalleri(sonuc, kip_t, gerekli), kip_hata, sonuc
+
+    with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 4)) as ex:
+        sonuclar = list(ex.map(_bir, denemeler))
+        tam = list(ex.map(lambda d: _analiz(d, False)[0], denemeler[:_G51_TAM_KARSILASTIR]))
+    farkli = [sonuclar[j][0] for j in range(_G51_TAM_KARSILASTIR) if sonuclar[j][4] != tam[j]]
+    assert not farkli, (
+        f"aparat: kısaltılmış günlük TAM günlükle aynı kenarları vermedi (kapı KÖR olabilir): {farkli[:2]}"
+    )
+    gecis = sum(1 for d, *_r in sonuclar if d[9] == "uni2bi")
+    assert 0 < gecis < _IG828_N, f"aparat: iki yön de denenmeli (uni→bi {gecis}/{_IG828_N})"
+    kotu = [(d[:6], d[9], d[12] - d[8], g, ih[:2]) for d, g, ih, _kh, _s in sonuclar if ih]
+    kipk = [(d[:6], d[9], kh[:2]) for d, _g, _ih, kh, _s in sonuclar if kh]
+    print(f"G52_KIP_ORAN bosluk={len(kotu)}/{_IG828_N} kip={len(kipk)}/{_IG828_N} ornek={kotu[:2]} {kipk[:2]}")
+    assert not kotu, (
+        f"çalışırken kip değişiminde {len(kotu)}/{_IG828_N} denemede köprü boşluğu tasarım değerinin altına indi ya da "
+        f"A+B birlikte HIGH — örnek ((f1,d1,p1,f2,d2,p2),yön,kip−t2,gerekli,ihlal): {kotu[:3]}"
+    )
+    assert not kipk, f"kip değişimi uygulanmadı (unipolarda B açıldı / bipolarda B yok): {kipk[:3]}"
 
 
 # ── AÇIK işaretler (uydurma ölçüm yok) ───────────────────────────────────────

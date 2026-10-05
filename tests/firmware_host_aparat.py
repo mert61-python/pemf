@@ -139,9 +139,19 @@ def derle(kaynak: str, dizin: Path) -> Path:
     return exe
 
 
-def kos(exe: Path, *args, gunluk_bas: int | None = None) -> list[str]:
-    """`gunluk_bas`: "B" günlüğü bu tick'ten başlar (isr kipi; ISR yine baştan koşar — isr_kosum.c ISR_GUNLUK_BAS)."""
-    env = None if gunluk_bas is None else {**os.environ, "ISR_GUNLUK_BAS": str(int(gunluk_bas))}
+def kos(
+    exe: Path, *args, gunluk_bas: int | None = None, kip_bas: int | None = None, kip: tuple[int, int] | None = None
+) -> list[str]:
+    """`gunluk_bas`: "B" günlüğü bu tick'ten başlar (isr kipi; ISR yine baştan koşar — isr_kosum.c ISR_GUNLUK_BAS).
+    `kip_bas`: sürüş kipi isteği (unipolar maskesi) döngüden önce · `kip=(tick, maske)`: çalışırken kip değişimi."""
+    ek = {}
+    if gunluk_bas is not None:
+        ek["ISR_GUNLUK_BAS"] = str(int(gunluk_bas))
+    if kip_bas is not None:
+        ek["ISR_KIP_BAS"] = str(int(kip_bas))
+    if kip is not None:
+        ek["ISR_KIP_TICK"], ek["ISR_KIP_MASKE"] = str(int(kip[0])), str(int(kip[1]))
+    env = {**os.environ, **ek} if ek else None
     r = subprocess.run([str(exe), *map(str, args)], capture_output=True, text=True, timeout=300, env=env)
     assert r.returncode == 0, f"koşum takımı rc={r.returncode}: {r.stderr[-800:]}"
     return r.stdout.splitlines()

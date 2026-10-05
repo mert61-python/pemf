@@ -14,6 +14,8 @@
  *                           "B <tick> <port> <bsrr_hex> <onceki_nop>" her BSRR yazımı;
  *                           "S <tick> <i> <tpp> <duty_ticks> <hedef>" parametre uygulandıktan sonraki ilk tick'te
  *                           ve t2'den hemen önce. Bobin maskesindeki bobinler (f, d, p) ile sürülür, diğerleri duty 0.
+ *                           İsteğe bağlı ortam (1-G inceleme): ISR_GUNLUK_BAS (günlük başlangıcı), ISR_KIP_BAS ve
+ *                           ISR_KIP_TICK + ISR_KIP_MASKE (çalışırken kip değişimi) — bkz. isr dalı.
  *   zorla|hata N bobin_maske f d p
  *                         → N tick sürülür, "BASLA", sonra zorla: PEMF_ForceAllCoilOutputsLow() · hata: Error_Handler()
  *                           (BSRR günlüklü); "P <i> <g_prev_state>"; hata kipinde "IRQ" (kesmeler kapatılmaya varıldı).
@@ -152,8 +154,18 @@ int main(int argc, char **argv) {
     const char *gunluk_bas_s = getenv("ISR_GUNLUK_BAS");
     const unsigned long long gunluk_bas = gunluk_bas_s ? strtoull(gunluk_bas_s, NULL, 10) : 0ULL;
     g_gunluk = (gunluk_bas == 0ULL);
+    /* 1-G inceleme G-5.2: ÇALIŞIRKEN KİP DEĞİŞİMİ. Ürün `Coil_KipUygula(pkt.unipolar_maskesi)`'yı ANA DÖNGÜDEN, gölgesiz
+     * çağırır (backend bobin çalışırken kipi HEMEN gönderir — `surus_kipi_ayarla`) → ISR yeni `g_unipolar`'ı bir sonraki
+     * tick'te görür. ISR_KIP_BAS=<maske>: döngüden önce · ISR_KIP_TICK=<tick> + ISR_KIP_MASKE=<maske>: o tick'te ISR'dan
+     * ÖNCE (t2'yle aynı tick'se parametre setinden de önce — paket işleme sırası). Verilmezse davranış değişmez. */
+    const char *kip_bas_s = getenv("ISR_KIP_BAS");
+    const char *kip_tick_s = getenv("ISR_KIP_TICK");
+    const char *kip_maske_s = getenv("ISR_KIP_MASKE");
+    const unsigned long long kip_tick = (kip_tick_s && kip_maske_s) ? strtoull(kip_tick_s, NULL, 10) : 0ULL;
+    if (kip_bas_s) Coil_KipUygula((uint8_t)strtoul(kip_bas_s, NULL, 0));
     for (g_tick = 0ULL; g_tick < n; g_tick++) {
       if (!g_gunluk && g_tick >= gunluk_bas) g_gunluk = 1;
+      if (kip_tick && g_tick == kip_tick) Coil_KipUygula((uint8_t)strtoul(kip_maske_s, NULL, 0));
       if (t2 && g_tick == t2) {
         durum_bas();
         parametre(maske, (float)atof(argv[8]), (float)atof(argv[9]), (float)atof(argv[10]));
