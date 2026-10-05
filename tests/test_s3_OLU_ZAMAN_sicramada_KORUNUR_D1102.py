@@ -308,3 +308,29 @@ def test_KRITIK_D1102_tolerans_KILIDI_her_periyot_OLU_ZAMANSIZ_gecis_uretmez(s3)
         "tolerans kilidi (s_tick=0, periyot sonu) frekans hafif uyumsuzken her periyot karşı bacağı ölü-zamansız "
         f"açıyor (İG-8.7):\n{metin}"
     )
+
+
+# ── (5) 1-G inceleme G-4.1: STOP → START (kuyruktan art arda, aynı kontrol döngüsü turu) ───────────────────────────
+def test_KRITIK_G41_STOP_START_art_arda_karsi_bacak_OLU_ZAMANSIZ_acilmaz(s3):
+    """ControlTask kuyruktaki komutları aynı turda art arda işler (`while (xQueueReceive(...))`) → STOP ile START arasında
+    gerçek zaman ~0 olabilir. Çıkış katı durumu (`s_son_bacak`, `s_kapali_tick`) STOP'ta SIFIRLANMAZ — bu yüzden STOP
+    anında açık olan bacak düşünce karşı bacak yeniden başlatmada da ≥ 40 µs bekler. Durumu STOP'ta sıfırlayan mutant
+    yukarıdaki kollarda YEŞİL kaldı, burada 476/2000 denemede boşluk 1 µs'ye indi (ölçüldü). N=2000 rastgele
+    (frekans 10–1000 Hz, duty, iki faz, durma anı)."""
+
+    def uret(sen, rnd):
+        f = rnd.choice([10, 50, 100, 200, 500, 1000])
+        d = rnd.choice([10, 25, 40, 50])
+        t = _tpp(f) * TICK_US
+        sen(f"BASLA {f} {d} {rnd.randrange(0, 360)} 0")
+        sen.bekle(2 * t + rnd.randrange(0, 2 * t))
+        sen("DUR")
+        sen(f"BASLA {f} {d} {rnd.randrange(0, 360)} 0")
+        sen.bekle(3 * t)
+
+    _out, bilgi, acilis = _kos(s3, "stop_start_art_arda", uret)
+    metin, ihlalli = _ozet("STOP->START art arda", acilis, bilgi)
+    assert ihlalli == 0, (
+        "STOP'tan hemen sonra yeniden başlatmada karşı bacak ölü-zamansız açıldı — çıkış katı durumu STOP'ta "
+        f"sıfırlanıyor (B-8.17 / D1.102):\n{metin}"
+    )
