@@ -77,6 +77,23 @@ def test_KRITIK_okunamayan_depo_EZILMEZ(mk, tmp_path):
     assert depo.read_bytes() == eski, "okunamayan kimlik deposu EZİLDİ (yakılmış ESP'ler kopardı)"
 
 
+def test_KRITIK_yenile_STOP_yolu_UYARISI_ve_izin_hatasi_DOSTCA(mk, tmp_path, capsys, monkeypatch):
+    """`--yenile`: kimlikli broker eski parolaları bellekte tutar → backend yeni parolaya geçince broker yeniden başlayana
+    dek STOP yayınları reddedilir. CLI bunu AÇIKÇA söylemeli (sır basmadan); yazma izni yoksa iz yığını değil eylem."""
+    assert mk.main(["hazirla", "--broker-dizini", str(tmp_path / "broker")]) == 0
+    assert mk.main(["hazirla", "--broker-dizini", str(tmp_path / "broker"), "--yenile"]) == 0
+    cikti = capsys.readouterr().out
+    assert "UYARI (--yenile)" in cikti and "BAGLANAMAZ" in cikti, f"--yenile STOP yolu uyarısı yok:\n{cikti}"
+    assert all(p not in cikti for p in mk.kimlikleri_oku().values()), "--yenile çıktısında parola"
+
+    def _izinsiz(*a, **k):
+        raise PermissionError(13, "Erişim engellendi", str(tmp_path / "broker" / mk.PASSWD_ADI))
+
+    monkeypatch.setattr(mk, "hazirla", _izinsiz)
+    assert mk.main(["hazirla", "--broker-dizini", str(tmp_path / "broker")]) == 3
+    assert "YONETICI" in capsys.readouterr().out
+
+
 def test_KRITIK_depoda_ve_CLI_ciktisinda_parola_DEGERI_YOK(mk, tmp_path, capsys):
     fw = tmp_path / "fw"
     fw.mkdir()

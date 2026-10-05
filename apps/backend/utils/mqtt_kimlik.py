@@ -233,7 +233,12 @@ def main(argv: list[str] | None = None) -> int:
     h.add_argument(
         "--firmware", action="append", default=[], help="MqttKimlikYerel.h yazilacak dizin (tekrarlanabilir)"
     )
-    h.add_argument("--yenile", action="store_true", help="parolalari YENIDEN uret (ESP'ler yeniden yakilmali)")
+    h.add_argument(
+        "--yenile",
+        action="store_true",
+        help="YALNIZ bozuk depo kurtarmasi: parolalari YENIDEN uret (ESP'ler yeniden yakilmali; broker yeniden "
+        "baslayana dek backend baglanamaz)",
+    )
     d = alt.add_parser("durum", help="hazirlik durumu (sir basmaz)")
     d.add_argument("--broker-dizini", default=None)
     a = ap.parse_args(argv)
@@ -246,6 +251,14 @@ def main(argv: list[str] | None = None) -> int:
     except RuntimeError as e:
         print(f"HATA: {e}")
         return 2
+    except PermissionError as e:
+        print(f"HATA: yazma izni yok ({e.filename}) - komutu YONETICI olarak calistirin.")
+        return 3
+    if a.yenile:
+        # ⚠️ Kimlikli broker ESKİ parolaları bellekte tutar: backend yeni parolaya hemen geçer → broker yeniden başlayana dek
+        # backend'in STOP yayınları REDDEDİLİR. Yenileme yalnız bozuk depo kurtarmasıdır (A-18: rotasyon YOK).
+        print("UYARI (--yenile): broker yeniden baslatilana kadar backend BAGLANAMAZ (ESP STOP yolu kapali) -")
+        print("  bobinler DURMUSKEN uygulayin, HEMEN ardindan ESP'leri yeni baslikla yakip broker'i yeniden baslatin.")
     print(f"kimlik deposu: {r['depo']} ({'OLUSTURULDU' if r['depo_olustu'] else 'korundu - parolalar AYNI'})")
     print(f"broker dosyalari: {r['broker_dizini']} ({PASSWD_ADI}, {ACL_ADI}, {CONF_DIZINI}/{CONF_ADI})")
     for b in r["basliklar"]:
