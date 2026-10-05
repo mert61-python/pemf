@@ -144,6 +144,18 @@ def consume(pid: str) -> dict:
         return dict(r)
 
 
+def geri_ver(pid: str) -> bool:
+    """Y65 · D1.E06: tüketilmiş onayı, tedavi BAŞLAMADIYSA (tedavi kaydının DB satırı açılamadı — bobin sürülmedi) geri
+    ver: hekimin tek kullanımlık onayı başlamayan tedavide YANMAZ, DB düzelince aynı onayla başlanır. Yalnız CONSUMED →
+    APPROVED; süre (TTL) `consume` sırasında yine denetlenir. @return geri verildi mi."""
+    with _lock:
+        r = _store.get(str(pid or ""))
+        if not r or r["status"] != CONSUMED:
+            return False
+        r["status"] = APPROVED
+        return True
+
+
 def clear() -> None:
     """Yalnız test/temizlik için."""
     with _lock:

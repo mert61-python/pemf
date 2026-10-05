@@ -2424,6 +2424,8 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
 
     # Seansı baştan _active_session'a yaz → süre-watchdog + emergency-stop AI Pro'yu da kapsar.
     # 1-7: STM (D1.83: `STM_COIL_IDS` tek kaynak; bobin 8 KAPALI; em_kedi 7 bobinlik per-coil duty/phase üretir).
+    from servers.api_server import KayitAcilamadi
+
     try:
         from servers.api_server import start_ai_session
 
@@ -2446,6 +2448,12 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
             model=_saglayici.ad,
             onay_hedefi=_organ_req,
         )
+    except KayitAcilamadi as _kayitsiz:
+        # ⚠️ Y65 (sahip, 1-F inceleme S-İF1): tedavi kaydının DB satırı açılamadı → otonom sürüş BAŞLAMAZ (döngü açılmaz,
+        # bobin sürülmedi). Başlamayan tedavi hekimin onayını YAKMAZ (D1.E06): DB düzelince aynı onayla başlanır.
+        _dongu_bayragini_indir(_dongu_muhru)
+        ai_approval.geri_ver(payload.proposal_id)
+        raise HTTPException(status_code=503, detail=str(_kayitsiz)) from None
     except Exception:
         logger.exception("start_ai_session failed")
     # D1.81: başlatma sürerken durdurma / acil durdurma geldiyse döngü BAŞLATILMAZ (seans doğmadan bayat). Onay

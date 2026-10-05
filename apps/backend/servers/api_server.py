@@ -840,6 +840,13 @@ STM_RED_MESAJI = (
 #: D1.53 (A-05): 0 Hz seans isteğinin nedeni — tek kaynak (mandallı ve mandalsız yol AYNI metni verir; 1-C i3-F-4).
 SIFIR_HZ_SEANS_MESAJI = "Frekans 0 Hz = DURDURMA (A-05): bobinler durduruldu, seans BAŞLATILMADI. Frekans girin."
 
+#: Y65 (sahip, 1-F inceleme S-İF1): tedavi kaydının DB satırı açılamazsa seans BAŞLAMAZ — elle seans ve AI Pro AYNI metin.
+KAYIT_ACILAMADI_MESAJI = "Tedavi kaydı açılamadı — seans BAŞLATILMADI; birkaç saniye sonra yeniden deneyin"
+
+
+class KayitAcilamadi(RuntimeError):
+    """Y65: yeni seansın tedavi kaydı (DB satırı) açılamadı — seans aktif BIRAKILMADI, bobin sürülmedi."""
+
 
 def _seansi_geri_al(sebep: str, seans_kimligi=None) -> None:
     """Başlatılmış ama HİÇ SÜRÜLEMEMİŞ seansı geri al (kayıt YALAN olmasın).
@@ -3848,6 +3855,18 @@ async def start_session(payload: SessionStartPayload, request: Request):
                         _active_session["db_patient_id"] = patient_id
         except Exception:
             logging.getLogger(__name__).warning("Seans DB satiri olusturulamadi (db_session_id=None).", exc_info=True)
+        # ⚠️ Y65 (sahip, 1-F inceleme S-İF1): tedavi kaydının DB satırı AÇILAMADIYSA seans BAŞLAMAZ — bobin sürülmeden 503.
+        # Eskiden (önceden var) yalnız günlüğe yazılıp seans `db_session_id=None` ile SÜRÜLÜYORDU: seans/koşu/sensör kaydı
+        # hiç oluşmuyordu (kaydedilen ≠ uygulanan; D1.77 "kayıtsız tedavi başlamaz"). Neden: DB > 5 sn meşgul (seans
+        # bitiminde koşan ertelenmiş KVKK VACUUM'u, Y62) ya da başka bir DB hatası. Seans aktif BIRAKILMAZ (yeniden deneme
+        # 409 almaz). STOP ve ACİL DURDUR bu kapıdan GEÇMEZ (Ö.4-Y8).
+        if sid is None:
+            with _session_lock:
+                if _active_session.get("session_id") == _benim_seans:
+                    _active_session["is_active"] = False
+                    _active_session["baslatma_ucusta"] = False
+            logging.getLogger(__name__).error("Seans REDDEDILDI — tedavi kaydi (DB satiri) acilamadi (Y65).")
+            raise HTTPException(status_code=503, detail=KAYIT_ACILAMADI_MESAJI)
 
         # Audit P1 (TOCTOU): DB-persist await'i sırasında eşzamanlı /stop is_active=False yapmış olabilir.
         # Bobinleri ENERJİLEMEDEN ÖNCE yeniden doğrula — aksi halde bobinler fiziksel açılır ama
@@ -4341,18 +4360,54 @@ def start_ai_session(
     yeni onay ister (`/ai/pro/organ` 409) ve sürüş yalnız bu hedefi sürer."""
     import time as _t
 
-    with _session_lock:
-        prev = dict(_active_session)  # devralma kararı için ESKİ seansın snapshot'ı (clear'dan ÖNCE)
+    def _devam_mi(onceki: dict) -> bool:
         # Devam (aynı seans satırı/başlangıcı) YALNIZ AI (Auto)'nun KENDİ tekrarlı çağrısında (landmark her istekte
         # çağırır). AI Pro her başlatmada YENİ mühürlü seanstır: önceki AI (Auto) seansının başlangıcını/satırını
         # devralsaydı mühürdeki süre (başlangıç + onaylanan dk) yanlış hesaplanırdı. Türü olmayan eski kayıt AI
         # (Auto) sayılır (yalnız kayıt sürekliliği — yetki değil).
-        cont = (
-            bool(prev.get("is_active"))
-            and str(prev.get("mode", "")).startswith("AI")
+        return (
+            bool(onceki.get("is_active"))
+            and str(onceki.get("mode", "")).startswith("AI")
             and tur == "ai_auto"
-            and prev.get("tur", "ai_auto") == "ai_auto"
+            and onceki.get("tur", "ai_auto") == "ai_auto"
         )
+
+    # ⚠️ Y65 (sahip, 1-F inceleme S-İF1): YENİ seansın tedavi satırı devralmanın HİÇBİR yan etkisinden (oturumun
+    # değişmesi, sahipsiz bobin STOP'u, önceki seansın kapatılması) ÖNCE açılır. Açılamazsa hiçbir şeye dokunulmadan
+    # `KayitAcilamadi` → önceki seans (ör. manuel) AYNEN sürer; çağıran (`/ai/pro/start`) döngüyü başlatmaz, onayı GERİ
+    # VERİR (D1.E06) ve 503 döner. 1-G ilk taslağı satırı devralmadan SONRA açıyordu: manuel seans sürerken AI Pro'nun
+    # satırı açılamayınca manuel seans kapatılmış, oturum silinmiş, bobinleri ise keep-alive ile SÜRMEYE devam ediyordu
+    # (sahipsiz, kayıtsız sürüş). Eskiden (önceden var) satır "best-effort" idi ("tedavi surer").
+    with _session_lock:
+        _on_cont = _devam_mi(dict(_active_session))
+    _ai_sid = None
+    if not _on_cont:
+        try:
+            _db = _get_treatment_db()
+            if _db is not None:
+                # ⚠️ SAHİPLİK (sahip bildirimi 2026-09-12: "klinik ve benim ayrımı düzgün
+                # çalışıyor mu incele... herkes kendi maili ile kayıt oluyor ya").
+                # ÖLÇÜLDÜ: bu satır `operator_email` YAZMIYORDU → her AI seansı SAHİPSİZ
+                # kaydediliyordu. Arayüzün kuralı "sahipsiz = benim" olduğu için otonom
+                # seanslar kliniğin HER hekimine "Benim Seanslarım"da görünüyordu; yani
+                # "Benim / Tüm Klinik" ayrımı AI tarafında fiilen YOKTU.
+                _ai_sid = _db.start_session(
+                    treatment_mode=mode,
+                    target_condition=None,
+                    operator_email=(str(operator_email or "").strip().lower() or None),
+                )
+        except Exception:
+            logging.getLogger(__name__).exception("AI seansi DB satiri acilamadi (Y65: seans BASLATILMAYACAK).")
+            _ai_sid = None
+        if _ai_sid is None:
+            raise KayitAcilamadi(KAYIT_ACILAMADI_MESAJI)
+
+    with _session_lock:
+        prev = dict(_active_session)  # devralma kararı için ESKİ seansın snapshot'ı (clear'dan ÖNCE)
+        cont = _devam_mi(prev)
+        if not cont and _ai_sid is None:
+            # Yarış: anlık görüntüde AI (Auto) devamıydı, kilitte YENİ seans — satır yok → oturuma DOKUNMADAN reddet.
+            raise KayitAcilamadi(KAYIT_ACILAMADI_MESAJI)
         # B-2.2: REBIND yerine IN-PLACE (clear+update) → dict kimliği sabit; davranış aynı.
         _active_session.clear()
         # 1-C inceleme i1-F3: kimlik BENZERSİZ olmalı (eskiden `ai_<epoch SANİYE>`: aynı saniyedeki iki AI seansı aynı
@@ -4375,8 +4430,8 @@ def start_ai_session(
                 # `if not _db_sid: return` ile TUM dakika-ortalamalarini atiyordu ve otonom
                 # tedavinin DB'de seans satiri OLUSMUYORDU (doz/sicaklik kaydi kalici kayip).
                 # cont=True (ayni AI seansinin tekrarli cagrisi, or. landmark auto_adjust her
-                # istekte cagirir) → MEVCUT satiri koru, YENI satir acma.
-                "db_session_id": prev.get("db_session_id") if cont else None,
+                # istekte cagirir) → MEVCUT satiri koru, YENI satir acma. Y65: yeni satır YUKARIDA açıldı.
+                "db_session_id": prev.get("db_session_id") if cont else _ai_sid,
                 "db_patient_id": prev.get("db_patient_id") if cont else None,
                 "started_epoch": prev.get("started_epoch") if cont else _t.time(),
                 "tur": tur,
@@ -4481,34 +4536,18 @@ def start_ai_session(
     # acilmadigi icin canli hayvana uygulanan dozun, dakika-ortalamali sensor/sicaklik
     # telemetrisinin ve seansin kendisinin KALICI KAYDI YOKTU (buffer 20k tavaninda kirpilip
     # atiliyordu). Yalniz YENI seansta (cont=False) acilir; tekrarli AI cagrilari mevcut
-    # satiri kullanir. Best-effort: DB hatasi otonom tedaviyi DURDURMAZ (eski davranis).
-    if not cont:
+    # satiri kullanir. Y65: satır fonksiyonun BAŞINDA (devralmadan önce) açıldı; burada yalnız başlangıç damgası yazılır.
+    if _ai_sid is not None:
         try:
             _db = _get_treatment_db()
-            if _db is not None:
-                # ⚠️ SAHİPLİK (sahip bildirimi 2026-09-12: "klinik ve benim ayrımı düzgün
-                # çalışıyor mu incele... herkes kendi maili ile kayıt oluyor ya").
-                # ÖLÇÜLDÜ: bu satır `operator_email` YAZMIYORDU → her AI seansı SAHİPSİZ
-                # kaydediliyordu. Arayüzün kuralı "sahipsiz = benim" olduğu için otonom
-                # seanslar kliniğin HER hekimine "Benim Seanslarım"da görünüyordu; yani
-                # "Benim / Tüm Klinik" ayrımı AI tarafında fiilen YOKTU.
-                _ai_sid = _db.start_session(
-                    treatment_mode=mode,
-                    target_condition=None,
-                    operator_email=(str(operator_email or "").strip().lower() or None),
-                )
-                try:
-                    _db.set_session_meta(_ai_sid, started_epoch=_started_epoch_ai)
-                except Exception:
-                    logging.getLogger(__name__).debug("AI set_session_meta hatasi", exc_info=True)
-                # YARIS MUHRU: DB yazimi sirasinda seans durdurulmus/devralinmis olabilir →
-                # db_session_id'yi YALNIZ hala AYNI seans aktifse damgala (yanlis seansa
-                # sensor satiri baglama).
-                with _session_lock:
-                    if _active_session.get("is_active") and _active_session.get("session_id") == _new_session_id:
-                        _active_session["db_session_id"] = _ai_sid
+            if cont and _db is not None:
+                # Yarış (anlık görüntüde yeni seans, kilitte AI (Auto) devamı): açılan satır KULLANILMADI → "İptal Edildi"
+                # (`_finalize_session_db` DEĞİL: o, süren seansın kısmi dakikasını bu satıra dökerdi).
+                _db.end_session(_ai_sid, duration_minutes=0, session_status="cancelled")
+            elif _db is not None:
+                _db.set_session_meta(_ai_sid, started_epoch=_started_epoch_ai)
         except Exception:
-            logging.getLogger(__name__).exception("AI seansi DB satiri acilamadi (tedavi surer).")
+            logging.getLogger(__name__).debug("AI set_session_meta hatasi", exc_info=True)
     # 1-C inceleme i1-F3: çağıran (AI (Auto) landmark) geri almayı bu kimliğe bağlar (`_seansi_geri_al(..., kimlik)`).
     return _new_session_id
 

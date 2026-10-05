@@ -40,10 +40,25 @@ def api(monkeypatch):
     # Deponun kuralı: kod SİLİNMEZ, testler `PEMF_ESP_ENABLED=1` ile KOŞMAYA DEVAM EDER.
     monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
     monkeypatch.setattr(api_server, "_mqtt_publish", lambda *a, **k: True)
-    monkeypatch.setattr(api_server, "_get_treatment_db", lambda: None)  # DB best-effort → atla
-    # ⚠️ 2026-08-09: `_get_treatment_db → None` artık "DB hazır değil" demek ve seans 503 ile
-    # reddediliyor (kayıtsız tedavi kapısı). Bu dosyanın konusu BELLEK-İÇİ yaşam döngüsü, DB
-    # değil → kapıyı da devre dışı bırak. Kapının KENDİSİ `test_db_ready_gate.py`'de test edilir.
+    # ⚠️ Y65 (sahip, 1-G): tedavi kaydının DB satırı AÇILAMAYAN seans BAŞLAMAZ (503) — eskiden burada DB `None` verilip
+    # seans "best-effort" satırsız başlatılıyordu. Bu dosyanın konusu BELLEK-İÇİ yaşam döngüsü, DB değil → satırı açan
+    # asgari sahte DB (yerleşik desen: `test_operator_identity_server_side.py` `_SahteDB`). Y65'in kendisi:
+    # `test_Y65_tedavi_kaydi_ACILAMAZSA_seans_BASLAMAZ.py`.
+    import itertools
+
+    sayac = itertools.count(1)
+
+    class _SahteDB:
+        def start_session(self, **_kw):
+            return next(sayac)
+
+        def __getattr__(self, _ad):
+            return lambda *a, **k: None
+
+    _db = _SahteDB()
+    monkeypatch.setattr(api_server, "_get_treatment_db", lambda: _db)
+    # ⚠️ 2026-08-09: DB hazır değilse seans 503 ile reddediliyor (kayıtsız tedavi kapısı). Bu dosyanın konusu
+    # BELLEK-İÇİ yaşam döngüsü, DB değil → kapıyı da devre dışı bırak. Kapının KENDİSİ `test_db_ready_gate.py`'de.
     monkeypatch.setattr(api_server, "_kayit_db_hazir", lambda: (True, ""))
     monkeypatch.setattr(api_server, "_broker_reachable", lambda: True)
     with api_server._session_lock:
@@ -83,7 +98,7 @@ def test_start_session_populates_active_session(api):
     assert s["mode"] == "Manuel"
     assert s["operator_name"] == "op"
     assert s["session_id"].startswith("react_")
-    assert s["db_session_id"] is None  # DB mock None → best-effort atlandı, seans yine de aktif
+    assert s["db_session_id"] == 1  # Y65: sahte DB'nin açtığı satır (satırsız seans artık BAŞLAMAZ)
 
 
 def test_start_session_rejects_double_start(api):

@@ -22,7 +22,17 @@ def api(monkeypatch):
     from servers import api_server
 
     monkeypatch.setattr(api_server, "_mqtt_publish", lambda *a, **k: True)
-    monkeypatch.setattr(api_server, "_get_treatment_db", lambda *a, **k: None)
+
+    # ⚠️ Y65 (sahip, 1-G): tedavi kaydının DB satırı AÇILAMAYAN seans BAŞLAMAZ — eskiden DB `None` verilip AI seansı satırsız
+    # başlatılıyordu. Bu dosyanın konusu DB değil → satırı açan asgari sahte DB (yerleşik `_SahteDB` deseni).
+    class _SahteDB:
+        def start_session(self, **_kw):
+            return 1
+
+        def __getattr__(self, _ad):
+            return lambda *a, **k: None
+
+    monkeypatch.setattr(api_server, "_get_treatment_db", lambda *a, **k: _SahteDB())
     monkeypatch.setattr(api_server, "_broker_reachable", lambda: True)
     with api_server._session_lock:
         api_server._active_session.clear()
