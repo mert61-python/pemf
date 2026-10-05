@@ -84,3 +84,31 @@ def paket_coz(paket: bytes):
     sonuc, sebep = sim.decode_packet(paket)
     assert sonuc is not None, f"paket firmware'ce NACK'lenir: {sebep!r}"
     return sonuc
+
+
+def paket_alanlari(paket: bytes):
+    """Paketin alanları DOĞRULAMASIZ → (duty, faz, freq, süre, ref_ms, kip). Firmware'in REDDEDECEĞİ paket de okunur
+    (D1.101 · Y20: tavan üstü duty backend'den AYNEN geçer, kart reddeder) — ret/kabul kararı `paket_coz`/`paket_reddi`."""
+    import struct
+
+    import tools.stm32_simulator as sim
+
+    a = struct.unpack(sim.PKT_FMT, paket)
+    n = sim.NUM_COILS
+    return (
+        list(a[2 : 2 + n]),
+        list(a[2 + n : 2 + 2 * n]),
+        list(a[2 + 2 * n : 2 + 3 * n]),
+        list(a[2 + 3 * n : 2 + 4 * n]),
+        a[2 + 4 * n],
+        a[3 + 4 * n],
+    )
+
+
+def paket_reddi(paket: bytes) -> str:
+    """Firmware aynası paketi REDDEDERSE NACK sebebi (firmware metniyle aynı); KABUL ederse AssertionError."""
+    import tools.stm32_simulator as sim
+
+    sonuc, sebep = sim.decode_packet(paket)
+    assert sonuc is None, "paket firmware'ce KABUL edilir (ret bekleniyordu)"
+    return sebep

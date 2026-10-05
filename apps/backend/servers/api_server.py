@@ -959,8 +959,8 @@ def _ucustaki_baslatmayi_gecersiz_kil(bobinler) -> bool:
         return False
 
 
-def _stm_red_aktif_seansi_durdur(ham: str) -> None:
-    """Kart komutları sistematik reddetmeye başladı → AKTİF SEANSI durdur.
+def _stm_red_aktif_seansi_durdur(ham: str) -> bool:
+    """Kart komutları sistematik reddetmeye başladı → AKTİF SEANSI durdur. @return seans durduruldu (bildirim basıldı) mı.
 
     ═══════════════════════════════════════════════════════════════════════════
     ⚠️ SAHİP BİLDİRİMİ (2026-09-12) — SAHTE "BAŞARILI" SEANS
@@ -982,24 +982,66 @@ def _stm_red_aktif_seansi_durdur(ham: str) -> None:
     olarak mühürler (`EMERGENCY_STOPPED` → geçmişte "Acil Durduruldu"). Operatör geçmişe
     baktığında bu seansın gerçekleşmediğini GÖREBİLİR. Sessizce "completed" yazmak, arızayı
     veritabanına kalıcılaştırmak olurdu.
+
+    ⚠️ D1.101 · Y20: duty TAVANI reddi (`kip=`) firmware uyuşmazlığı DEĞİLDİR — bildirim nedeni ve eylemi söyler
+    ("kartı yeniden programlayın" DEĞİL); kayıt aynı yoldan mühürlenir.
     """
     try:
         with _session_lock:
             _aktif = bool(_active_session.get("is_active"))
             _bobinler = _active_session.get("coil_ids") or list(range(1, 9))
         if not _aktif or not any(c in STM_COIL_IDS for c in _bobinler):
-            return
+            return False
         logging.getLogger(__name__).error(
             "STM komut REDDI sistematik (%s) → aktif seans durduruluyor (sahte 'tamamlandi' yazilmasin).",
             str(ham)[:120],
         )
+        _duty_metni = live_state.stm_duty_reddi_metni(ham, "seans DURDURULDU")
         _push_notification(
-            "⛔ Seans DURDURULDU: " + STM_RED_MESAJI,
+            "⛔ " + _duty_metni if _duty_metni else "⛔ Seans DURDURULDU: " + STM_RED_MESAJI,
             "error",
         )
-        _emergency_stop_async(reason="stm_komut_reddi", mode="Firmware Uyuşmazlığı")
+        _emergency_stop_async(
+            reason="stm_komut_reddi", mode="Duty Reddedildi" if _duty_metni else "Firmware Uyuşmazlığı"
+        )
+        return True
     except Exception:
         logging.getLogger(__name__).exception("STM red sonrasi seans durdurma basarisiz")
+        return False
+
+
+def _stm_duty_reddini_isle(ham: str, ilk_kez: bool) -> None:
+    """D1.101 · Y20 (sahip) — kart bir bobinin duty'sini TAVAN üstü diye reddetti (`STM_NACK: RANGE … kip=`).
+
+    Kenarda (`stm_komut_reddi_bildir` duty reddini TEK NACK'te sistematik sayar — içerik reddi gürültü değildir):
+      * STM bobinli aktif seans → seans DURDURULUR (Y20: "sistematik NACK seansı durdurur"; acil durdurma yolu,
+        kayıt "Acil Durduruldu") — `_stm_red_aktif_seansi_durdur`, bildirim nedeni ve eylemi söyler.
+      * seans yoksa → STM sürüş durumu sıfırlanır (`stop_all_coils`). ⚠️ NEDEN: firmware paketi BÜTÜN olarak reddeder;
+        reddedilen istek `HardwareController` durumunda kaldıkça keep-alive onu her turda yeniden gönderir → aynı
+        paketlerdeki BAŞKA bobinlerin komutları — STOP dahil — kartta UYGULANMAZ, çalışan bobin ancak firmware
+        ölü-adamıyla (1,5 sn) durur (Ö.4-Y8: STOP geciktirilmez). Ölü-adamın ZATEN yapacağı şey ilk NACK'te yapılır.
+        ⚠️ Kıskaç DEĞİL (Ö.4-Y9): duty düzeltilmez, istek düşürülür — operatör geçerli değerle yeniden başlatır.
+    Kenarda bildirim HER ZAMAN basılır (sistem bir şey durdurduysa operatör nedenini görmeli); NACK seli bastırması
+    (`_stm_nack_bastir`) yalnız kenar DIŞI tekrarlara (yeniden deneme, keep-alive) uygulanır."""
+    try:
+        if not ilk_kez:
+            if not _stm_nack_bastir(ham):
+                _push_notification("⛔ " + live_state.stm_duty_reddi_metni(ham), "error")
+            return
+        if not _stm_red_aktif_seansi_durdur(ham):
+            _durdu = False
+            if state.hardware:
+                try:
+                    _durdu = bool(state.hardware.stop_all_coils())
+                except Exception:
+                    logging.getLogger(__name__).exception("D1.101: duty reddi sonrasi STM surus durumu sifirlanamadi")
+            _push_notification(
+                "⛔ " + live_state.stm_duty_reddi_metni(ham, "STM bobin çıkışları durduruldu" if _durdu else ""),
+                "error",
+            )
+        _stm_nack_bastir(ham)  # kenarın ardından gelen aynı sebepli NACK'ler bildirimi yinelemesin
+    except Exception:
+        logging.getLogger(__name__).exception("D1.101: duty reddi islenemedi")
 
 
 #: bobin indeksi → son bilinen MANYETIK doygunluk durumu (ayni "yalniz gecis" kurali).
@@ -1807,6 +1849,9 @@ def _handle_backend_event(event) -> None:
         # kararı da bastırsaydı 30 sn'de bir tek olay sayılır ve "sistematik red" hiç
         # oluşmazdı — susturma, körlüğe dönüşürdü.
         _ilk_kez_sistematik = live_state.stm_komut_reddi_bildir(_ham)
+        if live_state.stm_duty_reddi_coz(_ham) is not None:  # D1.101 · Y20: duty tavanı reddi (firmware tek sınır)
+            _stm_duty_reddini_isle(_ham, _ilk_kez_sistematik)
+            return
         if _ilk_kez_sistematik:
             _stm_red_aktif_seansi_durdur(_ham)
         if _stm_nack_bastir(_ham):

@@ -17,6 +17,9 @@ kapı "kaydedilen ≠ uygulanan" hâlini kilitlerdi. Bipolar tavan ÜSTÜ istek 
 D1.101; backend'e ve arayüze duty sınırı EKLENMEZ) ayrı kollarda ölçülür: yalnız PAKETTEKİ duty'nin
 aynen geçtiği iddia edilir, koşu kaydı İDDİA EDİLMEZ (NACK anlamı D1.101'in konusu). Unipolar/bipolar
 ayrımı literalle değil firmware başlığındaki yetenek maskesinden (`tools/stm32_simulator.UNIPOLAR_YETENEK_MASKESI`) türer.
+D1.101'den beri o kollar paketi DOĞRULAMASIZ okur (`paket_alanlari`) ve kartın onu `kip=bipolar` ile REDDETTİĞİNİ de
+iddia eder (firmware aynası); NACK sonrası seans durdurma ve operatör metni:
+`test_D1101_duty_reddi_OPERATORE_neden_ve_STOP_bekletilmez.py`.
 """
 
 from __future__ import annotations
@@ -30,7 +33,7 @@ KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
 
-from kayitci_donanim import gercek_hc, paket_coz  # noqa: E402
+from kayitci_donanim import gercek_hc, paket_alanlari, paket_coz, paket_reddi  # noqa: E402
 from topoloji import TUM_STM  # noqa: E402
 
 import tools.stm32_simulator as sim  # noqa: E402
@@ -63,10 +66,14 @@ def test_KRITIK_Y20_bipolar_tavan_USTU_duty_update_coil_backendden_AYNEN_gecer(b
     son bipolar bobin."""
     with gercek_hc() as hc:
         assert hc.update_coil(bobin, 100.0, 90.0, 0.0, duration=1) is True
-        paket_duty = paket_coz(hc.core._hw_send_queue.paketler[-1])[0][bobin - 1]
+        paket = hc.core._hw_send_queue.paketler[-1]
+    paket_duty = paket_alanlari(paket)[0][bobin - 1]
     assert paket_duty == pytest.approx(0.90), (
         f"bipolar bobin {bobin}: duty 90 → pakette {paket_duty * 100:.1f} — backend'e bipolar duty tavanı "
         "EKLENMİŞ (Y20: tek sınır firmware NACK)"
+    )
+    assert f"coil={bobin} field=duty" in paket_reddi(paket) and "kip=bipolar" in paket_reddi(paket), (
+        "kart bipolar tavan üstü duty'yi reddetmiyor (D1.101)"
     )
 
 
@@ -142,10 +149,12 @@ def test_KRITIK_Y20_bipolar_tavan_USTU_duty_seans_yolunda_backendden_AYNEN_gecer
         },
     )
     assert r.status_code == 200, r.text[:300]
-    paket_duty = paket_coz(hc.core._hw_send_queue.paketler[-1])[0][bobin - 1]
+    paket = hc.core._hw_send_queue.paketler[-1]
+    paket_duty = paket_alanlari(paket)[0][bobin - 1]
     assert paket_duty == pytest.approx(0.90), (
         f"seans yolu bipolar bobin {bobin}: duty 90 → pakette {paket_duty * 100:.1f} (backend tavanı — Y20)"
     )
+    assert "kip=bipolar" in paket_reddi(paket), "kart bipolar tavan üstü duty'yi reddetmiyor (D1.101)"
 
 
 # ── D1.10 · B-10.199 (D1.06 ile BİRLEŞİK kapı — orkestratör notu) — ESP yayın yolu ────────────
@@ -281,10 +290,15 @@ def test_KRITIK_STM_API_duty_PAKETE_AYNEN_gider(seans_ortami, uc, kip):
     bobin = (_UNIPOLAR if kip == "unipolar_Y9" else _BIPOLAR)[0]
     r = _stm_api_istegi(istemci, uc, bobin, 90.0)
     assert r.status_code == 200, r.text[:300]
-    paket_duty = paket_coz(hc.core._hw_send_queue.paketler[-1])[0][bobin - 1]
+    paket = hc.core._hw_send_queue.paketler[-1]
+    paket_duty = paket_alanlari(paket)[0][bobin - 1]
     assert paket_duty == pytest.approx(0.90), (
         f"{uc} STM ucu ({kip}) bobin {bobin}: duty 90 → pakette {paket_duty * 100:.1f} — API katmanına duty "
         "tavanı EKLENMİŞ (Ö.4-Y9/Y20: tek sınır firmware)"
     )
+    if kip == "unipolar_Y9":  # tek-bacak tavanı tam periyot → kart KABUL eder
+        assert paket_coz(paket)[0][bobin - 1] == pytest.approx(0.90)
+    else:  # D1.101: bipolar tavan üstünü kart REDDEDER
+        assert "kip=bipolar" in paket_reddi(paket), "kart bipolar tavan üstü duty'yi reddetmiyor (D1.101)"
     # Koşu kaydı İDDİA EDİLMEZ: seans dışı bu iki uç `session_coil_runs` açmıyor (1-B'de ölçüldü: iki uçta da
     # `[]`) — "kayıt 90" iddiası boş kümede KÖR olurdu. Seans yolundaki kayıt yukarıdaki kollarda ölçülür.

@@ -291,6 +291,8 @@ void *const g_printf_float_zorla = (void *)&_printf_float;
  * @{
  */
 #define DUTY_MIN 0.0f        /**< Minimum duty cycle (Kapalı durum) */
+#define DUTY_MAX_BIPOLAR 0.5f  /**< D1.101 · Y20: bipolar duty tavanı (A ve B periyodu paylaşır) — üstü NACK */
+#define DUTY_MAX_UNIPOLAR 1.0f /**< D1.101: tek-bacak duty tavanı (tam periyot) — üstü NACK */
 #define PHASE_DEG_MIN 0.0f   /**< Minimum faz açısı */
 #define PHASE_DEG_MAX 360.0f /**< Maksimum faz açısı */
 #define FREQ_MIN 1.0f        /**< Minimum frekans (Hz) */
@@ -937,6 +939,30 @@ static uint8_t Coil_DecodeAndValidatePacket(const BinaryCmdPacket_t *pkt,
                (unsigned long)(i + 1U), (unsigned long)duration,
                (unsigned long)DURATION_MAX_MINUTES);
       return 0U;
+    }
+
+    /* ⚠️ D1.101 · B-8.13 · Y20 (sahip): duty ÜST sınırı da NACK'lenir — tek sınır firmware NACK'idir.
+     * İKİ YÖNLÜ (bipolar) sürüşte A ve B darbeleri periyodu paylaşır: her biri en çok YARIM periyot → duty > 0,5
+     * FİZİKSEL olarak uygulanamaz. Eskiden ISR klempi SESSİZCE ~%50'ye kırpıyor, ACK ise istenen değeri yankılıyordu
+     * (ölçüldü: 0,8 istenince ACK D=80, GPIO'da etkin 0,4996, arayüz 80 — gösterilen ≠ uygulanan). Tek-bacak (unipolar)
+     * bobinin tavanı tam periyottur (> 1,0 da aynı biçimde sessiz kırpılıyordu). Artık kart REDDEDER; backend ve arayüze
+     * duty sınırı EKLENMEZ (Ö.4-Y9) — backend NACK gerekçesini (`kip=`) operatöre eylem metnine çevirir.
+     * ⚠️ KİP KURALI `Coil_KipUygula` ile AYNI: etkin unipolar = yetenek (g_yalniz_unipolar) YA DA bu paketin isteği.
+     * ⚠️ ÖLÇÜT ORANDIR, tick DEĞİL: tick ölçütü (duty·tpp > tpp/2) yüksek frekansta kuantizasyonla delinir (25 kHz,
+     * tpp=2: 0,99·2 → 1 tick = yarım → "kabul", etkin %50). Tavana EŞİT istek kabul edilir; ISR klempinin yapısal
+     * boşluğu (DDS_BIPOLAR_GAP_TICKS) ölü-zamandır ve klempte KALIR (AI Pro'nun 0,50 normalize tavanı bu yüzden
+     * reddedilmez). Sistematik NACK seansı durdurur (sahip Y20). ⚠️ TEZGÂH (Oturum 13). */
+    {
+      const uint8_t tek_bacak =
+          (uint8_t)(g_yalniz_unipolar[i] || (((pkt->unipolar_maskesi >> i) & 1U) != 0U));
+      const float tavan = tek_bacak ? DUTY_MAX_UNIPOLAR : DUTY_MAX_BIPOLAR;
+      if (duty > tavan) {
+        snprintf(nack_reason, nack_reason_sz,
+                 "RANGE coil=%lu field=duty value_milli=%ld max_milli=%ld kip=%s",
+                 (unsigned long)(i + 1U), Coil_FloatMilliForLog(duty), Coil_FloatMilliForLog(tavan),
+                 tek_bacak ? "unipolar" : "bipolar");
+        return 0U;
+      }
     }
 
     out->coil[i].duty = duty;

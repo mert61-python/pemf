@@ -117,9 +117,13 @@ def test_KRITIK_uclar_tasan_girdiyi_422_ile_reddeder_ve_hicbir_sey_SURULMEZ(hc_o
 
 
 def test_KARSIT_duty_UST_SINIRI_EKLENMEDI_float32ye_sigan_deger_SURULUR_Y9(hc_ortam):
-    """Ö.4-Y9 / Y20: backend'e duty tavanı EKLENMEZ — %300 ve float32'ye sığan 3e40 % kabul edilir ve pakete gider."""
+    """Ö.4-Y9 / Y20: backend'e duty tavanı EKLENMEZ — %300 ve float32'ye sığan 3e40 % kabul edilir ve pakete gider.
+    D1.101: tavanı KART uygular — paket firmware aynasınca `field=duty` ile REDDEDİLİR (alan doğrulamasız okunur)."""
+    from kayitci_donanim import paket_alanlari, paket_reddi
+
     _api, hc = hc_ortam
     assert hc.update_coil(_B2, 100.0, 300.0, 0.0, 1, start=True) is True
-    assert _coz(_paketler(hc)[-1])[0][_B2 - 1] == pytest.approx(3.0), "duty %300 kirpildi (Y9: tavan YOK)"
+    assert paket_alanlari(_paketler(hc)[-1])[0][_B2 - 1] == pytest.approx(3.0), "duty %300 kirpildi (Y9: tavan YOK)"
+    assert f"coil={_B2} field=duty" in paket_reddi(_paketler(hc)[-1]), "tavan üstü duty'yi kart reddetmiyor (D1.101)"
     assert hc.update_coil(_B2, 100.0, 3e40, 0.0, 1, start=True) is True, "float32'ye SIGAN duty reddedildi"
     assert hc.update_coil(_B2, 0, 0, 0, 0, start=False) is True

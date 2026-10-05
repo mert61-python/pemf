@@ -82,6 +82,11 @@ PKT_SIZE = struct.calcsize(PKT_FMT)
 assert PKT_SIZE == 121, f"Paket boyutu {PKT_SIZE} != 121!"
 
 DUTY_MIN = 0.0
+#: D1.101 · Y20: duty ÜST sınırı firmware'de NACK'lenir (`main.c` DUTY_MAX_BIPOLAR / DUTY_MAX_UNIPOLAR) — tavan kipe
+#: bağlı: bipolar A ve B periyodu paylaşır (yarım periyot), tek-bacak tam periyot. Değerler `main.c` metnine pinli
+#: (`tests/test_stm32_simulator_firmware_hizasi.py`).
+DUTY_MAX_BIPOLAR = 0.5
+DUTY_MAX_UNIPOLAR = 1.0
 PHASE_MIN = 0.0
 PHASE_MAX = 360.0
 FREQ_MIN = 1.0
@@ -177,6 +182,18 @@ def firmware_ack_yuzdesi(duty: float) -> int:
     return max(-(2**31), min(2**31 - 1, int(carpim)))
 
 
+def firmware_milli(deger: float) -> int:
+    """`main.c` `Coil_FloatMilliForLog`: sonlu değilse 0, ±2147483 dışı doyar, aksi `(long)(value * 1000.0f)` —
+    float32 çarpım, sıfıra doğru kırpma (çarpım double'da tam; float32'ye tek yuvarlama = IEEE float32 çarpımı)."""
+    if not math.isfinite(deger):
+        return 0
+    if deger > 2147483.0:
+        return 2147483000
+    if deger < -2147483.0:
+        return -2147483000
+    return int(struct.unpack("<f", struct.pack("<f", deger * 1000.0))[0])
+
+
 def _banner_kipi(maske: int) -> str:
     """`main.c` banner üçlüsünün AYNISI: 0 → SYM-BIPOLAR, tüm bobinler → UNIPOLAR tek-bacak, aksi → KARMA."""
     if maske == 0:
@@ -251,6 +268,16 @@ def decode_packet(raw: bytes):
             return None, f"coil={i + 1} freq={freq[i]:.1f} out of [{FREQ_MIN},{FREQ_MAX}]"
         if duration[i] > DUR_MAX:
             return None, f"coil={i + 1} duration={duration[i]} > {DUR_MAX}"
+        # ⚠️ D1.101 · Y20: firmware duty ÜST sınırını kipe göre NACK'ler — metin firmware'in AYNISI (backend bu satırı
+        # operatörün eylem metnine çevirir). Kip kuralı `Coil_KipUygula` ile aynı: yetenek || bu paketin isteği.
+        # Ölçüt ORAN (float32 değer, tick değil).
+        tek_bacak = ((UNIPOLAR_YETENEK_MASKESI | unipolar_maskesi) >> i) & 1
+        tavan = DUTY_MAX_UNIPOLAR if tek_bacak else DUTY_MAX_BIPOLAR
+        if duty[i] > tavan:
+            return None, (
+                f"RANGE coil={i + 1} field=duty value_milli={firmware_milli(duty[i])} "
+                f"max_milli={firmware_milli(tavan)} kip={'unipolar' if tek_bacak else 'bipolar'}"
+            )
 
     return (duty, phase, freq, duration, ref_ms, unipolar_maskesi), None
 

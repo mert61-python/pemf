@@ -12,6 +12,7 @@ in-place mutasyon → çağrı yerleri değişmez). WS broadcast event-loop'a ba
 
 import json
 import logging
+import re
 import threading
 from collections import deque
 from datetime import datetime
@@ -348,6 +349,48 @@ STM_RED_GECERLILIK_S = 10.0
 _stm_red = {"ard_arda": 0, "son_an": 0.0, "son_mesaj": ""}
 _stm_red_lock = threading.Lock()
 
+#: D1.101 · Y20 (sahip): firmware duty ÜST sınırını NACK'ler (`main.c` Coil_DecodeAndValidatePacket) — satır biçimi
+#: `RANGE coil=<n> field=duty value_milli=<istenen> max_milli=<tavan> kip=<bipolar|unipolar>`.
+_DUTY_TAVANI_NACK = re.compile(
+    r"RANGE coil=(\d+) field=duty value_milli=(-?\d+) max_milli=(\d+) kip=(bipolar|unipolar)"
+)
+
+
+def stm_duty_reddi_coz(mesaj: str) -> dict | None:
+    """Firmware'in duty TAVANI NACK'i → {bobin, istenen_milli, tavan_milli, kip}; başka satır → None (D1.101).
+
+    ⚠️ Backend tavanı BİLMEZ ve UYGULAMAZ (Ö.4-Y9, Y20): sayılar firmware satırından okunur — tavan firmware'de
+    değişirse metin kendiliğinden doğru kalır."""
+    m = _DUTY_TAVANI_NACK.search(str(mesaj or ""))
+    if m is None:
+        return None
+    return {"bobin": int(m[1]), "istenen_milli": int(m[2]), "tavan_milli": int(m[3]), "kip": m[4]}
+
+
+def stm_duty_reddi_metni(mesaj: str, sonuc: str = "") -> str:
+    """D1.101: duty tavanı NACK'i → operatörün EYLEM metni ("" = duty tavanı reddi değil). `sonuc`: sistemin ne
+    yaptığı (ör. "seans DURDURULDU") — reddin hemen ardına yazılır.
+
+    ⚠️ "Firmware uyuşmuyor, kartı yeniden programlayın" DENMEZ (`STM_RED_MESAJI`): kart güncel ve doğru çalışıyor;
+    reddedilen İSTEKTİR. Operatör duty'yi düşürür ya da (bipolar) bobini Sürüş Kipi'nden Unipolar yapar."""
+    r = stm_duty_reddi_coz(mesaj)
+    if r is None:
+        return ""
+
+    def _yuzde(milli: int) -> str:
+        return f"{milli / 10:g}".replace(".", ",")
+
+    tavan = _yuzde(r["tavan_milli"])
+    if r["kip"] == "bipolar":
+        kip, oneri = "iki yönlü (bipolar)", "veya ⚡ Sürüş Kipi'nden bu bobini Unipolar yapın"
+    else:
+        kip, oneri = "tek yönlü (unipolar)", ""
+    return (
+        f"Bobin {r['bobin']}: %{_yuzde(r['istenen_milli'])} duty {kip} sürüşte UYGULANAMAZ — kart komutu REDDETTİ "
+        f"(üst sınır %{tavan}){'; ' + sonuc if sonuc else ''}. Duty'yi %{tavan} ya da altına indirin"
+        f"{' ' + oneri if oneri else ''}."
+    )
+
 
 def stm_komut_reddi_bildir(mesaj: str = "") -> bool:
     """Karttan bir NACK geldi. Eşiğe ULAŞILDIYSA True döner (bu çağrıyla sistematik red oldu)."""
@@ -363,6 +406,12 @@ def stm_komut_reddi_bildir(mesaj: str = "") -> bool:
             _stm_red["ard_arda"] = 0
         onceki = _stm_red["ard_arda"] >= STM_RED_ESIGI
         _stm_red["ard_arda"] += 1
+        # ⚠️ D1.101 · Y20: duty TAVANI reddi hat gürültüsü DEĞİLDİR — CRC'den geçmiş paketin İÇERİĞİ geçersiz, kart aynı
+        # paketi her keep-alive'da yine reddeder → TEK NACK sistematik karardır. Eşiği beklemek, reddedilen durum
+        # keep-alive'da dururken o paketlerdeki BAŞKA bobinlerin STOP'larını da (bütün paket reddedilir) ~1,5 sn
+        # bekletirdi (Ö.4-Y8: STOP geciktirilmez). Kenar yine bir kez: taze kararda sonraki NACK kenar üretmez.
+        if stm_duty_reddi_coz(mesaj) is not None:
+            _stm_red["ard_arda"] = max(_stm_red["ard_arda"], STM_RED_ESIGI)
         _stm_red["son_an"] = simdi_an
         _stm_red["son_mesaj"] = str(mesaj or "")[:200]
         simdi = _stm_red["ard_arda"] >= STM_RED_ESIGI

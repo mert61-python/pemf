@@ -208,9 +208,11 @@ def test_KRITIK_simulator_ACK_NUM_COILS_alan_ve_etkin_KIP_basar(hw, monkeypatch,
 
 
 def test_KRITIK_ACK_duty_FIRMWARE_float32_ile_basilir_yuzde_1_100(hw, monkeypatch):
-    """Ürünün paketiyle %1-100: ACK D= firmware'in `(long)(duty * 100.0f)`sinin AYNISI (double DEĞİL)."""
+    """Ürünün paketiyle %1-100: ACK D= firmware'in `(long)(duty * 100.0f)`sinin AYNISI (double DEĞİL).
+    D1.101: bipolar tavan %50 (üstü NACK) → süpürme bobin 1'i Sürüş Kipi isteğiyle TEK-BACAK sürer (tavan %100)."""
     istemci, karsi = _sim_bagla(monkeypatch)
     uyusmayan = []
+    hw.surus_kipi_ayarla(0x01)
     try:
         for yuzde in range(1, 101):
             assert hw.update_coil(1, 100.0, float(yuzde), 0.0, 1)
@@ -284,37 +286,92 @@ def test_KRITIK_birden_cok_sonlu_olmayan_alan_FIRMWARE_SIRASIYLA_NACK(hw, monkey
         karsi.close()
 
 
-def test_KRITIK_sonlu_ama_2_31_i_ASAN_carpim_ACK_da_KIRPILIR(hw, monkeypatch):
-    """D0Ö.13 ek-3 (tur 6): 1e37 kapısı yalnız float32'nin TAŞTIĞI (+inf) kolu koşuyordu. Sonlu ama 2^31'i
-    aşan çarpım (3e7 × 100 = 3e9, float32'de tam); simülatörün `max/min` kırpması hiçbir kapıda koşmuyordu (silen
-    mutant `D=3000000000` basar, kapılar yeşildi). ⚠️ D0Ö.13 ek-4 (tur 7): firmware'in 2147483647 basması bir
-    VARSAYIMDIR — C'de `(long)` taşması tanımsız davranış; hard-float Cortex-M4 + -Os'ta `vcvt.s32.f32` doyurması
-    beklenir ama objdump/tezgâhla ÖLÇÜLMEDİ (yayın öncesi / tezgâh listesinde). Bu kapı simülatörü o varsayıma pinler."""
+def test_KRITIK_sonlu_ama_2_31_i_ASAN_duty_NACK_metninde_DOYAR(hw, monkeypatch):
+    """D0Ö.13 ek-3 (tur 6) kolunun D1.101 hâli. Eskiden 3e7 duty KABUL ediliyor ve ACK'te `D=2147483647`'e doyuyordu
+    (VCVT varsayımı). D1.101 (Y20) ile duty ÜST sınırı firmware'de NACK'lenir → değer ACK'e ULAŞMAZ; NACK metnindeki
+    `value_milli` firmware `Coil_FloatMilliForLog`'u gibi ±2147483 dışını 2147483000'e DOYURUR (ölçülebilir, tanımsız
+    davranış değil). Doyurmayı silen ayna mutantı `value_milli=29999999...` basar → KIRMIZI."""
     istemci, karsi = _sim_bagla(monkeypatch)
     try:
         istemci.sendall(_ham_paket(3e7))
-        ack = _satirlar(istemci, "-> STM_OK:", 1, 3.0)
-        assert ack and "D=2147483647," in ack[0], f"2^31'i aşan sonlu çarpım ACK'te kırpılmadı: {ack}"
+        nack = _satirlar(istemci, "-> STM_NACK:", 1, 3.0)
+        assert nack and "RANGE coil=1 field=duty value_milli=2147483000 max_milli=500 kip=bipolar" in nack[0], (
+            f"2^31'i aşan sonlu duty firmware metniyle NACK'lenmedi: {nack}"
+        )
     finally:
         istemci.close()
         karsi.close()
 
 
-def test_KRITIK_tasan_duty_ACK_da_DOYAR_ve_baglanti_SURER(hw, monkeypatch):
-    """Sonlu ama float32 çarpımında taşan duty (1e37 × 100): firmware NACK'lemez (DUTY_MAX yok); `VCVT` doyurması
-    → `D=2147483647` VARSAYIMDIR (tanımsız davranış; ölçülmedi — bkz. üstteki kol). Simülatör eskiden
-    `struct.pack` OverflowError'ında bağlantıyı KAPATABİLİRDİ."""
+def test_KRITIK_tasan_duty_NACKlenir_ve_baglanti_SURER(hw, monkeypatch):
+    """Sonlu ama float32 çarpımında taşan duty (1e37): D1.101'den beri firmware NACK'ler (eskiden `D=2147483647`
+    yankılanırdı). Simülatör eskiden `struct.pack` OverflowError'ında bağlantıyı KAPATABİLİRDİ — NACK'ten sonra
+    sonraki geçerli pakete STM_OK gelmeli."""
     istemci, karsi = _sim_bagla(monkeypatch)
     try:
         istemci.sendall(_ham_paket(1e37))
-        ack = _satirlar(istemci, "-> STM_OK:", 1, 3.0)
-        assert ack and "D=2147483647," in ack[0], f"taşan duty ACK'te doymadı: {ack}"
+        nack = _satirlar(istemci, "-> STM_NACK:", 1, 3.0)
+        assert nack and "field=duty value_milli=2147483000 max_milli=500 kip=bipolar" in nack[0], f"{nack}"
         assert hw.update_coil(1, 100.0, 25.0, 0.0, 1)
         istemci.sendall(_son_paket(hw))
         assert _satirlar(istemci, "-> STM_OK:", 1, 3.0), "taşan duty'den sonra bağlantı düştü"
     finally:
         istemci.close()
         karsi.close()
+
+
+#: D1.101 · Y20 — (bobin, Hz, %duty, Sürüş Kipi isteği, beklenen NACK metni | None = KABUL); ürünün GERÇEK paketi.
+#: Metinler `main.c`'nin AYNISI (Windows'ta `test_firmware_DUTY_TAVANI_NACK_D1101.py` aynı paketleri GERÇEK firmware'e
+#: verip metni karşılaştırır; bu kol her platformda simülatörü pinler).
+def _duty_nack(bobin: int, istenen: int, tavan: int, kip: str) -> str:
+    return f"RANGE coil={bobin} field=duty value_milli={istenen} max_milli={tavan} kip={kip}"
+
+
+_D1101_VAKALAR = {
+    "bipolar_80": (1, 100.0, 80.0, 0x00, _duty_nack(1, 800, 500, "bipolar")),
+    "bipolar_50_tavana_ESIT_AI_Pro": (1, 100.0, 50.0, 0x00, None),
+    "bipolar_50_1_oran_olcutu": (1, 100.0, 50.1, 0x00, _duty_nack(1, 501, 500, "bipolar")),
+    "bipolar_25kHz_99_tick_deligi": (1, 25000.0, 99.0, 0x00, _duty_nack(1, 990, 500, "bipolar")),
+    "unipolar_yetenek_80": (6, 100.0, 80.0, 0x00, None),
+    "unipolar_yetenek_100": (7, 100.0, 100.0, 0x00, None),
+    "unipolar_yetenek_120": (6, 100.0, 120.0, 0x00, _duty_nack(6, 1200, 1000, "unipolar")),
+    "unipolar_ISTEK_80": (1, 100.0, 80.0, 0x01, None),
+}
+
+
+@pytest.mark.parametrize("ad", list(_D1101_VAKALAR))
+def test_KRITIK_D1101_duty_TAVANI_simulator_FIRMWARE_gibi_karar_ve_metin(hw, ad):
+    bobin, hz, duty, kip, beklenen = _D1101_VAKALAR[ad]
+    hw.surus_kipi_ayarla(kip)
+    assert hw.update_coil(bobin, hz, duty, 0.0, 1)
+    sonuc, sebep = sim.decode_packet(_son_paket(hw))
+    if beklenen is None:
+        assert sonuc is not None, f"{ad}: tavan içi istek reddedildi: {sebep!r}"
+        assert sonuc[0][bobin - 1] == pytest.approx(duty / 100.0)
+    else:
+        assert sonuc is None and sebep == beklenen, f"{ad}: {sebep!r} (beklenen {beklenen!r})"
+
+
+def test_main_c_DUTY_TAVANLARI_ve_KURALI_simulator_modeliyle_AYNI():
+    """D1.101: simülatörün tavan sabitleri ve kip kuralı `main.c`'ninkiyle AYNI (biri değişip öteki kalırsa KIRMIZI).
+    ⚠️ Beklenen değer BURADA yazılı (0,5 / 1,0) — mutasyon hedefinden (main.c ya da simülatör) OKUNMAZ."""
+    kod = c_soy(MAIN_C.read_text(encoding="utf-8", errors="replace"))
+    for ad, beklenen, sim_degeri in (
+        ("DUTY_MAX_BIPOLAR", 0.5, sim.DUTY_MAX_BIPOLAR),
+        ("DUTY_MAX_UNIPOLAR", 1.0, sim.DUTY_MAX_UNIPOLAR),
+    ):
+        bulunan = re.findall(rf"^[ \t]*#[ \t]*define[ \t]+{ad}[ \t]+([0-9.]+)[fF]?\b", kod, flags=re.M)
+        assert [float(b) for b in bulunan] == [beklenen], f"main.c {ad} (yorum dışı TEK tanım): {bulunan}"
+        assert sim_degeri == beklenen, f"simülatör {ad} = {sim_degeri} (firmware {beklenen})"
+    duz = re.sub(r"\s+", " ", kod)
+    for parca in (
+        "(uint8_t)(g_yalniz_unipolar[i] || (((pkt->unipolar_maskesi >> i) & 1U) != 0U));",
+        "const float tavan = tek_bacak ? DUTY_MAX_UNIPOLAR : DUTY_MAX_BIPOLAR;",
+        "if (duty > tavan) {",
+        '"RANGE coil=%lu field=duty value_milli=%ld max_milli=%ld kip=%s"',
+        'tek_bacak ? "unipolar" : "bipolar"',
+    ):
+        assert parca in duz, f"main.c D1.101 kuralı değişmiş — simülatör aynası gözden geçirilmeli: {parca!r}"
 
 
 def test_etkin_kip_YETENEGI_de_NUM_COILS_bite_kirpar(hw, monkeypatch):
