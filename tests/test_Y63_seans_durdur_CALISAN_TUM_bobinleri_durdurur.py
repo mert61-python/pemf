@@ -127,3 +127,47 @@ def test_KARSIT_Y63_CALISMAYAN_bobine_STOP_yok_broker_oluyken_SAHTE_alarm_yok(o,
     )
     assert not [t for t, p in denenen if t == "pemf/coil/8/control"], f"çalışmayan bobin 8'e STOP denendi: {denenen}"
     assert all(x == 0 for x in _son_duty(o)) and not ap.calisan(o), "seansın kendi bobinleri durmadı"
+
+
+# ── 1-G inceleme G-2.1: üç kaynağın HER BİRİ tek başına belirleyici ─────────────────────────────────────────────────────
+# Yukarıdaki senaryoda seans dışı bobinler seans SÜRERKEN başlatıldığı için üçünün de açık koşu kaydı var → HC ve ESP
+# canlı-durum kaynakları o kayıtla MASKELİ: ikisini ayrı ayrı söken mutant 5/5 yeşil kaldı (ölçüldü).
+
+
+def test_KRITIK_Y63_HC_TEK_kaynak_SEANS_ONCESI_tekil_baslatilan_bobin_de_DURUR(o):
+    """Seans yokken tekil başlatılan bobinin koşu kaydı AÇILMAZ (`_begin_coil_run` seans satırı ister); seans [1,2] sonra
+    başlar. Bobin 3'ün çalıştığını yalnız HC (`coils_state.is_running`) bilir."""
+    rb = o.c.post("/api/coil/3/control", json=_TEKIL)
+    assert rb.status_code == 200 and rb.json().get("status") == "success", f"aparat: bobin 3 {rb.text[:160]}"
+    r = o.c.post("/api/session/start", json=_SEANS)
+    assert r.status_code == 200 and r.json().get("status") == "success", r.text[:200]
+    assert sorted(ap.calisan(o)) == [1, 2, 3], f"aparat: telde çalışan {ap.calisan(o)}"
+    with o.api._active_coil_runs_lock:
+        assert 3 not in o.api._active_coil_runs, (
+            f"aparat: bobin 3'ün koşu kaydı VAR (HC tek kaynak değil): {o.api._active_coil_runs}"
+        )
+    o.c.post("/api/session/stop")
+    assert not ap.calisan(o) and all(x == 0 for x in _son_duty(o)), (
+        f"seans ÖNCESİ tekil başlatılan bobin 3 'Seansı Durdur'dan sonra hâlâ SÜRÜLÜYOR: çalışan={ap.calisan(o)}"
+    )
+
+
+def test_KRITIK_Y63_ESP_CANLI_DURUM_TEK_kaynak_NVS_devamindaki_bobin_8_STOP_alir(o):
+    """ESP durum iletisi bobin 8'i çalışıyor bildiriyor (NVS devamı — backend komutu da koşu kaydı da YOK). Bunu yalnız
+    ESP canlı durumu (`_live_state["coils"][7]["running"]`) bilir."""
+    r = o.c.post("/api/session/start", json=_SEANS)
+    assert r.status_code == 200 and r.json().get("status") == "success", r.text[:200]
+    with o.api._live_state_lock:
+        c8 = o.api._live_state["coils"][7]
+        assert int(c8.get("id") or 0) == 8, f"aparat: live_state dizini {c8}"
+        c8["running"] = True
+    try:
+        with o.api._active_coil_runs_lock:
+            assert 8 not in o.api._active_coil_runs, "aparat: bobin 8'in koşu kaydı VAR (ESP kaynağı tek değil)"
+        n = len(o.yayin)
+        o.c.post("/api/session/stop")
+        stoplar = [t for t, p in o.yayin[n:] if p.get("command") == "stop"]
+        assert "pemf/coil/8/control" in stoplar, f"ESP durumuna göre çalışan bobin 8'e STOP yayınlanmadı: {o.yayin[n:]}"
+    finally:
+        with o.api._live_state_lock:
+            o.api._live_state["coils"][7]["running"] = False  # modül geneli canlı durum sonraki testlere sızmasın
