@@ -79,6 +79,19 @@ static volatile bool     s_sync_disabled = false;  /* uyumsuzluk saptandı → s
 static volatile bool     s_awaiting_acquire = false; /* seans başı / freq değişimi → ilk PB1 darbesi faz kilidini EDİNİR */
 #define SYNC_MISMATCH_STREAK 8U   /* ~8 periyot başı erken kilit → uyumsuzluk kesin (jitter'ı tolere eder) */
 
+/* ── ÇIKIŞ KATI ÖLÜ-ZAMANI (1-G · D1.102 / B-8.17, 2026-10-05) ─────────────────────────────────────────────────────
+ * _updatePWM'deki duty kırpması (duty ≤ yarım − DEAD_TIME_TICKS) yalnız KARARLI dalgada iki bacak arasında boşluk
+ * bırakır. DDS konumunu çıkış durumuna BAKMADAN sıçratan dört olay var: [E4] edinimi (syncPulseISR s_tick=0), frekans
+ * değişimi (s_tpp), yalnız-faz güncellemesi (s_phase_ticks) ve tolerans kilidi (s_tick=0, frekans hafif uyumsuzken
+ * her periyot). Sıçrama B açıkken A penceresine (ya da tersi) düşerse ISR aynı çağrıda w1tc(eski)+w1ts(yeni) yazıyordu
+ * → 0 tick ölü-zaman (ana makine ölçümü: edinim D50 0,51 · 100→200 Hz 0,745 · faz 0→180 0,99 olasılıkla).
+ * Bu sayaç sıçramanın KAYNAĞINDAN bağımsızdır: karşı bacak en az DEAD_TIME_TICKS tick LOW kalmadan açılmaz.
+ * Kararlı dalgada boşluk zaten ≥ DEAD_TIME_TICKS (DDS_MIN_TPP=8, duty kırpması) → normal dalga DEĞİŞMEZ.
+ * Yalnız ddsTimerISR yazar; STOP'ta SIFIRLANMAZ (yeniden başlatmada ilk zıt darbe en çok DEAD_TIME_TICKS gecikir —
+ * güvenli yön). Kilit: tests/test_s3_OLU_ZAMAN_sicramada_KORUNUR_D1102.py. ⚠️ TEZGÂHTA SKOPLA DOĞRULA (Oturum 13). */
+static volatile uint8_t  s_son_bacak   = 0;  /* en son AÇILAN bacak: 0 yok · 1 A · 2 B */
+static volatile uint32_t s_kapali_tick = 0;  /* o bacak kapandığından beri iki-bacak-LOW tick sayısı (DEAD_TIME_TICKS'te doyar) */
+
 static hw_timer_t*  s_timer = nullptr;
 static portMUX_TYPE s_mux   = portMUX_INITIALIZER_UNLOCKED;
 
@@ -172,6 +185,7 @@ static void IRAM_ATTR ddsTimerISR() {
 
     if (duty == 0U) {
         GPIO.out_w1tc = (1UL << s_pin_a) | (1UL << s_pin_b);
+        if (s_kapali_tick < (uint32_t)DEAD_TIME_TICKS) s_kapali_tick = s_kapali_tick + 1U;
         return;
     }
 
@@ -182,16 +196,25 @@ static void IRAM_ATTR ddsTimerISR() {
     bool aHigh = (rel < duty);                            /* pozitif darbe   */
     bool bHigh = (rel >= yarim) && (rel < (yarim + duty)); /* negatif (ayna) */
 
-    /* Ölü-zaman garantisi _updatePWM'de duty kırpılarak sağlanır; burada yalnız
-     * "ikisi birden asla HIGH olamaz" değişmezi korunur (savunma derinliği). */
+    /* Kararlı dalgada ölü-zaman _updatePWM'deki duty kırpmasıyla gelir; DDS konumu SIÇRADIĞINDA (edinim, frekans/faz
+     * değişimi, tolerans kilidi) onu çıkış katı korur: karşı bacak en az DEAD_TIME_TICKS tick LOW kalmadan açılmaz
+     * (D1.102). "İkisi birden asla HIGH olamaz" değişmezi ve önce-kapat sırası da korunur (savunma derinliği). */
+    if (aHigh && !bHigh && s_son_bacak == 2U && s_kapali_tick < (uint32_t)DEAD_TIME_TICKS) aHigh = false;
+    if (bHigh && !aHigh && s_son_bacak == 1U && s_kapali_tick < (uint32_t)DEAD_TIME_TICKS) bHigh = false;
+
     if (aHigh && !bHigh) {
         GPIO.out_w1tc = (1UL << s_pin_b);
         GPIO.out_w1ts = (1UL << s_pin_a);
+        s_son_bacak = 1U;
+        s_kapali_tick = 0U;
     } else if (bHigh && !aHigh) {
         GPIO.out_w1tc = (1UL << s_pin_a);
         GPIO.out_w1ts = (1UL << s_pin_b);
+        s_son_bacak = 2U;
+        s_kapali_tick = 0U;
     } else {
         GPIO.out_w1tc = (1UL << s_pin_a) | (1UL << s_pin_b);
+        if (s_kapali_tick < (uint32_t)DEAD_TIME_TICKS) s_kapali_tick = s_kapali_tick + 1U;
     }
 }
 
