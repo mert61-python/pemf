@@ -4274,6 +4274,30 @@ def _seanssiz_durdur() -> list:
     return teyitsiz
 
 
+def _seans_disi_calisan_bobinler(seans_bobinleri) -> list:
+    """Y63 (sahip, 1-F S-F3): "Seansı Durdur" anında seansın bobin listesi DIŞINDA çalıştığı BİLİNEN bobinler — seans
+    sürerken tekil kontrol / toplu uç / eski `/hardware/command` ile ayrıca başlatılanlar (STM 1-7, 6-7 dahil; ESP 8).
+    Kaynaklar: HC durumu (`is_running` — STM'in kaynağı), açık koşu kaydı (seans satırına bağlanan tekil başlatma), ESP
+    canlı durumu (`running`). Çalıştığı bilinmeyen bobine STOP GÖNDERİLMEZ: ESP açık + broker ölüyken hiç sürülmemiş bobin 8
+    için sahte "STOP DOĞRULANAMADI" (409) alarmı üretilmesin (alarm körlüğü). Bir kaynak okunamazsa atlanır — seans
+    durdurmayı engellemez."""
+    seans = {int(c) for c in (seans_bobinleri or [])}
+    calisan: set = set()
+    try:
+        for _cid, _d in list((getattr(state.hardware, "coils_state", None) or {}).items()):
+            if (_d or {}).get("is_running"):
+                calisan.add(int(_cid))
+    except Exception:
+        logging.getLogger(__name__).warning("Y63: HC bobin durumu okunamadi (o kaynak atlandi)", exc_info=True)
+    with _active_coil_runs_lock:
+        calisan.update(int(c) for c in _active_coil_runs)
+    with _live_state_lock:
+        for _c in _live_state["coils"].values():
+            if _c.get("running") and int(_c.get("id") or 0) in ESP_COIL_IDS:
+                calisan.add(int(_c["id"]))
+    return sorted(c for c in calisan - seans if 1 <= c <= 8)
+
+
 def _bildir_teyitsiz_stop(teyitsiz, kaynak: str) -> None:
     """DENETIM 2. TUR [1.1] tamamlamasi (adversaryal review #2): /session/stop yaniti teyitsizligi
     tasirken sure-watchdog / AI durdurma / sahipsiz-bobin yollari onu YUTUYORDU — broker oluyken
@@ -5233,7 +5257,21 @@ async def stop_session():
     else:
         # D1.81: seansı bitiren durdurma → yetki kesilir (uçuştaki START'lar bu STOP'tan sonra enerjileyemez).
         # O-1.1: KENDİ iş parçacığı — ortak havuz (`to_thread`) asılı G/Ç ile doluyken STOP sıra beklemez.
-        _stop_teyitsiz = await _durdurma_is_parcaciginda(_stop_session_coils, coil_ids, True, ad="seans-durdur") or []
+        # ⚠️ Y63 (sahip, 1-F S-F3): çalışan TÜM bobinler — seans sırasında seans DIŞINDAN (tekil / toplu / eski uç)
+        # başlatılanlar dahil; onların koşu kaydı da ŞİMDİ kapanır (`_stop_session_coils`). Eskiden yalnız seansın listesi
+        # duruyor, ötekiler keep-alive ile sürüyordu (1-F açık #1). STOP yalnız artar (Ö.4-Y8); seans kaydı değişmez.
+        # Ek tespit HİÇBİR koşulda seansın KENDİ STOP'unu engellemez: hata → yalnız seansın bobinleri (eski kapsam).
+        try:
+            _seans_disi = _seans_disi_calisan_bobinler(coil_ids)
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "Y63: seans disi calisan bobinler belirlenemedi (seans STOP'u suruyor)"
+            )
+            _seans_disi = []
+        _durdurulacak = sorted({int(c) for c in coil_ids} | set(_seans_disi))
+        _stop_teyitsiz = (
+            await _durdurma_is_parcaciginda(_stop_session_coils, _durdurulacak, True, ad="seans-durdur") or []
+        )
         update_live_session_state(is_active=False, mode="Sistem Hazır")
 
     # (b) Sensor buffer'i gercek db_session_id ile FLUSH et + (c) end_session (gercek wall-clock sure).
