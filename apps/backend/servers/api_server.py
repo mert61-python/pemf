@@ -4297,7 +4297,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
 
 
 def _stop_session_coils(coil_ids, yetkiyi_kes: bool = False):
-    """Verilen bobinlere donanım STOP gönderir (ESP→MQTT, STM→update_coil start=False).
+    """Verilen bobinlere donanım STOP gönderir (önce STM→update_coil start=False, sonra ESP→MQTT).
     is_running=False yapar → HWKeepAlive tazelemeyi keser → bobinler fiziksel olarak durur.
 
     `yetkiyi_kes` (D1.81 · B-5.3): SEANSI BİTİREN durdurmalar (`/api/session/stop`, `/api/ai/pro/stop`, süre bekçisi)
@@ -4319,24 +4319,15 @@ def _stop_session_coils(coil_ids, yetkiyi_kes: bool = False):
 
     teyitsiz: list = []
     _esp_acik = live_state.esp_etkin()
-    for coil_id in [cid for cid in coil_ids if cid in ESP_COIL_IDS]:
-        ok = _mqtt_publish(
-            f"pemf/coil/{coil_id}/control",
-            {
-                "command": "stop",
-                "command_id": f"stop_{coil_id}_{int(_t.time() * 1000)}",
-            },
-        )
-        # ⚠️ A-63 (İG-5.10): ESP BİLEREK kapalıyken STOP yine DENENİR ama teyit STM'e göre verilir — ESP slotu "teyitsiz"
-        # sayılmaz (eskiden bobin 8'li her seans durdurması 409 "HÂLÂ ÇALIŞIYOR olabilirler" diyordu).
-        if not ok and _esp_acik:
-            teyitsiz.append(coil_id)
     _stm_hedef = [cid for cid in coil_ids if cid in STM_COIL_IDS]
+    # ⚠️ 1-G inceleme G-3.2 (Ö.4-Y8): STM STOP'ları ESP yayınlarından ÖNCE kuyruğa verilir. `_mqtt_publish` sağlıklı
+    # broker'da bile ~1 sn, yerel broker kimliği uyuşmazken (D1.104 `--yenile` penceresi) ~2 sn sürüyor; ESP önce
+    # yayınlandığında STM STOP'u onu BEKLİYORDU (ölçüldü: "Seansı Durdur" bobin [1, 8] → ilk STM STOP 1,04 sn /
+    # uyuşmazlıkta 3,09 sn). Port teyidi (yalnız RAPOR) ESP yayınlarından SONRA beklenir → ESP STOP'u da onu beklemez.
+    _isaret = _sira_once = None
+    _kuyrukta: list = []
     if state.hardware:
-        # ⚠️ 1-C §9 #2 (A-63): teyit "kuyruğa verildi" DEĞİL, STOP PORTA YAZILDI (E-stop'la aynı ölçüt, D1.55). Eskiden
-        # kablo çıkıkken (porta 0 bayt) seans / AI Pro / süre bekçisi durdurması "teyitli" sayılıyordu. Yalnız RAPOR.
         _isaret, _sira_once = _stm_yazim_isareti_al(), _stm_son_stop_sirasi_al()
-        _kuyrukta = []
         for coil_id in _stm_hedef:
             try:
                 ok = bool(state.hardware.update_coil(coil_id, 0.0, 0.0, 0.0, 0, start=False))
@@ -4349,10 +4340,24 @@ def _stop_session_coils(coil_ids, yetkiyi_kes: bool = False):
                 teyitsiz.append(coil_id)
             else:
                 _kuyrukta.append(coil_id)
-        if _kuyrukta and not _stm_stop_porta_yazildi_mi(_isaret, _sira_once):
-            teyitsiz.extend(_kuyrukta)
     else:
         teyitsiz.extend(_stm_hedef)
+    for coil_id in [cid for cid in coil_ids if cid in ESP_COIL_IDS]:
+        ok = _mqtt_publish(
+            f"pemf/coil/{coil_id}/control",
+            {
+                "command": "stop",
+                "command_id": f"stop_{coil_id}_{int(_t.time() * 1000)}",
+            },
+        )
+        # ⚠️ A-63 (İG-5.10): ESP BİLEREK kapalıyken STOP yine DENENİR ama teyit STM'e göre verilir — ESP slotu "teyitsiz"
+        # sayılmaz (eskiden bobin 8'li her seans durdurması 409 "HÂLÂ ÇALIŞIYOR olabilirler" diyordu).
+        if not ok and _esp_acik:
+            teyitsiz.append(coil_id)
+    # ⚠️ 1-C §9 #2 (A-63): teyit "kuyruğa verildi" DEĞİL, STOP PORTA YAZILDI (E-stop'la aynı ölçüt, D1.55). Eskiden
+    # kablo çıkıkken (porta 0 bayt) seans / AI Pro / süre bekçisi durdurması "teyitli" sayılıyordu. Yalnız RAPOR.
+    if _kuyrukta and not _stm_stop_porta_yazildi_mi(_isaret, _sira_once):
+        teyitsiz.extend(_kuyrukta)
     # Asama-2: durdurulan tum bobinlerin acik run'larini kapat (acik kalmasin).
     for coil_id in coil_ids:
         try:
