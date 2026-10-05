@@ -14,6 +14,7 @@ import json
 import logging
 import re
 import threading
+import time
 from collections import deque
 from datetime import datetime
 
@@ -295,7 +296,12 @@ _live_state = {
     },
 }
 _live_state_lock = threading.Lock()
-_notif_counter = 0
+#: Bildirim kimliği SÜREÇLER ARASI benzersiz (1-G inceleme G-13.1): arayüz yerel "okundu" işaretini KİMLİĞE göre oturum
+#: boyu saklar ve yeniden bağlanmada gelen snapshot'a uygular (`LiveDataContext` `readIdsRef`, #46). Sayaç her süreçte
+#: 0'dan başlıyordu → arayüz açıkken backend yeniden başlayınca yeni süreçteki bildirimler (Y64 açılış bildirimi dahil)
+#: önceki oturumda okunmuş kimlikleri alıp OKUNMUŞ görünüyordu (rozet yok — ölçüldü). Taban = süreç başlangıcının ms'si
+#: (JS Number'da kesin, < 2^53); süreç içinde yine 1'er artar.
+_notif_counter = time.time_ns() // 1_000_000
 # ── BOBİN TOPOLOJİSİ ──────────────────────────────────────────────────────────
 # FAZ 4 (sahip kararı 2026-09-10): bobin 6-7 ESP8266'dan STM32'ye TAŞINDI.
 # Firmware `NUM_COILS = 7`, paket 120 bayt; bobin 6 → PE13, bobin 7 → PE15.
