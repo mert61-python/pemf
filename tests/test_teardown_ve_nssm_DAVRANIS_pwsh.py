@@ -79,12 +79,16 @@ function Set-Location { [CmdletBinding()] param([Parameter(ValueFromRemainingArg
 function Start-Sleep { [CmdletBinding()] param([Parameter(ValueFromRemainingArguments = $true)]$R) K "SLEEP" }
 # D1.92/D1.93: ACİL DURDUR isteği GERÇEK ağa ÇIKMAZ — kayıtçı. Davranış senaryodan: basari | hata | zaman.
 $script:HttpDavranis = 'basari'; $script:AcikPortlar = @()
+# O-7.1: porta göre YABANCI yerel servis yanıtı (2xx ama PEMF ACİL DURDUR yanıtı DEĞİL) — senaryo doldurur.
+$script:YabanciPortlar = @{}
 function Invoke-RestMethod {
     [CmdletBinding()] param([string]$Uri, [string]$Method, $TimeoutSec, [Parameter(ValueFromRemainingArguments = $true)]$R)
     K ("HTTP " + $Method + " " + $Uri)
     K ("HTTP-SURE " + $TimeoutSec)
     if ($script:HttpDavranis -eq 'hata') { throw "sahte: baglanti reddedildi" }
     if ($script:HttpDavranis -eq 'zaman') { throw [System.TimeoutException]::new("sahte: zaman asimi") }
+    $port = ([uri]$Uri).Port
+    if ($script:YabanciPortlar.ContainsKey($port)) { return $script:YabanciPortlar[$port] }
     [pscustomobject]@{ status = 'success'; confirmed = $true }
 }
 function Invoke-WebRequest { [CmdletBinding()] param([Parameter(ValueFromRemainingArguments = $true)]$R) K "HTTP-IWR"; throw "sahte: IWR kullanilmamali" }
@@ -203,6 +207,10 @@ switch -Wildcard ($Senaryo) {
             'estop_portyok' { }
             'estop_sira' { Set-Content -LiteralPath $portDosyasi -Value '48123'; $script:AcikPortlar = @(8001, 8002) }
             'estop_bozukdosya' { Set-Content -LiteralPath $portDosyasi -Value '8000; KANARYA'; $script:AcikPortlar = @(8000) }
+            # O-7.1: backend.port YOK; 8000'de başka bir yerel servis 2xx döner, gerçek backend 8001'de.
+            'estop_yabanci_html' { $script:AcikPortlar = @(8000, 8001); $script:YabanciPortlar = @{ 8000 = '<html><body>baska servis</body></html>' } }
+            'estop_yabanci_json' { $script:AcikPortlar = @(8000, 8001); $script:YabanciPortlar = @{ 8000 = [pscustomobject]@{ status = 'ok'; servis = 'baska' } } }
+            'estop_yabanci_hepsi' { $script:AcikPortlar = @(8000); $script:YabanciPortlar = @{ 8000 = [pscustomobject]@{ ok = $true } } }
         }
         $script:Servis['mosquitto'] = 'Running'; $script:Servis['PemfBackend'] = 'Running'
         $script:PemfFailed = @()
@@ -609,6 +617,34 @@ def test_KRITIK_D192_port_SIRASI_backend_port_8000_8001_ve_ILK_basarida_durur(tm
     http = [x for x in k if x.startswith("HTTP ")]
     assert http == ["HTTP Post http://127.0.0.1:8001/api/hardware/emergency_stop"], http
     assert 8002 not in sonda, "ilk başarılı ACİL DURDUR'dan sonra taramaya devam edildi (yabancı servislere istek)"
+
+
+@pytest.mark.parametrize("senaryo", ["estop_yabanci_html", "estop_yabanci_json"])
+def test_KRITIK_O71_YABANCI_servisin_2xxi_GONDERILDI_sayilmaz_tarama_SURER(tmp_path, senaryo):
+    """O-7.1 (1-F inceleme): tarama ilk 2xx yanıtta duruyordu. `backend.port` yok/bayatken ÖNDEKİ bir yerel servis (8000)
+    bu yola 2xx dönerse gerçek backend (8001) ACİL DURDUR almıyordu. Yanıt PEMF yanıtı olmalı: `status` ∈ success/partial/
+    error (`_emergency_stop_all`'ın değerleri); HTML ya da başka `status` değeri 'gönderildi' sayılmaz, tarama SÜRER."""
+    s = _kos(tmp_path, senaryo)
+    k = s["kayit"]
+    http = [x for x in k if x.startswith("HTTP ")]
+    assert http == [
+        "HTTP Post http://127.0.0.1:8000/api/hardware/emergency_stop",
+        "HTTP Post http://127.0.0.1:8001/api/hardware/emergency_stop",
+    ], (
+        f"{senaryo}: 8000'deki YABANCI servisin 2xx'i 'gönderildi' sayıldı, tarama durdu — backend (8001) E-stop almadı: {http}"
+    )
+    assert any(x.startswith("LOG ACİL DURDUR gönderildi: 127.0.0.1:8001") for x in k), "8001'e gönderim günlükte yok"
+    assert not any(x.startswith("LOG ACİL DURDUR gönderildi: 127.0.0.1:8000") for x in k), "yabancı servis 'gönderildi'"
+    assert "Stop-Process" in k and k.index("Stop-Process") > _ilk(k, "HTTP Post http://127.0.0.1:8001/")
+
+
+def test_KRITIK_O71_yalniz_YABANCI_servis_varsa_TEYIT_EDILEMEDI_der_kill_SURER(tmp_path):
+    s = _kos(tmp_path, "estop_yabanci_hepsi")
+    k = s["kayit"]
+    assert _ilk(k, "HTTP Post http://127.0.0.1:8000/") >= 0, f"aparat: 8000 denenmedi: {k[:12]}"
+    assert not any(x.startswith("LOG ACİL DURDUR gönderildi") for x in k), "yabancı servisin 2xx'i 'gönderildi' sayıldı"
+    assert any(x.startswith("LOG ACİL DURDUR TEYİT EDİLEMEDİ") for x in k), f"teyitsizlik özeti yok: {k}"
+    assert "Stop-Process" in k, "yabancı servis yanıtında kaldırma durdu"
 
 
 def test_KRITIK_D192_bozuk_backend_port_dosyasi_KULLANILMAZ_tarama_SURER(tmp_path):
