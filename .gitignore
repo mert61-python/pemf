@@ -316,3 +316,8 @@ firmware/stm32_pemf_unipolar/Debug/
 firmware/stm32_pemf_unipolar/Release/
 firmware/stm32_pemf_unipolar/.metadata/
 firmware/stm32_pemf_unipolar/RemoteSystemsTempFiles/
+
+# A-04 / D1.104: ESP yerel MQTT broker kimligi (SIR) - `PEMF_Backend.exe --mqtt-kimlik hazirla --firmware <dizin>`
+# uretir; ASLA commit edilmez.
+firmware/*/MqttKimlikYerel.h
+MqttKimlikYerel.h

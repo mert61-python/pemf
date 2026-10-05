@@ -253,6 +253,7 @@ class MosquittoSupervisor:
         if (not config_path or not config_path.exists()) and platform.system() != "Windows":
             config_path = self._ensure_linux_broker_config()
         if config_path and config_path.exists():
+            config_path = self._kimlik_dahil_conf(config_path)  # A-04 · D1.104
             args.extend(["-c", str(config_path)])
 
         try:
@@ -314,6 +315,39 @@ class MosquittoSupervisor:
 
             dirs.append(kaynak_kokunu_bul(__file__) / "bin" / "mosquitto")
         return dirs
+
+    def _kimlik_dahil_conf(self, taban: Path) -> Path:
+        """A-04 · D1.104: yerel broker kimliği HAZIRLANMIŞSA (`utils.mqtt_kimlik hazirla`) seçilen taban yapılandırmanın
+        SONUNA kimlik parçasının dizinini (`include_dir`) ekleyen çalışma kopyasını döndür — parça `allow_anonymous false`
+        ile tabandaki anonim izni ezer (kurulum betiğinin NSSM yapılandırması bunu kendisi içerir; bu, paketli/Linux
+        yedek yolu). Hazırlanmamışsa taban AYNEN (bugünkü davranış). Taban zaten kendi `password_file`/`acl_file`'ını ya
+        da aynı `include_dir`'i taşıyorsa da taban AYNEN: mosquitto yinelenen `password_file`'da AÇILMAZ — broker'ı
+        düşürmek tüm ESP STOP yolunu keserdi (Ö.4-Y8)."""
+        try:
+            from utils import mqtt_kimlik
+
+            bd = mqtt_kimlik.varsayilan_broker_dizini()
+            parca_dizini = bd / mqtt_kimlik.CONF_DIZINI
+            if not (parca_dizini / mqtt_kimlik.CONF_ADI).is_file():
+                return taban
+            metin = taban.read_text(encoding="utf-8", errors="replace")
+            yonergeler = [s.split(None, 1) for s in metin.splitlines() if s.strip() and not s.lstrip().startswith("#")]
+            if any(y[0] in ("password_file", "acl_file") for y in yonergeler) or any(
+                y[0] == "include_dir" and len(y) > 1 and Path(y[1].strip()) == parca_dizini for y in yonergeler
+            ):
+                logger.warning("Broker tabani kendi kimlik yonergelerini tasiyor - kimlik parcasi EKLENMEDI: %s", taban)
+                return taban
+            hedef = bd / "pemf_calisma.conf"
+            hedef.write_text(
+                metin.rstrip("\n")
+                + "\n# A-04 / D1.104 - yerel broker kimlik parcasi (SONDA: anonim izni ezer)\n"
+                + f"include_dir {parca_dizini.as_posix()}\n",
+                encoding="utf-8",
+            )
+            return hedef
+        except Exception as exc:
+            logger.warning("Broker kimlik parcasi eklenemedi (taban kullaniliyor): %s", exc)
+            return taban
 
     def _ensure_linux_broker_config(self) -> Optional[Path]:
         """Linux/mac: LAN broker config'ini (0.0.0.0 + anon, Windows bundled mosquitto.conf ile aynı

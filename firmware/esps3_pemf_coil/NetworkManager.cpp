@@ -1,4 +1,5 @@
 #include "NetworkManager.h"
+#include "MqttKimlik.h"  /* A-04 / D1.104: yerel broker kimligi (MqttKimlikYerel.h yoksa Secrets.h / kimliksiz) */
 #include <esp_random.h>  /* core 3.x/IDF5: esp_random() ayri basliga tasindi (2026-08-19) */
 #include <HTTPUpdate.h>   // ✅ Add OTA Support
 #include <esp_task_wdt.h> // WDT FIX: reconnect öncesi WDT reset için
@@ -502,11 +503,16 @@ bool PemfNetworkManager::_connectToLocalBroker() {
   LOG_PRINTF("[MQTT] Yerel broker'a bağlanılıyor: %s:%d\n",
              _localMqttHost.c_str(), _localMqttPort);
 
-  // Yerel broker: anonymous veya kimlik bilgisiyle
+  // Yerel broker: anonymous veya kimlik bilgisiyle.
+  // A-04 / D1.104: `--mqtt-kimlik hazirla`nin urettigi kimlik (MqttKimlik.h → MqttKimlikYerel.h) ONCELIKLI — broker'in
+  // parola/yetki dosyalari onunla AYNI adimda uretildi; yoksa Secrets.h'teki DEFAULT_LOCAL_MQTT_*; o da bossa kimliksiz.
+  const bool hazirKimlik = (strlen(PEMF_YEREL_MQTT_KULLANICI) > 0);
+  const char* yerelKullanici = hazirKimlik ? PEMF_YEREL_MQTT_KULLANICI : DEFAULT_LOCAL_MQTT_USER;
+  const char* yerelParola = hazirKimlik ? PEMF_YEREL_MQTT_PAROLA : DEFAULT_LOCAL_MQTT_PASS;
   bool result;
-  if (strlen(DEFAULT_LOCAL_MQTT_USER) > 0) {
-    result = _mqtt->connect(clientId.c_str(), DEFAULT_LOCAL_MQTT_USER,
-                            DEFAULT_LOCAL_MQTT_PASS, lwtTopic.c_str(), 1, false,
+  if (strlen(yerelKullanici) > 0) {
+    result = _mqtt->connect(clientId.c_str(), yerelKullanici,
+                            yerelParola, lwtTopic.c_str(), 1, false,
                             lwtMsg.c_str());
   } else {
     result = _mqtt->connect(clientId.c_str(), lwtTopic.c_str(), 1, false,

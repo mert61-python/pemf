@@ -1324,7 +1324,8 @@ def _on_mqtt_message_api(client, userdata, msg):
                 # damgasını tazelemez — o koruma yukarıda; ack yalnız pending çözer.)
                 _cid = payload.get("command_id")
                 if _cid:
-                    _resolve_ack(str(_cid), bool(payload.get("success", False)))
+                    # A-04 · D1.104: teyit yalnız komutun yayınlandığı bobinin konusundan sayılır (`_resolve_ack`).
+                    _resolve_ack(str(_cid), bool(payload.get("success", False)), bobin=int(coil_id_str))
 
             elif msg_type == "events":
                 # D-4 (2026-08-19): RETAINED events YOK SAY. ESP LWT'si (last-will) retain=true
@@ -1530,6 +1531,18 @@ def _start_mqtt_for_api() -> None:
     if not live_state.esp_etkin():
         logging.info("MQTT dinleyicisi ATLANDI — ESP alt sistemi kapalı (PEMF_ESP_ENABLED=1 ile açılır).")
         return
+    # A-04 · D1.104: ESP açık ama yerel broker kimliği HAZIRLANMAMIŞSA broker anonim kabul eder → LAN'daki bir istemci
+    # sahte ack ile E-stop onayını taklit edebilir (D-2.1). Bağlantı KESİLMEZ (STOP yolu korunur); açıkça günlüğe yazılır.
+    try:
+        from utils import mqtt_kimlik as _mk
+
+        if not _mk.hazirlandi_mi():
+            logging.warning(
+                "A-04: ESP etkin ama yerel MQTT broker KIMLIKSIZ (anonim) - sahte ack E-stop onayini taklit edebilir. "
+                "ESP donus listesi: 'PEMF_Backend.exe --mqtt-kimlik hazirla' + broker yeniden baslatma + ESP yakma."
+            )
+    except Exception:
+        logging.getLogger(__name__).debug("mqtt kimlik durumu okunamadi", exc_info=True)
     try:
         import paho.mqtt.client as _mqtt
 
@@ -2285,8 +2298,20 @@ import json as _json
 
 
 def _mqtt_credentials():
-    """Broker auth (allow_anonymous false) açıkken kullanılacak (kullanıcı, şifre) — env'den.
-    Yapılandırılmamışsa (None, None) → anonim (geriye uyumlu). Üretimde PEMF_MQTT_USER/PASS ayarla."""
+    """Yerel broker'a gönderilecek (kullanıcı, şifre).
+
+    A-04 · D1.104: broker kimliği HAZIRLANMIŞSA (`utils.mqtt_kimlik hazirla`) makine deposundaki backend kimliği — broker'ın
+    parola/yetki dosyaları onunla AYNI adımda üretildi, yani backend'in STOP yayınları kimlikli broker'da da geçer
+    (Ö.4-Y8). Hazırlanmamışsa operatörün `mqtt_user/mqtt_pass` sırrı; o da yoksa (None, None) → anonim (hazırlanmamış
+    broker bugünkü gibi anonim kabul eder — hiçbir STOP yolu değişmez)."""
+    try:
+        from utils import mqtt_kimlik
+
+        _ku, _kp = mqtt_kimlik.backend_kimligi()
+        if _ku and _kp:
+            return _ku, _kp
+    except Exception:
+        logging.getLogger(__name__).warning("MQTT kimlik deposu okunamadi - operator kimligine dusuldu", exc_info=True)
     try:
         from utils.secrets_manager import get_secret
 
@@ -2494,20 +2519,36 @@ def _esp_start_yayinla(coil_id: int, payload: dict, nesil: int | None = None) ->
     return ok
 
 
-def _register_ack(command_id: str) -> None:
-    """Publish'ten ÖNCE çağrılır (ack yarışı kaybolmasın): command_id için bekleme kaydı aç."""
+def _register_ack(command_id: str, bobin: int | None = None) -> None:
+    """Publish'ten ÖNCE çağrılır (ack yarışı kaybolmasın): command_id için bekleme kaydı aç.
+
+    A-04 · D1.104: `bobin` = komutun YAYINLANDIĞI bobin — teyit yalnız o bobinin ack konusundan sayılır."""
     with _pending_acks_lock:
-        _pending_acks[command_id] = {"success": None, "event": threading.Event()}
+        _pending_acks[command_id] = {"success": None, "event": threading.Event(), "bobin": bobin}
 
 
-def _resolve_ack(command_id: str, success: bool) -> None:
+def _resolve_ack(command_id: str, success: bool, bobin: int | None = None) -> None:
     """ESP ack'i gelince: kayıtlıysa sonucu yaz + bekleyeni uyandır. Bilinmeyen id → no-op
-    (retained/bayat ack veya STM seri yolu; zararsız)."""
+    (retained/bayat ack veya STM seri yolu; zararsız).
+
+    A-04 · D1.104 (ack teyidinin KAYNAĞI): komut bir bobine yayınlandıysa ack yalnız O bobinin konusundan
+    (`pemf/coil/<bobin>/ack`) teyit sayılır; başka konudan gelen aynı kimlikli ack YOK SAYILIR ve günlüğe yazılır.
+    Kimlikli broker'da (utils.mqtt_kimlik) ack konusuna yalnız ESP kimliği yazabilir."""
     with _pending_acks_lock:
         entry = _pending_acks.get(command_id)
-    if entry is not None:
-        entry["success"] = bool(success)
-        entry["event"].set()
+    if entry is None:
+        return
+    beklenen = entry.get("bobin")
+    if beklenen is not None and bobin is not None and int(bobin) != int(beklenen):
+        logging.getLogger(__name__).warning(
+            "ack YANLIS bobin konusundan geldi (komut bobin %s, konu bobin %s) - teyit SAYILMADI: %s",
+            beklenen,
+            bobin,
+            command_id,
+        )
+        return
+    entry["success"] = bool(success)
+    entry["event"].set()
 
 
 def _wait_ack(command_id: str, timeout: float):
@@ -3364,7 +3405,7 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     # [4.5] NACK yarisi (2026-08-22): onay kaydi publish'ten ONCE acilir (hizli ESP ack yarisi
     # kaybolmasin — HG-4 deseni). Bekci publish sonucuna gore asagida baglanir.
     if payload.start:
-        _register_ack(command_id)
+        _register_ack(command_id, bobin=coil_id)
     # P0 audit 2026-06-28: senkron _mqtt_publish (~7sn worst-case) event-loop'u bloklamasin → to_thread.
     # D1.81 · Y4: START mandal/nesil kapılı yayından geçer (telafi STOP'u dahil); STOP doğrudan.
     if payload.start:
@@ -3547,7 +3588,7 @@ async def control_batch_coils(payload: BatchCoilPayload):
         # [4.5] NACK yarisi: tekil yolla AYNI bekci — batch'i atlamak deponun bir kez yandigi
         # "kismi duzeltme" desenini tekrarlamak olurdu.
         if payload.start:
-            _register_ack(command_id)
+            _register_ack(command_id, bobin=coil_id)
         # P0 audit 2026-06-28: senkron _mqtt_publish event-loop'u bloklamasin → to_thread.
         # D1.81 · Y4: START mandal/nesil kapılı yayından geçer (telafi STOP'u dahil); STOP doğrudan.
         if payload.start:
@@ -4025,7 +4066,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
             # (hizli ack yarisi kaybolmasin — HG-4 deseni; bekci publish sonucundan BAGIMSIZ, NACK ESP'nin
             # command_error event'iyle gelir). Tekil/batch yoluyla ayni sozlesme.
             if _esp_broker_ok:
-                _register_ack(command_id)
+                _register_ack(command_id, bobin=coil_id)
             # ESP publish arka planda → broker yavaş/erişilemezse seans başlatmayı bekletme (snappy start).
             # D1.81 · Y4: mandal/nesil kapılı START yayını (niyet nesli istek girişinden; telafi STOP'u dahil).
             _threading.Thread(
@@ -6277,7 +6318,7 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
         # [3.2]: `_{next(_estop_sira)}` eki ŞART — ms tek başına çakışabilir (üstteki blok yorumu).
         command_id = f"estop_{coil_id}_{int(_t.time() * 1000)}_{next(_estop_sira)}"
         # HG-4 (2026-08-19): onay kaydını publish'ten ÖNCE aç (hızlı ESP ack yarışı kaybolmasın).
-        _register_ack(command_id)
+        _register_ack(command_id, bobin=coil_id)
         ok = _mqtt_publish(
             f"pemf/coil/{coil_id}/control",
             {"command": "stop", "command_id": command_id, "emergency": True, "timestamp": _t.time()},

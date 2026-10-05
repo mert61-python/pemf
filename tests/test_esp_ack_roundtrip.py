@@ -176,6 +176,7 @@ def test_KARSIT_KANIT_subscribe_ve_kapsam_YERINDE():
     src = inspect.getsource(api)
     assert 'subscribe("pemf/coil/+/ack")' in src, "ack subscribe düşmüş — onaylar HİÇ gelmez"
     assert 'msg_type == "ack"' in src, "handler ack dalı düşmüş"
-    assert "_register_ack(command_id)" in src, "E-stop publish öncesi ack kaydı düşmüş"
+    # D1.104: kayıt komutun bobinini de taşır — teyit yalnız o bobinin ack konusundan sayılır.
+    assert "_register_ack(command_id, bobin=coil_id)" in src, "E-stop publish öncesi (bobine bağlı) ack kaydı düşmüş"
     # ESP kapsamı: watch yalnız ESP bobinleri için anlamlı (STM ack MQTT yollamaz)
     assert api.ESP_COIL_IDS == TUM_ESP, f"ESP_COIL_IDS beklenmedik: {api.ESP_COIL_IDS}"

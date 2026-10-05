@@ -73,6 +73,10 @@ function Get-PemfFootprint {
         # Bu satır o ödünleşimin karşılığıdır — kaldırılırsa yetki geride kalır.
         # (Sıradan kaldır-kur bu dosyaya DOKUNMAZ; yalnız -IncludePatientData siler.)
         @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_System\device_identity.json'; Owner = 'shared'; Kvkk = $true }
+        # A-04 · D1.104 — YEREL MQTT BROKER KİMLİĞİ (`utils.mqtt_kimlik`; device_identity.json ile AYNI ödünleşim):
+        # ESP'lere YAKILAN parolanın tek kaynağı. Sıradan kaldır-kur DOKUNMAZ (silinseydi yeniden kurulumda yeni parola
+        # üretilir, yakılmış ESP'ler broker'a BAĞLANAMAZ — bobinin STOP yolu kopardı); KVKK silmesi götürür.
+        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_System\mqtt_kimlik.json';    Owner = 'shared'; Kvkk = $true }
     )
     [pscustomobject]@{
         Paths       = $paths

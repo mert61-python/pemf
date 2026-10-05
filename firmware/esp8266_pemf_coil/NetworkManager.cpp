@@ -1,6 +1,7 @@
 #include "NetworkManager.h"
 #include "Secrets.h"  // 2026-08-19: DEFAULT_LOCAL_MQTT_* + MQTT_LOCAL_MAX_RETRIES burada tanimli - include eksikti, dosya derlenmiyordu
 #include "JsonSayi.h"  // D1.62: sensor alanlari NaN iken `null` (gecersiz "nan" JSON'u yerine)
+#include "MqttKimlik.h"  // A-04 / D1.104: yerel broker kimligi (MqttKimlikYerel.h yoksa kimliksiz)
 #include <limits.h>  // ULONG_MAX iÃ§in gerekli
 
 // Diagnostics sistemi kaldırıldı
@@ -797,7 +798,14 @@ bool NetworkManager::_connectToLocalBroker() {
 
     LOG_PRINTF("[MQTT] Local Broker (%s:%d) deneniyor...\n", _localMqttHost.c_str(), _localMqttPort);
     /* 16. parti (sahip onayi 2026-08-20): willRetain=FALSE — tek abone (backend) HER retained girdiyi eler; retain yalniz bayat-offline riski uretiyordu (canli LWT teslimi MQTT-3.3.1-9 geregi bayraktan bagimsiz). */
-    if (_mqttClient.connect(clientId, lwtTopic, 1, false, lwtMsg)) {
+    /* A-04 / D1.104: kimlik (MqttKimlik.h → MqttKimlikYerel.h) varsa yerel broker'a KIMLIKLE baglan; kimlikli broker
+     * ack konusuna yalniz ESP kimliginin yazmasina izin verir (sahte ack ile E-stop onayi taklit edilemez). Kimlik
+     * yoksa eskisi gibi kimliksiz (hazirlanmamis broker'la uyumlu; kimlikli broker reddeder). */
+    const bool yerelKimlikli = (strlen(PEMF_YEREL_MQTT_KULLANICI) > 0);
+    const bool baglandi = yerelKimlikli
+        ? _mqttClient.connect(clientId, PEMF_YEREL_MQTT_KULLANICI, PEMF_YEREL_MQTT_PAROLA, lwtTopic, 1, false, lwtMsg)
+        : _mqttClient.connect(clientId, lwtTopic, 1, false, lwtMsg);
+    if (baglandi) {
         LOG_PRINTLN("[MQTT] Local Broker'a baglanildi.");
         return true;
     }

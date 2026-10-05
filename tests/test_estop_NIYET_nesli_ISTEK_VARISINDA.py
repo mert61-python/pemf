@@ -134,10 +134,10 @@ def _tekil_esp_turu(o, monkeypatch, *, durdur: bool):
     geldi, birak = threading.Event(), threading.Event()
     gercek_kayit = o.api._register_ack
 
-    def _bekleyen_kayit(cid):
+    def _bekleyen_kayit(cid, *a, **k):  # D1.104: kayıt komutun bobinini de taşır (`bobin=`)
         geldi.set()
         assert birak.wait(10), "aparat: ack kaydı serbest bırakılmadı"
-        return gercek_kayit(cid)
+        return gercek_kayit(cid, *a, **k)
 
     monkeypatch.setattr(o.api, "_register_ack", _bekleyen_kayit)
     y0 = len(o.yayin)

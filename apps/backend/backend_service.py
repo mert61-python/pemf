@@ -1031,6 +1031,19 @@ def _kurtarma_mi(argv: list[str] | None) -> list[str] | None:
     return av
 
 
+def _mqtt_kimlik_mi(argv: list[str] | None) -> list[str] | None:
+    """`--mqtt-kimlik` verilmişse KALAN argümanları döndür, yoksa None (A-04 · D1.104).
+
+    Sahada Python YOK: yerel broker kimliğini hazırlama aracı (`utils.mqtt_kimlik`) kurtarma gibi PEMF_Backend.exe'nin
+    alt komutudur (ESP dönüşünde, ağ geçidinde): `PEMF_Backend.exe --mqtt-kimlik hazirla [--firmware DİZİN]` /
+    `... --mqtt-kimlik durum`. Kendi bayrakları ana ayrıştırıcıya sızmasın diye argparse'tan ÖNCE ayrılır."""
+    av = list(sys.argv[1:] if argv is None else argv)
+    if "--mqtt-kimlik" not in av:
+        return None
+    av.remove("--mqtt-kimlik")
+    return av
+
+
 def main(argv: list[str] | None = None) -> int:
     kurtarma_argv = _kurtarma_mi(argv)
     if kurtarma_argv is not None:
@@ -1039,6 +1052,13 @@ def main(argv: list[str] | None = None) -> int:
         from tools.kurtarma import main as _kurtarma_main
 
         return _kurtarma_main(kurtarma_argv)
+
+    mqtt_kimlik_argv = _mqtt_kimlik_mi(argv)
+    if mqtt_kimlik_argv is not None:
+        # Sunucuyu BAŞLATMADAN yerel broker kimliğini hazırla/raporla (donanım/port/DB'ye dokunmaz; sır basmaz).
+        from utils.mqtt_kimlik import main as _mqtt_kimlik_main
+
+        return _mqtt_kimlik_main(mqtt_kimlik_argv)
 
     args = build_arg_parser().parse_args(argv)
     _port_uyarisi = None

@@ -25,7 +25,7 @@ kök `.env.example`'daki `PEMF_*` değişkenlerindedir.)
 | `config.json.template` | Yukarıdakinin temizlenmiş şablonu |
 | `pemf_config.json` | ⚠️ **KULLANIM DIŞI** (denetim 2026-08-03: hiçbir kod okumuyor; dosyanın kendi `_DEPRECATED` notu var). Eski sunucu-ağ config'i (`http_port 5080`, `websocket_port 5555`, UDP keşif 5766, `max_esp_devices 8`, SSL kapalı) — değerleri CANLI YAPILANDIRMA DEĞİL. Gerçek ayarlar: CORS/host/auth → `deploy/*.env` (`PEMF_CORS_ORIGINS`/`PEMF_API_HOST`/`PEMF_REQUIRE_AUTH`); app ayarları → `config.json` + `apps/backend/utils/production_config_manager.py`. Yeni ayar EKLEME |
 | `credentials/` | **Sırlar** — `credentials.json`, `mosquitto_acl.conf`, `mosquitto_passwords.txt`, `secrets_coil_6.h` (ESP bobin-6 sır başlığı) |
-| `mosquitto/mosquitto.conf` | Yerel broker: `listener 1883 0.0.0.0`, `allow_anonymous true` (bilinçli — ESP anon bağlanır, hotspot-subnet firewall + WPA2 ile savunulur), persistence kapalı |
+| `mosquitto/mosquitto.conf` | Yerel broker: `listener 1883 0.0.0.0`, taban `allow_anonymous true` + sonda `include_dir conf.d` — A-04 · D1.104: `PEMF_Backend.exe --mqtt-kimlik hazirla` oraya kimlik parçası (`allow_anonymous false` + parola + ACL) yazınca broker KİMLİKLİ olur; hazırlanmamışsa anonim (hotspot-subnet firewall + WPA2 ile savunulur), persistence kapalı |
 
 ## Notlar
 - **Bobin GPIO haritası yalnız firmware'dedir** (`../firmware/stm32_pemf/Core/Src/main.c`), config'te değil.

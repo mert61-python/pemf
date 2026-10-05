@@ -288,7 +288,21 @@ log_type error
 log_type warning
 log_type notice
 log_timestamp true
+# A-04 / D1.104: yerel broker KIMLIGI. 'PEMF_Backend.exe --mqtt-kimlik hazirla' (ESP donusunde) bu dizine
+# pemf_kimlik.conf (allow_anonymous false + password_file + acl_file) yazar; SONDA oldugu icin yukaridaki
+# anonim izni EZER. Dizin bossa davranis bugunku gibidir (anonim). Bu satir HER ZAMAN en sonda kalmali.
+include_dir $($MosqDataRoot -replace '\\','/')/conf.d
 "@
+    # include_dir'in dizini YOKSA mosquitto acilmaz → once olustur. Yerinde guncellemede hazirlanmis kimlik parcasi
+    # KORUNUR; kaldir-kur 'mosquitto' dizinini siler → 'hazirla' yeniden calistirilir (kimlik deposu korundugu icin
+    # parolalar AYNI kalir, yakilmis ESP'ler yine baglanir).
+    New-Item -ItemType Directory -Force -Path "$MosqDataRoot\conf.d" | Out-Null
+    # ⚠️ BOS include_dir'de mosquitto (Windows) ACILMAZ ("Unable to open include_dir", 2.0.18'de OLCULDU) → hazirlanmamis
+    # her kurulumda broker duser ve ESP STOP yolu kopardi. Yalniz yorumdan olusan yer tutucu parca dizini bos birakmaz.
+    $TabanParca = Join-Path $MosqDataRoot "conf.d\00_pemf_taban.conf"
+    if (-not (Test-Path $TabanParca)) {
+        Set-Content -Path $TabanParca -Value "# PEMF: include_dir bos kalmasin (mosquitto Windows'ta bos dizinde ACILMAZ). Kimlik parcasi: pemf_kimlik.conf" -Encoding ASCII
+    }
     # BOŞLUKSUZ yola yaz (C:\ProgramData\...): NSSM AppParameters '-c <yol>' boşlukta bölünür;
     # "C:\Program Files\..." mosquitto'ya "C:\Program" olarak geçip "Unable to open config" verirdi.
     Set-Content -Path "$MosqDataRoot\mosquitto.conf" -Value $conf -Encoding ASCII
