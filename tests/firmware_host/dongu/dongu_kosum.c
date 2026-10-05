@@ -9,7 +9,8 @@
  * `__asm volatile("nop");` → `pemf_host_nop();` ve HAL `__weak` tanımları → `/alternatename`.
  *
  * SANAL ZAMAN (ns): model erişimi ERISIM_NS (50), HAL_GetTick GETTICK_NS (1000: ana döngü turunun CPU payı — firmware
- * turda iki kez çağırır; ISR'da 0), NOP 6 (1 çevrim @168 MHz) ilerletir; AYNI yazmacın
+ * turda iki kez çağırır; ISR'da 0), NOP 6 (1 çevrim @168 MHz), firmware `snprintf`'i SNPRINTF_NS (varsayılan 0;
+ * senaryo bildirirse ACK biçimleme gibi CPU işi zamanı ilerletir — TIM1/SysTick araya girer) ilerletir; AYNI yazmacın
  * DEĞİŞMEYEN değerle üst üste okunması (bayrak bekleme döngüsü) o yazmacın bir sonraki DEĞİŞİM anına atlar (kesme
  * olayları arada sırayla teslim edilir). Kesmeler — SysTick (LOAD/HCLK), TIM1 güncellemesi (PSC/ARR, TIM1 saati),
  * USART3 (TXE/TC/RXNE/ORE, CR1/CR3 + NVIC) — her erişimden sonra, HAL_GetTick'te ve `__enable_irq`'da, PRIMASK
@@ -25,6 +26,7 @@
  * sonda "SON …". Senaryo: SURE_US n · ERISIM_NS n · ACS <adc_kanalı> <mV> · I2C <hat> <MLX90614|MLX90393> <adres hex>
  * · SICAKLIK <hat> <ortam_C> <nesne_C> · ALAN <hat> <x> <y> <z> (ham LSB) · PAKET <t_us> <hex>. */
 
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,6 +54,7 @@ static volatile uint64_t g_vt;       /* ns */
 static uint64_t g_bitis = 30000000000ULL;
 static uint64_t g_erisim_ns = 50U;
 static uint64_t g_gettick_ns = 1000U; /* ana döngü turunun CPU payı (HAL_GetTick başına; ISR'da 0) */
+static uint64_t g_snprintf_ns = 0U;    /* CPU modeli: firmware snprintf çağrısı başına (senaryo SNPRINTF_NS) */
 static int g_isr, g_primask;
 static uint64_t g_erisim, g_isr_sayisi, g_tx_bayt, g_rx_ore, g_rx_kayip, g_tdr_ezildi;
 
@@ -1105,6 +1108,18 @@ uint32_t HAL_GetTick(void) { /* güçlü tanım: HAL'in zayıf HAL_GetTick'i `/a
   }
   return uwTick;
 }
+#undef snprintf
+int pemf_host_snprintf(char *tampon, size_t boy, const char *bicim, ...) {
+  va_list ap;
+  va_start(ap, bicim);
+  const int r = vsnprintf(tampon, boy, bicim, ap);
+  va_end(ap);
+  if (!g_isr && g_snprintf_ns) {
+    zamani_ilerlet(g_vt + g_snprintf_ns); /* newlib-nano snprintf'in M4'teki süresi (senaryo bildirir) */
+  }
+  return r;
+}
+
 void pemf_host_nop(void) {
   g_vt += 6U;
   if (g_vt >= g_bitis) {
@@ -1205,6 +1220,11 @@ static void senaryo_oku(const char *yol) {
       if (sscanf(satir + 2, "%llu %llu", &b, &n) == 2) {
         g_iz_bas = b;
         g_iz_adet = n;
+      }
+    } else if (!strcmp(ad, "SNPRINTF_NS")) {
+      unsigned long long v;
+      if (sscanf(satir + 11, "%llu", &v) == 1) {
+        g_snprintf_ns = v;
       }
     } else if (!strcmp(ad, "GETTICK_NS")) {
       unsigned long long v;

@@ -299,6 +299,8 @@ void *const g_printf_float_zorla = (void *)&_printf_float;
                                              / 2 = 25kHz */
 #define DURATION_MAX_MINUTES                                                   \
   9999U                 /**< GUI manuel/otomatik sure ust siniriyle uyumlu */
+_Static_assert((unsigned long long)DURATION_MAX_MINUTES * 60000ULL < 0x80000000ULL,
+               "sure denetimi isaretli ms farki kullanir: hedef 2^31 ms'nin altinda kalmali");
 #define REF_MS_MAX 999U /**< GUI time.monotonic() % 1000 gonderir */
 /** @} */
 
@@ -1521,8 +1523,14 @@ int main(void) {
         uint32_t start_ms = g_start_ms[i];
 
         if (dur_min > 0 && start_ms > 0 && g_active.coil[i].duty > 0.0f) {
-          uint32_t elapsed_ms = current_time - start_ms;
-          uint32_t target_ms = dur_min * 60000U; // dakika to milisaniye
+          /* ⚠️ 1-G YENİ BULGU (ana döngü koşum takımıyla ölçüldü): `current_time` tur BAŞINDA alınır; aynı turda işlenen
+           * paket bobini başlatınca TIM1 ISR'ı `g_start_ms[i] = HAL_GetTick()`'i TAZE yazar. Arada SysTick ilerlediyse
+           * `start_ms = current_time + 1` olur ve İŞARETSİZ fark 4 294 967 295 → "süre doldu": bobin başlar başlamaz
+           * DURDURULUYOR, `STM_STOPPED` basılıyordu (30 başlatmanın 13'ünde, bobin 0,18 ms açık; sonraki keep-alive
+           * yeniden başlatıyordu). İŞARETLİ fark: başlangıç bu turun "geleceğindeyse" geçen süre negatiftir = dolmadı.
+           * HAL_GetTick 49,7 günde sarar — işaretli fark sarmada da doğrudur (hedef < 2^31, bkz. _Static_assert). */
+          const int32_t elapsed_ms = (int32_t)(current_time - start_ms);
+          const int32_t target_ms = (int32_t)(dur_min * 60000U); // dakika to milisaniye
 
           if (elapsed_ms >= target_ms) {
             /* Süre doldu, bu bobini durdur */

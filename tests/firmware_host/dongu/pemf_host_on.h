@@ -27,4 +27,11 @@ static __inline unsigned pemf_host_ctz(unsigned x) {
 
 void pemf_host_nop(void);
 
+/* CPU SÜRESİ MODELİ (isteğe bağlı): firmware'in `snprintf` çağrıları koşum takımında sanal zamanı senaryonun
+ * `SNPRINTF_NS` değeri kadar ilerletir (varsayılan 0 = CPU "anlık"). ⚠️ stdio.h ÖNCE dahil edilir: makro yalnız
+ * firmware kaynağındaki ÇAĞRILARI yeniden adlandırır, CRT bildirimini değil. */
+#include <stdio.h>
+int pemf_host_snprintf(char *tampon, size_t boy, const char *bicim, ...);
+#define snprintf pemf_host_snprintf
+
 #endif /* PEMF_HOST_ON_H */
