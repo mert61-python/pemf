@@ -70,7 +70,7 @@ for _yol in (_KOK, _KOK / "apps" / "backend"):
     if str(_yol) not in sys.path:
         sys.path.insert(0, str(_yol))
 
-from utils.stm32_kimlik import banner_ayristir, uyum_denetle  # noqa: E402
+from utils.stm32_kimlik import banner_ayristir, firmware_paket_boyu, uyum_denetle  # noqa: E402
 
 # ⚠️ Paket boyu ELLE YAZILMAZ: 2026-09-11 protokol degisiminde (120 -> 121) betik
 #    120'de kaldi ve operatore YANLIS sayi gosterdi. Tek kaynak stm32_transport.
@@ -153,6 +153,12 @@ def main() -> int:
             if kanal < STM_PAKET_BOBIN_SAYISI:
                 print(
                     f"  ❌ ESKI FIRMWARE YUKLU  ({kanal}-kanal, {'88 baytlik' if kanal == 5 else 'eski boyda'} paket bekliyor)"
+                )
+            elif kanal == STM_PAKET_BOBIN_SAYISI and _kimlik is not None:
+                # D1.103 (B-1.20): kanal tutuyor ama paket boyu tutmuyor (2026-09-10/11 kip baytsiz surum; boy kimlikten)
+                print(
+                    f"  ❌ ESKI FIRMWARE YUKLU  ({kanal}-kanal, {firmware_paket_boyu(_kimlik)} baytlik paket bekliyor"
+                    " — surus kipi bayti yok)"
                 )
             else:
                 print(

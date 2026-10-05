@@ -111,6 +111,8 @@ class Stm32SerialTransport:
         self.settings = settings
         self._last_no_port_log = 0.0
         self._bad_ports_until: dict[str, float] = {}
+        #: D1.103 (B-1.21): son el sıkışmada görülen `STM_NACK` satırı sayısı (zaman aşımı teşhisini seçer).
+        self._el_sikisma_nack = 0
 
     def open_and_handshake(
         self,
@@ -143,6 +145,21 @@ class Stm32SerialTransport:
             if not ready_line:
                 self.close_serial(serial_obj)
                 self._mark_bad(candidate.device)
+                if self._el_sikisma_nack:
+                    # ⚠️ D1.103 (B-1.21, ölçüldü d01t83 durum D): kart YANIT VERİYOR ama sıfır-duty yoklamasını REDDEDİYOR
+                    # (resetsiz bağlanan eski/uyumsuz firmware — banner da görülmedi). Eskiden aşağıdaki kablo/port
+                    # metni basılıyordu → destek yanlış yöne (USART3/COM10) gidiyordu.
+                    self._log_warning(
+                        "[STM32] Handshake zaman aşımı (%.1f s) → %s; kart YANIT VERİYOR ama sıfır-duty yoklamasını %d "
+                        "kez REDDETTİ (STM_NACK) ve STM_READY görülmedi — karttaki firmware bu uygulamanın %d baytlık "
+                        "paketini anlamıyor, kimlik okunamadı. Kartı güncel firmware ile yeniden yakın "
+                        "(docs/SAHA-ISLERI-REHBERI.md B-2) ya da RESET'e basıp açılış satırını okutun. Port kapatıldı.",
+                        self.handshake_timeout_sec,
+                        candidate.label(),
+                        self._el_sikisma_nack,
+                        STM_PAKET_BOYU,
+                    )
+                    return None
                 self._log_warning(
                     "[STM32] Handshake zaman aşımı (%.1f s) → %s; ’STM_READY’ veya ’STM_OK’ "
                     "alınamadı. Port kapatıldı. Firmware USART3 (PD8/PD9) kullanıyor mu? "
@@ -312,6 +329,7 @@ class Stm32SerialTransport:
         start = time.monotonic()
         deadline = start + self.handshake_timeout_sec
         next_probe_at = start + HANDSHAKE_PASSIVE_LISTEN_SEC
+        self._el_sikisma_nack = 0
 
         while time.monotonic() < deadline:
             if stop_event is not None and getattr(stop_event, "is_set", lambda: False)():
@@ -334,6 +352,8 @@ class Stm32SerialTransport:
 
                     if "STM_READY" in decoded or "STM_OK:" in decoded:
                         return decoded
+                    if "STM_NACK" in decoded:
+                        self._el_sikisma_nack += 1
 
             now = time.monotonic()
             if now < next_probe_at:

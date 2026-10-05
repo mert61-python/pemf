@@ -565,6 +565,37 @@ class HeadlessCore:
                 priority=EventPriority.HIGH,
             )
 
+    def _stm_kimligi_okunamadi(self) -> None:
+        """D1.103 · B-1.21 — el sıkışma `STM_READY`siz tamamlandı: kart RESETLENMEDEN bağlandı (firmware banner'ı yalnız
+        açılışta basar; el sıkışma sessiz karta sıfır-duty yoklamasıyla `STM_OK` aldı) → bu bağlantıda kimlik OKUNMADI.
+
+        Eskiden SESSİZDİ: `stm_uyumlu` None kalıyor, günlükte ve olay akışında iz yoktu (destek kimliği göremiyordu).
+        Aynı süreçte daha önce kimlik okunmadıysa WARNING + `hardware.stm.uyumsuz` olayı (uyumlu=None) — banner'ı
+        tanınmayan kartla AYNI kanal. KARAR DEĞİŞMEZ: "bilinmiyor" seansı ENGELLEMEZ (kart paketleri reddederse
+        tepkisel kapı — sistematik NACK — seansı durdurur); bağlantı göstergesine 3. durum EKLENMEZ. Önceki bağlantıda
+        okunmuş kimlik korunur (yalnız INFO). Firmware'e kimlik SORGUSU komutu: Oturum 13 (tezgâh)."""
+        with self._stm_state_lock:
+            kimlik = self.stm_kimlik
+        if kimlik is not None:
+            self.logger.info(
+                "[STM32] Kart resetlenmeden baglandi; kimlik onceki baglantidan: %s, %d kanal",
+                kimlik.surum,
+                kimlik.kanal,
+            )
+            return
+        sebep = (
+            "Kartin firmware kimligi OKUNAMADI: kart resetlenmeden baglandi (STM_READY gorulmedi; el sikisma sifir-duty "
+            "yoklamasina STM_OK ile tamamlandi). Uyum DOGRULANAMADI — seans engellenmez; kart paketleri reddederse "
+            "sistematik red seansi durdurur. Kimligi okutmak icin kartin RESET dugmesine basin ya da backend kapaliyken "
+            "python scripts/stm_firmware_kimligi.py calistirin."
+        )
+        with self._stm_state_lock:
+            self.stm_uyumsuzluk_sebebi = sebep
+        self.logger.warning("STM32 firmware kimligi okunamadi — %s", sebep)
+        self._publish_event(
+            "hardware.stm.uyumsuz", {"uyumlu": None, "sebep": sebep, "banner": ""}, priority=EventPriority.HIGH
+        )
+
     def _on_stm_connected_slot(self, is_connected: bool) -> None:
         with self._stm_state_lock:
             self.stm_is_connected = bool(is_connected)
@@ -979,6 +1010,15 @@ class HeadlessCore:
             nesil = baglanti.yerlestir(yeni)
             self._set_stm_connected(True)
             threading.Thread(target=reader, args=(yeni, nesil), daemon=True, name="STM32Reader").start()
+            # ⚠️ D1.103 (B-1.21): el sıkışma `STM_READY`siz bitti (kart RESETLENMEDEN bağlandı) → bu bağlantıda kimlik
+            # okunmadı; eskiden SESSİZDİ. Görünürlük yalnız günlük + olay (bağlantı göstergesi İKİ durumlu kalır).
+            # Okuyucu ÖNCE başlar; görünürlük adımı hata verse de bağlantıyı bozamaz.
+            _el_sikisma = str(getattr(result, "ready_line", "") or "")  # gerçek taşıma: el sıkışmayı bitiren satır
+            if _el_sikisma and "STM_READY" not in _el_sikisma:
+                try:
+                    self._stm_kimligi_okunamadi()
+                except Exception:
+                    self.logger.debug("[STM32] kimlik gorunurlugu yazilamadi (baglanti SURUYOR)", exc_info=True)
 
         def reader(conn, nesil: int) -> None:
             """Kendi `conn`unu okur — paylaşılan duruma KÖR. Kapanışta kimlik doğrular."""
