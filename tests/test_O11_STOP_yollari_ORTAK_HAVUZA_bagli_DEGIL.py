@@ -446,3 +446,78 @@ def test_KRITIK_ai_pro_stop_STOPu_ONIZLEME_beklemesinden_ONCE_porta_gider(aparat
         f"AI Pro durdurma: önizleme kamerayı bırakırken (join) {len(kotu)}/{DENEME} denemede STOP {SINIR_S} sn içinde "
         f"PORTA gitmedi — STOP önizleme beklemesinin ARKASINDA (Ö.4-Y8). Örnek: {kotu[:3]}"
     )
+
+
+@pytest.mark.parametrize("ikinci", ["acil_durdur", "seans_durdur_SEANSSIZ"])
+def test_KRITIK_ASILI_bir_STOP_isi_SONRAKI_STOPu_bekletmez(aparat, monkeypatch, ikinci):
+    """1-G inceleme G-1.2: durdurma işleri birbirini BEKLEMEZ. Bir STOP işi STOP'u gönderdikten sonra asılı kalabilir
+    (ACİL DURDUR'un seans kaydı kapanışı asılı diskte; `_emergency_stop_all` DB'yi STOP'tan SONRA yazar). Yardımcı her
+    işe KENDİ iş parçacığını açtığı için sonraki STOP sıra beklemez. "Ayrılmış tek-işlik yürütücü" (1-F inceleme
+    önerisi) ya da işleri serileştiren bir kilit bunu bozar: yukarıdaki kollar onlarda YEŞİL kaldı (ölçüldü — ortak
+    havuzlar dolu ama ayrılmış yürütücü boş), sonraki STOP 10/10 porta GİTMEDİ."""
+    import httpx
+
+    o = aparat
+    asili, girdi = threading.Event(), threading.Event()
+
+    class _AsiliDB:
+        def record_session_event(self, *a, **k):
+            girdi.set()
+            asili.wait(30)
+
+    monkeypatch.setattr(o.api, "_get_treatment_db", lambda: _AsiliDB())
+    monkeypatch.setattr(o.api, "_finalize_session_db", lambda *a, **k: asili.wait(30))
+    sonuc = []
+    try:
+        for i in range(10):
+            asili.clear()
+            girdi.clear()
+            _bobin1_sur(o)
+            with o.api._session_lock:
+                o.api._active_session.clear()
+                o.api._active_session.update(
+                    {
+                        "is_active": True,
+                        "session_id": f"g12-{i}",
+                        "coil_ids": [1, 2],
+                        "db_session_id": 4242,
+                        "started_epoch": time.time(),
+                        "start_mono": time.monotonic(),
+                        "mode": "Manuel",
+                    }
+                )
+
+            async def _kos():
+                async with httpx.AsyncClient(
+                    transport=httpx.ASGITransport(app=o.api.app), base_url="http://cihaz"
+                ) as c:
+                    t0 = time.perf_counter()
+                    ilk = asyncio.ensure_future(c.post("/api/hardware/emergency_stop"))
+                    while time.perf_counter() < t0 + 3 and not girdi.is_set():
+                        await asyncio.sleep(0.01)
+                    assert girdi.is_set(), "aparat: ilk ACİL DURDUR seans kaydı kapanışına (asılı) girmedi"
+                    assert _ilk_stop_stm(o, t0) is not None, "aparat: ilk ACİL DURDUR'un STOP'u porta gitmedi"
+                    _bobin1_sur(o)  # ikinci STOP'tan önce telde yine gerçek sürüş
+                    with o.api._session_lock:
+                        o.api._active_session.clear()
+                    t1 = time.perf_counter()
+                    yol = "/api/hardware/emergency_stop" if ikinci == "acil_durdur" else "/api/session/stop"
+                    ikinci_g = asyncio.ensure_future(c.post(yol))
+                    try:
+                        while time.perf_counter() < t1 + SINIR_S and _ilk_stop_stm(o, t1) is None:
+                            await asyncio.sleep(0.01)
+                        ts = _ilk_stop_stm(o, t1)
+                    finally:
+                        asili.set()
+                        await asyncio.wait_for(asyncio.gather(ilk, ikinci_g, return_exceptions=True), 15)
+                    return None if ts is None else round(ts - t1, 3)
+
+            sonuc.append(asyncio.run(_kos()))
+    finally:
+        asili.set()
+    print(f"O11_ORAN yol={ikinci}_ASILI_ONCEKI_IS sonuc={sonuc}")
+    kotu = [s for s in sonuc if s is None or s >= SINIR_S]
+    assert not kotu, (
+        f"{ikinci}: önceki bir STOP işi (ACİL DURDUR'un DB kapanışı) asılıyken {len(kotu)}/10 denemede sonraki STOP "
+        f"{SINIR_S} sn içinde PORTA gitmedi — durdurma işleri birbirini bekliyor (Ö.4-Y8). Süreler: {sonuc}"
+    )
