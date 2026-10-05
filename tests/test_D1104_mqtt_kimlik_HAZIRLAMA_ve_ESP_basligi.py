@@ -94,6 +94,24 @@ def test_KRITIK_yenile_STOP_yolu_UYARISI_ve_izin_hatasi_DOSTCA(mk, tmp_path, cap
     assert "YONETICI" in capsys.readouterr().out
 
 
+def test_KRITIK_G31_sonraki_adim_SAHA_modelinde_uygulama_yeniden_baslatilir_Restart_Service_DEGIL(mk, tmp_path, capsys):
+    """1-G inceleme G-3.1: sahada (Y36) broker backend'in KENDİ sürecidir (launcher → PEMF_Backend.exe → mosquitto.exe);
+    makinedeki Windows `mosquitto` servisi eski kurulumun takılı servisidir. "Restart-Service mosquitto" tek talimat olarak
+    sahada kimliği devreye SOKMAZ (backend'in broker'ı yeniden başlamaz) ve eski servisi tetikler. CLI her iki kurulum
+    modelini ayrı söylemeli ve doğrulama adımını vermeli."""
+    assert mk.main(["hazirla", "--broker-dizini", str(tmp_path / "broker")]) == 0
+    cikti = capsys.readouterr().out
+    satirlar = cikti.splitlines()
+    saha = [s for s in satirlar if "launcher kurulumu" in s]
+    assert saha, f"CLI saha (launcher) kurulumu için yeniden başlatma adımını söylemiyor:\n{cikti}"
+    assert "PEMF uygulamasini kapatip yeniden" in cikti and "KULLANMAYIN" in cikti, (
+        f"saha adımı uygulamanın yeniden açılmasını ve servisin KULLANILMAMASINI söylemiyor:\n{cikti}"
+    )
+    servis = [s for s in satirlar if "Restart-Service mosquitto" in s and "servis kurulumu" in s]
+    assert servis, f"servis kurulumu (setup_services/NSSM) adımı yok:\n{cikti}"
+    assert "BAGLANAMAMALI" in cikti, f"anonim istemcinin bağlanamadığını doğrulama adımı yok:\n{cikti}"
+
+
 def test_KRITIK_depoda_ve_CLI_ciktisinda_parola_DEGERI_YOK(mk, tmp_path, capsys):
     fw = tmp_path / "fw"
     fw.mkdir()

@@ -264,9 +264,16 @@ def main(argv: list[str] | None = None) -> int:
     for b in r["basliklar"]:
         print(f"ESP basligi (SIR ICERIR - derleyip silin): {b}")
     print("SONRAKI ADIM (sira onemli): 1) ESP'leri bu baslikla derleyip yakin (bobinler durmusken);")
+    # ⚠️ 1-G inceleme G-3.1: sahada (Y36) broker backend'in KENDİ sürecidir (launcher → PEMF_Backend.exe →
+    # mosquitto.exe); oradaki Windows `mosquitto` servisi ESKİ kurulumun takılı servisidir, backend'in broker'ı DEĞİL.
+    # `Restart-Service mosquitto` sahada kimliği devreye SOKMAZ ve o eski servisi tetikler.
+    print("  2) SONRA broker'i yeniden baslatin - kimlik ancak o zaman devreye girer:")
+    print("     * launcher kurulumu (saha): broker backend'in KENDI surecidir -> PEMF uygulamasini kapatip yeniden")
     print(
-        "  2) SONRA broker'i yeniden baslatin (Windows: Restart-Service mosquitto) - kimlik ancak o zaman devreye girer."
+        "       acin (bobinler durmusken). 'Restart-Service mosquitto' KULLANMAYIN: o servis backend'in broker'i DEGIL."
     )
+    print("     * servis kurulumu (setup_services / NSSM): Restart-Service mosquitto.")
+    print("  3) dogrulayin: kimliksiz (anonim) istemci broker'a BAGLANAMAMALI.")
     print(
         "Not: basliksiz (eski) ESP firmware'i kimlikli broker'a BAGLANAMAZ; makine yeniden baslarsa broker kimlikli acilir."
     )
