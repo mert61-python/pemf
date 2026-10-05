@@ -2482,6 +2482,15 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
 
 
 @ai_router.post("/api/ai/pro/stop")
+async def stop_ai_pro_ucu():
+    """AI Pro durdurma UCU. ⚠️ O-1.1 (Ö.4-Y8): gövde (`stop_ai_pro`) KENDİ iş parçacığında — eşzamanlı (`def`) uç olarak
+    anyio'nun ORTAK iş parçacığı sınırlayıcısında (40) sıra beklemez (bağımlılığı `jeton_gate` de havuza girmeden karar
+    verir). Ölçüldü (1-G önce-kırmızı): iki ortak havuz asılı işlerle doluyken STOP 30/30 porta GİTMİYORDU."""
+    import servers.api_server as _api
+
+    return await _api._durdurma_is_parcaciginda(stop_ai_pro, ad="ai-pro-stop")
+
+
 def stop_ai_pro():
     global _ai_loop_active, _ai_owner_client, _ai_hedef_modeli
     with _ai_loop_lock:
@@ -2493,15 +2502,6 @@ def stop_ai_pro():
         # [B1] Sahiplik kilidin İÇİNDE temizlenir: stop'tan sonra başka bir modern istemci AI
         # Pro'yu devralabilsin (stale owner kimseyi kilitlemesin).
         _ai_owner_client = ""
-    # Mobil (/frame) seansında loop teardown'ı YOKTUR → canlı E bağlamını burada da temizle.
-    try:
-        from servers import efield_live as _ef3
-
-        _ef3.set_context([])
-    except Exception:
-        logger.debug("AI Pro stop: canlı E bağlamı temizlenemedi", exc_info=True)
-    # WEB kapalı-döngü: hazırlık önizlemesi çalışıyorsa onu da durdur (kamera bırakılsın).
-    _ai_hazirlik_durdur_ic()
 
     # Bobinleri TÜM transport'larda durdur: STM 1-5 + ESP 6-8 (Audit P1 #3). Eskiden yalnız
     # stop_all_coils (STM) çağrılıyordu; kamerasız/mobil yolda loop-cleanup çalışmadığı için
@@ -2523,6 +2523,19 @@ def stop_ai_pro():
         _api._bildir_teyitsiz_stop(_api._stop_session_coils(range(1, 9), yetkiyi_kes=True), "AI Pro durdurma")
     except Exception:
         logger.exception("stop_ai_pro: _stop_session_coils hatası")
+    # ⚠️ O-1.1 kapsamı (1-G): önizleme durdurma ve canlı E bağlamı STOP'tan SONRA. Eskiden STOP'tan ÖNCEydi: önizleme o an
+    # lokalizasyondaysa `_ai_hazirlik_durdur_ic` kamerayı bırakmasını `join(timeout=6)` ile BEKLİYOR, STOP 6 sn'ye dek
+    # gecikiyordu (ölçüldü 30/30; mobil `/frame` seansı `_ai_loop_active` kurmaz → önizleme açık kalabilir). İkisi de bobin
+    # sürmez; sıra yalnız STOP'u öne alır.
+    # Mobil (/frame) seansında loop teardown'ı YOKTUR → canlı E bağlamını burada da temizle.
+    try:
+        from servers import efield_live as _ef3
+
+        _ef3.set_context([])
+    except Exception:
+        logger.debug("AI Pro stop: canlı E bağlamı temizlenemedi", exc_info=True)
+    # WEB kapalı-döngü: hazırlık önizlemesi çalışıyorsa onu da durdur (kamera bırakılsın).
+    _ai_hazirlik_durdur_ic()
     # AI seansını da kapat → süre-watchdog ve frame-geçidi 'seans aktif değil' görsün.
     try:
         with _api._session_lock:
@@ -2780,7 +2793,8 @@ async def _frame_kayip_stopu(neden: str, seri: int = _AI_LOST_STOP_STREAK) -> No
     try:
         import servers.api_server as _apx
 
-        _teyitsiz = await asyncio.to_thread(_apx._stop_session_coils, range(1, 8))
+        # O-1.1 (Ö.4-Y8): KENDİ iş parçacığı — ortak havuz (`to_thread`) asılı G/Ç ile doluyken STOP sıra beklemez.
+        _teyitsiz = await _apx._durdurma_is_parcaciginda(_apx._stop_session_coils, range(1, 8), ad="frame-kayip-stop")
         if _bildir:
             _apx._bildir_teyitsiz_stop(_teyitsiz, "AI Pro hedef-kaybı durdurması (mobil kare)")
     except Exception:

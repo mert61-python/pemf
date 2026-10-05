@@ -3084,7 +3084,10 @@ async def hardware_command(payload: CommandPayload):
             success = state.hardware.stop_all_coils()
             # 1-C §9 #2 (A-63): teyit = STOP porta YAZILDI (E-stop'la aynı ölçüt). Kuyruğa verildi ama yazılamadıysa
             # (kablo çıkık / ölü gönderici) "success" DENMEZ — "partial" + `stmStopped:false`. Yalnız RAPOR.
-            _yazildi = bool(success) and await asyncio.to_thread(_stm_stop_porta_yazildi_mi, _isaret, _sira_once)
+            # O-1.1: teyit beklemesi KENDİ iş parçacığında — ortak havuz doluyken yanıt (ve istemcinin yedek adımı) takılmaz.
+            _yazildi = bool(success) and await _durdurma_is_parcaciginda(
+                _stm_stop_porta_yazildi_mi, _isaret, _sira_once, ad="stop-all-teyit"
+            )
             return {
                 "status": ("success" if _yazildi else "partial") if success else "error",
                 "command": cmd,
@@ -3296,8 +3299,10 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     # D1.81 · Y4: START mandal/nesil kapılı yayından geçer (telafi STOP'u dahil); STOP doğrudan.
     if payload.start:
         ok = await asyncio.to_thread(_esp_start_yayinla, coil_id, mqtt_payload)
-    else:
-        ok = await asyncio.to_thread(_mqtt_publish, f"pemf/coil/{coil_id}/control", mqtt_payload)
+    else:  # O-1.1: STOP yayını KENDİ iş parçacığında (ortak havuz doluyken sıra beklemez)
+        ok = await _durdurma_is_parcaciginda(
+            _mqtt_publish, f"pemf/coil/{coil_id}/control", mqtt_payload, ad=f"esp-stop-{coil_id}"
+        )
     # Asama-2: per-bobin run logging (ESP/MQTT dali). Loglanan freq = ESP'ye GİDEN (normalize) değer.
     # [4.5]: kosu kaydi yalniz DOGRULANMIS publish'te — broker oluyken komut KESIN gitmedi;
     # "kostu" yazmak hic kosmamis bobini tedavi gecmisine sokar. STOP'ta finish her halde.
@@ -3477,8 +3482,10 @@ async def control_batch_coils(payload: BatchCoilPayload):
         # D1.81 · Y4: START mandal/nesil kapılı yayından geçer (telafi STOP'u dahil); STOP doğrudan.
         if payload.start:
             ok = await asyncio.to_thread(_esp_start_yayinla, coil_id, mqtt_payload)
-        else:
-            ok = await asyncio.to_thread(_mqtt_publish, f"pemf/coil/{coil_id}/control", mqtt_payload)
+        else:  # O-1.1: STOP yayını KENDİ iş parçacığında (ortak havuz doluyken sıra beklemez)
+            ok = await _durdurma_is_parcaciginda(
+                _mqtt_publish, f"pemf/coil/{coil_id}/control", mqtt_payload, ad=f"esp-stop-{coil_id}"
+            )
         # Asama-2: per-bobin run logging (ESP/MQTT dali) — loglanan freq = ESP'ye GIDEN (normalize).
         # [4.5]: kosu kaydi yalniz DOGRULANMIS publish'te (tekil yolla ayni gerekce).
         if payload.start:
@@ -3548,7 +3555,8 @@ async def start_session(payload: SessionStartPayload, request: Request):
             if not live_state.esp_etkin():  # seans yoluyla aynı: ESP kapalıyken hayalet bobin 8'e STOP/alarm yok
                 _durdur = [c for c in _durdur if c not in ESP_COIL_IDS]
             _bildir_teyitsiz_stop(
-                await asyncio.to_thread(_stop_session_coils, _durdur), "0 Hz seans isteği (A-05) — mandallıyken"
+                await _durdurma_is_parcaciginda(_stop_session_coils, _durdur, ad="sifir-hz-durdur"),  # O-1.1
+                "0 Hz seans isteği (A-05) — mandallıyken",
             )
             raise HTTPException(status_code=503, detail=SIFIR_HZ_SEANS_MESAJI)
         raise HTTPException(status_code=409, detail=_giris_engeli)
@@ -5185,8 +5193,8 @@ async def stop_session():
         # ⚠️ D1.81 (B-5.3 · İG-5.3): "Aktif seans yok" ARTIK STOP'SUZ DÖNMEZ. Ölçüldü: E-stop'un yarışında uçuştaki AI
         # turu bobinleri yeniden enerjiledikten sonra operatörün /session/stop'u "Aktif seans yok" deyip telde 0 STOP
         # bırakıyordu (keep-alive sürmeye devam). Seanssız sürüş (tekil/batch, eski bir AI turu) de durdurulmalı:
-        # TÜM bobinlere STOP + yetki kesme. STOP idempotenttir (Ö.4-Y8: yalnız artar).
-        _teyitsiz = await asyncio.to_thread(_seanssiz_durdur) or []
+        # TÜM bobinlere STOP + yetki kesme. STOP idempotenttir (Ö.4-Y8: yalnız artar). O-1.1: KENDİ iş parçacığı.
+        _teyitsiz = await _durdurma_is_parcaciginda(_seanssiz_durdur, ad="seanssiz-durdur") or []
         # 1-C inceleme i2-F3: seans yokken canlı durum "aktif" kalmasın (bayat bir yazımın takılı göstergesi ve açık seans
         # CSV'si — `update_live_session_state` sarmalayıcısı "aktif değil" yazımında CSV'yi kapatır). Mandal kuruluyken
         # "Acil Durdurma" kalır (live_state kuralı).
@@ -5224,7 +5232,8 @@ async def stop_session():
         )
     else:
         # D1.81: seansı bitiren durdurma → yetki kesilir (uçuştaki START'lar bu STOP'tan sonra enerjileyemez).
-        _stop_teyitsiz = await asyncio.to_thread(_stop_session_coils, coil_ids, True) or []
+        # O-1.1: KENDİ iş parçacığı — ortak havuz (`to_thread`) asılı G/Ç ile doluyken STOP sıra beklemez.
+        _stop_teyitsiz = await _durdurma_is_parcaciginda(_stop_session_coils, coil_ids, True, ad="seans-durdur") or []
         update_live_session_state(is_active=False, mode="Sistem Hazır")
 
     # (b) Sensor buffer'i gercek db_session_id ile FLUSH et + (c) end_session (gercek wall-clock sure).
@@ -6283,13 +6292,51 @@ def _emergency_stop_async(reason: str = "manual", mode: str = "Acil Durdurma"):
     ).start()
 
 
+def _durdurma_is_parcaciginda(fn, *args, ad: str = "pemf-durdurma"):
+    """⚠️ O-1.1 (1-F inceleme §22 #1 · Ö.4-Y8): bir STOP yolunu olay döngüsünün ORTAK iş parçacığı havuzuna
+    (`asyncio.to_thread` → varsayılan yürütücü, `min(32, cpu+4)` işçi) BAĞLAMADAN, KENDİ daemon iş parçacığında koşturur ve
+    beklenebilir döner. Havuz asılı G/Ç ile (asılı diskte DB yazımları vb.) doluyken `to_thread` SIRAYA giriyordu: ACİL
+    DURDUR'un STOP'u porta GİTMİYOR, yanıt dönmüyordu; istemci vazgeçince sıradaki iş İPTAL edilip STOP HİÇ gitmiyordu
+    (ölçüldü — 1-G önce-kırmızı: ACİL DURDUR, seans durdurma, AI Pro, 0 Hz, ESP STOP yollarında 30/30).
+    * Bağlam (`contextvars`) `to_thread` gibi kopyalanır (sürüş niyeti damgası vb.).
+    * Bekleyen iptal edilse de (istemci zaman aşımı) iş YİNE koşar — yalnız sonucu yazılmaz.
+    * İş parçacığı açılamazsa (kaynak tükendi) iş BU iş parçacığında eşzamanlı koşar: döngü kısa süre bloklanır ama STOP
+      gider (gitmemesinden iyidir)."""
+    import concurrent.futures as _cf
+    import contextvars as _cv
+
+    gelecek: _cf.Future = _cf.Future()
+    baglam = _cv.copy_context()
+
+    def _kos() -> None:
+        dinleniyor = gelecek.set_running_or_notify_cancel()  # False: bekleyen vazgeçti — iş YİNE koşar
+        try:
+            sonuc = baglam.run(fn, *args)
+        except BaseException as exc:
+            if dinleniyor:
+                gelecek.set_exception(exc)
+            else:
+                logging.getLogger(__name__).warning("%s: durdurma işi hata verdi (bekleyen yok)", ad, exc_info=True)
+        else:
+            if dinleniyor:
+                gelecek.set_result(sonuc)
+
+    try:
+        threading.Thread(target=_kos, name=str(ad)[:24], daemon=True).start()
+    except RuntimeError:
+        logging.getLogger(__name__).error("%s: iş parçacığı açılamadı — durdurma EŞZAMANLI koşuyor (Ö.4-Y8)", ad)
+        _kos()
+    return asyncio.wrap_future(gelecek)
+
+
 @app.post("/api/hardware/emergency_stop")
 async def emergency_stop():
     """Stop all outputs through every available transport and notify clients."""
     # P0 audit 2026-06-28: _emergency_stop_all senkron MQTT publish yapar (~7sn worst-case) →
-    # event-loop'u BLOKLARDI (acil-durdurma yaniti gecikir + tum WS/istemci donardi). to_thread
-    # ile thread'e al — loop responsive kalir; fonksiyon icindeki ESP publish'leri de paralel.
-    result = await asyncio.to_thread(_emergency_stop_all, "manual")
+    # event-loop'u BLOKLARDI (acil-durdurma yaniti gecikir + tum WS/istemci donardi). Thread'e al — loop responsive
+    # kalir; fonksiyon icindeki ESP publish'leri de paralel. ⚠️ O-1.1: KENDİ iş parçacığı — ortak havuz (`to_thread`)
+    # asılı G/Ç ile doluyken ACİL DURDUR sıra beklemez.
+    result = await _durdurma_is_parcaciginda(_emergency_stop_all, "manual", ad="estop-manual")
     _push_notification("Acil durdurma uygulandı", "error")
     return result
 

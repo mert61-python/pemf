@@ -463,9 +463,15 @@ def _jeton_kapisi_karari(request: Request) -> None:
 
 async def jeton_gate(request: Request) -> None:
     """Router-seviyesi bağımlılık. Bloklayan Supabase çağrısı threadpool'a atılır (belge 4.1;
-    ai_queue_gate ile aynı gerekçe — event loop bloklanmasın)."""
+    ai_queue_gate ile aynı gerekçe — event loop bloklanmasın).
+
+    ⚠️ O-1.1 (Ö.4-Y8): serbest uç (AI Pro durdurma `/api/ai/pro/stop` …) ve KAPALI bayrak kararı OLAY DÖNGÜSÜNDE verilir —
+    ortak iş parçacığı havuzuna HİÇ girmez. Eskiden bu ucuz karar da `to_thread`'deydi: havuz asılı G/Ç ile doluyken AI Pro
+    durdurması bu bağımlılıkta bekliyor, STOP porta gitmiyordu (ölçüldü, 1-G önce-kırmızı 30/30). Ağ gereken yol havuzda."""
     import asyncio
 
+    if _islem_turu(getattr(getattr(request, "url", None), "path", "") or "") is None or not JETON_ENFORCED:
+        return
     await asyncio.to_thread(_jeton_kapisi_karari, request)
 
 
