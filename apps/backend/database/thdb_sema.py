@@ -494,9 +494,21 @@ class SemaKarisimi:
                 pass
         # B-7.2: migration_backups ROTASYONU — son 5; eskiden her migration bir tam-DB kopyası
         # bırakıp sınırsız büyüyordu.
+        # ⚠️ D2.64 (B-3.76, 2026-10-07): az önce alınan yedek rotasyondan MUAF ve sıra AD değil değişiklik ZAMANI.
+        # Eskiden ada göre sıralanıp taze yedek de rotasyona giriyordu: adı ondan SONRA gelen ≥5 dosya (ileri tarihli /
+        # farklı sürüm önekli — v10→v11'de ada göre sıra kendiliğinden bozulur) taze yedeği siliyor, göç patlayınca
+        # rollback canlı DB'yi silip kopyalayamıyordu → BOŞ tedavi geçmişi (ölçüldü). Kapı: test_goc_rollback_CANLI_DByi_SILMEZ_D264.py
         try:
-            _mbks = sorted(backup_dir.glob("pre_migration_*.db"))
-            for _old in _mbks[:-5]:
+            _taze = os.path.normcase(os.path.abspath(str(backup_path)))
+            _mbks = sorted(
+                (
+                    p
+                    for p in backup_dir.glob("pre_migration_*.db")
+                    if os.path.normcase(os.path.abspath(str(p))) != _taze
+                ),
+                key=lambda p: p.stat().st_mtime,
+            )
+            for _old in _mbks[:-4]:  # taze yedek + en yeni 4 = son 5
                 try:
                     _old.unlink()
                 except Exception:
@@ -517,10 +529,21 @@ class SemaKarisimi:
                     "Veri saglam; migration hatasi yukseltiliyor."
                 )
                 raise
+            # ⚠️ D2.64 (B-3.76): geçerlilik ROTASYONDAN SONRA, yıkıcı adımdan hemen önce YENİDEN sınanır — yedek artık
+            # yoksa/boşsa canlı DB'ye DOKUNULMAZ (ilk sınama rotasyondan ÖNCEydi; taze yedek arada silinebiliyordu).
+            if not (os.path.exists(backup_path) and os.path.getsize(backup_path) > 0):
+                self.logger.error(
+                    "Rollback yedegi artik YOK/BOS (%s) → rollback ATLANDI, canli DB'ye DOKUNULMADI. "
+                    "Veri saglam; migration hatasi yukseltiliyor.",
+                    backup_path,
+                )
+                raise
+            _gecici = str(self.db_path) + ".rollback.tmp"
             try:
                 self.close_connections()
-                if os.path.exists(self.db_path):
-                    os.remove(self.db_path)
+                # ⚠️ D2.64: yedek ÖNCE geçici dosyaya kopyalanır — disk dolu / G-Ç burada düşerse canlı DB YERİNDE kalır.
+                # Eskiden canlı DB önce SİLİNİYOR, sonra kopyalanıyordu: kopya düşünce veri gidiyordu (ölçüldü).
+                shutil.copy2(backup_path, _gecici)
                 # DENETIM P2: WAL modunda kalan yan-dosyalar SILINMIYORDU. Son baglanti temiz
                 # kapandiginda SQLite bunlari kendi siler; ama kapanis-checkpoint'i de basarisiz
                 # olduysa (ayni disk-dolu/I-O arizasi) bayat -wal cerceveleri geri-yuklenen DB'ye
@@ -541,10 +564,16 @@ class SemaKarisimi:
                             os.remove(_side)
                     except Exception:
                         self.logger.warning("Rollback: %s temizlenemedi", _sfx, exc_info=True)
-                shutil.copy2(backup_path, self.db_path)
+                # Canlı DB ancak kopya TAMAMLANINCA tek adımda değiştirilir.
+                os.replace(_gecici, self.db_path)
                 self.logger.warning(f"Migration rollback tamamlandı: {backup_path}")
             except Exception as rollback_error:
                 self.logger.error(f"Migration rollback başarısız: {rollback_error}")
+                try:
+                    if os.path.exists(_gecici):
+                        os.remove(_gecici)
+                except Exception:
+                    self.logger.warning("Rollback gecici dosyasi temizlenemedi: %s", _gecici, exc_info=True)
                 raise
             raise
 

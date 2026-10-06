@@ -370,15 +370,21 @@ def test_migration_rollback_requires_valid_backup(temp_app_data, monkeypatch):
     assert isinstance(koruma.body[-1], ast.Raise) and koruma.body[-1].exc is None, (
         "geçersiz yedek koruması hatayı YENİDEN YÜKSELTMİYOR (çıplak raise yok) -> akış rollback'e düşer, canlı DB silinir"
     )
+    # Canlı DB'yi DEĞİŞTİREN yıkıcı adım: `os.remove(self.db_path)` ya da (D2.64'ten beri) `os.replace(<geçici>, self.db_path)`.
     silmeler = [
         c
         for c in ast.walk(handler)
         if isinstance(c, ast.Call)
-        and getattr(c.func, "attr", None) == "remove"
-        and c.args
-        and ast.unparse(c.args[0]) == "self.db_path"
+        and (
+            (getattr(c.func, "attr", None) == "remove" and c.args and ast.unparse(c.args[0]) == "self.db_path")
+            or (
+                getattr(c.func, "attr", None) == "replace"
+                and len(c.args) > 1
+                and ast.unparse(c.args[1]) == "self.db_path"
+            )
+        )
     ]
-    assert silmeler, "rollback dalında canlı DB silmesi bulunamadı -> kapı KÖR kaldı"
+    assert silmeler, "rollback dalında canlı DB'yi değiştiren adım bulunamadı -> kapı KÖR kaldı"
     assert all(c.lineno > koruma.lineno for c in silmeler), "yedek kontrolü canlı DB silinmeden ÖNCE gelmeli"
     # WAL yan-dosyaları geri-yüklemeden önce temizlenmeli (bayat frame replay'i)
     assert '"-wal"' in src and '"-shm"' in src, "rollback öncesi WAL/SHM temizlenmeli"
