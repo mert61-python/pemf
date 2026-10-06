@@ -142,22 +142,55 @@ def firmware_indir(url: str, beklenen_sha256: str) -> tuple[Path | None, str]:
             um._download_to(r, f, _MAX_FIRMWARE_BYTES, "firmware")
     except Exception as e:  # noqa: BLE001
         logger.warning("firmware indirilemedi (%s)", type(e).__name__, exc_info=True)
-        try:
-            hedef.unlink(missing_ok=True)
-        except OSError as se:
-            logger.warning("geçici firmware dosyası silinemedi: %s", se)
+        _gecici_sil(hedef)
         return None, f"indirme başarısız: {type(e).__name__}"
 
     from utils.stm_yakma import sha256 as _ozet
 
     bulunan = _ozet(hedef)
     if bulunan != beklenen_sha256.lower():
-        try:
-            hedef.unlink(missing_ok=True)
-        except OSError as se:
-            logger.warning("bütünlüğü bozuk firmware silinemedi: %s", se)
+        _gecici_sil(hedef)
         return None, f"SHA256 tutmadı (beklenen {beklenen_sha256.lower()}, bulunan {bulunan})"
     return hedef, ""
+
+
+def _gecici_sil(yol: Path) -> None:
+    """D1.115 (B-4.10): indirilen dosya VE `_private_temp_path`'in açtığı `pemf_upd_*` dizini silinir. Eskiden yalnız dosya
+    siliniyordu: her başarısız/başarılı deneme %TEMP%'te yetim bir dizin bırakıyordu (1-H'de ölçüldü: 10 deneme → 10 dizin)."""
+    try:
+        Path(yol).unlink(missing_ok=True)
+    except OSError as e:
+        logger.warning("geçici firmware dosyası silinemedi: %s", e)
+    um._discard_temp_dir(yol)
+
+
+#: D1.115 (B-4.10): veri kökündeki kalıcı firmware yedeklerinden en yeni bu kadarı tutulur (elle kurtarma / geri dönüş).
+FIRMWARE_YEDEK_TUT = 5
+
+
+def _yedek_dizini() -> Path | None:
+    """D1.115 (B-4.10): eski firmware'in yedeği veri kökündeki KALICI `firmware_yedek` dizinine yazılır. Eskiden
+    `yakma_akisi` varsayılanı (`ikili.parent / "firmware_yedek"`) — yani GEÇİCİ indirme dizininin İÇİ — kullanılıyordu:
+    elle kurtarmada gereken eski firmware'in yeri yalnız INFO günlüğünde kalıyor, dizinle birlikte kayboluyordu.
+    Veri kökü çözülemezse None (varsayılana düşer, uyarı yazılır)."""
+    try:
+        from utils import path_utils
+
+        return Path(path_utils.get_app_data_directory()) / "firmware_yedek"
+    except Exception as e:  # noqa: BLE001
+        logger.warning("firmware yedek dizini çözülemedi (%s) — yedek geçici dizine yazılacak", type(e).__name__)
+        return None
+
+
+def _yedekleri_buda(kok: Path | None, tut: int = FIRMWARE_YEDEK_TUT) -> None:
+    """En yeni `tut` yedek kalır (ad = zaman damgası → kronolojik). Silinemeyen yedek yalnız günlüğe yazılır."""
+    if kok is None or tut < 1 or not kok.is_dir():
+        return
+    for eski in sorted(kok.glob("pemf_yedek_*.bin"))[:-tut]:
+        try:
+            eski.unlink()
+        except OSError as e:
+            logger.warning("eski firmware yedeği silinemedi: %s — %s", eski.name, e)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -272,19 +305,22 @@ def _firmware_uygula(girdi: dict, plan: su.Plan, banner_kaynagi=None) -> dict:
     # D1.114 (B-4.6): port BIRAKILMAZ — yakma sonrası kimlik çekirdeğin KENDİ okuyucusundan (`banner_kaynagi`). Pencere ön
     # kontrolden ÖNCE açılır: içinde bobin başlatma reddedilir (HC kapısı durum kilidi altında — denetle-sonra-yap aralığı
     # kapanır), seans/AI Pro 409, ACİL DURDUR kapılanmaz ama teyidi dürüst (`utils.firmware_yakma_penceresi`).
-    with pencere.ac():
-        sonuc = yakma_akisi(
-            yol,
-            beklenen_sha256=str(girdi.get("sha256", "")),
-            guvenlik_kontrolu=_surec_ici_guvenlik_kontrolu,
-            banner_kaynagi=banner_kaynagi,
-        )
+    # D1.115 (B-4.10): yedek veri kökündeki KALICI `firmware_yedek`e (tutma sınırıyla); indirme dizini HER yolda silinir.
+    yedek_kok = _yedek_dizini()
+    try:
+        with pencere.ac():
+            sonuc = yakma_akisi(
+                yol,
+                beklenen_sha256=str(girdi.get("sha256", "")),
+                guvenlik_kontrolu=_surec_ici_guvenlik_kontrolu,
+                banner_kaynagi=banner_kaynagi,
+                yedek_dizin=yedek_kok,
+            )
+    finally:
+        _gecici_sil(yol)
+    _yedekleri_buda(yedek_kok)
     for adim in sonuc.adimlar:
         logger.info("firmware: %s", adim)
-    try:
-        yol.unlink(missing_ok=True)
-    except OSError as e:
-        logger.warning("geçici firmware dosyası silinemedi: %s", e)
 
     if sonuc.kod == TAMAM:
         logger.info("donanım güncellemesi TAMAM → %s", plan.hedef_surum)
