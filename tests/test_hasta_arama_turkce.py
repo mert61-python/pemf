@@ -278,6 +278,76 @@ def test_KRITIK_ESKI_kuralla_kurulu_indeks_surum_ARTINCA_turkce_aramada_hastayi_
     )
 
 
+def test_KRITIK_D225_kurulum_COMMIT_dusurse_parmak_izi_YENI_surume_gecmez_sonraki_acilis_YENIDEN_kurar(
+    hasta_db, temp_app_data, monkeypatch
+):
+    """D2.25 (B-3.106) — parmak izi YALNIZ yeniden kurulumu içeren işlem COMMIT edildikten SONRA yazılır.
+
+    Eskiden `_ensure_search_index` yeni parmak izini commit'ten ÖNCE yazıyordu: commit düşerse (disk G-Ç / dolu)
+    yeniden kurma GERİ ALINIR ama dosya YENİ sürümü taşır → sonraki açılışlar "güncel" sanıp yeniden kurmaz, eski
+    kurala göre kurulmuş HMAC indeksi kalır, hasta Türkçe aramada BULUNAMAZ — günlük de bir şey söylemez.
+
+    Kurgu: indeks ESKİ kuralla kurulur (D2.05 kolu gibi); sonra gerçek kural + sürüm artışıyla açılışta COMMIT bir kez
+    düşer (gerçek `_get_connection`'ın bağlantısı sarılır, yalnız `commit` patlar; geri alma gerçek). Kurulum
+    `RuntimeError` vermeli; parmak izi ESKİ kalmalı; ardından normal açılış indeksi yeniden kurup hastayı bulmalı.
+
+    MUTASYON: parmak izi yazımını commit'ten önceye (`_ensure_search_index` içine) geri almak → KIRMIZI.
+    """
+    import contextlib
+    import sqlite3
+
+    import database.patient_database as pdb
+
+    gercek_kural = pdb.PatientDatabase._normalize_search_value
+    monkeypatch.setattr(pdb.PatientDatabase, "_normalize_search_value", lambda self, v: str(v or "").strip().lower())
+    hasta_db.add_patient({"name": "İhsan", "owner": "T", "species": "Kedi"})
+    fp_dosyasi = hasta_db._key_dir / ".patient_search_keyfp"
+    eski_iz = fp_dosyasi.read_text(encoding="utf-8").strip()
+    assert "İhsan" not in _adlar(hasta_db.search_patients("ihsan")), "eski kural kurulamadı — kapı kör olurdu"
+    hasta_db._reset_thread_conn()
+
+    monkeypatch.setattr(pdb.PatientDatabase, "_normalize_search_value", gercek_kural)
+    monkeypatch.setattr(pdb.PatientDatabase, "_SEARCH_NORM_VERSION", pdb.PatientDatabase._SEARCH_NORM_VERSION + 1)
+
+    gercek_baglanti = pdb.PatientDatabase._get_connection
+    durum = {"patlat": True}
+
+    class _CommitDusen:
+        def __init__(self, conn):
+            self._conn = conn
+
+        def commit(self):
+            if durum["patlat"]:
+                durum["patlat"] = False
+                raise sqlite3.OperationalError("disk I/O error")
+            return self._conn.commit()
+
+        def __getattr__(self, ad):
+            return getattr(self._conn, ad)
+
+    @contextlib.contextmanager
+    def _commit_bir_kez_duser(self):
+        with gercek_baglanti(self) as conn:
+            yield _CommitDusen(conn)
+
+    monkeypatch.setattr(pdb.PatientDatabase, "_get_connection", _commit_bir_kez_duser)
+    with pytest.raises(RuntimeError):
+        pdb.PatientDatabase(str(temp_app_data / "patients.db"))
+    monkeypatch.setattr(pdb.PatientDatabase, "_get_connection", gercek_baglanti)
+    assert not durum["patlat"], "commit hiç denenmedi — kurgu bozuk"
+    assert fp_dosyasi.read_text(encoding="utf-8").strip() == eski_iz, (
+        "kurulum COMMIT'i DÜŞTÜ ama parmak izi YENİ sürüme geçti → sonraki açılışlar yeniden KURMAZ"
+    )
+
+    yeni_db = _yeniden_ac(temp_app_data)
+    assert "İhsan" in _adlar(yeni_db.search_patients("ihsan")), (
+        "commit'i düşen kurulumdan sonra normal açılış indeksi YENİDEN KURMADI → hasta Türkçe aramada BULUNAMIYOR"
+    )
+    assert fp_dosyasi.read_text(encoding="utf-8").strip() != eski_iz, (
+        "başarılı kurulumdan sonra parmak izi GÜNCELLENMEDİ"
+    )
+
+
 def test_KARSIT_surum_ayniyken_acilista_indeks_yeniden_KURULMAZ(hasta_db, temp_app_data, monkeypatch):
     """Tazeleme "her açılışta kur" biçiminde bozulmasın (dolu tabloda gereksiz yeniden kurulum)."""
     hasta_db.add_patient({"name": "İpek", "owner": "T", "species": "Kedi"})

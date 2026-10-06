@@ -240,8 +240,10 @@ class PatientDatabase:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 self._create_patient_schema(cursor)
-                self._ensure_search_index(cursor)
+                _fp = self._ensure_search_index(cursor)
                 conn.commit()
+            # ⚠️ D2.25 (B-3.106): parmak izi YALNIZ yeniden kurulumu içeren işlem COMMIT edildikten SONRA yazılır.
+            self._parmak_izini_yaz(_fp)
             return
         except _DB_ERROR as e:
             if not (self._cipher_key and anahtar_uyusmazligi_mi(e)):
@@ -259,10 +261,11 @@ class PatientDatabase:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 self._create_patient_schema(cursor)
-                self._ensure_search_index(cursor)
+                _fp = self._ensure_search_index(cursor)
                 conn.commit()
         except _DB_ERROR as e:
             raise RuntimeError(f"Database initialization failed (karantina sonrasi): {e}") from e
+        self._parmak_izini_yaz(_fp)
 
     def _create_patient_schema(self, cursor) -> None:
         """patients + patient_search_index tabloları/indeksleri + idempotent kolon-migrasyonları."""
@@ -327,10 +330,16 @@ class PatientDatabase:
             """
         )
 
-    def _ensure_search_index(self, cursor) -> None:
+    def _ensure_search_index(self, cursor) -> Optional[str]:
         """HMAC arama indeksini garanti et: tablo BOŞSA veya arama-anahtarı DEĞİŞTİYSE yeniden kur.
         (P2 audit: HMAC indeksi _search_hmac_key'e bağlı; anahtar değişirse eski token'lar eşleşmez →
-        arama SESSİZCE bozulur. Anahtar parmak-izini saklayıp değişimi tespit ediyoruz.)"""
+        arama SESSİZCE bozulur. Anahtar parmak-izini saklayıp değişimi tespit ediyoruz.)
+
+        ⚠️ D2.25 (B-3.106): parmak izini YAZMAZ, yazılması gereken değeri DÖNDÜRÜR (değişmediyse None). Çağıran
+        (`_init_database`) yeniden kurulumu içeren işlem COMMIT edildikten SONRA `_parmak_izini_yaz` ile yazar.
+        Eskiden burada, commit'ten ÖNCE yazılıyordu: commit düşerse yeniden kurma geri alınıyor ama dosya YENİ
+        sürümü taşıyordu → sonraki açılışlar yeniden kurmuyor, hasta Türkçe aramada bulunamıyordu (ölçüldü).
+        Kapı: tests/test_hasta_arama_turkce.py::test_KRITIK_D225_…"""
         cursor.execute("SELECT COUNT(*) FROM patient_search_index")
         count = cursor.fetchone()[0]
         # ⚠️ Parmak izi HMAC anahtarını VE normalize sürümünü kapsar: normalize mantığı
@@ -348,10 +357,18 @@ class PatientDatabase:
             if count > 0:
                 self.logger.warning("Hasta arama anahtari degismis → HMAC indeksi yeniden kuruluyor.")
             self._rebuild_search_index(cursor)
+        return _fp if _fp != _stored_fp else None
+
+    def _parmak_izini_yaz(self, fp: Optional[str]) -> None:
+        """Arama indeksi parmak izini diske yaz — YALNIZ kurulum işlemi commit edildikten sonra çağrılır (D2.25)."""
+        if not fp:
+            return
         try:
-            _fp_file.write_text(_fp, encoding="utf-8")
+            (self._key_dir / ".patient_search_keyfp").write_text(fp, encoding="utf-8")
         except Exception:
-            pass
+            self.logger.warning(
+                "Arama indeksi parmak izi yazilamadi (sonraki acilista yeniden denenir).", exc_info=True
+            )
 
     # ⚠️ NORMALİZE SÜRÜMÜ — arama indeksi parmak-izine dahil (bkz. _ensure_search_index).
     # ORTAK KAYNAK: `utils.turkce_metin.SURUM` (arama katlaması orada tek yerde tanımlı;
