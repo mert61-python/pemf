@@ -311,6 +311,10 @@ async def health_check(request: Request):
         # Karşılama/Giriş ekranları dahil) durumu ve "Sıfırla"yı buradan/WS'ten gösterir. Neden/zaman ayrıntısı
         # yalnız yerel/LAN'a (bu uç auth-muaf ve tünelden erişilebilir); uzak istemci yalnız `aktif`i görür.
         "estopMandali": (_estop_mandali_durumu() if _local else {"aktif": _estop_mandali_durumu().get("aktif")}),
+        # D1.116 · B-4.11 (yalnız-ek): oto-firmware durumu — açılış denetiminin kararı (eylem/gerekçe) ve son yakma sonucu
+        # (`hata` = "[kod] …"). Eskiden yalnız servis günlüğündeydi ("fail-quiet ≠ fail-silent" vaadi fiilen gizliydi).
+        # Gerekçe/hata metni ayrıntı (sürüm, yol) taşır → yalnız yerel/LAN; tünel (uzak) istemcisine None.
+        "firmwareGuncelleme": (_firmware_guncelleme_durumu() if _local else None),
     }
 
 
@@ -318,6 +322,16 @@ def _estop_mandali_durumu() -> dict:
     from utils import estop_mandali
 
     return estop_mandali.durum()
+
+
+def _firmware_guncelleme_durumu() -> dict | None:
+    """D1.116: `firmware_manager.durum()` anlık görüntüsü; okunamazsa None (sağlık ucu ASLA düşmez)."""
+    try:
+        from servers import firmware_manager
+
+        return firmware_manager.durum()
+    except Exception:
+        return None
 
 
 @router.get("/favicon.ico")

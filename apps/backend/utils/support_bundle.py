@@ -210,6 +210,15 @@ def _saglik_ozeti(app_data_dir) -> dict:
         ozet["audit_event_count"] = db.denetim_sayisi()
     except Exception as e:
         ozet["db_hatasi"] = str(e)[:200]
+    # D1.116 · B-4.11: oto-firmware durumu (eylem, gerekçe, son yakma sonuç kodu). ⚠️ Backend sürecinde üretilen pakette
+    # (arayüzdeki Destek paketi düğmesi) GERÇEK durumdur; ayrı bir süreçte (backend çökmüşken) üretilirse o sürecin
+    # varsayılanıdır (`kontrol_edildi: false`) — karar o durumda logs/'taki "Donanım güncellemesi:" satırındadır.
+    try:
+        from servers import firmware_manager
+
+        ozet["firmware_guncelleme"] = firmware_manager.durum()
+    except Exception as e:
+        ozet["firmware_guncelleme"] = {"okunamadi": type(e).__name__}
     return ozet
 
 

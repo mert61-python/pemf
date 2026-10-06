@@ -77,6 +77,10 @@ GOLDEN_SHAPES = {
         # edilmez; arayuz (oturumsuz Karsilama/Giris ekranlari dahil) durumu ve "Sifirla"yi gosterir. Uzak istemci
         # yalniz `aktif`i gorur. Bkz. tests/test_estop_MANDALI_Y4_hicbir_START_gecmez.py.
         "estopMandali",
+        # D1.116 · B-4.11 (2026-10-06, BILINCLI sekil degisikligi): oto-firmware durumu (eylem, gerekce, son yakma sonuc
+        # kodu; D1.119 · Y16 launcher sinyali `istemciGeriAlinmali`). Eskiden yalniz servis gunlugundeydi. Yerel/LAN'a
+        # ayrinti, tunel istemcisine None. Bkz. tests/test_firmware_durumu_SAGLIK_ve_DESTEK_PAKETI_D1116.py.
+        "firmwareGuncelleme",
     },
     "/api/discovery": {"capabilities", "localIp", "port", "service", "tunnelUrl", "version"},
     "/api/system/info": {
