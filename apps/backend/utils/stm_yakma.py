@@ -50,6 +50,11 @@ from utils.stm32_uart import banner_dinle, port_adaylari
 
 #: Uygulama alanı — bootloader'a dokunulmaz.
 YAKMA_ADRESI = "0x08000000"
+#: D1.113 (B-4.8): yakmadan önceki YEDEK kartın UYGULAMA ALANI boyunda okunur — STM32F429ZI flash'ı 2048 KB
+#: (`firmware/stm32_pemf/STM32F429ZITX_FLASH.ld` FLASH LENGTH; kapı bu dosyayla eşitliği ölçer). Eskiden YENİ ikilinin
+#: boyunda okunuyordu: yeni ikili eskisinden küçükse yedek ESKİ firmware'in KESİK kopyasıydı ve geri dönüş onu yazardı.
+#: ⚠️ Kartın gerçek uygulama alanı ve 2 MB okuma/yazma süresi TEZGÂHTA (Oturum 13) doğrulanır.
+UYGULAMA_ALANI_BAYT = 2048 * 1024
 #: CubeIDE sürüm dizini değişir → yakıcı GLOB ile aranır, yol SABİT YAZILMAZ.
 CLI_ARAMA = (Path(r"C:\ST"), Path(r"C:\Program Files\STMicroelectronics"))
 BANNER_SURESI = 12.0
@@ -341,7 +346,7 @@ def yakma_akisi(
 
     kok = Path(yedek_dizin or (ikili.parent / "firmware_yedek"))
     yedek = kok / f"pemf_yedek_{time.strftime('%Y%m%d_%H%M%S')}.bin"
-    tamam, bilgi = yedek_al(cli, yedek, ikili.stat().st_size)
+    tamam, bilgi = yedek_al(cli, yedek, UYGULAMA_ALANI_BAYT)  # D1.113: yeni ikilinin boyu DEĞİL (kesik yedek)
     adimlar.append(f"yedek: {'alındı ' + bilgi if tamam else 'ALINAMADI'}")
     if not tamam:
         return Sonuc(
