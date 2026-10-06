@@ -163,11 +163,34 @@ def firmware_indir(url: str, beklenen_sha256: str) -> tuple[Path | None, str]:
 # ══════════════════════════════════════════════════════════════════════════════
 # AÇILIŞ DENETİMİ — sahip: "client kontrolünden SONRA, açılmadan ÖNCE"
 # ══════════════════════════════════════════════════════════════════════════════
+def _surec_ici_guvenlik_kontrolu() -> tuple[bool, str]:
+    """D1.108 + D1.111 (B-10.12 · B-4.9) — backend'in KENDİ yakma kararının ön kontrolü SÜREÇ İÇİ durumu okur.
+
+    ⚠️ HTTP DEĞİL: açılış denetimi `server.run()`'dan ÖNCE koşar; `127.0.0.1:<port>/api/health` ya bağlantı reddi alır
+    ("backend kapalı → güvenli" — süreç kendisi bobin sürüyor olsa bile) ya da o portta BAŞKA bir süreç cevap verir. Üç
+    kaynaktan biri "aktif" derse ya da okunamazsa YAKILMAZ (fail-closed): resmi seans (`_active_session`), STM
+    keep-alive'ının sürdüğü bobinler (`HardwareController.calisan_bobin_durumu`) ve seans dışı sürülen bobinler dahil canlı
+    durum (`update_manager._has_active_treatment` — `/api/health` `sessionActive`'in de kaynağı)."""
+    try:
+        from servers import api_server as api
+
+        if api._active_session.get("is_active"):
+            return False, "AKTİF SEANS VAR (süreç içi) — yakma MCU'yu resetler, bobinler ANİDEN durur; yakılmaz"
+        hw = getattr(api.state, "hardware", None)
+        calisan = hw.calisan_bobin_durumu() if hw is not None else {}
+        if calisan:
+            return False, f"BOBİN SÜRÜLÜYOR (süreç içi, STM): {sorted(calisan)} — yakılmaz"
+        if um._has_active_treatment():
+            return False, "AKTİF TEDAVİ / SÜRÜLEN BOBİN VAR (süreç içi canlı durum) — yakılmaz"
+    except Exception as e:  # noqa: BLE001 — doğrulanamayan durumda yakılmaz
+        return False, f"seans/bobin durumu süreç içinden OKUNAMADI ({type(e).__name__}) — yakılmaz"
+    return True, "seans yok, bobin sürülmüyor (süreç içi)"
+
+
 def acilis_denetimi(
     *,
     firmware_surum: str,
     stm_bagli: bool,
-    backend: str = "http://127.0.0.1:8000",
     uygula: bool = True,
 ) -> dict:
     """Uyumu ölç, plan yap, gerekirse uygula. Her yol `durum()`a yazar.
@@ -221,7 +244,7 @@ def acilis_denetimi(
         return durum()
 
     if plan.eylem == su.FIRMWARE_GUNCELLE:
-        return _firmware_uygula(girdi, plan, backend)
+        return _firmware_uygula(girdi, plan)
 
     if plan.eylem == su.CLIENT_GERI_AL:
         # ⚠️ Client'ı geri almak `update_manager.rollback()`un işi — burada YENİDEN YAZILMAZ.
@@ -235,7 +258,7 @@ def acilis_denetimi(
     return durum()
 
 
-def _firmware_uygula(girdi: dict, plan: su.Plan, backend: str) -> dict:
+def _firmware_uygula(girdi: dict, plan: su.Plan) -> dict:
     yol, hata = firmware_indir(str(girdi.get("url", "")), str(girdi.get("sha256", "")))
     if yol is None:
         logger.warning("firmware indirilemedi: %s", hata)
@@ -243,7 +266,10 @@ def _firmware_uygula(girdi: dict, plan: su.Plan, backend: str) -> dict:
 
     from utils.stm_yakma import TAMAM, yakma_akisi
 
-    sonuc = yakma_akisi(yol, beklenen_sha256=str(girdi.get("sha256", "")), backend=backend)
+    # D1.108 + D1.111: ön kontrol SÜREÇ İÇİ — HTTP değil (bkz. `_surec_ici_guvenlik_kontrolu`).
+    sonuc = yakma_akisi(
+        yol, beklenen_sha256=str(girdi.get("sha256", "")), guvenlik_kontrolu=_surec_ici_guvenlik_kontrolu
+    )
     for adim in sonuc.adimlar:
         logger.info("firmware: %s", adim)
     try:

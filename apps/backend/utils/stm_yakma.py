@@ -16,7 +16,10 @@ GÜVENLİK DEĞİŞMEZLERİ — pazarlığa kapalı
   2. Bobin sürülüyorsa YAKMAZ — "seans yok" YETMEZ (manuel kipte tek bobin sürülebilir).
   3. Bobin durumu OKUNAMIYORSA yakmaz (**fail-closed**). Ama backend KAPALIYSA yakar
      (**fail-open, bilerek**): kimse bobin sürmüyordur ve asıl ihtiyaç anı orasıdır.
-     Ayrım: backend YOK ≠ backend VAR ama cevap vermiyor.
+     Ayrım: backend YOK ≠ backend VAR ama cevap vermiyor. ⚠️ D1.108/D1.111: "YOK" YALNIZ bağlantı
+     reddidir (5xx/4xx/zaman aşımı/JSON-dışı/PEMF olmayan yanıt = "VAR ama doğrulanamıyor"); bu HTTP
+     ayrımı yalnız AYRI süreçteki CLI içindir. Backend'in KENDİ yakması süreç içi durumu okur
+     (`yakma_akisi(guvenlik_kontrolu=…)` — açılış denetimi `server.run()`'dan önce koşar, kendine soramaz).
   4. YEDEK yakmadan ÖNCE alınır; alınamazsa HİÇ yakılmaz (geri dönüşü olmayan işlem YOK).
   5. Banner UYUMSUZ → OTOMATİK GERİ DÖN.
   6. Banner TANINMADI (`None`) → geri DÖNÜLMEZ. Üç-durumlu karar `utils/stm32_kimlik`
@@ -37,6 +40,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -98,25 +102,69 @@ def sha256(p: Path) -> str:
     return h.hexdigest()
 
 
-def _json_al(url: str, timeout: float = 5.0):
+#: Ön kontrol HTTP zaman aşımları (sn) — yalnız AYRI süreçteki CLI yolu (`seans_ve_bobin_kontrolu`).
+SAGLIK_ZAMAN_ASIMI_S = 5.0
+ANLIK_ZAMAN_ASIMI_S = 8.0
+
+#: `_json_al` sınıfları. ⚠️ D1.108 (B-10.12) + D1.111 (B-4.9): YALNIZ bağlantı reddi (portta kimse dinlemiyor) `KAPALI`dır.
+HTTP_TAMAM = "tamam"
+HTTP_KAPALI = "kapali"
+HTTP_BELIRSIZ = "belirsiz"
+
+
+def _baglanti_reddi_mi(hata: BaseException) -> bool:
+    return isinstance(hata, ConnectionRefusedError) or isinstance(getattr(hata, "reason", None), ConnectionRefusedError)
+
+
+def _json_al(url: str, timeout: float = 5.0) -> tuple[dict | None, str]:
+    """(gövde, sınıf). Sınıf: `HTTP_TAMAM` (JSON nesnesi) · `HTTP_KAPALI` (YALNIZ bağlantı reddi) · `HTTP_BELIRSIZ`.
+
+    ⚠️ D1.108 (B-10.12) + D1.111 (B-4.9): eskiden HER hata (5xx, 404, zaman aşımı, JSON-dışı gövde) `None` dönüyor ve
+    `None` "backend kapalı — güvenli" okunuyordu: 5xx veren / asılı bir backend ya da o porttaki PEMF olmayan bir süreç
+    bobin sürülürken yakmaya izin veriyordu. Artık yalnız bağlantı reddi "kapalı"; geri kalan her yanıt `BELIRSIZ` — o
+    portta bir süreç VAR ve bobin durumu doğrulanamaz (fail-closed)."""
     try:
         with urllib.request.urlopen(url, timeout=timeout) as r:
-            return json.loads(r.read().decode("utf-8", "replace") or "{}")
-    except (urllib.error.URLError, OSError, ValueError):
-        return None
+            ham = r.read()
+    except urllib.error.HTTPError:  # URLError'ın alt sınıfı — ÖNCE yakalanır: biri dinliyor ama 4xx/5xx
+        return None, HTTP_BELIRSIZ
+    except urllib.error.URLError as e:
+        return None, (HTTP_KAPALI if _baglanti_reddi_mi(e) else HTTP_BELIRSIZ)
+    except OSError as e:  # zaman aşımı (TimeoutError), bağlantı sıfırlandı…
+        return None, (HTTP_KAPALI if _baglanti_reddi_mi(e) else HTTP_BELIRSIZ)
+    try:
+        veri = json.loads(ham.decode("utf-8", "replace"))
+    except ValueError:
+        return None, HTTP_BELIRSIZ
+    return (veri, HTTP_TAMAM) if isinstance(veri, dict) else (None, HTTP_BELIRSIZ)
 
 
 def seans_ve_bobin_kontrolu(backend: str) -> tuple[bool, str]:
-    """(guvenli_mi, açıklama). Bkz. modül başlığındaki 1-3 numaralı değişmezler."""
-    saglik = _json_al(f"{backend}/api/health")
+    """(guvenli_mi, açıklama) — HTTP ön kontrolü: YALNIZ AYRI süreçteki CLI içindir (`scripts/stm_yak.py`).
+
+    ⚠️ Backend'in KENDİ yakma kararı bunu KULLANMAZ: açılış denetimi `server.run()`'dan ÖNCE koşar, kendine HTTP soramaz —
+    süreç içi seans/bobin durumunu okur (`firmware_manager._surec_ici_guvenlik_kontrolu`, `yakma_akisi(guvenlik_kontrolu=…)`).
+    Bkz. modül başlığındaki 1-3 numaralı değişmezler: yalnız bağlantı reddi "backend kapalı" (fail-open, bilerek); 5xx /
+    4xx / zaman aşımı / JSON-dışı / PEMF olmayan yanıt "doğrulanamadı" (fail-closed)."""
+    saglik, sinif = _json_al(f"{backend}/api/health", timeout=SAGLIK_ZAMAN_ASIMI_S)
+    if sinif == HTTP_KAPALI:
+        return True, "backend kapalı (bağlantı reddedildi — portta kimse dinlemiyor, kimse bobin sürmüyor) — güvenli"
     if saglik is None:
-        return True, "backend kapalı (kimse bobin sürmüyor) — güvenli"
-    if saglik.get("sessionActive"):
+        return False, (
+            "Backend durumu DOĞRULANAMADI (`/api/health` 5xx / 4xx / zaman aşımı / JSON-dışı yanıt): o portta bir süreç "
+            "VAR ama seans/bobin durumu okunamıyor. Doğrulanamayan durumda yakılmaz — backend'i kapatıp tekrar deneyin."
+        )
+    if not isinstance(saglik.get("sessionActive"), bool):
+        return False, (
+            "`/api/health` yanıtı seans bilgisini (`sessionActive`) vermiyor — o portta PEMF backend'i olmayan bir servis "
+            "olabilir ya da istek loopback değil. Doğrulanamayan durumda yakılmaz."
+        )
+    if saglik["sessionActive"]:
         return False, (
             "AKTİF SEANS VAR. Yakma MCU'yu resetler ve bobinler ANİDEN durur; hasta "
             "üzerindeyken bu kabul edilemez. Seansı bitirip tekrar deneyin."
         )
-    anlik = _json_al(f"{backend}/api/dashboard-snapshot", timeout=8.0)
+    anlik, _ = _json_al(f"{backend}/api/dashboard-snapshot", timeout=ANLIK_ZAMAN_ASIMI_S)
     if anlik is None:
         return False, (
             "Bobin durumu DOĞRULANAMADI (`/api/dashboard-snapshot` okunamadı). "
@@ -206,10 +254,14 @@ def yakma_akisi(
     beklenen_sha256: str = "",
     port: str | None = None,
     backend: str = "http://127.0.0.1:8000",
+    guvenlik_kontrolu: Callable[[], tuple[bool, str]] | None = None,
     yedek_dizin: Path | None = None,
     kuru: bool = False,
 ) -> Sonuc:
-    """Tam akış. Yan etkiler YALNIZ burada; karar mantığı yukarıdaki parçalarda."""
+    """Tam akış. Yan etkiler YALNIZ burada; karar mantığı yukarıdaki parçalarda.
+
+    `guvenlik_kontrolu`: verilirse seans/bobin ön kontrolü BUNUNLA yapılır (backend'in kendi yakması — süreç içi durum,
+    D1.108 + D1.111); verilmezse `backend` adresine HTTP ön kontrolü (CLI). İstisna fırlatırsa yakılmaz (fail-closed)."""
     adimlar: list[str] = []
     ikili = Path(ikili).resolve()
     if not ikili.is_file():
@@ -220,7 +272,13 @@ def yakma_akisi(
     if beklenen_sha256 and beklenen_sha256.lower() != ozet:
         return Sonuc(BUTUNLUK, f"beklenen {beklenen_sha256.lower()}, bulunan {ozet}", sha256=ozet, adimlar=adimlar)
 
-    guvenli, aciklama = seans_ve_bobin_kontrolu(backend.rstrip("/"))
+    if guvenlik_kontrolu is not None:
+        try:
+            guvenli, aciklama = guvenlik_kontrolu()
+        except Exception as e:  # noqa: BLE001 — doğrulanamayan durumda yakılmaz
+            guvenli, aciklama = False, f"seans/bobin durumu DOĞRULANAMADI ({type(e).__name__}) — yakılmaz"
+    else:
+        guvenli, aciklama = seans_ve_bobin_kontrolu(backend.rstrip("/"))
     adimlar.append(f"donanım: {aciklama}")
     if not guvenli:
         return Sonuc(DONANIM_MESGUL, aciklama, sha256=ozet, adimlar=adimlar)

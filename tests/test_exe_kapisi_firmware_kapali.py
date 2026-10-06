@@ -79,7 +79,7 @@ def _yakma_zinciri(monkeypatch, fw_otomatik) -> tuple[list, dict]:
     # düzeyi durum sonraki testlere SIZMAZ (monkeypatch geri alır).
     monkeypatch.setattr(fm, "_durum", {})
     monkeypatch.setattr(fm, "manifest_oku", lambda *a, **k: manifest)
-    monkeypatch.setattr(fm, "_firmware_uygula", lambda girdi, plan, backend: yakilan.append(plan.hedef_surum) or {})
+    monkeypatch.setattr(fm, "_firmware_uygula", lambda girdi, plan, *a, **k: yakilan.append(plan.hedef_surum) or {})
     if fw_otomatik is None:
         monkeypatch.delenv("PEMF_FW_AUTO_UPDATE", raising=False)
     else:
