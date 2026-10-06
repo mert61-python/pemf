@@ -742,9 +742,9 @@ def _ack_bekcilerini_bosalt():
     Kayıt sözlüğü de temizlenir.
     """
     yield
-    try:
-        from servers import api_server as _api
-    except Exception:
+    # H-8.1 (1-H incelemesi): yalnız `sys.modules`'tan — yıkımda içe aktarma modülü YÜKLER (yüklenmediyse bekçi de yoktur).
+    _api = sys.modules.get("servers.api_server")
+    if _api is None:
         return
     try:
         with _api._pending_acks_lock:
@@ -775,14 +775,14 @@ def _broker_kimlik_sondasini_durdur():
     """O-3.1 (1-H): `_start_mqtt_for_api` (ESP etkin) broker kimlik sondasını DAEMON iş parçacığında başlatır; broker'a
     ulaşamazsa `_SONDA_ARALIK_S` aralıkla yeniden dener ve sonunda UYARI yazar — ack bekçisi deseni: test bittikten sonra
     BAŞKA testin günlüğüne/yamasına yazabilirdi. Yıkımda durdurma olayı kurulur (bekleme biter, sonuç yazılmaz),
-    iş parçacığı beklenir, olay temizlenir."""
+    iş parçacığı beklenir, olay temizlenir.
+    ⚠️ H-8.1 (1-H incelemesi, 1-H §8 #11): modül İÇE AKTARILMAZ, yalnız `sys.modules`'tan okunur — yıkımdaki try/except'li
+    `from servers import api_server` modül yüklü değilse onu YÜKLER (bugün `_lifespan_yan_etkilerini_engelle` oturum
+    kurulumunda zaten yüklüyor; yıkım bunu varsaymamalı). Kapı alt süreçte:
+    tests/test_conftest_yikimi_api_server_YUKLEMEZ_H81.py. Modül yüklenmediyse sonda da başlamamıştır."""
     yield
-    try:
-        from servers import api_server as _api
-
-        dur = getattr(_api, "_sonda_dur", None)
-    except Exception:
-        return
+    _api = sys.modules.get("servers.api_server")
+    dur = getattr(_api, "_sonda_dur", None) if _api is not None else None
     if dur is None:
         return
     dur.set()
