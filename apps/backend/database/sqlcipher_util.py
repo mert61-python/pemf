@@ -871,6 +871,98 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None, etiket="D
         # yerden ayrismisti (bayrak adi · ACL basarisizlik politikasi · log seviyesi).
         # Kendi kopyanizi YAZMAYIN — ayrisacak yer birakmamak icin ortak fonksiyon var.
         goc_sonrasi_yedek_politikasi(backup, logger, etiket=etiket)
+        # ⚠️ D2.48 (B-3.29 · A-08): göç DOĞRULANMIŞ başarıyla bitti (şifreli DB yerinde) → düz dönemden kalan
+        # `migration_backups/*.db` ve `backups/*.db` kopyaları AYNI anahtarla ŞİFRELENİR (silinmez).
+        duz_metin_yedekleri_sifrele(app_data_dir, keyq, sqlcipher, logger, etiket=etiket)
     except Exception:
         if logger:
             logger.exception("SQLCipher migrate hatasi (duz-metin korunur)")
+
+
+#: D2.48 (B-3.29): göç sonrası şifrelenen düz dönem yedek dizinleri (veri kökü altında).
+_DUZ_DONEM_YEDEK_DIZINLERI = ("migration_backups", "backups")
+
+
+def _duz_kopyayi_sifrele(yol, keyq, sqlcipher):
+    """Düz-metin SQLite kopyasını AYNI adla, doğrulanmış şifreli eşiyle değiştirir (sqlcipher_export → şema sayısı
+    karşılaştırması → `os.replace`). Değişiklik zamanı KORUNUR: `migration_backups` (D2.64) ve `backups` (günlük
+    bakımın tazelik/rotasyon kararı) mtime'a göre sıralanır — şifreleme eski kopyayı "en yeni" yapmamalı. Hata
+    yükselir; geçici dosya her durumda temizlenir, özgün dosyanın yerine YALNIZ doğrulanmış şifreli kopya geçer."""
+    gecici = yol + ".enc.tmp"
+    st = os.stat(yol)
+    if os.path.exists(gecici):
+        os.remove(gecici)
+    try:
+        k = sqlite3.connect(yol)
+        try:
+            n_kaynak = k.execute("SELECT count(*) FROM sqlite_master").fetchone()[0]
+        finally:
+            k.close()
+        c = sqlcipher.connect(yol)  # anahtar yok -> duz-metin kipinde acilir
+        try:
+            hedef = gecici.replace("'", "''")
+            c.execute(f"ATTACH DATABASE '{hedef}' AS enc KEY {keyq}")
+            c.execute("SELECT sqlcipher_export('enc')")
+            c.execute("DETACH DATABASE enc")
+        finally:
+            c.close()
+        v = sqlcipher.connect(gecici)
+        try:
+            v.execute(f"PRAGMA key={keyq}")
+            n = v.execute("SELECT count(*) FROM sqlite_master").fetchone()[0]
+        finally:
+            v.close()
+        if not n or n != n_kaynak:
+            raise RuntimeError(f"sifreli kopya dogrulanamadi (sema {n} != {n_kaynak})")
+        os.replace(gecici, yol)
+        os.utime(yol, ns=(st.st_atime_ns, st.st_mtime_ns))
+    finally:
+        if os.path.exists(gecici):
+            try:
+                os.remove(gecici)
+            except Exception:
+                pass
+
+
+def duz_metin_yedekleri_sifrele(app_data_dir, keyq, sqlcipher, logger=None, etiket="DB") -> dict:
+    """D2.48 (B-3.29 · A-08): düz dönemden kalan `migration_backups/*.db` ve `backups/*.db` kopyalarını at-rest
+    anahtarıyla ŞİFRELER — SİLMEZ (aynı ad, aynı veri, şifreli; mtime korunur). Düz-metin SQLite olmayan dosyaya
+    (zaten şifreli, JSON vb.) dokunulmaz. Şifrelenemeyen kopya DÜZ ama SAĞLAM bırakılır ve adıyla ERROR loglanır.
+
+    Eskiden at-rest göçü yalnız canlı DB'yi şifreliyordu; düz dönemde alınmış göç öncesi ve günlük yedekler hasta
+    adlarını diskte düz taşımaya devam ediyordu (ölçüldü). Kapı: tests/test_goc_sonrasi_duz_yedekler_SIFRELENIR_D248.py.
+    Döner: {"sifrelendi": [...], "sifrelenemedi": [...]}."""
+    sonuc = {"sifrelendi": [], "sifrelenemedi": []}
+    for alt in _DUZ_DONEM_YEDEK_DIZINLERI:
+        dizin = os.path.join(str(app_data_dir), alt)
+        if not os.path.isdir(dizin):
+            continue
+        for ad in sorted(os.listdir(dizin)):
+            yol = os.path.join(dizin, ad)
+            if not ad.endswith(".db") or not os.path.isfile(yol):
+                continue
+            try:
+                if not duz_metin_sqlite_mi(yol):
+                    continue
+            except Exception:
+                continue
+            try:
+                _duz_kopyayi_sifrele(yol, keyq, sqlcipher)
+                sonuc["sifrelendi"].append(yol)
+            except Exception as e:
+                sonuc["sifrelenemedi"].append(yol)
+                if logger:
+                    logger.error(
+                        "DUZ-METIN YEDEK SIFRELENEMEDI (%s: %s): %s — dosya DUZ-METIN ama SAGLAM birakildi (SILINMEDI); "
+                        "hasta PII'si tasiyabilir.",
+                        type(e).__name__,
+                        e,
+                        yol,
+                    )
+    if logger and sonuc["sifrelendi"]:
+        logger.warning(
+            "%s goc sonrasi duz donem yedekleri at-rest anahtariyla SIFRELENDI (silinmedi, ayni ad): %s",
+            etiket,
+            ", ".join(sonuc["sifrelendi"]),
+        )
+    return sonuc
