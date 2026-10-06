@@ -55,6 +55,7 @@ def ortam(monkeypatch, tmp_path):
     (kur / "mosquitto.conf").write_text("listener 1883 0.0.0.0\nallow_anonymous true\n", encoding="utf-8")
     durum = {"port": False, "servis": False, "servis_calisiyor": False, "surecler": [], "popen": [], "sonlandir": []}
     durum["kontrol"] = 0  # `_check_service_status` çağrı sayısı ≈ izleme döngüsü turu (check_once başına bir)
+    durum["servis_pid"] = None
     kilit = threading.Lock()
 
     def servis_durumu(_self):
@@ -81,6 +82,8 @@ def ortam(monkeypatch, tmp_path):
     # Y71 yardımcıları (önce-kırmızıda henüz YOK → raising=False: davranış ölçülsün, aparat hatası değil)
     monkeypatch.setattr(hs, "_surec_yollari", lambda ad: list(durum["surecler"]), raising=False)
     monkeypatch.setattr(hs.MosquittoSupervisor, "_sureci_sonlandir", sonlandir, raising=False)
+    # H-7.1 (1-H incelemesi): Windows `mosquitto` servisinin süreç PID'i (`sc queryex`) — servis süreci ASLA "kendi" sayılmaz.
+    monkeypatch.setattr(hs.MosquittoSupervisor, "_servis_pid", lambda self: durum["servis_pid"], raising=False)
     bd = mqtt_kimlik.varsayilan_broker_dizini()
     yield {"hs": hs, "mk": mqtt_kimlik, "bd": bd, "exe": exe, "durum": durum}
     mqtt_kimlik._onbellek.clear()
@@ -164,7 +167,9 @@ def test_KARSIT_WINDOWS_SERVISI_yeniden_baslatilmaz_parca_yine_yazilir(ortam):
     mk, bd, d = ortam["mk"], ortam["bd"], ortam["durum"]
     mk.hazirla(bd)
     _kaldir_kur(bd)
-    d.update(port=True, servis=True, servis_calisiyor=True, surecler=[(4242, str(ortam["exe"]))])
+    # Servis kurulumu: 1883'ü SERVİSİN süreci tutar (burada backend'le AYNI ikili — pid = servis pid). H-7.1: servis süreci
+    # "kendi broker" SAYILMAZ; servisin AYRI ikilisi (C:\Program Files\PEMF\mosquitto) de yola göre zaten eşleşmez.
+    d.update(port=True, servis=True, servis_calisiyor=True, servis_pid=4242, surecler=[(4242, str(ortam["exe"]))])
 
     _kos(ortam, sure=1.5, popen_bekle=99)
 
@@ -227,3 +232,47 @@ def test_KRITIK_onarim_YALNIZ_acilista_izleme_dongusu_yeniden_baslatmaz(ortam):
         f"izleme döngüsü broker'ı yeniden başlattı (sonlandır {d['sonlandir']}, başlat {len(d['popen'])}) — "
         "çalışırken (bobin sürülüyor olabilir) yeniden başlatma YOK"
     )
+
+
+def test_KRITIK_H71_SAHA_eski_mosquitto_SERVISI_kayitliyken_KENDI_broker_yeniden_baslatilir(ortam):
+    """H-7.1 (1-H incelemesi) — saha topolojisi (SAHIP-CEVAPLARI Y36, ölçüldü 2026-09-30): makinede eski kurulumun `mosquitto`
+    SERVİSİ kayıtlı ama StartPending (PID 3888, `C:/Program Files/mosquitto/mosquitto.exe`, hiçbir port dinlemiyor); 1883'ü
+    backend'in KENDİ paketli broker'ı tutuyor. Eskiden "servis kayıtlı" görülünce Y71'in yeniden başlatması hiç yapılmıyor,
+    günlüğe sahada YANLIŞ olan "Restart-Service mosquitto" yazılıyordu (1-G G-3.1) — broker yeniden başlayana dek ANONİM."""
+    mk, bd, d = ortam["mk"], ortam["bd"], ortam["durum"]
+    mk.hazirla(bd)
+    _kaldir_kur(bd)
+    d.update(
+        port=True,
+        servis=True,
+        servis_calisiyor=False,
+        servis_pid=3888,
+        surecler=[(3888, r"C:\Program Files\mosquitto\mosquitto.exe"), (2828, str(ortam["exe"]))],
+    )
+
+    _kos(ortam)
+
+    assert d["sonlandir"] == [2828], (
+        f"sonlandırılan {d['sonlandir']} — sahada 1883'ü tutan backend'in KENDİ broker'ı (2828) yeniden başlatılmalı; eski "
+        "servisin süreci (3888) DOKUNULMAZ"
+    )
+    assert d["popen"] and f"include_dir {(bd / 'conf.d').as_posix()}" in _conf_metni(d["popen"][0]), (
+        f"broker kimlikli yapılandırmayla yeniden BAŞLATILMADI: {d['popen']}"
+    )
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="sc queryex yalnız Windows")
+def test_KRITIK_H71_servis_pid_GERCEK_sc_queryex_ile_okunur():
+    """Aparatın sahtelediği `_servis_pid`'in kendisi: GERÇEK `sc queryex` çıktısı (Türkçe Windows'ta da etiketler İngilizce)
+    çalışan bir servisin PID'ini vermeli (her zaman çalışan RpcSs — svchost.exe içinde); olmayan servis → None. Okunamazsa
+    servis süreci "kendi broker" sanılıp sonlandırılabilirdi. Salt-okur: hiçbir servis başlatılmaz/durdurulmaz."""
+    from services import headless_services as hs
+
+    sup = hs.MosquittoSupervisor(
+        port=18831, interval_seconds=60, ensure_running=False, start_mdns=False, event_bus=_Olaylar()
+    )
+    sup.MOSQUITTO_SERVICE_NAME = "RpcSs"
+    pid = sup._servis_pid()
+    assert pid and pid in dict(hs._surec_yollari("svchost.exe")), f"RpcSs PID'i okunamadı: {pid!r}"
+    sup.MOSQUITTO_SERVICE_NAME = "pemf_olmayan_servis_h71"
+    assert sup._servis_pid() is None

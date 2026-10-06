@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import platform
+import re
 import signal
 import socket
 import subprocess
@@ -359,19 +360,28 @@ class MosquittoSupervisor:
             return "hata"
         if durum != "onarildi" or not _is_tcp_port_open("127.0.0.1", self.port):
             return durum
-        if self._check_service_status().get("service_exists"):
-            logger.warning(
-                "Y71: kimlik parcasi yazildi ama Windows 'mosquitto' SERVISI kayitli - backend'in broker'i DEGIL, yeniden "
-                "BASLATILMADI. Servis kurulumunda bobinler durmusken: Restart-Service mosquitto."
-            )
-            return durum
+        # ⚠️ H-7.1 (1-H incelemesi): karar SÜRECE göre verilir, "servis kayıtlı mı"ya göre DEĞİL. Sahada (Y36) eski kurulumun
+        # `mosquitto` SERVİSİ kayıtlı ama StartPending (port dinlemiyor) ve 1883'ü backend'in KENDİ broker'ı tutuyor; eskiden
+        # servis kayıtlı görülünce hiçbir şey yeniden başlatılmıyor, günlüğe sahada YANLIŞ olan "Restart-Service" yazılıyordu
+        # (1-G G-3.1). Servisin KENDİ süreci (PID `sc queryex`) hiçbir koşulda "kendi broker" sayılmaz.
         exe = self._find_mosquitto_exe()
-        kendi = [pid for pid, yol in _surec_yollari("mosquitto.exe") if exe and yol and _ayni_dosya(yol, exe)]
+        servis_pid = self._servis_pid()
+        kendi = [
+            pid
+            for pid, yol in _surec_yollari("mosquitto.exe")
+            if exe and yol and _ayni_dosya(yol, exe) and pid != servis_pid
+        ]
         if not kendi:
-            logger.warning(
-                "Y71: kimlik parcasi yazildi ama 1883'u backend'in KENDI broker'i tutmuyor - yeniden BASLATILMADI "
-                "(o broker yeniden baslayana dek ANONIM)."
-            )
+            if self._check_service_status().get("service_exists"):
+                logger.warning(
+                    "Y71: kimlik parcasi yazildi ama 1883'u Windows 'mosquitto' SERVISI tutuyor (backend'in broker'i "
+                    "DEGIL) - yeniden BASLATILMADI. Servis kurulumunda bobinler durmusken: Restart-Service mosquitto."
+                )
+            else:
+                logger.warning(
+                    "Y71: kimlik parcasi yazildi ama 1883'u backend'in KENDI broker'i tutmuyor - yeniden BASLATILMADI "
+                    "(o broker yeniden baslayana dek ANONIM)."
+                )
             return durum
         for pid in kendi:
             self._sureci_sonlandir(pid)
@@ -380,6 +390,20 @@ class MosquittoSupervisor:
             logger.warning("Y71: backend'in broker'i kimlikli yeniden baslatildi (sonlandirilan pid: %s).", kendi)
             return "yeniden_baslatildi"
         return durum
+
+    def _servis_pid(self) -> int | None:
+        """H-7.1: Windows `mosquitto` servisinin çalışan sürecinin PID'i (`sc queryex`); servis yok / durmuş / okunamaz → None.
+        Bu PID'li süreç "backend'in kendi broker'ı" sayılmaz (servis süreci backend'le aynı ikiliyi koşsa bile)."""
+        if platform.system() != "Windows":
+            return None
+        try:
+            r = _run_command(["sc", "queryex", self.MOSQUITTO_SERVICE_NAME], timeout=5)
+            m = re.search(r"\bPID\s*:\s*(\d+)", r.stdout or "") if r.returncode == 0 else None
+            pid = int(m.group(1)) if m else 0
+            return pid or None
+        except Exception:
+            logger.debug("mosquitto servis PID'i okunamadi", exc_info=True)
+            return None
 
     def _sureci_sonlandir(self, pid: int) -> None:
         """Y71: backend'in KENDİ broker sürecini sonlandırır (Windows'ta `os.kill` = TerminateProcess)."""
