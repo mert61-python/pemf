@@ -163,3 +163,20 @@ def test_KRITIK_yedek_TUTMA_siniri_en_yenisi_dahil(akis):
     kalan = sorted(p.name for p in kok.glob("pemf_yedek_*.bin"))
     assert len(kalan) == tut, f"tutma sınırı uygulanmadı: {len(kalan)} yedek ({kalan})"
     assert a["yedekler"][0].name in kalan, "en YENİ yedek (bu akışınki) silindi — geri dönüş/elle kurtarma onu ister"
+
+
+def test_KRITIK_H51_yakma_akisi_ISTISNA_firlatirsa_gecici_dizin_YINE_silinir(akis, monkeypatch):
+    """H-5.1 (1-H incelemesi): "HER yolda silinir" iddiasının İSTİSNA kolu kapısızdı — `_firmware_uygula`'da `_gecici_sil`
+    `finally` dışına alınınca firmware zincirinin 93 testi yeşil kaldı. Yakma akışı fırlatırsa (ör. `firmware_yedek` dizini
+    yazılamıyor) indirilen ikilinin `pemf_upd_*` dizini kalmamalı."""
+    a = akis
+
+    def _yedek_yazilamaz(cli, hedef, boyut):
+        raise PermissionError(13, "firmware_yedek dizini yazılamıyor (sahte)")
+
+    monkeypatch.setattr(a["sy"], "yedek_al", _yedek_yazilamaz)
+    with pytest.raises(PermissionError):
+        a["fm"].acilis_denetimi(firmware_surum="2.3.0", stm_bagli=True, uygula=True)
+    assert a["fm"]._test_acilan, "aparat: geçici dizin açılmadı (kapı kör)"
+    kalan = [str(d) for d in a["fm"]._test_acilan if d.exists()]
+    assert not kalan, f"yakma akışı istisnayla bitti ama geçici indirme dizini KALDI: {kalan}"
