@@ -77,3 +77,45 @@ def test_bos_deger_GERCEK_temizleme(hasta_db):
     p = _hasta(hasta_db, pid)
     assert (p.get("vet_contact") or "") == "", "açıkça boşaltılan alan temizlenmedi"
     assert p["name"] == "Boncuk", "boşaltma başka alanı etkiledi"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# D2.27 (B-3.111) — DÖNÜŞ, UPDATE'İN KENDİ SONUCUNDAN
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# `update_patient` dönüşünü `cursor.rowcount`tan, ama arama indeksi tazelemesinden SONRA okuyordu. Tazeleme aynı
+# imleçte DELETE (+ varsa INSERT) koşar → rowcount SON ifadenin sayısıdır. Aranabilir alanları (ad/tür/ırk/sahip/yaş/
+# kilo) boş bir hastada token yok: DELETE 0 satır → dönüş False → uç "error", arayüz "hata oluştu" der; OYSA yazım
+# commit edilmiştir (kayıt-durum dürüstlüğü — ölçüldü).
+
+
+def test_KRITIK_D227_aranabilir_alanlari_BOS_hastada_guncelleme_BASARI_doner(hasta_db):
+    """MUTASYON: dönüşü yeniden indeks tazelemesinden sonraki `cursor.rowcount`tan okumak → KIRMIZI."""
+    pid = hasta_db.add_patient({"name": "", "species": "", "owner": ""})
+    assert hasta_db.update_patient(pid, {"vet_contact": "Dr. X"}) is True, (
+        "yazım COMMIT edildiği hâlde update_patient False döndü → uç 'error', arayüz 'hata oluştu' der"
+    )
+    assert (_hasta(hasta_db, pid) or {}).get("vet_contact") == "Dr. X", "güncelleme yazılmadı"
+
+
+def test_KRITIK_D227_guncelleme_UCU_yazilan_kayitta_SUCCESS_der(hasta_db, monkeypatch):
+    """Ürünün gerçek ucu (`POST /api/patients` + `id` → `update_patient`): yazılan kayıtta 'success'."""
+    from database import patient_database as pdb
+    from fastapi.testclient import TestClient
+    from servers import api_server
+    from servers import patient_router as pr
+
+    monkeypatch.setattr(pdb, "get_patient_database", lambda *a, **k: hasta_db)
+    monkeypatch.setattr(pr, "get_patient_database", lambda *a, **k: hasta_db)
+    pid = hasta_db.add_patient({"name": "", "species": ""})
+    with TestClient(api_server.app) as c:
+        r = c.post("/api/patients", json={"id": pid, "vet_contact": "Dr. Y"})
+    assert r.status_code == 200 and r.json().get("status") == "success", (
+        f"yazılan kayıtta uç: {r.status_code} {r.json()}"
+    )
+    assert (_hasta(hasta_db, pid) or {}).get("vet_contact") == "Dr. Y"
+
+
+def test_KARSIT_D227_OLMAYAN_hasta_guncellemesi_BASARISIZ_doner(hasta_db):
+    """Dönüş "her zaman True"ya kaymasın: hiç satır güncellenmediyse False. MUTASYON: `return True` → KIRMIZI."""
+    hasta_db.add_patient({"name": "Var", "species": "Kedi"})
+    assert hasta_db.update_patient("olmayan-kimlik", {"vet_contact": "X"}) is False

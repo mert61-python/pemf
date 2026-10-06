@@ -708,10 +708,15 @@ class PatientDatabase:
 
                     query = f"UPDATE patients SET {', '.join(updates)} WHERE id = ?"
                     cursor.execute(query, values)
-                    if cursor.rowcount > 0:
+                    # ⚠️ D2.27 (B-3.111): sonuç UPDATE'in KENDİ rowcount'undan, indeks tazelemesinden ÖNCE alınır. Tazeleme
+                    # aynı imleçte DELETE (+ varsa INSERT) koşar → eskiden dönüş SON ifadenin sayısıydı: aranabilir
+                    # alanları boş hastada 0 → False → uç "error", arayüz "hata oluştu" diyordu; oysa yazım COMMIT
+                    # edilmişti (ölçüldü). Kapı: tests/test_hasta_kismi_guncelleme.py::test_KRITIK_D227_…
+                    guncellendi = cursor.rowcount > 0
+                    if guncellendi:
                         self._refresh_search_index_for_patient(cursor, patient_id)
                     conn.commit()
-                    return cursor.rowcount > 0
+                    return guncellendi
             except _DB_ERROR:
                 return False
 
