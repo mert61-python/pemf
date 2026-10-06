@@ -231,6 +231,31 @@ def _kosu_kaydi_sizmaz():
         crt._coil_run_stats.update(once[1])
 
 
+@pytest.fixture(autouse=True)
+def _canli_tedavi_durumu_sizmaz():
+    """H-5.2 (1-H incelemesi) — canlı durumun `activeTreatment`'ı (`live_state._live_state`) modül-geneldir. Ölçüldü:
+    `test_nack_gorunurlugu.py` `_active_session`'ı kapatıp `activeTreatment.isActive=True` BIRAKIYOR (D1.41 nöbeti yalnız
+    `_active_session`'a bakar); ardından koşan firmware kapıları (`update_manager._has_active_treatment` → bu alan)
+    "[4] AKTİF TEDAVİ … yakılmaz"a düşüyordu — D1.112 3 + D1.115 2 + H-5.1 kolu SIRAYA bağlı KIRMIZI (alt küme / mutasyon
+    koşuları); tam süitte arada başka bir seans testi alanı sıfırladığı için MASKELİ. Ters yönde "aktif tedavi varken
+    yakılmaz" kollarını sızıntıyla MASKELİ yeşil yapabilirdi. `_kosu_kaydi_sizmaz` ilkesi: her test alanı kendinden
+    ÖNCEKİ hâline YERİNDE geri alarak biter. Kapı: tests/test_canli_tedavi_durumu_testler_arasi_SIZMAZ_H52.py"""
+    ls = sys.modules.get("servers.live_state")
+    once = None
+    if ls is not None:
+        with ls._live_state_lock:
+            once = dict(ls._live_state.get("activeTreatment") or {})
+    yield
+    ls = sys.modules.get("servers.live_state")
+    if ls is None or once is None:
+        return
+    with ls._live_state_lock:
+        alan = ls._live_state.get("activeTreatment")
+        if isinstance(alan, dict):
+            alan.clear()
+            alan.update(once)
+
+
 # ⚠️ D0Ö.07 (B-10.9) — SÜİT AĞA ÇIKMAZ (TCP connect, UDP sendto, DNS). ÖLÇÜLDÜ:
 # `data/cloud_mqtt_provision.json` (git'e girmez) bu makinede VAR; aynayı stub'lamayan E-stop testleri
 # `_estop_cloud_mirror` üzerinden GERÇEK (üretim) bulut broker'ına gerçek kimlikle TLS + STOP yayını
