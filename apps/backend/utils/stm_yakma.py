@@ -69,6 +69,11 @@ BANNER_TANINMADI = 9
 PORT_MESGUL = 10
 #: `banner_dogrula` sebebinin öneki — tüm portlar açılamadıysa (yakma akışı bunu PORT_MESGUL'a çevirir).
 PORT_ACILAMADI_ONEKI = "SERİ PORT AÇILAMADI"
+#: D1.112 (B-4.7): yeni firmware UYUMSUZ ve eski firmware'e GERİ DÖNÜŞ YAKILAMADI — kart ne yeni ne eski firmware'le
+#: doğrulanmış; ST-Link ile elle kurtarma gerekir (yedek dosyası sonuçta). En ağır sonuç: `UYUMSUZ_GERI_DONULDU` DEĞİL.
+GERI_DONUS_BASARISIZ = 11
+#: D1.112: geri dönüş yakıldı (rc=0) ama kart geri dönülen firmware'le KİMLİĞİNİ söylemedi — "geri dönüldü" doğrulanamadı.
+GERI_DONUS_DOGRULANAMADI = 12
 
 
 @dataclass(frozen=True)
@@ -365,9 +370,48 @@ def yakma_akisi(
         return Sonuc(PORT_MESGUL, sebep, banner=ham, sha256=ozet, yedek=str(yedek), adimlar=adimlar)
 
     if uyumlu is False:
-        geri, _ = yak(cli, yedek)
-        adimlar.append("GERİ DÖNÜŞ: " + ("eski firmware yakıldı" if geri else "BAŞARISIZ"))
-        return Sonuc(UYUMSUZ_GERI_DONULDU, sebep, banner=ham, sha256=ozet, yedek=str(yedek), adimlar=adimlar)
+        # ⚠️ D1.112 (B-4.7): geri dönüşün SONUCU ve geri dönülen firmware'in KİMLİĞİ sonuç koduna yansır. Eskiden yakıcı
+        # hatası yalnız adım metnine yazılıp HER durumda UYUMSUZ_GERI_DONULDU dönüyordu — kart ne yeni ne eski firmware'le
+        # doğrulanmışken durum "geri dönüldü" ile aynıydı.
+        isaret_geri = banner_kaynagi.isaret() if banner_kaynagi is not None else 0
+        geri, geri_cikti = yak(cli, yedek)
+        if not geri:
+            adimlar.append("GERİ DÖNÜŞ: YAKICI HATA")
+            return Sonuc(
+                GERI_DONUS_BASARISIZ,
+                f"yeni firmware UYUMSUZ ({sebep}) VE eski firmware'e GERİ DÖNÜŞ YAKILAMADI — kart ne yeni ne eski firmware'le "
+                f"doğrulanmış. ST-Link ile ELLE kurtarın: yedek {yedek} → {YAKMA_ADRESI}. Yakıcı: {geri_cikti[-300:]}",
+                banner=ham,
+                sha256=ozet,
+                yedek=str(yedek),
+                adimlar=adimlar,
+            )
+        adimlar.append("GERİ DÖNÜŞ: eski firmware yakıldı")
+        if banner_kaynagi is not None:
+            g_uyumlu, g_sebep, g_ham = _banner_kaynaktan(banner_kaynagi, isaret_geri)
+        else:
+            time.sleep(2.0)
+            g_uyumlu, g_sebep, g_ham = banner_dogrula(port)
+        adimlar.append(f"geri dönüş banner: {g_ham or '(okunamadı)'} → uyum={g_uyumlu} ({g_sebep})")
+        if not g_ham:
+            return Sonuc(
+                GERI_DONUS_DOGRULANAMADI,
+                f"yeni firmware UYUMSUZ ({sebep}); eski firmware yakıldı ama kart KİMLİĞİNİ söylemedi ({g_sebep}) — geri "
+                f"dönüş DOĞRULANAMADI. Kartı yeniden başlatıp açılış satırını kontrol edin; açılmıyorsa ST-Link ile yedek "
+                f"{yedek} → {YAKMA_ADRESI}.",
+                banner=ham,
+                sha256=ozet,
+                yedek=str(yedek),
+                adimlar=adimlar,
+            )
+        return Sonuc(
+            UYUMSUZ_GERI_DONULDU,
+            f"{sebep} — eski firmware'e geri dönüldü (kart açılışta: {g_ham})",
+            banner=ham,
+            sha256=ozet,
+            yedek=str(yedek),
+            adimlar=adimlar,
+        )
 
     if uyumlu is None:
         # ⚠️ Geri dönüş sebebi DEĞİL — üç-durumlu karar (bkz. modül başlığı, 6).
