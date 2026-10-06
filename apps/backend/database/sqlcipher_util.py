@@ -394,7 +394,17 @@ def _kismi_karantinayi_geri_al(tasinanlar, dusen_kaynak, dusen_hedef, logger=Non
     return True
 
 
-def _tasi_yeniden_dene(kaynak, hedef, denemeler=_KILIT_DENEME, bekleme=_KILIT_BEKLEME_SN, logger=None):
+def _kopya_yazma(kaynak, hedef, *a, **k):
+    """`shutil.move` geri dönüşü YERİNE: kopya YAZMA (D2.47 · B-3.15 · A-08).
+
+    Windows'ta açık tutamaklı (okuyucu kilidi) dosyanın yeniden adlandırması düşünce `shutil.move` `copy2` ile hedefe
+    TAM bir kopya yazıp kaynağı silmeye çalışır; silme de düşer → hedefte, kaynak düz-metin DB ise TÜM PII'nin
+    korumasız kopyası kalır (ölçüldü: gerçek okuyucu bağlantısıyla `.plain.bak`). Aynı dizindeki taşımada kopyaya hiç
+    gerek yoktur; kilit kalıcıysa taşıma düşmeli, çağıran geri alıp göçü iptal etmelidir."""
+    raise PermissionError(13, "kaynak kilitli — yalniz yeniden adlandirma yapilir, KOPYA YAZILMADI (A-08)", str(kaynak))
+
+
+def _tasi_yeniden_dene(kaynak, hedef, denemeler=_KILIT_DENEME, bekleme=_KILIT_BEKLEME_SN, logger=None, kopyalama=True):
     """`shutil.move`, Windows'ta GECICI kilitlere karsi sinirli yeniden-deneme ile.
 
     ⚠️ NEDEN: dosya tasima Windows'ta baska bir surec (virus tarayici, yedekleyici, indeksleyici
@@ -404,11 +414,18 @@ def _tasi_yeniden_dene(kaynak, hedef, denemeler=_KILIT_DENEME, bekleme=_KILIT_BE
     yetim mosquitto bir DLL'i kilitleyip derlemeyi dusurmustu).
 
     ⚠️ SINIRLI: sonsuz denemez. Kilit kalicysa cagiran GERI ALMA yapabilsin diye istisna yukselir.
+
+    `kopyalama=False` (D2.47 · B-3.15 · A-08): yalnız yeniden adlandırma — `shutil.move`un `copy2` geri dönüşü
+    kapatılır (`_kopya_yazma`); kilitli düz-metin kaynağın kopyası hedefte KALMAZ. Göçün `db → .plain.bak` taşıması
+    bu kiple yapılır. (Test dikişi korunur: `shutil.move` yine tek nokta, `copy_function` anahtar sözcükle geçer.)
     """
     son = None
     for i in range(max(1, denemeler)):
         try:
-            shutil.move(kaynak, hedef)
+            if kopyalama:
+                shutil.move(kaynak, hedef)
+            else:
+                shutil.move(kaynak, hedef, copy_function=_kopya_yazma)
             return
         except Exception as e:  # PermissionError ve akrabalari
             son = e
@@ -498,6 +515,40 @@ def duz_metin_yedegi_emanete_al_mi(logger=None) -> bool:
     return False
 
 
+def _kalan_duz_metin_kopyalari_koru(backup, logger=None) -> list:
+    """D2.47 (B-3.15 · A-08): `backup`ın kenara alınmış kardeşleri (`<db>.plain.bak.<zaman>[.<n>]`) arasında DÜZ-METİN
+    olanları SİLMEZ; ACL ile korumaya alır (sürecin hesabı korunarak — yarım-göç toparlaması kendi yedeğini açabilsin;
+    açılıştaki `_harden_secret_file_acls` ile aynı ilke) ve her birini ADIYLA loglar. Döner: kalan kopya yolları.
+
+    Eskiden bu kopyalar (önceki kilitli göçün `copy2` artığı / yarım göçün tek kopyası) korumasız diskte kalırken
+    günlük "at-rest PII riski kapatıldı" diyordu (ölçüldü). Kapı: tests/test_goc_duz_metin_kopya_A08_D247.py."""
+    import glob
+
+    kalanlar = []
+    for yol in sorted(glob.glob(glob.escape(str(backup)) + ".*")):
+        try:
+            if not duz_metin_sqlite_mi(yol):
+                continue
+        except Exception:
+            continue
+        korundu = False
+        try:
+            from utils.file_acl import lock_down_file
+
+            korundu = bool(lock_down_file(yol, keep_current_user=True))
+        except Exception:
+            korundu = False
+        if logger:
+            logger.error(
+                "DUZ-METIN KOPYA DISKTE KALDI (A-08: SILINMEDI): %s — %s. Tum hasta PII'sini SQLCipher'siz tasir; "
+                "dogrulandiktan sonra guvenli silinmesi onerilir.",
+                yol,
+                "ACL korumasina alindi" if korundu else "ACL korumasi UYGULANAMADI (yerel kullanicilara acik olabilir)",
+            )
+        kalanlar.append(yol)
+    return kalanlar
+
+
 def goc_sonrasi_yedek_politikasi(backup, logger=None, etiket="DB"):
     """Goc BASARIYLA bittikten sonra `.plain.bak` ile ne yapilacagini uygular.
 
@@ -527,8 +578,11 @@ def goc_sonrasi_yedek_politikasi(backup, logger=None, etiket="DB"):
 
     `etiket`: log satirlarinda hangi veritabani oldugunu belirtir ("DB", "Tedavi DB").
     Kapilar: tests/test_escrow_acl_dusunce_fail_closed.py ·
-             tests/test_duz_metin_yedek_bayragi_tek_ad.py
+             tests/test_duz_metin_yedek_bayragi_tek_ad.py · tests/test_goc_duz_metin_kopya_A08_D247.py
     """
+    # ⚠️ D2.47 (A-08): önceki göçlerden kalan düz-metin kopyalar SİLİNMEZ, korumaya alınır ve ADIYLA bildirilir;
+    # varken "PII riski kapatıldı" DENMEZ.
+    kalanlar = _kalan_duz_metin_kopyalari_koru(backup, logger)
     kilitlendi = False
     if duz_metin_yedegi_emanete_al_mi(logger):
         try:
@@ -563,7 +617,14 @@ def goc_sonrasi_yedek_politikasi(backup, logger=None, etiket="DB"):
             _bf.flush()
             os.fsync(_bf.fileno())
         os.remove(backup)
-        if logger:
+        if logger and kalanlar:
+            logger.error(
+                "%s plaintext -> SQLCipher MIGRATE edildi; bu turun düz-metin yedeği GÜVENLİ-SİLİNDİ ama ÖNCEKİ düz-metin "
+                "kopya(lar) DİSKTE: %s — at-rest PII riski KAPATILMADI (A-08: silinmedi, korumaya alındı).",
+                etiket,
+                ", ".join(kalanlar),
+            )
+        elif logger:
             logger.warning(
                 "%s plaintext -> SQLCipher MIGRATE edildi; düz-metin yedek GÜVENLİ-SİLİNDİ "
                 "(at-rest PII riski kapatıldı).",
@@ -770,7 +831,10 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None, etiket="D
         # Bu yuzden: ikinci tasima yeniden-denemeli, DUSERSE orijinal GERI KONUR ve goc
         # temiz sekilde iptal edilir (veri duz-metin olarak SAGLAM kalir; sonraki acilis
         # yeniden dener).
-        _tasi_yeniden_dene(db, backup, logger=logger)
+        # ⚠️ D2.47 (B-3.15 · A-08): KOPYASIZ taşıma. Kalıcı okuyucu kilidinde `shutil.move`un `copy2` geri dönüşü
+        # `.plain.bak`a TÜM düz-metin PII'nin kopyasını bırakıyordu (göç iptal olsa da kopya kalıyordu — ölçüldü).
+        # Kilitte göç kopya yazmadan durur; canlı düz-metin DB yerinde kalır (karantina YOK), sonraki açılış yeniden dener.
+        _tasi_yeniden_dene(db, backup, logger=logger, kopyalama=False)
         try:
             _tasi_yeniden_dene(enc_tmp, db, logger=logger)
         except Exception:

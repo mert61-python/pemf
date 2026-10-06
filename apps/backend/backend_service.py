@@ -437,9 +437,11 @@ def _harden_secret_file_acls(app_data_dir: Path, logger: logging.Logger) -> None
     # gosteriyordu (urunde OLCULDU 2026-09-13). `file_acl.lock_down_file` docstring'i bu sinifi
     # "DENETIM P3 — sahada yasandi" diye zaten kaydetmisti; ayni kor nokta burada tekrar etti.
     # Korunan sey KAYBOLMUYOR: Users / Authenticated Users her iki kipte de ERISEMEZ.
+    # ⚠️ D2.47 (A-08): desen `*.plain.bak*` — kenara alınmış `*.plain.bak.<zaman>` kopyaları da aynı tam düz-metin PII'yi
+    # taşır ve SİLİNMEZ (korumaya alınır); eskiden yalnız `*.plain.bak` kilitleniyor, onlar korumasız kalıyordu.
     plain_yedekler = []
     try:
-        plain_yedekler = list(app_data_dir.glob("*.plain.bak"))
+        plain_yedekler = list(app_data_dir.glob("*.plain.bak*"))
     except Exception:
         pass
     seen: set[str] = set()
