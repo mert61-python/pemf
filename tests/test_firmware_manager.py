@@ -12,7 +12,8 @@ manifest ve yakma YAMALANIR, ölçülen şey SIRA ve KARAR.
   2. STM bağlı değilse → yakma DENENMEZ
   3. Uyumluysa → indirme bile yapılmaz (gereksiz yakma RİSKTİR)
   4. SHA256 yoksa/tutmuyorsa → indirme reddedilir, yakma YOK
-  5. Plan `client_geri_al` ise → `update_manager.rollback()` çağrılır, firmware YAKILMAZ
+  5. Client geri alınması gerekiyorsa (KESİN uyumsuz + STM bağlı + ileri gidilemiyor) → firmware YAKILMAZ,
+     `update_manager.rollback()` ÇAĞRILMAZ; `istemciGeriAlinmali=True` ile LAUNCHER'a bildirilir (Y16 · D1.119)
   6. Yakma başarısızsa → `uygulandi=False` ve hata KODUYLA yazılır
   7. `durum()` her dalda GÜNCELLENİR — "atlandı" ile "yapıldı" ayırt edilebilir
 """
@@ -133,13 +134,19 @@ def test_KRITIK_firmware_guncelle_dali_YAKMA_cagirir(fm, monkeypatch, tmp_path):
     assert d["uygulandi"] is True and d["firmwareSurum"] == "2.3", d
 
 
-def test_KRITIK_client_geri_al_dali_FIRMWARE_YAKMAZ(fm, monkeypatch):
-    """Plan geri alma diyorsa firmware'e DOKUNULMAZ — yanlış tarafı yakmak felakettir."""
-    # client 1.9.51 + fw 2.1; yeni firmware YOK → tek çare client'ı 1.9.20'ye almak
+def test_KRITIK_client_geri_alma_LAUNCHERA_devredilir_Y16_D1119(fm, monkeypatch):
+    """Y16 (sahip): "client güncellenip STM güncellenmezse client geri döner" kararını LAUNCHER (sağlık kapılı geri alma)
+    uygular; legacy EXE kanalı AÇILMAZ. D1.119 (B-4.3): backend'in `CLIENT_GERI_AL` dalı `update_manager.rollback()`'i
+    (Inno/`exe` kanalı) çağırıyordu — kanal kapalıyken ölüydü, `PEMF_LEGACY_EXE_UPDATE=1` ile açıkken backend'e İKİNCİ bir
+    kurulum yaptırırdı (split-brain hasta DB'si). Artık: firmware'e DOKUNULMAZ, `rollback()` ÇAĞRILMAZ (kanal açık ve
+    `previousStable` uyumlu olsa bile), eylem BEKLE; launcher'ın okuyacağı durum `uyum=False` + `istemciGeriAlinmali=True`
+    (`/api/health` → `firmwareGuncelleme`, D1.116). Rust tarafı (launcher geri alması) AYRI oturumun açık maddesi."""
+    # client 1.9.51 + fw 2.1; yeni firmware YOK → tek çare client'ı (1.9.20) geri almak — bunu LAUNCHER yapar
     kurallar = [
         {"clientMin": "1.9.00", "clientMax": "1.9.49", "firmwareMin": "2.0", "firmwareMax": "2.2"},
         {"clientMin": "1.9.50", "clientMax": "", "firmwareMin": "2.3", "firmwareMax": ""},
     ]
+    monkeypatch.setenv("PEMF_LEGACY_EXE_UPDATE", "1")  # en kötü hâl: eski kanal açık + previousStable uyumlu
     monkeypatch.setattr(fm, "manifest_oku", lambda **_k: _manifest(fw_surum="", kurallar=kurallar))
     import utils.stm_yakma as sy
 
@@ -148,10 +155,25 @@ def test_KRITIK_client_geri_al_dali_FIRMWARE_YAKMAZ(fm, monkeypatch):
     geri = []
     monkeypatch.setattr(fm.um, "rollback", lambda: geri.append(1) or {"ok": True})
 
-    d = fm.acilis_denetimi(firmware_surum="2.1", stm_bagli=True)
-    assert d["eylem"] == su.CLIENT_GERI_AL, d["gerekce"]
-    assert geri, "client rollback ÇAĞRILMADI"
-    assert not yakildi, "geri alma dalında firmware YAKILMIŞ"
+    d = fm.acilis_denetimi(firmware_surum="2.1", stm_bagli=True, uygula=True)
+    assert not geri, "backend eski EXE kanalının rollback()'ini ÇAĞIRDI — Y16: geri alma LAUNCHER'ın işi, kanal AÇILMAZ"
+    assert not yakildi, "geri alma gereken durumda firmware YAKILMIŞ"
+    assert d["eylem"] == su.BEKLE, f"eylem {d['eylem']!r} — backend geri almayı kendisi planlamamalı: {d['gerekce']}"
+    assert d.get("uyum") is False and d.get("istemciGeriAlinmali") is True, (
+        f"launcher'ın okuyacağı durum eksik (uyum/istemciGeriAlinmali): {d}"
+    )
+    assert "launcher" in d["gerekce"].lower() and "Y16" in d["gerekce"], d["gerekce"]
+
+
+@pytest.mark.parametrize(
+    "durum,fw,bagli",
+    [("uyumlu", "2.4", True), ("stm_yok", "2.1", False)],
+)
+def test_KARSIT_istemciGeriAlinmali_yalniz_KESIN_uyumsuz_ve_STM_bagliyken(fm, monkeypatch, durum, fw, bagli):
+    kurallar = [{"clientMin": "1.9.50", "clientMax": "", "firmwareMin": "2.3", "firmwareMax": ""}]
+    monkeypatch.setattr(fm, "manifest_oku", lambda **_k: _manifest(fw_surum="", kurallar=kurallar))
+    d = fm.acilis_denetimi(firmware_surum=fw, stm_bagli=bagli, uygula=False)
+    assert d.get("istemciGeriAlinmali") is False, f"{durum}: launcher yanlış yere geri alma sinyali alır: {d}"
 
 
 def test_KRITIK_yakma_basarisizsa_KOD_ile_yazilir(fm, monkeypatch, tmp_path):

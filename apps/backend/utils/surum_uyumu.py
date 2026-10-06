@@ -153,6 +153,9 @@ def plan_yap(
          geri almaya tercih edilir — kullanıcı zaten yeni client'ı istemiştir.
       5. İleri gidilemiyorsa **client'ı geri al** (sahip: *"client güncellenip stm
          güncellenmezse client geri eski sürümüne otomatik dönebilmeli"*).
+         ⚠️ Y16 (D1.119): geri almayı LAUNCHER yapar — backend (`firmware_manager.acilis_denetimi`)
+         `onceki_client` VERMEZ, bu adım backend'de hiç üretilmez; backend `istemciGeriAlinmali`
+         sinyalini yayınlar (docs/LAUNCHER_SPEC.md). Saf karar olarak (launcher/test için) kalır.
       6. Geri alınacak sürüm de yoksa → BEKLE. ⚠️ Hiçbir durumda "uyumsuz haliyle devam et"
          diye bir eylem ÜRETİLMEZ; ama bu modül seansı da ENGELLEMEZ — o kararı
          `utils/stm32_kimlik.uyum_denetle` verir ve E-stop her hâlükârda açıktır.

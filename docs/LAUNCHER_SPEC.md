@@ -153,6 +153,28 @@ sonra tarayıcıyı aç. Zaman aşımında backend log'unu göster — sessizce 
 Windows `%APPDATA%\PEMF_GUI`, macOS `~/Library/Application Support/PEMF_GUI`,
 Linux `~/.local/share/PEMF_GUI`. **Launcher bunu taklit etmeli, yeniden icat etmemeli.**
 
+## Firmware ↔ client uyumsuzluğunda client geri alma (Y16) — backend'in bildirdiği durum
+
+Sahip kararı **Y16**: "client güncellenip STM güncellenmezse client geri döner" kuralını **launcher** (sağlık kapılı
+geri alma, `runtime.old`) uygular. Backend client'ı geri **almaz**; eski Inno/`exe` kanalı (`update_manager.rollback()`)
+bu iş için **açılmaz** (split-brain hasta DB'si riski — `update_manager.py` başlığı). D1.119 (1-H) ile backend'in ölü
+`CLIENT_GERI_AL` dalı kaldırıldı.
+
+Sözleşme (yalnız yerel/LAN istek — tünele `null`): `GET /api/health` → `firmwareGuncelleme`
+(`servers/firmware_manager.durum()`):
+
+| Alan | Anlam |
+|---|---|
+| `eylem` | `yok` · `bekle` · `firmware_guncelle` (açılış denetiminin kararı) |
+| `gerekce` | insan-okur neden (destek için) |
+| `uyum` | `true` uyumlu · `false` KESİN uyumsuz · `null` karar verilemedi (kural yok / sürüm okunamadı / manifest yok) |
+| `istemciGeriAlinmali` | `true` ⇔ `uyum=false` **ve** STM bağlı **ve** ileriye (firmware güncellemesiyle) gidilemiyor |
+| `uygulandi` / `hata` | son yakma denemesi (`hata` = `"[kod] …"`, kodlar `utils/stm_yakma.py`) |
+
+Launcher `istemciGeriAlinmali=true` görürse — ve yalnız o zaman — önceki çalışan sürüme sağlık kapılı geri döner.
+⚠️ **Uygulanmadı (Rust):** launcher bu alanı henüz OKUMUYOR — launcher oturumunun açık maddesi (1-H raporu).
+`uyum=null` geri alma sebebi DEĞİLDİR (üç durumlu karar; bilinmeyene dayanarak hiçbir şey yapılmaz).
+
 ## Güvenlik gereksinimleri
 
 1. **SHA256 zorunlu.** Doğrulama başarısızsa kur**ma** ve dosyayı sil.

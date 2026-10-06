@@ -64,6 +64,10 @@ _durum: dict = {
     "hedefSurum": "",
     "uygulandi": False,
     "hata": "",
+    # D1.119 · Y16 — LAUNCHER'ın okuyacağı durum (`/api/health` → `firmwareGuncelleme`): uyum (True/False/None) ve
+    # "client geri alınmalı" sinyali (KESİN uyumsuz + STM bağlı + ileri gidilemiyor). Geri almayı LAUNCHER yapar.
+    "uyum": None,
+    "istemciGeriAlinmali": False,
 }
 
 
@@ -251,45 +255,53 @@ def acilis_denetimi(
             hedefSurum="",
             uygulandi=False,
             hata="",
+            uyum=None,
+            istemciGeriAlinmali=False,
         )
 
     girdi = _stm32_girdisi(manifest)
+    kurallar = _kurallar(manifest)
+    uyum, _uyum_gerekcesi = su.uyumlu_mu(client, firmware_surum, kurallar)
+    # ⚠️ D1.119 · Y16 (sahip): "client güncellenip STM güncellenmezse client geri döner" kararını LAUNCHER (sağlık kapılı
+    # geri alma) uygular — backend client'ı GERİ ALMAZ, eski EXE kanalı (`update_manager.rollback()`, Inno) AÇILMAZ.
+    # Eskiden `previousStable` eski kanalın manifestinden okunup `CLIENT_GERI_AL` dalında `um.rollback()` çağrılıyordu:
+    # kanal kapalıyken (varsayılan) ölüydü; `PEMF_LEGACY_EXE_UPDATE=1` ile açıkken launcher'ın yönettiği kurulumun YANINA
+    # ikinci bir kurulum yapardı (split-brain hasta DB'si). Artık `onceki_client` VERİLMEZ (plan geri almayı önermez);
+    # durum `uyum` + `istemciGeriAlinmali` ile launcher'a bildirilir (`/api/health` → `firmwareGuncelleme`, D1.116).
+    # Launcher (Rust) tarafı bu sinyali henüz OKUMUYOR — launcher oturumunun açık maddesi (docs/LAUNCHER_SPEC.md).
     plan = su.plan_yap(
         client,
         firmware_surum,
-        _kurallar(manifest),
+        kurallar,
         yeni_firmware=str(girdi.get("version", "")),
-        onceki_client=str((um.get_status().get("previousStable") or {}).get("version", "")),
+        onceki_client="",
         internet=True,
         stm_bagli=stm_bagli,
     )
+    istemci_geri = bool(uyum is False and stm_bagli and plan.eylem == su.BEKLE)
+    gerekce = plan.gerekce
+    if istemci_geri:
+        gerekce += (
+            " — client geri alma LAUNCHER'ın işi (Y16): launcher `istemciGeriAlinmali`yı okuyup sağlık kapılı geri alır; "
+            "backend client'ı geri ALMAZ (eski EXE kanalı açılmaz)"
+        )
     _durum_yaz(
         kontrol_edildi=True,
         eylem=plan.eylem,
-        gerekce=plan.gerekce,
+        gerekce=gerekce,
         clientSurum=client,
         firmwareSurum=firmware_surum,
         hedefSurum=plan.hedef_surum,
         uygulandi=False,
         hata="",
+        uyum=uyum,
+        istemciGeriAlinmali=istemci_geri,
     )
-    if not uygula or plan.eylem in (su.EYLEM_YOK, su.BEKLE):
-        logger.info("donanım güncellemesi: %s — %s", plan.eylem, plan.gerekce)
+    if not uygula or plan.eylem != su.FIRMWARE_GUNCELLE:
+        logger.info("donanım güncellemesi: %s — %s", plan.eylem, gerekce)
         return durum()
 
-    if plan.eylem == su.FIRMWARE_GUNCELLE:
-        return _firmware_uygula(girdi, plan, banner_kaynagi)
-
-    if plan.eylem == su.CLIENT_GERI_AL:
-        # ⚠️ Client'ı geri almak `update_manager.rollback()`un işi — burada YENİDEN YAZILMAZ.
-        #    O zincir Authenticode + SHA256 + "aktif tedavi yok" kapılarını zaten uygular.
-        sonuc = um.rollback()
-        return _durum_yaz(
-            uygulandi=bool(sonuc.get("ok")),
-            hata="" if sonuc.get("ok") else str(sonuc.get("error", "client geri alınamadı")),
-        )
-
-    return durum()
+    return _firmware_uygula(girdi, plan, banner_kaynagi)
 
 
 def _firmware_uygula(girdi: dict, plan: su.Plan, banner_kaynagi=None) -> dict:
