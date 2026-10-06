@@ -246,7 +246,16 @@ class PatientDatabase:
             self._parmak_izini_yaz(_fp)
             return
         except _DB_ERROR as e:
-            if not (self._cipher_key and anahtar_uyusmazligi_mi(e)):
+            # ⚠️ D2.46 (B-3.48): karar anahtarın VARLIĞINA değil ŞİFRELİ BAĞLANTIYA bakar. Anahtar var ama sqlcipher3
+            # binding YOKSA düz bağlantı şifreli dosyayı açamaz — bu uyuşmazlık DEĞİLDİR; eskiden sağlam şifreli
+            # patients.db karantinaya gidiyor, yerine DÜZ-METİN DB kuruluyordu (ölçüldü). Artık fail-closed, dosyaya
+            # dokunulmaz. Kapı: tests/test_karantina_YALNIZ_gercek_uyusmazlikta_D246.py.
+            if not (self.at_rest_encrypted and anahtar_uyusmazligi_mi(e)):
+                if self._cipher_key and not self.at_rest_encrypted and anahtar_uyusmazligi_mi(e):
+                    self.logger.error(
+                        "Hasta veritabani ACILAMADI: at-rest anahtari VAR ama sqlcipher3 binding YOK — dosya sifreli "
+                        "olabilir; KARANTINAYA ALINMADI, dokunulmadi. sqlcipher3'u kurun."
+                    )
                 raise RuntimeError(f"Database initialization failed: {e}") from e
             self.logger.error("Hasta veritabani mevcut at-rest anahtariyla ACILAMADI (%s) → karantina denenecek.", e)
 

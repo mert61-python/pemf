@@ -66,6 +66,10 @@ import json, os, shutil, time, traceback
 sys.path[:0] = [{kok!r}, {backend!r}]
 SENARYO = {senaryo!r}
 sonuc = {{"run": False, "senaryo": SENARYO}}
+# D2.46 (B-3.48) "binding_yok": sqlcipher3 binding YOK (paket eksik/bozuk) — urun importundan ONCE engellenir.
+if SENARYO == "binding_yok":
+    for _ad in ("sqlcipher3", "sqlcipher3.dbapi2", "pysqlcipher3", "pysqlcipher3.dbapi2"):
+        sys.modules[_ad] = None
 
 gercek_move = shutil.move
 KILIT = {{"aktif": True}}
@@ -340,10 +344,8 @@ def _eski_semali_tedavi_db(app: Path) -> None:
 _K_DOGRU, _K_BAYAT = "D245-e2e-dogru-anahtar", "D245-e2e-bayat-anahtar"
 
 
-def _sir_cozulemez_kur(app: Path, tmp_path: Path) -> None:
-    """D2.45 (B-3.14 · Karar 6): iki DB DOĞRU anahtarla şifreli; sır dosyasındaki `sqlcipher_key` bu makinede
-    ÇÖZÜLEMEZ (makine değişimi / Windows yeniden kurulumu); legacy `.sqlcipher_key` BAYAT. Dosya özetleri sonradan
-    karşılaştırılmak üzere `d245_once.json`a yazılır."""
+def _sifreli_iki_db(app: Path, anahtar: str) -> None:
+    """Hasta + tedavi DB'si ebeveynde GERÇEK sqlcipher3 ile `anahtar`la şifrelenir (`kayit` tablosunda 1 satır)."""
     from database.sqlcipher_util import import_sqlcipher
 
     mod = import_sqlcipher()
@@ -353,13 +355,20 @@ def _sir_cozulemez_kur(app: Path, tmp_path: Path) -> None:
         k = mod.connect(str(kaynak))
         try:
             hedef = str(app / ad).replace("'", "''")
-            k.execute(f"ATTACH DATABASE '{hedef}' AS enc KEY '{_K_DOGRU}'")
+            k.execute(f"ATTACH DATABASE '{hedef}' AS enc KEY '{anahtar}'")
             k.execute("SELECT sqlcipher_export('enc')")
             k.execute("DETACH DATABASE enc")
         finally:
             k.close()
         kaynak.unlink()
         assert (app / ad).read_bytes()[:16] != _SQLITE_BASLIK, f"ön koşul: {ad} şifreli kurulmalı"
+
+
+def _sir_cozulemez_kur(app: Path, tmp_path: Path) -> None:
+    """D2.45 (B-3.14 · Karar 6): iki DB DOĞRU anahtarla şifreli; sır dosyasındaki `sqlcipher_key` bu makinede
+    ÇÖZÜLEMEZ (makine değişimi / Windows yeniden kurulumu); legacy `.sqlcipher_key` BAYAT. Dosya özetleri sonradan
+    karşılaştırılmak üzere `d245_once.json`a yazılır."""
+    _sifreli_iki_db(app, _K_DOGRU)
     (app / ".sqlcipher_key").write_text(_K_BAYAT, encoding="utf-8")
     onek = "DPAPI:" if os.name == "nt" else "MKEY:"
     blob = onek + base64.b64encode(b"D245 baska makinenin blobu " * 4).decode("ascii")
@@ -372,6 +381,19 @@ def _sir_cozulemez_kur(app: Path, tmp_path: Path) -> None:
 
 
 _D245_DOSYALAR = ("patients.db", "pemf_treatment_history.db", ".sqlcipher_key")
+_D246_DOSYALAR = ("patients.db", "pemf_treatment_history.db")
+
+
+def _binding_yok_kur(app: Path, tmp_path: Path) -> None:
+    """D2.46 (B-3.48): iki DB at-rest anahtarıyla GERÇEKTEN şifreli, anahtar sır dosyasında OKUNUR; çocukta sqlcipher3
+    YOK, bayrak 0 (B-3.45 yolu: bayrak servise ulaşmamış). Özetler `d246_once.json`a yazılır."""
+    _sifreli_iki_db(app, _K_DOGRU)
+    (app / "pemf_secrets.json").write_text(
+        json.dumps({"_version": 1, "auto": {"sqlcipher_key": _K_DOGRU}, "operator": {}, "embedded": {}}),
+        encoding="utf-8",
+    )
+    ozet = {ad: hashlib.sha256((app / ad).read_bytes()).hexdigest() for ad in _D246_DOSYALAR}
+    (tmp_path / "d246_once.json").write_text(json.dumps(ozet), encoding="utf-8")
 
 
 def _kur(tmp_path: Path, senaryo: str) -> tuple[dict, Path]:
@@ -409,6 +431,8 @@ def _kur(tmp_path: Path, senaryo: str) -> tuple[dict, Path]:
         _eski_semali_tedavi_db(app)
     elif senaryo == "sir_cozulemez":
         _sir_cozulemez_kur(app, tmp_path)
+    elif senaryo == "binding_yok":
+        _binding_yok_kur(app, tmp_path)
     return env, app
 
 
@@ -614,6 +638,28 @@ def test_KRITIK_D245_SIR_COZULEMEZKEN_backend_DBSIZ_acilir_YENI_ANAHTAR_yok_KARA
     assert "Yeni SQLCipher anahtari uretildi" not in gunluk, "DB'siz kipe düşerken YENİ ANAHTAR üretildi (Y9 ihlali)"
     assert "legacy yola dusuluyor" not in gunluk, "birincil anahtar hatası yutulup legacy yola düşüldü"
     assert "Sır çözülemedi (sqlcipher_key)" in gunluk, "fail-closed nedeni (çözülemeyen sır) günlükte YOK"
+
+
+def test_KRITIK_D246_BINDING_YOKKEN_sifreli_DB_KARANTINAYA_alinmaz_backend_DBSIZ_acilir(tmp_path):
+    """D2.46 (B-3.48 · Y9) UÇTAN UCA, GERÇEK `main()`: iki DB at-rest anahtarıyla şifreli, anahtar sırda okunur, ama
+    çocukta sqlcipher3 binding YOK ve bayrak 0. Eskiden hasta DB'si düz bağlantının "file is not a database"ını
+    uyuşmazlık sayıp sağlam şifreli dosyayı KARANTİNAYA alıyor, yerine DÜZ-METİN DB kuruyordu. Şimdi backend DB'siz
+    KISITLI kipte açılır (ACİL DURDUR + açılış STOP mutabakatı + hızlı sağlık ucu, seans 503); iki DB değişmez,
+    karantina YOK, yeni anahtar üretilmez."""
+    if not _sqlcipher_var():
+        pytest.skip("sqlcipher3 yok — şifreli DB senaryosu kurulamaz")
+    s, app = _kos(tmp_path, "binding_yok")
+    _ortak_iddialar(s)
+    _db_yok_iddialari(s, r"a[çc][ıi]lamad[ıi]", tmp_path)
+    assert sorted(p.name for p in app.glob("*.acilamadi-*")) == [], (
+        "binding YOKKEN şifreli veritabanı KARANTİNAYA alındı (B-3.48)"
+    )
+    once = json.loads((tmp_path / "d246_once.json").read_text(encoding="utf-8"))
+    degisen = [ad for ad in _D246_DOSYALAR if hashlib.sha256((app / ad).read_bytes()).hexdigest() != once[ad]]
+    assert degisen == [], f"binding yokken şifreli DB'ye DOKUNULDU (yerine düz-metin DB?): {degisen}"
+    gunluk = (tmp_path / "log" / "backend_service.log").read_text(encoding="utf-8", errors="replace")
+    assert "sqlcipher3 binding YOK" in gunluk, "fail-closed nedeni (binding yok) günlükte YOK"
+    assert "Yeni SQLCipher anahtari uretildi" not in gunluk
 
 
 def test_KARSIT_cekirdek_yok_ya_da_SAHTE_cekirdekte_acilis_hatasi_YOK(monkeypatch):

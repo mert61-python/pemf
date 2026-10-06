@@ -351,7 +351,20 @@ class TreatmentHistoryDB(
             except Exception:
                 pass
 
-            conn = self._connect_plain_sqlite()
+            # ⚠️ D2.46 (B-3.10 · Karar 6): ŞİFRELİ bağlantı DÜZ-METNE DÜŞMEZ. Eskiden burada koşulsuz düz `sqlite3`
+            # açılıyordu: doğru anahtarla açılmış şifreli geçmiş "file is not a database" ile UYUŞMAZLIK sayılıp
+            # karantinaya gidiyor, ilk kurulumda şema + PII DÜZ-METİN yazılıyor, `at_rest_encrypted` True kalıyordu
+            # (ölçüldü). Şifreli bağlantı aynı (önbellekli) anahtarla YENİDEN açılır; açılamazsa fail-closed.
+            # Kapı: tests/test_karantina_YALNIZ_gercek_uyusmazlikta_D246.py.
+            if sqlcipher_conn is not None:
+                conn = self._connect_sqlcipher_if_configured()
+                if conn is None:
+                    raise RuntimeError(
+                        "Tedavi DB'si: WAL ayarlanamadi ve SIFRELI baglanti yeniden ACILAMADI — duz-metin baglantiya "
+                        "DUSULMEDI (Karar 6)."
+                    ) from e
+            else:
+                conn = self._connect_plain_sqlite()
             conn.execute('PRAGMA foreign_keys=ON')
             conn.execute('PRAGMA busy_timeout=5000')
             try:

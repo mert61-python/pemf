@@ -338,6 +338,7 @@ def karantinaya_al(db_path, logger=None, zaman_damgasi=None):
         raise GocBekliyorHatasi(f"DB duz-metin, at-rest gocu bekliyor (karantina YAPILMADI): {db}")
     ts = zaman_damgasi or datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     tasinan = None
+    tasinanlar = []  # (kaynak, hedef) — başarıyla kenara alınanlar (kısmi karantinada geri alınır)
     # WAL/SHM de tasinmali: geride kalan -wal, YENI ve bos DB'ye uygulanmaya calisilir → bozulma.
     for suffix in ("", "-wal", "-shm"):
         src = db + suffix
@@ -345,7 +346,12 @@ def karantinaya_al(db_path, logger=None, zaman_damgasi=None):
             continue
         dst = f"{src}.{_QUARANTINE_SUFFIX}-{ts}"
         if not _kilit_direncli_tasi(src, dst, logger):
+            # ⚠️ D2.46 (B-3.53): KISMİ karantina GERİ ALINIR. Eskiden ana dosya karantinada, `-wal` yerinde kalıp
+            # yalnız None dönülüyordu → sonraki açılış ana dosyayı YOK görüp BOŞ DB kuruyor, yetim `-wal` ona
+            # uygulanmaya çalışılıyordu (ölçüldü). Kapı: tests/test_karantina_YALNIZ_gercek_uyusmazlikta_D246.py.
+            _kismi_karantinayi_geri_al(tasinanlar, src, dst, logger)
             return None  # gercekten tasinamadi → cagiran hatayi gormeli
+        tasinanlar.append((src, dst))
         if suffix == "":
             tasinan = dst
     if logger:
@@ -358,6 +364,34 @@ def karantinaya_al(db_path, logger=None, zaman_damgasi=None):
             tasinan,
         )
     return tasinan
+
+
+def _kismi_karantinayi_geri_al(tasinanlar, dusen_kaynak, dusen_hedef, logger=None) -> bool:
+    """D2.46 (B-3.53): karantinada bir dosya taşınamayınca ÖNCEDEN taşınanları ters sırayla yerine koyar.
+
+    Silme YOK: taşınamayan dosyanın `copy2` geri dönüşüyle hedefte kalmış yarım/tam KOPYASI (özgünü yerinde) adıyla
+    loglanır, dokunulmaz (A-08 ilkesi). Geri taşıma da düşerse ELLE KURTARMA yönergesi (hangi dosya nereye) loglanır.
+    Döner: her şey yerine kondu mu."""
+    kalan = [(s, d) for s, d in reversed(tasinanlar) if not _kilit_direncli_tasi(d, s, logger)]
+    yarim_kopya = dusen_hedef if os.path.exists(dusen_hedef) else None
+    _log = logger or logging.getLogger(__name__)
+    if kalan:
+        _log.error(
+            "KISMI KARANTINA geri ALINAMADI: %s tasinamadi ve onceden kenara alinan dosya(lar) yerine KONAMADI. "
+            "ELLE KURTARMA: %s . Yarim kopya: %s . Veritabani bu dosyalar yerine konmadan ACILMAMALI.",
+            dusen_kaynak,
+            "; ".join(f"'{d}' dosyasini '{s}' adina geri tasiyin" for s, d in kalan),
+            yarim_kopya or "yok",
+        )
+        return False
+    _log.error(
+        "KISMI KARANTINA GERI ALINDI: %s tasinamadi; onceden kenara alinan %d dosya yerine kondu, veritabanina "
+        "DOKUNULMADI.%s",
+        dusen_kaynak,
+        len(tasinanlar),
+        f" Yarim kopya kaldi (ozgunu yerinde, silinmedi): {yarim_kopya}" if yarim_kopya else "",
+    )
+    return True
 
 
 def _tasi_yeniden_dene(kaynak, hedef, denemeler=_KILIT_DENEME, bekleme=_KILIT_BEKLEME_SN, logger=None):
