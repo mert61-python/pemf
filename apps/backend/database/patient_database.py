@@ -500,19 +500,24 @@ class PatientDatabase:
 
         # Backward compatibility: older rows may contain encrypted payloads
         # without the enc: prefix. Try silent decrypt, otherwise return as-is.
+        # ⚠️ D2.26 (B-3.108): `enc:` dalıyla AYNI zincir (birincil → legacy MAC-türevli anahtar). Eskiden burada YALNIZ
+        # birincil anahtar deneniyordu → legacy anahtarla şifrelenmiş öneksiz alan '[okunamayan kayıt]' görünüyor ve
+        # cihaz taşımada (get_all_patients → add_patient) yer-tutucu hedefe KALICI yazılıyordu (ölçüldü). `sessiz`:
+        # değer düz-metin de olabilir — başarısızlık ERROR değildir. Kapı: test_hasta_alani_ESKI_anahtar_oneksiz_COZULUR_D226.py
         try:
-            encrypted_bytes = base64.urlsafe_b64decode(value.encode())
-            decrypted = self.config_manager._cipher.decrypt(encrypted_bytes)
-            return decrypted.decode()
+            dec = self.config_manager._decrypt_value(value, sessiz=True)
         except Exception:
-            # Çözülemedi. Fernet token gibi görünüyorsa (farklı anahtarla şifrelenmiş eski/şablon
-            # kayıt) ham ciphertext'i KULLANICIYA GÖSTERME; düz-metin legacy ise olduğu gibi bırak.
-            try:
-                if base64.urlsafe_b64decode(value.encode()).startswith(b"gAAAAA"):
-                    return _UNREADABLE_PLACEHOLDER
-            except Exception:
-                pass
-            return value
+            dec = value
+        if dec != value:
+            return dec
+        # Çözülemedi. Fernet token gibi görünüyorsa (farklı anahtarla şifrelenmiş eski/şablon
+        # kayıt) ham ciphertext'i KULLANICIYA GÖSTERME; düz-metin legacy ise olduğu gibi bırak.
+        try:
+            if base64.urlsafe_b64decode(value.encode()).startswith(b"gAAAAA"):
+                return _UNREADABLE_PLACEHOLDER
+        except Exception:
+            pass
+        return value
 
     def add_patient(self, patient_info: Dict[str, str], patient_id: Optional[str] = None) -> str:
         """Yeni hasta ekler ve olusan patient_id degerini dondurur.

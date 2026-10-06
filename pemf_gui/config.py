@@ -208,9 +208,12 @@ class ConfigManager:
         encrypted = self._cipher.encrypt(value.encode())
         return base64.urlsafe_b64encode(encrypted).decode()
 
-    def _decrypt_value(self, encrypted_value: str) -> str:
+    def _decrypt_value(self, encrypted_value: str, sessiz: bool = False) -> str:
         """Decrypt: önce BİRİNCİL (rastgele) anahtar, sonra ESKİ MAC-türevli (geriye dönük).
-        İkisi de başarısızsa ham değeri döndürür (üst katman maskeleyebilir)."""
+        İkisi de başarısızsa ham değeri döndürür (üst katman maskeleyebilir).
+
+        `sessiz=True`: başarısızlık ERROR olarak loglanmaz — değerin şifreli OLDUĞU bilinmeyen çağıran içindir
+        (D2.26: hasta DB'sinin öneksiz eski alanları; düz-metin bir eski değer de base64 gibi çözülebilir)."""
         if not encrypted_value:
             return encrypted_value
         try:
@@ -227,7 +230,8 @@ class ConfigManager:
                 return legacy.decrypt(encrypted_bytes).decode()
             except Exception:
                 pass
-        logger.error("Decryption failed (birincil + legacy anahtar)")
+        if not sessiz:
+            logger.error("Decryption failed (birincil + legacy anahtar)")
         return encrypted_value
 
     def load(self) -> Dict[str, Any]:
