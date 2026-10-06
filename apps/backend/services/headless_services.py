@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import platform
+import signal
 import socket
 import subprocess
 import sys
@@ -76,6 +77,78 @@ def _is_tcp_port_open(host: str, port: int, timeout: float = 2.0) -> bool:
                 sock.close()
             except Exception:
                 pass
+
+
+def _surec_yollari(ad: str) -> list[tuple[int, str]]:
+    """Y71: Windows'ta adı `ad` olan süreçlerin (pid, TAM ikili yolu) listesi — stdlib ctypes (Toolhelp32 +
+    QueryFullProcessImageNameW; psutil paketlenmez). Yolu okunamayan süreç "" yolla döner (hiçbir yola EŞİT sayılmaz).
+    Windows dışı ya da hata: [] (çağıran hiçbir süreci sonlandırmaz)."""
+    if platform.system() != "Windows":
+        return []
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class _SurecKaydi(ctypes.Structure):  # PROCESSENTRY32W
+            _fields_ = [
+                ("dwSize", wintypes.DWORD),
+                ("cntUsage", wintypes.DWORD),
+                ("th32ProcessID", wintypes.DWORD),
+                ("th32DefaultHeapID", ctypes.c_size_t),
+                ("th32ModuleID", wintypes.DWORD),
+                ("cntThreads", wintypes.DWORD),
+                ("th32ParentProcessID", wintypes.DWORD),
+                ("pcPriClassBase", wintypes.LONG),
+                ("dwFlags", wintypes.DWORD),
+                ("szExeFile", wintypes.WCHAR * 260),
+            ]
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+        k32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+        k32.Process32FirstW.argtypes = [wintypes.HANDLE, ctypes.POINTER(_SurecKaydi)]
+        k32.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(_SurecKaydi)]
+        k32.OpenProcess.restype = wintypes.HANDLE
+        k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        k32.QueryFullProcessImageNameW.argtypes = [
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.LPWSTR,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        k32.CloseHandle.argtypes = [wintypes.HANDLE]
+        anlik = k32.CreateToolhelp32Snapshot(0x00000002, 0)  # TH32CS_SNAPPROCESS
+        if not anlik or anlik == ctypes.c_void_p(-1).value:
+            return []
+        sonuc: list[tuple[int, str]] = []
+        try:
+            kayit = _SurecKaydi()
+            kayit.dwSize = ctypes.sizeof(_SurecKaydi)
+            var = k32.Process32FirstW(anlik, ctypes.byref(kayit))
+            while var:
+                if kayit.szExeFile.lower() == ad.lower():
+                    yol = ""
+                    tutamac = k32.OpenProcess(0x1000, False, kayit.th32ProcessID)  # PROCESS_QUERY_LIMITED_INFORMATION
+                    if tutamac:
+                        try:
+                            tampon = ctypes.create_unicode_buffer(32768)
+                            boy = wintypes.DWORD(len(tampon))
+                            if k32.QueryFullProcessImageNameW(tutamac, 0, tampon, ctypes.byref(boy)):
+                                yol = tampon.value
+                        finally:
+                            k32.CloseHandle(tutamac)
+                    sonuc.append((int(kayit.th32ProcessID), yol))
+                var = k32.Process32NextW(anlik, ctypes.byref(kayit))
+        finally:
+            k32.CloseHandle(anlik)
+        return sonuc
+    except Exception:
+        logger.debug("surec listesi okunamadi", exc_info=True)
+        return []
+
+
+def _ayni_dosya(a: str, b) -> bool:
+    return os.path.normcase(os.path.abspath(str(a))) == os.path.normcase(os.path.abspath(str(b)))
 
 
 class MosquittoSupervisor:
@@ -270,8 +343,63 @@ class MosquittoSupervisor:
             )
             return False
 
+    def _kimlik_parcasini_onar(self) -> str:
+        """Y71 (sahip, S-G6) — YALNIZ AÇILIŞTA (izleme döngüsünden ÖNCE, bir kez; backend yeni başladı → bobin
+        sürülmüyor): kaldır-kur sonrası kimlik deposu VAR + broker dosyaları YOKSA `mqtt_kimlik.parcayi_onar` onları AYNI
+        parolalarla yazar. Broker henüz çalışmıyorsa döngü onu kimlikli çalışma kopyasıyla açar. ÇALIŞIYORSA (önceki
+        backend'in AYRIK süreci) YALNIZ backend'in KENDİ ikilisinden (`_find_mosquitto_exe`) çalışan `mosquitto.exe`
+        sonlandırılıp kimlikli yeniden başlatılır — Windows SERVİSİNE (eski kurulumun servisi / NSSM) ve yabancı bir
+        mosquitto'ya DOKUNULMAZ (1-G G-3.1: sahada broker backend'in kendi sürecidir; servis eski kurulumun artığıdır)."""
+        try:
+            from utils import mqtt_kimlik
+
+            durum = mqtt_kimlik.parcayi_onar()
+        except Exception as exc:
+            logger.warning("Y71: broker kimlik parcasi denetlenemedi: %s", exc)
+            return "hata"
+        if durum != "onarildi" or not _is_tcp_port_open("127.0.0.1", self.port):
+            return durum
+        if self._check_service_status().get("service_exists"):
+            logger.warning(
+                "Y71: kimlik parcasi yazildi ama Windows 'mosquitto' SERVISI kayitli - backend'in broker'i DEGIL, yeniden "
+                "BASLATILMADI. Servis kurulumunda bobinler durmusken: Restart-Service mosquitto."
+            )
+            return durum
+        exe = self._find_mosquitto_exe()
+        kendi = [pid for pid, yol in _surec_yollari("mosquitto.exe") if exe and yol and _ayni_dosya(yol, exe)]
+        if not kendi:
+            logger.warning(
+                "Y71: kimlik parcasi yazildi ama 1883'u backend'in KENDI broker'i tutmuyor - yeniden BASLATILMADI "
+                "(o broker yeniden baslayana dek ANONIM)."
+            )
+            return durum
+        for pid in kendi:
+            self._sureci_sonlandir(pid)
+        self._port_kapanmasini_bekle()
+        if self._launch_broker_process():
+            logger.warning("Y71: backend'in broker'i kimlikli yeniden baslatildi (sonlandirilan pid: %s).", kendi)
+            return "yeniden_baslatildi"
+        return durum
+
+    def _sureci_sonlandir(self, pid: int) -> None:
+        """Y71: backend'in KENDİ broker sürecini sonlandırır (Windows'ta `os.kill` = TerminateProcess)."""
+        try:
+            os.kill(int(pid), signal.SIGTERM)
+        except OSError as exc:
+            logger.warning("Y71: broker sureci (pid %s) sonlandirilamadi: %s", pid, exc)
+
+    def _port_kapanmasini_bekle(self, sure_sn: float = 5.0) -> None:
+        son = time.monotonic() + sure_sn
+        while time.monotonic() < son and _is_tcp_port_open("127.0.0.1", self.port, timeout=0.5):
+            time.sleep(0.2)
+
     def _monitor_loop(self) -> None:
         fails = 0
+        # Y71: kimlik parçası onarımı YALNIZ burada, döngüden ÖNCE bir kez (çalışırken yeniden başlatma YOK).
+        try:
+            self._kimlik_parcasini_onar()
+        except Exception as exc:
+            logger.warning("Y71: kimlik parcasi onarimi basarisiz: %s", exc)
         while not self._stop_event.is_set():
             try:
                 status = self.check_once()

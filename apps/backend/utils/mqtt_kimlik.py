@@ -211,6 +211,34 @@ def hazirla(broker_dizini: Path | None = None, firmware_dizinleri=(), yenile: bo
     return {"depo": str(_depo_yolu()), "depo_olustu": depo_olustu, "broker_dizini": str(bd), "basliklar": basliklar}
 
 
+def parcayi_onar(broker_dizini: Path | None = None) -> str:
+    """Y71 (sahip, S-G6): kaldır-kur sonrası kimlik deposu VAR ama broker dosyaları (`conf.d` parçası, `pemf_passwd`,
+    `pemf_acl`) EKSİKSE hepsini depodaki AYNI parolalarla yeniden yazar (`hazirla`, yenileme YOK — A-18: rotasyon yok;
+    ESP'ye yakılmış kimlik geçerli kalır). Broker'ı BAŞLATMAZ/yeniden başlatmaz — o `MosquittoSupervisor`'ın işi.
+
+    Dönüş: "hazir" (dosyalar yerinde) · "onarildi" · "hazirlanmamis" (depo yok — bugünkü anonim kip, DOKUNULMAZ) ·
+    "okunamadi" (depo var ama okunamıyor — EZİLMEZ) · "yazilamadi" (izin vb.; anonim kalır, günlüğe yazılır)."""
+    bd = Path(broker_dizini) if broker_dizini else varsayilan_broker_dizini()
+    if all((bd / ad).is_file() for ad in (PASSWD_ADI, ACL_ADI, f"{CONF_DIZINI}/{CONF_ADI}")):
+        return "hazir"
+    if not _depo_yolu().is_file():
+        return "hazirlanmamis"
+    if kimlikleri_oku() is None:
+        logger.warning(
+            "Y71: MQTT kimlik deposu VAR ama okunamiyor - broker kimlik parcasi YAZILMADI (depo ezilmez): %s", bd
+        )
+        return "okunamadi"
+    try:
+        hazirla(bd)
+    except Exception as e:
+        logger.warning(
+            "Y71: broker kimlik parcasi yeniden yazilamadi (%s) - broker ANONIM kalir: %s", type(e).__name__, bd
+        )
+        return "yazilamadi"
+    logger.warning("Y71: kaldir-kur sonrasi broker kimlik parcasi YOKTU - ayni parolalarla yeniden yazildi: %s", bd)
+    return "onarildi"
+
+
 def durum(broker_dizini: Path | None = None) -> dict:
     bd = Path(broker_dizini) if broker_dizini else varsayilan_broker_dizini()
     return {
