@@ -654,6 +654,12 @@ class HeadlessCore:
         # Eski firmware bu alani basmaz -> anahtar HIC koyulmaz (None de degil).
         _k = re.search(r"[,\s]K=(\d+)", decoded)
         _etkin_kip = int(_k.group(1)) if _k else None
+        # ⚠️ Y69 (sahip, S-G4): ETKIN DUTY (`E=<binde>`, bobin basina; 496 = %49,6). `D=` ISTENENI yankilar; yuksek
+        # frekansta olu-zaman tavani ve tick nicelemesi uygulanani dusurur (1 kHz bipolar %50 → %46; 10 kHz %10 → 0).
+        # Eski firmware alani basmaz → anahtar HIC konmaz (0 DEGIL: "surulmuyor" ile "bildirilmedi" ayri). Sayisi
+        # bobin sayisini tutmazsa da konmaz (yanlis bobine yazmaktansa "—").
+        _e = re.search(rf"[,\s]E=({num}(?:,{num})*)", decoded)
+        _etkin_binde = [float(x) for x in _e.group(1).split(",")] if _e else None
 
         d_vals = [float(x) for x in match.group(1).split(",")]
         p_vals = [float(x) for x in match.group(2).split(",")]
@@ -670,6 +676,13 @@ class HeadlessCore:
                 "STM parse: alan uzunlukları uyuşmuyor %s → satır reddedildi.", _lens
             )
             return []
+        if _etkin_binde is not None and len(_etkin_binde) != len(d_vals):
+            import logging as _lg
+
+            _lg.getLogger("headless_core").warning(
+                "STM parse: E= alan sayisi %d, D= %d → etkin duty yok sayildi.", len(_etkin_binde), len(d_vals)
+            )
+            _etkin_binde = None
         updates: list[dict[str, Any]] = []
         max_items = min(self.STM_COIL_COUNT, len(d_vals), len(p_vals), len(f_vals), len(t_vals))
         for index in range(max_items):
@@ -699,6 +712,8 @@ class HeadlessCore:
                     # Alan YOKSA (eski firmware) anahtar HİÇ KONMAZ → aşağı akış
                     # "bildirilmedi" ile "bipolar" ayırt edebilsin.
                     **({"unipolar": bool((_etkin_kip >> index) & 1)} if _etkin_kip is not None else {}),
+                    # ⚠️ Y69: ETKİN duty (%) — alan YOKSA anahtar HİÇ KONMAZ (yukarı bkz.).
+                    **({"duty_etkin": _etkin_binde[index] / 10.0} if _etkin_binde is not None else {}),
                 }
             )
         return updates

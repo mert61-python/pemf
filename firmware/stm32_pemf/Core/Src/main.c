@@ -832,6 +832,49 @@ static int Coil_AckSayi(char *buf, size_t cap, int pos, long deger) {
   return pos + n;
 }
 
+/**
+ * Y69 (sahip, S-G4) — ETKİN duty, BİNDE (‰; 496 = %49,6): ISR'ın bu parametre setiyle KARARLI durumda (slew rampası
+ * bittikten sonra) bir bacağı süreceği oran. ACK'in `D=` alanı İSTENENİ yankılar (D1.101 sözleşmesi); yüksek frekansta
+ * yapısal ölü-zaman (bipolar tavan = yarım − DDS_BIPOLAR_GAP_TICKS) ve tick nicelemesi uygulanan oranı düşürür — 1-G
+ * ölçümü, bipolar %50: 1 kHz %46 · 5 kHz %30 · 10 kHz %20; 10 kHz %10 → 0 tick (bobin SÜRÜLMEZ ama `D=10`).
+ *
+ * ISR'ın KENDİ adımları (HAL_TIM_PeriodElapsedCallback): f FREQ_MIN..FREQ_MAX'a kıstırılır · tpp = (uint32)(50000/f) ·
+ * hedef = (int32)(max(duty, DUTY_MIN)·tpp) · tavan = tek-bacak ? tpp−1 : tpp/2 − GAP (en az 1) · hedef ≤ 0 → çıkış
+ * kapalı; kararlı durum = min(hedef, tavan). Binde = yuvarlanmış tavan-sonrası tick / tpp.
+ * ⚠️ SÜRÜŞÜ DEĞİŞTİRMEZ — YALNIZ RAPOR eder; ISR bu işlevi ÇAĞIRMAZ. ISR'la eşitliği ÖLÇÜMLE kilitli (ISR takımının GPIO
+ * kenarlarından ölçülen oran = bu işlev, bir ızgarada): tests/test_firmware_ETKIN_duty_ACK_Y69.py. ⚠️ TEZGÂH (Oturum 13).
+ * hedef ≤ tpp ≤ 50000 (FREQ_MIN 1 Hz) → hedef·1000 ≤ 5·10^7: 32 bit taşmaz.
+ */
+static long Coil_EtkinDutyBinde(float duty, float freq, uint8_t tek_bacak) {
+  float f = freq;
+  if (f < FREQ_MIN) {
+    f = FREQ_MIN;
+  }
+  if (f > FREQ_MAX) {
+    f = FREQ_MAX;
+  }
+  const uint32_t tpp = (uint32_t)(DDS_ISR_HZ / f);
+  if (tpp == 0U) {
+    return 0L;
+  }
+  float d = duty;
+  if (d < DUTY_MIN) {
+    d = DUTY_MIN;
+  }
+  int32_t hedef = (int32_t)(d * (float)tpp);
+  if (hedef <= 0) {
+    return 0L;
+  }
+  int32_t tavan = tek_bacak ? ((int32_t)tpp - 1) : ((int32_t)(tpp / 2U) - DDS_BIPOLAR_GAP_TICKS);
+  if (tavan < 1) {
+    tavan = 1;
+  }
+  if (hedef > tavan) {
+    hedef = tavan;
+  }
+  return (long)(((uint32_t)hedef * 1000U + tpp / 2U) / tpp);
+}
+
 static void Coil_SendNack(const char *reason) {
   /* D1.106: bloklayan HAL_UART_Transmit TX IT ile meşgulken HAL_BUSY dönüp NACK'i SESSİZCE düşürüyordu → yuva. */
   int len = snprintf(g_tx_nack, sizeof(g_tx_nack), "-> STM_NACK: %s\r\n", reason);
@@ -1481,7 +1524,8 @@ int main(void) {
          * backend ayristiricisi da uzunluk kontrolu yaptigi icin satiri komple REDDEDERDI
          * (canli durum bayat kalir). Deponun tekrar eden 'sihirli sayi ikinci bir yere
          * kopyalanmis' sinifi; artik NUM_COILS'ten TUREYEN dongu ile kurulur.
-         * Tampon: 4 grup x 7 bobin x (10 hane + virgul) + etiketler ≈ 390 < 420. */
+         * Tampon (en kötü): 4 grup x 7 bobin x 11 ("-2147483648") + 24 virgul + etiketler 22 = 354;
+         * + ` K=` (maske ≤ 127) 6 + ` E=` (Y69, binde ≤ 1000) 37 + CRLF 2 = 399 < 420. */
         static const char *const ack_etiket[4] = {"-> STM_OK: D=", " P=", " F=", " T="};
         int len = 0;
         for (uint32_t g = 0U; g < 4U; g++) {
@@ -1521,6 +1565,18 @@ int main(void) {
           }
           len = Coil_AckMetin(ack_msg, sizeof(ack_msg), len, " K=");
           len = Coil_AckSayi(ack_msg, sizeof(ack_msg), len, (long)etkin);
+        }
+        /* Y69 (sahip, S-G4): ETKİN DUTY — `E=<binde>` (bobin başına; 496 = %49,6). `D=` İSTENENİ yankılar; yüksek
+         * frekansta ölü-zaman tavanı ve tick nicelemesi uygulananı düşürür → arayüz İKİSİNİ de gösterir. Kip ETKİN
+         * maskeden (`g_unipolar`, K= ile aynı kaynak); sürüş DEĞİŞMEZ (bkz. Coil_EtkinDutyBinde). Eski backend alanı
+         * tanımaz, yok sayar; yeni backend alan yoksa (eski firmware) "—" gösterir. */
+        len = Coil_AckMetin(ack_msg, sizeof(ack_msg), len, " E=");
+        for (uint32_t ei = 0U; ei < NUM_COILS; ei++) {
+          if (ei > 0U) {
+            len = Coil_AckMetin(ack_msg, sizeof(ack_msg), len, ",");
+          }
+          len = Coil_AckSayi(ack_msg, sizeof(ack_msg), len,
+                             Coil_EtkinDutyBinde(parsed.coil[ei].duty, parsed.coil[ei].freq, g_unipolar[ei]));
         }
         len = Coil_AckMetin(ack_msg, sizeof(ack_msg), len, "\r\n");
         /* DENETIM 2026-08-04: snprintf donus degeri kontrol EDILMIYORDU. Negatif donus

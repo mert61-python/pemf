@@ -38,7 +38,7 @@ hizali tutulur (backend 'STM_READY' alt-dizesini esler; surum eki serbesttir).
 
 YANIT FORMATI (ASCII, \r\n ile biten) — firmware ile HİZALI (D0Ö.13):
   -> STM_READY: DDS v2.3 (7-ch KARMA uni=0x60 SIM) Waiting for commands...\r\n   (kip/maske pemf_surus.h'den)
-  -> STM_OK: D=<NUM_COILS alan> P=<...> F=<...> T=<...> K=<etkin maske = yetenek | istek>\r\n
+  -> STM_OK: D=<NUM_COILS alan> P=<...> F=<...> T=<...> K=<etkin maske = yetenek | istek> E=<etkin duty, binde>\r\n
   -> STM_NACK: <sebep>\r\n
   -> STM_ERR: Watchdog Timeout! Baglanti koptu, bobinler 0'landi.\r\n
   -> STM_STOPPED: Sure(ler) doldu, bobinler kapatildi.\r\n
@@ -98,6 +98,9 @@ FREQ_MIN = 1.0
 DDS_ISR_HZ = 50000.0
 DDS_MIN_TICKS_PER_PERIOD = 2.0
 FREQ_MAX = DDS_ISR_HZ / DDS_MIN_TICKS_PER_PERIOD  # = 25000.0
+#: Y69: bipolar A ve B darbeleri arası yapısal boşluk (tick) — `main.c` DDS_BIPOLAR_GAP_TICKS. Etkin duty raporu
+#: (`firmware_etkin_binde`) firmware işleviyle IZGARADA birebir: tests/test_firmware_ETKIN_duty_ACK_Y69.py.
+DDS_BIPOLAR_GAP_TICKS = 2
 DUR_MAX = 9999
 REF_MS_MAX = 999
 WATCHDOG_MS = 1500  # ms — main.c ile aynı
@@ -192,6 +195,29 @@ def firmware_milli(deger: float) -> int:
     if deger < -2147483.0:
         return -2147483000
     return int(struct.unpack("<f", struct.pack("<f", deger * 1000.0))[0])
+
+
+def _f32(x: float) -> float:
+    return struct.unpack("<f", struct.pack("<f", x))[0]
+
+
+def firmware_etkin_binde(duty: float, freq: float, tek_bacak: int) -> int:
+    """Y69: `main.c` `Coil_EtkinDutyBinde` — ISR'ın kararlı durumda bir bacağı süreceği oran, BİNDE (ACK `E=`).
+
+    Adımlar firmware'in AYNISI (float32): f FREQ_MIN..FREQ_MAX'a kıstırılır · tpp = (uint32)(50000/f) · hedef =
+    (int32)(max(duty, DUTY_MIN)·tpp) · tavan = tek-bacak ? tpp−1 : tpp/2 − GAP (en az 1) · hedef ≤ 0 → 0 ·
+    binde = (min(hedef, tavan)·1000 + tpp/2) // tpp. Bölme double'da yapılıp float32'ye yuvarlanır: 53 ≥ 2·24+2 olduğundan
+    çift yuvarlama IEEE float32 bölmesiyle AYNI sonucu verir; çarpım double'da tamdır. `duty`/`freq` paketten gelen
+    float32 değerlerdir."""
+    f = min(max(freq, FREQ_MIN), FREQ_MAX)
+    tpp = int(_f32(DDS_ISR_HZ / f))
+    if tpp <= 0:
+        return 0
+    hedef = int(_f32(max(duty, DUTY_MIN) * float(tpp)))
+    if hedef <= 0:
+        return 0
+    tavan = max(1, (tpp - 1) if tek_bacak else (tpp // 2 - DDS_BIPOLAR_GAP_TICKS))
+    return (min(hedef, tavan) * 1000 + tpp // 2) // tpp
 
 
 def _banner_kipi(maske: int) -> str:
@@ -330,7 +356,9 @@ class Stm32SimClient:
             f"P={','.join(str(int(phase[i])) for i in range(n))} "
             f"F={','.join(str(int(freq[i])) for i in range(n))} "
             f"T={','.join(str(duration[i]) for i in range(n))} "
-            f"K={etkin}"
+            f"K={etkin} "
+            # Y69: ETKİN duty (binde) — firmware'in `E=` alanı; kip ETKİN maskeden (K= ile aynı kaynak).
+            f"E={','.join(str(firmware_etkin_binde(duty[i], freq[i], (etkin >> i) & 1)) for i in range(n))}"
             "\r\n"
         )
         self._send(msg)

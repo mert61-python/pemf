@@ -13,6 +13,11 @@
 > Etkin kip: `g_unipolar[i] = g_yalniz_unipolar[i] || istenen[i]` — ACK'te `K=<maske>` döner.
 > ⚠️ Paket bu yüzden **121 bayt** (120 → 121). **ATOMİK SEVK:** backend güncellenince kart
 > MUTLAKA yeniden flaşlanır, yoksa her komut CRC'den düşer ve hiçbir bobin çalışmaz.
+>
+> **Y69 (2026-10-06) · ETKİN duty:** ACK `K=`'den sonra `E=<binde>` ile bobin başına kartın GERÇEKTEN uyguladığı oranı
+> bildirir (`D=` İSTENENDİR). Yüksek frekansta ölü-zaman tavanı ve tick nicelemesi uygulananı düşürür (bipolar %50:
+> 1 kHz %46 · 5 kHz %30 · 10 kHz %20; 10 kHz %10 → 0). Sürüş DEĞİŞMEDİ (`Coil_EtkinDutyBinde` yalnız raporlar);
+> paket boyu aynı, eski backend alanı yok sayar, yeni backend alan yoksa arayüzde "—" gösterir.
 
 
 **2026-08-19'dan beri derleme BURADAN yapılır** (sahip kararı) — masaüstündeki eski

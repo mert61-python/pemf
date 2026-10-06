@@ -1703,6 +1703,10 @@ def _handle_backend_event(event) -> None:
         # (eski firmware) alana DOKUNULMAZ: False yazmak "bipolar doğrulandı" yalanı olur.
         if "unipolar" in data:
             update_live_coil_kip(int(data.get("coil_id", 0)), bool(data["unipolar"]))
+        # Y69: ETKİN duty — aynı kural: yalnız kart bildirdiyse (`E=`) yazılır; anahtar YOKSA dokunulmaz (0 yazmak
+        # "sürülmüyor" yalanı olur).
+        if "duty_etkin" in data:
+            live_state.update_live_coil_etkin_duty(int(data.get("coil_id", 0)), float(data["duty_etkin"]))
         return
     if event.event_type == "hardware.stm.telemetry":
         # FAZ 3 (2026-09-10): bobin 6-7 sensorleri ESP'den STM'e tasindi. ESP yolundaki

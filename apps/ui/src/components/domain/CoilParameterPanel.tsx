@@ -34,6 +34,8 @@ interface Props {
   measuredFields?: string[];
   frequencyHz: number;
   dutyCycle: number;
+  /** Y69: kartın UYGULADIĞI duty (%, ACK `E=`); null/undefined = bildirilmedi ("-"), 0 = sürülmüyor. */
+  dutyEtkin?: number | null;
   magneticMt: number;
   currentA: number;
   defaultFreq?: number;
@@ -55,6 +57,7 @@ export function CoilParameterPanel({
   measuredFields,
   frequencyHz,
   dutyCycle,
+  dutyEtkin,
   magneticMt,
   currentA,
   defaultFreq = 50,
@@ -307,6 +310,13 @@ export function CoilParameterPanel({
         <Reading label="A" value={olcum("currentA") ? currentA.toFixed(3) : "-"} active={running} />
         <Reading label="Hz" value={frequencyHz > 0 ? String(frequencyHz) : "-"} active={running} />
         <Reading label="DC%" value={dutyCycle > 0 ? String(dutyCycle) : "-"} active={running} />
+        {/* Y69 (sahip, S-G4): İSTENEN DC%'nin yanında kartın UYGULADIĞI (ACK `E=`; 1 kHz bipolar %50 → 46.0).
+            Bildirilmediyse "-"; 0 gerçek değerdir (0 tick'e nicelenmiş bobin SÜRÜLMÜYOR). */}
+        <Reading
+          label="Uyg.%"
+          value={typeof dutyEtkin === "number" && Number.isFinite(dutyEtkin) ? dutyEtkin.toFixed(1) : "-"}
+          active={running}
+        />
       </View>
 
       {/* Parameter inputs */}

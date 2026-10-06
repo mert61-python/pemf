@@ -102,6 +102,13 @@ const _num = (v: unknown, d = 0): number => {
   return Number.isFinite(n) ? n : d;
 };
 
+// Y69: ETKİN duty'de "kart bildirmedi" (null) ile 0 ("sürülmüyor") AYRI kalır — `_num` gibi 0'a ZORLANMAZ.
+const _numVeyaYok = (v: unknown): number | null => {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : parseFloat(String(v));
+  return Number.isFinite(n) ? n : null;
+};
+
 function normalizeStmCoils(snapshot: DashboardSnapshot): DashboardSnapshot {
   const stmOnline = snapshot.stm === "online";
   const coils = (snapshot.coils ?? []).map((coil) => {
@@ -114,6 +121,7 @@ function normalizeStmCoils(snapshot: DashboardSnapshot): DashboardSnapshot {
       objectTemp: _num(coil.objectTemp),
       ambientTemp: _num(coil.ambientTemp),
       currentA: _num(coil.currentA),
+      dutyEtkin: _numVeyaYok(coil.dutyEtkin),
     };
     if (!isStmCoil(coil.id)) return base;
     return {

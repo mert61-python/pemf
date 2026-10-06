@@ -73,6 +73,14 @@ export interface CoilStatus {
   unipolar?: boolean | null;
   /** Bu bobin bipolar sürülebilir mi (donanım yeteneği). Yoksa düğme KİLİTLİ çizilir. */
   bipolarYetenek?: boolean;
+  /**
+   * Y69 (sahip, S-G4): kartın GERÇEKTEN uyguladığı duty (%, ACK `E=`). `dutyCycle` İSTENENDİR (ACK `D=`); yüksek
+   * frekansta ölü-zaman tavanı ve tick nicelemesi uygulananı düşürür (1 kHz bipolar %50 → %46; 10 kHz %10 → 0).
+   *
+   * ⚠️ `undefined`/`null` = kart BİLDİRMEDİ (eski firmware / ESP bobini / kopuk) → arayüz kısa çizgi; `0` = SÜRÜLMÜYOR.
+   * İkisini 0'a eşitlemek "sürülmüyor" yalanıdır.
+   */
+  dutyEtkin?: number | null;
 }
 
 // ─── Patient ─────────────────────────────────────────────────────────────────

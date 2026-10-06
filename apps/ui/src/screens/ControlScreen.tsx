@@ -742,6 +742,7 @@ export function ControlScreen() {
                 objectTemp={coil.objectTemp}
                 frequencyHz={coil.frequencyHz}
                 dutyCycle={coil.dutyCycle}
+                dutyEtkin={coil.dutyEtkin}
                 magneticMt={coil.magneticMt}
                 currentA={coil.currentA}
                 measuredFields={coil.measuredFields}

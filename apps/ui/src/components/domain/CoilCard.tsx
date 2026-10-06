@@ -14,6 +14,11 @@ function num(v: unknown, digits = 0): string {
   return Number.isFinite(n) ? n.toFixed(digits) : "—";
 }
 
+/** Y69: kartın UYGULADIĞI duty — bildirilmediyse (null/undefined) "—"; 0 GERÇEK değerdir (0 tick'e nicelenmiş bobin). */
+function uygulanan(v: unknown): string {
+  return typeof v === "number" && Number.isFinite(v) ? `${v.toFixed(1)}%` : "—";
+}
+
 export function CoilCard({ coil }: { coil: CoilStatus }) {
   const isStmCoil = coil.stm32Driven || coil.id <= 7;
   const sourceText = coil.connected
@@ -37,7 +42,14 @@ export function CoilCard({ coil }: { coil: CoilStatus }) {
             çağrı yeri (ya da ileride eklenecek yeni bir kaynak) bu ekranı çökertirse operatör
             donanım çalışırken durdurma kontrolünü kaybeder. Bileşen kendi girdisini de doğrular. */}
         <MiniMetric icon={<RadioTower color={colors.primary} size={16} />} label="Frekans" value={`${num(coil.frequencyHz)} Hz`} />
-        <MiniMetric icon={<Zap color={colors.warning} size={16} />} label="Duty" value={`${num(coil.dutyCycle)}%`} />
+        {/* Y69 (sahip, S-G4): İSTENEN duty'nin yanında kartın UYGULADIĞI (ACK `E=`) — yüksek frekansta ölü-zaman
+            tavanı uygulananı düşürür (1 kHz bipolar %50 → %46). Kart bildirmediyse "—". */}
+        <MiniMetric
+          icon={<Zap color={colors.warning} size={16} />}
+          label="Duty"
+          value={`${num(coil.dutyCycle)}%`}
+          alt={`uygulanan ${uygulanan(coil.dutyEtkin)}`}
+        />
         {/* D1.67 · Y6 (1-D inceleme i2-F-3): bayat / hiç ölçülmemiş alan sayı olarak gösterilmez ('—'). */}
         <MiniMetric icon={<Activity color={colors.cyan} size={16} />} label="Alan" value={alanGosterilebilir(coil, "magneticMt") ? `${num(coil.magneticMt, 2)} mT` : "—"} />
         <MiniMetric icon={<Thermometer color={colors.danger} size={16} />} label="Sıcaklık" value={alanGosterilebilir(coil, "objectTemp") ? `${num(coil.objectTemp, 1)} C` : "—"} />
@@ -46,13 +58,14 @@ export function CoilCard({ coil }: { coil: CoilStatus }) {
   );
 }
 
-function MiniMetric({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+function MiniMetric({ icon, label, value, alt }: { icon: ReactNode; label: string; value: string; alt?: string }) {
   return (
     <View style={styles.mini}>
       {icon}
       <View style={{ flexShrink: 1 }}>
         <Text style={styles.miniLabel} numberOfLines={1}>{label}</Text>
         <Text style={styles.miniValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+        {alt ? <Text style={styles.miniAlt} numberOfLines={1} adjustsFontSizeToFit>{alt}</Text> : null}
       </View>
     </View>
   );
@@ -104,5 +117,11 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: "800",
     marginTop: 2
+  },
+  miniAlt: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    fontWeight: "600",
+    marginTop: 1
   }
 });

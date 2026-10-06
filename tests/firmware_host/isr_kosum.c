@@ -19,6 +19,9 @@
  *   zorla|hata N bobin_maske f d p
  *                         → N tick sürülür, "BASLA", sonra zorla: PEMF_ForceAllCoilOutputsLow() · hata: Error_Handler()
  *                           (BSRR günlüklü); "P <i> <g_prev_state>"; hata kipinde "IRQ" (kesmeler kapatılmaya varıldı).
+ *   etkin f d u [f d u ...] → "E <f> <d> <u> <binde>" — firmware'in ACK `E=` rapor işlevi (Coil_EtkinDutyBinde;
+ *                           Y69). Yalnız main.c metni PEMF_HOST_ETKIN_SONDASI tanımıyla biterse derlenir. ISR koşmaz;
+ *                           ölçülen oranla kıyas çağıranda (tests/test_firmware_ETKIN_duty_ACK_Y69.py).
  */
 #include <setjmp.h>
 #include <stdio.h>
@@ -141,6 +144,18 @@ int main(int argc, char **argv) {
     printf("N %u\n", (unsigned)NUM_COILS);
     return 0;
   }
+#ifdef PEMF_HOST_ETKIN_SONDASI
+  /* Y69: makroyu YALNIZ tests/test_firmware_ETKIN_duty_ACK_Y69.py main.c metninin SONUNA ekler (rapor işlevi olmayan
+   * eski firmware ile ve diğer kapılarda takım bu dal olmadan derlenir). */
+  if (strcmp(argv[1], "etkin") == 0 && argc >= 5 && ((argc - 2) % 3) == 0) {
+    for (int a = 2; a + 2 < argc; a += 3) {
+      const uint8_t u = (uint8_t)atoi(argv[a + 2]);
+      printf("E %s %s %u %ld\n", argv[a], argv[a + 1], (unsigned)u,
+             Coil_EtkinDutyBinde((float)atof(argv[a + 1]), (float)atof(argv[a]), u));
+    }
+    return 0;
+  }
+#endif
   if (strcmp(argv[1], "isr") == 0 && (argc == 7 || argc == 11 || argc == 12)) {
     unsigned long long n = strtoull(argv[2], NULL, 10);
     unsigned maske = (unsigned)strtoul(argv[3], NULL, 0);

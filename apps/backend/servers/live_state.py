@@ -248,6 +248,10 @@ _live_state = {
             # Bu bobin bipolar sürülebilir mi (donanım yeteneği). Arayüz düğmeyi buna göre
             # kilitler; yeteneksiz bobinde düğme gösterilmez.
             "bipolarYetenek": i < 5,
+            # ⚠️ Y69 (sahip, S-G4): ETKİN duty (%) — kartın GERÇEKTEN uyguladığı oran (ACK `E=`). `dutyCycle` İSTENENDİR
+            # (ACK `D=`); yüksek frekansta ölü-zaman tavanı/tick nicelemesi uygulananı düşürür (1 kHz bipolar %50 → %46,
+            # 10 kHz %10 → 0). None = kart bildirmedi (eski firmware / ESP / kopuk) → arayüz "—"; 0 = sürülmüyor.
+            "dutyEtkin": None,
         }
         for i in range(8)
     },
@@ -514,6 +518,8 @@ def _sync_stm_coils_locked() -> list[dict]:
             # doğrulanmamış bir kipi doğrulanmış gibi göstermek olurdu. None → arayüz
             # kısa çizgi gösterir ve ilk ACK'te gerçek kip geri gelir.
             coil["unipolar"] = None
+            # Y69: ETKİN duty de "kartın bildirdiği"dir — aynı gerekçeyle unutulur (ilk ACK'te geri gelir).
+            coil["dutyEtkin"] = None
         snapshots.append(dict(coil))
     return snapshots
 
@@ -527,6 +533,19 @@ def update_live_coil_kip(coil_id: int, unipolar: bool) -> None:
         if _live_state["coils"][idx].get("unipolar") == bool(unipolar):
             return  # değişmedi → boşuna yayın yapma
         _live_state["coils"][idx]["unipolar"] = bool(unipolar)
+        snapshot = dict(_live_state["coils"][idx])
+    _ws_broadcast_sync({"type": "coil_status", "coilId": coil_id, "data": snapshot})
+
+
+def update_live_coil_etkin_duty(coil_id: int, yuzde: float) -> None:
+    """Y69: bobinin ETKİN duty'sini (%) canlı duruma yazar (ACK `E=` alanından). Sürüşe/istenen duty'ye DOKUNMAZ."""
+    idx = coil_id - 1
+    if not (0 <= idx < 8):
+        return
+    with _live_state_lock:
+        if _live_state["coils"][idx].get("dutyEtkin") == float(yuzde):
+            return  # değişmedi → boşuna yayın yapma
+        _live_state["coils"][idx]["dutyEtkin"] = float(yuzde)
         snapshot = dict(_live_state["coils"][idx])
     _ws_broadcast_sync({"type": "coil_status", "coilId": coil_id, "data": snapshot})
 
