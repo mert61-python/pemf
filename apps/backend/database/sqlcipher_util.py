@@ -14,18 +14,11 @@ yeni cagiranlar (patient_database) icindir. Anahtar ADI ayni oldugundan ayni ana
 
 import contextlib
 import gc
+import logging
 import os
 import shutil
 import sqlite3
 import time
-
-try:
-    import keyring
-except Exception:  # keyring opsiyonel
-    keyring = None
-
-_SERVICE = "PEMF_GUI"
-_KEY_NAME = "sqlcipher_key"
 
 
 @contextlib.contextmanager
@@ -79,112 +72,41 @@ def import_sqlcipher():
 
 
 def get_sqlcipher_key(app_data_dir, logger=None) -> str:
-    """Anahtar: keyring -> env (PEMF_SQLCIPHER_KEY) -> .sqlcipher_key dosyasi. Hicbiri yok +
-    PEMF_ENCRYPT_AT_REST=1 ise yeni uretip saklar (keyring tercih, dosya fallback). Aksi '' (duz-metin)."""
-    # TEK-DOSYA: SecretsManager (keyring->env->.sqlcipher_key MİGRATE eder; tek dosyada DPAPI saklar).
-    # Üretim YALNIZ PEMF_ENCRYPT_AT_REST=1 iken; MEVCUT anahtar HER ZAMAN migrate → mevcut şifreli DB okunabilir kalır.
+    """At-rest anahtarı TEK kaynaktan: SecretsManager (`pemf_secrets.json`; kritik → DPAPI/MKEY). Eski kaynakları
+    (keyring → PEMF_SQLCIPHER_KEY → <veri kökü>/.sqlcipher_key) SecretsManager'ın `legacy` göçü okur. Anahtar yoksa
+    YALNIZ PEMF_ENCRYPT_AT_REST=1 iken SecretsManager üretir (diske yazdıktan SONRA döner); aksi '' (düz-metin).
+
+    ⚠️ D2.45 (B-3.51 · B-3.5 · Karar 6 · Y9): SecretsManager sırrı OKUYAMAZ ya da YAZAMAZSA (bozuk/çözülemeyen sır,
+    izin, G-Ç, başka Windows hesabına kilitli veri kökü) FAIL-CLOSED: eski yola düşülmez, YENİ ANAHTAR ÜRETİLMEZ,
+    sebep loglanır ve `RuntimeError` yükselir → backend DB'siz kısıtlı kipte açılır (ACİL DURDUR + açılış STOP
+    mutabakatı çalışır, DB uçları 503, DB arka planda yeniden açılmaya çalışılır — Y43). Eskiden `RuntimeError`
+    dışındaki her hata eski yola düşüyor, orada YENİ anahtar üretilip keyring + `.sqlcipher_key`e yazılıyordu →
+    mevcut şifreli DB'ler o anahtarla AÇILMIYOR, aynı süreçte iki anahtar dolaşıyordu (karantina, yeniden başlatmada
+    0 hasta — ölçüldü). `app_data_dir` imza uyumu için durur: anahtarın konumu SecretsManager'ın veri köküdür.
+    Kapı: tests/test_anahtar_yolu_FAIL_CLOSED_Karar6_D245.py."""
+    _encrypt = os.getenv("PEMF_ENCRYPT_AT_REST", "0") == "1"
     try:
         from utils.secrets_manager import get_secret
 
-        _encrypt = os.getenv("PEMF_ENCRYPT_AT_REST", "0") == "1"
-        _k = get_secret("sqlcipher_key", generate=_encrypt)
-        if _k:
-            return _k
-        if not _encrypt:
-            return ""  # şifreleme kapalı + mevcut anahtar yok → düz-metin
-        # encrypt=True ama boş (üreteç hatası) → aşağıdaki eski yola düş
+        return get_secret("sqlcipher_key", generate=_encrypt) or ""
     except RuntimeError:
-        # DENETIM P2 (brick korumasının deviril­mesi): SecretsManager, mevcut şifreli veriyi
-        # korumak için BİLEREK RuntimeError yükseltir — "sır saklanmış ama ÇÖZÜLEMİYOR"
-        # (DPAPI/makine değişmiş) ve "pemf_secrets.json BOZUK" durumlarında. Aşağıdaki geniş
-        # `except Exception` bunu YUTUP eski yola düşüyordu; eski yol ise YENİ bir SQLCipher
-        # anahtarı üretip keyring + .sqlcipher_key'e yazıyordu → mevcut patients.db /
-        # pemf_treatment_history.db ve TÜM yedekler kalıcı olarak çözülemez hale geliyordu.
-        # Tam da fail-closed korumasının önlemek için var olduğu sonuç. Yeniden yükselt:
-        # backend açılmaz ama VERİ SAĞLAM kalır (operatör yedekten/doğru makineden döner).
+        # DENETIM P2 (brick korumasının devrilmesi): SecretsManager, mevcut şifreli veriyi korumak için BİLEREK
+        # RuntimeError yükseltir — "sır saklanmış ama ÇÖZÜLEMİYOR" (DPAPI/makine değişmiş), "pemf_secrets.json BOZUK"
+        # ve "karantina kanıtı var" durumlarında; sebebi kendisi loglar. Yutulursa yeni anahtar üretilir ve mevcut
+        # patients.db / pemf_treatment_history.db ile TÜM yedekler kalıcı olarak çözülemez hale gelir.
         raise
-    except Exception as _e:
-        if logger:
-            logger.warning(f"SecretsManager sqlcipher_key okunamadı, eski yola düşülüyor: {_e}")
-    if keyring is not None:
-        try:
-            k = (keyring.get_password(_SERVICE, _KEY_NAME) or "").strip()
-            if k:
-                return k
-        except Exception as e:
-            if logger:
-                logger.warning(f"keyring okuma hatasi: {e}")
-    env_key = os.getenv("PEMF_SQLCIPHER_KEY", "").strip()
-    if env_key:
-        return env_key
-    keyfile = app_data_dir / ".sqlcipher_key"
-    try:
-        if keyfile.exists():
-            k = keyfile.read_text(encoding="utf-8").strip()
-            if k:
-                return k
-    except Exception:
-        pass
-    if os.getenv("PEMF_ENCRYPT_AT_REST", "0") != "1":
-        return ""  # acikca istenmedikce sifreleme acma
-    import secrets
-
-    newkey = secrets.token_urlsafe(32)
-    stored = False
-    if keyring is not None:
-        try:
-            keyring.set_password(_SERVICE, _KEY_NAME, newkey)
-            stored = True
-        except Exception:
-            pass
-    # DAYANIKLI DOSYA-YEDEGI: servis LocalSystem olarak kostugunda keyring, LocalSystem hesabinin
-    # Credential Manager kasasina yazar -> operatore GORUNMEZ + servis hesabi degisirse / PC
-    # tasinirsa KAYBOLUR. Bu yuzden keyring BASARILI olsa BILE anahtari ayrica dosyaya yaz:
-    # yedeklenebilir ve hesaptan bagimsiz okunur (okuma yolu keyring->env->dosya sirasini zaten dener).
-    keyfile_written = False
-    try:
-        keyfile.write_text(newkey, encoding="utf-8")
-        # NTFS ACL kilidi: yalnız SYSTEM + Administrators okuyabilsin (audit B-1.2 — os.chmod
-        # Windows'ta no-op'tu; anahtar dosyası Users'a açık kalıyordu). Escrow amacıyla dosya
-        # KALIR ama artık kilitli. Best-effort.
-        acl_kilitli = False
-        try:
-            from utils.file_acl import lock_down_file
-
-            acl_kilitli = bool(lock_down_file(keyfile))
-        except Exception:
-            # ⚠️ 2026-09-20 triyaji: burasi `pass` idi. Yutulan sey SIFRELEME ANAHTARI
-            # dosyasinin ACL kilidi — tutmazsa dosya Users'a ACIK kalir ve hicbir yer
-            # soylemez. Ayni sinif bu depoda A1b-2'de `.plain.bak` uzerinde yasandi.
-            # AKIS DEGISMEZ (anahtar yine yazildi); yalniz gorunur oldu.
-            if logger:
-                logger.exception("Anahtar dosyasi ACL kilidi UYGULANAMADI: %s", keyfile)
-        if not acl_kilitli and logger:
-            logger.error(
-                "SQLCipher anahtar dosyasi ACL ile KILITLENEMEDI: %s . Dosya bu makinedeki "
-                "diger kullanicilara OKUNABILIR olabilir. YAPILACAK: dosyayi elle kisitlayin "
-                "(icacls ... /inheritance:r /grant SYSTEM:R Administrators:R) ya da backend'i "
-                "yonetici olarak bir kez calistirin.",
-                keyfile,
-            )
-        keyfile_written = True
-    except Exception:
-        # ⚠️ 2026-09-20 triyaji: burasi `pass` idi. Basarisizlik ozet log'da
-        # `dosya-yedek=False` olarak GORUNUYOR (yani kor degil) ama SEBEBI kayboluyordu.
-        # Bu dal onemli: keyring LocalSystem kasasina yazar ve servis hesabi degisirse /
-        # makine tasinirsa KAYBOLUR — dosya yedegi tek makine-disi cikarilabilir kopyadir.
-        # Kaybolursa sifreli hasta verisi KALICI OKUNAMAZ. Akis degismez.
-        if logger:
-            logger.exception("SQLCipher anahtar dosyasi YAZILAMADI: %s", keyfile)
-    if logger:
-        logger.warning(
-            "Yeni SQLCipher anahtari uretildi (keyring=%s, dosya-yedek=%s @ %s). "
-            "BU ANAHTARI YEDEKLEYIN — kaybolursa sifreli hasta verisi KALICI OKUNAMAZ.",
-            stored,
-            keyfile_written,
-            keyfile,
+    except Exception as e:
+        (logger or logging.getLogger(__name__)).error(
+            "SQLCipher anahtari SecretsManager'dan OKUNAMADI/YAZILAMADI (%s: %s) — eski yola DUSULMEDI, YENI ANAHTAR "
+            "URETILMEDI; veritabani acilmayacak, dosyalara dokunulmadi (Karar 6). Sir dosyasina/veri kokune erisimi "
+            "duzeltin; veritabani arka planda yeniden acilir.",
+            type(e).__name__,
+            e,
         )
-    return newkey
+        raise RuntimeError(
+            f"SQLCipher anahtari okunamadi/yazilamadi ({type(e).__name__}) — yeni anahtar URETILMEDI, eski yola "
+            "dusulmedi (Karar 6)."
+        ) from e
 
 
 def open_encrypted_conn(db_path, key, sqlcipher_mod, row_factory=None, timeout=10.0, check_same_thread=False):

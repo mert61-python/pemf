@@ -160,7 +160,6 @@ def _configure_logging(app_data_dir: Path, level: str) -> None:
             pass
 
     log_dir = Path(os.environ.get("PEMF_LOG_DIR", app_data_dir / "logs"))
-    log_dir.mkdir(parents=True, exist_ok=True)
     log_level = getattr(logging, level.upper(), logging.INFO)
 
     # PEMF_LOG_JSON=1 → yapısal JSON log (toplama/sorgulama); aksi düz-metin (varsayılan, insan-okur).
@@ -172,12 +171,32 @@ def _configure_logging(app_data_dir: Path, level: str) -> None:
             datefmt="%Y-%m-%d %H:%M:%S",
         )
 
-    file_handler = RotatingFileHandler(
-        log_dir / "backend_service.log",
-        maxBytes=10 * 1024 * 1024,
-        backupCount=5,
-        encoding="utf-8",
-    )
+    def _dosya_handler(dizin: Path) -> RotatingFileHandler:
+        dizin.mkdir(parents=True, exist_ok=True)
+        return RotatingFileHandler(
+            dizin / "backend_service.log",
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
+            encoding="utf-8",
+        )
+
+    # ⚠️ D2.45 (B-3.51): günlük dizini oluşturulamaz/açılamazsa (veri kökü başka bir Windows hesabına kilitli, disk
+    # salt-okur) süreç BURADA — crash handler kurulmadan, hiçbir günlüğe yazmadan — ölüyordu (ikinci hesabın backend'i
+    # hiç açılmıyor, sebep yok; ölçüldü). Artık kullanıcının geçici dizinine düşülür, neden ilk ERROR satırıdır ve
+    # açılış sürer (DB açılamazsa DB'siz kısıtlı kip — Y9). Yedek de açılamazsa özgün hata yükselir.
+    # Kapı: tests/test_anahtar_yolu_FAIL_CLOSED_Karar6_D245.py.
+    yedege_dusus = None
+    try:
+        file_handler = _dosya_handler(log_dir)
+    except OSError as e:
+        import tempfile
+
+        yedek_dir = Path(tempfile.gettempdir()) / "PEMF_GUI" / "logs"
+        try:
+            file_handler = _dosya_handler(yedek_dir)
+        except OSError:
+            raise e from None
+        yedege_dusus = (log_dir, e, yedek_dir)
     file_handler.setFormatter(formatter)
 
     # stdout StreamHandler'ı YALNIZ gerçek interaktif konsolda ekle. Frozen/headless serviste
@@ -197,6 +216,16 @@ def _configure_logging(app_data_dir: Path, level: str) -> None:
         handlers.append(stream_handler)
 
     logging.basicConfig(level=log_level, handlers=handlers, force=True)
+    if yedege_dusus is not None:
+        _asil, _hata, _yedek = yedege_dusus
+        logging.getLogger("backend_service").error(
+            "GUNLUK DIZINI YAZILAMADI (%s: %s — %s) — gunluk gecici dizine yaziliyor: %s. Veri koku bu Windows "
+            "hesabina kapali ya da salt-okur olabilir (cok hesapli kurulum?); acilis suruyor.",
+            type(_hata).__name__,
+            _hata,
+            _asil,
+            _yedek,
+        )
 
 
 def publish_bind_host(host: str) -> str:
@@ -547,7 +576,14 @@ def _resolve_supabase_credentials() -> tuple[str, str]:
 
         sb_url = get_secret("supabase_url")
         sb_key = get_secret("supabase_anon_key")
-    except Exception:
+    except Exception as e:
+        # ⚠️ D2.45 (B-3.51): sessiz yutuluyordu — sır dosyası okunamazken (bozuk / başka Windows hesabına kilitli veri
+        # kökü) ortam/varsayılana düşüş görünmüyordu. Değer YAZILMAZ, yalnız neden.
+        logging.getLogger(__name__).warning(
+            "Supabase kimligi SecretsManager'dan okunamadi (%s: %s) — ortam/yapilandirma/gomulu varsayilana dusuldu.",
+            type(e).__name__,
+            e,
+        )
         sb_url = os.environ.get("SUPABASE_URL", "")
         sb_key = os.environ.get("SUPABASE_KEY", "")
     if not (sb_url and sb_key):

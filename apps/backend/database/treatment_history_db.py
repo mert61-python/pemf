@@ -176,14 +176,17 @@ class TreatmentHistoryDB(
         önce init olursa SecretsManager K üretir, treatment DB SONRA K' üretirdi = ÇİFT ANAHTAR
         (treatment DB latent OKUNAMAZ hale gelirdi). Artık ikisi de aynı kaynak → yeni DB birleşik;
         üretim de TEK yerde (çift-üretim divergence'ı kökten biter). Mevcut şifreli DB: shared yol
-        keyring/env/file'ı zaten migrate ettiğinden AYNI anahtarı döndürür → sorunsuz açılır."""
-        try:
-            from database.sqlcipher_util import get_sqlcipher_key
+        keyring/env/file'ı zaten migrate ettiğinden AYNI anahtarı döndürür → sorunsuz açılır.
 
-            return get_sqlcipher_key(self.app_data_dir, self.logger)
-        except Exception as e:
-            self.logger.warning(f"paylasimli sqlcipher_key alinamadi, legacy yola dusuluyor: {e}")
-            return self._get_sqlcipher_key_legacy()
+        ⚠️ D2.45 (B-3.14 · Karar 6 · Y9): birincil anahtar OKUNAMAZSA (`RuntimeError` — çözülemeyen/bozuk sır ya da
+        sır dosyasına erişilemiyor) hata YUTULMAZ, legacy yola DÜŞÜLMEZ: yükselir → tedavi DB'si açılmaz, dosyaya
+        DOKUNULMAZ, backend DB'siz kısıtlı kipte açılır. Eskiden her istisna legacy'e düşüyordu; legacy kaynakta FARKLI
+        bir anahtar varsa tek aday o oluyor, açmayınca "uyuşmazlık" sayılıp kurtarılabilir geçmiş KARANTİNAYA gidiyor,
+        yerine bayat anahtarla BOŞ DB kuruluyordu (ölçüldü). D-3 kurtarma adayı (legacy) yalnız birincil HATASIZ
+        döndüğünde denenir. Kapı: tests/test_anahtar_yolu_FAIL_CLOSED_Karar6_D245.py."""
+        from database.sqlcipher_util import get_sqlcipher_key
+
+        return get_sqlcipher_key(self.app_data_dir, self.logger)
 
     def _get_sqlcipher_key_legacy(self) -> str:
         """ESKİ anahtar yolu (keyring → env → .sqlcipher_key), ÜRETMEDEN (yoksa ''). D-3: divergence
@@ -244,6 +247,7 @@ class TreatmentHistoryDB(
             self.logger.warning("SQLCipher anahtari var ama binding (sqlcipher3) kurulu DEGIL → duz-metin fallback.")
             return None
         last_err = None
+        birincil_hatasi = None
         for label, cipher_key in candidates:
             conn = None
             try:
@@ -261,6 +265,8 @@ class TreatmentHistoryDB(
                 return conn
             except Exception as e:
                 last_err = e
+                if label == "birincil":
+                    birincil_hatasi = e
                 if label == "cache":
                     # Cache'lenmis anahtar artik ACMIYOR (re-key / anahtar degisimi) → cache'i
                     # bosalt ve TAM cozumleme ile bir kez daha dene (kurtarma yolu korunur).
@@ -289,7 +295,10 @@ class TreatmentHistoryDB(
         # TUGLALASMA KORUMASI (2026-08-11): "anahtar VARDI ama dosyayi ACMADI"yi, "anahtar/binding
         # HIC YOKTU"dan ayirt edilebilir kil. Karantina YALNIZ birincisinde yapilir — ikincisinde
         # sorun gecici olabilir ve dosyayi kenara almak KURTARILABILIR hasta verisini yetim birakir.
-        self._anahtar_vardi_ama_acmadi = bool(last_err) and anahtar_uyusmazligi_mi(last_err)
+        # ⚠️ D2.45 (Karar 6): karar YALNIZ BİRİNCİL anahtarın gerçek uyuşmazlığından verilir. Eskiden SON adayın
+        # hatasına bakılıyordu → birincil boşken ya da geçici bir hatayla düşmüşken legacy adayın uyuşmazlığı tek başına
+        # kurtarılabilir geçmişi karantinaya gönderiyordu (D2.04 ile aynı ilke: anahtar YOKKEN karantina yok).
+        self._anahtar_vardi_ama_acmadi = birincil_hatasi is not None and anahtar_uyusmazligi_mi(birincil_hatasi)
         return None
 
     def _create_connection(self):

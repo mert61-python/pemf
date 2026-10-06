@@ -523,11 +523,12 @@ def test_KARSIT_KANIT_DUZELTILEN_dortu_artik_sessiz_DEGIL():
     """2026-09-20'de düzeltilen dört nokta geri `pass`e dönerse yakalansın.
 
     ⚠️ Çıpa KODA pinli: her birinin `except` dalında artık bir `logger` çağrısı var.
+    ⚠️ D2.45 (Karar 6): `sqlcipher_util`'deki iki nokta ("ACL kilidi UYGULANAMADI", "anahtar dosyasi YAZILAMADI")
+    eski anahtar-üretim yolundaydı (yeni anahtarı `.sqlcipher_key`e yazıp kilitleyen dal); o yol bütünüyle SİLİNDİ —
+    sır okunamazken yeni anahtar üretilmediği DAVRANIŞLA ölçülür: test_anahtar_yolu_FAIL_CLOSED_Karar6_D245.py.
     """
     hedefler = {
         "apps/backend/database/sqlcipher_util.py": [
-            "ACL kilidi UYGULANAMADI",
-            "anahtar dosyasi YAZILAMADI",
             "temizlenemedi",
         ],
         "apps/backend/backend_service.py": [

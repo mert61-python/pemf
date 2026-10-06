@@ -188,7 +188,8 @@ def test_sqlcipher_key_does_not_swallow_brick_guard(tmp_path, monkeypatch):
     import pytest
 
     monkeypatch.setenv("PEMF_ENCRYPT_AT_REST", "1")
-    monkeypatch.setattr(scu, "keyring", None)  # gerçek keyring'e yazma
+    # gerçek keyring'e yazma (D2.45'ten beri modülde keyring yolu YOK; yeniden eklenirse de kasaya gitmesin)
+    monkeypatch.setattr(scu, "keyring", None, raising=False)
 
     def _brick(*a, **k):
         raise RuntimeError("Depolanmis sir cozulemedi (brick korumasi)")
@@ -198,9 +199,14 @@ def test_sqlcipher_key_does_not_swallow_brick_guard(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError):
         scu.get_sqlcipher_key(tmp_path)
 
-    # Diğer hatalar (ör. import/IO) hâlâ eski yola düşebilmeli — fail-closed YALNIZ brick için
+    # ⚠️ D2.45 (B-3.51 · Karar 6): DİĞER hatalar (izin/G-Ç/import) da artık eski yola DÜŞMEZ, yeni anahtar ÜRETMEZ.
+    # Burası eskiden "istisna yükseltmemeli, eski yol anahtar üretir" diyordu: o yol sır okunamazken YENİ anahtarı
+    # keyring + .sqlcipher_key'e yazıp mevcut şifreli DB'leri açılamaz kılıyordu (ölçüldü, DENETIM-03 B-3.5/B-3.51).
+    # Ayrıntılı kapı: tests/test_anahtar_yolu_FAIL_CLOSED_Karar6_D245.py
     def _other(*a, **k):
         raise OSError("keyring servisi yok")
 
     monkeypatch.setattr("utils.secrets_manager.get_secret", _other)
-    assert scu.get_sqlcipher_key(tmp_path)  # istisna YÜKSELTMEMELİ, eski yol anahtar üretir
+    with pytest.raises(RuntimeError):
+        scu.get_sqlcipher_key(tmp_path)
+    assert not (tmp_path / ".sqlcipher_key").exists(), "sır okunamazken yeni anahtar dosyası yazıldı"

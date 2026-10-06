@@ -38,7 +38,10 @@ ama uygulanmaz. Ölçülen zincir (HeadlessCore → api_server → sağlık/E-st
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
+import os
 import re
 import sqlite3
 from pathlib import Path
@@ -333,6 +336,44 @@ def _eski_semali_tedavi_db(app: Path) -> None:
         c.close()
 
 
+#: D2.45: DB'leri şifreleyen DOĞRU anahtar ve legacy kaynaktaki BAYAT anahtar (sentetik).
+_K_DOGRU, _K_BAYAT = "D245-e2e-dogru-anahtar", "D245-e2e-bayat-anahtar"
+
+
+def _sir_cozulemez_kur(app: Path, tmp_path: Path) -> None:
+    """D2.45 (B-3.14 · Karar 6): iki DB DOĞRU anahtarla şifreli; sır dosyasındaki `sqlcipher_key` bu makinede
+    ÇÖZÜLEMEZ (makine değişimi / Windows yeniden kurulumu); legacy `.sqlcipher_key` BAYAT. Dosya özetleri sonradan
+    karşılaştırılmak üzere `d245_once.json`a yazılır."""
+    from database.sqlcipher_util import import_sqlcipher
+
+    mod = import_sqlcipher()
+    for ad in ("patients.db", "pemf_treatment_history.db"):
+        kaynak = app / (ad + ".kaynak")
+        _duz_db(kaynak)
+        k = mod.connect(str(kaynak))
+        try:
+            hedef = str(app / ad).replace("'", "''")
+            k.execute(f"ATTACH DATABASE '{hedef}' AS enc KEY '{_K_DOGRU}'")
+            k.execute("SELECT sqlcipher_export('enc')")
+            k.execute("DETACH DATABASE enc")
+        finally:
+            k.close()
+        kaynak.unlink()
+        assert (app / ad).read_bytes()[:16] != _SQLITE_BASLIK, f"ön koşul: {ad} şifreli kurulmalı"
+    (app / ".sqlcipher_key").write_text(_K_BAYAT, encoding="utf-8")
+    onek = "DPAPI:" if os.name == "nt" else "MKEY:"
+    blob = onek + base64.b64encode(b"D245 baska makinenin blobu " * 4).decode("ascii")
+    (app / "pemf_secrets.json").write_text(
+        json.dumps({"_version": 1, "auto": {"sqlcipher_key": blob}, "operator": {}, "embedded": {}}), encoding="utf-8"
+    )
+    ozet = {ad: hashlib.sha256((app / ad).read_bytes()).hexdigest() for ad in _D245_DOSYALAR}
+    ozet["blob"] = blob
+    (tmp_path / "d245_once.json").write_text(json.dumps(ozet), encoding="utf-8")
+
+
+_D245_DOSYALAR = ("patients.db", "pemf_treatment_history.db", ".sqlcipher_key")
+
+
 def _kur(tmp_path: Path, senaryo: str) -> tuple[dict, Path]:
     veri = tmp_path / "veri"
     app = veri / "PEMF_GUI"
@@ -351,7 +392,7 @@ def _kur(tmp_path: Path, senaryo: str) -> tuple[dict, Path]:
             "PEMF_HOTSPOT": "0",
             "PEMF_AI_WARMUP": "0",
             "PEMF_ENABLE_TUNNEL": "0",
-            "PEMF_ENCRYPT_AT_REST": "1" if senaryo.startswith("goc") or senaryo == "saglam" else "0",
+            "PEMF_ENCRYPT_AT_REST": "1" if senaryo.startswith("goc") or senaryo in ("saglam", "sir_cozulemez") else "0",
         }
     )
     if senaryo in ("goc_hasta", "goc_gecici_hasta"):
@@ -366,6 +407,8 @@ def _kur(tmp_path: Path, senaryo: str) -> tuple[dict, Path]:
         env["PEMF_API_PORT"] = "80O0"
     elif senaryo == "alter_kilitli":
         _eski_semali_tedavi_db(app)
+    elif senaryo == "sir_cozulemez":
+        _sir_cozulemez_kur(app, tmp_path)
     return env, app
 
 
@@ -545,6 +588,32 @@ def test_KRITIK_D224_ALTER_KILITLIYKEN_backend_DBSIZ_acilir_kilit_kalkinca_KOLON
         "kök neden (eklenemeyen kolon + kilit) günlüğe YAZILMADI"
     )
     assert "Yeni SQLCipher anahtari uretildi" not in gunluk, "DB'siz kipe düşerken YENİ ANAHTAR üretildi (Y9 ihlali)"
+
+
+def test_KRITIK_D245_SIR_COZULEMEZKEN_backend_DBSIZ_acilir_YENI_ANAHTAR_yok_KARANTINA_yok(tmp_path):
+    """D2.45 (B-3.14 · Karar 6 · Y9) UÇTAN UCA, GERÇEK `main()`: sır dosyasındaki at-rest anahtarı bu makinede
+    çözülemiyor, legacy `.sqlcipher_key` BAYAT. Eskiden tedavi DB'si RuntimeError'u yutup bayat legacy anahtara
+    düşüyor, kurtarılabilir geçmişi `.acilamadi-*` olarak KARANTİNAYA alıp yerine bayat anahtarla BOŞ DB kuruyordu
+    (ölçüldü). Şimdi backend DB'siz KISITLI kipte açılır (ACİL DURDUR + açılış STOP mutabakatı + hızlı sağlık ucu,
+    seans 503); arka plan yeniden açma denemeleri de YENİ ANAHTAR ÜRETMEZ; iki DB, legacy anahtar dosyası ve
+    çözülemeyen sır DEĞİŞMEZ, karantina YOK."""
+    if not _sqlcipher_var():
+        pytest.skip("sqlcipher3 yok — şifreli DB senaryosu kurulamaz")
+    s, app = _kos(tmp_path, "sir_cozulemez")
+    _ortak_iddialar(s)
+    _db_yok_iddialari(s, r"a[çc][ıi]lamad[ıi]", tmp_path)
+    assert sorted(p.name for p in app.glob("*.acilamadi-*")) == [], (
+        "sır çözülemezken veritabanı KARANTİNAYA alındı (legacy adayla uyuşmazlık kararı — B-3.14)"
+    )
+    once = json.loads((tmp_path / "d245_once.json").read_text(encoding="utf-8"))
+    degisen = [ad for ad in _D245_DOSYALAR if hashlib.sha256((app / ad).read_bytes()).hexdigest() != once[ad]]
+    assert degisen == [], f"fail-closed açılışta veri/anahtar dosyasına DOKUNULDU: {degisen}"
+    sir = json.loads((app / "pemf_secrets.json").read_text(encoding="utf-8"))
+    assert sir["auto"]["sqlcipher_key"] == once["blob"], "çözülemeyen sır EZİLDİ (yeni anahtar üretildi)"
+    gunluk = (tmp_path / "log" / "backend_service.log").read_text(encoding="utf-8", errors="replace")
+    assert "Yeni SQLCipher anahtari uretildi" not in gunluk, "DB'siz kipe düşerken YENİ ANAHTAR üretildi (Y9 ihlali)"
+    assert "legacy yola dusuluyor" not in gunluk, "birincil anahtar hatası yutulup legacy yola düşüldü"
+    assert "Sır çözülemedi (sqlcipher_key)" in gunluk, "fail-closed nedeni (çözülemeyen sır) günlükte YOK"
 
 
 def test_KARSIT_cekirdek_yok_ya_da_SAHTE_cekirdekte_acilis_hatasi_YOK(monkeypatch):

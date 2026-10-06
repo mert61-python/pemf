@@ -26,6 +26,7 @@ Kullanım:
 from __future__ import annotations
 
 import base64
+import copy
 import json
 import logging
 import os
@@ -702,6 +703,22 @@ def _save(doc: dict) -> None:
         logger.warning("SIR dosyası ACL kilidi hata verdi", exc_info=True)
 
 
+def _diske_yaz_sonra_onbellege(doc: dict, section: str, key: str, stored: str) -> None:
+    """⚠️ D2.45 (B-3.5 · Karar 6): değer ÖNCE diske, `_save` BAŞARILIYSA önbelleğe.
+
+    Eskiden değer önbellek dokümanına (`_load()`un döndürdüğü `_cache`in KENDİSİ) `_save`'den ÖNCE yazılıyordu: `_save`
+    bir kez düşerse (AV / ACL / disk — `os.replace` PermissionError'ı sahada görüldü) üretilen anahtar yalnız BELLEKTE
+    kalıyor, aynı süreçteki sonraki çağrılar onu döndürüyordu → hasta DB'si diske hiç yazılmamış bir anahtarla
+    şifreleniyor, yeniden başlatmada anahtar YOK → kalıcı 0 hasta (ölçüldü). Artık KOPYA doküman kaydedilir; `_save`
+    düşerse önbellek DEĞİŞMEZ ve hata çağırana yükselir (anahtar yolu fail-closed).
+    Kapı: tests/test_anahtar_yolu_FAIL_CLOSED_Karar6_D245.py."""
+    global _cache
+    yeni = copy.deepcopy(doc)
+    yeni.setdefault(section, {})[key] = stored
+    _save(yeni)
+    _cache = yeni
+
+
 # ───────────────────────── genel API ─────────────────────────
 def get_secret(key: str, default: str = "", generate: bool = True) -> str:
     """Sırrı TEK dosyadan döndür. Yoksa: eski-kaynaktan MİGRATE (her zaman) → (generate=True ise) ÜRET → default.
@@ -776,9 +793,8 @@ def get_secret(key: str, default: str = "", generate: bool = True) -> str:
             logger.info("Sır üretildi (tek dosya): %s", key)
         if not val:
             return default
-        # dosyaya yaz (kritikse DPAPI)
-        doc[section][key] = _enc(val, critical=True) if dpapi else val
-        _save(doc)
+        # dosyaya yaz (kritikse DPAPI) — ÖNCE disk, sonra önbellek (D2.45)
+        _diske_yaz_sonra_onbellege(doc, section, key, _enc(val, critical=True) if dpapi else val)
         return val
 
 
@@ -789,5 +805,4 @@ def set_secret(key: str, value: str) -> None:
     section, dpapi, *_ = _REGISTRY[key]
     with _lock:
         doc = _load()
-        doc[section][key] = _enc(value, critical=True) if (dpapi and value) else value
-        _save(doc)
+        _diske_yaz_sonra_onbellege(doc, section, key, _enc(value, critical=True) if (dpapi and value) else value)
