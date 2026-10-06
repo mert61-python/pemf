@@ -332,15 +332,53 @@ def test_migration_rollback_requires_valid_backup(temp_app_data, monkeypatch):
     doğrulamadan `os.remove(db_path)` yapıp boş/bozuk yedeği üzerine kopyalıyordu → disk-dolu
     gibi bileşik arızada tüm tedavi geçmişi KALICI kayboluyordu.
     """
+    import ast
     import inspect
+    import textwrap
 
     from database.treatment_history_db import TreatmentHistoryDB
 
     src = inspect.getsource(TreatmentHistoryDB._run_startup_migrations_with_rollback)
     assert "_backup_ok" in src, "yedek geçerliliği doğrulanmalı"
-    # Yedek geçersizken canlı DB'ye dokunulmamalı: remove'dan ÖNCE guard olmalı
-    i_guard = src.index("if not _backup_ok")
-    i_remove = src.index("os.remove(self.db_path)")
-    assert i_guard < i_remove, "yedek kontrolü canlı DB silinmeden ÖNCE gelmeli"
+    # ⚠️ D2.09 (B-10.263, 2026-10-06): burada `src.index("if not _backup_ok") < src.index("os.remove(self.db_path)")`
+    # vardı — `.index` İLK eşleşmeyi (yedek alma sonrası `if not _backup_ok or not os.path.exists(...)`) buluyordu,
+    # asıl korumayı (except içindeki `if not _backup_ok: … raise`) DEĞİL. Koruma `raise` → `pass` yapılınca ya da
+    # koşulu `if _backup_ok is None:` yapılınca YEŞİL kaldı (ölçüldü; yalnız davranış ikizi
+    # `test_kalan_davranissal::test_gecersiz_yedekle_rollback_CANLI_DByi_yok_etmez` kırmızıydı).
+    # Artık AST: göçü (`_ensure_schema_version`) saran try'ın except'inde DOĞRUDAN `if not _backup_ok:` vardır, gövdesi
+    # ÇIPLAK `raise` ile biter ve canlı DB silmesi (`os.remove(self.db_path)`) ondan SONRA gelir.
+    fn = ast.parse(textwrap.dedent(src)).body[0]
+    gocu_saran = [
+        t
+        for t in ast.walk(fn)
+        if isinstance(t, ast.Try)
+        and any(
+            isinstance(c, ast.Call) and getattr(c.func, "attr", None) == "_ensure_schema_version"
+            for s in t.body
+            for c in ast.walk(s)
+        )
+    ]
+    assert len(gocu_saran) == 1 and gocu_saran[0].handlers, "göçü saran try/except bulunamadı -> kapı KÖR kaldı"
+    handler = gocu_saran[0].handlers[0]
+    koruma = next(
+        (s for s in handler.body if isinstance(s, ast.If) and ast.unparse(s.test) == "not _backup_ok"),
+        None,
+    )
+    assert koruma is not None, (
+        "except içinde `if not _backup_ok:` koruması YOK -> geçersiz yedekle rollback canlı DB'yi siler"
+    )
+    assert isinstance(koruma.body[-1], ast.Raise) and koruma.body[-1].exc is None, (
+        "geçersiz yedek koruması hatayı YENİDEN YÜKSELTMİYOR (çıplak raise yok) -> akış rollback'e düşer, canlı DB silinir"
+    )
+    silmeler = [
+        c
+        for c in ast.walk(handler)
+        if isinstance(c, ast.Call)
+        and getattr(c.func, "attr", None) == "remove"
+        and c.args
+        and ast.unparse(c.args[0]) == "self.db_path"
+    ]
+    assert silmeler, "rollback dalında canlı DB silmesi bulunamadı -> kapı KÖR kaldı"
+    assert all(c.lineno > koruma.lineno for c in silmeler), "yedek kontrolü canlı DB silinmeden ÖNCE gelmeli"
     # WAL yan-dosyaları geri-yüklemeden önce temizlenmeli (bayat frame replay'i)
     assert '"-wal"' in src and '"-shm"' in src, "rollback öncesi WAL/SHM temizlenmeli"

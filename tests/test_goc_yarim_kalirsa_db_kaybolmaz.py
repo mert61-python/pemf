@@ -507,16 +507,57 @@ def test_KRITIK_tedavi_DB_kurucusu_yarim_gocu_KENDI_yolunda_TOPARLAR(tmp_path, m
         yeni.close_connections()
 
 
+#: `sqlcipher_util`de TEK yerde tanımlı göç/karantina korumaları — tedavi DB modülleri bunları YENİDEN YAZMAZ.
+_PAYLASILAN_KORUMALAR = frozenset(
+    {
+        "anahtar_uyusmazligi_mi",
+        "karantinaya_al",
+        "duz_metin_sqlite_mi",
+        "migrate_to_encrypted_if_needed",
+        "_yarim_goc_toparla",
+        "_tasi_yeniden_dene",
+        "_yedegi_kenara_al",
+        "_kilit_direncli_tasi",
+        "_kilit_direncli_sil",
+        "goc_sonrasi_yedek_politikasi",
+        "duz_metin_yedegi_emanete_al_mi",
+        "get_sqlcipher_key",
+        "import_sqlcipher",
+    }
+)
+
+
 def test_ikinci_kopya_PAYLASILAN_yardimcilari_kullaniyor():
     """Kopyalar kendi ayrı implementasyonlarını yazarsa yine ayrışırlar.
 
     ⚠️ Bu yüzden `treatment_history_db` korumaları KENDİ yazmaz, `sqlcipher_util`den
     IMPORT eder. Böylece davranış tek yerde tanımlı kalır.
+
+    ⚠️ D2.09 (B-10.239, 2026-10-06): eski çıpa `"from database.sqlcipher_util import" in src` idi ve
+    dosyadaki İLGİSİZ yerel importlar (metot içi `import_sqlcipher` / `get_sqlcipher_key`) onu her zaman
+    karşılıyordu → tedavi modülüne YEREL bir `karantinaya_al` (düz-metin koruması yok) ya da
+    `anahtar_uyusmazligi_mi` (her hata uyuşmazlık) kopyası konunca YEŞİL kaldı (ölçüldü). Artık:
+    (1) tedavi modülünün kullandığı iki koruma `sqlcipher_util`de TANIMLI nesne (`__module__`; yeniden
+    yüklemeye dayanıklı), (2) tedavi DB modüllerinin (treatment_history_db.py + thdb_*.py) HİÇBİRİ ortak
+    korumalardan birini yerel TANIMLAMAZ (AST).
     """
-    src = _kaynak("apps/backend/database/treatment_history_db.py")
-    assert "from database.sqlcipher_util import" in src, (
-        "treatment_history_db paylasilan yardimcilari IMPORT etmiyor -> iki kopya zamanla ayrisir"
-    )
+    import ast
+
+    from database import treatment_history_db as thdb
+
+    for ad in ("anahtar_uyusmazligi_mi", "karantinaya_al"):
+        fn = getattr(thdb, ad, None)
+        assert getattr(fn, "__module__", None) == "database.sqlcipher_util", (
+            f"treatment_history_db.{ad} ortak `sqlcipher_util`den GELMIYOR ({getattr(fn, '__module__', None)}) "
+            "-> tedavi DB'si kendi kopyasini kullaniyor, iki kopya ayrisir (duz-metin korumasi kaybolabilir)"
+        )
+    db_dizin = KOK / "apps" / "backend" / "database"
+    yerel = []
+    for yol in [db_dizin / "treatment_history_db.py", *sorted(db_dizin.glob("thdb_*.py"))]:
+        for n in ast.walk(ast.parse(yol.read_text(encoding="utf-8"))):
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name in _PAYLASILAN_KORUMALAR:
+                yerel.append(f"{yol.name}:{n.lineno} {n.name}")
+    assert not yerel, f"tedavi DB modullerinde ORTAK korumanin YEREL kopyasi var: {yerel} -> iki kopya ayrisir"
 
 
 def test_KRITIK_toparlama_HATASI_sessizce_YUTULMAZ():

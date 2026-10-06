@@ -151,14 +151,30 @@ def test_KRITIK_URETIMDE_yazilan_her_durum_cevrilebiliyor():
     """
     from utils.seans_durum import DURUM_ETIKETLERI
 
-    src = (KOK / "apps" / "backend" / "database" / "treatment_history_db.py").read_text(encoding="utf-8")
-    # `session_status = 'X'` / `session_status TEXT DEFAULT 'X'` / sabit atamalari.
-    yazilanlar = set(re.findall(r"session_status\s*(?:TEXT DEFAULT|=)\s*'([A-Za-z_]+)'", src))
-    yazilanlar |= set(re.findall(r'SEANS_DURUMU_[A-Z_]+\s*=\s*"([A-Za-z_]+)"', src))
+    # ⚠️ D2.09 (B-10.253, 2026-10-06): bu kapı yalnız `treatment_history_db.py`yi tarıyordu; B4 bölmesinden
+    # (2026-09-18) sonra `ABORTED_DUE_TO_POWER` / `active` / `completed` `thdb_*.py`de ve kapı 5 durumdan
+    # yalnız 2'sini görüyordu → `thdb_seans.py`deki güç-kesintisi literali haritada OLMAYAN bir değere
+    # çevrilince YEŞİL kaldı (ölçüldü). Artık TÜM tedavi DB modülleri taranır; parametre varsayılanı
+    # (`session_status: str = "…"`) ve `session_status or '…'` biçimi de okunur.
+    db_dizin = KOK / "apps" / "backend" / "database"
+    yazilanlar = set()
+    for yol in [db_dizin / "treatment_history_db.py", *sorted(db_dizin.glob("thdb_*.py"))]:
+        src = yol.read_text(encoding="utf-8")
+        # `session_status = 'X'` / `session_status TEXT DEFAULT 'X'` / `session_status: str = "X"` / sabit atamalari.
+        yazilanlar |= set(
+            re.findall(r"session_status\s*(?::\s*str\s*)?(?:TEXT DEFAULT|=)\s*['\"]([A-Za-z_]+)['\"]", src)
+        )
+        yazilanlar |= set(re.findall(r"session_status\s+or\s+['\"]([A-Za-z_]+)['\"]", src))
+        yazilanlar |= set(re.findall(r'SEANS_DURUMU_[A-Z_]+\s*=\s*"([A-Za-z_]+)"', src))
     yazilanlar -= {""}
-    assert yazilanlar, "uretim durumlari ayiklanamadi -> capa bayatladi"
     eksik = sorted(d for d in yazilanlar if d.lower() not in DURUM_ETIKETLERI)
     assert not eksik, f"URETIMDE yazilan ama cevrilemeyen durum(lar): {eksik}"
+    # Tarayıcının KAPSAMI (Ö.6): bugün üretimde yazıldığı bilinen durumların HEPSİNİ görmeli; görmüyorsa
+    # literal başka bir yere taşınmıştır ve kapı sessizce daralmıştır (bölme sonrası tam bu oldu).
+    bilinen = {"active", "completed", "ABORTED_DUE_TO_POWER", "EMERGENCY_STOPPED", "HARDWARE_REJECTED"}
+    assert bilinen <= yazilanlar, (
+        f"uretim durum tarayicisi KOR: gorulmeyen {sorted(bilinen - yazilanlar)} -> literal tasinmis, capa bayatladi"
+    )
 
 
 # ============================================================================
