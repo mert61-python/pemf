@@ -274,6 +274,27 @@ def _sonlu_yapilandirma(kaynak, alanlar: dict) -> None:
                 raise ValueError(f"Kabin yapılandırması geçersiz ({kaynak}): '{ad}' sonlu bir sayı değil ({x!r})")
 
 
+#: Y73: kabin YAML'ının yanındaki kimlik dosyası (`utils.mqtt_kimlik.KABIN_KIMLIK_ADI` ile AYNI ad — ai_hub backend'i
+#: içe aktarmaz; ad `tests/test_kabin_CV_mqtt_kimligi_pemf_cv_Y73.py` ile kilitli).
+KABIN_KIMLIK_DOSYASI = "cabin_mqtt_kimlik.yaml"
+
+
+def _kabin_mqtt_kimligi(dizin: Path) -> tuple[str | None, str | None]:
+    """Y73: kabin YAML'ının dizinindeki `cabin_mqtt_kimlik.yaml` → (kullanıcı, parola); yoksa/okunamazsa (None, None).
+    ⚠️ Değer hiçbir yere YAZILMAZ / loglanmaz."""
+    yol = Path(dizin) / KABIN_KIMLIK_DOSYASI
+    if not yol.is_file():
+        return None, None
+    try:
+        ham = yaml.safe_load(yol.read_text(encoding="utf-8")) or {}
+        kullanici, parola = ham.get("username"), ham.get("password")
+    except Exception:
+        return None, None
+    if not (isinstance(kullanici, str) and kullanici and isinstance(parola, str) and parola):
+        return None, None
+    return kullanici, parola
+
+
 def load_cabin_config(
     yaml_path: str | os.PathLike | None = None,
     *,
@@ -302,6 +323,12 @@ def load_cabin_config(
     ph_r = raw["phantom"]
     out_r = raw["output"]
     mq = out_r["mqtt"]
+    # ⚠️ Y73 (sahip, S-G8): kabin MQTT kimliği YAML'ın İÇİNDE değil YANINDAKİ ayrı dosyada (`cabin_mqtt_kimlik.yaml`,
+    # gitignore; `PEMF_Backend.exe --mqtt-kimlik hazirla --kabin <bu dizin>` yazar — ESP başlığı gibi). YAML'da AÇIK
+    # kullanıcı adı varsa o geçerli (elle verilen kimlik ezilmez). Kabin MQTT'si `output.mqtt.enabled` ile varsayılan KAPALI.
+    mqtt_kullanici, mqtt_parola = mq.get("username"), mq.get("password")
+    if not mqtt_kullanici:
+        mqtt_kullanici, mqtt_parola = _kabin_mqtt_kimligi(p.parent)
 
     aruco = ArucoCfg(
         dict=ar_r["dict"],
@@ -384,8 +411,8 @@ def load_cabin_config(
         mqtt_client_id=mq.get("client_id", varsayilan_client_id),
         mqtt_topic_state=mq["topic_state"],
         mqtt_topic_cmd=mq["topic_cmd"],
-        mqtt_username=mq.get("username"),
-        mqtt_password=mq.get("password"),
+        mqtt_username=mqtt_kullanici,
+        mqtt_password=mqtt_parola,
     )
 
     # ⚠️ D1.E07 (İG-5.80): `.nan` / `.inf` YAML değeri YÜKLEMEDE reddedilir. `float(.nan)` sessizce geçiyordu; B/duty

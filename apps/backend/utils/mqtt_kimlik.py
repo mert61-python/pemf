@@ -38,6 +38,15 @@ logger = logging.getLogger(__name__)
 
 BACKEND_KULLANICI = "pemf_backend"
 ESP_KULLANICI = "pemf_esp"
+#: Y73 (sahip, S-G8): kabin kamerası (CV) MQTT yayıncısı — YALNIZ kendi konularına yazar (bobin control / ack YAZAMAZ).
+CV_KULLANICI = "pemf_cv"
+#: Kabin CV konuları (`ai_hub/*/cabin_config_example.yaml` `output.mqtt`): durum YAYINI + (isteğe bağlı) komut ABONELİĞİ.
+#: ⚠️ Kimlikli broker'da `pemf/coil/cmd`'ye YAZMA yetkisi olan rol YOK (geri besleme kanalı kullanılmıyor); durumu backend
+#: (`pemf/#` okur) görür, ESP göremez (kabin MQTT'si varsayılan KAPALI).
+CV_YAZMA_KONULARI = ("pemf/coil/state",)
+CV_OKUMA_KONULARI = ("pemf/coil/cmd",)
+#: Y73: kabin kimliği kabin YAML'ının İÇİNE değil YANINDAKİ ayrı dosyaya (ESP başlığı gibi; gitignore) yazılır.
+KABIN_KIMLIK_ADI = "cabin_mqtt_kimlik.yaml"
 DEPO_ADI = "mqtt_kimlik.json"
 PASSWD_ADI = "pemf_passwd"
 ACL_ADI = "pemf_acl"
@@ -88,6 +97,8 @@ def kimlikleri_oku() -> dict[str, str] | None:
 
         ham = json.loads(p.read_text(encoding="utf-8"))
         kimlikler = {k: _dec(str(ham[k])) for k in (BACKEND_KULLANICI, ESP_KULLANICI)}
+        if CV_KULLANICI in ham:  # Y73 öncesi depolarda yok (hazırlama ekler; parolalar değişmez)
+            kimlikler[CV_KULLANICI] = _dec(str(ham[CV_KULLANICI]))
         if not all(kimlikler.values()):
             raise ValueError("boş parola")
     except Exception as e:
@@ -172,7 +183,12 @@ def acl_metni() -> str:
     satir += [f"topic write pemf/esp32_{n}/command" for n in ESP_BOBINLERI]
     satir += ["", f"user {ESP_KULLANICI}", "topic read pemf/coil/+/control"]
     satir += [f"topic write pemf/coil/+/{k}" for k in ESP_YAZMA_KONULARI]
-    satir += ["topic write pemf/coil/+/system/#", ""]
+    satir += ["topic write pemf/coil/+/system/#"]
+    # Y73: kabin CV — YALNIZ kendi konuları (bobin control / ack / telemetri YAZAMAZ).
+    satir += ["", f"user {CV_KULLANICI}"]
+    satir += [f"topic write {k}" for k in CV_YAZMA_KONULARI]
+    satir += [f"topic read {k}" for k in CV_OKUMA_KONULARI]
+    satir += [""]
     return "\n".join(satir)
 
 
@@ -205,6 +221,19 @@ def firmware_basligi(kullanici: str, parola: str) -> str:
     )
 
 
+def kabin_kimlik_metni(kullanici: str, parola: str) -> str:
+    """Y73: kabin YAML'ının YANINA yazılan kimlik dosyası (`cabin_config` okur; YAML'daki açık kimlik üstündür)."""
+    for deger in (kullanici, parola):
+        if not deger or any(c in deger for c in "\"\\\n\r:#'"):
+            raise ValueError("kabin kimligi YAML'a guvenle yazilamaz")
+    return (
+        "# PEMF kabin CV MQTT kimligi (A-04 / Y73) - `utils.mqtt_kimlik hazirla --kabin` URETTI.\n"
+        "# ⚠️ SIR ICERIR: git'e GIRMEZ (.gitignore). Kabin MQTT'si YAML'da (output.mqtt.enabled) varsayilan KAPALI.\n"
+        f'username: "{kullanici}"\n'
+        f'password: "{parola}"\n'
+    )
+
+
 def _yaz(yol: Path, metin: str) -> None:
     yol.parent.mkdir(parents=True, exist_ok=True)
     gecici = yol.with_name(yol.name + ".tmp")
@@ -213,41 +242,66 @@ def _yaz(yol: Path, metin: str) -> None:
     os.replace(gecici, yol)
 
 
-def hazirla(broker_dizini: Path | None = None, firmware_dizinleri=(), yenile: bool = False) -> dict:
+def _broker_dosyalarini_yaz(bd: Path, kimlikler: dict[str, str]) -> None:
+    """Depodaki kimliklerden broker dosyaları (passwd + ACL + conf.d parçası) — depoya DOKUNMAZ."""
+    _yaz(bd / PASSWD_ADI, passwd_metni(kimlikler))
+    _yaz(bd / ACL_ADI, acl_metni())
+    _yaz(bd / CONF_DIZINI / CONF_ADI, conf_metni(bd))
+
+
+def hazirla(broker_dizini: Path | None = None, firmware_dizinleri=(), yenile: bool = False, kabin_dizinleri=()) -> dict:
     """Kimlik deposu (yoksa üret; VARSA KORU — yakılmış ESP parolası geçerli kalır) + broker dosyaları + istenen ESP
-    başlıkları. Dönüş: yol/durum raporu — SIR İÇERMEZ."""
+    başlıkları + istenen kabin kimlik dosyaları (Y73). Y73 öncesi depoya (backend + ESP) `pemf_cv` EKLENİR — mevcut
+    parolalar DEĞİŞMEZ. Dönüş: yol/durum raporu — SIR İÇERMEZ."""
     bd = Path(broker_dizini) if broker_dizini else varsayilan_broker_dizini()
     kimlikler = None if yenile else kimlikleri_oku()
     depo_olustu = False
+    from utils.secrets_manager import _enc
+
     if kimlikler is None:
         if _depo_yolu().exists() and not yenile:
             raise RuntimeError(
                 "kimlik deposu VAR ama okunamiyor - yakilmis ESP parolalari bozulmasin diye DURDU "
                 "(bilerek yenilemek: --yenile; ESP'ler yeniden yakilmali)"
             )
-        from utils.secrets_manager import _enc
-
-        kimlikler = {BACKEND_KULLANICI: secrets.token_urlsafe(24), ESP_KULLANICI: secrets.token_urlsafe(24)}
+        kimlikler = {k: secrets.token_urlsafe(24) for k in (BACKEND_KULLANICI, ESP_KULLANICI, CV_KULLANICI)}
         kayit = {k: _enc(v, critical=True) for k, v in kimlikler.items()}
         kayit["surum"] = 1
         _yaz(_depo_yolu(), json.dumps(kayit, ensure_ascii=False, indent=2) + "\n")
         _onbellek.clear()
         depo_olustu = True
-    _yaz(bd / PASSWD_ADI, passwd_metni(kimlikler))
-    _yaz(bd / ACL_ADI, acl_metni())
-    _yaz(bd / CONF_DIZINI / CONF_ADI, conf_metni(bd))
+    elif CV_KULLANICI not in kimlikler:
+        # Y73 yükseltmesi: yalnız yeni anahtar eklenir; mevcut şifreli değerler AYNEN kalır (yeniden şifrelenmez).
+        kayit = json.loads(_depo_yolu().read_text(encoding="utf-8"))
+        kimlikler[CV_KULLANICI] = secrets.token_urlsafe(24)
+        kayit[CV_KULLANICI] = _enc(kimlikler[CV_KULLANICI], critical=True)
+        _yaz(_depo_yolu(), json.dumps(kayit, ensure_ascii=False, indent=2) + "\n")
+        _onbellek.clear()
+    _broker_dosyalarini_yaz(bd, kimlikler)
     basliklar = []
     for fd in firmware_dizinleri:
         hedef = Path(fd) / YEREL_BASLIK_ADI
         _yaz(hedef, firmware_basligi(ESP_KULLANICI, kimlikler[ESP_KULLANICI]))
         basliklar.append(str(hedef))
-    return {"depo": str(_depo_yolu()), "depo_olustu": depo_olustu, "broker_dizini": str(bd), "basliklar": basliklar}
+    kabinler = []
+    for kd in kabin_dizinleri:
+        hedef = Path(kd) / KABIN_KIMLIK_ADI
+        _yaz(hedef, kabin_kimlik_metni(CV_KULLANICI, kimlikler[CV_KULLANICI]))
+        kabinler.append(str(hedef))
+    return {
+        "depo": str(_depo_yolu()),
+        "depo_olustu": depo_olustu,
+        "broker_dizini": str(bd),
+        "basliklar": basliklar,
+        "kabinler": kabinler,
+    }
 
 
 def parcayi_onar(broker_dizini: Path | None = None) -> str:
     """Y71 (sahip, S-G6): kaldır-kur sonrası kimlik deposu VAR ama broker dosyaları (`conf.d` parçası, `pemf_passwd`,
-    `pemf_acl`) EKSİKSE hepsini depodaki AYNI parolalarla yeniden yazar (`hazirla`, yenileme YOK — A-18: rotasyon yok;
-    ESP'ye yakılmış kimlik geçerli kalır). Broker'ı BAŞLATMAZ/yeniden başlatmaz — o `MosquittoSupervisor`'ın işi.
+    `pemf_acl`) EKSİKSE hepsini depodaki AYNI parolalarla yeniden yazar (yenileme YOK — A-18: rotasyon yok; ESP'ye
+    yakılmış kimlik geçerli kalır). Depoya DOKUNMAZ (Y73 öncesi depoya `pemf_cv` eklemek de açık hazırlamanın işi).
+    Broker'ı BAŞLATMAZ/yeniden başlatmaz — o `MosquittoSupervisor`'ın işi.
 
     Dönüş: "hazir" (dosyalar yerinde) · "onarildi" · "hazirlanmamis" (depo yok — bugünkü anonim kip, DOKUNULMAZ) ·
     "okunamadi" (depo var ama okunamıyor — EZİLMEZ) · "yazilamadi" (izin vb.; anonim kalır, günlüğe yazılır)."""
@@ -256,13 +310,14 @@ def parcayi_onar(broker_dizini: Path | None = None) -> str:
         return "hazir"
     if not _depo_yolu().is_file():
         return "hazirlanmamis"
-    if kimlikleri_oku() is None:
+    kimlikler = kimlikleri_oku()
+    if kimlikler is None:
         logger.warning(
             "Y71: MQTT kimlik deposu VAR ama okunamiyor - broker kimlik parcasi YAZILMADI (depo ezilmez): %s", bd
         )
         return "okunamadi"
     try:
-        hazirla(bd)
+        _broker_dosyalarini_yaz(bd, kimlikler)
     except Exception as e:
         logger.warning(
             "Y71: broker kimlik parcasi yeniden yazilamadi (%s) - broker ANONIM kalir: %s", type(e).__name__, bd
@@ -282,6 +337,7 @@ def durum(broker_dizini: Path | None = None) -> dict:
         "kimlik_parcasi": (bd / CONF_DIZINI / CONF_ADI).is_file(),
         "passwd": (bd / PASSWD_ADI).is_file(),
         "acl": (bd / ACL_ADI).is_file(),
+        "kabin_kimligi": CV_KULLANICI in (kimlikleri_oku() or {}),
     }
 
 
@@ -293,6 +349,12 @@ def main(argv: list[str] | None = None) -> int:
     h.add_argument("--broker-dizini", default=None, help="varsayilan: <makine deposu>/mosquitto")
     h.add_argument(
         "--firmware", action="append", default=[], help="MqttKimlikYerel.h yazilacak dizin (tekrarlanabilir)"
+    )
+    h.add_argument(
+        "--kabin",
+        action="append",
+        default=[],
+        help=f"kabin CV kimligi ({KABIN_KIMLIK_ADI}) yazilacak dizin = kabin YAML'inin dizini (tekrarlanabilir; Y73)",
     )
     h.add_argument(
         "--yenile",
@@ -308,7 +370,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{k}: {v}")
         return 0
     try:
-        r = hazirla(a.broker_dizini, a.firmware, a.yenile)
+        r = hazirla(a.broker_dizini, a.firmware, a.yenile, kabin_dizinleri=a.kabin)
     except RuntimeError as e:
         print(f"HATA: {e}")
         return 2
@@ -324,6 +386,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"broker dosyalari: {r['broker_dizini']} ({PASSWD_ADI}, {ACL_ADI}, {CONF_DIZINI}/{CONF_ADI})")
     for b in r["basliklar"]:
         print(f"ESP basligi (SIR ICERIR - derleyip silin): {b}")
+    for k in r["kabinler"]:
+        print(f"Kabin CV kimligi (SIR ICERIR - git'e girmez; kabin MQTT'si YAML'da varsayilan KAPALI): {k}")
     print("SONRAKI ADIM (sira onemli): 1) ESP'leri bu baslikla derleyip yakin (bobinler durmusken);")
     # ⚠️ 1-G inceleme G-3.1: sahada (Y36) broker backend'in KENDİ sürecidir (launcher → PEMF_Backend.exe →
     # mosquitto.exe); oradaki Windows `mosquitto` servisi ESKİ kurulumun takılı servisidir, backend'in broker'ı DEĞİL.

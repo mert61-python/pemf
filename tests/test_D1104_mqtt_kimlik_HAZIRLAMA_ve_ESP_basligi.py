@@ -61,7 +61,8 @@ def test_KRITIK_hazirla_IDEMPOTENT_yakilmis_parola_DEGISMEZ(mk, tmp_path):
         "ikinci hazırlama parolaları DEĞİŞTİRDİ"
     )
     satirlar = dict(s.split(":", 1) for s in (tmp_path / "broker" / mk.PASSWD_ADI).read_text().split())
-    assert set(satirlar) == {mk.BACKEND_KULLANICI, mk.ESP_KULLANICI}
+    # Y73 (1-H, sahip): kabin CV kimliği (pemf_cv) de üretilir — tests/test_kabin_CV_mqtt_kimligi_pemf_cv_Y73.py.
+    assert set(satirlar) == {mk.BACKEND_KULLANICI, mk.ESP_KULLANICI, mk.CV_KULLANICI}
     assert all(mk.ozet7_dogrula(k1[k], satirlar[k]) for k in satirlar), "passwd depodaki parolalarla doğrulanmıyor"
     mk.hazirla(tmp_path / "broker", yenile=True)
     assert mk.kimlikleri_oku() != k1, "--yenile parolaları yenilemedi"
@@ -161,9 +162,12 @@ def _eslesir(desen: str, konu: str) -> bool:
 
 def test_KRITIK_yetki_backend_ack_YAZAMAZ_ESP_control_YAZAMAZ_anonim_YOK(mk, tmp_path):
     y = _yetki(mk)
-    assert set(y) == {mk.BACKEND_KULLANICI, mk.ESP_KULLANICI}
+    # Y73 (1-H, sahip): kabin CV kimliği (pemf_cv) — yalnız kendi konusuna yazar; control / ack YAZAMAZ.
+    assert set(y) == {mk.BACKEND_KULLANICI, mk.ESP_KULLANICI, mk.CV_KULLANICI}
     assert not any(_eslesir(d, "pemf/coil/8/ack") for d in y[mk.BACKEND_KULLANICI]["write"]), "backend ack YAZABİLİR"
     assert not any(_eslesir(d, "pemf/coil/8/control") for d in y[mk.ESP_KULLANICI]["write"]), "ESP control YAZABİLİR"
+    for konu in ("pemf/coil/8/control", "pemf/coil/8/ack", "pemf/coil/8/sensors"):
+        assert not any(_eslesir(d, konu) for d in y[mk.CV_KULLANICI]["write"]), f"kabin CV {konu} YAZABİLİR"
     conf = mk.conf_metni(tmp_path)
     assert re.search(r"(?m)^allow_anonymous false$", conf) and "password_file" in conf and "acl_file" in conf
 

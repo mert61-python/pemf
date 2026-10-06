@@ -321,3 +321,5 @@ firmware/stm32_pemf_unipolar/RemoteSystemsTempFiles/
 # uretir; ASLA commit edilmez.
 firmware/*/MqttKimlikYerel.h
 MqttKimlikYerel.h
+# Y73: kabin CV MQTT kimligi (SIR) - `PEMF_Backend.exe --mqtt-kimlik hazirla --kabin <kabin YAML dizini>` uretir.
+cabin_mqtt_kimlik.yaml

@@ -78,12 +78,12 @@ def build_payload(coil_id: int, seq: int, now_ts: float) -> str:
     return json.dumps(payload, ensure_ascii=True)
 
 
-def tuketim_sondasi(host: str, port: int, konu: str) -> str:
+def tuketim_sondasi(host: str, port: int, konu: str, kullanici: str | None = None, parola: str | None = None) -> str:
     """Konuya ABONE (tüketici) var mı? → "VAR" / "YOK" / "OLCULEMEDI: <sebep>".
 
     Ayrı bir MQTT v5 istemcisi TEK bir QoS 1 sonda yayınlar ve PUBACK reason code'unu okur
     (0 = eşleşen abone var, 16 = yok). Cevap gelmezse ya da başka bir kod gelirse sonuç
-    ÖLÇÜLEMEDİ'dir — "var" SAYILMAZ.
+    ÖLÇÜLEMEDİ'dir — "var" SAYILMAZ. Y73: kimlikli broker'da (A-04) `kullanici`/`parola` ile bağlanır.
     """
     sonuc: dict = {}
     olay = threading.Event()
@@ -94,6 +94,8 @@ def tuketim_sondasi(host: str, port: int, konu: str) -> str:
 
     try:
         sonda = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2, protocol=mqtt.MQTTv5)
+        if kullanici:
+            sonda.username_pw_set(kullanici, parola)
         sonda.on_publish = _on_publish
         sonda.connect(host, port, keepalive=30)
         sonda.loop_start()
@@ -158,6 +160,10 @@ def main() -> int:
         action="store_true",
         help="urunun CANLI 'pemf/' konularina yayini ACIKCA onayla (ESP acik makinede canli durumu ezer)",
     )
+    # Y73 (sahip, S-G8): kimlikli yerel broker (A-04) — yayin yetkisi olan bir rolun kimligi (or. ESP: pemf_esp; parola
+    # ESP basligindan). Verilmezse anonim baglanir (hazirlanmamis broker).
+    parser.add_argument("--kullanici", default=None, help="MQTT kullanici adi (kimlikli broker)")
+    parser.add_argument("--parola", default=None, help="MQTT parolasi (kimlikli broker)")
     args, unknown_args = parser.parse_known_args()
 
     if canli_urun_konusu_mu(args.topic_prefix) and not args.canli_onay:
@@ -186,7 +192,9 @@ def main() -> int:
     # ya da kalibrasyon konusuyla da eşleşen KÖK düzeyinde joker (`#`, `+/#`) bir abone ürün konusunda SAHTE 'VAR' üretir. Kimsenin abone
     # olmadığı rastgele bir konu (ürün ad alanı DIŞI) önce sondalanır: orada 'YOK' gelmiyorsa tüketim
     # ÖLÇÜLEMEZ. ⚠️ Ad alanı jokeri (`pemf/#`) kalibrasyon konusunu KAPSAMAZ (modül başlığı).
-    kalibrasyon = tuketim_sondasi(args.host, args.port, f"soak-kalibrasyon/{uuid.uuid4().hex}/0/sensors")
+    kalibrasyon = tuketim_sondasi(
+        args.host, args.port, f"soak-kalibrasyon/{uuid.uuid4().hex}/0/sensors", args.kullanici, args.parola
+    )
     print(f"Tuketim sondasi kalibrasyonu (rastgele konu): {kalibrasyon}", flush=True)
     if kalibrasyon != "YOK":
         print(
@@ -197,7 +205,7 @@ def main() -> int:
         return 3
 
     # D0Ö.17 ek: TÜKETİCİ yoksa yük boşluğa gider — soak hiçbir şey ölçmez; başlamadan söyle.
-    bastaki = tuketim_sondasi(args.host, args.port, sonda_konusu)
+    bastaki = tuketim_sondasi(args.host, args.port, sonda_konusu, args.kullanici, args.parola)
     print(f"Tuketim sondasi (basta, {sonda_konusu}): {bastaki}", flush=True)
     if bastaki != "VAR":
         print(
@@ -212,6 +220,8 @@ def main() -> int:
     )
 
     client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+    if args.kullanici:
+        client.username_pw_set(args.kullanici, args.parola)
     client.connect(args.host, args.port, keepalive=30)
     client.loop_start()
 
@@ -277,7 +287,7 @@ def main() -> int:
     total_sec = max(0.001, time.perf_counter() - start)
     msg_rate = published / total_sec
     print(f"Published={published} messages in {total_sec:.2f}s ({msg_rate:.1f} msg/s), failed={failed}")
-    sondaki = tuketim_sondasi(args.host, args.port, sonda_konusu)
+    sondaki = tuketim_sondasi(args.host, args.port, sonda_konusu, args.kullanici, args.parola)
     print(f"Tuketim sondasi (sonda): {sondaki}", flush=True)
     kod = 0
     if failed or not published:
