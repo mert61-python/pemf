@@ -181,6 +181,35 @@ def test_KARSIT_istemciGeriAlinmali_yalniz_KESIN_uyumsuz_ve_STM_bagliyken(fm, mo
     assert d.get("istemciGeriAlinmali") is False, f"{durum}: launcher yanlış yere geri alma sinyali alır: {d}"
 
 
+def test_KARSIT_H101_ILERI_gidilebiliyorsa_istemciGeriAlinmali_FALSE(fm, monkeypatch, tmp_path):
+    """H-10.1 (1-H incelemesi): plan sırası "İLERİ GİT (firmware) geri almaya tercih edilir" — kesin uyumsuz + STM bağlı
+    olsa da yeni firmware client'la uyumluysa (FIRMWARE_GUNCELLE, bayrak 1) launcher'a geri alma sinyali VERİLMEZ. Sinyal
+    plandan bağımsız (`uyum is False and stm_bagli`) kurulunca 30 eski test yeşil kalıyordu: launcher (Y16) firmware
+    güncellenebilecekken client'ı geri alırdı."""
+    kurallar = [{"clientMin": "1.9.50", "clientMax": "", "firmwareMin": "2.3", "firmwareMax": ""}]
+    monkeypatch.setattr(fm, "manifest_oku", lambda **_k: _manifest(fw_surum="2.3", kurallar=kurallar))
+    sahte = tmp_path / "fw.bin"
+    sahte.write_bytes(b"X")
+    monkeypatch.setattr(fm, "firmware_indir", lambda *a, **k: (sahte, ""))
+    import utils.stm_yakma as sy
+
+    monkeypatch.setattr(
+        sy,
+        "yakma_akisi",
+        lambda *a, **k: sy.Sonuc(
+            sy.TAMAM,
+            "ok",
+            banner="-> STM_READY: DDS v2.3 (7-ch KARMA uni=0x60 + HW_SYNC@PB1) Waiting for commands...",
+            adimlar=["sahte"],
+        ),
+    )
+    d = fm.acilis_denetimi(firmware_surum="2.2", stm_bagli=True, uygula=True)
+    assert d["eylem"] == su.FIRMWARE_GUNCELLE and d.get("uyum") is False, f"aparat: plan {d}"
+    assert d.get("istemciGeriAlinmali") is False, (
+        f"ileri gidilebilir (firmware güncelleniyor) ama launcher'a client GERİ ALMA sinyali verildi: {d}"
+    )
+
+
 def test_KRITIK_yakma_basarisizsa_KOD_ile_yazilir(fm, monkeypatch, tmp_path):
     sahte = tmp_path / "fw.bin"
     sahte.write_bytes(b"X")
