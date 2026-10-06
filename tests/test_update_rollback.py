@@ -255,7 +255,11 @@ def test_bayat_guncelleme_guardi_SURESI_DOLAR():
 
 
 def test_zaman_damgasi_yoksa_eski_davranis_korunur():
-    """Damgasız (eski akıştan kalan) bayrak sessizce temizlenmemeli — geriye uyum."""
+    """Damgasız (eski akıştan kalan) bayrak sessizce temizlenmemeli — geriye uyum.
+
+    D1.118 · B-4.4 gözden geçirmesi: `apply_update` VE artık `rollback` de bayrağı damgalar — damgasız bayrak üreten yol
+    kalmadı. Bu test, ileride damgalamayı unutan bir yolun güvenli tarafta (guard AÇIK kalır) kalmasını kilitler;
+    rollback'in damgaladığı: tests/test_rollback_guard_SURESI_DOLAR_D1118.py."""
     um = _guard_ayarla(True, None)
     try:
         assert um.is_update_in_progress() is True

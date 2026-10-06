@@ -729,6 +729,10 @@ def rollback() -> dict:
         if _applying:
             return {"ok": False, "error": "Bir güncelleme/rollback zaten sürüyor."}
         _applying = True
+        # ⚠️ D1.118 (B-4.4): apply_update gibi DAMGALA — installer başladıktan sonra guard açık kalır (B-10.151) ama
+        # damgasız bayrak `is_update_in_progress()`'in süre dolumuna HİÇ girmiyordu: başarısız geri alma kurulumundan
+        # sonra cihaz seans/AI Pro başlatmayı SÜRESİZ reddediyordu (apply yolunda 2026-08-04'te kapatılan arızanın kardeşi).
+        _applying_since = time.monotonic()
     # DENETIM 2026-08-04 (P2): asagidaki `finally` _applying'i KOSULSUZ False yapiyordu — oysa
     # apply_update ayni zincirde (satir ~310) bunu bilerek ACIK BIRAKIYOR. Tehlikeli pencere
     # installer BASLATILDIKTAN sonra baslar: installer servisi durdurup EXE'yi degistirecektir.
