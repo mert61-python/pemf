@@ -192,6 +192,7 @@ def acilis_denetimi(
     firmware_surum: str,
     stm_bagli: bool,
     uygula: bool = True,
+    banner_kaynagi=None,
 ) -> dict:
     """Uyumu ölç, plan yap, gerekirse uygula. Her yol `durum()`a yazar.
 
@@ -244,7 +245,7 @@ def acilis_denetimi(
         return durum()
 
     if plan.eylem == su.FIRMWARE_GUNCELLE:
-        return _firmware_uygula(girdi, plan)
+        return _firmware_uygula(girdi, plan, banner_kaynagi)
 
     if plan.eylem == su.CLIENT_GERI_AL:
         # ⚠️ Client'ı geri almak `update_manager.rollback()`un işi — burada YENİDEN YAZILMAZ.
@@ -258,18 +259,26 @@ def acilis_denetimi(
     return durum()
 
 
-def _firmware_uygula(girdi: dict, plan: su.Plan) -> dict:
+def _firmware_uygula(girdi: dict, plan: su.Plan, banner_kaynagi=None) -> dict:
     yol, hata = firmware_indir(str(girdi.get("url", "")), str(girdi.get("sha256", "")))
     if yol is None:
         logger.warning("firmware indirilemedi: %s", hata)
         return _durum_yaz(uygulandi=False, hata=hata)
 
+    from utils import firmware_yakma_penceresi as pencere
     from utils.stm_yakma import TAMAM, yakma_akisi
 
     # D1.108 + D1.111: ön kontrol SÜREÇ İÇİ — HTTP değil (bkz. `_surec_ici_guvenlik_kontrolu`).
-    sonuc = yakma_akisi(
-        yol, beklenen_sha256=str(girdi.get("sha256", "")), guvenlik_kontrolu=_surec_ici_guvenlik_kontrolu
-    )
+    # D1.114 (B-4.6): port BIRAKILMAZ — yakma sonrası kimlik çekirdeğin KENDİ okuyucusundan (`banner_kaynagi`). Pencere ön
+    # kontrolden ÖNCE açılır: içinde bobin başlatma reddedilir (HC kapısı durum kilidi altında — denetle-sonra-yap aralığı
+    # kapanır), seans/AI Pro 409, ACİL DURDUR kapılanmaz ama teyidi dürüst (`utils.firmware_yakma_penceresi`).
+    with pencere.ac():
+        sonuc = yakma_akisi(
+            yol,
+            beklenen_sha256=str(girdi.get("sha256", "")),
+            guvenlik_kontrolu=_surec_ici_guvenlik_kontrolu,
+            banner_kaynagi=banner_kaynagi,
+        )
     for adim in sonuc.adimlar:
         logger.info("firmware: %s", adim)
     try:

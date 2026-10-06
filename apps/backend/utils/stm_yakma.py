@@ -64,6 +64,21 @@ YEDEK_ALINAMADI = 6
 YAKMA_HATASI = 7
 UYUMSUZ_GERI_DONULDU = 8
 BANNER_TANINMADI = 9
+#: D1.114 (B-4.6): yakma sonrası banner için seri port AÇILAMADI (başka süreç — çoğunlukla backend — tutuyor). "Hiç
+#: görülmedi"den (BANNER_TANINMADI) AYRI: destek "karta RESET atın" diye yanlış yöne gitmesin; uyum DOĞRULANAMADI.
+PORT_MESGUL = 10
+#: `banner_dogrula` sebebinin öneki — tüm portlar açılamadıysa (yakma akışı bunu PORT_MESGUL'a çevirir).
+PORT_ACILAMADI_ONEKI = "SERİ PORT AÇILAMADI"
+
+
+@dataclass(frozen=True)
+class BannerKaynagi:
+    """D1.114 (B-4.6) — yakma SONRASI kart kimliğini portu BIRAKMADAN veren kaynak: backend'in KENDİ seri okuyucusu
+    (`HeadlessCore.stm_banner_isareti` / `stm_banner_bekle`). `isaret()` yakmadan ÖNCE alınır; `bekle(isaret, sure)` o
+    işaretten SONRA okunan ilk `STM_READY` satırını (yoksa None) döner. Verilmezse (CLI) port açılıp dinlenir."""
+
+    isaret: Callable[[], int]
+    bekle: Callable[[int, float], str | None]
 
 
 @dataclass
@@ -230,21 +245,46 @@ def yak(cli: Path, ikili: Path) -> tuple[bool, str]:
 
 
 def banner_dogrula(port: str | None = None) -> tuple[bool | None, str, str]:
-    """(uyumlu, sebep, ham_banner). Kart KENDİ kimliğini söylemeden yakma başarılı sayılmaz."""
+    """(uyumlu, sebep, ham_banner) — portu KENDİSİ açıp dinler (CLI yolu). Kart KENDİ kimliğini söylemeden yakma başarılı
+    sayılmaz.
+
+    ⚠️ D1.114 (B-4.6): açılamayan port eskiden `except Exception: continue` ile YUTULUYOR, sonuç "hiç görülmedi" oluyordu
+    (backend portu tutarken her seferinde). Artık TÜM adaylar açılamadıysa sebep `PORT_ACILAMADI_ONEKI` ile başlar
+    (`banner_dinle` notu: "port meşgul" ile "hiçbir şey duyulmadı" farklı arızalardır)."""
     portlar = port_adaylari(port)
     if not portlar:
         return None, "seri port bulunamadı — banner okunamadı", ""
+    acilamayan: list[str] = []
     for p in portlar:
         try:
             _kanal, satirlar = banner_dinle(p, BANNER_SURESI)
-        except Exception:  # noqa: BLE001 — port meşgul/yok: sonraki adaya geç
+        except Exception as e:  # noqa: BLE001 — port meşgul/yok: SAYILIR, sonraki adaya geç
+            acilamayan.append(f"{p}: {type(e).__name__}: {str(e)[:120]}")
             continue
         for satir in satirlar:
             if "STM_READY" not in satir:
                 continue
             uyumlu, sebep = uyum_denetle(banner_ayristir(satir), STM_PAKET_BOBIN_SAYISI)
             return uyumlu, sebep or "banner uyumlu", satir
+    if len(acilamayan) == len(portlar):
+        return (
+            None,
+            (
+                f"{PORT_ACILAMADI_ONEKI} — kart kimliği okunamadı, uyum DOĞRULANAMADI. Port başka bir süreçte açık (backend "
+                f"çalışıyorsa portu o tutar: kapatıp yeniden deneyin). Ayrıntı: {'; '.join(acilamayan)}"
+            ),
+            "",
+        )
     return None, "STM_READY satırı hiç görülmedi (karta RESET atmayı deneyin)", ""
+
+
+def _banner_kaynaktan(kaynak: BannerKaynagi, isaret: int, sure: float | None = None) -> tuple[bool | None, str, str]:
+    """(uyumlu, sebep, ham) — D1.114: banner, portu tutan çekirdeğin okuyucusundan (`isaret`ten SONRA gelen ilk satır)."""
+    ham = kaynak.bekle(isaret, BANNER_SURESI if sure is None else sure)
+    if not ham:
+        return None, "yakma sonrası STM_READY satırı süresinde görülmedi (backend seri okuyucusu)", ""
+    uyumlu, sebep = uyum_denetle(banner_ayristir(ham), STM_PAKET_BOBIN_SAYISI)
+    return uyumlu, sebep or "banner uyumlu", ham
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -255,13 +295,16 @@ def yakma_akisi(
     port: str | None = None,
     backend: str = "http://127.0.0.1:8000",
     guvenlik_kontrolu: Callable[[], tuple[bool, str]] | None = None,
+    banner_kaynagi: BannerKaynagi | None = None,
     yedek_dizin: Path | None = None,
     kuru: bool = False,
 ) -> Sonuc:
     """Tam akış. Yan etkiler YALNIZ burada; karar mantığı yukarıdaki parçalarda.
 
     `guvenlik_kontrolu`: verilirse seans/bobin ön kontrolü BUNUNLA yapılır (backend'in kendi yakması — süreç içi durum,
-    D1.108 + D1.111); verilmezse `backend` adresine HTTP ön kontrolü (CLI). İstisna fırlatırsa yakılmaz (fail-closed)."""
+    D1.108 + D1.111); verilmezse `backend` adresine HTTP ön kontrolü (CLI). İstisna fırlatırsa yakılmaz (fail-closed).
+    `banner_kaynagi`: verilirse yakma sonrası kimlik portu BIRAKMADAN o kaynaktan okunur (backend — D1.114); verilmezse
+    port açılıp dinlenir (CLI; port açılamazsa PORT_MESGUL)."""
     adimlar: list[str] = []
     ikili = Path(ikili).resolve()
     if not ikili.is_file():
@@ -303,14 +346,23 @@ def yakma_akisi(
             adimlar=adimlar,
         )
 
+    # D1.114: işaret yakmadan ÖNCE — `-rst` sonrası banner `yak` dönmeden gelebilir.
+    isaret = banner_kaynagi.isaret() if banner_kaynagi is not None else 0
     tamam, cikti = yak(cli, ikili)
     adimlar.append("yakma: " + ("yazıldı + doğrulandı" if tamam else "YAKICI HATA"))
     if not tamam:
         return Sonuc(YAKMA_HATASI, cikti, sha256=ozet, yedek=str(yedek), adimlar=adimlar)
 
-    time.sleep(2.0)  # kart açılış banner'ını bassın
-    uyumlu, sebep, ham = banner_dogrula(port)
+    if banner_kaynagi is not None:
+        uyumlu, sebep, ham = _banner_kaynaktan(banner_kaynagi, isaret)
+    else:
+        time.sleep(2.0)  # kart açılış banner'ını bassın (CLI portu kendisi açar)
+        uyumlu, sebep, ham = banner_dogrula(port)
     adimlar.append(f"banner: {ham or '(okunamadı)'} → uyum={uyumlu} ({sebep})")
+
+    if uyumlu is None and sebep.startswith(PORT_ACILAMADI_ONEKI):
+        # D1.114: "hiç görülmedi"den AYRI — uyum DOĞRULANAMADI, geri dönüş sebebi değil (üç-durumlu kural).
+        return Sonuc(PORT_MESGUL, sebep, banner=ham, sha256=ozet, yedek=str(yedek), adimlar=adimlar)
 
     if uyumlu is False:
         geri, _ = yak(cli, yedek)

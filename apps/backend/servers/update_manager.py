@@ -492,8 +492,18 @@ def is_update_in_progress() -> bool:
 
     DENETİM 2026-08-04 (P2): bayrak installer başlatıldıktan sonra hiç kapanmıyordu → kurulum
     tamamlanmazsa cihaz KALICI olarak seans açamaz hale geliyordu. Bayat bayrak burada süresi
-    dolunca temizlenir (bkz. _APPLYING_GRACE_S)."""
+    dolunca temizlenir (bkz. _APPLYING_GRACE_S).
+
+    ⚠️ D1.114: oto-firmware YAKMA PENCERESİ de "güncelleme sürüyor"dur (MCU yeniden programlanıyor; seans/AI Pro 409) —
+    bayrak `utils.firmware_yakma_penceresi`'nde, yakma bitince (istisna dahil) kendiliğinden kapanır."""
     global _applying, _applying_since
+    try:
+        from utils import firmware_yakma_penceresi as _pencere
+
+        if _pencere.acik_mi():
+            return True
+    except Exception:
+        logger.debug("firmware yakma penceresi okunamadi", exc_info=True)
     if not _applying:
         return False
     if _applying_since is not None and (time.monotonic() - _applying_since) > _APPLYING_GRACE_S:

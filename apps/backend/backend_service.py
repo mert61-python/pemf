@@ -809,10 +809,17 @@ def _donanim_guncellemesi_safe(core, logger: logging.Logger) -> None:
         from servers import firmware_manager as fm
 
         kimlik = getattr(core, "stm_kimlik", None)
+        # D1.114 (B-4.6): yakma sonrası kart kimliği portu BIRAKMADAN çekirdeğin KENDİ okuyucusundan.
+        banner_kaynagi = None
+        if callable(getattr(core, "stm_banner_isareti", None)) and callable(getattr(core, "stm_banner_bekle", None)):
+            from utils.stm_yakma import BannerKaynagi
+
+            banner_kaynagi = BannerKaynagi(isaret=core.stm_banner_isareti, bekle=core.stm_banner_bekle)
         durum = fm.acilis_denetimi(
             firmware_surum=getattr(kimlik, "surum", "") or "",
             stm_bagli=bool(getattr(core, "stm_is_connected", False)),
             uygula=os.environ.get("PEMF_FW_AUTO_UPDATE", "0").strip() == "1",
+            banner_kaynagi=banner_kaynagi,
         )
         logger.info("Donanım güncellemesi: %s — %s", durum.get("eylem"), durum.get("gerekce"))
     except Exception as e:  # noqa: BLE001 — güncelleme bir KOLAYLIK, servisi ASLA düşürmez

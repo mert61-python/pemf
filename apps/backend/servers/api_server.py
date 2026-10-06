@@ -6443,6 +6443,20 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     # (emergencyStop.ts) → gönderim AZALMAZ (Ö.4-Y8). ESP açıkken başarısız yayın teyidi düşürür (eskisi gibi).
     _esp_ok = bool(mqtt_results) and all(r.get("mqtt") in ("success", "devre_disi") for r in mqtt_results)
     stm_stopped = _stm_stop_yazildi_mi(stm_stopped, _stm_isaret, _stm_stop_sirasi)  # D1.55: kuyruk değil PORT
+    # ⚠️ D1.114 (B-4.6): oto-firmware YAKMA PENCERESİNDE MCU yeniden programlanıyor — port backend'de AÇIK tutulduğu için
+    # STOP baytı ST-Link VCP'ye YAZILIR ama kart işlemez; "porta yazıldı" teyit SAYILMAZ. Yalnız RAPOR: STOP yukarıda
+    # yine verildi (Ö.4-Y8 — kapılanmaz, azaltılmaz); yakma yalnız seans/bobin yokken başlar, pencerede başlatma reddedilir.
+    try:
+        from utils import firmware_yakma_penceresi as _fw_pencere
+
+        _fw_yakiliyor = _fw_pencere.acik_mi()
+    except Exception:
+        _fw_yakiliyor = False
+    if _fw_yakiliyor and stm_stopped:
+        logging.getLogger(__name__).warning(
+            "E-stop: firmware YAKILIYOR — STOP verildi ama kart işlemiyor olabilir; STM teyidi YOK sayıldı"
+        )
+        stm_stopped = False
     _stm_ok = stm_stopped or state.hardware is None  # STM yoksa STM-basarisizligi sayma
     _status = "success" if (_stm_ok and _esp_ok) else ("error" if (not _stm_ok and not _esp_ok) else "partial")
     # D1.E04 · İG-6.7: teyit durumu `running:false` sıfırlamasından AYRI yayınlanır (istemci teyitsizken durdurmayı tutar).
@@ -6463,6 +6477,8 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
         # Y59: mandal dosyası yazılamıyorsa (SON BİLİNEN durum — disk yazımı BEKLENMEZ, Y46) yeniden başlatmada ne olacağı.
         # Uç auth-muaf → dosya YOLU yok (yol kimlikli bildirimde).
         "mandalDosyasi": estop_mandali.yazim_durumu(),
+        # D1.114 (yalnız-ek): E-stop anında STM'e firmware yakılıyordu — STM teyidi neden yok, operatör/destek görsün.
+        "firmwareYakiliyor": bool(_fw_yakiliyor),
     }
 
 

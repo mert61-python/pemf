@@ -545,6 +545,10 @@ class HeadlessCore:
             self.stm_kimlik = kimlik
             self.stm_uyumlu = uyumlu
             self.stm_uyumsuzluk_sebebi = sebep
+            # D1.114 (B-4.6): oto-firmware yakmasından SONRA kart kimliği portu BIRAKMADAN bu okuyucudan alınır
+            # (`stm_banner_isareti` / `stm_banner_bekle`) — sayaç + son satır, kilit altında.
+            self._stm_banner_sayaci = int(getattr(self, "_stm_banner_sayaci", 0)) + 1
+            self._stm_son_banner = kimlik.ham if kimlik else banner.strip()
         if uyumlu is False:
             # ⚠️ `error`: bu, operatorun SEANS BASLATAMAYACAGI anlamina gelir; `warning`
             # destek log'unda kaybolurdu.
@@ -564,6 +568,26 @@ class HeadlessCore:
                 {"uyumlu": uyumlu, "sebep": sebep, "banner": (kimlik.ham if kimlik else banner.strip())},
                 priority=EventPriority.HIGH,
             )
+
+    def stm_banner_isareti(self) -> int:
+        """D1.114: şimdiye dek okuyucunun gördüğü `STM_READY` satırı sayısı — yakmadan ÖNCE alınır."""
+        with self._stm_state_lock:
+            return int(getattr(self, "_stm_banner_sayaci", 0))
+
+    def stm_banner_bekle(self, isaret: int, sure: float) -> str | None:
+        """D1.114 (B-4.6): `isaret`ten SONRA okunan ilk `STM_READY` satırını `sure` sn bekler (yoksa None).
+
+        ⚠️ NEDEN: oto-firmware yakması sırasında seri port bu çekirdekte AÇIK kalır (ACİL DURDUR'un STM yolu kopmaz);
+        `stm_yakma.banner_dogrula` portu ikinci kez açamaz ("erişim reddedildi") ve sonuç "hiç görülmedi" oluyordu —
+        uyumsuz firmware'de otomatik geri dönüş hiç tetiklenemiyordu. Kart `-rst` ile açılınca banner'ı bu okuyucu görür."""
+        son = time.monotonic() + max(0.0, float(sure))
+        while True:
+            with self._stm_state_lock:
+                if int(getattr(self, "_stm_banner_sayaci", 0)) > int(isaret):
+                    return getattr(self, "_stm_son_banner", None) or ""
+            if time.monotonic() >= son:
+                return None
+            time.sleep(0.05)
 
     def _stm_kimligi_okunamadi(self) -> None:
         """D1.103 · B-1.21 — el sıkışma `STM_READY`siz tamamlandı: kart RESETLENMEDEN bağlandı (firmware banner'ı yalnız

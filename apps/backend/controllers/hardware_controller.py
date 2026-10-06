@@ -7,7 +7,7 @@ import threading
 import time
 import zlib
 
-from utils import estop_mandali
+from utils import estop_mandali, firmware_yakma_penceresi
 from utils.dongu_guvenligi import dongu_hatasini_bildir
 from utils.stm32_protocol_limits import (
     DURATION_MAX_MINUTES,
@@ -293,7 +293,12 @@ class HardwareController:
           2. D1.52 (B-1.4): firmware KESİN uyumsuz (`core.stm_uyumlu is False`; `None` = banner tanınmadı,
              ENGELLEMEZ). Eskiden yalnız `/api/session/start` bakıyordu; tekil/batch/`hardware/command`/AI (Auto)
              200 "success" dönüp koşu kaydı açıyordu — kart paketi reddederken.
-          3. D1.52: kart komutları SİSTEMATİK reddediyor (`stm_komutlari_reddediyor`, NACK kapısı)."""
+          3. D1.52: kart komutları SİSTEMATİK reddediyor (`stm_komutlari_reddediyor`, NACK kapısı).
+          4. D1.114: oto-firmware YAKMA PENCERESİ açık (MCU yeniden programlanıyor) — erken red; asıl kapı durum kilidi
+             ALTINDA (`update_coil` / `start_all_coils`), yakma ön kontrolüyle aynı kritik bölge."""
+        _yakma = firmware_yakma_penceresi.baslatma_engeli()
+        if _yakma:
+            return _yakma
         try:
             from servers.live_state import stm_komutlari_reddediyor, stm_surus_hazir
         except Exception:
@@ -449,9 +454,13 @@ class HardwareController:
                 # SONRA gider) ya da sonra denetleriz (mandal/bayat nesil → red). STOP bu kapıdan geçmez (Ö.4-Y8).
                 # ⚠️ 1-C inceleme i7-F-1: AI Pro hedef GÖZLEMİ kayıp STOP'undan eskiyse (bağlamdaki damga) aynı kritik
                 # bölgede red — kayıp STOP'u ya bu yazımdan SONRA gider ya da yazım reddedilir.
+                # ⚠️ D1.114: oto-firmware YAKMA PENCERESİ de AYNI kritik bölgede — yakma ön kontrolü pencereyi açtıktan SONRA
+                # `calisan_bobin_durumu()`'nu bu kilitle okur: ya bu START önce yazılır (kontrol bobini görür, YAKMAZ) ya da
+                # pencere açıkken reddedilir. STOP bu kapıdan geçmez (Ö.4-Y8).
                 _engel = (
                     estop_mandali.baslatma_engeli(nesil if nesil is not None else estop_mandali.baglam_nesli())
                     or estop_mandali.gozlem_engeli()
+                    or firmware_yakma_penceresi.baslatma_engeli()
                 )
                 if _engel:
                     self.logger.warning("Bobin %s BAŞLATILMADI: %s", coil_id, _engel)
@@ -548,7 +557,10 @@ class HardwareController:
         with self._state_lock:
             # D1.81 (B-5.3 · Y4): mandal + sürüş nesli DURUM KİLİDİ ALTINDA — gerekçe `update_coil`'de (AI (Auto) bu yolu kullanır).
             # (i7-F-1 hedef gözlemi damgası burada YOK: AI Pro bobinleri tek tek `update_coil` ile sürer.)
-            _engel = estop_mandali.baslatma_engeli(nesil if nesil is not None else estop_mandali.baglam_nesli())
+            _engel = (
+                estop_mandali.baslatma_engeli(nesil if nesil is not None else estop_mandali.baglam_nesli())
+                or firmware_yakma_penceresi.baslatma_engeli()
+            )  # D1.114 — gerekçe update_coil'de
             if _engel:
                 self.logger.warning("TÜM bobinler BAŞLATILMADI: %s", _engel)
                 return False
