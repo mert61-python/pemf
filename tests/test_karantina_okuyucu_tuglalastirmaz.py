@@ -54,8 +54,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from database import sqlcipher_util as su  # noqa: E402
 
-sqlcipher = su.import_sqlcipher()
-pytestmark = pytest.mark.skipif(sqlcipher is None, reason="sqlcipher3 binding yok")
+# ⚠️ D2.07 (B-3.47 · A-46, 2026-10-06): burada modül düzeyinde
+# `pytestmark = pytest.mark.skipif(import_sqlcipher() is None, reason="sqlcipher3 binding yok")` vardı → sqlcipher3'süz
+# ortamda (Windows CI) dosyanın TAMAMI atlanıyordu; sqlcipher GEREKTİRMEYEN bütçe/silme kapıları da dahil. Ölçüldü:
+# `_kilit_direncli_tasi` varsayılanı `deneme=1` yapılınca sqlcipher3 yokken dosya YEŞİL (tamamı atlandı). Karantina
+# dosya İÇERİĞİNE bakmaz — yalnız düz-metin SQLite başlığına (`duz_metin_sqlite_mi`); şifreli dosya dışarıdan
+# başlıksız bayttır. Bu yüzden "şifreli DB" artık başlıksız baytla üretilir ve dosya her ortamda koşar.
 
 #: Okuyucunun tutamacı bırakması için geçen süre. ESKİ bütçenin (0,75 sn) ÜSTÜNDE, yenisinin
 #: (6 sn) ALTINDA seçildi — böylece bu test eski koda karşı KIRMIZI, yeniye karşı YEŞİL.
@@ -63,12 +67,13 @@ OKUYUCU_SURESI_S = 1.5
 
 
 def _sifreli_db_yaz(yol: Path) -> None:
-    c = sqlcipher.connect(str(yol))
-    c.execute("PRAGMA key='ESKI-ANAHTAR'")
-    c.execute("CREATE TABLE t (v TEXT)")
-    c.execute("INSERT INTO t VALUES ('eski-seans')")
-    c.commit()
-    c.close()
+    """SQLCipher dosyasının DIŞARIDAN görünüşü: SQLite başlığı TAŞIMAYAN sabit baytlar (sqlcipher3 GEREKTİRMEZ).
+
+    `karantinaya_al` içeriği açmaz; yalnız `duz_metin_sqlite_mi` ile başlığa bakar (başlıklı dosya karantinaya
+    ALINMAZ — sahip kararı 2026-09-20). Gerçek SQLCipher dosyası da başlıksızdır."""
+    veri = bytes((i * 37 + 11) % 256 for i in range(4096 * 2))
+    assert not veri.startswith(b"SQLite format 3"), "kurgu bozuk: dosya duz-metin SQLite basligi tasiyor"
+    yol.write_bytes(veri)
 
 
 @pytest.mark.skipif(

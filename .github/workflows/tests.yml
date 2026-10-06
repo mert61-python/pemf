@@ -58,17 +58,29 @@ jobs:
           python-version: "3.10"
           cache: pip
 
-      # SQLCipher: at-rest şifreleme testleri gerçek kütüphaneyle koşsun. Kurulmazsa kod
-      # düz-metne graceful düşer ve şifreleme yolları SESSİZCE test edilmemiş olur.
-      # (Windows'ta sqlcipher3 wheel'i yok → orada düz-metin yoluyla koşulur; iki platformun
-      # farkı bilinçlidir ve `test_at_rest_encryption` bunu zaten iki durumda da sınar.)
+      # SQLCipher: at-rest şifreleme / göç / karantina / kurtarma testleri GERÇEK kütüphaneyle koşsun.
+      # ⚠️ A-46 (sahip kararı) + D2.07 (B-3.47): sqlcipher3 KURULAMAZSA İŞ KIRMIZI — sessiz düşüş YOK.
+      # Eskiden Linux'ta kurulum `|| echo "... duz-metin yoluyla kosulacak"` ile YUTULUYOR, Windows'ta
+      # HİÇ denenmiyordu ("wheel yok" varsayımı — oysa ürün Windows'ta sqlcipher3==0.6.2 tekerleğiyle
+      # paketlenir, requirements.txt). Bu kapıların çoğu `importorskip`/`skipif` ile korunduğu için CI'da
+      # ATLANIYOR ve iş YEŞİL bitiyordu. Her iki kurulum da bağlayıcıyı İÇE AKTARARAK doğrular; testten
+      # sonra `sqlcipher atlama kapısı` adımı "sqlcipher" nedenli atlama sayısı > 0 ise işi düşürür.
       - name: SQLCipher kur (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libsqlcipher-dev
           python -m pip install --upgrade pip
-          pip install sqlcipher3-binary || pip install sqlcipher3 || echo "sqlcipher3 kurulamadi — duz-metin yoluyla kosulacak"
+          pip install sqlcipher3-binary || pip install sqlcipher3
+          python -c "from sqlcipher3 import dbapi2; print('sqlcipher3 hazir, SQLite', dbapi2.sqlite_version)"
+
+      - name: SQLCipher kur (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install --only-binary sqlcipher3 sqlcipher3==0.6.2
+          python -c "from sqlcipher3 import dbapi2; print('sqlcipher3 hazir, SQLite', dbapi2.sqlite_version)"
 
       - name: Test bağımlılıkları
         run: |
@@ -79,7 +91,7 @@ jobs:
         if: runner.os != 'Windows'
         env:
           PEMF_SIMULATE: ""
-        run: pytest tests -v --no-header
+        run: pytest tests -v --no-header --junitxml=pytest-junit.xml
 
       # ⚠️ KAPSAM RATCHET'İ YALNIZ WINDOWS'TA (2026-08-09 denetimi, Tier 3).
       # İki sebep: (a) ürün Windows'ta çalışır, (b) `fail_under` eşiği Windows'ta ölçüldü
@@ -90,7 +102,13 @@ jobs:
         if: runner.os == 'Windows'
         env:
           PEMF_SIMULATE: ""
-        run: pytest tests -v --no-header --cov --cov-report=term
+        run: pytest tests -v --no-header --cov --cov-report=term --junitxml=pytest-junit.xml
+
+      # ⚠️ A-46 / D2.07: testler geçse bile "sqlcipher" nedenli ATLAMA varsa iş KIRMIZI. Kurulum adımı
+      # bağlayıcıyı içe aktaramazsa iş zaten orada durur; bu adım kalan sessiz yolu kapatır (bağlayıcı
+      # bir testte yüklenemedi / yeni bir test sqlcipher3'ü atlayarak eklendi). Çıkış 2 = junit yok/boş (kör).
+      - name: sqlcipher atlama kapısı (A-46)
+        run: python scripts/ci_sqlcipher_atlama_kapisi.py pytest-junit.xml
 
   sir-taramasi:
     name: sır taraması (gitleaks)

@@ -5,8 +5,11 @@
 # Testlerin (guii/tests) IMPORT + ÇALIŞMA zamanında gerçekten gereken paketler.
 # AĞIR AI bağımlılıkları (torch/ultralytics/onnx/librosa/numba/scikit-learn/xgboost)
 # model çalıştırma anında LAZY yüklenir → import edilen modüller için GEREKMEZ, CI'dan
-# çıkarıldı (kurulum ~2GB + dakikalarca sürerdi). sqlcipher3 de HARİÇ: ubuntu'da wheel
-# zor + kod onsuz gracefully düz-metine düşer (import_sqlcipher()→None); testler bunu mock'lar.
+# çıkarıldı (kurulum ~2GB + dakikalarca sürerdi). sqlcipher3 bu dosyada YOK ama CI'da ZORUNLU:
+# `.github/workflows/tests.yml` onu işletim sistemine göre AYRI adımda kurar (Linux: libsqlcipher-dev +
+# sqlcipher3-binary/sqlcipher3 · Windows: sqlcipher3==0.6.2 tekerleği) ve içe aktararak doğrular;
+# kurulamazsa ya da bir test "sqlcipher" nedeniyle atlanırsa iş KIRMIZI (A-46 · D2.07). Eski not
+# ("kod onsuz düz-metine düşer, testler mock'lar") yanlış güvence veriyordu: kapılar SESSİZCE atlanıyordu.
 # Sürümler ana requirements.txt (CPython 3.10) ile birebir kilitli.
 # Kurulum (CI):  pip install -r requirements-test.txt
 # =============================================================================
