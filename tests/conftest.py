@@ -207,6 +207,30 @@ def _estop_mandali_sizmaz():
     estop_mandali.sifirla("pytest-izolasyon")
 
 
+@pytest.fixture(autouse=True)
+def _kosu_kaydi_sizmaz():
+    """1-G inceleme G-14.2 (1G-YB3 sınıfı): bobin koşu kaydı haritaları (`coil_run_tracker._active_coil_runs` /
+    `_coil_run_stats`) modül-geneldir. Testlerin AÇIK bıraktığı kayıt sonraki testlere sızıyordu — Y63'ten beri "Seansı
+    Durdur" açık kaydı olan bobini de durdurduğu için ilgisiz testler SIRAYA bağlı kırmızı (ölçüldü: nack fikstürü {8} →
+    1G-YB3; A47 seans kolu {6, 7} → `test_p2p3…devralma_YOKSA` [1, 2, 6, 7]) ya da açık kayıtla MASKELİ yeşil olur.
+    Gözcü (159 dosya): 15 test / 9 dosya kayıt bırakıyor, 4 dosya dosya sonunda bile; tam süitte sonraki bir seans
+    başlatması (`.clear()`) maskeliyor, alt küme koşuları kırmızı. Mandal yalıtımıyla (`_estop_mandali_sizmaz`) aynı
+    ilke: her test haritaları kendinden ÖNCEKİ hâline YERİNDE geri alarak biter (`api_server` takma adları aynı nesne).
+    Modül bu testte ilk kez yüklendiyse önceki hâl = boş. Kapı: tests/test_kosu_kaydi_testler_arasi_SIZMAZ_G142.py"""
+    crt = sys.modules.get("servers.coil_run_tracker")
+    once = (dict(crt._active_coil_runs), dict(crt._coil_run_stats)) if crt is not None else ({}, {})
+    yield
+    crt = sys.modules.get("servers.coil_run_tracker")
+    if crt is None:
+        return
+    with crt._active_coil_runs_lock:
+        crt._active_coil_runs.clear()
+        crt._active_coil_runs.update(once[0])
+    with crt._coil_run_stats_lock:
+        crt._coil_run_stats.clear()
+        crt._coil_run_stats.update(once[1])
+
+
 # ⚠️ D0Ö.07 (B-10.9) — SÜİT AĞA ÇIKMAZ (TCP connect, UDP sendto, DNS). ÖLÇÜLDÜ:
 # `data/cloud_mqtt_provision.json` (git'e girmez) bu makinede VAR; aynayı stub'lamayan E-stop testleri
 # `_estop_cloud_mirror` üzerinden GERÇEK (üretim) bulut broker'ına gerçek kimlikle TLS + STOP yayını
