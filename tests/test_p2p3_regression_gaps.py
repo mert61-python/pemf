@@ -259,10 +259,12 @@ def test_guncelleme_guardi_installer_baslayinca_ACIK_kalir():
 
     from servers import update_manager as um
 
-    for ad in ("apply_update", "rollback_update"):
+    # ⚠️ D1.117 (B-10.151): eskiden var OLMAYAN `rollback_update` adı aranıyor, bulunamayınca `continue` ediliyordu —
+    # `rollback()`'in koruması HİÇ ölçülmüyordu. Ad düzeltildi; bulunamazsa KIRMIZI (sessiz atlama yok). Davranış kapısı:
+    # tests/test_eski_kanal_YETKI_ve_GERI_ALMA_korumasi_DAVRANIS_D1117.py.
+    for ad in ("apply_update", "rollback"):
         fn = getattr(um, ad, None)
-        if fn is None:
-            continue
+        assert fn is not None, f"update_manager.{ad} YOK — kapı bayat (ad değişmiş olabilir)"
         src = inspect.getsource(fn)
         tree = ast.parse(src)
         finallyler = [n for n in ast.walk(tree) if isinstance(n, ast.Try) and n.finalbody]
