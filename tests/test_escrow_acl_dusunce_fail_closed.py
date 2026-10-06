@@ -45,6 +45,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import sahte_sqlcipher
 
 KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
@@ -59,10 +60,12 @@ def _duz_db_kur(yol: Path, ad: str) -> None:
     c.close()
 
 
-def _sqlcipher_var_mi() -> bool:
-    from database.sqlcipher_util import import_sqlcipher
-
-    return import_sqlcipher() is not None
+@pytest.fixture(params=sahte_sqlcipher.BAGLAYICILAR)
+def baglayici(request, monkeypatch):
+    """D2.08 (B-10.41 · test-parca-06#12): bu dört davranış kapısı eskiden sqlcipher3 yoksa (Windows CI)
+    `pytest.skip` ile atlanıyordu → escrow ACL sonucunu TERSİNE çeviren mutant orada YEŞİLDİ (ölçüldü
+    2026-10-06). `sahte` kol göçü sqlcipher3'süz koşturur (yalnız bağlayıcı sahte; politika gerçek)."""
+    return sahte_sqlcipher.baglayici_kur(request.param, monkeypatch)
 
 
 @pytest.fixture
@@ -116,14 +119,12 @@ def _goc_kostur(ortam: Path, ad: str, caplog):
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
 
-def test_KRITIK_ACL_UYGULANAMAZSA_duz_metin_yedek_DISKTE_KALMAZ(ortam, monkeypatch, caplog):
+def test_KRITIK_ACL_UYGULANAMAZSA_duz_metin_yedek_DISKTE_KALMAZ(ortam, monkeypatch, caplog, baglayici):
     """⚠️ BU TEST BUGUNKU KODDA KIRMIZIDIR — arizanin ta kendisi.
 
     Korumasiz emanet = SQLCipher'in tamamen baypas edilebilecegi bir dosyanin diskte
     birakilmasi. Tedavi DB'si bu durumda guvenli-siliyor; hasta DB'si SAKLIYORDU.
     """
-    if not _sqlcipher_var_mi():
-        pytest.skip("sqlcipher3 yok")
     cagri = _acl_sonucu(monkeypatch, False)
     db, yedek = _goc_kostur(ortam, "AclDusenHasta", caplog)
 
@@ -137,15 +138,13 @@ def test_KRITIK_ACL_UYGULANAMAZSA_duz_metin_yedek_DISKTE_KALMAZ(ortam, monkeypat
     assert db.exists(), "sifreli DB kaybolmus — goc zaten basariliydi, dosya yerinde kalmali"
 
 
-def test_KRITIK_ACL_uygulanamayinca_log_ACL_KILITLI_DEMEZ(ortam, monkeypatch, caplog):
+def test_KRITIK_ACL_uygulanamayinca_log_ACL_KILITLI_DEMEZ(ortam, monkeypatch, caplog, baglayici):
     """⚠️ DUGME ETIKETI GERCEGI SOYLESIN.
 
     `lock_down_file` basarisizlikta FIRLATMAZ, False doner (apps/backend/utils/file_acl.py:110).
     Eski kod donusu atiyor ve kosulsuz "ESCROW saklandi (ACL-kilitli)" basiyordu — yani
     uygulanmamis bir korumayi duyuruyordu. Operator log'a bakip "korundu" saniyordu.
     """
-    if not _sqlcipher_var_mi():
-        pytest.skip("sqlcipher3 yok")
     _acl_sonucu(monkeypatch, False)
     _goc_kostur(ortam, "AclLogHasta", caplog)
 
@@ -161,14 +160,12 @@ def test_KRITIK_ACL_uygulanamayinca_log_ACL_KILITLI_DEMEZ(ortam, monkeypatch, ca
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
 
-def test_KARSIT_KANIT_ACL_TUTARSA_emanet_GERCEKTEN_saklanir(ortam, monkeypatch, caplog):
+def test_KARSIT_KANIT_ACL_TUTARSA_emanet_GERCEKTEN_saklanir(ortam, monkeypatch, caplog, baglayici):
     """Kural "ACL'e bakma, hep sil"e kayarsa emanet yetenegi sessizce olur.
 
     Emanet, anahtar kaybinda geri donusu olan tek kopyadir; operator bunu ACIKCA istedi
     (PEMF_KEEP_PLAIN_BACKUP=1). Kilit tutuyorsa dosya KALMALI.
     """
-    if not _sqlcipher_var_mi():
-        pytest.skip("sqlcipher3 yok")
     cagri = _acl_sonucu(monkeypatch, True)
     _db, yedek = _goc_kostur(ortam, "AclTutanHasta", caplog)
 
@@ -179,10 +176,8 @@ def test_KARSIT_KANIT_ACL_TUTARSA_emanet_GERCEKTEN_saklanir(ortam, monkeypatch, 
     )
 
 
-def test_KARSIT_KANIT_bayrak_KAPALIYKEN_ACL_tutsa_bile_SILINIR(tmp_path, monkeypatch, caplog):
+def test_KARSIT_KANIT_bayrak_KAPALIYKEN_ACL_tutsa_bile_SILINIR(tmp_path, monkeypatch, caplog, baglayici):
     """Varsayilan yol degismedi: emanet istenmiyorsa ACL basarili olsa bile silinir."""
-    if not _sqlcipher_var_mi():
-        pytest.skip("sqlcipher3 yok")
     d = tmp_path / "PEMF_GUI"
     d.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("PEMF_DATA_DIR", str(tmp_path))

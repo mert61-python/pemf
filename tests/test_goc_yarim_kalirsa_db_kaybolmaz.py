@@ -48,6 +48,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import sahte_sqlcipher
 
 KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
@@ -81,24 +82,28 @@ def ortam(tmp_path, monkeypatch):
     return d
 
 
-def _sqlcipher_var_mi() -> bool:
-    from database.sqlcipher_util import import_sqlcipher
+@pytest.fixture(params=sahte_sqlcipher.BAGLAYICILAR)
+def baglayici(request, monkeypatch):
+    """D2.08 (B-10.41): göç DAVRANIŞ kapıları İKİ bağlayıcıyla koşar.
 
-    return import_sqlcipher() is not None
+    · `sahte` — `tests/sahte_sqlcipher.py`: yalnız bağlayıcı sahte, ürün göçü BİREBİR koşar →
+      sqlcipher3 YOKKEN de (Windows CI) koşar. Eskiden bu dört test orada `pytest.skip` ile
+      atlanıyordu; ölçüldü (2026-10-06): sqlcipher3 yokken geri-alma satırı `pass` yapılınca küme YEŞİLDİ.
+    · `gercek` — kurulu sqlcipher3; yoksa ATLANIR (atlama nedeni "sqlcipher3" içerir → A-46 / D2.07 CI
+      adımı bu atlamayı sayar ve KIRMIZI yapar).
+    """
+    return sahte_sqlcipher.baglayici_kur(request.param, monkeypatch)
 
 
-def test_KRITIK_ikinci_tasima_DUSERSE_veritabani_YERINDE_KALIR(ortam, monkeypatch):
+def test_KRITIK_ikinci_tasima_DUSERSE_veritabani_YERINDE_KALIR(ortam, monkeypatch, baglayici):
     """⚠️ ASIL KAPI.
 
     İkinci `shutil.move` geçici bir kilitle düşerse, göç iptal edilmeli ve ORİJİNAL
     veritabanı yerine geri konmalı. Aksi halde `db` YOK olur ve uygulama boş bir DB yaratır.
 
     MUTASYON: `migrate_to_encrypted_if_needed` içindeki geri-alma (restore) dalını sil
-    → KIRMIZI (db dosyası kaybolur).
+    → KIRMIZI (db dosyası kaybolur) — D2.08'den beri sqlcipher3 YOKKEN de (sahte kol).
     """
-    if not _sqlcipher_var_mi():
-        pytest.skip("sqlcipher3 yok")
-
     from database import sqlcipher_util as su
 
     db = ortam / "test_gecmis.db"
@@ -133,11 +138,8 @@ def test_KRITIK_ikinci_tasima_DUSERSE_veritabani_YERINDE_KALIR(ortam, monkeypatc
         c.close()
 
 
-def test_KARSIT_KANIT_engel_yokken_goc_NORMAL_tamamlanir(ortam):
+def test_KARSIT_KANIT_engel_yokken_goc_NORMAL_tamamlanir(ortam, baglayici):
     """Kural "hep iptal et"e kaymasın: engel yokken göç gerçekten olmalı."""
-    if not _sqlcipher_var_mi():
-        pytest.skip("sqlcipher3 yok")
-
     from database import sqlcipher_util as su
 
     db = ortam / "test_normal.db"
@@ -150,15 +152,12 @@ def test_KARSIT_KANIT_engel_yokken_goc_NORMAL_tamamlanir(ortam):
     )
 
 
-def test_KRITIK_onceki_yarim_gocten_KENDILIGINDEN_toparlar(ortam):
+def test_KRITIK_onceki_yarim_gocten_KENDILIGINDEN_toparlar(ortam, baglayici):
     """Süreç tam o pencerede ölürse (elektrik/kill) diskte `db` YOK, `.plain.bak` VAR kalır.
     Sonraki açılış bunu görüp ORİJİNALİ geri koymalı — yoksa boş DB yaratılır.
 
     MUTASYON: baştaki yarım-göç toparlama dalını sil → KIRMIZI.
     """
-    if not _sqlcipher_var_mi():
-        pytest.skip("sqlcipher3 yok")
-
     from database import sqlcipher_util as su
 
     db = ortam / "test_yarim.db"
@@ -171,7 +170,7 @@ def test_KRITIK_onceki_yarim_gocten_KENDILIGINDEN_toparlar(ortam):
     assert db.exists(), "onceki yarim goc TOPARLANMADI -> `db` yok kaldi ve uygulama BOS bir DB yaratacak"
 
 
-def test_KRITIK_GECICI_kilit_yeniden_denemeyle_ASILIR(ortam, monkeypatch):
+def test_KRITIK_GECICI_kilit_yeniden_denemeyle_ASILIR(ortam, monkeypatch, baglayici):
     """⚠️ Windows'ta dosya kilitleri çoğunlukla ANLIKTIR (tarayıcı/yedekleyici/indeksleyici).
     Tek bir başarısızlıkta göçü iptal etmek, hiç göç edememeye yol açardı.
 
@@ -180,9 +179,6 @@ def test_KRITIK_GECICI_kilit_yeniden_denemeyle_ASILIR(ortam, monkeypatch):
     MUTASYON: `_tasi_yeniden_dene` içindeki döngüyü tek denemeye indir → KIRMIZI
     (geçici kilit göçü kalıcı olarak iptal ettirir).
     """
-    if not _sqlcipher_var_mi():
-        pytest.skip("sqlcipher3 yok")
-
     from database import sqlcipher_util as su
 
     db = ortam / "test_gecici.db"
@@ -206,6 +202,72 @@ def test_KRITIK_GECICI_kilit_yeniden_denemeyle_ASILIR(ortam, monkeypatch):
     assert not ham.startswith(b"SQLite format 3"), (
         "GECICI bir kilit gocu KALICI olarak iptal ettirdi -> yeniden-deneme calismiyor"
     )
+
+
+def test_KRITIK_onceki_duz_metin_yedek_GOCTE_SILINMEZ_kenara_alinir(ortam, baglayici):
+    """⚠️ D2.08 (B-10.41) DAVRANIŞ — "düz-metin yedek ASLA silinmez"in koşan ikizi.
+
+    Diskte önceki bir yarım göçün TEK kopyası (`.plain.bak`) duruyor ve canlı `db` de var (toparlama
+    o açılışta düşmüş, sonra DB yeniden oluşmuş — 2026-09-13 ürün ölçümü). Yeni göç bu dosyayı SİLMEMELİ:
+    `.plain.bak.<zaman>` olarak KENARA almalı. Eski statik kapı yalnız `remove` adına bakıyordu;
+    kenara almadan önce `os.unlink(backup)` eklenince sqlcipher3 VARKEN bile YEŞİLDİ (ölçüldü).
+
+    MUTASYON: `backup = db + ".plain.bak"` ardına `os.unlink(backup)` → KIRMIZI (iki bağlayıcıda).
+    """
+    from database import sqlcipher_util as su
+
+    db = ortam / "test_onceki_yedek.db"
+    _duz_db_kur(db, "CanliHasta")
+    onceki = Path(str(db) + ".plain.bak")
+    _duz_db_kur(onceki, "TekKopyaHasta")
+
+    su.migrate_to_encrypted_if_needed(db, ortam, logger=None)
+
+    assert not db.read_bytes()[:16].startswith(b"SQLite format 3"), "goc tamamlanmadi -> test amacina ulasmadi"
+    kenarda = sorted(p for p in ortam.iterdir() if p.name.startswith(db.name + ".plain.bak."))
+    adlar = []
+    for p in kenarda:
+        c = sqlite3.connect(str(p))
+        try:
+            adlar += [r[0] for r in c.execute("SELECT ad FROM hasta")]
+        finally:
+            c.close()
+    assert "TekKopyaHasta" in adlar, (
+        f"onceki yarim gocun TEK kopyasi gocte SILINDI (kenara alinmadi): kenarda={[p.name for p in kenarda]} "
+        "-> klinik gecmisi geri donulmez kayip"
+    )
+
+
+def test_KRITIK_toparlama_HATASI_LOGLANIR_davranis(tmp_path, monkeypatch, caplog):
+    """⚠️ D2.08 (B-10.41) DAVRANIŞ — `test_KRITIK_toparlama_HATASI_sessizce_YUTULMAZ`ın koşan ikizi.
+
+    `path_utils.initialize_database` (açılışta EN ÖNCE koşar, `db` yoksa ŞABLON koyar) yarım-göç
+    toparlaması düşerse bunu LOGLAMALI; sessiz düşüş klinik geçmişini boş gösterir ve iz bırakmaz.
+    Eski statik kapı handler gövdesinde yalnız `pass`'i arıyordu: gövde `_ = None` yapılınca YEŞİLDİ
+    (ölçüldü). sqlcipher3 GEREKTİRMEZ.
+
+    MUTASYON: handler gövdesi `_ = None` → KIRMIZI.
+    """
+    import logging
+
+    from database import sqlcipher_util as su
+    from utils import path_utils
+
+    monkeypatch.setenv("PEMF_DATA_DIR", str(tmp_path))
+
+    def _patla(*a, **k):
+        raise PermissionError(13, "erisim reddedildi (D2.08 sahte toparlama hatasi)")
+
+    monkeypatch.setattr(su, "_yarim_goc_toparla", _patla)
+    with caplog.at_level(logging.DEBUG):
+        path_utils.initialize_database()
+
+    kayitlar = [r for r in caplog.records if r.levelno >= logging.ERROR and "toparlama" in r.getMessage().lower()]
+    assert kayitlar, (
+        "yarim-goc toparlamasi DUSTU ama initialize_database HICBIR hata kaydi birakmadi -> sablon "
+        "kopyalanir, klinik gecmisi BOS gorunur ve teshis edilemez"
+    )
+    assert any(r.exc_info for r in kayitlar), "toparlama hatasi loglandi ama SEBEBI (istisna izi) yok"
 
 
 # ============================================================================
@@ -356,10 +418,20 @@ def test_KRITIK_HER_IKI_goc_yolu_da_KORUNUYOR():
     # uygulamada ölçülür — delegasyonun kendisi yukarıda AST ile (iki halka + `self.db_path`)
     # ve `test_KRITIK_tedavi_DB_kurucusu_yarim_gocu_KENDI_yolunda_TOPARLAR` ile davranışla kilitli.
     # (D2.02: bu satır eskiden "yukarıda kilitli" diyordu ama yukarıdaki alt-dize kördü.)
-    ortak_src = ast.unparse(ortak)
-    assert "GOC GERI ALINAMADI" in ortak_src or "_tasi_yeniden_dene(backup, db" in ortak_src, (
-        "ORTAK gocte ikinci tasima duserse GERI ALMA dali yok -> veritabani YOK kalir "
-        "(ve artik TEK uygulama oldugu icin bu, iki veritabanini birden vurur)"
+    # ⚠️ D2.08 (B-10.41): burada `"GOC GERI ALINAMADI" in ortak_src or …` vardı — LOG DİZESİ yerinde
+    # kaldıkça geri-alma ÇAĞRISI `pass` yapılsa da YEŞİLDİ (ölçüldü; sqlcipher3 yokken davranış
+    # ikizi de atlanıyordu). Artık gerçek çağrı düğümü aranır: `_tasi_yeniden_dene(backup, db, …)`.
+    # Davranış ikizi (iki bağlayıcı, sqlcipher3'süz de): test_KRITIK_ikinci_tasima_DUSERSE_veritabani_YERINDE_KALIR.
+    geri_alma = [
+        c
+        for c in ast.walk(ortak)
+        if isinstance(c, ast.Call)
+        and getattr(c.func, "id", getattr(c.func, "attr", None)) == "_tasi_yeniden_dene"
+        and [ast.unparse(a) for a in c.args[:2]] == ["backup", "db"]
+    ]
+    assert geri_alma, (
+        "ORTAK gocte ikinci tasima duserse GERI ALMA cagrisi (`_tasi_yeniden_dene(backup, db, ...)`) yok "
+        "-> veritabani YOK kalir (ve artik TEK uygulama oldugu icin bu, iki veritabanini birden vurur)"
     )
 
 
@@ -475,16 +547,20 @@ def test_KRITIK_toparlama_HATASI_sessizce_YUTULMAZ():
         "-> ya cagri yok ya da hata backend'i baslatmiyor"
     )
 
+    # ⚠️ D2.08 (B-10.41): eski ölçüt yalnız `pass`/çağrısız ifadeyi "sessiz" sayıyordu; gövde `_ = None`
+    # (bir atama) yapılınca YEŞİLDİ (ölçüldü). Artık handler'da GERÇEK bir günlük çağrısı aranır.
+    # Davranış ikizi: test_KRITIK_toparlama_HATASI_LOGLANIR_davranis.
+    _LOG_ADLARI = {"exception", "error", "critical", "warning"}
     for t in denemeler:
         for h in t.handlers:
-            govde = [s for s in h.body if not isinstance(s, ast.Expr)] or h.body
-            sessiz = all(
-                isinstance(s, (ast.Pass, ast.Expr)) and not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Call))
-                for s in govde
-            )
-            assert not sessiz, (
-                "Toparlama hatasi SESSIZCE yutuluyor (`pass`) -> urunde klinik gecmisi bos "
-                "gorunur ve logda HIC iz kalmaz. En az bir log cagrisi SART."
+            loglar = [
+                n
+                for n in ast.walk(ast.Module(body=h.body, type_ignores=[]))
+                if isinstance(n, ast.Call) and getattr(n.func, "attr", None) in _LOG_ADLARI
+            ]
+            assert loglar, (
+                "Toparlama hatasi SESSIZCE yutuluyor (handler'da gunluk cagrisi yok) -> urunde klinik gecmisi "
+                "bos gorunur ve logda HIC iz kalmaz. En az bir log cagrisi SART."
             )
 
 
@@ -536,7 +612,11 @@ def test_KRITIK_duz_metin_yedek_ASLA_SILINMEZ():
                 kenara.append(n.lineno)
             elif ad == "goc_sonrasi_yedek_politikasi":
                 politika.append(n.lineno)
-            elif ad == "remove" and any(getattr(a, "id", None) == "backup" for a in n.args):
+            # ⚠️ D2.08 (B-10.41): yalnız `remove` adı aranıyordu; `os.unlink(backup)` YEŞİLDİ (ölçüldü).
+            # Davranış ikizi: test_KRITIK_onceki_duz_metin_yedek_GOCTE_SILINMEZ_kenara_alinir.
+            elif ad in ("remove", "unlink", "rmtree", "_kilit_direncli_sil") and any(
+                getattr(a, "id", None) == "backup" for a in n.args
+            ):
                 siler.append(n.lineno)
         assert kenara, f"{yol}:{fon_adi}: yedek KENARA ALINMIYOR -> silme yoluna geri donulmus olabilir"
         erken = [s for s in siler if s < min(kenara)]
