@@ -203,12 +203,26 @@ class PatientDatabase:
             return False
 
     def _safe_add_column(self, cursor, table: str, column_def: str) -> None:
-        """Idempotent şema-migrasyonu: ALTER TABLE ADD COLUMN; sütun zaten varsa sessizce geç.
-        (Eski DB'lere yeni kolon eklemenin tek noktası — tekrarlanan try/except kalıbı buraya toplandı.)"""
+        """Idempotent şema-migrasyonu: ALTER TABLE ADD COLUMN; sütun zaten varsa (`duplicate column`) sessizce geç.
+        (Eski DB'lere yeni kolon eklemenin tek noktası — tekrarlanan try/except kalıbı buraya toplandı.)
+
+        ⚠️ D2.24 (B-3.81 · Y9): BAŞKA her `OperationalError` (kilit, G-Ç, disk dolu) WARNING ile loglanır ve YÜKSELİR →
+        `_init_database` `RuntimeError` verir (karantina YOK — anahtar uyuşmazlığı değil) → backend DB'siz kısıtlı kipte
+        açılır. Eskiden hepsi yutuluyor, hasta tablosu KOLONSUZ açılıyordu. İkiz: `thdb_sema._safe_add_column`.
+        Kapı: tests/test_sema_gocu_KILITTE_sessiz_gecmez_D224.py."""
         try:
             cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column_def}")
-        except _DB_OPERATIONAL:
-            pass
+        except _DB_OPERATIONAL as e:
+            if "duplicate column" in str(e).lower():
+                return
+            self.logger.warning(
+                "Sema gocu: %s.%s kolonu eklenemedi (%s) — hasta DB'si HAZIR DEGIL, acilis durduruluyor "
+                "(dosyaya dokunulmadi; kilit kalkinca kolon eklenir).",
+                table,
+                column_def.split()[0],
+                e,
+            )
+            raise
 
     def _init_database(self) -> None:
         """SQLite şemasını oluştur + HMAC arama indeksini garanti et.

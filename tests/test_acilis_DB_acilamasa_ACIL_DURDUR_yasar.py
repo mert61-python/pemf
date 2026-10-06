@@ -95,6 +95,27 @@ _su._tasi_yeniden_dene = _sayan_tasi
 import headless_core as _hc
 _hc.HeadlessCore.DB_YENIDEN_DENEME_ARALIKLARI_SN = (0.1, 0.2, 0.3)
 
+# 2-A (Y9): ACILIS STOP MUTABAKATI DB'siz kipte de kosmali — `startup-reconcile` is parcaciginin GERCEK
+# HardwareController.stop_all_coils cagrisi SINIF duzeyinde sayilir (cekirdek kurulmadan once yamanir).
+import threading as _th
+from controllers.hardware_controller import HardwareController as _HC
+MUTABAKAT = {{"stop": 0}}
+_o_hc_stop = _HC.stop_all_coils
+def _hc_stop(self, *a, **k):
+    if _th.current_thread().name == "startup-reconcile":
+        MUTABAKAT["stop"] += 1
+    return _o_hc_stop(self, *a, **k)
+_HC.stop_all_coils = _hc_stop
+
+# D2.24 (B-3.81 · Y9) "alter_kilitli": baska bir baglanti tedavi DB'sinin YAZMA kilidini tutar (yedekleyici / ikinci
+# surec); eski semadaki eksik kolonun ALTER'i busy_timeout sonra `database is locked` verir. GERCEK kilit, sahte yok.
+import sqlite3 as _sq
+TUTUCU = {{"baglanti": None}}
+TEDAVI_DB = os.path.join(os.environ["PEMF_DATA_DIR"], "PEMF_GUI", "pemf_treatment_history.db")
+if SENARYO == "alter_kilitli":
+    TUTUCU["baglanti"] = _sq.connect(TEDAVI_DB, isolation_level=None)
+    TUTUCU["baglanti"].execute("BEGIN IMMEDIATE")
+
 import backend_service as bs
 yan = []
 bs._start_cloud_sync = lambda logger: yan.append("cloud_sync")
@@ -156,8 +177,49 @@ class _Casus:
             sonuc["seans"] = {{"kod": r.status_code, "detail": (r.json() or {{}}).get("detail", "")}}
             c.post("/api/session/stop", json={{}})
         sonuc["sayac"] = dict(sayac)
+        # Y9: acilis STOP mutabakati (3 sn sonra `startup-reconcile`) DB'siz kipte de STM'e STOP verir.
+        son = time.monotonic() + 10
+        while MUTABAKAT["stop"] < 1 and time.monotonic() < son:
+            time.sleep(0.05)
+        sonuc["mutabakat_stop"] = MUTABAKAT["stop"]
         if SENARYO.startswith("goc_gecici"):
             _y43(c, api, sayac)
+        if SENARYO == "alter_kilitli":
+            _alter_iyilesme(c, api, sayac)
+
+
+def _sema_kolonlari():
+    k = _sq.connect(TEDAVI_DB)
+    try:
+        return [r[1] for r in k.execute("PRAGMA table_info(ai_analyses)")]
+    finally:
+        k.close()
+
+
+def _alter_iyilesme(c, api, sayac):
+    # D2.24: kilit SURERKEN kolon eklenmedi ve dosya yerinde; kilidi tutan BIRAKINCA (backend YENIDEN BASLATILMAZ)
+    # arka plan yeniden acmasi kolonu ekler, dbReady true olur, eski seans okunur, seans KAYIT kapisini gecer.
+    a = sonuc["alter"] = {{"sonra": []}}
+    a["kolon_kilitliyken"] = "reviewed_at" in _sema_kolonlari()
+    a["dosya_kilitliyken"] = os.path.exists(TEDAVI_DB)
+    TUTUCU["baglanti"].execute("ROLLBACK")
+    TUTUCU["baglanti"].close()
+    son = time.monotonic() + 40
+    while time.monotonic() < son:
+        a["sonra"].append(_saglik_olc(c))
+        if a["sonra"][-1]["dbReady"] is True:
+            break
+        time.sleep(0.2)
+    a["kolon_sonra"] = "reviewed_at" in _sema_kolonlari()
+    try:
+        a["seanslar"] = [s.get("treatment_mode") for s in api._get_treatment_db().get_session_history(limit=10)]
+    except Exception as e:
+        a["seanslar"] = "HATA " + type(e).__name__ + ": " + str(e)[:200]
+    r = c.post("/api/session/start", json={{"mode": "Manuel", "frequency": 100, "duty": 40, "phase": 0,
+               "intensity": 0, "duration_minutes": 5, "coil_ids": [1], "patient_name": "D224"}})
+    a["seans"] = {{"kod": r.status_code, "detail": str((r.json() or {{}}).get("detail", ""))[:200]}}
+    a["update"] = sayac["update"]
+    c.post("/api/session/stop", json={{}})
 
 
 def _getter_olc(api):
@@ -253,6 +315,24 @@ def _duz_db(yol: Path, tablo: str = "kayit") -> None:
     c.close()
 
 
+def _eski_semali_tedavi_db(app: Path) -> None:
+    """D2.24: GERÇEK tedavi şeması + 1 seans; ardından yeni bir kolon (`ai_analyses.reviewed_at`) DÜŞÜRÜLÜR → sonraki açılış
+    o kolonu ALTER ile eklemeye çalışır. Ebeveynde, anahtarsız (düz-metin) kurulur; çocukta bayrak 0."""
+    from database import treatment_history_db as thdb
+
+    db = thdb.TreatmentHistoryDB(app)
+    sid = db.start_session("AlterKilitliSeans")
+    db.end_session(sid)
+    db.close_connections()
+    del db
+    c = sqlite3.connect(str(app / "pemf_treatment_history.db"))
+    try:
+        c.execute("ALTER TABLE ai_analyses DROP COLUMN reviewed_at")
+        c.commit()
+    finally:
+        c.close()
+
+
 def _kur(tmp_path: Path, senaryo: str) -> tuple[dict, Path]:
     veri = tmp_path / "veri"
     app = veri / "PEMF_GUI"
@@ -284,6 +364,8 @@ def _kur(tmp_path: Path, senaryo: str) -> tuple[dict, Path]:
     elif senaryo == "bozuk_port":
         # 1-A açık madde 6 (kol D1.14 kapısında): launcher `--port` verir; ortamdaki bozuk port açılışı öldürmemeli.
         env["PEMF_API_PORT"] = "80O0"
+    elif senaryo == "alter_kilitli":
+        _eski_semali_tedavi_db(app)
     return env, app
 
 
@@ -329,6 +411,11 @@ def _ortak_iddialar(s: dict) -> None:
     )
     assert s["estop"]["sure"] < SAGLIK_SURE_SINIRI_SN, f"ACİL DURDUR yanıtı {s['estop']['sure']:.2f} sn (bloklandı)"
     assert s["sifirla"]["kod"] == 200, f"mandal 'Sıfırla' bu kipte çalışmadı (D1.81 · Y4): {s['sifirla']}"
+    # 2-A (Y9): açılış STOP mutabakatı (`startup-reconcile`, GERÇEK HardwareController) DB'siz kipte de koşar.
+    assert s.get("mutabakat_stop", 0) >= 1, (
+        f"açılış STOP mutabakatı STM'e STOP vermedi (10 sn içinde): {s.get('mutabakat_stop')} — önceki süreçten kalan "
+        "bobin durumu temizlenmedi"
+    )
     assert all(h["kod"] == 200 for h in s["saglik"]), f"sağlık ucu düştü: {s['saglik']}"
     yavas = [round(h["sure"], 2) for h in s["saglik"] if h["sure"] >= SAGLIK_SURE_SINIRI_SN]
     assert not yavas, (
@@ -425,6 +512,39 @@ def test_KRITIK_GENEL_bozuk_DB_RuntimeError_de_backendi_OLDURMEZ(tmp_path):
     _db_yok_iddialari(s, r"a[çc][ıi]lamad[ıi]", tmp_path)
     for ad in ("patients.db", "pemf_treatment_history.db"):
         assert (app / ad).read_bytes().startswith(b"BU BIR SQLITE"), f"{ad}: bozuk dosyaya DOKUNULDU"
+
+
+def test_KRITIK_D224_ALTER_KILITLIYKEN_backend_DBSIZ_acilir_kilit_kalkinca_KOLON_eklenir(tmp_path):
+    """D2.24 (B-3.81 · Y9) UÇTAN UCA: yeni kolonun ilk açılışında tedavi DB'sinin yazma kilidi başka bir bağlantıda
+    (gerçek `BEGIN IMMEDIATE`). Eskiden `_safe_add_column` `database is locked`ı YUTUYORDU → DB KOLONSUZ açılıyor,
+    `dbReady` TRUE, seans başlıyor, kolonu yazan kayıt "no such column" ile düşüyordu (ölçüldü). Artık açılış görünür
+    biçimde durur: backend DB'siz KISITLI kipte (ACİL DURDUR + açılış STOP mutabakatı + hızlı sağlık ucu, seans 503,
+    yeni anahtar ÜRETİLMEZ, dosya yerinde, karantina YOK); kilit kalkınca YENİDEN BAŞLATMADAN arka planda açılır, kolon
+    eklenir, eski seans okunur, yeni seans başlar."""
+    s, app = _kos(tmp_path, "alter_kilitli")
+    _ortak_iddialar(s)
+    _db_yok_iddialari(s, r"a[çc][ıi]lamad[ıi]", tmp_path)
+    a = s["alter"]
+    assert a["kolon_kilitliyken"] is False and a["dosya_kilitliyken"] is True, f"kurgu/dosya: {a}"
+    assert any(h["dbReady"] is True for h in a["sonra"]), (
+        f"kilit kalkınca dbReady true OLMADI (40 sn): {a['sonra'][-3:]}"
+    )
+    assert a["kolon_sonra"] is True, "kilit kalkınca kolon EKLENMEDİ"
+    assert a["seanslar"] == ["AlterKilitliSeans"], f"eski seans kaydı okunamadı: {a['seanslar']}"
+    # Kayıt kapısı GEÇİLDİ: bobin sürülmeye çalışıldı (çocukta STM kartı yok → ürün "hiçbir bobin komutu kabul etmedi"
+    # 503'ünü verir — Y43 kolundaki ölçütün aynısı; kayıt/DB nedeni OLMAMALI).
+    assert a["update"] >= 1, f"DB iyileşti ama seans kayıt kapısında kaldı (bobin sürülmedi): {a['seans']}"
+    assert not re.search(r"kay[ıi]t|veritaban|a[çc][ıi]lamad", a["seans"]["detail"], re.IGNORECASE), (
+        f"iyileşme sonrası seans hâlâ KAYIT/DB nedeniyle reddedildi: {a['seans']}"
+    )
+    assert sorted(p.name for p in app.glob("*.acilamadi-*")) == [], (
+        "kilit anahtar uyuşmazlığı değil — karantina OLMAMALI"
+    )
+    gunluk = (tmp_path / "log" / "backend_service.log").read_text(encoding="utf-8", errors="replace")
+    assert "ai_analyses.reviewed_at kolonu eklenemedi" in gunluk, (
+        "kök neden (eklenemeyen kolon + kilit) günlüğe YAZILMADI"
+    )
+    assert "Yeni SQLCipher anahtari uretildi" not in gunluk, "DB'siz kipe düşerken YENİ ANAHTAR üretildi (Y9 ihlali)"
 
 
 def test_KARSIT_cekirdek_yok_ya_da_SAHTE_cekirdekte_acilis_hatasi_YOK(monkeypatch):

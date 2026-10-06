@@ -24,6 +24,10 @@ delege `pass` / kurucudaki cagri yorumda / yanlis DB yolu — ucunde de YESIL):
 
 ⚠️ `_safe_add_column` var-olan sutunu SESSIZCE atlar (idempotent). Bunu "hata gizliyor" diye
 sertlestirmeyin: sema gocu her aciliste kosar ve ikinci kosuda patlamamalidir.
+⚠️ D2.24 (B-3.81 · Y9, 2026-10-06): YALNIZ `duplicate column` sessizdir. Kilit / G-Ç / disk-dolu
+eskiden de yutuluyordu → yeni kolonun ilk acilisinda sema KOLONSUZ kaliyor, `is_ready` yesil, kolonu
+yazan islem "no such column" ile dusuyordu (olculdu). Artik WARNING + YUKSELIR → DB DB'siz kisitli
+kipte acilir (D1.37 / Y43: ACIL DURDUR ve STOP calisir, DB arka planda yeniden acilir).
 
 ⚠️ GOVDELER DEGISTIRILMEDI — AST ile bayt bayt tasindi.
 
@@ -67,14 +71,27 @@ class SemaKarisimi:
 
     def _safe_add_column(self, cursor, table: str, column_def: str, log_msg: str = None) -> None:
         """Idempotent şema-migrasyonu: `ALTER TABLE <table> ADD COLUMN <column_def>`.
-        Sütun zaten varsa (yeni DB / önceki migrasyon) `_DB_OPERATIONAL` yutulur → sessizce geçilir.
-        Eski DB'lere yeni kolon eklemenin TEK noktası (tekrarlanan try/except kalıbı buraya toplandı)."""
+        Sütun zaten varsa (yeni DB / önceki migrasyon) `duplicate column` → sessizce geçilir.
+        Eski DB'lere yeni kolon eklemenin TEK noktası (tekrarlanan try/except kalıbı buraya toplandı).
+
+        ⚠️ D2.24 (B-3.81 · Y9): BAŞKA her `OperationalError` (kilit, G-Ç, disk dolu) WARNING ile loglanır ve
+        YÜKSELİR — açılış görünür biçimde durur (DB'siz kısıtlı kip; dosyaya dokunulmaz). Eskiden hepsi yutuluyordu.
+        Kapı: tests/test_sema_gocu_KILITTE_sessiz_gecmez_D224.py (gerçek yazma kilidiyle)."""
         try:
             cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column_def}")
             if log_msg:
                 self.logger.info(log_msg)
-        except _DB_OPERATIONAL:
-            pass
+        except _DB_OPERATIONAL as e:
+            if "duplicate column" in str(e).lower():
+                return
+            self.logger.warning(
+                "Sema gocu: %s.%s kolonu eklenemedi (%s) — tedavi DB'si HAZIR DEGIL, acilis durduruluyor "
+                "(dosyaya dokunulmadi; kilit kalkinca kolon eklenir).",
+                table,
+                column_def.split()[0],
+                e,
+            )
+            raise
 
     def _semayi_kur(self, conn):
         cursor = conn.cursor()
