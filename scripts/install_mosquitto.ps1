@@ -83,6 +83,15 @@ Write-Host "[*] Dizinler oluşturuluyor..." -ForegroundColor Yellow
         Write-Host "  Oluşturuldu: $_" -ForegroundColor Gray
     }
 }
+# ⚠️ 1-G §8 #11 (1-H): config/mosquitto/mosquitto.conf SONDA `include_dir C:/ProgramData/mosquitto/conf.d` içerir — BOŞ
+# include_dir'de mosquitto 2.0.18 (Windows) AÇILMAZ ("Unable to open include_dir"; deponun kendi yapılandırmasıyla ölçüldü).
+# Hazırlanmamış ağ geçidinde dizin boş kalırdı → broker hiç açılmaz, ESP'ler bağlanamaz. Yalnız yorumdan oluşan yer tutucu
+# (install_mosquitto_service.ps1 / setup_services.ps1 ile aynı); kimlik parçası (`--mqtt-kimlik hazirla --broker-dizini
+# C:/ProgramData/mosquitto`) yanına `pemf_kimlik.conf` olarak yazılır.
+$TabanParca = Join-Path $MOSQUITTO_CONF_DIR "00_pemf_taban.conf"
+if (-not (Test-Path $TabanParca)) {
+    Set-Content -Path $TabanParca -Value "# PEMF: include_dir bos kalmasin (mosquitto Windows'ta bos dizinde ACILMAZ). Kimlik parcasi: pemf_kimlik.conf" -Encoding ASCII
+}
 
 # --- 4. Config Dosyalarını Kopyala ---
 Write-Host "[*] Yapılandırma dosyaları kopyalanıyor..." -ForegroundColor Yellow
