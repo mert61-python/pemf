@@ -5,6 +5,7 @@ import logging
 import os
 import signal
 import sys
+import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -787,15 +788,83 @@ def _start_ai_warmup_safe(logger: logging.Logger) -> None:
     threading.Thread(target=_calistir, name="ai-warmup", daemon=True).start()
 
 
-def _donanim_guncellemesi_safe(core, logger: logging.Logger) -> None:
-    """DONANIM GÜNCELLEMESİ — client kontrolünden SONRA, servis açılmadan ÖNCE.
+#: D1.121 (B-1.5): STM bu sürede el sıkışmazsa YALNIZ ÖLÇÜM yapılır (`stm_bagli=False`, `uygula=False` → yakma YOK);
+#: gerçek karar ilk bağlantıya kalır.
+DONANIM_KARAR_YEDEK_S = 20.0
+#: D1.121: el sıkışma sessiz karta sıfır-duty yoklamasıyla tamamlanırsa banner bu kadar beklenir (yoksa sürüm okunamaz →
+#: karar verilmez/BEKLE — fail-safe).
+DONANIM_BANNER_BEKLEME_S = 3.0
+
+
+def _donanim_guncellemesi_kur(core, logger: logging.Logger, event_bus=None) -> None:
+    """D1.121 · B-1.5 — açılış donanım güncellemesi kararı EL SIKIŞMADAN SONRA verilir.
+
+    Eskiden `_donanim_guncellemesi_safe` `main()`'de SENKRON, HeadlessCore kurulduktan ~0,9 sn sonra çağrılıyordu; STM el
+    sıkışması ~2,4 sn'de bitiyordu → karar her açılışta `stm_bagli=False`, `firmware_surum=''` ile veriliyordu (1-H (a)0
+    ölçümü: kanca el sıkışmadan ~1,2 sn ÖNCE). Artık:
+      * ilk GERÇEK bağlantıda (`hardware.stm.connected`) karar AYRI bir iş parçacığında, süreç başına BİR KEZ verilir —
+        olay / seri okuyucu iş parçacığı beklemez (yakma uzun sürer); sonraki yeniden bağlanmalar karar ÜRETMEZ;
+      * el sıkışma bu kurulumdan önce olmuşsa (olay kaçtıysa) hemen;
+      * STM `DONANIM_KARAR_YEDEK_S` içinde bağlanmazsa YALNIZ ÖLÇÜM (`stm_bagli=False`, `uygula=False` → yakma YOK; durum
+        `/api/health`'te görünür) — gerçek karar ilk bağlantıya kalır.
+    ⚠️ Y1: yakma yine YALNIZ açık `PEMF_FW_AUTO_UPDATE=1` ile; Y2: klon / tezgâh backend'inde 0. Karar tablosu kapısı:
+    `tests/test_donanim_guncellemesi_EL_SIKISMADAN_SONRA_karar_tablosu_D1120_D1121.py`."""
+    bus = event_bus or get_event_bus()
+    verildi = threading.Event()
+    kilit = threading.Lock()
+    # Gerçek karar ile yedek ölçüm AYNI ANDA koşmaz: yedek sürerken el sıkışma olursa gerçek karar yedeğin bitmesini
+    # bekler ve SONRA koşar (son durum gerçek karardır); gerçek karar verildiyse yedek HİÇ koşmaz.
+    karar_kilidi = threading.Lock()
+
+    def _gercek() -> None:
+        with karar_kilidi:
+            _donanim_guncellemesi_safe(core, logger)
+
+    def _karar(neden: str) -> None:
+        with kilit:
+            if verildi.is_set():
+                return
+            verildi.set()
+        logger.info("Donanım güncellemesi kararı tetiklendi: %s", neden)
+        threading.Thread(target=_gercek, name="donanim-guncellemesi", daemon=True).start()
+
+    try:
+        bus.subscribe(
+            "hardware.stm.connected",
+            lambda _olay: _karar("STM el sıkışması (hardware.stm.connected)"),
+            "donanim-guncellemesi",
+        )
+    except Exception:  # noqa: BLE001 — abonelik olmazsa yedek ölçüm yine koşar; servis düşmez
+        logger.warning("Donanım güncellemesi: STM bağlantı olayına abone olunamadı", exc_info=True)
+    if getattr(core, "stm_is_connected", False):
+        _karar("STM zaten bağlı (el sıkışma kurulumdan önce)")
+
+    def _yedek() -> None:
+        if verildi.wait(DONANIM_KARAR_YEDEK_S):
+            return
+        with karar_kilidi:
+            if verildi.is_set():
+                return
+            logger.info(
+                "Donanım güncellemesi: STM %.0f sn içinde bağlanmadı — YALNIZ ÖLÇÜM (yakma YOK); karar ilk bağlantıda",
+                DONANIM_KARAR_YEDEK_S,
+            )
+            _donanim_guncellemesi_safe(core, logger, yalniz_olcum=True)
+
+    threading.Thread(target=_yedek, name="donanim-guncellemesi-yedek", daemon=True).start()
+
+
+def _donanim_guncellemesi_safe(core, logger: logging.Logger, *, yalniz_olcum: bool = False) -> None:
+    """DONANIM GÜNCELLEMESİ — client kontrolünden SONRA; D1.121'den beri STM EL SIKIŞMASINDAN SONRA
+    (`_donanim_guncellemesi_kur`).
 
     Sahip kararı 2026-09-22: *"ilk açılışta client güncelleme kontrol ediyor zaten,
     ardından stm için de güncelleme kontrol etcek donanım güncellemesi ismi altında,
     varsa güncelleyecek sonra açılacak."*
 
-    ⚠️ SIRA: `_start_update_checker_safe`ten SONRA çağrılır — client sürümü belli olmadan
+    ⚠️ SIRA: `_start_update_checker_safe`ten SONRA kurulur — client sürümü belli olmadan
     uyum kararı verilemez.
+    ⚠️ `yalniz_olcum`: STM bağlanmadan yapılan yedek ölçüm — `stm_bagli=False`, `uygula=False` (bu koşu ASLA yakmaz).
     ⚠️ ASLA SERVİSİ DÜŞÜRMEZ: her hata yutulur ama TAM ZİNCİRLE loglanır (A9 dersi).
     ⚠️ Y1 (sahip, 2026-09-29) — VARSAYILAN KAPALI: otomatik yakmaya YALNIZ açık `PEMF_FW_AUTO_UPDATE=1` izin verir;
        değişken YOKSA ya da başka bir değerse ('0', 'false', 'true', boş…) yalnız ÖLÇER, uygulamaz. Zincir tezgâhta
@@ -809,11 +878,18 @@ def _donanim_guncellemesi_safe(core, logger: logging.Logger) -> None:
         from servers import firmware_manager as fm
         from utils import stm32_kimlik
 
+        stm_bagli = (not yalniz_olcum) and bool(getattr(core, "stm_is_connected", False))
+        banner_var = callable(getattr(core, "stm_banner_isareti", None)) and callable(
+            getattr(core, "stm_banner_bekle", None)
+        )
+        # D1.121: el sıkışma sessiz karta sıfır-duty yoklamasıyla tamamlandıysa kimlik henüz yoktur — banner kısa bekle.
+        if stm_bagli and getattr(core, "stm_kimlik", None) is None and banner_var and core.stm_banner_isareti() == 0:
+            core.stm_banner_bekle(0, DONANIM_BANNER_BEKLEME_S)
         kimlik = getattr(core, "stm_kimlik", None)
         ham_surum = getattr(kimlik, "surum", "") or ""
         # D1.114 (B-4.6): yakma sonrası kart kimliği portu BIRAKMADAN çekirdeğin KENDİ okuyucusundan.
         banner_kaynagi = None
-        if callable(getattr(core, "stm_banner_isareti", None)) and callable(getattr(core, "stm_banner_bekle", None)):
+        if banner_var:
             from utils.stm_yakma import BannerKaynagi
 
             banner_kaynagi = BannerKaynagi(isaret=core.stm_banner_isareti, bekle=core.stm_banner_bekle)
@@ -821,8 +897,8 @@ def _donanim_guncellemesi_safe(core, logger: logging.Logger) -> None:
             # ⚠️ D1.120 (B-4.2): banner'ın sürüm alanı (`DDS v2.3`) SAYIYA (`2.3`) çevrilir — ham alan ayrıştırılamıyordu,
             # karar her açılışta "sürüm ayrıştırılamadı"ydı. Sayı yoksa "" → BEKLE (fail-safe).
             firmware_surum=stm32_kimlik.firmware_surumu(ham_surum),
-            stm_bagli=bool(getattr(core, "stm_is_connected", False)),
-            uygula=os.environ.get("PEMF_FW_AUTO_UPDATE", "0").strip() == "1",
+            stm_bagli=stm_bagli,
+            uygula=(not yalniz_olcum) and os.environ.get("PEMF_FW_AUTO_UPDATE", "0").strip() == "1",
             banner_kaynagi=banner_kaynagi,
         )
         logger.info(
@@ -1177,7 +1253,8 @@ def main(argv: list[str] | None = None) -> int:
     _start_update_checker_safe(logger)
     # ⚠️ SIRA: client kontrolünden SONRA (sahip kararı 2026-09-22). Firmware uyumu
     #    client sürümüne bağlı; o belli olmadan karar verilemez.
-    _donanim_guncellemesi_safe(core, logger)
+    # ⚠️ D1.121 (B-1.5): karar burada VERİLMEZ, kurulur — ilk STM el sıkışmasında (`hardware.stm.connected`) verilir.
+    _donanim_guncellemesi_kur(core, logger, event_bus)
     # ESP bobinleri (6-8) PEMF-Gateway WiFi'sine bağlanır → backend ile BİRLİKTE açılmalı.
     _start_hotspot_safe(logger)
     # ⚠️ A9 — SIRA ÖNEMLİ, ÖLÇÜLEREK KONDU. torch, ISITMA THREAD'LERİNDEN ÖNCE ve SENKRON

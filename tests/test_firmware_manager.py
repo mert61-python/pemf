@@ -231,9 +231,13 @@ def test_KRITIK_acilis_SIRASI_client_kontrolunden_SONRA():
     """Sahip: *"ilk açılışta client güncelleme kontrol ediyor zaten, ARDINDAN stm için de
     kontrol etcek… sonra açılacak."*
 
-    ⚠️ SIRA ASIL İDDİADIR, varlık değil: `_donanim_guncellemesi_safe` çağrısının var olması
+    ⚠️ SIRA ASIL İDDİADIR, varlık değil: donanım güncellemesi kurulumunun var olması
     hiçbir şey kanıtlamaz — client kontrolünün ÜSTÜNE alınırsa client sürümü henüz
     belirlenmemiş olur ve uyum kararı YANLIŞ girdiyle verilir. Sıra AST'den okunur.
+    ⚠️ D1.121 (B-1.5, 1-H): `main()` kararı VERMEZ, KURAR (`_donanim_guncellemesi_kur`) — karar ilk STM el
+    sıkışmasında verilir (servis o an açık olabilir; yakma penceresi D1.114 başlatmayı reddeder, ACİL DURDUR
+    kapılanmaz). Kurulumun client kontrolünden SONRA ve servis koşmadan ÖNCE olması kilitli; davranış:
+    tests/test_donanim_guncellemesi_EL_SIKISMADAN_SONRA_karar_tablosu_D1120_D1121.py.
     """
     import ast
 
@@ -248,7 +252,7 @@ def test_KRITIK_acilis_SIRASI_client_kontrolunden_SONRA():
         return [d.lineno for d in ast.walk(ana) if isinstance(d, ast.Call) and getattr(d.func, "id", "") == ad]
 
     client = _satirlar("_start_update_checker_safe")
-    donanim = _satirlar("_donanim_guncellemesi_safe")
+    donanim = _satirlar("_donanim_guncellemesi_kur")
     assert client, "client güncelleme kontrolü çağrısı YOK — çıpa bayat"
     assert donanim, "donanım güncellemesi çağrısı YOK — açılışa bağlanmamış"
     assert min(client) < min(donanim), (
