@@ -28,10 +28,10 @@ $p = "$(Get-Content "$env:LOCALAPPDATA\PEMF Vet Client\backend.port" -ErrorActio
 Get-Service PemfBackend
 nssm stop PemfBackend         # graceful kapanış bobinlere STOP gönderir (servis kipinde)
 nssm restart PemfBackend      # veya: Restart-Service PemfBackend
-# ⚠️ FİRMWARE (Y1/Y2): HEAD tabanlı derlemede PEMF_FW_AUTO_UPDATE varsayılanı 1 — backend'in HER açılışı
-#    (nssm restart ya da launcher'ı yeniden açma) oto-firmware denetimini koşar ve koşullar oluşursa STM'e firmware
-#    YAKMAYI dener (sahadaki 1.9.50'de bu zincir yok). Y1 kararıyla varsayılan 0'a çekilene dek (D1.120) yeniden
-#    başlatmadan önce ortamda PEMF_FW_AUTO_UPDATE=0 olduğunu doğrulayın.
+# ⚠️ FİRMWARE (Y1): oto-firmware VARSAYILAN KAPALI — backend'in her açılışı (nssm restart ya da launcher'ı yeniden
+#    açma) uyumu yalnız ÖLÇER; STM'e firmware YAKMA denemesi YALNIZ ortamda açıkça PEMF_FW_AUTO_UPDATE=1 verilmişse
+#    olur (sahadaki 1.9.50'de bu zincir yok). Zincir tezgâhta (Oturum 13) doğrulanmadan sahada 1 VERİLMEZ; yeniden
+#    başlatmadan önce ortamda PEMF_FW_AUTO_UPDATE=1 OLMADIĞINI doğrulayın.
 
 # Sağlık + sürüm + şifreleme durumu
 curl.exe http://127.0.0.1:8000/api/health        # atRestEncrypted, pairingCode, tunnelUrl (port: yukarıdaki $p)

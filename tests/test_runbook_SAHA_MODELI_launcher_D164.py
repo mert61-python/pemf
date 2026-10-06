@@ -117,7 +117,15 @@ def test_KRITIK_yeniden_baslatma_HEAD_derlemesinde_OTO_FIRMWARE_uyarisi_tasir():
     bloklar = _bloklar(RUNBOOK.read_text(encoding="utf-8"))
     yeniden = [b for b in bloklar if _YENIDEN.search(b)]
     if not acik:
-        return  # Y1 uygulandı (varsayılan KAPALI) — uyarı zorunlu değil
+        # Y1 uygulandı (varsayılan KAPALI) — uyarı zorunlu değil; AMA belge "varsayılan 1/AÇIK" diye BAYAT kalmamalı
+        # (1-H: operatör gereksiz bir '0' denetimine yönlenir, asıl tehlikeyi — açıkça verilmiş '1'i — kaçırır).
+        bayat = [
+            b[:160]
+            for b in bloklar
+            if re.search(r"PEMF_FW_AUTO_UPDATE\W{0,4}varsay[ıi]lan[ıi]\W{0,4}(?:1|'1'|\"1\"|A[ÇC]IK)", b, re.IGNORECASE)
+        ]
+        assert not bayat, f"kaynakta varsayılan KAPALI (Y1) iken RUNBOOK 'varsayılan 1/AÇIK' diyor: {bayat}"
+        return
     assert yeniden, "ön koşul: yeniden başlatma bloğu yok"
     eksik = [b[:160] for b in yeniden if "PEMF_FW_AUTO_UPDATE" not in b or "firmware" not in b.lower()]
     assert not eksik, (

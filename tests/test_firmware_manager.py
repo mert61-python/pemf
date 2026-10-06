@@ -20,6 +20,7 @@ manifest ve yakma YAMALANIR, ölçülen şey SIRA ve KARAR.
 from __future__ import annotations
 
 import importlib
+from types import SimpleNamespace
 
 import pytest
 from utils import surum_uyumu as su
@@ -240,29 +241,60 @@ def test_KRITIK_acilis_SIRASI_client_kontrolunden_SONRA():
     )
 
 
-def test_kill_switch_VAR(fm):
-    """`PEMF_FW_AUTO_UPDATE=0` ile sahada yeniden derlemeden kapatılabilmeli.
+#: Y1 (sahip, 2026-09-29): oto-firmware VARSAYILAN KAPALI — yalnız AÇIK '1' otomatik uygular; değişken yoksa ya da
+#: başka HER değerde yalnız ölçülür (plan hesaplanır, yakılmaz).
+_BAYRAK_KOLLARI = [
+    (None, False),
+    ("0", False),
+    ("false", False),
+    ("False", False),
+    ("", False),
+    ("true", False),
+    ("yes", False),
+    ("2", False),
+    ("1", True),
+    (" 1 ", True),
+]
 
-    ⚠️ BU TEST ÖNCE KÖRDÜ, MUTASYON YAKALADI (F8): kaynakta DİZEYİ arıyordu ve o dize
-    fonksiyonun KENDİ docstring'inde de geçiyor — env okuması silinse bile kapı yeşil
-    kalıyordu. Bu deponun "yorum kapıyı kandırdı" sınıfının yeni vakası. Artık AST'de
-    GERÇEK `os.environ.get(...)` çağrısı aranıyor.
+
+@pytest.mark.parametrize("deger,uygular", _BAYRAK_KOLLARI)
+def test_KRITIK_kill_switch_DEGERI_olculur_Y1_D1107(fm, monkeypatch, deger, uygular):
+    """GERÇEK `backend_service._donanim_guncellemesi_safe` → GERÇEK `acilis_denetimi`: ayrıştırılabilir banner, yakmayı
+    gerektiren manifest kuralı; `_firmware_uygula` (indir + yak) KAYITÇI — gerçek indirme/yakma YOK. Ölçülen: otomatik
+    yakma kararı `PEMF_FW_AUTO_UPDATE`'in DEĞERİNE bağlı (Y1: yalnız açık '1').
+
+    ⚠️ D1.107 (B-10.39): eski kapı (`test_kill_switch_VAR`) yalnız AST'de `os.environ.get("PEMF_FW_AUTO_UPDATE")`
+    ÇAĞRISININ VARLIĞINI arıyordu — `uygula=bool(os.environ.get(...))` ('0' → AÇIK) ya da varsayılanın '1' kalması onu
+    YEŞİL bırakıyordu. Bu kapı değeri davranışla ölçer.
     """
-    import ast
+    import backend_service as bs
+    from utils.stm32_kimlik import banner_ayristir
+    from utils.surum_uyumu import surum_demeti
 
-    from utils.path_utils import kaynak_kokunu_bul
+    kimlik = banner_ayristir("-> STM_READY: 2.3.0 (7-ch KARMA uni=0x60 + HW_SYNC@PB1) Waiting for commands...")
+    assert kimlik is not None and surum_demeti(kimlik.surum) is not None, "aparat: banner ayrıştırılamadı (kapı kör)"
+    monkeypatch.setattr(
+        fm, "manifest_oku", lambda **_k: _manifest(fw_surum="2.4", kurallar=[{"clientMin": "", "firmwareMin": "2.4"}])
+    )
+    yakilan = []
+    monkeypatch.setattr(fm, "_firmware_uygula", lambda girdi, plan, *a, **k: yakilan.append(plan.hedef_surum) or {})
+    if deger is None:
+        monkeypatch.delenv("PEMF_FW_AUTO_UPDATE", raising=False)
+    else:
+        monkeypatch.setenv("PEMF_FW_AUTO_UPDATE", deger)
 
-    kok = kaynak_kokunu_bul(__file__)
-    agac = ast.parse((kok / "apps" / "backend" / "backend_service.py").read_text(encoding="utf-8"))
-    okundu = any(
-        isinstance(d, ast.Call)
-        and getattr(d.func, "attr", "") == "get"
-        and d.args
-        and isinstance(d.args[0], ast.Constant)
-        and d.args[0].value == "PEMF_FW_AUTO_UPDATE"
-        for d in ast.walk(agac)
-    )
-    assert okundu, (
-        "kill-switch KODDA okunmuyor (yalnız yorumda geçiyor olabilir) — sahada otomatik "
-        "yakmayı kapatmak için yeniden derleme gerekirdi"
-    )
+    class _Gunluk:
+        def __getattr__(self, ad):
+            return lambda *a, **k: None
+
+    bs._donanim_guncellemesi_safe(SimpleNamespace(stm_kimlik=kimlik, stm_is_connected=True), _Gunluk())
+    d = fm.durum()
+    assert d["eylem"] == su.FIRMWARE_GUNCELLE, f"aparat: plan yakmayı GEREKTİRMEDİ — kapı kör olurdu: {d}"
+    if uygular:
+        assert yakilan == ["2.4"], f"PEMF_FW_AUTO_UPDATE={deger!r} (açık '1') iken plan UYGULANMADI: {yakilan}"
+    else:
+        assert yakilan == [], (
+            f"PEMF_FW_AUTO_UPDATE={deger!r} iken otomatik YAKMA uygulandı — Y1: yalnız açık '1' uygular; değişken "
+            "yoksa ya da başka bir değerse yalnız ÖLÇÜLÜR"
+        )
+        assert d["uygulandi"] is False, d

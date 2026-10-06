@@ -797,8 +797,11 @@ def _donanim_guncellemesi_safe(core, logger: logging.Logger) -> None:
     ⚠️ SIRA: `_start_update_checker_safe`ten SONRA çağrılır — client sürümü belli olmadan
     uyum kararı verilemez.
     ⚠️ ASLA SERVİSİ DÜŞÜRMEZ: her hata yutulur ama TAM ZİNCİRLE loglanır (A9 dersi).
-    ⚠️ Kill-switch: `PEMF_FW_AUTO_UPDATE=0` → yalnız ÖLÇER, uygulamaz. Sahada bir kez
-       kapatmak gerekirse yeniden derleme beklenmesin.
+    ⚠️ Y1 (sahip, 2026-09-29) — VARSAYILAN KAPALI: otomatik yakmaya YALNIZ açık `PEMF_FW_AUTO_UPDATE=1` izin verir;
+       değişken YOKSA ya da başka bir değerse ('0', 'false', 'true', boş…) yalnız ÖLÇER, uygulamaz. Zincir tezgâhta
+       (Oturum 13) doğrulanınca sahip elle açar — bir sonraki yayın sahaya oto-firmware'i AÇIK götürmez, backend
+       yeniden başlatması yakma denemesi olmaz. Kapı (değer davranışla ölçülür, D1.107):
+       `tests/test_firmware_manager.py::test_KRITIK_kill_switch_DEGERI_olculur_Y1_D1107`.
     ⚠️ STM bağlı değilse / internet yoksa hiçbir şey yakılmaz; durum `/api/health`te görünür
        (fail-quiet ≠ fail-silent).
     """
@@ -809,7 +812,7 @@ def _donanim_guncellemesi_safe(core, logger: logging.Logger) -> None:
         durum = fm.acilis_denetimi(
             firmware_surum=getattr(kimlik, "surum", "") or "",
             stm_bagli=bool(getattr(core, "stm_is_connected", False)),
-            uygula=os.environ.get("PEMF_FW_AUTO_UPDATE", "1").strip() not in ("0", "false", "False"),
+            uygula=os.environ.get("PEMF_FW_AUTO_UPDATE", "0").strip() == "1",
         )
         logger.info("Donanım güncellemesi: %s — %s", durum.get("eylem"), durum.get("gerekce"))
     except Exception as e:  # noqa: BLE001 — güncelleme bir KOLAYLIK, servisi ASLA düşürmez
