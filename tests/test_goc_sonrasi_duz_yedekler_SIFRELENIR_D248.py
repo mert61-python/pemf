@@ -25,6 +25,8 @@ if str(KOK) not in sys.path:
 
 K = "D248-at-rest-anahtar"
 _SQLITE_BASLIK = b"SQLite format 3\x00"
+#: Göç İPTAL kurgusu gerçek okuyucu kilidiyle kurulur; açık dosyanın yeniden adlandırılamaması Windows'a özgüdür.
+_WINDOWS_KILIDI = pytest.mark.skipif(os.name != "nt", reason="okuyucu kilidi Windows'a ozgu (POSIX'te kurulamaz)")
 
 
 @pytest.fixture(params=sahte_sqlcipher.BAGLAYICILAR)
@@ -130,6 +132,7 @@ def test_KRITIK_bir_yedek_SIFRELENEMEZSE_dokunulmaz_neden_LOGLANIR(baglayici, tm
     assert not list(app.rglob("*.enc.tmp")), "geçici şifreli kopya artığı kaldı"
 
 
+@_WINDOWS_KILIDI
 def test_KARSIT_goc_IPTAL_olursa_yedeklere_DOKUNULMAZ(baglayici, tmp_path, monkeypatch):
     """Göç doğrulanmış başarıyla bitmezse (kilit) yedekler ŞİFRELENMEZ — canlı DB düzken yedeği şifrelemek, geri
     dönüş kopyasını anahtara bağlar."""

@@ -32,6 +32,9 @@ if str(KOK) not in sys.path:
 K = "D247-at-rest-anahtar"
 PII = "HastaAdi-D247-Boncuk"
 _SQLITE_BASLIK = b"SQLite format 3\x00"
+#: Okuyucu kilidi GERÇEK bağlantıyla kurulur; açık dosyanın yeniden adlandırılamaması Windows'a özgüdür (POSIX'te
+#: açık dosya taşınabilir → kilit kurulamaz, `copy2` geri dönüşü de hiç tetiklenmez). CI-Linux'ta bu kollar ATLANIR.
+_WINDOWS_KILIDI = pytest.mark.skipif(os.name != "nt", reason="okuyucu kilidi Windows'a ozgu (POSIX'te kurulamaz)")
 
 
 @pytest.fixture(params=sahte_sqlcipher.BAGLAYICILAR)
@@ -80,6 +83,7 @@ def _duz_metin_kopyalar(app: Path) -> list:
     return out
 
 
+@_WINDOWS_KILIDI
 def test_KRITIK_kalici_okuyucu_KILIDINDE_goc_duz_metin_KOPYA_yazmadan_DURUR(baglayici, ortam, caplog):
     """A-08(b): canlı DB'de gerçek okuyucu bağlantısı açıkken göç iptal olur ama `.plain.bak`a KOPYA bırakmaz; canlı DB
     yerinde ve düz-metin (karantina yok). MUTASYON: göç taşımasında `copy2` geri dönüşünü geri açmak → KIRMIZI."""
@@ -161,6 +165,7 @@ def test_KARSIT_kalan_kopya_YOKSA_kapatildi_DOGRU_soylenir(baglayici, ortam, cap
     assert "kapatıldı" in caplog.text, "kopya kalmadığında doğru sonuç söylenmeli"
 
 
+@_WINDOWS_KILIDI
 def test_KRITIK_plan_kapisi_kilitli_goc_sonra_basarili_goc_DISKTE_duz_metin_KOPYA_kalmaz(baglayici, ortam, caplog):
     """Plan kapısı: kalıcı okuyucu altında göç düşer, okuyucu kapanır, ikinci göç GERÇEK `migrate_to_encrypted_if_needed`
     ile başarılı olur. Eskiden 'SQLite format 3' başlıklı `*.plain.bak*` kalıyor ve günlük 'kapatıldı' diyordu."""
@@ -173,6 +178,7 @@ def test_KRITIK_plan_kapisi_kilitli_goc_sonra_basarili_goc_DISKTE_duz_metin_KOPY
         su.migrate_to_encrypted_if_needed(db, app, logging.getLogger("d247"))
     finally:
         okuyucu.close()
+    assert db.read_bytes()[:16] == _SQLITE_BASLIK, "ön koşul: okuyucu kilidinde ilk göç İPTAL olmalıydı"
     with caplog.at_level(logging.WARNING):
         su.migrate_to_encrypted_if_needed(db, app, logging.getLogger("d247"))
     assert db.read_bytes()[:16] != _SQLITE_BASLIK, "ikinci göç tamamlanmalıydı"
