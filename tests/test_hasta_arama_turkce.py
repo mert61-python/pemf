@@ -239,6 +239,45 @@ def test_KRITIK_norm_surumu_ARTINCA_mevcut_indeks_acilista_YENIDEN_KURULUR(hasta
     assert "İhsan" in _adlar(yeni_db.search_patients("ihsan")), "yeniden kurulan indeks hastayı bulmuyor"
 
 
+def test_KRITIK_ESKI_kuralla_kurulu_indeks_surum_ARTINCA_turkce_aramada_hastayi_BULUR(
+    hasta_db, temp_app_data, monkeypatch
+):
+    """D2.05 (B-3.107) DAVRANIŞ — normalize kuralı GERÇEKTEN değişmiş bir saha indeksi.
+
+    Yukarıdaki D1.20 kolu sürümü artırır ama kuralı DEĞİŞTİRMEZ: eski ve yeni token'lar aynı
+    olduğundan yeniden kurulum hiç olmasa da arama bulur; o kolun ayırt ediciliği yalnız
+    `_rebuild_search_index` sayacındadır. Ölçüldü (2026-10-06, 2-A): yeniden kurma gövdesi no-op
+    yapılınca (çağrı sayılır, indeks DEĞİŞMEZ) arama/hasta kapı kümesi 22/22 YEŞİL kaldı.
+
+    Burada indeks ESKİ kuralla kurulur — v1: `str.lower()` ('İ' → 'i' + U+0307 birleşik nokta;
+    saha bulgusu 2026-08-30: "İhsan" kaydedip "ihsan" arayan hekim hastayı BULAMIYORDU). Sonra
+    gerçek kural geri gelir ve sürüm artar; yeniden açılan GERÇEK `PatientDatabase` hastayı
+    "ihsan" aramasında BULMALI. Bulamıyorsa sahadaki hastalar Türkçe aramada kayıp kalır.
+
+    MUTASYONLAR (hepsi KIRMIZI): `if count == 0 or (_stored_fp and _stored_fp != _fp)` →
+    `if count == 0` (plan) · parmak izinden normalize sürümü çıkar · `_rebuild_search_index` no-op.
+    """
+    import database.patient_database as pdb
+
+    gercek_kural = pdb.PatientDatabase._normalize_search_value
+    monkeypatch.setattr(pdb.PatientDatabase, "_normalize_search_value", lambda self, v: str(v or "").strip().lower())
+    hasta_db.add_patient({"name": "İhsan", "owner": "T", "species": "Kedi"})
+    # Ö.6 — araç kanıtı: eski kuralın kusuru bu kurulumda GERÇEKTEN var (yoksa kapı hiçbir şey ölçmez).
+    assert "İhsan" not in _adlar(hasta_db.search_patients("ihsan")), "eski kural kurulamadı — kapı kör olurdu"
+
+    monkeypatch.setattr(pdb.PatientDatabase, "_normalize_search_value", gercek_kural)
+    monkeypatch.setattr(pdb.PatientDatabase, "_SEARCH_NORM_VERSION", pdb.PatientDatabase._SEARCH_NORM_VERSION + 1)
+    yeni_db = _yeniden_ac(temp_app_data)
+
+    assert "İhsan" in _adlar(yeni_db.search_patients("ihsan")), (
+        "normalize kuralı ve sürümü değişti ama açılış ESKİ token'larla kurulu indeksi yeniden kurmadı → "
+        "sahadaki hasta Türkçe aramada BULUNAMIYOR"
+    )
+    assert "İhsan" in _adlar(yeni_db.search_patients("İHSAN")), (
+        "büyük harfli Türkçe arama yeniden kurulumdan sonra da bulmalı"
+    )
+
+
 def test_KARSIT_surum_ayniyken_acilista_indeks_yeniden_KURULMAZ(hasta_db, temp_app_data, monkeypatch):
     """Tazeleme "her açılışta kur" biçiminde bozulmasın (dolu tabloda gereksiz yeniden kurulum)."""
     hasta_db.add_patient({"name": "İpek", "owner": "T", "species": "Kedi"})
