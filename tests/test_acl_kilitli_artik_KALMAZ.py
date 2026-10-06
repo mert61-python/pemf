@@ -23,8 +23,11 @@ from betik_alt_sureci import KOK, kostur, yalitik_ortam
 
 EMANET_TESTLERI = [
     "tests/test_at_rest_encryption_rollout.py::test_escrow_ISTENIRSE_hala_saklanir",
+    # D2.08: bu test sahte/gerçek bağlayıcıyla PARAMETRELİ — önek iki düğümü de seçer, ikisi de koşmalı.
     "tests/test_escrow_acl_dusunce_fail_closed.py::test_KARSIT_KANIT_ACL_TUTARSA_emanet_GERCEKTEN_saklanir",
 ]
+# 1 + 2 (parametreli). Düğüm düşerse/atlanırsa (bir bağlayıcı değişkeni toplanmadı) kapı KÖR sayılır.
+EMANET_DUGUM_SAYISI = 3
 
 
 def test_KRITIK_emanet_testleri_tmpde_DUZ_METIN_YEDEK_birakmaz(tmp_path):
@@ -34,7 +37,7 @@ def test_KRITIK_emanet_testleri_tmpde_DUZ_METIN_YEDEK_birakmaz(tmp_path):
         cwd=KOK,
         env=yalitik_ortam(tmp_path / "ev"),
     )
-    assert r.returncode == 0 and "2 passed" in r.stdout, (
+    assert r.returncode == 0 and f"{EMANET_DUGUM_SAYISI} passed" in r.stdout, (
         f"ön koşul: emanet testleri koşmalı\n{r.stdout[-2000:]}\n{r.stderr[-1000:]}"
     )
     kalan = sorted(str(p.relative_to(bt)) for p in bt.rglob("*.plain.bak*"))
