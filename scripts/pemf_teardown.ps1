@@ -110,10 +110,15 @@ function Send-PemfAcilDurdur {
             # O-7.1 (1-F inceleme): yanıt PEMF ACİL DURDUR yanıtı mı — `status` ∈ success/partial/error
             # (`_emergency_stop_all`). `backend.port` yok/bayatken ÖNDEKİ başka bir yerel servis bu yola 2xx dönerse
             # (HTML, başka JSON) "gönderildi" SAYILMAZ, tarama SÜRER — gerçek backend E-stop'u alsın.
+            # O-13.1 (1-G inceleme → 1-H): `status` DEĞERİNİ taklit eden yabancı servis de (ör. {"status":"success"})
+            # PEMF sayılmaz — imza `stmStopped` VE `mqttResults` alanlarını da ister (`_emergency_stop_all` her yanıtta
+            # basar). Gönderim AZALMAZ (istek zaten gitti); yalnız tarama SÜRER.
             $durum = ''
-            if ($null -ne $r -and -not ($r -is [string]) -and $r.PSObject.Properties['status']) { $durum = [string]$r.status }
+            $pemf = $null -ne $r -and -not ($r -is [string]) -and $r.PSObject.Properties['status'] -and
+                $r.PSObject.Properties['stmStopped'] -and $r.PSObject.Properties['mqttResults']
+            if ($pemf) { $durum = [string]$r.status }
             if (@('success', 'partial', 'error') -notcontains $durum) {
-                Write-PemfLog "ACİL DURDUR: 127.0.0.1:$p yanıtı PEMF yanıtı DEĞİL (status alanı yok/yabancı) — başka bir servis; tarama sürüyor" 'Yellow'
+                Write-PemfLog "ACİL DURDUR: 127.0.0.1:$p yanıtı PEMF yanıtı DEĞİL (status/stmStopped/mqttResults imzası yok/yabancı) — başka bir servis; tarama sürüyor" 'Yellow'
                 continue
             }
             Write-PemfLog "ACİL DURDUR gönderildi: 127.0.0.1:$p (status=$($r.status) confirmed=$($r.confirmed))" 'Yellow'

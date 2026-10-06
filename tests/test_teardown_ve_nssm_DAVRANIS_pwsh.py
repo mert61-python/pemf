@@ -89,7 +89,8 @@ function Invoke-RestMethod {
     if ($script:HttpDavranis -eq 'zaman') { throw [System.TimeoutException]::new("sahte: zaman asimi") }
     $port = ([uri]$Uri).Port
     if ($script:YabanciPortlar.ContainsKey($port)) { return $script:YabanciPortlar[$port] }
-    [pscustomobject]@{ status = 'success'; confirmed = $true }
+    # O-13.1 (1-H): GERÇEK `_emergency_stop_all` yanıtının şekli — status + confirmed + stmStopped + mqttResults.
+    [pscustomobject]@{ status = 'success'; confirmed = $true; stmStopped = $true; mqttResults = @() }
 }
 function Invoke-WebRequest { [CmdletBinding()] param([Parameter(ValueFromRemainingArguments = $true)]$R) K "HTTP-IWR"; throw "sahte: IWR kullanilmamali" }
 function Get-Service {
@@ -211,6 +212,10 @@ switch -Wildcard ($Senaryo) {
             'estop_yabanci_html' { $script:AcikPortlar = @(8000, 8001); $script:YabanciPortlar = @{ 8000 = '<html><body>baska servis</body></html>' } }
             'estop_yabanci_json' { $script:AcikPortlar = @(8000, 8001); $script:YabanciPortlar = @{ 8000 = [pscustomobject]@{ status = 'ok'; servis = 'baska' } } }
             'estop_yabanci_hepsi' { $script:AcikPortlar = @(8000); $script:YabanciPortlar = @{ 8000 = [pscustomobject]@{ ok = $true } } }
+            # O-13.1: yabancı servis PEMF'in `status` DEĞERİNİ döner — imzanın öteki alanları (stmStopped / mqttResults) ayrı ayrı eksik.
+            'estop_yabanci_success' { $script:AcikPortlar = @(8000, 8001); $script:YabanciPortlar = @{ 8000 = [pscustomobject]@{ status = 'success' } } }
+            'estop_yabanci_success_stm' { $script:AcikPortlar = @(8000, 8001); $script:YabanciPortlar = @{ 8000 = [pscustomobject]@{ status = 'success'; stmStopped = $true } } }
+            'estop_yabanci_success_mqtt' { $script:AcikPortlar = @(8000, 8001); $script:YabanciPortlar = @{ 8000 = [pscustomobject]@{ status = 'partial'; mqttResults = @() } } }
         }
         $script:Servis['mosquitto'] = 'Running'; $script:Servis['PemfBackend'] = 'Running'
         $script:PemfFailed = @()
@@ -619,11 +624,22 @@ def test_KRITIK_D192_port_SIRASI_backend_port_8000_8001_ve_ILK_basarida_durur(tm
     assert 8002 not in sonda, "ilk başarılı ACİL DURDUR'dan sonra taramaya devam edildi (yabancı servislere istek)"
 
 
-@pytest.mark.parametrize("senaryo", ["estop_yabanci_html", "estop_yabanci_json"])
+@pytest.mark.parametrize(
+    "senaryo",
+    [
+        "estop_yabanci_html",
+        "estop_yabanci_json",
+        "estop_yabanci_success",
+        "estop_yabanci_success_stm",
+        "estop_yabanci_success_mqtt",
+    ],
+)
 def test_KRITIK_O71_YABANCI_servisin_2xxi_GONDERILDI_sayilmaz_tarama_SURER(tmp_path, senaryo):
     """O-7.1 (1-F inceleme): tarama ilk 2xx yanıtta duruyordu. `backend.port` yok/bayatken ÖNDEKİ bir yerel servis (8000)
     bu yola 2xx dönerse gerçek backend (8001) ACİL DURDUR almıyordu. Yanıt PEMF yanıtı olmalı: `status` ∈ success/partial/
-    error (`_emergency_stop_all`'ın değerleri); HTML ya da başka `status` değeri 'gönderildi' sayılmaz, tarama SÜRER."""
+    error (`_emergency_stop_all`'ın değerleri); HTML ya da başka `status` değeri 'gönderildi' sayılmaz, tarama SÜRER.
+    O-13.1 (1-G inceleme → 1-H): `status` DEĞERİNİ taklit eden yabancı servis de ('success' / 'partial') PEMF sayılmaz —
+    imza `stmStopped` VE `mqttResults` alanlarını da ister (gönderim AZALMAZ: istek zaten gitmiştir, yalnız tarama sürer)."""
     s = _kos(tmp_path, senaryo)
     k = s["kayit"]
     http = [x for x in k if x.startswith("HTTP ")]
