@@ -353,3 +353,37 @@ def test_KRITIK_simulator_rapor_islevi_firmware_ile_IZGARADA_birebir(exe_rapor):
         if (s := sim.firmware_etkin_binde(f32(d), f32(f), u)) != r
     ]
     assert not ayrisan, f"simülatör ≠ firmware (Hz, duty, tek_bacak, firmware, simülatör): {ayrisan[:8]}"
+
+
+def test_KRITIK_simulator_rapor_islevi_firmware_ile_FLOAT32_SINIRINDA_birebir_H61(exe_rapor):
+    """H-6.1 (1-H incelemesi): ızgara yalnız "yuvarlak" (Hz, duty) çiftlerini ölçüyordu — simülatörün iki float32 adımı
+    (`tpp = (uint32)(50000/f)` ve `hedef = (int32)(duty·tpp)`) double'a çevrilince 62/62 Y69 + simülatör testi YEŞİL kaldı;
+    oysa sınırda (f = f32(50000/n) · duty = k/tpp ± 3e-8) firmware'den 913 / 330 vakada ayrışıyordu (inceleme sondası).
+    Sevk edilen firmware'in ACK'ini basan simülatör (D0Ö.13) burada da birebir olmalı."""
+    import struct
+
+    import tools.stm32_simulator as sim
+
+    def f32(x: float) -> float:
+        return struct.unpack("<f", struct.pack("<f", x))[0]
+
+    vakalar = []
+    for n in list(range(2, 200)) + list(range(200, 50001, 211)):  # tpp sınırı: f float32'ye yuvarlanmış 50000/n
+        for d in (0.3, 0.9):
+            vakalar += [(f32(50000.0 / n), d, 0), (f32(50000.0 / n), d, 1)]
+    for tpp in (3, 5, 7, 10, 13, 33, 99, 101, 333, 4999):  # hedef sınırı: duty = k/tpp ± float32 yarım-ulp mertebesi
+        for k in range(1, min(tpp, 40)):
+            for dd in (-3e-8, 0.0, 3e-8):
+                vakalar += [(50000.0 / tpp, k / tpp + dd, 0), (50000.0 / tpp, k / tpp + dd, 1)]
+    raporlar = []
+    for i in range(0, len(vakalar), 400):
+        raporlar += _rapor(exe_rapor, vakalar[i : i + 400])
+    ayrisan = [
+        (f, d, u, r, s)
+        for (f, d, u), r in zip(vakalar, raporlar)
+        if (s := sim.firmware_etkin_binde(f32(d), f32(f), u)) != r
+    ]
+    assert len(raporlar) == len(vakalar) > 2000, f"aparat: {len(vakalar)} vaka / {len(raporlar)} rapor"
+    assert not ayrisan, (
+        f"simülatör ≠ firmware float32 SINIRINDA (Hz, duty, tek_bacak, firmware, simülatör): {ayrisan[:8]}"
+    )
