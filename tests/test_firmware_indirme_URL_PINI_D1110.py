@@ -160,6 +160,11 @@ def test_KRITIK_yonlendirme_hedefi_DOGRULANIR_http_hedef_IZLENMEZ():
         ("https://objects.githubusercontent.com/x/y", True),
         ("https://release-assets.githubusercontent.com/a", True),
         ("https://github.com/mert61-python/pemf-update/releases/download/a/b", True),
+        # H-4.1 (1-H incelemesi): joker sonek NOKTALI (`.githubusercontent.com`, Rust `ALLOWED_SUFFIX`) — benzer adlı
+        # alan adları ve sonek-önek hilesi REDDEDİLİR (noktasız `endswith` mutantı 161 eski testte yeşil kalıyordu).
+        ("https://evilgithubusercontent.com/x", False),
+        ("https://objects.githubusercontent.com.evil.example/x", False),
+        ("https://githubusercontent.com/x", False),
     ],
 )
 def test_yonlendirme_kurali_RUST_validate_url_ikizi(hedef, kabul):
