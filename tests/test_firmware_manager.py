@@ -126,7 +126,12 @@ def test_KRITIK_firmware_guncelle_dali_YAKMA_cagirir(fm, monkeypatch, tmp_path):
 
     def _sahte_yak(yol, **k):
         cagri["yol"] = yol
-        return sy.Sonuc(sy.TAMAM, "ok", adimlar=["sahte"])
+        return sy.Sonuc(
+            sy.TAMAM,
+            "ok",
+            banner="-> STM_READY: DDS v2.3 (7-ch KARMA uni=0x60 + HW_SYNC@PB1) Waiting for commands...",
+            adimlar=["sahte"],
+        )
 
     monkeypatch.setattr(sy, "yakma_akisi", _sahte_yak)
     d = fm.acilis_denetimi(firmware_surum="2.2", stm_bagli=True)

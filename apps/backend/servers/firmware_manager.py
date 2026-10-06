@@ -357,7 +357,37 @@ def _firmware_uygula(girdi: dict, plan: su.Plan, banner_kaynagi=None) -> dict:
         logger.info("firmware: %s", adim)
 
     if sonuc.kod == TAMAM:
-        logger.info("donanım güncellemesi TAMAM → %s", plan.hedef_surum)
-        return _durum_yaz(uygulandi=True, hata="", firmwareSurum=plan.hedef_surum)
+        # ⚠️ H-1.1 (1-H incelemesi): "uygulandı" ve `firmwareSurum` ÖLÇÜLENİ söyler — kartın yakmadan SONRA kendi bastığı
+        # banner'ın sürümü. Eskiden planın HEDEF sürümü yazılıyordu: yakılan ikilinin banner'ı hedefi söylemese de (main.c'deki
+        # sürüm dizesi artırılmadan yayınlanan ikili) durum "uygulandı, 2.4" diyordu ve sonraki her açılış AYNI ikiliyi
+        # YENİDEN yakıyordu (ölçüldü — inceleme raporu, Kapsam 1).
+        kart = _banner_surumu(sonuc.banner)
+        if _ayni_surum(kart, plan.hedef_surum):
+            logger.info("donanım güncellemesi TAMAM → %s (kart yakmadan sonra %s bildirdi)", plan.hedef_surum, kart)
+            return _durum_yaz(uygulandi=True, hata="", firmwareSurum=kart)
+        hata = (
+            f"yakıldı ama kart hedef sürümü bildirmedi: kart {kart or '(sürüm ayrıştırılamadı)'}, hedef "
+            f"{plan.hedef_surum} — yayınlanan ikilinin banner sürümü uyum varlığındaki sürümle UYUŞMUYOR (yayın hatası); "
+            "sonraki açılışta yeniden denenir"
+        )
+        logger.error("donanım güncellemesi DOĞRULANAMADI: %s", hata)
+        return _durum_yaz(uygulandi=False, hata=hata, firmwareSurum=kart)
     logger.warning("donanım güncellemesi BAŞARISIZ (kod %s): %s", sonuc.kod, sonuc.ozet)
     return _durum_yaz(uygulandi=False, hata=f"[{sonuc.kod}] {sonuc.ozet}")
+
+
+def _banner_surumu(banner: str) -> str:
+    """H-1.1: banner satırından karşılaştırılabilir firmware sürümü (D1.120 `firmware_surumu`); okunamazsa ""."""
+    from utils import stm32_kimlik
+
+    kimlik = stm32_kimlik.banner_ayristir(banner or "")
+    return stm32_kimlik.firmware_surumu(kimlik.surum) if kimlik else ""
+
+
+def _ayni_surum(a: str, b: str) -> bool:
+    """`2.4` ≡ `2.4.0` (eksik parçalar 0). Biri ayrıştırılamazsa False — bilinmeyen sürüm "hedefe ulaşıldı" sayılmaz."""
+    x, y = su.surum_demeti(a), su.surum_demeti(b)
+    if x is None or y is None:
+        return False
+    n = max(len(x), len(y))
+    return x + (0,) * (n - len(x)) == y + (0,) * (n - len(y))

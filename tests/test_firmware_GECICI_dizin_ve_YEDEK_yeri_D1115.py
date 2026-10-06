@@ -112,7 +112,15 @@ def akis(fm, monkeypatch, tmp_path):
 
     monkeypatch.setattr(sy, "programmer_cli", lambda: Path("sahte_cli.exe"))
     monkeypatch.setattr(sy, "_kos", _sahte_kos)
-    monkeypatch.setattr(sy, "banner_dogrula", lambda *a, **k: (True, "uyumlu", "-> STM_READY: 2.4.0 (7-ch ...)"))
+    monkeypatch.setattr(
+        sy,
+        "banner_dogrula",
+        lambda *a, **k: (
+            True,
+            "uyumlu",
+            "-> STM_READY: DDS v2.4.0 (7-ch KARMA uni=0x60 + HW_SYNC@PB1) Waiting for commands...",
+        ),
+    )
     monkeypatch.setattr(sy.time, "sleep", lambda _s: None)
     monkeypatch.setitem(api._active_session, "is_active", False)
     monkeypatch.setattr(api.state, "hardware", None)

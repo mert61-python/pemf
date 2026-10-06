@@ -73,7 +73,12 @@ def zincir(monkeypatch, tmp_path):
 
     def _sahte_yak(yol, **k):
         kayit["yak"].append(str(yol))
-        return sy.Sonuc(sy.TAMAM, "sahte yakıcı", adimlar=["sahte"])
+        return sy.Sonuc(
+            sy.TAMAM,
+            "sahte yakıcı",
+            banner="-> STM_READY: DDS v2.4 (7-ch KARMA uni=0x60 + HW_SYNC@PB1) Waiting for commands...",
+            adimlar=["sahte"],
+        )
 
     monkeypatch.setattr(sy, "yakma_akisi", _sahte_yak)
     monkeypatch.setattr(sy, "programmer_cli", lambda: None)
