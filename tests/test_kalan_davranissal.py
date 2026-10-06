@@ -204,16 +204,30 @@ def test_plain_bak_ACL_basarisizsa_SILINIR(temp_app_data, monkeypatch):
     """`.plain.bak` = tüm eski hasta PII'sinin DÜZ-METİN tam kopyası; SQLCipher'ı tamamen
     baypas eder. ACL uygulanamıyorsa korumasız escrow şifrelemenin kendisini anlamsız kılar
     → dosya SİLİNMELİ (fail-closed)."""
+    import ast
     import inspect
     import re
+    import textwrap
 
     from database import treatment_history_db as thdb
 
     # ⚠️ ÇIPA TAŞINDI (A1·2/2): tedavi yolu artık göç gövdesini taşımıyor, ortak
     # uygulamaya delege ediyor. Sözleşme aynı; ölçülen kaynak ortak fonksiyon.
-    src = inspect.getsource(thdb.TreatmentHistoryDB._migrate_to_encrypted_if_needed)
-    assert "migrate_to_encrypted_if_needed(" in src, (
-        "tedavi yolu ortak göçe DELEGE etmiyor → kopya geri gelmiş olabilir"
+    # ⚠️ D2.02 (B-3.78, 2026-10-06): burada `"migrate_to_encrypted_if_needed(" in src` vardı ve
+    # TOTOLOJİKTİ — `getsource`un döndürdüğü `def _migrate_to_encrypted_if_needed(self):` satırı
+    # aranan dizeyi HER ZAMAN içerir; delege çağrısı `pass` yapılınca kapı YEŞİL kaldı (ölçüldü).
+    # Artık metot gövdesinde GERÇEK bir çağrı düğümü aranır ve tedavi DB'sinin KENDİ yolu
+    # (`self.db_path`) ile çağrıldığı istenir (yanlış DB yoluna delege de KIRMIZI).
+    _delege = ast.parse(textwrap.dedent(inspect.getsource(thdb.TreatmentHistoryDB._migrate_to_encrypted_if_needed)))
+    _ortak_cagrilar = [
+        c
+        for c in ast.walk(_delege)
+        if isinstance(c, ast.Call)
+        and getattr(c.func, "id", getattr(c.func, "attr", None)) == "migrate_to_encrypted_if_needed"
+    ]
+    assert _ortak_cagrilar, "tedavi yolu ortak göçe DELEGE etmiyor → kopya geri gelmiş olabilir"
+    assert any(c.args and ast.unparse(c.args[0]) == "self.db_path" for c in _ortak_cagrilar), (
+        f"tedavi yolu ortak göçü KENDİ DB yoluyla çağırmıyor: {[ast.unparse(c) for c in _ortak_cagrilar]}"
     )
 
     from database.sqlcipher_util import migrate_to_encrypted_if_needed as _ortak_goc

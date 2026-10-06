@@ -12,7 +12,15 @@ sonraki acilis BOS bir veritabani yaratiyor ve klinik gecmisi BOS goruyordu. Bu 
   · `_migrate_to_encrypted_if_needed` KENDI govdesini TASIMAZ — `sqlcipher_util`e delege eder
     (A1 birlestirmesi). Buraya govde GERI YAZMAYIN; iki kopya sessizce ayrisir.
   · `_run_startup_migrations_with_rollback` her goc adimini GERI ALINABILIR tutar.
-Kapilar: 10 yarim-goc testi + 48 urun senaryosunun A grubu (donmus EXE'de kosar).
+Kapilar (D2.02, 2026-10-06'da OLCULDU — eski satir "10 yarim-goc testi" diyordu; 10'un 4'u
+sqlcipher3 YOKSA ATLANIR, `test_KRITIK_HER_IKI_goc_yolu_da_KORUNUYOR` tedavi delegasyonuna KORDU:
+delege `pass` / kurucudaki cagri yorumda / yanlis DB yolu — ucunde de YESIL):
+  · delegasyon (bu dosyadaki cagri + tedavi kurucusundaki cagri + `self.db_path`):
+    tests/test_goc_yarim_kalirsa_db_kaybolmaz.py::test_KRITIK_tedavi_DB_kurucusu_yarim_gocu_KENDI_yolunda_TOPARLAR
+    (davranis, sqlcipher3 GEREKTIRMEZ) + ::test_KRITIK_HER_IKI_goc_yolu_da_KORUNUYOR (AST) +
+    tests/test_duz_metin_yedek_bayragi_tek_ad.py::test_KRITIK_tedavi_yolu_ORTAK_goce_DELEGE_eder (AST).
+  · yarim-goc davranisi (geri alma / toparlama / gecici kilit): ayni dosyanin 4 davranis testi
+    sqlcipher3 ISTER. 48 urun senaryosu (scripts/urun_senaryolari.py) yalniz donmus EXE'de, elle.
 
 ⚠️ `_safe_add_column` var-olan sutunu SESSIZCE atlar (idempotent). Bunu "hata gizliyor" diye
 sertlestirmeyin: sema gocu her aciliste kosar ve ikinci kosuda patlamamalidir.
@@ -49,8 +57,8 @@ class SemaKarisimi:
         ⚠️ NEDEN BIRLESTIRILDI: bu kopya, TEK bir oturumda UC ayri yerden ayristigi olculen
         kuyrugun sahibiydi (bayrak adi · ACL fail-open · log seviyesi) ve ayrismalarin hicbiri
         denetimde gorunmuyordu. Dorduncusu kacinilmazdi. Kendi kopyanizi YAZMAYIN.
-        Kapilar: tests/test_goc_yarim_kalirsa_db_kaybolmaz.py ·
-                 tests/test_at_rest_encryption_rollout.py ·
+        Kapilar: tests/test_goc_yarim_kalirsa_db_kaybolmaz.py (delegasyon: davranis + AST) ·
+                 tests/test_at_rest_encryption_rollout.py (sqlcipher3 ISTER) ·
                  tests/test_escrow_acl_dusunce_fail_closed.py
         """
         from database.sqlcipher_util import migrate_to_encrypted_if_needed

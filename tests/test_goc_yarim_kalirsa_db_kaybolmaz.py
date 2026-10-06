@@ -229,12 +229,41 @@ def _kaynak(bagil: str) -> str:
     return c_soy((KOK / bagil).read_text(encoding="utf-8"))
 
 
+def _cagri_adlari(dugum) -> set:
+    """Düğümün altındaki GERÇEK çağrıların adları (AST: yorum, dize ve import satırı SAYILMAZ).
+
+    ⚠️ D2.02 (B-3.78, 2026-10-06): bu kapı eskiden `c_soy` (C yorum sökücüsü) uygulanmış kaynakta
+    ALT-DİZE arıyordu. C sökücüsü Python `#` yorumlarını sökmez: tedavi kurucusundaki göç çağrısı
+    YORUMA alınınca kapı YEŞİL kalıyordu (ölçüldü). AST yorumu hiç görmez."""
+    import ast
+
+    return {getattr(c.func, "id", getattr(c.func, "attr", None)) for c in ast.walk(dugum) if isinstance(c, ast.Call)}
+
+
+def _tedavi_delegesini_bul():
+    """Tedavi DB'sinin `_migrate_to_encrypted_if_needed` metodunu TAŞIYAN dosyada metodun AST düğümü.
+
+    Dosya adı SABİT YAZILMAZ (B4 bölmesi metodu `thdb_sema.py`ye taşıdı; sonraki bölme kapıyı kör
+    bırakmasın) — `apps/backend/database/` altında tanım aranır."""
+    import ast
+
+    for yol in sorted((KOK / "apps" / "backend" / "database").glob("*.py")):
+        agac = ast.parse(yol.read_text(encoding="utf-8"))
+        for n in ast.walk(agac):
+            if isinstance(n, ast.FunctionDef) and n.name == "_migrate_to_encrypted_if_needed":
+                return yol, n
+    raise AssertionError("`_migrate_to_encrypted_if_needed` hicbir DB modulunde yok -> kapi KOR kaldi")
+
+
 def test_KRITIK_HER_IKI_goc_yolu_da_KORUNUYOR():
     """⚠️ ASIL KAPI — kısmi düzeltmeyi yakalar.
 
-    MUTASYON: `treatment_history_db.py`den `_yarim_goc_toparla` çağrısını sil → KIRMIZI
-    (birim testler yeşil kalır ama ürün hasta geçmişini kaybeder — ilk düzeltmemde
-    tam olarak bu oldu).
+    MUTASYONLAR (hepsi KIRMIZI, D2.02 2026-10-06'da ölçüldü):
+      · thdb_sema.py'deki delege çağrısı (`migrate_to_encrypted_if_needed(self.db_path, …)`) → `pass`
+      · tedavi kurucusundaki `self._migrate_to_encrypted_if_needed()` YORUMA alınır
+      · delege YANLIŞ DB yoluyla çağrılır (`self.app_data_dir / "patients.db"`)
+    Eski biçim (alt-dize) üçünde de YEŞİLDİ. Davranış ikizi (sqlcipher3 GEREKTİRMEZ):
+    `test_KRITIK_tedavi_DB_kurucusu_yarim_gocu_KENDI_yolunda_TOPARLAR`.
     """
     # ⚠️ ÇIPALAR ÇAĞRIYA PİNLİ, ADA DEĞİL. İlk yazımda düz `"_yarim_goc_toparla" in src`
     # kullandım ve mutasyon YEŞİL kaldı: çağrıyı silsen bile `from ... import _yarim_goc_toparla`
@@ -254,22 +283,55 @@ def test_KRITIK_HER_IKI_goc_yolu_da_KORUNUYOR():
     #   · toparlamayı çağıran ORTAK göçe delege etmek.
     # İkinci biçimin gerçekten koruduğu, hemen aşağıda ayrıca ölçülüyor — yoksa "delege
     # ediyorum" demek kapıyı bedavaya geçirirdi.
-    for yol in (
-        "apps/backend/database/sqlcipher_util.py",
-        "apps/backend/database/treatment_history_db.py",
-        "apps/backend/utils/path_utils.py",
-    ):
-        src = _kaynak(yol)
-        dogrudan = "_yarim_goc_toparla(" in src
-        delege = "migrate_to_encrypted_if_needed(" in src
-        assert dogrudan or delege, (
+    # ⚠️ D2.02 (B-3.78): ÇAĞRILAR AST'DEN okunur (alt-dize DEĞİL). Eski biçimde tedavi yolu için
+    # `"migrate_to_encrypted_if_needed(" in src` aranıyordu ve bunu kurucudaki
+    # `self._migrate_to_encrypted_if_needed()` (metot ADI aranan dizeyi içerir) karşılıyordu;
+    # asıl delege (thdb_sema.py) HİÇ okunmuyordu.
+    import ast
+
+    for yol in ("apps/backend/database/sqlcipher_util.py", "apps/backend/utils/path_utils.py"):
+        cagrilar = _cagri_adlari(ast.parse((KOK / yol).read_text(encoding="utf-8")))
+        assert "_yarim_goc_toparla" in cagrilar or "migrate_to_encrypted_if_needed" in cagrilar, (
             f"{yol}: yarim-goc TOPARLAMA ne CAGRILIYOR ne de toparlamayi cagiran ortak goce "
             "DELEGE ediliyor -> o yolda `db` yok kalir ve BOS DB/SABLON yaratilir"
         )
 
-    # Delegasyonun DEĞERİ, delege edilen şeyin gerçekten toparlamasıdır.
-    import ast
+    # TEDAVİ YOLU — iki halka, ikisi de GERÇEK çağrıya pinli:
+    #   (1) kurucu göç metodunu ÇAĞIRIR (treatment_history_db.TreatmentHistoryDB.__init__),
+    #   (2) metot ortak göçe KENDİ DB yolunu (`self.db_path`) verir (thdb_sema.py).
+    thdb_agac = ast.parse((KOK / "apps/backend/database/treatment_history_db.py").read_text(encoding="utf-8"))
+    kurucu = next(
+        (
+            f
+            for c in ast.walk(thdb_agac)
+            if isinstance(c, ast.ClassDef) and c.name == "TreatmentHistoryDB"
+            for f in c.body
+            if isinstance(f, ast.FunctionDef) and f.name == "__init__"
+        ),
+        None,
+    )
+    assert kurucu is not None, "TreatmentHistoryDB.__init__ bulunamadi -> kapi KOR kaldi"
+    assert "_migrate_to_encrypted_if_needed" in _cagri_adlari(kurucu), (
+        "TreatmentHistoryDB kurucusu goc metodunu CAGIRMIYOR -> tedavi DB'si yarim gocu hic toparlamaz; "
+        "yarim kalmis bir gocte BOS DB yaratilir (yorumdaki cagri sayilmaz)"
+    )
+    delege_dosyasi, delege = _tedavi_delegesini_bul()
+    ortak_cagrilar = [
+        c
+        for c in ast.walk(delege)
+        if isinstance(c, ast.Call)
+        and getattr(c.func, "id", getattr(c.func, "attr", None)) == "migrate_to_encrypted_if_needed"
+    ]
+    assert ortak_cagrilar, (
+        f"{delege_dosyasi.name}: tedavi yolu ortak goce DELEGE etmiyor -> yarim-goc toparlamasi yok, "
+        "kopya geri gelmis olabilir"
+    )
+    assert any(c.args and ast.unparse(c.args[0]) == "self.db_path" for c in ortak_cagrilar), (
+        f"{delege_dosyasi.name}: ortak goc tedavi DB'sinin KENDI yoluyla (self.db_path) cagrilmiyor: "
+        f"{[ast.unparse(c) for c in ortak_cagrilar]} -> toparlama baska bir dosyada kosar, tedavi DB'si korumasiz"
+    )
 
+    # Delegasyonun DEĞERİ, delege edilen şeyin gerçekten toparlamasıdır.
     agac = ast.parse(_kaynak("apps/backend/database/sqlcipher_util.py"))
     ortak = next(
         (n for n in ast.walk(agac) if isinstance(n, ast.FunctionDef) and n.name == "migrate_to_encrypted_if_needed"),
@@ -291,12 +353,86 @@ def test_KRITIK_HER_IKI_goc_yolu_da_KORUNUYOR():
     # Geri alma dalı: ikinci taşıma düşerse orijinal geri konmalı.
     # ⚠️ ÇIPA TAŞINDI (2026-09-15, A1·2/2): eskiden İKİ dosyada da aranıyordu; tedavi yolu
     # artık göç gövdesini taşımıyor, ortak uygulamaya delege ediyor. Geri-alma dalı TEK
-    # uygulamada ölçülür — delegasyonun kendisi yukarıda kilitli.
+    # uygulamada ölçülür — delegasyonun kendisi yukarıda AST ile (iki halka + `self.db_path`)
+    # ve `test_KRITIK_tedavi_DB_kurucusu_yarim_gocu_KENDI_yolunda_TOPARLAR` ile davranışla kilitli.
+    # (D2.02: bu satır eskiden "yukarıda kilitli" diyordu ama yukarıdaki alt-dize kördü.)
     ortak_src = ast.unparse(ortak)
     assert "GOC GERI ALINAMADI" in ortak_src or "_tasi_yeniden_dene(backup, db" in ortak_src, (
         "ORTAK gocte ikinci tasima duserse GERI ALMA dali yok -> veritabani YOK kalir "
         "(ve artik TEK uygulama oldugu icin bu, iki veritabanini birden vurur)"
     )
+
+
+def test_KRITIK_tedavi_DB_kurucusu_yarim_gocu_KENDI_yolunda_TOPARLAR(tmp_path, monkeypatch):
+    """⚠️ D2.02 (B-3.78) — DAVRANIŞ KAPISI; sqlcipher3 GEREKTİRMEZ (Windows CI'da da koşar).
+
+    Tedavi DB'sinin yarım-göç koruması iki halkalı bir zincirden geçer:
+      `TreatmentHistoryDB.__init__` → `self._migrate_to_encrypted_if_needed()` (treatment_history_db.py)
+      → `migrate_to_encrypted_if_needed(self.db_path, …)` (thdb_sema.py) → `_yarim_goc_toparla`.
+    Eski iki "delege" kapısı alt-dize arıyordu ve şu üç mutantta YEŞİL kaldı (ölçüldü 2026-10-06):
+      · thdb_sema.py'deki çağrı `pass` → `def _migrate_to_encrypted_if_needed(` satırı dizeyi taşıyor;
+      · kurucudaki çağrı YORUMA alınır → C yorum sökücüsü Python `#` yorumunu sökmüyor;
+      · delege hasta DB'sinin yoluyla çağrılır → ad var, değer yanlış.
+    Bu kapı zinciri GERÇEKTEN koşturur: diskte yarım kalmış bir göç (db YOK, `.plain.bak` VAR) varken
+    gerçek `TreatmentHistoryDB` kurulur → seans geri gelmeli, ortak göç TEDAVİ yoluyla çağrılmış olmalı.
+
+    sqlcipher3'süz nasıl: ortak göç anahtarı okur ve toparlamayı binding sınamasından ÖNCE yapar
+    (`_yarim_goc_toparla(db)` → `if sqlcipher is None or not os.path.exists(db): return`). Anahtar
+    sahte bir dizeyle verilir, binding None'a çekilir → şifreleme hiç denenmez, yalnız toparlama
+    koşar; tedavi DB'si düz-metin açılır (bayrak kapalı).
+    """
+    from database import sqlcipher_util as su
+    from database import treatment_history_db as thdb
+
+    monkeypatch.delenv("PEMF_ENCRYPT_AT_REST", raising=False)
+    monkeypatch.delenv("PEMF_SQLCIPHER_KEY", raising=False)
+
+    # 1) Düz-metin dönemde GERÇEK tedavi şemasıyla bir seans yaz (anahtar yok → düz-metin).
+    hazirlik = tmp_path / "hazirlik" / "PEMF_GUI"
+    monkeypatch.setattr(su, "get_sqlcipher_key", lambda *a, **k: "")
+    eski = thdb.TreatmentHistoryDB(hazirlik)
+    sid = eski.start_session("YarimGocSeansi")
+    eski.end_session(sid)
+    eski.close_connections()
+    del eski
+
+    # 2) Yarım kalmış göç: canlı db YOK, veri `.plain.bak`ta.
+    kok = tmp_path / "PEMF_GUI"
+    kok.mkdir(parents=True, exist_ok=True)
+    db = kok / "pemf_treatment_history.db"
+    yedek = Path(str(db) + ".plain.bak")
+    shutil.move(str(hazirlik / "pemf_treatment_history.db"), str(yedek))
+    assert yedek.exists() and not db.exists()
+
+    # 3) Anahtar VAR (sahte), binding YOK → ortak göç yalnız toparlar. Ortak göç casuslanır (gerçeğine geçer).
+    monkeypatch.setattr(su, "get_sqlcipher_key", lambda *a, **k: "SAHTE-ANAHTAR-D202")
+    monkeypatch.setattr(su, "import_sqlcipher", lambda: None)
+    gercek_goc = su.migrate_to_encrypted_if_needed
+    cagrilan_yollar = []
+
+    def _casus(db_path, *a, **k):
+        cagrilan_yollar.append(Path(str(db_path)))
+        return gercek_goc(db_path, *a, **k)
+
+    monkeypatch.setattr(su, "migrate_to_encrypted_if_needed", _casus)
+
+    yeni = thdb.TreatmentHistoryDB(kok)
+    try:
+        assert cagrilan_yollar, (
+            "tedavi DB kurucusu ortak goce HIC ulasmadi -> yarim goc toparlanmaz; bir sonraki acilista "
+            "BOS bir tedavi DB'si yaratilir ve klinik gecmisi BOS gorur"
+        )
+        assert yeni.db_path in cagrilan_yollar, (
+            f"ortak goc tedavi DB'sinin KENDI yoluyla cagrilmadi: {cagrilan_yollar} (beklenen {yeni.db_path}) "
+            "-> toparlama baska bir dosyada kosuyor"
+        )
+        assert db.exists() and not yedek.exists(), (
+            "yarim kalmis goc TOPARLANMADI: tedavi DB'si yerine konmadi (veri .plain.bak'ta kaldi)"
+        )
+        modlar = [s.get("treatment_mode") for s in yeni.get_session_history(limit=10)]
+        assert modlar == ["YarimGocSeansi"], f"yarim gocten once yazilan seans geri GELMEDI: {modlar}"
+    finally:
+        yeni.close_connections()
 
 
 def test_ikinci_kopya_PAYLASILAN_yardimcilari_kullaniyor():
