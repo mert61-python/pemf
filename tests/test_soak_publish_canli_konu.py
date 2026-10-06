@@ -213,6 +213,8 @@ def _kayitli_mqtt_isleyicisi(monkeypatch, api) -> tuple:
     monkeypatch.setattr(api, "_mqtt_credentials", lambda: ("", ""))
     monkeypatch.setattr(api, "_mqtt_client_id", lambda *a, **k: "d0o-test")
     monkeypatch.setattr(api, "_mqtt_client_api", None)
+    # O-3.1 (1-H): broker kimlik sondası bu kapının konusu DEĞİL — gerçek 127.0.0.1:1883'e gitmesin (bekçi yasak portu).
+    monkeypatch.setattr(api, "_broker_kimlik_sondasi", lambda: None)
     api._start_mqtt_for_api()
     assert kurulan, "ürün MQTT dinleyicisini kurmadı (kayıt yolu değişti mi?)"
     istemci = kurulan[-1]

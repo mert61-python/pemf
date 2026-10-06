@@ -1524,6 +1524,58 @@ def _mqtt_client_id(role: str) -> str:
     return f"pemf_{role}_{os.getpid()}"
 
 
+#: O-3.1: yerel broker adresi — dinleyici istemci ve kimlik sondası AYNI broker'a bakar.
+_YEREL_BROKER = ("127.0.0.1", 1883)
+#: O-3.1: broker MosquittoSupervisor'la GEÇ açılabilir → sonda ölçülene dek dener (arka planda; açılışı bekletmez).
+_SONDA_DENEME = 15
+_SONDA_ARALIK_S = 2.0
+#: Sondayı kesen olay (süreç kapanışı / test yıkımı): kurulunca bekleme biter ve sonuç GÜNLÜĞE YAZILMAZ.
+_sonda_dur = threading.Event()
+
+
+def _broker_kimlik_sondasi() -> bool | None:
+    """A-04 · D1.104 · O-3.1: "broker KİMLİKSİZ" uyarısı DOSYAYA (`hazirlandi_mi`) değil ÇALIŞAN broker'ın gerçek
+    yapılandırmasına bağlı — kullanıcı adı olmayan CONNECT'in CONNACK'i (`mqtt_kimlik.broker_anonim_kabul_ediyor_mu`).
+    Anonim kabul ediliyorsa LAN'daki bir istemci sahte ack ile E-stop onayını taklit edebilir (D-2.1). Bağlantı KESİLMEZ
+    (STOP yolu korunur); yalnız açıkça günlüğe yazılır. Dosya kontrolü iki hâli kaçırıyordu: hazırladıktan sonra broker
+    yeniden başlayana dek ve çalışma kopyası yazılamayınca broker anonimdi, uyarı YOKTU; hazırlanmamış sistemde broker
+    kimlik isterse de "anonim" diyordu (asıl sorun: backend BAĞLANAMAZ)."""
+    from utils import mqtt_kimlik as _mk
+
+    host, port = _YEREL_BROKER
+    sonuc = None
+    for _ in range(max(1, int(_SONDA_DENEME))):
+        sonuc = _mk.broker_anonim_kabul_ediyor_mu(host, port)
+        if sonuc is not None or _sonda_dur.wait(_SONDA_ARALIK_S):
+            break
+    if _sonda_dur.is_set():
+        return sonuc
+    hazir = _mk.hazirlandi_mi()
+    if sonuc is True:
+        logging.warning(
+            "A-04: ESP etkin ama yerel MQTT broker KIMLIKSIZ (anonim baglanti KABUL EDILDI - olculdu) - sahte ack E-stop "
+            "onayini taklit edebilir. "
+            + (
+                "Kimlik HAZIRLANMIS ama calisan broker onu kullanmiyor: PEMF uygulamasini bobinler durmusken kapatip "
+                "acin (servis kurulumu: Restart-Service mosquitto)."
+                if hazir
+                else "ESP donus listesi: 'PEMF_Backend.exe --mqtt-kimlik hazirla' + broker yeniden baslatma + ESP yakma."
+            )
+        )
+    elif sonuc is False and not hazir:
+        logging.warning(
+            "A-04: yerel MQTT broker KIMLIK istiyor ama backend kimligi HAZIRLANMAMIS - backend broker'a BAGLANAMAZ "
+            "(ESP telemetrisi ve ESP STOP yolu kapali). 'PEMF_Backend.exe --mqtt-kimlik hazirla' (ESP donus listesi)."
+        )
+    elif sonuc is None:
+        logging.warning(
+            "A-04: yerel MQTT broker'in kimlik durumu OLCULEMEDI (%s:%s yanit vermedi) - KIMLIKSIZ olup olmadigi bilinmiyor.",
+            host,
+            port,
+        )
+    return sonuc
+
+
 def _start_mqtt_for_api() -> None:
     global _mqtt_client_api
     # ⚠️ ESP SÖKÜLÜ → MQTT'YE HİÇ BAĞLANMA (sahip kararı 2026-09-11).
@@ -1534,18 +1586,8 @@ def _start_mqtt_for_api() -> None:
     if not live_state.esp_etkin():
         logging.info("MQTT dinleyicisi ATLANDI — ESP alt sistemi kapalı (PEMF_ESP_ENABLED=1 ile açılır).")
         return
-    # A-04 · D1.104: ESP açık ama yerel broker kimliği HAZIRLANMAMIŞSA broker anonim kabul eder → LAN'daki bir istemci
-    # sahte ack ile E-stop onayını taklit edebilir (D-2.1). Bağlantı KESİLMEZ (STOP yolu korunur); açıkça günlüğe yazılır.
-    try:
-        from utils import mqtt_kimlik as _mk
-
-        if not _mk.hazirlandi_mi():
-            logging.warning(
-                "A-04: ESP etkin ama yerel MQTT broker KIMLIKSIZ (anonim) - sahte ack E-stop onayini taklit edebilir. "
-                "ESP donus listesi: 'PEMF_Backend.exe --mqtt-kimlik hazirla' + broker yeniden baslatma + ESP yakma."
-            )
-    except Exception:
-        logging.getLogger(__name__).debug("mqtt kimlik durumu okunamadi", exc_info=True)
+    # A-04 · D1.104 · O-3.1: kimlik durumu ÇALIŞAN broker'dan ölçülür (arka planda; bkz. _broker_kimlik_sondasi).
+    threading.Thread(target=_broker_kimlik_sondasi, name="BrokerKimlikSondasi", daemon=True).start()
     try:
         import paho.mqtt.client as _mqtt
 
@@ -1571,7 +1613,7 @@ def _start_mqtt_for_api() -> None:
         # Async connect + loop: broker GEÇ açılırsa da otomatik yeniden dener. Eskiden ilk connect
         # başarısız olunca listener kalıcı ölüydü → ESP telemetrisi WS'e hiç ulaşmazdı.
         _mqtt_client_api.reconnect_delay_set(min_delay=2, max_delay=30)
-        _mqtt_client_api.connect_async("127.0.0.1", 1883, 60)
+        _mqtt_client_api.connect_async(_YEREL_BROKER[0], _YEREL_BROKER[1], 60)
         _mqtt_client_api.loop_start()
     except Exception as e:
         logging.warning(f"MQTT dinleyici başlatılamadı: {e}")

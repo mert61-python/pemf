@@ -745,6 +745,30 @@ def _ack_bekcilerini_bosalt():
         pass
 
 
+@pytest.fixture(autouse=True)
+def _broker_kimlik_sondasini_durdur():
+    """O-3.1 (1-H): `_start_mqtt_for_api` (ESP etkin) broker kimlik sondasını DAEMON iş parçacığında başlatır; broker'a
+    ulaşamazsa `_SONDA_ARALIK_S` aralıkla yeniden dener ve sonunda UYARI yazar — ack bekçisi deseni: test bittikten sonra
+    BAŞKA testin günlüğüne/yamasına yazabilirdi. Yıkımda durdurma olayı kurulur (bekleme biter, sonuç yazılmaz),
+    iş parçacığı beklenir, olay temizlenir."""
+    yield
+    try:
+        from servers import api_server as _api
+
+        dur = getattr(_api, "_sonda_dur", None)
+    except Exception:
+        return
+    if dur is None:
+        return
+    dur.set()
+    try:
+        for _t in list(threading.enumerate()):
+            if getattr(_t, "name", "") == "BrokerKimlikSondasi" and _t.is_alive():
+                _t.join(timeout=3.0)
+    finally:
+        dur.clear()
+
+
 # ── D1.41 · B-10.243 · B-10.257: SEANS ve WATCHDOG NÖBETİ (ack bekçisi deseni) ─────────────────────────
 #
 # ÖLÇÜLEN (2026-10-01, tam süit + tanı eklentisi): 16 test `_active_session["is_active"]=True` bırakıyordu

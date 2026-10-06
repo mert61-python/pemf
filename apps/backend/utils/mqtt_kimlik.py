@@ -31,6 +31,7 @@ import json
 import logging
 import os
 import secrets
+import socket
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -102,9 +103,41 @@ def backend_kimligi() -> tuple[str | None, str | None]:
 
 
 def hazirlandi_mi(broker_dizini: Path | None = None) -> bool:
-    """Depo okunabilir VE broker kimlik parçası yerinde."""
+    """Depo okunabilir VE broker kimlik parçası yerinde. ⚠️ DOSYAYA bakar, çalışan broker'a DEĞİL (O-3.1) — broker'ın
+    gerçekte anonim kabul edip etmediği `broker_anonim_kabul_ediyor_mu` ile ölçülür."""
     bd = Path(broker_dizini) if broker_dizini else varsayilan_broker_dizini()
     return kimlikleri_oku() is not None and (bd / CONF_DIZINI / CONF_ADI).is_file()
+
+
+def broker_anonim_kabul_ediyor_mu(host: str, port: int, zaman_asimi: float = 2.0) -> bool | None:
+    """O-3.1: ÇALIŞAN broker kimliksiz (anonim) bağlantıyı KABUL EDİYOR mu? Broker'ın GERÇEK yapılandırmasını ölçer:
+    kullanıcı adı OLMAYAN MQTT 3.1.1 CONNECT → CONNACK dönüş kodu. True = kabul (anonim) · False = reddedildi (4/5:
+    kimlik zorunlu) · None = ölçülemedi (broker yok / yanıt yok / beklenmeyen yanıt). Kabulde DISCONNECT ile kapanır;
+    hiçbir konuya abone olmaz, yayın yapmaz."""
+    istemci = f"pemf_sonda_{os.getpid() % 100000}".encode("ascii")
+    # Değişken başlık: protokol adı "MQTT", seviye 4, bayrak 0x02 (temiz oturum, kullanıcı adı/parola YOK), keepalive 10.
+    govde = b"\x00\x04MQTT\x04\x02\x00\x0a" + len(istemci).to_bytes(2, "big") + istemci
+    try:
+        with socket.create_connection((host, int(port)), timeout=zaman_asimi) as s:
+            s.settimeout(zaman_asimi)
+            s.sendall(b"\x10" + bytes([len(govde)]) + govde)
+            yanit = b""
+            while len(yanit) < 4:
+                parca = s.recv(4 - len(yanit))
+                if not parca:
+                    break
+                yanit += parca
+            if len(yanit) < 4 or yanit[0] != 0x20 or yanit[1] != 0x02:
+                return None
+            if yanit[3] == 0:
+                try:
+                    s.sendall(b"\xe0\x00")  # DISCONNECT
+                except OSError:
+                    pass
+                return True
+            return False if yanit[3] in (4, 5) else None
+    except OSError:
+        return None
 
 
 def ozet7(parola: str, tuz: bytes | None = None, tur: int = PBKDF2_TUR) -> str:

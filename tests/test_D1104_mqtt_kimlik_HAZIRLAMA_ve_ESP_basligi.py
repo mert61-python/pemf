@@ -238,7 +238,15 @@ def test_KRITIK_mqtt_credentials_ONCELIGI_hazir_kimlik_operator_anonim(mk, tmp_p
 
 
 def test_KRITIK_ESP_acik_HAZIRLANMAMIS_broker_acilista_UYARILIR(mk, tmp_path, monkeypatch, caplog):
+    """⚠️ O-3.1 (1-H): uyarı artık DOSYAYA değil ÇALIŞAN broker'a bağlı (kimliksiz CONNECT'in CONNACK'i). Bu kapı iki uç
+    hâli korur: hazırlanmamış + broker ANONİM kabul ediyor → "KIMLIKSIZ" (+ ESP dönüş listesi); hazırlanmış + broker kimlik
+    istiyor → sahte uyarı YOK. Ara hâller (hazırlanmış ama broker anonim, ölçülemeyen broker, hazırlanmamış ama broker
+    kimlik istiyor): tests/test_broker_KIMLIKSIZ_uyarisi_CALISAN_brokerdan_O31.py."""
+    import threading
+    import time
+
     from servers import api_server as api
+    from test_broker_KIMLIKSIZ_uyarisi_CALISAN_brokerdan_O31 import _SahteBroker
 
     class _Sahte:
         def __init__(self, *a, **k):
@@ -251,15 +259,32 @@ def test_KRITIK_ESP_acik_HAZIRLANMAMIS_broker_acilista_UYARILIR(mk, tmp_path, mo
 
     monkeypatch.setattr(pm, "Client", _Sahte)
     monkeypatch.setattr(api, "_mqtt_client_api", getattr(api, "_mqtt_client_api", None))
+    monkeypatch.setattr(api, "_SONDA_DENEME", 2)
+    monkeypatch.setattr(api, "_SONDA_ARALIK_S", 0.05)
     monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
-    with caplog.at_level("WARNING"):
-        api._start_mqtt_for_api()
-    assert any("KIMLIKSIZ" in r.getMessage() for r in caplog.records), "ESP açık + kimliksiz broker uyarısı yok"
+
+    def _kos(rc):
+        broker = _SahteBroker(rc)
+        monkeypatch.setattr(api, "_YEREL_BROKER", ("127.0.0.1", broker.port))
+        try:
+            with caplog.at_level("WARNING"):
+                api._start_mqtt_for_api()
+                son = time.monotonic() + 5.0
+                while time.monotonic() < son and any(t.name == "BrokerKimlikSondasi" for t in threading.enumerate()):
+                    time.sleep(0.05)
+        finally:
+            broker.kapat()
+
+    _kos(0)
+    assert any("KIMLIKSIZ" in r.getMessage() and "hazirla" in r.getMessage() for r in caplog.records), (
+        "ESP açık + hazırlanmamış + anonim broker → uyarı (ESP dönüş listesiyle) yok"
+    )
     caplog.clear()
     mk.hazirla()
-    with caplog.at_level("WARNING"):
-        api._start_mqtt_for_api()
-    assert not any("KIMLIKSIZ" in r.getMessage() for r in caplog.records), "hazırlanmış sistemde sahte uyarı"
+    _kos(5)
+    assert not any("KIMLIKSIZ" in r.getMessage() for r in caplog.records), (
+        "hazırlanmış + kimlikli broker'da sahte uyarı"
+    )
 
 
 def test_KRITIK_paketli_yedek_yapilandirmaya_kimlik_SONDA_eklenir(mk, tmp_path):
