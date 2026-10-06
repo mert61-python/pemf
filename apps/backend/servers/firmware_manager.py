@@ -27,9 +27,10 @@ DEĞİŞMEZLER
    rahatsız edilmez ama durum `durum()` ile GÖRÜNÜR kalır — internetsiz klinikte sahte
    uyarı üretilmez, destek mühendisi de neden atlandığını okur.
 ⚠️ **İNDİRME ZİNCİRİ YENİDEN YAZILMADI.** `update_manager`ın host-pin'i
-   (`_validate_installer_url`), boyut tavanı (`_download_to`) ve özel geçici dizini
-   (`_private_temp_path`) AYNEN kullanılır. İkinci bir indirici, ikinci bir güvenlik
-   yüzeyi demektir; bu depoda "aynı kural iki yerde" sınıfının bedeli ölçülmüştür.
+   (`_validate_installer_url` — DÖNÜŞÜ okunur, D1.110), yönlendirme denetimli açıcısı (`_pinli_ac`),
+   boyut tavanı (`_download_to`) ve özel geçici dizini (`_private_temp_path`) AYNEN kullanılır. İkinci
+   bir indirici, ikinci bir güvenlik yüzeyi demektir; bu depoda "aynı kural iki yerde" sınıfının bedeli
+   ölçülmüştür.
 ⚠️ **SHA256 ZORUNLU.** Manifest özet vermiyorsa firmware YAKILMAZ. Yakma geri dönüşü
    pahalı bir işlemdir; doğrulanmamış ikili yakılmaz.
 """
@@ -127,14 +128,17 @@ def firmware_indir(url: str, beklenen_sha256: str) -> tuple[Path | None, str]:
         return None, "manifest firmware url'i vermiyor"
     if not beklenen_sha256:
         return None, "manifest SHA256 vermiyor — doğrulanmamış firmware YAKILMAZ"
-    try:
-        um._validate_installer_url(url)
-    except Exception as e:  # noqa: BLE001
-        return None, f"firmware url'i reddedildi: {e}"
+    # ⚠️ D1.110 (B-4.1): `_validate_installer_url` istisna FIRLATMAZ, (ok, hata) DÖNER — eskiden ifade-deyimi olarak
+    # çağrılıp dönüşü atılıyordu: `http://…`, yabancı host ve `../` atlatması dahil HER URL indiriliyordu (özet de aynı
+    # manifestten geldiği için eşleşir). Reddedilen URL'de ağa ÇIKILMAZ, geçici dizin de AÇILMAZ.
+    ok, neden = um._validate_installer_url(url)
+    if not ok:
+        return None, f"firmware url'i reddedildi: {neden}"
 
     hedef = um._private_temp_path("pemf_fw.bin")
     try:
-        with urllib.request.urlopen(url, timeout=120) as r, open(hedef, "wb") as f:
+        # D1.110: yönlendirme hedefi de her adımda doğrulanır (`urlopen` 302'leri — `http://` dahil — sessizce izliyordu).
+        with um._pinli_ac(url, timeout=120, headers={"User-Agent": "pemf-fw-updater"}) as r, open(hedef, "wb") as f:
             um._download_to(r, f, _MAX_FIRMWARE_BYTES, "firmware")
     except Exception as e:  # noqa: BLE001
         logger.warning("firmware indirilemedi (%s)", type(e).__name__, exc_info=True)

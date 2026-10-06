@@ -27,6 +27,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -112,17 +113,31 @@ def _path_has_traversal(path: str) -> bool:
     return any(seg in (".", "..", "") for seg in path.split("/")[1:])
 
 
+#: D1.110 (B-4.5) — KAYNAK URL'lerinde kabul edilen OPAK nesne depoları (Rust ikizi `net.rs::SOURCE_OBJECT_HOSTS` ile
+#: BİREBİR; ayna kapısı tests/test_ota_host_pini_PYTHON_RUST_aynasi_D1109.py). GitHub bu adreslerde yolu kendisi üretir
+#: (imzalı, geçici) → yol pini uygulanamaz; koruma SHA256'dır. `raw.githubusercontent.com` ve `codeload.github.com`
+#: BİLEREK YOK: yolları `<sahip>/<repo>/…` biçimindedir, ücretsiz bir GitHub hesabı oraya keyfi bayt koyar.
+_SOURCE_OBJECT_HOSTS = frozenset({"objects.githubusercontent.com", "release-assets.githubusercontent.com"})
+
+
 def _validate_installer_url(url: str):
-    """installerUrl'yi HTTPS + bilinen release host'una pinler. (ok: bool, hata: str) döner."""
+    """KAYNAK URL'yi (manifestten gelen installer / firmware) HTTPS + beklenen kaynağa pinler. (ok: bool, hata: str) döner.
+
+    ⚠️ İSTİSNA FIRLATMAZ — çağıran DÖNÜŞÜ okumalı (D1.110 · B-4.1: firmware indirmesi dönüşü atıyordu, her URL ağa gidiyordu).
+    ⚠️ D1.110 (B-4.5): Rust ikizi `net.rs::validate_download_source` ile AYNI kural — kaynak ya beklenen depo yoluna pinli
+    `github.com` ya da `_SOURCE_OBJECT_HOSTS`; `raw.`/`codeload.`, `gist.`/`user-images.githubusercontent.com` ve diğer joker
+    alt alanlar KAYNAK olarak REDDEDİLİR (joker sonek yalnız YÖNLENDİRME hedefinde geçerlidir — `_yonlendirme_hedefi_dogrula`).
+    Eskiden `raw.githubusercontent.com/<herhangi-sahip>/…` kabul ediliyordu (yol yalnız github.com'da denetleniyordu)."""
     try:
         p = urllib.parse.urlparse(url or "")
     except Exception:
         return False, "Güncelleme URL'si çözümlenemedi (güvenlik)."
     if p.scheme != "https":
         return False, "Güncelleme URL'si HTTPS değil — indirilmedi (güvenlik)."
+    if "@" in (p.netloc or ""):
+        # Rust ikizi gibi: `evil@github.com` biçimi ayrıştırıcılar arasında farklı yorumlanabilir — TAMAMEN reddedilir.
+        return False, "Güncelleme URL'si kullanıcı bilgisi (@) içeriyor — indirilmedi (güvenlik)."
     host = (p.hostname or "").lower()
-    if host not in _ALLOWED_UPDATE_HOSTS and not host.endswith(".githubusercontent.com"):
-        return False, f"Güncelleme host'u beklenen release sunucusu değil ({host}) — indirilmedi (güvenlik)."
     # DENETIM P3: host-pin TUM github.com'u (yani HERHANGI bir kullanicinin repo/release'ini) ve
     # TUM *.githubusercontent.com alt alanlarini kabul ediyordu → "pin" pratikte yalnizca
     # "GitHub'da bir yer" demekti. Manifest ele gecerse saldirgan KENDI repo'sundaki bir EXE'yi
@@ -140,7 +155,52 @@ def _validate_installer_url(url: str):
             return False, (
                 f"Güncelleme URL'si beklenen repo dışında ({p.path.split('/releases')[0]}) — indirilmedi (güvenlik)."
             )
-    return True, ""
+        return True, ""
+    if host in _SOURCE_OBJECT_HOSTS:
+        return True, ""
+    if host in _ALLOWED_UPDATE_HOSTS or host.endswith(".githubusercontent.com"):
+        return False, (
+            f"Güncelleme kaynağı ({host}) yol pini uygulanamayan bir GitHub adresi — yalnız beklenen deponun sürüm "
+            "varlığı kabul edilir; indirilmedi (güvenlik)."
+        )
+    return False, f"Güncelleme host'u beklenen release sunucusu değil ({host}) — indirilmedi (güvenlik)."
+
+
+def _yonlendirme_hedefi_dogrula(url: str):
+    """YÖNLENDİRME hedefi kuralı — Rust ikizi `net.rs::validate_url`: HTTPS + kullanıcı bilgisi YOK + host
+    `_ALLOWED_UPDATE_HOSTS` ya da `*.githubusercontent.com` (GitHub kendi CDN'ine yönlendirir; alt alan değişebilir).
+    (ok: bool, hata: str) döner. ⚠️ KAYNAK için DEĞİL — kaynak `_validate_installer_url`'den geçer (daha dar)."""
+    try:
+        p = urllib.parse.urlparse(url or "")
+    except Exception:
+        return False, "yönlendirme hedefi çözümlenemedi"
+    if p.scheme != "https":
+        return False, f"yönlendirme hedefi HTTPS değil ({p.scheme or '?'}://)"
+    if "@" in (p.netloc or ""):
+        return False, "yönlendirme hedefi kullanıcı bilgisi (@) içeriyor"
+    host = (p.hostname or "").lower()
+    if host in _ALLOWED_UPDATE_HOSTS or host.endswith(".githubusercontent.com"):
+        return True, ""
+    return False, f"yönlendirme hedefi beklenen release sunucusu değil ({host})"
+
+
+class _PinliYonlendirme(urllib.request.HTTPRedirectHandler):
+    """D1.110: `urlopen` yönlendirmeleri SESSİZCE izliyordu (`http://` ya da yabancı host dahil) — kaynak pini bir 302 ile
+    atlatılabilirdi. Her yönlendirme adımı izlenmeden ÖNCE `_yonlendirme_hedefi_dogrula`'dan geçer; reddedilen hedefe
+    istek GİTMEZ."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        ok, hata = _yonlendirme_hedefi_dogrula(newurl)
+        if not ok:
+            raise urllib.error.HTTPError(newurl, code, f"yönlendirme reddedildi (güvenlik): {hata}", headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _pinli_ac(url: str, timeout: float, headers: dict | None = None):
+    """Güncelleme/firmware İNDİRME açıcısı — her yönlendirme hedefi doğrulanır (`_PinliYonlendirme`).
+    ⚠️ KAYNAK URL'yi ÇAĞIRAN `_validate_installer_url` ile doğrulamış olmalı (bu açıcı kaynağı denetlemez)."""
+    istek = urllib.request.Request(url, headers=dict(headers or {"User-Agent": "pemf-updater"}))
+    return urllib.request.build_opener(_PinliYonlendirme).open(istek, timeout=timeout)
 
 
 # DENETIM P3: indirmelerde BOYUT SINIRI yoktu — ne Content-Length kontrolu ne toplam-bayt
@@ -549,8 +609,8 @@ def apply_update() -> dict:
     dest = None
     try:
         dest = _private_temp_path(f"PEMF_Update_{_safe_ver(st.get('latestVersion', 'x'))}.exe")
-        req = urllib.request.Request(url, headers={"User-Agent": "pemf-updater"})
-        with urllib.request.urlopen(req, timeout=180) as r, open(dest, "wb") as f:
+        # D1.110: yönlendirme hedefi her adımda doğrulanır (kaynak yukarıda `_validate_installer_url` ile pinlendi).
+        with _pinli_ac(url, timeout=180) as r, open(dest, "wb") as f:
             _download_to(r, f, _MAX_INSTALLER_BYTES, "Installer")
         # GÜVENLİK (P0): SHA256 ZORUNLU. Manifest hash vermezse indirilen installer'ı ÇALIŞTIRMA.
         # Aksi halde manifest'i değiştirebilen (repo/hesap ele geçirme, TLS-pinsiz MITM) biri
@@ -674,8 +734,8 @@ def rollback() -> dict:
                 "error": "previousStable SHA256 yok — doğrulanamayan installer ÇALIŞTIRILMADI (güvenlik).",
             }
         dest = _private_temp_path(f"PEMF_Rollback_{_safe_ver(ver)}.exe")
-        req = urllib.request.Request(url, headers={"User-Agent": "pemf-updater"})
-        with urllib.request.urlopen(req, timeout=180) as r, open(dest, "wb") as f:
+        # D1.110: yönlendirme hedefi her adımda doğrulanır (kaynak yukarıda `_validate_installer_url` ile pinlendi).
+        with _pinli_ac(url, timeout=180) as r, open(dest, "wb") as f:
             _download_to(r, f, _MAX_INSTALLER_BYTES, "Installer")
         actual = _sha256(dest)
         if actual != expected:

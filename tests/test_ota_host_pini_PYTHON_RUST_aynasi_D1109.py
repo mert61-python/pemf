@@ -58,6 +58,20 @@ def test_KRITIK_ALLOWED_HOSTS_python_rust_KUME_ESIT():
     )
 
 
+def test_KRITIK_KAYNAK_nesne_depolari_python_rust_KUME_ESIT():
+    """D1.110 (B-4.5): KAYNAK (manifestten gelen URL) pini de iki tarafta aynı opak nesne depolarına bağlı — Python
+    `_validate_installer_url` ↔ Rust `validate_download_source`. Biri genişlerse (ör. `raw.` geri eklenirse) o taraf
+    herhangi bir GitHub hesabının sunduğu baytı "güvenilir kaynak" sayar."""
+    from servers import update_manager as um
+
+    rust = _rust_dizi("SOURCE_OBJECT_HOSTS")
+    python = set(um._SOURCE_OBJECT_HOSTS)
+    assert rust, f"ön koşul: Rust SOURCE_OBJECT_HOSTS ayrıştırılamadı ya da boş: {rust}"
+    assert python == rust, (
+        f"KAYNAK pini AYRIŞTI — yalnız Python: {sorted(python - rust)} · yalnız Rust: {sorted(rust - python)}"
+    )
+
+
 def test_KRITIK_beklenen_depo_yolu_python_rust_AYNI():
     from servers import update_manager as um
 
