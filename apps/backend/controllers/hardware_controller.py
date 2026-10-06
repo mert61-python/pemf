@@ -315,7 +315,13 @@ class HardwareController:
             return f"STM32 firmware'i bu sürümle UYUMSUZ ({sebep}). Kartı güncel firmware ile yeniden programlayın."
         try:
             if stm_komutlari_reddediyor():
-                return "STM32 kartı komutları sistematik olarak REDDEDİYOR (firmware/protokol uyuşmazlığı)."
+                # Y74 / 1-G §8 #2: son red DUTY reddiyse (kart güncel, istek geçersiz) eylem duty'dir — firmware DEĞİL.
+                from servers.live_state import stm_red_duty_metni
+
+                return (
+                    stm_red_duty_metni("bobin BAŞLATILMADI")
+                    or "STM32 kartı komutları sistematik olarak REDDEDİYOR (firmware/protokol uyuşmazlığı)."
+                )
         except Exception:
             self.logger.debug("STM red durumu okunamadi → baslatma ENGELLENMEDI", exc_info=True)
         return ""

@@ -996,7 +996,8 @@ def _stm_red_aktif_seansi_durdur(ham: str) -> bool:
             "STM komut REDDI sistematik (%s) → aktif seans durduruluyor (sahte 'tamamlandi' yazilmasin).",
             str(ham)[:120],
         )
-        _duty_metni = live_state.stm_duty_reddi_metni(ham, "seans DURDURULDU")
+        # Y74 (sahip): seansta red ACİL DURDUR yolundan durdurur ve mandal KURULU KALIR → metin "sonra 'Sıfırla'ya basın" der.
+        _duty_metni = live_state.stm_duty_reddi_metni(ham, "seans DURDURULDU", sifirla=True)
         _push_notification(
             "⛔ " + _duty_metni if _duty_metni else "⛔ Seans DURDURULDU: " + STM_RED_MESAJI,
             "error",
@@ -1026,7 +1027,9 @@ def _stm_duty_reddini_isle(ham: str, ilk_kez: bool) -> None:
     try:
         if not ilk_kez:
             if not _stm_nack_bastir(ham):
-                _push_notification("⛔ " + live_state.stm_duty_reddi_metni(ham), "error")
+                _push_notification(
+                    "⛔ " + live_state.stm_duty_reddi_metni(ham, sifirla=estop_mandali.mandalli_mi()), "error"
+                )
             return
         if not _stm_red_aktif_seansi_durdur(ham):
             _durdu = False
@@ -3729,8 +3732,14 @@ async def start_session(payload: SessionStartPayload, request: Request):
     # ve bu reddin konusu değildir. Ayrıca kapı SADECE BAŞLATMADADIR — durdurma/E-stop
     # yolları bundan geçmez (kopuk/uyuşmaz kartta tedaviyi durduramamak asıl tehlike olurdu).
     if stm_coils and live_state.stm_komutlari_reddediyor():
-        logging.getLogger(__name__).error("Seans REDDEDILDI — STM kart komutlari reddediyor (firmware uyusmazligi).")
-        raise HTTPException(status_code=409, detail=STM_RED_MESAJI)
+        logging.getLogger(__name__).error(
+            "Seans REDDEDILDI — STM kart komutlari reddediyor (son red: %s).",
+            live_state.stm_red_ozeti().get("son_mesaj", "")[:80],
+        )
+        # Y74 / 1-G §8 #2: son red DUTY reddiyse eylem duty'dir (mandal kuruluysa + 'Sıfırla'), firmware uyuşmazlığı DEĞİL.
+        raise HTTPException(
+            status_code=409, detail=live_state.stm_red_duty_metni("seans BAŞLATILMADI") or STM_RED_MESAJI
+        )
 
     # ⚠️ FIRMWARE UYUM KAPISI (2026-09-18) — YUKARIDAKININ ONLEYICI IKIZI ────────────────
     # Ustteki kapi TEPKISELDIR: kart komutlari reddetmeye BASLADIKTAN sonra (NACK gorulunce)

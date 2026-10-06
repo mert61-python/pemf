@@ -2370,7 +2370,10 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
         from servers import live_state as _ls_red
 
         if _ls_red.stm_komutlari_reddediyor():
-            raise HTTPException(status_code=409, detail=_api_red.STM_RED_MESAJI)
+            # Y74 / 1-G §8 #2: son red DUTY reddiyse eylem duty'dir (firmware uyuşmazlığı DEĞİL).
+            raise HTTPException(
+                status_code=409, detail=_ls_red.stm_red_duty_metni("AI Pro BAŞLATILMADI") or _api_red.STM_RED_MESAJI
+            )
     except HTTPException:
         raise
     except Exception:

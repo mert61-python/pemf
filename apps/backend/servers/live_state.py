@@ -373,12 +373,15 @@ def stm_duty_reddi_coz(mesaj: str) -> dict | None:
     return {"bobin": int(m[1]), "istenen_milli": int(m[2]), "tavan_milli": int(m[3]), "kip": m[4]}
 
 
-def stm_duty_reddi_metni(mesaj: str, sonuc: str = "") -> str:
+def stm_duty_reddi_metni(mesaj: str, sonuc: str = "", sifirla: bool = False) -> str:
     """D1.101: duty tavanı NACK'i → operatörün EYLEM metni ("" = duty tavanı reddi değil). `sonuc`: sistemin ne
     yaptığı (ör. "seans DURDURULDU") — reddin hemen ardına yazılır.
 
     ⚠️ "Firmware uyuşmuyor, kartı yeniden programlayın" DENMEZ (`STM_RED_MESAJI`): kart güncel ve doğru çalışıyor;
-    reddedilen İSTEKTİR. Operatör duty'yi düşürür ya da (bipolar) bobini Sürüş Kipi'nden Unipolar yapar."""
+    reddedilen İSTEKTİR. Operatör duty'yi düşürür ya da (bipolar) bobini Sürüş Kipi'nden Unipolar yapar.
+    ⚠️ Y74 (sahip): `sifirla` — red ACİL DURDUR mandalını KURDUYSA (seansta red acil durdurma yolundan durdurur; mandal
+    güvence katmanı olarak KALIR) metin eylemin İKİNCİ adımını da söyler: "… sonra 'Sıfırla'ya basın." Eskiden yalnız
+    "duty'yi indirin" diyordu; operatör düzeltip başlatınca mandal 409'una çarpıyordu. Yalnız METİN — STOP yolu aynen."""
     r = stm_duty_reddi_coz(mesaj)
     if r is None:
         return ""
@@ -387,15 +390,40 @@ def stm_duty_reddi_metni(mesaj: str, sonuc: str = "") -> str:
         return f"{milli / 10:g}".replace(".", ",")
 
     tavan = _yuzde(r["tavan_milli"])
-    if r["kip"] == "bipolar":
-        kip, oneri = "iki yönlü (bipolar)", "veya ⚡ Sürüş Kipi'nden bu bobini Unipolar yapın"
+    bipolar = r["kip"] == "bipolar"
+    kip = "iki yönlü (bipolar)" if bipolar else "tek yönlü (unipolar)"
+    if sifirla:
+        # Y74 sahip metni: "Duty'yi %50 ya da altına indirin (ya da bobini Unipolar yapın), sonra 'Sıfırla'ya basın."
+        parantez = " (ya da bobini ⚡ Sürüş Kipi'nden Unipolar yapın)" if bipolar else ""
+        eylem = f"Duty'yi %{tavan} ya da altına indirin{parantez}, sonra 'Sıfırla'ya basın."
     else:
-        kip, oneri = "tek yönlü (unipolar)", ""
+        oneri = " veya ⚡ Sürüş Kipi'nden bu bobini Unipolar yapın" if bipolar else ""
+        eylem = f"Duty'yi %{tavan} ya da altına indirin{oneri}."
     return (
         f"Bobin {r['bobin']}: %{_yuzde(r['istenen_milli'])} duty {kip} sürüşte UYGULANAMAZ — kart komutu REDDETTİ "
-        f"(üst sınır %{tavan}){'; ' + sonuc if sonuc else ''}. Duty'yi %{tavan} ya da altına indirin"
-        f"{' ' + oneri if oneri else ''}."
+        f"(üst sınır %{tavan}){'; ' + sonuc if sonuc else ''}. {eylem}"
     )
+
+
+def stm_red_duty_metni(sonuc: str = "") -> str:
+    """Y74 / 1-G §8 #2: kart ŞU AN sistematik reddediyorsa ve son red bir DUTY reddiyse (kart güncel, istek geçersiz)
+    operatörün eylem metni — ACİL DURDUR mandalı kuruluysa "sonra 'Sıfırla'ya basın" ile; değilse "" (çağıran firmware
+    uyuşmazlığı metnine düşer). Ret sonrası dar pencerede `/session/start`, AI Pro ve HC başlatma engeli "firmware sürümü
+    uyuşmuyor, kartı yeniden programlayın" diyordu — yanlış eylem."""
+    import time as _t
+
+    with _stm_red_lock:
+        reddediyor = (
+            _stm_red["ard_arda"] >= STM_RED_ESIGI and (_t.monotonic() - _stm_red["son_an"]) <= STM_RED_GECERLILIK_S
+        )
+        son = _stm_red["son_mesaj"]
+    if not reddediyor or stm_duty_reddi_coz(son) is None:
+        return ""
+    try:
+        mandal = bool(estop_mandali.mandalli_mi())
+    except Exception:
+        mandal = False
+    return stm_duty_reddi_metni(son, sonuc, sifirla=mandal)
 
 
 def stm_komut_reddi_bildir(mesaj: str = "") -> bool:
