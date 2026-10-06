@@ -123,3 +123,17 @@ def test_KRITIK_hazirlanmamis_ve_broker_kimlik_ISTIYORSA_baglanamaz_uyarisi(kos)
 def test_KRITIK_broker_YANITSIZSA_olculemedi_SOYLENIR(kos):
     _broker, gunluk = kos(None, hazir=True)
     assert "OLCULEMEDI" in gunluk, f"broker'ın kimlik durumu ölçülemedi ama sessiz kalındı: {gunluk!r}"
+
+
+def test_KRITIK_H82_hazirlanmamis_ama_OPERATOR_kimligi_VARSA_baglanamaz_DENMEZ(kos, monkeypatch):
+    """H-8.2 (1-H incelemesi): backend'in kimliği `_mqtt_credentials` önceliğiyle seçilir — A-04 kimliği hazırlanmamışsa
+    operatörün `mqtt_user/mqtt_pass` sırrı. Sonda yalnız broker'ın KİMLİK İSTEDİĞİNİ ölçer; operatör kimliği varken
+    "backend broker'a BAGLANAMAZ (ESP STOP yolu kapalı)" demek ölçülmemiş bir sonucu ölçülmüş gibi söylemektir."""
+    from utils import secrets_manager
+
+    monkeypatch.setattr(
+        secrets_manager, "get_secret", lambda ad, *a, **k: {"mqtt_user": "operator", "mqtt_pass": "x1"}.get(ad)
+    )
+    _broker, gunluk = kos(5, hazir=False)
+    assert "BAGLANAMAZ" not in gunluk, f"operatör kimliği varken 'BAGLANAMAZ' denildi: {gunluk!r}"
+    assert "OPERATOR" in gunluk, f"broker kimlik istiyor — hangi kimlikle bağlanıldığı söylenmedi: {gunluk!r}"

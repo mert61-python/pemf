@@ -1563,10 +1563,21 @@ def _broker_kimlik_sondasi() -> bool | None:
             )
         )
     elif sonuc is False and not hazir:
-        logging.warning(
-            "A-04: yerel MQTT broker KIMLIK istiyor ama backend kimligi HAZIRLANMAMIS - backend broker'a BAGLANAMAZ "
-            "(ESP telemetrisi ve ESP STOP yolu kapali). 'PEMF_Backend.exe --mqtt-kimlik hazirla' (ESP donus listesi)."
-        )
+        # H-8.2 (1-H incelemesi): backend kimliği `_mqtt_credentials` önceliğiyle seçilir — A-04 kimliği yoksa operatörün
+        # `mqtt_user/mqtt_pass` sırrı. Sonda yalnız broker'ın kimlik İSTEDİĞİNİ ölçer; operatör kimliği varken
+        # "BAGLANAMAZ" ölçülmemiş bir sonuçtu (bağlantının sonucu paho istemcisinin günlüğündedir).
+        _op_kullanici, _op_parola = _mqtt_credentials()
+        if _op_kullanici and _op_parola:
+            logging.warning(
+                "A-04: yerel MQTT broker KIMLIK istiyor; A-04 kimligi HAZIRLANMAMIS - backend OPERATOR kimligiyle "
+                "(mqtt_user) baglanmayi dener; broker reddederse ESP telemetrisi ve ESP STOP yolu KAPALI (sonuc MQTT "
+                "baglanti gunlugunde). 'PEMF_Backend.exe --mqtt-kimlik hazirla' (ESP donus listesi)."
+            )
+        else:
+            logging.warning(
+                "A-04: yerel MQTT broker KIMLIK istiyor ama backend kimligi HAZIRLANMAMIS - backend broker'a BAGLANAMAZ "
+                "(ESP telemetrisi ve ESP STOP yolu kapali). 'PEMF_Backend.exe --mqtt-kimlik hazirla' (ESP donus listesi)."
+            )
     elif sonuc is None:
         logging.warning(
             "A-04: yerel MQTT broker'in kimlik durumu OLCULEMEDI (%s:%s yanit vermedi) - KIMLIKSIZ olup olmadigi bilinmiyor.",
