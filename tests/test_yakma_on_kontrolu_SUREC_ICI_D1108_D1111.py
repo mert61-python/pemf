@@ -56,6 +56,11 @@ class _Sunucu:
                     self.send_response(404)
                     self.end_headers()
                     return
+                if dis.kip == "cevapsiz_kapat":
+                    # H-3.1 (1-H incelemesi): süreç bağlantıyı KABUL edip yanıt vermeden kapatır (çöken / asılı backend) —
+                    # istemci `RemoteDisconnected` (ConnectionResetError alt sınıfı) alır: bağlantı REDDİ DEĞİLDİR.
+                    self.close_connection = True
+                    return
                 if dis.kip == "gecikme":
                     time.sleep(6.0)
                 if dis.kip == "html":
@@ -119,7 +124,9 @@ def sy(monkeypatch):
     return m
 
 
-@pytest.mark.parametrize("kip", ["500", "404", "html", "gecikme", "yabanci_json", "oturum_none", "pemf_bobin"])
+@pytest.mark.parametrize(
+    "kip", ["500", "404", "html", "gecikme", "yabanci_json", "oturum_none", "pemf_bobin", "cevapsiz_kapat"]
+)
 def test_KRITIK_CLI_on_kontrolu_belirsiz_yanit_GUVENLI_SAYILMAZ(sy, kip):
     s = _Sunucu(kip)
     try:
