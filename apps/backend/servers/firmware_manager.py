@@ -40,7 +40,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
-import urllib.request
+import urllib.error
 from pathlib import Path
 
 from utils import surum_uyumu as su
@@ -86,23 +86,45 @@ def _durum_yaz(**alanlar) -> dict:
 # ══════════════════════════════════════════════════════════════════════════════
 # MANIFEST
 # ══════════════════════════════════════════════════════════════════════════════
+#: ⚠️ Y17 (sahip) · D1.120: firmware uyum kuralları AYRI bir yayın varlığındadır — `exe/latest.json`'a BAĞLANMAZ (o dosya
+#: 2026-07-01'den beri değişmemiş, kapalı eski EXE kanalının 1.4.0 taslağı — B-4.25). Varlığı yayınlamak sahibin "yayınla"
+#: kararıdır; yayınlanmamışsa (HTTP 404) "kural yok" → EYLEM_YOK (hata DEĞİL). Biçim `manifest_oku` belgesinde.
+UYUM_ETIKETI = "firmware-uyum"
+UYUM_VARLIGI = "firmware_uyum.json"
+UYUM_URL = f"https://github.com/{um._UPDATE_REPO}/releases/download/{UYUM_ETIKETI}/{UYUM_VARLIGI}"
+
+
 def manifest_oku(timeout: float = 15.0) -> dict | None:
-    """`latest.json`daki `firmware.stm32` + `uyumluluk`. Ağ yoksa None (fail-quiet).
+    """Y17 firmware uyum varlığı (`UYUM_URL`) → `firmware.stm32` + `uyumluluk`. Varlık yayınlanmamışsa (404) `{}` = "kural
+    yok"; ağ yok / bozuk / tavan aşımı → None (fail-quiet: BEKLE). İndirme zincirinin AYNISI: kaynak pini
+    (`_validate_installer_url`, dönüşü okunur) + her yönlendirmesi doğrulanan açıcı (`_pinli_ac`) + boyut tavanı.
 
     Beklenen biçim:
-        {"firmware": {"stm32": {"version": "2.3", "url": "...", "sha256": "...",
-                                "previousStable": {"version": "...", "url": "...", "sha256": "..."}}},
+        {"firmware": {"stm32": {"version": "2.4", "url": "https://github.com/<depo>/releases/download/…/pemf_fw.bin",
+                                "sha256": "...", "previousStable": {"version": "...", "url": "...", "sha256": "..."}}},
          "uyumluluk": [{"clientMin": "...", "clientMax": "", "firmwareMin": "...", "firmwareMax": ""}]}
     """
+    ok, hata = um._validate_installer_url(UYUM_URL)
+    if not ok:
+        logger.error("firmware uyum varlığının adresi pin dışında (%s) — kontrol atlanıyor", hata)
+        return None
     try:
-        istek = urllib.request.Request(
-            um._MANIFEST_URL, headers={"User-Agent": "pemf-fw-updater", "Cache-Control": "no-cache"}
-        )
-        with urllib.request.urlopen(istek, timeout=timeout) as r:
+        with um._pinli_ac(
+            UYUM_URL, timeout=timeout, headers={"User-Agent": "pemf-fw-updater", "Cache-Control": "no-cache"}
+        ) as r:
             ham = r.read(um._MAX_MANIFEST_BYTES + 1)
         if len(ham) > um._MAX_MANIFEST_BYTES:
             raise ValueError("manifest boyut tavanını aştı — reddedildi")
-        return json.loads(ham.decode("utf-8"))
+        veri = json.loads(ham.decode("utf-8"))
+        if not isinstance(veri, dict):
+            raise ValueError("firmware uyum varlığı bir JSON nesnesi değil")
+        return veri
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            logger.info("firmware uyum varlığı YAYINLANMAMIŞ (404, Y17) — uyumluluk kuralı yok")
+            return {}
+        logger.warning("firmware uyum varlığı okunamadı (HTTP %s) — kontrol atlanıyor", e.code)
+        return None
     except Exception as e:  # noqa: BLE001
         # ⚠️ exc_info ŞART: bu depoda `logger.info(..., e)` bir kök nedeni saatlerce gizledi
         # (A9). "İnternet yok" ile "manifest bozuk" farklı arızalardır.

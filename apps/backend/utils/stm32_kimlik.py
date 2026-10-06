@@ -102,6 +102,22 @@ def banner_ayristir(satir: str) -> Stm32Kimlik | None:
     )
 
 
+#: D1.120 (B-4.2): banner'in `surum` alani firmware ADINI da tasir (`DDS v2.3`, main.c banner bicimi); uyum karari
+#: (`surum_uyumu.surum_demeti`) yalniz SAYIYI ayristirir. Sayi ad/ek icinde gomulu olabilir ("v2.3", "2.3-rc1").
+_SURUM_SAYISI = re.compile(r"(?<![\w.])v?(\d+(?:\.\d+)+)(?![\w.])")
+
+
+def firmware_surumu(surum: str | None) -> str:
+    """D1.120: banner surum alanindan (`DDS v2.3`) karsilastirilabilir firmware surumu (`2.3`).
+
+    ⚠️ Bulunamazsa "" — uyum karari "surum ayristirilamadi" der ve BEKLE'ye duser (fail-safe: bilinmeyen surume
+    dayanarak YAKMA karari URETILMEZ). Eskiden ham `DDS v2.3` gecirildigi icin karar HER acilista "ayristirilamadi"ydi
+    (1-H (a)0 olcumu) — oto-firmware zinciri bu yuzden olu kaliyordu; bu islev zinciri UYANDIRIR (Y1: yakma yalniz
+    acik `PEMF_FW_AUTO_UPDATE=1` ile)."""
+    m = _SURUM_SAYISI.search(str(surum or ""))
+    return m.group(1) if m else ""
+
+
 #: `uyum_denetle` sonucu: (uyumlu, sebep). `uyumlu` UC DURUMLU olabilir —
 #: True = eslesti · False = KESIN uyumsuz · None = BILINMIYOR (banner taninmadi).
 def uyum_denetle(

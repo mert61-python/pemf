@@ -807,8 +807,10 @@ def _donanim_guncellemesi_safe(core, logger: logging.Logger) -> None:
     """
     try:
         from servers import firmware_manager as fm
+        from utils import stm32_kimlik
 
         kimlik = getattr(core, "stm_kimlik", None)
+        ham_surum = getattr(kimlik, "surum", "") or ""
         # D1.114 (B-4.6): yakma sonrası kart kimliği portu BIRAKMADAN çekirdeğin KENDİ okuyucusundan.
         banner_kaynagi = None
         if callable(getattr(core, "stm_banner_isareti", None)) and callable(getattr(core, "stm_banner_bekle", None)):
@@ -816,12 +818,16 @@ def _donanim_guncellemesi_safe(core, logger: logging.Logger) -> None:
 
             banner_kaynagi = BannerKaynagi(isaret=core.stm_banner_isareti, bekle=core.stm_banner_bekle)
         durum = fm.acilis_denetimi(
-            firmware_surum=getattr(kimlik, "surum", "") or "",
+            # ⚠️ D1.120 (B-4.2): banner'ın sürüm alanı (`DDS v2.3`) SAYIYA (`2.3`) çevrilir — ham alan ayrıştırılamıyordu,
+            # karar her açılışta "sürüm ayrıştırılamadı"ydı. Sayı yoksa "" → BEKLE (fail-safe).
+            firmware_surum=stm32_kimlik.firmware_surumu(ham_surum),
             stm_bagli=bool(getattr(core, "stm_is_connected", False)),
             uygula=os.environ.get("PEMF_FW_AUTO_UPDATE", "0").strip() == "1",
             banner_kaynagi=banner_kaynagi,
         )
-        logger.info("Donanım güncellemesi: %s — %s", durum.get("eylem"), durum.get("gerekce"))
+        logger.info(
+            "Donanım güncellemesi: %s — %s (banner sürümü %r)", durum.get("eylem"), durum.get("gerekce"), ham_surum
+        )
     except Exception as e:  # noqa: BLE001 — güncelleme bir KOLAYLIK, servisi ASLA düşürmez
         logger.warning(
             "Donanım güncellemesi kontrolü BAŞARISIZ (%s) — servis normal açılıyor; "
