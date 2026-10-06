@@ -7,7 +7,8 @@ kurulmuş cihazlar içindir ve aşağıda AYRI gösterilir — sahada `nssm stop
 kipte:** `curl.exe -X POST http://127.0.0.1:8000/api/hardware/emergency_stop` — ⚠️ **`curl.exe`** yazın: Windows
 PowerShell 5.1'de çıplak `curl` = `Invoke-WebRequest` takma adıdır, `-X`'i tanımaz ve komut DÜŞER (ölçüldü). ⚠️ **Port:**
 launcher 8000 doluysa backend 8001..8049'dan birini kullanır; gerçek port `%LOCALAPPDATA%\PEMF Vet Client\backend.port`
-dosyasındadır (O-16.1) — aşağıdaki "Hızlı komutlar"daki tek satır portu oradan okur, dosya yoksa 8000'i dener.
+dosyasındadır (O-16.1) — aşağıdaki "Hızlı komutlar"daki tek satır portu oradan okur; dosya yoksa ya da içeriği sayı
+değilse 8000'i dener.
 Veri kökü `C:\ProgramData\PEMF_System\PEMF_GUI` (= `PEMF_DATA_DIR` + `\PEMF_GUI`; `PEMF_DATA_DIR` klinikte `C:\ProgramData\PEMF_System`'dir). Aşağıda `<data>` = **veri kökü**.
 
 ## Hızlı komutlar (Yönetici PowerShell)
@@ -16,8 +17,10 @@ Veri kökü `C:\ProgramData\PEMF_System\PEMF_GUI` (= `PEMF_DATA_DIR` + `\PEMF_GU
 # ── SAHA (launcher kipi) ──
 Get-Process PEMF_Backend -ErrorAction SilentlyContinue        # backend süreci ayakta mı
 # ACİL DURDUR — bobinler HEMEN durur (auth-muaf). Port backend.port'tan (launcher 8000 doluysa 8001..8049); dosya yoksa
-# 8000. Launcher'ı başlatan KULLANICININ oturumunda çalıştırın (başka hesapta %LOCALAPPDATA% farklıdır → 8000 denenir).
-$p = "$(Get-Content "$env:LOCALAPPDATA\PEMF Vet Client\backend.port" -ErrorAction SilentlyContinue)".Trim(); if (-not $p) { $p = '8000' }; curl.exe -X POST "http://127.0.0.1:$p/api/hardware/emergency_stop"
+# ya da içeriği SAYI değilse 8000 (dosya kullanıcı-yazılabilir: sayı denetimi teardown'daki gibi — bozuk içerik URL'yi
+# düşürür, `1@başka-adres` biçimi isteği başka adrese yollar; ölçüldü, G-14.1). Launcher'ı başlatan KULLANICININ
+# oturumunda çalıştırın (başka hesapta %LOCALAPPDATA% farklıdır → 8000 denenir).
+$p = "$(Get-Content "$env:LOCALAPPDATA\PEMF Vet Client\backend.port" -ErrorAction SilentlyContinue)".Trim(); if ($p -notmatch '^\d{1,5}$') { $p = '8000' }; curl.exe -X POST "http://127.0.0.1:$p/api/hardware/emergency_stop"
 # Durdur: launcher penceresini kapatın — launcher ÖNCE ACİL DURDUR gönderir, SONRA backend'i sonlandırır.
 # Yeniden başlat: launcher'ı kapatıp yeniden açın (⚠️ aşağıdaki FİRMWARE uyarısı).
 

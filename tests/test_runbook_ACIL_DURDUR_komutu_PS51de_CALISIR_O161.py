@@ -95,10 +95,14 @@ def _8000_bos():
         pytest.fail(f"127.0.0.1:8000'de dinleyen var ({sayi[0]!r}) — sahip uygulaması açık olabilir; bu kapı KOŞMAZ")
 
 
-def _kos(kabuk: str, satir: str, tmp_path: Path, port: int | None) -> subprocess.CompletedProcess:
+def _kos(
+    kabuk: str, satir: str, tmp_path: Path, port: int | None, icerik: str | None = None
+) -> subprocess.CompletedProcess:
     la = tmp_path / "la"
     (la / "PEMF Vet Client").mkdir(parents=True, exist_ok=True)
-    if port is not None:
+    if icerik is not None:
+        (la / "PEMF Vet Client" / "backend.port").write_text(icerik, encoding="ascii")
+    elif port is not None:
         (la / "PEMF Vet Client" / "backend.port").write_text(f"{port}\n", encoding="ascii")
     env = dict(os.environ)
     env["LOCALAPPDATA"] = str(la)
@@ -126,6 +130,53 @@ def test_KRITIK_O161_RUNBOOK_ACIL_DURDUR_satiri_KABUKTA_calisir_ve_backend_port_
     assert _Kayitci.istekler == ["/api/hardware/emergency_stop"], (
         f"RUNBOOK'un ACİL DURDUR satırı {Path(kabuk).name}'de backend'e (backend.port → {sunucu.server_address[1]}) "
         f"ULAŞMADI: istekler={_Kayitci.istekler} rc={r.returncode} çıktı={(r.stdout + r.stderr)[-400:]!r}"
+    )
+
+
+class _IkinciAdres(http.server.BaseHTTPRequestHandler):
+    """127.0.0.2'deki kayıtçı (loopback) — "başka adres" yönlendirmesini görür."""
+
+    istekler: list = []
+
+    def do_POST(self):  # noqa: N802
+        _IkinciAdres.istekler.append(self.path)
+        govde = b'{"status":"success","confirmed":true}'
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(govde)))
+        self.end_headers()
+        self.wfile.write(govde)
+
+    def log_message(self, *_a):
+        pass
+
+
+@pytest.mark.parametrize("tur", ["yonlendirme_at", "bozuk_noktali_virgul"])
+@pytest.mark.parametrize("kabuk", _KABUKLAR)
+def test_KRITIK_G141_backend_port_icerigi_SAYI_degilse_8000_denenir_BASKA_adrese_GITMEZ(sunucu, tmp_path, kabuk, tur):
+    """1-G inceleme G-14.1: `backend.port` kullanıcı-yazılabilir; tek satır içeriği DOĞRULAMIYORDU (teardown doğrular,
+    D1.92). Ölçüldü (5.1 ve pwsh): `<port>; KANARYA` → curl "URL rejected", ACİL DURDUR hiç gitmedi ve 8000 denenmedi;
+    `1@127.0.0.2:<port>` → istek BAŞKA adrese (127.0.0.2) gitti, 127.0.0.1 almadı. Sözleşme: içerik yalnız rakamsa port
+    olur, değilse 8000 denenir (dosya-yok yedeğiyle aynı); istek 127.0.0.1 dışına ÇIKMAZ. Yalnız loopback; 8000 boş."""
+    _8000_bos()
+    satir = _hizli_komut_satiri()
+    _IkinciAdres.istekler = []
+    srv2 = http.server.ThreadingHTTPServer(("127.0.0.2", 0), _IkinciAdres)
+    threading.Thread(target=srv2.serve_forever, daemon=True).start()
+    try:
+        p1, p2 = sunucu.server_address[1], srv2.server_address[1]
+        icerik = {"yonlendirme_at": f"1@127.0.0.2:{p2}", "bozuk_noktali_virgul": f"{p1}; KANARYA"}[tur]
+        r = _kos(kabuk, satir, tmp_path, None, icerik=icerik)
+    finally:
+        srv2.shutdown()
+        srv2.server_close()
+    cikti = (r.stdout + r.stderr)[-400:]
+    assert _IkinciAdres.istekler == [], (
+        f"{tur}: ACİL DURDUR BAŞKA adrese (127.0.0.2) gitti — backend.port doğrulanmıyor: {cikti!r}"
+    )
+    assert _Kayitci.istekler == [], f"{tur}: sayı olmayan içerikten port türetildi: {_Kayitci.istekler}"
+    assert "127.0.0.1:8000" in cikti, (
+        f"{tur}: geçersiz içerikte 8000 DENENMEDİ (yedek yok): rc={r.returncode} {cikti!r}"
     )
 
 
