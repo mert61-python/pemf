@@ -307,6 +307,14 @@ def acilis_denetimi(
             " — client geri alma LAUNCHER'ın işi (Y16): launcher `istemciGeriAlinmali`yı okuyup sağlık kapılı geri alır; "
             "backend client'ı geri ALMAZ (eski EXE kanalı açılmaz)"
         )
+    # H-1.2 (1-H incelemesi): `/api/health` NEDEN yakılmadığını söyler. (a) Y1 varsayılanında (bayrak yok / '0') karar
+    # "firmware_guncelle" + "… uyumlu olacak" gerekçesiyle görünüyordu (`uygulandi=False`, `hata` boş); (b) STM bağlanmadan
+    # yapılan ölçümde (D1.121 yedeği, Y76) gerekçe "firmware sürümü ayrıştırılamadı: ''" diyordu — asıl sebep kartın bağlı
+    # olmaması.
+    if plan.eylem == su.FIRMWARE_GUNCELLE and not uygula:
+        gerekce += " — otomatik yakma KAPALI (Y1: yalnız açık PEMF_FW_AUTO_UPDATE=1 yakar): yalnız ölçüldü, kart DEĞİŞTİRİLMEDİ"
+    if not stm_bagli:
+        gerekce = f"STM bağlı değil (kart sürümü okunamadı) — {gerekce}"
     _durum_yaz(
         kontrol_edildi=True,
         eylem=plan.eylem,
