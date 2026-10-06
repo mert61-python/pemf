@@ -22,6 +22,31 @@ if str(_BACKEND_KOKU) not in sys.path:
     sys.path.insert(0, str(_BACKEND_KOKU))
 
 
+# ⚠️ H-11.1 · 1-H §8 #10 (1-H incelemesi) — TestClient OLAY DÖNGÜSÜ Windows'ta SELECTOR (merkezi). TestClient her
+# istekte AYRI bir iş parçacığında YENİ bir asyncio döngüsü açıp kapatır; gömülü CPython 3.10.2'nin Proactor döngüsünde
+# bu desen bekleyen G/Ç'li `Overlapped` nesnesini GC'de serbest bırakır → "Windows fatal exception: access violation"
+# (rc 139, özet satırı YOK). 1-C bunu yalnız `ai_pro_aparati.istemci()`'de kapatmıştı; 1-H kapanışında tam süit
+# `test_ai_log_delete_scope`'ta yine çöktü (`ai_pro_aparati` dışında TestClient kuran 121 dosya Proactor'daydı). Ürün
+# etkilenmez: uvicorn tek, uzun ömürlü döngü; backend Proactor'a özgü asyncio API'si (alt süreç, boru, `sock_connect`,
+# `open_connection`, `start_server`) kullanmaz — `git grep` 0. Açıkça `backend_options` / başka `backend` veren test
+# kendi seçimini korur. Kapı: tests/test_TESTCLIENT_selector_dongusu_H111.py
+if sys.platform == "win32":
+    import asyncio as _asyncio
+
+    from starlette import testclient as _starlette_tc
+
+    _ORJ_TESTCLIENT_INIT = _starlette_tc.TestClient.__init__
+
+    def _testclient_selector_init(self, *args, **kwargs):
+        if kwargs.get("backend", "asyncio") == "asyncio":
+            secenek = dict(kwargs.get("backend_options") or {})
+            secenek.setdefault("loop_factory", _asyncio.SelectorEventLoop)
+            kwargs["backend_options"] = secenek
+        _ORJ_TESTCLIENT_INIT(self, *args, **kwargs)
+
+    _starlette_tc.TestClient.__init__ = _testclient_selector_init
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # TOPLAMA-ZAMANI KORUMASI (fixture'lardan ÖNCE — MODÜL SEVİYESİNDE ÇALIŞIR)
 # ─────────────────────────────────────────────────────────────────────────────
