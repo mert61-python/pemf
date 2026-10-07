@@ -122,6 +122,12 @@ def pytest_report_header(config):
 
 
 def pytest_configure(config):
+    # A-46 yerel ikizi (2-A inceleme · sahip isteği 2026-10-07): "sqlcipher" nedenli ATLAMA koşuyu KIRMIZI bitirir —
+    # CI'daki junit sayacı (D2.07) yerelde koşmuyordu, sqlcipher3'süz ortamda 66 kapı atlanıp koşu YEŞİL bitiyordu.
+    # Bilinçli benzetim: PEMF_SQLCIPHER_ATLAMA_SERBEST=1. Kapı: tests/test_sqlcipher_atlama_YEREL_kapi_A46.py
+    import sqlcipher_atlama_kapisi
+
+    sqlcipher_atlama_kapisi.kur(config)
     # Başlık `-q`/`--no-header` altında basılmaz → silme uyarı özetinde de görünsün (her kipte).
     if _PEMF_SIMULATE_DISARIDAN:
         config.issue_config_time_warning(

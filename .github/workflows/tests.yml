@@ -65,13 +65,16 @@ jobs:
       # paketlenir, requirements.txt). Bu kapıların çoğu `importorskip`/`skipif` ile korunduğu için CI'da
       # ATLANIYOR ve iş YEŞİL bitiyordu. Her iki kurulum da bağlayıcıyı İÇE AKTARARAK doğrular; testten
       # sonra `sqlcipher atlama kapısı` adımı "sqlcipher" nedenli atlama sayısı > 0 ise işi düşürür.
+      # 2-A inceleme (sahip isteği 2026-10-07): iki işletim sistemi de AYNI sabit tekerleği kurar (requirements.txt ve
+      # requirements-test.txt ile birebir; cp310 manylinux_2_28 tekerleği PyPI'da var). Eskiden Linux sürümsüzdü
+      # (`sqlcipher3-binary || sqlcipher3`) → CI ürünün sürümünden farklı bir SQLCipher'la koşabiliyordu.
       - name: SQLCipher kur (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libsqlcipher-dev
           python -m pip install --upgrade pip
-          pip install sqlcipher3-binary || pip install sqlcipher3
+          pip install --only-binary sqlcipher3 sqlcipher3==0.6.2
           python -c "from sqlcipher3 import dbapi2; print('sqlcipher3 hazir, SQLite', dbapi2.sqlite_version)"
 
       - name: SQLCipher kur (Windows)

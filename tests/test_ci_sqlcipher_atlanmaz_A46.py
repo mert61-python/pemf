@@ -111,6 +111,38 @@ def test_KRITIK_test_adimi_JUNIT_uretir_ve_atlama_kapisi_ARDINDAN_kosar():
         )
 
 
+def _sqlcipher3_pini(yol: Path) -> str | None:
+    m = re.search(r"^sqlcipher3==([0-9][0-9.]*)", yol.read_text(encoding="utf-8"), re.MULTILINE)
+    return m.group(1) if m else None
+
+
+def test_KRITIK_sqlcipher3_test_ortaminda_ve_iki_isletim_sisteminde_URETIM_SURUMUYLE_kurulur():
+    """2-A inceleme (sahip isteği 2026-10-07): sqlcipher3 `requirements-test.txt`te YOKTU — yalnız o dosyayı kuran yerel
+    ortamda şifreleme/göç/karantina/kurtarma kapıları sessizce atlanıyordu; CI'ın Linux kurulumu da sürümsüzdü
+    (`sqlcipher3-binary || sqlcipher3`) → ürünün SQLCipher sürümünden farklı bir kitaplıkla koşabiliyordu.
+    MUTASYON: test gereksiniminden pini silmek · Linux kurulumunu sürümsüz/başka paketle yapmak → KIRMIZI."""
+    uretim = _sqlcipher3_pini(KOK / "requirements.txt")
+    assert uretim, "requirements.txt'te sqlcipher3 SABİT sürümü yok -> kapı KÖR"
+    assert _sqlcipher3_pini(KOK / "requirements-test.txt") == uretim, (
+        f"requirements-test.txt sqlcipher3'ü üretim sürümüyle ({uretim}) KURMUYOR -> yerel koşu kapıları sessizce atlar"
+    )
+    adimlar = _backend()["steps"]
+    for isletim in _isletimler():
+        satirlar = [
+            s
+            for a in adimlar
+            if _kapsar(a, isletim)
+            for s in str(a.get("run", "")).splitlines()
+            if re.search(r"pip install[^\n]*\bsqlcipher3", s)
+        ]
+        assert satirlar, f"{isletim}: sqlcipher3 kurulum satırı yok"
+        for s in satirlar:
+            paketler = re.findall(r"\bsqlcipher3(?:-binary)?(?:==[0-9][0-9.]*)?", re.sub(r"--only-binary\s+\S+", "", s))
+            assert paketler and all(p == f"sqlcipher3=={uretim}" for p in paketler), (
+                f"{isletim}: sqlcipher3 ÜRETİM SÜRÜMÜYLE ({uretim}) kurulmuyor: {s.strip()!r}"
+            )
+
+
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # SAYAÇ BETİĞİNİN DAVRANIŞI (alt süreç YOK — modül içe aktarılır, `main` çağrılır)
 # ═══════════════════════════════════════════════════════════════════════════════════════

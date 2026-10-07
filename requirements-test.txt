@@ -5,10 +5,11 @@
 # Testlerin (guii/tests) IMPORT + ÇALIŞMA zamanında gerçekten gereken paketler.
 # AĞIR AI bağımlılıkları (torch/ultralytics/onnx/librosa/numba/scikit-learn/xgboost)
 # model çalıştırma anında LAZY yüklenir → import edilen modüller için GEREKMEZ, CI'dan
-# çıkarıldı (kurulum ~2GB + dakikalarca sürerdi). sqlcipher3 bu dosyada YOK ama CI'da ZORUNLU:
-# `.github/workflows/tests.yml` onu işletim sistemine göre AYRI adımda kurar (Linux: libsqlcipher-dev +
-# sqlcipher3-binary/sqlcipher3 · Windows: sqlcipher3==0.6.2 tekerleği) ve içe aktararak doğrular;
-# kurulamazsa ya da bir test "sqlcipher" nedeniyle atlanırsa iş KIRMIZI (A-46 · D2.07). Eski not
+# çıkarıldı (kurulum ~2GB + dakikalarca sürerdi). sqlcipher3 ZORUNLU (A-46 · D2.07) ve aşağıda SABİT: her test
+# ortamı onu kurar (2-A inceleme · sahip isteği 2026-10-07 — eskiden bu dosyada YOKTU, yalnız CI ayrı adımda kuruyordu;
+# yalnız bu dosyayı kuran yerel makinede şifreleme/göç/karantina/kurtarma kapıları sessizce ATLANIYORDU). CI ayrıca
+# iki işletim sisteminde aynı tekerleği AYRI adımda kurup içe aktararak doğrular; "sqlcipher" nedenli atlama hem
+# CI'da (junit sayacı) hem her yerel koşuda (tests/sqlcipher_atlama_kapisi.py) koşuyu KIRMIZI bitirir. Eski not
 # ("kod onsuz düz-metine düşer, testler mock'lar") yanlış güvence veriyordu: kapılar SESSİZCE atlanıyordu.
 # Sürümler ana requirements.txt (CPython 3.10) ile birebir kilitli.
 # Kurulum (CI):  pip install -r requirements-test.txt
@@ -46,6 +47,9 @@ pillow==12.3.0        # CVE fix (denetim 2026-08-04): 12.2.0'da 26 acik — yigi
 reportlab==4.0.7                   # history_router → pdf_report_generator import-zamanı
 cryptography==50.0.0               # DO-1: shipped ile esit (2026-08-04: 46.0.7->50.0.0 CVE bump)
 keyring==25.7.0                    # sqlcipher_util opsiyonel import eder (yoksa graceful)
+sqlcipher3==0.6.2                  # A-46: at-rest şifreleme/göç/karantina/kurtarma kapıları GERÇEK SQLCipher'la koşar.
+                                   # Sürüm shipped requirements.txt ile BİREBİR; cp310 tekerleği Windows (win_amd64) ve
+                                   # Linux (manylinux_2_28_x86_64) için PyPI'da var — derleme gerekmez.
 paho-mqtt==2.1.0                   # _mqtt_publish/_start_mqtt_for_api (graceful ama davranış eşleği)
 pyserial==3.5                      # SAHIP ISTEGI 2026-09-11. STM32 SERI YOLUNUN TAMAMI bunun uzerinde:
                                    # port secimi/acma (utils/stm32_transport), kablo-cikti yoklamasi
