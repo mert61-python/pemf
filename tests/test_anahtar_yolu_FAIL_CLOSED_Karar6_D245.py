@@ -236,7 +236,12 @@ def test_KRITIK_birincil_anahtar_COZULEMEZSE_tedavi_DB_legacy_yola_DUSMEZ_karant
 
     assert _karantina(app) == [], f"birincil anahtar OKUNAMAZKEN tedavi geçmişi karantinaya alındı: {_karantina(app)}"
     assert db.exists() and _ozet(db) == once, "tedavi DB'sine DOKUNULDU"
-    assert "legacy yola dusuluyor" not in caplog.text, "birincil anahtar hatası yutulup legacy yola düşüldü"
+    # ⚠️ 2-A inceleme A2-1.5: çıpa SİLİNEN eski log metnine ("legacy yola dusuluyor") pinliydi → hiç ateşlenemezdi; yutma
+    # çağıranda (aday listesi kurulurken) yeniden eklenince sahte kol YEŞİL kalıyordu (ölçüldü — sahte bağlayıcı gerçek şemayı
+    # koşturamadığı için `RuntimeError` başka yerden geliyor). Gerçek işaret: legacy aday DB'yi AÇTIĞINDA basılan satır.
+    assert "LEGACY anahtarla acildi" not in caplog.text and "legacy yola" not in caplog.text, (
+        "birincil anahtar OKUNAMAZKEN tedavi DB'si legacy adayla AÇILDI (Karar 6 ihlali)"
+    )
     sir = json.loads(sm.secrets_path().read_text(encoding="utf-8"))
     assert sir["auto"]["sqlcipher_key"] == blob, "çözülemeyen sır EZİLDİ (yeni anahtar üretildi)"
     # İkiz: hasta DB'si aynı koşulda zaten duruyordu — karşılaştırma için.

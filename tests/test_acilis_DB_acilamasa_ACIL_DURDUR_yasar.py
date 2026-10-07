@@ -736,7 +736,10 @@ def test_KRITIK_D245_SIR_COZULEMEZKEN_backend_DBSIZ_acilir_YENI_ANAHTAR_yok_KARA
     assert sir["auto"]["sqlcipher_key"] == once["blob"], "çözülemeyen sır EZİLDİ (yeni anahtar üretildi)"
     gunluk = (tmp_path / "log" / "backend_service.log").read_text(encoding="utf-8", errors="replace")
     assert "Yeni SQLCipher anahtari uretildi" not in gunluk, "DB'siz kipe düşerken YENİ ANAHTAR üretildi (Y9 ihlali)"
-    assert "legacy yola dusuluyor" not in gunluk, "birincil anahtar hatası yutulup legacy yola düşüldü"
+    # 2-A inceleme A2-1.5: silinen eski log metni yerine legacy adayın DB'yi AÇTIĞI satır (gerçek işaret).
+    assert "LEGACY anahtarla acildi" not in gunluk and "legacy yola" not in gunluk, (
+        "birincil anahtar OKUNAMAZKEN tedavi DB'si legacy adayla AÇILDI (Karar 6 ihlali)"
+    )
     assert "Sır çözülemedi (sqlcipher_key)" in gunluk, "fail-closed nedeni (çözülemeyen sır) günlükte YOK"
 
 
