@@ -266,6 +266,31 @@ def test_KRITIK_ai_log_cagiran_HER_ekran_KAPSAM_suzuyor():
     assert not eksik, "AI analiz gecmisi kapsam sizintisi: " + " | ".join(eksik)
 
 
+@pytest.mark.skipif(not (_PF / "screens").exists(), reason="apps/ui/ kaynak agaci yok")
+def test_KRITIK_patients_OKUYAN_HER_dosya_KAPSAM_suzuyor_D268():
+    """D2.68 (B-6.12): `GET /patients` sahip süzgeci DESTEKLEMEZ — tüm kliniğin hastalarını döndürür. Onu okuyan HER
+    arayüz dosyası `inScope(` uygulamalı; `PatientGate` uygulamıyordu → ev sahibi başka sahibin hayvanını seçip ona AI
+    analizi yazdırabiliyordu (davranış kapısı: `PatientGate.D268.kapsam.test.tsx`).
+
+    Liste ELLE TUTULMAZ: `/patients` okuyan dosyalar kaynaktan türetilir (yeni bir seçici süzmeyi unutursa KIRMIZI).
+    MUTASYON: PatientGate'ten `inScope(` süzgecini kaldır → KIRMIZI."""
+    import re
+
+    from c_soyucu import c_soy
+
+    okuyucu = re.compile(r"""apiGet\s*(?:<[^()]*>)?\s*\(\s*["'`]/patients["'`]""")
+    cagiranlar = sorted(
+        p.relative_to(_PF).as_posix()
+        for p in _PF.rglob("*.ts*")
+        if "__tests__" not in p.parts and okuyucu.search(p.read_text(encoding="utf-8"))
+    )
+    assert "components/domain/PatientGate.tsx" in cagiranlar and "screens/PatientScreen.tsx" in cagiranlar, (
+        f"onkosul: /patients okuyucu turetimi bayat -> {cagiranlar}"
+    )
+    eksik = [d for d in cagiranlar if "inScope(" not in c_soy((_PF / d).read_text(encoding="utf-8"))]
+    assert not eksik, f"/patients okuyup KAPSAM SUZMEYEN dosya (KVKK + yanlis hastaya yazma): {eksik}"
+
+
 @pytest.mark.skipif(not (_PF / "utils").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_EV_SAHIBI_tum_klinige_CIKAMAZ():
     """⚠️ KVKK kapısı (2026-08-08): ev sahibi profili "Tüm Klinik" kapsamına asla çıkamaz —

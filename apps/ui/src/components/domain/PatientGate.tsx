@@ -21,14 +21,16 @@ import { ChevronDown, PawPrint, Plus, Search, X } from "lucide-react-native";
 
 import { Card } from "@/components/ui/Card";
 import { useAppNav } from "@/context/AppNavContext";
+import { useOperatorOptional } from "@/context/OperatorContext";
 import { useUserMode } from "@/context/UserModeContext";
 import { apiGet } from "@/services/apiClient";
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
 import { IconButton } from "@/components/ui/IconButton";
 import { aramaEslesir } from "@/utils/aramaNormalize";
+import { effectiveScope, inScope } from "@/utils/patientScope";
 import { profilSozlugu } from "@/utils/profilSozlugu";
 
-interface Hasta { id: string; name: string; species?: string }
+interface Hasta { id: string; name: string; species?: string; operator_email?: string | null }
 
 /** Profile göre terimler — ev sahibi "hasta" demez, "evcil hayvanım" der. */
 // ⚠️ SÖZLÜK TAŞINDI (Faz 3): metinler `@/utils/profilSozlugu` içinde. AI Pro paneli de aynı
@@ -45,6 +47,13 @@ export function PatientGate({ children, soft = false }: { children: React.ReactN
   const { selectedPatient, setSelectedPatient, navigateTo } = useAppNav();
   const { isExpert, isResearcher } = useUserMode();
   const S = profilSozlugu({ petOwner: !isExpert && !isResearcher, researcher: isResearcher });
+  // ⚠️ D2.68 (B-6.12): KVKK kapsam TEK KAYNAĞI. Seçici eskiden `/patients`ın TAMAMINI listeliyordu → ev sahibi başka
+  // hekimin/sahibin hayvanını seçip ona AI analizi yazdırabiliyordu (yanlış hastaya yazma; ölçüldü). Klinik profilleri
+  // tüm kliniği seçer (A-01/A-28 açık model); ev sahibi HER ZAMAN "benim" (`effectiveScope`). Kimlik `operatorEmail`
+  // (TEK KAYNAK); kimliksiz kipin kuralı `inScope`ta (D2.70). Kapı: __tests__/PatientGate.D268.kapsam.test.tsx.
+  const op = useOperatorOptional();
+  const myEmail = (op?.operatorEmail || "").toLowerCase();
+  const kapsam = effectiveScope("all", { isExpert, isResearcher });
 
   const [acik, setAcik] = useState(false);
   const [liste, setListe] = useState<Hasta[] | null>(null);
@@ -70,7 +79,8 @@ export function PatientGate({ children, soft = false }: { children: React.ReactN
   // ⚠️ DENETİM 2026-08-17: ham `toLowerCase()` Türkçe'de İ→'i'+U+0307 ürettiği için "İpek" kaydı
   // "ipek" ile aranınca "Eşleşme yok." veriyordu. (Arama BOŞKEN tam liste gösterilip seçtirildiği
   // için hasta ULAŞILAMAZ değildi — kırık olan arama kısayoluydu.) Tek kaynak: aramaEslesir.
-  const suzulmus = (liste ?? []).filter((h) => aramaEslesir(h.name, ara));
+  const kapsamli = (liste ?? []).filter((h) => inScope(h, kapsam, myEmail));
+  const suzulmus = kapsamli.filter((h) => aramaEslesir(h.name, ara));
 
   const secici = (
     <View style={{ gap: spacing.sm }}>
@@ -85,7 +95,7 @@ export function PatientGate({ children, soft = false }: { children: React.ReactN
         <ActivityIndicator color={colors.primary} />
       ) : (
         <>
-          {(liste.length > 0) && (
+          {(kapsamli.length > 0) && (
             <TextInput style={styles.input} value={ara} onChangeText={setAra}
               placeholder="Ara…" placeholderTextColor={colors.textSubtle}
               accessibilityLabel="Kayıtlarda ara" />
