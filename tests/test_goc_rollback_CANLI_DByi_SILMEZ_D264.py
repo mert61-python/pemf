@@ -198,3 +198,30 @@ def test_KRITIK_A231_rotasyon_ADA_degil_DEGISIKLIK_ZAMANINA_gore_en_yeni_eskiler
         f"rotasyon DEĞİŞİKLİK ZAMANINA göre en yeni 4 eski yedeği TUTMADI: kalan {sorted(sonra - taze)}, "
         f"beklenen {sorted(beklenen)}"
     )
+
+
+def test_KRITIK_A232_yedek_GOC_SIRASINDA_BOSALIRSA_canli_DBye_dokunulmaz(bes_seansli_db, monkeypatch, caplog):
+    """2-A inceleme A2-3.2: D2.64 (b) yıkıcı adımdan önce yedeğin VAR ve BOŞ OLMADIĞINI yeniden sınar; yalnız "var mı"ya indiren
+    mutant 34/34 YEŞİLDİ (ölçüldü). Göç sırasında 0 bayta inen yedek (AV yer tutucusu / dışarıdan kesilme) o mutantta rollback'te
+    CANLI DB'nin yerine konur → tedavi geçmişi BOŞ dosyayla değişir."""
+    import logging
+
+    from database import treatment_history_db as thdb
+
+    kok = bes_seansli_db
+
+    def _yedegi_bosalt_ve_patla(self):
+        for p in (kok / "migration_backups").glob("pre_migration_v2_*.db"):
+            p.write_bytes(b"")
+        raise RuntimeError("disk dolu (taklit) — goc adimi dustu")
+
+    gercek = thdb.TreatmentHistoryDB._ensure_schema_version
+    monkeypatch.setattr(thdb.TreatmentHistoryDB, "_ensure_schema_version", _yedegi_bosalt_ve_patla)
+    with caplog.at_level(logging.ERROR), pytest.raises(Exception):
+        thdb.TreatmentHistoryDB(kok)
+    monkeypatch.setattr(thdb.TreatmentHistoryDB, "_ensure_schema_version", gercek)
+
+    assert _seans_sayisi(kok) == 5, "BOŞ yedek rollback'te CANLI DB'nin yerine kondu — tedavi geçmişi BOŞ"
+    assert any("Rollback yedegi artik YOK/BOS" in r.getMessage() for r in caplog.records), (
+        "boşalan yedek için günlük gerçek nedeni (yedek BOŞ → canlı DB'ye dokunulmadı) SÖYLEMİYOR"
+    )
