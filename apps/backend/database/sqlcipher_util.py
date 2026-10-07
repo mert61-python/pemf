@@ -894,12 +894,115 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None, etiket="D
 _DUZ_DONEM_YEDEK_DIZINLERI = ("migration_backups", "backups")
 
 
-def _duz_kopyayi_sifrele(yol, keyq, sqlcipher):
+#: Y95: şifreli kopya yerine konurken ESKİ düz içeriğe verilen geçici ikinci ad (sabit bağ). Yalnız bu ad sıfırlanır.
+_DUZ_SIL_EK = ".duz.sil"
+
+
+def _duz_icerigi_sifirla_ve_sil(eski, logger=None) -> bool:
+    """Y95 (Y13 güvenli silme ilkesi): YALNIZ eski düz içeriğe giden adın baytlarını sıfırlar, diske zorlar, siler.
+    SSD/eMMC'de en iyi çaba (aşınma dengeleme eski blokları başka yerde tutabilir). Sıfırlanamazsa yalnız silinir (eski
+    davranış) ve uyarı loglanır — hiçbir durumda bugünkünden kötü değil. Döner: içerik sıfırlandı mı."""
+    sifirlandi = False
+    try:
+        boyut = os.path.getsize(eski)
+        blok = b"\0" * (1 << 16)
+        with open(eski, "r+b") as fh:
+            kalan = boyut
+            while kalan > 0:
+                n = min(kalan, len(blok))
+                fh.write(blok[:n])
+                kalan -= n
+            fh.flush()
+            os.fsync(fh.fileno())
+        sifirlandi = True
+    except Exception as e:
+        if logger:
+            logger.warning(
+                "DUZ-METIN ESKI ICERIGIN UZERINE YAZILAMADI (%s: %s): %s — yalniz silinecek (eski davranis).",
+                type(e).__name__,
+                e,
+                eski,
+            )
+    try:
+        os.remove(eski)
+    except Exception as e:
+        if logger:
+            logger.error(
+                "DUZ-METIN ESKI ICERIK SILINEMEDI (%s: %s): %s — dosyayi elle silin (icerik %s).",
+                type(e).__name__,
+                e,
+                eski,
+                "sifirlandi" if sifirlandi else "DUZ-METIN",
+            )
+    return sifirlandi
+
+
+def _anahtarla_dogrulama_hatasi(yol, keyq, sqlcipher):
+    """Y95 yarım işlem toparlaması: dosya at-rest anahtarıyla açılıp şeması boş değilse None; değilse NEDEN (çağıran
+    loglar — başarısızlık yutulmaz)."""
+    try:
+        v = sqlcipher.connect(yol)
+    except Exception as e:
+        return f"acilamadi ({type(e).__name__}: {e})"
+    try:
+        v.execute(f"PRAGMA key={keyq}")
+        if not v.execute("SELECT count(*) FROM sqlite_master").fetchone()[0]:
+            return "sema bos"
+        return None
+    except Exception as e:
+        return f"anahtarla okunamadi ({type(e).__name__}: {e})"
+    finally:
+        v.close()
+
+
+def _yarim_kalan_duz_icerigi_toparla(sil, keyq, sqlcipher, logger=None):
+    """Y95: önceki bir şifrelemenin değiştirme ile sıfırlama ARASINDA kesilmesinden kalan `<yedek>.db.duz.sil`.
+    Özgün ad ŞİFRELİ ve anahtarla doğrulanıyorsa eski düz içerik sıfırlanıp silinir; özgün adla AYNI dosyaysa (bağ
+    kurulup değiştirme yapılmadan kesildi) yalnız ikinci ad kaldırılır; başka her durumda DOKUNULMAZ ve loglanır."""
+    asil = sil[: -len(_DUZ_SIL_EK)]
+    neden = "ozgun ad YOK"
+    try:
+        if os.path.exists(asil) and os.path.samefile(asil, sil):
+            os.remove(sil)  # yalnız ikinci ad; içerik özgün adda aynen duruyor
+            return
+        if os.path.exists(asil):
+            if duz_metin_sqlite_mi(asil):
+                neden = "ozgun ad DUZ-METIN"
+            else:
+                neden = _anahtarla_dogrulama_hatasi(asil, keyq, sqlcipher)
+            if neden is None:
+                _duz_icerigi_sifirla_ve_sil(sil, logger)
+                if logger:
+                    logger.warning("Y95: yarim kalan guvenli silme tamamlandi (sifreli kopya yerinde): %s", sil)
+                return
+    except Exception as e:
+        if logger:
+            logger.error("Y95 yarim islem toparlanamadi (%s: %s): %s", type(e).__name__, e, sil)
+        return
+    if logger:
+        logger.error(
+            "DUZ-METIN ESKI ICERIK KALDI: %s — ozgun ad (%s) dogrulanmis sifreli kopya degil (%s); DOKUNULMADI, "
+            "elle bakin.",
+            sil,
+            asil,
+            neden,
+        )
+
+
+def _duz_kopyayi_sifrele(yol, keyq, sqlcipher, logger=None) -> bool:
     """Düz-metin SQLite kopyasını AYNI adla, doğrulanmış şifreli eşiyle değiştirir (sqlcipher_export → şema sayısı
     karşılaştırması → `os.replace`). Değişiklik zamanı KORUNUR: `migration_backups` (D2.64) ve `backups` (günlük
     bakımın tazelik/rotasyon kararı) mtime'a göre sıralanır — şifreleme eski kopyayı "en yeni" yapmamalı. Hata
-    yükselir; geçici dosya her durumda temizlenir, özgün dosyanın yerine YALNIZ doğrulanmış şifreli kopya geçer."""
+    yükselir; geçici dosya her durumda temizlenir, özgün dosyanın yerine YALNIZ doğrulanmış şifreli kopya geçer.
+
+    ⚠️ Y95 (SAHİP KARARI, Y13 ilkesi): değiştirmeden ÖNCE eski düz içeriğe ikinci bir ad (sabit bağ, aynı dizin)
+    verilir; doğrulanmış şifreli kopya özgün adla atomik yerine konunca YALNIZ o ikinci ad sıfırlanıp silinir. Eskiden
+    `os.replace` eski düz blokları üzerine YAZMADAN serbest bırakıyordu (hasta adları diskte okunur kalıyordu). Özgün ad
+    hiçbir anda eksik kalmaz; değiştirme düşerse yalnız ikinci ad kaldırılır, düz dosya aynen durur; doğrulanmış kopya
+    yoksa düz dosyaya HİÇ dokunulmaz. Bağ kurulamazsa (FAT/exFAT) eski davranış + uyarı.
+    Kapı: tests/test_duz_yedek_uzerine_YAZILIR_Y95.py. Döner: eski düz içerik sıfırlandı mı."""
     gecici = yol + ".enc.tmp"
+    eski = yol + _DUZ_SIL_EK
     st = os.stat(yol)
     if os.path.exists(gecici):
         os.remove(gecici)
@@ -925,8 +1028,38 @@ def _duz_kopyayi_sifrele(yol, keyq, sqlcipher):
             v.close()
         if not n or n != n_kaynak:
             raise RuntimeError(f"sifreli kopya dogrulanamadi (sema {n} != {n_kaynak})")
-        os.replace(gecici, yol)
+        # ── Y95: doğrulanmış şifreli kopya HAZIR — ancak şimdi eski düz içeriğe ikinci ad verilir.
+        if os.path.exists(eski):
+            if not os.path.samefile(yol, eski):
+                raise RuntimeError(f"onceki yarim islemden kalan farkli dosya var, dokunulmadi: {eski}")
+            os.remove(eski)  # yalnız ikinci ad (aynı dosya) — içerik özgün adda
+        try:
+            os.link(yol, eski)
+        except OSError as e:
+            eski = None
+            if logger:
+                logger.warning(
+                    "DUZ-METIN yedek icin sabit bag kurulamadi (%s: %s): %s — sifreli kopya yine yerine konuyor ama "
+                    "eski duz icerigin UZERINE YAZILAMAYACAK (dosya sistemi bag desteklemiyor olabilir).",
+                    type(e).__name__,
+                    e,
+                    yol,
+                )
+        try:
+            os.replace(gecici, yol)
+        except BaseException:
+            if eski:
+                try:
+                    os.remove(eski)  # yalnız ikinci ad; düz dosya özgün adda AYNEN
+                except Exception:
+                    pass
+            raise
         os.utime(yol, ns=(st.st_atime_ns, st.st_mtime_ns))
+        if not eski:
+            return False
+        if os.path.samefile(yol, eski):  # savunma: şifreli kopyanın kendisi ASLA sıfırlanmaz
+            raise RuntimeError(f"Y95: ikinci ad sifreli kopyayi gosteriyor, sifirlanmadi: {eski}")
+        return _duz_icerigi_sifirla_ve_sil(eski, logger)
     finally:
         if os.path.exists(gecici):
             try:
@@ -966,6 +1099,9 @@ def duz_metin_yedekleri_sifrele(app_data_dir, keyq, sqlcipher, logger=None, etik
             continue
         for ad in adlar:
             yol = os.path.join(dizin, ad)
+            if ad.endswith(".db" + _DUZ_SIL_EK) and os.path.isfile(yol):
+                _yarim_kalan_duz_icerigi_toparla(yol, keyq, sqlcipher, logger)  # Y95: kesilmiş önceki işlem
+                continue
             if not ad.endswith(".db") or not os.path.isfile(yol):
                 continue
             try:
@@ -974,7 +1110,8 @@ def duz_metin_yedekleri_sifrele(app_data_dir, keyq, sqlcipher, logger=None, etik
             except Exception:
                 continue
             try:
-                _duz_kopyayi_sifrele(yol, keyq, sqlcipher)
+                if not _duz_kopyayi_sifrele(yol, keyq, sqlcipher, logger):
+                    sonuc.setdefault("duz_icerik_sifirlanamadi", []).append(yol)
                 sonuc["sifrelendi"].append(yol)
             except Exception as e:
                 sonuc["sifrelenemedi"].append(yol)

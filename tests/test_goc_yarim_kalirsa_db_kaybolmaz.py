@@ -394,7 +394,10 @@ def test_KRITIK_HER_IKI_goc_yolu_da_KORUNUYOR():
     )
 
     # Delegasyonun DEĞERİ, delege edilen şeyin gerçekten toparlamasıdır.
-    agac = ast.parse(_kaynak("apps/backend/database/sqlcipher_util.py"))
+    # ⚠️ 2-B (Y95): HAM kaynak (C yorum sökücüsü DEĞİL). `c_soy` Python'da `'`/`"` paritesiyle dize durumunu çeviriyor;
+    # docstring'deki bir kesme işareti (ör. "SSD/eMMC'de") paritesini değiştirince `migration_backups/*.db` bir C blok
+    # yorumu başlatıp dosyanın kalanını boşalttı → AST "kapanmamış dize" ile düştü (ölçüldü). AST yorumu zaten görmez.
+    agac = ast.parse((KOK / "apps/backend/database/sqlcipher_util.py").read_text(encoding="utf-8"))
     ortak = next(
         (n for n in ast.walk(agac) if isinstance(n, ast.FunctionDef) and n.name == "migrate_to_encrypted_if_needed"),
         None,
