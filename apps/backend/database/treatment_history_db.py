@@ -330,48 +330,63 @@ class TreatmentHistoryDB(
                     self._PII_REDACTION,
                 )
             conn = self._connect_plain_sqlite()
-        conn.execute('PRAGMA foreign_keys=ON')
-        conn.execute('PRAGMA busy_timeout=5000')
-
-        # WAL bazı disk/ortam kombinasyonlarında başarısız olabilir.
+        # ⚠️ Y98 (O-2A.2): ayarlar sırasında HERHANGİ bir hata (ilk okuyan `PRAGMA journal_mode`'un "file is not a
+        # database"ı `DatabaseError`dır, OperationalError DEĞİL) o anki bağlantıyı KAPATIR. Eskiden bağlantı istisnanın
+        # izindeki çerçevede açık kalıyor, istisnayı tutan her şey dosya tutamağını da tutuyordu → Windows'ta karantina
+        # taşıması WinError 32 ile ~6 sn bekliyordu (ölçüldü). Kapı: tests/test_PRAGMA_hatasinda_baglanti_KAPANIR_Y98.py.
         try:
-            # Eğer zaten WAL modundaysa tekrar set etmeye çalışıp kilit (lock) hatası alma
-            current_mode = conn.execute('PRAGMA journal_mode').fetchone()[0]
-            if current_mode.upper() != 'WAL':
-                conn.execute('PRAGMA journal_mode=WAL')
-
-            conn.execute('PRAGMA synchronous=NORMAL')
-            conn.execute('PRAGMA wal_autocheckpoint=1000')
-            conn.execute('PRAGMA journal_size_limit=33554432')
-        except _DB_OPERATIONAL as e:
-            # Beklenen bir durum olabildiğinden bunu DEBUG seviyesinde logluyoruz (Uyarıyı gizler)
-            self.logger.debug(f"WAL modu ayarlanamadı (zaten açık veya kilitli olabilir), DELETE moda geçiliyor: {e}")
-            try:
-                conn.close()
-            except Exception:
-                pass
-
-            # ⚠️ D2.46 (B-3.10 · Karar 6): ŞİFRELİ bağlantı DÜZ-METNE DÜŞMEZ. Eskiden burada koşulsuz düz `sqlite3`
-            # açılıyordu: doğru anahtarla açılmış şifreli geçmiş "file is not a database" ile UYUŞMAZLIK sayılıp
-            # karantinaya gidiyor, ilk kurulumda şema + PII DÜZ-METİN yazılıyor, `at_rest_encrypted` True kalıyordu
-            # (ölçüldü). Şifreli bağlantı aynı (önbellekli) anahtarla YENİDEN açılır; açılamazsa fail-closed.
-            # Kapı: tests/test_karantina_YALNIZ_gercek_uyusmazlikta_D246.py.
-            if sqlcipher_conn is not None:
-                conn = self._connect_sqlcipher_if_configured()
-                if conn is None:
-                    raise RuntimeError(
-                        "Tedavi DB'si: WAL ayarlanamadi ve SIFRELI baglanti yeniden ACILAMADI — duz-metin baglantiya "
-                        "DUSULMEDI (Karar 6)."
-                    ) from e
-            else:
-                conn = self._connect_plain_sqlite()
             conn.execute('PRAGMA foreign_keys=ON')
             conn.execute('PRAGMA busy_timeout=5000')
+
+            # WAL bazı disk/ortam kombinasyonlarında başarısız olabilir.
             try:
-                conn.execute('PRAGMA journal_mode=DELETE')
-                conn.execute('PRAGMA synchronous=FULL')
-            except _DB_OPERATIONAL as fallback_err:
-                self.logger.error(f"Fallback DELETE modu da hataya düştü: {fallback_err}")
+                # Eğer zaten WAL modundaysa tekrar set etmeye çalışıp kilit (lock) hatası alma
+                current_mode = conn.execute('PRAGMA journal_mode').fetchone()[0]
+                if current_mode.upper() != 'WAL':
+                    conn.execute('PRAGMA journal_mode=WAL')
+
+                conn.execute('PRAGMA synchronous=NORMAL')
+                conn.execute('PRAGMA wal_autocheckpoint=1000')
+                conn.execute('PRAGMA journal_size_limit=33554432')
+            except _DB_OPERATIONAL as e:
+                # Beklenen bir durum olabildiğinden bunu DEBUG seviyesinde logluyoruz (Uyarıyı gizler)
+                self.logger.debug(
+                    f"WAL modu ayarlanamadı (zaten açık veya kilitli olabilir), DELETE moda geçiliyor: {e}"
+                )
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                conn = None
+
+                # ⚠️ D2.46 (B-3.10 · Karar 6): ŞİFRELİ bağlantı DÜZ-METNE DÜŞMEZ. Eskiden burada koşulsuz düz `sqlite3`
+                # açılıyordu: doğru anahtarla açılmış şifreli geçmiş "file is not a database" ile UYUŞMAZLIK sayılıp
+                # karantinaya gidiyor, ilk kurulumda şema + PII DÜZ-METİN yazılıyor, `at_rest_encrypted` True kalıyordu
+                # (ölçüldü). Şifreli bağlantı aynı (önbellekli) anahtarla YENİDEN açılır; açılamazsa fail-closed.
+                # Kapı: tests/test_karantina_YALNIZ_gercek_uyusmazlikta_D246.py.
+                if sqlcipher_conn is not None:
+                    conn = self._connect_sqlcipher_if_configured()
+                    if conn is None:
+                        raise RuntimeError(
+                            "Tedavi DB'si: WAL ayarlanamadi ve SIFRELI baglanti yeniden ACILAMADI — duz-metin "
+                            "baglantiya DUSULMEDI (Karar 6)."
+                        ) from e
+                else:
+                    conn = self._connect_plain_sqlite()
+                conn.execute('PRAGMA foreign_keys=ON')
+                conn.execute('PRAGMA busy_timeout=5000')
+                try:
+                    conn.execute('PRAGMA journal_mode=DELETE')
+                    conn.execute('PRAGMA synchronous=FULL')
+                except _DB_OPERATIONAL as fallback_err:
+                    self.logger.error(f"Fallback DELETE modu da hataya düştü: {fallback_err}")
+        except BaseException:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            raise
 
         return conn
 

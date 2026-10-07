@@ -137,10 +137,21 @@ class PatientDatabase:
                         "Uretimde sqlcipher3 + PEMF_ENCRYPT_AT_REST=1 (keyring) ayarlayin."
                     )
                 conn = sqlite3.connect(self.db_file, timeout=30.0, check_same_thread=False)  # B-6.2
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA synchronous=NORMAL")
-            conn.execute("PRAGMA foreign_keys=ON")  # B-7.3: patient_search_index ON DELETE CASCADE aktif
-            conn.execute("PRAGMA busy_timeout=5000")  # B-6.2: 'database is locked' yerine bekle
+            try:
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA synchronous=NORMAL")
+                conn.execute("PRAGMA foreign_keys=ON")  # B-7.3: patient_search_index ON DELETE CASCADE aktif
+                conn.execute("PRAGMA busy_timeout=5000")  # B-6.2: 'database is locked' yerine bekle
+            except BaseException:
+                # ⚠️ Y98 (O-2A.2): PRAGMA hatasında ("file is not a database" = DatabaseError) açılan bağlantı
+                # KAPATILIR. Eskiden istisna izindeki çerçevede açık kalıyor, istisnayı tutan her şey dosya tutamağını da
+                # tutuyordu → Windows'ta karantina/göç taşıması WinError 32 ile ~6 sn bekliyordu (ölçüldü).
+                # Kapı: tests/test_PRAGMA_hatasinda_baglanti_KAPANIR_Y98.py.
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                raise
             self._local.conn = conn
             created_here = True
 
