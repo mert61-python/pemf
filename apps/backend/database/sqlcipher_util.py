@@ -931,13 +931,29 @@ def duz_metin_yedekleri_sifrele(app_data_dir, keyq, sqlcipher, logger=None, etik
 
     Eskiden at-rest göçü yalnız canlı DB'yi şifreliyordu; düz dönemde alınmış göç öncesi ve günlük yedekler hasta
     adlarını diskte düz taşımaya devam ediyordu (ölçüldü). Kapı: tests/test_goc_sonrasi_duz_yedekler_SIFRELENIR_D248.py.
-    Döner: {"sifrelendi": [...], "sifrelenemedi": [...]}."""
+    Döner: {"sifrelendi": [...], "sifrelenemedi": [...]} (listelenemeyen dizin `sifrelenemedi`de dizin yoluyla)."""
     sonuc = {"sifrelendi": [], "sifrelenemedi": []}
     for alt in _DUZ_DONEM_YEDEK_DIZINLERI:
         dizin = os.path.join(str(app_data_dir), alt)
         if not os.path.isdir(dizin):
             continue
-        for ad in sorted(os.listdir(dizin)):
+        # ⚠️ 2-A inceleme A2-9.1 (O-2A.4): dizin listelenemezse (ACL/kilit) YALNIZ o dizin atlanır ve adıyla ERROR
+        # loglanır — eskiden istisna döngüden göçün dış `except`ine kaçıyordu: sıradaki dizin (backups/) hiç
+        # şifrelenmiyor, BAŞARILI göç "migrate hatasi (duz-metin korunur)" diye loglanıyordu (ölçüldü).
+        try:
+            adlar = sorted(os.listdir(dizin))
+        except Exception as e:
+            sonuc["sifrelenemedi"].append(dizin)
+            if logger:
+                logger.error(
+                    "DUZ-METIN YEDEK DIZINI OKUNAMADI (%s: %s): %s — icindeki duz yedekler SIFRELENMEDI (silinmedi); "
+                    "hasta PII'si tasiyabilirler.",
+                    type(e).__name__,
+                    e,
+                    dizin,
+                )
+            continue
+        for ad in adlar:
             yol = os.path.join(dizin, ad)
             if not ad.endswith(".db") or not os.path.isfile(yol):
                 continue

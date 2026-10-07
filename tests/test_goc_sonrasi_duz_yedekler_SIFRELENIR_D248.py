@@ -132,6 +132,46 @@ def test_KRITIK_bir_yedek_SIFRELENEMEZSE_dokunulmaz_neden_LOGLANIR(baglayici, tm
     assert not list(app.rglob("*.enc.tmp")), "geçici şifreli kopya artığı kaldı"
 
 
+def test_KRITIK_A291_yedek_DIZINI_listelenemezse_digeri_SIFRELENIR_gunluk_YALAN_soylemez(
+    baglayici, tmp_path, monkeypatch, caplog
+):
+    """2-A inceleme A2-9.1 (O-2A.4): `migration_backups/` listelenemezse (ACL/kilit) göç BAŞARILI kalır; sıradaki
+    `backups/` yine ŞİFRELENİR, günlük okunamayan dizini adıyla söyler ve başarılı göçü "migrate hatasi" diye loglamaz.
+    Eskiden listeleme istisnası döngüyü kesip göçün dış `except`ine düşüyordu (ölçüldü).
+    MUTASYON: dizin başına listeleme korumasını kaldırmak → KIRMIZI (backups/ düz kalır)."""
+    from database import sqlcipher_util as su
+
+    app = tmp_path / "PEMF_GUI"
+    db = _gocu_kur(app, monkeypatch)
+    okunamaz = app / "migration_backups" / "pre_migration_v2_20261001_000000.db"
+    gunluk = app / "backups" / "pemf_treatment_history_20261001_000000.db"
+    _duz_db(okunamaz, "OkunamazDizin-D248")
+    _duz_db(gunluk, "GunlukYedek-D248")
+    once = okunamaz.read_bytes()
+    gercek_listdir = os.listdir
+
+    def _listdir(yol=".", *a, **k):
+        if os.path.normcase(os.path.abspath(str(yol))) == os.path.normcase(str(okunamaz.parent)):
+            raise PermissionError(13, "Erisim engellendi (taklit)", str(yol))
+        return gercek_listdir(yol, *a, **k)
+
+    monkeypatch.setattr(os, "listdir", _listdir)
+    with caplog.at_level(logging.WARNING):
+        su.migrate_to_encrypted_if_needed(db, app, logging.getLogger("d248"))
+    assert db.read_bytes()[:16] != _SQLITE_BASLIK, "ön koşul: canlı DB göçmeli"
+    assert gunluk.read_bytes()[:16] != _SQLITE_BASLIK, (
+        f"migration_backups/ listelenemeyince backups/ HİÇ ŞİFRELENMEDİ (hasta PII'si düz):\n{caplog.text[-1500:]}"
+    )
+    assert _anahtarla_acilir(baglayici, gunluk, K), "backups/ yedeği at-rest anahtarıyla AÇILMIYOR (veri kaybı)"
+    assert okunamaz.read_bytes() == once, "listelenemeyen dizindeki yedek DEĞİŞTİ"
+    assert "migrate hatasi" not in caplog.text, (
+        f"BAŞARILI göç 'migrate hatasi (duz-metin korunur)' diye loglandı (yalan):\n{caplog.text[-1500:]}"
+    )
+    assert "OKUNAMADI" in caplog.text and str(okunamaz.parent) in caplog.text, (
+        f"okunamayan yedek dizini adıyla/nedeniyle loglanmadı:\n{caplog.text[-1500:]}"
+    )
+
+
 @_WINDOWS_KILIDI
 def test_KARSIT_goc_IPTAL_olursa_yedeklere_DOKUNULMAZ(baglayici, tmp_path, monkeypatch):
     """Göç doğrulanmış başarıyla bitmezse (kilit) yedekler ŞİFRELENMEZ — canlı DB düzken yedeği şifrelemek, geri
