@@ -19,6 +19,7 @@
  * güncelleme akışındaki "seans sürerken dokunma" ilkesinin aynısı.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { StyleSheet, View } from "react-native";
 
 import { apiGet, apiPost, setOperatorToken } from "@/services/apiClient";
 import { useAuth } from "@/context/AuthContext";
@@ -147,6 +148,21 @@ export function OperatorProvider({
   const lock = useCallback(() => { setOperatorToken(null); setActive(null); }, []);
   const touch = useCallback(() => { sonEtkilesim.current = Date.now(); }, []);
 
+  // ── ETKİLEŞİM → SAYAÇ (D2.E13 · İG-6.18) ─────────────────────────────────────────────────
+  // `touch()` üründe HİÇ çağrılmıyordu → kimlik PIN'den tam 10 dk sonra, çalışan hekimde bile düşüyordu (ölçüldü: gerçek
+  // tarayıcıda 46 tıklama/tuşa rağmen 600. sn). Web/masaüstü: pencerenin YAKALAMA evresinde gerçek kullanıcı etkileşimi
+  // (dokunma/tıklama, tuş, tekerlek). Yerel: kök görünümün yanıtlayıcı YAKALAMA sorgusu — `false` döner, dokunuşu ÇALMAZ.
+  // ⚠️ `mousemove` SAYILMAZ: masada kayan fare kimliği sonsuza dek açık tutardı. 10 dk eşiği ve "seans sürerken
+  // kilitlenmez" DEĞİŞMEZ. Kapı: __tests__/OperatorContext.E13.etkilesim.web.test.tsx + OperatorContext.test.tsx (yerel).
+  useEffect(() => {
+    const w = typeof window !== "undefined" ? window : undefined;
+    if (!w || typeof w.addEventListener !== "function") return;
+    const olaylar = ["pointerdown", "keydown", "wheel", "touchstart"];
+    for (const o of olaylar) w.addEventListener(o, touch, { capture: true, passive: true });
+    return () => { for (const o of olaylar) w.removeEventListener(o, touch, { capture: true }); };
+  }, [touch]);
+  const dokunusYakala = useCallback(() => { touch(); return false; }, [touch]);
+
   // ── HAREKETSİZLİK KİLİDİ ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!active) return;                       // kilitlenecek bir kimlik yok
@@ -168,8 +184,16 @@ export function OperatorProvider({
     refresh, enroll, switchTo, lock, touch,
   }), [operators, active, session, refresh, enroll, switchTo, lock, touch]);
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={value}>
+      <View style={styles.kok} testID="operator-etkilesim-koku" onStartShouldSetResponderCapture={dokunusYakala}>
+        {children}
+      </View>
+    </Ctx.Provider>
+  );
 }
+
+const styles = StyleSheet.create({ kok: { flex: 1 } });
 
 export function useOperator(): OperatorContextValue {
   const v = useContext(Ctx);

@@ -208,15 +208,21 @@ describe("hareketsizlik kilidi", () => {
     expect(getByTestId("aktif").children.join("")).toBe("Dr. A");
   });
 
-  it("touch() sayacı sıfırlar", async () => {
+  it("KRİTİK (D2.E13, yerel yol): kök görünümün dokunuş YAKALAMA sorgusu sayacı sıfırlar ve dokunuşu ÇALMAZ", async () => {
+    // ⚠️ Eskiden bu test `touch()`'ı KENDİSİ çağırıyordu → üründe hiç çağrılmadığı hâlde YEŞİLDİ (kör kapı, İG-6.18).
+    // Artık ürünün dinlediği yerel olay yolu: kök `View`'ın `onStartShouldSetResponderCapture`ı (RN yanıtlayıcı sistemi
+    // her dokunuşun başında kökten hedefe sorar). `false` dönmeli — aksi hâlde kök yanıtlayıcıyı çalar, düğmeler basılmaz.
     jest.useFakeTimers();
     mockGet.mockResolvedValue({ ok: true, data: [{ email: "a@x.com", display_name: "Dr. A" }] });
     const { getByTestId } = kur({ autoLockMs: 60_000 });
     await act(async () => {});
     await act(async () => { await sonBaglam!.switchTo("a@x.com", "123456"); });
 
+    const kok = getByTestId("operator-etkilesim-koku");
     await act(async () => { jest.advanceTimersByTime(45_000); });
-    act(() => sonBaglam!.touch());
+    let calindi: unknown;
+    act(() => { calindi = kok.props.onStartShouldSetResponderCapture({ nativeEvent: {} }); });
+    expect(calindi).toBe(false);
     await act(async () => { jest.advanceTimersByTime(45_000); });
     expect(getByTestId("aktif").children.join("")).toBe("Dr. A");
   });
