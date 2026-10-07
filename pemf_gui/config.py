@@ -129,17 +129,22 @@ class ConfigManager:
             logger.warning("Legacy config_dir ileri-tasima atlandi (kritik degil).", exc_info=True)
 
     def _get_or_create_key(self) -> bytes:
-        """Birincil şifreleme anahtarı: keyring'de RASTGELE (yüksek entropi, MAC'ten bağımsız → ağ
-        kartı/makine değişse bile stabil). Keyring yoksa .pemf_key_v2 dosyası fallback. Eski
-        MAC-türevli anahtar artık BİRİNCİL DEĞİL (yalnız _get_legacy_cipher ile decrypt fallback)."""
-        # TEK-DOSYA: SecretsManager (keyring->.pemf_key_v2 MİGRATE; tek dosyada DPAPI saklar).
-        # MEVCUT anahtar HER ZAMAN migrate → mevcut şifreli PII alanları (ad/sahip/iletişim) okunabilir kalır.
+        """Birincil şifreleme anahtarı (RASTGELE, MAC'ten bağımsız) TEK kaynaktan: SecretsManager (`patient_fernet_key`,
+        DPAPI/MKEY ile saklanır). Eski kaynakları (keyring → `.pemf_key_v2`) SecretsManager'ın `legacy` göçü okur; anahtar
+        hiç yoksa SecretsManager üretir (diske yazdıktan SONRA döner). Eski MAC-türevli anahtar BİRİNCİL DEĞİL (yalnız
+        `_get_legacy_cipher` ile decrypt fallback).
+
+        ⚠️ 2-A inceleme A2-1.2 (D2.45 · Karar 6 "TÜM anahtar yollarında" · Y9): SecretsManager'ın HER hatası fail-closed
+        `RuntimeError`'dır — eski yola (keyring → `.pemf_key_v2` → YOKSA YENİ anahtar üretip GERÇEK Windows kimlik kasasına /
+        dosyaya yazma) DÜŞÜLMEZ. Eskiden `RuntimeError` OLMAYAN hata (sır dizinine erişilemiyor — ikinci Windows hesabı; ilk
+        kalıcılaştırma bir kez düştü) bu yola düşüyor, YENİ Fernet anahtarı üretip kasaya yazıyordu (ölçüldü: veri kökü başka
+        SID'e kilitliyken `keyring.set_password('PEMF_GUI', 'patient_fernet_key')`); kasa yazamazsa anahtar YALNIZ bellekte
+        kalıyor, o süreçte şifrelenen hasta alanları yeniden başlatmada ÇÖZÜLEMİYORDU (ölçüldü, null kasa). `sqlcipher_key`
+        yolunun D2.45'teki ikizi. Kapı: tests/test_alan_anahtari_eski_yol_YOK_Karar6_A12.py."""
         try:
             from utils.secrets_manager import get_secret
 
             _k = get_secret("patient_fernet_key")
-            if _k:
-                return _k.encode() if isinstance(_k, str) else _k
         except RuntimeError:
             # Audit P3: SecretsManager brick-koruma (kritik anahtar VAR ama çözülemez → fail-closed
             # RuntimeError) → YUTMA. Yeni patient_fernet_key üretmek mevcut şifreli PII'yi kalıcı
@@ -149,51 +154,20 @@ class ConfigManager:
             )
             raise
         except Exception as _e:
-            logger.warning("SecretsManager patient_fernet_key okunamadı, eski yola düşülüyor: %s", _e)
-        service, name = "PEMF_GUI", "patient_fernet_key"
-        kr = None
-        try:
-            import keyring as kr  # type: ignore
-        except Exception:
-            kr = None
-        if kr is not None:
-            try:
-                k = kr.get_password(service, name)
-                if k:
-                    return k.encode()
-            except Exception:
-                pass
-        key_file_v2 = os.path.join(self.config_dir, '.pemf_key_v2')
-        if os.path.exists(key_file_v2):
-            try:
-                with open(key_file_v2, 'rb') as f:
-                    k = f.read().strip()
-                if k:
-                    return k
-            except Exception:
-                pass
-        new_key = Fernet.generate_key()
-        stored = False
-        if kr is not None:
-            try:
-                kr.set_password(service, name, new_key.decode())
-                stored = True
-            except Exception:
-                pass
-        if not stored:
-            try:
-                with open(key_file_v2, 'wb') as f:
-                    f.write(new_key)
-                try:
-                    from utils.file_acl import lock_down_file
-
-                    lock_down_file(key_file_v2)  # audit B-1.2: NTFS ACL (os.chmod Windows'ta no-op)
-                except Exception:
-                    pass
-            except Exception:
-                pass
-        logger.info("Yeni RASTGELE Fernet anahtari uretildi (keyring=%s).", stored)
-        return new_key
+            logger.error(
+                "patient_fernet_key SecretsManager'dan OKUNAMADI/YAZILAMADI (%s: %s) — eski yola DUSULMEDI, YENI ANAHTAR "
+                "URETILMEDI; hasta veritabani acilmayacak, dosyalara dokunulmadi (Karar 6). Sir dosyasina/veri kokune "
+                "erisimi duzeltin; veritabani arka planda yeniden acilir.",
+                type(_e).__name__,
+                _e,
+            )
+            raise RuntimeError(
+                f"patient_fernet_key okunamadi/yazilamadi ({type(_e).__name__}) — yeni anahtar URETILMEDI, eski yola "
+                "dusulmedi (Karar 6)."
+            ) from _e
+        if not _k:
+            raise RuntimeError("patient_fernet_key bos dondu — yeni anahtar URETILMEDI, eski yola dusulmedi (Karar 6).")
+        return _k.encode() if isinstance(_k, str) else _k
 
     def _get_legacy_cipher(self):
         """Eski MAC-türevli (veya .pemf_key) anahtar — yalnız ESKİ kayıtları çözmek için. Yoksa None."""
