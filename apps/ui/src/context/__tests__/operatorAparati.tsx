@@ -113,6 +113,13 @@ export class Sahne {
     await act(async () => { el.click(); });
     await this.bosalt();
   }
+  /** `testID` ile tıkla (RN-web `testID` → `data-testid`). */
+  async testIdTikla(kimlik: string) {
+    const el = document.querySelector(`[data-testid="${kimlik}"]`) as HTMLElement | null;
+    if (!el) throw new Error(`data-testid="${kimlik}" bulunamadi. Govde: ${document.body.textContent?.slice(0, 300)}`);
+    await act(async () => { el.click(); });
+    await this.bosalt();
+  }
   /** Görünen METNİ tam olarak `metin` olan en derin elemana tıkla (etiketsiz düğmeler; tıklama atadaki basılabilir öğeye
    *  kabarcıklanır). */
   async metneTikla(metin: string) {

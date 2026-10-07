@@ -14,7 +14,15 @@ import { useAuth } from "@/context/AuthContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
 import { SessionDetailModal } from "@/components/domain/SessionDetailModal";
 import { aramaEslesir } from "@/utils/aramaNormalize";
-import { inScope, KIMLIK_ISTEMI } from "@/utils/patientScope";
+import {
+  inScope,
+  KIMLIK_ISTEMI,
+  SILME_KIMLIK_ISTEMI,
+  silinebilir,
+  silinmeyecekNotu,
+  YALNIZ_KENDI_SILME,
+} from "@/utils/patientScope";
+import { useUserMode } from "@/context/UserModeContext";
 import { downloadFileWithAuth } from "@/services/dosyaIndir";
 import { useCokluSecim } from "@/hooks/useCokluSecim";
 import { SecimCubugu } from "@/components/ui/SecimCubugu";
@@ -63,8 +71,13 @@ export function TreatmentHistoryScreen() {
   // gösteriyordu — hekim kendi seansını bulamıyor, başkasınınkini kendi sanıyordu.
   const op = useOperatorOptional();
   const myEmail = (op ? op.operatorEmail : (session?.email || "")).toLowerCase();
+  const { isExpert } = useUserMode();
   // Klinik-içi görünüm: "mine" = benim başlattığım seanslar (+ sahipsiz eski), "all" = tüm klinik.
   const [scope, setScope] = useState<"mine" | "all">("mine");
+  // D2.72 · Y92: seans (tıbbi kayıt) silme yetkisinin bağlamı — tek kaynak `silinebilir`; kayıtlı operatör yoksa Kural 2.
+  const silmeBaglami = { myEmail, operatorKayitli: (op?.operators?.length ?? 0) > 0, kapsam: scope, isExpert };
+  const silmeEngeli = (kayit: { operator_email?: string | null }): string | null =>
+    !myEmail ? SILME_KIMLIK_ISTEMI : silinebilir(kayit, silmeBaglami) ? null : YALNIZ_KENDI_SILME;
   const { showToast } = useToast();
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -217,11 +230,20 @@ export function TreatmentHistoryScreen() {
   const [siliniyor, setSiliniyor] = useState(false);
 
   const secilenleriSil = async () => {
-    const kimlikler = secim.seciliKimlikler;
-    if (kimlikler.length === 0 || siliniyor) return;
+    const secilenler = secim.seciliKimlikler;
+    if (secilenler.length === 0 || siliniyor) return;
+    // ⚠️ D2.72 (B-6.26 · Y92): istek YALNIZ silinebilen (kendi) seanslarla gider; dışarıda kalanların SAYISI onayda
+    // söylenir. Eskiden "Tüm Klinik → Tümünü Seç" başka hekimlerin seans kayıtlarını (tıbbi kayıt) isteğe koyuyordu.
+    if (!myEmail) { showToast(SILME_KIMLIK_ISTEMI, "error"); return; }
+    const kimlikler = secilenler.filter((k) => {
+      const kayit = sessions.find((x) => x.id === k);
+      return !!kayit && silinebilir(kayit, silmeBaglami);
+    });
+    if (kimlikler.length === 0) { showToast(YALNIZ_KENDI_SILME, "error"); return; }
     const ok = await platformConfirm(
       "Seçili Kayıtları Sil",
-      `${kimlikler.length} seans kaydı KALICI olarak silinecek. Bu işlem geri alınamaz.`,
+      `${kimlikler.length} seans kaydı KALICI olarak silinecek. Bu işlem geri alınamaz.` +
+        silinmeyecekNotu(secilenler.length - kimlikler.length),
       "Sil",
     );
     if (!ok) return;
@@ -343,6 +365,7 @@ export function TreatmentHistoryScreen() {
                 session={session}
                 onRefresh={fetchHistory}
                 onOpenDetails={() => setSelectedSessionId(session.id)}
+                silmeEngeli={silmeEngeli(session)}
                 secimModu={secim.secimModu}
                 secili={secim.secilimi(session.id)}
                 onSecimDegistir={() => secim.degistir(session.id)}
@@ -379,6 +402,7 @@ function SessionCard({
   session,
   onRefresh,
   onOpenDetails,
+  silmeEngeli = null,
   secimModu = false,
   secili = false,
   onSecimDegistir,
@@ -386,6 +410,8 @@ function SessionCard({
   session: any;
   onRefresh: () => void;
   onOpenDetails: () => void;
+  /** D2.72 · Y92: dolu ise bu kayıt bu kimlikle SİLİNEMEZ — tekil silme istek göndermez, metni gösterir. */
+  silmeEngeli?: string | null;
   secimModu?: boolean;
   secili?: boolean;
   onSecimDegistir?: () => void;
@@ -424,6 +450,7 @@ function SessionCard({
   };
 
   const handleDelete = async () => {
+    if (silmeEngeli) { showToast(silmeEngeli, "error"); return; }   // D2.72 · Y92 (karar üst bileşende, tek kaynak)
     const ok = await platformConfirm("Kaydı Sil", "Bu seans kaydını silmek istediğinizden emin misiniz?", "Sil");
     if (!ok) return;
     const res = await apiPost<{status: string}>("/history/delete", { session_id: session.id }, { status: "error" });
@@ -474,7 +501,12 @@ function SessionCard({
           <TouchableOpacity style={styles.btnOutline} onPress={downloadPdf} accessibilityLabel="Seans raporunu PDF olarak al">
             <Text style={styles.btnOutlineText}>PDF</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={handleDelete}>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={handleDelete}
+            accessibilityRole="button"
+            accessibilityLabel={`${session.patient_name || "Bilinmeyen Hasta"} kaydını sil`}
+          >
             <Trash2 color={colors.danger} size={18} />
           </TouchableOpacity>
         </View>

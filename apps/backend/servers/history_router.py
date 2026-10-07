@@ -305,9 +305,18 @@ def export_patient_pdf(patient_name: str, pdf_gen=Depends(get_pdf_gen)):
         raise HTTPException(status_code=500, detail="İşlem başarısız")
 
 
+def _seans_sahipligi(request: Request, db, kimlikler: list, olay: str, scope: str) -> None:
+    """⚠️ D2.72 (B-6.26 · Y92): seans (tıbbi kayıt) silme yalnız KENDİ kaydına; kimlik jetondan; operatörsüz klinik
+    kısıtsız (Kural 2). Kural tek yerde: servers/silme_yetkisi.py. Kapı: tests/test_silme_SAHIPLIK_jetondan_D272_Y92.py."""
+    from servers.silme_yetkisi import sahiplik_kapisi
+
+    sahiplik_kapisi(request, db.seans_sahipleri(kimlikler), olay=olay, scope=scope)
+
+
 @router.post("/delete")
-def delete_session_compat(payload: HistoryDeletePayload, db=Depends(get_db)):
+def delete_session_compat(request: Request, payload: HistoryDeletePayload, db=Depends(get_db)):
     """Backward-compatible delete route used by the current Expo app."""
+    _seans_sahipligi(request, db, [payload.session_id], "history.delete", f"id={payload.session_id}")
     try:
         db.delete_session(payload.session_id)
         return {"status": "success"}
@@ -343,6 +352,7 @@ def delete_sessions_bulk(request: Request, payload: HistoryBulkDeletePayload, db
     istenen = sorted({int(x) for x in (payload.session_ids or [])})
     if not istenen:
         raise HTTPException(status_code=400, detail="Silinecek seans seçilmedi.")
+    _seans_sahipligi(request, db, istenen, "history.delete_bulk", f"{len(istenen)} seans")
     try:
         silinen = db.delete_sessions_bulk(istenen)
     except ValueError as e:
@@ -544,8 +554,9 @@ def get_session_detail(session_id: int, db=Depends(get_db)):
 
 
 @router.delete("/{session_id}")
-def delete_session(session_id: int, db=Depends(get_db)):
+def delete_session(session_id: int, request: Request, db=Depends(get_db)):
     """Seans sil"""
+    _seans_sahipligi(request, db, [session_id], "history.delete", f"id={session_id}")
     try:
         db.delete_session(session_id)
         return {"status": "success"}

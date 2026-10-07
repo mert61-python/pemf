@@ -445,6 +445,27 @@ class SeansKarisimi:
             self.logger.error(f"Geçmiş getirme hatası: {e}")
             raise
 
+    def seans_sahipleri(self, session_ids) -> Dict[int, str]:
+        """{seans kimliği: seansın operator_email'i} — YALNIZ var olan seanslar.
+
+        Silme yetkisi (D2.72 · Y92) için. ⚠️ Hata YUTULMAZ (fail-closed): okunamayan sahiplik boş sözlük dönerse silme
+        kapısı geçerdi."""
+        kimlikler = []
+        for x in session_ids or ():
+            try:
+                kimlikler.append(int(x))
+            except (TypeError, ValueError):
+                continue
+        kimlikler = sorted(set(kimlikler))
+        if not kimlikler:
+            return {}
+        yer = ",".join("?" for _ in kimlikler)
+        with self._get_connection() as conn:
+            satirlar = conn.execute(
+                f"SELECT id, operator_email FROM treatment_sessions WHERE id IN ({yer})", kimlikler
+            ).fetchall()
+        return {int(s[0]): (s[1] or "") for s in satirlar}
+
     def get_session_details(self, session_id: int) -> Optional[Dict]:
         """
         Belirli bir seansın detaylarını getir

@@ -630,6 +630,22 @@ class PatientDatabase:
             except _DB_ERROR:
                 return None
 
+    def operator_sahipleri(self, patient_ids) -> Dict[str, str]:
+        """{hasta kimliği: kaydı oluşturan hekimin e-postası (deşifre)} — YALNIZ var olan kayıtlar.
+
+        Silme yetkisi (D2.72 · Y92) için. ⚠️ Hata YUTULMAZ: okunamayan sahiplik "sahibi yok" sayılırsa silme kapısı
+        boş sözlükle geçerdi (fail-open) — istisna çağırana gider, uç 500 döner, hiçbir şey silinmez."""
+        kimlikler = sorted({str(x) for x in (patient_ids or ()) if str(x or "").strip()})
+        if not kimlikler:
+            return {}
+        yer = ",".join("?" for _ in kimlikler)
+        with self.lock:
+            with self._get_connection() as conn:
+                satirlar = conn.execute(
+                    f"SELECT id, operator_email FROM patients WHERE id IN ({yer})", kimlikler
+                ).fetchall()
+        return {str(s[0]): self._decrypt_field(s[1] or "") for s in satirlar}
+
     def count_patients(self) -> int:
         """Toplam hasta sayisi (sayfalamada 'total' icin — desifre GEREKTIRMEZ)."""
         with self.lock:

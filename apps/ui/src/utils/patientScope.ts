@@ -91,3 +91,40 @@ export function deleteScope(
   }
   return { izinli: true, operatorEmail: "", allOperators: true };
 }
+
+/**
+ * KAYIT SİLME YETKİSİ (D2.72 · B-6.26 · Y92) — hasta ve seans silmenin (toplu + tekil) TEK kaynağı.
+ *
+ * ⚠️ ÖLÇÜLEN KUSUR: toplu ve tekil silme kimlik/sahiplik sormadan ekranda görünen her kaydı isteğe koyuyordu →
+ * "Tüm Klinik → Tümünü Seç → Sil" başka hekimlerin hasta ve SEANS kayıtlarını siliyor, araştırma profili kendisine
+ * kapatılan "Tümünü Sil"i böyle dolanıyordu (DENETIM-06 B-6.26, İG-6.4).
+ *
+ * KURAL (sahip kararı Y92 — backend `servers/silme_yetkisi.py` AYNI kuralı jetondan uygular):
+ *   * Kimlik yoksa → HİÇBİR kayıt (istek gitmez).
+ *   * Cihazda kayıtlı operatör VARSA → yalnız `operator_email` = aktif operatör. SAHİPSİZ kayıt da "kendi" değildir
+ *     ("Benim" listesinde GÖRÜNÜR ama silinmez — backend 403 der). "Tüm Klinik" görünümü bunu değiştirmez.
+ *   * Operatörsüz tek hekimli klinik (Kural 2) → bugünkü gibi her kayıt; YALNIZ araştırma profili "Tüm Klinik"te kendi
+ *     kayıtlarıyla sınırlı (B-6.26 — "Tümünü Sil" ona kapalı; bu kol yalnız arayüzde: backend profili bilmez).
+ */
+export function silinebilir(
+  kayit: { operator_email?: string | null },
+  b: { myEmail: string; operatorKayitli: boolean; kapsam: PatientScope; isExpert: boolean },
+): boolean {
+  const mail = (b.myEmail || "").trim().toLowerCase();
+  if (!mail) return false;
+  const sahip = (kayit.operator_email || "").trim().toLowerCase();
+  if (b.operatorKayitli) return sahip === mail;
+  if (b.kapsam === "all" && !b.isExpert) return sahip === mail;
+  return true;
+}
+
+/** Tekil silmede kayıt kimliğe ait değilse (ya da toplu seçimin HİÇBİRİ silinemiyorsa) gösterilen metin. */
+export const YALNIZ_KENDI_SILME = "Yalnız kendi kayıtlarınızı silebilirsiniz — bu kayıt başka bir hekime ait ya da sahipsiz.";
+
+/** Kimlik yokken silme denemesi (kayıtlı operatörlü cihaz, kimse seçili değil ya da kilit sonrası). */
+export const SILME_KIMLIK_ISTEMI = "Silmek için operatörünüzü seçin";
+
+/** Toplu silme onayında, seçimden silinmeyecek kayıtların sayısı. */
+export function silinmeyecekNotu(n: number): string {
+  return n > 0 ? `\n\n${n} kayıt başka bir hekime ait ya da sahipsiz — SİLİNMEYECEK.` : "";
+}

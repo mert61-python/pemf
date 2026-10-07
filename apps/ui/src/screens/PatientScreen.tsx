@@ -15,7 +15,17 @@ import { useUserMode } from "@/context/UserModeContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
 import { useAuth } from "@/context/AuthContext";
 import { canAccess } from "@/config/access";
-import { canChooseScope, EKLEME_KIMLIK_ISTEMI, effectiveScope, inScope, KIMLIK_ISTEMI } from "@/utils/patientScope";
+import {
+  canChooseScope,
+  EKLEME_KIMLIK_ISTEMI,
+  effectiveScope,
+  inScope,
+  KIMLIK_ISTEMI,
+  SILME_KIMLIK_ISTEMI,
+  silinebilir,
+  silinmeyecekNotu,
+  YALNIZ_KENDI_SILME,
+} from "@/utils/patientScope";
 import { aramaEslesir } from "@/utils/aramaNormalize";
 import { useCokluSecim } from "@/hooks/useCokluSecim";
 import { hastaninSonAnalizi, hastayaGoreSonAnaliz, kapsamda, sonAnalizOzeti, type AnalizKaydi } from "@/utils/sonAnaliz";
@@ -144,6 +154,11 @@ export function PatientScreen() {
   };
 
   const handleDelete = async (id: string) => {
+    // ⚠️ D2.72 (B-6.26 · Y92): tekil silme de YALNIZ kendi kaydına (kural `patientScope.silinebilir`, backend aynısını
+    // jetondan uygular). Eskiden her görünen kartta "sil" başka hekimin kaydına istek gönderiyordu.
+    if (!myEmail) { showToast(SILME_KIMLIK_ISTEMI, "error"); return; }
+    const hedef = patients.find((p) => p.id === id);
+    if (!hedef || !silinebilir(hedef, silmeBaglami)) { showToast(YALNIZ_KENDI_SILME, "error"); return; }
     // platformConfirm = web-güvenli onay. (Alert.alert çoklu-buton WEB'de tetiklenmez → "Sil" onPress
     // hiç çalışmıyor, istek gitmiyordu → "hasta silme çalışmıyor". window.confirm'e düşer.)
     if (!(await platformConfirm("Hasta Sil", "Bu hastayı silmek istediğinizden emin misiniz?", "Sil"))) return;
@@ -182,6 +197,10 @@ export function PatientScreen() {
   // ileride başka bir yerden setScope("all") çağrılırsa diye). Mantık utils/patientScope.ts'te.
   const etkinScope = effectiveScope(scope, { isExpert, isResearcher });
   const scopedPatients = patients.filter(p => inScope(p, etkinScope, myEmail));
+  // D2.72 · Y92: silme yetkisinin bağlamı (tek kaynak `silinebilir`). Kayıtlı operatör yoksa Kural 2.
+  const silmeBaglami = {
+    myEmail, operatorKayitli: (op?.operators?.length ?? 0) > 0, kapsam: etkinScope, isExpert,
+  };
   // ⚠️ DENETİM 2026-09-12 (sahip: "klinik ve benim ayrımı düzgün çalışıyor mu incele"):
   // burada `inScope`un KOPYASI vardı. İki kopya sessizce ayrışır — sekmedeki SAYI bir kuralı,
   // LİSTE başka bir kuralı uygularsa operatör "(3)" görüp 5 kayıt bulur (ya da tersi) ve
@@ -238,11 +257,21 @@ export function PatientScreen() {
   const [siliniyor, setSiliniyor] = useState(false);
 
   const secilenleriSil = async () => {
-    const kimlikler = secim.seciliKimlikler.filter(Boolean);
-    if (kimlikler.length === 0 || siliniyor) return;
+    const secilenler = secim.seciliKimlikler.filter(Boolean);
+    if (secilenler.length === 0 || siliniyor) return;
+    // ⚠️ D2.72 (B-6.26 · Y92): istek YALNIZ silinebilen (kendi) kayıtlarla gider; dışarıda kalanların SAYISI onayda
+    // söylenir. Eskiden "Tüm Klinik → Tümünü Seç" başka hekimlerin hastalarını isteğe koyuyordu (araştırma profili
+    // "Tümünü Sil" kısıtını böyle dolanıyordu). Backend aynı kuralı jetondan uygular (karışık seçim → 403, hiçbiri).
+    if (!myEmail) { showToast(SILME_KIMLIK_ISTEMI, "error"); return; }
+    const kimlikler = secilenler.filter((k) => {
+      const p = patients.find((x) => (x.id || x.name || "") === k);
+      return !!p && silinebilir(p, silmeBaglami);
+    });
+    if (kimlikler.length === 0) { showToast(YALNIZ_KENDI_SILME, "error"); return; }
     const ok = await platformConfirm(
       "Seçili Hastaları Sil",
-      `${kimlikler.length} hasta kaydı KALICI olarak silinecek. Bu işlem geri alınamaz.`,
+      `${kimlikler.length} hasta kaydı KALICI olarak silinecek. Bu işlem geri alınamaz.` +
+        silinmeyecekNotu(secilenler.length - kimlikler.length),
       "Sil",
     );
     if (!ok) return;

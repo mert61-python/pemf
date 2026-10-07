@@ -7,7 +7,7 @@
  * "Tüm Klinik" sekmesi ev sahibine kliniğin tüm kayıtlarını (sahip adı/iletişim = kişisel veri)
  * açardı. Bu testler kapının İKİ katmanını da kanıtlar: sekme gizli VE mantık kilitli.
  */
-import { canChooseScope, deleteScope, effectiveScope, inScope } from "@/utils/patientScope";
+import { canChooseScope, deleteScope, effectiveScope, inScope, silinebilir } from "@/utils/patientScope";
 
 const VET = { isExpert: true, isResearcher: false };
 const ARASTIRMA = { isExpert: false, isResearcher: true };
@@ -180,5 +180,36 @@ describe("deleteScope", () => {
 
   it("yalnız boşluktan ibaret e-posta KİMLİK SAYILMAZ", () => {
     expect(deleteScope("mine", "   ", VET).izinli).toBe(false);
+  });
+});
+
+describe("D2.72 · Y92 — silinebilir (hasta/seans silme yetkisinin tek kaynağı)", () => {
+  const A = "dr.a@klinik.com";
+  const cokHekimli = { myEmail: A, operatorKayitli: true, kapsam: "all" as const, isExpert: true };
+  const kural2 = { myEmail: A, operatorKayitli: false, kapsam: "all" as const, isExpert: true };
+
+  it("KRİTİK: kimlik yoksa HİÇBİR kayıt silinemez (Kural 2 bağlamında da)", () => {
+    expect(silinebilir({ operator_email: "" }, { ...kural2, myEmail: "" })).toBe(false);
+    expect(silinebilir({ operator_email: A }, { ...cokHekimli, myEmail: "  " })).toBe(false);
+  });
+
+  it("KRİTİK: kayıtlı operatörlü cihazda YALNIZ kendi kaydı — başka hekimin ve SAHİPSİZ kayıt 'Tüm Klinik'te de değil", () => {
+    expect(silinebilir({ operator_email: "Dr.A@Klinik.com" }, cokHekimli)).toBe(true);
+    expect(silinebilir({ operator_email: "dr.b@klinik.com" }, cokHekimli)).toBe(false);
+    expect(silinebilir({ operator_email: "" }, cokHekimli)).toBe(false);
+    expect(silinebilir({ operator_email: "" }, { ...cokHekimli, kapsam: "mine" })).toBe(false);
+  });
+
+  it("KRİTİK (B-6.26): operatörsüz klinikte araştırma profili 'Tüm Klinik'te yalnız kendi kaydı", () => {
+    const arastirma = { ...kural2, isExpert: false };
+    expect(silinebilir({ operator_email: A }, arastirma)).toBe(true);
+    expect(silinebilir({ operator_email: "" }, arastirma)).toBe(false);
+    expect(silinebilir({ operator_email: "eski@klinik.com" }, arastirma)).toBe(false);
+  });
+
+  it("KARŞIT (Kural 2): operatörsüz tek hekimli klinikte hekim her kaydı; 'Benim' kapsamında her profil kendi + sahipsiz", () => {
+    expect(silinebilir({ operator_email: "eski@klinik.com" }, kural2)).toBe(true);
+    expect(silinebilir({ operator_email: "" }, kural2)).toBe(true);
+    expect(silinebilir({ operator_email: "" }, { ...kural2, kapsam: "mine", isExpert: false })).toBe(true);
   });
 });

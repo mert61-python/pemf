@@ -98,6 +98,11 @@ def remove_patient(patient_id: str, request: Request):
     """Hasta siler"""
     _enforce_patient_auth(request)
     db = get_patient_database()
+    # ⚠️ D2.72 (Y92): kayıtlı operatörlü cihazda yalnız KENDİ kaydı, kimlik jetondan (bkz. servers/silme_yetkisi.py).
+    # Kapı: tests/test_silme_SAHIPLIK_jetondan_D272_Y92.py.
+    from servers.silme_yetkisi import sahiplik_kapisi
+
+    sahiplik_kapisi(request, db.operator_sahipleri([patient_id]), olay="patient.delete", scope=f"id={patient_id}")
     success = db.delete_patient(patient_id)
     # Denetim izi (2026-08-09, Tier 3): hasta kaydı silmek geri dönüşsüzdür ve KVKK "unutulma
     # hakkı"nın karşılığıdır — talebin yerine getirildiğinin kanıtı da gerekir. Hasta ADI
@@ -146,6 +151,12 @@ def remove_patients_bulk(request: Request, payload: BulkDeletePayload):
     db = get_patient_database()
     if not db:
         raise HTTPException(status_code=500, detail="Patient DB not initialized")
+    # ⚠️ D2.72 (B-6.26 · Y92): seçimde başka hekimin ya da sahipsiz kaydı varsa HİÇBİRİ silinmez (403); kimliksiz 428.
+    # Eskiden yalnız onay dizesine bakılıyordu — "Tüm Klinik → Tümünü Seç → Sil" kliniğin kayıtlarını siliyordu
+    # (araştırma profili kendisine kapatılan "Tümünü Sil"i böyle dolanıyordu). Kural 2: operatörsüz klinik kısıtsız.
+    from servers.silme_yetkisi import sahiplik_kapisi
+
+    sahiplik_kapisi(request, db.operator_sahipleri(istenen), olay="patient.delete_bulk", scope=f"{len(istenen)} hasta")
     try:
         silinen = db.delete_patients_bulk(istenen)
     except ValueError as e:
