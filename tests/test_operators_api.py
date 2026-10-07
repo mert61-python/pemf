@@ -24,10 +24,15 @@ def client():
 
 @pytest.fixture(autouse=True)
 def _temiz_operatorler(client):
-    """Her test kendi operatörleriyle başlasın (uçlar süreç-geneli DB'yi paylaşır)."""
+    """Her test kendi operatörleriyle başlasın VE bitsin (uçlar süreç-geneli DB'yi paylaşır).
+
+    ⚠️ 2-B (ölçüldü): temizlik yalnız testten ÖNCE yapılıyordu → dosyanın son testinin operatörleri süreçte KALIYOR, sonraki
+    dosyalar "cihazda kayıtlı operatör var" kipinde koşuyordu (ör. `test_session_lifecycle` Kural 2 beyanını kaybetti)."""
     for o in client.get("/api/operators").json().get("data", []):
         client.post("/api/operators/remove", json={"email": o["email"]})
     yield
+    for o in client.get("/api/operators").json().get("data", []):
+        client.post("/api/operators/remove", json={"email": o["email"]})
 
 
 def _kaydet(client, eposta="a@klinik.com", ad="Dr. A", pin="123456"):

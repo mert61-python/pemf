@@ -83,6 +83,12 @@ def add_new_patient(patient: PatientInput, request: Request):
     if patient_id:
         success = db.update_patient(patient_id, payload)
         return {"status": "success" if success else "error", "patient_id": patient_id}
+    # ⚠️ D2.41 (B-2.11): hastanın SAHİBİ sunucu kuralından (jeton; kanıtsız kayıtlı-hekim beyanı → sahipsiz; operatörsüz
+    # klinikte beyan — Kural 2). Eskiden LAN'dan jetonsuz başka bir hekimin adına hasta açılabiliyordu ("Benim" listesine).
+    # Kapı: tests/test_kayit_atfi_COZUMLENMIS_operator_D241.py.
+    from servers.auth import cozumlenmis_operator
+
+    payload["operator_email"] = cozumlenmis_operator(request, payload.get("operator_email", ""))
     patient_id = db.add_patient(payload)
     return {"status": "success", "patient_id": patient_id}
 

@@ -61,6 +61,19 @@ def api(monkeypatch):
     # BELLEK-İÇİ yaşam döngüsü, DB değil → kapıyı da devre dışı bırak. Kapının KENDİSİ `test_db_ready_gate.py`'de.
     monkeypatch.setattr(api_server, "_kayit_db_hazir", lambda: (True, ""))
     monkeypatch.setattr(api_server, "_broker_reachable", lambda: True)
+    # ⚠️ 2-B D2.41: `_SahteIstek` varsayımı ("cihazda kayıtlı operatör YOK → beyan kabul", Kural 2) EN ALT katta sabitlenir.
+    # Seans `operator_name`i artık kayıtlı operatör listesine bakıyor; başka bir dosyanın süreçte bıraktığı operatör bu
+    # dosyayı sessizce "kayıtlı operatörlü cihaz" kipine sokuyordu (ölçüldü: test_operators_api / test_audit_trail sonrası).
+    from database import auth_db as _adb
+
+    class _OperatorsuzKayit:
+        def operator_exists(self, _e):
+            return False
+
+        def list_operators(self):
+            return []
+
+    monkeypatch.setattr(_adb, "get_auth_db", lambda: _OperatorsuzKayit())
     with api_server._session_lock:
         api_server._active_session.clear()
     with api_server._active_coil_runs_lock:

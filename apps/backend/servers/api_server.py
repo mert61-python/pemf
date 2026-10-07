@@ -3735,9 +3735,12 @@ async def start_session(payload: SessionStartPayload, request: Request):
     # ⚠️ 2026-08-09 (Tier 1): kaydın SAHİBİNE sunucu karar verir (bkz. auth.cozumlenmis_operator).
     # Beyanı doğrudan yazmak, cihaza erişen herkesin başka bir hekim adına seans açmasına izin
     # veriyordu; seansın denetim izi (`session_started` olayı) de o adla imzalanıyordu.
-    from servers.auth import cozumlenmis_operator
+    from servers.auth import cozumlenmis_operator, cozumlenmis_operator_adi
 
     _operator_kimligi = cozumlenmis_operator(request, payload.operator_email)
+    # ⚠️ D2.41 (B-2.19): ADI da aynı kurala bağlı — e-posta sahipsiz düşerken `operator_name` beyanı seans satırına ve
+    # `session_started` izine kayıtlı bir hekimin adını yazıyordu (ölçüldü). Jetonluda kayıtlı görünen ad; Kural 2'de beyan.
+    _operator_adi = cozumlenmis_operator_adi(_operator_kimligi, payload.operator_name)
     # D1.95 (B-1.13 · B-1.16): taşan parametre seans KURULMADAN 422 (eskiden bobin başına patlayıp seansı yarım bırakırdı).
     _s_uyg = _surus_parametrelerini_dogrula_422(
         payload.frequency, payload.duty, payload.phase, payload.duration_minutes
@@ -3870,7 +3873,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
                 "session_id": _yeni_seans_muhru(),
                 "patient_id": payload.patient_id,
                 "patient_name": payload.patient_name,
-                "operator_name": payload.operator_name,
+                "operator_name": _operator_adi,
                 "mode": payload.mode,
                 "target_condition": payload.target_condition,
                 "frequency": payload.frequency,
@@ -3920,7 +3923,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
                 "session_started",
                 payload={
                     "ref": _active_session["session_id"],
-                    "operator_name": payload.operator_name,
+                    "operator_name": _operator_adi,
                     "operator_email": _operator_kimligi,
                     "patient_id": payload.patient_id,
                     "mode": payload.mode,
@@ -3974,7 +3977,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
             _sid = db.start_session(
                 treatment_mode=payload.mode,
                 target_condition=payload.target_condition or None,
-                operator_name=payload.operator_name or None,
+                operator_name=_operator_adi or None,
                 patient_name=payload.patient_name or None,
                 # ⚠️ 2026-08-09 (Tier 1): e-posta İSTEMCİ BEYANINDAN değil, doğrulanmış operatör
                 # jetonundan gelir. Beyan yalnız cihazda kayıtlı operatör YOKKEN kabul edilir.
@@ -4305,7 +4308,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
             str(_active_session.get("session_id") or ""),
             {
                 "patient_name": payload.patient_name,
-                "operator_name": payload.operator_name,
+                "operator_name": _operator_adi,
                 "mode": payload.mode,
                 "frequency": payload.frequency,
                 "duty": payload.duty,
@@ -5758,7 +5761,7 @@ class AiReviewPayload(BaseModel):
 
 
 @app.post("/api/ai/log/review")
-async def review_ai_analysis(payload: AiReviewPayload):
+async def review_ai_analysis(payload: AiReviewPayload, request: Request):
     """AI analizine HEKİM DEĞERLENDİRMESİ ekle (2026-08-06, sahip isteği).
 
     AI çıktısı bir ÖNERİdir; klinik karar hekimindir. Onay/red/düzeltme kaydın YANINA yazılır —
@@ -5774,9 +5777,13 @@ async def review_ai_analysis(payload: AiReviewPayload):
     db = _get_treatment_db()
     if db is None:
         raise HTTPException(status_code=503, detail="Kayıt veritabanı kullanılamıyor.")
-    ok = await asyncio.to_thread(
-        db.set_ai_review, int(payload.analysis_id), payload.status, payload.note, payload.reviewed_by
-    )
+    # ⚠️ D2.41 (B-2.3): "bu teşhisi kim onayladı" kaydı İSTEMCİ BEYANINDAN değil sunucu kuralından (jeton; kanıtsız
+    # kayıtlı-hekim beyanı → sahipsiz; operatörsüz klinikte beyan — Kural 2). Eskiden LAN'dan jetonsuz başka bir hekimin adı
+    # yazılabiliyordu. Kapı: tests/test_kayit_atfi_COZUMLENMIS_operator_D241.py.
+    from servers.auth import cozumlenmis_operator
+
+    _inceleyen = cozumlenmis_operator(request, payload.reviewed_by)
+    ok = await asyncio.to_thread(db.set_ai_review, int(payload.analysis_id), payload.status, payload.note, _inceleyen)
     if not ok:
         raise HTTPException(status_code=404, detail="Analiz kaydı bulunamadı.")
     return {"status": "success", "analysisId": payload.analysis_id, "review": payload.status}

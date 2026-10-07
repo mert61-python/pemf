@@ -146,12 +146,15 @@ def test_KRITIK_kanitsiz_beyan_HEKIMI_TAKLIT_EDEMEZ(client, db):
     assert (
         client.post("/api/operators/enroll", json={"email": e, "display_name": e, "pin": "123456"}).status_code == 200
     )
-
-    client.post("/api/ai/log/delete_all", json={"confirm": "DELETE_ALL", "operator_email": e})
-    kayit = next(k for k in db.denetim_oku(50) if k["event_type"] == "ai_log.delete_all")
-    assert kayit["operator_email"] != e, "kanitsiz beyan denetim izine hekim adiyla girdi"
-    assert e in (kayit["detail"] or ""), "kanitsiz beyan hic kaydedilmemis (sinyal kayboldu)"
-    operator_tokens.temizle_hepsi()
+    try:
+        client.post("/api/ai/log/delete_all", json={"confirm": "DELETE_ALL", "operator_email": e})
+        kayit = next(k for k in db.denetim_oku(50) if k["event_type"] == "ai_log.delete_all")
+        assert kayit["operator_email"] != e, "kanitsiz beyan denetim izine hekim adiyla girdi"
+        assert e in (kayit["detail"] or ""), "kanitsiz beyan hic kaydedilmemis (sinyal kayboldu)"
+    finally:
+        # ⚠️ 2-B (ölçüldü): kaydedilen operatör süreçte KALIYORDU → sonraki dosyalar "kayıtlı operatör var" kipinde koşuyordu.
+        client.post("/api/operators/remove", json={"email": e})
+        operator_tokens.temizle_hepsi()
 
 
 def test_operator_ekleme_cikarma_IZ_birakir(client, db):

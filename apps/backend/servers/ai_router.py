@@ -2244,12 +2244,19 @@ class AiApprovalPayload(BaseModel):
 
 
 @ai_router.post("/api/ai/pro/approve")
-def approve_ai_pro(payload: AiApprovalPayload):
-    """Hekim önerilen parametreleri ONAYLAR. Denetim izi session_events'e yazılır."""
+def approve_ai_pro(payload: AiApprovalPayload, request: Request):
+    """Hekim önerilen parametreleri ONAYLAR. Denetim izi session_events'e yazılır.
+
+    ⚠️ D2.41 (D-2.2 · İG-6.25): mühürdeki hekim İSTEMCİ BEYANINDAN değil sunucu kuralından (`cozumlenmis_operator`: jeton;
+    kanıtsız kayıtlı-hekim beyanı → sahipsiz; operatörsüz klinikte beyan — Kural 2). Seansın sahibi `/start`ta bu
+    mühürden okunur. Eskiden tünelden ANONİM bir istek kayıtlı bir hekimin adıyla mühür basıp tedaviyi başlatıyordu
+    (ölçüldü). SAHİP KARARI D-2.2: `/api/ai/pro/*` tünelden kimliksiz erişilebilir — ERİŞİM SINIFI DEĞİŞMEZ (onay 200
+    kalır, mühür '' olur, başlatma sürer). Kapı: tests/test_kayit_atfi_COZUMLENMIS_operator_D241.py."""
     from servers import ai_approval
+    from servers.auth import cozumlenmis_operator
 
     try:
-        rec = ai_approval.approve(payload.proposal_id, payload.operator_email)
+        rec = ai_approval.approve(payload.proposal_id, cozumlenmis_operator(request, payload.operator_email))
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from None
     except ValueError as e:
@@ -2259,12 +2266,16 @@ def approve_ai_pro(payload: AiApprovalPayload):
 
 
 @ai_router.post("/api/ai/pro/reject")
-def reject_ai_pro(payload: AiApprovalPayload):
-    """Hekim önerilen parametreleri REDDEDER (gerekçesiyle). Tedavi BAŞLAMAZ."""
+def reject_ai_pro(payload: AiApprovalPayload, request: Request):
+    """Hekim önerilen parametreleri REDDEDER (gerekçesiyle). Tedavi BAŞLAMAZ.
+    ⚠️ D2.41 (İG-6.25): red mührü de onay gibi sunucu kuralından (bkz. `approve_ai_pro`)."""
     from servers import ai_approval
+    from servers.auth import cozumlenmis_operator
 
     try:
-        rec = ai_approval.reject(payload.proposal_id, payload.operator_email, payload.reason)
+        rec = ai_approval.reject(
+            payload.proposal_id, cozumlenmis_operator(request, payload.operator_email), payload.reason
+        )
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from None
     except ValueError as e:

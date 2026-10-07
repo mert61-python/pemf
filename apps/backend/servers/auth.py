@@ -447,3 +447,28 @@ def cozumlenmis_operator(request, beyan: str = "") -> str:
     except Exception:
         logger.exception("operator cozumleme hatasi → SAHIPSIZ")
         return ""
+
+
+def cozumlenmis_operator_adi(cozulen_email: str, beyan_ad: str = "") -> str:
+    """Kayda yazılacak operatör ADI — e-postayla AYNI kurala bağlı (D2.41 · B-2.19).
+
+    * E-posta cihazda KAYITLI bir operatöre aitse ad onun KAYITLI görünen adıdır (beyan yok sayılır).
+    * E-posta çözüldü ama kayıtlı değilse (Kural 2 beyanı) beyan edilen ad kabul edilir.
+    * E-posta ÇÖZÜLMEDİYSE: cihazda kayıtlı operatör VARSA ad da YOK (kanıtsız beyan bir hekimin adını taşıyamaz — seans
+      satırı ve `session_started` izi); kayıtlı operatör YOKSA (Kural 2: tek hekimli klinik, yalnız ad gönderen eski
+      istemci) beyan edilen ad kabul edilir.
+    Hata halinde FAIL-CLOSED: ad yazılmaz. ASLA istisna atmaz."""
+    e = (cozulen_email or "").strip().lower()
+    try:
+        from database.auth_db import get_auth_db
+
+        operatorler = get_auth_db().list_operators()
+    except Exception:
+        logger.exception("operator adi cozumleme hatasi → ad YAZILMIYOR")
+        return ""
+    if not e:
+        return (beyan_ad or "").strip() if not operatorler else ""
+    for op in operatorler:
+        if (op.get("email") or "").strip().lower() == e:
+            return (op.get("display_name") or "").strip() or e
+    return (beyan_ad or "").strip()
