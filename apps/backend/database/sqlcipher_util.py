@@ -230,6 +230,11 @@ def _kilit_direncli_tasi(src, dst, logger=None, deneme=_KILIT_DENEME, bekleme_s=
     durumda 6 sn gecikme, ACILMAMAKTAN kiyaslanamayacak kadar iyidir. Kalici bir
     okuyucu varsa yine duser ve hata mesaji operatore ne yapacagini soyler.
 
+    ⚠️ Y97 (O-2A.1): KOPYASIZ taşıma (D2.47 deseni). `shutil.move`un `copy2` geri dönüşü kilitli kaynakta her denemede
+    hedefe TAM bir kopya yazıyor, kaynağı silemiyordu → "KARANTINA BASARISIZ" denirken diskte `.acilamadi-*` kopyası
+    duruyordu (ölçüldü). Karantina aynı dizinde yeniden adlandırmadır; kilit kalıcıysa taşıma düşer, dosya yerinde kalır.
+    Kapı: tests/test_karantina_KOPYASIZ_tasima_Y97.py.
+
     Doner: tasindiysa True.
     """
     import gc
@@ -238,7 +243,7 @@ def _kilit_direncli_tasi(src, dst, logger=None, deneme=_KILIT_DENEME, bekleme_s=
     son_hata = None
     for i in range(deneme):
         try:
-            shutil.move(src, dst)
+            shutil.move(src, dst, copy_function=_kopya_yazma)
             if i and logger:
                 logger.warning("KARANTINA: %s ancak %d. denemede tasinabildi (tutamac gec birakildi).", src, i + 1)
             return True
@@ -247,7 +252,13 @@ def _kilit_direncli_tasi(src, dst, logger=None, deneme=_KILIT_DENEME, bekleme_s=
             gc.collect()  # yetim baglanti nesnelerini kapat → tutamac serbest kalsin
             time.sleep(bekleme_s)
     if logger:
-        logger.error("KARANTINA BASARISIZ (%s), %d deneme: %s", src, deneme, son_hata)
+        logger.error(
+            "KARANTINA BASARISIZ (%s): %d denemede yeniden adlandirilamadi (%s) — dosya YERINDE birakildi, "
+            "KOPYA YAZILMADI. Dosyayi acik tutan sureci (virus tarayici/yedekleyici/ikinci backend) kapatip yeniden deneyin.",
+            src,
+            deneme,
+            son_hata,
+        )
     return False
 
 

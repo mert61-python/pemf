@@ -247,8 +247,9 @@ def _wal_ile_kur(baglayici, app: Path) -> Path:
 
 
 def _tasima_dusur(monkeypatch, dusen, kopya_birakir) -> None:
-    """Kilitli dosya: Windows'ta `shutil.move`un yeniden adlandırması düşer, `copy2` geri dönüşü hedefe KOPYA yazar,
-    kaynağın silinmesi düşer (SQLite tutamağı FILE_SHARE_DELETE vermez) — hedefte yarım/tam kopya kalır."""
+    """Kilitli dosya: Windows'ta `shutil.move`un yeniden adlandırması düşer, `copy_function` geri dönüşü çağrılır,
+    kaynağın silinmesi düşer (SQLite tutamağı FILE_SHARE_DELETE vermez). Y97: karantina `copy_function=_kopya_yazma`
+    verir → geri dönüş KOPYA YAZMADAN düşer (gerçek `shutil.move` sözleşmesi); `copy2` verilirse hedefte kopya kalır."""
     import shutil
     import time
 
@@ -258,7 +259,7 @@ def _tasima_dusur(monkeypatch, dusen, kopya_birakir) -> None:
     def _move(src, dst, *a, **k):
         if dusen(str(src), str(dst)):
             if kopya_birakir(str(src), str(dst)):
-                kopya(src, dst)
+                (k.get("copy_function") or kopya)(src, dst)
             raise PermissionError(32, "Dosya baska bir islem tarafindan kullaniliyor (taklit)")
         return gercek(src, dst, *a, **k)
 
