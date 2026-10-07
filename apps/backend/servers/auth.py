@@ -426,6 +426,19 @@ def _kayitli_operator_mu(email: str) -> bool:
         return True
 
 
+def kayitli_operator_var() -> bool:
+    """Cihazda en az bir operatör KAYITLI mı? (Kural 2 ayrımı: kayıtlı operatörü olmayan tek hekimli klinik kilitlenmez.)
+    Hata halinde FAIL-CLOSED (True): bilemiyorsak kimliksiz isteği operatörsüz klinik sanıp kabul etmeyiz. ASLA istisna
+    atmaz."""
+    try:
+        from database.auth_db import get_auth_db
+
+        return bool(get_auth_db().list_operators())
+    except Exception:
+        logger.exception("kayitli operator listesi okunamadi → kimliksiz istek REDDEDILIYOR (fail-closed)")
+        return True
+
+
 def cozumlenmis_operator(request, beyan: str = "") -> str:
     """Kaydın yazılacağı operatör e-postası. Yukarıdaki üç kurala göre; ASLA istisna atmaz."""
     try:

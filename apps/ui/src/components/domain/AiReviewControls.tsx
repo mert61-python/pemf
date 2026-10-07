@@ -42,18 +42,48 @@ export function ReviewBadge({ status }: { status?: ReviewStatus }) {
   );
 }
 
+/** Yarım kalmış değerlendirme taslağı (red/düzeltme formu + gerekçe). YALNIZ BELLEKTE tutulur — diske yazılmaz (KVKK). */
+export interface DegerlendirmeTaslagi {
+  mode: null | "rejected" | "corrected";
+  text: string;
+}
+
+/** D2.E12: sunucu değerlendirmeyi kaydedemeyince formda gösterilen metin (gerekçe silinmez). */
+export const KAYDEDILEMEDI_METNI = "Değerlendirme kaydedilemedi — gerekçeniz korunuyor. Tekrar deneyin.";
+
 export function AiReviewControls({
-  status, note, reviewedBy, reviewedAt, busy, onSubmit,
+  status, note, reviewedBy, reviewedAt, busy, onSubmit, taslak, onTaslakDegis,
 }: {
   status?: ReviewStatus;
   note?: string;
   reviewedBy?: string;
   reviewedAt?: string;
   busy?: boolean;
-  onSubmit: (status: Exclude<ReviewStatus, "">, note: string) => void;
+  /** `false` (ya da `false` çözen söz) = KAYDEDİLEMEDİ → form ve gerekçe korunur; diğer her dönüş başarı sayılır. */
+  onSubmit: (status: Exclude<ReviewStatus, "">, note: string) => void | boolean | Promise<boolean | void>;
+  /** Verilirse taslak ÜST bileşende tutulur (kart kapanıp açılınca da kaybolmaz — D2.E12). */
+  taslak?: DegerlendirmeTaslagi;
+  onTaslakDegis?: (t: DegerlendirmeTaslagi) => void;
 }) {
-  const [mode, setMode] = useState<null | "rejected" | "corrected">(null);
-  const [text, setText] = useState("");
+  const [yerel, setYerel] = useState<DegerlendirmeTaslagi>({ mode: null, text: "" });
+  const t = taslak ?? yerel;
+  const taslakYaz = (yeni: DegerlendirmeTaslagi) => (onTaslakDegis ? onTaslakDegis(yeni) : setYerel(yeni));
+  const { mode, text } = t;
+  const setMode = (m: DegerlendirmeTaslagi["mode"]) => taslakYaz({ mode: m, text: m === null ? "" : text });
+  const setText = (x: string) => taslakYaz({ mode, text: x });
+  const [hata, setHata] = useState("");
+
+  /** ⚠️ D2.E12 (İG-6.115): gerekçe sunucu BAŞARI dönene dek KORUNUR. Eskiden form istek dönmeden kapanıp metin
+   *  siliniyordu — 500/503'te hekimin yazdığı red/düzeltme gerekçesi kayboluyordu (ölçüldü). */
+  const gonder = async (st: Exclude<ReviewStatus, "">, nt: string) => {
+    setHata("");
+    const sonuc = await Promise.resolve(onSubmit(st, nt));
+    if (sonuc === false) {
+      setHata(KAYDEDILEMEDI_METNI);
+      return;
+    }
+    taslakYaz({ mode: null, text: "" });
+  };
 
   const gerekceZorunlu = mode !== null;
   const gonderilebilir = !busy && (!gerekceZorunlu || text.trim().length > 0);
@@ -92,14 +122,15 @@ export function AiReviewControls({
             placeholderTextColor={colors.textSubtle}
             accessibilityLabel={mode === "rejected" ? "Red gerekçesi" : "Düzeltme açıklaması"}
           />
+          {hata ? <Text style={s.hata} accessibilityRole="alert">{hata}</Text> : null}
           <View style={s.row}>
-            <TouchableOpacity style={[s.btn, s.ghost]} onPress={() => { setMode(null); setText(""); }}>
+            <TouchableOpacity style={[s.btn, s.ghost]} onPress={() => { setHata(""); setMode(null); }}>
               <Text style={s.ghostText}>Vazgeç</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.btn, mode === "rejected" ? s.danger : s.warn, !gonderilebilir && s.disabled]}
               disabled={!gonderilebilir}
-              onPress={() => { onSubmit(mode, text.trim()); setMode(null); setText(""); }}
+              onPress={() => { void gonder(mode, text.trim()); }}
               accessibilityRole="button"
               accessibilityLabel={mode === "rejected" ? "Reddi kaydet" : "Düzeltmeyi kaydet"}
             >
@@ -109,10 +140,11 @@ export function AiReviewControls({
         </View>
       ) : (
         <View style={s.row}>
+          {hata ? <Text style={s.hata} accessibilityRole="alert">{hata}</Text> : null}
           <TouchableOpacity
             style={[s.btn, s.ghost, busy && s.disabled]}
             disabled={!!busy}
-            onPress={() => onSubmit("approved", "")}
+            onPress={() => { void gonder("approved", ""); }}
             accessibilityRole="button"
             accessibilityLabel="AI sonucunu onayla"
           >
@@ -160,6 +192,7 @@ const s = StyleSheet.create({
   warn: { backgroundColor: colors.warning },
   solidText: { color: "#0B1220", fontSize: rf(12), fontWeight: "800" },
   disabled: { opacity: 0.5 },
+  hata: { color: colors.danger, fontSize: rf(11), fontWeight: "700", width: "100%" },
   form: { gap: spacing.xs },
   formLabel: { color: colors.textMuted, fontSize: rf(11) },
   input: { minHeight: rs(56), backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, color: colors.text, padding: spacing.sm, fontSize: rf(12), textAlignVertical: "top" },

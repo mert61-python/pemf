@@ -8,7 +8,12 @@ import { apiGet, apiPost, platformConfirm } from "@/services/apiClient";
 import { useAuth } from "@/context/AuthContext";
 import { detailRows, INPUT_LABELS } from "@/utils/aiDetail";
 import { Brain, ChevronDown, ChevronRight, RefreshCcw, Trash2, Share2 } from "lucide-react-native";
-import { AiReviewControls, ReviewBadge, type ReviewStatus } from "@/components/domain/AiReviewControls";
+import {
+  AiReviewControls,
+  ReviewBadge,
+  type DegerlendirmeTaslagi,
+  type ReviewStatus,
+} from "@/components/domain/AiReviewControls";
 import { useUserMode } from "@/context/UserModeContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
 import { canChooseScope, deleteScope, effectiveScope, inScope, KIMLIK_ISTEMI } from "@/utils/patientScope";
@@ -66,6 +71,9 @@ export function AiHistoryScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
+  // ⚠️ D2.E12 (İG-6.115): yarım değerlendirme taslakları (kayıt kimliği → form + gerekçe) ÜST bileşende — kart kapanıp
+  // açılınca (AiReviewControls sökülür) gerekçe kaybolmaz. YALNIZ BELLEKTE: diske/depoya yazılmaz (KVKK).
+  const [taslaklar, setTaslaklar] = useState<Record<number, DegerlendirmeTaslagi>>({});
   const [filter, setFilter] = useState<string>("__all__");
   const [hastaFiltre, setHastaFiltre] = useState<string>("__all__");
   const [hasMore, setHasMore] = useState(false);
@@ -172,7 +180,15 @@ export function AiHistoryScreen() {
 
   /** Onay/red/düzeltme gönder. Başarılıysa kaydı YERİNDE güncelle — tüm listeyi yeniden
    *  çekmek açık kartı kapatır ve hekimin yerini kaybettirir. */
-  const submitReview = useCallback(async (id: number, status: string, note: string) => {
+  const submitReview = useCallback(async (id: number, status: string, note: string): Promise<boolean> => {
+    // ⚠️ İG-6.26 (D2.42): değerlendirme de silme gibi KİMLİK ister — kayıtlı operatörlü cihazda kimse seçili değilken istek
+    // GÖNDERİLMEZ (eskiden `reviewed_by: ""` ile gidiyor, ekranda imzasız "Hekim onayladı" görünüyordu). Operatörsüz
+    // klinikte `myEmail` oturum e-postasıdır (Kural 2). Backend ayrıca 428 döner (Y88).
+    if (!myEmail) {
+      await platformConfirm("Operatör seçin",
+        "Değerlendirme için önce üst bardan hangi hekim olduğunuzu seçin.");
+      return false;
+    }
     setReviewing(id);
     const res = await apiPost<{ status?: string } | null>(
       "/ai/log/review",
@@ -182,12 +198,16 @@ export function AiHistoryScreen() {
       null,
     );
     setReviewing(null);
-    if (!res) return;   // apiPost hata mesajını zaten gösterdi; iyimser güncelleme YAPMA
+    if (!res) return false;   // apiPost hata mesajını zaten gösterdi; iyimser güncelleme YAPMA, gerekçe korunur (D2.E12)
     setItems((prev) => prev.map((x) => x.id === id
       ? { ...x, review_status: status as ReviewStatus, review_note: note,
           reviewed_by: myEmail, reviewed_at: new Date().toISOString() }
       : x));
-  }, [session]);
+    setTaslaklar((p) => { const y = { ...p }; delete y[id]; return y; });
+    return true;
+    // ⚠️ D2.42 (B-6.21): bağımlılık GÜNCEL kimlik (`myEmail`). Eskiden `[session]` — kart açıkken operatör değişince
+    // değerlendirme ESKİ hekimin adıyla imzalanıyordu (ölçüldü). Kapı: screens/__tests__/aiDegerlendirme.D242.E12.web.
+  }, [myEmail]);
 
 
   // ORTA fix: before_id keyset ile "Daha Fazla Yükle" → 300'den fazla AI analizi olan (araştırma) kullanıcının
@@ -401,6 +421,8 @@ export function AiHistoryScreen() {
                         reviewedAt={it.reviewed_at ? fmtDate(it.reviewed_at) : ""}
                         busy={reviewing === it.id}
                         onSubmit={(st, nt) => submitReview(it.id, st, nt)}
+                        taslak={taslaklar[it.id]}
+                        onTaslakDegis={(t) => setTaslaklar((p) => ({ ...p, [it.id]: t }))}
                       />
 
                       {/* ⚠️ ANALİZİ PAYLAŞ (sahip isteği 2026-09-12, ev sahibi önerisi #3):

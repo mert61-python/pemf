@@ -126,7 +126,9 @@ export class Sahne {
   /** Denetimli giriş alanına gerçek `input` olayıyla metin yaz (React değer ayarlayıcısı üzerinden). */
   async yaz(ad: string, metin: string) {
     const el = this.etiket(ad) as HTMLInputElement;
-    const ayarla = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    // Çok satırlı alan RN-web'de <textarea>: kendi prototipinin ayarlayıcısı gerekir ("Illegal invocation" — ölçüldü).
+    const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const ayarla = Object.getOwnPropertyDescriptor(proto, "value")!.set!;
     await act(async () => {
       ayarla.call(el, metin);
       el.dispatchEvent(new Event("input", { bubbles: true }));

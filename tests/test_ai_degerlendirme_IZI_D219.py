@@ -100,6 +100,7 @@ def test_KRITIK_gerekce_METNI_ize_GIRMEZ_yalniz_varligi(o):
 
 
 def test_KRITIK_jetonsuz_kayitli_hekim_beyani_izde_SAHIPSIZ_ve_KANITSIZ_isaretli(o):
+    # Y88 sonrası bu deneme 428 alır (kayda yazılmaz) — iz yine yazılır (`reddedildi`): kimlik kuralı aynı.
     _hekimler_ve_jetonlar(o)
     aid = o.db.add_ai_analysis(module_id="m", patient_name="P", result_summary="ozet")
     _degerlendir(o, aid, "approved", AYSE)

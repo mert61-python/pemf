@@ -96,7 +96,10 @@ def _degerlendir(o, istemci, beyan, jeton=""):
 
 
 def test_KRITIK_a_degerlendirme_JETONSUZ_kayitli_hekim_beyani_SAHIPSIZ(o):
-    """MUTASYON: `set_ai_review`a `payload.reviewed_by`yi doğrudan geçirmek → KIRMIZI."""
+    """MUTASYON: `set_ai_review`a `payload.reviewed_by`yi doğrudan geçirmek → KIRMIZI.
+
+    ⚠️ KATMAN (Y88 sonrası): bu istek artık 428 ile durur ve kayda HİÇ yazılmaz; yukarıdaki tek mutant Y88 katmanı
+    arkasında eşdeğerdir — ısırması Y88 dalı da indirilince ölçülür (tests/test_degerlendirme_KIMLIKSIZ_428_Y88.py)."""
     _iki_hekim(o)
     assert _degerlendir(o, o.lan, AYSE) == "", "jetonsuz LAN beyanı kayıtlı hekimin adıyla 'onaylandı' yazdı"
 
