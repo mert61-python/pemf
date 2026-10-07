@@ -44,6 +44,7 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -70,6 +71,29 @@ sonuc = {{"run": False, "senaryo": SENARYO}}
 if SENARYO == "binding_yok":
     for _ad in ("sqlcipher3", "sqlcipher3.dbapi2", "pysqlcipher3", "pysqlcipher3.dbapi2"):
         sys.modules[_ad] = None
+
+# 2-A inceleme A2-1.4 "ikinci_hesap": veri koku BASKA bir SID'e kilitli (ebeveyn icacls ile kurar). Bu surec dosyalarin
+# SAHIBI oldugundan ortuk WRITE_DAC tasir (gercek ikinci hesapta YOK) -> ACL degistiren cagrilar sahip-olmayan hesaptaki gibi
+# DUSER (kaydedilir). Kimlik kasasina yazim (servis, ad) KAYDEDILIR, deger tutulmaz — yeni anahtar uretimi gorunsun.
+ACL = []
+KASA = []
+if SENARYO == "ikinci_hesap":
+    import utils.file_acl as _fa
+
+    def _acl_dusur(ad):
+        def _f(*a, **k):
+            ACL.append(ad)
+            return False
+        return _f
+    _fa.lock_down_dir = _acl_dusur("dir")
+    _fa.lock_down_file = _acl_dusur("file")
+    import keyring as _kr
+    _o_kr_set = _kr.set_password
+
+    def _kr_set(s, n, v):
+        KASA.append([s, n])
+        return _o_kr_set(s, n, v)
+    _kr.set_password = _kr_set
 
 # 2-A inceleme A2-1.1: urun zincirinin ILK ice aktarimi (headless_core -> patient_database -> pemf_gui.config) ICE
 # AKTARMADA olurse de SONUC basilir — "cocuk sonuc basmadi" diye gizlenmesin (ACIL DURDUR ucu hic kurulmamistir).
@@ -316,6 +340,8 @@ except BaseException as e:
     sonuc["kacan"] = type(e).__name__ + ": " + str(e)[:300]
     sonuc["iz"] = traceback.format_exc()[-1500:]
 sonuc["yan"] = yan
+sonuc["acl"] = ACL
+sonuc["kasa"] = KASA
 sonuc["ag"] = _ag.ENGELLENEN
 sonuc["alt"] = _ag.ALT_SURECLER
 print("SONUC " + json.dumps(sonuc, default=str))
@@ -422,6 +448,30 @@ def _a21_kur(app: Path, tmp_path: Path, senaryo: str) -> None:
     (tmp_path / "a21_once.json").write_text(json.dumps(ozet), encoding="utf-8")
 
 
+_IKINCI_DOSYALAR = ("patients.db", "pemf_treatment_history.db", "pemf_secrets.json", "logs/backend_service.log")
+
+
+def _ikinci_hesap_kur(app: Path, tmp_path: Path) -> None:
+    """2-A inceleme A2-1.4 (B-3.51 · A-2A.1 · Y9): İLK hesabın kurulumu — iki DB doğru anahtarla gerçekten şifreli, sır
+    dosyasında iki kritik anahtar bu makinenin GERÇEK DPAPI/MKEY'iyle sarılı, ilk hesabın günlüğü. Test bunu sonra BAŞKA bir
+    SID'e kilitler (ikinci Windows hesabı OLUŞTURULMAZ)."""
+    from utils import secrets_manager as sm
+
+    _sifreli_iki_db(app, _K_DOGRU)
+    alan = base64.urlsafe_b64encode(bytes(range(32, 64))).decode("ascii")
+    doc = {
+        "_version": 1,
+        "auto": {"sqlcipher_key": sm._enc(_K_DOGRU, critical=True), "patient_fernet_key": sm._enc(alan, critical=True)},
+        "operator": {},
+        "embedded": {},
+    }
+    (app / "pemf_secrets.json").write_text(json.dumps(doc), encoding="utf-8")
+    (app / "logs").mkdir()
+    (app / "logs" / "backend_service.log").write_text("ilk hesabin gunlugu\n", encoding="utf-8")
+    ozet = {ad: hashlib.sha256((app / ad).read_bytes()).hexdigest() for ad in _IKINCI_DOSYALAR}
+    (tmp_path / "ikinci_once.json").write_text(json.dumps(ozet), encoding="utf-8")
+
+
 def _binding_yok_kur(app: Path, tmp_path: Path) -> None:
     """D2.46 (B-3.48): iki DB at-rest anahtarıyla GERÇEKTEN şifreli, anahtar sır dosyasında OKUNUR; çocukta sqlcipher3
     YOK, bayrak 0 (B-3.45 yolu: bayrak servise ulaşmamış). Özetler `d246_once.json`a yazılır."""
@@ -453,7 +503,8 @@ def _kur(tmp_path: Path, senaryo: str) -> tuple[dict, Path]:
             "PEMF_AI_WARMUP": "0",
             "PEMF_ENABLE_TUNNEL": "0",
             "PEMF_ENCRYPT_AT_REST": "1"
-            if senaryo.startswith("goc") or senaryo in ("saglam", "sir_cozulemez", "sir_bozuk", "sir_cozulemez_ikisi")
+            if senaryo.startswith("goc")
+            or senaryo in ("saglam", "sir_cozulemez", "sir_bozuk", "sir_cozulemez_ikisi", "ikinci_hesap")
             else "0",
         }
     )
@@ -475,6 +526,9 @@ def _kur(tmp_path: Path, senaryo: str) -> tuple[dict, Path]:
         _binding_yok_kur(app, tmp_path)
     elif senaryo in ("sir_bozuk", "sir_cozulemez_ikisi"):
         _a21_kur(app, tmp_path, senaryo)
+    elif senaryo == "ikinci_hesap":
+        _ikinci_hesap_kur(app, tmp_path)
+        env.pop("PEMF_LOG_DIR")  # gerçek günlük dizini türetimi (veri kökü) + %TEMP% düşüşü sınansın
     return env, app
 
 
@@ -484,6 +538,10 @@ ARGV_LAUNCHER = ["--host", "127.0.0.1", "--port", "51999", "--no-headless-servic
 
 def _kos(tmp_path: Path, senaryo: str, argv: list[str] | None = None) -> tuple[dict, Path]:
     env, app = _kur(tmp_path, senaryo)
+    return _cocuk(tmp_path, env, senaryo, argv), app
+
+
+def _cocuk(tmp_path: Path, env: dict, senaryo: str, argv: list[str] | None = None) -> dict:
     kod = _SURUCU.format(
         testler=str(TESTLER),
         kok=str(KOK),
@@ -495,7 +553,7 @@ def _kos(tmp_path: Path, senaryo: str, argv: list[str] | None = None) -> tuple[d
     p = kostur([str(tmp_path / "surucu.py")], cwd=tmp_path, env=env, sure=420)
     for satir in p.stdout.splitlines():
         if satir.startswith("SONUC "):
-            return json.loads(satir[len("SONUC ") :]), app
+            return json.loads(satir[len("SONUC ") :])
     raise AssertionError(f"çocuk sonuç basmadı (rc={p.returncode}); stderr sonu: {p.stderr[-1500:]}")
 
 
@@ -739,6 +797,50 @@ def test_KRITIK_A21_SIR_BOZUK_ya_da_IKI_ANAHTAR_COZULEMEZKEN_backend_ICE_AKTARMA
         "sır okunamazken YENİ ANAHTAR üretildi (Y9 ihlali)"
     )
     assert re.search(r"S[ıi]r [çc][öo]z[üu]lemedi|BOZUK|karantina kaniti", gunluk), "sır hatasının nedeni günlükte YOK"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows ACL (icacls) benzetimi")
+def test_KRITIK_A14_IKINCI_HESAP_veri_koku_KILITLI_backend_DBSIZ_acilir_gunluk_TEMPe_yeni_anahtar_YOK(tmp_path):
+    """2-A inceleme A2-1.4 (D2.45 · B-3.51 · A-2A.1 · Y9) UÇTAN UCA, GERÇEK `main()`: veri kökü ilk Windows hesabının
+    ACL'ine kilitli (benzetim: `icacls /inheritance:r /grant:r *S-1-5-19:(OI)(CI)(F)` — bu kullanıcı listeleyemez/okuyamaz/
+    yazamaz; ikinci hesap OLUŞTURULMAZ). D2.45'in birim kapısı günlük dizini ölüm noktasını yalnız "dizin yerinde DOSYA"
+    (`FileExistsError`) ile ölçüyordu; ikinci hesabın GERÇEK hatası `PermissionError` (WinError 5) — düşüş yalnız
+    `FileExistsError`ı yakalasa 40 kapı yeşil kalıyordu (ölçüldü), backend sebepsiz ölürdü. Beklenen: backend DB'siz KISITLI
+    kipte açılır (ACİL DURDUR + açılış STOP mutabakatı + hızlı sağlık ucu, seans 503), günlük kullanıcının TEMP'ine düşer ve
+    nedeni söyler, YENİ ANAHTAR üretilmez / kimlik kasasına yazılmaz, ilk hesabın dosyaları DEĞİŞMEZ, karantina YOK."""
+    if not _sqlcipher_var():
+        pytest.skip("sqlcipher3 yok — şifreli DB senaryosu kurulamaz")
+    env, app = _kur(tmp_path, "ikinci_hesap")
+    kilit = subprocess.run(
+        ["icacls", str(app), "/inheritance:r", "/grant:r", "*S-1-5-19:(OI)(CI)(F)", "/T", "/C"], capture_output=True
+    )
+    try:
+        try:
+            os.listdir(app)
+            erisim = "LISTELENDI"
+        except PermissionError:
+            erisim = "REDDEDILDI"
+        assert erisim == "REDDEDILDI", f"benzetim kurulamadı (icacls rc={kilit.returncode}): veri kökü listelenebiliyor"
+        s = _cocuk(tmp_path, env, "ikinci_hesap")
+    finally:
+        geri = subprocess.run(["icacls", str(app), "/reset", "/T", "/C"], capture_output=True)
+    assert geri.returncode == 0 and os.listdir(app), "veri kökünün ACL'si geri ALINAMADI"
+    _ortak_iddialar(s)
+    for h in s["saglik"]:
+        assert h["dbReady"] is False and re.search(r"a[çc][ıi]lamad[ıi]", h["dbSebep"] or ""), s["saglik"]
+    assert s["seans"]["kod"] == 503 and "kayıt" in s["seans"]["detail"].lower(), f"DB'siz seans: {s['seans']}"
+    assert s["sayac"]["update"] == 0, f"DB'siz kipte STM bobini sürülmeye çalışıldı ({s['sayac']['update']})"
+    once = json.loads((tmp_path / "ikinci_once.json").read_text(encoding="utf-8"))
+    degisen = [ad for ad in _IKINCI_DOSYALAR if hashlib.sha256((app / ad).read_bytes()).hexdigest() != once[ad]]
+    assert degisen == [], f"ikinci hesap ilk hesabın dosyalarına DOKUNDU: {degisen}"
+    assert sorted(p.name for p in app.glob("*.acilamadi-*")) == [], "erişilemeyen veri kökünde karantina"
+    assert s["kasa"] == [], f"ikinci hesapta YENİ ANAHTAR kimlik kasasına yazıldı (Karar 6 · Y9): {s['kasa']}"
+    gunluk = Path(env["TEMP"]) / "PEMF_GUI" / "logs" / "backend_service.log"
+    assert gunluk.exists(), "günlük yedek dizine (%TEMP%) düşmedi — günlük dizini yazılamayınca backend sebepsiz ölür"
+    metin = gunluk.read_text(encoding="utf-8", errors="replace")
+    assert "GUNLUK DIZINI YAZILAMADI" in metin and "PermissionError" in metin, "günlük düşüşünün NEDENİ yazılmadı"
+    assert "OKUNAMADI/YAZILAMADI" in metin, "sır okunamadığı (fail-closed nedeni) günlükte YOK"
+    assert "Yeni SQLCipher anahtari uretildi" not in metin and "Yeni RASTGELE Fernet" not in metin
 
 
 def test_KARSIT_cekirdek_yok_ya_da_SAHTE_cekirdekte_acilis_hatasi_YOK(monkeypatch):
