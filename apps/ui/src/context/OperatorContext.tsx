@@ -170,10 +170,13 @@ export function OperatorProvider({
       // ⚠️ SEANS SÜRERKEN KİLİTLEME: bobinler hastanın üzerinde çalışırken kimlik düşürmek,
       // operatörü kritik bir anda PIN ekranına sokar. Seans bitince sayaç yeniden işler.
       if (sessionActive) { sonEtkilesim.current = Date.now(); return; }
-      if (Date.now() - sonEtkilesim.current >= autoLockMs) setActive(null);
+      // ⚠️ D2.32 (B-6.8): hareketsizlik kilidi elle "Kilitle" İLE AYNI yoldan — jeton da DÜŞER. Eskiden yalnız
+      // `setActive(null)` vardı: ekranda "Operatör seçin" yazarken istekler önceki hekimin jetonunu taşıyor, seans/AI
+      // kaydı ve silmeler ona atfediliyordu (ölçüldü). Kapı: __tests__/OperatorContext.D232.kilitJeton.web.test.tsx.
+      if (Date.now() - sonEtkilesim.current >= autoLockMs) lock();
     }, 30_000);
     return () => clearInterval(t);
-  }, [active, sessionActive, autoLockMs]);
+  }, [active, sessionActive, autoLockMs, lock]);
 
   const value = useMemo<OperatorContextValue>(() => ({
     operators,
