@@ -38,7 +38,11 @@ export function OperatorSwitcher() {
   const [hata, setHata] = useState("");
   const [mesgul, setMesgul] = useState(false);
 
-  useEffect(() => { if (acik) void ctx?.refresh(); }, [acik, ctx]);
+  // ⚠️ 2-B B2B-1: bağımlılık `ctx` DEĞİL, kararlı `refresh`. `refresh` her çağrıda yeni bir liste kurar → bağlam değeri
+  // değişir → `[acik, ctx]` effect'i yeniden koşup yine `refresh` çağırıyordu: pencere açıkken `/operators` istek fırtınası
+  // (ölçüldü: 5 ms ağ gecikmesiyle saniyede 30). Kapı: __tests__/OperatorSwitcher.B2B1.istekFirtinasi.web.test.tsx.
+  const yenile = ctx?.refresh;
+  useEffect(() => { if (acik) void yenile?.(); }, [acik, yenile]);
 
   const kapat = useCallback(() => {
     setAcik(false); setPin(""); setHata(""); setSecili(""); setKayitKipi(false);
