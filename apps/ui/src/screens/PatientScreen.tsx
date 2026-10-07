@@ -15,7 +15,7 @@ import { useUserMode } from "@/context/UserModeContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
 import { useAuth } from "@/context/AuthContext";
 import { canAccess } from "@/config/access";
-import { canChooseScope, effectiveScope, inScope, KIMLIK_ISTEMI } from "@/utils/patientScope";
+import { canChooseScope, EKLEME_KIMLIK_ISTEMI, effectiveScope, inScope, KIMLIK_ISTEMI } from "@/utils/patientScope";
 import { aramaEslesir } from "@/utils/aramaNormalize";
 import { useCokluSecim } from "@/hooks/useCokluSecim";
 import { hastaninSonAnalizi, hastayaGoreSonAnaliz, kapsamda, sonAnalizOzeti, type AnalizKaydi } from "@/utils/sonAnaliz";
@@ -89,6 +89,14 @@ export function PatientScreen() {
     // E-posta opsiyonel; girildiyse basit format kontrolü (rapor gönderimi için).
     if (form.owner_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.owner_email.trim())) {
       showToast("Geçerli bir sahip e-posta adresi girin (örn: ad@ornek.com).", "error");
+      return;
+    }
+
+    // ⚠️ A-61 (D2.70): hasta eklemek KİMLİK ister. Kayıtlı operatörlü cihazda kimse seçili değilken istek GÖNDERİLMEZ:
+    // kimliksiz eklenen hasta sahipsiz yazılır ve kliniğin HER hekiminin "Benim" listesine düşerdi. Operatörsüz tek
+    // hekimli klinikte kimlik oturum e-postasıdır (Kural 2 — engel yok).
+    if (!editingId && !myEmail) {
+      showToast(EKLEME_KIMLIK_ISTEMI, "error");
       return;
     }
 

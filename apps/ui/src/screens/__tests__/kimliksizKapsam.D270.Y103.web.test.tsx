@@ -26,7 +26,8 @@ jest.mock("@/services/supabaseAuth", () => {
     getCurrentSession: async () => ({ access_token: "x", user: { email: mockOturum.eposta, user_metadata: {} } }),
   };
 });
-jest.mock("@/components/ui/ToastProvider", () => ({ useToast: () => ({ showToast: jest.fn() }) }));
+const mockToast = jest.fn();
+jest.mock("@/components/ui/ToastProvider", () => ({ useToast: () => ({ showToast: mockToast }) }));
 // Cihaz sınırı (dosya paylaşımı/yazımı): jsdom'da yerel modül yok; bu kapı dosya indirmeyi ölçmez.
 jest.mock("expo-sharing", () => ({ isAvailableAsync: jest.fn(async () => false), shareAsync: jest.fn() }));
 jest.mock("expo-file-system/legacy", () => ({ documentDirectory: "file:///", writeAsStringAsync: jest.fn() }));
@@ -50,8 +51,8 @@ import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
 import { PatientScreen } from "@/screens/PatientScreen";
 import { TreatmentHistoryScreen } from "@/screens/TreatmentHistoryScreen";
 import { AiHistoryScreen } from "@/screens/AiHistoryScreen";
-import { KIMLIK_ISTEMI } from "@/utils/patientScope";
-import { aktifOperator, pinleSec, Sahne, sahteSunucu, type SahteOperator } from "../../context/__tests__/operatorAparati";
+import { EKLEME_KIMLIK_ISTEMI, KIMLIK_ISTEMI } from "@/utils/patientScope";
+import { aktifOperator, pinleSec, Sahne, sahteSunucu, type Istek, type SahteOperator } from "../../context/__tests__/operatorAparati";
 
 const A = "dr.a@klinik.com";
 const B = "dr.b@klinik.com";
@@ -92,8 +93,14 @@ afterEach(async () => {
   jest.useRealTimers();
 });
 
-async function kur(mod: UserMode, oturum: string, operatorler: SahteOperator[], sahipler: Record<string, string>) {
+async function kur(
+  mod: UserMode,
+  oturum: string,
+  operatorler: SahteOperator[],
+  sahipler: Record<string, string>,
+): Promise<Istek[]> {
   mockOturum.eposta = oturum;
+  mockToast.mockClear();
   const { hastalar, seanslar, analizler } = veri(sahipler);
   const sunucu = sahteSunucu(operatorler, (yol, _g, yontem) => {
     if (yontem !== "GET") return undefined;
@@ -121,6 +128,7 @@ async function kur(mod: UserMode, oturum: string, operatorler: SahteOperator[], 
   );
   await s.ilerlet(50);
   await s.bosalt(10);
+  return sunucu.kayit;
 }
 
 /** Ekrandaki kayıt adları (üç liste). */
@@ -162,5 +170,31 @@ describe("D2.70 · Y103 — kimliksizken kayıt listeleri fail-closed", () => {
     const m = s.metin();
     for (const ad of ["HastaT", "HastaS", "SeansT", "SeansS", "OzetT", "OzetS"]) expect(m).toContain(ad);
     expect(istemSayisi()).toBe(0);
+  });
+});
+
+describe("D2.70 · A-61 — hasta eklemek KİMLİK ister", () => {
+  async function ekle(ad: string) {
+    await s.metneTikla("Yeni Hasta Kayıt");
+    await s.yaz("Hasta adı", ad);
+    await s.yaz("Hayvan türü", "Kedi");
+    await s.metneTikla("Kaydet");
+  }
+  const eklemeler = (kayit: Istek[]) => kayit.filter((k) => k.yol === "/patients" && k.yontem === "POST");
+
+  it("KRİTİK: kayıtlı operatörlü cihazda kimse seçili değilken hasta ekleme isteği GİTMEZ, operatör seçmesi söylenir", async () => {
+    const kayit = await kur("veterinarian", A, [{ email: A, display_name: "Dr. A" }, { email: B, display_name: "Dr. B" }], {});
+    await ekle("YeniKedi");
+    expect(eklemeler(kayit)).toEqual([]);
+    expect(mockToast.mock.calls.map((c) => c[0])).toContain(EKLEME_KIMLIK_ISTEMI);
+  });
+
+  it("KARŞIT (Kural 2): operatörsüz tek hekimli klinikte hasta eklenir, sahibi oturum e-postası", async () => {
+    const T = "tek@klinik.com";
+    const kayit = await kur("veterinarian", T, [], {});
+    await ekle("YeniKedi");
+    const e = eklemeler(kayit);
+    expect(e.length).toBe(1);
+    expect((e[0].govde as { operator_email?: string; name?: string })).toMatchObject({ name: "YeniKedi", operator_email: T });
   });
 });

@@ -113,6 +113,16 @@ export class Sahne {
     await act(async () => { el.click(); });
     await this.bosalt();
   }
+  /** Görünen METNİ tam olarak `metin` olan en derin elemana tıkla (etiketsiz düğmeler; tıklama atadaki basılabilir öğeye
+   *  kabarcıklanır). */
+  async metneTikla(metin: string) {
+    const adaylar = Array.from(document.querySelectorAll("*")).filter(
+      (e) => (e.textContent || "").trim() === metin && !Array.from(e.children).some((c) => (c.textContent || "").trim() === metin),
+    ) as HTMLElement[];
+    if (!adaylar.length) throw new Error(`metin "${metin}" bulunamadi. Govde: ${document.body.textContent?.slice(0, 300)}`);
+    await act(async () => { adaylar[0].click(); });
+    await this.bosalt();
+  }
   /** Denetimli giriş alanına gerçek `input` olayıyla metin yaz (React değer ayarlayıcısı üzerinden). */
   async yaz(ad: string, metin: string) {
     const el = this.etiket(ad) as HTMLInputElement;

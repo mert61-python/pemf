@@ -33,6 +33,9 @@ export function canChooseScope(
  */
 export const KIMLIK_ISTEMI = "Kayıtları görmek için operatörünüzü seçin";
 
+/** A-61: hasta eklemek KİMLİK ister — kimliksiz eklenen hasta sahipsiz yazılır ve herkesin "Benim" listesine düşerdi. */
+export const EKLEME_KIMLIK_ISTEMI = "Hasta eklemek için operatörünüzü seçin";
+
 /**
  * "Benim" = operator_email eşleşen VEYA SAHİPSİZ kayıtlar (eski/migrasyon kayıtları kaybolmasın).
  *
