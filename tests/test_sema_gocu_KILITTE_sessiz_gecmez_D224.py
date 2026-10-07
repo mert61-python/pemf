@@ -159,3 +159,101 @@ def test_KARSIT_kolon_VARKEN_ikinci_acilis_duplicate_column_ile_SESSIZ_gecer(duz
         r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING and "eklenemedi" in r.getMessage()
     ]
     assert gurultu == [], f"kolon VARKEN ikinci acilis sema uyarisi basti (idempotentlik bozuk): {gurultu}"
+
+
+# ─────────── 2-A inceleme A2-6.1 · ŞİFRELİ kurulum (sahadaki yapılandırma): kilit ≠ anahtar uyuşmazlığı ───────────
+
+_K_A261 = "A261-at-rest-anahtar"
+
+
+@contextlib.contextmanager
+def _sifreli_yazma_kilidi(mod, db: Path):
+    """Şifreli DB'nin YAZMA kilidini başka bir (anahtarlı) bağlantı tutar."""
+    tutucu = mod.connect(str(db), isolation_level=None)
+    try:
+        tutucu.execute(f"PRAGMA key='{_K_A261}'")
+        tutucu.execute("BEGIN IMMEDIATE")
+        yield
+    finally:
+        try:
+            tutucu.execute("ROLLBACK")
+        finally:
+            tutucu.close()
+
+
+def _sifreli_kolonu_dusur(mod, db: Path, tablo: str, kolon: str) -> None:
+    c = mod.connect(str(db))
+    try:
+        c.execute(f"PRAGMA key='{_K_A261}'")
+        c.execute(f"ALTER TABLE {tablo} DROP COLUMN {kolon}")
+        c.commit()
+        assert kolon not in [r[1] for r in c.execute(f"PRAGMA table_info({tablo})")], "kurgu bozuk"
+    finally:
+        c.close()
+
+
+@pytest.fixture
+def sifreli_kok(tmp_path, monkeypatch):
+    from database import patient_database as pdb
+    from database import sqlcipher_util as su
+    from database import treatment_history_db as thdb
+
+    mod = su.import_sqlcipher()
+    if mod is None:
+        pytest.skip("sqlcipher3 yok — şifreli kurulum kolu kurulamaz")
+    monkeypatch.setenv("PEMF_ENCRYPT_AT_REST", "1")
+    monkeypatch.setattr(su, "get_sqlcipher_key", lambda *a, **k: _K_A261)
+    monkeypatch.setattr(pdb, "get_sqlcipher_key", lambda *a, **k: _K_A261)
+    monkeypatch.setattr(thdb.TreatmentHistoryDB, "_get_sqlcipher_key_legacy", lambda self: "")
+    kok = tmp_path / "PEMF_GUI"
+    kok.mkdir(parents=True)
+    return mod, kok
+
+
+@pytest.mark.parametrize("hangi", ["tedavi", "hasta"])
+def test_KRITIK_A261_SIFRELI_DB_yeni_kolon_KILITTE_karantinaya_ALINMAZ(sifreli_kok, hangi, caplog):
+    """2-A inceleme A2-6.1: yukarıdaki kollar DÜZ-METİN kurulumda; sahadaki yapılandırma ŞİFRELİ. Karantina kararı orada
+    `anahtar_uyusmazligi_mi`ya (tedavi: önbellekli anahtar + hata; hasta: `at_rest_encrypted` + hata) bakar. Yüklemi
+    "locked"ı da uyuşmazlık sayacak biçimde genişleten mutant 28 kapıda YEŞİLDİ (ölçüldü) — şifreli kurulumda kilitli
+    canlı DB karantinaya (kilitte `copy2` artığı / kilit kalkınca BOŞ DB) giderdi. Kilit anahtar uyuşmazlığı DEĞİLDİR."""
+    from database import patient_database as pdb
+    from database import treatment_history_db as thdb
+
+    mod, kok = sifreli_kok
+    if hangi == "tedavi":
+        db = kok / "pemf_treatment_history.db"
+        ilk = thdb.TreatmentHistoryDB(kok)
+        ilk.end_session(ilk.start_session("SifreliKilitSeansi"))
+        ilk.close_connections()
+        del ilk
+        tablo, kolon = "ai_analyses", "reviewed_at"
+    else:
+        db = kok / "patients.db"
+        ilk = pdb.PatientDatabase(str(db))
+        hid = ilk.add_patient({"name": "SifreliKilitHasta", "owner": "T", "species": "Kedi"})
+        ilk._reset_thread_conn()
+        del ilk
+        tablo, kolon = "patients", "anonymized"
+    assert db.read_bytes()[:16] != b"SQLite format 3\x00", "kurgu: DB şifreli kurulmalı"
+    _sifreli_kolonu_dusur(mod, db, tablo, kolon)
+
+    with _sifreli_yazma_kilidi(mod, db), caplog.at_level(logging.WARNING), pytest.raises(Exception) as hata:
+        thdb.TreatmentHistoryDB(kok) if hangi == "tedavi" else pdb.PatientDatabase(str(db))
+
+    assert _karantina(kok) == [], (
+        f"ŞİFRELİ DB kilitte KARANTİNAYA alındı (kilit anahtar uyuşmazlığı değil): {_karantina(kok)}"
+    )
+    assert "locked" in str(hata.value).lower(), f"beklenmeyen hata: {hata.value!r}"
+    assert _sema_uyarilari(caplog, kolon), "şifreli DB'de kilitli ALTER için WARNING yok"
+    if hangi == "tedavi":
+        yeni = thdb.TreatmentHistoryDB(kok)
+        try:
+            assert [s.get("treatment_mode") for s in yeni.get_session_history(limit=10)] == ["SifreliKilitSeansi"]
+        finally:
+            yeni.close_connections()
+    else:
+        yeni = pdb.PatientDatabase(str(db))
+        try:
+            assert (yeni.get_patient(hid) or {}).get("name") == "SifreliKilitHasta", "hasta kaydı kayboldu"
+        finally:
+            yeni._reset_thread_conn()
