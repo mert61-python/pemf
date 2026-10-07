@@ -385,6 +385,10 @@ def test_migration_rollback_requires_valid_backup(temp_app_data, monkeypatch):
         )
     ]
     assert silmeler, "rollback dalında canlı DB'yi değiştiren adım bulunamadı -> kapı KÖR kaldı"
-    assert all(c.lineno > koruma.lineno for c in silmeler), "yedek kontrolü canlı DB silinmeden ÖNCE gelmeli"
+    # ⚠️ 2-A inceleme A2-9.3: ölçüt korumanın `if` satırı değil GÖVDESİNİN SONU (`end_lineno`). Eskiden koruma gövdesine,
+    # `raise`den önce konan `os.remove(self.db_path)` "korumadan sonra" sayılıyor, kapı YEŞİL kalıyordu (ölçüldü).
+    assert all(c.lineno > koruma.end_lineno for c in silmeler), (
+        "yedek kontrolü canlı DB silinmeden ÖNCE gelmeli (koruma gövdesinde canlı DB'ye dokunulmaz)"
+    )
     # WAL yan-dosyaları geri-yüklemeden önce temizlenmeli (bayat frame replay'i)
     assert '"-wal"' in src and '"-shm"' in src, "rollback öncesi WAL/SHM temizlenmeli"
