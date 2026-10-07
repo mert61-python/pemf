@@ -34,6 +34,8 @@ GOLDEN_ROUTES = {
     ("/api/operators/enroll", "POST"),
     ("/api/operators/verify", "POST"),
     ("/api/operators/remove", "POST"),
+    # 2026-10-08 D2.E14 · İG-6.63: "Kilitle" jetonu SUNUCUDA da iptal eder (yetki = jetonun kendisi).
+    ("/api/operators/lock", "POST"),
     ("/api/ai/log", "POST"),
     ("/api/ai/pro/calibrate", "POST"),
     ("/api/ai/pro/organ", "POST"),
@@ -216,4 +218,5 @@ def test_route_contract_unchanged():
     # → 99 (+1 bipolar/unipolar sürüş kipi: coil/surus_kipi POST), 2026-09-11
     # → 100 (+1 seans-ortası parametre güncelleme: session/parametre_guncelle POST), 2026-09-11
     # → 105 (+1 acil durdurma mandalını sıfırla: hardware/estop_mandali/sifirla POST — D1.81 · Y4), 2026-10-01
-    assert len(current) == len(beklenen) == 105 - (0 if _simulator_mountlu() else 1)
+    # → 106 (+1 operatör sunucu kilidi: operators/lock POST — D2.E14 · İG-6.63), 2026-10-08
+    assert len(current) == len(beklenen) == 106 - (0 if _simulator_mountlu() else 1)

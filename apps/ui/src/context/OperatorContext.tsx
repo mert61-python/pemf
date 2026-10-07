@@ -145,7 +145,14 @@ export function OperatorProvider({
 
   // Kilitlemede jeton da DÜŞER: aksi hâlde kimlik ekranda düşmüş görünürken backend hâlâ o
   // hekimin adına kayıt yazmaya devam ederdi.
-  const lock = useCallback(() => { setOperatorToken(null); setActive(null); }, []);
+  // ⚠️ D2.E14 (İG-6.63): jeton SUNUCUDA da iptal edilir — aynı jetonu tutan diğer kopyalar (ikinci sekme, eski mobil)
+  // kilitlenen hekim adına yazmayı sürdürüyordu. İstek jeton düşürülmeden ÖNCE kurulur (`apiPost` başlığı eşzamanlı
+  // okur); sonucu BEKLENMEZ — sunucu hatası kilidi ENGELLEMEZ. Kapı: __tests__/OperatorContext.E14.sunucuKilit.web.test.tsx.
+  const lock = useCallback(() => {
+    void apiPost("/operators/lock", {}, null, { silent: true });
+    setOperatorToken(null);
+    setActive(null);
+  }, []);
   const touch = useCallback(() => { sonEtkilesim.current = Date.now(); }, []);
 
   // ── ETKİLEŞİM → SAYAÇ (D2.E13 · İG-6.18) ─────────────────────────────────────────────────

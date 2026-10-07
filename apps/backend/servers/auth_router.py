@@ -450,6 +450,21 @@ async def _operators_verify(payload: _OperatorPin):
     raise HTTPException(status_code=401, detail="PIN hatalı.")
 
 
+@router.post("/api/operators/lock")
+async def _operators_lock(request: Request):
+    """Aktif operatörü SUNUCUDA kilitle: istekteki `X-PEMF-Operator` jetonu İPTAL edilir (D2.E14 · İG-6.63).
+
+    Eskiden "Kilitle" jetonu yalnız istemciden siliyordu; jetonu elinde tutan her kopya (ikinci sekme, eski mobil)
+    kilitlenen hekimin adına kayıt yazmayı sürdürüyordu (kayan TTL ile 47,9 sa — ölçüldü). Y89: mutlak üst ömür EKLENMEZ.
+    Yetki = jetonun KENDİSİ: yalnız gönderilen jeton düşer, başka bir hekim kilitlenemez. ACİL DURDUR/STOP'a DOKUNMAZ.
+    Kapı: tests/test_operator_kilit_ucu_E14.py."""
+    from servers import operator_tokens
+    from servers.auth import _operator_jetonu
+
+    jeton = _operator_jetonu(request)
+    return {"ok": True, "iptal": bool(jeton) and operator_tokens.iptal(jeton)}
+
+
 @router.post("/api/operators/remove")
 async def _operators_remove(payload: _OperatorRemove, request: Request):
     """Operatörü cihazdan çıkar. ⚠️ Tıbbi KAYITLARI SİLMEZ (yasal saklama + klinik sürekliliği)."""
