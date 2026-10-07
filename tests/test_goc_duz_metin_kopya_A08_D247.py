@@ -205,3 +205,22 @@ def test_KRITIK_acilista_KENARA_alinmis_duz_metin_kopyalar_da_KORUNUR(tmp_path, 
     assert kenar_kilidi[0].get("keep_current_user") is True, (
         "düz-metin yedek sürecin hesabı DIŞARIDA bırakılarak kilitlendi (toparlama kendi yedeğini açamaz)"
     )
+
+
+def test_KRITIK_A241_acilista_CIPLAK_plain_bak_da_KORUNUR(tmp_path, monkeypatch):
+    """2-A inceleme A2-4.1: D2.47 açılış desenini `*.plain.bak*`a genişletti; yukarıdaki kol yalnız kenara alınmış kopyayı
+    ölçüyor. Deseni `*.plain.bak.*`a (nokta zorunlu) daraltan mutant 58 kapıda YEŞİLDİ (ölçüldü) → ÇIPLAK `<db>.plain.bak`
+    (emanet kipi / eski sürümlerin ACL'siz yazdığı yedek — op-doğrulama #8'in asıl konusu) açılışta KORUMASIZ kalır."""
+    import backend_service as bs
+    from utils import file_acl
+
+    app = tmp_path / "PEMF_GUI"
+    app.mkdir()
+    ciplak = app / "patients.db.plain.bak"
+    ciplak.write_bytes(_SQLITE_BASLIK + b"duz-metin")
+    kilitler = []
+    monkeypatch.setattr(file_acl, "lock_down_file", lambda yol, *a, **k: kilitler.append((Path(yol), k)) or True)
+    bs._harden_secret_file_acls(app, logging.getLogger("a241"))
+    kilit = [k for y, k in kilitler if y == ciplak]
+    assert kilit, f"çıplak düz-metin yedek (.plain.bak) açılışta KORUMAYA alınmadı: {[str(y) for y, _ in kilitler]}"
+    assert kilit[0].get("keep_current_user") is True, "çıplak .plain.bak sürecin hesabı DIŞARIDA bırakılarak kilitlendi"
