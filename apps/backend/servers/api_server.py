@@ -5780,12 +5780,33 @@ async def review_ai_analysis(payload: AiReviewPayload, request: Request):
     # ⚠️ D2.41 (B-2.3): "bu teşhisi kim onayladı" kaydı İSTEMCİ BEYANINDAN değil sunucu kuralından (jeton; kanıtsız
     # kayıtlı-hekim beyanı → sahipsiz; operatörsüz klinikte beyan — Kural 2). Eskiden LAN'dan jetonsuz başka bir hekimin adı
     # yazılabiliyordu. Kapı: tests/test_kayit_atfi_COZUMLENMIS_operator_D241.py.
-    from servers.auth import cozumlenmis_operator
+    from servers import operator_tokens
+    from servers.auth import _operator_jetonu, cozumlenmis_operator
 
+    _jetonlu = bool(operator_tokens.cozumle(_operator_jetonu(request)))
     _inceleyen = cozumlenmis_operator(request, payload.reviewed_by)
     ok = await asyncio.to_thread(db.set_ai_review, int(payload.analysis_id), payload.status, payload.note, _inceleyen)
     if not ok:
         raise HTTPException(status_code=404, detail="Analiz kaydı bulunamadı.")
+    # ⚠️ D2.19 (B-3.37): kayıt alanları her değerlendirmede ÜZERİNE yazılır; karar GEÇMİŞİ denetim izinde (append-only)
+    # tutulur — eskiden önceki red/düzeltme iz bırakmadan siliniyordu. Kimlik KAYNAĞI işaretlenir: "jeton" (doğrulanmış),
+    # "beyan" (jetonsuz kabul — Kural 2, DOĞRULANMAMIŞ), "yok" (kanıtsız kayıtlı-hekim beyanı; `kimlikli_yaz` beyanı
+    # `kanitsiz_beyan` olarak saklar). İÇERİK YAZILMAZ: gerekçe METNİ ize girmez, yalnız varlığı.
+    # Kapı: tests/test_ai_degerlendirme_IZI_D219.py.
+    from servers import audit_log as _iz
+
+    _iz.kimlikli_yaz(
+        request,
+        "ai.review",
+        beyan=payload.reviewed_by,
+        scope=f"ai_analiz:{int(payload.analysis_id)}",
+        detail={
+            "analysis_id": int(payload.analysis_id),
+            "status": payload.status,
+            "gerekce_var": bool((payload.note or "").strip()),
+            "kimlik_kaynagi": "jeton" if _jetonlu else ("beyan" if _inceleyen else "yok"),
+        },
+    )
     return {"status": "success", "analysisId": payload.analysis_id, "review": payload.status}
 
 
