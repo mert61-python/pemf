@@ -379,7 +379,13 @@ class TreatmentHistoryDB(
                     conn.execute('PRAGMA journal_mode=DELETE')
                     conn.execute('PRAGMA synchronous=FULL')
                 except _DB_OPERATIONAL as fallback_err:
-                    self.logger.error(f"Fallback DELETE modu da hataya düştü: {fallback_err}")
+                    # O-A2-2.b (2-A inceleme): başka bir bağlantı WAL'de açıkken DELETE'e geçilemez; bağlantı mevcut
+                    # kipte (WAL) sürer ve çalışır (ölçüldü) — zararsız, ERROR değil. Kapı: test_WAL_DELETE_gecisi_UYARI_OA22b.
+                    self.logger.warning(
+                        "WAL ayarlanamadi, DELETE kipine de gecilemedi (%s) — baglanti MEVCUT kipte suruyor (baska bir "
+                        "baglanti WAL'de acik olabilir; zararsiz).",
+                        fallback_err,
+                    )
         except BaseException:
             if conn is not None:
                 try:
