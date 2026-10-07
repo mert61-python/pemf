@@ -10,6 +10,7 @@ watchdog ve temiz seans yanlış alarm üretmez.
 from __future__ import annotations
 
 import threading
+import time
 import types
 
 import conftest
@@ -70,16 +71,31 @@ def test_ARAC_uyku_nobetcisi_FIRLATAN_sleep_yamasinda_OLUR():
     assert not t.is_alive(), "fırlatan sleep yaması nöbetçiyi öldürmedi — nöbet bu sınıfı göremez"
 
 
+#: Döngünün "dönmediği" ölçütü: tur başına ORTALAMA süre. Kısa dönüşte döngü `Event.wait(0.005)` bekler → 1 ms zamanlayıcı
+#: çözünürlüğünde ~5 ms, varsayılan 15,6 ms'de ~15,6 ms; dönen (beklemeyen) döngü µs mertebesinde tur atar.
+_TUR_ASGARI_SN = 0.002
+
+
 def test_ARAC_uyku_nobetcisi_FIRLATMAYAN_sahte_sleepte_YASAR_ve_doner():
+    """2-A inceleme O-A2-K.2: eski ölçüt sabit "0,5 sn'de ≤ 50 tur"du — tur sayısı Windows zamanlayıcı çözünürlüğüne
+    bağlı (süreç 1 ms isteyince 92–93 tur, yük altında 51–53; ölçüldü) → sahte kırmızı. Ölçüt artık ölçülen süreye göre
+    tur başına ortalama süre (çözünürlükten bağımsız). MUTASYON: `conftest.uyku_nobetcisi_dongusu`daki kısa-dönüş
+    beklemesini kaldırmak ya da eşiğini tutmaz yapmak → KIRMIZI (döngü döner)."""
     sayac = {"n": 0}
 
     def _aninda(_s):
         sayac["n"] += 1
 
     t = threading.Thread(target=conftest.uyku_nobetcisi_dongusu, kwargs={"uyku": _aninda}, daemon=True)
+    t0 = time.monotonic()
     t.start()
     t.join(0.5)
-    assert t.is_alive() and 2 <= sayac["n"] <= 50, f"anında dönen sleep'te nöbetçi döngüsü {sayac['n']} tur (dönme yok)"
+    n, gecen = sayac["n"], time.monotonic() - t0
+    assert t.is_alive() and n >= 2, f"anında dönen sleep'te nöbetçi döngüsü yaşamıyor ya da dönmüyor ({n} tur)"
+    assert gecen / n >= _TUR_ASGARI_SN, (
+        f"anında dönen sleep'te nöbetçi döngüsü DÖNÜYOR: {n} tur / {gecen:.3f} sn = {1000 * gecen / n:.3f} ms/tur "
+        f"(asgari {1000 * _TUR_ASGARI_SN:.0f} ms)"
+    )
 
 
 def test_KRITIK_suit_nobetcisi_CANLI():
