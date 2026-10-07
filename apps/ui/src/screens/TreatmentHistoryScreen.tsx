@@ -14,6 +14,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
 import { SessionDetailModal } from "@/components/domain/SessionDetailModal";
 import { aramaEslesir } from "@/utils/aramaNormalize";
+import { inScope, KIMLIK_ISTEMI } from "@/utils/patientScope";
 import { downloadFileWithAuth } from "@/services/dosyaIndir";
 import { useCokluSecim } from "@/hooks/useCokluSecim";
 import { SecimCubugu } from "@/components/ui/SecimCubugu";
@@ -119,10 +120,9 @@ export function TreatmentHistoryScreen() {
 
   const filteredSessions = sessions.filter((s) => {
     // "Benim Seanslarım" = operator_email eşleşen VEYA sahipsiz (eski/migrasyon) kayıtlar → hiçbiri kaybolmaz.
-    if (scope === "mine" && myEmail) {
-      const op = (s.operator_email || "").toLowerCase();
-      if (op && op !== myEmail) return false;
-    }
+    // ⚠️ D2.70 (B-6.19 · Y103): kural burada KENDİ kopyasıyla yazılıydı (`scope === "mine" && myEmail`) — kimlik düşünce
+    // tüm kliniğin seansları "Benim" görünüyordu. TEK KAYNAK `inScope`: kimliksizken kayıt yok (fail-closed).
+    if (!inScope(s, scope, myEmail)) return false;
     // ⚠️ DENETİM 2026-08-17: ham `toLowerCase()` Türkçe'de İ→'i'+U+0307 ürettiği için "İpek"
     // kaydı "ipek" ile aranınca bulunamıyordu. BURADAKİ ETKİ EN AĞIRI: süzme yalnız YÜKLENMİŞ
     // sayfalar üzerinde çalışır, dolayısıyla hekim "bu hastanın geçmişi yok" sonucuna varıyor ve
@@ -309,7 +309,9 @@ export function TreatmentHistoryScreen() {
         </View>
       ) : filteredSessions.length === 0 ? (
         <Text style={[styles.intro, { marginTop: spacing.md, flex: undefined, textAlign: "center" }]}>
-          {searchQuery
+          {!myEmail
+            ? KIMLIK_ISTEMI
+            : searchQuery
             ? (hasMore
                 ? "Yüklü sayfalarda eşleşme yok — daha eski kayıtlarda olabilir, aşağıdan “Daha Fazla Yükle”."
                 : "Aramayla eşleşen kayıt yok.")

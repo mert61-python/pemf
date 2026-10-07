@@ -22,6 +22,9 @@ const mockApiGet = jest.fn();
 
 jest.mock("@/context/AppNavContext", () => ({ useAppNav: () => mockNav }));
 jest.mock("@/context/UserModeContext", () => ({ useUserMode: () => mockMode }));
+// D2.68/D2.70: seçici kimliği `OperatorContext.operatorEmail`ten alır; kimliksizken (fail-closed) liste boştur.
+// Bu dosyanın konusu yönlendirme/kapı sertliği → kimlikli bir hekim.
+jest.mock("@/context/OperatorContext", () => ({ useOperatorOptional: () => ({ operatorEmail: "vet@klinik.com" }) }));
 jest.mock("@/services/apiClient", () => ({ apiGet: (...a: unknown[]) => mockApiGet(...a) }));
 
 import { PatientGate } from "../PatientGate";

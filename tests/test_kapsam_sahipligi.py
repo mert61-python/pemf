@@ -205,10 +205,10 @@ def test_KRITIK_kapsam_filtresi_kucuk_harf_KIYASI_yapiyor():
     # dosyada BAŞKA yerlerde de (myEmail hesabı) geçiyor. Kapı artık sahiplik okumasının
     # KENDİSİNİ ölçer.
     KIYAS = 'operator_email || "").toLowerCase()'
-    for bagil in (
-        "screens/TreatmentHistoryScreen.tsx",
-        "utils/patientScope.ts",
-    ):
+    # ⚠️ 2-B D2.70 (B-6.19 · Y103): `TreatmentHistoryScreen` kuralın KENDİ kopyasını taşıyordu (`scope === "mine" &&
+    # myEmail`) ve kimlik düşünce o kopya da fail-open'dı. Artık tek kaynağa (`inScope`) bağlı → kıyas YALNIZ patientScope'ta;
+    # Seans Geçmişi aşağıdaki "kendi kopyası YOK" listesine taşındı.
+    for bagil in ("utils/patientScope.ts",):
         src = c_soy((_PF / bagil).read_text(encoding="utf-8"))
         assert KIYAS in src, f"{bagil}: sahiplik kiyasi kucuk harfe indirilmiyor -> hekim KENDI kaydini goremez"
 
@@ -220,7 +220,7 @@ def test_KRITIK_kapsam_filtresi_kucuk_harf_KIYASI_yapiyor():
     # özgü adlandırılmış sarmalayıcı (kendisi de `inScope`a devreder — bkz. utils/sonAnaliz.ts).
     # Ayrı ad, `/ai/log` süzgecini hasta süzgecinden ayırt edebilmek için gerekliydi:
     # tek ada pinli kapı, PatientScreen'de HASTA süzmesi yüzünden mutasyonda yeşil kalıyordu.
-    for ekran in ("screens/PatientScreen.tsx", "screens/AiHistoryScreen.tsx"):
+    for ekran in ("screens/PatientScreen.tsx", "screens/AiHistoryScreen.tsx", "screens/TreatmentHistoryScreen.tsx"):
         src = c_soy((_PF / ekran).read_text(encoding="utf-8"))
         assert KIYAS not in src, f"{ekran} sahiplik kiyasini KENDI yaziyor -> patientScope ile sessizce ayrisir"
         assert ("inScope(" in src) or ("kapsamda(" in src), (

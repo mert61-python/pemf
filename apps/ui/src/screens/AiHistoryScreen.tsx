@@ -11,7 +11,7 @@ import { Brain, ChevronDown, ChevronRight, RefreshCcw, Trash2, Share2 } from "lu
 import { AiReviewControls, ReviewBadge, type ReviewStatus } from "@/components/domain/AiReviewControls";
 import { useUserMode } from "@/context/UserModeContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
-import { canChooseScope, deleteScope, effectiveScope, inScope } from "@/utils/patientScope";
+import { canChooseScope, deleteScope, effectiveScope, inScope, KIMLIK_ISTEMI } from "@/utils/patientScope";
 import { downloadFileWithAuth } from "@/services/dosyaIndir";
 import { emitToast } from "@/services/toastBridge";
 import { TakipGrafigi } from "@/components/domain/TakipGrafigi";
@@ -225,10 +225,12 @@ export function AiHistoryScreen() {
   // HASTA FİLTRESİ (2026-08-07): "bu hastaya hangi AI modülü uygulandı, sonucu neydi?"
   // sorusunun cevabı tek dokunuşla görünsün. Liste yüklü kayıtlardan türetilir.
   const hastalar = useMemo(() => {
+    // ⚠️ D2.70 · Y103: kimliksizken kayıt gösterilmez — hasta adı çipleri de (kapsamlı çip türetimi D2.71'de).
+    if (!myEmail) return [];
     const seen = new Set<string>();
     for (const it of items) if (it.patient_name) seen.add(it.patient_name);
     return Array.from(seen).sort((a, b) => a.localeCompare(b, "tr"));
-  }, [items]);
+  }, [items, myEmail]);
 
   const shown = useMemo(
     () => items.filter((it) => {
@@ -320,7 +322,9 @@ export function AiHistoryScreen() {
         <Text style={styles.empty}>{"Geçmiş yüklenemedi. Cihaza bağlı olduğunuzdan emin olun, sonra Yenile'ye dokunun."}</Text>
       ) : shown.length === 0 ? (
         <Text style={styles.empty}>
-          {filter !== "__all__"
+          {!myEmail
+            ? KIMLIK_ISTEMI
+            : filter !== "__all__"
             ? 'Bu filtre için kayıt yok. Farklı bir hasta/modül seçin ya da "Tümü"ye dönün.'
             : "Henüz AI analiz kaydı yok. Akıllı Teşhis'ten bir analiz çalıştırın — sonuç burada şifreli, detaylı saklanır."}
         </Text>

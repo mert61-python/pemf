@@ -27,7 +27,7 @@ import { apiGet } from "@/services/apiClient";
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
 import { IconButton } from "@/components/ui/IconButton";
 import { aramaEslesir } from "@/utils/aramaNormalize";
-import { effectiveScope, inScope } from "@/utils/patientScope";
+import { effectiveScope, inScope, KIMLIK_ISTEMI } from "@/utils/patientScope";
 import { profilSozlugu } from "@/utils/profilSozlugu";
 
 interface Hasta { id: string; name: string; species?: string; operator_email?: string | null }
@@ -101,7 +101,7 @@ export function PatientGate({ children, soft = false }: { children: React.ReactN
               accessibilityLabel="Kayıtlarda ara" />
           )}
           {suzulmus.length === 0 ? (
-            <Text style={styles.not}>{ara.trim() ? "Eşleşme yok." : S.bos}</Text>
+            <Text style={styles.not}>{!myEmail ? KIMLIK_ISTEMI : ara.trim() ? "Eşleşme yok." : S.bos}</Text>
           ) : (
             <ScrollView style={styles.listeKutu} nestedScrollEnabled>
               {suzulmus.map((h) => (

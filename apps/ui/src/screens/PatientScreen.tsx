@@ -15,7 +15,7 @@ import { useUserMode } from "@/context/UserModeContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
 import { useAuth } from "@/context/AuthContext";
 import { canAccess } from "@/config/access";
-import { canChooseScope, effectiveScope, inScope } from "@/utils/patientScope";
+import { canChooseScope, effectiveScope, inScope, KIMLIK_ISTEMI } from "@/utils/patientScope";
 import { aramaEslesir } from "@/utils/aramaNormalize";
 import { useCokluSecim } from "@/hooks/useCokluSecim";
 import { hastaninSonAnalizi, hastayaGoreSonAnaliz, kapsamda, sonAnalizOzeti, type AnalizKaydi } from "@/utils/sonAnaliz";
@@ -371,7 +371,9 @@ export function PatientScreen() {
             <Button label="Tekrar Dene" variant="secondary" onPress={loadPatients} />
           </View>
         ) : filteredPatients.length === 0 ? (
-          <Text style={styles.emptyText}>{search ? "Aramayla eşleşen kayıt yok." : "Henüz hasta kaydı yok."}</Text>
+          <Text style={styles.emptyText}>
+            {!myEmail ? KIMLIK_ISTEMI : search ? "Aramayla eşleşen kayıt yok." : "Henüz hasta kaydı yok."}
+          </Text>
         ) : (
           <>
           {secim.secimModu ? (

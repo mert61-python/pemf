@@ -28,15 +28,27 @@ export function canChooseScope(
 }
 
 /**
+ * KİMLİK İSTEMİ (D2.70 · Y103) — kimliksizken (cihazda kayıtlı operatör var, kimse seçili değil ya da kilit sonrası)
+ * Hastalar, Seans Geçmişi ve AI Geçmişi kayıt göstermez, bunu söyler. TEK KAYNAK: ekranlar metni buradan alır.
+ */
+export const KIMLIK_ISTEMI = "Kayıtları görmek için operatörünüzü seçin";
+
+/**
  * "Benim" = operator_email eşleşen VEYA SAHİPSİZ kayıtlar (eski/migrasyon kayıtları kaybolmasın).
- * Oturum e-postası yoksa sahiplik kıyaslanamaz → filtre uygulanmaz (mevcut davranış korunur).
+ *
+ * ⚠️ D2.70 (B-6.19 · Y103): kimlik (`myEmail`) BOŞSA hiçbir kayıt kapsamda DEĞİLDİR — "Tüm Klinik" dahil (FAIL-CLOSED).
+ * Eskiden "oturum e-postası yoksa filtre uygulanmaz" kuralıyla kimlik düşünce (açılış, kilit) ev sahibi kliniğin TÜM
+ * hasta/seans/AI kayıtlarını "Benim" diye görüyordu (ölçüldü). Kimlik yalnız kayıtlı operatörlü cihazda boştur:
+ * operatörü olmayan tek hekimli klinikte `operatorEmail` oturum e-postasıdır (Kural 2 — bugünkü gibi). Profil / "son
+ * operatör" kalıcılığı EKLENMEZ. Kapı: __tests__/patientScope.test.ts + screens/__tests__/kimliksizKapsam.D270.Y103.web.
  */
 export function inScope(
   hasta: { operator_email?: string | null },
   scope: PatientScope,
   myEmail: string,
 ): boolean {
-  if (scope === "all" || !myEmail) return true;
+  if (!myEmail) return false;
+  if (scope === "all") return true;
   const op = (hasta.operator_email || "").toLowerCase();
   return !op || op === myEmail;
 }

@@ -87,8 +87,14 @@ describe("inScope — sahiplik filtresi", () => {
     expect(inScope({ operator_email: "VET@Example.com" }, "mine", "vet@example.com")).toBe(true);
   });
 
-  it("oturum e-postası yoksa filtre uygulanmaz (mevcut davranış korunur)", () => {
-    expect(inScope(BASKASI, "mine", "")).toBe(true);
+  it("KRİTİK (D2.70 · Y103): kimlik YOKSA hiçbir kayıt kapsamda değil — 'Tüm Klinik' ve sahipsiz dahil (fail-closed)", () => {
+    // Eskiden bu test "oturum e-postası yoksa filtre uygulanmaz" diyerek fail-open'ı KİLİTLİYORDU (B-6.19): kimlik düşünce
+    // ev sahibi kliniğin TÜM kayıtlarını görüyordu. Kimlik yalnız kayıtlı operatörlü cihazda boştur (Kural 2: operatörsüz
+    // tek hekimli klinikte operatorEmail = oturum e-postası).
+    expect(inScope(BASKASI, effectiveScope("mine", EV_SAHIBI), "")).toBe(false);
+    expect(inScope(BASKASI, effectiveScope("all", VET), "")).toBe(false);
+    expect(inScope(SAHIPSIZ, "mine", "")).toBe(false);
+    expect(inScope(BENIM, "mine", "")).toBe(false);
   });
 });
 
