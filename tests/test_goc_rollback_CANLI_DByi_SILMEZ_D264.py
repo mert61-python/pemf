@@ -166,3 +166,35 @@ def test_KARSIT_gecerli_yedekle_rollback_GERCEKTEN_geri_yukler(bes_seansli_db, m
     yedekler = list((kok / "migration_backups").glob("pre_migration_v2_*.db"))
     assert yedekler, "göç öncesi yedek alınmadı"
     assert _seans_sayisi(kok) == 5
+
+
+def test_KRITIK_A231_rotasyon_ADA_degil_DEGISIKLIK_ZAMANINA_gore_en_yeni_eskileri_TUTAR(bes_seansli_db):
+    """2-A inceleme A2-3.1: D2.64 (a)'nın İKİNCİ yarısı — rotasyon sırası AD değil DEĞİŞİKLİK ZAMANI. Taze yedek muafiyeti
+    ayrı ölçülüyordu; "ada göre sırala (taze yine muaf)" mutantı rollback kapılarında 34/34 YEŞİLDİ (ölçüldü). Ada göre
+    sırada `pre_migration_v10_*` `…v15_*`ten önce gelir: adları ters sıralı eski yedeklerde EN YENİLER silinir, en eskiler
+    kalır (v10→v11 geçişinde kendiliğinden olur)."""
+    import os
+    import time
+
+    from database import treatment_history_db as thdb
+
+    kok = bes_seansli_db
+    mb = kok / "migration_backups"
+    mb.mkdir(exist_ok=True)
+    simdi = time.time()
+    for i in range(6):  # ad sırası ↔ zaman sırası TERS: v10 en YENİ … v15 en ESKİ
+        f = mb / f"pre_migration_v1{i}_20260101_000000.db"
+        f.write_bytes(b"ESKI-YEDEK")
+        os.utime(f, (simdi - (i + 1) * 86400, simdi - (i + 1) * 86400))
+    once = {p.name: p.stat().st_mtime for p in mb.glob("pre_migration_*.db")}
+    beklenen = set(sorted(once, key=lambda ad: once[ad])[-4:])  # taze HARİÇ en yeni 4 (değişiklik zamanı)
+
+    thdb.TreatmentHistoryDB(kok).close_connections()  # göç başarılı koşar — rotasyon her durumda koşar
+
+    sonra = {p.name for p in mb.glob("pre_migration_*.db")}
+    taze = sonra - set(once)
+    assert len(taze) == 1, f"taze göç yedeği yok/birden çok: {sorted(taze)}"
+    assert sonra - taze == beklenen, (
+        f"rotasyon DEĞİŞİKLİK ZAMANINA göre en yeni 4 eski yedeği TUTMADI: kalan {sorted(sonra - taze)}, "
+        f"beklenen {sorted(beklenen)}"
+    )
