@@ -81,6 +81,10 @@ class PatientDatabase:
         self.lock = threading.Lock()
         self.logger = logging.getLogger("PatientDatabase")
         self.config_manager = get_config()
+        # ⚠️ 2-A inceleme A2-1.1 (D2.45 · Y9): alan şifreleme anahtarı (patient_fernet_key) artık modül yüklenirken değil
+        # BURADA alınır; alınamazsa (bozuk / bu makinede çözülemeyen sır) hasta DB'sine DOKUNULMADAN `RuntimeError` →
+        # DB'siz kısıtlı kip; arka plan yeniden açması (Y43) her denemede yeniden alır.
+        self.config_manager._anahtar_hazirla()
         self._local = threading.local()  # Performans Fix (4.2): Thread-local connection pool
 
         # P0 audit 2026-06-28: whole-DB SQLCipher at-rest (keyring 'sqlcipher_key' — treatment

@@ -71,6 +71,17 @@ if SENARYO == "binding_yok":
     for _ad in ("sqlcipher3", "sqlcipher3.dbapi2", "pysqlcipher3", "pysqlcipher3.dbapi2"):
         sys.modules[_ad] = None
 
+# 2-A inceleme A2-1.1: urun zincirinin ILK ice aktarimi (headless_core -> patient_database -> pemf_gui.config) ICE
+# AKTARMADA olurse de SONUC basilir — "cocuk sonuc basmadi" diye gizlenmesin (ACIL DURDUR ucu hic kurulmamistir).
+try:
+    import headless_core as _hc_ilk  # noqa: F401
+except BaseException as _e:
+    sonuc["kacan"] = "ICE AKTARMADA: " + type(_e).__name__ + ": " + str(_e)[:300]
+    sonuc["iz"] = traceback.format_exc()[-1500:]
+    print("SONUC " + json.dumps(sonuc, default=str))
+    sys.stdout.flush()
+    os._exit(0)
+
 gercek_move = shutil.move
 KILIT = {{"aktif": True}}
 if SENARYO.startswith("goc"):
@@ -382,6 +393,33 @@ def _sir_cozulemez_kur(app: Path, tmp_path: Path) -> None:
 
 _D245_DOSYALAR = ("patients.db", "pemf_treatment_history.db", ".sqlcipher_key")
 _D246_DOSYALAR = ("patients.db", "pemf_treatment_history.db")
+_A21_DOSYALAR = ("patients.db", "pemf_treatment_history.db")
+
+
+def _a21_kur(app: Path, tmp_path: Path, senaryo: str) -> None:
+    """2-A inceleme A2-1.1 (D2.45 · Y9): iki DB DOĞRU anahtarla gerçekten şifreli; sır dosyası GERÇEKÇİ biçimde
+    okunamaz — `sir_bozuk`: JSON yarıda kesilmiş (güç kesintisi / elle düzenleme); `sir_cozulemez_ikisi`: İKİ kritik
+    anahtar da (`sqlcipher_key` + `patient_fernet_key`) bu makinede ÇÖZÜLEMEYEN DPAPI/MKEY blobu (makine değişimi /
+    Windows yeniden kurulumu — ikisi aynı mekanizmayla sarıldığı için birlikte düşer). D2.45 kolu (`sir_cozulemez`)
+    yalnız `sqlcipher_key`i çözülemez yapıyor, `patient_fernet_key` YOKTU → içe aktarmadaki ölüm görünmüyordu."""
+    _sifreli_iki_db(app, _K_DOGRU)
+    sir = app / "pemf_secrets.json"
+    if senaryo == "sir_bozuk":
+        sir.write_text('{"_version": 1, "auto": {"sqlcipher_key": "DPAPI:QUJD', encoding="utf-8")
+    else:
+        onek = "DPAPI:" if os.name == "nt" else "MKEY:"
+        doc = {
+            "_version": 1,
+            "auto": {
+                "sqlcipher_key": onek + base64.b64encode(b"A21 baska makinenin sqlcipher blobu " * 4).decode("ascii"),
+                "patient_fernet_key": onek + base64.b64encode(b"A21 baska makinenin fernet blobu " * 4).decode("ascii"),
+            },
+            "operator": {},
+            "embedded": {},
+        }
+        sir.write_text(json.dumps(doc), encoding="utf-8")
+    ozet = {ad: hashlib.sha256((app / ad).read_bytes()).hexdigest() for ad in (*_A21_DOSYALAR, "pemf_secrets.json")}
+    (tmp_path / "a21_once.json").write_text(json.dumps(ozet), encoding="utf-8")
 
 
 def _binding_yok_kur(app: Path, tmp_path: Path) -> None:
@@ -414,7 +452,9 @@ def _kur(tmp_path: Path, senaryo: str) -> tuple[dict, Path]:
             "PEMF_HOTSPOT": "0",
             "PEMF_AI_WARMUP": "0",
             "PEMF_ENABLE_TUNNEL": "0",
-            "PEMF_ENCRYPT_AT_REST": "1" if senaryo.startswith("goc") or senaryo in ("saglam", "sir_cozulemez") else "0",
+            "PEMF_ENCRYPT_AT_REST": "1"
+            if senaryo.startswith("goc") or senaryo in ("saglam", "sir_cozulemez", "sir_bozuk", "sir_cozulemez_ikisi")
+            else "0",
         }
     )
     if senaryo in ("goc_hasta", "goc_gecici_hasta"):
@@ -433,6 +473,8 @@ def _kur(tmp_path: Path, senaryo: str) -> tuple[dict, Path]:
         _sir_cozulemez_kur(app, tmp_path)
     elif senaryo == "binding_yok":
         _binding_yok_kur(app, tmp_path)
+    elif senaryo in ("sir_bozuk", "sir_cozulemez_ikisi"):
+        _a21_kur(app, tmp_path, senaryo)
     return env, app
 
 
@@ -660,6 +702,43 @@ def test_KRITIK_D246_BINDING_YOKKEN_sifreli_DB_KARANTINAYA_alinmaz_backend_DBSIZ
     gunluk = (tmp_path / "log" / "backend_service.log").read_text(encoding="utf-8", errors="replace")
     assert "sqlcipher3 binding YOK" in gunluk, "fail-closed nedeni (binding yok) günlükte YOK"
     assert "Yeni SQLCipher anahtari uretildi" not in gunluk
+
+
+@pytest.mark.parametrize("senaryo", ["sir_bozuk", "sir_cozulemez_ikisi"])
+def test_KRITIK_A21_SIR_BOZUK_ya_da_IKI_ANAHTAR_COZULEMEZKEN_backend_ICE_AKTARMADA_OLMEZ_DBSIZ_acilir(
+    tmp_path, senaryo
+):
+    """2-A inceleme A2-1.1 (D2.45 · Y9 · Ö.4-Y8) UÇTAN UCA, GERÇEK `main()`: planın D2.45 kapısı "bozuk sırla açılışta
+    POST E-stop 200 ve STM STOP". `pemf_gui.config`in modül düzeyi `ConfigManager()`ı alan anahtarını İÇE AKTARMADA
+    alıyordu → sır dosyası bozukken ya da `patient_fernet_key` çözülemezken fail-closed `RuntimeError`
+    `backend_service` → `headless_core` → `patient_database` içe aktarmasından kaçıyor, backend HİÇ açılmıyordu:
+    ACİL DURDUR, sağlık ucu, açılış STOP mutabakatı ve günlük YOK (ölçüldü — veri sağlam ama cihaz kör). Şimdi backend
+    DB'siz KISITLI kipte açılır (seans 503), iki DB değişmez, karantina YOK, YENİ ANAHTAR ÜRETİLMEZ (sır dosyası ezilmez
+    / yeniden kurulmaz), neden günlükte."""
+    if not _sqlcipher_var():
+        pytest.skip("sqlcipher3 yok — şifreli DB senaryosu kurulamaz")
+    s, app = _kos(tmp_path, senaryo)
+    _ortak_iddialar(s)
+    _db_yok_iddialari(s, r"a[çc][ıi]lamad[ıi]", tmp_path)
+    assert sorted(p.name for p in app.glob("*.acilamadi-*")) == [], "sır okunamazken veritabanı KARANTİNAYA alındı"
+    once = json.loads((tmp_path / "a21_once.json").read_text(encoding="utf-8"))
+    degisen = [ad for ad in _A21_DOSYALAR if hashlib.sha256((app / ad).read_bytes()).hexdigest() != once[ad]]
+    assert degisen == [], f"sır okunamazken veri dosyasına DOKUNULDU: {degisen}"
+    sir = app / "pemf_secrets.json"
+    if senaryo == "sir_cozulemez_ikisi":
+        assert hashlib.sha256(sir.read_bytes()).hexdigest() == once["pemf_secrets.json"], (
+            "çözülemeyen sır dosyası DEĞİŞTİ (yeni anahtar üretildi / ezildi)"
+        )
+    else:
+        # Bozuk dosya kanıt olarak `.corrupt.<zaman>` adına alınır (bilinçli, kapı: test_bozuk_sir_dosyasi_kalici_…);
+        # yerine YENİ sır dosyası (= yeni anahtarlar) KURULMAMALI.
+        assert not sir.exists(), "bozuk sırın yerine YENİ sır dosyası kuruldu (yeni anahtar üretildi)"
+        assert list(app.glob("pemf_secrets.json.corrupt.*")), "bozuk sır kanıt olarak saklanmadı"
+    gunluk = (tmp_path / "log" / "backend_service.log").read_text(encoding="utf-8", errors="replace")
+    assert "Yeni SQLCipher anahtari uretildi" not in gunluk and "Yeni RASTGELE Fernet" not in gunluk, (
+        "sır okunamazken YENİ ANAHTAR üretildi (Y9 ihlali)"
+    )
+    assert re.search(r"S[ıi]r [çc][öo]z[üu]lemedi|BOZUK|karantina kaniti", gunluk), "sır hatasının nedeni günlükte YOK"
 
 
 def test_KARSIT_cekirdek_yok_ya_da_SAHTE_cekirdekte_acilis_hatasi_YOK(monkeypatch):

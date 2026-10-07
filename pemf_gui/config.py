@@ -67,8 +67,19 @@ class ConfigManager:
             self.config_dir = os.path.dirname(config_file)
 
         # CRITICAL FIX: Initialize encryption
-        self._encryption_key = self._get_or_create_key()
-        self._cipher = Fernet(self._encryption_key)
+        # ⚠️ 2-A inceleme A2-1.1 · A2-1.3 (D2.45 · Y9 · Ö.4-Y8): birincil anahtar MODÜL YÜKLENİRKEN ALINMAZ, ilk
+        # ihtiyaçta alınır (`_anahtar_hazirla`). Bu sınıfın modül düzeyi singleton'ı `backend_service` → `headless_core`
+        # → `patient_database` zincirinde İÇE AKTARILIRKEN kuruluyordu:
+        #   * sır dosyası BOZUKKEN ya da `patient_fernet_key` bu makinede ÇÖZÜLEMEZKEN (makine değişimi / Windows yeniden
+        #     kurulumu) fail-closed `RuntimeError` içe aktarmadan kaçıyor, backend HİÇ açılmıyordu — ACİL DURDUR, sağlık
+        #     ucu, açılış STOP mutabakatı ve günlük YOK; kurtarma aracı (`--kurtarma`) da açılamıyordu (ölçüldü);
+        #   * taze kurulumda içe aktarma YENİ bir anahtar üretip sır dosyasına yazıyor, `--kurtarma --yaz` onu "mevcut"
+        #     sayıp DURUYORDU (ölçüldü).
+        # Anahtar artık hasta DB'si açılırken alınır; alınamazsa o DB açılmaz (DB'siz kısıtlı kip — Y9), arka plan yeniden
+        # açması (Y43) her denemede yeniden dener. Kapı: tests/test_alan_anahtari_ICE_AKTARMADA_alinmaz_A21.py ve
+        # tests/test_acilis_DB_acilamasa_ACIL_DURDUR_yasar.py ("sir_bozuk", "sir_cozulemez_ikisi").
+        self._encryption_key = None
+        self._cipher = None
         self._legacy_cipher = self._get_legacy_cipher()  # eski MAC-türevli anahtar (yalnız decrypt fallback)
 
         # Default configuration
@@ -201,11 +212,21 @@ class ConfigManager:
         except Exception:
             return None
 
+    def _anahtar_hazirla(self) -> Fernet:
+        """Birincil alan anahtarını İLK İHTİYAÇTA al (2-A inceleme A2-1.1). Alınamazsa `RuntimeError` yükselir (fail-closed:
+        yeni anahtar üretilmez, düz-metin yazılmaz); sonraki çağrı yeniden dener (Y43)."""
+        if self._cipher is None:
+            anahtar = self._get_or_create_key()
+            cipher = Fernet(anahtar)
+            self._encryption_key = anahtar
+            self._cipher = cipher
+        return self._cipher
+
     def _encrypt_value(self, value: str) -> str:
         """Encrypt sensitive value"""
         if not value:
             return value
-        encrypted = self._cipher.encrypt(value.encode())
+        encrypted = self._anahtar_hazirla().encrypt(value.encode())
         return base64.urlsafe_b64encode(encrypted).decode()
 
     def _decrypt_value(self, encrypted_value: str, sessiz: bool = False) -> str:
@@ -221,7 +242,7 @@ class ConfigManager:
         except Exception:
             return encrypted_value
         try:
-            return self._cipher.decrypt(encrypted_bytes).decode()
+            return self._anahtar_hazirla().decrypt(encrypted_bytes).decode()
         except Exception:
             pass
         legacy = getattr(self, "_legacy_cipher", None)
