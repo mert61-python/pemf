@@ -2,8 +2,10 @@
 """D2.04 (B-3.105) — ANAHTAR YOKKEN ŞİFRELİ DB KARANTİNAYA ALINMAZ (hasta + tedavi ikizi).
 
 KORUNAN KOŞUL. `patient_database._init_database` açılış hatasında dosyayı yalnız
-`self._cipher_key and anahtar_uyusmazligi_mi(e)` ise kenara alır; tedavi ikizi
-(`treatment_history_db._init_database`) aynı kuralı `_cipher_key_cache` ile uygular. Anahtar
+`self.at_rest_encrypted and anahtar_uyusmazligi_mi(e)` ise kenara alır (D2.46'dan beri: anahtarın varlığı değil, ŞİFRELİ
+BAĞLANTININ açılmış olması; bu dosya yazıldığında koşul `self._cipher_key and …` idi); tedavi ikizi
+(`treatment_history_db._init_database`) aynı kuralı birincil anahtarın gerçek uyuşmazlığı (`_anahtar_vardi_ama_acmadi`,
+D2.45) ya da `_cipher_key_cache` ile uygular. Anahtar
 HİÇ okunamadıysa (bayrak ≠ 1, kaynak boş) şifreli dosya düz sqlite3 ile açılmaya çalışılır ve
 "file is not a database" verir — bu bir anahtar UYUŞMAZLIĞI DEĞİLDİR: doğru anahtar sonradan
 gelirse veri tam olarak kurtarılabilir. Koşul düşerse kurtarılabilir şifreli hasta DB'si
@@ -90,8 +92,10 @@ def _karantina(kok: Path) -> list[str]:
 
 @pytest.mark.parametrize("kip", ["rastgele", "sqlcipher"])
 def test_KRITIK_hasta_DB_anahtar_YOKKEN_sifreli_dosyayi_KARANTINAYA_ALMAZ(anahtarsiz, monkeypatch, kip):
-    """MUTASYON: `patient_database.py` `if not (self._cipher_key and anahtar_uyusmazligi_mi(e))` →
-    `self._cipher_key and` silinir (plan) ya da `self._sqlcipher_mod and` → KIRMIZI."""
+    """MUTASYON (D2.46 sonrası koşul; 2-A inceleme A2-9.2'de ölçüldü): `patient_database.py`
+    `if not (self.at_rest_encrypted and anahtar_uyusmazligi_mi(e))` → `if not anahtar_uyusmazligi_mi(e)` → KIRMIZI
+    (iki kol; sqlcipher3 YOKKEN rastgele kol). Eski plan mutantı (`self._cipher_key and` silinir) koşul değiştiği için
+    artık UYGULANAMAZ."""
     from database import patient_database as pdb
 
     monkeypatch.setattr(pdb, "get_sqlcipher_key", lambda *a, **k: "")
