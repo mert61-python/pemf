@@ -292,6 +292,34 @@ def test_KRITIK_kismi_karantina_GERI_ALINIR_ana_dosya_YERINDE(baglayici, tmp_pat
         assert _ozet(app / ad) == once[1] and ad in caplog.text, f"yarım kopya {ad} adıyla loglanmadı"
 
 
+def test_KRITIK_kismi_karantina_UCUNCU_dosyada_duserse_ONCEKI_IKISI_de_GERI_ALINIR(
+    baglayici, tmp_path, monkeypatch, caplog
+):
+    """2-A inceleme A2-2.1: geri alma önceden taşınan HER dosyayı (ters sırayla) yerine koymalı. Yukarıdaki kol yalnız
+    İKİNCİ dosyada (`-wal`) düşüyor — geri alınacak tek dosya var; yalnız SON taşınanı geri koyan mutant 52 kapıda YEŞİLDİ
+    (ölçüldü). Üçüncü dosyada (`-shm`) düşünce o mutant ana DB'yi karantinada bırakır, `-wal`'ı ana DB'siz yerine koyar →
+    sonraki açılış BOŞ DB kurar (B-3.53'ün kendisi) ve günlük "geri alındı" der."""
+    from database import sqlcipher_util as su
+
+    app = tmp_path / "PEMF_GUI"
+    app.mkdir()
+    yol = _wal_ile_kur(baglayici, app)
+    wal = app / "pemf_treatment_history.db-wal"
+    shm = app / "pemf_treatment_history.db-shm"
+    shm.write_bytes(b"SHM-BELLEGI " * 64)
+    once = (_ozet(yol), _ozet(wal), _ozet(shm))
+    _tasima_dusur(monkeypatch, lambda s, d: s.endswith("-shm"), lambda s, d: True)
+
+    with caplog.at_level(logging.WARNING):
+        assert su.karantinaya_al(yol, logging.getLogger("d246")) is None
+    assert yol.exists() and _ozet(yol) == once[0], "üçüncü dosyada düşen kısmi karantinada ana DB YERİNE KONMADI"
+    assert wal.exists() and _ozet(wal) == once[1], "-wal karantinada kaldı (ana DB'den AYRILDI)"
+    assert _ozet(shm) == once[2], "özgün -shm değişti"
+    kalan = _karantina(app)
+    assert all(ad.startswith("pemf_treatment_history.db-shm.") for ad in kalan), f"geri alınmayan dosya: {kalan}"
+    assert "GERI ALINDI" in caplog.text and "2 dosya" in caplog.text, caplog.text[-800:]
+
+
 def test_KRITIK_kismi_karantina_geri_ALINAMAZSA_kurtarma_yonergesi_LOGLANIR(baglayici, tmp_path, monkeypatch, caplog):
     """Geri taşıma da düşerse operatöre hangi dosyanın nerede olduğu ve ne yapılacağı söylenir."""
     from database import sqlcipher_util as su
