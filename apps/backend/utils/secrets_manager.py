@@ -806,3 +806,23 @@ def set_secret(key: str, value: str) -> None:
     with _lock:
         doc = _load()
         _diske_yaz_sonra_onbellege(doc, section, key, _enc(value, critical=True) if (dpapi and value) else value)
+
+
+def set_secrets(degerler: dict) -> None:
+    """Birden çok sırrı TEK disk yazımında kaydeder — ya HEPSİ diske yazılır ya HİÇBİRİ (önbellek de değişmez).
+
+    ⚠️ 2-A inceleme A2-1.6 (D2.45 · Karar 6): felaket kurtarma `--yaz` zarftaki iki anahtarı TEK TEK `set_secret` ile
+    yazıyordu; ikinci yazım düşünce (AV / kilit) diskte yalnız `sqlcipher_key` kalıyor, sonraki açılış eksik
+    `patient_fernet_key`i YENİDEN ÜRETİYORDU → kurtarılan hasta alanları çözülemiyordu (ölçüldü).
+    Kapı: tests/test_alan_anahtari_ICE_AKTARMADA_alinmaz_A21.py::test_KRITIK_A16_…"""
+    global _cache
+    for key in degerler:
+        if key not in _REGISTRY:
+            raise KeyError("Bilinmeyen sır anahtarı: %s" % key)
+    with _lock:
+        yeni = copy.deepcopy(_load())
+        for key, value in degerler.items():
+            section, dpapi, *_ = _REGISTRY[key]
+            yeni.setdefault(section, {})[key] = _enc(value, critical=True) if (dpapi and value) else value
+        _save(yeni)
+        _cache = yeni

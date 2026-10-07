@@ -109,7 +109,8 @@ def test_KRITIK_A21_alan_anahtari_ALINAMAZKEN_hasta_DB_DOKUNULMADAN_acilmaz_sir_
 # ─────────────────────────── A2-1.3 · `PEMF_Backend.exe --kurtarma` (gerçek alt süreç) ───────────────────────────
 
 
-def _kurtarma_kos(tmp_path: Path, argv: list, sir: dict | None = None):
+def _kurtarma_kos(tmp_path: Path, argv: list, sir: dict | None = None, on_kod: str = ""):
+    """`on_kod`: ürün koşmadan ÖNCE çocukta çalışan kod (ör. sır deposu yazımını düşüren alt-kat taklidi)."""
     veri = tmp_path / "veri"
     app = veri / "PEMF_GUI"
     app.mkdir(parents=True)
@@ -127,8 +128,9 @@ def _kurtarma_kos(tmp_path: Path, argv: list, sir: dict | None = None):
     )
     kod = (
         f"import sys; sys.path.insert(0, r'{TESTLER}'); import alt_surec_ag_bekcisi as _ag; sys.path.remove(r'{TESTLER}'); "
-        f"import runpy; sys.path.insert(0, r'{KOK}'); sys.path.insert(0, r'{BACKEND}'); "
-        f"sys.argv = ['PEMF_Backend.exe'] + {argv!r}; "
+        f"import runpy; sys.path.insert(0, r'{KOK}'); sys.path.insert(0, r'{BACKEND}')\n"
+        f"{on_kod}"
+        f"sys.argv = ['PEMF_Backend.exe'] + {argv!r}\n"
         "rc = 0\n"
         "try:\n"
         "    runpy.run_path(r'apps/backend/backend_service.py', run_name='__main__')\n"
@@ -194,4 +196,41 @@ def test_KRITIK_A13_COZULEMEYEN_eski_sir_dururken_kurtarma_araci_ACILIR(tmp_path
     cikti = p.stdout + p.stderr
     assert "Zarf ACILDI" in cikti and "RC=0" in p.stdout, (
         f"çözülemeyen eski sır dururken kurtarma aracı AÇILAMADI: {cikti[-1500:]}"
+    )
+
+
+#: Sır deposunun `patient_fernet_key` taşıyan kaydını düşüren alt-kat taklidi (AV / kilit — `os.replace` PermissionError'ı).
+_ALAN_ANAHTARI_YAZIMI_DUSER = (
+    "from utils import secrets_manager as _sm\n"
+    "_o_save = _sm._save\n"
+    "def _save(doc):\n"
+    "    if (doc.get('auto') or {}).get('patient_fernet_key'):\n"
+    "        raise PermissionError(32, 'Dosya baska bir islem tarafindan kullaniliyor (taklit)')\n"
+    "    return _o_save(doc)\n"
+    "_sm._save = _save\n"
+)
+
+
+def test_KRITIK_A16_kurtarma_YAZ_yazim_DUSERSE_HICBIR_anahtar_yazilmaz_operator_UYARILIR(tmp_path):
+    """2-A inceleme A2-1.6 (D2.45 · Karar 6): `--yaz` zarftaki anahtarları TEK yazımda kaydetmeli. Eskiden tek tek
+    yazıyordu; `patient_fernet_key` kaydı düşünce `sqlcipher_key` diskte KALIYOR, araç ham istisnayla çıkıyor ve sonraki
+    açılış eksik alan anahtarını YENİDEN ÜRETİYORDU (zarftakinden farklı → kurtarılan hasta alanları çözülemez; yeniden
+    `--yaz` "zaten anahtar var" ile durur — ölçüldü). Artık hiçbir anahtar yazılmaz, araç rc 4 ile "servisi BAŞLATMAYIN" der.
+    MUTASYON: `--yaz` anahtarları yeniden tek tek `set_secret` ile yazar → KIRMIZI."""
+    z, kod = _zarf(tmp_path)
+    p, app = _kurtarma_kos(
+        tmp_path, ["--kurtarma", "--zarf", str(z), "--kod", kod, "--yaz"], on_kod=_ALAN_ANAHTARI_YAZIMI_DUSER
+    )
+    cikti = p.stdout + p.stderr
+    assert "RC=4" in p.stdout and "HICBIR anahtar yazilmadi" in cikti and "BASLATMAYIN" in cikti, (
+        f"yazım düştü ama araç yarım durumu ve yapılacağı SÖYLEMEDİ (ham istisna?): {cikti[-1500:]}"
+    )
+    assert "AG=[]" in p.stdout, f"kurtarma alt süreci AĞA çıkmayı denedi: {p.stdout[-500:]}"
+    assert "yazildi:" not in cikti, f"yazım düştüğü hâlde 'yazildi' basıldı: {cikti[-800:]}"
+    sir = app / "pemf_secrets.json"
+    auto = (json.loads(sir.read_text(encoding="utf-8")) if sir.exists() else {}).get("auto") or {}
+    yarim = [k for k in ("sqlcipher_key", "patient_fernet_key") if auto.get(k)]
+    assert yarim == [], (
+        f"yazım düştü ama sır deposunda YARIM anahtar kaldı: {yarim} -> sonraki açılış eksik alan anahtarını YENİDEN "
+        "ÜRETİR, kurtarılan hasta alanları çözülemez"
     )

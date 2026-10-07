@@ -133,8 +133,18 @@ def _restore(zarf: Path, kod: str, yaz: bool) -> int:
         print("      set PEMF_KURTARMA_USTUNE_YAZ=1   &&   python tools/kurtarma.py ... --yaz")
         return 3
 
-    for name, val in keys.items():
-        sm.set_secret(name, val)
+    # ⚠️ 2-A inceleme A2-1.6: anahtarlar TEK yazımda (ya hepsi ya hiçbiri). Eskiden tek tek yazılıyordu; ikinci yazım
+    # düşünce (AV / kilit) diskte yalnız `sqlcipher_key` kalıyor, araç ham istisnayla çıkıyor ve sonraki açılış eksik
+    # `patient_fernet_key`i YENİDEN ÜRETİYORDU → kurtarılan hasta alanları çözülemiyordu (ölçüldü).
+    try:
+        sm.set_secrets(keys)
+    except Exception as e:
+        print(f"YAZILAMADI ({type(e).__name__}: {e}) — HICBIR anahtar yazilmadi, sir deposu DEGISMEDI.")
+        print()
+        print("  Servisi BASLATMAYIN: eksik anahtar yeniden URETILIR ve kurtarilan veri acilamaz.")
+        print("  Sir dizinine erisimi (antivirus / izin) duzeltip AYNI komutu yeniden calistirin.")
+        return 4
+    for name in keys:
         print(f"  yazildi: {name}")
     print()
     print("Anahtarlar bu makinenin sir deposuna yazildi.")

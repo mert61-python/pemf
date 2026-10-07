@@ -46,6 +46,10 @@ def izole_sirlar(monkeypatch):
     store = {"sqlcipher_key": _KEY, "patient_fernet_key": "test-fernet-anahtari"}
     monkeypatch.setattr(sm, "get_secret", lambda k, default="", generate=True: store.get(k, default))
     monkeypatch.setattr(sm, "set_secret", lambda k, v: store.__setitem__(k, v))
+    # 2-A inceleme A2-1.6: kurtarma `--yaz` anahtarları TEK yazımda (`set_secrets`) kaydeder; sahte aynı API'yi taşır.
+    # Yazımın gerçekten "ya hepsi ya hiçbiri" olduğu alt katta (`_save`) ölçülür:
+    # test_alan_anahtari_ICE_AKTARMADA_alinmaz_A21.py::test_KRITIK_A16_…
+    monkeypatch.setattr(sm, "set_secrets", lambda degerler: store.update(degerler))
     return store
 
 
