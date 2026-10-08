@@ -337,8 +337,17 @@ class AiGecmisiKarisimi:
                     _hasta_kosul.append("patient_uuid = ?")
                     _hasta_param.append(str(patient_uuid))
                 if patient_name:
-                    _hasta_kosul.append("patient_name LIKE ?")
-                    _hasta_param.append(f"%{patient_name}%")
+                    # ⚠️ D2.18 (B-3.32): ad dalı TAM ad (alt-dize DEĞİL — "Mia" sorgusu "Miami"yi getiriyordu) ve kimlikle
+                    # birlikte verildiğinde YALNIZ KİMLİKSİZ eski kayıtlar: başka hayvanın (aynı adlı) kimlikli kaydı bu
+                    # hastanın listesine girmesin (ölçüldü — "kaldığın yerden" şeridi yanlış hastanın analizini gösteriyordu).
+                    # Yalnız ad verilen (eski istemci) sorgu tam adla tüm kayıtları bulur. Kapı:
+                    # tests/test_ai_gecmisi_AD_SUZGECI_kimliksiz_ve_TAM_D218.py.
+                    _hasta_kosul.append(
+                        "(COALESCE(patient_uuid,'') = '' AND TRIM(patient_name) = ?)"
+                        if patient_uuid
+                        else "TRIM(patient_name) = ?"
+                    )
+                    _hasta_param.append(str(patient_name).strip())
                 if _hasta_kosul:
                     clauses.append("(" + " OR ".join(_hasta_kosul) + ")")
                     params.extend(_hasta_param)

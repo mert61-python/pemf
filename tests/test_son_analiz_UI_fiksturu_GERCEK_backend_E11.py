@@ -101,13 +101,16 @@ def test_KRITIK_arayuz_fiksturu_GERCEK_backend_yanitlariyla_AYNI(tmp_path, monke
     )
 
 
-def test_KARSIT_fikstur_kusuru_TASIR_B_icin_sorgu_A_nin_analizini_doner():
-    """Fikstür kusuru taşımalı (yoksa arayüz kapısı kör): B'nin şerit sorgusu (ad 'Mia' VEYA kimlik B) A'nın analizini döndürür —
-    arayüzün ad yedeği onu B'ye bağlıyordu. Hastalar ekranının sorgusu (`?limit=200`, süzgeçsiz) A'nın kaydını HER ZAMAN taşır."""
+def test_KARSIT_fikstur_kusuru_TASIR_Hastalar_sorgusu_A_nin_analizini_tasir_B_seridi_ARKA_UCTA_suzulur():
+    """Fikstür kusuru taşımalı (yoksa arayüz kapısı kör): Hastalar ekranının sorgusu (`?limit=200`, süzgeçsiz) A'nın kimlikli
+    'Mia' kaydını taşır — arayüzün ad yedeği onu B'nin kartına bağlıyordu. D2.18'den (2-C) sonra B'nin şerit sorgusu (ad 'Mia'
+    + kimlik B) arka uçta YALNIZ kimliksiz + tam adlı kayıtları getirir: A'nın da Miami'nin de analizi GELMEZ (D2.18 öncesi
+    fikstürde ikisi de geliyordu — ölçüldü). Şerit kolu bu yüzden iki katmanla korunur (arka uç + arayüz A-62)."""
     veri = json.loads(_FIKSTUR.read_text(encoding="utf-8"))
     tum = veri["/ai/log?limit=200"]["data"]
     assert ("kimlik-A", "Mia", "A-ANALIZI") in [
         (k["patient_uuid"], k["patient_name"], k["result_summary"]) for k in tum
     ]
-    b = veri["/ai/log?limit=20&patient_name=Mia&patient_id=kimlik-B"]["data"]
-    assert ("kimlik-A", "A-ANALIZI") in [(k["patient_uuid"], k["result_summary"]) for k in b]
+    assert veri["/ai/log?limit=20&patient_name=Mia&patient_id=kimlik-B"]["data"] == []
+    c = veri["/ai/log?limit=20&patient_name=Miami&patient_id=kimlik-C"]["data"]
+    assert [k["result_summary"] for k in c] == ["C-ANALIZI"]
