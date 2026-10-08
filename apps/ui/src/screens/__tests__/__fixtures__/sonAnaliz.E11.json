@@ -1,0 +1,205 @@
+{
+  "/patients": {
+    "status": "success",
+    "data": [
+      {
+        "id": "kimlik-C",
+        "name": "Miami",
+        "species": "Kedi",
+        "breed": "",
+        "age": "",
+        "weight": "",
+        "owner": "",
+        "vet_contact": "",
+        "owner_email": "",
+        "operator_email": "sahip@ev.com",
+        "last_treatment_at": null,
+        "anonymized": 0,
+        "created_at": "2026-10-01 10:00:00",
+        "updated_at": "2026-10-01 10:00:00",
+        "sync_status": 0
+      },
+      {
+        "id": "kimlik-B",
+        "name": "Mia",
+        "species": "Köpek",
+        "breed": "",
+        "age": "",
+        "weight": "",
+        "owner": "",
+        "vet_contact": "",
+        "owner_email": "",
+        "operator_email": "sahip@ev.com",
+        "last_treatment_at": null,
+        "anonymized": 0,
+        "created_at": "2026-10-01 10:00:00",
+        "updated_at": "2026-10-01 10:00:00",
+        "sync_status": 0
+      },
+      {
+        "id": "kimlik-A",
+        "name": "Mia",
+        "species": "Kedi",
+        "breed": "",
+        "age": "",
+        "weight": "",
+        "owner": "",
+        "vet_contact": "",
+        "owner_email": "",
+        "operator_email": "sahip@ev.com",
+        "last_treatment_at": null,
+        "anonymized": 0,
+        "created_at": "2026-10-01 10:00:00",
+        "updated_at": "2026-10-01 10:00:00",
+        "sync_status": 0
+      }
+    ],
+    "total": 3
+  },
+  "/ai/log?limit=200": {
+    "status": "success",
+    "data": [
+      {
+        "id": 2,
+        "created_at": "2026-10-01 10:00:00",
+        "mode": "",
+        "module_id": "landmark",
+        "module_label": "Ağrı Analizi (FGS)",
+        "patient_name": "Miami",
+        "patient_uuid": "kimlik-C",
+        "operator_email": "sahip@ev.com",
+        "input_type": "",
+        "result_summary": "C-ANALIZI",
+        "result_detail": {},
+        "confidence": null,
+        "review_status": "",
+        "review_note": "",
+        "reviewed_by": "",
+        "reviewed_at": ""
+      },
+      {
+        "id": 1,
+        "created_at": "2026-10-01 10:00:00",
+        "mode": "",
+        "module_id": "landmark",
+        "module_label": "Ağrı Analizi (FGS)",
+        "patient_name": "Mia",
+        "patient_uuid": "kimlik-A",
+        "operator_email": "sahip@ev.com",
+        "input_type": "",
+        "result_summary": "A-ANALIZI",
+        "result_detail": {},
+        "confidence": null,
+        "review_status": "",
+        "review_note": "",
+        "reviewed_by": "",
+        "reviewed_at": ""
+      }
+    ]
+  },
+  "/ai/log?limit=20&patient_name=Mia&patient_id=kimlik-A": {
+    "status": "success",
+    "data": [
+      {
+        "id": 2,
+        "created_at": "2026-10-01 10:00:00",
+        "mode": "",
+        "module_id": "landmark",
+        "module_label": "Ağrı Analizi (FGS)",
+        "patient_name": "Miami",
+        "patient_uuid": "kimlik-C",
+        "operator_email": "sahip@ev.com",
+        "input_type": "",
+        "result_summary": "C-ANALIZI",
+        "result_detail": {},
+        "confidence": null,
+        "review_status": "",
+        "review_note": "",
+        "reviewed_by": "",
+        "reviewed_at": ""
+      },
+      {
+        "id": 1,
+        "created_at": "2026-10-01 10:00:00",
+        "mode": "",
+        "module_id": "landmark",
+        "module_label": "Ağrı Analizi (FGS)",
+        "patient_name": "Mia",
+        "patient_uuid": "kimlik-A",
+        "operator_email": "sahip@ev.com",
+        "input_type": "",
+        "result_summary": "A-ANALIZI",
+        "result_detail": {},
+        "confidence": null,
+        "review_status": "",
+        "review_note": "",
+        "reviewed_by": "",
+        "reviewed_at": ""
+      }
+    ]
+  },
+  "/ai/log?limit=20&patient_name=Mia&patient_id=kimlik-B": {
+    "status": "success",
+    "data": [
+      {
+        "id": 2,
+        "created_at": "2026-10-01 10:00:00",
+        "mode": "",
+        "module_id": "landmark",
+        "module_label": "Ağrı Analizi (FGS)",
+        "patient_name": "Miami",
+        "patient_uuid": "kimlik-C",
+        "operator_email": "sahip@ev.com",
+        "input_type": "",
+        "result_summary": "C-ANALIZI",
+        "result_detail": {},
+        "confidence": null,
+        "review_status": "",
+        "review_note": "",
+        "reviewed_by": "",
+        "reviewed_at": ""
+      },
+      {
+        "id": 1,
+        "created_at": "2026-10-01 10:00:00",
+        "mode": "",
+        "module_id": "landmark",
+        "module_label": "Ağrı Analizi (FGS)",
+        "patient_name": "Mia",
+        "patient_uuid": "kimlik-A",
+        "operator_email": "sahip@ev.com",
+        "input_type": "",
+        "result_summary": "A-ANALIZI",
+        "result_detail": {},
+        "confidence": null,
+        "review_status": "",
+        "review_note": "",
+        "reviewed_by": "",
+        "reviewed_at": ""
+      }
+    ]
+  },
+  "/ai/log?limit=20&patient_name=Miami&patient_id=kimlik-C": {
+    "status": "success",
+    "data": [
+      {
+        "id": 2,
+        "created_at": "2026-10-01 10:00:00",
+        "mode": "",
+        "module_id": "landmark",
+        "module_label": "Ağrı Analizi (FGS)",
+        "patient_name": "Miami",
+        "patient_uuid": "kimlik-C",
+        "operator_email": "sahip@ev.com",
+        "input_type": "",
+        "result_summary": "C-ANALIZI",
+        "result_detail": {},
+        "confidence": null,
+        "review_status": "",
+        "review_note": "",
+        "reviewed_by": "",
+        "reviewed_at": ""
+      }
+    ]
+  }
+}

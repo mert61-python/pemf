@@ -169,7 +169,7 @@ export function hastaSeridi(): HTMLElement | null {
 }
 
 /** PatientGate'ten hasta seç (kapı ya da üst şerit — GERÇEK akış); liste gelene dek bekler. */
-export async function hastaSec(s: Sahne, ad: string) {
+export async function hastaSec(s: Sahne, ad: string, tur?: string) {
   const serit = hastaSeridi();
   if (serit) {
     await act(async () => { serit.click(); });
@@ -183,7 +183,17 @@ export async function hastaSec(s: Sahne, ad: string) {
     await s.bosalt();
   }
   for (let i = 0; i < 20 && !s.varMi(`Seç: ${ad}`); i++) await s.bosalt();
-  await s.tikla(`Seç: ${ad}`);
+  if (!tur) {
+    await s.tikla(`Seç: ${ad}`);
+    return;
+  }
+  // Aynı adlı birden çok hasta: satırın görünen türüne göre seç (seçici satırı "ad + tür" gösterir).
+  const satir = Array.from(document.querySelectorAll(`[aria-label="Seç: ${ad}"]`)).find((e) =>
+    (e.textContent || "").includes(tur),
+  ) as HTMLElement | undefined;
+  if (!satir) throw new Error(`"${ad}" (${tur}) secici satiri yok. Govde: ${document.body.textContent?.slice(0, 300)}`);
+  await act(async () => { satir.click(); });
+  await s.bosalt();
 }
 
 /** Ürünün `Button`'ı AYNI etiketin 400 ms içindeki ikinci basışını yutar (çift-tık koruması, `Date.now`). Aynı düğmeye

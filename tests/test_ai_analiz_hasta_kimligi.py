@@ -249,18 +249,21 @@ def test_KRITIK_arayuz_patient_id_GONDERIYOR():
 
 
 @pytest.mark.skipif(not (_PF / "utils").exists(), reason="apps/ui/ kaynak agaci yok")
-def test_KRITIK_AD_YEDEGI_kaldirilmadi():
-    """⚠️ Ad yedeği KALDIRILAMAZ: taşıma, adı birden çok hastaya çözülen kayıtları BİLEREK
-    kimliksiz bıraktı. Yedek kaldırılırsa o kayıtlar ekrandan SESSİZCE kaybolur.
+def test_KRITIK_A62_kimlikli_hastada_AD_YEDEGI_YOK():
+    """⚠️ D2.E11 · SAHİP KARARI A-62 (2-C) bu pinin ESKİ iddiasını ("ad yedeği KALDIRILAMAZ") BİLİNÇLİ olarak tersine çevirdi:
+    kimliği olan hasta yalnız kimliğiyle aranır — ad yedeği aynı adlı ikinci hayvana birincinin analizini gösteriyordu
+    (İG-6.59, ölçüldü). Bilinen bedel: kimliksiz eski kayıtlar kimlikli hastanın kart/şeridinde görünmez (AI Geçmişi'nde kalır).
+    Davranış kapısı: `apps/ui/src/screens/__tests__/sonAnalizAdYedegi.E11.A62.web.test.tsx` (gerçek backend yanıtlarıyla).
 
-    MUTASYON: `hastaAnahtarlari`ndan `adAnahtari(...)`yı çıkar → KIRMIZI.
+    MUTASYON: `hastaAnahtarlari`na ad yedeğini geri koy (`[kimlik, ad]`) → KIRMIZI.
     """
     from c_soyucu import c_soy
 
     src = c_soy((_PF / "utils" / "sonAnaliz.ts").read_text(encoding="utf-8"))
-    assert "kimlikAnahtari(hasta?.id), adAnahtari(hasta?.name)" in src, (
-        "kimlik->ad yedek sirasi bozulmus: kimliksiz ESKI kayitlar ekrandan kaybolur"
+    assert "kimlikAnahtari(hasta?.id), adAnahtari(hasta?.name)" not in src, (
+        "kimlikli hastada AD YEDEGI geri geldi (A-62)"
     )
+    assert "return kimlik ? [kimlik] : [adAnahtari(hasta?.name)]" in src, "hasta anahtarlari A-62 kuralini uygulamiyor"
 
 
 # ============================================================================

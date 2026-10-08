@@ -181,15 +181,15 @@ test("KRITIK: AYNI ADLI iki hayvan KIMLIKLE ayrisir", () => {
   expect(hastaninSonAnalizi(harita, { id: "kedi-B", name: "Mia" })?.result_summary).toBe("B");
 });
 
-test("KRITIK: KIMLIKSIZ eski kayit AD yedegiyle BULUNUR", () => {
-  // ⚠️ Taşıma, adı birden çok hastaya çözülen kayıtları BİLEREK kimliksiz bıraktı.
-  // Ad yedeği kaldırılırsa o kayıtlar ekrandan SESSİZCE kaybolur.
-  //
-  // MUTASYON: `hastaAnahtarlari`ndan `adAnahtari(...)`yı çıkar → KIRMIZI.
+test("KRITIK (A-62): KIMLIKSIZ eski kayit KIMLIKLI hastada GORUNMEZ; kimliksiz hasta onu adla BULUR", () => {
+  // ⚠️ D2.E11 · SAHİP KARARI A-62 (2-C) bu testin eski iddiasını ("ad yedeği kaldırılamaz") BİLİNÇLİ olarak tersine çevirdi:
+  // ad yedeği aynı adlı ikinci hayvana birincinin analizini gösteriyordu (İG-6.59, ölçüldü). Bilinen bedel: kimliksiz eski
+  // kayıt kimlikli hastanın kart/şeridinde görünmez — AI Geçmişi'nde kalır. Kapı: screens/__tests__/sonAnalizAdYedegi.E11.A62.web.test.tsx.
   const harita = hastayaGoreSonAnaliz([
     { id: 1, patient_name: "Mia", created_at: "2026-09-01T10:00:00", result_summary: "ESKI" },
   ]);
-  expect(hastaninSonAnalizi(harita, { id: "kedi-A", name: "Mia" })?.result_summary).toBe("ESKI");
+  expect(hastaninSonAnalizi(harita, { id: "kedi-A", name: "Mia" })).toBeUndefined();
+  expect(hastaninSonAnalizi(harita, { name: "Mia" })?.result_summary).toBe("ESKI");
 });
 
 test("KRITIK: KIMLIK adin ONUNE gecer", () => {
@@ -207,6 +207,8 @@ test("bos kimlik ANAHTAR uretmez (ad yedegine duser)", () => {
   expect(kimlikAnahtari(null)).toBe("");
   expect(hastaAnahtarlari({ id: "", name: "Mia" })).toEqual([adAnahtari("Mia")]);
   expect(hastaAnahtarlari({ id: "k1", name: "" })).toEqual([kimlikAnahtari("k1")]);
+  // A-62: kimliği olan hastada AD YEDEĞİ yok.
+  expect(hastaAnahtarlari({ id: "k1", name: "Mia" })).toEqual([kimlikAnahtari("k1")]);
 });
 
 test("KRITIK: kimlik anahtari ADLA CARPISMAZ", () => {

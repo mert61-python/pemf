@@ -10,10 +10,12 @@
  * ⚠️ YENİ BACKEND YOK: `/api/ai/log` zaten hasta adı + tarih + özet döndürüyor. Ev sahibine
  * yeni bir uç açmak, olmayan bir veri modeli icat etmek olurdu.
  *
- * ⚠️ EŞLEME HASTA ADIYLA: `ai_analyses` tablosunda hasta KİMLİĞİ yok, ADI var. Bu bir
- * sınırlamadır ve burada AÇIKÇA söylenir: aynı adlı iki hayvan varsa analizler karışır.
- * Kimliğe geçmek backend + migrasyon işidir; o yapılana kadar ad bazlı eşleme, hiç
- * göstermemekten iyidir (ev sahibi profilinde zaten birkaç hayvan olur).
+ * ⚠️ EŞLEME (D2.E11 · SAHİP KARARI A-62, 2-C): kayıt TEK anahtara yazılır — kimlikliyse KİMLİĞE, kimliksizse ADA; kimliği olan
+ * hasta YALNIZ kimliğiyle aranır (AD YEDEĞİ YOK). Eskiden kimlikli kayıt ad anahtarına da yazılıyor ve kimlik bulunamayınca
+ * ada düşülüyordu → aynı adlı ikinci hayvan (Mia/Köpek) birincinin (Mia/Kedi) analizini Hastalar kartında ve "kaldığın
+ * yerden" şeridinde görüyordu (ölçüldü, İG-6.59). Bilinen bedel (A-62): kimliksiz ESKİ kayıtlar kimlikli hastanın kartında
+ * ve şeridinde görünmez — AI Geçmişi'nde kalır. Kimliği olmayan hasta (eski istemci) adla eşlenmeye devam eder.
+ * Kapı: screens/__tests__/sonAnalizAdYedegi.E11.A62.web.test.tsx.
  */
 
 import { aramaNormalize } from "@/utils/aramaNormalize";
@@ -27,8 +29,8 @@ export interface AnalizKaydi {
    * Hastanın OPAK KİMLİĞİ (2026-09-12 taşıması). Eşlemede ADIN ÖNÜNE geçer.
    *
    * ⚠️ Eski kayıtlarda BOŞTUR (taşıma yalnız adı TEK bir hastaya çözülenleri doldurur —
-   * aynı adlı iki hayvan varsa tahmin EDİLMEZ). Bu yüzden eşleme kimlik→ad sırasıyla
-   * çalışır; ad yedeği kaldırılırsa eski kayıtlar EKRANDAN KAYBOLUR.
+   * aynı adlı iki hayvan varsa tahmin EDİLMEZ). A-62: böyle bir kayıt yalnız AD anahtarına yazılır; kimlikli hasta onu
+   * görmez (bilinen bedel — AI Geçmişi'nde kalır).
    */
   patient_uuid?: string | null;
   /**
@@ -61,13 +63,9 @@ export function hastayaGoreSonAnaliz(kayitlar: readonly AnalizKaydi[] | null | u
     if (!mevcut || dahaYeni(k, mevcut)) harita.set(anahtar, k);
   };
   for (const k of kayitlar ?? []) {
-    // ⚠️ HER İKİ ANAHTAR DA YAZILIR (kimlik VE ad):
-    //  · Kimlik → 2026-09-12 taşımasından sonraki kayıtlar; aynı adlı iki hayvanı AYIRIR.
-    //  · Ad     → kimliği olmayan ESKİ kayıtlar; taşıma belirsiz adları BİLEREK doldurmadı.
-    // İkisini birden yazmak, `hastaAnahtarlari` ile arayan tarafın önce kimliği deneyip
-    // bulamazsa ada düşmesini sağlar — geçmiş taşıma günü ikiye bölünmüş görünmez.
-    koy(kimlikAnahtari(k?.patient_uuid), k);
-    koy(adAnahtari(k?.patient_name), k);
+    // ⚠️ A-62: TEK anahtar — kimlikli kayıt yalnız KİMLİĞE (aynı adlı başka hayvanın ad aramasına SIZMAZ), kimliksiz eski
+    // kayıt yalnız ADA. Eskiden ikisine birden yazılıyordu (bkz. dosya başı).
+    koy(kayitHastaAnahtari(k), k);
   }
   return harita;
 }
@@ -88,17 +86,19 @@ export function kimlikAnahtari(kimlik: string | null | undefined): string {
 }
 
 /**
- * Bir hasta için DENENECEK anahtarlar — SIRA ÖNEMLİ: önce kimlik, sonra ad.
+ * Bir hasta için DENENECEK anahtarlar.
  *
- * ⚠️ AD YEDEĞİ KALDIRILAMAZ: taşıma, adı birden çok hastaya çözülen kayıtları BİLEREK
- * kimliksiz bıraktı (yanlış kimlik yazmak geri alınamaz bir karışma olurdu). Yedek
- * kaldırılırsa o kayıtlar ekrandan sessizce kaybolur.
+ * ⚠️ A-62 (sahip kararı, 2-C): kimliği olan hasta YALNIZ kimliğiyle aranır — AD YEDEĞİ YOK. Eskiden kimlik bulunamayınca ada
+ * düşülüyordu ("ad yedeği kaldırılamaz" gerekçesi: taşımanın bilerek kimliksiz bıraktığı eski kayıtlar ekrandan kaybolmasın);
+ * bu, aynı adlı ikinci hayvana birincinin analizini gösteriyordu. Sahip, eski kayıtların kart/şeritte görünmemesini (AI
+ * Geçmişi'nde kalırlar) yanlış hastaya atfa tercih etti. Kimliği olmayan hasta adla aranır.
  */
 export function hastaAnahtarlari(hasta: { id?: string | null; name?: string | null }): string[] {
-  return [kimlikAnahtari(hasta?.id), adAnahtari(hasta?.name)].filter(Boolean);
+  const kimlik = kimlikAnahtari(hasta?.id);
+  return kimlik ? [kimlik] : [adAnahtari(hasta?.name)].filter(Boolean);
 }
 
-/** Haritadan bir hastanın son analizi — önce kimlik, sonra ad. */
+/** Haritadan bir hastanın son analizi — kimliği varsa YALNIZ kimlikle (A-62), yoksa adla. */
 export function hastaninSonAnalizi(
   harita: Map<string, AnalizKaydi>,
   hasta: { id?: string | null; name?: string | null },
