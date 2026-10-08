@@ -646,12 +646,16 @@ async def recovery_ack(request: Request):
     try:
         from database.treatment_history_db import get_treatment_db
 
-        tdb = get_treatment_db(Path(_api._app_data_dir()))
-        tdb._set_system_setting(
-            _KURTARMA_ONAY_ANAHTARI,
-            datetime.now().isoformat(timespec="seconds"),
-            "Operator kurtarma kodunu makine disina kopyaladigini onayladi",
-        )
+        def _yaz():
+            tdb = get_treatment_db(Path(_api._app_data_dir()))
+            tdb._set_system_setting(
+                _KURTARMA_ONAY_ANAHTARI,
+                datetime.now().isoformat(timespec="seconds"),
+                "Operator kurtarma kodunu makine disina kopyaladigini onayladi",
+            )
+
+        # C2-4.1 (Ö.4-Y8): DB yazımı olay döngüsünde DEĞİL — tedavi DB'si kilitliyken döngü donup ACİL DURDUR beklemesin.
+        await asyncio.to_thread(_yaz)
     except Exception:
         logging.getLogger("system_router").exception("kurtarma onayi yazilamadi")
         raise HTTPException(status_code=500, detail="Onay kaydedilemedi.")
@@ -687,12 +691,16 @@ async def retention_durumu(request: Request):
     from servers.auth import enforce_privileged
 
     enforce_privileged(request)
-    try:
+
+    def _oku():
         db = _pii_ayar_db()
         secilen = db.pii_suresi_oku()
         etkin = secilen if secilen is not None else int(os.getenv("PEMF_RETAIN_PII_DAYS", _PII_VARSAYILAN_GUN))
-        onayli = db.pii_onayi_var_mi()
-        bekleyen = db.redaksiyon_bekleyen_sayisi(etkin) if etkin > 0 else 0
+        return secilen, etkin, db.pii_onayi_var_mi(), (db.redaksiyon_bekleyen_sayisi(etkin) if etkin > 0 else 0)
+
+    try:
+        # C2-4.1 (Ö.4-Y8): DB okumaları olay döngüsünde DEĞİL (tedavi DB'si kilitliyken döngü donup ACİL DURDUR beklemesin).
+        secilen, etkin, onayli, bekleyen = await asyncio.to_thread(_oku)
         return {
             "days": etkin,
             "configured": secilen is not None,
@@ -721,7 +729,8 @@ async def denetim_olaylari(request: Request, limit: int = 200, event_type: str =
     from servers.auth import enforce_privileged
 
     enforce_privileged(request)
-    try:
+
+    def _oku():
         db = _pii_ayar_db()
         n = max(1, min(int(limit), 1000))
         return {
@@ -729,6 +738,10 @@ async def denetim_olaylari(request: Request, limit: int = 200, event_type: str =
             "total": db.denetim_sayisi(),
             "events": db.denetim_oku(n, (event_type or "").strip()[:64]),
         }
+
+    try:
+        # C2-4.1 (Ö.4-Y8): DB okuması olay döngüsünde DEĞİL (tedavi DB'si kilitliyken döngü donup ACİL DURDUR beklemesin).
+        return await asyncio.to_thread(_oku)
     except Exception:
         logger.exception("denetim izi okunamadi")
         raise HTTPException(status_code=500, detail="Denetim izi okunamadı.")

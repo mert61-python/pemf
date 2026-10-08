@@ -3925,7 +3925,13 @@ async def start_session(payload: SessionStartPayload, request: Request):
             # P1 audit 2026-06-28: get_treatment_db() ARGUMANSIZ cagriliyordu (imza app_data_dir
             # zorunlu) → TypeError → except yutuyordu → session_started AUDIT IZI HIC yazilmazdi.
             # _get_treatment_db() sarmalayicisi app_data_dir gecer (dosyadaki diger cagrilarla tutarli).
-            _get_treatment_db().record_session_event(
+            # ⚠️ C2-4.1 (2-C incelemesi · Ö.4-Y8): bu yazım OLAY DÖNGÜSÜNDE koşuyordu; tedavi DB'si kilitliyken döngü
+            # `busy_timeout` kadar donuyor, ACİL DURDUR bekliyordu (ölçüldü: 4,4 sn). Döngüde FIFO işçide, en çok 0,25 sn
+            # beklenerek (kayıt kaybolmaz; yeni `await` noktası YOK — başlatma akışının atomikliği değişmez).
+            from utils import dongu_disi_yazim as _dongu_disi
+
+            _dongu_disi.calistir(
+                _get_treatment_db().record_session_event,
                 None,
                 "session_started",
                 payload={
@@ -3942,6 +3948,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
                     "coil_ids": coil_ids,
                 },
                 severity="info",
+                ad="session_started izi",
             )
         except Exception:
             logging.getLogger(__name__).warning("Seans başlangıç audit kaydı yapılamadı.", exc_info=True)
@@ -6220,7 +6227,8 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
     with _session_lock:
         _seans_suruyor = bool(_active_session.get("is_active"))
     n = await asyncio.to_thread(db.clear_ai_analyses, op, _seans_suruyor, _sahipsiz_dahil, _kayitli_set)
-    _vacuum_bekliyor = bool(getattr(db, "vacuum_bekliyor_mu", lambda: False)())
+    # C2-4.1: DB okuması olay döngüsünde değil (tedavi DB'si kilitliyken döngüyü dondurmasın — Ö.4-Y8).
+    _vacuum_bekliyor = bool(await asyncio.to_thread(getattr(db, "vacuum_bekliyor_mu", lambda: False)))
 
     if n < 0:
         _iz.kimlikli_yaz(

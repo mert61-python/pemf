@@ -52,7 +52,29 @@ def set_treatment_db_getter(fn) -> None:
 
 def _begin_coil_run(coil_id, freq, duty, phase, intensity, hw_type):
     """Aktif seans (db_session_id) varsa bir bobin calismasini DB'de baslat ve run-map'e koy.
-    Ayni coil zaten acik run'daysa once eskisini _finish_coil_run ile kapatir. Hepsi best-effort."""
+    Ayni coil zaten acik run'daysa once eskisini _finish_coil_run ile kapatir. Hepsi best-effort.
+
+    ⚠️ C2-4.1 (2-C incelemesi · Ö.4-Y8): bobin kontrol uçları (async) bunu OLAY DÖNGÜSÜNDE çağırır; tedavi DB'si başka bir
+    yazıcı tarafından kilitliyken INSERT döngüyü `busy_timeout` kadar donduruyor, sonraki ACİL DURDUR'un STOP'u donanım
+    kuyruğuna 9,8 sn gecikmeyle gidiyordu (ölçüldü). DB işi `utils.dongu_disi_yazim.calistir` ile (döngüde FIFO işçi, en çok
+    0,25 sn beklenir; döngü dışında eşzamanlı — eski davranış). Başlangıç damgası ÇAĞRI ANINDA alınır (kuyrukta bekleme
+    süresi doz kaydına kaymasın — D2.40). Kapı: tests/test_kayit_DB_KILITLIYKEN_dongu_yazimi_ACIL_DURDUR_BEKLEMEZ_C2_4_1.py"""
+    from utils import dongu_disi_yazim
+
+    return dongu_disi_yazim.calistir(
+        _begin_coil_run_govde,
+        coil_id,
+        freq,
+        duty,
+        phase,
+        intensity,
+        hw_type,
+        _baslangic=(time.time(), time.monotonic()),
+        ad=f"bobin kosu kaydi baslat (bobin {coil_id})",
+    )
+
+
+def _begin_coil_run_govde(coil_id, freq, duty, phase, intensity, hw_type, _baslangic=None):
     try:
         coil_id = int(coil_id)
     except Exception:
@@ -75,7 +97,7 @@ def _begin_coil_run(coil_id, freq, duty, phase, intensity, hw_type):
             # ⚠️ D2.40 (B-1.31): koşu süresi MONOTONİK saatle — başlangıcın duvar + monotonik damgası birlikte saklanır;
             # bitişte `bitiş = başlangıç_duvar + monotonik geçen` (duration = ended - started → monotonik süre). Eskiden iki
             # duvar saati farkıydı: koşu sırasında saat −2 sa düzeltilince doz kaydına −7170 sn yazılıyordu (ölçüldü).
-            _t0 = (time.time(), time.monotonic())
+            _t0 = _baslangic or (time.time(), time.monotonic())
             run_id = db.start_coil_run(
                 sid,
                 coil_id,
@@ -113,7 +135,22 @@ def _finish_coil_run(coil_id, only_run_id=None):
     ⚠️ only_run_id (denetim 2026-08-24, D2): verilirse SADECE o an acik run bu run_id ise kapatir.
     NACK bekcisi bunu kullanir: ayni bobine hizli cift-start'ta araya giren KABUL edilmis bir start
     run'i devraldiysa, GECIKEN eski NACK o CALISAN run'i DUSURMEMELI (command/run eslemesi). None =
-    kosulsuz kapat (stop / begin-ici eski-run kapatma / seans finalize — mevcut davranis)."""
+    kosulsuz kapat (stop / begin-ici eski-run kapatma / seans finalize — mevcut davranis).
+
+    ⚠️ C2-4.1: `_begin_coil_run` ile aynı — döngüde FIFO işçide (başlatmadan SONRA koşar: sıra korunur), bitiş damgası ÇAĞRI
+    ANINDA alınır."""
+    from utils import dongu_disi_yazim
+
+    return dongu_disi_yazim.calistir(
+        _finish_coil_run_govde,
+        coil_id,
+        only_run_id,
+        _bitis_an=(time.time(), time.monotonic()),
+        ad=f"bobin kosu kaydi bitir (bobin {coil_id})",
+    )
+
+
+def _finish_coil_run_govde(coil_id, only_run_id=None, _bitis_an=None):
     try:
         coil_id = int(coil_id)
     except Exception:
@@ -130,7 +167,8 @@ def _finish_coil_run(coil_id, only_run_id=None):
         with _coil_run_stats_lock:
             _t0 = (_coil_run_stats.get(run_id) or {}).get("saat0")
         # D2.40: bitiş = başlangıç duvar damgası + MONOTONİK geçen süre (saat adımından bağımsız); damga yoksa duvar saati.
-        _bitis = (_t0[0] + max(0.0, time.monotonic() - _t0[1])) if _t0 else time.time()
+        _an = _bitis_an or (time.time(), time.monotonic())
+        _bitis = (_t0[0] + max(0.0, _an[1] - _t0[1])) if _t0 else _an[0]
         if db is not None:
             try:
                 db.end_coil_run(run_id, _bitis)

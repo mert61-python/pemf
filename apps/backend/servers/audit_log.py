@@ -55,23 +55,32 @@ def yaz(
     outcome: str = "ok",
     detail=None,
 ) -> bool:
-    """Denetim olayını yaz. ASLA istisna atmaz."""
+    """Denetim olayını yaz. ASLA istisna atmaz.
+
+    ⚠️ C2-4.1 (2-C incelemesi · Ö.4-Y8): async uçlar bunu OLAY DÖNGÜSÜNDE çağırır; tedavi DB'si başka bir yazıcı tarafından
+    kilitliyken INSERT `busy_timeout` (5 sn) kadar bekliyor, döngü donuyor ve ACİL DURDUR bekliyordu (ölçüldü: 9,8 sn; STOP
+    donanım kuyruğuna 4,4 sn). Yazım `utils.dongu_disi_yazim.calistir` ile: döngüde tek işçili FIFO yürütücüde, en çok 0,25 sn
+    beklenerek (normal yükte yanıt yine yazımdan SONRA döner; DB meşgulse iz işçide tamamlanır — kaybolmaz). Döngü dışından
+    çağrı eskisi gibi eşzamanlı. Dönüş: yazıldı → True, yazılamadı → False, arka planda sürüyor → True."""
     try:
         db = _db()
         if db is None:
             logger.error("DENETIM IZI YAZILAMADI (%s): tedavi DB'si yok", event_type)
             return False
-        return bool(
-            db.denetim_yaz(
-                event_type,
-                operator_email=operator_email or "",
-                client_ip=istemci_ip(request) if request is not None else "",
-                scope=scope,
-                item_count=item_count,
-                outcome=outcome,
-                detail=detail,
-            )
+        from utils import dongu_disi_yazim
+
+        sonuc = dongu_disi_yazim.calistir(
+            db.denetim_yaz,
+            event_type,
+            operator_email=operator_email or "",
+            client_ip=istemci_ip(request) if request is not None else "",
+            scope=scope,
+            item_count=item_count,
+            outcome=outcome,
+            detail=detail,
+            ad=f"denetim izi ({event_type})",
         )
+        return True if sonuc is None else bool(sonuc)
     except Exception:
         logger.exception("denetim izi yazilamadi (%s)", event_type)
         return False
