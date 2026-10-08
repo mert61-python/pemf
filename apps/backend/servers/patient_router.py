@@ -113,21 +113,33 @@ def remove_patient(patient_id: str, request: Request):
     # Kapı: tests/test_silme_SAHIPLIK_jetondan_D272_Y92.py.
     from servers.silme_yetkisi import sahiplik_kapisi
 
-    sahiplik_kapisi(request, db.operator_sahipleri([patient_id]), olay="patient.delete", scope=f"id={patient_id}")
-    success = db.delete_patient(patient_id)
+    sahipler = db.operator_sahipleri([patient_id])
+    sahiplik_kapisi(request, sahipler, olay="patient.delete", scope=f"id={patient_id}")
     # Denetim izi (2026-08-09, Tier 3): hasta kaydı silmek geri dönüşsüzdür ve KVKK "unutulma
     # hakkı"nın karşılığıdır — talebin yerine getirildiğinin kanıtı da gerekir. Hasta ADI
     # YAZILMAZ; iz, sildiği verinin ikinci bir kopyası olamaz.
     from servers import audit_log as _iz
 
+    # ⚠️ Y108 (S-B.5 · O-B.8): olmayan hasta 404 (seans uçlarıyla aynı — D2.43); eskiden `200 {"status":"error"}` → arayüz
+    # "Hasta silinemedi" diyordu (başka cihazda zaten silinmiş hasta için "silme çalışmıyor"). Sıra: önce kimlik/sahiplik
+    # (yukarıda — kimliksize varlık bilgisi verilmez), sonra varlık. Var olan kaydın silinememesi 404 DEĞİL, 500.
+    # Kapı: tests/test_hasta_TEKIL_silme_OLMAYAN_404_Y108.py
+    if str(patient_id) not in sahipler:
+        _iz.kimlikli_yaz(request, "patient.delete", scope=f"id={patient_id}", item_count=0, outcome="bulunamadi")
+        raise HTTPException(status_code=404, detail="Hasta bulunamadı — zaten silinmiş olabilir; listeyi yenileyin.")
+    success = db.delete_patient(patient_id)
     _iz.kimlikli_yaz(
         request,
         "patient.delete",
         scope=f"id={patient_id}",
         item_count=1 if success else 0,
-        outcome="ok" if success else "bulunamadi",
+        outcome="ok" if success else "hata",
     )
-    return {"status": "success" if success else "error"}
+    if not success:
+        raise HTTPException(
+            status_code=500, detail="Hasta silinemedi — kayıt duruyor; birkaç saniye sonra yeniden deneyin."
+        )
+    return {"status": "success"}
 
 
 @router.post("/api/patients/{patient_id}/delete")

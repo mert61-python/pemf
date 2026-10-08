@@ -33,6 +33,9 @@ import { hastaninSonAnalizi, hastayaGoreSonAnaliz, kapsamda, sonAnalizOzeti, typ
 import { SecimCubugu } from "@/components/ui/SecimCubugu";
 import { TOPLU_SILME_ONAYI } from "@/services/topluSilme";
 
+/** Y108: tekil silmede sunucu 404 (başka cihazda / sekmede zaten silinmiş) → bilgi; liste yenilenir. */
+export const ZATEN_SILINMIS_HASTA = "Bu hasta zaten silinmiş — liste yenilendi.";
+
 export function PatientScreen() {
   const { showToast } = useToast();
   const { navigateTo, setSelectedPatient } = useAppNav();
@@ -166,12 +169,19 @@ export function PatientScreen() {
     // hiç çalışmıyor, istek gitmiyordu → "hasta silme çalışmıyor". window.confirm'e düşer.)
     if (!(await platformConfirm("Hasta Sil", "Bu hastayı silmek istediğinizden emin misiniz?", "Sil"))) return;
     // Sunucu: POST /api/patients/{id}/delete (Expo-uyumlu) veya DELETE /api/patients/{id}.
-    const res = await apiPost<{ status: string }>(`/patients/${id}/delete`, {}, { status: "error" });
+    // ⚠️ Y108 (S-B.5): olmayan hasta 404 → "zaten silinmiş" (bilgi) + liste yenilenir (seans kartıyla aynı — D2.43); diğer
+    // hatalarda sunucunun gerekçesi (428 kimlik, 403 başka hekim, 500 arıza). Kapı: __tests__/hastaTekilSilme.Y108.web.test.tsx
+    const hata = { durum: 0, detay: "" };
+    const res = await apiPost<{ status: string }>(`/patients/${id}/delete`, {}, { status: "error" },
+      { silent: true, onHttpError: (durum, detay) => { hata.durum = durum; hata.detay = detay || ""; } });
     if (res.status === "success" || res.status === undefined) {
       showToast("Hasta silindi.", "success");
       loadPatients();
+    } else if (hata.durum === 404) {
+      showToast(ZATEN_SILINMIS_HASTA, "info");
+      loadPatients();
     } else {
-      showToast("Hasta silinemedi.", "error");
+      showToast(hata.detay || "Hasta silinemedi.", "error");
     }
   };
 
