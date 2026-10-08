@@ -528,12 +528,28 @@ def kayitli_operator_epostalari():
         return None
 
 
+def _jeton_kimligi(request) -> str:
+    """İsteğin JETON kimliği — istek başına BİR KEZ çözülür ve istek boyunca AYNI kalır (ASGI `scope`'ta; istekler arası SIZMAZ).
+
+    ⚠️ C2-3.3 (2-C incelemesi A3): uçlar kimliği kapıda çözüp DB işlemine girer, başarı izini `audit_log.kimlikli_yaz` ile yazar —
+    o kimliği YENİDEN çözüyordu; işlem sürerken (VACUUM'lu toplu silme) gelen "Kilitle" jetonu düşürünce Ayşe'nin yetkisiyle
+    silinen kayıtların izi SAHİPSİZ kalıyordu (silinen kaydın tek kanıtı). İstekten ÖNCE iptal edilmiş jeton yine boş çözülür.
+    Kapı: tests/test_silme_ve_not_BASARI_IZI_kilit_yarisinda_YETKILENDIREN_hekim_C2_3_3.py"""
+    from servers import operator_tokens
+
+    kapsam = getattr(request, "scope", None)
+    if isinstance(kapsam, dict) and "pemf_jeton_kimligi" in kapsam:
+        return kapsam["pemf_jeton_kimligi"]
+    e = operator_tokens.cozumle(_operator_jetonu(request)) or ""
+    if isinstance(kapsam, dict):
+        kapsam["pemf_jeton_kimligi"] = e
+    return e
+
+
 def cozumlenmis_operator(request, beyan: str = "") -> str:
     """Kaydın yazılacağı operatör e-postası. Yukarıdaki üç kurala göre; ASLA istisna atmaz."""
     try:
-        from servers import operator_tokens
-
-        jetonlu = operator_tokens.cozumle(_operator_jetonu(request))
+        jetonlu = _jeton_kimligi(request)
         if jetonlu:
             return jetonlu
         e = (beyan or "").strip().lower()
