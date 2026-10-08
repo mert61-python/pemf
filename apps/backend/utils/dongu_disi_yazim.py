@@ -25,9 +25,13 @@ import logging
 import threading
 
 BEKLEME_SN = 0.25  # B2B2-1'in katı kimlik okumasıyla aynı sınır
+#: C2-2.5 / C2-1.3: durdurma yanıtının STOP'tan sonraki kayıt kapanışını en çok bekleyeceği süre (sn). Sağlıklı DB'de kapanış
+#: ms'de biter (yanıt eskisi gibi kayıttan SONRA döner); kilitli tedavi DB'sinde ACİL DURDUR yanıtı 21,7 sn bekliyordu.
+DURDURMA_KAYIT_BEKLEME_SN = 1.0
 
 _logger = logging.getLogger(__name__)
 _kilit = threading.Lock()
+_yerel = threading.local()  # `iscide`: çağıran FIFO işçinin kendisi mi (kendini bekleyip kilitlenmesin)
 _yurutucu: concurrent.futures.ThreadPoolExecutor | None = None
 _sayac_kilidi = threading.Lock()
 _bekleyen = 0  # kuyruğa girmiş, henüz BİTMEMİŞ iş sayısı (geri birikim)
@@ -43,6 +47,7 @@ def _isci() -> concurrent.futures.ThreadPoolExecutor:
 
 def _iscide_kos(baglam: contextvars.Context, fn, args, kwargs):
     global _bekleyen
+    _yerel.iscide = True
     try:
         return baglam.run(fn, *args, **kwargs)
     finally:
@@ -103,6 +108,22 @@ def calistir(fn, *args, ad: str = "kayit", **kwargs):
     if not dongude_mi():
         return fn(*args, **kwargs)
     return _kuyrukta_bekle(fn, args, kwargs, BEKLEME_SN, ad)
+
+
+def sirada_calistir(fn, *args, bekleme_sn: float = DURDURMA_KAYIT_BEKLEME_SN, ad: str = "kayit", **kwargs):
+    """`fn(*args, **kwargs)`'u döngüde OLMASA da FIFO işçide koşar (önceden kuyruğa girmiş kayıtlardan SONRA) ve en çok
+    `bekleme_sn` bekler (C2-2.5 · C2-1.3 · Ö.4-Y8).
+
+    DURDURMA yollarının STOP'tan SONRAKİ kayıt kapanışı için (ACİL DURDUR, AI Pro durdurma): tedavi DB'si kilitliyken yanıt
+    ve teyit kayıt yazımını beklemez (kayıt işçide tamamlanır); kuyruktaki koşu başlatma / seans izi kayıtlarından sonra
+    koştuğu için kayıt sırası bozulmaz. İşçinin kendisinden ya da işçi açılamazken (kapanış) doğrudan koşar. Süre dolarsa
+    `None`."""
+    if getattr(_yerel, "iscide", False):
+        return fn(*args, **kwargs)
+    try:
+        return _kuyrukta_bekle(fn, args, kwargs, bekleme_sn, ad)
+    except RuntimeError:  # yürütücü kapatıldı / iş parçacığı açılamadı → eski (eşzamanlı) yol
+        return fn(*args, **kwargs)
 
 
 def bosalt(sure: float = 30.0) -> bool:

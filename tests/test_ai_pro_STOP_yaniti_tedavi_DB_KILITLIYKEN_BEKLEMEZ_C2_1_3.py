@@ -1,0 +1,107 @@
+# -*- coding: utf-8 -*-
+"""C2-1.3 (2-C inceleme, A1) — tedavi DB'si KİLİTLİYKEN `/api/ai/pro/stop` yanıtı satır kapanışını BEKLEMEMELİ.
+
+KUSUR (D2.E07, `047155e`): `stop_ai_pro` bobin STOP'undan SONRA aynı istek içinde `_ai_pro_satirini_kapat` ile tedavi DB'sini
+okur/yazar. DB başka bir bağlantı tarafından kilitliyken (yedekleme aracı, ikinci backend, `locking_mode=EXCLUSIVE`) okuma
+bağlantı zaman aşımı + `busy_timeout` boyunca bekler → yanıt ~21 sn (ölçüldü). STOP donanıma 15 ms'de gider (Ö.4-Y8 STOP'un
+kendisi gecikmez) ama arayüz (`apiPost` 8 sn zaman aşımı) yanıtı alamaz: "Durdurulamadı — … ACİL DURDUR kullanın" der ve
+paneli "çalışıyor" bırakır; satır da kapanmaz. E07'den önce bu uç DB'ye dokunmuyordu.
+GERÇEK: tedavi DB dosyası İKİNCİ bir SQLite bağlantısıyla kilitlenir; istek TEK paylaşılan olay döngüsünden gider.
+KARŞIT: kilit yokken satır yanıt dönmeden `completed` kapanır (E07 davranışı korunur).
+"""
+
+from __future__ import annotations
+
+import sqlite3
+import threading
+import time
+
+import pytest
+from fastapi.testclient import TestClient
+
+ARAYUZ_ZAMAN_ASIMI_SN = 8.0  # apps/ui/src/services/apiClient.ts REQUEST_TIMEOUT_MS
+
+
+@pytest.fixture
+def o(monkeypatch, tmp_path):
+    import ai_pro_aparati as ap
+    from kayitci_donanim import gercek_hc
+    from servers import operator_tokens
+
+    o = ap.kur(monkeypatch, tmp_path)
+    operator_tokens.temizle_hepsi()
+    try:
+        with gercek_hc() as hc:
+            monkeypatch.setattr(o.api.state, "hardware", hc)
+            o.hc = hc
+            yield o
+            o.c.post("/api/ai/pro/stop")
+    finally:
+        o.air._ai_loop_active = False
+        o.geri()
+
+
+def _baslat_ve_sur(o):
+    import ai_pro_aparati as ap
+
+    _pid, r = ap.onayli_baslat(o, organ=0)
+    assert r.status_code == 200, r.text[:200]
+    with o.api._session_lock:
+        sid = o.api._active_session.get("db_session_id")
+    ap.kare(o)
+    assert ap.bekle(lambda: bool(ap.calisan(o)), 3), "aparat: AI Pro bobinleri sürmedi"
+    return sid
+
+
+def _durdur_paylasilan_dongu(o):
+    import ai_pro_aparati as ap
+    from anyio.from_thread import start_blocking_portal
+
+    durdu: dict = {}
+    with start_blocking_portal(backend="asyncio", backend_options=dict(ap.ISTEMCI_SECENEKLERI)) as portal:
+        c = TestClient(o.api.app, client=("127.0.0.1", 50131))
+        c.portal = portal
+
+        def _izle(t0):
+            while time.monotonic() - t0 < 60:
+                if not ap.calisan(o):
+                    durdu["sn"] = time.monotonic() - t0
+                    return
+                time.sleep(0.002)
+
+        t0 = time.monotonic()
+        ti = threading.Thread(target=_izle, args=(t0,), daemon=True)
+        ti.start()
+        r = c.post("/api/ai/pro/stop")
+        yanit_sn = time.monotonic() - t0
+        ti.join(60)
+    return r, yanit_sn, durdu.get("sn")
+
+
+def test_KRITIK_C2_1_3_tedavi_DB_KILITLIYKEN_AI_Pro_STOP_yaniti_arayuz_zaman_asimini_ASMAZ(o):
+    sid = _baslat_ve_sur(o)
+    o.db.close_connections()
+    kc = sqlite3.connect(str(o.db.db_path), isolation_level=None, timeout=5)
+    try:
+        kc.execute("PRAGMA locking_mode=EXCLUSIVE")
+        kc.execute("BEGIN EXCLUSIVE")
+        kc.execute("UPDATE system_settings SET setting_value = setting_value")
+        r, yanit_sn, stop_sn = _durdur_paylasilan_dongu(o)
+    finally:
+        kc.execute("ROLLBACK")
+        kc.close()
+    print(f"\nC2-1.3: yanıt {r.status_code} {yanit_sn:.2f} sn · STOP donanıma {stop_sn} sn · satır {sid}")
+    assert stop_sn is not None and stop_sn < 0.5, f"STOP donanıma {stop_sn} sn'de gitti"
+    assert r.status_code == 200 and yanit_sn < ARAYUZ_ZAMAN_ASIMI_SN, (
+        f"tedavi DB kilitliyken /ai/pro/stop yanıtı {yanit_sn:.1f} sn bekledi — arayüz {ARAYUZ_ZAMAN_ASIMI_SN:.0f} sn'de "
+        "'Durdurulamadı … ACİL DURDUR kullanın' der (bobinler durmuşken)"
+    )
+
+
+def test_KARSIT_C2_1_3_kilit_yokken_satir_yanit_donmeden_KAPANIR(o):
+    sid = _baslat_ve_sur(o)
+    r, yanit_sn, stop_sn = _durdur_paylasilan_dongu(o)
+    with o.db._get_connection() as c:
+        durum = c.execute("SELECT session_status FROM treatment_sessions WHERE id=?", (sid,)).fetchone()[0]
+    assert r.status_code == 200 and stop_sn is not None
+    assert durum == "completed", f"kilitsiz durdurmada satır yanıtla birlikte kapanmadı: {durum!r}"

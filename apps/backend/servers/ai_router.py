@@ -2644,7 +2644,14 @@ def stop_ai_pro():
     # Kesintisi, 0 dk" mühürlüyordu (ölçüldü). Operatör durdurması = "completed" (elle seansın durdurulmasıyla aynı).
     # Yalnız durdurma anında AKTİF olan KENDİ seansı ve yalnız satırı hâlâ AÇIKSA (acil durdurmanın "EMERGENCY_STOPPED"
     # mührü ezilmez).
-    _ai_pro_satirini_kapat(_kapanacak, "ai-pro-durdurma")
+    # ⚠️ C2-1.3 (2-C inceleme · Ö.4-Y8): kapanış KAYIT kuyruğunda (sıra korunur — ACİL DURDUR kapanışıyla aynı işçi: "durum
+    # hâlâ active mi?" denetimi ile finalize arasına öteki kapanış giremez); yanıt en çok `DURDURMA_KAYIT_BEKLEME_SN` bekler.
+    # Tedavi DB'si kilitliyken yanıt 21 sn bekliyordu (arayüz zaman aşımı 8 sn → bobinler durmuşken "Durdurulamadı").
+    from utils import dongu_disi_yazim as _kayit_kuyrugu
+
+    _kayit_kuyrugu.sirada_calistir(
+        _ai_pro_satirini_kapat, _kapanacak, "ai-pro-durdurma", ad="AI Pro durdurma seans kaydi kapanisi"
+    )
     return {"status": "success", "message": "AI Pro Closed-Loop Stopped"}
 
 

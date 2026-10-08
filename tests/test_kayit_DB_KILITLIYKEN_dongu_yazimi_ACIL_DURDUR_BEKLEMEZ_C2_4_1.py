@@ -273,6 +273,67 @@ def test_KARSIT_kilitte_BOBIN_KOSU_kaydi_KAYBOLMAZ_sira_ve_SURE_dogru(o):
     )
 
 
+def test_KRITIK_C2_2_5_durdurma_kapanisi_KUYRUKTAKI_kayitlardan_SONRA_kosar_ve_beklemez():
+    """C2-2.5 / C2-1.3 birleşimi (orkestratör): durdurma yollarının STOP-sonrası kayıt kapanışı (`sirada_calistir`) kayıt
+    kuyruğuna önceden girmiş yazımlardan (döngüde ertelenmiş koşu BAŞLATMA kaydı) SONRA koşar ve çağıranı en çok
+    `bekleme_sn` bekletir. Ayrı iş parçacığında koşsaydı açık koşuları başlatma kaydı işlenmeden okuyabilir, koşu kilit
+    kalkınca açılıp AÇIK kalırdı (kayıt 'sürülüyor' der, bobin durmuş)."""
+    import asyncio
+
+    from utils import dongu_disi_yazim
+
+    sira: list = []
+    engel = threading.Event()
+
+    def _baslatma():
+        engel.wait(10)  # kilitli DB'de bekleyen yazım
+        sira.append("baslatma")
+
+    async def _dongude():
+        return dongu_disi_yazim.calistir(_baslatma, ad="sinama")
+
+    assert asyncio.run(_dongude()) is None, "aparat: döngüdeki yazım kuyruğa ertelenmedi"
+    t0 = time.monotonic()
+    sonuc = dongu_disi_yazim.sirada_calistir(lambda: sira.append("kapanis"), bekleme_sn=0.2, ad="sinama")
+    gecen = time.monotonic() - t0
+    engel.set()
+    assert dongu_disi_yazim.bosalt(10)
+    assert sonuc is None and gecen < 1.0, f"durdurma kapanışı çağıranı {gecen:.2f} sn bekletti (sınır 0,2 sn)"
+    assert sira == ["baslatma", "kapanis"], f"kapanış kuyruktaki kayıttan ÖNCE koştu: {sira}"
+
+
+def test_KARSIT_C2_2_5_kilitte_baslatilan_bobinin_kosusu_ACIL_DURDURDA_KAPANIR(o):
+    """Kilit sürerken başlatılan bobin, ardından ACİL DURDUR: yanıt beklemez; kilit kalkınca hiçbir koşu AÇIK kalmaz ve
+    seans ACİL DURDURMA mührüyle kapanır (kayıt kaybolmaz)."""
+    from utils import dongu_disi_yazim
+
+    _seans_ac(o)
+    with o.api._session_lock:
+        sid = o.api._active_session.get("db_session_id")
+    c = TestClient(o.api.app, client=LAN, backend_options=o.secenek)
+    kc = _kilitle(o.db.db_path)
+    try:
+        r1 = c.post("/api/coil/3/control", json={"freq": 50, "duty": 25, "start": True})
+        t0 = time.monotonic()
+        r2 = c.post("/api/hardware/emergency_stop")
+        sn = time.monotonic() - t0
+        time.sleep(0.5)
+    finally:
+        _birak(kc)
+    assert (r1.status_code, r2.status_code) == (200, 200), (r1.text[:200], r2.text[:200])
+    assert sn < SINIR_SN, f"tedavi DB kilitliyken ACİL DURDUR yanıtı {sn:.1f} sn (kayıt kapanışını bekledi)"
+    assert dongu_disi_yazim.bosalt(30)
+    with o.db._get_connection() as conn:
+        acik = conn.execute(
+            "SELECT coil_id FROM session_coil_runs WHERE session_id = ? AND ended_epoch IS NULL", (sid,)
+        ).fetchall()
+        durum = conn.execute("SELECT session_status FROM treatment_sessions WHERE id = ?", (sid,)).fetchone()[0]
+    assert not acik, f"ACİL DURDUR'dan sonra koşu AÇIK kaldı (bobinler {[r[0] for r in acik]})"
+    assert durum == "EMERGENCY_STOPPED", durum
+    with o.api._active_coil_runs_lock:
+        assert not o.api._active_coil_runs, f"bellekte açık koşu kaldı: {dict(o.api._active_coil_runs)}"
+
+
 def test_KRITIK_ESZAMANLI_bes_istemci_kilitte_ACIL_DURDUR_gecikmeleri_TOPLANMAZ(o):
     """Geri birikim kuralı (C2-3.2 kapısının ölçümü): kilitte beş istemci aynı anda jetonsuz değerlendirme gönderirken
     ACİL DURDUR yanıtı 1 sn'yi aşmaz — kuyrukta bitmemiş kayıt varken döngü HİÇ beklemez. Kural olmasa her istek 0,25 sn

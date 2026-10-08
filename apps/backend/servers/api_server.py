@@ -6704,33 +6704,46 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     _ws_broadcast_sync({"type": "emergency_stop", "data": {"timestamp": _t.time(), "reason": reason}})
     # D1.81 · Y4: arayüz (Karşılama/Giriş dahil) mandalı ve "Sıfırla"yı gösterir.
     _ws_broadcast_sync({"type": "estop_mandali", "data": estop_mandali.durum()})
+
     # DENETIM P2: acil durdurma seansi DB'de KAPATMIYOR, acik coil-run'lari ve son dakikanin
     # sensor verisini kaybediyordu → guvenlik olayinin telemetri KANITI yok oluyordu. Bobinler
     # ZATEN durduruldu (yukarida); bu blok yalnizca kaydi tamamlar, durdurmayi geciktirmez.
     # Denetim izi olarak ayrica session_events'e emergency_stop olayi yazilir.
-    if _was_active and _db_sid:
-        try:
-            _get_treatment_db().record_session_event(
-                _db_sid,
-                "emergency_stop",
-                payload={"reason": reason, "mode": mode, "coil_ids": list(coil_ids)},
-                severity="critical",
+    # ⚠️ C2-2.5 / C2-4.2 (2-C inceleme · Ö.4-Y8): kayıt kapanışı tek işçili KAYIT kuyruğunda koşar (kuyruğa önceden girmiş
+    # koşu başlatma / seans izi kayıtlarından SONRA — sıra korunur); yanıt ve teyit en çok `DURDURMA_KAYIT_BEKLEME_SN`
+    # bekler. Tedavi DB'si kilitliyken yanıt ve teyit kayıt yazımlarını 21,7 sn (kilit sürdükçe ~44 sn) bekliyordu — STOP'lar
+    # zaten gitmişti. Sağlıklı DB'de kapanış ms'de biter: yanıt eskisi gibi kayıttan SONRA döner.
+    def _estop_kaydini_kapat():
+        if _was_active and _db_sid:
+            try:
+                _get_treatment_db().record_session_event(
+                    _db_sid,
+                    "emergency_stop",
+                    payload={"reason": reason, "mode": mode, "coil_ids": list(coil_ids)},
+                    severity="critical",
+                )
+            except Exception:
+                logging.getLogger(__name__).warning("estop: session_event yazilamadi", exc_info=True)
+            _finalize_session_db(
+                _db_sid, _started_ep, coil_ids=coil_ids, reason=f"acil-durdurma:{reason}", start_mono=_start_mono_es
             )
-        except Exception:
-            logging.getLogger(__name__).warning("estop: session_event yazilamadi", exc_info=True)
-        _finalize_session_db(
-            _db_sid, _started_ep, coil_ids=coil_ids, reason=f"acil-durdurma:{reason}", start_mono=_start_mono_es
-        )
-    # ⚠️ D1.68 (B-1.6): finalize kapsamı STOP kapsamıyla EŞLEŞİR — `stop_all_coils` TÜM bobinleri durdurdu; seansın bobin
-    # listesi dışındaki (seans sırasında tekil başlatılmış) bobinlerin AÇIK koşuları da kapanır. Eskiden yalnız seansın
-    # bobinleri kapanıyor, ötekiler `ended_epoch=NULL` kalıcı kalıyordu. Seans yokken de (önceki seanstan kalan koşu).
-    with _active_coil_runs_lock:
-        _acik_kosular = list(_active_coil_runs.keys())
-    for _cid in _acik_kosular:
-        try:
-            _finish_coil_run(_cid)
-        except Exception:
-            logging.getLogger(__name__).warning("estop: kosu kaydi kapatilamadi (bobin %s)", _cid, exc_info=True)
+        # ⚠️ D1.68 (B-1.6): finalize kapsamı STOP kapsamıyla EŞLEŞİR — `stop_all_coils` TÜM bobinleri durdurdu; seansın bobin
+        # listesi dışındaki (seans sırasında tekil başlatılmış) bobinlerin AÇIK koşuları da kapanır. Eskiden yalnız seansın
+        # bobinleri kapanıyor, ötekiler `ended_epoch=NULL` kalıcı kalıyordu. Seans yokken de (önceki seanstan kalan koşu).
+        with _active_coil_runs_lock:
+            _acik_kosular = list(_active_coil_runs.keys())
+        for _cid in _acik_kosular:
+            try:
+                _finish_coil_run(_cid)
+            except Exception:
+                logging.getLogger(__name__).warning("estop: kosu kaydi kapatilamadi (bobin %s)", _cid, exc_info=True)
+
+    try:
+        from utils import dongu_disi_yazim as _kayit_kuyrugu
+
+        _kayit_kuyrugu.sirada_calistir(_estop_kaydini_kapat, ad="acil durdurma seans kaydi kapanisi")
+    except Exception:
+        logging.getLogger(__name__).exception("E-stop: seans kaydi kapatilamadi (durdurma tamam)")
     # Audit P2: ust-seviye status'u transport sonuclarindan TURET — eskiden kosulsuz 'success'
     # donuyordu (STM hatasi + broker cokuk olsa bile UI 'ciktilar kesildi' saniyordu). Bir transport
     # dogrulanamadiysa 'partial'/'error' don + confirmed=False (keep-alive/firmware fiziksel-telafi P2).
