@@ -395,7 +395,13 @@ class PatientDatabase:
         if not fp:
             return
         try:
-            (self._key_dir / ".patient_search_keyfp").write_text(fp, encoding="utf-8")
+            # ⚠️ C2-2.10 (2-C inceleme · Y101 "bir kez"): dosya VAR ama OKUNAMIYORSA (izin) üstüne yazmak izni korur → her
+            # açılış yeniden kuruyordu (ölçüldü 3/3). Geçici dosyaya yazılıp `os.replace` ile değiştirilir: yeni dosya dizinin
+            # iznini miras alır, sonraki açılış okur (tek seferlik). Yerine koyma da düşerse uyarı (sonraki açılışta yeniden denenir).
+            hedef = self._key_dir / ".patient_search_keyfp"
+            gecici = hedef.with_name(hedef.name + ".tmp")
+            gecici.write_text(fp, encoding="utf-8")
+            os.replace(gecici, hedef)
         except Exception:
             self.logger.warning(
                 "Arama indeksi parmak izi yazilamadi (sonraki acilista yeniden denenir).", exc_info=True
