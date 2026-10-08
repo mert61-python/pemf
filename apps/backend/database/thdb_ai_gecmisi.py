@@ -377,12 +377,19 @@ class AiGecmisiKarisimi:
                     # hastanın listesine girmesin (ölçüldü — "kaldığın yerden" şeridi yanlış hastanın analizini gösteriyordu).
                     # Yalnız ad verilen (eski istemci) sorgu tam adla tüm kayıtları bulur. Kapı:
                     # tests/test_ai_gecmisi_AD_SUZGECI_kimliksiz_ve_TAM_D218.py.
+                    # C2-1.10: "tam ad" eşitliği D2.22 taşımasının ve arayüz anahtarının KURALIYLA (Türkçe-doğru küçültme + NFC
+                    # + boşluk; aksan ve ı/i korunur) — "mia"/"ışık" yazımlı eski kayıt düşmez, "Miami" yine gelmez.
+                    from utils.turkce_metin import arama_katla as _katla
+
+                    conn.create_function(
+                        "pemf_arama_katla", 1, lambda v: _katla(v or "")
+                    )  # deterministic= YOK: SQLCipher bağlayıcısı desteklemeyebilir
                     _hasta_kosul.append(
-                        "(COALESCE(patient_uuid,'') = '' AND TRIM(patient_name) = ?)"
+                        "(COALESCE(patient_uuid,'') = '' AND pemf_arama_katla(patient_name) = ?)"
                         if patient_uuid
-                        else "TRIM(patient_name) = ?"
+                        else "pemf_arama_katla(patient_name) = ?"
                     )
-                    _hasta_param.append(str(patient_name).strip())
+                    _hasta_param.append(_katla(str(patient_name)))
                 if _hasta_kosul:
                     clauses.append("(" + " OR ".join(_hasta_kosul) + ")")
                     params.extend(_hasta_param)
