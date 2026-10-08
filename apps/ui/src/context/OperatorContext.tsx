@@ -83,15 +83,29 @@ export function OperatorProvider({
 }) {
   const { session } = useAuth();
   const [operators, setOperators] = useState<Operator[]>([]);
+  // ⚠️ B2-3.1 (2-B bağımsız incelemesi): liste BİLİNMİYOR ≠ liste BOŞ. Okuma düşünce (backend hazır değil, mobilde keşif
+  // bitmeden, 5xx/503 — auth DB okunamıyor, ağ hatası) `[]` "operatörsüz klinik" sayılıyordu → kayıtlı operatörlü klinikte
+  // kimliksiz arayüz Kural 2'ye düşüp giriş e-postasıyla kayıt gösteriyor (Y103), hasta ekliyor (A-61), değerlendirme
+  // gönderiyordu (İG-6.26). Bilinmiyorken kimlik YOK (fail-closed, backend `kayitli_operator_var` ile aynı yön); okuma düşerse
+  // önceki liste KORUNUR; bilinene dek yeniden denenir (Kural 2 kliniği takılı kalmaz).
+  // Kapı: screens/__tests__/operatorlerOkunamaz.B23_1.web.test.tsx.
+  const [listeBilinir, setListeBilinir] = useState(false);
   const [active, setActive] = useState<Operator | null>(null);
   const sonEtkilesim = useRef<number>(Date.now());
 
   const refresh = useCallback(async () => {
     const r = await apiGet<{ ok?: boolean; data?: Operator[] } | null>("/operators", null, { silent: true });
-    setOperators(Array.isArray(r?.data) ? r!.data! : []);
+    if (!Array.isArray(r?.data)) return;
+    setOperators(r!.data!);
+    setListeBilinir(true);
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    if (listeBilinir) return;
+    const t = setInterval(() => { void refresh(); }, 5_000);
+    return () => clearInterval(t);
+  }, [listeBilinir, refresh]);
 
   // ⚠️ B2-4.1 (2-B bağımsız incelemesi): sağlayıcı SÖKÜLÜNCE (çıkış ya da Supabase oturumu düşünce `PemfApp.AuthGate`
   // uygulama ağacını söker) modül düzeyi operatör jetonu da DÜŞER. Eskiden yalnız `lock()` siliyordu: yeniden girişte yeni
@@ -195,10 +209,10 @@ export function OperatorProvider({
     operators,
     active,
     // GERİYE UYUM: operatör kayıtlı değilse oturum e-postası (tek veterinerli klinik).
-    operatorEmail: active?.email || (operators.length === 0 ? (session?.email || "") : ""),
-    multiUser: operators.length > 0,
+    operatorEmail: active?.email || (listeBilinir && operators.length === 0 ? (session?.email || "") : ""),
+    multiUser: operators.length > 0 || !listeBilinir,
     refresh, enroll, switchTo, lock, touch,
-  }), [operators, active, session, refresh, enroll, switchTo, lock, touch]);
+  }), [operators, listeBilinir, active, session, refresh, enroll, switchTo, lock, touch]);
 
   return (
     <Ctx.Provider value={value}>
