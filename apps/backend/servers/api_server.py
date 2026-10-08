@@ -5645,6 +5645,8 @@ _ai_migrate_lock = _threading.Lock()
 
 _ai_kimlik_tasima_lock = _threading.Lock()
 _ai_kimlik_tasindi = False
+#: D2.22 (B-3.85): taşımanın yapıldığı tedavi DB'sinin `system_settings`inde KALICI işaretlenir (yeniden açılışta tekrar koşmaz).
+_AI_KIMLIK_TASIMA_ISARETI = "ai_hasta_kimlik_tasimasi_yapildi"
 
 
 def _ai_hasta_kimliklerini_tasi_bir_kez(db) -> dict:
@@ -5669,6 +5671,13 @@ def _ai_hasta_kimliklerini_tasi_bir_kez(db) -> dict:
     with _ai_kimlik_tasima_lock:
         if _ai_kimlik_tasindi:
             return {}
+        # ⚠️ D2.22 (B-3.85): "bir kez" KALICI — yalnız süreç bayrağı her açılışta sıfırlanıyordu: ilk koşuda aynı adlı iki hayvan
+        # yüzünden BİLEREK kimliksiz bırakılan eski analiz, sonradan biri silinip ad tekilleşince bir sonraki açılışta kalan
+        # hayvanın kimliğine BAĞLANIYORDU (ölçüldü). İşaret aynı DB'de: yedekten dönen DB kendi işaretini taşır. Taşıma DÜŞERSE
+        # işaret konmaz (sonraki açılışta yeniden denenir). Kapı: tests/test_ai_kimlik_tasimasi_KALICI_tek_seferlik_D222.py.
+        if getattr(db, "_get_system_setting", None) and db._get_system_setting(_AI_KIMLIK_TASIMA_ISARETI) == "1":
+            _ai_kimlik_tasindi = True
+            return {}
         try:
             from database.patient_database import get_patient_database
             from utils.turkce_metin import arama_katla
@@ -5692,6 +5701,9 @@ def _ai_hasta_kimliklerini_tasi_bir_kez(db) -> dict:
                     len(cakisan),
                 )
             sonuc = db.ai_analiz_kimliklerini_doldur(harita)
+            db._set_system_setting(
+                _AI_KIMLIK_TASIMA_ISARETI, "1", "AI analiz ad->kimlik tasimasi yapildi (D2.22: tek seferlik, kalici)"
+            )
             _ai_kimlik_tasindi = True
             return sonuc
         except Exception:
