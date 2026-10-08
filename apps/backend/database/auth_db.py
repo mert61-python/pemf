@@ -166,8 +166,11 @@ class AuthDB:
             logger.exception("operator kaydi basarisiz")
             return False, "db_error"
 
-    def operator_exists(self, email: str) -> bool:
-        """Bu e-posta cihazda kayıtlı mı (PIN güncellemesinde eski-PIN kapısı için)."""
+    def operator_exists(self, email: str, kati: bool = False) -> bool:
+        """Bu e-posta cihazda kayıtlı mı (PIN güncellemesinde eski-PIN kapısı için).
+
+        `kati=True`: okuma hatası YUTULMAZ, yükseltilir — kimlik kapıları (`servers.auth`) "bilmiyoruz"u "kayıtlı değil"den
+        ayırmalı; yutulan hata orada FAIL-OPEN oluyordu (B2-1.1 / B2-2.1 / B2-3.2, 2-B incelemesi)."""
         try:
             with self._lock, self._conn() as c:
                 return (
@@ -176,10 +179,16 @@ class AuthDB:
                 )
         except Exception:
             logger.exception("operator varlik kontrolu basarisiz")
+            if kati:
+                raise
             return False
 
-    def list_operators(self):
-        """Cihazda kayıtlı operatörler — SIR İÇERMEZ (hash/salt asla dışarı verilmez)."""
+    def list_operators(self, kati: bool = False):
+        """Cihazda kayıtlı operatörler — SIR İÇERMEZ (hash/salt asla dışarı verilmez).
+
+        `kati=True`: okuma hatası YUTULMAZ (bkz. `operator_exists`) — boş liste "operatörsüz klinik" (Kural 2) demektir;
+        auth DB okunamazken `[]` dönmek kayıtlı operatörlü kliniği sessizce operatörsüz sayıyordu (ölçüldü: jetonsuz LAN
+        isteği başka hekimin hastasını sildi). Kapı: tests/test_kimlik_kapisi_GERCEK_auth_arizasi_FAIL_CLOSED_B221.py."""
         try:
             with self._lock, self._conn() as c:
                 rows = c.execute(
@@ -201,6 +210,8 @@ class AuthDB:
             ]
         except Exception:
             logger.exception("operator listesi okunamadi")
+            if kati:
+                raise
             return []
 
     def verify_pin(self, email: str, pin: str):

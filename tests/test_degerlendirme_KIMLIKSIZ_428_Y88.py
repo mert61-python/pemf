@@ -99,10 +99,10 @@ def test_KRITIK_operator_listesi_OKUNAMAZSA_FAIL_CLOSED_428(o, monkeypatch):
     from database import auth_db
 
     class _Bozuk:
-        def list_operators(self):
+        def list_operators(self, kati=False):
             raise RuntimeError("auth db okunamadi (taklit)")
 
-        def operator_exists(self, _e):
+        def operator_exists(self, _e, kati=False):
             raise RuntimeError("auth db okunamadi (taklit)")
 
     # Yama BU blokta kalır: fikstür yıkımı (operatör temizliği) gerçek auth DB'sine erişebilmeli.

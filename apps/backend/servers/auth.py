@@ -435,7 +435,8 @@ def _kayitli_operator_mu(email: str) -> bool:
     try:
         from database.auth_db import get_auth_db
 
-        return bool(get_auth_db().operator_exists(e))
+        # kati=True: AuthDB okuma hatasını YUTMAZ → aşağıdaki fail-closed dalı GERÇEK arızada da koşar (B2-1.1, 2-B incelemesi).
+        return bool(get_auth_db().operator_exists(e, kati=True))
     except Exception:
         logger.exception("operator varlik kontrolu basarisiz → beyan REDDEDILIYOR (fail-closed)")
         return True
@@ -448,7 +449,7 @@ def kayitli_operator_var() -> bool:
     try:
         from database.auth_db import get_auth_db
 
-        return bool(get_auth_db().list_operators())
+        return bool(get_auth_db().list_operators(kati=True))  # kati: yutulan hata fail-OPEN oluyordu (B2-1.1)
     except Exception:
         logger.exception("kayitli operator listesi okunamadi → kimliksiz istek REDDEDILIYOR (fail-closed)")
         return True
@@ -490,7 +491,7 @@ def cozumlenmis_operator_adi(cozulen_email: str, beyan_ad: str = "") -> str:
     try:
         from database.auth_db import get_auth_db
 
-        operatorler = get_auth_db().list_operators()
+        operatorler = get_auth_db().list_operators(kati=True)  # B2-1.1: arızada ad YAZILMAZ (aşağıdaki dal)
     except Exception:
         logger.exception("operator adi cozumleme hatasi → ad YAZILMIYOR")
         return ""

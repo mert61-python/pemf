@@ -368,7 +368,15 @@ async def _operators_list():
     """Bu cihazda kayıtlı operatörler (hızlı geçiş listesi). SIR İÇERMEZ."""
     from database.auth_db import get_auth_db
 
-    return {"ok": True, "data": await asyncio.to_thread(get_auth_db().list_operators)}
+    # ⚠️ B2-1.1 / B2-3.2 (2-B incelemesi): okunamayan liste 200 `[]` DEĞİL — boş liste "operatörsüz klinik" (Kural 2)
+    # demektir; arayüz "bilinmiyor"u ondan ayırabilsin (B2-3.1).
+    try:
+        veri = await asyncio.to_thread(get_auth_db().list_operators, True)
+    except Exception:
+        raise HTTPException(
+            status_code=503, detail="Operatör listesi okunamadı — cihazın kimlik veritabanına erişilemiyor."
+        ) from None
+    return {"ok": True, "data": veri}
 
 
 @router.post("/api/operators/enroll")

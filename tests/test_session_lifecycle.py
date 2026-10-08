@@ -67,10 +67,10 @@ def api(monkeypatch):
     from database import auth_db as _adb
 
     class _OperatorsuzKayit:
-        def operator_exists(self, _e):
+        def operator_exists(self, _e, kati=False):
             return False
 
-        def list_operators(self):
+        def list_operators(self, kati=False):
             return []
 
     monkeypatch.setattr(_adb, "get_auth_db", lambda: _OperatorsuzKayit())
