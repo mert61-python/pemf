@@ -261,7 +261,8 @@ export function AiHubScreen() {
 
   // KRİTİK fix (bkz. resetAiCachesForOwner): profil/hasta değişince AI cache'lerini TEMİZLE + açık modülü
   // kapat → önceki hastanın görüntüsü/sonucu yeni hastada görünmesin ve yanlış hastaya analiz yazılmasın.
-  const aiCacheOwnerKey = `${userMode ?? ""}:${selectedPatient?.id ?? selectedPatient?.name ?? ""}`;
+  // O-A3.6: sahip = profil + KİMLİK + hasta — başka hekim aynı hastayı seçince önceki hekimin görüntüsü/sonucu geri gelmez.
+  const aiCacheOwnerKey = `${userMode ?? ""}:${(operatorEmail || "").toLowerCase()}:${selectedPatient?.id ?? selectedPatient?.name ?? ""}`;
   // ⚠️ D2.E08 (İG-6.23): temizlik ÇİZİM sırasında, yeni sahibin çocukları kurulmadan ÖNCE. Eskiden `useEffect`teydi: çocuğun
   // `useState(moduleCache…)` başlatıcıları temizlikten ÖNCE okuyordu → ev sahibi ekranında önceki hastanın fotoğrafı/sesi/
   // sonucu kalıyor, "Teşhis Et" önceki hastanın dosyasını YENİ hastaya gönderiyordu (ölçüldü; "yalnız key" de yetmiyordu).

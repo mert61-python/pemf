@@ -160,20 +160,29 @@ export async function kurAiHub(
   );
 }
 
-/** PatientGate'ten hasta seç (kapı ya da üst şerit — GERÇEK akış). */
+/** PatientGate'in seçili hasta şeridi (`<Hasta|Evcil Hayvanım|Örnek / Denek>: <ad>. Değiştir.`). ⚠️ Operatör çipi de ". Değiştir."
+ *  ile biter ("Aktif operatör: Dr. A. Değiştir.") — genel sonek seçicisi çipi açıyordu (ölçüldü). */
+export function hastaSeridi(): HTMLElement | null {
+  return (Array.from(document.querySelectorAll('[role="button"]')).find((e) =>
+    /^(Hasta|Evcil Hayvanım|Örnek \/ Denek): .*\. Değiştir\.$/.test(e.getAttribute("aria-label") || ""),
+  ) as HTMLElement | undefined) ?? null;
+}
+
+/** PatientGate'ten hasta seç (kapı ya da üst şerit — GERÇEK akış); liste gelene dek bekler. */
 export async function hastaSec(s: Sahne, ad: string) {
-  const serit = document.querySelector('[aria-label$=". Değiştir."]');
+  const serit = hastaSeridi();
   if (serit) {
-    await act(async () => { (serit as HTMLElement).click(); });
+    await act(async () => { serit.click(); });
     await s.bosalt();
   } else {
     const kapi = Array.from(document.querySelectorAll('[role="button"]')).find((e) =>
-      /seçin$/.test(e.getAttribute("aria-label") || ""),
+      /^(Hasta seçin|Hayvanınızı seçin|Örnek seçin)$/.test(e.getAttribute("aria-label") || ""),
     ) as HTMLElement | undefined;
     if (!kapi) throw new Error(`hasta kapisi yok. Govde: ${document.body.textContent?.slice(0, 300)}`);
     await act(async () => { kapi.click(); });
     await s.bosalt();
   }
+  for (let i = 0; i < 20 && !s.varMi(`Seç: ${ad}`); i++) await s.bosalt();
   await s.tikla(`Seç: ${ad}`);
 }
 

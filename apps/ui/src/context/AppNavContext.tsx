@@ -7,7 +7,8 @@
  * Böylece Hastalar ekranından "Seans Başlat" → Kontrol ekranına gidip hastayı
  * seansta kullanabiliriz.
  */
-import { createContext, useContext, useState, useMemo } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useOperatorOptional } from "@/context/OperatorContext";
 import type { RouteKey } from "@/types/domain";
 
 export interface SelectedPatient {
@@ -51,6 +52,17 @@ export function AppNavProvider({
 }) {
   const [selectedPatient, setSelectedPatient] = useState<SelectedPatient | null>(null);
   const [aiProModeli, setAiProModeli] = useState("");
+  // ⚠️ O-A3.6 (2-B incelemesi): seçili hasta KİMLİĞE bağlıdır. Operatör değişince ya da kilitlenince (kimlik düşer) seçim
+  // DÜŞER — eskiden kalıyordu: "Kilitle"den sonra önceki hekimin seçtiği hastaya kimliksiz (sahipsiz) analiz/seans
+  // başlatılabiliyordu. Kimlik aynı kaldıkça seçim korunur (Kural 2: kimlik oturum e-postası, değişmez). Sağlayıcı yoksa
+  // (eski testler) kimlik '' → hiç değişmez. Kapı: screens/__tests__/aiHubKimlikDegisimi.OA36.web.test.tsx.
+  const kimlik = (useOperatorOptional()?.operatorEmail || "").toLowerCase();
+  const sonKimlik = useRef(kimlik);
+  useEffect(() => {
+    if (sonKimlik.current === kimlik) return;
+    sonKimlik.current = kimlik;
+    setSelectedPatient(null);
+  }, [kimlik]);
   // DÜŞÜK fix: value'yu memoize et → her render'da yeni obje üretip tüm useAppNav tüketicilerini
   // gereksiz yere render etme (setSelectedPatient stabil setter, navigateTo stabil prop).
   const value = useMemo(
