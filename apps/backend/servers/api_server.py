@@ -3991,8 +3991,17 @@ async def start_session(payload: SessionStartPayload, request: Request):
                 operator_email=_operator_kimligi or None,
             )
             # Yeni kolonlar (start_session bunlari yazmaz): gercek baslangic epoch + patient_id FK.
+            # ⚠️ Y116: seansın REÇETESİ (frekans / şiddet) de BURADA, sunucunun bildiği değerle yazılır — doz kaydı seansın
+            # kendi kaydıdır; `/api/session/notes` artık hiçbir dalda doz yazmaz (eskiden reçete satıra yalnız oradan,
+            # istemcinin gövdesinden giriyordu — bitmiş seansta kimliksiz LAN isteği 50 → 999 Hz yapabiliyordu).
             try:
-                db.set_session_meta(_sid, started_epoch=_started_epoch_snap, patient_id=_pid)
+                db.set_session_meta(
+                    _sid,
+                    started_epoch=_started_epoch_snap,
+                    patient_id=_pid,
+                    frequency_hz=(payload.frequency or None),
+                    intensity_mt=(payload.intensity or None),
+                )
             except Exception:
                 logging.getLogger(__name__).debug("set_session_meta(start) hatasi", exc_info=True)
             # Sahip e-postasini seans-parametresi olarak yaz (history JOIN'i bunu okur).

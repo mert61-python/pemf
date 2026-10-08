@@ -935,10 +935,15 @@ class SeansKarisimi:
             self.logger.error(f"Hasta upsert hatası: {e}")
             return None
 
-    def set_session_meta(self, session_id, *, started_epoch=None, ended_epoch=None, patient_id=None) -> None:
+    def set_session_meta(
+        self, session_id, *, started_epoch=None, ended_epoch=None, patient_id=None, frequency_hz=None, intensity_mt=None
+    ) -> None:
         """treatment_sessions satirina yeni kolonlari (gercek wall-clock epoch + patient_id FK)
         baglar. Mevcut start_session/end_session bu Asama-2 kolonlarini bilmedigi icin ayrica cagrilir.
-        Yalniz verilen alanlar UPDATE edilir; hepsi best-effort."""
+        Yalniz verilen alanlar UPDATE edilir; hepsi best-effort.
+
+        `frequency_hz` / `intensity_mt` (Y116): seansın REÇETESİ başlatmada SUNUCU tarafından yazılır — doz kaydı seansın
+        kendi kaydıdır; eskiden satıra yalnız seans sonu not isteğinin gövdesinden giriyordu (istemci beyanı)."""
         try:
             self._ensure_write_guardrail()
             sets, params = [], []
@@ -951,6 +956,12 @@ class SeansKarisimi:
             if patient_id is not None:
                 sets.append('patient_id = ?')
                 params.append(int(patient_id))
+            if frequency_hz is not None:
+                sets.append('frequency_hz = ?')
+                params.append(float(frequency_hz))
+            if intensity_mt is not None:
+                sets.append('intensity_mt = ?')
+                params.append(float(intensity_mt))
             if not sets:
                 return
             params.append(int(session_id))

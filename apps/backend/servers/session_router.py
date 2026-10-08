@@ -109,12 +109,33 @@ def save_session_notes(payload: SessionNotesPayload, request: Request):
     Hedef: `_not_hedefi` (D1.66 · D1.78). Seans DB'de zaten kapandıysa (stop / bekçi / E-stop / kurtarma) YALNIZ not ve
     parametre güncellenir — gerçek süre ve durum EZİLMEZ (DENETİM P1). Bellekteki BİTMİŞ seans DB'de henüz kapanmadıysa
     (eski akış: `/stop` hiç çağrılmadı) normal finalize. SÜREN seansa not yazılır ama seans KAPATILMAZ.
-    Sensör tamponu `/api/session/stop`'ta flush edilir; burada tekrar flush edilmez."""
+    Sensör tamponu `/api/session/stop`'ta flush edilir; burada tekrar flush edilmez.
+
+    ⚠️ Y116 (S-B2B2.1 · B2B2-2): kayıtlı operatörlü klinikte `session_id` ile güncelleme KİMLİK ister (jetonsuz LAN / kilit sonrası
+    eski jeton → 428, satır değişmez, deneme izde `reddedildi`; kimlik DB'si okunamıyorsa Y113 iletisi). Kimlikli HER hekim not
+    ekler (Y107). Her güncelleme İZ yazar (kim, hangi seans, hangi alanlar — not METNİ ize girmez, D2.43). Kapanmış / süren
+    seansın DOZ parametreleri (frekans, şiddet) istekle DEĞİŞMEZ — doz kaydı seansın kendi kaydıdır; yalnız not eklenir (eskiden
+    jetonsuz LAN isteği başka hekimin bitmiş seansını 50 → 999 Hz yapabiliyordu, iz yoktu — ölçüldü). Operatörsüz klinik (Kural 2)
+    değişmez. Kapı: tests/test_seans_sonu_NOTU_kimlik_ister_DOZ_degismez_Y116.py"""
     from servers import api_server as _api
+    from servers import audit_log as _iz
+    from servers.auth import cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
 
     db = _api._get_treatment_db()
     if db is None:
         raise HTTPException(status_code=503, detail="Tedavi kaydı veritabanı hazır değil — not kaydedilmedi.")
+    if (
+        payload.session_id is not None and kayitli_operator_var() and not cozumlenmis_operator(request)
+    ):  # beyan YOK → jeton
+        _iz.kimlikli_yaz(
+            request, "session.notes", scope=f"id={int(payload.session_id)}", item_count=0, outcome="reddedildi"
+        )
+        raise HTTPException(
+            status_code=428,
+            detail=kimliksiz_detayi(
+                "Operatör seçin — seans notunu kaydetmek için hangi hekim olduğunuzu seçin; notunuz ekranda duruyor."
+            ),
+        )
     with _api._session_lock:
         bellek = dict(_api._active_session)
     sid, yol = _not_hedefi(payload, db, bellek)
@@ -128,20 +149,33 @@ def save_session_notes(payload: SessionNotesPayload, request: Request):
             and ozet.get("session_status") == "active"
         ):
             # Seans bellekte bitti ama DB'de kapanmadı (ör. /stop hiç çağrılmadı) → normal finalize.
+            # Y116: doz istekten YAZILMAZ — reçete başlatmada sunucu tarafından satıra yazıldı (`set_session_meta`).
             db.end_session(
                 sid,
-                parameters={"frequency_hz": payload.frequency, "intensity_mt": payload.intensity},
                 patient_notes=payload.notes or None,
                 duration_minutes=(int(payload.duration_minutes) if payload.duration_minutes else None),
             )
+            _iz.kimlikli_yaz(
+                request,
+                "session.notes",
+                scope=f"id={sid}",
+                item_count=1,
+                detail={"not_var": bool((payload.notes or "").strip()), "alanlar": ["notes", "kapanis"], "hedef": yol},
+            )
             return {"status": "success", "session_id": sid, "sensor_samples": 0, "updated": True, "hedef": yol}
         # DENETIM P1: kapanmış seansta end_session TEKRAR çağrılmaz (gerçek süreyi planlananla ezerdi); süren seans da
-        # burada kapatılmaz. Yalnız not + parametre.
-        db.update_session_finalized_extras(
-            sid,
-            notes=(payload.notes or None),
-            frequency_hz=(payload.frequency or None),
-            intensity_mt=(payload.intensity or None),
+        # burada kapatılmaz. Y116: yalnız NOT — doz parametreleri (frekans / şiddet) istekten YAZILMAZ.
+        db.update_session_finalized_extras(sid, notes=(payload.notes or None))
+        _iz.kimlikli_yaz(
+            request,
+            "session.notes",
+            scope=f"id={sid}",
+            item_count=1,
+            detail={
+                "not_var": bool((payload.notes or "").strip()),
+                "alanlar": ["notes"] if payload.notes else [],
+                "hedef": yol,
+            },
         )
         return {
             "status": "success",

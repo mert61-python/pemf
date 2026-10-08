@@ -12,6 +12,12 @@
  * GERÇEK: ObservationNotesModal, apiClient. Sahte: fetch (ağ sınırı), güvenli alan kancası, `window.alert` (yakalanır).
  */
 jest.mock("react-native", () => jest.requireActual("react-native-web"));
+// Y116'dan beri modal 428'de operatör seçiciyi çizer (OperatorSwitcher → AuthContext → Supabase istemcisi) — Supabase en alt
+// katta sahtelenir (bu ortamda küresel `URL` yok; modül yüklenemezdi).
+jest.mock("@/services/supabaseAuth", () => {
+  const aparat = require("../../../context/__tests__/operatorAparati");
+  return aparat.supabaseSahte("klinik@ortak.com");
+});
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));

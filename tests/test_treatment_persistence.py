@@ -107,6 +107,7 @@ def test_notes_do_not_overwrite_real_duration_after_stop(temp_app_data, monkeypa
     monkeypatch.setattr(api_server, "_app_data_dir", lambda: temp_app_data)
 
     sid = db.start_session("Manuel", patient_name="Minnos")
+    db.set_session_meta(sid, frequency_hz=10.0, intensity_mt=1.0)  # Y116: reçeteyi başlatma (sunucu) yazar
     db.end_session(sid, duration_minutes=4)  # /stop GERÇEK süreyi yazdı
 
     with api_server._session_lock:
@@ -129,7 +130,11 @@ def test_notes_do_not_overwrite_real_duration_after_stop(temp_app_data, monkeypa
     row = next(h for h in db.get_session_history(limit=10) if h["id"] == sid)
     assert row["duration_minutes"] == 4, "gerçek tedavi süresi PLANLANAN süreyle ezilmemeli"
     assert row["session_status"] == "completed"
-    assert row["frequency_hz"] == 50.0, "parametreler yine de güncellenmeli"
+    # ⚠️ Y116 (sahip kararı S-B2B2.1): BİTMİŞ seansın doz parametreleri not isteğiyle DEĞİŞMEZ — eskiden burası "parametreler
+    # yine de güncellenmeli" diye kilitliydi (jetonsuz LAN isteği bitmiş seansı 50 → 999 Hz yapabiliyordu). Kapı:
+    # tests/test_seans_sonu_NOTU_kimlik_ister_DOZ_degismez_Y116.py
+    assert (row["frequency_hz"], row["intensity_mt"]) == (10.0, 1.0), "bitmiş seansın dozu not isteğiyle değişti (Y116)"
+    assert row.get("patient_notes") == "iyi tolere etti" or "iyi tolere etti" in str(row.get("patient_notes") or "")
     assert r.json().get("durationPreserved") is True
 
 

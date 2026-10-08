@@ -12,6 +12,8 @@ import { Chip, ChipRow } from "@/components/ui/Chip";
 import { colors, spacing, typography, rs } from "@/theme/tokens";
 import { apiPost, platformAlert } from "@/services/apiClient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
+import { KIMLIK_DB_ARIZA_ONEKI } from "@/utils/patientScope";
 
 const REACTIONS = ["Sakinleşti", "Hareket etti", "Uyudu", "Endişeli", "Tepki yok", "Rahatsızlık"];
 
@@ -41,6 +43,10 @@ export function ObservationNotesModal({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  // ⚠️ Y116 (S-B2B2.1): kayıtlı operatörlü klinikte sunucu kimliksiz notu 428 ile reddeder. Pencere tam ekran örtüdür — üst
+  // bardaki operatör çipine ULAŞILAMAZ; bu yüzden 428'de not KORUNUR ve operatör PENCERENİN İÇİNDE seçilir (sonraki "Kaydet"
+  // jetonla gider). Boş = istem yok. Kapı: __tests__/ObservationNotesModal.Y116.operatorSectirir.web.test.tsx
+  const [kimlikIstemi, setKimlikIstemi] = useState("");
 
   const toggle = (r: string) =>
     setSelected((p) => {
@@ -53,6 +59,7 @@ export function ObservationNotesModal({
   const reset = () => {
     setSelected(new Set());
     setNotes("");
+    setKimlikIstemi("");
   };
 
   // GÜVENLİK (#48): hedef seans/hasta DEĞİŞİNCE veya sayfa (yeniden) AÇILINCA not+tepkileri SIFIRLA.
@@ -78,6 +85,7 @@ export function ObservationNotesModal({
   useEffect(() => {
     setSelected(new Set());
     setNotes("");
+    setKimlikIstemi("");
   }, [session?.obsKey, session?.patientName]);
 
   const save = async () => {
@@ -118,7 +126,11 @@ export function ObservationNotesModal({
     setSaving(false);
     if (!res || res.status === "error") {
       // ⚠️ ÜÇ FARKLI DURUM, ÜÇ FARKLI CÜMLE — hepsine "ulaşmadı" demek YANLIŞTI.
-      if (sunucuDurumu !== null) {
+      if (sunucuDurumu === 428) {
+        // Y116: kimlik gerekli → not DURUR, operatör pencerenin içinde seçilir (aşağıda). Kimlik DB'si okunamıyorsa (Y113)
+        // seçici gösterilmez — iletinin kendisi arızayı ve çareyi söyler.
+        setKimlikIstemi(sunucuGerekce || "Operatör seçin — seans notunu kaydetmek için hangi hekim olduğunuzu seçin.");
+      } else if (sunucuDurumu !== null) {
         // Sunucu YANIT VERDİ ve reddetti → gerekçesini göster; not GİTMEDİ, modal açık kalır.
         platformAlert(
           "Not kaydedilemedi",
@@ -191,6 +203,13 @@ export function ObservationNotesModal({
             numberOfLines={3}
           />
 
+          {kimlikIstemi ? (
+            <View style={styles.kimlikKutusu}>
+              <Text style={styles.kimlikMetni}>{kimlikIstemi}</Text>
+              {kimlikIstemi.startsWith(KIMLIK_DB_ARIZA_ONEKI) ? null : <OperatorSwitcher />}
+            </View>
+          ) : null}
+
           </ScrollView>
 
           {/* [S4 adım 4] Atla/Kaydet ScrollView'ın DIŞINDA: yatay telefonda (sheet ≈160 px) ve klavye
@@ -230,6 +249,15 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: typography.subtitle, fontWeight: "800" },
   sub: { color: colors.primary, fontSize: typography.small, fontWeight: "700" },
   label: { color: colors.textMuted, fontSize: typography.small, fontWeight: "700" },
+  kimlikKutusu: {
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: rs(12),
+    borderWidth: 1,
+    borderColor: colors.warning,
+    backgroundColor: colors.warningSoft,
+  },
+  kimlikMetni: { color: colors.text, fontSize: typography.small, fontWeight: "700" },
   // Satır boşluğu ve yükseklik ChipRow/Chip'ten; burada yalnız RENK ve çerçeve kalır.
   chip: {
     backgroundColor: "#1e293b",
