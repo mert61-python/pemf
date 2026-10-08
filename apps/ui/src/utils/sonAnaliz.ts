@@ -72,6 +72,15 @@ export function hastayaGoreSonAnaliz(kayitlar: readonly AnalizKaydi[] | null | u
   return harita;
 }
 
+/**
+ * D2.71 (B-6.20): bir AI KAYDININ hasta anahtarı — TEK anahtar: kimliği varsa KİMLİK (`#…`), yoksa ad. Aynı adlı iki hayvanın
+ * kimlikli kayıtları AYRI anahtar alır; kimliksiz ESKİ kayıtlar ada göre birlikte kalır (ayrılamaz — yalnız gösterim).
+ * AI Geçmişi'nin hasta çipleri ve süzmesi bunu kullanır.
+ */
+export function kayitHastaAnahtari(k: { patient_uuid?: string | null; patient_name?: string | null }): string {
+  return kimlikAnahtari(k?.patient_uuid) || adAnahtari(k?.patient_name);
+}
+
 /** Kimlik anahtarı — ada çarpışmasın diye ön ekli (boş kimlik anahtar ÜRETMEZ). */
 export function kimlikAnahtari(kimlik: string | null | undefined): string {
   const k = String(kimlik ?? "").trim();

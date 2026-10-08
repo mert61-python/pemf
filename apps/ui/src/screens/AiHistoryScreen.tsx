@@ -30,7 +30,7 @@ import { downloadFileWithAuth } from "@/services/dosyaIndir";
 import { emitToast } from "@/services/toastBridge";
 import { TakipGrafigi } from "@/components/domain/TakipGrafigi";
 import { takipSerisiKur } from "@/utils/takipSerisi";
-import { kapsamda } from "@/utils/sonAnaliz";
+import { kapsamda, kayitHastaAnahtari } from "@/utils/sonAnaliz";
 import { serviceConfig } from "@/services/config";
 import { isDesktopHost } from "@/services/desktopSession";
 
@@ -42,6 +42,8 @@ interface AiAnalysis {
   module_id: string;
   module_label: string;
   patient_name: string;
+  /** Hastanın opak kimliği (2026-09-12 taşıması; eski kayıtlarda boş). D2.71: çip/süzme bununla — ad değil. */
+  patient_uuid?: string;
   operator_email: string;  // analizi yapan hekim (klinik-içi "Benim/Tüm Klinik" filtresi)
   input_type: string;
   result_summary: string;
@@ -284,12 +286,30 @@ export function AiHistoryScreen() {
   // HASTA FİLTRESİ (2026-08-07): "bu hastaya hangi AI modülü uygulandı, sonucu neydi?"
   // sorusunun cevabı tek dokunuşla görünsün. Liste yüklü kayıtlardan türetilir.
   const hastalar = useMemo(() => {
-    // ⚠️ D2.70 · Y103: kimliksizken kayıt gösterilmez — hasta adı çipleri de (kapsamlı çip türetimi D2.71'de).
+    // ⚠️ D2.70 · Y103: kimliksizken kayıt gösterilmez — hasta adı çipleri de.
     if (!myEmail) return [];
-    const seen = new Set<string>();
-    for (const it of items) if (it.patient_name) seen.add(it.patient_name);
-    return Array.from(seen).sort((a, b) => a.localeCompare(b, "tr"));
-  }, [items, myEmail]);
+    // ⚠️ D2.71 (B-6.18 · B-6.20 · O-B.2): çipler KAPSAM İÇİ kayıtlardan ve hasta KİMLİĞİYLE kurulur. Eskiden ham listeden ve
+    // ADLA kuruluyordu → ev sahibi başka hekimin hastasının adını çipte görüyordu (KVKK) ve aynı adlı iki hayvan tek çipte
+    // birleşiyor, süzme + takip eğrisi iki hayvanı karıştırıyordu. Aynı görünen ad birden çok hastaya aitse etiket ayırt
+    // edici sonek alır (kimliğin son 4 hanesi; kimliksiz ESKİ kayıtlar "eski kayıt"). Kapı: __tests__/aiGecmisiHastaCipleri.D271.web.test.tsx.
+    const anahtarlar = new Map<string, { ad: string; kimlik: string }>();
+    for (const it of items) {
+      if (!it.patient_name || !kapsamda(it, etkinScope, myEmail)) continue;
+      const anahtar = kayitHastaAnahtari(it);
+      if (anahtar && !anahtarlar.has(anahtar)) anahtarlar.set(anahtar, { ad: it.patient_name, kimlik: it.patient_uuid || "" });
+    }
+    const adSayisi = new Map<string, number>();
+    for (const { ad } of anahtarlar.values()) adSayisi.set(ad, (adSayisi.get(ad) || 0) + 1);
+    return Array.from(anahtarlar, ([anahtar, { ad, kimlik }]) => ({
+      anahtar,
+      etiket: (adSayisi.get(ad) || 0) > 1 ? `${ad} · ${kimlik ? `#${kimlik.slice(-4)}` : "eski kayıt"}` : ad,
+    })).sort((a, b) => a.etiket.localeCompare(b.etiket, "tr"));
+  }, [items, myEmail, etkinScope]);
+  // Kapsam değişip seçili hasta listeden çıkarsa süzgeç "Tüm hastalar"a döner (boş listeye kilitli kalmasın).
+  useEffect(() => {
+    if (hastaFiltre !== "__all__" && !hastalar.some((h) => h.anahtar === hastaFiltre)) setHastaFiltre("__all__");
+  }, [hastalar, hastaFiltre]);
+  const seciliHastaEtiketi = hastalar.find((h) => h.anahtar === hastaFiltre)?.etiket ?? "";
 
   const shown = useMemo(
     () => items.filter((it) => {
@@ -299,7 +319,7 @@ export function AiHistoryScreen() {
       // "düzgün çalışıyor mu?" diye sorduğu şeyin ta kendisi. Tek kaynak: patientScope.
       // ("Benim" = operator_email eşleşen VEYA sahipsiz → hiçbir analiz kaybolmaz.)
       if (!kapsamda(it, etkinScope, myEmail)) return false;
-      if (hastaFiltre !== "__all__" && (it.patient_name || "") !== hastaFiltre) return false;
+      if (hastaFiltre !== "__all__" && kayitHastaAnahtari(it) !== hastaFiltre) return false;
       return filter === "__all__" || (it.module_label || it.module_id) === filter;
     }),
     [items, filter, hastaFiltre, etkinScope, myEmail]
@@ -352,7 +372,7 @@ export function AiHistoryScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
           <Chip label="Tüm hastalar" active={hastaFiltre === "__all__"} onPress={() => setHastaFiltre("__all__")} />
           {hastalar.map((h) => (
-            <Chip key={h} label={h} active={hastaFiltre === h} onPress={() => setHastaFiltre(h)} />
+            <Chip key={h.anahtar} label={h.etiket} active={hastaFiltre === h.anahtar} onPress={() => setHastaFiltre(h.anahtar)} />
           ))}
         </ScrollView>
       )}
@@ -372,7 +392,7 @@ export function AiHistoryScreen() {
           ⚠️ `takipSerisiKur` null dönerse hiçbir şey çizilmez: tek ölçüm "eğilim" değildir
           ve boş bir eksen "veri mi yok, bozuk mu?" sorusunu doğurur. */}
       {!loading && hastaFiltre !== "__all__" && takipSeri ? (
-        <TakipGrafigi seri={takipSeri} hasta={hastaFiltre} />
+        <TakipGrafigi seri={takipSeri} hasta={seciliHastaEtiketi} />
       ) : null}
 
       {loading ? (
