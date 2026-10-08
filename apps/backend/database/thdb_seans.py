@@ -846,15 +846,21 @@ class SeansKarisimi:
                     if row:
                         existing_id = int(row['id'])
                 else:
-                    # name (+ owner_name) ile eslestir
+                    # name (+ owner_name) ile eslestir.
+                    # ⚠️ D2.21 (B-3.65): YALNIZ KİMLİKSİZ ayna satırları — kimliksiz bir seans başlangıcı AYNI ADLI başka bir
+                    # (kimlikli) hastanın satırına bağlanıp onun alanlarını NULL'luyordu; o hasta anonimleşince seans geri
+                    # dönüşsüz [ANONIM] oluyordu (ölçüldü). Kapı: tests/test_upsert_patient_AD_dali_kimlikli_satira_BAGLANMAZ_D221.py.
                     if owner_name is not None:
                         cursor.execute(
-                            'SELECT id FROM patients WHERE name = ? AND IFNULL(owner_name, "") = ? ORDER BY id LIMIT 1',
+                            'SELECT id FROM patients WHERE name = ? AND IFNULL(owner_name, "") = ? '
+                            "AND COALESCE(patient_uuid, '') = '' ORDER BY id LIMIT 1",
                             (name, owner_name),
                         )
                     else:
                         cursor.execute(
-                            'SELECT id FROM patients WHERE name = ? AND owner_name IS NULL ORDER BY id LIMIT 1', (name,)
+                            "SELECT id FROM patients WHERE name = ? AND owner_name IS NULL "
+                            "AND COALESCE(patient_uuid, '') = '' ORDER BY id LIMIT 1",
+                            (name,),
                         )
                     row = cursor.fetchone()
                     if row:
