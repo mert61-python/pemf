@@ -122,11 +122,15 @@ def seans_basladi(tur: str = "", model: str | None = None) -> None:
     Bağlamı fantom/petri ANALİZİ kurar (bir tümör konumu). Ölçüldü (plan, 20 olayın 17'si): elle ya da kedi seansında
     bağlam duruyordu → E barı BAŞKA hedefin (önceki analizin) E'sini "● canlı" gösteriyordu. Analiz ucu bağlamı modelsiz
     kurar → fantom vekili (bkz. `_predictor`), bu yüzden modelsiz bağlam "fantom" sayılır."""
+    global _ctx_nesli
     ctx = get_context()
     if ctx is None:
         return
     m = (model or "").strip().lower()
     if tur == "ai_pro" and m in ("fantom", "petri") and m == (ctx.get("model") or "fantom"):
+        # C2-1.15: korunan bağlam artık YENİ seansındır → nesil artar (biten döngünün geç kapanışı onu silmesin).
+        with _ctx_lock:
+            _ctx_nesli += 1
         return
     logger.info("Canlı E bağlamı yeni seans başlangıcında temizlendi (tür=%s, model=%s)", tur or "-", m or "-")
     set_context([])
