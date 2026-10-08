@@ -3953,26 +3953,36 @@ async def start_session(payload: SessionStartPayload, request: Request):
         except Exception:
             logging.getLogger(__name__).warning("Seans başlangıç audit kaydı yapılamadı.", exc_info=True)
 
-        # Asama-2 (1a): seans BASINDA gercek DB satirini ac (coil-run + sensor ona baglanir).
-        # Sahip e-postasini hasta kayittan (patient_id=UUID) cek — "raporu sahibe e-posta gonder"
-        # icin history'de session.owner_email dolu gelsin. Best-effort (yoksa bos string).
-        owner_email = _lookup_owner_email(payload.patient_id)
-        # KVKK retention (2026-06-28): bu tedavi icin hastanin last_treatment_at'ini guncelle
-        # (inaktiflik sayaci → 5 yil sonra anonimlestirme bunu baz alir).
-        if payload.patient_id:
-            try:
-                _pdb = get_patient_database()
-                if _pdb is not None:
-                    _pdb.touch_last_treatment(payload.patient_id)
-            except Exception:
-                logging.getLogger(__name__).debug("touch_last_treatment hatasi", exc_info=True)
-
         # Best-effort: DB hatasi seansi/donanimi DURDURMASIN → db_session_id=None kalir (eski davranis).
         # P-1 fix: senkron SQLCipher yazimlari (upsert_patient/start_session/set_meta/set_param) event-loop'u
         # BLOKLAMASIN → tumu tek to_thread'de; hizli lock-update (db_session_id) async'te sonrasinda yapilir.
         _started_epoch_snap = _active_session.get("started_epoch")
+        # C2-2.9: Hasta Özeti kartının hasta kaydı da bu iş parçacığında okunur (sürüşten sonra döngüde okunuyordu).
+        _hasta_kaydi: dict = {}
 
         def _persist_session_start():
+            # ⚠️ C2-2.9 (2-C inceleme · Ö.4-Y8): hasta DB işleri (sahip e-postası, son tedavi damgası, Hasta Özeti kaydı) OLAY
+            # DÖNGÜSÜNDE senkron koşuyordu — hasta DB'si kilitliyken (`busy_timeout` 5 sn; toplu silme `PatientDatabase.lock`'u
+            # tutarken 10 sn) uçuştaki başlatma ACİL DURDUR'u ve donanım STOP'unu 5–10 sn bekletiyordu (ölçüldü). Artık bu iş
+            # parçacığında; yeni `await` noktası EKLENMEZ (mühür denetimleri ve sürüş sonrası atomik bölge değişmez).
+            # Asama-2 (1a): seans BASINDA gercek DB satirini ac (coil-run + sensor ona baglanir).
+            # Sahip e-postasini hasta kayittan (patient_id=UUID) cek — "raporu sahibe e-posta gonder"
+            # icin history'de session.owner_email dolu gelsin. Best-effort (yoksa bos string).
+            owner_email = _lookup_owner_email(payload.patient_id)
+            # KVKK retention (2026-06-28): bu tedavi icin hastanin last_treatment_at'ini guncelle
+            # (inaktiflik sayaci → 5 yil sonra anonimlestirme bunu baz alir).
+            if payload.patient_id:
+                try:
+                    _pdb = get_patient_database()
+                    if _pdb is not None:
+                        _pdb.touch_last_treatment(payload.patient_id)
+                except Exception:
+                    logging.getLogger(__name__).debug("touch_last_treatment hatasi", exc_info=True)
+                try:
+                    _pdb = get_patient_database()
+                    _hasta_kaydi["kayit"] = _pdb.get_patient(payload.patient_id) if _pdb else None
+                except Exception:
+                    logging.getLogger(__name__).debug("Hasta Özeti snapshot lookup hatasi", exc_info=True)
             db = _get_treatment_db()
             if db is None:
                 return None, None
@@ -4355,8 +4365,8 @@ async def start_session(payload: SessionStartPayload, request: Request):
         _patient_snap = {"name": _pname or "İsimsiz", "species": "", "breed": "", "owner": ""}
         if payload.patient_id:
             try:
-                _pdb = get_patient_database()
-                _rec = _pdb.get_patient(payload.patient_id) if _pdb else None
+                # C2-2.9: kayıt başlatmadaki iş parçacığında okundu (olay döngüsünde hasta DB G/Ç'si yok).
+                _rec = _hasta_kaydi.get("kayit")
                 if _rec:
                     _patient_snap = {
                         "name": (_rec.get("name") or _pname or "İsimsiz"),
