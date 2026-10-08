@@ -5819,6 +5819,23 @@ def _hasta_adi_kimlikten(hasta_kimligi: str) -> str:
         return ""
 
 
+def _ad_doldurma_izni(request) -> bool:
+    """S-A1.3 (a) · Y123 (2-C incelemesi): D2.69 ad doldurması bu isteğe açık mı? Kayıtlı operatörlü cihazda JETONSUZ bir LAN
+    isteği hasta kimliğinden ADI öğrenemez (Y103: aynı istemciye hasta listesi zaten kapalı — kimlik→ad kâhini kapanır; kayıt
+    yine kimlikle yazılır). Jetonlu hekim, operatörsüz klinik (Kural 2) ve cihazın kendi ekranı değişmez. Kimlik DB'si
+    okunamazsa doldurulmaz (fail-closed — Y113). Senkron (kimlik DB okuması): olay döngüsü DIŞINDA çağrılır."""
+    try:
+        from servers import auth as _auth
+        from servers import operator_tokens as _jetonlar
+
+        if _jetonlar.cozumle(_auth._operator_jetonu(request)) or _auth.cihazin_kendisinden_mi(request):
+            return True
+        return not _auth.kayitli_operator_var()
+    except Exception:
+        logging.getLogger(__name__).warning("AI kaydi: ad doldurma izni belirlenemedi -> doldurulmadi", exc_info=True)
+        return False
+
+
 @app.post("/api/ai/log")
 async def log_ai_result(payload: AiLogPayload, request: Request):
     """AI analiz sonucunu ŞİFRELİ (SQLCipher) geçmişe profesyonel+detaylı kaydeder (ai_analyses tablosu).
@@ -5845,7 +5862,7 @@ async def log_ai_result(payload: AiLogPayload, request: Request):
 
         _hasta_kimligi = str(payload.patient_id or "").strip()
         _hasta_adi = str(payload.patient_name or "").strip()
-        if _hasta_kimligi and not _hasta_adi:
+        if _hasta_kimligi and not _hasta_adi and await asyncio.to_thread(_ad_doldurma_izni, request):
             _hasta_adi = await asyncio.to_thread(_hasta_adi_kimlikten, _hasta_kimligi)
         rid = await asyncio.to_thread(
             db.add_ai_analysis,
