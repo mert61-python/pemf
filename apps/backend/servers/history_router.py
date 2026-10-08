@@ -313,16 +313,36 @@ def _seans_sahipligi(request: Request, db, kimlikler: list, olay: str, scope: st
     sahiplik_kapisi(request, db.seans_sahipleri(kimlikler), olay=olay, scope=scope)
 
 
+def _tekil_seans_sil(request: Request, db, session_id: int) -> dict:
+    """İki tekil silme ucunun (`POST /delete`, `DELETE /{id}`) TEK gövdesi.
+
+    ⚠️ D2.43 (B-2.7 · B-2.10): tedavi kaydının (uygulanan doz dahil) geri dönüşsüz silinmesi izsizdi ve olmayan seansı
+    silmek 'success' dönüyordu → her silme `kimlikli_yaz` ile izlenir (kimlik sunucuda çözülür), olmayan seans 404
+    (iz `bulunamadi`). Sıra: önce kimlik/sahiplik (D2.72 — kimliksize varlık bilgisi verilmez), sonra varlık.
+    Kapı: tests/test_seans_tekil_silme_IZ_ve_404_D243.py.
+    """
+    from servers import audit_log as _iz
+    from servers.silme_yetkisi import sahiplik_kapisi
+
+    scope = f"id={session_id}"
+    sahipler = db.seans_sahipleri([session_id])
+    sahiplik_kapisi(request, sahipler, olay="history.delete", scope=scope)
+    if not sahipler:
+        _iz.kimlikli_yaz(request, "history.delete", scope=scope, item_count=0, outcome="bulunamadi")
+        raise HTTPException(status_code=404, detail="Seans bulunamadı — zaten silinmiş olabilir; listeyi yenileyin.")
+    try:
+        db.delete_session(session_id)
+    except Exception as e:
+        logger.error(f"Error deleting session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail="İşlem başarısız")
+    _iz.kimlikli_yaz(request, "history.delete", scope=scope, item_count=1)
+    return {"status": "success"}
+
+
 @router.post("/delete")
 def delete_session_compat(request: Request, payload: HistoryDeletePayload, db=Depends(get_db)):
     """Backward-compatible delete route used by the current Expo app."""
-    _seans_sahipligi(request, db, [payload.session_id], "history.delete", f"id={payload.session_id}")
-    try:
-        db.delete_session(payload.session_id)
-        return {"status": "success"}
-    except Exception as e:
-        logger.error(f"Error deleting session {payload.session_id}: {e}")
-        raise HTTPException(status_code=500, detail="İşlem başarısız")
+    return _tekil_seans_sil(request, db, payload.session_id)
 
 
 class HistoryNotesPayload(BaseModel):
@@ -378,14 +398,25 @@ def delete_sessions_bulk(request: Request, payload: HistoryBulkDeletePayload, db
 
 
 @router.post("/update_notes")
-def update_notes(payload: HistoryNotesPayload, db=Depends(get_db)):
+def update_notes(request: Request, payload: HistoryNotesPayload, db=Depends(get_db)):
     """Bir seansın notlarını günceller (Expo Geçmiş ekranı). /{session_id}'den ÖNCE tanımlı."""
     try:
         db.update_session_notes(payload.session_id, payload.notes)
-        return {"status": "success"}
     except Exception as e:
         logger.error(f"Error updating notes for session {payload.session_id}: {e}")
         raise HTTPException(status_code=500, detail="İşlem başarısız")
+    # ⚠️ D2.43 (B-2.10): tıbbi kaydın değişmesi izlenir — kim, hangi seans. İÇERİK YAZILMAZ: not METNİ ize girmez
+    # (denetim izi verinin ikinci kopyası olamaz), yalnız notun var olup olmadığı.
+    from servers import audit_log as _iz
+
+    _iz.kimlikli_yaz(
+        request,
+        "history.notes",
+        scope=f"id={payload.session_id}",
+        item_count=1,
+        detail={"not_var": bool((payload.notes or "").strip())},
+    )
+    return {"status": "success"}
 
 
 def _epoch_to_hms(epoch):
@@ -556,10 +587,4 @@ def get_session_detail(session_id: int, db=Depends(get_db)):
 @router.delete("/{session_id}")
 def delete_session(session_id: int, request: Request, db=Depends(get_db)):
     """Seans sil"""
-    _seans_sahipligi(request, db, [session_id], "history.delete", f"id={session_id}")
-    try:
-        db.delete_session(session_id)
-        return {"status": "success"}
-    except Exception as e:
-        logger.error(f"Error deleting session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail="İşlem başarısız")
+    return _tekil_seans_sil(request, db, session_id)

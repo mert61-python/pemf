@@ -23,6 +23,9 @@ import {
   YALNIZ_KENDI_SILME,
 } from "@/utils/patientScope";
 import { useUserMode } from "@/context/UserModeContext";
+
+/** D2.43: tekil silmede seans sunucuda yoksa (başka cihaz/hekim az önce silmiş) gösterilen metin. */
+export const ZATEN_SILINMIS_SEANS = "Bu seans zaten silinmiş — liste yenilendi.";
 import { downloadFileWithAuth } from "@/services/dosyaIndir";
 import { useCokluSecim } from "@/hooks/useCokluSecim";
 import { SecimCubugu } from "@/components/ui/SecimCubugu";
@@ -453,12 +456,23 @@ function SessionCard({
     if (silmeEngeli) { showToast(silmeEngeli, "error"); return; }   // D2.72 · Y92 (karar üst bileşende, tek kaynak)
     const ok = await platformConfirm("Kaydı Sil", "Bu seans kaydını silmek istediğinizden emin misiniz?", "Sil");
     if (!ok) return;
-    const res = await apiPost<{status: string}>("/history/delete", { session_id: session.id }, { status: "error" });
+    // ⚠️ D2.43 (B-2.7): olmayan seansın silinmesi artık 404 (eskiden 'success'). "Zaten silinmiş" bir HATA değildir —
+    // başka bir cihaz/hekim az önce silmiş olabilir: söylenir ve liste yenilenir. Diğer hatalarda sunucunun gerekçesi.
+    const hata = { durum: 0, detay: "" };
+    const res = await apiPost<{status: string}>(
+      "/history/delete",
+      { session_id: session.id },
+      { status: "error" },
+      { silent: true, onHttpError: (durum, detay) => { hata.durum = durum; hata.detay = detay || ""; } },
+    );
     if (res.status === "success") {
       showToast("Seans silindi.", "success");
       onRefresh();
+    } else if (hata.durum === 404) {
+      showToast(ZATEN_SILINMIS_SEANS, "info");
+      onRefresh();
     } else {
-      showToast("Silme işlemi başarısız.", "error");
+      showToast(hata.detay || "Silme işlemi başarısız.", "error");
     }
   };
 

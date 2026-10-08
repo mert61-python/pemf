@@ -49,6 +49,7 @@ import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
 import { PatientScreen } from "@/screens/PatientScreen";
 import { TreatmentHistoryScreen } from "@/screens/TreatmentHistoryScreen";
 import { YALNIZ_KENDI_SILME } from "@/utils/patientScope";
+import { ZATEN_SILINMIS_SEANS } from "@/screens/TreatmentHistoryScreen";
 import { aktifOperator, pinleSec, Sahne, sahteSunucu, type Istek, type SahteOperator } from "../../context/__tests__/operatorAparati";
 
 const A = "dr.a@klinik.com";
@@ -101,10 +102,13 @@ const EKRAN = {
 let s: Sahne;
 let onaylar: string[];
 let kayit: Istek[];
+/** D2.43: tekil seans silmesinin sunucu yanıt kodu (404 = zaten silinmiş). */
+let tekilDurum = 200;
 beforeEach(() => {
   jest.useFakeTimers();
   s = new Sahne();
   onaylar = [];
+  tekilDurum = 200;
   jest.spyOn(window, "confirm").mockImplementation((m?: string) => { onaylar.push(String(m)); return true; });
 });
 afterEach(async () => {
@@ -121,6 +125,9 @@ async function kur(ekran: EkranAdi, mod: UserMode, oturum: string, operatorler: 
     if (yontem === "GET" && yol === "/patients") return [200, { status: "success", data: hastalar }];
     if (yontem === "GET" && yol.startsWith("/history/")) return [200, yol.includes("cursor=") ? [] : seanslar];
     if (yontem === "GET" && yol.startsWith("/ai/log")) return [200, { status: "success", data: [] }];
+    if (yontem === "POST" && yol === "/history/delete" && tekilDurum !== 200) {
+      return [tekilDurum, { detail: "Seans bulunamadı — zaten silinmiş olabilir; listeyi yenileyin." }];
+    }
     if (yontem === "POST" && /delete/.test(yol)) return [200, { status: "success", silinen: 1 }];
     return undefined;
   });
@@ -239,5 +246,31 @@ describe.each(["hasta", "seans"] as EkranAdi[])("D2.72 · Y92 — %s silme yaln�
       try { await tumunuSecVeSil(ekran); } catch { /* çubuk yok — D2.70 katmanı */ }
     }
     expect(silmeler(ekran)).toEqual([]);
+  });
+});
+
+describe("D2.43 · B-2.7 — tekil seans silmesi 404 (zaten silinmiş)", () => {
+  it("KRİTİK: sunucu 404 → hata değil 'zaten silinmiş' bilgisi ve liste YENİLENİR", async () => {
+    await kur("seans", "veterinarian", A, IKI_HEKIM, { A, B, S: "" });
+    await pinleSec(s, "Dr. A");
+    await s.bosalt(10);
+    tekilDurum = 404;
+    const once = kayit.filter((k) => k.yontem === "GET" && k.yol.startsWith("/history/")).length;
+    await s.tikla(EKRAN.seans.tekilEtiket("A"));
+    await s.bosalt(10);
+    expect(silmeler("seans").length).toBe(1); // ARA DOĞRULAMA: istek gitti, sunucu 404 dedi
+    expect(mockToast.mock.calls).toContainEqual([ZATEN_SILINMIS_SEANS, "info"]);
+    expect(kayit.filter((k) => k.yontem === "GET" && k.yol.startsWith("/history/")).length).toBeGreaterThan(once);
+  });
+
+  it("KARŞIT: başka bir hata (500) 'zaten silinmiş' DEMEZ, sunucunun gerekçesini gösterir", async () => {
+    await kur("seans", "veterinarian", A, IKI_HEKIM, { A, B, S: "" });
+    await pinleSec(s, "Dr. A");
+    await s.bosalt(10);
+    tekilDurum = 500;
+    await s.tikla(EKRAN.seans.tekilEtiket("A"));
+    await s.bosalt(10);
+    expect(toastlar()).not.toContain(ZATEN_SILINMIS_SEANS);
+    expect(mockToast.mock.calls.some((c) => c[1] === "error")).toBe(true);
   });
 });

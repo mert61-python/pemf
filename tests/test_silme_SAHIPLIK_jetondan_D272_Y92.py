@@ -100,10 +100,11 @@ class _Hasta:
         )
 
     @staticmethod
-    def tekiller(o, istemci, kimlik, jeton=""):
+    def tekiller(o, istemci, kimlik, jeton="", ikinci=None):
+        """İki tekil uç; `ikinci` verilirse ikinci uç BAŞKA kayda gider (aynı kaydı iki kez silmek 404 — D2.43)."""
         return [
             istemci.delete(f"/api/patients/{kimlik}", headers=_b(jeton)),
-            istemci.post(f"/api/patients/{kimlik}/delete", json={}, headers=_b(jeton)),
+            istemci.post(f"/api/patients/{kimlik if ikinci is None else ikinci}/delete", json={}, headers=_b(jeton)),
         ]
 
 
@@ -133,10 +134,13 @@ class _Seans:
         )
 
     @staticmethod
-    def tekiller(o, istemci, kimlik, jeton=""):
+    def tekiller(o, istemci, kimlik, jeton="", ikinci=None):
+        """İki tekil uç; `ikinci` verilirse ikinci uç BAŞKA kayda gider (aynı kaydı iki kez silmek 404 — D2.43)."""
         return [
             istemci.delete(f"/api/history/{kimlik}", headers=_b(jeton)),
-            istemci.post("/api/history/delete", json={"session_id": kimlik}, headers=_b(jeton)),
+            istemci.post(
+                "/api/history/delete", json={"session_id": kimlik if ikinci is None else ikinci}, headers=_b(jeton)
+            ),
         ]
 
 
@@ -215,18 +219,22 @@ def test_KRITIK_red_IZDE_reddedildi_olarak_kalir(o, t):
 @TURLER
 def test_KARSIT_kendi_kayitlari_toplu_ve_tekil_SILINIR(o, t):
     j = _iki_hekim(o)
-    ayse, mehmet = t.tohum(o, AYSE, 3), t.tohum(o, MEHMET)
+    ayse, mehmet = t.tohum(o, AYSE, 4), t.tohum(o, MEHMET)
     r = t.toplu(o, o.lan, ayse[:2], j[AYSE])
     assert r.status_code == 200 and r.json().get("silinen") == 2, r.text[:200]
-    assert all(x.status_code == 200 for x in t.tekiller(o, o.lan, ayse[2], j[AYSE])), f"{t.ad}: kendi tekil silme"
+    assert all(x.status_code == 200 for x in t.tekiller(o, o.lan, ayse[2], j[AYSE], ikinci=ayse[3])), (
+        f"{t.ad}: kendi tekil silme"
+    )
     assert (t.var_olan(o, ayse), t.var_olan(o, mehmet)) == (0, 1)
 
 
 @TURLER
 def test_KARSIT_KURAL2_operatorsuz_klinik_jetonsuz_SILER(o, t):
     """Kural 2: kayıtlı operatörü olmayan tek hekimli klinik kilitlenmez (sahipsiz ve beyanlı kayıtlar dahil)."""
-    kayitlar = t.tohum(o, TEK, 2) + t.tohum(o, "") + t.tohum(o, "eski@klinik.com")
+    kayitlar = t.tohum(o, TEK, 2) + t.tohum(o, "") + t.tohum(o, "eski@klinik.com", 2)
     r = t.toplu(o, o.lan, kayitlar[:3], "")
     assert r.status_code == 200 and r.json().get("silinen") == 3, f"Kural 2 kilitlendi: {r.status_code} {r.text[:200]}"
-    assert all(x.status_code == 200 for x in t.tekiller(o, o.lan, kayitlar[3], "")), "Kural 2: tekil silme kilitlendi"
+    assert all(x.status_code == 200 for x in t.tekiller(o, o.lan, kayitlar[3], "", ikinci=kayitlar[4])), (
+        "Kural 2: tekil silme kilitlendi"
+    )
     assert t.var_olan(o, kayitlar) == 0

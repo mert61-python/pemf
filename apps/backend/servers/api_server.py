@@ -6195,9 +6195,10 @@ async def export_clinic_data(payload: DataExportPayload, request: Request):
     # ⚠️ Dışa aktarma, at-rest şifrelemesinin dışına ÇIKAN tek meşru yoldur: klinik verisinin
     # tamamı, çağıranın SEÇTİĞİ bir parolayla tek dosyaya iner. Kim, ne zaman, nereden ve kaç
     # kayıt çıkardı — bu kayıt olmadan bir veri sızıntısı geriye dönük hiç görünmez.
+    # ⚠️ D2.43 (B-2.10): "kim" sorusunun cevabı da izde — `kimlikli_yaz` (eskiden `yaz`: jetonlu istekte de operatör '').
     from servers import audit_log as _iz
 
-    _iz.yaz(
+    _iz.kimlikli_yaz(
         request,
         "data.export",
         scope="klinik",
@@ -6332,9 +6333,10 @@ async def import_clinic_data(payload: DataImportPayload, request: Request):
     # ⚠️ `replace=True` ise bu işlem cihazdaki TÜM tıbbi kayıtları SİLDİ. Denetim izi (ekleme-only)
     # silinmediği için "hangi yedek, ne zaman, kaç kaydın üzerine yazıldı" sorusu cevaplanabilir
     # kalır — aksi hâlde yanlış yedeği geri yükleyen bir işlem geriye dönük görünmez olurdu.
+    # ⚠️ D2.43 (B-2.10): operatörlü (`kimlikli_yaz`; eskiden `yaz` — operatör hep '').
     from servers import audit_log as _iz
 
-    _iz.yaz(
+    _iz.kimlikli_yaz(
         request,
         "data.import",
         scope=("replace_all" if dolu else "bos_cihaz"),
