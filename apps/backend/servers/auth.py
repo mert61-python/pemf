@@ -482,7 +482,7 @@ def cozumlenmis_operator_adi(cozulen_email: str, beyan_ad: str = "") -> str:
     """Kayda yazılacak operatör ADI — e-postayla AYNI kurala bağlı (D2.41 · B-2.19).
 
     * E-posta cihazda KAYITLI bir operatöre aitse ad onun KAYITLI görünen adıdır (beyan yok sayılır).
-    * E-posta çözüldü ama kayıtlı değilse (Kural 2 beyanı) beyan edilen ad kabul edilir.
+    * E-posta çözüldü ama kayıtlı değilse beyan edilen ad YALNIZ cihazda kayıtlı operatör YOKSA (Kural 2) kabul edilir.
     * E-posta ÇÖZÜLMEDİYSE: cihazda kayıtlı operatör VARSA ad da YOK (kanıtsız beyan bir hekimin adını taşıyamaz — seans
       satırı ve `session_started` izi); kayıtlı operatör YOKSA (Kural 2: tek hekimli klinik, yalnız ad gönderen eski
       istemci) beyan edilen ad kabul edilir.
@@ -500,4 +500,6 @@ def cozumlenmis_operator_adi(cozulen_email: str, beyan_ad: str = "") -> str:
     for op in operatorler:
         if (op.get("email") or "").strip().lower() == e:
             return (op.get("display_name") or "").strip() or e
-    return (beyan_ad or "").strip()
+    # ⚠️ B2-2.3: kayıtlı operatörlü cihazda kayıtsız (doğrulanmamış) e-postanın yanındaki ad da kanıtsızdır — kayıtlı bir hekimin
+    # görünen adını ("Dr. Ayşe") seans satırına / `session_started` izine / CSV'ye taşıyamaz. Kural 2 (operatör yok) değişmez.
+    return (beyan_ad or "").strip() if not operatorler else ""
