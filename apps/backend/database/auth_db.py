@@ -9,6 +9,7 @@ hesabıdır. `.edu` içeren e-posta → araştırma-modu profili görünür (gat
 import hashlib
 import hmac
 import logging
+import os
 import re
 import secrets
 import sqlite3
@@ -69,13 +70,26 @@ class AuthDB:
     # kapatır → çağıran FAIL-CLOSED (B2-1.1). Kapı: tests/test_kimlik_DB_KILITLIYKEN_ACIL_DURDUR_BEKLEMEZ_B2B2_1.py
     _KATI_OKUMA_BEKLEME_SN = 0.25
 
-    def _kati_oku(self, sql: str, params=()):
-        c = sqlite3.connect(
-            Path(self.db_path).resolve().as_uri() + "?mode=rw",
+    def _kati_baglan(self):
+        # ⚠️ B2B2-3: URI yalnız sürücü harfli yerel yolda. `\\` ile başlayan yolda (UNC: `PEMF_DATA_DIR=\\sunucu\pay`, ağa
+        # yönlendirilmiş %APPDATA%; `\\?\` öneki) URI'nin otorite alanı dolar ve SQLite reddeder ("invalid uri authority") →
+        # her kimlik kararı fail-closed kalıyordu (operatörsüz klinik dahil 428). `abspath`: `resolve()` eşlenmiş ağ sürücüsünü
+        # UNC'ye çözerdi. `\\` dalı `_conn` ile aynı düz yolu açar; dosya YOKSA açmaz (yaratmasın — `mode=rw` eşdeğeri).
+        # Kapı: tests/test_kimlik_DB_UNC_yolunda_KATI_okuma_ACILIR_B2B2_3.py
+        yol = os.path.abspath(str(self.db_path))
+        if yol.startswith("\\\\"):
+            if not os.path.isfile(yol):
+                raise sqlite3.OperationalError(f"kimlik veritabani dosyasi yok: {yol}")
+            return sqlite3.connect(yol, check_same_thread=False, timeout=self._KATI_OKUMA_BEKLEME_SN)
+        return sqlite3.connect(
+            Path(yol).as_uri() + "?mode=rw",
             uri=True,
             check_same_thread=False,
             timeout=self._KATI_OKUMA_BEKLEME_SN,
         )
+
+    def _kati_oku(self, sql: str, params=()):
+        c = self._kati_baglan()
         try:
             c.row_factory = sqlite3.Row
             return c.execute(sql, params).fetchall()
