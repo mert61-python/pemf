@@ -5726,6 +5726,20 @@ def _migrate_ai_jsonl_once(db) -> None:
         logging.exception("ai jsonl migrate failed")
 
 
+def _hasta_adi_kimlikten(hasta_kimligi: str) -> str:
+    """D2.69 (B-6.29): AI kaydı hasta KİMLİĞİYLE gelip adı boşsa ad hasta defterinden doldurulur (eski/hatalı istemci). Bilinmeyen
+    kimlik ya da okunamayan defter → '' (ad UYDURULMAZ; kayıt yine kimliğe bağlıdır)."""
+    try:
+        from database.patient_database import get_patient_database
+
+        pdb = get_patient_database()
+        h = pdb.get_patient(hasta_kimligi) if pdb else None
+        return str((h or {}).get("name") or "").strip()
+    except Exception:
+        logging.getLogger(__name__).warning("AI kaydi: hasta adi kimlikten okunamadi (ad bos kaldi).", exc_info=True)
+        return ""
+
+
 @app.post("/api/ai/log")
 async def log_ai_result(payload: AiLogPayload, request: Request):
     """AI analiz sonucunu ŞİFRELİ (SQLCipher) geçmişe profesyonel+detaylı kaydeder (ai_analyses tablosu).
@@ -5740,12 +5754,16 @@ async def log_ai_result(payload: AiLogPayload, request: Request):
         await asyncio.to_thread(_ai_hasta_kimliklerini_tasi_bir_kez, db)
         from servers.auth import cozumlenmis_operator
 
+        _hasta_kimligi = str(payload.patient_id or "").strip()
+        _hasta_adi = str(payload.patient_name or "").strip()
+        if _hasta_kimligi and not _hasta_adi:
+            _hasta_adi = await asyncio.to_thread(_hasta_adi_kimlikten, _hasta_kimligi)
         rid = await asyncio.to_thread(
             db.add_ai_analysis,
             payload.mode,
             payload.module_id,
             payload.module,
-            str(payload.patient_name or "").strip(),
+            _hasta_adi,
             payload.input_type,
             payload.summary,
             payload.result_detail or {},
@@ -5753,7 +5771,7 @@ async def log_ai_result(payload: AiLogPayload, request: Request):
             # ⚠️ 2026-08-09 (Tier 1): AI analizinin sahibi de jetondan türetilir — aksi hâlde
             # "bu teşhisi kim yaptı" sorusunun cevabı doğrulanmamış bir dizeydi.
             cozumlenmis_operator(request, payload.operator_email),
-            str(payload.patient_id or "").strip(),
+            _hasta_kimligi,
         )
         return {"status": "success", "id": rid}
     except Exception:

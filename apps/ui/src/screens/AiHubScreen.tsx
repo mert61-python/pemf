@@ -561,7 +561,8 @@ function PetOwnerAiScreen() {
       if (response.ok && data.status === "success") {
         setResult(data);
         // AI Geçmişi'ne kaydet (Evcil Hayvan Sahibi FGS ağrı analizi de audit'e yazılsın — eskiden atlanıyordu).
-        logAiResult("", "Ağrı Analizi (FGS)", summarizeVision(data), { moduleId: "landmark", inputType: "image", detail: data });
+        // ⚠️ D2.69 (B-6.29): seçili hastanın ADIYLA — eskiden "" yazılıyordu, ev sahibi geçmişinde hayvan ayrımı oluşmuyordu.
+        logAiResult(secili?.name || "", "Ağrı Analizi (FGS)", summarizeVision(data), { moduleId: "landmark", inputType: "image", detail: data });
       } else {
         showToast(aiDetayCumlesi(data?.detail, "Teşhis sırasında hata oluştu."), "error");
       }
@@ -720,7 +721,7 @@ function PetOwnerAiScreen() {
       </View>
 
       <View style={{ marginTop: spacing.xl }}>
-        <DiseaseModule patientName="" />
+        <DiseaseModule patientName={secili?.name || ""} />
       </View>
     </View>
   );
@@ -747,6 +748,8 @@ const CAT_SOUND_ADVICE: Record<string, { emoji: string; title: string; text: str
  */
 function PetOwnerSoundCard() {
   const { showToast } = useToast();
+  // D2.69: ses analizi de seçili hastanın adıyla kaydedilir.
+  const { selectedPatient: secili } = useAppNav();
   const [audioUri, setAudioUri] = useState<string | null>(moduleCache.pet_owner_sound?.audioUri ?? null);
   const [fileName, setFileName] = useState<string>(moduleCache.pet_owner_sound?.fileName ?? "");
   const [webFile, setWebFile] = useState<any>(moduleCache.pet_owner_sound?.webFile ?? null);
@@ -819,7 +822,7 @@ function PetOwnerSoundCard() {
       const data = await response.json();
       if (response.ok && data.status === "success") {
         setResult(data);
-        logAiResult("", "Kedi Sesi", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob || 0) * 100)}`, { moduleId: "cat_sound", inputType: "audio", detail: data, confidence: data.top_1_prob });
+        logAiResult(secili?.name || "", "Kedi Sesi", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob || 0) * 100)}`, { moduleId: "cat_sound", inputType: "audio", detail: data, confidence: data.top_1_prob });
       } else {
         showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
       }
