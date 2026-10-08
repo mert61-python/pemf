@@ -433,7 +433,10 @@ export function AiHistoryScreen() {
 
                       {/* HEKİM DEĞERLENDİRMESİ (2026-08-06): AI çıktısı öneri, klinik karar hekimin.
                           Karar kaydın YANINA yazılır; AI sonucu değişmez. */}
+                      {/* ⚠️ B2-3.6 (2-B incelemesi): `key` = kimlik — kimlik değişince bileşen yeniden kurulur, yerel "gerekçeniz
+                          korunuyor" iletisi de (B2B-2 taslağı düşürdüğü gibi) düşer; yeni hekime ait olmayan bir hata gösterilmez. */}
                       <AiReviewControls
+                        key={myEmail}
                         status={it.review_status}
                         note={it.review_note}
                         reviewedBy={it.reviewed_by}
