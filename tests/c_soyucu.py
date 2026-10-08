@@ -18,11 +18,31 @@ yapısını koruyacak biçimde boşlukla değiştirilir (dizin-tabanlı dilimlem
 
 from __future__ import annotations
 
+import ast
 import re
 
 
+def _python_kaynagi_mi(src: str) -> bool:
+    """C2-2.6 (2-C inceleme · O-B.1): girdi Python modülü olarak ayrışıyor VE üst düzeyde `def`/`class`/`import` taşıyorsa Python
+    kaynağıdır. C/C++/TS/TSX ayrışmaz; ayrışan kısa C ifadeleri (`a = 1 // x`) üst düzey tanım taşımaz → reddedilmez."""
+    try:
+        agac = ast.parse(src)
+    except (SyntaxError, ValueError):
+        return False
+    return any(
+        isinstance(d, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Import, ast.ImportFrom))
+        for d in agac.body
+    )
+
+
 def c_soy(src: str) -> str:
-    """Yorumları söker; string/char literalleri (içerik dahil) aynen korur."""
+    """Yorumları söker; string/char literalleri (içerik dahil) aynen korur.
+
+    ⚠️ C2-2.6: Python kaynağı REDDEDİLİR (`ValueError`) — `'`/`"` paritesi ve docstring'deki `/*` dosyanın yarısını boşaltıyordu
+    (O-B.1, ölçüldü); meta kapı (AST) takma ad / yerel değişken / başka modüldeki yardımcı biçimlerini kaçırıyordu. Koruma EN ALT
+    katta: çağıran hangi biçimde gelirse gelsin. Python kaynağını okuyan kapı AST ya da ham metin kullanır."""
+    if _python_kaynagi_mi(src):
+        raise ValueError("c_soy Python kaynağına uygulanamaz (C yorum sökücüsü) — AST ya da ham metin kullanın (O-B.1)")
     out = []
     i, n = 0, len(src)
     KOD, STR, CHR, SATIR, BLOK = 0, 1, 2, 3, 4

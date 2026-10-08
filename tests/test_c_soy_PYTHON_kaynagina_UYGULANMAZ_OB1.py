@@ -36,8 +36,25 @@ def _c_soy_cagrisi_mi(d) -> bool:
     return (isinstance(f, ast.Name) and f.id == "c_soy") or (isinstance(f, ast.Attribute) and f.attr == "c_soy")
 
 
+def _reddi_olcen_dugumler(agac) -> set[int]:
+    """`with pytest.raises(...)` gövdelerindeki düğümler: C2-2.6'dan beri `c_soy` Python kaynağını ÇALIŞMA ANINDA reddeder; bu
+    reddi ölçen kasıtlı çağrı ihlal değildir (2-C incelemesi — kapı `test_c_soy_PYTHON_kaynagini_CALISMA_ANINDA_reddeder_C2_2_6.py`)."""
+    ic: set[int] = set()
+    for w in ast.walk(agac):
+        if isinstance(w, ast.With) and any(
+            isinstance(i.context_expr, ast.Call)
+            and isinstance(i.context_expr.func, ast.Attribute)
+            and i.context_expr.func.attr == "raises"
+            for i in w.items
+        ):
+            for b in w.body:
+                ic.update(id(x) for x in ast.walk(b))
+    return ic
+
+
 def ihlaller(kaynak: str, ad: str) -> list[str]:
     agac = ast.parse(kaynak)
+    red_olcen = _reddi_olcen_dugumler(agac)
     py_adlari = set()
     for d in agac.body:
         if isinstance(d, (ast.Assign, ast.AnnAssign)) and d.value is not None:
@@ -51,6 +68,8 @@ def ihlaller(kaynak: str, ad: str) -> list[str]:
             saranlar.add(fn.name)
     bulgu = []
     for d in ast.walk(agac):
+        if id(d) in red_olcen:
+            continue
         if _c_soy_cagrisi_mi(d):
             for x in ast.walk(d):
                 if _py_sabiti(x) or (isinstance(x, ast.Name) and x.id in py_adlari):
