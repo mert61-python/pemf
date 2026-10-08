@@ -408,6 +408,10 @@ def enforce_privileged(request) -> None:
 #      klinik ve eski istemciler bozulmaz; ortada taklit edilecek bir kimlik de yoktur.
 #   3) Jeton yoksa ama beyan edilen e-posta KAYITLI BİR OPERATÖRE aitse → REDDEDİLİR (boş döner).
 #      Kanıtsız olarak kayıtlı bir hekimin adına yazmak, korumanın delindiği tek durumdu.
+#   ⚠️ Y109 (sahip kararı, 2-B incelemesi B2-2.2): (2) HARFİYEN — cihazda kayıtlı operatör VARSA jetonsuz HER beyan
+#      (kayıtlı olmayan, paylaşılan giriş e-postası, görünmez karakterle kayıtlı adrese GÖRSEL EŞ) kanıtsızdır → boş.
+#      Eskiden yalnız (3) uygulanıyordu: kayıtsız beyan değerlendirmeyi imzalıyor (Y88 baypası), hasta/AI/seans sahibi
+#      oluyor, tünelden anonim AI Pro mührü ekranda bir hekimin adresi gibi görünen dizeyle basılıyordu.
 #
 # ⚠️ İşlemi DURDURMAZ, yalnız atfı düşürür. Seans başlatmayı 403'e çevirmek, hasta masadayken
 # eski bir istemci yüzünden tedaviyi engellerdi; kaydın "sahipsiz" yazılması bundan iyidir.
@@ -470,6 +474,14 @@ def cozumlenmis_operator(request, beyan: str = "") -> str:
             logger.warning(
                 "Operatör beyanı KANITSIZ (jeton yok) ve e-posta cihazda kayıtlı → kayıt "
                 "SAHİPSİZ yazılıyor. İstemcinin PIN doğrulaması yapması gerekir."
+            )
+            return ""
+        # Y109: kural (2) harfiyen — kayıtlı operatörlü cihazda KAYITSIZ beyan (paylaşılan giriş, uydurma, görsel eş adres)
+        # da kanıtsızdır. Kapı: tests/test_kayitli_cihazda_JETONSUZ_KAYITSIZ_beyan_SAHIPSIZ_Y109.py
+        if kayitli_operator_var():
+            logger.warning(
+                "Operatör beyanı KANITSIZ (jeton yok) ve cihazda kayıtlı operatör var → kayıt SAHİPSİZ yazılıyor "
+                "(beyan yalnız operatörsüz klinikte kabul edilir). İstemcinin PIN doğrulaması yapması gerekir."
             )
             return ""
         return e

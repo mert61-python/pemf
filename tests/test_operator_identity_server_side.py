@@ -14,6 +14,7 @@ YENİ KURAL (bkz. apps/backend/servers/auth.cozumlenmis_operator):
   1) Jeton varsa → e-posta JETONDAN (beyan yok sayılır)
   2) Jeton yok + cihazda kayıtlı operatör yok → beyan kabul (tek veterinerli klinik bozulmaz)
   3) Jeton yok + beyan KAYITLI bir operatöre ait → REDDEDİLİR (kayıt sahipsiz yazılır)
+  Y109: (2) harfiyen — kayıtlı operatörlü cihazda jetonsuz HER beyan (kayıtsız, görsel eş dahil) sahipsiz.
 
 ⚠️ Reddediş işlemi DURDURMAZ, yalnız atfı düşürür: seans başlatmayı 403'e çevirmek hasta
 masadayken eski bir istemci yüzünden tedaviyi engellerdi.
@@ -139,11 +140,21 @@ def test_bos_beyan_bos_doner(api):
     assert _coz(api, beyan="") == ""
 
 
-def test_eposta_normalize_edilir(client, api):
+def test_eposta_normalize_edilir_KURAL2(client, api):
+    """Beyan normalleştirmesi Kural 2'de (operatörsüz cihaz) ölçülür; jetonlu kimlik de normal biçimde döner."""
+    assert _coz(api, beyan="  YENI@Klinik.COM  ") == "yeni@klinik.com"
     _kaydet(client, "a@klinik.com")
     t = _jeton(client, "a@klinik.com")
     assert _coz(api, jeton=t) == "a@klinik.com"
-    assert _coz(api, beyan="  YENI@Klinik.COM  ") == "yeni@klinik.com"
+
+
+def test_KRITIK_kayitli_cihazda_KAYITSIZ_beyan_SAHIPSIZ_Y109(client, api):
+    """Y109 (B2-2.2): bu kol eskiden kusuru KİLİTLİYORDU — kayıtlı `a@` varken kayıtsız `yeni@` beyanının kimlik sayılmasını
+    bekliyordu (kural 2 "cihazda kayıtlı operatör YOKSA" der). Kayıtlı operatörlü cihazda jetonsuz HER beyan sahipsizdir:
+    kayıtsız, paylaşılan giriş ve görünmez karakterle kayıtlı adrese görsel eş adresler dahil."""
+    _kaydet(client, "a@klinik.com")
+    for beyan in ("  YENI@Klinik.COM  ", "klinik@ortak-giris.com", "a@klinik.com​", "a­@klinik.com"):
+        assert _coz(api, beyan=beyan) == "", f"kayıtlı operatörlü cihazda kanıtsız beyan kimlik sayıldı: {beyan!r}"
 
 
 # ── jeton yaşam döngüsü ──────────────────────────────────────────────────────
