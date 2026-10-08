@@ -93,6 +93,12 @@ export function OperatorProvider({
 
   useEffect(() => { void refresh(); }, [refresh]);
 
+  // ⚠️ B2-4.1 (2-B bağımsız incelemesi): sağlayıcı SÖKÜLÜNCE (çıkış ya da Supabase oturumu düşünce `PemfApp.AuthGate`
+  // uygulama ağacını söker) modül düzeyi operatör jetonu da DÜŞER. Eskiden yalnız `lock()` siliyordu: yeniden girişte yeni
+  // sağlayıcı "aktif operatör yok" ile başlarken istekler önceki hekimin jetonunu taşıyor, kimliksiz ekranda başlatılan
+  // seans / AI kaydı ona atfediliyordu (D2.32'nin çıkış yolu ikizi — ölçüldü). Kapı: __tests__/OperatorContext.B241.cikisJeton.web.test.tsx.
+  useEffect(() => () => { setOperatorToken(null); }, []);
+
   const enroll = useCallback(async (displayName: string, pin: string,
                                     eskiPin = ""): Promise<EnrollResult> => {
     const eposta = (session?.email || "").toLowerCase();
