@@ -330,12 +330,20 @@ def _tekil_seans_sil(request: Request, db, session_id: int) -> dict:
     if not sahipler:
         _iz.kimlikli_yaz(request, "history.delete", scope=scope, item_count=0, outcome="bulunamadi")
         raise HTTPException(status_code=404, detail="Seans bulunamadı — zaten silinmiş olabilir; listeyi yenileyin.")
+    # ⚠️ D2.17 (B-3.27): "bu hastanın acil durdurma kaydını ve dozunu kim sildi" — bağlı kayıtların SAYILARI silmeden
+    # ÖNCE alınır ve ize girer (içerik değil). Özet okunamazsa silme KISITLANMAZ; iz bunu söyler.
+    # Kapı: tests/test_seans_tekil_silme_OZETI_IZDE_D217.py.
+    try:
+        ozet = db.seans_silme_ozeti(session_id)
+    except Exception:
+        logger.warning("Seans %s silme ozeti okunamadi — iz ozetsiz yaziliyor.", session_id, exc_info=True)
+        ozet = {"ozet_okunamadi": True}
     try:
         db.delete_session(session_id)
     except Exception as e:
         logger.error(f"Error deleting session {session_id}: {e}")
         raise HTTPException(status_code=500, detail="İşlem başarısız")
-    _iz.kimlikli_yaz(request, "history.delete", scope=scope, item_count=1)
+    _iz.kimlikli_yaz(request, "history.delete", scope=scope, item_count=1, detail=ozet)
     return {"status": "success"}
 
 

@@ -466,6 +466,28 @@ class SeansKarisimi:
             ).fetchall()
         return {int(s[0]): (s[1] or "") for s in satirlar}
 
+    def seans_silme_ozeti(self, session_id: int) -> Dict[str, int]:
+        """Silinmek üzere olan seansın bağlı kayıtlarının SAYILARI (D2.17 · B-3.27) — denetim izine girer.
+
+        `olay` (session_events), `acil_durdurma` (bunlardan `emergency_stop`), `bobin_kosusu` (session_coil_runs = doz
+        kaydı: süre + frekans + yoğunluk), `sensor_ornegi`. İÇERİK YOK: olay yükü, hasta adı, not okunmaz. Silmeden ÖNCE
+        çağrılmalı. Hata çağırana gider (çağıran silmeyi KISITLAMAZ, yalnız izde "okunamadı" der)."""
+        sid = int(session_id)
+        with self._get_connection() as conn:
+            c = conn.cursor()
+            olay = c.execute("SELECT COUNT(*) FROM session_events WHERE session_id = ?", (sid,)).fetchone()[0]
+            estop = c.execute(
+                "SELECT COUNT(*) FROM session_events WHERE session_id = ? AND event_type = 'emergency_stop'", (sid,)
+            ).fetchone()[0]
+            kosu = c.execute("SELECT COUNT(*) FROM session_coil_runs WHERE session_id = ?", (sid,)).fetchone()[0]
+            sensor = c.execute("SELECT COUNT(*) FROM sensor_samples WHERE session_id = ?", (sid,)).fetchone()[0]
+        return {
+            "olay": int(olay or 0),
+            "acil_durdurma": int(estop or 0),
+            "bobin_kosusu": int(kosu or 0),
+            "sensor_ornegi": int(sensor or 0),
+        }
+
     def get_session_details(self, session_id: int) -> Optional[Dict]:
         """
         Belirli bir seansın detaylarını getir
