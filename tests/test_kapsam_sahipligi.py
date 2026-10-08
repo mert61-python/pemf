@@ -297,13 +297,16 @@ def test_KRITIK_EV_SAHIBI_tum_klinige_CIKAMAZ():
     sekme gizli olsa bile mantık `patientScope.effectiveScope`te kilitli.
 
     MUTASYON: `effectiveScope`u `return istenen` yap → KIRMIZI.
+
+    ⚠️ Y115 (2-C): ev sahibinin kapsamı kayıtlı operatörlü cihazda "sahibi" (sahipsiz HARİÇ), operatörsüz cihazda "mine" —
+    ikisi de "all" DEĞİL; pin iki satırı birlikte ister. Davranış: apps/ui/src/screens/__tests__/evSahibiKapsami.Y115.web.test.tsx.
     """
     from c_soyucu import c_soy
 
     src = c_soy((_PF / "utils" / "patientScope.ts").read_text(encoding="utf-8"))
-    assert 'return isExpert || isResearcher ? istenen : "mine";' in src, (
-        "ev sahibi profili 'Tum Klinik' kapsamina cikabilir hale gelmis (KVKK kapisi)"
-    )
+    assert "if (isExpert || isResearcher) return istenen;" in src and (
+        'return operatorKayitli ? "sahibi" : "mine";' in src
+    ), "ev sahibi profili 'Tum Klinik' kapsamina cikabilir hale gelmis (KVKK kapisi)"
 
 
 def _usecallback_govdesi(src: str, ad: str) -> str:

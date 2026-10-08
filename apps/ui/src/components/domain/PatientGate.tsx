@@ -53,7 +53,8 @@ export function PatientGate({ children, soft = false }: { children: React.ReactN
   // (TEK KAYNAK); kimliksiz kipin kuralı `inScope`ta (D2.70). Kapı: __tests__/PatientGate.D268.kapsam.test.tsx.
   const op = useOperatorOptional();
   const myEmail = (op?.operatorEmail || "").toLowerCase();
-  const kapsam = effectiveScope("all", { isExpert, isResearcher });
+  // Y115: kayıtlı operatörlü cihazda ev sahibinin seçicisi sahipsiz hayvanı GÖSTERMEZ (analiz yazılamaz).
+  const kapsam = effectiveScope("all", { isExpert, isResearcher, operatorKayitli: (op?.operators?.length ?? 0) > 0 });
 
   const [acik, setAcik] = useState(false);
   const [liste, setListe] = useState<Hasta[] | null>(null);

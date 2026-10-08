@@ -112,7 +112,8 @@ export function AiHistoryScreen() {
   // kliniğin tüm AI analizlerini HASTA ADLARIYLA görebiliyordu. Kural utils/patientScope.ts'te
   // TEK yerde; iki ekran da onu kullanır ki bir daha ayrışmasın.
   const { isExpert, isResearcher } = useUserMode();
-  const roller = { isExpert, isResearcher };
+  // Y115: kayıtlı operatörlü cihazda ev sahibinin kapsamı sahipsiz kayıtları içermez.
+  const roller = { isExpert, isResearcher, operatorKayitli: (op?.operators?.length ?? 0) > 0 };
   const etkinScope = effectiveScope(scope, roller);
   // Hekim değerlendirmesi (2026-08-06): hangi kaydın kararı gönderiliyor.
   const [reviewing, setReviewing] = useState<number | null>(null);

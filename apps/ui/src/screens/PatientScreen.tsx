@@ -213,7 +213,7 @@ export function PatientScreen() {
   // "Tüm Klinik" = filtresiz. Oturum yoksa (myEmail boş) filtreleme yapılmaz (hepsi).
   // KVKK: ev sahibi profili "all" kapsamına ASLA çıkamaz (sekme de gizli — bu ikinci kapı,
   // ileride başka bir yerden setScope("all") çağrılırsa diye). Mantık utils/patientScope.ts'te.
-  const etkinScope = effectiveScope(scope, { isExpert, isResearcher });
+  const etkinScope = effectiveScope(scope, { isExpert, isResearcher, operatorKayitli: (op?.operators?.length ?? 0) > 0 });
   const scopedPatients = patients.filter(p => inScope(p, etkinScope, myEmail));
   // D2.72 · Y92: silme yetkisinin bağlamı (tek kaynak `silinebilir`). Kayıtlı operatör yoksa Kural 2.
   const silmeBaglami = {

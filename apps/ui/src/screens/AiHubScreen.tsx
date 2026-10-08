@@ -37,6 +37,7 @@ import { useResponsive } from "@/hooks/useResponsive";
 import { PatientGate } from "@/components/domain/PatientGate";
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 import { hastaninSonAnalizi, hastayaGoreSonAnaliz, kapsamda, sonAnalizOzeti, type AnalizKaydi } from "@/utils/sonAnaliz";
+import { effectiveScope } from "@/utils/patientScope";
 
 type AiModule = "disease" | "landmark" | "segmentation" | "thermal" | "reticulocytes" | "em_fantom" | "em_petri" | "kidney_rna" | "kidney_disease" | "cat_sound" | "kidney_ct" | "histopath" | "cat_organ" | "cell_scratch";
 
@@ -458,7 +459,7 @@ function PetOwnerAiScreen() {
       // utils/patientScope.effectiveScope); süzmeden göstermek, ev sahibine bir hekimin
       // analiz özetini sızdırırdı. TEK KAYNAK: patientScope.inScope.
       const kayitlar = (Array.isArray(y?.data) ? y!.data! : []).filter((k) =>
-        kapsamda(k, "mine", benimEpostam));
+        kapsamda(k, effectiveScope("mine", { isExpert: false, isResearcher: false, operatorKayitli: (_op?.operators?.length ?? 0) > 0 }), benimEpostam));
       const harita = hastayaGoreSonAnaliz(kayitlar);
       setSonKayit(hastaninSonAnalizi(harita, { id: secili?.id, name: ad }) ?? null);
     })();

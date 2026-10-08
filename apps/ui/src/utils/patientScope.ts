@@ -7,16 +7,26 @@
  * ev sahibi "Tüm Klinik" sekmesine basıp kliniğin tüm hasta listesini (sahip adı, iletişim =
  * kişisel veri) görebilecekti. Bu modül kapsamı TEK YERDEN belirler; ekran yalnız onu uygular.
  *
- * KURAL: ev sahibi HER ZAMAN "mine" — sekme gizlenmiş olsa bile mantık burada kilitli.
+ * KURAL: ev sahibi HER ZAMAN "mine" — sekme gizlenmiş olsa bile mantık burada kilitli. Kayıtlı operatörlü cihazda ev sahibi
+ * "sahibi"dir (Y115: sahipsiz HARİÇ).
  */
-export type PatientScope = "mine" | "all";
+export type PatientScope = "mine" | "all" | "sahibi";
 
-/** Sekme gizli olsa da geçerli kapsam: klinik profilleri seçebilir, ev sahibi seçemez. */
+/**
+ * Sekme gizli olsa da geçerli kapsam: klinik profilleri seçebilir, ev sahibi seçemez.
+ *
+ * ⚠️ Y115 (S-B2.7, sahip kararı — 2-C): kayıtlı operatörlü (çok kullanıcılı) cihazda EV SAHİBİNİN kapsamı "sahibi"dir — yalnız
+ * kendi kaydı, SAHİPSİZ kayıtlar HARİÇ. Eskiden "mine" (kendi VEYA sahipsiz) idi: ev sahibi, operatörler kurulmadan önce ortak
+ * girişle yazılmış klinik hastalarını kendi hayvanı gibi görüp seçiyor, onlara AI analizi yazdırabiliyordu (2-B incelemesi
+ * S-A3.2). Operatörsüz cihazda bugünkü gibi "mine" (sahipsiz kayıtlar o tek kullanıcınındır). Hekimin "Benim"i sahipsizleri
+ * görmeye devam eder (Y104). Kapı: screens/__tests__/evSahibiKapsami.Y115.web.test.tsx.
+ */
 export function effectiveScope(
   istenen: PatientScope,
-  { isExpert, isResearcher }: { isExpert: boolean; isResearcher: boolean },
+  { isExpert, isResearcher, operatorKayitli = false }: { isExpert: boolean; isResearcher: boolean; operatorKayitli?: boolean },
 ): PatientScope {
-  return isExpert || isResearcher ? istenen : "mine";
+  if (isExpert || isResearcher) return istenen;
+  return operatorKayitli ? "sahibi" : "mine";
 }
 
 /** Kapsam sekmesi gösterilsin mi (oturum yoksa sahiplik bilinmez → gösterilmez). */
@@ -70,6 +80,7 @@ export function inScope(
   if (!myEmail) return false;
   if (scope === "all") return true;
   const op = (hasta.operator_email || "").toLowerCase();
+  if (scope === "sahibi") return op === myEmail; // Y115: sahipsiz HARİÇ
   return !op || op === myEmail;
 }
 
@@ -100,7 +111,7 @@ export function deleteScope(
 ): SilmeKapsami {
   const etkin = effectiveScope(scope, roles);
   // Klinik profili DEĞİLSE (ev sahibi) kapsam her zaman "benim" — sekme gizli olsa da.
-  const kendi = etkin === "mine" || !(roles.isExpert || roles.isResearcher);
+  const kendi = etkin !== "all" || !(roles.isExpert || roles.isResearcher);
   const mail = (operatorEmail || "").trim().toLowerCase();
   if (kendi) {
     // Kimlik yoksa İSTEK GÖNDERİLMEZ. Boş e-posta göndermek "hepsini sil" demektir.
