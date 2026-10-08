@@ -239,3 +239,25 @@ def test_KARSIT_sabit_bag_kurulamazsa_eski_davranis_ve_UYARI(baglayici, tmp_path
         sonuc = _sifrele(app, baglayici)
     assert sonuc["sifrelendi"] == [str(y)] and sonuc.get("duz_icerik_sifirlanamadi") == [str(y)], sonuc
     assert _anahtarla_acilir(baglayici, y) and "UZERINE YAZILAMAYACAK" in caplog.text
+
+
+def test_KRITIK_ozgun_DUZ_ve_FARKLI_ikinci_ad_varken_IKISINE_DE_DOKUNULMAZ(baglayici, tmp_path, caplog):
+    """B2-4.2 (2-B bağımsız incelemesi): özgün ad DÜZ-METİN ve önceki bir işlemden kalan `.duz.sil` FARKLI bir dosyaysa
+    (aynı ada sonradan düz bir yedek konmuş; `.duz.sil` önceki düz içeriğin TEK kopyası olabilir) ikinci ada DOKUNULMAZ:
+    özgün ad bu koşuda şifrelenmez (`sifrelenemedi`, nedeni loglanır), `.duz.sil` bayt bayt aynı kalır. Bu koruma dalının
+    kapısı yoktu (ölçüldü: korumayı kaldırıp ikinci adı silen mutantta Y95 + D2.48 21/21 YEŞİL). MUTASYON:
+    `_duz_kopyayi_sifrele`'deki "farklı dosya" korumasını kaldırmak (ikinci adı silip sürdürmek) → KIRMIZI."""
+    app = tmp_path / "PEMF_GUI"
+    y = app / "backups" / "pemf_patients_20261001_000000.db"
+    once_ozgun = _duz_yedek(y)
+    eski = Path(str(y) + ".duz.sil")
+    once_eski = _duz_kopya_bayt(tmp_path) + b"ONCEKI-DUZ-ICERIK"  # ayrı dosya (farklı içerik ve kimlik)
+    eski.write_bytes(once_eski)
+    assert not os.path.samefile(y, eski), "ön koşul: ikinci ad özgünle AYNI dosya olmamalı"
+    with caplog.at_level(logging.WARNING):
+        sonuc = _sifrele(app, baglayici)
+    assert eski.exists() and eski.read_bytes() == once_eski, (
+        "önceki yarım işlemden kalan FARKLI ikinci ad SİLİNDİ ya da DEĞİŞTİ — tek kopya olabilirdi (veri kaybı)"
+    )
+    assert y.read_bytes() == once_ozgun and sonuc["sifrelenemedi"] == [str(y)], sonuc
+    assert "farkli dosya" in caplog.text and str(eski) in caplog.text, caplog.text[-800:]
