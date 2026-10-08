@@ -5995,17 +5995,24 @@ async def delete_ai_log_entry(payload: AiLogDeletePayload, request: Request):
     # beyandan DEĞİL. Eskiden beyan edilen e-posta kapsamdı ve sahipsiz kayıtlar da "kendi" sayılıyordu → başka hekimin
     # beyanıyla onun kaydı, her kimlikle sahipsiz kayıtlar silinebiliyordu. Tekil "Kaydı sil" sahipsizi SİLMEZ (404);
     # sahipsizler yalnız "Tüm Klinik" toplu silmesinden gider. Kapı: tests/test_ai_gecmisi_SILME_KAPSAMI_jetondan_D220.py.
-    kimlik = cozumlenmis_operator(request, payload.operator_email or "")
+    # ⚠️ B2-1.2 (A-10): kayıtlı operatörlü cihazda beyan HİÇ kullanılmaz — `cozumlenmis_operator` KAYITSIZ bir beyanı
+    # (paylaşılan giriş e-postası, cihazdan çıkarılmış hekim, uydurma adres) kabul eder; jetonsuz istek o e-postanın
+    # kayıtlarını siliyordu (ölçüldü). Kapı: tests/test_ai_gecmisi_KAYITSIZ_beyan_SILEMEZ_B2_1_2.py
+    _kayitli = kayitli_operator_var()
+    _ham_beyan = (payload.operator_email or "").strip()
+    _beyan = "" if _kayitli else _ham_beyan
+    kimlik = cozumlenmis_operator(request, _beyan)
     if not kimlik:
         _iz.kimlikli_yaz(
             request,
             "ai_log.delete",
-            beyan=payload.operator_email or "",
+            beyan=_beyan,
             scope=f"id={payload.id}",
             item_count=0,
             outcome="reddedildi",
+            detail={"kanitsiz_beyan": _ham_beyan[:200]} if (_kayitli and _ham_beyan) else None,
         )
-        if kayitli_operator_var():
+        if _kayitli:
             raise HTTPException(status_code=428, detail=KIMLIKSIZ_DETAY)
         raise HTTPException(
             status_code=400, detail="Silme kapsamı belirsiz: kendi kaydınızı silmek için operatör seçin."
@@ -6019,16 +6026,14 @@ async def delete_ai_log_entry(payload: AiLogDeletePayload, request: Request):
         _iz.kimlikli_yaz(
             request,
             "ai_log.delete",
-            beyan=payload.operator_email or "",
+            beyan=_beyan,
             scope=f"id={payload.id}",
             item_count=0,
             outcome="reddedildi",
         )
         raise HTTPException(status_code=404, detail="Kayıt bulunamadı veya silme yetkiniz yok.")
     logging.getLogger(__name__).warning("KVKK: AI analiz kaydı silindi (id=%s).", payload.id)
-    _iz.kimlikli_yaz(
-        request, "ai_log.delete", beyan=payload.operator_email or "", scope=f"id={payload.id}", item_count=1
-    )
+    _iz.kimlikli_yaz(request, "ai_log.delete", beyan=_beyan, scope=f"id={payload.id}", item_count=1)
     return {"status": "success", "deleted": 1}
 
 
@@ -6057,15 +6062,20 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
     # beyansız (çelişkili istekte DAR kapsam kazanır). Kayıtlı operatörlü cihazda kimliksiz silme (her iki kapsam) 428.
     beyan = (payload.operator_email or "").strip()
     tum_klinik = bool(payload.all_operators) and not beyan
-    kimlik = cozumlenmis_operator(request, beyan)
-    if not kimlik and kayitli_operator_var():
+    # ⚠️ B2-1.2 (A-10): kayıtlı operatörlü cihazda beyan HİÇ kullanılmaz (kayıtsız beyan kapsam olurdu — ölçüldü).
+    # Kapı: tests/test_ai_gecmisi_KAYITSIZ_beyan_SILEMEZ_B2_1_2.py
+    _kayitli = kayitli_operator_var()
+    _beyan = "" if _kayitli else beyan
+    kimlik = cozumlenmis_operator(request, _beyan)
+    if not kimlik and _kayitli:
         _iz.kimlikli_yaz(
             request,
             "ai_log.delete_all",
-            beyan=beyan,
+            beyan=_beyan,
             scope="TUM_KLINIK" if tum_klinik else "kendi",
             item_count=0,
             outcome="reddedildi",
+            detail={"kanitsiz_beyan": beyan[:200]} if beyan else None,
         )
         raise HTTPException(status_code=428, detail=KIMLIKSIZ_DETAY)
     op = None if tum_klinik else (kimlik or None)
@@ -6090,7 +6100,7 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
         _iz.kimlikli_yaz(
             request,
             "ai_log.delete_all",
-            beyan=payload.operator_email or "",
+            beyan=_beyan,
             scope=(op or "TUM_KLINIK"),
             item_count=0,
             outcome="hata",
@@ -6108,7 +6118,7 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
     _iz.kimlikli_yaz(
         request,
         "ai_log.delete_all",
-        beyan=payload.operator_email or "",
+        beyan=_beyan,
         scope=(op or "TUM_KLINIK"),
         item_count=n,
         detail={"all_operators": tum_klinik, "vacuum": not _vacuum_bekliyor},
