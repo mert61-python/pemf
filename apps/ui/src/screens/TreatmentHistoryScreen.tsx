@@ -196,7 +196,9 @@ export function TreatmentHistoryScreen() {
    * ⚠️ KURAL `downloadCsv` İÇİNDEKİYLE BİREBİR AYNI KAYNAKTAN: ayrışırsa etiket bir şey der,
    * indirme başka şey yapar.
    */
-  const kapsamDaraltilmis = scope === "mine" || searchQuery.trim().length > 0;
+  // ⚠️ B2-3.4 (2-B incelemesi): KİMLİKSİZKEN de daraltılmış (Y103 · D2.70) — kilitten sonra `scope` "all" kalınca id listesiz
+  // istek kliniğin TÜM seans geçmişini (hasta adı, not) indiriyordu; liste boşken döküm dolu. Kural 2'de `myEmail` = oturum.
+  const kapsamDaraltilmis = !myEmail || scope === "mine" || searchQuery.trim().length > 0;
   const disaAktarimOneki = kapsamDaraltilmis ? "Görünenleri" : "Tümünü";
 
   const downloadCsv = async () => {
