@@ -26,7 +26,8 @@ başladığını sanar. Blok tam olarak o boşluk için eklenmişti (AiHubScreen
 "backend'in skipped_* yanıtları sessizce yutuluyordu → kullanıcı seansın başladığını
 sanabiliyordu"). Bu yüzden yalnız `idle` elendi.
 
-⚠️ ÇIPA `c_soy` İLE SOYULUR: düzeltmenin kendi YORUMU "idle" kelimesini içeriyor; ham metinde
+⚠️ ÇIPA (TSX) `c_soy` İLE SOYULUR — Python kaynağı (`ai_router.py`) AST ile okunur (O-B.1): düzeltmenin kendi YORUMU
+"idle" kelimesini içeriyor; ham metinde
 arama yapan bir kapı, kod geri alınsa bile yorum yüzünden YEŞİL kalırdı ("yorum kapıyı
 kandırdı" — bu depoda ALTI kez yaşandı).
 """
@@ -87,15 +88,26 @@ def test_KRITIK_idle_backend_VARSAYILANI_OLMAYA_DEVAM_EDIYOR():
     (ör. idle'ı gerçek bir atlama sebebi yaparsa) eleme YANLIŞ olur ve sessizce bilgi gizler.
 
     MUTASYON: `ai_router.py`de `hw_status = "idle"` satırını başka bir değere çevir → KIRMIZI.
-    """
-    from c_soyucu import c_soy
 
-    src = c_soy(_ROUTER.read_text(encoding="utf-8"))
-    assert 'hw_status = "idle"' in src, (
+    ⚠️ O-B.1 (2-C): Python kaynağı AST ile okunur. Eskiden `c_soy` (C yorum sökücüsü) uygulanıyordu; docstring'deki
+    `/api/ai/pro/*` blok yorum başlattığı için dosyanın 2254. satırından sonu BOŞALIYORDU → ikinci bir atama orada
+    GÖRÜNMÜYORDU (ölçüldü: o mutant eski kapıda yeşil). AST yorumu ve dizeyi görmez; yalnız gerçek atamaları sayar.
+    """
+    import ast
+
+    idle_atamalari = []
+    for d in ast.walk(ast.parse(_ROUTER.read_text(encoding="utf-8"))):
+        if isinstance(d, (ast.Assign, ast.AnnAssign)) and d.value is not None:
+            hedefler = d.targets if isinstance(d, ast.Assign) else [d.target]
+            if any(isinstance(h, ast.Name) and h.id == "hw_status" for h in hedefler) and any(
+                isinstance(x, ast.Constant) and x.value == "idle" for x in ast.walk(d.value)
+            ):
+                idle_atamalari.append(d.lineno)
+    assert idle_atamalari, (
         "ai_router artik 'idle' varsayilanini kullanmiyor -> arayuzdeki eleme varsayimi "
         "GECERSIZ; ya varsayilani geri getirin ya elemeyi gozden gecirin"
     )
     # Ve `idle` GERÇEK bir atlama sebebi olarak atanmamalı (yalnız varsayılan kalmalı).
-    assert src.count('hw_status = "idle"') == 1, (
-        "'idle' birden cok yerde ATANIYOR -> artik 'surus istenmedi' anlamina gelmiyor olabilir"
+    assert len(idle_atamalari) == 1, (
+        f"'idle' birden cok yerde ATANIYOR (satir {idle_atamalari}) -> artik 'surus istenmedi' anlamina gelmiyor olabilir"
     )

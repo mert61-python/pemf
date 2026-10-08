@@ -285,12 +285,6 @@ def test_KRITIK_toparlama_HATASI_LOGLANIR_davranis(tmp_path, monkeypatch, caplog
 # Bu kapı, üç korumanın da HER İKİ yolda bulunduğunu ölçer.
 
 
-def _kaynak(bagil: str) -> str:
-    from c_soyucu import c_soy
-
-    return c_soy((KOK / bagil).read_text(encoding="utf-8"))
-
-
 def _cagri_adlari(dugum) -> set:
     """Düğümün altındaki GERÇEK çağrıların adları (AST: yorum, dize ve import satırı SAYILMAZ).
 
@@ -721,9 +715,33 @@ def test_KRITIK_plain_bak_kilidi_kullaniciyi_DISARI_ATMAZ():
     korunan şey kaybolmuyor.
 
     MUTASYON: `keep_current_user=c in plain_yedekler` → `lock_down_file(c)` → KIRMIZI.
+
+    ⚠️ O-B.1 (2-C): kaynak AST ile okunur. Eskiden `c_soy` (C yorum sökücüsü) uygulanmış metinde alt-dize aranıyordu:
+    C sökücüsü Python `#` yorumunu sökmez → `lock_down_file(c)  # keep_current_user=c in plain_yedekler` mutantı YEŞİL
+    kalıyordu (ölçüldü); ayrıca docstring'deki `librosa/*/__pycache__` dosyanın 758. satırından sonunu boşaltıyordu.
+    Kapı GERÇEK çağrıyı ister: `lock_down_file(<x>, keep_current_user=<x> in plain_yedekler)`.
     """
-    src = _kaynak("apps/backend/backend_service.py")
-    assert "plain_yedekler" in src and "keep_current_user=c in plain_yedekler" in src, (
+    import ast
+
+    agac = ast.parse((KOK / "apps" / "backend" / "backend_service.py").read_text(encoding="utf-8"))
+    uyan = []
+    for c in ast.walk(agac):
+        if not (isinstance(c, ast.Call) and getattr(c.func, "id", getattr(c.func, "attr", None)) == "lock_down_file"):
+            continue
+        for kw in c.keywords:
+            v = kw.value
+            if (
+                kw.arg == "keep_current_user"
+                and c.args
+                and isinstance(v, ast.Compare)
+                and len(v.ops) == 1
+                and isinstance(v.ops[0], ast.In)
+                and isinstance(v.comparators[0], ast.Name)
+                and v.comparators[0].id == "plain_yedekler"
+                and ast.dump(v.left) == ast.dump(c.args[0])
+            ):
+                uyan.append(c.lineno)
+    assert uyan, (
         "`.plain.bak` dosyalari kullaniciyi DISARI ATAN varsayilan ACL ile kilitleniyor -> "
         "yarim-goc toparlamasi kalici olarak imkansizlasir"
     )
