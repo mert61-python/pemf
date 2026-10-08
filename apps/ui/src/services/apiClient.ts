@@ -35,6 +35,11 @@ function showError(title: string, message: string) {
 /** İstek opsiyonları — `silent: true` arka-plan poll'lerinde hata pop-up'ını bastırır. */
 export interface ApiOpts {
   silent?: boolean;
+  /** ⚠️ C2-4.3 (2-C incelemesi · Y87 ilkesi): bu istek için operatör jetonu — modül düzeyindeki ŞU ANKİ jeton yerine. Uzun
+   *  süren bir iş (AI analizi) BAŞLADIĞI andaki hekimin adına kaydedilsin diye; uçuşta "Geçiş yap" ile başka hekime geçilince
+   *  kayıt eskiden yeni hekime imzalanıyordu. `null` → jetonsuz. Alan verilmezse davranış AYNI. Güvenli taban kapısı aynen.
+   *  Yalnız `apiPost`ta uygulanır. */
+  operatorJetonu?: string | null;
   /** HTTP hata durumunda (response.ok=false) durum kodunu bildirir.
    *
    *  NEDEN: `apiPost` hata halinde `fallback` döner ve durum kodunu YUTAR. Bazı uçlarda kodun
@@ -134,6 +139,16 @@ export function setEntitlementHeaders(tier: string | null, addons: string[] = []
 let _operatorToken: string | null = null;
 export function setOperatorToken(token: string | null): void {
   _operatorToken = token || null;
+}
+
+/** `authHeaders()` + (verildiyse) isteğe özgü operatör jetonu (C2-4.3 — işin BAŞLADIĞI andaki hekim; bkz. `ApiOpts.operatorJetonu`). */
+function _istekBasliklari(opts?: ApiOpts): Record<string, string> {
+  const h = authHeaders();
+  if (opts && "operatorJetonu" in opts) {
+    delete h["X-PEMF-Operator"];
+    if (opts.operatorJetonu && isSafeBackendBase(serviceConfig.apiBaseUrl)) h["X-PEMF-Operator"] = opts.operatorJetonu;
+  }
+  return h;
 }
 
 // Supabase erişim JWT'si — backend bunu Supabase'e iletip tier'ı DOĞRULAR (spoof-proof). Device
@@ -345,7 +360,7 @@ export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        ...authHeaders(),
+        ..._istekBasliklari(opts),
       },
       body: JSON.stringify(body),
       signal: ctrl.signal,

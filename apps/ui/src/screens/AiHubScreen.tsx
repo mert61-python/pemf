@@ -94,19 +94,28 @@ let currentAiMode: UserMode = null;
  * ⚠️ `currentAiMode`/`currentOperatorEmail` ile AYNI desen: `logAiResult` bir React
  * bileşeni değil, bu yüzden bağlamı modül değişkeninden okur.
  */
-let currentPatient: HastaAnligi = { id: "", name: "" };
+let currentPatient: { id: string; name: string } = { id: "", name: "" };
 
-/** Analizin bağlandığı hasta: KİMLİK ve AD birlikte (aynı anın görüntüsü). */
-type HastaAnligi = { id: string; name: string };
+/** Analizin bağlandığı hasta: KİMLİK ve AD birlikte (aynı anın görüntüsü) + analizi BAŞLATAN hekim (jeton + e-posta, C2-4.3). */
+type HastaAnligi = { id: string; name: string; operatorJetonu: string | null; operatorEmail: string };
 
 /**
  * ⚠️ D2.E09 (İG-6.24) · SAHİP KARARI Y87: uçuştaki analiz, hasta değiştirilse bile BAŞLATILDIĞI hastaya yazılır. Her analiz işlevi
  * İLK `await`'ten ÖNCE `const hasta = hastaAnligi()` alır ve kaydı onunla yazar. Eskiden ad çağıranın kapanışından (başlangıçtaki
  * hasta), KİMLİK bu modül değişkeninden (tamamlanma anındaki hasta) okunuyordu → satır iki hayvanın geçmişinde görünüyordu
  * (ölçüldü: "Mia" + Pamuk'un kimliği). Kapı: __tests__/aiHubUcustakiAnaliz.E09.Y87.web.test.tsx (çağıranlar kaynaktan türetilir).
+ * ⚠️ C2-4.3 (2-C incelemesi, aynı ilke — hekim için): görüntü analizi BAŞLATAN hekimin operatör jetonunu ve e-postasını da taşır.
+ * Eskiden kayıt tamamlanma anındaki jetonla gidiyordu → Dr. A'nın başlattığı analiz, uçuşta "Geçiş yap" ile Dr. B'ye geçilince
+ * Dr. B'ye imzalanıyordu (ölçüldü, SQL: `('dr.b', 'u-mia', 'Mia')`). Kilitle (D2.E14) jetonu sunucuda iptal ettiğinden o durumda
+ * kayıt bugünkü gibi sahipsiz yazılır (Y109). Kapı: __tests__/aiHubUcustaOperatorDegisimi.C2_4_3.web.test.tsx.
  */
 function hastaAnligi(): HastaAnligi {
-  return { ...currentPatient };
+  // Jeton `authHeaders()`'tan: gönderimle AYNI güvenli-taban kapısı (güvensiz tabana jeton zaten gitmez).
+  return {
+    ...currentPatient,
+    operatorJetonu: authHeaders()["X-PEMF-Operator"] || null,
+    operatorEmail: currentOperatorEmail,
+  };
 }
 // Aynı desen: giriş yapan hekim e-postası (klinik-içi "Benim/Tüm Klinik" AI-analiz filtresi).
 let currentOperatorEmail: string = "";
@@ -130,11 +139,12 @@ async function logAiResult(
       input_type: extra?.inputType || "",
       result_detail: cleanDetail(extra?.detail),
       confidence: extra?.confidence ?? null,
-      operator_email: currentOperatorEmail || "",
+      // C2-4.3: analizi BAŞLATAN hekim (görüntüden) — tamamlanma anındaki hekim DEĞİL.
+      operator_email: hasta.operatorEmail || "",
       // ⚠️ Hasta KİMLİĞİ (opak) — ad bazlı eşlemenin üç kırılganlığını kapatır (bkz. currentPatient). Ad ile AYNI görüntüden
       // (D2.E09). Boş geçerse backend eskisi gibi ada bağlı çalışır (geriye uyumlu).
       patient_id: hasta.id || "",
-    }, null);
+    }, null, { operatorJetonu: hasta.operatorJetonu });
   } catch {
     /* audit başarısız — kullanıcı akışını bozma */
   }
