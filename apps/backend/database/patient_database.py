@@ -196,7 +196,15 @@ class PatientDatabase:
 
     def create_backup(self, backup_path: str) -> bool:
         """Çalışan hasta DB'sinden dosya yedeği (online backup API). DB ŞİFRELİYSE yedek de AYNI
-        anahtarla ŞİFRELİ olur (düz hedefe yedek PII sızdırır). audit B-7.2: PatientDB'nin yedeği yoktu."""
+        anahtarla ŞİFRELİ olur (düz hedefe yedek PII sızdırır). audit B-7.2: PatientDB'nin yedeği yoktu.
+
+        ⚠️ D2.61 (B-3.70): tedavi DB'siyle AYNI kural — başarısız deneme hedefte 0 baytlık / yarım dosya BIRAKMAZ
+        (`database/yedek_dosyasi.py`). Kapı: tests/test_at_rest_bayragi_ve_yarim_yedek_D261.py"""
+        from database.yedek_dosyasi import basarisiz_yedegi_kaldir
+
+        onceden_vardi = os.path.exists(backup_path)
+        dst = None
+        basarili = False
         try:
             bdir = os.path.dirname(backup_path)
             if bdir:
@@ -207,15 +215,21 @@ class PatientDatabase:
                     dst.execute("PRAGMA key='{}'".format(self._cipher_key.replace("'", "''")))
                 else:
                     dst = sqlite3.connect(backup_path)
-                try:
-                    src.backup(dst)
-                    dst.commit()
-                finally:
-                    dst.close()
+                src.backup(dst)
+                dst.commit()
+            basarili = True
             return True
         except Exception:
             self.logger.exception("PatientDB create_backup hatası")
             return False
+        finally:
+            if dst is not None:
+                try:
+                    dst.close()
+                except Exception:
+                    pass
+            if not basarili:
+                basarisiz_yedegi_kaldir(backup_path, onceden_vardi, self.logger)
 
     def _safe_add_column(self, cursor, table: str, column_def: str) -> None:
         """Idempotent şema-migrasyonu: ALTER TABLE ADD COLUMN; sütun zaten varsa (`duplicate column`) sessizce geç.

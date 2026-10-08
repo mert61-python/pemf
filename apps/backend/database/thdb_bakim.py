@@ -157,7 +157,16 @@ class BakimKarisimi:
 
     def create_backup(self, backup_path: str) -> bool:
         """Çalışan DB'den dosya yedeği üret (online backup API). DB ŞİFRELİYSE yedek de aynı
-        anahtarla ŞİFRELİ olur (plain hedefe yedek hem uyumsuz hem düz-metin PII sızdırır)."""
+        anahtarla ŞİFRELİ olur (plain hedefe yedek hem uyumsuz hem düz-metin PII sızdırır).
+
+        ⚠️ D2.61 (B-3.70): başarısız deneme hedefte 0 baytlık / yarım dosya BIRAKMAZ (`database/yedek_dosyasi.py`); hedef
+        bağlantısı her yolda (anahtar PRAGMA'sı düşse de) kapatılır — açık tutamak Windows'ta artığın silinmesini engellerdi.
+        Kapı: tests/test_at_rest_bayragi_ve_yarim_yedek_D261.py"""
+        from database.yedek_dosyasi import basarisiz_yedegi_kaldir
+
+        onceden_vardi = os.path.exists(backup_path)
+        dst_conn = None
+        basarili = False
         try:
             backup_dir = os.path.dirname(backup_path)
             if backup_dir:
@@ -171,15 +180,21 @@ class BakimKarisimi:
                     dst_conn.execute("PRAGMA key='{}'".format(key.replace("'", "''")))
                 else:
                     dst_conn = sqlite3.connect(backup_path)
-                try:
-                    src_conn.backup(dst_conn)
-                    dst_conn.commit()
-                finally:
-                    dst_conn.close()
+                src_conn.backup(dst_conn)
+                dst_conn.commit()
+            basarili = True
             return True
         except Exception as e:
             self.logger.error(f"DB backup hatası: {e}")
             return False
+        finally:
+            if dst_conn is not None:
+                try:
+                    dst_conn.close()
+                except Exception:
+                    pass
+            if not basarili:
+                basarisiz_yedegi_kaldir(backup_path, onceden_vardi, self.logger)
 
     def apply_data_retention_policy(
         self,

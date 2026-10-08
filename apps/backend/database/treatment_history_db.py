@@ -303,13 +303,16 @@ class TreatmentHistoryDB(
 
     def _create_connection(self):
         """Yeni SQLite bağlantısı oluştur ve bağlantı ayarlarını uygula."""
+        # ⚠️ D2.61 (B-3.70): `at_rest_encrypted` YALNIZ bağlantı BAŞARIYLA kurulunca (fonksiyon sonunda) yazılır. Eskiden düz
+        # dala girer girmez False yazılıyor, ardından `PEMF_ENCRYPT_AT_REST=1` için `RuntimeError` geliyordu: tek bir iş
+        # parçacığındaki GEÇİCİ şifreli bağlantı arızası örnek düzeyindeki bayrağı düşürüyor → `/api/health` şifreli DB'yi
+        # "şifresiz" diyor, `create_backup` havuzdaki şifreli bağlantıdan DÜZ hedefe sapıp yedek almadan 0 baytlık dosya
+        # bırakıyordu (ölçüldü). Kapı: tests/test_at_rest_bayragi_ve_yarim_yedek_D261.py
         sqlcipher_conn = self._connect_sqlcipher_if_configured()
         if sqlcipher_conn is not None:
-            self.at_rest_encrypted = True
             conn = sqlcipher_conn
         else:
             # GÖRÜNÜRLÜK: at-rest şifreleme yoksa SESSİZCE düz-metne düşme — operatör bilsin.
-            self.at_rest_encrypted = False
             # P0 (KVKK): şifreleme AÇIKÇA istendiyse (PEMF_ENCRYPT_AT_REST=1) ama sağlanamıyorsa
             # (sqlcipher3 binding yok / anahtar açılamadı) hasta PII'sini DÜZ-METİN yazmaktansa
             # HARD FAIL et. Aksi halde "şifreli sanıp cleartext PII yazma" sessiz veri sızıntısı olur.
@@ -394,6 +397,7 @@ class TreatmentHistoryDB(
                     pass
             raise
 
+        self.at_rest_encrypted = sqlcipher_conn is not None
         return conn
 
     def _ensure_write_guardrail(self):
