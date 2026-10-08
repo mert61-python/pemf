@@ -94,6 +94,10 @@ export function AiHistoryScreen() {
   // `operatorEmail` tek kaynaktır: aktif operatör, yoksa (kayıtlı operatör yokken) oturum e-postası.
   const op = useOperatorOptional();
   const myEmail = (op ? op.operatorEmail : (session?.email || "")).toLowerCase();
+  // ⚠️ B2B-2 (2-B, D2.E12'nin kendi açığı — ölçüldü): yarım değerlendirme taslağı KİMLİĞE aittir. Kimlik değişince
+  // (operatör geçişi, kilit) taslaklar DÜŞER — aksi hâlde Dr. B, Dr. A'nın yazdığı red gerekçesini görüp kendi adıyla
+  // gönderebiliyordu. Kapı: screens/__tests__/aiDegerlendirme.D242.E12.web.test.tsx (B2B-2).
+  useEffect(() => { setTaslaklar({}); }, [myEmail]);
   // Klinik-içi: "mine" = benim yaptığım analizler (+ sahipsiz eski), "all" = tüm klinik.
   const [scope, setScope] = useState<"mine" | "all">("mine");
   // ⚠️ KVKK 2026-08-08: "Tüm Klinik" EV SAHİBİNE KAPALI — hasta ekranındaki kapının AYNISI.

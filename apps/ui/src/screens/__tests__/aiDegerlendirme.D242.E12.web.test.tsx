@@ -176,6 +176,20 @@ describe("D2.E12 · İG-6.115 — gerekçe sunucu BAŞARI dönene dek korunur", 
     expect(gerekceAlani()?.value).toBe(GEREKCE);
   });
 
+  it("KRİTİK (B2B-2): yarım gerekçe operatör DEĞİŞİNCE taşınmaz — Dr. B, Dr. A'nın taslağını görmez/gönderemez", async () => {
+    await kur(A, [{ email: A, display_name: "Dr. A" }, { email: B, display_name: "Dr. B" }]);
+    await pinleSec(s, "Dr. A");
+    await s.bosalt(10);
+    await kartiAcKapa();
+    await s.tikla("AI sonucunu reddet");
+    await s.yaz("Red gerekçesi", GEREKCE);
+    expect(gerekceAlani()?.value).toBe(GEREKCE); // ARA DOĞRULAMA: taslak yazıldı
+    await pinleSec(s, "Dr. B");
+    await s.bosalt(10);
+    expect(gerekceAlani()?.value ?? "").not.toBe(GEREKCE);
+    expect(s.metin()).not.toContain(GEREKCE);
+  });
+
   it("KRİTİK: sunucu 503 sonrası yeniden deneme BAŞARILI olunca form kapanır ve kayıt 'Hekim reddetti' olur", async () => {
     await kur("tek@klinik.com", []);
     await kartiAcKapa();
