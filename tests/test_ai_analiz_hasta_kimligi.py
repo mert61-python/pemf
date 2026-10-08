@@ -236,12 +236,16 @@ def test_KRITIK_arayuz_patient_id_GONDERIYOR():
     """Saf hesap doğru olsa bile arayüz kimliği göndermiyorsa taşıma ileriye dönük çalışmaz.
 
     MUTASYON: `logAiResult`taki `patient_id` alanını kaldır → KIRMIZI.
+
+    ⚠️ D2.E09 (Y87, 2-C): kimlik ve ad artık analizin BAŞINDA alınan TEK görüntüden (`hasta = hastaAnligi()`) yazılır —
+    eskiden kimlik tamamlanma anındaki modül değişkeninden okunuyordu (uçuştaki analiz ad başka, kimlik başka hastaya). Bu
+    metin pini yeni sözleşmeyi izler; davranış kapısı `apps/ui/src/screens/__tests__/aiHubUcustakiAnaliz.E09.Y87.web.test.tsx`.
     """
     from c_soyucu import c_soy
 
     src = c_soy((_PF / "screens" / "AiHubScreen.tsx").read_text(encoding="utf-8"))
-    assert "patient_id: currentPatientId" in src, "analiz kaydi hasta KIMLIGINI gondermiyor"
-    assert "currentPatientId = selectedPatient?.id" in src, "secili hasta kimligi HIC yazilmiyor"
+    assert "patient_id: hasta.id" in src, "analiz kaydi hasta KIMLIGINI gondermiyor"
+    assert "currentPatient = { id: selectedPatient?.id" in src, "secili hasta kimligi HIC yazilmiyor"
 
 
 @pytest.mark.skipif(not (_PF / "utils").exists(), reason="apps/ui/ kaynak agaci yok")

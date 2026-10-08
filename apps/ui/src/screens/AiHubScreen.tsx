@@ -93,7 +93,20 @@ let currentAiMode: UserMode = null;
  * ⚠️ `currentAiMode`/`currentOperatorEmail` ile AYNI desen: `logAiResult` bir React
  * bileşeni değil, bu yüzden bağlamı modül değişkeninden okur.
  */
-let currentPatientId: string = "";
+let currentPatient: HastaAnligi = { id: "", name: "" };
+
+/** Analizin bağlandığı hasta: KİMLİK ve AD birlikte (aynı anın görüntüsü). */
+type HastaAnligi = { id: string; name: string };
+
+/**
+ * ⚠️ D2.E09 (İG-6.24) · SAHİP KARARI Y87: uçuştaki analiz, hasta değiştirilse bile BAŞLATILDIĞI hastaya yazılır. Her analiz işlevi
+ * İLK `await`'ten ÖNCE `const hasta = hastaAnligi()` alır ve kaydı onunla yazar. Eskiden ad çağıranın kapanışından (başlangıçtaki
+ * hasta), KİMLİK bu modül değişkeninden (tamamlanma anındaki hasta) okunuyordu → satır iki hayvanın geçmişinde görünüyordu
+ * (ölçüldü: "Mia" + Pamuk'un kimliği). Kapı: __tests__/aiHubUcustakiAnaliz.E09.Y87.web.test.tsx (çağıranlar kaynaktan türetilir).
+ */
+function hastaAnligi(): HastaAnligi {
+  return { ...currentPatient };
+}
 // Aynı desen: giriş yapan hekim e-postası (klinik-içi "Benim/Tüm Klinik" AI-analiz filtresi).
 let currentOperatorEmail: string = "";
 
@@ -101,14 +114,14 @@ let currentOperatorEmail: string = "";
 // result_detail utils/aiDetail.cleanDetail ile temizlenir (görsel/binary/devasa alanlar atılır).
 // extra: modül-id + girdi-tipi + sonuç detayı (cleanDetail ile temizlenir) + opsiyonel güven. mode oto.
 async function logAiResult(
-  patientName: string,
+  hasta: HastaAnligi,
   module: string,
   summary: string,
   extra?: { moduleId?: string; inputType?: string; detail?: unknown; confidence?: number }
 ) {
   try {
     await apiPost("/ai/log", {
-      patient_name: patientName || "",
+      patient_name: hasta.name || "",
       module,
       summary,
       mode: currentAiMode || "",
@@ -117,9 +130,9 @@ async function logAiResult(
       result_detail: cleanDetail(extra?.detail),
       confidence: extra?.confidence ?? null,
       operator_email: currentOperatorEmail || "",
-      // ⚠️ Hasta KİMLİĞİ (opak) — ad bazlı eşlemenin üç kırılganlığını kapatır (bkz. currentPatientId).
-      // Boş geçerse backend eskisi gibi ada bağlı çalışır (geriye uyumlu).
-      patient_id: currentPatientId || "",
+      // ⚠️ Hasta KİMLİĞİ (opak) — ad bazlı eşlemenin üç kırılganlığını kapatır (bkz. currentPatient). Ad ile AYNI görüntüden
+      // (D2.E09). Boş geçerse backend eskisi gibi ada bağlı çalışır (geriye uyumlu).
+      patient_id: hasta.id || "",
     }, null);
   } catch {
     /* audit başarısız — kullanıcı akışını bozma */
@@ -239,7 +252,9 @@ export function AiHubScreen() {
 
   // logAiResult (hook değil) aktif profili bilsin diye modül-değişkenine yaz (analiz kaydına mode gitsin).
   useEffect(() => { currentAiMode = userMode; }, [userMode]);
-  useEffect(() => { currentPatientId = selectedPatient?.id || ""; }, [selectedPatient?.id]);
+  useEffect(() => {
+    currentPatient = { id: selectedPatient?.id || "", name: selectedPatient?.name || "" };
+  }, [selectedPatient?.id, selectedPatient?.name]);
   // Aynı desen: giriş yapan hekim e-postasını modül-değişkenine yaz (AI analiz sahipliği).
   const { operatorEmail } = useOperator();
   useEffect(() => { currentOperatorEmail = operatorEmail; }, [operatorEmail]);
@@ -517,6 +532,7 @@ function PetOwnerAiScreen() {
   };
 
   const analyzeImage = async () => {
+    const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
     if (!imageUri) return;
     setLoading(true);
     try {
@@ -572,7 +588,7 @@ function PetOwnerAiScreen() {
         setResult(data);
         // AI Geçmişi'ne kaydet (Evcil Hayvan Sahibi FGS ağrı analizi de audit'e yazılsın — eskiden atlanıyordu).
         // ⚠️ D2.69 (B-6.29): seçili hastanın ADIYLA — eskiden "" yazılıyordu, ev sahibi geçmişinde hayvan ayrımı oluşmuyordu.
-        logAiResult(secili?.name || "", "Ağrı Analizi (FGS)", summarizeVision(data), { moduleId: "landmark", inputType: "image", detail: data });
+        logAiResult(hasta, "Ağrı Analizi (FGS)", summarizeVision(data), { moduleId: "landmark", inputType: "image", detail: data });
       } else {
         showToast(aiDetayCumlesi(data?.detail, "Teşhis sırasında hata oluştu."), "error");
       }
@@ -812,6 +828,7 @@ function PetOwnerSoundCard() {
   };
 
   const analyze = async () => {
+    const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
     if (!audioUri) return;
     setLoading(true);
     try {
@@ -832,7 +849,7 @@ function PetOwnerSoundCard() {
       const data = await response.json();
       if (response.ok && data.status === "success") {
         setResult(data);
-        logAiResult(secili?.name || "", "Kedi Sesi", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob || 0) * 100)}`, { moduleId: "cat_sound", inputType: "audio", detail: data, confidence: data.top_1_prob });
+        logAiResult(hasta, "Kedi Sesi", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob || 0) * 100)}`, { moduleId: "cat_sound", inputType: "audio", detail: data, confidence: data.top_1_prob });
       } else {
         showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
       }
@@ -1046,6 +1063,7 @@ function DiseaseModule({ patientName }: { patientName: string }) {
   };
 
   const analyze = async () => {
+    const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
     if (selectedSymptoms.length < 2) {
       showToast("Lütfen en az 2 semptom seçin.", "error");
       return;
@@ -1097,7 +1115,7 @@ function DiseaseModule({ patientName }: { patientName: string }) {
       setXai(res.xai ?? null); // sunum-katmanı XAI (alan yoksa satır gizli)
       setResultUsedDefaults(usedDefaults);
       const top = res.results?.[0];
-      logAiResult(patientName, "Hastalık Analizi", top ? `${trValue(top.disease)} (%${(top.probability * 100).toFixed(0)})` : "Belirgin sonuç yok", { moduleId: "disease", inputType: "clinical", detail: res, confidence: top?.probability });
+      logAiResult(hasta, "Hastalık Analizi", top ? `${trValue(top.disease)} (%${(top.probability * 100).toFixed(0)})` : "Belirgin sonuç yok", { moduleId: "disease", inputType: "clinical", detail: res, confidence: top?.probability });
     }
     // Hata durumunda apiClient zaten kullanıcıya bildirim gösterir (çift-popup önlendi).
   };
@@ -1242,15 +1260,15 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
     autoAdjustRef.current = autoAdjust;
   }, [autoAdjust]);
 
-  // YÜKSEK fix: unmount'ta uçuştaki MANUEL analizi iptal et → boşa 60-90sn model pipeline'ı + unmount-sonrası
-  // setState (stale sonuç/yanlış-loglama) önlenir. mountedRef await-sonrası setState'leri de kapılar.
+  // Unmount'ta uçuştaki CANLI kare analizi iptal edilir; mountedRef await-sonrası setState'leri kapılar.
+  // ⚠️ D2.E09 (Y87): uçuştaki MANUEL analiz İPTAL EDİLMEZ — eskiden iptal edilip atılıyordu (sahip "atılmaz" dedi); sonuç
+  // analizin BAŞLADIĞI hastaya kaydedilir (`hasta` görüntüsü), yalnız ekran güncellenmez. Yanlış hastaya yazma görüntüyle
+  // kapandığı için iptale gerek kalmadı.
   const mountedRef = useRef(true);
-  const analyzeAbortRef = useRef<AbortController | null>(null);
   /** Canlı kamera döngüsündeki uçuştaki kare analizi (unmount'ta iptal edilir). */
   const liveAbortRef = useRef<AbortController | null>(null);
   useEffect(() => () => {
     mountedRef.current = false;
-    analyzeAbortRef.current?.abort();
     try { liveAbortRef.current?.abort(); } catch { /* ignore */ }
   }, []);
 
@@ -1445,6 +1463,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
   };
 
   const analyzeImage = async (uriToAnalyze?: string | null) => {
+    const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
     uriToAnalyze = typeof uriToAnalyze === "string" ? uriToAnalyze : imageUri;
     if (!uriToAnalyze) return;
     // BUG #2 FIX: loadingRef hem state hem de interval closure için güncelleniyor
@@ -1511,7 +1530,6 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
       // döngüde ASLA — kare başına sn'lerce Grad-CAM akışı kilitler).
       if (explainDestegi && isiHaritasi) formData.append("explain", "true");
       const ctrl = new AbortController();
-      analyzeAbortRef.current = ctrl; // unmount iptali için sakla
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS); // ilk-kullanım model indirme için geniş timeout
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
         method: "POST",
@@ -1521,11 +1539,13 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
       });
       clearTimeout(to);
       const data = await response.json();
-      if (!mountedRef.current) return; // unmount olduysa stale setState/yanlış-loglama yapma
-      if (response.ok && data.status === "success") {
+      const basarili = response.ok && data.status === "success";
+      // D2.E09 (Y87): kayıt ekrandan BAĞIMSIZ — modül kapansa / hasta değişse de başlatılan hastaya (sadece manuel analizler).
+      if (basarili && !isLive) logAiResult(hasta, title, summarizeVision(data), { moduleId: endpoint.replace("/vision/", ""), inputType: "image", detail: data });
+      if (!mountedRef.current) return; // unmount olduysa stale setState yapma
+      if (basarili) {
         setResult(data);
         if (isLive) setImageUri(`data:image/jpeg;base64,${data.image_base64}`); // overlay updated
-        else logAiResult(patientName, title, summarizeVision(data), { moduleId: endpoint.replace("/vision/", ""), inputType: "image", detail: data }); // sadece manuel analizleri audit'e yaz
       }
       else if (!isLive) showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
     } catch (error) {
@@ -2008,6 +2028,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
   };
 
   const analyze = async () => {
+    const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
     if (!imageUri) return;
     setLoading(true);
     try {
@@ -2042,7 +2063,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
         setResult(data);
         if (data.status === "success") {
           const ec = data.tumor_regions?.[0]?.E_cancer;
-          logAiResult(patientName, "Fantom Tümör Analizi", `${data.n_tumor} tümör${ec != null ? `, E_c≈${Number(ec).toFixed(3)}` : ""}`, { moduleId: "em_fantom", inputType: "image", detail: data });
+          logAiResult(hasta, "Fantom Tümör Analizi", `${data.n_tumor} tümör${ec != null ? `, E_c≈${Number(ec).toFixed(3)}` : ""}`, { moduleId: "em_fantom", inputType: "image", detail: data });
         }
       } else {
         showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
@@ -2294,6 +2315,7 @@ function PetriModule({ patientName }: { patientName: string }) {
   };
 
   const analyze = async () => {
+    const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
     if (!imageUri) return;
     setLoading(true);
     try {
@@ -2347,7 +2369,7 @@ function PetriModule({ patientName }: { patientName: string }) {
       if (response.ok && (data.status === "success" || data.status === "no_detection")) {
         setResult(data);
         if (data.status === "success") {
-          logAiResult(patientName, "Petri Kuyu Analizi", `${data.n_wells} kuyu (${data.n_cancer} kanser)`, { moduleId: "em_petri", inputType: "image", detail: data });
+          logAiResult(hasta, "Petri Kuyu Analizi", `${data.n_wells} kuyu (${data.n_cancer} kanser)`, { moduleId: "em_petri", inputType: "image", detail: data });
         }
       } else {
         showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
@@ -2617,6 +2639,7 @@ function RnaModule({ patientName }: { patientName: string }) {
   };
 
   const analyze = async () => {
+    const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
     if (!file) return;
     setLoading(true);
     try {
@@ -2639,7 +2662,7 @@ function RnaModule({ patientName }: { patientName: string }) {
       const data = await response.json();
       if (response.ok && data.status === "success") {
         setResult(data);
-        logAiResult(patientName, "Böbrek RNA (KIRC)", `${data.n_patients} hasta`, { moduleId: "kidney_rna", inputType: "csv", detail: data });
+        logAiResult(hasta, "Böbrek RNA (KIRC)", `${data.n_patients} hasta`, { moduleId: "kidney_rna", inputType: "csv", detail: data });
       } else {
         showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
       }
@@ -2776,6 +2799,7 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
   useEffect(() => { moduleCache.kidney_disease = { result, num, cat }; }, [result, num, cat]);
 
   const analyze = async () => {
+    const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
     setLoading(true);
     setResult(null);
     try {
@@ -2807,7 +2831,7 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
       });
       if (res && res.status === "success") {
         setResult(res);
-        logAiResult(patientName, "Böbrek Hastalığı (CKD)", `${trValue(res.label)} %${res.prob_pct}`, { moduleId: "kidney_disease", inputType: "clinical", detail: res, confidence: res.prob_pct != null ? res.prob_pct / 100 : undefined });
+        logAiResult(hasta, "Böbrek Hastalığı (CKD)", `${trValue(res.label)} %${res.prob_pct}`, { moduleId: "kidney_disease", inputType: "clinical", detail: res, confidence: res.prob_pct != null ? res.prob_pct / 100 : undefined });
       } else if (!sunucuBildirdi) {
         // Ağ/JSON-boş yolu (HTTP hatası değil): sunucu bir gerekçe vermedi → anlaşılır varsayılan.
         showToast("Böbrek analizi tamamlanamadı. Değerleri kontrol edip tekrar deneyin.", "error");
@@ -2972,6 +2996,7 @@ function CatSoundModule({ patientName }: { patientName: string }) {
   };
 
   const analyze = async () => {
+    const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
     if (!audioUri) return;
     setLoading(true);
     try {
@@ -2994,7 +3019,7 @@ function CatSoundModule({ patientName }: { patientName: string }) {
       const data = await response.json();
       if (response.ok && data.status === "success") {
         setResult(data);
-        logAiResult(patientName, "Kedi Sesi", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob ?? 0) * 100)}`, { moduleId: "cat_sound", inputType: "audio", detail: data, confidence: data.top_1_prob });
+        logAiResult(hasta, "Kedi Sesi", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob ?? 0) * 100)}`, { moduleId: "cat_sound", inputType: "audio", detail: data, confidence: data.top_1_prob });
       } else {
         showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
       }
@@ -3171,6 +3196,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
   };
 
   const analyze = async () => {
+    const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
     if (!imageUri) return;
     setLoading(true);
     try {
@@ -3195,7 +3221,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
       if (response.ok && data.status === "success") {
         setResult(data);
         const c = data.class_counts || {};
-        logAiResult(patientName, "Böbrek CT", `${data.n_detections} tespit (taş:${c["Kidney Stone"] ?? 0} kist:${c["Kidney Cyst"] ?? 0})`, { moduleId: "kidney_ct", inputType: "image", detail: data });
+        logAiResult(hasta, "Böbrek CT", `${data.n_detections} tespit (taş:${c["Kidney Stone"] ?? 0} kist:${c["Kidney Cyst"] ?? 0})`, { moduleId: "kidney_ct", inputType: "image", detail: data });
       } else {
         showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
       }
@@ -3386,6 +3412,7 @@ function HistopathModule({ patientName }: { patientName: string }) {
   };
 
   const analyze = async () => {
+    const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
     if (!imageUri) return;
     setLoading(true);
     try {
@@ -3409,7 +3436,7 @@ function HistopathModule({ patientName }: { patientName: string }) {
       const data = await response.json();
       if (response.ok && data.status === "success") {
         setResult(data);
-        logAiResult(patientName, "Böbrek Patoloji", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob || 0) * 100)}`, { moduleId: "histopath", inputType: "image", detail: data, confidence: data.top_1_prob });
+        logAiResult(hasta, "Böbrek Patoloji", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob || 0) * 100)}`, { moduleId: "histopath", inputType: "image", detail: data, confidence: data.top_1_prob });
       } else {
         showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
       }
@@ -3547,12 +3574,12 @@ function ScratchModule({ patientName }: { patientName: string }) {
   const [kayitlar, setKayitlar] = useState<ScratchKayit[]>(onceki.kayitlar ?? []);
   const [karsiAcik, setKarsiAcik] = useState(false);
   const mountedRef = useRef(true);
-  const abortRef = useRef<AbortController | null>(null);
   // DÜŞMAN-DOĞRULAMA: 300sn'lik pencerede kullanıcı yeni dosya/parametre seçebilir;
   // ESKİ isteğin yanıtı gelirse sessizce yeni girdinin sonucu sanılırdı → istek-kimliği.
   const istekRef = useRef(0);
   const { showToast } = useToast();
-  useEffect(() => () => { mountedRef.current = false; abortRef.current?.abort(); }, []);
+  // ⚠️ D2.E09 (Y87): unmount'ta uçuştaki analiz İPTAL EDİLMEZ — sonuç başlatıldığı hastaya kaydedilir (atılmaz); ekran güncellenmez.
+  useEffect(() => () => { mountedRef.current = false; }, []);
   // Kalıcılık: moduleCache (hasta/profil değişince resetAiCachesForOwner temizler — KRİTİK desen).
   // `imageUri` alias'ı BİLİNÇLİ: resetAiCachesForOwner blob revoke'unu bu alandan yapar
   // (düşman-doğrulama: dosya.uri altında saklanan web blob'u temizlikte kaçıyordu).
@@ -3586,6 +3613,7 @@ function ScratchModule({ patientName }: { patientName: string }) {
   })();
 
   const analiz = async () => {
+    const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
     if (!dosya || loading) return;
     setLoading(true); setLongLoading(false);
     const benimIstek = ++istekRef.current;
@@ -3610,7 +3638,7 @@ function ScratchModule({ patientName }: { patientName: string }) {
       fd.append("scratch_yonu", yon);
       fd.append("pixel_mm", pmm);
       if (xaiAc) fd.append("explain", "true");
-      const ctrl = new AbortController(); abortRef.current = ctrl;
+      const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), SCRATCH_TIMEOUT_MS);
       const r = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/scratch", {
         method: "POST", body: fd,
@@ -3618,9 +3646,16 @@ function ScratchModule({ patientName }: { patientName: string }) {
       });
       clearTimeout(to);
       const data = await r.json();
-      if (!mountedRef.current) return;
       if (istekRef.current !== benimIstek) return; // stale yanıt: girdi/parametre değişti
-      if (r.ok && data.status === "success") {
+      const basarili = r.ok && data.status === "success";
+      // D2.E09 (Y87): kayıt ekrandan BAĞIMSIZ — modül kapansa / hasta değişse de başlatılan hastaya.
+      if (basarili) {
+        logAiResult(hasta, "Yara Kapanma (Scratch)",
+          data.uyari ? "Hücre tespit edilemedi" : `Kapanma %${data.closure?.closure_pct ?? "?"} · ${data.n_cells} hücre`,
+          { moduleId: "cell_scratch", inputType: "image", detail: data });
+      }
+      if (!mountedRef.current) return;
+      if (basarili) {
         // B4 (2026-09-03): ısı haritası bu analizde İSTENDİ mi → istenip gelmeyeni sessiz bırakmamak için.
         setResult({ ...data, _xai_istendi: xaiAc }); setYenidenGerek(false);
         // Isı haritası İSTENDİYSE ve geldiyse sahne onunla açılır (diğer modüllerle parite: ısı haritası
@@ -3634,9 +3669,6 @@ function ScratchModule({ patientName }: { patientName: string }) {
             etiket, closure_pct: data.closure.closure_pct, mean_gap_um: data.closure.mean_gap_um,
           }]);
         }
-        logAiResult(patientName, "Yara Kapanma (Scratch)",
-          data.uyari ? "Hücre tespit edilemedi" : `Kapanma %${data.closure?.closure_pct ?? "?"} · ${data.n_cells} hücre`,
-          { moduleId: "cell_scratch", inputType: "image", detail: data });
       } else showToast(aiDetayCumlesi(data?.detail || data?.error, "Analiz sırasında hata oluştu."), "error");
     } catch (e) {
       if (mountedRef.current) showToast(aiHataMesaji(e), "error");
@@ -3931,6 +3963,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
   };
 
   const analyze = async () => {
+    const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
     if (!imageUri) return;
     setLoading(true);
     try {
@@ -3955,7 +3988,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
       if (isLiveRef.current) return;
       if (response.ok && data.status === "success") {
         setResult(data);
-        logAiResult(patientName, "Kedi Organ", `${data.n_organs} organ lokalize`, { moduleId: "cat_organ", inputType: "image", detail: data });
+        logAiResult(hasta, "Kedi Organ", `${data.n_organs} organ lokalize`, { moduleId: "cat_organ", inputType: "image", detail: data });
       } else {
         showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
       }

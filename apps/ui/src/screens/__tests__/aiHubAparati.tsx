@@ -120,7 +120,8 @@ export async function kurAiHub(
     return undefined;
   });
   aparat.kayit = sunucu.kayit;
-  const fetchSahte = jest.fn(async (url: unknown, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) => {
+  const fetchSahte = jest.fn(async (url: unknown, init: { method?: string; body?: unknown; headers?: Record<string, string>;
+    signal?: AbortSignal } = {}) => {
     const yol = String(url).replace(/^[a-z]+:\/\/[^/]+/i, "").replace(/^\/api/, "");
     const yontem = init.method || "GET";
     aparat.ham.push({ yontem, yol, govde: init.body });
@@ -129,7 +130,14 @@ export async function kurAiHub(
     const bekleyen = askidakiler.find((x) => x.yol === yol && x.yontem === yontem);
     if (bekleyen) {
       askidakiler.splice(askidakiler.indexOf(bekleyen), 1);
-      const [durum, veri] = await bekleyen.a.sozu;
+      // İstemcinin İPTALİ (AbortController) gerçek fetch gibi uygulanır: askıdaki istek iptal edilirse AbortError ile düşer.
+      const sinyal = init.signal;
+      const iptal = new Promise<never>((_c, red) => {
+        const at = () => red(Object.assign(new Error("The operation was aborted."), { name: "AbortError" }));
+        if (sinyal?.aborted) at();
+        sinyal?.addEventListener?.("abort", at);
+      });
+      const [durum, veri] = await Promise.race([bekleyen.a.sozu, iptal]);
       return { ok: durum < 400, status: durum, text: async () => JSON.stringify(veri), json: async () => veri,
         headers: { get: () => "application/json" } };
     }
