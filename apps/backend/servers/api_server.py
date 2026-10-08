@@ -5274,7 +5274,8 @@ def _sensor_persistence_loop():
 
 def _daily_maintenance_loop():
     """Asama-2 (4): GUNLUK arka-plan bakim — retention temizligi + .db yedek.
-    - Retention: sensor_samples (PEMF_SENSOR_RETAIN_DAYS, vars. 90) + session_events (365).
+    - Retention: sensor_samples (PEMF_SENSOR_RETAIN_DAYS, vars. 90) + session_events (PEMF_RETAIN_EVENT_DAYS, vars. 365,
+      0 = silme — headless bakımla aynı ayar; B2-1.6).
       Run-ozetleri run bitiminde yazildigindan ham silinince ozet kalir.
     - Haftada bir wal_checkpoint(TRUNCATE) + VACUUM (run_maintenance helper'i + VACUUM).
     - Gunluk .db yedek: once wal_checkpoint, sonra pemf_treatment_history.db ->
