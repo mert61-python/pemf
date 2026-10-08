@@ -1,0 +1,6 @@
+{
+  "durum": 500,
+  "govde": {
+    "detail": "Not kaydedilemedi — kayıt veritabanına yazılamadı (kilitli ya da disk dolu olabilir). Notunuz ekranda duruyor; birazdan tekrar deneyin."
+  }
+}

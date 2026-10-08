@@ -153,8 +153,13 @@ def save_session_notes(payload: SessionNotesPayload, request: Request):
         }
     except Exception:
         # B3 güvenlik-fix: ham str(e) SIZMAZ (zaten loglanıyor) — generic detail.
+        # D2.15: gerekçe EYLEM söyler; arayüz notu ekranda tutar ve bu metni gösterir.
         logging.exception("save_session_notes failed")
-        raise HTTPException(status_code=500, detail="Not kaydedilemedi")
+        raise HTTPException(
+            status_code=500,
+            detail="Not kaydedilemedi — kayıt veritabanına yazılamadı (kilitli ya da disk dolu olabilir). "
+            "Notunuz ekranda duruyor; birazdan tekrar deneyin.",
+        )
 
 
 class ParametreGuncellePayload(BaseModel):

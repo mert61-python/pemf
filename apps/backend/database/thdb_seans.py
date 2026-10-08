@@ -671,7 +671,10 @@ class SeansKarisimi:
                 conn.commit()
             self.logger.info(f"Kapatilmis seansin not/parametreleri guncellendi: ID {session_id}")
         except _DB_ERROR as e:
+            # ⚠️ D2.15 (B-3.23): hata YÜKSELTİLİR — eskiden yalnız loglanıyordu, uç 200 "success" dönüp not ekranı
+            # kapanıyor, klinik gözlem notu kilit/G-Ç hatasında SESSİZCE kayboluyordu (gerçek 5,7 sn'lik kilitle ölçüldü).
             self.logger.error(f"update_session_finalized_extras hatasi: {e}")
+            raise
 
     def update_session_notes(self, session_id: int, notes: str):
         """
