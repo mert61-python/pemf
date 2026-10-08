@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import shutil
 import sqlite3
+import subprocess
 import sys
 
 import pytest
@@ -83,6 +84,13 @@ class _Ariza:
 
     def __init__(self, monkeypatch, tmp_path, kip):
         self.mp, self.tmp, self.kip, self.kc = monkeypatch, tmp_path, kip, None
+        self.kilitli: list = []  # `acl` kipinde ürün kilidi uygulanan kopyalar — çıkışta izin GERİ alınır
+
+    def _acl_geri_al(self):
+        """O-B2B2.4: kilitli kopyaların iznini sıfırla (miras geri gelir) — tmp'de okunamayan/silinemeyen artık kalmasın."""
+        while self.kilitli:
+            g = self.kilitli.pop()
+            subprocess.run(["icacls", str(g), "/reset", "/Q"], capture_output=True)
 
     def _kopya(self, adb, ad):
         d = self.tmp / ad
@@ -118,19 +126,27 @@ class _Ariza:
             from utils.file_acl import lock_down_file
 
             f = self._kopya(adb, "acl")
-            for sfx in ("", "-wal", "-shm"):
-                g = __import__("pathlib").Path(str(f) + sfx)
-                if g.exists():
-                    assert lock_down_file(g, keep_current_user=False), f"aparat: ACL uygulanamadı ({g.name})"
-            m.setattr(adb, "db_path", f)
-            with pytest.raises(PermissionError):  # aparat kanıtı: süreç gerçekten okuyamıyor
-                open(f, "rb").close()
+            try:
+                for sfx in ("", "-wal", "-shm"):
+                    g = __import__("pathlib").Path(str(f) + sfx)
+                    if g.exists():
+                        self.kilitli.append(g)
+                        assert lock_down_file(g, keep_current_user=False), f"aparat: ACL uygulanamadı ({g.name})"
+                m.setattr(adb, "db_path", f)
+                with pytest.raises(PermissionError):  # aparat kanıtı: süreç gerçekten okuyamıyor
+                    open(f, "rb").close()
+            except BaseException:
+                # `__enter__` düşerse `with` `__exit__`'i çağırmaz → kilit ve yama burada geri alınır.
+                self._acl_geri_al()
+                self.ctx.__exit__(None, None, None)
+                raise
         return m
 
     def __exit__(self, *a):
         if self.kc is not None:
             self.kc.execute("ROLLBACK")
             self.kc.close()
+        self._acl_geri_al()
         self.ctx.__exit__(*a)
         return False
 
