@@ -128,6 +128,11 @@ def pytest_configure(config):
     import sqlcipher_atlama_kapisi
 
     sqlcipher_atlama_kapisi.kur(config)
+    # S-A2.5 (2-C incelemesi · Y123): `*_FIKSTUR_YAZ=1` arayüz fikstürü yenilemesi YALNIZ tamamen yeşil koşuda kalıcı (aksi hâlde
+    # geri alınır, koşu kırmızı). Kapı: tests/test_fikstur_yenilemesi_YALNIZ_yesil_kosuda_SA25.py
+    import fikstur_yenileme_kapisi
+
+    fikstur_yenileme_kapisi.kur(config)
     # Başlık `-q`/`--no-header` altında basılmaz → silme uyarı özetinde de görünsün (her kipte).
     if _PEMF_SIMULATE_DISARIDAN:
         config.issue_config_time_warning(
