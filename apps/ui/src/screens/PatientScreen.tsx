@@ -176,6 +176,10 @@ export function PatientScreen() {
   };
 
   const handleDeleteAll = async () => {
+    // ⚠️ Y106 (S-B.3): kayıtlı operatörlü klinikte kliniğin TAMAMINI silmek SEÇİLİ operatör ister (backend 428 der; iz onun
+    // adına). Kimliksizken (kimse seçili değil / kilit sonrası) istek GÖNDERİLMEZ, onay penceresi bile açılmaz. Operatörsüz
+    // klinikte `myEmail` oturum e-postasıdır (Kural 2). Kapı: __tests__/tumunuSil.Y106.web.test.tsx
+    if (!myEmail) { showToast(kimlikIstemi(SILME_KIMLIK_ISTEMI, kimlikDbOkunamiyor), "error"); return; }
     if (!(await platformConfirm("Tüm Hastaları Sil", "Veritabanındaki TÜM HASTALARI silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!", "Hepsini Sil"))) return;
     // Backend (audit B-8.2) kazara toplu-silmeye karşı confirm ister.
     const res = await apiPost<{ status: string }>(`/patients/delete_all`, { confirm: "DELETE_ALL" }, { status: "error" });

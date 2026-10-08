@@ -207,6 +207,22 @@ def remove_all_patients(request: Request, payload: DeleteAllPayload = DeleteAllP
             detail="Tüm hastaları silmek yalnız cihazın kendi ekranından yapılabilir (telefon ya da ağdaki başka "
             "bir cihazdan değil).",
         )
+    # ⚠️ Y106 (S-B.3): kayıtlı operatörlü klinikte kliniğin TAMAMINI silme SEÇİLİ operatör (jeton) ister — kimliksiz (kimse
+    # seçili değil, kilit sonrası eski jeton) 428; silme izi o hekimin adına (`kimlikli_yaz` jetondan). Eskiden cihaz ekranından
+    # kimliksiz silinip iz sahipsiz kalıyordu. A-03 (yukarıda) AYNEN; operatörsüz klinik (Kural 2) etkilenmez. Kimlik DB'si
+    # okunamıyorsa ileti arızayı söyler (Y113). Kapı: tests/test_hasta_TUMUNU_SIL_KIMLIK_ister_Y106.py
+    from servers.auth import cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
+
+    if kayitli_operator_var() and not cozumlenmis_operator(request):  # beyan YOK → yalnız jeton
+        from servers import audit_log as _iz
+
+        _iz.kimlikli_yaz(request, "patient.delete_all", scope="TUM_HASTALAR", item_count=0, outcome="reddedildi")
+        raise HTTPException(
+            status_code=428,
+            detail=kimliksiz_detayi(
+                "Operatör seçin — tüm hastaları silmek için önce üst bardan hangi hekim olduğunuzu seçin."
+            ),
+        )
     if payload.confirm != "DELETE_ALL":
         raise HTTPException(
             status_code=400, detail="Toplu silme için onay gerekli: gövdede {\"confirm\":\"DELETE_ALL\"} gönderin."
