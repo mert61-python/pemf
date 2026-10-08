@@ -61,6 +61,27 @@ class AuthDB:
                 "auth_users.db ACL kilidi uygulanamadi (elle icacls onerilir): %s", self.db_path, exc_info=True
             )
 
+    # ⚠️ B2B2-1 (2-B2): kimlik KARARI okuması (`kati=True`) — çağıranlar (`servers.auth`) bunu `async` uçlarda OLAY DÖNGÜSÜNDE
+    # satır içi yapar. `_conn()` (connect 10 sn + her bağlantıda `PRAGMA journal_mode=WAL` + busy 5 sn) ve `self._lock` altında
+    # kilitli DB'de tek okuma ~26 sn sürüyor, döngü donuyor ve ACİL DURDUR isteği bekliyordu (ölçüldü: 24–85 sn; Ö.4-Y8).
+    # Bu okuma `self._lock`'u BEKLEMEZ (her çağrı kendi bağlantısı; WAL okuyucuları yazıcıyla eşzamanlı güvenli), journal
+    # pragması yapmaz (WAL kalıcıdır, `_init` kurar), dosya YARATMAZ (`mode=rw`), kısa zaman aşımıyla düşer ve bağlantıyı
+    # kapatır → çağıran FAIL-CLOSED (B2-1.1). Kapı: tests/test_kimlik_DB_KILITLIYKEN_ACIL_DURDUR_BEKLEMEZ_B2B2_1.py
+    _KATI_OKUMA_BEKLEME_SN = 0.25
+
+    def _kati_oku(self, sql: str, params=()):
+        c = sqlite3.connect(
+            Path(self.db_path).resolve().as_uri() + "?mode=rw",
+            uri=True,
+            check_same_thread=False,
+            timeout=self._KATI_OKUMA_BEKLEME_SN,
+        )
+        try:
+            c.row_factory = sqlite3.Row
+            return c.execute(sql, params).fetchall()
+        finally:
+            c.close()
+
     def _conn(self):
         c = sqlite3.connect(str(self.db_path), check_same_thread=False, timeout=10.0)
         c.row_factory = sqlite3.Row
@@ -171,12 +192,12 @@ class AuthDB:
 
         `kati=True`: okuma hatası YUTULMAZ, yükseltilir — kimlik kapıları (`servers.auth`) "bilmiyoruz"u "kayıtlı değil"den
         ayırmalı; yutulan hata orada FAIL-OPEN oluyordu (B2-1.1 / B2-2.1 / B2-3.2, 2-B incelemesi)."""
+        sql, params = "SELECT 1 FROM device_operators WHERE email = ?", (self._norm(email),)
         try:
+            if kati:
+                return bool(self._kati_oku(sql, params))  # B2B2-1: döngüyü dondurmaz
             with self._lock, self._conn() as c:
-                return (
-                    c.execute("SELECT 1 FROM device_operators WHERE email = ?", (self._norm(email),)).fetchone()
-                    is not None
-                )
+                return c.execute(sql, params).fetchone() is not None
         except Exception:
             logger.exception("operator varlik kontrolu basarisiz")
             if kati:
@@ -189,12 +210,16 @@ class AuthDB:
         `kati=True`: okuma hatası YUTULMAZ (bkz. `operator_exists`) — boş liste "operatörsüz klinik" (Kural 2) demektir;
         auth DB okunamazken `[]` dönmek kayıtlı operatörlü kliniği sessizce operatörsüz sayıyordu (ölçüldü: jetonsuz LAN
         isteği başka hekimin hastasını sildi). Kapı: tests/test_kimlik_kapisi_GERCEK_auth_arizasi_FAIL_CLOSED_B221.py."""
+        sql = (
+            "SELECT email, display_name, enrolled_at, last_active, locked_until "
+            "FROM device_operators ORDER BY last_active DESC, email ASC"
+        )
         try:
-            with self._lock, self._conn() as c:
-                rows = c.execute(
-                    "SELECT email, display_name, enrolled_at, last_active, locked_until "
-                    "FROM device_operators ORDER BY last_active DESC, email ASC"
-                ).fetchall()
+            if kati:
+                rows = self._kati_oku(sql)  # B2B2-1: döngüyü dondurmaz
+            else:
+                with self._lock, self._conn() as c:
+                    rows = c.execute(sql).fetchall()
             import time as _t
 
             simdi = _t.time()
