@@ -14,6 +14,7 @@ import re
 import secrets
 import sqlite3
 import threading
+import time
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -88,13 +89,33 @@ class AuthDB:
             timeout=self._KATI_OKUMA_BEKLEME_SN,
         )
 
+    # ⚠️ C2-3.1 (2-C incelemesi A3): okuma başına kısa süre YETMEZ — kararlar async uçlarda olay döngüsünde ve istek başına
+    # birden çok katı okuma (beyanlı değerlendirme 3) × eşzamanlı istek ÇARPILIYOR (ölçüldü: kilitte 3 istemciyle ACİL DURDUR
+    # 12,9 sn). Bir katı okuma düşünce aynı dosyaya kısa süre (bekletme) yeniden GİDİLMEZ: okuma hemen hata verir → çağıran yine
+    # FAIL-CLOSED; döngü kilitte en çok bir okuma süresi tutulur. Başarılı okuma bekletmeyi kaldırır; yol değişince uygulanmaz.
+    # Kapı: tests/test_kimlik_DB_KILITLIYKEN_ESZAMANLI_beyanli_istekler_ACIL_DURDUR_BEKLEMEZ_C2_3_1.py
+    _KATI_ARIZA_BEKLETME_SN = 1.0
+    _kati_ariza = None  # (db yolu, monotonik bitiş) — son katı okuma arızası
+
     def _kati_oku(self, sql: str, params=()):
-        c = self._kati_baglan()
+        yol = str(self.db_path)
+        ariza = self._kati_ariza
+        if ariza is not None and ariza[0] == yol and time.monotonic() < ariza[1]:
+            raise sqlite3.OperationalError(
+                "kimlik veritabani az once okunamadi - yeniden okuma bekletiliyor (fail-closed)"
+            )
         try:
-            c.row_factory = sqlite3.Row
-            return c.execute(sql, params).fetchall()
-        finally:
-            c.close()
+            c = self._kati_baglan()
+            try:
+                c.row_factory = sqlite3.Row
+                sonuc = c.execute(sql, params).fetchall()
+            finally:
+                c.close()
+        except Exception:
+            self._kati_ariza = (yol, time.monotonic() + self._KATI_ARIZA_BEKLETME_SN)
+            raise
+        self._kati_ariza = None
+        return sonuc
 
     def _conn(self):
         c = sqlite3.connect(str(self.db_path), check_same_thread=False, timeout=10.0)
