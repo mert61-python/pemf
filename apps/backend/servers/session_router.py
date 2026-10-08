@@ -97,6 +97,15 @@ def _not_hedefi(payload: "SessionNotesPayload", db, bellek: dict) -> tuple[int, 
     b_sid = bellek.get("db_session_id")
     b_hasta = (bellek.get("patient_name") or "").strip()
     p_hasta = (payload.patient_name or "").strip()
+    # ⚠️ C2-2.1 (2-C inceleme): eski istemci yalnız AD gönderir. Aynı adlı birden çok hastanın yakın tarihli bitmiş seansı
+    # varsa ad hangi hastanın olduğunu SÖYLEMEZ — not başka hastanın (başka hekimin) satırına düşüyordu (ölçüldü). Belirsizse
+    # yazılmaz (A-62 · D2.21 · D2.22: ad belirsizse bağlanmaz); not istemcide kalır.
+    if p_hasta and db.son_biten_seans_belirsiz_mi(p_hasta):
+        raise HTTPException(
+            status_code=409,
+            detail="Bu adla birden çok hastanın yakın tarihli seansı var — not hangi hastanın olduğu belirlenemediği için "
+            "kaydedilmedi. Notunuz ekranda duruyor; uygulamayı güncelleyin (yeni sürüm notu seansın kendisine bağlar).",
+        )
     # ⚠️ 1-F inceleme: istemci hasta adı gönderdiyse bellek dalı YALNIZ AYNI ad için — hastası bilinmeyen (anonim) bellek
     # seansı başka hastanın notunu almaz (ölçüldü: "Rex" notu başka istemcinin hastasız seansına yazılıyordu); o durumda
     # hastanın kendi son bitmiş seansı adla aranır (3).

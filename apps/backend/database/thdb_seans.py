@@ -620,6 +620,31 @@ class SeansKarisimi:
             return None
         return int(row[0]) if row else None
 
+    def son_biten_seans_belirsiz_mi(
+        self, patient_name: str, en_cok_yas_s: float = 12 * 3600, simdi: float = None
+    ) -> bool:
+        """C2-2.1 (2-C inceleme): kimliksiz (eski istemci) notun AD eşlemesi BELİRSİZ mi — aynı adlı, son `en_cok_yas_s`
+        içinde başlamış bitmiş seanslar birden çok HASTAYA (`patient_id`) mı ait? Belirsizse not hiçbir satıra yazılmaz
+        (A-62 · D2.21 · D2.22 ilkesi: ad belirsizse bağlanmaz). Okuma düşerse belirsiz sayılır (not istemcide kalır)."""
+        import time as _time
+
+        ad = (patient_name or "").strip()
+        if not ad:
+            return False
+        sinir = (_time.time() if simdi is None else float(simdi)) - float(en_cok_yas_s)
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    "SELECT COUNT(DISTINCT patient_id) FROM treatment_sessions WHERE patient_name = ? "
+                    "AND session_status != 'active' AND started_epoch IS NOT NULL AND started_epoch >= ? "
+                    "AND patient_id IS NOT NULL",
+                    (ad, sinir),
+                ).fetchone()
+        except _DB_ERROR as e:
+            self.logger.error(f"son_biten_seans_belirsiz_mi hatası: {e}")
+            return True
+        return bool(row and int(row[0] or 0) > 1)
+
     def seans_ozeti(self, session_id: int):
         """D1.66: not yönlendirmesi için seansın durumu (var mı, aktif mi). Yoksa None."""
         try:
