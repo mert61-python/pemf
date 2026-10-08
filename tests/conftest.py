@@ -325,7 +325,19 @@ def _kayitli_operator_epostalari():
 
 def _operator_sizintisini_geri_al(once, request, kapsam: str) -> None:
     sonra = _kayitli_operator_epostalari()
-    if once is None or sonra is None:
+    if once is None:
+        return  # başta okunamadı → taban yok, karar verilmez
+    if sonra is None:
+        # ⚠️ C2-3.5 (2-C incelemesi A3): sonda okunamayan DB "karar yok" DEĞİL — test operatör bırakıp DB'yi kilitli bırakınca gözcü
+        # sessiz kalıyor, sızıntı sonraki testlere geçiyordu (ölçüldü). Geri alma yapılamaz; test KIRMIZI olur (işaret yalnız kırmızıyı kaldırır).
+        # Kapı: tests/test_operator_gozcusu_KILITLI_DB_de_SESSIZ_KALMAZ_C2_3_5.py
+        beklenen = request.node.get_closest_marker("operator_sizintisi_beklenir") is not None
+        _OPERATOR_SIZINTI_KAYDI.append((request.node.nodeid, kapsam, ("<auth DB okunamadı>",), beklenen))
+        if not beklenen:
+            pytest.fail(
+                f"bu {kapsam} SONUNDA cihaz operatör kaydı (auth DB) OKUNAMADI — sızıntı kararı verilemedi (kilit / bozuk dosya / "
+                "izin). Test tekil auth DB'sini kilitli ya da bozuk bırakmamalı (O-A2.4 gözcüsü, C2-3.5)."
+            )
         return
     sizan = sorted(sonra - once)
     if not sizan:
