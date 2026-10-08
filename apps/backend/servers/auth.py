@@ -366,6 +366,21 @@ def is_privileged_request(request) -> bool:
         return False
 
 
+def cihazin_kendisinden_mi(request) -> bool:
+    """İstek cihazın KENDİSİNDEN mi (127.0.0.1 / ::1; tünel ve ters-proxy SAYILMAZ)? Token KABUL EDİLMEZ.
+
+    `is_privileged_request`ten DAHA SIKI (D2.11 · sahip kararı A-03): kliniğin TAMAMINI silmek gibi işlemleri telefon ya
+    da ağdaki başka bir cihaz — geçerli cihaz token'ıyla da — yapamaz. Hata halinde FAIL-CLOSED (False)."""
+    try:
+        h = request.headers
+        via_proxy = bool(h.get("cf-connecting-ip") or h.get("cf-ray") or h.get("x-forwarded-for"))
+        host = request.client.host if request.client else ""
+        return is_loopback_request(host, via_proxy)
+    except Exception:
+        logger.exception("cihaz-kendisi denetimi hatasi → REDDEDILDI (fail-closed)")
+        return False
+
+
 def enforce_privileged(request) -> None:
     """`is_privileged_request` değilse 403 fırlatır. Yıkıcı/PII uçlarında İLK satır olmalı."""
     if is_privileged_request(request):

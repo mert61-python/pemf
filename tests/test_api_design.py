@@ -18,6 +18,13 @@ def client(api):
     return TestClient(api.app)
 
 
+@pytest.fixture(scope="module")
+def cihaz(api):
+    """Cihazın KENDİSİ (loopback). ⚠️ D2.11 · A-03: `delete_all` yalnız buradan; erişim kapısı
+    tests/test_hasta_TUMUNU_SIL_yalniz_cihazdan_D211_A03.py'de — bu dosya onay İŞLEVİNİ test eder."""
+    return TestClient(api.app, client=("127.0.0.1", 51236))
+
+
 # ── B-8.1: versiyon tutarlılığı + versiyonlama ────────────────────────────────
 def test_version_single_source_consistent(client, api):
     from utils.path_utils import get_app_version
@@ -74,13 +81,13 @@ def test_patients_pagination_limits(client):
             client.delete(f"/api/patients/{pid}")
 
 
-def test_delete_all_requires_confirmation(client):
+def test_delete_all_requires_confirmation(cihaz):
     # confirm YOK / yanlış → 400 (kazara toplu-silme engellenir)
-    assert client.post("/api/patients/delete_all", json={}).status_code == 400
-    assert client.post("/api/patients/delete_all", json={"confirm": "yanlis"}).status_code == 400
+    assert cihaz.post("/api/patients/delete_all", json={}).status_code == 400
+    assert cihaz.post("/api/patients/delete_all", json={"confirm": "yanlis"}).status_code == 400
 
 
-def test_delete_all_with_confirmation_succeeds(client):
-    r = client.post("/api/patients/delete_all", json={"confirm": "DELETE_ALL"})
+def test_delete_all_with_confirmation_succeeds(cihaz):
+    r = cihaz.post("/api/patients/delete_all", json={"confirm": "DELETE_ALL"})
     assert r.status_code == 200
     assert r.json()["status"] == "success"

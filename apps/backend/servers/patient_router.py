@@ -181,6 +181,21 @@ def remove_all_patients(request: Request, payload: DeleteAllPayload = DeleteAllP
     Eskiden boş POST tüm hastaları geri-dönülemez siliyordu (yalnız middleware auth). Yanlış-tık/
     otomatik-istek koruması; frontend confirm gönderir."""
     _enforce_patient_auth(request)
+    # ⚠️ D2.11 (B-2.9 · sahip kararı A-03): kliniğin TAMAMINI silme YALNIZ cihazın kendi ekranından (loopback; tünel /
+    # ters-proxy sayılmaz). Telefon ya da ağdaki başka cihaz — geçerli cihaz token'ıyla da — silemez. Eskiden bu uç LAN'dan
+    # (ve tünelden) token'sız tek istekle tüm hasta defterini VACUUM'lu siliyordu (ölçüldü).
+    # Kapı: tests/test_hasta_TUMUNU_SIL_yalniz_cihazdan_D211_A03.py.
+    from servers.auth import cihazin_kendisinden_mi
+
+    if not cihazin_kendisinden_mi(request):
+        from servers import audit_log as _iz
+
+        _iz.kimlikli_yaz(request, "patient.delete_all", scope="TUM_HASTALAR", item_count=0, outcome="reddedildi")
+        raise HTTPException(
+            status_code=403,
+            detail="Tüm hastaları silmek yalnız cihazın kendi ekranından yapılabilir (telefon ya da ağdaki başka "
+            "bir cihazdan değil).",
+        )
     if payload.confirm != "DELETE_ALL":
         raise HTTPException(
             status_code=400, detail="Toplu silme için onay gerekli: gövdede {\"confirm\":\"DELETE_ALL\"} gönderin."
