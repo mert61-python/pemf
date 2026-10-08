@@ -340,6 +340,7 @@ class AiGecmisiKarisimi:
             return sonuc
         except Exception:
             self.logger.exception("AI analiz kimlik tasimasi basarisiz (kayitlar DEGISMEDI).")
+            sonuc["hata"] = True  # C2-1.2: çağıran kalıcı "yapıldı" işaretini KOYMAZ
             return sonuc
 
     def get_ai_analyses(

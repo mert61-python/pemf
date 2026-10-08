@@ -662,7 +662,7 @@ class PatientDatabase:
             except _DB_ERROR:
                 return 0
 
-    def get_all_patients(self, limit: int = 0, offset: int = 0) -> List[Dict[str, Any]]:
+    def get_all_patients(self, limit: int = 0, offset: int = 0, kati: bool = False) -> List[Dict[str, Any]]:
         """Hastalari getirir. limit>0 ise SAYFAYI SQL'de sinirlar (limit=0 → hepsi, geriye uyumlu).
 
         DENETIM P2: sayfalama YALNIZCA cagiran tarafinda (Python dilimi) yapiliyordu; bu metod
@@ -698,6 +698,8 @@ class PatientDatabase:
                         patients.append(self._decrypt_patient_fields(patient))
                     return patients
             except _DB_ERROR:
+                if kati:  # C2-1.2: "defter boş" ile "defter okunamadı" ayrılır (tek seferlik taşıma işaret koymasın)
+                    raise
                 return []
 
     def update_patient(self, patient_id: str, patient_info: Dict[str, str]) -> bool:

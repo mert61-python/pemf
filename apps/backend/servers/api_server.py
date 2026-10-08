@@ -5748,7 +5748,7 @@ def _ai_hasta_kimliklerini_tasi_bir_kez(db) -> dict:
             from utils.turkce_metin import arama_katla
 
             pdb = get_patient_database()
-            hastalar = pdb.get_all_patients() if pdb else []
+            hastalar = pdb.get_all_patients(kati=True) if pdb else []
             # Ad → kimlik; ÇAKIŞAN adlar ELENİR (tekil çözülmeyen ad taşınmaz).
             sayac: dict = {}
             for h in hastalar or []:
@@ -5766,6 +5766,8 @@ def _ai_hasta_kimliklerini_tasi_bir_kez(db) -> dict:
                     len(cakisan),
                 )
             sonuc = db.ai_analiz_kimliklerini_doldur(harita)
+            if sonuc.get("hata"):
+                return sonuc  # C2-1.2: taşıma yazamadı → işaret konmaz, sonraki açılışta yeniden denenir
             db._set_system_setting(
                 _AI_KIMLIK_TASIMA_ISARETI, "1", "AI analiz ad->kimlik tasimasi yapildi (D2.22: tek seferlik, kalici)"
             )
