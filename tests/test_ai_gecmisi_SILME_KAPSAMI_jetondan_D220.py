@@ -199,12 +199,13 @@ def test_KARSIT_tekil_KENDI_kaydi_silinir_jeton_kimligiyle(o):
 
 
 def test_KARSIT_KURAL2_operatorsuz_klinik_KILITLENMEZ(o):
-    """Kayıtlı operatör yok: kimlik = beyan (oturum e-postası). Kendi kapsamı yine yalnız kendi (A-56); tüm klinik siler."""
+    """Kayıtlı operatör yok: kimlik = beyan (oturum e-postası). Kendi kapsamı kendi + SAHİPSİZ (Y105 — 2-B2; önce A-56 gereği
+    yalnız kendi idi); başka e-postalı kayıt durur; tüm klinik siler."""
     kim = _tohum(o, a=TEK, b="eski@klinik.com")
     r = _tekil(o, kim["A"][0], TEK)
     assert r.status_code == 200, r.text[:200]
     r = _toplu(o, TEK)
     assert r.status_code == 200, r.text[:200]
-    assert _kalan(o, kim) == {"A": 0, "B": 2, "S": 3}
+    assert _kalan(o, kim) == {"A": 0, "B": 2, "S": 0}  # Y105: operatörsüz cihazda sahipsizler "kendi"nindir
     r = _toplu(o, "", "", tum=True)
     assert r.status_code == 200 and _kalan(o, kim) == {"A": 0, "B": 0, "S": 0}, f"Kural 2 kilitlendi: {r.text[:200]}"

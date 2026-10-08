@@ -187,9 +187,12 @@ export function AiHistoryScreen() {
     // ⚠️ Y112 (S-B2.4): cihaz DIŞINDAN (LAN / telefon / tünel) kayıtlı operatörlü klinikte "Tüm Klinik" yalnız KENDİ + SAHİPSİZ
     // kayıtları siler (backend kapsamı); başka hekimlerinki dahil TAMAMI yalnız cihazın kendi ekranından. Onay metni gerçeği
     // söyler. Kapı: __tests__/aiTumKlinikSilme.Y112.lan.web.test.tsx (+ .cihaz).
-    const uzaktanKayitli = !isDesktopHost() && (op?.operators?.length ?? 0) > 0;
+    const operatorKayitli = (op?.operators?.length ?? 0) > 0;
+    const uzaktanKayitli = !isDesktopHost() && operatorKayitli;
+    // ⚠️ Y105 (S-B.2): operatörsüz (tek kullanıcılı) cihazda "kendi" silmesi SAHİPSİZ eski kayıtları da siler (backend kapsamı);
+    // onay bunu söyler. Kapı: __tests__/aiKendiSilme.Y105.web.test.tsx
     const kapsamMetni = kendiKapsami
-      ? "Kendi AI analiz kayıtlarınızın TAMAMI"
+      ? (operatorKayitli ? "Kendi AI analiz kayıtlarınızın TAMAMI" : "Kendi ve sahipsiz (eski) AI analiz kayıtlarınızın TAMAMI")
       : uzaktanKayitli
         ? "Kendi ve sahipsiz AI analiz kayıtlarınız (başka hekimlerin kayıtları yalnız cihazın kendi ekranından silinebilir)"
         : "Kliniğin TÜM AI analiz geçmişi";

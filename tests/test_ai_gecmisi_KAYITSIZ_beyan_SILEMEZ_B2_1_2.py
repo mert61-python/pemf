@@ -135,4 +135,5 @@ def test_KARSIT_KURAL2_operatorsuz_klinikte_beyan_kapsamdir(o):
     r1 = o.yerel.post("/api/ai/log/delete", json={"id": ids[TEK][0], "operator_email": TEK})
     r2 = o.yerel.post("/api/ai/log/delete_all", json={"confirm": "DELETE_ALL", "operator_email": TEK})
     assert (r1.status_code, r2.status_code) == (200, 200), (r1.text[:120], r2.text[:120])
-    assert _say(o) == {"": 1}, _say(o)
+    # Y105 (2-B2): operatörsüz (tek kullanıcılı) cihazda "kendi" toplu silme sahipsiz eski kaydı da siler (önce A-10 gereği kalıyordu).
+    assert _say(o) == {}, _say(o)

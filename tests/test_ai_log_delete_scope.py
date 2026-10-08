@@ -70,13 +70,14 @@ def test_klinik_geneli_silme_ACIK_bayrakla_calisir(client, dolu_gecmis):
     assert _ozetler(dolu_gecmis) == []
 
 
-def test_kendi_kayitlarini_silme_YALNIZ_kendisini_siler_sahipsize_DOKUNMAZ(client, dolu_gecmis):
-    """⚠️ D2.20 · A-10 / A-56 (eski kural tersine döndü): "kendi" kapsamı sahipsizleri KAPSAMAZ — eskiden her "kendi
-    geçmişimi sil" kliniğin TÜM sahipsiz AI kayıtlarını da VACUUM'lu götürüyordu (İG-6.19 ölçtü)."""
+def test_kendi_kayitlarini_silme_OPERATORSUZ_cihazda_sahipsizi_de_siler_baskasina_DOKUNMAZ_Y105(client, dolu_gecmis):
+    """⚠️ Bu dosya OPERATÖRSÜZ cihazda koşar (Kural 2). D2.20 (A-10 / A-56) "kendi" kapsamından sahipsizleri çıkarmıştı; Y105
+    (2-B2, sahip kararı) operatörsüz (tek kullanıcılı) cihazda sahipsiz eski kayıtları "kendi"ne geri katar. Başka bir
+    e-postayla yazılmış kayıt (B) yine DURUR. Kayıtlı operatörlü klinikte A-10 aynen (D2.20 / Y105 kapıları)."""
     r = client.post("/api/ai/log/delete_all", json={"confirm": "DELETE_ALL", "operator_email": "a@klinik.com"})
     assert r.status_code == 200, r.text[:300]
     kalan = _ozetler(dolu_gecmis)
-    assert kalan == ["B-analiz", "sahipsiz"], f"baska hekimin ya da sahipsiz kayit etkilendi: {kalan}"
+    assert kalan == ["B-analiz"], f"baska hesabin kaydi gitti ya da sahipsiz kaldi: {kalan}"
 
 
 def test_confirm_kapisi_KORUNUR(client, dolu_gecmis):
@@ -93,7 +94,8 @@ def test_bayrak_kimlikle_birlikte_gelirse_KIMLIK_kazanir(client, dolu_gecmis):
         json={"confirm": "DELETE_ALL", "operator_email": "a@klinik.com", "all_operators": True},
     )
     assert r.status_code == 200, r.text[:300]
-    assert _ozetler(dolu_gecmis) == ["B-analiz", "sahipsiz"], "celiskili istekte GENIS kapsam uygulandi"
+    # Y105: operatörsüz cihazda "kendi" = kendi + sahipsiz; dar kapsam yine kazanır (B durur — "Tüm Klinik" uygulanmadı)
+    assert _ozetler(dolu_gecmis) == ["B-analiz"], "celiskili istekte GENIS kapsam uygulandi"
 
 
 # ── tekil silme: sahiplik ───────────────────────────────────────────────────

@@ -6107,6 +6107,12 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
             # None (kimlik DB okunamıyor) → kimin kayıtlı olduğu bilinmiyor: yalnız kendi + boş sahipli (fail-closed)
             _kayitli_set = kayitli_operator_epostalari()
             op, _sahipsiz_dahil, _kapsam = kimlik, True, "kendi_ve_sahipsiz"
+    elif op and not _kayitli:
+        # ⚠️ Y105 (S-B.2): kayıtlı operatörü OLMAYAN (tek kullanıcılı) cihazda "kendi geçmişimi sil" SAHİPSİZ (boş/NULL) eski
+        # kayıtları da siler — orada sahipsiz kayıt o kullanıcınındır (ev sahibi "Tüm Klinik"e çıkamadığı için başka yolu yoktu).
+        # Başka bir e-postayla yazılmış kayıt "kendi" DEĞİLDİR (`kayitli_epostalar=None` → yalnız boş/NULL). Kayıtlı operatörlü
+        # klinikte A-10 aynen. Kapı: tests/test_ai_gecmisi_KENDI_silme_OPERATORSUZ_cihazda_sahipsizi_de_siler_Y105.py
+        _sahipsiz_dahil, _kapsam = True, "kendi_ve_sahipsiz"
     # ⚠️ FAIL-CLOSED (2026-08-09): kimlik yok VE klinik-geneli silme AÇIKÇA istenmediyse reddet.
     # Aksi hâlde istemcideki bir kimlik kaybı (operatör seçilmemiş, oturum düşmüş, alan boş
     # gönderilmiş) sessizce "kliniğin tüm AI geçmişini sil"e dönüşürdü — geri dönüşü olmayan bir
