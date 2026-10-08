@@ -13,6 +13,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { useAppNav } from "@/context/AppNavContext";
 import { useUserMode } from "@/context/UserModeContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
+import { isDesktopHost } from "@/services/desktopSession";
 import { useAuth } from "@/context/AuthContext";
 import { canAccess } from "@/config/access";
 import {
@@ -321,8 +322,11 @@ export function PatientScreen() {
         <Text style={styles.title}>Hasta Veritabanı</Text>
         <View style={{flexDirection: 'row', gap: spacing.sm}}>
           {/* Güvenlik/KVKK (inceleme): "Tümünü Sil" paylaşılan hasta-DB'sini yıkar → yalnız VETERİNER (isExpert).
-              Araştırma modu (PIN'li de olsa) tüm klinik kayıtlarını silememeli. */}
-          {isExpert && (
+              Araştırma modu (PIN'li de olsa) tüm klinik kayıtlarını silememeli.
+              ⚠️ O-B.10 (A-03 · D2.11): arka uç kliniğin tamamını silmeyi YALNIZ cihazın kendisinden kabul eder (telefon, LAN,
+              tünel → 403) → düğme de yalnız cihazın kendi ekranında (`isDesktopHost` — loopback) görünür; başka yerde ölü
+              eylemdi. Kapı: __tests__/tumunuSilGorunurluk.OB10.{lan,tunel,cihaz}.web.test.tsx */}
+          {isExpert && isDesktopHost() && (
             <Button
               label="Tümünü Sil"
               icon={<Trash2 color={colors.danger} size={16} />}
