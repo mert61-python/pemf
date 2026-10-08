@@ -191,6 +191,18 @@ export function gidenDosyalar(yol: string, alan = "file"): unknown[] {
     .map((i) => (i.govde as FormData).get(alan));
 }
 
+/** Giden dosyaların İÇERİĞİ (metin). jsdom'da `FormData.get` YENİ bir `File` döndürür — kimlik karşılaştırması anlamsız. */
+export async function gidenDosyaIcerikleri(yol: string, alan = "file"): Promise<string[]> {
+  const oku = (b: unknown) =>
+    new Promise<string>((coz) => {
+      if (!(b instanceof Blob)) return coz(String(b));
+      const r = new FileReader();
+      r.onload = () => coz(String(r.result));
+      r.readAsText(b);
+    });
+  return Promise.all(gidenDosyalar(yol, alan).map(oku));
+}
+
 /** Metni tam `metin` olan en derin elemanın (etiketsiz düğme) varlığı. */
 export function metinVar(metin: string): boolean {
   return Array.from(document.querySelectorAll("*")).some(

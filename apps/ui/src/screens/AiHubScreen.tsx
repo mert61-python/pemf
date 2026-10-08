@@ -247,8 +247,17 @@ export function AiHubScreen() {
   // KRİTİK fix (bkz. resetAiCachesForOwner): profil/hasta değişince AI cache'lerini TEMİZLE + açık modülü
   // kapat → önceki hastanın görüntüsü/sonucu yeni hastada görünmesin ve yanlış hastaya analiz yazılmasın.
   const aiCacheOwnerKey = `${userMode ?? ""}:${selectedPatient?.id ?? selectedPatient?.name ?? ""}`;
+  // ⚠️ D2.E08 (İG-6.23): temizlik ÇİZİM sırasında, yeni sahibin çocukları kurulmadan ÖNCE. Eskiden `useEffect`teydi: çocuğun
+  // `useState(moduleCache…)` başlatıcıları temizlikten ÖNCE okuyordu → ev sahibi ekranında önceki hastanın fotoğrafı/sesi/
+  // sonucu kalıyor, "Teşhis Et" önceki hastanın dosyasını YENİ hastaya gönderiyordu (ölçüldü; "yalnız key" de yetmiyordu).
+  // `resetAiCachesForOwner` eşdeğer çağrıda no-op (aynı sahip) — tekrarlanan çizim güvenli. Açık modüllerin kapanması durum
+  // güncellemesidir → etkide kalır.
+  resetAiCachesForOwner(aiCacheOwnerKey);
+  const sonSahip = useRef(aiCacheOwnerKey);
   useEffect(() => {
-    if (resetAiCachesForOwner(aiCacheOwnerKey)) setAcikModuller(new Set());
+    if (sonSahip.current === aiCacheOwnerKey) return;
+    sonSahip.current = aiCacheOwnerKey;
+    setAcikModuller(new Set());
   }, [aiCacheOwnerKey]);
 
   // pet_owner → basit ekran; veterinarian/researcher → modüler AI Hub (modüller profile göre filtreli).
@@ -258,7 +267,8 @@ export function AiHubScreen() {
   if (!hasAiHub) {
     return (
       <PatientGate>
-        <PetOwnerAiScreen />
+        {/* D2.E08: hasta/profil değişince ev sahibi ekranı (FGS + ses kartı + hastalık formu) YENİDEN KURULUR. */}
+        <PetOwnerAiScreen key={aiCacheOwnerKey} />
       </PatientGate>
     );
   }
