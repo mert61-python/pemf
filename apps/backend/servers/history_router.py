@@ -435,6 +435,21 @@ def delete_sessions_bulk(request: Request, payload: HistoryBulkDeletePayload, db
 @router.post("/update_notes")
 def update_notes(request: Request, payload: HistoryNotesPayload, db=Depends(get_db)):
     """Bir seansın notlarını günceller (Expo Geçmiş ekranı). /{session_id}'den ÖNCE tanımlı."""
+    # ⚠️ Y107 (S-B.4 · O-B.9): kayıtlı operatörlü klinikte seans notu (tıbbi kayıt) KİMLİK ister — kimliksiz (jetonsuz LAN, kilit
+    # sonrası eski jeton) 428, not değişmez, deneme izde `reddedildi`. Kimlikli HER hekim düzenler (klinik içi paylaşım; sahiplik
+    # sorulmaz), iz düzenleyenin adına. Operatörsüz klinik (Kural 2) değişmez; kimlik DB'si okunamıyorsa Y113 iletisi.
+    # Kapı: tests/test_seans_notu_KIMLIK_ister_Y107.py
+    from servers import audit_log as _iz
+    from servers.auth import cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
+
+    if kayitli_operator_var() and not cozumlenmis_operator(request):  # beyan YOK → yalnız jeton
+        _iz.kimlikli_yaz(request, "history.notes", scope=f"id={payload.session_id}", item_count=0, outcome="reddedildi")
+        raise HTTPException(
+            status_code=428,
+            detail=kimliksiz_detayi(
+                "Operatör seçin — seans notunu düzenlemek için önce üst bardan hangi hekim olduğunuzu seçin."
+            ),
+        )
     try:
         db.update_session_notes(payload.session_id, payload.notes)
     except Exception as e:
@@ -442,8 +457,6 @@ def update_notes(request: Request, payload: HistoryNotesPayload, db=Depends(get_
         raise HTTPException(status_code=500, detail="İşlem başarısız")
     # ⚠️ D2.43 (B-2.10): tıbbi kaydın değişmesi izlenir — kim, hangi seans. İÇERİK YAZILMAZ: not METNİ ize girmez
     # (denetim izi verinin ikinci kopyası olamaz), yalnız notun var olup olmadığı.
-    from servers import audit_log as _iz
-
     _iz.kimlikli_yaz(
         request,
         "history.notes",
