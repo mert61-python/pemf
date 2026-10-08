@@ -313,6 +313,28 @@ def _seans_sahipligi(request: Request, db, kimlikler: list, olay: str, scope: st
     sahiplik_kapisi(request, db.seans_sahipleri(kimlikler), olay=olay, scope=scope)
 
 
+SURUYOR_DETAY = "Seans sürüyor — süren tedavinin kaydı silinemez; önce seansı durdurun."
+
+
+def _suren_seans_reddi(request: Request, kimlikler, olay: str, scope: str) -> None:
+    """⚠️ B2-1.5: SÜREN seansın satırı silinirse tedavi donanımda sürer ama doz satırları ebeveynsiz yazılır, ACİL DURDUR
+    olayı FK'dan YAZILAMAZ (ölçüldü) → 409, hiçbir şey silinmez. ⚠️ Ö.4-Y8: `_session_lock` ALINMAZ (ACİL DURDUR beklemez;
+    `dict.get` atomik). Kapı: tests/test_seans_SURERKEN_kaydi_silinemez_B2_1_5.py"""
+    try:
+        from servers import api_server as _api
+
+        _s = _api._active_session
+        aktif = _s.get("db_session_id") if _s.get("is_active") else None
+    except Exception:
+        aktif = None
+    if aktif is None or int(aktif) not in {int(k) for k in kimlikler}:
+        return
+    from servers import audit_log as _iz
+
+    _iz.kimlikli_yaz(request, olay, scope=scope, item_count=0, outcome="reddedildi", detail={"neden": "seans_suruyor"})
+    raise HTTPException(status_code=409, detail=SURUYOR_DETAY)
+
+
 def _tekil_seans_sil(request: Request, db, session_id: int) -> dict:
     """İki tekil silme ucunun (`POST /delete`, `DELETE /{id}`) TEK gövdesi.
 
@@ -330,6 +352,7 @@ def _tekil_seans_sil(request: Request, db, session_id: int) -> dict:
     if not sahipler:
         _iz.kimlikli_yaz(request, "history.delete", scope=scope, item_count=0, outcome="bulunamadi")
         raise HTTPException(status_code=404, detail="Seans bulunamadı — zaten silinmiş olabilir; listeyi yenileyin.")
+    _suren_seans_reddi(request, [session_id], "history.delete", scope)
     # ⚠️ D2.17 (B-3.27): "bu hastanın acil durdurma kaydını ve dozunu kim sildi" — bağlı kayıtların SAYILARI silmeden
     # ÖNCE alınır ve ize girer (içerik değil). Özet okunamazsa silme KISITLANMAZ; iz bunu söyler.
     # Kapı: tests/test_seans_tekil_silme_OZETI_IZDE_D217.py.
@@ -381,6 +404,7 @@ def delete_sessions_bulk(request: Request, payload: HistoryBulkDeletePayload, db
     if not istenen:
         raise HTTPException(status_code=400, detail="Silinecek seans seçilmedi.")
     _seans_sahipligi(request, db, istenen, "history.delete_bulk", f"{len(istenen)} seans")
+    _suren_seans_reddi(request, istenen, "history.delete_bulk", f"{len(istenen)} seans")
     try:
         silinen = db.delete_sessions_bulk(istenen)
     except ValueError as e:
