@@ -1214,7 +1214,24 @@ def _ai_seansi_pasife_al(neden: str, dongu_muhru=None) -> None:
             _baskasi_aktif = bool(_s.get("is_active")) and not _kendi
         # D2.E07: döngü bobin SÜRMEDEN öldü (model / kamera) → satır "İptal Edildi" kapanır (açık kalıp yeniden açılışta
         # "Elektrik Kesintisi" olmaz).
-        _ai_pro_satirini_kapat(_iptal, "iptal-ai-pro")
+        # C2-1.4: bu pencerede kare yolu (`/frame`, mühürlü seans) bobin SÜRMÜŞ olabilir — KENDİ seansının bobinlerine STOP
+        # (idempotent; satır kapanışından ÖNCE); sürüldüyse kayıt "Kesintiye Uğradı" (İptal Edildi = bobin sürülmedi).
+        _sebep = "iptal-ai-pro"
+        if _iptal is not None:
+            try:
+                _cs = getattr(getattr(_api3.state, "hardware", None), "coils_state", None) or {}
+                if any((_cs.get(int(c)) or {}).get("is_running") for c in (_iptal.get("coil_ids") or [])):
+                    _sebep = "ai-pro-kesinti"
+            except Exception:
+                logger.debug("AI Pro: bobin durumu okunamadı", exc_info=True)
+            try:
+                _api3._bildir_teyitsiz_stop(
+                    _api3._stop_session_coils(_iptal.get("coil_ids") or list(range(1, 8)), yetkiyi_kes=True),
+                    "AI Pro başlatılamadı — durdurma",
+                )
+            except Exception:
+                logger.exception("AI Pro: başlatılamayan seansın bobinleri durdurulamadı")
+        _ai_pro_satirini_kapat(_iptal, _sebep)
         if _baskasi_aktif:
             logger.error("AI Pro döngüsü başlatılamadı (%s) — aktif seans bu döngünün değil, ona DOKUNULMADI.", neden)
             return
