@@ -305,12 +305,15 @@ def export_patient_pdf(patient_name: str, pdf_gen=Depends(get_pdf_gen)):
         raise HTTPException(status_code=500, detail="İşlem başarısız")
 
 
-def _seans_sahipligi(request: Request, db, kimlikler: list, olay: str, scope: str) -> None:
+def _seans_sahipligi(request: Request, db, kimlikler: list, olay: str, scope: str) -> dict:
     """⚠️ D2.72 (B-6.26 · Y92): seans (tıbbi kayıt) silme yalnız KENDİ kaydına; kimlik jetondan; operatörsüz klinik
-    kısıtsız (Kural 2). Kural tek yerde: servers/silme_yetkisi.py. Kapı: tests/test_silme_SAHIPLIK_jetondan_D272_Y92.py."""
+    kısıtsız (Kural 2). Kural tek yerde: servers/silme_yetkisi.py. Kapı: tests/test_silme_SAHIPLIK_jetondan_D272_Y92.py.
+    Denetlenen `{kimlik: sahip}` sözlüğünü döner (B2-1.3: DELETE yalnız bunlara)."""
     from servers.silme_yetkisi import sahiplik_kapisi
 
-    sahiplik_kapisi(request, db.seans_sahipleri(kimlikler), olay=olay, scope=scope)
+    sahipler = db.seans_sahipleri(kimlikler)
+    sahiplik_kapisi(request, sahipler, olay=olay, scope=scope)
+    return sahipler
 
 
 SURUYOR_DETAY = "Seans sürüyor — süren tedavinin kaydı silinemez; önce seansı durdurun."
@@ -403,10 +406,10 @@ def delete_sessions_bulk(request: Request, payload: HistoryBulkDeletePayload, db
     istenen = sorted({int(x) for x in (payload.session_ids or [])})
     if not istenen:
         raise HTTPException(status_code=400, detail="Silinecek seans seçilmedi.")
-    _seans_sahipligi(request, db, istenen, "history.delete_bulk", f"{len(istenen)} seans")
+    denetlenen = _seans_sahipligi(request, db, istenen, "history.delete_bulk", f"{len(istenen)} seans")
     _suren_seans_reddi(request, istenen, "history.delete_bulk", f"{len(istenen)} seans")
     try:
-        silinen = db.delete_sessions_bulk(istenen)
+        silinen = db.delete_sessions_bulk(istenen, yalniz=set(denetlenen))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

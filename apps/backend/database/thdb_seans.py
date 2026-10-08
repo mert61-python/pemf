@@ -736,7 +736,7 @@ class SeansKarisimi:
             self.logger.error(f"Seans silme hatası: {e}")
             raise
 
-    def delete_sessions_bulk(self, session_ids) -> int:
+    def delete_sessions_bulk(self, session_ids, yalniz=None) -> int:
         """Birden çok seansı TEK İŞLEMDE (atomik) siler; silinen seans sayısını döndürür.
 
         ⚠️ NEDEN AYRI BİR METOT, NEDEN DÖNGÜYLE `delete_session` DEĞİL:
@@ -759,6 +759,13 @@ class SeansKarisimi:
             return 0
         if len(kimlikler) > self.TOPLU_SILME_AZAMI:
             raise ValueError(f"Tek istekte en fazla {self.TOPLU_SILME_AZAMI} seans silinebilir.")
+        if yalniz is not None:
+            # ⚠️ B2-1.3: yalnız sahipliği DENETLENMİŞ (denetim anında var olan) kimlikler — denetimle bu DELETE arasında
+            # açılan başka hekimin seansı (AUTOINCREMENT, tahmin edilebilir kimlik) sorulmadan silinmesin. Üst sınır yukarıda
+            # İSTENEN listeyle aynen uygulanır. Kapı: tests/test_seans_toplu_silme_YARIS_denetlenmeyen_silinmez_B2_1_3.py
+            kimlikler = [k for k in kimlikler if k in yalniz]
+            if not kimlikler:
+                return 0
         try:
             self._ensure_write_guardrail()
             yer = ",".join("?" for _ in kimlikler)
