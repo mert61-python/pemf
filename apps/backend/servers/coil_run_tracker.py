@@ -72,6 +72,10 @@ def _begin_coil_run(coil_id, freq, duty, phase, intensity, hw_type):
             db = _treatment_db_getter()
             if db is None:
                 return
+            # ⚠️ D2.40 (B-1.31): koşu süresi MONOTONİK saatle — başlangıcın duvar + monotonik damgası birlikte saklanır;
+            # bitişte `bitiş = başlangıç_duvar + monotonik geçen` (duration = ended - started → monotonik süre). Eskiden iki
+            # duvar saati farkıydı: koşu sırasında saat −2 sa düzeltilince doz kaydına −7170 sn yazılıyordu (ölçüldü).
+            _t0 = (time.time(), time.monotonic())
             run_id = db.start_coil_run(
                 sid,
                 coil_id,
@@ -80,7 +84,7 @@ def _begin_coil_run(coil_id, freq, duty, phase, intensity, hw_type):
                 phase=phase,
                 intensity_mt=intensity,
                 hw_type=hw_type,
-                started_epoch=time.time(),
+                started_epoch=_t0[0],
             )
             if run_id is not None:
                 with _active_coil_runs_lock:
@@ -96,6 +100,7 @@ def _begin_coil_run(coil_id, freq, duty, phase, intensity, hw_type):
                         "t_n": 0,
                         "i_n": 0,
                         "b_n": 0,
+                        "saat0": _t0,  # D2.40: (duvar, monotonik) — süre monotonik
                     }
     except Exception:
         logging.getLogger(__name__).debug("_begin_coil_run hatasi (coil=%s)", coil_id, exc_info=True)
@@ -122,9 +127,13 @@ def _finish_coil_run(coil_id, only_run_id=None):
         if run_id is None:
             return
         db = _treatment_db_getter()
+        with _coil_run_stats_lock:
+            _t0 = (_coil_run_stats.get(run_id) or {}).get("saat0")
+        # D2.40: bitiş = başlangıç duvar damgası + MONOTONİK geçen süre (saat adımından bağımsız); damga yoksa duvar saati.
+        _bitis = (_t0[0] + max(0.0, time.monotonic() - _t0[1])) if _t0 else time.time()
         if db is not None:
             try:
-                db.end_coil_run(run_id, time.time())
+                db.end_coil_run(run_id, _bitis)
             except Exception:
                 logging.getLogger(__name__).debug("end_coil_run hatasi", exc_info=True)
         with _coil_run_stats_lock:

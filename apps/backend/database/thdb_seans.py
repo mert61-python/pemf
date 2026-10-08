@@ -973,14 +973,17 @@ class SeansKarisimi:
 
     def set_session_parameter(
         self, session_id, parameter_name: str, parameter_value: str, parameter_unit: str = ''
-    ) -> None:
+    ) -> bool:
         """Seansa tek bir parametre yaz (varsa GUNCELLE, yoksa EKLE) — idempotent.
         React seans-akisinda hasta meta-parametrelerini (orn. patient_owner_email)
-        kaydetmek icin. Best-effort: hata seansi/donanimi DURDURMAZ."""
+        kaydetmek icin. Best-effort: hata seansi/donanimi DURDURMAZ.
+
+        D2.40 (B-1.32): sonucu DÖNDÜRÜR (yazıldı → True, yazılamadı → False) — çağıran "kayda yazıldı" diyebilmek için
+        bilmeli (eskiden hata yutulup `kayda_yazildi: True` dönüyordu). Mevcut çağıranlar dönüşü yok sayabilir."""
         try:
             self._ensure_write_guardrail()
             if not session_id or not parameter_name:
-                return
+                return False
             _pv = str(parameter_value)
             if parameter_name in self._PII_PARAM_NAMES:
                 _pv = self._redact_pii(_pv)  # B-1.3: şifresiz DB'ye gerçek PII yazma
@@ -999,5 +1002,7 @@ class SeansKarisimi:
                         (int(session_id), parameter_name, _pv, parameter_unit),
                     )
                 conn.commit()
+            return True
         except Exception as e:
             self.logger.error(f"set_session_parameter hatası: {e}")
+            return False

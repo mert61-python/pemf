@@ -79,7 +79,13 @@ def _saati_ilerlet(monkeypatch, saniye):
         "time",
         types.SimpleNamespace(monotonic=lambda: gercek.monotonic() + saniye, sleep=gercek.sleep, time=gercek.time),
     )
-    monkeypatch.setattr(crt, "time", types.SimpleNamespace(time=lambda: gercek.time() + saniye))
+    # D2.40 (B-1.31): koşu süresi artık MONOTONİK saatten — benzetilen ilerleme iki saati de ilerletir (yalnız duvar saati
+    # ilerletilirse koşucu `time.monotonic`ı bulamaz ve bitiş best-effort yutulurdu).
+    monkeypatch.setattr(
+        crt,
+        "time",
+        types.SimpleNamespace(time=lambda: gercek.time() + saniye, monotonic=lambda: gercek.monotonic() + saniye),
+    )
 
 
 def test_KRITIK_sure_kapagi_bobini_durdurunca_KOSU_KAYDI_da_kapanir_sure_UYGULANANDIR(o, monkeypatch):

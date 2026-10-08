@@ -10,12 +10,16 @@ NOT: /api/session/start + /api/session/stop (bobin-suren, safety-kritik) BURADA 
 human-review batch'inde ayrica ele alinacak.
 """
 
+import itertools
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
 router = APIRouter(tags=["session"])
+
+#: D2.40 (B-1.32): parametre değişikliği anahtarının süreç içi sırası (aynı saniyedeki değişiklikler ayrı satır).
+_DEGISIKLIK_SIRASI = itertools.count(1)
 
 
 class SessionNotesPayload(BaseModel):
@@ -42,7 +46,12 @@ def get_active_session():
     with _api._session_lock:
         sess = dict(_api._active_session)
     if sess.get("is_active"):
-        elapsed = int(time.time() - sess.get("start_time", time.time()))
+        # ⚠️ D2.40 (B-1.30): geçen süre MONOTONİK saatten — duvar saati +1 sa atlayınca seans (backend aktifken) arayüzde
+        # KAPALI, −2 sa atlayınca geçen süre NEGATİF görünüyordu. `start_mono` yoksa (eski kayıt) duvar saati, 0'da kırpılı.
+        if sess.get("start_mono") is not None:
+            elapsed = int(time.monotonic() - float(sess["start_mono"]))
+        else:
+            elapsed = max(0, int(time.time() - sess.get("start_time", time.time())))
         total = sess.get("duration_minutes", 0) * 60
         remaining = max(0, total - elapsed)
         # D1.70 (Y5): seans ortası süre değişikliği kesin bitiş anını yazar — kalan süre ondan (bekçiyle AYNI ölçüt).
@@ -320,7 +329,10 @@ def parametre_guncelle(payload: ParametreGuncellePayload):
             # GEÇMİŞİNİ siler — "10. dakikada 150'ye çıktık" bilgisi kaybolurdu.
             import time as _t
 
-            damga = int(_t.time())
+            # ⚠️ D2.40 (B-1.32): anahtar saniye + süreç içi SIRA — eskiden yalnız tamsayı saniyeydi; aynı saniyedeki ikinci
+            # değişiklik (150 → 200 Hz) ilkini EZİYORDU (`set_session_parameter` aynı adı günceller). Okuyucular ön eke bakar.
+            damga = f"{int(_t.time())}-{next(_DEGISIKLIK_SIRASI)}"
+            sonuclar = []
             for ad, deger, birim in (
                 ("degisiklik_frekans_hz", frekans, "Hz"),
                 ("degisiklik_duty_yuzde", duty, "%"),
@@ -329,12 +341,16 @@ def parametre_guncelle(payload: ParametreGuncellePayload):
                 ("degisiklik_sure_dk", payload.duration_minutes, "dk (kalan)"),
             ):
                 if deger is not None:
-                    db.set_session_parameter(sid, f"{ad}@{damga}", str(deger), birim)
+                    sonuclar.append(db.set_session_parameter(sid, f"{ad}@{damga}", str(deger), birim))
             if payload.coil_ids:
-                db.set_session_parameter(
-                    sid, f"degisiklik_bobinler@{damga}", ",".join(str(c) for c in payload.coil_ids), ""
+                sonuclar.append(
+                    db.set_session_parameter(
+                        sid, f"degisiklik_bobinler@{damga}", ",".join(str(c) for c in payload.coil_ids), ""
+                    )
                 )
-            yazildi = True
+            # D2.40: `set_session_parameter` hatayı yutar (best-effort) — artık sonucunu döndürür; yazılamayan değişiklik
+            # "kayda yazıldı" DENMEZ (eskiden DB hatasında da True).
+            yazildi = all(s is not False for s in sonuclar)
         except Exception:
             logging.exception("parametre degisikligi kayda yazilamadi (surus ETKILENMEDI)")
 
