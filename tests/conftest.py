@@ -898,6 +898,44 @@ def _broker_kimlik_sondasini_durdur():
         dur.clear()
 
 
+# ── O-A2-K.1 (2-A incelemesi): AI Pro DÖNGÜ İŞ PARÇACIĞI testten SIZMAZ ───────────────────────────────────────────
+#
+# ÖLÇÜLEN (2-A incelemesi, tanı eklentisi): `test_KRITIK_IG515_DONGU_…` biterken `ai-pro-dongu` YAŞIYORDU; iki test sonra
+# döngünün kapanışı (`_ai_pro_loop` → `efield_live.set_context([])` + `seans_bitti`) süreç geneli E bağlamını sildi →
+# `test_KARSIT_E07_em_fantom_OLCEKLI_kipte_baglam_KURULUR` zamanlamaya bağlı KIRMIZI. Testin `_ai_loop_active` bayrağını
+# beklemesi döngünün BİTTİĞİNİ göstermez (bayrak durdurmada hemen iner, iş parçacığı bir tur daha yaşar).
+# Yıkımda (testin kendi fikstürleri ve monkeypatch geri alındıktan SONRA): yaşayan döngü durdurulur, beklenir (kapanış
+# yan etkisi BU testin yıkımında olur, sonrakine taşınmaz) ve test KIRMIZI yapılır — test döngüsünü kendisi beklemeli
+# (`ai_pro_aparati.dongu_bitir`). Modül içe AKTARILMAZ (H-8.1 dersi), yalnız `sys.modules`'tan okunur.
+AI_PRO_DONGU_ADI = "ai-pro-dongu"
+
+
+def ai_pro_dongu_sizinti_sorunu(air, is_parcaciklari, bekle: float = 10.0) -> str:
+    """Gözcünün denetimi (test edilebilir saf işlev): yaşayan `ai-pro-dongu` varsa durdurur (`_ai_loop_active=False`),
+    bekler ve sorunu döndürür; yoksa ''. Ölçüt iş parçacığının CANLILIĞIdır — bayrak değil (bayrak durdurmada hemen iner)."""
+    canli = [t for t in is_parcaciklari if getattr(t, "name", "") == AI_PRO_DONGU_ADI and t.is_alive()]
+    if not canli:
+        return ""
+    if air is not None:
+        air._ai_loop_active = False
+    for t in canli:
+        t.join(timeout=bekle)
+    kalan = sum(t.is_alive() for t in canli)
+    return (
+        f"O-A2-K.1: '{AI_PRO_DONGU_ADI}' iş parçacığı test sonunda YAŞIYORDU ({len(canli)}; beklemeden sonra {kalan}) — "
+        "kapanışı sonraki testin süreç geneli durumunu (E bağlamı, seans) değiştirir; test döngüyü durdurup BEKLEMELİ "
+        "(`ai_pro_aparati.dongu_bitir`)"
+    )
+
+
+@pytest.fixture(autouse=True)
+def _ai_pro_dongusu_sizmaz():
+    yield
+    sorun = ai_pro_dongu_sizinti_sorunu(sys.modules.get("servers.ai_router"), threading.enumerate())
+    if sorun:
+        pytest.fail(sorun, pytrace=False)
+
+
 # ── D1.41 · B-10.243 · B-10.257: SEANS ve WATCHDOG NÖBETİ (ack bekçisi deseni) ─────────────────────────
 #
 # ÖLÇÜLEN (2026-10-01, tam süit + tanı eklentisi): 16 test `_active_session["is_active"]=True` bırakıyordu

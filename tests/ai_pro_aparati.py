@@ -65,6 +65,24 @@ def mandali_sifirla(c) -> None:
     c.post("/api/hardware/estop_mandali/sifirla", json={"onay": True})
 
 
+DONGU_IP_ADI = "ai-pro-dongu"
+
+
+def dongu_bitir(air, sure: float = 10.0) -> int:
+    """O-A2-K.1: GERÇEK AI Pro döngüsü (`ai-pro-dongu` iş parçacığı) durdurulur ve BİTMESİ beklenir; yaşayan sayısını döndürür.
+
+    `_ai_loop_active` bayrağını beklemek yetmez — bayrak durdurmada hemen iner, iş parçacığı bir tur daha yaşar ve kapanışında
+    (`efield_live.set_context([])` + `seans_bitti`) süreç geneli durumu SONRAKİ testin içinde değiştirir (2-A incelemesi ölçtü:
+    E07 bağlam kapısı zamanlamaya bağlı kırmızı). Çağrı testin yıkımında, monkeypatch geri alınmadan ÖNCE yapılır (kapanış
+    yan etkisi testin kendi yamalı ortamında kalır). Conftest gözcüsü `_ai_pro_dongusu_sizmaz` kaçağı KIRMIZI yapar."""
+    canli = [t for t in threading.enumerate() if t.name == DONGU_IP_ADI and t.is_alive()]
+    if canli:
+        air._ai_loop_active = False
+    for t in canli:
+        t.join(timeout=sure)
+    return sum(t.is_alive() for t in canli)
+
+
 def kur(monkeypatch, tmp_path, *, dongu_noop: bool = True):
     """Ortamı kurar ve bir isim alanı döner. Çağıran `with gercek_hc()` bloğunu kendisi açar ve `ns.hc`yi atar."""
     from database.treatment_history_db import TreatmentHistoryDB
@@ -143,6 +161,7 @@ def kur(monkeypatch, tmp_path, *, dongu_noop: bool = True):
         api._active_session["is_active"] = False
 
     def _geri():
+        dongu_bitir(air)  # O-A2-K.1: döngünün kapanışı BU testin yamalı ortamında olsun (sonrakine sızmasın)
         if m is not None:
             m.sifirla("test-izolasyon")
         with api._session_lock:
