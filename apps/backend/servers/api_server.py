@@ -5794,11 +5794,21 @@ def _hasta_adi_kimlikten(hasta_kimligi: str) -> str:
 @app.post("/api/ai/log")
 async def log_ai_result(payload: AiLogPayload, request: Request):
     """AI analiz sonucunu ŞİFRELİ (SQLCipher) geçmişe profesyonel+detaylı kaydeder (ai_analyses tablosu).
-    Eski düz-metin JSONL + isim-maskeleme KALDIRILDI — şifreli olduğundan hasta adı TAM (KVKK-güvenli)."""
+    Eski düz-metin JSONL + isim-maskeleme KALDIRILDI — şifreli olduğundan hasta adı TAM (KVKK-güvenli).
+
+    ⚠️ D2.56 (B-3.86): kayıt YAZILAMAZSA "success" DÖNMEZ — 503 + eylem söyleyen gerekçe. Eskiden `add_ai_analysis` hatayı
+    (disk korkuluğu dahil) yutup `None` döndürüyor, uç `200 {"status": "success", "id": None}` veriyordu → arayüz sessiz,
+    hekim analizin geçmişe yazıldığını sanıyordu (değerlendirme ve PDF üretilemez). İstemci (`apiPost`) `!ok` yanıtta
+    gerekçeyi bildirim olarak gösterir; eski LAN istemcileri de (A-01) aynı genel yoldan görür.
+    Kapı: tests/test_ai_log_YAZILAMAZSA_basari_DONMEZ_D256.py (+ arayüz aiKaydiYazilamadi.D256)."""
+    _yazilamadi = (
+        "AI analizi geçmişe kaydedilemedi (kayıt veritabanına yazılamadı — disk dolu ya da veritabanı kilitli olabilir). "
+        "Sonuç ekranda duruyor; değerlendirme ve rapor için sorunu giderip analizi yeniden çalıştırın."
+    )
     try:
         db = _get_treatment_db()
         if db is None:
-            return {"status": "error", "detail": "Kayıt DB yok"}
+            raise HTTPException(status_code=503, detail=_yazilamadi)
         await asyncio.to_thread(_migrate_ai_jsonl_once, db)
         # ⚠️ Eski kayıtlara hasta kimliği yaz (tek seferlik, idempotent, best-effort).
         # Yalnız YAZMA yolunda: GET read-only kalmalı (jsonl taşımasıyla aynı ilke).
@@ -5824,10 +5834,14 @@ async def log_ai_result(payload: AiLogPayload, request: Request):
             cozumlenmis_operator(request, payload.operator_email),
             _hasta_kimligi,
         )
+        if rid is None:
+            raise HTTPException(status_code=503, detail=_yazilamadi)
         return {"status": "success", "id": rid}
+    except HTTPException:
+        raise
     except Exception:
         logging.exception("log_ai_result failed")
-        return {"status": "error", "detail": "Kayıt başarısız"}
+        raise HTTPException(status_code=503, detail=_yazilamadi)
 
 
 class AiReviewPayload(BaseModel):

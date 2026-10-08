@@ -1,0 +1,6 @@
+{
+  "durum": 503,
+  "govde": {
+    "detail": "AI analizi geçmişe kaydedilemedi (kayıt veritabanına yazılamadı — disk dolu ya da veritabanı kilitli olabilir). Sonuç ekranda duruyor; değerlendirme ve rapor için sorunu giderip analizi yeniden çalıştırın."
+  }
+}
