@@ -104,12 +104,18 @@ class AiGecmisiKarisimi:
                 # ⚠️ Y114 (S-B2.6): alanlar üzerine yazılmadan ÖNCE önceki değerlendirme (metniyle) kaydın kendi geçmişine
                 # eklenir — eskiden ikinci değerlendirme önceki red gerekçesini / düzeltilmiş teşhisi DB'den siliyordu
                 # (D2.19'un izi bilinçli olarak metinsiz). Okuma ve yazma AYNI bağlantı/işlemde.
+                # ⚠️ C2-2.7 (2-C inceleme): Python `sqlite3` SELECT'ten önce işlem AÇMAZ (örtük BEGIN yalnız UPDATE'ten önce) →
+                # eşzamanlı iki değerlendirme aynı geçmişi okuyup birbirini eziyordu (ölçüldü: 30/30'da bir metin kayboldu).
+                # Okuma YAZMA KİLİDİ altında: ikinci yazar birincinin commit'ini bekler ve taze geçmişi okur.
+                if not conn.in_transaction:
+                    cur.execute("BEGIN IMMEDIATE")
                 onceki = cur.execute(
                     "SELECT COALESCE(review_status,''), COALESCE(review_note,''), COALESCE(reviewed_by,''), "
                     "COALESCE(reviewed_at,''), COALESCE(review_history,'') FROM ai_analyses WHERE id=?",
                     (int(analysis_id),),
                 ).fetchone()
                 if onceki is None:
+                    conn.rollback()
                     return False
                 try:
                     gecmis = json.loads(onceki[4]) if onceki[4] else []
