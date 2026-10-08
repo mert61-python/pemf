@@ -95,4 +95,22 @@ describe("D2.E13 · İG-6.18 — etkileşim hareketsizlik sayacını sıfırlar 
     await etkiles(["mousemove"], AUTO_LOCK_MS + 31_000);
     expect(aktifOperator()).toBeNull();
   });
+
+  it("KRİTİK (O-A3.5): hedef öğe olayın YAYILIMINI durdursa da (modal / girdi bileşeni) klavye + tekerlek sayılır — YAKALAMA evresi", async () => {
+    // Pencere dinleyicisi KABARCIK evresinde olsaydı, yayılımı hedefte durduran bir bileşenin içinde çalışan hekimin hiçbir
+    // tuşu/kaydırması sayaca ulaşmaz, kimlik 10. dakikada düşerdi (2-B incelemesi: kabarcık mutantı 55/55 yeşildi). `pointerdown`
+    // / `touchstart` RN-web yanıtlayıcı katmanınca da sayıldığından bu kol yalnız pencere dinleyicisinin duyduğu iki olayla kurulur.
+    await kurVeSec();
+    const hedef = s.etiket("Is alani");
+    const durdur = (e: Event) => e.stopPropagation();
+    hedef.addEventListener("keydown", durdur);
+    hedef.addEventListener("wheel", durdur);
+    try {
+      await etkiles(["keydown", "wheel"], 11 * 60_000);
+    } finally {
+      hedef.removeEventListener("keydown", durdur);
+      hedef.removeEventListener("wheel", durdur);
+    }
+    expect(aktifOperator()).toBe("Dr. A");
+  });
 });
