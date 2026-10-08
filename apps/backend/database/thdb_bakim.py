@@ -174,7 +174,19 @@ class BakimKarisimi:
 
             with self._get_connection() as src_conn:
                 if getattr(self, "at_rest_encrypted", False):
+                    # ⚠️ A-13 (sahip kararı): yedek BİRİNCİL anahtarla şifrelenir — DB D-3 legacy anahtarla açılmış olsa da.
+                    # Kurtarma zarfı yalnız birincil `sqlcipher_key`i taşır; "açan anahtarla" yazılan yedek makine dışında
+                    # açılamazdı (regresyon). SQLCipher yedek API'si farklı anahtarlar arasında çalışır, çıktı hedef anahtarla.
+                    # ⚠️ D2.62 (B-3.71): anahtar çözümü bu `try` içinde — düşerse yedek yok, artık yok (`finally`). BOŞ anahtar
+                    # REDDEDİLİR, hedef dosya hiç açılmaz: `PRAGMA key=''` kitaplığa bırakılmaz (boş anahtarı "şifresiz" sayan
+                    # sürümde klinik verisinin düz-metin kopyası yazılırdı). Kapı: tests/test_yedek_ANA_anahtarla_bos_anahtar_reddi_D262_A13.py
                     key = self._get_sqlcipher_key()
+                    if not key:
+                        self.logger.error(
+                            "DB yedegi ALINMADI: at-rest sifreli DB icin birincil anahtar BOS dondu (sir kaydi okunamadi/silinmis) "
+                            "— bos anahtarla yedek yazilmaz (duz-metin kopya riski). Sir deposunu denetleyin."
+                        )
+                        return False
                     sqlcipher = self._import_sqlcipher()
                     dst_conn = sqlcipher.connect(backup_path)
                     dst_conn.execute("PRAGMA key='{}'".format(key.replace("'", "''")))
