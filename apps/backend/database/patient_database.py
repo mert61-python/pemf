@@ -882,19 +882,35 @@ class PatientDatabase:
         finally:
             self.lock.release()
 
-    def clear_all_patients(self) -> bool:
-        """Tum hasta kayitlarini temizler."""
+    def clear_all_patients(self) -> tuple:
+        """Tum hasta kayitlarini temizler → `(silinen, vacuum_ok)`; DELETE düşerse `(-1, False)` (kayıtlar DURUR).
+
+        ⚠️ D2.57 (B-3.109): DELETE commit edildikten SONRA VACUUM düşerse (disk dolu / G-Ç) silme GERÇEKLEŞMİŞTİR — sonuç
+        "silindi, VACUUM başarısız" olarak AYRI bildirilir. Eskiden ikisi tek `try`'daydı: `False` dönüyor, KVKK denetim izi
+        "hata" yazıyor, arayüz "başarısız" deyip listeyi yenilemiyordu (operatör verinin durduğunu sanıyordu)."""
         with self.lock:
             try:
                 with self._get_connection() as conn:
                     cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM patients")
+                    silinen = int(cursor.fetchone()[0] or 0)
                     cursor.execute("DELETE FROM patient_search_index")
                     cursor.execute("DELETE FROM patients")
                     conn.commit()
-                    cursor.execute("VACUUM")
-                    return True
             except _DB_ERROR:
-                return False
+                self.logger.exception("Toplu hasta silme basarisiz (kayitlar DURUYOR).")
+                return -1, False
+            try:
+                with self._get_connection() as conn:
+                    conn.cursor().execute("VACUUM")
+                return silinen, True
+            except _DB_ERROR:
+                self.logger.warning(
+                    "Hastalar SILINDI ama VACUUM yapilamadi — silinen veri dosyanin bos sayfalarinda kalabilir "
+                    "(disk/G-C sorunu giderilince yeniden denenmeli).",
+                    exc_info=True,
+                )
+                return silinen, False
 
     def search_patients(self, search_term: str) -> List[Dict[str, Any]]:
         """Hasta adi/sahibi/tur bilgisine gore arama yapar."""

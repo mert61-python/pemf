@@ -193,9 +193,14 @@ export function PatientScreen() {
     if (!myEmail) { showToast(kimlikIstemi(SILME_KIMLIK_ISTEMI, kimlikDbOkunamiyor), "error"); return; }
     if (!(await platformConfirm("Tüm Hastaları Sil", "Veritabanındaki TÜM HASTALARI silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!", "Hepsini Sil"))) return;
     // Backend (audit B-8.2) kazara toplu-silmeye karşı confirm ister.
-    const res = await apiPost<{ status: string }>(`/patients/delete_all`, { confirm: "DELETE_ALL" }, { status: "error" });
+    const res = await apiPost<{ status: string; vacuum_ok?: boolean }>(`/patients/delete_all`, { confirm: "DELETE_ALL" }, { status: "error" });
     if (res.status === "success") {
       showToast("Tüm hastalar silindi.", "success");
+      // ⚠️ D2.57 (B-3.109): silme GERÇEKLEŞTİ ama VACUUM düştüyse (disk dolu / G-Ç) bu AYRICA söylenir — silinen veri dosyanın boş
+      // sayfalarında kalabilir. Eskiden backend bu durumda "error" dönüyor, ekran "başarısız" deyip listeyi yenilemiyordu.
+      if (res.vacuum_ok === false) {
+        showToast("Ancak disk temizliği (VACUUM) tamamlanamadı — silinen veri dosyada kalabilir. Disk alanını kontrol edip yeniden deneyin.", "info");
+      }
       loadPatients();
     } else {
       showToast("Toplu silme işlemi başarısız.", "error");

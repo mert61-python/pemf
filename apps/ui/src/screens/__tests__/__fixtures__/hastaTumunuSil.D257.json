@@ -1,0 +1,8 @@
+{
+  "durum": 200,
+  "govde": {
+    "status": "success",
+    "deleted": 3,
+    "vacuum_ok": false
+  }
+}

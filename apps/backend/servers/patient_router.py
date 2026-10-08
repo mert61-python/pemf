@@ -245,17 +245,26 @@ def remove_all_patients(request: Request, payload: DeleteAllPayload = DeleteAllP
     # Audit P3: atomik clear_all_patients() (DELETE + commit + VACUUM) — eskiden get_all + tek-tek
     # delete (atomik DEĞİL, VACUUM yok → silinen PII freelist'te kurtarılabilir kalıyordu; 300.'de
     # hata → tutarsız durum). count'u silmeden önce al (response doğru olsun).
-    count = len(db.get_all_patients())
-    ok = db.clear_all_patients()
-    logging.getLogger(__name__).warning("TOPLU HASTA SİLME uygulandı (atomik+VACUUM, %d hasta).", count)
+    # ⚠️ D2.57 (B-3.109): silinen sayı ve VACUUM durumu AYRI — DELETE commit edildikten sonra VACUUM düşerse silme
+    # GERÇEKLEŞMİŞTİR: iz "ok" + gerçek sayı + `vacuum: False`, yanıt "success" + `vacuum_ok: false` (arayüz listeyi yeniler ve
+    # disk temizliğinin tamamlanamadığını söyler). Eskiden "hata, 0"/"error" — kayıtlar gitmişken.
+    silinen, vacuum_ok = db.clear_all_patients()
+    ok = silinen >= 0
+    logging.getLogger(__name__).warning(
+        "TOPLU HASTA SİLME: %s hasta silindi (VACUUM %s).",
+        silinen if ok else "HİÇ",
+        "tamam" if vacuum_ok else "YAPILAMADI",
+    )
     from servers import audit_log as _iz
 
     _iz.kimlikli_yaz(
         request,
         "patient.delete_all",
         scope="TUM_HASTALAR",
-        item_count=count,
+        item_count=silinen if ok else 0,
         outcome="ok" if ok else "hata",
-        detail={"vacuum": True},
+        detail={"vacuum": vacuum_ok},
     )
-    return {"status": "success" if ok else "error", "deleted": count}
+    if not ok:
+        return {"status": "error", "deleted": 0, "detail": "Hastalar silinemedi — kayıtlar duruyor."}
+    return {"status": "success", "deleted": silinen, "vacuum_ok": vacuum_ok}
