@@ -8,6 +8,7 @@ Zorlama: PEMF_REQUIRE_AUTH=1 ise ZORUNLU; değilse KAPALI (prominent uyarı logl
 emergency_stop + health + discovery + statik (simulator) MUAFTIR (fail-safe / keşif).
 """
 
+import contextvars
 import ipaddress
 import logging
 import os
@@ -430,6 +431,56 @@ def _operator_jetonu(request) -> str:
         return ""
 
 
+# ⚠️ Y113 (S-B2.5, 2-B incelemesi): kimlik (auth) veritabanı OKUNAMAZKEN kimlik kapıları KAPALI kalır (B2-1.1) — ama ileti
+# "Operatör seçin" DEMEZ: seçilecek operatör listesi de okunamıyor, operatörsüz klinikte seçilecek kimse yok; operatör yanlış
+# eyleme yönlendiriliyordu. 428 iletisi, günlük ve arayüz ARIZAYI ve ÇAREYİ söyler. Tek kaynak bu metin (arayüz ikizi:
+# apps/ui/src/utils/patientScope.ts `KIMLIK_DB_OKUNAMIYOR`). ACİL DURDUR ve STOP kimlik DB'si okumaz (B2B2-1 ölçümü).
+# Kapı: tests/test_kimlik_DB_okunamazken_ileti_ARIZA_ve_CARE_Y113.py
+KIMLIK_DB_OKUNAMIYOR = (
+    "Cihazın kimlik veritabanı okunamıyor — kayıtların hangi hekime ait olduğu doğrulanamıyor; değerlendirme, silme ve "
+    "kimlik isteyen kayıt işlemleri şimdilik yapılamaz. Çare: uygulamayı kapatıp yeniden açın; sorun sürerse veri "
+    "klasöründeki auth_users.db dosyasının erişim iznini ve diski teknik desteğe denetletin. ACİL DURDUR ve STOP etkilenmez."
+)
+# Bu istekte (bağlam) kimlik DB'si okunabildi mi — kimlik kararları yazar, `kimliksiz_detayi` okur (ikinci bir okuma yapılmaz:
+# kilitte her okuma döngüyü ~0,8 sn tutar, B2B2-1). İstek görevleri bağlamı kopyalar → istekler arası SIZMAZ.
+_KIMLIK_DB_ARIZASI: contextvars.ContextVar = contextvars.ContextVar("kimlik_db_arizasi", default=None)
+
+
+def _kimlik_db_yolu() -> str:
+    try:
+        from database.auth_db import _auth_db
+
+        return str(_auth_db.db_path) if _auth_db is not None else "?"
+    except Exception:
+        return "?"
+
+
+def _kimlik_db_arizasi_bildir(ne: str) -> None:
+    """Kimlik DB arızasını günlüğe ARIZA + ÇARE olarak yazar ve bu isteğin bağlamında işaretler (`kimliksiz_detayi` okur)."""
+    _KIMLIK_DB_ARIZASI.set(True)
+    logger.exception("%s [%s — FAIL-CLOSED; dosya: %s]", KIMLIK_DB_OKUNAMIYOR, ne, _kimlik_db_yolu())
+
+
+def kimlik_db_okunamiyor() -> bool:
+    """Bu istekte kimlik DB'si okunamadı mı? Bağlamda karar yoksa bir katı okuma dener. ASLA istisna atmaz."""
+    d = _KIMLIK_DB_ARIZASI.get()
+    if d is not None:
+        return d
+    try:
+        from database.auth_db import get_auth_db
+
+        get_auth_db().list_operators(kati=True)
+        return False
+    except Exception:
+        return True
+
+
+def kimliksiz_detayi(varsayilan: str) -> str:
+    """Kimliksiz istek reddinin (428) iletisi: kimlik DB'si okunamıyorsa ARIZA + ÇARE (Y113), değilse `varsayilan`
+    ("Operatör seçin — …")."""
+    return KIMLIK_DB_OKUNAMIYOR if kimlik_db_okunamiyor() else varsayilan
+
+
 def _kayitli_operator_mu(email: str) -> bool:
     """Bu e-posta cihazda kayıtlı bir operatöre mi ait? Hata halinde FAIL-CLOSED (True):
     bilemiyorsak kanıtsız beyanı kabul etmeyiz."""
@@ -440,9 +491,11 @@ def _kayitli_operator_mu(email: str) -> bool:
         from database.auth_db import get_auth_db
 
         # kati=True: AuthDB okuma hatasını YUTMAZ → aşağıdaki fail-closed dalı GERÇEK arızada da koşar (B2-1.1, 2-B incelemesi).
-        return bool(get_auth_db().operator_exists(e, kati=True))
+        sonuc = bool(get_auth_db().operator_exists(e, kati=True))
+        _KIMLIK_DB_ARIZASI.set(False)
+        return sonuc
     except Exception:
-        logger.exception("operator varlik kontrolu basarisiz → beyan REDDEDILIYOR (fail-closed)")
+        _kimlik_db_arizasi_bildir("kanıtsız beyan REDDEDİLİYOR")
         return True
 
 
@@ -453,9 +506,11 @@ def kayitli_operator_var() -> bool:
     try:
         from database.auth_db import get_auth_db
 
-        return bool(get_auth_db().list_operators(kati=True))  # kati: yutulan hata fail-OPEN oluyordu (B2-1.1)
+        sonuc = bool(get_auth_db().list_operators(kati=True))  # kati: yutulan hata fail-OPEN oluyordu (B2-1.1)
+        _KIMLIK_DB_ARIZASI.set(False)
+        return sonuc
     except Exception:
-        logger.exception("kayitli operator listesi okunamadi → kimliksiz istek REDDEDILIYOR (fail-closed)")
+        _kimlik_db_arizasi_bildir("kimliksiz istek REDDEDİLİYOR")
         return True
 
 
@@ -504,8 +559,9 @@ def cozumlenmis_operator_adi(cozulen_email: str, beyan_ad: str = "") -> str:
         from database.auth_db import get_auth_db
 
         operatorler = get_auth_db().list_operators(kati=True)  # B2-1.1: arızada ad YAZILMAZ (aşağıdaki dal)
+        _KIMLIK_DB_ARIZASI.set(False)
     except Exception:
-        logger.exception("operator adi cozumleme hatasi → ad YAZILMIYOR")
+        _kimlik_db_arizasi_bildir("operatör adı YAZILMIYOR")
         return ""
     if not e:
         return (beyan_ad or "").strip() if not operatorler else ""

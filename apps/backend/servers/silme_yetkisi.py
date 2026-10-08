@@ -33,14 +33,16 @@ def yabanci_detayi(n: int) -> str:
 def sahiplik_kapisi(request, sahipler: dict, *, olay: str, scope: str) -> None:
     """`sahipler` = {kayıt kimliği: kaydın operator_email'i} (YALNIZ var olan kayıtlar). İzinsizse HTTPException atar."""
     from servers import audit_log as _iz
-    from servers.auth import cozumlenmis_operator, kayitli_operator_var
+    from servers.auth import cozumlenmis_operator, kayitli_operator_var, kimlik_db_okunamiyor, kimliksiz_detayi
 
     if not kayitli_operator_var():
         return  # Kural 2
     kimlik = cozumlenmis_operator(request)  # beyan YOK → yalnız jeton
     if not kimlik:
-        _iz.yaz(request, olay, scope=scope, item_count=0, outcome="reddedildi", detail={"neden": "kimliksiz"})
-        raise HTTPException(status_code=428, detail=KIMLIKSIZ_DETAY)
+        # Y113: kimlik DB'si okunamıyorsa ileti arızayı ve çareyi söyler ("Operatör seçin" DEMEZ); iz nedeni ayırır.
+        neden = "kimlik_db_okunamiyor" if kimlik_db_okunamiyor() else "kimliksiz"
+        _iz.yaz(request, olay, scope=scope, item_count=0, outcome="reddedildi", detail={"neden": neden})
+        raise HTTPException(status_code=428, detail=kimliksiz_detayi(KIMLIKSIZ_DETAY))
     yabanci = sum(1 for sahip in sahipler.values() if (sahip or "").strip().lower() != kimlik)
     if yabanci:
         _iz.yaz(

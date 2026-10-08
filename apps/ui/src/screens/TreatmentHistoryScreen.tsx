@@ -17,6 +17,7 @@ import { aramaEslesir } from "@/utils/aramaNormalize";
 import {
   inScope,
   KIMLIK_ISTEMI,
+  kimlikIstemi,
   SILME_KIMLIK_ISTEMI,
   silinebilir,
   silinmeyecekNotu,
@@ -74,13 +75,15 @@ export function TreatmentHistoryScreen() {
   // gösteriyordu — hekim kendi seansını bulamıyor, başkasınınkini kendi sanıyordu.
   const op = useOperatorOptional();
   const myEmail = (op ? op.operatorEmail : (session?.email || "")).toLowerCase();
+  // Y113: kimlik veritabanı okunamıyorsa kimliksiz istemler arızayı ve çareyi söyler ("operatörünüzü seçin" DEMEZ).
+  const kimlikDbOkunamiyor = Boolean(op?.kimlikDbOkunamiyor);
   const { isExpert } = useUserMode();
   // Klinik-içi görünüm: "mine" = benim başlattığım seanslar (+ sahipsiz eski), "all" = tüm klinik.
   const [scope, setScope] = useState<"mine" | "all">("mine");
   // D2.72 · Y92: seans (tıbbi kayıt) silme yetkisinin bağlamı — tek kaynak `silinebilir`; kayıtlı operatör yoksa Kural 2.
   const silmeBaglami = { myEmail, operatorKayitli: (op?.operators?.length ?? 0) > 0, kapsam: scope, isExpert };
   const silmeEngeli = (kayit: { operator_email?: string | null }): string | null =>
-    !myEmail ? SILME_KIMLIK_ISTEMI : silinebilir(kayit, silmeBaglami) ? null : YALNIZ_KENDI_SILME;
+    !myEmail ? kimlikIstemi(SILME_KIMLIK_ISTEMI, kimlikDbOkunamiyor) : silinebilir(kayit, silmeBaglami) ? null : YALNIZ_KENDI_SILME;
   const { showToast } = useToast();
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -239,7 +242,7 @@ export function TreatmentHistoryScreen() {
     if (secilenler.length === 0 || siliniyor) return;
     // ⚠️ D2.72 (B-6.26 · Y92): istek YALNIZ silinebilen (kendi) seanslarla gider; dışarıda kalanların SAYISI onayda
     // söylenir. Eskiden "Tüm Klinik → Tümünü Seç" başka hekimlerin seans kayıtlarını (tıbbi kayıt) isteğe koyuyordu.
-    if (!myEmail) { showToast(SILME_KIMLIK_ISTEMI, "error"); return; }
+    if (!myEmail) { showToast(kimlikIstemi(SILME_KIMLIK_ISTEMI, kimlikDbOkunamiyor), "error"); return; }
     const kimlikler = secilenler.filter((k) => {
       const kayit = sessions.find((x) => x.id === k);
       return !!kayit && silinebilir(kayit, silmeBaglami);
@@ -337,7 +340,7 @@ export function TreatmentHistoryScreen() {
       ) : filteredSessions.length === 0 ? (
         <Text style={[styles.intro, { marginTop: spacing.md, flex: undefined, textAlign: "center" }]}>
           {!myEmail
-            ? KIMLIK_ISTEMI
+            ? kimlikIstemi(KIMLIK_ISTEMI, kimlikDbOkunamiyor)
             : searchQuery
             ? (hasMore
                 ? "Yüklü sayfalarda eşleşme yok — daha eski kayıtlarda olabilir, aşağıdan “Daha Fazla Yükle”."

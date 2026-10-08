@@ -17,6 +17,7 @@ import { Lock, LogOut, UserCheck, UserPlus } from "lucide-react-native";
 import { Card } from "@/components/ui/Card";
 import { useAuth } from "@/context/AuthContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
+import { KIMLIK_DB_OKUNAMIYOR } from "@/utils/patientScope";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 
 const PIN_UZUNLUK = 6;
@@ -86,14 +87,18 @@ export function OperatorSwitcher() {
   }, [pin, ad, eskiPin, eskiPinGerek, ctx, kapat]);
 
   if (!ctx) return null;
-  const { operators, active, multiUser, lock } = ctx;
-  const etiket = active?.display_name || (multiUser ? "Operatör seçin" : (session?.email || ""));
+  const { operators, active, multiUser, lock, kimlikDbOkunamiyor } = ctx;
+  // Y113: kimlik veritabanı okunamıyorsa çip "Operatör seçin" DEMEZ (liste okunamıyor, seçmek imkânsız) — arızayı adlandırır;
+  // dokununca açılan pencere arızayı ve çareyi tam metinle söyler.
+  const etiket = active?.display_name
+    || (kimlikDbOkunamiyor ? "Kimlik veritabanı okunamıyor" : (multiUser ? "Operatör seçin" : (session?.email || "")));
 
   return (
     <>
       <TouchableOpacity style={styles.cip} onPress={() => setAcik(true)}
         accessibilityRole="button"
-        accessibilityLabel={active ? `Aktif operatör: ${active.display_name}. Değiştir.` : "Operatör seç"}>
+        accessibilityLabel={active ? `Aktif operatör: ${active.display_name}. Değiştir.`
+          : kimlikDbOkunamiyor ? "Kimlik veritabanı okunamıyor. Ayrıntı için dokunun." : "Operatör seç"}>
         <UserCheck color={active ? colors.primary : colors.warning} size={rs(14)} />
         <Text style={[styles.cipText, !active && { color: colors.warning }]} numberOfLines={1}>{etiket}</Text>
       </TouchableOpacity>
@@ -129,8 +134,12 @@ export function OperatorSwitcher() {
               </>
             ) : (
               <ScrollView style={styles.liste} nestedScrollEnabled>
+                {/* Y113: kimlik DB'si okunamıyorsa "kayıtlı operatör yok" DENMEZ — arıza + çare. */}
+                {kimlikDbOkunamiyor ? (
+                  <Text style={[styles.not, { color: colors.warning }]} accessibilityRole="alert">{KIMLIK_DB_OKUNAMIYOR}</Text>
+                ) : null}
                 {operators.length === 0 ? (
-                  <Text style={styles.not}>Bu cihazda kayıtlı operatör yok.</Text>
+                  kimlikDbOkunamiyor ? null : <Text style={styles.not}>Bu cihazda kayıtlı operatör yok.</Text>
                 ) : operators.map((o) => (
                   <TouchableOpacity key={o.email}
                     style={[styles.satir, secili === o.email && styles.satirSecili]}

@@ -260,6 +260,20 @@ export async function apiGet<T>(path: string, fallback: T, opts?: ApiOpts): Prom
       const response = await fetch(url, { headers: authHeaders(), signal: ctrl.signal });
       if (!response.ok) {
         console.error(`API GET Hatası [${response.status}]: ${url}`);
+        // Y113: apiPost ile AYNI sözleşme — durum kodu ve sunucunun gerekçesi (`detail`) çağırana verilir (ör. `/operators`
+        // 503 "Cihazın kimlik veritabanı okunamıyor — …" ile hazır-değil 503'ünü ayırmak için). Gövde okunamazsa akış bozulmaz.
+        if (opts?.onHttpError) {
+          let detail: string | undefined;
+          let govdeHam: unknown;
+          try {
+            govdeHam = await response.json();
+            const govde = govdeHam as { detail?: unknown };
+            if (typeof govde?.detail === "string" && govde.detail.trim()) detail = govde.detail.trim();
+          } catch {
+            /* JSON değil ya da boş gövde → detail yok */
+          }
+          opts.onHttpError(response.status, detail, govdeHam);
+        }
         if (!opts?.silent) showError("Sunucu Hatası", "Sunucu ile iletişimde bir sorun oluştu.");
         return fallback;
       }

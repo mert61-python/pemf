@@ -21,7 +21,9 @@ import {
   deleteScope,
   effectiveScope,
   inScope,
+  KIMLIK_DB_OKUNAMIYOR,
   KIMLIK_ISTEMI,
+  kimlikIstemi,
   YALNIZ_KENDI_SILME,
 } from "@/utils/patientScope";
 import { downloadFileWithAuth } from "@/services/dosyaIndir";
@@ -94,6 +96,8 @@ export function AiHistoryScreen() {
   // `operatorEmail` tek kaynaktır: aktif operatör, yoksa (kayıtlı operatör yokken) oturum e-postası.
   const op = useOperatorOptional();
   const myEmail = (op ? op.operatorEmail : (session?.email || "")).toLowerCase();
+  // Y113: kimlik veritabanı okunamıyorsa kimliksiz istemler arızayı ve çareyi söyler ("Operatör seçin" DEMEZ).
+  const kimlikDbOkunamiyor = Boolean(op?.kimlikDbOkunamiyor);
   // ⚠️ B2B-2 (2-B, D2.E12'nin kendi açığı — ölçüldü): yarım değerlendirme taslağı KİMLİĞE aittir. Kimlik değişince
   // (operatör geçişi, kilit) taslaklar DÜŞER — aksi hâlde Dr. B, Dr. A'nın yazdığı red gerekçesini görüp kendi adıyla
   // gönderebiliyordu. Kapı: screens/__tests__/aiDegerlendirme.D242.E12.web.test.tsx (B2B-2).
@@ -126,8 +130,8 @@ export function AiHistoryScreen() {
 
   const kaydiSil = useCallback(async (id: number) => {
     if (kimlikYok || !myEmail) {
-      await platformConfirm("Operatör seçin",
-        "Silme işlemi için önce üst bardan hangi hekim olduğunuzu seçin.");
+      if (kimlikDbOkunamiyor) await platformConfirm("Kimlik veritabanı okunamıyor", KIMLIK_DB_OKUNAMIYOR);
+      else await platformConfirm("Operatör seçin", "Silme işlemi için önce üst bardan hangi hekim olduğunuzu seçin.");
       return;
     }
     // ⚠️ D2.20 (A-10 · Y83): tekil silme YALNIZ kimliğin kendi kaydına — SAHİPSİZ kayıt da değil (sahipsizler yalnız
@@ -152,7 +156,7 @@ export function AiHistoryScreen() {
     setSilinen(null);
     if (!res) return;                                   // hata mesajını apiPost gösterdi
     setItems((prev) => prev.filter((x) => x.id !== id)); // yerinde çıkar (liste yerini kaybetmesin)
-  }, [kimlikYok, myEmail, items]);
+  }, [kimlikYok, kimlikDbOkunamiyor, myEmail, items]);
 
   // ⚠️ `load` BURADA tanımlanır (aşağıda değil): `tumunuSil` onu kullanıyor ve bildirimden
   // ÖNCE erişim, React Compiler'ın tüm bileşende iyileştirmeyi bırakmasına yol açıyordu
@@ -175,8 +179,8 @@ export function AiHistoryScreen() {
 
   const tumunuSil = useCallback(async () => {
     if (kimlikYok) {
-      await platformConfirm("Operatör seçin",
-        "Silme işlemi için önce üst bardan hangi hekim olduğunuzu seçin.");
+      if (kimlikDbOkunamiyor) await platformConfirm("Kimlik veritabanı okunamıyor", KIMLIK_DB_OKUNAMIYOR);
+      else await platformConfirm("Operatör seçin", "Silme işlemi için önce üst bardan hangi hekim olduğunuzu seçin.");
       return;
     }
     const kapsamMetni = kendiKapsami ? "Kendi AI analiz kayıtlarınızın TAMAMI" : "Kliniğin TÜM AI analiz geçmişi";
@@ -195,7 +199,7 @@ export function AiHistoryScreen() {
     );
     if (!res) return;
     await load();
-  }, [silmeKapsami, kendiKapsami, kimlikYok]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [silmeKapsami, kendiKapsami, kimlikYok, kimlikDbOkunamiyor]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Onay/red/düzeltme gönder. Başarılıysa kaydı YERİNDE güncelle — tüm listeyi yeniden
    *  çekmek açık kartı kapatır ve hekimin yerini kaybettirir. */
@@ -204,8 +208,8 @@ export function AiHistoryScreen() {
     // GÖNDERİLMEZ (eskiden `reviewed_by: ""` ile gidiyor, ekranda imzasız "Hekim onayladı" görünüyordu). Operatörsüz
     // klinikte `myEmail` oturum e-postasıdır (Kural 2). Backend ayrıca 428 döner (Y88).
     if (!myEmail) {
-      await platformConfirm("Operatör seçin",
-        "Değerlendirme için önce üst bardan hangi hekim olduğunuzu seçin.");
+      if (kimlikDbOkunamiyor) await platformConfirm("Kimlik veritabanı okunamıyor", KIMLIK_DB_OKUNAMIYOR);
+      else await platformConfirm("Operatör seçin", "Değerlendirme için önce üst bardan hangi hekim olduğunuzu seçin.");
       return false;
     }
     setReviewing(id);
@@ -226,7 +230,7 @@ export function AiHistoryScreen() {
     return true;
     // ⚠️ D2.42 (B-6.21): bağımlılık GÜNCEL kimlik (`myEmail`). Eskiden `[session]` — kart açıkken operatör değişince
     // değerlendirme ESKİ hekimin adıyla imzalanıyordu (ölçüldü). Kapı: screens/__tests__/aiDegerlendirme.D242.E12.web.
-  }, [myEmail]);
+  }, [myEmail, kimlikDbOkunamiyor]);
 
 
   // ORTA fix: before_id keyset ile "Daha Fazla Yükle" → 300'den fazla AI analizi olan (araştırma) kullanıcının
@@ -362,7 +366,7 @@ export function AiHistoryScreen() {
       ) : shown.length === 0 ? (
         <Text style={styles.empty}>
           {!myEmail
-            ? KIMLIK_ISTEMI
+            ? kimlikIstemi(KIMLIK_ISTEMI, kimlikDbOkunamiyor)
             : filter !== "__all__"
             ? 'Bu filtre için kayıt yok. Farklı bir hasta/modül seçin ya da "Tümü"ye dönün.'
             : "Henüz AI analiz kaydı yok. Akıllı Teşhis'ten bir analiz çalıştırın — sonuç burada şifreli, detaylı saklanır."}

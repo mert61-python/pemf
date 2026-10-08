@@ -373,9 +373,9 @@ async def _operators_list():
     try:
         veri = await asyncio.to_thread(get_auth_db().list_operators, True)
     except Exception:
-        raise HTTPException(
-            status_code=503, detail="Operatör listesi okunamadı — cihazın kimlik veritabanına erişilemiyor."
-        ) from None
+        from servers.auth import KIMLIK_DB_OKUNAMIYOR
+
+        raise HTTPException(status_code=503, detail=KIMLIK_DB_OKUNAMIYOR) from None  # Y113: arıza + çare
     return {"ok": True, "data": veri}
 
 

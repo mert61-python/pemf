@@ -5790,7 +5790,7 @@ async def review_ai_analysis(payload: AiReviewPayload, request: Request):
     # yazılabiliyordu. Kapı: tests/test_kayit_atfi_COZUMLENMIS_operator_D241.py.
     from servers import audit_log as _iz
     from servers import operator_tokens
-    from servers.auth import _operator_jetonu, cozumlenmis_operator, kayitli_operator_var
+    from servers.auth import _operator_jetonu, cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
 
     _jetonlu = bool(operator_tokens.cozumle(_operator_jetonu(request)))
     _inceleyen = cozumlenmis_operator(request, payload.reviewed_by)
@@ -5818,9 +5818,12 @@ async def review_ai_analysis(payload: AiReviewPayload, request: Request):
             outcome="reddedildi",
             detail=_iz_detay,
         )
+        # Y113: kimlik DB'si okunamıyorsa ileti arızayı ve çareyi söyler ("Operatör seçin" DEMEZ).
         raise HTTPException(
             status_code=428,
-            detail="Operatör seçin — değerlendirme için önce üst bardan hangi hekim olduğunuzu seçin.",
+            detail=kimliksiz_detayi(
+                "Operatör seçin — değerlendirme için önce üst bardan hangi hekim olduğunuzu seçin."
+            ),
         )
     ok = await asyncio.to_thread(db.set_ai_review, int(payload.analysis_id), payload.status, payload.note, _inceleyen)
     if not ok:
@@ -5998,7 +6001,7 @@ async def delete_ai_log_entry(payload: AiLogDeletePayload, request: Request):
     if db is None:
         raise HTTPException(status_code=500, detail="Geçmiş veritabanı hazır değil")
     from servers import audit_log as _iz
-    from servers.auth import cozumlenmis_operator, kayitli_operator_var
+    from servers.auth import cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
     from servers.silme_yetkisi import KIMLIKSIZ_DETAY
 
     # ⚠️ D2.20 (B-3.38 · A-10 · Y83): kapsam OTURUM KİMLİĞİNDEN (jeton; kayıtlı operatör yoksa — Kural 2 — beyan), gövdedeki
@@ -6023,7 +6026,7 @@ async def delete_ai_log_entry(payload: AiLogDeletePayload, request: Request):
             detail={"kanitsiz_beyan": _ham_beyan[:200]} if (_kayitli and _ham_beyan) else None,
         )
         if _kayitli:
-            raise HTTPException(status_code=428, detail=KIMLIKSIZ_DETAY)
+            raise HTTPException(status_code=428, detail=kimliksiz_detayi(KIMLIKSIZ_DETAY))  # Y113
         raise HTTPException(
             status_code=400, detail="Silme kapsamı belirsiz: kendi kaydınızı silmek için operatör seçin."
         )
@@ -6063,7 +6066,7 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
     if db is None:
         raise HTTPException(status_code=500, detail="Geçmiş veritabanı hazır değil")
     from servers import audit_log as _iz
-    from servers.auth import cozumlenmis_operator, kayitli_operator_var
+    from servers.auth import cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
     from servers.silme_yetkisi import KIMLIKSIZ_DETAY
 
     # ⚠️ D2.20 (B-3.38 · A-10 · A-56): "kendi" kapsamı OTURUM KİMLİĞİNDEN (jeton; kayıtlı operatör yoksa — Kural 2 — beyan)
@@ -6087,7 +6090,7 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
             outcome="reddedildi",
             detail={"kanitsiz_beyan": beyan[:200]} if beyan else None,
         )
-        raise HTTPException(status_code=428, detail=KIMLIKSIZ_DETAY)
+        raise HTTPException(status_code=428, detail=kimliksiz_detayi(KIMLIKSIZ_DETAY))  # Y113
     op = None if tum_klinik else (kimlik or None)
     # ⚠️ FAIL-CLOSED (2026-08-09): kimlik yok VE klinik-geneli silme AÇIKÇA istenmediyse reddet.
     # Aksi hâlde istemcideki bir kimlik kaybı (operatör seçilmemiş, oturum düşmüş, alan boş

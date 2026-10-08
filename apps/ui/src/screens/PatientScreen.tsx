@@ -21,6 +21,7 @@ import {
   effectiveScope,
   inScope,
   KIMLIK_ISTEMI,
+  kimlikIstemi,
   SILME_KIMLIK_ISTEMI,
   silinebilir,
   silinmeyecekNotu,
@@ -42,6 +43,8 @@ export function PatientScreen() {
   // "Benim Hastalarım / Tüm Klinik" ayrımı (çoklu-operatör özelliğinin tüm amacı) anlamsız kalıyordu.
   const op = useOperatorOptional();
   const myEmail = (op ? op.operatorEmail : (session?.email || "")).toLowerCase();
+  // Y113: kimlik veritabanı okunamıyorsa kimliksiz istemler arızayı ve çareyi söyler ("operatörünüzü seçin" DEMEZ).
+  const kimlikDbOkunamiyor = Boolean(op?.kimlikDbOkunamiyor);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -106,7 +109,7 @@ export function PatientScreen() {
     // kimliksiz eklenen hasta sahipsiz yazılır ve kliniğin HER hekiminin "Benim" listesine düşerdi. Operatörsüz tek
     // hekimli klinikte kimlik oturum e-postasıdır (Kural 2 — engel yok).
     if (!editingId && !myEmail) {
-      showToast(EKLEME_KIMLIK_ISTEMI, "error");
+      showToast(kimlikIstemi(EKLEME_KIMLIK_ISTEMI, kimlikDbOkunamiyor), "error");
       return;
     }
 
@@ -156,7 +159,7 @@ export function PatientScreen() {
   const handleDelete = async (id: string) => {
     // ⚠️ D2.72 (B-6.26 · Y92): tekil silme de YALNIZ kendi kaydına (kural `patientScope.silinebilir`, backend aynısını
     // jetondan uygular). Eskiden her görünen kartta "sil" başka hekimin kaydına istek gönderiyordu.
-    if (!myEmail) { showToast(SILME_KIMLIK_ISTEMI, "error"); return; }
+    if (!myEmail) { showToast(kimlikIstemi(SILME_KIMLIK_ISTEMI, kimlikDbOkunamiyor), "error"); return; }
     const hedef = patients.find((p) => p.id === id);
     if (!hedef || !silinebilir(hedef, silmeBaglami)) { showToast(YALNIZ_KENDI_SILME, "error"); return; }
     // platformConfirm = web-güvenli onay. (Alert.alert çoklu-buton WEB'de tetiklenmez → "Sil" onPress
@@ -262,7 +265,7 @@ export function PatientScreen() {
     // ⚠️ D2.72 (B-6.26 · Y92): istek YALNIZ silinebilen (kendi) kayıtlarla gider; dışarıda kalanların SAYISI onayda
     // söylenir. Eskiden "Tüm Klinik → Tümünü Seç" başka hekimlerin hastalarını isteğe koyuyordu (araştırma profili
     // "Tümünü Sil" kısıtını böyle dolanıyordu). Backend aynı kuralı jetondan uygular (karışık seçim → 403, hiçbiri).
-    if (!myEmail) { showToast(SILME_KIMLIK_ISTEMI, "error"); return; }
+    if (!myEmail) { showToast(kimlikIstemi(SILME_KIMLIK_ISTEMI, kimlikDbOkunamiyor), "error"); return; }
     const kimlikler = secilenler.filter((k) => {
       const p = patients.find((x) => (x.id || x.name || "") === k);
       return !!p && silinebilir(p, silmeBaglami);
@@ -409,7 +412,7 @@ export function PatientScreen() {
           </View>
         ) : filteredPatients.length === 0 ? (
           <Text style={styles.emptyText}>
-            {!myEmail ? KIMLIK_ISTEMI : search ? "Aramayla eşleşen kayıt yok." : "Henüz hasta kaydı yok."}
+            {!myEmail ? kimlikIstemi(KIMLIK_ISTEMI, kimlikDbOkunamiyor) : search ? "Aramayla eşleşen kayıt yok." : "Henüz hasta kaydı yok."}
           </Text>
         ) : (
           <>

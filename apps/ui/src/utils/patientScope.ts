@@ -37,6 +37,23 @@ export const KIMLIK_ISTEMI = "Kayıtları görmek için operatörünüzü seçin
 export const EKLEME_KIMLIK_ISTEMI = "Hasta eklemek için operatörünüzü seçin";
 
 /**
+ * Y113 — CİHAZIN KİMLİK VERİTABANI OKUNAMIYOR (auth DB: kilit, dosya yok, bozuk, erişim izni). Kapılar KAPALI kalır; ama
+ * kimliksiz istem "operatörünüzü seçin" DEMEZ — operatör listesi de okunamıyor, seçmek imkânsız; operatör yanlış eyleme
+ * yönlendiriliyordu. Metin arızayı ve çareyi söyler. Arka uç ikizi: apps/backend/servers/auth.py `KIMLIK_DB_OKUNAMIYOR`
+ * (`/api/operators` 503 ve 428 iletileri bu ÖN EKLE başlar — `OperatorContext` onu tanır).
+ */
+export const KIMLIK_DB_ARIZA_ONEKI = "Cihazın kimlik veritabanı okunamıyor";
+export const KIMLIK_DB_OKUNAMIYOR =
+  `${KIMLIK_DB_ARIZA_ONEKI} — kayıtların hangi hekime ait olduğu doğrulanamıyor; kayıt listesi, değerlendirme, silme ve ` +
+  "hasta ekleme şimdilik kapalı. Çare: uygulamayı kapatıp yeniden açın; sorun sürerse teknik desteğe başvurun. " +
+  "ACİL DURDUR ve STOP çalışır.";
+
+/** Kimliksizken gösterilecek istem — kimlik veritabanı okunamıyorsa arıza + çare (Y113), değilse verilen `istem`. */
+export function kimlikIstemi(istem: string, kimlikDbOkunamiyor?: boolean): string {
+  return kimlikDbOkunamiyor ? KIMLIK_DB_OKUNAMIYOR : istem;
+}
+
+/**
  * "Benim" = operator_email eşleşen VEYA SAHİPSİZ kayıtlar (eski/migrasyon kayıtları kaybolmasın).
  *
  * ⚠️ D2.70 (B-6.19 · Y103): kimlik (`myEmail`) BOŞSA hiçbir kayıt kapsamda DEĞİLDİR — "Tüm Klinik" dahil (FAIL-CLOSED).

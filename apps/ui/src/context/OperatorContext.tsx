@@ -23,6 +23,7 @@ import { StyleSheet, View } from "react-native";
 
 import { apiGet, apiPost, setOperatorToken } from "@/services/apiClient";
 import { useAuth } from "@/context/AuthContext";
+import { KIMLIK_DB_ARIZA_ONEKI } from "@/utils/patientScope";
 
 export interface Operator {
   email: string;
@@ -52,6 +53,9 @@ interface OperatorContextValue {
   operatorEmail: string;
   /** Cihazda en az bir operatör kayıtlı mı (çoklu-kullanıcı kipi açık mı). */
   multiUser: boolean;
+  /** Y113: cihazın kimlik veritabanı okunamıyor (`/operators` 503 + arka ucun arıza iletisi). Kimliksiz istemler "operatör
+   *  seçin" yerine arızayı ve çareyi söyler (`patientScope.kimlikIstemi`). */
+  kimlikDbOkunamiyor: boolean;
   refresh: () => Promise<void>;
   /**
    * Bu cihaza kaydol / PIN değiştir. E-posta ZATEN kayıtlıysa backend `eskiPin` ister
@@ -93,19 +97,32 @@ export function OperatorProvider({
   const [active, setActive] = useState<Operator | null>(null);
   const sonEtkilesim = useRef<number>(Date.now());
 
+  // ⚠️ Y113: liste okunamadığında NEDEN ayrılır — arka uç kimlik veritabanını okuyamıyorsa (503 + "Cihazın kimlik veritabanı
+  // okunamıyor — …") ekranlar "operatörünüzü seçin" DEMEZ (seçmek de imkânsız), arızayı ve çareyi söyler; ağ hatası / hazır
+  // değil (başka 503) bugünkü gibi. Arıza sürerken de yeniden denenir → DB düzelince kendiliğinden kalkar.
+  // Kapı: screens/__tests__/kimlikDbOkunamiyor.Y113.web.test.tsx.
+  const [kimlikDbOkunamiyor, setKimlikDbOkunamiyor] = useState(false);
+
   const refresh = useCallback(async () => {
-    const r = await apiGet<{ ok?: boolean; data?: Operator[] } | null>("/operators", null, { silent: true });
-    if (!Array.isArray(r?.data)) return;
+    let durum = 0;
+    let detay = "";
+    const r = await apiGet<{ ok?: boolean; data?: Operator[] } | null>("/operators", null, {
+      silent: true, onHttpError: (s, d) => { durum = s; detay = d || ""; } });
+    if (!Array.isArray(r?.data)) {
+      if (durum === 503 && detay.startsWith(KIMLIK_DB_ARIZA_ONEKI)) setKimlikDbOkunamiyor(true);
+      return;
+    }
+    setKimlikDbOkunamiyor(false);
     setOperators(r!.data!);
     setListeBilinir(true);
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
-    if (listeBilinir) return;
+    if (listeBilinir && !kimlikDbOkunamiyor) return;
     const t = setInterval(() => { void refresh(); }, 5_000);
     return () => clearInterval(t);
-  }, [listeBilinir, refresh]);
+  }, [listeBilinir, kimlikDbOkunamiyor, refresh]);
 
   // ⚠️ B2-4.1 (2-B bağımsız incelemesi): sağlayıcı SÖKÜLÜNCE (çıkış ya da Supabase oturumu düşünce `PemfApp.AuthGate`
   // uygulama ağacını söker) modül düzeyi operatör jetonu da DÜŞER. Eskiden yalnız `lock()` siliyordu: yeniden girişte yeni
@@ -211,8 +228,9 @@ export function OperatorProvider({
     // GERİYE UYUM: operatör kayıtlı değilse oturum e-postası (tek veterinerli klinik).
     operatorEmail: active?.email || (listeBilinir && operators.length === 0 ? (session?.email || "") : ""),
     multiUser: operators.length > 0 || !listeBilinir,
+    kimlikDbOkunamiyor,
     refresh, enroll, switchTo, lock, touch,
-  }), [operators, listeBilinir, active, session, refresh, enroll, switchTo, lock, touch]);
+  }), [operators, listeBilinir, kimlikDbOkunamiyor, active, session, refresh, enroll, switchTo, lock, touch]);
 
   return (
     <Ctx.Provider value={value}>
