@@ -32,6 +32,7 @@ import { TakipGrafigi } from "@/components/domain/TakipGrafigi";
 import { takipSerisiKur } from "@/utils/takipSerisi";
 import { kapsamda } from "@/utils/sonAnaliz";
 import { serviceConfig } from "@/services/config";
+import { isDesktopHost } from "@/services/desktopSession";
 
 /** Şifreli ai_analyses tablosundan bir kayıt (backend get_ai_log). result_detail = tam ham sonuç. */
 interface AiAnalysis {
@@ -183,7 +184,15 @@ export function AiHistoryScreen() {
       else await platformConfirm("Operatör seçin", "Silme işlemi için önce üst bardan hangi hekim olduğunuzu seçin.");
       return;
     }
-    const kapsamMetni = kendiKapsami ? "Kendi AI analiz kayıtlarınızın TAMAMI" : "Kliniğin TÜM AI analiz geçmişi";
+    // ⚠️ Y112 (S-B2.4): cihaz DIŞINDAN (LAN / telefon / tünel) kayıtlı operatörlü klinikte "Tüm Klinik" yalnız KENDİ + SAHİPSİZ
+    // kayıtları siler (backend kapsamı); başka hekimlerinki dahil TAMAMI yalnız cihazın kendi ekranından. Onay metni gerçeği
+    // söyler. Kapı: __tests__/aiTumKlinikSilme.Y112.lan.web.test.tsx (+ .cihaz).
+    const uzaktanKayitli = !isDesktopHost() && (op?.operators?.length ?? 0) > 0;
+    const kapsamMetni = kendiKapsami
+      ? "Kendi AI analiz kayıtlarınızın TAMAMI"
+      : uzaktanKayitli
+        ? "Kendi ve sahipsiz AI analiz kayıtlarınız (başka hekimlerin kayıtları yalnız cihazın kendi ekranından silinebilir)"
+        : "Kliniğin TÜM AI analiz geçmişi";
     const onay = await platformConfirm(
       "Geçmişi sil",
       `${kapsamMetni} kalıcı olarak silinecek. Bu işlem geri alınamaz.\n\nHasta kayıtları ve seans geçmişi ETKİLENMEZ.`,
@@ -199,7 +208,7 @@ export function AiHistoryScreen() {
     );
     if (!res) return;
     await load();
-  }, [silmeKapsami, kendiKapsami, kimlikYok, kimlikDbOkunamiyor]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [silmeKapsami, kendiKapsami, kimlikYok, kimlikDbOkunamiyor, op?.operators]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Onay/red/düzeltme gönder. Başarılıysa kaydı YERİNDE güncelle — tüm listeyi yeniden
    *  çekmek açık kartı kapatır ve hekimin yerini kaybettirir. */

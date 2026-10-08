@@ -147,7 +147,13 @@ class AiGecmisiKarisimi:
     #: D1.58: ertelenmiş KVKK VACUUM'u — `system_settings`te KALICI (yeniden başlatmada kaybolmaz).
     VACUUM_BEKLIYOR_ANAHTARI = "kvkk_vacuum_bekliyor"
 
-    def clear_ai_analyses(self, operator_email: Optional[str] = None, vacuum_ertele: bool = False) -> int:
+    def clear_ai_analyses(
+        self,
+        operator_email: Optional[str] = None,
+        vacuum_ertele: bool = False,
+        sahipsiz_dahil: bool = False,
+        kayitli_epostalar=None,
+    ) -> int:
         """AI analiz geçmişini TOPLU siler; silinen kayıt sayısını döner (DELETE hatasında -1).
 
         ⚠️ VACUUM ŞART: `DELETE` satırları yalnız serbest listeye bırakır — hasta adı ve analiz
@@ -159,11 +165,30 @@ class AiGecmisiKarisimi:
         tutar (2–2,6 sn ölçülmüş) → tedavi sırasında sensör/koşu (DOZ) yazımları düşebiliyordu.
         ⚠️ B-3.87 (aynı işlev — plan "uyandırır"): DELETE commit'lendikten SONRA VACUUM düşerse -1 DÖNÜLMEZ (kayıtlar
         gitti; "temizlenemedi" demek yanlış ve yeniden deneme 0 siler) → VACUUM aynı erteleme yoluna alınır.
+        ⚠️ Y112 / Y105: `sahipsiz_dahil=True` (yalnız `operator_email` ile) → kimliğin kayıtları + SAHİPSİZ kayıtlar: sahibi
+        NULL/boş, ve `kayitli_epostalar` verilirse sahibi bu kümede OLMAYAN kayıtlar (Y104 tanımı: operatörler kurulmadan
+        önceki ortak giriş). `kayitli_epostalar` boş küme ise (operatörsüz cihaz) her sahip "kayıtlı değil"dir.
         """
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                if operator_email:
+                if operator_email and sahipsiz_dahil:
+                    op = operator_email.strip().lower()
+                    kosul = "LOWER(operator_email) = ? OR operator_email IS NULL OR TRIM(operator_email) = ''"
+                    params: list = [op]
+                    if kayitli_epostalar is not None:
+                        kayitli = sorted({(e or "").strip().lower() for e in kayitli_epostalar} - {""})
+                        if kayitli:
+                            yer = ",".join("?" for _ in kayitli)
+                            kosul += f" OR LOWER(TRIM(operator_email)) NOT IN ({yer})"
+                            params += kayitli
+                        else:
+                            kosul = "1 = 1"  # operatörsüz cihaz: kayıtlı kimse yok → her sahip sahipsiz
+                            params = []
+                    cursor.execute(f"SELECT COUNT(*) FROM ai_analyses WHERE {kosul}", params)
+                    n = int(cursor.fetchone()[0] or 0)
+                    cursor.execute(f"DELETE FROM ai_analyses WHERE {kosul}", params)
+                elif operator_email:
                     # ⚠️ D2.20 (A-10 · A-56): "kendi" kapsamı YALNIZ kimliğin kayıtları — sahipsizlere dokunulmaz (eskiden
                     # her "kendi geçmişimi sil" kliniğin TÜM sahipsiz AI kayıtlarını da VACUUM'lu götürüyordu — ölçüldü).
                     op = operator_email.strip().lower()

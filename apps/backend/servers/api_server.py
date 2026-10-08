@@ -6092,6 +6092,21 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
         )
         raise HTTPException(status_code=428, detail=kimliksiz_detayi(KIMLIKSIZ_DETAY))  # Y113
     op = None if tum_klinik else (kimlik or None)
+    # ⚠️ Y112 (S-B2.4): "Tüm Klinik" TAMAMI yalnız CİHAZIN KENDİ ekranından (loopback; tünel/ters-proxy sayılmaz — A-03 ile
+    # aynı) ve kimlikli hekimle. Cihaz DIŞINDAN (LAN cihaz token'ı, tünel) "Tüm Klinik" = kimliğin kayıtları + SAHİPSİZ
+    # (Y104 tanımı); başka kayıtlı hekimin AI kayıtları KALIR (eskiden jetonlu herhangi bir hekim herkesinkini siliyordu —
+    # ölçüldü). Operatörsüz klinikte (Kural 2) kayıtlı kimse yok → kapsam fiilen tamamı. Kapı:
+    # tests/test_ai_gecmisi_TUM_KLINIK_silme_kapsami_Y112.py
+    from servers.auth import cihazin_kendisinden_mi, kayitli_operator_epostalari
+
+    _kapsam = "kendi"
+    _sahipsiz_dahil, _kayitli_set = False, None
+    if tum_klinik:
+        _kapsam = "tum_klinik"
+        if _kayitli and not cihazin_kendisinden_mi(request):
+            # None (kimlik DB okunamıyor) → kimin kayıtlı olduğu bilinmiyor: yalnız kendi + boş sahipli (fail-closed)
+            _kayitli_set = kayitli_operator_epostalari()
+            op, _sahipsiz_dahil, _kapsam = kimlik, True, "kendi_ve_sahipsiz"
     # ⚠️ FAIL-CLOSED (2026-08-09): kimlik yok VE klinik-geneli silme AÇIKÇA istenmediyse reddet.
     # Aksi hâlde istemcideki bir kimlik kaybı (operatör seçilmemiş, oturum düşmüş, alan boş
     # gönderilmiş) sessizce "kliniğin tüm AI geçmişini sil"e dönüşürdü — geri dönüşü olmayan bir
@@ -6106,7 +6121,7 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
     # silme hemen yapılır, VACUUM seans bitince / bakımda (`_bekleyen_vacuumu_arka_planda`).
     with _session_lock:
         _seans_suruyor = bool(_active_session.get("is_active"))
-    n = await asyncio.to_thread(db.clear_ai_analyses, op, _seans_suruyor)
+    n = await asyncio.to_thread(db.clear_ai_analyses, op, _seans_suruyor, _sahipsiz_dahil, _kayitli_set)
     _vacuum_bekliyor = bool(getattr(db, "vacuum_bekliyor_mu", lambda: False)())
 
     if n < 0:
@@ -6114,7 +6129,7 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
             request,
             "ai_log.delete_all",
             beyan=_beyan,
-            scope=(op or "TUM_KLINIK"),
+            scope=("KENDI_VE_SAHIPSIZ" if _sahipsiz_dahil else (op or "TUM_KLINIK")),
             item_count=0,
             outcome="hata",
         )
@@ -6122,7 +6137,7 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
     # KVKK "sildim" kanıtı: kapsam + sayı loglanır (kayıt İÇERİĞİ loglanmaz).
     logging.getLogger(__name__).warning(
         "KVKK: AI analiz geçmişi TOPLU silindi (kapsam=%s, %d kayıt, VACUUM %s).",
-        op or "TÜM KLİNİK",
+        "KENDİ + SAHİPSİZ" if _sahipsiz_dahil else (op or "TÜM KLİNİK"),
         n,
         "ERTELENDİ (seans sonu/bakım)" if _vacuum_bekliyor else "uygulandı",
     )
@@ -6132,11 +6147,11 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
         request,
         "ai_log.delete_all",
         beyan=_beyan,
-        scope=(op or "TUM_KLINIK"),
+        scope=("KENDI_VE_SAHIPSIZ" if _sahipsiz_dahil else (op or "TUM_KLINIK")),
         item_count=n,
-        detail={"all_operators": tum_klinik, "vacuum": not _vacuum_bekliyor},
+        detail={"all_operators": tum_klinik, "kapsam": _kapsam, "vacuum": not _vacuum_bekliyor},
     )
-    return {"status": "success", "deleted": n, "vacuumErtelendi": _vacuum_bekliyor}
+    return {"status": "success", "deleted": n, "vacuumErtelendi": _vacuum_bekliyor, "kapsam": _kapsam}
 
 
 # ─────────────────── CİHAZ TAŞIMA: şifreli dışa/içe aktarma (2026-08-08) ───────────────────
