@@ -2164,8 +2164,30 @@ class AiProProposePayload(BaseModel):
     patient_name: str = ""
 
 
+def _uzaktan_kimliksiz_mi(request) -> bool:
+    """S-A1.1 (a) · Y123 (2-C incelemesi): istek tünelden / ters-proxy'den (cf-* ya da X-Forwarded-For) geliyor ve NE geçerli
+    operatör jetonu NE geçerli cihaz token'ı taşıyor mu? AI Pro uçları auth-muaf (sahip kararı) — tünel ERİŞİMİ değişmez; yalnız
+    böyle bir öneri hastaya BAĞLANMAZ. Ölçüldü (A1): saha kimlik kipinde anonim tünel `/propose` → `/approve` → `/start` 200 ile
+    kimliği bilinen herhangi bir hastanın Seans Geçmişi'ne AI Pro satırı ve sahibinin e-postasını yazabiliyordu (aynı tünelden
+    elle seans 401). Karar verilemezse BAĞLANMAZ (seans E15 öncesi gibi sahipsiz kaydedilir — tedavi engellenmez)."""
+    try:
+        h = request.headers
+        if not (h.get("cf-connecting-ip") or h.get("cf-ray") or h.get("x-forwarded-for")):
+            return False
+        from servers import auth as _auth
+        from servers import operator_tokens as _jetonlar
+
+        if _jetonlar.cozumle(_auth._operator_jetonu(request)):
+            return False
+        _t = _auth._istek_tokeni(request)
+        return not (_t and _auth.check_token(_t))
+    except Exception:
+        logger.exception("AI Pro önerisi: uzak istek kimlik denetimi yapılamadı → hasta BAĞLANMAZ (fail-closed)")
+        return True
+
+
 @ai_router.post("/api/ai/pro/propose")
-def propose_ai_pro(payload: AiProProposePayload = AiProProposePayload()):
+def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProProposePayload()):
     """AI'ın önerdiği tedavi parametrelerini ÜRET — DONANIMA DOKUNMADAN.
 
     SAHİP KARARI (2026-08-06, sert kapı): hekim önce ne uygulanacağını görür, sonra onaylar.
@@ -2242,6 +2264,12 @@ def propose_ai_pro(payload: AiProProposePayload = AiProProposePayload()):
         logger.warning("AI Pro öneri XAI üretilemedi (öneri etkilenmedi): %s", xe)
 
     sure = max(1, min(_AI_PRO_MAX_DURATION_MIN, int(payload.duration_minutes)))
+    _hasta_id = str(payload.patient_id or "").strip()[:64]
+    _hasta_adi = str(payload.patient_name or "").strip()[:120]
+    if (_hasta_id or _hasta_adi) and _uzaktan_kimliksiz_mi(request):
+        # S-A1.1 (a): kimliksiz uzak öneri hastaya bağlanmaz (mühürde hasta YOK → `/start` seansı sahipsiz açar).
+        logger.warning("AI Pro önerisi uzaktan KİMLİKSİZ geldi — hasta bağı kurulmadı (S-A1.1)")
+        _hasta_id, _hasta_adi = "", ""
     rec = ai_approval.create(
         "ai_pro",
         {
@@ -2258,8 +2286,8 @@ def propose_ai_pro(payload: AiProProposePayload = AiProProposePayload()):
             "P": [round(float(p), 2) for p in P],
             "e_field": round(float(e_field), 6),
             # D2.E15: hasta MÜHÜRDE (onay penceresi gösterir; `/start` buradan okur, gövdedeki hasta YOK SAYILIR).
-            "patient_id": str(payload.patient_id or "").strip()[:64],
-            "patient_name": str(payload.patient_name or "").strip()[:120],
+            "patient_id": _hasta_id,
+            "patient_name": _hasta_adi,
         },
         meta={
             "x_mm": c["x_mm"],
