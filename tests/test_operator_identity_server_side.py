@@ -36,15 +36,25 @@ def client(api):
     return TestClient(api.app, client=("127.0.0.1", 51234))
 
 
+def _operatorleri_cikar(client):
+    for o in client.get("/api/operators").json().get("data", []):
+        client.post("/api/operators/remove", json={"email": o["email"]})
+
+
 @pytest.fixture(autouse=True)
 def _temiz(client):
+    # ⚠️ O-A2.4: temizlik testten SONRA da — yalnız öncesinde yapılınca SON test kaydettiği operatörü süreç-tekil auth DB'de
+    # BIRAKIYORDU ve sıradaki dosya "kayıtlı operatörlü cihaz" kipinde (Kural 2 dışı) koşuyordu. Gözcü: conftest
+    # `_operator_kaydi_sizmaz`.
     from servers import operator_tokens
 
     operator_tokens.temizle_hepsi()
-    for o in client.get("/api/operators").json().get("data", []):
-        client.post("/api/operators/remove", json={"email": o["email"]})
-    yield
-    operator_tokens.temizle_hepsi()
+    _operatorleri_cikar(client)
+    try:
+        yield
+    finally:
+        _operatorleri_cikar(client)
+        operator_tokens.temizle_hepsi()
 
 
 def _kaydet(client, eposta, pin="123456"):

@@ -287,6 +287,79 @@ def _canli_tedavi_durumu_sizmaz():
             alan.update(once)
 
 
+# ⚠️ O-A2.4 (2-B incelemesi → 2-B2) — CİHAZ OPERATÖR KAYDI testler arası SIZMAZ. `database.auth_db.get_auth_db()` süreç-
+# tekildir: ilk çağıran testin veri kökünde kurulur ve süitin GERİ KALANI aynı `auth_users.db`yi görür. Bir test kayıtlı
+# operatör BIRAKINCA sonraki testler "kayıtlı operatörlü cihaz" kipinde koşar — `cozumlenmis_operator` / `kayitli_operator_var`
+# Kural 2 (operatörsüz klinik) dalı yerine kimlik dalına girer: sıraya bağlı kırmızı ya da kimlik kapılarının sızıntıyla
+# MASKELİ yeşili (2-B D2.41 kümesinde ölçüldü). Ölçüldü (gözcü, operatör kaydeden 24 dosya): `test_operator_identity_server_side`
+# dosya sonunda `a@klinik.com` bırakıyordu ve sıradaki dosya (`…B226`) kayıtlı operatörlü cihazda başlıyordu; her testi ve
+# `test_privileged_endpoints`'in enroll kolları sonraki teste operatör (+ jeton) devrediyordu.
+# GÖZCÜ: testin (ve dosyanın) sonunda tekilde başta OLMAYAN operatör varsa ürünün kendi çıkarma yoluyla (kayıt + jetonları)
+# YERİNDE geri alınır VE o test KIRMIZI olur (sızıntı görünür kalsın; D0Ö.11 deseni). Testin başında zaten olanlara (modül
+# fikstürü) dokunulmaz. Bilinçli sızdıran tek yer meta kapının 1. kolu: `operator_sizintisi_beklenir` işareti (yalnız
+# kırmızıyı kaldırır, geri alma aynen). Tekil kurulmamışsa boş; okunamazsa o test için karar verilmez.
+# Kapı: tests/test_operator_kaydi_testler_arasi_SIZMAZ_OA24.py
+_OPERATOR_SIZINTI_KAYDI: list = []
+
+
+def _kayitli_operator_epostalari():
+    """Süreç-tekil auth DB'deki cihaz operatörleri — SALT-OKUR (`mode=ro`); modül içe AKTARILMAZ, tekil KURULMAZ."""
+    m = sys.modules.get("database.auth_db")
+    tek = getattr(m, "_auth_db", None) if m is not None else None
+    if tek is None:
+        return frozenset()
+    try:
+        import sqlite3
+
+        yol = Path(str(tek.db_path)).resolve()
+        if not yol.exists():
+            return frozenset()
+        c = sqlite3.connect(yol.as_uri() + "?mode=ro", uri=True, timeout=2)
+        try:
+            return frozenset(r[0] for r in c.execute("SELECT email FROM device_operators"))
+        finally:
+            c.close()
+    except Exception:
+        return None
+
+
+def _operator_sizintisini_geri_al(once, request, kapsam: str) -> None:
+    sonra = _kayitli_operator_epostalari()
+    if once is None or sonra is None:
+        return
+    sizan = sorted(sonra - once)
+    if not sizan:
+        return
+    tek = sys.modules["database.auth_db"]._auth_db
+    ot = sys.modules.get("servers.operator_tokens")
+    for e in sizan:
+        tek.remove_operator(e)
+        if ot is not None:
+            ot.iptal_email(e)
+    beklenen = request.node.get_closest_marker("operator_sizintisi_beklenir") is not None
+    _OPERATOR_SIZINTI_KAYDI.append((request.node.nodeid, kapsam, tuple(sizan), beklenen))
+    if not beklenen:
+        pytest.fail(
+            f"bu {kapsam} cihaz operatör kaydı BIRAKTI: {sizan} (geri alındı) — sonraki testler 'kayıtlı operatörlü cihaz' "
+            "kipinde koşardı (Kural 2 sessizce çevrilir; O-A2.4). Operatör kaydeden fikstür yield SONRASI da temizlemeli."
+        )
+
+
+@pytest.fixture(autouse=True)
+def _operator_kaydi_sizmaz(request):
+    once = _kayitli_operator_epostalari()
+    yield
+    _operator_sizintisini_geri_al(once, request, "test")
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _operator_kaydi_dosyadan_sizmaz(request):
+    """Modül kapsamlı fikstürün bıraktığı operatör için (test düzeyi gözcü onu 'baştan vardı' sayar)."""
+    once = _kayitli_operator_epostalari()
+    yield
+    _operator_sizintisini_geri_al(once, request, "dosya")
+
+
 # ⚠️ D0Ö.07 (B-10.9) — SÜİT AĞA ÇIKMAZ (TCP connect, UDP sendto, DNS). ÖLÇÜLDÜ:
 # `data/cloud_mqtt_provision.json` (git'e girmez) bu makinede VAR; aynayı stub'lamayan E-stop testleri
 # `_estop_cloud_mirror` üzerinden GERÇEK (üretim) bulut broker'ına gerçek kimlikle TLS + STOP yayını

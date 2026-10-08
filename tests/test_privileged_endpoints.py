@@ -33,6 +33,23 @@ def _loopback(app, **kw):
     return TestClient(app, client=("127.0.0.1", 51234), **kw)
 
 
+@pytest.fixture(autouse=True)
+def _operator_birakmaz():
+    """O-A2.4: `/api/operators/enroll` kolları `a@x.com`u süreç-tekil auth DB'de BIRAKIP sıradaki teste devrediyordu
+    (sonraki dosyalar "kayıtlı operatörlü cihaz" kipine düşerdi). Bu dosya yalnız yetki KAPISINI ölçer (`!= 403`); kaydın
+    kendisi sonraki teste taşınmaz. Gözcü: conftest `_operator_kaydi_sizmaz`."""
+    yield
+    import sys
+
+    adb = getattr(sys.modules.get("database.auth_db"), "_auth_db", None)  # tekil yoksa kurulmaz (yan etki yok)
+    if adb is None:
+        return
+    from servers import operator_tokens
+
+    adb.remove_operator("a@x.com")
+    operator_tokens.iptal_email("a@x.com")
+
+
 AYRICALIKLI = [
     ("/api/data/export", {"passphrase": "p"}),
     ("/api/data/import", {"passphrase": "p", "blob_b64": "", "confirm": "REPLACE_ALL"}),

@@ -125,6 +125,7 @@ indent-style = "space"
 # yerel tam suitte PEMF_CAPRAZ_KAYNAK_ZORUNLU=1 atlamayi HATAYA cevirir.
 markers = [
     "entegrasyon: gercek model agirliklariyla ucdan uca (agirlik yoksa atlanir)",
+    "operator_sizintisi_beklenir: yalniz O-A2.4 meta kapisinin 1. kolu - conftest gozcusu operatoru geri alir ama kirmizi yapmaz",
 ]
 
 [tool.coverage.run]
