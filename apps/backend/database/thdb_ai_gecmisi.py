@@ -197,13 +197,18 @@ class AiGecmisiKarisimi:
                 cursor = conn.cursor()
                 if operator_email and sahipsiz_dahil:
                     op = operator_email.strip().lower()
-                    kosul = "LOWER(operator_email) = ? OR operator_email IS NULL OR TRIM(operator_email) = ''"
+                    # ⚠️ C2-3.4 (2-C incelemesi A3): "sahipsiz" Y104 tanımı hasta/seans kapısıyla (`silme_yetkisi._yabanci`: Python
+                    # `.strip().lower()`) AYNI normalleştirmeyle — SQLite LOWER yalnız ASCII küçültür, TRIM yalnız ' ' kırpar; kayıtlı
+                    # hekimin `\t`/NBSP/`Ö` varyantlı (eski / içe aktarılmış) kaydı "sahipsiz" sayılıp cihaz dışından siliniyordu.
+                    # Kapı: tests/test_ai_TUM_KLINIK_cihaz_disi_SAHIPSIZ_tanimi_hasta_ile_AYNI_C2_3_4.py
+                    conn.create_function("pemf_sahip", 1, lambda s: (s or "").strip().lower())
+                    kosul = "pemf_sahip(operator_email) = ? OR pemf_sahip(operator_email) = ''"
                     params: list = [op]
                     if kayitli_epostalar is not None:
                         kayitli = sorted({(e or "").strip().lower() for e in kayitli_epostalar} - {""})
                         if kayitli:
                             yer = ",".join("?" for _ in kayitli)
-                            kosul += f" OR LOWER(TRIM(operator_email)) NOT IN ({yer})"
+                            kosul += f" OR pemf_sahip(operator_email) NOT IN ({yer})"
                             params += kayitli
                         else:
                             kosul = "1 = 1"  # operatörsüz cihaz: kayıtlı kimse yok → her sahip sahipsiz
