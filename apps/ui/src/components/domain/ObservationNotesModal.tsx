@@ -206,7 +206,10 @@ export function ObservationNotesModal({
           {kimlikIstemi ? (
             <View style={styles.kimlikKutusu}>
               <Text style={styles.kimlikMetni}>{kimlikIstemi}</Text>
-              {kimlikIstemi.startsWith(KIMLIK_DB_ARIZA_ONEKI) ? null : <OperatorSwitcher />}
+              {/* ⚠️ C2-2.2 (Ö.4-Y8): seçicinin PIN penceresi AYRI portaldır; pencere ACİL DURDUR için gizlenince (bobin
+                  çalışıyor) RN-web dış pencerenin çocuklarını ancak kayma animasyonu bitince söker — o arada PIN penceresi
+                  ACİL DURDUR'u örtüyordu. Seçici yalnız pencere GÖRÜNÜRKEN çizilir; istem ve not durur. */}
+              {kimlikIstemi.startsWith(KIMLIK_DB_ARIZA_ONEKI) || !visible ? null : <OperatorSwitcher />}
             </View>
           ) : null}
 
