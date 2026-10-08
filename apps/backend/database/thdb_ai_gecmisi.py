@@ -120,17 +120,19 @@ class AiGecmisiKarisimi:
     def delete_ai_analysis(self, analysis_id: int, operator_email: Optional[str] = None) -> bool:
         """TEK bir AI analiz kaydını siler.
 
-        `operator_email` verilirse yalnız O KİŞİYE ait (veya sahipsiz) kayıt silinir — böylece
-        klinik profili olmayan kullanıcı başkasının kaydını silemez. KVKK silme hakkı için gerekli:
-        kullanıcı kendi kaydını kaldırabilmeli, başkasınınkini kaldıramamalı.
+        `operator_email` verilirse yalnız O KİŞİYE ait kayıt silinir — böylece klinik profili olmayan
+        kullanıcı başkasının kaydını silemez. KVKK silme hakkı için gerekli: kullanıcı kendi kaydını
+        kaldırabilmeli, başkasınınkini kaldıramamalı.
+
+        ⚠️ D2.20 (Y83 · A-56): SAHİPSİZ kayıt (`NULL`/`''`) "kendi" DEĞİLDİR — eskiden tekil silme her kimlikle sahipsiz
+        kaydı da siliyordu. Sahipsizler yalnız "Tüm Klinik" toplu silmesinden (`clear_ai_analyses(None)`) gider.
         """
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 if operator_email:
                     cursor.execute(
-                        "DELETE FROM ai_analyses WHERE id = ? AND "
-                        "(operator_email IS NULL OR operator_email = '' OR LOWER(operator_email) = ?)",
+                        "DELETE FROM ai_analyses WHERE id = ? AND LOWER(operator_email) = ?",
                         (int(analysis_id), operator_email.strip().lower()),
                     )
                 else:
@@ -162,18 +164,12 @@ class AiGecmisiKarisimi:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 if operator_email:
+                    # ⚠️ D2.20 (A-10 · A-56): "kendi" kapsamı YALNIZ kimliğin kayıtları — sahipsizlere dokunulmaz (eskiden
+                    # her "kendi geçmişimi sil" kliniğin TÜM sahipsiz AI kayıtlarını da VACUUM'lu götürüyordu — ölçüldü).
                     op = operator_email.strip().lower()
-                    cursor.execute(
-                        "SELECT COUNT(*) FROM ai_analyses WHERE "
-                        "(operator_email IS NULL OR operator_email = '' OR LOWER(operator_email) = ?)",
-                        (op,),
-                    )
+                    cursor.execute("SELECT COUNT(*) FROM ai_analyses WHERE LOWER(operator_email) = ?", (op,))
                     n = int(cursor.fetchone()[0] or 0)
-                    cursor.execute(
-                        "DELETE FROM ai_analyses WHERE "
-                        "(operator_email IS NULL OR operator_email = '' OR LOWER(operator_email) = ?)",
-                        (op,),
-                    )
+                    cursor.execute("DELETE FROM ai_analyses WHERE LOWER(operator_email) = ?", (op,))
                 else:
                     cursor.execute("SELECT COUNT(*) FROM ai_analyses")
                     n = int(cursor.fetchone()[0] or 0)

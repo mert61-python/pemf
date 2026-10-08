@@ -16,7 +16,14 @@ import {
 } from "@/components/domain/AiReviewControls";
 import { useUserMode } from "@/context/UserModeContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
-import { canChooseScope, deleteScope, effectiveScope, inScope, KIMLIK_ISTEMI } from "@/utils/patientScope";
+import {
+  canChooseScope,
+  deleteScope,
+  effectiveScope,
+  inScope,
+  KIMLIK_ISTEMI,
+  YALNIZ_KENDI_SILME,
+} from "@/utils/patientScope";
 import { downloadFileWithAuth } from "@/services/dosyaIndir";
 import { emitToast } from "@/services/toastBridge";
 import { TakipGrafigi } from "@/components/domain/TakipGrafigi";
@@ -114,9 +121,17 @@ export function AiHistoryScreen() {
   const kimlikYok = !silmeKapsami.izinli;
 
   const kaydiSil = useCallback(async (id: number) => {
-    if (kimlikYok) {
+    if (kimlikYok || !myEmail) {
       await platformConfirm("Operatör seçin",
         "Silme işlemi için önce üst bardan hangi hekim olduğunuzu seçin.");
+      return;
+    }
+    // ⚠️ D2.20 (A-10 · Y83): tekil silme YALNIZ kimliğin kendi kaydına — SAHİPSİZ kayıt da değil (sahipsizler yalnız
+    // "Tüm Klinik" toplu silmesinden gider). Eskiden "Tüm Klinik"te `operator_email: ""` gidiyordu ve backend boş
+    // e-postayı "sahip filtresi yok" sayıp HER kaydı siliyordu. Backend aynı kuralı jetondan uygular (404 / 428).
+    const hedef = items.find((x) => x.id === id);
+    if (!hedef || (hedef.operator_email || "").trim().toLowerCase() !== myEmail) {
+      await platformConfirm("Silinemez", YALNIZ_KENDI_SILME);
       return;
     }
     const onay = await platformConfirm(
@@ -127,13 +142,13 @@ export function AiHistoryScreen() {
     setSilinen(id);
     const res = await apiPost<{ status?: string } | null>(
       "/ai/log/delete",
-      { id, operator_email: silmeKapsami.operatorEmail },
+      { id, operator_email: myEmail },
       null,
     );
     setSilinen(null);
     if (!res) return;                                   // hata mesajını apiPost gösterdi
     setItems((prev) => prev.filter((x) => x.id !== id)); // yerinde çıkar (liste yerini kaybetmesin)
-  }, [silmeKapsami, kimlikYok]);
+  }, [kimlikYok, myEmail, items]);
 
   // ⚠️ `load` BURADA tanımlanır (aşağıda değil): `tumunuSil` onu kullanıyor ve bildirimden
   // ÖNCE erişim, React Compiler'ın tüm bileşende iyileştirmeyi bırakmasına yol açıyordu

@@ -168,6 +168,11 @@ describe("deleteScope", () => {
     expect(deleteScope("all", "x@y.com", ARASTIRMA).allOperators).toBe(true);
   });
 
+  it("KRİTİK (D2.20 · A-10): kimliksiz klinik profili 'Tüm Klinik' silmesini de İSTEYEMEZ", () => {
+    expect(deleteScope("all", "", VET).izinli).toBe(false);
+    expect(deleteScope("all", "  ", ARASTIRMA).izinli).toBe(false);
+  });
+
   it("KRİTİK: ev sahibi 'all' seçse bile KENDİ kapsamında kalır", () => {
     const r = deleteScope("all", "sahip@x.com", EV_SAHIBI);
     expect(r.allOperators).toBe(false);

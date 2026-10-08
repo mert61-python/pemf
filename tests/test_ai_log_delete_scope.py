@@ -70,11 +70,13 @@ def test_klinik_geneli_silme_ACIK_bayrakla_calisir(client, dolu_gecmis):
     assert _ozetler(dolu_gecmis) == []
 
 
-def test_kendi_kayitlarini_silme_SADECE_kendisini_ve_sahipsizi_siler(client, dolu_gecmis):
+def test_kendi_kayitlarini_silme_YALNIZ_kendisini_siler_sahipsize_DOKUNMAZ(client, dolu_gecmis):
+    """⚠️ D2.20 · A-10 / A-56 (eski kural tersine döndü): "kendi" kapsamı sahipsizleri KAPSAMAZ — eskiden her "kendi
+    geçmişimi sil" kliniğin TÜM sahipsiz AI kayıtlarını da VACUUM'lu götürüyordu (İG-6.19 ölçtü)."""
     r = client.post("/api/ai/log/delete_all", json={"confirm": "DELETE_ALL", "operator_email": "a@klinik.com"})
     assert r.status_code == 200, r.text[:300]
     kalan = _ozetler(dolu_gecmis)
-    assert kalan == ["B-analiz"], f"baska hekimin kaydi etkilendi: {kalan}"
+    assert kalan == ["B-analiz", "sahipsiz"], f"baska hekimin ya da sahipsiz kayit etkilendi: {kalan}"
 
 
 def test_confirm_kapisi_KORUNUR(client, dolu_gecmis):
@@ -91,7 +93,7 @@ def test_bayrak_kimlikle_birlikte_gelirse_KIMLIK_kazanir(client, dolu_gecmis):
         json={"confirm": "DELETE_ALL", "operator_email": "a@klinik.com", "all_operators": True},
     )
     assert r.status_code == 200, r.text[:300]
-    assert _ozetler(dolu_gecmis) == ["B-analiz"], "celiskili istekte GENIS kapsam uygulandi"
+    assert _ozetler(dolu_gecmis) == ["B-analiz", "sahipsiz"], "celiskili istekte GENIS kapsam uygulandi"
 
 
 # ── tekil silme: sahiplik ───────────────────────────────────────────────────

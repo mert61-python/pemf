@@ -30,7 +30,7 @@ def client():
     return TestClient(api_server.app, client=("127.0.0.1", 51234))
 
 
-def _analiz_ekle(client, ad="Minnos") -> int:
+def _analiz_ekle(client, ad="Minnos", operator_email="") -> int:
     r = client.post(
         "/api/ai/log",
         json={
@@ -42,6 +42,7 @@ def _analiz_ekle(client, ad="Minnos") -> int:
             "input_type": "clinical",
             "result_detail": {"top": "X"},
             "confidence": 0.8,
+            "operator_email": operator_email,
         },
     )
     assert r.status_code == 200, r.text[:200]
@@ -64,15 +65,18 @@ def test_yanlis_onay_metni_REDDEDILIR(client):
 
 
 def test_tekil_silme_calisir(client):
-    i = _analiz_ekle(client, "SilinecekHasta")
-    r = client.post("/api/ai/log/delete", json={"id": i})
+    # ⚠️ D2.20 (A-10 · Y83): tekil silme KİMLİK ister ve yalnız kimliğin kaydını siler (sahipsiz kayıt tekil silinmez).
+    # Bu dosya İŞLEVİ test eder; kapsam kapısı tests/test_ai_gecmisi_SILME_KAPSAMI_jetondan_D220.py'de. Ortam operatörsüz
+    # (Kural 2): kimlik = beyan.
+    i = _analiz_ekle(client, "SilinecekHasta", operator_email="dr.tek@klinik.com")
+    r = client.post("/api/ai/log/delete", json={"id": i, "operator_email": "dr.tek@klinik.com"})
     assert r.status_code == 200 and r.json()["deleted"] == 1
     kalan = [x["id"] for x in client.get("/api/ai/log?limit=50").json()["data"]]
     assert i not in kalan
 
 
 def test_olmayan_kaydi_silmek_404(client):
-    r = client.post("/api/ai/log/delete", json={"id": 99999999})
+    r = client.post("/api/ai/log/delete", json={"id": 99999999, "operator_email": "dr.tek@klinik.com"})
     assert r.status_code == 404
 
 

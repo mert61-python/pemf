@@ -89,7 +89,9 @@ export function deleteScope(
     // Kimlik yoksa İSTEK GÖNDERİLMEZ. Boş e-posta göndermek "hepsini sil" demektir.
     return { izinli: Boolean(mail), operatorEmail: mail, allOperators: false };
   }
-  return { izinli: true, operatorEmail: "", allOperators: true };
+  // ⚠️ D2.20 (A-10): "Tüm Klinik" silmesi de KİMLİK ister — kimliksiz (kayıtlı operatörlü cihaz, kimse seçili değil ya
+  // da kilit sonrası) kliniğin tüm AI geçmişini silme isteği GİTMEZ (eskiden `izinli: true`; backend de artık 428 der).
+  return { izinli: Boolean(mail), operatorEmail: "", allOperators: true };
 }
 
 /**

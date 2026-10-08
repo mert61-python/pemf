@@ -45,23 +45,25 @@ def test_KRITIK_baskasinin_kaydini_SILEMEZ(temp_app_data):
     assert len(db.get_ai_analyses(limit=50)) == 1, "kayit gitmis olmamali"
 
 
-def test_sahipsiz_eski_kayit_silinebilir(temp_app_data):
-    # operator_email kolonu SONRADAN eklendi → eski kayitlar sahipsiz. Silinemez olsalardi
-    # kullanicinin kendi eski kayitlarini kaldirmasi imkansiz olurdu.
+def test_KRITIK_sahipsiz_eski_kayit_TEKIL_silmeyle_SILINEMEZ_Y83(temp_app_data):
+    # ⚠️ D2.20 · SAHİP KARARI Y83 / A-56 (eski kural tersine döndü): sahipsiz kayıt kimsenin "kendi" kaydı değildir —
+    # eskiden her kimlik onu silebiliyordu (kliniğin sahipsiz geçmişi "kendi kaydımı sil" ile gidiyordu). Sahipsizler
+    # yalnız "Tüm Klinik" toplu silmesinden (`clear_ai_analyses(None)`) gider — aşağıdaki `test_toplu_silme_tum_klinik`.
     db = _db(temp_app_data)
     i = _ekle(db, "Pamuk", "")
-    assert db.delete_ai_analysis(i, "ben@example.com") is True
+    assert db.delete_ai_analysis(i, "ben@example.com") is False, "sahipsiz kayit tekil silmeyle gitti"
+    assert len(db.get_ai_analyses(limit=50)) == 1
 
 
 def test_toplu_silme_kapsami(temp_app_data):
     db = _db(temp_app_data)
     _ekle(db, "A", "ben@example.com")
     _ekle(db, "B", "baskasi@example.com")
-    _ekle(db, "C", "")  # sahipsiz → "benim" kapsamina dahil
+    _ekle(db, "C", "")  # sahipsiz → "kendi" kapsamında DEĞİL (D2.20 · A-56: sahipsizlere dokunulmaz)
     n = db.clear_ai_analyses("ben@example.com")
-    assert n == 2, f"kapsam disi kayit silindi/kaldi: {n}"
+    assert n == 1, f"kapsam disi kayit silindi/kaldi: {n}"
     kalan = db.get_ai_analyses(limit=50)
-    assert [r["patient_name"] for r in kalan] == ["B"]
+    assert sorted(r["patient_name"] for r in kalan) == ["B", "C"]
 
 
 def test_toplu_silme_tum_klinik(temp_app_data):

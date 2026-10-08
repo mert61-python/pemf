@@ -5987,8 +5987,30 @@ async def delete_ai_log_entry(payload: AiLogDeletePayload, request: Request):
     db = _get_treatment_db()
     if db is None:
         raise HTTPException(status_code=500, detail="Geçmiş veritabanı hazır değil")
-    ok = await asyncio.to_thread(db.delete_ai_analysis, int(payload.id), (payload.operator_email or "").strip() or None)
     from servers import audit_log as _iz
+    from servers.auth import cozumlenmis_operator, kayitli_operator_var
+    from servers.silme_yetkisi import KIMLIKSIZ_DETAY
+
+    # ⚠️ D2.20 (B-3.38 · A-10 · Y83): kapsam OTURUM KİMLİĞİNDEN (jeton; kayıtlı operatör yoksa — Kural 2 — beyan), gövdedeki
+    # beyandan DEĞİL. Eskiden beyan edilen e-posta kapsamdı ve sahipsiz kayıtlar da "kendi" sayılıyordu → başka hekimin
+    # beyanıyla onun kaydı, her kimlikle sahipsiz kayıtlar silinebiliyordu. Tekil "Kaydı sil" sahipsizi SİLMEZ (404);
+    # sahipsizler yalnız "Tüm Klinik" toplu silmesinden gider. Kapı: tests/test_ai_gecmisi_SILME_KAPSAMI_jetondan_D220.py.
+    kimlik = cozumlenmis_operator(request, payload.operator_email or "")
+    if not kimlik:
+        _iz.kimlikli_yaz(
+            request,
+            "ai_log.delete",
+            beyan=payload.operator_email or "",
+            scope=f"id={payload.id}",
+            item_count=0,
+            outcome="reddedildi",
+        )
+        if kayitli_operator_var():
+            raise HTTPException(status_code=428, detail=KIMLIKSIZ_DETAY)
+        raise HTTPException(
+            status_code=400, detail="Silme kapsamı belirsiz: kendi kaydınızı silmek için operatör seçin."
+        )
+    ok = await asyncio.to_thread(db.delete_ai_analysis, int(payload.id), kimlik)
 
     if not ok:
         # Kayıt yok VEYA başkasına ait → ikisini AYIRMA (varlık sızdırmayalım).
@@ -6025,12 +6047,33 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
     db = _get_treatment_db()
     if db is None:
         raise HTTPException(status_code=500, detail="Geçmiş veritabanı hazır değil")
-    op = (payload.operator_email or "").strip() or None
+    from servers import audit_log as _iz
+    from servers.auth import cozumlenmis_operator, kayitli_operator_var
+    from servers.silme_yetkisi import KIMLIKSIZ_DETAY
+
+    # ⚠️ D2.20 (B-3.38 · A-10 · A-56): "kendi" kapsamı OTURUM KİMLİĞİNDEN (jeton; kayıtlı operatör yoksa — Kural 2 — beyan)
+    # ve YALNIZ kimliğin kayıtları — sahipsizlere dokunulmaz (eskiden beyan kapsamdı ve sahipsizler de gidiyordu: başka
+    # hekimin jetonuyla A beyan edilince A'nın geçmişi VACUUM'lu silindi — ölçüldü). "Tüm Klinik" = `all_operators` VE
+    # beyansız (çelişkili istekte DAR kapsam kazanır). Kayıtlı operatörlü cihazda kimliksiz silme (her iki kapsam) 428.
+    beyan = (payload.operator_email or "").strip()
+    tum_klinik = bool(payload.all_operators) and not beyan
+    kimlik = cozumlenmis_operator(request, beyan)
+    if not kimlik and kayitli_operator_var():
+        _iz.kimlikli_yaz(
+            request,
+            "ai_log.delete_all",
+            beyan=beyan,
+            scope="TUM_KLINIK" if tum_klinik else "kendi",
+            item_count=0,
+            outcome="reddedildi",
+        )
+        raise HTTPException(status_code=428, detail=KIMLIKSIZ_DETAY)
+    op = None if tum_klinik else (kimlik or None)
     # ⚠️ FAIL-CLOSED (2026-08-09): kimlik yok VE klinik-geneli silme AÇIKÇA istenmediyse reddet.
     # Aksi hâlde istemcideki bir kimlik kaybı (operatör seçilmemiş, oturum düşmüş, alan boş
     # gönderilmiş) sessizce "kliniğin tüm AI geçmişini sil"e dönüşürdü — geri dönüşü olmayan bir
     # işlem için kabul edilemez bir varsayılan.
-    if op is None and not payload.all_operators:
+    if op is None and not tum_klinik:
         raise HTTPException(
             status_code=400,
             detail="Silme kapsamı belirsiz. Kendi kayıtlarınız için operatör seçin; kliniğin "
@@ -6042,7 +6085,6 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
         _seans_suruyor = bool(_active_session.get("is_active"))
     n = await asyncio.to_thread(db.clear_ai_analyses, op, _seans_suruyor)
     _vacuum_bekliyor = bool(getattr(db, "vacuum_bekliyor_mu", lambda: False)())
-    from servers import audit_log as _iz
 
     if n < 0:
         _iz.kimlikli_yaz(
@@ -6069,7 +6111,7 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
         beyan=payload.operator_email or "",
         scope=(op or "TUM_KLINIK"),
         item_count=n,
-        detail={"all_operators": bool(payload.all_operators), "vacuum": not _vacuum_bekliyor},
+        detail={"all_operators": tum_klinik, "vacuum": not _vacuum_bekliyor},
     )
     return {"status": "success", "deleted": n, "vacuumErtelendi": _vacuum_bekliyor}
 
