@@ -105,6 +105,12 @@ kendi gönderdiği sahte IP zincire girer ve oran-sınırlama sahte IP döndüre
 **IIS (ARR)** URL Rewrite ile `X-Forwarded-For` = `{REMOTE_ADDR}` sunucu değişkenini **set** edin
 (append eden varsayılan kuralı değil).
 
+> ⚠️ **Cihazın ÜZERİNDE yerel ters proxy (S-A3.2 · 2-C incelemesi):** "isteğin cihazın kendisinden geldiği" kararı
+> (`auth.cihazin_kendisinden_mi` — kliniğin tamamını silme, AI Geçmişi "Tüm Klinik" silmesinin TAMAMI; A-03, Y112) yalnız
+> `X-Forwarded-For` ve `cf-*` başlıklarını vekil (proxy) işareti sayar. Cihazın üzerinde bir yerel ters proxy çalıştırılacaksa
+> **mutlaka `X-Forwarded-For` eklemelidir**: yalnız `X-Real-IP` / `Forwarded` / `Via` ekleyen bir proxy arkasında ağdaki başka
+> bir cihazın isteği "cihazın kendisi" sayılır. (Klinik profilinde cihaz üzerinde böyle bir proxy yoktur.)
+
 ---
 
 ## 4) cloudflared (klinik uzaktan erişim için ZORUNLU)
