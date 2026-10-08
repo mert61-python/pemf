@@ -5817,10 +5817,12 @@ async def review_ai_analysis(payload: AiReviewPayload, request: Request):
     ok = await asyncio.to_thread(db.set_ai_review, int(payload.analysis_id), payload.status, payload.note, _inceleyen)
     if not ok:
         raise HTTPException(status_code=404, detail="Analiz kaydı bulunamadı.")
-    _iz.kimlikli_yaz(
+    # ⚠️ B2-2.4: iz, KAYDA yazılan kimliği taşır — kimlik İSTEKTEN yeniden çözülmez (değerlendirme yazılırken başka sekmenin
+    # "Kilitle"si jetonu düşürürse kayıt Ayşe'yi, iz sahipsizi gösteriyordu). Kapı: tests/test_degerlendirme_IZI_KAYITLA_AYNI_kimlik_kilit_yarisi_B224.py
+    _iz.yaz(
         request,
         "ai.review",
-        beyan=payload.reviewed_by,
+        operator_email=_inceleyen,
         scope=f"ai_analiz:{int(payload.analysis_id)}",
         detail=_iz_detay,
     )
