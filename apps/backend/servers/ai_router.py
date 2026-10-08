@@ -2321,16 +2321,24 @@ def _kaydet_onay_izi(olay: str, rec: dict) -> None:
     try:
         from servers.api_server import _get_treatment_db
 
+        # D2.E15: hasta ADI öneri mühründe (onay penceresi gösterir) ama süresiz denetim izine GİRMEZ — iz yalnız opak
+        # kimliği taşır (hangi hastaya onaylatıldığı yine izlenebilir).
+        _specs = dict(rec.get("specs") or {})
+        _specs.pop("patient_name", None)
+        _yuk = {
+            "proposal_id": rec.get("id"),
+            "operator": rec.get("operator"),
+            "specs": _specs,
+            "meta": rec.get("meta"),
+        }
+        if olay == "ai_proposal_rejected":
+            # O-A2.2 (2-B incelemesi): hekimin serbest red gerekçesi hasta/sahip adı, klinik bulgu taşıyabilir → iz METİNSİZ,
+            # yalnız varlığı (D2.19'un AI değerlendirmesi kuralıyla aynı ilke).
+            _yuk["gerekce_var"] = bool(str(rec.get("reason") or "").strip())
         _get_treatment_db().record_session_event(
             None,
             olay,
-            payload={
-                "proposal_id": rec.get("id"),
-                "operator": rec.get("operator"),
-                "reason": rec.get("reason"),
-                "specs": rec.get("specs"),
-                "meta": rec.get("meta"),
-            },
+            payload=_yuk,
             severity="info",
         )
     except Exception:
