@@ -4844,6 +4844,10 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
                 elif _sebep.startswith("ai-pro-kesinti"):
                     # D2.E07 (YA-1): AI Pro döngüsü KENDİ kesildi (hedef kaybı / doz modeli hatası / kamera) → "Kesintiye Uğradı".
                     _durum = "interrupted"
+                elif _sebep.startswith("ai-devralma"):
+                    # D2.E06 (YA-2) · sahip kararı Y90: AI seansının DEVRALDIĞI (planlanan süresi dolmadan kapatılan) elle
+                    # seans → "Kesintiye Uğradı" (D1.75 ile aynı ilke; "completed" verilmemiş süreyi tamamlanmış gösterirdi).
+                    _durum = "interrupted"
                 elif _sebep.startswith("kapanis"):
                     # D1.75 (B-1.22): backend seans ortasında KAPANDI (servis durdurma / Ctrl+C) → "Kesintiye Uğradı".
                     # "completed" planlanan süre dolmamışken yanlış; satırı açık bırakmak ise sonraki açılışta
