@@ -198,11 +198,20 @@ describe("D2.72 · Y92 — silinebilir (hasta/seans silme yetkisinin tek kaynağ
     expect(silinebilir({ operator_email: A }, { ...cokHekimli, myEmail: "  " })).toBe(false);
   });
 
-  it("KRİTİK: kayıtlı operatörlü cihazda YALNIZ kendi kaydı — başka hekimin ve SAHİPSİZ kayıt 'Tüm Klinik'te de değil", () => {
-    expect(silinebilir({ operator_email: "Dr.A@Klinik.com" }, cokHekimli)).toBe(true);
+  it("KRİTİK: kayıtlı operatörlü cihazda kendi + SAHİPSİZ (Y104) — BAŞKA kayıtlı hekiminki 'Tüm Klinik'te de ASLA (Y92)", () => {
+    const k = { ...cokHekimli, kayitliOperatorler: [A, "Dr.B@klinik.com"] };
+    expect(silinebilir({ operator_email: "Dr.A@Klinik.com" }, k)).toBe(true);
+    expect(silinebilir({ operator_email: "dr.b@klinik.com" }, k)).toBe(false);
+    expect(silinebilir({ operator_email: " DR.B@klinik.com " }, k)).toBe(false);
+    expect(silinebilir({ operator_email: "" }, k)).toBe(true);
+    expect(silinebilir({ operator_email: null }, { ...k, kapsam: "mine" })).toBe(true);
+    expect(silinebilir({ operator_email: "klinik@ortak-giris.com" }, k)).toBe(true); // cihazda kayıtlı değil (ortak giriş)
+  });
+
+  it("KRİTİK (Y104 fail-closed): kayıtlı operatör listesi BİLİNMİYORSA yalnız sahibi BOŞ kayıt sahipsiz sayılır", () => {
+    expect(silinebilir({ operator_email: "" }, cokHekimli)).toBe(true);
+    expect(silinebilir({ operator_email: "klinik@ortak-giris.com" }, cokHekimli)).toBe(false);
     expect(silinebilir({ operator_email: "dr.b@klinik.com" }, cokHekimli)).toBe(false);
-    expect(silinebilir({ operator_email: "" }, cokHekimli)).toBe(false);
-    expect(silinebilir({ operator_email: "" }, { ...cokHekimli, kapsam: "mine" })).toBe(false);
   });
 
   it("KRİTİK (B-6.26): operatörsüz klinikte araştırma profili 'Tüm Klinik'te yalnız kendi kaydı", () => {

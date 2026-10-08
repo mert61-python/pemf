@@ -199,7 +199,8 @@ describe("B2-3.1 — /operators okunamazsa kayıtlı operatörlü klinikte kimli
   });
 
   it.each(["hasta", "seans"] as const)(
-    "KRİTİK (D2.72 arayüz katmanı, %s): A seçiliyken pencere yenilemesi 503 → 'Tüm Klinik → Tümünü Seç → Sil' YALNIZ A'nın kaydı",
+    // Y104 (2-B2): sahipsiz kayıt (S) da silinebilir; kolun konusu BAŞKA (kayıtlı) hekimin kaydının (B) isteğe GİRMEMESİ.
+    "KRİTİK (D2.72 arayüz katmanı, %s): A seçiliyken pencere yenilemesi 503 → 'Tüm Klinik → Tümünü Seç → Sil' B'nin kaydı YOK (A + sahipsiz)",
     async (ekran) => {
       await kur("veterinarian", A, IKI_HEKIM, { A, B, S: "" }, [ekran]);
       await pinleSec(s, "Dr. A");
@@ -211,8 +212,8 @@ describe("B2-3.1 — /operators okunamazsa kayıtlı operatörlü klinikte kimli
       await s.tikla("Kapat");
       expect(aktifOperator()).toBe("Dr. A"); // ARA DOĞRULAMA: kimlik duruyor, jeton A
       const e = ekran === "hasta"
-        ? { tum: "Tüm klinik hastaları", cubuk: "hasta-secim-cubugu", yol: "/patients/delete_bulk", alan: "patient_ids", kendi: ["p0"] }
-        : { tum: "Tüm klinik seansları", cubuk: "gecmis-secim-cubugu", yol: "/history/delete_bulk", alan: "session_ids", kendi: [100] };
+        ? { tum: "Tüm klinik hastaları", cubuk: "hasta-secim-cubugu", yol: "/patients/delete_bulk", alan: "patient_ids", kendi: ["p0", "p2"] }
+        : { tum: "Tüm klinik seansları", cubuk: "gecmis-secim-cubugu", yol: "/history/delete_bulk", alan: "session_ids", kendi: [100, 102] };
       await s.tikla(e.tum);
       if (ekran === "hasta") await s.metneTikla("Seç");
       else await s.tikla("Toplu seçim kipini aç veya kapat");

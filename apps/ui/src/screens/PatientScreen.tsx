@@ -25,7 +25,7 @@ import {
   SILME_KIMLIK_ISTEMI,
   silinebilir,
   silinmeyecekNotu,
-  YALNIZ_KENDI_SILME,
+  BASKA_HEKIM_SILME,
 } from "@/utils/patientScope";
 import { aramaEslesir } from "@/utils/aramaNormalize";
 import { useCokluSecim } from "@/hooks/useCokluSecim";
@@ -161,7 +161,7 @@ export function PatientScreen() {
     // jetondan uygular). Eskiden her görünen kartta "sil" başka hekimin kaydına istek gönderiyordu.
     if (!myEmail) { showToast(kimlikIstemi(SILME_KIMLIK_ISTEMI, kimlikDbOkunamiyor), "error"); return; }
     const hedef = patients.find((p) => p.id === id);
-    if (!hedef || !silinebilir(hedef, silmeBaglami)) { showToast(YALNIZ_KENDI_SILME, "error"); return; }
+    if (!hedef || !silinebilir(hedef, silmeBaglami)) { showToast(BASKA_HEKIM_SILME, "error"); return; }
     // platformConfirm = web-güvenli onay. (Alert.alert çoklu-buton WEB'de tetiklenmez → "Sil" onPress
     // hiç çalışmıyor, istek gitmiyordu → "hasta silme çalışmıyor". window.confirm'e düşer.)
     if (!(await platformConfirm("Hasta Sil", "Bu hastayı silmek istediğinizden emin misiniz?", "Sil"))) return;
@@ -207,6 +207,7 @@ export function PatientScreen() {
   // D2.72 · Y92: silme yetkisinin bağlamı (tek kaynak `silinebilir`). Kayıtlı operatör yoksa Kural 2.
   const silmeBaglami = {
     myEmail, operatorKayitli: (op?.operators?.length ?? 0) > 0, kapsam: etkinScope, isExpert,
+    kayitliOperatorler: (op?.operators ?? []).map((o) => o.email), // Y104: sahipsiz = boş ya da kayıtlı olmayan sahip
   };
   // ⚠️ DENETİM 2026-09-12 (sahip: "klinik ve benim ayrımı düzgün çalışıyor mu incele"):
   // burada `inScope`un KOPYASI vardı. İki kopya sessizce ayrışır — sekmedeki SAYI bir kuralı,
@@ -274,7 +275,7 @@ export function PatientScreen() {
       const p = patients.find((x) => (x.id || x.name || "") === k);
       return !!p && silinebilir(p, silmeBaglami);
     });
-    if (kimlikler.length === 0) { showToast(YALNIZ_KENDI_SILME, "error"); return; }
+    if (kimlikler.length === 0) { showToast(BASKA_HEKIM_SILME, "error"); return; }
     const ok = await platformConfirm(
       "Seçili Hastaları Sil",
       `${kimlikler.length} hasta kaydı KALICI olarak silinecek. Bu işlem geri alınamaz.` +

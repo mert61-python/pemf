@@ -162,7 +162,7 @@ def remove_patients_bulk(request: Request, payload: BulkDeletePayload):
     db = get_patient_database()
     if not db:
         raise HTTPException(status_code=500, detail="Patient DB not initialized")
-    # ⚠️ D2.72 (B-6.26 · Y92): seçimde başka hekimin ya da sahipsiz kaydı varsa HİÇBİRİ silinmez (403); kimliksiz 428.
+    # ⚠️ D2.72 (B-6.26 · Y92 · Y104): seçimde BAŞKA (kayıtlı) hekimin kaydı varsa HİÇBİRİ silinmez (403); sahipsiz silinir; kimliksiz 428.
     # Eskiden yalnız onay dizesine bakılıyordu — "Tüm Klinik → Tümünü Seç → Sil" kliniğin kayıtlarını siliyordu
     # (araştırma profili kendisine kapatılan "Tümünü Sil"i böyle dolanıyordu). Kural 2: operatörsüz klinik kısıtsız.
     from servers.silme_yetkisi import sahiplik_kapisi

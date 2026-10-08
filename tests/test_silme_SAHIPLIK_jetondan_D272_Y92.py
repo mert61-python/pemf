@@ -7,8 +7,8 @@ onay dizesine bakıyordu → kimliksiz ev sahibi ya da başka bir hekim (jetonlu
 kayıtlarını geri dönüşsüz silebiliyordu (İG-6.4: 200 `7/7`, başka hekim satırı 4 silindi).
 
 Kural (Y92): cihazda kayıtlı operatör VARKEN silme isteğinin kimliği YALNIZ jetondan; kimliksiz → 428 "Operatör seçin";
-hedeflerden biri bile kimliğe ait değilse (başka hekim ya da SAHİPSİZ) → 403 ve HİÇBİR kayıt silinmez (atomik — "kısmen oldu"
-yok); red izde `reddedildi`. Karşıt kollar: kendi kayıtları silinir; Kural 2 — kayıtlı operatörü OLMAYAN tek hekimli klinik
+hedeflerden biri bile kimliğe ait değilse (başka hekim) → 403 ve HİÇBİR kayıt silinmez (atomik — "kısmen oldu" yok); red izde
+`reddedildi`. ⚠️ Y104 (2-B2): SAHİPSİZ kayıt kimlikli her hekimce silinir (eskiden 403 — bu dosyanın sahipsiz kolu yeniden yazıldı). Karşıt kollar: kendi kayıtları silinir; Kural 2 — kayıtlı operatörü OLMAYAN tek hekimli klinik
 bugünkü gibi siler (kilitlenmez); A-01 — LAN'dan jetonlu istek kabul. Kliniğin TAMAMINI silme (`delete_all`) A-03 · D2.11.
 
 GERÇEK: uçlar (TestClient — LAN 192.168.1.70 / yerel), `operator_tokens`, `auth_db` operatörleri, hasta ve tedavi DB'leri
@@ -167,12 +167,14 @@ def test_KRITIK_karisik_secim_ATOMIK_reddedilir_kendi_kaydi_da_silinmez(o, t):
 
 
 @TURLER
-def test_KRITIK_SAHIPSIZ_kayit_da_kimligin_DEGIL_403(o, t):
-    """Y92 'yalnız KENDİ kayıtları': sahipsiz kayıt kimseye ait değildir."""
+def test_SAHIPSIZ_kayit_KIMLIKLI_hekimce_SILINIR_Y104(o, t):
+    """Y104 (sahip kararı, 2-B2): bu kol eskiden Y92'yi harfiyen kilitliyordu ("sahipsiz kayıt kimseye ait değildir" → 403).
+    Sahipsiz kayıt (operatörler kurulmadan önceki ortak girişle yazılanlar dahil) kimlikli her hekimce silinir; başka (kayıtlı)
+    hekimin kaydı 403 kalır (yukarıdaki kollar). Ayrıntılı kapı: tests/test_silme_SAHIPSIZ_KIMLIKLI_her_hekim_her_yerden_Y104.py"""
     j = _iki_hekim(o)
     sahipsiz = t.tohum(o, "")
     r = t.toplu(o, o.lan, sahipsiz, j[AYSE])
-    assert r.status_code == 403 and t.var_olan(o, sahipsiz) == 1, (r.status_code, t.var_olan(o, sahipsiz))
+    assert r.status_code == 200 and t.var_olan(o, sahipsiz) == 0, (r.status_code, t.var_olan(o, sahipsiz))
 
 
 @TURLER

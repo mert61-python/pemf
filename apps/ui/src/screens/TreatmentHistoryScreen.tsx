@@ -21,7 +21,7 @@ import {
   SILME_KIMLIK_ISTEMI,
   silinebilir,
   silinmeyecekNotu,
-  YALNIZ_KENDI_SILME,
+  BASKA_HEKIM_SILME,
 } from "@/utils/patientScope";
 import { useUserMode } from "@/context/UserModeContext";
 
@@ -81,9 +81,12 @@ export function TreatmentHistoryScreen() {
   // Klinik-içi görünüm: "mine" = benim başlattığım seanslar (+ sahipsiz eski), "all" = tüm klinik.
   const [scope, setScope] = useState<"mine" | "all">("mine");
   // D2.72 · Y92: seans (tıbbi kayıt) silme yetkisinin bağlamı — tek kaynak `silinebilir`; kayıtlı operatör yoksa Kural 2.
-  const silmeBaglami = { myEmail, operatorKayitli: (op?.operators?.length ?? 0) > 0, kapsam: scope, isExpert };
+  const silmeBaglami = {
+    myEmail, operatorKayitli: (op?.operators?.length ?? 0) > 0, kapsam: scope, isExpert,
+    kayitliOperatorler: (op?.operators ?? []).map((o) => o.email), // Y104: sahipsiz = boş ya da kayıtlı olmayan sahip
+  };
   const silmeEngeli = (kayit: { operator_email?: string | null }): string | null =>
-    !myEmail ? kimlikIstemi(SILME_KIMLIK_ISTEMI, kimlikDbOkunamiyor) : silinebilir(kayit, silmeBaglami) ? null : YALNIZ_KENDI_SILME;
+    !myEmail ? kimlikIstemi(SILME_KIMLIK_ISTEMI, kimlikDbOkunamiyor) : silinebilir(kayit, silmeBaglami) ? null : BASKA_HEKIM_SILME;
   const { showToast } = useToast();
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -247,7 +250,7 @@ export function TreatmentHistoryScreen() {
       const kayit = sessions.find((x) => x.id === k);
       return !!kayit && silinebilir(kayit, silmeBaglami);
     });
-    if (kimlikler.length === 0) { showToast(YALNIZ_KENDI_SILME, "error"); return; }
+    if (kimlikler.length === 0) { showToast(BASKA_HEKIM_SILME, "error"); return; }
     const ok = await platformConfirm(
       "Seçili Kayıtları Sil",
       `${kimlikler.length} seans kaydı KALICI olarak silinecek. Bu işlem geri alınamaz.` +

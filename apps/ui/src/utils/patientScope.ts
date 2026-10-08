@@ -120,30 +120,43 @@ export function deleteScope(
  *
  * KURAL (sahip kararı Y92 — backend `servers/silme_yetkisi.py` AYNI kuralı jetondan uygular):
  *   * Kimlik yoksa → HİÇBİR kayıt (istek gitmez).
- *   * Cihazda kayıtlı operatör VARSA → yalnız `operator_email` = aktif operatör. SAHİPSİZ kayıt da "kendi" değildir
- *     ("Benim" listesinde GÖRÜNÜR ama silinmez — backend 403 der). "Tüm Klinik" görünümü bunu değiştirmez.
+ *   * Cihazda kayıtlı operatör VARSA → aktif operatörün kendi kaydı VE SAHİPSİZ kayıt (Y104): sahibi boş ya da cihazda
+ *     KAYITLI OLMAYAN bir e-posta (operatörler kurulmadan önce ortak girişle yazılanlar). BAŞKA (kayıtlı) hekimin kaydı ASLA
+ *     (Y92 — backend 403). Kayıtlı operatör listesi bilinmiyorsa (`kayitliOperatorler` yok) yalnız sahibi boş kayıt
+ *     sahipsiz sayılır (backend'in fail-closed yönü). "Tüm Klinik" görünümü bunu değiştirmez.
  *   * Operatörsüz tek hekimli klinik (Kural 2) → bugünkü gibi her kayıt; YALNIZ araştırma profili "Tüm Klinik"te kendi
  *     kayıtlarıyla sınırlı (B-6.26 — "Tümünü Sil" ona kapalı; bu kol yalnız arayüzde: backend profili bilmez).
  */
 export function silinebilir(
   kayit: { operator_email?: string | null },
-  b: { myEmail: string; operatorKayitli: boolean; kapsam: PatientScope; isExpert: boolean },
+  b: {
+    myEmail: string; operatorKayitli: boolean; kapsam: PatientScope; isExpert: boolean;
+    /** Y104: cihazda kayıtlı operatörlerin e-postaları (sahipsiz ayrımı). Verilmezse yalnız sahibi BOŞ kayıt sahipsizdir. */
+    kayitliOperatorler?: readonly string[];
+  },
 ): boolean {
   const mail = (b.myEmail || "").trim().toLowerCase();
   if (!mail) return false;
   const sahip = (kayit.operator_email || "").trim().toLowerCase();
-  if (b.operatorKayitli) return sahip === mail;
+  if (b.operatorKayitli) {
+    if (sahip === mail || !sahip) return true;
+    if (!b.kayitliOperatorler) return false;
+    return !b.kayitliOperatorler.some((e) => (e || "").trim().toLowerCase() === sahip);
+  }
   if (b.kapsam === "all" && !b.isExpert) return sahip === mail;
   return true;
 }
 
-/** Tekil silmede kayıt kimliğe ait değilse (ya da toplu seçimin HİÇBİRİ silinemiyorsa) gösterilen metin. */
+/** AI geçmişi tekil silmesinde kayıt kimliğe ait değilse gösterilen metin (Y83: AI'da sahipsiz kayıt tekil SİLİNMEZ). */
 export const YALNIZ_KENDI_SILME = "Yalnız kendi kayıtlarınızı silebilirsiniz — bu kayıt başka bir hekime ait ya da sahipsiz.";
+
+/** Y104: hasta/seans tekil silmede kayıt BAŞKA (kayıtlı) bir hekime aitse (ya da toplu seçimin hiçbiri silinemiyorsa). */
+export const BASKA_HEKIM_SILME = "Yalnız kendi ve sahipsiz kayıtları silebilirsiniz — bu kayıt başka bir hekime ait.";
 
 /** Kimlik yokken silme denemesi (kayıtlı operatörlü cihaz, kimse seçili değil ya da kilit sonrası). */
 export const SILME_KIMLIK_ISTEMI = "Silmek için operatörünüzü seçin";
 
 /** Toplu silme onayında, seçimden silinmeyecek kayıtların sayısı. */
 export function silinmeyecekNotu(n: number): string {
-  return n > 0 ? `\n\n${n} kayıt başka bir hekime ait ya da sahipsiz — SİLİNMEYECEK.` : "";
+  return n > 0 ? `\n\n${n} kayıt başka bir hekime ait — SİLİNMEYECEK.` : "";
 }

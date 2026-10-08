@@ -48,7 +48,7 @@ import { AppNavProvider } from "@/context/AppNavContext";
 import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
 import { PatientScreen } from "@/screens/PatientScreen";
 import { TreatmentHistoryScreen } from "@/screens/TreatmentHistoryScreen";
-import { YALNIZ_KENDI_SILME } from "@/utils/patientScope";
+import { BASKA_HEKIM_SILME } from "@/utils/patientScope";
 import { ZATEN_SILINMIS_SEANS } from "@/screens/TreatmentHistoryScreen";
 import { aktifOperator, pinleSec, Sahne, sahteSunucu, type Istek, type SahteOperator } from "../../context/__tests__/operatorAparati";
 
@@ -174,26 +174,41 @@ const toastlar = () => mockToast.mock.calls.map((c) => String(c[0]));
 describe.each(["hasta", "seans"] as EkranAdi[])("D2.72 · Y92 — %s silme yalnız KENDİ kayıtlarına", (ekran) => {
   const e = EKRAN[ekran];
 
-  it("KRİTİK: kimlikli hekim 'Tüm Klinik → Tümünü Seç → Sil' → istek YALNIZ kendi kaydıyla (jetonlu); onay dışarıda kalanı söyler", async () => {
-    await kur(ekran, "veterinarian", A, IKI_HEKIM, { A, B, S: "" });
+  it("KRİTİK: kimlikli hekim 'Tüm Klinik → Tümünü Seç → Sil' → istek kendi + SAHİPSİZ kayıtla (Y104), BAŞKA hekiminki YOK; onay söyler", async () => {
+    await kur(ekran, "veterinarian", A, IKI_HEKIM, { A, B, S: "", X: "eski@klinik.com" });
     await pinleSec(s, "Dr. A");
     await s.bosalt(10);
     await s.tikla(e.tumKlinik);
     await tumunuSecVeSil(ekran);
-    expect(topluKimlikler(ekran)).toEqual([[e.kimlik(0)]]);
+    // Y104: sahipsiz (boş) ve cihazda KAYITLI OLMAYAN e-postalı (ortak giriş) kayıt silinebilir; B (kayıtlı hekim) ASLA (Y92).
+    expect(topluKimlikler(ekran)).toEqual([[e.kimlik(0), e.kimlik(2), e.kimlik(3)].sort()]);
     expect(silmeler(ekran)[0].operator).toBe(`JETON-${A}`);
-    expect(onaylar.join("\n")).toContain("2 kayıt başka bir hekime ait ya da sahipsiz");
+    expect(onaylar.join("\n")).toContain("1 kayıt başka bir hekime ait — SİLİNMEYECEK");
   });
 
-  it("KRİTİK: kimlikli hekim başka hekimin kaydında TEKİL 'sil' → istek YOK, 'yalnız kendi' uyarısı", async () => {
+  it("KRİTİK: kimlikli hekim BAŞKA (kayıtlı) hekimin kaydında TEKİL 'sil' → istek YOK, uyarı", async () => {
     await kur(ekran, "veterinarian", A, IKI_HEKIM, { A, B, S: "" });
     await pinleSec(s, "Dr. A");
     await s.bosalt(10);
     await s.tikla(e.tumKlinik);
     await s.tikla(e.tekilEtiket("B"));
-    await s.tikla(e.tekilEtiket("S"));
     expect(silmeler(ekran)).toEqual([]);
-    expect(toastlar().filter((t) => t === YALNIZ_KENDI_SILME).length).toBe(2);
+    expect(toastlar().filter((t) => t === BASKA_HEKIM_SILME).length).toBe(1);
+  });
+
+  it("KRİTİK (Y104): SAHİPSİZ ve ORTAK GİRİŞ (kayıtlı olmayan e-posta) kaydında TEKİL 'sil' → istek gider, aktif hekimin jetonuyla", async () => {
+    await kur(ekran, "veterinarian", A, IKI_HEKIM, { A, B, S: "", X: "eski@klinik.com" });
+    await pinleSec(s, "Dr. A");
+    await s.bosalt(10);
+    await s.tikla(e.tumKlinik);
+    await s.tikla(e.tekilEtiket("S"));
+    await s.bosalt(5);
+    await s.tikla(e.tekilEtiket("X"));
+    await s.bosalt(5);
+    const t = silmeler(ekran);
+    expect(t.length).toBe(2);
+    expect(t.every((k) => k.operator === `JETON-${A}`)).toBe(true);
+    expect(toastlar()).not.toContain(BASKA_HEKIM_SILME);
   });
 
   it("KARŞIT: kendi kaydında TEKİL 'sil' → istek gider, aktif operatörün jetonuyla", async () => {
@@ -220,7 +235,7 @@ describe.each(["hasta", "seans"] as EkranAdi[])("D2.72 · Y92 — %s silme yaln�
     await s.tikla(e.tumKlinik);
     await tumunuSecVeSil(ekran);
     expect(topluKimlikler(ekran)).toEqual([[e.kimlik(0), e.kimlik(1), e.kimlik(2)].sort()]);
-    expect(toastlar()).not.toContain(YALNIZ_KENDI_SILME);
+    expect(toastlar()).not.toContain(BASKA_HEKIM_SILME);
   });
 
   it("KRİTİK (İG-6.4 b): seçim yapılmışken hareketsizlik kilidi düşer → silme isteği GİTMEZ (önceki hekimin jetonuyla da)", async () => {

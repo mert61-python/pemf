@@ -514,6 +514,20 @@ def kayitli_operator_var() -> bool:
         return True
 
 
+def kayitli_operator_epostalari():
+    """Cihazda kayıtlı operatörlerin e-postaları (küçük harf, kırpılmış) — `frozenset()` = operatörsüz klinik (Kural 2).
+    Okunamazsa `None` (çağıran FAIL-CLOSED davranır: kimin kayıtlı olduğu bilinmiyor). ASLA istisna atmaz. (Y104)"""
+    try:
+        from database.auth_db import get_auth_db
+
+        s = frozenset((o.get("email") or "").strip().lower() for o in get_auth_db().list_operators(kati=True))
+        _KIMLIK_DB_ARIZASI.set(False)
+        return s
+    except Exception:
+        _kimlik_db_arizasi_bildir("kayıtlı operatör listesi okunamadı — sahiplik fail-closed")
+        return None
+
+
 def cozumlenmis_operator(request, beyan: str = "") -> str:
     """Kaydın yazılacağı operatör e-postası. Yukarıdaki üç kurala göre; ASLA istisna atmaz."""
     try:
