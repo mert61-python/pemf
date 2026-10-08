@@ -1208,9 +1208,13 @@ def _ai_seansi_pasife_al(neden: str, dongu_muhru=None) -> None:
                 _kendi = _s.get("onay_kimligi") == dongu_muhru.get("onay")
             else:
                 _kendi = _ai_seansi_mi(_s)
+            _iptal = dict(_s) if (_kendi and _s.get("is_active")) else None
             if _kendi:
                 _s["is_active"] = False
             _baskasi_aktif = bool(_s.get("is_active")) and not _kendi
+        # D2.E07: döngü bobin SÜRMEDEN öldü (model / kamera) → satır "İptal Edildi" kapanır (açık kalıp yeniden açılışta
+        # "Elektrik Kesintisi" olmaz).
+        _ai_pro_satirini_kapat(_iptal, "iptal-ai-pro")
         if _baskasi_aktif:
             logger.error("AI Pro döngüsü başlatılamadı (%s) — aktif seans bu döngünün değil, ona DOKUNULMADI.", neden)
             return
@@ -2062,13 +2066,20 @@ def _ai_pro_loop(dongu_muhru=None):
                     )
                 except Exception:
                     logger.warning("AI Pro stop: bobin %s STOP publish hatası", _cid, exc_info=True)  # B-4.2
+        _kesilen = None
         with _api2._session_lock:
             _s = _api2._active_session
             # Yalnız KENDİ seansını kapatır (mühürdeki onay kimliği); eski çağıranda önceki kural.
             _kendi = _s.get("onay_kimligi") == dongu_muhru.get("onay") if dongu_muhru is not None else _ai_seansi_mi(_s)
             if _kendi:
+                if _s.get("is_active") and not _s.get("ai_pro_durduruluyor"):
+                    # Seans hâlâ AKTİFSE (ve operatör durdurmuyorsa) döngü KENDİ kesildi (hedef kaybı / doz modeli hatası /
+                    # kamera): durdurma, acil durdurma ve süre-watchdog oturumu önce pasife alıp satırı kendileri kapatır.
+                    _kesilen = dict(_s)
                 _s["is_active"] = False
             _baskasi_aktif = bool(_s.get("is_active")) and not _kendi
+        # ⚠️ D2.E07 (YA-1): döngünün kendi kesintisi satırı "Kesintiye Uğradı" diye GERÇEK süreyle kapatır (STOP yukarıda gitti).
+        _ai_pro_satirini_kapat(_kesilen, "ai-pro-kesinti")
         if not _baskasi_aktif:
             # Mandal kuruluyken "Sistem Hazır" yazılmaz, "Acil Durdurma" kalır (live_state kuralı, İG-5.36).
             _api2.update_live_session_state(is_active=False, mode="Sistem Hazır")
@@ -2114,6 +2125,11 @@ class AiProProposePayload(BaseModel):
     #: kararı); onay izinde "hangi profil bu dozu onaylattı" sorusu yanıtlanabilsin diye mühür
     #: meta'sına yazılır (api_server AI-log'undaki `mode` alanı emsali). Boş bırakılabilir.
     client_mode: str = ""
+    #: ⚠️ D2.E15 (İG-5.14): seansın HASTASI (opak kimlik + ad) öneri MÜHRÜNE yazılır — organ/süre/model ile aynı ilke:
+    #: "A için onaylat, B'ye başlat" yapısal olarak imkânsız; `/start` hastayı mühürden okur. Boş = hasta seçilmedi
+    #: (seans bugünkü gibi sahipsiz kaydedilir; arayüz bunu ayrıca onaylatır).
+    patient_id: str = ""
+    patient_name: str = ""
 
 
 @ai_router.post("/api/ai/pro/propose")
@@ -2209,6 +2225,9 @@ def propose_ai_pro(payload: AiProProposePayload = AiProProposePayload()):
             "D": [round(float(d), 4) for d in D],
             "P": [round(float(p), 2) for p in P],
             "e_field": round(float(e_field), 6),
+            # D2.E15: hasta MÜHÜRDE (onay penceresi gösterir; `/start` buradan okur, gövdedeki hasta YOK SAYILIR).
+            "patient_id": str(payload.patient_id or "").strip()[:64],
+            "patient_name": str(payload.patient_name or "").strip()[:120],
         },
         meta={
             "x_mm": c["x_mm"],
@@ -2461,6 +2480,12 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
             surus_nesli=_niyet_nesli,
             model=_saglayici.ad,
             onay_hedefi=_organ_req,
+            # ⚠️ D2.E15 (İG-5.14): hasta ONAY MÜHRÜNDEN — eskiden `/start` gövdesinin `patient_name`i pydantic tarafından
+            # atılıyordu (alan yok) → AI Pro satırı ad/kimlik NULL, hastanın geçmişinde tedavi YOKTU (ölçüldü).
+            hasta={
+                "id": str((_onay.get("specs") or {}).get("patient_id") or ""),
+                "name": str((_onay.get("specs") or {}).get("patient_name") or ""),
+            },
         )
     except KayitAcilamadi as _kayitsiz:
         # ⚠️ Y65 (sahip, 1-F inceleme S-İF1): tedavi kaydının DB satırı açılamadı → otonom sürüş BAŞLAMAZ (döngü açılmaz,
@@ -2515,6 +2540,19 @@ async def stop_ai_pro_ucu():
 
 def stop_ai_pro():
     global _ai_loop_active, _ai_owner_client, _ai_hedef_modeli
+    import servers.api_server as _api
+
+    # ⚠️ D2.E07: durdurma NİYETİ döngü bayrağından ÖNCE oturuma işlenir ve kapatılacak seansın anlık görüntüsü alınır —
+    # döngünün teardown'ı bayrak iner inmez koşabilir; işaret olmasa operatör durdurmasını kendi kesintisi ("Kesintiye
+    # Uğradı") sayardı. Bobin STOP'u bundan ETKİLENMEZ (aşağıda, sırası değişmeden).
+    _kapanacak = None
+    try:
+        with _api._session_lock:
+            if _ai_seansi_mi(_api._active_session) and _api._active_session.get("is_active"):
+                _api._active_session["ai_pro_durduruluyor"] = True
+                _kapanacak = dict(_api._active_session)
+    except Exception:
+        logger.exception("stop_ai_pro: durdurma niyeti işlenemedi (STOP etkilenmez)")
     with _ai_loop_lock:
         _ai_loop_active = False
         # Aktif modeli VARSAYILANA döndür (Faz 1): aksi halde fantom seansından sonra `model`
@@ -2535,8 +2573,6 @@ def stop_ai_pro():
     # baska yazilim katmani da yok (sure-watchdog ve /session/stop 'aktif seans yok' diye erken doner).
     # Calismayan bobine STOP gondermek zararsiz/idempotenttir → kapsami TUM 8 bobine cikar.
     # (D1.88: AI (Auto) landmark surus yolu KALDIRILDI; tum bobinlere STOP yine dogru — idempotent.)
-    import servers.api_server as _api
-
     try:
         # Denetim 2. tur [1.1]: teyitsiz STOP'lar operatore bildirilir — broker oluyken
         # bu uc "success" donerken bobinlerin durmadigi sessiz kaliyordu.
@@ -2566,7 +2602,38 @@ def stop_ai_pro():
     except Exception:
         logger.exception("stop_ai_pro: _active_session reset hatası")
     _api.update_live_session_state(is_active=False, mode="Sistem Hazır")
+    # ⚠️ D2.E07 (YA-1): AI Pro satırı GERÇEK süreyle KAPATILIR — STOP'TAN SONRA (Ö.4-Y8: bobin STOP'u yukarıda gitti; kayıt
+    # yazımı onu geciktiremez). Eskiden kapatılmıyordu: satır `active` kalıyor, yeniden açılışta kurtarma onu "Elektrik
+    # Kesintisi, 0 dk" mühürlüyordu (ölçüldü). Operatör durdurması = "completed" (elle seansın durdurulmasıyla aynı).
+    # Yalnız durdurma anında AKTİF olan KENDİ seansı ve yalnız satırı hâlâ AÇIKSA (acil durdurmanın "EMERGENCY_STOPPED"
+    # mührü ezilmez).
+    _ai_pro_satirini_kapat(_kapanacak, "ai-pro-durdurma")
     return {"status": "success", "message": "AI Pro Closed-Loop Stopped"}
+
+
+def _ai_pro_satirini_kapat(seans: dict | None, sebep: str) -> None:
+    """D2.E07 (YA-1): AI Pro seansının DB satırını `_finalize_session_db` ile kapat (kısmi dakika + sensör + bitiş damgası).
+    `seans` = kapatılmadan HEMEN önce alınmış oturum anlık görüntüsü (yalnız o an aktif olan KENDİ seansı); yoksa ya da
+    satır zaten kapatıldıysa (`db_finalized`) hiçbir şey yapılmaz. STOP'u asla beklemez: yalnız STOP gönderildikten sonra
+    çağrılır. `sebep` durumu belirler (`api_server._finalize_session_db`)."""
+    if not seans or not seans.get("db_session_id") or seans.get("db_finalized"):
+        return
+    try:
+        import servers.api_server as _api_k
+
+        _db = _api_k._get_treatment_db()
+        _durum = (_db.get_session_details(int(seans["db_session_id"])) or {}).get("session_status") if _db else None
+        if _durum != "active":
+            # Başka bir yol (acil durdurma, süre-watchdog, devralma, durdurma) satırı zaten kapattı — mührü EZİLMEZ.
+            return
+        _api_k._finalize_session_db(
+            seans.get("db_session_id"),
+            seans.get("started_epoch") or seans.get("start_time"),
+            reason=sebep,
+            start_mono=seans.get("start_mono"),
+        )
+    except Exception:
+        logger.exception("AI Pro seans satırı kapatılamadı (%s)", sebep)
 
 
 @ai_router.post("/api/ai/pro/organ")

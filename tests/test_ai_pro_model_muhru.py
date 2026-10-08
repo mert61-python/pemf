@@ -121,6 +121,11 @@ def muhur_env(monkeypatch):
 
     yield air, apis, TestClient(apis.app), taze_cache, izler
 
+    # O-A2-K.1: döngü (kamera açılamaz → hemen kapanır) kapanışında seans satırını kapatır (D2.E07) — yamalar geri
+    # alınmadan BEKLENİR; yoksa kapanış sonraki testin içinde koşar.
+    import ai_pro_aparati as ap
+
+    assert ap.dongu_bitir(air) == 0, "ai-pro-dongu yıkımda bitmedi"
     air._ai_loop_active = False
     air._ai_organ_cache.clear()
     air._ai_organ_cache.update(snap_cache)

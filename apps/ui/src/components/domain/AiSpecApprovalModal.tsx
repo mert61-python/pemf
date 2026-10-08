@@ -42,6 +42,9 @@ export interface AiProposalSpecs {
   e_cancer?: number | null;
   /** Çevrenin (sağlıklı sınıf) göreli alan öngörüsü — seçiciliği gösterir. */
   e_healthy?: number | null;
+  /** D2.E15: MÜHÜRLENEN hasta (opak kimlik + ad) — `/start` seansı buna bağlar. Boş = hasta seçilmedi (sahipsiz). */
+  patient_id?: string;
+  patient_name?: string;
 }
 
 export interface AiProposalMeta {
@@ -208,6 +211,8 @@ export function AiSpecApprovalModal({
           </Text>
 
           <View style={s.summary}>
+            {/* D2.E15: onaylanan seansın HASTASI (mühürden) — "A için onaylat, B'ye başlat" imkânsız; hekim kimi onayladığını görür. */}
+            <Meta label={arastirma ? "Örnek" : "Hasta"} value={specs.patient_name || "— seçilmedi (sahipsiz kaydedilir)"} />
             <Meta label={hedefEtiketi} value={hedefAdi} />
             <Meta label="Süre" value={`${specs.duration_minutes} dk`} />
             <Meta label="Sürülen bobin" value={`${surulen}/${rows.length}`} />

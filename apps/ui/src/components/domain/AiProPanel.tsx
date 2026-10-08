@@ -258,6 +258,15 @@ export function AiProPanel({
   useEffect(() => {
     kullaniciKipiRef.current = kullaniciKipi;
   }, [kullaniciKipi]);
+  /** ⚠️ D2.E15 (İG-5.14): seansın HASTASI öneriyle birlikte gider ve ONAY MÜHRÜNE yazılır (`/start` hastayı mühürden okur;
+   *  eskiden yalnız `/start` gövdesinde `patient_name` vardı ve backend onu ATIYORDU — AI Pro seansı hastaya bağlanmıyordu).
+   *  Kimlik + ad AYNI kaynaktan (seçili hasta); seçili hasta yoksa ad (seans ekranının yedeği), kimlik boş. Ref:
+   *  `hedefModeliRef` ile aynı gerekçe (öneri efektinin bağımlılık dizisi kaynak-regex kapısıdır). */
+  const { selectedPatient: seciliHasta } = useAppNav();
+  const hastaRef = useRef({ id: "", name: "" });
+  hastaRef.current = seciliHasta?.id
+    ? { id: String(seciliHasta.id), name: seciliHasta.name || "" }
+    : { id: "", name: patientName || "" };
   /** Araştırma kipi: listede kedi YOK → model kartları gösterilir, kedi organ çipleri gizlenir. */
   const arastirmaKipi = !secilebilirModeller.includes("kedi");
   /**
@@ -596,6 +605,9 @@ export function AiProPanel({
           model: hedefModeliRef.current,
           // DENETİM İZİ: hangi profil bu dozu onaylattı (backend yetki VERMEZ, yalnız mühre yazar).
           client_mode: kullaniciKipiRef.current,
+          // D2.E15: hasta mühre yazılır (onay penceresi gösterir, `/start` buradan okur).
+          patient_id: hastaRef.current.id,
+          patient_name: hastaRef.current.name,
         },
         null,
         { silent: true }
@@ -645,6 +657,9 @@ export function AiProPanel({
           model: hedefModeliRef.current,
           // DENETİM İZİ: hangi profil bu dozu onaylattı (backend yetki VERMEZ, yalnız mühre yazar).
           client_mode: kullaniciKipiRef.current,
+          // D2.E15: hasta mühre yazılır (onay penceresi gösterir, `/start` buradan okur).
+          patient_id: hastaRef.current.id,
+          patient_name: hastaRef.current.name,
         },
         null,
         { silent: true }

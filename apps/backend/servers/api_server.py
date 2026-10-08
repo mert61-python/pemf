@@ -4525,6 +4525,7 @@ def start_ai_session(
     surus_nesli: int | None = None,
     model: str = "",
     onay_hedefi: int | None = None,
+    hasta: dict | None = None,
 ):
     """AI biofeedback donanım sürerken seansı _active_session'a YAZAR → süre-watchdog onu da
     izler ve süresi dolunca DURDURUR; emergency_stop/STM-disconnect de AI'yı kapsar. Parametre
@@ -4559,9 +4560,30 @@ def start_ai_session(
     with _session_lock:
         _on_cont = _devam_mi(dict(_active_session))
     _ai_sid = None
+    _ai_pid = None
+    # ⚠️ D2.E15 (İG-5.14): AI Pro seansı HASTAYA bağlanır — elle seans yoluyla AYNI bağ (`upsert_patient` ayna satırı + satırda
+    # ad + `set_session_meta(patient_id)` + sahip e-postası). Hasta ONAY MÜHRÜNDEN gelir (`/ai/pro/start`). Hasta yoksa
+    # bugünkü gibi sahipsiz.
+    _hasta_adi = str((hasta or {}).get("name") or "").strip()
+    _hasta_kimligi = str((hasta or {}).get("id") or "").strip()
+    _sahip_epostasi = ""
     if not _on_cont:
         try:
             _db = _get_treatment_db()
+            if _db is not None and _hasta_adi:
+                try:
+                    _sahip_epostasi = _lookup_owner_email(_hasta_kimligi) if _hasta_kimligi else ""
+                    _ai_pid = _db.upsert_patient(
+                        {
+                            "name": _hasta_adi,
+                            "patient_uuid": (_hasta_kimligi or None),
+                            "owner_email": (_sahip_epostasi or None),
+                        }
+                    )
+                except Exception:
+                    logging.getLogger(__name__).warning(
+                        "AI seansi: hasta ayna satiri yazilamadi (seans sahipsiz)", exc_info=True
+                    )
             if _db is not None:
                 # ⚠️ SAHİPLİK (sahip bildirimi 2026-09-12: "klinik ve benim ayrımı düzgün
                 # çalışıyor mu incele... herkes kendi maili ile kayıt oluyor ya").
@@ -4572,6 +4594,7 @@ def start_ai_session(
                 _ai_sid = _db.start_session(
                     treatment_mode=mode,
                     target_condition=None,
+                    patient_name=(_hasta_adi or None),
                     operator_email=(str(operator_email or "").strip().lower() or None),
                 )
         except Exception:
@@ -4610,7 +4633,7 @@ def start_ai_session(
                 # cont=True (ayni AI seansinin tekrarli cagrisi, or. landmark auto_adjust her
                 # istekte cagirir) → MEVCUT satiri koru, YENI satir acma. Y65: yeni satır YUKARIDA açıldı.
                 "db_session_id": prev.get("db_session_id") if cont else _ai_sid,
-                "db_patient_id": prev.get("db_patient_id") if cont else None,
+                "db_patient_id": prev.get("db_patient_id") if cont else _ai_pid,
                 "started_epoch": prev.get("started_epoch") if cont else _t.time(),
                 "tur": tur,
                 "onay_kimligi": str(onay_kimligi or ""),
@@ -4723,7 +4746,9 @@ def start_ai_session(
                 # (`_finalize_session_db` DEĞİL: o, süren seansın kısmi dakikasını bu satıra dökerdi).
                 _db.end_session(_ai_sid, duration_minutes=0, session_status="cancelled")
             elif _db is not None:
-                _db.set_session_meta(_ai_sid, started_epoch=_started_epoch_ai)
+                _db.set_session_meta(_ai_sid, started_epoch=_started_epoch_ai, patient_id=_ai_pid)
+                if _sahip_epostasi:
+                    _db.set_session_parameter(_ai_sid, "patient_owner_email", _sahip_epostasi, "")
         except Exception:
             logging.getLogger(__name__).debug("AI set_session_meta hatasi", exc_info=True)
     # 1-C inceleme i1-F3: çağıran (AI (Auto) landmark) geri almayı bu kimliğe bağlar (`_seansi_geri_al(..., kimlik)`).
@@ -4816,6 +4841,9 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
                 elif _sebep.startswith("iptal"):
                     # 1-C §9 #5: başlatma bobin sürülmeden İPTAL edildi (durdurma geldi) → "İptal Edildi".
                     _durum = "cancelled"
+                elif _sebep.startswith("ai-pro-kesinti"):
+                    # D2.E07 (YA-1): AI Pro döngüsü KENDİ kesildi (hedef kaybı / doz modeli hatası / kamera) → "Kesintiye Uğradı".
+                    _durum = "interrupted"
                 elif _sebep.startswith("kapanis"):
                     # D1.75 (B-1.22): backend seans ortasında KAPANDI (servis durdurma / Ctrl+C) → "Kesintiye Uğradı".
                     # "completed" planlanan süre dolmamışken yanlış; satırı açık bırakmak ise sonraki açılışta
