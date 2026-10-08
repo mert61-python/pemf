@@ -304,3 +304,30 @@ def test_KRITIK_EV_SAHIBI_tum_klinige_CIKAMAZ():
     assert 'return isExpert || isResearcher ? istenen : "mine";' in src, (
         "ev sahibi profili 'Tum Klinik' kapsamina cikabilir hale gelmis (KVKK kapisi)"
     )
+
+
+def _usecallback_govdesi(src: str, ad: str) -> str:
+    """`const <ad> = useCallback(` ile başlayan gövde — bağımlılık dizisinin satırına (`\n  }, [`) kadar."""
+    bas = src.find(f"const {ad} = useCallback(")
+    assert bas >= 0, f"onkosul: {ad} tanimi bulunamadi (yapi degisti — kapiyi guncelleyin)"
+    son = src.find("\n  }, [", bas)
+    assert son > bas, f"onkosul: {ad} govdesinin sonu bulunamadi"
+    return src[bas:son]
+
+
+@pytest.mark.skipif(not (_PF / "screens").exists(), reason="apps/ui/ kaynak agaci yok")
+def test_KRITIK_AI_gecmisi_KIMLIK_kapisi_TEK_kaynak_OB4():
+    """O-B.4 (2-B §6): AI Geçmişi'nde değerlendirme (`submitReview`), tekil silme (`kaydiSil`) ve toplu silme (`tumunuSil`)
+    AYNI kimlik kapısından geçer — `patientScope.deleteScope(...).izinli` → `kimlikYok`. Eskiden değerlendirme kendi
+    `!myEmail` koşulunu, tekil silme ikisini birden taşıyordu (bugün eşdeğer; biri değişince sessizce ayrışır — D2.42 notu).
+    Davranış kolu: screens/__tests__/aiKimlikKapisi.OB4.web.test.tsx.
+
+    MUTASYON: `submitReview`e kendi `!myEmail` kapısını geri koymak → KIRMIZI."""
+    from c_soyucu import c_soy
+
+    src = c_soy((_PF / "screens" / "AiHistoryScreen.tsx").read_text(encoding="utf-8"))
+    assert "const kimlikYok = !silmeKapsami.izinli;" in src and "deleteScope(" in src, "onkosul: tek kaynak kapı yok"
+    for ad in ("submitReview", "kaydiSil", "tumunuSil"):
+        g = _usecallback_govdesi(src, ad)
+        assert "if (kimlikYok)" in g, f"{ad} tek kaynak kimlik kapısını (kimlikYok) kullanmıyor"
+        assert "!myEmail" not in g, f"{ad} kendi kimlik koşulunu taşıyor (iki kapı ayrışabilir)"
