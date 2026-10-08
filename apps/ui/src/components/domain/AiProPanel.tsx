@@ -1042,8 +1042,11 @@ export function AiProPanel({
   return (
     <View style={styles.wrap}>
       {/* SERT ONAY KAPISI (2026-08-06): AI önerisi hekime gösterilir; onaylanmadan seans
-          BAŞLAMAZ. Kapatmak reddetmek DEĞİLdir — öneri süresi dolunca kendiliğinden düşer. */}
+          BAŞLAMAZ. Kapatmak reddetmek DEĞİLdir — öneri süresi dolunca kendiliğinden düşer.
+          D2.E10 (İG-6.27): pencere ÖNERİ KİMLİĞİYLE anahtarlı → her yeni öneride TEMİZ açılır; önceki önerinin red formu
+          ve gerekçesi yeni öneriye taşınmaz (tek dokunuş p2'yi p1'in gerekçesiyle reddediyordu). */}
       <AiSpecApprovalModal
+        key={proposal?.proposalId ?? "oneri-yok"}
         visible={!!proposal}
         specs={proposal?.specs ?? null}
         meta={proposal?.meta ?? null}
