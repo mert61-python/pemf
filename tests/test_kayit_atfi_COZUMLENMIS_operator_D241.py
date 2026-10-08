@@ -127,9 +127,14 @@ def _hasta_ekle(o, istemci, beyan, jeton=""):
     return next(h for h in hastalar if str(h["id"]) == str(pid)).get("operator_email") or ""
 
 
-def test_KRITIK_b_hasta_JETONSUZ_kayitli_hekim_beyani_SAHIPSIZ(o):
+def test_KRITIK_b_hasta_JETONSUZ_kayitli_hekim_beyani_SAHIP_OLAMAZ_Y110(o):
+    """Kanıtsız kayıtlı-hekim beyanı hastanın sahibi OLAMAZ. Y110'dan (A-61) beri kayıtlı operatörlü cihazda kimliksiz YENİ
+    hasta hiç AÇILMAZ — 428, satır yok (önce sahipsiz açılıyor, herkesin "Benim" listesine düşüyordu)."""
     _iki_hekim(o)
-    assert _hasta_ekle(o, o.lan, AYSE) == ""
+    once = len(o.yerel.get("/api/patients").json()["data"])
+    r = o.lan.post("/api/patients", json={"name": "Boncuk", "species": "Kedi", "operator_email": AYSE})
+    assert r.status_code == 428, r.text[:200]
+    assert len(o.yerel.get("/api/patients").json()["data"]) == once
 
 
 def test_KRITIK_b2_hasta_JETON_SAHIBINE_yazilir(o):

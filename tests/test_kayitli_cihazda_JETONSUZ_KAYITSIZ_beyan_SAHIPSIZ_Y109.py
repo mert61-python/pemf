@@ -154,12 +154,13 @@ def test_KRITIK_AI_gunlugu_sahibi_KAYITSIZ_beyan_OLMAZ_kayit_yazilir(o, beyan):
 
 @pytest.mark.parametrize("beyan", [ORTAK, GORSEL_ES], ids=["ortak_giris", "gorsel_es"])
 def test_KRITIK_hasta_sahibi_KAYITSIZ_beyan_OLMAZ(o, beyan):
+    """Y109: kayıtsız / görsel-eş beyan hastanın sahibi OLAMAZ. Y110'dan (A-61) beri kimliksiz YENİ hasta hiç açılmaz (428)."""
     _iki_hekim(o)
+    once = len(o.hdb.get_all_patients())
     r = o.lan.post("/api/patients", json={"name": "Boncuk", "species": "Kedi", "operator_email": beyan})
-    assert r.status_code == 200, r.text[:200]
-    pid = r.json()["patient_id"]
-    sahip = next(h.get("operator_email") for h in o.hdb.get_all_patients() if str(h["id"]) == str(pid))
-    assert (sahip or "") == "", f"kayıtlı operatörlü cihazda doğrulanmamış beyan hasta sahibi oldu: {sahip!r}"
+    sahipler = [h.get("operator_email") or "" for h in o.hdb.get_all_patients()]
+    assert beyan not in sahipler, f"kayıtlı operatörlü cihazda doğrulanmamış beyan hasta sahibi oldu: {beyan!r}"
+    assert (r.status_code, len(sahipler)) == (428, once), r.text[:200]
 
 
 def test_KRITIK_seans_KAYITSIZ_beyanla_BASLAR_sahipsiz_yazilir(o):

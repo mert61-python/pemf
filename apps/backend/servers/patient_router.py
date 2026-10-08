@@ -86,9 +86,20 @@ def add_new_patient(patient: PatientInput, request: Request):
     # ⚠️ D2.41 (B-2.11): hastanın SAHİBİ sunucu kuralından (jeton; kanıtsız kayıtlı-hekim beyanı → sahipsiz; operatörsüz
     # klinikte beyan — Kural 2). Eskiden LAN'dan jetonsuz başka bir hekimin adına hasta açılabiliyordu ("Benim" listesine).
     # Kapı: tests/test_kayit_atfi_COZUMLENMIS_operator_D241.py.
-    from servers.auth import cozumlenmis_operator
+    from servers.auth import cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
 
     payload["operator_email"] = cozumlenmis_operator(request, payload.get("operator_email", ""))
+    # ⚠️ Y110 (S-B2.2 · A-61 · B2-2.7): kayıtlı operatörlü cihazda kimliği çözülemeyen YENİ hasta AÇILMAZ — 428. Eskiden eski
+    # APK / LAN / kilit sonrası eski jetonla SAHİPSİZ hasta açılıyordu ve arayüzün kapsam kuralı (`patientScope.inScope`) onu
+    # kliniğin HER hekiminin "Benim" listesinde sayıyordu. Operatörsüz klinik (Kural 2) ve GÜNCELLEME (yukarıda) değişmez.
+    # Kimlik DB'si okunamıyorsa ileti arızayı ve çareyi söyler (Y113). Kapı: tests/test_hasta_ekleme_KAYITLI_cihazda_KIMLIKSIZ_428_Y110.py
+    if not payload["operator_email"] and kayitli_operator_var():
+        raise HTTPException(
+            status_code=428,
+            detail=kimliksiz_detayi(
+                "Operatör seçin — hasta eklemek için önce üst bardan hangi hekim olduğunuzu seçin."
+            ),
+        )
     patient_id = db.add_patient(payload)
     return {"status": "success", "patient_id": patient_id}
 

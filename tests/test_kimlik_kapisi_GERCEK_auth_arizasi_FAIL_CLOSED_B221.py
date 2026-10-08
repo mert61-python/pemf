@@ -172,9 +172,11 @@ def test_KRITIK_auth_DB_okunamazken_kayitli_hekim_BEYANI_kayda_GECMEZ(o, monkeyp
         o.lan.post("/api/session/stop")
     kayit = next(a for a in o.db.get_ai_analyses(limit=50) if a["id"] == aid)
     assert rd.status_code == 428 and (kayit.get("reviewed_by") or "") == "", (rd.status_code, kayit.get("reviewed_by"))
-    pid = rh.json().get("patient_id")
-    sahip = next(h.get("operator_email") for h in o.hdb.get_all_patients() if str(h["id"]) == str(pid))
-    assert (sahip or "") == "", f"hasta kanıtsız beyanla {sahip!r} adına açıldı"
+    # Y110 (A-61): kayıtlı operatörlü cihazda (arızada fail-closed) kimliksiz YENİ hasta hiç AÇILMAZ — 428 (önce sahipsiz açılıyordu).
+    assert rh.status_code == 428, rh.text[:200]
+    assert all((h.get("operator_email") or "") != AYSE for h in o.hdb.get_all_patients()), (
+        "hasta kanıtsız beyanla açıldı"
+    )
     assert rs.status_code == 200, rs.text[:200]
     assert ((satir.get("operator_name") or ""), (satir.get("operator_email") or "")) == ("", ""), satir
 
