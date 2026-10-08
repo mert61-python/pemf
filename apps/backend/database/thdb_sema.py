@@ -193,6 +193,11 @@ class SemaKarisimi:
         self._safe_add_column(cursor, "ai_analyses", "review_note TEXT DEFAULT ''", "ai_analyses.review_note eklendi")
         self._safe_add_column(cursor, "ai_analyses", "reviewed_by TEXT DEFAULT ''", "ai_analyses.reviewed_by eklendi")
         self._safe_add_column(cursor, "ai_analyses", "reviewed_at TEXT DEFAULT ''", "ai_analyses.reviewed_at eklendi")
+        # ⚠️ Y114 (S-B2.6): ÖNCEKİ değerlendirmeler (karar, gerekçe / düzeltilmiş teşhis METNİ, kim, ne zaman) — JSON liste,
+        # eskiden yeniye. Metin AI kaydının kendi (şifreli) tablosunda kalır; denetim izi metinsiz (D2.19).
+        self._safe_add_column(
+            cursor, "ai_analyses", "review_history TEXT DEFAULT ''", "ai_analyses.review_history eklendi"
+        )
 
         # ── HASTA KİMLİĞİ BAĞI (sahip isteği 2026-09-12) ───────────────────────────────
         # ⚠️ ANALİZLER HASTAYA *ADLA* BAĞLIYDI ve bunun üç ayrı kırılganlığı vardı:

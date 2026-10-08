@@ -17,7 +17,8 @@
       "review_status": "",
       "review_note": "",
       "reviewed_by": "",
-      "reviewed_at": ""
+      "reviewed_at": "",
+      "review_history": []
     },
     {
       "id": 4,
@@ -35,7 +36,8 @@
       "review_status": "",
       "review_note": "",
       "reviewed_by": "",
-      "reviewed_at": ""
+      "reviewed_at": "",
+      "review_history": []
     },
     {
       "id": 3,
@@ -53,7 +55,8 @@
       "review_status": "",
       "review_note": "",
       "reviewed_by": "",
-      "reviewed_at": ""
+      "reviewed_at": "",
+      "review_history": []
     },
     {
       "id": 2,
@@ -71,7 +74,8 @@
       "review_status": "",
       "review_note": "",
       "reviewed_by": "",
-      "reviewed_at": ""
+      "reviewed_at": "",
+      "review_history": []
     },
     {
       "id": 1,
@@ -89,7 +93,8 @@
       "review_status": "",
       "review_note": "",
       "reviewed_by": "",
-      "reviewed_at": ""
+      "reviewed_at": "",
+      "review_history": []
     }
   ]
 }

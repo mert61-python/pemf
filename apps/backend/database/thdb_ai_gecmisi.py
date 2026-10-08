@@ -101,13 +101,36 @@ class AiGecmisiKarisimi:
         try:
             with self._get_connection() as conn:
                 cur = conn.cursor()
+                # ⚠️ Y114 (S-B2.6): alanlar üzerine yazılmadan ÖNCE önceki değerlendirme (metniyle) kaydın kendi geçmişine
+                # eklenir — eskiden ikinci değerlendirme önceki red gerekçesini / düzeltilmiş teşhisi DB'den siliyordu
+                # (D2.19'un izi bilinçli olarak metinsiz). Okuma ve yazma AYNI bağlantı/işlemde.
+                onceki = cur.execute(
+                    "SELECT COALESCE(review_status,''), COALESCE(review_note,''), COALESCE(reviewed_by,''), "
+                    "COALESCE(reviewed_at,''), COALESCE(review_history,'') FROM ai_analyses WHERE id=?",
+                    (int(analysis_id),),
+                ).fetchone()
+                if onceki is None:
+                    return False
+                try:
+                    gecmis = json.loads(onceki[4]) if onceki[4] else []
+                except ValueError:
+                    self.logger.warning(
+                        "AI değerlendirme geçmişi okunamadı (id=%s) — yeni liste başlatılıyor.", analysis_id
+                    )
+                    gecmis = []
+                if onceki[0]:
+                    gecmis.append(
+                        {"status": onceki[0], "note": onceki[1], "reviewed_by": onceki[2], "reviewed_at": onceki[3]}
+                    )
                 cur.execute(
-                    "UPDATE ai_analyses SET review_status=?, review_note=?, reviewed_by=?, reviewed_at=? WHERE id=?",
+                    "UPDATE ai_analyses SET review_status=?, review_note=?, reviewed_by=?, reviewed_at=?, "
+                    "review_history=? WHERE id=?",
                     (
                         status,
                         str(note or ""),
                         str(reviewed_by or ""),
                         datetime.now().isoformat(timespec="seconds"),
+                        json.dumps(gecmis, ensure_ascii=False) if gecmis else "",
                         int(analysis_id),
                     ),
                 )
@@ -362,7 +385,9 @@ class AiGecmisiKarisimi:
                     "input_type, result_summary, result_detail, confidence, "
                     # Hekim değerlendirmesi (2026-08-06) — AI çıktısı öneri, karar hekimin.
                     "COALESCE(review_status,'') AS review_status, COALESCE(review_note,'') AS review_note, "
-                    "COALESCE(reviewed_by,'') AS reviewed_by, COALESCE(reviewed_at,'') AS reviewed_at "
+                    "COALESCE(reviewed_by,'') AS reviewed_by, COALESCE(reviewed_at,'') AS reviewed_at, "
+                    # Y114: önceki değerlendirmeler (eskiden yeniye) — kaydı görebilen, güncel gerekçeyi de görür.
+                    "COALESCE(review_history,'') AS review_history "
                     f"FROM ai_analyses{where} ORDER BY id DESC LIMIT ?",
                     params,
                 )
@@ -374,6 +399,10 @@ class AiGecmisiKarisimi:
                         d["result_detail"] = json.loads(d.get("result_detail") or "{}")
                     except Exception:
                         d["result_detail"] = {}
+                    try:
+                        d["review_history"] = json.loads(d.get("review_history") or "[]")
+                    except ValueError:
+                        d["review_history"] = []
                     out.append(d)
                 return out
         except Exception as e:
