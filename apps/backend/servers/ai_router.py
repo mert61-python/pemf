@@ -1753,6 +1753,8 @@ def _ai_pro_loop(dongu_muhru=None):
         return
 
     _lost_streak = 0  # ardisik hedef-kaybi sayaci (bkz. _AI_LOST_STOP_STREAK)
+    # C2-1.1: döngü KENDİ süre sayacıyla bittiyse kapanış "Tamamlandı" yazar (kesinti DEĞİL; süre bekçisiyle aynı sebep).
+    _sure_doldu = False
     while _ai_loop_active and _dongu_gecerli():
         start_time = time.time()
         # Dış STOP (acil-durdur / süre-watchdog / STM-disconnect / /session/stop) AI loop'u da durdursun.
@@ -1955,6 +1957,7 @@ def _ai_pro_loop(dongu_muhru=None):
                 max(0, int(_ai_duration_min * 60 - (time.monotonic() - _ai_started_at))) if _ai_started_at else 0
             )
             if _ai_started_at and remaining <= 0:
+                _sure_doldu = True
                 _dongu_bayragini_indir(dongu_muhru)  # süre doldu → otomatik durdur
 
             # Canlı seans göstergesi: bobin-1 AI duty'sini temsil değer olarak ver.
@@ -2104,7 +2107,7 @@ def _ai_pro_loop(dongu_muhru=None):
                 _s["is_active"] = False
             _baskasi_aktif = bool(_s.get("is_active")) and not _kendi
         # ⚠️ D2.E07 (YA-1): döngünün kendi kesintisi satırı "Kesintiye Uğradı" diye GERÇEK süreyle kapatır (STOP yukarıda gitti).
-        _ai_pro_satirini_kapat(_kesilen, "ai-pro-kesinti")
+        _ai_pro_satirini_kapat(_kesilen, "sure-doldu" if _sure_doldu else "ai-pro-kesinti")
         if not _baskasi_aktif:
             # Mandal kuruluyken "Sistem Hazır" yazılmaz, "Acil Durdurma" kalır (live_state kuralı, İG-5.36).
             _api2.update_live_session_state(is_active=False, mode="Sistem Hazır", e_baglam_nesli=_baglam_nesli)
