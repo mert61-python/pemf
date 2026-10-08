@@ -40,6 +40,10 @@ logger = logging.getLogger(__name__)
 # Analizden gelen SABİT bağlam (konum + organ). em_fantom/em_petri analizi çalışınca set edilir.
 _ctx_lock = threading.Lock()
 _ctx: dict | None = None
+# O-A2-K.1 (2-A incelemesi): bağlam NESLİ — her kurma ve temizleme bir artırır. Biten AI Pro döngüsünün GEÇ kapanışı yalnız
+# kendi döneminin bağlamını siler (`temizle_degismediyse`). Zaman damgası (`set_at`) yetmez: `time.time()` bu makinede
+# 15,6 ms çözünürlüklü (ölçüldü) → döngü çıkışıyla aynı tikte kurulan yeni bağlam "eski" sayılırdı.
+_ctx_nesli = 0
 
 # Son hesaplanan canlı değer (snapshot bunu okur — ONNX istek yolunda çalışmaz).
 _live_lock = threading.Lock()
@@ -56,10 +60,11 @@ def set_context(regions: list[dict], organ_id: int | None = None, model: str | N
     `model` (2026-09-09, yalnız-ek): bağlamı hangi hedef modeli kurdu ("fantom" | "petri" | ...).
     Vekil E modeli seçimi buna göre yapılır; verilmezse eski davranış (fantom vekili) sürer.
     ⚠️ İmza GERİYE UYUMLU: mevcut çağrılar ve `tests/test_efield_live.py` etkilenmez."""
-    global _ctx
+    global _ctx, _ctx_nesli
     if not regions:
         with _ctx_lock:
             _ctx = None
+            _ctx_nesli += 1
         _set_live(None)
         return
     _ad = (model or "").strip().lower() or None
@@ -77,6 +82,7 @@ def set_context(regions: list[dict], organ_id: int | None = None, model: str | N
             "model": _ad,
             "set_at": time.time(),
         }
+        _ctx_nesli += 1
     logger.info(
         "E-alanı canlı bağlamı kuruldu: x=%.1f y=%.1f z=%.1f organ=%s",
         _ctx["x"],
@@ -89,6 +95,25 @@ def set_context(regions: list[dict], organ_id: int | None = None, model: str | N
 def get_context() -> dict | None:
     with _ctx_lock:
         return dict(_ctx) if _ctx else None
+
+
+def baglam_nesli() -> int:
+    """O-A2-K.1: bağlamın şu anki nesli (her kurma/temizleme +1). Bkz. `temizle_degismediyse`."""
+    with _ctx_lock:
+        return _ctx_nesli
+
+
+def temizle_degismediyse(nesil: int) -> bool:
+    """O-A2-K.1: bağlamı YALNIZ `nesil`den beri kurulmadı/temizlenmediyse temizler (True). AI Pro döngüsü ÇIKTIĞI andaki nesli
+    alır; çıkış ile kapanışı arasında yeni bir analiz bağlam kurduysa geç kapanış ona dokunmaz (False)."""
+    global _ctx, _ctx_nesli
+    with _ctx_lock:
+        if _ctx_nesli != nesil:
+            return False
+        _ctx = None
+        _ctx_nesli += 1
+    _set_live(None)
+    return True
 
 
 def seans_basladi(tur: str = "", model: str | None = None) -> None:

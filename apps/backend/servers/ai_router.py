@@ -2012,6 +2012,14 @@ def _ai_pro_loop(dongu_muhru=None):
         sleep_time = max(0.1, 1.0 - elapsed)
         time.sleep(sleep_time)
 
+    # O-A2-K.1: döngünün BİTTİĞİ andaki canlı E bağlamı nesli — kapanış (aşağıda) yalnız BU dönemin bağlamını temizler;
+    # çıkıştan sonra (kamera bırakılırken, STOP yayınlanırken) yeni bir analizin kurduğu bağlam silinmez.
+    try:
+        from servers import efield_live as _ef_cikis
+
+        _baglam_nesli = _ef_cikis.baglam_nesli()
+    except Exception:
+        _baglam_nesli = None
     cap.release()
     # Audit P2 (teardown-race seal): süre-doldu ile bu teardown arasındaki ~1sn'de yeni bir
     # start_ai_pro başlamış olabilir (_ai_loop_active tekrar True + yeni seans). O durumda YENİ seans
@@ -2082,14 +2090,18 @@ def _ai_pro_loop(dongu_muhru=None):
         _ai_pro_satirini_kapat(_kesilen, "ai-pro-kesinti")
         if not _baskasi_aktif:
             # Mandal kuruluyken "Sistem Hazır" yazılmaz, "Acil Durdurma" kalır (live_state kuralı, İG-5.36).
-            _api2.update_live_session_state(is_active=False, mode="Sistem Hazır")
+            _api2.update_live_session_state(is_active=False, mode="Sistem Hazır", e_baglam_nesli=_baglam_nesli)
         # Canlı E bağlamını TEMİZLE (2026-09-09): fantom/petri seansı bağlamı kuruyor; seans
         # bitince temizlenmezse bir sonraki (kedi) seansta E barı ESKİ hedefin değerini "canlı"
         # göstermeye devam ederdi.
         try:
             from servers import efield_live as _ef2
 
-            _ef2.set_context([])
+            if _baglam_nesli is None:
+                _ef2.set_context([])
+            elif not _ef2.temizle_degismediyse(_baglam_nesli):
+                # O-A2-K.1: döngü çıktıktan SONRA yeni bir analiz bağlam kurdu → onun; dokunulmaz.
+                logger.info("AI Pro teardown: canlı E bağlamı döngü bittikten sonra yeniden kurulmuş — dokunulmadı.")
         except Exception:
             logger.debug("AI Pro teardown: canlı E bağlamı temizlenemedi", exc_info=True)
     except Exception:

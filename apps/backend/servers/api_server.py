@@ -61,8 +61,12 @@ set_live_patient = live_state.set_live_patient
 from servers.seans_alan_kaydi import seans_alan_kaydi as _seans_alan  # noqa: E402
 
 
-def update_live_session_state(*args, **kwargs):
+def update_live_session_state(*args, e_baglam_nesli: int | None = None, **kwargs):
     """`live_state.update_live_session_state` + seans alan kaydının kapanışı.
+
+    `e_baglam_nesli` (O-A2-K.1): verilirse canlı E bağlamı yalnız o nesilden beri DEĞİŞMEDİYSE temizlenir — biten AI Pro
+    döngüsünün GEÇ kapanışı, döngü çıktıktan sonra kurulan (yeni analizin) bağlamını silmez. Verilmezse (bütün durdurma
+    yolları) bugünkü gibi koşulsuz temizlenir.
 
     ⚠️ NEDEN SARMALAYICI, NEDEN HER STOP YOLUNA AYRI ÇAĞRI DEĞİL: seansı bitiren DÖRT yol
     var (kullanıcı durdurma, süre-watchdog'u, STM watchdog'u, acil durdurma) ve hepsi
@@ -84,7 +88,10 @@ def update_live_session_state(*args, **kwargs):
         try:
             from servers import efield_live as _ef_bitis
 
-            _ef_bitis.seans_bitti()
+            if e_baglam_nesli is None:
+                _ef_bitis.seans_bitti()
+            else:
+                _ef_bitis.temizle_degismediyse(e_baglam_nesli)
         except Exception:
             logging.exception("canlı E bağlamı temizlenemedi (seans akışı etkilenmez)")
     return live_state.update_live_session_state(*args, **kwargs)
