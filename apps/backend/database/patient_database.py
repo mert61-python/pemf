@@ -377,9 +377,16 @@ class PatientDatabase:
                 _stored_fp = _fp_file.read_text(encoding="utf-8").strip()
         except Exception:
             pass
-        if count == 0 or (_stored_fp and _stored_fp != _fp):
+        # ⚠️ Y101 (S3 · O-A2-9.b, 2-C): parmak izi DOSYASI YOKKEN (silinmiş / okunamamış / taşımada geride kalmış) dolu indeks
+        # de BİR KEZ yeniden kurulur — eskiden kurulmuyor, dosyaya güncel sürüm yazılıyordu → eski kuralla kurulmuş indeks bir
+        # daha tazelenmiyordu (ölçüldü). Kurulumdan sonra dosya yazılır (D2.25: commit SONRASI) → tek seferlik.
+        # Kapı: tests/test_arama_indeksi_PARMAK_IZI_YOKSA_bir_kez_kurulur_Y101.py.
+        if count == 0 or _stored_fp != _fp:
             if count > 0:
-                self.logger.warning("Hasta arama anahtari degismis → HMAC indeksi yeniden kuruluyor.")
+                self.logger.warning(
+                    "Hasta arama indeksi parmak izi %s → HMAC indeksi yeniden kuruluyor.",
+                    "YOK" if not _stored_fp else "degismis",
+                )
             self._rebuild_search_index(cursor)
         return _fp if _fp != _stored_fp else None
 
