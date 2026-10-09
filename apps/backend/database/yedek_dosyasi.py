@@ -42,8 +42,11 @@ YEDEK_AILELERI = {
 _YEDEK_ADI = re.compile(r"pemf_([a-z_]+)_(\d{8}_\d{6})(\.db|\.json)")
 
 #: Ayar yedeğinden ayıklanan anahtar ADLARI (A-32 "SIR hariç"): parola / jeton / API anahtarı / özel anahtar / kimlik bilgisi.
+#: ⚠️ D2-2.1 (2-D incelemesi): `key` ile BİTEN adlar (kodun config.json'dan OKUDUĞU `supabase_key` dahil) ve kısa sır adları da.
 _SIR_ANAHTARI = re.compile(
-    r"pass|parola|sifre|şifre|secret|token|api_?key|private|credential|^user(name)?$", re.IGNORECASE
+    r"pass|parola|sifre|şifre|secret|token|api_?key|private|credential|^user(name)?$"
+    r"|key$|authorization|bearer|cookie|jwt|(^|_)(pin|pwd|otp|psk|salt|hmac|kod|kodu)($|_)",
+    re.IGNORECASE,
 )
 
 
