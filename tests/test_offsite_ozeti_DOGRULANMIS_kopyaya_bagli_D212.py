@@ -119,3 +119,26 @@ def test_KRITIK_D212_kopya_SESSIZCE_eksik_yazilirsa_ozet_dogrulamasi_YAKALAR(o, 
     assert not any(r.levelno == logging.INFO and "geri yuklenebilir" in r.getMessage() for r in caplog.records)
     assert any(r.levelno >= logging.ERROR for r in caplog.records)
     assert o.yedek.name not in {p.name for p in o.nas.iterdir()}, "eksik yazılmış kopya son adla kaldı"
+
+
+# D2-3.7 (2-D incelemesi): SHA-256 kolu — tam boyutta bozuk kopya (boyut denetimi tek başına yakalamaz; mutant "yalnız boyut" bu kolla KIRMIZI).
+def test_KRITIK_D212_ayni_BOYUTTA_bozuk_kopya_geri_yuklenebilir_DENMEZ_ve_son_adla_KALMAZ(o, monkeypatch, caplog):
+    gercek = shutil.copy2
+
+    def _copy2(kaynak, hedef, *a, **k):
+        if str(kaynak).endswith(".db"):
+            veri = bytearray(Path(kaynak).read_bytes())
+            veri[len(veri) // 2] ^= 0xFF  # tam boyut, tek bayt bozuk, hata YOK
+            Path(hedef).write_bytes(bytes(veri))
+            return str(hedef)
+        return gercek(kaynak, hedef, *a, **k)
+
+    monkeypatch.setattr(shutil, "copy2", _copy2)
+    with caplog.at_level(logging.INFO, logger="services.headless_db_maintenance"):
+        o.w._copy_offsite([o.yedek, o.zarf])
+    k = [(r.levelno, r.getMessage()) for r in caplog.records if r.name == "services.headless_db_maintenance"]
+    assert not any(lv == logging.INFO and "geri yuklenebilir" in m for lv, m in k), (
+        "aynı boyutta BOZUK .db kopyası için 'geri yuklenebilir' (INFO) denildi — SHA-256 doğrulaması çalışmıyor"
+    )
+    assert any(lv >= logging.ERROR for lv, _ in k), k
+    assert o.yedek.name not in {p.name for p in o.nas.iterdir()}, "bozuk kopya son adla duruyor"
