@@ -66,6 +66,12 @@ export interface ApiOpts {
    *  "analiz boş döndü" görüyor, ikinci denemede model artık yüklü olduğu için ANINDA çalışıyor.
    *  AI çağrıları için AI_TIMEOUT_MS kullanın. */
   timeoutMs?: number;
+  /** Zaman aşımında gösterilecek metin (yalnız `apiPost`; verilmezse varsayılan "Tekrar deneyin — model yüklemesi" metni).
+   *
+   *  ⚠️ D2.E03 (Y84): varsayılan metin AI çıkarımı içindir; yedek alma / geri yüklemede "Tekrar deneyin" demek kayıtları
+   *  ÇOĞALTIYORDU (ikinci istek ilk geri yükleme sürerken). Çağıran işine uygun metni verir (`services/veriTasima.ts`).
+   *  EKLEMELİ: mevcut çağıranlar etkilenmez. */
+  zamanAsimiMesaji?: string;
 }
 
 /** AI çıkarım uçları için zaman aşımı — ilk çağrıdaki model yükleme + JIT derlemesini kapsar. */
@@ -404,7 +410,11 @@ export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?
     // HİÇBİR geri bildirim almadan boş ekranla kalıyordu ("analiz boş döndü" şikâyetinin sebebi:
     // AI ilk çağrısı 8sn sınırını aşıp sessizce iptal ediliyordu). Zaman aşımını AÇIKÇA söyle.
     if ((error as { name?: string })?.name === "AbortError" && !opts?.silent) {
-      showError("İşlem zaman aşımına uğradı", "Sunucu zamanında yanıt vermedi. Tekrar deneyin — ilk analiz model yüklemesi nedeniyle uzun sürebilir.");
+      showError(
+        "İşlem zaman aşımına uğradı",
+        opts?.zamanAsimiMesaji ??
+          "Sunucu zamanında yanıt vermedi. Tekrar deneyin — ilk analiz model yüklemesi nedeniyle uzun sürebilir.",
+      );
     }
     return fallback;
   } finally {

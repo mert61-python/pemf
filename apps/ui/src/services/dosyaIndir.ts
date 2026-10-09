@@ -16,31 +16,9 @@ import { serviceConfig } from "@/services/config";
 // (tarayıcı geçmişi / sunucu & Cloudflare tünel erişim-logları / PDF disk-cache) SIZMASIN. Eski
 // `withToken` token'ı ?token= olarak URL'e koyuyordu (Linking header gönderemediği için). Şimdi:
 // Web → fetch+blob+<a> indir; Native → FileSystem.downloadAsync+header → paylaş menüsü. Token hep header'da.
-/**
- * Backend BU MAKİNEDE mi koşuyor?
- *
- * ⚠️ 2026-09-11 SAHA ARIZASI: "Excel/CSV İndir" ve "Tümünü PDF İndir" düğmeleri masaüstü
- * uygulamasında HİÇBİR ŞEY YAPMIYORDU. Arayüz Tauri v2 **WebView2** penceresinde koşuyor
- * ve `<a download>` orada ancak uygulama bir indirme işleyicisi kaydederse çalışır —
- * `launcher/app/src/main.rs` hiçbir `on_download`/dialog/fs eklentisi KAYDETMİYOR.
- * Tıklama sessizce ölüyordu; üstelik kod `a.click()`ten sonra hiçbir geri bildirim
- * vermediği için "çalıştı" ile "öldü" AYNI görünüyordu.
- *
- * Backend aynı makinede koştuğunda dosyayı ONA yazdırmak sorunu Tauri'ye hiç dokunmadan
- * çözer (launcher yeniden yayınlanmak zorunda kalmaz — sahada tek makine var, yayın durdu).
- *
- * ⚠️ SADECE YEREL: uzak/LAN backend'de `kaydet=1` dosyayı KARŞI MAKİNENİN masaüstüne
- * yazardı — operatör dosyayı asla göremezdi. O yüzden yalnız localhost/127.0.0.1 kabul
- * edilir ve tarayıcı/mobil yolu olduğu gibi korunur.
- */
-export function backendBuMakinede(): boolean {
-  try {
-    const u = new URL(serviceConfig.apiBaseUrl, "http://localhost");
-    return u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "::1";
-  } catch {
-    return false;
-  }
-}
+import { backendBuMakinede } from "@/services/backendKonumu";
+
+export { backendBuMakinede };
 
 export async function downloadFileWithAuth(
   url: string,

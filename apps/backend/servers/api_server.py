@@ -6309,6 +6309,52 @@ GERI_YUKLEME_SURUYOR = (
 
 class DataExportPayload(BaseModel):
     passphrase: str = ""
+    #: D2.E01: True → dosyayı BU makinenin masaüstüne backend yazar ve doğrular (yalnız cihazın kendi ekranından).
+    kaydet: bool = False
+
+
+def _yedegi_masaustune_yaz(blob: bytes, ad: str) -> dict:
+    """⚠️ D2.E01 (İG-6.20): şifreli yedek dosyasını cihazın masaüstüne yazar ve GERİ OKUYARAK doğrular.
+
+    Masaüstü arayüzü Tauri WebView2'de koşar; `<a download>` orada sessizce ölebiliyor (09-11 saha arızası) ve ekran dosya oluşmasa da
+    "Yedek oluşturuldu" diyordu (ölçüldü). Backend aynı makinede → dosyayı o yazar: geçici ada yazım + `fsync` + `os.replace`, sonra
+    diskteki baytların SHA-256'sı pakete eşit mi denetlenir. Eşit değilse dosya silinir ve hata yükselir — yarım/bozuk `.pemfbak` "yedek"
+    diye kalmaz. Hedef dizin TEK kaynaktan (`seans_alan_kaydi.masaustu_dizini` — test süiti onu yamalar, gerçek masaüstüne sızmaz)."""
+    import hashlib as _hashlib
+    from pathlib import Path
+
+    from servers.seans_alan_kaydi import masaustu_dizini
+
+    dizin, gerekce = masaustu_dizini()
+    guvenli = "".join(c for c in ad if c.isalnum() or c in ("_", "-", ".")) or "pemf-vet-yedek.pemfbak"
+    hedef = Path(dizin) / guvenli
+    if hedef.exists():  # aynı dakikada ikinci yedek öncekinin ÜZERİNE yazmasın
+        kok, uzanti = os.path.splitext(guvenli)
+        hedef = Path(dizin) / f"{kok}_{int(time.time() * 1000)}{uzanti}"
+    gecici = hedef.with_name(hedef.name + ".yazim.tmp")
+    try:
+        with open(gecici, "wb") as f:
+            f.write(blob)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(gecici, hedef)
+        okunan = hedef.read_bytes()
+        if len(okunan) != len(blob) or _hashlib.sha256(okunan).digest() != _hashlib.sha256(blob).digest():
+            try:
+                hedef.unlink()
+            except OSError:
+                pass
+            raise RuntimeError(f"yedek dosyası diske yazıldı ama DOĞRULANAMADI ({len(okunan)} / {len(blob)} bayt)")
+    finally:
+        try:
+            if gecici.exists():
+                gecici.unlink()
+        except OSError:
+            pass
+    logging.getLogger(__name__).warning(
+        "VERİ TAŞIMA: şifreli yedek diske yazıldı ve doğrulandı: %s (%s)", hedef, gerekce
+    )
+    return {"yol": str(hedef), "ad": hedef.name, "bayt": len(okunan)}
 
 
 class DataImportPayload(BaseModel):
@@ -6323,6 +6369,15 @@ async def export_clinic_data(payload: DataExportPayload, request: Request):
     _enforce_privileged(request)
     if _VERI_TASIMA_KILIDI.locked():  # D2.E02: yarım içe aktarılmış durum yedek diye verilmez
         raise HTTPException(status_code=409, detail=GERI_YUKLEME_SURUYOR)
+    if payload.kaydet:
+        from servers.auth import cihazin_kendisinden_mi
+
+        if not cihazin_kendisinden_mi(request):
+            # D2.E01: dosya CİHAZIN masaüstüne yazılır — telefon/LAN istemcisi onu göremez; o yol dosyayı yanıtta alır.
+            raise HTTPException(
+                status_code=400,
+                detail="Yedeği cihaza kaydetme yalnız cihazın kendi ekranından yapılır; bu istemcide dosya indirilir.",
+            )
     import base64 as _base64
 
     from utils.data_export import BUNDLE_VERSION, ExportError, encrypt_bundle
@@ -6403,10 +6458,27 @@ async def export_clinic_data(payload: DataExportPayload, request: Request):
             )
         },
     )
+    _dosya_adi = f"pemf-vet-yedek-{datetime.now():%Y%m%d-%H%M}.pemfbak"
+    _kayit = {}
+    if payload.kaydet:
+        try:
+            _kayit = await asyncio.to_thread(_yedegi_masaustune_yaz, blob, _dosya_adi)
+        except Exception:
+            logging.getLogger(__name__).exception("VERİ TAŞIMA: yedek dosyası diske yazılamadı/doğrulanamadı")
+            raise HTTPException(
+                status_code=500,
+                detail="Yedek dosyası cihaza yazılamadı ya da doğrulanamadı — yedek OLUŞTURULMADI. Disk alanını ve masaüstü "
+                "klasörünün yazılabilir olduğunu denetleyin.",
+            )
     return {
         "status": "success",
-        "filename": f"pemf-vet-yedek-{datetime.now():%Y%m%d-%H%M}.pemfbak",
-        "data_b64": _base64.b64encode(blob).decode("ascii"),
+        "filename": _dosya_adi,
+        # D2.E01: cihaza kaydedildiyse içerik yanıtta TAŞINMAZ (yol + boyut + doğrulandı); değilse istemci indirir.
+        **(
+            {"yol": _kayit["yol"], "ad": _kayit["ad"], "bayt": _kayit["bayt"], "dogrulandi": True}
+            if _kayit
+            else {"data_b64": _base64.b64encode(blob).decode("ascii")}
+        ),
         # Sayımlar kullanıcıya gösterilir: "ne taşındığını" görebilmeli. Doz kaydı (bobin
         # koşuları) ayrı kalem — eskiden hiç taşınmadığı için hiç görünmüyordu da.
         #

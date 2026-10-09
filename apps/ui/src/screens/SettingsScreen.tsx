@@ -21,6 +21,12 @@ import { FIRMA } from "@/config/firma";
 // Saf fonksiyonlar AYRI modulde: testleri tum ekran bagimlilik grafigini yuklemeden kosar.
 import { bulutKayitRozeti, eslestirmeKoduUzaktanGecerliMi } from "@/services/bulutKayit";
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
+import { backendBuMakinede } from "@/services/backendKonumu";
+import {
+  DISA_AKTARMA_ZAMAN_ASIMI_MESAJI,
+  ICE_AKTARMA_ZAMAN_ASIMI_MESAJI,
+  VERI_TASIMA_ZAMAN_ASIMI_MS,
+} from "@/services/veriTasima";
 
 
 export function SettingsScreen() {
@@ -86,24 +92,47 @@ export function SettingsScreen() {
   const disaAktar = useCallback(async () => {
     const parola = await parolaSor("olustur");
     if (!parola) return;
+    // ⚠️ D2.E01 (İG-6.20): masaüstü uygulamasında (backend BU makinede) dosyayı BACKEND yazar ve doğrular — `<a download>` WebView2'de
+    // sessizce ölebiliyor (09-11 saha arızası, `dosyaIndir.ts`) ve eskiden dosya oluşmasa da "Yedek oluşturuldu" deniyordu (ölçüldü).
+    // "oluşturuldu" YALNIZ backend yolu ve boyutu bildirince. Tarayıcı (LAN) yolunda dosya istemciye iner: metin "indirme başlatıldı —
+    // doğrulayın" der. ⚠️ D2.E03 (Y84): UZUN zaman aşımı, "Tekrar deneyin" yok. Kapı: SettingsVeriTasima.D2E01_E03.web.test.tsx
+    const yerel = backendBuMakinede();
     setTasimaMesgul("export");
-    const res = await apiPost<{ status?: string; filename?: string; data_b64?: string;
-                               counts?: Record<string, number> } | null>(
-      "/data/export", { passphrase: parola }, null);
+    const res = await apiPost<{ status?: string; filename?: string; data_b64?: string; yol?: string; ad?: string;
+                               bayt?: number; counts?: Record<string, number> } | null>(
+      "/data/export", yerel ? { passphrase: parola, kaydet: true } : { passphrase: parola }, null,
+      { timeoutMs: VERI_TASIMA_ZAMAN_ASIMI_MS, zamanAsimiMesaji: DISA_AKTARMA_ZAMAN_ASIMI_MESAJI });
     setTasimaMesgul("");
-    if (!res?.data_b64) return;                       // hata mesajını apiPost gösterdi
+    if (!res) return;                                 // hata mesajını apiPost gösterdi
+    const c = res.counts || {};
+    const sayim = `${c.patients ?? 0} hasta, ${c.treatment_sessions ?? 0} seans, ${c.ai_analyses ?? 0} analiz`;
+    if (yerel) {
+      if (res.status === "success" && res.yol && (res.bayt ?? 0) > 0) {
+        showToast(`Yedek oluşturuldu ve doğrulandı: ${res.yol} (${sayim}).`, "success");
+      } else {
+        showToast("Yedek dosyası kaydedilemedi — cihaz dosya yolunu bildirmedi; yedek OLUŞTURULMADI sayın.", "error");
+      }
+      return;
+    }
+    if (!res.data_b64) {
+      showToast("Yedek alınamadı — cihaz dosya içeriğini döndürmedi.", "error");
+      return;
+    }
     try {
       // base64 → Blob → indir. Dosya diske YALNIZ kullanıcının seçtiği yere gider.
       const ham = atob(res.data_b64);
       const buf = new Uint8Array(ham.length);
       for (let i = 0; i < ham.length; i++) buf[i] = ham.charCodeAt(i);
       const url = URL.createObjectURL(new Blob([buf], { type: "application/octet-stream" }));
+      const ad = res.filename || "pemf-vet-yedek.pemfbak";
       const a = document.createElement("a");
-      a.href = url; a.download = res.filename || "pemf-vet-yedek.pemfbak";
+      a.href = url; a.download = ad;
       document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(url);
-      const c = res.counts || {};
-      showToast(`Yedek oluşturuldu: ${c.patients ?? 0} hasta, ${c.treatment_sessions ?? 0} seans, ${c.ai_analyses ?? 0} analiz.`, "success");
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      showToast(
+        `İndirme başlatıldı: ${ad} (${sayim}). Dosyanın indirme klasörüne geldiğini doğrulayın — tarayıcı indirmeyi engellemiş olabilir.`,
+        "info",
+      );
     } catch {
       showToast("Yedek dosyası kaydedilemedi.", "error");
     }
@@ -126,8 +155,10 @@ export function SettingsScreen() {
       const buf = new Uint8Array(await f.arrayBuffer());
       let s = "";
       for (let i = 0; i < buf.length; i++) s += String.fromCharCode(buf[i]);
+      // ⚠️ D2.E03 (Y84): UZUN zaman aşımı; zaman aşımında metin "Tekrar deneyin" DEMEZ — geri yükleme cihazda sürüyor olabilir.
       const res = await apiPost<{ status?: string; counts?: Record<string, number> } | null>(
-        "/data/import", { passphrase: parola, blob_b64: btoa(s), confirm: "REPLACE_ALL" }, null);
+        "/data/import", { passphrase: parola, blob_b64: btoa(s), confirm: "REPLACE_ALL" }, null,
+        { timeoutMs: VERI_TASIMA_ZAMAN_ASIMI_MS, zamanAsimiMesaji: ICE_AKTARMA_ZAMAN_ASIMI_MESAJI });
       setTasimaMesgul("");
       if (!res?.counts) return;
       const c = res.counts;
