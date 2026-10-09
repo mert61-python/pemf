@@ -40,7 +40,6 @@ değişkenleri** ile → `deploy/device.env` (klinik), `deploy/server.env` (sunu
 | `_internal\frontend\dist\` | React web UI (FastAPI `/` kökünden serve) | **BOTH** |
 | `_internal\deploy\device.env` / `server.env` | Profil knob'ları (EXE'ye bundle edilir) | her biri |
 | `_internal\bin\cloudflared\cloudflared.exe` | Uzaktan erişim tüneli — **elle eklenir** (bkz. §4) | DEVICE |
-| `_internal\database\*_template.db` | Boş DB şablonları | **BOTH** |
 | `nssm.exe` | Windows servis sarmalayıcı (çökme→5sn restart) | **BOTH** |
 | `setup_services.ps1` | Üretim kurulum (`-Mode device|server`) | **BOTH** |
 | `install_mosquitto_service.ps1` | Mosquitto'yu ayrı servis yapar | DEVICE |

@@ -17,7 +17,7 @@ Backend'in her yerinden kullanılan bağımsız yardımcılar: STM32 seri/protok
 | `agir_import.py` | **Ağır (torch tabanlı) import'ları TEK boğumdan geçirir** (A9) — eşzamanlı yarış `torch/__init__.py`'de `NameError: name '_C' is not defined` ile 8 AI ucunu birden 500'e düşürüyordu. ⚠️ İlk teşhis yanlıştı; `sys.meta_path` izcisiyle ölçüldü |
 | `ai_rapor_ogeleri.py` | **AI analiz kaydı → PDF öğeleri** (2026-09-12) — PDF üretimi yalnız SEANS kayıtları için vardı; ev sahibi profili analizini veterinerine GÖNDEREMİYORDU |
 | `simple_signal.py` | **`SimpleSignal`** — minimal Qt-siz signal/slot (STM-bağlandı bildirimleri için) |
-| `path_utils.py` | App-data dizini, benzersiz cihaz-id, pairing-code, PyInstaller resource-path çözümü, `initialize_database()`, `get_app_version()` |
+| `path_utils.py` | App-data dizini, benzersiz cihaz-id, pairing-code, PyInstaller resource-path çözümü, `initialize_database()` (açılışta yarım göç toparlaması; şablon kopyalamaz — D2.34), `get_app_version()` |
 | `secrets_manager.py` | Şifreli sır deposu — Windows DPAPI + makine-bağlı Fernet + keyring; token/pairing/admin-code/device-id üreteçleri. **TÜM sırlar tek dosyada** (`pemf_secrets.json`). 2026-08-19: `mqtt_cloud_host/port/user/pass` eklendi (operator bölümü; E-stop **bulut aynası** — tanımsızsa ayna sessiz devre dışı; env fallback `PEMF_MQTT_CLOUD_*`) |
 | `file_acl.py` | `lock_down_file()` — bir dosyanın ACL'ini yalnız mevcut kullanıcıya kısıtla (sır dosyalarını sertleştirir) |
 | `production_config_manager.py` | **`ProductionConfigManager`** singleton — bundled+kullanıcı JSON config birleştir (şifreli değerler, noktalı-anahtar get/set) |

@@ -74,9 +74,8 @@ _p12_pw.txt
 # → build context'e ~11 GB gereksiz veri giriyor (yavaş build, şişmiş katman) ve `COPY . .`
 # bunların bir kısmını IMAJA GÖMÜYOR.
 #
-# ⚠️ Kökteki `*.db` deseni BİLEREK kopyalanmadı: `database/*_template.db` dosyaları ÇALIŞMA
-# ZAMANINDA gereklidir (utils/path_utils.py:140 runtime DB'yi şablondan oluşturur). Bunun
-# yerine yalnız ÇALIŞMA-ZAMANI veritabanı artıkları dışlanır — hasta verisi imaja girmesin.
+# ⚠️ Kökteki `*.db` deseni kopyalanmadı: yalnız ÇALIŞMA-ZAMANI veritabanı artıkları dışlanır — hasta
+# verisi imaja girmesin. (D2.34 · Y26: DB şablonları ve şablon-kopya dalı KALDIRILDI; şemayı DB sınıfları kurar.)
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Ağır derleme çıktıları (image'a girmez, build'i yavaşlatır)
@@ -88,7 +87,7 @@ backups/
 *.ipa
 *.rar
 
-# Hasta verisi (KVKK) — ÇALIŞMA ZAMANI DB'leri. Şablonlar (`*_template.db`) HARİÇ TUTULMAZ.
+# Hasta verisi (KVKK) — ÇALIŞMA ZAMANI DB'leri.
 data/*.db
 **/patients.db
 **/pemf_treatment_history.db

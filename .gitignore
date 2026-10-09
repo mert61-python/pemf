@@ -50,8 +50,6 @@ database/*.db
 database/*.db-journal
 database/*.db-shm
 database/*.db-wal
-# Sablon (template) veritabanlarini HARIC tut (onlari repoda istiyoruz)
-!database/*_template.db
 
 # Logs
 logs/
@@ -138,9 +136,8 @@ _p2boot.*
 
 # ⚠️ DEPO KOKUNDE olusan CALISMA-ZAMANI veritabanlari (2026-08-15). Bir test `app_data_dir`
 # olarak depo kokunu verince uretici koke `pemf_treatment_history.db` + `migration_backups/`
-# yaratti ve bunlar COMMIT'E GIRDI. Yollar koke SABITLENDI (bas taraftaki `/`): `database/`
-# altindaki SABLON DB'ler (patients_template.db, pemf_treatment_history_template.db) izlenmeye
-# devam etmeli — topyekun `*.db` yok saymak onlari da dusururdu.
+# yaratti ve bunlar COMMIT'E GIRDI. Yollar koke SABITLENDI (bas taraftaki `/`). (D2.34 · Y26: eskiden
+# izlenen SABLON DB'ler kaldirildi; semayi DB siniflari kurar.)
 /pemf_treatment_history.db
 /patients.db
 /auth_users.db

@@ -463,32 +463,26 @@ def get_pairing_code():
 
 
 def initialize_database():
-    """
-    0 KM Veritabanı Oluşturucu (Çoklu DB Desteği):
-    Eğer müşteride veritabanları yoksa, EXE içindeki şablonları oraya kopyalar.
+    """Açılışta veri kökündeki iki DB için YARIM GÖÇ TOPARLAMASI; DB yollarını döndürür.
+
+    ⚠️ D2.34 (B-9.1 · B-11.13) · Y26 (sahip kararı): "0 KM" ŞABLON KOPYALAYICISI KALDIRILDI. Eskiden `db` yoksa paketteki boş
+    DÜZ-METİN şablon (`database/*_template.db`) veri köküne kopyalanıyordu — 09-13 veri kaybının 3. yolu: yarım göç toparlaması
+    düşerse canlı DB'nin yerine BOŞ şablon konuyor, klinik geçmişi kaybolmuş görünüyordu (1.9.50 EXE'si şablonları taşıyor). Şema
+    DB sınıflarınca (PatientDatabase / TreatmentHistoryDB) TAM kurulur; şablonlar depodan da silindi (spec'i yeniden yönlendirmek
+    yolu uyandıramaz). Kapı: tests/test_sablon_KOPYALAYICI_YOK_sema_DB_siniflarindan_D234.py
     """
     app_data_dir = get_app_data_directory()
-
-    # Yönetilecek veritabanı dosyaları listesi
-    # (Gerçek dosya adı : Şablon dosya adı)
-    db_files = {
-        "pemf_treatment_history.db": "pemf_treatment_history_template.db",
-        "patients.db": "patients_template.db",
-    }
-
     generated_paths = {}
 
-    for real_name, template_name in db_files.items():
+    for real_name in ("pemf_treatment_history.db", "patients.db"):
         target_db_path = app_data_dir / real_name
 
-        # ⚠️ ÖNCE YARIM GÖÇ TOPARLAMASI — ŞABLON KOPYALAMADAN ÖNCE OLMAK ZORUNDA.
+        # ⚠️ YARIM GÖÇ TOPARLAMASI — açılışta DB sınıflarından ÖNCE.
         # At-rest göçü `db → .plain.bak` ve `.enc.tmp → db` diye İKİ taşıma yapar. İkincisi
-        # düşerse (Windows dosya kilidi / elektrik) diskte `db` YOK, veri `.plain.bak`ta kalır.
-        # Bu fonksiyon açılışta EN ÖNCE koşar ve `db` yok görünce ŞABLONU kopyalar → klinik
-        # BOŞ bir veritabanıyla açılır ve hasta geçmişi kaybolmuş görünür (veri diskte durur
-        # ama kimse bakmaz). ÖLÇÜLDÜ (2026-09-13): düzeltme yalnız `treatment_history_db` ve
-        # `sqlcipher_util`e konunca ürün HÂLÂ kaybediyordu, çünkü şablon kopyalayıcı ÖNCE
-        # davranıyordu. Toparlama üç yolda da çağrılmalı.
+        # düşerse (Windows dosya kilidi / elektrik) diskte `db` YOK, veri `.plain.bak`ta kalır;
+        # toparlanmazsa DB sınıfı BOŞ bir veritabanı kurar ve hasta geçmişi kaybolmuş görünür
+        # (veri diskte durur ama kimse bakmaz). ÖLÇÜLDÜ (2026-09-13): toparlama üç yolda da
+        # (`sqlcipher_util`, `treatment_history_db`, burası) çağrılmalı.
         # ⚠️ SESSİZ `pass` YASAK: ilk yazımda `except Exception: pass` vardı ve import frozen
         # EXE'de düşerse hiçbir iz bırakmıyordu — teşhis SAATLER aldı. Başarısızlık da,
         # başarı da LOGLANIR.
@@ -499,30 +493,12 @@ def initialize_database():
             from database.sqlcipher_util import _yarim_goc_toparla
 
             if _yarim_goc_toparla(str(target_db_path), _log):
-                _log.warning("Yarim kalmis goc toparlandi (sablon kopyalanmadan once): %s", target_db_path)
+                _log.warning("Yarim kalmis goc toparlandi (acilista, DB acilmadan once): %s", target_db_path)
         except Exception:
             _log.exception(
-                "Yarim-goc toparlamasi DENENEMEDI (%s) — sablon kopyalanabilir ve klinik gecmisi BOS gorunebilir.",
+                "Yarim-goc toparlamasi DENENEMEDI (%s) — veri .plain.bak dosyasinda kalabilir ve klinik gecmisi BOS gorunebilir.",
                 target_db_path,
             )
-
-        # Müşteride zaten varsa dokunma (Veri kaybını önler)
-        if target_db_path.exists():
-            # print(f"Mevcut DB bulundu: {real_name}")
-            generated_paths[real_name] = target_db_path
-            continue
-
-        # Yoksa, şablonu kopyala
-        source_template = resource_path(os.path.join('database', template_name))
-
-        try:
-            if Path(source_template).exists():
-                # Konsolsuz (console=False) uygulamalarda print hata fırlatabilir, bu nedenle pass/log kullanılır
-                shutil.copy2(source_template, target_db_path)
-            else:
-                pass
-        except Exception:
-            pass
 
         generated_paths[real_name] = target_db_path
 
