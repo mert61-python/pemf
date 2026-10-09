@@ -33,7 +33,11 @@ disable_mlock = false
 // işe yaramazdı. Sahip kararı (2026-09-13): emanet token'ı uzun ömürlü olacak.
 // 87600h = 10 yıl. Bu YALNIZ üst sınırdır; her token kendi TTL'ini ayrıca belirtir.
 max_lease_ttl     = "87600h"
-default_lease_ttl = "87600h"
+// ⚠️ A-84 (sahip kararı): VARSAYILAN kira süresi KISALTILDI (eskiden 87600h). TTL'i açıkça verilmeyen her token / kira
+// (elle üretilen yardımcı token'lar dahil) artık 32 günde düşer. Kurtarma token'ı bundan ETKİLENMEZ: `vault_emanet.py
+// --token-uret` onu açık `ttl = 87600h` ile üretir (üst sınır yukarıda). Token yenileme adımı: `--tatbikat` kurtarma
+// token'ının kalan ömrünü söyler, bir yıldan az kalınca `--token-uret` ile yenisini üretmeyi ister.
+default_lease_ttl = "768h"
 
 // Tek düğüm: küme yok, replikasyon yok. Yedekleme = `pemf-vault-veri` biriminin kopyası.
 // ⚠️ O birimi AYNI diskte tutmak riski KAPATMAZ — başka bir makineye/USB'ye kopyalayın.

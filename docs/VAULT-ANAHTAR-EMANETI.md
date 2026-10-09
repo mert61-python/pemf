@@ -82,7 +82,7 @@ açın.
 python scripts/vault_emanet.py --durum      # muhurlu mu, emanet var mi
 python scripts/vault_emanet.py --ac         # yeniden baslatma sonrasi ac
 python scripts/vault_emanet.py --dogrula    # Vault kopyasi yerelle AYNI mi (parmak izi)
-python scripts/vault_emanet.py --tatbikat   # KURTARMA TATBIKATI: emanet GERCEKTEN aciyor mu
+python scripts/vault_emanet.py --tatbikat   # KURTARMA TATBIKATI (KURTARMA token'iyla — gizli istemle sorulur)
 python scripts/vault_emanet.py --yaz        # anahtar degistiyse emaneti TAZELE
 ```
 
@@ -97,9 +97,16 @@ parmak izlerini kıyaslar; anahtarı ekrana yazmaz.
 halkalar (`sqlcipher3` binding sürümü, `PRAGMA key` tırnaklaması, dosya biçimi) sessizce
 bozulabilir ve parmak izi karşılaştırması bunu **göremez**.
 
-`--tatbikat` o zinciri gerçekten koşturur:
+`--tatbikat` o zinciri gerçekten koşturur — ⚠️ **ilk halka KURTARMA token'ıdır** (D2.E05 · Y86, sahip
+kararı): tatbikat onunla koşar, kök token'la DEĞİL (eskiden kök token'la koşuyor, iptal edilmiş kurtarma
+token'ında bile "BASARILI" diyordu). Token `--token` ile ya da etkileşimli konsolda gizli istemle alınır;
+verilmezse / kök token ise "kurtarma token'ı SINANMADI", geçersizse "TATBIKAT BASARISIZ" der (çıkış 1).
+**Token yenileme (A-84):** tatbikat token'ın kalan ömrünü yazar; bir yıldan az kalınca `--token-uret` ile
+yenisini üretip saklayın (sonra eskisini iptal edin). Vault'un varsayılan kira süresi 32 gün; kurtarma
+token'ı kendi açık 10 yıllık TTL'iyle üretilir.
 
 ```
+[0] kurtarma token'i gecerli; kalan omur ~3650 gun
 [1] Vault'tan anahtar alindi (uzunluk 43; DEGER BASILMAZ)
 [2] veri koku: C:\ProgramData\PEMF_System\PEMF_GUI
 [3] emanet anahtariyla acma:

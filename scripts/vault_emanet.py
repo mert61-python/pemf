@@ -20,8 +20,13 @@ KULLANIM
     python scripts/vault_emanet.py --yaz            # yerel anahtarlari Vault'a YEDEKLE
     python scripts/vault_emanet.py --token-uret     # 10 yillik KURTARMA token'i uret
     python scripts/vault_emanet.py --dogrula        # Vault'taki kopya yerelle AYNI mi (parmak izi)
-    python scripts/vault_emanet.py --tatbikat       # KURTARMA TATBIKATI: emanet GERCEKTEN aciyor mu
+    python scripts/vault_emanet.py --tatbikat       # KURTARMA TATBIKATI (KURTARMA token'iyla; gizli istem)
     python scripts/vault_emanet.py --geri-al        # Vault'taki anahtari EKRANA yaz (kurtarma)
+
+⚠️ `--tatbikat` KURTARMA token'iyla kosar (Y86) — felakette elinizde olacak olan odur, kok token DEGIL. Token
+`--token` ile ya da (verilmezse) etkilesimli konsolda gizli istemle alinir; yoksa / kok token ise / gecersizse tatbikat
+"BASARILI" DEMEZ. Tatbikat token'in kalan omrunu de soyler: bir yildan azsa `--token-uret` ile yenisini uretin (A-84).
+Vault adresi varsayilan `http://127.0.0.1:8200`; `PEMF_VAULT_ADRES` ile degistirilebilir.
 
 ⚠️ `--dogrula` ile `--tatbikat` AYNI SEY DEGILDIR. İlki iki degerin ayni oldugunu soyler;
 ikincisi zincirin tamamini (Vault -> anahtar -> SQLCipher -> okunabilir tablo) gercek DB'nin
@@ -38,6 +43,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -61,7 +67,8 @@ for _yol in (KOK, KOK / "apps" / "backend"):
     if str(_yol) not in sys.path:
         sys.path.insert(0, str(_yol))
 
-ADRES = "http://127.0.0.1:8200"
+#: Vault adresi — varsayılan compose yayını; farklı port / sınama için `PEMF_VAULT_ADRES` (D2.E05).
+ADRES = os.environ.get("PEMF_VAULT_ADRES", "").strip() or "http://127.0.0.1:8200"
 KURTARMA_DOSYASI = Path.home() / "pemf-vault-kurtarma.json"
 
 #: KV v2 mount + emanet yolu.
@@ -118,6 +125,62 @@ def _kok_token() -> str:
     return _kurtarma()["root_token"]
 
 
+#: Y86: tatbikatın kullanacağı KURTARMA token'ı — `main` `--token`dan koyar; verilmezse etkileşimli konsolda gizli istemle
+#: alınır. Dosyaya / günlüğe yazılmaz.
+_KURTARMA_TOKENI: str | None = None
+#: A-84: kurtarma token'ı yenilenemez (renewable=False) — kalan ömrü bundan kısaysa tatbikat `--token-uret` ile YENİSİNİ
+#: üretip saklamayı söyler (token yenileme adımı). Vault'un varsayılan kira süresi kısaltıldı (docker/vault/config/vault.hcl);
+#: kurtarma token'ı kendi 10 yıllık TTL'iyle üretilir (`token_uret`).
+_YENILEME_ESIGI_SN = 365 * 24 * 3600
+
+
+def _kurtarma_tokeni() -> str:
+    """⚠️ Y86 (sahip kararı · İG-9.86): tatbikat KURTARMA token'ıyla koşar — felakette elde olacak olan odur; kök token
+    tatbikatta KULLANILMAZ. Eskiden `--tatbikat` `--token`ı yok sayıp kök token'la koşuyordu: kurtarma token'ı İPTAL edilmiş
+    olsa bile "TATBIKAT BASARILI" diyordu (ölçüldü). Token yoksa / kök token ise / kurtarma politikasını taşımıyorsa /
+    geçersizse tatbikat "BASARILI" DEMEZ (SystemExit). Token'ın kalan ömrü raporlanır; bir yıldan azsa yenileme söylenir."""
+    tok = (_KURTARMA_TOKENI or "").strip()
+    if not tok and sys.stdin is not None and sys.stdin.isatty():
+        import getpass
+
+        tok = getpass.getpass("  Kurtarma token'i (ekranda gorunmez): ").strip()
+    if not tok:
+        raise SystemExit(
+            "  HATA: kurtarma token'i VERILMEDI -> kurtarma token'i SINANMADI, tatbikat YAPILMADI.\n"
+            "  Felakette elinizde olacak olan kurtarma token'idir (kok token degil); onunla calistirin:\n"
+            "    python scripts/vault_emanet.py --tatbikat --token <kurtarma-token>   (ya da etkilesimli konsolda)"
+        )
+    kod, bilgi = _istek("/v1/auth/token/lookup-self", token=tok)
+    if kod == 0:
+        raise SystemExit(
+            f"  HATA: Vault'a ULASILAMIYOR ({ADRES}) -> tatbikat YAPILAMADI.\n"
+            "  -> docker compose -f docker/docker-compose.vault.yml up -d   ve   python scripts/vault_emanet.py --ac"
+        )
+    if kod != 200:
+        raise SystemExit(
+            f"  HATA {kod}: kurtarma token'i GECERSIZ ({(bilgi or {}).get('errors')}) -> TATBIKAT BASARISIZ.\n"
+            "  Token iptal edilmis / suresi dolmus olabilir: --token-uret ile yenisini uretip saklayin."
+        )
+    veri = (bilgi or {}).get("data") or {}
+    politikalar = veri.get("policies") or []
+    if "root" in politikalar or POLITIKA_ADI not in politikalar:
+        raise SystemExit(
+            f"  HATA: verilen token kurtarma token'i DEGIL (politikalar: {politikalar}) -> kurtarma token'i SINANMADI.\n"
+            f"  --token-uret ile uretilen ('{POLITIKA_ADI}' politikali) token'i verin."
+        )
+    kalan = veri.get("ttl")
+    if isinstance(kalan, int) and kalan > 0:
+        print(f"  [0] kurtarma token'i gecerli; kalan omur ~{kalan // 86400} gun")
+        if kalan < _YENILEME_ESIGI_SN:
+            print(
+                "      ⚠️ bir yildan AZ kaldi -> YENILEYIN: python scripts/vault_emanet.py --token-uret\n"
+                "         (yeni token'i saklayin; sonra eskisini iptal edin)"
+            )
+    else:
+        print("  [0] kurtarma token'i gecerli (suresiz)")
+    return tok
+
+
 def durum() -> int:
     kod, s = _istek("/v1/sys/health?uninitcode=200&sealedcode=200")
     if kod == 0:
@@ -159,12 +222,17 @@ def ac() -> int:
 
 
 def kur() -> int:
+    """KV + denetim + kurtarma politikası. ⚠️ D2.E05 (İG-9.86): adım hataları SAYILIR; biri bile düşerse çıkış kodu 1.
+    Eskiden her durumda 0 dönüyordu — Vault kapalıyken / kök token yetkisizken üç "HATA" basıp yine "başarılı" çıkıyordu
+    (ölçüldü); otomasyon ve operatör kurulumu tamam sanıyordu."""
     t = _kok_token()
+    hata = 0
 
     # 1) KV v2
     kod, m = _istek("/v1/sys/mounts", token=t)
     if f"{MOUNT}/" not in (m or {}):
         kod, s = _istek(f"/v1/sys/mounts/{MOUNT}", "POST", {"type": "kv", "options": {"version": "2"}}, t)
+        hata += kod not in (200, 204)
         print(f"  KV v2 '{MOUNT}/' " + ("olusturuldu" if kod in (200, 204) else f"HATA {kod} {s.get('errors')}"))
     else:
         print(f"  KV v2 '{MOUNT}/' zaten var")
@@ -180,13 +248,20 @@ def kur() -> int:
             {"type": "file", "options": {"file_path": "/vault/logs/denetim.log"}},
             t,
         )
+        hata += kod not in (200, 204)
         print("  denetim kaydi " + ("acildi" if kod in (200, 204) else f"HATA {kod} {s.get('errors')}"))
     else:
         print("  denetim kaydi zaten acik")
 
     # 3) Kurtarma politikasi (YALNIZ OKUMA)
     kod, s = _istek(f"/v1/sys/policies/acl/{POLITIKA_ADI}", "PUT", {"policy": POLITIKA}, t)
+    hata += kod not in (200, 204)
     print(f"  politika '{POLITIKA_ADI}' " + ("yazildi" if kod in (200, 204) else f"HATA {kod} {s.get('errors')}"))
+    if hata:
+        print(
+            f"\nSONUC: KURULUM EKSIK — {hata} adim BASARISIZ (yukariya bakin; Vault kapali / muhurlu / kok token yetkisiz?)."
+        )
+        return 1
     return 0
 
 
@@ -259,11 +334,13 @@ def tatbikat() -> int:
       · PII basılmaz; yalnız SATIR SAYISI.
       · ⚠️ KARŞIT KANIT zorunlu: YANLIŞ anahtarın reddedildiği de ölçülür. O olmadan
         "açıldı" sonucu hiçbir şey kanıtlamaz (binding anahtarı yok sayıyor olabilirdi).
+      · ⚠️ Y86: zincirin İLK halkası KURTARMA token'ıdır — tatbikat onunla koşar; kök token KULLANILMAZ
+        (`_kurtarma_tokeni`: yoksa / kök token ise / geçersizse "BASARILI" denmez).
     """
     import shutil
     import tempfile
 
-    t = _kok_token()
+    t = _kurtarma_tokeni()
     kod, d = _istek(f"/v1/{MOUNT}/data/{EMANET_YOLU}", token=t)
     if kod != 200:
         print(f"  HATA {kod}: emanet okunamadi ({(d or {}).get('errors')})")
@@ -406,6 +483,7 @@ def geri_al(token: str | None) -> int:
 
 
 def main() -> int:
+    global _KURTARMA_TOKENI
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--durum", action="store_true")
@@ -420,7 +498,11 @@ def main() -> int:
     )
     g.add_argument("--token-uret", action="store_true")
     g.add_argument("--geri-al", action="store_true", help="KURTARMA: anahtari ekrana yaz")
-    ap.add_argument("--token", help="--geri-al icin kurtarma token'i (yoksa kok token kullanilir)")
+    ap.add_argument(
+        "--token",
+        help="kurtarma token'i: --tatbikat icin (verilmezse gizli istem; kok token KULLANILMAZ) ve --geri-al icin "
+        "(yoksa kok token kullanilir)",
+    )
     a = ap.parse_args()
 
     if a.durum:
@@ -434,6 +516,7 @@ def main() -> int:
     if a.dogrula:
         return dogrula()
     if a.tatbikat:
+        _KURTARMA_TOKENI = a.token  # Y86: tatbikat KURTARMA token'ıyla (bkz. _kurtarma_tokeni)
         return tatbikat()
     if a.token_uret:
         return token_uret()

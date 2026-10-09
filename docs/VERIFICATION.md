@@ -565,7 +565,8 @@ python scripts/vault_emanet.py --dogrula
 #   ✓ auto.patient_fernet_key : guncel
 #   SONUC: EMANET GUNCEL.
 
-python scripts/vault_emanet.py --tatbikat   # YENİ — aşağıya bakın
+python scripts/vault_emanet.py --tatbikat   # KURTARMA token'ı gizli istemle sorulur (ya da --token) — aşağıya bakın
+#   [0] kurtarma token'i gecerli; kalan omur ~3650 gun
 #   patients.db                ACILDI (2 tablo)   patients=1
 #   pemf_treatment_history.db  ACILDI (15 tablo)  treatment_sessions=12
 #   KARSIT KANIT: yanlis anahtar ✓ reddedildi (DatabaseError)
@@ -581,6 +582,16 @@ sessizce bozulabilir ve parmak izi karşılaştırması bunu **göremez**.
 
 `--tatbikat` o zinciri koşturur. Sözleşmesi:
 
+- ⚠️ **Zincirin ilk halkası KURTARMA token'ıdır** (D2.E05 · Y86): tatbikat onunla koşar — kök token
+  KULLANILMAZ. Eskiden `--tatbikat` `--token`ı yok sayıp **kök token'la** koşuyordu; kurtarma token'ı
+  iptal edilmiş olsa bile "TATBIKAT BASARILI" diyordu (ölçüldü, İG-9.86). Token `--token` ile ya da
+  etkileşimli konsolda **gizli istemle** alınır; **verilmezse / kök token ise / kurtarma politikasını
+  taşımıyorsa** tatbikat "kurtarma token'ı SINANMADI" der, **geçersizse** (iptal / süresi dolmuş)
+  "TATBIKAT BASARISIZ" der — ikisinde de çıkış kodu 1.
+- **Token yenileme adımı (A-84):** tatbikat kurtarma token'ının kalan ömrünü yazar; bir yıldan az
+  kalınca `--token-uret` ile **yenisini üretip saklamayı** söyler (token `renewable=false`; eskisini
+  yenisini sakladıktan sonra iptal edin). Vault'un varsayılan kira süresi 32 güne indirildi
+  (`docker/vault/config/vault.hcl`); kurtarma token'ı kendi açık 10 yıllık TTL'iyle üretilir.
 - Anahtar **hiçbir biçimde yazdırılmaz** (ne tam ne kısmi).
 - Gerçek DB'ye **dokunulmaz** — geçici bir kopya açılır, sonunda silinir.
 - PII basılmaz; yalnız **satır sayısı**.

@@ -76,7 +76,7 @@ def test_KRITIK_tatbikat_CLIye_BAGLI():
 
 
 #: Sir TASIYAN adlar (tatbikat icinde). ⚠️ D0Ö.18 ek (bagimsiz inceleme tur 4): yalniz ADI izlemek
-#: yetmiyordu — `d` (Vault yaniti) IKI hasta anahtarini birden tasir, `t` kok token'dir; `print(d)`
+#: yetmiyordu — `d` (Vault yaniti) IKI hasta anahtarini birden tasir, `t` token'dir (D2.E05: kurtarma token'i); `print(d)`
 #: ya da `print(locals())` hic `anahtar` gecisi eklemeden sirlari basardi.
 SIRLAR = ("anahtar", "d", "t")
 #: `d`nin TEK izinli kullanimlari (ast.unparse bicimiyle): hata listesi ve anahtarin turetimi.
@@ -119,9 +119,12 @@ _GOLGELENEMEZ = {"len", "open_encrypted_conn", "_istek", "print"}
 #: Korunan bir adi BAGLAYABILEN tek import (modul + ad birebir); baska kaynaktan baglamak golgelemedir.
 _KANONIK_IMPORT = {"open_encrypted_conn": ("database.sqlcipher_util", "open_encrypted_conn")}
 #: Siri URETEN cagrilar ve TEK izinli baglamlari (atama hedef adlari) — D0Ö.18 ek-2 (tur 5, ORTA).
-_KAYNAK_BAGLAMLARI = {"_kok_token": ["t"], "_istek": ["kod", "d"]}
-#: Tatbikatta HIC cagrilamayan sir kaynaklari (unseal anahtarlari + kok token, cozulmus hasta anahtarlari).
-_YASAK_KAYNAKLAR = {"_kurtarma", "_sirlari_oku", "geri_al", "token_uret"}
+#: ⚠️ D2.E05 · Y86 (sahip karari): `t` artik KURTARMA token'idir — tek kaynagi `_kurtarma_tokeni()`; kok token
+#: (`_kok_token`) tatbikatta YASAK kaynaktir (felakette elde olacak olan kurtarma token'i sinanmali).
+_KAYNAK_BAGLAMLARI = {"_kurtarma_tokeni": ["t"], "_istek": ["kod", "d"]}
+#: Tatbikatta HIC cagrilamayan sir kaynaklari (kok token; `_kurtarma` = unseal anahtarlari + kok token; cozulmus hasta
+#: anahtarlari; uretim/geri alma yollari).
+_YASAK_KAYNAKLAR = {"_kok_token", "_kurtarma", "_sirlari_oku", "geri_al", "token_uret"}
 
 
 def _ebeveynler(kok: ast.AST) -> dict:
@@ -312,8 +315,9 @@ def _hedef_adlari(hedef: ast.AST) -> list[str]:
 
 
 def kaynak_ihlalleri(fn: ast.AST) -> list[str]:
-    """Siri URETEN cagrilar: `_kok_token()` yalniz `t = _kok_token()`, `_istek(...)` yalniz
-    `kod, d = _istek(...)` — TAM BIR KEZ; `_kurtarma`/`_sirlari_oku`/`geri_al`/`token_uret` HIC.
+    """Siri URETEN cagrilar: `_kurtarma_tokeni()` yalniz `t = _kurtarma_tokeni()`, `_istek(...)` yalniz
+    `kod, d = _istek(...)` — TAM BIR KEZ; `_kok_token`/`_kurtarma`/`_sirlari_oku`/`geri_al`/`token_uret` HIC
+    (D2.E05 · Y86: tatbikat kurtarma token'iyla kosar, kok token'la DEGIL).
 
     ⚠️ D0Ö.18 ek-2 (bagimsiz inceleme tur 5, ORTA): adlari izleyen kollar siri ureten CAGRININ kendisini
     gormuyordu — `print(_kok_token())`, `print(_sirlari_oku())` ya da `_istek` donusunu yeni bir ada
@@ -367,7 +371,7 @@ def tum_ihlaller(fn: ast.AST) -> dict[str, list[str]]:
 def test_KRITIK_ANAHTAR_asla_YAZDIRILMAZ():
     """⚠️ Bu kapinin korudugu sey bir SIR.
 
-    Sir tasiyan adlar (`anahtar`, Vault yaniti `d`, kok token `t`) bir CIKTI cagrisinda (print,
+    Sir tasiyan adlar (`anahtar`, Vault yaniti `d`, kurtarma token'i `t`) bir CIKTI cagrisinda (print,
     sys.stdout/stderr(.buffer).write(lines), logging) yalniz izinli bicimde gecebilir: `anahtar`
     dogrudan `len(...)` icinde, `d` yalniz hata listesi olarak, `t` HIC.
 
@@ -414,8 +418,8 @@ def test_KRITIK_anahtar_ALANI_yalniz_TEK_turetimde():
 
 
 def test_KRITIK_sir_KAYNAKLARI_yalniz_TEK_baglamda():
-    """D0Ö.18 ek-2 (tur 5, ORTA): siri URETEN cagrilar (`_kok_token`, `_istek`) yalniz bilinen TEK atamada;
-    kurtarma/hasta-anahtari kaynaklari tatbikatta HIC. Sayim 0 donerse de KIRMIZI (tarayici kor olamaz)."""
+    """D0Ö.18 ek-2 (tur 5, ORTA): siri URETEN cagrilar (`_kurtarma_tokeni`, `_istek`) yalniz bilinen TEK atamada;
+    kok token / kurtarma dosyasi / hasta-anahtari kaynaklari tatbikatta HIC (D2.E05 · Y86). Sayim 0 donerse de KIRMIZI (tarayici kor olamaz)."""
     fn = _fonksiyon("tatbikat")
     ihlaller = kaynak_ihlalleri(fn)
     assert not ihlaller, f"tatbikat'ta sir KAYNAGI izinsiz baglamda: {ihlaller}"
@@ -443,7 +447,7 @@ def test_KAPI_TARAYICISI_gercek_gecisleri_GORUYOR():
 _TABAN = (
     "def tatbikat():\n"
     "    from database.sqlcipher_util import open_encrypted_conn\n"
-    "    t = _kok_token()\n"
+    "    t = _kurtarma_tokeni()\n"
     "    kod, d = _istek('/v1/x', token=t)\n"
     "    if kod != 200:\n"
     "        print(f\"  HATA {kod}: ({(d or {}).get('errors')})\")\n"
@@ -479,7 +483,7 @@ _OZ_DENETIM = [
     ('print(f"emanet: {d}")', {"cikti", "akis"}),
     ("print(d.get('data'))", {"cikti", "akis"}),
     ("v = (d.get('data') or {}).get('data') or {}\nprint(v)", {"akis"}),
-    ("print(t)", {"cikti", "akis"}),  # kok token
+    ("print(t)", {"cikti", "akis"}),  # kurtarma token'i
     ("print(locals())", {"icgozlem"}),
     ("print(vars())", {"icgozlem"}),
     ("print(sys._getframe().f_locals)", {"icgozlem"}),
@@ -491,6 +495,9 @@ _OZ_DENETIM = [
     ("y = 'auto.patient_fernet_key'", {"sabit"}),
     # ── D0Ö.18 ek-2 (bağımsız inceleme tur 5) ──
     ("print(_kok_token())", {"kaynak"}),  # ORTA: kaynak çağrısı ada bağlanmadan basılır
+    # ── D2.E05 · Y86: kök token tatbikatta YASAK kaynak; kurtarma token'ı yalnız `t = _kurtarma_tokeni()` ──
+    ("t2 = _kok_token()", {"kaynak"}),
+    ("print(_kurtarma_tokeni())", {"kaynak"}),
     ("print(_sirlari_oku())", {"kaynak"}),
     ("y = _istek('/v1/x', token=t)[1]\nprint(y)", {"kaynak"}),
     ("x = _kurtarma()", {"kaynak"}),
