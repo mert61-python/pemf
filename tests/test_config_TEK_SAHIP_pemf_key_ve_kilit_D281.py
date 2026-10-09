@@ -91,10 +91,18 @@ def pcm_uret(veri, monkeypatch):
 
 
 @pytest.fixture()
-def sahip_uret(veri):
-    from pemf_gui.config import ConfigManager
+def sahip_uret(veri, monkeypatch):
+    """Sahip = süreç-geneli `pemf_gui.config.config` (PCM onu `get_config()` ile kullanır — üründe TEK örnek). Her çağrı test veri
+    dizinine bağlı YENİ sahibi kurar ve TEKİL olarak yerleştirir. Ayrı örnek kurmak, önceki bir testin tekilde önbelleğe aldığı
+    şifreleyiciyle ayrışıyordu (kapanış tam süitinde ölçüldü: PCM, sahibin şifrelediği `mqtt.pass`i çözemedi — tek başına yeşil)."""
+    from pemf_gui import config as sahip_modulu
 
-    return lambda: ConfigManager(config_file=str(veri / "config.json"))
+    def _uret():
+        m = sahip_modulu.ConfigManager(config_file=str(veri / "config.json"))
+        monkeypatch.setattr(sahip_modulu, "config", m)
+        return m
+
+    return _uret
 
 
 @pytest.fixture()
