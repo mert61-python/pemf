@@ -607,7 +607,16 @@ class HeadlessDBMaintenance:
             try:
                 (dpath / _OFFSITE_README_NAME).write_text(_OFFSITE_README_TEXT, encoding="utf-8")
             except Exception:
-                logger.debug("off-machine kurtarma notu yazilamadi", exc_info=True)
+                # ⚠️ D2-3.6 (2-D incelemesi): not felaket günü okunacak TEK talimattır — yazılamazsa (hedefte eski / hiç not) SESSİZ
+                # kalmaz. Eskiden DEBUG idi; aynı turda INFO "geri yuklenebilir" yazılıyordu.
+                # Kapı: tests/test_kurtarma_notu_YAZILAMAZSA_SESSIZ_DEGIL_D236.py
+                logger.warning(
+                    "off-machine kurtarma notu (%s) YAZILAMADI — hedefteki not eski ya da yok; kurtarma adimlari icin "
+                    "docs/RUNBOOK.md 'Felaket kurtarma' bolumune bakin: %s",
+                    _OFFSITE_README_NAME,
+                    dest,
+                    exc_info=True,
+                )
         except Exception:
             logger.warning("off-machine backup dizini hatasi (%s)", dest, exc_info=True)
 
