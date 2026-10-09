@@ -612,6 +612,35 @@ class PatientDatabase:
                     _verilen = ""
             patient_id = _verilen or str(uuid.uuid4())
             now = datetime.now().isoformat()
+            # ⚠️ D2.53 (B-3.30 · B-3.31): İÇE AKTARMADA (patient_id verildiğinde) satır EKSİKSİZ taşınır:
+            #   · `created_at` / `updated_at` / `last_treatment_at` / `anonymized` paketteki değerleriyle — eskiden kayıt tarihi içe
+            #     aktarma anına SIFIRLANIYOR, KVKK'nın 5 yıllık inaktiflik saati baştan başlıyor, anonim hasta "anonim değil" oluyordu;
+            #   · çözülemeyen alan (`_sifreli_ham`, bkz. `disa_aktarim_hastalari`) ÖZGÜN şifreli değeriyle AYNEN yazılır ve arama
+            #     dizinine katılmaz — eskiden "[okunamayan kayıt]" yer tutucusu gerçek değer diye şifreleniyor, özgün değer kayboluyordu.
+            # Yeni hasta (patient_id yok) bugünkü gibi. Kapı: tests/test_cihaz_tasima_hasta_satiri_EKSIKSIZ_D253.py
+            ice_aktarma = bool(_verilen)
+            ham = patient_info.get("_sifreli_ham") if ice_aktarma else None
+            ham = {k: v for k, v in (ham or {}).items() if k in self._ENCRYPTED_FIELDS and isinstance(v, str) and v}
+
+            def _alan(ad: str) -> str:
+                return ham[ad] if ad in ham else self._encrypt_field(patient_info.get(ad, ""))
+
+            def _tarih(ad: str, varsayilan):
+                deger = patient_info.get(ad) if ice_aktarma else None
+                if deger in (None, ""):
+                    return varsayilan
+                try:
+                    datetime.fromisoformat(str(deger))
+                    return str(deger)
+                except ValueError:
+                    self.logger.warning("Ice aktarma: gecersiz %s (%r) — varsayilan kullanildi.", ad, str(deger)[:40])
+                    return varsayilan
+
+            olusturma = _tarih("created_at", now)
+            guncelleme = _tarih("updated_at", olusturma)
+            son_tedavi = _tarih("last_treatment_at", None)
+            anonim = 1 if ice_aktarma and str(patient_info.get("anonymized") or 0) in ("1", "True", "true") else 0
+            dizin_icin = {k: ("" if k in ham else v) for k, v in patient_info.items()}
 
             try:
                 with self._get_connection() as conn:
@@ -619,29 +648,54 @@ class PatientDatabase:
                     cursor.execute(
                         """
                         INSERT INTO patients
-                        (id, name, species, breed, age, weight, owner, vet_contact, owner_email, operator_email, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (id, name, species, breed, age, weight, owner, vet_contact, owner_email, operator_email, created_at, updated_at,
+                         last_treatment_at, anonymized)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             patient_id,
-                            self._encrypt_field(patient_info.get("name", "")),
-                            self._encrypt_field(patient_info.get("species", "")),
-                            self._encrypt_field(patient_info.get("breed", "")),
-                            self._encrypt_field(patient_info.get("age", "")),
-                            self._encrypt_field(patient_info.get("weight", "")),
-                            self._encrypt_field(patient_info.get("owner", "")),
-                            self._encrypt_field(patient_info.get("vet_contact", "")),
-                            self._encrypt_field(patient_info.get("owner_email", "")),
-                            self._encrypt_field(patient_info.get("operator_email", "")),
-                            now,
-                            now,
+                            _alan("name"),
+                            _alan("species"),
+                            _alan("breed"),
+                            _alan("age"),
+                            _alan("weight"),
+                            _alan("owner"),
+                            _alan("vet_contact"),
+                            _alan("owner_email"),
+                            _alan("operator_email"),
+                            olusturma,
+                            guncelleme,
+                            son_tedavi,
+                            anonim,
                         ),
                     )
-                    self._index_patient_search_terms(cursor, patient_id, patient_info)
+                    self._index_patient_search_terms(cursor, patient_id, dizin_icin)
                     conn.commit()
                 return patient_id
             except _DB_ERROR as e:
                 raise RuntimeError(f"Failed to add patient: {e}") from e
+
+    def disa_aktarim_hastalari(self) -> List[Dict[str, Any]]:
+        """Cihaz taşıma paketi için TÜM hasta satırları (tarihler ve `anonymized` dahil) — KATI okuma (hata yükselir, D2.66).
+
+        ⚠️ D2.53 (B-3.31): çözülemeyen (farklı / eski anahtarla şifreli) alan YER TUTUCU olarak pakete GİRMEZ: alan boş bırakılır ve
+        özgün şifreli değeri `_sifreli_ham` altında taşınır; içe aktarma onu aynen yazar (`add_patient`). Eskiden "[okunamayan kayıt]"
+        metni paketleniyor, yeni cihazda gerçek değer diye şifreleniyordu — özgün değer kayboluyordu."""
+        with self.lock:
+            with self._get_connection() as conn:
+                conn.row_factory = self._row_factory
+                satirlar = conn.cursor().execute("SELECT * FROM patients ORDER BY created_at DESC").fetchall()
+        sonuc: List[Dict[str, Any]] = []
+        for satir in satirlar:
+            ham = dict(satir)
+            hasta = self._decrypt_patient_fields(dict(ham))
+            okunamayan = {a: ham.get(a) for a in self._ENCRYPTED_FIELDS if hasta.get(a) == _UNREADABLE_PLACEHOLDER}
+            if okunamayan:
+                for a in okunamayan:
+                    hasta[a] = ""
+                hasta["_sifreli_ham"] = okunamayan
+            sonuc.append(hasta)
+        return sonuc
 
     def get_patient(self, patient_id: str) -> Optional[Dict[str, Any]]:
         """Belirtilen ID'ye sahip hastayi getirir."""

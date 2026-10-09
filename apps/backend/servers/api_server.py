@@ -6396,7 +6396,7 @@ async def export_clinic_data(payload: DataExportPayload, request: Request):
         # ⚠️ D2.66 (B-3.110): hasta okuması KATI — okunamayan hasta DB'si "hasta yok" sayılırsa yedek hasta listesiz "başarılı"
         # çıkıyordu (yeni cihaza yüklenince 0 hasta — veri kaybı zinciri). Kapı: tests/test_hasta_DB_okunamazken_SESSIZ_DEGIL_D266.py
         try:
-            _hastalar_disa = await asyncio.to_thread(pdb.get_all_patients, kati=True)
+            _hastalar_disa = await asyncio.to_thread(pdb.disa_aktarim_hastalari)  # D2.53: katı + çözülemeyen alan özgün
         except Exception:
             logging.getLogger(__name__).exception("VERİ TAŞIMA: hasta kayıtları okunamadı — yedek oluşturulmadı")
             raise HTTPException(
