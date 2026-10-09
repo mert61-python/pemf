@@ -88,7 +88,7 @@ curl "http://127.0.0.1:8000/api/audit/events?event_type=ai_log.delete_all"
 | **STM bobinleri ölü** | `PEMF_STM_PORT=auto` ST-Link'i buldu mu? Sürücü? `/api/health` → `stmConnected`. |
 | **atRestEncrypted=false (beklenmedik)** | `PEMF_ENCRYPT_AT_REST=1` set mi? sqlcipher3 wheel EXE'de mi? Anahtar (`.sqlcipher_key`/keyring) okunuyor mu? PatientDB fail-closed → başlatma reddeder. |
 | **Kötü güncelleme sonrası sorun** | Aşağıdaki **"Kötü güncelleme"** bölümüne bakın. ⚠️ `/api/update/rollback` **KULLANMAYIN** — o uç eski (kapatılmış) EXE kanalına aittir ve hiçbir şey yapmaz. |
-| **Disk dolu / yedek** | `<data>\backups\` günlük şifreli yedek (her türden son 14: tedavi, hasta, operatör hesapları, SIRSIZ `config` / `system_settings`) + `kurtarma-zarfi.enc`. `PEMF_BACKUP_DIR` set ise off-machine kopya — orada da her türden **son 14** tutulur, eskileri cihaz siler (Y11); cihaz o dizinde yalnız kendi `pemf_<tür>_<tarih>` dosyalarını siler. Kaldırma / tam temizlik off-machine dizine dokunmaz (A-45). |
+| **Disk dolu / yedek** | `<data>\backups\` günlük şifreli yedek (her türden son 14: tedavi, hasta, operatör hesapları, SIRSIZ `config` / `system_settings`) + `kurtarma-zarfi.enc`. `PEMF_BACKUP_DIR` set ise off-machine kopya — orada da her türden **son 14** tutulur, eskileri cihaz siler (Y11); cihaz o dizinde yalnız kendi `pemf_<tür>_<tarih>` dosyalarını siler. Kaldırma / tam temizlik off-machine dizine dokunmaz (A-45). Her cihaz AYRI `PEMF_BACKUP_DIR` kullanmalı: dizinde başka kurulumun `.pemf_kurulum_*` işareti varsa cihaz orada HİÇ silmez ve ERROR yazar (D2-1.2). Aynı veri kökünü iki backend süreci paylaşamaz — geri yükleme / yedek alma kilitleri süreç içidir; launcher tek backend başlatır (S-D2I.6). |
 
 ## Kötü güncelleme (TEK KANAL: launcher)
 
