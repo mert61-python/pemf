@@ -546,6 +546,21 @@ async def log_client_error(request: Request):
 # LAN'dan/tünelden erişilebilen bir yere sızarsa at-rest şifreleme anlamsızlaşır. Kodun kendisi
 # YALNIZ loopback'ten (cihazın kendi ekranı) okunur — `desktop-session` ile aynı gerekçe.
 _KURTARMA_ONAY_ANAHTARI = "recovery_code_acknowledged_at"
+# ⚠️ D2.13 (B-3.39): onay KODA bağlıdır. Onay anındaki `KURTARMA-KODU.txt` içeriğinin parmak izi saklanır; kod değişip dosya yeniden
+# yazılınca parmak izi tutmaz → onay YENİ kodu onaylamış SAYILMAZ, uyarı bandı geri gelir (operatör kasadaki eski kodla kalmaz).
+# Parmak izi DOSYA İÇERİĞİNİN tek yönlü özetidir (16 hex); kodun kendisi saklanmaz/döndürülmez. Parmak izi olmayan eski onaylar
+# (bu sürümden önce verilmiş) mevcut koda verilmiş sayılır — güncellemede herkes yeniden uyarılmasın.
+_KURTARMA_ONAY_IZI_ANAHTARI = "recovery_code_acknowledged_fp"
+
+
+def _kod_dosyasi_izi(kod_dosyasi) -> str:
+    """`KURTARMA-KODU.txt` içeriğinin parmak izi (yoksa / okunamazsa "")."""
+    import hashlib
+
+    try:
+        return hashlib.sha256(kod_dosyasi.read_bytes()).hexdigest()[:16]
+    except Exception:
+        return ""
 
 
 def _loopback_mu(request: Request) -> bool:
@@ -575,6 +590,10 @@ def _kurtarma_durumu():
         tdb = get_treatment_db(app_data)
         at_rest = bool(getattr(tdb, "at_rest_encrypted", False))
         onay = tdb._get_system_setting(_KURTARMA_ONAY_ANAHTARI)
+        # D2.13: onay bugünkü kod dosyasına verilmemişse (kod değişti) onay YOK sayılır → uyarı geri gelir.
+        onay_izi = tdb._get_system_setting(_KURTARMA_ONAY_IZI_ANAHTARI)
+        if onay and onay_izi and onay_izi != _kod_dosyasi_izi(kod_dosyasi):
+            onay = None
     except Exception:
         logging.getLogger("system_router").debug("kurtarma durumu okunamadi", exc_info=True)
     return at_rest, kod_dosyasi.exists(), onay, str(kod_dosyasi)
@@ -647,7 +666,16 @@ async def recovery_ack(request: Request):
         from database.treatment_history_db import get_treatment_db
 
         def _yaz():
-            tdb = get_treatment_db(Path(_api._app_data_dir()))
+            from utils.backup_recovery import CODE_FILE_NAME
+
+            app_data = Path(_api._app_data_dir())
+            tdb = get_treatment_db(app_data)
+            # D2.13: onay, operatörün GÖRDÜĞÜ kod dosyasına bağlanır (önce iz, sonra zaman — yarım yazımda iz eski onayı bozmasın).
+            tdb._set_system_setting(
+                _KURTARMA_ONAY_IZI_ANAHTARI,
+                _kod_dosyasi_izi(app_data / CODE_FILE_NAME),
+                "Onaylanan KURTARMA-KODU.txt iceriginin parmak izi (kod degisirse onay gecersiz)",
+            )
             tdb._set_system_setting(
                 _KURTARMA_ONAY_ANAHTARI,
                 datetime.now().isoformat(timespec="seconds"),

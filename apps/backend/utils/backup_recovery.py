@@ -200,14 +200,9 @@ def _collect_keys() -> dict:
     return out
 
 
-def write_code_file(app_data_dir: Path, code: str) -> Path | None:
-    """Kurtarma kodunu yerel diske yaz (ACL kilitli) — operatör bir yerden okumalı.
-
-    Bu dosya yedek dizinine KOPYALANMAZ; amacı operatörün kodu makine dışına
-    taşıyabilmesi. Taşındıktan sonra silinebilir (zarf yine geçerli kalır).
-    """
-    p = Path(app_data_dir) / CODE_FILE_NAME
-    text = (
+def kod_dosyasi_metni(code: str) -> str:
+    """`KURTARMA-KODU.txt`in BEKLENEN içeriği (tek kaynak) — yazım ve "dosya güncel mi?" denetimi aynı metni kullanır."""
+    return (
         "PEMF — YEDEK KURTARMA KODU\n"
         "=============================================================\n\n"
         f"    {format_code(code)}\n\n"
@@ -226,7 +221,39 @@ def write_code_file(app_data_dir: Path, code: str) -> Path | None:
         "  tools/kurtarma.py --zarf <yedek-dizini>/" + ENVELOPE_NAME + " --kod <kod> --yaz\n"
         "=============================================================\n"
     )
-    p.write_text(text, encoding="utf-8")
+
+
+def kod_dosyasi_guncel_mi(app_data_dir: Path, code: str) -> bool:
+    """`KURTARMA-KODU.txt` VAR ve tam olarak `code` için beklenen metni mi taşıyor? (okunamazsa False)."""
+    try:
+        return (Path(app_data_dir) / CODE_FILE_NAME).read_text(encoding="utf-8") == kod_dosyasi_metni(code)
+    except Exception:
+        return False
+
+
+def write_code_file(app_data_dir: Path, code: str) -> Path | None:
+    """Kurtarma kodunu yerel diske yaz (ACL kilitli) — operatör bir yerden okumalı.
+
+    Bu dosya yedek dizinine KOPYALANMAZ; amacı operatörün kodu makine dışına
+    taşıyabilmesi. Taşındıktan sonra silinebilir (zarf yine geçerli kalır).
+
+    D2.13: ATOMİK (tmp + fsync + os.replace) — kod değişince dosya yeniden yazılır; yarım kalan bir yazım eski kodu
+    bozup yeni kodu da yarım bırakmasın.
+    """
+    p = Path(app_data_dir) / CODE_FILE_NAME
+    tmp = p.with_name(f"{p.name}.{os.getpid()}.tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(kod_dosyasi_metni(code))
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, p)
+    finally:
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except Exception:
+            pass
     try:
         from utils.file_acl import lock_down_file
 
@@ -341,13 +368,19 @@ def refresh_recovery_material(app_data_dir, dest_dirs) -> bool:
     except Exception:
         logger.debug("kurtarma parmak izi yazilamadi", exc_info=True)
 
+    # ⚠️ D2.13 (B-3.39): kod dosyası yalnız YOKSA yazılıyordu. Kod yeniden üretilince (sır dosyası sıfırlanıp `get_or_create_code`
+    # yenisini üretince) zarf YENİ kodla yazılıyor, `KURTARMA-KODU.txt` (ve onu okuyan `/api/system/recovery-code`) ESKİ kodu
+    # gösteriyordu → operatör zarfı AÇMAYAN kodu kasaya koyardı. Artık dosya zarfın koduyla güncel DEĞİLSE (yok / farklı kod /
+    # bozuk) yeniden yazılır. Kapı: tests/test_kurtarma_kodu_DOSYASI_yeni_kodla_GUNCELLENIR_D213.py
     code_file = app_data_dir / CODE_FILE_NAME
-    if not code_file.exists():
+    if not kod_dosyasi_guncel_mi(app_data_dir, code):
+        _vardi = code_file.exists()
         try:
             write_code_file(app_data_dir, code)
             logger.warning(
-                "KURTARMA KODU yazildi: %s — bu kodu MAKINE DISINDA saklayin. Yedekleri "
+                "KURTARMA KODU %s: %s — bu kodu MAKINE DISINDA saklayin. Yedekleri "
                 "baska bir makinede acmanin TEK yolu budur.",
+                "GUNCELLENDI (kod degisti; eski kod artik zarfi ACMAZ)" if _vardi else "yazildi",
                 code_file,
             )
         except Exception:
