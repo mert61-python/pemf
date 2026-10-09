@@ -207,22 +207,45 @@ def test_stm_baglanti_durumu_ve_emit_AYNI_kilitte(api):
     )
 
 
-def test_auth_db_ACL_sureci_disari_kilitlemez():
+def test_auth_db_ACL_sureci_disari_kilitlemez(tmp_path, monkeypatch):
     """P3 — kaçan mutasyon: `keep_current_user=False` yapılınca takım yeşil kaldı.
 
     `lock_down_file` yalnız SYSTEM+Administrators verir. auth DB'si sürekli AÇIK tutulur;
     süreç kendi hesabını kaybederse `unable to open database file` alır ve backend BAŞLAMAZ.
     Bu gerçek makinede yaşandı (auth_users.db kilitlendi, elle icacls ile kurtarıldı).
+
+    ⚠️ D2.30 (B-3.93): bu kapı eskiden kaynak METNİNDE `keep_current_user=True` arıyordu. Argüman silinse (varsayılan False), konumsal
+    `False` yazılsa ya da sertleştirme çağrısı hiç yapılmasa da `auth_db.py`nin yorum/docstring satırları metni taşıdığı için YEŞİL
+    kalıyordu (ölçüldü: 3/3 mutant yeşil). Artık GERÇEK `AuthDB(tmp)` kurulur, `file_acl.lock_down_file` CASUSLA değiştirilir ve her
+    çağrının argümanları GERÇEK imzaya bağlanır (konumsal / anahtar sözcük fark etmez, varsayılan dahil).
     """
     import inspect
+    from pathlib import Path
 
+    import utils.file_acl as fa
     from database import auth_db
 
-    src = inspect.getsource(auth_db)
-    assert "keep_current_user=True" in src, (
-        "auth DB ACL'i keep_current_user=True KULLANMIYOR → süreç kendi DB'sini açamaz hale gelir"
+    imza = inspect.signature(fa.lock_down_file)
+    cagrilar = []
+
+    def _casus(*a, **k):
+        b = imza.bind(*a, **k)
+        b.apply_defaults()
+        cagrilar.append((Path(b.arguments["path"]), b.arguments["keep_current_user"]))
+        return True
+
+    monkeypatch.setattr(fa, "lock_down_file", _casus)
+    db = auth_db.AuthDB(tmp_path)
+
+    assert cagrilar, (
+        "AuthDB kurulunca auth_users.db için ACL kilidi HİÇ çağrılmadı (sertleştirme düştü → hash'ler Users'a açık)"
     )
-    assert "keep_current_user=False" not in src
+    assert any(p == Path(db.db_path) for p, _ in cagrilar), f"kilit auth_users.db dosyasına uygulanmadı: {cagrilar}"
+    disari = [str(p) for p, tut in cagrilar if tut is not True]
+    assert not disari, (
+        "auth DB ACL'i sürecin hesabını KORUMUYOR (keep_current_user False / varsayılan) → yükseltilmemiş süreç kendi DB'sini "
+        f"açamaz, giriş/kayıt düşer: {disari}"
+    )
 
 
 def test_acilis_VACUUM_u_AKTIF_SEANSTA_calismaz(api):
