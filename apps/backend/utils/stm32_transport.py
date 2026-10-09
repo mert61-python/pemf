@@ -29,7 +29,13 @@ ST_LINK_USB_VID = 0x0483  # STMicroelectronics
 ST_LINK_USB_PIDS = frozenset({0x3744, 0x3748, 0x374B, 0x374D, 0x374E, 0x374F, 0x3752, 0x3753})
 DEFAULT_BAUDRATE = 115200
 DEFAULT_HANDSHAKE_TIMEOUT_SEC = 12.0
-DEFAULT_NO_PORT_LOG_INTERVAL_SEC = 15.0
+# ⚠️ D2.10 (B-1.14): STM takılı değilken yeniden deneme (~3 sn) her seferinde "Port seçimi" INFO + "Bağlantı başarısız" WARNING
+# (oto-algılamada ayrıca 15 sn'de bir "ST-Link bulunamadı") basıyordu — sahadaki 1.9.50 günlüğünün %75-90'ı; 10 MB'lık dosya 3-10
+# günde dönüp NACK / watchdog / çökme izini siliyordu. Artık DURUM DEĞİŞİMİNDE bir kez (ilk başarısızlık, hata metni ya da port
+# değişince, başarıdan sonraki ilk başarısızlık) + bu aralıkla ÖZET (ardışık deneme sayısı + son hata). Başarı durumu sıfırlar.
+# Kapı: tests/test_stm_YOKKEN_gunluk_DURUM_degisiminde_ve_OZETLE_D210.py
+DEFAULT_NO_PORT_LOG_INTERVAL_SEC = 600.0
+DEFAULT_FAILURE_SUMMARY_INTERVAL_SEC = 600.0
 DEFAULT_BAD_PORT_COOLDOWN_SEC = 3.0
 # Port açıldıktan sonra USB VCP/CDC’nin hazır hale gelmesini bekle (saniye)
 VCP_SETTLE_TIME_SEC = 2.0
@@ -102,15 +108,22 @@ class Stm32SerialTransport:
         handshake_timeout_sec: float = DEFAULT_HANDSHAKE_TIMEOUT_SEC,
         no_port_log_interval_sec: float = DEFAULT_NO_PORT_LOG_INTERVAL_SEC,
         bad_port_cooldown_sec: float = DEFAULT_BAD_PORT_COOLDOWN_SEC,
+        failure_summary_interval_sec: float = DEFAULT_FAILURE_SUMMARY_INTERVAL_SEC,
     ) -> None:
         self.logger = logger
         self.baudrate = int(baudrate)
         self.handshake_timeout_sec = float(handshake_timeout_sec)
         self.no_port_log_interval_sec = float(no_port_log_interval_sec)
         self.bad_port_cooldown_sec = float(bad_port_cooldown_sec)
+        self.failure_summary_interval_sec = float(failure_summary_interval_sec)
         self.settings = settings
-        self._last_no_port_log = 0.0
+        self._last_no_port_log = -float("inf")
         self._bad_ports_until: dict[str, float] = {}
+        # D2.10: durum-değişimi günlüğü — son yazılan port seçimi, başarısızlık imzası (port + hata), ardışık deneme sayısı.
+        self._son_secim_logu: Optional[tuple] = None
+        self._hata_imzasi: Optional[tuple] = None
+        self._ardisik_hata = 0
+        self._son_hata_ozeti = 0.0
         #: D1.103 (B-1.21): son el sıkışmada görülen `STM_NACK` satırı sayısı (zaman aşımı teşhisini seçer).
         self._el_sikisma_nack = 0
 
@@ -145,6 +158,7 @@ class Stm32SerialTransport:
             if not ready_line:
                 self.close_serial(serial_obj)
                 self._mark_bad(candidate.device)
+                self._hata_imzasi = None  # D2.10: port AÇILDI → sonraki açılış hatası YENİ durumdur, yeniden yazılır
                 if self._el_sikisma_nack:
                     # ⚠️ D1.103 (B-1.21, ölçüldü d01t83 durum D): kart YANIT VERİYOR ama sıfır-duty yoklamasını REDDEDİYOR
                     # (resetsiz bağlanan eski/uyumsuz firmware — banner da görülmedi). Eskiden aşağıdaki kablo/port
@@ -171,12 +185,15 @@ class Stm32SerialTransport:
 
             self._bad_ports_until.pop(candidate.device.upper(), None)
             self._log_info("[STM32] Handshake OK: %s", candidate.label())
+            if self._ardisik_hata:
+                self._log_info("[STM32] Bağlantı %d başarısız denemeden sonra kuruldu.", self._ardisik_hata)
+            self._durum_sifirla()
             return Stm32OpenResult(serial=serial_obj, candidate=candidate, ready_line=ready_line)
         except Exception as exc:
             if serial_obj is not None:
                 self.close_serial(serial_obj)
             self._mark_bad(candidate.device)
-            self._log_warning("[STM32] Bağlantı başarısız → %s: %s", candidate.label(), exc)
+            self._baglanti_hatasi(candidate, exc)
             return None
 
     def close_serial(self, serial_obj: Any) -> None:
@@ -249,7 +266,11 @@ class Stm32SerialTransport:
         if bad_until > time.monotonic():
             self._throttled_no_port_log(f"[STM32] {candidate.device} cooldown dolana kadar bekleniyor.")
             return None
-        self._log_info("[STM32] Port seçimi: %s @ %d baud", candidate.label(), self.baudrate)
+        # D2.10: seçim yalnız DEĞİŞİNCE (ya da başarılı bağlantıdan sonraki ilk denemede) yazılır.
+        secim = (candidate.label(), self.baudrate)
+        if secim != self._son_secim_logu:
+            self._son_secim_logu = secim
+            self._log_info("[STM32] Port seçimi: %s @ %d baud", candidate.label(), self.baudrate)
         return candidate
 
     def _autodetect_stlink(self) -> Optional[Stm32PortCandidate]:
@@ -381,6 +402,36 @@ class Stm32SerialTransport:
         if now - self._last_no_port_log >= self.no_port_log_interval_sec:
             self._last_no_port_log = now
             self._log_info(message)
+
+    def _baglanti_hatasi(self, candidate: Stm32PortCandidate, exc: Exception) -> None:
+        """D2.10: açılamayan port DURUM DEĞİŞİMİNDE bir kez (ilk / farklı hata ya da port) + seyrek ÖZETLE yazılır."""
+        self._ardisik_hata += 1
+        now = time.monotonic()
+        imza = (candidate.device.upper(), type(exc).__name__, str(exc))
+        if imza != self._hata_imzasi:
+            self._hata_imzasi = imza
+            self._son_hata_ozeti = now
+            self._log_warning(
+                "[STM32] Bağlantı başarısız → %s: %s (yeniden denenecek; aynı hata %d sn'de bir özetlenir)",
+                candidate.label(),
+                exc,
+                int(self.failure_summary_interval_sec),
+            )
+        elif now - self._son_hata_ozeti >= self.failure_summary_interval_sec:
+            self._son_hata_ozeti = now
+            self._log_warning(
+                "[STM32] Bağlantı hâlâ kurulamıyor → %s: %d ardışık deneme; son hata: %s",
+                candidate.label(),
+                self._ardisik_hata,
+                exc,
+            )
+
+    def _durum_sifirla(self) -> None:
+        """Başarılı bağlantı: bir sonraki kesinti / seçim / 'port yok' durumu yeniden BİR KEZ yazılsın."""
+        self._ardisik_hata = 0
+        self._hata_imzasi = None
+        self._son_secim_logu = None
+        self._last_no_port_log = -float("inf")
 
     def _log_info(self, message: str, *args: Any) -> None:
         if self.logger:
