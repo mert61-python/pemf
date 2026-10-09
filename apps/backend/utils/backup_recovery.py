@@ -44,6 +44,20 @@ logger = logging.getLogger(__name__)
 ENVELOPE_NAME = "kurtarma-zarfi.enc"
 # Kurtarma kodunun operatöre gösterildiği yerel dosya — YEDEK DİZİNİNE KOPYALANMAZ.
 CODE_FILE_NAME = "KURTARMA-KODU.txt"
+# ⚠️ D2.75 (B-11.5): kurtarma komutunun TEK kaynağı. Sahada Python YOK; tek çalıştırılabilir launcher'ın kullanıcı-başına kurduğu
+# `PEMF_Backend.exe`dir (`%LOCALAPPDATA%\PEMF Vet Client\runtime\PEMF_Backend\`); `--kurtarma` alt komutu `tools.kurtarma`yı koşturur
+# (`backend_service._kurtarma_mi`; D2.35: donmuş EXE'de depo dışında açılır). Eskiden KURTARMA-KODU.txt, yedeklerin yanındaki
+# OKU-KURTARMA.txt, aracın kendi uyarıları ve RUNBOOK `python tools/kurtarma.py` diyordu → anakartı ölen klinik "Python bulunamadı"
+# alıp yedeklerin açılamadığını sanırdı. Biçim Komut İstemi (cmd.exe) içindir (`%LOCALAPPDATA%` orada açılır).
+# Kapı: tests/test_kurtarma_yonergesi_SAHADA_CALISAN_komut_D275.py
+KURTARMA_EXE = r'"%LOCALAPPDATA%\PEMF Vet Client\runtime\PEMF_Backend\PEMF_Backend.exe"'
+
+
+def kurtarma_komutu(*argumanlar: str) -> str:
+    """Sahada çalışan kurtarma komutu (cmd.exe): `"…\\PEMF_Backend.exe" --kurtarma <argümanlar>`."""
+    return " ".join((KURTARMA_EXE, "--kurtarma", *argumanlar))
+
+
 # Zarfın gereksiz yere her gün yeniden yazılmaması için yerel parmak izi.
 _FP_FILE_NAME = ".recovery_fp"
 # D2.60 (B-3.94): mühür `<önek><parmak izi>` YALNIZ zarf VE kod dosyası bu kod için yazıldıktan sonra vurulur. Öneksiz mühür eski
@@ -220,8 +234,8 @@ def kod_dosyasi_metni(code: str) -> str:
         "    durursa koruma ortadan kalkar.\n"
         "  * Kod kaybolursa yedekler bu makine disinda ACILAMAZ.\n"
         "  * Kodu disari aldiktan sonra bu dosyayi silebilirsiniz.\n\n"
-        "KURTARMA\n"
-        "  tools/kurtarma.py --zarf <yedek-dizini>/" + ENVELOPE_NAME + " --kod <kod> --yaz\n"
+        "KURTARMA (yeni makinede, PEMF kurulduktan sonra, Komut Istemi / cmd penceresinde)\n"
+        "  " + kurtarma_komutu("--zarf", "<yedek-dizini>\\" + ENVELOPE_NAME, "--kod", "<kod>", "--yaz") + "\n"
         "=============================================================\n"
     )
 

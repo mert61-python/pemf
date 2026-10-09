@@ -14,6 +14,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from utils.backup_recovery import kurtarma_komutu
 from utils.dongu_guvenligi import dongu_hatasini_bildir
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,9 @@ logger = logging.getLogger(__name__)
 _OFFSITE_README_NAME = "OKU-KURTARMA.txt"
 #: Operatör hesapları DB'si (`database/auth_db.AuthDB`: `<veri dizini>/auth_users.db`) — D2.51 (A-32) yedek kapsamı.
 _HESAP_DB_ADI = "auth_users.db"
-_OFFSITE_README_TEXT = """PEMF — YEDEK KURTARMA NOTU
+# ⚠️ D2.75 (B-11.5): komutlar `utils.backup_recovery.kurtarma_komutu` TEK kaynağından (`@@…@@` yer tutucuları aşağıda doldurulur);
+# eskiden `python tools/kurtarma.py` yazıyordu — sahada Python YOK, çalışan yol `PEMF_Backend.exe --kurtarma`.
+_OFFSITE_README_SABLON = """PEMF — YEDEK KURTARMA NOTU
 =============================================================
 Bu dizindeki .db dosyalari SQLCipher ile SIFRELIDIR (sifreli kurulumda).
 
@@ -54,8 +57,8 @@ KURTARMA ZARFI
 
 NASIL GERI YUKLENIR
   1) Yeni makineye PEMF kurun (henuz baslatmadan).
-  2) Anahtarlari zarftan cikarip yerlestirin:
-       python tools/kurtarma.py --zarf kurtarma-zarfi.enc --kod <KOD> --yaz
+  2) Anahtarlari zarftan cikarip yerlestirin (Komut Istemi / cmd penceresinde):
+       @@KURTARMA_ZARF@@
   3) Bu dizindeki  pemf_treatment_history_*.db / pemf_patients_*.db  dosyalarindan
      en yenisini veri dizinine  pemf_treatment_history.db / patients.db
      adiyla kopyalayin.
@@ -63,7 +66,7 @@ NASIL GERI YUKLENIR
       yonergeyi izleyen klinik hasta kayitlarini geri yukledigini sanip bos liste gorurdu.
       YEDEK dosya on-eki `pemf_patients_<tarih>.db` DEGISMEDI — rotasyon onu kullanir.)
   3b) Operator hesaplari: pemf_auth_users_<tarih>.db sifreliyse (2. adimdan SONRA):
-       python tools/kurtarma.py --hesap-yedegi pemf_auth_users_<tarih>.db --cikti <veri-dizini>\\auth_users.db
+       @@KURTARMA_HESAP@@
       Sifresiz kurulumda dosyayi  auth_users.db  adiyla kopyalamak yeter.
   3c) Ayarlar:  pemf_config_<tarih>.json -> config.json,
       pemf_system_settings_<tarih>.json -> system_settings.json.
@@ -77,6 +80,12 @@ ZARF YOKSA
   Ikisi de yoksa bu yedekler kurtarilamaz.
 =============================================================
 """
+_OFFSITE_README_TEXT = _OFFSITE_README_SABLON.replace(
+    "@@KURTARMA_ZARF@@", kurtarma_komutu("--zarf", "kurtarma-zarfi.enc", "--kod", "<KOD>", "--yaz")
+).replace(
+    "@@KURTARMA_HESAP@@",
+    kurtarma_komutu("--hesap-yedegi", "pemf_auth_users_<tarih>.db", "--cikti", "<veri-dizini>\\auth_users.db"),
+)
 
 #: D2-1.1: dosya zamanı bu kadar saniyeden fazla İLERİDEYSE saat güvenilmez sayılır (tazelik kararında yok sayılır).
 _SAAT_TOLERANSI_SN = 600.0
@@ -308,7 +317,7 @@ class HeadlessDBMaintenance:
         `system_settings.json`. AÇIK İZİN LİSTESİ: yalnız bu üç dosya; SIR dosyaları (`pemf_secrets.json`, `.pemf_key`, `.sqlcipher_key`,
         `KURTARMA-KODU.txt`, `api_token.txt`, `admin_reset_code.txt`, cihaz kimliği) yapısal olarak kapsama GİREMEZ.
           · Hesap DB'si: şifreli kurulumda yedek BİRİNCİL anahtarla ŞİFRELİ (kaynak düz olsa da) — e-posta + 6 haneli PIN özeti makine
-            dışına düz gitmez. Geri yükleme: `tools/kurtarma.py --hesap-yedegi`.
+            dışına düz gitmez. Geri yükleme: `PEMF_Backend.exe --kurtarma --hesap-yedegi` (`kurtarma_komutu`).
           · Ayar dosyaları: SIRSIZ kopya — parola / jeton / API anahtarı / `enc:` değerleri ayıklanır (geri yüklemede yeniden girilir).
             Kaynak okunamazsa HAM kopya ALINMAZ (sır içerebilir).
         Biri düşerse ötekiler ve klinik DB yedekleri etkilenmez; düşen ERROR ile söylenir. Döndürür: üretilen yedek yolları.

@@ -12,18 +12,23 @@ NEDEN GEREKLİ
     (CRYPTPROTECT_LOCAL_MACHINE) ile sarılıydı → o makine olmadan çözülemez.
     Kurtarma zarfı anahtarların koda-bağlı bir kopyasını taşır.
 
-KULLANIM
+KULLANIM — SAHADA (Python YOK; launcher'ın kurduğu EXE'nin alt komutu, Komut İstemi / cmd penceresinde)
+    set EXE="%LOCALAPPDATA%\\PEMF Vet Client\\runtime\\PEMF_Backend\\PEMF_Backend.exe"
+
     # Sadece göster (hiçbir şey yazmaz):
-    python tools/kurtarma.py --zarf E:\\PEMF_Yedek\\kurtarma-zarfi.enc --kod ABCDE-FGHIJ-...
+    %EXE% --kurtarma --zarf E:\\PEMF_Yedek\\kurtarma-zarfi.enc --kod ABCDE-FGHIJ-...
 
     # Anahtarları BU makinenin sır deposuna yaz (yeni kurulum için):
-    python tools/kurtarma.py --zarf ... --kod ... --yaz
+    %EXE% --kurtarma --zarf ... --kod ... --yaz
 
     # Bu makinedeki kurtarma kodunu göster (cihaz hâlâ çalışıyorken):
-    python tools/kurtarma.py --kodu-goster
+    %EXE% --kurtarma --kodu-goster
 
     # Şifreli operatör hesapları yedeğini düz auth_users.db'ye çöz (--yaz'dan SONRA):
-    python tools/kurtarma.py --hesap-yedegi pemf_auth_users_<tarih>.db --cikti <veri-dizini>\\auth_users.db
+    %EXE% --kurtarma --hesap-yedegi pemf_auth_users_<tarih>.db --cikti <veri-dizini>\\auth_users.db
+
+    Kaynak ağacında (geliştirme) aynı bayraklarla: python tools/kurtarma.py ...
+    ⚠️ D2.75 (B-11.5): aracın ve ürünün yazdığı yönergeler komutu TEK kaynaktan alır (`utils.backup_recovery.kurtarma_komutu`).
 
 GERİ YÜKLEME SIRASI
     1) Yeni makineye PEMF'i kurun, servisi HENÜZ BAŞLATMAYIN.
@@ -74,6 +79,7 @@ from utils.backup_recovery import (  # noqa: E402
     CODE_FILE_NAME,
     ENVELOPE_NAME,
     format_code,
+    kurtarma_komutu,
     open_envelope,
 )
 
@@ -141,7 +147,10 @@ def _restore(zarf: Path, kod: str, yaz: bool) -> int:
         print("  NOT: anahtar pemf_secrets.json'da olmasa bile ESKI kaynaklardan (Windows keyring,")
         print("       .sqlcipher_key, config\\.pemf_key_v2) geliyor olabilir — bunlar da sayilir.")
         print("  Bu makine TAZE bir kurulumsa (hic hasta verisi YOK) su sekilde zorlayin:")
-        print("      set PEMF_KURTARMA_USTUNE_YAZ=1   &&   python tools/kurtarma.py ... --yaz")
+        print(
+            "      set PEMF_KURTARMA_USTUNE_YAZ=1   &&   "
+            + kurtarma_komutu("--zarf", "<yedek>\\" + ENVELOPE_NAME, "--kod", "<KOD>", "--yaz")
+        )
         return 3
 
     # ⚠️ 2-A inceleme A2-1.6: anahtarlar TEK yazımda (ya hepsi ya hiçbiri). Eskiden tek tek yazılıyordu; ikinci yazım
@@ -167,7 +176,10 @@ def _restore(zarf: Path, kod: str, yaz: bool) -> int:
     # DEGISMEDI — onu `headless_db_maintenance` uretir ve rotasyona sokar.
     print("    pemf_patients_<tarih>.db           ->  patients.db")
     print("Operator hesaplari (sifreli yedek):")
-    print("    python tools/kurtarma.py --hesap-yedegi pemf_auth_users_<tarih>.db --cikti <veri-dizini>\\auth_users.db")
+    print(
+        "    "
+        + kurtarma_komutu("--hesap-yedegi", "pemf_auth_users_<tarih>.db", "--cikti", "<veri-dizini>\\auth_users.db")
+    )
     return 0
 
 
@@ -220,7 +232,7 @@ def _hesap_yedegini_coz(yedek: Path, cikti: Path) -> int:
         print(f"HATA: sqlcipher_key okunamadi ({type(e).__name__}: {e})")
     if not anahtar:
         print("HATA: bu makinede sqlcipher_key YOK — once anahtarlari zarftan yerlestirin:")
-        print("    python tools/kurtarma.py --zarf <yedek>\\kurtarma-zarfi.enc --kod <KOD> --yaz")
+        print("    " + kurtarma_komutu("--zarf", "<yedek>\\" + ENVELOPE_NAME, "--kod", "<KOD>", "--yaz"))
         return 2
     try:
         sifreli_yedegi_duze_coz(str(yedek), str(cikti), import_sqlcipher(), anahtar, logging.getLogger("kurtarma"))

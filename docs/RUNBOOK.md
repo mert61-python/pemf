@@ -134,8 +134,9 @@ dahil — tek başına **açılamaz**. Bunun için kurulum bir kez **150-bit kur
 | | |
 |---|---|
 | **Kod nerede** | `<data>\KURTARMA-KODU.txt` (ilk yedekte oluşur). **Operatör bunu makine dışına almalı** — kasa / parola yöneticisi. Aldıktan sonra dosya silinebilir. |
-| **Zarf nerede** | `<data>\backups\kurtarma-zarfi.enc` ve `PEMF_BACKUP_DIR` set ise off-site kopyada. İçinde `sqlcipher_key` + `patient_fernet_key`, koddan scrypt ile türetilen anahtarla şifreli. |
-| **Kodu görüntüle** | `python tools\kurtarma.py --kodu-goster` (cihaz hâlâ çalışırken) |
+| **Zarf nerede** | `<data>\backups\kurtarma-zarfi.enc` ve `PEMF_BACKUP_DIR` set ise off-site kopyada. İçinde kurtarılacak anahtarlar — `sqlcipher_key` (şifreli kurulumda) + `patient_fernet_key` (hasta alanları; at-rest kapalıyken de, D2.60) — koddan scrypt ile türetilen anahtarla şifreli. |
+| **Kodu görüntüle** | `"%LOCALAPPDATA%\PEMF Vet Client\runtime\PEMF_Backend\PEMF_Backend.exe" --kurtarma --kodu-goster` (cihaz hâlâ çalışırken; Komut İstemi / cmd) |
+| **Kurtarma aracı** | Sahada Python YOK: araç launcher'ın kurduğu `PEMF_Backend.exe`nin `--kurtarma` alt komutudur (D2.75). Aşağıdaki komutlar **cmd** içindir; PowerShell'de `& "$env:LOCALAPPDATA\PEMF Vet Client\runtime\PEMF_Backend\PEMF_Backend.exe" --kurtarma …` |
 
 **Kod ve zarf ASLA aynı yerde durmamalı** — zarfın tüm koruması buna dayanır. Kod dosyası
 yedek dizinine kopyalanmaz; regresyon testiyle kilitlidir.
@@ -143,14 +144,14 @@ yedek dizinine kopyalanmaz; regresyon testiyle kilitlidir.
 **Yeni makinede geri yükleme:**
 1. PEMF'i kur, **backend'i henüz BAŞLATMA** — launcher'ı açma (servis kurulumunda: servisi henüz BAŞLATMA);
    başlatırsan yeni bir `sqlcipher_key` üretilir ve yedekler açılmaz.
-2. `python tools\kurtarma.py --zarf <yedek>\kurtarma-zarfi.enc --kod <KOD> --yaz`
+2. `"%LOCALAPPDATA%\PEMF Vet Client\runtime\PEMF_Backend\PEMF_Backend.exe" --kurtarma --zarf <yedek>\kurtarma-zarfi.enc --kod <KOD> --yaz`
    Makinede zaten anahtar varsa araç **durur** (üzerine yazmak mevcut şifreli veriyi kalıcı kaybettirir);
    gerçekten taze kurulumsa `PEMF_KURTARMA_USTUNE_YAZ=1` ile zorla.
 3. En yeni yedeği kopyala: `pemf_treatment_history_<tarih>.db` → `pemf_treatment_history.db`,
    `pemf_patients_<tarih>.db` → `patients.db`  ← ⚠️ hedef ad `patients.db`; uygulama
    `pemf_patients.db` adını **hiç açmaz** (yedek dosya ön-eki ile karıştırmayın)
    Operatör hesapları: `pemf_auth_users_<tarih>.db` şifreliyse
-   `python tools\kurtarma.py --hesap-yedegi <yedek>\pemf_auth_users_<tarih>.db --cikti <data>\auth_users.db`
+   `"%LOCALAPPDATA%\PEMF Vet Client\runtime\PEMF_Backend\PEMF_Backend.exe" --kurtarma --hesap-yedegi <yedek>\pemf_auth_users_<tarih>.db --cikti <data>\auth_users.db`
    (2. adımdan sonra; şifresiz kurulumda `auth_users.db` adıyla kopyalamak yeter). Ayarlar: `pemf_config_<tarih>.json` →
    `config.json`, `pemf_system_settings_<tarih>.json` → `system_settings.json` — SIRSIZDIR, MQTT kullanıcı/parola ve API
    anahtarını yeniden gir.
