@@ -175,7 +175,7 @@ def _hesap_yedegini_coz(yedek: Path, cikti: Path) -> int:
     import logging
     import shutil
 
-    from database.yedek_dosyasi import sifreli_yedegi_duze_coz, yedek_acilir_mi
+    from database.yedek_dosyasi import basarisiz_yedegi_kaldir, sifreli_yedegi_duze_coz, yedek_acilir_mi
 
     if not yedek.is_file():
         print(f"HATA: hesap yedegi bulunamadi: {yedek}")
@@ -190,8 +190,21 @@ def _hesap_yedegini_coz(yedek: Path, cikti: Path) -> int:
         if not yedek_acilir_mi(str(yedek), tam=True):
             print(f"HATA: sifresiz hesap yedegi ACILMIYOR / bozuk: {yedek}")
             return 2
-        shutil.copy2(yedek, cikti)
-        print(f"Sifresiz hesap yedegi kopyalandi: {cikti}")
+        # ⚠️ D2-2.3 (2-D incelemesi): doğrudan çıktıya kopya disk dolunca YARIM auth_users.db bırakıyor, OSError yakalanmadan
+        # kaçıyor, yeniden denemede rc 3 ("çıktı zaten var") yarım dosyayı koruyordu. Şifreli dalla aynı sözleşme: geçici ad →
+        # doğrulama → os.replace; düşerse geçici silinir, çıktı OLUŞMAZ.
+        gecici = Path(f"{cikti}.yazim.tmp")
+        try:
+            shutil.copy2(yedek, gecici)
+            if not yedek_acilir_mi(str(gecici), tam=True):
+                raise RuntimeError(f"kopya dogrulanamadi: {gecici}")
+            os.replace(gecici, cikti)
+        except Exception as e:
+            basarisiz_yedegi_kaldir(str(gecici), logging.getLogger("kurtarma"))
+            print(f"HATA: sifresiz hesap yedegi KOPYALANAMADI ({type(e).__name__}: {e}) — cikti YAZILMADI.")
+            print("  Disk alanini ve hedef klasorun yazilabilir oldugunu denetleyip ayni komutu yeniden calistirin.")
+            return 4
+        print(f"Sifresiz hesap yedegi kopyalandi ve dogrulandi: {cikti}")
         return 0
     from database.sqlcipher_util import import_sqlcipher
     from utils import secrets_manager as sm
