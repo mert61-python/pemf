@@ -198,38 +198,32 @@ class PatientDatabase:
         """Çalışan hasta DB'sinden dosya yedeği (online backup API). DB ŞİFRELİYSE yedek de AYNI
         anahtarla ŞİFRELİ olur (düz hedefe yedek PII sızdırır). audit B-7.2: PatientDB'nin yedeği yoktu.
 
-        ⚠️ D2.61 (B-3.70): tedavi DB'siyle AYNI kural — başarısız deneme hedefte 0 baytlık / yarım dosya BIRAKMAZ
-        (`database/yedek_dosyasi.py`). Kapı: tests/test_at_rest_bayragi_ve_yarim_yedek_D261.py"""
-        from database.yedek_dosyasi import basarisiz_yedegi_kaldir
+        ⚠️ D2.61 (B-3.70) · D2.63 (B-3.20): tedavi DB'siyle AYNI kural ve AYNI yazıcı (`database/yedek_dosyasi.yedek_yaz`) —
+        geçici ad → açılarak doğrulama → son ada taşıma; başarısız deneme hedefte 0 baytlık / yarım dosya BIRAKMAZ.
+        Kapılar: tests/test_at_rest_bayragi_ve_yarim_yedek_D261.py · tests/test_yerel_yedek_penceresi_KORUNUR_D263.py"""
+        from database.yedek_dosyasi import yedek_yaz
 
-        onceden_vardi = os.path.exists(backup_path)
-        dst = None
-        basarili = False
         try:
             bdir = os.path.dirname(backup_path)
             if bdir:
                 os.makedirs(bdir, exist_ok=True)
             with self._get_connection() as src:
                 if self.at_rest_encrypted and self._sqlcipher_mod is not None:
-                    dst = self._sqlcipher_mod.connect(backup_path)
-                    dst.execute("PRAGMA key='{}'".format(self._cipher_key.replace("'", "''")))
+                    yedek_yaz(src, backup_path, self._sqlcipher_mod, self._cipher_key, self.logger)
                 else:
-                    dst = sqlite3.connect(backup_path)
-                src.backup(dst)
-                dst.commit()
-            basarili = True
+                    yedek_yaz(src, backup_path, sqlite3, "", self.logger)
             return True
         except Exception:
             self.logger.exception("PatientDB create_backup hatası")
             return False
-        finally:
-            if dst is not None:
-                try:
-                    dst.close()
-                except Exception:
-                    pass
-            if not basarili:
-                basarisiz_yedegi_kaldir(backup_path, onceden_vardi, self.logger)
+
+    def yedek_acilir_mi(self, yol, tam: bool = False) -> bool:
+        """Bu kurulumun anahtarıyla hasta DB yedeği açılıyor mu? (D2.63 rotasyon / tazelik) ASLA istisna atmaz."""
+        from database.yedek_dosyasi import yedek_acilir_mi
+
+        if self.at_rest_encrypted and self._sqlcipher_mod is not None:
+            return yedek_acilir_mi(yol, self._sqlcipher_mod, self._cipher_key, tam=tam)
+        return yedek_acilir_mi(yol, None, "", tam=tam)
 
     def _safe_add_column(self, cursor, table: str, column_def: str) -> None:
         """Idempotent şema-migrasyonu: ALTER TABLE ADD COLUMN; sütun zaten varsa (`duplicate column`) sessizce geç.

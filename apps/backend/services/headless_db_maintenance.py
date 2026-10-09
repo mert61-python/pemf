@@ -106,7 +106,8 @@ class HeadlessDBMaintenance:
             t.join(timeout=10.0)
 
     def _loop(self):
-        last_maint = last_backup = last_disk = 0.0
+        last_maint = last_disk = 0.0
+        last_backup = None
         first = True
         while not self._stop.is_set():
             now = time.monotonic()
@@ -123,11 +124,23 @@ class HeadlessDBMaintenance:
                 # gunun kopyalariyla degistiriyordu (felaket-kurtarma penceresi yok olur).
                 # Cozum: acilista yedek al AMA yalnizca diskteki EN YENI yedek bayatsa. Boylece
                 # "servis uzun sure kapali kaldi" durumu yine yedeklenir, restart dongusu yedegi imha etmez.
-                if (first and not self._recent_backup_exists()) or now - last_backup >= self.backup_interval:
+                # ⚠️ D2.63 (B-3.11): açılış kararı YALNIZ diskteki en yeni AÇILABİLEN yedeğin yaşından verilir. Eskiden koşul
+                # `(first and not recent) or now - last_backup >= interval` ve `last_backup = 0.0` idi: `now` monotonic olduğu
+                # için 24 saatten uzun açık makinede ikinci terim ilk turda hep doğruydu → koruma ölü, her yeniden başlatma
+                # yedek alıyordu (ölçüldü). Atlanan açılış yedeğinde sayaç o yedeğin YAŞINA göre kurulur: sonraki yedek
+                # "en yeni yedek + aralık"ta gelir (şimdiye kurmak 2 güne yakın gecikme demekti).
+                # Kapı: tests/test_yerel_yedek_penceresi_KORUNUR_D263.py
+                if first:
+                    yas = self._en_yeni_gecerli_yedek_yasi()
+                    if yas is None or yas >= self.backup_interval:
+                        self._run_backup()
+                        last_backup = now
+                    else:
+                        logger.info("Acilis yedegi ATLANDI: diskte taze yedek var (restart-dongusu korumasi).")
+                        last_backup = now - yas
+                elif last_backup is None or now - last_backup >= self.backup_interval:
                     self._run_backup()
                     last_backup = now
-                elif first:
-                    logger.info("Acilis yedegi ATLANDI: diskte taze yedek var (restart-dongusu korumasi).")
             except Exception:
                 # D1.18 (B-4.17): bildirim fırlatırsa bakım/yedek/disk denetimi süreç ömrü boyunca ölürdü.
                 dongu_hatasini_bildir("DB bakim turu hatasi", logger=logger)
@@ -172,23 +185,46 @@ class HeadlessDBMaintenance:
         except Exception:
             logger.exception("maintenance hatasi")
 
-    def _recent_backup_exists(self) -> bool:
-        """Diskteki EN YENI yedek `backup_interval`'dan taze mi? (restart-dongusu korumasi)
+    def _yedek_acilir_mi(self, yol: Path) -> bool:
+        """Yedek dosyası bu kurulumun anahtarıyla AÇILIYOR mu? Hasta yedekleri hasta DB'siyle, yoksa tedavi DB'siyle (iki DB
+        aynı birincil anahtarı kullanır) doğrulanır. Doğrulayıcı yoksa AÇILAMAZ sayılır. ASLA istisna atmaz."""
+        db = self.patient_db if yol.name.startswith("pemf_patients_") and self.patient_db is not None else self.db
+        try:
+            return bool(db.yedek_acilir_mi(yol))
+        except Exception:
+            logger.warning("Yedek dogrulanamadi: %s", yol, exc_info=True)
+            return False
 
-        "Son yedek ne zaman alindi" bilgisini ayri bir durum dosyasinda tutmak yerine yedek
-        dosyalarinin KENDI mtime'indan turetiyoruz — surec yeniden basladiginda da gecerli
-        kalan tek gercek kaynak budur.
-        """
+    def _en_yeni_gecerli_yedek_yasi(self):
+        """Diskteki EN YENİ AÇILABİLEN tedavi yedeğinin yaşı (sn, ≥ 0) — yoksa None.
+
+        "Son yedek ne zaman alındı" bilgisi ayrı bir durum dosyasında tutulmaz; yedek dosyalarının KENDİ mtime'ından türetilir —
+        süreç yeniden başladığında da geçerli kalan tek gerçek kaynak budur.
+        ⚠️ D2.63 (B-3.20): yalnız AÇILABİLEN yedek sayılır. Eskiden en yeni mtime'lı DOSYA alınıyordu: başarısız yedeğin bıraktığı
+        0 baytlık artık "taze yedek" sayılıp açılış yedeğini 24 saat bastırıyordu (yedek sessizce alınmamış olur — ölçüldü).
+        Saat geride (mtime gelecekte) ise yaş 0 sayılır."""
         try:
             backup_dir = self.app_data_dir / "backups"
-            newest = max(
-                (p.stat().st_mtime for p in backup_dir.glob("pemf_treatment_history_*.db")),
-                default=0.0,
-            )
-            return newest > 0.0 and (time.time() - newest) < self.backup_interval
+            adaylar = []
+            for p in backup_dir.glob("pemf_treatment_history_*.db"):
+                try:
+                    st = p.stat()
+                except OSError:
+                    continue
+                if st.st_size > 0:
+                    adaylar.append((st.st_mtime, p))
+            for mtime, p in sorted(adaylar, key=lambda x: x[0], reverse=True):
+                if self._yedek_acilir_mi(p):
+                    return max(0.0, time.time() - mtime)
+            return None
         except Exception:
-            logger.debug("yedek tazelik kontrolu basarisiz", exc_info=True)
-            return False  # emin degilsek yedek AL (veri kaybetmektense fazladan yedek)
+            logger.warning("yedek tazelik kontrolu basarisiz — yedek ALINACAK", exc_info=True)
+            return None  # emin degilsek yedek AL (veri kaybetmektense fazladan yedek)
+
+    def _recent_backup_exists(self) -> bool:
+        """Diskteki EN YENİ AÇILABİLEN yedek `backup_interval`'dan taze mi? (restart-döngüsü korumasi)"""
+        yas = self._en_yeni_gecerli_yedek_yasi()
+        return yas is not None and yas < self.backup_interval
 
     def _run_backup(self):
         try:
@@ -243,18 +279,46 @@ class HeadlessDBMaintenance:
         return None
 
     def _cleanup_backups(self, backup_dir: Path):
-        # Her iki yedek ailesini de ayrı ayrı rotasyona sok (son N).
+        """Her iki yedek ailesini ayrı ayrı rotasyona sok: son N AÇILABİLEN yedek kalır.
+
+        ⚠️ D2.63 (B-3.20): eskiden dosyalar YALNIZ adla sayılıyordu — 0 baytlık / başarısız yedek artıkları rotasyonda SAĞLAM
+        yedeklerin yuvasını alıyor, en eski sağlam yedek siliniyordu (ölçüldü). Şimdi:
+          · 0 baytlık dosya veri taşımaz → silinir;
+          · DOLU ama bu kurulumun anahtarıyla AÇILAMAYAN dosya (anahtar değişiminden önceki yedek olabilir — kurtarılabilir veri)
+            SİLİNMEZ ve geçerli yedek sayısına KATILMAZ; günlükte söylenir;
+          · yalnız açılabilen yedekler arasında son N tutulur (ad = damga sırası).
+        Kapı: tests/test_yerel_yedek_penceresi_KORUNUR_D263.py"""
         for pattern in ("pemf_treatment_history_*.db", "pemf_patients_*.db"):
             try:
-                files = sorted(backup_dir.glob(pattern))
-                if len(files) > self.backup_retention_keep:
-                    for old in files[: -self.backup_retention_keep]:
+                gecerli, acilamayan = [], []
+                for f in sorted(backup_dir.glob(pattern)):
+                    try:
+                        bos = f.stat().st_size == 0
+                    except OSError:
+                        continue
+                    if bos:
+                        try:
+                            f.unlink(missing_ok=True)
+                            logger.info("0 baytlik yedek artigi silindi (veri tasimaz): %s", f.name)
+                        except OSError:
+                            logger.warning("0 baytlik yedek artigi silinemedi: %s", f, exc_info=True)
+                        continue
+                    (gecerli if self._yedek_acilir_mi(f) else acilamayan).append(f)
+                if acilamayan:
+                    logger.warning(
+                        "Yedek rotasyonu: %d ACILAMAYAN yedek (%s) bu kurulumun anahtariyla acilmiyor — SAYILMADI ve SILINMEDI "
+                        "(onceki bir anahtarla sifrelenmis olabilir; kurtarma zarfi/kodu ile acilabilir). Gerekmiyorsa elle kaldirin.",
+                        len(acilamayan),
+                        ", ".join(p.name for p in acilamayan[:5]),
+                    )
+                if len(gecerli) > self.backup_retention_keep:
+                    for old in gecerli[: -self.backup_retention_keep]:
                         try:
                             old.unlink(missing_ok=True)
-                        except Exception:
-                            pass
+                        except OSError:
+                            logger.warning("Eski yedek silinemedi (yedekler birikir): %s", old, exc_info=True)
             except Exception:
-                logger.warning("backup temizlik uyarisi (%s)", pattern)
+                logger.warning("backup temizlik uyarisi (%s)", pattern, exc_info=True)
 
     def _copy_offsite(self, files):
         """audit B-7.2: PEMF_BACKUP_DIR set ise YENİ yedekleri harici hedefe (ağ paylaşımı/USB) kopyala

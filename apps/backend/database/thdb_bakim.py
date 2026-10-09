@@ -159,14 +159,11 @@ class BakimKarisimi:
         """Çalışan DB'den dosya yedeği üret (online backup API). DB ŞİFRELİYSE yedek de aynı
         anahtarla ŞİFRELİ olur (plain hedefe yedek hem uyumsuz hem düz-metin PII sızdırır).
 
-        ⚠️ D2.61 (B-3.70): başarısız deneme hedefte 0 baytlık / yarım dosya BIRAKMAZ (`database/yedek_dosyasi.py`); hedef
-        bağlantısı her yolda (anahtar PRAGMA'sı düşse de) kapatılır — açık tutamak Windows'ta artığın silinmesini engellerdi.
-        Kapı: tests/test_at_rest_bayragi_ve_yarim_yedek_D261.py"""
-        from database.yedek_dosyasi import basarisiz_yedegi_kaldir
+        ⚠️ D2.61 (B-3.70) · D2.63 (B-3.20): yedek GEÇİCİ ada yazılır, açılarak doğrulanır, sonra son ada taşınır
+        (`database/yedek_dosyasi.yedek_yaz`) — başarısız deneme hedefte 0 baytlık / yarım dosya BIRAKMAZ, son ad yalnız doğrulanmış
+        yedekle oluşur. Kapılar: tests/test_at_rest_bayragi_ve_yarim_yedek_D261.py · tests/test_yerel_yedek_penceresi_KORUNUR_D263.py"""
+        from database.yedek_dosyasi import yedek_yaz
 
-        onceden_vardi = os.path.exists(backup_path)
-        dst_conn = None
-        basarili = False
         try:
             backup_dir = os.path.dirname(backup_path)
             if backup_dir:
@@ -177,9 +174,9 @@ class BakimKarisimi:
                     # ⚠️ A-13 (sahip kararı): yedek BİRİNCİL anahtarla şifrelenir — DB D-3 legacy anahtarla açılmış olsa da.
                     # Kurtarma zarfı yalnız birincil `sqlcipher_key`i taşır; "açan anahtarla" yazılan yedek makine dışında
                     # açılamazdı (regresyon). SQLCipher yedek API'si farklı anahtarlar arasında çalışır, çıktı hedef anahtarla.
-                    # ⚠️ D2.62 (B-3.71): anahtar çözümü bu `try` içinde — düşerse yedek yok, artık yok (`finally`). BOŞ anahtar
-                    # REDDEDİLİR, hedef dosya hiç açılmaz: `PRAGMA key=''` kitaplığa bırakılmaz (boş anahtarı "şifresiz" sayan
-                    # sürümde klinik verisinin düz-metin kopyası yazılırdı). Kapı: tests/test_yedek_ANA_anahtarla_bos_anahtar_reddi_D262_A13.py
+                    # ⚠️ D2.62 (B-3.71): anahtar çözümü bu `try` içinde — düşerse yedek yok, artık yok. BOŞ anahtar REDDEDİLİR,
+                    # hedef dosya hiç açılmaz: `PRAGMA key=''` kitaplığa bırakılmaz (boş anahtarı "şifresiz" sayan sürümde
+                    # klinik verisinin düz-metin kopyası yazılırdı). Kapı: tests/test_yedek_ANA_anahtarla_bos_anahtar_reddi_D262_A13.py
                     key = self._get_sqlcipher_key()
                     if not key:
                         self.logger.error(
@@ -187,26 +184,30 @@ class BakimKarisimi:
                             "— bos anahtarla yedek yazilmaz (duz-metin kopya riski). Sir deposunu denetleyin."
                         )
                         return False
-                    sqlcipher = self._import_sqlcipher()
-                    dst_conn = sqlcipher.connect(backup_path)
-                    dst_conn.execute("PRAGMA key='{}'".format(key.replace("'", "''")))
+                    yedek_yaz(src_conn, backup_path, self._import_sqlcipher(), key, self.logger)
                 else:
-                    dst_conn = sqlite3.connect(backup_path)
-                src_conn.backup(dst_conn)
-                dst_conn.commit()
-            basarili = True
+                    yedek_yaz(src_conn, backup_path, sqlite3, "", self.logger)
             return True
         except Exception as e:
             self.logger.error(f"DB backup hatası: {e}")
             return False
-        finally:
-            if dst_conn is not None:
-                try:
-                    dst_conn.close()
-                except Exception:
-                    pass
-            if not basarili:
-                basarisiz_yedegi_kaldir(backup_path, onceden_vardi, self.logger)
+
+    def yedek_acilir_mi(self, yol, tam: bool = False) -> bool:
+        """Bu kurulumun anahtarıyla (birincil — A-13) yedek dosyası açılıyor mu? Rotasyon / tazelik yalnız açılanları sayar
+        (D2.63). Düz-metin yedek anahtarsız açılır; şifreli yedek anahtar yoksa AÇILAMAZ sayılır. ASLA istisna atmaz."""
+        from database.yedek_dosyasi import yedek_acilir_mi
+
+        mod, key = None, ""
+        if getattr(self, "at_rest_encrypted", False):
+            try:
+                key = self._get_sqlcipher_key() or ""
+                mod = self._import_sqlcipher()
+            except Exception:
+                self.logger.warning(
+                    "Yedek dogrulamasi: birincil anahtar cozulemedi — sifreli yedekler ACILAMAZ sayilir.", exc_info=True
+                )
+                mod, key = None, ""
+        return yedek_acilir_mi(yol, mod, key, tam=tam)
 
     def apply_data_retention_policy(
         self,

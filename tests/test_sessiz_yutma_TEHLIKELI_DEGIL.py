@@ -137,14 +137,8 @@ MUAF: dict[tuple[str, str], tuple[int, str]] = {
         1,
         "geçici dosya `unlink`i `finally` içinde; kalması yalnız disk sızdırır, analiz sonucunu etkilemez",
     ),
-    (
-        "apps/backend/services/headless_db_maintenance.py",
-        "_cleanup_backups",
-    ): (
-        1,
-        "retention dışı ESKİ yedeklerin silinmesi; başarısızlık yedeklerin BİRİKMESİ "
-        "demektir (veri kaybı değil) ve dıştaki handler zaten loglar",
-    ),
+    # ⚠️ D2.63 (B-3.20): `headless_db_maintenance._cleanup_backups` muafiyeti KALDIRILDI — rotasyon artık silinemeyen yedeği
+    # WARNING ile söylüyor (sessiz `pass` yok). Kapı: tests/test_yerel_yedek_penceresi_KORUNUR_D263.py
 }
 
 

@@ -90,32 +90,50 @@ def test_retention_env_overrides_are_read(monkeypatch):
     assert M._retain_days("PEMF_RETAIN_SENSOR_DAYS", 90) == 90
 
 
-def test_startup_backup_skipped_when_recent_one_exists(tmp_path, monkeypatch):
+def test_startup_backup_skipped_when_recent_one_exists(temp_app_data, monkeypatch):
     """DENETIM P2 regresyonu: restart döngüsü yedek geçmişini imha etmemeli.
 
     Hata: döngü koşulu `first or ...` idi → servis HER açılışta yedek alıyordu. Rotasyon yalnız
     son N yedeği tuttuğundan crash-loop / art arda restart, N açılışta TÜM yedek geçmişini aynı
     günün kopyalarıyla değiştiriyordu (felaket-kurtarma penceresi yok olur).
+
+    ⚠️ D2.63 (B-3.20): "taze yedek" artık AÇILABİLEN yedektir — eskiden bu test 1 baytlık bir dosyayı taze sayılmaya
+    KİLİTLİYORDU (başarısız yedeğin 0 baytlık artığı da aynı yoldan açılış yedeğini 24 saat bastırıyordu). Taze yedek GERÇEK bir
+    yedektir; 1 baytlık dosya taze SAYILMAZ. Ayrıntılı kapı: tests/test_yerel_yedek_penceresi_KORUNUR_D263.py
     """
+    import os
     import time
 
+    from database import sqlcipher_util as su
+    from database.treatment_history_db import TreatmentHistoryDB
     from services.headless_db_maintenance import HeadlessDBMaintenance as M
 
-    obj = M.__new__(M)  # __init__'i atla (DB/thread gerekmesin)
-    obj.app_data_dir = tmp_path
-    obj.backup_interval = 24 * 3600.0
+    monkeypatch.delenv("PEMF_ENCRYPT_AT_REST", raising=False)
+    monkeypatch.setattr(su, "get_sqlcipher_key", lambda *a, **k: "")
+    monkeypatch.setattr(TreatmentHistoryDB, "_get_sqlcipher_key_legacy", lambda self: "")
+    db = TreatmentHistoryDB(temp_app_data)
+    try:
+        obj = M.__new__(M)  # __init__'i atla (thread gerekmesin)
+        obj.app_data_dir = temp_app_data
+        obj.backup_interval = 24 * 3600.0
+        obj.db = db
+        obj.patient_db = None
 
-    bdir = tmp_path / "backups"
-    bdir.mkdir()
-    assert obj._recent_backup_exists() is False, "yedek yokken açılışta yedek ALINMALI"
+        bdir = temp_app_data / "backups"
+        bdir.mkdir()
+        assert obj._recent_backup_exists() is False, "yedek yokken açılışta yedek ALINMALI"
 
-    taze = bdir / "pemf_treatment_history_20260803_120000.db"
-    taze.write_bytes(b"x")
-    assert obj._recent_backup_exists() is True, "taze yedek varken açılış yedeği ATLANMALI"
+        bir_bayt = bdir / "pemf_treatment_history_20260803_130000.db"
+        bir_bayt.write_bytes(b"x")
+        assert obj._recent_backup_exists() is False, "1 baytlık (açılmayan) dosya 'taze yedek' SAYILMAMALI"
 
-    # Bayat yedek → tekrar yedeklenmeli (servis uzun süre kapalı kaldıysa)
-    eski = time.time() - (25 * 3600)
-    import os
+        taze = bdir / "pemf_treatment_history_20260803_120000.db"
+        assert db.create_backup(str(taze)) is True
+        assert obj._recent_backup_exists() is True, "taze yedek varken açılış yedeği ATLANMALI"
 
-    os.utime(taze, (eski, eski))
-    assert obj._recent_backup_exists() is False, "bayat yedek varken yeniden yedeklenmeli"
+        # Bayat yedek → tekrar yedeklenmeli (servis uzun süre kapalı kaldıysa)
+        eski = time.time() - (25 * 3600)
+        os.utime(taze, (eski, eski))
+        assert obj._recent_backup_exists() is False, "bayat yedek varken yeniden yedeklenmeli"
+    finally:
+        db.close()
