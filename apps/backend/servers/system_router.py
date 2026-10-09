@@ -618,8 +618,9 @@ async def recovery_status(request: Request):
         "acknowledgedAt": onay,
         # Operatör dosyayı bulup kopyalayabilsin diye YOL verilir; içerik verilmez.
         "codeFilePath": yol,
-        # Uyarı gösterilmeli mi: şifreleme AÇIK, kod VAR ama operatör henüz onaylamadı.
-        "warn": bool(at_rest and kod_var and not onay),
+        # Uyarı gösterilmeli mi: kod VAR ama operatör (bu koda) henüz onay vermedi. ⚠️ D2.60 (B-3.64): şifreleme KAPALIYKEN de —
+        # zarf `patient_fernet_key`i taşır (hasta alanları onunla şifreli); kod dosyası yalnız kurtarılacak anahtar varken yazılır.
+        "warn": bool(kod_var and not onay),
     }
 
 
@@ -642,7 +643,14 @@ async def recovery_code(request: Request):
 
     yol = Path(_api._app_data_dir()) / CODE_FILE_NAME
     if not yol.exists():
-        raise HTTPException(status_code=404, detail="Bu cihazda kurtarma kodu yok (at-rest şifreleme kapalı olabilir).")
+        # D2.60 (B-3.94): "şifreleme kapalı olabilir" demiyor — dosya, kod üretilmiş ama yazılamamışken ya da operatör kodu dışarı
+        # alıp sildikten sonra da yok olabilir (o durumda geri yazılmaz).
+        raise HTTPException(
+            status_code=404,
+            detail="Kurtarma kodu dosyası bu cihazda yok: ya henüz yazılmadı (kurtarılacak anahtar varsa bir sonraki yedek turunda "
+            "yazılır; yazılamıyorsa günlükte 'kurtarma kodu dosyasi YAZILAMADI' satırına bakın) ya da kod dışarı alındıktan sonra "
+            "silindi.",
+        )
     try:
         return {"status": "success", "codeFilePath": str(yol), "content": yol.read_text(encoding="utf-8")}
     except Exception:

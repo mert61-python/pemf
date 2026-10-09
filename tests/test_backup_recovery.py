@@ -173,9 +173,12 @@ def test_KOD_YEDEK_DIZININE_ASLA_YAZILMAZ(tmp_path, izole_sirlar):
             assert br.CODE_FILE_NAME.encode() not in p.name.encode()
 
 
-def test_sifreleme_kapaliysa_zarf_YAZILMAZ_ve_anahtar_URETILMEZ(tmp_path, izole_sirlar):
-    """sqlcipher_key yoksa at-rest şifreleme kapalıdır. Burada anahtar ÜRETMEK,
-    şifrelemeyi kazara açıp mevcut düz-metin DB'yi okunamaz yapardı."""
+def test_kurtarilacak_ANAHTAR_YOKSA_zarf_YAZILMAZ_ve_anahtar_URETILMEZ(tmp_path, izole_sirlar):
+    """HİÇ kurtarılacak anahtar yoksa (taze, şifresiz kurulum) zarf yazılmaz. Burada anahtar ÜRETMEK, şifrelemeyi kazara
+    açıp mevcut düz-metin DB'yi okunamaz yapardı.
+
+    ⚠️ D2.60 (B-3.64): eski adı "şifreleme kapalıysa zarf YAZILMAZ" idi — plan bu öncülü YANLIŞ sayar: `sqlcipher_key` yokken de
+    `patient_fernet_key` (hasta alanları) varsa zarf yazılır (kapı: test_kurtarma_zarfi_FERNET_ve_kod_dosyasi_YENIDEN_denenir_D260)."""
     izole_sirlar.clear()
     app = tmp_path / "app"
     app.mkdir()

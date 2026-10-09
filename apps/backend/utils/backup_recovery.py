@@ -46,6 +46,9 @@ ENVELOPE_NAME = "kurtarma-zarfi.enc"
 CODE_FILE_NAME = "KURTARMA-KODU.txt"
 # Zarfın gereksiz yere her gün yeniden yazılmaması için yerel parmak izi.
 _FP_FILE_NAME = ".recovery_fp"
+# D2.60 (B-3.94): mühür `<önek><parmak izi>` YALNIZ zarf VE kod dosyası bu kod için yazıldıktan sonra vurulur. Öneksiz mühür eski
+# sürümündür — o sürüm mührü kod dosyasından ÖNCE vuruyordu, yani dosya hiç yazılamamış olabilir (bkz. refresh_recovery_material).
+_FP_MUHUR_ONEKI = "kod-yazildi:"
 
 # Yedekleri OKUYABİLMEK için gereken asgari anahtar kümesi. Fazlasını koymuyoruz:
 # zarf ele geçerse açığa çıkacak yüzey kadar küçük olsun.
@@ -278,7 +281,8 @@ def refresh_recovery_material(app_data_dir, dest_dirs) -> bool:
     Anahtarlar değişmediyse (parmak izi aynı) ve zarf zaten yerindeyse yeniden
     yazmaz → operatörün doğruladığı dosya gün gün değişip şüphe uyandırmasın.
 
-    Returns: zarf yazıldıysa/yerindeyse True; at-rest şifreleme yoksa False.
+    Returns: zarf yazıldıysa/yerindeyse True; kurtarılacak anahtar (sqlcipher_key / patient_fernet_key) yoksa ya da zarf hiçbir
+    hedefe yazılamadıysa False.
     """
     app_data_dir = Path(app_data_dir)
     dests = [Path(d) for d in dest_dirs if d]
@@ -286,19 +290,25 @@ def refresh_recovery_material(app_data_dir, dest_dirs) -> bool:
         return False
 
     keys = _collect_keys()
-    if "sqlcipher_key" not in keys:
-        # Şifreleme kapalı → yedekler zaten düz-metin, kurtarma zarfı ANLAMSIZ
-        # (ve sqlcipher_key'i burada ÜRETMEK şifrelemeyi yanlışlıkla açardı).
-        logger.debug("kurtarma zarfi atlandi: sqlcipher_key yok (at-rest sifreleme kapali)")
+    # ⚠️ D2.60 (B-3.64): eskiden `sqlcipher_key` yoksa ("at-rest kapalı") zarf HİÇ yazılmıyordu; oysa hasta alanları (ad, sahip, …)
+    # `patient_fernet_key` ile şifreli — makine ölünce başka makinede okunamaz. Artık kurtarılacak HERHANGİ bir anahtar varsa zarf
+    # yazılır; hiç yoksa (taze, şifresiz kurulum) atlanır. Karar 31 korunur: `_collect_keys` generate=False → sqlcipher_key
+    # burada ÜRETİLMEZ (şifrelemeyi kazara açmaz). Kapı: tests/test_kurtarma_zarfi_FERNET_ve_kod_dosyasi_YENIDEN_denenir_D260.py
+    if not keys:
+        logger.debug("kurtarma zarfi atlandi: kurtarilacak anahtar yok (sqlcipher_key / patient_fernet_key)")
         return False
 
     code = get_or_create_code()
     fp = _fingerprint(code, keys)
     fp_file = app_data_dir / _FP_FILE_NAME
     try:
-        unchanged = fp_file.read_text(encoding="utf-8").strip() == fp
+        muhur = fp_file.read_text(encoding="utf-8").strip()
     except Exception:
-        unchanged = False
+        muhur = ""
+    unchanged = muhur in (fp, _FP_MUHUR_ONEKI + fp)
+    # D2.60 (B-3.94): önekli mühür = bu kod + anahtarlar için kod dosyası YAZILDI. Öneksiz (eski sürüm) mühür dosya yazılamadan da
+    # vurulmuş olabilir → zarf yeniden yazılmaz ama kod dosyasına bir kez daha bakılır (takılı kalmış kurulum kendiliğinden düzelir).
+    kod_muhurlu = muhur == _FP_MUHUR_ONEKI + fp
 
     # ══════════════════════════════════════════════════════════════════════════════════════════
     # SAGLAMLIK "VAR MI?" ILE OLCULEMEZ (DENETIM 2026-08-17).
@@ -327,7 +337,11 @@ def refresh_recovery_material(app_data_dir, dest_dirs) -> bool:
             return False
 
     missing = [d for d in dests if not _zarf_saglam_mi(d / ENVELOPE_NAME)]
-    if unchanged and not missing:
+    # ⚠️ D2.60 (B-3.94): erken dönüş yalnız kod dosyası bu kod için YAZILMIŞSA (önekli mühür). Eskiden mühür kod dosyasından ÖNCE
+    # vuruluyordu; dosya bir kez yazılamayınca (disk dolu / AV / izin) sonraki her tur "değişmedi + zarf sağlam" deyip burada dönüyor,
+    # operatör kodu HİÇ öğrenmiyordu (uyarı bandı da çıkmıyordu: kod dosyası yok). Önekli mühürle dosya şimdi yoksa operatör kodu
+    # dışarı alıp silmiştir (dosyanın kendi metni "silebilirsiniz" der) → geri YAZILMAZ.
+    if unchanged and not missing and kod_muhurlu:
         return True
     if missing:
         logger.warning(
@@ -335,9 +349,10 @@ def refresh_recovery_material(app_data_dir, dest_dirs) -> bool:
             ", ".join(str(d) for d in missing),
         )
 
-    blob = build_envelope(code, keys)
     written = 0
-    for d in dests:
+    zarf_gerekli = bool(missing) or not unchanged
+    blob = build_envelope(code, keys) if zarf_gerekli else b""
+    for d in dests if zarf_gerekli else ():
         try:
             d.mkdir(parents=True, exist_ok=True)
             # ATOMIK YAZIM: tmp + fsync + os.replace. `write_bytes` yarim dosya birakabilir ve
@@ -360,23 +375,20 @@ def refresh_recovery_material(app_data_dir, dest_dirs) -> bool:
             written += 1
         except Exception:
             logger.warning("kurtarma zarfi yazilamadi: %s", d, exc_info=True)
-    if not written:
+    if zarf_gerekli and not written:
         return False
-
-    try:
-        fp_file.write_text(fp, encoding="utf-8")
-    except Exception:
-        logger.debug("kurtarma parmak izi yazilamadi", exc_info=True)
 
     # ⚠️ D2.13 (B-3.39): kod dosyası yalnız YOKSA yazılıyordu. Kod yeniden üretilince (sır dosyası sıfırlanıp `get_or_create_code`
     # yenisini üretince) zarf YENİ kodla yazılıyor, `KURTARMA-KODU.txt` (ve onu okuyan `/api/system/recovery-code`) ESKİ kodu
     # gösteriyordu → operatör zarfı AÇMAYAN kodu kasaya koyardı. Artık dosya zarfın koduyla güncel DEĞİLSE (yok / farklı kod /
     # bozuk) yeniden yazılır. Kapı: tests/test_kurtarma_kodu_DOSYASI_yeni_kodla_GUNCELLENIR_D213.py
     code_file = app_data_dir / CODE_FILE_NAME
-    if not kod_dosyasi_guncel_mi(app_data_dir, code):
+    kod_guncel = kod_dosyasi_guncel_mi(app_data_dir, code)
+    if not kod_guncel:
         _vardi = code_file.exists()
         try:
             write_code_file(app_data_dir, code)
+            kod_guncel = True
             logger.warning(
                 "KURTARMA KODU %s: %s — bu kodu MAKINE DISINDA saklayin. Yedekleri "
                 "baska bir makinede acmanin TEK yolu budur.",
@@ -384,7 +396,20 @@ def refresh_recovery_material(app_data_dir, dest_dirs) -> bool:
                 code_file,
             )
         except Exception:
-            logger.warning("kurtarma kodu dosyasi yazilamadi", exc_info=True)
+            logger.warning(
+                "kurtarma kodu dosyasi YAZILAMADI (%s) — bir sonraki yedek turunda yeniden denenecek; operator kodu henuz "
+                "goremiyor.",
+                code_file,
+                exc_info=True,
+            )
 
-    logger.info("Kurtarma zarfi guncellendi (%d dizin, %d anahtar)", written, len(keys))
+    # D2.60 (B-3.94): mühür YALNIZ zarf ve kod dosyası güncelken vurulur → yazılamayan kod dosyası sonraki turda yeniden denenir.
+    if kod_guncel:
+        try:
+            fp_file.write_text(_FP_MUHUR_ONEKI + fp, encoding="utf-8")
+        except Exception:
+            logger.debug("kurtarma parmak izi yazilamadi", exc_info=True)
+
+    if written:
+        logger.info("Kurtarma zarfi guncellendi (%d dizin, %d anahtar)", written, len(keys))
     return True

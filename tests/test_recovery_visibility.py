@@ -112,12 +112,14 @@ def test_onaylandiktan_sonra_UYARI_SUSAR(loopback, kod_dosyasi, monkeypatch):
     assert g["warn"] is False and g["acknowledged"] is True
 
 
-def test_sifreleme_KAPALIYKEN_uyari_YOK(loopback, kod_dosyasi, monkeypatch):
-    """Düz-metin DB'de kurtarma zarfı anlamsızdır → gereksiz uyarı alarm körlüğü yaratır."""
+def test_sifreleme_KAPALIYKEN_de_kod_VARSA_UYARI_ister_D260(loopback, kod_dosyasi, monkeypatch):
+    """⚠️ D2.60 (B-3.64): eski hâli "düz-metin DB'de kurtarma zarfı anlamsızdır → uyarı yok" diyordu — plan bu öncülü YANLIŞ sayar:
+    at-rest kapalıyken de hasta alanları `patient_fernet_key` ile şifreli ve zarf onu taşır. Kod dosyası yalnız kurtarılacak anahtar
+    varken yazıldığı için "kod VAR" = "zarf var" → operatör onaylayana kadar uyarı GEREKİR (alarm körlüğü: anahtar yoksa kod da yok)."""
     from servers import system_router as sr
 
     monkeypatch.setattr(sr, "_kurtarma_durumu", lambda: (False, True, None, "x"))
-    assert loopback.get("/api/system/recovery-status").json()["warn"] is False
+    assert loopback.get("/api/system/recovery-status").json()["warn"] is True
 
 
 def test_kod_dosyasi_YOKSA_uyari_YOK(loopback, monkeypatch):
