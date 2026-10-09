@@ -3868,6 +3868,9 @@ async def start_session(payload: SessionStartPayload, request: Request):
         pass
 
     with _session_lock:
+        # D2-4.1: geri yükleme sürerken açılan seansın satırı içe aktarmanın silme adımında gider
+        if _VERI_TASIMA_KILIDI.locked():
+            raise HTTPException(status_code=409, detail=GERI_YUKLEME_SURERKEN_SEANS)
         if _active_session.get("is_active"):
             raise HTTPException(status_code=409, detail="Zaten aktif bir seans var.")
 
@@ -4601,6 +4604,8 @@ def start_ai_session(
     _hasta_kimligi = str((hasta or {}).get("id") or "").strip()
     _sahip_epostasi = ""
     if not _on_cont:
+        if _VERI_TASIMA_KILIDI.locked():  # D2-4.1: Y65 yolu — bobin sürülmez, onay yanmaz (çağıran `geri_ver`)
+            raise KayitAcilamadi(GERI_YUKLEME_SURERKEN_SEANS)
         try:
             _db = _get_treatment_db()
             if _db is not None and _hasta_adi:
@@ -6305,6 +6310,14 @@ GERI_YUKLEME_SURUYOR = (
     "Geri yükleme bu cihazda sürüyor — bitince kayıtlar görünür. İşlemi tekrarlamayın ve uygulamayı yeniden başlatmayın; "
     "birkaç dakika sonra Seans Geçmişi'ni yenileyin."
 )
+#: ⚠️ D2-4.1: geri yükleme ↔ süren seans (iki yön). Kapı: tests/test_geri_yukleme_SUREN_SEANSI_SILMEZ_D2_4_1.py
+GERI_YUKLEME_SURERKEN_SEANS = (
+    "Geri yükleme bu cihazda sürüyor — seans BAŞLATILMADI; geri yükleme bitince yeniden başlatın."
+)
+SEANS_SURERKEN_GERI_YUKLEME = (
+    "Tedavi seansı sürüyor — geri yükleme cihazdaki tüm tedavi kayıtlarını değiştirir (süren seansın kaydı da silinirdi); "
+    "önce seansı durdurun. Hiçbir kayıt değişmedi."
+)
 
 
 class DataExportPayload(BaseModel):
@@ -6627,6 +6640,22 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
             "olmayan hastaların kartı kalır ama bu cihazdaki seans ve analiz geçmişleri silinir. Onaylamak için "
             "{\"confirm\":\"REPLACE_ALL\"} gönderin.",
         )
+
+    # ⚠️ D2-4.1 (2-D incelemesi · A-07 · B2-1.5 ilkesi): SÜREN seans (elle ya da AI Pro) varken geri yükleme YAPILMAZ. `import_rows` tüm
+    # tedavi tablolarını siliyor: süren seansın satırı ve bobin koşusu gidiyor, tedavi donanımda sürüyor; durdurma / ACİL DURDUR sonrası
+    # uygulanan dozun ve ACİL DURDUR olayının KAYDI KALMIYORDU (ölçüldü). Silme uçlarıyla aynı ilke: 409, hiçbir şey değişmez.
+    # ⚠️ Ö.4-Y8: `_session_lock` ALINMAZ (`dict.get` atomik). Kilit tutulurken yeni seans başlatılamaz (`GERI_YUKLEME_SURERKEN_SEANS`),
+    # denetim silmeden hemen önce. Kapı: tests/test_geri_yukleme_SUREN_SEANSI_SILMEZ_D2_4_1.py
+    if _active_session.get("is_active"):
+        _iz.kimlikli_yaz(
+            request,
+            "data.import",
+            scope=("replace_all" if dolu else "bos_cihaz"),
+            item_count=0,
+            outcome="reddedildi",
+            detail={"neden": "seans_suruyor"},
+        )
+        raise HTTPException(status_code=409, detail=SEANS_SURERKEN_GERI_YUKLEME)
 
     try:
         n = await asyncio.to_thread(thdb.import_rows, paket, bool(dolu))
