@@ -77,6 +77,9 @@ ZARF YOKSA
 =============================================================
 """
 
+#: D2-1.1: dosya zamanı bu kadar saniyeden fazla İLERİDEYSE saat güvenilmez sayılır (tazelik kararında yok sayılır).
+_SAAT_TOLERANSI_SN = 600.0
+
 _worker = None  # type: Optional[HeadlessDBMaintenance]
 
 
@@ -225,20 +228,30 @@ class HeadlessDBMaintenance:
         süreç yeniden başladığında da geçerli kalan tek gerçek kaynak budur.
         ⚠️ D2.63 (B-3.20): yalnız AÇILABİLEN yedek sayılır. Eskiden en yeni mtime'lı DOSYA alınıyordu: başarısız yedeğin bıraktığı
         0 baytlık artık "taze yedek" sayılıp açılış yedeğini 24 saat bastırıyordu (yedek sessizce alınmamış olur — ölçüldü).
-        Saat geride (mtime gelecekte) ise yaş 0 sayılır."""
+        ⚠️ D2-1.1 (2-D incelemesi): mtime'ı GELECEKTE olan yedek (saat geri gitti ya da bir gün ileri gidip düzeldi) tazelik
+        kararında SAYILMAZ. Eskiden "yaş 0 = taze" sayılıyordu: her gün kapanan klinik PC'sinde (süreç 24 saat yaşamaz) açılış yedeği
+        o tarihe kadar HER GÜN atlanıyordu (ölçüldü). Kapı: tests/test_rotasyon_SAAT_GERIDE_bu_turun_yedegi_KALIR_D2_1_1.py"""
         try:
             backup_dir = self.app_data_dir / "backups"
-            adaylar = []
+            simdi = time.time()
+            adaylar, gelecek = [], []
             for p in backup_dir.glob("pemf_treatment_history_*.db"):
                 try:
                     st = p.stat()
                 except OSError:
                     continue
                 if st.st_size > 0:
-                    adaylar.append((st.st_mtime, p))
+                    (gelecek if st.st_mtime > simdi + _SAAT_TOLERANSI_SN else adaylar).append((st.st_mtime, p))
+            if gelecek:
+                logger.warning(
+                    "Yedek tazeligi: %d yedegin tarihi GELECEKTE (%s) — sistem saati geride olabilir; bu yedekler tazelik "
+                    "kararinda SAYILMADI.",
+                    len(gelecek),
+                    ", ".join(p.name for _m, p in gelecek[:3]),
+                )
             for mtime, p in sorted(adaylar, key=lambda x: x[0], reverse=True):
                 if self._yedek_acilir_mi(p):
-                    return max(0.0, time.time() - mtime)
+                    return max(0.0, simdi - mtime)
             return None
         except Exception:
             logger.warning("yedek tazelik kontrolu basarisiz — yedek ALINACAK", exc_info=True)
@@ -273,7 +286,7 @@ class HeadlessDBMaintenance:
                     logger.warning("Hasta DB yedegi hatasi", exc_info=True)
             # ⚠️ D2.51 (A-32, sahip kararı): operatör hesapları + config + sistem ayarları da yedeklenir; SIR dosyaları HARİÇ.
             created.extend(self._ek_kapsam_yedekle(backup_dir, stamp))
-            self._cleanup_backups(backup_dir)
+            self._cleanup_backups(backup_dir, frozenset(p.name for p in created))
             # DENETIM: kurtarma zarfi .db'lerden ONCE yazilir ki off-site kopyaya da GİRSİN —
             # zarfsiz bir off-site kopya donanim arizasindan sonra acilamaz.
             env = self._refresh_recovery(backup_dir)
@@ -362,12 +375,12 @@ class HeadlessDBMaintenance:
             logger.warning("kurtarma zarfi guncellenemedi (yedekler ALINDI)", exc_info=True)
         return None
 
-    def _cleanup_backups(self, backup_dir: Path):
+    def _cleanup_backups(self, backup_dir: Path, koru=frozenset()):
         """Yerel `backups/` rotasyonu — kural `_rotasyon`da (makine dışı hedefle AYNI).
         Kapılar: tests/test_yerel_yedek_penceresi_KORUNUR_D263.py · tests/test_offsite_ROTASYON_ve_yedek_KAPSAMI_D251_Y11_A32_A45.py"""
-        self._rotasyon(backup_dir, "yerel")
+        self._rotasyon(backup_dir, "yerel", koru)
 
-    def _rotasyon(self, dizin: Path, yer: str):
+    def _rotasyon(self, dizin: Path, yer: str, koru=frozenset()):
         """Her yedek ailesinde son N AÇILABİLEN yedek kalır (N = `backup_retention_keep`). Yerel ve makine dışı hedefte AYNI kural.
 
         ⚠️ D2.63 (B-3.20): eskiden dosyalar YALNIZ adla sayılıyordu — 0 baytlık / başarısız yedek artıkları rotasyonda SAĞLAM
@@ -420,6 +433,17 @@ class HeadlessDBMaintenance:
                     )
                 if len(gecerli) > self.backup_retention_keep:
                     for old in gecerli[: -self.backup_retention_keep]:
+                        if old.name in koru:
+                            # ⚠️ D2-1.1 (2-D incelemesi): BU TURUN yedeği en eski damgalı görünüyor = sistem saati geride. Ad sırasıyla
+                            # silinseydi yeni yedek aynı turda giderdi ve saat damgayı geçene dek hiçbir yeni seans yedeğe girmezdi
+                            # (ölçüldü). Bu turun yedeği kalır (son N + 1); bir sonraki turda bir önceki turunki silinir.
+                            logger.error(
+                                "Yedek rotasyonu (%s): bu turun yedegi %s mevcut yedeklerden ESKI damgali — sistem saati GERIDE "
+                                "olabilir. Bu turun yedegi SILINMEDI; saati duzeltin.",
+                                yer,
+                                old.name,
+                            )
+                            continue
                         try:
                             old.unlink(missing_ok=True)
                         except OSError:
@@ -511,7 +535,7 @@ class HeadlessDBMaintenance:
             # N). Eskiden yalnız kopyalanıyordu: hedef sınırsız büyüyor (doldukça B-3.19) ve canlı DB'den SİLİNEN hastanın adı ilk
             # kopyada süresiz kalıyordu (KVKK; zarf + kodla açılabilir — ölçüldü). Kopyalardan SONRA: bu turun kopyası düşse de
             # yalnız açılabilen kopyalar sayılır, eskiler gereksiz yere gitmez. A-45: yalnız kendi adlı dosyalar (bkz. `_rotasyon`).
-            self._rotasyon(dpath, "makine disi")
+            self._rotasyon(dpath, "makine disi", frozenset(dogrulanan))
             # Yedeklerin YANINA ne gerektigini yaz: kurtarma anindaki kisi log'lara bakamayabilir.
             try:
                 (dpath / _OFFSITE_README_NAME).write_text(_OFFSITE_README_TEXT, encoding="utf-8")
