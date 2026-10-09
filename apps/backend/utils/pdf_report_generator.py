@@ -345,10 +345,26 @@ class PDFReportGenerator:
             str: Oluşturulan PDF dosya yolu
         """
         try:
+            # ⚠️ D2-3.4 (2-D incelemesi): "Toplam Seans" BULUNAN seans sayısıdır; yinelenen kimlik tek seans; bulunamayan (silinmiş)
+            # seans PDF'in KENDİSİNDE söylenir. Eskiden başlık istenen kimlik sayısını yazıyor (silinmiş seçimde "2" başlık / 1 seans;
+            # hiçbiri yokken "1" başlık / seanssız PDF), eksik seans yalnız günlükte kalıyordu.
+            # Kapı: tests/test_pdf_TOPLAM_SEANS_bulunan_seanslarla_TUTARLI_D234.py
+            session_ids = list(dict.fromkeys(int(x) for x in session_ids))
+            bulunan = self._fetch_sessions(session_ids)
             output_path = output_path or self._default_output_path("PEMF_Tedavi_Raporu")
             story = []
             self._add_header(story)
-            self._add_report_info(story, len(session_ids))
+            self._add_report_info(story, len(bulunan))
+            if len(bulunan) < len(session_ids):
+                story.append(
+                    Paragraph(
+                        _esc(
+                            f"UYARI: İstenen {len(session_ids)} seanstan {len(session_ids) - len(bulunan)} tanesi bulunamadı "
+                            "(silinmiş olabilir) ve bu rapora GİRMEDİ."
+                        ),
+                        self.styles['UnicodeNormal'],
+                    )
+                )
             if include_statistics:
                 self._add_statistics_section(story, session_ids)
             self._add_sessions_section(story, session_ids, include_patient_info)
