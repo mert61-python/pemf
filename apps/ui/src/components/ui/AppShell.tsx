@@ -27,6 +27,7 @@ import { MobileUpdateBanner } from "@/components/domain/MobileUpdateBanner";
 import { RecoveryCodeBanner } from "@/components/domain/RecoveryCodeBanner";
 import { SurumFarkiBanner } from "@/components/domain/SurumFarkiBanner";
 import { KayitDbBandi } from "@/components/domain/KayitDbBandi";
+import { VeriKokuAgBandi } from "@/components/domain/VeriKokuAgBandi";
 import { EstopMandalBandi } from "@/components/ui/EstopMandalBandi";
 import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
 import { useKendiDurdurmaKaydi } from "@/components/ui/KendiDurdurmaKontrolu";
@@ -439,6 +440,8 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
             anahtarla şifreli. Kurtarma kodu makine dışına kopyalanmazsa disk arızasında
             off-site yedekler bile SONSUZA DEK açılamaz. Operatör onaylayana kadar kalıcı. */}
         <RecoveryCodeBanner />
+        {/* Y118: veri klasörü AĞ PAYLAŞIMINDA (SQLite orada güvenilir değil) — giderilene kadar, donanım çalışırken gizli. */}
+        <VeriKokuAgBandi />
         {/* Sürüm farkı BİLGİSİ (bloklamaz, kapatılabilir, seansta gizli) — sahip kararı 2026-08-22 */}
         <SurumFarkiBanner />
 

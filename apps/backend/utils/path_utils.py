@@ -351,6 +351,45 @@ def get_app_data_directory():
     return app_data_dir
 
 
+# ⚠️ Y118 (sahip kararı · S-B2B2.3): veri klasörünün (`PEMF_DATA_DIR` / `%APPDATA%`) AĞ PAYLAŞIMINDA olması DESTEKLENMEZ — SQLite'ın
+# dosya kilitleri SMB / ağ sürücüsünde güvenilir değil (eşzamanlı yazımda veritabanı bozulabilir). Açılışta günlük + arayüz uyarısı
+# (`backend_service._veri_koku_ag_uyarisi`, `/api/health` `veriKokuAgda`); veri kökü DEĞİŞTİRİLMEZ, açılış DURMAZ (B2B2-3'ün UNC
+# düzeltmesi kalır). Kapı: tests/test_veri_koku_AG_PAYLASIMI_uyarisi_Y118.py
+_DRIVE_REMOTE = 4  # GetDriveTypeW: ağ (eşlenmiş) sürücü
+
+
+def _surucu_turu(kok: str) -> int:
+    """`kok` (ör. `Z:\\`) için Windows sürücü türü (`GetDriveTypeW`); Windows dışında / hata → 0 (bilinmiyor)."""
+    if sys.platform != "win32":
+        return 0
+    try:
+        import ctypes
+
+        get_drive_type = ctypes.WinDLL("kernel32").GetDriveTypeW
+        get_drive_type.argtypes = [ctypes.c_wchar_p]
+        get_drive_type.restype = ctypes.c_uint
+        return int(get_drive_type(kok))
+    except Exception:
+        return 0
+
+
+def veri_koku_ag_paylasiminda_mi(yol) -> bool:
+    """Y118: `yol` bir ağ paylaşımında mı — UNC (`\\\\sunucu\\pay\\…`, `\\\\?\\UNC\\…`) ya da eşlenmiş ağ sürücüsü (DRIVE_REMOTE).
+    Uzun yol önekli YEREL yol (`\\\\?\\C:\\…`) ağ DEĞİLDİR. Dosya sistemine dokunmaz (UNC yol için ağa çıkılmaz)."""
+    s = str(yol).replace("/", "\\")
+    if s[:4] in ("\\\\?\\", "\\\\.\\"):
+        govde = s[4:]
+        if govde[:4].upper() == "UNC\\":
+            return True
+        s = govde
+    elif s.startswith("\\\\"):
+        return True
+    surucu = s[:2]
+    if len(surucu) == 2 and surucu[1] == ":" and surucu[0].isalpha():
+        return _surucu_turu(surucu + "\\") == _DRIVE_REMOTE
+    return False
+
+
 def get_unique_device_id():
     """Her bilgisayar için KALICI benzersiz ID.
 

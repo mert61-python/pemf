@@ -315,7 +315,20 @@ async def health_check(request: Request):
         # (`hata` = "[kod] …"). Eskiden yalnız servis günlüğündeydi ("fail-quiet ≠ fail-silent" vaadi fiilen gizliydi).
         # Gerekçe/hata metni ayrıntı (sürüm, yol) taşır → yalnız yerel/LAN; tünel (uzak) istemcisine None.
         "firmwareGuncelleme": (_firmware_guncelleme_durumu() if _local else None),
+        # Y118 (yalnız-ek): veri klasörü AĞ PAYLAŞIMINDA mı (SQLite bu kipte güvenilir değil — arayüz bandı). Yalnız bayrak (yol
+        # günlükte); yalnız yerel/LAN'a, tünel (uzak) istemcisine None.
+        "veriKokuAgda": (_veri_koku_agda(_api) if _local else None),
     }
+
+
+def _veri_koku_agda(_api):
+    """Y118: veri kökü ağ paylaşımında mı (bilinemezse None — arayüz susar)."""
+    try:
+        from utils.path_utils import veri_koku_ag_paylasiminda_mi
+
+        return bool(veri_koku_ag_paylasiminda_mi(_api._app_data_dir()))
+    except Exception:
+        return None
 
 
 def _estop_mandali_durumu() -> dict:

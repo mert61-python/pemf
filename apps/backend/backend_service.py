@@ -477,6 +477,24 @@ def _harden_secret_file_acls(app_data_dir: Path, logger: logging.Logger) -> None
         logger.info("Sır dosyası ACL kilidi uygulandı: %d dosya (SYSTEM + Administrators + süreç hesabı).", locked)
 
 
+def _veri_koku_ag_uyarisi(app_data_dir: Path, logger: logging.Logger) -> bool:
+    """⚠️ Y118 (sahip kararı): veri klasörü AĞ PAYLAŞIMINDAYSA (UNC / eşlenmiş ağ sürücüsü) açılışta UYARI — SQLite'ın dosya kilitleri
+    orada güvenilir değil. Desteklenmeyen kip; veri kökü değiştirilmez, açılış DURMAZ (ACİL DURDUR yolu etkilenmez). Arayüz aynı
+    bilgiyi `/api/health` `veriKokuAgda` alanından gösterir. True = uyarıldı."""
+    try:
+        from utils.path_utils import veri_koku_ag_paylasiminda_mi
+
+        if veri_koku_ag_paylasiminda_mi(app_data_dir):
+            logger.warning(
+                "Veri klasörü ağ paylaşımında (%s); SQLite bu kipte güvenilir değil — yerel diske taşıyın (PEMF_DATA_DIR).",
+                app_data_dir,
+            )
+            return True
+    except Exception:
+        logger.debug("veri koku konum denetimi yapilamadi", exc_info=True)
+    return False
+
+
 def _log_pairing_info(logger: logging.Logger) -> None:
     """Eşleştirme kodu + cihaz kimliğini GÖRÜNÜR logla → operatör LattePanda konsolunda
     okuyup mobil uygulamaya girebilsin (TEMASSIZ/QR'sız eşleştirme)."""
@@ -1260,6 +1278,7 @@ def main(argv: list[str] | None = None) -> int:
     if _port_uyarisi:
         logger.warning(_port_uyarisi)
     logger.info("PEMF backend service starting: host=%s port=%s", args.host, args.port)
+    _veri_koku_ag_uyarisi(app_data_dir, logger)  # Y118: ağ paylaşımındaki veri kökü — günlük (+ arayüz: /api/health)
 
     # Opsiyonel uzaktan hata-izleme (audit B-5.1) — yalnız PEMF_SENTRY_DSN set + sentry-sdk varsa.
     try:

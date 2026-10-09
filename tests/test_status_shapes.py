@@ -81,6 +81,10 @@ GOLDEN_SHAPES = {
         # kodu; D1.119 · Y16 launcher sinyali `istemciGeriAlinmali`). Eskiden yalniz servis gunlugundeydi. Yerel/LAN'a
         # ayrinti, tunel istemcisine None. Bkz. tests/test_firmware_durumu_SAGLIK_ve_DESTEK_PAKETI_D1116.py.
         "firmwareGuncelleme",
+        # Y118 (2026-10-09, BILINCLI sekil degisikligi): veri klasoru AG PAYLASIMINDA mi (UNC / eslenmis ag surucusu) —
+        # SQLite orada guvenilir degil; arayuz bandi bu alani gosterir. Yalniz bayrak (yol gunlukte); yerel/LAN'a bool,
+        # tunel istemcisine None. Bkz. tests/test_veri_koku_AG_PAYLASIMI_uyarisi_Y118.py.
+        "veriKokuAgda",
     },
     "/api/discovery": {"capabilities", "localIp", "port", "service", "tunnelUrl", "version"},
     "/api/system/info": {

@@ -95,6 +95,12 @@ if SENARYO == "ikinci_hesap":
         return _o_kr_set(s, n, v)
     _kr.set_password = _kr_set
 
+# Y118 "ag_kok": veri koku AG SURUCUSUNDE — surucu turu sorgusu (GetDriveTypeW sarmalayicisi, urunun EN ALT kati) DRIVE_REMOTE
+# doner; geri kalan her sey gercek (main(), gunluk, /api/health).
+if SENARYO == "ag_kok":
+    import utils.path_utils as _pu
+    _pu._surucu_turu = lambda kok: 4
+
 # 2-A inceleme A2-1.1: urun zincirinin ILK ice aktarimi (headless_core -> patient_database -> pemf_gui.config) ICE
 # AKTARMADA olurse de SONUC basilir — "cocuk sonuc basmadi" diye gizlenmesin (ACIL DURDUR ucu hic kurulmamistir).
 try:
@@ -200,7 +206,8 @@ class _Casus:
             r = c.get("/api/health")
             g = r.json() if r.status_code == 200 else {{}}
             sonuc["saglik"].append({{"kod": r.status_code, "sure": time.perf_counter() - t0,
-                                     "dbReady": g.get("dbReady"), "dbSebep": g.get("dbSebep")}})
+                                     "dbReady": g.get("dbReady"), "dbSebep": g.get("dbSebep"),
+                                     "veriKokuAgda": g.get("veriKokuAgda")}})
         # Hasta listesi ucu (eşzamanlı uç, iş parçacığı havuzu): açılışta açılamayan hasta DB'si her istekte
         # yeniden denenmemeli. raise_server_exceptions=False: 5xx yanıt olarak ölçülür.
         t0 = time.perf_counter()
