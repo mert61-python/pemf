@@ -185,6 +185,10 @@ def export_pdf(
         raise HTTPException(status_code=500, detail="İşlem başarısız")
 
 
+#: D2.16: CSV dışa aktarmasının geçmiş SAYFA boyu (tavan DEĞİL — sayfalar sonuna kadar okunur).
+_CSV_SAYFA = 5000
+
+
 @router.get("/export_csv")
 def export_csv(
     session_ids: str = Query(
@@ -206,9 +210,19 @@ def export_csv(
                 _idset = [int(x.strip()) for x in _sid.split(",") if x.strip()]
             except ValueError:
                 return Response(content="Geçersiz session_ids", media_type="text/plain", status_code=400)
-        sessions = db.get_session_history(
-            limit=10000, internal_full=True, session_ids=_idset
-        )  # Audit P2: tam-export, 500'e kırpma
+        # ⚠️ D2.16 (B-3.24): geçmiş anahtar kümesi (keyset, `before_id`) SAYFALARIYLA sonuna kadar okunur — sınır YOK. Eskiden
+        # tek sorgu `limit=10000` ile kırpıyordu: yoğun klinikte "Tümünü dışa aktar" CSV'sinde EN ESKİ tıbbi kayıtlar işaretsiz
+        # düşüyordu (ölçüldü: 10.001 seansta 10.000 satır). Kapı: tests/test_csv_TUMU_disa_aktarim_KESILMEZ_D216.py
+        sessions = []
+        _once = None
+        while True:
+            _sayfa = db.get_session_history(
+                limit=_CSV_SAYFA, internal_full=True, session_ids=_idset, before_id=_once
+            )  # Audit P2: tam-export, 500'e kırpma
+            sessions.extend(_sayfa)
+            if len(_sayfa) < _CSV_SAYFA:
+                break
+            _once = _sayfa[-1]["id"]
         if not sessions:
             # ⚠️ ESKIDEN BU DA "indirilen dosya" oluyordu: istemci 200'ü başarı sayıp içinde
             # "Veri bulunamadi" yazan bir `PEMF_Gecmis.csv` kaydediyordu. Operatör dosyayı
