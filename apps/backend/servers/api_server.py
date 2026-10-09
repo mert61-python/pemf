@@ -6310,6 +6310,9 @@ GERI_YUKLEME_SURUYOR = (
     "Geri yükleme bu cihazda sürüyor — bitince kayıtlar görünür. İşlemi tekrarlamayın ve uygulamayı yeniden başlatmayın; "
     "birkaç dakika sonra Seans Geçmişi'ni yenileyin."
 )
+#: ⚠️ D2-4.2: aynı anda TEK dışa aktarma (bkz. `export_clinic_data`). Kapı: tests/test_disa_aktarma_TEK_SEFERDE_bir_D2_4_2.py
+_DISA_AKTARMA_KILIDI = threading.Lock()
+YEDEK_ALMA_SURUYOR = "Bu cihazda bir yedek alma işlemi sürüyor — bitmesini bekleyin (büyük klinikte birkaç dakika sürebilir); işlemi tekrarlamayın."
 #: ⚠️ D2-4.1: geri yükleme ↔ süren seans (iki yön). Kapı: tests/test_geri_yukleme_SUREN_SEANSI_SILMEZ_D2_4_1.py
 GERI_YUKLEME_SURERKEN_SEANS = (
     "Geri yükleme bu cihazda sürüyor — seans BAŞLATILMADI; geri yükleme bitince yeniden başlatın."
@@ -6378,7 +6381,35 @@ class DataImportPayload(BaseModel):
 
 @app.post("/api/data/export")
 async def export_clinic_data(payload: DataExportPayload, request: Request):
-    """Hasta + seans + AI analiz kayıtlarını TEK şifreli dosyaya çıkarır (base64 döner)."""
+    """Hasta + seans + AI analiz kayıtlarını TEK şifreli dosyaya çıkarır (base64 döner).
+
+    ⚠️ D2-4.2 (2-D incelemesi · Ö.4-Y8): aynı anda TEK dışa aktarma — ikincisi beklemez, hemen 409 (D2.E02 deseni). Dışa aktarma
+    CPU yoğun (tüm tablolar + JSON + gzip + şifreleme + doğrulama için çözme); eşzamanlılık sınırsızken 25 istek (A-01: LAN'dan da)
+    GIL'i doyuruyor, ACİL DURDUR'un KENDİ iş parçacığı aç kalıyordu: 2000 seanslık şifreli klinikte ACİL DURDUR yanıtı 12,0 sn, ilk
+    donanım STOP paketi 2,9 sn (tek dışa aktarmada 0,47 / 0,45 sn — ölçüldü). Kilit iş BİTİNCE bırakılır (istemci koparsa da).
+    Kapı: tests/test_disa_aktarma_TEK_SEFERDE_bir_D2_4_2.py"""
+    _enforce_privileged(request)
+    if _VERI_TASIMA_KILIDI.locked():  # D2.E02: yarım içe aktarılmış durum yedek diye verilmez
+        raise HTTPException(status_code=409, detail=GERI_YUKLEME_SURUYOR)
+    if not _DISA_AKTARMA_KILIDI.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail=YEDEK_ALMA_SURUYOR)
+    try:
+        gorev = asyncio.ensure_future(_disa_aktar(payload, request))
+    except BaseException:
+        _DISA_AKTARMA_KILIDI.release()
+        raise
+
+    def _bitti(g):
+        _DISA_AKTARMA_KILIDI.release()
+        if not g.cancelled():
+            g.exception()  # istek iptal edildiyse sonuç yine "alınmış" sayılsın (gürültü yok)
+
+    gorev.add_done_callback(_bitti)
+    return await asyncio.shield(gorev)
+
+
+async def _disa_aktar(payload: DataExportPayload, request: Request):
+    """`/api/data/export` gövdesi — YALNIZ `_DISA_AKTARMA_KILIDI` tutulurken çağrılır (D2-4.2)."""
     _enforce_privileged(request)
     if _VERI_TASIMA_KILIDI.locked():  # D2.E02: yarım içe aktarılmış durum yedek diye verilmez
         raise HTTPException(status_code=409, detail=GERI_YUKLEME_SURUYOR)
