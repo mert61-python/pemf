@@ -6342,6 +6342,15 @@ def _yedegi_masaustune_yaz(blob: bytes, ad: str) -> dict:
     from servers.seans_alan_kaydi import masaustu_dizini
 
     dizin, gerekce = masaustu_dizini()
+    # ⚠️ D2-2.7 (2-D incelemesi) [KARAR — önerilen]: masaüstü bulunamayınca (`masaustu_dizini` → çalışma dizini: servis hesabı / yönlendirilmiş
+    # masaüstü) tüm-klinik yedeği backend'in ÇALIŞMA DİZİNİNE (launcher: `runtime\PEMF_Backend` — güncellemede silinir; NSSM: kurulum dizini)
+    # yazılıyor ve "doğrulandı" deniyordu. Ortak Masaüstü (`%PUBLIC%\Desktop`) kullanılır; o da yoksa YAZILMAZ (çağıran 500 "OLUŞTURULMADI").
+    # Kapı: tests/test_yedek_kaydet_CALISMA_DIZININE_dusmez_D2_2_7.py
+    if Path(dizin).resolve() == Path.cwd().resolve():
+        ortak = Path(os.environ.get("PUBLIC") or r"C:\Users\Public") / "Desktop"
+        if not ortak.is_dir():
+            raise RuntimeError(f"masaüstü bulunamadı ({gerekce}) — yedek çalışma dizinine YAZILMAZ: {dizin}")
+        dizin, gerekce = ortak, f"ortak masaüstü — {gerekce}"
     guvenli = "".join(c for c in ad if c.isalnum() or c in ("_", "-", ".")) or "pemf-vet-yedek.pemfbak"
     hedef = Path(dizin) / guvenli
     if hedef.exists():  # aynı dakikada ikinci yedek öncekinin ÜZERİNE yazmasın
