@@ -119,7 +119,10 @@ async function iceAktarBaslat() {
     }
     return el;
   }) as typeof document.createElement);
-  const onay = jest.spyOn(window, "confirm").mockImplementation(() => true);
+  const onay = jest.spyOn(window, "confirm").mockImplementation((m?: string) => {
+    sonOnayMetni = String(m ?? "");
+    return true;
+  });
   try {
     await s.tikla("Şifreli yedekten geri yükle");
     expect(girdi).not.toBeNull();
@@ -138,6 +141,24 @@ async function iceAktarBaslat() {
 }
 
 const metinler = () => [...mockHata.mock.calls, ...mockToast.mock.calls].map((c) => String(c[0]));
+let sonOnayMetni = "";
+
+describe("Y12 (D2.52) — geri yükleme metinleri gerçeği söyler: hasta kartları SİLİNMEZ, yedekte olmayanlar RAPORLANIR", () => {
+  it("KRİTİK: onay metni hasta kartlarının silinmediğini söyler; başarı bildirimi sunucunun 'yedekte olmayan' uyarısını gösterir", async () => {
+    sonOnayMetni = "";
+    const uyari = "Yedekte olmayan 1 hastanın kartı korundu; bu hastaların bu cihazdaki seans ve analiz geçmişi geri yüklemeyle silindi (yedekte yoktu).";
+    yanit = (yol) =>
+      yol === "/data/import"
+        ? sahteYanit({ status: "success", counts: { patients: 2, treatment_sessions: 4, ai_analyses: 2 }, yedekte_olmayan_hasta: 1, uyari })
+        : null;
+    await ekran("http://127.0.0.1:8000/api");
+    await iceAktarBaslat();
+    expect(sonOnayMetni).toMatch(/Hasta kartları silinmez/);
+    expect(sonOnayMetni).not.toMatch(/SEANS ve AI ANALİZ geçmişi SİLİNİP/);
+    const m = mockToast.mock.calls.map((x) => String(x[0]));
+    expect(m.some((x) => x.includes(uyari))).toBe(true);
+  });
+});
 
 describe("D2.E03 — yedek alma / geri yükleme UZUN zaman aşımıyla, 'Tekrar deneyin' YOK (Y84)", () => {
   it.each([

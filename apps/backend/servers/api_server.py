@@ -6557,19 +6557,78 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
         raise HTTPException(status_code=400, detail=str(e))
 
     mevcut = await asyncio.to_thread(thdb.export_rows)
-    dolu = bool(
-        mevcut["treatment_sessions"] or mevcut["ai_analyses"] or (await asyncio.to_thread(pdb.get_all_patients))
-    )
+    _mevcut_hastalar = await asyncio.to_thread(pdb.get_all_patients)
+    dolu = bool(mevcut["treatment_sessions"] or mevcut["ai_analyses"] or _mevcut_hastalar)
+    from servers import audit_log as _iz
+
+    if dolu:
+        # ⚠️ Y111 (sahip · S-B2.3): DOLU cihazda geri yükleme (REPLACE_ALL) tüm tedavi kayıtlarını siler → yalnız CİHAZIN KENDİSİNDEN
+        # (loopback; tünel / ters-proxy sayılmaz — A-03 deseni) ve kayıtlı operatörlü klinikte KİMLİKLİ hekimle. Eskiden LAN'daki
+        # herhangi bir eşleşmiş istemci (cihaz token'ı) kliniğin tüm tedavi geçmişini değiştirebiliyordu (2-B incelemesi B2-1.7).
+        # Boş cihaza ilk içe aktarma bugünkü gibi. Kapı: tests/test_geri_yukleme_BUTUNLUKLU_D252_Y12_Y111.py
+        from servers.auth import cihazin_kendisinden_mi, cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
+
+        if not cihazin_kendisinden_mi(request):
+            _iz.kimlikli_yaz(
+                request,
+                "data.import",
+                scope="replace_all",
+                item_count=0,
+                outcome="reddedildi",
+                detail={"neden": "cihaz_disi"},
+            )
+            raise HTTPException(
+                status_code=403,
+                detail="Bu cihazda kayıt var: geri yükleme (cihazdaki tüm tedavi kayıtlarını değiştirir) yalnız cihazın kendi "
+                "ekranından yapılabilir.",
+            )
+        if kayitli_operator_var() and not cozumlenmis_operator(request):
+            _iz.kimlikli_yaz(
+                request,
+                "data.import",
+                scope="replace_all",
+                item_count=0,
+                outcome="reddedildi",
+                detail={"neden": "kimliksiz"},
+            )
+            raise HTTPException(
+                status_code=428,
+                detail=kimliksiz_detayi(
+                    "Operatör seçin — dolu cihazda geri yükleme için önce üst bardan hangi hekim olduğunuzu seçin."
+                ),
+            )
     if dolu and payload.confirm != "REPLACE_ALL":
+        # ⚠️ Y12 (sahip · B-3.21): metin GERÇEĞİ söyler — hasta kartları (patients.db) SİLİNMEZ; yedekte olmayan hastanın kartı kalır
+        # ama bu cihazdaki tedavi geçmişi (tedavi DB'sinin tamamı) yedektekiyle değişir. Eskiden "hasta kayıtları SİLER" diyordu.
         raise HTTPException(
             status_code=409,
-            detail="Bu cihazda zaten kayıt var. Geri yükleme bu cihazdaki TÜM tıbbi kayıtları "
-            "(seanslar, bobin koşuları, sensör verisi, AI analizleri ve hasta kayıtları) "
-            "SİLER ve yedektekilerle değiştirir. Onaylamak için "
+            detail="Bu cihazda zaten kayıt var. Geri yükleme bu cihazdaki TÜM tedavi kayıtlarını (seanslar, bobin koşuları, "
+            "sensör verisi, seans olayları, AI analizleri) SİLER ve yedektekilerle değiştirir. Hasta kartları SİLİNMEZ: yedekte "
+            "olmayan hastaların kartı kalır ama bu cihazdaki seans ve analiz geçmişleri silinir. Onaylamak için "
             "{\"confirm\":\"REPLACE_ALL\"} gönderin.",
         )
 
-    n = await asyncio.to_thread(thdb.import_rows, paket, bool(dolu))
+    try:
+        n = await asyncio.to_thread(thdb.import_rows, paket, bool(dolu))
+    except Exception as _hata:
+        # ⚠️ D2.52 (B-3.28) + P2u: `import_rows` artık bütünlüklü — düşerse HİÇBİR şey commit edilmez ve hasta kartlarına da
+        # geçilmez. Eskiden hata yutulup "success" (0 seans ya da eski + yeni yan yana) dönülüyordu.
+        logging.getLogger(__name__).exception(
+            "VERİ TAŞIMA: içe aktarma DÜŞTÜ — tedavi DB'si geri alındı, kayıtlar değişmedi"
+        )
+        _iz.kimlikli_yaz(
+            request,
+            "data.import",
+            scope=("replace_all" if dolu else "bos_cihaz"),
+            item_count=0,
+            outcome="hata",
+            detail={"neden": type(_hata).__name__},
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Geri yükleme YAPILAMADI — tedavi veritabanı yazılamadı (meşgul ya da disk hatası). Cihazdaki kayıtlar "
+            "DEĞİŞMEDİ. Veritabanını kullanan işlem (bakım, ikinci uygulama) bitince geri yüklemeyi yeniden başlatabilirsiniz.",
+        )
     eklenen_hasta = 0
     # v2'de ayrı hasta veritabanı `patient_db` anahtarındadır; v1 yedeklerinde `patients` idi
     # (o sürümde tedavi DB'sinin hasta tablosu hiç taşınmıyordu, çakışma yok).
@@ -6582,6 +6641,13 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
     # GERÇEKTEN başarısız olmuş olabilirdi. Tıbbi kayıt taşımada bu kabul edilemez bir belirsizlik.
     # Ayrım hata METNİNDEN değil, ÖNCE varlık sorgusundan türetilir (metin kırılgan olurdu).
     _zaten_var, _basarisiz = 0, 0
+    # ⚠️ Y12: REPLACE_ALL yedekte olmayan hastanın kartını SİLMEZ; RAPORLAR (kimlikler — PII değil) ve yanıt gerçeği söyler.
+    _paket_kimlikleri = {str(h.get("id")) for h in (_hastalar or []) if isinstance(h, dict) and h.get("id")}
+    _yedekte_olmayan = (
+        [str(h.get("id")) for h in (_mevcut_hastalar or []) if str(h.get("id")) not in _paket_kimlikleri]
+        if dolu
+        else []
+    )
     for h in _hastalar or []:
         _hid = h.get("id") if isinstance(h, dict) else None
         try:
@@ -6615,14 +6681,18 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
     # silinmediği için "hangi yedek, ne zaman, kaç kaydın üzerine yazıldı" sorusu cevaplanabilir
     # kalır — aksi hâlde yanlış yedeği geri yükleyen bir işlem geriye dönük görünmez olurdu.
     # ⚠️ D2.43 (B-2.10): operatörlü (`kimlikli_yaz`; eskiden `yaz` — operatör hep '').
-    from servers import audit_log as _iz
-
     _iz.kimlikli_yaz(
         request,
         "data.import",
         scope=("replace_all" if dolu else "bos_cihaz"),
         item_count=n.get("treatment_sessions", 0),
-        detail={"replace": bool(dolu), "hasta": eklenen_hasta, "bundle_version": paket.get("bundle_version"), **n},
+        detail={
+            "replace": bool(dolu),
+            "hasta": eklenen_hasta,
+            "yedekte_olmayan_hasta": len(_yedekte_olmayan),
+            "bundle_version": paket.get("bundle_version"),
+            **n,
+        },
     )
     # ⚠️ ÜÇ SONUÇ YANITTA DA RAPORLANIR (yalnız logda değil). Operatör geri yüklemenin gerçekten
     # ne yaptığını görmeli: "0 hasta" tek başına "hepsi zaten vardı" mı yoksa "hepsi BAŞARISIZ" mı
@@ -6636,8 +6706,17 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
     # gerçekten eklenen hasta sayısını taşır (export ile aynı anlam). Kapı: test_yedek_sayaclari.
     _n_disari = dict(n)
     _fk_kopya = _n_disari.pop("patients", 0)
+    _uyari = (
+        f"Yedekte olmayan {len(_yedekte_olmayan)} hastanın kartı korundu; bu hastaların bu cihazdaki seans ve analiz geçmişi "
+        "geri yüklemeyle silindi (yedekte yoktu)."
+        if _yedekte_olmayan
+        else ""
+    )
     return {
         "status": "success",
+        "yedekte_olmayan_hasta": len(_yedekte_olmayan),
+        "yedekte_olmayan_hasta_kimlikleri": _yedekte_olmayan,
+        "uyari": _uyari,
         "counts": {
             "patient_db": eklenen_hasta,
             "patient_db_zaten_vardi": _zaten_var,

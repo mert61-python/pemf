@@ -149,14 +149,17 @@ export function SettingsScreen() {
       if (!parola) return;
       if (!(await platformConfirm(
         "Yedekten geri yükle",
-        "Bu cihazda kayıt varsa mevcut SEANS ve AI ANALİZ geçmişi SİLİNİP yedektekiyle değiştirilecek.\n\nDevam edilsin mi?",
+        // ⚠️ Y12: metin GERÇEĞİ söyler — tedavi geçmişinin TAMAMI değişir; hasta kartları SİLİNMEZ (yedekte olmayanların kartı kalır).
+        "Bu cihazda kayıt varsa mevcut tedavi geçmişi (seanslar, bobin koşuları, sensör verisi, AI analizleri) SİLİNİP " +
+          "yedektekiyle değiştirilecek. Hasta kartları silinmez: yedekte olmayan hastaların kartı kalır ama bu cihazdaki seans " +
+          "geçmişleri silinir.\n\nDevam edilsin mi?",
         "Geri yükle"))) return;
       setTasimaMesgul("import");
       const buf = new Uint8Array(await f.arrayBuffer());
       let s = "";
       for (let i = 0; i < buf.length; i++) s += String.fromCharCode(buf[i]);
       // ⚠️ D2.E03 (Y84): UZUN zaman aşımı; zaman aşımında metin "Tekrar deneyin" DEMEZ — geri yükleme cihazda sürüyor olabilir.
-      const res = await apiPost<{ status?: string; counts?: Record<string, number> } | null>(
+      const res = await apiPost<{ status?: string; counts?: Record<string, number>; uyari?: string } | null>(
         "/data/import", { passphrase: parola, blob_b64: btoa(s), confirm: "REPLACE_ALL" }, null,
         { timeoutMs: VERI_TASIMA_ZAMAN_ASIMI_MS, zamanAsimiMesaji: ICE_AKTARMA_ZAMAN_ASIMI_MESAJI });
       setTasimaMesgul("");
@@ -173,7 +176,9 @@ export function SettingsScreen() {
       ].filter(Boolean).join(", ");
       showToast(
         `Geri yüklendi: ${c.patients ?? 0} hasta, ${c.treatment_sessions ?? 0} seans, ${c.ai_analyses ?? 0} analiz.`
-        + (ek ? ` (${ek})` : ""),
+        + (ek ? ` (${ek})` : "")
+        // ⚠️ Y12: yedekte olmayan hastaların kartı korundu ama seans geçmişleri silindi — sunucu söyler, ekran GÖSTERİR.
+        + (res.uyari ? ` ${res.uyari}` : ""),
         basarisiz > 0 ? "error" : "success",
       );
     };
@@ -828,7 +833,7 @@ export function SettingsScreen() {
           </TouchableOpacity>
 
           <Text style={[styles.intro, { color: colors.warning }]}>
-            Geri yükleme, bu cihazda kayıt varsa mevcut seans ve analiz geçmişini SİLER.
+            Geri yükleme, bu cihazda kayıt varsa mevcut seans ve analiz geçmişini SİLER. Hasta kartları silinmez.
           </Text>
         </Card>
       )}

@@ -331,19 +331,24 @@ class BakimKarisimi:
         sonuc = {t: 0 for t in self._TASINAN_TABLOLAR}
         # tablo -> {eski_id: yeni_id}
         eslem: Dict[str, Dict[Any, int]] = {t: {} for t in self._TASINAN_TABLOLAR}
+        from database.db_hatalari import _DB_INTEGRITY
+
+        # ⚠️ D2.52 (B-3.28) + İG-6.5 P2u: işlem BÜTÜNLÜKLÜ — silme ya da ekleme adımlarından biri UNIQUE çakışması DIŞINDA bir
+        # hatayla düşerse (kilit, G-Ç, disk dolu) HİÇBİR şey commit edilmez: `_get_connection` geri alır, istisna çağırana yükselir.
+        # Eskiden silme hataları `logger.debug` ile YUTULUYORDU (eski + yeni satırlar yan yana, seanslar çiftleniyordu) ve ekleme
+        # dalı her istisnayı "zaten var" sayıyordu (DB kilitliyken 0 satır yazılıp "success" dönülüyordu — ölçüldü).
+        # Kapı: tests/test_geri_yukleme_BUTUNLUKLU_D252_Y12_Y111.py
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            if replace:
-                # Çocuktan ebeveyne doğru sil (FK ihlali olmasın).
-                for tablo in reversed(self._TASINAN_TABLOLAR):
-                    try:
-                        cursor.execute(f"DELETE FROM {tablo}")
-                    except Exception:
-                        self.logger.debug("temizlenemedi: %s", tablo, exc_info=True)
-
             var_olan_tablolar = {
                 r[0] for r in cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
             }
+            if replace:
+                # Çocuktan ebeveyne doğru sil (FK ihlali olmasın). Hata YUTULMAZ (yukarıdaki not); yalnız bu sürümde
+                # olmayan tablo atlanır.
+                for tablo in reversed(self._TASINAN_TABLOLAR):
+                    if tablo in var_olan_tablolar:
+                        cursor.execute(f"DELETE FROM {tablo}")
 
             for tablo in self._TASINAN_TABLOLAR:
                 satirlar = data.get(tablo) or []
@@ -381,8 +386,9 @@ class BakimKarisimi:
                     ph = ", ".join("?" for _ in alan)
                     try:
                         cursor.execute(f"INSERT INTO {tablo} ({', '.join(alan)}) VALUES ({ph})", list(alan.values()))
-                    except Exception:
-                        # UNIQUE çakışması: bu satır hedefte ZATEN VAR (aynı hasta/olay).
+                    except _DB_INTEGRITY:
+                        # UNIQUE çakışması: bu satır hedefte ZATEN VAR (aynı hasta/olay). ⚠️ P2u: YALNIZ bütünlük hatası
+                        # buraya girer; kilit / G-Ç hatası yükselir ve işlem geri alınır.
                         #
                         # ⚠️ Burada "atla ve devam et" demek YETMEZ: eşlemeye giriş yazılmazsa o
                         # ebeveyne bağlı TÜM çocuk satırlar (seanslar, bobin koşuları, telemetri)
