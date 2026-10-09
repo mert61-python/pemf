@@ -86,18 +86,69 @@ def _govde_agaci(govde):
     return ast.Module(body=govde, type_ignores=[])
 
 
+_SEVIYE_SABITLERI = {
+    "NOTSET": 0,
+    "DEBUG": 10,
+    "INFO": 20,
+    "WARNING": 30,
+    "WARN": 30,
+    "ERROR": 40,
+    "CRITICAL": 50,
+    "FATAL": 50,
+}
+
+
+def _log_seviyesi(ad: str, cagri: ast.Call) -> str:
+    """Çağrının ETKİN seviyesi. ⚠️ D2.37 (B-10.244): `.log(<seviye>, …)` eskiden "log" adıyla kalıyor ve DÜŞÜK sayılmıyordu —
+    `logger.log(logging.INFO, …)` kör handler'ı gizliyordu. Seviye SABİTTEN çözülür (`logging.INFO` / `INFO` / `20`); sabit
+    değilse (değişken) bilinmez → düşük SAYILMAZ (kanıt yok)."""
+    if ad != "log":
+        return ad
+    arg = cagri.args[0] if cagri.args else next((k.value for k in cagri.keywords if k.arg == "level"), None)
+    deger = None
+    if isinstance(arg, ast.Constant) and isinstance(arg.value, int) and not isinstance(arg.value, bool):
+        deger = arg.value
+    elif isinstance(arg, (ast.Attribute, ast.Name)):
+        deger = _SEVIYE_SABITLERI.get(arg.attr if isinstance(arg, ast.Attribute) else arg.id)
+    if deger is None:
+        return "log?"
+    return "debug" if deger <= 10 else "info" if deger <= 20 else "warning"
+
+
 def _log_cagrilari(govde):
     out = []
     for d in ast.walk(_govde_agaci(govde)):
         if isinstance(d, ast.Call):
             ad = _cagri_adi(d)
             if ad in ("debug", "info", "warning", "error", "critical", "exception", "log"):
-                out.append((ad, d))
+                out.append((_log_seviyesi(ad, d), d))
     return out
 
 
+def _zincir_basar(cagri: ast.Call) -> bool:
+    """⚠️ D2.37: `exc_info`/`stack_info` anahtarının VARLIĞI değil DEĞERİ — `False`/`None`/`0` zincir BASMAZ; değişken, çağrı ya da
+    doğru sabit (ör. `exc_info=last_err`, `exc_info=True`) basar."""
+    for k in cagri.keywords:
+        if k.arg in ("exc_info", "stack_info"):
+            if isinstance(k.value, ast.Constant) and not k.value.value:
+                continue
+            return True
+    return False
+
+
 def _yeniden_firlatir(govde) -> bool:
-    return any(isinstance(d, ast.Raise) for d in ast.walk(_govde_agaci(govde)))
+    """Handler GERÇEKTEN yeniden fırlatıyor mu? ⚠️ D2.37: `if False: raise` / `while False: raise` ÖLÜ daldır — eskiden herhangi bir
+    `raise` düğümü "yeniden fırlatıyor" sayılıyor, kör handler kapıdan geçiyordu. Ölü dalın yalnız `else`i erişilebilir."""
+    yigin = list(govde)
+    while yigin:
+        d = yigin.pop()
+        if isinstance(d, ast.Raise):
+            return True
+        if isinstance(d, (ast.If, ast.While)) and isinstance(d.test, ast.Constant) and not d.test.value:
+            yigin.extend(d.orelse)
+            continue
+        yigin.extend(ast.iter_child_nodes(d))
+    return False
 
 
 def _alt_sistem_isi(try_govdesi) -> set[str]:
@@ -126,7 +177,7 @@ def kor_mu(dugum: ast.Try) -> bool:
             continue
         if any(s == "exception" for s, _ in loglar):
             continue
-        if any(k.arg in ("exc_info", "stack_info") for _, c in loglar for k in c.keywords):
+        if any(_zincir_basar(c) for _, c in loglar):
             continue
         return True
     return False
@@ -203,12 +254,82 @@ def _muaf_mi(rel: str, fonksiyon: str) -> tuple[bool, str]:
             "yeniden firlatiyor",
         ),
         ("try:\n    import x\nexcept Exception:\n    pass", False, "SESSIZ handler — oteki kapinin konusu"),
+        # ⚠️ D2.37 (B-10.244): üç KAÇIŞ biçimi — eski sınıflandırıcı üçünü de "kör değil" sayıyordu.
+        (
+            "try:\n    import torch\nexcept Exception as e:\n    logger.info('atlandi: %s', e, exc_info=False)",
+            True,
+            "D2.37: exc_info=False zincir BASMAZ (anahtarın VARLIĞI değil DEĞERİ)",
+        ),
+        (
+            "try:\n    import torch\nexcept Exception as e:\n    logger.log(logging.INFO, 'atlandi: %s', e)",
+            True,
+            "D2.37: .log(logging.INFO, …) düşük seviyedir",
+        ),
+        (
+            "try:\n    import torch\nexcept Exception as e:\n    logger.info('atlandi: %s', e)\n    if False:\n        raise",
+            True,
+            "D2.37: ölü `if False: raise` yeniden FIRLATMAZ",
+        ),
+        (
+            "try:\n    import torch\nexcept Exception as e:\n    logger.log(logging.WARNING, 'x: %s', e)",
+            False,
+            "D2.37 karşıtı: .log(logging.WARNING, …) düşük değil",
+        ),
+        (
+            "try:\n    import torch\nexcept Exception as e:\n    logger.info('x: %s', e, exc_info=e)",
+            False,
+            "D2.37 karşıtı: exc_info=<istisna> zincir basar",
+        ),
+        (
+            "try:\n    import torch\nexcept Exception as e:\n    logger.info('x: %s', e)\n    if hata_say():\n        raise",
+            False,
+            "D2.37 karşıtı: koşullu (ölü OLMAYAN) yeniden fırlatma",
+        ),
     ],
 )
 def test_KARSIT_KANIT_siniflandirici_AYIRIYOR(kaynak: str, beklenen: bool, aciklama: str):
     """⚠️ Bu kapı kendi sınıflandırıcısına dayanıyor; önce ONU kanıtla."""
     dugum = [d for d in ast.walk(ast.parse(kaynak)) if isinstance(d, ast.Try)][0]
     assert kor_mu(dugum) is beklenen, f"yanlış sınıflandırma: {aciklama}"
+
+
+def _a9_try() -> ast.Try:
+    """GERÇEK A9 handler'ı: `backend_service._start_ai_warmup_safe` → `_calistir` içindeki `try`."""
+    agac = ast.parse((KOK / "apps" / "backend" / "backend_service.py").read_text(encoding="utf-8"))
+    dis = next(f for f in ast.walk(agac) if isinstance(f, ast.FunctionDef) and f.name == "_start_ai_warmup_safe")
+    ic = next(f for f in ast.walk(dis) if isinstance(f, ast.FunctionDef) and f.name == "_calistir")
+    return next(d for d in ast.walk(ic) if isinstance(d, ast.Try))
+
+
+def _a9_bicimi(ne: str) -> ast.Try:
+    """A9 handler'ının günlük çağrısı plan'ın üç KAÇIŞ biçimine çevrilir (AST'de; kaynak dosyaya DOKUNULMAZ)."""
+    import copy
+
+    t = copy.deepcopy(_a9_try())
+    h = t.handlers[0]
+    cagri = next(c for c in ast.walk(_govde_agaci(h.body)) if isinstance(c, ast.Call) and _cagri_adi(c) == "warning")
+    if ne == "exc_info_false":
+        cagri.func.attr = "info"
+        for k in cagri.keywords:
+            if k.arg == "exc_info":
+                k.value = ast.Constant(False)
+    elif ne == "log_info":
+        cagri.func.attr = "log"
+        cagri.args.insert(0, ast.Attribute(value=ast.Name(id="logging", ctx=ast.Load()), attr="INFO", ctx=ast.Load()))
+        cagri.keywords = [k for k in cagri.keywords if k.arg != "exc_info"]
+    elif ne == "olu_raise":
+        cagri.func.attr = "info"
+        cagri.keywords = [k for k in cagri.keywords if k.arg != "exc_info"]
+        h.body.append(ast.If(test=ast.Constant(False), body=[ast.Raise(exc=None, cause=None)], orelse=[]))
+    return t
+
+
+@pytest.mark.parametrize("ne", ["exc_info_false", "log_info", "olu_raise"])
+def test_KRITIK_D237_A9_handleri_uc_KACIS_bicimine_cevrilince_KOR_sayilir(ne):
+    """Plan (B-10.244): A9 handler'ı `exc_info=False` / `logger.log(logging.INFO, …)` / `if False: raise` biçimine çevrilince
+    eski `kor_mu` üçünde de "kör değil" diyordu (kapı yeşil kalırdı) — yeni sınıflandırıcı üçünü de KÖR sayar."""
+    assert kor_mu(_a9_try()) is False, "aparat: GERÇEK A9 handler'ı (warning + exc_info=True) zaten kör sayıldı"
+    assert kor_mu(_a9_bicimi(ne)) is True, f"A9 handler'ının `{ne}` biçimi KÖR sayılmadı — kapı bu kaçışı görmez"
 
 
 # ──────────────────────────────────────────────────────────────────────────
