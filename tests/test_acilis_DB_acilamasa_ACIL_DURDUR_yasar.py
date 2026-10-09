@@ -561,10 +561,12 @@ def _cocuk(tmp_path: Path, env: dict, senaryo: str, argv: list[str] | None = Non
 #: kilidi — YALNIZ onun tam komut biçimi (Users / Authenticated Users kaldırılır; SYSTEM, Administrators ve süreç SID'i verilir).
 #: ⚠️ D2.79 öncesi bu kilit çocukta HİÇ koşmuyordu: yalıtık ortamda `USERNAME` yok → `getpass.getuser()` istisna → her
 #: `keep_current_user=True` kilidi SESSİZCE düşüyordu (D-3.1'in ortam biçimi). SID ile kilit artık gerçekten uygulanıyor.
+#: Yol BOŞLUKSUZ (`\S+`): eskiden `.+` idi — yol ile `/inheritance:r` arasına ek seçenek (`/T`, `/grant …`) sızabiliyordu.
+#: Bozuk-bayrak aparatıyla AYNI desen (tests/test_bozuk_sayisal_bayrak_ESTOP_OLDURMEZ.py) — biri değişirse öteki de.
 _IZINLI_ALT_SUREC = re.compile(
     r"subprocess\.Popen:(?:"
     r'(?:[A-Za-z]:\\(?:[^"\\]+\\)*)?cmd\.exe /c "?ver"?'
-    r"|icacls .+ /inheritance:r /remove:g \*S-1-5-32-545 /remove:g \*S-1-5-11"
+    r"|icacls [A-Za-z]:\\\S+ /inheritance:r /remove:g \*S-1-5-32-545 /remove:g \*S-1-5-11"
     r" /grant:r \*S-1-5-18:(?:\(OI\)\(CI\))?F /grant:r \*S-1-5-32-544:(?:\(OI\)\(CI\))?F"
     r"(?: /grant:r \*S-1-5-(?:18|21-[0-9-]+):(?:\(OI\)\(CI\))?F)*"
     r")",

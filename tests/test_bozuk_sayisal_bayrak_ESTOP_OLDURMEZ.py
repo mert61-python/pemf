@@ -169,7 +169,19 @@ print("SONUC " + json.dumps({{"sonuc": sonuc, "ag": _ag.ENGELLENEN, "sarmalayici
 #: Çocuğun başlatmasına izin verilen alt süreçler (torunlar bekçisizdir). Windows `platform` sürüm sorgusu
 #: `cmd.exe /c "ver"` çalıştırır (ağ yok) — ölçüldü (bağımsız inceleme r3 sonrası, 2026-10-01).
 #: 1-B inceleme (i6): desen başa çapalı değildi (`…; cmd.exe /c "ver"` ile BİTEN her komut izinliydi) → TAM eşleşme.
-_IZINLI_ALT_SUREC = re.compile(r'subprocess\.Popen:(?:[A-Za-z]:\\(?:[^"\\]+\\)*)?cmd\.exe /c "?ver"?', re.IGNORECASE)
+#: D2.79 (D-3.1) artığı: SID düzeltmesinden beri `utils.file_acl`ın veri kökü kilidi çocukta GERÇEKTEN koşar (eskiden yalıtık
+#: ortamda `USERNAME` yokken `getpass` düşüyor, kilit SESSİZCE atlanıyordu) → YALNIZ onun tam komut biçimi izinli: boşluksuz yol,
+#: Users / Authenticated Users kaldırılır, SYSTEM + Administrators + (isteğe bağlı) S-1-5-18 / S-1-5-21-… süreç SID'i verilir.
+#: A14 aparatıyla AYNI desen (tests/test_acilis_DB_acilamasa_ACIL_DURDUR_yasar.py `_IZINLI_ALT_SUREC`) — biri değişirse öteki de.
+_IZINLI_ALT_SUREC = re.compile(
+    r"subprocess\.Popen:(?:"
+    r'(?:[A-Za-z]:\\(?:[^"\\]+\\)*)?cmd\.exe /c "?ver"?'
+    r"|icacls [A-Za-z]:\\\S+ /inheritance:r /remove:g \*S-1-5-32-545 /remove:g \*S-1-5-11"
+    r" /grant:r \*S-1-5-18:(?:\(OI\)\(CI\))?F /grant:r \*S-1-5-32-544:(?:\(OI\)\(CI\))?F"
+    r"(?: /grant:r \*S-1-5-(?:18|21-[0-9-]+):(?:\(OI\)\(CI\))?F)*"
+    r")",
+    re.IGNORECASE,
+)
 
 
 def _izinli_alt_surec(kayit: str) -> bool:
@@ -296,11 +308,24 @@ def test_ARAC_alt_surec_ag_bekcisi_her_KATI_engeller_ve_KAYDEDER(tmp_path):
     # İzin deseni TAM eşleşir: yalnız `cmd.exe /c "ver"` (yollu ya da yolsuz); sonuna/başına ek yapılmış komut DEĞİL.
     assert _izinli_alt_surec(r'subprocess.Popen:C:\WINDOWS\system32\cmd.exe /c "ver"')
     assert _izinli_alt_surec('subprocess.Popen:cmd.exe /c ver')
+    # D2.79: ürünün veri kökü / sır dosyası kilidi (dizin ve dosya biçimi) izinli.
+    _kilit = r"subprocess.Popen:icacls C:\t\veri\PEMF_GUI /inheritance:r /remove:g *S-1-5-32-545 /remove:g *S-1-5-11"
+    assert _izinli_alt_surec(
+        _kilit
+        + r" /grant:r *S-1-5-18:(OI)(CI)F /grant:r *S-1-5-32-544:(OI)(CI)F /grant:r *S-1-5-21-1-2-3-1001:(OI)(CI)F"
+    )
+    assert _izinli_alt_surec(_kilit + r" /grant:r *S-1-5-18:F /grant:r *S-1-5-32-544:F /grant:r *S-1-5-18:F")
     for kotu in (
         'subprocess.Popen:kotu.exe; cmd.exe /c "ver"',
         r'subprocess.Popen:C:\x\cmd.exe /c "ver" & kotu.exe',
         "_winapi.CreateProcess:EŞLENMEMİŞ (Popen'sız süreç başlatma)",
         'os.exec:cmd.exe /c "ver"',
+        # D2.79: kilit biçimine eklenmiş Users / Everyone erişimi, `/reset`, araya sızan seçenek İZİNLİ DEĞİL.
+        _kilit + r" /grant:r *S-1-5-18:F /grant:r *S-1-5-32-544:F /grant:r *S-1-5-32-545:F",
+        _kilit + r" /grant:r *S-1-5-18:F /grant:r *S-1-5-32-544:F /grant:r *S-1-1-0:F",
+        r"subprocess.Popen:icacls C:\x /reset /T",
+        r"subprocess.Popen:icacls C:\x /T /inheritance:r /remove:g *S-1-5-32-545 /remove:g *S-1-5-11"
+        r" /grant:r *S-1-5-18:F /grant:r *S-1-5-32-544:F",
     ):
         assert not _izinli_alt_surec(kotu), kotu
 
