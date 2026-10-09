@@ -88,7 +88,7 @@ curl "http://127.0.0.1:8000/api/audit/events?event_type=ai_log.delete_all"
 | **STM bobinleri ölü** | `PEMF_STM_PORT=auto` ST-Link'i buldu mu? Sürücü? `/api/health` → `stmConnected`. |
 | **atRestEncrypted=false (beklenmedik)** | `PEMF_ENCRYPT_AT_REST=1` set mi? sqlcipher3 wheel EXE'de mi? Anahtar (`.sqlcipher_key`/keyring) okunuyor mu? PatientDB fail-closed → başlatma reddeder. |
 | **Kötü güncelleme sonrası sorun** | Aşağıdaki **"Kötü güncelleme"** bölümüne bakın. ⚠️ `/api/update/rollback` **KULLANMAYIN** — o uç eski (kapatılmış) EXE kanalına aittir ve hiçbir şey yapmaz. |
-| **Disk dolu / yedek** | `<data>\backups\` günlük şifreli yedek (son 14) + `kurtarma-zarfi.enc`. `PEMF_BACKUP_DIR` set ise off-machine kopya. |
+| **Disk dolu / yedek** | `<data>\backups\` günlük şifreli yedek (her türden son 14: tedavi, hasta, operatör hesapları, SIRSIZ `config` / `system_settings`) + `kurtarma-zarfi.enc`. `PEMF_BACKUP_DIR` set ise off-machine kopya — orada da her türden **son 14** tutulur, eskileri cihaz siler (Y11); cihaz o dizinde yalnız kendi `pemf_<tür>_<tarih>` dosyalarını siler. Kaldırma / tam temizlik off-machine dizine dokunmaz (A-45). |
 
 ## Kötü güncelleme (TEK KANAL: launcher)
 
@@ -149,6 +149,11 @@ yedek dizinine kopyalanmaz; regresyon testiyle kilitlidir.
 3. En yeni yedeği kopyala: `pemf_treatment_history_<tarih>.db` → `pemf_treatment_history.db`,
    `pemf_patients_<tarih>.db` → `patients.db`  ← ⚠️ hedef ad `patients.db`; uygulama
    `pemf_patients.db` adını **hiç açmaz** (yedek dosya ön-eki ile karıştırmayın)
+   Operatör hesapları: `pemf_auth_users_<tarih>.db` şifreliyse
+   `python tools\kurtarma.py --hesap-yedegi <yedek>\pemf_auth_users_<tarih>.db --cikti <data>\auth_users.db`
+   (2. adımdan sonra; şifresiz kurulumda `auth_users.db` adıyla kopyalamak yeter). Ayarlar: `pemf_config_<tarih>.json` →
+   `config.json`, `pemf_system_settings_<tarih>.json` → `system_settings.json` — SIRSIZDIR, MQTT kullanıcı/parola ve API
+   anahtarını yeniden gir.
 4. Backend'i başlat: launcher'ı aç (servis kurulumunda: servisi başlat).
 
 **Kod kaybolursa** yedekler yalnız orijinal makinede açılır. Kod, kaybı geri alınamaz tek şeydir.

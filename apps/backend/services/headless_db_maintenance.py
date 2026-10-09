@@ -22,9 +22,21 @@ logger = logging.getLogger(__name__)
 # (baska bir teknisyen, aylar sonra) log'lara bakamaz; "sifreli .db var ama acilmiyor" ile
 # bas basa kalmasin diye NE GEREKTIGI dosyanin yanina yazilir.
 _OFFSITE_README_NAME = "OKU-KURTARMA.txt"
+#: Operatör hesapları DB'si (`database/auth_db.AuthDB`: `<veri dizini>/auth_users.db`) — D2.51 (A-32) yedek kapsamı.
+_HESAP_DB_ADI = "auth_users.db"
 _OFFSITE_README_TEXT = """PEMF — YEDEK KURTARMA NOTU
 =============================================================
-Bu dizindeki .db dosyalari SQLCipher ile SIFRELIDIR.
+Bu dizindeki .db dosyalari SQLCipher ile SIFRELIDIR (sifreli kurulumda).
+
+DOSYALAR — her turden SON N kopya tutulur, eskilerini cihaz SILER
+  pemf_treatment_history_<tarih>.db    tedavi gecmisi
+  pemf_patients_<tarih>.db             hasta kartlari
+  pemf_auth_users_<tarih>.db           operator hesaplari
+  pemf_config_<tarih>.json             ayarlar (SIRSIZ: parola/anahtar YOK)
+  pemf_system_settings_<tarih>.json    sistem ayarlari (SIRSIZ)
+  Cihaz YALNIZ bu adlardaki kendi dosyalarini siler; bu dizindeki baska
+  dosyalara dokunmaz. Kaldirma / "tam temizlik" bu dizine HIC dokunmaz —
+  gerekmiyorsa yedekleri elle silin.
 
 Sifre-cozme anahtari yedegi ALAN MAKINEYE baglidir (Windows DPAPI /
 CRYPTPROTECT_LOCAL_MACHINE). Bu yuzden .db dosyalari TEK BASINA yetmez.
@@ -49,6 +61,12 @@ NASIL GERI YUKLENIR
      (⚠️ 2026-08-15: hedef ad `pemf_patients.db` yaziliyordu; uygulama O ADI HIC ACMAZ →
       yonergeyi izleyen klinik hasta kayitlarini geri yukledigini sanip bos liste gorurdu.
       YEDEK dosya on-eki `pemf_patients_<tarih>.db` DEGISMEDI — rotasyon onu kullanir.)
+  3b) Operator hesaplari: pemf_auth_users_<tarih>.db sifreliyse (2. adimdan SONRA):
+       python tools/kurtarma.py --hesap-yedegi pemf_auth_users_<tarih>.db --cikti <veri-dizini>\\auth_users.db
+      Sifresiz kurulumda dosyayi  auth_users.db  adiyla kopyalamak yeter.
+  3c) Ayarlar:  pemf_config_<tarih>.json -> config.json,
+      pemf_system_settings_<tarih>.json -> system_settings.json.
+      MQTT kullanici/parola ve API anahtari bu kopyalarda YOKTUR — yeniden girin.
   4) Servisi baslatin.
 
 ZARF YOKSA
@@ -187,7 +205,12 @@ class HeadlessDBMaintenance:
 
     def _yedek_acilir_mi(self, yol: Path) -> bool:
         """Yedek dosyası bu kurulumun anahtarıyla AÇILIYOR mu? Hasta yedekleri hasta DB'siyle, yoksa tedavi DB'siyle (iki DB
-        aynı birincil anahtarı kullanır) doğrulanır. Doğrulayıcı yoksa AÇILAMAZ sayılır. ASLA istisna atmaz."""
+        aynı birincil anahtarı kullanır) doğrulanır. Doğrulayıcı yoksa AÇILAMAZ sayılır. ASLA istisna atmaz.
+        D2.51: hesap yedekleri de tedavi DB'siyle (aynı birincil anahtar); ayar yedekleri (`.json`) kökü sözlük olan geçerli JSON ise."""
+        if yol.suffix == ".json":
+            from database.yedek_dosyasi import json_yedegi_gecerli_mi
+
+            return json_yedegi_gecerli_mi(yol)
         db = self.patient_db if yol.name.startswith("pemf_patients_") and self.patient_db is not None else self.db
         try:
             return bool(db.yedek_acilir_mi(yol))
@@ -248,6 +271,8 @@ class HeadlessDBMaintenance:
                         created.append(pfile)
                 except Exception:
                     logger.warning("Hasta DB yedegi hatasi", exc_info=True)
+            # ⚠️ D2.51 (A-32, sahip kararı): operatör hesapları + config + sistem ayarları da yedeklenir; SIR dosyaları HARİÇ.
+            created.extend(self._ek_kapsam_yedekle(backup_dir, stamp))
             self._cleanup_backups(backup_dir)
             # DENETIM: kurtarma zarfi .db'lerden ONCE yazilir ki off-site kopyaya da GİRSİN —
             # zarfsiz bir off-site kopya donanim arizasindan sonra acilamaz.
@@ -257,6 +282,65 @@ class HeadlessDBMaintenance:
             self._copy_offsite(created)  # audit B-7.2: off-machine kopya (PEMF_BACKUP_DIR)
         except Exception:
             logger.exception("backup hatasi")
+
+    def _ek_kapsam_yedekle(self, backup_dir: Path, stamp: str) -> list:
+        """⚠️ D2.51 (A-32, sahip kararı): otomatik yedek kapsamı — operatör hesapları (`auth_users.db`), `config.json`,
+        `system_settings.json`. AÇIK İZİN LİSTESİ: yalnız bu üç dosya; SIR dosyaları (`pemf_secrets.json`, `.pemf_key`, `.sqlcipher_key`,
+        `KURTARMA-KODU.txt`, `api_token.txt`, `admin_reset_code.txt`, cihaz kimliği) yapısal olarak kapsama GİREMEZ.
+          · Hesap DB'si: şifreli kurulumda yedek BİRİNCİL anahtarla ŞİFRELİ (kaynak düz olsa da) — e-posta + 6 haneli PIN özeti makine
+            dışına düz gitmez. Geri yükleme: `tools/kurtarma.py --hesap-yedegi`.
+          · Ayar dosyaları: SIRSIZ kopya — parola / jeton / API anahtarı / `enc:` değerleri ayıklanır (geri yüklemede yeniden girilir).
+            Kaynak okunamazsa HAM kopya ALINMAZ (sır içerebilir).
+        Biri düşerse ötekiler ve klinik DB yedekleri etkilenmez; düşen ERROR ile söylenir. Döndürür: üretilen yedek yolları.
+        Kapı: tests/test_offsite_ROTASYON_ve_yedek_KAPSAMI_D251_Y11_A32_A45.py"""
+        import json
+
+        from database.yedek_dosyasi import duz_dbyi_yedekle, json_yedegi_yaz, sirsiz_ayarlar
+
+        uretilen = []
+        hesap = self.app_data_dir / _HESAP_DB_ADI
+        if hesap.is_file():
+            hedef = backup_dir / f"pemf_auth_users_{stamp}.db"
+            try:
+                mod, anahtar = self.db.yedek_sifre_bilgisi()
+                duz_dbyi_yedekle(str(hesap), str(hedef), mod, anahtar, logger)
+                logger.info("Hesap DB yedegi alindi (%s): %s", "sifreli" if anahtar else "sifresiz kurulum", hedef)
+                uretilen.append(hedef)
+            except Exception:
+                logger.error("Hesap DB yedegi BASARISIZ — operator hesaplari bu turda YEDEKLENMEDI", exc_info=True)
+        for kaynak_adi, tur in (("config.json", "config"), ("system_settings.json", "system_settings")):
+            kaynak = self.app_data_dir / kaynak_adi
+            if not kaynak.is_file():
+                continue
+            hedef = backup_dir / f"pemf_{tur}_{stamp}.json"
+            try:
+                veri = json.loads(kaynak.read_text(encoding="utf-8-sig"))
+                if not isinstance(veri, dict):
+                    raise ValueError("kok nesne sozluk degil")
+                temiz, ayiklanan = sirsiz_ayarlar(veri, self._config_sir_yollari())
+                json_yedegi_yaz(temiz, str(hedef), logger)
+                logger.info("%s yedegi alindi (SIRSIZ; %d sir alani ayiklandi): %s", kaynak_adi, len(ayiklanan), hedef)
+                uretilen.append(hedef)
+            except Exception:
+                logger.error(
+                    "%s yedegi BASARISIZ (okunamadi / yazilamadi) — HAM kopya ALINMADI (sir icerebilir)",
+                    kaynak_adi,
+                    exc_info=True,
+                )
+        return uretilen
+
+    @staticmethod
+    def _config_sir_yollari() -> frozenset:
+        """Config yöneticisinin ŞİFRELEDİĞİ anahtar yolları — ayar yedeğinden ayıklanır (ad deseni ve `enc:` önekine EK)."""
+        try:
+            from utils.production_config_manager import ProductionConfigManager
+
+            return frozenset(ProductionConfigManager._ENCRYPTED_KEYS)
+        except Exception:
+            logger.warning(
+                "config sir anahtari listesi okunamadi — yalniz ad deseni ve 'enc:' oneki ile ayiklanir", exc_info=True
+            )
+            return frozenset()
 
     def _refresh_recovery(self, backup_dir: Path):
         """DENETIM (offsite-backup-no-key-escrow): yedeklerin yanina kurtarma zarfini yaz.
@@ -279,7 +363,12 @@ class HeadlessDBMaintenance:
         return None
 
     def _cleanup_backups(self, backup_dir: Path):
-        """Her iki yedek ailesini ayrı ayrı rotasyona sok: son N AÇILABİLEN yedek kalır.
+        """Yerel `backups/` rotasyonu — kural `_rotasyon`da (makine dışı hedefle AYNI).
+        Kapılar: tests/test_yerel_yedek_penceresi_KORUNUR_D263.py · tests/test_offsite_ROTASYON_ve_yedek_KAPSAMI_D251_Y11_A32_A45.py"""
+        self._rotasyon(backup_dir, "yerel")
+
+    def _rotasyon(self, dizin: Path, yer: str):
+        """Her yedek ailesinde son N AÇILABİLEN yedek kalır (N = `backup_retention_keep`). Yerel ve makine dışı hedefte AYNI kural.
 
         ⚠️ D2.63 (B-3.20): eskiden dosyalar YALNIZ adla sayılıyordu — 0 baytlık / başarısız yedek artıkları rotasyonda SAĞLAM
         yedeklerin yuvasını alıyor, en eski sağlam yedek siliniyordu (ölçüldü). Şimdi:
@@ -287,27 +376,45 @@ class HeadlessDBMaintenance:
           · DOLU ama bu kurulumun anahtarıyla AÇILAMAYAN dosya (anahtar değişiminden önceki yedek olabilir — kurtarılabilir veri)
             SİLİNMEZ ve geçerli yedek sayısına KATILMAZ; günlükte söylenir;
           · yalnız açılabilen yedekler arasında son N tutulur (ad = damga sırası).
-        Kapı: tests/test_yerel_yedek_penceresi_KORUNUR_D263.py"""
-        for pattern in ("pemf_treatment_history_*.db", "pemf_patients_*.db"):
+        ⚠️ D2.51 (Y11 · A-45): makine dışı hedefe de uygulanır; bu yüzden kapsam DAR: YALNIZ `pemf_<aile>_<YYYYMMDD_HHMMSS><uzantı>`
+        adlı (`yedek_dosyasi.yedek_ailesi`) DÜZENLİ dosyalar. Elle alınmış kopya, aynı adlı dizin, kısayol, kurtarma zarfı, not ve
+        kullanıcı dosyaları YOK SAYILIR — hedef yanlışlıkla bir kullanıcı dizini seçilse de silme bu adlarla sınırlı kalır."""
+        from database.yedek_dosyasi import yedek_ailesi
+
+        try:
+            girdiler = sorted(dizin.iterdir())
+        except OSError:
+            logger.warning("Yedek rotasyonu (%s): dizin listelenemedi: %s", yer, dizin, exc_info=True)
+            return
+        aileler: dict = {}
+        for f in girdiler:
+            aile = yedek_ailesi(f.name)
+            if aile is not None:
+                aileler.setdefault(aile, []).append(f)
+        for aile, dosyalar in aileler.items():
             try:
                 gecerli, acilamayan = [], []
-                for f in sorted(backup_dir.glob(pattern)):
+                for f in dosyalar:
                     try:
+                        if f.is_symlink() or not f.is_file():
+                            continue
                         bos = f.stat().st_size == 0
                     except OSError:
+                        logger.warning("Yedek rotasyonu (%s): dosya okunamadi, ATLANDI: %s", yer, f, exc_info=True)
                         continue
                     if bos:
                         try:
                             f.unlink(missing_ok=True)
-                            logger.info("0 baytlik yedek artigi silindi (veri tasimaz): %s", f.name)
+                            logger.info("0 baytlik yedek artigi silindi (%s; veri tasimaz): %s", yer, f.name)
                         except OSError:
-                            logger.warning("0 baytlik yedek artigi silinemedi: %s", f, exc_info=True)
+                            logger.warning("0 baytlik yedek artigi silinemedi (%s): %s", yer, f, exc_info=True)
                         continue
                     (gecerli if self._yedek_acilir_mi(f) else acilamayan).append(f)
                 if acilamayan:
                     logger.warning(
-                        "Yedek rotasyonu: %d ACILAMAYAN yedek (%s) bu kurulumun anahtariyla acilmiyor — SAYILMADI ve SILINMEDI "
+                        "Yedek rotasyonu (%s): %d ACILAMAYAN yedek (%s) bu kurulumun anahtariyla acilmiyor — SAYILMADI ve SILINMEDI "
                         "(onceki bir anahtarla sifrelenmis olabilir; kurtarma zarfi/kodu ile acilabilir). Gerekmiyorsa elle kaldirin.",
+                        yer,
                         len(acilamayan),
                         ", ".join(p.name for p in acilamayan[:5]),
                     )
@@ -316,9 +423,9 @@ class HeadlessDBMaintenance:
                         try:
                             old.unlink(missing_ok=True)
                         except OSError:
-                            logger.warning("Eski yedek silinemedi (yedekler birikir): %s", old, exc_info=True)
+                            logger.warning("Eski yedek silinemedi (%s; yedekler birikir): %s", yer, old, exc_info=True)
             except Exception:
-                logger.warning("backup temizlik uyarisi (%s)", pattern, exc_info=True)
+                logger.warning("Yedek rotasyonu uyarisi (%s, %s)", yer, aile, exc_info=True)
 
     @staticmethod
     def _dogrulanmis_kopya(kaynak: Path, hedef: Path) -> bool:
@@ -400,6 +507,11 @@ class HeadlessDBMaintenance:
                     _ENV_NAME,
                     _OFFSITE_README_NAME,
                 )
+            # ⚠️ D2.51 (B-3.22 · Y11, sahip kararı): makine dışı hedefte de her yedek türünden SON N kopya kalır (yerel ile aynı kural ve
+            # N). Eskiden yalnız kopyalanıyordu: hedef sınırsız büyüyor (doldukça B-3.19) ve canlı DB'den SİLİNEN hastanın adı ilk
+            # kopyada süresiz kalıyordu (KVKK; zarf + kodla açılabilir — ölçüldü). Kopyalardan SONRA: bu turun kopyası düşse de
+            # yalnız açılabilen kopyalar sayılır, eskiler gereksiz yere gitmez. A-45: yalnız kendi adlı dosyalar (bkz. `_rotasyon`).
+            self._rotasyon(dpath, "makine disi")
             # Yedeklerin YANINA ne gerektigini yaz: kurtarma anindaki kisi log'lara bakamayabilir.
             try:
                 (dpath / _OFFSITE_README_NAME).write_text(_OFFSITE_README_TEXT, encoding="utf-8")

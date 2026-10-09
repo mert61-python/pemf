@@ -22,6 +22,9 @@ KULLANIM
     # Bu makinedeki kurtarma kodunu göster (cihaz hâlâ çalışıyorken):
     python tools/kurtarma.py --kodu-goster
 
+    # Şifreli operatör hesapları yedeğini düz auth_users.db'ye çöz (--yaz'dan SONRA):
+    python tools/kurtarma.py --hesap-yedegi pemf_auth_users_<tarih>.db --cikti <veri-dizini>\\auth_users.db
+
 GERİ YÜKLEME SIRASI
     1) Yeni makineye PEMF'i kurun, servisi HENÜZ BAŞLATMAYIN.
        (Başlatırsanız yeni bir sqlcipher_key üretilir ve yedekler açılmaz.)
@@ -29,6 +32,10 @@ GERİ YÜKLEME SIRASI
     3) Yedek dizinindeki EN YENİ dosyaları veri dizinine kopyalayın:
          pemf_treatment_history_<tarih>.db  ->  pemf_treatment_history.db
          pemf_patients_<tarih>.db           ->  patients.db
+       Operatör hesapları (D2.51 · A-32): pemf_auth_users_<tarih>.db şifreliyse --hesap-yedegi ile
+       auth_users.db'ye çözün; şifresiz kurulumda auth_users.db adıyla kopyalayın. Ayarlar:
+       pemf_config_<tarih>.json -> config.json, pemf_system_settings_<tarih>.json -> system_settings.json
+       (SIRSIZ — MQTT kullanıcı/parola ve API anahtarını yeniden girin).
     4) Servisi başlatın.
 """
 
@@ -155,6 +162,56 @@ def _restore(zarf: Path, kod: str, yaz: bool) -> int:
     # sanip bos bir hasta listesiyle calisirdi. YEDEK dosya on-eki (`pemf_patients_<tarih>.db`)
     # DEGISMEDI — onu `headless_db_maintenance` uretir ve rotasyona sokar.
     print("    pemf_patients_<tarih>.db           ->  patients.db")
+    print("Operator hesaplari (sifreli yedek):")
+    print("    python tools/kurtarma.py --hesap-yedegi pemf_auth_users_<tarih>.db --cikti <veri-dizini>\\auth_users.db")
+    return 0
+
+
+def _hesap_yedegini_coz(yedek: Path, cikti: Path) -> int:
+    """⚠️ D2.51 (A-32): makine dışı / yerel hesap yedeğini (`pemf_auth_users_<tarih>.db`) düz `auth_users.db`ye çevirir.
+
+    Şifreli kurulumda yedek BİRİNCİL `sqlcipher_key` ile şifrelidir (zarf yalnız onu taşır — A-13); anahtar bu makineye `--yaz` ile
+    yerleşmiş olmalıdır. Düz yedek doğrulanıp kopyalanır. Çıktı VARSA dokunulmaz (mevcut hesapları ezmez)."""
+    import logging
+    import shutil
+
+    from database.yedek_dosyasi import sifreli_yedegi_duze_coz, yedek_acilir_mi
+
+    if not yedek.is_file():
+        print(f"HATA: hesap yedegi bulunamadi: {yedek}")
+        return 2
+    if cikti.exists():
+        print(f"DURDURULDU: cikti zaten var → {cikti}")
+        print("  Mevcut hesaplarin USTUNE YAZILMAZ. Baska bir cikti yolu verin ya da dosyayi bilerek kaldirin.")
+        return 3
+    with open(yedek, "rb") as f:
+        duz = f.read(16) == b"SQLite format 3\x00"
+    if duz:
+        if not yedek_acilir_mi(str(yedek), tam=True):
+            print(f"HATA: sifresiz hesap yedegi ACILMIYOR / bozuk: {yedek}")
+            return 2
+        shutil.copy2(yedek, cikti)
+        print(f"Sifresiz hesap yedegi kopyalandi: {cikti}")
+        return 0
+    from database.sqlcipher_util import import_sqlcipher
+    from utils import secrets_manager as sm
+
+    anahtar = ""
+    try:
+        anahtar = sm.get_secret("sqlcipher_key", generate=False) or ""
+    except Exception as e:
+        print(f"HATA: sqlcipher_key okunamadi ({type(e).__name__}: {e})")
+    if not anahtar:
+        print("HATA: bu makinede sqlcipher_key YOK — once anahtarlari zarftan yerlestirin:")
+        print("    python tools/kurtarma.py --zarf <yedek>\\kurtarma-zarfi.enc --kod <KOD> --yaz")
+        return 2
+    try:
+        sifreli_yedegi_duze_coz(str(yedek), str(cikti), import_sqlcipher(), anahtar, logging.getLogger("kurtarma"))
+    except Exception as e:
+        print(f"HATA: hesap yedegi COZULEMEDI ({type(e).__name__}: {e}) — cikti YAZILMADI.")
+        print("  Yedek baska bir anahtarla (onceki kurulum) sifrelenmis olabilir; o kurulumun zarfi/kodu gerekir.")
+        return 4
+    print(f"Hesap yedegi cozuldu ve dogrulandi: {cikti}")
     return 0
 
 
@@ -171,10 +228,21 @@ def main(argv=None) -> int:
     ap.add_argument(
         "--kodu-goster", action="store_true", help="Bu makinedeki kurtarma kodunu goster (cihaz calisirken)"
     )
+    ap.add_argument(
+        "--hesap-yedegi",
+        type=Path,
+        help="Operator hesaplari yedegini (pemf_auth_users_<tarih>.db) duz auth_users.db'ye coz (--yaz'dan sonra)",
+    )
+    ap.add_argument("--cikti", type=Path, help="--hesap-yedegi icin cikti yolu (or. <veri-dizini>\\auth_users.db)")
     a = ap.parse_args(argv)
 
     if a.kodu_goster:
         return _show_local_code()
+
+    if a.hesap_yedegi:
+        if not a.cikti:
+            ap.error("--hesap-yedegi icin --cikti gerekli")
+        return _hesap_yedegini_coz(a.hesap_yedegi, a.cikti)
 
     if not a.zarf:
         ap.error("--zarf gerekli (ya da --kodu-goster kullanin)")

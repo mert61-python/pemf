@@ -209,6 +209,20 @@ class BakimKarisimi:
                 mod, key = None, ""
         return yedek_acilir_mi(yol, mod, key, tam=tam)
 
+    def yedek_sifre_bilgisi(self):
+        """⚠️ D2.51 (A-32): bu kurulumun yedek şifrelemesi — `(sqlcipher modülü, BİRİNCİL anahtar)`; düz kurulumda `(None, "")`.
+
+        Ek yedekler (operatör hesapları) klinik DB yedekleriyle AYNI anahtarla şifrelenir: kurtarma zarfı yalnız birincil anahtarı
+        taşır (A-13). Şifreli kurulumda anahtar BOŞ dönerse istisna — D2.62 kuralı: boş anahtarla yedek yazılmaz."""
+        if not getattr(self, "at_rest_encrypted", False):
+            return None, ""
+        key = self._get_sqlcipher_key()
+        if not key:
+            raise RuntimeError(
+                "at-rest sifreli kurulumda birincil anahtar BOS dondu — ek yedek yazilmaz (duz-metin kopya riski)"
+            )
+        return self._import_sqlcipher(), key
+
     def apply_data_retention_policy(
         self,
         sensor_retain_days: int = 90,
