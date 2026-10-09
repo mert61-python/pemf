@@ -152,14 +152,8 @@ def test_KARSIT_kimliksiz_durumda_ACIL_DURDUR_ve_STOP_kapisiz(o):
     assert o.lan.post("/api/hardware/emergency_stop").status_code == 200
 
 
-def test_KARSIT_A01_eski_istemci_SESSION_ID_siz_not_yolu_DEGISMEZ(o):
-    """Y116 `session_id` ile güncellemeyi kapsar; kimliksiz eski istemci dalı (APK 2.3.34, hasta adıyla son bitmiş seans) bugünkü
-    gibi yazar — ama bitmiş seansın DOZU yine değişmez (doz kaydı seansın kendi kaydıdır)."""
-    _hekimler(o)
-    sid = _bitmis_seans(o)
-    r = o.lan.post("/api/session/notes", json={"notes": NOT, "patient_name": "Pamuk", "frequency": 999, "intensity": 9})
-    assert r.status_code == 200, r.text[:200]
-    assert _satir(o, sid) == (NOT, 50.0, 2.0, 4, "completed")
+# (Eski `test_KARSIT_A01_eski_istemci_SESSION_ID_siz_not_yolu_DEGISMEZ` kaldırıldı: Y120 (S-C.2) sahip kararıyla `session_id`'siz eski
+# istemci dalı da kayıtlı klinikte KİMLİK ister — davranış ve karşıtları tests/test_eski_istemci_notu_KAYITLI_klinikte_KIMLIK_ister_Y120.py.)
 
 
 def test_KRITIK_arayuz_fiksturu_GERCEK_428_yanitiyla_AYNI(o):

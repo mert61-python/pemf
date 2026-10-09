@@ -134,7 +134,13 @@ def save_session_notes(payload: SessionNotesPayload, request: Request):
     ekler (Y107). Her güncelleme İZ yazar (kim, hangi seans, hangi alanlar — not METNİ ize girmez, D2.43). Kapanmış / süren
     seansın DOZ parametreleri (frekans, şiddet) istekle DEĞİŞMEZ — doz kaydı seansın kendi kaydıdır; yalnız not eklenir (eskiden
     jetonsuz LAN isteği başka hekimin bitmiş seansını 50 → 999 Hz yapabiliyordu, iz yoktu — ölçüldü). Operatörsüz klinik (Kural 2)
-    değişmez. Kapı: tests/test_seans_sonu_NOTU_kimlik_ister_DOZ_degismez_Y116.py"""
+    değişmez. Kapı: tests/test_seans_sonu_NOTU_kimlik_ister_DOZ_degismez_Y116.py
+
+    ⚠️ Y120 (S-C.2, sahip kararı): `session_id` GÖNDERMEYEN eski istemci dalı (APK 2.3.34 — hasta adıyla son bitmiş seans) da kayıtlı
+    operatörlü klinikte KİMLİK ister (428; Y107/Y116 ile aynı ilke). Eskiden kapı yalnız `session_id`li istekteydi → eski istemci başka
+    hekimin bitmiş seans notunun ÜZERİNE kimliksiz yazabiliyordu (2-C inceleme A3, ölçüldü). Bedel (kabul): kayıtlı klinikte eski APK'lı
+    telefon güncellenene dek not ekleyemez — ileti bunu söyler. Operatörsüz klinik (Kural 2) değişmez.
+    Kapı: tests/test_eski_istemci_notu_KAYITLI_klinikte_KIMLIK_ister_Y120.py"""
     from servers import api_server as _api
     from servers import audit_log as _iz
     from servers.auth import cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
@@ -142,16 +148,20 @@ def save_session_notes(payload: SessionNotesPayload, request: Request):
     db = _api._get_treatment_db()
     if db is None:
         raise HTTPException(status_code=503, detail="Tedavi kaydı veritabanı hazır değil — not kaydedilmedi.")
-    if (
-        payload.session_id is not None and kayitli_operator_var() and not cozumlenmis_operator(request)
-    ):  # beyan YOK → jeton
+    if kayitli_operator_var() and not cozumlenmis_operator(request):  # beyan YOK → jeton
+        eski_istemci = payload.session_id is None
         _iz.kimlikli_yaz(
-            request, "session.notes", scope=f"id={int(payload.session_id)}", item_count=0, outcome="reddedildi"
+            request,
+            "session.notes",
+            scope=("eski-istemci" if eski_istemci else f"id={int(payload.session_id)}"),
+            item_count=0,
+            outcome="reddedildi",
         )
         raise HTTPException(
             status_code=428,
             detail=kimliksiz_detayi(
                 "Operatör seçin — seans notunu kaydetmek için hangi hekim olduğunuzu seçin; notunuz ekranda duruyor."
+                + (" Uygulamanız hekim seçimi sunmuyorsa güncelleyin." if eski_istemci else "")
             ),
         )
     with _api._session_lock:
