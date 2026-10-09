@@ -6413,6 +6413,19 @@ async def _disa_aktar(payload: DataExportPayload, request: Request):
     _enforce_privileged(request)
     if _VERI_TASIMA_KILIDI.locked():  # D2.E02: yarım içe aktarılmış durum yedek diye verilmez
         raise HTTPException(status_code=409, detail=GERI_YUKLEME_SURUYOR)
+    # ⚠️ D2-2.5 (2-D incelemesi · S-D.1/Y103 ile tutarlılık) [KARAR — önerilen]: kayıtlı operatörlü klinikte kliniğin TAMAMINI çağıranın
+    # seçtiği parolayla veren paket KİMLİK ister (jetonsuz 428). A-01 cihaz token'ı tek başına yetmez — LAN'daki herkese
+    # `/api/auth/token`dan verilir. Operatörsüz klinik (Kural 2) ve kimlikli hekim (rol modeli yok, A-28) DEĞİŞMEZ.
+    # Kapı: tests/test_data_export_KAYITLI_klinikte_KIMLIK_ister_D2_2_5.py
+    from servers.auth import cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
+
+    if kayitli_operator_var() and not cozumlenmis_operator(request):
+        raise HTTPException(
+            status_code=428,
+            detail=kimliksiz_detayi(
+                "Operatör seçin — kliniğin tüm kayıtlarının yedeğini almak için önce üst bardan hangi hekim olduğunuzu seçin."
+            ),
+        )
     if payload.kaydet:
         from servers.auth import cihazin_kendisinden_mi
 
