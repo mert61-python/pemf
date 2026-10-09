@@ -96,13 +96,19 @@ def get_sqlcipher_key(app_data_dir, logger=None) -> str:
         # patients.db / pemf_treatment_history.db ile TÜM yedekler kalıcı olarak çözülemez hale gelir.
         raise
     except Exception as e:
-        (logger or logging.getLogger(__name__)).error(
+        _gunluk = logger or logging.getLogger(__name__)
+        _ileti = (
             "SQLCipher anahtari SecretsManager'dan OKUNAMADI/YAZILAMADI (%s: %s) — eski yola DUSULMEDI, YENI ANAHTAR "
             "URETILMEDI; veritabani acilmayacak, dosyalara dokunulmadi (Karar 6). Sir dosyasina/veri kokune erisimi "
-            "duzeltin; veritabani arka planda yeniden acilir.",
-            type(e).__name__,
-            e,
+            "duzeltin; veritabani arka planda yeniden acilir."
         )
+        try:
+            # O-A2-1.b (D2.80): her açılış denemesinde (Y43) aynı satır — tekrar-kısıtlı (ilk satır + sayım).
+            from utils.secrets_manager import tekrar_kisitli_hata
+
+            tekrar_kisitli_hata(_gunluk, "sqlcipher_key", f"{type(e).__name__}: {e}", _ileti, type(e).__name__, e)
+        except ImportError:
+            _gunluk.error(_ileti, type(e).__name__, e)
         raise RuntimeError(
             f"SQLCipher anahtari okunamadi/yazilamadi ({type(e).__name__}) — yeni anahtar URETILMEDI, eski yola "
             "dusulmedi (Karar 6)."

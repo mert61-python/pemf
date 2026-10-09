@@ -154,13 +154,20 @@ class ConfigManager:
             )
             raise
         except Exception as _e:
-            logger.error(
+            _ileti = (
                 "patient_fernet_key SecretsManager'dan OKUNAMADI/YAZILAMADI (%s: %s) — eski yola DUSULMEDI, YENI ANAHTAR "
                 "URETILMEDI; hasta veritabani acilmayacak, dosyalara dokunulmadi (Karar 6). Sir dosyasina/veri kokune "
-                "erisimi duzeltin; veritabani arka planda yeniden acilir.",
-                type(_e).__name__,
-                _e,
+                "erisimi duzeltin; veritabani arka planda yeniden acilir."
             )
+            try:
+                # O-A2-1.b (D2.80): her açılış denemesinde (Y43) aynı satır — tekrar-kısıtlı (ilk satır + sayım).
+                from utils.secrets_manager import tekrar_kisitli_hata
+
+                tekrar_kisitli_hata(
+                    logger, "patient_fernet_key", f"{type(_e).__name__}: {_e}", _ileti, type(_e).__name__, _e
+                )
+            except ImportError:
+                logger.error(_ileti, type(_e).__name__, _e)
             raise RuntimeError(
                 f"patient_fernet_key okunamadi/yazilamadi ({type(_e).__name__}) — yeni anahtar URETILMEDI, eski yola "
                 "dusulmedi (Karar 6)."

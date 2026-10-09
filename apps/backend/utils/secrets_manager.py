@@ -76,30 +76,96 @@ def secrets_path() -> Path:
 #       YERLESTIRILEBILIRDI (bilinen-anahtar enjeksiyonu).
 # icacls maliyetli → surec basina BIR KEZ.
 _dir_hardened = False
+# ⚠️ D2.80 (B-3.52): başarısız sertleştirme GERİ ÇEKİLİR. Bayrak yalnız başarıda kurulduğu için (P3, aşağıda) sertleştirme
+# düşerken — LocalSystem'de D-3.1, kilitli dizin, AV — eskiden HER `get_secret` (önbellek denetiminden ÖNCE) ve her `_save` küresel
+# `_lock` altında `icacls` (10 sn zaman aşımı) koşturuyordu. Artık başarısız denemeden sonra bu süre dolmadan yeniden denenmez;
+# süre dolunca bir sonraki okuma/yazım yeniden dener (kalıcı kapatma YOK). Kapı: tests/test_sir_dosyasi_ERISIM_reddi_BOZUK_sayilmaz_D280.py
+_SERTLESTIRME_GERI_CEKILME_SN = 60.0
+_sertlestirme_sonraki = 0.0  # time.monotonic(); bu andan ÖNCE yeniden denenmez
 
 
 def _ensure_dir_hardened(d: Path) -> None:
-    global _dir_hardened
+    global _dir_hardened, _sertlestirme_sonraki
     if _dir_hardened:
+        return
+    simdi = time.monotonic()
+    if simdi < _sertlestirme_sonraki:
         return
     # ⚠️ DENETİM 2026-08-04 (P3): bayrak DENEMEDEN ÖNCE True yapılıyordu → tek bir geçici
     # `icacls` hatası (dosya kilidi, AV, geçici izin sorunu) sertleştirmeyi SÜREÇ ÖMRÜ BOYUNCA
     # kapatıyordu; oysa asıl korunmak istenen `_save()` yolu her yazımda tekrar denenebilir.
-    # Bayrak artık YALNIZ BAŞARIDA set edilir → sonraki yazımlar yeniden dener.
+    # Bayrak artık YALNIZ BAŞARIDA set edilir → sonraki yazımlar (geri çekilme süresi dolunca) yeniden dener.
     try:
         from utils.file_acl import lock_down_dir
 
         if lock_down_dir(d, keep_current_user=True):
             _dir_hardened = True
         else:
+            _sertlestirme_sonraki = simdi + _SERTLESTIRME_GERI_CEKILME_SN
             logger.warning(
                 "SIR DIZINI ACL kilidi UYGULANAMADI (%s) — .tmp yazim penceresinde duz-metin "
                 "sirlar yerel Users'a okunur kalabilir ve eski-kaynak dosyalari onceden "
-                "yerlestirilebilir.",
+                "yerlestirilebilir. %d sn sonra yeniden denenecek.",
                 d,
+                int(_SERTLESTIRME_GERI_CEKILME_SN),
             )
     except Exception:
+        _sertlestirme_sonraki = simdi + _SERTLESTIRME_GERI_CEKILME_SN
         logger.warning("SIR DIZINI ACL kilidi hata verdi", exc_info=True)
+
+
+# ⚠️ D2.80 (B-3.13 · O-2A.3 / O-A2-1.c): sır dosyasına ERİŞİLEMİYOR (izin / G-Ç) ≠ dosya BOZUK. Eskiden `_load` her okuma
+# istisnasını "BOZUK" sayıp dosyayı `.corrupt.<zaman>` adına taşımayı deniyordu: yükseltilmemiş süreçte DACL süreci dışarıda
+# bırakınca SAĞLAM dosya yeniden adlandırılıyor (üst dizin silmeye izin veriyorsa — ölçüldü, gerçek ACL) ve sonraki her açılış
+# "karantina kanıtı var" ile KALICI kapalı kalıyordu; adlandırma tutmasa bile ileti "bozuk kopya saklandı, yedekten geri
+# yükleyin" diyordu (ikisi de yanlış). Artık erişim hatasında dosyaya DOKUNULMAZ ve hata doğru eylemi söyler.
+# ⚠️ Tür BİLEREK `PermissionError`/`OSError` kalır, `RuntimeError` DEĞİL: çağıranlar (`sqlcipher_util.get_sqlcipher_key`,
+# `pemf_gui.config._get_or_create_key`) `RuntimeError`'ı "sır VAR ama ÇÖZÜLEMEZ (brick)", diğerini "OKUNAMADI/YAZILAMADI" diye
+# sınıflar ve ikisinde de yeni anahtar üretmez (fail-closed, Karar 6). Erişim reddini `RuntimeError` yapmak günlüğe yanlış
+# neden yazdırıyordu (ölçüldü: ikinci hesap kapısı A14 ve A12 bunu yakaladı).
+# O-A2-1.b: ikinci hesap kipinde bu hata her `get_secret` çağrısında (Y43 yeniden denemeleri + çağıranlar) yükselir ve
+# günlük 5 sn'de onlarca aynı satırla doluyordu (ölçüldü). `tekrar_kisitli_hata`: satır ilk kez ERROR basılır, AYNI anahtar +
+# AYNI neden süre içinde tekrarlanınca BASILMAZ (sayılır), süre dolunca ya da neden değişince basılan satır sayıyı söyler.
+_ERISIM_GUNLUK_ARALIK_SN = 60.0
+_tekrar_gunluk: dict = {}
+
+
+def tekrar_kisitli_hata(gunlukcu, anahtar: str, neden: str, ileti: str, *args) -> bool:
+    """`ileti % args`i ERROR olarak basar — aynı `anahtar` ve aynı `neden` son basımdan bu yana `_ERISIM_GUNLUK_ARALIK_SN` sn
+    dolmadan tekrarlanıyorsa basmaz, sayar. Basıldıysa True. Davranışı DEĞİŞTİRMEZ (yalnız günlük); çağıran hatayı yine yükseltir."""
+    simdi = time.monotonic()
+    with _lock:
+        k = _tekrar_gunluk.get(anahtar)
+        if k and k["neden"] == neden and simdi - k["zaman"] < _ERISIM_GUNLUK_ARALIK_SN:
+            k["bastirilan"] += 1
+            return False
+        onceki = k["bastirilan"] if k else 0
+        _tekrar_gunluk[anahtar] = {"neden": neden, "zaman": simdi, "bastirilan": 0}
+    if onceki:
+        ileti = ileti + " [onceki %d sn icinde ayni nedenle %d kez daha]"
+        args = (*args, int(_ERISIM_GUNLUK_ARALIK_SN), onceki)
+    gunlukcu.error(ileti, *args)
+    return True
+
+
+def _erisim_hatasi(p: Path, e: OSError) -> OSError:
+    neden = f"{type(e).__name__}: {e}"
+    reddedildi = isinstance(e, PermissionError)
+    tekrar_kisitli_hata(
+        logger,
+        "pemf_secrets.json",
+        neden,
+        "pemf_secrets.json OKUNAMADI (%s) — dosya BOZUK SAYILMADI, yerinde birakildi, YENI ANAHTAR URETILMEDI.",
+        neden,
+    )
+    tur = "erişim reddedildi" if reddedildi else "G/Ç hatası"
+    ileti = (
+        f"pemf_secrets.json OKUNAMADI — {tur} ({type(e).__name__}). Dosya BOZUK DEĞİL, yerinde bırakıldı; yeni anahtar "
+        f"ÜRETİLMEDİ. Yapılacak: uygulamayı bu veri klasörünü kuran Windows hesabıyla açın ya da yöneticiye "
+        f"'{p.parent}' klasörünün ve '{p.name}' dosyasının izinlerini düzelttirin (SYSTEM, Administrators ve uygulamayı "
+        f"çalıştıran hesap tam erişim)."
+    )
+    return (PermissionError if reddedildi else OSError)(e.errno, ileti)
 
 
 # ───────────────────────── DPAPI (makine kapsamı) ─────────────────────────
@@ -566,14 +632,24 @@ def _empty_doc() -> dict:
 
 
 def _load() -> dict:
-    _ensure_dir_hardened(_data_dir())
     global _cache
     if _cache is not None:
         return _cache
+    # D2.80 (B-3.52): sertleştirme önbellek denetiminden SONRA — önbellek doluyken hiç denenmez (bkz. _ensure_dir_hardened).
+    _ensure_dir_hardened(_data_dir())
     p = secrets_path()
-    if p.exists():
+    try:
+        _var = p.exists()  # dizin listelenemiyorsa (ikinci hesap) `exists()` de WinError 5 yükseltir
+    except OSError as e:
+        raise _erisim_hatasi(p, e) from e
+    if _var:
         try:
-            doc = json.loads(p.read_text(encoding="utf-8"))
+            _ham = p.read_bytes()
+        except OSError as e:
+            # D2.80: izin / G-Ç hatası — dosya BOZUK DEĞİL: yeniden adlandırma YOK, önbellek dolmaz (bkz. _erisim_hatasi).
+            raise _erisim_hatasi(p, e) from e
+        try:
+            doc = json.loads(_ham.decode("utf-8"))
             for s in ("auto", "operator", "embedded"):
                 doc.setdefault(s, {})
         except Exception as e:
@@ -585,17 +661,24 @@ def _load() -> dict:
             # halini kapsiyor; "dosya PARSE EDILEMIYOR" hali bu excepte dusup korumayi ATLIYORDU.
             # Artik FAIL-CLOSED: bozuk dosyayi ASLA ezme, kanit icin sakla, HATA yukselt.
             # (Cagiranlarin tamami try/except ile sarili → surec cokmez, eski yollara duser.)
+            _saklandi = None
             try:
                 _ts = time.strftime("%Y%m%d_%H%M%S")
                 _bad = p.with_name(p.name + f".corrupt.{_ts}")
                 p.replace(_bad)
+                _saklandi = _bad.name
                 logger.error("pemf_secrets.json BOZUK (%s) — %s olarak saklandi, YENI URETILMEDI.", e, _bad.name)
             except Exception:
                 logger.error("pemf_secrets.json BOZUK (%s) ve yeniden adlandirilamadi — YENI URETILMEDI.", e)
+            # D2.80: ileti GERÇEĞİ söyler — kenara alma tutmadıysa "kopya saklandı" DENMEZ (dosya yerinde durur).
             raise RuntimeError(
                 "pemf_secrets.json okunamadi/bozuk. Mevcut sifreli hasta verisini korumak icin "
                 "yeni anahtar URETILMEDI ve dosya EZILMEDI. Yedekten geri yukleyin "
-                "(bozuk kopya .corrupt.<zaman> olarak saklandi)."
+                + (
+                    f"(bozuk kopya {_saklandi} olarak saklandi)."
+                    if _saklandi
+                    else "(bozuk dosya YERINDE birakildi — kenara alinamadi)."
+                )
             ) from e
     else:
         # ══════════════════════════════════════════════════════════════════════════════════════
