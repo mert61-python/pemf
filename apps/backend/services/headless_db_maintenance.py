@@ -320,48 +320,83 @@ class HeadlessDBMaintenance:
             except Exception:
                 logger.warning("backup temizlik uyarisi (%s)", pattern, exc_info=True)
 
-    def _copy_offsite(self, files):
-        """audit B-7.2: PEMF_BACKUP_DIR set ise YENİ yedekleri harici hedefe (ağ paylaşımı/USB) kopyala
-        → aynı-disk yedek felaketi (disk arızası/ransomware) tek nokta olmasın. Set değilse no-op."""
-        import os
+    @staticmethod
+    def _dogrulanmis_kopya(kaynak: Path, hedef: Path) -> bool:
+        """⚠️ D2.12 (B-3.19): `kaynak`ı `hedef`e DOĞRULANARAK kopyalar — geçici ada (`<ad>.kopya.tmp`), boyut + SHA-256 kaynakla eşitse
+        `os.replace` ile son ada. Düşerse geçici silinir, son addaki ÖNCEKİ sağlam kopyaya dokunulmaz. Eskiden `shutil.copy2` doğrudan
+        son ada yazıyordu: hedef dolunca / ağ kopunca YARIM dosya "yedek" adıyla kalıyordu."""
+        import hashlib
         import shutil
 
+        def _ozet(yol: Path) -> str:
+            h = hashlib.sha256()
+            with open(yol, "rb") as f:
+                for parca in iter(lambda: f.read(1 << 20), b""):
+                    h.update(parca)
+            return h.hexdigest()
+
+        gecici = hedef.with_name(hedef.name + ".kopya.tmp")
+        try:
+            shutil.copy2(kaynak, gecici)
+            if gecici.stat().st_size != kaynak.stat().st_size or _ozet(gecici) != _ozet(kaynak):
+                raise OSError(f"kopya kaynakla ESIT DEGIL: {gecici}")
+            os.replace(gecici, hedef)
+            return True
+        except Exception:
+            logger.warning("off-machine kopya hatasi (DOGRULANMADI): %s", kaynak, exc_info=True)
+            try:
+                if gecici.exists():
+                    gecici.unlink()
+            except OSError:
+                logger.warning("off-machine gecici kopya silinemedi: %s", gecici, exc_info=True)
+            return False
+
+    def _copy_offsite(self, files):
+        """audit B-7.2: PEMF_BACKUP_DIR set ise YENİ yedekleri harici hedefe (ağ paylaşımı/USB) kopyala
+        → aynı-disk yedek felaketi (disk arızası/ransomware) tek nokta olmasın. Set değilse no-op.
+
+        ⚠️ D2.12 (B-3.19): her dosya DOĞRULANARAK kopyalanır (`_dogrulanmis_kopya`); "geri yüklenebilir" güvencesi (INFO) YALNIZ tüm
+        dosyalar ve kurtarma zarfı bu turda doğrulanınca verilir. Bir dosya bile düşerse ERROR + başarısız sayı. Eskiden özet yalnız
+        `(hedef / zarf).exists()`e bakıyordu: yarım .db kopyası varken "KURTARMA KODU ile geri yuklenebilir" deniyordu.
+        Kapı: tests/test_offsite_ozeti_DOGRULANMIS_kopyaya_bagli_D212.py"""
         dest = os.environ.get("PEMF_BACKUP_DIR", "").strip()
         if not dest or not files:
             return
         try:
             dpath = Path(dest)
             dpath.mkdir(parents=True, exist_ok=True)
-            for f in files:
-                try:
-                    shutil.copy2(f, dpath / Path(f).name)
-                except Exception:
-                    logger.warning("off-machine kopya hatasi: %s", f, exc_info=True)
-            # DENETIM P2 (yanlis guvence): eskiden yalnizca "kopyalandi" bilgisi loglaniyordu; bu,
-            # yedeklerin FELAKET KURTARMA icin kullanilabilir oldugu izlenimini veriyordu. Oysa
-            # kopyalanan .db dosyalari SQLCipher ile sifreli ve onlari acan anahtar
-            # pemf_secrets.json icinde CRYPTPROTECT_LOCAL_MACHINE (DPAPI) ile MAKINEYE bagliydi
-            # → anakart/disk arizasinda bu yedekler ACILAMIYORDU. Cozuldu: _refresh_recovery
-            # yedeklerin yanina kurtarma zarfini yaziyor. Zarfin GERCEKTEN yerinde olup
-            # olmadigina gore log seviyesi degisir — "kopyalandi" demek yetmez, kurtarilabilir
-            # olup olmadigini soylemek gerekir.
             from utils.backup_recovery import ENVELOPE_NAME as _ENV_NAME
 
-            if (dpath / _ENV_NAME).exists():
+            dogrulanan, basarisiz = [], []
+            for f in files:
+                kaynak = Path(f)
+                (dogrulanan if self._dogrulanmis_kopya(kaynak, dpath / kaynak.name) else basarisiz).append(kaynak.name)
+            zarf_dogrulandi = _ENV_NAME in dogrulanan
+            # DENETIM P2 (yanlis guvence): kopyalanan .db dosyalari SQLCipher ile sifreli ve onlari acan anahtar
+            # pemf_secrets.json icinde CRYPTPROTECT_LOCAL_MACHINE (DPAPI) ile MAKINEYE bagli → zarf olmadan baska makinede ACILMAZ.
+            if basarisiz:
+                logger.error(
+                    "Off-machine yedek kopyasi BASARISIZ: %d / %d dosya DOGRULANAMADI (%s) — bu kopyalar off-site'ta GERI "
+                    "YUKLENEMEZ; hedef dolu / erisilemez olabilir: %s",
+                    len(basarisiz),
+                    len(files),
+                    ", ".join(basarisiz[:10]),
+                    dest,
+                )
+            elif zarf_dogrulandi:
                 logger.info(
-                    "Yedekler off-machine kopyalandi: %s (%d dosya). Kurtarma zarfi (%s) yerinde → "
+                    "Yedekler off-machine kopyalandi ve DOGRULANDI: %s (%d dosya). Kurtarma zarfi (%s) yerinde → "
                     "KURTARMA KODU ile baska makinede geri yuklenebilir.",
                     dest,
-                    len(files),
+                    len(dogrulanan),
                     _ENV_NAME,
                 )
             else:
                 logger.warning(
-                    "Yedekler off-machine kopyalandi: %s (%d dosya). DIKKAT: kurtarma zarfi (%s) YOK "
-                    "→ bu dosyalar SQLCipher ile sifreli ve anahtar BU MAKINEYE bagli (DPAPI); donanim "
-                    "arizasinda ACILAMAZLAR. bkz. %s",
+                    "Yedekler off-machine kopyalandi: %s (%d dosya). DIKKAT: kurtarma zarfi (%s) bu turda kopyalanmadi "
+                    "→ dosyalar SQLCipher ile sifreliyse anahtar BU MAKINEYE bagli (DPAPI); donanim arizasinda ACILAMAZLAR. bkz. %s",
                     dest,
-                    len(files),
+                    len(dogrulanan),
                     _ENV_NAME,
                     _OFFSITE_README_NAME,
                 )
