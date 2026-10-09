@@ -9,7 +9,7 @@ from pathlib import Path
 
 from database.treatment_history_db import get_treatment_db
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 from utils.path_utils import get_app_data_directory
@@ -187,6 +187,17 @@ def export_pdf(
 
 #: D2.16: CSV dışa aktarmasının geçmiş SAYFA boyu (tavan DEĞİL — sayfalar sonuna kadar okunur).
 _CSV_SAYFA = 5000
+#: D2-3.3: okuma sırasında geri yükleme oldu/sürüyor — dosya verilmez.
+_CSV_GERI_YUKLEME_SURUYOR = (
+    "Seans geçmişi okunurken bu cihazda geri yükleme yapıldı ya da sürüyor — tutarsız dosya OLUŞTURULMADI. Geri yükleme bitince "
+    "dışa aktarmayı yeniden başlatın."
+)
+
+
+def _geri_yukleme_nesli(db) -> int:
+    """D2-3.3: api_server `_ice_aktar`ın tedavi DB nesnesine yazdığı sayaç (yalnız örnek sözlüğünden — sahte/Mock DB'de 0)."""
+    n = getattr(db, "__dict__", {}).get("_geri_yukleme_nesli", 0)
+    return n if isinstance(n, int) else 0
 
 
 @router.get("/export_csv")
@@ -228,6 +239,12 @@ def export_csv(
         # ⚠️ D2.16 (B-3.24): geçmiş anahtar kümesi (keyset, `before_id`) SAYFALARIYLA sonuna kadar okunur — sınır YOK. Eskiden
         # tek sorgu `limit=10000` ile kırpıyordu: yoğun klinikte "Tümünü dışa aktar" CSV'sinde EN ESKİ tıbbi kayıtlar işaretsiz
         # düşüyordu (ölçüldü: 10.001 seansta 10.000 satır). Kapı: tests/test_csv_TUMU_disa_aktarim_KESILMEZ_D216.py
+        # ⚠️ D2-3.3 (2-D incelemesi): sayfalar TEK anlık görüntü değil — okuma sürerken geri yükleme (REPLACE_ALL) başlar/biterse
+        # dosya iki durumun karışımı ya da eski geçmişin ilk sayfası olur (AUTOINCREMENT: yeni kimlikler büyük → sonraki sayfa boş).
+        # Nesil sayacı (`_ice_aktar`; tek = sürüyor) değiştiyse dosya VERİLMEZ, 409. Kapı: tests/test_csv_TUMU_sayfalar_arasi_GERI_YUKLEME_kesik_dosya_VERMEZ_D233.py
+        _nesil = _geri_yukleme_nesli(db)
+        if _nesil % 2:
+            return JSONResponse(status_code=409, content={"detail": _CSV_GERI_YUKLEME_SURUYOR})
         sessions = []
         _once = None
         while True:
@@ -238,6 +255,9 @@ def export_csv(
             if len(_sayfa) < _CSV_SAYFA:
                 break
             _once = _sayfa[-1]["id"]
+        if _geri_yukleme_nesli(db) != _nesil:
+            logger.warning("CSV disa aktarma: okuma sirasinda geri yukleme oldu — tutarsiz dosya VERILMEDI (409).")
+            return JSONResponse(status_code=409, content={"detail": _CSV_GERI_YUKLEME_SURUYOR})
         if not sessions:
             # ⚠️ ESKIDEN BU DA "indirilen dosya" oluyordu: istemci 200'ü başarı sayıp içinde
             # "Veri bulunamadi" yazan bir `PEMF_Gecmis.csv` kaydediyordu. Operatör dosyayı

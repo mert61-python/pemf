@@ -6742,8 +6742,15 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
         )
         raise HTTPException(status_code=409, detail=SEANS_SURERKEN_GERI_YUKLEME)
 
+    # ⚠️ D2-3.3 (2-D incelemesi): sayfalı okuyucular (D2.16 "Tümünü" CSV'si) geri yüklemenin ARAYA girdiğini görsün — nesil sayacı
+    # (tek = sürüyor, çift = bitti; düşse de çifte döner). Eskiden sayfalar arasında commit edilen REPLACE_ALL CSV'yi eski geçmişin
+    # ilk sayfasıyla (5000 / 10 001) 200 döndürüyordu. Kapı: tests/test_csv_TUMU_sayfalar_arasi_GERI_YUKLEME_kesik_dosya_VERMEZ_D233.py
+    thdb._geri_yukleme_nesli = getattr(thdb, "_geri_yukleme_nesli", 0) + 1
     try:
-        n = await asyncio.to_thread(thdb.import_rows, paket, bool(dolu))
+        try:
+            n = await asyncio.to_thread(thdb.import_rows, paket, bool(dolu))
+        finally:
+            thdb._geri_yukleme_nesli += 1
     except Exception as _hata:
         # ⚠️ D2.52 (B-3.28) + P2u: `import_rows` artık bütünlüklü — düşerse HİÇBİR şey commit edilmez ve hasta kartlarına da
         # geçilmez. Eskiden hata yutulup "success" (0 seans ya da eski + yeni yan yana) dönülüyordu.
