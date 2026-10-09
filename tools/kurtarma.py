@@ -44,17 +44,21 @@ import os
 import sys
 from pathlib import Path
 
-_ROOT = Path(__file__).resolve().parent.parent
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
-
 
 # ── DEPO KÖKÜ + BACKEND YOLU ─────────────────────────────────────────────────
 # ⚠️ Bu betik 2026-09-18 klasör taşımasından (F4: `apps/backend/`) beri ÖLÜYDÜ: `utils`
 #    artık depo kökünde değil. Açılışta `ModuleNotFoundError: No module named 'utils'`.
 #    Ölçüldü 2026-09-21; kapı: tests/test_betikler_ACILIYOR.py
 # ⚠️ SABİT DERİNLİK YAZILMAZ — kök İŞARET DOSYASIYLA yukarı aranır.
-def _depo_koku(bas: Path) -> Path:
+# ⚠️ D2.35 (B-10.59): DONMUŞ EXE'de (`PEMF_Backend.exe --kurtarma` — sahadaki TEK kurtarma yolu) kaynak ağacı YOKTUR: modüller paketin
+#    içinden gelir, işaret dosyası (`pyproject.toml`) pakete girmez. Kök araması yeni makinede (depo yok — tam da kurtarma anı) İÇE
+#    AKTARMA anında RuntimeError ile ölüyordu → anakartı ölen klinik zarfı açamazdı. `utils.path_utils.kaynak_kokunu_bul` ile AYNI
+#    kural: donmuşken ARAMA YAPILMAZ ve yol EKLENMEZ (yukarı yürümek depoya çıkıp paketi gölgeleyebilir). (`utils.path_utils`
+#    burada içe aktarılamaz: kaynak ağacında `utils` bu yollar eklenmeden bulunmaz.)
+#    Kapı: tests/test_kurtarma_DONMUS_EXEde_DEPO_DISINDA_acilir_D235.py
+def _depo_koku(bas: Path) -> Path | None:
+    if getattr(sys, "frozen", False):
+        return None
     for aday in (bas, *bas.parents):
         if (aday / "pyproject.toml").is_file() and (aday / "apps" / "backend").is_dir():
             return aday
@@ -62,7 +66,7 @@ def _depo_koku(bas: Path) -> Path:
 
 
 _KOK = _depo_koku(Path(__file__).resolve())
-for _yol in (_KOK, _KOK / "apps" / "backend"):
+for _yol in (_KOK, _KOK / "apps" / "backend") if _KOK is not None else ():
     if str(_yol) not in sys.path:
         sys.path.insert(0, str(_yol))
 
