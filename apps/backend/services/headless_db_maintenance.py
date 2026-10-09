@@ -80,6 +80,9 @@ ZARF YOKSA
 #: D2-1.1: dosya zamanı bu kadar saniyeden fazla İLERİDEYSE saat güvenilmez sayılır (tazelik kararında yok sayılır).
 _SAAT_TOLERANSI_SN = 600.0
 
+#: D2-1.4: bu kadar saniyeden eski kendi-adlı geçici yedek artığı (`.yazim.tmp` / `.kopya.tmp`) yarıda kalmış sayılır ve silinir.
+_ARTIK_YASI_SN = 3600.0
+
 _worker = None  # type: Optional[HeadlessDBMaintenance]
 
 
@@ -400,10 +403,27 @@ class HeadlessDBMaintenance:
             logger.warning("Yedek rotasyonu (%s): dizin listelenemedi: %s", yer, dizin, exc_info=True)
             return
         aileler: dict = {}
+        simdi = time.time()
         for f in girdiler:
             aile = yedek_ailesi(f.name)
             if aile is not None:
                 aileler.setdefault(aile, []).append(f)
+                continue
+            # ⚠️ D2-1.4 (2-D incelemesi): yazım/kopya ortasında ölen süreçten kalan KENDİ yedek adımızın geçicisi (`.yazim.tmp` /
+            # `.kopya.tmp`) — yazıcılar yalnız AYNI adlı geçiciyi siler, damga her turda farklı → süresiz kalıyordu (ölçüldü). Yalnız
+            # 1 saatten eski olanlar: taze geçici süren bir yazım ya da paylaşılan hedefte komşunun kopyası olabilir.
+            for ek in (".yazim.tmp", ".kopya.tmp"):
+                if f.name.endswith(ek) and yedek_ailesi(f.name[: -len(ek)]) is not None:
+                    try:
+                        if f.is_file() and not f.is_symlink() and simdi - f.stat().st_mtime > _ARTIK_YASI_SN:
+                            f.unlink()
+                            logger.info(
+                                "Yarim kalmis yedek artigi silindi (%s; onceki yazim/kopya yarida kesilmis): %s",
+                                yer,
+                                f.name,
+                            )
+                    except OSError:
+                        logger.warning("Yarim yedek artigi silinemedi (%s): %s", yer, f, exc_info=True)
         for aile, dosyalar in aileler.items():
             try:
                 gecerli, acilamayan = [], []
