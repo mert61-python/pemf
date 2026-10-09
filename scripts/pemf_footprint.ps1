@@ -79,6 +79,18 @@ function Get-PemfFootprint {
         @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_System\mqtt_kimlik.json';    Owner = 'shared'; Kvkk = $true }
         # D2.74: staging profili bulut kimliğini AYRI tutar (deploy/staging.env PEMF_DEVICE_IDENTITY_DIR=C:\ProgramData\PEMF_Staging).
         @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_Staging\device_identity.json'; Owner = 'shared'; Kvkk = $true }
+        # ⚠️ Y85 (İG-9.88 · D2.E04): faturalanmamış AI tüketim defteri (`servers/jeton.py` → `<PEMF_DATA_DIR>\jeton_bekleyen.json`;
+        # PEMF_DATA_DIR yoksa `~\.pemf`). Hasta verisi DEĞİL ama cihaz kimliği taşır → yalnız -IncludePatientData siler; sıradan
+        # kaldır-kur KORUR (silinseydi çevrimdışı birikmiş tüketim hiç faturalanmazdı). Eskiden hiçbir kaldırma dokunmuyordu.
+        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_System\jeton_bekleyen.json';  Owner = 'shared'; Kvkk = $true }
+        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_Staging\jeton_bekleyen.json'; Owner = 'shared'; Kvkk = $true }
+        @{ Kind = 'PerUser'; Path = '.pemf\jeton_bekleyen.json';                       Owner = 'shared'; Kvkk = $true }
+        # ⚠️ Y99 (O-A2-1.a · D2.E04): veri kökü yazılamayınca backend günlüğü geçici dizine düşer (`backend_service.py`
+        # `tempfile.gettempdir()\PEMF_GUI\logs`); günlük hasta adı taşıyabilir → KVKK tam temizliği götürür. Kullanıcı süreci:
+        # `%LOCALAPPDATA%\Temp`; LocalSystem servisi: `C:\Windows\Temp` (Windows 11 24H2+: `C:\Windows\SystemTemp`).
+        @{ Kind = 'PerUser'; Path = 'AppData\Local\Temp\PEMF_GUI';                     Owner = 'shared'; Kvkk = $true }
+        @{ Kind = 'Abs';     Path = 'C:\Windows\Temp\PEMF_GUI';                        Owner = 'shared'; Kvkk = $true }
+        @{ Kind = 'Abs';     Path = 'C:\Windows\SystemTemp\PEMF_GUI';                  Owner = 'shared'; Kvkk = $true }
     )
     [pscustomobject]@{
         Paths       = $paths

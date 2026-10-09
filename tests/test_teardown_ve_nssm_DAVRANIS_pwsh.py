@@ -117,7 +117,7 @@ $script:Kayit.Clear()
 # fonksiyon, ya da salt-okur yerleşik olmalı. Gölge listesi bir YASAK listesi gibi çalışıyordu: fonksiyona
 # `taskkill.exe`, tam yollu `sc.exe` ya da `[Diagnostics.Process]::…Kill()` eklense test GERÇEK süreçleri
 # öldürürdü. Denetim KOŞTURMADAN ÖNCE yapılır; ihlalde hiçbir şey çağrılmadan çıkılır (çıkış 3).
-$kayitcilar = 'Write-PemfLog','Remove-PemfCredentials','Remove-PemfSystemCredentials','Remove-PemfTasks','Remove-PemfFirewall','Remove-PemfEnv','Remove-PemfRegistry','Get-PemfProfileRoots','Get-PemfFootprint','Log','Invoke-PemfTeardown','Test-PemfPortAcik'
+$kayitcilar = 'Write-PemfLog','Remove-PemfCredentials','Remove-PemfSystemCredentials','Remove-PemfTasks','Remove-PemfFirewall','Remove-PemfEnv','Remove-PemfRegistry','Get-PemfProfileRoots','Get-PemfFootprint','Log','Invoke-PemfTeardown','Test-PemfPortAcik','Get-PemfMakineDisiYedekHedefleri','Write-PemfMakineDisiYedekRaporu'
 $yuklenenler = 'Test-PemfScope','Assert-PemfRemoved','Remove-PemfPaths','Stop-PemfProcessesAndServices','Invoke-PemfTeardown','Stop-AppProcs','Send-PemfAcilDurdur','Get-PemfBackendPortAdaylari','Invoke-PemfAcilDurdurIstegi','Get-PemfProfilEnvDosyasi','Read-PemfProfilEnv'
 $salt_okur = 'Test-Path','Join-Path','Split-Path','Sort-Object','ForEach-Object','Where-Object','Select-Object','Get-Content'
 $izinli = @($golgeler) + $kayitcilar + $yuklenenler + $salt_okur
@@ -171,6 +171,9 @@ function Remove-PemfTasks { param($Tasks, [switch]$DryRun) K "GOREV" }
 function Remove-PemfFirewall { param($Rx, [switch]$DryRun) K "FIREWALL" }
 function Remove-PemfEnv { param($Rx, [switch]$DryRun) K "ENV" }
 function Remove-PemfRegistry { param($Registry, $Scope, [switch]$DryRun) K "REGISTRY" }
+# D2.E04: makine dışı yedek kayıtları (gerçek registry/ortam okur) burada kayıtçı — davranışı kendi gölge kapısı ölçer.
+function Get-PemfMakineDisiYedekHedefleri { param($Footprint) K "YEDEK_HEDEF_OKU"; @() }
+function Write-PemfMakineDisiYedekRaporu { param($Hedefler) K ("YEDEK_RAPOR n=" + @($Hedefler).Count) }
 function Get-PemfProfileRoots { @(Join-Path $Kok 'profil') }
 function Test-PemfPortAcik([int]$Port) { K ("PROBE " + $Port); return ($script:AcikPortlar -contains $Port) }
 $estop_islevleri = @('Send-PemfAcilDurdur', 'Get-PemfBackendPortAdaylari', 'Invoke-PemfAcilDurdurIstegi')

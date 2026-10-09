@@ -257,6 +257,72 @@ function Remove-PemfPaths($Footprint, [string]$Scope, [switch]$IncludePatientDat
     }
 }
 
+# ⚠️ D2.E04 (İG-9.88 · A-44 / A-45 / A-87, sahip kararı): MAKİNE DIŞI YEDEK HEDEFİ (`PEMF_BACKUP_DIR` — ağ paylaşımı / USB; yedekler +
+# `kurtarma-zarfi.enc` + OKU-KURTARMA.txt) kaldırmada HİÇBİR kipte SİLİNMEZ; rapor yerini ve durumunu söyler. Eskiden rapor "HASTA VERİSİ DE
+# SİLİNDİ (tam temizlik)" derken oradaki yedekler ve zarf duruyordu, raporda yer YOKTU ve yerin tek kaydı (launcher'ın `backup_dir.txt`'i,
+# KVKK-dışı kurulum kökünde) İLK silinen dizindeydi — sıradan kaldırmada bile. Kayıtlar bu yüzden HER adımdan ÖNCE okunur:
+# `backup_dir.txt` (adım 6 kurulum kökünü siler), makine ortamı (adım 4), NSSM servis ortamı (adım 1 servisi kaldırır).
+# Kapı: tests/test_tam_temizlik_MAKINE_DISI_yedek_raporu_ve_jeton_defteri_D2E04.py (gölge koşum).
+function Get-PemfYedekOrtamDegerleri([string[]]$Services) {
+    $d = @()
+    try {
+        $v = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' -ErrorAction Stop).PEMF_BACKUP_DIR
+        if ("$v".Trim()) { $d += [pscustomobject]@{ Kaynak = 'makine ortamı (PEMF_BACKUP_DIR)'; Yol = "$v".Trim() } }
+    } catch { }
+    foreach ($s in $Services) {
+        try {
+            $ek = (Get-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Services\$s\Parameters" -ErrorAction Stop).AppEnvironmentExtra
+            foreach ($satir in @($ek)) {
+                if ("$satir" -match '^PEMF_BACKUP_DIR=(.+)$' -and $Matches[1].Trim()) {
+                    $d += [pscustomobject]@{ Kaynak = "servis ortamı ($s)"; Yol = $Matches[1].Trim() }
+                }
+            }
+        } catch { }
+    }
+    $d
+}
+
+function Get-PemfMakineDisiYedekHedefleri($Footprint) {
+    $d = @()
+    foreach ($kok in Get-PemfProfileRoots) {
+        foreach ($kurulum in 'AppData\Local\PEMF Vet Client', 'AppData\Local\PEMFVetClient') {
+            $kayit = Join-Path (Join-Path $kok $kurulum) 'backup_dir.txt'
+            if (-not (Test-Path -LiteralPath $kayit -PathType Leaf -ErrorAction SilentlyContinue)) { continue }
+            try {
+                $v = "$(Get-Content -LiteralPath $kayit -Raw -ErrorAction Stop)".Trim()
+                if ($v) { $d += [pscustomobject]@{ Kaynak = $kayit; Yol = $v } }
+            } catch {
+                # Okunamayan kayıt: yer BİLİNMİYOR ama yedek olabilir → rapor bunu söyler (Yol boş).
+                $d += [pscustomobject]@{ Kaynak = $kayit; Yol = $null }
+            }
+        }
+    }
+    $d += @(Get-PemfYedekOrtamDegerleri -Services $Footprint.Services)
+    # Aynı hedef birden çok kayıttan gelebilir → hedef başına TEK satır (ilk kaynak).
+    $tek = [ordered]@{}
+    foreach ($h in $d) {
+        $anahtar = if ($h.Yol) { $h.Yol.TrimEnd('\').ToLowerInvariant() } else { 'okunamadi|' + $h.Kaynak }
+        if (-not $tek.Contains($anahtar)) { $tek[$anahtar] = $h }
+    }
+    @($tek.Values)
+}
+
+function Write-PemfMakineDisiYedekRaporu($Hedefler) {
+    foreach ($h in $Hedefler) {
+        if (-not $h.Yol) {
+            Write-PemfLog "MAKİNE DIŞI YEDEK KAYDI OKUNAMADI: $($h.Kaynak) — yedek yeri BİLİNMİYOR, kontrol edin (kaldırma makine dışı hedefe dokunmaz)" 'Yellow'
+            continue
+        }
+        if (Test-Path -LiteralPath $h.Yol -PathType Container -ErrorAction SilentlyContinue) {
+            $n = @(Get-ChildItem -LiteralPath $h.Yol -File -Force -ErrorAction SilentlyContinue).Count
+            $zarf = if (Test-Path -LiteralPath (Join-Path $h.Yol 'kurtarma-zarfi.enc') -PathType Leaf -ErrorAction SilentlyContinue) { 'VAR' } else { 'YOK' }
+            Write-PemfLog "MAKİNE DIŞI YEDEK DURUYOR (dokunulmadı): $($h.Yol) — $n dosya, kurtarma-zarfi.enc $zarf (kayıt: $($h.Kaynak))" 'Yellow'
+        } else {
+            Write-PemfLog "MAKİNE DIŞI YEDEK HEDEFİ şu an ERİŞİLEMİYOR: $($h.Yol) (kayıt: $($h.Kaynak)) — oradaki yedekler bu kaldırmayla SİLİNMEDİ" 'Yellow'
+        }
+    }
+}
+
 # NOT: $TargetNames = Windows Credential Manager HEDEF ADLARI (ör. 'PEMF_GUI') — PAROLA DEĞİL,
 # yalnız cmdkey /delete için tanımlayıcı. (İsim 'Cred' içerince analyzer parola sanıyordu.)
 #
@@ -571,6 +637,8 @@ function Invoke-PemfTeardown {
     $script:PemfFailed = @()
     $fp = Get-PemfFootprint
     Write-PemfLog "TEARDOWN başladı — Scope=$Scope IncludePatientData=$IncludePatientData DryRun=$DryRun" 'Cyan'
+    # 0. D2.E04: makine dışı yedek hedef(ler)i — kayıtları aşağıdaki adımlar SİLMEDEN önce okunur; hedeflere DOKUNULMAZ (A-45/A-87).
+    $yedekHedefleri = @(Get-PemfMakineDisiYedekHedefleri -Footprint $fp)
 
     # 1. Süreç+servis (yalnız backend/all — client/gui'de NSSM servisi yok)
     if ($Scope -eq 'backend' -or $Scope -eq 'all') {
@@ -593,6 +661,8 @@ function Invoke-PemfTeardown {
     #    7. adımdan SONRA ve yollardan (6) sonra: çalışma dizini ProgramData\PEMF_KimlikTemizlik_* olduğundan
     #    6. adımın PEMF_System silmesinden etkilenmez; görev+dizin fonksiyon içinde her durumda temizlenir.
     if ($IncludePatientData) { Remove-PemfSystemCredentials -TargetNames $fp.Credentials -DryRun:$DryRun }
+    # 9. Makine dışı yedek raporu (her kipte; hedef yalnız OKUNUR).
+    Write-PemfMakineDisiYedekRaporu -Hedefler $yedekHedefleri
 
     # ⚠️ Rapor GERÇEĞE dayanmalı: tek bir silme bile başarısızsa "tam temizlik" DENMEZ.
     if ($script:PemfFailed.Count -gt 0) {
@@ -607,10 +677,13 @@ function Invoke-PemfTeardown {
     # DENETIM 2026-08-04 (P2): -DryRun'da da "HASTA VERİSİ DE SİLİNDİ (tam temizlik)" yazıyordu.
     # Bu log dosyası, dosya başlığında KVKK "tüm hasta verisini sildim" KANITI olarak tanımlı;
     # önizleme koşusunun raporu silme kanıtı gibi okunurdu.
+    # D2.E04 (A-44): son satır yalnız BU MAKİNEDE doğrulananı "silindi" der; makine dışı yedek kayıtlıysa durduğunu da söyler.
     $policy = if ($DryRun) {
         'ÖNİZLEME — HİÇBİR ŞEY SİLİNMEDİ (DryRun)'
+    } elseif ($IncludePatientData -and $yedekHedefleri.Count -gt 0) {
+        'HASTA VERİSİ BU MAKİNEDEN SİLİNDİ (tam temizlik) — makine dışı yedekler DURUYOR (yukarıdaki satırlar; gerekiyorsa elle silin)'
     } elseif ($IncludePatientData) {
-        'HASTA VERİSİ DE SİLİNDİ (tam temizlik)'
+        'HASTA VERİSİ BU MAKİNEDEN SİLİNDİ (tam temizlik) — kayıtlı makine dışı yedek hedefi yok'
     } else {
         'HASTA VERİSİ KORUNDU (KVKK; -IncludePatientData ile silinir)'
     }
