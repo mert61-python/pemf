@@ -18,7 +18,6 @@ import base64
 import copy
 import json
 import logging
-import os
 import sys
 import threading
 import time
@@ -36,8 +35,24 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# DENETIM P3: config.json yazimini serilestiren surec-geneli kilit (atomik replace ile birlikte).
-_SAVE_LOCK = threading.Lock()
+
+def _sahip():
+    """⚠️ D2.81 (A-29): `config.json`un SAHİBİ `pemf_gui.config` modülü — şifreli alan anahtarı (`get_config()._encrypt_value` /
+    `_decrypt_value`) ve TEK okuyucu / atomik yazıcı / kilit (`config_json_oku` / `config_json_yaz`) oradadır. PCM ayrı anahtar,
+    ayrı kilit ya da ayrı ACL TUTMAZ. (`pemf_gui` depo kökünde; doğrudan betik koşumunda kök sys.path'e eklenir.)"""
+    try:
+        from pemf_gui import config as sahip_modulu
+    except ModuleNotFoundError:
+        kok = str(kaynak_kokunu_bul(__file__))
+        if kok not in sys.path:
+            sys.path.insert(0, kok)
+        from pemf_gui import config as sahip_modulu
+    return sahip_modulu
+
+
+def kayit_reddi_mi(hata: BaseException) -> bool:
+    """`hata`, okunamayan `config.json` yüzünden REDDEDİLEN bir kayıt mı? (`/api/settings` bunu 503'e çevirir.)"""
+    return isinstance(hata, _sahip().ConfigKaydiReddedildi)
 
 
 # Gömülü varsayılan config (son çare). Kullanım öncesi copy.deepcopy'lenir — iç içe dict'ler
@@ -84,56 +99,26 @@ class ProductionConfigManager:
             if self._initialized:  # double-check
                 return
             self._config = {}
-            self._encryption_key = None
-            self._cipher = None
             #: Kullanıcı config'i diskte VAR ama okunamadıysa hata metni (fail-closed kapısı).
             self._user_config_unreadable = None
+            #: Kaydedilmemiş değişiklik var mı — okunamayan dosyada kayıt reddi yalnız o zaman HATA yükseltir (D2.81).
+            self._kirli = False
             self._last_save_ts = 0.0
-            # Initialize encryption
-            self._setup_encryption()
+            # ⚠️ D2.81 (A-29 · B-3.40): şifreleme KURULUMU YOK — anahtar `config.json`un sahibininkidir (`_sahip`); PCM `.pemf_key`
+            # ÜRETMEZ. Eskiden `.pemf_key` yoksa ortak veri dizinine RASTGELE anahtar yazıyordu → sahibin eski-anahtar zinciri o
+            # dosyayı seçip MAC-türevli anahtarla şifrelenmiş eski hasta alanlarını "[okunamayan kayıt]" yapıyordu.
             # Load config with fallback
             self._load_config()
             self._initialized = True  # SONA: init tamamlanınca (yarım-init obje görünmesin)
 
-    def _setup_encryption(self):
-        """Setup encryption for sensitive config values"""
+    def _eski_pcm_anahtari(self):
+        """1.9.50 ve öncesinin PCM'i şifreli alanları KENDİ veri dizinindeki `.pemf_key`le yazıyordu — o değerler yalnız OKUNUR
+        (dosya ÜRETİLMEZ, yazımda kullanılmaz). Yoksa / geçersizse None."""
         try:
-            key_file = self._get_app_data_dir() / '.pemf_key'
-
-            if key_file.exists():
-                with open(key_file, 'rb') as f:
-                    self._encryption_key = f.read()
-            else:
-                # Audit P2: MAC-tabanli anahtar (uuid.getnode → sha256) TAHMIN EDILEBILIR — cihazin
-                # MAC'ini bilen, yedek/exfil edilen config.json'daki sirlari (.pemf_key olmadan) cozer.
-                # Kriptografik-rastgele 32-byte anahtar uret + dosyada sakla (dosya zaten ACL-kilitli).
-                # Mevcut cihazlar kayitli .pemf_key'i dosyadan yukleyip calismaya devam eder (geriye-uyumlu).
-                self._encryption_key = base64.urlsafe_b64encode(os.urandom(32))
-
-                # Save key with restricted permissions
-                key_file.parent.mkdir(parents=True, exist_ok=True)
-                with open(key_file, 'wb') as f:
-                    f.write(self._encryption_key)
-
-                # NTFS ACL kilidi (audit B-1.2): Fernet anahtar dosyası yalnız SYSTEM+Administrators'a
-                # açık olsun. os.chmod Windows'ta NO-OP → anahtar dosyası Users'a okunur kalır ve config
-                # şifrelemesi anlamsızlaşırdı. Önce ACL; olmazsa chmod (POSIX) yedek.
-                try:
-                    from utils.file_acl import lock_down_file
-
-                    lock_down_file(key_file)
-                except Exception:
-                    try:
-                        os.chmod(key_file, 0o600)
-                    except Exception:
-                        pass  # Windows chmod no-op; ACL zaten denendi
-
-            self._cipher = Fernet(self._encryption_key)
-            logger.info("Encryption initialized successfully")
-
-        except Exception as e:
-            logger.error(f"Encryption setup failed: {e}")
-            self._cipher = None
+            anahtar = (self._get_app_data_dir() / '.pemf_key').read_bytes().strip()
+            return Fernet(anahtar) if anahtar else None
+        except Exception:
+            return None
 
     def _get_app_data_dir(self) -> Path:
         """Get application data directory (persistent, user-writable)"""
@@ -198,8 +183,9 @@ class ProductionConfigManager:
         user_config_path = self._get_app_data_dir() / 'config.json'
         if user_config_path.exists():
             try:
-                with open(user_config_path, 'r', encoding='utf-8') as f:
-                    self._deep_merge(self._config, json.load(f))
+                # D2.81 (A-29 · B-3.41): sahibin ORTAK okuyucusu — erişim reddinde kilidi süreç hesabı korunarak bir kez onarır
+                # (1.9.50'nin kendi dosyasını SYSTEM + Administrators'a kilitlediği yükseltilmemiş kurulum güncellemede açılır).
+                self._deep_merge(self._config, _sahip().config_json_oku(user_config_path))
                 logger.info(f"Loaded user config from: {user_config_path}")
                 # Eksik anahtarları template + bundled credential'lardan tamamla; değişiklik varsa kaydet.
                 try:
@@ -245,35 +231,30 @@ class ProductionConfigManager:
         ⚠️ FAIL-CLOSED KAPISI (denetim 2026-08-17): kullanıcı config'i diskte VAR ama YÜKLENEMEDİYSE
         bellekteki `self._config` yalnızca bundled+template VARSAYILANLARIDIR. Onu diske yazmak,
         okunamayan dosyadaki gerçek klinik ayarlarını (MQTT broker/port gibi) SESSİZCE SİLER.
-        Yazma reddedilir; operatöre ne yapacağı söylenir."""
+        Yazma reddedilir; operatöre ne yapacağı söylenir.
+
+        ⚠️ D2.81 (B-3.41): ret artık SESSİZ DEĞİL — kaydedilmemiş değişiklik varsa `ConfigKaydiReddedildi` yükselir
+        (`POST /api/settings` eskiden "success" deyip diske yazmıyordu). Yazım sahibin ORTAK atomik yazıcısıyla (tmp + fsync +
+        replace, sahiple AYNI kilit) ve süreç hesabını KORUYAN ACL ile (eskiden yalnız SYSTEM + Administrators → yükseltilmemiş
+        backend bir sonraki açılışta KENDİ ayarını okuyamıyordu)."""
+        sahip = _sahip()
         if getattr(self, "_user_config_unreadable", None):
             logger.error(
                 "config.json YUKLENEMEDIGI icin KAYDETME REDDEDILDI (%s). Mevcut dosya korunuyor; "
                 "varsayilanlarla UZERINE YAZILMASI kullanici ayarlarini yok ederdi.",
                 self._user_config_unreadable,
             )
+            if getattr(self, "_kirli", False):
+                raise sahip.ConfigKaydiReddedildi(
+                    f"Ayar KAYDEDILMEDI: config.json okunamiyor ({self._user_config_unreadable}). Mevcut dosya korunuyor "
+                    "(varsayilanlarla ezilmedi). Yapilacak: dosyayi uygulamayi kuran Windows hesabiyla acin ya da izinlerini "
+                    "duzelttirin; bozuksa yedekteki pemf_config_<tarih>.json dosyasini config.json olarak geri yukleyin."
+                )
             return
         user_config_path = self._get_app_data_dir() / 'config.json'
-
-        # DENETIM P3: truncate-then-write idi (gecici dosya + os.replace YOK, kilit YOK).
-        # Guc kesintisi ya da es-zamanli iki kaydetme, config.json'i YARIM/BOS birakabiliyordu →
-        # TUM kullanici ayarlari sessizce kaybolur (bir sonraki acilista varsayilanlara doner).
-        # Ayni projedeki settings_router zaten atomik desen kullaniyor; burada eksikti.
         try:
-            with _SAVE_LOCK:
-                tmp_path = user_config_path.with_suffix('.json.tmp')
-                with open(tmp_path, 'w', encoding='utf-8') as f:
-                    json.dump(self._config, f, indent=4, ensure_ascii=False)
-                    f.flush()
-                    os.fsync(f.fileno())  # once diske indir, sonra atomik takas
-                os.replace(tmp_path, user_config_path)
-            # NTFS ACL kilidi (audit B-1.2): config hassas alanlar içerebilir → Users'a kapat.
-            try:
-                from utils.file_acl import lock_down_file
-
-                lock_down_file(user_config_path)
-            except Exception:
-                pass
+            sahip.config_json_yaz(user_config_path, copy.deepcopy(self._config))
+            self._kirli = False
             logger.info(f"Saved user config to: {user_config_path}")
         except Exception as e:
             logger.error(f"Failed to save user config: {e}")
@@ -362,7 +343,7 @@ class ProductionConfigManager:
         # sifrelendiyse eklenir; sifrelenemediyse duz-metin DURUSTCE yazilir + GORUNUR uyarilir.
         if key_path in self._ENCRYPTED_KEYS and isinstance(value, str) and value:
             _enc = self._encrypt_value(value)
-            if self._cipher and _enc != value:
+            if _enc:  # D2.81: `_encrypt_value` şifreleyemezse None döner (sahibin anahtarı alınamadı / şifreleme düştü)
                 value = 'enc:' + _enc
             else:
                 logger.warning(
@@ -378,6 +359,7 @@ class ProductionConfigManager:
             return
 
         config[key_name] = value
+        self._kirli = True
 
         if save:
             self._save_user_config()
@@ -388,30 +370,39 @@ class ProductionConfigManager:
         self._save_user_config()
         self._last_save_ts = time.monotonic()
 
-    def _encrypt_value(self, value: str) -> str:
-        """Encrypt sensitive value"""
-        if not self._cipher or not value:
+    def _encrypt_value(self, value: str) -> Optional[str]:
+        """Hassas değeri `config.json`un SAHİBİNİN anahtarıyla (`patient_fernet_key`) şifrele (D2.81 · A-29) — sahip ve PCM aynı
+        değeri okuyabilsin. Şifrelenemezse None (çağıran düz yazar ve uyarır; sahte 'enc:' öneki YOK)."""
+        if not value:
             return value
-
         try:
-            encrypted = self._cipher.encrypt(value.encode())
-            return base64.urlsafe_b64encode(encrypted).decode()
+            return _sahip().get_config()._encrypt_value(value)
         except Exception as e:
-            logger.error(f"Encryption failed: {e}")
-            return value
+            logger.error("Encryption failed (%s)", type(e).__name__)
+            return None
 
     def _decrypt_value(self, encrypted_value: str) -> str:
-        """Decrypt sensitive value"""
-        if not self._cipher or not encrypted_value:
-            return encrypted_value
+        """Sahibin zinciriyle çöz (birincil `patient_fernet_key` → eski `.pemf_key` + MAC-türevli); eski PCM'in kendi veri
+        dizinindeki `.pemf_key` ile yazdığı değerler için o dosya da (yalnız OKUNUR) denenir. Çözülemezse ham değer (D2.81).
 
-        try:
-            encrypted_bytes = base64.urlsafe_b64decode(encrypted_value.encode())
-            decrypted = self._cipher.decrypt(encrypted_bytes)
-            return decrypted.decode()
-        except Exception as e:
-            logger.error(f"Decryption failed: {e!r}", exc_info=True)
+        Eskiden PCM yalnız KENDİ `.pemf_key`iyle çözüyordu: sahibin `patient_fernet_key` ile şifrelediği `mqtt.pass` (ör. açılıştaki
+        düz-metin sır göçü) PCM'den şifreli metin olarak dönüyordu."""
+        if not encrypted_value:
             return encrypted_value
+        try:
+            cozulen = _sahip().get_config()._decrypt_value(encrypted_value, sessiz=True)
+        except Exception:
+            cozulen = encrypted_value
+        if cozulen != encrypted_value:
+            return cozulen
+        eski = self._eski_pcm_anahtari()
+        if eski is not None:
+            try:
+                return eski.decrypt(base64.urlsafe_b64decode(encrypted_value.encode())).decode()
+            except Exception:
+                pass
+        logger.error("Decryption failed (sahibin anahtarlari + eski PCM .pemf_key)")
+        return encrypted_value
 
 
 # Global singleton instance

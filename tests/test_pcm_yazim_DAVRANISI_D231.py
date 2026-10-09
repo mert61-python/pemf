@@ -2,7 +2,7 @@
 # Author: mertaygn, cglrgrkn
 """D2.31 (B-3.96) — `config.json` yazım yolunun iki koruması DAVRANIŞLA ölçülür.
 
-`tests/test_config_manager_safety.py` iki korumayı kaynak METNİNDE arıyordu (`inspect.getsource`): (1) şifreleme
+`tests/test_config_manager_safety.py` (D2.81'de kaldırıldı) iki korumayı kaynak METNİNDE arıyordu (`inspect.getsource`): (1) şifreleme
 yapılamadığında `enc:` öneki EKLENMEZ (yanlış güvence: dosyayı inceleyen sırrı şifreli sanar); (2) yazım ATOMİKTİR
 (tmp + fsync + `os.replace`, süreç içi kilit) — güç kesintisi / disk dolması `config.json`u 0 bayt ya da yarım bırakmaz,
 klinik ayarları varsayılana dönmez. Ölçüldü: önekin koşulsuz eklendiği (M1) ve `os.replace` yerine doğrudan yazıldığı

@@ -5,7 +5,7 @@ import os
 import tempfile
 import threading
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from utils.path_utils import get_app_data_directory
 
@@ -17,7 +17,7 @@ _app_data_dir = get_app_data_directory()
 _settings_file = _app_data_dir / "system_settings.json"
 _settings_lock = threading.Lock()  # Audit P3: eş-zamanlı POST'lar system_settings.json'u bozmasın
 
-from utils.production_config_manager import get_production_config
+from utils.production_config_manager import get_production_config, kayit_reddi_mi
 
 # NOT: E-posta (Gmail/SMTP) rapor gönderimi KALDIRILDI — raporlar artık mobil "Paylaş"
 # butonuyla (expo-sharing) paylaşılıyor. Bu router yalnız klinik adı / BLE MAC / MQTT ayarını tutar.
@@ -103,5 +103,13 @@ def update_settings(payload: SettingsModel):
     # ve OpenAPI varsayılanlarını kaybetmek gerekirdi; `exclude_unset` sıfır model değişikliğiyle
     # aynı semantiği veriyor.
     data = {**load_settings(), **payload.dict(exclude_unset=True)}
-    save_settings(data)
+    try:
+        save_settings(data)
+    except Exception as e:
+        # ⚠️ D2.81 (B-3.41): okunamayan config.json'da kayıt REDDEDİLİR (varsayılanlar klinik ayarlarını ezmesin). Eskiden ret
+        # sessizdi ve uç "success" diyordu — operatör ayarın kaydedildiğini sanıyordu. Şimdi eylem söyleyen 503 (hiçbir ayar
+        # yazılmadı: config.json system_settings.json'dan ÖNCE yazılır).
+        if kayit_reddi_mi(e):
+            raise HTTPException(status_code=503, detail=str(e))
+        raise
     return {"status": "success"}

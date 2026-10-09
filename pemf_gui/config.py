@@ -8,9 +8,10 @@ import hashlib
 import json
 import logging
 import os
+import threading
 from typing import Any, Dict
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, MultiFernet
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -27,6 +28,81 @@ ch.setFormatter(formatter)
 # Add the handlers to the logger
 if not logger.handlers:  # Avoid adding handlers multiple times
     logger.addHandler(ch)
+
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+# ⚠️ D2.81 (A-29 sahip kararı · B-3.40 · B-3.41): `config.json`un SAHİBİ bu modülün ConfigManager'ıdır. `/api/settings`in
+# ProductionConfigManager'ı (PCM) ona BAĞLANIR: şifreli alanları bu sınıfın anahtarıyla (`patient_fernet_key`) yazar/okur ve
+# dosyayı aşağıdaki TEK okuyucu / yazıcı / kilitle okur-yazar. Eskiden iki yönetici aynı dosyayı ayrı anahtar, ayrı kilit ve ayrı
+# ACL ile yazıyordu: PCM ortak veri dizinine rastgele `.pemf_key` yazıp eski MAC-türevli hasta alanlarını "[okunamayan kayıt]"
+# yapıyor (B-3.40), kaydettiği dosyayı yalnız SYSTEM + Administrators'a kilitleyip yükseltilmemiş (launcher) backend'in bir
+# sonraki açılışta KENDİ ayarını okuyamamasına yol açıyordu; `POST /api/settings` "success" deyip diske yazamıyordu (B-3.41).
+# Kapı: tests/test_config_TEK_SAHIP_pemf_key_ve_kilit_D281.py · atomiklik: tests/test_pcm_yazim_DAVRANISI_D231.py
+# ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+_YAZIM_KILIDI = threading.Lock()
+
+
+class ConfigKaydiReddedildi(RuntimeError):
+    """`config.json` diskte VAR ama okunamadığı için kayıt REDDEDİLDİ: bellekteki değerler varsayılanlardır, yazmak klinik
+    ayarlarını (MQTT broker / port …) silerdi."""
+
+
+def _config_oku(yol) -> dict:
+    with open(yol, 'r', encoding='utf-8') as f:
+        veri = json.load(f)
+    if not isinstance(veri, dict):
+        raise ValueError(f"config.json bir JSON nesnesi degil ({type(veri).__name__})")
+    return veri
+
+
+def config_json_oku(yol) -> dict:
+    """`config.json`u oku (UTF-8). Erişim REDDEDİLİRSE kilit BİR KEZ süreç hesabı korunarak yeniden uygulanır ve okuma yeniden
+    denenir: dosyanın sahibi bu hesapsa (1.9.50'nin yükseltilmemiş backend'i kendi dosyasını SYSTEM + Administrators'a
+    kilitlemişti) Windows sahibe ACL değiştirme hakkı verir → dosya güncellemeden sonra kendiliğinden açılır; başka hesabın
+    dosyasıysa hiçbir şey değişmez. Kalan hata (bozuk JSON / hâlâ erişim yok) çağırana yükselir — çağıran kaydı kapatır."""
+    try:
+        return _config_oku(yol)
+    except PermissionError as ilk:
+        try:
+            from utils.file_acl import lock_down_file
+
+            onarildi = bool(lock_down_file(yol, keep_current_user=True))
+        except Exception:
+            onarildi = False
+        if not onarildi:
+            raise
+        logger.warning(
+            "config.json okunamiyordu (%s) — ACL kilidi surecin hesabi korunarak yeniden uygulandi, yeniden okunuyor: %s",
+            ilk,
+            yol,
+        )
+        return _config_oku(yol)
+
+
+def config_json_yaz(yol, veri: dict) -> None:
+    """ATOMİK yaz (tmp + fsync + `os.replace`, süreç geneli kilit) ve süreç hesabını KORUYAN ACL ile kilitle (Users yine dışarıda).
+    Hata çağırana yükselir; `config.json` önceki baytlarla kalır."""
+    tmp = f"{yol}.{os.getpid()}.tmp"
+    with _YAZIM_KILIDI:
+        os.makedirs(os.path.dirname(os.path.abspath(yol)), exist_ok=True)
+        try:
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(veri, f, indent=4, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())  # önce diske indir, sonra atomik takas
+            os.replace(tmp, yol)
+        finally:
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except Exception:
+                pass
+    try:
+        from utils.file_acl import lock_down_file
+
+        lock_down_file(yol, keep_current_user=True)
+    except Exception:
+        logger.debug("config.json ACL kilidi uygulanamadi", exc_info=True)
 
 
 class ConfigManager:
@@ -122,7 +198,9 @@ class ConfigManager:
                     try:
                         from utils.file_acl import lock_down_file
 
-                        lock_down_file(dst)  # audit B-1.2: NTFS ACL (os.chmod Windows'ta no-op)
+                        # audit B-1.2: NTFS ACL (os.chmod Windows'ta no-op). D2.81 (B-3.41): süreç hesabı KORUNUR — varsayılan
+                        # (yalnız SYSTEM + Administrators) yükseltilmemiş backend'i kopyaladığı kendi config'inden dışarı atardı.
+                        lock_down_file(dst, keep_current_user=True)
                     except Exception:
                         pass
         except Exception:
@@ -177,21 +255,29 @@ class ConfigManager:
         return _k.encode() if isinstance(_k, str) else _k
 
     def _get_legacy_cipher(self):
-        """Eski MAC-türevli (veya .pemf_key) anahtar — yalnız ESKİ kayıtları çözmek için. Yoksa None."""
+        """Eski anahtarlar — yalnız ESKİ kayıtları çözmek için: `.pemf_key` (varsa) VE MAC-türevli anahtar, sırayla. Hiçbiri yoksa None.
+
+        ⚠️ D2.81 (B-3.40): eskiden `.pemf_key` VARSA yalnız o deneniyordu. 1.9.50'nin ProductionConfigManager'ı ortak veri dizinine
+        `.pemf_key` yoksa RASTGELE anahtar yazıyordu → o andan sonra MAC-türevli anahtarla şifrelenmiş eski hasta alanları (ad / sahip)
+        "[okunamayan kayıt]" görünüyordu (veri durur). İkisi de denenir; PCM artık `.pemf_key` ÜRETMEZ."""
+        anahtarlar = []
         try:
-            legacy_key = None
             key_file = os.path.join(self.config_dir, '.pemf_key')
             if os.path.exists(key_file):
                 with open(key_file, 'rb') as f:
-                    legacy_key = f.read().strip()
-            if not legacy_key:
-                import uuid
-
-                machine_id = str(uuid.getnode()).encode()
-                legacy_key = base64.urlsafe_b64encode(hashlib.sha256(machine_id).digest())
-            return Fernet(legacy_key)
+                    dosya_anahtari = f.read().strip()
+                if dosya_anahtari:
+                    anahtarlar.append(Fernet(dosya_anahtari))
         except Exception:
-            return None
+            logger.debug(".pemf_key eski anahtar olarak kullanilamadi", exc_info=True)
+        try:
+            import uuid
+
+            machine_id = str(uuid.getnode()).encode()
+            anahtarlar.append(Fernet(base64.urlsafe_b64encode(hashlib.sha256(machine_id).digest())))
+        except Exception:
+            logger.debug("MAC-turevli eski anahtar kurulamadi", exc_info=True)
+        return MultiFernet(anahtarlar) if anahtarlar else None
 
     def _anahtar_hazirla(self) -> Fernet:
         """Birincil alan anahtarını İLK İHTİYAÇTA al (2-A inceleme A2-1.1). Alınamazsa `RuntimeError` yükselir (fail-closed:
@@ -237,29 +323,36 @@ class ConfigManager:
         return encrypted_value
 
     def load(self) -> Dict[str, Any]:
-        """Load configuration from file."""
+        """Load configuration from file (ortak okuyucu: UTF-8, erişim reddinde kilit bir kez onarılır — D2.81).
+
+        Dosya VAR ama okunamazsa (bozuk JSON / erişim yok) bellekte varsayılanlar kalır ve kayıt KAPATILIR: `save()`
+        `ConfigKaydiReddedildi` yükseltir — varsayılanlar klinik ayarlarını EZMEZ (PCM'deki 2026-08-17 kapısının sahipteki ikizi)."""
+        self._yuklenemedi = None
         try:
             if os.path.exists(self.config_file):
                 logger.debug(f"Loading configuration from {self.config_file}")
-                with open(self.config_file, 'r') as f:
-                    loaded = json.load(f)
-                    self._merge_config(loaded)
+                self._merge_config(config_json_oku(self.config_file))
                 logger.info("Configuration loaded successfully")
         except Exception as e:
-            logger.error(f"Failed to load configuration: {e}")
+            self._yuklenemedi = f"{type(e).__name__}: {e}"
+            logger.error(
+                "Failed to load configuration: %s -- KAYDETME KAPATILDI (mevcut dosya EZILMEYECEK): %s",
+                e,
+                self.config_file,
+            )
             self.config = self.default_config.copy()
 
         return self.config
 
     def save(self) -> None:
-        """Save current configuration to file."""
+        """Save current configuration to file — ortak ATOMİK yazıcı (PCM ile AYNI kilit) + süreç hesabını koruyan ACL (D2.81)."""
+        if getattr(self, "_yuklenemedi", None):
+            raise ConfigKaydiReddedildi(
+                f"config.json okunamadigi icin KAYDEDILMEDI ({self._yuklenemedi}); mevcut dosya korunuyor: {self.config_file}"
+            )
         try:
-            # Ensure config directory exists
-            os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
-
             logger.debug(f"Saving configuration to {self.config_file}")
-            with open(self.config_file, 'w') as f:
-                json.dump(self.config, f, indent=4)
+            config_json_yaz(self.config_file, self.config)
             logger.info("Configuration saved successfully")
 
         except Exception as e:

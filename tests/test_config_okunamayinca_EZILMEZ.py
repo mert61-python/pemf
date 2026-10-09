@@ -37,11 +37,7 @@ def yonetici(tmp_path, monkeypatch):
 
     monkeypatch.setattr(pcm.ProductionConfigManager, "_get_app_data_dir", lambda self: tmp_path)
 
-    # ⚠️ Şifreleme kurulumu devre dışı: `.pemf_key` üretip onu ACL ile kilitliyor ve sonraki
-    # testler tmp dizinini temizleyemiyor (PermissionError). Bu testin konusu ŞİFRELEME DEĞİL,
-    # okunamayan config'in EZİLMEMESİ.
-    monkeypatch.setattr(pcm.ProductionConfigManager, "_setup_encryption", lambda self: None)
-
+    # (D2.81: PCM artık `.pemf_key` ÜRETMEZ — eskiden burada devre dışı bırakılan şifreleme kurulumu kaldırıldı.)
     # ⚠️ ACL sertleştirmesi de devre dışı: `_save_user_config` yazdığı dosyayı SYSTEM+Admin'e
     # kilitliyor ve test onu GERİ OKUYAMIYOR. (Bu kilit, gerçek kazanın da sebebiydi: dosya
     # okunamaz ama DİZİN yazılabilir kaldığı için `os.replace` başarılı oluyor.)
@@ -72,8 +68,13 @@ def test_KRITIK_okunamayan_config_VARSAYILANLARLA_EZILMEZ(yonetici, tmp_path):
     y = _yonetici_uret(yonetici)
 
     # Yükleme düştüğü için bellekteki config VARSAYILANLARDIR — kaydetmek dosyayı yok ederdi.
-    y.set("mqtt.broker_url", "localhost", save=False)
-    y.save()
+    # D2.81 (B-3.41): ret artık SESSİZ değil — kaydedilmemiş DEĞİŞİKLİK varken `save()` yükseltir (`/api/settings` → 503).
+    # (Değer bellekteki varsayılandan FARKLI olmalı: aynı değer değişiklik sayılmaz ve ret sessiz kalır — karşıt kol D2.81 kapısında.)
+    y.set("mqtt.broker_url", "10.0.0.250", save=False)
+    from pemf_gui.config import ConfigKaydiReddedildi
+
+    with pytest.raises(ConfigKaydiReddedildi):
+        y.save()
 
     assert hedef.read_bytes() == once, (
         "okunamayan config.json VARSAYILANLARLA EZILDI -> klinik override'lari (MQTT broker/port) "

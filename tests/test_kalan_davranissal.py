@@ -342,24 +342,10 @@ def test_plain_bak_goc_sonrasi_DISKTE_KALMAZ(temp_app_data, monkeypatch):
     )
 
 
-def test_config_kaydi_ATOMIK(tmp_path, monkeypatch):
-    """Kaçan mutasyon: `os.replace` → `shutil.copyfile`. Güç kesintisi veya eş-zamanlı iki
-    kaydetme config.json'i YARIM/BOŞ bırakır → tüm kullanıcı ayarları sessizce kaybolur."""
-    import inspect
-
-    from utils import production_config_manager as pcm
-
-    src = (
-        inspect.getsource(pcm.ProductionConfigManager.save_user_config)
-        if hasattr(pcm.ProductionConfigManager, "save_user_config")
-        else inspect.getsource(pcm)
-    )
-    assert "os.replace(" in src, "config yazımı atomik DEĞİL (os.replace yok)"
-    assert "os.fsync(" in src, "fsync yok → replace öncesi veri diske inmemiş olabilir"
-    # tmp dosyaya yaz → replace sırası
-    i_tmp = src.find(".json.tmp")
-    i_rep = src.find("os.replace(")
-    assert 0 < i_tmp < i_rep, "geçici dosyaya yazıp SONRA replace etme deseni bozulmuş"
+# (D2.81: `test_config_kaydi_ATOMIK` — PCM kaynağında `os.replace` / `.json.tmp` METNİ arıyordu — kaldırıldı. Yazım A-29 ile
+# `config.json`un sahibinin ortak atomik yazıcısına (`pemf_gui.config.config_json_yaz`) taşındı; atomiklik DAVRANIŞLA ölçülür:
+# tests/test_pcm_yazim_DAVRANISI_D231.py (PCM yolu: yarıda düşen yazım + eşzamanlı kayıtlar) ve
+# tests/test_config_TEK_SAHIP_pemf_key_ve_kilit_D281.py (sahibin yolu).)
 
 
 # ───────────────────── AĞ / BULUT ─────────────────────
