@@ -194,6 +194,16 @@ class PatientDatabase:
                 pass
         self._local.conn = None
 
+    def _db_hatasini_yaz(self, ne: str) -> None:
+        """⚠️ D2.66 (B-3.110): hasta DB'si okunamaz / yazılamazken yöntemler boş / None / False / 0 döner — ama artık SESSİZ DEĞİL:
+        WARNING + istisna izi. Eskiden operatör "hasta yok" görüyor, günlükte hiçbir iz olmuyordu; arıza sırasında alınan cihaz-taşıma
+        yedeği hasta listesiz "başarılı" çıkıyordu. Kapı: tests/test_hasta_DB_okunamazken_SESSIZ_DEGIL_D266.py"""
+        self.logger.warning(
+            "Hasta DB'si %s basarisiz (DB okunamiyor/yazilamiyor) — sonuc bos/False dondu; bu 'hasta yok' DEMEK DEGIL.",
+            ne,
+            exc_info=True,
+        )
+
     def create_backup(self, backup_path: str) -> bool:
         """Çalışan hasta DB'sinden dosya yedeği (online backup API). DB ŞİFRELİYSE yedek de AYNI
         anahtarla ŞİFRELİ olur (düz hedefe yedek PII sızdırır). audit B-7.2: PatientDB'nin yedeği yoktu.
@@ -649,6 +659,7 @@ class PatientDatabase:
                     patient = dict(row)
                     return self._decrypt_patient_fields(patient)
             except _DB_ERROR:
+                self._db_hatasini_yaz("hasta okuma")
                 return None
 
     def operator_sahipleri(self, patient_ids) -> Dict[str, str]:
@@ -674,6 +685,7 @@ class PatientDatabase:
                 with self._get_connection() as conn:
                     return int(conn.cursor().execute("SELECT COUNT(*) FROM patients").fetchone()[0])
             except _DB_ERROR:
+                self._db_hatasini_yaz("hasta sayimi")
                 return 0
 
     def get_all_patients(self, limit: int = 0, offset: int = 0, kati: bool = False) -> List[Dict[str, Any]]:
@@ -714,6 +726,7 @@ class PatientDatabase:
             except _DB_ERROR:
                 if kati:  # C2-1.2: "defter boş" ile "defter okunamadı" ayrılır (tek seferlik taşıma işaret koymasın)
                     raise
+                self._db_hatasini_yaz("hasta listesi")
                 return []
 
     def update_patient(self, patient_id: str, patient_info: Dict[str, str]) -> bool:
@@ -781,6 +794,7 @@ class PatientDatabase:
                     conn.commit()
                     return guncellendi
             except _DB_ERROR:
+                self._db_hatasini_yaz("hasta guncelleme")
                 return False
 
     def touch_last_treatment(self, patient_id: str) -> None:
@@ -866,6 +880,7 @@ class PatientDatabase:
                 conn.commit()
                 return rowcount > 0
         except _DB_ERROR:
+            self._db_hatasini_yaz("hasta silme")
             return False
         finally:
             self.lock.release()
@@ -901,6 +916,7 @@ class PatientDatabase:
                 conn.commit()
                 return silinen
         except _DB_ERROR:
+            self._db_hatasini_yaz("toplu hasta silme")
             return 0
         finally:
             self.lock.release()
@@ -982,6 +998,7 @@ class PatientDatabase:
 
                     return results
             except _DB_ERROR:
+                self._db_hatasini_yaz("hasta arama")
                 return []
 
     def get_patient_count(self) -> int:
@@ -993,6 +1010,7 @@ class PatientDatabase:
                     cursor.execute("SELECT COUNT(*) FROM patients")
                     return int(cursor.fetchone()[0])
             except _DB_ERROR:
+                self._db_hatasini_yaz("hasta sayimi")
                 return 0
 
 

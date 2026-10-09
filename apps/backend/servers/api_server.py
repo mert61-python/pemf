@@ -6393,11 +6393,22 @@ async def export_clinic_data(payload: DataExportPayload, request: Request):
         #                       BUNLARA bakar, dolayısıyla ilişkiyi kurmak için ŞART.
         #   pdb.get_all_patients → ayrı hasta veritabanı (arayüzün hasta listesi).
         # Eskiden yalnız ikincisi taşınıyor ve `rows`daki `patients` anahtarını EZİYORDU.
+        # ⚠️ D2.66 (B-3.110): hasta okuması KATI — okunamayan hasta DB'si "hasta yok" sayılırsa yedek hasta listesiz "başarılı"
+        # çıkıyordu (yeni cihaza yüklenince 0 hasta — veri kaybı zinciri). Kapı: tests/test_hasta_DB_okunamazken_SESSIZ_DEGIL_D266.py
+        try:
+            _hastalar_disa = await asyncio.to_thread(pdb.get_all_patients, kati=True)
+        except Exception:
+            logging.getLogger(__name__).exception("VERİ TAŞIMA: hasta kayıtları okunamadı — yedek oluşturulmadı")
+            raise HTTPException(
+                status_code=503,
+                detail="Hasta kayıtları okunamadı (hasta veritabanı açılamıyor) — yedek OLUŞTURULMADI. Uygulamayı yeniden "
+                "başlatın; sürerse teknik desteğe başvurun.",
+            )
         paket = {
             "bundle_version": BUNDLE_VERSION,
             "created_at": datetime.now().isoformat(timespec="seconds"),
             **rows,
-            "patient_db": await asyncio.to_thread(pdb.get_all_patients),
+            "patient_db": _hastalar_disa,
         }
         blob = await asyncio.to_thread(encrypt_bundle, paket, payload.passphrase)
         # ⚠️ DENETİM 2026-08-09 (Tier 1) — ÜRETİLEN DOSYA GERÇEKTEN AÇILIYOR MU?
@@ -6426,7 +6437,7 @@ async def export_clinic_data(payload: DataExportPayload, request: Request):
         raise
     except Exception:
         logging.exception("data export failed")
-        raise HTTPException(status_code=500, detail="Dışa aktarma başarısız")
+        raise HTTPException(status_code=500, detail="Dışa aktarma başarısız — yedek OLUŞTURULMADI.")
     logging.getLogger(__name__).warning(
         "VERİ TAŞIMA: dışa aktarıldı (%d hasta, %d seans, %d bobin-koşusu, %d sensör, %d analiz).",
         len(paket["patient_db"]),
@@ -6557,7 +6568,16 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
         raise HTTPException(status_code=400, detail=str(e))
 
     mevcut = await asyncio.to_thread(thdb.export_rows)
-    _mevcut_hastalar = await asyncio.to_thread(pdb.get_all_patients)
+    # ⚠️ D2.66: hasta okuması KATI — okunamayan hasta DB'si DOLU cihazı BOŞ gösterip onayı (REPLACE_ALL) ve Y111'i atlatmasın.
+    try:
+        _mevcut_hastalar = await asyncio.to_thread(pdb.get_all_patients, kati=True)
+    except Exception:
+        logging.getLogger(__name__).exception("VERİ TAŞIMA: hedefin hasta kayıtları okunamadı — geri yükleme yapılmadı")
+        raise HTTPException(
+            status_code=503,
+            detail="Bu cihazın hasta kayıtları okunamadı (hasta veritabanı açılamıyor) — geri yükleme YAPILMADI, cihazdaki "
+            "kayıtlar DEĞİŞMEDİ. Uygulamayı yeniden başlatın; sürerse teknik desteğe başvurun.",
+        )
     dolu = bool(mevcut["treatment_sessions"] or mevcut["ai_analyses"] or _mevcut_hastalar)
     from servers import audit_log as _iz
 
