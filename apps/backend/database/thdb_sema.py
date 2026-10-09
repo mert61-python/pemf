@@ -462,6 +462,28 @@ class SemaKarisimi:
 
     def _run_startup_migrations_with_rollback(self):
         """Migration çalıştır; hata olursa backup'tan geri dön."""
+        # ⚠️ D2-1.11 (2-D incelemesi · Y100): `<db>.rollback.tmp` YALNIZ yarıda kalan geri almanın imzasıdır (başarılı yolda canlı ada
+        # taşınır, istisna yolunda silinir). Kenara alma ile yerine koyma arasında süreç ölürse bu açılış ana dosyayı WAL'SİZ açar:
+        # checkpoint edilmemiş son seanslar kenardaki `-wal.rollback-*`te kalır, eskiden HİÇ söylenmiyordu (ölçüldü). Dosyalara dokunulmaz
+        # (S-D.5: elle). Kapı: tests/test_goc_geri_almasi_YARIDA_kaldiysa_acilis_SOYLER_D2_1_11.py
+        _yarim = str(self.db_path) + ".rollback.tmp"
+        if os.path.exists(_yarim):
+            _ad = os.path.basename(str(self.db_path))
+            try:
+                _kenar = sorted(
+                    f
+                    for f in os.listdir(os.path.dirname(str(self.db_path)) or ".")
+                    if f.startswith(_ad + "-wal.rollback-") or f.startswith(_ad + "-shm.rollback-")
+                )
+            except OSError:
+                _kenar = []
+            self.logger.error(
+                "Onceki goc geri almasi YARIDA kalmis olabilir: %s ve kenardaki dosyalar (%s) duruyor — checkpoint edilmemis SON "
+                "SEANSLAR kenardaki -wal.rollback-* dosyasinda olabilir. Dosyalari SILMEYIN; teknik destekle inceleyin (elle geri "
+                "adlandirma).",
+                _yarim,
+                ", ".join(_kenar) or "kenar dosyasi yok",
+            )
         version_key = 'db_schema_version'
         current_raw = self._get_system_setting(version_key)
         current_version = int(current_raw) if current_raw and current_raw.isdigit() else 0
