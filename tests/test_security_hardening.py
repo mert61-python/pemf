@@ -144,6 +144,8 @@ def test_secrets_save_writes_file_when_not_admin(tmp_path, monkeypatch):
     DELETE hakkını kaybedip os.replace'te PermissionError alıyordu → sırlar hiç kalıcılaşmıyor,
     geride okunamaz bir .tmp kalıyordu (sahada doğrulandı).
     """
+    import inspect
+
     import utils.file_acl as facl
     from utils import secrets_manager as sm
 
@@ -154,10 +156,21 @@ def test_secrets_save_writes_file_when_not_admin(tmp_path, monkeypatch):
     # kısıtlar) ve BUNDAN SONRA yönetici olmayan süreç o dosyayı taşıyamaz hale gelir.
     locked = {"tmp": False}
 
-    def _fake_lock(path):
+    def _fake_lock(path, keep_current_user: bool = False):
         if str(path).endswith(".tmp"):
             locked["tmp"] = True
         return True
+
+    # ⚠️ D2.38 (B-10.254): sahte GERÇEK imzayı taşımalı. Eskiden `_fake_lock(path)` idi; ürün `lock_down_file(p,
+    # keep_current_user=True)` çağırdığı için sahte `TypeError` atıyor, `_save`'in geniş `except`i onu yutuyordu → .tmp'yi
+    # replace'ten ÖNCE kwarg'la (ya da konumsal True ile) kilitleyen mutant — asıl regresyon biçimi — YEŞİL kalıyordu (ölçüldü 2/2).
+    # Gerçek imza değişirse sahte de değişmeli: ad / tür / varsayılan eşitliği burada kilitli.
+    def _imza(f):
+        return [(p.name, p.kind, p.default) for p in inspect.signature(f).parameters.values()]
+
+    assert _imza(_fake_lock) == _imza(facl.lock_down_file), (
+        "sahte kilit GERÇEK imzayla aynı değil — kwarg'lı çağrı yutulur"
+    )
 
     _real_replace = sm.os.replace
 
