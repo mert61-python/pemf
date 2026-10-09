@@ -557,8 +557,19 @@ def _cocuk(tmp_path: Path, env: dict, senaryo: str, argv: list[str] | None = Non
     raise AssertionError(f"çocuk sonuç basmadı (rc={p.returncode}); stderr sonu: {p.stderr[-1500:]}")
 
 
-#: Çocuğun başlatmasına izin verilen alt süreçler (D1.14 ile aynı: `platform` sürüm sorgusu).
-_IZINLI_ALT_SUREC = re.compile(r'subprocess\.Popen:(?:[A-Za-z]:\\(?:[^"\\]+\\)*)?cmd\.exe /c "?ver"?', re.IGNORECASE)
+#: Çocuğun başlatmasına izin verilen alt süreçler (D1.14 ile aynı: `platform` sürüm sorgusu) + D2.79: `utils.file_acl`ın veri kökü
+#: kilidi — YALNIZ onun tam komut biçimi (Users / Authenticated Users kaldırılır; SYSTEM, Administrators ve süreç SID'i verilir).
+#: ⚠️ D2.79 öncesi bu kilit çocukta HİÇ koşmuyordu: yalıtık ortamda `USERNAME` yok → `getpass.getuser()` istisna → her
+#: `keep_current_user=True` kilidi SESSİZCE düşüyordu (D-3.1'in ortam biçimi). SID ile kilit artık gerçekten uygulanıyor.
+_IZINLI_ALT_SUREC = re.compile(
+    r"subprocess\.Popen:(?:"
+    r'(?:[A-Za-z]:\\(?:[^"\\]+\\)*)?cmd\.exe /c "?ver"?'
+    r"|icacls .+ /inheritance:r /remove:g \*S-1-5-32-545 /remove:g \*S-1-5-11"
+    r" /grant:r \*S-1-5-18:(?:\(OI\)\(CI\))?F /grant:r \*S-1-5-32-544:(?:\(OI\)\(CI\))?F"
+    r"(?: /grant:r \*S-1-5-(?:18|21-[0-9-]+):(?:\(OI\)\(CI\))?F)*"
+    r")",
+    re.IGNORECASE,
+)
 
 
 def _sqlcipher_var() -> bool:

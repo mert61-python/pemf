@@ -407,7 +407,7 @@ def _install_crash_handler(app_data_dir: Path) -> None:
 
 
 def _harden_secret_file_acls(app_data_dir: Path, logger: logging.Logger) -> None:
-    """Var olan sır/anahtar dosyalarının NTFS ACL'sini SYSTEM + Administrators'a kilitle (audit B-1.2).
+    """Var olan sır/anahtar dosyalarının NTFS ACL'sini SYSTEM + Administrators + süreç hesabına kilitle (audit B-1.2; D2.79).
     Yeni yazımlar zaten kilitli üretiliyor; bu geçiş, ÖNCEDEN kurulmuş cihazlardaki (ACL'siz yazılmış)
     mevcut dosyaları da kapatır. Best-effort — hata servisi durdurmaz."""
     try:
@@ -444,6 +444,11 @@ def _harden_secret_file_acls(app_data_dir: Path, logger: logging.Logger) -> None
         plain_yedekler = list(app_data_dir.glob("*.plain.bak*"))
     except Exception:
         pass
+    # ⚠️ D2.79 (B-3.13 ikinci yarı): sır dosyaları da artık `keep_current_user=True` ile kilitlenir. Varsayılan (False) yükseltilmemiş
+    # (launcher) backend'i KENDİ `pemf_secrets.json`undan dışarı atıyordu: sonraki açılışta okuma `PermissionError` → (D2.80 öncesi)
+    # sağlam dosya "BOZUK" sayılıyordu. Bu değişiklik D-3.1 ile AYNI commit'te: kullanıcı ADIYLA (`getpass`) verilseydi LocalSystem'de
+    # icacls 1332 ile düşer ve hep-ya-hiç yüzünden kilit TAMAMEN kalkardı; `file_acl` artık sürecin SID'ini verir (LocalSystem'de
+    # S-1-5-18 = SYSTEM, yani servis kipinde sonuç yine yalnız SYSTEM + Administrators). Users / Authenticated Users yine DIŞARIDA.
     seen: set[str] = set()
     locked = 0
     basarisiz = 0
@@ -453,7 +458,7 @@ def _harden_secret_file_acls(app_data_dir: Path, logger: logging.Logger) -> None
             if key in seen:
                 continue
             seen.add(key)
-            if lock_down_file(c, keep_current_user=c in plain_yedekler):
+            if lock_down_file(c, keep_current_user=True):
                 locked += 1
         except Exception:
             # ⚠️ 2026-09-20 triyaji: burasi `pass` idi. Sayac dusuyordu ama ISTISNA ile
@@ -469,7 +474,7 @@ def _harden_secret_file_acls(app_data_dir: Path, logger: logging.Logger) -> None
             basarisiz,
         )
     if locked:
-        logger.info("Sır dosyası ACL kilidi uygulandı: %d dosya (yalnız SYSTEM + Administrators).", locked)
+        logger.info("Sır dosyası ACL kilidi uygulandı: %d dosya (SYSTEM + Administrators + süreç hesabı).", locked)
 
 
 def _log_pairing_info(logger: logging.Logger) -> None:

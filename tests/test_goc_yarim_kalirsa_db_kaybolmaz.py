@@ -707,41 +707,46 @@ def test_KRITIK_toparlama_ACL_kilidinden_ONCE_kosar():
     assert bulundu, "backend_service icinde iki cagriyi birlikte iceren fonksiyon YOK"
 
 
-def test_KRITIK_plain_bak_kilidi_kullaniciyi_DISARI_ATMAZ():
+def test_KRITIK_plain_bak_kilidi_kullaniciyi_DISARI_ATMAZ(tmp_path, monkeypatch):
     """`.plain.bak` kilidi `keep_current_user=True` olmalı.
 
     Aksi hâlde sıra düzeltmesi bile yetmez: bir kez kilitlenen yedek, sonraki açılışlarda
     kalıcı olarak erişilemez kalır. Users / Authenticated Users her iki kipte de dışarıda —
     korunan şey kaybolmuyor.
 
-    MUTASYON: `keep_current_user=c in plain_yedekler` → `lock_down_file(c)` → KIRMIZI.
+    MUTASYON: `.plain.bak` için `lock_down_file(c)` (varsayılan False) → KIRMIZI.
 
-    ⚠️ O-B.1 (2-C): kaynak AST ile okunur. Eskiden `c_soy` (C yorum sökücüsü) uygulanmış metinde alt-dize aranıyordu:
-    C sökücüsü Python `#` yorumunu sökmez → `lock_down_file(c)  # keep_current_user=c in plain_yedekler` mutantı YEŞİL
-    kalıyordu (ölçüldü); ayrıca docstring'deki `librosa/*/__pycache__` dosyanın 758. satırından sonunu boşaltıyordu.
-    Kapı GERÇEK çağrıyı ister: `lock_down_file(<x>, keep_current_user=<x> in plain_yedekler)`.
+    ⚠️ O-B.1 (2-C) kaynağı AST ile okuyup `keep_current_user=<x> in plain_yedekler` İFADESİNİ arıyordu. D2.79 (B-3.13 ikinci
+    yarı) sır dosyalarını da `keep_current_user=True` ile kilitler — ifade değişti, korunan şey AYNI. Kapı artık DAVRANIŞI ölçer:
+    GERÇEK `_harden_secret_file_acls`, casus `lock_down_file` (argümanlar gerçek imzaya bağlanır), `.plain.bak` ve kenara alınmış
+    `.plain.bak.<zaman>` kopyası için sürecin hesabı KORUNMALI.
     """
-    import ast
+    import inspect
+    import logging
 
-    agac = ast.parse((KOK / "apps" / "backend" / "backend_service.py").read_text(encoding="utf-8"))
-    uyan = []
-    for c in ast.walk(agac):
-        if not (isinstance(c, ast.Call) and getattr(c.func, "id", getattr(c.func, "attr", None)) == "lock_down_file"):
-            continue
-        for kw in c.keywords:
-            v = kw.value
-            if (
-                kw.arg == "keep_current_user"
-                and c.args
-                and isinstance(v, ast.Compare)
-                and len(v.ops) == 1
-                and isinstance(v.ops[0], ast.In)
-                and isinstance(v.comparators[0], ast.Name)
-                and v.comparators[0].id == "plain_yedekler"
-                and ast.dump(v.left) == ast.dump(c.args[0])
-            ):
-                uyan.append(c.lineno)
-    assert uyan, (
+    import backend_service as bs
+    import utils.file_acl as fa
+
+    app = tmp_path / "PEMF_GUI"
+    app.mkdir()
+    for ad in ("patients.db.plain.bak", "pemf_treatment_history.db.plain.bak.20260101_000000"):
+        (app / ad).write_text("x", encoding="utf-8")
+    imza = inspect.signature(fa.lock_down_file)
+    cagrilar = []
+
+    def _casus(*a, **k):
+        b = imza.bind(*a, **k)
+        b.apply_defaults()
+        cagrilar.append((Path(b.arguments["path"]).name, b.arguments["keep_current_user"]))
+        return True
+
+    monkeypatch.setattr(fa, "lock_down_file", _casus)
+    bs._harden_secret_file_acls(app, logging.getLogger("plain_bak"))
+    yedek = {ad: tut for ad, tut in cagrilar if ".plain.bak" in ad}
+    assert set(yedek) == {"patients.db.plain.bak", "pemf_treatment_history.db.plain.bak.20260101_000000"}, (
+        f"`.plain.bak*` dosyalari kilitlenmedi: {sorted(yedek)}"
+    )
+    assert all(tut is True for tut in yedek.values()), (
         "`.plain.bak` dosyalari kullaniciyi DISARI ATAN varsayilan ACL ile kilitleniyor -> "
-        "yarim-goc toparlamasi kalici olarak imkansizlasir"
+        f"yarim-goc toparlamasi kalici olarak imkansizlasir: {yedek}"
     )
