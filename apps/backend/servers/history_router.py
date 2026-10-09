@@ -197,9 +197,24 @@ def export_csv(
     ),
     kaydet: int = Query(0, description="1 = masaüstüne yaz + JSON yol döndür (bkz. export_pdf)."),
     db=Depends(get_db),
+    request: Request = None,
 ):
     """Seans geçmişini CSV indir. session_ids verilirse YALNIZ o kayıtlar (ekranda görünen
     operatör-kapsam+arama) döner → 'Benim Seanslarım' seçiliyken tüm-klinik PII dökümü olmaz (KVKK)."""
+    # ⚠️ O-A3.7 (2-B incelemesi) · S-D.1 [ÖNERİLEN UYGULANDI, Y123]: kimlik LİSTESİZ ("Tümünü") istek kliniğin TÜM seans geçmişini
+    # (hasta adı, notlar) verir → kayıtlı operatörlü klinikte KİMLİK ister (jetonsuz 428; Y103 "kimse seçili değilse kayıt
+    # gösterilmez" ilkesinin dışa aktarma yüzü). Kimlikli hekim tümünü alır (rol modeli yok — A-28); operatörsüz klinik (Kural 2)
+    # ve kimlik listeli istek DEĞİŞMEZ. Kapı: tests/test_csv_KIMLIK_LISTESIZ_istek_kayitli_klinikte_KIMLIK_ister_OA37.py
+    if not session_ids.strip() and request is not None:
+        from servers.auth import cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
+
+        if kayitli_operator_var() and not cozumlenmis_operator(request):
+            raise HTTPException(
+                status_code=428,
+                detail=kimliksiz_detayi(
+                    "Operatör seçin — tüm seans geçmişini dışa aktarmak için önce üst bardan hangi hekim olduğunuzu seçin."
+                ),
+            )
     try:
         # DENETIM P3: session_ids SQL'e HIC girmiyordu → birkac seans istense bile 10.000 satir
         # 11 LEFT JOIN ile belleğe cekilip Python'da filtreleniyordu. Filtre artik SQL'de.
