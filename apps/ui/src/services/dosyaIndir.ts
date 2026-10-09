@@ -10,13 +10,13 @@
 import { Platform } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
-import { serviceConfig } from "@/services/config";
 
 // GÜVENLİK (YÜKSEK fix): Raporu X-API-Key HEADER'ı ile indir → cihaz MASTER token'ı URL'de
 // (tarayıcı geçmişi / sunucu & Cloudflare tünel erişim-logları / PDF disk-cache) SIZMASIN. Eski
 // `withToken` token'ı ?token= olarak URL'e koyuyordu (Linking header gönderemediği için). Şimdi:
 // Web → fetch+blob+<a> indir; Native → FileSystem.downloadAsync+header → paylaş menüsü. Token hep header'da.
 import { backendBuMakinede } from "@/services/backendKonumu";
+import { authHeaders } from "@/services/apiClient";
 
 export { backendBuMakinede };
 
@@ -25,7 +25,10 @@ export async function downloadFileWithAuth(
   filename: string,
   toast?: (m: string, t?: "success" | "error" | "info") => void,
 ): Promise<void> {
-  const headers: Record<string, string> = serviceConfig.apiToken ? { "X-API-Key": serviceConfig.apiToken } : {};
+  // ⚠️ D2-3.2 (2-D incelemesi): başlıklar apiClient'in TEK kaynağından — X-API-Key + (güvenli tabanda) operatör jetonu. Eskiden
+  // yalnız X-API-Key gidiyordu; S-D.1 (O-A3.7) sonrası kayıtlı operatörlü klinikte PIN'le seçilmiş hekimin "Tümünü Excel/CSV İndir"i
+  // jetonsuz sayılıp 428 alıyordu ("İndirilemedi (428)."). Kapı: screens/__tests__/TumuCsvOperatorJetonu.D2_3_2.web.test.tsx
+  const headers: Record<string, string> = authHeaders();
   const safeName = filename.replace(/[^\w.\-]/g, "_");
   try {
     // ── MASAÜSTÜ YOLU: dosyayı backend diske yazsın, biz yolunu söyleyelim ──────────
