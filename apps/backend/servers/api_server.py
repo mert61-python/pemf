@@ -6294,6 +6294,19 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
 # değişimiydi; çözümü bulut değil, kliniğin kendi kontrolündeki şifreli dosya.
 
 
+#: ⚠️ D2.E02 (İG-6.5): geri yükleme TEK kritik bölge — "hedef dolu mu" denetimi + içe aktarma bu kilidin içinde. Eskiden arada kilit
+#: yoktu: ilk geri yükleme cihazda sürerken (arayüzün 8 sn zaman aşımı "Tekrar deneyin" diyordu — İG-6.21) gelen ikinci istek de
+#: hedefi BOŞ görüp aynı paketi ekleme kipinde yazıyordu → tüm tıbbi kayıtlar İKİYE katlanıyordu (sahada 4000 seans ölçüldü).
+#: İkinci istek BEKLEMEZ (SQLCipher'da dakikalık işi ikilerdi), hemen 409 alır; geri yükleme sürerken dışa aktarma da 409 (yarım
+#: içe aktarılmış durum yedek diye verilmesin). Kilit, istek iptal edilse de iş BİTİNCE bırakılır (görev bitiş geri çağrısı).
+#: Kapı: tests/test_ice_aktarma_TEK_kritik_bolge_ikinci_istek_409_D2E02.py
+_VERI_TASIMA_KILIDI = threading.Lock()
+GERI_YUKLEME_SURUYOR = (
+    "Geri yükleme bu cihazda sürüyor — bitince kayıtlar görünür. İşlemi tekrarlamayın ve uygulamayı yeniden başlatmayın; "
+    "birkaç dakika sonra Seans Geçmişi'ni yenileyin."
+)
+
+
 class DataExportPayload(BaseModel):
     passphrase: str = ""
 
@@ -6308,6 +6321,8 @@ class DataImportPayload(BaseModel):
 async def export_clinic_data(payload: DataExportPayload, request: Request):
     """Hasta + seans + AI analiz kayıtlarını TEK şifreli dosyaya çıkarır (base64 döner)."""
     _enforce_privileged(request)
+    if _VERI_TASIMA_KILIDI.locked():  # D2.E02: yarım içe aktarılmış durum yedek diye verilmez
+        raise HTTPException(status_code=409, detail=GERI_YUKLEME_SURUYOR)
     import base64 as _base64
 
     from utils.data_export import BUNDLE_VERSION, ExportError, encrypt_bundle
@@ -6429,10 +6444,31 @@ async def import_clinic_data(payload: DataImportPayload, request: Request):
     (bobin koşuları = uygulanan doz, sensör telemetrisi, seans olayları/parametreleri ve tedavi
     DB'sinin hasta satırları) `replace` bunların HEPSİNİ siler. Yalnız seans+analiz silinip
     çocuk satırlar bırakılsaydı, eski telemetri yeni seanslara bağlanır ve kayıtlar karışırdı.
+
+    ⚠️ D2.E02 (İG-6.5): tek kritik bölge — eşzamanlı ikinci istek 409 (`_VERI_TASIMA_KILIDI` notu).
     """
+    _enforce_privileged(request)
+    if not _VERI_TASIMA_KILIDI.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail=GERI_YUKLEME_SURUYOR)
+    try:
+        gorev = asyncio.ensure_future(_ice_aktar(payload, request))
+    except BaseException:
+        _VERI_TASIMA_KILIDI.release()
+        raise
+
+    def _bitti(g):
+        _VERI_TASIMA_KILIDI.release()
+        if not g.cancelled():
+            g.exception()  # istek iptal edildiyse sonuç yine "alınmış" sayılsın (gürültü yok)
+
+    gorev.add_done_callback(_bitti)
+    return await asyncio.shield(gorev)
+
+
+async def _ice_aktar(payload: DataImportPayload, request: Request):
+    """`/api/data/import` gövdesi — YALNIZ `_VERI_TASIMA_KILIDI` tutulurken çağrılır (D2.E02)."""
     import base64 as _base64
 
-    _enforce_privileged(request)
     from utils.data_export import ExportError, decrypt_bundle
 
     thdb = _get_treatment_db()
