@@ -479,8 +479,17 @@ class PDFReportGenerator:
 
     def _fetch_sessions(self, session_ids):
         """Verilen ID'lerin seanslarını getir — geçmişten TEK sorgu + ID eşleme (döngü-içi tekrar
-        sorgu yok). session_ids sırasını korur; bulunamayanları atlar."""
-        by_id = {s['id']: s for s in self.db.get_session_history(limit=_HISTORY_FETCH_LIMIT, internal_full=True)}
+        sorgu yok). session_ids sırasını korur; bulunamayanları atlar.
+
+        ⚠️ D2.28 (B-3.68): istenen kimlikler SQL'e GEÇER (`session_ids`). Eskiden geçmişin en yeni `_HISTORY_FETCH_LIMIT` seansı
+        çekilip Python'da eşleniyordu: o pencerenin dışındaki AÇIKÇA seçilmiş seans rapora girmiyor, "Toplam Seans" ile istatistik
+        çelişiyordu (her raporda tüm geçmiş belleğe de çekiliyordu). Kapı: tests/test_pdf_secili_seans_SQL_suzgeci_D228.py"""
+        istenen = sorted({int(x) for x in session_ids})
+        if not istenen:
+            return []
+        by_id = {
+            s['id']: s for s in self.db.get_session_history(limit=len(istenen), internal_full=True, session_ids=istenen)
+        }
         found = [by_id[sid] for sid in session_ids if sid in by_id]
         missing = [sid for sid in session_ids if sid not in by_id]
         if missing:
