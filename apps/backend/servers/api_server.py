@@ -6793,14 +6793,19 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
     # silinmediği için "hangi yedek, ne zaman, kaç kaydın üzerine yazıldı" sorusu cevaplanabilir
     # kalır — aksi hâlde yanlış yedeği geri yükleyen bir işlem geriye dönük görünmez olurdu.
     # ⚠️ D2.43 (B-2.10): operatörlü (`kimlikli_yaz`; eskiden `yaz` — operatör hep '').
+    # ⚠️ D2-1.6 (2-D incelemesi): hasta ayağı tedavi commit'inden SONRA düşerse iz "ok" diyordu ve başarısız sayıyı taşımıyordu —
+    # yarım geri yükleme kalıcı izde başarılı görünüyordu (ölçüldü). Kapı: tests/test_geri_yukleme_hasta_ayagi_DUSERSE_denetim_izi_GERCEGI_soyler_D2_1_6.py
     _iz.kimlikli_yaz(
         request,
         "data.import",
         scope=("replace_all" if dolu else "bos_cihaz"),
         item_count=n.get("treatment_sessions", 0),
+        outcome=("kismi" if _basarisiz else "ok"),
         detail={
             "replace": bool(dolu),
             "hasta": eklenen_hasta,
+            "hasta_zaten_vardi": _zaten_var,
+            "hasta_basarisiz": _basarisiz,
             "yedekte_olmayan_hasta": len(_yedekte_olmayan),
             "bundle_version": paket.get("bundle_version"),
             **n,
@@ -6824,6 +6829,11 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
         if _yedekte_olmayan
         else ""
     )
+    if _basarisiz:
+        _uyari = (
+            f"{_basarisiz} hastanın kartı içe aktarılamadı (hasta veritabanı yazılamadı) — tedavi geçmişi geri yüklendi ama bu "
+            "hastaların kartı yok; sorun giderilince aynı yedeği yeniden geri yükleyin. " + _uyari
+        ).strip()
     return {
         "status": "success",
         "yedekte_olmayan_hasta": len(_yedekte_olmayan),
