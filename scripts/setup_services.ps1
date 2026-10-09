@@ -38,9 +38,25 @@ function Log($m, $c = "White") {
 
 if (-not $AppDir) { $AppDir = Split-Path -Parent $MyInvocation.MyCommand.Path }
 
-$ServiceBackend = "PemfBackend"
+# ⚠️ D2.74 (B-9.7): servis adı, NSSM log dizini ve güvenlik duvarı kuralı KİPE bağlıdır. Staging (simülasyon; ayrı veri kökü
+# C:\ProgramData\PEMF_Staging, port 8010 — deploy\staging.env) eskiden klinik servisiyle AYNI adı ("PemfBackend") kullanıyordu →
+# tek saha makinesinde `-Mode staging` klinik backend'ini DURDURUP SİLİYOR, yerine PEMF_SIMULATE=1 + başka veri kökü koyuyordu
+# (hasta/seans geçmişi "kaybolmuş" görünür, bobin sürülmez); zorla-öldürme de ADINA göre TÜM PEMF_Backend süreçlerini (klinik
+# dahil) ACİL DURDUR'suz öldürüyordu; kaldırma ise klinik kurulumunu (ACİL DURDUR 8000, birleşik teardown) hedefliyordu.
+# Kapı: tests/test_setup_services_STAGING_klinige_DOKUNMAZ_D274.py
+$StagingMi      = ($Mode -eq "staging")
+$ServiceBackend = if ($StagingMi) { "PemfBackendStaging" } else { "PemfBackend" }
 $ServiceMosq    = "mosquitto"
-$LogDir         = "C:\ProgramData\PEMF_System\logs"
+# staging.env PEMF_LOG_DIR ile AYNI (kapı ikisini eşler).
+$LogDir         = if ($StagingMi) { "C:\ProgramData\PEMF_Staging\logs" } else { "C:\ProgramData\PEMF_System\logs" }
+
+# D2.74: zorla-öldürme YALNIZ bu kurulumun ({app}) PEMF_Backend süreçlerine — başka kurulumun (klinik servisi / launcher çocuğu)
+# backend'i öldürülmez (bobinler hastanın üzerinde olabilir; ACİL DURDUR onun işi değil).
+function Stop-PemfKurulumBackendi([string]$Dizin) {
+    Get-CimInstance Win32_Process -Filter "Name='PEMF_Backend.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.ExecutablePath -and $_.ExecutablePath -like "$Dizin\*" } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
 # NSSM: ÖNCE bundled (offline, {app}\_internal\bin\nssm) → yoksa C:\nssm → en son indir (internet).
 # Offline klinikte internet gerekmesin diye nssm.exe EXE'ye bundle edildi (spec bin/nssm).
 $NssmBundled    = Join-Path $AppDir "_internal\bin\nssm\nssm.exe"
@@ -168,21 +184,37 @@ if (-not (Test-Path (Join-Path $MosqSrc "mosquitto.exe"))) {
     if (Test-Path (Join-Path $alt "mosquitto.exe")) { $MosqSrc = $alt }
 }
 
+# ⚠️ D2.74: staging KLİNİK servisinin kurulum dizinini PAYLAŞAMAZ. -AppDir verilmezse betiğin KENDİ dizini kullanılır → klinik
+# kurulumundaki kopyayla `-Mode staging` koşulursa {app} süreç temizliği (kurulumda da kaldırmada da) klinik backend'ini ACİL
+# DURDUR'suz öldürürdü. Klinik servisinin uygulaması (NSSM Parameters\Application) bu dizindeyse HİÇBİR şey değiştirilmeden durur.
+if ($StagingMi) {
+    $KlinikUygulamasi = $null
+    try { $KlinikUygulamasi = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Services\PemfBackend\Parameters' -ErrorAction Stop).Application } catch { }
+    if ($KlinikUygulamasi -and ("$KlinikUygulamasi".Trim('"') -like "$AppDir\*")) {
+        Log "HATA: $AppDir KLİNİK servisinin (PemfBackend) kurulum dizini — staging buradan kurulamaz/kaldırılamaz (klinik backend'i durdurulurdu). Staging paketini AYRI bir dizine açıp -AppDir ile verin. Hiçbir şey değiştirilmedi." "Red"
+        exit 1
+    }
+}
+
 # ───────────────────────── UNINSTALL ─────────────────────────
 if ($Uninstall) {
     Log "Servisler kaldırılıyor..." "Yellow"
+    # ⚠️ D2.74: STAGING kaldırması YALNIZ kendi servisini / {app} süreçlerini / güvenlik duvarı kuralını kaldırır. Adla öldürme
+    # (klinik backend'i, mosquitto'su), ACİL DURDUR yardımcısı (önce 8000'i — KLİNİK backend'i — dener) ve birleşik teardown
+    # (klinik servisleri / kökleri / kimlikleri) staging'de ATLANIR: staging simülasyondur (bobin yok), klinik seansını kesmek
+    # kabul edilemez. Graceful durdur → bekle → zorla-öldür SIRASI iki kipte de AYNI. Staging veri kökü KORUNUR.
     # KRİTİK: {app} altından çalışan TÜM süreçleri (backend + cloudflared-tünel + nssm) + mosquitto'yu ÖLDÜR →
     # dosya kilidi kalmasın ("bazı dosyalar kaldırılamadı / ille silin"i KÖKTEN önler). cloudflared tünel-watchdog
     # süreci {app}\bin\cloudflared'den çalışıp {app}'i kilitliyordu ve ESKİDEN öldürülmüyordu (asıl kalan-kilit nedeni).
     function Stop-AppProcs {
         Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -and $_.ExecutablePath -like "$AppDir\*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-        Get-Process cloudflared, nssm, mosquitto, PEMF_Backend -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        if (-not $StagingMi) { Get-Process cloudflared, nssm, mosquitto, PEMF_Backend -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue }
     }
     # ⚠️ D1.92 (B-9.23): aşağıdaki force-kill döngüsü ADINA göre TÜM `PEMF_Backend` süreçlerini öldürür — launcher'ın
     # doğurduğu backend dahil (onun servisi yoktur, `nssm stop` onu durdurmaz). Bobin HER kill'den önce durur: birleşik
     # teardown'ın ACİL DURDUR yardımcısı (backend.port → 8000 → 8001..8049) EN BAŞTA. Hatası kaldırmayı DURDURMAZ.
     $teardownScript = Join-Path $AppDir 'pemf_teardown.ps1'
-    if (Test-Path $teardownScript) {
+    if (-not $StagingMi -and (Test-Path $teardownScript)) {
         . $teardownScript
         try { [void](Send-PemfAcilDurdur) } catch { Log "UYARI: ACİL DURDUR gönderilemedi ($_) — kaldırma sürüyor." "Yellow" }
     }
@@ -197,11 +229,17 @@ if ($Uninstall) {
     # {app}'e ÖZGÜ FALLBACK: graceful başarısız/asılıysa, {app} altındaki TÜM süreçler GERÇEKTEN ölene
     # kadar force-kill → dosya kilidi bırakılsın, Inno {app}'i silebilsin (cloudflared {app}\bin'den kilit).
     for ($i = 0; $i -lt 30; $i++) {
-        $alive = @(Get-Process PEMF_Backend, mosquitto, cloudflared, nssm -ErrorAction SilentlyContinue)
+        $alive = @(if (-not $StagingMi) { Get-Process PEMF_Backend, mosquitto, cloudflared, nssm -ErrorAction SilentlyContinue })
         $alive += @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -and $_.ExecutablePath -like "$AppDir\*" })
         if ($alive.Count -eq 0) { break }
         Stop-AppProcs
         Start-Sleep -Milliseconds 500
+    }
+    if ($StagingMi) {
+        Remove-NetFirewallRule -DisplayName "PEMF Backend API (staging)" -ErrorAction SilentlyContinue
+        if ($PurgeData) { Log "NOT: staging veri kökü bu betikle SİLİNMEZ — gerekmiyorsa elle silin: C:\ProgramData\PEMF_Staging" "Yellow" }
+        Log "Staging kaldırıldı ($ServiceBackend); klinik kurulumuna dokunulmadı; veri kökü korundu: C:\ProgramData\PEMF_Staging" "Green"
+        exit 0
     }
 
     # Geri kalan HER ŞEY = BİRLEŞİK TEARDOWN modülü (Faz 2 tek-kaynak): servis-sil/görev/firewall/env/
@@ -387,8 +425,9 @@ if (-not (Test-Path $NssmExe))    { Log "HATA: NSSM yok, backend servisi kurulam
 Log "Backend servisi kuruluyor: $BackendExe" "Yellow"
 if (Get-Service -Name $ServiceBackend -ErrorAction SilentlyContinue) {
     & $NssmExe stop $ServiceBackend *>$null
-    # Süreç gerçekten ölsün (nssm stop timeout'unu aşabilir) → marked-for-delete (1072) yarışını önler
-    Get-Process PEMF_Backend -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    # Süreç gerçekten ölsün (nssm stop timeout'unu aşabilir) → marked-for-delete (1072) yarışını önler.
+    # D2.74: YALNIZ bu kurulumun ({app}) backend'i — eskiden adına göre TÜMÜ (staging klinik backend'ini öldürürdü).
+    Stop-PemfKurulumBackendi $AppDir
     & $NssmExe remove $ServiceBackend confirm *>$null
     # SABİT sleep yerine GERÇEK silinmeyi poll et (max ~20sn) → 1072 "marked for delete" yarışını önler
     $deadline = (Get-Date).AddSeconds(20)
@@ -439,7 +478,14 @@ Log ("Env (" + $Mode + "): " + ($AppEnv -join '  ')) "Gray"
 # bu scriptte backend'den ÖNCE başlatılır; boot'ta ikisi de Automatic → paralel başlar, backend
 # broker gelene kadar dener. (Bağımlılık eklemek backend'i başlatmamaya yol açıyordu.)
 
-foreach ($r in @(@{n = "PEMF Backend API"; p = "TCP"; port = 8000 }, @{n = "PEMF UDP Discovery"; p = "UDP"; port = 5051 })) {
+# Y44: sonda DOĞRULANMIŞ portu kullanır (ön doğrulama geçti; `+8000`/`08000` gibi geçerli yazımlar URL'yi bozmasın).
+# D2.74: güvenlik duvarı API kuralı da AYNI portu açar (eskiden SABİT 8000 — staging 8010'u açmıyordu).
+$probePort = if ($EnvMap.Contains('PEMF_API_PORT')) { (Test-PemfApiPortDegeri $EnvMap['PEMF_API_PORT']).Port } else { 8000 }
+
+# D2.74: kural adı kipe bağlı — staging kuralı klinik kuralını ezmez / onunla karışmaz; staging keşif (UDP 5051) kuralı açmaz.
+$FwKurallar = @(@{n = $(if ($StagingMi) { "PEMF Backend API (staging)" } else { "PEMF Backend API" }); p = "TCP"; port = $probePort })
+if (-not $StagingMi) { $FwKurallar += @{n = "PEMF UDP Discovery"; p = "UDP"; port = 5051 } }
+foreach ($r in $FwKurallar) {
     if (-not (Get-NetFirewallRule -DisplayName $r.n -ErrorAction SilentlyContinue)) {
         try { New-NetFirewallRule -DisplayName $r.n -Direction Inbound -Program $BackendExe -Action Allow -Protocol $r.p -LocalPort $r.port -Profile Any -ErrorAction Stop | Out-Null }
         catch { Log "UYARI: Firewall kuralı oluşturulamadı ($($r.n)): $_. LAN'dan (mobil/web) erişim engellenebilir." "Yellow" }
@@ -450,8 +496,6 @@ foreach ($r in @(@{n = "PEMF Backend API"; p = "TCP"; port = 8000 }, @{n = "PEMF
 # ── GERÇEK fonksiyonel doğrulama (sessiz-başarıyı kapat) ──────────────────────────
 # nssm status TEK BAŞINA yetmez: AppThrottle/Restart ile crash-loop'ta bile RUNNING görünür.
 # Bu yüzden /api/health 200 esas kanıt. (device=0.0.0.0, server=127.0.0.1 → localhost ikisinde de çalışır.)
-# Y44: sonda DOĞRULANMIŞ portu kullanır (ön doğrulama geçti; `+8000`/`08000` gibi geçerli yazımlar URL'yi bozmasın).
-$probePort = if ($EnvMap.Contains('PEMF_API_PORT')) { (Test-PemfApiPortDegeri $EnvMap['PEMF_API_PORT']).Port } else { 8000 }
 $healthOk = $false
 for ($i = 1; $i -le 8; $i++) {
     Start-Sleep 3

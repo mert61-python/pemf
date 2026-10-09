@@ -72,6 +72,8 @@ function icacls.exe { icacls @args }
 function Stop-Service { [CmdletBinding()] param([Parameter(ValueFromRemainingArguments = $true)]$R) K ("Stop-Service " + ($R -join ' ')) }
 function Remove-Item { [CmdletBinding()] param([string]$LiteralPath, [string]$Path, [switch]$Recurse, [switch]$Force) K ("Remove-Item " + $LiteralPath + $Path) }
 function Stop-Process { [CmdletBinding()] param([Parameter(ValueFromPipeline = $true)]$InputObject, $Id, [switch]$Force) K "Stop-Process"; $script:Olduruldu = $true }
+# D2.74: kaldırma bloğunun staging dalı kendi güvenlik duvarı kuralını siler — gerçek kural silinmez, kayıtçı.
+function Remove-NetFirewallRule { [CmdletBinding()] param([string]$DisplayName) K ("FW-SIL " + $DisplayName) }
 # Öldürülene kadar bir SAHTE süreç "yaşar" (kill döngüleri en az bir tur dönsün); gerçek süreç listesi okunmaz.
 function Get-Process { [CmdletBinding()] param([Parameter(ValueFromRemainingArguments = $true)]$R) if (-not $script:Olduruldu) { [pscustomobject]@{ Name = 'SAHTE_PEMF_Backend'; Id = -1 } } }
 function Get-CimInstance { [CmdletBinding()] param([Parameter(ValueFromRemainingArguments = $true)]$R) K "CIM"; @() }
@@ -102,7 +104,7 @@ function Get-Service {
     K ("GS " + $Name + " " + $script:Servis[$Name])
     [pscustomobject]@{ Name = $Name; Status = $script:Servis[$Name] }
 }
-$golgeler = 'sc.exe','sc','cmdkey','cmdkey.exe','schtasks','schtasks.exe','nssm','nssm.exe','icacls','icacls.exe','Stop-Service','Remove-Item','Stop-Process','Get-Process','Start-Sleep','Get-Service','Get-CimInstance','Set-Location','Invoke-RestMethod','Invoke-WebRequest'
+$golgeler = 'sc.exe','sc','cmdkey','cmdkey.exe','schtasks','schtasks.exe','nssm','nssm.exe','icacls','icacls.exe','Stop-Service','Remove-Item','Stop-Process','Get-Process','Start-Sleep','Get-Service','Get-CimInstance','Set-Location','Invoke-RestMethod','Invoke-WebRequest','Remove-NetFirewallRule'
 foreach ($ad in $golgeler) {
     $c = Get-Command $ad -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $c -or $c.CommandType -ne 'Function') { [Console]::Out.WriteLine("APARAT_HATASI golgelenemedi: $ad"); exit 3 }
@@ -271,7 +273,7 @@ switch -Wildcard ($Senaryo) {
             Set-Content -LiteralPath (Join-Path $AppDir 'pemf_teardown.ps1') -Encoding UTF8 -Value $stub
         }
         Set-Content -LiteralPath (Join-Path (Get-Location) 'nssm') -Value '' # Test-Path $NssmExe → gölge `nssm`
-        $NssmExe = 'nssm'; $ServiceBackend = 'PemfBackend'; $ServiceMosq = 'mosquitto'; $PurgeData = $false
+        $NssmExe = 'nssm'; $ServiceBackend = 'PemfBackend'; $ServiceMosq = 'mosquitto'; $PurgeData = $false; $StagingMi = $false
         $script:Servis['PemfBackend'] = 'Running'; $script:Servis['mosquitto'] = 'Running'
         function Log { param($m, $c) K ("LOG " + $m) }
         function Invoke-PemfTeardown { param($Scope, [switch]$IncludePatientData) K "TEARDOWN"; $true }

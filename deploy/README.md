@@ -21,9 +21,13 @@ değişkenleri** ile → `deploy/device.env` (klinik), `deploy/server.env` (sunu
 `setup_services.ps1 -Mode device|server|staging` doğru profili okur.
 
 > **Staging (B-9.4):** Bir release'i GERÇEK klinik cihazına deploy ETMEDEN önce sınamak için
-> üretim-benzeri profil: simülasyon (donanımsız) + auth/at-rest-şifreleme AÇIK + AYRI port (8010)/
-> veri-kökü (`C:\ProgramData\PEMF_Staging`)/log → device/server ile çakışmaz. QA veya ayrı makine:
-> `setup_services.ps1 -AppDir C:\PEMF_Staging -Mode staging`.
+> üretim-benzeri profil: simülasyon (donanımsız) + auth/at-rest-şifreleme AÇIK. **AYRI (D2.74):** servis adı
+> (`PemfBackendStaging`), veri/log kökü (`C:\ProgramData\PEMF_Staging`), bulut cihaz kimliği, API portu (8010), güvenlik duvarı
+> kuralı; kurulum/kaldırma klinik servisini durdurmaz/silmez, klinik backend'ini öldürmez, klinik ACİL DURDUR'unu göndermez.
+> **PAYLAŞILAN:** UDP keşif portu 5051 (aynı makinede keşif yalnız birinde çalışır) → QA için **ayrı makine önerilir**.
+> Staging paketi **ayrı bir dizine** açılır; klinik kurulum dizininden (`PemfBackend` servisinin dizini) koşulursa betik hiçbir şey
+> değiştirmeden durur: `setup_services.ps1 -AppDir C:\PEMF_Staging -Mode staging` (kaldırma: `… -Mode staging -Uninstall`;
+> staging veri kökü korunur).
 
 ---
 

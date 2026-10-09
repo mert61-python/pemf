@@ -77,10 +77,13 @@ function Get-PemfFootprint {
         # ESP'lere YAKILAN parolanın tek kaynağı. Sıradan kaldır-kur DOKUNMAZ (silinseydi yeniden kurulumda yeni parola
         # üretilir, yakılmış ESP'ler broker'a BAĞLANAMAZ — bobinin STOP yolu kopardı); KVKK silmesi götürür.
         @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_System\mqtt_kimlik.json';    Owner = 'shared'; Kvkk = $true }
+        # D2.74: staging profili bulut kimliğini AYRI tutar (deploy/staging.env PEMF_DEVICE_IDENTITY_DIR=C:\ProgramData\PEMF_Staging).
+        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_Staging\device_identity.json'; Owner = 'shared'; Kvkk = $true }
     )
     [pscustomobject]@{
         Paths       = $paths
-        Services    = @('PemfBackend', 'mosquitto')
+        # D2.74: staging servisi AYRI addadır (setup_services.ps1 -Mode staging → PemfBackendStaging); tam temizlik onu da kaldırır.
+        Services    = @('PemfBackend', 'PemfBackendStaging', 'mosquitto')
         Tasks       = @('PEMF-Hotspot')
         FirewallRx  = 'pemf|mosquitto|cloudflared'    # eski adlar (pemf_gui/PEMF_Service_Port_*/cloudflared) dahil
         EnvRx       = '^PEMF_'                          # HKLM Session Manager Environment (Makine kapsamı)
