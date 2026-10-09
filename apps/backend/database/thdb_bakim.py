@@ -314,13 +314,23 @@ class BakimKarisimi:
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                mevcut = {r[0] for r in cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-                for tablo in self._TASINAN_TABLOLAR:
-                    if tablo not in mevcut:  # çok eski DB — tablo henüz yok
-                        continue
-                    cursor.execute(f"SELECT * FROM {tablo} ORDER BY id ASC")
-                    cols = [c[0] for c in cursor.description]
-                    out[tablo] = [dict(zip(cols, r)) for r in cursor.fetchall()]
+                # ⚠️ D2-4.3 (2-D incelemesi): tablolar TEK okuma işleminde (WAL anlık görüntüsü) okunur — yazarlar beklemez. Eskiden her
+                # SELECT kendi anlık görüntüsüydü: dışa aktarma sürerken commit edilen bir geri yükleme ya da süren tedavinin yeni seansı
+                # paketi karıştırıyordu (eski seanslar + yeni bobin koşuları / sensör / olay — seansları pakette YOK); o yedekten geri
+                # yüklemede doz kayıtları sessizce düşüyordu (ölçüldü). Kapı: tests/test_disa_aktarma_TUTARLI_anlik_goruntu_D2_4_3.py
+                cursor.execute("BEGIN")
+                try:
+                    mevcut = {
+                        r[0] for r in cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+                    }
+                    for tablo in self._TASINAN_TABLOLAR:
+                        if tablo not in mevcut:  # çok eski DB — tablo henüz yok
+                            continue
+                        cursor.execute(f"SELECT * FROM {tablo} ORDER BY id ASC")
+                        cols = [c[0] for c in cursor.description]
+                        out[tablo] = [dict(zip(cols, r)) for r in cursor.fetchall()]
+                finally:
+                    conn.rollback()  # salt okuma işlemi kapanır (havuzdaki bağlantı anlık görüntü / kilit tutmaz)
         except Exception:
             self.logger.exception("Dışa aktarma için satırlar okunamadı.")
             raise
