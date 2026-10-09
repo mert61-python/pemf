@@ -19,6 +19,7 @@ Best-effort: uygulanamazsa (izin/eski Windows) uyarı loglanır, çağıran akı
 import functools
 import logging
 import os
+import re
 import subprocess
 import sys
 
@@ -103,6 +104,99 @@ def _surec_ace(kalitim: str):
     return f"*{sid}:{kalitim}F" if sid else None
 
 
+# ⚠️ Y96 (sahip kararı 2026-10-07 · B-3.51 / A-2A.1; file_acl yarısı — launcher yarısı Rust oturumunda): çok hesaplı kurulumda launcher
+# veri kökünü, uygulamayı kullanan hesapların üye olduğu PAYLAŞILAN bir yerel grubun ACL'iyle kurar. Buradaki kilitler `/inheritance:r`
+# ile o kalıtımı KALDIRDIĞI için grup burada da AÇIKÇA verilir; yoksa ilk hesabın açılışı sır dizinini / dosyalarını / auth_users.db'yi
+# öbür hesaplara KAPATIR. Grup SID'i `PEMF_DATA_GROUP_SID` ortam değişkeniyle gelir (launcher / kurulum verir) ve yalnız
+# `keep_current_user=True` kilitlerinde verilir ("süreç hesabı" = "uygulamayı kullanan hesaplar"). Yalnız bu makinenin OLUŞTURULMUŞ
+# YEREL grubu kabul edilir (`S-1-5-21-…` biçimi, hesap türü yerel grup, etki alanı = bu bilgisayar): Users / Authenticated Users /
+# Everyone / Interactive (biçim dışı), None (makine grubu ama yerel grup türü değil), bir KULLANICI hesabı ya da etki alanı grubu
+# REDDEDİLİR → yerel Users yine DIŞARIDA. Bu makinede ÇÖZÜLEMEYEN (silinmiş) grup VERİLMEZ: icacls hep-ya-hiç olduğundan tek bir
+# çözülemeyen SID bütün kilidi düşürürdü (1332). Kapı: tests/test_file_acl_PAYLASILAN_GRUP_Y96.py
+_GRUP_ORTAM_DEGISKENI = "PEMF_DATA_GROUP_SID"
+_OZEL_GRUP_SID_RE = re.compile(r"^S-1-5-21-\d+-\d+-\d+-\d+$")
+_grup_uyarisi_verilen: set = set()
+
+
+def _bu_makinenin_yerel_grubu_mu(sid: str) -> bool:
+    """`sid` bu makinede çözülen bir YEREL GRUP mu (SidTypeAlias + etki alanı = bu bilgisayarın adı)? Hata → False."""
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+        kernel32.GetComputerNameW.argtypes = [wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+        kernel32.GetComputerNameW.restype = wintypes.BOOL
+        advapi32.ConvertStringSidToSidW.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_void_p)]
+        advapi32.ConvertStringSidToSidW.restype = wintypes.BOOL
+        advapi32.LookupAccountSidW.argtypes = [
+            wintypes.LPCWSTR,
+            ctypes.c_void_p,
+            wintypes.LPWSTR,
+            ctypes.POINTER(wintypes.DWORD),
+            wintypes.LPWSTR,
+            ctypes.POINTER(wintypes.DWORD),
+            ctypes.POINTER(ctypes.c_int),
+        ]
+        advapi32.LookupAccountSidW.restype = wintypes.BOOL
+
+        bilgisayar = ctypes.create_unicode_buffer(64)
+        boy = wintypes.DWORD(len(bilgisayar))
+        if not kernel32.GetComputerNameW(bilgisayar, ctypes.byref(boy)):
+            return False
+        psid = ctypes.c_void_p()
+        if not advapi32.ConvertStringSidToSidW(sid, ctypes.byref(psid)):
+            return False
+        try:
+            ad = ctypes.create_unicode_buffer(256)
+            alan = ctypes.create_unicode_buffer(256)
+            ad_boy, alan_boy, tur = wintypes.DWORD(len(ad)), wintypes.DWORD(len(alan)), ctypes.c_int(0)
+            if not advapi32.LookupAccountSidW(
+                None, psid, ad, ctypes.byref(ad_boy), alan, ctypes.byref(alan_boy), ctypes.byref(tur)
+            ):
+                return False  # ERROR_NONE_MAPPED (1332): bu makinede yok
+            SID_TYPE_ALIAS = 4  # yerel grup (SidTypeGroup = etki alanı grubu, SidTypeUser = kullanıcı)
+            return tur.value == SID_TYPE_ALIAS and alan.value.casefold() == bilgisayar.value.casefold()
+        finally:
+            kernel32.LocalFree(psid)
+    except Exception:
+        return False
+
+
+def _paylasilan_grup_ace(kalitim: str):
+    """Y96: `PEMF_DATA_GROUP_SID` bu makinenin yerel grubuysa ACE'i (`*S-…:<kalıtım>F`), değilse None (neden BİR KEZ günlüğe)."""
+    ham = os.environ.get(_GRUP_ORTAM_DEGISKENI, "").strip()
+    if not ham:
+        return None
+    if not _OZEL_GRUP_SID_RE.match(ham):
+        if ham not in _grup_uyarisi_verilen:
+            _grup_uyarisi_verilen.add(ham)
+            logger.error(
+                "%s=%s REDDEDILDI: yalniz bu makinede olusturulmus bir yerel grubun SID'i (S-1-5-21-...) verilebilir; Users / "
+                "Authenticated Users / Everyone / Interactive gibi genis gruplar sir dosyalarini makinedeki herkese acardi. "
+                "Grup VERILMEDI.",
+                _GRUP_ORTAM_DEGISKENI,
+                ham,
+            )
+        return None
+    if not _bu_makinenin_yerel_grubu_mu(ham):
+        if ham not in _grup_uyarisi_verilen:
+            _grup_uyarisi_verilen.add(ham)
+            logger.warning(
+                "%s=%s bu makinede bir YEREL GRUP olarak bulunamadi (silinmis grup / kullanici hesabi / etki alani grubu?) — "
+                "gruba erisim VERILMEDI; kilit SYSTEM + Administrators + surec hesabiyla uygulanir (diger hesaplar bu veri "
+                "kokunu acamayabilir). Launcher'in olusturdugu grubun SID'ini verin.",
+                _GRUP_ORTAM_DEGISKENI,
+                ham,
+            )
+        return None
+    return f"*{ham}:{kalitim}F"
+
+
 def lock_down_dir(path, keep_current_user: bool = True) -> bool:
     """`path` DİZİNİNİ kilitle; içinde OLUŞACAK dosyalar kısıtlı ACL'i MİRAS alsın.
 
@@ -160,6 +254,9 @@ def lock_down_dir(path, keep_current_user: bool = True) -> bool:
                 )
                 return False
             _args += ["/grant:r", ace]
+            grup = _paylasilan_grup_ace("(OI)(CI)")  # Y96: uygulamayı kullanan öbür hesaplar
+            if grup:
+                _args += ["/grant:r", grup]
         subprocess.run(
             _args,
             check=True,
@@ -180,6 +277,7 @@ def lock_down_file(path, keep_current_user: bool = False) -> bool:
     tam erişim verilir. Bu, SÜREKLİ açılıp yazılan dosyalar (ör. auth_users.db) için ZORUNLUDUR:
     aksi halde yönetici OLMAYAN bir süreç (Tauri launcher kullanıcı-başına kurulum) kendi
     dosyasından dışarı atılır ve o özellik tamamen kırılır (DENETİM P3 — sahada yaşandı).
+    Y96: `PEMF_DATA_GROUP_SID` bu makinenin yerel grubunu veriyorsa (çok hesaplı kurulum) bu kipte o gruba da tam erişim verilir.
     Yerel `Users` grubu her iki modda da ERİŞEMEZ; korunan şey budur.
 
     True = ACL uygulandı. Dosya yoksa / hata olursa False (best-effort — çağıran DURMAZ).
@@ -219,6 +317,9 @@ def lock_down_file(path, keep_current_user: bool = False) -> bool:
                 )
                 return False
             _args += ["/grant:r", ace]
+            grup = _paylasilan_grup_ace("")  # Y96: uygulamayı kullanan öbür hesaplar
+            if grup:
+                _args += ["/grant:r", grup]
         subprocess.run(
             _args,
             check=True,
