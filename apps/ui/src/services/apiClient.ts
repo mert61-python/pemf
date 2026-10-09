@@ -72,6 +72,12 @@ export interface ApiOpts {
    *  ÇOĞALTIYORDU (ikinci istek ilk geri yükleme sürerken). Çağıran işine uygun metni verir (`services/veriTasima.ts`).
    *  EKLEMELİ: mevcut çağıranlar etkilenmez. */
   zamanAsimiMesaji?: string;
+  /** Bağlantı reddi / kopmasında (fetch reddi — zaman aşımı DEĞİL) gösterilecek metin (yalnız `apiPost`). Verilmezse bugünkü gibi
+   *  tost YOK (global "Çevrimdışı" göstergesine bırakılır).
+   *
+   *  ⚠️ D2-3.5 (2-D incelemesi): uzun yedek alma / geri yüklemede bağlantı koparsa işlem cihazda sürüyor olabilir; ekran HİÇBİR şey
+   *  söylemiyordu (Y84 zaman aşımı metninin ikizi yoktu). EKLEMELİ: mevcut çağıranlar etkilenmez. */
+  agHatasiMesaji?: string;
 }
 
 /** AI çıkarım uçları için zaman aşımı — ilk çağrıdaki model yükleme + JIT derlemesini kapsar. */
@@ -415,6 +421,8 @@ export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?
         opts?.zamanAsimiMesaji ??
           "Sunucu zamanında yanıt vermedi. Tekrar deneyin — ilk analiz model yüklemesi nedeniyle uzun sürebilir.",
       );
+    } else if (opts?.agHatasiMesaji && !opts?.silent) {
+      showError("Cihaza ulaşılamadı", opts.agHatasiMesaji);
     }
     return fallback;
   } finally {

@@ -23,7 +23,9 @@ import { bulutKayitRozeti, eslestirmeKoduUzaktanGecerliMi } from "@/services/bul
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 import { backendBuMakinede } from "@/services/backendKonumu";
 import {
+  DISA_AKTARMA_AG_HATASI_MESAJI,
   DISA_AKTARMA_ZAMAN_ASIMI_MESAJI,
+  ICE_AKTARMA_AG_HATASI_MESAJI,
   ICE_AKTARMA_ZAMAN_ASIMI_MESAJI,
   VERI_TASIMA_ZAMAN_ASIMI_MS,
 } from "@/services/veriTasima";
@@ -101,7 +103,8 @@ export function SettingsScreen() {
     const res = await apiPost<{ status?: string; filename?: string; data_b64?: string; yol?: string; ad?: string;
                                bayt?: number; counts?: Record<string, number> } | null>(
       "/data/export", yerel ? { passphrase: parola, kaydet: true } : { passphrase: parola }, null,
-      { timeoutMs: VERI_TASIMA_ZAMAN_ASIMI_MS, zamanAsimiMesaji: DISA_AKTARMA_ZAMAN_ASIMI_MESAJI });
+      { timeoutMs: VERI_TASIMA_ZAMAN_ASIMI_MS, zamanAsimiMesaji: DISA_AKTARMA_ZAMAN_ASIMI_MESAJI,
+        agHatasiMesaji: DISA_AKTARMA_AG_HATASI_MESAJI });
     setTasimaMesgul("");
     if (!res) return;                                 // hata mesajını apiPost gösterdi
     const c = res.counts || {};
@@ -155,13 +158,22 @@ export function SettingsScreen() {
           "geçmişleri silinir.\n\nDevam edilsin mi?",
         "Geri yükle"))) return;
       setTasimaMesgul("import");
-      const buf = new Uint8Array(await f.arrayBuffer());
+      // ⚠️ D2-3.5 (2-D incelemesi): dosya okunamazsa (arrayBuffer reddi) kilit açılır ve neden söylenir — eskiden düğmeler KALICI
+      // kilitli, "Yükleniyor…" sonsuza dek kalıyordu (işlenmeyen ret). Kapı: screens/__tests__/VeriTasimaAgHatasi.D2_3_5.web.test.tsx
       let s = "";
-      for (let i = 0; i < buf.length; i++) s += String.fromCharCode(buf[i]);
+      try {
+        const buf = new Uint8Array(await f.arrayBuffer());
+        for (let i = 0; i < buf.length; i++) s += String.fromCharCode(buf[i]);
+      } catch {
+        setTasimaMesgul("");
+        showToast("Yedek dosyası okunamadı — dosyayı yeniden seçin; geri yükleme BAŞLAMADI.", "error");
+        return;
+      }
       // ⚠️ D2.E03 (Y84): UZUN zaman aşımı; zaman aşımında metin "Tekrar deneyin" DEMEZ — geri yükleme cihazda sürüyor olabilir.
       const res = await apiPost<{ status?: string; counts?: Record<string, number>; uyari?: string } | null>(
         "/data/import", { passphrase: parola, blob_b64: btoa(s), confirm: "REPLACE_ALL" }, null,
-        { timeoutMs: VERI_TASIMA_ZAMAN_ASIMI_MS, zamanAsimiMesaji: ICE_AKTARMA_ZAMAN_ASIMI_MESAJI });
+        { timeoutMs: VERI_TASIMA_ZAMAN_ASIMI_MS, zamanAsimiMesaji: ICE_AKTARMA_ZAMAN_ASIMI_MESAJI,
+          agHatasiMesaji: ICE_AKTARMA_AG_HATASI_MESAJI });
       setTasimaMesgul("");
       if (!res?.counts) return;
       const c = res.counts;

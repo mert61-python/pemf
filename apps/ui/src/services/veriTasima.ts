@@ -24,3 +24,12 @@ export const ICE_AKTARMA_ZAMAN_ASIMI_MESAJI =
 export const DISA_AKTARMA_ZAMAN_ASIMI_MESAJI =
   "Yedek alma cihazda sürüyor olabilir — cihaz zamanında yanıt vermedi (veri büyük olabilir). Bir süre bekleyip yedek dosyasının " +
   "oluşup oluşmadığını denetleyin.";
+
+/** ⚠️ D2-3.5: geri yükleme isteği bağlantı kopmasıyla düşerse (zaman aşımı DEĞİL): işlem cihazda başlamış olabilir. */
+export const ICE_AKTARMA_AG_HATASI_MESAJI =
+  "Bağlantı koptu — geri yükleme cihazda başlamış olabilir. İşlemi tekrarlamayın; bağlantı dönünce birkaç dakika sonra Seans " +
+  "Geçmişi'ni yenileyin.";
+
+/** ⚠️ D2-3.5: yedek alma isteği bağlantı kopmasıyla düşerse: dosya bu istemciye ulaşmadı. */
+export const DISA_AKTARMA_AG_HATASI_MESAJI =
+  "Bağlantı koptu — yedek bu cihaza ulaşmadı, yedek OLUŞTURULMADI sayın. Bağlantıyı denetleyip yedeği yeniden alın.";
