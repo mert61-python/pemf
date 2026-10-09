@@ -35,7 +35,8 @@ DOSYALAR — her turden SON N kopya tutulur, eskilerini cihaz SILER
   pemf_config_<tarih>.json             ayarlar (SIRSIZ: parola/anahtar YOK)
   pemf_system_settings_<tarih>.json    sistem ayarlari (SIRSIZ)
   Cihaz YALNIZ bu adlardaki kendi dosyalarini siler; bu dizindeki baska
-  dosyalara dokunmaz. Kaldirma / "tam temizlik" bu dizine HIC dokunmaz —
+  dosyalara dokunmaz. Her cihaz AYRI dizin kullanmalidir: dizinde baska bir
+  kurulumun .pemf_kurulum_* isareti varsa cihaz bu dizinde HIC silmez. Kaldirma / "tam temizlik" bu dizine HIC dokunmaz —
   gerekmiyorsa yedekleri elle silin.
 
 Sifre-cozme anahtari yedegi ALAN MAKINEYE baglidir (Windows DPAPI /
@@ -82,6 +83,9 @@ _SAAT_TOLERANSI_SN = 600.0
 
 #: D2-1.4: bu kadar saniyeden eski kendi-adlı geçici yedek artığı (`.yazim.tmp` / `.kopya.tmp`) yarıda kalmış sayılır ve silinir.
 _ARTIK_YASI_SN = 3600.0
+
+#: D2-1.2: makine dışı hedefteki kurulum işaret dosyası öneki (rotasyon deseni `pemf_<aile>_<damga>` ile EŞLEŞMEZ).
+_KURULUM_ISARETI = ".pemf_kurulum_"
 
 _worker = None  # type: Optional[HeadlessDBMaintenance]
 
@@ -502,6 +506,39 @@ class HeadlessDBMaintenance:
                 logger.warning("off-machine gecici kopya silinemedi: %s", gecici, exc_info=True)
             return False
 
+    def _kurulum_kimligi(self) -> str:
+        """D2-1.2: bu kurulumun makine dışı işaret kimliği — yerel `backups/.kurulum_kimligi` (ilk çağrıda üretilir; SIR DEĞİL)."""
+        import uuid
+
+        yol = self.app_data_dir / "backups" / ".kurulum_kimligi"
+        try:
+            k = yol.read_text(encoding="utf-8").strip()
+            if len(k) == 12 and all(c in "0123456789abcdef" for c in k):
+                return k
+        except FileNotFoundError:
+            pass
+        k = uuid.uuid4().hex[:12]
+        yol.parent.mkdir(parents=True, exist_ok=True)
+        yol.write_text(k, encoding="utf-8")
+        return k
+
+    def _makine_disi_paylasiliyor_mu(self, dpath: Path) -> bool:
+        """D2-1.2 (A-45): hedefe bu kurulumun işaretini (`.pemf_kurulum_<kimlik>`) bırakır; BAŞKA bir kurulumun işareti varsa True + ERROR.
+        Kapı: tests/test_makine_disi_rotasyon_YALNIZ_bu_kurulumun_kopyalarini_siler_D2_1_2.py"""
+        ben = f"{_KURULUM_ISARETI}{self._kurulum_kimligi()}"
+        (dpath / ben).write_text("PEMF kurulum isareti - bu dizine yedekleyen kurulum. Silmeyin.\n", encoding="utf-8")
+        digerleri = sorted(p.name for p in dpath.iterdir() if p.name.startswith(_KURULUM_ISARETI) and p.name != ben)
+        if digerleri:
+            logger.error(
+                "Makine disi yedek dizini BASKA bir PEMF kurulumuyla PAYLASILIYOR (%s) — bu dizinde rotasyon YAPILMADI (komsu "
+                "cihazin yedekleri silinmesin; A-45). Her cihaz icin AYRI dizin kullanin; o kurulum kaldirildiysa isaret dosyasini "
+                "silin: %s",
+                ", ".join(digerleri),
+                dpath,
+            )
+            return True
+        return False
+
     def _copy_offsite(self, files):
         """audit B-7.2: PEMF_BACKUP_DIR set ise YENİ yedekleri harici hedefe (ağ paylaşımı/USB) kopyala
         → aynı-disk yedek felaketi (disk arızası/ransomware) tek nokta olmasın. Set değilse no-op.
@@ -555,7 +592,17 @@ class HeadlessDBMaintenance:
             # N). Eskiden yalnız kopyalanıyordu: hedef sınırsız büyüyor (doldukça B-3.19) ve canlı DB'den SİLİNEN hastanın adı ilk
             # kopyada süresiz kalıyordu (KVKK; zarf + kodla açılabilir — ölçüldü). Kopyalardan SONRA: bu turun kopyası düşse de
             # yalnız açılabilen kopyalar sayılır, eskiler gereksiz yere gitmez. A-45: yalnız kendi adlı dosyalar (bkz. `_rotasyon`).
-            self._rotasyon(dpath, "makine disi", frozenset(dogrulanan))
+            # ⚠️ D2-1.2 (2-D incelemesi, A-45): ad + açılabilirlik "bu kurulumun yedeği" demek DEĞİL — düz kurulumda her düz SQLite
+            # anahtarsız açılır. Aynı hedefi paylaşan ikinci kurulum varsa rotasyon O dizinde yapılmaz (komşunun kopyaları silinmez).
+            try:
+                paylasimli = self._makine_disi_paylasiliyor_mu(dpath)
+            except OSError:
+                logger.warning(
+                    "Makine disi kurulum isareti yazilamadi/okunamadi — rotasyon YAPILMADI: %s", dest, exc_info=True
+                )
+                paylasimli = True
+            if not paylasimli:
+                self._rotasyon(dpath, "makine disi", frozenset(dogrulanan))
             # Yedeklerin YANINA ne gerektigini yaz: kurtarma anindaki kisi log'lara bakamayabilir.
             try:
                 (dpath / _OFFSITE_README_NAME).write_text(_OFFSITE_README_TEXT, encoding="utf-8")
