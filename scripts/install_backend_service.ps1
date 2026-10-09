@@ -2,9 +2,16 @@
 # PEMF Headless Backend — Windows Service kurulumu (NSSM).  Faz 5 (sağlamlaştırılmış)
 # =============================================================================
 # Öncelik: frozen EXE (dist\PEMF_Backend\PEMF_Backend.exe). Yoksa python + script.
-# Mosquitto KENDİ servisidir (install_mosquitto_service.ps1) -> backend ona
-# 'depends' ile bağlanır ve broker'ı kendi başlatmaz (--no-mosquitto-ensure).
+# Mosquitto KENDİ servisidir (install_mosquitto_service.ps1); backend broker'ı kendi başlatmaz
+# (--no-mosquitto-ensure) ve ona yeniden deneyerek bağlanır — SCM 'depend=' KULLANILMAZ (aşağıya bakın).
 # Çökme -> NSSM otomatik restart. Kapanış -> backend_service donanımı güvenli durdurur.
+#
+# ⚠️ D2.73 (B-9.21 · A-11 sahip kararı): bu betik DESTEKLENEN İKİNCİ kurulum yoludur (sahadaki yol launcher'dır — Y36).
+# Servis ortamı dağıtım profilinden (deploy\<Mode>.env; varsayılan device.env) setup_services.ps1 ile AYNI ayrıştırmayla
+# kurulur: at-rest şifreleme (PEMF_ENCRYPT_AT_REST), veri kökü (PEMF_DATA_DIR — LocalSystem profili DEĞİL, operatörün görüp
+# yedekleyebildiği ProgramData), STM portu (auto), DNS-rebinding koruması (PEMF_ALLOWED_HOSTS). Eskiden yalnız 3 değişken
+# yazılıyordu: taze makinede hasta/seans DB'leri DÜZ METİN, veri kökü LocalSystem profilinde, ALLOWED_HOSTS='*'.
+# Profil bulunamazsa kurulum, servise DOKUNMADAN durur. Kapı: tests/test_install_backend_service_PROFIL_ORTAMI_D273.py
 #
 # Yönetici PowerShell:  .\install_backend_service.ps1                 (yalnız-LAN, güvenli)
 #   Uzaktan erişim (internete açar):  .\install_backend_service.ps1 -EnableTunnel
@@ -12,9 +19,13 @@
 param(
     # Cloudflare tüneli (uzaktan erişim) — VARSAYILAN KAPALI. Açarsanız cihaz internete
     # açılır; bu durumda kimlik doğrulama (PEMF_REQUIRE_AUTH) OTOMATİK zorunlu kılınır.
+    # Profil (device.env) tüneli açsa bile bu betikte tünel YALNIZ bu anahtarla açılır.
     [switch]$EnableTunnel,
     # API kimlik doğrulamasını zorla (LAN'da bile önerilir). Tünel açıksa zaten zorunlu.
-    [switch]$RequireAuth
+    [switch]$RequireAuth,
+    # Dağıtım profili: deploy\<Mode>.env (device = klinik, server = demo).
+    [ValidateSet("device", "server")]
+    [string]$Mode = "device"
 )
 $ErrorActionPreference = "Stop"
 
@@ -89,6 +100,40 @@ function Protect-PemfDir([string]$Dir) {
 $ServiceName = "PemfBackend"
 $LogDir      = "C:\ProgramData\PEMF_System\logs"
 
+# ── D2.73 (A-11): dağıtım profili — setup_services.ps1 ile AYNI dosya araması ve AYNI ayrıştırma (kapı ikisinin çıktısını eşler) ──
+function Get-PemfProfilEnvDosyasi([string]$AppDir, [string]$Mode, [string]$BetikDizini) {
+    @(
+        (Join-Path $AppDir "_internal\deploy\$Mode.env"),
+        (Join-Path $AppDir "deploy\$Mode.env"),
+        (Join-Path $BetikDizini "..\deploy\$Mode.env")
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+
+function Read-PemfProfilEnv([string]$Dosya) {
+    $d = [ordered]@{}
+    foreach ($ln in (Get-Content $Dosya)) {
+        $t = $ln.Trim()
+        if ($t -and -not $t.StartsWith("#") -and $t.Contains("=")) {
+            $k, $v = $t.Split("=", 2); $d[$k.Trim()] = $v.Trim()
+        }
+    }
+    $d
+}
+
+# Servis ortamı: temel değerler + profil (aynı anahtarda profil kazanır) + bu betiğin güvenlik anahtarları. Profil yoksa $null.
+# GÜVENLİK: tünel (internete açma) bu betikte YALNIZ -EnableTunnel ile açılır — profil açsa bile yalnız-LAN varsayılanı korunur;
+# tünel açıksa kimlik doğrulama zorunlu; profilin kimlik doğrulama zorunluluğu hiçbir durumda GEVŞETİLMEZ.
+function Get-PemfServisOrtami([string]$ProfilDosyasi, [string]$LogDir, [bool]$UsingExe, [string]$GuiRoot, [bool]$Tunel, [bool]$Kimlik) {
+    if (-not $ProfilDosyasi) { return $null }
+    $EnvMap = [ordered]@{ "PYTHONUNBUFFERED" = "1"; "PEMF_HEADLESS" = "1"; "PEMF_LOG_DIR" = $LogDir }
+    $Profil = Read-PemfProfilEnv $ProfilDosyasi
+    foreach ($k in $Profil.Keys) { $EnvMap[$k] = $Profil[$k] }
+    if (-not $UsingExe) { $EnvMap["PYTHONPATH"] = $GuiRoot }
+    $EnvMap["PEMF_ENABLE_TUNNEL"] = $(if ($Tunel) { "1" } else { "0" })
+    if ($Tunel -or $Kimlik) { $EnvMap["PEMF_REQUIRE_AUTH"] = "1" }
+    @($EnvMap.Keys | ForEach-Object { "$_=$($EnvMap[$_])" })
+}
+
 # --- Servis ikilisi: önce frozen EXE, yoksa python + backend_service.py ---
 # Ortak argüman: Mosquitto kendi servisi olduğu için broker'ı backend BAŞLATMAZ,
 # sadece izler -> --no-mosquitto-ensure.
@@ -117,6 +162,20 @@ if (Test-Path $ExePath) {
     $UsingExe        = $false
     Write-Status "Frozen EXE yok; python+script (dev) ile: $SvcBinary" "Yellow"
 }
+
+# ── D2.73 (A-11): servis ortamı servise DOKUNMADAN ÖNCE kurulur — profil yoksa mevcut servis kaldırılmadan durulur ──
+if ($EnableTunnel -and -not $RequireAuth) {
+    Write-Status "Tünel açık -> PEMF_REQUIRE_AUTH otomatik ZORUNLU (public+kimliksiz engellendi)." "Yellow"
+    $RequireAuth = $true
+}
+$ProfilDosyasi = Get-PemfProfilEnvDosyasi $AppDir $Mode $ScriptDir
+$AppEnv = Get-PemfServisOrtami $ProfilDosyasi $LogDir $UsingExe $GuiRoot $EnableTunnel $RequireAuth
+if (-not $AppEnv) {
+    Write-Status "HATA: dağıtım profili deploy\$Mode.env bulunamadı ($AppDir / $ScriptDir\..) — at-rest şifreleme ve veri kökü KURULAMAZ; servis DEĞİŞTİRİLMEDİ." "Red"
+    Write-Status "       Profili EXE'nin yanına (deploy\$Mode.env) koyun ya da depodaki betikten çalıştırın." "Red"
+    pause; exit 1
+}
+Write-Status "Profil ($Mode): $ProfilDosyasi" "Cyan"
 
 if (-not (Test-Path $LogDir)) {
     New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
@@ -196,28 +255,21 @@ if (-not $SvcBinary -or -not (Test-Path $SvcBinary)) {
 & $NssmExe set $ServiceName AppStopMethodConsole 15000
 & $NssmExe set $ServiceName AppThrottle         5000
 
-# Ortam değişkenleri. GÜVENLİK: tünel (internete açma) VARSAYILAN KAPALI. Açılırsa
-# kimlik doğrulama OTOMATİK zorunlu kılınır (public + kimliksiz erişim engellenir).
+# Ortam değişkenleri — profil + güvenlik anahtarları (yukarıda, servise dokunmadan ÖNCE kuruldu: Get-PemfServisOrtami).
+# GÜVENLİK: tünel (internete açma) VARSAYILAN KAPALI; açılırsa kimlik doğrulama OTOMATİK zorunlu.
 # EXE'de PYTHONPATH'e gerek yok -> bundled modüller kullanılır.
-if ($EnableTunnel -and -not $RequireAuth) {
-    Write-Status "Tünel açık -> PEMF_REQUIRE_AUTH otomatik ZORUNLU (public+kimliksiz engellendi)." "Yellow"
-    $RequireAuth = $true
-}
-$EnvList = @("PYTHONUNBUFFERED=1", "PEMF_HEADLESS=1", "PEMF_LOG_DIR=$LogDir")
-if (-not $UsingExe) { $EnvList = @("PYTHONPATH=$GuiRoot") + $EnvList }
-if ($EnableTunnel)  { $EnvList += "PEMF_ENABLE_TUNNEL=1" }
-if ($RequireAuth)   { $EnvList += "PEMF_REQUIRE_AUTH=1" }
-& $NssmExe set $ServiceName AppEnvironmentExtra @EnvList
+& $NssmExe set $ServiceName AppEnvironmentExtra @AppEnv
 if ($EnableTunnel) {
     Write-Status "Uzaktan erişim (Cloudflare tüneli) AÇIK + auth zorunlu. Token'ı istemcilere verin." "Cyan"
 } else {
     Write-Status "Yalnız-LAN modu (tünel kapalı, güvenli). Uzaktan erişim için: -EnableTunnel" "Gray"
 }
 
-# --- Mosquitto bağımlılığı (kendi servisi varsa) ---
+# --- Mosquitto: SCM bağımlılığı KULLANILMAZ (D2.73 — setup_services.ps1 ile aynı gerekçe) ---
+# NSSM-managed mosquitto'da SCM bağımlılık çözümü güvenilmez: mosquitto Running olsa BİLE "Bağımlılık başlayamadı" (1068) →
+# backend HİÇ başlamaz (ACİL DURDUR ucu da yok). Backend broker'a yeniden deneyerek bağlanır; ikisi de Automatic başlar.
 if (Get-Service -Name "mosquitto" -ErrorAction SilentlyContinue) {
-    sc.exe config $ServiceName depend= mosquitto | Out-Null
-    Write-Status "Bağımlılık eklendi: PemfBackend -> mosquitto" "Green"
+    Write-Status "mosquitto servisi var — backend broker'a yeniden deneyerek bağlanır (SCM bağımlılığı YOK)." "Green"
 } else {
     Write-Status "UYARI: 'mosquitto' servisi yok. Önce install_mosquitto_service.ps1 çalıştırın." "Yellow"
 }
@@ -250,7 +302,8 @@ Write-Host "Backend servisi kuruldu." -ForegroundColor Green
 Write-Host "  Servis : $ServiceName  (ikili: $(if($UsingExe){'frozen EXE'}else{'python+script'}))"
 Write-Host "  URL    : http://localhost:8000"
 Write-Host "  Loglar : $LogDir\backend_service.log"
-Write-Host "  Bağımlılık: mosquitto (otomatik sıra: mosquitto -> PemfBackend)"
+Write-Host "  Profil : $ProfilDosyasi (at-rest şifreleme / veri kökü / STM portu / izinli adlar profilden)"
+Write-Host "  Broker : mosquitto servisi (SCM bağımlılığı yok; backend yeniden dener)"
 Write-Host ""
 Write-Host "Yönetim: $NssmExe (status|stop|start|restart|remove) $ServiceName"
 Write-Host ""

@@ -43,7 +43,7 @@ Build, yayın, servis-kurulum, gateway/hotspot ve kaldırma scriptleri.
 | Script | Görev |
 |---|---|
 | `setup_services.ps1` | Dağıtılmış yerleşimde üretim kurulumu — `{app}`'ten backend+mosquitto servisleri; `-Mode device\|server\|staging`, `-Uninstall`; Inno `.iss` çağırır |
-| `install_backend_service.ps1` | `PemfBackend`'i NSSM Windows servisi olarak kur (frozen EXE'yi tercih eder; mosquitto'ya `depends`) |
+| `install_backend_service.ps1` | **İkinci desteklenen kurulum yolu** (A-11; sahadaki yol launcher'dır): `PemfBackend`'i NSSM Windows servisi olarak kurar (frozen EXE'yi tercih eder); servis ortamı `deploy\<Mode>.env` profilinden — `setup_services.ps1` ile aynı ayrıştırma (at-rest şifreleme, veri kökü, STM portu, izinli adlar); profil yoksa servise dokunmadan durur; SCM `depend=` YOK; tünel yalnız `-EnableTunnel` ile |
 | `install_mosquitto.ps1` / `install_mosquitto_service.ps1` | Mosquitto broker kur/yapılandır (gateway) / bağımsız oto-başlar servis (offline) |
 
 ## Gateway / hotspot (LattePanda klinik mini-PC)
