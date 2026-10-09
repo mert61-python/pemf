@@ -6592,6 +6592,19 @@ async def import_clinic_data(payload: DataImportPayload, request: Request):
     return await asyncio.shield(gorev)
 
 
+_CIHAZ_DISI_GERI_YUKLEME = "Bu cihazda kayıt var: geri yükleme (cihazdaki tüm tedavi kayıtlarını değiştirir) yalnız cihazın kendi ekranından yapılabilir."
+
+
+def _hedef_dolu_mu_hizli(thdb, pdb) -> bool:
+    """D2-1.9: hedef dolu mu — `export_rows` tam okuması YAPMADAN (EXISTS). Hasta okuması KATI (D2.66): okunamazsa istisna yükselir."""
+    with thdb._get_connection() as c:
+        tablolar = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        for t in ("treatment_sessions", "ai_analyses"):
+            if t in tablolar and c.execute(f"SELECT EXISTS(SELECT 1 FROM {t})").fetchone()[0]:
+                return True
+    return bool(pdb.get_all_patients(kati=True))
+
+
 async def _ice_aktar(payload: DataImportPayload, request: Request):
     """`/api/data/import` gövdesi — YALNIZ `_VERI_TASIMA_KILIDI` tutulurken çağrılır (D2.E02)."""
     import base64 as _base64
@@ -6610,6 +6623,29 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
         paket = await asyncio.to_thread(decrypt_bundle, blob, payload.passphrase)
     except ExportError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    # ⚠️ D2-1.9 (2-D incelemesi · Y111): cihaz DIŞI istekte hedef doluluğu ÖNCE ucuz sorguyla; doluysa hedefin tüm satırları okunmadan
+    # 403. Eskiden reddedilecek LAN isteği kilidi tam okuma (`export_rows`) boyunca tutuyor, cihazın KENDİ yedeği o sırada "Geri yükleme
+    # bu cihazda sürüyor" 409'u alıyordu (ölçüldü). Okuma düşerse aşağıdaki tam yol karar verir (hata metinleri orada).
+    # Kapı: tests/test_cihaz_disi_REDDEDILECEK_istek_kilidi_TUTMAZ_D2_1_9.py
+    from servers.auth import cihazin_kendisinden_mi as _cihazdan_mi
+
+    if not _cihazdan_mi(request):
+        try:
+            _dolu_hizli = await asyncio.to_thread(_hedef_dolu_mu_hizli, thdb, pdb)
+        except Exception:
+            _dolu_hizli = False
+        if _dolu_hizli:
+            from servers import audit_log as _iz0
+
+            _iz0.kimlikli_yaz(
+                request,
+                "data.import",
+                scope="replace_all",
+                item_count=0,
+                outcome="reddedildi",
+                detail={"neden": "cihaz_disi"},
+            )
+            raise HTTPException(status_code=403, detail=_CIHAZ_DISI_GERI_YUKLEME)
 
     mevcut = await asyncio.to_thread(thdb.export_rows)
     # ⚠️ D2.66: hasta okuması KATI — okunamayan hasta DB'si DOLU cihazı BOŞ gösterip onayı (REPLACE_ALL) ve Y111'i atlatmasın.
@@ -6641,11 +6677,7 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
                 outcome="reddedildi",
                 detail={"neden": "cihaz_disi"},
             )
-            raise HTTPException(
-                status_code=403,
-                detail="Bu cihazda kayıt var: geri yükleme (cihazdaki tüm tedavi kayıtlarını değiştirir) yalnız cihazın kendi "
-                "ekranından yapılabilir.",
-            )
+            raise HTTPException(status_code=403, detail=_CIHAZ_DISI_GERI_YUKLEME)
         if kayitli_operator_var() and not cozumlenmis_operator(request):
             _iz.kimlikli_yaz(
                 request,
