@@ -40,8 +40,13 @@ def _yan_dosyalar(db_path: Path):
     return [p.name for p in db_path.parent.iterdir() if p.name.startswith(db_path.name) and p.name != db_path.name]
 
 
-def test_KRITIK_rollback_bayat_WAL_yan_dosyalarini_SILER(tmp_path, monkeypatch):
-    """Rollback dalı koşturulur; geri yüklemeden sonra `-wal`/`-shm` diskte KALMAMALI.
+def test_KRITIK_rollback_bayat_WAL_yan_dosyalarini_CANLI_ADDAN_kaldirir_Y100_KENARA_alir(tmp_path, monkeypatch):
+    """Rollback dalı koşturulur; geri yüklemeden sonra `-wal`/`-shm` CANLI ADLA diskte KALMAMALI (geri yüklenen DB'ye uygulanmasın).
+
+    ⚠️ Y100 (sahip · O-A2-3.1): yan dosyalar artık SİLİNMEZ, `<db>-wal.rollback-<damga>` adıyla KENARA alınır — kapanış
+    checkpoint'i düşmüşse canlı DB'nin son çerçeveleri oradadır. Bu test eskiden `test_KRITIK_rollback_bayat_WAL_yan_dosyalarini_SILER`
+    idi; değişmez aynı (canlı adla bayat WAL kalmaz), yalnız "silinir" yerine "kenarda, içerik korunur". Kapı (yerine koyma
+    düşüşü dahil): tests/test_goc_rollback_WAL_SHM_KENARA_alinir_Y100.py
 
     Senaryo, gerçek arıza dizisinin diskteki SONUCUNU birebir kurar:
       1) sağlam bir DB + geçerli ön-yedek var,
@@ -81,7 +86,13 @@ def test_KRITIK_rollback_bayat_WAL_yan_dosyalarini_SILER(tmp_path, monkeypatch):
     with pytest.raises(Exception):
         db._run_startup_migrations_with_rollback()
 
-    kalanlar = _yan_dosyalar(db_path)
+    kalanlar = [k for k in _yan_dosyalar(db_path) if ".rollback-" not in k]
+    kenarda = {k for k in _yan_dosyalar(db_path) if ".rollback-" in k}
+    assert {k.split(".rollback-")[0] for k in kenarda} == {db_path.name + "-wal", db_path.name + "-shm"}, (
+        f"Y100: bayat yan dosyalar kenara alinmali (silinmemeli): {sorted(kenarda)}"
+    )
+    wal_kenar = next(db_path.parent / k for k in kenarda if k.startswith(db_path.name + "-wal"))
+    assert wal_kenar.read_bytes() == b"BAYAT-WAL-CERCEVELERI", "kenara alinan -wal icerigi korunmali"
     assert not kalanlar, (
         f"rollback'ten SONRA bayat yan-dosyalar diskte KALDI: {kalanlar}. "
         "`Path + str` TypeError'a duserse `os.remove` HIC calismaz; sifreli kurulumda bayat WAL "

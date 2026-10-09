@@ -554,23 +554,42 @@ class SemaKarisimi:
                 # olduysa (ayni disk-dolu/I-O arizasi) bayat -wal cerceveleri geri-yuklenen DB'ye
                 # REPLAY edilip sema/veriyi karistirir. Kopyalamadan once acikca temizle
                 # (sqlcipher_util'daki dogrulanmis desenin aynisi).
-                for _sfx in ("-wal", "-shm"):
-                    try:
-                        # ⚠️ DENETİM 2026-08-17: burada `self.db_path + _sfx` yazıyordu ve
-                        # `self.db_path` bir `Path` → `TypeError: unsupported operand type(s) for
-                        # +: 'WindowsPath' and 'str'`. İfade `os.remove`a HİÇ ulaşmıyor, aşağıdaki
-                        # `except` yalnız "temizlenemedi" uyarısı basıyordu → **koruma ölü koddu.**
-                        # Doğru kardeş desen: `database/auth_db.py` → `Path(str(...) + _sfx)`.
-                        # Kilit: `tests/test_rollback_wal_temizligi.py` (bileşik arızayı modelleyip
-                        # temizliği DAVRANIŞSAL ölçer; eski "koruma" bir kaynak-metin grep'iydi ve
-                        # TypeError'lı kodu geçiriyordu).
+                # ⚠️ DENETİM 2026-08-17: burada `self.db_path + _sfx` yazıyordu ve `self.db_path` bir `Path` → `TypeError`;
+                # ifade dosya işlemine HİÇ ulaşmıyordu → koruma ölü koddu. Doğru kardeş desen: `database/auth_db.py` →
+                # `Path(str(...) + _sfx)`. Kilit: `tests/test_rollback_wal_temizligi.py`.
+                # ⚠️ Y100 (sahip · O-A2-3.1): yan dosyalar SİLİNMEZ, KENARA adlandırılır (`<db>-wal.rollback-<damga>`): kapanış
+                # checkpoint'i düşmüşse `-wal` canlı DB'nin SON çerçevelerini taşır. Eskiden burada siliniyordu; ardından yerine
+                # koyma (`os.replace`) düşerse (AV / yedekleyici tutamağı) canlı DB son seanslarını YİTİRİYORDU (ölçüldü).
+                # Kenara alma düşerse geri alma YAPILMAZ (canlı DB + WAL olduğu gibi kalır); yerine koyma düşerse kenara
+                # alınanlar GERİ KONUR. Kapı: tests/test_goc_rollback_WAL_SHM_KENARA_alinir_Y100.py
+                _damga = datetime.now().strftime("%Y%m%d_%H%M%S")
+                _kenarda = []
+                try:
+                    for _sfx in ("-wal", "-shm"):
                         _side = str(self.db_path) + _sfx
                         if os.path.exists(_side):
-                            os.remove(_side)
-                    except Exception:
-                        self.logger.warning("Rollback: %s temizlenemedi", _sfx, exc_info=True)
-                # Canlı DB ancak kopya TAMAMLANINCA tek adımda değiştirilir.
-                os.replace(_gecici, self.db_path)
+                            _kenar = f"{_side}.rollback-{_damga}"
+                            os.replace(_side, _kenar)
+                            _kenarda.append((_side, _kenar))
+                    # Canlı DB ancak kopya TAMAMLANINCA tek adımda değiştirilir.
+                    os.replace(_gecici, self.db_path)
+                except Exception:
+                    for _side, _kenar in reversed(_kenarda):
+                        try:
+                            os.replace(_kenar, _side)
+                        except Exception:
+                            self.logger.error(
+                                "Rollback: %s GERI KONAMADI — canli DB'nin son cerceveleri %s dosyasinda; ELLE geri adlandirin.",
+                                _side,
+                                _kenar,
+                                exc_info=True,
+                            )
+                    raise
+                if _kenarda:
+                    self.logger.warning(
+                        "Rollback: canli DB'nin yan dosyalari SILINMEDI, kenara alindi (geri yuklenen DB'ye uygulanmasin diye): %s",
+                        ", ".join(_k for _, _k in _kenarda),
+                    )
                 self.logger.warning(f"Migration rollback tamamlandı: {backup_path}")
             except Exception as rollback_error:
                 self.logger.error(f"Migration rollback başarısız: {rollback_error}")
