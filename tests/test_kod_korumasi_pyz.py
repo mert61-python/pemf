@@ -36,8 +36,9 @@ import pytest
 _KOK = Path(__file__).resolve().parents[1]
 _SPECLER = {
     "onedir": _KOK / "build_tools" / "PEMF_Backend_onedir.spec",
-    "onefile": _KOK / "build_tools" / "PEMF_Backend_onefile.spec",
 }
+# A-31 · D2.36: onefile spec'i SİLİNDİ — tek spec kaldı; iki kopyanın torch filtresi eşitliği kapısı (sapma riski) da
+# konusuz kaldığı için kaldırıldı. Kalan kapılar onedir'i AYNEN tarar.
 
 
 def _agac(spec: Path) -> ast.Module:
@@ -161,22 +162,7 @@ def test_KRITIK_torch_filtresi_GERCEKTEN_CAGRILIYOR(ad):
     assert kullaniliyor, f"{spec.name}: `_torch_kaynagi_mi` tanımlı ama `a.datas` filtresinde KULLANILMIYOR"
 
 
-def test_iki_spec_ayni_torch_filtresini_KULLANIYOR():
-    """İki spec kopyası birbirinden sapmamalı (çürütme notu: kopya varsa sapma kaçınılmazdır)."""
-    govdeler = {}
-    for ad, spec in _SPECLER.items():
-        fn = next(
-            (d for d in ast.walk(_agac(spec)) if isinstance(d, ast.FunctionDef) and d.name == "_torch_kaynagi_mi"),
-            None,
-        )
-        assert fn is not None, f"{spec.name}: `_torch_kaynagi_mi` yok"
-        # Docstring hariç gövde karşılaştırılır (yorum/açıklama farkı serbest).
-        govde = [g for g in fn.body if not (isinstance(g, ast.Expr) and isinstance(g.value, ast.Constant))]
-        govdeler[ad] = ast.unparse(ast.Module(body=govde, type_ignores=[]))
-    assert govdeler["onedir"] == govdeler["onefile"], (
-        f"iki spec'teki torch filtresi SAPMIŞ:\n--- onedir ---\n{govdeler['onedir']}\n"
-        f"--- onefile ---\n{govdeler['onefile']}"
-    )
+# (İki spec kopyasının torch filtresi eşitliği kapısı A-31 · D2.36 ile kaldırıldı: onefile spec'i silindi, kopya kalmadı.)
 
 
 # ── 3) Kapı betikleri var ve build'e BAĞLI ───────────────────────────────────

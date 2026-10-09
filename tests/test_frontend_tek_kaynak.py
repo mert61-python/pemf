@@ -14,7 +14,7 @@ ama installer `frontend/dist`ten paketlendiği için kullanıcıya ESKİ arayüz
 "düzeltildi ama geçmedi" görünür; teşhisi çok zordur çünkü kaynak dosyada düzeltme DURUYOR.
 
 ÇÖZÜM: ikinci klon kaldırıldı, tüm build yolları `apps/ui/`ye çevrildi (build_installer.ps1,
-PEMF_Backend_onedir/onefile.spec, .github/workflows/linux-backend.yml).
+PEMF_Backend_onedir.spec, .github/workflows/linux-backend.yml). (Onefile spec'i A-31 · D2.36 ile SİLİNDİ.)
 
 Bu dosya tekrarını kilitler: ikinci bir kaynak ağacı belirirse ya da bir build yolu geri
 `frontend/`ye dönerse test kırılır. (Paket İÇİ yol `frontend/dist` OLARAK KALIR — backend ve
@@ -79,11 +79,6 @@ def test_KRITIK_ikinci_arayuz_kaynagi_YOK():
             r"frontend_dir\s*=\s*os\.path\.join\(project_path,\s*'([^']+)'",
             "onedir spec",
         ),
-        (
-            "build_tools/PEMF_Backend_onefile.spec",
-            r"frontend_dir\s*=\s*os\.path\.join\(project_path,\s*'([^']+)'",
-            "onefile spec",
-        ),
     ],
 )
 def test_build_yollari_TEK_kaynagi_gosterir(yol, desen, aciklama):
@@ -116,7 +111,7 @@ def test_paket_ICI_yolu_frontend_dist_OLARAK_KALIR():
     yola bakar (`launcher/core/src/flow.rs`). Hedefi 'apps/ui/dist' yapmak, kurulumu "arayüz yok"
     durumuna düşürürdü — kaynak yolu düzeltirken kolayca yapılabilecek bir hata.
     """
-    for spec in ("PEMF_Backend_onedir.spec", "PEMF_Backend_onefile.spec"):
+    for spec in ("PEMF_Backend_onedir.spec",):
         metin = (_KOK / "build_tools" / spec).read_text(encoding="utf-8")
         assert "os.path.join('frontend', 'dist')" in metin, (
             f"{spec}: paket İÇİ hedef yolu 'frontend/dist' olmaktan çıkmış — backend ve "

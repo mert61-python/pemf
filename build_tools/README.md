@@ -10,7 +10,6 @@ Tüm build tarifleri. **Tam adım-adım rehber kökte: [`../BUILD.md`](../BUILD.
 | `build_installer.ps1` | **Inno offline installer** (PyInstaller onedir + Inno Setup); `-Mode device\|server`; sürümü `../VERSION`/`../versions.json`'dan senkronlar |
 | `sync_versions.ps1` | **`../versions.json` (tek-kaynak)** değerlerini hedef dosyalara (`apps/ui\app.json` vb.) yazar; `build_apk.ps1`/`build_installer.ps1` otomatik çağırır; PS 5.1 için ASCII-only |
 | `PEMF_Backend_onedir.spec` | PyInstaller **onedir** spec (birincil) — mosquitto, cloudflared, web `frontend/dist`, `deploy/` env, ai_models gömer |
-| `PEMF_Backend_onefile.spec` | PyInstaller **onefile** spec (alternatif tek-EXE) |
 | `PEMF_Backend_Setup.iss` | Inno Setup scripti → `PEMFBackendSetup_device_vX.exe` (DiskSpanning `.bin` dilimleri); `[Run]`'da `setup_services.ps1` çağırır |
 | `make_model_zip.py` | Profil model paketlerini üretir → **`home.zip`/`vet.zip`/`research.zip`** (manifest `models`/`profiles`); `inference_cat_organ` çekirdek modelinin hangi zip'te olduğunu kilitler |
 | `compile_pyd.py` | Kaynak koruması — `.py → .pyd` **NATIVE (Cython) derleme**; kaynağı geri-alınamaz biçimde yok eder |

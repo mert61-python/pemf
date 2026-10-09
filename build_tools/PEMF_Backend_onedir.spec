@@ -200,10 +200,9 @@ if os.path.exists(_cloud_prov):
 else:
     print('[spec] UYARI: cloud_mqtt_provision.json YOK -> bulut E-stop aynasi paketde devre disi')
 
-for tmpl in ('pemf_treatment_history_template.db', 'patients_template.db'):
-    p = os.path.join(project_path, 'database', tmpl)
-    if os.path.exists(p):
-        datas.append((p, 'database'))
+# ⚠️ D2.36 (B-10.201) · Y26: DB şablonları GÖMÜLMEZ — `database/*_template.db` F4'ten beri yoktu (girdi sessizce düşüyordu);
+# yeniden yönlendirmek 09-13 veri kaybının 3. yolunu (şablon kopyalayıcı, D2.34'te kaldırıldı) uyandırırdı. Şemayı DB
+# sınıfları kurar. Kapı: tests/test_spec_OLU_paket_girdisi_YOK_onefile_SILINDI_D236.py (depoda olmayan yere bakan girdi YOK).
 
 # Mosquitto broker (EXE içinde de bulunsun; ayrıca bağımsız servis de kurulabilir)
 mosquitto_dir = os.path.join(project_path, 'bin', 'mosquitto')
