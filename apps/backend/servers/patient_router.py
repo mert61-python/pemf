@@ -66,7 +66,19 @@ def get_all_patients(request: Request, limit: int = 0, offset: int = 0):
     # kayitlik klinikte tum tabloyu desifre ediyor ve o sure boyunca hasta-DB'sini blokluyordu.
     # Sayfalama artik SQL'de; 'total' ise desifre gerektirmeyen COUNT ile alinir.
     off = max(0, offset)
-    data = db.get_all_patients(limit=limit, offset=off)
+    # ⚠️ D2-3.1 (2-D incelemesi · D2.66'nın ilk yarısı): okuma KATI — okunamayan hasta DB'si "hasta yok" (200 success, 0) DEĞİL, 503.
+    # Eskiden arayüz "Henüz hasta kaydı yok." gösteriyordu; operatör masadaki hayvana yeni kart açıyordu (geçici arızada çift kart).
+    try:
+        data = db.get_all_patients(limit=limit, offset=off, kati=True)
+    except Exception:
+        logger.warning(
+            "Hasta listesi okunamadi (hasta DB'si acilamiyor) — 503; bu 'hasta yok' DEMEK DEGIL.", exc_info=True
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Hasta kayıtları okunamadı (hasta veritabanı açılamıyor) — bu 'hasta yok' demek değil, yeni kart "
+            "açmayın. Uygulamayı yeniden başlatın; sürerse teknik desteğe başvurun.",
+        )
     total = db.count_patients()
     return {"status": "success", "data": data, "total": total}
 
