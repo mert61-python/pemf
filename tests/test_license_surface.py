@@ -17,14 +17,11 @@ import re
 import zipfile
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parent.parent
 PAKET = KOK / "pemf-app-packages" / "base-deps.zip"
-
-#: Kopyleft sayılan lisans imzaları. LGPL KASITLI DIŞARIDA: dinamik bağlamada kapalı kaynak
-#: ürünle birlikte dağıtılabilir ve bu projede öyle kullanılır.
-_KOPYLEFT = ("AGPL", "GPL-3", "GPL-2", "GPLV3", "GPLV2", "GNU GENERAL PUBLIC")
 
 #: BİLİNEN ve KARARI BEKLEYEN istisna. Buraya bir şey eklemek, hukuki bir karar vermektir —
 #: `docs/AGPL-KARARI.md` güncellenmeden eklenmemelidir.
@@ -54,21 +51,27 @@ def _paket_lisanslari():
 
 
 def _kopyleft_mu(lisans: str) -> bool:
-    u = (lisans or "").upper()
-    if "LGPL" in u:
-        return False
-    return any(k in u for k in _KOPYLEFT)
+    """TEK KAYNAK: sınıflandırıcı `scripts/lisans_envanteri_uret.py`de (D4.08, 2026-10-10). LGPL KASITLI DIŞARIDA:
+    dinamik bağlamada kapalı kaynak ürünle birlikte dağıtılabilir ve bu projede öyle kullanılır."""
+    from scripts.lisans_envanteri_uret import kopyleft_mu
+
+    return kopyleft_mu(lisans)
 
 
-pytestmark = pytest.mark.skipif(
-    not PAKET.exists(), reason="base-deps.zip yok (temiz checkout / CI) — lisans yüzeyi paketten okunur"
-)
+@pytest.fixture()
+def paket_gerekli():
+    """Sevk edilen paketten OKUYAN testler için: paket yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    ⚠️ D4.08 (B-10.139): eskiden modül düzeyi `pytestmark = skipif(not PAKET.exists())` vardı → paketsiz ortamda
+    (temiz checkout, CI) dosyadaki TÜM testler atlanıyordu; paket gerektirmeyen 4 test (LGPL sınıflandırıcı, NOTICE,
+    karar notu) CI'da hiç koşmuyordu. Kapı artık yalnız pakete bakan üç teste uygulanır."""
+    capraz.atla_yoksa("pemf-app-packages/base-deps.zip")
 
 
 # ── kapı ─────────────────────────────────────────────────────────────────────
 
 
-def test_KRITIK_YENI_kopyleft_bagimlilik_EKLENMEZ():
+def test_KRITIK_YENI_kopyleft_bagimlilik_EKLENMEZ(paket_gerekli):
     """Yeni bir AGPL/GPL bağımlılık pakete sızarsa uyumsuzluk yüzeyi sessizce büyür.
     Bu test, o kararın BİLİNÇLİ verilmesini zorunlu kılar."""
     kopyleft = {ad for ad, lic in _paket_lisanslari().items() if _kopyleft_mu(lic)}
@@ -80,7 +83,7 @@ def test_KRITIK_YENI_kopyleft_bagimlilik_EKLENMEZ():
     )
 
 
-def test_bilinen_istisna_HALA_GECERLI():
+def test_bilinen_istisna_HALA_GECERLI(paket_gerekli):
     """İstisna listesi 'ölü' kalmasın: `ultralytics` paketten çıkarsa (ONNX'e taşındıysa)
     bu test düşer ve listeden silinmesi hatırlatılır — sorun çözüldüğünde kapı da kapanmalı."""
     kopyleft = {ad for ad, lic in _paket_lisanslari().items() if _kopyleft_mu(lic)}
@@ -91,7 +94,7 @@ def test_bilinen_istisna_HALA_GECERLI():
     )
 
 
-def test_ultralytics_AGPL_olarak_tespit_ediliyor():
+def test_ultralytics_AGPL_olarak_tespit_ediliyor(paket_gerekli):
     """Tespit mantığının kendisi çalışıyor mu — yoksa kapı boş güvence verirdi."""
     lisanslar = _paket_lisanslari()
     assert "ultralytics" in lisanslar, "ultralytics pakette bulunamadi (tespit bozuk olabilir)"
@@ -102,7 +105,52 @@ def test_LGPL_kopyleft_SAYILMAZ():
     """LGPL kasıtlı dışarıda: dinamik bağlamada kapalı kaynak ürünle dağıtılabilir."""
     assert not _kopyleft_mu("LGPL-2.1")
     assert not _kopyleft_mu("GNU Lesser General Public License v3 (LGPLv3)")
+    assert not _kopyleft_mu("GNU Library or Lesser General Public License (LGPL)")
     assert _kopyleft_mu("AGPL-3.0") and _kopyleft_mu("GPL-3.0")
+
+
+@pytest.mark.parametrize(
+    "lisans",
+    [
+        "GPL",  # yalın klasik `License: GPL` — eski sınıflandırıcı KAÇIRIYORDU
+        "LGPL-2.1 AND GPL-3.0",  # bileşik ifade: LGPL geçtiği için TAMAMI muaf sayılıyordu
+        "GPL-2.0-only",
+        "GPLv2+",
+        "AGPL-3.0-or-later",
+        "GNU General Public License v3 (GPLv3)",
+        "GNU Affero General Public License v3",
+    ],
+)
+def test_KRITIK_kopyleft_siniflandirici_GPL_bicimlerini_TANIR(lisans):
+    """D4.08 (B-10.94): yeni bir GPL bağımlılık bu biçimlerden biriyle gelirse kopyleft kapısına GÖRÜNMEZDİ."""
+    assert _kopyleft_mu(lisans), f"kopyleft TANINMADI: {lisans!r}"
+
+
+@pytest.mark.parametrize("lisans", ["MIT", "BSD-3-Clause", "Apache-2.0", "MPL-2.0", "PSF-2.0", "", "LGPL-3.0-or-later"])
+def test_KARSIT_KANIT_kopyleft_OLMAYAN_lisans_kopyleft_SAYILMAZ(lisans):
+    assert not _kopyleft_mu(lisans), f"kopyleft OLMAYAN lisans kopyleft sayıldı: {lisans!r}"
+
+
+def test_KRITIK_sahte_pakette_GPL_bagimlilik_YAKALANIR(tmp_path):
+    """Uçtan uca (paket GEREKMEZ — CI'da koşar): sahte `base-deps.zip`te iki dist-info; gerçek ayrıştırıcı +
+    sınıflandırıcı ikisini de kopyleft bulmalı (`License: GPL` + GPLv3 sınıflandırıcısı; PEP 639 bileşik ifade)."""
+    from scripts.lisans_envanteri_uret import paket_lisanslari
+
+    sahte = tmp_path / "base-deps.zip"
+    with zipfile.ZipFile(sahte, "w") as z:
+        z.writestr(
+            "PEMF_Backend/_internal/gplpaket-1.0.dist-info/METADATA",
+            "Name: gplpaket\nLicense: GPL\nClassifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)\n",
+        )
+        z.writestr(
+            "PEMF_Backend/_internal/karisik-2.0.dist-info/METADATA",
+            "Name: karisik\nLicense-Expression: LGPL-2.1 AND GPL-3.0\n",
+        )
+        z.writestr("PEMF_Backend/_internal/mitpaket-3.0.dist-info/METADATA", "Name: mitpaket\nLicense: MIT\n")
+    lisanslar = {ad: lic for ad, (_s, lic) in paket_lisanslari(sahte).items()}
+    assert set(lisanslar) == {"gplpaket", "karisik", "mitpaket"}, lisanslar
+    kopyleft = {ad for ad, lic in lisanslar.items() if _kopyleft_mu(lic)}
+    assert kopyleft == {"gplpaket", "karisik"}, f"kopyleft kümesi yanlış: {kopyleft} ({lisanslar})"
 
 
 # ── belgeler ─────────────────────────────────────────────────────────────────

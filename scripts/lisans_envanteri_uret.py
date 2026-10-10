@@ -127,6 +127,24 @@ def metadata_lisansi(meta: str) -> str:
     return ifade or klasik or siniflandirici
 
 
+#: LGPL biçimleri — KASITLI muaf (dinamik bağlamada kapalı kaynak ürünle dağıtılabilir; bu projede öyle kullanılır).
+_LGPL = re.compile(
+    r"\bLGPL[\w.+-]*|GNU\s+(?:LIBRARY\s+OR\s+)?LESSER\s+GENERAL\s+PUBLIC\s+LICENSE[^,;()]*|\bLESSER\s+GENERAL\s+PUBLIC"
+)
+#: Kopyleft imzaları (LGPL bölümleri SİLİNDİKTEN sonra aranır): yalın `GPL`, `GPL-3.0`, `GPLv2+`, `AGPL…`, uzun adlar.
+_KOPYLEFT = re.compile(r"\bA?GPL(?:\b|[-V]?\d)|\bGNU\s+(?:AFFERO\s+)?GENERAL\s+PUBLIC\b|\bAFFERO\b")
+
+
+def kopyleft_mu(lisans: str) -> bool:
+    """Lisans metni kaynak açma yükümlülüğü doğuran (AGPL/GPL) bir bileşen mi — TEK KAYNAK (`tests/test_license_surface`).
+
+    ⚠️ D4.08 (B-10.94, 2026-10-10): eski sınıflandırıcı alt-dize listesine bakıyordu ve metinde "LGPL" geçerse TAMAMINI
+    muaf sayıyordu → yalın `License: GPL`, bileşik `LGPL-2.1 AND GPL-3.0` ve `GNU Affero General Public License v3`
+    kopyleft kapısına GÖRÜNMEZDİ (ölçüldü). Artık önce yalnız LGPL BÖLÜMLERİ çıkarılır, kalan metinde GPL aranır."""
+    u = _LGPL.sub(" ", (lisans or "").upper())
+    return bool(_KOPYLEFT.search(u))
+
+
 def paket_lisanslari(paket: Path | None = None) -> dict[str, tuple[str, str]]:
     """Sevk edilen pakette (paket adi -> (surum, lisans)). Paket yoksa bos sozluk."""
     yol = paket or _PAKET
@@ -175,6 +193,16 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--kontrol", action="store_true", help="yazma; yalniz fark varsa 1 don")
     a = ap.parse_args()
+
+    # ⚠️ D4.08 (B-10.94, 2026-10-10): paket YOKKEN `paket_lisanslari` boş sözlük döner ve tablo yalnız requirements'tan
+    # kurulur — dolaylı bağımlılıkların atfı sessizce SİLİNİRDİ (ölçüldü: 113 → ~44 satır, "[OK]", çıkış 0). Paketsiz
+    # ortamda ne yazma ne "güncel" hükmü: ikisi de yarım kaynakla verilir → çıkış 2, dosya DEĞİŞMEZ.
+    if not _PAKET.exists():
+        print(
+            f"[HATA] {_PAKET.name} yok ({_PAKET}) — lisans METINLERI okunamaz; envanter yarim kalir. "
+            f"{'Kontrol' if a.kontrol else 'Yazma'} REDDEDILDI; paketi uretip/indirip yeniden kosun."
+        )
+        return 2
 
     satirlar = envanter()
     mevcut = _HEDEF.read_text(encoding="utf-8")

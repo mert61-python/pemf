@@ -106,3 +106,37 @@ def test_KARSIT_KANIT_License_Expression_ONCELIKLI():
 
     ikisi = "Name: ornek\nLicense: UNKNOWN\nLicense-Expression: Apache-2.0\n"
     assert metadata_lisansi(ikisi) == "Apache-2.0", "eski `License:` alanı PEP 639'u eziyor"
+
+
+# ── D4.08 (B-10.94, 2026-10-10): paket YOKKEN yazma kipi REDDEDER ──────────────
+
+
+def _uretec_kos(monkeypatch, tmp_path, *argv: str) -> tuple[int, bytes, bytes]:
+    """Üreteci yerinde (process içi) çalıştırır; hedef dosya tmp KOPYADIR, depo dosyasına DOKUNULMAZ."""
+    from scripts import lisans_envanteri_uret as uretec
+
+    hedef = tmp_path / "THIRD_PARTY_LICENSES.md"
+    hedef.write_bytes((KOK / "THIRD_PARTY_LICENSES.md").read_bytes())
+    once = hedef.read_bytes()
+    monkeypatch.setattr(uretec, "_PAKET", tmp_path / "olmayan" / "base-deps.zip")
+    monkeypatch.setattr(uretec, "_HEDEF", hedef)
+    monkeypatch.setattr(sys, "argv", ["lisans_envanteri_uret.py", *argv])
+    rc = uretec.main()
+    return rc, once, hedef.read_bytes()
+
+
+def test_KRITIK_paket_YOKKEN_yazma_REDDEDILIR_dosya_DEGISMEZ(monkeypatch, tmp_path, capsys):
+    """Ölçülen arıza: `base-deps.zip` yokken üreteç `paket_lisanslari`ndan SESSİZCE boş sözlük alıp tabloyu yalnız
+    requirements'tan kuruyor (113 → ~44 satır: dolaylı bağımlılıkların atfı SİLİNİR), `[OK]` deyip 0 dönüyordu."""
+    rc, once, sonra = _uretec_kos(monkeypatch, tmp_path)
+    cikti = capsys.readouterr().out
+    assert rc != 0, f"paket yokken yazma kipi BASARI dondu (rc={rc}) — atif dosyasi kucultulur: {cikti[-300:]}"
+    assert sonra == once, "paket yokken THIRD_PARTY_LICENSES.md DEGISTIRILDI (atif satirlari silindi)"
+    assert "base-deps.zip" in cikti, f"hata mesaji nedeni soylemiyor: {cikti[-300:]}"
+
+
+def test_KARSIT_KANIT_paket_YOKKEN_kontrol_kipi_de_BASARI_demez(monkeypatch, tmp_path, capsys):
+    """`--kontrol` paketsiz ortamda "güncel" diyemez (karşılaştırma yarım tabloyla yapılırdı)."""
+    rc, once, sonra = _uretec_kos(monkeypatch, tmp_path, "--kontrol")
+    assert rc != 0 and sonra == once, f"rc={rc}"
+    assert "[OK]" not in capsys.readouterr().out
