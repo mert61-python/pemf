@@ -120,10 +120,13 @@ def get_api_token() -> str:
             _token = secrets.token_urlsafe(24)
             f.write_text(_token, encoding="utf-8")
             # NTFS ACL kilidi (audit B-1.2): API token dosyası yalnız SYSTEM + Administrators'a açık.
+            # ⚠️ A-10 (2-E incelemesi): + süreci çalıştıran hesap (`keep_current_user=True`). Eskiden yükseltilmemiş süreç (Kural 2,
+            # başlatıcı backend'i) yeniden başlayınca kendi dosyasını OKUYAMIYOR, her açılışta yeni token üretiyordu (ölçüldü). Users yine
+            # ERİŞEMEZ. Kapı: tests/test_api_token_YEDEK_yolu_KENDINI_kilitlemez_A10.py
             try:
                 from utils.file_acl import lock_down_file
 
-                lock_down_file(f)
+                lock_down_file(f, keep_current_user=True)
             except Exception:
                 pass
             logger.info("Yeni cihaz-yerel API token üretildi: %s", f)
