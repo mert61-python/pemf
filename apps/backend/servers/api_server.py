@@ -5469,6 +5469,22 @@ def _daily_maintenance_loop():
                 # Eskiden burada shutil.copy2 (duz-metin) ile AYNI backups/ dizinine + AYNI glob'a
                 # (pemf_treatment_history_*.db, son-14) yaziliyordu → iki zamanlayici birbirinin
                 # yedegini SILIYORDU ve PII duz-metin yedekleniyordu. Yedek tek noktada toplandi.
+
+            # 4) Y121 (S-C.3 · D2.57): HASTA DB'sinin ertelenmiş KVKK VACUUM'u (toplu silmede düşmüştü) — ilk tur (açılıştan ~60 sn
+            # sonra) ve her gün, YALNIZ seans yokken (VACUUM tüm DB'yi kilitler). Tedavi DB'sinden bağımsız.
+            # Kapı: tests/test_hasta_DB_VACUUM_bekliyor_KALICI_Y121.py
+            try:
+                with _session_lock:
+                    _seans_var = bool(_active_session.get("is_active"))
+            except Exception:
+                _seans_var = True  # emin degilsek VACUUM YAPMA (fail-safe)
+            if not _seans_var:
+                try:
+                    _hdb = get_patient_database()
+                    if _hdb is not None and hasattr(_hdb, "bekleyen_vacuum_calistir"):
+                        _hdb.bekleyen_vacuum_calistir()
+                except Exception:
+                    log.warning("Hasta DB ertelenmis KVKK VACUUM'u (bakim) hatasi", exc_info=True)
         except Exception:
             _dongu_hatasini_bildir("daily maintenance loop genel hatasi", logger=log, seviye=logging.WARNING)
         run_count += 1

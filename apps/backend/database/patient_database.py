@@ -374,6 +374,59 @@ class PatientDatabase:
             ON patient_search_index(token_hmac)
             """
         )
+        # Y121 (S-C.3): kalıcı bakım işaretleri (ör. ertelenmiş KVKK VACUUM'u) — yeniden başlatmada kaybolmaz.
+        cursor.execute(
+            "CREATE TABLE IF NOT EXISTS bakim_durumu (anahtar TEXT PRIMARY KEY, deger TEXT, guncellendi TEXT)"
+        )
+
+    #: Y121: toplu silmede düşen VACUUM'un kalıcı işareti (`bakim_durumu`).
+    VACUUM_BEKLIYOR_ANAHTARI = "kvkk_vacuum_bekliyor"
+
+    def vacuum_bekliyor_mu(self) -> bool:
+        """Y121: ertelenmiş KVKK VACUUM'u var mı? Okunamazsa True (emin değilsek yeniden dene — VACUUM zararsız)."""
+        try:
+            with self._get_connection() as conn:
+                r = conn.execute(
+                    "SELECT deger FROM bakim_durumu WHERE anahtar=?", (self.VACUUM_BEKLIYOR_ANAHTARI,)
+                ).fetchone()
+                return bool(r) and str(r[0]) == "1"
+        except _DB_ERROR:
+            self.logger.warning("Hasta DB VACUUM isareti okunamadi — bekliyor sayiliyor", exc_info=True)
+            return True
+
+    def _vacuum_isaretini_yaz(self, deger: str) -> bool:
+        try:
+            with self._get_connection() as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO bakim_durumu (anahtar, deger, guncellendi) VALUES (?,?,?)",
+                    (self.VACUUM_BEKLIYOR_ANAHTARI, deger, datetime.now().isoformat(timespec="seconds")),
+                )
+                conn.commit()
+            return True
+        except _DB_ERROR:
+            self.logger.error(
+                "Hasta DB VACUUM isareti yazilamadi (%s) — ertelenmis VACUUM kendiliginden yeniden denenmeyebilir.",
+                deger,
+                exc_info=True,
+            )
+            return False
+
+    def bekleyen_vacuum_calistir(self) -> bool:
+        """Y121: ertelenmiş KVKK VACUUM'u koş (ÇAĞIRAN seans olmadığını denetler — günlük bakım döngüsü). @return koştu mu."""
+        if not self.vacuum_bekliyor_mu():
+            return False
+        with self.lock:
+            try:
+                with self._get_connection() as conn:
+                    conn.cursor().execute("VACUUM")
+                    # WAL kipinde VACUUM yeni sayfaları WAL'a yazar; eski sayfalar denetim noktasına kadar ana dosyada KALIR (ölçüldü).
+                    self._silme_sonrasi_denetim_noktasi(conn, "ertelenmis VACUUM")
+            except _DB_ERROR:
+                self.logger.warning("Hasta DB ertelenmis KVKK VACUUM'u yine yapilamadi (bekliyor)", exc_info=True)
+                return False
+        self._vacuum_isaretini_yaz("0")
+        self.logger.info("Hasta DB ertelenmis KVKK VACUUM'u tamamlandi.")
+        return True
 
     def _ensure_search_index(self, cursor) -> Optional[str]:
         """HMAC arama indeksini garanti et: tablo BOŞSA veya arama-anahtarı DEĞİŞTİYSE yeniden kur.
@@ -1041,13 +1094,18 @@ class PatientDatabase:
             try:
                 with self._get_connection() as conn:
                     conn.cursor().execute("VACUUM")
+                    # Y121: WAL kipinde eski sayfalar denetim noktasına kadar ana dosyada kalır (ölçüldü) → TRUNCATE.
+                    self._silme_sonrasi_denetim_noktasi(conn, "toplu hasta silme VACUUM")
                 return silinen, True
             except _DB_ERROR:
                 self.logger.warning(
-                    "Hastalar SILINDI ama VACUUM yapilamadi — silinen veri dosyanin bos sayfalarinda kalabilir "
-                    "(disk/G-C sorunu giderilince yeniden denenmeli).",
+                    "Hastalar SILINDI ama VACUUM yapilamadi — silinen veri dosyanin bos sayfalarinda kalabilir; "
+                    "kalici 'VACUUM bekliyor' isaretiyle acilista ve gunluk bakimda yeniden denenecek (Y121).",
                     exc_info=True,
                 )
+                # ⚠️ Y121 (S-C.3 · D2.57): eskiden kimse yeniden denemiyordu — silinen kayıtlar süresiz dosyada kalıyordu.
+                # Kapı: tests/test_hasta_DB_VACUUM_bekliyor_KALICI_Y121.py
+                self._vacuum_isaretini_yaz("1")
                 return silinen, False
 
     def search_patients(self, search_term: str) -> List[Dict[str, Any]]:
