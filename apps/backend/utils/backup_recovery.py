@@ -400,13 +400,25 @@ def refresh_recovery_material(app_data_dir, dest_dirs) -> bool:
     kod_guncel = kod_dosyasi_guncel_mi(app_data_dir, code)
     if not kod_guncel:
         _vardi = code_file.exists()
+        # ⚠️ E2-1.9 (2-E incelemesi): dosya yalnız METİN ŞABLONU yüzünden de güncel olmayabilir (D2.75 metni değiştirdi; 1.9.50'den
+        # yükseltme). "Kod değişti" yalnız dosyadaki kod bu kod DEĞİLSE denir — yoksa geçerli kasa kopyası "geçersiz" sanılır.
+        try:
+            _kod_ayni = _vardi and format_code(code) in code_file.read_text(encoding="utf-8")
+        except Exception:
+            _kod_ayni = False
         try:
             write_code_file(app_data_dir, code)
             kod_guncel = True
             logger.warning(
                 "KURTARMA KODU %s: %s — bu kodu MAKINE DISINDA saklayin. Yedekleri "
                 "baska bir makinede acmanin TEK yolu budur.",
-                "GUNCELLENDI (kod degisti; eski kod artik zarfi ACMAZ)" if _vardi else "yazildi",
+                (
+                    "dosya metni yenilendi (kod AYNI — kasadaki kod gecerli)"
+                    if _kod_ayni
+                    else "GUNCELLENDI (kod degisti; eski kod artik zarfi ACMAZ)"
+                    if _vardi
+                    else "yazildi"
+                ),
                 code_file,
             )
         except Exception:

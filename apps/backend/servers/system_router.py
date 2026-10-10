@@ -612,13 +612,18 @@ _KURTARMA_ONAY_IZI_ANAHTARI = "recovery_code_acknowledged_fp"
 
 
 def _kod_dosyasi_izi(kod_dosyasi) -> str:
-    """`KURTARMA-KODU.txt` içeriğinin parmak izi (yoksa / okunamazsa "")."""
+    """`KURTARMA-KODU.txt`deki KODUN parmak izi (yoksa / okunamazsa ""). ⚠️ E2-1.9: eskiden dosya METNİNİN özetiydi → yalnız metin
+    şablonu değişince (kod AYNI) onay düşüyor, bant geri geliyordu. Kod 150 bit — 16 hex özeti kaba kuvvetle açılamaz."""
     import hashlib
+    import re
 
     try:
-        return hashlib.sha256(kod_dosyasi.read_bytes()).hexdigest()[:16]
+        metin = kod_dosyasi.read_text(encoding="utf-8")
     except Exception:
         return ""
+    m = re.search(r"[A-Z2-7]{5}(?:-[A-Z2-7]{5}){5}", metin)
+    govde = ("kod:" + m.group(0)).encode("ascii") if m else metin.encode("utf-8")
+    return hashlib.sha256(govde).hexdigest()[:16]
 
 
 def _loopback_mu(request: Request) -> bool:
