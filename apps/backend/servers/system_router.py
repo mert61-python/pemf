@@ -752,6 +752,14 @@ async def recovery_ack(request: Request):
                 datetime.now().isoformat(timespec="seconds"),
                 "Operator kurtarma kodunu makine disina kopyaladigini onayladi",
             )
+            # E2-1.10: yedek turu (DB'ye bağlanmadan) "operatör kodu aldı" bilgisini görsün → onaydan sonra silinen dosya geri yazılmaz,
+            # onaysız yok olan dosya bir kez daha yazılır. İşaret yazılamazsa onay yine geçerli (yalnız dosya bir kez geri gelebilir).
+            try:
+                from utils.backup_recovery import ONAY_ISARETI_ADI
+
+                (app_data / ONAY_ISARETI_ADI).write_text(_kod_dosyasi_izi(app_data / CODE_FILE_NAME), encoding="utf-8")
+            except Exception:
+                logging.getLogger("system_router").warning("kurtarma onay isareti yazilamadi", exc_info=True)
 
         # C2-4.1 (Ö.4-Y8): DB yazımı olay döngüsünde DEĞİL — tedavi DB'si kilitliyken döngü donup ACİL DURDUR beklemesin.
         await asyncio.to_thread(_yaz)

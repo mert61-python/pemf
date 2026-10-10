@@ -87,7 +87,9 @@ def test_KRITIK_eski_surumun_MUHRU_varken_kod_dosyasi_YOKSA_bir_kez_YAZILIR_zarf
     )
     assert istemci.get("/api/system/recovery-status").json()["warn"] is True
 
-    dosya.unlink()  # operatör kodu dışarı aldı ve sildi → artık mühür yeni biçimde, dosya geri gelmez
+    # operatör kodu dışarı aldı ("Kaydettim" — E2-1.10: dışarı alındığının kanıtı onaydır) ve sildi → dosya geri gelmez
+    assert istemci.post("/api/system/recovery-ack").status_code == 200
+    dosya.unlink()
     br.refresh_recovery_material(veri, [hedef])
     assert not dosya.exists(), (
         "iyileştirme kalıcı değil: her turda eski mühür gibi davranıp operatörün sildiği dosyayı geri yazıyor"
@@ -102,6 +104,7 @@ def test_KARSIT_operator_kod_dosyasini_SILDIYSE_geri_YAZILMAZ_D260(ortam):
     assert br.refresh_recovery_material(veri, [hedef]) is True
     dosya = veri / br.CODE_FILE_NAME
     assert dosya.is_file(), "ön koşul: kod dosyası yazılmalı"
+    assert istemci.post("/api/system/recovery-ack").status_code == 200  # E2-1.10: "dışarı aldı" = onay verdi
     dosya.unlink()
     assert br.refresh_recovery_material(veri, [hedef]) is True
     assert br.refresh_recovery_material(veri, [hedef]) is True

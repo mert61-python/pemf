@@ -63,6 +63,24 @@ _FP_FILE_NAME = ".recovery_fp"
 # D2.60 (B-3.94): mühür `<önek><parmak izi>` YALNIZ zarf VE kod dosyası bu kod için yazıldıktan sonra vurulur. Öneksiz mühür eski
 # sürümündür — o sürüm mührü kod dosyasından ÖNCE vuruyordu, yani dosya hiç yazılamamış olabilir (bkz. refresh_recovery_material).
 _FP_MUHUR_ONEKI = "kod-yazildi:"
+# E2-1.10: operatör "Kaydettim" dediğinde (`/api/system/recovery-ack`) veri kökünde bırakılan işaret — kod dosyası yoksa "operatör kodu
+# dışarı alıp sildi" yalnız bu işaret varken varsayılır (onay kaydının asıl yeri tedavi DB'si; yedek turu DB'ye bağlanmaz).
+ONAY_ISARETI_ADI = ".recovery_ack"
+
+
+def kod_onay_izi(code: str) -> str:
+    """Onaylanan KODUN 16 hex parmak izi (kod 150 bit → kaba kuvvetle açılamaz; kod saklanmaz). Onay ucu (`system_router`) ve yedek turu
+    AYNI izi kullanır: işaret yalnız onaylanan koda geçerlidir — kod değişince eski onayın işareti yeni kodun onaysız silinmesini örtmez
+    (2-E incelemesi E2-1.10)."""
+    return hashlib.sha256(("kod:" + format_code(code)).encode("ascii")).hexdigest()[:16]
+
+
+def _onay_isareti_bu_kod_icin_mi(app_data_dir: Path, code: str) -> bool:
+    try:
+        return (Path(app_data_dir) / ONAY_ISARETI_ADI).read_text(encoding="utf-8").strip() == kod_onay_izi(code)
+    except Exception:
+        return False
+
 
 # Yedekleri OKUYABİLMEK için gereken asgari anahtar kümesi. Fazlasını koymuyoruz:
 # zarf ele geçerse açığa çıkacak yüzey kadar küçük olsun.
@@ -355,7 +373,14 @@ def refresh_recovery_material(app_data_dir, dest_dirs) -> bool:
     # vuruluyordu; dosya bir kez yazılamayınca (disk dolu / AV / izin) sonraki her tur "değişmedi + zarf sağlam" deyip burada dönüyor,
     # operatör kodu HİÇ öğrenmiyordu (uyarı bandı da çıkmıyordu: kod dosyası yok). Önekli mühürle dosya şimdi yoksa operatör kodu
     # dışarı alıp silmiştir (dosyanın kendi metni "silebilirsiniz" der) → geri YAZILMAZ.
-    if unchanged and not missing and kod_muhurlu:
+    # ⚠️ E2-1.10 (2-E incelemesi, S-E.1 kalan riski): "dışarı alıp sildi" yalnız operatör ONAY verdiyse varsayılır (onay ucu
+    # `ONAY_ISARETI_ADI` bırakır). Onaysız yok olan dosya (kodu almadan silme / AV) bir kez daha yazılır → uyarı bandı geri gelir.
+    if (
+        unchanged
+        and not missing
+        and kod_muhurlu
+        and ((app_data_dir / CODE_FILE_NAME).exists() or _onay_isareti_bu_kod_icin_mi(app_data_dir, code))
+    ):
         return True
     if missing:
         logger.warning(
