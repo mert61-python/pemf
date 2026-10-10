@@ -44,6 +44,11 @@ def tur(pdb, tdb, esik: int = ESIK_GUN) -> dict:
     sonuc = {"onay": False, "bekleyen": 0, "anonimlestirilen": 0, "tedavi_bekleyen": 0}
     islenen = 0
     try:
+        # 0) F2-1.3: kanonik tarafı ANONİM ama tedavi-DB ayna satırı hâlâ ad taşıyan hastalar bekleyen listeye (yeniden) yazılır.
+        try:
+            _uzlastir(pdb, tdb)
+        except Exception:
+            logger.warning("KVKK uzlastirma adimi yapilamadi (sonraki turda yeniden denenecek)", exc_info=True)
         # 1) B-3.34: önceki turlardan kalan tedavi-DB adımlarını yeniden dene (onaydan bağımsız: kanonik taraf ZATEN anonim).
         islenen += _bekleyenleri_isle(pdb, tdb)
         onay = tdb.anonim_onayi_oku()
@@ -94,6 +99,31 @@ def _kalinti_temizle(pdb, tdb) -> None:
                 db._silme_sonrasi_denetim_noktasi(conn, ne)
         except Exception:
             logger.warning("%s: denetim noktasi yapilamadi.", ne, exc_info=True)
+
+
+def _uzlastir(pdb, tdb) -> None:
+    """⚠️ F2-1.3 (2-F incelemesi): kanonik `anonymized=1` olduktan sonra tedavi DB'sine ad GERİ gelebilir — anonimleştirmeden önce alınmış
+    paketin REPLACE_ALL geri yüklemesi (`import_rows(replace=True)`; hasta kartı zaten var → atlanır), bayat istemcinin eski adla açtığı seans
+    (`upsert_patient` ayna satırına eski adı yazar), bozuk okunup ezilen bekleyen listesi. Hasta artık aday olmadığı için eskiden hiçbir tur
+    onu bir daha görmüyordu → ad SÜRESİZ kalıyordu (ölçüldü). Ayna satırı hâlâ ad taşıyan ve kanonik tarafı anonim olan hastalar, ayna
+    satırının KENDİ kimlik metinleriyle bekleyen listeye yazılır; tedavi adımı `_bekleyenleri_isle`de uygulanır. Onaydan bağımsız (kanonik
+    taraf zaten operatör onayıyla anonim — A-06); kartı yeniden adlanan hasta (`anonymized=0`) DOKUNULMAZ.
+    Kapı: tests/test_anonim_hasta_GERI_GELEN_ad_UZLASTIRILIR_F2_1_3.py"""
+    adli = tdb.adli_ayna_hastalar()
+    if not adli:
+        return
+    anonim = {
+        str(p.get("id"))
+        for p in pdb.get_all_patients(kati=True)
+        if str(p.get("anonymized") or 0) in ("1", "True", "true")
+    }
+    geri_gelen = {k: v for k, v in adli.items() if k in anonim}
+    if geri_gelen:
+        logger.warning(
+            "KVKK: %d anonim hastanin adi tedavi gecmisinde yeniden bulundu (geri yukleme / bayat istemci) — yeniden anonimlestiriliyor.",
+            len(geri_gelen),
+        )
+        tdb.anonim_bekleyen_ekle(geri_gelen)
 
 
 def _bekleyenleri_isle(pdb, tdb) -> int:

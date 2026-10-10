@@ -517,6 +517,16 @@ class PiiKarisimi:
             "KVKK: tedavi-DB anonimlestirmesi bekleyenler",
         )
 
+    def adli_ayna_hastalar(self) -> dict:
+        """F2-1.3: kimlikli ayna hasta satırlarından ad taşıyanlar {uuid: [ad, sahip, eposta]} (anonim / maskeli olmayan). Hata YÜKSELİR
+        (çağıran `tur` yakalar — "uzlaştırılacak yok" yalanı yok)."""
+        with self._get_connection() as conn:
+            satirlar = conn.execute(
+                "SELECT patient_uuid, name, owner_name, owner_email FROM patients WHERE COALESCE(patient_uuid, '') != '' "
+                f"AND {self._maskelenecek_mi_sql('name')}"
+            ).fetchall()
+        return {str(r[0]): [str(x) if x else "" for x in (r[1], r[2], r[3])] for r in satirlar}
+
     def anonim_bekleyen_dus(self, uuids) -> None:
         import json
 
