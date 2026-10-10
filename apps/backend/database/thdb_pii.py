@@ -236,6 +236,15 @@ class PiiKarisimi:
     #: ⚠️ D2.54 · A-27: anonimleştirme HASTAYI hedefler — hastanın veteriner HEKİMİ (`patient_veteriner`) seans parametresinde KALIR
     #: (kanonik `patient_database.anonymize_inactive_patients` de `veteriner`i bırakır, `vet_contact`ı siler).
     _ANONIM_KALAN_PARAMETRELER = frozenset({"patient_veteriner"})
+    #: ⚠️ F2-3.3 (2-F incelemesi, A-38): Legal §6 "yaşı ve kilosu ... anonimleştirilir" — kanonik `anonymize_inactive_patients` yaş/kiloyu
+    #: siler; geçmiş JOIN'i ve PDF bunları seans parametresinden (`patient_age` / `patient_weight`) okur → onlar da anonimleşir.
+    _ANONIM_EK_PARAMETRELER = frozenset({"patient_age", "patient_weight"})
+    #: Ayna hasta satırının anonim hâli (kimlikli ve F2-1.4'ün kimliksiz satırları AYNI kural): ad / sahip / iletişim / e-posta, F2-3.3: yaş,
+    #: kilo ve serbest not (cihaz taşımasıyla tam gelen satır — not sahibin adını/telefonunu taşıyabilir). Tür / ırk / hekim KALIR.
+    _ANONIM_AYNA_SET = (
+        "name='[ANONIM]', owner_name='[ANONIM]', vet_contact='', owner_email='', age='', weight_kg=NULL, "
+        "notes=CASE WHEN COALESCE(notes, '') = '' THEN notes ELSE '[ANONIM]' END, updated_at=CURRENT_TIMESTAMP"
+    )
 
     def anonymize_patients_by_uuid(self, patient_uuids, kimlikler=None) -> int:
         """KVKK retention (2026-06-28): patient_database'de anonimlestirilen hastalarin bu DB'deki
@@ -268,11 +277,9 @@ class PiiKarisimi:
                 ).fetchall():
                     metinler.setdefault(u, []).extend([ad, sahip, eposta])
                 # 1) patients kopyasi (get_session_history JOIN ile gösterdiği ad/sahip)
-                cursor.execute(
-                    f"UPDATE patients SET name='[ANONIM]', owner_name='[ANONIM]', vet_contact='', "
-                    f"owner_email='', updated_at=CURRENT_TIMESTAMP WHERE patient_uuid IN ({ph})",
-                    uuids,
-                )
+                # F2-3.3: kopyanın yaş / kilo / serbest notu da (cihaz taşımasıyla tam gelen satır — not sahibin adını/telefonunu
+                # taşıyabilir; kanonik DB yaş/kiloyu siler, seans notu zaten `[ANONIM]` olur).
+                cursor.execute(f"UPDATE patients SET {self._ANONIM_AYNA_SET} WHERE patient_uuid IN ({ph})", uuids)
                 n = int(cursor.rowcount)
                 # 1b) ⚠️ F2-1.4 (2-F incelemesi): KİMLİKSİZ ayna satırları (istemci yalnız ad gönderdi → `upsert_patient(uuid=None)`) ve
                 #     hastaya hiç bağlanmamış seanslar (`patient_id` NULL) — ad TEK hastaya çözülüyorsa (`ad_ile_kimliksiz`, Y125 kuralı;
@@ -280,11 +287,7 @@ class PiiKarisimi:
                 ek_pids, ek_sids = self._kimliksiz_ad_eslesmeleri(cursor, uuids, kimlikler)
                 if ek_pids:
                     eph = ",".join("?" * len(ek_pids))
-                    cursor.execute(
-                        f"UPDATE patients SET name='[ANONIM]', owner_name='[ANONIM]', vet_contact='', "
-                        f"owner_email='', updated_at=CURRENT_TIMESTAMP WHERE id IN ({eph})",
-                        ek_pids,
-                    )
+                    cursor.execute(f"UPDATE patients SET {self._ANONIM_AYNA_SET} WHERE id IN ({eph})", ek_pids)
                 # 2) KVKK BÜTÜNLÜK (sağ-unutulma): get_session_history patient_name'i session_parameters ve
                 #    ts.patient_name'den de okur (COALESCE). Şifreli-at-rest üretimde bu DENORMALİZE PII de
                 #    silinmezse anonimleştirme EKSİK kalırdı → ilgili session'ları patient_id üstünden temizle.
@@ -302,7 +305,9 @@ class PiiKarisimi:
                         f"UPDATE treatment_sessions SET patient_name='[ANONIM]', patient_notes='[ANONIM]' WHERE id IN ({sph})",
                         sids,
                     )
-                    _hasta_parametreleri = tuple(sorted(self._PII_PARAM_NAMES - self._ANONIM_KALAN_PARAMETRELER))
+                    _hasta_parametreleri = tuple(
+                        sorted((self._PII_PARAM_NAMES | self._ANONIM_EK_PARAMETRELER) - self._ANONIM_KALAN_PARAMETRELER)
+                    )
                     pn_ph = ",".join("?" * len(_hasta_parametreleri))
                     cursor.execute(
                         f"UPDATE session_parameters SET parameter_value='[ANONIM]' "
