@@ -460,6 +460,10 @@ def _harden_secret_file_acls(app_data_dir: Path, logger: logging.Logger) -> None
             seen.add(key)
             if lock_down_file(c, keep_current_user=True):
                 locked += 1
+            elif os.path.exists(str(c)):
+                # ⚠️ E2-1.2 (2-E incelemesi): `lock_down_file` her hatayı YUTUP False döner (icacls hata kodu / zaman aşımı /
+                # D2.79 "SID okunamadı") — aşağıdaki `except` bu yüzden ölü daldı. VAR olan dosyada False = kilit UYGULANAMADI.
+                basarisiz += 1
         except Exception:
             # ⚠️ 2026-09-20 triyaji: burasi `pass` idi. Sayac dusuyordu ama ISTISNA ile
             # "zaten kilitli/atlandi" AYIRT EDILEMIYORDU — sir dosyasi korumasiz kalsa
