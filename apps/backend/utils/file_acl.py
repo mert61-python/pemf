@@ -48,9 +48,21 @@ _EK_KALDIR = [x for s in _EK_GENIS_SIDLER for x in ("/remove:g", s)]
 # okunur (LocalSystem'de S-1-5-18); SID ad çözümlemesine ve dile bağlı değildir. SID okunamazsa kilit UYGULANMAZ (False +
 # uyarı): eksik bir ACE ile sürecin KENDİNİ dışarı atması kilidin hiç olmamasından kötüdür (DENETİM P3 — sahada yaşandı).
 # Kapı: tests/test_file_acl_SUREC_SID_ile_LocalSystem_kilidi_D279.py
-@functools.lru_cache(maxsize=1)
 def _surec_sid():
-    """Sürecin kullanıcı SID'i (`S-1-5-21-…`; LocalSystem'de `S-1-5-18`). Okunamazsa None. Belirteç süreç boyunca değişmez."""
+    """Sürecin kullanıcı SID'i (`S-1-5-21-…`; LocalSystem'de `S-1-5-18`). Okunamazsa None.
+
+    ⚠️ E2-1.1 (2-E incelemesi): yalnız BAŞARILI okuma önbellekte kalır (belirteç süreç boyunca değişmez). None önbelleğe girerse tek bir
+    geçici belirteç hatası bu süreçteki her `keep_current_user` kilidini yeniden başlatmaya kadar düşürürdü (sır dizininin 60 sn
+    geri çekilmesi boşa yeniden denerdi). Kapı: tests/test_file_acl_SUREC_SID_gecici_hata_KALICI_degil_E2_1_1.py"""
+    sid = _surec_sid_oku()
+    if sid is None:
+        _surec_sid_oku.cache_clear()
+    return sid
+
+
+@functools.lru_cache(maxsize=1)
+def _surec_sid_oku():
+    """Belirteçten tek okuma (önbellekli; None `_surec_sid` tarafından önbellekten atılır)."""
     if sys.platform != "win32":
         return None
     try:
@@ -101,6 +113,9 @@ def _surec_sid():
         return sid if sid and sid.startswith("S-1-") else None
     except Exception:
         return None
+
+
+_surec_sid.cache_clear = _surec_sid_oku.cache_clear
 
 
 def _surec_ace(kalitim: str):
