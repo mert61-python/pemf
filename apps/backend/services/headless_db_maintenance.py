@@ -209,6 +209,26 @@ class HeadlessDBMaintenance:
             logger.warning("%s gecersiz — varsayilan %d gun kullaniliyor.", env_name, default)
             return default
 
+    #: ⚠️ D2.44 (O-B2.1): `api_server` günlük döngüsünün okuduğu, hiçbir yerde belgelenmemiş ESKİ sensör saklama adı.
+    _ESKI_SENSOR_ADI = "PEMF_SENSOR_RETAIN_DAYS"
+
+    @classmethod
+    def _eski_sensor_adiyla(cls, yeni_ad_degeri: int) -> int:
+        """Sensör saklama süresi: `PEMF_RETAIN_SENSOR_DAYS` (vars. 90, 0 = adım kapalı) — çağıran onu okuyup buraya verir.
+
+        ⚠️ D2.44 (B-4.18 · O-B2.1): eski ad `PEMF_SENSOR_RETAIN_DAYS` YALNIZ yeni ad ayarlanmamışsa takma ad olarak uygulanır ve
+        uyarı yazılır — eski ada "0" (silme) yazmış klinikte telemetri sessizce 90 günde silinmesin. İkisi birden varsa YENİ ad kazanır.
+        Günlük döngü (`api_server`) artık sensör silmez; tek silici burası. Kapı: tests/test_bakim_TEK_silici_sensor_sozlesmesi_D244.py"""
+        if os.environ.get("PEMF_RETAIN_SENSOR_DAYS") is None and os.environ.get(cls._ESKI_SENSOR_ADI) is not None:
+            gun = cls._retain_days(cls._ESKI_SENSOR_ADI, 90)
+            logger.warning(
+                "%s KULLANIMDAN KALKTI — %d gun uygulandi; dagitim dosyasinda (device.env) PEMF_RETAIN_SENSOR_DAYS yazin.",
+                cls._ESKI_SENSOR_ADI,
+                gun,
+            )
+            return gun
+        return yeni_ad_degeri
+
     def _run_maintenance(self):
         try:
             m = self.db.run_maintenance()
@@ -218,7 +238,7 @@ class HeadlessDBMaintenance:
             # Tibbi-hukuki saklama suresi ulkeye/kliniğe gore degisir → operator karari.
             # 0 = o adim KAPALI (hicbir sey silinmez/maskelenmez).
             r = self.db.apply_data_retention_policy(
-                sensor_retain_days=self._retain_days("PEMF_RETAIN_SENSOR_DAYS", 90),
+                sensor_retain_days=self._eski_sensor_adiyla(self._retain_days("PEMF_RETAIN_SENSOR_DAYS", 90)),
                 # ⚠️ DOZ kaydı AYRI ayar (denetim 2026-08-17): uygulanan doz telemetri
                 # saklama süresiyle silinemez. `0` = adım kapalı.
                 dose_retain_days=self._retain_days("PEMF_RETAIN_DOSE_DAYS", 3650),

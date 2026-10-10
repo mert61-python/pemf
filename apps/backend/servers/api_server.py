@@ -5344,9 +5344,9 @@ def _sensor_persistence_loop():
 
 def _daily_maintenance_loop():
     """Asama-2 (4): GUNLUK arka-plan bakim — retention temizligi + .db yedek.
-    - Retention: sensor_samples (PEMF_SENSOR_RETAIN_DAYS, vars. 90) + session_events (PEMF_RETAIN_EVENT_DAYS, vars. 365,
-      0 = silme — headless bakımla aynı ayar; B2-1.6).
-      Run-ozetleri run bitiminde yazildigindan ham silinince ozet kalir.
+    - Retention: session_events (PEMF_RETAIN_EVENT_DAYS, vars. 365, 0 = silme — headless bakımla aynı ayar; B2-1.6).
+      ⚠️ D2.44 (B-4.18 · O-B2.1): sensör örneklerini bu döngü SİLMEZ — tek silici `services/headless_db_maintenance`
+      (`PEMF_RETAIN_SENSOR_DAYS`, 0 = kapalı).
     - Haftada bir wal_checkpoint(TRUNCATE) + VACUUM (run_maintenance helper'i + VACUUM).
     - Gunluk .db yedek: once wal_checkpoint, sonra pemf_treatment_history.db ->
       app_data/backups/pemf_treatment_history_YYYYMMDD.db (shutil.copy2). Son 14 yedek tutulur.
@@ -5358,15 +5358,15 @@ def _daily_maintenance_loop():
     run_count = 0
     while True:
         try:
-            retain_days = int(os.getenv("PEMF_SENSOR_RETAIN_DAYS", "90"))
-        except Exception:
-            retain_days = 90
-        try:
             db = _get_treatment_db()
             if db is not None:
                 # 1) Retention temizligi.
                 try:
-                    removed_s = db.purge_old_sensor_samples(retain_days)
+                    # ⚠️ D2.44 (B-4.18 · O-B2.1): SENSÖR SİLME BU DÖNGÜDEN KALDIRILDI (dozdaki 2026-08-17 düzeltmesinin ikizi).
+                    # Burası hiçbir yerde belgelenmemiş `PEMF_SENSOR_RETAIN_DAYS`i (vars. 90) okuyor ve `max(1, …)` ile siliyordu →
+                    # dağıtım dosyasında `PEMF_RETAIN_SENSOR_DAYS=0` ("silme") yazan klinikte telemetri yine 90 günde gidiyor, eski
+                    # ada 0 yazılırsa 1 GÜNDEN eski tüm telemetri siliniyordu (ölçüldü). Tek silici headless bakım; eski ad orada
+                    # yalnız yeni ad yokken takma ad + uyarı. Kapı: tests/test_bakim_TEK_silici_sensor_sozlesmesi_D244.py
                     # ⚠️ B2-1.6: seans olayları (ACİL DURDUR kanıtı dahil) headless bakımla AYNI ayara uyar —
                     # `PEMF_RETAIN_EVENT_DAYS` (vars. 365, 0 = SİLME). Sabit 365 operatörün "silme"sini her gün eziyordu
                     # (dozdaki 2026-08-17 çelişkisinin aynısı). Kapı: tests/test_seans_olaylari_SAKLAMA_ayarina_uyar_B2_1_6.py
@@ -5385,7 +5385,7 @@ def _daily_maintenance_loop():
                     # Silme yeteneği kaybolmuyor: `services/headless_db_maintenance` üretimde her
                     # zaman koşuyor ve aynı işi `apply_data_retention_policy` üzerinden
                     # YAPILANDIRILABİLİR biçimde (`PEMF_RETAIN_DOSE_DAYS`) yapıyor.
-                    log.info("Retention: %s sensor + %s event silindi.", removed_s, removed_e)
+                    log.info("Retention: %s event silindi.", removed_e)
                     # KVKK retention (2026-06-28): 5 YIL inaktif hastalari ANONIMLESTIR (canonical
                     # patient_database + treatment-history kopyasi). Muafiyet yok.
                     try:
