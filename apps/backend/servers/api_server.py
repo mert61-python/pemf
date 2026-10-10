@@ -6043,10 +6043,45 @@ async def get_ai_log(
             (int(before_id) or None),
             (patient_id or None),
         )
+        # ⚠️ Y126 (S-A2.3): bu liste LAN'dan JETONSUZ (A-02) — önceki değerlendirmelerin METİNLERİ (red gerekçesi, düzeltilmiş
+        # teşhis; hasta adı / klinik bulgu taşıyabilir) listede TAŞINMAZ, yalnız SAYISI; metinler kayıt ayrıntısında
+        # (`GET /api/ai/log/{id}` — Y122). Listelenen kayıtlar DEĞİŞMEZ. Kapı: tests/test_ai_gecmisi_DEGERLENDIRME_GECMISI_ayrintida_Y122_Y126.py
+        for k in data:
+            k["review_history_count"] = len(k.pop("review_history", None) or [])
         return {"status": "success", "data": data}
     except Exception:
         logging.exception("get_ai_log failed")
         return {"status": "error", "detail": "Log okunamadı", "data": []}
+
+
+@app.get("/api/ai/log/{analiz_id}")
+async def get_ai_log_kaydi(request: Request, analiz_id: int):
+    """TEK AI kaydı + ÖNCEKİ değerlendirmelerin metinleri (Y122 "Önceki değerlendirmeler": karar, metin, hekim, zaman).
+
+    ⚠️ Y122 / Y126: metinler kaydı görebilen hekime — kimlik kuralı silme/değerlendirmeyle aynı: cihazda kayıtlı operatör VARSA kimlik
+    YALNIZ operatör jetonundan (kimliksiz → 428); YOKSA (Kural 2, tek hekimli klinik) serbest. Tünel/uzak kuralı değişmez (ara katman).
+    PDF bu ucu kullanmaz ve geçmişi basmaz."""
+    from servers.auth import cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
+
+    def _kimlik_tamam() -> bool:
+        return (not kayitli_operator_var()) or bool(cozumlenmis_operator(request))
+
+    if not await asyncio.to_thread(_kimlik_tamam):
+        raise HTTPException(
+            status_code=428,
+            detail=kimliksiz_detayi(
+                "Operatör seçin — önceki değerlendirmeleri görmek için üst bardan hangi hekim olduğunuzu seçin."
+            ),
+        )
+    db = _get_treatment_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Kayıt veritabanı açılamadı.")
+    kayitlar = await asyncio.to_thread(db.get_ai_analyses, 1, None, None, int(analiz_id) + 1)
+    kayit = next((k for k in (kayitlar or []) if int(k.get("id", 0)) == int(analiz_id)), None)
+    if not kayit:
+        raise HTTPException(status_code=404, detail="Analiz kaydı bulunamadı.")
+    kayit["review_history_count"] = len(kayit.get("review_history") or [])
+    return {"status": "success", "data": kayit}
 
 
 def _enforce_privileged(request: Request) -> None:

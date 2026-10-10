@@ -1,0 +1,62 @@
+{
+  "liste": {
+    "durum": 200,
+    "govde": {
+      "status": "success",
+      "data": [
+        {
+          "id": 1,
+          "created_at": "<zaman>",
+          "mode": "",
+          "module_id": "m",
+          "module_label": "",
+          "patient_name": "P",
+          "patient_uuid": "",
+          "operator_email": "",
+          "input_type": "",
+          "result_summary": "ozet",
+          "result_detail": {},
+          "confidence": null,
+          "review_status": "approved",
+          "review_note": "",
+          "reviewed_by": "tek@klinik.com",
+          "reviewed_at": "<zaman>",
+          "review_history_count": 1
+        }
+      ]
+    }
+  },
+  "ayrinti": {
+    "durum": 200,
+    "govde": {
+      "status": "success",
+      "data": {
+        "id": 1,
+        "created_at": "<zaman>",
+        "mode": "",
+        "module_id": "m",
+        "module_label": "",
+        "patient_name": "P",
+        "patient_uuid": "",
+        "operator_email": "",
+        "input_type": "",
+        "result_summary": "ozet",
+        "result_detail": {},
+        "confidence": null,
+        "review_status": "approved",
+        "review_note": "",
+        "reviewed_by": "tek@klinik.com",
+        "reviewed_at": "<zaman>",
+        "review_history": [
+          {
+            "status": "rejected",
+            "note": "Lezyon sinirlari yanlis-Y122-gizli-gerekce",
+            "reviewed_by": "tek@klinik.com",
+            "reviewed_at": "<zaman>"
+          }
+        ],
+        "review_history_count": 1
+      }
+    }
+  }
+}

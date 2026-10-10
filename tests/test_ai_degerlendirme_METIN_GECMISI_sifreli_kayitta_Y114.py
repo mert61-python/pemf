@@ -114,9 +114,10 @@ def test_KARSIT_ilk_degerlendirmede_gecmis_BOS_ve_GET_ucu_gecmisi_tasir(o):
     assert _degerlendir(o, aid, "rejected", j[AYSE], GEREKCE_1).status_code == 200
     assert _gecmis_sql(o, aid) == [], "ilk değerlendirmede geçmiş boş olmalı"
     assert _degerlendir(o, aid, "approved", j[AYSE]).status_code == 200
-    kayit = next(k for k in o.yerel.get("/api/ai/log", params={"limit": 50}).json()["data"] if k["id"] == aid)
+    # Y126 (2-F): jetonsuz LAN listesi geçmişin yalnız SAYISINI taşır; metinler kayıt ayrıntısında (Y122, kimlikli).
+    kayit = o.yerel.get(f"/api/ai/log/{aid}", headers={"X-PEMF-Operator": j[AYSE]}).json()["data"]
     assert [g.get("note") for g in kayit.get("review_history") or []] == [GEREKCE_1], (
-        "GET /api/ai/log geçmişi taşımıyor"
+        "GET /api/ai/log/{id} (ayrıntı) geçmişi taşımıyor"
     )
 
 

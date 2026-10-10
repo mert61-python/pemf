@@ -10,6 +10,7 @@ import { detailRows, INPUT_LABELS } from "@/utils/aiDetail";
 import { Brain, ChevronDown, ChevronRight, RefreshCcw, Trash2, Share2 } from "lucide-react-native";
 import {
   AiReviewControls,
+  REVIEW_LABEL,
   ReviewBadge,
   type DegerlendirmeTaslagi,
   type ReviewStatus,
@@ -54,7 +55,12 @@ interface AiAnalysis {
   review_note?: string;
   reviewed_by?: string;
   reviewed_at?: string;
+  /** Y126: liste ucu önceki değerlendirmelerin yalnız SAYISINI taşır (metinler kayıt ayrıntısında — Y122). */
+  review_history_count?: number;
 }
+
+/** Y122: önceki bir değerlendirme (karar, metin, hekim, zaman) — `GET /api/ai/log/{id}` ayrıntısından. */
+interface OncekiDegerlendirme { status: ReviewStatus; note?: string; reviewed_by?: string; reviewed_at?: string }
 
 const MODE_LABEL: Record<string, string> = {
   pet_owner: "Evcil Sahibi",
@@ -105,6 +111,10 @@ export function AiHistoryScreen() {
   // (operatör geçişi, kilit) taslaklar DÜŞER — aksi hâlde Dr. B, Dr. A'nın yazdığı red gerekçesini görüp kendi adıyla
   // gönderebiliyordu. Kapı: screens/__tests__/aiDegerlendirme.D242.E12.web.test.tsx (B2B-2).
   useEffect(() => { setTaslaklar({}); }, [myEmail]);
+  // ⚠️ Y122 / Y126: önceki değerlendirmelerin METİNLERİ liste ucunda yok — kayıt açılınca ayrıntı ucundan (kimlikli) çekilir.
+  // Önbellek YALNIZ BELLEKTE ve KİMLİĞE aittir: kimlik değişince düşer (A'nın jetonuyla çekilen metin B'ye gösterilmez).
+  const [gecmisler, setGecmisler] = useState<Record<number, OncekiDegerlendirme[] | "yukleniyor" | "hata">>({});
+  useEffect(() => { setGecmisler({}); }, [myEmail]);
   // Klinik-içi: "mine" = benim yaptığım analizler (+ sahipsiz eski), "all" = tüm klinik.
   const [scope, setScope] = useState<"mine" | "all">("mine");
   // ⚠️ KVKK 2026-08-08: "Tüm Klinik" EV SAHİBİNE KAPALI — hasta ekranındaki kapının AYNISI.
@@ -243,13 +253,30 @@ export function AiHistoryScreen() {
     if (!res) return false;   // apiPost hata mesajını zaten gösterdi; iyimser güncelleme YAPMA, gerekçe korunur (D2.E12)
     setItems((prev) => prev.map((x) => x.id === id
       ? { ...x, review_status: status as ReviewStatus, review_note: note,
-          reviewed_by: myEmail, reviewed_at: new Date().toISOString() }
+          reviewed_by: myEmail, reviewed_at: new Date().toISOString(),
+          // Y122: önceki karar (varsa) sunucuda geçmişe geçti — sayı artar.
+          review_history_count: (x.review_history_count ?? 0) + (x.review_status ? 1 : 0) }
       : x));
     setTaslaklar((p) => { const y = { ...p }; delete y[id]; return y; });
+    // Y122: önbellek düşer — açık kart geçmişi yeniden çeker.
+    setGecmisler((g) => { const y = { ...g }; delete y[id]; return y; });
     return true;
     // ⚠️ D2.42 (B-6.21): bağımlılık GÜNCEL kimlik (`myEmail`). Eskiden `[session]` — kart açıkken operatör değişince
     // değerlendirme ESKİ hekimin adıyla imzalanıyordu (ölçüldü). Kapı: screens/__tests__/aiDegerlendirme.D242.E12.web.
   }, [myEmail, kimlikYok, kimlikIste]);
+
+  // ⚠️ Y122 (S-C.4): açık kartın önceki değerlendirmeleri (sayısı > 0 ise) ayrıntı ucundan — kimlik kuralı backend'de (kayıtlı
+  // operatörlü cihazda jeton; operatörsüz klinik serbest). Başarısızsa "yüklenemedi" (sessiz boş liste YOK).
+  // Kapı: screens/__tests__/aiGecmisiOncekiDegerlendirmeler.Y122.web.test.tsx
+  useEffect(() => {
+    if (expanded == null) return;
+    const it = items.find((x) => x.id === expanded);
+    if (!it || !((it.review_history_count ?? 0) > 0) || gecmisler[expanded] !== undefined) return;
+    const id = expanded;
+    setGecmisler((g) => ({ ...g, [id]: "yukleniyor" }));
+    void apiGet<{ data?: { review_history?: OncekiDegerlendirme[] } } | null>(`/ai/log/${id}`, null, { silent: true })
+      .then((r) => setGecmisler((g) => ({ ...g, [id]: Array.isArray(r?.data?.review_history) ? r!.data!.review_history! : "hata" })));
+  }, [expanded, items, gecmisler]);
 
 
   // ORTA fix: before_id keyset ile "Daha Fazla Yükle" → 300'den fazla AI analizi olan (araştırma) kullanıcının
@@ -488,6 +515,30 @@ export function AiHistoryScreen() {
                         onTaslakDegis={(t) => setTaslaklar((p) => ({ ...p, [it.id]: t }))}
                       />
 
+                      {/* Y122 (S-C.4): ÖNCEKİ DEĞERLENDİRMELER — karar, metin, hekim, zaman (eskiden yeniye). PDF'e GİRMEZ. */}
+                      {(it.review_history_count ?? 0) > 0 ? (
+                        <View style={styles.onceki}>
+                          <Text style={styles.detailKey}>Önceki değerlendirmeler ({it.review_history_count})</Text>
+                          {gecmisler[it.id] === undefined || gecmisler[it.id] === "yukleniyor" ? (
+                            <ActivityIndicator color={colors.primary} />
+                          ) : gecmisler[it.id] === "hata" ? (
+                            <Text style={styles.detailLine}>
+                              Önceki değerlendirmeler yüklenemedi — kayıtlı hekimli cihazda üst bardan hangi hekim olduğunuzu seçin.
+                            </Text>
+                          ) : (
+                            (gecmisler[it.id] as OncekiDegerlendirme[]).map((g, i) => (
+                              <View key={i} style={styles.oncekiSatir}>
+                                <Text style={styles.detailLine}>
+                                  {REVIEW_LABEL[g.status] || g.status} · {g.reviewed_by || "imzasız"}
+                                  {g.reviewed_at ? ` · ${fmtDate(g.reviewed_at)}` : ""}
+                                </Text>
+                                {g.note ? <Text style={styles.oncekiMetin} selectable>{g.note}</Text> : null}
+                              </View>
+                            ))
+                          )}
+                        </View>
+                      ) : null}
+
                       {/* ⚠️ ANALİZİ PAYLAŞ (sahip isteği 2026-09-12, ev sahibi önerisi #3):
                           ev sahibi sonucu veterinerine gönderemiyordu — PDF üretimi yalnız
                           SEANS kayıtları içindi. Ekran görüntüsü eksik (sayısal detay kaybolur)
@@ -643,6 +694,9 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   detailKey: { color: colors.textMuted, fontSize: typography.small, flexShrink: 0 },
+  onceki: { marginTop: spacing.sm, gap: spacing.xs },
+  oncekiSatir: { borderLeftWidth: 2, borderLeftColor: colors.border, paddingLeft: spacing.sm },
+  oncekiMetin: { color: colors.text, fontSize: typography.small },
   detailValue: { color: colors.text, fontSize: typography.small, fontWeight: "600", flex: 1, textAlign: "right" },
   empty: { color: colors.textMuted, fontSize: typography.body, textAlign: "center", padding: spacing.xxl, lineHeight: rf(22) },
 });

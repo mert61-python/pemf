@@ -115,7 +115,8 @@ def test_KRITIK_GERCEK_uc_eszamanli_iki_degerlendirme_gecmisi_GET_ile_TAM(o):
                 ),
             ]
         )
-        kayit = next(k for k in c.get("/api/ai/log?limit=50").json()["data"] if k["id"] == aid)
+        # Y126 (2-F): liste geçmişin yalnız SAYISINI taşır; metinler kayıt ayrıntısında (Y122) — ölçüm ayrıntı ucundan.
+        kayit = c.get(f"/api/ai/log/{aid}").json()["data"]
         metinler = sorted([x["note"] for x in kayit["review_history"]] + [kayit["review_note"]])
         if sonuc != [200, 200] or metinler != ["B duzeltmesi", "C duzeltmesi", "ilk gerekce"]:
             kayiplar.append((i, sonuc, metinler))

@@ -22,6 +22,7 @@ GOLDEN_ROUTES = {
     ("/api/ai/disease/kidney", "POST"),
     ("/api/ai/log", "GET"),
     ("/api/ai/log/{analiz_id}/pdf", "GET"),  # sahip 2026-09-12: ev sahibi analiz paylasimi
+    ("/api/ai/log/{analiz_id}", "GET"),  # Y122/Y126 (2-F): kayit ayrintisi + onceki degerlendirme metinleri
     ("/api/ai/log/review", "POST"),  # 2026-08-06 hekim degerlendirmesi (onay/red/duzeltme)
     # 2026-08-08 KVKK silme hakki: AI gecmisini silmenin HICBIR yolu yoktu (kaldirma da silmiyor).
     ("/api/ai/log/delete", "POST"),
@@ -219,4 +220,5 @@ def test_route_contract_unchanged():
     # → 100 (+1 seans-ortası parametre güncelleme: session/parametre_guncelle POST), 2026-09-11
     # → 105 (+1 acil durdurma mandalını sıfırla: hardware/estop_mandali/sifirla POST — D1.81 · Y4), 2026-10-01
     # → 106 (+1 operatör sunucu kilidi: operators/lock POST — D2.E14 · İG-6.63), 2026-10-08
-    assert len(current) == len(beklenen) == 106 - (0 if _simulator_mountlu() else 1)
+    # → 107 (+1 AI kaydı ayrıntısı: ai/log/{analiz_id} GET — Y122/Y126), 2026-10-10
+    assert len(current) == len(beklenen) == 107 - (0 if _simulator_mountlu() else 1)
