@@ -59,6 +59,12 @@ DEĞİL, **depo kökündeki** `supabase/` dizinindedir (buradan `../../../supaba
 | `../../../supabase/upsert_device_envanter.sql` | `upsert_device`e envanter alanları ekler (bcrypt modeli korunur) | Envanter alanları kullanılacaksa |
 | `../../../supabase/seans_kimligi_bilesik_anahtar.sql` | `treatment_sessions` birincil anahtarını `(id)` → **`(device_id, id)`** bileşiğine çevirir. `id` kliniğin YEREL SQLite `AUTOINCREMENT`'inden geldiği için her klinik 1, 2, 3… diye başlıyordu → çoklu klinikte sessiz veri kaybı (denetim 2026-08-30) | Çoklu klinik kullanılacaksa **Evet** |
 
+### Abonelik tablosu — ÜÇÜNCÜ konum (`apps/ui/supabase/`)
+
+| Dosya | Ne yapar | Zorunlu mu |
+|---|---|---|
+| `../../ui/supabase/subscriptions.sql` | `subscriptions` (abonelik / entitlement) tablosu + RLS + `anon`/`authenticated` yazma yetkilerini geri alma; kullanıcı yalnız kendi satırını okur, yazma yalnız `service_role` (Stripe webhook). Mobil arayüzle birlikte taşındığı için bu dizinde değil (D4.25: SQL değişmez kapısı bu dosyayı da tarar — taranan küme `git ls-files '*.sql'`) | Abonelik/hak gösterimi kullanılacaksa |
+
 ### Jeton ücretlendirme + canlı-şema sertleştirme
 
 Bu `.sql` dosyaları da bu dizindedir ama yukarıdaki v1→v2 sırasından **bağımsızdır**; canlıya

@@ -19,6 +19,7 @@ SQL'i çalıştırmaz (canlı Postgres gerektirmez); metinsel/yapısal denetim y
 """
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -28,11 +29,15 @@ _KOK = Path(__file__).resolve().parent.parent
 # `supabase/upsert_device_envanter.sql` bu yüzden HİÇ denetlenmedi ve içinde üretimi kıracak bir
 # imza çakışması vardı (dağıtımdan önce elle yakalandı). Yeni SQL'in nereye konacağı sabit
 # değilse, kapı da tek bir dizine bakmamalı.
-_SQL_DIRS = [_KOK / "apps" / "backend" / "database", _KOK / "supabase"]
+# ⚠️ D4.25 (B-3.58, 2026-10-10): İKİ dizin de YETMEDİ — `apps/ui/supabase/subscriptions.sql` (abonelik tablosu, RLS +
+# grant geri alma) ÜÇÜNCÜ konumdaydı ve hiç taranmıyordu (oraya `grant select … to authenticated` eklemek yeşildi).
+# Taranan küme artık dizin listesi değil, depodaki İZLENEN her `.sql` dosyası (`git ls-files -z '*.sql'`).
 
 
 def _sql_files() -> list[Path]:
-    return sorted(p for d in _SQL_DIRS if d.is_dir() for p in d.glob("*.sql"))
+    r = subprocess.run(["git", "ls-files", "-z", "*.sql"], cwd=_KOK, capture_output=True, timeout=120)
+    assert r.returncode == 0, f"git ls-files düştü (rc={r.returncode}) — SQL kümesi ölçülemiyor"
+    return sorted(_KOK / x.decode("utf-8") for x in r.stdout.split(b"\x00") if x)
 
 
 def _strip_comments(text: str) -> str:
@@ -43,9 +48,27 @@ def _strip_comments(text: str) -> str:
 @pytest.fixture(scope="module")
 def sql_bodies() -> dict[str, str]:
     files = _sql_files()
-    if not files:
-        pytest.skip(f"SQL şeması yok: {[str(d) for d in _SQL_DIRS]}")
+    assert len(files) >= 10, f"VAKUM: yalniz {len(files)} izlenen .sql bulundu — tarama bozuk"
+    adlar = [f.name for f in files]
+    assert len(set(adlar)) == len(adlar), f"ayni adli iki .sql (anahtar cakisir): {sorted(adlar)}"
     return {f.name: _strip_comments(f.read_text(encoding="utf-8", errors="replace")) for f in files}
+
+
+def test_KRITIK_taranan_SQL_kumesi_IZLENEN_her_SQL_dosyasi():
+    """D4.25: "izlenen = taranan". Kapının kendi bulucusundan BAĞIMSIZ `git ls-files` ölçümüyle karşılaştırılır."""
+    r = subprocess.run(["git", "ls-files", "-z", "--", "*.sql"], cwd=_KOK, capture_output=True, timeout=120)
+    izlenen = {x.decode("utf-8") for x in r.stdout.split(b"\x00") if x}
+    taranan = {p.relative_to(_KOK).as_posix() for p in _sql_files()}
+    assert izlenen and taranan == izlenen, f"taranmayan izlenen .sql: {sorted(izlenen - taranan)}"
+    assert "apps/ui/supabase/subscriptions.sql" in taranan, "abonelik SQL'i (ucuncu konum) taranmiyor"
+
+
+def test_KRITIK_README_her_izlenen_SQL_dosyasini_ANAR():
+    """D4.25: Supabase SQL'leri sahibi tarafından ELLE ve SIRAYLA uygulanır; README'de anılmayan dosya ya hiç uygulanmaz
+    ya da yanlış sırada uygulanır (4. dosya listede YOKTU — 2026-08-18). Üçüncü konum (`apps/ui/supabase/`) da anılmalı."""
+    metin = (_KOK / "apps" / "backend" / "database" / "README.md").read_text(encoding="utf-8")
+    anilmayan = sorted(p.relative_to(_KOK).as_posix() for p in _sql_files() if p.name not in metin)
+    assert not anilmayan, f"apps/backend/database/README.md su izlenen .sql dosya(lar)ini ANMIYOR: {anilmayan}"
 
 
 def test_her_tabloda_rls_acik(sql_bodies):
@@ -198,24 +221,45 @@ def test_KRITIK_ayni_RPC_farkli_arite_ile_tanimlaniyorsa_ESKISI_DUSURULUR(sql_bo
     ⚠️ "Başka bir dosyada drop var" YETMEZ: dosyalar ayrı ayrı ve farklı zamanlarda çalıştırılır.
     Düşürme, yeni imzayı getiren betiğin İÇİNDE olmalı ki tek başına çalıştırıldığında da güvenli
     olsun."""
+    ihlaller = _imza_dusurme_ihlalleri(sql_bodies)
+    assert not ihlaller, "\n".join(ihlaller)
+
+
+def _imza_dusurme_ihlalleri(sql_bodies: dict[str, str]) -> list[str]:
+    """D4.25 (B-3.57): EN KÜÇÜK aritenin ÜSTÜNDEKİ her (fonksiyon, arite) için, o imzayı tanımlayan dosyalardan EN AZ
+    BİRİ eski imzaları düşürmeli. Eski kural yalnız EN GENİŞ imzayı getiren dosyaya bakıyordu: `upsert_device` için o dosya
+    envanter (11); v2'nin (7) sırsız v1'i (6) düşürmesi silinse — sıfırdan kurulumda anon'a açık sırsız aşırı-yük geri
+    gelir (tünel zehirleme) — kapı YEŞİLDİ (ölçüldü). Aynı imzayı yeniden tanımlayan sonraki yama (seans bileşik anahtarı)
+    ayrıca düşürme yazmak zorunda değildir: o arite zaten düşürmeli bir dosyayla gelmiştir."""
     ariteler: dict[str, dict[str, set[int]]] = {}
     for ad, govde in sql_bodies.items():
         for m in _FN_TANIM.finditer(govde):
             fn = m.group(1).lower()
             ariteler.setdefault(fn, {}).setdefault(ad, set()).add(_parametre_sayisi(m.group(2)))
-
-    for fn, dosyalar in ariteler.items():
+    ihlaller = []
+    for fn, dosyalar in sorted(ariteler.items()):
         hepsi = set().union(*dosyalar.values())
         if len(hepsi) <= 1:
             continue  # tek arite → çakışma yok
-        enis = max(hepsi)
-        getirenler = [ad for ad, ar in dosyalar.items() if enis in ar]
-        for ad in getirenler:
-            assert _dusurme_var_mi(sql_bodies[ad], fn), (
-                f"{ad}: `{fn}` en genis imzayi ({enis} parametre) getiriyor ama eski imzalari "
-                f"DUSURMUYOR. Depoda su ariteler var: {sorted(hepsi)}. PostgreSQL ikinci bir "
-                f"asiri-yukleme yaratir; az-argumanli cagrilar PGRST203 ile olur."
-            )
+        for arite in sorted(hepsi - {min(hepsi)}):
+            getirenler = sorted(ad for ad, ar in dosyalar.items() if arite in ar)
+            if not any(_dusurme_var_mi(sql_bodies[ad], fn) for ad in getirenler):
+                ihlaller.append(
+                    f"{getirenler}: `{fn}` {arite} parametreli imzayi getiriyor ama HICBIRI eski imzalari DUSURMUYOR. "
+                    f"Depoda su ariteler var: {sorted(hepsi)}. PostgreSQL ikinci bir asiri-yukleme yaratir; az-argumanli "
+                    f"cagrilar PGRST203 ile olur (sirsiz v1 anon'a acik kalir)."
+                )
+    return ihlaller
+
+
+def test_KARSIT_KANIT_v2_SIRSIZ_upsert_device_DUSURMESI_bellekte_silinince_YAKALANIR(sql_bodies):
+    """Ölçücü kör değil: v2'nin `drop function … upsert_device(6 parametre)` satırı BELLEKTE silinince ihlal çıkmalı."""
+    govde = sql_bodies["supabase_secure_v2.sql"]
+    satir = re.search(r"^drop\s+function\s+if\s+exists\s+public\.upsert_device\([^)]*\);[^\n]*\n", govde, re.M | re.I)
+    assert satir, "v2'de sirsiz upsert_device dusurmesi bulunamadi — karsit kanit kurulamiyor"
+    bozuk = dict(sql_bodies)
+    bozuk["supabase_secure_v2.sql"] = govde.replace(satir.group(0), "")
+    assert any("upsert_device" in i for i in _imza_dusurme_ihlalleri(bozuk)), "dusurmesi silinen v2 YESIL kaldi"
 
 
 def test_envanter_SQL_i_bcrypt_modelini_KORUR(sql_bodies):
