@@ -280,7 +280,12 @@ class BakimKarisimi:
             if not self.pii_onayi_var_mi(pii_retain_days):
                 bekleyen = self.redaksiyon_bekleyen_sayisi(pii_retain_days)
                 report['pii_pending'] = bekleyen
-                if bekleyen:
+                if bekleyen is None:
+                    # D2.58 (B-3.90): sayılamadı — "0 bekleyen" yazılmaz; ekran da "sayılamadı" der.
+                    self.logger.warning(
+                        "KVKK: maskelenmeyi bekleyen kayıt sayılamadı — operatöre sorulamıyor; maskeleme YAPILMADI."
+                    )
+                elif bekleyen:
                     self.logger.warning(
                         "KVKK: %d seans kaydı maskelenmeyi bekliyor ama operatör ONAYI YOK — "
                         "maskeleme YAPILMADI (geri dönüşsüz işlem sessizce uygulanmaz).",

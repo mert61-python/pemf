@@ -981,6 +981,12 @@ async def retention_ayarla(payload: _RetentionAyar, request: Request):
             yeni = int(payload.days) if payload.days is not None else onceki
             if payload.acknowledge and payload.acknowledge_days is not None and int(payload.acknowledge_days) != yeni:
                 return {"cakisma": yeni}
+            sayi = 0
+            if payload.acknowledge and yeni > 0:
+                # D2.58 (B-3.90): etkilenecek kayıt sayısı okunamıyorsa HİÇBİR ŞEY yazılmaz (A-09: sayı gösterilmeden onay yok).
+                sayi = db.redaksiyon_bekleyen_sayisi(yeni)
+                if sayi is None:
+                    return {"sayilamadi": True}
             sonuc = {"onceki": onceki, "yeni": yeni}
             if payload.days is not None:
                 sonuc["onay_dustu"] = yeni != onceki and db.pii_onayi_var_mi(onceki)
@@ -988,7 +994,6 @@ async def retention_ayarla(payload: _RetentionAyar, request: Request):
                 if yeni != onceki:
                     db.pii_onayi_iptal("sure_degisti")
             if payload.acknowledge:
-                sayi = db.redaksiyon_bekleyen_sayisi(yeni) if yeni > 0 else 0
                 db.pii_onayla(gun=yeni, sayi=sayi, kim=cozumlenmis_operator(request))
                 sonuc["onay_sayi"] = sayi
             return sonuc
@@ -999,6 +1004,11 @@ async def retention_ayarla(payload: _RetentionAyar, request: Request):
                 status_code=409,
                 detail=f"Saklama süresi bu ekran açıldıktan sonra değişti ({s['cakisma']} gün). Ekranı yenileyin, etkilenecek "
                 "kayıt sayısını görüp yeniden onaylayın — onay kaydedilmedi.",
+            )
+        if s.get("sayilamadi"):
+            raise HTTPException(
+                status_code=503,
+                detail="Maskelenecek kayıt sayısı okunamadı — onay kaydedilmedi. Tedavi veritabanını kontrol edip yeniden deneyin.",
             )
         if payload.days is not None:
             _iz.kimlikli_yaz(

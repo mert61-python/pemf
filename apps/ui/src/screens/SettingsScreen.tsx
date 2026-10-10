@@ -53,7 +53,8 @@ export function SettingsScreen() {
   // ortam değişkeniyle ayarlanabiliyordu — hiçbir veteriner bunu bilmez. Klinik 366. günde
   // hasta adı yerine `[REDACTED]` görüyor ve sebebini hiçbir yerde bulamıyordu.
   interface RetentionDurum {
-    days: number; configured: boolean; acknowledged: boolean; pending: number; default: number;
+    // D2.58 (B-3.90): pending null = sayılamadı (DB hatası) — "0 bekleyen" yalanı yok; ekran söyler, onay düğmesi çıkmaz.
+    days: number; configured: boolean; acknowledged: boolean; pending: number | null; default: number;
     // D2.55 · A-09: onay süreye ve maskeleme kapsamına bağlı. Kayıtlı ama geçersiz onay (süre/kapsam değişti) → approvalStale.
     approvedDays?: number | null; approvedCount?: number | null; approvalStale?: boolean;
     // D2.54 · A-06: 5 yıl inaktif hasta anonimleştirmesi — onay yoksa bekleyen sayı (sayılamazsa null) gösterilir, operatör onaylar.
@@ -870,7 +871,12 @@ export function SettingsScreen() {
               : "Maskeleme KAPALI — hasta ve operatör adları süresiz saklanır."}
           </Text>
 
-          {retention.pending > 0 ? (
+          {retention.pending === null ? (
+            <Text style={[styles.intro, { color: colors.warning }]}>
+              Maskelenmeyi bekleyen seans kaydı sayısı okunamadı — tedavi veritabanını kontrol edin. Sayı görülmeden onay verilemez;
+              onay verilene kadar hiçbir kayda dokunulmaz.
+            </Text>
+          ) : retention.pending > 0 ? (
             <>
               {/* D2.55 · A-09: süre ya da maskeleme kapsamı değişince önceki onay geçersiz — neden yeniden sorulduğu söylenir. */}
               {retention.approvalStale ? (

@@ -29,26 +29,54 @@ from typing import Dict, Optional
 
 
 class PiiKarisimi:
-    def redaksiyon_bekleyen_sayisi(self, retain_days: int = 365) -> int:
+    #: PII TAŞIMAYAN değerler (maskeli ya da anonimleşmiş) — maskelenecek sayılmaz, yeniden yazılmaz (D2.58).
+    _PII_SIZ_DEGERLER = ("[REDACTED]", "[ANONIM]")
+
+    @classmethod
+    def _maskelenecek_mi_sql(cls, sutun: str) -> str:
+        siz = ", ".join(f"'{d}'" for d in cls._PII_SIZ_DEGERLER)
+        return f"({sutun} IS NOT NULL AND {sutun} != '' AND {sutun} NOT IN ({siz}))"
+
+    def _redaksiyon_kosulu(self):
+        """(SQL koşulu, parametreler): seansın maskelenecek alanı VAR mı (seans sütunu ya da PII parametresi)?
+
+        ⚠️ D2.58 (B-3.89): bekleyen sayısı ve maskeleme bu TEK ölçütten türer — ekranın "N kayıt" dediği, maskelemenin değiştirdiğidir."""
+        adlar = tuple(sorted(self._PII_PARAM_NAMES))
+        seans = " OR ".join(self._maskelenecek_mi_sql(s) for s in self._PII_MASKELENEN_SEANS_SUTUNLARI)
+        param = (
+            "EXISTS (SELECT 1 FROM session_parameters p WHERE p.session_id = treatment_sessions.id "
+            f"AND p.parameter_name IN ({','.join('?' * len(adlar))}) AND {self._maskelenecek_mi_sql('p.parameter_value')})"
+        )
+        return f"({seans} OR {param})", adlar
+
+    def redaksiyon_bekleyen_sayisi(self, retain_days: int = 365) -> Optional[int]:
         """Bu ayarla KAÇ seans maskelenecek? (kuru çalışma — hiçbir şey değiştirmez)
 
         ⚠️ DENETİM 2026-08-09 (Tier 1): maskeleme GERİ DÖNÜŞSÜZ ve tamamen SESSİZ çalışıyordu.
         Klinik 366. günde hasta adı yerine `[REDACTED]` görüyor, sebebini hiçbir yerde bulamıyor
         ve "veritabanım bozuldu" diye destek arıyordu. Kararı operatörün ALMASI gerekir; bu
         fonksiyon "ne kaybedeceğini" önceden gösterebilmek için var.
+
+        ⚠️ D2.58 (B-3.89 · B-3.90): yalnız maskelenecek alanı OLAN seanslar sayılır (zaten maskeli / `[ANONIM]` / boş sayılmaz; adı
+        maskeli ama parametresinde PII kalan seans sayılır). DB hatasında `None` ("sayılamadı") + WARNING — eskiden DEBUG + `0`:
+        ekran "bekleyen yok" sanıp geri dönüşsüz maskeleme sorusunu sormuyordu.
+        Kapı: tests/test_pii_redaksiyon_SAYIMLARI_durust_D258.py
         """
         try:
             cutoff = (datetime.now() - timedelta(days=max(1, int(retain_days)))).strftime('%Y-%m-%d')
+            kosul, adlar = self._redaksiyon_kosulu()
             with self._get_connection() as conn:
                 r = conn.execute(
-                    "SELECT COUNT(*) FROM treatment_sessions WHERE session_date < ? AND "
-                    "patient_name IS NOT NULL AND patient_name != '' AND patient_name != '[REDACTED]'",
-                    (cutoff,),
+                    f"SELECT COUNT(*) FROM treatment_sessions WHERE session_date < ? AND {kosul}",
+                    (cutoff, *adlar),
                 ).fetchone()
                 return int(r[0] or 0)
         except Exception:
-            self.logger.debug("redaksiyon on-sayimi basarisiz", exc_info=True)
-            return 0
+            self.logger.warning(
+                "KVKK: maskelenmeyi bekleyen seans kaydi sayilamadi — ekran 'sayilamadi' der, onay verilemez.",
+                exc_info=True,
+            )
+            return None
 
     #: Maskelenen seans sütunları — `redact_old_session_pii` UPDATE'i ve onay KAPSAM imzası BURADAN türer (tek kaynak).
     _PII_MASKELENEN_SEANS_SUTUNLARI = ("patient_name", "operator_name", "patient_notes")
@@ -152,16 +180,20 @@ class PiiKarisimi:
                 cursor = conn.cursor()
 
                 # D2.55: maskelenen sütunlar onay KAPSAM imzasıyla aynı tek kaynaktan (`_PII_MASKELENEN_SEANS_SUTUNLARI`).
+                # ⚠️ D2.58 (B-3.89): YALNIZ maskelenecek alanı olan satırlar güncellenir — eskiden `WHERE session_date < ?` süresi dolmuş
+                # TÜM satırları her turda yeniden yazıyor, `rowcount` hepsini "maskelendi" sayıyor ve ekleme-only denetim izine her 6
+                # saatte sahte kayıt düşüyordu.
+                _sutunlar = self._PII_MASKELENEN_SEANS_SUTUNLARI
                 _set = ",\n                        ".join(
-                    f"{s} = CASE WHEN {s} IS NOT NULL AND {s} != '' THEN '[REDACTED]' ELSE {s} END"
-                    for s in self._PII_MASKELENEN_SEANS_SUTUNLARI
+                    f"{s} = CASE WHEN {self._maskelenecek_mi_sql(s)} THEN '[REDACTED]' ELSE {s} END" for s in _sutunlar
                 )
+                _gerek = " OR ".join(self._maskelenecek_mi_sql(s) for s in _sutunlar)
                 cursor.execute(
                     f'''
                     UPDATE treatment_sessions
                     SET {_set},
                         updated_at = CURRENT_TIMESTAMP
-                    WHERE session_date < ?
+                    WHERE session_date < ? AND ({_gerek})
                 ''',
                     (cutoff_date,),
                 )
@@ -180,6 +212,7 @@ class PiiKarisimi:
                         SELECT id FROM treatment_sessions WHERE session_date < ?
                     )
                     AND parameter_name IN ({_pii_ph})
+                    AND {self._maskelenecek_mi_sql('parameter_value')}
                 ''',
                     (cutoff_date, *_pii_names),
                 )
