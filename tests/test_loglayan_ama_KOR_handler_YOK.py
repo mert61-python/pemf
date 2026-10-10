@@ -128,12 +128,29 @@ def _log_cagrilari(govde):
 def _zincir_basar(cagri: ast.Call) -> bool:
     """⚠️ D2.37: `exc_info`/`stack_info` anahtarının VARLIĞI değil DEĞERİ — `False`/`None`/`0` zincir BASMAZ; değişken, çağrı ya da
     doğru sabit (ör. `exc_info=last_err`, `exc_info=True`) basar."""
+    # ⚠️ E2-3.13: `stack_info` ÇAĞRI yığınını basar, yakalanan istisnanın zincirini DEĞİL → zincir sayılmaz; `exc_info=(None, None,
+    # None)` (hep-None demet) de basmaz.
     for k in cagri.keywords:
-        if k.arg in ("exc_info", "stack_info"):
+        if k.arg == "exc_info":
             if isinstance(k.value, ast.Constant) and not k.value.value:
+                continue
+            if isinstance(k.value, ast.Tuple) and all(
+                isinstance(e, ast.Constant) and e.value is None for e in k.value.elts
+            ):
                 continue
             return True
     return False
+
+
+def _olu_test_mu(test: ast.AST) -> bool:
+    """E2-3.13: çalışmada hep yanlış koşul — sabit-yanlış, `not <sabit-doğru>`, `TYPE_CHECKING` / `typing.TYPE_CHECKING`."""
+    if isinstance(test, ast.Constant):
+        return not test.value
+    if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not) and isinstance(test.operand, ast.Constant):
+        return bool(test.operand.value)
+    return (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING") or (
+        isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"
+    )
 
 
 def _yeniden_firlatir(govde) -> bool:
@@ -144,7 +161,9 @@ def _yeniden_firlatir(govde) -> bool:
         d = yigin.pop()
         if isinstance(d, ast.Raise):
             return True
-        if isinstance(d, (ast.If, ast.While)) and isinstance(d.test, ast.Constant) and not d.test.value:
+        if isinstance(d, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+            continue  # E2-3.13: iç tanımın `raise`i handler'ı yeniden fırlatıcı YAPMAZ
+        if isinstance(d, (ast.If, ast.While)) and _olu_test_mu(d.test):
             yigin.extend(d.orelse)
             continue
         yigin.extend(ast.iter_child_nodes(d))
