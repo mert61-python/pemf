@@ -244,6 +244,19 @@ def _hesap_yedegini_coz(yedek: Path, cikti: Path) -> int:
     return 0
 
 
+def _veri_kokunu_hizala() -> None:
+    """⚠️ E2-3.6: araç, backend'in OKUDUĞU veri köküne yazmalı. Launcher backend'e `PEMF_DATA_DIR=%PROGRAMDATA%\\PEMF_System` verir
+    (`deploy/device.env` de aynı kök); operatörün cmd penceresinde bu değişken YOKTUR → araç `%APPDATA%\\PEMF_GUI`ye düşüp kurtarılan
+    anahtarları backend'in hiç okumadığı yere yazıyor, `--kodu-goster` "üretilmemiş" diyordu (ölçüldü). Açık `PEMF_DATA_DIR` her zaman
+    önceliklidir; yoksa makine-geneli kök VARSA o kullanılır. Kullanılan kök her koşuda söylenir."""
+    if not os.environ.get("PEMF_DATA_DIR", "").strip() and os.environ.get("PROGRAMDATA"):
+        makine = Path(os.environ["PROGRAMDATA"]) / "PEMF_System"
+        if makine.is_dir():
+            os.environ["PEMF_DATA_DIR"] = str(makine)
+    kok = os.environ.get("PEMF_DATA_DIR", "").strip()
+    print("Veri koku: " + (str(Path(kok) / "PEMF_GUI") if kok else "%APPDATA%\\PEMF_GUI (kullanici-basina)"))
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="PEMF yedek kurtarma araci",
@@ -264,7 +277,18 @@ def main(argv=None) -> int:
     )
     ap.add_argument("--cikti", type=Path, help="--hesap-yedegi icin cikti yolu (or. <veri-dizini>\\auth_users.db)")
     a = ap.parse_args(argv)
+    onceki = os.environ.get("PEMF_DATA_DIR")
+    _veri_kokunu_hizala()
+    try:
+        return _main(ap, a)
+    finally:  # süreç içi çağıran (test / backend_service) ortamı değişmeden geri alır
+        if onceki is None:
+            os.environ.pop("PEMF_DATA_DIR", None)
+        else:
+            os.environ["PEMF_DATA_DIR"] = onceki
 
+
+def _main(ap, a) -> int:
     if a.kodu_goster:
         return _show_local_code()
 
