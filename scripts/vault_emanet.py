@@ -229,21 +229,33 @@ def durum() -> int:
         print("    docker compose -f docker/docker-compose.vault.yml up -d")
         return 1
     print(f"  adres       : {ADRES}")
+    # ⚠️ E2-3.2: okunamayan durum "YOK" DEĞİLDİR — eskiden 403 / 500 yanıtında "YOK (--yaz)" basıp 0 dönüyordu (ölçüldü).
+    if kod != 200:
+        print(f"  HATA {kod}: saglik ucu okunamadi ({(s or {}).get('errors')})")
+        return 1
     print(f"  surum       : {s.get('version')}")
     print(f"  kurulu      : {s.get('initialized')}")
     print(f"  MUHURLU     : {s.get('sealed')}  " + ("<- --ac ile acin" if s.get("sealed") else ""))
     if s.get("sealed"):
         return 1
+    hata = 0
     kod, m = _istek("/v1/sys/mounts", token=_kok_token())
-    print(f"  KV mount    : {'VAR' if f'{MOUNT}/' in (m or {}) else 'YOK (--kur)'}")
+    if kod == 200:
+        print(f"  KV mount    : {'VAR' if f'{MOUNT}/' in (m or {}) else 'YOK (--kur)'}")
+    else:
+        hata += 1
+        print(f"  KV mount    : OKUNAMADI (HATA {kod} {(m or {}).get('errors')}) -> kok token gecersiz / yetkisiz?")
     kod, d = _istek(f"/v1/{MOUNT}/data/{EMANET_YOLU}", token=_kok_token())
     if kod == 200:
         alanlar = sorted((d.get("data") or {}).get("data") or {})
         sur = ((d.get("data") or {}).get("metadata") or {}).get("version")
         print(f"  EMANET      : VAR (surum {sur}) alanlar={alanlar}")
-    else:
+    elif kod == 404:
         print("  EMANET      : YOK (--yaz)")
-    return 0
+    else:
+        hata += 1
+        print(f"  EMANET      : OKUNAMADI (HATA {kod} {(d or {}).get('errors')}) -> kok token gecersiz / yetkisiz?")
+    return 1 if hata else 0
 
 
 def ac() -> int:
