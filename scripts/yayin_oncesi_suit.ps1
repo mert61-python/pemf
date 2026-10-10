@@ -45,11 +45,20 @@ if ($PytestOnek.Count -gt 1) { $argumanlar += $PytestOnek[1..($PytestOnek.Count 
 $argumanlar += @($Hedef, '-q', '-rs', '-p', 'no:cacheprovider')
 
 Write-Host "[YAYIN-ONCESI] tam suit (ZORUNLU=1, GOLDEN_REQUIRED=1): $komut $($argumanlar -join ' ')"
+# ⚠️ PSModulePath (ölçüldü, 4-A ZORUNLU koşusu 2026-10-10): pwsh 7 kendi modül dizinlerini süreç PSModulePath'ine ekler;
+# pytest'in açtığı powershell.exe (5.1) bunu MİRAS alır, Microsoft.PowerShell.Security'nin 7 sürümünü yükleyemez ve
+# "Get-Acl ... module could not be loaded" ile düşer → 9 ACL testi YALANCI KIRMIZI, Y30 her yayını durdururdu. (pwsh
+# powershell.exe'yi DOĞRUDAN açınca yolu kendisi ayıklar; araya python girince ayıklama yok.) Süit süresince değişken
+# KALDIRILIR — her kabuk kendi varsayılanını kurar — ve sonra AYNEN geri yüklenir (betik `&` ile çağrılır; publish'in
+# kalanı etkilenmesin). SetEnvironmentVariable($null) değişkeni silmez, "" bırakır → Remove-Item.
+$psModulYolu = $env:PSModulePath
+Remove-Item -LiteralPath 'Env:PSModulePath' -ErrorAction SilentlyContinue
 Push-Location -LiteralPath $kok
 try {
   & $komut @argumanlar
   $rc = $LASTEXITCODE
 } finally {
+  if ($null -ne $psModulYolu) { $env:PSModulePath = $psModulYolu }
   Pop-Location
 }
 if ($null -eq $rc) { $rc = 1 }

@@ -157,3 +157,49 @@ def test_KRITIK_yayin_oncesi_suit_KIRMIZIYI_cikis_koduyla_TASIR(tmp_path):
     rc, cikti = _suit_kos(tmp_path, kirmizi=True)
     assert rc == 1, f"kırmızı süit çıkış kodu taşınmadı (rc={rc}) — publish bunu GEÇTİ sanardı\n{cikti[-1500:]}"
     assert "1 failed" in cikti and "YAYIN DURDU" in cikti, cikti[-1500:]
+
+
+# ── 4) pwsh 7'nin modül yolu pytest'in açtığı Windows PowerShell 5.1'e SIZMAZ ──
+# ⚠️ ÖLÇÜLDÜ (4-A ZORUNLU koşusu, 2026-10-10): betik pwsh 7'de koşar; pwsh kendi modül dizinlerini süreç `PSModulePath`ine
+# ekler, pytest → `powershell.exe` (5.1) bunu MİRAS alır ve `Microsoft.PowerShell.Security`nin 7 sürümünü yükleyemez →
+# "Get-Acl … module could not be loaded" → 9 ACL testi (D2.79/D2.81/Y96) YALANCI KIRMIZI, Y30 her yayını durdururdu.
+# (pwsh `powershell.exe`yi DOĞRUDAN açınca yolu kendisi ayıklar; araya python girince ayıklama YOK.)
+
+_ACL_TEST = """import os
+import subprocess
+
+
+def test_alt_powershell51_get_acl():
+    r = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", f"(Get-Acl -LiteralPath '{os.getcwd()}').Sddl"],
+        capture_output=True, text=True, timeout=120,
+    )
+    assert r.returncode == 0 and "D:" in r.stdout, "Y30-GETACL-DUSTU " + (r.stdout + r.stderr)[-300:]
+"""
+_ACL_SARMAL = """param([string]$Betik, [string]$Onek, [string]$Hedef)
+$once = $env:PSModulePath
+& $Betik -PytestOnek $Onek -Hedef $Hedef
+$rc = $LASTEXITCODE
+if ($env:PSModulePath -ne $once) { Write-Host 'Y30-PSMODULEPATH-GERI-YUKLENMEDI'; exit 97 }
+exit $rc
+"""
+
+
+def test_KRITIK_yayin_oncesi_suit_pwsh7_modul_yolunu_alt_PowerShell51e_SIZDIRMAZ_ve_GERI_yukler(tmp_path):
+    pwsh = _pwsh_gerekli()
+    if os.name != "nt" or not shutil.which("powershell.exe"):
+        pytest.skip("Windows PowerShell 5.1 yalnız Windows'ta")
+    hedef = tmp_path / "acl"
+    hedef.mkdir()
+    (hedef / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
+    (hedef / "test_y30_acl.py").write_text(_ACL_TEST, encoding="utf-8")
+    _yaz_bom(tmp_path / "sarmal.ps1", _ACL_SARMAL)
+    komut = [pwsh, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(tmp_path / "sarmal.ps1")]
+    komut += ["-Betik", str(BETIKLER / "yayin_oncesi_suit.ps1"), "-Onek", f"{sys.executable},-m,pytest"]
+    komut += ["-Hedef", str(hedef)]
+    r = subprocess.run(
+        komut, cwd=hedef, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300
+    )
+    cikti = r.stdout + r.stderr
+    assert "Y30-GETACL-DUSTU" not in cikti and r.returncode == 0, f"rc={r.returncode}\n{cikti[-1500:]}"
+    assert "1 passed" in cikti, cikti[-1500:]
