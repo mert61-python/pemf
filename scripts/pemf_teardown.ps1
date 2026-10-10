@@ -304,6 +304,12 @@ function Get-PemfMakineDisiYedekHedefleri($Footprint) {
         $anahtar = if ($h.Yol) { $h.Yol.TrimEnd('\').ToLowerInvariant() } else { 'okunamadi|' + $h.Kaynak }
         if (-not $tek.Contains($anahtar)) { $tek[$anahtar] = $h }
     }
+    # E2-2.1: durum silmeden ÖNCE de ölçülür — hedef silinen bir PEMF kökünün İÇİNDEYSE adım 9 onu "ERİŞİLEMİYOR … SİLİNMEDİ"
+    # sanıyordu (A-44: rapor yalnız doğrulananı söyler).
+    foreach ($h in @($tek.Values)) {
+        $var = [bool]($h.Yol -and (Test-Path -LiteralPath $h.Yol -PathType Container -ErrorAction SilentlyContinue))
+        $h | Add-Member -NotePropertyName OnceVar -NotePropertyValue $var -Force
+    }
     @($tek.Values)
 }
 
@@ -317,6 +323,9 @@ function Write-PemfMakineDisiYedekRaporu($Hedefler) {
             $n = @(Get-ChildItem -LiteralPath $h.Yol -File -Force -ErrorAction SilentlyContinue).Count
             $zarf = if (Test-Path -LiteralPath (Join-Path $h.Yol 'kurtarma-zarfi.enc') -PathType Leaf -ErrorAction SilentlyContinue) { 'VAR' } else { 'YOK' }
             Write-PemfLog "MAKİNE DIŞI YEDEK DURUYOR (dokunulmadı): $($h.Yol) — $n dosya, kurtarma-zarfi.enc $zarf (kayıt: $($h.Kaynak))" 'Yellow'
+        } elseif ($h.OnceVar) {
+            $h | Add-Member -NotePropertyName Silindi -NotePropertyValue $true -Force
+            Write-PemfLog "YEDEK HEDEFİ BU KALDIRMAYLA SİLİNDİ: $($h.Yol) (kayıt: $($h.Kaynak)) — hedef, kaldırmanın sildiği bir PEMF dizininin İÇİNDEYDİ (makine dışı DEĞİLDİ); yedek hedefini harici bir diske / ağ paylaşımına alın" 'Red'
         } else {
             Write-PemfLog "MAKİNE DIŞI YEDEK HEDEFİ şu an ERİŞİLEMİYOR: $($h.Yol) (kayıt: $($h.Kaynak)) — oradaki yedekler bu kaldırmayla SİLİNMEDİ" 'Yellow'
         }
@@ -678,12 +687,19 @@ function Invoke-PemfTeardown {
     # Bu log dosyası, dosya başlığında KVKK "tüm hasta verisini sildim" KANITI olarak tanımlı;
     # önizleme koşusunun raporu silme kanıtı gibi okunurdu.
     # D2.E04 (A-44): son satır yalnız BU MAKİNEDE doğrulananı "silindi" der; makine dışı yedek kayıtlıysa durduğunu da söyler.
+    # E2-2.1: silinen kökün içinde kalıp bu kaldırmayla SİLİNEN hedef "duruyor" sayılmaz.
+    $silinenHedef = @($yedekHedefleri | Where-Object { $_.Silindi }).Count
+    $duranHedef = $yedekHedefleri.Count - $silinenHedef
     $policy = if ($DryRun) {
         'ÖNİZLEME — HİÇBİR ŞEY SİLİNMEDİ (DryRun)'
-    } elseif ($IncludePatientData -and $yedekHedefleri.Count -gt 0) {
+    } elseif ($IncludePatientData -and $duranHedef -gt 0) {
         'HASTA VERİSİ BU MAKİNEDEN SİLİNDİ (tam temizlik) — makine dışı yedekler DURUYOR (yukarıdaki satırlar; gerekiyorsa elle silin)'
+    } elseif ($IncludePatientData -and $silinenHedef -gt 0) {
+        'HASTA VERİSİ BU MAKİNEDEN SİLİNDİ (tam temizlik) — kayıtlı yedek hedefi bu makinedeydi ve SİLİNDİ (yukarıdaki satır)'
     } elseif ($IncludePatientData) {
         'HASTA VERİSİ BU MAKİNEDEN SİLİNDİ (tam temizlik) — kayıtlı makine dışı yedek hedefi yok'
+    } elseif ($silinenHedef -gt 0) {
+        'HASTA VERİSİ KORUNDU (KVKK; -IncludePatientData ile silinir) — ANCAK kurulum dizinindeki yedek hedefi SİLİNDİ (yukarıdaki kırmızı satır)'
     } else {
         'HASTA VERİSİ KORUNDU (KVKK; -IncludePatientData ile silinir)'
     }
