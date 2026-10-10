@@ -120,7 +120,8 @@ def test_KRITIK_VACUUM_turundan_sonra_anonimlestirme_ATOMIK_ikinci_UPDATE_dusers
             return n, c.execute("SELECT name FROM patients WHERE patient_uuid='uuid-d223'").fetchone()[0]
 
     n, ad = _dongu_sonra_ayni_is_parcaciginda(api, 8, _anonimlestir)
-    assert n == 0, f"aparat: ikinci UPDATE düşmedi (dönüş {n})"
+    # D2.54 (B-3.34): hata artık -1 (eskiden sessiz 0) — çağıran kalıcı bekleyen listeden düşürmez, yeniden dener.
+    assert n == -1, f"aparat: ikinci UPDATE düşmedi (dönüş {n})"
     assert ad == "Pamuk D223", (
         f"ikinci UPDATE düştü ama hasta kopyası anonimleşmiş KALDI (yarım anonimleştirme): {ad!r}"
     )

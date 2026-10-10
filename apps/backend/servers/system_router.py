@@ -808,6 +808,7 @@ async def retention_durumu(request: Request):
     try:
         # C2-4.1 (Ö.4-Y8): DB okumaları olay döngüsünde DEĞİL (tedavi DB'si kilitliyken döngü donup ACİL DURDUR beklemesin).
         secilen, etkin, onayli, bekleyen = await asyncio.to_thread(_oku)
+        anonim = await asyncio.to_thread(_anonimlestirme_durumu)
         return {
             "days": etkin,
             "configured": secilen is not None,
@@ -815,6 +816,8 @@ async def retention_durumu(request: Request):
             # Onay yoksa VE maskelenecek kayıt varsa arayüz sormalı.
             "pending": 0 if onayli else bekleyen,
             "default": _PII_VARSAYILAN_GUN,
+            # D2.54 · A-06: 5 yıl inaktif hasta anonimleştirmesi — onay yoksa bekleyen sayı gösterilir ve arayüz sorar.
+            "anonymization": anonim,
         }
     except Exception:
         logger.exception("retention durumu okunamadi")
@@ -901,11 +904,36 @@ async def destek_paketi(request: Request):
     }
 
 
+def _anonimlestirme_durumu() -> dict:
+    """D2.54 · A-06 / A-09: anonimleştirme eşiği, onayın BU eşiğe verilip verilmediği ve bekleyen hasta sayısı (sayılamazsa None —
+    arayüz "sayılamadı" der; "0 bekleyen" yalanı yok). Olay döngüsü DIŞINDA çağrılır."""
+    from database.patient_database import get_patient_database
+    from services import kvkk_anonimlestirme as _kv
+
+    db = _pii_ayar_db()
+    onay = db.anonim_onayi_oku()
+    onayli = bool(onay) and int(onay.get("gun") or 0) == int(_kv.ESIK_GUN)
+    try:
+        bekleyen = _kv.bekleyen_sayisi(get_patient_database(), _kv.ESIK_GUN)
+    except Exception:
+        logger.warning("KVKK anonimlestirme bekleyen sayisi okunamadi", exc_info=True)
+        bekleyen = None
+    return {
+        "days": int(_kv.ESIK_GUN),
+        "acknowledged": onayli,
+        "pending": bekleyen,
+        "approvedAt": (onay or {}).get("zaman") if onayli else None,
+        "approvedCount": (onay or {}).get("sayi") if onayli else None,
+    }
+
+
 class _RetentionAyar(BaseModel):
     #: Saklama süresi (gün). 0 → maskeleme KAPALI (kayıtlar süresiz tam kalır).
     days: Optional[int] = None
     #: Operatör geri dönüşsüz maskelemeyi anladığını onaylıyor.
     acknowledge: bool = False
+    #: D2.54 · A-06: operatör 5 yıl inaktif hastaların geri dönüşsüz anonimleştirmesini onaylıyor (o anki bekleyen sayıyla kayda geçer).
+    anonymize_acknowledge: bool = False
 
 
 @router.post("/api/settings/retention")
@@ -934,6 +962,29 @@ async def retention_ayarla(payload: _RetentionAyar, request: Request):
             # kayıtlı olmazsa, aylar sonra ortaya çıkan [REDACTED] kayıtların sorumlusu
             # bulunamaz — ve klinik haklı olarak "ben onaylamadım" der.
             _iz.kimlikli_yaz(request, "retention.onay", scope="pii", outcome="onaylandi")
+        if payload.anonymize_acknowledge:
+            # ⚠️ D2.54 · A-06 / A-09: onay ESİĞE ve o anki bekleyen SAYIYA bağlı yazılır (eşik değişirse geçersiz); kim, ne zaman, kaç
+            # hasta — denetim izinde. DB işleri olay döngüsü DIŞINDA (Ö.4-Y8).
+            def _anonim_onayla():
+                from database.patient_database import get_patient_database
+                from services import kvkk_anonimlestirme as _kv
+
+                from servers.auth import cozumlenmis_operator
+
+                sayi = _kv.bekleyen_sayisi(get_patient_database(), _kv.ESIK_GUN)
+                db.anonim_onayi_yaz(gun=_kv.ESIK_GUN, sayi=sayi, kim=cozumlenmis_operator(request))
+                return int(_kv.ESIK_GUN), sayi
+
+            gun, sayi = await asyncio.to_thread(_anonim_onayla)
+            logger.warning("KVKK: operator 5 yil inaktif hasta anonimlestirmesini ONAYLADI (%d hasta bekliyor).", sayi)
+            _iz.kimlikli_yaz(
+                request,
+                "retention.anonim_onay",
+                scope="kvkk",
+                item_count=sayi,
+                outcome="onaylandi",
+                detail={"gun": gun},
+            )
         return {"status": "success"}
     except HTTPException:
         raise

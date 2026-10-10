@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Platform } from "react-native";
 import { Card } from "@/components/ui/Card";
-import { colors, spacing, typography, radius, rf, rs, layoutMax } from "@/theme/tokens";
+import { colors, spacing, typography, radius, rf, rs, layoutMax, touch } from "@/theme/tokens";
 import { apiGet, apiPost, platformAlert, platformConfirm } from "@/services/apiClient";
 import { Save, UserCog, Network, ServerCrash, RefreshCcw, Trash2, Wifi, Search, Link2, Copy, Building2 } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -54,6 +54,8 @@ export function SettingsScreen() {
   // hasta adı yerine `[REDACTED]` görüyor ve sebebini hiçbir yerde bulamıyordu.
   interface RetentionDurum {
     days: number; configured: boolean; acknowledged: boolean; pending: number; default: number;
+    // D2.54 · A-06: 5 yıl inaktif hasta anonimleştirmesi — onay yoksa bekleyen sayı (sayılamazsa null) gösterilir, operatör onaylar.
+    anonymization?: { days: number; acknowledged: boolean; pending: number | null; approvedAt?: string | null };
   }
   const [retention, setRetention] = useState<RetentionDurum | null>(null);
   const [retMesgul, setRetMesgul] = useState(false);
@@ -64,7 +66,7 @@ export function SettingsScreen() {
   }, []);
   useEffect(() => { void retentionYukle(); }, [retentionYukle]);
 
-  const retentionKaydet = useCallback(async (govde: { days?: number; acknowledge?: boolean }) => {
+  const retentionKaydet = useCallback(async (govde: { days?: number; acknowledge?: boolean; anonymize_acknowledge?: boolean }) => {
     setRetMesgul(true);
     const r = await apiPost<{ status?: string } | null>("/settings/retention", govde, null);
     setRetMesgul(false);
@@ -877,6 +879,35 @@ export function SettingsScreen() {
                 </Text>
               </TouchableOpacity>
             </>
+          ) : null}
+
+          {/* D2.54 · A-06: anonimleştirme operatör ONAYINA bağlı — sessiz ve geri dönüşsüz işlem yok. Bekleyen sayı gösterilir. */}
+          {retention.anonymization && !retention.anonymization.acknowledged ? (
+            retention.anonymization.pending === null ? (
+              <Text style={[styles.intro, { color: colors.warning }]}>
+                Anonimleştirmeyi bekleyen hasta sayısı okunamadı — hasta veritabanını kontrol edin. Onay verilmeden hiçbir kayda dokunulmaz.
+              </Text>
+            ) : retention.anonymization.pending > 0 ? (
+              <>
+                <Text style={[styles.intro, { color: colors.warning }]}>
+                  {retention.anonymization.pending} hasta {retention.anonymization.days} gündür (5 yıl) tedavi görmedi ve anonimleştirmeyi
+                  bekliyor. Bu işlem GERİ ALINAMAZ: hastanın adı, sahibinin adı ve iletişim bilgileri, seans ve AI kayıtlarındaki adı
+                  kalıcı olarak silinir; tedavi verileri ve hekim adı kalır. Onaylayana kadar hiçbir kayda dokunulmaz.
+                </Text>
+                <TouchableOpacity style={[styles.btnOutline, { borderColor: colors.warning, minHeight: touch.min }]}
+                  disabled={retMesgul} onPress={() => retentionKaydet({ anonymize_acknowledge: true })}
+                  accessibilityRole="button"
+                  accessibilityLabel="Geri dönüşsüz anonimleştirmeyi onayla ve başlat">
+                  <Text style={[styles.btnOutlineText, { color: colors.warning }]}>
+                    {retMesgul ? "…" : "Anladım, anonimleştirmeyi başlat"}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : null
+          ) : retention.anonymization?.acknowledged ? (
+            <Text style={styles.intro}>
+              Anonimleştirme onaylı — {retention.anonymization.days} gün (5 yıl) tedavi görmeyen hastalar otomatik anonimleştirilir.
+            </Text>
           ) : null}
 
           <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" }}>

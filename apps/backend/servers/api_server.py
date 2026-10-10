@@ -5396,13 +5396,16 @@ def _daily_maintenance_loop():
                     log.info("Retention: %s event silindi.", removed_e)
                     # KVKK retention (2026-06-28): 5 YIL inaktif hastalari ANONIMLESTIR (canonical
                     # patient_database + treatment-history kopyasi). Muafiyet yok.
+                    # ⚠️ D2.54 · A-06: anonimleştirme OPERATÖR ONAYINA bağlı (sessiz ve geri dönüşsüz işlem yok; A-09 onay eşiğe bağlı),
+                    # tedavi-DB adımı düşerse sonraki turda yeniden denenir (B-3.34), AI kayıtları da anonimleşir (Y125), hekim atfı
+                    # kalır (A-27). Eskiden burada onaysız `anonymize_inactive_patients(1825)` koşuyordu.
+                    # Kapı: tests/test_kvkk_anonimlestirme_ONAYLI_ve_EKSIKSIZ_D254.py
                     try:
                         _pdb = get_patient_database()
                         if _pdb is not None:
-                            _anon = _pdb.anonymize_inactive_patients(1825)
-                            if _anon:
-                                db.anonymize_patients_by_uuid(_anon)
-                                log.warning("KVKK: %d inaktif hasta anonimlestirildi.", len(_anon))
+                            from services import kvkk_anonimlestirme as _kvkk
+
+                            _kvkk.tur(_pdb, db)
                     except Exception:
                         log.warning("Hasta retention (anonimlestirme) hatasi", exc_info=True)
                 except Exception:

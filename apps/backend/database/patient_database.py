@@ -867,11 +867,31 @@ class PatientDatabase:
         except Exception:
             self.logger.debug("touch_last_treatment hatasi", exc_info=True)
 
-    def anonymize_inactive_patients(self, inactive_days: int = 1825) -> List[str]:
+    def anonimlestirilecek_hastalar(self, inactive_days: int = 1825) -> List[Dict[str, Any]]:
+        """D2.54 · A-06: anonimleştirmeyi BEKLEYEN hastalar (kuru — hiçbir şey değiştirmez) → [{id, name, owner, owner_email}]
+        (şifresi çözülmüş). Operatöre "kaç hasta" sorusunu sormak ve tedavi-DB adımının kimlik metinlerini kanonik adımdan ÖNCE kalıcı
+        bekleyen listeye yazmak için. Okuma hatası YÜKSELİR (çağıran turu atlar; "0 bekleyen" yalanı yok)."""
+        if int(inactive_days) <= 0:
+            return []
+        cutoff = (datetime.now() - timedelta(days=int(inactive_days))).isoformat()
+        with self.lock:
+            with self._get_connection() as conn:
+                conn.row_factory = self._row_factory
+                satirlar = conn.execute(
+                    "SELECT id, name, owner, owner_email FROM patients WHERE COALESCE(anonymized,0)=0 "
+                    "AND COALESCE(last_treatment_at, created_at) < ?",
+                    (cutoff,),
+                ).fetchall()
+                return [self._decrypt_patient_fields(dict(r)) for r in satirlar]
+
+    def anonymize_inactive_patients(self, inactive_days: int = 1825, yalniz=None) -> List[str]:
         """KVKK: son tedaviden (yoksa kayit tarihinden) inactive_days'ten (vars. 5 YIL=1825) uzun
         sure gecmis hastalarin PII'sini (ad/sahip/iletisim/e-posta) ANONIMLESTIR — SILMEZ (klinik
         istatistikleri/tedavi gecmisi korunur). Muafiyet yok. Anonimlestirilen UUID listesini doner
-        (treatment-history DB'deki hasta kopyasi da guncellensin diye)."""
+        (treatment-history DB'deki hasta kopyasi da guncellensin diye).
+
+        ⚠️ D2.54 · A-06: `yalniz` verilirse YALNIZ o kimlikler (hâlâ aday olanlar) anonimleşir — operatörün onayladığı ve kimlik
+        metinleri tedavi-DB adımı için kalıcı listeye yazılmış aday kümesi; tur sırasında aday olan YENİ hasta bu turda işlenmez."""
         cutoff = (datetime.now() - timedelta(days=max(1, int(inactive_days)))).isoformat()
         anonymized: List[str] = []
         try:
@@ -884,6 +904,9 @@ class PatientDatabase:
                         (cutoff,),
                     )
                     ids = [r[0] for r in cursor.fetchall()]
+                    if yalniz is not None:
+                        izinli = {str(x) for x in yalniz}
+                        ids = [i for i in ids if str(i) in izinli]
                     enc_anon = self._encrypt_field("[ANONIM]")
                     enc_empty = self._encrypt_field("")
                     now_iso = datetime.now().isoformat()

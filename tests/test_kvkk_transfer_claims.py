@@ -138,6 +138,7 @@ _HEADLESS = KOK / "apps" / "backend" / "services" / "headless_db_maintenance.py"
 _ROUTER = KOK / "apps" / "backend" / "servers" / "system_router.py"
 _PII = KOK / "apps" / "backend" / "database" / "thdb_pii.py"
 _API = KOK / "apps" / "backend" / "servers" / "api_server.py"
+_KVKK = KOK / "apps" / "backend" / "services" / "kvkk_anonimlestirme.py"
 
 #: Gönderilen alan → metinde geçmesi gereken Türkçe karşılık. YENİ alan eklenince buraya VE metne yazılmadan kapı geçmez.
 _CIHAZ_KARSILIK = {
@@ -246,17 +247,30 @@ def _modul_sabiti(yol, ad):
 
 
 def _anonimlestirme_esigi() -> int:
-    """Üretimdeki `anonymize_inactive_patients(<gün>)` çağrısının (günlük bakım) eşiği."""
-    esikler = {
+    """Üretimdeki anonimleştirme eşiği: D2.54'ten beri günlük bakım `services.kvkk_anonimlestirme.tur`u çağırır, eşik o modülün
+    `ESIK_GUN`ü. Günlük döngüde sabit eşikli eski `anonymize_inactive_patients(<gün>)` çağrısı KALMAMALI (iki eşik = metin birine yanlış)."""
+    esik = int(_modul_sabiti(_KVKK, "ESIK_GUN"))
+    api = ast.parse(_API.read_text(encoding="utf-8"))
+    sabit = {
         int(d.args[0].value)
-        for d in ast.walk(ast.parse(_API.read_text(encoding="utf-8")))
+        for d in ast.walk(api)
         if isinstance(d, ast.Call)
         and getattr(d.func, "attr", "") == "anonymize_inactive_patients"
         and d.args
         and isinstance(d.args[0], ast.Constant)
     }
-    assert len(esikler) == 1, f"üretimde tek bir anonimleştirme eşiği beklenir, bulunan: {esikler}"
-    return esikler.pop()
+    assert not sabit, f"günlük döngüde sabit eşikli eski anonimleştirme çağrısı var: {sabit}"
+    dongu = _fonksiyon(api, "_daily_maintenance_loop")
+    assert any(
+        isinstance(d, ast.ImportFrom) and any(a.name == "kvkk_anonimlestirme" for a in d.names) for d in ast.walk(dongu)
+    ), "günlük bakım döngüsü services.kvkk_anonimlestirme'yi çağırmıyor (araç: üretimdeki eşik okunamaz)"
+    return esik
+
+
+def test_KRITIK_A06_anonimlestirme_ONAYLI_anlatilir(metin):
+    """D2.54 · A-06: anonimleştirme operatör onayına bağlı — §6 'anonim' maddesi bunu söylemeli. MUTASYON: metinden onay düşer → KIRMIZI."""
+    madde = _saklama_maddeleri(metin)["anonim"]
+    assert "onay" in madde, f"§6 'anonim' maddesi klinik onayını söylemiyor: {madde!r}"
 
 
 def _saklama_maddeleri(metin: str) -> dict:

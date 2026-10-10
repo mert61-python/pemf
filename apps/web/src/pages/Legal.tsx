@@ -429,8 +429,10 @@ const DOCS: Record<LegalSlug, ReactNode> = {
         </li>
         <li data-saklama="anonim">
           Hasta kimlik bilgileri: <strong>1825 gün (5 yıl)</strong> boyunca tedavi kaydı olmayan hastanın adı,
-          sahibinin adı, iletişim bilgileri, yaşı ve kilosu anonimleştirilir; tedavi verileri (uygulanan doz,
-          süre, sensör ölçümleri) ve tür/ırk bilgisi klinik istatistik için kalır.
+          sahibinin adı, iletişim bilgileri, yaşı ve kilosu — seans ve AI analiz kayıtlarındaki adı dahil —
+          anonimleştirilir; bu işlem geri alınamaz olduğu için klinik <strong>açıkça onaylamadan başlamaz</strong> (Ayarlar
+          → Veri Saklama Süresi, bekleyen hasta sayısı gösterilir). Tedavi verileri (uygulanan doz, süre, sensör ölçümleri),
+          tür/ırk bilgisi ve tedaviyi uygulayan hekimin adı kalır.
         </li>
         <li data-saklama="maskeleme">
           Seans kayıtlarındaki adların maskelenmesi <strong>varsayılan olarak KAPALI</strong>dır ve klinik açıkça
