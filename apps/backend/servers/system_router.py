@@ -11,8 +11,10 @@ davranış-koruyan ARTIMLI extraction için lazy-import deseni kullanılıyor.
 """
 
 import asyncio
+import concurrent.futures
 import logging
 import os
+import threading
 import time
 from datetime import datetime
 from typing import Optional
@@ -262,6 +264,12 @@ async def health_check(request: Request):
         except Exception:
             _session_active = True
 
+    # ⚠️ E2-3.10 (Ö.4-Y8): sürücü türü sorgusu (GetDriveTypeW — ağ sürücüsünde asılabilir) olay döngüsünde KOŞMAZ; satır içi
+    # çağrıda asılınca ACİL DURDUR bekliyordu (ölçüldü 2,1 sn / 3 sn benzetim). Ortak havuzda (`to_thread`) da DEĞİL: zaman aşımı
+    # yalnız bekleyeni bırakır, asılı işi değil — her yoklama bir havuz iş parçacığı sızdırıp havuzu tüketiyordu (25 yoklamada 20,
+    # ölçüldü). Kendi daemon iş parçacığında, TEK uçuşta; bilinemezse None (arayüz susar).
+    _veri_agda = await _veri_koku_agda_dongu_disi(_api) if _local else None
+
     return {
         "status": "online",
         "service": "PEMF-Vet",
@@ -317,8 +325,45 @@ async def health_check(request: Request):
         "firmwareGuncelleme": (_firmware_guncelleme_durumu() if _local else None),
         # Y118 (yalnız-ek): veri klasörü AĞ PAYLAŞIMINDA mı (SQLite bu kipte güvenilir değil — arayüz bandı). Yalnız bayrak (yol
         # günlükte); yalnız yerel/LAN'a, tünel (uzak) istemcisine None.
-        "veriKokuAgda": (_veri_koku_agda(_api) if _local else None),
+        "veriKokuAgda": _veri_agda,
     }
+
+
+_veri_agda_ucusta = None  # (anahtar, concurrent.futures.Future) — sürmekte olan TEK sürücü türü sorgusu
+_veri_agda_kilit = threading.Lock()
+
+
+async def _veri_koku_agda_dongu_disi(_api, sinir_sn: float = 2.0):
+    """E2-3.10: `_veri_koku_agda`yı kendi daemon iş parçacığında koşar; önceki sorgu bitmediyse YENİSİNİ BAŞLATMAZ, onu bekler.
+    `sinir_sn` içinde sonuç yoksa None (sorgu arka planda sürer, sonraki yoklama onu yeniden kullanır)."""
+    global _veri_agda_ucusta
+    try:
+        from utils import path_utils as _pu
+
+        anahtar = (
+            str(_api._app_data_dir()),
+            id(_pu._surucu_turu),
+        )  # üretimde sabit; testte kök/sorgu değişince yeni uçuş
+    except Exception:
+        anahtar = None
+    with _veri_agda_kilit:
+        onceki = _veri_agda_ucusta
+        f = onceki[1] if onceki and onceki[0] == anahtar else None
+        if f is None or f.done():
+            f = concurrent.futures.Future()
+
+            def _is(gelecek=f):
+                try:
+                    gelecek.set_result(_veri_koku_agda(_api))
+                except BaseException:
+                    gelecek.set_result(None)
+
+            threading.Thread(target=_is, daemon=True, name="pemf-veri-koku-ag").start()
+            _veri_agda_ucusta = (anahtar, f)
+    try:
+        return await asyncio.wait_for(asyncio.shield(asyncio.wrap_future(f)), timeout=sinir_sn)
+    except Exception:
+        return None
 
 
 def _veri_koku_agda(_api):
