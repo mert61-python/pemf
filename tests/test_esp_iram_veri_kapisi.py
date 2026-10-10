@@ -42,6 +42,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 from c_soyucu import c_soy
 
@@ -62,7 +63,14 @@ def _kaynaklar() -> list[Path]:
     return yollar
 
 
-pytestmark = pytest.mark.skipif(not _kaynaklar(), reason="firmware/ kaynak agaci yok")
+@pytest.fixture(autouse=True)
+def _firmware_kaynagi():
+    """D4.04: `firmware/esp8266_pemf_coil` ve `esps3_pemf_coil` (ikisi de taranır; biri eksikse kapı yarım kalırdı) İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden düz `skipif` idi: klasör taşınınca (09-18 `pf`→`apps/ui` gibi) kapı zorunlu kipte de sessizce atlanıyordu.
+    """
+    capraz.atla_yoksa("firmware/esp8266_pemf_coil", izlenen=True)
+    capraz.atla_yoksa("firmware/esps3_pemf_coil", izlenen=True)
 
 
 def _veri_bildirimi_mi(kalan: str) -> bool:

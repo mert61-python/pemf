@@ -25,6 +25,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 from c_soyucu import c_soy
 
@@ -36,7 +37,16 @@ INO8266 = ESP8266 / "esp8266_pemf_coil.ino"
 INOS3 = ESPS3 / "esps3_pemf_coil.ino"
 SENSOR8266 = ESP8266 / "SensorManager.cpp"
 
-pytestmark = pytest.mark.skipif(not INO8266.exists(), reason="firmware/ kaynak agaci yok")
+
+@pytest.fixture(autouse=True)
+def _firmware_kaynagi():
+    """D4.04: `firmware/esp8266_pemf_coil` ve `esps3_pemf_coil` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden düz `skipif` idi: klasör taşınınca (09-18 `pf`→`apps/ui` gibi) kapı zorunlu kipte de sessizce atlanıyordu.
+    """
+    capraz.atla_yoksa("firmware/esp8266_pemf_coil/esp8266_pemf_coil.ino", izlenen=True)
+    capraz.atla_yoksa("firmware/esps3_pemf_coil/esps3_pemf_coil.ino", izlenen=True)
+
 
 #: `LOG_PRINTF("[MAG] …")` biçim dizesini yakalar (iki kartta da aynı olmalı).
 _BICIM = re.compile(r'LOG_PRINTF\(\s*"(\[MAG\][^"]*)"')

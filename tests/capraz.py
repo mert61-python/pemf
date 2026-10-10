@@ -40,11 +40,19 @@ def var_mi(gorece: str) -> bool:
     return kaynak_yolu(gorece).exists()
 
 
-def atla_yoksa(gorece: str) -> None:
-    """Kardeş kaynak yoksa testi atlar (zorunlu kipte düşürür). Okumadan kontrol için."""
+def atla_yoksa(gorece: str, *, izlenen: bool = False) -> None:
+    """Kardeş kaynak yoksa testi atlar (zorunlu kipte düşürür). Okumadan kontrol için.
+
+    `izlenen=True` (D4.04, 2026-10-10): yol bu depoda İZLENEN bir ağaçtadır (`firmware/`, `apps/ui/`). Yalnız
+    backend paketinde yokluğu beklenir; tam depoda yokluk bir klasör taşıması/silinmesidir — düz `skipif`
+    bunu ZORUNLU=1'de de sessizce atlıyordu. Atlama nedeni bunu söyler.
+    """
     if var_mi(gorece):
         return
-    sebep = f"kardeş kaynak yok: {gorece} — bu depoda izlenmez (.gitignore); ayrı depo/derleme çıktısı"
+    if izlenen:
+        sebep = f"izlenen kaynak yok: {gorece} — depoda İZLENİR; tam depoda yokluğu klasör taşıması/silinmesidir (yalnız backend paketinde beklenir)"
+    else:
+        sebep = f"kardeş kaynak yok: {gorece} — bu depoda izlenmez (.gitignore); ayrı depo/derleme çıktısı"
     if ZORUNLU:
         pytest.fail(f"PEMF_CAPRAZ_KAYNAK_ZORUNLU=1 ama {sebep}")
     pytest.skip(sebep)

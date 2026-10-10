@@ -17,16 +17,22 @@ Davranışsal kanıt: apps/ui/src/components/ui/__tests__/GlobalEmergencyStop.be
 
 import pathlib
 
+import capraz
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
 _CONTROL = _KOK / "apps" / "ui" / "src" / "screens" / "ControlScreen.tsx"
 _GES = _KOK / "apps" / "ui" / "src" / "components" / "ui" / "GlobalEmergencyStop.tsx"
 
-pytestmark = pytest.mark.skipif(
-    not _CONTROL.exists() or not _GES.exists(),
-    reason="apps/ui/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
-)
+
+@pytest.fixture(autouse=True)
+def _arayuz_kaynagi():
+    """D4.04: `apps/ui/` (ACİL DURDUR erişimi) İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden düz `skipif` idi: klasör taşınınca (09-18 `pf`→`apps/ui` gibi) kapı zorunlu kipte de sessizce atlanıyordu.
+    """
+    capraz.atla_yoksa("apps/ui/src/screens/ControlScreen.tsx", izlenen=True)
+    capraz.atla_yoksa("apps/ui/src/components/ui/GlobalEmergencyStop.tsx", izlenen=True)
 
 
 def _oku(p: pathlib.Path) -> str:

@@ -29,13 +29,22 @@ import io
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 from c_soyucu import c_soy
 
 KOK = Path(__file__).resolve().parents[1]
 NM = KOK / "firmware" / "esp8266_pemf_coil" / "NetworkManager.cpp"
 
-pytestmark = pytest.mark.skipif(not NM.exists(), reason="firmware/ kaynak agaci yok")
+
+@pytest.fixture(autouse=True)
+def _firmware_kaynagi():
+    """D4.04: `firmware/esp8266_pemf_coil` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden düz `skipif` idi: klasör taşınınca (09-18 `pf`→`apps/ui` gibi) kapı zorunlu kipte de sessizce atlanıyordu.
+    """
+    capraz.atla_yoksa("firmware/esp8266_pemf_coil/NetworkManager.cpp", izlenen=True)
+
 
 _SPES = re.compile(r"%[-+ #0-9.]*(?:ll|l|h)?[a-zA-Z]")
 

@@ -34,6 +34,7 @@ import io
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 from c_soyucu import c_soy
 
@@ -41,7 +42,15 @@ KOK = Path(__file__).resolve().parents[1]
 ESP8266 = KOK / "firmware" / "esp8266_pemf_coil"
 S3 = KOK / "firmware" / "esps3_pemf_coil"
 
-pytestmark = pytest.mark.skipif(not ESP8266.exists(), reason="firmware/ kaynak agaci yok")
+
+@pytest.fixture(autouse=True)
+def _firmware_kaynagi():
+    """D4.04: `firmware/esp8266_pemf_coil` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden düz `skipif` idi: klasör taşınınca (09-18 `pf`→`apps/ui` gibi) kapı zorunlu kipte de sessizce atlanıyordu.
+    """
+    capraz.atla_yoksa("firmware/esp8266_pemf_coil", izlenen=True)
+
 
 #: Sahip kararı (2026-09-10). Değiştirilirse BİLİNÇLİ olsun diye pinli.
 BEKLENEN_KESME = 100.0
@@ -195,8 +204,7 @@ def test_S3_ve_asimetri_BILINCLI():
 
     Karşıt kanıt: biri "tutarlılık" adına S3'ü de 100'e çekmesin.
     """
-    if not (S3 / "SharedDefs.h").exists():
-        pytest.skip("esps3 kaynagi yok")
+    capraz.atla_yoksa("firmware/esps3_pemf_coil/SharedDefs.h", izlenen=True)  # D4.04: düz skip değil
     s3 = _oku(S3 / "SharedDefs.h")
     assert _sabit(s3, "TERMAL_KESME_C") == 48.0, (
         "S3 termal esigi degismis. Sahip 2026-09-10'da YALNIZ 8266 icin 100 °C dedi; "

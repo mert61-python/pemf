@@ -38,13 +38,23 @@ import io
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 NM_CPP = KOK / "firmware" / "esp8266_pemf_coil" / "NetworkManager.cpp"
 NM_H = KOK / "firmware" / "esp8266_pemf_coil" / "NetworkManager.h"
 
-pytestmark = pytest.mark.skipif(not NM_CPP.exists(), reason="firmware/ kaynak agaci yok")
+
+@pytest.fixture(autouse=True)
+def _firmware_kaynagi():
+    """D4.04: `firmware/esp8266_pemf_coil` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden düz `skipif` idi: klasör taşınınca (09-18 `pf`→`apps/ui` gibi) kapı zorunlu kipte de sessizce atlanıyordu.
+    """
+    capraz.atla_yoksa("firmware/esp8266_pemf_coil/NetworkManager.cpp", izlenen=True)
+    capraz.atla_yoksa("firmware/esp8266_pemf_coil/NetworkManager.h", izlenen=True)
+
 
 #: Kredi kontrolünü temsil eden belirteçler (doğrudan çağrı ya da türetilmiş yerel).
 KREDI_BELIRTECI = ("_hasSavedCredentials", "krediVar")
