@@ -37,7 +37,6 @@ def client():
 #
 # Konvansiyon `test_ai_golden_values.py` ile aynı: eser yoksa ATLA, ama `PEMF_GOLDEN_REQUIRED=1`
 # ayarlıysa atlamak YASAK (yayın makinesi sessiz atlamayı imkânsız kılar).
-_MODEL_DIZINI = Path(__file__).resolve().parents[1] / "ai_hub" / "inference_human_kidney_disease"
 
 
 def _cikarim_neden_olmaz() -> str:
@@ -45,8 +44,14 @@ def _cikarim_neden_olmaz() -> str:
         import onnxruntime  # noqa: F401
     except Exception as e:
         return f"onnxruntime yok ({type(e).__name__})"
-    if not any(_MODEL_DIZINI.glob("*.onnx")):
-        return f"model ağırlıkları yok: {_MODEL_DIZINI.name}/*.onnx (release_assets tek-kaynak)"
+    # D3.03 (B-10.82): ön-koşul ÜRÜNÜN çözücüsüyle — modül dizininde ONNX yok ama ürün onu izlenen
+    # `release_assets/ai_models`ten çözüyor; eski modül-dizini `glob("*.onnx")` ön-koşulu bu yüzden temiz klonda ve CI'da
+    # 4 testi HİÇ koşturmuyordu (CKD altın değerleri aynı ortamda yükleniyordu).
+    from golden import eser as _eser
+
+    eserler = _eser.ckd_eserleri()
+    if not _eser.eser_var_mi(*eserler):
+        return f"model eserleri ürün çözücüsünde yok: {list(eserler)}"
     return ""
 
 

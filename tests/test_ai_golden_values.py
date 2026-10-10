@@ -37,25 +37,29 @@ ALTIN = json.loads((KOK / "tests" / "golden" / "ai_golden_values.json").read_tex
 # `test_petri_plausibility.py`nin 11 testini kırar (bkz. tests/golden/yukleyici.py).
 sys.path.insert(0, str(KOK))
 sys.path.insert(0, str(KOK / "tests"))  # `tests` paket değil (conftest tabanlı toplama)
+from golden import eser as E  # noqa: E402
 from golden import girdiler as G  # noqa: E402
 from golden import yukleyici as Y  # noqa: E402
 
 REL = 1e-4
-ZORUNLU = os.environ.get("PEMF_GOLDEN_REQUIRED") == "1"
+
+#: D3.03: her tahmincinin ANA eseri (canlı çıkarımın yüklediği dosya; ürün envanteriyle aynı yollar).
+EM_ESERLERI = {
+    "em_fantom": ("ai_hub/inference_em_fantom/BiLSTM_XXL_Raw.onnx",),
+    "em_petri": ("ai_hub/inference_em_petri/BaggingRegressor.onnx",),
+    "em_kedi": ("ai_hub/em_kedi/BiLSTM_XXL_Raw.onnx",),
+}
+RNA_ESERLERI = ("ai_hub/inference_human_kidney_rna/mlp_medium_kirc.onnx",)
 
 
 def _atla(sebep: str):
     """Eser yoksa atla — ama yayın makinesinde atlamak YASAK."""
-    if ZORUNLU:
-        pytest.fail(f"PEMF_GOLDEN_REQUIRED=1 ama altin deger testi kosulamiyor: {sebep}")
-    pytest.skip(sebep)
+    E.atla(sebep)
 
 
-def _yukle(kur, sebep: str):
-    try:
-        return kur()
-    except Exception as e:  # eser/bağımlılık yok
-        _atla(f"{sebep} ({type(e).__name__}: {str(e)[:120]})")
+def _yukle(kur, sebep: str, eserler: tuple[str, ...]):
+    """D3.03: eser VARKEN yükleme hatası → FAIL; yalnız eser yoksa / 3. taraf bağımlılık yoksa atla."""
+    return E.yukle(kur, eserler, sebep)
 
 
 def _karsilastir(olculen: dict, beklenen: dict, etiket: str):
@@ -82,7 +86,7 @@ def ckd():
         m.load_model()  # eser gerçekten var mı — burada patlasın
         return m
 
-    return _yukle(kur, "CKD eserleri yok")
+    return _yukle(kur, "CKD", E.ckd_eserleri())
 
 
 @pytest.mark.parametrize("durum", ["hasta", "saglikli", "eksik"])
@@ -105,7 +109,7 @@ def test_KRITIK_CKD_eksik_alan_yolu_IMPUTER_calistirir(ckd):
 @pytest.fixture(scope="module", params=sorted(Y.EM_TAHMINCILER), ids=lambda a: a)
 def em(request):
     ad = request.param
-    return ad, _yukle(lambda: Y.em_tahminci(ad), f"{ad} eserleri yok")
+    return ad, _yukle(lambda: Y.em_tahminci(ad), ad, EM_ESERLERI[ad])
 
 
 @pytest.mark.parametrize("nokta", ["orta", "kose"])
@@ -128,7 +132,7 @@ def test_KRITIK_RNA_altin_degerleri():
 
         return Y.rna_tahminci(), pd
 
-    tahminci, pd = _yukle(kur, "RNA eserleri yok")
+    tahminci, pd = _yukle(kur, "RNA", RNA_ESERLERI)
 
     df = pd.read_csv(csv, index_col=0)
     olculen = tahminci.predict(df)

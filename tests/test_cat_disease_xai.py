@@ -146,16 +146,24 @@ def test_YAPISAL_ai_service_disease_XAI_paritesi():
 # açıklama sessizce üretilemiyor, kullanıcı "Açıklama üretilemedi" görüyordu —
 # zarif düşüş arızayı MASKELEDİ. Vekil-model testi gerçek bağımlılık kırılmasını
 # göremez; bu kilit gerçek ağırlıkla koşar.
+#: D3.03: CatDiseasePredictor'ın yüklediği eserler (modül yanında izlenir).
+_KEDI_ESERLERI = (
+    "ai_hub/cat_disease/XGBoost.pkl",
+    "ai_hub/cat_disease/scaler_X.pkl",
+    "ai_hub/cat_disease/label_encoder.pkl",
+)
+
+
 def test_KRITIK_GERCEK_XGBoost_modeliyle_XAI_URETILIR():
     import pytest as _pt
 
     _pt.importorskip("xgboost")
+    # D3.03: eser (XGBoost.pkl + scaler) VARKEN yükleme hatası FAIL — yalnız eser yoksa atla (golden/eser.py).
+    from golden import eser as _eser
+
     from ai_hub.cat_disease.inference_cat_disease import CatDiseasePredictor, xai_top_features
 
-    try:
-        p = CatDiseasePredictor()
-    except Exception as e:  # ağırlık bu ortamda yoksa (CI) atla
-        _pt.skip(f"cat_disease modeli yüklenemedi: {e}")
+    p = _eser.yukle(CatDiseasePredictor, _KEDI_ESERLERI, "cat_disease")
 
     r = xai_top_features(p, 5, 4, 180, 39.5, 3, [0, 1])
     assert r.get("disease"), "tahmin edilen sınıf yok"
@@ -177,12 +185,12 @@ def test_KRITIK_XGBoost_yolu_shap_TreeExplainer_KULLANMAZ(monkeypatch):
     _pt.importorskip("xgboost")
     import shap
 
+    # D3.03: eser (XGBoost.pkl + scaler) VARKEN yükleme hatası FAIL — yalnız eser yoksa atla (golden/eser.py).
+    from golden import eser as _eser
+
     from ai_hub.cat_disease.inference_cat_disease import CatDiseasePredictor, xai_top_features
 
-    try:
-        p = CatDiseasePredictor()
-    except Exception as e:
-        _pt.skip(f"cat_disease modeli yüklenemedi: {e}")
+    p = _eser.yukle(CatDiseasePredictor, _KEDI_ESERLERI, "cat_disease")
 
     def _yasak(*a, **k):
         raise AssertionError("XGBoost yolunda shap.TreeExplainer ÇAĞRILDI (uyumsuz sürüm arızası geri geldi)")
