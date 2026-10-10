@@ -868,8 +868,11 @@ export function SettingsScreen() {
         <Card style={styles.card}>
           <Text style={styles.cardTitle}>Veri Saklama Süresi</Text>
           <Text style={styles.intro}>
+            {/* F2-3.5 (A-06 · Legal §6): maskeleme klinik ONAYI olmadan başlamaz — onaysız durumda "maskelenir" diye olmuş gibi anlatılmaz. */}
             {retention.days > 0
-              ? `Seans kayıtlarındaki hasta ve operatör adları ${retention.days} gün sonra kalıcı olarak maskelenir ([REDACTED]). Tedavi verileri (doz, süre, sensör) KALIR.`
+              ? retention.acknowledged
+                ? `Seans kayıtlarındaki hasta ve operatör adları ${retention.days} gün sonra kalıcı olarak maskelenir ([REDACTED]). Tedavi verileri (doz, süre, sensör) KALIR.`
+                : `Maskeleme onayınızı bekliyor: onay verilmeden hiçbir seans kaydı maskelenmez. Onaylarsanız ${retention.days} günden eski kayıtlardaki hasta ve operatör adları kalıcı olarak maskelenir ([REDACTED]); tedavi verileri (doz, süre, sensör) KALIR.`
               : "Maskeleme KAPALI — hasta ve operatör adları süresiz saklanır."}
           </Text>
 
@@ -932,7 +935,7 @@ export function SettingsScreen() {
               <>
                 <Text style={[styles.intro, { color: colors.warning }]}>
                   {retention.anonymization.pending} hasta {retention.anonymization.days} gündür (5 yıl) tedavi görmedi ve anonimleştirmeyi
-                  bekliyor. Bu işlem GERİ ALINAMAZ: hastanın adı, sahibinin adı ve iletişim bilgileri, seans ve AI kayıtlarındaki adı
+                  bekliyor. Bu işlem GERİ ALINAMAZ: hastanın adı, sahibinin adı ve iletişim bilgileri, yaşı ve kilosu, seans ve AI kayıtlarındaki adı
                   kalıcı olarak silinir; tedavi verileri ve hekim adı kalır. Onaylayana kadar hiçbir kayda dokunulmaz.
                 </Text>
                 <TouchableOpacity style={[styles.btnOutline, { borderColor: colors.warning, minHeight: touch.min }]}

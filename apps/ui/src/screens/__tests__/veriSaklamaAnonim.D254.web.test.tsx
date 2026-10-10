@@ -79,6 +79,8 @@ test("KRİTİK: onaysız — bekleyen hasta sayısı ve geri dönüşsüzlük S�
   const metin = s.metin();
   expect(metin).toMatch(/1 hasta 1825 gündür \(5 yıl\) tedavi görmedi/);
   expect(metin).toMatch(/GERİ ALINAMAZ/);
+  // F2-3.3 (2-F incelemesi · A-38): Legal §6 "adı, sahibinin adı, iletişim bilgileri, yaşı ve kilosu ... anonimleştirilir".
+  expect(metin).toMatch(/iletişim bilgileri, yaşı ve kilosu/);
   expect(metin).toMatch(/Onaylayana kadar hiçbir kayda dokunulmaz/);
   await s.tikla(ONAY_ETIKETI);
   const post = cagrilar.filter((c) => c.yontem === "POST" && c.yol === "/settings/retention");
