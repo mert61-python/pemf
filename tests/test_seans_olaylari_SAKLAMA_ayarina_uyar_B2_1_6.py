@@ -104,9 +104,18 @@ def test_KRITIK_gunluk_bakim_saklama_AYARINA_uyar_eski_ACIL_DURDUR_olayi_KALIR(o
 
 
 def test_KARSIT_varsayilan_365_gun_eski_olay_silinir_yeni_kalir(ortam, monkeypatch):
-    """Ayar yoksa bugünkü gibi 365 gün (headless bakımla aynı varsayılan)."""
+    """Ayar yoksa 365 gün (headless bakımla aynı varsayılan): KRİTİK OLMAYAN eski olay silinir, yenisi kalır.
+
+    ⚠️ D2.50 · A-07 (2026-10-10): bu kol eskiden 400 günlük `emergency_stop` (severity=critical) olayının SİLİNMESİNİ iddia ediyordu —
+    sahip kararı A-07 "kritik tıbbi olaylar SÜRESİZ saklanır" ile çelişiyordu. Artık kritik ACİL DURDUR olayı KALIR (ayrıntılı kapı:
+    tests/test_kritik_olaylar_SURESIZ_silme_IZ_birakir_D250.py); günlük döngünün silme yeteneği kritik olmayan olayla kanıtlanır."""
     api, db = ortam
     monkeypatch.delenv("PEMF_RETAIN_EVENT_DAYS", raising=False)
     eski, yeni = _olaylar(db, (400, 10))
+    sid = int(db.start_session(treatment_mode="Manuel", patient_name="Pamuk"))
+    kritik_olmayan = db.record_session_event(sid, "seans_notu", {"a": 1})
+    with db._get_connection() as c:
+        c.execute("UPDATE session_events SET created_at=? WHERE id=?", (time.time() - 400 * 86400, kritik_olmayan))
+        c.commit()
     _gunluk_bakim_tek_tur(api)
-    assert (_var(db, eski), _var(db, yeni)) == (0, 1)
+    assert (_var(db, eski), _var(db, yeni), _var(db, kritik_olmayan)) == (1, 1, 0)

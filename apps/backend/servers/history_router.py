@@ -457,6 +457,15 @@ def delete_sessions_bulk(request: Request, payload: HistoryBulkDeletePayload, db
         raise HTTPException(status_code=400, detail="Silinecek seans seçilmedi.")
     denetlenen = _seans_sahipligi(request, db, istenen, "history.delete_bulk", f"{len(istenen)} seans")
     _suren_seans_reddi(request, istenen, "history.delete_bulk", f"{len(istenen)} seans")
+    # ⚠️ O-B.7 (D2.17'nin toplu ikizi): silinecek seansların bağlı kayıt SAYILARI (olay, ACİL DURDUR, doz = bobin koşusu, sensör)
+    # silmeden ÖNCE ve YALNIZ silinecek (sahipliği denetlenmiş) kimliklerle alınıp ize girer — içerik değil. Özet okunamazsa silme
+    # KISITLANMAZ; iz bunu söyler. Kapı: tests/test_seans_toplu_silme_OZETI_IZDE_OB7.py
+    _silinecek = sorted(set(istenen) & set(denetlenen))
+    try:
+        ozet = db.seans_silme_ozeti_toplu(_silinecek)
+    except Exception:
+        logger.warning("Toplu silme ozeti okunamadi — iz ozetsiz yaziliyor.", exc_info=True)
+        ozet = {"ozet_okunamadi": True}
     try:
         silinen = db.delete_sessions_bulk(istenen, yalniz=set(denetlenen))
     except ValueError as e:
@@ -473,6 +482,7 @@ def delete_sessions_bulk(request: Request, payload: HistoryBulkDeletePayload, db
             scope=f"{len(istenen)} seans",
             item_count=silinen,
             outcome="ok" if silinen else "bulunamadi",
+            detail=ozet,
         )
     except Exception:
         logger.debug("Toplu silme denetim izi yazilamadi (non-fatal).", exc_info=True)

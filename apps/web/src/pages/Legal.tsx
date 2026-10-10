@@ -422,7 +422,10 @@ const DOCS: Record<LegalSlug, ReactNode> = {
           <strong>3650 gün (10 yıl)</strong>.
         </li>
         <li data-saklama="olay">
-          Seans olay kayıtları (başlatma, durdurma, acil durdurma ve benzeri): <strong>365 gün</strong>.
+          Seans olay kayıtları (başlatma, bitiş ve benzeri): <strong>365 gün</strong>. Acil durdurma kayıtları (nedeniyle
+          birlikte: aşırı akım, iletişim reddi, kart bağlantısının kopması ve benzeri), acil durdurma kilidinin sıfırlanması,
+          AI önerisinin hekim tarafından onaylanması ya da reddedilmesi ve seansı kesen servis kapanışı{' '}
+          <strong>SÜRESİZ</strong> saklanır. Süresi dolan olayların silinmesi, silinen kayıt sayısıyla denetim izine yazılır.
         </li>
         <li data-saklama="anonim">
           Hasta kimlik bilgileri: <strong>1825 gün (5 yıl)</strong> boyunca tedavi kaydı olmayan hastanın adı,

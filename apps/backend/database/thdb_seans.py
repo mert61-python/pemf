@@ -40,6 +40,18 @@ from database.thdb_telemetri import KanitOkunamadi
 
 
 class SeansKarisimi:
+    #: ⚠️ D2.50 · A-07: SÜRESİZ saklanan kritik seans olayları — önemi bu kümede olan HER olay ...
+    KRITIK_OLAY_ONEMLERI = ("critical", "warning")
+    #: ... ve önemi ne olursa olsun bu türler (ACİL DURDUR + nedeni, kilit sıfırlama, AI önerisinin hekim onay/ret izi, seansı kesen
+    #: servis kapanışı). Yeni bir güvenlik olayı türü eklenirse ya önemi `critical`/`warning` yazılmalı ya da buraya eklenmeli.
+    KRITIK_OLAY_TURLERI = (
+        "emergency_stop",
+        "estop_mandali_sifirlandi",
+        "ai_proposal_approved",
+        "ai_proposal_rejected",
+        "service_shutdown",
+    )
+
     def recover_stale_active_sessions(self, max_age_hours: int = 12) -> int:
         """Açık kalmış `active` seansları güvenli şekilde kapat (recovery).
 
@@ -147,16 +159,42 @@ class SeansKarisimi:
         if int(retain_days) <= 0:
             return 0
         cutoff_ts = datetime.now().timestamp() - (int(retain_days) * 86400)
+        # ⚠️ D2.50 (B-3.25) · SAHİP KARARI A-07: kritik tıbbi olaylar SÜRESİZ saklanır, diğer seans olayları süre dolunca silinir,
+        # silme İZ bırakır. Eskiden tür/önem ayrımı yoktu: seans başlığındaki "Acil Durduruldu" ve doz kaydı 3650 gün kalırken
+        # durdurmanın NEDENİ (aşırı akım, NACK, STM kopması, bekçi — `emergency_stop` yükü), kilidi kimin sıfırladığı ve AI önerisinin
+        # hekim onay/ret izi 365. günde İZ BIRAKMADAN siliniyordu. Kritik = önemi `KRITIK_OLAY_ONEMLERI`nde olan HER olay (listede
+        # olmayan yeni bir alarm türü de korunur) + `KRITIK_OLAY_TURLERI` (önemi `info` yazılan onay/ret/kapanış dahil).
+        # Kapı: tests/test_kritik_olaylar_SURESIZ_silme_IZ_birakir_D250.py
+        on_yer = ",".join("?" for _ in self.KRITIK_OLAY_ONEMLERI)
+        tur_yer = ",".join("?" for _ in self.KRITIK_OLAY_TURLERI)
+        kritik_disi = (
+            f"created_at < ? AND COALESCE(severity, 'info') NOT IN ({on_yer}) AND event_type NOT IN ({tur_yer})"
+        )
+        parametre = (cutoff_ts, *self.KRITIK_OLAY_ONEMLERI, *self.KRITIK_OLAY_TURLERI)
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('DELETE FROM session_events WHERE created_at < ?', (cutoff_ts,))
+                cursor.execute(f'DELETE FROM session_events WHERE {kritik_disi}', parametre)
                 removed = int(cursor.rowcount)
+                korunan = int(
+                    cursor.execute('SELECT COUNT(*) FROM session_events WHERE created_at < ?', (cutoff_ts,)).fetchone()[
+                        0
+                    ]
+                )
                 conn.commit()
-                return removed
         except Exception as e:
             self.logger.warning(f"Session event retention temizleme uyarısı: {e}")
             return 0
+        # ⚠️ İZ `with` bloğunun DIŞINDA (purge_old_coil_runs ile aynı gerekçe: `denetim_yaz` kilidi alır, istisna atmaz). Yalnız
+        # gerçekten silinen turda — boş turlar 6 saatte bir iz satırı biriktirmez. İçerik YOK: yalnız sayı, süre, korunan kritik sayısı.
+        if removed:
+            self.denetim_yaz(
+                "retention.olay_silindi",
+                scope="otomatik",
+                item_count=removed,
+                detail={"gun": int(retain_days), "kritik_korunan": korunan},
+            )
+        return removed
 
     def start_session(
         self,
@@ -492,6 +530,15 @@ class SeansKarisimi:
             "bobin_kosusu": int(kosu or 0),
             "sensor_ornegi": int(sensor or 0),
         }
+
+    def seans_silme_ozeti_toplu(self, session_ids) -> Dict[str, int]:
+        """O-B.7: TOPLU silmede `seans_silme_ozeti` sayılarının TOPLAMI (aynı anahtarlar, aynı "içerik yok" kuralı). Silmeden ÖNCE ve
+        yalnız gerçekten silinecek kimliklerle çağrılmalı. Hata çağırana gider (çağıran silmeyi KISITLAMAZ)."""
+        toplam = {"olay": 0, "acil_durdurma": 0, "bobin_kosusu": 0, "sensor_ornegi": 0}
+        for sid in sorted({int(x) for x in (session_ids or ())}):
+            for anahtar, deger in self.seans_silme_ozeti(sid).items():
+                toplam[anahtar] += int(deger)
+        return toplam
 
     def get_session_details(self, session_id: int) -> Optional[Dict]:
         """

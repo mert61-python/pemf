@@ -284,6 +284,26 @@ def test_KRITIK_saklama_sureleri_metinde_DEVREDEKI_kod_varsayilanlariyla_AYNI(me
         )
 
 
+def test_KRITIK_A07_kritik_olaylar_SURESIZ_anlatilir(metin):
+    """D2.50 · A-07: yazılım kritik seans olaylarını (`KRITIK_OLAY_TURLERI` — ACİL DURDUR dahil) süresiz saklıyorsa §6 'olay' maddesi
+    bunu SÖYLEMELİ (A-38). MUTASYON: kod kritik listeyi boşaltır ya da metin 'SÜRESİZ'i düşürür → KIRMIZI."""
+    agac = ast.parse((KOK / "apps" / "backend" / "database" / "thdb_seans.py").read_text(encoding="utf-8"))
+    turler = [
+        tuple(e.value for e in d.value.elts)
+        for d in ast.walk(agac)
+        if isinstance(d, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "KRITIK_OLAY_TURLERI" for t in d.targets)
+        and isinstance(d.value, (ast.Tuple, ast.List))
+    ]
+    assert len(turler) == 1 and "emergency_stop" in turler[0], (
+        f"kritik olay listesi okunamadı / ACİL DURDUR yok: {turler}"
+    )
+    madde = _saklama_maddeleri(metin)["olay"]
+    assert "SÜRESİZ" in madde and "Acil durdurma" in madde, (
+        f"§6 'olay' maddesi kritik olayların süresiz olduğunu söylemiyor: {madde!r}"
+    )
+
+
 def test_KRITIK_maskeleme_suresi_ayar_ucu_ve_bakimda_AYNI():
     """Ayarlar ekranının gösterdiği varsayılan (`_PII_VARSAYILAN_GUN`) ile bakımın uyguladığı aynı olmalı — biri değişirse metin
     ikisinden birine göre yanlış olur. MUTASYON: `_PII_VARSAYILAN_GUN = 180` → KIRMIZI."""
