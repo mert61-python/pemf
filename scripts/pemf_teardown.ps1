@@ -289,7 +289,9 @@ function Get-PemfMakineDisiYedekHedefleri($Footprint) {
             $kayit = Join-Path (Join-Path $kok $kurulum) 'backup_dir.txt'
             if (-not (Test-Path -LiteralPath $kayit -PathType Leaf -ErrorAction SilentlyContinue)) { continue }
             try {
-                $v = "$(Get-Content -LiteralPath $kayit -Raw -ErrorAction Stop)".Trim()
+                # E2-2.2: launcher BOM'suz UTF-8 yazar; Inno kaldırması powershell.exe 5.1'de koşar ve 5.1 BOM'suz dosyayı ANSI okur
+                # (Türkçe harfli yol bozulur → var olan hedef "ERİŞİLEMİYOR: <bozuk yol>"). Kodlama açıkça UTF-8.
+                $v = "$(Get-Content -LiteralPath $kayit -Raw -Encoding UTF8 -ErrorAction Stop)".Trim()
                 if ($v) { $d += [pscustomobject]@{ Kaynak = $kayit; Yol = $v } }
             } catch {
                 # Okunamayan kayıt: yer BİLİNMİYOR ama yedek olabilir → rapor bunu söyler (Yol boş).
