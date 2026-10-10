@@ -140,7 +140,9 @@ def _restore(zarf: Path, kod: str, yaz: bool) -> int:
             # Cozulemeyen (baska makinenin DPAPI'siyle sarilmis) deger de "mevcut" sayilir:
             # ustune yazmak, o degerle sifrelenmis veriyi kalici kaybettirebilir.
             mevcut.append(name)
-    if mevcut and os.environ.get("PEMF_KURTARMA_USTUNE_YAZ") != "1":
+    # ⚠️ E2-3.5: cmd.exe `set AD=1 && …` değere `&&` öncesindeki BOŞLUKLARI katar ("1   ") — katı karşılaştırma zorlamayı
+    # sessizce reddediyordu (araç kendi bastığı satırla bile DURDURULDU diyordu; ölçüldü). Değer kırpılır; satır tırnaklı `set`.
+    if mevcut and (os.environ.get("PEMF_KURTARMA_USTUNE_YAZ") or "").strip() != "1":
         print("DURDURULDU: bu makinede zaten anahtar var → " + ", ".join(mevcut))
         print()
         print("  Ustune yazmak, MEVCUT sifreli veriyi kalici olarak acilamaz hale getirebilir.")
@@ -148,7 +150,7 @@ def _restore(zarf: Path, kod: str, yaz: bool) -> int:
         print("       .sqlcipher_key, config\\.pemf_key_v2) geliyor olabilir — bunlar da sayilir.")
         print("  Bu makine TAZE bir kurulumsa (hic hasta verisi YOK) su sekilde zorlayin:")
         print(
-            "      set PEMF_KURTARMA_USTUNE_YAZ=1   &&   "
+            '      set "PEMF_KURTARMA_USTUNE_YAZ=1"  &&  '
             + kurtarma_komutu("--zarf", "<yedek>\\" + ENVELOPE_NAME, "--kod", "<KOD>", "--yaz")
         )
         return 3
