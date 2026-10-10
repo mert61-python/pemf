@@ -5432,12 +5432,23 @@ def _daily_maintenance_loop():
                                     cur.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                                 except Exception:
                                     pass
+                                # VACUUM islem (transaction) icinde calismaz → autocommit'e gec.
+                                # ⚠️ D2.23 (B-3.79): bağlantı TreatmentHistoryDB'nin iş parçacığı başına HAVUZUNDAN gelir ve bu döngü
+                                # iş parçacığında süreç ömrü boyunca KALIR → eski işlem kipi `finally`de GERİ YÜKLENİR. Eskiden autocommit
+                                # kalıyordu: sonraki turların KVKK anonimleştirmesi (`anonymize_patients_by_uuid`) tek işlem sanılan üç
+                                # UPDATE'i ayrı ayrı commit ediyor, ikincisi düşünce hasta kopyası [ANONIM] / seans geçmişinde ad kalıyordu
+                                # (yarım anonimleştirme — ölçüldü). Kapı: tests/test_haftalik_VACUUM_havuz_baglantisini_KIRLETMEZ_D223.py
+                                _onceki_kip = conn.isolation_level
                                 try:
-                                    # VACUUM islem (transaction) icinde calismaz → autocommit'e gec.
                                     conn.isolation_level = None
                                     cur.execute("VACUUM")
                                 except Exception:
-                                    pass
+                                    log.warning(
+                                        "Haftalik VACUUM yapilamadi (bir sonraki haftalik turda denenecek)",
+                                        exc_info=True,
+                                    )
+                                finally:
+                                    conn.isolation_level = _onceki_kip
                     except Exception:
                         log.warning("Haftalik VACUUM/checkpoint hatasi", exc_info=True)
 
