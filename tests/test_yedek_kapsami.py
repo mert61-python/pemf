@@ -52,45 +52,62 @@ _SERT_SINIR = 100 * 1024 * 1024
 
 
 def _izleniyor_mu(rel: str) -> bool:
-    """Git bu yolu YOK SAYIYOR mu? (`check-ignore` çıkış kodu 0 = yok sayılıyor)"""
+    """Git INDEX'inde mi? (`ls-files --error-unmatch` çıkış 0 = izleniyor).
+
+    ⚠️ D4.06 (B-10.52, 2026-10-10): eski sürüm burada `check-ignore -q` soruyordu. `check-ignore` İZLENEN bir dosya için
+    kuralları HİÇ değerlendirmez (`--no-index` olmadan) → `.gitignore` sonuna `*.onnx` eklemek ya da istisna satırını
+    silmek bu kapıyı YEŞİL bırakıyordu; `git rm --cached` sonrası dosya diskte durduğu için yine yeşildi (ölçüldü)."""
     r = subprocess.run(
-        ["git", "check-ignore", "-q", f"release_assets/ai_models/{rel}"],
+        ["git", "ls-files", "--error-unmatch", "--", f"release_assets/ai_models/{rel}"],
         cwd=_KOK,
         capture_output=True,
     )
-    return r.returncode != 0
+    return r.returncode == 0
 
 
-@pytest.mark.skipif(not _MODELLER.is_dir(), reason="model dizini bu çalışma kopyasında yok")
+def _kural_disliyor_mu(rel: str) -> bool:
+    """`.gitignore` kuralları bu yolu dışlıyor mu — index'e BAKMADAN (`--no-index`): bir sonraki `git add` onu alır mı."""
+    r = subprocess.run(
+        ["git", "check-ignore", "--no-index", "-q", f"release_assets/ai_models/{rel}"],
+        cwd=_KOK,
+        capture_output=True,
+    )
+    return r.returncode == 0
+
+
 @pytest.mark.parametrize("rel", _DEPODA_DURMALI)
 def test_KRITIK_yedegi_olmayan_model_DEPODA(rel):
-    """Yayında kopyası olmayan model dosyası git'te DURMALI — yoksa makineyle birlikte kaybolur."""
+    """Yayında kopyası olmayan model dosyası git'te DURMALI — yoksa makineyle birlikte kaybolur.
+
+    D4.06 (B-10.52 · B-10.53): dosya yoksa SKIP DEĞİL FAIL (izlenen dosya her checkout'ta vardır; yokluğu silinmesidir);
+    üç ayrı iddia: index'te · kural dışlamıyor · diskte ve 100 MiB altında."""
+    assert _izleniyor_mu(rel), (
+        f"{rel} git index'inde YOK (git rm --cached?). Bu dosyanin yayinlanmis hicbir pakette kopyasi YOK -> makine "
+        f"kaybinda geri getirilemez."
+    )
+    assert not _kural_disliyor_mu(rel), (
+        f"{rel} .gitignore tarafindan DISLANIYOR (--no-index). Muhtemel sebep: istisnalar dosyanin SONUNDAN yukari "
+        f"tasindi ya da yeni bir genel kural (*.onnx/*.pkl) eklendi — sonraki `git add` onu almaz."
+    )
     p = _MODELLER / rel
-    if not p.is_file():
-        pytest.skip(f"dosya bu kopyada yok: {rel}")
+    assert p.is_file(), f"{rel} izleniyor ama diskte YOK — calisma agacindan silinmis"
     assert p.stat().st_size < _SERT_SINIR, (
         f"{rel} 100 MiB'i asmis ({p.stat().st_size / 2**20:.0f} MB) — git'e giremez, "
         f"Releases'e tasinmali ve bu listeden cikarilmali"
     )
-    assert _izleniyor_mu(rel), (
-        f"{rel} .gitignore tarafindan DISLANIYOR. Bu dosyanin yayinlanmis hicbir pakette kopyasi "
-        f"YOK -> makine kaybinda geri getirilemez. Muhtemel sebep: istisnalar dosyanin SONUNDAN "
-        f"yukari tasindi ya da yeni bir genel kural (*.onnx/*.pkl) eklendi."
-    )
 
 
-@pytest.mark.skipif(not _MODELLER.is_dir(), reason="model dizini bu çalışma kopyasında yok")
 @pytest.mark.parametrize("rel", _DEPODA_DURMAMALI)
 def test_KARSIT_KANIT_buyuk_agirliklar_depoya_ALINMAZ(rel):
-    """Karşıt-kanıt: "hepsini ekleyelim" biçimindeki bir yama depoyu kırar (100 MiB sert sınır)."""
+    """Karşıt-kanıt: "hepsini ekleyelim" biçimindeki bir yama depoyu kırar (100 MiB sert sınır).
+
+    D4.06: index/kural iddiaları dosya diskte OLMASA da ölçülür (temiz klonda büyük ağırlık yoktur)."""
+    assert not _izleniyor_mu(rel), f"{rel} git'e alinmis — GitHub 100 MiB ustunu SERT olarak reddeder, push kirilir"
+    assert _kural_disliyor_mu(rel), f"{rel} .gitignore'da DISLANMIYOR — bir sonraki `git add -A` onu depoya alir"
     p = _MODELLER / rel
     if not p.is_file():
-        pytest.skip(f"dosya bu kopyada yok: {rel}")
+        pytest.skip(f"buyuk agirlik bu kopyada yok (Releases'te durur) — boyut iddiasi olculemez: {rel}")
     assert p.stat().st_size > _SERT_SINIR, f"{rel} artik kucuk — bu karsit-kanit guncellenmeli"
-    assert not _izleniyor_mu(rel), (
-        f"{rel} ({p.stat().st_size / 2**20:.0f} MB) git'e alinmis — GitHub 100 MiB ustunu SERT "
-        f"olarak reddeder, push tamamen kirilir. Buyuk agirliklar Releases'te durmali."
-    )
 
 
 # ── training_archive/ — silinen `esp` dalindan kurtarilan egitim arsivi (2026-08-18) ──────────
