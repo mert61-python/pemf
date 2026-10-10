@@ -72,6 +72,17 @@ SUTUNLAR: tuple[str, ...] = (
     "current_sensor_ok",
     "uptime_ms",
     "wifi_rssi",
+    # ⚠️ D2.39 (B-1.12): STM telemetrisinin (`STM_TELE` → `hardware.stm.telemetry`) İŞARETLİ eksen uçları — saniyelik pencerenin
+    # min/max'ı (mT). `magnetic_field` büyüklüktür, unipolar ile bipolari AYNI gösterir; bipolar / faz kazancını YALNIZ bunlar taşır.
+    # SONA eklendi (sıra sözleşmesi): o gün eski başlıkla açılmış dosyaya yazılmaz, yeni dosya açılır (`_dosyayi_hazirla`).
+    "mag_x_min",
+    "mag_x_max",
+    "mag_y_min",
+    "mag_y_max",
+    "mag_z_min",
+    "mag_z_max",
+    "current_saturated",
+    "magnetic_saturated",
 )
 
 #: Yük anahtarı → CSV sütunu. İki firmware ailesi farklı adlar kullanıyor (8266
@@ -98,6 +109,15 @@ _ESLEME: dict[str, str] = {
     "current_sensor_ok": "current_sensor_ok",
     "uptime": "uptime_ms",
     "wifi_rssi": "wifi_rssi",
+    # D2.39: STM telemetri alanları (adlar `headless_core._parse_stm_tele` ile birebir; skalerler yukarıdaki eşlemeyle ortak).
+    "mag_x_min": "mag_x_min",
+    "mag_x_max": "mag_x_max",
+    "mag_y_min": "mag_y_min",
+    "mag_y_max": "mag_y_max",
+    "mag_z_min": "mag_z_min",
+    "mag_z_max": "mag_z_max",
+    "current_saturated": "current_saturated",
+    "magnetic_saturated": "magnetic_saturated",
 }
 
 #: Sensör alanı taşıyan mesaj tipleri. ⚠️ `status` DA LİSTEDE: S3 hiç `sensors` yayınlamaz
@@ -144,6 +164,7 @@ class SensorKaydedici:
         self._kilit = threading.Lock()
         self._dosya = None
         self._gun_etiketi = ""
+        self._aktif_ad = ""
         self._son_flush = 0.0
         self.yazilan = 0
         self.atilan = 0
@@ -164,13 +185,29 @@ class SensorKaydedici:
                 pass
             self._dosya = None
         self.dizin.mkdir(parents=True, exist_ok=True)
-        yol = self._dosya_yolu(etiket)
+        # ⚠️ D2.39: o gün ESKİ başlıkla (ör. güncellemeden önce) açılmış dosyaya yeni sütunlu satır eklenmez — sütunlar kayardı.
+        # Başlığı uyuşmayan dosya olduğu gibi kalır, satırlar `sensor_<gün>_<n>.csv`ye gider (retention gün etiketini ilk 10
+        # karakterden okur). Kapı: tests/test_stm_telemetrisi_SENSOR_KAYDINA_yazilir_D239.py
+        baslik = ",".join(SUTUNLAR)
+        yol, n = self._dosya_yolu(etiket), 1
+        while yol.exists() and yol.stat().st_size > 0 and self._ilk_satir(yol) != baslik:
+            n += 1
+            yol = self.dizin / f"sensor_{etiket}_{n}.csv"
         yeni = not yol.exists() or yol.stat().st_size == 0
         self._dosya = open(yol, "a", encoding="utf-8", newline="")
         if yeni:
-            self._dosya.write(",".join(SUTUNLAR) + "\n")
+            self._dosya.write(baslik + "\n")
         self._gun_etiketi = etiket
+        self._aktif_ad = yol.name
         self._temizle(simdi)
+
+    @staticmethod
+    def _ilk_satir(yol: Path) -> str:
+        try:
+            with open(yol, encoding="utf-8", newline="") as f:
+                return f.readline().rstrip("\r\n")
+        except OSError:
+            return ""
 
     def _temizle(self, simdi: datetime) -> None:
         """Gün sınırı + TOPLAM BOYUT tavanı. ⚠️ Tavan olmadan disk sessizce dolar."""
@@ -180,9 +217,9 @@ class SensorKaydedici:
             return
         sinir = simdi - timedelta(days=self.gun)
         for y in list(dosyalar):
-            etiket = y.stem.replace("sensor_", "")
+            etiket = y.stem.replace("sensor_", "")[:10]  # D2.39: `sensor_<gün>_<n>.csv` da aynı gün
             try:
-                if datetime.strptime(etiket, "%Y-%m-%d") < sinir and y.name != self._dosya_yolu(self._gun_etiketi).name:
+                if datetime.strptime(etiket, "%Y-%m-%d") < sinir and y.name != self._aktif_ad:
                     y.unlink()
                     dosyalar.remove(y)
             except (ValueError, OSError):
@@ -196,7 +233,7 @@ class SensorKaydedici:
         for y in dosyalar:
             if toplam <= tavan:
                 break
-            if y.name == self._dosya_yolu(self._gun_etiketi).name:
+            if y.name == self._aktif_ad:
                 continue
             try:
                 boyut = y.stat().st_size

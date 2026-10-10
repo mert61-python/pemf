@@ -1821,6 +1821,14 @@ def _handle_backend_event(event) -> None:
         if not _t_yazildi:
             return
         _coil_last_telemetry[_t_idx] = time.monotonic()
+        # ⚠️ D2.39 (B-1.12 · Y31): "sensör kaydı HER ZAMAN açık" STM telemetrisini de kapsar. Kaydedicinin tek çağıranı MQTT (ESP)
+        # işleyicisiydi ve o yol `PEMF_ESP_ENABLED` arkasında → varsayılan sahada bobin 1-7 telemetrisi diske HİÇ yazılmıyordu. Yük
+        # olduğu gibi verilir (yalnız GELEN alanlar → ölçülmeyen sütun boş, Y6). Kaydedici ASLA canlı akışı bozmaz (kendisi yutar;
+        # burada da sarılı). Kapı: tests/test_stm_telemetrisi_SENSOR_KAYDINA_yazilir_D239.py
+        try:
+            _sensor_kaydedici.kaydet(_t_coil_id, "sensors", data)
+        except Exception:
+            logging.getLogger(__name__).debug("STM telemetrisi sensor kaydina yazilamadi", exc_info=True)
         # ⚠️ DOYGUNLUK: deger geldi ama ADC tavanina dayandi → sayi guvenilmez ve
         # DOZ KAYDINA giriyor. Operatore SOYLENMELI. Yalnız 0→1 gecisinde bildir:
         # her saniye bildirim basmak alarm yorgunlugu uretir ve gercek olaylari bogar.
