@@ -576,12 +576,38 @@ class HeadlessDBMaintenance:
             return True
         return False
 
+    @staticmethod
+    def _yerel_esdeger(yol: str) -> str:
+        """F2-3.7 (2-F incelemesi): `\\\\?\\` uzun yol önekini ve AYNI makinenin yönetici paylaşımını (`\\\\localhost\\C$\\…`,
+        `\\\\127.0.0.1\\C$\\…`, `\\\\<bu makine>\\C$\\…`) yerel sürücü yoluna indirger — ağa ÇIKMADAN (yalnız dizgi + yerel makine adı).
+        `realpath` önekli girdiyi önekli bırakır, UNC'yi sürücü harfine çevirmez → kök-içi hedef "kök dışı" sayılıyordu (ölçüldü)."""
+        import re
+        import socket
+
+        y = str(yol)
+        if y.startswith("\\\\?\\UNC\\"):
+            y = "\\\\" + y[8:]
+        elif y.startswith("\\\\?\\"):
+            y = y[4:]
+        m = re.match(r"^\\\\([^\\]+)\\([A-Za-z])\$(\\.*)?$", y)
+        if m:
+            yerel = {"localhost", "127.0.0.1", "::1", "[::1]", "."}
+            for ad in (os.environ.get("COMPUTERNAME", ""), socket.gethostname()):
+                if ad:
+                    yerel.add(ad.lower())
+            ana = m.group(1).lower()
+            if ana in yerel or ana.startswith("127."):
+                y = f"{m.group(2)}:{m.group(3) or os.sep}"
+        return y
+
     def _hedef_veri_kokunde_mi(self, dest: str) -> bool:
         """S-E2I.4: `dest` (mutlak + gerçek yol, Windows'ta harf duyarsız) veri kökünün KENDİSİ ya da altı mı? Çözülemezse True
-        (fail-closed: kopya yapılmaz, ERROR — yerel yedekler sürer)."""
+        (fail-closed: kopya yapılmaz, ERROR — yerel yedekler sürer). F2-3.7: `\\\\?\\` öneki ve aynı makinenin yönetici paylaşımı
+        yerel yola indirgenir (`_yerel_esdeger`)."""
+        _y = self._yerel_esdeger
         try:
-            hedef = os.path.normcase(os.path.realpath(os.path.abspath(dest)))
-            kok = os.path.normcase(os.path.realpath(os.path.abspath(str(self.app_data_dir))))
+            hedef = os.path.normcase(_y(os.path.realpath(os.path.abspath(_y(dest)))))
+            kok = os.path.normcase(_y(os.path.realpath(os.path.abspath(_y(str(self.app_data_dir))))))
         except (OSError, ValueError, TypeError):
             return True
         return hedef == kok or hedef.startswith(kok.rstrip("\\/") + os.sep)
