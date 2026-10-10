@@ -31,6 +31,13 @@ import {
 } from "@/services/veriTasima";
 
 
+/** S-F2-1.1: denetim izinin UTC ISO zamanını yerel tarih-saate çevirir; okunamazsa ham metin. */
+function sonTurZamani(at: string | null | undefined): string {
+  if (!at) return "bilinmiyor";
+  const t = new Date(at);
+  return Number.isNaN(t.getTime()) ? String(at) : t.toLocaleString("tr-TR");
+}
+
 export function SettingsScreen() {
   const { setUserMode, isExpert, isResearcher } = useUserMode();
   const { reconnect: liveReconnect, wsConnected } = useLiveData();
@@ -58,7 +65,11 @@ export function SettingsScreen() {
     // D2.55 · A-09: onay süreye ve maskeleme kapsamına bağlı. Kayıtlı ama geçersiz onay (süre/kapsam değişti) → approvalStale.
     approvedDays?: number | null; approvedCount?: number | null; approvalStale?: boolean;
     // D2.54 · A-06: 5 yıl inaktif hasta anonimleştirmesi — onay yoksa bekleyen sayı (sayılamazsa null) gösterilir, operatör onaylar.
-    anonymization?: { days: number; acknowledged: boolean; pending: number | null; approvedAt?: string | null };
+    // S-F2-1.1: lastRun = son anonimleştirme turu (denetim izinden; zaman UTC ISO) — tur yoksa null.
+    anonymization?: {
+      days: number; acknowledged: boolean; pending: number | null; approvedAt?: string | null;
+      lastRun?: { at: string | null; count: number | null } | null;
+    };
     // F2-1.2 · A-73: onaylanmamış saat şüphesi (neden metni) — varken maskeleme / anonimleştirme / saklama silmesi KOŞMAZ.
     clockSuspect?: string | null;
   }
@@ -72,7 +83,8 @@ export function SettingsScreen() {
   useEffect(() => { void retentionYukle(); }, [retentionYukle]);
 
   const retentionKaydet = useCallback(async (govde: {
-    days?: number; acknowledge?: boolean; acknowledge_days?: number; anonymize_acknowledge?: boolean; clock_confirm?: boolean;
+    days?: number; acknowledge?: boolean; acknowledge_days?: number; anonymize_acknowledge?: boolean; anonymize_revoke?: boolean;
+    clock_confirm?: boolean;
   }) => {
     setRetMesgul(true);
     await apiPost<{ status?: string } | null>("/settings/retention", govde, null);
@@ -949,9 +961,23 @@ export function SettingsScreen() {
               </>
             ) : null
           ) : retention.anonymization?.acknowledged ? (
-            <Text style={styles.intro}>
-              Anonimleştirme onaylı — {retention.anonymization.days} gün (5 yıl) tedavi görmeyen hastalar otomatik anonimleştirilir.
-            </Text>
+            <>
+              {/* S-F2-1.1 (2-F incelemesi · Y123 · A-06): onay süresiz değil — operatör son turu görür ve onayı GERİ ALABİLİR. */}
+              <Text style={styles.intro}>
+                Anonimleştirme onaylı — {retention.anonymization.days} gün (5 yıl) tedavi görmeyen hastalar otomatik anonimleştirilir.
+                {retention.anonymization.lastRun
+                  ? ` Son tur: ${sonTurZamani(retention.anonymization.lastRun.at)} — ${retention.anonymization.lastRun.count ?? 0} hasta.`
+                  : " Henüz anonimleştirme turu yapılmadı."}
+              </Text>
+              <TouchableOpacity style={[styles.btnOutline, { minHeight: touch.min }]}
+                disabled={retMesgul} onPress={() => retentionKaydet({ anonymize_revoke: true })}
+                accessibilityRole="button"
+                accessibilityLabel="Anonimleştirme onayını geri al">
+                <Text style={styles.btnOutlineText}>
+                  {retMesgul ? "…" : "Anonimleştirmeyi durdur"}
+                </Text>
+              </TouchableOpacity>
+            </>
           ) : null}
 
           <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" }}>

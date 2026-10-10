@@ -100,3 +100,29 @@ test("KARŞIT: bekleyen sayılamadıysa (null) '0 bekleyen' yalanı yok — okun
   expect(s.varMi(ONAY_ETIKETI)).toBe(false);
   expect(s.metin()).toMatch(/bekleyen hasta sayısı okunamadı/);
 });
+
+const GERI_AL_ETIKETI = "Anonimleştirme onayını geri al";
+
+test("KRİTİK (S-F2-1.1): onaylıyken son tur SÖYLENİR ve GERİ ALMA düğmesi anonymize_revoke gönderir", async () => {
+  expect("lastRun" in (FIKSTUR.govde.anonymization as Record<string, unknown>)).toBe(true); // GERÇEK yanıt alanı taşıyor
+  const a = retentionGovde.anonymization as Record<string, unknown>;
+  a.acknowledged = true;
+  a.lastRun = { at: "2026-10-10T13:40:42+00:00", count: 2 };
+  await ekran();
+  expect(s.metin()).toMatch(/Son tur: .+ — 2 hasta\./);
+  await s.tikla(GERI_AL_ETIKETI);
+  const post = cagrilar.filter((c) => c.yontem === "POST" && c.yol === "/settings/retention");
+  expect(post.map((c) => c.govde)).toEqual([{ anonymize_revoke: true }]);
+});
+
+test("KARŞIT (S-F2-1.1): GERÇEK yanıtta tur yok (lastRun null) — 'henüz tur yapılmadı'; onaysızken geri alma düğmesi YOK", async () => {
+  expect((FIKSTUR.govde.anonymization as Record<string, unknown>).lastRun).toBeNull();
+  (retentionGovde.anonymization as Record<string, unknown>).acknowledged = true;
+  await ekran();
+  expect(s.metin()).toMatch(/Henüz anonimleştirme turu yapılmadı/);
+  await s.sok();
+  s = new Sahne();
+  (retentionGovde.anonymization as Record<string, unknown>).acknowledged = false;
+  await ekran();
+  expect(s.varMi(GERI_AL_ETIKETI)).toBe(false);
+});

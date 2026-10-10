@@ -497,6 +497,15 @@ class PiiKarisimi:
             "Operator 5 yil inaktif hasta anonimlestirmesini onayladi (A-06); esik degisirse gecersiz (A-09)",
         )
 
+    def anonim_onayi_iptal(self) -> Optional[dict]:
+        """S-F2-1.1 (2-F incelemesi · Y123 · A-06): operatör anonimleştirme onayını GERİ ALDI — sonraki turlar YENİ hastaya dokunmaz;
+        yeniden onay ekranda bekleyen sayıyla sorulur. Kanonik tarafı ZATEN anonim olanların tedavi-DB adımı (kalıcı bekleyen liste,
+        B-3.34) onaydan bağımsız sürer. Dönen: geri alınan onay (denetim izine) ya da None.
+        Kapı: tests/test_anonimlestirme_onayi_GERI_ALINIR_SF211.py"""
+        onceki = self.anonim_onayi_oku()
+        self._set_system_setting(self.ANONIM_ONAY_ANAHTARI, "", "Operator anonimlestirme onayini GERI ALDI (S-F2-1.1)")
+        return onceki
+
     def anonim_bekleyen_oku(self) -> dict:
         """Tedavi-DB adımı henüz BİTMEMİŞ anonimleştirmeler {uuid: [ad, sahip, eposta]} (B-3.34). Okunamaz → {} (bu tur atlanır)."""
         import json

@@ -995,7 +995,18 @@ def _anonimlestirme_durumu() -> dict:
         "pending": bekleyen,
         "approvedAt": (onay or {}).get("zaman") if onayli else None,
         "approvedCount": (onay or {}).get("sayi") if onayli else None,
+        # S-F2-1.1 (2-F incelemesi · Y123): son anonimleştirme turunun zamanı (UTC) ve sayısı — denetim izinden; tur yoksa None.
+        "lastRun": _son_anonim_turu(db),
     }
+
+
+def _son_anonim_turu(db) -> Optional[dict]:
+    try:
+        son = db.denetim_oku(1, "kvkk.anonimlestirildi")
+    except Exception:
+        logger.warning("son anonimlestirme turu okunamadi", exc_info=True)
+        return None
+    return {"at": son[0].get("ts_utc"), "count": son[0].get("item_count")} if son else None
 
 
 class _RetentionAyar(BaseModel):
@@ -1007,6 +1018,8 @@ class _RetentionAyar(BaseModel):
     acknowledge_days: Optional[int] = None
     #: D2.54 · A-06: operatör 5 yıl inaktif hastaların geri dönüşsüz anonimleştirmesini onaylıyor (o anki bekleyen sayıyla kayda geçer).
     anonymize_acknowledge: bool = False
+    #: S-F2-1.1 (2-F incelemesi · Y123 · A-06): operatör anonimleştirme onayını GERİ ALIYOR (sonraki turlar yeni hastaya dokunmaz).
+    anonymize_revoke: bool = False
     #: F2-1.2 · A-73: operatör cihaz saatinin DOĞRU olduğunu onaylıyor (saat şüphesi kalkar, geri dönüşsüz saklama adımları sürer).
     clock_confirm: bool = False
 
@@ -1021,6 +1034,8 @@ async def retention_ayarla(payload: _RetentionAyar, request: Request):
     from servers.auth import enforce_privileged
 
     enforce_privileged(request)
+    if payload.anonymize_acknowledge and payload.anonymize_revoke:
+        raise HTTPException(status_code=400, detail="Aynı istekte anonimleştirme onayı ve geri alması olmaz.")
     if payload.days is not None and (payload.days < 0 or payload.days > 36500):
         raise HTTPException(status_code=400, detail="Saklama süresi 0–36500 gün aralığında olmalı.")
     try:
@@ -1125,6 +1140,18 @@ async def retention_ayarla(payload: _RetentionAyar, request: Request):
                 item_count=sayi,
                 outcome="onaylandi",
                 detail={"gun": gun},
+            )
+        if payload.anonymize_revoke:
+            onceki_onay = await asyncio.to_thread(db.anonim_onayi_iptal)
+            logger.warning(
+                "KVKK: operator 5 yil inaktif hasta anonimlestirme onayini GERI ALDI (onceki: %s).", onceki_onay
+            )
+            _iz.kimlikli_yaz(
+                request,
+                "retention.anonim_onay_iptal",
+                scope="kvkk",
+                outcome="geri_alindi",
+                detail={"onceki": onceki_onay},
             )
         if payload.clock_confirm:
             onceki_suphe = await asyncio.to_thread(db.saat_supheli_mi)

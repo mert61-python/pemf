@@ -14,7 +14,8 @@
       "acknowledged": false,
       "pending": 1,
       "approvedAt": null,
-      "approvedCount": null
+      "approvedCount": null,
+      "lastRun": null
     },
     "clockSuspect": null
   }
