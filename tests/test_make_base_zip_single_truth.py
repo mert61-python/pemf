@@ -122,37 +122,77 @@ def test_tek_surum_kapisi_dogrulamada_raporlanir(ortam):
 # ── kapı gerçekten ısırıyor mu ───────────────────────────────────────────────
 
 
-def test_KRITIK_BAYAT_base_zip_dogrulamayi_DUSURUR(ortam):
-    """Asıl senaryonun modeli: base.zip eski bir build'den kalmış (exe farklı)."""
-    dist, cikti = ortam
-    assert _calistir(dist, cikti=cikti).returncode == 0
+# ⚠️ D4.30 (B-10.245 · B-10.246, 2026-10-10): aşağıdaki test eskiden kapının mantığını TESTİN İÇİNDE "birebir" yeniden
+# yazıp KENDİ kopyasını ölçüyordu (totoloji) — `_monolith_esit` hep True, karşılaştırma `if True:` ya da kontrol tablosunda
+# sabit True olsa bile bu dosyanın 18 testi YEŞİLDİ (ölçüldü). Artık BETİĞİN KENDİ doğrulama adımı bayat bir base.zip
+# üzerinde koşar. Bayatlık EN ALT katta kurulur: betik gerçek `dist/`ten her şeyi üretir, yalnız monolith'in `os.replace`i
+# "yerine oturmaz" → diskte ÖNCEKİ build'in base.zip'i kalır (yarım `.tmp`yi `_yaz`ın finally'si siler).
+_BAYAT_SARMAL = """import os
+import runpy
+import sys
 
-    # base.zip'i "eski build" hâline getir: exe'nin içeriğini değiştir.
-    bayat = cikti / "base.zip"
+betik, dist = sys.argv[1], sys.argv[2]
+_gercek = os.replace
+
+
+def _replace(src, dst, *a, **k):
+    if os.path.basename(str(dst)) == "base.zip":
+        return None
+    return _gercek(src, dst, *a, **k)
+
+
+os.replace = _replace
+sys.argv = [betik, dist]
+runpy.run_path(betik, run_name="__main__")
+"""
+
+
+def _monolith_yerine_oturmadan_kos(tmp_path: Path, dist: Path, cikti: Path):
+    sarmal = tmp_path / "bayat_sarmal.py"
+    sarmal.write_text(_BAYAT_SARMAL, encoding="utf-8")
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PEMF_PKG_OUT": str(cikti)}
+    return subprocess.run(
+        [sys.executable, str(sarmal), str(BETIK), str(dist)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+    )
+
+
+def _eski_builde_cevir(base_zip: Path) -> None:
+    """base.zip'i "eski build" hâline getir: exe'nin içeriği farklı."""
     ham = {}
-    with zipfile.ZipFile(bayat) as z:
+    with zipfile.ZipFile(base_zip) as z:
         for n in z.namelist():
             ham[n] = z.read(n)
     ham["PEMF_Backend/PEMF_Backend.exe"] = b"EXE-v0-ESKI"
-    with zipfile.ZipFile(bayat, "w", zipfile.ZIP_STORED, allowZip64=True) as z:
+    with zipfile.ZipFile(base_zip, "w", zipfile.ZIP_STORED, allowZip64=True) as z:
         for n in sorted(ham):
             z.writestr(n, ham[n])
 
-    # Betiği --no-monolith ile çalıştırırsak bayat dosya SİLİNİR (kapı ikinci savunma):
-    # burada kapıyı görmek için doğrulama fonksiyonunu doğrudan çağırıyoruz.
-    sys.path.insert(0, str(GUII / "build_tools"))
-    try:
-        import importlib.util
 
-        spec = importlib.util.spec_from_file_location("_mbz_kapi", BETIK)
-        assert spec and spec.loader
-        # Betik modül seviyesinde çalışıyor → import etmek yerine kapının mantığını
-        # BİREBİR uygula (aynı karşılaştırma: isim kümesi + CRC).
-        katman = _crc(cikti / "base-app.zip")
-        katman.update(_crc(cikti / "base-deps.zip"))
-        assert _crc(bayat) != katman, "bayat base.zip fark edilmedi"
-    finally:
-        sys.path.remove(str(GUII / "build_tools"))
+def test_KRITIK_BAYAT_base_zip_BETIGIN_dogrulamasini_DUSURUR(tmp_path, ortam):
+    """Asıl senaryonun modeli: diskte eski bir build'in base.zip'i kalmış (exe farklı) ve bu koşunun monolith'i yerine
+    oturmamış. BETİĞİN kendi `[FAIL] base.zip == app+deps` satırı, farklı dosyanın adı ve çıkış 1 beklenir."""
+    dist, cikti = ortam
+    assert _calistir(dist, cikti=cikti).returncode == 0
+    _eski_builde_cevir(cikti / "base.zip")
+    r = _monolith_yerine_oturmadan_kos(tmp_path, dist, cikti)
+    assert r.returncode == 1, f"bayat base.zip ile betik GECTI (rc={r.returncode})\n{r.stdout[-1500:]}{r.stderr[-800:]}"
+    assert "[FAIL] base.zip == app+deps" in r.stdout and "VALIDATION: FAIL" in r.stdout, r.stdout[-1500:]
+    assert "ICERIGI FARKLI" in r.stdout and "PEMF_Backend/PEMF_Backend.exe" in r.stdout, (
+        "fark raporu bayat dosyayi ADLANDIRMIYOR\n" + r.stdout[-1500:]
+    )
+
+
+def test_KARSIT_KANIT_ayni_sarmal_TAZE_base_zip_ile_GECER(tmp_path, ortam):
+    """Ölçücü kör değil: aynı sarmalayıcı (monolith yerine oturmaz) diskteki TAZE base.zip ile [OK] ve çıkış 0 verir."""
+    dist, cikti = ortam
+    assert _calistir(dist, cikti=cikti).returncode == 0
+    r = _monolith_yerine_oturmadan_kos(tmp_path, dist, cikti)
+    assert r.returncode == 0 and "[OK] base.zip == app+deps" in r.stdout, r.stdout[-1500:] + r.stderr[-800:]
 
 
 def test_no_monolith_BAYAT_dosyayi_SILER(ortam):

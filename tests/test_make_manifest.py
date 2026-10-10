@@ -100,10 +100,14 @@ def test_KRITIK_layers_blogu_KAYBOLMAZ(dizin):
     assert _oku(dizin)["layers"]["win-x64"]["deps"] == ONCEKI["layers"]["win-x64"]["deps"]
 
 
-def test_launcher_blogu_KAYBOLMAZ(dizin):
-    """Zaten korunuyordu — regresyon kapısı."""
-    assert _oku(dizin)["launcher"] == ONCEKI["launcher"] or _calistir(dizin).returncode == 0
-    assert _oku(dizin)["launcher"] == ONCEKI["launcher"]
+def test_KRITIK_launcher_blogu_KAYBOLMAZ(dizin):
+    """⚠️ D4.30 (B-10.247, 2026-10-10): eskiden `assert onceki == ONCEKI or _calistir(...)` biçimindeydi — fikstürün manifest'i
+    zaten ONCEKI olduğundan `or`un sağı HİÇ koşmuyor, betik çalışmıyordu (`CARRY_ONLY`'den 'launcher' çıkarılınca bu test
+    YEŞİL kaldı — ölçüldü; aynı mutantı başka 32 test yakalıyordu). Artık betik GERÇEKTEN koşar; blok taşınır ve sahip kararı
+    2026-08-19 gereği bayraksız üretimde `rollout: 100` eklenir (eski "rollout yok" beklentisi bu kararla bayattı)."""
+    r = _calistir(dizin)
+    assert r.returncode == 0, r.stderr[-800:]
+    assert _oku(dizin).get("launcher") == {**ONCEKI["launcher"], "rollout": 100}, _oku(dizin).get("launcher")
 
 
 def test_aciklama_notlari_korunur(dizin):
