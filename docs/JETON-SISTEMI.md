@@ -61,13 +61,17 @@ kaybolur. `tests/test_supabase_sql_invariants.py` bunu kaynaktan okuyup karşıl
 Jeton **ticari** bir kapıdır, güvenlik kontrolü **değildir**:
 
 - Süren seansı, seans durdurmayı, **acil durdurmayı**, sensör okumayı ve cihaz kontrolünü
-  **asla** engellemez — bunlar `GUVENLIK_YOLLARI` kümesinde ve kapının **en başında** serbest
-  bırakılır (bayrak/bakiye/ağ durumu fark etmeksizin).
+  **asla** engellemez — bu yollar kapıya **hiç gelmez**: `servers/jeton.py::_islem_turu` ai_router
+  DIŞINDAKİ her yolu ve `_SERBEST_AI_UCLARI`nı (AI Pro durdurma, seans içi kare akışı …) `None`a
+  eşler, kapı bakiyeye/ağa bakmadan döner (bayrak/bakiye/ağ durumu fark etmeksizin). (Eski
+  `GUVENLIK_YOLLARI` ad kümesi üretimde hiç eşleşmiyordu — D4.11'de kaldırıldı.)
 - Yalnız **yeni yapay zekâ analizi** isteğini kapılar.
 - Yetersiz bakiye mesajı, tedavinin etkilenmediğini **açıkça söyler**.
 
-Bu üç davranış `tests/test_jeton_yoneticisi.py` içinde kilitli ve mutasyonla doğrulanmıştır
-(acil durdurmayı kapıya sokan mutasyon kırmızı yanar).
+Bu üç davranış `tests/test_jeton_yoneticisi.py` ve `tests/test_jeton_gate.py` içinde kilitli; tedavi/E-stop
+serbestliği ayrıca `tests/test_jeton_kapisi_TUM_ROTALARDA_guvenlik_uclari_SERBEST_D411.py` ile uygulamanın TÜM
+rotalarında gerçek kapı gövdesiyle ölçülür ve mutasyonla doğrulanmıştır (`/api/hardware/` yollarını ücretli sınıfa
+sokan mutasyon kırmızı yanar).
 
 ## 3. Çevrimdışı klinik
 
@@ -275,7 +279,9 @@ ai_router = APIRouter(dependencies=[Depends(_allow_large_upload), Depends(ai_que
 taşıyor; ama emin ol:
 - Tedavi/kontrol uçları (`/api/session/*`, `/api/coil/*`, acil durdurma) bu router'da **değil**;
 - `entitlement.py`'deki `_QUEUE_BYPASS_FRAGMENTS` listesinin karşılığı jeton tarafında
-  `GUVENLIK_YOLLARI`dır — yeni bir tedavi ucu eklenirse **oraya da eklenmelidir**;
+  `_islem_turu` + `_SERBEST_AI_UCLARI`dır (ai_router dışı yollar zaten serbest) — ai_router'a analiz
+  OLMAYAN yeni bir uç eklenirse **`_SERBEST_AI_UCLARI`na eklenmelidir** (kapı:
+  `tests/test_jeton_kapisi_TUM_ROTALARDA_guvenlik_uclari_SERBEST_D411.py`, uygulamanın tüm rotaları);
 - Kırmızı-önce test: "jeton 0 iken `/api/session/stop` ve acil durdurma **200 döner**".
 
 **4.4** Mobil/masaüstü arayüzünde 402 yanıtını yakala ve kullanıcıya jeton mesajını göster

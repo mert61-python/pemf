@@ -42,15 +42,37 @@ def _yeni(tmp_path, **env):
 # ─────────────────────── 1) TIBBİ GÜVENLİK DEĞİŞMEZİ ───────────────────────
 
 
-def test_KRITIK_GUVENLIK_seans_ve_acil_durdurma_ASLA_kapilanmaz(tmp_path):
-    """Jeton bitse bile tedavi tarafı çalışır. Bu, ürünün pazarlık edilemez değişmezi."""
-    j = _yeni(tmp_path, PEMF_JETON_ENFORCED="1")
-    y = j.JetonYoneticisi(bakiye_okuyucu=lambda: 0, tuketim_gonderici=lambda **k: False)
+class _Istek:
+    """`_jeton_kapisi_karari`nın kullandığı en küçük Request yüzeyi (kimlikli istek)."""
 
-    for guvenli in ("seans_baslat", "seans_durdur", "acil_durdur", "sensor_oku", "cihaz_kontrol"):
-        karar = y.izin(guvenli)
-        assert karar.izinli, f"jeton kapısı GÜVENLİK yolunu engelledi: {guvenli}"
-        assert karar.jeton_harcandi == 0, f"{guvenli} jeton harcamamalı"
+    def __init__(self, path: str):
+        self.url = type("U", (), {"path": path})()
+        self.headers = {"authorization": "Bearer test-jwt"}
+
+
+_GUVENLIK_YOLLARI_ORNEK = (
+    "/api/session/start",
+    "/api/session/stop",
+    "/api/hardware/emergency_stop",
+    "/api/coil/6/control",
+    "/api/ai/pro/stop",
+)
+
+
+def test_KRITIK_GUVENLIK_seans_ve_acil_durdurma_ASLA_kapilanmaz(tmp_path, monkeypatch):
+    """Jeton bitse bile tedavi tarafı çalışır. Bu, ürünün pazarlık edilemez değişmezi.
+
+    ⚠️ D4.11 (B-2.14): bu test eskiden `izin("acil_durdur")` gibi ADLARI soruyordu (`GUVENLIK_YOLLARI`); üretimde `izin()`e
+    yalnız `_islem_turu`nun MALIYET anahtarları gelir → ÖLÜ değeri koruyordu. Artık GERÇEK kapı gövdesi gerçek YOLLARLA
+    (bayrak açık, bakiye 0, bakiye okuması sayılır). Uygulamanın tüm rotaları: test_jeton_kapisi_TUM_ROTALARDA_…_D411.py."""
+    j = _yeni(tmp_path, PEMF_JETON_ENFORCED="1")
+    okumalar: list = []
+    monkeypatch.setattr(j, "_bakiye_satiri_oku", lambda token: (okumalar.append(token), {"aylik_hak": 0})[1])
+
+    for yol in _GUVENLIK_YOLLARI_ORNEK:
+        assert j._islem_turu(yol) is None, f"jeton kapısı GÜVENLİK yolunu ücretli sınıfa eşledi: {yol}"
+        j._jeton_kapisi_karari(_Istek(yol))  # 402 fırlatmamalı
+    assert not okumalar, f"güvenlik yolu için bakiye okundu (ağ çağrısı) — {okumalar}"
 
 
 def test_KRITIK_yalniz_YAPAY_ZEKA_analizi_kapilanir(tmp_path):
@@ -90,8 +112,10 @@ def test_KRITIK_sunucuya_ULASILAMAZSA_analiz_durmaz(tmp_path):
     assert y.bekleyen_tuketim_sayisi() == 1, "çevrimdışı tüketim yerel deftere yazılmadı"
 
 
-def test_KRITIK_cevrimdisi_TAVAN_asilinca_reddedilir(tmp_path):
+def test_KRITIK_cevrimdisi_TAVAN_asilinca_reddedilir(tmp_path, monkeypatch):
     """Sınırsız çevrimdışı kullanım ücretlendirmeyi anlamsız yapardı."""
+    from fastapi import HTTPException
+
     j = _yeni(tmp_path, PEMF_JETON_ENFORCED="1", PEMF_JETON_OFFLINE_TAVAN="3")
 
     def patlayan():
@@ -102,8 +126,13 @@ def test_KRITIK_cevrimdisi_TAVAN_asilinca_reddedilir(tmp_path):
         assert y.izin("goruntu").izinli
     son = y.izin("goruntu")
     assert not son.izinli, "çevrimdışı tavan aşıldığı hâlde analiz sürdü"
-    # ⚠️ Tavan aşılsa BİLE tedavi yolu serbest kalmalı.
-    assert y.izin("acil_durdur").izinli
+    # ⚠️ Tavan aşılsa BİLE tedavi yolu serbest kalmalı — GERÇEK kapı gövdesiyle (D4.11: eskiden ölü `GUVENLIK_YOLLARI`
+    # adına `izin("acil_durdur")` soruluyordu). Aynı defter (PEMF_DATA_DIR) kapıda da dolu: analiz 402, acil durdurma serbest.
+    monkeypatch.setattr(j, "_bakiye_satiri_oku", lambda token: patlayan())
+    with pytest.raises(HTTPException) as ex:
+        j._jeton_kapisi_karari(_Istek("/api/ai/vision/landmark"))
+    assert ex.value.status_code == 402, "karşıt: kapıdaki çevrimdışı defter dolu değil — ölçüm kör"
+    j._jeton_kapisi_karari(_Istek("/api/hardware/emergency_stop"))  # 402 fırlatmamalı
 
 
 # ─────────────────────── 3) TÜKETİM / İDEMPOTANS ───────────────────────

@@ -162,8 +162,11 @@ def test_KRITIK_bakiye_ucu_JETON_KAPISININ_ARKASINDA_DEGIL():
 
 
 def test_GUVENLIK_yollari_hala_jetondan_BAGIMSIZ():
-    """Bu turda jeton yüzeyine dokunuldu; tedavi/E-stop kapılanmadığı DEĞİŞMEZİ korunmalı."""
-    from servers.jeton import GUVENLIK_YOLLARI
+    """Bu turda jeton yüzeyine dokunuldu; tedavi/E-stop kapılanmadığı DEĞİŞMEZİ korunmalı.
 
-    for zorunlu in ("seans_baslat", "seans_durdur", "acil_durdur"):
-        assert zorunlu in GUVENLIK_YOLLARI, f"{zorunlu} guvenlik yollarindan CIKARILMIS"
+    ⚠️ D4.11 (B-2.14): eskiden ölü `GUVENLIK_YOLLARI` kümesinin ADLARINI sayıyordu (üretimde `izin()`e hiç gelmezdi). Artık asıl
+    taşıyıcı `_islem_turu` gerçek yollarla ölçülür (tüm rotalar: test_jeton_kapisi_TUM_ROTALARDA_…_D411.py)."""
+    from servers.jeton import _islem_turu
+
+    for yol in ("/api/session/start", "/api/session/stop", "/api/hardware/emergency_stop"):
+        assert _islem_turu(yol) is None, f"{yol} jeton kapisinda ucretli sinifa dustu"

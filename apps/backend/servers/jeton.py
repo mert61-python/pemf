@@ -73,7 +73,7 @@ OFFLINE_TAVAN: int = max(0, _sayi("PEMF_JETON_OFFLINE_TAVAN", 50))
 # ücret çıkmaz. Bakiye 0 olsa bile analiz İZİNLİDİR — kapı, bakiye yerine BİRİKMİŞ BORCA bakar.
 #
 # ⚠️ Neden tavan var: ödeme alınamayan sınırsız kullanım (kartı düşen/vazgeçen hesap) riski.
-# Tavan TİCARİ bir sınırdır — aşılsa bile tedavi yolu serbest kalır (aşağıdaki GUVENLIK_YOLLARI).
+# Tavan TİCARİ bir sınırdır — aşılsa bile tedavi yolu serbest kalır (tedavi/E-stop uçları kapıya hiç gelmez: `_islem_turu`).
 BORC_TAVANI: int = max(0, _sayi("PEMF_JETON_BORC_TAVANI", 300))
 
 # ⚠️ TEK KAYNAK EŞLEŞMESİ: bu tablo `apps/web/src/config.ts::JETON.maliyet` ile BİREBİR
@@ -87,11 +87,12 @@ MALIYET: dict[str, int] = {
     "ai_pro_seans": 5,
 }
 
-# ⚠️ GÜVENLİK YOLLARI: bunlar jetondan BAĞIMSIZDIR ve hiçbir koşulda kapılanmaz.
-# Yeni bir tedavi/emniyet yolu eklenirse buraya da eklenmelidir.
-GUVENLIK_YOLLARI: frozenset[str] = frozenset(
-    {"seans_baslat", "seans_durdur", "acil_durdur", "sensor_oku", "cihaz_kontrol", "durum"}
-)
+# ⚠️ GÜVENLİK YOLLARI (D4.11 · B-2.14, 2026-10-10): seans, acil durdurma, sensör ve cihaz kontrolü jetondan BAĞIMSIZDIR.
+# Bunu taşıyan `_islem_turu`dur (aşağıda): ai_router DIŞINDAKİ her yol ve `_SERBEST_AI_UCLARI` → None → kapı karar vermeden
+# döner, `izin()`e HİÇ gelmez. Eskiden burada `GUVENLIK_YOLLARI` ({"seans_baslat", "acil_durdur", …}) kümesi vardı ve
+# `izin()`in başında kontrol ediliyordu; ama `izin()`e yalnız MALIYET anahtarları geldiği için üretimde HİÇ eşleşmiyordu
+# (96 rotada kesişim ∅) — testler ölü değeri koruyordu. Küme kaldırıldı; kapı
+# `tests/test_jeton_kapisi_TUM_ROTALARDA_guvenlik_uclari_SERBEST_D411.py` (gerçek karar, uygulamanın TÜM rotaları).
 
 _YETERSIZ_MESAJ = (
     "Jeton hakkınız bitti; yeni yapay zekâ analizi başlatılamadı. "
@@ -170,11 +171,8 @@ class JetonYoneticisi:
 
     # ── Ana kapı ────────────────────────────────────────────────────────────
     def izin(self, islem: str, istek_id: str | None = None, cihaz_id: str | None = None) -> Karar:
-        """Bir işlem için jeton kapısı. GÜVENLİK yolları her koşulda serbesttir."""
-        # 1) GÜVENLİK YOLU → hiçbir koşulda kapılanmaz (bayrak, bakiye, ağ durumu fark etmez).
-        if islem in GUVENLIK_YOLLARI:
-            return Karar(izinli=True, sebep="guvenlik_yolu")
-
+        """ÜCRETLİ bir işlem (MALIYET anahtarı) için jeton kapısı. Tedavi / acil durdurma buraya GELMEZ — onları
+        `_islem_turu` None'a eşler ve `_jeton_kapisi_karari` karar vermeden döner (D4.11)."""
         # 2) Bayrak kapalı → no-op (satış açılana kadar canlı davranış değişmez).
         if not JETON_ENFORCED:
             return Karar(izinli=True, sebep="enforce_kapali")
@@ -222,7 +220,7 @@ class JetonYoneticisi:
             )
             return Karar(izinli=True, jeton_harcandi=maliyet, sebep="cevrimdisi")
 
-        # 4) Bakiye yetersiz → YALNIZ analiz reddedilir (tedavi yolu zaten yukarıda serbest).
+        # 4) Bakiye yetersiz → YALNIZ analiz reddedilir (tedavi yolu buraya hiç gelmez — `_islem_turu`).
         if bakiye < maliyet:
             return Karar(izinli=False, mesaj=_YETERSIZ_MESAJ, sebep="yetersiz")
 
