@@ -38,6 +38,7 @@ function Write-PemfLog($msg, $color = 'Gray') {
 # kayıt "silindi" der — bir tıbbi cihazda kabul edilemez bir yanlış-güvence.
 # Artık her silme DOĞRULANIR; başarısızlıklar sayılır ve sonuç raporu buna göre değişir.
 $script:PemfFailed = @()
+$script:PemfKapsamDisi = @()   # E2-2.3: -IncludePatientData'da kapsam (-Scope) dışında DURAN hasta verisi yolları
 function Assert-PemfRemoved {
     param([string]$Path, [string]$Tag)
     if (Test-Path -LiteralPath $Path -ErrorAction SilentlyContinue) {
@@ -240,10 +241,21 @@ function Remove-PemfPaths($Footprint, [string]$Scope, [switch]$IncludePatientDat
     # Non-KVKK ÖNCE: alt-dizin (ör. PEMF_GUI\ai_models) üst KVKK-dizininden önce temizlensin.
     $ordered = @($Footprint.Paths | Sort-Object { [int][bool]$_.Kvkk })
     foreach ($item in $ordered) {
-        if (-not (Test-PemfScope $item.Owner $Scope)) { continue }
-        if ($item.Kvkk -and -not $IncludePatientData) { continue }   # KVKK: koru
         $targets = if ($item.Kind -eq 'Abs') { @($item.Path) }
         else { $profileRoots | ForEach-Object { Join-Path $_ $item.Path } }
+        if (-not (Test-PemfScope $item.Owner $Scope)) {
+            # E2-2.3 (A-44): kapsam DIŞINDA kalan hasta verisi silinmez ama raporda SÖYLENİR; son satır "tam temizlik" demez.
+            if ($item.Kvkk -and $IncludePatientData) {
+                foreach ($t in $targets) {
+                    if (Test-Path -LiteralPath $t -ErrorAction SilentlyContinue) {
+                        $script:PemfKapsamDisi += $t
+                        Write-PemfLog "KAPSAM DIŞI — DURUYOR (HASTA-VERİSİ, Scope=$Scope): $t" 'Yellow'
+                    }
+                }
+            }
+            continue
+        }
+        if ($item.Kvkk -and -not $IncludePatientData) { continue }   # KVKK: koru
         foreach ($t in $targets) {
             if (Test-Path -LiteralPath $t -ErrorAction SilentlyContinue) {
                 $tag = if ($item.Kvkk) { 'HASTA-VERİSİ' } else { 'veri' }
@@ -646,6 +658,7 @@ function Invoke-PemfTeardown {
     # durdurup AYNI oturumda tekrar çalıştırdığında ilk turun başarısızlıkları taşınıyor ve
     # ZATEN SİLİNMİŞ yollar "SİLİNEMEDİ" diye raporlanıp fonksiyon $false dönüyordu.
     $script:PemfFailed = @()
+    $script:PemfKapsamDisi = @()
     $fp = Get-PemfFootprint
     Write-PemfLog "TEARDOWN başladı — Scope=$Scope IncludePatientData=$IncludePatientData DryRun=$DryRun" 'Cyan'
     # 0. D2.E04: makine dışı yedek hedef(ler)i — kayıtları aşağıdaki adımlar SİLMEDEN önce okunur; hedeflere DOKUNULMAZ (A-45/A-87).
@@ -692,8 +705,12 @@ function Invoke-PemfTeardown {
     # E2-2.1: silinen kökün içinde kalıp bu kaldırmayla SİLİNEN hedef "duruyor" sayılmaz.
     $silinenHedef = @($yedekHedefleri | Where-Object { $_.Silindi }).Count
     $duranHedef = $yedekHedefleri.Count - $silinenHedef
+    # E2-2.3 (A-44): -Scope dışında DURAN hasta verisi varsa son satır "tam temizlik" DEMEZ.
+    $kapsamDisi = @($script:PemfKapsamDisi).Count
     $policy = if ($DryRun) {
         'ÖNİZLEME — HİÇBİR ŞEY SİLİNMEDİ (DryRun)'
+    } elseif ($IncludePatientData -and $kapsamDisi -gt 0) {
+        "HASTA VERİSİ YALNIZ '$Scope' KAPSAMINDA SİLİNDİ — kapsam dışında $kapsamDisi hasta verisi yolu DURUYOR (yukarıdaki 'KAPSAM DIŞI' satırları; tam temizlik: pemf_uninstall_all.ps1 -PurgeData)"
     } elseif ($IncludePatientData -and $duranHedef -gt 0) {
         'HASTA VERİSİ BU MAKİNEDEN SİLİNDİ (tam temizlik) — makine dışı yedekler DURUYOR (yukarıdaki satırlar; gerekiyorsa elle silin)'
     } elseif ($IncludePatientData -and $silinenHedef -gt 0) {
