@@ -181,25 +181,15 @@ async def health_check(request: Request):
         else {}
     )
     # At-rest şifreleme durumu (görünürlük — düz-metin fallback'i sessizce gizleme).
-    at_rest_encrypted = None
-    try:
-        from database.treatment_history_db import get_treatment_db
-
-        _tdb = get_treatment_db(_api._app_data_dir())
-        at_rest_encrypted = bool(getattr(_tdb, "at_rest_encrypted", False))
-    except Exception:
-        pass
     # ⚠️ DENETİM 2026-08-09: TIBBİ KAYIT DB'Sİ HAZIR MI (dbReady).
     # `/api/session/start` ile AYNI kaynaktan hesaplanır (api_server._kayit_db_hazir) — aksi hâlde
     # "sağlık yeşil ama seans 503" gibi teşhis edilemez bir tutarsızlık çıkardı. Bu alan olmadan
     # DB arızası ancak veteriner seans başlatmayı DENEYİNCE, yani hasta masadayken görülüyordu.
     # Sağlığın kendisini DÜŞÜRMEZ: backend ayakta ve acil durdurma yolu çalışıyor.
-    _hazir_sebep = ""
-    try:
-        _hazir, _hazir_sebep = _api._kayit_db_hazir()
-        db_ready = bool(_hazir)
-    except Exception:
-        db_ready = False
+    # ⚠️ A-8 / A-9 (2-E incelemesi · S-E2I.10 · Ö.4-Y8): ikisi de OLAY DÖNGÜSÜNDE DEĞİL — tek-uçuşlu daemon, süre sınırlı
+    # (`_saglik_db_durumu_dongu_disi`). Eskiden asılı veri kökünde (ilk çağrıda mkdir + sqlite3.connect + şema) 13 yoklama sırayla
+    # döngüyü tutuyor, ACİL DURDUR 39 sn bekliyordu (ölçüldü). Kapı: tests/test_saglik_ve_kurtarma_durumu_DONGU_DISI_A8_A9.py
+    at_rest_encrypted, db_ready, _hazir_sebep = await _saglik_db_durumu_dongu_disi(_api)
     # D1.37 (B-3.8): DB'siz (kısıtlı) açılışta NEDEN — ör. "Hasta veritabanı göç bekliyor …".
     # Yalnız açılış kaydından (yol/istisna ayrıntısı yok: bu uç auth-muaf ve tünelden erişilebilir).
     # D1.77 (B-3.9): disk kritikse o nedenin KENDİSİ (sabit metin + MB; yol/istisna içermez — `is_ready`).
@@ -207,8 +197,12 @@ async def health_check(request: Request):
     if not db_ready:
         try:
             _disk = str(_hazir_sebep or "") if str(_hazir_sebep or "").startswith("Disk boş alanı kritik") else ""
+            _yanitsiz = str(_hazir_sebep or "") if str(_hazir_sebep or "").startswith(_DB_YANITSIZ) else ""
             db_sebep = (
-                _api._db_acilis_hatasi() or _disk or "Tıbbi kayıt veritabanı hazır değil; yeni seans başlatılamaz."
+                _api._db_acilis_hatasi()
+                or _disk
+                or _yanitsiz
+                or "Tıbbi kayıt veritabanı hazır değil; yeni seans başlatılamaz."
             )
         except Exception:
             db_sebep = "Tıbbi kayıt veritabanı hazır değil; yeni seans başlatılamaz."
@@ -331,6 +325,59 @@ async def health_check(request: Request):
 
 _veri_agda_ucusta = None  # (anahtar, concurrent.futures.Future) — sürmekte olan TEK sürücü türü sorgusu
 _veri_agda_kilit = threading.Lock()
+
+#: A-8 / A-9: süre sınırında yanıt gelmezse sağlığın söylediği neden (yol / istisna içermez — uç auth-muaf ve tünelden erişilebilir).
+_DB_YANITSIZ = "Tıbbi kayıt veritabanı yanıt vermiyor"
+_saglik_db_ucusta = None  # (anahtar, concurrent.futures.Future) — sürmekte olan TEK sağlık DB sorgusu
+_saglik_db_kilit = threading.Lock()
+
+
+def _saglik_db_durumu(_api) -> tuple:
+    """(at_rest_encrypted | None, db_ready, sebep) — tedavi DB'si kurulumu/okuması ve `_kayit_db_hazir` (G/Ç). ASLA istisna atmaz."""
+    at_rest = None
+    try:
+        from database.treatment_history_db import get_treatment_db
+
+        at_rest = bool(getattr(get_treatment_db(_api._app_data_dir()), "at_rest_encrypted", False))
+    except Exception:
+        pass
+    try:
+        hazir, sebep = _api._kayit_db_hazir()
+    except Exception:
+        hazir, sebep = False, ""
+    return at_rest, bool(hazir), str(sebep or "")
+
+
+async def _saglik_db_durumu_dongu_disi(_api, sinir_sn: float = 2.5) -> tuple:
+    """A-8 / A-9 (2-E incelemesi · S-E2I.10): `_saglik_db_durumu` kendi daemon iş parçacığında (E2-3.10 kalıbı); önceki sorgu bitmediyse
+    YENİSİ BAŞLAMAZ (N eşzamanlı yoklama → tek sorgu; ortak havuz tükenmez). `sinir_sn` içinde sonuç yoksa DÜRÜST yanıt: dbReady
+    BİLİNMİYOR (`None` → JSON null) + "yanıt vermiyor" nedeni; eski / bayat sonuç döndürülmez.
+    ⚠️ `False` DEĞİL: launcher güncellemeden sonra sağlığa TEK istek atar (3 sn) ve `dbReady == false`'ta güncellemeyi GERİ ALIR
+    (`launcher/app/src/main.rs` · `backend::db_hazir_mi`); yavaş ama sağlam ilk açılış "bozuk" sayılırdı. `null` = bilinmiyor → normal onay
+    (eski backend kuralıyla aynı); arayüz bandı yalnız `=== false`'ta çıkar. Sınır launcher'ın 3 sn'sinin altında."""
+    global _saglik_db_ucusta
+    try:
+        anahtar = str(_api._app_data_dir())
+    except Exception:
+        anahtar = None
+    with _saglik_db_kilit:
+        onceki = _saglik_db_ucusta
+        f = onceki[1] if onceki and onceki[0] == anahtar else None
+        if f is None or f.done():
+            f = concurrent.futures.Future()
+
+            def _is(gelecek=f):
+                try:
+                    gelecek.set_result(_saglik_db_durumu(_api))
+                except BaseException:
+                    gelecek.set_result((None, False, ""))
+
+            threading.Thread(target=_is, daemon=True, name="pemf-saglik-db").start()
+            _saglik_db_ucusta = (anahtar, f)
+    try:
+        return await asyncio.wait_for(asyncio.shield(asyncio.wrap_future(f)), timeout=sinir_sn)
+    except Exception:
+        return None, None, f"{_DB_YANITSIZ} (disk ya da ağ sürücüsü takılmış olabilir); durum bilinmiyor."
 
 
 async def _veri_koku_agda_dongu_disi(_api, sinir_sn: float = 2.0):
@@ -673,7 +720,9 @@ async def recovery_status(request: Request):
     from servers.auth import enforce_privileged
 
     enforce_privileged(request)
-    at_rest, kod_var, onay, yol = _kurtarma_durumu()
+    # ⚠️ A-8 (2-E incelemesi · Ö.4-Y8): tedavi DB'si okuması ve kod dosyası izi (G/Ç) olay döngüsü DIŞINDA — eskiden asılı veri kökünde
+    # döngüyü tutuyordu. Ayrıcalıklı, seyrek yoklanan uç → `to_thread` yeterli. Kapı: tests/test_saglik_ve_kurtarma_durumu_DONGU_DISI_A8_A9.py
+    at_rest, kod_var, onay, yol = await asyncio.to_thread(_kurtarma_durumu)
     return {
         "atRestEncrypted": at_rest,
         "codeExists": kod_var,
