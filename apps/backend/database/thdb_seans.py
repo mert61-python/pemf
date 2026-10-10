@@ -127,12 +127,16 @@ class SeansKarisimi:
                     except Exception:
                         self.logger.warning("Kurtarma: bobin calismalari kapatilamadi (seans %s)", session_id)
 
+                    # ⚠️ D2.65 (B-3.66): kurtarılan kapanış PUSH için işaretlenir (sync_status=0) — seans aktifken buluta gitmişse
+                    # (1) kapanış eskiden HİÇ gönderilmiyor, bulut kopyası kalıcı 'active' kalıyordu (bayrak A-15 ile uykuda).
+                    # Kapı: tests/test_kurtarma_ve_kapanis_sonrasi_SYNC_bayragi_D265.py
                     cursor.execute(
                         '''
                         UPDATE treatment_sessions
                         SET end_time = ?,
                             duration_minutes = ?,
                             session_status = 'ABORTED_DUE_TO_POWER',
+                            sync_status = 0,
                             updated_at = CURRENT_TIMESTAMP
                         WHERE id = ?
                     ''',
@@ -747,6 +751,9 @@ class SeansKarisimi:
                 vals.append(intensity_mt)
             if not sets:
                 return
+            # ⚠️ D2.65 (B-3.66): kapanış sonrası değişiklik PUSH için işaretlenir — eskiden buluta gitmiyor, aynı döngüdeki PULL
+            # bayat bulut değeriyle yerel frekansı eziyordu (77.0 → None, ölçüldü). PULL tarafı: `sync_worker._sync_sessions`.
+            sets.append('sync_status = 0')
             sets.append('updated_at = CURRENT_TIMESTAMP')
             vals.append(int(session_id))
             with self._get_connection() as conn:

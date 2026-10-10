@@ -459,7 +459,12 @@ class CloudSyncWorker:
                                 duration_minutes=CASE WHEN treatment_sessions.end_time IS NOT NULL AND excluded.end_time IS NULL
                                               THEN treatment_sessions.duration_minutes ELSE excluded.duration_minutes END,
                                 treatment_mode=excluded.treatment_mode, target_condition=excluded.target_condition,
-                                frequency_hz=excluded.frequency_hz, intensity_mt=excluded.intensity_mt,
+                                -- D2.65 (B-3.66): yerelde PUSH BEKLEYEN degisiklik (sync_status=0 — kapanis sonrasi
+                                -- not/frekans/yogunluk) bayat bulut degeriyle EZILMEZ (77.0 -> None olculdu).
+                                frequency_hz=CASE WHEN treatment_sessions.sync_status = 0
+                                              THEN treatment_sessions.frequency_hz ELSE excluded.frequency_hz END,
+                                intensity_mt=CASE WHEN treatment_sessions.sync_status = 0
+                                              THEN treatment_sessions.intensity_mt ELSE excluded.intensity_mt END,
                                 pulse_duration_ms=excluded.pulse_duration_ms,
                                 session_status=CASE WHEN treatment_sessions.end_time IS NOT NULL AND excluded.end_time IS NULL
                                               THEN treatment_sessions.session_status ELSE excluded.session_status END,
@@ -469,7 +474,9 @@ class CloudSyncWorker:
                                 -- buluta HIC gitmez, bayat-active kalicilasirdi. Kapanis korunuyorsa
                                 -- (yerel end_time dolu + bulut NULL) yerel sync_status'u koru; aksi halde
                                 -- normal PULL sonrasi (yerel = bulutla ayni) senkron sayilir (1).
-                                sync_status=CASE WHEN treatment_sessions.end_time IS NOT NULL AND excluded.end_time IS NULL
+                                -- D2.65: PUSH bekleyen (0) yerel degisikligin bayragi PULL'da SILINMEZ (yoksa hic gonderilmez).
+                                sync_status=CASE WHEN treatment_sessions.sync_status = 0 THEN 0
+                                              WHEN treatment_sessions.end_time IS NOT NULL AND excluded.end_time IS NULL
                                               THEN treatment_sessions.sync_status ELSE 1 END
                             """,
                             (
