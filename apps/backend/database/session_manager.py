@@ -107,6 +107,7 @@ class SessionManager:
         operator_name: str = None,
         patient_name: str = None,
         initial_parameters: Optional[Dict] = None,
+        patient_uuid: str = None,
     ) -> Optional[int]:
         """
         Yeni tedavi seansı başlat
@@ -117,9 +118,17 @@ class SessionManager:
             operator_name: Uygulayıcı adı
             patient_name: Hasta adı
             initial_parameters: Başlangıç parametreleri
+            patient_uuid: Hastanın OPAK kimliği (verilirse seans hastaya BAĞLANIR — üretim yolu
+                `api_server._persist_session_start` ile aynı: `upsert_patient` ayna satırı + `patient_id`).
 
         Returns:
             Optional[int]: Başarılı ise session_id, hata durumunda None
+
+        ⚠️ D2.59 (B-3.83): (1) yaşam döngüsü yükü (`session_events` + outbox) hasta/operatör adını `_redact_pii`'den geçirir —
+        tedavi satırıyla AYNI opt-in sözleşme (`PEMF_MASK_HISTORY_PII=1` + şifresiz DB → maskeli; aksi hâlde gerçek ad; varsayılan-açık
+        maske GERİ EKLENMEZ). Eskiden yük ham adı taşıyordu. (2) `patient_uuid` ile seans hastaya bağlanır → 5 yıl inaktif hastanın
+        anonimleştirmesi (`anonymize_patients_by_uuid`) bu seansa ve yüklerine ULAŞIR (eskiden seans bağsızdı, ad süresiz kalırdı).
+        Kapı: tests/test_session_manager_yasam_dongusu_PII_D259.py
         """
         try:
             # Eğer aktif seans varsa önce onu sonlandır
@@ -134,6 +143,12 @@ class SessionManager:
                 operator_name=operator_name,
                 patient_name=patient_name,
             )
+            if patient_uuid and patient_name:
+                try:
+                    _pid = self.db.upsert_patient({"name": patient_name, "patient_uuid": patient_uuid})
+                    self.db.set_session_meta(session_id, patient_id=_pid)
+                except Exception:
+                    self.logger.warning("Seans hastaya bağlanamadı (anonimleştirme bu seansa ulaşamaz)", exc_info=True)
 
             # Seans bilgilerini sakla
             self.current_session_id = session_id
@@ -150,8 +165,9 @@ class SessionManager:
                 'session_id': session_id,
                 'treatment_mode': treatment_mode,
                 'target_condition': target_condition,
-                'operator_name': operator_name,
-                'patient_name': patient_name,
+                'operator_name': self.db._redact_pii(operator_name),
+                'patient_name': self.db._redact_pii(patient_name),
+                'patient_id': patient_uuid,  # opak kimlik — PII değil, maskelenmez
                 'timestamp': datetime.now().isoformat(),
             }
             self.db.record_session_event(session_id, 'session_started', lifecycle_payload, severity='info')

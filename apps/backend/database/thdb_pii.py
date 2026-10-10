@@ -162,11 +162,45 @@ class PiiKarisimi:
                         f"(SELECT id FROM treatment_sessions WHERE patient_id IN ({pph}))",
                         (*self._PII_PARAM_NAMES, *pids),
                     )
+                    # 3) D2.59 (B-3.83): seans olayı ve outbox YÜKLERİNDEKİ hasta adı da (SessionManager yaşam döngüsü yükü) —
+                    #    aynı işlemde. Satırlar SİLİNMEZ (olay izi A-07, outbox drain-only #21/#28); yalnız `patient_name` alanı.
+                    #    Hekim atfı (`operator_name`) KALIR (A-27).
+                    cursor.execute(f"SELECT id FROM treatment_sessions WHERE patient_id IN ({pph})", pids)
+                    sids = [r[0] for r in cursor.fetchall()]
+                    if sids:
+                        self._yuklerden_hasta_adini_anonimlestir(cursor, sids)
                 conn.commit()
                 return n
         except Exception as e:
             self.logger.warning(f"treatment-history hasta anonimlestirme uyarisi: {e}")
             return 0
+
+    def _yuklerden_hasta_adini_anonimlestir(self, cursor, sids) -> int:
+        """`session_events` (seans kimliğiyle) ve `outbox_messages` (`correlation_id` = seans kimliği VE yükün `session_id`'si) JSON
+        yüklerindeki `patient_name`'i `[ANONIM]` yapar; ÇAĞIRANIN işleminde koşar (commit yok). Ayrıştırılamayan yük olduğu gibi kalır
+        (yalnız JSON sözlük yükü tanınır). @return değişen satır sayısı."""
+        import json
+
+        anahtarlar = {str(s) for s in sids}
+        sph = ",".join("?" * len(sids))
+        degisen = 0
+        for tablo, kosul, parametre in (
+            ("session_events", f"session_id IN ({sph})", list(sids)),
+            ("outbox_messages", f"correlation_id IN ({sph})", sorted(anahtarlar)),
+        ):
+            for rid, yuk in cursor.execute(f"SELECT id, payload FROM {tablo} WHERE {kosul}", parametre).fetchall():
+                try:
+                    d = json.loads(yuk or "")
+                except (TypeError, ValueError):
+                    continue
+                if not isinstance(d, dict) or d.get("patient_name") in (None, "", "[ANONIM]"):
+                    continue
+                if tablo == "outbox_messages" and str(d.get("session_id")) not in anahtarlar:
+                    continue
+                d["patient_name"] = "[ANONIM]"
+                cursor.execute(f"UPDATE {tablo} SET payload=? WHERE id=?", (json.dumps(d, ensure_ascii=True), rid))
+                degisen += 1
+        return degisen
 
     def _redact_pii(self, value):
         """at_rest_encrypted=True → değer AYNEN (whole-DB SQLCipher = birincil koruma, şifreli saklanır).
