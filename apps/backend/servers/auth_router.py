@@ -483,6 +483,12 @@ async def _operators_remove(payload: _OperatorRemove, request: Request):
     _yetki_iste(request)
     from database.auth_db import get_auth_db
 
+    from servers.auth import _jeton_kimligi
+
+    # S-F2-2.3 (2-F incelemesi · Y123): iz kimin ÇIKARDIĞINI da taşır — istekte operatör jetonu varsa `cikaran`. Jeton çıkarmadan ÖNCE
+    # çözülür (hekim kendini çıkarırsa jetonu aşağıda düşer); `operator_email` = çıkarılan hekim (anlamı değişmez); jetonsuz istek yazmaz.
+    # Kapı: tests/test_operator_cikarma_IZI_cikarani_tasir_SF223.py
+    cikaran = await asyncio.to_thread(_jeton_kimligi, request)
     ok = await asyncio.to_thread(get_auth_db().remove_operator, payload.email)
     if not ok:
         raise HTTPException(status_code=404, detail="Operatör bulunamadı.")
@@ -493,7 +499,13 @@ async def _operators_remove(payload: _OperatorRemove, request: Request):
     operator_tokens.iptal_email(payload.email)
     from servers import audit_log as _iz
 
-    _iz.yaz(request, "operator.remove", operator_email=(payload.email or "").strip().lower(), scope="cihaz")
+    _iz.yaz(
+        request,
+        "operator.remove",
+        operator_email=(payload.email or "").strip().lower(),
+        scope="cihaz",
+        detail={"cikaran": cikaran} if cikaran else None,
+    )
     return {"ok": True}
 
 
