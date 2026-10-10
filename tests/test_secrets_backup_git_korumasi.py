@@ -25,6 +25,7 @@ import sys
 from argparse import Namespace
 from pathlib import Path
 
+import gitleaks_ikili
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -264,16 +265,45 @@ def test_KRITIK_gitleaks_kurali_config_json_gercek_degeri_yakalar():
     assert not rx.search('"mqtt_pass": ""'), "boş placeholder kırmızıya boyandı"
 
 
-def test_gitleaks_binarisi_varsa_DAVRANISSAL_dogrulama(tmp_path):
-    """gitleaks PATH'teyse kural gerçekten koşularak doğrulanır; yoksa atlanır (CI test işi
-    gitleaks kurmaz — tarama ayrı işte action ile koşar)."""
-    if not shutil.which("gitleaks"):
-        pytest.skip("gitleaks binarisi yok — regex-düzeyi testler yukarıda")
-    hedef = tmp_path / "Secrets.h"
-    hedef.write_text('static const char* DEFAULT_CLOUD_MQTT_PASS = "GizliParola1";\n', encoding="utf-8")
+def _gercek_gitleaks_bulgulari(kok: Path) -> list[tuple[str, str]]:
+    """Depo config'iyle GERÇEK gitleaks taraması → [(kural, kök-göreli yol)]. ⚠️ Sır DEĞERİ okunmaz/basılmaz
+    (`--redact`; JSON'dan yalnız RuleID + File alınır)."""
+    ikili = gitleaks_ikili.gerekli()
+    rapor = kok.parent / f"{kok.name}_rapor.json"
     r = subprocess.run(
-        ["gitleaks", "detect", "--no-git", "-c", str(KOK / ".gitleaks.toml"), "-s", str(tmp_path)],
+        [ikili, "detect", "--no-git", "--no-banner", "--redact", "-c", str(KOK / ".gitleaks.toml"), "-s", str(kok)]
+        + ["--report-format", "json", "--report-path", str(rapor)],
         capture_output=True,
         text=True,
+        timeout=180,
     )
-    assert r.returncode == 1, f"gitleaks gerçek-görünümlü değeri yakalamadı: {r.stdout} {r.stderr}"
+    assert r.returncode in (0, 1), f"gitleaks koşmadı (rc={r.returncode}) — kapı ölçemiyor"
+    bulgular = json.loads(rapor.read_text(encoding="utf-8") or "[]")
+    return sorted((b["RuleID"], Path(b["File"]).resolve().relative_to(kok.resolve()).as_posix()) for b in bulgular)
+
+
+def test_KRITIK_ozel_kurallar_GERCEK_gitleaks_ile_YAKALAR(tmp_path):
+    """D3.02 · B-10.48 · A-69 — özel kurallar GERÇEK gitleaks'te yakalıyor mu (regex vekili değil).
+
+    Sentetik firmware ağacı (tmp, depo DIŞI): config.json kuralı YALNIZ `firmware/*/data/config.json` yolunda 2 bulgu,
+    aynı içerik firmware dışında 0; boş placeholder 0; Secrets.h kuralı 1. Eskiden bu test yalnız `shutil.which`
+    arıyordu → her ortamda ATLANIYORDU ve `.gitleaks.toml`'daki path'i bozan mutant (`data`→`veri`: 2 → 0) görünmüyordu.
+    """
+    kok = tmp_path / "depo"
+    sahte_json = '{"wifi_pass": "parola123", "mqtt_pass": "GizliParola1"}\n'
+    dosyalar = {
+        "firmware/esp8266_pemf_coil/data/config.json": sahte_json,
+        "firmware/esps3_pemf_coil/data/config.json": '{"wifi_pass": "", "mqtt_pass": ""}\n',
+        "diger/data/config.json": sahte_json,
+        "firmware/esps3_pemf_coil/Secrets.h": 'static const char* DEFAULT_CLOUD_MQTT_PASS = "GizliParola1";\n',
+    }
+    for rel, icerik in dosyalar.items():
+        (kok / rel).parent.mkdir(parents=True, exist_ok=True)
+        (kok / rel).write_text(icerik, encoding="utf-8")
+    bulgular = _gercek_gitleaks_bulgulari(kok)
+    ozel = [b for b in bulgular if b[0].startswith("pemf-firmware-")]
+    assert ozel == [
+        ("pemf-firmware-config-json-gercek-deger", "firmware/esp8266_pemf_coil/data/config.json"),
+        ("pemf-firmware-config-json-gercek-deger", "firmware/esp8266_pemf_coil/data/config.json"),
+        ("pemf-firmware-secrets-h-gercek-deger", "firmware/esps3_pemf_coil/Secrets.h"),
+    ], f"özel kurallar gerçek gitleaks'te beklenen yakalamayı vermedi (kural, dosya): {ozel}"

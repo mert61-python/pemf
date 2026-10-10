@@ -24,10 +24,10 @@ config'i GERCEKTEN yukleyip cokmedigini olcer.
 from __future__ import annotations
 
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
+import gitleaks_ikili
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
@@ -65,35 +65,21 @@ def test_KRITIK_her_desen_DERLENIR():
     )
 
 
-def test_KRITIK_gitleaks_config_i_GERCEKTEN_yukluyor():
+def test_KRITIK_gitleaks_config_i_GERCEKTEN_yukluyor(tmp_path):
     """Vekil degil, GERCEK olcum: gitleaks ikilisi bu config'le calisip cokmuyor mu?
 
-    ⚠️ Ikili yoksa test ATLANIR (gelistirici makinesinde kurulu olmayabilir); ama CI'da
-    pre-commit gitleaks'i indirdigi icin orada GERCEKTEN kosar.
+    ⚠️ D3.02 (2026-10-10): ikili `tests/gitleaks_ikili.py` ile bulunur (PEMF_GITLEAKS / PATH / pre-commit
+    onbellegi); yoksa varsayilan kipte ATLANIR, zorunlu kipte (CI: PEMF_GITLEAKS_ZORUNLU=1) DUSER. Eskiden yalniz
+    PATH + HOME onbellegi arandigi icin CI'da, temiz klonda ve yalitilmis koşucuda hep atlaniyordu. Bos dizin
+    artik depo icinde (`tests/__gitleaks_bos__`) DEGIL, tmp_path'te.
     """
-    ikili = shutil.which("gitleaks")
-    if not ikili:
-        adaylar = list((Path.home() / ".cache" / "pre-commit").glob("**/gitleaks.exe")) + list(
-            (Path.home() / ".cache" / "pre-commit").glob("**/gitleaks")
-        )
-        ikili = str(adaylar[0]) if adaylar else None
-    if not ikili:
-        pytest.skip("gitleaks ikilisi bulunamadi (CI'da pre-commit indirir)")
-
-    bos = _KOK / "tests" / "__gitleaks_bos__"
-    bos.mkdir(exist_ok=True)
-    try:
-        r = subprocess.run(
-            [ikili, "detect", "--config", str(_CONFIG), "--no-git", "--no-banner", "-s", str(bos)],
-            capture_output=True,
-            text=True,
-            timeout=180,
-        )
-    finally:
-        try:
-            bos.rmdir()
-        except OSError:
-            pass
+    ikili = gitleaks_ikili.gerekli()
+    r = subprocess.run(
+        [ikili, "detect", "--config", str(_CONFIG), "--no-git", "--no-banner", "-s", str(tmp_path)],
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
 
     cikti = (r.stdout or "") + (r.stderr or "")
     assert "panic:" not in cikti.lower(), (
@@ -156,20 +142,9 @@ def test_KARSIT_KANIT_gitleaksignore_COMMIT_PINLI():
 # GERCEK gorunumlu bir sirrin HALA yakalandigini olcer.
 
 
-def _gitleaks_ikilisi() -> str | None:
-    ikili = shutil.which("gitleaks")
-    if ikili:
-        return ikili
-    onbellek = Path.home() / ".cache" / "pre-commit"
-    adaylar = list(onbellek.glob("**/gitleaks.exe")) + list(onbellek.glob("**/gitleaks"))
-    return str(adaylar[0]) if adaylar else None
-
-
 def _bulgu_sayisi(tmp_path: Path, icerik: str) -> int:
-    """Verilen metni gecici bir .py dosyasina yazip depo config'iyle tarar."""
-    ikili = _gitleaks_ikilisi()
-    if not ikili:
-        pytest.skip("gitleaks ikilisi bulunamadi (CI'da pre-commit indirir)")
+    """Verilen metni gecici bir .py dosyasina yazip depo config'iyle tarar (ikili: tests/gitleaks_ikili.py, D3.02)."""
+    ikili = gitleaks_ikili.gerekli()
     kaynak = tmp_path / "ornek.py"
     kaynak.write_text(icerik, encoding="utf-8")
     rapor = tmp_path / "rapor.json"
@@ -241,3 +216,58 @@ def test_KRITIK_PEMF_bayragi_TURKCE_baglamda_YANLIS_ALARM_uretmez(tmp_path):
 def test_KARSIT_KANIT_bayrak_muafiyeti_GERCEK_SIRRI_gecirmez(tmp_path, deger, neden):
     n = _bulgu_sayisi(tmp_path, _TR_BAGLAM.format(deger=deger))
     assert n >= 1, f"muafiyet COK GENIS: {neden}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+# D3.02 (B-10.48 · A-69, 2026-10-10) — CI gitleaks ikilisini SABİT rev'den kurar ve testleri ZORUNLU kipte koşar
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+
+
+def test_KRITIK_CI_gitleaks_ikilisini_KURAR_ve_testleri_ZORUNLU_kosar():
+    """CI pytest işi gitleaks'i kurmuyordu → özel kural testleri hep ATLANIYORDU (docstring "CI'da pre-commit indirir"
+    diyordu, CI ölçümü tersini gösterdi). Artık: kurulum adımı pytest'ten ÖNCE, pytest adımlarında zorunlu kip."""
+    yaml = pytest.importorskip("yaml", reason="pyyaml yok")
+    adimlar = yaml.safe_load((_KOK / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8"))["jobs"][
+        "backend"
+    ]["steps"]
+    kur = [i for i, a in enumerate(adimlar) if "pre-commit install-hooks" in str(a.get("run", ""))]
+    pyt = [i for i, a in enumerate(adimlar) if "pytest tests" in str(a.get("run", ""))]
+    assert kur, "CI backend işinde gitleaks'i kuran `pre-commit install-hooks` adımı YOK"
+    assert pyt and max(kur) < min(pyt), f"kurulum adımı pytest'ten SONRA ({kur} / {pyt})"
+    for i in pyt:
+        env = adimlar[i].get("env") or {}
+        assert str(env.get(gitleaks_ikili.ZORUNLU_ORTAM)) == "1", (
+            f"pytest adımı '{adimlar[i].get('name')}' {gitleaks_ikili.ZORUNLU_ORTAM}=1 taşımıyor — ikili yoksa ATLAR"
+        )
+    cfg = (_KOK / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    assert re.search(r"repo:\s*https://github\.com/gitleaks/gitleaks\s+rev:\s*v\d+\.\d+\.\d+\s", cfg), (
+        "pre-commit gitleaks rev'i SABİT sürüm (vX.Y.Z) değil — CI ikilisi kayabilir"
+    )
+
+
+def test_KARSIT_KANIT_bulucu_ACIK_yol_bozuksa_baska_ikiliye_DUSMEZ_ve_kipler(monkeypatch, tmp_path):
+    """`PEMF_GITLEAKS` bozuk yolsa SESSİZCE PATH/önbelleğe düşülmez (yanlış sürüm ölçülmesin); zorunlu kip DÜŞER,
+    varsayılan kip ATLAR. Dış ortam her iki bayrağın da tersine kurulur (koşucu maskelemesin)."""
+    monkeypatch.setenv("PEMF_GITLEAKS", str(tmp_path / "olmayan_gitleaks.exe"))
+    assert gitleaks_ikili.bul() is None
+    monkeypatch.setattr(gitleaks_ikili.capraz, "ZORUNLU", False)
+
+    def _sonuc() -> str:
+        # ⚠️ `pytest.raises(fail.Exception)` bir ATLAMAYI yakalamaz, atlama dışarı sızar ve testi SKIPPED yapar —
+        # mutant ("zorunlu ortamı yok say") kırmızı değil atlanmış görünürdü (ölçüldü). İki sonuç da AÇIKÇA yakalanır.
+        try:
+            gitleaks_ikili.gerekli()
+        except pytest.fail.Exception as e:
+            return f"DUSTU: {e}"
+        except pytest.skip.Exception as e:
+            return f"ATLADI: {e}"
+        return "IKILI-BULUNDU"
+
+    monkeypatch.setenv(gitleaks_ikili.ZORUNLU_ORTAM, "1")
+    assert _sonuc().startswith("DUSTU: zorunlu kip"), _sonuc()
+    monkeypatch.setenv(gitleaks_ikili.ZORUNLU_ORTAM, "0")
+    assert _sonuc().startswith("ATLADI:") and "indirme YAPILMAZ" in _sonuc(), _sonuc()
+    sahte = tmp_path / "gitleaks.exe"
+    sahte.write_bytes(b"")
+    monkeypatch.setenv("PEMF_GITLEAKS", str(sahte))
+    assert gitleaks_ikili.bul() == str(sahte)

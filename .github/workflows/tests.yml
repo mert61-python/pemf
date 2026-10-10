@@ -90,6 +90,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-test.txt
 
+      # ⚠️ D3.02 (B-10.48 · A-69): özel gitleaks kurallarını GERÇEK ikiliyle ölçen testler CI'da da koşsun. İkili
+      # `.pre-commit-config.yaml`'daki SABİT rev'den (gitleaks v8.24.0) pre-commit ile kaynaktan kurulur (hazır ikili
+      # indirilmez); testler onu `tests/gitleaks_ikili.py` ile pre-commit önbelleğinde bulur. pytest adımları
+      # `PEMF_GITLEAKS_ZORUNLU=1` taşır: ikili bulunamazsa bu testler ATLANMAZ, DÜŞER (eskiden CI'da hep atlanıyordu).
+      - name: gitleaks ikilisi (pre-commit, sabit rev)
+        shell: bash
+        run: |
+          pip install "pre-commit>=4.0,<5.0"
+          pre-commit install-hooks
+
       # ⚠️ Y30 / D4.10 (B-10.3): `-rs` her ATLAMAYI nedeniyle listeler — CI varsayılan kipte koşar ve kardeş kaynak
       # yoksa ≥193 test atlanır; nedenler görünmeden "yeşil" okunuyordu. Yayın öncesi ZORUNLU kip ayrı betikte:
       # scripts/yayin_oncesi_suit.ps1 (publish_release.ps1'in zorunlu adımı).
@@ -97,6 +107,7 @@ jobs:
         if: runner.os != 'Windows'
         env:
           PEMF_SIMULATE: ""
+          PEMF_GITLEAKS_ZORUNLU: "1"
         run: pytest tests -v -rs --no-header --junitxml=pytest-junit.xml
 
       # ⚠️ KAPSAM RATCHET'İ YALNIZ WINDOWS'TA (2026-08-09 denetimi, Tier 3).
@@ -108,6 +119,7 @@ jobs:
         if: runner.os == 'Windows'
         env:
           PEMF_SIMULATE: ""
+          PEMF_GITLEAKS_ZORUNLU: "1"
         run: pytest tests -v -rs --no-header --cov --cov-report=term --junitxml=pytest-junit.xml
 
       # ⚠️ A-46 / D2.07: testler geçse bile "sqlcipher" nedenli ATLAMA varsa iş KIRMIZI. Kurulum adımı
