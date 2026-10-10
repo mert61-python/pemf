@@ -134,7 +134,12 @@ def test_KRITIK_PII_sure_ve_onay_yazimlari_KILITTE_beklerken_ACIL_DURDUR_gecikme
                 t0 = time.monotonic()  # ⚠️ istekler kuyruğa girmeden ÖNCE (yukarıdaki testin notu)
                 yazimlar = [
                     asyncio.create_task(c.post("/api/settings/retention", json=g))
-                    for g in ({"days": 730}, {"days": 365}, {"acknowledge": True}, {"acknowledge": True})
+                    for g in (
+                        {"days": 730},
+                        {"days": 365},
+                        {"acknowledge": True, "acknowledge_days": 365},
+                        {"acknowledge": True, "acknowledge_days": 365},
+                    )
                 ]
                 acil = asyncio.create_task(c.post("/api/hardware/emergency_stop"))
                 r = await acil

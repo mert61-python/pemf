@@ -1028,7 +1028,12 @@ async def retention_ayarla(payload: _RetentionAyar, request: Request):
             secilen = db.pii_suresi_oku()
             onceki = secilen if secilen is not None else _pii_ortam_gunu()
             yeni = int(payload.days) if payload.days is not None else onceki
-            if payload.acknowledge and payload.acknowledge_days is not None and int(payload.acknowledge_days) != yeni:
+            # ⚠️ F2-1.6 (2-F incelemesi · A-09): onay YALNIZ ekranın gösterdiği (o anki etkin) süreye — `acknowledge_days` ZORUNLU ve süre
+            # değişikliğiyle AYNI istekte onay yok (yeni sürenin sayısı hiçbir ekranda gösterilmedi). Eskiden alan gönderilmezse denetim
+            # atlanıyor, ekran 365/1 seans gösterirken 30/3 seans onaylanıp maskeleniyordu (ölçüldü).
+            if payload.acknowledge and payload.acknowledge_days is None:
+                return {"gun_yok": True}
+            if payload.acknowledge and (int(payload.acknowledge_days) != onceki or yeni != onceki):
                 return {"cakisma": yeni}
             sayi = 0
             if payload.acknowledge and yeni > 0:
@@ -1048,6 +1053,12 @@ async def retention_ayarla(payload: _RetentionAyar, request: Request):
             return sonuc
 
         s = await asyncio.to_thread(_pii_yaz)
+        if s.get("gun_yok"):
+            raise HTTPException(
+                status_code=409,
+                detail="Onay, ekranın gösterdiği saklama süresiyle birlikte gönderilmeli. Ekranı yenileyin, etkilenecek kayıt sayısını "
+                "görüp yeniden onaylayın — onay kaydedilmedi.",
+            )
         if "cakisma" in s:
             raise HTTPException(
                 status_code=409,

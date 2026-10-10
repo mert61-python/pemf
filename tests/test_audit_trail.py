@@ -131,7 +131,9 @@ def test_REDDEDILEN_silme_de_iz_birakir(client, db):
 
 
 def test_saklama_ONAYI_iz_birakir(client, db):
-    assert client.post("/api/settings/retention", json={"acknowledge": True}).status_code == 200
+    assert (
+        client.post("/api/settings/retention", json={"acknowledge": True, "acknowledge_days": 365}).status_code == 200
+    )
     assert "retention.onay" in _turler(db), "geri donussuz maskeleme onayi izsiz"
 
 

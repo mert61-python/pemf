@@ -271,7 +271,7 @@ def test_KRITIK_API_bekleyen_sayi_gosterilir_onay_ESIK_ve_SAYIYLA_kayda_gecer(o,
     c = api_istemcisi
     durum = c.get("/api/settings/retention").json()["anonymization"]
     assert (durum["days"], durum["acknowledged"], durum["pending"]) == (1825, False, 1), durum
-    assert c.post("/api/settings/retention", json={"acknowledge": True}).status_code == 200
+    assert c.post("/api/settings/retention", json={"acknowledge": True, "acknowledge_days": 365}).status_code == 200
     assert o.tdb.anonim_onayi_oku() is None, "PII maskeleme onayı anonimleştirme onayı SAYILMAMALI (ayrı karar)"
     assert c.post("/api/settings/retention", json={"anonymize_acknowledge": True}).status_code == 200
     onay = o.tdb.anonim_onayi_oku()

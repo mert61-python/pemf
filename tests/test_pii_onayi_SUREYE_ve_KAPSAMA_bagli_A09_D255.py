@@ -82,7 +82,7 @@ def test_KRITIK_A09_sure_KISALINCA_genisleyen_kapsam_YENI_ONAYSIZ_maskelenmez_ve
     der ve 1 bekleyen gösterir. Yeni onaydan sonra maskelenir. MUTASYON: onay süreden bağımsız boolean → KIRMIZI."""
     c = o.c
     assert c.post("/api/settings/retention", json={"days": 1825}).status_code == 200
-    assert c.post("/api/settings/retention", json={"acknowledge": True}).status_code == 200
+    assert c.post("/api/settings/retention", json={"acknowledge": True, "acknowledge_days": 1825}).status_code == 200
     assert _durum(o)["acknowledged"] is True
     _headless_tur(o.db)
     assert ESKI_AD in _adlar(o.db), "aparat: 1825 günlük süreyle 400 günlük seans maskelenmemeliydi"
@@ -127,7 +127,7 @@ def test_KARSIT_ayni_sureye_yeniden_basmak_onayi_DUSURMEZ(o):
 def test_KRITIK_A09_ortam_degiskeniyle_degisen_sure_de_onayi_GECERSIZ_kilar(o, monkeypatch):
     """Operatör süre seçmemişse etkin süre `PEMF_RETAIN_PII_DAYS`'tir (vars. 365). Onay 365'e verildi; kurulum ortamı 30'a
     çekilince (kapsam genişler) yeni onay olmadan maskelenmez."""
-    assert o.c.post("/api/settings/retention", json={"acknowledge": True}).status_code == 200
+    assert o.c.post("/api/settings/retention", json={"acknowledge": True, "acknowledge_days": 365}).status_code == 200
     with o.db._get_connection() as c:
         c.execute(
             "UPDATE treatment_sessions SET session_date=? WHERE patient_name=?",

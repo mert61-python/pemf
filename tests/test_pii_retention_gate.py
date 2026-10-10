@@ -159,7 +159,9 @@ def test_API_durum_bekleyeni_bildirir(client):
 
 
 def test_API_onay_maskelemeyi_ACAR(client, dolu):
-    assert client.post("/api/settings/retention", json={"acknowledge": True}).status_code == 200
+    assert (
+        client.post("/api/settings/retention", json={"acknowledge": True, "acknowledge_days": 365}).status_code == 200
+    )
     assert dolu.pii_onayi_var_mi(365) is True
     assert client.get("/api/settings/retention").json()["pending"] == 0
 
