@@ -137,7 +137,9 @@ function Get-PemfServisOrtami([string]$ProfilDosyasi, [string]$LogDir, [bool]$Us
 # --- Servis ikilisi: önce frozen EXE, yoksa python + backend_service.py ---
 # Ortak argüman: Mosquitto kendi servisi olduğu için broker'ı backend BAŞLATMAZ,
 # sadece izler -> --no-mosquitto-ensure.
-$CommonArgs = @("--host", "0.0.0.0", "--port", "8000", "--no-mosquitto-ensure")
+# ⚠️ E2-2.6: host/port CLI'da SABİTLENMEZ (setup_services.ps1 ile aynı) — backend PEMF_API_HOST / PEMF_API_PORT'u profilden okur.
+# Eskiden `--host 0.0.0.0 --port 8000` server.env'in `PEMF_API_HOST=127.0.0.1`'ini (yalnız ters vekil arkası) EZİYORDU.
+$CommonArgs = @("--no-mosquitto-ensure")
 if (Test-Path $ExePath) {
     $SvcBinary       = $ExePath
     $SvcArgs         = $CommonArgs
