@@ -103,6 +103,8 @@ class CloudSyncWorker:
         # `_ensure_client` HER TURDA çağrılır (self-heal). İlk başarısızlık tam zincirle
         # UYARI basar, sonrakiler debug — yoksa 7/24 cihazda log şişerdi.
         self._istemci_hatasi_bildirildi = False
+        # F2-3.6: bulutun KALICI reddettiği seanslar — ret seans başına bir kez ERROR, sonra DEBUG (yeniden deneme sürer).
+        self._push_ret_bildirilen: set = set()
 
         # GİZLİLİK (tıbbi cihaz): Hasta/seans PII'sinin buluta sync'i VARSAYILAN KAPALI.
         # Açmak için ortam değişkeni PEMF_CLOUD_PATIENT_SYNC=1. Açıkken bile tüm push/pull
@@ -412,10 +414,25 @@ class CloudSyncWorker:
                     }
 
                     # P1 audit 2026-06-28: RLS+RPC — upsert_session RPC (device_id sunucu-tarafi).
-                    self.client.rpc(
-                        "upsert_session",
-                        {"p_device_id": self.device_id, "p_session": payload, "p_secret": self._registry_secret()},
-                    ).execute()
+                    # ⚠️ F2-3.6 (2-F incelemesi, D2.65): seans BAŞINA hata yalıtımı. Bulut BİR seansı kalıcı reddederse (kısıt ihlali)
+                    # eskiden döngü ilk hatada kesiliyordu → sonraki bekleyen seanslar HİÇ gönderilmiyordu; D2.65'ten beri PULL bayrağı
+                    # korur, reddedilen seans her döngüde (60 sn) yeniden denenip ERROR yazıyordu (ölçüldü: 3 döngü, 3 hata, öteki 0 gönderim).
+                    # Bayrak 0 KALIR (değişiklik kaybolmaz); ret seans başına bir kez ERROR, sonra DEBUG.
+                    try:
+                        self.client.rpc(
+                            "upsert_session",
+                            {"p_device_id": self.device_id, "p_session": payload, "p_secret": self._registry_secret()},
+                        ).execute()
+                    except Exception as _re:
+                        _bildirilen = self._push_ret_bildirilen
+                        if session_data["id"] not in _bildirilen:
+                            _bildirilen.add(session_data["id"])
+                            logger.error(
+                                f"Session PUSH hatasi (seans {session_data['id']}, sonraki turlarda yeniden denenecek): {_re}"
+                            )
+                        else:
+                            logger.debug("Session PUSH hatasi (seans %s, tekrar): %s", session_data["id"], _re)
+                        continue
                     cursor.execute("UPDATE treatment_sessions SET sync_status = 1 WHERE id = ?", (session_data["id"],))
                     conn.commit()
                     logger.info(f"Seans {session_data['id']} Supabase'e senkronize edildi (RPC).")
