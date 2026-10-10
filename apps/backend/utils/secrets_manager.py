@@ -649,7 +649,10 @@ def _load() -> dict:
             # D2.80: izin / G-Ç hatası — dosya BOZUK DEĞİL: yeniden adlandırma YOK, önbellek dolmaz (bkz. _erisim_hatasi).
             raise _erisim_hatasi(p, e) from e
         try:
-            doc = json.loads(_ham.decode("utf-8"))
+            # ⚠️ E2-1.5 (2-E incelemesi): emanet geri yükleme yönergesi bu dosyayı ELLE düzenletir; PowerShell 5.1 / eski Notepad
+            # BOM'lu UTF-8 ya da UTF-16 yazar. GEÇERLİ dosya "bozuk" sayılıp karantinaya gidiyordu. BOM'a göre çöz (yazım yine UTF-8).
+            _metin = _ham.decode("utf-16") if _ham[:2] in (b"\xff\xfe", b"\xfe\xff") else _ham.decode("utf-8-sig")
+            doc = json.loads(_metin)
             for s in ("auto", "operator", "embedded"):
                 doc.setdefault(s, {})
         except Exception as e:

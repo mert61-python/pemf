@@ -72,8 +72,9 @@ def _boz_ve_ilk_load(sm, tmp_path):
     sm._cache = None
     assert sm._load()["auto"]["sqlcipher_key"] == "HAM-ANAHTAR-DEGERI", "on-kosul: gecerli dosya okunmali"
 
-    # Notepad'in "UTF-8 BOM" kaydı — ölçülen dört gerçekçi bozulmadan biri.
-    dosya.write_bytes(b"\xef\xbb\xbf" + json.dumps(_gecerli_doc("HAM-ANAHTAR-DEGERI")).encode("utf-8"))
+    # Elle düzenlemede sondaki fazla virgül — ölçülen dört gerçekçi bozulmadan biri. (E2-1.5: BOM'lu UTF-8 / UTF-16 artık
+    # GEÇERLİ okunur; bu kapının bozulma örneği gerçekten ayrıştırılamayan biçime alındı.)
+    dosya.write_bytes(json.dumps(_gecerli_doc("HAM-ANAHTAR-DEGERI")).encode("utf-8")[:-1] + b",}")
     sm._cache = None
     with pytest.raises(RuntimeError):
         sm._load()
