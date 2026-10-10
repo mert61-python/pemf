@@ -576,6 +576,16 @@ class HeadlessDBMaintenance:
             return True
         return False
 
+    def _hedef_veri_kokunde_mi(self, dest: str) -> bool:
+        """S-E2I.4: `dest` (mutlak + gerçek yol, Windows'ta harf duyarsız) veri kökünün KENDİSİ ya da altı mı? Çözülemezse True
+        (fail-closed: kopya yapılmaz, ERROR — yerel yedekler sürer)."""
+        try:
+            hedef = os.path.normcase(os.path.realpath(os.path.abspath(dest)))
+            kok = os.path.normcase(os.path.realpath(os.path.abspath(str(self.app_data_dir))))
+        except (OSError, ValueError, TypeError):
+            return True
+        return hedef == kok or hedef.startswith(kok.rstrip("\\/") + os.sep)
+
     def _copy_offsite(self, files):
         """audit B-7.2: PEMF_BACKUP_DIR set ise YENİ yedekleri harici hedefe (ağ paylaşımı/USB) kopyala
         → aynı-disk yedek felaketi (disk arızası/ransomware) tek nokta olmasın. Set değilse no-op.
@@ -586,6 +596,18 @@ class HeadlessDBMaintenance:
         Kapı: tests/test_offsite_ozeti_DOGRULANMIS_kopyaya_bagli_D212.py"""
         dest = os.environ.get("PEMF_BACKUP_DIR", "").strip()
         if not dest or not files:
+            return
+        if self._hedef_veri_kokunde_mi(dest):
+            # ⚠️ S-E2I.4 (2-E incelemesi, kalan yarı): hedef veri kökünün içindeyse "makine dışı" kopya AYNI diske ve kaldırma / tam
+            # temizliğin sileceği köke yazılıyor, günlük "geri yuklenebilir" diyordu (yanlış güvence — ölçüldü). Kopya YAPILMAZ.
+            # Kapı: tests/test_makine_disi_yedek_hedefi_PEMF_KOKU_ALTINDA_olamaz_SE2I4.py
+            logger.error(
+                "Makine disi yedek hedefi (PEMF_BACKUP_DIR=%s) PEMF veri kokunun ICINDE olamaz: ayni diske ve kaldirma / tam "
+                "temizligin silecegi koke yazilir, felaket kopyasi degildir — kopya YAPILMADI. Cozum: hedefi veri koku (%s) disindaki "
+                "bir USB / ag paylasimi yapin.",
+                dest,
+                self.app_data_dir,
+            )
             return
         try:
             dpath = Path(dest)
