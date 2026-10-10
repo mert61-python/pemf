@@ -522,6 +522,13 @@ class SeansKarisimi:
             estop = c.execute(
                 "SELECT COUNT(*) FROM session_events WHERE session_id = ? AND event_type = 'emergency_stop'", (sid,)
             ).fetchone()[0]
+            on_yer = ",".join("?" for _ in self.KRITIK_OLAY_ONEMLERI)
+            tur_yer = ",".join("?" for _ in self.KRITIK_OLAY_TURLERI)
+            kritik = c.execute(
+                f"SELECT COUNT(*) FROM session_events WHERE session_id = ? AND (COALESCE(severity, 'info') IN ({on_yer}) "
+                f"OR event_type IN ({tur_yer}))",
+                (sid, *self.KRITIK_OLAY_ONEMLERI, *self.KRITIK_OLAY_TURLERI),
+            ).fetchone()[0]
             kosu = c.execute("SELECT COUNT(*) FROM session_coil_runs WHERE session_id = ?", (sid,)).fetchone()[0]
             sensor = c.execute("SELECT COUNT(*) FROM sensor_samples WHERE session_id = ?", (sid,)).fetchone()[0]
         return {
@@ -529,12 +536,14 @@ class SeansKarisimi:
             "acil_durdurma": int(estop or 0),
             "bobin_kosusu": int(kosu or 0),
             "sensor_ornegi": int(sensor or 0),
+            # S-F.1 (A-07): bunlar seansla SİLİNMEZ — bağı kopar, kayıt süresiz kalır (iz "kaç acil durdurma gitti" diye okunmasın).
+            "kritik_korunan": int(kritik or 0),
         }
 
     def seans_silme_ozeti_toplu(self, session_ids) -> Dict[str, int]:
         """O-B.7: TOPLU silmede `seans_silme_ozeti` sayılarının TOPLAMI (aynı anahtarlar, aynı "içerik yok" kuralı). Silmeden ÖNCE ve
         yalnız gerçekten silinecek kimliklerle çağrılmalı. Hata çağırana gider (çağıran silmeyi KISITLAMAZ)."""
-        toplam = {"olay": 0, "acil_durdurma": 0, "bobin_kosusu": 0, "sensor_ornegi": 0}
+        toplam = {"olay": 0, "acil_durdurma": 0, "bobin_kosusu": 0, "sensor_ornegi": 0, "kritik_korunan": 0}
         for sid in sorted({int(x) for x in (session_ids or ())}):
             for anahtar, deger in self.seans_silme_ozeti(sid).items():
                 toplam[anahtar] += int(deger)
@@ -797,6 +806,8 @@ class SeansKarisimi:
                 # Çocuk kayıtları sil — FK ON DELETE CASCADE yok; aksi halde veri-içeren seansı
                 # silmek FOREIGN KEY hatasıyla 500 döner.
                 cursor.execute('DELETE FROM sensor_samples WHERE session_id = ?', (session_id,))
+                # ⚠️ S-F.1 (A-07): seansın KRİTİK olayları silinmez — bağı kopar, yüke silinen seansın kimliği yazılır.
+                self._kritik_olaylari_seanstan_ayir(cursor, [int(session_id)])
                 cursor.execute('DELETE FROM session_events WHERE session_id = ?', (session_id,))
                 # P2 audit 2026-06-28: per-bobin run tablolari da silinsin (eskiden orphan kaliyordu).
                 cursor.execute(
@@ -853,6 +864,8 @@ class SeansKarisimi:
                 cursor = conn.cursor()
                 cursor.execute(f'DELETE FROM session_parameters WHERE session_id IN ({yer})', kimlikler)
                 cursor.execute(f'DELETE FROM sensor_samples WHERE session_id IN ({yer})', kimlikler)
+                # ⚠️ S-F.1 (A-07): seansların KRİTİK olayları silinmez — bağı kopar (bkz. `_kritik_olaylari_seanstan_ayir`).
+                self._kritik_olaylari_seanstan_ayir(cursor, kimlikler)
                 cursor.execute(f'DELETE FROM session_events WHERE session_id IN ({yer})', kimlikler)
                 cursor.execute(
                     'DELETE FROM sensor_run_summary WHERE coil_run_id IN '
@@ -868,6 +881,38 @@ class SeansKarisimi:
         except _DB_ERROR as e:
             self.logger.error(f"Toplu seans silme hatası: {e}")
             raise
+
+    def _kritik_olaylari_seanstan_ayir(self, cursor, session_ids) -> int:
+        """⚠️ S-F.1 [ÖNERİLEN UYGULANDI] · A-07: silinen seansların KRİTİK olaylarını (önemi `KRITIK_OLAY_ONEMLERI` ya da türü
+        `KRITIK_OLAY_TURLERI` — ACİL DURDUR ve nedeni, seansı kesen servis kapanışı…) SİLMEK yerine seanstan AYIRIR: `session_id` NULL
+        (FK seans satırının silinmesine izin versin), yüke `silinen_seans_id` yazılır (kayıt hangi seansa ait olduğunu söylemeye devam
+        eder). Kritik olay yükünde PII yok (neden, kip, bobin listesi). ÇAĞIRANIN işleminde koşar (commit yok). Eskiden seans silmesi bu
+        kayıtları da götürüyordu — D2.17/O-B.7 izi kaç acil durdurmanın "gittiğini" yazıyordu.
+        Kapı: tests/test_seans_silme_KRITIK_olaylari_KORUR_SF1.py"""
+        kimlikler = sorted({int(x) for x in (session_ids or ())})
+        if not kimlikler:
+            return 0
+        yer = ",".join("?" for _ in kimlikler)
+        on_yer = ",".join("?" for _ in self.KRITIK_OLAY_ONEMLERI)
+        tur_yer = ",".join("?" for _ in self.KRITIK_OLAY_TURLERI)
+        satirlar = cursor.execute(
+            f"SELECT id, session_id, payload FROM session_events WHERE session_id IN ({yer}) "
+            f"AND (COALESCE(severity, 'info') IN ({on_yer}) OR event_type IN ({tur_yer}))",
+            (*kimlikler, *self.KRITIK_OLAY_ONEMLERI, *self.KRITIK_OLAY_TURLERI),
+        ).fetchall()
+        for eid, sid, yuk in satirlar:
+            try:
+                d = json.loads(yuk or "{}")
+            except (TypeError, ValueError):
+                d = {"_ham_yuk": str(yuk)[:2000]}
+            if not isinstance(d, dict):
+                d = {"_ham_yuk": d}
+            d["silinen_seans_id"] = int(sid)
+            cursor.execute(
+                "UPDATE session_events SET session_id = NULL, payload = ? WHERE id = ?",
+                (json.dumps(d, ensure_ascii=True), eid),
+            )
+        return len(satirlar)
 
     def record_session_event(
         self, session_id: Optional[int], event_type: str, payload: Optional[Dict] = None, severity: str = 'info'
