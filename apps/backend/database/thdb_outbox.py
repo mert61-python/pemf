@@ -37,7 +37,12 @@ from database.db_hatalari import _DB_ERROR, _DB_INTEGRITY  # noqa: F401
 class OutboxKarisimi:
     def purge_old_dead_outbox(self, retain_days: int = 30) -> int:
         """Uzun süreli dead outbox kayıtlarını temizle."""
-        cutoff_ts = datetime.now().timestamp() - (max(1, int(retain_days)) * 86400)
+        # ⚠️ D2.49 (B-3.1): süre <= 0 → "adım kapalı" — HİÇBİR şey silinmez. Eskiden `max(1, …)` 0'ı 1 GÜNE çeviriyordu:
+        # çağıran "0 = kapalı" kuralını bir kez unutursa bir günden eski TÜMÜ gidiyordu (2026-08-17 doz olayı ve B2-1.6'da iki kez oldu).
+        # Kapı: tests/test_silme_fonksiyonlari_SIFIRDA_hicbir_sey_silmez_D249.py
+        if int(retain_days) <= 0:
+            return 0
+        cutoff_ts = datetime.now().timestamp() - (int(retain_days) * 86400)
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()

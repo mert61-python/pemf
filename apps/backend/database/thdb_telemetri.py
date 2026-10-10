@@ -83,7 +83,12 @@ class TelemetriKarisimi:
 
     def purge_old_sensor_samples(self, retain_days: int = 90) -> int:
         """Retention süresini aşan sensör örneklerini temizle."""
-        cutoff_ts = datetime.now().timestamp() - (max(1, int(retain_days)) * 86400)
+        # ⚠️ D2.49 (B-3.1): süre <= 0 → "adım kapalı" — HİÇBİR şey silinmez. Eskiden `max(1, …)` 0'ı 1 GÜNE çeviriyordu:
+        # çağıran "0 = kapalı" kuralını bir kez unutursa bir günden eski TÜMÜ gidiyordu (2026-08-17 doz olayı ve B2-1.6'da iki kez oldu).
+        # Kapı: tests/test_silme_fonksiyonlari_SIFIRDA_hicbir_sey_silmez_D249.py
+        if int(retain_days) <= 0:
+            return 0
+        cutoff_ts = datetime.now().timestamp() - (int(retain_days) * 86400)
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
@@ -112,9 +117,14 @@ class TelemetriKarisimi:
         aralığını kabul ediyor. Sahibin GERÇEK kararı ("sınırsız büyüme olmasın") korunuyor —
         değişen tek şey SAAT.
 
-        ⚠️ `0 = adım kapalı` sözleşmesi çağıran tarafta; buraya 0 gelmez.
+        ⚠️ `0 = adım kapalı` sözleşmesi çağıran tarafta; D2.49 ile burada da (0 gelirse hiçbir şey silinmez).
         """
-        cutoff_ts = datetime.now().timestamp() - (max(1, int(retain_days)) * 86400)
+        # ⚠️ D2.49 (B-3.1): süre <= 0 → "adım kapalı" — HİÇBİR şey silinmez. Eskiden `max(1, …)` 0'ı 1 GÜNE çeviriyordu:
+        # çağıran "0 = kapalı" kuralını bir kez unutursa bir günden eski TÜMÜ gidiyordu (2026-08-17 doz olayı ve B2-1.6'da iki kez oldu).
+        # Kapı: tests/test_silme_fonksiyonlari_SIFIRDA_hicbir_sey_silmez_D249.py
+        if int(retain_days) <= 0:
+            return 0
+        cutoff_ts = datetime.now().timestamp() - (int(retain_days) * 86400)
         removed = 0
         try:
             with self._get_connection() as conn:
