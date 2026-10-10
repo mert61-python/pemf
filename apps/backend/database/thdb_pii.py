@@ -328,7 +328,11 @@ class PiiKarisimi:
                 parca.append(r"\s+")
             else:
                 parca.append(re.escape(ch))
-        return re.compile("".join(parca), re.IGNORECASE)
+        # ⚠️ F2-1.1 (2-F incelemesi): desen KELİME SINIRLI — ad başka bir kelimenin İÇİNDE eşleşmez. Eskiden "Kara" → "[ANONIM]ciğer"
+        # (karaciğer), "Mia" → "ane[ANONIM]", "Can" → hekim e-postası "[ANONIM]dan.vet@…" (A-27), "Mor" → AI ayrıntısının
+        # "n_tu[ANONIM]s" anahtarı oluyordu (ölçüldü): tıbbi kayıt geri dönüşsüz bozuluyordu. Türkçe ek kesme işaretiyle ayrılır
+        # ("Kara'nın" eşleşir). Kapı: tests/test_kimlik_deseni_KELIME_SINIRI_klinik_metni_bozmaz_F2_1_1.py
+        return re.compile(r"(?<!\w)" + "".join(parca) + r"(?!\w)", re.IGNORECASE)
 
     def _metinden_kimligi_sil(self, deger, desenler):
         if not isinstance(deger, str) or not deger:
