@@ -121,9 +121,16 @@ def test_KRITIK_okuma_RPC_leri_semada_TANIMLI_ve_sertlestirilmis():
         assert "security definer" in g.lower(), f"{ad.group(1)}: SECURITY DEFINER degil"
         assert "set search_path" in g.lower(), f"{ad.group(1)}: sabit search_path YOK"
 
-    # anon'a grant verilmemeli.
-    for m in re.finditer(r"grant execute on function public\.(\w+)[^;]*to ([a-z_, ]+)", sema):
-        assert "anon" not in m.group(2), (
+    # anon'a grant verilmemeli. ⚠️ D4.26 (B-10.18): büyük/küçük harfe DUYARSIZ, tırnaklı rol ve `to public` (PUBLIC = anon
+    # dahil herkes) da yakalanır — eski regex `GRANT EXECUTE … TO anon`ı görmüyordu (ölçüldü).
+    yurutme = list(re.finditer(r"grant\s+execute\s+on\s+function\s+public\.(\w+)[^;]*?\bto\s+([^;]+)", sema, re.I))
+    assert len(yurutme) >= 3, f"VAKUM: yalniz {len(yurutme)} grant execute bulundu"
+    for m in yurutme:
+        roller = {
+            r.strip().strip('"').lower()
+            for r in re.split(r"\bwith\s+grant\s+option\b", m.group(2), flags=re.I)[0].split(",")
+        }
+        assert not roller & {"anon", "public"}, (
             f"{m.group(1)} anon'a acilmis — bu RPC'ler `auth.uid()` ile calisir, anon'da uid YOK; "
             "acmak yalnizca saldiri yuzeyi ekler"
         )
