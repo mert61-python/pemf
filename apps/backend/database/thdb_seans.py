@@ -186,6 +186,9 @@ class SeansKarisimi:
                     ]
                 )
                 conn.commit()
+                if removed:
+                    # F2-2.3 (Y13 · D2.29 ilkesi): WAL kipinde silinen yükün ESKİ sayfası denetim noktasına kadar ana dosyada kalır.
+                    self._silme_sonrasi_denetim_noktasi(conn, "olay saklama silmesi")
         except Exception as e:
             self.logger.warning(f"Session event retention temizleme uyarısı: {e}")
             return 0
@@ -829,6 +832,8 @@ class SeansKarisimi:
 
                 conn.commit()
                 self.logger.info(f"Tedavi seansı silindi: ID {session_id}")
+                # F2-2.3 (Y13 · D2.29 ilkesi): silinen seansın ESKİ sayfaları denetim noktasına kadar ana dosyada kalıyordu (ölçüldü).
+                self._silme_sonrasi_denetim_noktasi(conn, "seans silme")
 
         except _DB_ERROR as e:
             self.logger.error(f"Seans silme hatası: {e}")
@@ -884,6 +889,8 @@ class SeansKarisimi:
                 silinen = cursor.rowcount if cursor.rowcount and cursor.rowcount > 0 else 0
                 conn.commit()
                 self.logger.info("TOPLU seans silme: %d istendi, %d silindi.", len(kimlikler), silinen)
+                if silinen:
+                    self._silme_sonrasi_denetim_noktasi(conn, "toplu seans silme")  # F2-2.3 (Y13 · D2.29 ilkesi)
                 return silinen
         except _DB_ERROR as e:
             self.logger.error(f"Toplu seans silme hatası: {e}")

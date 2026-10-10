@@ -219,6 +219,8 @@ class PiiKarisimi:
                 report['parameters_redacted'] = int(cursor.rowcount)
 
                 conn.commit()
+                if report['sessions_redacted'] or report['parameters_redacted']:
+                    self._silme_sonrasi_denetim_noktasi(conn, "PII maskeleme")  # F2-2.3 (Y13 · D2.29 ilkesi)
         except Exception as e:
             self.logger.warning(f"PII redaction uyarısı: {e}")
 
@@ -476,6 +478,11 @@ class PiiKarisimi:
             json.dumps(d, ensure_ascii=False),
             "KVKK: tedavi-DB anonimlestirmesi bekleyenler",
         )
+        # F2-2.3 (A-06 · Y13 · D2.29 ilkesi): tedavi-DB adımı (`anonymize_patients_by_uuid`) ve listeden düşme bitince denetim noktası —
+        # eski adların sayfa sürümleri (seans, parametre, AI metinleri, bu liste) ana dosyada / WAL'da kalıyordu (ölçüldü: SQL'de 0,
+        # dosyada 9 kopya, ~1500 yazıma kadar). Sonuç DEĞİŞMEZ (açık okuyucu varsa uyarı).
+        with self._get_connection() as conn:
+            self._silme_sonrasi_denetim_noktasi(conn, "KVKK bekleyen listesi")
 
     def _yuklerden_hasta_adini_anonimlestir(self, cursor, sids) -> int:
         """`session_events` (seans kimliğiyle) ve `outbox_messages` (`correlation_id` = seans kimliği VE yükün `session_id`'si) JSON

@@ -420,10 +420,12 @@ class PatientDatabase:
                 with self._get_connection() as conn:
                     conn.cursor().execute("VACUUM")
                     # WAL kipinde VACUUM yeni sayfaları WAL'a yazar; eski sayfalar denetim noktasına kadar ana dosyada KALIR (ölçüldü).
-                    self._silme_sonrasi_denetim_noktasi(conn, "ertelenmis VACUUM")
+                    tamam = self._silme_sonrasi_denetim_noktasi(conn, "ertelenmis VACUUM")
             except _DB_ERROR:
                 self.logger.warning("Hasta DB ertelenmis KVKK VACUUM'u yine yapilamadi (bekliyor)", exc_info=True)
                 return False
+        if not tamam:
+            return False  # F2-2.5: kalıntı duruyor → işaret KALIR (eskiden 0 yazılıyordu — "tamamlandı" yalanı)
         self._vacuum_isaretini_yaz("0")
         self.logger.info("Hasta DB ertelenmis KVKK VACUUM'u tamamlandi.")
         return True
@@ -1020,20 +1022,36 @@ class PatientDatabase:
         finally:
             self.lock.release()
 
-    def _silme_sonrasi_denetim_noktasi(self, conn, ne: str) -> None:
+    #: F2-4.3: denetim noktasının okuyucuyu (ve arkasında bloklanan yazarları) bekleme sınırı — tedavi DB'sindeki eşiyle aynı.
+    DENETIM_NOKTASI_BEKLEME_MS = 200
+
+    def _silme_sonrasi_denetim_noktasi(self, conn, ne: str) -> bool:
         """D2.29 (Y13): silmeden sonra WAL denetim noktası (TRUNCATE) — `secure_delete` yeni sayfa sürümünü sıfırlar ama WAL kipinde
         eski sayfa denetim noktasına kadar ana dosyada, eklemenin çerçevesi WAL dosyasında durur (ölçüldü). Okuyucu varsa
-        tamamlanamayabilir → uyarı; silme sonucu DEĞİŞMEZ. (Tedavi DB'sindeki eşi: `thdb_ai_gecmisi._silme_sonrasi_denetim_noktasi`.)"""
+        tamamlanamayabilir → uyarı; silme sonucu DEĞİŞMEZ. (Tedavi DB'sindeki eşi: `thdb_ai_gecmisi._silme_sonrasi_denetim_noktasi`.)
+        ⚠️ F2-4.3: TRUNCATE okuyucuyu beklerken yeni yazarları da bloklar → kısa bekleme (`DENETIM_NOKTASI_BEKLEME_MS`); tamamlanamazsa
+        kalıcı işaret (F2-2.5) ve günlük bakımda yeniden."""
         try:
-            sonuc = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+            onceki = conn.execute("PRAGMA busy_timeout").fetchone()[0]
+            conn.execute(f"PRAGMA busy_timeout={int(self.DENETIM_NOKTASI_BEKLEME_MS)}")
+            try:
+                sonuc = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+            finally:
+                conn.execute(f"PRAGMA busy_timeout={int(onceki)}")
             if sonuc and sonuc[0]:
                 self.logger.warning(
                     "%s: silme sonrasi denetim noktasi tamamlanamadi (acik okuyucu) — silinen icerik sonraki denetim noktasina "
-                    "dek WAL'da kalabilir.",
+                    "dek WAL'da kalabilir; kalici isaretle gunluk bakimda yeniden denenecek.",
                     ne,
                 )
+                # F2-2.5: kalıntı için kalıcı işaret (Y121'in işareti) — günlük bakım seans yokken VACUUM + denetim noktasını yeniden dener.
+                self._vacuum_isaretini_yaz("1")
+                return False
+            return True
         except Exception:
             self.logger.warning("%s: silme sonrasi denetim noktasi yapilamadi.", ne, exc_info=True)
+            self._vacuum_isaretini_yaz("1")
+            return False
 
     #: Tek istekte silinebilecek AZAMİ hasta sayısı (seans tarafıyla AYNI gerekçe ve AYNI sayı).
     TOPLU_SILME_AZAMI = 500

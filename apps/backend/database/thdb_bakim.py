@@ -449,4 +449,7 @@ class BakimKarisimi:
                         eslem[tablo][s["id"]] = cursor.lastrowid
                     sonuc[tablo] += 1
             conn.commit()
+            if replace:
+                # F2-2.3 (Y13 · D2.29 ilkesi): REPLACE_ALL'ın sildiği eski kayıtların sayfaları denetim noktasına kadar ana dosyada kalıyordu.
+                self._silme_sonrasi_denetim_noktasi(conn, "REPLACE_ALL ice aktarma")
         return sonuc

@@ -189,26 +189,46 @@ class AiGecmisiKarisimi:
                 silindi = cursor.rowcount > 0
                 conn.commit()
                 if silindi:
+                    # F2-2.5 · F2-4.3: tamamlanamazsa kalıcı işaret yardımcının içinde yazılır; günlük bakım (seans yokken) yeniden dener.
                     self._silme_sonrasi_denetim_noktasi(conn, "AI kaydi silme")
-                return silindi
         except Exception:
             self.logger.exception("AI analiz kaydı silinemedi (id=%s).", analysis_id)
             return False
+        return silindi
 
-    def _silme_sonrasi_denetim_noktasi(self, conn, ne: str) -> None:
+    def _silme_sonrasi_denetim_noktasi(self, conn, ne: str) -> bool:
         """D2.29 (B-3.91 · Y13): tekil silmeden sonra WAL denetim noktası (TRUNCATE). `secure_delete` silinen içeriği yeni sayfa
         sürümünde sıfırlar ama WAL kipinde ESKİ sayfa denetim noktasına kadar ana dosyada, eklemenin çerçevesi de WAL dosyasında
-        durur (ölçüldü). TRUNCATE ikisini de kapatır. Okuyucu varsa tamamlanamayabilir → uyarı; silme sonucu DEĞİŞMEZ."""
+        durur (ölçüldü). TRUNCATE ikisini de kapatır. Okuyucu varsa tamamlanamayabilir → uyarı; silme sonucu DEĞİŞMEZ.
+
+        ⚠️ F2-4.3 (2-F incelemesi · A-07 · Ö.4-Y8): TRUNCATE okuyucuyu beklerken YENİ yazarları da bloklar — bağlantının 5 sn `busy_timeout`uyla,
+        açık bir okuyucu (dışa aktarma, yedek, uzun liste) varken eşzamanlı ACİL DURDUR olay yazımı 5,3 sn bekledi (ölçüldü; birkaç ms sonra
+        DÜŞERDİ). Denetim noktası kısa beklemeyle (`DENETIM_NOKTASI_BEKLEME_MS`) koşar; tamamlanamazsa (F2-2.5) kalıcı "VACUUM bekliyor" işareti
+        burada yazılır — günlük bakım seans yokken yeniden dener (F2-2.3'ün yolları dahil her çağıran kapsanır).
+        Kapı: tests/test_denetim_noktasi_YAZARI_BLOKLAMAZ_ACIL_DURDUR_kaydi_F2_4_3.py"""
+        tamam = False
         try:
-            sonuc = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
-            if sonuc and sonuc[0]:
+            onceki = conn.execute("PRAGMA busy_timeout").fetchone()[0]
+            conn.execute(f"PRAGMA busy_timeout={int(self.DENETIM_NOKTASI_BEKLEME_MS)}")
+            try:
+                sonuc = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+            finally:
+                conn.execute(f"PRAGMA busy_timeout={int(onceki)}")
+            tamam = not (sonuc and sonuc[0])
+            if not tamam:
                 self.logger.warning(
                     "%s: silme sonrasi denetim noktasi tamamlanamadi (acik okuyucu) — silinen icerik sonraki denetim noktasina "
-                    "dek WAL'da kalabilir.",
+                    "dek WAL'da kalabilir; kalici isaretle gunluk bakimda yeniden denenecek.",
                     ne,
                 )
         except Exception:
             self.logger.warning("%s: silme sonrasi denetim noktasi yapilamadi.", ne, exc_info=True)
+        if not tamam:
+            self._vacuum_beklet(f"{ne}: denetim noktasi tamamlanamadi")  # F2-2.5 · F2-4.3
+        return tamam
+
+    #: F2-4.3: silme sonrası denetim noktasının okuyucuyu (ve arkasında bloklanan yazarları) bekleme sınırı.
+    DENETIM_NOKTASI_BEKLEME_MS = 200
 
     #: D1.58: ertelenmiş KVKK VACUUM'u — `system_settings`te KALICI (yeniden başlatmada kaybolmaz).
     VACUUM_BEKLIYOR_ANAHTARI = "kvkk_vacuum_bekliyor"
@@ -282,7 +302,9 @@ class AiGecmisiKarisimi:
                 conn.cursor().execute("VACUUM")
                 # ⚠️ S-F.3 (2-F): WAL kipinde VACUUM yeni sayfaları WAL'a yazar; ESKİ sayfalar denetim noktasına kadar ana dosyada
                 # KALIYORDU ("Tümünü sil" sonrası 3/3 metin dosyada — ölçüldü). Kapı: test_AI_gecmisi_toplu_silme_VACUUM_sonrasi_KALINTI_yok_SF3
-                self._silme_sonrasi_denetim_noktasi(conn, "AI gecmisi VACUUM")
+                self._silme_sonrasi_denetim_noktasi(
+                    conn, "AI gecmisi VACUUM"
+                )  # tamamlanamazsa işaret (F2-2.5 · F2-4.3)
         except Exception:
             self.logger.warning("KVKK VACUUM'u şimdi yapılamadı → ERTELENDİ (kayıtlar silindi)", exc_info=True)
             self._vacuum_beklet("VACUUM hatası")
@@ -307,10 +329,12 @@ class AiGecmisiKarisimi:
         try:
             with self._get_connection() as conn:
                 conn.cursor().execute("VACUUM")
-                self._silme_sonrasi_denetim_noktasi(conn, "ertelenmis KVKK VACUUM")  # S-F.3 (yukarıdaki not)
+                tamam = self._silme_sonrasi_denetim_noktasi(conn, "ertelenmis KVKK VACUUM")  # S-F.3 (yukarıdaki not)
         except Exception:
             self.logger.warning("Ertelenmis KVKK VACUUM'u yine yapilamadi (bekliyor)", exc_info=True)
             return False
+        if not tamam:
+            return False  # F2-2.5: kalıntı duruyor → işaret KALIR (eskiden "tamamlandı" yazılıyordu), sonraki tur yeniden dener
         self._set_system_setting(self.VACUUM_BEKLIYOR_ANAHTARI, "0", "KVKK VACUUM tamamlandi")
         self.logger.info("Ertelenmis KVKK VACUUM'u tamamlandi.")
         return True

@@ -42,9 +42,10 @@ def bekleyen_sayisi(pdb, esik: int = ESIK_GUN) -> int:
 def tur(pdb, tdb, esik: int = ESIK_GUN) -> dict:
     """Bir anonimleştirme turu. Dönen: {onay, bekleyen, anonimlestirilen, tedavi_bekleyen}. ASLA istisna atmaz (günlük döngü)."""
     sonuc = {"onay": False, "bekleyen": 0, "anonimlestirilen": 0, "tedavi_bekleyen": 0}
+    islenen = 0
     try:
         # 1) B-3.34: önceki turlardan kalan tedavi-DB adımlarını yeniden dene (onaydan bağımsız: kanonik taraf ZATEN anonim).
-        _bekleyenleri_isle(pdb, tdb)
+        islenen += _bekleyenleri_isle(pdb, tdb)
         onay = tdb.anonim_onayi_oku()
         sonuc["onay"] = bool(onay) and int(onay.get("gun") or 0) == int(esik)
         adaylar = pdb.anonimlestirilecek_hastalar(esik)
@@ -71,21 +72,39 @@ def tur(pdb, tdb, esik: int = ESIK_GUN) -> dict:
                 logger.warning(
                     "KVKK: %d inaktif hasta (>%d gun) operator onayiyla anonimlestirildi.", len(yapilan), esik
                 )
-            _bekleyenleri_isle(pdb, tdb)
+            islenen += _bekleyenleri_isle(pdb, tdb)
         sonuc["tedavi_bekleyen"] = len(tdb.anonim_bekleyen_oku())
     except Exception:
         logger.warning("KVKK anonimlestirme turu hatasi (sonraki turda yeniden denenecek)", exc_info=True)
+    if sonuc["anonimlestirilen"] or islenen:
+        _kalinti_temizle(pdb, tdb)
     return sonuc
 
 
-def _bekleyenleri_isle(pdb, tdb) -> None:
+def _kalinti_temizle(pdb, tdb) -> None:
+    """⚠️ F2-1.5 (2-F incelemesi · Y13): anonimleştirme UPDATE'lerinden SONRA iki DB'de de `wal_checkpoint(TRUNCATE)`. `secure_delete` yeni
+    sayfa sürümünü sıfırlar ama WAL kipinde ESKİ sürüm denetim noktasına dek ana dosyada, önceki çerçeveler (kalıcı bekleyen listesinin düz
+    ad/sahip/e-posta JSON'u dahil) -wal'da kalıyordu: tedavi DB'sinde ad, hasta DB'sinde cihaz anahtarıyla çözülen ŞİFRELİ kimlik (ölçüldü).
+    Bekleyen listesi düşürüldükten SONRA koşar (yoksa listenin eski sayfası ana dosyaya kopyalanırdı). Açık okuyucu varsa tamamlanamaz →
+    WARNING + kalıcı işaret (`_silme_sonrasi_denetim_noktasi`, F2-2.5 · F2-4.3); anonimleştirme sonucu DEĞİŞMEZ.
+    Kapı: tests/test_anonimlestirme_ve_maskeleme_DOSYADA_kalinti_birakmaz_F2_1_5.py"""
+    for db, ne in ((tdb, "KVKK anonimlestirme (tedavi DB)"), (pdb, "KVKK anonimlestirme (hasta DB)")):
+        try:
+            with db._get_connection() as conn:
+                db._silme_sonrasi_denetim_noktasi(conn, ne)
+        except Exception:
+            logger.warning("%s: denetim noktasi yapilamadi.", ne, exc_info=True)
+
+
+def _bekleyenleri_isle(pdb, tdb) -> int:
+    """@return tedavi adımı BAŞARIYLA uygulanan hasta sayısı."""
     bekleyen = tdb.anonim_bekleyen_oku()
     if not bekleyen:
-        return
+        return 0
     # Yalnız kanonik tarafı GERÇEKTEN anonim olanlar (kanonik adım düştüyse hasta hâlâ adaydır — tedavi tarafına dokunulmaz).
     anonim = {k for k in bekleyen if str((pdb.get_patient(k) or {}).get("anonymized") or 0) in ("1", "True", "true")}
     if not anonim:
-        return
+        return 0
     aktif = _aktif_adlar(pdb)
     from utils.turkce_metin import arama_katla
 
@@ -97,3 +116,5 @@ def _bekleyenleri_isle(pdb, tdb) -> None:
     n = tdb.anonymize_patients_by_uuid(sorted(anonim), kimlikler=kimlikler)
     if n >= 0:
         tdb.anonim_bekleyen_dus(sorted(anonim))
+        return len(anonim)
+    return 0
