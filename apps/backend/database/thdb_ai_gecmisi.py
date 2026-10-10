@@ -280,6 +280,9 @@ class AiGecmisiKarisimi:
         try:
             with self._get_connection() as conn:
                 conn.cursor().execute("VACUUM")
+                # ⚠️ S-F.3 (2-F): WAL kipinde VACUUM yeni sayfaları WAL'a yazar; ESKİ sayfalar denetim noktasına kadar ana dosyada
+                # KALIYORDU ("Tümünü sil" sonrası 3/3 metin dosyada — ölçüldü). Kapı: test_AI_gecmisi_toplu_silme_VACUUM_sonrasi_KALINTI_yok_SF3
+                self._silme_sonrasi_denetim_noktasi(conn, "AI gecmisi VACUUM")
         except Exception:
             self.logger.warning("KVKK VACUUM'u şimdi yapılamadı → ERTELENDİ (kayıtlar silindi)", exc_info=True)
             self._vacuum_beklet("VACUUM hatası")
@@ -304,6 +307,7 @@ class AiGecmisiKarisimi:
         try:
             with self._get_connection() as conn:
                 conn.cursor().execute("VACUUM")
+                self._silme_sonrasi_denetim_noktasi(conn, "ertelenmis KVKK VACUUM")  # S-F.3 (yukarıdaki not)
         except Exception:
             self.logger.warning("Ertelenmis KVKK VACUUM'u yine yapilamadi (bekliyor)", exc_info=True)
             return False
