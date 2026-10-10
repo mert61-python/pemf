@@ -21,7 +21,7 @@ GitHub Actions iş akışları + bağımlılık güncelleme. Her workflow kendi 
 - ⚠️ **Workflow'lar YALNIZ kök `.github/` altından okunur** (tek-depo, 2026-08-18): alt dizine
   (`apps/ui/.github/` gibi) konan yapılandırmayı GitHub sessizce YOK SAYAR.
   `tests/test_ci_workflow_gate.py` bunu kilitler.
-- macOS/imzalama sırları GitHub **Secrets**'tadır — repo ağacındaki [`../apple-mac-cert/`](../apple-mac-cert/README.md) yerel kopyaları CI kullanmaz.
+- macOS/imzalama sırları GitHub **Secrets**'tadır — geliştirme makinesindeki `apple-mac-cert/` yerel kopyaları (gitignore'lu, git'te izlenmez) CI kullanmaz.
 - Windows launcher **yerel** derlenip elle yayınlanır (self-update); CI Win launcher'ı `launcher.yml`'de opsiyoneldir.
 
 ---

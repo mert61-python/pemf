@@ -39,4 +39,4 @@ otomatik **CPU fallback**. Çekirdek backend bunu içeriden çağırır (core→
 - Bu servis opsiyoneldir: tek-EXE backend AI'yı gömülü çalıştırabilir; mikroservis GPU ölçekleme içindir (bkz. [`../docker/DOCKER_README.md`](../docker/DOCKER_README.md)).
 
 ---
-İlgili: [ai_hub/ (model kodu)](../ai_hub/README.md) · [release_assets/ (ağırlıklar)](../release_assets/README.md) · [docker/](../docker/DOCKER_README.md) · [apps/backend/servers/ai_client](../apps/backend/servers/README.md)
+İlgili: [ai_hub/ (model kodu)](../ai_hub/README.md) · [release_assets/ (ağırlıklar)](../release_assets/ai_models/) · [docker/](../docker/DOCKER_README.md) · [apps/backend/servers/ai_client](../apps/backend/servers/README.md)

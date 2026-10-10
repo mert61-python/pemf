@@ -97,7 +97,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 |---|---|
 | [`ai_hub/`](ai_hub/README.md) | Teşhis modeli **kodu** (14+ model; yeni: Yara Kapanma/Scratch CPN) + gömülü küçük ağırlıklar + `PEMF_AI_Test_Girdileri/` |
 | [`ai_service/`](ai_service/README.md) | Bağımsız **GPU (CUDA) inference mikroservisi** (:8100, onnxruntime-gpu + torch cu128 — scratch CPN; opsiyonel) |
-| [`release_assets/`](release_assets/README.md) | **Model ağırlık deposu (~3,9 GB) TEK-KAYNAK** + `PEMF_Vet_Mobil.apk` |
+| `release_assets/` | **Model ağırlık deposu (~3,9 GB) TEK-KAYNAK** + `PEMF_Vet_Mobil.apk` — git'te yalnız [`release_assets/ai_models/`](release_assets/ai_models/) altındaki küçük dosyalar izlenir; `README.md` ve büyük ağırlıklar yalnız yerelde |
 | [`training_archive/`](training_archive/) | **DONMUŞ eğitim arşivi** (doktora/TÜBİTAK; silinen `esp` dalından kurtarıldı, 434 dosya/296 MB). Lint/format **muaf** — değeri sadakati; elleme |
 
 ### Frontend / Web
@@ -121,10 +121,10 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 | [`pemf-app-packages/`](pemf-app-packages/README.md) | Güncelleme-sunucusu hazırlık: `base.zip` + `manifest.json` |
 | [`launcher/`](launcher/README.md) | **Tauri v2 ince istemci** ("PEMF Vet Client") — indirir/doğrular/backend'i başlatır, kendini günceller |
 | [`deploy/`](deploy/README.md) | `device.env` / `server.env` / `staging.env` dağıtım profilleri |
-| [`offline dağıtım/`](offline%20dağıtım/OKU-README.md) | İnternetsiz USB kurulum (Inno DiskSpanning `.bin` dilimleri) |
+| `offline dağıtım/` | **YEREL** (git'te izlenmez, gitignore'lu) — İnternetsiz USB kurulum (Inno DiskSpanning `.bin` dilimleri) |
 | [`docker/`](docker/DOCKER_README.md) | Container'lar: backend/AI + frontend nginx + GPU AI (3 compose profili) |
-| [`bin/`](bin/README.md) | Gömülü ikililer: mosquitto (MQTT — ESP kapalıyken kullanılmaz), cloudflared (tünel), nssm (servis) |
-| [`lattekurulum/`](lattekurulum/README.md) | LattePanda klinik mini-PC kurulum yardımcıları |
+| `bin/` | Gömülü ikililer: mosquitto (MQTT — ESP kapalıyken kullanılmaz), cloudflared (tünel), nssm (servis) — git'te yalnız `bin/mosquitto/` izlenir |
+| `lattekurulum/` | **YEREL** (git'te izlenmez, gitignore'lu) — LattePanda klinik mini-PC kurulum yardımcıları |
 
 ### Firmware · Test · CI · Diğer
 | Klasör | Ne işe yarar |
@@ -134,7 +134,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 | [`tools/`](tools/README.md) | Geliştirici araçları (STM32 simülatör :5100, COM sniffer, test-verisi) |
 | [`.github/`](.github/README.md) | CI (tests/lint/security/**frontend/site**/linux-mac backend/launcher/testflight) + dependabot — **yalnız KÖK `.github/` geçerli** |
 | [`docs/`](docs/README.md) | Dokümanlar (mimari, launcher-sözleşmesi, runbook, doğrulama, sistem-raporu) + ekran görüntüleri |
-| [`apple-mac-cert/`](apple-mac-cert/README.md) | ⚠️ Apple kod-imzalama/notarization materyali (SIR — gitignore+rotate gerekir) |
+| `apple-mac-cert/` | **YEREL** (git'te izlenmez, gitignore'lu — kapı ölçer) — ⚠️ Apple kod-imzalama/notarization materyali (SIR — rotate gerekir) |
 | [`dema-terapi-simülatörü/`](dema-terapi-simülatörü/README.md) | Bağımsız demo terapi simülatörü (React+Vite; backend'e bağlı değil) |
 
 ---
@@ -181,7 +181,7 @@ Tam adım-adım: **[`BUILD.md`](BUILD.md)**. En kısa hâli (guii kökünden):
 | **Çevrimdışı açılış** | Manifest ve kimlik kapısı artık boot'u BLOKLAMIYOR — internetsiz klinikte client açılır, kurulu cihazda "Başlat" çalışır. Eskiden "Ortam algılanıyor…" ekranında kilitleniyordu. |
 | **Profiller** | Araştırma Modu'na Kontrol · Hastalar · Sensörler · Raporlar · Simülasyon eklendi; **üç profilde de** Ayarlar'dan sonra "Çıkış Yap" (bobin çalışırken teardown-guard'a bağlı). |
 | **MQTT** | `client_id` süreç/çağrı başına benzersiz — sabit kimlik, paralel yayın yapan acil-durdurmada STOP komutunu kaybettirebiliyordu. |
-| **Android imzalama** | **Release keystore üretildi** (4096-bit RSA, 2053'e kadar geçerli). APK artık release-imzalı. ⚠️ Anahtar yedeği ve uyarılar: [keys/README.md](keys/README.md) — kaybolursa uygulama bir daha güncellenemez. |
+| **Android imzalama** | **Release keystore üretildi** (4096-bit RSA, 2053'e kadar geçerli). APK artık release-imzalı. ⚠️ Anahtar yedeği ve uyarılar: `keys/README.md` (yalnız yerelde — `keys/` gitignore'lu, git'te izlenmez) — kaybolursa uygulama bir daha güncellenemez. |
 | **Site** | İndirme öncesi kayıt/giriş kapısı. Windows client `launcher-v1.9.9`; Android **kendi etiketine** taşındı — eskiden mac/linux ile ortak etiket kullandığından site APK güncellense bile hep eski sürümü veriyordu. |
 
 Yayındaki sürümler için **[`versions.json`](versions.json)**'a bakın — bu belgeye sürüm yazılmaz
