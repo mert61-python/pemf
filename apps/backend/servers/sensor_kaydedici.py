@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import logging
 import os
+import queue
 import threading
 import time
 from datetime import datetime, timedelta
@@ -243,11 +244,12 @@ class SensorKaydedici:
                 continue
 
     # ── genel API ─────────────────────────────────────────────────────────────────────────
-    def kaydet(self, bobin, msg_type: str, yuk: dict) -> bool:
+    def kaydet(self, bobin, msg_type: str, yuk: dict, zaman: float | None = None) -> bool:
         """Bir telemetri mesajını CSV'ye ekler. `True` = satır yazıldı.
 
         ⚠️ ASLA FIRLATMAZ: MQTT işleyicisinden çağrılır; bir dosya hatası canlı durum
         güncellemesini, paneli ya da E-stop görünürlüğünü bozamaz.
+        `zaman` (epoch sn): satırın damgası — arka plan kaydı mesajın GELDİĞİ anı verir (yoksa şimdi).
         """
         if not _acik_mi():
             return False
@@ -255,9 +257,10 @@ class SensorKaydedici:
             return False
         try:
             satir = {s: "" for s in SUTUNLAR}
-            simdi = datetime.now()
+            _t = time.time() if zaman is None else float(zaman)
+            simdi = datetime.fromtimestamp(_t)
             satir["ts_yerel"] = simdi.isoformat(timespec="milliseconds")
-            satir["ts_epoch_ms"] = str(int(time.time() * 1000))
+            satir["ts_epoch_ms"] = str(int(_t * 1000))
             satir["bobin"] = str(bobin)
             satir["msg_type"] = str(msg_type)
             for anahtar, deger in yuk.items():
@@ -298,6 +301,9 @@ class SensorKaydedici:
         kayıt için OLMAZDI (o yüzden hasta verisi bu yoldan GEÇMİYOR).
         Kapanışta ve dışarıdan okuma öncesinde çağrılır.
         """
+        _arka_kuyruk_bosalsin(
+            2.0
+        )  # F2-3.1: arka plan kuyruğundaki satırlar önce dosyaya (kilit DIŞINDA — işçi kilidi alır)
         with self._kilit:
             if self._dosya is not None:
                 try:
@@ -349,3 +355,62 @@ def kaydet(bobin, msg_type: str, yuk: dict) -> bool:
     except Exception:
         logger.debug("sensor kaydedici olusturulamadi", exc_info=True)
         return False
+
+
+# ⚠️ F2-3.1 (2-F incelemesi, D2.39): STM telemetrisi STM OKUYUCU iş parçacığında yayımlanır (`_handle_stm_line` → olay veriyolu →
+# api işleyicisi EŞZAMANLI abone) — kaydın dosya G/Ç'si (gün değişiminde mkdir + glob + unlink dahil) okuyucuda koşuyordu. Dizin
+# asılınca (USB/ağ yolu, sürücü takılması) okuyucu sonraki satırları (kartın tüm-sıfır ACK'i = ACİL DURDUR teyidi, NACK, STM_EVT)
+# işleyemiyor, kaydedicinin kilidini tutan asılı okuyucu yeniden bağlanmanın el sıkışmasını da kilitliyordu (ölçüldü). Çağıran
+# artık yalnız SINIRLI kuyruğa koyar (ASLA bloklamaz; dolu kuyrukta satır atılır ve `atilan` sayılır); G/Ç tek arka plan işçisinde.
+_ARKA_KUYRUK_BOYU = 2048  # ~5 dk (7 bobin × 1 satır/sn); taşarsa telemetri atılır — canlı akış beklemez
+_arka_kuyruk: queue.Queue = queue.Queue(maxsize=_ARKA_KUYRUK_BOYU)
+_arka_is: threading.Thread | None = None
+_arka_kilit = threading.Lock()
+
+
+def _arka_isci() -> None:
+    while True:
+        bobin, msg_type, yuk, zaman = _arka_kuyruk.get()
+        try:
+            kaydedici().kaydet(bobin, msg_type, yuk, zaman=zaman)
+        except Exception:
+            logger.debug("sensor kaydi (arka plan) basarisiz", exc_info=True)
+        finally:
+            _arka_kuyruk.task_done()
+
+
+def kaydet_arka_planda(bobin, msg_type: str, yuk: dict) -> bool:
+    """Satırı arka plan kaydına KUYRUKLAR. ⚠️ ASLA BLOKLAMAZ, ASLA FIRLATMAZ (STM okuyucu / el sıkışma iş parçacığından çağrılır).
+    `True` = kuyruğa alındı; `False` = kayıt kapalı / ilgisiz tip / kuyruk dolu (satır atıldı)."""
+    global _arka_is
+    try:
+        if not _acik_mi() or msg_type not in KAYDEDILEN_TIPLER or not isinstance(yuk, dict):
+            return False
+        if _arka_is is None or not _arka_is.is_alive():
+            with _arka_kilit:
+                if _arka_is is None or not _arka_is.is_alive():
+                    _arka_is = threading.Thread(target=_arka_isci, name="sensor-kaydi", daemon=True)
+                    _arka_is.start()
+        _arka_kuyruk.put_nowait((bobin, msg_type, dict(yuk), time.time()))
+        return True
+    except queue.Full:
+        try:
+            kaydedici().atilan += 1
+        except Exception:
+            pass
+        return False
+    except Exception:
+        logger.debug("sensor kaydi kuyruga alinamadi", exc_info=True)
+        return False
+
+
+def _arka_kuyruk_bosalsin(sure: float) -> bool:
+    """Arka plan kuyruğu en çok `sure` sn boşalsın diye bekler (okuma / kapanış öncesi). Asılı diskte süre dolar — bloklamaz."""
+    son = time.monotonic() + sure
+    with _arka_kuyruk.all_tasks_done:
+        while _arka_kuyruk.unfinished_tasks:
+            kalan = son - time.monotonic()
+            if kalan <= 0:
+                return False
+            _arka_kuyruk.all_tasks_done.wait(kalan)
+    return True

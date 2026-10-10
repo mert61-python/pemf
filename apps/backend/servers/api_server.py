@@ -1825,8 +1825,9 @@ def _handle_backend_event(event) -> None:
         # işleyicisiydi ve o yol `PEMF_ESP_ENABLED` arkasında → varsayılan sahada bobin 1-7 telemetrisi diske HİÇ yazılmıyordu. Yük
         # olduğu gibi verilir (yalnız GELEN alanlar → ölçülmeyen sütun boş, Y6). Kaydedici ASLA canlı akışı bozmaz (kendisi yutar;
         # burada da sarılı). Kapı: tests/test_stm_telemetrisi_SENSOR_KAYDINA_yazilir_D239.py
+        # F2-3.1: KUYRUĞA — bu satır STM okuyucu iş parçacığında koşar; dosya G/Ç'si okuyucuyu (ACİL DURDUR teyidi, NACK) bekletmez.
         try:
-            _sensor_kaydedici.kaydet(_t_coil_id, "sensors", data)
+            _sensor_kaydedici.kaydet_arka_planda(_t_coil_id, "sensors", data)
         except Exception:
             logging.getLogger(__name__).debug("STM telemetrisi sensor kaydina yazilamadi", exc_info=True)
         # ⚠️ DOYGUNLUK: deger geldi ama ADC tavanina dayandi → sayi guvenilmez ve
