@@ -334,6 +334,11 @@ class PiiKarisimi:
 
         degisen = 0
         karar_tablosu = None
+        # ⚠️ F2-2.1 (2-F incelemesi): kimliksiz kayıtlar TEK KEZ ve yalnız (id, ad) ile okunur — eskiden HER hasta için tablodaki tüm
+        # kimliksiz kayıtlar metinleriyle çekiliyordu (O(hasta × kayıt), yazım kilidi altında: 300 × 5000'de kilit ~12 sn, eşzamanlı
+        # ACİL DURDUR kritik olayı ve seans kapanışı "database is locked" ile DÜŞTÜ — ölçüldü). İşlenen kimlikler haritadan düşer
+        # (eskisi gibi: ilk eşleşen hastanın UPDATE'inden sonra ad [ANONIM] olur, ikinci hasta onu bulmaz).
+        kimliksiz_ada_gore = None
         for u in uuids:
             desenler = [
                 self._kimlik_deseni(m)
@@ -347,15 +352,21 @@ class PiiKarisimi:
             bilgi = kimlikler.get(u) or {}
             ad = next((m for m in (bilgi.get("metinler") or []) if m), None)
             if bilgi.get("ad_ile_kimliksiz") and ad:
-                katli = arama_katla(str(ad))
-                satirlar += [
-                    r[:5]
-                    for r in cursor.execute(
-                        "SELECT id, result_summary, result_detail, review_note, review_history, patient_name FROM ai_analyses "
-                        "WHERE COALESCE(patient_uuid, '') = ''"
+                if kimliksiz_ada_gore is None:
+                    kimliksiz_ada_gore = {}
+                    for kid, kad in cursor.execute(
+                        "SELECT id, patient_name FROM ai_analyses WHERE COALESCE(patient_uuid, '') = ''"
+                    ).fetchall():
+                        if kad:
+                            kimliksiz_ada_gore.setdefault(arama_katla(str(kad)), []).append(kid)
+                kimlikleri = kimliksiz_ada_gore.pop(arama_katla(str(ad)), [])
+                for i in range(0, len(kimlikleri), 500):
+                    parca = kimlikleri[i : i + 500]
+                    satirlar += cursor.execute(
+                        "SELECT id, result_summary, result_detail, review_note, review_history FROM ai_analyses "
+                        f"WHERE id IN ({','.join('?' * len(parca))})",
+                        parca,
                     ).fetchall()
-                    if r[5] and arama_katla(str(r[5])) == katli
-                ]
             for aid, ozet, ayrinti, not_, gecmis in satirlar:
                 cursor.execute(
                     "UPDATE ai_analyses SET patient_name='[ANONIM]', result_summary=?, result_detail=?, review_note=?, "
