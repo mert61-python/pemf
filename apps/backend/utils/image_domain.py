@@ -117,6 +117,29 @@ class DomainMismatch(Exception):
         )
 
 
+#: A-24 (sahip kararı, 2026-10-01): modalite denetimi ÇALIŞTIRILAMAZSA analiz YAPILMAZ ve neden SÖYLENİR.
+DENETIM_CALISMADI_MESAJI = (
+    "Görüntü türü (modalite) denetimi çalıştırılamadı; yanlış türde görüntüyle yanıltıcı sonuç üretmemek için "
+    "analiz YAPILMADI. Görüntüyü yeniden yükleyin; sürerse sunucu günlüğünü teknik desteğe iletin."
+)
+
+
+class DomainCheckError(Exception):
+    """Modalite denetimi İÇ HATA ile çalıştırılamadı (A-24 — D4.09): kapı REDDEDER, analiz yapılmaz.
+
+    Eskiden `analyze` istisnası DEBUG'a yazılıp denetim ATLANIYORDU (fail-open): kapı bozulursa yanlış modalite (CT →
+    "Böbrek Patoloji Grade 4 · %100") sessizce analize giderdi. ⚠️ AYRI KALAN bilinçli geçiş: modalite BELİRLENEMEYEN
+    (`UNKNOWN`) girdi ve kuralı OLMAYAN etiket denetlenmez — bunlar hata değil, karar."""
+
+    def __init__(self, label: str, neden: str):
+        self.label = label
+        self.neden = neden
+        super().__init__(f"{label}: {neden}")
+
+    def user_message(self) -> str:
+        return DENETIM_CALISMADI_MESAJI
+
+
 def guard_enabled() -> bool:
     return os.getenv("PEMF_AI_DOMAIN_GUARD", "1") != "0"
 
@@ -168,9 +191,10 @@ def check(img: np.ndarray, label: str) -> None:
         return
     try:
         detected, metrics = analyze(img)
-    except Exception:
-        logger.debug("modalite analizi başarısız (denetim atlandı)", exc_info=True)
-        return
+    except Exception as e:
+        # A-24: iç hatada REDDET (eskiden DEBUG + `return` = denetim sessizce atlanıyordu).
+        logger.warning("MODALİTE DENETİMİ ÇALIŞTIRILAMADI [%s] — analiz REDDEDİLDİ (A-24)", label, exc_info=True)
+        raise DomainCheckError(label, f"{type(e).__name__}: {e}") from e
     if detected == UNKNOWN or detected in expected:
         return  # UNKNOWN → modalite belirlenemedi, denetim yapma (fail-open, yukarıya bkz.)
     logger.warning(

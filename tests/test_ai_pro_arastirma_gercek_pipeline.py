@@ -27,6 +27,27 @@ pytestmark = pytest.mark.entegrasyon
 
 _TEST_GIRDI = "ai_hub/PEMF_AI_Test_Girdileri"
 
+#: D4.09 (B-10.224): sağlayıcıların GERÇEKTEN yüklediği ağırlıklar (ürün envanteri `_AI_MODUL_ENVANTERI` ile aynı yollar).
+#: Ön-koşul eskiden `release_assets/ai_models` DİZİNİYDİ — dizin temiz klonda da var (izlenen küçük dosyalar), ağırlık
+#: yokken test atlanmak yerine FileNotFoundError ile KIRMIZI oluyordu.
+_AGIRLIK = {
+    "fantom": ("ai_hub/inference_em_fantom/BiLSTM_XXL_Raw.onnx",),
+    "petri": ("ai_hub/inference_em_petri/BaggingRegressor.onnx", "ai_hub/inference_petri_dish/yolo11m-seg.onnx"),
+}
+
+
+def _agirlik_gerekli(*saglayicilar: str) -> None:
+    """Ağırlıklar ÜRÜNÜN çözücüsünde (modül yanı / model kökleri) yoksa ATLA; zorunlu kipte DÜŞ."""
+    from golden import eser
+
+    yollar = tuple(y for s in saglayicilar for y in _AGIRLIK[s])
+    if eser.eser_var_mi(*yollar):
+        return
+    sebep = f"model agirligi urun cozucusunde yok: {list(yollar)}"
+    if capraz.ZORUNLU:
+        pytest.fail(f"PEMF_CAPRAZ_KAYNAK_ZORUNLU=1 ama {sebep}")
+    pytest.skip(sebep)
+
 
 def _kare(gorece: str):
     """Örnek fotoğrafı BGR kare olarak yükle (yoksa testi atla)."""
@@ -56,7 +77,7 @@ def kedi_izi(monkeypatch):
 
 def test_ENTEGRASYON_fantom_gercek_kareden_hedef_ve_doz(kedi_izi):
     """05_FantomTumor.jpeg ile: hedef adayları çıkar, doz üret, süreyi raporla."""
-    capraz.atla_yoksa("release_assets/ai_models")
+    _agirlik_gerekli("fantom")
     import servers.ai_pro_hedef as hedef
 
     kare = _kare(f"{_TEST_GIRDI}/05_FantomTumor.jpeg")
@@ -101,7 +122,7 @@ def test_ENTEGRASYON_fantom_gercek_kareden_hedef_ve_doz(kedi_izi):
 def test_ENTEGRASYON_petri_gercek_kareden_hedef_ve_SURE_olcumu(kedi_izi):
     """06b_PetriKuyu_aruco.jpg ile: kuyu adayları + doz; YOLO CPU süresi ÖLÇÜLÜR ve raporlanır
     (plan Faz 2 bitiş kriteri: `join_timeout_s` bu ölçüme göre sabitlenir)."""
-    capraz.atla_yoksa("release_assets/ai_models")
+    _agirlik_gerekli("petri")
     import servers.ai_pro_hedef as hedef
 
     kare = _kare(f"{_TEST_GIRDI}/06b_PetriKuyu_aruco.jpg")
@@ -145,7 +166,7 @@ def test_ENTEGRASYON_petri_gercek_kareden_hedef_ve_SURE_olcumu(kedi_izi):
 def test_ENTEGRASYON_analiz_ve_saglayici_AYNI_onbellegi_paylasir():
     """239 MB petri ONNX + 90 MB YOLO iki kez yüklenmesin: analiz ucu ve sağlayıcı aynı
     `_get_or_load_model` anahtarını ve AYNI yükleyiciyi kullanmalı."""
-    capraz.atla_yoksa("release_assets/ai_models")
+    _agirlik_gerekli("fantom", "petri")
     import servers.ai_pro_hedef as hedef
     import servers.ai_router as air
 

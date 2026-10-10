@@ -31,6 +31,7 @@ import os
 import wave
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parent.parent
@@ -38,6 +39,12 @@ FIXTURE = KOK / "ai_hub" / "PEMF_AI_Test_Girdileri"
 CT = FIXTURE / "07a_BobrekCT_tas.jpg"
 PATOLOJI = FIXTURE / "08c_BobrekPatoloji_grade4.jpg"
 SES = FIXTURE / "10a_KediSesi_mutlu.mp3"
+
+
+def _fikstur_gerekli(p: Path) -> None:
+    """D4.09 (B-10.205): fikstürler İZLENMEZ (kardeş kaynak) — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+    Eskiden düz `skipif` idi: yayın makinesinin zorunlu kipi de bu kapıları sessizce atlıyordu."""
+    capraz.atla_yoksa(p.relative_to(KOK).as_posix())
 
 
 @pytest.fixture(scope="module")
@@ -93,12 +100,12 @@ def _gonder(client, uc: str, p: Path, mime: str = "image/jpeg"):
 # ── 1) Modalite kapısı :8100'de de çalışmalı ──────────────────────────────────
 
 
-@pytest.mark.skipif(not CT.exists(), reason="CT fixture yok")
 def test_KRITIK_8100_histopath_CT_REDDEDILIR(client):
     """CT kesiti → /infer/histopath: 422 ile reddedilmeli (bugün 200 "Grade 4 %100" dönüyordu).
 
     ⚠️ `!= 200` DEĞİL, TAM 422: `_err500`in 500'ü de `!= 200`'dür ve kapıyı hiç çalıştırmadan
     testi yanlış-yeşile çevirirdi."""
+    _fikstur_gerekli(CT)
     r = _gonder(client, "/infer/histopath", CT)
 
     assert r.status_code == 422, (
@@ -108,26 +115,45 @@ def test_KRITIK_8100_histopath_CT_REDDEDILIR(client):
     assert r.json().get("domain_mismatch") is True, f"ret sebebi isaretlenmedi: {r.text[:200]}"
 
 
-@pytest.mark.skipif(not PATOLOJI.exists(), reason="patoloji fixture yok")
 def test_KRITIK_8100_DOGRU_modalite_GECER_karsit_kanit(client):
     """Karşıt-kanıt: kapı "her şeyi reddet"e dönüşmemeli — doğru modalite geçmeli.
 
     Aynı zamanda sahte predictor'ın patlamasından kaynaklanacak sahte-yeşili imkânsız kılar:
     yanıtta gerçek sonuç alanları bulunmak zorunda."""
+    _fikstur_gerekli(PATOLOJI)
     r = _gonder(client, "/infer/histopath", PATOLOJI)
 
     assert r.status_code == 200, f"dogru modalite reddedildi: {r.text[:200]}"
     assert r.json().get("top_1_class") == "Grade 4", f"boru hatti bozuldu: {r.text[:200]}"
 
 
-@pytest.mark.skipif(not CT.exists(), reason="CT fixture yok")
 def test_KRITIK_8100_ayni_CT_kidney_ct_ucunda_GECER(client):
     """Karşıt-kanıt: AYNI CT dosyası DOĞRU ucunda geçmeli.
 
     Bir fixture'ın bir uçta reddedilip diğerinde geçmesi, kapının modaliteyi GERÇEKTEN ölçtüğünün
     (ve girdinin decode edilebildiğinin) bağımsız kanıtıdır."""
+    _fikstur_gerekli(CT)
     r = _gonder(client, "/infer/kidney_ct", CT)
     assert r.status_code == 200, f"CT, kidney_ct ucunda reddedildi: {r.text[:200]}"
+
+
+def test_KRITIK_A24_8100_modalite_denetimi_IC_HATADA_REDDEDER(client, app_modulu, monkeypatch):
+    """A-24 · D4.09: `:8100` kapısı (`_kapi`) iç hatada da REDDEDER, nedeni işaretler. Eskiden genel `except` bunu
+    yutup isteği modele geçiriyordu (decode edilemeyen girdi yolu AYRI ve değişmedi). Fikstürsüz: her ortamda koşar."""
+    import cv2
+    import numpy as np
+    from utils import image_domain
+
+    def _bozuk_analiz(img):
+        raise RuntimeError("sentetik ic hata (A-24 kapisi)")
+
+    monkeypatch.setattr(image_domain, "analyze", _bozuk_analiz)
+    ok, buf = cv2.imencode(".png", np.random.default_rng(7).integers(0, 255, (64, 64, 3), dtype=np.uint8))
+    assert ok
+    r = client.post("/infer/histopath", files={"file": ("sentetik.png", buf.tobytes(), "image/png")})
+    assert r.status_code == 422, f":8100 ic hatada kapiyi ATLADI (HTTP {r.status_code}): {r.text[:200]}"
+    assert r.json().get("domain_check_error") is True, f"ret nedeni isaretlenmedi: {r.text[:200]}"
+    assert "denetimi çalıştırılamadı" in r.json().get("error", ""), r.text[:200]
 
 
 # ── 2) Sessizlik kapısı :8100'de de çalışmalı ─────────────────────────────────
@@ -185,12 +211,12 @@ def test_KRITIK_8100_SESSIZ_ses_REDDEDILIR(client, ffmpeg, tmp_path):
     assert "sessiz" in r.text.lower()
 
 
-@pytest.mark.skipif(not SES.exists(), reason="ses fixture'i yok")
 def test_KRITIK_8100_GERCEK_ses_GECER_ve_belirsizlik_TASINIR(client, ffmpeg):
     """Karşıt-kanıt: gerçek kayıt geçmeli VE belirsizlik alanları yanıtta taşınmalı.
 
     Alanlar burada üretilirse backend'in devrettiği yanıt da onları taşır — aynı bilgi iki yerde
     hesaplanmaz (tek kaynak)."""
+    _fikstur_gerekli(SES)
     r = _gonder(client, "/infer/sound", SES, "audio/mpeg")
 
     assert r.status_code == 200, f"gercek kayit reddedildi: {r.text[:200]}"
@@ -204,8 +230,7 @@ def test_bos_olasilik_sahte_GUVENILIR_isaretlenmez(client, ffmpeg, monkeypatch, 
 
     Yani olasılık DÖNMEYEN bir model yanıtı SAHTE "güvenilir" işaretlenirdi. `len(_p) >= 2`
     koruması bunu engelliyor; bu test o korumayı kilitler."""
-    if not SES.exists():
-        pytest.skip("ses fixture'i yok")
+    _fikstur_gerekli(SES)
 
     class _OlasiliksizModel:
         device = "sahte"

@@ -244,7 +244,15 @@ async def _decode_image(file, image_base64, *, label: str) -> np.ndarray:
     except HTTPException:
         raise
     except Exception:
-        logger.debug("alan denetimi çalıştırılamadı (atlandı)", exc_info=True)
+        # A-24 (sahip kararı) · D4.09: kapı İÇ HATADA REDDEDER — analiz yapılmaz, neden söylenir. Eskiden DEBUG + atla
+        # (fail-open): kapı bozulunca yanlış modalite sessizce analize gidiyordu. Modalitesi BELİRLENEMEYEN girdi ve kuralı
+        # olmayan etiket `check` içinde bilinçli olarak geçer (hata değil) → buraya düşmez.
+        logger.warning("AI modalite kapısı çalıştırılamadı [%s] — analiz REDDEDİLDİ (A-24)", label, exc_info=True)
+        try:
+            from utils.image_domain import DENETIM_CALISMADI_MESAJI as _mesaj
+        except Exception:
+            _mesaj = "Görüntü türü (modalite) denetimi çalıştırılamadı; analiz YAPILMADI."
+        raise HTTPException(status_code=422, detail=_mesaj) from None
     return img
 
 

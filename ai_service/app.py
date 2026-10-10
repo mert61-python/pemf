@@ -45,6 +45,7 @@ from fastapi.responses import JSONResponse
 # ⚠️ IMPORT ÜST DÜZEY ve try/except İÇİNDE DEĞİL: fail-open bir kapı kapı değildir. Modüller
 # imajda yoksa (docker/Dockerfile.ai'deki COPY satırı silinirse) uvicorn açılışta ImportError ile
 # GÜRÜLTÜLÜ düşer — kapının sessizce kaybolması imkânsız.
+from utils.image_domain import DomainCheckError as _DomainCheckError
 from utils.image_domain import DomainMismatch as _DomainMismatch
 from utils.image_domain import check as _domain_check
 
@@ -161,6 +162,10 @@ def _kapi(data: bytes, label: str):
         _domain_check(_read_bgr(data), label)
     except _DomainMismatch as dm:
         return JSONResponse({"error": dm.user_message(), "domain_mismatch": True}, status_code=422)
+    except _DomainCheckError as de:
+        # A-24 · D4.09: denetim İÇ HATAYLA çalışmadıysa analiz YAPILMAZ, neden söylenir (eskiden aşağıdaki genel
+        # `except` onu da yutup isteği modele geçiriyordu). Decode edilemeyen girdi yolu (aşağıda) DEĞİŞMEDİ.
+        return JSONResponse({"error": de.user_message(), "domain_check_error": True}, status_code=422)
     except Exception:
         return None
     return None

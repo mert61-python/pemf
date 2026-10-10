@@ -44,6 +44,7 @@ import base64
 import os
 from pathlib import Path
 
+import capraz
 import pytest
 from fastapi.testclient import TestClient
 
@@ -51,6 +52,12 @@ KOK = Path(__file__).resolve().parent.parent
 FIXTURE = KOK / "ai_hub" / "PEMF_AI_Test_Girdileri"
 CT = FIXTURE / "07a_BobrekCT_tas.jpg"
 PATOLOJI = FIXTURE / "08c_BobrekPatoloji_grade4.jpg"
+
+
+def _fikstur_gerekli(p: Path) -> None:
+    """D4.09 (B-10.205): fikstür görüntüleri İZLENMEZ (kardeş kaynak) — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de
+    DÜŞ. Eskiden düz `skipif` idi: yayın makinesinin zorunlu kipi de bu kapıları sessizce atlıyordu."""
+    capraz.atla_yoksa(p.relative_to(KOK).as_posix())
 
 
 @pytest.fixture(scope="module")
@@ -91,9 +98,9 @@ def _gonder(client, uc: str, p: Path):
         return client.post(uc, files={"file": (p.name, f, "image/jpeg")})
 
 
-@pytest.mark.skipif(not CT.exists(), reason="CT fixture yok")
 def test_KRITIK_mikroserviste_YANLIS_modalite_REDDEDILIR(client, mikroservis):
     """CT kesiti → Böbrek Patoloji ucu: mikroservis modunda da 422 ile reddedilmeli."""
+    _fikstur_gerekli(CT)
     r = _gonder(client, "/api/ai/vision/histopath", CT)
 
     assert r.status_code == 422, (
@@ -104,9 +111,9 @@ def test_KRITIK_mikroserviste_YANLIS_modalite_REDDEDILIR(client, mikroservis):
     assert not mikroservis, f"kapi reddetmesine ragmen GPU servisine devredildi: {mikroservis}"
 
 
-@pytest.mark.skipif(not PATOLOJI.exists(), reason="patoloji fixture yok")
 def test_KRITIK_DOGRU_modalite_hala_DEVREDILIR_karsit_kanit(client, mikroservis):
     """Karşı-kanıt: düzeltme mikroservis modunu BOZMAMALI — doğru modalite devredilmeli."""
+    _fikstur_gerekli(PATOLOJI)
     r = _gonder(client, "/api/ai/vision/histopath", PATOLOJI)
 
     assert r.status_code == 200, f"dogru modalite reddedildi: {r.text[:200]}"
@@ -115,12 +122,12 @@ def test_KRITIK_DOGRU_modalite_hala_DEVREDILIR_karsit_kanit(client, mikroservis)
     )
 
 
-@pytest.mark.skipif(not CT.exists(), reason="CT fixture yok")
 def test_KRITIK_DOGRU_ucta_CT_devredilir_karsit_kanit(client, mikroservis):
     """Karşı-kanıt: aynı CT görüntüsü DOĞRU ucunda (kidney_ct) devredilmeli.
 
     Aynı fixture'ın bir uçta reddedilip diğerinde geçmesi, kapının modaliteyi gerçekten ölçtüğünü
     ve düzeltmenin "her şeyi reddet"e dönüşmediğini kanıtlar."""
+    _fikstur_gerekli(CT)
     r = _gonder(client, "/api/ai/vision/kidney_ct", CT)
 
     assert r.status_code == 200, f"CT, kidney_ct ucunda reddedildi: {r.text[:200]}"
@@ -130,10 +137,81 @@ def test_KRITIK_DOGRU_ucta_CT_devredilir_karsit_kanit(client, mikroservis):
 def test_GOMULU_mod_etkilenmez_karsit_kanit(client, api, monkeypatch):
     """Karşı-kanıt: mikroservis KAPALIYKEN davranış hiç değişmemeli (kapı zaten çalışıyordu)."""
     monkeypatch.setattr(api, "ai_service_enabled", lambda: False)
-    if not CT.exists():
-        pytest.skip("CT fixture yok")
+    _fikstur_gerekli(CT)
     r = _gonder(client, "/api/ai/vision/histopath", CT)
     assert r.status_code == 422, f"gomulu modda kapi bozuldu: {r.text[:200]}"
+
+
+# ── D4.09 (B-10.223) + A-24: FİKSTÜRSÜZ kapılar — her ortamda (CI dahil) koşar ──────────────────────
+
+
+def _sentetik_png(renkli: bool) -> bytes:
+    """Fikstürsüz girdi: gri tonlama (R=G=B → modalite GRAYSCALE; histopath H&E bekler) ya da renkli gürültü."""
+    import cv2
+    import numpy as np
+
+    if renkli:
+        img = np.random.default_rng(7).integers(0, 255, (96, 96, 3), dtype=np.uint8)
+    else:
+        gri = np.tile(np.linspace(0, 255, 96, dtype=np.uint8), (96, 1))
+        img = np.dstack([gri, gri, gri])
+    ok, buf = cv2.imencode(".png", img)
+    assert ok
+    return buf.tobytes()
+
+
+def _gonder_bayt(client, uc: str, veri: bytes):
+    return client.post(uc, files={"file": ("sentetik.png", veri, "image/png")})
+
+
+def test_KRITIK_FIKSTURSUZ_gri_goruntu_mikroserviste_histopath_ucunda_REDDEDILIR(client, mikroservis):
+    """D4.09 (B-10.223): `_kapili_devret`teki kapı çağrısı silinirse bunu YALNIZ fikstürlü testler görüyordu ve fikstür
+    izlenmediği için CI'da HİÇ koşmuyorlardı. Sentetik gri görüntü (CT benzeri, boyasız) aynı reddi her ortamda ölçer."""
+    r = _gonder_bayt(client, "/api/ai/vision/histopath", _sentetik_png(renkli=False))
+    assert r.status_code == 422, f"mikroservis modunda kapi ATLANDI (HTTP {r.status_code}): {r.text[:200]}"
+    assert not mikroservis, f"kapi reddetmesine ragmen GPU servisine devredildi: {mikroservis}"
+
+
+def test_KARSIT_KANIT_FIKSTURSUZ_gri_goruntu_GRI_KABUL_EDEN_ucta_DEVREDILIR(client, mikroservis):
+    """Kapı "her şeyi reddet" değil: aynı gri görüntü gri tonlamayı kabul eden ucunda (kidney_ct) devredilir."""
+    r = _gonder_bayt(client, "/api/ai/vision/kidney_ct", _sentetik_png(renkli=False))
+    assert r.status_code == 200, f"gri goruntu kidney_ct ucunda reddedildi: {r.text[:200]}"
+    assert mikroservis and mikroservis[0]["name"] == "kidney_ct", mikroservis
+
+
+@pytest.mark.parametrize("mikroservis_modu", [True, False], ids=["mikroservis", "gomulu"])
+def test_KRITIK_A24_modalite_denetimi_IC_HATADA_REDDEDER(client, api, monkeypatch, mikroservis_modu):
+    """A-24 (sahip kararı): modalite kapısı İÇ HATADA REDDEDER — analiz yapılmaz, neden söylenir. Eskiden
+    `image_domain.check` istisnayı DEBUG'a yazıp denetimi ATLIYORDU (fail-open) ve istek modele/GPU servisine gidiyordu."""
+    from utils import image_domain
+
+    devredilen = []
+
+    async def _sahte_devret(name, **kw):
+        devredilen.append(name)
+        return {"status": "success", "_sahte": True}
+
+    def _bozuk_analiz(img):
+        raise RuntimeError("sentetik ic hata (A-24 kapisi)")
+
+    monkeypatch.setattr(api, "ai_service_enabled", lambda: mikroservis_modu)
+    monkeypatch.setattr(api, "delegate_infer", _sahte_devret)
+    monkeypatch.setattr(image_domain, "analyze", _bozuk_analiz)
+    monkeypatch.delenv("PEMF_AI_DOMAIN_GUARD", raising=False)
+    r = _gonder_bayt(client, "/api/ai/vision/histopath", _sentetik_png(renkli=True))
+    assert r.status_code == 422, f"ic hatada kapi ATLANDI / analiz yapildi (HTTP {r.status_code}): {r.text[:200]}"
+    assert "denetimi çalıştırılamadı" in r.json().get("detail", ""), f"reddin nedeni soylenmedi: {r.text[:200]}"
+    assert not devredilen, f"kapi ic hatada reddetmesine ragmen devredildi: {devredilen}"
+
+
+def test_KARSIT_KANIT_A24_BILINMEYEN_ve_KURALSIZ_bilincli_GECER():
+    """A-24'ün "bilinmeyen türdeki bilinçli geçiş ayrı kalır" kısmı: modalitesi belirlenemeyen (boş) görüntü ve kuralı
+    olmayan etiket denetlenmez — iç hata yolu bunları REDDE çevirmemeli."""
+    import numpy as np
+    from utils import image_domain
+
+    assert image_domain.check(np.zeros((0, 0, 3), dtype=np.uint8), "histopath") is None  # UNKNOWN → geçer
+    assert image_domain.check(np.zeros((8, 8, 3), dtype=np.uint8), "kurali_olmayan_etiket") is None
 
 
 # ── SES UCU: sessizlik kapısı da devretmeden ÖNCE çalışmalı (2026-08-17, kalan iş kapatıldı) ──
@@ -184,13 +262,14 @@ def test_KRITIK_mikroserviste_SESSIZ_kayit_REDDEDILIR(client, mikroservis, tmp_p
     assert not mikroservis, f"kapi reddetmesine ragmen GPU servisine devredildi: {mikroservis}"
 
 
-@pytest.mark.skipif(not SES.exists() or not _ffmpeg_var(), reason="ses fixture'i / ffmpeg yok")
+@pytest.mark.skipif(not _ffmpeg_var(), reason="imageio_ffmpeg binary yok")
 def test_KRITIK_mikroserviste_GERCEK_kayit_hala_DEVREDILIR_karsit_kanit(client, mikroservis):
     """Karşıt-kanıt: düzeltme "her şeyi reddet"e dönüşmemeli VE baytlar gerçekten geçmeli.
 
     ⚠️ Asıl tuzak burada: kapı `file`'ı TÜKETİYOR. Devretmede `file=file` bırakılırsa uzak servise
     BOŞ gövde gider ve hata "başarılı analiz" gibi görünür. Bu yüzden gönderilen bayt sayısı
     dosyanın kendisiyle birebir karşılaştırılır."""
+    _fikstur_gerekli(SES)
     ham = SES.read_bytes()
     with SES.open("rb") as f:
         r = client.post("/api/ai/sound/cat", files={"file": (SES.name, f, "audio/mpeg")})

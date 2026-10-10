@@ -9,6 +9,7 @@ bilmez. Bu testler gerçek test görüntüleriyle (ai_hub/PEMF_AI_Test_Girdileri
 
 from pathlib import Path
 
+import capraz
 import cv2
 import pytest
 from utils import image_domain as dom
@@ -24,7 +25,13 @@ PETRI = GIRDI / "06_PetriKuyu.jpg"
 PETRI_ARUCO = GIRDI / "06b_PetriKuyu_aruco.jpg"
 FANTOM = GIRDI / "05_FantomTumor.jpeg"
 
-pytestmark = pytest.mark.skipif(not CT.exists(), reason="test girdileri yok")
+
+@pytest.fixture(autouse=True)
+def _test_girdileri():
+    """D4.09 (B-10.205 ile aynı sınıf): girdiler İZLENMEZ (kardeş kaynak) — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de
+    DÜŞ. Eskiden modül düzeyi düz `skipif` idi: gömülü modalite kapısının bütün testleri yayın makinesinin zorunlu
+    kipinde de sessizce atlanıyordu."""
+    capraz.atla_yoksa("ai_hub/PEMF_AI_Test_Girdileri/07a_BobrekCT_tas.jpg")
 
 
 def oku(p):
