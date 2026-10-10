@@ -135,7 +135,12 @@ markers = [
 # demektir; oysa `utils` altında `data_export`, `encrypted_import`, `backup_recovery`,
 # `secrets_manager`, `stm32_transport`, `image_domain` gibi veri ve donanım yolları yaşıyor —
 # yani ölçülmesi en gerekli yerler tam da ölçüm dışındaydı.
-source = ["servers", "database", "controllers", "utils"]
+#
+# ⚠️ D4.02 (B-10.6, 2026-10-10): F4 taşımasıyla `apps/backend/` altına giren `services` paketi ve üst düzey
+# `backend_service` (açılış firmware zinciri), `headless_core` (STM telemetri ayrıştırıcı), `event_bus` ÖLÇÜLMÜYORDU.
+# Küme artık ürün kodunun TAMAMI: package-dir'de apps/backend'e eşlenen paketler + apps/backend üst düzey modülleri
+# (kapı: tests/test_kapsam_kaynagi_URUN_KODUNU_kapsar_D402.py — yeni ürün paketi/modülü eklenince burası da eklenmeli).
+source = ["servers", "services", "database", "controllers", "utils", "backend_service", "headless_core", "event_bus"]
 omit = ["*/__pycache__/*", "tests/*", "*/ai_hub/*"]
 
 [tool.coverage.report]
@@ -144,6 +149,8 @@ omit = ["*/__pycache__/*", "tests/*", "*/ai_hub/*"]
 # Eski değer 33'tü ve gerçeğin 21 puan altındaydı: o kadar boşluk bırakan bir ratchet, büyük bir
 # gerilemeyi bile sessizce geçirir (örn. bir modülün testlerinin tamamı silinse hâlâ yeşil kalır).
 # Kademeli yükseltin (kritik yol testleri arttıkça).
+# ⚠️ D4.02 (B-10.7, 2026-10-10): kaynak 4 yüzeyle genişledi (yukarıda); eşik, genişlemiş kaynakla ÖLÇÜLEN değerin
+# ~4 puan altına YÜKSELTİLİR (düşürülmez — sahip kararı #20, kapı test_ci_workflow_gate). Ölçüm 4-A kapanış süitinde.
 fail_under = 50
 show_missing = false
 
