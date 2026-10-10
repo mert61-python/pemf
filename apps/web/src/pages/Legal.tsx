@@ -344,7 +344,8 @@ const DOCS: Record<LegalSlug, ReactNode> = {
             • Supabase Auth  → e-posta, şifrenin geri döndürülemez özeti, oturum jetonları, kayıt profil alanları
             • devices tablosu (60 sn'de bir heartbeat, servers/sync_worker._publish_device_registry):
               device_id, cihaz adı, tunnel_url, yerel IP, port, eşleştirme kodu, last_seen,
-              app_version, launcher_version, base_sha, at_rest_encrypted
+              app_version, launcher_version, base_sha, at_rest_encrypted, (RPC) p_secret cihaz doğrulama anahtarı
+              — D2.06: tests/test_kvkk_transfer_claims.py bu kümeyi AST ile koddan çıkarır, eşlemesiz yeni alan KIRMIZI
             • hasta/seans kayıtları → VARSAYILAN OLARAK GİTMEZ (PEMF_CLOUD_PATIENT_SYNC=0);
               yalnız klinik açıkça açarsa ve o hâlde de PII şifreli gönderilir.
           ⚠️ SAHİBİNE: Supabase proje BÖLGESİ (ör. eu-central-1 / us-east-1) panodan okunup
@@ -364,7 +365,9 @@ const DOCS: Record<LegalSlug, ReactNode> = {
         </li>
         <li>
           <strong>Cihaz kayıt defteri verileri</strong> — cihaz kimliği ve adı, uzaktan erişim adresi,
-          yerel IP adresi ve port, eşleştirme kodu, son görülme zamanı ve kurulu yazılım sürümleri. Bu
+          yerel IP adresi ve port, eşleştirme kodu, son görülme zamanı, kurulu yazılım sürümleri, cihazdaki
+          veri şifrelemesinin açık olup olmadığı ve kaydı yalnız o cihazın güncelleyebilmesi için cihaza özgü
+          bir doğrulama anahtarı. Bu
           kayıt, mobil uygulamanın kliniğin cihazına bağlanabilmesi ve bir güvenlik güncellemesinin
           hangi cihazlara ulaştığının izlenebilmesi için <strong>yaklaşık 60 saniyede bir</strong>{' '}
           güncellenir. Alıcı: <strong>Supabase</strong>.
@@ -399,18 +402,44 @@ const DOCS: Record<LegalSlug, ReactNode> = {
       {/* ⚠️ 2026-08-09 denetimi: metin "öngörülen süreler" diyordu ama YAZILIM somut bir süre
           uyguluyordu (varsayılan 365 gün) ve bunu operatöre hiçbir yerde söylemiyordu. Klinik
           366. günde hasta adı yerine [REDACTED] görüp sebebini bulamıyordu. Uygulanan kuralın
-          hukuki metinde de somut olarak yazması gerekir. */}
+          hukuki metinde de somut olarak yazması gerekir.
+          ⚠️ D2.06 (A-38, 2026-10-10): aşağıdaki maddeler yazılımın DEVREDEKİ varsayılanlarından türetilir ve
+          tests/test_kvkk_transfer_claims.py `data-saklama` anahtarlarıyla koddaki sayıya kilitler (headless bakımın
+          PEMF_RETAIN_* varsayılanları, ayar ucunun maskeleme süresi, günlük bakımın anonimleştirme eşiği). Kodda bir süre
+          değişirse metin de değişmeden kapı geçmez. Eski metin maskelemeyi "varsayılan olarak 365 gün sonra" anlatıyordu;
+          gerçekte maskeleme klinik onaylamadan HİÇ başlamaz (opt-in). */}
       <P>
-        <strong>Klinik cihazındaki tedavi kayıtları için uygulanan somut süre:</strong> seans kayıtlarındaki
-        hasta ve operatör adları ile serbest metin notlar, <strong>varsayılan olarak 365 gün</strong> sonra
-        geri dönüşsüz biçimde maskelenir: kayıtta adın yerinde <code>[REDACTED]</code> ibaresi görünür.
-        Tedavi verileri (uygulanan doz, süre, frekans, sensör ölçümleri) maskelenmez ve klinik
-        geçmişinde kalır.
+        <strong>Klinik cihazındaki tedavi kayıtları için yazılımın uyguladığı somut süreler</strong> (yazılımın
+        varsayılanları):
       </P>
+      <UL>
+        <li data-saklama="sensor">
+          Seans sırasında kaydedilen sensör ölçümleri (bobin sıcaklığı, manyetik alan, akım):{' '}
+          <strong>90 gün</strong>.
+        </li>
+        <li data-saklama="doz">
+          Uygulanan doz kayıtları (hangi bobin, hangi frekans ve oranla, ne kadar süre çalıştı):{' '}
+          <strong>3650 gün (10 yıl)</strong>.
+        </li>
+        <li data-saklama="olay">
+          Seans olay kayıtları (başlatma, durdurma, acil durdurma ve benzeri): <strong>365 gün</strong>.
+        </li>
+        <li data-saklama="anonim">
+          Hasta kimlik bilgileri: <strong>1825 gün (5 yıl)</strong> boyunca tedavi kaydı olmayan hastanın adı,
+          sahibinin adı, iletişim bilgileri, yaşı ve kilosu anonimleştirilir; tedavi verileri (uygulanan doz,
+          süre, sensör ölçümleri) ve tür/ırk bilgisi klinik istatistik için kalır.
+        </li>
+        <li data-saklama="maskeleme">
+          Seans kayıtlarındaki adların maskelenmesi <strong>varsayılan olarak KAPALI</strong>dır ve klinik açıkça
+          onaylamadan başlamaz. Klinik onaylarsa, seçilen süreden (varsayılan <strong>365 gün</strong>) eski seans
+          kayıtlarındaki hasta ve operatör adları ile serbest metin notlar geri dönüşsüz biçimde maskelenir: kayıtta
+          adın yerinde <code>[REDACTED]</code> ibaresi görünür. Tedavi verileri maskelenmez.
+        </li>
+      </UL>
       <P>
-        Bu süre klinik tarafından uygulama içinden değiştirilebilir (Ayarlar → Veri Saklama Süresi) veya
+        Maskeleme süresi klinik tarafından uygulama içinden değiştirilebilir (Ayarlar → Veri Saklama Süresi) veya
         tamamen kapatılabilir; tıbbi ve hukuki saklama yükümlülüğü ülkeye ve olaya göre değiştiğinden karar
-        veri sorumlusu kliniğe aittir. Maskeleme, klinik <strong>açıkça onaylamadan başlatılmaz</strong>.
+        veri sorumlusu kliniğe aittir.
       </P>
 
       <H2>7. İlgili Kişinin Hakları (KVKK m.11)</H2>
