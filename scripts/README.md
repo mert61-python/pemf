@@ -19,6 +19,7 @@ Build, yayın, servis-kurulum, gateway/hotspot ve kaldırma scriptleri.
 | `sevk_agaci_ai_hub_kapisi.py` | **(6. koruma kapısı, `build_backend_exe.ps1`)** — kaynaktaki HER `ai_hub` modülünün sevk ağacına girdiğini doğrular. `xai_tabular/ig_torch.py` adında "torch" geçtiği için torch-eleme filtresine takılıp üründe yalnız PYZ bytecode'u olarak yaşıyordu → yol-çıpasız filtrenin sessiz düşürmesini yakalar (denetim 2026-08-28 #07) |
 | `make_manifest.py` | `../pemf-app-packages/manifest.json` üretir (sha256/size hesaplı) — elle düzenlemeyi bitirir |
 | `publish_release.ps1` | GitHub release oluştur + asset yükle + `latest.json` güncelle (`-Branch exe\|mobil`) |
+| `yayin_oncesi_suit.ps1` | **Y30 — yayın öncesi ZORUNLU tam süit** (`PEMF_CAPRAZ_KAYNAK_ZORUNLU=1` + `PEMF_GOLDEN_REQUIRED=1`, `-rs`); `publish_release.ps1` kimlik/ağdan ÖNCE çağırır, süit geçmezse yayın DURUR (atlama anahtarı yok). Kapı: `tests/test_yayin_oncesi_suit_Y30_D410.py` |
 | `restore_assets.ps1` | Boş/yeni makinede depoyu çalışır kılar — yayınlardaki AI model ağırlıklarını (`home/vet/research.zip` + deps katmanından çekirdek `cat_organ`) indirip `../release_assets/ai_models`'a açar |
 | `site_indirme_dogrula.py` | Yayın **SON adımı** — sitedeki (`apps/web/src/config.ts`) indirme bağlantıları GERÇEKTEN yayında mı (HTTP 200) doğrular; "yerelde üretildi ama sürümsüz adla yüklendi → 404" tuzağını yakalar |
 | `check_changelog_surum.py` | Pre-commit kancası — `../versions.json` sürümleri `../CHANGELOG.md`'de geçmeden commit'i durdurur (CI testiyle birebir mantık) |

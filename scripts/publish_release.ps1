@@ -26,6 +26,12 @@ param(
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path $AssetPath)) { throw "Asset bulunamadi: $AssetPath" }
 
+# --- 0) Y30 / D4.10: YAYIN ONCESI ZORUNLU TAM SUIT (sahip karari) ---
+# Kimlik bilgisine ve aga dokunmadan ONCE: PEMF_CAPRAZ_KAYNAK_ZORUNLU=1 + PEMF_GOLDEN_REQUIRED=1 ile tam suit.
+# Gecmezse hicbir sey yayinlanmaz. Atlama anahtari YOK (kapi: tests/test_yayin_oncesi_suit_Y30_D410.py).
+& (Join-Path $PSScriptRoot 'yayin_oncesi_suit.ps1')
+if ($LASTEXITCODE -ne 0) { throw "Yayin oncesi tam suit GECMEDI (cikis=$LASTEXITCODE) - yayin DURDU (Y30)." }
+
 # --- GitHub token (git credential) ---
 $out = ("protocol=https`nhost=github.com`n`n" | git credential fill 2>$null)
 $token = (($out | Where-Object { $_ -like 'password=*' }) -replace '^password=', '')
