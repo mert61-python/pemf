@@ -81,13 +81,44 @@ def test_KRITIK_denetim_izi_seansa_JOIN_edilebilir(tmp_path):
 
 def test_audit_ref_PII_MASKESINE_takilmaz():
     """`audit_ref` kişisel veri DEĞİLDİR; PII redaksiyon listesine girerse join anahtarı
-    maskelenir ve bağlantı yine kopar."""
+    maskelenir ve bağlantı yine kopar.
+
+    ⚠️ D4.07 (B-10.2, 2026-10-10): sembol MODÜLDE aranıyordu (`getattr(thd, ...)`) ama `_PII_PARAM_NAMES`
+    `TreatmentHistoryDB` SINIFININ özniteliği → test doğduğundan beri HİÇ koşmadı (her ortamda SKIP). Sembol yoksa
+    artık SKIP değil FAIL (PII listesi kaybolmuş ya da taşınmış demektir)."""
     from database import treatment_history_db as thd
 
-    pii = getattr(thd, "_PII_PARAM_NAMES", None)
-    if pii is None:
-        pytest.skip("_PII_PARAM_NAMES yok")
+    pii = getattr(thd.TreatmentHistoryDB, "_PII_PARAM_NAMES", None)
+    assert pii is not None, "TreatmentHistoryDB._PII_PARAM_NAMES YOK — PII maskesinin kapsami olculemiyor"
+    assert "patient_name" in pii, f"PII listesi beklenen biçimde değil (patient_name yok): {sorted(pii)}"
     assert "audit_ref" not in pii, "audit_ref PII sayilmis → maskelenir, join anahtari kaybolur"
+
+
+def test_KRITIK_audit_ref_MASKE_ACIKKEN_de_seansa_baglanir(tmp_path, monkeypatch):
+    """D4.07 davranış kolu: maske GERÇEKTEN devredeyken (şifresiz DB + `PEMF_MASK_HISTORY_PII=1`) `audit_ref` aynen
+    yazılır. JOIN testi şifreli test DB'sinde koştuğu için maske hiç devreye girmiyor ve `audit_ref`i PII listesine
+    ekleyen mutant orada YEŞİL kalıyordu (ölçüldü). KARŞIT: aynı koşumda `patient_name` MASKELENİR (maske açık)."""
+    from database.treatment_history_db import TreatmentHistoryDB
+
+    monkeypatch.setenv("PEMF_MASK_HISTORY_PII", "1")
+    db = TreatmentHistoryDB(tmp_path)
+    monkeypatch.setattr(db, "at_rest_encrypted", False)
+    sid = db.start_session(treatment_mode="Manuel", target_condition="test", patient_name="Pamuk")
+    ref = "react_1786734864491_7"
+    assert db.set_session_parameter(sid, "audit_ref", ref, "")
+    assert db.set_session_parameter(sid, "patient_name", "Pamuk", "")
+    with db._get_connection() as conn:
+        degerler = dict(
+            conn.execute(
+                "SELECT parameter_name, parameter_value FROM session_parameters WHERE session_id=? "
+                "AND parameter_name IN ('audit_ref','patient_name')",
+                (sid,),
+            ).fetchall()
+        )
+    assert degerler.get("patient_name") == TreatmentHistoryDB._PII_REDACTION, (
+        f"maske bu koşumda devrede DEĞİL — kapı ölçemiyor: {degerler}"
+    )
+    assert degerler.get("audit_ref") == ref, f"audit_ref MASKELENDI → denetim izi seansa baglanamaz: {degerler}"
 
 
 if __name__ == "__main__":
