@@ -10,8 +10,10 @@ gecmis ekraninda PII maskesi OPT-IN. Varsayilani "acik" yapmayin — klinik kend
 adini goremez hale gelir.
 
 ⚠️ `anonymize_patients_by_uuid` GERI DONUSSUZDUR ve KVKK "unutulma hakki"nin karsiligidir.
-Kapisi: `tests/test_kvkk_anonymization.py` (5 yil inaktif hasta -> PII `[ANONIM]`,
-`anonymized=1`, arama indeksi temizlenir; AKTIF hasta KORUNUR; idempotent).
+Kapisi (D2.03 · B-3.92): `tests/test_anonimlestirme_TEDAVI_kopyasi_DAVRANISLA_D203.py` (tedavi-DB'deki hasta
+kopyasi, seans satiri ve seans parametrelerinde eski ad/sahip/e-posta HAM SQL ile aranir; baska hasta
+DOKUNULMAZ). ⚠️ `tests/test_kvkk_anonymization.py` bu metodu KOSTURMAZ — o, kanonik hasta DB'sinin
+(`patient_database.anonymize_inactive_patients`) kapisidir (eskiden burada yanlislikla bu metodun kapisi diye aniliyordu).
 
 ⚠️ GOVDELER DEGISTIRILMEDI — bayt bayt tasindi.
 
