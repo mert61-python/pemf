@@ -939,6 +939,12 @@ async def destek_paketi(request: Request):
     from servers.auth import enforce_privileged
 
     enforce_privileged(request)
+    # F2-2.4 (O-A2.3 kalıbı): kimlik İŞLEMDEN ÖNCE bir kez çözülür (istek kapsamında saklanır — C2-3.3); eskiden başarı izi sonda ilk kez
+    # çözüyordu → paket üretilirken "Kilitle" izi SAHİPSİZ bırakıyordu (ölçüldü).
+    # Kapı: tests/test_destek_paketi_IZI_kilit_yarisinda_YETKILENDIREN_F2_2_4.py
+    from servers.auth import cozumlenmis_operator
+
+    await _a.to_thread(cozumlenmis_operator, request)
     try:
         from utils.support_bundle import dosya_adi, olustur
 
