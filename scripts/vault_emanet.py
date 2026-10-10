@@ -92,7 +92,30 @@ path "{MOUNT}/metadata/{EMANET_YOLU}" {{
 '''
 
 
+def _adres_guvenli_mi(adres: str) -> bool:
+    """⚠️ E2-3.3: kök token + hasta anahtarları DÜZ HTTP ile yalnız bu makineye (loopback) gider; uzak Vault yalnız https://.
+    `PEMF_VAULT_ADRES` (D2.E05) denetimsizdi: `http://<uzak>` verilince `--yaz` kök token'ı ve iki anahtarı düz metin yolluyordu."""
+    import ipaddress
+    from urllib.parse import urlsplit
+
+    try:
+        u = urlsplit(adres)
+        if u.scheme == "https":
+            return True
+        if u.scheme != "http":
+            return False
+        ana = (u.hostname or "").lower()
+        return ana == "localhost" or ipaddress.ip_address(ana).is_loopback
+    except ValueError:
+        return False
+
+
 def _istek(yol: str, yontem: str = "GET", govde=None, token: str | None = None, zaman: float = 20.0):
+    if not _adres_guvenli_mi(ADRES):
+        raise SystemExit(
+            f"  HATA: Vault adresi GUVENSIZ ({ADRES}) -> istek GONDERILMEDI. Duz http yalniz bu makinede "
+            "(127.0.0.1 / localhost); uzak Vault icin https:// kullanin (PEMF_VAULT_ADRES)."
+        )
     veri = json.dumps(govde).encode() if govde is not None else None
     istek = urllib.request.Request(ADRES + yol, data=veri, method=yontem)
     istek.add_header("Content-Type", "application/json")
