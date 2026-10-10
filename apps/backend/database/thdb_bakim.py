@@ -276,7 +276,8 @@ class BakimKarisimi:
             pii_retain_days = _secilen
         report['pii_pending'] = 0
         if pii_retain_days and pii_retain_days > 0:
-            if not self.pii_onayi_var_mi():
+            # D2.55 · A-09: onay BU süreye ve maskeleme kapsamına verilmiş olmalı (süre kısalınca genişleyen kapsam yeni onay ister).
+            if not self.pii_onayi_var_mi(pii_retain_days):
                 bekleyen = self.redaksiyon_bekleyen_sayisi(pii_retain_days)
                 report['pii_pending'] = bekleyen
                 if bekleyen:

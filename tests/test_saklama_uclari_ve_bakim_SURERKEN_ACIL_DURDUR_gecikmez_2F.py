@@ -124,6 +124,33 @@ def test_KRITIK_retention_onay_yazimlari_ve_bakim_turu_KILITTE_beklerken_ACIL_DU
     )
 
 
+def test_KRITIK_PII_sure_ve_onay_yazimlari_KILITTE_beklerken_ACIL_DURDUR_gecikmez(o):
+    """D2.55: `POST /api/settings/retention` `days` ve `acknowledge` yazımları (eskiden olay döngüsünde senkron) kilitte beklerken."""
+
+    async def _s():
+        async with _istemci(o) as c:
+            with _Kilit(o.db.db_path, 6.0):
+                cagri = o.hc.stop_all_cagri
+                t0 = time.monotonic()  # ⚠️ istekler kuyruğa girmeden ÖNCE (yukarıdaki testin notu)
+                yazimlar = [
+                    asyncio.create_task(c.post("/api/settings/retention", json=g))
+                    for g in ({"days": 730}, {"days": 365}, {"acknowledge": True}, {"acknowledge": True})
+                ]
+                acil = asyncio.create_task(c.post("/api/hardware/emergency_stop"))
+                r = await acil
+                sure = time.monotonic() - t0
+                stop = o.hc.stop_all_cagri - cagri
+                bekleyen_yazim = sum(1 for t in yazimlar if not t.done())
+            for t in yazimlar:
+                await t
+            return r, sure, stop, bekleyen_yazim
+
+    r, sure, stop, bekleyen_yazim = asyncio.run(_s())
+    assert r.status_code == 200 and stop >= 1, f"kilitte ACİL DURDUR çalışmadı: {r.status_code} stop={stop}"
+    assert sure < 1.0, f"PII süre/onay yazımları kilitte beklerken ACİL DURDUR {sure:.2f} sn bekledi (Ö.4-Y8)"
+    assert bekleyen_yazim == 4, f"aparat: yazımlar ACİL DURDUR sırasında kilitte beklemiyordu ({bekleyen_yazim}/4)"
+
+
 def test_KARSIT_kilit_GERCEKTEN_yazimi_bekletiyor(o):
     """Araç kör değil: kilit sürerken onay yazımı busy_timeout kadar bekler (kilitsiz anında döner)."""
 

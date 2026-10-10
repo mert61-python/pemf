@@ -50,15 +50,78 @@ class PiiKarisimi:
             self.logger.debug("redaksiyon on-sayimi basarisiz", exc_info=True)
             return 0
 
-    def pii_onayi_var_mi(self) -> bool:
-        """Operatör geri dönüşsüz maskelemeyi onayladı mı?"""
-        return bool(self._get_system_setting(self.PII_ONAY_ANAHTARI))
+    #: Maskelenen seans sütunları — `redact_old_session_pii` UPDATE'i ve onay KAPSAM imzası BURADAN türer (tek kaynak).
+    _PII_MASKELENEN_SEANS_SUTUNLARI = ("patient_name", "operator_name", "patient_notes")
 
-    def pii_onayla(self) -> None:
+    def pii_kapsam_imzasi(self) -> str:
+        """Maskeleme KAPSAMI (hangi alanlar maskelenir) — bir sürüm kapsamı genişletirse eski onay geçersiz olur (A-09)."""
+        return "seans:{}|parametre:{}".format(
+            ",".join(self._PII_MASKELENEN_SEANS_SUTUNLARI), ",".join(sorted(self._PII_PARAM_NAMES))
+        )
+
+    def pii_onayi_oku(self) -> Optional[dict]:
+        """Kayıtlı maskeleme onayı {gun, kapsam, sayi, zaman, kim[, iptal]} ya da None (hiç verilmemiş).
+
+        Eski biçim (D2.55 öncesi: yalnız zaman damgası — hangi süreye verildiği bilinmiyor) → {"gun": None, "zaman": ham}: kayıt
+        VAR ama hiçbir süreye geçerli DEĞİL (ekran "yeni onay gerekiyor" der)."""
+        import json
+
+        ham = self._get_system_setting(self.PII_ONAY_ANAHTARI)
+        if not ham:
+            return None
+        try:
+            d = json.loads(ham)
+        except (TypeError, ValueError):
+            d = None
+        return d if isinstance(d, dict) else {"gun": None, "zaman": str(ham)}
+
+    def pii_onayi_var_mi(self, gun: int) -> bool:
+        """Operatör geri dönüşsüz maskelemeyi BU SÜRE ve BU KAPSAM için onayladı mı?
+
+        ⚠️ D2.55 · A-09: onay süreden bağımsız bir boolean DEĞİLDİR. Eskiden 1825 günü onaylayan klinikte süre 365'e düşürülünce
+        genişleyen kapsam yeni onay istenmeden ve gösterilmeden maskeleniyordu (ölçüldü). Onay yalnız verildiği süreye ve maskeleme
+        kapsamına geçerlidir; süre DEĞİŞİNCE açıkça iptal edilir (`pii_onayi_iptal` — geri dönüş eski onayı canlandırmaz).
+        Kapı: tests/test_pii_onayi_SUREYE_ve_KAPSAMA_bagli_A09_D255.py"""
+        d = self.pii_onayi_oku()
+        if not d or d.get("iptal") or d.get("gun") is None:
+            return False
+        try:
+            return int(d["gun"]) == int(gun) and d.get("kapsam") == self.pii_kapsam_imzasi()
+        except (TypeError, ValueError):
+            return False
+
+    def pii_onayla(self, gun: int, sayi: int = 0, kim: str = "") -> None:
+        """Onayı SÜREYE ve KAPSAMA bağlı yaz; onay anındaki etkilenecek kayıt sayısı ve onaylayan kayda geçer (A-09)."""
+        import json
+
         self._set_system_setting(
             self.PII_ONAY_ANAHTARI,
-            datetime.now().isoformat(timespec="seconds"),
-            "Operator geri donussuz PII maskelemesini onayladi",
+            json.dumps(
+                {
+                    "gun": int(gun),
+                    "kapsam": self.pii_kapsam_imzasi(),
+                    "sayi": int(sayi),
+                    "zaman": datetime.now().isoformat(timespec="seconds"),
+                    "kim": kim or "",
+                },
+                ensure_ascii=False,
+            ),
+            "Operator geri donussuz PII maskelemesini onayladi (sureye ve kapsama bagli; A-09)",
+        )
+
+    def pii_onayi_iptal(self, neden: str) -> None:
+        """Süre değişti → onay geçersiz (kayıt silinmez; ekran eski onayın süresini gösterebilsin diye `iptal` işaretlenir)."""
+        import json
+
+        d = self.pii_onayi_oku()
+        if not d or d.get("iptal"):
+            return
+        d["iptal"] = str(neden)
+        d["iptal_zaman"] = datetime.now().isoformat(timespec="seconds")
+        self._set_system_setting(
+            self.PII_ONAY_ANAHTARI,
+            json.dumps(d, ensure_ascii=False),
+            "PII maskeleme onayi gecersiz (A-09: sure degisti)",
         )
 
     def pii_suresi_oku(self) -> Optional[int]:
@@ -88,12 +151,15 @@ class PiiKarisimi:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
 
+                # D2.55: maskelenen sütunlar onay KAPSAM imzasıyla aynı tek kaynaktan (`_PII_MASKELENEN_SEANS_SUTUNLARI`).
+                _set = ",\n                        ".join(
+                    f"{s} = CASE WHEN {s} IS NOT NULL AND {s} != '' THEN '[REDACTED]' ELSE {s} END"
+                    for s in self._PII_MASKELENEN_SEANS_SUTUNLARI
+                )
                 cursor.execute(
-                    '''
+                    f'''
                     UPDATE treatment_sessions
-                    SET patient_name = CASE WHEN patient_name IS NOT NULL AND patient_name != '' THEN '[REDACTED]' ELSE patient_name END,
-                        operator_name = CASE WHEN operator_name IS NOT NULL AND operator_name != '' THEN '[REDACTED]' ELSE operator_name END,
-                        patient_notes = CASE WHEN patient_notes IS NOT NULL AND patient_notes != '' THEN '[REDACTED]' ELSE patient_notes END,
+                    SET {_set},
                         updated_at = CURRENT_TIMESTAMP
                     WHERE session_date < ?
                 ''',

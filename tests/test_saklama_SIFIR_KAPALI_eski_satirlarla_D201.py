@@ -61,7 +61,9 @@ def _eski_satirlar(db) -> dict:
         eski_tarih = time.strftime("%Y-%m-%d", time.localtime(simdi - 400 * GUN))
         c.execute("UPDATE treatment_sessions SET session_date=? WHERE id=?", (eski_tarih, sid))
         c.commit()
-    db.pii_onayla()  # operatör geri dönüşsüz maskelemeyi DAHA ÖNCE onaylamış — süre 0 olunca yine de maskelenmemeli
+    db.pii_onayla(
+        gun=365, sayi=1
+    )  # operatör geri dönüşsüz maskelemeyi DAHA ÖNCE onaylamış — süre 0 olunca yine de maskelenmemeli
     return {"sid": sid, "olay": olay, "kosu": kosu, "kutu": kutu}
 
 

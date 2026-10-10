@@ -54,6 +54,8 @@ export function SettingsScreen() {
   // hasta adı yerine `[REDACTED]` görüyor ve sebebini hiçbir yerde bulamıyordu.
   interface RetentionDurum {
     days: number; configured: boolean; acknowledged: boolean; pending: number; default: number;
+    // D2.55 · A-09: onay süreye ve maskeleme kapsamına bağlı. Kayıtlı ama geçersiz onay (süre/kapsam değişti) → approvalStale.
+    approvedDays?: number | null; approvedCount?: number | null; approvalStale?: boolean;
     // D2.54 · A-06: 5 yıl inaktif hasta anonimleştirmesi — onay yoksa bekleyen sayı (sayılamazsa null) gösterilir, operatör onaylar.
     anonymization?: { days: number; acknowledged: boolean; pending: number | null; approvedAt?: string | null };
   }
@@ -66,11 +68,15 @@ export function SettingsScreen() {
   }, []);
   useEffect(() => { void retentionYukle(); }, [retentionYukle]);
 
-  const retentionKaydet = useCallback(async (govde: { days?: number; acknowledge?: boolean; anonymize_acknowledge?: boolean }) => {
+  const retentionKaydet = useCallback(async (govde: {
+    days?: number; acknowledge?: boolean; acknowledge_days?: number; anonymize_acknowledge?: boolean;
+  }) => {
     setRetMesgul(true);
-    const r = await apiPost<{ status?: string } | null>("/settings/retention", govde, null);
+    await apiPost<{ status?: string } | null>("/settings/retention", govde, null);
     setRetMesgul(false);
-    if (r?.status === "success") await retentionYukle();
+    // D2.55: başarısızlıkta da yenile — 409 (süre bu ekran açıldıktan sonra değişti) sonrası operatör GÜNCEL süreyi ve
+    // etkilenecek kayıt sayısını görmeli; eski ekranda kalıp yeniden onaylamaya çalışmamalı.
+    await retentionYukle();
   }, [retentionYukle]);
 
   // ⚠️ DENETİM 2026-08-09 (Tier 1): `window.prompt` KALDIRILDI. Parolayı düz metin gösteriyor,
@@ -866,12 +872,20 @@ export function SettingsScreen() {
 
           {retention.pending > 0 ? (
             <>
+              {/* D2.55 · A-09: süre ya da maskeleme kapsamı değişince önceki onay geçersiz — neden yeniden sorulduğu söylenir. */}
+              {retention.approvalStale ? (
+                <Text style={[styles.intro, { color: colors.warning }]}>
+                  {retention.approvedDays
+                    ? `Önceki onay ${retention.approvedDays} günlük süre içindi; süre ya da maskeleme kapsamı değiştiği için yeni onay gerekiyor.`
+                    : "Önceki onay hangi süreye verildiğini taşımıyor (eski sürüm); yeni onay gerekiyor."}
+                </Text>
+              ) : null}
               <Text style={[styles.intro, { color: colors.warning }]}>
-                {retention.pending} seans kaydı maskelenmeyi bekliyor. Bu işlem GERİ ALINAMAZ:
+                {retention.pending} seans kaydı {retention.days} günlük süreyle maskelenmeyi bekliyor. Bu işlem GERİ ALINAMAZ:
                 hasta adları kalıcı olarak silinir. Onaylayana kadar hiçbir kayda dokunulmaz.
               </Text>
               <TouchableOpacity style={[styles.btnOutline, { borderColor: colors.warning }]}
-                disabled={retMesgul} onPress={() => retentionKaydet({ acknowledge: true })}
+                disabled={retMesgul} onPress={() => retentionKaydet({ acknowledge: true, acknowledge_days: retention.days })}
                 accessibilityRole="button"
                 accessibilityLabel="Geri dönüşsüz maskelemeyi onayla ve başlat">
                 <Text style={[styles.btnOutlineText, { color: colors.warning }]}>

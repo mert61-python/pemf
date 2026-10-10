@@ -1,0 +1,13 @@
+{
+  "durum": 200,
+  "govde": {
+    "days": 365,
+    "configured": true,
+    "acknowledged": false,
+    "pending": 1,
+    "approvedDays": 1825,
+    "approvedCount": 0,
+    "approvalStale": true,
+    "default": 365
+  }
+}

@@ -782,6 +782,14 @@ async def recovery_ack(request: Request):
 _PII_VARSAYILAN_GUN = 365
 
 
+def _pii_ortam_gunu() -> int:
+    """Operatör süre seçmemişse etkin süre: `PEMF_RETAIN_PII_DAYS`, yoksa 365 — headless bakım turunun AYNI okuyucusuyla (geçersiz
+    değer → varsayılan). D2.55: onay bu süreye bağlı; ekran ile bakım turu farklı süre okursa onay hiç tutmaz ya da yanlış süreye tutar."""
+    from services.headless_db_maintenance import HeadlessDBMaintenance
+
+    return HeadlessDBMaintenance._retain_days("PEMF_RETAIN_PII_DAYS", _PII_VARSAYILAN_GUN)
+
+
 def _pii_ayar_db():
     from pathlib import Path
 
@@ -802,12 +810,13 @@ async def retention_durumu(request: Request):
     def _oku():
         db = _pii_ayar_db()
         secilen = db.pii_suresi_oku()
-        etkin = secilen if secilen is not None else int(os.getenv("PEMF_RETAIN_PII_DAYS", _PII_VARSAYILAN_GUN))
-        return secilen, etkin, db.pii_onayi_var_mi(), (db.redaksiyon_bekleyen_sayisi(etkin) if etkin > 0 else 0)
+        etkin = secilen if secilen is not None else _pii_ortam_gunu()
+        bekleyen = db.redaksiyon_bekleyen_sayisi(etkin) if etkin > 0 else 0
+        return secilen, etkin, db.pii_onayi_var_mi(etkin), db.pii_onayi_oku(), bekleyen
 
     try:
         # C2-4.1 (Ö.4-Y8): DB okumaları olay döngüsünde DEĞİL (tedavi DB'si kilitliyken döngü donup ACİL DURDUR beklemesin).
-        secilen, etkin, onayli, bekleyen = await asyncio.to_thread(_oku)
+        secilen, etkin, onayli, onay, bekleyen = await asyncio.to_thread(_oku)
         anonim = await asyncio.to_thread(_anonimlestirme_durumu)
         return {
             "days": etkin,
@@ -815,6 +824,11 @@ async def retention_durumu(request: Request):
             "acknowledged": onayli,
             # Onay yoksa VE maskelenecek kayıt varsa arayüz sormalı.
             "pending": 0 if onayli else bekleyen,
+            # D2.55 · A-09: onay BU süreye ve kapsama mı verildi? Kayıtlı ama geçersiz onay (süre/kapsam değişti ya da süresiz eski
+            # biçim) → `approvalStale`; arayüz "önceki onay N gün içindi, yeni onay gerekiyor" der.
+            "approvedDays": (onay or {}).get("gun"),
+            "approvedCount": (onay or {}).get("sayi"),
+            "approvalStale": bool(onay) and not onayli,
             "default": _PII_VARSAYILAN_GUN,
             # D2.54 · A-06: 5 yıl inaktif hasta anonimleştirmesi — onay yoksa bekleyen sayı gösterilir ve arayüz sorar.
             "anonymization": anonim,
@@ -932,6 +946,8 @@ class _RetentionAyar(BaseModel):
     days: Optional[int] = None
     #: Operatör geri dönüşsüz maskelemeyi anladığını onaylıyor.
     acknowledge: bool = False
+    #: D2.55 · A-09: onay ekranının GÖSTERDİĞİ süre — etkin süreden farklıysa onay yazılmaz (409; bayat ekrandan onay yok).
+    acknowledge_days: Optional[int] = None
     #: D2.54 · A-06: operatör 5 yıl inaktif hastaların geri dönüşsüz anonimleştirmesini onaylıyor (o anki bekleyen sayıyla kayda geçer).
     anonymize_acknowledge: bool = False
 
@@ -946,22 +962,67 @@ async def retention_ayarla(payload: _RetentionAyar, request: Request):
     from servers.auth import enforce_privileged
 
     enforce_privileged(request)
+    if payload.days is not None and (payload.days < 0 or payload.days > 36500):
+        raise HTTPException(status_code=400, detail="Saklama süresi 0–36500 gün aralığında olmalı.")
     try:
-        db = _pii_ayar_db()
+        # D2.55 (Ö.4-Y8): süre ve onay yazımları da olay döngüsü DIŞINDA — eskiden döngüde senkron yazılıyordu (D2.54 yalnız
+        # anonimleştirme onayını taşımıştı); tedavi DB'si kilitliyken döngü donup ACİL DURDUR bekliyordu.
+        db = await asyncio.to_thread(_pii_ayar_db)
         from servers import audit_log as _iz
 
+        def _pii_yaz():
+            """⚠️ D2.55 · A-09: süre DEĞİŞİNCE kayıtlı onay iptal edilir (geri dönüş eski onayı canlandırmaz); onay o anki etkin
+            SÜREYE + kapsama + etkilenecek kayıt SAYISINA bağlı yazılır. `acknowledge_days` (ekranın gösterdiği süre) etkin süreden
+            farklıysa HİÇBİR ŞEY yazılmaz → 409: operatör görmediği kapsamı onaylamış olmasın."""
+            from servers.auth import cozumlenmis_operator
+
+            secilen = db.pii_suresi_oku()
+            onceki = secilen if secilen is not None else _pii_ortam_gunu()
+            yeni = int(payload.days) if payload.days is not None else onceki
+            if payload.acknowledge and payload.acknowledge_days is not None and int(payload.acknowledge_days) != yeni:
+                return {"cakisma": yeni}
+            sonuc = {"onceki": onceki, "yeni": yeni}
+            if payload.days is not None:
+                sonuc["onay_dustu"] = yeni != onceki and db.pii_onayi_var_mi(onceki)
+                db.pii_suresi_yaz(payload.days)
+                if yeni != onceki:
+                    db.pii_onayi_iptal("sure_degisti")
+            if payload.acknowledge:
+                sayi = db.redaksiyon_bekleyen_sayisi(yeni) if yeni > 0 else 0
+                db.pii_onayla(gun=yeni, sayi=sayi, kim=cozumlenmis_operator(request))
+                sonuc["onay_sayi"] = sayi
+            return sonuc
+
+        s = await asyncio.to_thread(_pii_yaz)
+        if "cakisma" in s:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Saklama süresi bu ekran açıldıktan sonra değişti ({s['cakisma']} gün). Ekranı yenileyin, etkilenecek "
+                "kayıt sayısını görüp yeniden onaylayın — onay kaydedilmedi.",
+            )
         if payload.days is not None:
-            if payload.days < 0 or payload.days > 36500:
-                raise HTTPException(status_code=400, detail="Saklama süresi 0–36500 gün aralığında olmalı.")
-            db.pii_suresi_yaz(payload.days)
-            _iz.kimlikli_yaz(request, "retention.sure", scope="pii", item_count=int(payload.days))
+            _iz.kimlikli_yaz(
+                request,
+                "retention.sure",
+                scope="pii",
+                item_count=int(payload.days),
+                detail={"onceki": s["onceki"], "onay_dustu": bool(s.get("onay_dustu"))},
+            )
         if payload.acknowledge:
-            db.pii_onayla()
-            logger.warning("KVKK: operatör geri dönüşsüz PII maskelemesini ONAYLADI.")
+            logger.warning(
+                "KVKK: operatör geri dönüşsüz PII maskelemesini ONAYLADI (%d gün, %d kayıt).", s["yeni"], s["onay_sayi"]
+            )
             # ⚠️ Bu onay, geri dönüşsüz maskelemenin ANAHTARIDIR. Kimin ve ne zaman verdiği
             # kayıtlı olmazsa, aylar sonra ortaya çıkan [REDACTED] kayıtların sorumlusu
             # bulunamaz — ve klinik haklı olarak "ben onaylamadım" der.
-            _iz.kimlikli_yaz(request, "retention.onay", scope="pii", outcome="onaylandi")
+            _iz.kimlikli_yaz(
+                request,
+                "retention.onay",
+                scope="pii",
+                item_count=s["onay_sayi"],
+                outcome="onaylandi",
+                detail={"gun": s["yeni"]},
+            )
         if payload.anonymize_acknowledge:
             # ⚠️ D2.54 · A-06 / A-09: onay ESİĞE ve o anki bekleyen SAYIYA bağlı yazılır (eşik değişirse geçersiz); kim, ne zaman, kaç
             # hasta — denetim izinde. DB işleri olay döngüsü DIŞINDA (Ö.4-Y8).

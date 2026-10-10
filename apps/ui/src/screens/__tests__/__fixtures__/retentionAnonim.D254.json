@@ -5,6 +5,9 @@
     "configured": false,
     "acknowledged": false,
     "pending": 0,
+    "approvedDays": null,
+    "approvedCount": null,
+    "approvalStale": false,
     "default": 365,
     "anonymization": {
       "days": 1825,

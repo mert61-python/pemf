@@ -438,7 +438,9 @@ const DOCS: Record<LegalSlug, ReactNode> = {
           Seans kayıtlarındaki adların maskelenmesi <strong>varsayılan olarak KAPALI</strong>dır ve klinik açıkça
           onaylamadan başlamaz. Klinik onaylarsa, seçilen süreden (varsayılan <strong>365 gün</strong>) eski seans
           kayıtlarındaki hasta ve operatör adları ile serbest metin notlar geri dönüşsüz biçimde maskelenir: kayıtta
-          adın yerinde <code>[REDACTED]</code> ibaresi görünür. Tedavi verileri maskelenmez.
+          adın yerinde <code>[REDACTED]</code> ibaresi görünür. Tedavi verileri maskelenmez. Onay yalnız verildiği süre
+          için geçerlidir: süre değiştirilirse onay düşer ve yeni süreyle etkilenecek kayıt sayısı gösterilerek
+          <strong> yeniden onay</strong> istenir.
         </li>
       </UL>
       <P>

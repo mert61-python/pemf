@@ -324,6 +324,19 @@ def test_KRITIK_maskeleme_suresi_ayar_ucu_ve_bakimda_AYNI():
     assert int(_modul_sabiti(_ROUTER, "_PII_VARSAYILAN_GUN")) == _retain_varsayilanlari()["PEMF_RETAIN_PII_DAYS"]
 
 
+def test_KRITIK_A09_maskeleme_onayi_SUREYE_bagli_anlatilir(metin):
+    """D2.55 · A-09: onay yalnız verildiği süreye geçerli; süre değişince yeniden sorulur. Metin bunu söylemeli ve kod onayı süreyle
+    sormalı (`pii_onayi_var_mi(gun)`) — biri geri dönerse KIRMIZI. Davranış kapısı: tests/test_pii_onayi_SUREYE_ve_KAPSAMA_bagli_A09_D255.py"""
+    madde = _saklama_maddeleri(metin)["maskeleme"]
+    assert "yeniden onay" in madde and "süre değiştirilirse" in madde, (
+        f"maskeleme maddesi A-09 yeniden onayını anlatmıyor: {madde!r}"
+    )
+    fn = _fonksiyon(ast.parse(_PII.read_text(encoding="utf-8")), "pii_onayi_var_mi")
+    assert [a.arg for a in fn.args.args] == ["self", "gun"], (
+        "kod onayı süreden bağımsız soruyor — metin A-09 için yanlış olur"
+    )
+
+
 def test_KRITIK_maskeleme_OPT_IN_anlatilir_ve_gecmis_PII_maskesi_VARSAYILAN_KAPALI(metin):
     """Ö.4 / sahip kararı (bellek `pemf-history-pii-mask-opt-in`): maskeleme varsayılan KAPALI ve klinik ONAYI olmadan başlamaz.
     Metin bunu söylemeli; `_redact_pii`'nin `PEMF_MASK_HISTORY_PII` varsayılanı "0" kalmalı. MUTASYON: varsayılan "1" → KIRMIZI."""

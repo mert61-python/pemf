@@ -72,7 +72,7 @@ def test_KRITIK_bekleyen_kayit_sayisi_RAPORLANIR(dolu):
 
 
 def test_onaydan_SONRA_maskeleme_calisir(dolu):
-    dolu.pii_onayla()
+    dolu.pii_onayla(gun=365, sayi=1)
     r = dolu.apply_data_retention_policy(
         sensor_retain_days=0, event_retain_days=0, dead_outbox_retain_days=0, pii_retain_days=365
     )
@@ -83,7 +83,7 @@ def test_onaydan_SONRA_maskeleme_calisir(dolu):
 
 def test_sure_SIFIRSA_hicbir_sey_maskelenmez(dolu):
     """0 = kapalı. Kliniği süresiz saklamaya zorlamak da, silmeye zorlamak da yanlış."""
-    dolu.pii_onayla()
+    dolu.pii_onayla(gun=365, sayi=1)
     r = dolu.apply_data_retention_policy(
         sensor_retain_days=0, event_retain_days=0, dead_outbox_retain_days=0, pii_retain_days=0
     )
@@ -97,7 +97,7 @@ def test_sure_SIFIRSA_hicbir_sey_maskelenmez(dolu):
 def test_KRITIK_operator_suresi_ORTAM_DEGISKENINI_ezer(dolu):
     """Ayar arayüzden yönetilir; env yalnız varsayılandır. Aksi hâlde operatör ekrandan
     değiştirir ama hiçbir şey değişmez."""
-    dolu.pii_onayla()
+    dolu.pii_onayla(gun=365, sayi=1)
     dolu.pii_suresi_yaz(0)  # operatör: KAPALI
     r = dolu.apply_data_retention_policy(
         sensor_retain_days=0, event_retain_days=0, dead_outbox_retain_days=0, pii_retain_days=365
@@ -123,7 +123,7 @@ def test_kuru_calisma_hicbir_seyi_DEGISTIRMEZ(dolu):
 
 
 def test_zaten_maskelenmis_kayit_TEKRAR_SAYILMAZ(dolu):
-    dolu.pii_onayla()
+    dolu.pii_onayla(gun=365, sayi=1)
     dolu.apply_data_retention_policy(
         sensor_retain_days=0, event_retain_days=0, dead_outbox_retain_days=0, pii_retain_days=365
     )
@@ -160,7 +160,7 @@ def test_API_durum_bekleyeni_bildirir(client):
 
 def test_API_onay_maskelemeyi_ACAR(client, dolu):
     assert client.post("/api/settings/retention", json={"acknowledge": True}).status_code == 200
-    assert dolu.pii_onayi_var_mi() is True
+    assert dolu.pii_onayi_var_mi(365) is True
     assert client.get("/api/settings/retention").json()["pending"] == 0
 
 
@@ -173,7 +173,7 @@ def test_API_sure_ayarlanabilir(client, dolu):
 def test_KRITIK_sure_degistirmek_ONAY_YERINE_GECMEZ(client, dolu):
     """Süreyi değiştirmek tek başına geri dönüşsüz maskelemeyi başlatmamalı."""
     client.post("/api/settings/retention", json={"days": 30})
-    assert dolu.pii_onayi_var_mi() is False, "sure degisikligi onay sayildi"
+    assert dolu.pii_onayi_var_mi(30) is False, "sure degisikligi onay sayildi"
 
 
 def test_gecersiz_sure_REDDEDILIR(client):
