@@ -6706,6 +6706,12 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
 
     from utils.data_export import ExportError, decrypt_bundle
 
+    from servers.auth import cozumlenmis_operator as _kimlik_coz
+
+    # ⚠️ O-A2.3 (2-B incelemesi): kimlik İŞLEMDEN ÖNCE bir kez çözülür (istek kapsamında saklanır — C2-3.3). Boş cihaza ilk içe
+    # aktarma eskiden kimliği hiç çözmeden işleme giriyor, başarı izi sonda İLK KEZ çözüyordu → işlem sürerken "Kilitle" izi SAHİPSİZ
+    # bırakıyordu (ölçüldü). Döngü dışında (kimlik DB okuması). Kapı: tests/test_ice_aktarma_IZI_islem_SURERKEN_kilitte_YETKILENDIREN_OA23.py
+    await asyncio.to_thread(_kimlik_coz, request)
     thdb = _get_treatment_db()
     pdb = get_patient_database()
     if thdb is None or pdb is None:
