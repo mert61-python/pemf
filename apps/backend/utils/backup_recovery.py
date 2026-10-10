@@ -58,6 +58,14 @@ def kurtarma_komutu(*argumanlar: str) -> str:
     return " ".join((KURTARMA_EXE, "--kurtarma", *argumanlar))
 
 
+# ⚠️ E2-3.7: A-11 (servis / Inno) kurulumu DESTEKLENEN ikinci yoldur; EXE orada launcher kökünde DEĞİL (`{autopf}\PEMF Backend`,
+# build_tools/PEMF_Backend_Setup.iss) → yönergeler o kurulumda "yol bulunamadı" alıyordu. Yönerge satırlarının altına eklenir.
+KURTARMA_EXE_NOTU = (
+    "  (Launcher DISI servis kurulumunda ayni komutu kurulum dizinindeki EXE ile verin:\n"
+    '   "C:\\Program Files\\PEMF Backend\\PEMF_Backend.exe" ya da install_backend_service ile kuruldugu klasor.)\n'
+)
+
+
 # Zarfın gereksiz yere her gün yeniden yazılmaması için yerel parmak izi.
 _FP_FILE_NAME = ".recovery_fp"
 # D2.60 (B-3.94): mühür `<önek><parmak izi>` YALNIZ zarf VE kod dosyası bu kod için yazıldıktan sonra vurulur. Öneksiz mühür eski
@@ -253,8 +261,11 @@ def kod_dosyasi_metni(code: str) -> str:
         "  * Kod kaybolursa yedekler bu makine disinda ACILAMAZ.\n"
         "  * Kodu disari aldiktan sonra bu dosyayi silebilirsiniz.\n\n"
         "KURTARMA (yeni makinede, PEMF kurulduktan sonra, Komut Istemi / cmd penceresinde)\n"
-        "  " + kurtarma_komutu("--zarf", "<yedek-dizini>\\" + ENVELOPE_NAME, "--kod", "<kod>", "--yaz") + "\n"
-        "=============================================================\n"
+        "  "
+        + kurtarma_komutu("--zarf", "<yedek-dizini>\\" + ENVELOPE_NAME, "--kod", "<kod>", "--yaz")
+        + "\n"
+        + KURTARMA_EXE_NOTU
+        + "=============================================================\n"
     )
 
 

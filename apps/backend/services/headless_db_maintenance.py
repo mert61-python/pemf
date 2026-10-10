@@ -14,7 +14,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from utils.backup_recovery import kurtarma_komutu
+from utils.backup_recovery import KURTARMA_EXE_NOTU, kurtarma_komutu
 from utils.dongu_guvenligi import dongu_hatasini_bildir
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,7 @@ NASIL GERI YUKLENIR
   1) Yeni makineye PEMF kurun (henuz baslatmadan).
   2) Anahtarlari zarftan cikarip yerlestirin (Komut Istemi / cmd penceresinde):
        @@KURTARMA_ZARF@@
+@@KURTARMA_EXE_NOTU@@
   3) Bu dizindeki  pemf_treatment_history_*.db / pemf_patients_*.db  dosyalarindan
      en yenisini veri dizinine  pemf_treatment_history.db / patients.db
      adiyla kopyalayin.
@@ -80,11 +81,18 @@ ZARF YOKSA
   Ikisi de yoksa bu yedekler kurtarilamaz.
 =============================================================
 """
-_OFFSITE_README_TEXT = _OFFSITE_README_SABLON.replace(
-    "@@KURTARMA_ZARF@@", kurtarma_komutu("--zarf", "kurtarma-zarfi.enc", "--kod", "<KOD>", "--yaz")
-).replace(
-    "@@KURTARMA_HESAP@@",
-    kurtarma_komutu("--hesap-yedegi", "pemf_auth_users_<tarih>.db", "--cikti", "<veri-dizini>\\auth_users.db"),
+# ⚠️ E2-3.7: dosya yolları `<bu-dizin>\` ile — cmd %USERPROFILE%'da açılır, göreli ad "zarf bulunamadi" verir.
+_OFFSITE_README_TEXT = (
+    _OFFSITE_README_SABLON.replace(
+        "@@KURTARMA_ZARF@@", kurtarma_komutu("--zarf", "<bu-dizin>\\kurtarma-zarfi.enc", "--kod", "<KOD>", "--yaz")
+    )
+    .replace(
+        "@@KURTARMA_HESAP@@",
+        kurtarma_komutu(
+            "--hesap-yedegi", "<bu-dizin>\\pemf_auth_users_<tarih>.db", "--cikti", "<veri-dizini>\\auth_users.db"
+        ),
+    )
+    .replace("@@KURTARMA_EXE_NOTU@@", KURTARMA_EXE_NOTU.rstrip("\n"))
 )
 
 #: D2-1.1: dosya zamanı bu kadar saniyeden fazla İLERİDEYSE saat güvenilmez sayılır (tazelik kararında yok sayılır).
