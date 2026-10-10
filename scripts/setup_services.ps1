@@ -275,6 +275,17 @@ if ($OnEnvFile) {
         if ($OnPort.Hata) { Log "HATA: $($OnPort.Hata) Dosya: $OnEnvFile — kurulum DURDU, hiçbir servis değiştirilmedi." "Red"; exit 1 }
     }
 }
+# ⚠️ E2-2.4 (S-E.4): portu bu kurulumun DIŞINDAN bir süreç (launcher'ın backend çocuğu / başka kurulum) tutuyorsa sağlık sondası
+# ONUN /api/health'inden 200 alır → "Kurulum DOĞRULANDI" + .install_verified; yeni servis bind edemeyip döngüde çöker. O süreç
+# öldürülmez (ACİL DURDUR bu betiğin işi değil) — kurulum HİÇBİR şey değiştirmeden durur.
+$OnSondaPort = if ($OnPort -and $OnPort.Port) { $OnPort.Port } else { 8000 }
+foreach ($PortSahibi in @(Get-NetTCPConnection -LocalPort $OnSondaPort -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique)) {
+    $SahipYolu = (Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessId -eq $PortSahibi } | Select-Object -First 1).ExecutablePath
+    if (-not ($SahipYolu -and $SahipYolu -like "$AppDir\*")) {
+        Log "HATA: port $OnSondaPort dolu — bu kurulumun DIŞINDA bir süreç dinliyor (PID $PortSahibi, $SahipYolu). Launcher'ın backend'i ya da başka bir kurulum olabilir; sağlık sondası onun yanıtını bu servisin sanırdı. Önce onu kapatın (launcher'dan çıkın) ya da profilde PEMF_API_PORT'u değiştirin — kurulum DURDU, hiçbir servis değiştirilmedi." "Red"
+        exit 1
+    }
+}
 
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 # Önceki çalıştırmanın başarı-bayrağını temizle — bu kurulum GERÇEKTEN doğrulanmadıkça
