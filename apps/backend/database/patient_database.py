@@ -142,6 +142,9 @@ class PatientDatabase:
                 conn.execute("PRAGMA synchronous=NORMAL")
                 conn.execute("PRAGMA foreign_keys=ON")  # B-7.3: patient_search_index ON DELETE CASCADE aktif
                 conn.execute("PRAGMA busy_timeout=5000")  # B-6.2: 'database is locked' yerine bekle
+                # ⚠️ D2.29 (Y13): GÜVENLİ SİLME — silinen hastanın (alan şifreli) saklanan değerleri sıfırlanır; eskiden serbest
+                # listede kalıyor, aynı cihazın anahtarıyla ÇÖZÜLEBİLİYORDU. Kapı: tests/test_sifresiz_kurulumda_GUVENLI_SILME_Y13_D229.py
+                conn.execute("PRAGMA secure_delete=ON")
             except BaseException:
                 # ⚠️ Y98 (O-2A.2): PRAGMA hatasında ("file is not a database" = DatabaseError) açılan bağlantı
                 # KAPATILIR. Eskiden istisna izindeki çerçevede açık kalıyor, istisnayı tutan her şey dosya tutamağını da
@@ -955,12 +958,29 @@ class PatientDatabase:
                 rowcount = cursor.rowcount
                 cursor.execute("DELETE FROM patient_search_index WHERE patient_id = ?", (patient_id,))
                 conn.commit()
+                if rowcount > 0:
+                    self._silme_sonrasi_denetim_noktasi(conn, "hasta silme")
                 return rowcount > 0
         except _DB_ERROR:
             self._db_hatasini_yaz("hasta silme")
             return False
         finally:
             self.lock.release()
+
+    def _silme_sonrasi_denetim_noktasi(self, conn, ne: str) -> None:
+        """D2.29 (Y13): silmeden sonra WAL denetim noktası (TRUNCATE) — `secure_delete` yeni sayfa sürümünü sıfırlar ama WAL kipinde
+        eski sayfa denetim noktasına kadar ana dosyada, eklemenin çerçevesi WAL dosyasında durur (ölçüldü). Okuyucu varsa
+        tamamlanamayabilir → uyarı; silme sonucu DEĞİŞMEZ. (Tedavi DB'sindeki eşi: `thdb_ai_gecmisi._silme_sonrasi_denetim_noktasi`.)"""
+        try:
+            sonuc = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+            if sonuc and sonuc[0]:
+                self.logger.warning(
+                    "%s: silme sonrasi denetim noktasi tamamlanamadi (acik okuyucu) — silinen icerik sonraki denetim noktasina "
+                    "dek WAL'da kalabilir.",
+                    ne,
+                )
+        except Exception:
+            self.logger.warning("%s: silme sonrasi denetim noktasi yapilamadi.", ne, exc_info=True)
 
     #: Tek istekte silinebilecek AZAMİ hasta sayısı (seans tarafıyla AYNI gerekçe ve AYNI sayı).
     TOPLU_SILME_AZAMI = 500
@@ -991,6 +1011,8 @@ class PatientDatabase:
                 silinen = cursor.rowcount if cursor.rowcount and cursor.rowcount > 0 else 0
                 cursor.execute(f"DELETE FROM patient_search_index WHERE patient_id IN ({yer})", kimlikler)
                 conn.commit()
+                if silinen:
+                    self._silme_sonrasi_denetim_noktasi(conn, "toplu hasta silme")  # D2.29 · Y13
                 return silinen
         except _DB_ERROR:
             self._db_hatasini_yaz("toplu hasta silme")

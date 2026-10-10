@@ -168,10 +168,27 @@ class AiGecmisiKarisimi:
                     cursor.execute("DELETE FROM ai_analyses WHERE id = ?", (int(analysis_id),))
                 silindi = cursor.rowcount > 0
                 conn.commit()
+                if silindi:
+                    self._silme_sonrasi_denetim_noktasi(conn, "AI kaydi silme")
                 return silindi
         except Exception:
             self.logger.exception("AI analiz kaydı silinemedi (id=%s).", analysis_id)
             return False
+
+    def _silme_sonrasi_denetim_noktasi(self, conn, ne: str) -> None:
+        """D2.29 (B-3.91 · Y13): tekil silmeden sonra WAL denetim noktası (TRUNCATE). `secure_delete` silinen içeriği yeni sayfa
+        sürümünde sıfırlar ama WAL kipinde ESKİ sayfa denetim noktasına kadar ana dosyada, eklemenin çerçevesi de WAL dosyasında
+        durur (ölçüldü). TRUNCATE ikisini de kapatır. Okuyucu varsa tamamlanamayabilir → uyarı; silme sonucu DEĞİŞMEZ."""
+        try:
+            sonuc = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+            if sonuc and sonuc[0]:
+                self.logger.warning(
+                    "%s: silme sonrasi denetim noktasi tamamlanamadi (acik okuyucu) — silinen icerik sonraki denetim noktasina "
+                    "dek WAL'da kalabilir.",
+                    ne,
+                )
+        except Exception:
+            self.logger.warning("%s: silme sonrasi denetim noktasi yapilamadi.", ne, exc_info=True)
 
     #: D1.58: ertelenmiş KVKK VACUUM'u — `system_settings`te KALICI (yeniden başlatmada kaybolmaz).
     VACUUM_BEKLIYOR_ANAHTARI = "kvkk_vacuum_bekliyor"

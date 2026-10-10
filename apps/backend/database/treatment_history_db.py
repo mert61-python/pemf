@@ -340,6 +340,10 @@ class TreatmentHistoryDB(
         try:
             conn.execute('PRAGMA foreign_keys=ON')
             conn.execute('PRAGMA busy_timeout=5000')
+            # ⚠️ D2.29 (B-3.91 · Y13): GÜVENLİ SİLME her bağlantıda — silinen satırın içeriği sıfırlanır; eskiden serbest
+            # listede OKUNABİLİR kalıyordu (şifresiz kurulumda haftalık VACUUM'a kadar). Şifreli (SQLCipher) kurulumda zararsız.
+            # Kapı: tests/test_sifresiz_kurulumda_GUVENLI_SILME_Y13_D229.py
+            conn.execute('PRAGMA secure_delete=ON')
 
             # WAL bazı disk/ortam kombinasyonlarında başarısız olabilir.
             try:
@@ -378,6 +382,7 @@ class TreatmentHistoryDB(
                     conn = self._connect_plain_sqlite()
                 conn.execute('PRAGMA foreign_keys=ON')
                 conn.execute('PRAGMA busy_timeout=5000')
+                conn.execute('PRAGMA secure_delete=ON')  # D2.29 · Y13 (yukarıdaki not)
                 try:
                     conn.execute('PRAGMA journal_mode=DELETE')
                     conn.execute('PRAGMA synchronous=FULL')
