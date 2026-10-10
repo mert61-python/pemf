@@ -15,12 +15,14 @@ Sonuç: 700+ test değişiklik anında çalışmıyordu; regresyonlar ancak elle
 düşerse (ör. biri `matrix`i kaldırır ya da jest adımını siler) burası kırılır.
 """
 
+import re
 import subprocess
 from pathlib import Path
 
 import pytest
 
 W = Path(__file__).resolve().parent.parent / ".github" / "workflows"
+KOK = W.parent.parent
 
 
 def _yukle(ad):
@@ -242,3 +244,136 @@ def test_permissions_SALT_OKUR(dosya):
     """Ele geçirilmiş bir bağımlılık/action, varsayılan token'la depoya YAZABİLİRDİ."""
     d = _yukle(dosya)
     assert d.get("permissions", {}).get("contents") == "read", f"{dosya} en-az-yetki degil"
+
+
+# ── BLOKLAYICILIK (D4.05 · B-10.115, B-10.152 — 2026-10-10) ─────────────────
+# Önceki kapılar işlerin VARLIĞINI ölçüyordu, BLOKLAYICILIĞINI değil: `tests.yml`'in pytest satırına `|| true`, Windows
+# ratchet adımından `--cov` silmek, `fail_under` 50→49 ya da bir işe `continue-on-error: true` eklemek dosyadaki her
+# testi YEŞİL bırakıyordu ("ratchet boş güvenceydi" arızası + sahip kararı "fail_under=50 düşürülmez" kapısızdı).
+# Artık TÜM iş akışlarındaki her iş ve adım taranır; bloklamayan biçim yalnız aşağıdaki gerekçeli izin listesindeyse
+# kabul edilir ve KULLANILMAYAN izin satırı da kırmızıdır (izin listesi bayatlayıp genişlemesin).
+
+#: Run satırında hatayı YUTAN biçimler. `|| KOD=$?` gibi kodu yakalayıp yeniden çıkan biçim yutma DEĞİLDİR.
+_YUTMA = re.compile(r"\|\|\s*(true|:|exit\s+0|echo)\b")
+#: `if:` için sabit-yanlış değerler (iş/adım hiç koşmaz).
+_SABIT_YANLIS = re.compile(r"^\s*(false|0|\$\{\{\s*(false|0)\s*\}\})\s*$", re.I)
+
+#: BİLİNÇLİ istisnalar: (dosya, iş, adım adı) → izinli biçimler. Her satır sahibin/denetimin kararıdır.
+BLOKLAMAYAN_IZINLI = {
+    # Biçim kontrolü bilgi amaçlı (lint işi `ruff check` ile bloklar).
+    ("lint.yml", "ruff", "Ruff format check (bilgi amaçlı — hata verse de iş başarısız olmaz)"): {"|| true"},
+    # pip-audit bilgi amaçlı: torch/onnx CVE'leri bilinen-ertelenen (Ö.4-Y3); exact-ID izin listesi sahip işi.
+    ("security.yml", "pip-audit", "pip-audit — çekirdek + SHIPPED AI ağacı (bilgi amaçlı, bloklamaz)"): {
+        "continue-on-error",
+        "|| true",
+    },
+    # Tarayıcı kurulamazsa görünüm kapısı kendisi "ATLANDI" der (exit 3 → uyarı); kapının kendisi bloklar.
+    ("site.yml", "site", "Tarayici (headless olcum icin)"): {"continue-on-error"},
+    # `ls -la … || true; exit 1` teşhis listesi (ardından exit 1 — yutma yok). ⚠️ `--help … || echo` smoke'u YUTUYOR:
+    # açık aday İG-9.58 (yayın iş akışı, etiketle tetiklenir) — düzeltilince bu biçim listeden ÇIKARILMALI.
+    ("linux-backend.yml", "build", "Doğrula + paketle (base-linux.zip)"): {"|| true", "|| echo"},
+}
+
+
+def _is_akislari() -> list[str]:
+    return sorted(p.name for p in W.glob("*.yml"))
+
+
+def _adim_adi(adim: dict) -> str:
+    return str(adim.get("name") or adim.get("uses") or str(adim.get("run", ""))[:60])
+
+
+def _bloklamayan(deger_cont, deger_if) -> list[str]:
+    bul = []
+    if deger_cont not in (None, False) and str(deger_cont).strip().lower() != "false":
+        bul.append("continue-on-error")
+    if deger_if is not None and _SABIT_YANLIS.match(str(deger_if)):
+        bul.append("if-sabit-yanlis")
+    return bul
+
+
+def bloklamayan_bicimler() -> dict[tuple[str, str, str], set[str]]:
+    """{(dosya, iş, adım | '<iş>'): {biçimler}} — TÜM iş akışlarında bloklamayan her biçim."""
+    sonuc: dict[tuple[str, str, str], set[str]] = {}
+    for dosya in _is_akislari():
+        for is_adi, is_ in (_yukle(dosya).get("jobs") or {}).items():
+            for b in _bloklamayan(is_.get("continue-on-error"), is_.get("if")):
+                sonuc.setdefault((dosya, is_adi, "<iş>"), set()).add(b)
+            for adim in is_.get("steps") or []:
+                anahtar = (dosya, is_adi, _adim_adi(adim))
+                for b in _bloklamayan(adim.get("continue-on-error"), adim.get("if")):
+                    sonuc.setdefault(anahtar, set()).add(b)
+                for m in _YUTMA.finditer(str(adim.get("run", ""))):
+                    sonuc.setdefault(anahtar, set()).add("|| " + m.group(1).split()[0])
+    return sonuc
+
+
+def test_KRITIK_hicbir_is_ya_da_adim_IZINSIZ_bloklamayan_degil():
+    """`continue-on-error`, sabit-yanlış `if:` ve hata yutan `||` yalnız gerekçeli izin listesinde."""
+    assert len(_is_akislari()) >= 8, f"VAKUM: yalnız {_is_akislari()} tarandı"
+    bulunan = bloklamayan_bicimler()
+    izinsiz = {k: v - BLOKLAMAYAN_IZINLI.get(k, set()) for k, v in bulunan.items()}
+    izinsiz = {k: sorted(v) for k, v in izinsiz.items() if v}
+    assert not izinsiz, (
+        f"BLOKLAMAYAN iş/adım (izin listesinde yok): {izinsiz}. Bir CI kapısı dekorasyona dönüşmesin; bilinçliyse "
+        "BLOKLAMAYAN_IZINLI'ya gerekçesiyle ekleyin."
+    )
+
+
+def test_KRITIK_izin_listesi_BAYATLAMAZ():
+    """İzin listesinde olup artık iş akışında karşılığı olmayan biçim kalmasın (liste yalnız küçülür)."""
+    bulunan = bloklamayan_bicimler()
+    bayat = {k: sorted(v - bulunan.get(k, set())) for k, v in BLOKLAMAYAN_IZINLI.items() if v - bulunan.get(k, set())}
+    assert not bayat, f"izin listesinde KULLANILMAYAN satır: {bayat} — kaldırın (ya da adım adı değiştiyse güncelleyin)"
+
+
+#: Kapının bloklayıcı saydığı işler ve her birinin ASIL adımı (run/uses içinde aranan parça).
+BLOKLAYICI_ISLER = {
+    ("tests.yml", "backend"): "pytest tests",
+    ("tests.yml", "launcher"): "cargo test",
+    ("tests.yml", "sir-taramasi"): "gitleaks",
+    ("lint.yml", "ruff"): "ruff check",
+    ("site.yml", "site"): "npm test",
+    ("frontend.yml", "test"): "tsc --noEmit",
+}
+
+
+@pytest.mark.parametrize("dosya,is_adi", sorted(BLOKLAYICI_ISLER))
+def test_KRITIK_bloklayici_isin_ASIL_adimi_VAR_ve_KOSAR(dosya, is_adi):
+    """Bloklayıcı iş ve asıl adımı var; iş ya da asıl adım koşulsuz-kapalı (`if: false`) ya da yutucu değil."""
+    is_ = (_yukle(dosya).get("jobs") or {}).get(is_adi)
+    assert is_, f"{dosya}: bloklayıcı iş '{is_adi}' YOK"
+    parca = BLOKLAYICI_ISLER[(dosya, is_adi)]
+    asil = [a for a in is_.get("steps") or [] if parca in (str(a.get("run", "")) + " " + str(a.get("uses", "")))]
+    assert asil, f"{dosya}/{is_adi}: '{parca}' adımı YOK"
+    for a in asil:
+        bicim = _bloklamayan(a.get("continue-on-error"), a.get("if")) + [
+            "|| " + m for m in _YUTMA.findall(str(a.get("run", "")))
+        ]
+        assert not bicim, f"{dosya}/{is_adi}: asıl adım '{_adim_adi(a)}' bloklamıyor: {bicim}"
+
+
+def test_KRITIK_Windows_ratchet_adimi_KAPSAMI_OLCER():
+    """`fail_under` eşiği ancak kapsam ÖLÇÜLÜRSE işler: Windows pytest adımında `--cov` + `--cov-report` şart."""
+    adimlar = _yukle("tests.yml")["jobs"]["backend"]["steps"]
+    # ⚠️ `runner.os != 'Windows'` de "Windows" içerir — EŞİTLİK koşuluna çapalı (ilk sürüm iki adımı da seçiyordu).
+    win_mi = re.compile(r"runner\.os\s*==\s*['\"]Windows['\"]")
+    win = [a for a in adimlar if "pytest tests" in str(a.get("run", "")) and win_mi.search(str(a.get("if", "")))]
+    assert len(win) == 1, f"Windows'ta koşan TEK pytest adımı bekleniyordu, bulunan {len(win)}"
+    komut = str(win[0]["run"])
+    assert re.search(r"(^|\s)--cov(\s|=|$)", komut), f"Windows ratchet adımı kapsamı ÖLÇMÜYOR: {komut}"
+    assert "--cov-report" in komut, f"Windows ratchet adımında --cov-report yok: {komut}"
+
+
+def _fail_under() -> float:
+    metin = (KOK / "pyproject.toml").read_text(encoding="utf-8")
+    blok = re.search(r"^\[tool\.coverage\.report\]\s*$(.*?)(?=^\[)", metin, re.M | re.S)
+    assert blok, "pyproject.toml'da [tool.coverage.report] bölümü yok"
+    m = re.search(r"^fail_under\s*=\s*([0-9.]+)\s*$", blok.group(1), re.M)
+    assert m, "[tool.coverage.report] fail_under tanımsız — ratchet YOK"
+    return float(m.group(1))
+
+
+def test_KRITIK_fail_under_SAHIP_KARARI_50_ALTINA_DUSMEZ():
+    """Sahip kararı (#20): kapsam eşiği 50'nin altına DÜŞÜRÜLMEZ (yalnız yükseltilir)."""
+    assert _fail_under() >= 50, f"fail_under {_fail_under()} < 50 — sahip kararı: eşik düşürülmez"
