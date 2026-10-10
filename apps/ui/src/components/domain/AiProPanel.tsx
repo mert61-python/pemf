@@ -753,11 +753,19 @@ export function AiProPanel({
   const rejectProposal = useCallback(async (reason: string) => {
     if (!proposal?.proposalId) return;
     setApprovalBusy(true);
-    await apiPost("/ai/pro/reject",
+    const r = await apiPost<{ status?: string; gerekceKaydedildi?: boolean } | null>("/ai/pro/reject",
       { proposal_id: proposal.proposalId, operator_email: operatorEmail || "", reason },
       null);
     setApprovalBusy(false);
     setProposal(null);
+    // S-F2-1.2 (2-F incelemesi · Y123 · C2-1.14): pencere "Red gerekçesi (kayda geçer)" diyor — sunucu yazamadıysa hekim bilmeli.
+    if (r && r.gerekceKaydedildi === false) {
+      platformAlert(
+        "Gerekçe kaydedilemedi",
+        "Öneri reddedildi ve tedavi BAŞLAMADI; ancak red gerekçesi cihazın kayıtlarına yazılamadı. Gerekçeyi hasta notuna ekleyin; "
+          + "sorun sürerse teknik desteğe bildirin.",
+      );
+    }
   }, [proposal, operatorEmail]);
 
   const stop = useCallback(async () => {

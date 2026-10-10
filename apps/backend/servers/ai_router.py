@@ -2359,13 +2359,17 @@ def reject_ai_pro(payload: AiApprovalPayload, request: Request):
         raise HTTPException(status_code=404, detail=str(e)) from None
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e)) from None
-    _kaydet_onay_izi("ai_proposal_rejected", rec)
-    return {"status": "success", "proposalId": rec["id"]}
+    # S-F2-1.2 (2-F incelemesi · Y123 · C2-1.14): onay penceresi "Red gerekçesi (kayda geçer)" diyor — karar kaydı yazılamazsa ret yine
+    # 200 (tedavi BAŞLAMAZ, akış durmaz) ama yanıt bunu SÖYLER; arayüz hekimi uyarır.
+    # Kapı: tests/test_ai_pro_red_GEREKCE_KAYDEDILDI_mi_soyler_SF212.py
+    kaydedildi = _kaydet_onay_izi("ai_proposal_rejected", rec)
+    return {"status": "success", "proposalId": rec["id"], "gerekceKaydedildi": kaydedildi}
 
 
-def _kaydet_onay_izi(olay: str, rec: dict) -> None:
+def _kaydet_onay_izi(olay: str, rec: dict) -> bool:
     """Onay/red kararını KALICI denetim izine yaz (append-only session_events).
-    Best-effort: DB hatası klinik akışı DURDURMAZ, ama sessizce de yutulmaz (log'a düşer)."""
+    Best-effort: DB hatası klinik akışı DURDURMAZ, ama sessizce de yutulmaz (log'a düşer). Dönen: AI Pro karar kaydı (ret gerekçesi
+    metni dahil) yazıldı mı — S-F2-1.2."""
     try:
         from servers.api_server import _get_treatment_db
 
@@ -2406,6 +2410,8 @@ def _kaydet_onay_izi(olay: str, rec: dict) -> None:
         )
     except Exception:
         logger.warning("AI Pro karar kaydı (gerekçe metni) yazılamadı (%s)", olay, exc_info=True)
+        return False
+    return True
 
 
 @ai_router.post("/api/ai/pro/start")
