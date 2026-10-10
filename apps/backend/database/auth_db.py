@@ -121,6 +121,10 @@ class AuthDB:
         c = sqlite3.connect(str(self.db_path), check_same_thread=False, timeout=10.0)
         c.row_factory = sqlite3.Row
         try:
+            # S-F2-2.4 (2-F incelemesi · Y13): çıkarılan hekimin e-postası / adı / PIN özeti serbest bırakılan sayfada kalmasın (tedavi ve
+            # hasta DB'leriyle aynı). İLK sırada: WAL kipi kilitte düşse de kurulur.
+            # Kapı: tests/test_kimlik_DB_operator_cikarma_DOSYADA_kalinti_birakmaz_SF224.py
+            c.execute("PRAGMA secure_delete=ON")
             c.execute("PRAGMA journal_mode=WAL")
             c.execute("PRAGMA busy_timeout=5000")
         except Exception:
