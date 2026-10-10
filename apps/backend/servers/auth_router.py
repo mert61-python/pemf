@@ -44,7 +44,10 @@ async def _get_auth_token(request: Request):
                 content='{"detail":"Token yalniz yerel agdan alinabilir"}',
                 media_type="application/json",
             )
-        return {"token": get_api_token()}
+        # ⚠️ E2-4.1 (2-E incelemesi · Ö.4-Y8): sır deposu soğuk / okunamazken `get_api_token` `icacls` (alt süreç, 10 sn zaman
+        # aşımı) ve dosya G/Ç'si yapar; satır içi koşunca olay döngüsü donuyor, o sürede ACİL DURDUR dağıtılamıyordu (3 sn'lik
+        # icacls → 6,1 sn ölçüldü). Döngü dışında koşar. Kapı: tests/test_auth_uclari_SIR_hatasinda_ACIL_DURDUR_gecikmez_E2_4_1.py
+        return {"token": await asyncio.to_thread(get_api_token)}
     except Exception:
         logging.exception("auth token endpoint hatasi")
         return Response(status_code=500, content='{"detail":"token alinamadi"}', media_type="application/json")
@@ -283,7 +286,8 @@ async def _exchange_code_for_token(request: Request):
     try:
         from utils.secrets_manager import get_secret
 
-        expected = (get_secret("pairing_code") or "").strip().upper()
+        # E2-4.1 (Ö.4-Y8): sır deposu okuması döngü dışında (bkz. `_get_auth_token`).
+        expected = (await asyncio.to_thread(get_secret, "pairing_code") or "").strip().upper()
     except Exception:
         expected = ""
     if not _safe_compare(code, expected) or not expected or not code:
@@ -296,7 +300,7 @@ async def _exchange_code_for_token(request: Request):
     try:
         from servers.auth import get_api_token
 
-        return {"token": get_api_token()}
+        return {"token": await asyncio.to_thread(get_api_token)}
     except Exception:
         logging.exception("exchange token alinamadi")
         return Response(status_code=500, content='{"detail":"token alinamadi"}', media_type="application/json")
@@ -590,12 +594,13 @@ async def _reset_password(payload: _ResetPayload, request: Request):
         return _throttle_429()
     email = (payload.email or "").strip().lower()
     supplied = (payload.admin_code or "").strip()
-    valid = bool(supplied) and _safe_compare(supplied, _admin_reset_code())
+    # E2-4.1 (Ö.4-Y8): sır deposu okumaları döngü dışında (bkz. `_get_auth_token`).
+    valid = bool(supplied) and _safe_compare(supplied, await asyncio.to_thread(_admin_reset_code))
     if not valid and supplied:  # break-glass: api_token da geçerli (ProgramData'dan okunabilir)
         try:
             from utils.secrets_manager import get_secret
 
-            api_tok = (get_secret("api_token") or "").strip()
+            api_tok = (await asyncio.to_thread(get_secret, "api_token") or "").strip()
             if api_tok:
                 valid = _safe_compare(supplied, api_tok)
         except Exception:
