@@ -41,6 +41,8 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from utils.dongu_guvenligi import dongu_hatasini_bildir
+
 logger = logging.getLogger(__name__)
 
 #: CSV sütunları — SIRA SÖZLEŞMEDİR (mevcut dosyalara yeni sütun eklenirse başlık değişir ve
@@ -374,7 +376,9 @@ def _arka_isci() -> None:
         try:
             kaydedici().kaydet(bobin, msg_type, yuk, zaman=zaman)
         except Exception:
-            logger.debug("sensor kaydi (arka plan) basarisiz", exc_info=True)
+            # D1.17: daemon döngüsünün bildirimi de fırlatmamalı (yoksa işçi sessizce ölür, kuyruk dolar, telemetri hep atılır).
+            # Kapı: tests/test_dongu_hata_bildirimi_OLDURMEZ.py
+            dongu_hatasini_bildir("sensor kaydi (arka plan) basarisiz", logger=logger, seviye=logging.DEBUG)
         finally:
             _arka_kuyruk.task_done()
 
