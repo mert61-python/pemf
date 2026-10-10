@@ -165,8 +165,11 @@ def test_ENTEGRASYON_petri_gercek_kareden_hedef_ve_SURE_olcumu(kedi_izi):
 
 def test_ENTEGRASYON_analiz_ve_saglayici_AYNI_onbellegi_paylasir():
     """239 MB petri ONNX + 90 MB YOLO iki kez yüklenmesin: analiz ucu ve sağlayıcı aynı
-    `_get_or_load_model` anahtarını ve AYNI yükleyiciyi kullanmalı."""
-    _agirlik_gerekli("fantom", "petri")
+    `_get_or_load_model` anahtarını ve AYNI yükleyiciyi kullanmalı.
+
+    ⚠️ AĞIRLIK GEREKMEZ (4-A kapanış, 2026-10-10): yalnız önbellek anahtarı ve yükleyici KİMLİĞİ ölçülür, model yüklenmez —
+    D4.09'da buraya da `_agirlik_gerekli` eklenmişti; temiz klonda GEÇEN test atlanıyor, ZORUNLU kipte YALANCI kırmızı
+    veriyordu (kapanış süiti tabanla karşılaştırmasında "passed -> skipped" olarak ölçüldü)."""
     import servers.ai_pro_hedef as hedef
     import servers.ai_router as air
 
