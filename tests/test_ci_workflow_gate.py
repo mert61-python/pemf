@@ -374,6 +374,13 @@ def _fail_under() -> float:
     return float(m.group(1))
 
 
-def test_KRITIK_fail_under_SAHIP_KARARI_50_ALTINA_DUSMEZ():
-    """Sahip kararı (#20): kapsam eşiği 50'nin altına DÜŞÜRÜLMEZ (yalnız yükseltilir)."""
-    assert _fail_under() >= 50, f"fail_under {_fail_under()} < 50 — sahip kararı: eşik düşürülmez"
+#: Ratchet TABANI — test sabiti (mutasyon hedefi pyproject'ten OKUNMAZ). Sahip kararı #20: yalnız yükseltilir. D4.02 adım 2
+#: (2026-10-10): genişlemiş kaynakla ölçülen %79,14 → eşik 75; taban da 75'e çekildi (50'de kalsaydı 75→51 düşürmesi YEŞİLDİ).
+_FAIL_UNDER_TABANI = 75
+
+
+def test_KRITIK_fail_under_SAHIP_KARARI_TABANIN_ALTINA_DUSMEZ():
+    """Sahip kararı (#20): kapsam eşiği DÜŞÜRÜLMEZ (yalnız yükseltilir) — taban son ölçülen yükseltmenin değeridir."""
+    assert _fail_under() >= _FAIL_UNDER_TABANI, (
+        f"fail_under {_fail_under()} < {_FAIL_UNDER_TABANI} — sahip kararı: eşik düşürülmez"
+    )

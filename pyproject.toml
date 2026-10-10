@@ -151,7 +151,9 @@ omit = ["*/__pycache__/*", "tests/*", "*/ai_hub/*"]
 # Kademeli yükseltin (kritik yol testleri arttıkça).
 # ⚠️ D4.02 (B-10.7, 2026-10-10): kaynak 4 yüzeyle genişledi (yukarıda); eşik, genişlemiş kaynakla ÖLÇÜLEN değerin
 # ~4 puan altına YÜKSELTİLİR (düşürülmez — sahip kararı #20, kapı test_ci_workflow_gate). Ölçüm 4-A kapanış süitinde.
-fail_under = 50
+# ÖLÇÜLEN (4-A kapanış, 2026-10-10, temiz klon @ cb2926fe, Windows, 6250 geçen test, 8 kaynak yüzeyi): TOPLAM %79,14
+# (21580 ifade). Eşik 50 → 75 (~4 puan marj). Taban artık 75: test_ci_workflow_gate bunun altını KIRMIZI yapar.
+fail_under = 75
 show_missing = false
 
 [tool.mypy]
