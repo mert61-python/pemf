@@ -2391,6 +2391,21 @@ def _kaydet_onay_izi(olay: str, rec: dict) -> None:
         )
     except Exception:
         logger.warning("AI onay denetim izi yazılamadı (%s)", olay, exc_info=True)
+    # ⚠️ Y119 (S-C.1): kararın kendisi ve ret gerekçesi METNİ şifreli DB'nin AI Pro karar tablosuna — iz metinsiz kalır (yukarıda).
+    # Ayrı try: biri düşerse öteki yine yazılır; ikisi de kararı (ve tedaviyi) DURDURMAZ. Onay penceresi "Red gerekçesi (kayda
+    # geçer)" diyor — C2-1.14. Kapı: tests/test_ai_pro_red_gerekcesi_KARAR_TABLOSUNDA_Y119.py
+    try:
+        from servers.api_server import _get_treatment_db
+
+        _get_treatment_db().ai_pro_karari_yaz(
+            rec.get("id"),
+            "reddedildi" if olay == "ai_proposal_rejected" else "onaylandi",
+            gerekce=str(rec.get("reason") or "") if olay == "ai_proposal_rejected" else "",
+            operator_email=rec.get("operator") or "",
+            patient_uuid=str((rec.get("specs") or {}).get("patient_id") or ""),
+        )
+    except Exception:
+        logger.warning("AI Pro karar kaydı (gerekçe metni) yazılamadı (%s)", olay, exc_info=True)
 
 
 @ai_router.post("/api/ai/pro/start")

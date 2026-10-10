@@ -333,6 +333,7 @@ class PiiKarisimi:
         from utils.turkce_metin import arama_katla
 
         degisen = 0
+        karar_tablosu = None
         for u in uuids:
             desenler = [
                 self._kimlik_deseni(m)
@@ -368,6 +369,32 @@ class PiiKarisimi:
                     ),
                 )
                 degisen += 1
+            # Y119: AI Pro karar metinleri (ret gerekçesi) — bu hastanın kararları + (ad TEK hastaya çözülüyorsa) hastasız
+            # kararlardan adı GEÇENLER. Hekim atfı (`operator_email`) KALIR (A-27). Tablo yoksa (çok eski şema) atlanır.
+            if karar_tablosu is None:
+                karar_tablosu = bool(
+                    cursor.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ai_pro_kararlari'"
+                    ).fetchone()
+                )
+            if karar_tablosu:
+                kararlar = cursor.execute(
+                    "SELECT id, gerekce FROM ai_pro_kararlari WHERE patient_uuid = ?", (u,)
+                ).fetchall()
+                if bilgi.get("ad_ile_kimliksiz") and ad:
+                    ad_deseni = self._kimlik_deseni(str(ad))
+                    kararlar += [
+                        r
+                        for r in cursor.execute(
+                            "SELECT id, gerekce FROM ai_pro_kararlari WHERE COALESCE(patient_uuid, '') = ''"
+                        ).fetchall()
+                        if r[1] and ad_deseni.search(str(r[1]))
+                    ]
+                for kid, gerekce in kararlar:
+                    yeni = self._metinden_kimligi_sil(gerekce, desenler)
+                    if yeni != gerekce:
+                        cursor.execute("UPDATE ai_pro_kararlari SET gerekce=? WHERE id=?", (yeni, kid))
+                        degisen += 1
         return degisen
 
     # ── D2.54 · A-06 / A-09 / B-3.34: anonimleştirme ONAYI ve kalıcı BEKLEYEN listesi (system_settings) ──────────────────────────

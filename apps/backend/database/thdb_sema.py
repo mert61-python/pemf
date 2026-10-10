@@ -210,6 +210,24 @@ class SemaKarisimi:
         self._safe_add_column(cursor, "ai_analyses", "patient_uuid TEXT DEFAULT ''", "ai_analyses.patient_uuid eklendi")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_analyses_patient_uuid ON ai_analyses(patient_uuid)")
 
+        # ── AI PRO ÖNERİ KARARLARI (Y119 · S-C.1 · O-A2.2) ─────────────────────────────────────────────────────────────
+        # Hekimin onay/ret kararı ve ret gerekçesi METNİ burada (şifreli DB'nin kendi tablosu). `session_events` izi METİNSİZ
+        # kalır (yalnız `gerekce_var`) — gerekçe hasta/sahip adı, klinik bulgu taşıyabilir (Y114 deseni). Hasta bağı opak
+        # `patient_uuid`; ad YAZILMAZ. Anonimleştirme (A-06 / Y125) metne ulaşır, hekim atfı kalır (A-27).
+        # Kapı: tests/test_ai_pro_red_gerekcesi_KARAR_TABLOSUNDA_Y119.py
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_pro_kararlari (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                proposal_id TEXT NOT NULL,
+                karar TEXT NOT NULL,
+                gerekce TEXT DEFAULT '',
+                operator_email TEXT DEFAULT '',
+                patient_uuid TEXT DEFAULT ''
+            )
+        ''')
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_pro_kararlari_patient_uuid ON ai_pro_kararlari(patient_uuid)")
+
         # Schema migration kayıtları
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS schema_migrations (

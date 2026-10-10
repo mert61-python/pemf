@@ -146,6 +146,26 @@ class AiGecmisiKarisimi:
             self.logger.warning(f"AI değerlendirmesi yazılamadı: {e}")
             return False
 
+    def ai_pro_karari_yaz(
+        self, proposal_id: str, karar: str, gerekce: str = "", operator_email: str = "", patient_uuid: str = ""
+    ) -> int:
+        """Y119 (S-C.1): AI Pro öneri kararını ve ret gerekçesi METNİNİ kendi tablosuna yaz (`ai_pro_kararlari`). Hata YÜKSELİR
+        (çağıran best-effort: kararın kendisini ve metinsiz izi bozmaz). @return satır kimliği."""
+        self._ensure_write_guardrail()
+        with self._get_connection() as conn:
+            cur = conn.execute(
+                "INSERT INTO ai_pro_kararlari (proposal_id, karar, gerekce, operator_email, patient_uuid) VALUES (?,?,?,?,?)",
+                (
+                    str(proposal_id or ""),
+                    str(karar),
+                    str(gerekce or ""),
+                    str(operator_email or ""),
+                    str(patient_uuid or ""),
+                ),
+            )
+            conn.commit()
+            return int(cur.lastrowid)
+
     def delete_ai_analysis(self, analysis_id: int, operator_email: Optional[str] = None) -> bool:
         """TEK bir AI analiz kaydını siler.
 
