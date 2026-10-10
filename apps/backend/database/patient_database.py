@@ -950,7 +950,11 @@ class PatientDatabase:
 
         ⚠️ D2.54 · A-06: `yalniz` verilirse YALNIZ o kimlikler (hâlâ aday olanlar) anonimleşir — operatörün onayladığı ve kimlik
         metinleri tedavi-DB adımı için kalıcı listeye yazılmış aday kümesi; tur sırasında aday olan YENİ hasta bu turda işlenmez."""
-        cutoff = (datetime.now() - timedelta(days=max(1, int(inactive_days)))).isoformat()
+        # ⚠️ F2-1.8 (2-F incelemesi · D2.49 kuralı): süre 0/negatif → HİÇBİR hasta anonimleşmez. Eskiden `max(1, …)` 0'ı 1 GÜNE
+        # çeviriyordu: dünden önce tedavi görmüş TÜM hastalar geri dönüşsüz anonimleşirdi (ölçüldü).
+        if int(inactive_days) <= 0:
+            return []
+        cutoff = (datetime.now() - timedelta(days=int(inactive_days))).isoformat()
         anonymized: List[str] = []
         try:
             with self.lock:

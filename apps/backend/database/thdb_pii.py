@@ -63,7 +63,10 @@ class PiiKarisimi:
         Kapı: tests/test_pii_redaksiyon_SAYIMLARI_durust_D258.py
         """
         try:
-            cutoff = (datetime.now() - timedelta(days=max(1, int(retain_days)))).strftime('%Y-%m-%d')
+            # F2-1.8: süre 0/negatif = maskeleme KAPALI → bekleyen yok (eskiden `max(1, …)` 1 günlük kapsamı sayıyordu).
+            if int(retain_days) <= 0:
+                return 0
+            cutoff = (datetime.now() - timedelta(days=int(retain_days))).strftime('%Y-%m-%d')
             kosul, adlar = self._redaksiyon_kosulu()
             with self._get_connection() as conn:
                 r = conn.execute(
@@ -173,7 +176,11 @@ class PiiKarisimi:
             'sessions_redacted': 0,
             'parameters_redacted': 0,
         }
-        cutoff_date = (datetime.now() - timedelta(days=max(1, int(retain_days)))).strftime('%Y-%m-%d')
+        # ⚠️ F2-1.8 (2-F incelemesi · D2.49 kuralı): süre 0/negatif → HİÇBİR şey maskelenmez (eskiden `max(1, …)` → 1 GÜNLÜK kesim:
+        # dünden önceki tüm seanslar geri dönüşsüz maskelenirdi — ölçüldü).
+        if int(retain_days) <= 0:
+            return report
+        cutoff_date = (datetime.now() - timedelta(days=int(retain_days))).strftime('%Y-%m-%d')
 
         try:
             with self._get_connection() as conn:
