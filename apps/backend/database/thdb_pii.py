@@ -274,34 +274,45 @@ class PiiKarisimi:
                     uuids,
                 )
                 n = int(cursor.rowcount)
+                # 1b) ⚠️ F2-1.4 (2-F incelemesi): KİMLİKSİZ ayna satırları (istemci yalnız ad gönderdi → `upsert_patient(uuid=None)`) ve
+                #     hastaya hiç bağlanmamış seanslar (`patient_id` NULL) — ad TEK hastaya çözülüyorsa (`ad_ile_kimliksiz`, Y125 kuralı;
+                #     çağıran ölçer) bu hastanındır. Eskiden bunlara hiç ulaşılmıyordu → ad SÜRESİZ kalıyordu (ölçüldü).
+                ek_pids, ek_sids = self._kimliksiz_ad_eslesmeleri(cursor, uuids, kimlikler)
+                if ek_pids:
+                    eph = ",".join("?" * len(ek_pids))
+                    cursor.execute(
+                        f"UPDATE patients SET name='[ANONIM]', owner_name='[ANONIM]', vet_contact='', "
+                        f"owner_email='', updated_at=CURRENT_TIMESTAMP WHERE id IN ({eph})",
+                        ek_pids,
+                    )
                 # 2) KVKK BÜTÜNLÜK (sağ-unutulma): get_session_history patient_name'i session_parameters ve
                 #    ts.patient_name'den de okur (COALESCE). Şifreli-at-rest üretimde bu DENORMALİZE PII de
                 #    silinmezse anonimleştirme EKSİK kalırdı → ilgili session'ları patient_id üstünden temizle.
                 cursor.execute(f"SELECT id FROM patients WHERE patient_uuid IN ({ph})", uuids)
-                pids = [r[0] for r in cursor.fetchall() if r[0] is not None]
+                pids = [r[0] for r in cursor.fetchall() if r[0] is not None] + ek_pids
+                sids = list(ek_sids)
                 if pids:
                     pph = ",".join("?" * len(pids))
+                    cursor.execute(f"SELECT id FROM treatment_sessions WHERE patient_id IN ({pph})", pids)
+                    sids += [r[0] for r in cursor.fetchall()]
+                if sids:
+                    sph = ",".join("?" * len(sids))
                     # ⚠️ A-27: `operator_name` (hekim atfı) DOKUNULMAZ.
                     cursor.execute(
-                        f"UPDATE treatment_sessions SET patient_name='[ANONIM]', "
-                        f"patient_notes='[ANONIM]' WHERE patient_id IN ({pph})",
-                        pids,
+                        f"UPDATE treatment_sessions SET patient_name='[ANONIM]', patient_notes='[ANONIM]' WHERE id IN ({sph})",
+                        sids,
                     )
                     _hasta_parametreleri = tuple(sorted(self._PII_PARAM_NAMES - self._ANONIM_KALAN_PARAMETRELER))
                     pn_ph = ",".join("?" * len(_hasta_parametreleri))
                     cursor.execute(
                         f"UPDATE session_parameters SET parameter_value='[ANONIM]' "
-                        f"WHERE parameter_name IN ({pn_ph}) AND session_id IN "
-                        f"(SELECT id FROM treatment_sessions WHERE patient_id IN ({pph}))",
-                        (*_hasta_parametreleri, *pids),
+                        f"WHERE parameter_name IN ({pn_ph}) AND session_id IN ({sph})",
+                        (*_hasta_parametreleri, *sids),
                     )
                     # 3) D2.59 (B-3.83): seans olayı ve outbox YÜKLERİNDEKİ hasta adı da (SessionManager yaşam döngüsü yükü) —
                     #    aynı işlemde. Satırlar SİLİNMEZ (olay izi A-07, outbox drain-only #21/#28); yalnız `patient_name` alanı.
                     #    Hekim atfı (`operator_name`) KALIR (A-27).
-                    cursor.execute(f"SELECT id FROM treatment_sessions WHERE patient_id IN ({pph})", pids)
-                    sids = [r[0] for r in cursor.fetchall()]
-                    if sids:
-                        self._yuklerden_hasta_adini_anonimlestir(cursor, sids)
+                    self._yuklerden_hasta_adini_anonimlestir(cursor, sids)
                 # 4) Y125 / B-3.33: AI analiz kayıtları (aynı işlem).
                 self._ai_kayitlarini_anonimlestir(cursor, uuids, metinler, kimlikler)
                 conn.commit()
@@ -311,6 +322,34 @@ class PiiKarisimi:
                 f"treatment-history hasta anonimlestirme uyarisi (sonraki turda yeniden denenecek): {e}"
             )
             return -1
+
+    @staticmethod
+    def _kimliksiz_ad_eslesmeleri(cursor, uuids, kimlikler):
+        """F2-1.4: `ad_ile_kimliksiz` işaretli hastaların adına (Türkçe katlanmış eşitlik) sahip KİMLİKSİZ ayna satırları ve `patient_id`'si
+        NULL seanslar → (ayna id'leri, seans id'leri). Belirsiz ad (aynı adlı aktif hasta) işaretlenmez — dokunulmaz."""
+        from utils.turkce_metin import arama_katla
+
+        adlar = set()
+        for u in uuids:
+            b = kimlikler.get(u) or {}
+            ad = next((m for m in (b.get("metinler") or []) if m), None)
+            if b.get("ad_ile_kimliksiz") and ad and str(ad).strip() != "[ANONIM]":
+                adlar.add(arama_katla(str(ad)))
+        if not adlar:
+            return [], []
+        ek_pids = [
+            r[0]
+            for r in cursor.execute("SELECT id, name FROM patients WHERE COALESCE(patient_uuid, '') = ''").fetchall()
+            if r[1] and arama_katla(str(r[1])) in adlar
+        ]
+        ek_sids = [
+            r[0]
+            for r in cursor.execute(
+                "SELECT id, patient_name FROM treatment_sessions WHERE patient_id IS NULL"
+            ).fetchall()
+            if r[1] and arama_katla(str(r[1])) in adlar
+        ]
+        return ek_pids, ek_sids
 
     @staticmethod
     def _kimlik_deseni(metin: str):
