@@ -157,13 +157,31 @@ _KURTARMA_TOKENI: str | None = None
 _YENILEME_ESIGI_SN = 365 * 24 * 3600
 
 
+def _etkilesimli_konsol() -> bool:
+    """stdin GERÇEK etkileşimli konsol mu? ⚠️ E2-3.1: Windows'ta `NUL` bir karakter aygıtıdır — `isatty()` True döner; `getpass`
+    (`msvcrt.getwch`) zamanlanmış görev / otomasyon / `< NUL` koşusunda gizli konsolda SONSUZA DEK bekler, konsolsuz süreçte
+    %100 CPU ile döner (ölçüldü). Konsol girdisi yalnız `GetConsoleMode` başarılıysa sayılır."""
+    try:
+        if sys.stdin is None or not sys.stdin.isatty():
+            return False
+        if os.name != "nt":
+            return True
+        import ctypes
+        import msvcrt
+
+        kip = ctypes.c_ulong(0)
+        return bool(ctypes.windll.kernel32.GetConsoleMode(msvcrt.get_osfhandle(sys.stdin.fileno()), ctypes.byref(kip)))
+    except Exception:
+        return False
+
+
 def _kurtarma_tokeni() -> str:
     """⚠️ Y86 (sahip kararı · İG-9.86): tatbikat KURTARMA token'ıyla koşar — felakette elde olacak olan odur; kök token
     tatbikatta KULLANILMAZ. Eskiden `--tatbikat` `--token`ı yok sayıp kök token'la koşuyordu: kurtarma token'ı İPTAL edilmiş
     olsa bile "TATBIKAT BASARILI" diyordu (ölçüldü). Token yoksa / kök token ise / kurtarma politikasını taşımıyorsa /
     geçersizse tatbikat "BASARILI" DEMEZ (SystemExit). Token'ın kalan ömrü raporlanır; bir yıldan azsa yenileme söylenir."""
     tok = (_KURTARMA_TOKENI or "").strip()
-    if not tok and sys.stdin is not None and sys.stdin.isatty():
+    if not tok and _etkilesimli_konsol():
         import getpass
 
         tok = getpass.getpass("  Kurtarma token'i (ekranda gorunmez): ").strip()
