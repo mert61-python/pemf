@@ -202,12 +202,24 @@ class HeadlessDBMaintenance:
 
     @staticmethod
     def _retain_days(env_name: str, default: int) -> int:
-        """Retention suresi (gun). 0 → O ADIM KAPALI. Gecersiz deger → varsayilan."""
-        try:
-            return int(os.environ.get(env_name, default))
-        except (TypeError, ValueError):
-            logger.warning("%s gecersiz — varsayilan %d gun kullaniliyor.", env_name, default)
+        """Retention suresi (gun). Tanimsiz → varsayilan. 0 → O ADIM KAPALI.
+
+        ⚠️ S-F2-1.5 (2-F incelemesi · Y123): GECERSIZ ya da BOS deger → adim KAPALI (0) + WARNING. Eskiden varsayilana dusuyordu →
+        niyeti okunamayan (ör. 'silme' niyetiyle bos birakilmis `PEMF_RETAIN_DOSE_DAYS=`) geri donussuz silme SURUYORDU. Ekran
+        (`/api/settings/retention`) ve gunluk dongunun olay silmesi de BU okuyucuyu kullanir (tutarli).
+        Kapi: tests/test_saklama_GECERSIZ_ya_da_BOS_deger_adimi_KAPATIR_SF215.py"""
+        ham = os.environ.get(env_name)
+        if ham is None:
             return default
+        try:
+            return int(ham)
+        except (TypeError, ValueError):
+            logger.warning(
+                "%s gecersiz (%r) — bu saklama adimi KAPALI (hicbir sey silinmez/maskelenmez); gecerli gun sayisi yazin.",
+                env_name,
+                ham,
+            )
+            return 0
 
     #: ⚠️ D2.44 (O-B2.1): `api_server` günlük döngüsünün okuduğu, hiçbir yerde belgelenmemiş ESKİ sensör saklama adı.
     _ESKI_SENSOR_ADI = "PEMF_SENSOR_RETAIN_DAYS"

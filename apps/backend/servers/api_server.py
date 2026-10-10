@@ -5379,10 +5379,10 @@ def _daily_maintenance_loop():
                     # ⚠️ B2-1.6: seans olayları (ACİL DURDUR kanıtı dahil) headless bakımla AYNI ayara uyar —
                     # `PEMF_RETAIN_EVENT_DAYS` (vars. 365, 0 = SİLME). Sabit 365 operatörün "silme"sini her gün eziyordu
                     # (dozdaki 2026-08-17 çelişkisinin aynısı). Kapı: tests/test_seans_olaylari_SAKLAMA_ayarina_uyar_B2_1_6.py
-                    try:
-                        _olay_gun = int(os.getenv("PEMF_RETAIN_EVENT_DAYS", "365"))
-                    except (TypeError, ValueError):
-                        _olay_gun = 365
+                    # S-F2-1.5: headless bakımla AYNI okuyucu (geçersiz / boş değer → adım KAPALI + WARNING; eskiden 365'e düşüyordu).
+                    from services.headless_db_maintenance import HeadlessDBMaintenance as _HDM
+
+                    _olay_gun = _HDM._retain_days("PEMF_RETAIN_EVENT_DAYS", 365)
                     removed_e = db.purge_old_session_events(_olay_gun) if _olay_gun > 0 else 0
                     # ⚠️ DOZ SİLME BU DÖNGÜDEN KALDIRILDI (denetim 2026-08-17). Burası
                     # `PEMF_SENSOR_RETAIN_DAYS` okuyordu — headless bakımın kullandığı

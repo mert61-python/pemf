@@ -85,7 +85,11 @@ def test_retention_env_overrides_are_read(monkeypatch):
     monkeypatch.setenv("PEMF_RETAIN_SENSOR_DAYS", "0")
     assert M._retain_days("PEMF_RETAIN_SENSOR_DAYS", 90) == 0, "0 = kapalı olarak okunmalı"
     monkeypatch.setenv("PEMF_RETAIN_SENSOR_DAYS", "bozuk")
-    assert M._retain_days("PEMF_RETAIN_SENSOR_DAYS", 90) == 90, "geçersiz değer varsayılana düşmeli"
+    # S-F2-1.5 (2-F incelemesi · Y123): geçersiz değer adımı KAPATIR — eskiden varsayılana düşüyor, niyeti okunamayan silme sürüyordu.
+    # Davranış kapısı: tests/test_saklama_GECERSIZ_ya_da_BOS_deger_adimi_KAPATIR_SF215.py
+    assert M._retain_days("PEMF_RETAIN_SENSOR_DAYS", 90) == 0, (
+        "geçersiz değer adımı KAPATMALI (niyeti okunamayan silme yapılmaz)"
+    )
     monkeypatch.delenv("PEMF_RETAIN_SENSOR_DAYS", raising=False)
     assert M._retain_days("PEMF_RETAIN_SENSOR_DAYS", 90) == 90
 
