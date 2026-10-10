@@ -999,20 +999,24 @@ class SeansKarisimi:
                         existing_id = int(row['id'])
 
                 if existing_id is not None:
+                    # ⚠️ 2-C incelemesi §9 #9: GÖNDERİLMEYEN (None) alan mevcut değeri KORUR. Üç çağıranın üçü de (seans başlangıcı,
+                    # AI Pro seansı, SessionManager) yalnız ad / kimlik / sahip e-postası gönderir; eskiden her seans başlangıcı ayna
+                    # satırının tür, ırk, yaş, kilo, sahip adı, veteriner ve notunu NULL'luyordu (ölçüldü).
+                    # Kapı: tests/test_upsert_patient_GONDERILMEYEN_alani_NULLLAMAZ_C2_9.py
                     cursor.execute(
                         '''
                         UPDATE patients SET
                             patient_uuid = COALESCE(?, patient_uuid),
                             name = ?,
-                            species = ?,
-                            breed = ?,
-                            age = ?,
-                            weight_kg = ?,
-                            owner_name = ?,
+                            species = COALESCE(?, species),
+                            breed = COALESCE(?, breed),
+                            age = COALESCE(?, age),
+                            weight_kg = COALESCE(?, weight_kg),
+                            owner_name = COALESCE(?, owner_name),
                             owner_email = COALESCE(?, owner_email),
-                            vet_contact = ?,
-                            veteriner = ?,
-                            notes = ?,
+                            vet_contact = COALESCE(?, vet_contact),
+                            veteriner = COALESCE(?, veteriner),
+                            notes = COALESCE(?, notes),
                             updated_at = ?,
                             sync_status = 0
                         WHERE id = ?
