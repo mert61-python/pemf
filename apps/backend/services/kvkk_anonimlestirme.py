@@ -63,6 +63,9 @@ def tur(pdb, tdb, esik: int = ESIK_GUN) -> dict:
                     len(adaylar),
                     esik,
                 )
+        elif adaylar and not tdb.saat_akla_yatkin_mi():
+            # ⚠️ F2-1.2 · A-73: saat sıçradı / geride — "5 yıl inaktif" kesimi güvenilmez; onay olsa da hiçbir hastaya dokunulmaz.
+            sonuc["saat_supheli"] = True
         elif adaylar:
             # 2) Kimlik metinleri kanonik adımdan ÖNCE kalıcı listeye (kanonik anonimleşince bir daha okunamazlar).
             tdb.anonim_bekleyen_ekle({a["id"]: [a.get("name"), a.get("owner"), a.get("owner_email")] for a in adaylar})

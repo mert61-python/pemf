@@ -8,6 +8,7 @@
     "approvedDays": null,
     "approvedCount": null,
     "approvalStale": false,
-    "default": 365
+    "default": 365,
+    "clockSuspect": null
   }
 }

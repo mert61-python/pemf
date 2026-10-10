@@ -162,6 +162,9 @@ class SeansKarisimi:
         # Kapı: tests/test_silme_fonksiyonlari_SIFIRDA_hicbir_sey_silmez_D249.py
         if int(retain_days) <= 0:
             return 0
+        # ⚠️ F2-1.2 · A-73: günlük döngü bu işlevi DOĞRUDAN çağırır (headless turu dışında) — saat akla yatkın değilse silinmez.
+        if not self.saat_akla_yatkin_mi():
+            return 0
         cutoff_ts = datetime.now().timestamp() - (int(retain_days) * 86400)
         # ⚠️ D2.50 (B-3.25) · SAHİP KARARI A-07: kritik tıbbi olaylar SÜRESİZ saklanır, diğer seans olayları süre dolunca silinir,
         # silme İZ bırakır. Eskiden tür/önem ayrımı yoktu: seans başlığındaki "Acil Durduruldu" ve doz kaydı 3650 gün kalırken

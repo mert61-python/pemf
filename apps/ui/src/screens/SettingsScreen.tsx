@@ -59,6 +59,8 @@ export function SettingsScreen() {
     approvedDays?: number | null; approvedCount?: number | null; approvalStale?: boolean;
     // D2.54 · A-06: 5 yıl inaktif hasta anonimleştirmesi — onay yoksa bekleyen sayı (sayılamazsa null) gösterilir, operatör onaylar.
     anonymization?: { days: number; acknowledged: boolean; pending: number | null; approvedAt?: string | null };
+    // F2-1.2 · A-73: onaylanmamış saat şüphesi (neden metni) — varken maskeleme / anonimleştirme / saklama silmesi KOŞMAZ.
+    clockSuspect?: string | null;
   }
   const [retention, setRetention] = useState<RetentionDurum | null>(null);
   const [retMesgul, setRetMesgul] = useState(false);
@@ -70,7 +72,7 @@ export function SettingsScreen() {
   useEffect(() => { void retentionYukle(); }, [retentionYukle]);
 
   const retentionKaydet = useCallback(async (govde: {
-    days?: number; acknowledge?: boolean; acknowledge_days?: number; anonymize_acknowledge?: boolean;
+    days?: number; acknowledge?: boolean; acknowledge_days?: number; anonymize_acknowledge?: boolean; clock_confirm?: boolean;
   }) => {
     setRetMesgul(true);
     await apiPost<{ status?: string } | null>("/settings/retention", govde, null);
@@ -870,6 +872,25 @@ export function SettingsScreen() {
               ? `Seans kayıtlarındaki hasta ve operatör adları ${retention.days} gün sonra kalıcı olarak maskelenir ([REDACTED]). Tedavi verileri (doz, süre, sensör) KALIR.`
               : "Maskeleme KAPALI — hasta ve operatör adları süresiz saklanır."}
           </Text>
+
+          {/* F2-1.2 · A-73: saat ileri sıçradıysa ya da geride kaldıysa geri dönüşsüz adımlar operatör saati onaylayana dek bekler. */}
+          {retention.clockSuspect ? (
+            <>
+              <Text style={[styles.intro, { color: colors.warning }]}>
+                Cihaz saati şüpheli ({retention.clockSuspect}). Saat doğrulanana kadar maskeleme, anonimleştirme ve süresi dolan
+                kayıtların silinmesi YAPILMAZ; veri kaybolmaz, yalnız bekler. Önce cihazın tarih ve saatini düzeltin. Saat bir süre
+                geride kaldıysa o sırada yazılan kayıtlar eski tarihli görünür ve onaydan sonra saklama süresine göre işlenir.
+              </Text>
+              <TouchableOpacity style={[styles.btnOutline, { borderColor: colors.warning, minHeight: touch.min }]}
+                disabled={retMesgul} onPress={() => retentionKaydet({ clock_confirm: true })}
+                accessibilityRole="button"
+                accessibilityLabel="Cihaz saatinin doğru olduğunu onayla">
+                <Text style={[styles.btnOutlineText, { color: colors.warning }]}>
+                  {retMesgul ? "…" : "Saat doğru, saklamayı sürdür"}
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
 
           {retention.pending === null ? (
             <Text style={[styles.intro, { color: colors.warning }]}>

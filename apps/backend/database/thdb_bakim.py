@@ -26,10 +26,68 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 
 class BakimKarisimi:
+    # ── ⚠️ F2-1.2 (2-F incelemesi) · A-73: geri dönüşsüz SÜREYE BAĞLI işlemler (anonimleştirme, PII maskeleme, doz/sensör/olay silmesi)
+    # yalnız AKLA YATKIN saatle koşar. Ölçüldü: saat +10 yıl sıçrayınca TEK tur tüm hastaları anonimleştiriyor, tüm dozu siliyordu; BIOS
+    # 2000'deyken yapılan tedavi saat düzelince anonimleşip dozu siliniyordu. Son görülen saat ("tavan") DB'de tutulur: saat ondan 1 günden
+    # fazla GERİDE ya da `SAAT_SICRAMA_GUN`den fazla İLERİDE ise şüphe KALICI işaretlenir; operatör saati onaylayana (`saat_onayla`) dek bu
+    # adımlar ATLANIR (veri kaybı yok — yalnız gecikme). Kapı: tests/test_saat_SICRAMASI_geri_donussuz_islem_yapmaz_A73_F2_1_2.py
+    SAAT_TAVANI_ANAHTARI = "saat_tavani"
+    SAAT_SUPHELI_ANAHTARI = "saat_supheli"
+    #: Bir turdan ötekine saatin (cihaz kapalı kalsa da) en çok ilerleyebileceği gün — aşılırsa ileri sıçrama şüphesi (sahip kararı).
+    SAAT_SICRAMA_GUN = 45
+    SAAT_GERI_TOLERANS = timedelta(days=1)
+
+    def saat_supheli_mi(self) -> Optional[str]:
+        """Onaylanmamış saat şüphesinin nedeni ya da None."""
+        return self._get_system_setting(self.SAAT_SUPHELI_ANAHTARI) or None
+
+    def saat_akla_yatkin_mi(self) -> bool:
+        """Geri dönüşsüz süreye bağlı adım bu turda koşabilir mi? ASLA istisna atmaz; denetlenemezse False (bu tur atlanır)."""
+        try:
+            neden = self.saat_supheli_mi()
+            if not neden:
+                simdi = datetime.now()
+                ham = self._get_system_setting(self.SAAT_TAVANI_ANAHTARI)
+                tavan = datetime.fromisoformat(ham) if ham else None
+                if tavan is not None and simdi < tavan - self.SAAT_GERI_TOLERANS:
+                    neden = f"geride: cihaz saati {simdi:%Y-%m-%d %H:%M}, son gorulen {tavan:%Y-%m-%d %H:%M}"
+                elif tavan is not None and simdi > tavan + timedelta(days=self.SAAT_SICRAMA_GUN):
+                    neden = f"ileri: cihaz saati {simdi:%Y-%m-%d %H:%M}, son gorulen {tavan:%Y-%m-%d %H:%M}"
+                if neden:
+                    self._set_system_setting(
+                        self.SAAT_SUPHELI_ANAHTARI, neden, "A-73: saat suphesi (operator onayi bekleniyor)"
+                    )
+                elif tavan is None or simdi > tavan:
+                    self._set_system_setting(
+                        self.SAAT_TAVANI_ANAHTARI, simdi.isoformat(timespec="seconds"), "A-73: son gorulen saat"
+                    )
+                    return True
+                else:
+                    return True
+            self.logger.warning(
+                "SAAT SUPHESI (%s) — anonimlestirme / maskeleme / saklama silmesi YAPILMADI; Ayarlar > Veri Saklama'dan cihaz "
+                "saatini dogrulayip onaylayin (A-73).",
+                neden,
+            )
+            return False
+        except Exception:
+            self.logger.warning(
+                "Saat denetimi yapilamadi — geri donussuz saklama adimlari bu turda ATLANDI.", exc_info=True
+            )
+            return False
+
+    def saat_onayla(self) -> None:
+        """Operatör cihaz saatinin DOĞRU olduğunu onayladı: şüphe kalkar, tavan = şimdi."""
+        self._set_system_setting(
+            self.SAAT_TAVANI_ANAHTARI, datetime.now().isoformat(timespec="seconds"), "A-73: son gorulen saat"
+        )
+        self._set_system_setting(self.SAAT_SUPHELI_ANAHTARI, "", "A-73: saat suphesi (operator onayladi)")
+
     def get_disk_space_status(self) -> Dict[str, object]:
         """DB volume disk alanı durumunu döndür."""
         usage = self._disk_usage_provider(self.db_path.parent)
@@ -250,6 +308,10 @@ class BakimKarisimi:
             'sessions_pii_redacted': 0,
             'parameters_pii_redacted': 0,
         }
+        # ⚠️ F2-1.2 · A-73: saat akla yatkın değilse HİÇBİR geri dönüşsüz adım koşmaz (bkz. `saat_akla_yatkin_mi`).
+        if not self.saat_akla_yatkin_mi():
+            report['saat_supheli'] = True
+            return report
 
         if sensor_retain_days and sensor_retain_days > 0:
             report['sensor_samples_removed'] = self.purge_old_sensor_samples(sensor_retain_days)

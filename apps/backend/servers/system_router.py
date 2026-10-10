@@ -861,11 +861,11 @@ async def retention_durumu(request: Request):
         secilen = db.pii_suresi_oku()
         etkin = secilen if secilen is not None else _pii_ortam_gunu()
         bekleyen = db.redaksiyon_bekleyen_sayisi(etkin) if etkin > 0 else 0
-        return secilen, etkin, db.pii_onayi_var_mi(etkin), db.pii_onayi_oku(), bekleyen
+        return secilen, etkin, db.pii_onayi_var_mi(etkin), db.pii_onayi_oku(), bekleyen, db.saat_supheli_mi()
 
     try:
         # C2-4.1 (Ö.4-Y8): DB okumaları olay döngüsünde DEĞİL (tedavi DB'si kilitliyken döngü donup ACİL DURDUR beklemesin).
-        secilen, etkin, onayli, onay, bekleyen = await asyncio.to_thread(_oku)
+        secilen, etkin, onayli, onay, bekleyen, saat_supheli = await asyncio.to_thread(_oku)
         anonim = await asyncio.to_thread(_anonimlestirme_durumu)
         return {
             "days": etkin,
@@ -881,6 +881,8 @@ async def retention_durumu(request: Request):
             "default": _PII_VARSAYILAN_GUN,
             # D2.54 · A-06: 5 yıl inaktif hasta anonimleştirmesi — onay yoksa bekleyen sayı gösterilir ve arayüz sorar.
             "anonymization": anonim,
+            # F2-1.2 · A-73: onaylanmamış saat şüphesi (neden) — varken anonimleştirme / maskeleme / saklama silmesi KOŞMAZ.
+            "clockSuspect": saat_supheli,
         }
     except Exception:
         logger.exception("retention durumu okunamadi")
@@ -999,6 +1001,8 @@ class _RetentionAyar(BaseModel):
     acknowledge_days: Optional[int] = None
     #: D2.54 · A-06: operatör 5 yıl inaktif hastaların geri dönüşsüz anonimleştirmesini onaylıyor (o anki bekleyen sayıyla kayda geçer).
     anonymize_acknowledge: bool = False
+    #: F2-1.2 · A-73: operatör cihaz saatinin DOĞRU olduğunu onaylıyor (saat şüphesi kalkar, geri dönüşsüz saklama adımları sürer).
+    clock_confirm: bool = False
 
 
 @router.post("/api/settings/retention")
@@ -1115,6 +1119,12 @@ async def retention_ayarla(payload: _RetentionAyar, request: Request):
                 item_count=sayi,
                 outcome="onaylandi",
                 detail={"gun": gun},
+            )
+        if payload.clock_confirm:
+            onceki_suphe = await asyncio.to_thread(db.saat_supheli_mi)
+            await asyncio.to_thread(db.saat_onayla)
+            _iz.kimlikli_yaz(
+                request, "retention.saat_onay", scope="a73", outcome="onaylandi", detail={"suphe": onceki_suphe}
             )
         return {"status": "success"}
     except HTTPException:
