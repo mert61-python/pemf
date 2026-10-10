@@ -140,10 +140,15 @@ def tekrar_kisitli_hata(gunlukcu, anahtar: str, neden: str, ileti: str, *args) -
             k["bastirilan"] += 1
             return False
         onceki = k["bastirilan"] if k else 0
+        onceki_neden = k["neden"] if k else None
         _tekrar_gunluk[anahtar] = {"neden": neden, "zaman": simdi, "bastirilan": 0}
-    if onceki:
+    if onceki and onceki_neden == neden:
         ileti = ileti + " [onceki %d sn icinde ayni nedenle %d kez daha]"
         args = (*args, int(_ERISIM_GUNLUK_ARALIK_SN), onceki)
+    elif onceki:
+        # ⚠️ E2-1.7 (2-E incelemesi): bastırılan sayı ESKİ nedene aittir — yeni nedenin satırına "aynı nedenle" diye yazılmaz.
+        ileti = ileti + " [NEDEN DEGISTI: onceki neden (%s) bastirilmis %d kez daha tekrarlanmisti]"
+        args = (*args, onceki_neden, onceki)
     gunlukcu.error(ileti, *args)
     return True
 
