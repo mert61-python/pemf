@@ -34,6 +34,11 @@ _ADMINS_SID = "*S-1-5-32-544"  # BUILTIN\Administrators (operatör yedek/kurtarm
 # DEVAM EDER. (Davranış testiyle yakalandı.) Bu yüzden ikisi AÇIKÇA kaldırılır.
 _USERS_SID = "*S-1-5-32-545"  # BUILTIN\Users
 _AUTHUSERS_SID = "*S-1-5-11"  # NT AUTHORITY\Authenticated Users
+# ⚠️ E2-1.3 (2-E incelemesi): Users / AU dışındaki GENİŞ gruplar da açık ACE taşıyabilir (yönetici "izinleri düzeltirken"
+# Everyone'a tam denetim verir; kopyalama aracı açık ACE taşır) → kilit True der, dosya herkese açık kalırdı. Onlar da kaldırılır.
+# Everyone · Interactive · Local · Console Logon · Guests · Anonymous · Network. Kapı: tests/test_file_acl_ACIK_genis_grup_E2_1_3.py
+_EK_GENIS_SIDLER = ("*S-1-1-0", "*S-1-5-4", "*S-1-2-0", "*S-1-2-1", "*S-1-5-32-546", "*S-1-5-7", "*S-1-5-2")
+_EK_KALDIR = [x for s in _EK_GENIS_SIDLER for x in ("/remove:g", s)]
 
 
 # ⚠️ D2.79 (D-3.1): "süreci çalıştıran hesap" ADIYLA (`getpass.getuser()`) veriliyordu. LocalSystem serviste getpass makine
@@ -239,6 +244,7 @@ def lock_down_dir(path, keep_current_user: bool = True) -> bool:
             _USERS_SID,
             "/remove:g",
             _AUTHUSERS_SID,
+            *_EK_KALDIR,  # E2-1.3: açık Everyone / Interactive / … grant'ları da
             "/grant:r",
             f"{_SYSTEM_SID}:(OI)(CI)F",
             "/grant:r",
@@ -302,6 +308,7 @@ def lock_down_file(path, keep_current_user: bool = False) -> bool:
             _USERS_SID,
             "/remove:g",
             _AUTHUSERS_SID,
+            *_EK_KALDIR,  # E2-1.3: açık Everyone / Interactive / … grant'ları da
             "/grant:r",
             f"{_SYSTEM_SID}:F",
             "/grant:r",

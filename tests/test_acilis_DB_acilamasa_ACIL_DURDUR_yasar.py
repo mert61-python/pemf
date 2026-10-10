@@ -574,6 +574,7 @@ _IZINLI_ALT_SUREC = re.compile(
     r"subprocess\.Popen:(?:"
     r'(?:[A-Za-z]:\\(?:[^"\\]+\\)*)?cmd\.exe /c "?ver"?'
     r"|icacls [A-Za-z]:\\\S+ /inheritance:r /remove:g \*S-1-5-32-545 /remove:g \*S-1-5-11"
+    r"(?: /remove:g \*S-1-(?:1-0|5-4|2-0|2-1|5-32-546|5-7|5-2))*"  # E2-1.3: öbür geniş grupların açık ACE'leri de kaldırılır
     r" /grant:r \*S-1-5-18:(?:\(OI\)\(CI\))?F /grant:r \*S-1-5-32-544:(?:\(OI\)\(CI\))?F"
     r"(?: /grant:r \*S-1-5-(?:18|21-[0-9-]+):(?:\(OI\)\(CI\))?F)*"
     r")",
