@@ -71,10 +71,18 @@ def paket_gerekli():
 # ── kapı ─────────────────────────────────────────────────────────────────────
 
 
+def _paket_kopyleft():
+    """4A-3.7 (A3 incelemesi): kopyleft KARARI tüm lisans alanlarından (`paket_kopyleft`) — NOTICE'in tek alanı
+    (`metadata_lisansi`) `License: UNKNOWN`/serbest metin/ilk sınıflandırıcı arkasında GPL sınıflandırıcısını gizliyordu."""
+    from scripts.lisans_envanteri_uret import paket_kopyleft
+
+    return paket_kopyleft(PAKET)
+
+
 def test_KRITIK_YENI_kopyleft_bagimlilik_EKLENMEZ(paket_gerekli):
     """Yeni bir AGPL/GPL bağımlılık pakete sızarsa uyumsuzluk yüzeyi sessizce büyür.
     Bu test, o kararın BİLİNÇLİ verilmesini zorunlu kılar."""
-    kopyleft = {ad for ad, lic in _paket_lisanslari().items() if _kopyleft_mu(lic)}
+    kopyleft = _paket_kopyleft()
     yeni = kopyleft - _BILINEN_ISTISNALAR
     assert not yeni, (
         f"Pakete YENİ kopyleft bağımlılık girdi: {sorted(yeni)}. "
@@ -86,7 +94,7 @@ def test_KRITIK_YENI_kopyleft_bagimlilik_EKLENMEZ(paket_gerekli):
 def test_bilinen_istisna_HALA_GECERLI(paket_gerekli):
     """İstisna listesi 'ölü' kalmasın: `ultralytics` paketten çıkarsa (ONNX'e taşındıysa)
     bu test düşer ve listeden silinmesi hatırlatılır — sorun çözüldüğünde kapı da kapanmalı."""
-    kopyleft = {ad for ad, lic in _paket_lisanslari().items() if _kopyleft_mu(lic)}
+    kopyleft = _paket_kopyleft()
     kalan = _BILINEN_ISTISNALAR & kopyleft
     assert kalan == _BILINEN_ISTISNALAR, (
         f"Bu istisnalar artık pakette YOK: {sorted(_BILINEN_ISTISNALAR - kopyleft)}. "

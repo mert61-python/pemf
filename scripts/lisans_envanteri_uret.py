@@ -166,6 +166,36 @@ def paket_lisanslari(paket: Path | None = None) -> dict[str, tuple[str, str]]:
     return out
 
 
+def kopyleft_metadata_mu(meta: str) -> bool:
+    """Bir `dist-info/METADATA` kopyleft mi — TÜM lisans alanlarına bakar (License-Expression, License, HER
+    `Classifier: License ::`).
+
+    ⚠️ 4A-3.7 (A3 incelemesi): kopyleft kapısı lisansı `metadata_lisansi`nin TEK alanından (NOTICE tablosunun gösterdiği
+    değer: License-Expression > License > İLK sınıflandırıcı) okuyordu → `License: UNKNOWN`, serbest metin (`Dual License`,
+    `Copyright (c) …`) ya da ilk sınıflandırıcısı MIT olan bir paketin GPL sınıflandırıcısı kapıya GÖRÜNMEZDİ. NOTICE metni
+    değişmez (o hâlâ `metadata_lisansi`); yalnız kopyleft KARARI tüm alanlardan verilir."""
+    for satir in meta.splitlines()[:80]:
+        if satir.startswith(("License-Expression:", "License:")) and kopyleft_mu(satir.split(":", 1)[1]):
+            return True
+        if satir.startswith("Classifier: License ::") and kopyleft_mu(satir.split("::", 1)[1]):
+            return True
+    return False
+
+
+def paket_kopyleft(paket: Path | None = None) -> set[str]:
+    """Sevk edilen pakette kopyleft olan paket adları (`kopyleft_metadata_mu`). Paket yoksa boş küme."""
+    yol = paket or _PAKET
+    out: set[str] = set()
+    if not yol.exists():
+        return out
+    with zipfile.ZipFile(yol) as z:
+        for n in z.namelist():
+            m = re.match(r"PEMF_Backend/_internal/([^/]+)-([^/]+)\.dist-info/METADATA$", n)
+            if m and kopyleft_metadata_mu(z.read(n).decode("utf-8", "replace")):
+                out.add(m.group(1).lower().replace("_", "-"))
+    return out
+
+
 def _paket_metadata_lisanslari() -> dict[str, tuple[str, str]]:
     return paket_lisanslari()
 
