@@ -134,15 +134,18 @@ def _ifadeler(govde: str) -> list[str]:
     """Satır-içi `--` ve `/* */` yorumları atılır, gövde `;` ile ifadelere bölünür, boşluklar teke indirilir.
 
     Satır-içi yorum ATILMAZSA `…; -- not` sonrasındaki ifade yorumla başlar ve `grant` diye eşleşmez (gerçek dosyalarda
-    `;  --` 5 kez var). `$$` gövdeleri de bölünür — grant/revoke ifadeleri gövde DIŞINDA durduğu için zararsız."""
+    `;  --` 5 kez var). `$$` gövdeleri de bölünür; gövde/DO bloğu İÇİNDEKİ grant'ı `yetki_ifadeleri` ifadenin herhangi bir
+    yerinde arar (4-A inc. 4A-2.3). Bilinçli sınır: yorum atma dize sabitini tanımaz (`select '-- x'; grant …` AYNI satırda
+    görünmez) ve `format()` ile kurulan dinamik grant görülmez — canlı şema denetimi (#32) bu kapının konusu değil."""
     govde = re.sub(r"/\*.*?\*/", " ", govde, flags=re.S)
     govde = re.sub(r"--[^\n]*", " ", govde)
     return [" ".join(s.split()) for s in govde.split(";") if s.strip()]
 
 
 def _roller(metin: str) -> set[str]:
-    metin = re.split(r"\bwith\s+grant\s+option\b|\bgranted\s+by\b|\bcascade\b|\brestrict\b", metin, flags=re.I)[0]
-    return {re.sub(r"^group\s+", "", r.strip(), flags=re.I).strip('"').lower() for r in metin.split(",") if r.strip()}
+    # 4-A inc. 4A-2.3: `with admin|inherit|set option` (rol üyeliği) da kesilir; sabit dizeli dinamik SQL'in kapanış `'`ı atılır.
+    metin = re.split(r"\bwith\b|\bgranted\s+by\b|\bcascade\b|\brestrict\b", metin, flags=re.I)[0]
+    return {re.sub(r"^group\s+", "", r.strip(), flags=re.I).strip("\"'").lower() for r in metin.split(",") if r.strip()}
 
 
 def _tablo_adlari(metin: str) -> list[str]:
@@ -154,7 +157,9 @@ def yetki_ifadeleri(govde: str) -> list[tuple[str, str, list[str], set[str]]]:
     """[(grant|revoke, tablo|fonksiyon|diger, [adlar], {roller})] — `*` = `ALL TABLES/FUNCTIONS IN SCHEMA`."""
     out = []
     for s in _ifadeler(govde):
-        m = re.match(r"(grant|revoke)\s+(.+?)\s+on\s+(.+?)\s+(to|from)\s+(.+)$", s, re.I)
+        # 4-A inc. 4A-2.3: ifadenin BAŞINDA değil HERHANGİ bir yerinde — `do $$ begin grant … to anon; end $$`, fonksiyon
+        # gövdesindeki statik grant ve sabit dizeli `execute 'grant …'` da yürütülür (`;` bölmesi gövdeyi de böler).
+        m = re.search(r"\b(grant|revoke)\s+(.+?)\s+on\s+(.+?)\s+(to|from)\s+(.+)$", s, re.I)
         if not m or m.group(4).lower() != {"grant": "to", "revoke": "from"}[m.group(1).lower()]:
             continue
         tur, nesne, roller = m.group(1).lower(), m.group(3).strip(), _roller(m.group(5))
@@ -200,6 +205,11 @@ def _dogrudan_tablo_yetkisi_ihlalleri(sql_bodies: dict[str, str]) -> list[str]:
                 ihlaller.append(
                     f"{ad}: `ALTER DEFAULT PRIVILEGES ... GRANT ... TO {m.group(1)}` — sonraki HER nesneye erisim"
                 )
+            # 4-A inc. 4A-2.3: ROL ÜYELİĞİ (`grant service_role to anon`) — `on` yok; anon/authenticated ayrıcalıklı rolün
+            # TÜM tablo yetkilerini miras alır, tablo revoke'ları bunu geri almaz. anon ↔ authenticated üyeliği zararsız.
+            u = re.search(r"\bgrant\s+((?:\"?\w+\"?\s*,\s*)*\"?\w+\"?)\s+to\s+(.+)$", s, re.I)
+            if u and (_roller(u.group(1)) - {"anon", "authenticated"}) and _roller(u.group(2)) & _YASAK_ROLLER:
+                ihlaller.append(f"{ad}: ROL UYELIGI `grant {u.group(1)} to {u.group(2)}` — ayricalikli rolun yetkileri")
     return ihlaller
 
 
