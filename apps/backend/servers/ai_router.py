@@ -4678,18 +4678,26 @@ def _model_hazir_mi(rel_yol: str | None) -> tuple[str, str]:
     ⚠️ İKİ DEĞİŞMEZ, ikisi de ölçümle kondu:
       1. `rel_yol is None` artık "gomulu" DEĞİL, `envanter_eksik` HATASIDIR. Eski davranış
          (None → "gomulu" → PASS) kapının 12 modülde hiçbir şeye bakmamasının sebebiydi.
-      2. Çözücü `find_installed_model` — CANLI çıkarımın baktığı 5 kök + bütünlük sağlaması.
-         `pt_coz` yalnız PT ikizleri içindir ve farklı bir yol kümesine bakar; kapının canlı
-         yoldan BAŞKA bir yere bakması, tam olarak "yeşil kapı / ölü uç" durumunu üretir.
+      2. Çözücü CANLI çıkarımınkiyle AYNI: `yan_dosya_coz` — önce modülün YANI, sonra `find_installed_model`'in
+         5 kökü + bütünlük sağlaması. `pt_coz` yalnız PT ikizleri içindir ve farklı bir yol kümesine bakar; kapının
+         canlı yoldan BAŞKA bir yere bakması, tam olarak "yeşil kapı / ölü uç" durumunu üretir.
+         ⚠️ D4.E01 (İG-9.21): eskiden yalnız `find_installed_model` vardı. Katmanlı launcher düzeninde küçük model dosyaları
+         (spec: <5 MB .onnx/.pkl… — D4.27) modülün YANINDA (`_internal/ai_hub/…`) sevk edilir; çıkarım onları buluyor (ölçüldü:
+         böbrek-hastalık 200) ama hazırlık "model_yok" diyordu (sahte kırmızı). Kapı:
+         tests/test_ai_hazirlik_CIKARIMLA_AYNI_cozucu_D4E01.py
     """
     if not rel_yol:
         return "envanter_eksik", "model yolu tanımsız — envantere gerçek yol yazılmalı (denetim #03)"
     try:
-        from utils.model_downloader import find_installed_model
+        from utils.model_downloader import yan_dosya_coz
+        from utils.path_utils import resource_path
 
-        yol = find_installed_model(rel_yol)
-        if not yol:
-            return "model_yok", f"{rel_yol} hiçbir model kökünde bulunamadı (ya da bütünlük sağlaması başarısız)"
+        yol = yan_dosya_coz(resource_path(rel_yol), rel_yol)  # modül yanı (donmuşta `_MEIPASS/<rel>`) → model kökleri
+        if not os.path.isfile(yol):
+            return (
+                "model_yok",
+                f"{rel_yol} ne modülün yanında ne bir model kökünde bulundu (ya da bütünlük sağlaması başarısız)",
+            )
         return "ok", ""
     except Exception as e:
         return "model_yok", _kok_neden_zinciri(e)
