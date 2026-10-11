@@ -296,6 +296,9 @@ def test_KRITIK_ozel_kurallar_GERCEK_gitleaks_ile_YAKALAR(tmp_path):
         "firmware/esps3_pemf_coil/data/config.json": '{"wifi_pass": "", "mqtt_pass": ""}\n',
         "diger/data/config.json": sahte_json,
         "firmware/esps3_pemf_coil/Secrets.h": 'static const char* DEFAULT_CLOUD_MQTT_PASS = "GizliParola1";\n',
+        # 4A-1.7 (A1 incelemesi): Secrets.h kuralı firmware DIŞINDA da yakalamalı — A-69'da gerçek sızıntıyı yakaladığı dosya
+        # `config/credentials/secrets_coil_6.h` idi; kuralı firmware yoluna daraltan mutant eski testte kırmızı, burada YEŞİLDİ.
+        "config/credentials/secrets_coil_6.h": 'static const char* DEFAULT_CLOUD_MQTT_PASS = "GizliParola1";\n',
     }
     for rel, icerik in dosyalar.items():
         (kok / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -305,5 +308,6 @@ def test_KRITIK_ozel_kurallar_GERCEK_gitleaks_ile_YAKALAR(tmp_path):
     assert ozel == [
         ("pemf-firmware-config-json-gercek-deger", "firmware/esp8266_pemf_coil/data/config.json"),
         ("pemf-firmware-config-json-gercek-deger", "firmware/esp8266_pemf_coil/data/config.json"),
+        ("pemf-firmware-secrets-h-gercek-deger", "config/credentials/secrets_coil_6.h"),
         ("pemf-firmware-secrets-h-gercek-deger", "firmware/esps3_pemf_coil/Secrets.h"),
     ], f"özel kurallar gerçek gitleaks'te beklenen yakalamayı vermedi (kural, dosya): {ozel}"
