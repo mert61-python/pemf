@@ -248,6 +248,94 @@ def user_message(metrics: dict | None = None) -> str:
             ).format(olcum=olcum)
 
 
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# PLAKA KİPİ (AI-2, 2026-10-12 — hocanın petri v2'si, 24'lük plaka ızgarası)
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# NEDEN AYRI KURAL: plaka kipinde kuyucuklar YOLO tespiti değil, plakanın standart geometrisinden ÇİZİLEN ızgaradır
+# (dairesellik ≈ 1, "conf" = sıvı payı) → yukarıdaki üç sinyal anlamsız. Hocanın v2'si makullik denetimi İÇERMİYOR ve
+# ÖLÇÜLDÜ (kâhin ağacı, ONNX@640, 31 girdi): pembe/mor bölge bulunan HER görüntüye 24 kuyucuk dayatıp `success=True`
+# dönüyor — 9/9 fantom fotoğrafı (3–18 "kanser"), 2/7 kedi, tekil petri kapları (`real_petri`, 06: 24/24 "kanser"),
+# sentetik ArUco (06b: 21/24). 2026-08-06 sahip bildiriminin AYNI sınıfı (sessiz ve ikna edici yanlış sonuç).
+# AYIRT EDİCİ (ölçülen): gerçek 24'lük plaka 6/6'da ince hizalama (ECC) BAŞARILI ve ızgarayı doğrulayan aday
+# (YOLO + Hough) 4–24; plaka OLMAYAN girdide ECC başarılıysa doğrulanan aday 0 (real_petri, 06, fantom 16(3)),
+# aday > 0 ise ECC başarısız (kedi: 2 / 4). Kural: ECC başarılı VE doğrulanmış aday ≥ 2 (iki tarafta da ≥ 2 pay).
+# `fit_score` (sıvı içi − arası) tek başına AYIRMIYOR (fantom 16(3) 0,095 ↔ gerçek plaka en düşük 0,093) → raporlanır,
+# oy vermez. ⚠️ FAIL-CLOSED: ızgara her girdide 24 kuyucuk ürettiği için "ölçülemedi" ile "plaka değil" ayrılamaz —
+# ölçüm alanı yoksa REDDEDİLİR (tekil kip kuralındaki fail-open burada geçerli değil).
+#: Izgarayı doğrulayan en az aday sayısı (gerçek plaka en düşük 4 · plaka dışı ECC'li en yüksek 0).
+_PLAKA_MIN_DOGRULANMIS = 2
+
+
+def analyze_plate(plate: "dict | None") -> dict[str, Any]:
+    """Plaka ızgarası özetinden (`PlateGridResult.to_dict()`) makullik ölçümleri. Saf fonksiyon."""
+    p = plate if isinstance(plate, dict) else {}
+    n_inl = p.get("n_inliers")
+    ecc = p.get("ecc_ok")
+    try:
+        n_inl = int(n_inl) if n_inl is not None else None
+    except (TypeError, ValueError):
+        n_inl = None
+    return {
+        "kip": "plaka",
+        "measurable": n_inl is not None and isinstance(ecc, bool),
+        "n_inliers": n_inl,
+        "ecc_ok": ecc if isinstance(ecc, bool) else None,
+        "n_yolo_candidates": p.get("n_yolo_candidates"),
+        "fit_score": p.get("fit_score"),
+        "chosen": p.get("chosen"),
+        "thresholds": {"min_dogrulanmis": _PLAKA_MIN_DOGRULANMIS, "ecc_gerekli": True},
+    }
+
+
+def is_plate_plausible(metrics: dict) -> bool:
+    """ECC başarılı VE doğrulanmış aday ≥ eşik → plaka. Ölçülemediyse REDDET (fail-closed, bkz. blok notu)."""
+    try:
+        if not metrics.get("measurable"):
+            return False
+        return bool(metrics.get("ecc_ok")) and int(metrics.get("n_inliers") or 0) >= _PLAKA_MIN_DOGRULANMIS
+    except Exception:
+        return False
+
+
+def plate_user_message(metrics: dict | None = None) -> str:
+    """Plaka kipi reddi — ne ölçüldü, ne beklendi, ne yapılmalı (eylem söyleyen hata)."""
+    m = metrics or {}
+    try:
+        n = m.get("n_inliers")
+        olcum = " (ölçülen: ızgarayı doğrulayan kuyucuk adayı {n} — beklenen ≥{e}; ince hizalama {h})".format(
+            n="ölçülemedi" if n is None else int(n),
+            e=_PLAKA_MIN_DOGRULANMIS,
+            h="başarılı" if m.get("ecc_ok") else "başarısız",
+        )
+    except Exception:
+        olcum = ""
+    return ("Bu modül 24 kuyucuklu petri plakası fotoğrafı bekliyor; yüklenen görüntüde plaka ızgarası "
+            "doğrulanamadı{olcum}. Fantom fotoğrafını 'Fantom Tümör' modülüne, hayvan fotoğrafını ilgili kedi "
+            "modülüne yükleyin — yanlış modülde üretilen kuyucuk sonucu yanıltıcıdır. Görüntü gerçekten bir "
+            "plakaysa tepeden, dik ve yakın çekin (plaka karenin en az yarısını kaplasın); tekil petri kapları "
+            "için 'Tekil petri kapları' kipini seçin. Araştırma için denetim Petri modülündeki 'Gelişmiş "
+            "(araştırma) ayarları' bölümünden kapatılabilir (sunucu tarafında PEMF_AI_PLAUSIBILITY_GUARD=0)."
+            ).format(olcum=olcum)
+
+
+def evaluate_plate(plate: "dict | None", guard: "bool | None" = None) -> tuple[bool, dict[str, Any]]:
+    """Plaka kipi giriş noktası → (kabul_edildi_mi, ölçümler). Denetim kapalıysa geçer (`guard: off` kayda geçer)."""
+    try:
+        metrics = analyze_plate(plate)
+    except Exception:
+        logger.warning("petri plaka makullik ölçümü başarısız → REDDEDİLDİ (plaka kipi fail-closed)", exc_info=True)
+        metrics = {"kip": "plaka", "measurable": False}
+    acik = guard_enabled() if guard is None else bool(guard)
+    if not acik:
+        metrics["guard"] = "off"
+        return True, metrics
+    ok = is_plate_plausible(metrics)
+    if not ok:
+        logger.warning("PETRI PLAKA MAKULLİK REDDİ: ölçüm=%s", metrics)
+        metrics["message"] = plate_user_message(metrics)
+    return ok, metrics
+
+
 def evaluate(contours: Sequence[np.ndarray], confs: Sequence[float],
              image_area: float, esikler: "dict | None" = None,
              guard: "bool | None" = None) -> tuple[bool, dict[str, Any]]:
