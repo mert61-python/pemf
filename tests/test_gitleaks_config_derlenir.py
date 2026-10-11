@@ -74,8 +74,12 @@ def test_KRITIK_gitleaks_config_i_GERCEKTEN_yukluyor(tmp_path):
     artik depo icinde (`tests/__gitleaks_bos__`) DEGIL, tmp_path'te.
     """
     ikili = gitleaks_ikili.gerekli()
+    bos = tmp_path / "bos"
+    bos.mkdir()
+    rapor = tmp_path / "rapor.json"
     r = subprocess.run(
-        [ikili, "detect", "--config", str(_CONFIG), "--no-git", "--no-banner", "-s", str(tmp_path)],
+        [ikili, "detect", "--config", str(_CONFIG), "--no-git", "--no-banner", "-s", str(bos)]
+        + ["--report-format", "json", "--report-path", str(rapor)],
         capture_output=True,
         text=True,
         timeout=180,
@@ -86,6 +90,12 @@ def test_KRITIK_gitleaks_config_i_GERCEKTEN_yukluyor(tmp_path):
         "gitleaks config'i yuklerken PANIK etti — kapi calismiyor demektir:\n" + cikti[:1200]
     )
     assert "MustCompile" not in cikti, "regex derleme hatasi (MustCompile):\n" + cikti[:1200]
+    # 4A-1.8 (A1 incelemesi): panik aramak yetmez — TOML'u bozuk config (yükleme hatası, panik yok) ve gitleaks OLMAYAN ikili
+    # (where.exe) bu testi geçiriyordu. Taramanın gerçekten TAMAMLANDIĞI ölçülür: dönüş kodu 0/1 ve JSON raporu yazıldı.
+    assert r.returncode in (0, 1) and rapor.is_file(), (
+        f"gitleaks taramayı TAMAMLAMADI (rc={r.returncode}, rapor={rapor.is_file()}) — config yüklenemedi ya da ikili "
+        f"gitleaks değil:\n{cikti[:1200]}"
+    )
 
 
 def test_KARSIT_KANIT_ozel_kurallar_HALA_YERINDE():
@@ -148,7 +158,7 @@ def _bulgu_sayisi(tmp_path: Path, icerik: str) -> int:
     kaynak = tmp_path / "ornek.py"
     kaynak.write_text(icerik, encoding="utf-8")
     rapor = tmp_path / "rapor.json"
-    subprocess.run(
+    r = subprocess.run(
         [
             ikili,
             "detect",
@@ -156,6 +166,7 @@ def _bulgu_sayisi(tmp_path: Path, icerik: str) -> int:
             str(_CONFIG),
             "--no-git",
             "--no-banner",
+            "--redact",
             "-s",
             str(kaynak),
             "--report-format",
@@ -167,8 +178,11 @@ def _bulgu_sayisi(tmp_path: Path, icerik: str) -> int:
         text=True,
         timeout=180,
     )
-    if not rapor.exists():
-        return 0
+    # 4A-1.8 (A1 incelemesi): eskiden rapor yoksa 0 dönülüyordu — "gitleaks koşmadı" = "0 bulgu" (where.exe ile YANLIS_ALARM testi
+    # geçiyordu). Tarama tamamlanmadıysa ölçüm yok: DÜŞ.
+    assert r.returncode in (0, 1) and rapor.exists(), (
+        f"gitleaks taramayı TAMAMLAMADI (rc={r.returncode}, rapor={rapor.exists()}): {((r.stdout or '') + (r.stderr or ''))[:600]}"
+    )
     import json as _json
 
     return len(_json.loads(rapor.read_text(encoding="utf-8") or "[]"))
