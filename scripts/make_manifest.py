@@ -24,6 +24,7 @@ import argparse
 import hashlib
 import json
 import sys
+import zipfile
 from pathlib import Path
 
 # ⚠️ CIKTI KODLAMASI SABITLENIR (denetim 2026-08-18): betigin Turkce mesajlari (`Yazıldı:` vb.)
@@ -78,6 +79,33 @@ LAYER_ASSETS = {
 #   launcher → client'ın kendi oto-güncellemesi
 #   mobile   → APK'nın kendi oto-güncellemesi (versionCode karşılaştırması)
 CARRY_ONLY = ("launcher", "mobile")
+
+# ── D4.31 (B-9.4): APP KATMANI KURULABİLİR Mİ ───────────────────────────────────────────────
+# Bu betik yereldeki base-app.zip'in sha'sını İÇERİĞİNE BAKMADAN mühürlüyordu. Ölçüldü: guii'deki
+# yerel base-app.zip 7 girdilik bir taslaktı (6 betik + _app_roots.json, EXE YOK) ve `make_manifest`
+# onu çıkış 0 ile canlı URL'ye bağlardı → taze kurulum, "Onar" ve geri çağırma (min_supported_version)
+# launcher'da `backend_path` bulunamadığı için fail-closed düşer. Acil geri çekme (`--rollout 0`) bu
+# klasörle koşulduğunda gerçekçi bir yol. Kontrol yalnız YEREL app paketine bakar (taşınan katmana değil).
+# Kapı: tests/test_paketleme_DOGRULAMADAN_once_YAYIN_DIZINI_EZILMEZ_D431.py
+APP_ASGARI_YAPI = {
+    "win-x64": ("PEMF_Backend/PEMF_Backend.exe", "PEMF_Backend/_app_roots.json"),
+    "linux-x64": ("PEMF_Backend/PEMF_Backend", "PEMF_Backend/_app_roots.json"),
+    "mac-arm64": ("PEMF_Backend/PEMF_Backend", "PEMF_Backend/_app_roots.json"),
+}
+
+
+def app_katmani_eksikleri(path: Path, plat: str) -> list[str]:
+    """Kurulabilir bir app katmanında olması gerekenlerden EKSİK olanlar (boş liste = tamam)."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            adlar = {i.filename.replace("\\", "/") for i in z.infolist()}
+            bozuk = z.testzip()  # app katmanı küçük (~71 MB); yarım yazılmış/bozuk girdi burada görünür
+    except (zipfile.BadZipFile, OSError, EOFError) as e:
+        return [f"zip acilamadi ({e.__class__.__name__}: {e})"]
+    eksik = [ad for ad in APP_ASGARI_YAPI[plat] if ad not in adlar]
+    if bozuk is not None:
+        eksik.append(f"BOZUK girdi: {bozuk}")
+    return eksik
 
 
 def sha256(path: Path) -> str:
@@ -158,6 +186,27 @@ def main() -> int:
         return 1
     if args.launcher_rollout is not None and not (0 <= args.launcher_rollout <= 100):
         print("[HATA] --launcher-rollout 0-100 araliginda olmali.", file=sys.stderr)
+        return 1
+
+    # D4.31: yereldeki app paketi kurulabilir değilse HİÇBİR ŞEY yazılmaz (sha mühürlenmeden ÖNCE).
+    kurulamaz = []
+    for _ad, (_plat, _katman) in LAYER_ASSETS.items():
+        _yol = args.dir / _ad
+        if _katman == "app" and _yol.exists():
+            _eksik = app_katmani_eksikleri(_yol, _plat)
+            if _eksik:
+                kurulamaz.append((_ad, _eksik))
+    if kurulamaz:
+        print("[HATA] app katmani KURULABILIR DEGIL — manifest YAZILMADI:", file=sys.stderr)
+        for _ad, _eksik in kurulamaz:
+            print(f"  - {_ad}: {', '.join(_eksik)}", file=sys.stderr)
+        print(
+            "  Bu paket yayinlansaydi taze kurulum, 'Onar' ve geri cagirma launcher'da backend bulunamadigi icin dusuyordu.\n"
+            "  Cozum: `python build_tools/make_base_zip.py` ile paketleri YENIDEN uretin (VALIDATION: PASS gorun).\n"
+            "  Acil geri cekme (--rollout 0 / --launcher-rollout 0) icin yeni paket GEREKMEZ: base-app.zip ve\n"
+            "  base-deps.zip'i bu klasorden kaldirin, katmanlar ONCEKI manifestten aynen tasinir.",
+            file=sys.stderr,
+        )
         return 1
 
     base_url = f"https://github.com/{args.repo}/releases/download/{args.tag}"

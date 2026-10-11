@@ -38,6 +38,7 @@ import os
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -47,7 +48,19 @@ BETIK = KOK / "scripts" / "make_manifest.py"
 PY = sys.executable
 
 
+def _app_zip(yol: Path, isaret: bytes) -> None:
+    """D4.31 (B-9.4): make_manifest app katmanının KURULABİLİR olmasını ister (`PEMF_Backend.exe` + `_app_roots.json`, sağlam zip)
+    — eskiden zip OLMAYAN baytlar mühürleniyordu. Gerçek küçük zip; `isaret` EXE içeriğini (dolayısıyla sha'yı) belirler,
+    sabit tarih → aynı işaret aynı sha."""
+    with zipfile.ZipFile(yol, "w", zipfile.ZIP_STORED) as z:
+        for ad, veri in (("PEMF_Backend/PEMF_Backend.exe", isaret), ("PEMF_Backend/_app_roots.json", b'{"roots": []}')):
+            z.writestr(zipfile.ZipInfo(ad, date_time=(1980, 1, 1, 0, 0, 0)), veri)
+
+
 def _paket_yaz(dizin: Path, ad: str, icerik: bytes) -> None:
+    if ad.endswith("-app.zip"):  # app katmanı gerçek, kurulabilir zip olmalı (D4.31)
+        _app_zip(dizin / ad, icerik)
+        return
     (dizin / ad).write_bytes(icerik)
 
 

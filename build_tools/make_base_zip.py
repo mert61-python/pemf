@@ -225,6 +225,11 @@ def _yaz(out, items, extra=None):
     # ⚠️ '.tmp' UZANTISI BILEREK: make_manifest.py sabit ad tablosu kullanir ve
     # `gh release upload ... *.zip` joker'i bu adi GORMEZ. Uzantiyi '.new.zip' gibi bir seye
     # cevirmek yarim dosyayi yayina sokabilirdi (testle kilitli).
+    # ⚠️ D4.31 (B-9.3): bu islev artik YALNIZ <out>.tmp'yi yazar ve yolunu dondurur — yayin dizinindeki
+    # gecerli zip'e DOKUNMAZ. Eskiden burada `os.replace` vardi ve YAPI DOGRULAMASI yazimdan SONRA kosuyordu:
+    # EXE'siz / korumasiz bir dist ile kosu once gecerli base-app.zip'i EZIYOR, sonra "VALIDATION: FAIL"
+    # diyordu (olculdu: nobetci base-app.zip'in sha'si degisti). Yerine koyma dogrulama PASS'ten sonra
+    # `_yerlestir`de yapilir. Kapi: tests/test_paketleme_DOGRULAMADAN_once_YAYIN_DIZINI_EZILMEZ_D431.py
     gecici = str(out) + '.tmp'
     try:
         with open(gecici, 'wb') as fh:
@@ -246,35 +251,47 @@ def _yaz(out, items, extra=None):
                         z.writestr(zi, extra[arc])
             fh.flush()
             os.fsync(fh.fileno())  # elektrik kesintisinde rename'den ONCE veri diskte olsun
-        os.replace(gecici, out)
-    finally:
+    except BaseException:
         if os.path.exists(gecici):
             os.remove(gecici)  # basarisiz kosudan artik birakma (git status temiz kalir)
-    size = os.path.getsize(out)
+        raise
+    return gecici, os.path.getsize(gecici), _sha256(gecici)
+
+
+def _sha256(yol):
     h = hashlib.sha256()
-    with open(out, 'rb') as fp:
+    with open(yol, 'rb') as fp:
         for chunk in iter(lambda: fp.read(1 << 20), b''):
             h.update(chunk)
-    return size, h.hexdigest()
+    return h.hexdigest()
+
+
+def _gecicileri_sil():
+    for g in _GECICILER:
+        if os.path.exists(g):
+            os.remove(g)
 
 
 # app zip'i kendi sinirini tasir → launcher eski kokleri buradan ogrenir.
 _roots_json = json.dumps({'roots': APP_ROOTS}, indent=2)
-app_size, app_sha = _yaz(OUT_APP, app_items, extra={APP_ROOTS_FILE: _roots_json})
-deps_size, deps_sha = _yaz(OUT_DEPS, deps_items)
-print(f'  base-app.zip  : {app_size} bayt  sha256 {app_sha}', flush=True)
-print(f'  base-deps.zip : {deps_size} bayt  sha256 {deps_sha}', flush=True)
+_GECICILER = []
+try:
+    app_tmp, app_size, app_sha = _yaz(OUT_APP, app_items, extra={APP_ROOTS_FILE: _roots_json})
+    _GECICILER.append(app_tmp)
+    deps_tmp, deps_size, deps_sha = _yaz(OUT_DEPS, deps_items)
+    _GECICILER.append(deps_tmp)
+    print(f'  base-app.zip  : {app_size} bayt  sha256 {app_sha}', flush=True)
+    print(f'  base-deps.zip : {deps_size} bayt  sha256 {deps_sha}', flush=True)
 
-mono_size = mono_sha = None
-if MONOLITH:
-    print('  tek-parca base.zip (eski client <=1.9.12 icin) uretiliyor...', flush=True)
-    mono_size, mono_sha = _yaz(OUT_MONO, app_items + deps_items, extra={APP_ROOTS_FILE: _roots_json})
-    print(f'  base.zip      : {mono_size} bayt  sha256 {mono_sha}', flush=True)
-elif os.path.exists(OUT_MONO):
-    # BAYAT MONOLITH BIRAKMA: diskte kalan eski base.zip, yayin adiminda yanlislikla
-    # yuklenirse eski client'lara BAYAT backend gider (bkz. bastaki denetim notu).
-    os.remove(OUT_MONO)
-    print('  (--no-monolith) diskteki BAYAT base.zip silindi.', flush=True)
+    mono_tmp = mono_size = mono_sha = None
+    if MONOLITH:
+        print('  tek-parca base.zip (eski client <=1.9.12 icin) uretiliyor...', flush=True)
+        mono_tmp, mono_size, mono_sha = _yaz(OUT_MONO, app_items + deps_items, extra={APP_ROOTS_FILE: _roots_json})
+        _GECICILER.append(mono_tmp)
+        print(f'  base.zip      : {mono_size} bayt  sha256 {mono_sha}', flush=True)
+except BaseException:
+    _gecicileri_sil()  # yarim kosu: yayin dizini DEGISMEDI, .tmp artigi da kalmaz
+    raise
 
 
 def _korumasiz_ai_hub(names):
@@ -309,20 +326,21 @@ def _crc_haritasi(yol):
         return {i.filename: i.CRC for i in z.infolist() if not i.is_dir()}
 
 
-def _monolith_esit():
+def _monolith_esit(mono_yol, app_yol, deps_yol):
     """base.zip, base-app + base-deps ile BIREBIR ayni icerigi mi tasiyor?
 
     Karsilastirma isim kumesi + CRC32 uzerinden yapilir (zip'i acmaya gerek yok). Zaman
     damgalari zaten SABIT_TARIH ile sabitlendiginden, fark = GERCEK icerik farki demektir.
-    Monolith uretilmediyse (--no-monolith) dosya diskten SILINMISTIR → karsilastirilacak bir
-    sey yok, kapi gecer.
+    Monolith uretilmediyse (--no-monolith) `mono_yol` None'dir (diskteki bayat kopya PASS'ten
+    sonra SILINIR) → karsilastirilacak bir sey yok, kapi gecer.
+    D4.31: once yazilan .tmp'ler, yerlestirmeden sonra YAYIN DIZINI icin iki kez cagrilir.
     """
-    if not os.path.exists(OUT_MONO):
+    if mono_yol is None or not os.path.exists(mono_yol):
         return True
     try:
-        mono = _crc_haritasi(OUT_MONO)
-        katman = _crc_haritasi(OUT_APP)
-        katman.update(_crc_haritasi(OUT_DEPS))
+        mono = _crc_haritasi(mono_yol)
+        katman = _crc_haritasi(app_yol)
+        katman.update(_crc_haritasi(deps_yol))
     except Exception as e:
         print(f'  !! monolith karsilastirmasi yapilamadi: {e}', flush=True)
         return False
@@ -345,23 +363,40 @@ def _monolith_esit():
     return False
 
 
-# --- YAPI DOGRULAMA: zip-integrity + iki katmani BIRLIKTE ac + kilit yollar ---
-print('DOGRULAMA: zip integrity + katmanli extract...', flush=True)
-app_names, deps_names = set(), set()
-for out, bucket in ((OUT_APP, app_names), (OUT_DEPS, deps_names)):
-    with zipfile.ZipFile(out) as z:
-        bad = z.testzip()
-        assert bad is None, f'BOZUK zip girdisi ({os.path.basename(out)}): {bad}'
-        bucket |= set(z.namelist())
+def _yerlestir(ciftler):
+    """D4.31: DOGRULANMIS .tmp'leri yayin dizinine koyar (ayni dizin → atomik `os.replace`).
 
+    Sira deps → app → base.zip: en buyuk (yukleme sirasinda kilitli olma olasiligi en yuksek) once; biri
+    yerine oturamazsa hata YUTULMAZ, `yayin dizinine yerlesti` kontrolu FAIL olur ve cikis 1 verilir.
+    """
+    for gecici, out in ciftler:
+        try:
+            os.replace(gecici, out)
+        except OSError as e:
+            print(f'  !! {os.path.basename(out)} yayin dizinine konulamadi: {e}', flush=True)
+
+
+# --- YAPI DOGRULAMA: zip-integrity + iki katmani BIRLIKTE ac + kilit yollar ---
+# ⚠️ D4.31: dogrulama YAYIN DIZININDEKI dosyalarda degil, bu kosunun .tmp'lerinde yapilir; yerine koyma
+# yalniz PASS'ten sonra. FAIL'de onceki gecerli zip'ler bayt bayt aynen kalir, .tmp'ler silinir.
+print('DOGRULAMA: zip integrity + katmanli extract...', flush=True)
 tmp = tempfile.mkdtemp(prefix='basezip_val_')
 try:
+    app_names, deps_names = set(), set()
+    zip_bozuk = []
+    for out, bucket in ((app_tmp, app_names), (deps_tmp, deps_names)):
+        with zipfile.ZipFile(out) as z:
+            bad = z.testzip()
+            if bad is not None:
+                zip_bozuk.append(f'{os.path.basename(out)}: {bad}')
+            bucket |= set(z.namelist())
     # Kurulum sirasi: once deps, sonra app (launcher da boyle yapar).
-    for out in (OUT_DEPS, OUT_APP):
+    for out in (deps_tmp, app_tmp):
         with zipfile.ZipFile(out) as z:
             z.extractall(tmp)
     names = app_names | deps_names
     checks = {
+        'zip butunlugu (testzip)': not zip_bozuk,
         'PEMF_Backend/PEMF_Backend.exe (backend_path)': os.path.isfile(
             os.path.join(tmp, 'PEMF_Backend', 'PEMF_Backend.exe')
         ),
@@ -398,8 +433,33 @@ try:
         # eski client'lar (<=1.9.12) `runtimes`/`base`, yeni client'lar `layers` okudugu icin
         # AYNI surum numarasi altinda IKI FARKLI yazilim dagitiliyordu. Bu kontrol, monolith'in
         # katmanlarin BIREBIR ayni icerigi oldugunu ISPATLAR (isim kumesi + CRC).
-        'base.zip == app+deps (icerik birebir)': _monolith_esit(),
+        'base.zip == app+deps (icerik birebir)': _monolith_esit(mono_tmp, app_tmp, deps_tmp),
     }
+    for b in zip_bozuk:
+        print(f'  !! BOZUK zip girdisi ({b})', flush=True)
+    if all(checks.values()):
+        # ── YALNIZ PASS: yayin dizinine koy + YERLESME denetimi ─────────────────────────────
+        # Diskteki dosyalarin DOGRULANANLARLA ayni oldugu ayrica olculur: bir dosya yerine oturmadiysa (kilit,
+        # antivirus, es zamanli yukleme) yayin dizininde ONCEKI build'in kopyasi kalir ve iki farkli yazilim
+        # ayni surum altinda yayinlanirdi (D4.30 testlerinin modeli).
+        ciftler = [(deps_tmp, OUT_DEPS, deps_sha), (app_tmp, OUT_APP, app_sha)]
+        if mono_tmp:
+            ciftler.append((mono_tmp, OUT_MONO, mono_sha))
+        _yerlestir([(g, o) for g, o, _s in ciftler])
+        if not MONOLITH and os.path.exists(OUT_MONO):
+            # BAYAT MONOLITH BIRAKMA: diskte kalan eski base.zip, yayin adiminda yanlislikla
+            # yuklenirse eski client'lara BAYAT backend gider (bkz. bastaki denetim notu).
+            os.remove(OUT_MONO)
+            print('  (--no-monolith) diskteki BAYAT base.zip silindi.', flush=True)
+        for _g, o, s in ciftler:
+            checks[f'yayin dizinine yerlesti: {os.path.basename(o)} (sha == dogrulanan)'] = (
+                os.path.isfile(o) and _sha256(o) == s
+            )
+        checks['base.zip == app+deps (icerik birebir)'] = _monolith_esit(
+            OUT_MONO if os.path.exists(OUT_MONO) else None, OUT_APP, OUT_DEPS
+        )
+    else:
+        print('  (DOGRULAMA FAIL: yayin dizinine DOKUNULMADI — onceki zip\'ler aynen duruyor)', flush=True)
     allok = all(checks.values())
     for k, v in checks.items():
         print(f'  [{"OK" if v else "FAIL"}] {k}', flush=True)
@@ -414,3 +474,4 @@ try:
     sys.exit(0 if allok else 1)
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
+    _gecicileri_sil()  # FAIL'de (ya da yerine oturmayan dosyada) .tmp artigi kalmaz

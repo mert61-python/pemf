@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -99,8 +100,17 @@ def _kos(dizin: Path) -> subprocess.CompletedProcess:
     )
 
 
+def _app_zip(yol: Path, isaret: bytes) -> None:
+    """D4.31 (B-9.4): make_manifest app katmanının KURULABİLİR olmasını ister (`PEMF_Backend.exe` + `_app_roots.json`, sağlam zip)
+    — eskiden zip OLMAYAN baytlar mühürleniyordu. Gerçek küçük zip; `isaret` EXE içeriğini (dolayısıyla sha'yı) belirler,
+    sabit tarih → aynı işaret aynı sha."""
+    with zipfile.ZipFile(yol, "w", zipfile.ZIP_STORED) as z:
+        for ad, veri in (("PEMF_Backend/PEMF_Backend.exe", isaret), ("PEMF_Backend/_app_roots.json", b'{"roots": []}')):
+            z.writestr(zipfile.ZipInfo(ad, date_time=(1980, 1, 1, 0, 0, 0)), veri)
+
+
 def _paketleri_koy(dizin: Path, monolit: bool) -> None:
-    (dizin / "base-app.zip").write_bytes(b"APP")
+    _app_zip(dizin / "base-app.zip", b"APP")
     (dizin / "base-deps.zip").write_bytes(b"DEPS")
     (dizin / "vet.zip").write_bytes(b"VET")
     if monolit:

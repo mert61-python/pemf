@@ -17,6 +17,7 @@ SEBEPSİZ kaybolamaz.
 import json
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -44,6 +45,15 @@ ONCEKI = {
     "profiles": {},
     "base": {"url": "https://x/base.zip", "sha256": "e" * 64, "size": 5, "kind": "zip"},
 }
+
+
+def _app_zip(yol: Path, isaret: bytes, ikili: str = "PEMF_Backend/PEMF_Backend.exe") -> None:
+    """D4.31 (B-9.4): make_manifest app katmanının KURULABİLİR olmasını ister (platform ikilisi + `_app_roots.json`, sağlam
+    zip) — eskiden zip OLMAYAN `b"APP"` baytları mühürleniyordu. Sahte paket gerçek küçük bir zip'tir; `isaret` ikilinin
+    içeriğini (dolayısıyla sha'yı) belirler; sabit tarih → aynı işaret aynı sha (URL koruma testleri buna dayanır)."""
+    with zipfile.ZipFile(yol, "w", zipfile.ZIP_STORED) as z:
+        for ad, veri in ((ikili, isaret), ("PEMF_Backend/_app_roots.json", b'{"roots": []}')):
+            z.writestr(zipfile.ZipInfo(ad, date_time=(1980, 1, 1, 0, 0, 0)), veri)
 
 
 def _calistir(dizin: Path, *ek, betik: Path | None = None):
@@ -119,14 +129,14 @@ def test_aciklama_notlari_korunur(dizin):
 
 
 def test_yereldeki_katman_paketlerinden_URETIR(dizin):
-    (dizin / "base-app.zip").write_bytes(b"APP" * 100)
+    _app_zip(dizin / "base-app.zip", b"APP" * 100)
     (dizin / "base-deps.zip").write_bytes(b"DEPS" * 100)
     (dizin / "base.zip").write_bytes(b"APP" * 100 + b"DEPS" * 100)  # tek-sürüm kapısı gereği
     r = _calistir(dizin)
     assert r.returncode == 0, r.stderr[-800:]
     L = _oku(dizin)["layers"]["win-x64"]
     assert L["app"]["url"].endswith("client-app-v1.9.0/base-app.zip"), "URL yeni tag'e bakmiyor"
-    assert L["app"]["size"] == 300 and L["deps"]["size"] == 400
+    assert L["app"]["size"] == (dizin / "base-app.zip").stat().st_size and L["deps"]["size"] == 400
     assert L["app"]["sha256"] != ONCEKI["layers"]["win-x64"]["app"]["sha256"], "sha yenilenmedi"
 
 
@@ -139,7 +149,7 @@ def test_KRITIK_karisik_katman_seti_URETILMEZ(dizin):
     veriliyordu. Yarım set YAYINLANAMAZ: launcher tarafında `deps`/`app` ZORUNLU alan, eksikse
     client TÜM manifesti reddeder ve kayıp o platformla sınırlı kalmaz (kurulum, güncelleme ve
     geri çağırma her platformda durur). Artık manifest YAZILMIYOR ve çıkış 1."""
-    (dizin / "base-app.zip").write_bytes(b"APP" * 100)
+    _app_zip(dizin / "base-app.zip", b"APP" * 100)
     (dizin / "base.zip").write_bytes(b"APP" * 100)  # tek-sürüm kapısı gereği
     r = _calistir(dizin)
     assert r.returncode == 1, f"yarim katman seti SESSIZCE yayina gitti: {r.stdout[-400:]}"
@@ -147,8 +157,8 @@ def test_KRITIK_karisik_katman_seti_URETILMEZ(dizin):
     assert "deps EKSIK" in r.stderr, f"hangi katmanin eksik oldugu soylenmedi: {r.stderr[-400:]}"
     # ⚠️ ASIL DEĞİŞMEZ hâlâ kilitli: manifest HİÇ YAZILMADIĞI için karışık set üretilmesi
     # zaten imkânsız. (Fixture ÖNCEKİ manifesti bırakıyor — o dosyanın DOKUNULMAMIŞ olduğunu
-    # doğruluyoruz: yeni `app` boyutu 300 ise dosya bu koşuda yazılmış demektir.)
-    assert _oku(dizin)["layers"]["win-x64"]["app"]["size"] != 300, (
+    # doğruluyoruz: yeni `app` boyutu yerel zip'inkiyse dosya bu koşuda yazılmış demektir.)
+    assert _oku(dizin)["layers"]["win-x64"]["app"]["size"] != (dizin / "base-app.zip").stat().st_size, (
         "manifest YAZILDI: yeni app onceki manifest'e islenmis, yani yarim set yayina gitti"
     )
 
@@ -191,7 +201,7 @@ def test_gecersiz_rollout_REDDEDILIR(dizin):
 
 
 def test_yeni_platformda_rollout_varsayilan_100(dizin):
-    (dizin / "base-mac-app.zip").write_bytes(b"A")
+    _app_zip(dizin / "base-mac-app.zip", b"A", ikili="PEMF_Backend/PEMF_Backend")
     (dizin / "base-mac-deps.zip").write_bytes(b"B")
     (dizin / "base-mac.zip").write_bytes(b"AB")  # tek-sürüm kapısı gereği
     assert _calistir(dizin).returncode == 0
@@ -317,7 +327,7 @@ def test_launchersiz_manifest_HATA(tmp_path):
 
 
 def test_KRITIK_taze_katman_bayat_base_ile_YAYINLANMAZ(dizin):
-    (dizin / "base-app.zip").write_bytes(b"YENI-APP")
+    _app_zip(dizin / "base-app.zip", b"YENI-APP")
     (dizin / "base-deps.zip").write_bytes(b"YENI-DEPS")
     # base.zip yerelde YOK → önceki manifest'ten taşınacaktı (bayat).
     r = _calistir(dizin)
@@ -326,7 +336,7 @@ def test_KRITIK_taze_katman_bayat_base_ile_YAYINLANMAZ(dizin):
 
 
 def test_taze_katman_TAZE_base_ile_yayinlanir(dizin):
-    (dizin / "base-app.zip").write_bytes(b"YENI-APP")
+    _app_zip(dizin / "base-app.zip", b"YENI-APP")
     (dizin / "base-deps.zip").write_bytes(b"YENI-DEPS")
     (dizin / "base.zip").write_bytes(b"YENI-APPYENI-DEPS")
     r = _calistir(dizin)
@@ -344,7 +354,7 @@ def test_ikisi_de_bayatsa_yayinlanir(dizin):
 
 def test_baska_platformun_bayat_basei_ENGEL_DEGIL(dizin):
     """win-x64 tazelenirken mac/linux'un taşınması normaldir (ayrı runner'larda üretilirler)."""
-    (dizin / "base-app.zip").write_bytes(b"A")
+    _app_zip(dizin / "base-app.zip", b"A")
     (dizin / "base-deps.zip").write_bytes(b"B")
     (dizin / "base.zip").write_bytes(b"AB")
     r = _calistir(dizin)
