@@ -53,6 +53,8 @@ services:
     volumes:
       - ../release_assets/ai_models:/models:ro  # devredilmeyen uçlar (em_fantom vb.) in-process
       - pemf_micro_data:/data
+      # D4.12: KALICI makine kimliği — kritik sırlar buna bağlı; pemf_micro_data'yı korurken SİLMEYİN.
+      - pemf_micro_kimlik:/var/lib/dbus
     ports:
       - "8000:8000"
     depends_on:
@@ -80,3 +82,4 @@ services:
 
 volumes:
   pemf_micro_data:
+  pemf_micro_kimlik:

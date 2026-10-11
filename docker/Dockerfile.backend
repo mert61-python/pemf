@@ -38,6 +38,15 @@ RUN groupadd -r pemf && useradd -r -g pemf -d /home/pemf -m pemf \
 # 3) Uygulama kaynağı — pemf sahipliğinde kopyala (.dockerignore ağırları hariç tutar).
 COPY --chown=pemf:pemf . .
 
+# 3b) D4.12 (B-3.49) KALICI MAKİNE KİMLİĞİ: secrets_manager kritik anahtarları makine kimliğiyle sarar ve kimlik
+#     yoksa fail-closed RuntimeError verir → bu imajda /etc/machine-id YOKTU, backend import'ta ölüyordu. Kimlik
+#     ilk açılışta giriş betiğiyle ADLI birimde (/var/lib/dbus, compose) üretilir; /etc/machine-id ona bağlanır
+#     (taban imaj bir kimlik taşısaydı her konteyner AYNISINI paylaşırdı). Windows checkout'u betiği CRLF
+#     getirebilir → satır sonları burada normalize edilir. Kapı: tests/test_docker_KALICI_makine_kimligi_D412.py
+RUN sed -i 's/\r$//' docker/backend-entrypoint.sh \
+    && mkdir -p /var/lib/dbus && chown pemf:pemf /var/lib/dbus \
+    && ln -sf /var/lib/dbus/machine-id /etc/machine-id
+
 # 4) Server/demo profili — donanım yok; mosquitto/UDP-keşif kapalı (--no-headless-services).
 ENV PEMF_HEADLESS=1 \
     PEMF_SIMULATE=1 \
@@ -61,9 +70,10 @@ ENV PEMF_HEADLESS=1 \
     HF_HOME=/home/pemf/.cache/huggingface \
     PYTHONUNBUFFERED=1
 
-# AI modelleri (2 GB+, image'a GÖMÜLMEZ) + veri/DB → volume ile bağlanır (compose).
-VOLUME ["/models", "/data"]
+# AI modelleri (2 GB+, image'a GÖMÜLMEZ) + veri/DB + makine kimliği → volume ile bağlanır (compose).
+VOLUME ["/models", "/data", "/var/lib/dbus"]
 EXPOSE 8000
 USER pemf
 
+ENTRYPOINT ["/bin/sh", "/app/docker/backend-entrypoint.sh"]
 CMD ["python", "backend_service.py", "--host", "0.0.0.0", "--port", "8000", "--no-headless-services"]

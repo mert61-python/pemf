@@ -33,6 +33,8 @@ services:
     volumes:
       - "${PEMF_MODELS_DIR:-../release_assets/ai_models}:/models:ro"  # AI ağırlıkları (host; image'a gömülmez)
       - pemf_data:/data                                              # SQLCipher DB + loglar (kalıcı)
+      # D4.12: KALICI makine kimliği — kritik sırlar (sqlcipher_key) buna bağlı; pemf_data'yı korurken SİLMEYİN.
+      - pemf_kimlik:/var/lib/dbus
     ports:
       - "${PEMF_API_PORT:-8000}:8000"   # doğrudan API / debug (frontend zaten proxy'ler)
     healthcheck:                        # /api/health auth-muaf → token'sız 200; AI import'ları ~30-60sn
@@ -70,3 +72,4 @@ services:
 
 volumes:
   pemf_data:
+  pemf_kimlik:

@@ -201,6 +201,10 @@ def _dpapi(data: bytes, protect: bool) -> bytes:
 # yedek/imaj hırsızlığında şifreli DB + PII çözülür). Fix (#6): stabil makine-kimliğinden (/etc/
 # machine-id, mac IOPlatformUUID) türetilmiş Fernet ile "MKEY:" öneki → başka makinede çözülemez.
 _MKEY_PREFIX = "MKEY:"
+#: Linux makine kimliği kaynakları (sırayla; ilk DOLU olan kullanılır). D4.12 (B-3.49): `python:slim` Docker imajında ikisi de
+#: YOKTU → kritik anahtar fail-closed RuntimeError, backend import'ta ölüyordu. İmaj artık `/etc/machine-id`'yi kalıcı adlı
+#: birimdeki `/var/lib/dbus/machine-id`'ye bağlar; `docker/backend-entrypoint.sh` onu ilk açılışta üretir.
+MAKINE_KIMLIGI_YOLLARI = ("/etc/machine-id", "/var/lib/dbus/machine-id")
 
 
 def _machine_secret() -> bytes:
@@ -227,7 +231,7 @@ def _machine_secret() -> bytes:
         except Exception:
             ident = ""
     else:
-        for p in ("/etc/machine-id", "/var/lib/dbus/machine-id"):
+        for p in MAKINE_KIMLIGI_YOLLARI:
             try:
                 v = Path(p).read_text(encoding="utf-8").strip()
                 if v:
