@@ -36,10 +36,19 @@ def atla(sebep: str):
 
 
 def eser_var_mi(*rel_yollar: str) -> bool:
-    """Her `ai_hub/...` yolu modül yanında ya da ürünün model köklerinde (find_installed_model) çözülüyor mu."""
-    from utils.model_downloader import find_installed_model
+    """Her `ai_hub/...` yolu modül yanında ya da ürünün model köklerinde DİSKTE duruyor mu.
 
-    return bool(rel_yollar) and all((KOK / r).exists() or find_installed_model(r) for r in rel_yollar)
+    ⚠️ 4A-3.8 (A3 incelemesi): eskiden yalnız `find_installed_model` soruluyordu; o, bütünlük süzgecinden (asgari boyut /
+    sha yan dosyası) geçmeyen dosyayı GÖRMEZ → diskte DURAN kesik/yarım eser "yok" sayılıp ATLANIYORDU. Bozuk eser "yok"
+    değil "VAR ama yüklenemiyor"dur → FAIL. Kökler ürünün KENDİ listesi (`_candidate_model_roots`; aynı ad/kök kuralı)."""
+    from utils.model_downloader import _candidate_model_roots, find_installed_model
+
+    def _diskte(r: str) -> bool:
+        if (KOK / r).exists() or find_installed_model(r):
+            return True
+        return any((k / r).is_file() or (k / Path(r).name).is_file() for k in _candidate_model_roots())
+
+    return bool(rel_yollar) and all(_diskte(r) for r in rel_yollar)
 
 
 def ckd_eserleri() -> tuple[str, ...]:
