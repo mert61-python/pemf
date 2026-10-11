@@ -31,6 +31,8 @@ davranış değişmez (entitlement.py deseniyle birebir).
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import logging
 import os
@@ -116,6 +118,22 @@ def _defter_yolu() -> Path:
     return p
 
 
+def _jwt_sahip(token: str) -> str | None:
+    """Jetonu kullananın kimlik ÖZETİ (JWT gövdesindeki `sub` alanının sha256 özeti; imza burada DOĞRULANMAZ — yalnız defter kaydını
+    sahibine bağlamak için; sahte jetonla yapılan uzlaştırmayı sunucu RPC'si zaten reddeder). Çözülemezse None.
+
+    ⚠️ D4.23 eki: çevrimdışı defter CİHAZ-GENELİ ve uzlaştırma "bağlantı döndü" anındaki isteğin jetonuyla (`auth.uid()`)
+    gönderiyordu → aynı cihazda iki hesap varsa A'nın çevrimdışı analizleri B'nin bakiyesinden düşerdi. Kayıt artık tüketenin
+    özetini taşır; uzlaştırma ve `bekleyen` sayımı yalnız o kullanıcının kayıtlarına bakar.
+    Kapı: tests/test_jeton_uzlastirma_YALNIZ_TUKETEN_kullaniciya_D423b.py"""
+    try:
+        govde = (token or "").split(".")[1]
+        sub = str(json.loads(base64.urlsafe_b64decode(govde + "=" * (-len(govde) % 4))).get("sub") or "")
+    except Exception:
+        return None
+    return hashlib.sha256(sub.encode("utf-8")).hexdigest()[:16] if sub else None
+
+
 class JetonYoneticisi:
     """Analiz isteklerini jeton bakiyesine göre kapılar; çevrimdışı tüketimi biriktirir.
 
@@ -130,11 +148,13 @@ class JetonYoneticisi:
         defter_yolu: Path | None = None,
         odeme_modeli: str = "on_odemeli",
         borc_okuyucu: Callable[[], int] | None = None,
+        sahip: str | None = None,
     ) -> None:
         """`odeme_modeli`:
         · "on_odemeli"  → plan hakkı/satın alınan jetondan düşer; bakiye biterse analiz durur.
         · "kullandikca" → önden ödeme YOK; tüketim borç olarak birikir, dönem sonunda faturalanır.
         `borc_okuyucu` yalnız kullandıkça-öde modelinde kullanılır (birikmiş, faturalanmamış jeton).
+        `sahip`: jetonu kullananın kimlik özeti (`_jwt_sahip`) — çevrimdışı kayda yazılır; uzlaştırma yalnız bu sahibin kayıtlarını gönderir.
         """
         self._bakiye_oku = bakiye_okuyucu
         self._tuketim_gonder = tuketim_gonderici
@@ -142,6 +162,7 @@ class JetonYoneticisi:
         self._kilit = threading.Lock()
         self._odeme_modeli = odeme_modeli
         self._borc_oku = borc_okuyucu or (lambda: 0)
+        self._sahip = sahip
 
     # ── Yerel defter (çevrimdışı tüketim) ───────────────────────────────────
     def _defteri_oku(self) -> list[dict]:
@@ -160,6 +181,10 @@ class JetonYoneticisi:
 
     def bekleyen_tuketim_sayisi(self) -> int:
         return len(self._defteri_oku())
+
+    def sahibin_bekleyen_sayisi(self) -> int:
+        """Bu yöneticinin sahibine ait (uzlaşmamış) çevrimdışı kayıt sayısı — ekranda gösterilen `bekleyen`."""
+        return sum(1 for k in self._defteri_oku() if k.get("sahip") == self._sahip)
 
     def _bekleyene_ekle(self, kayit: dict) -> None:
         with self._kilit:
@@ -216,7 +241,14 @@ class JetonYoneticisi:
                     sebep="offline_tavan",
                 )
             self._bekleyene_ekle(
-                {"istek_id": iid, "miktar": maliyet, "tur": "analiz", "detay": islem, "cihaz_id": cihaz_id}
+                {
+                    "istek_id": iid,
+                    "miktar": maliyet,
+                    "tur": "analiz",
+                    "detay": islem,
+                    "cihaz_id": cihaz_id,
+                    "sahip": self._sahip,
+                }
             )
             return Karar(izinli=True, jeton_harcandi=maliyet, sebep="cevrimdisi")
 
@@ -234,7 +266,16 @@ class JetonYoneticisi:
         except Exception:
             gitti = False
         if not gitti:
-            self._bekleyene_ekle({"istek_id": iid, "miktar": maliyet, "tur": tur, "detay": islem, "cihaz_id": cihaz_id})
+            self._bekleyene_ekle(
+                {
+                    "istek_id": iid,
+                    "miktar": maliyet,
+                    "tur": tur,
+                    "detay": islem,
+                    "cihaz_id": cihaz_id,
+                    "sahip": self._sahip,
+                }
+            )
         return Karar(izinli=True, jeton_harcandi=maliyet, sebep="tuketildi")
 
     # ── Uzlaştırma ──────────────────────────────────────────────────────────
@@ -245,13 +286,14 @@ class JetonYoneticisi:
         bedava analiz yapmış olurdu (ya da tersi: borcu iki kez ödeyebilirdi). `istek_id`
         sayesinde tekrar gönderim güvenlidir — sunucu ikinciyi yok sayar.
         """
-        kayitlar = self._defteri_oku()
+        # D4.23 eki: YALNIZ bu yöneticinin sahibine ait kayıtlar (başka kullanıcının tüketimi bu jetonla gönderilmez).
+        kayitlar = [k for k in self._defteri_oku() if k.get("sahip") == self._sahip]
         if not kayitlar:
             return 0
         gonderilen_idler: set = set()
         for k in kayitlar:
             try:
-                ok = bool(self._tuketim_gonder(**k))
+                ok = bool(self._tuketim_gonder(**{a: d for a, d in k.items() if a != "sahip"}))
             except Exception:
                 ok = False
             if ok:
@@ -415,12 +457,16 @@ def _tuketim_gonder_canli(token: str, **k) -> bool:
 _GATE_DEFTER_KILIT = threading.Lock()
 
 
-def _defter_yoneticisi(tuketim_gonderici: Callable[..., bool] | None = None) -> JetonYoneticisi:
+def _defter_yoneticisi(
+    tuketim_gonderici: Callable[..., bool] | None = None, sahip: str | None = None
+) -> JetonYoneticisi:
     """Yalnız DEFTER işlemleri (bekleyen sayımı / uzlaştırma) için yönetici — bakiye okunmaz; kilit kapının defter kilidiyle ORTAK.
 
     ⚠️ D4.23 (B-2.15): `bakiye_ozeti` eskiden `JetonYoneticisi()` ARGÜMANSIZ kuruyordu → kurucu iki zorunlu argüman ister,
     `TypeError` yutuluyor ve uç defterde kayıt varken HER ZAMAN `bekleyen: 0` diyordu."""
-    y = JetonYoneticisi(bakiye_okuyucu=lambda: 0, tuketim_gonderici=tuketim_gonderici or (lambda **k: False))
+    y = JetonYoneticisi(
+        bakiye_okuyucu=lambda: 0, tuketim_gonderici=tuketim_gonderici or (lambda **k: False), sahip=sahip
+    )
     y._kilit = _GATE_DEFTER_KILIT
     return y
 
@@ -439,8 +485,10 @@ _son_uzlastirma: "threading.Thread | None" = None
 def _uzlastirmayi_tetikle(token: str) -> bool:
     """Defterde bekleyen varsa uzlaştırmayı arka planda başlatır; başlattıysa True. Asla fırlatmaz (ticari kapı analizi bozmaz)."""
     global _son_uzlastirma
+    sahip = _jwt_sahip(token)
     try:
-        if not token or _defter_yoneticisi().bekleyen_tuketim_sayisi() == 0:
+        # Kimliği çözülemeyen jetonla UZLAŞTIRILMAZ: kayıt kime aitse onun bakiyesinden düşmeli (D4.23 eki).
+        if not sahip or _defter_yoneticisi(sahip=sahip).sahibin_bekleyen_sayisi() == 0:
             return False
         if not _UZLASTIRMA_TEK_UCUS.acquire(blocking=False):
             return False  # süren uzlaştırma var
@@ -449,7 +497,7 @@ def _uzlastirmayi_tetikle(token: str) -> bool:
 
     def _calis() -> None:
         try:
-            n = _defter_yoneticisi(lambda **k: _tuketim_gonder_canli(token, **k)).bekleyenleri_uzlastir()
+            n = _defter_yoneticisi(lambda **k: _tuketim_gonder_canli(token, **k), sahip=sahip).bekleyenleri_uzlastir()
             if n:
                 logger.info("jeton: %d çevrimdışı tüketim uzlaştırıldı (bağlantı döndü)", n)
         except Exception:
@@ -506,6 +554,7 @@ def _jeton_kapisi_karari(request: Request) -> None:
         tuketim_gonderici=lambda **k: _tuketim_gonder_canli(token, **k),
         odeme_modeli=model,
         borc_okuyucu=lambda borc=borc: borc,
+        sahip=_jwt_sahip(token),  # D4.23 eki: çevrimdışı kayıt tüketene bağlanır
     )
     yonetici._kilit = _GATE_DEFTER_KILIT  # defter dosyası paylaşımlı → kilit de paylaşımlı
 
@@ -560,7 +609,7 @@ def bakiye_ozeti(request) -> dict:
         return {"etkin": True, "bilinmiyor": True, "sebep": "kimlik_yok"}
 
     try:
-        bekleyen = _defter_yoneticisi().bekleyen_tuketim_sayisi()
+        bekleyen = _defter_yoneticisi(sahip=_jwt_sahip(token)).sahibin_bekleyen_sayisi()  # bu kullanıcının (D4.23 eki)
     except Exception:
         bekleyen = 0
     try:

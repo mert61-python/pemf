@@ -14,6 +14,7 @@ gösterir; `bekleyen` alanı uzlaşmamış sayıyı söyler).
 
 from __future__ import annotations
 
+import base64
 import importlib
 import json
 import threading
@@ -21,9 +22,20 @@ import threading
 import pytest
 
 
+def _jwt(sub: str) -> str:
+    """D4.23 eki: uzlaştırma kaydı TÜKETENE bağlı → test jetonları `sub` taşıyan JWT biçiminde (imza önemsiz)."""
+    b = base64.urlsafe_b64encode(json.dumps({"sub": sub}).encode()).decode().rstrip("=")
+    return f"eyJhbGciOiJIUzI1NiJ9.{b}.imza"
+
+
+def _sub(token: str) -> str:
+    govde = token.split(".")[1]
+    return json.loads(base64.urlsafe_b64decode(govde + "=" * (-len(govde) % 4)))["sub"]
+
+
 class _SahteIstek:
     def __init__(self, token: str, yol: str = "/api/jeton/bakiye"):
-        self.headers = {"authorization": f"Bearer {token}"} if token else {}
+        self.headers = {"authorization": f"Bearer {_jwt(token)}"} if token else {}
         self.url = type("U", (), {"path": yol})()
 
 
@@ -40,8 +52,10 @@ def j(tmp_path, monkeypatch):
         t.join(timeout=10)
 
 
-def _defter_yaz(j, kayitlar):
-    j._defter_yolu().write_text(json.dumps(kayitlar), encoding="utf-8")
+def _defter_yaz(j, kayitlar, sub):
+    """Kayıtlar `sub` kullanıcısının çevrimdışı tüketimi (sahip özeti ürünün türetmesiyle — kimlik bağlama ayrıca D4.23b'de ölçülür)."""
+    sahip = j._jwt_sahip(_jwt(sub))
+    j._defter_yolu().write_text(json.dumps([{**k, "sahip": sahip} for k in kayitlar]), encoding="utf-8")
 
 
 def _defter(j):
@@ -56,7 +70,7 @@ def _cevrimici(j, monkeypatch, gonderilen, cevap=lambda k: True, bekle=None):
     def _gonder(token, **k):
         if bekle is not None:
             assert bekle.wait(10), "test: uzlaştırma kapısı açılmadı"
-        gonderilen.append((token, k.get("istek_id")))
+        gonderilen.append((_sub(token), k.get("istek_id")))
         return cevap(k)
 
     monkeypatch.setattr(j, "_tuketim_gonder_canli", _gonder)
@@ -72,7 +86,7 @@ def _bitir(j):
 def test_KRITIK_cevrimdisi_bakiye_ozeti_defterdeki_BEKLEYEN_sayisini_soyler_B2_15(j, monkeypatch):
     monkeypatch.setattr(j, "_bakiye_satiri_oku", lambda _t: (_ for _ in ()).throw(ConnectionError("ag yok")))
     _defter_yaz(
-        j, [{"istek_id": "a-1", "miktar": 1}, {"istek_id": "a-2", "miktar": 3}, {"istek_id": "a-3", "miktar": 1}]
+        j, [{"istek_id": "a-1", "miktar": 1}, {"istek_id": "a-2", "miktar": 3}, {"istek_id": "a-3", "miktar": 1}], "tok"
     )
     ozet = j.bakiye_ozeti(_SahteIstek("tok"))
     assert ozet.get("bilinmiyor") is True and ozet.get("sebep") == "cevrimdisi", ozet
@@ -83,7 +97,9 @@ def test_KRITIK_baglanti_DONUNCE_bakiye_ozeti_defteri_UZLASTIRIR_B2_16(j, monkey
     gonderilen = []
     _cevrimici(j, monkeypatch, gonderilen)
     _defter_yaz(
-        j, [{"istek_id": "b-1", "miktar": 1, "tur": "analiz"}, {"istek_id": "b-2", "miktar": 3, "tur": "analiz"}]
+        j,
+        [{"istek_id": "b-1", "miktar": 1, "tur": "analiz"}, {"istek_id": "b-2", "miktar": 3, "tur": "analiz"}],
+        "tok-1",
     )
     ozet = j.bakiye_ozeti(_SahteIstek("tok-1"))
     assert ozet.get("bilinmiyor") is False and ozet.get("bekleyen") == 2, ozet
@@ -95,7 +111,7 @@ def test_KRITIK_baglanti_DONUNCE_bakiye_ozeti_defteri_UZLASTIRIR_B2_16(j, monkey
 def test_KRITIK_baglanti_DONUNCE_analiz_kapisi_da_UZLASTIRIR_B2_16(j, monkeypatch):
     gonderilen = []
     _cevrimici(j, monkeypatch, gonderilen)
-    _defter_yaz(j, [{"istek_id": "c-1", "miktar": 1, "tur": "analiz"}])
+    _defter_yaz(j, [{"istek_id": "c-1", "miktar": 1, "tur": "analiz"}], "tok-2")
     j._jeton_kapisi_karari(_SahteIstek("tok-2", "/api/ai/vision/wound"))
     _bitir(j)
     assert ("tok-2", "c-1") in gonderilen and all(i != "c-1" for i in (k.get("istek_id") for k in _defter(j))), (
@@ -109,7 +125,7 @@ def test_KRITIK_uzlastirma_SIRASINDA_eklenen_tuketim_KAYBOLMAZ(j, monkeypatch):
     gonderilen = []
     kapi = threading.Event()
     _cevrimici(j, monkeypatch, gonderilen, bekle=kapi)
-    _defter_yaz(j, [{"istek_id": "d-1", "miktar": 1, "tur": "analiz"}])
+    _defter_yaz(j, [{"istek_id": "d-1", "miktar": 1, "tur": "analiz"}], "tok-3")
     j.bakiye_ozeti(_SahteIstek("tok-3"))
     y = j._defter_yoneticisi()
     y._bekleyene_ekle({"istek_id": "d-YENI", "miktar": 1, "tur": "analiz", "detay": "goruntu", "cihaz_id": None})
@@ -125,7 +141,7 @@ def test_KRITIK_uzlastirma_TEK_UCUS(j, monkeypatch):
     gonderilen = []
     kapi = threading.Event()
     _cevrimici(j, monkeypatch, gonderilen, bekle=kapi)
-    _defter_yaz(j, [{"istek_id": "e-1", "miktar": 1, "tur": "analiz"}])
+    _defter_yaz(j, [{"istek_id": "e-1", "miktar": 1, "tur": "analiz"}], "tok-4")
     j.bakiye_ozeti(_SahteIstek("tok-4"))
     ilk = j._son_uzlastirma
     j.bakiye_ozeti(_SahteIstek("tok-4"))
@@ -139,7 +155,7 @@ def test_KARSIT_hala_CEVRIMDISI_iken_uzlastirma_DENENMEZ(j, monkeypatch):
     gonderilen = []
     monkeypatch.setattr(j, "_bakiye_satiri_oku", lambda _t: (_ for _ in ()).throw(ConnectionError("ag yok")))
     monkeypatch.setattr(j, "_tuketim_gonder_canli", lambda t, **k: gonderilen.append(k) or True)
-    _defter_yaz(j, [{"istek_id": "f-1", "miktar": 1}])
+    _defter_yaz(j, [{"istek_id": "f-1", "miktar": 1}], "tok-5")
     j.bakiye_ozeti(_SahteIstek("tok-5"))
     assert j._son_uzlastirma is None and not gonderilen and len(_defter(j)) == 1
 
@@ -147,7 +163,7 @@ def test_KARSIT_hala_CEVRIMDISI_iken_uzlastirma_DENENMEZ(j, monkeypatch):
 def test_KARSIT_gonderilemeyen_kayit_KORUNUR(j, monkeypatch):
     gonderilen = []
     _cevrimici(j, monkeypatch, gonderilen, cevap=lambda k: k.get("istek_id") != "g-2")
-    _defter_yaz(j, [{"istek_id": "g-1", "miktar": 1}, {"istek_id": "g-2", "miktar": 1}])
+    _defter_yaz(j, [{"istek_id": "g-1", "miktar": 1}, {"istek_id": "g-2", "miktar": 1}], "tok-6")
     j.bakiye_ozeti(_SahteIstek("tok-6"))
     _bitir(j)
     assert [k.get("istek_id") for k in _defter(j)] == ["g-2"], "başarısız gönderim defterden silindi (tüketim kaybolur)"
