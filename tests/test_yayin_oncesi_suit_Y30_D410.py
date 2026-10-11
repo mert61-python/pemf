@@ -56,6 +56,18 @@ def test_KRITIK_CI_pytest_satirlari_ATLAMA_NEDENINI_listeler():
     assert len(pytestli) == 2, f"Linux + Windows pytest adımı bekleniyordu: {pytestli}"
     eksik = [r for r in pytestli if not re.search(r"(^|\s)-r[a-zA-Z]*s", r)]
     assert not eksik, f"`-rs` YOK — CI atlamaları nedensiz yeşil okunur: {eksik}"
+    ozetsiz = [r for r in pytestli if not _rapor_harfleri_kirmiziyi_da_listeler(r)]
+    assert not ozetsiz, (
+        f"pytest `-r` harfleri kırmızıları listelemiyor: {ozetsiz} — `-r<harfler>` varsayılan `fE`nin YERİNE geçer; `-rs` tek "
+        "başına kısa özetteki FAILED/ERROR satırlarını SİLER (4A-4.1). `-rfEs` (ya da `-ra`) kullanın."
+    )
+
+
+def _rapor_harfleri_kirmiziyi_da_listeler(komut: str) -> bool:
+    """4A-4.1 (4-A incelemesi, ölçüldü pytest 9.1.1): `-r` seçeneği varsayılanı (`fE`) EKLEMEZ, DEĞİŞTİRİR. Komuttaki bütün
+    `-r<harfler>` birleşimi `a`/`A` içermeli ya da `f`, `E` ve `s`'nin üçünü de içermeli."""
+    harfler = "".join(re.findall(r"(?:^|\s)-r([a-zA-Z]+)", komut))
+    return bool(set("aA") & set(harfler)) or set("fEs") <= set(harfler)
 
 
 # ── 2) publish_release.ps1: süit geçmeden İLERLEMEZ ─────────────────────────
@@ -157,6 +169,11 @@ def test_KRITIK_yayin_oncesi_suit_KIRMIZIYI_cikis_koduyla_TASIR(tmp_path):
     rc, cikti = _suit_kos(tmp_path, kirmizi=True)
     assert rc == 1, f"kırmızı süit çıkış kodu taşınmadı (rc={rc}) — publish bunu GEÇTİ sanardı\n{cikti[-1500:]}"
     assert "1 failed" in cikti and "YAYIN DURDU" in cikti, cikti[-1500:]
+    # 4A-4.1: betiğin "kırmızıları ve atlama nedenlerini okuyun" iletisi kısa özete yönlendirir — kırmızı orada ADIYLA görünmeli
+    # (4-A'nın ZORUNLU tam süit çıktısında 22 kırmızıya karşı FAILED/ERROR satırı 0, SKIPPED satırı 116'ydı).
+    assert re.search(r"^FAILED \S*test_y30_ornek\.py::test_kirmizi\b", cikti, re.M), (
+        f"kırmızı test kısa özette ADIYLA listelenmedi (`-rs` varsayılan `-rfE`yi siler):\n{cikti[-1500:]}"
+    )
 
 
 # ── 4) pwsh 7'nin modül yolu pytest'in açtığı Windows PowerShell 5.1'e SIZMAZ ──

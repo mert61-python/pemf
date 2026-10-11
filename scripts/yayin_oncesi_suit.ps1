@@ -10,7 +10,8 @@
 # "Yayın makinesi bayrağı ayarlar" güvencesinin hiçbir betikte karşılığı yoktu. Burada:
 #   PEMF_CAPRAZ_KAYNAK_ZORUNLU=1  → tests/capraz.py atlamayı BAŞARISIZLIĞA çevirir
 #   PEMF_GOLDEN_REQUIRED=1        → AI altın değer / CKD asgari girdi testleri atlanamaz
-#   -rs                           → kalan her atlama NEDENİYLE listelenir
+#   -rfEs                         → kırmızılar (FAILED/ERROR) ve kalan her atlama NEDENİYLE kısa özette listelenir
+#                                   (⚠️ 4A-4.1: `-r` varsayılan `fE`'nin YERİNE geçer — yalnız `-rs` kırmızıları özetten SİLERDİ)
 #
 # KULLANIM (depo kökünden ya da herhangi bir yerden):
 #   pwsh -File scripts\yayin_oncesi_suit.ps1
@@ -42,7 +43,7 @@ $env:PEMF_GOLDEN_REQUIRED = '1'
 $komut = $PytestOnek[0]
 $argumanlar = @()
 if ($PytestOnek.Count -gt 1) { $argumanlar += $PytestOnek[1..($PytestOnek.Count - 1)] }
-$argumanlar += @($Hedef, '-q', '-rs', '-p', 'no:cacheprovider')
+$argumanlar += @($Hedef, '-q', '-rfEs', '-p', 'no:cacheprovider')
 
 Write-Host "[YAYIN-ONCESI] tam suit (ZORUNLU=1, GOLDEN_REQUIRED=1): $komut $($argumanlar -join ' ')"
 # ⚠️ PSModulePath (ölçüldü, 4-A ZORUNLU koşusu 2026-10-10): pwsh 7 kendi modül dizinlerini süreç PSModulePath'ine ekler;
@@ -63,7 +64,7 @@ try {
 }
 if ($null -eq $rc) { $rc = 1 }
 if ($rc -ne 0) {
-  Write-Host "[YAYIN-ONCESI] TAM SUIT GECMEDI (cikis=$rc) - YAYIN DURDU (Y30). Kirmizilari ve atlama nedenlerini (-rs) okuyun."
+  Write-Host "[YAYIN-ONCESI] TAM SUIT GECMEDI (cikis=$rc) - YAYIN DURDU (Y30). Kirmizilari (FAILED/ERROR) ve atlama nedenlerini (SKIPPED) kisa ozette okuyun."
   exit $rc
 }
 Write-Host "[YAYIN-ONCESI] tam suit GECTI (ZORUNLU kip)."

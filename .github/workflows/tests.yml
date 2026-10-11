@@ -103,12 +103,14 @@ jobs:
       # ⚠️ Y30 / D4.10 (B-10.3): `-rs` her ATLAMAYI nedeniyle listeler — CI varsayılan kipte koşar ve kardeş kaynak
       # yoksa ≥193 test atlanır; nedenler görünmeden "yeşil" okunuyordu. Yayın öncesi ZORUNLU kip ayrı betikte:
       # scripts/yayin_oncesi_suit.ps1 (publish_release.ps1'in zorunlu adımı).
+      # ⚠️ 4A-4.1 (4-A incelemesi): `-r<harfler>` pytest'in varsayılanı `fE`'nin YERİNE geçer — `-rs` tek başına kısa özetteki
+      # FAILED/ERROR satırlarını siliyordu. `-rfEs`: kırmızılar ve atlama nedenleri birlikte.
       - name: Kritik-yol testleri
         if: runner.os != 'Windows'
         env:
           PEMF_SIMULATE: ""
           PEMF_GITLEAKS_ZORUNLU: "1"
-        run: pytest tests -v -rs --no-header --junitxml=pytest-junit.xml
+        run: pytest tests -v -rfEs --no-header --junitxml=pytest-junit.xml
 
       # ⚠️ KAPSAM RATCHET'İ YALNIZ WINDOWS'TA (2026-08-09 denetimi, Tier 3).
       # İki sebep: (a) ürün Windows'ta çalışır, (b) `fail_under` eşiği Windows'ta ölçüldü
@@ -120,7 +122,7 @@ jobs:
         env:
           PEMF_SIMULATE: ""
           PEMF_GITLEAKS_ZORUNLU: "1"
-        run: pytest tests -v -rs --no-header --cov --cov-report=term --junitxml=pytest-junit.xml
+        run: pytest tests -v -rfEs --no-header --cov --cov-report=term --junitxml=pytest-junit.xml
 
       # ⚠️ A-46 / D2.07: testler geçse bile "sqlcipher" nedenli ATLAMA varsa iş KIRMIZI. Kurulum adımı
       # bağlayıcıyı içe aktaramazsa iş zaten orada durur; bu adım kalan sessiz yolu kapatır (bağlayıcı
