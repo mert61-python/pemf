@@ -41,7 +41,16 @@ def urun_kumesi(t: dict) -> set[str]:
         parca = yol.split("/")
         if len(parca) == 3 and parca[2].endswith(".py") and parca[2] != "__init__.py":
             moduller.add(parca[2][:-3])
+        # 4-A inc. 4A-2.12: `package-dir`'e eklenmeden gelen alt paket de ürün kodudur (çalışma anında apps/backend sys.path'te).
+        if len(parca) == 4 and parca[3] == "__init__.py":
+            moduller.add(parca[2])
     return paketler | moduller
+
+
+def _urun_dosyalari() -> list[str]:
+    ls = subprocess.run(["git", "ls-files", "-z", "--", BACKEND], cwd=KOK, capture_output=True, timeout=120)
+    assert ls.returncode == 0, f"git ls-files düştü: {ls.stderr[:200]!r}"
+    return [x.decode("utf-8") for x in ls.stdout.split(b"\x00") if x and x.endswith(b".py")]
 
 
 def test_KRITIK_kapsam_source_URUN_KODUNA_esit():
@@ -53,6 +62,15 @@ def test_KRITIK_kapsam_source_URUN_KODUNA_esit():
     eksik, fazla = sorted(urun - source), sorted(source - urun)
     assert not eksik, f"kapsam ÖLÇMÜYOR (ratchet bu kodda kördür): {eksik}"
     assert not fazla, f"kapsam source'unda var olmayan ürün adı (coverage yalnız uyarır): {fazla}"
+    # 4-A inc. 4A-2.12: `omit` ürün dosyasını ölçümden çıkarmamalı (coverage göreli deseni cwd'ye göre mutlaklaştırır).
+    import fnmatch
+
+    desenler = [
+        d if d.startswith("*") or Path(d).is_absolute() else (KOK / d).as_posix()
+        for d in t["tool"]["coverage"]["run"].get("omit", [])
+    ]
+    disarida = sorted(y for y in _urun_dosyalari() if any(fnmatch.fnmatch((KOK / y).as_posix(), d) for d in desenler))
+    assert not disarida, f"[tool.coverage.run] omit ürün kodunu ölçümden ÇIKARIYOR: {disarida[:10]}"
 
 
 def test_KARSIT_KANIT_turetme_paket_disi_ve_test_dizinini_ALMAZ():
