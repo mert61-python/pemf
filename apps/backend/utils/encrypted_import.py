@@ -85,7 +85,11 @@ class EncryptedFinder(importlib.abc.MetaPathFinder):
                 continue
             if aday.is_file():
                 loader = EncryptedLoader(fullname, aday, self.password)
-                return importlib.util.spec_from_loader(fullname, loader, origin=str(aday))
+                # ⚠️ D4.13 (B-3.95): `spec_from_loader(..., origin=)` `has_location`'ı False bırakır → içe aktarma düzeneği
+                # `__file__`'ı ATAMAZ; ai_hub modüllerinin çoğu yan dosyalarını `Path(__file__).parent` ile bulduğundan
+                # .pyenc katmanına düşen modül import anında NameError ile ölürdü. Dosya konumlu spec `__file__`'ı
+                # diskteki .pyenc yoluna bağlar. Kapı: tests/test_sifreli_modul_DOSYA_YOLUNU_bilir_D413.py
+                return importlib.util.spec_from_file_location(fullname, str(aday), loader=loader)
         return None
 
 
