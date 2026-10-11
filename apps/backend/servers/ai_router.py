@@ -4689,7 +4689,9 @@ def _model_hazir_mi(rel_yol: str | None) -> tuple[str, str]:
     if not rel_yol:
         return "envanter_eksik", "model yolu tanımsız — envantere gerçek yol yazılmalı (denetim #03)"
     try:
-        from utils.model_downloader import yan_dosya_coz
+        from pathlib import Path as _P
+
+        from utils.model_downloader import _model_integrity_ok, yan_dosya_coz
         from utils.path_utils import resource_path
 
         yol = yan_dosya_coz(resource_path(rel_yol), rel_yol)  # modül yanı (donmuşta `_MEIPASS/<rel>`) → model kökleri
@@ -4698,6 +4700,10 @@ def _model_hazir_mi(rel_yol: str | None) -> tuple[str, str]:
                 "model_yok",
                 f"{rel_yol} ne modülün yanında ne bir model kökünde bulundu (ya da bütünlük sağlaması başarısız)",
             )
+        # 4B-3.6: `yan_dosya_coz` modül-yanı dosyayı bütünlük sağlamasız döndürür (kökten gelen `find_installed_model`'de
+        # süzülür) → kesik modül-yanı ONNX "ok" görünüp çıkarımda (modül-yanı ÖNCE) düşüyordu. Seçilen dosya aynı süzgeçten geçer.
+        if not _model_integrity_ok(_P(yol)):
+            return "model_yok", f"{rel_yol} bulundu ama bütünlük sağlaması başarısız (kesik/bozuk ağırlık): {yol}"
         return "ok", ""
     except Exception as e:
         return "model_yok", _kok_neden_zinciri(e)
