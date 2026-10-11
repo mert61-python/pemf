@@ -159,7 +159,11 @@ if [[ -n "${PEMF_CODESIGN_ID:-}" ]]; then
   echo "  Developer ID ile imzalanıyor: $PEMF_CODESIGN_ID"
   codesign --force --deep --timestamp --options runtime \
            --sign "$PEMF_CODESIGN_ID" "$DIST_DIR/PEMF_Backend"
-  codesign --verify --deep --strict "$DIST_DIR/PEMF_Backend" && echo "  [OK] imza doğrulandı"
+  # ⚠️ D4.22 (B-10.202): eskiden `codesign --verify … && echo` idi — `&&` listesindeki komutun başarısızlığı `set -e`'den MUAF,
+  # doğrulanamayan imzayla paketleme sürüyordu. Kapı: tests/test_build_mac_IMZA_dogrulamasi_YUTULMAZ_D422.py
+  codesign --verify --deep --strict "$DIST_DIR/PEMF_Backend" \
+    || die "İmza DOĞRULANAMADI (codesign --verify) — paket üretilmedi. Kimliği/anahtarlığı denetleyin."
+  echo "  [OK] imza doğrulandı"
 else
   echo "  PEMF_CODESIGN_ID verilmedi → PyInstaller'ın ad-hoc imzası kullanılacak."
   echo "  (Gatekeeper: kullanıcı ZIP'i indirince karantina uygulanır. Notarization"
