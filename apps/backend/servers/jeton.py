@@ -111,6 +111,12 @@ class Karar:
     sebep: str = ""
 
 
+#: 4B-1.4: atomik yazımın geçici dosyası ve bozuk defterin karantina dosyası (`<defter>` + ek). SABİT adlar: KVKK tam temizliği
+#: (`scripts/pemf_footprint.ps1`) defterle BİRLİKTE bunları da siler — ek değişirse orası da güncellenmeli.
+DEFTER_GECICI_EKI = ".tmp"
+DEFTER_KARANTINA_EKI = ".bozuk"
+
+
 def _defter_yolu() -> Path:
     kok = os.getenv("PEMF_DATA_DIR") or str(Path.home() / ".pemf")
     p = Path(kok) / "jeton_bekleyen.json"
@@ -167,17 +173,51 @@ class JetonYoneticisi:
     # ── Yerel defter (çevrimdışı tüketim) ───────────────────────────────────
     def _defteri_oku(self) -> list[dict]:
         try:
-            return json.loads(self._defter.read_text(encoding="utf-8")) or []
+            ham = self._defter.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return []
         except Exception:
+            logger.warning("jeton: bekleyen tüketim defteri okunamadı", exc_info=True)
+            return []
+        try:
+            return (json.loads(ham) or []) if ham.strip() else []
+        except ValueError:
+            # ⚠️ 4B-1.4: yarım/bozuk defter eskiden SESSİZCE boş sayılıyor, bir sonraki yazım onu EZİYORDU (uzlaşmamış tüketim
+            # kalıcı kayıp). Okunan içerik AYNEN karantina dosyasına eklenir (JSON satırı; aynı içerik bir kez — elle uzlaştırma
+            # için; yeniden adlandırma DEĞİL: eşzamanlı yeni yazımı karantinaya almasın) ve olay HATA olarak günlüklenir.
+            kopya = self._defter.with_name(self._defter.name + DEFTER_KARANTINA_EKI)
+            ozet = hashlib.sha256(ham.encode("utf-8")).hexdigest()[:16]
+            try:
+                onceki = kopya.read_text(encoding="utf-8") if kopya.exists() else ""
+                if f'"ozet": "{ozet}"' not in onceki:
+                    with open(kopya, "a", encoding="utf-8") as f:
+                        f.write(
+                            json.dumps({"ozet": ozet, "zaman": time.time(), "icerik": ham}, ensure_ascii=False) + "\n"
+                        )
+            except OSError:
+                pass
+            logger.error("jeton: bekleyen tüketim defteri BOZUK — içerik %s dosyasında saklandı", kopya.name)
             return []
 
     def _defteri_yaz(self, kayitlar: list[dict]) -> None:
+        # ⚠️ 4B-1.4: ATOMİK — geçici dosya + os.replace. Yerinde yazım (önce boşalt, sonra yaz) arka plan uzlaştırma ipliği
+        # (daemon) ya da süreç yazım ortasında ölürse defteri boş/yarım bırakıyordu → tüm bekleyen tüketim kayboluyordu.
+        # Geçici ad SABİT (KVKK tam temizliği onu da siler); yazımlar defter kilidiyle sıralıdır (`_GATE_DEFTER_KILIT`).
+        gecici = self._defter.with_name(self._defter.name + DEFTER_GECICI_EKI)
         try:
-            self._defter.write_text(json.dumps(kayitlar, ensure_ascii=False), encoding="utf-8")
+            with open(gecici, "w", encoding="utf-8") as f:
+                f.write(json.dumps(kayitlar, ensure_ascii=False))
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(gecici, self._defter)
         except Exception:
             # Defter yazılamazsa tüketim izi kaybolur ama TEDAVİ ETKİLENMEZ — sessiz düşme
-            # yerine uyar (ücretlendirme eksik kalır, klinik çalışmaya devam eder).
+            # yerine uyar (ücretlendirme eksik kalır, klinik çalışmaya devam eder). Eski defter BOZULMADAN kalır.
             logger.warning("jeton: bekleyen tüketim defteri yazılamadı", exc_info=True)
+            try:
+                gecici.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     def bekleyen_tuketim_sayisi(self) -> int:
         return len(self._defteri_oku())

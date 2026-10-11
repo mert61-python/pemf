@@ -85,6 +85,14 @@ function Get-PemfFootprint {
         @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_System\jeton_bekleyen.json';  Owner = 'shared'; Kvkk = $true }
         @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_Staging\jeton_bekleyen.json'; Owner = 'shared'; Kvkk = $true }
         @{ Kind = 'PerUser'; Path = '.pemf\jeton_bekleyen.json';                       Owner = 'shared'; Kvkk = $true }
+        # 4B-1.4: defterin atomik yazım geçici dosyası (`.tmp`) ve bozuk defter karantinası (`.bozuk`) — AYNI veri, AYNI kural
+        # (`servers/jeton.py` DEFTER_GECICI_EKI / DEFTER_KARANTINA_EKI).
+        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_System\jeton_bekleyen.json.tmp';    Owner = 'shared'; Kvkk = $true }
+        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_Staging\jeton_bekleyen.json.tmp';   Owner = 'shared'; Kvkk = $true }
+        @{ Kind = 'PerUser'; Path = '.pemf\jeton_bekleyen.json.tmp';                         Owner = 'shared'; Kvkk = $true }
+        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_System\jeton_bekleyen.json.bozuk';  Owner = 'shared'; Kvkk = $true }
+        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_Staging\jeton_bekleyen.json.bozuk'; Owner = 'shared'; Kvkk = $true }
+        @{ Kind = 'PerUser'; Path = '.pemf\jeton_bekleyen.json.bozuk';                       Owner = 'shared'; Kvkk = $true }
         # ⚠️ Y99 (O-A2-1.a · D2.E04): veri kökü yazılamayınca backend günlüğü geçici dizine düşer (`backend_service.py`
         # `tempfile.gettempdir()\PEMF_GUI\logs`); günlük hasta adı taşıyabilir → KVKK tam temizliği götürür. Kullanıcı süreci:
         # `%LOCALAPPDATA%\Temp`; LocalSystem servisi: `C:\Windows\Temp` (Windows 11 24H2+: `C:\Windows\SystemTemp`).
