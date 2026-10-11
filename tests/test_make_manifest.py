@@ -397,6 +397,20 @@ def test_launcher_ve_runtime_rollout_AYRI_kararlardir(dizin):
     assert m["launcher"]["rollout"] == 0
 
 
+def test_KRITIK_launcher_geri_cekilmis_rollout_SIFIRLANMAZ(tmp_path):
+    """4A-3.4 (A3 incelemesi): bozuk bir client yayını `launcher.rollout: 0` ile geri çekilir (yeni launcher kurulunca eskisi
+    çalıştırılamaz — dönüşün TEK yolu). Bayraksız yeniden üretim onu SESSİZCE 100'e döndürürse geri çekilmiş yayın HERKESE
+    gider. Ürün freni (make_manifest.py `_onceki_lr == 0`) vardı ama hiçbir test ölçmüyordu (fren `if False:` → 233 test yeşil).
+    Runtime eşi: test_KRITIK_geri_cekilmis_rollout_SIFIRLANMAZ."""
+    onceki = json.loads(json.dumps(ONCEKI))
+    onceki["launcher"]["rollout"] = 0
+    (tmp_path / "manifest.json").write_text(json.dumps(onceki), encoding="utf-8")
+    r = _calistir(tmp_path)
+    assert r.returncode == 0, r.stderr[-800:]
+    assert _oku(tmp_path)["launcher"] == {**ONCEKI["launcher"], "rollout": 0}, "launcher geri cekmesi sifirlandi"
+    assert "launcher.rollout=0 KORUNDU" in r.stdout, "geri cekme korunurken UYARI basilmadi"
+
+
 # ── PLATFORM ÇIKARMA (2026-08-09 denetimi, Tier 1 — sahip kararı) ────────────
 # mac/linux paketleri bayattı, `layers` (rollout freni) yoktu ve client self-update'i Windows'a
 # özeldi → o platformlara kurulan cihaz ESKİ sürümde KİLİTLİ kalıyor ve bozuk bir yayın geri
