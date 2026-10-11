@@ -429,8 +429,9 @@ def test_security_definer_fonksiyonlari_sabit_search_path_kullanir(sql_bodies):
 # Hata SAHADA, cihazlar sustuğunda görünürdü. Bu yüzden kural metin düzeyinde kilitlenir.
 # ═══════════════════════════════════════════════════════════════════════════════════════════
 
+# 4-A inc. 4A-2.5: tırnaklı ad (`public."f"(…)`) da tanım sayılır — eskiden arite kuralına hiç girmiyordu.
 _FN_TANIM = re.compile(
-    r"create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?(\w+)\s*\(([^)]*)\)",
+    r"create\s+(?:or\s+replace\s+)?function\s+(?:\"?public\"?\.)?\"?(\w+)\"?\s*\(([^)]*)\)",
     re.IGNORECASE | re.DOTALL,
 )
 
@@ -451,21 +452,30 @@ def _parametre_sayisi(ham: str) -> int:
     return n
 
 
-def _dusurme_var_mi(govde: str, fn: str) -> bool:
+def _dusurme_var_mi(govde: str, fn: str, eski_ariteler: set[int]) -> bool:
     """Bu dosya `fn`in eski imzalarını GERÇEKTEN düşürüyor mu?
 
     ⚠️ İlk hâli `pg_proc` + fonksiyon adı geçmesini yeterli sayıyordu — ama dosyanın SONUNDAKİ
     "tek imza kaldı mı?" DOĞRULAMA bloğu da tam olarak bu ikisini içeriyor. Sonuç: düşürme adımı
     silinse bile kapı yeşil kalıyordu (mutasyon turunda ölçüldü). `drop function` ifadesinin
     KENDİSİ aranmalı; doğrulama saymamalı.
+    ⚠️ 4-A inc. 4A-2.5: ADIN geçmesi de yetmez — `drop function if exists f(<yanlış imza>)` PostgreSQL'de sessiz no-op'tur
+    (yazım hatası ya da YENİ imzayı düşürmek eskisini bırakır). Açık düşürmede HER eski aritenin düşürüldüğü ölçülür
+    (tür yazımı — `varchar`/`character varying` — aritede fark etmez); katalog süpürmesi tüm imzaları kapsar.
     """
     low = govde.lower()
     if "drop function" not in low:
         return False
-    if re.search(rf"drop\s+function[^;]*\b{re.escape(fn)}\b", low):
-        return True  # düz: drop function ... fn(...)
     # Dinamik katalog süpürmesi: pg_proc üzerinde proname='<fn>' + execute'lu drop
-    return "pg_proc" in low and f"'{fn}'" in low
+    if "pg_proc" in low and f"'{fn}'" in low:
+        return True
+    dusen = {
+        _parametre_sayisi(m.group(1))
+        for m in re.finditer(
+            rf"drop\s+function\s+(?:if\s+exists\s+)?(?:\"?public\"?\.)?\"?{re.escape(fn)}\"?\s*\(([^)]*)\)", low
+        )
+    }
+    return bool(eski_ariteler) and eski_ariteler <= dusen
 
 
 def test_KRITIK_ayni_RPC_farkli_arite_ile_tanimlaniyorsa_ESKISI_DUSURULUR(sql_bodies):
@@ -498,7 +508,8 @@ def _imza_dusurme_ihlalleri(sql_bodies: dict[str, str]) -> list[str]:
             continue  # tek arite → çakışma yok
         for arite in sorted(hepsi - {min(hepsi)}):
             getirenler = sorted(ad for ad, ar in dosyalar.items() if arite in ar)
-            if not any(_dusurme_var_mi(sql_bodies[ad], fn) for ad in getirenler):
+            eski = {a for a in hepsi if a < arite}
+            if not any(_dusurme_var_mi(sql_bodies[ad], fn, eski) for ad in getirenler):
                 ihlaller.append(
                     f"{getirenler}: `{fn}` {arite} parametreli imzayi getiriyor ama HICBIRI eski imzalari DUSURMUYOR. "
                     f"Depoda su ariteler var: {sorted(hepsi)}. PostgreSQL ikinci bir asiri-yukleme yaratir; az-argumanli "
