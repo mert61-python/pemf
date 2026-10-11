@@ -41,7 +41,8 @@ def _hepsi(*a, **k):
 cagrilar = []
 def _collect_submodules(pkg, *a, **k):
     if pkg not in birinci:
-        return []
+        # 4B-2.9: spec pickle-zorunlu üçüncü-taraf paket (sklearn) boşsa durur → sahte toplayıcı üçüncü-taraf için boş OLMAYAN liste
+        return [pkg + "._sahte"]
     hedef = os.path.normcase(os.path.normpath(os.path.join(os.getcwd(), "apps", "backend")))
     cagrilar.append([pkg, any(os.path.normcase(os.path.normpath(p)) == hedef for p in sys.path)])
     if pkg == bos_donsun:

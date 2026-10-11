@@ -402,6 +402,7 @@ print(f"Toplam: {len(binaries)} binary, {len(datas)} data")
 # --- Hidden imports: SADECE headless paketler (GUI paketleri toplanmaz) ---
 hidden = []
 _BIRINCI_TARAF_PAKETLER = ('controllers', 'services', 'database', 'servers', 'utils', 'ai', 'ai_hub')
+_PICKLE_ZORUNLU_UCUNCU_TARAF = ('sklearn',)
 for pkg in ('controllers', 'services', 'database', 'servers', 'utils', 'ai',
             'ai_hub', 'cryptography', 'numpy',
             # sklearn: pickled preprocessor/scaler nesneleri unpickle'da sklearn.impute /
@@ -434,6 +435,18 @@ for pkg in ('controllers', 'services', 'database', 'servers', 'utils', 'ai',
             raise SystemExit(
                 f"[BUILD FAIL] birinci-taraf paket '{pkg}' 0 modül döndü — sys.path'te değil mi? "
                 f"(apps/backend: {backend_path}). Dinamik yüklenen ürün modülleri EXE'den SESSİZCE düşerdi (D4.17)."
+            )
+        hidden += _toplanan
+        continue
+    # 4B-2.9: pickle'dan yüklenen ve ürün kodunda HİÇ statik içe aktarılmayan üçüncü-taraf paket — boş toplama (derleme ortamında
+    # yok: GERÇEK collect_submodules istisna DEĞİL 0 modül döndürür) EXE'yi o paketsiz bırakır; D4.28 AI kapısı (içe aktarım + dosya
+    # varlığı) bunu görmez, sahada böbrek-hastalık `preprocessor.pkl` yüklemesi ölür. XAI paketleri zarif düşüşlüdür → hoşgörü kalır.
+    if pkg in _PICKLE_ZORUNLU_UCUNCU_TARAF:
+        _toplanan = collect_submodules(pkg)
+        if not _toplanan:
+            raise SystemExit(
+                f"[BUILD FAIL] pickle'la yuklenen modeller icin zorunlu ucuncu-taraf paket '{pkg}' 0 modul dondu — derleme "
+                "ortaminda kurulu mu? (requirements.txt) EXE'de olmazsa bobrek-hastalik analizi sahada olur (4B-2.9)."
             )
         hidden += _toplanan
         continue
