@@ -80,6 +80,10 @@ def test_a_launcher_UI_invoke_adlari_RUST_generate_handler_listesinde():
 # ── b) Supabase ref + publishable anahtar — DEĞER BASILMAZ ────────────────────────────────────────────────
 
 _REF = re.compile(rb"https://([a-z0-9]{20})\.supabase\.co")
+# 4A-3.1 (A3 incelemesi): launcher'ın ÜRÜN sabiti `PROJECT_REF` (auth.rs → `expected_host()`) URL biçimini taşımaz; yalnız
+# https deseniyle auth.rs `#[cfg(test)]` vektörleri üzerinden "görülüyordu" — sabit ayrışınca kapı YEŞİL kalıyordu.
+_REF_SABIT = re.compile(rb"""(?i)project_ref[^"'\n]{0,24}["']([a-z0-9]{20})["']""")
+_REF_URUN_SABITI = "launcher/core/src/auth.rs"
 _ANAHTAR = re.compile(rb"sb_publishable_[A-Za-z0-9_\-]{10,}")
 
 
@@ -91,6 +95,7 @@ def test_b_supabase_ref_ve_publishable_anahtar_TUM_kopyalarda_AYNI():
     """Sır değeri ASLA basılmaz (Y6 / A-14): ileti yalnız dosya adı ve SHA-256 öneki taşır."""
     ref_oz: dict[str, set[str]] = {}
     anahtar_oz: dict[str, set[str]] = {}
+    sabit_dosya: set[str] = set()
     for rel in _izlenen():
         if "node_modules" in rel or rel.endswith((".png", ".jpg", ".zip", ".exe", ".onnx", ".pt", ".pdf", ".ico")):
             continue
@@ -103,12 +108,18 @@ def test_b_supabase_ref_ve_publishable_anahtar_TUM_kopyalarda_AYNI():
             continue
         for m in _REF.finditer(b):
             ref_oz.setdefault(_oz(m.group(1)), set()).add(rel)
+        for m in _REF_SABIT.finditer(b):
+            ref_oz.setdefault(_oz(m.group(1)), set()).add(rel)
+            sabit_dosya.add(rel)
         for m in _ANAHTAR.finditer(b):
             anahtar_oz.setdefault(_oz(m.group(0)), set()).add(rel)
     ref_dosya = set().union(*ref_oz.values()) if ref_oz else set()
     anahtar_dosya = set().union(*anahtar_oz.values()) if anahtar_oz else set()
     assert len(ref_dosya) >= 5 and len(anahtar_dosya) >= 5, (
         f"VAKUM: ref {len(ref_dosya)} / anahtar {len(anahtar_dosya)} dosyada bulundu"
+    )
+    assert _REF_URUN_SABITI in sabit_dosya, (
+        f"VAKUM: launcher URUN sabiti PROJECT_REF {_REF_URUN_SABITI} icinde bulunamadi (ad/bicim degisti mi?)"
     )
     ozet = lambda d: {k: sorted(v) for k, v in d.items()}  # noqa: E731
     assert len(ref_oz) == 1, f"Supabase proje ref'i kopyalarda FARKLI (SHA-256 oneki -> dosyalar): {ozet(ref_oz)}"
