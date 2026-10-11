@@ -1,5 +1,7 @@
 # =============================================================================
-# PEMF — GitHub Release yayinlayici (oto-guncelleme icin).
+# PEMF - GitHub Release yayinlayici (oto-guncelleme icin).
+# DIKKAT (4A-1.6): bu dosya BOM'suz -> YALNIZ ASCII kalmali. Windows PowerShell 5.1 BOM'suz betigi ANSI okur; UTF-8 tire
+# (U+2014) baytlarinin sonuncusu sag cift tirnak olur ve cift tirnakli dizgeyi KAPATIR -> betik hic ayristirilmaz.
 # -----------------------------------------------------------------------------
 # Yeni surum cikarinca TEK komut: release olusturur + asset (installer/APK) yukler
 # + ilgili branch'in latest.json manifest'ini gunceller. Kurulu eski surumler bunu
@@ -46,7 +48,7 @@ Write-Host "Asset: $assetName  ($([int]((Get-Item $AssetPath).Length/1MB)) MB)  
 # --- 1) release (varsa yeniden kullan) ---
 $rel = $null
 try { $rel = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/tags/$tag" -Headers $h } catch {}
-if ($rel) { Write-Host "Release zaten var ($tag) — asset guncellenecek." }
+if ($rel) { Write-Host "Release zaten var ($tag) - asset guncellenecek." }
 else {
   $body = @{ tag_name = $tag; target_commitish = $Branch; name = "$Branch $Version"; body = $Notes } | ConvertTo-Json
   $rel = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases" -Headers $h -Method Post -Body $body -ContentType 'application/json'
