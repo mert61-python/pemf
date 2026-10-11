@@ -132,7 +132,10 @@ foreach ($p in $Profiller) {
 # Kilit: tests/test_restore_assets_MODEL_PARCALARI_D416.py
 foreach ($p in $Profiller) {
   if (-not $manifest.profiles.$p) { continue }  # ana profil yoksa parcasi da yok (yukarida uyarildi)
-  $parcalar = if ($manifest.model_parts -and $manifest.model_parts.$p) { @($manifest.model_parts.$p) } else { @() }
+  # 4B-2.7: TEK ogeli dizi boolean'da ogesinin degerini alir (@($null) -> $false) ve `if` deyiminin ciktisi diziyi ACAR
+  # (`$x = if (...) { @($null) }` -> $null): `[null]` girdisi 'parca yok' sayiliyordu. Atama ifadeyle yapilir, dizi korunur.
+  $parcalar = @()
+  if ($manifest.model_parts -and ($null -ne $manifest.model_parts.$p)) { $parcalar = @($manifest.model_parts.$p) }
   $n = 2
   foreach ($parca in $parcalar) {
     $ad = "$p-$n"
