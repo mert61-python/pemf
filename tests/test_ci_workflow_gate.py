@@ -35,17 +35,28 @@ def _tetikleyici(d):
     return d.get("on") or d.get(True)
 
 
-AKTIF_DAL = "production-hardening"
+#: ⚠️ 4-A inc. S-A2.1 (Y123 önerilen, 2026-10-11): aktif geliştirme dalı `duzeltme/dalga-2`; `production-hardening` yalnız
+#: listede kalan eski dal. Push tetikleyicisi GitHub dal desenidir (`duzeltme/**`) — eşleşme düz üyelik değil desenle ölçülür.
+AKTIF_DAL = "duzeltme/dalga-2"
+
+
+def _dal_eslesir(dal: str, desen: str) -> bool:
+    """GitHub `branches` deseni: `**` her karakteri (`/` dahil), `*` `/` dışındakileri eşler."""
+    rx = re.escape(desen).replace(r"\*\*", "\0").replace(r"\*", "[^/]*").replace("\0", ".*")
+    return re.fullmatch(rx, dal) is not None
 
 
 # ── tetikleyici ──────────────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("dosya", ["tests.yml", "lint.yml", "security.yml"])
+@pytest.mark.parametrize("dosya", ["tests.yml", "lint.yml", "security.yml", "frontend.yml", "site.yml"])
 def test_KRITIK_aktif_dal_TETIKLENIR(dosya):
     """Aktif dal listede yoksa iş akışı sahadaki hiçbir değişiklikte koşmaz — yani YOK demektir."""
     dallar = _tetikleyici(_yukle(dosya))["push"]["branches"]
-    assert AKTIF_DAL in dallar, f"{dosya} aktif dalda ({AKTIF_DAL}) KOSMUYOR: {dallar}"
+    assert any(_dal_eslesir(AKTIF_DAL, d) for d in dallar), f"{dosya} aktif dalda ({AKTIF_DAL}) KOSMUYOR: {dallar}"
+    assert not _dal_eslesir("duzeltme/dalga-2", "duzeltme/*/x") and _dal_eslesir("feature/a/b", "feature/**"), (
+        "desen ölçücüsü"
+    )
 
 
 @pytest.mark.parametrize("dosya", ["tests.yml", "lint.yml", "security.yml"])

@@ -16,7 +16,7 @@ name: critical-path-tests
 on:
   push:
     # Aktif dallar dahil: kısa ömürlü konu dalları da kapsansın diye desen kullanılır.
-    branches: [ main, master, production-hardening, "feature/**", "fix/**" ]
+    branches: [ main, master, production-hardening, "feature/**", "fix/**", "duzeltme/**" ]
     # ⚠️ YOL FILTRESI BILEREK YOK (monorepo 2026-08-18). Once `paths-ignore: [apps/ui/**,
     # pemf-vet-web/**]` eklendi, sonra GERI ALINDI: bu suit CAPRAZ-KATMAN kapilari iceriyor ve
     # onlar tam da OTEKI tarafin dosyalarini okuyor —

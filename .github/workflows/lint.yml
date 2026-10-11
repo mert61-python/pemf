@@ -7,7 +7,7 @@ on:
   # yapıldığı için bu iş akışı sahadaki hiçbir değişiklikte KOŞMUYORDU. Aktif dal + konu-dal
   # desenleri eklendi (bkz. tests.yml'deki aynı düzeltme).
   push:
-    branches: [ main, master, production-hardening, "feature/**", "fix/**" ]
+    branches: [ main, master, production-hardening, "feature/**", "fix/**", "duzeltme/**" ]
   pull_request:
   workflow_dispatch:
 

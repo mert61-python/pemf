@@ -10,7 +10,7 @@ name: site-ci
 
 on:
   push:
-    branches: [ main, master, production-hardening, "feature/**", "fix/**" ]
+    branches: [ main, master, production-hardening, "feature/**", "fix/**", "duzeltme/**" ]
     # Yol filtresi: backend/firmware degisikligi bu hatti tetiklemesin.
     # ⚠️ `scripts/responsive_kapisi.py` DE BURADA OLMALI: bu is akisi onu CALISTIRIYOR ama
     # izlemiyordu -> kapi betigini bozan bir degisiklik CI'da hic gorunmuyordu (2026-09-05'te
