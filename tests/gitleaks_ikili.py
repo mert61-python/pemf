@@ -36,6 +36,41 @@ def _onbellek_kokleri() -> list[Path]:
     return kokler
 
 
+_GITLEAKS_DEPO = "https://github.com/gitleaks/gitleaks"
+
+
+def _yapilandirilmis_rev() -> str | None:
+    """`.pre-commit-config.yaml`daki gitleaks `rev`i (CI aynı rev'i kurar)."""
+    import re
+
+    try:
+        cfg = (Path(__file__).resolve().parents[1] / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    m = re.search(r"repo:\s*https://github\.com/gitleaks/gitleaks\s+rev:\s*(\S+)", cfg)
+    return m.group(1) if m else None
+
+
+def _db_eslemesi(kok: Path, rev: str | None) -> list[Path] | None:
+    """4A-1.9 (A1 incelemesi): pre-commit'in KENDİ eşlemesi (`db.db` → `repos(repo, ref, path)`). None = db yok / okunamadı."""
+    db = kok / "db.db"
+    if not rev or not db.is_file():
+        return None
+    try:
+        import sqlite3
+
+        con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+        try:
+            satirlar = con.execute(
+                "SELECT path FROM repos WHERE repo = ? AND ref = ?", (_GITLEAKS_DEPO, rev)
+            ).fetchall()
+        finally:
+            con.close()
+    except Exception:
+        return None
+    return [Path(p) for (p,) in satirlar]
+
+
 def bul() -> str | None:
     acik = os.environ.get("PEMF_GITLEAKS", "").strip()
     if acik:
@@ -43,8 +78,17 @@ def bul() -> str | None:
     yol = shutil.which("gitleaks")
     if yol:
         return yol
+    rev = _yapilandirilmis_rev()
     for kok in _onbellek_kokleri():
         if not kok.is_dir():
+            continue
+        eslesen = _db_eslemesi(kok, rev)
+        if eslesen is not None:
+            # db var: YALNIZ yapılandırılmış rev'in kurulumu — başka rev'in (mtime'ı daha yeni olsa da) ikilisi seçilmez
+            # (açık yoldaki "yanlış sürüm ölçülmesin" ilkesiyle aynı; ölçüldü: eskiden mtime'ı en yeni rev seçiliyordu).
+            adaylar = [p for d in eslesen for ad in _ADLAR for p in d.glob(f"golangenv-*/bin/{ad}") if p.is_file()]
+            if adaylar:
+                return str(adaylar[0])
             continue
         adaylar = [p for ad in _ADLAR for p in kok.glob(f"*/golangenv-*/bin/{ad}") if p.is_file()]
         if adaylar:
