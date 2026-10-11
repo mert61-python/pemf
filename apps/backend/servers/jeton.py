@@ -103,6 +103,12 @@ _YETERSIZ_MESAJ = (
 )
 
 
+_KIMLIK_GEREKLI_MESAJ = (
+    "Ücretli yapay zekâ analizi için hesabınızla giriş yapın (analiz jetonu hesabınızdan düşülür). "
+    "Seans, acil durdurma ve sensör izleme bundan ETKİLENMEZ."
+)
+
+
 @dataclass(frozen=True)
 class Karar:
     izinli: bool
@@ -567,10 +573,16 @@ def _jeton_kapisi_karari(request: Request) -> None:
         return  # sahip kararı: satış kapalı — kapı bağlı ama uykuda (bayrak tek anahtar)
 
     token = _bearer_token(request)
+    if not _jwt_sahip(token):
+        # ⚠️ 4B-1.5 (Y24): kimliği çözülemeyen (jetonsuz / `sub`'sız) istek eskiden bağlantı VARKEN bile "çevrimdışı" yoluna düşüp
+        # İZİN alıyor, deftere SAHİPSİZ kayıt yazıyordu: hiçbir hesaptan düşülmez (bedava analiz; eki uzlaştırmayı sahibe bağladı) ama
+        # cihaz-geneli OFFLINE_TAVAN'ı doldurur → tavan dolunca cihazdaki HER kullanıcının çevrimdışı analizi KALICI 402. Ücretlendirme
+        # açıkken yeni AI analizi hesap ister; tedavi / E-stop / seans bu kapıya HİÇ gelmez (`_islem_turu` → None, Ö.4-Y8).
+        raise HTTPException(status_code=402, detail=_KIMLIK_GEREKLI_MESAJ)
     try:
         satir = _bakiye_satiri_oku(token)
     except Exception:
-        satir = None  # çevrimdışı/tokensız → JetonYoneticisi fail-open yolu (yerel defter)
+        satir = None  # çevrimdışı → JetonYoneticisi fail-open yolu (yerel defter; kayıt tüketene bağlı)
     if satir is not None:
         _uzlastirmayi_tetikle(token)  # D4.23 (Y24): bağlantı DÖNDÜ → biriken çevrimdışı tüketim arka planda uzlaşır
 

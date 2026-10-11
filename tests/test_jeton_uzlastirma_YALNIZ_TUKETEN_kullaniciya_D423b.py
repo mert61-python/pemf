@@ -111,7 +111,19 @@ def test_KRITIK_bekleyen_sayisi_KULLANICIYA_ozel(j, monkeypatch):
 def test_KARSIT_kimligi_cozulemeyen_jetonla_uzlastirma_DENENMEZ(j, monkeypatch):
     a = _jwt("kullanici-A")
     _cevrimdisi_tuket(j, monkeypatch, a, 1)
-    _cevrimdisi_tuket(j, monkeypatch, "", 1)  # jetonsuz istek → sahibi bilinmeyen kayıt
+    # Sahibi bilinmeyen (eski) kayıt. 4B-1.5'ten beri jetonsuz istek kayıt ÜRETMEZ (402); defterde kalmış olabilecek eski kayıt elle konur.
+    k = _defter(j)
+    k.append(
+        {
+            "istek_id": "sahipsiz-eski-1",
+            "miktar": 1,
+            "tur": "analiz",
+            "detay": "goruntu",
+            "cihaz_id": None,
+            "sahip": None,
+        }
+    )
+    j._defter_yolu().write_text(json.dumps(k), encoding="utf-8")
     gonderilen: list = []
     _cevrimici(j, monkeypatch, gonderilen)
     j.bakiye_ozeti(_Istek(_jwt(None)))

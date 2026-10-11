@@ -45,7 +45,8 @@ def jeton(tmp_path, monkeypatch):
 class _Istek:
     """jeton_gate'in kullandığı en küçük Request yüzeyi."""
 
-    def __init__(self, path: str, token: str = "test-jwt"):
+    # 4B-1.5: gerçek Supabase jetonu `sub` taşıyan bir JWT'dir; kimliği çözülemeyen jeton zorlama açıkken 402 alır.
+    def __init__(self, path: str, token: str = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0LWt1bGxhbmljaSJ9.imza"):
         self.url = type("U", (), {"path": path})()
         self.headers = {"authorization": f"Bearer {token}"} if token else {}
 

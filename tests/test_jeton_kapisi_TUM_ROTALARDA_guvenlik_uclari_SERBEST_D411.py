@@ -45,7 +45,8 @@ class _Istek:
 
     def __init__(self, path: str):
         self.url = type("U", (), {"path": path})()
-        self.headers = {"authorization": "Bearer d411-jwt"}
+        # 4B-1.5: `sub` taşıyan JWT ({"sub": "test-kullanici"}) — kimliği çözülemeyen jeton zorlama açıkken 402 alır.
+        self.headers = {"authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0LWt1bGxhbmljaSJ9.imza"}
 
 
 def _somut(yol: str) -> str:
