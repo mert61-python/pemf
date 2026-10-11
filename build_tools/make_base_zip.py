@@ -366,16 +366,86 @@ def _monolith_esit(mono_yol, app_yol, deps_yol):
 
 
 def _yerlestir(ciftler):
-    """D4.31: DOGRULANMIS .tmp'leri yayin dizinine koyar (ayni dizin → atomik `os.replace`).
+    """D4.31: DOGRULANMIS .tmp'leri yayin dizinine koyar (ayni dizin → atomik `os.replace`) — HEPSI YA DA HICBIRI.
 
     Sira deps → app → base.zip: en buyuk (yukleme sirasinda kilitli olma olasiligi en yuksek) once; biri
     yerine oturamazsa hata YUTULMAZ, `yayin dizinine yerlesti` kontrolu FAIL olur ve cikis 1 verilir.
+    ⚠️ 4-B incelemesi (4B-4.2): eskiden her dosya ayri `os.replace` ediliyordu — deps yerlesip app yerlesemeyince yayin dizini
+    ESKI app + YENI deps (iki farkli build) kaliyor, `make_manifest` bu KARMA seti cikis 0 ile muhurluyordu. Artik: (1) eski
+    dosyalarin HEPSININ yedegi `<ad>.onceki` olarak alinir (NTFS sabit baglantisi — aninda, ek yer yok; desteklenmezse kopya);
+    yedek alinamazsa hicbir sey degismez; (2) yeniler yerlestirilir ve sha'lari dogrulananla karsilastirilir; biri tutmazsa
+    ESKILERIN HEPSI geri konur. `.onceki` uzantisi `gh release upload *.zip` jokerine GIRMEZ. Donus: True = yeni set yerinde;
+    False = eski set yerinde (geri alma da duserse ileti bunu AYRICA soyler).
+    Kapi: tests/test_paketleme_DOGRULAMADAN_once_YAYIN_DIZINI_EZILMEZ_D431.py
     """
-    for gecici, out in ciftler:
+    yedekler = []  # (out, onceki) — onceki None: hedef yoktu
+    try:
+        for _g, out, _s in ciftler:
+            if not os.path.exists(out):
+                yedekler.append((out, None))
+                continue
+            onceki = out + '.onceki'
+            if os.path.exists(onceki):
+                os.remove(onceki)  # onceki kosunun artigi
+            try:
+                os.link(out, onceki)
+            except OSError:
+                shutil.copy2(out, onceki)
+            yedekler.append((out, onceki))
+    except OSError as e:
+        print(f'  !! onceki paketlerin yedegi alinamadi: {e} — yayin dizinine DOKUNULMADI', flush=True)
+        _yedekleri_sil(yedekler)
+        return False
+    for gecici, out, sha in ciftler:
         try:
             os.replace(gecici, out)
+            if os.path.isfile(out) and _sha256(out) == sha:
+                continue
+            print(f'  !! {os.path.basename(out)} yerine oturmadi (sha dogrulananla ayni degil)', flush=True)
         except OSError as e:
             print(f'  !! {os.path.basename(out)} yayin dizinine konulamadi: {e}', flush=True)
+        if _geri_koy(yedekler):
+            print('  !! yerlesme TAMAMLANAMADI — onceki paketler geri donduruldu (karma set birakilmadi)', flush=True)
+        return False
+    _yedekleri_sil(yedekler)
+    return True
+
+
+def _yedekleri_sil(yedekler):
+    for _o, onceki in yedekler:
+        if onceki and os.path.exists(onceki):
+            os.remove(onceki)
+
+
+def _ayni_dosya(a, b):
+    return os.path.isfile(a) and os.path.isfile(b) and (os.path.samefile(a, b) or _sha256(a) == _sha256(b))
+
+
+def _geri_koy(yedekler):
+    """Onceki seti geri koyar; True = tamamı geri geldi."""
+    tamam = True
+    for out, onceki in reversed(yedekler):
+        try:
+            if onceki is None:
+                if os.path.exists(out):
+                    os.remove(out)  # once yoktu: yeni build'in tek basina kalan dosyasi da kalmasin
+                continue
+            if not _ayni_dosya(
+                out, onceki
+            ):  # hedef hic degismediyse (yerlesme o dosyada dustuyse) geri koymaya gerek yok
+                os.replace(onceki, out)
+            if os.path.exists(onceki):
+                if not _ayni_dosya(out, onceki):
+                    raise OSError('onceki kopya yerine konamadi')
+                os.remove(onceki)
+        except OSError as e:
+            tamam = False
+            print(
+                f'  !! GERI ALINAMADI: {os.path.basename(out)} ({e}) — yayin dizini KARMA olabilir, YUKLEMEYIN; '
+                f'onceki kopya: {onceki}',
+                flush=True,
+            )
+    return tamam
 
 
 # --- YAPI DOGRULAMA: zip-integrity + iki katmani BIRLIKTE ac + kilit yollar ---
@@ -447,8 +517,8 @@ try:
         ciftler = [(deps_tmp, OUT_DEPS, deps_sha), (app_tmp, OUT_APP, app_sha)]
         if mono_tmp:
             ciftler.append((mono_tmp, OUT_MONO, mono_sha))
-        _yerlestir([(g, o) for g, o, _s in ciftler])
-        if not MONOLITH and os.path.exists(OUT_MONO):
+        yerlesti = _yerlestir(ciftler)
+        if yerlesti and not MONOLITH and os.path.exists(OUT_MONO):
             # BAYAT MONOLITH BIRAKMA: diskte kalan eski base.zip, yayin adiminda yanlislikla
             # yuklenirse eski client'lara BAYAT backend gider (bkz. bastaki denetim notu).
             os.remove(OUT_MONO)

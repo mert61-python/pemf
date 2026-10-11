@@ -132,7 +132,7 @@ def test_KARSIT_gecerli_dist_PASSte_zipleri_YERINE_KOYAR(kum):
     with zipfile.ZipFile(cikti / "base-app.zip") as z:
         assert z.read("PEMF_Backend/PEMF_Backend.exe") == b"EXE-yeni-build"
     assert "[OK] yayin dizinine yerlesti: base-app.zip" in r.stdout, r.stdout[-1500:]
-    assert not [p for p in cikti.iterdir() if p.suffix == ".tmp"], ".tmp artigi kaldi"
+    assert not [p for p in cikti.iterdir() if p.suffix in (".tmp", ".onceki")], ".tmp/.onceki artigi kaldi"
 
 
 _OTURMAYAN_SARMAL = """import os
@@ -144,8 +144,13 @@ _gercek = os.replace
 
 
 def _replace(src, dst, *a, **k):
-    if os.path.basename(str(dst)) == "base-app.zip":
+    kip = os.environ.get("KILIT_KIPI", "yutar")
+    if kip == "yutar" and os.path.basename(str(dst)) == "base-app.zip":
         return None  # kilit / antivirus / es zamanli yukleme: dosya yerine OTURMAZ, eski kopya kalir
+    if kip == "kilitli" and "base-app.zip" in (os.path.basename(str(src)), os.path.basename(str(dst))):
+        raise PermissionError(13, "sahte kilit: base-app.zip baska surecte acik")  # Windows: acik dosya ne tasinir ne ezilir
+    if kip == "kaynak" and os.path.basename(str(src)) == "base-app.zip.tmp":
+        raise PermissionError(13, "sahte antivirus: yeni base-app.zip.tmp taraniyor")
     return _gercek(src, dst, *a, **k)
 
 
@@ -180,6 +185,36 @@ def test_KRITIK_yerine_OTURMAYAN_app_zip_FAIL_verir(kum):
         -1500:
     ]
     assert not [p for p in cikti.iterdir() if p.suffix == ".tmp"], ".tmp artigi kaldi"
+    # 4-B incelemesi (4B-4.2): yalnız app değil, önceki GEÇERLİ SET bütün kalmalı — deps yerleşip app yerleşmezse yayın dizini
+    # ESKİ app + YENİ deps (iki build) olur ve make_manifest bu karma seti çıkış 0 ile mühürlerdi (ölçüldü).
+    assert {ad: _sha(cikti / ad) for ad in once} == once, "yerine oturmayan app sonrası önceki set bozuldu (KARMA set)"
+    assert not [p for p in cikti.iterdir() if p.suffix == ".onceki"], ".onceki yedek artigi kaldi"
+
+
+@pytest.mark.parametrize("kip", ["kilitli", "kaynak"])
+def test_KRITIK_kilitli_app_ya_da_kaynak_ONCEKI_SET_butun_kalir(kum, kip):
+    """4-B incelemesi (4B-4.2): gerçekçi Windows kilidi (açık `base-app.zip` ne kenara alınır ne ezilir) ya da yeni `.tmp`'yi tutan
+    antivirüs → app yerleşemez. Önceden yerleşen deps GERİ KONMALI: çıkış 1, önceki üç dosya bayt bayt aynı, `.tmp`/`.onceki` yok."""
+    tmp, cikti = kum
+    once = _nobetciler(cikti)
+    sarmal = tmp / "oturmayan_sarmal.py"
+    sarmal.write_text(_OTURMAYAN_SARMAL, encoding="utf-8")
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PEMF_PKG_OUT": str(cikti), "KILIT_KIPI": kip}
+    r = subprocess.run(
+        [sys.executable, str(sarmal), str(MAKE_BASE_ZIP), str(_sahte_dist(tmp, exe=True))],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        timeout=300,
+    )
+    assert r.returncode == 1 and "VALIDATION: FAIL" in r.stdout, f"rc={r.returncode}\n{r.stdout[-1500:]}"
+    assert "[FAIL] yayin dizinine yerlesti: base-app.zip" in r.stdout, r.stdout[-1500:]
+    sonra = {ad: _sha(cikti / ad) for ad in once if (cikti / ad).exists()}
+    assert sonra == once, f"önceki GEÇERLİ set bozuldu: {sorted(ad for ad in once if sonra.get(ad) != once[ad])}"
+    artik = sorted(p.name for p in cikti.iterdir() if p.suffix in (".tmp", ".onceki"))
+    assert not artik, f"artik kaldi: {artik}"
 
 
 # ── 2) make_manifest: EXE'siz app katmanı mühürlenmez ─────────────────────────────────────────
