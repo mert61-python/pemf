@@ -1,4 +1,4 @@
-# Frontend image (Dockerfile.frontend) build context = guii/pf
+# Frontend image (Dockerfile.frontend) build context = guii/apps/ui
 # Web export'a gerekmeyenleri context'e ALMA (npm ci konteynerde node_modules üretir).
 node_modules/
 dist/

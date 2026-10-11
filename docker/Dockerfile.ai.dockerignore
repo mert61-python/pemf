@@ -7,7 +7,7 @@
 # satır-içi yorumu DESTEKLEMEZ — `#`'ten sonrası kalıbın PARÇASI olur, dolayısıyla desen
 # hiçbir şeyle eşleşmiyordu ve release_assets/ (2,36 GB) build context'e GİRİYORDU.
 release_assets/
-pf/
+apps/ui/
 frontend/
 myenv/
 build/

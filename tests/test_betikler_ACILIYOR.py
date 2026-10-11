@@ -477,6 +477,11 @@ def _compose_contextleri() -> dict[str, Path]:
     return out
 
 
+#: Compose'da servisi OLMAYAN Dockerfile'ların build bağlamı (Dockerfile başlığındaki `docker build` komutuyla aynı).
+#: D4.20: bağlamı bilinmeyen Dockerfile artık `continue` ile ATLANMAZ — buraya ya da compose'a eklenmeli.
+COMPOSE_DISI_BAGLAM = {"docker/Dockerfile.ai-full": "release_assets"}
+
+
 def test_KRITIK_dockerfile_COPY_kaynaklari_DISKTE_VAR():
     """`COPY <kaynak> <hedef>` kaynakları build context'inde bulunmalı.
 
@@ -486,17 +491,27 @@ def test_KRITIK_dockerfile_COPY_kaynaklari_DISKTE_VAR():
     ⚠️ Context TAHMİN EDİLMEZ, compose'dan okunur: `Dockerfile.frontend`in context'i
     `../apps/ui`, `Dockerfile.ai-full`ünki `release_assets`. Kökü varsaymak üç dosyayı
     YANLIŞLIKLA kırık gösteriyordu (ilk ölçümde tam bu oldu).
+
+    ⚠️ D4.20 (B-10.181): bağlamı çözülemeyen Dockerfile eskiden `continue` ile ATLANIYORDU — compose'daki
+    `dockerfile:` yolu (bağlama göre) yanlış olunca frontend Dockerfile'ı hiç denetlenmedi, imaj derlenemez
+    hâlde kaldı. Artık her Dockerfile ya compose'dan ya `COMPOSE_DISI_BAGLAM`'dan bağlam almalı.
     """
     ctx = _compose_contextleri()
     assert ctx, "VAKUM: hiçbir compose dosyasından context okunamadı"
 
     kirik: list[str] = []
+    baglamsiz: list[str] = []
     bakilan = 0
     for rel in _takipli(["**/Dockerfile*"]):
+        if rel.endswith(".dockerignore"):
+            continue  # Dockerfile'a özgü ignore dosyası (BuildKit) — Dockerfile değil
         p = KOK / rel
         taban = ctx.get(str(p.resolve()))
+        if taban is None and rel in COMPOSE_DISI_BAGLAM:
+            taban = KOK / COMPOSE_DISI_BAGLAM[rel]
         if taban is None:
-            continue  # compose'da tanımlı değil → context bilinmiyor, iddia EDİLMEZ
+            baglamsiz.append(rel)
+            continue
         for satir in p.read_text(encoding="utf-8", errors="replace").splitlines():
             s = satir.strip()
             if not s.upper().startswith("COPY "):
@@ -511,6 +526,10 @@ def test_KRITIK_dockerfile_COPY_kaynaklari_DISKTE_VAR():
                 if not (taban / kaynak).exists():
                     kirik.append(f"{rel}  ->  {kaynak}   (context: {taban.name})")
     assert bakilan > 10, f"VAKUM: yalnız {bakilan} COPY kaynağı sınandı"
+    assert not baglamsiz, (
+        f"build bağlamı ÇÖZÜLEMEYEN Dockerfile (compose'daki dockerfile yolu yanlış ya da servis yok): {baglamsiz} — "
+        "COPY kaynakları denetlenemez, imaj sessizce derlenemez kalır"
+    )
     assert not kirik, (
         "DOCKERFILE COPY KAYNAĞI YOK:\n  "
         + "\n  ".join(kirik)

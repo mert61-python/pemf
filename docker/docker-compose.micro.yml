@@ -69,7 +69,7 @@ services:
   frontend:
     build:
       context: ../apps/ui
-      dockerfile: ../docker/Dockerfile.frontend
+      dockerfile: ../../docker/Dockerfile.frontend
     image: pemf-frontend
     ports:
       - "8080:80"

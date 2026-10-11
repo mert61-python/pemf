@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1
 # =============================================================================
 # PEMF Frontend image — Expo/React web export → nginx statik servis + /api proxy
-# Build context = guii/pf   (compose: context: ./pf, dockerfile: ../Dockerfile.frontend)
+# Build context = guii/apps/ui   (compose: context: ../apps/ui, dockerfile: ../../docker/Dockerfile.frontend —
+#   dockerfile yolu BAĞLAMA göredir, compose dosyasına değil)
 # =============================================================================
 
 # ── Aşama 1: web derlemesi (expo export → dist/) ──

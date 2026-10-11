@@ -9,7 +9,7 @@ ai_hub/**/*.pt
 ai_hub/**/*.pkl
 
 # Frontend (ayrı image'da build edilir)
-pf/
+apps/ui/
 frontend/
 
 # Python build/venv/cache
