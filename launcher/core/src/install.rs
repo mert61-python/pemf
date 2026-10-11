@@ -152,8 +152,10 @@ pub const ENV_ALLOWED_HOSTS: &str = "PEMF_ALLOWED_HOSTS";
 /// ⚠️ VARSAYILAN `"0"` — SATIS ACILMADI. Bunu `"1"` YAPMAYIN: acilirsa her AI analizi bakiye
 /// ister ve bakiyesi olmayan klinikte analiz DURUR. Kapali iken `jeton.izin()` tam no-op.
 ///
-/// ⚠️ SEANS / ACIL DURDUR / SENSOR IZLEME HICBIR KOSULDA KAPILANMAZ — bu, jeton modulunun
-/// kendi `GUVENLIK_YOLLARI` listesiyle garanti altinda; bayragin acilmasi onu DEGISTIRMEZ.
+/// ⚠️ SEANS / ACIL DURDUR / SENSOR IZLEME HICBIR KOSULDA KAPILANMAZ — bu yollar jeton kapisina hic
+/// gelmez: `servers/jeton.py::_islem_turu` ai_router disindaki her yolu ve `_SERBEST_AI_UCLARI`ni
+/// serbest sayar (D4.11; kapi tests/test_jeton_kapisi_TUM_ROTALARDA_guvenlik_uclari_SERBEST_D411.py);
+/// bayragin acilmasi onu DEGISTIRMEZ.
 ///
 /// CIKIS KAPISI: ortamda tanimliysa DOKUNULMAZ → `PEMF_JETON_ENFORCED=1` ile test edilebilir.
 pub const ENV_JETON_ENFORCED: &str = "PEMF_JETON_ENFORCED";
