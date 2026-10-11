@@ -45,3 +45,35 @@ def test_GPL_uyumlu_ibaresi_kopyleft_SAYILMAZ(lisans):
 )
 def test_KARSIT_LGPL_uzun_adlari_hala_MUAF(lisans):
     assert not kopyleft_mu(lisans), f"LGPL kopyleft sayıldı: {lisans!r}"
+
+
+# ── 4-A inc. S-A3.2 (Y123 önerilen): GPL ailesi DIŞINDAKİ güçlü kopyleftler ─────────────────────────────────────────────
+@pytest.mark.parametrize(
+    "lisans",
+    [
+        "EUPL-1.2",
+        "European Union Public Licence 1.2 (EUPL 1.2)",
+        "SSPL-1.0",
+        "Server Side Public License, v 1",
+        "OSL-3.0",
+        "Open Software License 3.0 (OSL-3.0)",
+        "MIT AND EUPL-1.2",
+    ],
+)
+def test_KRITIK_GPL_ailesi_DISINDAKI_guclu_kopyleft_GORUNUR(lisans):
+    assert kopyleft_mu(lisans), f"güçlü kopyleft (EUPL/SSPL/OSL) görünmedi: {lisans!r}"
+
+
+@pytest.mark.parametrize(
+    "lisans",
+    [
+        "MIT",
+        "Apache-2.0",
+        "BSD-3-Clause",
+        "Open Software Foundation",
+        "OSLO-1.0",
+        "Mozilla Public License 2.0 (MPL 2.0)",
+    ],
+)
+def test_KARSIT_benzer_adli_izin_verici_lisans_kopyleft_SAYILMAZ(lisans):
+    assert not kopyleft_mu(lisans), f"izin verici lisans kopyleft sayıldı: {lisans!r}"

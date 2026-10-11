@@ -137,7 +137,13 @@ _LGPL = re.compile(
 #: "GPL-compatible" (PSF / BSD türevlerinin ibaresi) kopyleft DEĞİL — LGPL gibi aramadan önce silinir (4A-3.6 yanlış pozitifi).
 _GPL_UYUMLU = re.compile(r"\bGPL[-\s]+COMPATIBLE\b")
 #: Kopyleft imzaları (LGPL bölümleri SİLİNDİKTEN sonra aranır): yalın `GPL`, `GPL-3.0`, `GPLv2+`, `AGPL…`, uzun adlar.
-_KOPYLEFT = re.compile(r"\bA?GPL(?:\b|[-V]?\d)|\bGNU\s+(?:AFFERO\s+)?GENERAL\s+PUBLIC\b|\bAFFERO\b")
+#: ⚠️ 4-A inc. S-A3.2 (Y123 önerilen, 2026-10-11): GPL ailesi DIŞINDAKİ güçlü kopyleftler de — EUPL (European Union Public
+#: Licence), SSPL (Server Side Public License), OSL (Open Software License). Bugün pakette yoklar (yanlış alarm üretmez).
+_KOPYLEFT = re.compile(
+    r"\bA?GPL(?:\b|[-V]?\d)|\bGNU\s+(?:AFFERO\s+)?GENERAL\s+PUBLIC\b|\bAFFERO\b"
+    r"|\bEUPL\b|\bEUROPEAN\s+UNION\s+PUBLIC\s+LICEN[CS]E\b|\bSSPL\b|\bSERVER\s+SIDE\s+PUBLIC\s+LICENSE\b"
+    r"|\bOSL-\d|\bOPEN\s+SOFTWARE\s+LICEN[CS]E\b"
+)
 
 
 def kopyleft_mu(lisans: str) -> bool:
