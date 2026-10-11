@@ -3580,7 +3580,7 @@ const SCRATCH_GALERI: { k: string; ad: string; alan: keyof AiResult; not: string
   { k: "seg", ad: "Segmentasyon", alan: "seg_image_base64", not: "Her hücre ayrı renk (CPN instance)" },
   { k: "overlay", ad: "Overlay", alan: "overlay_image_base64", not: "Segmentasyon + orijinal karışımı" },
   { k: "input", ad: "Orijinal", alan: "input_image_base64", not: "Orijinal görüntü (sunucu JPEG önizlemesi — TIF tarayıcıda gösterilemez)" },
-  { k: "xai", ad: "XAI", alan: "xai_image_base64", not: "EigenCAM — bölgesel model ilgisi (hücre-düzeyi açıklama DEĞİLDİR)" },
+  { k: "xai", ad: "XAI", alan: "xai_image_base64", not: "Tespit hedefli HiRes-CAM — hücre tespitlerini sürükleyen bölgeler · numaralı mavi kutular: en etkili 10 hücre (kenara değen hücreler değerlendirme dışı)" },
   { k: "panel", ad: "3'lü panel", alan: "xai_side_by_side_base64", not: "Orijinal | ısı haritası | overlay" },
 ];
 type ScratchKayit = { etiket: string; closure_pct: number; mean_gap_um: number };

@@ -88,11 +88,11 @@ def test_KRITIK_scratch_endpoint_param_gecisi(istemci, monkeypatch, tmp_path):
             "scratch_yonu": "yatay",
             "pixel_mm": "0.00065",
             "explain": "true",
-            "xai_method": "gradcam++",
+            "xai_method": "gradcam",
         },
     )
     assert r.status_code == 200, r.text
-    assert cagri == {"yon": "yatay", "pmm": 0.00065, "exp": True, "met": "gradcam++"}
+    assert cagri == {"yon": "yatay", "pmm": 0.00065, "exp": True, "met": "gradcam"}
     b = r.json()
     assert b["status"] == "success" and b["closure"]["closure_pct"] == 29.3
     for alan in ("input_image_base64", "seg_image_base64", "analysis_image_base64", "closure_image_base64"):
@@ -120,6 +120,10 @@ def test_KARSIT_gecersiz_parametreler_422(istemci, tmp_path):
     assert r1.status_code == 422 and "dikey" in r1.json()["detail"]
     r2 = client.post("/api/ai/vision/scratch", data={"image_base64": b64, "xai_method": "scorecam"})
     assert r2.status_code == 422, "xai_method allowlist dışı kabul edildi"
+    # AI1.X5: hücreleri açıklamadığı ölçülen yöntemler izin listesinden çıktı (gradcam++ lift 0,32/1,00 · eigencam 0,06/0,51)
+    for yontem in ("gradcam++", "eigencam"):
+        r2b = client.post("/api/ai/vision/scratch", data={"image_base64": b64, "xai_method": yontem})
+        assert r2b.status_code == 422, f"{yontem} hâlâ kabul ediliyor"
     r3 = client.post("/api/ai/vision/scratch", data={"image_base64": b64, "pixel_mm": "5.0"})
     assert r3.status_code == 422, "pixel_mm sınırı yok"
 
@@ -146,7 +150,7 @@ def test_KRITIK_delegate_STRING_paritesi(istemci, monkeypatch, tmp_path):
     assert yakalanan["data"] == {
         "scratch_yonu": "yatay",
         "pixel_mm": "0.00033",
-        "xai_method": "eigencam",
+        "xai_method": "hirescam",  # AI1.X5: varsayılan tespit hedefli HiRes-CAM
         "explain": "true",
     }
 

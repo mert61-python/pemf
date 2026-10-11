@@ -599,76 +599,71 @@ def draw_analysis(binary: np.ndarray, dikey_kusak: bool = True) -> np.ndarray:
 
 
 # ============================================================
-# XAI — Grad-CAM/EigenCAM @ CPN backbone (BELLEK-ICI)
+# XAI — tespit hedefli CAM @ CPN score_fuse (BELLEK-ICI; AI1.X5)
 # ============================================================
-def _resolve_cpn_backbone_and_target(lit_cpn_model):
-    """CPN ResNeXt-101 UNet icinden backbone Module'unu + CAM target katmanini bul.
-
-    Yapi (celldetection 0.4.x): LitCpn -> model -> core -> backbone -> body
-    (IntermediateLayerGetter); body'nin son elemani ResNeXt layer4 karsiligi.
-    """
-    import torch.nn as nn
-
-    for chain in (
-        ["model", "model", "core", "backbone", "body"],
-        ["model", "core", "backbone", "body"],
-        ["model", "backbone", "body"],
-    ):
-        cur = lit_cpn_model
-        try:
-            for a in chain:
-                cur = getattr(cur, a)
-            body = cur
-            break
-        except AttributeError:
-            body = None
-    if body is None:
-        last_conv = None
-        for mod in lit_cpn_model.modules():
-            if isinstance(mod, nn.Conv2d):
-                last_conv = mod
-        if last_conv is None:
-            raise RuntimeError("CPN backbone bulunamadi.")
-        return lit_cpn_model, last_conv
-
-    children = list(body.children())
-    return body, children[-1]
-
-
 def _xai_cpn_bellekte(predictor: CellSegmentationPredictor,
                       image_path: str,
-                      *, method: str = "eigencam") -> dict:
-    """CPN backbone uzerinde CAM — overlay + 3-panel side-by-side, base64 (disk yok).
+                      *, method: str = "hirescam", labels=None) -> dict:
+    """CPN uzerinde TESPIT HEDEFLI CAM — overlay + 3-panel side-by-side, base64 (disk yok).
 
-    CPN detection modeli; "target class" yok. _BackboneWrap en derin feature map'i
-    GAP'leyip (B, C) dondurur — CAM feature-magnitude proxy'si. Default EigenCAM
-    (label-agnostic; CPN icin en stabil). Isi haritasi ~layer4 cozunurlugunde
-    KABA bolgesel ilgidir; hucre-duzeyi aciklama VAAT ETMEZ (UI metni de oyle).
+    AI1.X5 (hoca XAI v3 `inference_paper_dilek_hoca/xai_dilek_v2.py`): hedef = CPN'in TESPIT ETTIGI hucre skorlari
+    toplami, katman = skor basini besleyen `core.score_fuse`, varsayilan HiRes-CAM. OLCULDU (gercek CPN, 12a/12b):
+    eski hedef (backbone son katmani GAP'inin 0. kanali) Grad-CAM / Grad-CAM++'ta TAMAMEN BOS harita uretip
+    "basarili" donuyordu; EigenCAM bos degildi ama hucrelerde degildi (lift 0,99 / 1,15). Yeni: lift 2,73 / 1,40.
+    labels (CPN etiketleri) verilirse hucre basina katki: kenara degen hucreler (ag kenar dolgusu yapay etkisi —
+    olculdu: sinirsiz ilk-10'un 8/10 ve 10/10'u) "en etkili hucre" siralamasina ALINMAZ; ilk 10 overlay'de
+    numarali mavi kutuyla isaretlenir. Bos harita "basarili" DONMEZ (hucre_cam_haritasi RuntimeError → zarif dusus).
     """
+    from ai_hub.xai_utils.overlay import blend_to_array, heatmap_to_rgb
+
+    heatmap_orig = hucre_cam_haritasi(predictor, image_path, method=method)
+    img_bgr = predictor._read_image(image_path)
+    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    overlay = blend_to_array(img_rgb, heatmap_orig, alpha=0.5)
+    yanit: dict = {}
+    if labels is not None and getattr(labels, "shape", None) == heatmap_orig.shape:
+        sira, kenara_degen = hucre_katkilari(heatmap_orig, labels)
+        overlay = _en_etkili_hucreleri_ciz(overlay, sira)
+        yanit["xai_en_etkili_hucreler"] = sira
+        yanit["xai_kenara_degen_hucre"] = kenara_degen
+    hm_rgb = heatmap_to_rgb(heatmap_orig)
+    sep = np.full((img_rgb.shape[0], 8, 3), 255, dtype=np.uint8)
+    panel = np.concatenate([img_rgb, sep, hm_rgb, sep, overlay], axis=1)
+    yanit.update({
+        "xai_image_base64": _jpg64(overlay),
+        "xai_side_by_side_base64": _jpg64(panel, maks_w=PANEL_MAKS_GENISLIK),
+        "xai_method": method,
+    })
+    return yanit
+
+
+def _cpn_skor_katmani(lit_cpn_model):
+    """(CPN cekirdegi, skor basini besleyen `core.score_fuse` katmani) — celldetection 0.4.x yapisi."""
+    core = getattr(lit_cpn_model, "model", None)
+    katman = getattr(getattr(core, "core", None), "score_fuse", None)
+    if core is None or katman is None:
+        raise RuntimeError("CPN skor katmani (core.score_fuse) bulunamadi — celldetection surumu degismis olabilir")
+    return core, katman
+
+
+def hucre_cam_haritasi(predictor: CellSegmentationPredictor, image_path: str, *, method: str = "hirescam"):
+    """(H0, W0) [0, 1] CAM — hedef = tespit edilen hucre skorlari toplami (AI1.X5). Bos haritada RuntimeError."""
     import torch
 
     from ai_hub.xai_utils.grad_cam import GradCAMExplainer
-    from ai_hub.xai_utils.overlay import blend_to_array, heatmap_to_rgb
 
     _, multi_norm = _cell_import()
+    core, skor_katmani = _cpn_skor_katmani(predictor.cpn.model)
 
-    lit_model = predictor.cpn.model
-    backbone, target_layer = _resolve_cpn_backbone_and_target(lit_model)
-
-    class _BackboneWrap(torch.nn.Module):
-        def __init__(self, b):
+    class _HucreSkoruToplami(torch.nn.Module):
+        def __init__(self, m):
             super().__init__()
-            self.b = b
+            self.m = m
 
         def forward(self, x):
-            out = self.b(x)
-            if isinstance(out, dict):
-                out = list(out.values())[-1]
-            if isinstance(out, (list, tuple)):
-                out = out[-1]
-            return out.mean(dim=(2, 3))
+            return torch.stack([s.sum() for s in self.m(x)["scores"]]).unsqueeze(1)
 
-    wrap = _BackboneWrap(backbone).to(predictor.device).eval()
+    wrap = _HucreSkoruToplami(core).to(predictor.device).eval()
     # DUSMAN-DOGRULAMA DERSI (2026-08-26, hakem-onayli): predictor KALICI cache'te
     # yasar; bayraklar geri alinmazsa ilk explain'den SONRAKI HER normal analiz
     # grad-etkin kosar (1664px tile autograd -> VRAM sismesi) ve backward'in .grad
@@ -676,10 +671,8 @@ def _xai_cpn_bellekte(predictor: CellSegmentationPredictor,
     _eski_bayraklar = [(p, p.requires_grad) for p in wrap.parameters()]
     for p, _ in _eski_bayraklar:
         p.requires_grad_(True)
-
     try:
-        img_bgr = predictor._read_image(image_path)
-        img_norm = multi_norm(img_bgr, "cstm-mix")
+        img_norm = multi_norm(predictor._read_image(image_path), "cstm-mix")
         if img_norm.ndim == 2:
             img_norm = cv2.cvtColor(img_norm, cv2.COLOR_GRAY2RGB)
         H0, W0 = img_norm.shape[:2]
@@ -693,27 +686,59 @@ def _xai_cpn_bellekte(predictor: CellSegmentationPredictor,
         arr = (img_small.astype(np.float32) / 255.0).transpose(2, 0, 1)[None]
         x_t = torch.from_numpy(arr).to(predictor.device)
 
-        expl = GradCAMExplainer(wrap, target_layer=target_layer, method=method,
+        expl = GradCAMExplainer(wrap, target_layer=skor_katmani, method=method,
                                 device=predictor.device)
-        heatmap = expl.explain(x_t, class_idx=0)
+        heatmap = expl.explain(x_t, class_idx=0)        # tek cikti: hucre skorlari toplami
         heatmap_orig = cv2.resize(heatmap.astype(np.float32), (W0, H0),
                                   interpolation=cv2.INTER_LINEAR)
-
-        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-        overlay = blend_to_array(img_rgb, heatmap_orig, alpha=0.5)
-        hm_rgb = heatmap_to_rgb(heatmap_orig)
-        sep = np.full((img_rgb.shape[0], 8, 3), 255, dtype=np.uint8)
-        panel = np.concatenate([img_rgb, sep, hm_rgb, sep, overlay], axis=1)
-
-        return {
-            "xai_image_base64": _jpg64(overlay),
-            "xai_side_by_side_base64": _jpg64(panel, maks_w=PANEL_MAKS_GENISLIK),
-            "xai_method": method,
-        }
     finally:
         for p, eski in _eski_bayraklar:
             p.requires_grad_(eski)
             p.grad = None                                # backward artigi VRAM'i birak
+    if not np.isfinite(heatmap_orig).all() or float(heatmap_orig.max()) <= 0.0 or float(heatmap_orig.std()) < 1e-6:
+        raise RuntimeError(f"Hucre isi haritasi BOS cikti (yontem {method}) — aciklama gosterilmedi")
+    return heatmap_orig
+
+
+def hucre_katkilari(heatmap: np.ndarray, labels: np.ndarray, *, kenar_orani: float = 0.02,
+                    ilk_n: int = 10) -> tuple[list, int]:
+    """Hucre basina katki = etiket ici ortalama harita degeri. Goruntu kenarinin `kenar_orani` bandina DEGEN hucreler
+    siralamaya ALINMAZ (ag kenar dolgusu yapay etkisi — hocanin notu, olculdu). Doner: (ilk_n sira listesi, kenara degen sayisi)."""
+    H, W = labels.shape
+    mrg = max(1, int(kenar_orani * max(H, W)))
+    kenar = np.zeros((H, W), bool)
+    kenar[:mrg] = kenar[-mrg:] = True
+    kenar[:, :mrg] = kenar[:, -mrg:] = True
+    n = int(labels.max())
+    if n <= 0:
+        return [], 0
+    lab = labels.ravel()
+    toplam = np.bincount(lab, weights=heatmap.ravel().astype(np.float64), minlength=n + 1)
+    adet = np.bincount(lab, minlength=n + 1)
+    degen = set(int(i) for i in np.unique(labels[kenar & (labels > 0)]))
+    katki = toplam / np.maximum(adet, 1)
+    adaylar = [i for i in range(1, n + 1) if adet[i] > 0 and i not in degen]
+    sira = []
+    for r, i in enumerate(sorted(adaylar, key=lambda j: -katki[j])[: int(ilk_n)], 1):
+        ys, xs = np.nonzero(labels == i)
+        sira.append({"sira": r, "hucre": int(i), "katki": round(float(katki[i]), 4),
+                     "kutu": [int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())]})
+    return sira, len(degen)
+
+
+def _en_etkili_hucreleri_ciz(rgb: np.ndarray, sira: list) -> np.ndarray:
+    """En etkili hucreleri numarali mavi kutuyla isaretle (hocanin v3 gorseliyle ayni dil)."""
+    out = rgb.copy()
+    H, W = out.shape[:2]
+    kalinlik = max(2, int(round(max(H, W) / 600)))
+    pad = int(0.006 * max(H, W))
+    olcek = max(0.6, max(H, W) / 1600)
+    for s in sira:
+        x0, y0, x1, y1 = s["kutu"]
+        cv2.rectangle(out, (x0 - pad, y0 - pad), (x1 + pad, y1 + pad), (34, 211, 238), kalinlik)
+        cv2.putText(out, str(s["sira"]), (x0 - pad, max(12, y0 - pad - 4)), cv2.FONT_HERSHEY_SIMPLEX, olcek,
+                    (34, 211, 238), kalinlik, cv2.LINE_AA)
+    return out
 
 
 # ============================================================
@@ -753,7 +778,7 @@ def scratch_analiz(image_path: str,
                    *, scratch_yonu: str = "dikey",
                    pixel_mm: float = PIXEL_TO_MM_DEFAULT,
                    explain: bool = False,
-                   xai_method: str = "eigencam") -> dict:
+                   xai_method: str = "hirescam") -> dict:
     """TEK mikroskop goruntusunden coklu gorsel AI ciktisi (UI sozlesmesi).
 
     TEK-KAYNAK: router in-process + ai_service ayni fonksiyonu cagirir (kapi-paritesi).
@@ -853,7 +878,7 @@ def scratch_analiz(image_path: str,
             # XAI İKİNCİLDİR (kapi-paritesi: zarif düşüş TEK-KAYNAK burada —
             # router da ai_service de aynı davranışı alır): hata analizi DÜŞÜRMEZ.
             try:
-                yanit.update(_xai_cpn_bellekte(pred, image_path, method=xai_method))
+                yanit.update(_xai_cpn_bellekte(pred, image_path, method=xai_method, labels=res.get("_labels")))
             except Exception as e:
                 _LOG.warning("Scratch XAI üretilemedi (analiz etkilenmedi): %s",
                              e, exc_info=True)
@@ -863,7 +888,10 @@ def scratch_analiz(image_path: str,
         _KILIT.release()
 
 
-GECERLI_XAI_YONTEMLERI = ("eigencam", "gradcam", "gradcam++")
+# AI1.X5: yalniz hucre tespitlerini ACIKLADIGI olculen yontemler (gercek CPN, 12a/12b, hedef = hucre skorlari toplami):
+# hirescam lift 2,73/1,40 (varsayilan; hocanin v2si) · gradcam 2,90/1,44. CIKARILAN: gradcam++ 0,32/1,00 ve eigencam
+# 0,06/0,51 (eski backbone hedefinde 0,99/1,15) hucreleri aciklamiyor; eski hedefte gradcam/gradcam++ BOS harita veriyordu.
+GECERLI_XAI_YONTEMLERI = ("hirescam", "gradcam")
 
 
 def isit() -> "str | None":

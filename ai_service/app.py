@@ -415,7 +415,7 @@ def infer_scratch(
         yon = scratch_yonu or "dikey"
         if yon not in _ipd.GECERLI_SCRATCH_YONLERI:
             return JSONResponse({"error": "scratch_yonu 'dikey' ya da 'yatay' olmalı"}, status_code=422)
-        met = xai_method or "eigencam"
+        met = xai_method or "hirescam"  # AI1.X5 paritesi (router varsayılanı)
         if met not in _ipd.GECERLI_XAI_YONTEMLERI:
             return JSONResponse({"error": f"xai_method geçersiz: {met}"}, status_code=422)
         pmm = float(pixel_mm) if pixel_mm else _ipd.PIXEL_TO_MM_DEFAULT

@@ -4365,7 +4365,7 @@ async def analyze_scratch(
     scratch_yonu: str = Form("dikey"),
     pixel_mm: float = Form(0.0016),
     explain: bool = Form(False),
-    xai_method: str = Form("eigencam"),
+    xai_method: str = Form("hirescam"),  # AI1.X5: tespit hedefli (eski hedefte gradcam/gradcam++ BOŞ harita)
     _res=Depends(require_research),
 ):
     """Yara Kapanma (Scratch) — CPN hücre segmentasyonu + wound-closure metrikleri.
