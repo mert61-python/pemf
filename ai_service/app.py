@@ -541,7 +541,7 @@ def infer_sound(file: UploadFile = File(...), explain: str = Form(None), xai_met
             try:
                 from ai_hub.inference_cat_sound import inference_cat_sound as _ics
 
-                _x = _ics.xai_ses_isi_haritasi(tmp_wav, None, xai_method or "gradcam++")
+                _x = _ics.xai_ses_isi_haritasi(tmp_wav, None, xai_method or "gradcam")  # AI1.X7 paritesi
                 _ek["xai_image_base64"] = _x["xai_image_base64"]
                 _ek["xai_method"] = _x.get("method")
             except Exception as xe:

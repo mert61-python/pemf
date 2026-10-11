@@ -4031,7 +4031,7 @@ async def analyze_cat_sound(
     file: UploadFile = File(None),
     audio_base64: str = Form(None),
     explain: bool = Form(False),
-    xai_method: str = Form("gradcam++"),
+    xai_method: str = Form("gradcam"),  # AI1.X7: Grad-CAM++ bazı örneklerde BOŞ harita (ölçüldü 2/23)
 ):
     """Kedi Sesi Sınıflandırma (EfficientNet_Lite0 mel-spektrogram ONNX).
 

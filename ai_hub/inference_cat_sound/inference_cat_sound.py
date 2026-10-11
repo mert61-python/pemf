@@ -357,8 +357,12 @@ _XAI_PT_CACHE: dict = {}
 
 
 def xai_ses_isi_haritasi(audio_path: str, pt_path: str | None = None,
-                          method: str = "gradcam++", alpha: float = 0.5) -> dict:
+                          method: str = "gradcam", alpha: float = 0.5) -> dict:
     """Ses icin mel-spektrogram uzerinde Grad-CAM — BELLEK-ICI base64 (karar #3, disk yok).
+
+    AI1.X7 (hoca XAI v3 `explain_cat_sound_v2.py`): varsayilan Grad-CAM (eski Grad-CAM++). Hedef katmanin negatif
+    aktivasyonunda Grad-CAM++ bazi orneklerde BOS harita uretiyordu (olculdu 2/23, biri PEMF test girdisi 10c "agri");
+    Grad-CAM 0/23. Bos harita "basarili" DONMEZ: RuntimeError → cagiranin zarif dususu ("Aciklama uretilemedi").
 
     Isi haritasi top-1 sinif icindir (class_idx=None -> argmax): "model bu duyguya mel'in
     hangi frekans/zaman bandindan karar verdi". ⚠️ SESSIZLIK KAPISININ ARKASINDA cagrilmali
@@ -397,6 +401,8 @@ def xai_ses_isi_haritasi(audio_path: str, pt_path: str | None = None,
                                  method=method, device=str(clf.device))
         heatmap = expl.explain(x_t, class_idx=None)            # argmax = top-1 duygu
 
+    if not np.isfinite(heatmap).all() or float(np.max(heatmap)) <= 0.0 or float(np.std(heatmap)) < 1e-6:
+        raise RuntimeError(f"Ses isi haritasi BOS cikti (yontem {method}) — aciklama gosterilmedi")
     overlay = blend_to_array(mel_rgb, heatmap, alpha=alpha)
     ok, buf = cv2.imencode(".jpg", cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR),
                             [cv2.IMWRITE_JPEG_QUALITY, 85])
