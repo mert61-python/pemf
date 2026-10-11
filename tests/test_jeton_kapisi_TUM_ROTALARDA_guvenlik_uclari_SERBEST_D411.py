@@ -96,14 +96,30 @@ def test_KRITIK_guvenlik_uclari_UYGULAMADA_VAR_ve_jeton_kapisi_SERBEST_ag_SIFIR(
 
 
 def test_KRITIK_guvenlik_uclari_ASENKRON_kapida_ortak_havuza_GIRMEZ(kapi, monkeypatch):
-    """`jeton_gate` güvenlik uçlarının kararını olay döngüsünde verir — `to_thread`e (ortak havuz) hiç girmez (O-1.1)."""
+    """`jeton_gate` güvenlik uçlarının kararını olay döngüsünde verir — HİÇBİR havuza girmez (O-1.1).
 
-    async def _havuz(*a, **k):
-        raise AssertionError("güvenlik ucu jeton kararı için ortak iş parçacığı havuzuna girdi")
+    4A-1.2 (A1 incelemesi, 2026-10-11): eskiden yalnız `asyncio.to_thread` yamalanıyordu; karar `run_in_threadpool`a (anyio
+    ORTAK sınırlayıcısı) taşınınca bu test ve O-1.1 havuz testi (bayrak kapalı koşar) YEŞİL kalıyordu (ölçüldü). Ölçüt artık
+    kütüphaneden bağımsız: koroutin çalışan döngüde TEK ADIMDA biter (hiçbir `await`te askıya alınmaz). KARŞIT: ücretli uç
+    (`kidney_ct`) askıya alınır — ölçücü kör değil. `to_thread` askıya alan sahteyle değiştirilir (gerçek havuz açılmaz)."""
 
-    monkeypatch.setattr(asyncio, "to_thread", _havuz)
-    for yol in sorted(_GUVENLIK_UCLARI):
-        asyncio.run(kapi.modul.jeton_gate(_Istek(_somut(yol))))
+    async def _askiya_alan_havuz(*a, **k):
+        await asyncio.sleep(0)
+
+    monkeypatch.setattr(asyncio, "to_thread", _askiya_alan_havuz)
+
+    async def _tek_adimda_biter(yol: str) -> bool:
+        coro = kapi.modul.jeton_gate(_Istek(_somut(yol)))
+        try:
+            coro.send(None)
+        except StopIteration:
+            return True
+        coro.close()
+        return False
+
+    assert not asyncio.run(_tek_adimda_biter("/api/ai/vision/kidney_ct")), "KARŞIT: ücretli uç askıya alınmadı"
+    askida = [yol for yol in sorted(_GUVENLIK_UCLARI) if not asyncio.run(_tek_adimda_biter(yol))]
+    assert not askida, f"güvenlik ucu jeton kararı için askıya alındı (havuz / await): {askida} — O-1.1 · Ö.4-Y8"
 
 
 def test_KRITIK_ai_DISINDAKI_her_rota_jeton_kapisinda_SERBEST_ag_SIFIR(http_rotalari, kapi):
