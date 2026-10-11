@@ -1,4 +1,4 @@
-# pemf-app-packages/ — Güncelleme-Sunucusu Hazırlık Alanı (manifest + base.zip)
+# pemf-app-packages/ — Güncelleme-Sunucusu Hazırlık Alanı (manifest + katmanlı paketler)
 
 Launcher / güncelleme-sunucusunun tükettiği **manifest + runtime paketi**. Buradaki dosyalar GitHub
 `mert61-python/pemf-update` release'lerine yüklenir.
@@ -8,9 +8,9 @@ Launcher / güncelleme-sunucusunun tükettiği **manifest + runtime paketi**. Bu
 |---|---|
 | `base-app.zip` | **Katmanlı paket — app katmanı** (~71 MB): istemci kodu; her sürümde iner (client ≥1.9.13). [`../build_tools/make_base_zip.py`](../build_tools/README.md) çıktısı |
 | `base-deps.zip` | **Katmanlı paket — deps katmanı** (~1.46 GB): torch/AI bağımlılıkları + çekirdek `cat_organ` modeli; yalnız bağımlılıklar değişince yenilenir |
-| `base.zip` | **Tek-parça runtime** (~1.5 GB, `_internal/ai_models` hariç) — ESKİ launcher'lar (≤1.9.12) için DURUR, silme (bkz. manifest `_layers_note`). [`../build_tools/make_base_zip.py`](../build_tools/README.md) çıktısı |
+| `base.zip` | **TARİHSEL tek-parça runtime** — 1.9.48'den (2026-09-11, sahip kararı) beri **YAYINLANMAZ** (manifest `runtimes` boş, v1 `base` yok; client ≤1.9.12 kuramaz). [`../build_tools/make_base_zip.py`](../build_tools/README.md) varsayılan olarak üretmez ve bayat kopyayı siler; yalnız `--monolith` ile üretilir — **yüklemeyin** |
 | `home.zip` | `home` profil model paketi (~318 MB) — [`../build_tools/make_model_zip.py`](../build_tools/README.md) çıktısı (`vet.zip`/`research.zip` yalnız yayında tutulur) |
-| `manifest.json` | Şema v2 (+ v1 geriye-uyum). Anahtarlar: `launcher` (version/`installer_url`/sha256/size — self-update), `layers.win-x64.{app,deps,rollout}` (client ≥1.9.13 **birincil**), `runtimes.win-x64` **+** eski `base` (≤1.9.12 geri-uyum), `models`/`profiles` `{home,vet,research}`, `mobile.android` (APK oto-güncelleme). Tüm URL'ler sürüm-başına `mert61-python/pemf-update` etiketine |
+| `manifest.json` | Şema v2 (+ v1 geriye-uyum). Anahtarlar: `launcher` (version/`installer_url`/sha256/size — self-update), `layers.win-x64.{app,deps,rollout}` (client ≥1.9.13 **birincil**), `runtimes` (**BOŞ** — Windows tek-parçası 1.9.48'den beri yok, `make_manifest.py` koymaz), `models`/`profiles` `{home,vet,research}`, `mobile.android` (APK oto-güncelleme). Tüm URL'ler sürüm-başına `mert61-python/pemf-update` etiketine |
 
 ## Yayın (özet — tam akış [`../BUILD.md`](../BUILD.md) §6)
 ```powershell
@@ -22,9 +22,9 @@ gh release upload client-app-v1.8.0 -R mert61-python/pemf-update --clobber manif
 ```
 
 ## ⚠️ Dikkat
-- **çift-base gotcha:** `base.zip` sha256/size'ı manifest'te **İKİ yere** yazılmalı — `runtimes.win-x64` (6-boşluk girinti) **VE** `base` (4-boşluk girinti). `replace_all` sadece birini yakalar.
+- **çift-base gotcha (TARİHSEL, ≤1.9.47):** tek-parça sha256/size'ı manifest'te İKİ yere yazılırdı (`runtimes.win-x64` + `base`); 1.9.48'den beri ikisi de YOK. Manifesti elle değil `scripts/make_manifest.py` ile üretin.
 - **`--clobber` kesme tuzağı:** önce eski asset'i siler; 1.3 GB yüklemesini yarıda kesme → taze kurulumlar bozulur. Kesildiyse `gh release view --json assets` ile doğrula.
-- `manifest.json`'ı base.zip'ten **sonra** yükle (sha eşleşsin).
+- `manifest.json`'ı paketlerden (`base-app.zip` / `base-deps.zip` / profil zip'leri) **sonra** yükle (sha eşleşsin).
 
 ---
 İlgili: [BUILD.md §6 (yayın)](../BUILD.md) · [make_base_zip](../build_tools/README.md) · [scripts/make_manifest](../scripts/README.md) · [launcher/](../launcher/README.md)

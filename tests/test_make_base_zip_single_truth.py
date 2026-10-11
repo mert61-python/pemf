@@ -97,17 +97,22 @@ def _crc(z: Path):
 # ── monolith artık VARSAYILAN ────────────────────────────────────────────────
 
 
-def test_KRITIK_base_zip_bayrak_OLMADAN_uretilir(ortam):
-    """Eskiden `--monolith` gerekiyordu; unutulunca yayındaki base.zip bayat kalıyordu."""
+def test_KRITIK_base_zip_YALNIZ_monolith_bayragiyla_uretilir(ortam):
+    """TARİHSEL: eskiden `--monolith` gerekiyordu, unutulunca yayındaki base.zip bayat kalıyordu → 2026-08-09'da VARSAYILAN
+    yapıldı. ⚠️ D4.32 (B-9.5): 1.9.48'den beri tek-parça YAYINLANMAZ → varsayılan yeniden YALNIZ katmanlar; `--monolith` açık
+    bayrakla katmanlarla AYNI kümeden üretilir (bayraksız koşu bayat kopyayı siler — test_no_monolith_BAYAT_dosyayi_SILER)."""
     dist, cikti = ortam
     r = _calistir(dist, cikti=cikti)
     assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-800:]
-    assert (cikti / "base.zip").exists(), "base.zip bayraksiz uretilmedi — bayat kalirdi"
+    assert not (cikti / "base.zip").exists(), "bayraksiz kosu tek-parca base.zip URETTI (1.9.48'den beri yayinlanmaz)"
+    r = _calistir(dist, "--monolith", cikti=cikti)
+    assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-800:]
+    assert (cikti / "base.zip").exists(), "--monolith verildigi halde base.zip uretilmedi"
 
 
 def test_KRITIK_base_zip_katmanlarla_BIREBIR_ayni(ortam):
     dist, cikti = ortam
-    assert _calistir(dist, cikti=cikti).returncode == 0
+    assert _calistir(dist, "--monolith", cikti=cikti).returncode == 0
     katman = _crc(cikti / "base-app.zip")
     katman.update(_crc(cikti / "base-deps.zip"))
     assert _crc(cikti / "base.zip") == katman, "base.zip katmanlardan FARKLI icerik tasiyor"
@@ -115,7 +120,7 @@ def test_KRITIK_base_zip_katmanlarla_BIREBIR_ayni(ortam):
 
 def test_tek_surum_kapisi_dogrulamada_raporlanir(ortam):
     dist, cikti = ortam
-    r = _calistir(dist, cikti=cikti)
+    r = _calistir(dist, "--monolith", cikti=cikti)
     assert "[OK] base.zip == app+deps" in r.stdout, r.stdout[-1500:]
 
 
@@ -142,7 +147,7 @@ def _replace(src, dst, *a, **k):
 
 
 os.replace = _replace
-sys.argv = [betik, dist]
+sys.argv = [betik, dist, "--monolith"]  # D4.32: tek-parca yalniz acik bayrakla
 runpy.run_path(betik, run_name="__main__")
 """
 
@@ -177,7 +182,7 @@ def test_KRITIK_BAYAT_base_zip_BETIGIN_dogrulamasini_DUSURUR(tmp_path, ortam):
     """Asıl senaryonun modeli: diskte eski bir build'in base.zip'i kalmış (exe farklı) ve bu koşunun monolith'i yerine
     oturmamış. BETİĞİN kendi `[FAIL] base.zip == app+deps` satırı, farklı dosyanın adı ve çıkış 1 beklenir."""
     dist, cikti = ortam
-    assert _calistir(dist, cikti=cikti).returncode == 0
+    assert _calistir(dist, "--monolith", cikti=cikti).returncode == 0
     _eski_builde_cevir(cikti / "base.zip")
     r = _monolith_yerine_oturmadan_kos(tmp_path, dist, cikti)
     assert r.returncode == 1, f"bayat base.zip ile betik GECTI (rc={r.returncode})\n{r.stdout[-1500:]}{r.stderr[-800:]}"
@@ -203,7 +208,7 @@ def test_KRITIK_BAYAT_base_zip_AD_farki_BETIGIN_dogrulamasini_DUSURUR(tmp_path, 
     """4A-3.5 (A3 incelemesi): `_monolith_esit`in AD kolu — içerik (CRC çoklu kümesi) aynı, ad listesi farklı bayat base.zip.
     Karşılaştırma yalnız CRC değerlerine inerse (adlar yok sayılırsa) eski testler yeşil kalıyordu."""
     dist, cikti = ortam
-    assert _calistir(dist, cikti=cikti).returncode == 0
+    assert _calistir(dist, "--monolith", cikti=cikti).returncode == 0
     _ad_degistir(cikti / "base.zip")
     r = _monolith_yerine_oturmadan_kos(tmp_path, dist, cikti)
     assert r.returncode == 1, f"ad farkli bayat base.zip ile betik GECTI (rc={r.returncode})\n{r.stdout[-1500:]}"
@@ -216,7 +221,7 @@ def test_KRITIK_BOZUK_bayat_base_zip_karsilastirilamazsa_FAIL(tmp_path, ortam):
     """4A-3.5 (A3 incelemesi): `_monolith_esit`in fail-closed kolu — diskte kalan bayat base.zip BOZUK (açılamıyor) →
     karşılaştırma yapılamadı → FAIL. Kol `return True`ya dönerse eski testler yeşil kalıyordu."""
     dist, cikti = ortam
-    assert _calistir(dist, cikti=cikti).returncode == 0
+    assert _calistir(dist, "--monolith", cikti=cikti).returncode == 0
     (cikti / "base.zip").write_bytes(b"PK\x03\x04 bozuk - yarim kalmis eski indirme")
     r = _monolith_yerine_oturmadan_kos(tmp_path, dist, cikti)
     assert r.returncode == 1, f"BOZUK bayat base.zip ile betik GECTI (rc={r.returncode})\n{r.stdout[-1500:]}"
@@ -227,21 +232,21 @@ def test_KRITIK_BOZUK_bayat_base_zip_karsilastirilamazsa_FAIL(tmp_path, ortam):
 def test_KARSIT_KANIT_ayni_sarmal_TAZE_base_zip_ile_GECER(tmp_path, ortam):
     """Ölçücü kör değil: aynı sarmalayıcı (monolith yerine oturmaz) diskteki TAZE base.zip ile [OK] ve çıkış 0 verir."""
     dist, cikti = ortam
-    assert _calistir(dist, cikti=cikti).returncode == 0
+    assert _calistir(dist, "--monolith", cikti=cikti).returncode == 0
     r = _monolith_yerine_oturmadan_kos(tmp_path, dist, cikti)
     assert r.returncode == 0 and "[OK] base.zip == app+deps" in r.stdout, r.stdout[-1500:] + r.stderr[-800:]
 
 
 def test_no_monolith_BAYAT_dosyayi_SILER(ortam):
-    """`--no-monolith` seçilirse diskte bayat base.zip KALMAMALI — yayın adımında yanlışlıkla
-    yüklenirse eski client'lara bayat backend giderdi."""
+    """Monolitsiz koşuda (D4.32'den beri VARSAYILAN; `--no-monolith` geriye uyum) diskte bayat base.zip KALMAMALI — yayın
+    adımında yanlışlıkla yüklenirse eski client'lara bayat backend giderdi."""
     dist, cikti = ortam
-    assert _calistir(dist, cikti=cikti).returncode == 0
-    assert (cikti / "base.zip").exists()
-
-    r = _calistir(dist, "--no-monolith", cikti=cikti)
-    assert r.returncode == 0, r.stdout[-1500:]
-    assert not (cikti / "base.zip").exists(), "bayat base.zip diskte birakildi"
+    for bayrak in ((), ("--no-monolith",)):
+        assert _calistir(dist, "--monolith", cikti=cikti).returncode == 0
+        assert (cikti / "base.zip").exists()
+        r = _calistir(dist, *bayrak, cikti=cikti)
+        assert r.returncode == 0, r.stdout[-1500:]
+        assert not (cikti / "base.zip").exists(), f"bayat base.zip diskte birakildi (bayrak={bayrak})"
 
 
 # ── mevcut kapılar korunuyor mu (regresyon) ──────────────────────────────────
@@ -253,7 +258,7 @@ def test_ai_models_HARIC_kalir(ortam):
     ayrıca `test_DIGER_ai_models_HALA_HARIC` ile kilitli."""
     dist, cikti = ortam
     assert _calistir(dist, cikti=cikti).returncode == 0
-    hepsi = set(_crc(cikti / "base.zip"))
+    hepsi = set(_crc(cikti / "base-app.zip")) | set(_crc(cikti / "base-deps.zip"))  # D4.32: paket = iki katman
     sizan = [n for n in hepsi if "/_internal/ai_models/" in n and "inference_cat_organ" not in n]
     assert not sizan, f"ai_models pakete girdi: {sizan[:5]}"
 
@@ -396,7 +401,7 @@ def test_belirlenimci_zip_ayni_sha(ortam):
 def test_KRITIK_cekirdek_model_cat_organ_PAKETTE(ortam):
     dist, cikti = ortam
     assert _calistir(dist, cikti=cikti).returncode == 0
-    hepsi = set(_crc(cikti / "base.zip"))
+    hepsi = set(_crc(cikti / "base-app.zip")) | set(_crc(cikti / "base-deps.zip"))  # D4.32: paket = iki katman
     assert any("inference_cat_organ" in n for n in hepsi), (
         "cekirdek ortak model pakete GIRMEDI — vet-only kurulumda AI Pro organ lokalizasyonu "
         "sessizce calismaz ve profil bagimliligini kaldirmak ANLAMSIZ olur"
@@ -420,7 +425,7 @@ def test_DIGER_ai_models_HALA_HARIC(ortam):
     """İstisna YALNIZ ortak modeldir. Genişlerse 2,1 GB'lık model ağacı çekirdeğe sızar."""
     dist, cikti = ortam
     assert _calistir(dist, cikti=cikti).returncode == 0
-    hepsi = set(_crc(cikti / "base.zip"))
+    hepsi = set(_crc(cikti / "base-app.zip")) | set(_crc(cikti / "base-deps.zip"))  # D4.32: paket = iki katman
     sizan = [n for n in hepsi if "/_internal/ai_models/" in n and "inference_cat_organ" not in n]
     assert not sizan, f"ai_models istisnasi GENISLEMIS: {sizan[:5]}"
 
@@ -440,7 +445,7 @@ def test_KRITIK_yarim_kalan_yazim_ONCEKI_zipi_BOZMAZ(ortam):
     `_IC_ZIPLER` kümesinde olduğu için hata tam **deps** yazımının ortasında oluşur.
     """
     dist, cikti = ortam
-    assert _calistir(dist, cikti=cikti).returncode == 0, "on-kosul: ilk kosu basarili olmali"
+    assert _calistir(dist, "--monolith", cikti=cikti).returncode == 0, "on-kosul: ilk kosu basarili olmali"
     saglam = {ad: (cikti / ad).read_bytes() for ad in ("base-app.zip", "base-deps.zip", "base.zip")}
 
     # PyInstaller iç-zip'i taklidi ama BOZUK → `_ic_zip_belirlenimci` `BadZipFile` atar.
@@ -449,7 +454,7 @@ def test_KRITIK_yarim_kalan_yazim_ONCEKI_zipi_BOZMAZ(ortam):
     # yüzüdür: zarar ölü `base` kanalında değil, **canlı `layers` kanalındadır**.
     (dist / "_internal" / "base_library.zip").write_bytes(b"NOT-A-ZIP")
 
-    r = _calistir(dist, cikti=cikti)
+    r = _calistir(dist, "--monolith", cikti=cikti)
 
     assert r.returncode != 0, "bozuk ic-zip ile kosu BASARILI dondu (patlama beklenmisti)"
     assert "BadZipFile" in r.stdout + r.stderr, (

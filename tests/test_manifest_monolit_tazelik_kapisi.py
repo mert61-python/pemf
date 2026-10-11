@@ -26,6 +26,10 @@ Ortak hata: **tek-parça kopyayı kurulabilirliğin/tazeliğin TEK ölçütü sa
 
 Bu dosya ikisini birden kilitler: kapı BAYAT taşımada hâlâ KIRMIZI, monolitsiz dünyada
 ise YEŞİL. Biri olmadan öteki bir regresyon.
+
+⚠️ D4.32 (B-9.5): Windows tek-parçası (`base.zip`) `make_manifest` ASSETS tablosundan çıktı (1.9.48'den beri yayınlanmaz;
+önceki manifestteki win-x64 tek-parçası artık TAŞINMAZ). Kapı linux/mac tek-parçaları için AYNEN çalışır → bu dosyanın
+senaryoları linux-x64 paketleriyle kurulur.
 """
 
 from __future__ import annotations
@@ -73,8 +77,9 @@ def _manifest_yaz(dizin: Path, runtimes: dict | None) -> None:
         "launcher": {"version": "1.9.51"},
         "mobile": {"android": {"version": "2.3.34"}},
     }
-    if runtimes:
-        m["base"] = runtimes.get("win-x64")
+    for plat, v1 in (("win-x64", "base"), ("linux-x64", "base_linux")):
+        if runtimes and plat in runtimes:
+            m[v1] = runtimes[plat]
     (dizin / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
 
 
@@ -110,11 +115,14 @@ def _app_zip(yol: Path, isaret: bytes) -> None:
 
 
 def _paketleri_koy(dizin: Path, monolit: bool) -> None:
-    _app_zip(dizin / "base-app.zip", b"APP")
-    (dizin / "base-deps.zip").write_bytes(b"DEPS")
+    """linux-x64 katman çifti (+ isteğe bağlı tek-parça). Uygulama ikilisi linux'ta uzantısız `PEMF_Backend` (D4.31)."""
+    with zipfile.ZipFile(dizin / "base-linux-app.zip", "w", zipfile.ZIP_STORED) as z:
+        for ad, veri in (("PEMF_Backend/PEMF_Backend", b"APP"), ("PEMF_Backend/_app_roots.json", b'{"roots": []}')):
+            z.writestr(zipfile.ZipInfo(ad, date_time=(1980, 1, 1, 0, 0, 0)), veri)
+    (dizin / "base-linux-deps.zip").write_bytes(b"DEPS")
     (dizin / "vet.zip").write_bytes(b"VET")
     if monolit:
-        (dizin / "base.zip").write_bytes(b"MONO")
+        (dizin / "base-linux.zip").write_bytes(b"MONO")
 
 
 def test_KRITIK_monolit_YOKKEN_manifest_URETILIR(tmp_path):
@@ -133,7 +141,9 @@ def test_KRITIK_monolit_YOKKEN_manifest_URETILIR(tmp_path):
     assert r.returncode == 0, "monolitsiz dunyada manifest URETILEMEDI -> HICBIR YAYIN YAPILAMAZ.\n" + r.stderr[-1500:]
     m = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert m["version"] == "1.9.99"
-    assert m["layers"]["win-x64"]["app"]["sha256"] != "b" * 64, "app katmani TAZELENMEDI"
+    assert m["layers"]["linux-x64"]["app"]["url"].endswith("client-app-v1.9.99/base-linux-app.zip"), (
+        "app katmani TAZELENMEDI"
+    )
 
 
 def test_KRITIK_BAYAT_monolit_tasinirken_kapi_HALA_KIRMIZI(tmp_path):
@@ -147,7 +157,7 @@ def test_KRITIK_BAYAT_monolit_tasinirken_kapi_HALA_KIRMIZI(tmp_path):
     """
     _manifest_yaz(
         tmp_path,
-        runtimes={"win-x64": {"url": "https://x/base.zip", "sha256": "d" * 64, "size": 10}},
+        runtimes={"linux-x64": {"url": "https://x/base-linux.zip", "sha256": "d" * 64, "size": 10}},
     )
     _paketleri_koy(tmp_path, monolit=False)
     r = _kos(tmp_path)
@@ -159,7 +169,7 @@ def test_KRITIK_monolit_de_TAZEYKEN_uretilir(tmp_path):
     """Üçü de yerelde taze → sorun yok, manifest yazılır (eski dünya hâlâ çalışır)."""
     _manifest_yaz(
         tmp_path,
-        runtimes={"win-x64": {"url": "https://x/base.zip", "sha256": "d" * 64, "size": 10}},
+        runtimes={"linux-x64": {"url": "https://x/base-linux.zip", "sha256": "d" * 64, "size": 10}},
     )
     _paketleri_koy(tmp_path, monolit=True)
     r = _kos(tmp_path)

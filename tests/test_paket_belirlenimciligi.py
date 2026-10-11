@@ -83,7 +83,8 @@ def _calistir(dist: Path, cikti: Path):
     """⚠️ `PEMF_PKG_OUT` ile çıktı tmp'ye yönlendirilir — GERÇEK yayın ziplerine dokunulmaz."""
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PEMF_PKG_OUT": str(cikti)}
     r = subprocess.run(
-        [sys.executable, str(BETIK), str(dist)],
+        # D4.32: tek-parça yalnız açık `--monolith` ile — bu dosya onun belirlenimciliğini de ölçer.
+        [sys.executable, str(BETIK), str(dist), "--monolith"],
         capture_output=True,
         text=True,
         encoding="utf-8",

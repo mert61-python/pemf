@@ -24,7 +24,7 @@ Yayın varlıkları hâlâ **`pemf-update`** deposuna yüklenir (istemciye derle
 | # | Hedef | Komut (guii kökünden) | Çıktı |
 |---|-------|------------------------|-------|
 | 1 | **Backend** (frozen EXE) | `.\scripts\build_backend_exe.ps1` | `PEMF_BUILD\dist\PEMF_Backend\PEMF_Backend.exe` |
-| 2 | **base.zip** (client runtime) | `python build_tools\make_base_zip.py` | `pemf-app-packages\base.zip` (+ sha/size) |
+| 2 | **Katmanlı runtime** (base-app + base-deps) | `python build_tools\make_base_zip.py` | `pemf-app-packages\base-app.zip` + `base-deps.zip` (+ sha/size) |
 | 3 | **Installer** (launcher/Tauri) | `cd launcher\app; npx @tauri-apps/cli build` | `launcher\target\release\bundle\nsis\PEMF Vet Client_<sürüm>_x64-setup.exe` |
 | 3b | **Installer** (Inno offline) | `.\build_tools\build_installer.ps1 [-Mode device\|server]` | Inno Setup .exe (her şeyi bundle) |
 | 4 | **Web frontend** | `cd apps/ui; npm run export:web` + mirror | `apps/ui\dist` → `frontend\dist` + runtime |
@@ -102,7 +102,7 @@ cd guii
 
 | Araç | Ne için | Not |
 |------|---------|-----|
-| **embedded python** (klasör kökü) | Backend build + base.zip | guii'nin **üstünde** `python.exe` — self-contained, tüm deps pinli (myenv/sistem Python GEREKMEZ). Override: `scripts\build_backend_exe.ps1 -Python <path>` |
+| **embedded python** (klasör kökü) | Backend build + katmanlı paket | guii'nin **üstünde** `python.exe` — self-contained, tüm deps pinli (myenv/sistem Python GEREKMEZ). Override: `scripts\build_backend_exe.ps1 -Python <path>` |
 | **PyInstaller** | Backend frozen EXE | Yoksa script otomatik `pip install` eder |
 | **Node.js + npm + npx** | Web export + APK + launcher | `npm ci --legacy-peer-deps` |
 | **Rust + cargo** (1.97+) | Launcher (Tauri) | `npx @tauri-apps/cli` (tauri-cli 2.11.4) |
@@ -144,8 +144,8 @@ $env:PYTHONPATH=""; $env:PYTHONHOME=""; $env:PYTHONNOUSERSITE="1"
 ```powershell
 python .\build_tools\make_base_zip.py
 # override:      python .\build_tools\make_base_zip.py <DIST_YOLU>   (veya PEMF_DIST env)
-# katman-only:   python .\build_tools\make_base_zip.py --no-monolith
-#                (base.zip URETILMEZ; diskteki bayat base.zip SILINIR ki yanlislikla yayinlanmasin)
+# varsayilan YALNIZ katmanlar (D4.32): diskteki bayat tek-parca SILINIR ki yanlislikla yayinlanmasin
+# tek-parca monolit (1.9.48'den beri YAYINLANMAZ; yalniz bilincli inceleme icin): --monolith
 ```
 
 **KATMANLI PAKET (2026-08-08).** Eskiden tek `base.zip` (~1,32 GB) vardı ve tek satırlık bir yazı
@@ -158,16 +158,18 @@ mosquitto/cloudflared 60…), yalnız ~71 MB'ı bizim kodumuz. Paket ikiye ayrı
 | `base-app.zip` | ~71 MB | **her sürümde** — exe + `ai_hub` .pyd + web arayüzü + scriptler |
 | `base-deps.zip` | ~1,19 GB | yalnız `requirements` değişince |
 
-> ⚠️ **TEK SÜRÜM, TEK YAZILIM (2026-08-09 denetimi).** `base.zip` eskiden yalnız `--monolith`
-> ile üretiliyordu ve "normalde GEREKMEZ" deniyordu. Sonuç ölçüldü: yayındaki `base.zip` ile
+> ⚠️ **TEK SÜRÜM, TEK YAZILIM (2026-08-09 denetimi — TARİHSEL).** Tek-parça `base.zip` o tarihte yalnız `--monolith`
+> ile üretiliyordu ve "normalde GEREKMEZ" deniyordu. Sonuç ölçüldü: yayındaki tek-parça paket ile
 > `base-app`+`base-deps` **53 dosyada farklıydı — `PEMF_Backend.exe` dahil**. Yani eski client'lar
 > (`runtimes`/`base` okur) ile yeni client'lar (`layers` okur) aynı sürüm numarası altında
 > **farklı yazılım** alıyordu. Tıbbi cihazda bir arızanın hangi kodda olduğu bilinemez hale gelir.
-> Artık `base.zip` **varsayılan olarak** her koşuda aynı dosya kümesinden üretilir ve script
-> `base.zip == app+deps` eşitliğini (isim kümesi + CRC) **doğrulayıp uyuşmazsa DURUR**.
+> O gün monolit varsayılan yapıldı; 1.9.48'de (2026-09-11, sahip kararı) KALICI olarak yayından çıktı. D4.32'den
+> beri `make_base_zip.py` tek-parçayı **varsayılan olarak ÜRETMEZ** (diskteki bayat kopyayı siler); `--monolith` verilirse
+> aynı dosya kümesinden üretir ve `base.zip == app+deps` (yalnız `--monolith`) eşitliğini doğrulayıp uyuşmazsa DURUR.
 
-- **Çıktı:** `guii\pemf-app-packages\base-app.zip` + `base-deps.zip` + `base.zip` + ekranda
-  `APPZIP_SHA/SIZE`, `DEPSZIP_SHA/SIZE` ve `BASEZIP_SHA/SIZE`.
+- **Çıktı:** `guii\pemf-app-packages\base-app.zip` + `base-deps.zip` + ekranda `APPZIP_SHA/SIZE` ve
+  `DEPSZIP_SHA/SIZE` (yalnız `--monolith` ile ayrıca tek-parça ve `BASEZIP_SHA/SIZE`). Zip'ler önce `.tmp`'ye yazılır,
+  doğrulama `.tmp`'lerde koşar, yalnız PASS'te yerine konur (D4.31) — FAIL'de önceki paketler aynen kalır.
 - **Kayıp dosya kapısı:** her dosya tam bir katmana gitmeli; script toplamı doğrular ve
   uyuşmazsa **durur** (ikisine de girmeyen bir dosya kurulumdan sessizce düşerdi).
 - Katman kapıları otomatik: `katmanlar KESISMIYOR`, `exe/web/ai_hub APP'te`, `torch DEPS'te`,
@@ -180,12 +182,14 @@ mosquitto/cloudflared 60…), yalnız ~71 MB'ı bizim kodumuz. Paket ikiye ayrı
 - `layers.<platform>.deps` ve `layers.<platform>.app` → yeni `sha256` + `size`.
 - ⚠️ **TEK-PARÇA `base.zip` 1.9.48'DEN BERİ YAYINLANMIYOR** (sahip kararı; yayın 1,55 GB → 210 MB).
   manifest `runtimes` **BOŞ** bırakılır, yalnız `layers` taşınır. Sonuç: client ≤1.9.12 kurulum
-  yapamaz — **BİLİNEN ve KABUL EDİLEN** durum (launcher ≥1.9.51 katmanları da sayar). Yerel
-  üretimde `--no-monolith` kullan; diskteki bayat `base.zip`i ASLA yükleme.
+  yapamaz — **BİLİNEN ve KABUL EDİLEN** durum (launcher ≥1.9.51 katmanları da sayar).
+  `make_base_zip.py` tek-parçayı varsayılan olarak üretmez ve diskteki bayat kopyayı siler; `make_manifest.py`
+  Windows tek-parçasını manifeste HİÇ koymaz (D4.32). Tek-parça dosyayı ASLA yükleme (YAYINLANMAZ).
 - ⚠️ Manifest'i **elle düzenlemeyin** — `python scripts/make_manifest.py` üretir. Betik artık
   `layers` + `mobile` bloklarını da taşır/üretir, `rollout` geri-çekmesini korur ve şu iki
   durumda **manifest yazmadan HATA verir**: (a) önceki manifest'te olan bir bölüm kaybolacaksa,
-  (b) katmanlar yeni ama tek-parça `base` eskiden taşınıyorsa.
+  (b) katmanlar yeni ama aynı platformun (linux/mac) tek-parçası eskiden taşınıyorsa; (c) yerel app katmanında
+  platform ikilisi / `_app_roots.json` yoksa (D4.31).
 - Doğrulama: `cargo test -p pemf-launcher-core --lib uretim_manifesti` — üretim manifestini
   gerçekten ayrıştırır; katman/url/boyut değişmezlerini ve platformda **katman YA DA tek-parça**
   ile kurulabilir bir şey olduğunu kontrol eder (`runtimes` BOŞ olabilir — monolit 1.9.48'de kaldırıldı).
@@ -242,7 +246,7 @@ python scripts/make_manifest.py --dir pemf-app-packages ... `
 
 ## 3. Installer — Launcher (Tauri, ANA dağıtım)
 
-Kullanıcının indirdiği ince-client (base.zip'i internetten çeker).
+Kullanıcının indirdiği ince-client (katmanlı runtime paketlerini — `base-app.zip` + `base-deps.zip` — internetten çeker).
 
 ```powershell
 cd launcher\app
@@ -270,7 +274,7 @@ npx @tauri-apps/cli build          # cargo + NSIS, ~60sn (incremental)
   bekler — `config.ts::windowsAsset` adı `windowsTag`ten türetir). İkisi de aynı ikili olmalı.
   ⚠️ Yalnız birini yüklemek karşı tarafı sessizce 404 yapar (2026-08-22'de yaşandı).
 - ⚠️ **`withGlobalTauri: true` ŞART** (`tauri.conf.json` app bloğu). Tauri v2'de varsayılan `false` → `window.__TAURI__` enjekte edilmez → UI "Ortam algılanıyor…"da DONAR.
-- ⚠️ **Launcher AYRI yayınlanır:** base.zip/APK republish launcher binary'yi GÜNCELLEMEZ. Launcher kaynağı (net.rs / index.html / main.rs) değişince EXE'yi ayrıca rebuild+reupload et.
+- ⚠️ **Launcher AYRI yayınlanır:** base-app/APK republish launcher binary'yi GÜNCELLEMEZ. Launcher kaynağı (net.rs / index.html / main.rs) değişince EXE'yi ayrıca rebuild+reupload et.
 - **Doğrulama:** binary'yi çalıştır + screencap → profil-UI (home/vet/research) geliyor mu? (Runtime-test edilmezse bug kullanıcıya ulaşır.)
 
 ### Oto-güncelleme (self-update) — client kendini günceller
@@ -438,7 +442,7 @@ gh release upload client-app-v1.8.0 -R mert61-python/pemf-update --clobber pemf-
 - Cihaz dilimi `install_id.txt`'ten türer → **kararlıdır**; yüzde artınca sıra sırayla gelir,
   cihazlar dilimler arasında zıplamaz.
 
-> ⚠️⚠️ **`--clobber` KESME TUZAĞI:** `--clobber` önce eski asset'i SİLER, sonra yenisini yükler. Büyük dosya (base.zip 1.3GB) yüklenirken süreci kesersen **asset TAMAMEN EKSİK kalır** → manifest sha'ya işaret eder ama dosya yok → **taze Windows kurulumları BOZUK**. Büyük `--clobber` yüklemesini **asla yarıda kesme**; kesersen bittikten sonra `gh release view --json assets` ile varlığını + boyutunu DOĞRULA.
+> ⚠️⚠️ **`--clobber` KESME TUZAĞI:** `--clobber` önce eski asset'i SİLER, sonra yenisini yükler. Büyük dosya (base-deps.zip ~1,4 GB) yüklenirken süreci kesersen **asset TAMAMEN EKSİK kalır** → manifest sha'ya işaret eder ama dosya yok → **taze Windows kurulumları BOZUK**. Büyük `--clobber` yüklemesini **asla yarıda kesme**; kesersen bittikten sonra `gh release view --json assets` ile varlığını + boyutunu DOĞRULA.
 
 ---
 
@@ -446,7 +450,7 @@ gh release upload client-app-v1.8.0 -R mert61-python/pemf-update --clobber pemf-
 
 | Build | guii'den doğrudan? | Neden |
 |-------|--------------------|-------|
-| Backend / base.zip / Installer | ✅ **Evet** | En uzun yol 238<260 + LongPathsEnabled=1 |
+| Backend / katmanlı paket / Installer | ✅ **Evet** | En uzun yol 238<260 + LongPathsEnabled=1 |
 | **APK** | ❌ **Hayır → kısa-dizin** | ninja/CMake ANSI 260; LongPaths işe yaramaz. `build_apk.ps1` otomatik çözer |
 
 ---
@@ -464,7 +468,7 @@ guii\
 │  ├─ check_headless_imports.py# guard (Qt sızıntısı)
 │  └─ install_backend_service.ps1
 ├─ build_tools\
-│  ├─ make_base_zip.py         # (2) base.zip paketleyici (taşınabilir)
+│  ├─ make_base_zip.py         # (2) katmanlı paket (base-app + base-deps) paketleyici
 │  ├─ build_installer.ps1      # (3b) Inno offline installer
 │  ├─ PEMF_Backend_Setup.iss   # Inno script
 │  ├─ build_apk.ps1            # (5) APK (kısa-dizin otomasyonu)
@@ -472,8 +476,8 @@ guii\
 ├─ launcher\app\               # (3) Tauri client (installer) kaynağı
 ├─ apps/ui\                         # mobil + web React (Expo) kaynağı
 ├─ frontend\dist\              # (4) web export hedefi
-├─ PEMF_BUILD\dist\PEMF_Backend# (1) frozen backend çıktısı (base.zip kaynağı)
-├─ pemf-app-packages\          # base.zip + manifest.json
+├─ PEMF_BUILD\dist\PEMF_Backend# (1) frozen backend çıktısı (katmanlı paket kaynağı)
+├─ pemf-app-packages\          # base-app.zip + base-deps.zip + manifest.json
 └─ release_assets\             # PEMF_Vet_Mobil.apk
 ```
 

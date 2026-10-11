@@ -36,7 +36,7 @@ Arayüz **React Native / Expo** ile tek kod tabanından **Web + Android + iOS**'
 Mobil/Web (apps/ui → frontend/dist)  ──LAN http/ws :8000 · uzak: Cloudflare tünel──▶  PEMF_Backend.exe
                                                                                        (FastAPI+uvicorn, NSSM servis)
    Supabase (yalnız cihaz-registry + şifreli PII)                                        ├─ apps/backend/servers/  (REST+WS+router'lar)
-   GitHub Releases (OTA: base.zip/APK/launcher)                                          ├─ apps/backend/controllers/ → STM32 (bobin 1-7, seri)
+   GitHub Releases (OTA: base-app/APK/launcher)                                          ├─ apps/backend/controllers/ → STM32 (bobin 1-7, seri)
                                                                                          ├─ apps/backend/services/ + bin/mosquitto → ESP (slot 8, MQTT) ⚠️ 2026-09-11: ESP SÖKÜLÜ, PEMF_ESP_ENABLED=0
                                                                                          ├─ apps/backend/database/ (SQLCipher yerel)
                                                                                          └─ ai_hub/ (gömülü ONNX teşhis)
@@ -112,13 +112,13 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 ### Build / Dağıtım / Launcher
 | Klasör/Dosya | Ne işe yarar |
 |---|---|
-| [`BUILD.md`](BUILD.md) | **Ana build rehberi** (backend/base.zip/launcher/APK/installer + yayın) |
+| [`BUILD.md`](BUILD.md) | **Ana build rehberi** (backend/katmanlı paket/launcher/APK/installer + yayın) |
 | `scripts/bootstrap.ps1` | Sıfır-makinede tüm toolchain'i tek komutla kurar (Node/Rust/MSVC/JDK/Android/Inno/gh) |
 | [`build_tools/`](build_tools/README.md) | Derleme reçeteleri (PyInstaller spec, Inno .iss, `make_base_zip.py`, `build_apk.ps1`, sürüm-lock) |
 | [`scripts/`](scripts/README.md) | Ops: build/yayın/servis-kurulum/gateway-hotspot/teardown-uninstall |
-| `PEMF_BUILD/` | **ÜRETİLEN** — kanonik frozen-backend çıktısı (`dist/PEMF_Backend`, base.zip girdisi) |
+| `PEMF_BUILD/` | **ÜRETİLEN** — kanonik frozen-backend çıktısı (`dist/PEMF_Backend`, katmanlı paket girdisi) |
 | `build/` · `dist/` | **ÜRETİLEN** — PyInstaller varsayılan-konum ikizleri (regenerable) |
-| [`pemf-app-packages/`](pemf-app-packages/README.md) | Güncelleme-sunucusu hazırlık: `base.zip` + `manifest.json` |
+| [`pemf-app-packages/`](pemf-app-packages/README.md) | Güncelleme-sunucusu hazırlık: `base-app.zip` + `base-deps.zip` + `manifest.json` |
 | [`launcher/`](launcher/README.md) | **Tauri v2 ince istemci** ("PEMF Vet Client") — indirir/doğrular/backend'i başlatır, kendini günceller |
 | [`deploy/`](deploy/README.md) | `device.env` / `server.env` / `staging.env` dağıtım profilleri |
 | `offline dağıtım/` | **YEREL** (git'te izlenmez, gitignore'lu) — İnternetsiz USB kurulum (Inno DiskSpanning `.bin` dilimleri) |
@@ -150,7 +150,7 @@ Tam adım-adım: **[`BUILD.md`](BUILD.md)**. En kısa hâli (guii kökünden):
 | Hedef | Komut | Çıktı |
 |---|---|---|
 | Backend (frozen EXE) | `.\scripts\build_backend_exe.ps1` | `PEMF_BUILD\dist\PEMF_Backend\` |
-| base.zip (client runtime) | `python build_tools\make_base_zip.py` | `pemf-app-packages\base.zip` |
+| Katmanlı runtime (base-app + base-deps) | `python build_tools\make_base_zip.py` | `pemf-app-packages\base-app.zip` + `base-deps.zip` |
 | Launcher (installer) | `cd launcher\app; npx @tauri-apps/cli build` | `...\nsis\...setup.exe` |
 | Web frontend | `cd apps/ui; npm run export:web` + mirror | `frontend\dist` |
 | Android APK | `.\build_tools\build_apk.ps1` | `release_assets\PEMF_Vet_Mobil.apk` |
@@ -167,7 +167,7 @@ Tam adım-adım: **[`BUILD.md`](BUILD.md)**. En kısa hâli (guii kökünden):
 - 🔒 **PII maskeleme varsayılan KAPALI** (bilinçli sahip kararı) — `PEMF_MASK_HISTORY_PII=1` ile açılır.
 - 🌐 **AI offline** — `apps/backend/utils/model_downloader.py` yalnız yerel kökleri arar; internetten model çekmez.
 - ✏️ Web/mobil UI'yi **`apps/ui/`'te düzenle** — `frontend/src` bayat kopyadır.
-- 🚀 **Launcher AYRI yayınlanır** (base.zip/APK republish onu güncellemez).
+- 🚀 **Launcher AYRI yayınlanır** (base-app/APK republish onu güncellemez).
 
 ---
 İlgili: [BUILD.md](BUILD.md) · [docs/ (doküman indeksi)](docs/README.md) · [ARCHITECTURE.md](docs/ARCHITECTURE.md) · [RUNBOOK.md](docs/RUNBOOK.md)

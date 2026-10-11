@@ -41,8 +41,13 @@ for _akis in (sys.stdout, sys.stderr):
         pass
 
 # dosya adı -> (v2 bölümü, v2 anahtarı, v1 anahtarı)
+# ⚠️ D4.32 (B-9.5 · B-11.4): Windows tek-parçası (`base.zip` → `runtimes.win-x64` + v1 `base`) bu tablodan ÇIKTI. 1.9.48'de
+# (2026-09-11, sahip kararı) monolit KALICI olarak YAYINLANMAZ oldu ve canlı manifestte `runtimes` boş; ama satır durduğu
+# sürece klasörde bir `base.zip` (bayraksız `make_base_zip` onu üretiyordu) yayınlanmamış bir URL'ye bağlanıyordu, önceki
+# manifestteki win-x64 tek-parçası ise "bayat" diye yayını durduruyordu. linux/mac tek-parçaları (ayrı runner'lar) AYNEN kalır.
+# Kapı: tests/test_monolit_VARSAYILAN_DEGIL_runtimes_BOS_D432.py
+WIN_TEK_PARCA = "base.zip"
 ASSETS = {
-    "base.zip": ("runtimes", "win-x64", "base"),
     "base-linux.zip": ("runtimes", "linux-x64", "base_linux"),
     "base-mac.zip": ("runtimes", "mac-arm64", "base_mac"),
     "home.zip": ("models", "home", None),
@@ -311,6 +316,20 @@ def main() -> int:
                     manifest[v1_key] = entry
                 missing.remove(name)
                 carried.append(f"{name} -> {section}.{key} (mevcut manifest'ten)")
+
+    # D4.32: Windows tek-parçası ne üretilir ne taşınır — ama SESSİZ değil.
+    if (prev.get("runtimes") or {}).get("win-x64") or prev.get("base"):
+        print(
+            "[manifest] NOT: onceki manifestteki runtimes.win-x64 / v1 `base` (tek-parca) TASINMADI — 1.9.48'den beri "
+            "YAYINLANMAZ; client <=1.9.12 kuramaz (launcher >=1.9.51 katmanlari kullanir).",
+            file=sys.stderr,
+        )
+    if (args.dir / WIN_TEK_PARCA).exists():
+        print(
+            f"[UYARI] klasorde {WIN_TEK_PARCA} var: 1.9.48'den beri YAYINLANMAZ ve manifeste GIRMEZ — yuklemeyin "
+            "(`gh release upload *.zip` jokeri onu da alir). `python build_tools/make_base_zip.py` bayraksiz kosuda siler.",
+            file=sys.stderr,
+        )
 
     # ── FAZ 4.5: PROFIL PARCALARI (model_parts) — ASSETS ile AYNI kurallar ──────────────────
     # URL-koruma: sha ayniysa eski etiket URL'i KORUNUR (ayni sessiz-404 dersi).
@@ -610,7 +629,8 @@ def main() -> int:
     # ikisi FARKLI build'lerdendir. Sahada ölçüldü: 53 dosya farklı, `PEMF_Backend.exe` dahil →
     # client <=1.9.12 base.zip'ten ESKİ backend'i, >=1.9.13 layers'tan YENİ backend'i kuruyordu.
     # Aynı sürüm numarası altında iki farklı yazılım: bir arızanın hangi kodda olduğu bilinemez.
-    # Çözüm build tarafında (make_base_zip artık base.zip'i DAİMA üretir); burası yayın kapısıdır.
+    # (D4.32: Windows tek-parçası 1.9.48'den beri yayınlanmaz ve ASSETS'te yok → bu kapı yalnız linux/mac tek-parçalarını
+    # denetler; onlar ayrı runner'larda üretilir.)
     #
     # ⚠️ 2026-09-11 DÜZELTME — AYNI KÖR NOKTA **DÖRDÜNCÜ** YERDE.
     # Bu kapı "yerelde base.zip yok" ile "önceki manifest'ten BAYAT bir base TAŞINIYOR"u aynı
@@ -640,47 +660,14 @@ def main() -> int:
         for plat, name in bayat_ciftler:
             print(f"  - layers.{plat} taze, runtimes.{plat} ({name}) bayat", file=sys.stderr)
         print(
-            "  Çözüm: `python build_tools/make_base_zip.py` (base.zip'i de üretir) ve "
-            f"{', '.join(n for _, n in bayat_ciftler)} dosyasını da bu klasöre koyun.",
+            "  Çözüm: o platformun tek-parça paketini de aynı build'den üretip "
+            f"({', '.join(n for _, n in bayat_ciftler)}) bu klasöre koyun ya da --drop-platform ile platformu çıkarın.",
             file=sys.stderr,
         )
         return 1
 
-    # ── TEK SÜRÜM, TEK YAZILIM — İÇERİK SAĞLAMASI (2026-08-09, Tier 1 eki) ──────────────────
-    # Yukarıdaki kapı "katmanlar taze ama base bayat" durumunu yakalar. ÜÇÜ DE yerelde varken
-    # yine de İÇERİK olarak ayrışmış olabilirler — gerçek durum tam olarak buydu: yayındaki
-    # base.zip ile base-app+base-deps 53 dosyada farklıydı, `PEMF_Backend.exe` dahil.
-    #
-    # ⚠️ BİLEREK UYARI, HATA DEĞİL. Asıl kapı build tarafındadır (`make_base_zip.py` uyuşmazsa
-    # DURUR). Bu betik ise ACİL DURUM aracıdır: bozuk bir yayını `--launcher-rollout 0` ile geri
-    # çekmek, paketlerin yeniden üretilmesini BEKLEYEMEZ. Emniyet kontrolünü acil çıkışın önüne
-    # koymak, korumaya çalıştığı şeyden daha büyük zarar verirdi.
-    try:
-        import zipfile
-
-        _b, _a, _d = (args.dir / "base.zip", args.dir / "base-app.zip", args.dir / "base-deps.zip")
-        if _b.exists() and _a.exists() and _d.exists():
-
-            def _crc(z):
-                with zipfile.ZipFile(z) as f:
-                    return {i.filename: i.CRC for i in f.infolist() if not i.is_dir()}
-
-            _mono, _kat = _crc(_b), _crc(_a)
-            _kat.update(_crc(_d))
-            if _mono != _kat:
-                _fark = len([n for n in set(_mono) & set(_kat) if _mono[n] != _kat[n]])
-                print(
-                    f"\n[UYARI] base.zip ile base-app+base-deps AYNI DEGIL: {_fark} dosyanin "
-                    f"icerigi farkli, {len(set(_kat) - set(_mono))} dosya yalniz katmanlarda, "
-                    f"{len(set(_mono) - set(_kat))} dosya yalniz base.zip'te.\n"
-                    "  Eski client'lar (<=1.9.12) base.zip'i, yeniler layers'i kurar → AYNI surum "
-                    "numarasi altinda FARKLI yazilim dagitilir.\n"
-                    "  Duzeltme: `python build_tools/make_base_zip.py` (ucunu birden yeniden "
-                    "uretir) ve UCUNU DE yayina yukleyin.",
-                    file=sys.stderr,
-                )
-    except Exception as e:
-        print(f"[UYARI] paket icerik saglamasi yapilamadi: {e}", file=sys.stderr)
+    # (D4.32: buradaki "base.zip == base-app + base-deps" İÇERİK SAĞLAMASI kaldırıldı — Windows tek-parçası 1.9.48'den beri
+    # yayınlanmaz ve manifeste girmez; eşitlik yalnız `make_base_zip.py --monolith` koşusunda doğrulanır.)
 
     out_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 

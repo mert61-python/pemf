@@ -209,7 +209,9 @@ if __name__ == "__main__":
 
 # ── FAZ 4.5: model_parts (profil parça zip'leri) — aynı kurallar ─────────────
 def _kos_ve_oku(d, tag, surum):
-    _paket_yaz(d, "base.zip", b"BASE-SABIT")  # betigin zorunlu base kapisi (idempotent)
+    # betigin "kurulabilir paket" kapisi (idempotent). D4.32: Windows tek-parcasi (base.zip) manifeste GIRMEZ → katman cifti.
+    _paket_yaz(d, "base-app.zip", b"APP-SABIT")
+    _paket_yaz(d, "base-deps.zip", b"DEPS-SABIT")
     r = _kos(d, tag, surum)
     assert r.returncode == 0, f"kosu basarisiz: {r.stdout} {r.stderr}"
     return _manifest(d)

@@ -121,10 +121,11 @@ def test_KRITIK_korumasiz_ai_hub_da_GECERLI_zipleri_EZMEZ(kum):
 
 
 def test_KARSIT_gecerli_dist_PASSte_zipleri_YERINE_KOYAR(kum):
-    """Ölçücü kör değil: aynı nöbetçilerle GEÇERLİ dist → çıkış 0, üç zip de YENİ içerikle yerinde, .tmp yok."""
+    """Ölçücü kör değil: aynı nöbetçilerle GEÇERLİ dist → çıkış 0, zip'ler YENİ içerikle yerinde, .tmp yok.
+    (D4.32: tek-parça yalnız `--monolith` ile — bu kolda açık bayrakla; bayraksız koşu onu siler, D4.32 kapısında.)"""
     tmp, cikti = kum
     once = _nobetciler(cikti)
-    r = _make_base_zip(_sahte_dist(tmp, exe=True), cikti)
+    r = _make_base_zip(_sahte_dist(tmp, exe=True), cikti, "--monolith")
     assert r.returncode == 0 and "VALIDATION: PASS" in r.stdout, r.stdout[-1500:] + r.stderr[-800:]
     for ad in once:
         assert _sha(cikti / ad) != once[ad], f"{ad} PASS'te yerine konmadi"

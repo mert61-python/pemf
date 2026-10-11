@@ -2,7 +2,7 @@
 # PEMF Vet — bootstrap.ps1
 # SIFIR (bos) bir Windows makinesinde tum build+publish arac zincirini kurar.
 # Amac: bu embeddable-python klasorunu herhangi bir laptoba koy + bu scripti
-#       calistir -> tum build'ler (backend/base.zip/installer/launcher/APK)
+#       calistir -> tum build'ler (backend/katmanli paket/installer/launcher/APK)
 #       ve yayinlar yapilabilir hale gelir.
 #
 # KURAR:  Node.js, Git, GitHub CLI, JDK 17, Inno Setup 6,
@@ -338,7 +338,7 @@ $rows = @(
     @{ Ad="Inno (ISCC)"; Var=((Have "iscc") -or (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")); Icin="offline installer" }
     @{ Ad="Android NDK"; Var=(Test-Path (Join-Path $sdk "ndk\$NdkVersion"));    Icin="APK native" }
     @{ Ad="Android CMake";Var=(Test-Path (Join-Path $sdk "cmake\$CmakeVersion"));Icin="APK native" }
-    @{ Ad="embedded Py"; Var=(Test-Path (Join-Path $EmbRoot "python.exe"));      Icin="backend/base.zip/installer (klasorde, self-contained)" }
+    @{ Ad="embedded Py"; Var=(Test-Path (Join-Path $EmbRoot "python.exe"));      Icin="backend/katmanli paket/installer (klasorde, self-contained)" }
 )
 $missing = 0
 foreach ($r in $rows) {
@@ -364,7 +364,7 @@ Write-Host "        gh auth login          # GitHub Releases icin" -ForegroundCo
 Write-Host "        npx vercel login       # (web deploy yapacaksan)" -ForegroundColor DarkGray
 Write-Host "   3) Build'ler (guii kokunden — detay: BUILD.md):" -ForegroundColor White
 Write-Host "        .\scripts\build_backend_exe.ps1          # backend frozen EXE" -ForegroundColor DarkGray
-Write-Host "        python .\build_tools\make_base_zip.py    # base.zip" -ForegroundColor DarkGray
+Write-Host "        python .\build_tools\make_base_zip.py    # base-app.zip + base-deps.zip" -ForegroundColor DarkGray
 Write-Host "        .\build_tools\build_installer.ps1        # offline installer" -ForegroundColor DarkGray
 Write-Host "        cd launcher\app; cargo tauri build       # launcher" -ForegroundColor DarkGray
 Write-Host "        .\build_tools\build_apk.ps1              # Android APK" -ForegroundColor DarkGray

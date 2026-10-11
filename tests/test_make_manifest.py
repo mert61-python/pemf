@@ -131,7 +131,7 @@ def test_aciklama_notlari_korunur(dizin):
 def test_yereldeki_katman_paketlerinden_URETIR(dizin):
     _app_zip(dizin / "base-app.zip", b"APP" * 100)
     (dizin / "base-deps.zip").write_bytes(b"DEPS" * 100)
-    (dizin / "base.zip").write_bytes(b"APP" * 100 + b"DEPS" * 100)  # tek-sürüm kapısı gereği
+    (dizin / "base.zip").write_bytes(b"APP" * 100 + b"DEPS" * 100)  # D4.32: manifeste GIRMEZ (yalniz uyari)
     r = _calistir(dizin)
     assert r.returncode == 0, r.stderr[-800:]
     L = _oku(dizin)["layers"]["win-x64"]
@@ -150,7 +150,7 @@ def test_KRITIK_karisik_katman_seti_URETILMEZ(dizin):
     client TÜM manifesti reddeder ve kayıp o platformla sınırlı kalmaz (kurulum, güncelleme ve
     geri çağırma her platformda durur). Artık manifest YAZILMIYOR ve çıkış 1."""
     _app_zip(dizin / "base-app.zip", b"APP" * 100)
-    (dizin / "base.zip").write_bytes(b"APP" * 100)  # tek-sürüm kapısı gereği
+    (dizin / "base.zip").write_bytes(b"APP" * 100)  # D4.32: manifeste GIRMEZ (yalniz uyari)
     r = _calistir(dizin)
     assert r.returncode == 1, f"yarim katman seti SESSIZCE yayina gitti: {r.stdout[-400:]}"
     assert "YARIM KATMAN SETI" in r.stderr, f"sebep soylenmedi: {r.stderr[-400:]}"
@@ -215,7 +215,8 @@ def test_KRITIK_mobile_kaybolacaksa_manifest_YAZILMAZ(tmp_path):
     """Kapının kendisi: bir bölüm kaybolacaksa çıkış kodu 0 dönmemeli — yayın akışı (publish.ps1
     / CI) sıfırı 'başarılı' sayar ve bozuk manifest yayınlanır."""
     onceki = json.loads(json.dumps(ONCEKI))
-    onceki.pop("layers")
+    # D4.32: `layers` artık KORUNUR — Windows tek-parçası (runtimes) taşınmadığından layers'sız önceki manifestte kurulabilir
+    # paket kalmaz ("hiçbir kurulabilir paket yok"). Testin ölçtüğü `mobile` taşıması bundan bağımsız.
     (tmp_path / "manifest.json").write_text(json.dumps(onceki), encoding="utf-8")
     # `mobile` taşınabilir olsun diye betiği CARRY yolundan geçir ama bloğu sil:
     onceki2 = json.loads(json.dumps(onceki))
@@ -239,9 +240,9 @@ def test_KRITIK_layers_kaybolursa_HATA_verir(dizin, monkeypatch):
 
 
 def test_drop_missing_ile_bilerek_silinebilir(dizin):
-    # `--drop-missing` hiçbir şey taşımaz → base de yerelde OLMALI (yoksa "hiçbir base paketi
-    # bulunamadı" ile zaten durur; o kontrol bu düzeltmeden ÖNCE de vardı).
-    (dizin / "base.zip").write_bytes(b"BASE" * 50)
+    # `--drop-missing` hiçbir şey taşımaz → kurulabilir bir paket yerelde OLMALI (yoksa "hiçbir kurulabilir paket yok"
+    # ile durur). D4.32: Windows tek-parçası manifeste girmez → linux tek-parçası kullanılır.
+    (dizin / "base-linux.zip").write_bytes(b"BASE" * 50)
     r = _calistir(dizin, "--drop-missing")
     assert r.returncode == 0, r.stderr[-800:]
     assert not _oku(dizin)["layers"], "acik --drop-missing'e ragmen layers tasindi"
@@ -303,14 +304,15 @@ def test_KARSIT_KANIT_allow_missing_mobile_kapiyi_ACAR(tmp_path):
 # ── mevcut davranış korunuyor mu (regresyon) ─────────────────────────────────
 
 
-def test_runtimes_ve_v1_alanlari_KORUNUR(dizin):
-    """⚠️ `runtimes`/`base` ESKİ client'lar (<=1.9.12) için DURMALI — katmanlar onların yerine
-    geçmez."""
+def test_KRITIK_win_tek_parca_runtimes_ve_v1_base_TASINMAZ(dizin):
+    """⚠️ D4.32 (B-9.5): eskiden `runtimes.win-x64`/`base` ESKİ client'lar (<=1.9.12) için taşınıyordu ("DURMALI"). 1.9.48'de
+    (sahip kararı) tek-parça KALICI olarak yayından çıktı: taşınırsa yayınlanmamış/bayat bir pakete işaret eden URL yeniden ilan
+    edilir. Artık taşınmaz ama SESSİZ değil (stderr NOT). Kapı: test_monolit_VARSAYILAN_DEGIL_runtimes_BOS_D432.py"""
     r = _calistir(dizin)
     assert r.returncode == 0, r.stderr[-800:]
     m = _oku(dizin)
-    assert m["runtimes"]["win-x64"] == ONCEKI["runtimes"]["win-x64"]
-    assert m["base"] == ONCEKI["base"]
+    assert "win-x64" not in m["runtimes"] and "base" not in m
+    assert "runtimes.win-x64" in r.stderr, "dusurme yayinciya soylenmedi"
 
 
 def test_launchersiz_manifest_HATA(tmp_path):
@@ -326,24 +328,32 @@ def test_launchersiz_manifest_HATA(tmp_path):
 # numarası altında iki farklı yazılım. Tıbbi cihazda bir arızanın hangi kodda olduğu bilinemez.
 
 
-def test_KRITIK_taze_katman_bayat_base_ile_YAYINLANMAZ(dizin):
-    _app_zip(dizin / "base-app.zip", b"YENI-APP")
-    (dizin / "base-deps.zip").write_bytes(b"YENI-DEPS")
-    # base.zip yerelde YOK → önceki manifest'ten taşınacaktı (bayat).
+def _linuxlu_onceki(tmp_path):
+    """D4.32: Windows tek-parçası manifeste girmez → TEK SÜRÜM kapısı linux/mac tek-parçalarında ölçülür."""
+    onceki = json.loads(json.dumps(ONCEKI))
+    onceki["runtimes"]["linux-x64"] = {"url": "https://x/base-linux.zip", "sha256": "9" * 64, "size": 8, "kind": "zip"}
+    (tmp_path / "manifest.json").write_text(json.dumps(onceki), encoding="utf-8")
+    _app_zip(tmp_path / "base-linux-app.zip", b"YENI-APP", ikili="PEMF_Backend/PEMF_Backend")
+    (tmp_path / "base-linux-deps.zip").write_bytes(b"YENI-DEPS")
+    return tmp_path
+
+
+def test_KRITIK_taze_katman_bayat_base_ile_YAYINLANMAZ(tmp_path):
+    dizin = _linuxlu_onceki(tmp_path)
+    # base-linux.zip yerelde YOK → önceki manifest'ten taşınacaktı (bayat).
     r = _calistir(dizin)
     assert r.returncode == 1, "taze katman + bayat base yayinlandi (iki farkli yazilim)"
     assert "İKİ FARKLI" in r.stderr or "IKI FARKLI" in r.stderr
 
 
-def test_taze_katman_TAZE_base_ile_yayinlanir(dizin):
-    _app_zip(dizin / "base-app.zip", b"YENI-APP")
-    (dizin / "base-deps.zip").write_bytes(b"YENI-DEPS")
-    (dizin / "base.zip").write_bytes(b"YENI-APPYENI-DEPS")
+def test_taze_katman_TAZE_base_ile_yayinlanir(tmp_path):
+    dizin = _linuxlu_onceki(tmp_path)
+    (dizin / "base-linux.zip").write_bytes(b"YENI-APPYENI-DEPS")
     r = _calistir(dizin)
     assert r.returncode == 0, r.stderr[-800:]
     m = _oku(dizin)
-    assert m["runtimes"]["win-x64"]["url"].endswith("client-app-v1.9.0/base.zip")
-    assert m["layers"]["win-x64"]["app"]["url"].endswith("client-app-v1.9.0/base-app.zip")
+    assert m["runtimes"]["linux-x64"]["url"].endswith("client-app-v1.9.0/base-linux.zip")
+    assert m["layers"]["linux-x64"]["app"]["url"].endswith("client-app-v1.9.0/base-linux-app.zip")
 
 
 def test_ikisi_de_bayatsa_yayinlanir(dizin):
@@ -352,15 +362,17 @@ def test_ikisi_de_bayatsa_yayinlanir(dizin):
     assert _calistir(dizin).returncode == 0
 
 
-def test_baska_platformun_bayat_basei_ENGEL_DEGIL(dizin):
+def test_baska_platformun_bayat_basei_ENGEL_DEGIL(tmp_path):
     """win-x64 tazelenirken mac/linux'un taşınması normaldir (ayrı runner'larda üretilirler)."""
+    dizin = _mac_linuxlu(tmp_path)
     _app_zip(dizin / "base-app.zip", b"A")
     (dizin / "base-deps.zip").write_bytes(b"B")
-    (dizin / "base.zip").write_bytes(b"AB")
     r = _calistir(dizin)
     assert r.returncode == 0, r.stderr[-800:]
     # win-x64 tazelendi, mac/linux hiç dokunulmadı → kapı yalnız TAZELENEN platformu denetler.
-    assert _oku(dizin)["runtimes"]["win-x64"]["url"].endswith("client-app-v1.9.0/base.zip")
+    m = _oku(dizin)
+    assert m["layers"]["win-x64"]["app"]["url"].endswith("client-app-v1.9.0/base-app.zip")
+    assert m["runtimes"]["linux-x64"]["url"] == "https://x/base-linux.zip", "linux tek-parcasi tasinmadi"
 
 
 # ── LAUNCHER SELF-UPDATE GERİ ÇEKME (2026-08-09 denetimi, Tier 1) ────────────
@@ -452,7 +464,7 @@ def test_cikarma_DIGER_platformu_bozmaz(tmp_path):
     d = _mac_linuxlu(tmp_path)
     assert _calistir(d, "--drop-platform", "mac-arm64").returncode == 0
     m = _oku(d)
-    assert m["runtimes"]["win-x64"] == ONCEKI["runtimes"]["win-x64"], "windows paketi bozuldu"
+    assert "win-x64" not in m["runtimes"], "D4.32: Windows tek-parcasi tasinmaz"
     assert m["layers"]["win-x64"]["app"] == ONCEKI["layers"]["win-x64"]["app"]
     assert "linux-x64" in m["runtimes"], "istenmeyen platform da silindi"
 
@@ -473,7 +485,7 @@ def test_KRITIK_sessiz_kayip_kapisi_ACIK_cikarmayi_ENGELLEMEZ(tmp_path):
 
 def test_olmayan_platformu_cikarmak_ZARARSIZ(dizin):
     assert _calistir(dizin, "--drop-platform", "solaris-sparc").returncode == 0
-    assert _oku(dizin)["runtimes"]["win-x64"] == ONCEKI["runtimes"]["win-x64"]
+    assert _oku(dizin)["layers"]["win-x64"]["app"] == ONCEKI["layers"]["win-x64"]["app"]
 
 
 def test_cikarma_launcher_ve_mobile_bloklarini_KORUR(tmp_path):

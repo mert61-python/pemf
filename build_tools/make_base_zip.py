@@ -19,19 +19,21 @@
 # _internal/ai_models HARIC (profil-zip'lerinde ayri). ZIP_STORED.
 #
 # TASINABILIR: tum yollar bu scriptin konumundan turetilir; hard-code C:\ YOK.
-# Kullanim:  python make_base_zip.py [DIST_YOLU] [--no-monolith]
+# Kullanim:  python make_base_zip.py [DIST_YOLU] [--monolith]
 #
-# ⚠️ DENETIM 2026-08-09 (ENGEL) — TEK SURUM, TEK YAZILIM.
+# ⚠️ DENETIM 2026-08-09 (ENGEL) — TEK SURUM, TEK YAZILIM (TARIHSEL; 1.9.48'de asildi).
 # `--monolith` ESKIDEN OPSIYONELDI ve yorumda "normalde GEREKMEZ" yaziyordu. Sonuc olculdu:
 # yayindaki base.zip ile base-app+base-deps 53 dosyada FARKLIYDI — PEMF_Backend.exe DAHIL.
 # Yani ayni surum numarasi altinda IKI FARKLI YAZILIM dagitiliyordu:
 #     client <=1.9.12  -> `runtimes`/`base` okur -> ESKI (bayat) backend
 #     client >=1.9.13  -> `layers` okur          -> YENI backend
-# Tibbi cihazda bu kabul edilemez: bir sahada bulunan arizanin hangi kodda oldugu bilinemez,
-# duzeltme dogrulanamaz. base.zip artik VARSAYILAN olarak her kosuda katmanlarla AYNI
-# `app_items + deps_items` kumesinden yeniden uretilir. `--no-monolith` bilinen bir durumda
-# (ornegin yalniz katman denemesi) atlamak icindir ve o zaman DISKTEKI bayat base.zip SILINIR —
-# yanlislikla eski dosyayi yayinlamak mumkun olmasin.
+# O gun cozum monolith'i VARSAYILAN yapmakti.
+# ⚠️ D4.32 (B-9.5 · B-11.4): 1.9.48'de (2026-09-11, sahip karari) tek-parca base.zip KALICI olarak YAYINLANMAZ oldu —
+# canli manifestte `runtimes` bos, v1 `base` yok. Varsayilan o karardan beri TERSTI: bayraksiz kosu 1,5 GB'lik base.zip
+# uretiyor, BUILD.md'yi harfiyen izleyen operator onu da yuklemeye yoneliyordu. Artik VARSAYILAN YALNIZ katmanlardir ve
+# PASS'ten sonra DISKTEKI bayat base.zip SILINIR (`gh release upload *.zip` jokeri onu gormesin). `--monolith` yalniz
+# bilincli inceleme icindir: o zaman base.zip katmanlarla AYNI kumeden uretilir ve `base.zip == app+deps` dogrulanir.
+# `--no-monolith` geriye uyum icin kabul edilir (artik varsayilan). Kapi: tests/test_monolit_VARSAYILAN_DEGIL_runtimes_BOS_D432.py
 import hashlib
 import io
 import json
@@ -44,8 +46,8 @@ import zipfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 GUII = os.path.dirname(HERE)
 _args = [a for a in sys.argv[1:] if not a.startswith('--')]
-# `--monolith` geriye uyum icin kabul edilir (artik varsayilan); kapatmak icin `--no-monolith`.
-MONOLITH = '--no-monolith' not in sys.argv
+# D4.32: tek-parca monolit YALNIZ acik `--monolith` ile (1.9.48'den beri YAYINLANMAZ); `--no-monolith` = varsayilan.
+MONOLITH = '--monolith' in sys.argv
 DIST = _args[0] if _args else os.environ.get('PEMF_DIST') or os.path.join(GUII, 'PEMF_BUILD', 'dist', 'PEMF_Backend')
 PARENT = os.path.dirname(DIST)  # arcname'e PEMF_Backend/ oneki gelsin
 # ⚠️ DENETIM 2026-08-15: cikti dizini SABITTI ve testler betigi gercek `pemf-app-packages/`
@@ -450,7 +452,10 @@ try:
             # BAYAT MONOLITH BIRAKMA: diskte kalan eski base.zip, yayin adiminda yanlislikla
             # yuklenirse eski client'lara BAYAT backend gider (bkz. bastaki denetim notu).
             os.remove(OUT_MONO)
-            print('  (--no-monolith) diskteki BAYAT base.zip silindi.', flush=True)
+            print(
+                '  (monolit yok — varsayilan) diskteki BAYAT base.zip silindi (1.9.48\'den beri YAYINLANMAZ).',
+                flush=True,
+            )
         for _g, o, s in ciftler:
             checks[f'yayin dizinine yerlesti: {os.path.basename(o)} (sha == dogrulanan)'] = (
                 os.path.isfile(o) and _sha256(o) == s

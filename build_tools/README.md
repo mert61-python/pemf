@@ -5,7 +5,7 @@ Tüm build tarifleri. **Tam adım-adım rehber kökte: [`../BUILD.md`](../BUILD.
 ## Dosyalar
 | Dosya | Görev |
 |---|---|
-| `make_base_zip.py` | Frozen backend'i (`../PEMF_BUILD/dist/PEMF_Backend`) → **`../pemf-app-packages/base.zip`** paketler (ZIP_STORED, `_internal/ai_models` HARİÇ, setup/hotspot/teardown scriptleri eklenir), doğrular, `BASEZIP_SHA`/`BASEZIP_SIZE` basar |
+| `make_base_zip.py` | Frozen backend'i (`../PEMF_BUILD/dist/PEMF_Backend`) → **`../pemf-app-packages/base-app.zip` + `base-deps.zip`** (katmanlı) paketler (ZIP_STORED, `_internal/ai_models` HARİÇ — çekirdek `cat_organ` deps'te —, setup/hotspot/teardown scriptleri app'e eklenir); `.tmp`'de doğrular, yalnız PASS'te yerine koyar, `APPZIP_*`/`DEPSZIP_*` basar. Tek-parça yalnız `--monolith` ile (1.9.48'den beri YAYINLANMAZ) |
 | `build_apk.ps1` | Android release APK — `apps/ui\`'i kısa yola (`C:\pb`, MAX_PATH kaçışı) aynala → `gradle assembleRelease` → **`../release_assets/PEMF_Vet_Mobil.apk`** |
 | `build_installer.ps1` | **Inno offline installer** (PyInstaller onedir + Inno Setup); `-Mode device\|server`; sürümü `../VERSION`/`../versions.json`'dan senkronlar |
 | `sync_versions.ps1` | **`../versions.json` (tek-kaynak)** değerlerini hedef dosyalara (`apps/ui\app.json` vb.) yazar; `build_apk.ps1`/`build_installer.ps1` otomatik çağırır; PS 5.1 için ASCII-only |
