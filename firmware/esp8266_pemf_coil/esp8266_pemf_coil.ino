@@ -246,16 +246,16 @@ void setup() {
 
     feedWatchdog();
 
-    // 1. EEPROM Başlat & CONFIG_VERSION Kontrolü
+    // 1. EEPROM Başlat & EEPROM_CONFIG_VERSION Kontrolü (izlenen SharedDefs.h — D4.14)
     EEPROM.begin(EEPROM_SIZE);
     uint8_t storedVersion = EEPROM.read(EEPROM_CONFIG_VER_ADDR);
-    if (storedVersion != CONFIG_VERSION) {
+    if (storedVersion != EEPROM_CONFIG_VERSION) {
         LOG_PRINTLN("[SETUP] Config version değişti, EEPROM sıfırlanıyor...");
         // 3. tur denetimi [D4] (2026-08-24): TÜM WiFi bölgesini (0..494) sil, yalnız 256'ya kadar
         // DEĞİL. Eski 256 sınırı slot3-4'ü (297-494) bırakıyordu → bayat valid=true kalıp
         // _loadWiFiCredentials bozuk-veri yolunu tetikliyor, migrasyon iki boot'a uzuyordu.
         for (int i = 0; i < EEPROM_WIFI_REGION_END; i++) EEPROM.write(i, 0);
-        EEPROM.write(EEPROM_CONFIG_VER_ADDR, CONFIG_VERSION);
+        EEPROM.write(EEPROM_CONFIG_VER_ADDR, EEPROM_CONFIG_VERSION);
         EEPROM.commit();
     }
 

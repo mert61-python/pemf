@@ -173,7 +173,7 @@ def test_KARSIT_KANIT_D4_reverse_pwm_wifi_bolgesini_bozmuyor():
 # ═══════════════════════ YAPISAL KAPILAR (c_soy) ══════════════════════════════════════════════
 def test_YAPISAL_D4_boot_wipe_tum_wifi_bolgesini_siliyor():
     ino = c_soy(INO.read_text(encoding="utf-8", errors="replace"))
-    i = ino.index("if (storedVersion != CONFIG_VERSION)")
+    i = ino.index("if (storedVersion != EEPROM_CONFIG_VERSION)")
     govde = ino[i : ino.index("EEPROM.commit()", i)]
     assert "for (int i = 0; i < 256;" not in govde, (
         "boot wipe hâlâ literal 256'ya sınırlı — slot3-4 (297-494) bayat valid=true kalır, migrasyon "

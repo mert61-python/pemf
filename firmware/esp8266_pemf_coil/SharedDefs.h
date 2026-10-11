@@ -187,7 +187,13 @@ struct PWMStateEEPROM {
 #define EEPROM_WIFI_REGION_END    495  // 5 slot × 99 bayt; non-WiFi adresler bunun ÜSTÜNDE olmalı
 #define EEPROM_PWM_STATE_ADDR     512  // WiFi bölgesinden (0-494) sonra; sizeof(PWMStateEEPROM)=24 → [512,536)
 #define EEPROM_BROKER_STATE_ADDR  536  // son aktif broker tipi
-#define EEPROM_CONFIG_VER_ADDR    540  // CONFIG_VERSION
+#define EEPROM_CONFIG_VER_ADDR    540  // EEPROM_CONFIG_VERSION (aşağıda)
+// ⚠️ D4.14 (B-8.1, A-41): EEPROM yapılandırma SÜRÜMÜ — sır DEĞİL, izlenen başlıkta. Eskiden yalnız skip-worktree'li
+// Secrets.h'de `CONFIG_VERSION` olarak duruyordu: [D4] artışı (1→2) hiç commit'lenmedi, HEAD'den derlenen firmware 1
+// taşıyor ve v2 kartla dönüşümlü yakmada her seferinde WiFi bölgesini siliyordu. Secrets.h'deki `CONFIG_VERSION` artık
+// KULLANILMIYOR (o dosya skip-worktree; yerelde kaldırılabilir). EEPROM düzeni değişirse BURADA artırın.
+// Kapı: tests/test_esp8266_CONFIG_SURUMU_izlenen_baslikta_D414.py
+#define EEPROM_CONFIG_VERSION     2
 
 // Sistem durum yapÄ±sÄ±
 struct StatusData {

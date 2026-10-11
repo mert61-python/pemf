@@ -67,7 +67,8 @@ ArduinoJson · Adafruit MLX90614 · Adafruit MLX90393 (+bağımlılıkları).
   non-WiFi adresler (PWM/BROKER/CONFIG_VER, eski 256/300/304) 5-slotluk WiFi kimlik bölgesinin
   ([0,495)) İÇİNDEYDİ → 30 sn'lik `savePWMState` kayıtlı WiFi'yi, portal WiFi yazımı `CONFIG_VER`'i
   bozup her boot'ta yanlış sürüm-uyuşmazlığı + wipe tetikliyordu. Non-WiFi blok bölgenin sonrasına
-  (`≥512`) taşındı, `CONFIG_VERSION 1→2`; **5-slot kapasitesi korundu** (`SharedDefs.h`). Yalnız
+  (`≥512`) taşındı, `EEPROM_CONFIG_VERSION 1→2` (izlenen `SharedDefs.h`; D4.14 — eskiden yalnız skip-worktree'li
+  `Secrets.h`'de `CONFIG_VERSION` idi ve artış hiç commit'lenmemişti); **5-slot kapasitesi korundu**. Yalnız
   portal-tabanlı kurulumları etkiliyordu (gömülü `Secrets.h` kimlikli mutlu yol EEPROM'a yazmaz).
   ⚠️ Reflash sonrası tek-seferlik WiFi wipe olur → yeniden provizyon gerekir.
 
