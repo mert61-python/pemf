@@ -7,6 +7,10 @@
 // VERSION INFO
 // ============================================================================
 #define FIRMWARE_VERSION "1.3.0"  // Full Bridge Bipolar — toleransli HW sync + SANIYE sozlesmesi + yerel termal (2026-08-19)
+// ⚠️ 4B-3.7 (A-41, D4.14 ailesi): NVS yapilandirma SURUMU sir DEGIL -> izlenen baslikta. Eskiden yalniz skip-worktree'li
+// Secrets.h'de `CONFIG_VERSION` idi; HEAD'den derlenen firmware sahibin yerel degerini tasimiyordu (degerler ayrisirsa her
+// donusumlu yakmada NVS WiFi/MQTT silinir). Deger HEAD'deki eski tanimla AYNI (2). NVS duzeni degisirse BURADA artirin.
+#define NVS_CONFIG_VERSION 2
 
 // ============================================================================
 // DONANIM VE PIN TANIMLAMALARI (ESP32-S3 DevKit)

@@ -121,10 +121,10 @@ void PemfNetworkManager::_loadConfig() {
   // --- Config version check: yeni firmware NVS'yi sıfırlamalı mı? ---
   _prefs.begin("pemf_config", false); // Read-Write
   int storedVersion = _prefs.getInt(PREF_KEY_CONFIG_VERSION, 0);
-  if (storedVersion != CONFIG_VERSION) {
+  if (storedVersion != NVS_CONFIG_VERSION) {  // 4B-3.7: izlenen SharedDefs.h (A-41)
     LOG_PRINTF("[Config] NVS config version %d != firmware %d — WiFi/MQTT "
                "factory reset!\n",
-               storedVersion, CONFIG_VERSION);
+               storedVersion, NVS_CONFIG_VERSION);
     _prefs.remove(PREF_KEY_WIFI_SSID);
     _prefs.remove(PREF_KEY_WIFI_PASS);
     _prefs.remove(PREF_KEY_LOCAL_MQTT_HOST);
@@ -133,7 +133,7 @@ void PemfNetworkManager::_loadConfig() {
     _prefs.remove(PREF_KEY_CLOUD_MQTT_PORT);
     _prefs.remove(PREF_KEY_MQTT_SERVER);
     _prefs.remove(PREF_KEY_MQTT_PORT);
-    _prefs.putInt(PREF_KEY_CONFIG_VERSION, CONFIG_VERSION);
+    _prefs.putInt(PREF_KEY_CONFIG_VERSION, NVS_CONFIG_VERSION);
     LOG_PRINTLN("[Config] Factory defaults restored, config version updated.");
   }
 

@@ -340,7 +340,7 @@ void BLEProvisioning::_saveConfigToNVS() {
     prefs.putString(PREF_KEY_WIFI_PASS, _receivedPass);
 
     // Config version güncelle (NVS'nin geçersiz sayılmaması için)
-    prefs.putInt(PREF_KEY_CONFIG_VERSION, CONFIG_VERSION);
+    prefs.putInt(PREF_KEY_CONFIG_VERSION, NVS_CONFIG_VERSION);  // 4B-3.7: izlenen SharedDefs.h (A-41)
 
     prefs.end();
 
