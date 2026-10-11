@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""4A-1.6 (A1 incelemesi; 4-B ile) — Y30'un taşıyıcısı `publish_release.ps1` Windows PowerShell 5.1'de AYRIŞTIRILAMIYOR.
+r"""4A-1.6 (A1 incelemesi; 4-B ile) — Y30'un taşıyıcısı `publish_release.ps1` Windows PowerShell 5.1'de AYRIŞTIRILAMIYOR.
 
 ÖLÇÜLEN (A1, 2026-10-11; `_inceleme/kayit/k3_ps51_ayristir.txt`, `k3_sonda.txt`): dosya BOM'suz UTF-8 ve `:49`daki çift tırnaklı
 dizgede `—` (U+2014) var. 5.1 BOM'suz betiği ANSI (cp1254/1252) okur → E2 80 94 baytlarının sonuncusu `”` (U+201D) olur ve
