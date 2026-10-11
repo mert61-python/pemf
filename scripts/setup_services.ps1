@@ -505,9 +505,11 @@ foreach ($r in $FwKurallar) {
     if ($mevcut.Count -gt 0) {
         $uygun = $true
         foreach ($k in $mevcut) {
-            $pf = $k | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
-            $af = $k | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue
-            if (-not $pf -or "$($pf.Protocol)" -ne $r.p -or "$($pf.LocalPort)" -ne "$($r.port)" -or -not $af -or "$($af.Program)" -ne $BackendExe) { $uygun = $false }
+            # Değişken adları bilinçli UZUN: iki harfli kısaltmalar taşınmış-dizin kapısının aradığı eski dizin adlarıyla çakışıyordu.
+            $portFiltre = $k | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
+            $uygFiltre = $k | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue
+            if (-not $portFiltre -or "$($portFiltre.Protocol)" -ne $r.p -or "$($portFiltre.LocalPort)" -ne "$($r.port)" -or
+                -not $uygFiltre -or "$($uygFiltre.Program)" -ne $BackendExe) { $uygun = $false }
         }
         if ($uygun) { continue }
         Log "Firewall kuralı '$($r.n)' farklı port/protokol/programla VAR -> yeniden kuruluyor ($($r.p) $($r.port))." "Yellow"
