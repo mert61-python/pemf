@@ -272,34 +272,98 @@ def test_KRITIK_her_tablonun_anon_ve_authenticated_yetkisi_REVOKE_edilir(sql_bod
     assert not eksik, f"anon/authenticated yetkisi REVOKE EDILMEYEN tablo(lar) (tablo: geri alinan roller): {eksik}"
 
 
-def _security_definer_fonksiyonlar(sql_bodies: dict[str, str]) -> set[str]:
-    """Her `create function` başlangıcından bir sonrakine kadar olan pencerede SECURITY DEFINER aranır (nitelik
-    `$$` gövdesinden önce de sonra da yazılabilir)."""
-    sd: set[str] = set()
+# 4-A inc. 4A-2.4: PostgreSQL'de fonksiyon = AD + argüman türleri. R2 artık (ad, arite) ile eşler: `revoke … f(integer)`
+# yeni `f(integer, integer)`ü KAPATMAZ; `grant … f(text) to anon` başka imzayı "bilerek açık" yapmaz. Tırnaklı ad ve
+# `create procedure` da keşfedilir (eskiden görünmezdi ve SECURITY DEFINER'ı ÖNCEKİ fonksiyona yazılıyordu).
+_FN_BASLIK = re.compile(
+    r'create\s+(?:or\s+replace\s+)?(?:function|procedure)\s+(?:"?\w+"?\s*\.\s*)?"?(\w+)"?\s*\(', re.I
+)
+
+
+def _ust_duzey_bol(metin: str) -> list[str]:
+    ogeler, derinlik, bas = [], 0, 0
+    for i, c in enumerate(metin):
+        derinlik += {"(": 1, ")": -1}.get(c, 0)
+        if c == "," and derinlik == 0:
+            ogeler.append(metin[bas:i])
+            bas = i + 1
+    ogeler.append(metin[bas:])
+    return [o.strip() for o in ogeler if o.strip()]
+
+
+def _parantez_ici(metin: str, ac: int) -> str:
+    derinlik = 0
+    for i in range(ac, len(metin)):
+        derinlik += {"(": 1, ")": -1}.get(metin[i], 0)
+        if derinlik == 0:
+            return metin[ac + 1 : i]
+    return metin[ac + 1 :]
+
+
+def _imza_aritesi(ham: str) -> int:
+    """İmzadaki argüman sayısı; OUT parametreleri PostgreSQL imzasına GİRMEZ (varsayılanlı olanlar girer)."""
+    return sum(1 for o in _ust_duzey_bol(ham) if not re.match(r"out\s", o, re.I))
+
+
+def _security_definer_fonksiyonlar(sql_bodies: dict[str, str]) -> set[tuple[str, int]]:
+    """Her `create function|procedure` başlangıcından bir sonrakine kadar olan pencerede SECURITY DEFINER aranır
+    (nitelik `$$` gövdesinden önce de sonra da yazılabilir). Dönüş: {(ad, arite)}."""
+    sd: set[tuple[str, int]] = set()
     for govde in sql_bodies.values():
         temiz = re.sub(r"--[^\n]*", " ", govde)
-        bas = list(re.finditer(r"create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?(\w+)\s*\(", temiz, re.I))
+        bas = list(_FN_BASLIK.finditer(temiz))
         for i, m in enumerate(bas):
             son = bas[i + 1].start() if i + 1 < len(bas) else len(temiz)
             if re.search(r"\bsecurity\s+definer\b", temiz[m.start() : son], re.I):
-                sd.add(m.group(1).lower())
+                sd.add((m.group(1).lower(), _imza_aritesi(_parantez_ici(temiz, m.end() - 1))))
     return sd
+
+
+def _fonksiyon_yetki_imzalari(govde: str) -> list[tuple[str, set[tuple[str, int | None]], set[str]]]:
+    """[(grant|revoke, {(ad, arite | None=parantezsiz ad: her imza) | ("*", None)=ALL FUNCTIONS}, {roller})]."""
+    out = []
+    for s in _ifadeler(govde):
+        m = re.match(r"(grant|revoke)\s+.+?\s+on\s+(.+?)\s+(to|from)\s+(.+)$", s, re.I)
+        if not m or not _FONKSIYON_NESNESI.match(m.group(2)):
+            continue
+        nesne = m.group(2).strip()
+        if nesne.lower().startswith("all "):
+            imzalar: set[tuple[str, int | None]] = {("*", None)}
+        else:
+            imzalar = set()
+            for oge in _ust_duzey_bol(re.sub(r"^(?:function|procedure|routine)s?\s+", "", nesne, flags=re.I)):
+                a = re.match(r'(?:"?\w+"?\s*\.\s*)?"?(\w+)"?\s*(\()?', oge)
+                if a:
+                    arite = _imza_aritesi(_parantez_ici(oge, a.end() - 1)) if a.group(2) else None
+                    imzalar.add((a.group(1).lower(), arite))
+        out.append((m.group(1).lower(), imzalar, _roller(m.group(4))))
+    return out
+
+
+def _imza_eslesir(imzalar: set[tuple[str, int | None]], ad: str, arite: int, *, joker: bool) -> bool:
+    return any((joker and a == "*") or (a == ad and n in (None, arite)) for a, n in imzalar)
 
 
 def test_KRITIK_anona_ACILMAYAN_SECURITY_DEFINER_fonksiyonun_anon_yetkisi_REVOKE_edilir(sql_bodies):
     """D4.26 revoke pini: Supabase yeni fonksiyona anon'a EXECUTE verir; `revoke … from public` bunu KALDIRMAZ. Anon'a
     BİLEREK açılan (cihaz) RPC'leri dışındaki her SECURITY DEFINER fonksiyonun anon yetkisi bir dosyada geri alınmalı —
-    `okuma_rpc.sql`deki `revoke … abonelik_getir() from public, anon` silinirse kullanıcı okuma RPC'si anon'a açık kalır."""
+    `okuma_rpc.sql`deki `revoke … abonelik_getir() from public, anon` silinirse kullanıcı okuma RPC'si anon'a açık kalır.
+    4-A inc. 4A-2.4: eşleme İMZA (ad + arite) düzeyinde."""
     sd = _security_definer_fonksiyonlar(sql_bodies)
-    assert len(sd) >= 12, f"VAKUM: yalniz {len(sd)} SECURITY DEFINER fonksiyon bulundu: {sorted(sd)}"
+    adlar = {a for a, _ in sd}
+    assert len(adlar) >= 12, f"VAKUM: yalniz {len(adlar)} SECURITY DEFINER fonksiyon bulundu: {sorted(sd)}"
+    yetkiler = [y for govde in sql_bodies.values() for y in _fonksiyon_yetki_imzalari(govde)]
+    # Bilerek açık = O İMZAYA anon/PUBLIC grant'ı (şema geneli `ALL FUNCTIONS` "bilerek" sayılmaz — eski davranış).
     anona_acik = {
-        a
-        for govde in sql_bodies.values()
-        for tur, sinif, adlar, roller in yetki_ifadeleri(govde)
-        if tur == "grant" and sinif == "fonksiyon" and roller & {"anon", "public"}
-        for a in adlar
+        f
+        for f in sd
+        if any(t == "grant" and r & {"anon", "public"} and _imza_eslesir(i, *f, joker=False) for t, i, r in yetkiler)
     }
-    eksik = sorted(fn for fn in sd - anona_acik if "anon" not in _revoke_eden_roller(sql_bodies, "fonksiyon", fn))
+    eksik = sorted(
+        f"{a}({n} arg)"
+        for a, n in sd - anona_acik
+        if not any(t == "revoke" and "anon" in r and _imza_eslesir(i, a, n, joker=True) for t, i, r in yetkiler)
+    )
     assert not eksik, (
         f"anon'a acilmayan ama anon EXECUTE yetkisi geri ALINMAYAN SECURITY DEFINER fonksiyon(lar): {eksik}"
     )
