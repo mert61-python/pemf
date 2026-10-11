@@ -43,7 +43,9 @@ $sec = @($ust | Where-Object { $_.Extent.Text -match '^\$FwKurallar\s*=' -or $_.
 if ($sec.Count -ne 3) { [IO.File]::WriteAllText($Cikti, (@{ cipa = "FwKurallar blogu bulunamadi: $($sec.Count)" } | ConvertTo-Json)); exit 0 }
 $d = Get-Content -LiteralPath $Durum -Raw | ConvertFrom-Json
 $script:Tablo = [System.Collections.Generic.List[object]]::new()
-foreach ($k in @($d.kurallar)) { $script:Tablo.Add([pscustomobject]@{ DisplayName = $k.n; Protocol = $k.p; LocalPort = "$($k.port)"; Program = $k.prog }) }
+# 4B-3.5: gerçek kural nesnesi Enabled / Action / Direction / Profile da taşır (betik bunları da içerik sayar).
+foreach ($k in @($d.kurallar)) { $script:Tablo.Add([pscustomobject]@{ DisplayName = $k.n; Protocol = $k.p; LocalPort = "$($k.port)"; Program = $k.prog
+    Enabled = 'True'; Action = 'Allow'; Direction = 'Inbound'; Profile = 'Any' }) }
 $script:Cagri = [System.Collections.Generic.List[string]]::new()
 function Log { param($m, $c) $script:Cagri.Add("LOG " + $m) }
 function Out-Null { param([Parameter(ValueFromPipeline = $true)]$x) process { } }
@@ -54,7 +56,8 @@ function Get-NetFirewallApplicationFilter { param([Parameter(ValueFromPipeline =
     process { $k = if ($InputObject) { $InputObject } else { $AssociatedNetFirewallRule }; [pscustomobject]@{ Program = $k.Program } } }
 function New-NetFirewallRule { param($DisplayName, $Direction, $Program, $Action, $Protocol, $LocalPort, $Profile, $ErrorAction)
     $script:Cagri.Add("FW-YENI $DisplayName $Protocol $LocalPort")
-    $script:Tablo.Add([pscustomobject]@{ DisplayName = $DisplayName; Protocol = $Protocol; LocalPort = "$LocalPort"; Program = $Program }) }
+    $script:Tablo.Add([pscustomobject]@{ DisplayName = $DisplayName; Protocol = $Protocol; LocalPort = "$LocalPort"; Program = $Program
+        Enabled = 'True'; Action = $Action; Direction = $Direction; Profile = $Profile }) }
 function Remove-NetFirewallRule { param($DisplayName, $ErrorAction)
     $script:Cagri.Add("FW-SIL $DisplayName")
     foreach ($k in @($script:Tablo | Where-Object { $_.DisplayName -eq $DisplayName })) { [void]$script:Tablo.Remove($k) } }

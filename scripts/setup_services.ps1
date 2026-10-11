@@ -508,11 +508,14 @@ foreach ($r in $FwKurallar) {
             # Değişken adları bilinçli UZUN: iki harfli kısaltmalar taşınmış-dizin kapısının aradığı eski dizin adlarıyla çakışıyordu.
             $portFiltre = $k | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
             $uygFiltre = $k | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue
+            # 4B-3.4/4B-3.5: LAN erişimini belirleyen kural alanları da içeriktir — aynı adlı ama Block / devre dışı / giden / dar profilli
+            # kural "uygun" sayılırsa backend dinler, LAN'dan erişim ENGELLİ kalır (health yalnız localhost'u ölçer).
             if (-not $portFiltre -or "$($portFiltre.Protocol)" -ne $r.p -or "$($portFiltre.LocalPort)" -ne "$($r.port)" -or
-                -not $uygFiltre -or "$($uygFiltre.Program)" -ne $BackendExe) { $uygun = $false }
+                -not $uygFiltre -or "$($uygFiltre.Program)" -ne $BackendExe -or "$($k.Enabled)" -ne 'True' -or
+                "$($k.Action)" -ne 'Allow' -or "$($k.Direction)" -ne 'Inbound' -or "$($k.Profile)" -ne 'Any') { $uygun = $false }
         }
         if ($uygun) { continue }
-        Log "Firewall kuralı '$($r.n)' farklı port/protokol/programla VAR -> yeniden kuruluyor ($($r.p) $($r.port))." "Yellow"
+        Log "Firewall kuralı '$($r.n)' farklı port/protokol/program/durumla VAR -> yeniden kuruluyor ($($r.p) $($r.port))." "Yellow"
         try { Remove-NetFirewallRule -DisplayName $r.n -ErrorAction Stop }
         catch { Log "UYARI: eski firewall kuralı silinemedi ($($r.n)): $_" "Yellow" }
     }
