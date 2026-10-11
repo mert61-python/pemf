@@ -1188,7 +1188,7 @@ pub enum ProfileRecord {
 /// `research-2.zip` ayrı bir profil DEĞİL, `model_parts` parçasıdır → "research"e eşlenir.
 ///
 /// Sürüklenme kapısı: `tests/test_profil_modul_haritasi.py` (kaynak = make_model_zip.py).
-pub const PROFIL_MODULLERI: [(&str, &str); 17] = [
+pub const PROFIL_MODULLERI: [(&str, &str); 18] = [
     ("cat_disease", "home"),
     ("cat_landmark", "home"),
     ("cat_segmentation", "home"),
@@ -1202,6 +1202,8 @@ pub const PROFIL_MODULLERI: [(&str, &str); 17] = [
     ("inference_em_fantom", "research"),
     ("inference_em_petri", "research"),
     ("inference_human_kidney_ct", "research"),
+    // D4.27 (B-9.9): RNA açıklamasının PT ikizi araştırma paketinde (make_model_zip PROFILLER["research"]).
+    ("inference_human_kidney_rna", "research"),
     ("inference_paper_dilek_hoca", "research"),
     ("inference_petri_dish", "research"),
     ("inference_renal_histopath_kmc", "research"),

@@ -114,6 +114,12 @@ PROFILLER: dict[str, tuple[str, ...]] = {
         # (xai_ref_stats.npz'ler app katmanında — bkz. vet notu.)
         "ai_hub/inference_human_kidney_ct/yolov8s.pt",
         "ai_hub/feline_reticulocytes/yolov8s.pt",
+        # ⚠️ D4.27 (B-9.9): böbrek-RNA gen-katkısı açıklamasının (Integrated Gradients) PT ikizi (~1,2 MB). HİÇBİR pakette
+        # yoktu: app katmanı spec'in ai_hub süzgecinde .pt ALMAZ, `_internal/ai_models` katmanlı pakette HARİÇ → launcher
+        # kurulumunda `explain=1` RNA analizi "Açıklama üretilemedi" ile düşüyordu (sahadaki 1.9.50'de canlı). RNA ucu
+        # `require_research` → yeri araştırma profili (ONNX çıkarımı app katmanında, açıklama araştırmayla). Yayınlanınca
+        # bu ağırlığın da makine dışı ilk yedeği olur (restore_assets research.zip'ten geri getirir).
+        "ai_hub/inference_human_kidney_rna/mlp_medium_kirc.pt",
     ),
 }
 

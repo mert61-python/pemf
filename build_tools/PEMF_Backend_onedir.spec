@@ -282,6 +282,35 @@ if os.path.exists(_pw_src):
 else:
     print('[..] _static_password.py yok -> kaynak sifreleme KAPALI (duz .py kalir)')
 
+# ⚠️ D4.27 (B-9.9): release_assets/ai_models'taki, HİÇBİR profil / parça / çekirdek paketine girmeyen küçük (<5 MB) model
+# dosyaları launcher'ın kurduğu katmanlı düzende YALNIZ app katmanından (`_internal/ai_hub/<modül>`) gelebilir
+# (`_internal/ai_models` katmanlı pakette çekirdek dışında HARİÇ — make_base_zip EXCLUDE). Eskiden app katmanı onları modül
+# dizinindeki İZLENMEYEN yerel kopyalardan alıyordu (ölçüldü: 10 dosya — böbrek-hastalık 4 ONNX + preprocessor, böbrek-RNA ONNX
+# + scaler, em_petri 3 scaler; `.gitignore` *.onnx / *.pkl) → temiz makinede (clone + restore_assets + build) pakete HİÇ
+# girmezlerdi ve böbrek-hastalık / böbrek-RNA / em_petri sahada sessizce ölürdü. Kaynak artık depoda İZLENEN release_assets
+# kopyasıdır (bu makinede modül yanındakilerle bayt bayt aynı); modül dizinindeki aynı adlı kopya ATLANIR (aynı hedefe iki kaynak yok).
+# Kapı: tests/test_her_model_agirligi_bir_PAKETE_duser_D427.py
+from build_tools.make_model_zip import CEKIRDEK_HARIC as _CEKIRDEK_HARIC
+from build_tools.make_model_zip import PARCALAR as _PARCALAR
+from build_tools.make_model_zip import PROFILLER as _PROFILLER
+
+_paketli_modeller = {_r for _tablo in (_PROFILLER, _PARCALAR) for _liste in _tablo.values() for _r in _liste}
+_app_modelleri = {}  # 'ai_hub/<modül>/<dosya>' -> izlenen release_assets kaynağı
+_ra_ai_models = os.path.join(project_path, 'release_assets', 'ai_models')
+for root, _, files in os.walk(os.path.join(_ra_ai_models, 'ai_hub')):
+    for f in files:
+        full = os.path.join(root, f)
+        _rel_ra = os.path.relpath(full, _ra_ai_models).replace(os.sep, '/')
+        if (
+            _rel_ra in _paketli_modeller
+            or _rel_ra.startswith(_CEKIRDEK_HARIC)
+            or not f.endswith(('.pkl', '.onnx', '.npy', '.npz', '.txt', '.json'))
+            or os.path.getsize(full) >= 5 * 1024 * 1024
+        ):
+            continue
+        _app_modelleri[_rel_ra] = full
+print(f"[D4.27] app katmanina release_assets'tan gomulen model dosyasi: {len(_app_modelleri)}")
+
 ai_hub_dir = os.path.join(project_path, 'ai_hub')
 if os.path.exists(ai_hub_dir):
     for root, _, files in os.walk(ai_hub_dir):
@@ -290,6 +319,8 @@ if os.path.exists(ai_hub_dir):
         for f in files:
             full = os.path.join(root, f)
             rel = os.path.relpath(root, project_path)
+            if os.path.join(rel, f).replace(os.sep, '/') in _app_modelleri:
+                continue  # D4.27: izlenen release_assets kopyası aşağıda gömülür (tek kaynak)
             if f.endswith(('.py', '.json', '.txt', '.yaml', '.yml')):
                 datas.append((full, rel))
             # ⚠️ .npz ŞART (düşman-doğrulama 2026-08-27): xai_ref_stats.npz'ler (EM canlı XAI
@@ -297,6 +328,8 @@ if os.path.exists(ai_hub_dir):
             # em_kedi/fantom/petri xaiSensitivity sessizce üretilemiyordu (zarif düşüş maskeledi).
             elif f.endswith(('.pkl', '.onnx', '.npy', '.npz')) and os.path.getsize(full) < 5 * 1024 * 1024:
                 datas.append((full, rel))
+for _rel_ra, _kaynak in sorted(_app_modelleri.items()):
+    datas.append((_kaynak, os.path.dirname(_rel_ra).replace('/', os.sep)))
 
 # TÜM AI MODELLERİNİ EXE'YE GÖM (Hugging Face KALDIRILDI → self-contained; ProgramData staging'e
 # bağımlı kalma). release_assets/ai_models/** → _internal/ai_models/** ; download_model_sync /
