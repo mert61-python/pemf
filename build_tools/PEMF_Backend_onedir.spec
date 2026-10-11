@@ -519,7 +519,10 @@ a = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=hidden,
-    hookspath=[spec_dir],
+    # ⚠️ D4.E02 (İG-9.23): eskiden `[spec_dir]` (= cwd). Üç ürün derleme yolu da (build_backend_exe.ps1, linux-backend.yml,
+    # build_mac.sh) depo KÖKÜNDEN koşar → hookspath depo kökü, `build_tools/hook-paho.mqtt.py` SESSİZCE yüklenmiyordu.
+    # Kancalar spec'in yanında: cwd'den bağımsız. Kapı: tests/test_spec_KANCA_yolu_build_tools_D4E02.py
+    hookspath=[os.path.join(project_path, 'build_tools')],
     hooksconfig={'matplotlib': {'backends': ['Agg']}},
     runtime_hooks=[],
     excludes=[
