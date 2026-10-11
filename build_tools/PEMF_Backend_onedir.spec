@@ -320,14 +320,20 @@ for root, _, files in os.walk(os.path.join(_ra_ai_models, 'ai_hub')):
 print(f"[D4.27] app katmanina release_assets'tan gomulen model dosyasi: {len(_app_modelleri)}")
 
 ai_hub_dir = os.path.join(project_path, 'ai_hub')
+_yerel_farkli = []  # 4B-2.5: modül dizinindeki yerel kopya izlenen kopyadan FARKLI → geliştirme ile sevk ayrışır
 if os.path.exists(ai_hub_dir):
+    import filecmp as _filecmp
+
     for root, _, files in os.walk(ai_hub_dir):
         if 'results' in root.split(os.sep):
             continue
         for f in files:
             full = os.path.join(root, f)
             rel = os.path.relpath(root, project_path)
-            if os.path.join(rel, f).replace(os.sep, '/') in _app_modelleri:
+            _rel_m = os.path.join(rel, f).replace(os.sep, '/')
+            if _rel_m in _app_modelleri:
+                if not _filecmp.cmp(full, _app_modelleri[_rel_m], shallow=False):
+                    _yerel_farkli.append(_rel_m)
                 continue  # D4.27: izlenen release_assets kopyası aşağıda gömülür (tek kaynak)
             if f.endswith(('.py', '.json', '.txt', '.yaml', '.yml')):
                 datas.append((full, rel))
@@ -336,6 +342,12 @@ if os.path.exists(ai_hub_dir):
             # em_kedi/fantom/petri xaiSensitivity sessizce üretilemiyordu (zarif düşüş maskeledi).
             elif f.endswith(('.pkl', '.onnx', '.npy', '.npz')) and os.path.getsize(full) < 5 * 1024 * 1024:
                 datas.append((full, rel))
+if _yerel_farkli:
+    raise SystemExit(
+        "[BUILD FAIL] 4B-2.5: modul dizinindeki YEREL model kopyasi izlenen release_assets kopyasindan FARKLI — EXE izlenen "
+        f"kopyayi sevk eder, kaynaktan kosan backend yereli yukler: {_yerel_farkli}. Dogru olani release_assets/ai_models'a "
+        "koyun (git'te izlenir) ya da yerel kopyayi silin."
+    )
 for _rel_ra, _kaynak in sorted(_app_modelleri.items()):
     datas.append((_kaynak, os.path.dirname(_rel_ra).replace('/', os.sep)))
 
