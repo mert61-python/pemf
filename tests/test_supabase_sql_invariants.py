@@ -71,12 +71,25 @@ def test_KRITIK_README_her_izlenen_SQL_dosyasini_ANAR():
     assert not anilmayan, f"apps/backend/database/README.md su izlenen .sql dosya(lar)ini ANMIYOR: {anilmayan}"
 
 
+# 4-A inc. 4A-2.1: tablo adı TIRNAKLI da yazılabilir (`supabase db diff` / migra çıktısı `create table "public"."x"`);
+# eski regex tırnaklı tabloyu RLS, grant ve revoke kapılarının HEPSİNDE görünmez kılıyordu.
+_TABLO_ADI = r'(?:"?public"?\s*\.\s*)?"?([a-z_0-9]+)"?'
+_CREATE_TABLE = re.compile(
+    r"create\s+(?:(?:global\s+|local\s+)?(?:temporary|temp)\s+|unlogged\s+)?table\s+(?:if\s+not\s+exists\s+)?"
+    + _TABLO_ADI,
+    re.I,
+)
+_RLS_AC = re.compile(
+    r"alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?" + _TABLO_ADI + r"\s+enable\s+row\s+level\s+security", re.I
+)
+
+
 def test_her_tabloda_rls_acik(sql_bodies):
     """RLS kapalı bir tablo, uygulamaya gömülü `anon` anahtarıyla doğrudan okunur/yazılır."""
     for name, body in sql_bodies.items():
         low = body.lower()
-        tables = set(re.findall(r"create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?([a-z_0-9]+)", low))
-        rls = set(re.findall(r"alter\s+table\s+(?:public\.)?([a-z_0-9]+)\s+enable\s+row\s+level\s+security", low))
+        tables = set(_CREATE_TABLE.findall(low))
+        rls = set(_RLS_AC.findall(low))
         eksik = tables - rls
         assert not eksik, (
             f"{name}: RLS ACILMAMIS tablo(lar): {sorted(eksik)} — uygulamaya gomulu anon "
@@ -111,7 +124,8 @@ _FONKSIYON_NESNESI = re.compile(
     r"(?:function|procedure|routine)s?\b|all\s+(?:functions|procedures|routines)\s+in\s+schema\b", re.I
 )
 _TABLO_DISI_NESNE = re.compile(
-    r"(?:sequence|schema|type|domain|foreign|language|large|database|tablespace)\b|all\s+sequences\s+in\s+schema\b",
+    r"(?:sequence|schema|type|domain|foreign\s+(?:data\s+wrapper|server)|language|large|database|tablespace)\b"
+    r"|all\s+sequences\s+in\s+schema\b",
     re.I,
 )
 
@@ -160,10 +174,7 @@ def yetki_ifadeleri(govde: str) -> list[tuple[str, str, list[str], set[str]]]:
 def _tum_tablolar(sql_bodies: dict[str, str]) -> set[str]:
     tablolar: set[str] = set()
     for body in sql_bodies.values():
-        tablolar |= {
-            t.lower()
-            for t in re.findall(r"create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?([a-z_0-9]+)", body, re.I)
-        }
+        tablolar |= {t.lower() for t in _CREATE_TABLE.findall(body)}
     return tablolar
 
 
@@ -174,7 +185,10 @@ def _dogrudan_tablo_yetkisi_ihlalleri(sql_bodies: dict[str, str]) -> list[str]:
     for ad, govde in sorted(sql_bodies.items()):
         for tur, sinif, adlar, roller in yetki_ifadeleri(govde):
             yasak = roller & _YASAK_ROLLER
-            hedef = [n for n in adlar if n == "*" or n in tablolar]
+            # 4-A inc. 4A-2.1: hedef depoda `create table` ile bulunan tablolarla SINIRLANMAZ — `on [table] <ad>` biçimi
+            # tablo, görünüm (sahip yetkisiyle okur → RLS baypas), materialized view (RLS YOK), foreign table ve depoda
+            # create'i olmayan (panelden kurulmuş) tabloyu kapsar; hepsine anon/authenticated grant'ı aynı sızıntıdır.
+            hedef = list(adlar)
             if tur == "grant" and sinif == "tablo" and yasak and hedef:
                 ihlaller.append(
                     f"{ad}: {hedef} tablo(lar)ina DOGRUDAN grant -> {sorted(yasak)}. RPC disi erisim RLS/device_id "
