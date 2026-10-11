@@ -132,7 +132,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 | [`firmware/`](firmware/README.md) | STM32F429 bobin-sürücü firmware'i (`main.c`, yazılım DDS PWM + güvenlik watchdog) |
 | [`tests/`](tests/README.md) | pytest paketi (358 dosya / 3303 test — ölçüm 2026-09-22, güncel sayı için `pytest --collect-only -q`; protokol-güvenlik, auth, KVKK, seans, OTA, CI-kapıları) |
 | [`tools/`](tools/README.md) | Geliştirici araçları (STM32 simülatör :5100, COM sniffer, test-verisi) |
-| [`.github/`](.github/README.md) | CI (tests/lint/security/**frontend/site**/linux-mac backend/launcher/testflight) + dependabot — **yalnız KÖK `.github/` geçerli** |
+| [`.github/`](.github/README.md) | CI (tests/lint/security/**frontend/site**/linux-mac backend/launcher) + dependabot — **yalnız KÖK `.github/` geçerli** (TestFlight iş akışı arşivli, S-4B.4) |
 | [`docs/`](docs/README.md) | Dokümanlar (mimari, launcher-sözleşmesi, runbook, doğrulama, sistem-raporu) + ekran görüntüleri |
 | `apple-mac-cert/` | **YEREL** (git'te izlenmez, gitignore'lu — kapı ölçer) — ⚠️ Apple kod-imzalama/notarization materyali (SIR — rotate gerekir) |
 | [`dema-terapi-simülatörü/`](dema-terapi-simülatörü/README.md) | Bağımsız demo terapi simülatörü (React+Vite; backend'e bağlı değil) |

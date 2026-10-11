@@ -14,7 +14,7 @@ GitHub Actions iş akışları + bağımlılık güncelleme. Her workflow kendi 
 | `workflows/linux-backend.yml` | PyInstaller onedir → `base-linux.zip` (tag `backend-linux-v*`) |
 | `workflows/mac-backend.yml` | `build_mac.sh` (`macos-14`, arm64) → `base-mac.zip` + Rust E2E artifact testi |
 | `workflows/launcher.yml` | Tauri launcher (mac/Win/Linux); macOS **kod-imzala + notarize/staple** (`APPLE_*` secrets) |
-| `workflows/upload-testflight.yml` | `xcrun altool` ile IPA → TestFlight (branch `upload-testflight`) |
+| ~~`workflows/upload-testflight.yml`~~ | **ARŞİVLENDİ** (S-4B.4, 2026-10-11): test süitini koşturmadan sırlarla TestFlight'a yükleyen, Y30 DIŞI dağıtım yolu; dalı 2026-08-18'de arşivlenmişti, yüklediği `.ipa` izlenmiyordu. Geri: `git show 83ee5d12:.github/workflows/upload-testflight.yml`. Kapı: dış dağıtım işi pytest/Y30 işine `needs:` ile bağlı olmalı (`tests/test_ci_DIS_DAGITIM_isi_TEST_onkosullu_S4B4.py`) |
 | `workflows/supabase-ping.yml` | **Supabase hareketsizlik koruması**: günlük cron (`03:17 UTC`) `resolve_device` RPC'siyle Free-plan projeyi uyanık tutar (~7-gün otomatik durdurmayı önler). 3 denemede de 5xx/540 → iş KIRMIZI = "girişler çökmek üzere" erken uyarısı. Yalnız varsayılan dalda koşar |
 
 ## Not
