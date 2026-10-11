@@ -868,10 +868,23 @@ def get_secret(key: str, default: str = "", generate: bool = True) -> str:
                 logger.error(
                     "Sır çözülemedi (%s): %s — mevcut şifreli değer KORUNUYOR, üretilmiyor (brick koruması).", key, e
                 )
+                # ⚠️ 4B-1.6: Linux/Docker'da "makine" = kimlik dosyası (D4.12: compose `pemf_kimlik` birimi). `pemf_secrets.json`
+                # veri biriminde ve AYNI kimlikle sarılı — onu geri yüklemek ÇÖZMEZ; doğru yol kimlik birimini geri yüklemektir.
+                # (macOS IOPlatformUUID kullanır — machine-id ipucu orada yanlış olurdu.)
+                import platform as _pf
+
+                _linux_ipucu = (
+                    ""
+                    if _is_windows() or _pf.system() == "Darwin"
+                    else (
+                        f" Linux/Docker: makine kimliği {', '.join(MAKINE_KIMLIGI_YOLLARI)} — kimlik birimini (compose: "
+                        "pemf_kimlik) veri birimiyle BİRLİKTE geri yükleyin."
+                    )
+                )
                 raise RuntimeError(
                     f"Depolanmış sır '{key}' çözülemedi (DPAPI/makine/profil değişmiş olabilir). "
                     f"Var olan şifreli veriyi korumak için yeni anahtar ÜRETİLMEDİ ve dosya EZİLMEDİ. "
-                    f"Doğru makineyi kullanın veya pemf_secrets.json yedeğinden geri yükleyin."
+                    f"Doğru makineyi kullanın veya pemf_secrets.json yedeğinden geri yükleyin.{_linux_ipucu}"
                 ) from e
         # 1) eski kaynaktan MİGRATE (her zaman — mevcut DB anahtarı korunur)
         val = ""

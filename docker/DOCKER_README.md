@@ -77,6 +77,7 @@ Kalıcı istersen `docker-compose.yml`'de her iki servise ekle:
 2. **AI modelleri image'a GÖMÜLMEZ** (2 GB+). `release_assets/ai_models` host'tan `/models` olarak bağlanır (compose'da), `PEMF_AI_MODELS_DIR=/models`. Modellerin orada olması gerekir (bu repoda var).
    - *WSL notu:* `/mnt/c/...` (Windows FS) bind-mount yavaş olabilir; hız istenirse modeller bir Docker volume'e kopyalanabilir.
 3. **DB (SQLCipher) + loglar** → `pemf_data` adlı kalıcı volume (`/data`). Konteyner silinse de kalır.
+   - ⚠️ **Makine kimliği** → `pemf_kimlik` adlı kalıcı volume (`/var/lib/dbus`; mikroservis profilinde `pemf_micro_data` + `pemf_micro_kimlik`). Kritik sırlar (SQLCipher anahtarı) bu kimlikle sarılır (D4.12). `pemf_data` ile `pemf_kimlik`'i **BİRLİKTE** yedekleyin/taşıyın; yalnız veri birimi geri yüklenir ya da `pemf_kimlik` silinirse backend fail-closed **açılmaz** (yeni anahtar üretilmez, şifreli veri EZİLMEZ; ama kimlik yedeği olmadan bu birimle AÇILAMAZ) — kurtarma: kimlik biriminin yedeğini geri yükleyin. `pemf_secrets.json`'u geri yüklemek ÇÖZMEZ (o da veri biriminde ve aynı kimlikle sarılı). `docker compose down -v` ikisini birden siler. Host'un `/etc/machine-id`'sini konteynere BAĞLAMAYIN (kimlik o olur; bağ kalkınca sırlar çözülmez).
 4. **requirements ayrımı bilerek:** lokal Windows build sürüm-kilitli kalsın, Docker'daki farklar ana sistemi bozmasın diye.
 5. **Server modu:** `--no-headless-services` (mosquitto/UDP-keşif kapalı), `PEMF_REQUIRE_AUTH=1`, `PEMF_ENCRYPT_AT_REST=1`. Klinik/donanım için bu image DEĞİL — o hâlâ Windows servis/EXE.
 
