@@ -32,8 +32,15 @@ MAKE_BASE_ZIP = KOK / "build_tools" / "make_base_zip.py"
 MAKE_MANIFEST = KOK / "scripts" / "make_manifest.py"
 CANLI_MANIFEST = KOK / "pemf-app-packages" / "manifest.json"
 
-#: Monoliti GÜNCEL ürün gibi anlatabilecek belgeler (plan D4.32 dosya listesi).
-BELGELER = ("README.md", "BUILD.md", "build_tools/README.md", "pemf-app-packages/README.md", "scripts/bootstrap.ps1")
+#: Monoliti GÜNCEL ürün gibi anlatabilecek belgeler (plan D4.32 dosya listesi + 4B-2.3: istemcinin ne indirdiğini anlatan launcher README).
+BELGELER = (
+    "README.md",
+    "BUILD.md",
+    "build_tools/README.md",
+    "pemf-app-packages/README.md",
+    "scripts/bootstrap.ps1",
+    "launcher/README.md",
+)
 #: `base.zip` belirteci — `base-app.zip` / `base-deps.zip` / `base-mac.zip` / `base-linux.zip` DEĞİL.
 _BELIRTEC = re.compile(r"(?<![-\w.])base\.zip")
 #: Bu işaretlerden biri satırda yoksa `base.zip` güncel dağıtım birimi gibi okunur.
