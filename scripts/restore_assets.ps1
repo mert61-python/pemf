@@ -7,6 +7,7 @@
 #
 #   git'te      : kaynak kod + yayinda kopyasi OLMAYAN 11 kucuk model dosyasi (6 MB)
 #   Releases'te : buyuk agirliklar (2,1 GB) — home.zip / vet.zip / research.zip icinde
+#                 + manifest `model_parts` parcalari (research-2.zip: iki buyuk PT; D4.16'dan beri bu betik onlari da getirir)
 #
 # Bu betik ikinci yarisini geri getirir. Yeni/bos bir makinede sira:
 #     1) bu klasoru (ya da `git clone`) getir
@@ -120,6 +121,40 @@ foreach ($p in $Profiller) {
   Expand-Archive -Path $zip -DestinationPath (Join-Path $Kok "release_assets") -Force:$Force
   $toplam += $girdi.size
   Remove-Item $zip -Force
+}
+
+# --- PROFIL PARCALARI (D4.16 / B-9.24): manifest `model_parts.<profil>` ---------------------------------
+# FAZ 4.5'ten (2026-08-26) beri arastirma profilinin iki buyuk PT'si (renal XAI + Yara-Kapanma, ~1,7 GB) 2 GiB
+# release sinirina sigmadigi icin research.zip'te DEGIL, ayri parca zip'inde (research-2.zip) gider. Bu betik onlari
+# HIC getirmiyordu: belgelenen sirayla kurulan derleme makinesi PT'siz EXE/installer uretir (renal XAI ve in-process
+# Yara-Kapanma sahada olur) ve betik yine "Geri yuklendi" derdi. Ayni kurallar: sha256 ZORUNLU, uyusmazsa kurulum
+# IPTAL. Parcalar ana zip'ten SONRA, liste sirasiyla acilir (launcher ile ayni sira). Ad sozlesmesi: <profil>-<n>.zip, n>=2.
+# Kilit: tests/test_restore_assets_MODEL_PARCALARI_D416.py
+foreach ($p in $Profiller) {
+  if (-not $manifest.profiles.$p) { continue }  # ana profil yoksa parcasi da yok (yukarida uyarildi)
+  $parcalar = if ($manifest.model_parts -and $manifest.model_parts.$p) { @($manifest.model_parts.$p) } else { @() }
+  $n = 2
+  foreach ($parca in $parcalar) {
+    $ad = "$p-$n"
+    if (-not $parca -or -not $parca.url -or -not $parca.sha256) {
+      throw "[$ad] manifest model_parts girdisi eksik (url/sha256) - kurulum iptal."
+    }
+    $zip = Join-Path $gecici "$ad.zip"
+    $mb = [math]::Round($parca.size / 1MB)
+    Write-Host "[$ad] parca indiriliyor ($mb MB)..." -NoNewline
+    Invoke-WebRequest -Uri $parca.url -OutFile $zip -TimeoutSec 3600
+    Write-Host " tamam"
+    $sha = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+    if ($sha -ne $parca.sha256) {
+      Remove-Item $zip -Force
+      throw "[$ad] SHA256 UYUSMUYOR (beklenen $($parca.sha256), gelen $sha) - indirme bozuk, kurulum iptal."
+    }
+    Write-Host "[$ad] sha256 dogrulandi"
+    Expand-Archive -Path $zip -DestinationPath (Join-Path $Kok "release_assets") -Force:$Force
+    $toplam += $parca.size
+    Remove-Item $zip -Force
+    $n++
+  }
 }
 
 # --- CEKIRDEK MODEL (2. tur [3.5]): profil zip'lerinin HICBIRINDE yok — deps katmanindan gelir.

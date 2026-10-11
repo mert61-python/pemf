@@ -84,7 +84,7 @@ ya da 100 MiB üstü bir dosya git'e girerse test kırılır.
 git clone https://github.com/mert61-python/pemf.git guii
 cd guii
 .\scripts\bootstrap.ps1                  # toolchain (Node/Rust/MSVC/JDK/Android/Inno/gh)
-.\scripts\restore_assets.ps1     # AI model ağırlıkları (Releases'ten, SHA256 doğrulamalı)
+.\scripts\restore_assets.ps1     # AI model ağırlıkları (Releases'ten, SHA256 doğrulamalı; model_parts parçaları dahil — D4.16)
 .\scripts\build_backend_exe.ps1  # artık derlenebilir
 ```
 
