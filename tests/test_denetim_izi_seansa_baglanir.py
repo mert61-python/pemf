@@ -121,6 +121,32 @@ def test_KRITIK_audit_ref_MASKE_ACIKKEN_de_seansa_baglanir(tmp_path, monkeypatch
     assert degerler.get("audit_ref") == ref, f"audit_ref MASKELENDI → denetim izi seansa baglanamaz: {degerler}"
 
 
+def test_KRITIK_SIFRELI_DB_de_maske_bayragi_ACIKKEN_PII_ve_audit_ref_AYNEN_yazilir(tmp_path, monkeypatch):
+    """4-A inc. 4A-2.13 — maskenin ŞİFRELİ kolu: `at_rest_encrypted=True` iken `_redact_pii` değeri AYNEN yazar
+    (`PEMF_MASK_HISTORY_PII=1` olsa bile; whole-DB SQLCipher birincil koruma). Bu kol hiçbir testte ölçülmüyordu: şifre ve
+    maske denetiminin sırası değişince (şifreli DB'de de maskele) PII kümesi 308/308 yeşildi — üretimde bayrak açılırsa gerçek
+    adlar geri DÖNÜLEMEZ biçimde maskelenirdi."""
+    from database.treatment_history_db import TreatmentHistoryDB
+
+    monkeypatch.setenv("PEMF_MASK_HISTORY_PII", "1")
+    db = TreatmentHistoryDB(tmp_path)
+    monkeypatch.setattr(db, "at_rest_encrypted", True)
+    sid = db.start_session(treatment_mode="Manuel", target_condition="test", patient_name="Pamuk")
+    ref = "react_1786734864491_7"
+    assert db.set_session_parameter(sid, "audit_ref", ref, "")
+    assert db.set_session_parameter(sid, "patient_name", "Pamuk", "")
+    with db._get_connection() as conn:
+        degerler = dict(
+            conn.execute(
+                "SELECT parameter_name, parameter_value FROM session_parameters WHERE session_id=? "
+                "AND parameter_name IN ('audit_ref','patient_name')",
+                (sid,),
+            ).fetchall()
+        )
+    assert degerler.get("patient_name") == "Pamuk", f"ŞİFRELİ DB'de PII MASKELENDİ (geri dönülemez kayıp): {degerler}"
+    assert degerler.get("audit_ref") == ref, degerler
+
+
 if __name__ == "__main__":
     import os
 
