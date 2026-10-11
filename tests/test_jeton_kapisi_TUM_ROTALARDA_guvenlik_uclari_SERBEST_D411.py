@@ -119,3 +119,78 @@ def test_KARSIT_KANIT_analiz_uclari_402_alir_ve_kapili_her_rota_ai_altinda(http_
     assert kapi("/api/ai/vision/kidney_ct") == ("kapili:402", ["bakiye_oku"]), kapi("/api/ai/vision/kidney_ct")
     assert len(kapili) >= 10, f"VAKUM: yalniz {len(kapili)} kapili rota: {sorted(kapili)}"
     assert all(y.startswith("/api/ai/") for y in kapili), f"ai_router disi kapili rota: {sorted(kapili)}"
+
+
+# ── 4A-1.1 (A1 incelemesi, 2026-10-11): `/api/ai/` altına YARIN eklenecek bir durdurma ucu ───────────────────────────
+# ÖLÇÜLDÜ: `@ai_router.post("/api/ai/pro/acil_durdur")` eklenip route contract güncellenince yukarıdaki dört test YEŞİL
+# kalıyordu (güvenlik uçları SABİT 6 yol; `/api/ai/` altındaki yeni rota varsayılan "goruntu" sınıfına düşer ve KARŞIT
+# testi onu doğru sayar), oysa uç bayrak açık + bakiye 0 iken GERÇEK `jeton_gate`le 402 alıp bakiye için ağa çıkıyordu.
+#: Adında durdurma / acil anlamı taşıyan yol parçaları (TEST SABİTİ — jeton.py'den okunmaz).
+_DURDURMA_PARCALARI = frozenset(
+    {"stop", "estop", "durdur", "acil", "emergency", "iptal", "cancel", "abort", "halt", "kill", "bitir", "sonlandir"}
+)
+#: `jeton_gate` taşıyan HER rotanın BİLİNÇLİ sınıfı (None = serbest). Yeni bir ai_router rotası "durdurma mı, analiz mi?"
+#: kararı verilip buraya eklenmeden bu kapı KIRMIZI — karar varsayılan "goruntu" sınıfına bırakılmaz.
+_JETONLU_ROTA_SINIFI = {
+    "/api/ai/ai_pro/frame": None,
+    "/api/ai/hazirlik": None,
+    "/api/ai/pro/approve": None,
+    "/api/ai/pro/calibrate": None,
+    "/api/ai/pro/hazirlik/baslat": None,
+    "/api/ai/pro/hazirlik/durdur": None,
+    "/api/ai/pro/organ": None,
+    "/api/ai/pro/reject": None,
+    "/api/ai/pro/status": None,
+    "/api/ai/pro/stop": None,
+    "/api/ai/pro/start": "ai_pro_seans",
+    "/api/ai/pro/propose": "sensor",
+    "/api/ai/rna/kidney": "agir_arastirma",
+    "/api/ai/vision/histopath": "agir_arastirma",
+    "/api/ai/vision/kidney_ct": "agir_arastirma",
+    "/api/ai/vision/scratch": "agir_arastirma",
+    "/api/ai/sound/cat": "ses",
+    "/api/ai/disease": "goruntu",
+    "/api/ai/disease/kidney": "goruntu",
+    "/api/ai/vision/cat_organ": "goruntu",
+    "/api/ai/vision/em_fantom": "goruntu",
+    "/api/ai/vision/em_petri": "goruntu",
+    "/api/ai/vision/landmark": "goruntu",
+    "/api/ai/vision/reticulocytes": "goruntu",
+    "/api/ai/vision/segmentation": "goruntu",
+    "/api/ai/vision/thermal": "goruntu",
+}
+
+
+def _durdurma_anlamli(yol: str) -> bool:
+    return bool(set(re.split(r"[/_\-{}.]+", yol.lower())) & _DURDURMA_PARCALARI)
+
+
+def test_KRITIK_adinda_DURDURMA_anlami_olan_HER_rota_SERBEST_ag_SIFIR(http_rotalari, kapi):
+    durdurma = [y for y in http_rotalari if _durdurma_anlamli(y)]
+    assert {"/api/hardware/emergency_stop", "/api/session/stop", "/api/ai/pro/stop"} <= set(durdurma), durdurma
+    sorunlu = {yol: kapi(yol) for yol in durdurma if kapi(yol) != ("serbest", [])}
+    assert not sorunlu, (
+        f"adında durdurma/acil anlamı olan rota(lar) jeton kapısında ücretli ya da ağa çıkıyor: {sorunlu} — "
+        "`_SERBEST_AI_UCLARI`na ekleyin (Ö.4-Y8: ACİL DURDUR / STOP jetona kapılanmaz)"
+    )
+
+
+def test_KRITIK_jeton_gate_tasiyan_HER_rota_BILINCLI_siniflandirilmis(kapi):
+    from servers.api_server import app
+
+    jetonlu = {
+        r.path
+        for r in app.routes
+        if isinstance(r, APIRoute)
+        and "jeton_gate" in [getattr(d.call, "__name__", "") for d in r.dependant.dependencies]
+    }
+    assert len(jetonlu) >= 20, f"VAKUM: yalniz {len(jetonlu)} jeton_gate'li rota"
+    yeni = sorted(jetonlu - set(_JETONLU_ROTA_SINIFI))
+    assert not yeni, (
+        f"sınıflandırılmamış jeton_gate'li rota(lar): {yeni} — durdurma/tedavi ise `_SERBEST_AI_UCLARI`na, analiz ise "
+        "MALIYET sınıfına BİLİNÇLİ olarak koyun ve `_JETONLU_ROTA_SINIFI`na ekleyin (varsayılan 'goruntu' ücretlidir)"
+    )
+    farkli = {
+        y: (kapi.modul._islem_turu(y), s) for y, s in _JETONLU_ROTA_SINIFI.items() if kapi.modul._islem_turu(y) != s
+    }
+    assert not farkli, f"jeton sınıfı değişti (gerçek, beklenen): {farkli}"
