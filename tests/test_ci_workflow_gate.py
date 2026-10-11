@@ -254,7 +254,8 @@ def test_permissions_SALT_OKUR(dosya):
 # kabul edilir ve KULLANILMAYAN izin satırı da kırmızıdır (izin listesi bayatlayıp genişlemesin).
 
 #: Run satırında hatayı YUTAN biçimler. `|| KOD=$?` gibi kodu yakalayıp yeniden çıkan biçim yutma DEĞİLDİR.
-_YUTMA = re.compile(r"\|\|\s*(true|:|exit\s+0|echo)\b")
+# ⚠️ 4-A inc. 4A-2.7: eski desen `(…|:|…)\b` idi — `:`dan sonra satır sonu/boşluk gelince `\b` HİÇ eşleşmez (`|| :` KAÇIYORDU).
+_YUTMA = re.compile(r"\|\|\s*(true|:|exit\s+0|echo|/bin/true)(?![\w/-])")
 #: `if:` için sabit-yanlış değerler (iş/adım hiç koşmaz).
 _SABIT_YANLIS = re.compile(r"^\s*(false|0|\$\{\{\s*(false|0)\s*\}\})\s*$", re.I)
 
@@ -347,10 +348,26 @@ def test_KRITIK_bloklayici_isin_ASIL_adimi_VAR_ve_KOSAR(dosya, is_adi):
     asil = [a for a in is_.get("steps") or [] if parca in (str(a.get("run", "")) + " " + str(a.get("uses", "")))]
     assert asil, f"{dosya}/{is_adi}: '{parca}' adımı YOK"
     for a in asil:
-        bicim = _bloklamayan(a.get("continue-on-error"), a.get("if")) + [
-            "|| " + m for m in _YUTMA.findall(str(a.get("run", "")))
-        ]
+        bicim = (
+            _bloklamayan(a.get("continue-on-error"), a.get("if"))
+            + ["|| " + m for m in _YUTMA.findall(str(a.get("run", "")))]
+            + _asil_komut_kabuk_sorunlari(str(a.get("run", "")))
+        )
         assert not bicim, f"{dosya}/{is_adi}: asıl adım '{_adim_adi(a)}' bloklamıyor: {bicim}"
+
+
+def _asil_komut_kabuk_sorunlari(run: str) -> list[str]:
+    """4-A inc. 4A-2.7: asıl komutun çıkış kodunu KABUK yutabilir. GitHub varsayılanları: Linux `bash -e {0}` (pipefail YOK →
+    `pytest | tee` teenin koduyla biter), Windows pwsh yalnız SON native komutun `$LASTEXITCODE`'una bakar (`pytest` ardından
+    `python -m coverage xml` → yeşil), `set +e` / özel `shell: bash {0}` (-e yok) çok satırda aynı. Asıl adım TEK satır ve
+    borusuz olmalı (bugünkü bütün asıl adımlar öyle — envanter ölçüldü)."""
+    satirlar = [s for s in run.splitlines() if s.strip() and not s.strip().startswith("#")]
+    sorun = []
+    if len(satirlar) > 1:
+        sorun.append(f"cok-satirli-asil-adim ({len(satirlar)} satir: kabuk ara komutun kodunu yutabilir)")
+    if any(re.search(r"(?<!\|)\|(?!\|)", s) for s in satirlar):
+        sorun.append("boru (`|`): varsayilan bash'te pipefail yok")
+    return sorun
 
 
 def test_KRITIK_Windows_ratchet_adimi_KAPSAMI_OLCER():
