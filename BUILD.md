@@ -354,9 +354,11 @@ Sonra `apps/ui\dist`'i iki yere **mirror**'la (robocopy /MIR):
 ## 6. Yayınlama (GitHub Releases + Vercel)
 
 ```powershell
-# 0) manifest'i URET (surum-basina etiketle): sha DEGISMEYEN paketlerin URL'si korunur ve
+# 0) Y30 + manifest — TEK betik (4-A devri #4): ONCE yayin oncesi ZORUNLU tam suit; GECMEZSE manifest YAZILMAZ
+#    (atlama anahtari YOK). Sonra manifest'i URET (surum-basina etiketle): sha DEGISMEYEN paketlerin URL'si korunur ve
 #    "URL KORUNDU" satiriyla bildirilir → onlar YENIDEN YUKLENMEZ (eski etiketlerinde durur).
-python scripts\make_manifest.py --dir pemf-app-packages --tag client-app-v<sürüm> ...
+#    ⚠️ `-ManifestArgs:` iki noktali yazilir (deger `--` ile basliyor). make_manifest'i DOGRUDAN cagirmak Y30'u ATLAR.
+pwsh -File scripts\katmanli_yayin_hazirla.ps1 -ManifestArgs:"--dir,pemf-app-packages,--version,<sürüm>,--tag,client-app-v<sürüm>,--repo,mert61-python/pemf-update"
 # 1) ONCE paketler → client-app-v<sürüm> ETIKETI  (siradan surumde YALNIZ base-app.zip degisir)
 #    ⚠️ 2. TUR DENETIMI [3.4] (2026-08-20): burasi eskiden SABIT client-app-v1.8.0 diyordu —
 #    1.9.16'dan beri paket URL'leri SURUM-BASINA etikete yazilir; v1.8.0'a yuklenen paket
