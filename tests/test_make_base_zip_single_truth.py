@@ -187,6 +187,43 @@ def test_KRITIK_BAYAT_base_zip_BETIGIN_dogrulamasini_DUSURUR(tmp_path, ortam):
     )
 
 
+def _ad_degistir(base_zip: Path) -> None:
+    """base.zip'i "eski build" hâline getir: İÇERİK aynı, bir dosyanın ADI farklı (eski build'de başka adla duruyordu)."""
+    ham = {}
+    with zipfile.ZipFile(base_zip) as z:
+        for n in z.namelist():
+            ham[n] = z.read(n)
+    ham["PEMF_Backend/_internal/torch/lib_eski.dll"] = ham.pop("PEMF_Backend/_internal/torch/lib.dll")
+    with zipfile.ZipFile(base_zip, "w", zipfile.ZIP_STORED, allowZip64=True) as z:
+        for n in sorted(ham):
+            z.writestr(n, ham[n])
+
+
+def test_KRITIK_BAYAT_base_zip_AD_farki_BETIGIN_dogrulamasini_DUSURUR(tmp_path, ortam):
+    """4A-3.5 (A3 incelemesi): `_monolith_esit`in AD kolu — içerik (CRC çoklu kümesi) aynı, ad listesi farklı bayat base.zip.
+    Karşılaştırma yalnız CRC değerlerine inerse (adlar yok sayılırsa) eski testler yeşil kalıyordu."""
+    dist, cikti = ortam
+    assert _calistir(dist, cikti=cikti).returncode == 0
+    _ad_degistir(cikti / "base.zip")
+    r = _monolith_yerine_oturmadan_kos(tmp_path, dist, cikti)
+    assert r.returncode == 1, f"ad farkli bayat base.zip ile betik GECTI (rc={r.returncode})\n{r.stdout[-1500:]}"
+    assert "[FAIL] base.zip == app+deps" in r.stdout and "VALIDATION: FAIL" in r.stdout, r.stdout[-1500:]
+    assert "yalniz katmanlarda" in r.stdout and "PEMF_Backend/_internal/torch/lib.dll" in r.stdout, r.stdout[-1500:]
+    assert "yalniz base.zip'te" in r.stdout and "lib_eski.dll" in r.stdout, r.stdout[-1500:]
+
+
+def test_KRITIK_BOZUK_bayat_base_zip_karsilastirilamazsa_FAIL(tmp_path, ortam):
+    """4A-3.5 (A3 incelemesi): `_monolith_esit`in fail-closed kolu — diskte kalan bayat base.zip BOZUK (açılamıyor) →
+    karşılaştırma yapılamadı → FAIL. Kol `return True`ya dönerse eski testler yeşil kalıyordu."""
+    dist, cikti = ortam
+    assert _calistir(dist, cikti=cikti).returncode == 0
+    (cikti / "base.zip").write_bytes(b"PK\x03\x04 bozuk - yarim kalmis eski indirme")
+    r = _monolith_yerine_oturmadan_kos(tmp_path, dist, cikti)
+    assert r.returncode == 1, f"BOZUK bayat base.zip ile betik GECTI (rc={r.returncode})\n{r.stdout[-1500:]}"
+    assert "monolith karsilastirmasi yapilamadi" in r.stdout, r.stdout[-1500:]
+    assert "[FAIL] base.zip == app+deps" in r.stdout and "VALIDATION: FAIL" in r.stdout, r.stdout[-1500:]
+
+
 def test_KARSIT_KANIT_ayni_sarmal_TAZE_base_zip_ile_GECER(tmp_path, ortam):
     """Ölçücü kör değil: aynı sarmalayıcı (monolith yerine oturmaz) diskteki TAZE base.zip ile [OK] ve çıkış 0 verir."""
     dist, cikti = ortam
