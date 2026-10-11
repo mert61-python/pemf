@@ -119,7 +119,8 @@ def _paketleri_koy(dizin: Path, monolit: bool) -> None:
     with zipfile.ZipFile(dizin / "base-linux-app.zip", "w", zipfile.ZIP_STORED) as z:
         for ad, veri in (("PEMF_Backend/PEMF_Backend", b"APP"), ("PEMF_Backend/_app_roots.json", b'{"roots": []}')):
             z.writestr(zipfile.ZipInfo(ad, date_time=(1980, 1, 1, 0, 0, 0)), veri)
-    (dizin / "base-linux-deps.zip").write_bytes(b"DEPS")
+    with zipfile.ZipFile(dizin / "base-linux-deps.zip", "w", zipfile.ZIP_STORED) as z:  # 4B-2.2: açılabilir deps
+        z.writestr(zipfile.ZipInfo("PEMF_Backend/_internal/deps.bin", date_time=(1980, 1, 1, 0, 0, 0)), b"DEPS")
     (dizin / "vet.zip").write_bytes(b"VET")
     if monolit:
         (dizin / "base-linux.zip").write_bytes(b"MONO")

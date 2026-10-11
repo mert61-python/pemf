@@ -248,7 +248,8 @@ def test_KARSIT_acik_dusurme_bayragi_kayip_kapisini_ATLAR(tmp_path, bayrak):
     with zipfile.ZipFile(tmp_path / "base-app.zip", "w") as z:
         z.writestr("PEMF_Backend/PEMF_Backend.exe", b"EXE")
         z.writestr("PEMF_Backend/_app_roots.json", b"{}")
-    (tmp_path / "base-deps.zip").write_bytes(b"DEPS")
+    with zipfile.ZipFile(tmp_path / "base-deps.zip", "w") as z:  # 4B-2.2: deps katmanı da açılabilir zip olmalı
+        z.writestr("PEMF_Backend/_internal/deps.bin", b"DEPS")
     onceki = {
         **ONCEKI,
         "model_parts": {"vet": [{"url": "https://x/vet-2.zip", "sha256": "f" * 64, "size": 9, "kind": "zip"}]},

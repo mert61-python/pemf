@@ -103,14 +103,30 @@ def app_katmani_eksikleri(path: Path, plat: str) -> list[str]:
     """Kurulabilir bir app katmanında olması gerekenlerden EKSİK olanlar (boş liste = tamam)."""
     try:
         with zipfile.ZipFile(path) as z:
-            adlar = {i.filename.replace("\\", "/") for i in z.infolist()}
+            adlar = {i.filename.replace("\\", "/"): i.file_size for i in z.infolist()}
             bozuk = z.testzip()  # app katmanı küçük (~71 MB); yarım yazılmış/bozuk girdi burada görünür
     except (zipfile.BadZipFile, OSError, EOFError) as e:
         return [f"zip acilamadi ({e.__class__.__name__}: {e})"]
     eksik = [ad for ad in APP_ASGARI_YAPI[plat] if ad not in adlar]
+    ikili = APP_ASGARI_YAPI[plat][0]
+    if adlar.get(ikili) == 0:
+        eksik.append(f"{ikili} 0 BAYT")  # 4B-2.2: bos ikili de kurulamaz
     if bozuk is not None:
         eksik.append(f"BOZUK girdi: {bozuk}")
     return eksik
+
+
+def deps_katmani_eksikleri(path: Path) -> list[str]:
+    """4B-2.2: deps katmanı en azından AÇILABİLİR bir zip mi (merkezi dizin + en az bir girdi)?
+
+    testzip YOK (~1,2 GB; içerik bütünlüğü `make_base_zip`'in .tmp doğrulamasında) — 0 bayt / kesik / zip olmayan dosya
+    burada görünür. Mühürlenen sha yüklenenle aynı olacağı için launcher'ın sha denetimi geçer, AÇMA düşerdi."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            n = len(z.infolist())
+    except (zipfile.BadZipFile, OSError, EOFError) as e:
+        return [f"zip acilamadi ({e.__class__.__name__}: {e})"]
+    return [] if n else ["BOS zip (girdi yok)"]
 
 
 def sha256(path: Path) -> str:
@@ -197,8 +213,8 @@ def main() -> int:
     kurulamaz = []
     for _ad, (_plat, _katman) in LAYER_ASSETS.items():
         _yol = args.dir / _ad
-        if _katman == "app" and _yol.exists():
-            _eksik = app_katmani_eksikleri(_yol, _plat)
+        if _yol.exists():
+            _eksik = app_katmani_eksikleri(_yol, _plat) if _katman == "app" else deps_katmani_eksikleri(_yol)
             if _eksik:
                 kurulamaz.append((_ad, _eksik))
     if kurulamaz:

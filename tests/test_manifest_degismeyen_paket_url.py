@@ -61,6 +61,10 @@ def _paket_yaz(dizin: Path, ad: str, icerik: bytes) -> None:
     if ad.endswith("-app.zip"):  # app katmanı gerçek, kurulabilir zip olmalı (D4.31)
         _app_zip(dizin / ad, icerik)
         return
+    if ad.endswith("-deps.zip"):  # 4B-2.2: deps katmanı da AÇILABİLİR zip olmalı (sabit tarih → aynı içerik aynı sha)
+        with zipfile.ZipFile(dizin / ad, "w", zipfile.ZIP_STORED) as z:
+            z.writestr(zipfile.ZipInfo("PEMF_Backend/_internal/deps.bin", date_time=(1980, 1, 1, 0, 0, 0)), icerik)
+        return
     (dizin / ad).write_bytes(icerik)
 
 

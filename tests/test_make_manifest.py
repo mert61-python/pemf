@@ -47,6 +47,13 @@ ONCEKI = {
 }
 
 
+def _deps_zip(yol: Path, isaret: bytes) -> None:
+    """4B-2.2: make_manifest deps katmanının AÇILABİLİR zip olmasını ister — sahte deps de gerçek küçük zip (sabit tarih → aynı
+    işaret aynı sha)."""
+    with zipfile.ZipFile(yol, "w", zipfile.ZIP_STORED) as z:
+        z.writestr(zipfile.ZipInfo("PEMF_Backend/_internal/deps.bin", date_time=(1980, 1, 1, 0, 0, 0)), isaret)
+
+
 def _app_zip(yol: Path, isaret: bytes, ikili: str = "PEMF_Backend/PEMF_Backend.exe") -> None:
     """D4.31 (B-9.4): make_manifest app katmanının KURULABİLİR olmasını ister (platform ikilisi + `_app_roots.json`, sağlam
     zip) — eskiden zip OLMAYAN `b"APP"` baytları mühürleniyordu. Sahte paket gerçek küçük bir zip'tir; `isaret` ikilinin
@@ -130,13 +137,16 @@ def test_aciklama_notlari_korunur(dizin):
 
 def test_yereldeki_katman_paketlerinden_URETIR(dizin):
     _app_zip(dizin / "base-app.zip", b"APP" * 100)
-    (dizin / "base-deps.zip").write_bytes(b"DEPS" * 100)
+    _deps_zip(dizin / "base-deps.zip", b"DEPS" * 100)
     (dizin / "base.zip").write_bytes(b"APP" * 100 + b"DEPS" * 100)  # D4.32: manifeste GIRMEZ (yalniz uyari)
     r = _calistir(dizin)
     assert r.returncode == 0, r.stderr[-800:]
     L = _oku(dizin)["layers"]["win-x64"]
     assert L["app"]["url"].endswith("client-app-v1.9.0/base-app.zip"), "URL yeni tag'e bakmiyor"
-    assert L["app"]["size"] == (dizin / "base-app.zip").stat().st_size and L["deps"]["size"] == 400
+    assert (
+        L["app"]["size"] == (dizin / "base-app.zip").stat().st_size
+        and L["deps"]["size"] == (dizin / "base-deps.zip").stat().st_size
+    )
     assert L["app"]["sha256"] != ONCEKI["layers"]["win-x64"]["app"]["sha256"], "sha yenilenmedi"
 
 
@@ -202,7 +212,7 @@ def test_gecersiz_rollout_REDDEDILIR(dizin):
 
 def test_yeni_platformda_rollout_varsayilan_100(dizin):
     _app_zip(dizin / "base-mac-app.zip", b"A", ikili="PEMF_Backend/PEMF_Backend")
-    (dizin / "base-mac-deps.zip").write_bytes(b"B")
+    _deps_zip(dizin / "base-mac-deps.zip", b"B")
     (dizin / "base-mac.zip").write_bytes(b"AB")  # tek-sürüm kapısı gereği
     assert _calistir(dizin).returncode == 0
     assert _oku(dizin)["layers"]["mac-arm64"]["rollout"] == 100
@@ -334,7 +344,7 @@ def _linuxlu_onceki(tmp_path):
     onceki["runtimes"]["linux-x64"] = {"url": "https://x/base-linux.zip", "sha256": "9" * 64, "size": 8, "kind": "zip"}
     (tmp_path / "manifest.json").write_text(json.dumps(onceki), encoding="utf-8")
     _app_zip(tmp_path / "base-linux-app.zip", b"YENI-APP", ikili="PEMF_Backend/PEMF_Backend")
-    (tmp_path / "base-linux-deps.zip").write_bytes(b"YENI-DEPS")
+    _deps_zip(tmp_path / "base-linux-deps.zip", b"YENI-DEPS")
     return tmp_path
 
 
@@ -366,7 +376,7 @@ def test_baska_platformun_bayat_basei_ENGEL_DEGIL(tmp_path):
     """win-x64 tazelenirken mac/linux'un taşınması normaldir (ayrı runner'larda üretilirler)."""
     dizin = _mac_linuxlu(tmp_path)
     _app_zip(dizin / "base-app.zip", b"A")
-    (dizin / "base-deps.zip").write_bytes(b"B")
+    _deps_zip(dizin / "base-deps.zip", b"B")
     r = _calistir(dizin)
     assert r.returncode == 0, r.stderr[-800:]
     # win-x64 tazelendi, mac/linux hiç dokunulmadı → kapı yalnız TAZELENEN platformu denetler.
