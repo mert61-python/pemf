@@ -4821,7 +4821,17 @@ def _xai_zinciri_durumu() -> dict:
         except Exception:
             continue
     durum["em_ref_stats_eksik"] = eksik_npz
-    durum["hazir"] = durum.get("grad_cam") == "ok" and not eksik_npz
+    # AI1.X4: CKD Kernel SHAP eğitim arka planı (`xai_train_ref_v2.npz`) — yoksa CKD açıklaması üretilmez (zarif düşüş);
+    # aynı "spec'te yok → üretimde sessiz ölü" sınıfı burada görünür olsun. Ürünün KENDİ yükleyicisi ölçülür (varlık + biçim).
+    try:
+        from ai_hub.inference_human_kidney_disease import inference_human_kidney_disease as _ihd
+
+        _ihd.xai_egitim_arka_plani(24)
+        durum["ckd_xai_referansi"] = "ok"
+    except Exception as e:
+        durum["ckd_xai_referansi"] = "eksik"
+        durum["ckd_xai_referansi_sebep"] = _kok_neden_zinciri(e)[:200]
+    durum["hazir"] = durum.get("grad_cam") == "ok" and not eksik_npz and durum["ckd_xai_referansi"] == "ok"
     return durum
 
 

@@ -199,7 +199,8 @@ def test_KRITIK_baseline_DEJENERE_DEGIL():
         f"açıklanabilir toplam kütle {kutle:.4f} — baseline hastaya çok yakın, katkılar gürültüde "
         f"(ölçülen bozuk hâl 0,0100)"
     )
-    assert r["baseline"] == "klinik_normal_referans", f"baseline etiketi beklenmedik: {r['baseline']}"
+    # AI1.X4: arka plan klinik-normal referans hastadan EĞİTİM verisi özetine geçti (sağlıklı hastada kütle ~0,026'ydı)
+    assert r["baseline"] == "egitim_verisi_ozeti", f"baseline etiketi beklenmedik: {r['baseline']}"
 
 
 @gercek_model_gerekir

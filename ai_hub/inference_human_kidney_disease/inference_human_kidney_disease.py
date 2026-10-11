@@ -257,6 +257,8 @@ def _referans_background(post_names: list[str]) -> np.ndarray:
 # Aşağıdaki klinik-normal referansla aynı ölçümde bg prob_ckd = 0,0125 → kütle 0,9875 (~100×).
 # Katkılar artık "sağlıklı bir referansa göre" okunur. Eğitim veri seti GEREKTİRMEZ
 # (dataset/ sevk edilmiyor) ve deterministiktir.
+# ⚠️ AI1.X4 (2026-10-11): xai_top_features ARTIK BUNU KULLANMIYOR (aşağıdaki eğitim arka planı) — sağlıklı hasta referansa
+# yakın olduğu için açıklama kütlesi ~0,026'ya düşüyordu (ölçüldü, 20/20 notckd). Karşıt-kanıt testleri için duruyor.
 NORMAL_REFERANS: dict = {
     # Sayısal: erişkin sağlıklı aralık ortası (UCI-CKD notckd sınıfının tipik değerleri).
     "age": 45, "bp": 80, "sg": 1.020, "al": 0, "su": 0,
@@ -266,6 +268,41 @@ NORMAL_REFERANS: dict = {
     "rbc": "normal", "pc": "normal", "pcc": "notpresent", "ba": "notpresent",
     "htn": "no", "dm": "no", "cad": "no", "appet": "good", "pe": "no", "ane": "no",
 }
+
+
+# ⚠️ AI1.X4 (hoca XAI v3 `xai_kidney_disease_v2.py`, 2026-10) — EĞİTİM ARKA PLANI.
+# Tek bir referans hasta, ona benzeyen hastanın açıklamasını sıfırlar (ölçüldü, 40 hasta): gelen kodun arka planı
+# hastanın kendisiydi → 40/40 TAM SIFIR; Faz 1 "ortalama hasta"sı CKD hastalarında kütleyi 0,026'ya, klinik-normal
+# referans sağlıklı hastalarda kütleyi 0,026'ya düşürüyordu. Arka plan = eğitim verisinin (UCI-CKD, n=400, aynı
+# preprocessor) k-means özeti: 30 merkez + küme payları (AĞIRLIKLI — hocanın kodu `shap.common` yoksa payları
+# düşürüyordu; shap 0.49.1'de yok). Taban = ağırlıklı eğitim ortalaması (prob_ckd 0,643); ölçüm: CKD kütlesi ort.
+# 0,34, sağlıklı 0,62, verimlilik hatası 0. Dosya hocanınkiyle dizi-aynı, kişisel kaynak yolu (`source`) atıldı.
+XAI_EGITIM_REFERANSI = THIS_DIR / "xai_train_ref_v2.npz"
+
+
+def xai_egitim_arka_plani(n_ozellik: int):
+    """(merkezler (k, n_ozellik) float32, ağırlıklar (k,) float64). Yoksa / bozuksa AÇIK hata — başka bir referansa
+    SESSİZ düşüş YOK (açıklamanın anlamı değişirdi); çağıran router/ai_service bunu "Açıklama üretilemedi"ye çevirir."""
+    if not XAI_EGITIM_REFERANSI.exists():
+        raise FileNotFoundError(
+            f"CKD açıklama referansı yok ({XAI_EGITIM_REFERANSI.name}) — kurulum eksik; açıklama üretilmedi, analiz etkilenmedi"
+        )
+    with np.load(XAI_EGITIM_REFERANSI, allow_pickle=False) as d:
+        merkez = np.asarray(d["background"], dtype=np.float32)
+        agirlik = np.asarray(d["weights"], dtype=np.float64)
+    if (
+        merkez.ndim != 2
+        or merkez.shape[1] != int(n_ozellik)
+        or agirlik.shape != (merkez.shape[0],)
+        or not (np.isfinite(merkez).all() and np.isfinite(agirlik).all())
+        or (agirlik < 0).any()
+        or abs(float(agirlik.sum()) - 1.0) > 1e-6
+    ):
+        raise ValueError(
+            f"CKD açıklama referansı bozuk ({XAI_EGITIM_REFERANSI.name}: merkez {merkez.shape}, ağırlık {agirlik.shape}, "
+            f"beklenen {n_ozellik} özellik) — dosyayı kurulum paketinden yeniden alın"
+        )
+    return merkez, agirlik
 
 
 def xai_top_features(features: dict, top_n: int = 7,
@@ -291,10 +328,12 @@ def xai_top_features(features: dict, top_n: int = 7,
         return np.stack([1 - p, p], axis=1)
 
     post_names = _preprocessor_feature_names(pre)
-    # Denetim #04: baseline artık klinik-normal referans hasta (ölçüm gerekçesi
-    # NORMAL_REFERANS'ın üstünde). Eski `_referans_background` geriye-uyum ve karşıt-kanıt
-    # testi için DURUYOR ama artık kullanılmıyor.
-    bg = pre.transform(pd.DataFrame([_normalise_record(NORMAL_REFERANS)], columns=ALL_FEATURES)).astype(np.float32)
+    # AI1.X4: arka plan = eğitim verisinin AĞIRLIKLI k-means özeti (ölçüm gerekçesi XAI_EGITIM_REFERANSI'nın üstünde).
+    # Eski `_referans_background` ve `NORMAL_REFERANS` karşıt-kanıt testleri için DURUYOR ama artık kullanılmıyor.
+    from shap.utils._legacy import DenseData
+
+    merkez, agirlik = xai_egitim_arka_plani(len(post_names))
+    bg = DenseData(merkez, list(post_names), None, agirlik)
 
     _rng_durum = np.random.get_state()
     try:
@@ -330,8 +369,8 @@ def xai_top_features(features: dict, top_n: int = 7,
     return {
         "prob_ckd": float(_predict_onnx(sess, input_name, Xp)[0]),
         "top_features": [{"feature": f, "attribution": round(v, 4)} for f, v in sirali],
-        # Denetim #04: baseline değişti — tüketiciler hangi referansa göre okuduklarını bilmeli.
-        "baseline": "klinik_normal_referans",
+        # Tüketiciler hangi referansa göre okuduklarını bilmeli (AI1.X4: eğitim ortalamasına göre; ↑ = CKD lehine).
+        "baseline": "egitim_verisi_ozeti",
     }
 
 
