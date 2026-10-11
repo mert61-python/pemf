@@ -20,27 +20,70 @@ import yaml
 
 KOK = Path(__file__).resolve().parents[1]
 DAGITIM = re.compile(
-    r"xcrun\s+altool|--upload-app|gh\s+release\s+(?:create|upload)|action-gh-release|vercel\s+(?:deploy|--prod)|fastlane\s+(?:pilot|deliver)"
+    r"xcrun\s+altool|--upload-app|gh\s+release\s+(?:create|upload)|gh\s+api\b[^\n]*/releases|action-gh-release|release-action"
+    r"|upload-release-asset|vercel-action|\bvercel\b(?!\.json)|fastlane\s+(?:pilot|deliver|supply)|upload_to_(?:play_store|app_store|testflight)"
+    r"|\btwine\s+upload|\bnpm\s+publish|\beas(?:-cli)?\s+(?:submit|update)\b|--auto-submit|firebase\s+appdistribution"
+    r"|(?m:^\s*(?:scp|rsync)\s[^\n]*:)|\bcurl\b[^\n]*(?:\s-T\s|--upload-file)|\baws\s+s3\s+(?:cp|sync|mv)|\bgsutil\s+(?:-m\s+)?(?:cp|rsync)"
 )
-TEST_ADIMI = re.compile(r"\bpytest\b|yayin_oncesi_suit")
+# 4B-3.3: test ADIMI = satır başında pytest (ya da `python -m pytest`) ÇAĞRISI — `pip install pytest`, `--collect-only` ve
+# `|| true` / `|| :` / `; exit 0` ile yutulan koşu test sayılmaz; Y30 betiği ayrıca kabul.
+TEST_ADIMI = re.compile(
+    r"(?m)^\s*(?:python\d?(?:\.\d+)?\s+-m\s+)?pytest\b(?![^\n]*(?:--collect-only|\|\|\s*(?:true|:)|;\s*exit\s+0))|yayin_oncesi_suit"
+)
+# İş düzeyinde `if:` bu ifadelerden birini taşıyorsa iş, `needs` ettiği iş DÜŞSE de koşar → koruma zinciri orada kopar.
+HER_KOSULDA = re.compile(r"always\(\)|cancelled\(\)|failure\(\)")
 
 
 def _adim_metni(adim: dict) -> str:
     return f"{adim.get('uses', '')}\n{adim.get('run', '')}"
 
 
+def _yanlis_mi(deger) -> bool:
+    return deger is False or str(deger).strip().lower() in ("false", "${{ false }}")
+
+
+def _dogru_mu(deger) -> bool:
+    return deger is True or str(deger).strip().lower() in ("true", "${{ true }}")
+
+
+def _gecerli_test_isi(j: dict) -> bool:
+    if _dogru_mu(j.get("continue-on-error")) or _yanlis_mi(j.get("if", True)):
+        return False
+    return any(
+        TEST_ADIMI.search(_adim_metni(a))
+        and not _dogru_mu(a.get("continue-on-error"))
+        and not _yanlis_mi(a.get("if", True))
+        for a in j.get("steps") or []
+    )
+
+
+def _needs(j: dict) -> list[str]:
+    n = j.get("needs") or []
+    return [n] if isinstance(n, str) else list(n)
+
+
+def _test_ile_korunur(isler: dict, ad: str, test_isleri: set[str], gorulen: set[str]) -> bool:
+    """`ad` işi yalnız bir test işi BAŞARIYLA bittiyse koşar mı? `needs` zinciri (dolaylı) izlenir; `always()` gibi koşul zinciri koparır."""
+    j = isler.get(ad) or {}
+    if HER_KOSULDA.search(str(j.get("if", ""))):
+        return False
+    for n in _needs(j):
+        if n in gorulen:
+            continue
+        gorulen.add(n)
+        if n in test_isleri or _test_ile_korunur(isler, n, test_isleri, gorulen):
+            return True
+    return False
+
+
 def korumasiz_dagitim_isleri(belge: dict) -> list[str]:
     isler = (belge or {}).get("jobs") or {}
-    test_isleri = {
-        ad for ad, j in isler.items() if any(TEST_ADIMI.search(_adim_metni(a)) for a in (j or {}).get("steps") or [])
-    }
+    test_isleri = {ad for ad, j in isler.items() if _gecerli_test_isi(j or {})}
     out = []
     for ad, j in isler.items():
         if not any(DAGITIM.search(_adim_metni(a)) for a in (j or {}).get("steps") or []):
             continue
-        needs = (j or {}).get("needs") or []
-        needs = [needs] if isinstance(needs, str) else list(needs)
-        if not set(needs) & test_isleri:
+        if not _test_ile_korunur(isler, ad, test_isleri, set()):
             out.append(ad)
     return out
 
