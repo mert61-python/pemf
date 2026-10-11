@@ -262,29 +262,21 @@ def _collect_from_dir(d: Path) -> list[str]:
 
 
 # ============================================================
-# XAI — EigenCAM isi haritasi (Faz 2 kuyrugu, 2026-08-26; Faz-0 karar #4 AGPL ONAYLI)
+# XAI — tespit hedefli HiRes-CAM isi haritasi (Faz 2 kuyrugu 2026-08-26; Faz-0 karar #4 AGPL ONAYLI; AI1.X3 2026-10)
 # ============================================================
-# EigenCAM label-agnostik, GRADIENT'SIZ (YOLO'da Grad-CAM gurultulu). TEK-IS kilidi +
-# XAI kendi PT-YOLO instance'i (detektorun ONNX oturumuna dokunmaz); bellek-ici base64.
+# AI1.X3 (hoca XAI v3 `xai_utils/yolo_cam_v2.py`): EigenCAM yerine YoloDetCAM — olculdu: EigenCAM'de tespit
+# kutularindaki pay %0,3-27, siyah zemin (BT dolgusu) payi %36-86. TEK-IS kilidi + XAI kendi PT-YOLO instance'i
+# (detektorun ONNX oturumuna dokunmaz; predict ile paylasilmaz); bellek-ici base64.
 import threading as _xai_threading
 
 _XAI_KILIT = _xai_threading.Lock()
 _XAI_PT_CACHE: dict = {}
 
 
-def xai_ct_isi_haritasi(image_path: str, pt_path: str | None = None,
-                          alpha: float = 0.5) -> dict:
-    """CT goruntusu icin EigenCAM — modelin tespitte bakis bolgeleri (arastirma yuzeyi).
-
-    TEK-KAYNAK: router + ai_service ayni fonksiyon (kapi-paritesi dersi).
-    Doner: {"xai_image_base64": <jpg b64 overlay>, "method": "eigencam"}
-    """
-    import base64 as _b64
-
-    import cv2
-
-    from ai_hub.xai_utils.overlay import blend_to_array
-    from ai_hub.xai_utils.yolo_cam import YoloEigenCAM
+def ct_cam_haritasi(image_path: str, pt_path: str | None = None):
+    """(H, W) [0, 1] tespit hedefli HiRes-CAM — orijinal goruntuye hizali (dolgu kirpilir). Hedef = KidneyCTDetector'un
+    varsayilan esigini (conf 0.25) gecen tespitlerin sinif skorlari."""
+    from ai_hub.xai_utils.yolo_cam import YoloDetCAM
 
     if pt_path is None:
         from ai_hub.xai_utils.pt_yolu import pt_coz
@@ -296,9 +288,25 @@ def xai_ct_isi_haritasi(image_path: str, pt_path: str | None = None,
         if expl is None:
             from ultralytics import YOLO
 
-            expl = YoloEigenCAM(YOLO(str(pt_path)), layer_idx=-2, imgsz=640, device="cpu")
+            expl = YoloDetCAM(YOLO(str(pt_path)), imgsz=640, conf=0.25, method="hirescam", device="cpu")
             _XAI_PT_CACHE["ct"] = expl
-        heatmap = expl.explain(image_path)
+        return expl.explain(image_path)
+
+
+def xai_ct_isi_haritasi(image_path: str, pt_path: str | None = None,
+                          alpha: float = 0.5) -> dict:
+    """CT goruntusu icin tespit hedefli HiRes-CAM — modelin tespitlerine dayandigi bolgeler (arastirma yuzeyi).
+
+    TEK-KAYNAK: router + ai_service ayni fonksiyon (kapi-paritesi dersi).
+    Doner: {"xai_image_base64": <jpg b64 overlay>, "method": "hirescam"}
+    """
+    import base64 as _b64
+
+    import cv2
+
+    from ai_hub.xai_utils.overlay import blend_to_array
+
+    heatmap = ct_cam_haritasi(image_path, pt_path)
 
     bgr = cv2.imread(str(image_path))
     if bgr is None:
@@ -308,7 +316,7 @@ def xai_ct_isi_haritasi(image_path: str, pt_path: str | None = None,
                             [cv2.IMWRITE_JPEG_QUALITY, 85])
     if not ok:
         raise RuntimeError("XAI overlay JPG encode basarisiz")
-    return {"xai_image_base64": _b64.b64encode(buf.tobytes()).decode("ascii"), "method": "eigencam"}
+    return {"xai_image_base64": _b64.b64encode(buf.tobytes()).decode("ascii"), "method": "hirescam"}
 
 
 def main():

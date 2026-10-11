@@ -24,13 +24,14 @@ Ilgili modul icin uygun target_layer secimi sart. Ornekler:
 # (overlay/report_html testleri CI'da ModuleNotFoundError). torch-gerektirenler KOSULLU.
 try:
     from .grad_cam import GradCAMExplainer, list_pytorch_gradcam_methods
-    from .yolo_cam import YoloEigenCAM
+    from .yolo_cam import YoloDetCAM, YoloEigenCAM
 
     TORCH_XAI_AVAILABLE = True
 except ImportError:  # torch yok → gradient-XAI kapali; geri kalan paket calisir
     GradCAMExplainer = None  # type: ignore[assignment]
     list_pytorch_gradcam_methods = None  # type: ignore[assignment]
     YoloEigenCAM = None  # type: ignore[assignment]
+    YoloDetCAM = None  # type: ignore[assignment]
     TORCH_XAI_AVAILABLE = False
 from .disagreement import ensemble_disagreement_map
 from .overlay import blend_and_save, heatmap_to_rgb
@@ -44,5 +45,6 @@ __all__ = [
     "ensemble_disagreement_map",
     "build_report",
     "YoloEigenCAM",
+    "YoloDetCAM",
     "TORCH_XAI_AVAILABLE",
 ]

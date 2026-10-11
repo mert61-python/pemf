@@ -59,9 +59,10 @@ def _b64_gorsel(b64: str) -> np.ndarray:
     return img
 
 
-# ── 1) EigenCAM — gerçek PT'lerle ────────────────────────────────────────────
+# ── 1) YOLO CAM — gerçek PT'lerle (AI1.X2/X3: EigenCAM → tespit hedefli HiRes-CAM; yerleşim kapısı
+#        tests/test_xai_yolo_TESPIT_hedefli_cam_AI1_X2_X3.py) ───────────────────────────────────────────────
 @yolo_pt_gerekir
-def test_KRITIK_feline_eigencam_URETIR_ve_DETERMINISTIK(tmp_path):
+def test_KRITIK_feline_detcam_URETIR_ve_DETERMINISTIK(tmp_path):
     import cv2
 
     from ai_hub.feline_reticulocytes.inference_feline_reticulocytes import xai_retikulosit_isi_haritasi
@@ -72,13 +73,13 @@ def test_KRITIK_feline_eigencam_URETIR_ve_DETERMINISTIK(tmp_path):
     cv2.imwrite(str(p), img)
     r1 = xai_retikulosit_isi_haritasi(str(p))
     ov = _b64_gorsel(r1["xai_image_base64"])
-    assert float(ov.std()) > 1.0 and r1.get("method") == "eigencam"
+    assert float(ov.std()) > 1.0 and r1.get("method") == "hirescam"
     r2 = xai_retikulosit_isi_haritasi(str(p))
-    assert r1["xai_image_base64"] == r2["xai_image_base64"], "EigenCAM deterministik değil"
+    assert r1["xai_image_base64"] == r2["xai_image_base64"], "tespit hedefli CAM deterministik değil"
 
 
 @yolo_pt_gerekir
-def test_KRITIK_ct_eigencam_URETIR(tmp_path):
+def test_KRITIK_ct_detcam_URETIR(tmp_path):
     import cv2
 
     from ai_hub.inference_human_kidney_ct.inference_human_kidney_ct import xai_ct_isi_haritasi
@@ -89,20 +90,21 @@ def test_KRITIK_ct_eigencam_URETIR(tmp_path):
     cv2.imwrite(str(p), img)
     r = xai_ct_isi_haritasi(str(p))
     ov = _b64_gorsel(r["xai_image_base64"])
-    assert float(ov.std()) > 1.0 and r.get("method") == "eigencam"
+    assert float(ov.std()) > 1.0 and r.get("method") == "hirescam"
 
 
-def test_YAPISAL_eigencam_tek_is_kilidi():
+def test_YAPISAL_yolo_cam_tek_is_kilidi():
+    # AI1.X2/X3: kilit + explain CAM hesabını yapan yardımcıya taşındı (xai_*_isi_haritasi onu çağırır)
     for dosya, fn in [
-        ("ai_hub/feline_reticulocytes/inference_feline_reticulocytes.py", "def xai_retikulosit_isi_haritasi"),
-        ("ai_hub/inference_human_kidney_ct/inference_human_kidney_ct.py", "def xai_ct_isi_haritasi"),
+        ("ai_hub/feline_reticulocytes/inference_feline_reticulocytes.py", "def retikulosit_cam_haritasi"),
+        ("ai_hub/inference_human_kidney_ct/inference_human_kidney_ct.py", "def ct_cam_haritasi"),
     ]:
         src = (KOK / dosya).read_text(encoding="utf-8", errors="replace")
         i = src.index(fn)
         govde = src[i : i + 2400]
         kilit = govde.find("_XAI_KILIT")
         explain = govde.find(".explain(")
-        assert kilit >= 0 and explain >= 0 and kilit < explain, f"{dosya}: EigenCAM kilitsiz/kilitten önce"
+        assert kilit >= 0 and explain >= 0 and kilit < explain, f"{dosya}: YOLO CAM kilitsiz/kilitten önce"
 
 
 # ── 2) RNA IG — gerçek PT ile ────────────────────────────────────────────────

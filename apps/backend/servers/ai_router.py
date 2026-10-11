@@ -3391,7 +3391,7 @@ async def analyze_thermal(
 async def analyze_reticulocytes(
     file: UploadFile = File(None), image_base64: str = Form(None), explain: bool = Form(False)
 ):
-    """YOLO Detect Retikülosit Sayımı (+opsiyonel EigenCAM — Faz 2 kuyruğu)"""
+    """YOLO Detect Retikülosit Sayımı (+opsiyonel tespit hedefli HiRes-CAM — Faz 2 kuyruğu; AI1.X2)"""
     tmp = None  # finally'de temizlenecek temp görüntü (hata olsa da sızmasın)
     try:
         if ai_service_enabled():
@@ -3455,7 +3455,7 @@ async def analyze_reticulocytes(
             _kodlanan = img
         b64_image = _encode_jpg_b64(_kodlanan, quality=GOSTERIM_JPEG_KALITESI)
 
-        # Sunum-katmanı XAI (Faz 2 kuyruğu): EigenCAM — tespitte dayanılan hücre bölgeleri.
+        # Sunum-katmanı XAI (Faz 2 kuyruğu; AI1.X2): tespit hedefli HiRes-CAM — tespitlere dayanılan hücre bölgeleri.
         # ⚠️ tmp finally'de siliniyor → XAI burada. Açıklama İKİNCİL (zarif düşüş).
         _xai_alanlari = {}
         if explain:
@@ -4248,7 +4248,7 @@ async def analyze_kidney_ct(
         try:
             result = await asyncio.to_thread(lambda: det.predict(tmp.name))
             overlay = await asyncio.to_thread(lambda: det.draw_overlay(tmp.name, result))
-            # Sunum-katmanı XAI (Faz 2 kuyruğu; Faz-0 karar #4 AGPL onaylı): EigenCAM.
+            # Sunum-katmanı XAI (Faz 2 kuyruğu; Faz-0 karar #4 AGPL onaylı; AI1.X3): tespit hedefli HiRes-CAM.
             # tmp bu blokta silinir → XAI silinmeden. Açıklama İKİNCİL (zarif düşüş).
             if explain:
                 try:

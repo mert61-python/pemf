@@ -3318,7 +3318,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
       </View>
 
       <TouchableOpacity style={styles.xaiToggle} accessibilityRole="switch" accessibilityState={{ checked: isiHaritasi }} onPress={() => setIsiHaritasi(!isiHaritasi)}>
-        <Text style={styles.xaiToggleText}>{isiHaritasi ? "☑" : "☐"} 🔍 Isı haritası üret (EigenCAM — modelin baktığı bölgeler)</Text>
+        <Text style={styles.xaiToggleText}>{isiHaritasi ? "☑" : "☐"} 🔍 Isı haritası üret (tespit hedefli HiRes-CAM — modeli tespitlere götüren bölgeler)</Text>
       </TouchableOpacity>
 
       <View style={styles.analyzeBtn}>
@@ -3368,8 +3368,8 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
             </>
           )}
           {result.xai_image_base64 ? (
-            <XaiIsiHaritasi base64={result.xai_image_base64} etiket="🔍 Isı haritası (EigenCAM)"
-              not="Kırmızı bölgeler modelin tespitte en çok dayandığı alanlardır (bölgesel ilgi — tanı kanıtı değildir)." />
+            <XaiIsiHaritasi base64={result.xai_image_base64} etiket="🔍 Isı haritası (tespit hedefli HiRes-CAM)"
+              not="Kırmızı bölgeler modelin kutulardaki tespitlere karar verirken en çok dayandığı alanlardır (tanı kanıtı değildir; kutuyla birlikte okuyun)." />
           ) : null}
           {result.xai_error ? <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text> : null}
           <MedicalDisclaimer />

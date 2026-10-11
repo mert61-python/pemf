@@ -188,14 +188,16 @@ describe("XAI §KALAN A-grubu davranış kilitleri", () => {
     mockMode = "researcher";
     const u = render(<Ekran />);
     await acVeSec(u, "Böbrek CT");
-    fireEvent.press(u.getByText(/Isı haritası üret \(EigenCAM/));
+    // AI1.X3: BT ısı haritası EigenCAM yerine tespit hedefli HiRes-CAM (hoca XAI v3) — metin de onu söyler
+    fireEvent.press(u.getByText(/Isı haritası üret \(tespit hedefli HiRes-CAM/));
     fetchYaniti({
       status: "success", n_detections: 1, image_base64: "IMG64", xai_image_base64: "XAI64",
       class_counts: { "Kidney Stone": 1 }, detections: [{ class_name: "Kidney Stone", conf: 0.9, bbox_xyxy: [0, 0, 10, 10] }],
     });
     await act(async () => { fireEvent.press(u.getByText("CT Analizini Başlat")); });
 
-    await waitFor(() => u.getByText(/Isı haritası \(EigenCAM\)/));
+    await waitFor(() => u.getByText(/Isı haritası \(tespit hedefli HiRes-CAM\)/));
+    expect(u.queryByText(/EigenCAM/)).toBeNull();
     expect(sonIstekParcalari().explain).toBe("true");
   });
 

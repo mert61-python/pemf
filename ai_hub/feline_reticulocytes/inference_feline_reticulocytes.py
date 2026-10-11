@@ -22,30 +22,23 @@ CLASS_NAMES = ["erythrocyte", "punctate reticulocyte", "aggregate reticulocyte"]
 
 
 # ============================================================
-# XAI — EigenCAM isi haritasi (Faz 2 kuyrugu, 2026-08-26)
+# XAI — tespit hedefli HiRes-CAM isi haritasi (Faz 2 kuyrugu 2026-08-26; AI1.X2 2026-10)
 # ============================================================
-# EigenCAM label-agnostik PCA — GRADIENT'SIZ (YOLO'da Grad-CAM gurultulu, doc §10.1).
-# ⚠️ grad-cam hook'lari + paylasilan model thread-safe DEGIL → TEK-IS kilidi; XAI kendi
-# PT-YOLO instance'ini cache'ler (canli ONNX tespit yoluna dokunmaz); bellek-ici base64.
+# AI1.X2 (hoca XAI v3 `xai_utils/yolo_cam_v2.py`): EigenCAM yerine YoloDetCAM — olculdu: EigenCAM'de harita
+# enerjisinin %100'u letterbox dolgusundaydi (300x300 yayma), tespit kutularindaki pay %0-6 (tesadufi ~%4).
+# ⚠️ grad-cam hook'lari + paylasilan model thread-safe DEGIL → TEK-IS kilidi; XAI kendi PT-YOLO instance'ini
+# cache'ler (canli ONNX tespit yoluna dokunmaz; predict ile paylasilmaz); bellek-ici base64.
 import threading as _xai_threading
 
 _XAI_KILIT = _xai_threading.Lock()
 _XAI_PT_CACHE: dict = {}
+#: canli tespit esigi (router /api/ai/vision/reticulocytes conf=0.25) — CAM hedefi ayni tespitleri aciklar
+XAI_TESPIT_CONF = 0.25
 
 
-def xai_retikulosit_isi_haritasi(image_path: str, pt_path: str | None = None,
-                                   alpha: float = 0.5) -> dict:
-    """Kan yaymasi goruntusu icin EigenCAM — modelin tespitte dayandigi hucre bolgeleri.
-
-    TEK-KAYNAK: router in-process + ai_service ayni fonksiyonu cagirir (kapi-paritesi).
-    Doner: {"xai_image_base64": <jpg b64 overlay>, "method": "eigencam"}
-    """
-    import base64 as _b64
-
-    import cv2
-
-    from ai_hub.xai_utils.overlay import blend_to_array
-    from ai_hub.xai_utils.yolo_cam import YoloEigenCAM
+def retikulosit_cam_haritasi(image_path: str, pt_path: str | None = None):
+    """(H, W) [0, 1] tespit hedefli HiRes-CAM — orijinal goruntuye hizali (dolgu kirpilir)."""
+    from ai_hub.xai_utils.yolo_cam import YoloDetCAM
 
     if pt_path is None:
         from ai_hub.xai_utils.pt_yolu import pt_coz
@@ -57,9 +50,25 @@ def xai_retikulosit_isi_haritasi(image_path: str, pt_path: str | None = None,
         if expl is None:
             from ultralytics import YOLO
 
-            expl = YoloEigenCAM(YOLO(str(pt_path)), layer_idx=-2, imgsz=640, device="cpu")
+            expl = YoloDetCAM(YOLO(str(pt_path)), imgsz=640, conf=XAI_TESPIT_CONF, method="hirescam", device="cpu")
             _XAI_PT_CACHE["retic"] = expl
-        heatmap = expl.explain(image_path)  # (H, W) 0-1, orijinal cozunurluk
+        return expl.explain(image_path)
+
+
+def xai_retikulosit_isi_haritasi(image_path: str, pt_path: str | None = None,
+                                   alpha: float = 0.5) -> dict:
+    """Kan yaymasi goruntusu icin tespit hedefli HiRes-CAM — modelin tespitlerine dayandigi hucre bolgeleri.
+
+    TEK-KAYNAK: router in-process + ai_service ayni fonksiyonu cagirir (kapi-paritesi).
+    Doner: {"xai_image_base64": <jpg b64 overlay>, "method": "hirescam"}
+    """
+    import base64 as _b64
+
+    import cv2
+
+    from ai_hub.xai_utils.overlay import blend_to_array
+
+    heatmap = retikulosit_cam_haritasi(image_path, pt_path)  # (H, W) 0-1, orijinal cozunurluk
 
     bgr = cv2.imread(str(image_path))
     if bgr is None:
@@ -69,7 +78,7 @@ def xai_retikulosit_isi_haritasi(image_path: str, pt_path: str | None = None,
                             [cv2.IMWRITE_JPEG_QUALITY, 85])
     if not ok:
         raise RuntimeError("XAI overlay JPG encode basarisiz")
-    return {"xai_image_base64": _b64.b64encode(buf.tobytes()).decode("ascii"), "method": "eigencam"}
+    return {"xai_image_base64": _b64.b64encode(buf.tobytes()).decode("ascii"), "method": "hirescam"}
 
 
 def main():

@@ -573,7 +573,7 @@ def infer_sound(file: UploadFile = File(...), explain: str = Form(None), xai_met
 def infer_kidney_ct(file: UploadFile = File(...), explain: str = Form(None)):
     """Böbrek CT → YOLOv8s tespit (taş/kist/normal) + annotated görsel (GPU).
 
-    explain=true → EigenCAM (Faz 2 paritesi — TEK-KAYNAK xai_ct_isi_haritasi).
+    explain=true → tespit hedefli HiRes-CAM (Faz 2 paritesi — TEK-KAYNAK xai_ct_isi_haritasi; AI1.X3).
     """
     tmp = None
     try:
@@ -1039,7 +1039,7 @@ def infer_rna(file: UploadFile = File(...), explain: str = Form(None)):
 def infer_reticulocytes(file: UploadFile = File(...), explain: str = Form(None)):
     """Kan mikroskop görüntüsü → YOLOv8s retikülosit tespiti + sayım + overlay (GPU).
 
-    explain=true → EigenCAM ısı haritası (Faz 2 paritesi — TEK-KAYNAK
+    explain=true → tespit hedefli HiRes-CAM ısı haritası (AI1.X2; Faz 2 paritesi — TEK-KAYNAK
     ai_hub.feline_reticulocytes.xai_retikulosit_isi_haritasi).
     """
     tmp = None
