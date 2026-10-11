@@ -10,9 +10,10 @@ kopya-kod yok). Predictor sözleşmesi (üçünde ortak): _build_input(x,y,z,org
 - load_ref_stats: ai_hub/<modül>/xai_ref_stats.npz — eğitim-dağılımı std+background
   (build_tools/make_em_xai_ref_stats.py; scaler.scale_ + eğitim CSV çapraz-kontrollü).
   Tek-örnek (canlı) XAI bu referanslar OLMADAN dejenere olur (em_sensitivity ValueError).
-- hizli_sensitivity: CANLI yol (öneri-onay ekranı) — 7 ONNX forward, D-KANALLARI (ilk
-  n_duty çıktı) üzerinden, PNG/SHAP YOK, JSON döner. SHAP'ın mean-agregasyonu 22/23
-  heterojen çıktıyı sulandırdığı için canlı anlatı D-hedeflidir (plan §4/1.2).
+- hizli_sensitivity: CANLI yol (öneri-onay ekranı) — D-KANALLARI (ilk n_duty çıktı) üzerinden, PNG/SHAP YOK, JSON
+  döner. SHAP'ın mean-agregasyonu 22/23 heterojen çıktıyı sulandırdığı için canlı anlatı D-hedeflidir (plan §4/1.2).
+  AI1.X6 (hoca XAI v3): yöntem eğitim std'li MERKEZİ fark + organ_id kategorik + öğrenilmemiş / eğitim aralığı dışı
+  işareti; referans `load_egitim_ref` (xai_train_ref.npz — eğitim CSV'sinin tamamı).
 - batch_xai: Mod-2 seans-sonrası/batch — run_em_xai (sensitivity+SHAP+CSV+PNG) ref_stats'la.
 """
 
@@ -23,7 +24,7 @@ from typing import Callable, Sequence
 
 import numpy as np
 
-from .em_sensitivity import EM_FEATURES, run_em_xai, sensitivity_analysis
+from .em_sensitivity import EM_FEATURES, run_em_xai
 
 
 def predict_raw_fn(predictor) -> Callable[[np.ndarray], np.ndarray]:
@@ -49,9 +50,54 @@ def load_ref_stats(module_dir: str | Path) -> dict:
     return {"std": np.asarray(d["std"], dtype=np.float64), "background": np.asarray(d["background"], dtype=np.float64)}
 
 
+def load_egitim_ref(module_dir: str | Path) -> dict:
+    """xai_train_ref.npz -> {"min", "max", "std", "mean"} (6,) — EĞİTİM CSV'sinin TAMAMINDAN (AI1.X6, hoca XAI v3
+    `xai_train_ref.npz`; depodaki `training_archive` CSV'leriyle birebir — kapı testi doğrular). Yoksa / bozuksa açık hata."""
+    p = Path(module_dir) / "xai_train_ref.npz"
+    if not p.exists():
+        raise FileNotFoundError(f"{p.name} yok — EM açıklaması eğitim referanssız üretilmez (kurulum eksik)")
+    with np.load(p, allow_pickle=False) as d:
+        ref = {k: np.asarray(d[k], dtype=np.float64) for k in ("min", "max", "std", "mean")}
+    if any(v.shape != (len(EM_FEATURES),) or not np.isfinite(v).all() for v in ref.values()) or (ref["std"] < 0).any() or (
+        ref["min"] > ref["max"]
+    ).any():
+        raise ValueError(f"{p.name} bozuk (beklenen {len(EM_FEATURES)} özellik için sonlu min/max/std/mean)")
+    return ref
+
+
+#: etkisi bundan küçük özellik "dozu belirleyen" sayılmaz (ölçüldü: em_petri x/y/z/organ_id etkisi TAM 0 iken ilk-3'e girip
+#: onay ekranında "belirleyen" yazıyordu).
+ETKI_ESIGI = 1e-9
+
+
+def merkezi_duyarlilik(fn: Callable[[np.ndarray], np.ndarray], X: np.ndarray, egitim_ref: dict,
+                       *, n_duty: int = 7, delta_frac: float = 0.10) -> np.ndarray:
+    """(N, F) yerel duyarlılık — HER SATIR KENDİ BAŞINA (yığından bağımsız; hoca v2 `sensitivity_v2` yöntemi):
+    sürekli özellik: |f(x + d) − f(x − d)| / 2, d = delta_frac · EĞİTİM std'si (merkezi fark); organ_id KATEGORİK: komşu geçerli
+    değere (±1, eğitim aralığına kırpılır); eğitimde SABİT özellik (std 0) → NaN ("öğrenilmemiş"). Hedef = ilk n_duty çıktının
+    (bobin duty'leri) ort. |Δ| — guii'nin klinik sorusu: "önerilen duty'leri en çok ne değiştirir"."""
+    X = np.asarray(X, dtype=np.float64)
+    N, F = X.shape
+    S = np.full((N, F), np.nan)
+    for j in range(F):
+        s = float(egitim_ref["std"][j])
+        if not s > 0.0:
+            continue
+        Xp, Xm = X.copy(), X.copy()
+        if EM_FEATURES[j] == "organ_id":
+            lo, hi = float(egitim_ref["min"][j]), float(egitim_ref["max"][j])
+            Xp[:, j] = np.clip(np.round(X[:, j]) + 1.0, lo, hi)
+            Xm[:, j] = np.clip(np.round(X[:, j]) - 1.0, lo, hi)
+        else:
+            Xp[:, j] += delta_frac * s
+            Xm[:, j] -= delta_frac * s
+        S[:, j] = (np.abs(fn(Xp)[:, :n_duty] - fn(Xm)[:, :n_duty]) / 2.0).mean(axis=1)
+    return S
+
+
 def hizli_sensitivity(
     predictor,
-    ref_stats: dict,
+    egitim_ref: dict,
     x: float,
     y: float,
     z: float,
@@ -62,17 +108,35 @@ def hizli_sensitivity(
     n_duty: int = 7,
     top_n: int = 3,
 ) -> list[dict]:
-    """Canlı yol: tek nokta için hafif duyarlılık (7+1 forward; PNG/SHAP yok).
+    """Canlı yol (AI Pro öneri-onay ekranı): tek nokta için hafif duyarlılık (2·5+1 forward; PNG/SHAP yok).
 
-    D-kanalları (ilk n_duty çıktı = bobin duty'leri) üzerinden ölçer: "önerilen dozu en
-    çok hangi girdi belirledi". Döner: [{"feature", "etki"}, ...] |Δ| azalan sırada.
+    AI1.X6 (hoca XAI v3 `xai_tabular/em_sensitivity_v2.py`): yöntem `merkezi_duyarlilik` (eğitim std'si, merkezi fark,
+    organ_id kategorik, sabit özellik "öğrenilmemiş"). Döner (sıra korunur):
+      * dozu belirleyenler: [{"feature", "etki"}] |Δ| azalan, en çok top_n, YALNIZ etki > ETKI_ESIGI;
+        değeri EĞİTİM ARALIĞI DIŞINDAYSA "egitim_disi": True (açıklama ekstrapolasyondur),
+      * eğitim aralığı dışındaki ama belirleyen olmayan özellik: {"feature", "etki", "egitim_disi": True, "surukleyen": False},
+      * öğrenilmemiş özellik: {"feature", "etki": None, "ogrenilmemis": True}.
     """
     fn = predict_raw_fn(predictor)
     X = np.array([[x, y, z, organ_id, achieved_B, duty_sum]], dtype=np.float64)
-    sens = sensitivity_analysis(lambda A: fn(A)[:, :n_duty], X, ref_std=ref_stats["std"])
-    vals = np.asarray(sens["delta_abs_mean"], dtype=np.float64)
-    order = np.argsort(-vals)[: int(top_n)]
-    return [{"feature": EM_FEATURES[int(i)], "etki": round(float(vals[int(i)]), 4)} for i in order]
+    S = merkezi_duyarlilik(fn, X, egitim_ref, n_duty=n_duty)[0]
+    disi = {EM_FEATURES[j] for j in range(len(EM_FEATURES))
+            if not (egitim_ref["min"][j] <= X[0, j] <= egitim_ref["max"][j])}
+    ogrenilmemis = [EM_FEATURES[j] for j in range(len(EM_FEATURES)) if np.isnan(S[j])]
+    adaylar = [j for j in np.argsort(-np.nan_to_num(S, nan=-1.0)) if not np.isnan(S[j]) and S[j] > ETKI_ESIGI]
+    surukleyen = [int(j) for j in adaylar[: int(top_n)]]
+    sonuc = []
+    for j in surukleyen:
+        d = {"feature": EM_FEATURES[j], "etki": round(float(S[j]), 4)}
+        if EM_FEATURES[j] in disi:
+            d["egitim_disi"] = True
+        sonuc.append(d)
+    for j in range(len(EM_FEATURES)):
+        if EM_FEATURES[j] in disi and j not in surukleyen:
+            sonuc.append({"feature": EM_FEATURES[j], "etki": None if np.isnan(S[j]) else round(float(S[j]), 4),
+                          "egitim_disi": True, "surukleyen": False})
+    sonuc += [{"feature": ad, "etki": None, "ogrenilmemis": True} for ad in ogrenilmemis]
+    return sonuc
 
 
 def batch_xai(

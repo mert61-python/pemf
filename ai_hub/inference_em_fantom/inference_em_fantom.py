@@ -174,6 +174,14 @@ def xai_ref_stats():
     return load_ref_stats(_DIR)
 
 
+def xai_egitim_ref():
+    """AI1.X6: eğitim CSV'sinin TAMAMINDAN min/max/std (xai_train_ref.npz) — canlı duyarlılığın merkezi farkı, organ_id
+    kırpma aralığı, öğrenilmemiş (std 0) ve eğitim aralığı dışı işaretleri buradan."""
+    from ai_hub.xai_tabular.em_runtime import load_egitim_ref
+
+    return load_egitim_ref(_DIR)
+
+
 def xai_hizli_sensitivity(predictor, x_mm: float, y_mm: float, z_mm: float,
                           organ_id: float, achieved_B: float = 0.0,
                           duty_sum: float = 0.0, top_n: int = 3) -> list[dict]:
@@ -183,7 +191,7 @@ def xai_hizli_sensitivity(predictor, x_mm: float, y_mm: float, z_mm: float,
     Doner: [{"feature", "etki"}...] |delta| azalan; hata cagiranin zarif dususune."""
     from ai_hub.xai_tabular.em_runtime import hizli_sensitivity
 
-    return hizli_sensitivity(predictor, xai_ref_stats(), float(x_mm), float(y_mm),
+    return hizli_sensitivity(predictor, xai_egitim_ref(), float(x_mm), float(y_mm),
                              float(z_mm), float(organ_id), float(achieved_B or 0.0),
                              float(duty_sum or 0.0), top_n=top_n)
 

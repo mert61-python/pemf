@@ -60,8 +60,31 @@ export interface AiProposalMeta {
   subject_label?: string;
   /** Sunum-katmanı XAI (2026-08-26): "önerilen dozu en çok ne belirledi" — backend
    *  hafif D-kanal duyarlılığı (|Δ| azalan). Alan yoksa (eski backend / XAI zarif
-   *  düşüşü) satır gizlenir. */
-  xaiSensitivity?: { feature: string; etki: number }[];
+   *  düşüşü) satır gizlenir. AI1.X6 (hoca XAI v3): yalnız etkisi > 0 olan ÖĞRENİLMİŞ girdiler "belirleyen"dir;
+   *  `ogrenilmemis` (eğitimde sabit — açıklamaya katılmaz) ve `egitim_disi` (değer eğitim aralığı dışında —
+   *  açıklama ekstrapolasyon) ayrı satırlarda gösterilir. */
+  xaiSensitivity?: XaiDuyarlilik[];
+}
+
+/** Canlı EM duyarlılık öğesi (backend `em_runtime.hizli_sensitivity`). */
+export type XaiDuyarlilik = {
+  feature: string;
+  etki: number | null;
+  egitim_disi?: boolean;
+  ogrenilmemis?: boolean;
+  surukleyen?: boolean;
+};
+
+/** AI1.X6: "dozu belirleyen" = öğrenilmiş + belirleyen işaretli öğeler (eski backend'in düz listesi de buraya düşer). */
+export function xaiSatirlari(liste: XaiDuyarlilik[] | undefined, etiket: Record<string, string>) {
+  const ad = (f: string) => etiket[f] ?? f;
+  const l = Array.isArray(liste) ? liste : [];
+  return {
+    belirleyen: l.filter((t) => !t.ogrenilmemis && t.surukleyen !== false)
+      .map((t) => ad(t.feature) + (t.egitim_disi ? " (eğitim aralığı dışı)" : "")),
+    egitimDisi: l.filter((t) => t.egitim_disi).map((t) => ad(t.feature)),
+    ogrenilmemis: l.filter((t) => t.ogrenilmemis).map((t) => ad(t.feature)),
+  };
 }
 
 /** EM girdi adları → hekim diline (öneri ekranı). */
@@ -258,14 +281,25 @@ export function AiSpecApprovalModal({
           )}
 
           {/* Sunum-katmanı XAI (2026-08-26): hekim onaylamadan "dozu ne belirledi" görür. */}
-          {Array.isArray(meta?.xaiSensitivity) && meta!.xaiSensitivity!.length > 0 && (
-            <Text style={s.xai}>
-              {"Dozu en çok belirleyen: " +
-                meta!.xaiSensitivity!
-                  .map((t) => (arastirma ? XAI_ETIKET_ARASTIRMA : XAI_ETIKET)[t.feature] ?? t.feature)
-                  .join(" · ")}
-            </Text>
-          )}
+          {(() => {
+            const x = xaiSatirlari(meta?.xaiSensitivity, arastirma ? XAI_ETIKET_ARASTIRMA : XAI_ETIKET);
+            return (
+              <>
+                {x.belirleyen.length > 0 && <Text style={s.xai}>{"Dozu en çok belirleyen: " + x.belirleyen.join(" · ")}</Text>}
+                {x.egitimDisi.length > 0 && (
+                  <Text style={s.xai}>
+                    {"⚠ Açıklamadaki değer eğitim aralığı dışında (" + x.egitimDisi.join(", ") +
+                      ") — açıklama tahmin dışı bölgeye uzanıyor; konumu ve parametreleri doğrulayın."}
+                  </Text>
+                )}
+                {x.ogrenilmemis.length > 0 && (
+                  <Text style={s.xai}>
+                    {"Öğrenilmemiş girdi: " + x.ogrenilmemis.join(", ") + " — model eğitiminde sabitti, dozu etkilemez; açıklamaya katılmadı."}
+                  </Text>
+                )}
+              </>
+            );
+          })()}
 
           {/* [S5 adım 10] İç ScrollView → View: iç içe kaydırıcı Android'de dokunuşu çalıyordu.
               Tablo artık tek kaydırıcının (kart gövdesi) parçası. */}

@@ -4816,7 +4816,9 @@ def _xai_zinciri_durumu() -> dict:
                 continue
             from pathlib import Path as _P
 
-            if not (_P(list(spec.submodule_search_locations)[0]) / "xai_ref_stats.npz").exists():
+            # AI1.X6: canlı duyarlılığın eğitim referansı (xai_train_ref.npz) da aynı sınıfta — biri yoksa modül eksik
+            _kok = _P(list(spec.submodule_search_locations)[0])
+            if not all((_kok / ad).exists() for ad in ("xai_ref_stats.npz", "xai_train_ref.npz")):
                 eksik_npz.append(modul)
         except Exception:
             continue

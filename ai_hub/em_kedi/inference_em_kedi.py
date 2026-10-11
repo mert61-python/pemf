@@ -164,12 +164,20 @@ def xai_ref_stats():
     return load_ref_stats(_DIR)
 
 
+def xai_egitim_ref():
+    """AI1.X6: eğitim CSV'sinin TAMAMINDAN min/max/std (xai_train_ref.npz) — canlı duyarlılığın merkezi farkı, organ_id
+    kırpma aralığı, öğrenilmemiş (std 0) ve eğitim aralığı dışı işaretleri buradan."""
+    from ai_hub.xai_tabular.em_runtime import load_egitim_ref
+
+    return load_egitim_ref(_DIR)
+
+
 def xai_hizli_sensitivity(predictor, x, y, z, organ_id, achieved_B=0.001, duty_sum=2.0, top_n=3):
     """CANLI yol (AI Pro öneri-onay ekranı): 7+1 ONNX forward'lık D-kanal duyarlılığı —
     'önerilen dozu en çok ne belirledi' JSON'u (PNG/SHAP yok; ~ms mertebesi)."""
     from ai_hub.xai_tabular.em_runtime import hizli_sensitivity
 
-    return hizli_sensitivity(predictor, xai_ref_stats(), x, y, z, organ_id,
+    return hizli_sensitivity(predictor, xai_egitim_ref(), x, y, z, organ_id,
                               achieved_B, duty_sum, n_duty=7, top_n=top_n)
 
 

@@ -99,9 +99,11 @@ def test_KRITIK_em_modul_hizli_sensitivity_ANLAMLI(modul_yolu):
     a = m.xai_hizli_sensitivity(p, 10.0, 20.0, 5.0, 1, 0.001, 2.0)
     b = m.xai_hizli_sensitivity(p, 10.0, 20.0, 5.0, 1, 0.001, 2.0)
     assert a == b, f"{modul_yolu}: aynı girdiye farklı açıklama (deterministik değil)"
-    assert len(a) == 3 and all(set(t) == {"feature", "etki"} for t in a)
-    assert a[0]["feature"] == "duty_sum", f"{modul_yolu}: mühendislenmiş sinyal top-1 değil: {a!r}"
-    assert all(t["etki"] > 0 for t in a), f"{modul_yolu}: sensitivity ~0 (ref-stats bağlanmamış olabilir)"
+    # AI1.X6: liste = belirleyenler + (eğitim aralığı dışı / öğrenilmemiş) işaret öğeleri — "belirleyen"ler süzülür
+    belirleyen = [t for t in a if not t.get("ogrenilmemis") and t.get("surukleyen", True)]
+    assert len(belirleyen) == 3 and all({"feature", "etki"} <= set(t) for t in belirleyen)
+    assert belirleyen[0]["feature"] == "duty_sum", f"{modul_yolu}: mühendislenmiş sinyal top-1 değil: {a!r}"
+    assert all(t["etki"] > 0 for t in belirleyen), f"{modul_yolu}: sensitivity ~0 (ref-stats bağlanmamış olabilir)"
 
 
 def _fonksiyon_govdesi(src: str, karakter_ofseti: int) -> str:
