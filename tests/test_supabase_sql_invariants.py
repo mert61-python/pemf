@@ -67,7 +67,13 @@ def test_KRITIK_README_her_izlenen_SQL_dosyasini_ANAR():
     """D4.25: Supabase SQL'leri sahibi tarafından ELLE ve SIRAYLA uygulanır; README'de anılmayan dosya ya hiç uygulanmaz
     ya da yanlış sırada uygulanır (4. dosya listede YOKTU — 2026-08-18). Üçüncü konum (`apps/ui/supabase/`) da anılmalı."""
     metin = (_KOK / "apps" / "backend" / "database" / "README.md").read_text(encoding="utf-8")
-    anilmayan = sorted(p.relative_to(_KOK).as_posix() for p in _sql_files() if p.name not in metin)
+    # 4-A inc. 4A-2.6: ad README'de ALT-DİZE olarak değil, AYRI bir ad olarak geçmeli — yoksa yeni `supabase/devices.sql`
+    # ("supabase_devices.sql"in alt dizesi), `okuma_rpc.sql`, `v2.sql` anılmadan geçiyordu.
+    anilmayan = sorted(
+        p.relative_to(_KOK).as_posix()
+        for p in _sql_files()
+        if not re.search(r"(?<![\w.-])" + re.escape(p.name) + r"(?![\w.-])", metin)
+    )
     assert not anilmayan, f"apps/backend/database/README.md su izlenen .sql dosya(lar)ini ANMIYOR: {anilmayan}"
 
 
