@@ -51,15 +51,21 @@ Write-Host "[YAYIN-ONCESI] tam suit (ZORUNLU=1, GOLDEN_REQUIRED=1): $komut $($ar
 # "Get-Acl ... module could not be loaded" ile düşer → 9 ACL testi YALANCI KIRMIZI, Y30 her yayını durdururdu. (pwsh
 # powershell.exe'yi DOĞRUDAN açınca yolu kendisi ayıklar; araya python girince ayıklama yok.) Süit süresince değişken
 # KALDIRILIR — her kabuk kendi varsayılanını kurar — ve sonra AYNEN geri yüklenir (betik `&` ile çağrılır; publish'in
-# kalanı etkilenmesin). SetEnvironmentVariable($null) değişkeni silmez, "" bırakır → Remove-Item.
+# kalanı etkilenmesin).
+# ⚠️ S-4B.3 (4-A inc. A1 S4, ölçüldü 4-B): değişken SİLİNMEZ, BOŞ DİZEYE çekilir. Silinen değişkeni pwsh bir sonraki modül
+# (oto)yüklemesinde KENDİ yollarıyla yeniden kurar → python → powershell.exe 5.1 yine düşer (sonda: silme = dokunmama = KIRMIZI,
+# boş dize = YEŞİL). Bugün silme ile çağrı arasında otoyükleme yok; araya giren her cmdlet Y30'u sessizce bozardı. Boş dizede
+# her kabuk kendi varsayılanını kurar. Kapı: tests/test_yayin_oncesi_suit_PSMODULEPATH_otoyuklemeye_dayanikli_S4B3.py
 $psModulYolu = $env:PSModulePath
-Remove-Item -LiteralPath 'Env:PSModulePath' -ErrorAction SilentlyContinue
+$env:PSModulePath = ''
 Push-Location -LiteralPath $kok
 try {
   & $komut @argumanlar
   $rc = $LASTEXITCODE
 } finally {
+  # Önceden YOKSA yine YOK bırak ('' kalmasın — SetEnvironmentVariable($null) değişkeni silmez, "" bırakır).
   if ($null -ne $psModulYolu) { $env:PSModulePath = $psModulYolu }
+  else { Remove-Item -LiteralPath 'Env:PSModulePath' -ErrorAction SilentlyContinue }
   Pop-Location
 }
 if ($null -eq $rc) { $rc = 1 }
