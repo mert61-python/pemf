@@ -372,7 +372,15 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
                 $hazir = $true; break
             } catch { }
         }
-        if (-not $hazir) { Warn "AI kapısı: EXE $gatePort portunda açılmadı → kapı ATLANDI (log: $gateLog)" }
+        # ⚠️ D4.19 (B-10.74): EXE sağlık ucuna ULAŞILAMAZSA derleme DURUR. Eskiden `Warn "… kapı ATLANDI"` deyip devam ediyor,
+        # betik "✓ Headless backend EXE hazır" ve ÇIKIŞ 0 ile bitiyordu → hiç açılmayan (ölü doğmuş) EXE paketlemeye geçebilirdi;
+        # AI hazırlık, XAI zinciri, pip yasağı ve çalışma-anı kod koruması denetimleri BİRLİKTE düşüyordu. Bilinçli geçiş yalnız
+        # açık `-SkipAiGate` ile. (`Die` = exit 1; `finally` ortamı geri yükler ve kapı kökünü siler.)
+        # Kapı: tests/test_build_AI_kapisi_EXE_acilmazsa_DURUR_D419.py
+        if (-not $hazir) {
+            Die ("AI KAPISI: üretilen EXE $gatePort portunda AÇILMADI — bu EXE yayına ÇIKAMAZ (log: $gateLog, $gateLog.err). " +
+                 "Kapıyı bilinçli geçmek için -SkipAiGate (yalnız acil durum).")
+        }
         else {
             # derin=1: find_spec DEĞİL, GERÇEK import — ölü-doğmuş modülü yakalayan tek mod.
             $rapor = Invoke-RestMethod "http://127.0.0.1:$gatePort/api/ai/hazirlik?derin=1" -TimeoutSec 600
