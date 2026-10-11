@@ -380,6 +380,12 @@ def test_KRITIK_Windows_ratchet_adimi_KAPSAMI_OLCER():
     komut = str(win[0]["run"])
     assert re.search(r"(^|\s)--cov(\s|=|$)", komut), f"Windows ratchet adımı kapsamı ÖLÇMÜYOR: {komut}"
     assert "--cov-report" in komut, f"Windows ratchet adımında --cov-report yok: {komut}"
+    # 4-A inc. 4A-2.8: komut satırı `--cov-fail-under` pyproject eşiğini EZER, `--cov-config` başka ayar dosyasına yönlendirir.
+    for dosya in _is_akislari():
+        for is_ in (_yukle(dosya).get("jobs") or {}).values():
+            for a in is_.get("steps") or []:
+                ez = re.findall(r"--cov-(?:fail-under|config)\b\S*", str(a.get("run", "")))
+                assert not ez, f"{dosya}/{_adim_adi(a)}: {ez} — pyproject fail_under eşiğini EZER (sahip kararı #20)"
 
 
 def _fail_under() -> float:
@@ -401,3 +407,16 @@ def test_KRITIK_fail_under_SAHIP_KARARI_TABANIN_ALTINA_DUSMEZ():
     assert _fail_under() >= _FAIL_UNDER_TABANI, (
         f"fail_under {_fail_under()} < {_FAIL_UNDER_TABANI} — sahip kararı: eşik düşürülmez"
     )
+    # 4-A inc. 4A-2.8: coverage.py ayarı `.coveragerc` → `setup.cfg [coverage:*]` → `tox.ini [coverage:*]` → pyproject
+    # sırasıyla arar ve İLK bulunanı kullanır (pyproject hiç okunmaz); pytest-cov `--cov-fail-under` (addopts) dosyayı ezer.
+    assert not (KOK / ".coveragerc").exists(), (
+        ".coveragerc VAR — pyproject [tool.coverage] hiç okunmaz, eşik oradan gelir"
+    )
+    for ad in ("setup.cfg", "tox.ini"):
+        yol = KOK / ad
+        if yol.exists():
+            assert not re.search(r"^\[coverage:", yol.read_text(encoding="utf-8", errors="replace"), re.M), (
+                f"{ad} [coverage:*] bölümü taşıyor — pyproject eşiği okunmaz"
+            )
+    ez = re.findall(r"--cov-(?:fail-under|config)\b\S*", (KOK / "pyproject.toml").read_text(encoding="utf-8"))
+    assert not ez, f"pyproject (addopts) {ez} — fail_under eşiğini EZER"
