@@ -162,9 +162,36 @@ def harita_sorunlari(kok: Path = KOK) -> tuple[int, list[str]]:
         sonda = posixpath.join(ad, "_yerel_kapi_sondasi")
         if ad in dizinler:
             sorunlar.append(f"{girdi} {YEREL_ISARETI} işaretli ama git'te İZLENİYOR")
-        elif subprocess.run(["git", "check-ignore", "--no-index", "-q", sonda], cwd=kok, timeout=60).returncode != 0:
+        elif not gitignore_disliyor_mu(kok, sonda):
             sorunlar.append(f"{girdi} {YEREL_ISARETI} işaretli ama .gitignore'da DEĞİL (yanlışlıkla izlenebilir)")
     return len(girdiler), sorunlar
+
+
+def gitignore_disliyor_mu(kok: Path, yol: str) -> bool:
+    """Yolu DEPONUN `.gitignore`'u mu dışlıyor (index'e bakmadan)?
+
+    ⚠️ 4-A inc. 4A-2.10: `check-ignore --no-index -q` `.git/info/exclude` ve `core.excludesFile` (makineye özgü — CI'ın temiz
+    klonunda YOK) kurallarını da sayar → kural yalnız oradaysa kapı yerelde YEŞİL, CI'da KIRMIZI. `-v` karar veren deseni ve
+    kaynağını verir; yalnız depo içi bir `.gitignore` kaynağı sayılır. `-v` NEGASYON (`!`) eşleşmesinde de çıkış 0 verir (ölçüldü)."""
+    r = subprocess.run(
+        ["git", "check-ignore", "--no-index", "-v", yol],
+        cwd=kok,
+        capture_output=True,
+        timeout=60,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    m = re.match(r"^(.*):(\d+):(.*)\t", r.stdout)
+    if r.returncode != 0 or not m:
+        return False
+    kaynak, desen = m.group(1).strip('"').replace("\\", "/"), m.group(3)
+    return (
+        (kaynak == ".gitignore" or kaynak.endswith("/.gitignore"))
+        and not kaynak.startswith((".git/", "/"))
+        and (":" not in kaynak)
+        and not desen.startswith("!")
+    )
 
 
 def _sahte_depo(kok: Path, izlenen: dict[str, str], izlenmeyen: dict[str, str], gitignore: bytes = b"") -> Path:

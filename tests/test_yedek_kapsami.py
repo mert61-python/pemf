@@ -67,13 +67,35 @@ def _izleniyor_mu(rel: str) -> bool:
 
 
 def _kural_disliyor_mu(rel: str) -> bool:
-    """`.gitignore` kuralları bu yolu dışlıyor mu — index'e BAKMADAN (`--no-index`): bir sonraki `git add` onu alır mı."""
+    """`.gitignore` kuralları bu yolu dışlıyor mu — index'e BAKMADAN (`--no-index`): bir sonraki `git add` onu alır mı.
+
+    ⚠️ 4-A inc. 4A-2.10: yalnız DEPONUN `.gitignore`'u sayılır — `.git/info/exclude` / `core.excludesFile` makineye özgüdür
+    (kural yalnız oradaysa kapı yerelde yeşil, CI'da/başka makinede kırmızı ya da 857 MB'lık ağırlık `git add -A` ile girer)."""
+    return _gitignore_disliyor_mu(f"release_assets/ai_models/{rel}")
+
+
+def _gitignore_disliyor_mu(yol: str) -> bool:
+    import re
+
     r = subprocess.run(
-        ["git", "check-ignore", "--no-index", "-q", f"release_assets/ai_models/{rel}"],
+        ["git", "check-ignore", "--no-index", "-v", yol],
         cwd=_KOK,
         capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
-    return r.returncode == 0
+    m = re.match(r"^(.*):(\d+):(.*)\t", r.stdout)
+    if r.returncode != 0 or not m:
+        return False
+    kaynak, desen = m.group(1).strip('"').replace("\\", "/"), m.group(3)
+    # `-v` NEGASYON (`!`) eşleşmesinde de çıkış 0 verir (ölçüldü) — o yol dışlanmıyor demektir.
+    return (
+        (kaynak == ".gitignore" or kaynak.endswith("/.gitignore"))
+        and not kaynak.startswith((".git/", "/"))
+        and (":" not in kaynak)
+        and not desen.startswith("!")
+    )
 
 
 @pytest.mark.parametrize("rel", _DEPODA_DURMALI)
@@ -156,7 +178,7 @@ def test_KRITIK_arsivdeki_hicbir_dosya_gitignore_ile_GIZLENMIYOR():
     gizli = [
         a
         for a in _izlenen_dosyalar("training_archive")
-        if subprocess.run(["git", "check-ignore", "--no-index", "-q", a], cwd=_KOK, capture_output=True).returncode == 0
+        if _gitignore_disliyor_mu(a)  # 4A-2.10: yalnız deponun .gitignore'u (makineye özgü exclude sayılmaz)
     ]
     assert not gizli, (
         f"{len(gizli)} arsiv dosyasi gitignore ile gizleniyor (ornek: {gizli[:3]}). "
