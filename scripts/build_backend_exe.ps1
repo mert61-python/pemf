@@ -375,11 +375,16 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
         try { $null = $proc.Handle } catch { }
         $hazir = $false
         $yabanci = $false
+        # ⚠️ 4B-1.1: pwsh 7 HTTP(S)_PROXY'yi 127.0.0.1 için de kullanır (ölçüldü) → istek kendi EXE'mize değil VEKİLE gider;
+        # vekil hedefe ulaşamaz ya da X-Forwarded-For ekler → nonce yansımaz → sağlam EXE "açılmadı/yabancı" sayılıp build
+        # YANLIŞ durur. Windows PowerShell 5.1'de -NoProxy yok (ortam vekilini zaten okumaz; sistem vekili loopback'i atlar).
+        $vekilsiz = @{}
+        if ($PSVersionTable.PSVersion.Major -ge 6) { $vekilsiz['NoProxy'] = $true }
         foreach ($i in 1..90) {
             Start-Sleep -Seconds 2
             if ($proc.HasExited) { break }   # ölü EXE için 3 dakika yoklama YOK
             try {
-                $saglik = Invoke-RestMethod "http://127.0.0.1:$gatePort/api/health" -TimeoutSec 3
+                $saglik = Invoke-RestMethod "http://127.0.0.1:$gatePort/api/health" -TimeoutSec 3 @vekilsiz
                 if ($saglik.launcherNonce -eq $gateNonce) { $hazir = $true; break }
                 $yabanci = $true   # portta yanıt veren süreç nonce'umuzu bilmiyor → bizim EXE DEĞİL
             } catch { }
@@ -400,7 +405,7 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
         }
         else {
             # derin=1: find_spec DEĞİL, GERÇEK import — ölü-doğmuş modülü yakalayan tek mod.
-            $rapor = Invoke-RestMethod "http://127.0.0.1:$gatePort/api/ai/hazirlik?derin=1" -TimeoutSec 600
+            $rapor = Invoke-RestMethod "http://127.0.0.1:$gatePort/api/ai/hazirlik?derin=1" -TimeoutSec 600 @vekilsiz
             Info "AI hazırlık: $($rapor.hazir)/$($rapor.toplam) modül hazır."
             if ($rapor.eksik.Count -gt 0) {
                 foreach ($m in $rapor.moduller) {
