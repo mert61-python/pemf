@@ -4818,9 +4818,9 @@ def _modul_yukleme_bicimi(import_yolu: str) -> str:
     """Modül GERÇEKTE nereden yüklendi? (denetim 2026-08-28 #07)
 
     ⚠️ UZANTIYA BAKMA. PyInstaller 6.20, PYZ arşivinden yüklenen modüle de `.py` uzantılı bir
-    `__file__` verir (`pyimod02_importers.py:405-418` bunu bilerek yapar), `EncryptedLoader` ise
-    (`utils/encrypted_import.py:88` — `spec_from_loader` + `get_filename` yok) `__file__`
-    ATAMAZ. İkisi de ölçüldü: uzantı tabanlı ayrım "PYZ bytecode" ile "diskte düz kaynak"ı
+    `__file__` verir (`pyimod02_importers.py:405-418` bunu bilerek yapar — ölçüldü). `EncryptedLoader`
+    da D4.13'ten beri (`utils/encrypted_import.py`, `spec_from_file_location`) `__file__`'ı diskteki
+    `.pyenc`'e bağlar (has_location True). Uzantı tabanlı ayrım "PYZ bytecode" ile "diskte düz kaynak"ı
     karıştırır — oysa alanın var oluş sebebi tam olarak bu ayrımdır.
 
     Anlamlar:
