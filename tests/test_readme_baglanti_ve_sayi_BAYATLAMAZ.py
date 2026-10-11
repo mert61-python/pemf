@@ -100,13 +100,35 @@ def _cozulur_mu(kaynak_rel: str, hedef: str, kok: Path = KOK) -> bool:
     """
     dosyalar, dizinler = _izlenen(str(kok))
     for aday in dict.fromkeys((hedef, urllib.parse.unquote(hedef))):
-        yol = posixpath.normpath(posixpath.join(posixpath.dirname(kaynak_rel), aday))
+        # 4-A inc. (orkestratör, 4A-2.9 eki): `/` ile başlayan hedefi GitHub DEPO KÖKÜNDEN çözer — atlanmaz (atlansaydı ileride
+        # yazılacak kök-göreli bir bağlantı sessizce kapısız kalırdı). Yalın `/` depo köküdür (vardır).
+        temel = "" if aday.startswith("/") else posixpath.dirname(kaynak_rel)
+        yol = posixpath.normpath(posixpath.join(temel, aday.lstrip("/")))
         yol = "" if yol == "." else yol
         if yol == ".." or yol.startswith("../"):
             continue
+        if yol == "" and aday.startswith("/"):
+            return True
         if yol in dosyalar or yol in dizinler:
             return True
     return False
+
+
+#: 4-A inc. 4A-2.9: satır içi `[x](hedef)` dışındaki yerel bağlantı biçimleri — eskiden SESSİZCE atlanıyordu (kök README'nin
+#: `<img src="docs/screenshots/…">` ekran görüntüleri kapısızdı). Sıra: açılı · sorgulu · başvuru tanımı · HTML src/href.
+_EK_BICIMLER = (
+    re.compile(r"\]\(<([^>#?]+)(?:[#?][^>]*)?>\)"),
+    re.compile(r"\]\(([^)\s#?<]+)\?[^)]*\)"),
+    re.compile(r"^ {0,3}\[[^\]^][^\]]*\]:[ \t]*<?([^\s>#?]+)", re.M),
+    re.compile(r"""<(?:img|a|source|video)\b[^>]*?\b(?:src|href)\s*=\s*["']([^"'#?]+)""", re.I),
+)
+
+
+def _hedefler(metin: str) -> list[str]:
+    hedefler = [m.group(1) for m in re.finditer(r"\]\(([^)#?]+?)(?:#[^)]*)?\)", metin)]
+    for desen in _EK_BICIMLER:
+        hedefler += [m.group(1) for m in desen.finditer(metin)]
+    return [h.strip() for h in hedefler]
 
 
 def kirik_baglantilar(kok: Path = KOK) -> list[tuple[str, str]]:
@@ -114,9 +136,8 @@ def kirik_baglantilar(kok: Path = KOK) -> list[tuple[str, str]]:
     bulgular = []
     for rel in _md_dosyalari(kok):
         metin = _cit_disi((kok / rel).read_bytes().decode("utf-8", errors="replace"))
-        for m in re.finditer(r"\]\(([^)#?]+?)(?:#[^)]*)?\)", metin):
-            hedef = m.group(1).strip()
-            if hedef.startswith(("http://", "https://", "mailto:", "<")) or not hedef:
+        for hedef in _hedefler(metin):
+            if hedef.startswith(("http://", "https://", "mailto:", "data:", "<", "//")) or not hedef:
                 continue
             if Path(hedef).name.startswith(MUAF_ADLAR):
                 continue
@@ -268,6 +289,15 @@ def test_KARSIT_KANIT_TEMIZ_AGAC_izlenmeyen_hedef_KIRIK(tmp_path):
     assert sorted(h for _, h in kirik_baglantilar(kok)) == sorted(
         ["yerel/B.md", "sir/README.md", "yok/C.md", "docs/a.md", "docs\\A.md", "../disari.md"]
     )
+
+
+def test_KARSIT_KANIT_KOK_goreli_hedef_DEPO_KOKUNDEN_cozulur_ATLANMAZ(tmp_path):
+    """4-A inc. (orkestratör, 4A-2.9 eki): GitHub depo içi markdown'da `/yol`u DEPO KÖKÜNDEN çözer. Kök-göreli hedef atlanırsa
+    kırık bir `/docs/YOK.md` ya da `<img src="/docs/yok.png">` kapısız kalır; yalın `/` (depo kökü) ve `//alan` (şema-göreli
+    harici adres) kırık sayılmaz."""
+    readme = '[kok](/docs/A.md) [kokyok](/docs/YOK.md) <img src="/docs/yok.png"> <a href="/">kok</a> [harici](//ornek.invalid/x)'
+    kok = _sahte_depo(tmp_path / "depo", {"docs/README.md": readme, "docs/A.md": "a"}, {})
+    assert sorted(h for _, h in kirik_baglantilar(kok)) == ["/docs/YOK.md", "/docs/yok.png"]
 
 
 def test_KARSIT_KANIT_harita_YEREL_isareti_DOGRULANIR(tmp_path):
