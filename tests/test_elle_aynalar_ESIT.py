@@ -75,6 +75,28 @@ def test_a_launcher_UI_invoke_adlari_RUST_generate_handler_listesinde():
     assert not eksik, (
         f"UI'nin cagirdigi komut(lar) Rust generate_handler! listesinde YOK (cagri SESSIZCE duser): {eksik}"
     )
+    # 4A-3.2 (A3 incelemesi): (1) dinamik cagri desenin disinda kalir (takma ad `const inv = invoke`, sablon dize
+    # invoke(`…`), degisken ad) — yorum disindaki HER `invoke` basvurusu literal adli cagri ya da tek destructuring olmali.
+    kod = re.sub(r"<!--.*?-->|/\*.*?\*/", "", ui, flags=re.S)
+    kod = re.sub(r"(?<![:\"'\\])//[^\n]*", "", kod)
+    dinamik = [
+        kod[max(0, m.start() - 20) : m.end() + 30].strip()
+        for m in re.finditer(r"\binvoke\b", kod)
+        if not re.match(r"""invoke\(\s*["'][A-Za-z_][A-Za-z0-9_]*["']""", kod[m.start() :])
+    ]
+    destructuring = [d for d in dinamik if re.search(r"const\s*\{\s*invoke\s*\}\s*=", d)]
+    assert len(destructuring) == 1 and len(dinamik) == 1, (
+        f"UI'da kapinin goremedigi (literal adsiz) invoke basvurusu var — adi dogrulanamaz: {dinamik}"
+    )
+    # (2) guncelleme kipi Builder'i (ikinci generate_handler! blogu) yalniz EN BUYUK blok olculunce gorunmez. UI `boot()`
+    # ILK cagrisi her kipte kosar → o komut HER blokta kayitli olmali (yoksa guncelleme ekrani yerine normal acilis).
+    ilk = re.search(r"async function boot\(\)\s*\{.*?\binvoke\(\s*[\"']([A-Za-z_][A-Za-z0-9_]*)[\"']", ui, re.S)
+    assert ilk, "UI boot() icinde ilk invoke bulunamadi (yapi degisti mi?)"
+    assert len(bloklar) >= 2, f"VAKUM: guncelleme kipi generate_handler! blogu bulunamadi ({len(bloklar)} blok)"
+    kayitsiz = [sorted(b) for b in bloklar if ilk.group(1) not in b]
+    assert not kayitsiz, (
+        f"boot() ilk komutu {ilk.group(1)!r} su generate_handler! blok(lar)inda YOK (o kipte UI acilista duser): {kayitsiz}"
+    )
 
 
 # ── b) Supabase ref + publishable anahtar — DEĞER BASILMAZ ────────────────────────────────────────────────
