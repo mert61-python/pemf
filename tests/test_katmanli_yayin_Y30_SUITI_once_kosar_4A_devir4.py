@@ -37,7 +37,8 @@ def _kos(tmp_path: Path, kirmizi: bool) -> tuple[subprocess.CompletedProcess, di
     paket.mkdir()
     (paket / "manifest.json").write_text(json.dumps(ONCEKI), encoding="utf-8")
     argumanlar = f"--dir,{paket},--version,{SURUM},--tag,client-app-v{SURUM},--repo,ornek/pemf-update"
-    env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONDONTWRITEBYTECODE="1")
+    # 4B-3.4: sentetik -Hedef/-PytestOnek kancası yalnız açık denetim bayrağıyla kabul edilir.
+    env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONDONTWRITEBYTECODE="1", PEMF_Y30_DENETIM_KANCASI="1")
     r = subprocess.run(
         [pwsh, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(BETIKLER / "katmanli_yayin_hazirla.ps1"),
          f"-ManifestArgs:{argumanlar}", "-Python", sys.executable, "-PytestOnek", f"{sys.executable},-m,pytest", "-Hedef", str(hedef)],

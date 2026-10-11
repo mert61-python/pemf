@@ -13,6 +13,8 @@
 #   pwsh -File scripts\katmanli_yayin_hazirla.ps1 -ManifestArgs:"--dir,pemf-app-packages,--version,<sürüm>,--tag,client-app-v<sürüm>,--repo,mert61-python/pemf-update"
 #   ⚠️ İki nokta (`-ManifestArgs:"…"`) ŞART: değer `--` ile başladığı için `pwsh -File` onu yeni bir parametre adı sanar.
 # Denetim / sandbox kancaları (yayın makinesinde KULLANILMAZ): -PytestOnek, -Hedef (yayin_oncesi_suit.ps1'e aynen geçer).
+# ⚠️ 4B-3.4: kancalar Y30'u daraltır ya da TÜMDEN atlar (ölçüldü: no-op -PytestOnek ile hiç test koşmadan manifest yazıldı) →
+# YALNIZ açık denetim bayrağıyla (PEMF_Y30_DENETIM_KANCASI=1) kabul edilir ve çıktı "DAR SUIT" diye damgalanır.
 # =============================================================================
 param(
   [Parameter(Mandatory = $true)][string[]]$ManifestArgs,
@@ -30,6 +32,11 @@ if (-not $Python) {
 }
 
 # --- 0) Y30: YAYIN ÖNCESİ ZORUNLU TAM SÜİT ---
+$kancaVar = ($PytestOnek.Count -gt 0) -or ($Hedef -ne 'tests')
+if ($kancaVar -and $env:PEMF_Y30_DENETIM_KANCASI -ne '1') {
+  throw "Y30 denetim kancasi (-PytestOnek / -Hedef) yayinda KULLANILMAZ - tam suit daraltilamaz, manifest YAZILMADI (yalniz denetim: PEMF_Y30_DENETIM_KANCASI=1)."
+}
+if ($kancaVar) { Write-Host "[KATMANLI-YAYIN] !!! DAR SUIT (denetim kancasi: Hedef=$Hedef) - bu manifest YAYINLANAMAZ !!!" }
 # ⚠️ Adlandırılmış parametreler HASHTABLE ile geçirilir (dizi splat'ı "-Ad" dizesini KONUMSAL verir).
 $y30 = @{ Hedef = $Hedef }
 if ($PytestOnek.Count -gt 0) { $y30.PytestOnek = $PytestOnek }
