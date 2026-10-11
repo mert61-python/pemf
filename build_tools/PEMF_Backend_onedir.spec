@@ -26,6 +26,14 @@ else:
     project_path = spec_dir
 if project_path not in sys.path:
     sys.path.insert(0, project_path)
+# ⚠️ D4.18 (B-10.71) · D4.17 (B-9.2): F4'ten (2026-09-18) beri ürün paketleri (servers / utils / database / services /
+# controllers) `apps/backend` altında. `collect_submodules` aşağıda yalnız depo kökü yoldayken çağrılıyordu ve `except: pass`
+# boş sonucu yutuyordu → beş paketin beşi 0 modül: yalnız DİNAMİK yüklenen (string / importlib) bir ürün modülü donmuş EXE'den
+# SESSİZCE düşerdi (ör. services.credential_manager). Yol, toplamadan ÖNCE eklenir (Analysis `pathex` ile aynı).
+# Kapı: tests/test_spec_BIRINCI_TARAF_paketleri_TOPLANIR_D417_D418.py
+backend_path = os.path.join(project_path, 'apps', 'backend')
+if backend_path not in sys.path:
+    sys.path.insert(0, backend_path)
 
 version_file = os.path.join(project_path, 'VERSION')
 app_version = open(version_file, encoding='utf-8').read().strip() if os.path.exists(version_file) else '0.0.0'
