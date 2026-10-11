@@ -496,11 +496,26 @@ $probePort = if ($EnvMap.Contains('PEMF_API_PORT')) { (Test-PemfApiPortDegeri $E
 # D2.74: kural adı kipe bağlı — staging kuralı klinik kuralını ezmez / onunla karışmaz; staging keşif (UDP 5051) kuralı açmaz.
 $FwKurallar = @(@{n = $(if ($StagingMi) { "PEMF Backend API (staging)" } else { "PEMF Backend API" }); p = "TCP"; port = $probePort })
 if (-not $StagingMi) { $FwKurallar += @{n = "PEMF UDP Discovery"; p = "UDP"; port = 5051 } }
+# ⚠️ İG-9.5 artığı (4-A devri #3): kural eskiden yalnız ADINA göre denetleniyordu ("bu adda kural VAR → atla"). Aynı adlı ESKİ
+# bir kural farklı port (eski PEMF_API_PORT), protokol ya da program yolu (taşınmış kurulum) taşıyorsa düzeltilmiyor, backend
+# yeni portta dinlerken LAN erişimi engelli kalıyordu. Kural İÇERİĞİYLE (protokol + port + program) doğrulanır; uymayan aynı
+# adlı kurallar silinip doğrusu kurulur. Kapı: tests/test_setup_services_FW_kurali_ADLA_degil_ICERIKLE_IG95.py
 foreach ($r in $FwKurallar) {
-    if (-not (Get-NetFirewallRule -DisplayName $r.n -ErrorAction SilentlyContinue)) {
-        try { New-NetFirewallRule -DisplayName $r.n -Direction Inbound -Program $BackendExe -Action Allow -Protocol $r.p -LocalPort $r.port -Profile Any -ErrorAction Stop | Out-Null }
-        catch { Log "UYARI: Firewall kuralı oluşturulamadı ($($r.n)): $_. LAN'dan (mobil/web) erişim engellenebilir." "Yellow" }
+    $mevcut = @(Get-NetFirewallRule -DisplayName $r.n -ErrorAction SilentlyContinue)
+    if ($mevcut.Count -gt 0) {
+        $uygun = $true
+        foreach ($k in $mevcut) {
+            $pf = $k | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
+            $af = $k | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue
+            if (-not $pf -or "$($pf.Protocol)" -ne $r.p -or "$($pf.LocalPort)" -ne "$($r.port)" -or -not $af -or "$($af.Program)" -ne $BackendExe) { $uygun = $false }
+        }
+        if ($uygun) { continue }
+        Log "Firewall kuralı '$($r.n)' farklı port/protokol/programla VAR -> yeniden kuruluyor ($($r.p) $($r.port))." "Yellow"
+        try { Remove-NetFirewallRule -DisplayName $r.n -ErrorAction Stop }
+        catch { Log "UYARI: eski firewall kuralı silinemedi ($($r.n)): $_" "Yellow" }
     }
+    try { New-NetFirewallRule -DisplayName $r.n -Direction Inbound -Program $BackendExe -Action Allow -Protocol $r.p -LocalPort $r.port -Profile Any -ErrorAction Stop | Out-Null }
+    catch { Log "UYARI: Firewall kuralı oluşturulamadı ($($r.n)): $_. LAN'dan (mobil/web) erişim engellenebilir." "Yellow" }
 }
 
 & $NssmExe start $ServiceBackend *>$null   # 'SERVICE_START_PENDING' zararsız uyarısını sustur; gerçek kanıt /api/health

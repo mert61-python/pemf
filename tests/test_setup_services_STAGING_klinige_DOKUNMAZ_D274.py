@@ -81,12 +81,16 @@ function Get-NetFirewallRule { param($DisplayName, $ErrorAction) }
 function New-NetFirewallRule { param($DisplayName, $Direction, $Program, $Action, $Protocol, $LocalPort, $Profile, $ErrorAction)
     K ("FW-YENI " + $DisplayName + " " + $Protocol + " " + $LocalPort) }
 function Remove-NetFirewallRule { param($DisplayName, $ErrorAction) K ("FW-SIL " + $DisplayName) }
+# İG-9.5 artığı: kural artık İÇERİKLE doğrulanır (port / program filtresi) → filtre gölgeleri de izinli (aparat izin listesi dersi).
+function Get-NetFirewallPortFilter { param([Parameter(ValueFromPipeline = $true)]$InputObject) process { } }
+function Get-NetFirewallApplicationFilter { param([Parameter(ValueFromPipeline = $true)]$InputObject) process { } }
 function Send-PemfAcilDurdur { K 'ACIL-DURDUR'; 1 }
 function Invoke-PemfTeardown { param($Scope, [switch]$IncludePatientData) K ("TEARDOWN " + $Scope); $true }
 function Teardown-Yukle { }
 function sc.exe { K ("sc.exe " + ($args -join ' ')) }
 $izinli = [System.Collections.Generic.List[string]]@('K', 'Log', 'Write-Host', 'Out-Null', 'Start-Sleep', 'Set-Location', 'Nssm-Kayit',
     'Get-Service', 'Get-CimInstance', 'Get-Process', 'Stop-Process', 'Get-NetFirewallRule', 'New-NetFirewallRule', 'Remove-NetFirewallRule',
+    'Get-NetFirewallPortFilter', 'Get-NetFirewallApplicationFilter',
     'Send-PemfAcilDurdur', 'Invoke-PemfTeardown', 'Teardown-Yukle', 'sc.exe', 'Join-Path', 'Split-Path', 'Test-Path', 'Where-Object',
     'Select-Object', 'ForEach-Object', 'Get-Content', 'Get-Date', 'Test-PemfApiPortDegeri', 'Get-PemfProfilEnvDosyasi', 'Read-PemfProfilEnv',
     'Stop-PemfKurulumBackendi', 'Stop-AppProcs', 'Get-ItemProperty')
