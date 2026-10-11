@@ -23,7 +23,7 @@ const bos = () => {};
 function ac(meta: any, model?: string) {
   return render(
     <AiSpecApprovalModal visible specs={{ ...SPECS, ...(model ? { model } : {}) } as any} meta={meta} organName="Hedef"
-      onApprove={bos} onReject={bos} />,
+      onApprove={bos} onReject={bos} onDismiss={bos} />,
   );
 }
 
