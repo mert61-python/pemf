@@ -128,9 +128,14 @@ def metadata_lisansi(meta: str) -> str:
 
 
 #: LGPL biçimleri — KASITLI muaf (dinamik bağlamada kapalı kaynak ürünle dağıtılabilir; bu projede öyle kullanılır).
+#: ⚠️ 4A-3.6 (A3 incelemesi): uzun adın ardındaki `[^,;()]*` KALDIRILDI — virgül/parantez görene dek açgözlü siliyor, aynı
+#: cümledeki "… and GNU General Public License v3" / "and GPL-2.0" / "and GNU Affero …"yu da siliyordu (kopyleft GÖRÜNMEZDİ).
+#: Sürüm/"or later" kuyruğu silinmese de GPL imzası taşımaz.
 _LGPL = re.compile(
-    r"\bLGPL[\w.+-]*|GNU\s+(?:LIBRARY\s+OR\s+)?LESSER\s+GENERAL\s+PUBLIC\s+LICENSE[^,;()]*|\bLESSER\s+GENERAL\s+PUBLIC"
+    r"\bLGPL[\w.+-]*|GNU\s+(?:LIBRARY\s+OR\s+)?LESSER\s+GENERAL\s+PUBLIC\s+LICENSE|\bLESSER\s+GENERAL\s+PUBLIC"
 )
+#: "GPL-compatible" (PSF / BSD türevlerinin ibaresi) kopyleft DEĞİL — LGPL gibi aramadan önce silinir (4A-3.6 yanlış pozitifi).
+_GPL_UYUMLU = re.compile(r"\bGPL[-\s]+COMPATIBLE\b")
 #: Kopyleft imzaları (LGPL bölümleri SİLİNDİKTEN sonra aranır): yalın `GPL`, `GPL-3.0`, `GPLv2+`, `AGPL…`, uzun adlar.
 _KOPYLEFT = re.compile(r"\bA?GPL(?:\b|[-V]?\d)|\bGNU\s+(?:AFFERO\s+)?GENERAL\s+PUBLIC\b|\bAFFERO\b")
 
@@ -141,7 +146,7 @@ def kopyleft_mu(lisans: str) -> bool:
     ⚠️ D4.08 (B-10.94, 2026-10-10): eski sınıflandırıcı alt-dize listesine bakıyordu ve metinde "LGPL" geçerse TAMAMINI
     muaf sayıyordu → yalın `License: GPL`, bileşik `LGPL-2.1 AND GPL-3.0` ve `GNU Affero General Public License v3`
     kopyleft kapısına GÖRÜNMEZDİ (ölçüldü). Artık önce yalnız LGPL BÖLÜMLERİ çıkarılır, kalan metinde GPL aranır."""
-    u = _LGPL.sub(" ", (lisans or "").upper())
+    u = _GPL_UYUMLU.sub(" ", _LGPL.sub(" ", (lisans or "").upper()))
     return bool(_KOPYLEFT.search(u))
 
 
