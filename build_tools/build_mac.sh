@@ -175,7 +175,10 @@ set +e
 "$APP_BIN" --help >/dev/null 2>&1
 rc=$?
 set -e
-[[ $rc -eq 0 ]] && echo "  [OK] --help geçti" || echo "  (--help desteklenmiyor olabilir; asıl smoke: kurulumda --port 8000)"
+# ⚠️ 4B-3.2: eskiden `&& echo OK || echo "(--help desteklenmiyor olabilir …)"` idi — kod YUTULUYORDU; backend_service argparse ile
+# --help'te 0 döner, sıfır dışı = import zinciri kırık / imza reddi (Apple Silicon SIGKILL 137) → bozuk paket zip'lenmez.
+[[ $rc -eq 0 ]] || die "Smoke DÜŞTÜ: '$APP_BIN --help' çıkış $rc — paket üretilmedi (import zinciri / imza / dylib)."
+echo "  [OK] --help geçti"
 
 # --- 7) Paketle ---------------------------------------------------------------
 say "7/7  Paketleme → $OUT_ZIP"
