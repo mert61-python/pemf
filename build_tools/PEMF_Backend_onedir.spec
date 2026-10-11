@@ -389,6 +389,7 @@ print(f"Toplam: {len(binaries)} binary, {len(datas)} data")
 
 # --- Hidden imports: SADECE headless paketler (GUI paketleri toplanmaz) ---
 hidden = []
+_BIRINCI_TARAF_PAKETLER = ('controllers', 'services', 'database', 'servers', 'utils', 'ai', 'ai_hub')
 for pkg in ('controllers', 'services', 'database', 'servers', 'utils', 'ai',
             'ai_hub', 'cryptography', 'numpy',
             # sklearn: pickled preprocessor/scaler nesneleri unpickle'da sklearn.impute /
@@ -410,6 +411,20 @@ for pkg in ('controllers', 'services', 'database', 'servers', 'utils', 'ai',
             # myenv kurulumunda headless KALDIRILIP opencv-python force-reinstall edilir
             # (requirements.txt'teki olculmus kural — grad-cam dersiyle ayni).
             'celldetection'):
+    # D4.17: birinci-taraf paketin toplanamaması (hata ya da 0 modül) derlemeyi DURDURUR — sessiz düşüş yok. Üçüncü-taraf
+    # paketler isteğe bağlı olabilir (ortamda yoksa) → onlar için bugünkü hoşgörü korunur.
+    if pkg in _BIRINCI_TARAF_PAKETLER:
+        try:
+            _toplanan = collect_submodules(pkg)
+        except Exception as _te:
+            raise SystemExit(f"[BUILD FAIL] birinci-taraf paket '{pkg}' toplanamadı: {_te} (D4.17)")
+        if not _toplanan:
+            raise SystemExit(
+                f"[BUILD FAIL] birinci-taraf paket '{pkg}' 0 modül döndü — sys.path'te değil mi? "
+                f"(apps/backend: {backend_path}). Dinamik yüklenen ürün modülleri EXE'den SESSİZCE düşerdi (D4.17)."
+            )
+        hidden += _toplanan
+        continue
     try:
         hidden += collect_submodules(pkg)
     except Exception:

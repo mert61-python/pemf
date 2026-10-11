@@ -117,3 +117,12 @@ def test_KRITIK_collect_submodules_apps_backend_YOLDAYKEN_cagrilir(kosum):
     )
     assert kosum["cagrilar"], "spec birinci-taraf paket icin collect_submodules HIC cagirmadi (vakum)"
     assert not yolsuz, f"bu paketler apps/backend sys.path'te DEGILKEN toplandi: {yolsuz}"
+
+
+def test_KRITIK_birinci_taraf_toplama_BOS_donerse_derleme_DURUR_D417(tmp_path):
+    """`except: pass` / boş liste sessizce geçilmemeli: toplama 0 modül dönerse spec SystemExit ile durmalı (derleme DURUR)."""
+    p, _ = _kos(tmp_path, bos_donsun="services")
+    assert p.returncode != 0, f"services 0 modul dondugu halde spec BASARIYLA bitti (sessiz dusus):\n{p.stdout[-1200:]}"
+    assert "services" in (p.stdout + p.stderr), (
+        f"hangi paketin bos dondugu soylenmedi:\n{(p.stdout + p.stderr)[-1200:]}"
+    )

@@ -52,7 +52,10 @@ def _bos(*a, **k):
 def _hepsi(*a, **k):
     return ([], [], [])
 hooks = types.ModuleType("PyInstaller.utils.hooks")
-hooks.collect_data_files = hooks.collect_submodules = hooks.collect_dynamic_libs = hooks.copy_metadata = _bos
+hooks.collect_data_files = hooks.collect_dynamic_libs = hooks.copy_metadata = _bos
+# D4.17: spec birinci-taraf paket toplaması BOŞ dönerse derlemeyi durdurur → sahte toplayıcı boş olmayan liste döner
+# (bu sürücü datas'ı ölçer; gizli içe aktarmayı test_spec_BIRINCI_TARAF_paketleri_TOPLANIR_D417_D418 ölçer).
+hooks.collect_submodules = lambda pkg, *a, **k: [pkg + '._sahte']
 hooks.collect_all = _hepsi
 pi, ut = types.ModuleType("PyInstaller"), types.ModuleType("PyInstaller.utils")
 pi.utils, ut.hooks = ut, hooks
