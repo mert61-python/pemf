@@ -43,8 +43,10 @@ backend_service.main() imports api_server unconditionally at startup.
      onedir spec removes from the EXE (`Analysis(excludes=[...])`, read from the
      spec itself) -> ModuleNotFoundError in the frozen EXE.
 
-Exit code 1 if any HARD BREAK or EXE EXCLUDE RISK is found; 2 if a startup root
-or the spec's excludes cannot be resolved; else 0. Use as a pre-build / CI guard.
+Exit code 1 if any HARD BREAK or EXE EXCLUDE RISK is found; 2 if a startup root,
+the spec's excludes or a reachable first-party module cannot be resolved/parsed
+(PyInstaller drops an unparsable module silently -- 4B-1.3); else 0. Use as a
+pre-build / CI guard.
 
 @author : migration tooling (Faz 0)
 """
@@ -209,13 +211,20 @@ def _empty():
     return {k: set() for k in _KEYS}
 
 
+#: startup kokunden ulasilan ama AYRISTIRILAMAYAN birinci-taraf moduller {yol: neden} (4B-1.3) -> cikis 2.
+AYRISTIRILAMAYAN: dict = {}
+
+
 def analyze(path: Path, haric=()):
     """Return import buckets keyed by timing (eager/lazy) and guard (open/guarded).
     `haric`: spec'in EXE'den cikardigi moduller (`spec_excludes`) -> ex_open / ex_guarded."""
     src = path.read_text(encoding="utf-8", errors="ignore")
     try:
         tree = ast.parse(src, filename=str(path))
-    except SyntaxError:
+    except SyntaxError as e:
+        # ⚠️ 4B-1.3: eskiden SESSIZCE bos sayiliyordu. PyInstaller da onu yalniz warn-*.txt'e "invalid module named"
+        # yazip pakete ALMADAN surer (olculdu, 6.20) -> main() cikis 2 verir (yarim kapsamli yesil YOK).
+        AYRISTIRILAMAYAN[str(path)] = f"{e.msg} (satir {e.lineno})"
         return _empty()
 
     eager_ids = _eager_import_ids(tree)
@@ -317,6 +326,7 @@ def main(argv):
         return 2
 
     cache = {}
+    AYRISTIRILAMAYAN.clear()
 
     def get(mod):
         if mod not in cache:
@@ -474,6 +484,14 @@ def main(argv):
             print(f"    - {mod}  --guarded-->  {name}")
         print()
 
+    if AYRISTIRILAMAYAN:
+        print(
+            f"HATA: ulasilan {len(AYRISTIRILAMAYAN)} birinci-taraf modul AYRISTIRILAMADI (PyInstaller onu pakete ALMAZ, derleme surer):"
+        )
+        for yol, neden in sorted(AYRISTIRILAMAYAN.items()):
+            print(f"    - {yol}: {neden}")
+        print("SONUC: KIRMIZI (ayristirilamayan modul -- tarama yarim kapsamli)")
+        return 2
     if hard:
         print("SONUC: KIRMIZI (hard break var)")
     elif excl_open:
