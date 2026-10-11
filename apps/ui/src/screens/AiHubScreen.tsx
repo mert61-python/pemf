@@ -207,6 +207,7 @@ interface AiResult {
   xai?: { disease?: string; prob_ckd?: number; top_features?: { feature: string; attribution: number }[] } | null;
   // Faz 2: gradient ısı haritası (termal/ses; explain=true istenirse)
   xai_image_base64?: string; xai_method?: string; xai_error?: string;
+  xai_hedef?: "Sick" | "Healthy";  // AI1.X1: termal haritanın AÇIKLADIĞI karar (tahmin edilen sınıf)
   xai_disagreement_base64?: string;  // histopat: 3-model kararsızlık haritası
   // top-k sınıflandırma (cat_sound / histopath / reticulocytes)
   top_1_class?: string; top_1_prob?: number; top_k?: AiTopK[];
@@ -961,6 +962,21 @@ function MedicalDisclaimer() {
  * ölçüde AÇIK yükseklik ver → heatmap analiz görseliyle aynı boyut/hizada, konteynere sığar.
  * Ebeveyne bağımlılık yok (refaktörde başka kutuya taşınsa da bozulmaz).
  */
+/**
+ * AI1.X1 (hoca XAI v3, 2026-10): termal ısı haritası başlığı haritanın HANGİ KARARI açıkladığını söyler. Sunucu açıklanan
+ * sınıfı `xai_hedef` ile döner (harita artık tahmin edilen sınıfın kanıtı; eskiden "Sağlıklı" sonuçta bile "Hasta"
+ * kararının kanıtı gösteriliyordu). `xai_hedef` yoksa (retikülosit ya da eski sunucu) genel başlık kalır.
+ */
+function isiHaritasiBasligi(r: { xai_hedef?: string }): string {
+  if (r.xai_hedef === "Healthy") {
+    return "🔍 Isı haritası — modeli “Sağlıklı” kararına götüren bölgeler (kırmızı = bu karara güçlü katkı)";
+  }
+  if (r.xai_hedef === "Sick") {
+    return "🔍 Isı haritası — modeli “Hasta (Riskli)” kararına götüren bölgeler (kırmızı = bu karara güçlü katkı)";
+  }
+  return "🔍 Isı haritası — modelin baktığı bölgeler (kırmızı = karara güçlü etki)";
+}
+
 function XaiIsiHaritasi({ base64, etiket, not, testID }: { base64: string; etiket: string; not?: string; testID?: string }) {
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
@@ -1874,9 +1890,9 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
               <Text style={styles.resultText}>Agrege Retikülosit: {result.counts["aggregate reticulocyte"]}</Text>
             </>
           )}
-          {/* Sunum-katmanı XAI (Faz 2): Grad-CAM ısı haritası — istenip üretildiyse. */}
+          {/* Sunum-katmanı XAI (Faz 2): CAM ısı haritası — istenip üretildiyse. AI1.X1: termalde başlık AÇIKLANAN kararı söyler. */}
           {result.xai_image_base64 && (
-            <XaiIsiHaritasi base64={result.xai_image_base64} etiket="🔍 Isı haritası — modelin baktığı bölgeler (kırmızı = karara güçlü etki)" />
+            <XaiIsiHaritasi base64={result.xai_image_base64} etiket={isiHaritasiBasligi(result)} />
           )}
           {result.xai_error && <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text>}
           <MedicalDisclaimer />

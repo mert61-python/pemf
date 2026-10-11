@@ -67,21 +67,29 @@ class GradCAMExplainer:
         self._cam = cls(model=self.model, target_layers=[target_layer])
 
     def explain(self, input_tensor: torch.Tensor,
-                 class_idx: int | None = None) -> np.ndarray:
+                 class_idx: int | None = None,
+                 target: Callable | None = None) -> np.ndarray:
         """Girdi tensoru icin (H, W) 0-1 arasi heatmap.
 
         Args:
             input_tensor: (1, 3, H, W) veya (B, 3, H, W)
             class_idx: hedef sinif index'i. None ise argmax.
+            target: model ciktisini skalere ceviren hedef (class_idx'in yerine). Tek lojitli (sigmoid) ikili
+                modelde sinif secimi bununla yapilir: +lojit = pozitif sinif, -lojit = negatif sinif
+                (AI1.X1, hoca XAI v3 `xai_thermal_v2.py`: class_idx=0 HER ZAMAN pozitif sinifi aciklar).
 
         Returns:
             heatmap: (H, W) numpy float32 [0, 1]
         """
+        if class_idx is not None and target is not None:
+            raise ValueError("class_idx ve target ayni anda verilemez")
         if input_tensor.dim() == 3:
             input_tensor = input_tensor.unsqueeze(0)
         input_tensor = input_tensor.to(self.device)
         targets = None
-        if class_idx is not None:
+        if target is not None:
+            targets = [target]
+        elif class_idx is not None:
             targets = [ClassifierOutputTarget(int(class_idx))]
         cam_out = self._cam(input_tensor=input_tensor, targets=targets)
         return cam_out[0]

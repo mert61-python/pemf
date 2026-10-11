@@ -167,21 +167,24 @@ def _build_thermal_model_pt(pt_path: str, backbone_name: str = "ghostnetv2_100.i
     return model.eval()
 
 
-def xai_termal_isi_haritasi(image_path: str, pt_path: str | None = None,
-                             method: str = "gradcam++", alpha: float = 0.5) -> dict:
-    """Termal goruntu icin Grad-CAM isi haritasi — BELLEK-ICI base64 (disk yok, karar #3).
+#: Tek lojitli (sigmoid) modelin iki karari. Lojit = Sick kaniti: Sick -> +lojit, Healthy -> -lojit aciklanir.
+TERMAL_XAI_SINIFLARI = ("Sick", "Healthy")
 
-    Binary sigmoid model squeeze sorunu _NoSqueeze ile cozulur (bkz. XAI_INTEGRATION §9.5);
-    class_idx=0 = Sick logiti ("modeli 'hasta' dedirten bolgeler"). TEK-KAYNAK: router
-    in-process + ai_service ayni fonksiyonu cagirir (kapi-paritesi dersi).
 
-    Doner: {"xai_image_base64": <jpg b64 overlay>, "method": ...}
+def termal_cam_haritasi(image_path: str, hedef_sinif: str | None = None, pt_path: str | None = None,
+                        method: str = "hirescam"):
+    """CAM isi haritasi — TAHMIN EDILEN sinifin kaniti (AI1.X1, hoca XAI v3 `xai_thermal_v2.py`).
+
+    ⚠️ Eskiden hedef HEP `class_idx=0` = +Sick lojitiydi ("Saglikli" tahmininde "Hasta" aciklaniyordu). Grad-CAM++
+    tek lojitte sinif-duyarsiz (Sick<->Healthy rho 0,83-0,95); HiRes-CAM tamamlayici (-0,45...-0,76) → varsayilan.
+    hedef_sinif: cagiranin GOSTERDIGI tahmin; None ise PT lojiti karar verir (lojit >= 0 <=> predict esigi 0.5).
+    Doner: (img_rgb (224, 224, 3) uint8, heatmap (H, W) 0-1, aciklanan_sinif)
     """
-    import cv2
+    if hedef_sinif is not None and hedef_sinif not in TERMAL_XAI_SINIFLARI:
+        raise ValueError(f"Termal XAI hedefi gecersiz: {hedef_sinif!r} (beklenen: {TERMAL_XAI_SINIFLARI})")
     import torch
 
     from ai_hub.xai_utils.grad_cam import GradCAMExplainer
-    from ai_hub.xai_utils.overlay import blend_to_array
 
     if pt_path is None:
         from ai_hub.xai_utils.pt_yolu import pt_coz
@@ -210,10 +213,33 @@ def xai_termal_isi_haritasi(image_path: str, pt_path: str | None = None,
         arr = (img_rgb.astype(np.float32) / 255.0 - MEAN) / STD
         x_t = torch.from_numpy(arr.transpose(2, 0, 1)[None]).to(device)
 
+        if hedef_sinif is None:
+            with torch.no_grad():
+                hedef_sinif = "Sick" if float(model(x_t).reshape(-1)[0]) >= 0.0 else "Healthy"
+        isaret = 1.0 if hedef_sinif == "Sick" else -1.0
         expl = GradCAMExplainer(model, target_layer=model_raw.backbone.blocks[-1],
                                  method=method, device=device)
-        heatmap = expl.explain(x_t, class_idx=0)  # (H, W) 0-1 — Sick logiti
+        # isaretli hedef: Sick -> +lojit, Healthy -> -lojit (cikti (B, 1))
+        heatmap = expl.explain(x_t, target=lambda cikti, s=isaret: s * cikti[..., 0])
+    return img_rgb, heatmap, hedef_sinif
 
+
+def xai_termal_isi_haritasi(image_path: str, pt_path: str | None = None,
+                             method: str = "hirescam", alpha: float = 0.5,
+                             hedef_sinif: str | None = None) -> dict:
+    """Termal goruntu icin CAM isi haritasi — BELLEK-ICI base64 (disk yok, karar #3).
+
+    Binary sigmoid model squeeze sorunu _NoSqueeze ile cozulur (bkz. XAI_INTEGRATION §9.5); harita TAHMIN EDILEN
+    sinifin kanitini gosterir (`termal_cam_haritasi`). TEK-KAYNAK: router in-process + ai_service ayni fonksiyonu
+    cagirir ve gosterdigi tahmini `hedef_sinif` ile gecirir (kapi-paritesi dersi).
+
+    Doner: {"xai_image_base64": <jpg b64 overlay>, "method": ..., "hedef": "Sick" | "Healthy"}
+    """
+    import cv2
+
+    from ai_hub.xai_utils.overlay import blend_to_array
+
+    img_rgb, heatmap, hedef = termal_cam_haritasi(image_path, hedef_sinif=hedef_sinif, pt_path=pt_path, method=method)
     overlay = blend_to_array(img_rgb, heatmap, alpha=alpha)
     ok, buf = cv2.imencode(".jpg", cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR),
                             [cv2.IMWRITE_JPEG_QUALITY, 85])
@@ -221,7 +247,7 @@ def xai_termal_isi_haritasi(image_path: str, pt_path: str | None = None,
         raise RuntimeError("XAI overlay JPG encode basarisiz")
     import base64 as _b64
 
-    return {"xai_image_base64": _b64.b64encode(buf.tobytes()).decode("ascii"), "method": method}
+    return {"xai_image_base64": _b64.b64encode(buf.tobytes()).decode("ascii"), "method": method, "hedef": hedef}
 
 
 def main():

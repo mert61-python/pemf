@@ -3321,10 +3321,11 @@ async def analyze_thermal(
     file: UploadFile = File(None),
     image_base64: str = Form(None),
     explain: bool = Form(False),
-    xai_method: str = Form("gradcam++"),
+    xai_method: str = Form("hirescam"),
 ):
-    """GhostNetV2 Termal Analiz (+opsiyonel Grad-CAM ısı haritası — Faz 2 + §KALAN A6:
-    CAM yöntemi dışa açıldı, allowlist'li)."""
+    """GhostNetV2 Termal Analiz (+opsiyonel CAM ısı haritası — Faz 2 + §KALAN A6:
+    CAM yöntemi dışa açıldı, allowlist'li). AI1.X1: harita TAHMİN EDİLEN sınıfı açıklar (varsayılan HiRes-CAM;
+    Grad-CAM++ tek lojitte sınıf-duyarsız) ve açıklanan sınıf `xai_hedef` olarak döner."""
     if xai_method not in ("gradcam++", "gradcam", "eigencam", "hirescam"):
         raise HTTPException(status_code=422, detail=f"xai_method geçersiz: {xai_method}")
     try:
@@ -3355,16 +3356,20 @@ async def analyze_thermal(
         yanit = {}
         try:
             result = await asyncio.to_thread(lambda: predictor.predict(tmp.name, threshold=0.5))
-            # Sunum-katmanı XAI: Grad-CAM ısı haritası (modeli 'hasta' dedirten bölgeler).
-            # ⚠️ Açıklama İKİNCİL — hatası analizi ASLA düşürmez (zarif düşüş). CPU'da PT
-            # Grad-CAM sn'ler sürebilir (karar #2 notu) → to_thread; tek-iş kilidi modülde.
+            # Sunum-katmanı XAI: CAM ısı haritası — EKRANDA GÖSTERİLEN tahminin (Sağlıklı / Hasta) kanıtı (AI1.X1:
+            # eskiden hep 'Hasta' lojiti açıklanıyordu). ⚠️ Açıklama İKİNCİL — hatası analizi ASLA düşürmez (zarif
+            # düşüş). CPU'da PT CAM sn'ler sürebilir (karar #2 notu) → to_thread; tek-iş kilidi modülde.
             if explain:
                 try:
                     from ai_hub.cat_thermal import inference_cat_thermal as _ict
 
-                    _x = await asyncio.to_thread(_ict.xai_termal_isi_haritasi, tmp.name, None, xai_method)
+                    _etiket = result.get("label")
+                    _x = await asyncio.to_thread(
+                        lambda: _ict.xai_termal_isi_haritasi(tmp.name, None, xai_method, hedef_sinif=_etiket)
+                    )
                     yanit["xai_image_base64"] = _x["xai_image_base64"]
                     yanit["xai_method"] = _x.get("method")
+                    yanit["xai_hedef"] = _x.get("hedef")
                 except Exception as xe:
                     logger.warning("Termal XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
                     yanit["xai_error"] = "Açıklama üretilemedi"

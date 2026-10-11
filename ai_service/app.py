@@ -787,9 +787,11 @@ def infer_thermal(file: UploadFile = File(...), explain: str = Form(None), xai_m
             try:
                 from ai_hub.cat_thermal import inference_cat_thermal as _ict
 
-                _x = _ict.xai_termal_isi_haritasi(tmp, None, xai_method or "gradcam++")
+                # AI1.X1 paritesi: harita GÖSTERİLEN tahmini açıklar (router ile aynı); varsayılan HiRes-CAM
+                _x = _ict.xai_termal_isi_haritasi(tmp, None, xai_method or "hirescam", hedef_sinif=result.get("label"))
                 yanit["xai_image_base64"] = _x["xai_image_base64"]
                 yanit["xai_method"] = _x.get("method")
+                yanit["xai_hedef"] = _x.get("hedef")
             except Exception as xe:
                 import logging as _lg
 

@@ -154,7 +154,8 @@ def test_YAPISAL_xai_fonksiyonlari_pt_coz_kullanir():
 def test_YAPISAL_xai_cagri_tek_is_kilidi_ICINDE():
     """grad-cam hook'ları thread-safe değil (plan §2): explain çağrısı modül kilidi içinde olmalı."""
     for dosya, fn_adi in [
-        ("ai_hub/cat_thermal/inference_cat_thermal.py", "def xai_termal_isi_haritasi"),
+        # AI1.X1: termal CAM hesabı (kilit + explain) `termal_cam_haritasi`'na taşındı; xai_termal_isi_haritasi onu çağırır
+        ("ai_hub/cat_thermal/inference_cat_thermal.py", "def termal_cam_haritasi"),
         ("ai_hub/inference_cat_sound/inference_cat_sound.py", "def xai_ses_isi_haritasi"),
     ]:
         src = (KOK / dosya).read_text(encoding="utf-8", errors="replace")
