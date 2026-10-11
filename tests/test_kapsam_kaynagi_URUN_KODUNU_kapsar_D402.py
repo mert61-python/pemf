@@ -10,6 +10,9 @@ düşse de ratchet kıpırdamıyordu. Ayrıca eşik, ölçülen değerin 17–21
 KAPI: `source` = (pyproject `[tool.setuptools.package-dir]`'de `apps/backend/` altına eşlenen ürün paketleri) ∪
 (`apps/backend/` altındaki İZLENEN üst düzey `.py` modülleri) — TAM eşitlik: eksik ad = ölçülmeyen ürün kodu; fazla ad =
 var olmayan kaynak (coverage yalnız "never imported" UYARISI verir, düşmez). Küme kaynaktan TÜRETİLİR, elle yazılmaz.
+
+⚠️ Kapsam sınırı (4-A inc. S-A2.3): "ürün kodu" burada `apps/backend` ağacıdır. `ai_service/` ayrı süreçtir (bilinçli dışarıda);
+depo kökündeki `ai/` ve `pemf_gui/` backend sürecinde içe aktarılır ama bu kapının türettiği kümede DEĞİL — açık karar S-4A.3.
 """
 
 from __future__ import annotations

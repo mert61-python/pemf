@@ -140,7 +140,11 @@ markers = [
 # `backend_service` (açılış firmware zinciri), `headless_core` (STM telemetri ayrıştırıcı), `event_bus` ÖLÇÜLMÜYORDU.
 # Küme artık ürün kodunun TAMAMI: package-dir'de apps/backend'e eşlenen paketler + apps/backend üst düzey modülleri
 # (kapı: tests/test_kapsam_kaynagi_URUN_KODUNU_kapsar_D402.py — yeni ürün paketi/modülü eklenince burası da eklenmeli).
-source = ["servers", "services", "database", "controllers", "utils", "backend_service", "headless_core", "event_bus"]
+# ⚠️ 4-A inc. S-A2.3 (2026-10-11): "TAMAMI" = apps/backend ağacı. `ai_service/` AYRI SÜREÇ (AI mikroservisi, Docker profili)
+# — bilinçli olarak dışarıda. Ama depo kökündeki `ai/` (api_server → ai.hybrid_recommender) ve `pemf_gui/` (config.json
+# sahibi, A-29) backend SÜRECİNDE içe aktarılır ve bugün kaynakta YOK; eklenmeleri toplamı ve eşiği değiştirir → açık karar
+# (4-A incelemesi S-4A.3; etkisi inceleme kapanış süitinde ölçüldü).
+source =["servers", "services", "database", "controllers", "utils", "backend_service", "headless_core", "event_bus"]
 omit = ["*/__pycache__/*", "tests/*", "*/ai_hub/*"]
 
 [tool.coverage.report]
