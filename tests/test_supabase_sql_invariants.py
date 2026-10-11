@@ -238,9 +238,15 @@ def _revoke_eden_roller(sql_bodies: dict[str, str], sinif: str, ad: str) -> set[
     """`revoke … on <ad> from <roller>` ifadelerinin TÜM dosyalardaki rol birleşimi (`*` şema geneli de sayılır)."""
     roller: set[str] = set()
     for govde in sql_bodies.values():
-        for tur, s, adlar, r in yetki_ifadeleri(govde):
-            if tur == "revoke" and s == sinif and (ad in adlar or "*" in adlar):
-                roller |= r
+        for ifade in _ifadeler(govde):
+            # 4-A inc. 4A-2.2: tabloda yalnız TAM geri alma (`revoke all [privileges] on …`) sayılır. Kısmi revoke
+            # (`revoke insert, update, delete …` — subscriptions.sql:25) SELECT'i bırakır; `revoke grant option for all`
+            # yalnız grant opsiyonunu alır. Fonksiyonun tek yetkisi EXECUTE olduğundan orada her revoke tamdır.
+            if sinif == "tablo" and not re.match(r"revoke\s+all(?:\s+privileges)?\s+on\b", ifade, re.I):
+                continue
+            for tur, s, adlar, r in yetki_ifadeleri(ifade):
+                if tur == "revoke" and s == sinif and (ad in adlar or "*" in adlar):
+                    roller |= r
     return roller
 
 
