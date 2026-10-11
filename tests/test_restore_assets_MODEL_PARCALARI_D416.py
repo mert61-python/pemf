@@ -61,7 +61,7 @@ def _sha(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
-def _kur(tmp_path: Path, *, parca_sha_bozuk: bool = False, parcasiz: bool = False):
+def _kur(tmp_path: Path, *, parca_sha_bozuk: bool = False, parcasiz: bool = False, kabuk: str = "pwsh"):
     paket = tmp_path / "paket"
     paket.mkdir()
     research = _zip(paket / "research.zip", {"ai_models/ai_hub/em_petri/PetriNet_v3.onnx": b"ANA-ONNX"})
@@ -106,9 +106,11 @@ def _kur(tmp_path: Path, *, parca_sha_bozuk: bool = False, parcasiz: bool = Fals
     temp.mkdir()
     kok = tmp_path / "kok"
     env = {**os.environ, "SAHTE_IWR_GUNLUK": str(gunluk), "TEMP": str(temp), "TMP": str(temp)}
+    if kabuk != "pwsh":  # pwsh 7 -> python -> 5.1 zincirinde PSModulePath 5.1'in modül otomatik yüklemesini bozar
+        env = {k: v for k, v in env.items() if k.upper() != "PSMODULEPATH"}
     r = subprocess.run(
         [
-            "pwsh",
+            kabuk,
             "-NoProfile",
             "-NonInteractive",
             "-ExecutionPolicy",
@@ -166,3 +168,42 @@ def test_KARSIT_parcasiz_manifest_eski_davranisla_GECER(tmp_path):
     assert r.returncode == 0, f"{r.stdout[-1500:]}\n{r.stderr[-800:]}"
     assert "research-2" not in gunluk and (ai_hub / "em_petri" / "PetriNet_v3.onnx").is_file()
     assert MANIFEST_URL in gunluk, "golge gunlugu bos — olcucu calismadi"
+
+
+# ── S-4B.1 (4-A incelemesi A1 S3; Y123 önerilen): Windows PowerShell 5.1 ─────────────────────────────────────────────
+# BUILD.md taze makinede `.\scripts\restore_assets.ps1` diye çağırıyor (Windows'un varsayılan kabuğu 5.1; pwsh 7 henüz yok
+# olabilir). Dosya BOM'suz UTF-8 ve Türkçe / em-dash taşıyordu → 5.1 onu ANSI okur: 18 ayrıştırma hatası, betik HİÇ başlamaz.
+_PS51 = shutil.which("powershell.exe")
+
+
+@pytest.mark.skipif(os.name != "nt" or not _PS51, reason="Windows PowerShell 5.1 yalnız Windows'ta")
+def test_KRITIK_PS51_ayristiricisi_HATASIZ_S4B1(tmp_path):
+    betik = (
+        "$t = $null; $e = $null; "
+        "[void][System.Management.Automation.Language.Parser]::ParseFile($args[0], [ref]$t, [ref]$e); "
+        "Write-Output ('AYRISTIR ' + $e.Count)"
+    )
+    a = tmp_path / "ayristir.ps1"
+    a.write_bytes(b"\xef\xbb\xbf" + betik.encode("utf-8"))
+    env = {k: v for k, v in os.environ.items() if k.upper() != "PSMODULEPATH"}
+    r = subprocess.run(
+        [_PS51, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(a), str(BETIK)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        timeout=120,
+    )
+    assert "AYRISTIR 0" in r.stdout, (
+        f"restore_assets.ps1 Windows PowerShell 5.1'de AYRISTIRILAMIYOR: {r.stdout[-600:]}{r.stderr[-600:]}"
+    )
+
+
+@pytest.mark.skipif(os.name != "nt" or not _PS51, reason="Windows PowerShell 5.1 yalnız Windows'ta")
+def test_KRITIK_PS51_ile_model_parcasi_ACILIR_S4B1(tmp_path):
+    """Ayrışması yetmez: 5.1'de de profil + parça + çekirdek akışı tamamlanır (D4.16'nın 5.1 ikizi)."""
+    r, ai_hub, gunluk = _kur(tmp_path, kabuk=_PS51)
+    assert r.returncode == 0, f"5.1'de betik basarisiz (rc={r.returncode}):\n{r.stdout[-1500:]}\n{r.stderr[-800:]}"
+    assert (ai_hub / "inference_paper_dilek_hoca" / "ginoro_parca.pt").read_bytes() == b"PARCA-PT-1"
+    assert "https://paket.invalid/research-2.zip" in gunluk

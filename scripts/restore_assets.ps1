@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # PEMF — VARLIK GERI YUKLEME (bos makinede depoyu calisir hale getirir)
 # -----------------------------------------------------------------------------
 # NEDEN VAR: `guii` klasoru tasinabilir bir PEMF projesidir, ama AI model agirliklarinin
