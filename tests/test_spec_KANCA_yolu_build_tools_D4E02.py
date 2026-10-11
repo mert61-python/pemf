@@ -26,17 +26,18 @@ def _hookspath(cwd: Path) -> list[Path]:
     # yalnız `spec_dir` / `project_path` atamaları — PyInstaller içe aktarımı ve yan etki YOK
     bas = [d for d in agac.body if isinstance(d, (ast.Assign, ast.If)) and "spec_dir" in ast.unparse(d)][:2]
     ad_alani: dict = {"os": os}
-    eski = os.getcwd()
-    try:
-        os.chdir(cwd)
-        exec(compile(ast.Module(body=bas, type_ignores=[]), str(SPEC), "exec"), ad_alani)  # noqa: S102
-    finally:
-        os.chdir(eski)
     cagri = [n for n in ast.walk(agac) if isinstance(n, ast.Call) and getattr(n.func, "id", "") == "Analysis"]
     assert len(cagri) == 1, f"Analysis çağrısı TAM 1 olmalı: {len(cagri)}"
     hp = [k.value for k in cagri[0].keywords if k.arg == "hookspath"]
     assert hp, "Analysis(hookspath=...) yok"
-    return [Path(p).resolve() for p in eval(compile(ast.Expression(hp[0]), str(SPEC), "eval"), ad_alani)]  # noqa: S307
+    eski = os.getcwd()
+    try:
+        os.chdir(cwd)
+        exec(compile(ast.Module(body=bas, type_ignores=[]), str(SPEC), "exec"), ad_alani)  # noqa: S102
+        # 4B-2.10: ifade de AYNI cwd'de hesaplanır (os.getcwd() / göreli yol çağıran bir hookspath da benzetime girer)
+        return [Path(p).resolve() for p in eval(compile(ast.Expression(hp[0]), str(SPEC), "eval"), ad_alani)]  # noqa: S307
+    finally:
+        os.chdir(eski)
 
 
 @pytest.mark.parametrize("cwd", ["depo_koku", "build_tools"])
