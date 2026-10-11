@@ -51,6 +51,14 @@ def _ts_dizgi_listesi(govde: str) -> list[str]:
     return re.findall(r"""["']([^"']*)["']""", govde)
 
 
+def _py_int_tanim(ad: str, metin: str) -> str:
+    """4A-3.3 (A3 incelemesi): Python modül sabitinin HER atama biçimi sayılır (satır sonu yorumu, `: int` açıklaması) —
+    eski `^AD\\s*=\\s*(\\d+)\\s*$` deseni yorumlu/açıklamalı YENİDEN tanımı görmüyordu (çift tanım TAM 1'i atlatıyordu)."""
+    m = _tek(rf"^{ad}\s*(?::[^=\n]*)?=(?!=)[ \t]*([^\n#]*?)\s*(?:#[^\n]*)?$", metin, f"Python {ad}")
+    assert re.fullmatch(r"\d+", m.group(1)), f"Python {ad} tamsayi literal degil: {m.group(1)!r}"
+    return m.group(1)
+
+
 # ── a) launcher UI invoke ⊆ Rust generate_handler! ──────────────────────────────────────────────────────
 
 
@@ -159,8 +167,8 @@ def test_c_yedek_parolasi_MIN_PAROLA_TS_ile_PYTHON_AYNI():
         _oku("apps/ui/src/components/domain/BackupPassphraseDialog.tsx"),
         "TS MIN_PAROLA",
     )
-    py = _tek(r"^MIN_PAROLA\s*=\s*(\d+)\s*$", _oku("apps/backend/utils/data_export.py"), "Python MIN_PAROLA")
-    assert int(ts.group(1)) == int(py.group(1)), f"MIN_PAROLA ayristi: TS {ts.group(1)} != Python {py.group(1)}"
+    py = _py_int_tanim("MIN_PAROLA", _oku("apps/backend/utils/data_export.py"))
+    assert int(ts.group(1)) == int(py), f"MIN_PAROLA ayristi: TS {ts.group(1)} != Python {py}"
 
 
 # ── d) CKD asgari kural TS ↔ Python ──────────────────────────────────────────────────────────────────────
@@ -170,7 +178,7 @@ def test_d_CKD_asgari_kural_TS_ile_PYTHON_AYNI():
     ts = _oku("apps/ui/src/utils/ckdOnKontrol.ts")
     py = _oku("apps/backend/utils/klinik_asgari.py")
     ts_min = _tek(r"^export const CKD_MIN_ALAN\s*=\s*(\d+)\s*;", ts, "TS CKD_MIN_ALAN").group(1)
-    py_min = _tek(r"^CKD_MIN_ALAN\s*=\s*(\d+)\s*$", py, "Python CKD_MIN_ALAN").group(1)
+    py_min = _py_int_tanim("CKD_MIN_ALAN", py)
     ts_cek = _ts_dizgi_listesi(_tek(r"^export const CKD_CEKIRDEK\s*=\s*\[([^\]]*)\]", ts, "TS CKD_CEKIRDEK").group(1))
     py_cek = _ts_dizgi_listesi(_tek(r"^CKD_CEKIRDEK\s*=\s*\(([^)]*)\)", py, "Python CKD_CEKIRDEK").group(1))
     assert len(py_cek) >= 3, f"VAKUM: Python CKD_CEKIRDEK {py_cek}"
