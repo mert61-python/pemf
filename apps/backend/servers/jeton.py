@@ -248,20 +248,21 @@ class JetonYoneticisi:
         kayitlar = self._defteri_oku()
         if not kayitlar:
             return 0
-        kalan: list[dict] = []
-        gonderilen = 0
+        gonderilen_idler: set = set()
         for k in kayitlar:
             try:
                 ok = bool(self._tuketim_gonder(**k))
             except Exception:
                 ok = False
             if ok:
-                gonderilen += 1
-            else:
-                kalan.append(k)
+                gonderilen_idler.add(k.get("istek_id"))
         with self._kilit:
-            self._defteri_yaz(kalan)
-        return gonderilen
+            # ⚠️ D4.23: defter kilit altında YENİDEN okunur ve yalnız gönderilenler düşülür. Eskiden gönderim öncesi okunan
+            # liste (`kalan`) defterin ÜZERİNE yazılıyordu → gönderim sürerken eşzamanlı bir analizin deftere düşen
+            # tüketimi SİLİNİYORDU (bedava analiz). Uzlaştırma artık arka planda koştuğu için bu yarış gerçek.
+            guncel = self._defteri_oku()
+            self._defteri_yaz([k for k in guncel if k.get("istek_id") not in gonderilen_idler])
+        return len(gonderilen_idler)
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════
@@ -414,6 +415,59 @@ def _tuketim_gonder_canli(token: str, **k) -> bool:
 _GATE_DEFTER_KILIT = threading.Lock()
 
 
+def _defter_yoneticisi(tuketim_gonderici: Callable[..., bool] | None = None) -> JetonYoneticisi:
+    """Yalnız DEFTER işlemleri (bekleyen sayımı / uzlaştırma) için yönetici — bakiye okunmaz; kilit kapının defter kilidiyle ORTAK.
+
+    ⚠️ D4.23 (B-2.15): `bakiye_ozeti` eskiden `JetonYoneticisi()` ARGÜMANSIZ kuruyordu → kurucu iki zorunlu argüman ister,
+    `TypeError` yutuluyor ve uç defterde kayıt varken HER ZAMAN `bekleyen: 0` diyordu."""
+    y = JetonYoneticisi(bakiye_okuyucu=lambda: 0, tuketim_gonderici=tuketim_gonderici or (lambda **k: False))
+    y._kilit = _GATE_DEFTER_KILIT
+    return y
+
+
+# ── BAĞLANTI DÖNÜNCE UZLAŞTIRMA — D4.23 (B-2.16, Y24) ─────────────────────────────────────────────────────────────
+# `bekleyenleri_uzlastir` tanımlıydı ama HİÇBİR üretim yolu çağırmıyordu → zorlama açılınca defter hiç uzlaşmaz, tavana
+# (`PEMF_JETON_OFFLINE_TAVAN`) takılan klinik analiz yapamaz, tüketim faturalanmazdı. Y24 (sahip, önerilen): çevrimdışı
+# tüketim bağlantı dönünce GERİYE DÖNÜK düşülür ve ekranda gösterilir. RPC kullanıcının KENDİ JWT'siyle çağrıldığı için
+# (auth.uid()) cihazın elinde arka planda kullanabileceği bir kimlik yok → tetik "bağlantı döndü" anıdır: bir bakiye okuması
+# ya da analiz isteği Supabase'e ULAŞTIĞINDA, o isteğin jetonuyla. Arka planda ve TEK UÇUŞLA koşar (isteği bekletmez,
+# aynı kaydı iki iplik göndermez); hata kaydı SİLMEZ (defterde kalır, sonraki bağlantıda yeniden denenir).
+_UZLASTIRMA_TEK_UCUS = threading.Lock()
+_son_uzlastirma: "threading.Thread | None" = None
+
+
+def _uzlastirmayi_tetikle(token: str) -> bool:
+    """Defterde bekleyen varsa uzlaştırmayı arka planda başlatır; başlattıysa True. Asla fırlatmaz (ticari kapı analizi bozmaz)."""
+    global _son_uzlastirma
+    try:
+        if not token or _defter_yoneticisi().bekleyen_tuketim_sayisi() == 0:
+            return False
+        if not _UZLASTIRMA_TEK_UCUS.acquire(blocking=False):
+            return False  # süren uzlaştırma var
+    except Exception:
+        return False
+
+    def _calis() -> None:
+        try:
+            n = _defter_yoneticisi(lambda **k: _tuketim_gonder_canli(token, **k)).bekleyenleri_uzlastir()
+            if n:
+                logger.info("jeton: %d çevrimdışı tüketim uzlaştırıldı (bağlantı döndü)", n)
+        except Exception:
+            logger.warning("jeton: çevrimdışı uzlaştırma düştü — kayıtlar defterde KALIR", exc_info=True)
+        finally:
+            _UZLASTIRMA_TEK_UCUS.release()
+
+    try:
+        t = threading.Thread(target=_calis, name="jeton-uzlastirma", daemon=True)
+        _son_uzlastirma = t
+        t.start()
+    except Exception:
+        _UZLASTIRMA_TEK_UCUS.release()
+        logger.warning("jeton: uzlaştırma ipliği başlatılamadı", exc_info=True)
+        return False
+    return True
+
+
 def _jeton_kapisi_karari(request: Request) -> None:
     """Senkron karar gövdesi (test yüzeyi). İzin yoksa HTTPException(402) fırlatır."""
     # ⚠️ SIRA: serbest-uç ve bayrak kontrolü HER ŞEYDEN ÖNCE — pro/stop için ağ çağrısı bile
@@ -429,6 +483,8 @@ def _jeton_kapisi_karari(request: Request) -> None:
         satir = _bakiye_satiri_oku(token)
     except Exception:
         satir = None  # çevrimdışı/tokensız → JetonYoneticisi fail-open yolu (yerel defter)
+    if satir is not None:
+        _uzlastirmayi_tetikle(token)  # D4.23 (Y24): bağlantı DÖNDÜ → biriken çevrimdışı tüketim arka planda uzlaşır
 
     if satir is None:
 
@@ -493,6 +549,7 @@ def bakiye_ozeti(request) -> dict:
       · `{"etkin": False}`                      → ücretlendirme KAPALI, rozet çizilmez
       · `{"etkin": True, "bilinmiyor": True}`   → okunamadı (çevrimdışı) → "—"
       · `{"etkin": True, "kalan": N, ...}`      → gerçek bakiye
+    Etkinken `bekleyen` = defterde henüz uzlaşmamış çevrimdışı tüketim sayısı (D4.23; çevrimiçiyken uzlaştırma tetiklenir).
     """
     if not JETON_ENFORCED:
         return {"etkin": False}
@@ -503,14 +560,17 @@ def bakiye_ozeti(request) -> dict:
         return {"etkin": True, "bilinmiyor": True, "sebep": "kimlik_yok"}
 
     try:
+        bekleyen = _defter_yoneticisi().bekleyen_tuketim_sayisi()
+    except Exception:
+        bekleyen = 0
+    try:
         satir = _bakiye_satiri_oku(token)
     except Exception:
         # ⚠️ Sıfıra DÜŞME (yukarıdaki nota bakın). Bekleyen çevrimdışı tüketim varsa onu söyle.
-        try:
-            bekleyen = JetonYoneticisi().bekleyen_tuketim_sayisi()
-        except Exception:
-            bekleyen = 0
         return {"etkin": True, "bilinmiyor": True, "sebep": "cevrimdisi", "bekleyen": bekleyen}
+    # D4.23 (Y24): bağlantı DÖNDÜ → biriken çevrimdışı tüketim arka planda geriye dönük düşülür; rozet sunucu bakiyesini
+    # gösterir, `bekleyen` henüz uzlaşmamış kayıt sayısını söyler (uzlaşınca 0'a iner).
+    _uzlastirmayi_tetikle(token)
 
     aylik = int(satir.get("aylik_hak") or 0)
     satin = int(satir.get("satin_alinan") or 0)
@@ -521,6 +581,7 @@ def bakiye_ozeti(request) -> dict:
         "bilinmiyor": False,
         "odemeModeli": model,
         "maliyet": dict(MALIYET),
+        "bekleyen": bekleyen,
     }
     if model == "kullandikca":
         # Kullandıkça ödemede bakiye kavramı YOK — faturalanmamış borç gösterilir.

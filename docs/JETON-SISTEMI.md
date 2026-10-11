@@ -76,7 +76,12 @@ sokan mutasyon kırmızı yanar).
 ## 3. Çevrimdışı klinik
 
 İnternet yokken analiz **durmaz**: tüketim `PEMF_DATA_DIR/jeton_bekleyen.json` defterine yazılır,
-bağlantı gelince `bekleyenleri_uzlastir()` ile gönderilir. Sınır: `PEMF_JETON_OFFLINE_TAVAN`
+bağlantı dönünce `bekleyenleri_uzlastir()` ile gönderilir — tetik: bir bakiye okuması (`/api/jeton/bakiye`) ya da
+analiz isteği Supabase'e ULAŞTIĞINDA, o isteğin kimliğiyle; arka planda ve tek uçuşla (istek beklemez, aynı kayıt iki
+kez gönderilmez); gönderilemeyen kayıt defterde kalır (D4.23, Y24: geriye dönük düşülür, rozet sunucu bakiyesini
+gösterir, `bekleyen` uzlaşmamış kayıt sayısını söyler). ⚠️ Açık: sunucu `jeton_tuket` ön ödemeli modelde yetersiz
+bakiyede uzlaştırmayı da `yetersiz` ile reddeder → kayıt defterde kalır; Y24'ün "bakiye eksiye düşebilir" kısmı
+SQL değişikliği + canlı Supabase uygulaması ister (sahip). Sınır: `PEMF_JETON_OFFLINE_TAVAN`
 (varsayılan 50) — sınırsız olsaydı ücretlendirme anlamsızlaşırdı. Tavan aşılsa bile **tedavi yolu
 serbest** kalır.
 
