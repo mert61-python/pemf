@@ -22,6 +22,7 @@ eklerse yedek SESSİZCE kaybolur; bu test onu yakalar.
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 _KOK = Path(__file__).resolve().parent.parent
@@ -127,7 +128,9 @@ def _izlenen_dosyalar(dizin: str) -> list[str]:
     return [a for a in r.stdout.split(chr(0)) if a]
 
 
-@pytest.mark.skipif(not _ARSIV.is_dir(), reason="training_archive bu çalışma kopyasında yok")
+# ⚠️ 4-A inc. 4A-2.11: bu üç kapı `skipif(not _ARSIV.is_dir())` taşıyordu — arşiv `git rm -r` ile SİLİNİNCE üçü de ATLANIYOR,
+# ZORUNLU=1'de bile rc 0 (ölçüldü). Arşiv İZLENEN ağaçtır: index'e bakan iki kapı koşulsuz koşar (silinmişse DÜŞER); diske bakan
+# boyut kapısı `capraz.atla_yoksa(izlenen=True)` (varsayılanda nedenle atlar, ZORUNLU=1'de düşer — D4.04 deseni).
 def test_KRITIK_egitim_arsivi_DEPODA():
     """`esp` silindikten sonra tek kaynak burasi — arsiv sessizce dusmemeli."""
     izlenen = _izlenen_dosyalar("training_archive")
@@ -140,9 +143,9 @@ def test_KRITIK_egitim_arsivi_DEPODA():
         "training_archive/dr_calisma/models/models_em_kedi/scaler_y.pkl",
     ):
         assert kritik in izlenen, f"{kritik} izlenmiyor — yeniden fit EDILEMEZ, kaybi kalicidir"
+        assert (_KOK / kritik).is_file(), f"{kritik} izleniyor ama diskte YOK — calisma agacindan silinmis"
 
 
-@pytest.mark.skipif(not _ARSIV.is_dir(), reason="training_archive bu çalışma kopyasında yok")
 def test_KRITIK_arsivdeki_hicbir_dosya_gitignore_ile_GIZLENMIYOR():
     """`git checkout <dal> -- <yol>` gitignore'u ATLAR — dosyalar index'e girer ama gizli kalir.
 
@@ -162,9 +165,9 @@ def test_KRITIK_arsivdeki_hicbir_dosya_gitignore_ile_GIZLENMIYOR():
     )
 
 
-@pytest.mark.skipif(not _ARSIV.is_dir(), reason="training_archive bu çalışma kopyasında yok")
 def test_KARSIT_KANIT_arsivde_100MiB_ustu_dosya_YOK():
     """Muafiyet sinirsiz degil: 100 MiB ustu bir dosya push'u tamamen kirar."""
+    capraz.atla_yoksa("training_archive", izlenen=True)
     asan = [
         (a, (_KOK / a).stat().st_size)
         for a in _izlenen_dosyalar("training_archive")
