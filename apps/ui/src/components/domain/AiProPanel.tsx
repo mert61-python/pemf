@@ -34,6 +34,7 @@ import { getClientInstanceId, serviceConfig } from "@/services/config";
 import { useAuth } from "@/context/AuthContext";
 import { AiSpecApprovalModal, type AiProposalMeta, type AiProposalSpecs } from "@/components/domain/AiSpecApprovalModal";
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
+import { trValue } from "@/utils/aiDetail";
 
 const ORGANS = [
   { id: 0, name: "Tüm Vücut" }, { id: 1, name: "Mide" }, { id: 2, name: "Böbrek" },
@@ -158,6 +159,26 @@ interface GuvenDokumu {
   mask_factor?: number;
   uncertainty_factor?: number;
   calibration_cap?: number | null;
+  /** AI1.K3 (hoca kedi organ v2 ara çıktıları): hattın kalite göstergeleri — alan yoksa (eski backend) gösterilmez. */
+  poz_turu?: string | null;
+  pnp_hata_px?: number | null;
+  ayna_uyarisi?: boolean;
+  anatomik_gecti?: boolean | null;
+  anatomik_skor?: number | null;
+}
+
+/** AI1.K3: güven dökümünün hat-kalitesi eki. Sorun varsa operatöre NE YAPACAĞINI söyler; yalnız gösterim (güven/sürüş değişmez). */
+function hatKalitesiMetni(g: GuvenDokumu): string {
+  return (
+    (g.poz_turu ? ` · poz türü ${trValue(g.poz_turu)}` : "") +
+    (typeof g.pnp_hata_px === "number" ? ` · PnP uyum hatası ${Math.round(g.pnp_hata_px)} px` : "") +
+    (g.ayna_uyarisi ? " · ⚠️ sağ-sol (ayna) belirsizliği — kamerayı biraz çevirip açıyı değiştirin" : "") +
+    (g.anatomik_gecti === false
+      ? " · ⚠️ anatomik tutarsızlık — organ yerleşimi doğrulanamadı; açıyı değiştirip yeniden konumlayın"
+      : g.anatomik_gecti === true
+        ? " · anatomik kontrol geçti"
+        : "")
+  );
 }
 
 // Backend yanıt sözleşmeleri (audit B-10.1) — AI-Pro otonom tedavi uçları.
@@ -1180,7 +1201,8 @@ export function AiProPanel({
             ` × belirsizlik ${(guvenDokumu.uncertainty_factor ?? 1).toFixed(2).replace(".", ",")}` +
             (guvenDokumu.calibration_cap != null
               ? ` · ⚠️ kalibrasyonsuz — tavan %${Math.round(guvenDokumu.calibration_cap * 100)}`
-              : "")}
+              : "") +
+            hatKalitesiMetni(guvenDokumu)}
         </GenisletilebilirMetin>
       ) : null}
 

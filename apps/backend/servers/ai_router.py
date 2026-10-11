@@ -741,13 +741,33 @@ def _get_or_load_catorgan():
     return _get_or_load_model("cat_organ", _load)
 
 
-def _extract_organ_target(organs_by_id, organ_id, overlay):
+def _hat_dokumu(poz_turu, pnp_hata_px, ayna_uyarisi, anatomik) -> dict:
+    """AI1.K3 (hoca kedi organ v2 `ara_ciktilar`): güven dökümüne hattın KALİTE ara çıktıları — poz türü, PnP (keypoint) uyum
+    hatası, ayna uyarısı, anatomik kontrol. CPU (predictor sonucu) ve GPU (servis yanıtı) yolları AYNI alanları üretir (parite).
+    YALNIZ-EK ve yalnız GÖSTERİM: güven, konum ve sürüş DEĞİŞMEZ; eski servis yanıtında alan yoksa boş kalır."""
+    an = anatomik if isinstance(anatomik, dict) else {}
+    try:
+        hata = float(pnp_hata_px)
+        hata = round(hata, 1) if _math.isfinite(hata) else None
+    except (TypeError, ValueError):
+        hata = None
+    return {
+        "poz_turu": str(poz_turu) if poz_turu else None,
+        "pnp_hata_px": hata,
+        "ayna_uyarisi": bool(ayna_uyarisi),
+        "anatomik_gecti": None if an.get("passed") is None else bool(an.get("passed")),
+        "anatomik_skor": an.get("score"),
+    }
+
+
+def _extract_organ_target(organs_by_id, organ_id, overlay, hat=None):
     """cat_organ sonucundan (CPU dict VEYA GPU-JSON'dan kurulmuş dict) seçili organ hedefini çıkar.
     organs_by_id: {id: {coord_cabin_cm|coord_3d_cm, reliability}}. organ_id 0 (Tüm Vücut) → max-reliability
     güven-geçidi + koordinat (0,0,0). NOT: estimate_organs_pnp INT-anahtarlı ama JSON'da str → ikisi denenir.
     Döner: (localized, x_mm, y_mm, z_mm, reliability, overlay_bgr, kedi_var, guven_dokumu).
     guven_dokumu (2026-08-26, sunum-katmanı XAI): seçili organın reliability_components'ı
     (yoksa/Tüm Vücut'ta None). Tüketiciler `*ekstra` ile açar → eski 7'li tuple'lar KIRILMAZ.
+    hat (AI1.K3): `_hat_dokumu` alanları dökümün KOPYASINA eklenir (organ sözlüğü değişmez; döküm yoksa eklenmez).
 
     ⚠️ `kedi_var` NEDEN AYRI (sahip isteği 2026-08-24): "kedi yok" ile "kedi var ama hedef organ
     bulunamadı" tek bir `detected: false` altında birleşiyordu ve operatöre NE YAPACAĞI
@@ -768,6 +788,8 @@ def _extract_organ_target(organs_by_id, organ_id, overlay):
     coord = o.get("coord_cabin_cm") or o.get("coord_3d_cm") or [0.0, 0.0, 0.0]
     rel = float(o.get("reliability") or 0.0)
     dokum = o.get("reliability_components") if isinstance(o.get("reliability_components"), dict) else None
+    if dokum is not None and hat:
+        dokum = {**dokum, **hat}
     # ⚠️ D1.85 (B-5.11): kabin DIŞI ya da sonlu olmayan hedef REDDEDİLİR (WARNING) — kıskaçtan ÖNCE. Eskiden aşağıdaki
     # ±300 mm kıskacı onu kabin kenarına çekip SÜRÜYORDU (Y/Z kabin sınırı 250 mm; NaN → 300 mm). Kabin sınırı kabin
     # yapılandırmasından (`ai_pro_hedef.kabin_yari_boyut_mm`). Reddedilen hedef "bulunamadı"dır → döngü/`/frame` hedef
@@ -920,7 +942,18 @@ def _localize_organ_cpu(frame, organ_id):
         )
         _kabin_okunamaz_bildir()
         return False, 0.0, 0.0, 0.0, 0.0, result.get("_overlay_bgr"), bool(result.get("organs")), None
-    return _extract_organ_target(result.get("organs") or {}, organ_id, result.get("_overlay_bgr"))
+    _pnp = result.get("pnp_fit") or {}
+    return _extract_organ_target(
+        result.get("organs") or {},
+        organ_id,
+        result.get("_overlay_bgr"),
+        hat=_hat_dokumu(
+            (result.get("pose_classifier") or {}).get("type"),
+            _pnp.get("residual_px"),
+            _pnp.get("mirror_warning"),
+            result.get("anatomic_consistency"),
+        ),
+    )
 
 
 def _localize_organ_gpu(frame, organ_id):
@@ -959,7 +992,18 @@ def _localize_organ_gpu(frame, organ_id):
         logger.warning("AI Pro (GPU): kabin yapılandırması yüklenemedi — hedef doğrulanamaz, SÜRÜLMEZ")
         _kabin_okunamaz_bildir()
         return False, 0.0, 0.0, 0.0, 0.0, overlay, bool(organs_by_id), None
-    return _extract_organ_target(organs_by_id, organ_id, overlay)
+    # AI1.K3 parite: servis yanıtı aynı ara çıktıları üst düzeyde taşır (ai_service `infer_cat_organ`).
+    return _extract_organ_target(
+        organs_by_id,
+        organ_id,
+        overlay,
+        hat=_hat_dokumu(
+            resp.get("pose_type"),
+            resp.get("pnp_residual_px"),
+            resp.get("mirror_warning"),
+            resp.get("anatomic_consistency"),
+        ),
+    )
 
 
 # İSTEK-YEREL hedef bağlamı (2026-09-08): `/propose` HENÜZ AKTİF OLMAYAN bir modelin dozunu
