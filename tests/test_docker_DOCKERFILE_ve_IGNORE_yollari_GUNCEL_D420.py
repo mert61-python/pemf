@@ -13,8 +13,8 @@ GEREKMEZ; compose-spec'in kendi çözümü) çapraz kolu. Taşınmış dizin tab
 
 from __future__ import annotations
 
-import fnmatch
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -101,13 +101,35 @@ def test_KRITIK_ignore_dosyalarinda_TASINMIS_dizin_adi_YOK_B10_203():
     assert not bayat, f".dockerignore girdisi TAŞINMIŞ dizinin ESKİ adını dışlıyor (yeni yer imaja girer): {bayat}"
 
 
+def _desen_regex(desen: str) -> re.Pattern[str]:
+    """moby/patternmatcher anlamı (4B-2.12; Docker belgesi örnekleriyle kalibre): `*` ve `?` `/` GEÇMEZ, `**/` her derinlik (sıfır dahil),
+    `**` her şey, `[...]` tek ayraç-dışı karakter; desen bir DİZİNİ eşlerse altındaki her şey de dışlanır. (Eski `fnmatch` yaklaşığı `*`'ı
+    `/` üzerinden geçiriyordu: `*/temp*` → `a/b/temp` yanlış "dışlanır".)"""
+    d = desen.strip("/")
+    out, i = "", 0
+    while i < len(d):
+        if d.startswith("**/", i):
+            out, i = out + "(?:.*/)?", i + 3
+        elif d.startswith("**", i):
+            out, i = out + ".*", i + 2
+        elif d[i] == "*":
+            out, i = out + "[^/]*", i + 1
+        elif d[i] == "?":
+            out, i = out + "[^/]", i + 1
+        elif d[i] == "[" and d.find("]", i + 1) > i:
+            j = d.find("]", i + 1)
+            out, i = out + "(?:(?!/)" + d[i : j + 1] + ")", j + 1
+        else:
+            out, i = out + re.escape(d[i]), i + 1
+    return re.compile("^" + out + "(?:/.*)?$")
+
+
 def _dislanir_mi(rel_yol: str, desenler: list[str]) -> bool:
-    """Docker `.dockerignore` anlamı (yaklaşık): son eşleşen kazanır; `!` geri alır; dizin deseni altını kapsar."""
+    """Docker `.dockerignore` anlamı: son eşleşen kazanır; `!` geri alır; dizin deseni altını kapsar (moby `_desen_regex`)."""
     sonuc = False
     for d in desenler:
         ters = d.startswith("!")
-        desen = d.lstrip("!").strip("/").replace("**/", "*")
-        if fnmatch.fnmatchcase(rel_yol, desen) or fnmatch.fnmatchcase(rel_yol, desen + "/*"):
+        if _desen_regex(d.lstrip("!").strip()).match(rel_yol):
             sonuc = not ters
     return sonuc
 
