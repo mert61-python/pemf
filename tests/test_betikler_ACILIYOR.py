@@ -462,18 +462,26 @@ def test_DUZELTILEN_uc_betik_YASIYOR(rel: str, beklenen_import: str):
 
 
 def _compose_contextleri() -> dict[str, Path]:
-    """{dockerfile_mutlak: context_dizini} — compose'dan OKUNUR, tahmin edilmez."""
+    """{dockerfile_mutlak: context_dizini} — compose'dan OKUNUR (YAML yapısı, compose-spec çözümü), tahmin edilmez.
+
+    4B-2.14: eskiden satır ayrıştırıcıydı — `context` her `build:`'de sıfırlanmadığından `dockerfile:` `context:`'ten ÖNCE yazılınca
+    önceki servisin bağlamıyla eşleniyordu; tırnak / satır sonu yorumu / kısa `build: <yol>` ayrışıyordu; YAML'ı bozuk dosyayı sessizce
+    "çözüyordu". Bozuk YAML artık istisna verir (fail-closed).
+    """
+    import yaml
+
     out: dict[str, Path] = {}
     for rel in _takipli(["*compose*.yml", "*compose*.yaml"]):
         p = KOK / rel
-        ctx = None
-        for satir in p.read_text(encoding="utf-8", errors="replace").splitlines():
-            s = satir.strip()
-            if s.startswith("context:"):
-                ctx = s.split(":", 1)[1].strip()
-            elif s.startswith("dockerfile:") and ctx is not None:
-                taban = (p.parent / ctx).resolve()
-                out[str((taban / s.split(":", 1)[1].strip()).resolve())] = taban
+        belge = yaml.safe_load(p.read_text(encoding="utf-8", errors="replace")) or {}
+        for servis in (belge.get("services") or {}).values():
+            b = (servis or {}).get("build")
+            if b is None:
+                continue
+            if isinstance(b, str):
+                b = {"context": b}
+            taban = (p.parent / str(b.get("context", "."))).resolve()
+            out[str((taban / str(b.get("dockerfile", "Dockerfile"))).resolve())] = taban
     return out
 
 

@@ -55,7 +55,19 @@ def _compose_config(dosya: str) -> dict:
         timeout=120,
     )
     if r.returncode != 0:
-        pytest.skip(f"docker compose config koşmadı ({dosya}): {r.stderr.strip()[:300]}")
+        # 4B-2.14: CLI varken sıfır-dışı = compose-spec dosyayı REDDETTİ (`docker compose up` da düşer) → KIRMIZI.
+        # Yalnız `compose` eklentisi yoksa (ortam) atlanır.
+        v = subprocess.run(
+            [DOCKER, "compose", "version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+        )
+        if v.returncode != 0:
+            pytest.skip(f"docker compose eklentisi yok: {v.stderr.strip()[:200]}")
+        pytest.fail(f"compose-spec dosyayı REDDETTİ ({dosya}) — imaj derlenemez: {r.stderr.strip()[:300]}")
     return json.loads(r.stdout)
 
 
