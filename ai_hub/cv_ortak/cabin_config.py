@@ -183,6 +183,56 @@ class OutputCfg:
 
 
 @dataclass
+class MultiwellCfg:
+    """Cok kuyucuklu plaka modu (hocanin petri v2'si, 2026-10-02). YAML'da `multiwell:` bolumu opsiyonel;
+    yoksa varsayilan (plate_type None = tekil petri / YOLO kipi) — eski profil YAML'lari aynen yuklenir."""
+    plate_type: int | None = None            # 12/24/48/96; None = tekil petri (YOLO)
+    a1_corner: str = "auto"                  # auto / tl / tr / br / bl
+    # PEMF icin kabin konumu (ArUco yoksa). Plaka sabit tutucudaysa bir kez olc:
+    #   cabin = a1_cabin_mm + col_mm * col_axis_cabin + row_mm * row_axis_cabin
+    a1_cabin_mm: list[float] | None = None
+    col_axis_cabin: list[float] = field(default_factory=lambda: [1.0, 0.0, 0.0])
+    row_axis_cabin: list[float] = field(default_factory=lambda: [0.0, -1.0, 0.0])
+    # Kanser siniflandirma (goreli renk)
+    cancer_frac: float = 0.02
+    cancer_db: float = 8.0
+    cancer_abs_b: float = -5.0
+    control_healthy: list[str] = field(default_factory=list)   # orn. ["A1", "D6"]
+    control_cancer: list[str] = field(default_factory=list)    # orn. ["B2"]
+
+
+@dataclass
+class PhantomV2Cfg:
+    """Hocanin fantom v3 ayarlari (YAML anahtari geriye uyum icin `phantom_v2:`). Bolum yoksa varsayilan."""
+    # Yesil Helmholtz halkasi ile olcek (ArUco yoksa varsayilan kalibrasyon)
+    ring_enabled: bool = True
+    ring_diameter_mm: float = 184.0          # petri plakasindan capraz kalibre; serit metreyle dogrula
+    # Paralaks: tumorler halka duzleminin h mm ustunde (fantom ust yuzeyi)
+    parallax_height_mm: float = 31.3         # 8 goruntuden fit (CV %4.4 -> %3.0); olculurse gir
+    focal_equiv_mm: float = 26.0             # telefon ana kamera (35 mm esdeger)
+    # Tumor yerlesim referansi (kimlik + dusuk cozunurluk + QC); "" = kapali
+    layout_file: str = "phantom_layout_2026-10-02.json"
+    # PEMF icin cercevenin kabin konumu (cerceve origin'i: halka merkezi veya fantom merkezi)
+    #   kabin_xyz = origin_cabin_mm + X_mm * x_axis_cabin + Y_mm * y_axis_cabin
+    origin_cabin_mm: list[float] | None = None
+    x_axis_cabin: list[float] = field(default_factory=lambda: [0.0, 1.0, 0.0])
+    y_axis_cabin: list[float] = field(default_factory=lambda: [0.0, 0.0, 1.0])
+    # PEMF varsayilan yerlesim: CST fantom egitim kutusu (training_data_phantom_v7.csv)
+    #   x [-56.6,-30.6] (26 mm kalinlik), y [-60.8,61.2] (122 mm), z [-37.7,44.3] (82 mm)
+    #   fantom merkezi -> box_center ; fantom uzun ekseni (u) -> axis_u ; kisa (v) -> axis_v
+    # ⚠️ EKSEN ISARETI VARSAYIMDIR (hoca §4 madde 2, laboratuvar maddesi) — sonuc `pemf_axis_sign_assumed` uyarisi tasir.
+    cst_box_enabled: bool = True
+    cst_box_center_mm: list[float] = field(default_factory=lambda: [-43.645, 0.215, 3.335])
+    cst_axis_u: list[float] = field(default_factory=lambda: [0.0, 1.0, 0.0])
+    cst_axis_v: list[float] = field(default_factory=lambda: [0.0, 0.0, 1.0])
+    # Tumor renk esikleri
+    navy_s_min: int = 45
+    navy_v_min: int = 20
+    navy_a_max: int = 12
+    core_v_max: int = 35
+
+
+@dataclass
 class CabinConfig:
     cabin_id: str
     aruco: ArucoCfg
@@ -194,6 +244,10 @@ class CabinConfig:
     phantom: PhantomPhysicsCfg
     output: OutputCfg
     source_path: str = ""
+    # AI-2 (hoca petri v2 / fantom v3, 2026-10-12): iki bolum de OPSIYONEL — A2 tek uygulamasina tasindi (§3.4),
+    # profil kopyasi alinmadi. Kapi: tests/test_cv_ortak_PLAKA_ve_FANTOM_v3_bolumleri_AI2_C1.py
+    multiwell: MultiwellCfg = field(default_factory=MultiwellCfg)
+    phantom_v2: PhantomV2Cfg = field(default_factory=PhantomV2Cfg)
 
     # ----- yardimcilar -----
     def is_camera_anchored(self) -> bool:
@@ -415,8 +469,33 @@ def load_cabin_config(
         mqtt_password=mqtt_parola,
     )
 
+    mw = _multiwell(raw.get("multiwell") or {})
+    pv2 = _phantom_v2(raw.get("phantom_v2") or {})
+
     # ⚠️ D1.E07 (İG-5.80): `.nan` / `.inf` YAML değeri YÜKLEMEDE reddedilir. `float(.nan)` sessizce geçiyordu; B/duty
     # ya da geometri NaN iken öngörücü "makul görünen" bir doz üretiyordu (ölçüldü). Hata, bozuk ANAHTARI söyler.
+    # AI-2: hocanın v2/v3 bölümlerinin sayısal alanları da (kabin yerleşimi, eksenler, halka çapı, paralaks, CST kutusu,
+    # kanser eşikleri) AYNI kurala tabidir — NaN yerleşim konumu dozu sessizce "makul" bir noktaya götürürdü.
+    _sonlu_yapilandirma(
+        p,
+        {
+            "multiwell.placement.a1_cabin_mm": mw.a1_cabin_mm,
+            "multiwell.placement.col_axis_cabin": mw.col_axis_cabin,
+            "multiwell.placement.row_axis_cabin": mw.row_axis_cabin,
+            "multiwell.cancer.frac": mw.cancer_frac,
+            "multiwell.cancer.delta_b": mw.cancer_db,
+            "multiwell.cancer.abs_b": mw.cancer_abs_b,
+            "phantom_v2.coil_ring.diameter_mm": pv2.ring_diameter_mm,
+            "phantom_v2.parallax.height_mm": pv2.parallax_height_mm,
+            "phantom_v2.parallax.focal_equiv_mm": pv2.focal_equiv_mm,
+            "phantom_v2.placement.origin_cabin_mm": pv2.origin_cabin_mm,
+            "phantom_v2.placement.x_axis_cabin": pv2.x_axis_cabin,
+            "phantom_v2.placement.y_axis_cabin": pv2.y_axis_cabin,
+            "phantom_v2.cst_box.center_mm": pv2.cst_box_center_mm,
+            "phantom_v2.cst_box.axis_u": pv2.cst_axis_u,
+            "phantom_v2.cst_box.axis_v": pv2.cst_axis_v,
+        },
+    )
     _sonlu_yapilandirma(
         p,
         {
@@ -444,6 +523,56 @@ def load_cabin_config(
         aruco=aruco, geometry=geom, camera=cam,
         phantom_plate=plate, segmentation=seg, pnp=pnp,
         phantom=ph, output=out, source_path=str(p),
+        multiwell=mw, phantom_v2=pv2,
+    )
+
+
+def _multiwell(m: dict) -> MultiwellCfg:
+    """`multiwell:` bölümü (hocanın petri v2 `cabin_config.py::_multiwell`, birebir)."""
+    d = MultiwellCfg()
+    pl = m.get("placement") or {}
+    cn = m.get("cancer") or {}
+    return MultiwellCfg(
+        plate_type=(int(m["plate_type"]) if m.get("plate_type") else None),
+        a1_corner=str(m.get("a1_corner", d.a1_corner)),
+        a1_cabin_mm=([float(v) for v in pl["a1_cabin_mm"]]
+                     if pl.get("a1_cabin_mm") is not None else None),
+        col_axis_cabin=[float(v) for v in pl.get("col_axis_cabin", d.col_axis_cabin)],
+        row_axis_cabin=[float(v) for v in pl.get("row_axis_cabin", d.row_axis_cabin)],
+        cancer_frac=float(cn.get("frac", d.cancer_frac)),
+        cancer_db=float(cn.get("delta_b", d.cancer_db)),
+        cancer_abs_b=float(cn.get("abs_b", d.cancer_abs_b)),
+        control_healthy=[str(w).upper() for w in cn.get("control_healthy") or []],
+        control_cancer=[str(w).upper() for w in cn.get("control_cancer") or []],
+    )
+
+
+def _phantom_v2(m: dict) -> PhantomV2Cfg:
+    """`phantom_v2:` bölümü (hocanın fantom v3 `cabin_config.py::_phantom_v2`, birebir)."""
+    d = PhantomV2Cfg()
+    ring = m.get("coil_ring") or {}
+    pl = m.get("placement") or {}
+    tu = m.get("tumor") or {}
+    cst = m.get("cst_box") or {}
+    par = m.get("parallax") or {}
+    return PhantomV2Cfg(
+        ring_enabled=bool(ring.get("enabled", d.ring_enabled)),
+        ring_diameter_mm=float(ring.get("diameter_mm", d.ring_diameter_mm)),
+        parallax_height_mm=float(par.get("height_mm", d.parallax_height_mm)),
+        focal_equiv_mm=float(par.get("focal_equiv_mm", d.focal_equiv_mm)),
+        layout_file=str(m.get("layout_file", d.layout_file) or ""),
+        origin_cabin_mm=([float(v) for v in pl["origin_cabin_mm"]]
+                         if pl.get("origin_cabin_mm") is not None else None),
+        x_axis_cabin=[float(v) for v in pl.get("x_axis_cabin", d.x_axis_cabin)],
+        y_axis_cabin=[float(v) for v in pl.get("y_axis_cabin", d.y_axis_cabin)],
+        cst_box_enabled=bool(cst.get("enabled", d.cst_box_enabled)),
+        cst_box_center_mm=[float(v) for v in cst.get("center_mm", d.cst_box_center_mm)],
+        cst_axis_u=[float(v) for v in cst.get("axis_u", d.cst_axis_u)],
+        cst_axis_v=[float(v) for v in cst.get("axis_v", d.cst_axis_v)],
+        navy_s_min=int(tu.get("navy_s_min", d.navy_s_min)),
+        navy_v_min=int(tu.get("navy_v_min", d.navy_v_min)),
+        navy_a_max=int(tu.get("navy_a_max", d.navy_a_max)),
+        core_v_max=int(tu.get("core_v_max", d.core_v_max)),
     )
 
 
