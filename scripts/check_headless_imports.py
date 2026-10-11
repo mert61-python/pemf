@@ -9,8 +9,14 @@ packages needed, so it runs on any Python 3.8+ even WITHOUT the heavy ML/Qt stac
 installed. It models what actually happens when PyQt6 is NOT installed.
 
 Every import edge is classified on two axes:
-  * timing  : EAGER (module top-level, runs at import) vs LAZY (inside a def).
-  * guard   : OPEN (plain) vs GUARDED (inside `try: ... except ImportError:`).
+  * timing  : EAGER (runs at import: module top-level, inside top-level
+              try/if/with/for/while, CLASS BODY, decorators/defaults) vs LAZY
+              (inside a def/lambda body).
+  * guard   : OPEN (plain) vs GUARDED (inside the `try:` BODY of a
+              `try: ... except ImportError:` that does not re-raise). An import in
+              an `except` / `else` / `finally` branch is OPEN.
+Dynamic imports with a literal name (`importlib.import_module("x")`,
+`__import__("x")`) and `matplotlib.use("<Qt/Tk backend>")` count as imports.
 
 A GUARDED import degrades gracefully when the target is missing, so it is a SAFE
 boundary -- Qt-absence never crashes past it. The checker therefore does NOT
@@ -33,7 +39,12 @@ transparency (e.g. opt-in legacy services behind try/except).
 Startup roots default to `backend_service` + `servers.api_server` because
 backend_service.main() imports api_server unconditionally at startup.
 
-Exit code 1 if any HARD BREAK is found, else 0. Use as a pre-build / CI guard.
+  3. EXE EXCLUDE RISK -- a reachable module OPENLY imports a module that the
+     onedir spec removes from the EXE (`Analysis(excludes=[...])`, read from the
+     spec itself) -> ModuleNotFoundError in the frozen EXE.
+
+Exit code 1 if any HARD BREAK or EXE EXCLUDE RISK is found; 2 if a startup root
+or the spec's excludes cannot be resolved; else 0. Use as a pre-build / CI guard.
 
 @author : migration tooling (Faz 0)
 """
@@ -41,16 +52,32 @@ Exit code 1 if any HARD BREAK is found, else 0. Use as a pre-build / CI guard.
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from collections import deque
 from pathlib import Path
 
-GUI_PACKAGES = {"PyQt6", "PyQt5", "PySide6", "PySide2", "pyqtgraph", "PyOpenGL", "OpenGL"}
+GUI_PACKAGES = {
+    "PyQt6", "PyQt5", "PyQt4", "PySide6", "PySide2", "pyqtgraph", "PyOpenGL", "OpenGL",
+    # D4.28 (B-10.93): Qt soyutlamasi ve Tk de GUI'dir — spec tkinter'i EXE'den CIKARIR (donmus EXE'de YOK).
+    "qtpy", "tkinter", "_tkinter", "Tkinter", "wx",
+}  # fmt: skip
+#: Headless'te mesru bir paketin GUI ALT modulleri: matplotlib'in Qt/Tk backend'leri (spec Qt olanlari cikarir).
+GUI_MODUL_ONEKLERI = (
+    "matplotlib.backends.backend_qt",
+    "matplotlib.backends.backend_tk",
+    "matplotlib.backends.qt_compat",
+)
+#: `matplotlib.use("<backend>")` ile secilen GUI backend'i (Agg/pdf/svg mesru).
+_MPL_GUI_BACKEND = re.compile(r"qt|tk|wx|gtk", re.IGNORECASE)
 SAFE_HANDLERS = {"ImportError", "ModuleNotFoundError", "Exception", "BaseException"}
-# Birinci-parti paketler ki PyInstaller spec'te EXE'den exclude ediliyorlar (GUI/legacy).
-# Headless zincir bunlardan birini ACIK (guard'sız) import ediyorsa, EXE runtime'da
-# ModuleNotFoundError verir -> spec excludes'tan cikarilmalidir.
-EXCLUDED_GUI_PACKAGES = {"windows", "pemf_gui", "styles", "threads"}
+_TRY_DUGUMLERI = (ast.Try, *((ast.TryStar,) if hasattr(ast, "TryStar") else ()))
+# ⚠️ D4.28 (B-10.93): spec'in EXE'den CIKARDIGI moduller TEK KAYNAKTAN, spec'in `Analysis(excludes=[...])`
+# listesinden okunur (`spec_excludes`). Eskiden burada elle tutulan {windows, pemf_gui, styles, threads}
+# spec'ten ayrismisti: spec tkinter + mpl Qt backend'lerini cikariyor, pemf_gui'yi CIKARMIYOR
+# (pemf_gui.config headless'te canli). Headless zincir cikarilan bir modulu ACIK import ederse donmus EXE
+# ModuleNotFoundError verir -> guard KIRMIZI (eskiden yalniz yazdiriliyordu, cikis 0 kaliyordu).
+SPEC_GORELI = Path("build_tools") / "PEMF_Backend_onedir.spec"
 ROOT = Path(__file__).resolve().parents[1]  # guii/
 DEFAULT_ROOTS = ["backend_service", "servers.api_server"]
 
@@ -90,66 +117,101 @@ def _resolve_relative(path: Path, level: int, module):
     return base or None
 
 
+def _gui_mi(ad: str) -> bool:
+    return ad.split(".")[0] in GUI_PACKAGES or ad.startswith(GUI_MODUL_ONEKLERI)
+
+
+def _haric_mi(ad: str, haric) -> bool:
+    return any(ad == e or ad.startswith(e + ".") for e in haric)
+
+
+def spec_excludes(spec: Path) -> tuple:
+    """Onedir spec'inin `Analysis(excludes=[...])` listesi — donmus EXE'de OLMAYACAK moduller."""
+    tree = ast.parse(spec.read_text(encoding="utf-8"), filename=str(spec))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "Analysis":
+            for kw in node.keywords:
+                if kw.arg == "excludes":
+                    return tuple(ast.literal_eval(kw.value))
+    raise ValueError(f"{spec}: Analysis(excludes=[...]) bulunamadi")
+
+
+def _hemen_kosanlar(govde):
+    """`govde` (deyim listesi) kosturuldugu AN calisan dugumler. def/lambda GOVDESINE inmez (cagrilinca kosar) ama
+    dekoratorlere ve varsayilan degerlere iner (tanim aninda kosar). ⚠️ D4.28: SINIF GOVDESI de tanim aninda kosar —
+    eskiden ClassDef atlaniyordu ve sinif govdesindeki `from PyQt6 import QtCore` guard'i YESIL geciyordu."""
+    yigin = list(govde)
+    while yigin:
+        n = yigin.pop()
+        yield n
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            yigin.extend(getattr(n, "decorator_list", ()))
+            yigin.extend(n.args.defaults)
+            yigin.extend(d for d in n.args.kw_defaults if d is not None)
+        else:
+            yigin.extend(ast.iter_child_nodes(n))
+
+
 def _eager_import_ids(tree: ast.Module):
-    """IDs of Import/ImportFrom nodes that execute at import time (top-level, or
-    inside a top-level try/if/with/for/while). Imports nested inside a
-    FunctionDef/ClassDef are NOT eager."""
-    eager = set()
+    """IDs of the nodes that execute at import time (see `_hemen_kosanlar`)."""
+    return {id(n) for n in _hemen_kosanlar(tree.body)}
 
-    def mark(node):
-        for child in ast.walk(node):
-            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                continue
-            if isinstance(child, (ast.Import, ast.ImportFrom)):
-                eager.add(id(child))
 
-    for n in ast.iter_child_nodes(tree):
-        if isinstance(n, (ast.Import, ast.ImportFrom)):
-            eager.add(id(n))
-        elif isinstance(n, (ast.Try, ast.If, ast.With, ast.For, ast.While)):
-            mark(n)
-    return eager
+def _guvenli_handler(h: ast.ExceptHandler) -> bool:
+    # `except ImportError: raise` yeniden firlatir -> koruma DEGIL (D4.28).
+    if any(isinstance(s, ast.Raise) for s in h.body):
+        return False
+    if h.type is None:
+        return True
+    names = []
+    if isinstance(h.type, ast.Name):
+        names = [h.type.id]
+    elif isinstance(h.type, ast.Tuple):
+        names = [e.id for e in h.type.elts if isinstance(e, ast.Name)]
+    return any(n in SAFE_HANDLERS for n in names)
 
 
 def _guarded_import_ids(tree: ast.Module):
-    """IDs of Import/ImportFrom nodes wrapped in a try/except that catches
-    ImportError/ModuleNotFoundError/Exception/BaseException (or is bare). Such an
-    import degrades to a fallback instead of crashing -> a safe boundary."""
+    """IDs of the nodes that execute inside the `try:` BODY of a try/except catching
+    ImportError/ModuleNotFoundError/Exception/BaseException (or bare) without
+    re-raising. Such an import degrades to a fallback instead of crashing -> a safe
+    boundary. ⚠️ D4.28: `except` / `else` / `finally` branches are NOT protected by their
+    own try (eskiden tum Try agaci korunmus sayiliyordu)."""
     guarded = set()
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Try):
-            continue
-        safe = False
-        for h in node.handlers:
-            if h.type is None:
-                safe = True
-                break
-            names = []
-            if isinstance(h.type, ast.Name):
-                names = [h.type.id]
-            elif isinstance(h.type, ast.Tuple):
-                names = [e.id for e in h.type.elts if isinstance(e, ast.Name)]
-            if any(n in SAFE_HANDLERS for n in names):
-                safe = True
-                break
-        if not safe:
-            continue
-        for child in ast.walk(node):
-            if isinstance(child, (ast.Import, ast.ImportFrom)):
-                guarded.add(id(child))
+        if isinstance(node, _TRY_DUGUMLERI) and any(_guvenli_handler(h) for h in node.handlers):
+            guarded.update(id(n) for n in _hemen_kosanlar(node.body))
     return guarded
 
 
-# dependency buckets: (timing, guard)
-_KEYS = ("fp_eager", "fp_eager_g", "fp_lazy", "fp_lazy_g", "qt_eager", "qt_lazy", "qt_guarded")
+def _dinamik_import_adi(node, mpl_adlari):
+    """`importlib.import_module("x")` / `import_module("x")` / `__import__("x")` -> "x";
+    `<matplotlib>.use("QtAgg")` -> "matplotlib.backends.backend_qtagg". Sabit dize olmayan ad -> None."""
+    if not isinstance(node, ast.Call) or not node.args:
+        return None
+    a0 = node.args[0]
+    if not (isinstance(a0, ast.Constant) and isinstance(a0.value, str)) or not a0.value:
+        return None
+    f = node.func
+    ad = f.id if isinstance(f, ast.Name) else (f.attr if isinstance(f, ast.Attribute) else None)
+    if ad in ("import_module", "__import__"):
+        return None if a0.value.startswith(".") else a0.value
+    if ad == "use" and isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) and f.value.id in mpl_adlari:
+        return f"matplotlib.backends.backend_{a0.value.lower()}" if _MPL_GUI_BACKEND.search(a0.value) else None
+    return None
+
+
+# dependency buckets: (timing, guard); ex_* = spec'in EXE'den cikardigi moduller (acik / korunan)
+_KEYS = ("fp_eager", "fp_eager_g", "fp_lazy", "fp_lazy_g", "qt_eager", "qt_lazy", "qt_guarded", "ex_open", "ex_guarded")
 
 
 def _empty():
     return {k: set() for k in _KEYS}
 
 
-def analyze(path: Path):
-    """Return import buckets keyed by timing (eager/lazy) and guard (open/guarded)."""
+def analyze(path: Path, haric=()):
+    """Return import buckets keyed by timing (eager/lazy) and guard (open/guarded).
+    `haric`: spec'in EXE'den cikardigi moduller (`spec_excludes`) -> ex_open / ex_guarded."""
     src = path.read_text(encoding="utf-8", errors="ignore")
     try:
         tree = ast.parse(src, filename=str(path))
@@ -159,6 +221,13 @@ def analyze(path: Path):
     eager_ids = _eager_import_ids(tree)
     guarded_ids = _guarded_import_ids(tree)
     out = _empty()
+    mpl_adlari = {
+        (a.asname or a.name)
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Import)
+        for a in n.names
+        if a.name == "matplotlib"
+    }
 
     def add(name: str, is_qt: bool, eager: bool, guarded: bool):
         if is_qt:
@@ -168,15 +237,25 @@ def analyze(path: Path):
         else:
             out["fp_lazy_g" if guarded else "fp_lazy"].add(name)
 
+    def haric_kaydet(name: str, guarded: bool) -> bool:
+        if haric and _haric_mi(name, haric):
+            out["ex_guarded" if guarded else "ex_open"].add(name)
+            return True
+        return False
+
+    def modul_kaydet(name: str, eager: bool, guarded: bool):
+        haric_kaydet(name, guarded)
+        if _gui_mi(name):
+            add(name, True, eager, guarded)
+        elif module_to_path(name) is not None:
+            add(name, False, eager, guarded)
+
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             eager = id(node) in eager_ids
             guarded = id(node) in guarded_ids
             for a in node.names:
-                if a.name.split(".")[0] in GUI_PACKAGES:
-                    add(a.name, True, eager, guarded)
-                elif module_to_path(a.name) is not None:
-                    add(a.name, False, eager, guarded)
+                modul_kaydet(a.name, eager, guarded)
 
         elif isinstance(node, ast.ImportFrom):
             eager = id(node) in eager_ids
@@ -184,13 +263,16 @@ def analyze(path: Path):
             base = _resolve_relative(path, node.level, node.module) if node.level else node.module
             if not base:
                 continue
-            if base.split(".")[0] in GUI_PACKAGES:
+            taban_haric = haric_kaydet(base, guarded)
+            if _gui_mi(base):
                 add(base, True, eager, guarded)
                 continue
             handled = False
             for a in node.names:
                 cand = f"{base}.{a.name}"
-                if cand.split(".")[0] in GUI_PACKAGES:
+                if not taban_haric:
+                    haric_kaydet(cand, guarded)
+                if _gui_mi(cand):
                     add(cand, True, eager, guarded)
                     handled = True
                 elif module_to_path(cand) is not None:
@@ -198,6 +280,12 @@ def analyze(path: Path):
                     handled = True
             if not handled and module_to_path(base) is not None:
                 add(base, False, eager, guarded)
+
+        else:
+            # ⚠️ D4.28: sabit adli dinamik import (importlib / __import__) ve matplotlib GUI backend secimi de import'tur.
+            dinamik = _dinamik_import_adi(node, mpl_adlari)
+            if dinamik:
+                modul_kaydet(dinamik, id(node) in eager_ids, id(node) in guarded_ids)
 
     return out
 
@@ -219,13 +307,21 @@ def main(argv):
     if not roots:
         print("HATA: gecerli giris modulu yok.")
         return 2
+    # D4.28: EXE'den cikarilan moduller bilinmeden "exclude guvenli" denemez — spec okunamazsa yarim kapsamli yesil YOK.
+    spec = ROOT / SPEC_GORELI
+    try:
+        haric = spec_excludes(spec)
+    except (OSError, SyntaxError, ValueError) as e:
+        print(f"HATA: spec excludes OKUNAMADI: {e}")
+        print("      (EXE'den cikarilan moduller bilinmeden guard YESIL veremez)")
+        return 2
 
     cache = {}
 
     def get(mod):
         if mod not in cache:
             p = module_to_path(mod)
-            cache[mod] = analyze(p) if p else None
+            cache[mod] = analyze(p, haric) if p else None
         return cache[mod]
 
     # --- eager-reach: BFS following only OPEN eager edges (import-time closure) ---
@@ -355,35 +451,36 @@ def main(argv):
             print(f"    - {parent_mod}  --guarded-->  {child}")
         print()
 
-    # --- EXE excludes validasyonu: headless'in import ettigi GUI/legacy paketler ---
+    # --- EXE excludes validasyonu: headless'in import ettigi, spec'in EXE'den CIKARDIGI moduller ---
     excl_open, excl_guarded = [], []
-    seen_e = set()
     for mod in sorted(full):
         info = get(mod)
         if not info:
             continue
-        for name in sorted(info["fp_eager"] | info["fp_lazy"]):
-            if name.split(".")[0] in EXCLUDED_GUI_PACKAGES and (mod, name) not in seen_e:
-                seen_e.add((mod, name))
-                excl_open.append((mod, name))
-        for name in sorted(info["fp_eager_g"] | info["fp_lazy_g"]):
-            if name.split(".")[0] in EXCLUDED_GUI_PACKAGES and (mod, name) not in seen_e:
-                seen_e.add((mod, name))
-                excl_guarded.append((mod, name))
+        excl_open += [(mod, name) for name in sorted(info["ex_open"])]
+        excl_guarded += [(mod, name) for name in sorted(info["ex_guarded"])]
     if excl_open:
-        print(f"[X] EXE EXCLUDE RISKI ({len(excl_open)}) -- headless bu paketleri ACIK import ediyor;")
-        print("    spec.excludes'tan CIKARILMALI, yoksa EXE 'ModuleNotFoundError' verir:")
+        print(
+            f"[X] EXE EXCLUDE RISKI ({len(excl_open)}) -- headless, spec'in EXE'den CIKARDIGI modulu ACIK import ediyor;"
+        )
+        print("    spec excludes'tan CIKARILMALI ya da import try/except ImportError ile korunmali,")
+        print("    yoksa donmus EXE 'ModuleNotFoundError' verir:")
         for mod, name in excl_open:
             print(f"    - {mod}  ->  {name}")
         print()
     if excl_guarded:
-        print(f"[i] GUI/legacy paketi GUARDED import ({len(excl_guarded)}) -- exclude GUVENLI:")
+        print(f"[i] spec'in cikardigi modul GUARDED import ({len(excl_guarded)}) -- exclude GUVENLI:")
         for mod, name in excl_guarded:
             print(f"    - {mod}  --guarded-->  {name}")
         print()
 
-    print("SONUC:", "KIRMIZI (hard break var)" if hard else "YESIL (startup Qt-free)")
-    return 1 if hard else 0
+    if hard:
+        print("SONUC: KIRMIZI (hard break var)")
+    elif excl_open:
+        print("SONUC: KIRMIZI (EXE exclude riski)")
+    else:
+        print("SONUC: YESIL (startup Qt-free)")
+    return 1 if (hard or excl_open) else 0
 
 
 if __name__ == "__main__":

@@ -326,7 +326,14 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
     # Kapı: tests/test_build_kapisi_yalitimi.py
     $gateKok = Join-Path $BuildRoot "ai_kapisi_kok"
     Remove-Item -LiteralPath $gateKok -Recurse -Force -EA 0
+    # ⚠️ D4.28 (B-10.92) — YANIT KENDİ SÜRECİMİZDEN Mİ? Kapı eskiden yalnız "portta HTTP 200 + rapor" bakıyordu: üretilen
+    # EXE açılır açılmaz ölse bile aynı portu tutan BAŞKA bir backend (yetim, elle açılmış, başka BuildRoot) tam-yeşil rapor
+    # veriyor, ölü EXE "hazır" diye paketleniyordu. Launcher'ın çözümü (system_router.py `launcherNonce`, yalnız loopback):
+    # EXE'ye tek-seferlik nonce verilir, sağlık yanıtı onu YANSITMADIKÇA kapı kendi sürecine ulaşmış sayılmaz; süreç
+    # ölürse (`HasExited`) beklenmez. Kapı: tests/test_build_AI_kapisi_KENDI_SURECINE_bagli_ve_kapi_kosullari_D428.py
+    $gateNonce = [guid]::NewGuid().ToString('N')
     $gateOrtam = [ordered]@{
+        PEMF_HEALTH_NONCE         = $gateNonce
         PEMF_SIMULATE             = "1"
         PEMF_FW_AUTO_UPDATE       = "0"
         PEMF_STM_PORT             = "SIM"
@@ -364,12 +371,17 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
         # DLL kilidiyle düşürür (bkz. build başındaki yetim temizliği).
         $proc = Start-Process -FilePath $exe -ArgumentList "--port", "$gatePort", "--no-mosquitto-ensure" `
             -RedirectStandardOutput $gateLog -RedirectStandardError "$gateLog.err" -PassThru -WindowStyle Hidden
+        # Tutamaç önbelleğe alınmazsa Start-Process nesnesinin ExitCode'u süreç bitince boş kalır.
+        try { $null = $proc.Handle } catch { }
         $hazir = $false
+        $yabanci = $false
         foreach ($i in 1..90) {
             Start-Sleep -Seconds 2
+            if ($proc.HasExited) { break }   # ölü EXE için 3 dakika yoklama YOK
             try {
-                $null = Invoke-RestMethod "http://127.0.0.1:$gatePort/api/health" -TimeoutSec 3
-                $hazir = $true; break
+                $saglik = Invoke-RestMethod "http://127.0.0.1:$gatePort/api/health" -TimeoutSec 3
+                if ($saglik.launcherNonce -eq $gateNonce) { $hazir = $true; break }
+                $yabanci = $true   # portta yanıt veren süreç nonce'umuzu bilmiyor → bizim EXE DEĞİL
             } catch { }
         }
         # ⚠️ D4.19 (B-10.74): EXE sağlık ucuna ULAŞILAMAZSA derleme DURUR. Eskiden `Warn "… kapı ATLANDI"` deyip devam ediyor,
@@ -378,7 +390,12 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
         # açık `-SkipAiGate` ile. (`Die` = exit 1; `finally` ortamı geri yükler ve kapı kökünü siler.)
         # Kapı: tests/test_build_AI_kapisi_EXE_acilmazsa_DURUR_D419.py
         if (-not $hazir) {
-            Die ("AI KAPISI: üretilen EXE $gatePort portunda AÇILMADI — bu EXE yayına ÇIKAMAZ (log: $gateLog, $gateLog.err). " +
+            $neden = ""
+            if ($proc.HasExited) { $neden += " Süreç KAPANDI (çıkış kodu $($proc.ExitCode))." }
+            if ($yabanci) {
+                $neden += " Portta BAŞKA bir süreç yanıt veriyor (PEMF_HEALTH_NONCE yansımadı) — yetim/elle açılmış backend'i kapatın."
+            }
+            Die ("AI KAPISI: üretilen EXE $gatePort portunda AÇILMADI — bu EXE yayına ÇIKAMAZ.$neden (log: $gateLog, $gateLog.err). " +
                  "Kapıyı bilinçli geçmek için -SkipAiGate (yalnız acil durum).")
         }
         else {

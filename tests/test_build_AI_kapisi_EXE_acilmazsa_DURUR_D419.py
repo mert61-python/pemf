@@ -47,15 +47,17 @@ function Start-Sleep { }
 function Stop-Process { }
 function Wait-Process { }
 function Get-Process { @() }
+$global:SAGLIKLI = ($Senaryo -eq 'saglikli')
 function Start-Process {
     param($FilePath, $ArgumentList, $RedirectStandardOutput, $RedirectStandardError, [switch]$PassThru, $WindowStyle)
-    [pscustomobject]@{ Id = 0; HasExited = $true; ExitCode = 3 }   # açılır açılmaz ölen EXE
+    # D4.28: sağlıklı EXE, başlatılırken aldığı PEMF_HEALTH_NONCE'u sağlık yanıtında yansıtır.
+    $global:COCUK_NONCE = [Environment]::GetEnvironmentVariable('PEMF_HEALTH_NONCE', 'Process')
+    [pscustomobject]@{ Id = 0; HasExited = (-not $global:SAGLIKLI); ExitCode = 3 }   # sağlıksız: açılır açılmaz ölen EXE
 }
-$global:SAGLIKLI = ($Senaryo -eq 'saglikli')
 function Invoke-RestMethod {
     param($Uri, $TimeoutSec, $Headers)
     if (-not $global:SAGLIKLI) { throw 'sahte: baglanti reddedildi' }
-    if ($Uri -match '/api/health') { return [pscustomobject]@{ status = 'ok' } }
+    if ($Uri -match '/api/health') { return [pscustomobject]@{ status = 'ok'; launcherNonce = $global:COCUK_NONCE } }
     return [pscustomobject]@{ hazir = 2; toplam = 2; eksik = @(); moduller = @();
         xai = [pscustomobject]@{ hazir = $true; grad_cam = $true; shap = $true; captum = $true; ttach = $true; em_ref_stats_eksik = @() };
         pip_yasagi = [pscustomobject]@{ etkin = $true } }

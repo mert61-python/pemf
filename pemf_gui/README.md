@@ -12,7 +12,9 @@ geçildi), **ama paket ölü değil** — iki parça hâlâ aktif kullanılıyor
 
 ## ⚠️ Dikkat
 - **Silme** — GUI olarak bayat ama **config + asset shim'i olarak canlı** (backend import ediyor).
-- `scripts/check_headless_imports.py` bunu `EXCLUDED_GUI_PACKAGES`'te listeler (headless guard'ı kızdırmaz).
+- PyInstaller spec'i bu paketi EXE'den **çıkarmaz** (`Analysis(excludes=…)`'ta yok). `scripts/check_headless_imports.py`
+  exclude listesini spec'in kendisinden okur (D4.28) — bu yüzden `pemf_gui` importu headless guard'ı kızdırmaz;
+  pakete Qt importu girerse guard yine KIRMIZI olur.
 
 ---
 İlgili: [apps/backend/utils/secrets_manager](../apps/backend/utils/README.md) · [apps/backend/database/](../apps/backend/database/README.md) · [proje geneli](../README.md)
