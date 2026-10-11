@@ -148,15 +148,20 @@ def batch_xai(
     output_labels: Sequence[str] | None = None,
     sample_ids: Sequence[str] | None = None,
     run_shap: bool = True,
-    shap_nsamples: int = 60,
+    shap_nsamples: int = 200,
     shap_output_agg: str = "duty",
+    egitim_ref: dict | None = None,
 ) -> dict:
     """Mod-2: seans-sonrası/batch tam paket (sensitivity+SHAP+CSV+PNG+~200KB).
 
     SHAP varsayılanı 'duty' (§KALAN A7 wiring, 2026-08-27): hizli_sensitivity ile aynı
     klinik soru — "önerilen DOZU ne belirledi". mean-agregasyon 23 heterojen çıktıda
     (D7+faz14+E2) duty sinyalini sulandırıyordu (test: duty-sürücü özellik mean'de top-1
-    OLMUYOR, duty'de OLUYOR — mühendislenmiş karşıt-kanıt)."""
+    OLMUYOR, duty'de OLUYOR — mühendislenmiş karşıt-kanıt).
+
+    AI1.X10 (hoca XAI v3): egitim_ref (xai_train_ref.npz) → yığından bağımsız merkezi-fark duyarlılığı + domain_check.csv
+    + öğrenilmemiş özellik NaN; shap_nsamples 60 → 200: 6 özellikte ≥ 62 koalisyon TAM sayılır → aynı noktanın SHAP'ı
+    tek başına ve yığında AYNI (ölçüldü: 60'ta x katkısı 0,000187 ↔ 0,000059)."""
     return run_em_xai(
         predict_raw_fn(predictor),
         np.asarray(X, dtype=np.float64),
@@ -167,4 +172,5 @@ def batch_xai(
         shap_nsamples=shap_nsamples,
         ref_stats=ref_stats,
         shap_output_agg=shap_output_agg,
+        egitim_ref=egitim_ref,
     )

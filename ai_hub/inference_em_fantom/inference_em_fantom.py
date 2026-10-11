@@ -201,6 +201,7 @@ def _run_xai_em(predictor, X, out_dir, **kw):
     from ai_hub.xai_tabular.em_runtime import batch_xai
 
     kw.setdefault("output_labels", XAI_OUTPUT_LABELS)
+    kw.setdefault("egitim_ref", xai_egitim_ref())  # AI1.X10: hoca v2 duyarlılığı + alan kontrolü
     return batch_xai(predictor, xai_ref_stats(), X, out_dir, **kw)
 
 

@@ -204,7 +204,7 @@ def _csv_oku(girdi: Path, index_col: bool):
 
 
 # ── görüntü/ses modülleri ────────────────────────────────────────────────────
-def _ses_kapili_explain(p: Path, xai_method: str) -> dict:
+def _ses_kapili_explain(p: Path, xai_method: str | None) -> dict:
     """Ses XAI'si SESSİZLİK KAPISININ ARKASINDA (değişmez; router ile aynı sıra):
     ffmpeg → 22050Hz mono WAV → RMS ölçümü → sessizse ısı haritası ÜRETİLMEZ."""
     import subprocess
@@ -228,15 +228,17 @@ def _ses_kapili_explain(p: Path, xai_method: str) -> dict:
         rms = wav_rms_dbfs(wav)
         if sessiz_mi(rms):
             raise RuntimeError(f"sessizlik kapısı: kayıt sessiz (RMS {rms:.1f} dBFS) — duygu ısı-haritası üretilmez")
-        return xai_ses_isi_haritasi(wav, None, xai_method)
+        # AI1.X10: yöntem verilmezse modülün KENDİ varsayılanı (ses Grad-CAM — AI1.X7)
+        return xai_ses_isi_haritasi(wav, None, *([xai_method] if xai_method else []))
 
 
-def _gorsel_explain_fn(modul: str, xai_method: str):
+def _gorsel_explain_fn(modul: str, xai_method: str | None):
     """Modülün TEK-KAYNAK explain fonksiyonunu (dosya-yolu → dict) closure olarak döndür."""
     if modul == "termal":
         from ai_hub.cat_thermal.inference_cat_thermal import xai_termal_isi_haritasi
 
-        return lambda p: xai_termal_isi_haritasi(str(p), None, xai_method)
+        # AI1.X10: yöntem verilmezse modülün KENDİ varsayılanı (termal HiRes-CAM, tahmin edilen sınıf — AI1.X1)
+        return lambda p: xai_termal_isi_haritasi(str(p), None, *([xai_method] if xai_method else []))
     if modul == "ses":
         return lambda p: _ses_kapili_explain(p, xai_method)
     if modul == "ct":
@@ -279,8 +281,15 @@ def _kos_gorsel(modul: str, girdi: Path, cikti: Path, args) -> tuple[list[dict],
             satirlar.append(
                 {"dosya": govde, "yontem": sonuc.get("method", "?"), "cikti": ana.name, "sure_s": sure, "hata": ""}
             )
+            _hedef = {"Sick": " · açıklanan karar: Hasta", "Healthy": " · açıklanan karar: Sağlıklı"}.get(
+                sonuc.get("hedef"), ""
+            )
             kartlar.append(
-                {"etiket": govde, "gorseller": gorseller, "not": f"yöntem: {sonuc.get('method', '?')} · {sure}s"}
+                {
+                    "etiket": govde,
+                    "gorseller": gorseller,
+                    "not": f"yöntem: {sonuc.get('method', '?')}{_hedef} · {sure}s",
+                }
             )
             print(f"[{i}/{len(dosyalar)}] {govde} OK ({sure}s)")
         except ImportError as e:
@@ -412,6 +421,7 @@ def _kos_em(modul: str, girdi: Path, cikti: Path, args) -> tuple[list[dict], lis
             "nokta_sayisi": len(df),
             "paket": "em_paket/",
             "shap": "hayır" if args.no_shap else "evet (D1-D7 duty-agg)",
+            "egitim_disi_nokta": sum(1 for d in (paket.get("alan_disi") or []) if d),
             "sure_s": sure,
             "hata": "",
         }
@@ -420,7 +430,12 @@ def _kos_em(modul: str, girdi: Path, cikti: Path, args) -> tuple[list[dict], lis
         {
             "etiket": f"{modul} · {len(df)} nokta",
             "gorseller": [(ad, f"em_paket/{ad}") for ad in uretilen if ad.endswith(".png")],
-            "not": f"tam paket: {', '.join(uretilen)} ({sure}s)",
+            "not": f"tam paket: {', '.join(uretilen)} ({sure}s)"
+            + (
+                f" · ⚠ eğitim aralığı dışı nokta: {satirlar[0]['egitim_disi_nokta']} (domain_check.csv — açıklaması ekstrapolasyon)"
+                if satirlar[0].get('egitim_disi_nokta')
+                else ""
+            ),
         }
     ]
     print(f"{modul}: {len(df)} nokta → em_paket/ ({sure}s); dosyalar: {uretilen}")
@@ -469,9 +484,9 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=None, help="en fazla N dosya/satır işle")
     ap.add_argument(
         "--xai-method",
-        default="gradcam++",
+        default=None,  # AI1.X10: eskiden gradcam++ zorlanıyordu (termalde sınıf-duyarsız, seste boş harita — ölçüldü)
         choices=GECERLI_CAM,
-        help="termal/ses CAM yöntemi (diğer modüllerde yok sayılır)",
+        help="termal/ses CAM yöntemi; verilmezse modülün doğrulanmış varsayılanı (termal hirescam, ses gradcam)",
     )
     ap.add_argument("--top-n", type=int, default=10, help="rna: hasta başına top-N gen")
     ap.add_argument("--no-shap", action="store_true", help="em: SHAP'ı atla (yalnız sensitivity)")

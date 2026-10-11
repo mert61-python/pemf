@@ -76,6 +76,55 @@ def sensitivity_analysis(
     return {"delta_abs_mean": delta_abs_mean, "per_output": per_output, "feature_names": list(feature_names)}
 
 
+def sensitivity_egitim_ref(
+    predict_fn: Callable[[np.ndarray], np.ndarray],
+    X: np.ndarray,
+    egitim_ref: dict,
+    feature_names: Sequence[str] = EM_FEATURES,
+    delta_frac: float = 0.10,
+    n_duty: int = 7,
+) -> dict:
+    """AI1.X10 (hoca XAI v3 `em_sensitivity_v2.sensitivity_v2`): her satir KENDI BASINA (yigindan bagimsiz) merkezi fark,
+    d = delta_frac * EGITIM std'si; organ_id kategorik +-1 (egitim araligina kirpilir); egitimde sabit ozellik -> NaN.
+    sensitivity_analysis ile ayni sozluk + "per_sample_duty" (N, F; ilk n_duty ciktinin ort. |delta| - canli yolla ayni hedef)
+    + "ogrenilmemis" (ad listesi)."""
+    X = np.asarray(X, dtype=np.float64)
+    N, F = X.shape
+    y0 = np.asarray(predict_fn(X)).reshape(N, -1)
+    O = y0.shape[1]
+    per_output = np.full((F, O), np.nan)
+    per_sample = np.full((N, F), np.nan)
+    ogrenilmemis = []
+    for f in range(F):
+        s = float(egitim_ref["std"][f])
+        if not s > 0.0:
+            ogrenilmemis.append(feature_names[f])
+            continue
+        Xp, Xm = X.copy(), X.copy()
+        if feature_names[f] == "organ_id":
+            lo, hi = float(egitim_ref["min"][f]), float(egitim_ref["max"][f])
+            Xp[:, f] = np.clip(np.round(X[:, f]) + 1.0, lo, hi)
+            Xm[:, f] = np.clip(np.round(X[:, f]) - 1.0, lo, hi)
+        else:
+            Xp[:, f] += delta_frac * s
+            Xm[:, f] -= delta_frac * s
+        diff = np.abs(np.asarray(predict_fn(Xp)).reshape(N, O) - np.asarray(predict_fn(Xm)).reshape(N, O)) / 2.0
+        per_output[f] = diff.mean(axis=0)
+        per_sample[:, f] = diff[:, : min(n_duty, O)].mean(axis=1)
+    delta = np.array([np.nan if np.isnan(per_output[f]).all() else float(per_output[f].mean()) for f in range(F)])
+    return {"delta_abs_mean": delta, "per_output": per_output, "feature_names": list(feature_names),
+            "per_sample_duty": per_sample, "ogrenilmemis": ogrenilmemis}
+
+
+def egitim_araligi_disi(X: np.ndarray, egitim_ref: dict, feature_names: Sequence[str] = EM_FEATURES) -> list:
+    """Her satir icin egitim araligi DISINDAKI ozellikler (hoca v2 `domain_check`): "ad=deger (egitim lo..hi)"."""
+    out = []
+    for row in np.asarray(X, dtype=np.float64):
+        out.append([f"{n}={v:.4g} (egitim {lo:.4g}..{hi:.4g})"
+                    for n, v, lo, hi in zip(feature_names, row, egitim_ref["min"], egitim_ref["max"]) if not (lo <= v <= hi)])
+    return out
+
+
 def sensitivity_bar_plot(sens: dict, out_png: str | Path, title: str = "Feature sensitivity (EM)"):
     """Sensitivity mean bar plot."""
     import matplotlib
@@ -83,7 +132,7 @@ def sensitivity_bar_plot(sens: dict, out_png: str | Path, title: str = "Feature 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    vals = sens["delta_abs_mean"]
+    vals = np.nan_to_num(np.asarray(sens["delta_abs_mean"], dtype=np.float64), nan=0.0)  # NaN = ogrenilmemis
     names = sens["feature_names"]
     order = np.argsort(-vals)
     fig, ax = plt.subplots(figsize=(8, max(3, 0.35 * len(names))))
@@ -112,7 +161,7 @@ def sensitivity_heatmap(
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    M = sens["per_output"]  # (F, O)
+    M = np.nan_to_num(np.asarray(sens["per_output"], dtype=np.float64), nan=0.0)  # (F, O); NaN = ogrenilmemis
     names = sens["feature_names"]
     F, O = M.shape
     if output_labels is None:
@@ -213,6 +262,7 @@ def run_em_xai(
     top_n: int = 6,
     ref_stats: dict | None = None,
     shap_output_agg: str = "mean",
+    egitim_ref: dict | None = None,
 ) -> dict:
     """Tum EM XAI'yi tek çağrida uret: sensitivity + SHAP + CSV + PNG'ler.
 
@@ -235,9 +285,24 @@ def run_em_xai(
     ref_std = None if ref_stats is None else ref_stats.get("std")
     ref_bg = None if ref_stats is None else ref_stats.get("background")
 
-    # 1) Sensitivity
-    sens = sensitivity_analysis(predict_fn, X, feature_names, delta_frac=sens_delta, ref_std=ref_std)
-    sensitivity_bar_plot(sens, out_dir / "sens_bar.png", title=f"Sensitivity (delta={sens_delta * 100:.0f}% std)")
+    # 1) Sensitivity - AI1.X10: egitim_ref verilirse hocanin v2 yontemi (yigindan bagimsiz merkezi fark + alan kontrolu)
+    alan_disi = None
+    _not = ""
+    if egitim_ref is not None:
+        sens = sensitivity_egitim_ref(predict_fn, X, egitim_ref, feature_names, delta_frac=sens_delta)
+        alan_disi = egitim_araligi_disi(X, egitim_ref, feature_names)
+        pd.DataFrame(
+            {"sample_id": list(sample_ids), "egitim_araliginda": [not d for d in alan_disi],
+             "aralik_disi": [" | ".join(d) for d in alan_disi]}
+        ).to_csv(out_dir / "domain_check.csv", index=False)
+        pd.DataFrame(sens["per_sample_duty"], columns=list(feature_names), index=list(sample_ids)).to_csv(
+            out_dir / "sensitivity_ornek.csv"
+        )
+        if sens["ogrenilmemis"]:
+            _not = f" - ogrenilmemis: {', '.join(sens['ogrenilmemis'])}"
+    else:
+        sens = sensitivity_analysis(predict_fn, X, feature_names, delta_frac=sens_delta, ref_std=ref_std)
+    sensitivity_bar_plot(sens, out_dir / "sens_bar.png", title=f"Sensitivity (delta={sens_delta * 100:.0f}% std){_not}")
     sensitivity_heatmap(sens, out_dir / "sens_heatmap.png", output_labels=output_labels)
     pd.DataFrame({"feature": feature_names, "mean_abs_delta": sens["delta_abs_mean"]}).to_csv(
         out_dir / "sensitivity.csv", index=False
@@ -255,12 +320,15 @@ def run_em_xai(
             output_agg=shap_output_agg,
             background=ref_bg,
         )
+        if egitim_ref is not None:  # AI1.X10: egitimde sabit ozellik "ogrenilmemis" - katkisi NaN
+            shap_vals = np.asarray(shap_vals, dtype=np.float64)
+            shap_vals[:, np.asarray(egitim_ref["std"]) <= 0] = np.nan
         pd.DataFrame(shap_vals, columns=list(feature_names), index=sample_ids).to_csv(out_dir / "shap_values.csv")
         _agg_etiket = {"mean": "output mean-aggregate", "first": "first output", "duty": "D1-D7 duty-aggregate"}.get(
             shap_output_agg, shap_output_agg
         )
         # Ortalama |SHAP| bar plot
-        mean_abs_shap = np.abs(shap_vals).mean(axis=0)
+        mean_abs_shap = np.nan_to_num(np.nanmean(np.abs(shap_vals), axis=0), nan=0.0)
         bar_plot(
             mean_abs_shap,
             feature_names,
@@ -272,7 +340,7 @@ def run_em_xai(
         # Per-sample bar
         for i, pid in enumerate(sample_ids):
             bar_plot(
-                shap_vals[i],
+                np.nan_to_num(shap_vals[i], nan=0.0),
                 feature_names,
                 out_dir / f"bar_shap_{pid}.png",
                 top_n=min(top_n, len(feature_names)),
@@ -280,4 +348,4 @@ def run_em_xai(
                 signed=True,
             )
 
-    return {"sensitivity": sens, "shap_values": shap_vals, "out_dir": str(out_dir)}
+    return {"sensitivity": sens, "shap_values": shap_vals, "out_dir": str(out_dir), "alan_disi": alan_disi}
