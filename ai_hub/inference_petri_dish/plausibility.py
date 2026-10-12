@@ -243,8 +243,9 @@ def user_message(metrics: dict | None = None) -> str:
             "fotoğrafını ilgili kedi modülüne yükleyin — yanlış modülde üretilen sonuç yanıltıcıdır. "
             "Görüntü gerçekten bir petri plakasıysa kuyucukları tepeden ve tam kadrajda gösteren bir "
             "fotoğraf deneyin. Araştırma için eşikler Petri modülündeki 'Gelişmiş (araştırma) "
-            "ayarları' bölümünden gevşetilebilir ya da denetim tamamen kapatılabilir "
-            "(sunucu tarafında PEMF_AI_PLAUSIBILITY_GUARD=0)."
+            "ayarları' bölümünden gevşetilebilir ya da denetim tamamen kapatılabilir."
+            # AIK K4 (AI incelemesi §8 #8): sunucu ortam değişkeni adı kullanıcı metnine YAZILMAZ — operatör onu değiştiremez
+            # (eylem yukarıdaki Gelişmiş ayarlardır); kaçış kapağı (`guard_enabled`) AYNEN çalışır, belgesi modül başında.
             ).format(olcum=olcum)
 
 
@@ -314,7 +315,8 @@ def plate_user_message(metrics: dict | None = None) -> str:
             "modülüne yükleyin — yanlış modülde üretilen kuyucuk sonucu yanıltıcıdır. Görüntü gerçekten bir "
             "plakaysa tepeden, dik ve yakın çekin (plaka karenin en az yarısını kaplasın); tekil petri kapları "
             "için 'Tekil petri kapları' kipini seçin. Araştırma için denetim Petri modülündeki 'Gelişmiş "
-            "(araştırma) ayarları' bölümünden kapatılabilir (sunucu tarafında PEMF_AI_PLAUSIBILITY_GUARD=0)."
+            "(araştırma) ayarları' bölümünden kapatılabilir."
+            # AIK K4: ortam değişkeni adı kullanıcı metnine yazılmaz (bkz. `user_message`).
             ).format(olcum=olcum)
 
 

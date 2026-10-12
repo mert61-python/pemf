@@ -42,6 +42,7 @@
 5. 🟠 **celldetection frozen EXE'ye GİRMEZ** (deps 6. değişim + CPU'da CPN dakikalar) → mikroservis-öncelikli (§3).
 6. 🟡 `_labels/_binary/contours` JSON'a girmez; yanıt = özet metrik + base64 görseller.
 7. 🟡 **EigenCAM kaba-bölgeseldir**; UI "bölgesel model ilgisi" der. Fonksiyon default'u `gradcam++` ≠ CLI default'u `eigencam` → servis metodu AÇIKÇA geçer.
+   > ⚠️ **GÜNCEL (2026-10-13, AIK — AI incelemesi §8 #7):** bu madde v2 dönemine aittir. AI-1 X5'ten (hoca XAI v3) beri izin listesi `GECERLI_XAI_YONTEMLERI = ("hirescam", "gradcam")`, varsayılan **`hirescam`** (tespit hedefli; eski hedefte EigenCAM / Grad-CAM++ boş harita veriyordu) — kaynak `ai_hub/inference_paper_dilek_hoca/inference_paper_dilek_hoca.py`, uç `ai_router` `/api/ai/vision/scratch` ve `ai_service` `/infer/scratch` aynı listeyi kullanır.
 8. 🟡 Kod tuhaflıkları korunur ama **UI'ya sızanlar ele alınır** (§5): analysis görseli içindeki "Total cells: 114" (binary sayımı) ile metrik kartındaki n_cells=2085 (CPN instance) AYNI ekranda çelişir — görsel altına tek satır açıklama; `"No cancer"` metni ve tamsayı-bölme görsel içinde kalır (Çağlar'ın v4 davranışı).
 9. 🟢 guii `ai_hub/xai_utils` upstream'le birebir uyumlu — XAI için yeni bağımlılık yok.
 
@@ -102,6 +103,7 @@
 ### Faz 2 — Uçlar + sözleşme (mock'lu)
 - Router `/api/ai/vision/scratch`: ham file-part (+base64 yalnız JSON); `scratch_yonu`, `pixel_mm`, `explain`, `xai_method`; `require_research`; `_kapili_devret` (STRING data); zarif 503; `xai_error`.
 - **ai_service imzaları AÇIK** (delegate `str()` + None-atlar): `scratch_yonu: str = Form("dikey")`, `pixel_mm: float = Form(None)`, `explain: str = Form(None)` → `=="true"`, `xai_method: str = Form(None)` + **ALLOWLIST** {eigencam, gradcam, gradcam++} (istek alanı olarak depoda İLK — doğrulanmadan CAM sınıfına gitmez).
+  > ⚠️ **GÜNCEL (2026-10-13, AIK):** izin listesi bugün {hirescam, gradcam}, varsayılan hirescam (AI-1 X5) — yukarıdaki küme v2 planıdır.
 - predictors kaydı + **warmup/per-key-kilit kararının uygulaması** (bulgu 12) + `app.py` "torch YOK" başlığının güncellenmesi.
 - Route-contract 96→97 (İKİ yer) + **jeton TAM-YOL 'serbest' + sınıf kaydı** (0.5/0.6) + testleri.
 - **Girdi tavanı**: mevcut 25 MB/50 MP yeterli — .tif **gerçek fixture** testi (router `_decode_image`'dan geçer, cell'siz koşar).
