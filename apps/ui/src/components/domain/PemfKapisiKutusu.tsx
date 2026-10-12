@@ -52,11 +52,17 @@ export function PemfKapisiKutusu({
         backgroundColor: surulebilir ? "transparent" : "rgba(220,38,38,0.06)",
       }}
     >
-      <Text style={{ fontSize: typography.small, fontWeight: "bold", color: gecerli ? colors.success : colors.danger }}>
-        {gecerli ? "✔ PEMF girdisi geçerli" : "⛔ PEMF girdisi GEÇERSİZ"}
+      {/* AII-3.9: başlık kutunun HÜKMÜNÜ söyler — kabin çerçevesi geçerli ama engelleyici neden varsa YEŞİL "✔ geçerli" yazılmaz
+          (kırmızı "ESAS ALINMAZ" ile çelişiyordu; göz ilk satırı okur). */}
+      <Text style={{ fontSize: typography.small, fontWeight: "bold", color: surulebilir ? colors.success : colors.danger }}>
+        {surulebilir
+          ? "✔ PEMF girdisi geçerli"
+          : gecerli
+            ? "⛔ Sonuç bobin sürüşüne KULLANILAMAZ (kabin konumu geçerli — nedenler aşağıda)"
+            : "⛔ PEMF girdisi GEÇERSİZ"}
         {model === "fantom" && reliable != null ? (
-          <Text style={{ color: reliable ? colors.success : colors.danger }}>
-            {reliable ? "   ·   ✔ tespit güvenilir" : "   ·   ⛔ tespit güvenilir DEĞİL"}
+          <Text style={{ color: !reliable ? colors.danger : surulebilir ? colors.success : colors.textMuted }}>
+            {!reliable ? "   ·   ⛔ tespit güvenilir DEĞİL" : surulebilir ? "   ·   ✔ tespit güvenilir" : "   ·   tespit güvenilir"}
           </Text>
         ) : null}
       </Text>
