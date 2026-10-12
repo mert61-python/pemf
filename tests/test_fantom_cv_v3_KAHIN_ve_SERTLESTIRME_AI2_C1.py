@@ -175,7 +175,7 @@ def test_v3_EM_ongorucu_PAKET_yolundan():
     dokunanlar = [
         y.name
         for y in sorted(paket_dizini.glob("*.py"))
-        if re.search(r"sys\.path\.(insert|append)", y.read_text(encoding="utf-8"))
+        if re.search(r"sys\.path\.(insert|append)\b", y.read_text(encoding="utf-8"))
     ]
     assert not dokunanlar, f"phantom_cv_v3 sys.path hilesi taşıyor: {dokunanlar}"
 

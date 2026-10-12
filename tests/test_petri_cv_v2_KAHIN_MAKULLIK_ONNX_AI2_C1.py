@@ -230,7 +230,7 @@ def test_v2_EM_ongorucu_PAKET_yolundan_sys_path_hilesi_YOK():
     dokunanlar = [
         y.name
         for y in sorted(paket_dizini.glob("*.py"))
-        if re.search(r"sys\.path\.(insert|append)", y.read_text(encoding="utf-8"))
+        if re.search(r"sys\.path\.(insert|append)\b", y.read_text(encoding="utf-8"))
     ]
     assert not dokunanlar, f"petri_cv_v2 sys.path hilesi taşıyor: {dokunanlar}"
 
