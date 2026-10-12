@@ -4938,7 +4938,8 @@ def _xai_zinciri_durumu() -> dict:
     try:
         from ai_hub.inference_human_kidney_disease import inference_human_kidney_disease as _ihd
 
-        _ihd.xai_egitim_arka_plani(24)
+        # AII-3.5: npz + açıklamanın kurulduğu shap ÖZEL API'si (DenseData) birlikte — ürünün TEK kurucusu (ağırlıksız)
+        _ihd.xai_arka_plan_verisi([f"f{i}" for i in range(24)])
         durum["ckd_xai_referansi"] = "ok"
     except Exception as e:
         durum["ckd_xai_referansi"] = "eksik"

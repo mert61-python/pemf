@@ -305,6 +305,17 @@ def xai_egitim_arka_plani(n_ozellik: int):
     return merkez, agirlik
 
 
+def xai_arka_plan_verisi(ozellik_adlari):
+    """Kernel SHAP arka planı (ağırlıklı DenseData) — TEK kurucu: `xai_top_features` ve `/api/ai/hazirlik` aynı yolu ölçer.
+
+    ⚠️ AII-3.5: `shap.utils._legacy.DenseData` shap'ın ÖZEL API'si (0.49.1'de ağırlık 4. konumsal argüman). shap yükseltmesinde ad ya da
+    imza değişirse burada AÇIK hata — hazırlık bunu "eksik" görür (eskiden yalnız npz ölçülüyordu, özellik ölüyken hazırlık "ok" diyordu)."""
+    from shap.utils._legacy import DenseData
+
+    merkez, agirlik = xai_egitim_arka_plani(len(ozellik_adlari))
+    return DenseData(merkez, list(ozellik_adlari), None, agirlik)
+
+
 def xai_top_features(features: dict, top_n: int = 7,
                       model_name: str | None = None,
                       n_kernel_samples: int = 8000) -> dict:
@@ -330,10 +341,7 @@ def xai_top_features(features: dict, top_n: int = 7,
     post_names = _preprocessor_feature_names(pre)
     # AI1.X4: arka plan = eğitim verisinin AĞIRLIKLI k-means özeti (ölçüm gerekçesi XAI_EGITIM_REFERANSI'nın üstünde).
     # Eski `_referans_background` ve `NORMAL_REFERANS` karşıt-kanıt testleri için DURUYOR ama artık kullanılmıyor.
-    from shap.utils._legacy import DenseData
-
-    merkez, agirlik = xai_egitim_arka_plani(len(post_names))
-    bg = DenseData(merkez, list(post_names), None, agirlik)
+    bg = xai_arka_plan_verisi(post_names)
 
     _rng_durum = np.random.get_state()
     try:
