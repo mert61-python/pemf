@@ -980,6 +980,14 @@ function isiHaritasiBasligi(r: { xai_hedef?: string }): string {
   return "🔍 Isı haritası — modelin baktığı bölgeler (kırmızı = karara güçlü etki)";
 }
 
+/**
+ * AII-3.3 (AI incelemesi): canlı tespit 0 kutuyken tespit hedefli CAM (YoloDetCAM) eşik altı en güçlü 5 adaya düşer ve haritayı
+ * maks'a ölçekler (harita boş dönmez) — bu harita tespitin ya da tanının kanıtı DEĞİLDİR. ONNX ↔ PT kutuları birebir ve iki eşik
+ * de katı `> 0,25` olduğundan "ekranda 0 tespit" ⇔ "harita eşik altı adaylar".
+ */
+const TESPIT_YOK_HARITA_NOTU =
+  "Tespit yok — harita, güven eşiğinin altında kalan en güçlü 5 aday bölgeyi gösterir (tespit ya da tanı kanıtı değildir). Görüntünün doğru tür ve odakta olduğunu kontrol edip yeniden deneyin.";
+
 function XaiIsiHaritasi({ base64, etiket, not, testID }: { base64: string; etiket: string; not?: string; testID?: string }) {
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
@@ -1895,7 +1903,8 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
           )}
           {/* Sunum-katmanı XAI (Faz 2): CAM ısı haritası — istenip üretildiyse. AI1.X1: termalde başlık AÇIKLANAN kararı söyler. */}
           {result.xai_image_base64 && (
-            <XaiIsiHaritasi base64={result.xai_image_base64} etiket={isiHaritasiBasligi(result)} />
+            <XaiIsiHaritasi base64={result.xai_image_base64} etiket={isiHaritasiBasligi(result)}
+              not={result.counts && Object.values(result.counts).every((v) => !Number(v)) ? TESPIT_YOK_HARITA_NOTU : undefined} />
           )}
           {result.xai_error && <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text>}
           <MedicalDisclaimer />
@@ -3450,7 +3459,9 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
           )}
           {result.xai_image_base64 ? (
             <XaiIsiHaritasi base64={result.xai_image_base64} etiket="🔍 Isı haritası (tespit hedefli HiRes-CAM)"
-              not="Kırmızı bölgeler modelin kutulardaki tespitlere karar verirken en çok dayandığı alanlardır (tanı kanıtı değildir; kutuyla birlikte okuyun)." />
+              not={dets.length > 0
+                ? "Kırmızı bölgeler modelin kutulardaki tespitlere karar verirken en çok dayandığı alanlardır (tanı kanıtı değildir; kutuyla birlikte okuyun)."
+                : TESPIT_YOK_HARITA_NOTU} />
           ) : null}
           {result.xai_error ? <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text> : null}
           <MedicalDisclaimer />
