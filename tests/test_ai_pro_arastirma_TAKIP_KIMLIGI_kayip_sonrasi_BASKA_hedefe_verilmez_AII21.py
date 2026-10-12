@@ -147,7 +147,8 @@ def test_KARSIT_ayni_hedef_geri_donunce_kimligini_GERI_alir(sag):
         _lokalize(s, bolgeler, 0)
     son = {tuple(t["px"]): t["id"] for t in s.son_lokalizasyon_meta()["targets"]}
     assert son[P3] == 3 and son[P1] == 1, son
-    assert max(son.values()) <= max(s.hedef_idleri()), son
+    # AIK: `hedef_idleri` artık VERİLMİŞ kimlikleri kapsar → "sonsuz büyümez" iddiası STATİK tavana pinlenir.
+    assert max(son.values()) <= s.azami_hedef, son
 
 
 # ── GERÇEK SEANS DÖNGÜSÜ: mühürlü hedef 3 iken yalnız P3'ün koordinatı sürülür ─────────────────────────────────────

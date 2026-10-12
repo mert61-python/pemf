@@ -430,7 +430,12 @@ class _EmCvSaglayici:
             return 2.4
 
     def hedef_idleri(self) -> "frozenset[int]":
-        return frozenset(range(0, self.azami_hedef + 1))
+        # ⚠️ AIK (Y143 eki): takip kimliği BAŞKA hedefe yeniden verilmez (AII-2.1) ve sayaç geri dönmez → fantom kaydırılınca
+        # kimlikler `azami_hedef`i aşar (ÖLÇÜLDÜ: ~35 px kaydırma → 1–5 → 6–10; fantom tavanı 8) ve kimliği 9 / 10 olan hedef
+        # seçilemiyordu (öneri / hedef değişimi 422). Y143 otomatik öneriyi seçili KİMLİKLE mühürlediği için başlatma da 422'ye
+        # düşerdi. Sağlayıcının VERDİĞİ her kimlik geçerli hedeftir; verilmemiş kimlik yine reddedilir (dört doğrulama noktası bu
+        # kümeyi TEK KAYNAK olarak kullanır). Kilit ALINMAZ: tamsayı okuması atomik, `_kimlik_ata` kilidi tutarken çağrılmaz.
+        return frozenset(range(0, max(self.azami_hedef, int(getattr(self, "_son_kimlik", 0) or 0)) + 1))
 
     def _onbellek(self) -> dict:
         from servers import ai_router as air
