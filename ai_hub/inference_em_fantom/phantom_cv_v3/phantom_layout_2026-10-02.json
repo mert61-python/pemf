@@ -1,0 +1,47 @@
+{
+  "ids": [
+    "T1",
+    "T2",
+    "T3",
+    "T4",
+    "T5"
+  ],
+  "points_mm": [
+    [
+      -6.839,
+      21.222
+    ],
+    [
+      17.483,
+      18.051
+    ],
+    [
+      -3.323,
+      3.474
+    ],
+    [
+      5.19,
+      -13.451
+    ],
+    [
+      -12.512,
+      -29.296
+    ]
+  ],
+  "tumor_radius_mm": 12.05,
+  "n_images": 8,
+  "rms_mm": 0.559,
+  "source": "fcst: WhatsApp Image 2026-10-02 at 19.40.11, WhatsApp Image 2026-10-02 at 19.40.15, WhatsApp Image 2026-10-02 at 19.40.15(1), WhatsApp Image 2026-10-02 at 19.40.16, WhatsApp Image 2026-10-02 at 19.40.16(1), WhatsApp Image 2026-10-02 at 19.40.16(2), WhatsApp Image 2026-10-02 at 19.40.17, WhatsApp Image 2026-10-02 at 19.40.17(4)",
+  "phantom_box": {
+    "center_mm": [
+      2.575,
+      3.887
+    ],
+    "long_axis_deg": -100.98,
+    "size_mm": [
+      104.1,
+      65.0
+    ]
+  },
+  "note": "Tumor merkezleri, fantom duzleminde mm (Y yukari). Kimlikler bu referanstaki sirayi izler."
+}

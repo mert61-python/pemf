@@ -54,13 +54,24 @@ KABUK_TAVANI = 70
 PROFILLER = {
     "ai_hub/inference_em_fantom/phantom_cv": "phantom_cv_pipeline",
     "ai_hub/inference_petri_dish/petri_cv": "petri_cv_pipeline",
+    # AI-2 (2026-10-12): hocanın v2 / v3'ü yeni profil paketleri — aynı profil kimliği (aynı kabin, aynı yayın konusu).
+    "ai_hub/inference_em_fantom/phantom_cv_v3": "phantom_cv_pipeline",
+    "ai_hub/inference_petri_dish/petri_cv_v2": "petri_cv_pipeline",
 }
 ORTAK_MODULLER = ("coord_transform", "mqtt_publish", "cabin_config")
+#: Profil başına kabuk modülleri. ⚠️ v2 / v3'te `mqtt_publish` YOK: hocanın paho yayıncısı ALINMADI (plan §3.3; guii
+#: bobini kendi yolundan sürer) — kabuğu da yok. Kopyası geri gelirse kopya taraması yakalar (muafiyet dışı).
+PROFIL_MODULLERI = {
+    "ai_hub/inference_em_fantom/phantom_cv": ORTAK_MODULLER,
+    "ai_hub/inference_petri_dish/petri_cv": ORTAK_MODULLER,
+    "ai_hub/inference_em_fantom/phantom_cv_v3": ("coord_transform", "cabin_config"),
+    "ai_hub/inference_petri_dish/petri_cv_v2": ("coord_transform", "cabin_config"),
+}
 
 
 #: Kabuklar — birbirinin aynı OLMALARI normaldir (aynı yeniden-dışa-aktarım metni).
 #: Gövde taşımadıklarını `test_KRITIK_profil_dosyasi_KABUK_kaliyor` ayrıca ölçer.
-KABUK_YOLLARI = frozenset(f"{p}/{m}.py" for p in PROFILLER for m in ORTAK_MODULLER)
+KABUK_YOLLARI = frozenset(f"{p}/{m}.py" for p, mods in PROFIL_MODULLERI.items() for m in mods)
 
 
 def _taranan_py() -> list[str]:
@@ -118,17 +129,18 @@ def test_KRITIK_muafiyet_BASKA_kapiya_pinli():
     `test_KRITIK_profil_dosyasi_KABUK_kaliyor` satır tavanıyla ölçer. Bu test yalnız
     muafiyetin O KAPIYLA ÖRTÜŞTÜĞÜNÜ ve şişmediğini doğrular.
     """
-    beklenen = {f"{p}/{m}.py" for p in PROFILLER for m in ORTAK_MODULLER}
+    beklenen = {f"{p}/{m}.py" for p in PROFILLER for m in PROFIL_MODULLERI[p]}
     assert KABUK_YOLLARI == beklenen, (
         f"muafiyet listesi kabuk kapısıyla ÖRTÜŞMÜYOR — muaf ama ölçülmeyen dosya olur:\n"
         f"  yalnız muaf : {sorted(KABUK_YOLLARI - beklenen)}\n"
         f"  yalnız kapı : {sorted(beklenen - KABUK_YOLLARI)}"
     )
-    assert len(KABUK_YOLLARI) == 6, f"muafiyet listesi şişmiş: {sorted(KABUK_YOLLARI)}"
+    # 2 v1 profili × 3 + 2 v2/v3 profili × 2 (AI-2). v1 emekliye ayrılınca 4.
+    assert len(KABUK_YOLLARI) == 10, f"muafiyet listesi şişmiş: {sorted(KABUK_YOLLARI)}"
+    assert set(PROFIL_MODULLERI) == set(PROFILLER), "kabuk modül listesi profil listesiyle örtüşmüyor"
 
 
-@pytest.mark.parametrize("paket", sorted(PROFILLER))
-@pytest.mark.parametrize("modul", ORTAK_MODULLER)
+@pytest.mark.parametrize("paket,modul", sorted((p, m) for p, mods in PROFIL_MODULLERI.items() for m in mods))
 def test_KRITIK_profil_dosyasi_KABUK_kaliyor(paket: str, modul: str):
     """Kabuk şişerse kopya sessizce geri gelmiş demektir (gövde yapıştırma)."""
     p = KOK / paket / f"{modul}.py"
