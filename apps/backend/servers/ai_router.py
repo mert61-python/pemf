@@ -480,7 +480,7 @@ async def analyze_landmark(
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
         tmp.close()
         try:
-            cv2.imwrite(tmp.name, img)
+            _gecici_gorsel_yaz(tmp.name, img)
             results = await asyncio.to_thread(lambda: model.predict(tmp.name, conf=0.25, device="cpu", verbose=False))
         finally:
             # Hata olsa da geçici dosyayı temizle (disk şişmesini önle).
@@ -899,6 +899,17 @@ def _doz_hatasi_bildir() -> None:
 _CAT_ABSENT_ERR_PREFIX = "segmentasyon:"
 
 
+def _gecici_gorsel_yaz(yol: str, img) -> None:
+    """Geçici analiz görselini Unicode-güvenli yaz (AII-3.11). ⚠️ OpenCV `imwrite` Windows'ta ASCII DIŞI yola (C:\\Users\\Müjde\\…\\Temp)
+    YAZAMAZ ve yalnız False döner — dönüş denetlenmiyordu: dosya 0 bayt kalıyor, termal ucu her çağrıda, kedi organ / AI Pro ilk karede 500
+    veriyordu (ultralytics içe aktarılınca cv2'yi yamaladığı için sonuç içe aktarma SIRASINA bağlıydı). Kodla + Python dosyasıyla yaz."""
+    ok, buf = cv2.imencode(os.path.splitext(str(yol))[1] or ".jpg", img)
+    if not ok:
+        raise RuntimeError(f"geçici görsel kodlanamadı ({os.path.basename(str(yol))})")
+    with open(yol, "wb") as f:
+        f.write(buf.tobytes())
+
+
 def _is_cat_absent_error(exc) -> bool:
     return isinstance(exc, RuntimeError) and str(exc).startswith(_CAT_ABSENT_ERR_PREFIX)
 
@@ -916,7 +927,7 @@ def _localize_organ_cpu(frame, organ_id):
 
     tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
     tmp.close()
-    cv2.imwrite(tmp.name, frame)
+    _gecici_gorsel_yaz(tmp.name, frame)
     try:
         clf = _get_or_load_catorgan()
         result = clf.predict(tmp.name, render=True, target_oid=(int(organ_id) or None))
@@ -3328,7 +3339,7 @@ async def analyze_segmentation(file: UploadFile = File(None), image_base64: str 
 
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
         tmp.close()
-        cv2.imwrite(tmp.name, img)
+        _gecici_gorsel_yaz(tmp.name, img)
         # P2 audit 2026-06-28: tmp .jpg'yi HER durumda sil (predict/mask hata yolunda sizmasin → disk
         # dolar → _ensure_write_guardrail sensor/seans yazimini engelleyebilir). landmark deseni.
         try:
@@ -3419,7 +3430,7 @@ async def analyze_thermal(
 
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
         tmp.close()
-        cv2.imwrite(tmp.name, img)
+        _gecici_gorsel_yaz(tmp.name, img)
 
         # P2 audit 2026-06-28: tmp .jpg'yi HER durumda sil (predict hata yolunda sizmasin → disk dolar).
         # Faz 2: XAI da AYNI tmp'yi kullanir → silme XAI'den SONRA (finally kapsami genisletildi).
@@ -3487,7 +3498,7 @@ async def analyze_reticulocytes(
 
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
         tmp.close()
-        cv2.imwrite(tmp.name, img)
+        _gecici_gorsel_yaz(tmp.name, img)
 
         temp_project = os.path.join(tempfile.gettempdir(), "PEMF_API_AI")
         output_dir = os.path.join(temp_project, 'feline_reticulocytes', 'results')
@@ -4342,7 +4353,7 @@ async def analyze_kidney_ct(
 
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
         tmp.close()
-        cv2.imwrite(tmp.name, img)
+        _gecici_gorsel_yaz(tmp.name, img)
         _xai_alanlari = {}
         try:
             result = await asyncio.to_thread(lambda: det.predict(tmp.name))
@@ -4420,7 +4431,7 @@ async def analyze_histopath(
 
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
         tmp.close()
-        cv2.imwrite(tmp.name, img)
+        _gecici_gorsel_yaz(tmp.name, img)
         _xai_alanlari = {}
         try:
             result = await asyncio.to_thread(lambda: clf.predict(tmp.name, top_k=5))
@@ -4526,7 +4537,7 @@ async def analyze_scratch(
 
         tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
         tmp.close()
-        cv2.imwrite(tmp.name, img)
+        _gecici_gorsel_yaz(tmp.name, img)
         try:
             from ai_hub.inference_paper_dilek_hoca import inference_paper_dilek_hoca as _ipd
 
@@ -4589,7 +4600,7 @@ async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = F
 
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
         tmp.close()
-        cv2.imwrite(tmp.name, img)
+        _gecici_gorsel_yaz(tmp.name, img)
         try:
             result = await asyncio.to_thread(lambda: clf.predict(tmp.name, render=True))
         finally:
