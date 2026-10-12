@@ -80,6 +80,11 @@ export const DETAIL_LABELS: Record<string, string> = {
   inference_ms: "Analiz süresi (ms)", device: "Cihaz",
   cell_area_mean: "Hücre alanı (ort. px)", cell_area_median: "Hücre alanı (medyan px)",
   score_mean: "Ortalama skor", score_min: "En düşük skor",
+  // AI-2 (hoca petri v2 / fantom v3): geçerlilik + tüketim kapısı geçmiş ayrıntısında Türkçe görünsün
+  pemf_valid: "PEMF girdisi geçerli", reliable: "Tespit güvenilir", coord_frame: "Koordinat çerçevesi",
+  pemf_source: "PEMF yerleşim kaynağı", warnings: "Uyarılar", tumor_id: "Tümör kimliği",
+  pemf_kapisi: "PEMF kapısı", surulebilir: "Bobin sürüşüne esas alınabilir", pemf_gecerli: "PEMF geçerli",
+  eylem: "Yapılacak", cancer_reasons: "Kanser gerekçesi", source: "Kuyucuk kaynağı",
 };
 
 /** Girdi tipi → Türkçe. */
@@ -116,6 +121,11 @@ const VALUE_LABELS: Record<string, string> = {
   // Kalibrasyon yöntemi (em_fantom / em_petri):
   "aruco_pnp": "ArUco PnP (3B kalibre)", "phantom_length": "Fantom uzunluğu ölçekli",
   "petri_diameter": "Petri çapı ölçekli", "pixel": "Piksel modu (ölçeksiz)",
+  // AI-2: v2 / v3 yöntem ve çerçeve değerleri
+  "plate_grid": "Plaka ızgarası (kuyucuk aralığı ölçekli)", "coil_ring": "Yeşil halka ölçekli",
+  "phantom_layout": "Yerleşim referansı ölçekli", "cabin_aruco": "Kabin (ArUco)", "plate": "Plaka çerçevesi (kabin konumu yok)",
+  "cabin_placement": "Kabin (ölçülmüş yerleşim)", "cabin_cst_phantom_box": "CST eğitim kutusu (VARSAYIM)",
+  "cst_phantom_box": "CST eğitim kutusu (VARSAYIM)", "aruco": "ArUco kabin işareti", "placement": "Ölçülmüş yerleşim",
   // Böbrek CT / patoloji:
   "kidney stone": "Böbrek taşı", "kidney cyst": "Böbrek kisti",
   "grade0": "Derece 0", "grade1": "Derece 1", "grade2": "Derece 2", "grade3": "Derece 3", "grade4": "Derece 4",

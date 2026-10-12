@@ -115,11 +115,15 @@ beforeEach(() => {
   global.fetch = jest.fn(async () => ({ ok: true, json: async () => YANIT })) as any;
 });
 
-/** Petri modülünü aç, görüntü seç (analiz düğmesi görüntü olmadan çalışmaz). */
+/** Petri modülünü aç, görüntü seç (analiz düğmesi görüntü olmadan çalışmaz).
+ *  AI-2 (hocanın petri v2'si): bu altı ayar TEKİL petri kabı kipinin ayarlarıdır — plaka kipinde (varsayılan) conf / IoU /
+ *  "petri değil" eşikleri sonucu DEĞİŞTİRMEDİĞİ ölçüldü ve gizlenir (kilit: petriFantomV2V3.AI2_C5.test.tsx). Davranış
+ *  kilitleri burada AYNEN sınanır; kip seçimi `plate_type=0` ekler, aşağıdaki iddialar onu sormaz. */
 async function petriAc() {
   const u = render(<Ekran />);
   fireEvent.press(u.getAllByLabelText("Petri Kuyu")[0]);
   await waitFor(() => u.getByText("Petri Kuyu Analizi"));
+  fireEvent.press(u.getByLabelText("Tekil petri kapları"));
   fireEvent.press(u.getByText("Galeriden Seç"));
   await waitFor(() => expect(u.getByText("Petri Analizini Başlat")).toBeTruthy());
   return u;
