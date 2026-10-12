@@ -79,20 +79,28 @@ _VARSAYIM = {
 }
 
 
+def _uyari_listesi(uyarilar) -> list[str]:
+    """AII-2.2: `warnings` tek DİZE (ya da bytes) gelirse karakterlerine bölünmez — tek uyarı sayılır (FAIL-CLOSED)."""
+    if isinstance(uyarilar, (str, bytes)):
+        uyarilar = [uyarilar]
+    return [u.decode("utf-8", "replace") if isinstance(u, bytes) else str(u) for u in (uyarilar or [])]
+
+
 def uyari_kodlari(uyarilar) -> list[str]:
     """`"ring_unavailable: ring_partial: halkanin %31'i ..."` → `["ring_unavailable", "ring_partial"]`.
 
     Hocanın uyarıları `kod: açıklama` biçimindedir ve iç içe kod taşıyabilir (`ring_unavailable: ring_partial: …`);
     `ring_partial` tam bu biçimde gelir — yalnız ilk kod okunsaydı yeniden-çekim kapısı onu GÖRMEZDİ."""
     kodlar: list[str] = []
-    for u in uyarilar or []:
-        parcalar = str(u).split(":")
+    for u in _uyari_listesi(uyarilar):
+        parcalar = u.split(":")
         # Son parça AÇIKLAMADIR (tek sözcük olsa bile kod sayılmaz); iki nokta yoksa uyarının tamamı koddur.
         adaylar = parcalar[:-1] if len(parcalar) > 1 else parcalar
         for parca in adaylar:
-            p = parca.strip()
+            # AII-2.2: büyük harf / kodsuz serbest metin öneki iç içe kodu GİZLEMEZ (eskiden `break` → tanınmıyordu).
+            p = parca.strip().lower()
             if not _KOD.match(p):
-                break
+                continue
             if p not in kodlar:
                 kodlar.append(p)
     return kodlar
@@ -131,7 +139,7 @@ def yanit_alanlari(sonuc, *, model: str) -> dict:
     `well_id` / `tumor_id` kuyucuk / tümör sözlüklerinin içinde zaten gelir (`asdict`)."""
     d = {
         "pemf_valid": _al(sonuc, "pemf_valid") is True,
-        "warnings": [str(u) for u in (_al(sonuc, "warnings") or [])],
+        "warnings": _uyari_listesi(_al(sonuc, "warnings")),
         "coord_frame": str(_al(sonuc, "coord_frame") or ""),
         "pemf_kapisi": degerlendir(sonuc, model=model),
     }
