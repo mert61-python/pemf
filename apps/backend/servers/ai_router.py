@@ -3639,7 +3639,11 @@ async def analyze_em_fantom(
         # → bar'daki değer bu paneldeki E ile aynı kaynaktan gelir (bkz. servers/efield_live.py).
         # ⚠️ D1.E07 (İG-5.76): PİKSEL kipinde koordinat piksel farkıdır (mm DEĞİL) ve doz hesaplanmaz → canlı E bağlamı
         # ve XAI duyarlılığı KURULMAZ (bağlam piksel konumuyla kurulsaydı E barı anlamsız konumdan E üretirdi).
-        _fiziksel = result.method != "pixel"
+        # ⚠️ AI-2 C7 (S-AI2.5): hocanın v2 / v3 kuralı — kabin konumu bilinmeyen çerçevede (`pemf_valid` false: fantom boyu /
+        # halka / yerleşim ya da petri çapı / plaka çerçevesi — mm ama KABİN DEĞİL) D / P / E fiziksel olarak geçersiz. Etiketsiz
+        # canlı E barı ve "dozu belirleyen" açıklaması bu konumdan KURULMAZ (D1.E07 piksel kuralıyla aynı sınıf); D / P / E yine
+        # gösterilir, `pemf_kapisi` eylemiyle (C4).
+        _fiziksel = result.method != "pixel" and payload.get("pemf_valid") is True
         try:
             from servers import efield_live as _ef
 
@@ -3869,7 +3873,11 @@ async def analyze_em_petri(
         _xai_meta = {}
         # ⚠️ D1.E07 (İG-5.76): PİKSEL kipinde koordinat piksel farkıdır → XAI duyarlılığı üretilmez (fantomla aynı).
         _xai_w0 = next((w for w in wells if w.get("centroid_cabin_mm")), None)  # D1.100: konumu çözülmüş ilk kuyu
-        if result.success and _xai_w0 is not None and result.method != "pixel":
+        # ⚠️ AI-2 C7 (S-AI2.5): hocanın v2 / v3 kuralı — kabin konumu bilinmeyen çerçevede (`pemf_valid` false: fantom boyu /
+        # halka / yerleşim ya da petri çapı / plaka çerçevesi — mm ama KABİN DEĞİL) D / P / E fiziksel olarak geçersiz. Etiketsiz
+        # canlı E barı ve "dozu belirleyen" açıklaması bu konumdan KURULMAZ (D1.E07 piksel kuralıyla aynı sınıf); D / P / E yine
+        # gösterilir, `pemf_kapisi` eylemiyle (C4).
+        if result.success and _xai_w0 is not None and result.method != "pixel" and _payload.get("pemf_valid") is True:
             try:
                 from ai_hub.inference_em_petri import inference_em_petri as _iep
 

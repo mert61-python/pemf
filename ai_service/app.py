@@ -1183,7 +1183,8 @@ def infer_em_fantom(
         # D1.E07 (İG-5.76, router paritesi): piksel kipinde XAI üretilmez.
         # D1.100 (router paritesi): XAI yalnız konumu ÇÖZÜLMÜŞ ilk bölgede.
         _xai_r0 = next((r for r in (payload.get("tumor_regions") or []) if r.get("centroid_cabin_mm")), None)
-        if result.success and result.method != "pixel" and _xai_r0 is not None:
+        # AI-2 C7 (S-AI2.5, router paritesi): XAI yalnız KABİN çerçevesinde (`pemf_valid`).
+        if result.success and result.method != "pixel" and _xai_r0 is not None and payload.get("pemf_valid") is True:
             try:
                 from ai_hub.inference_em_fantom import inference_em_fantom as _ief
 
@@ -1309,7 +1310,8 @@ def infer_em_petri(
         _xai_meta = {}
         # D1.E07 (İG-5.76, router paritesi): piksel kipinde XAI üretilmez.
         _xai_w0 = next((w for w in wells if w.get("centroid_cabin_mm")), None)  # D1.100: konumu çözülmüş ilk kuyu
-        if result.success and _xai_w0 is not None and result.method != "pixel":
+        # AI-2 C7 (S-AI2.5, router paritesi): XAI yalnız KABİN çerçevesinde (`pemf_valid`).
+        if result.success and _xai_w0 is not None and result.method != "pixel" and _payload.get("pemf_valid") is True:
             try:
                 from ai_hub.inference_em_petri import inference_em_petri as _iep
 

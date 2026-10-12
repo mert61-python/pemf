@@ -611,13 +611,39 @@ def test_KRITIK_E07_em_fantom_SONLU_OLMAYAN_girdiye_422(fantom_ucu):
     )
 
 
-def test_KARSIT_E07_em_fantom_OLCEKLI_kipte_baglam_KURULUR(fantom_ucu):
+def _aruco(mod, monkeypatch):
+    """Kabin (ArUco) çerçevesi: poz var, her piksel kabin içi noktaya çözülür (FIZIKSEL testinin aparatı)."""
+    from test_koordinat_donusumu_FIZIKSEL_poz_DOGRULUK_ve_RED import _aruco_yamala
+
+    _aruco_yamala(mod, monkeypatch, [])
+
+
+def test_KARSIT_E07_em_fantom_OLCEKLI_kipte_baglam_KURULUR(fantom_ucu, fantom_hatti, monkeypatch):
+    """AI-2 C7: "ölçekli" artık KABİN çerçevesi demek (ArUco; hocanın v3'ünde `pemf_valid` true). Fantom boyu / halka / yerleşim
+    ölçeği kabin konumu vermez → bar ve XAI KURULMAZ (aşağıdaki KRİTİK test)."""
+    c, ef, kutu, govde = fantom_ucu
+    _aruco(fantom_hatti[0], monkeypatch)
+    kutu["ong"] = _KayitciFantom()
+    r = c.post("/api/ai/vision/em_fantom", data={"image_base64": govde})
+    assert r.status_code == 200 and r.json()["method"] == "aruco_pnp" and r.json()["pemf_valid"] is True, r.text[:200]
+    assert ef.get_context() is not None, "kabin çerçevesinde canlı E bağlamı kurulmalı (bar meşru)"
+    assert kutu["xai"] and "xaiSensitivity" in r.json(), "kabin çerçevesinde XAI üretilmeli"
+
+
+def test_KRITIK_AI2_C7_em_fantom_OLCEKLI_ama_KABIN_DISI_cercevede_baglam_ve_XAI_KURULMAZ(fantom_ucu):
+    """S-AI2.5: fantom boyuyla ölçekli (mm) ama kabin konumu YOK (`pemf_valid` false, hocanın `pemf_frame_unknown`'ı) →
+    D/P/E fiziksel olarak geçersiz; etiketsiz canlı E barı bu konumdan kurulmaz, ÖNCEKİ bağlam da KALMAZ; XAI üretilmez."""
     c, ef, kutu, govde = fantom_ucu
     kutu["ong"] = _KayitciFantom()
+    ef.set_context([{"centroid_cabin_mm": [99.0, 99.0, 99.0], "organ_id": 1}])
     r = c.post("/api/ai/vision/em_fantom", data={"image_base64": govde, "phantom_length_cm": "10"})
-    assert r.status_code == 200 and r.json()["method"] == "phantom_length", r.text[:200]
-    assert ef.get_context() is not None, "ölçekli kipte canlı E bağlamı kurulmalı (bar meşru)"
-    assert kutu["xai"] and "xaiSensitivity" in r.json(), "ölçekli kipte XAI üretilmeli"
+    j = r.json()
+    assert r.status_code == 200 and j["method"] == "phantom_length" and j["pemf_valid"] is False, r.text[:200]
+    assert ef.get_context() is None, (
+        f"kabin dışı çerçevede canlı E bağlamı kuruldu / eski bağlam kaldı: {ef.get_context()}"
+    )
+    assert kutu["xai"] == [] and "xaiSensitivity" not in j, "kabin dışı çerçevede XAI üretildi"
+    assert j["tumor_regions"][0]["D"], "aparat: D / P / E yine HESAPLANIR (geçersiz etiketiyle gösterilir — C4)"
 
 
 # ── D1.E07 ek: kabin YAML'ında sonlu olmayan değer YÜKLEMEDE reddedilir (İG-5.80 BİLİNMİYOR kolu) ──────────────────
@@ -815,11 +841,24 @@ def test_KRITIK_IG576_em_petri_PIKSEL_kipinde_XAI_URETILMEZ(petri_ucu):
     assert xai == [] and "xaiSensitivity" not in j, "piksel kipinde XAI piksel koordinatıyla üretildi"
 
 
-def test_KARSIT_IG576_em_petri_OLCEKLI_kipte_XAI_uretilir(petri_ucu):
+def test_KARSIT_IG576_em_petri_OLCEKLI_kipte_XAI_uretilir(petri_ucu, petri_hatti, monkeypatch):
+    """AI-2 C7: "ölçekli" = KABİN çerçevesi (ArUco; hocanın v2'sinde `pemf_valid` true)."""
+    c, kutu, govde, xai = petri_ucu
+    _aruco(petri_hatti[0], monkeypatch)
+    r = c.post("/api/ai/vision/em_petri", data={"image_base64": govde})
+    assert r.status_code == 200, r.text[:200]
+    assert r.json()["method"] == "aruco_pnp" and r.json()["pemf_valid"] is True and xai, (
+        "kabin çerçevesinde XAI üretilmeli"
+    )
+
+
+def test_KRITIK_AI2_C7_em_petri_OLCEKLI_ama_KABIN_DISI_XAI_URETILMEZ(petri_ucu):
+    """S-AI2.5: petri çapıyla ölçekli ama kabin konumu yok (`pemf_valid` false) → XAI üretilmez (D / P / E geçersiz)."""
     c, kutu, govde, xai = petri_ucu
     r = c.post("/api/ai/vision/em_petri", data={"image_base64": govde, "petri_diameter_cm": "9"})
-    assert r.status_code == 200, r.text[:200]
-    assert r.json()["method"] == "petri_diameter" and xai, "ölçekli kipte XAI üretilmeli"
+    j = r.json()
+    assert r.status_code == 200 and j["method"] == "petri_diameter" and j["pemf_valid"] is False, r.text[:200]
+    assert xai == [] and "xaiSensitivity" not in j, "kabin dışı çerçevede XAI üretildi"
 
 
 def test_KRITIK_E07_em_petri_SONLU_OLMAYAN_girdiye_422(petri_ucu):
@@ -921,10 +960,21 @@ def test_KRITIK_E07_servis_SONLU_OLMAYAN_girdiye_422(servis_cv, uc, olcek):
 
 
 @pytest.mark.parametrize("uc,olcek", [("em_fantom", 10.0), ("em_petri", 9.0)])
-def test_KARSIT_E07_servis_OLCEKLI_kipte_XAI_uretilir(servis_cv, uc, olcek):
+def test_KARSIT_E07_servis_OLCEKLI_kipte_XAI_uretilir(servis_cv, fantom_hatti, petri_hatti, monkeypatch, uc, olcek):
+    """AI-2 C7: "ölçekli" = KABİN çerçevesi (ArUco); `olcek` parametresi adı korunsun diye durur, kabin kipinde kullanılmaz."""
+    a, _kutu, xai = servis_cv
+    _aruco(fantom_hatti[0] if uc == "em_fantom" else petri_hatti[0], monkeypatch)
+    kod, j = _govde(_servis_cagir(a, uc))
+    assert kod == 200 and j.get("pemf_valid") is True and xai, (kod, str(j)[:200])
+
+
+@pytest.mark.parametrize("uc,olcek", [("em_fantom", 10.0), ("em_petri", 9.0)])
+def test_KRITIK_AI2_C7_servis_OLCEKLI_ama_KABIN_DISI_XAI_URETILMEZ(servis_cv, uc, olcek):
+    """S-AI2.5 (GPU servisi paritesi): ölçekli ama `pemf_valid` false → XAI üretilmez."""
     a, _kutu, xai = servis_cv
     kod, j = _govde(_servis_cagir(a, uc, olcek))
-    assert kod == 200 and xai, (kod, str(j)[:200])
+    assert kod == 200 and j.get("pemf_valid") is False and j.get("method") != "pixel", (kod, str(j)[:200])
+    assert xai == [] and "xaiSensitivity" not in j, f"servis ({uc}) kabin dışı çerçevede XAI üretti"
 
 
 def _kabin(profil):
