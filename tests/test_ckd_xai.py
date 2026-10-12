@@ -27,9 +27,14 @@ KOK = Path(__file__).resolve().parents[1]
 # CI checkout'unda YOKLAR (kosu b4d223b dersi): gercek-model testleri ACIK reason'la atlanir
 # (sessiz kayip degil); endpoint KABLOLAMA testleri mock'la her ortamda kosar.
 _CKD_DIR = KOK / "ai_hub" / "inference_human_kidney_disease"
-_MODEL_VAR = (_CKD_DIR / "ExtraTrees.onnx").exists() and (_CKD_DIR / "preprocessor.pkl").exists()
+from golden.eser import ckd_eserleri as _ckd_eserleri  # noqa: E402
+from golden.eser import eser_var_mi as _eser_var_mi
+from golden.eser import zorunlu_mu as _zorunlu_mu
+
+# AII-3.13: ürünün yükleyicisi (yan_dosya_coz) PEMF_AI_MODELS_DIR'ı da çözer — koşul onu görmüyordu; golden kipte ATLANMAZ
+_MODEL_VAR = _eser_var_mi(*_ckd_eserleri())
 gercek_model_gerekir = pytest.mark.skipif(
-    not _MODEL_VAR,
+    not _MODEL_VAR and not _zorunlu_mu(),
     reason="CKD ONNX/preprocessor yerel degil (gitignore'lu model agirligi) — gercek-model testi yalniz modelli ortamda",
 )
 

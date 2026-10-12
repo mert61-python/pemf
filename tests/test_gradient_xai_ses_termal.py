@@ -37,8 +37,16 @@ def _torch_var() -> bool:
         return False
 
 
+from golden.eser import eser_var_mi as _eser_var_mi  # noqa: E402
+from golden.eser import zorunlu_mu as _zorunlu_mu
+
+# AII-3.13: koşul ürünün model kökünü (PEMF_AI_MODELS_DIR) de görür; PEMF_GOLDEN_REQUIRED=1'de ATLANMAZ (4-A SKIP→FAIL)
 gercek_pt_gerekir = pytest.mark.skipif(
-    not (_torch_var() and _THERMAL_PT.exists() and _SOUND_PT.exists()),
+    not (
+        _torch_var()
+        and _eser_var_mi("ai_hub/cat_thermal/GhostNetV2.pt", "ai_hub/inference_cat_sound/EfficientNet_Lite0.pt")
+    )
+    and not _zorunlu_mu(),
     reason="torch veya PT ikizleri yok (CI: torch test-setinde değil, PT gitignore'lu) — gerçek-model testi modelli ortamda",
 )
 

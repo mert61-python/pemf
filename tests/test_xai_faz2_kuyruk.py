@@ -41,9 +41,17 @@ def _torch_var() -> bool:
         return False
 
 
+from golden.eser import eser_var_mi as _eser_var_mi  # noqa: E402
+from golden.eser import zorunlu_mu as _zorunlu_mu
+
+# AII-3.13: koşul ürünün model kökünü (PEMF_AI_MODELS_DIR) de görür; PEMF_GOLDEN_REQUIRED=1'de ATLANMAZ (4-A SKIP→FAIL)
 yolo_pt_gerekir = pytest.mark.skipif(
-    not (_torch_var() and _FELINE_PT.exists() and _CT_PT.exists()),
-    reason="torch/YOLO-PT yok (CI) — gerçek EigenCAM testi modelli ortamda",
+    not (
+        _torch_var()
+        and _eser_var_mi("ai_hub/feline_reticulocytes/yolov8s.pt", "ai_hub/inference_human_kidney_ct/yolov8s.pt")
+    )
+    and not _zorunlu_mu(),
+    reason="torch/YOLO-PT yok (CI) — gerçek tespit hedefli CAM (DetCAM) testi modelli ortamda",
 )
 rna_pt_gerekir = pytest.mark.skipif(
     not (_torch_var() and _RNA_PT.exists()),
