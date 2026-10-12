@@ -3751,6 +3751,8 @@ async def analyze_em_fantom(
             status = "no_detection"
 
         payload = result.to_dict()
+        # Y144: tüketim kapısı BİR KEZ hesaplanır — hem yanıta eklenir hem bağlam / açıklama kararını verir (tek kaynak).
+        _pemf = _pemf_alanlari(payload, "fantom")
         # CANLI E-ALANI bağlamı (2026-08-06): tümör konumu + organ seans boyunca DEĞİŞMEZ.
         # Bunu saklarsak tedavi sürerken E'yi AYNI vekil modelle canlı B/duty'den türetebiliriz
         # → bar'daki değer bu paneldeki E ile aynı kaynaktan gelir (bkz. servers/efield_live.py).
@@ -3760,7 +3762,11 @@ async def analyze_em_fantom(
         # halka / yerleşim ya da petri çapı / plaka çerçevesi — mm ama KABİN DEĞİL) D / P / E fiziksel olarak geçersiz. Etiketsiz
         # canlı E barı ve "dozu belirleyen" açıklaması bu konumdan KURULMAZ (D1.E07 piksel kuralıyla aynı sınıf); D / P / E yine
         # gösterilir, `pemf_kapisi` eylemiyle (C4).
-        _fiziksel = result.method != "pixel" and payload.get("pemf_valid") is True
+        # ⚠️ Y144 (S-AII.7, sahip 2026-10-13): `pemf_valid` YETMEZ — kabin konumu geçerli ama fantom tespiti güvenilmez
+        # (`reliable=false`), yerleşim referansla uyuşmuyor (`layout_mismatch`) ya da sonucu kullanılamaz / yeniden çekim isteyen
+        # uyarı varken (`control_*`, `oblique_view`, `ring_partial` …) bağlam ve açıklama bu konumdan KURULMAZ: bobin sürüşüne esas
+        # alınamayan sonuç seans boyunca "canlı" görünmesin. Ölçüt TEK KAYNAK `pemf_kapisi.surulebilir` (AI Pro sürüş kapısıyla aynı).
+        _fiziksel = result.method != "pixel" and _pemf["pemf_kapisi"].get("surulebilir") is True
         try:
             from servers import efield_live as _ef
 
@@ -3816,7 +3822,7 @@ async def analyze_em_fantom(
             **_y51_duty_etiketi("fantom", duty_sum, cache["cfg"]),  # i-15.1 · Y51
             # AI-2 (hoca fantom v3): `reliable`, `pemf_valid`, `pemf_source`, `coord_frame`, `warnings`, kayıt / halka özeti
             # + tüketim kapısının eylem metinleri (`pemf_kapisi`). YALNIZ EK — eski istemci etkilenmez. Tek kaynak: ai_hub.
-            **_pemf_alanlari(payload, "fantom"),
+            **_pemf,
         }
     except Exception as e:
         # D1.E07 (İG-5.80): sonlu olmayan girdi (ör. achieved_B=nan) ya da bozuk ölçekleyici → 422 (istemci girdisi;
@@ -3986,6 +3992,8 @@ async def analyze_em_petri(
         # mm, Lab b*, kanser nedenleri) NaN taşıyabilir; çıplak `asdict` katı JSON'u bozardı.
         _payload = result.to_dict()
         wells = _payload["wells"]
+        # Y144: tüketim kapısı BİR KEZ hesaplanır (yanıt + açıklama kararı — tek kaynak).
+        _pemf = _pemf_alanlari(_payload, "petri")
         # §KALAN A5: em_kedi paritesi — ilk kuyu icin hafif duyarlilik meta'si (zarif).
         _xai_meta = {}
         # ⚠️ D1.E07 (İG-5.76): PİKSEL kipinde koordinat piksel farkıdır → XAI duyarlılığı üretilmez (fantomla aynı).
@@ -3994,7 +4002,14 @@ async def analyze_em_petri(
         # halka / yerleşim ya da petri çapı / plaka çerçevesi — mm ama KABİN DEĞİL) D / P / E fiziksel olarak geçersiz. Etiketsiz
         # canlı E barı ve "dozu belirleyen" açıklaması bu konumdan KURULMAZ (D1.E07 piksel kuralıyla aynı sınıf); D / P / E yine
         # gösterilir, `pemf_kapisi` eylemiyle (C4).
-        if result.success and _xai_w0 is not None and result.method != "pixel" and _payload.get("pemf_valid") is True:
+        # ⚠️ Y144 (S-AII.7): `pemf_valid` YETMEZ — açıklama yalnız SÜRÜLEBİLİR sonuçta (kontrol kuyucuğu / kırpık plaka / az aday …
+        # varken "dozu belirleyen" satırı üretilmez). Ölçüt TEK KAYNAK `pemf_kapisi.surulebilir`.
+        if (
+            result.success
+            and _xai_w0 is not None
+            and result.method != "pixel"
+            and _pemf["pemf_kapisi"].get("surulebilir") is True
+        ):
             try:
                 from ai_hub.inference_em_petri import inference_em_petri as _iep
 
@@ -4038,7 +4053,7 @@ async def analyze_em_petri(
             **_y51_duty_etiketi("petri", duty_sum, cache["cfg"]),  # i-15.1 · Y51
             # AI-2 (hoca petri v2): `pemf_valid`, `coord_frame`, `warnings`, plaka ızgarası özeti (ONNX aday sayısı dahil),
             # sınıflama / kontrol QC + tüketim kapısının eylem metinleri (`pemf_kapisi`). YALNIZ EK. Tek kaynak: ai_hub.
-            **_pemf_alanlari(_payload, "petri"),
+            **_pemf,
         }
     except Exception as e:
         # D1.E07 (İG-5.80): sonlu olmayan girdi / bozuk ölçekleyici → 422 (fantomla aynı sözleşme).

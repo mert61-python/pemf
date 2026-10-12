@@ -1178,6 +1178,7 @@ def infer_em_fantom(
         # ayrışmasına kapı açardı. Tespit yoksa orijinal kare kodlanır (yedek yol).
         _b64, _boyut = _kok_gorseli_sec(_paneller, _kapakli_kodla_servis, img)
         payload = result.to_dict()
+        _pemf = _pemf_alanlari(payload, "fantom")  # Y144: tek hesap — yanıt + açıklama kararı (router paritesi)
         # §KALAN A5 (router paritesi): ilk tumor bolgesi icin hafif duyarlilik meta'si.
         # Aciklama IKINCIL — hatasi analizi ASLA dusurmez (zarif). Sync uc (threadpool)
         # oldugundan dogrudan cagri yeterli; 7+1 ONNX forward ~ms mertebesi.
@@ -1185,8 +1186,14 @@ def infer_em_fantom(
         # D1.E07 (İG-5.76, router paritesi): piksel kipinde XAI üretilmez.
         # D1.100 (router paritesi): XAI yalnız konumu ÇÖZÜLMÜŞ ilk bölgede.
         _xai_r0 = next((r for r in (payload.get("tumor_regions") or []) if r.get("centroid_cabin_mm")), None)
-        # AI-2 C7 (S-AI2.5, router paritesi): XAI yalnız KABİN çerçevesinde (`pemf_valid`).
-        if result.success and result.method != "pixel" and _xai_r0 is not None and payload.get("pemf_valid") is True:
+        # AI-2 C7 (S-AI2.5) + Y144 (S-AII.7), router paritesi: XAI yalnız SÜRÜLEBİLİR sonuçta (`pemf_kapisi.surulebilir`:
+        # kabin konumu geçerli + fantom güvenilir + engelleyen / yeniden çekim uyarısı yok).
+        if (
+            result.success
+            and result.method != "pixel"
+            and _xai_r0 is not None
+            and _pemf["pemf_kapisi"].get("surulebilir") is True
+        ):
             try:
                 from ai_hub.inference_em_fantom import inference_em_fantom as _ief
 
@@ -1225,7 +1232,7 @@ def infer_em_fantom(
             **_boyut,
             **_xai_meta,
             # AI-2 router paritesi: hocanın v3 alanları + tüketim kapısı (TEK KAYNAK ai_hub.cv_ortak.pemf_kapisi).
-            **_pemf_alanlari(payload, "fantom"),
+            **_pemf,
         }
     except Exception as e:
         return _sonlu_degilse_422(e) or _err500(e)
@@ -1308,12 +1315,18 @@ def infer_em_petri(
         # AI-2 router paritesi: kuyucuklar `to_dict()`ten (NaN → None; v2 alanları NaN taşıyabilir).
         _payload = result.to_dict()
         wells = _payload["wells"]
+        _pemf = _pemf_alanlari(_payload, "petri")  # Y144: tek hesap — yanıt + açıklama kararı (router paritesi)
         # §KALAN A5 (router paritesi): ilk kuyu icin hafif duyarlilik meta'si (zarif).
         _xai_meta = {}
         # D1.E07 (İG-5.76, router paritesi): piksel kipinde XAI üretilmez.
         _xai_w0 = next((w for w in wells if w.get("centroid_cabin_mm")), None)  # D1.100: konumu çözülmüş ilk kuyu
-        # AI-2 C7 (S-AI2.5, router paritesi): XAI yalnız KABİN çerçevesinde (`pemf_valid`).
-        if result.success and _xai_w0 is not None and result.method != "pixel" and _payload.get("pemf_valid") is True:
+        # AI-2 C7 (S-AI2.5) + Y144 (S-AII.7), router paritesi: XAI yalnız SÜRÜLEBİLİR sonuçta (`pemf_kapisi.surulebilir`).
+        if (
+            result.success
+            and _xai_w0 is not None
+            and result.method != "pixel"
+            and _pemf["pemf_kapisi"].get("surulebilir") is True
+        ):
             try:
                 from ai_hub.inference_em_petri import inference_em_petri as _iep
 
@@ -1354,7 +1367,7 @@ def infer_em_petri(
             "image_base64": _b64,
             **_boyut,
             **_xai_meta,
-            **_pemf_alanlari(_payload, "petri"),
+            **_pemf,
         }
     except Exception as e:
         return _sonlu_degilse_422(e) or _err500(e)

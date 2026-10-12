@@ -71,6 +71,16 @@ export function PemfKapisiKutusu({
           Aşağıdaki D / P / E değerleri bobin sürüşüne ESAS ALINMAZ:
         </Text>
       ) : null}
+      {/* Y144 (sahip 2026-10-13): backend sürülemez sonuçta canlı E bağlamını ve EM "dozu belirleyen" açıklamasını KURMAZ —
+          operatör seansta canlı E barını göremeyince "bozuk" sanmasın; neden burada söylenir (kutunun kendi hükmünden). */}
+      {!surulebilir ? (
+        <Text testID="pemf-kapisi-baglam-kurulmadi" style={{ fontSize: typography.small, color: colors.textMuted, marginTop: 2 }}>
+          {(model === "fantom"
+            ? "Canlı E göstergesi ve “dozu en çok belirleyen” açıklaması bu sonuçtan kurulmadı"
+            : "“Dozu en çok belirleyen” açıklaması bu sonuçtan üretilmedi") +
+            " — sonuç sürülebilir değil (nedenler aşağıda)."}
+        </Text>
+      ) : null}
       {mesajlar.map((m) => (
         <Text key={m.kod} testID={`pemf-kapisi-${m.kod}`} style={{ fontSize: typography.small, color: colors.danger, marginTop: 2 }}>
           • {m.metin}
