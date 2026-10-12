@@ -1120,6 +1120,32 @@ def _sonlu_degilse_422(e):
     return None
 
 
+def _pemf_alanlari(payload: dict, model: str) -> dict:
+    """AI-2 router paritesi (`ai_router._pemf_alanlari`): hocanın v2/v3 alanları + tüketim kapısı; üretilemezse FAIL-CLOSED."""
+    try:
+        from ai_hub.cv_ortak import pemf_kapisi as _pk
+
+        return _pk.yanit_alanlari(payload, model=model)
+    except Exception:
+        import logging as _lg
+
+        _lg.getLogger("ai_service").warning(
+            "%s PEMF kapısı alanları üretilemedi → geçersiz işaretlendi", model, exc_info=True
+        )
+        _m = "PEMF geçerliliği hesaplanamadı — D/P/E değerleri kullanılmamalı; analizi yineleyin."
+        return {
+            "pemf_valid": False,
+            "pemf_kapisi": {
+                "surulebilir": False,
+                "pemf_gecerli": False,
+                "nedenler": ["kapi_hesaplanamadi"],
+                "eylem": _m,
+                "mesajlar": [{"kod": "kapi_hesaplanamadi", "metin": _m}],
+                "varsayimlar": [],
+            },
+        }
+
+
 @app.post("/infer/em_fantom")
 def infer_em_fantom(
     file: UploadFile = File(...),
@@ -1195,6 +1221,8 @@ def infer_em_fantom(
             "image_base64": _b64,
             **_boyut,
             **_xai_meta,
+            # AI-2 router paritesi: hocanın v3 alanları + tüketim kapısı (TEK KAYNAK ai_hub.cv_ortak.pemf_kapisi).
+            **_pemf_alanlari(payload, "fantom"),
         }
     except Exception as e:
         return _sonlu_degilse_422(e) or _err500(e)
@@ -1217,15 +1245,18 @@ def infer_em_petri(
     plaus_conf: float = Form(None),
     plaus_area_frac: float = Form(None),
     plaus_guard: bool = Form(None),
+    # AI-2 router paritesi (hocanın petri v2'si): kip + laboratuvar protokolü; doğrulama TEK KAYNAK petri_ayar.
+    plate_type: int = Form(None),
+    control_healthy: str = Form(None),
+    control_cancer: str = Form(None),
+    a1_corner: str = Form(None),
 ):
-    """Petri kuyu: YOLO-seg + klasik CV + BaggingRegressor. petri_diameter_cm ile gerçek-mm.
+    """Petri kuyu (hocanın v2'si): 24'lük plaka ızgarası / tekil kap YOLO-seg + klasik CV + BaggingRegressor.
 
     Ayarlanabilir parametreler ve sınırları TEK KAYNAK:
     `ai_hub/inference_petri_dish/petri_ayar.py` (gömülü uç `apps/backend/servers/ai_router.py` da onu
     kullanır → iki uç ayrışamaz).
     """
-    from dataclasses import asdict
-
     from ai_hub.inference_petri_dish import petri_ayar as _pa
 
     try:
@@ -1238,6 +1269,10 @@ def infer_em_petri(
                 plaus_conf=plaus_conf,
                 plaus_area_frac=plaus_area_frac,
                 plaus_guard=plaus_guard,
+                plate_type=plate_type,
+                control_healthy=control_healthy,
+                control_cancer=control_cancer,
+                a1_corner=a1_corner,
             )
         except _pa.AyarHatasi as _ae:
             return JSONResponse({"error": str(_ae)}, status_code=422)
@@ -1267,7 +1302,9 @@ def infer_em_petri(
         # 38 ms'i (6048×12256 dikey mozaik) boşuna yakar ve iki kodlamanın sessizce
         # ayrışmasına kapı açardı. Tespit yoksa orijinal kare kodlanır (yedek yol).
         _b64, _boyut = _kok_gorseli_sec(_paneller, _kapakli_kodla_servis, img)
-        wells = [asdict(w) for w in result.wells]
+        # AI-2 router paritesi: kuyucuklar `to_dict()`ten (NaN → None; v2 alanları NaN taşıyabilir).
+        _payload = result.to_dict()
+        wells = _payload["wells"]
         # §KALAN A5 (router paritesi): ilk kuyu icin hafif duyarlilik meta'si (zarif).
         _xai_meta = {}
         # D1.E07 (İG-5.76, router paritesi): piksel kipinde XAI üretilmez.
@@ -1305,7 +1342,7 @@ def infer_em_petri(
             # gösterir. `plausibility` ayrıca REDDİ de taşır — router 422'ye çevirebilsin.
             "yolo_ayar": result.yolo_ayar,
             "resize": result.resize,
-            "plausibility": result.plausibility,
+            "plausibility": _payload.get("plausibility") or {},
             # KAPAK PARITESI (ADIM 3): gomulu yol kok gorseli `_kapakli_kodla` ile
             # 1600 px'e indiriyor; burasi `_jpg_b64` ile HAM mozaigi gonderiyordu — yani
             # ADIM 1'in olctugu 6048x12256 dev kare GPU profilinde YASAMAYA DEVAM ediyordu.
@@ -1313,6 +1350,7 @@ def infer_em_petri(
             "image_base64": _b64,
             **_boyut,
             **_xai_meta,
+            **_pemf_alanlari(_payload, "petri"),
         }
     except Exception as e:
         return _sonlu_degilse_422(e) or _err500(e)

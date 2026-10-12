@@ -19,6 +19,7 @@ konum sıralı kalıyordu (uyarı yok). Artık `layout_unregistered` uyarısı.
 from __future__ import annotations
 
 import csv
+import re
 from pathlib import Path
 
 import numpy as np
@@ -164,13 +165,19 @@ def test_KRITIK_HEADLESS_manuel_secim_ve_pencere_YOK():
 
 
 def test_v3_EM_ongorucu_PAKET_yolundan():
-    import sys
-
     from ai_hub.inference_em_fantom import inference_em_fantom as paket
     from ai_hub.inference_em_fantom.phantom_cv_v3 import pipeline as pp
 
     assert pp.PhantomPredictor is paket.PhantomPredictor
-    assert not any(str(p).replace("\\", "/").rstrip("/").endswith("ai_hub/inference_em_fantom") for p in sys.path)
+    # YAPISAL: paketin HİÇBİR modülü sys.path'e dokunmaz. (Süreç geneli sys.path bakılmaz — aynı koşumda v1 boru hatları
+    # hâlâ yüklenebilir ve kendi eklemelerini yapar; ölçülen şey BU paketin davranışı.)
+    paket_dizini = Path(pp.__file__).parent
+    dokunanlar = [
+        y.name
+        for y in sorted(paket_dizini.glob("*.py"))
+        if re.search(r"sys\.path\.(insert|append)", y.read_text(encoding="utf-8"))
+    ]
+    assert not dokunanlar, f"phantom_cv_v3 sys.path hilesi taşıyor: {dokunanlar}"
 
 
 def test_v3_yerlesim_referansi_YAMLin_YANINDA_ve_hocaninkiyle_AYNI():

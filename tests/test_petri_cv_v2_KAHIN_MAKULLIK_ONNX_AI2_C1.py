@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import csv
 import math
+import re
 from pathlib import Path
 
 import numpy as np
@@ -219,13 +220,19 @@ def test_KRITIK_YOLO_aday_hatasi_izgarayi_OLDURMEZ_ama_GORUNUR():
 
 def test_v2_EM_ongorucu_PAKET_yolundan_sys_path_hilesi_YOK():
     """Hocanın `../../inference_em_petri` sys.path hilesi alınmadı: modül adı TEK (paket), sys.path'e ai_hub alt dizini girmez."""
-    import sys
-
     from ai_hub.inference_em_petri import inference_em_petri as paket
     from ai_hub.inference_petri_dish.petri_cv_v2 import pipeline as pp
 
     assert pp.PetriPredictor is paket.PetriPredictor
-    assert not any(str(p).replace("\\", "/").rstrip("/").endswith("ai_hub/inference_em_petri") for p in sys.path)
+    # YAPISAL: paketin HİÇBİR modülü sys.path'e dokunmaz. (Süreç geneli sys.path bakılmaz — aynı koşumda v1 boru hatları
+    # hâlâ yüklenebilir ve kendi eklemelerini yapar; ölçülen şey BU paketin davranışı.)
+    paket_dizini = Path(pp.__file__).parent
+    dokunanlar = [
+        y.name
+        for y in sorted(paket_dizini.glob("*.py"))
+        if re.search(r"sys\.path\.(insert|append)", y.read_text(encoding="utf-8"))
+    ]
+    assert not dokunanlar, f"petri_cv_v2 sys.path hilesi taşıyor: {dokunanlar}"
 
 
 def test_v2_dedektor_RuntimeError_ve_CAGRI_BASINA_esik_korunur():

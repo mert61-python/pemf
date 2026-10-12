@@ -49,6 +49,10 @@ class _SahteSonuc:
         self.healthy_regions = []
         self.wells = list(wells or [])
         self.phantom_detection = phantom if phantom is not None else {"primary": {"solidity": 0.9, "n_blue_inside": 12}}
+        # AI-2: hocanın v2 / v3 sonucunun GEÇERLİ hâli (ArUco kipi). Tüketim kapısı (tests/test_ai_pro_arastirma_PEMF_KAPISI_
+        # fail_closed_AI2_C4.py) eksik alanı FAIL-CLOSED sayar — bu dosyanın sağlayıcı mantığı kapıları geçerli sonuçla ölçülür.
+        self.pemf_valid, self.reliable, self.warnings = True, True, []
+        self.pemf_source, self.coord_frame, self.layout = "aruco", "cabin_aruco", {}
 
 
 class _SahtePipeline:

@@ -1062,12 +1062,13 @@ def _yukle_em_fantom_cv() -> dict:
         download_model_sync("ai_hub/inference_em_fantom/BiLSTM_XXL_Raw.onnx")
     except Exception as _de:
         logger.warning("em_fantom ONNX indirme/çözümleme uyarısı: %s", _de)
-    from ai_hub.inference_em_fantom.phantom_cv import (
+    # AI-2 (2026-10-12): hocanın fantom v3'ü (T1–T5 sabit kimlik, halka ölçeği, `reliable`, `pemf_valid`) — v1 emekli.
+    from ai_hub.inference_em_fantom.phantom_cv_v3 import (
         PhantomCvPipeline,
         load_cabin_config,
     )
 
-    cfg = load_cabin_config(None)  # gömülü cabin_config_example.yaml
+    cfg = load_cabin_config(None)  # gömülü cabin_config_v3.yaml (saha kabin ölçüsü + hocanın phantom_v2 bölümü)
     warm = PhantomCvPipeline(cfg, manual_fallback=False)
     _ = warm.predictor  # ONNX + scaler'ları bir kez yükle
     return {"cfg": cfg, "predictor": warm._predictor, "cls": PhantomCvPipeline}
@@ -1080,7 +1081,8 @@ def _yukle_em_petri_cv() -> dict:
     90 MB YOLO analiz ve seans yolları için iki kez yüklenmesin. Sözleşme DEĞİŞMEDİ:
     {cfg, cls, yolo, predictor, yolo_path}.
     """
-    from ai_hub.inference_petri_dish.petri_cv import (
+    # AI-2 (2026-10-12): hocanın petri v2'si (24'lük plaka ızgarası A1–D6, `pemf_valid`, kontrol kuyucuklu sınıflama) — v1 emekli.
+    from ai_hub.inference_petri_dish.petri_cv_v2 import (
         PetriCvPipeline,
         load_cabin_config,
     )
@@ -1091,7 +1093,7 @@ def _yukle_em_petri_cv() -> dict:
     except Exception as _de:
         logger.warning("em_petri YOLO ONNX indirme/çözümleme uyarısı: %s", _de)
         yolo_path = os.path.join(project_root, "ai_hub", "inference_petri_dish", "yolo11m-seg.onnx")
-    cfg = load_cabin_config(None)  # gömülü cabin_config_example.yaml
+    cfg = load_cabin_config(None)  # gömülü cabin_config_v2.yaml (saha kabin ölçüsü + hocanın multiwell bölümü)
     # yolo_device="cpu" ŞART (headless — CUDA yok).
     warm = PetriCvPipeline(cfg, yolo_model_path=yolo_path, yolo_device="cpu")
     _ = warm.predictor  # BaggingRegressor ONNX (kendi fallback'i)
@@ -1106,6 +1108,30 @@ def _yukle_em_petri_cv() -> dict:
         "predictor": warm._predictor,
         "yolo_path": yolo_path,
     }
+
+
+def _pemf_alanlari(payload: dict, model: str) -> dict:
+    """AI-2: hocanın v2/v3 yanıt alanları + tüketim kapısı (TEK KAYNAK `ai_hub.cv_ortak.pemf_kapisi`; ai_service aynısını
+    kullanır). `payload` = `result.to_dict()` (NaN-güvenli). Kapı hesaplanamazsa alanlar BOŞ dönmez, FAIL-CLOSED işaret
+    döner: `pemf_valid` False ve `pemf_kapisi.surulebilir` False — arayüz D/P/E'yi "geçersiz" etiketiyle gösterir."""
+    try:
+        from ai_hub.cv_ortak import pemf_kapisi as _pk
+
+        return _pk.yanit_alanlari(payload, model=model)
+    except Exception:
+        logger.warning("%s PEMF kapısı alanları üretilemedi → geçersiz işaretlendi", model, exc_info=True)
+        _m = "PEMF geçerliliği hesaplanamadı — D/P/E değerleri kullanılmamalı; analizi yineleyin."
+        return {
+            "pemf_valid": False,
+            "pemf_kapisi": {
+                "surulebilir": False,
+                "pemf_gecerli": False,
+                "nedenler": ["kapi_hesaplanamadi"],
+                "eylem": _m,
+                "mesajlar": [{"kod": "kapi_hesaplanamadi", "metin": _m}],
+                "varsayimlar": [],
+            },
+        }
 
 
 def _saglayici_meta() -> dict:
@@ -3667,6 +3693,9 @@ async def analyze_em_fantom(
             "timing_ms": result.timing_ms,
             **_xai_meta,
             **_y51_duty_etiketi("fantom", duty_sum, cache["cfg"]),  # i-15.1 · Y51
+            # AI-2 (hoca fantom v3): `reliable`, `pemf_valid`, `pemf_source`, `coord_frame`, `warnings`, kayıt / halka özeti
+            # + tüketim kapısının eylem metinleri (`pemf_kapisi`). YALNIZ EK — eski istemci etkilenmez. Tek kaynak: ai_hub.
+            **_pemf_alanlari(payload, "fantom"),
         }
     except Exception as e:
         # D1.E07 (İG-5.80): sonlu olmayan girdi (ör. achieved_B=nan) ya da bozuk ölçekleyici → 422 (istemci girdisi;
@@ -3698,8 +3727,14 @@ async def analyze_em_petri(
     plaus_conf: float = Form(None),
     plaus_area_frac: float = Form(None),
     plaus_guard: bool = Form(None),
+    # AI-2 (hocanın petri v2'si): kip + laboratuvar protokolü. Verilmezse YAML `multiwell:` (24'lük plaka, A1 auto,
+    # kontrol yok). plate_type 0 = tekil petri kapları (eski YOLO kipi). Doğrulama TEK KAYNAK: petri_ayar.
+    plate_type: int = Form(None),
+    control_healthy: str = Form(None),
+    control_cancer: str = Form(None),
+    a1_corner: str = Form(None),
 ):
-    """Petri Kuyu Analizi (petri_cv YOLO11m-seg + BaggingRegressor ONNX).
+    """Petri Kuyu Analizi (petri_cv_v2 — hocanın v2'si: 24'lük plaka ızgarası / tekil kap YOLO11m-seg + BaggingRegressor ONNX).
 
     Petri fotoğrafından: YOLO ile N kuyucuk tespit → her kuyuda HSV kanser
     sınıflandırma → 3B mm koordinat (petri_diameter_cm verilirse gerçek mm) →
@@ -3738,6 +3773,10 @@ async def analyze_em_petri(
                 plaus_conf=plaus_conf,
                 plaus_area_frac=plaus_area_frac,
                 plaus_guard=plaus_guard,
+                plate_type=plate_type,
+                control_healthy=control_healthy,
+                control_cancer=control_cancer,
+                a1_corner=a1_corner,
             )
         except _pa.AyarHatasi as _ae:
             raise HTTPException(status_code=422, detail=str(_ae)) from None
@@ -3761,6 +3800,10 @@ async def analyze_em_petri(
                     "plaus_conf": plaus_conf,
                     "plaus_area_frac": plaus_area_frac,
                     "plaus_guard": plaus_guard,
+                    "plate_type": plate_type,
+                    "control_healthy": control_healthy,
+                    "control_cancer": control_cancer,
+                    "a1_corner": a1_corner,
                 },
             )
             # MİKROSERVİS YOLU: makullik reddi ai_hub boru hattında verilir (ai_service o kodu
@@ -3818,9 +3861,10 @@ async def analyze_em_petri(
             _paneller = []
             status = "no_detection"
 
-        from dataclasses import asdict
-
-        wells = [asdict(w) for w in result.wells]
+        # AI-2: kuyucuklar `to_dict()`ten (hocanın `_json_safe`'i: NaN/inf → None, numpy → Python) — v2 alanları (plaka
+        # mm, Lab b*, kanser nedenleri) NaN taşıyabilir; çıplak `asdict` katı JSON'u bozardı.
+        _payload = result.to_dict()
+        wells = _payload["wells"]
         # §KALAN A5: em_kedi paritesi — ilk kuyu icin hafif duyarlilik meta'si (zarif).
         _xai_meta = {}
         # ⚠️ D1.E07 (İG-5.76): PİKSEL kipinde koordinat piksel farkıdır → XAI duyarlılığı üretilmez (fantomla aynı).
@@ -3864,9 +3908,12 @@ async def analyze_em_petri(
             # hangi eşiklerle üretildiğini gösterir, gevşetilmiş bir koşu "normal" görünmesin.
             "yolo_ayar": result.yolo_ayar,
             "resize": result.resize,
-            "plausibility": result.plausibility,
+            "plausibility": _payload.get("plausibility") or {},
             **_xai_meta,
             **_y51_duty_etiketi("petri", duty_sum, cache["cfg"]),  # i-15.1 · Y51
+            # AI-2 (hoca petri v2): `pemf_valid`, `coord_frame`, `warnings`, plaka ızgarası özeti (ONNX aday sayısı dahil),
+            # sınıflama / kontrol QC + tüketim kapısının eylem metinleri (`pemf_kapisi`). YALNIZ EK. Tek kaynak: ai_hub.
+            **_pemf_alanlari(_payload, "petri"),
         }
     except Exception as e:
         # D1.E07 (İG-5.80): sonlu olmayan girdi / bozuk ölçekleyici → 422 (fantomla aynı sözleşme).

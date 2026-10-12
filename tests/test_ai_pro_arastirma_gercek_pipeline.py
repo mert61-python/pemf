@@ -76,11 +76,26 @@ def kedi_izi(monkeypatch):
 
 
 def test_ENTEGRASYON_fantom_gercek_kareden_hedef_ve_doz(kedi_izi):
-    """05_FantomTumor.jpeg ile: hedef adayları çıkar, doz üret, süreyi raporla."""
+    """Hocanın GERÇEK fantom fotoğrafı (kâhin, tests/kahin) ile: T1–T5 hedef adayları, doz, süre.
+
+    AI-2 (fantom v3): eskiden `05_FantomTumor.jpeg` (eski dağınık-leke fantomu → v3'te piksel kipi, doz YOK) kullanılıyordu
+    ve doz adımı hep ATLANIYORDU. Hocanın fotoğrafında ölçek yeşil halkadan gelir (`coil_ring`), kabin işareti YOK → ArUco
+    zorunluluğu (karar #4) kareyi kabul etmez (beklenen); doz adımı öngörücüyle CST kutusu merkezinde doğrudan ölçülür."""
     _agirlik_gerekli("fantom")
+    from pathlib import Path
+
+    import cv2
+    import numpy as np
     import servers.ai_pro_hedef as hedef
 
-    kare = _kare(f"{_TEST_GIRDI}/05_FantomTumor.jpeg")
+    yol = (
+        Path(__file__).resolve().parent
+        / "kahin"
+        / "hoca_cv_2026_10"
+        / "fantom"
+        / "WhatsApp Image 2026-10-02 at 19.40.11.jpeg"
+    )
+    kare = cv2.imdecode(np.fromfile(str(yol), dtype=np.uint8), cv2.IMREAD_COLOR)
     sag = hedef.saglayici_al("fantom")
 
     t0 = time.perf_counter()
@@ -107,12 +122,14 @@ def test_ENTEGRASYON_fantom_gercek_kareden_hedef_ve_doz(kedi_izi):
         f"ikinci kare çok yavaş ({kare2_ms:.0f} ms) — ağır model her karede yeniden yükleniyor olabilir"
     )
 
-    if not lz:
-        # ArUco yoksa (karar #4) hedef yapısal olarak reddedilir; bu BEKLENEN bir sonuçtur.
-        assert meta.get("method") != "aruco_pnp", f"ArUco varken hedef reddedildi: {meta}"
-        pytest.skip(f"örnek fotoğrafta kabin işareti yok (yöntem={meta.get('method')}) — doz adımı atlandı")
+    assert {t["label"] for t in meta["targets"]} == {f"Tümör T{i}" for i in range(1, 6)}, (
+        "v3 kayıtlı kimlik etikete taşınmadı"
+    )
+    # Hocanın kuralları geçer (pemf_valid CST kutusu VARSAYIMI, reliable) ama kabin işareti yok → ArUco zorunlu: SÜRÜLMEZ.
+    assert meta["pemf_kapisi"]["surulebilir"] is True and lz is False and meta.get("method") == "coil_ring"
+    assert "kabin işareti" in sag.ipucu(True, "Tümör T1")
 
-    D, P, e = sag.predict(x, y, z, 0)
+    D, P, e = sag.predict(-43.645, 0.215, 3.335, 0)  # CST fantom kutusu merkezi (eğitim aralığı içi)
     print(f"[OLCUM] fantom doz: max(D)={max(D):.3f} · e_field={e:.4f} · ood={meta.get('ood')}")
     assert len(D) == 7 and len(P) == 7
     assert any(d > 0 for d in D), "gerçek ağırlıkla tüm duty 0 — sürülebilir parametre üretilmedi"
@@ -120,12 +137,27 @@ def test_ENTEGRASYON_fantom_gercek_kareden_hedef_ve_doz(kedi_izi):
 
 
 def test_ENTEGRASYON_petri_gercek_kareden_hedef_ve_SURE_olcumu(kedi_izi):
-    """06b_PetriKuyu_aruco.jpg ile: kuyu adayları + doz; YOLO CPU süresi ÖLÇÜLÜR ve raporlanır
-    (plan Faz 2 bitiş kriteri: `join_timeout_s` bu ölçüme göre sabitlenir)."""
+    """Hocanın GERÇEK 24'lük plaka fotoğrafı (kâhin, tests/kahin) ile: 24 kuyu adayı (A1–D6 etiketli) + doz; kare süresi
+    ÖLÇÜLÜR ve raporlanır (plan Faz 2 bitiş kriteri: `join_timeout_s` bu ölçüme göre sabitlenir).
+
+    AI-2 (petri v2): eskiden `06b_PetriKuyu_aruco.jpg` (tek kap + sentetik işaret) kullanılıyordu; v2'nin plaka kipinde o
+    görüntü doğru olarak "plaka değil" sayılır (aşağıdaki karşıt). Gerçek plakada kabin işareti YOK → `pemf_valid=false`
+    → tüketim kapısı kareyi lokalize SAYMAZ (beklenen); doz adımı öngörücüyle doğrudan ölçülür."""
     _agirlik_gerekli("petri")
+    from pathlib import Path
+
+    import cv2
+    import numpy as np
     import servers.ai_pro_hedef as hedef
 
-    kare = _kare(f"{_TEST_GIRDI}/06b_PetriKuyu_aruco.jpg")
+    yol = (
+        Path(__file__).resolve().parent
+        / "kahin"
+        / "hoca_cv_2026_10"
+        / "petri"
+        / "WhatsApp Image 2026-10-02 at 19.40.15(2).jpeg"
+    )
+    kare = cv2.imdecode(np.fromfile(str(yol), dtype=np.uint8), cv2.IMREAD_COLOR)
     sag = hedef.saglayici_al("petri")
 
     t0 = time.perf_counter()
@@ -153,14 +185,23 @@ def test_ENTEGRASYON_petri_gercek_kareden_hedef_ve_SURE_olcumu(kedi_izi):
         "hazırlık thread'i turu bitiremeden seans kamerayı açmaya çalışır"
     )
 
-    if not lz:
-        assert meta.get("method") != "aruco_pnp", f"ArUco varken hedef reddedildi: {meta}"
-        pytest.skip(f"örnek fotoğrafta kabin işareti çözülemedi (yöntem={meta.get('method')})")
+    hedefler = meta.get("targets") or []
+    assert len(hedefler) == 24, f"24'lük plakada {len(hedefler)} kuyu adayı"
+    assert {t["label"] for t in hedefler} >= {"Kuyu A1", "Kuyu D6"}, "v2 kuyucuk kimliği (A1–D6) etikete taşınmadı"
+    # Kabin işareti yok → plaka çerçevesi → pemf_valid=false → kapı kareyi KESER (beklenen; ArUco zorunlu, karar #4).
+    assert lz is False and meta.get("method") == "plate_grid", meta.get("method")
+    assert "pemf_gecersiz" in meta["pemf_kapisi"]["nedenler"], meta.get("pemf_kapisi")
 
-    D, P, e = sag.predict(x, y, z, 0)
-    print(f"[OLCUM] petri doz: max(D)={max(D):.3f} · e_field={e:.4f} · sinif={meta.get('secili_organ_id')}")
+    # Doz adımı (gerçek ağırlık): kabin merkezinde, öngörücüyle doğrudan.
+    D, P, e = sag.predict(0.0, 0.0, 0.0, 0)
+    print(f"[OLCUM] petri doz: max(D)={max(D):.3f} · e_field={e:.4f} · sinif={meta.get('secili_organ_id', 1)}")
     assert len(D) == 7 and any(d > 0 for d in D), "gerçek ağırlıkla sürülebilir parametre üretilmedi"
     assert e > 0, "e_field 0 — E anahtarı eşlemesi gerçek çıktıda tutmuyor"
+
+    # KARŞIT: tek kap + sentetik işaret (06b) plaka kipinde "plaka değil" → ÖZNE YOK (ipucu yerleşimi söyler).
+    tek = _kare(f"{_TEST_GIRDI}/06b_PetriKuyu_aruco.jpg")
+    lz2, *_orta, ozne2, _d = sag.localize(tek, 0)
+    assert lz2 is False and ozne2 is False and "petri plakası görünmüyor" in sag.ipucu(False, "Kuyu")
 
 
 def test_ENTEGRASYON_analiz_ve_saglayici_AYNI_onbellegi_paylasir():

@@ -144,6 +144,10 @@ class _SahteSonuc:
         self.yolo_ayar = {"conf": 0.33, "iou": 0.44, "imgsz": 640}
         self.resize = {"from": [1200, 1600], "to": [720, 960], "max": 960}
 
+    def to_dict(self):
+        # AI-2: uç kuyucukları ve makullik özetini hocanın NaN-güvenli `to_dict()`inden okur (v2 `PipelineResult` sözleşmesi).
+        return dict(self.__dict__)
+
 
 @pytest.fixture()
 def yakala(monkeypatch):

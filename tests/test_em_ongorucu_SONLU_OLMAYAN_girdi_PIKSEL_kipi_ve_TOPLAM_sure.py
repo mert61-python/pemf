@@ -877,6 +877,8 @@ def _servis_cagir(a, uc, olcek=None, **k):
         return a.infer_em_fantom(file=_Dosya(_renkli_jpg()), phantom_length_cm=olcek, achieved_B=None, duty_sum=None)
     bos = dict.fromkeys(
         ["yolo_conf", "yolo_iou", "resize_max", "plaus_circularity", "plaus_conf", "plaus_area_frac", "plaus_guard"]
+        # AI-2 (petri v2): kip + laboratuvar protokolü alanları; doğrudan çağrıda Form varsayılanı yerine None.
+        + ["plate_type", "control_healthy", "control_cancer", "a1_corner"]
     )
     return a.infer_em_petri(file=_Dosya(_renkli_jpg()), petri_diameter_cm=olcek, achieved_B=None, duty_sum=None, **bos)
 

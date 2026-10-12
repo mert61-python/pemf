@@ -357,6 +357,9 @@ class _EmCvSaglayici:
     """
 
     ad = ""
+    # AI-2: PEMF tüketim kapısının profili ("fantom" | "petri") — `ad`dan AYRI: test/alt sağlayıcı kendi adını taşıyabilir,
+    # kapı profili ise yalnız bilinen iki CV hattından biri olabilir. Boş kalırsa kapı ValueError verir (sessiz geçiş YOK).
+    kapi_modeli = ""
     title = ""
     subject_label = ""
     onbellek_anahtari = ""
@@ -437,11 +440,16 @@ class _EmCvSaglayici:
             return self._ipucu_ozne_yok()
         with self._kilit:
             yontem = str(self._meta.get("method") or "")
+            kapi = dict(self._meta.get("pemf_kapisi") or {})
         if yontem and yontem != "aruco_pnp":
             return (
                 "Konum ölçülemedi: kabin işareti (arka duvardaki kare kod) kadrajda görünmüyor. "
                 "Kamerayı işaret ve hedef AYNI karede kalacak şekilde ayarlayın."
             )
+        # AI-2: hocanın tüketim kapısı kareyi kestiyse NEDENİ ve EYLEMİ (pemf geçersiz / güvenilmez / yerleşim uyuşmuyor /
+        # kontrol kuyucuğu / yeniden çekim) — "hedef seçilemedi" demek operatörü yanlış yere yönlendirirdi.
+        if kapi and not kapi.get("surulebilir", True) and kapi.get("eylem"):
+            return str(kapi["eylem"])
         return (
             f"{hedef_adi} seçilemedi — hedefi tepsinin ortasına alın, kabin ışığını artırın ve "
             "işaret üzerinde parlama olmadığından emin olun."
@@ -482,7 +490,9 @@ class _EmCvSaglayici:
         for aday in yeni:
             if not aday.get("id"):
                 aday["id"] = sonraki
-                aday["label"] = f"{self.hedef_etiketi} {sonraki}"
+                # AI-2: CV SABİT kimliği (petri v2 kuyucuk A1–D6, fantom v3 KAYITLI tümör T1–T5) varsa etiket odur;
+                # eşleşen (takip edilen) hedef ilk görüldüğü etiketi KORUR — mühürlü etiket karede değişmez.
+                aday["label"] = aday.get("label") or f"{self.hedef_etiketi} {sonraki}"
                 sonraki += 1
         with self._kilit:
             self._kimlikler = [
@@ -555,6 +565,22 @@ class _EmCvSaglayici:
             "targets": [_hedef_tel(a, _kare_w, _kare_h) for a in adaylar],
             "hata": hata,
         }
+        # ⚠️ AI-2 (plan §3.9 · hocanın ENTEGRASYON §3): bobine giden yolda tüketim kapısı — `success`, `pemf_valid`,
+        # fantomda `reliable`, engelleyici uyarılar (`layout_mismatch`, `control_cancer_missed`, `control_healthy_flagged`)
+        # ve yeniden-çekim uyarıları (`oblique_view`, `low_resolution`, `ring_partial`). Geçmezse kare LOKALİZE SAYILMAZ:
+        # `/propose` taze hedef bulamaz (409 + eylem), seans döngüsü sürmez, `_predict_and_drive` ÇAĞRILMAZ. FAIL-CLOSED ve
+        # `PEMF_ARASTIRMA_AIPRO` bayrağından BAĞIMSIZ (bayrak sürüşü açar, bu kapı geçersiz sonucu yine keser). Hedef
+        # adayları meta'da kalır (operatör ne görüldüğünü görür) ama hiçbiri seçili değildir.
+        if basarili:
+            from ai_hub.cv_ortak import pemf_kapisi
+
+            kapi = pemf_kapisi.degerlendir(result, model=self.kapi_modeli)
+            meta["pemf_kapisi"] = kapi
+            if not kapi["surulebilir"]:
+                air.logger.warning("%s karesi tüketim kapısında REDDEDİLDİ: %s", self.ad, kapi["nedenler"])
+                with self._kilit:
+                    self._meta = meta
+                return (False, 0.0, 0.0, 0.0, 0.0, overlay, True, None)
         if secili is None:
             with self._kilit:
                 self._meta = meta
@@ -636,9 +662,10 @@ class _EmCvSaglayici:
 
 
 class FantomSaglayici(_EmCvSaglayici):
-    """Silikon fantomdaki mavi tümör odakları (`phantom_cv` + `PhantomPredictor`)."""
+    """Silikon fantomdaki tümör odakları (`phantom_cv_v3` — hocanın v3'ü, AI-2 — + `PhantomPredictor`)."""
 
     ad = "fantom"
+    kapi_modeli = "fantom"
     title = "Fantom Tümör"
     subject_label = "fantom"
     onbellek_anahtari = "em_fantom_cv"
@@ -658,7 +685,9 @@ class FantomSaglayici(_EmCvSaglayici):
         return pl
 
     def _ozne_yok_hatalari(self) -> tuple:
-        return ("phantom_not_detected",)
+        # v3: lacivert hale kümesi hiç bulunamadıysa `tumor_cluster_not_found` (fantom kadrajda değil); fantom bulunup
+        # içinde tümör yoksa `no_tumor_in_phantom` — o ÖZNE VAR durumudur (açı / ışık sorunu).
+        return ("phantom_not_detected", "tumor_cluster_not_found")
 
     def _ipucu_ozne_yok(self) -> str:
         return (
@@ -684,10 +713,18 @@ class FantomSaglayici(_EmCvSaglayici):
         solidity = float(tespit.get("solidity", 0.0) or 0.0)
         mavi = 1.0 if float(tespit.get("n_blue_inside", 0) or 0) > 0 else 0.0
         ham = max(0.0, min(1.0, solidity * mavi))
+        # AI-2: v3 tümör kimliği (T1–T5) YALNIZ yerleşim referansına KAYITLI sonuçta sabittir (`layout.rms_mm` var ve
+        # `layout_mismatch` / `layout_unregistered` yok). ArUco kipinde kayıt yapılamıyor (ölçüldü) → kimlik konum sıralı →
+        # etiket olarak KULLANILMAZ, sağlayıcının yarıçap sınırlı takip kimliği geçerlidir.
+        uyarilar = [str(u) for u in (getattr(result, "warnings", None) or [])]
+        kayitli = "rms_mm" in (getattr(result, "layout", None) or {}) and not any(
+            u.startswith(("layout_mismatch", "layout_unregistered")) for u in uyarilar
+        )
         out = []
         for r in list(getattr(result, "tumor_regions", []) or []):
             if r.centroid_cabin_mm is None:  # D1.100: geçersiz kesişim → konum yok → hedef olamaz
                 continue
+            tid = str(getattr(r, "tumor_id", "") or "")
             out.append(
                 {
                     "px": tuple(float(v) for v in r.centroid_px),
@@ -701,7 +738,7 @@ class FantomSaglayici(_EmCvSaglayici):
                     # D1.E07 (İG-5.76): doz hesaplanmadıysa (piksel kipi) None kalır — 0.0 "hesaplandı, sıfır" okunur.
                     "E_cancer": _sayi_ya_da_none(getattr(r, "E_cancer", None)),
                     "E_healthy": _sayi_ya_da_none(getattr(r, "E_healthy", None)),
-                    "label": "",
+                    "label": f"{self.hedef_etiketi} {tid}" if (kayitli and tid) else "",
                     "id": 0,
                 }
             )
@@ -709,13 +746,17 @@ class FantomSaglayici(_EmCvSaglayici):
 
 
 class PetriSaglayici(_EmCvSaglayici):
-    """Petri plakasındaki kuyucuklar (`petri_cv` YOLO11m-seg + `PetriPredictor`)."""
+    """Petri plakasındaki kuyucuklar (`petri_cv_v2` — hocanın v2'si, AI-2: 24'lük plaka ızgarası, A1–D6 — + `PetriPredictor`)."""
 
     ad = "petri"
+    kapi_modeli = "petri"
     title = "Petri Kuyu"
     subject_label = "petri plakası"
     onbellek_anahtari = "em_petri_cv"
     hedef_etiketi = "Kuyu"
+    #: AI-2: v2 plaka kipi TÜM kuyucukları verir (24'lük: 24, 96'lık: 96) — eski 8'lik tavan kuyu 9–24'ü seçilemez
+    #: kılardı (`hedef_idleri` dört doğrulama noktasının TEK kaynağı). En büyük standart plaka 96.
+    azami_hedef = 96
     #: ÖLÇÜLDÜ (2026-09-09, bu makine, 06b_PetriKuyu_aruco.jpg): ilk yükleme ~5,1 s (artık döngü
     #: DIŞINDA, kameradan önce) ve kare başına ~0,34 s (YOLO11m-seg CPU dahil). README'deki 2,8 s
     #: bu ölçümle uyuşmuyor (orada cihaz belirtilmemiş). Kamera devrinde beklenen tek bir TUR
@@ -740,7 +781,8 @@ class PetriSaglayici(_EmCvSaglayici):
         # hazırlığı bitirmez, hedef bulunamamış sayılır ve şeritte eylem söyleyen ipucu gösterilir.
         from ai_hub.inference_petri_dish import plausibility as _pl
 
-        return ("yolo_no_well_detected", _pl.PETRI_REJECT)
+        # v2 plaka kipi: pembe/mor sıvı bölgesi hiç yoksa `plate_not_found` (plaka kadrajda değil).
+        return ("yolo_no_well_detected", "plate_not_found", _pl.PETRI_REJECT)
 
     def _ipucu_ozne_yok(self) -> str:
         # ⚠️ AI Hub'ın YÜKLEME bağlamlı makullik metni kullanıcıya GİTMEZ ("yüklenen görüntü",
@@ -771,6 +813,7 @@ class PetriSaglayici(_EmCvSaglayici):
                 continue
             kanser = int(getattr(w, "organ_id", 0) or 0) == 1
             guven = max(0.0, min(1.0, float(getattr(w, "reliability", 0.0) or 0.0)))
+            wid = str(getattr(w, "well_id", "") or "")
             out.append(
                 {
                     "px": tuple(float(v) for v in w.centroid_px),
@@ -783,7 +826,9 @@ class PetriSaglayici(_EmCvSaglayici):
                     "oncelik": (1000.0 if kanser else 0.0) + guven,
                     "E_cancer": _sayi_ya_da_none(getattr(w, "E_cancer", None)),
                     "E_healthy": _sayi_ya_da_none(getattr(w, "E_healthy", None)),
-                    "label": "",
+                    # AI-2: plaka kipinde kuyucuk kimliği ızgaradan (A1–D6) — etiket odur; tekil kipte (W1…) sıra
+                    # karede değişebilir → etiket verilmez, takip kimliği geçerli.
+                    "label": f"{self.hedef_etiketi} {wid}" if (wid and not wid.startswith("W")) else "",
                     "id": 0,
                 }
             )

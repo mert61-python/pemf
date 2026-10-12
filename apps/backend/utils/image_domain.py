@@ -69,7 +69,14 @@ EXPECTED: dict[str, set[str]] = {
     "landmark": {COLOR},
     "segmentation": {COLOR},
     "cat_organ": {COLOR},
-    "em_fantom": {COLOR},
+    # AI-2 (2026-10-12, YANLIŞ-POZİTİF — ÖLÇÜLDÜ): hocanın 2026-10-02 laboratuvar fotoğrafları pembe/mor (fenol kırmızılı
+    # besiyeri, mor bobin, lacivert hale) → `stain_ratio` 0,15–0,23 → STAINED algılanıyor: 9 fantom fotoğrafının 2'si
+    # (0,151 / 0,153) ve 6 plaka fotoğrafının 4'ü (0,169–0,229) bu uçlarda 422 "H&E gibi görünüyor" alıyordu (v1'de de —
+    # kapı boru hattından ÖNCE çalışır). STAINED bu iki uca AÇILDI; H&E'yi tutan İKİNCİ KATMAN ölçüldü: gerçek patoloji
+    # 08a / 08b / 08c → fantom v3 `tumor_cluster_not_found` (sonuç YOK), petri plaka kipi `not_a_petri_plate`
+    # (plausibility.evaluate_plate, fail-closed), tekil kip `yolo_no_well_detected`. `histopath` {STAINED} DEĞİŞMEDİ ve
+    # `_STAIN_RATIO` eşiği DEĞİŞMEDİ (patoloji ucunun ayrımı aynen). Kapı: tests/test_ai_hub_fantom_petri_v2v3_YANIT_ve_PARITE_AI2_C3.py
+    "em_fantom": {COLOR, STAINED},
     # DENETİM 2026-08-06 (YANLIŞ-POZİTİF): burası yalnız {COLOR} idi ve GERÇEK bir petri girdisini
     # reddediyordu — `06b_PetriKuyu_aruco.jpg` achromatic_ratio=0.9937 (sat_mean=0.0048) ile
     # `grayscale` algılanıyor (renksiz kuyucuk + gri kabin zemini). Kullanıcı için sonuç
@@ -79,7 +86,8 @@ EXPECTED: dict[str, set[str]] = {
     # TUTMADI (07b/07c böbrek CT → HTTP 200, success=True, n_wells=1). Kapatan şey geometri
     # katmanına eklenen ALAN VETO'sudur (plausibility.py `area_ok`). BU İKİSİ BİRLİKTE ANLAMLI:
     # veto sökülürse burası da {COLOR}'a geri alınmalı, yoksa CT sessizce "kuyucuk" üretir.
-    "em_petri": {COLOR, GRAYSCALE},
+    # AI-2: + STAINED (hocanın 24'lük plakaları 4/6 STAINED — yukarıdaki em_fantom notu; ikinci katman ölçümü aynı).
+    "em_petri": {COLOR, GRAYSCALE, STAINED},
     # "thermal" KASITLI DIŞARIDA: IR kamera hem gri hem renk-haritalı çıktı verebilir.
     # "ai_pro_frame" KASITLI DIŞARIDA: canlı kamera karesi, kullanıcı yüklemesi değil.
 }

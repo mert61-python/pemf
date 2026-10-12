@@ -99,9 +99,11 @@ def _load_reticulocytes():
 # ── kabin-CV pipeline'ları: predictor'ı explicit /models yoluyla kur → pipeline'a enjekte ──
 def _load_em_fantom():
     from ai_hub.inference_em_fantom.inference_em_fantom import PhantomPredictor
-    from ai_hub.inference_em_fantom.phantom_cv import PhantomCvPipeline, load_cabin_config
 
-    cfg = load_cabin_config(None)  # gömülü cabin_config_example.yaml (imajda)
+    # AI-2 (2026-10-12): hocanın fantom v3'ü (router `_yukle_em_fantom_cv` paritesi) — v1 emekli.
+    from ai_hub.inference_em_fantom.phantom_cv_v3 import PhantomCvPipeline, load_cabin_config
+
+    cfg = load_cabin_config(None)  # gömülü cabin_config_v3.yaml (imajda; yerleşim referansı JSON'u yanında)
     predictor = PhantomPredictor(
         onnx_path=_mp("ai_hub/inference_em_fantom/BiLSTM_XXL_Raw.onnx"), providers=gpu.onnx_providers()
     )
@@ -110,7 +112,9 @@ def _load_em_fantom():
 
 def _load_em_petri():
     from ai_hub.inference_em_petri.inference_em_petri import PetriPredictor
-    from ai_hub.inference_petri_dish.petri_cv import PetriCvPipeline, load_cabin_config
+
+    # AI-2 (2026-10-12): hocanın petri v2'si (router `_yukle_em_petri_cv` paritesi) — v1 emekli.
+    from ai_hub.inference_petri_dish.petri_cv_v2 import PetriCvPipeline, load_cabin_config
 
     cfg = load_cabin_config(None)
     predictor = PetriPredictor(

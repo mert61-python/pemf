@@ -19,6 +19,8 @@ sahte tespit üretip belleği doldurur. Aralığı UÇTA zorlamak tek gerçek ko
 """
 from __future__ import annotations
 
+import re
+
 from .plausibility import ESIK_VARSAYILAN
 
 #: Ayarlanabilir sayısal parametre → (alt, üst) kapsayıcı sınır. Anahtarlar aynı zamanda
@@ -39,6 +41,13 @@ _ESIK_ADI: dict[str, str] = {
     "plaus_conf": "conf_med",
     "plaus_area_frac": "max_area_frac",
 }
+
+
+#: AI-2 (hocanın petri v2'si): plaka tipi — 0 = tekil petri kapları (eski YOLO kipi), diğerleri SBS/ANSI plakaları.
+PLAKA_TIPLERI: tuple[int, ...] = (0, 12, 24, 48, 96)
+#: A1 kuyucuğunun görüntü köşesi (hocanın `plate_grid.A1_SHIFT`; "auto" = yatay sol-üst / dikey sağ-üst).
+A1_KOSELERI: tuple[str, ...] = ("auto", "tl", "tr", "br", "bl")
+_KUYU_RE = re.compile(r"^[A-H](?:[1-9]|1[0-2])$")
 
 
 class AyarHatasi(ValueError):
@@ -80,6 +89,24 @@ def _sinirla(ad: str, deger) -> float | None:
     return d
 
 
+def _kuyu_listesi(ad: str, ham) -> list[str] | None:
+    """"A1, D6" → ["A1", "D6"]; boş → None (YAML'daki değer geçerli). Bozuk kuyucuk adı → AyarHatasi."""
+    if ham is None or str(ham).strip() == "":
+        return None
+    out = []
+    for parca in str(ham).replace(";", ",").split(","):
+        k = parca.strip().upper()
+        if not k:
+            continue
+        if not _KUYU_RE.match(k):
+            raise AyarHatasi(
+                f"{ad} içinde geçersiz kuyucuk adı {parca.strip()!r}; A1–H12 biçiminde virgülle ayırın (ör. A1, D6)"
+            )
+        if k not in out:
+            out.append(k)
+    return out or None
+
+
 def coz(
     *,
     yolo_conf=None,
@@ -89,6 +116,10 @@ def coz(
     plaus_conf=None,
     plaus_area_frac=None,
     plaus_guard=None,
+    plate_type=None,
+    control_healthy=None,
+    control_cancer=None,
+    a1_corner=None,
 ) -> dict:
     """Ham form değerlerini `PetriCvPipeline(**kwargs)` sözlüğüne çevirir.
 
@@ -122,4 +153,26 @@ def coz(
 
     if plaus_guard is not None:
         kw["plaus_guard"] = bool(plaus_guard)
+
+    # ── AI-2: hocanın petri v2 kip / laboratuvar protokolü parametreleri (verilmezse YAML `multiwell:` geçerli) ──
+    if plate_type is not None and str(plate_type).strip() != "":
+        try:
+            pt = int(float(plate_type))
+        except (TypeError, ValueError):
+            raise AyarHatasi(f"plate_type bir sayı olmalı (gelen: {plate_type!r})") from None
+        if pt not in PLAKA_TIPLERI:
+            raise AyarHatasi(
+                f"plate_type {pt} desteklenmiyor; {', '.join(str(t) for t in PLAKA_TIPLERI)} olmalı "
+                "(0 = tekil petri kapları)"
+            )
+        kw["plate_type"] = pt
+    for ad, ham in (("control_healthy", control_healthy), ("control_cancer", control_cancer)):
+        liste = _kuyu_listesi(ad, ham)
+        if liste is not None:
+            kw[ad] = liste
+    if a1_corner is not None and str(a1_corner).strip() != "":
+        ak = str(a1_corner).strip().lower()
+        if ak not in A1_KOSELERI:
+            raise AyarHatasi(f"a1_corner {a1_corner!r} geçersiz; {', '.join(A1_KOSELERI)} olmalı")
+        kw["a1_corner"] = ak
     return kw

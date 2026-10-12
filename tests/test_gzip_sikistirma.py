@@ -88,6 +88,10 @@ class _SahteSonuc:
         self.yolo_ayar = {}
         self.resize = {}
 
+    def to_dict(self):
+        # AI-2: petri ucu kuyucukları/plaka alanlarını gerçek PetriResult gibi `to_dict()`ten okur.
+        return {"wells": [], "plausibility": {}}
+
 
 @pytest.fixture()
 def sahte_boru(monkeypatch):

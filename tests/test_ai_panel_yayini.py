@@ -345,6 +345,10 @@ class _SahtePetriSonuc:
         self.yolo_ayar = {}
         self.resize = {}
 
+    def to_dict(self):
+        # AI-2: petri ucu kuyucukları/plaka alanlarını gerçek PetriResult gibi `to_dict()`ten okur.
+        return {"wells": [], "plausibility": {}}
+
 
 class _SahteFantomSonuc:
     def __init__(self):

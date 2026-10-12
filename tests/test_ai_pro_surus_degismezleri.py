@@ -246,12 +246,24 @@ def _arastirma_saglayici(guven: float):
 
     class _Sahte(ai_pro_hedef._EmCvSaglayici):
         ad = "d112_sahte"
+        kapi_modeli = (
+            "fantom"  # AI-2: PEMF tüketim kapısı profili (sonuç aşağıda kapıdan GEÇER → sınanan bu testin kuralı)
+        )
 
         def _onbellek(self):
             return {}
 
         def _pipeline_kur(self, cache):
-            sonuc = SimpleNamespace(success=True, error="", method="aruco_pnp", mm_per_px=1.0)
+            sonuc = SimpleNamespace(
+                success=True,
+                error="",
+                method="aruco_pnp",
+                mm_per_px=1.0,
+                # AI-2: hocanın v3 sözleşmesinde GEÇERLİ sonuç — PEMF kapısı geçer, red/kabul BU testin eşiğinden gelir.
+                pemf_valid=True,
+                reliable=True,
+                warnings=[],
+            )
             return SimpleNamespace(process_image=lambda *a, **k: (sonuc, None))
 
         def _adaylar(self, result):
