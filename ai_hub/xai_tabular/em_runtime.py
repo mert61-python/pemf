@@ -91,7 +91,14 @@ def merkezi_duyarlilik(fn: Callable[[np.ndarray], np.ndarray], X: np.ndarray, eg
         else:
             Xp[:, j] += delta_frac * s
             Xm[:, j] -= delta_frac * s
-        S[:, j] = (np.abs(fn(Xp)[:, :n_duty] - fn(Xm)[:, :n_duty]) / 2.0).mean(axis=1)
+        fark = np.abs(fn(Xp)[:, :n_duty] - fn(Xm)[:, :n_duty]).mean(axis=1)
+        if EM_FEATURES[j] == "organ_id":
+            # ⚠️ AII-2.5: UÇ değerde (kedi 0 / 6, fantom 0 / 1) kırpma bir tarafı sıfırlar → kapsanan adım 2 değil 1. Sabit /2 uçta
+            # adım etkisini YARIYA indiriyor, onay ekranının ilk-3'ünü değiştiriyordu (ölçüldü). Bölen = kapsanan kategori adımı.
+            adim = Xp[:, j] - Xm[:, j]
+            S[:, j] = np.where(adim > 0, fark / np.where(adim > 0, adim, 1.0), 0.0)
+        else:
+            S[:, j] = fark / 2.0
     return S
 
 

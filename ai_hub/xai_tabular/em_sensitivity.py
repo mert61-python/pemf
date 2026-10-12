@@ -108,7 +108,14 @@ def sensitivity_egitim_ref(
         else:
             Xp[:, f] += delta_frac * s
             Xm[:, f] -= delta_frac * s
-        diff = np.abs(np.asarray(predict_fn(Xp)).reshape(N, O) - np.asarray(predict_fn(Xm)).reshape(N, O)) / 2.0
+        diff = np.abs(np.asarray(predict_fn(Xp)).reshape(N, O) - np.asarray(predict_fn(Xm)).reshape(N, O))
+        if feature_names[f] == "organ_id":
+            # AII-2.5 (canlı yol `em_runtime.merkezi_duyarlilik` ile AYNI): uçta kırpma bir tarafı sıfırlar, kapsanan adım 1 —
+            # sabit /2 uç organın etkisini yarıya indirirdi. Bölen = kapsanan kategori adımı (0 ise etki 0).
+            adim = (Xp[:, f] - Xm[:, f])[:, None]
+            diff = np.where(adim > 0, diff / np.where(adim > 0, adim, 1.0), 0.0)
+        else:
+            diff = diff / 2.0
         per_output[f] = diff.mean(axis=0)
         per_sample[:, f] = diff[:, : min(n_duty, O)].mean(axis=1)
     delta = np.array([np.nan if np.isnan(per_output[f]).all() else float(per_output[f].mean()) for f in range(F)])
