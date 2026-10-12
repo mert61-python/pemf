@@ -1074,6 +1074,43 @@ def _arastirma_aipro_kapisi(saglayici) -> None:
     )
 
 
+#: Y142 (S-AI1.5, sahip 2026-10-13): KEDİ AI Pro kapalı döngü SÜRÜŞÜ — VARSAYILAN KAPALI.
+#: Neden: hocanın uyarısı "EM'e henüz güvenme, bobine gönderme" — kedi kabin çerçevesi ↔ em_kedi EĞİTİM çerçevesinin aynı
+#: olduğu hiçbir ölçümle kanıtlanmadı (AI-1 K2: kabin içi eğitim DIŞI hedef yalnız `ood` ile işaretlenip SÜRÜLÜYORDU).
+#: Kapalıyken analiz, hazırlık, öneri ve onay ekranı GÖRÜNÜR kalır; AI Pro'dan BAŞLATMA, onay mührü ve BOBİN SÜRÜŞÜ eylem
+#: söyleyen iletiyle reddedilir. Elle seans (Kontrol), araştırma sağlayıcıları (kendi bayrakları) ve ACİL DURDUR ETKİLENMEZ
+#: (Ö.4-Y8). Anlam araştırma bayrağıyla AYNI: yok / boş / bozuk = KAPALI; yalnız `1|true|yes|on` açar. Tezgâhta kabin → EM
+#: çerçevesi doğrulanınca SAHİP onayıyla açılır (TEZGAH-LISTESI §F6). ⚠️ Taşıyıcı bugün yalnız SÜREÇ ORTAMI (launcher'ın
+#: doğurduğu backend ortamı miras alır); `deploy/device.env` satırı + launcher geçişi açma kararıyla birlikte eklenir — o güne
+#: dek yokluğu = KAPALI (fail-closed yön). Kapı: tests/test_ai_pro_KEDI_surus_KAPALI_varsayilan_Y142.py
+KEDI_AIPRO_SURUS_BAYRAGI = "PEMF_KEDI_AIPRO_SURUS"
+KEDI_AIPRO_SURUS_KAPALI_MESAJI = (
+    "Kedi AI Pro sürüşü, kabin konumu doğrulanana kadar kapalı. Analizi ve öneriyi inceleyebilirsiniz; "
+    "seansı Kontrol ekranından elle başlatın."
+)
+
+
+def _kedi_aipro_surus_acik() -> bool:
+    """Kedi AI Pro kapalı döngü sürüşüne izin var mı (Y142; env bayrağı, varsayılan HAYIR)."""
+    return str(os.environ.get(KEDI_AIPRO_SURUS_BAYRAGI, "")).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _kedi_modeli_mi(saglayici_ya_da_ad) -> bool:
+    """Sağlayıcı ya da mühürdeki model adı KEDİ mi? Adı OLMAYAN / boş model kedi sayılır (`saglayici_al(None)` → kedi;
+    model alanı taşımayan eski öneri / seans mührü) — Y142 kapısı fail-closed."""
+    if isinstance(saglayici_ya_da_ad, str):
+        ad = saglayici_ya_da_ad
+    else:
+        ad = getattr(saglayici_ya_da_ad, "ad", "")
+    return (str(ad or "").strip().lower() or ai_pro_hedef.VARSAYILAN_MODEL) == ai_pro_hedef.KediSaglayici.ad
+
+
+def _kedi_aipro_surus_kapisi(saglayici_ya_da_ad) -> None:
+    """Y142: kedi modeliyle AI Pro BAŞLATMA / ONAY isteniyor ve bayrak kapalı → 409 (eylem söyleyen metin)."""
+    if _kedi_modeli_mi(saglayici_ya_da_ad) and not _kedi_aipro_surus_acik():
+        raise HTTPException(status_code=409, detail=KEDI_AIPRO_SURUS_KAPALI_MESAJI)
+
+
 def _yukle_em_fantom_cv() -> dict:
     """phantom_cv_v3 boru hattı + PhantomPredictor'ı BİR KEZ ısıt → `_get_or_load_model` önbelleğine.
 
@@ -1275,6 +1312,10 @@ def _muhur_surulebilir_mi(muhur) -> bool:
         _arastirma_aipro_kapisi(sag)
     except HTTPException:
         logger.warning("AI Pro: araştırma bayrağı kapalı → '%s' ile SÜRÜLMEZ", getattr(sag, "ad", ""))
+        return False
+    # Y142: kedi sürüşü de SÜRÜŞ ANINDA denetlenir (bayrak açıkken alınmış onay / başka yoldan yazılmış mühür sürülmez).
+    if _kedi_modeli_mi(sag) and not _kedi_aipro_surus_acik():
+        logger.warning("AI Pro: kedi sürüşü kapalı (Y142, %s) → SÜRÜLMEZ", KEDI_AIPRO_SURUS_BAYRAGI)
         return False
     return True
 
@@ -1532,7 +1573,14 @@ def _drive_coils_ai_pro(D, P) -> list:
     if not (state and state.hardware):
         return surulen
     _plan_disi = _ai_pro_plan_disi_bobinler(_muhur["onay"])  # Y54: operatörün durdurduğu bobin SÜRÜLMEZ
-    for cid in _ai_pro_bobinleri():
+    _surulecek = _ai_pro_bobinleri()
+    # ⚠️ Y142: EN ALT sürüş katı (döngü ve `/frame` ORTAK) — mühür kedi modelindeyken (model alanı yoksa da) bayrak kapalıysa
+    # hiçbir bobine START gitmez; `/start` ve kare yolunun kapıları bu katmana güvenmez, bu katman da onlara. Aşağıdaki plan-dışı
+    # STOP bloğu (yalnız ARTAN STOP — Ö.4-Y8) AYNEN koşar.
+    if _kedi_modeli_mi(_muhur.get("model") or "") and not _kedi_aipro_surus_acik():
+        logger.warning("AI Pro sürüşü ATLANDI: kedi AI Pro sürüşü kapalı (Y142 — %s).", KEDI_AIPRO_SURUS_BAYRAGI)
+        _surulecek = []
+    for cid in _surulecek:
         if cid in _plan_disi:
             continue
         idx = cid - 1
@@ -2410,12 +2458,17 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
             **xai_meta,
         },
     )
+    # Y142: öneri GÖRÜNÜR kalır ama onay ekranı sürüşün kapalı olduğunu SÖYLER (mühüre/denetim izine girmez — yanıt alanı).
+    # Araştırma modeli buraya ancak kendi bayrağı açıkken gelir (`_arastirma_aipro_kapisi`).
+    _surus_acik = not (_kedi_modeli_mi(_saglayici) and not _kedi_aipro_surus_acik())
     return {
         "status": "success",
         "proposalId": rec["id"],
         "specs": rec["specs"],
         "meta": rec["meta"],
         "expiresAt": rec["expires_at"],
+        "surusAcik": _surus_acik,
+        "surusKapaliNedeni": "" if _surus_acik else KEDI_AIPRO_SURUS_KAPALI_MESAJI,
     }
 
 
@@ -2437,6 +2490,11 @@ def approve_ai_pro(payload: AiApprovalPayload, request: Request):
     from servers import ai_approval
     from servers.auth import cozumlenmis_operator
 
+    # Y142: onay = "bu hasta için otonom tedaviyi başlatıyorum" beyanı (bkz. `propose_ai_pro`). Kedi sürüşü kapalıyken
+    # başlatılamayacak tedavi için MÜHÜR basılmaz ve karar kaydına "onaylandı" yazılmaz; red ucu etkilenmez.
+    _kayit = ai_approval.get(payload.proposal_id)
+    if _kayit is not None:
+        _kedi_aipro_surus_kapisi(str((_kayit.get("specs") or {}).get("model") or ""))
     try:
         rec = ai_approval.approve(payload.proposal_id, cozumlenmis_operator(request, payload.operator_email))
     except KeyError as e:
@@ -2573,6 +2631,8 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     # Bayrak MÜHÜRLÜ model için de denetlenir: bayrak açıkken alınmış bir onay, bayrak
     # kapatıldıktan sonra (ör. tezgâh sonucu olumsuz çıktı) SÜRÜLMEMELİ.
     _arastirma_aipro_kapisi(_saglayici)
+    # Y142: kedi AI Pro sürüşü kapalıyken başlatma 409 — onay TÜKETİLMEDEN (D1.E06: başlamayan tedavi onayı yakmaz).
+    _kedi_aipro_surus_kapisi(_saglayici)
     _organ_req = int(_spec.get("organ_id", payload.organ_id))
     if _organ_req not in _saglayici.hedef_idleri():
         _gecerli = ", ".join(str(i) for i in sorted(_saglayici.hedef_idleri()))
@@ -3034,6 +3094,9 @@ def ai_pro_status():
         # YALNIZ-EK (2026-09-09): araştırma modelleriyle sürüş açık mı? Panel model kartlarını
         # buna göre "Deneysel — tezgâh doğrulaması bekleniyor" diye pasifleştirir.
         "arastirmaAiProAcik": _arastirma_aipro_acik(),
+        # YALNIZ-EK (Y142): kedi AI Pro kapalı döngü sürüşü açık mı. Panel kapalıyken başlatma düğmesini ve onay ekranını
+        # gerçeğe göre etiketler (alan yoksa — eski backend — eski davranış).
+        "kediAiProSurusAcik": _kedi_aipro_surus_acik(),
     }
 
 

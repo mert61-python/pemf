@@ -43,6 +43,21 @@ const ORGANS = [
 
 const IS_WEB = Platform.OS === "web";
 
+/** Y142 (sahip 2026-10-13): kedi AI Pro sürüşü kapalıyken gösterilen NEDEN + EYLEM (backend `KEDI_AIPRO_SURUS_KAPALI_MESAJI`
+ *  ile aynı metin; öneri yanıtı kendi metnini taşırsa o gösterilir). */
+const KEDI_SURUS_KAPALI_METNI =
+  "Kedi AI Pro sürüşü, kabin konumu doğrulanana kadar kapalı. Analizi ve öneriyi inceleyebilirsiniz; " +
+  "seansı Kontrol ekranından elle başlatın.";
+
+/** Y142: bu öneriyle sürüş başlatılabilir mi? Öneri yanıtı (`surusAcik: false`) YA DA durum ucu (`kediAiProSurusAcik: false`,
+ *  kedi önerisi) kapalı diyorsa kapalı (ikisinden biri yeter). Alanlar yoksa (eski backend) "" = eski davranış. → neden metni. */
+function oneriSurusuKapali(oneri: AiProposeResponse | null, kediSurusAcik: boolean | null): string {
+  if (!oneri) return "";
+  if (oneri.surusAcik === false) return oneri.surusKapaliNedeni || KEDI_SURUS_KAPALI_METNI;
+  if (String(oneri.specs?.model || "kedi") === "kedi" && kediSurusAcik === false) return KEDI_SURUS_KAPALI_METNI;
+  return "";
+}
+
 /** Kapalı döngü SEANSINDA kare aralığı — hayvan hareket ettikçe duty/faz güncellenmeli. */
 const KARE_ARALIK_SEANS_MS = 400;
 /**
@@ -220,6 +235,8 @@ interface AiProStatus {
   arastirmaAiProAcik?: boolean;
   /** Hazırlık hatasının SINIFI (kamera / model_paketi / model_yukleme / zaman_asimi). */
   hazirlikHataKodu?: string;
+  /** Y142: kedi AI Pro kapalı döngü sürüşü açık mı (`PEMF_KEDI_AIPRO_SURUS`). Alan yoksa bilinmiyor → eski davranış. */
+  kediAiProSurusAcik?: boolean;
 }
 interface AiProAction {
   status?: string;
@@ -235,6 +252,10 @@ interface AiProposeResponse {
   specs?: AiProposalSpecs;
   meta?: AiProposalMeta;
   expiresAt?: number;
+  /** Y142: bu öneriyle sürüş başlatılabilir mi (false = kapalı; alan yoksa eski backend). */
+  surusAcik?: boolean;
+  /** Y142: kapalıysa NEDEN + EYLEM metni (backend tek kaynak). */
+  surusKapaliNedeni?: string;
 }
 
 /**
@@ -308,6 +329,8 @@ export function AiProPanel({
   const [ozneVar, setOzneVar] = useState(false);
   /** `PEMF_ARASTIRMA_AIPRO`: null = bilinmiyor (alan yok / durum okunamadı). */
   const [arastirmaAcik, setArastirmaAcik] = useState<boolean | null>(null);
+  /** Y142 `PEMF_KEDI_AIPRO_SURUS`: null = bilinmiyor (alan yok / durum okunamadı) → eski davranış. */
+  const [kediSurusAcik, setKediSurusAcik] = useState<boolean | null>(null);
   /** Model kurulum durumu — `GET /api/ai/hazirlik` envanterinden BİR KEZ okunur (poll YOK). */
   const [kurulum, setKurulum] = useState<Partial<Record<HedefModeli, KurulumDurumu>>>({});
   const [duration, setDuration] = useState("20");
@@ -474,6 +497,7 @@ export function AiProPanel({
       setOod(Boolean(st.ood));
       setOzneVar(Boolean(st.subjectDetected ?? st.catDetected));
       setArastirmaAcik(typeof st.arastirmaAiProAcik === "boolean" ? st.arastirmaAiProAcik : null);
+      setKediSurusAcik(typeof st.kediAiProSurusAcik === "boolean" ? st.kediAiProSurusAcik : null);
       // B3 (siyah ekran): sunucu önizlemesi kamera/model hatasıyla öldüyse panel bunu ÖĞRENSİN.
       // Eskiden /baslat "success" diyor, thread anında ölüyor ve panel 120 sn "Hazırlanıyor…"da
       // takılıp sonra "hayvan bulunamadı" (YANLIŞ teşhis) diyordu. ⚠️ Yalnız hata METNİ doluysa
@@ -742,6 +766,12 @@ export function AiProPanel({
   /** Hekim ONAYLADI → onayı işaretle, sonra mühürlenmiş parametrelerle tedaviyi başlat. */
   const approveAndStart = useCallback(async () => {
     if (!proposal?.proposalId) return;
+    // Y142: sürüş kapalıyken onay seans BAŞLATMAZ — /approve ve /start GÖNDERİLMEZ (düğme zaten pasif; klavye/otomasyon yolu).
+    const kapali = oneriSurusuKapali(proposal, kediSurusAcik);
+    if (kapali) {
+      platformAlert("Sürüş kapalı", kapali);
+      return;
+    }
     setApprovalBusy(true);
     const ok = await apiPost<{ status?: string } | null>(
       "/ai/pro/approve",
@@ -771,7 +801,7 @@ export function AiProPanel({
       setProposal(null);
     }
     // Başlatma başarısızsa modal AÇIK kalır: onay tüketilmiş olabilir, hekim yeni öneri alır.
-  }, [proposal, operatorEmail, patientName]);
+  }, [proposal, operatorEmail, patientName, kediSurusAcik]);
 
   /** Hekim REDDETTİ → gerekçeyle kaydet; tedavi BAŞLAMAZ. */
   const rejectProposal = useCallback(async (reason: string) => {
@@ -1067,6 +1097,8 @@ export function AiProPanel({
    * kapılar KALDIRILMADI: düğme pasif olsa da (klavye/otomasyon) çağrı gelebilir.
    */
   const baslatKapali = !running && (arastirmaMobilKapali || (arastirmaKipi && !hedefModeli));
+  /** Y142: kedi panelinde sürüş KAPALI (durum ucu söyledi) → başlatma düğmesi yalnız analiz + öneri yapar ve bunu SÖYLER. */
+  const kediSurusKapali = !arastirmaKipi && kediSurusAcik === false;
   const baslatKapaliNedeni = arastirmaMobilKapali
     ? "Bu model masaüstü kabin kamerası ister — bilgisayardaki Kontrol → AI Pro ekranını kullanın."
     : "Önce Adım 1'de bir hedef modeli seçin.";
@@ -1088,6 +1120,7 @@ export function AiProPanel({
             : ORGANS.find((o) => o.id === (proposal?.specs?.organ_id ?? organId))?.name
         }
         busy={approvalBusy}
+        surusKapali={oneriSurusuKapali(proposal, kediSurusAcik)}
         onApprove={approveAndStart}
         onReject={rejectProposal}
         onDismiss={() => setProposal(null)}
@@ -1104,7 +1137,11 @@ export function AiProPanel({
           ? arastirmaMobilKapali
             ? "🔬 Bu modeller masaüstü KABİN kamerası ister: konum kabin işaretine göre ölçülür, telefon bunu yapamaz. Bilgisayardaki Kontrol → AI Pro ekranını kullanın; burada yalnız izleyebilirsiniz."
             : "🔬 Bu ekran deney hedefini kabin kamerasıyla bulur, 7 bobin için doz önerir ve SİZ onaylamadan hiçbir bobini çalıştırmaz."
-          : IS_WEB
+          : kediSurusKapali
+            ? IS_WEB
+              ? "📷 Sunucu kamerasından kedi organ lokalizasyonu → em_kedi doz ÖNERİSİ — sürüş kapalı, bobin sürülmez."
+              : "📷 Telefon kameranızı KEDİYE doğrultun — organ lokalizasyonu ve em_kedi doz ÖNERİSİ; sürüş kapalı, bobin sürülmez."
+            : IS_WEB
             ? "📷 Sunucu kamerasından canlı otonom seans: kedi organ lokalizasyonu → em_kedi → 7 bobin."
             : "📷 Telefon kameranızı KEDİYE doğrultun — organ lokalizasyonu (em_kedi) ile 7 bobin per-coil sürülür."}
       </Text>
@@ -1301,17 +1338,29 @@ export function AiProPanel({
         disabled={busy || baslatKapali}
         accessibilityRole="button"
         accessibilityState={{ busy, selected: running, disabled: busy || baslatKapali }}
-        accessibilityLabel={running ? "AI Pro otonom seansı durdur" : "AI Pro otonom seansı başlat"}
+        accessibilityLabel={
+          running
+            ? "AI Pro otonom seansı durdur"
+            : kediSurusKapali
+              ? "AI Pro analiz ve öneri — kedi sürüşü kapalı"
+              : "AI Pro otonom seansı başlat"
+        }
         accessibilityHint={
           running
             ? "Bobinleri durdurur"
             : baslatKapali
               ? baslatKapaliNedeni
-              : "Kamera kapalı-döngüsüyle bobinleri otomatik sürer"
+              : kediSurusKapali
+                ? "Organı konumlar ve doz önerisi hazırlar; bobin sürmez"
+                : "Kamera kapalı-döngüsüyle bobinleri otomatik sürer"
         }
       >
-        <Text style={styles.toggleText} numberOfLines={1} adjustsFontSizeToFit>{running ? "⏹ AI Pro'yu Durdur" : hazirlik ? "🔎 Hazırlanıyor…" : arastirmaKipi ? "🚀 Hazırlığı Başlat" : "🚀 AI Pro Başlat (1Hz DDS)"}</Text>
+        <Text style={styles.toggleText} numberOfLines={1} adjustsFontSizeToFit>{running ? "⏹ AI Pro'yu Durdur" : hazirlik ? "🔎 Hazırlanıyor…" : arastirmaKipi ? "🚀 Hazırlığı Başlat" : kediSurusKapali ? "🔎 Analiz ve Öneri (sürüş kapalı)" : "🚀 AI Pro Başlat (1Hz DDS)"}</Text>
       </TouchableOpacity>
+      {/* Y142: neden + eylem GÖRÜNÜR (yalnız erişilebilirlik ipucuna yazmak "düğme bozuk" izlenimi verirdi). */}
+      {kediSurusKapali && !running ? (
+        <Text style={styles.note} testID="ai-pro-kedi-surus-kapali">{KEDI_SURUS_KAPALI_METNI}</Text>
+      ) : null}
       {/* ⚠️ Pasif düğmenin SEBEBİ GÖRÜNÜR olmalı: yalnız `accessibilityHint`e yazmak, ekran
           okuyucu kullanmayan operatöre "düğme çalışmıyor" (yazılım arızası) izlenimi verirdi. */}
       {baslatKapali ? <Text style={styles.note}>{baslatKapaliNedeni}</Text> : null}

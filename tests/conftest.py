@@ -244,6 +244,16 @@ def _estop_mandali_sizmaz():
 
 
 @pytest.fixture(autouse=True)
+def _kedi_aipro_surus_bugunku(monkeypatch):
+    """Y142 (sahip 2026-10-13): ürünün varsayılanı kedi AI Pro sürüşü KAPALI (`PEMF_KEDI_AIPRO_SURUS` yok = kapalı). Süitin
+    kedi AI Pro kapıları (başlatma, döngü, `/frame`, mühür, Y54/Y25/D1.8x …) bayrak AÇIKKEN bugünkü davranışı ölçer —
+    Y142'nin "bayrak açıkken davranış AYNEN" şartının süit çapı kâhini onlardır. Varsayılanı ve kapalı kolu ölçen kapılar
+    değişkeni KENDİLERİ siler/bozar: tests/test_ai_pro_KEDI_surus_KAPALI_varsayilan_Y142.py."""
+    monkeypatch.setenv("PEMF_KEDI_AIPRO_SURUS", "1")
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _kosu_kaydi_sizmaz():
     """1-G inceleme G-14.2 (1G-YB3 sınıfı): bobin koşu kaydı haritaları (`coil_run_tracker._active_coil_runs` /
     `_coil_run_stats`) modül-geneldir. Testlerin AÇIK bıraktığı kayıt sonraki testlere sızıyordu — Y63'ten beri "Seansı

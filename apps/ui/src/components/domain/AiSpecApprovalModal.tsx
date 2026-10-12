@@ -106,7 +106,7 @@ function tr(n: number, basamak = 2): string {
 }
 
 export function AiSpecApprovalModal({
-  visible, specs, meta, organName, busy, onApprove, onReject, onDismiss,
+  visible, specs, meta, organName, busy, onApprove, onReject, onDismiss, surusKapali,
 }: {
   visible: boolean;
   specs: AiProposalSpecs | null;
@@ -116,6 +116,9 @@ export function AiSpecApprovalModal({
   onApprove: () => void;
   onReject: (reason: string) => void;
   onDismiss: () => void;
+  /** Y142 (sahip 2026-10-13): doluysa bu öneriyle SÜRÜŞ BAŞLATILAMAZ — değeri NEDEN metnidir (backend `surusKapaliNedeni`).
+   *  Öneri yine incelenir ve reddedilebilir; onay düğmesi pasiftir ve bunu SÖYLER (düğme etiketi gerçeği söyler). */
+  surusKapali?: string;
 }) {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
@@ -213,6 +216,18 @@ export function AiSpecApprovalModal({
               <XCircle size={rs(16)} color={colors.danger} />
               <Text style={s.btnGhostText}>Reddet</Text>
             </TouchableOpacity>
+            {surusKapali ? (
+              // Y142: sürüş kapalıyken onay seans BAŞLATMAZ — düğme pasif ve etiketi bunu söyler (backend de 409 verir).
+              <TouchableOpacity
+                style={[s.btn, s.btnPrimary, s.btnDisabled]}
+                disabled
+                accessibilityRole="button"
+                accessibilityState={{ disabled: true }}
+                accessibilityLabel="Sürüş kapalı — onay seansı başlatmaz"
+              >
+                <Text style={s.btnPrimaryText}>Sürüş kapalı</Text>
+              </TouchableOpacity>
+            ) : (
             <TouchableOpacity
               style={[s.btn, s.btnPrimary, busy && s.btnDisabled]}
               onPress={onApprove}
@@ -223,15 +238,26 @@ export function AiSpecApprovalModal({
               <CheckCircle2 size={rs(16)} color="#04121F" />
               <Text style={s.btnPrimaryText}>{busy ? "Başlatılıyor…" : "Onayla ve Başlat"}</Text>
             </TouchableOpacity>
+            )}
           </View>
         )
       }
     >
+          {surusKapali ? (
+            <>
+              <Text style={s.surusKapali} testID="ai-onay-surus-kapali">{surusKapali}</Text>
+              <Text style={s.lead}>
+                Parametreleri inceleyebilir ya da gerekçesiyle reddedebilirsiniz; bu ekrandan{" "}
+                <Text style={s.bold}>seans başlatılamaz</Text>.
+              </Text>
+            </>
+          ) : (
           <Text style={s.lead}>
             {arastirma ? "Deney seansı " : "Otonom seans "}
             <Text style={s.bold}>onaylanmadan başlamaz</Text>. Aşağıdaki parametreleri inceleyip
             onaylayın veya gerekçesiyle reddedin.
           </Text>
+          )}
 
           <View style={s.summary}>
             {/* D2.E15: onaylanan seansın HASTASI (mühürden) — "A için onaylat, B'ye başlat" imkânsız; hekim kimi onayladığını görür. */}
@@ -341,6 +367,8 @@ const s = StyleSheet.create({
   altBaslik: { color: colors.warning, fontSize: rf(11), fontWeight: "700", marginTop: 2 },
   konum: { color: colors.text, fontSize: rf(12), fontWeight: "700" },
   uyari: { color: colors.warning, fontSize: rf(11), fontWeight: "700" },
+  // Y142: sürüş kapalı bildirimi — onay satırından ÖNCE, gövdenin başında (hekim ilk bunu okur).
+  surusKapali: { color: colors.warning, fontSize: rf(12), fontWeight: "800" },
   lead: { color: colors.textMuted, fontSize: rf(12), lineHeight: rf(18) },
   bold: { color: colors.text, fontWeight: "800" },
   summary: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.xs },
