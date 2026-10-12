@@ -69,10 +69,17 @@ def sag(monkeypatch):
     monkeypatch.setattr(hedef, "hedef_kabin_disi_nedeni", lambda *a: "")
     tekil = hedef.SAGLAYICILAR["fantom"]
     snap = {
-        a: (list(v) if isinstance(v, list) else dict(v)) for a, v in vars(tekil).items() if isinstance(v, (list, dict))
+        a: (list(v) if isinstance(v, list) else dict(v) if isinstance(v, dict) else v) for a, v in vars(tekil).items()
     }
+    # Orkestratör (AI inceleme): tekil sağlayıcı önceki testlerin takip durumunu taşır (ör. AI2_C4 döngüleri `_son_kimlik`'i
+    # büyütür) → seans testinde "kimlik 3" P3 olmaz ve kapı SIRAYA bağlı düşerdi (ölçüldü: AI2_C4 + bu dosya → 1 failed).
+    # Seans testi TAZE tekille başlar; bitince TÜM öznitelikler (sayıllar dahil) geri yüklenir.
+    for a, v in vars(hedef.FantomSaglayici()).items():
+        setattr(tekil, a, v)
     _Hat.kuyruk = []
     yield hedef, hedef.FantomSaglayici()
+    for a in [a for a in vars(tekil) if a not in snap]:
+        delattr(tekil, a)
     for a, v in snap.items():
         setattr(tekil, a, v)
 
