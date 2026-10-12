@@ -27,7 +27,10 @@ import re
 #: Hocanın §3'ü: bu uyarılardan biri varsa sonuç KULLANILMAZ.
 ENGELLEYICI = ("layout_mismatch", "control_cancer_missed", "control_healthy_flagged")
 #: Hocanın §3'ü: bu uyarılardan biri varsa çekim TEKRARLANIR (kapalı döngüde kare sürülmez).
-YENIDEN_CEKIM = ("oblique_view", "low_resolution", "ring_partial")
+#: AII-1.1 (AI incelemesi): + hocanın petri README'sindeki çekim protokolü uyarıları — `plate_cropped` ("kadrajı genişlet"),
+#: `few_candidates` ("sonucu gözle kontrol et": kapalı döngüde göz yok), `ecc_failed` ("ışık / odak kontrol"). ÖLÇÜLDÜ: kırpık
+#: gerçek plakada uydurulan 24 kuyucuk (0/12 doğru, ~3 aralık kayık) yalnız bu ikisini taşıyıp "sürülebilir" geçiyordu.
+YENIDEN_CEKIM = ("oblique_view", "low_resolution", "ring_partial", "plate_cropped", "few_candidates", "ecc_failed")
 
 _KOD = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -56,6 +59,11 @@ _EYLEM = {
     "oblique_view": "Kamera {nesne_yalin} dik değil — kamerayı tam tepeden tutup yeniden çekin.",
     "low_resolution": "Görüntü çözünürlüğü düşük — yaklaşın ya da yakınlaştırıp yeniden çekin.",
     "ring_partial": "Yeşil bobin halkasının büyük kısmı kadrajda değil — halkayı kadraja alıp yeniden çekin.",
+    "plate_cropped": "Plakanın bir kısmı kadraj dışında — plakanın tamamını kadraja alıp yeniden çekin.",
+    "few_candidates": (
+        "Kuyucuk ızgarası görüntüden yeterince doğrulanamadı — plakaya dik ve yakından, iyi ışıkta yeniden çekin."
+    ),
+    "ecc_failed": "Plaka ızgarası ince hizalanamadı — ışığı ve odağı denetleyip yeniden çekin.",
 }
 
 #: VARSAYIM (laboratuvar maddesi) kodu → kullanıcıya gösterilen açıklama. Sürüşü kendi başına ENGELLEMEZ (pemf_valid
