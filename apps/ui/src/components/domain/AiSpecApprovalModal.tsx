@@ -56,6 +56,8 @@ export interface AiProposalMeta {
   method?: string;
   /** Konum modelin eğitim örnekleminin DIŞINDA mı — sürüşü engellemez, UYARIR. */
   ood?: boolean;
+  /** Y143: araştırmada "otomatik" hedef SEÇİLİ hedefin kimliğiyle mühürlendi (seans boyunca yalnız o sürülür). */
+  otomatik_secim?: boolean;
   /** Kadrajda aranan özne ("hayvan" | "fantom" | "petri plakası"). */
   subject_label?: string;
   /** Sunum-katmanı XAI (2026-08-26): "önerilen dozu en çok ne belirledi" — backend
@@ -288,6 +290,13 @@ export function AiSpecApprovalModal({
           {/* 3B konum rozeti: karar #4 (kabin işareti ZORUNLU) — işaretsiz öneri zaten üretilmez,
               rozet onaylayan kişiye konumun NEYE dayandığını söyler. */}
           {arastirma ? <KalibrasyonRozeti yontem={meta?.method} /> : null}
+
+          {/* Y143: otomatik seçim onay anında MÜHÜRLENDİ — onaylanan hedef seans boyunca DEĞİŞMEZ (görülen = sürülen). */}
+          {arastirma && meta?.otomatik_secim ? (
+            <Text style={s.uyari} testID="ai-onay-otomatik-muhur">
+              {`Otomatik seçim bu hedefe mühürlendi: seans boyunca yalnız «${hedefAdi}» sürülür; hedef kaybolursa sürüş durur.`}
+            </Text>
+          ) : null}
 
           {arastirma && meta?.ood ? (
             <Text style={s.uyari}>

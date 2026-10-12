@@ -1111,6 +1111,13 @@ def _kedi_aipro_surus_kapisi(saglayici_ya_da_ad) -> None:
         raise HTTPException(status_code=409, detail=KEDI_AIPRO_SURUS_KAPALI_MESAJI)
 
 
+#: Y143: otomatik (0) araştırma önerisinde mühürlenecek SEÇİLİ hedef yok / kimliği okunamadı — eylem söyleyen metin.
+OTOMATIK_HEDEF_SECILEMEDI_MESAJI = (
+    "Otomatik seçimde mühürlenecek hedef bulunamadı: seçili hedefin kimliği okunamadı. Kare üstünde bir hedef işaretlenince "
+    "yeniden deneyin ya da hedefi listeden elle seçin."
+)
+
+
 def _yukle_em_fantom_cv() -> dict:
     """phantom_cv_v3 boru hattı + PhantomPredictor'ı BİR KEZ ısıt → `_get_or_load_model` önbelleğine.
 
@@ -1223,6 +1230,8 @@ def _saglayici_cache_alanlari() -> dict:
         "e_cancer": m.get("e_cancer"),
         "e_healthy": m.get("e_healthy"),
         "ood": bool(m.get("ood")),
+        # Y143: lokalizasyonun SEÇTİĞİ hedefin kalıcı kimliği (araştırma; kedide yok → None). Otomatik (0) öneri bunu mühürler.
+        "secili_id": m.get("secili_id"),
     }
 
 
@@ -2388,6 +2397,23 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
             detail=f"{_ad} henüz konumlandırılmadı. {_ipucu} Kamera görüntüsü akarken konumlandırma "
             "kendiliğinden tamamlanır ve öneri otomatik hazırlanır.",
         )
+    # ⚠️ Y143 (S-AII.4, sahip 2026-10-13): araştırma modelinde "otomatik" (0) hedef MÜHÜRE YAZILMAZ — o anki lokalizasyonun
+    # SEÇTİĞİ hedefin kalıcı KİMLİĞİ yazılır (onay ekranında görülen = sürülen). Eskiden 0 mühürleniyordu: döngü / kare yolu
+    # her karede yeniden "en yüksek öncelikli" hedefi seçiyor, öncelik değişince ya da onaylanan hedef kaybolunca ONAYLANMAYAN
+    # komşu sürülüyordu (ölçüldü). Kimlik bu lokalizasyonla AYNI önbellek anlık görüntüsünden (x/y/z, etiket); mühür onaydan
+    # SONRA güncellenmez (`/start` mühürden okur). Seçili kimlik okunamazsa öneri REDDEDİLİR. Kedi (0 = Tüm Vücut) DEĞİŞMEZ.
+    _muhur_hedefi = oid
+    _otomatik_secim = False
+    if oid == 0 and not _kedi_modeli_mi(_saglayici):
+        _secili = c.get("secili_id")
+        if isinstance(_secili, bool) or not isinstance(_secili, int) or _secili <= 0:
+            raise HTTPException(status_code=409, detail=OTOMATIK_HEDEF_SECILEMEDI_MESAJI)
+        if _secili not in _saglayici.hedef_idleri():
+            raise HTTPException(
+                status_code=409,
+                detail=f"{OTOMATIK_HEDEF_SECILEMEDI_MESAJI} (seçili hedefin kimliği {_secili} bu modelde geçersiz).",
+            )
+        _muhur_hedefi, _otomatik_secim = _secili, True
     # Sağlayıcıyı bu isteğin thread'ine bağla → `_predict_and_drive` MÜHÜRLENEN modelin dozunu
     # üretir (imza değişmez: mevcut testlerin 4 argümanlı mock'ları çalışmaya devam eder).
     _ai_hedef_yerel.saglayici = _saglayici
@@ -2424,11 +2450,12 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
     rec = ai_approval.create(
         "ai_pro",
         {
-            "organ_id": oid,
+            # Y143: otomatik (0) araştırma önerisinde SEÇİLİ hedefin kimliği (yukarıda); aksi hâlde istenen hedef.
+            "organ_id": _muhur_hedefi,
             "duration_minutes": sure,
             # MÜHÜRLÜ MODEL (Faz 1): /start bunu okur, gövdedeki `model` yok sayılır.
             "model": _saglayici.ad,
-            "target_label": (c.get("target_label") or _saglayici.hedef_adi(oid)),
+            "target_label": (c.get("target_label") or _saglayici.hedef_adi(_muhur_hedefi)),
             # Onay ekranı (Faz 2): hedef sınıfının ve çevresinin E'si — onaylayan kişi seçiciliği görsün.
             "e_cancer": c.get("e_cancer"),
             "e_healthy": c.get("e_healthy"),
@@ -2453,6 +2480,8 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
             # uyarısını besler; sürüşü ENGELLEMEZ.
             "ood": bool(c.get("ood")),
             "client_mode": str(payload.client_mode or "")[:32],
+            # Y143: hedef otomatik seçimden mühürlendi (onay ekranı "seans boyunca yalnız bu hedef sürülür" der).
+            **({"otomatik_secim": True} if _otomatik_secim else {}),
             "achieved_B": _saglayici.achieved_B,
             "duty_sum": _saglayici.duty_sum,
             **xai_meta,
