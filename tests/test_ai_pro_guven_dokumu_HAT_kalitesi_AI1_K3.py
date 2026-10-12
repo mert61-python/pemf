@@ -29,6 +29,7 @@ DOK = {
 HAT = {
     "poz_turu": "sphinx",
     "pnp_hata_px": 119.2,
+    "pnp_hata_cm": None,  # AII-2.7: ölçek (scale_px_per_cm) yok → cm yok
     "ayna_uyarisi": True,
     "anatomik_gecti": False,
     "anatomik_skor": 0.667,

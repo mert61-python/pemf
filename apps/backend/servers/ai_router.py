@@ -741,19 +741,31 @@ def _get_or_load_catorgan():
     return _get_or_load_model("cat_organ", _load)
 
 
-def _hat_dokumu(poz_turu, pnp_hata_px, ayna_uyarisi, anatomik) -> dict:
+def _hat_dokumu(poz_turu, pnp_hata_px, ayna_uyarisi, anatomik, pnp_olcek_px_cm=None) -> dict:
     """AI1.K3 (hoca kedi organ v2 `ara_ciktilar`): güven dökümüne hattın KALİTE ara çıktıları — poz türü, PnP (keypoint) uyum
     hatası, ayna uyarısı, anatomik kontrol. CPU (predictor sonucu) ve GPU (servis yanıtı) yolları AYNI alanları üretir (parite).
-    YALNIZ-EK ve yalnız GÖSTERİM: güven, konum ve sürüş DEĞİŞMEZ; eski servis yanıtında alan yoksa boş kalır."""
+    YALNIZ-EK ve yalnız GÖSTERİM: güven, konum ve sürüş DEĞİŞMEZ; eski servis yanıtında alan yoksa boş kalır.
+    AII-2.7 (AI inceleme): px çözünürlükle doğrusal (aynı kedi 4032 / 1008 px'te 231 / 49 px) → gösterim `pnp_hata_cm` =
+    residual_px / scale_px_per_cm (hattın kendi ölçeği; kedi gövdesi biriminde, çözünürlükten bağımsız). Ölçek yoksa None."""
     an = anatomik if isinstance(anatomik, dict) else {}
     try:
-        hata = float(pnp_hata_px)
-        hata = round(hata, 1) if _math.isfinite(hata) else None
+        ham = float(pnp_hata_px)
+        hata = round(ham, 1) if _math.isfinite(ham) else None
     except (TypeError, ValueError):
         hata = None
+    try:
+        olcek = float(pnp_olcek_px_cm)
+    except (TypeError, ValueError):
+        olcek = None
+    hata_cm = (
+        round(ham / olcek, 1)
+        if hata is not None and olcek is not None and _math.isfinite(olcek) and olcek > 0
+        else None
+    )
     return {
         "poz_turu": str(poz_turu) if poz_turu else None,
         "pnp_hata_px": hata,
+        "pnp_hata_cm": hata_cm,
         "ayna_uyarisi": bool(ayna_uyarisi),
         "anatomik_gecti": None if an.get("passed") is None else bool(an.get("passed")),
         "anatomik_skor": an.get("score"),
@@ -963,6 +975,7 @@ def _localize_organ_cpu(frame, organ_id):
             _pnp.get("residual_px"),
             _pnp.get("mirror_warning"),
             result.get("anatomic_consistency"),
+            _pnp.get("scale_px_per_cm"),
         ),
     )
 
@@ -1013,6 +1026,7 @@ def _localize_organ_gpu(frame, organ_id):
             resp.get("pnp_residual_px"),
             resp.get("mirror_warning"),
             resp.get("anatomic_consistency"),
+            resp.get("pnp_scale_px_per_cm"),
         ),
     )
 
@@ -4653,6 +4667,8 @@ async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = F
             "organs": organs_list,
             "pose_type": (result.get("pose_classifier") or {}).get("type"),
             "pnp_residual_px": round(float((result.get("pnp_fit") or {}).get("residual_px", 0.0)), 1),
+            # AII-2.7: hattın ölçeği (px/cm) — AI Pro dökümü PnP hatasını çözünürlükten bağımsız ≈ cm gösterir (GPU servisiyle parite).
+            "pnp_scale_px_per_cm": (result.get("pnp_fit") or {}).get("scale_px_per_cm"),
             # Sunum-katmanı XAI rozetleri (2026-08-26): sağ/sol ayna şüphesi + anatomik tutarlılık
             # ihlalleri — pipeline üretiyordu, yanıt taşımıyordu.
             "mirror_warning": bool((result.get("pnp_fit") or {}).get("mirror_warning")),

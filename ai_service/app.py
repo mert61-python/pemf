@@ -867,6 +867,8 @@ def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(None)):
             # ⚠️ PARİTE (ADIM 2): router:3623'te VARDI, burada YOKTU → GPU dağıtımında arayüz
             # canlıda **"PnP undefinedpx"** yazıyordu (AiHubScreen.tsx:3879).
             "pnp_residual_px": round(float((result.get("pnp_fit") or {}).get("residual_px", 0.0)), 1),
+            # AII-2.7 parite: hattın ölçeği (px/cm) — AI Pro dökümü PnP hatasını ≈ cm gösterir (gömülü uçla AYNI alan).
+            "pnp_scale_px_per_cm": (result.get("pnp_fit") or {}).get("scale_px_per_cm"),
             # Kapi-paritesi (dusman-dogrulama 2026-08-27): A2 rozetleri router'da vardi,
             # burada YOKTU -> GPU dagitiminda ayna/anatomik uyarilar hic gorunmuyordu.
             "mirror_warning": bool((result.get("pnp_fit") or {}).get("mirror_warning")),

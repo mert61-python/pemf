@@ -71,13 +71,16 @@ it("KRİTİK K3: poz türü Türkçe, PnP uyum hatası, ayna ve anatomik tutars�
     ...BILESENLER,
     poz_turu: "sphinx",
     pnp_hata_px: 119.2,
+    pnp_hata_cm: 2.58,
     ayna_uyarisi: true,
     anatomik_gecti: false,
     anatomik_skor: 0.667,
   });
   expect(s).toContain("poz %70");
   expect(s).toContain("poz türü Sfenks (oturmuş, önden)");
-  expect(s).toContain("PnP uyum hatası 119 px");
+  // AII-2.7: çözünürlükten bağımsız ≈ cm; px (kamerayı ölçen sayı) gösterilmez.
+  expect(s).toContain("PnP uyum hatası ≈ 2,6 cm");
+  expect(s).not.toContain("px");
   expect(s).toContain("sağ-sol (ayna) belirsizliği — kamerayı biraz çevirip açıyı değiştirin");
   expect(s).toContain("anatomik tutarsızlık — organ yerleşimi doğrulanamadı; açıyı değiştirip yeniden konumlayın");
 });
@@ -88,6 +91,14 @@ it("KARŞIT K3: anatomik kontrol geçti ve ayna yok → uyarı/eylem metni YOK",
   expect(s).toContain("anatomik kontrol geçti");
   expect(s).not.toContain("tutarsızlık");
   expect(s).not.toContain("ayna");
+});
+
+it("KARŞIT AII-2.7: ölçek yoksa (yalnız px — eski GPU servisi) PnP sayısı GÖSTERİLMEZ, diğer hat metinleri kalır", async () => {
+  const s = await dokumSatiri({ ...BILESENLER, poz_turu: "lateral", pnp_hata_px: 231.2, pnp_hata_cm: null, anatomik_gecti: true });
+  expect(s).toContain("poz türü Yandan (lateral)");
+  expect(s).toContain("anatomik kontrol geçti");
+  expect(s).not.toContain("PnP");
+  expect(s).not.toContain("231");
 });
 
 it("KARŞIT K3: eski backend (hat alanları YOK) → döküm cümlesi eskisi gibi", async () => {

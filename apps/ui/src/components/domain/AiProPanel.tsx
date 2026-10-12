@@ -162,6 +162,9 @@ interface GuvenDokumu {
   /** AI1.K3 (hoca kedi organ v2 ara çıktıları): hattın kalite göstergeleri — alan yoksa (eski backend) gösterilmez. */
   poz_turu?: string | null;
   pnp_hata_px?: number | null;
+  /** AII-2.7: PnP uyum hatası kedi gövdesi biriminde (residual_px / scale_px_per_cm) — çözünürlükten bağımsız. px GÖSTERİLMEZ
+   *  (aynı kedi 4032 / 1008 px'te 231 / 49 px: sayı kamerayı ölçüyordu); ölçek yoksa (eski servis) sayı yok. */
+  pnp_hata_cm?: number | null;
   ayna_uyarisi?: boolean;
   anatomik_gecti?: boolean | null;
   anatomik_skor?: number | null;
@@ -171,7 +174,7 @@ interface GuvenDokumu {
 function hatKalitesiMetni(g: GuvenDokumu): string {
   return (
     (g.poz_turu ? ` · poz türü ${trValue(g.poz_turu)}` : "") +
-    (typeof g.pnp_hata_px === "number" ? ` · PnP uyum hatası ${Math.round(g.pnp_hata_px)} px` : "") +
+    (typeof g.pnp_hata_cm === "number" ? ` · PnP uyum hatası ≈ ${g.pnp_hata_cm.toFixed(1).replace(".", ",")} cm` : "") +
     (g.ayna_uyarisi ? " · ⚠️ sağ-sol (ayna) belirsizliği — kamerayı biraz çevirip açıyı değiştirin" : "") +
     (g.anatomik_gecti === false
       ? " · ⚠️ anatomik tutarsızlık — organ yerleşimi doğrulanamadı; açıyı değiştirip yeniden konumlayın"
