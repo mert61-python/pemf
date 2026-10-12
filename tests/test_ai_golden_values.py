@@ -156,7 +156,7 @@ def test_KRITIK_yukleyici_sys_pathi_KIRLETMEZ():
     paket = sys.modules.get("inference_em_petri")
     assert paket is None or getattr(paket, "PetriPredictor", None) is not None, (
         "`inference_em_petri` adi PetriPredictor'i OLMAYAN pakete cozulmus — "
-        "petri_cv/pipeline.py bu adi modul dosyasi sanar ve patlar"
+        "eski petri_cv/pipeline.py (AI-2'de emekli) bu adi modul dosyasi saniyordu; kirli ad baska tuketiciyi de bozar"
     )
 
 

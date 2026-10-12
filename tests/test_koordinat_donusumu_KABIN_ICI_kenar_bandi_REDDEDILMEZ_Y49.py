@@ -21,7 +21,8 @@ import pytest
 
 cv2 = pytest.importorskip("cv2")
 
-PROFILLER = ["inference_em_fantom.phantom_cv", "inference_petri_dish.petri_cv"]
+# AI-2 C6: v1 `phantom_cv` / `petri_cv` emekli → hocanın v3 / v2'si (ürün yükleyicilerinin profili).
+PROFILLER = ["inference_em_fantom.phantom_cv_v3", "inference_petri_dish.petri_cv_v2"]
 
 
 def _bak(C, hedef, yukari):

@@ -125,6 +125,15 @@ def test_envanterdeki_her_model_yolu_bu_ortamda_COZULEBILIYOR(ad, _imp, model):
     )
 
 
+@pytest.mark.parametrize("ad,imp,_model", _AI_MODUL_ENVANTERI, ids=lambda x: x if isinstance(x, str) else "")
+def test_KRITIK_envanterdeki_her_KOD_yolu_bu_agacta_COZULUR(ad, imp, _model):
+    """AI-2 C6 (2026-10-12): v1 `petri_cv` silindiğinde `petri_yolo` satırı `...petri_cv.petri_detector`i gösteriyordu —
+    `/api/ai/hazirlik` hafif kipi (`_modul_hazir_mi` → `find_spec`) bu modülü "kod_yok" sayar ve kurulu, çalışan petri
+    ucunu HAZIR DEĞİL gösterirdi. Ağırlık testinin aksine bu ağaçtan bağımsızdır: kod depoda olmak ZORUNDA.
+    MUTASYON: `petri_yolo` yolunu `petri_cv.petri_detector`e döndürün → KIRMIZI."""
+    assert importlib.util.find_spec(imp) is not None, f"'{ad}': envanterdeki kod yolu çözülmüyor: {imp}"
+
+
 # ── (c) Kapsam: canlı uçlar envanterde ───────────────────────────────────────
 
 

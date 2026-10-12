@@ -22,8 +22,28 @@ from pathlib import Path
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
-PETRI_V1_YAML = KOK / "ai_hub" / "inference_petri_dish" / "petri_cv" / "cabin_config_example.yaml"
-FANTOM_V1_YAML = KOK / "ai_hub" / "inference_em_fantom" / "phantom_cv" / "cabin_config_example.yaml"
+PETRI_V2_YAML = KOK / "ai_hub" / "inference_petri_dish" / "petri_cv_v2" / "cabin_config_v2.yaml"
+FANTOM_V3_YAML = KOK / "ai_hub" / "inference_em_fantom" / "phantom_cv_v3" / "cabin_config_v3.yaml"
+
+
+def _bolumsuz(yol: Path, bolum: str) -> str:
+    """Profil YAML'ının hocanın bölümü ÇIKARILMIŞ hâli = saha kabin çekirdeği (eski profil YAML'ı). AI-2 C6: v1 örnek
+    YAML'ları (`petri_cv/`, `phantom_cv/cabin_config_example.yaml`) emekli; v2 / v3 YAML'ı = o çekirdek + hocanın bölümü."""
+    satirlar = yol.read_text(encoding="utf-8").splitlines(keepends=True)
+    i = next(n for n, x in enumerate(satirlar) if x.startswith(f"{bolum}:"))
+    j = next((n for n in range(i + 1, len(satirlar)) if satirlar[n][:1].isalpha()), len(satirlar))
+    metin = "".join(satirlar[:i] + satirlar[j:])
+    assert f"\n{bolum}:" not in "\n" + metin, f"aparat: {bolum} bölümü çıkarılamadı"
+    return metin
+
+
+def _petri_taban() -> str:
+    return _bolumsuz(PETRI_V2_YAML, "multiwell")
+
+
+def _fantom_taban() -> str:
+    return _bolumsuz(FANTOM_V3_YAML, "phantom_v2")
+
 
 #: Hocanın `petri_cv_v2/cabin_config_v2.yaml` `multiwell:` bölümü (yorumlar atıldı); iki değer testte değiştirildi:
 #: a1_cabin_mm (null → ölçülmüş örnek) ve kontrol kuyucukları (küçük harf → büyütülmeli).
@@ -70,16 +90,16 @@ phantom_v2:
 """
 
 
-def _yukle(tmp_path: Path, taban: Path, ek: str, ad: str = "kabin.yaml"):
+def _yukle(tmp_path: Path, taban: str, ek: str, ad: str = "kabin.yaml"):
     from ai_hub.cv_ortak.cabin_config import load_cabin_config
 
     yol = tmp_path / ad
-    yol.write_text(taban.read_text(encoding="utf-8") + "\n" + ek, encoding="utf-8")
+    yol.write_text(taban + "\n" + ek, encoding="utf-8")
     return load_cabin_config(yol)
 
 
 def test_KRITIK_hoca_petri_v2_multiwell_bolumu_BIREBIR(tmp_path):
-    c = _yukle(tmp_path, PETRI_V1_YAML, HOCA_MULTIWELL)
+    c = _yukle(tmp_path, _petri_taban(), HOCA_MULTIWELL)
     m = c.multiwell
     assert m.plate_type == 24
     assert m.a1_corner == "auto"
@@ -90,14 +110,12 @@ def test_KRITIK_hoca_petri_v2_multiwell_bolumu_BIREBIR(tmp_path):
         "kontrol kuyucukları büyük harfe çevrilmeli"
     )
     # Bölüm eklenince kabin çekirdeği (saha ölçüsü) DEĞİŞMEZ: aynı YAML'ın bölümsüz hâliyle aynı.
-    from ai_hub.cv_ortak.cabin_config import load_cabin_config
-
-    t = load_cabin_config(PETRI_V1_YAML)
+    t = _yukle(tmp_path, _petri_taban(), "", ad="taban.yaml")
     assert (c.aruco, c.geometry, c.phantom_plate, c.phantom) == (t.aruco, t.geometry, t.phantom_plate, t.phantom)
 
 
 def test_KRITIK_hoca_fantom_v3_phantom_v2_bolumu_BIREBIR(tmp_path):
-    c = _yukle(tmp_path, FANTOM_V1_YAML, HOCA_PHANTOM_V2)
+    c = _yukle(tmp_path, _fantom_taban(), HOCA_PHANTOM_V2)
     v = c.phantom_v2
     assert v.ring_enabled is True and v.ring_diameter_mm == 184.0
     assert (v.parallax_height_mm, v.focal_equiv_mm) == (31.3, 26.0)
@@ -111,12 +129,10 @@ def test_KRITIK_hoca_fantom_v3_phantom_v2_bolumu_BIREBIR(tmp_path):
     assert (v.navy_s_min, v.navy_v_min, v.navy_a_max, v.core_v_max) == (45, 20, 12, 35)
 
 
-def test_bolum_YOKSA_varsayilan_eski_profil_YAMLlari_aynen_yuklenir():
+def test_bolum_YOKSA_varsayilan_eski_profil_YAMLlari_aynen_yuklenir(tmp_path):
     """Bölümü olmayan YAML (v1 profilleri) KeyError VERMEZ; plaka kipi KAPALI (None) — tekil petri / YOLO."""
-    from ai_hub.cv_ortak.cabin_config import load_cabin_config
-
-    for yaml_yolu in (PETRI_V1_YAML, FANTOM_V1_YAML):
-        c = load_cabin_config(yaml_yolu)
+    for ad, taban in (("petri.yaml", _petri_taban()), ("fantom.yaml", _fantom_taban())):
+        c = _yukle(tmp_path, taban, "", ad=ad)
         assert c.multiwell.plate_type is None and c.multiwell.a1_cabin_mm is None
         assert c.multiwell.a1_corner == "auto" and c.multiwell.control_healthy == []
         assert c.phantom_v2.ring_diameter_mm == 184.0 and c.phantom_v2.origin_cabin_mm is None
@@ -135,7 +151,7 @@ def test_bolum_YOKSA_varsayilan_eski_profil_YAMLlari_aynen_yuklenir():
 )
 def test_KRITIK_multiwell_SONLU_OLMAYAN_alan_yuklemede_REDDEDILIR(tmp_path, eski, yeni, anahtar):
     with pytest.raises(ValueError, match=anahtar.replace(".", r"\.")):
-        _yukle(tmp_path, PETRI_V1_YAML, HOCA_MULTIWELL.replace(eski, yeni))
+        _yukle(tmp_path, _petri_taban(), HOCA_MULTIWELL.replace(eski, yeni))
 
 
 @pytest.mark.parametrize(
@@ -150,4 +166,4 @@ def test_KRITIK_multiwell_SONLU_OLMAYAN_alan_yuklemede_REDDEDILIR(tmp_path, eski
 )
 def test_KRITIK_phantom_v2_SONLU_OLMAYAN_alan_yuklemede_REDDEDILIR(tmp_path, eski, yeni, anahtar):
     with pytest.raises(ValueError, match=anahtar.replace(".", r"\.")):
-        _yukle(tmp_path, FANTOM_V1_YAML, HOCA_PHANTOM_V2.replace(eski, yeni))
+        _yukle(tmp_path, _fantom_taban(), HOCA_PHANTOM_V2.replace(eski, yeni))

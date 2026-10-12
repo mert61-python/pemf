@@ -25,8 +25,9 @@ donanım = kabin + kamera + basılı QR; yazılım = `cabin_config_example.yaml`
 > `to_marker_cm: 61.5`, `normal_axis_in_cabin: "-Y"` (3 yaml'da tek satır).
 > Mod = **kamera-sabitli**: en kritik doğruluk **kamera lensinin konumu**; QR = ölçek + origin referansı.
 
-Bu değerler **3 örnek yaml'da canlı**: `inference_cat_organ/cabin_config_example.yaml`,
-`inference_em_fantom/phantom_cv/cabin_config_example.yaml`, `inference_petri_dish/petri_cv/cabin_config_example.yaml`.
+Bu değerler **3 kabin yaml'ında canlı**: `inference_cat_organ/cabin_config_example.yaml`,
+`inference_em_fantom/phantom_cv_v3/cabin_config_v3.yaml`, `inference_petri_dish/petri_cv_v2/cabin_config_v2.yaml`
+(AI-2, 2026-10-12: hocanın fantom v3 / petri v2'si; v1 `phantom_cv` / `petri_cv` emekli).
 Kurulu makineye **yayınla** (app katmanı) gider; yayın sonrası backend yeniden başlar.
 
 ---
@@ -79,8 +80,8 @@ birkaç piksellik hata metrelere dönüşür. Kamera bu konumda kediyi (dikey ha
 seçilmişti — tabanda yatay duran bir plakayı 3B ölçmek için uygun değil.
 
 ⚠️ **YAML'DA SAHİP ÖLÇÜSÜ YAZILI — eski davranışa DÖNÜLMEDİ (ölçüldü 2026-09-22):**
-`ai_hub/inference_em_fantom/phantom_cv/cabin_config_example.yaml:112-113` ve
-`ai_hub/inference_petri_dish/petri_cv/cabin_config_example.yaml:123-124` →
+`ai_hub/inference_em_fantom/phantom_cv_v3/cabin_config_v3.yaml:112-113` ve
+`ai_hub/inference_petri_dish/petri_cv_v2/cabin_config_v2.yaml:123-124` →
 `hedef_duzlem_eksen: "Y"` + `hedef_duzlem_cm: -20.0`. Yukarıdaki tablo bu değerin kuyuyu kabinin
 ~4,45 m dışına koyduğunu gösteriyor: **fantom/petri tek-foto 3B koordinatları bu yapılandırmayla
 GÜVENİLİR DEĞİLDİR** (araştırma AI Pro sürüşü `PEMF_ARASTIRMA_AIPRO=0` ile kapalı, ama AI Hub

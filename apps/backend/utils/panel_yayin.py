@@ -64,7 +64,7 @@ PANEL_ADLARI: dict[str, str] = {
 KOK_PANEL = "07_combined"
 
 #: Petri boru hattı aynı 7 yuvayı farklı adlarla doldurur — gösterim adı ona göre.
-#: ⚠️ ANAHTARLAR KAYNAKTAN DOĞRULANDI (`petri_cv/render.py:344-350`) — tahmin EDİLMEDİ.
+#: ⚠️ ANAHTARLAR KAYNAKTAN DOĞRULANDI (`petri_cv_v2/render.py:374-380`; v1'de 344-350, AI-2'de aynı) — tahmin EDİLMEDİ.
 #: İlk yazımda `02_plate_detect`/`03_wells` varsayılmıştı; gerçek adlar farklı çıktı ve
 #: yanlış anahtar paneli sessizce "bilinmeyen"e düşürürdü.
 PETRI_PANEL_ADLARI: dict[str, str] = {

@@ -374,11 +374,30 @@ def test_YAPISAL_petri_dedektoru_SystemExit_FIRLATMAZ():
     from pathlib import Path
 
     kok = Path(__file__).resolve().parents[1]
-    src = (kok / "ai_hub" / "inference_petri_dish" / "petri_cv" / "petri_detector.py").read_text(encoding="utf-8")
+    # AI-2 (C6): v1 `petri_cv` emekli → hocanın v2'si (`petri_cv_v2`); kural iki araştırma paketinin TÜM modüllerine genişletildi
+    # (hocanın v2 / v3'ü yeni modüller getirdi: plate_grid, tumor_detect, ring_calib, layout).
+    src = (kok / "ai_hub" / "inference_petri_dish" / "petri_cv_v2" / "petri_detector.py").read_text(encoding="utf-8")
     assert "raise SystemExit(" not in src, (
         "petri dedektörü SystemExit fırlatıyor — hazırlık/seans thread'inde kamera sızdırır"
     )
     assert "raise RuntimeError(" in src, "ultralytics eksikliği artık hiç bildirilmiyor?"
+    import ast
+
+    # Komut satırı aracı (`_cli` / `main`, argparse) SystemExit ile çıkabilir — boru hattından çağrılmaz.
+    for paket in (
+        kok / "ai_hub" / "inference_petri_dish" / "petri_cv_v2",
+        kok / "ai_hub" / "inference_em_fantom" / "phantom_cv_v3",
+    ):
+        for py in sorted(paket.glob("*.py")):
+            agac = ast.parse(py.read_text(encoding="utf-8"))
+            for fn in [d for d in ast.walk(agac) if isinstance(d, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+                if fn.name in ("_cli", "main"):
+                    continue
+                for d in ast.walk(fn):
+                    hedef = getattr(getattr(d, "exc", None), "func", getattr(d, "exc", None))
+                    assert not (isinstance(d, ast.Raise) and getattr(hedef, "id", "") == "SystemExit"), (
+                        f"{paket.name}/{py.name}:{d.lineno} {fn.name}() SystemExit fırlatıyor — AI Pro iş parçacığından kaçar"
+                    )
 
 
 def test_YAPISAL_EM_scaler_yollari_MODEL_DIZINININ_disinda_da_aranir():

@@ -24,8 +24,9 @@ import pytest
 KOK = Path(__file__).resolve().parents[1]
 YAMLLAR = {
     "cat_organ": KOK / "ai_hub" / "inference_cat_organ" / "cabin_config_example.yaml",
-    "em_fantom": KOK / "ai_hub" / "inference_em_fantom" / "phantom_cv" / "cabin_config_example.yaml",
-    "petri": KOK / "ai_hub" / "inference_petri_dish" / "petri_cv" / "cabin_config_example.yaml",
+    # AI-2 C6: v1 `phantom_cv` / `petri_cv` emekli → hocanın v3 / v2 profil YAML'ları (aynı saha kabin çekirdeği).
+    "em_fantom": KOK / "ai_hub" / "inference_em_fantom" / "phantom_cv_v3" / "cabin_config_v3.yaml",
+    "petri": KOK / "ai_hub" / "inference_petri_dish" / "petri_cv_v2" / "cabin_config_v2.yaml",
 }
 EXTENT = [65.0, 50.0, 50.0]
 KAMERA = [32.5, -25.0, -25.0]

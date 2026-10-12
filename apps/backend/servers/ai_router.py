@@ -114,7 +114,7 @@ def _kok_neden_zinciri(e: BaseException, sinir: int = 5) -> str:
 # ── PETRİ MAKULLİK REDDİ (2026-08-06, sahip bildirimi) ────────────────────────────────────
 # Denetimin KENDİSİ ai_hub boru hattındadır (mikroservis yolunda da çalışsın diye — bkz.
 # ai_hub/inference_petri_dish/plausibility.py). Burada YALNIZ HTTP çevrimi yapılır.
-# Sabit dize bilerek KOPYALANDI: `ai_hub...petri_cv` paketini modül seviyesinde import etmek
+# Sabit dize bilerek KOPYALANDI: `ai_hub...petri_cv_v2` paketini modül seviyesinde import etmek
 # onnxruntime/ultralytics zincirini her açılışta yükletirdi ve mikroservis modunda ai_hub hiç
 # gerekmez. Değer bir TEL SÖZLEŞMESİDİR (JSON `error` alanı); tests/test_petri_plausibility.py
 # iki tarafın eşitliğini kilitler → sessizce ayrışamaz.
@@ -1050,7 +1050,7 @@ def _arastirma_aipro_kapisi(saglayici) -> None:
 
 
 def _yukle_em_fantom_cv() -> dict:
-    """phantom_cv boru hattı + PhantomPredictor'ı BİR KEZ ısıt → `_get_or_load_model` önbelleğine.
+    """phantom_cv_v3 boru hattı + PhantomPredictor'ı BİR KEZ ısıt → `_get_or_load_model` önbelleğine.
 
     ⚠️ MODÜL SEVİYESİNE TAŞINDI (2026-09-09): eskiden `analyze_em_fantom` içinde bir kapanıştı.
     Araştırma AI Pro fantom sağlayıcısı AYNI önbelleği kullanacağı için (anahtar "em_fantom_cv")
@@ -1075,7 +1075,7 @@ def _yukle_em_fantom_cv() -> dict:
 
 
 def _yukle_em_petri_cv() -> dict:
-    """petri_cv boru hattı + YOLO11m-seg + PetriPredictor'ı BİR KEZ ısıt → önbelleğe.
+    """petri_cv_v2 boru hattı + YOLO11m-seg + PetriPredictor'ı BİR KEZ ısıt → önbelleğe.
 
     ⚠️ MODÜL SEVİYESİNE TAŞINDI (2026-09-09; fantomla aynı gerekçe): 239 MB BaggingRegressor +
     90 MB YOLO analiz ve seans yolları için iki kez yüklenmesin. Sözleşme DEĞİŞMEDİ:
@@ -3586,7 +3586,7 @@ async def analyze_em_fantom(
     achieved_B: float = Form(None),
     duty_sum: float = Form(None),
 ):
-    """Fantom Tümör Analizi (phantom_cv + BiLSTM_XXL_Raw ONNX).
+    """Fantom Tümör Analizi (phantom_cv_v3 — hocanın v3'ü, AI-2 — + BiLSTM_XXL_Raw ONNX).
 
     Sentetik böbrek fantomu fotoğrafından: fantomu tespit et → mavi tümör
     odaklarını bul → 3B mm koordinatı (phantom_length_cm verilirse gerçek mm,
@@ -3760,7 +3760,7 @@ async def analyze_em_petri(
         # yani arayüz doğrulaması atlanabilir (resize_max=1 görüntüyü tek piksele indirir,
         # yolo_conf=0 on binlerce sahte tespit üretir). petri_ayar ai_hub'da çünkü aynı kuralı
         # ai_service/app.py::infer_em_petri de uygular — kopyalanırsa sürüklenir.
-        # ⚠️ Fonksiyon içi import: petri_cv paketini modül seviyesinde çekmek her açılışta
+        # ⚠️ Fonksiyon içi import: petri_cv_v2 paketini modül seviyesinde çekmek her açılışta
         # onnxruntime/ultralytics zincirini yükletirdi (bkz. _PETRI_NOT_PLATE notu).
         from ai_hub.inference_petri_dish import petri_ayar as _pa
 
@@ -4727,13 +4727,13 @@ _AI_MODUL_ENVANTERI = [
     ),
     ("em_petri", "ai_hub.inference_em_petri.inference_em_petri", "ai_hub/inference_em_petri/BaggingRegressor.onnx"),
     # Denetim 2026-09-08: em_petri ANALİZİ iki ağırlık ister — doz modeli (üstteki BaggingRegressor)
-    # VE kuyucuk tespiti için petri_cv'nin YOLO11m-seg'i (85,5 MB, research.zip). İkincisi
+    # VE kuyucuk tespiti için petri_cv_v2'nin YOLO11m-seg'i (85,5 MB, research.zip). İkincisi
     # envanterde HİÇ YOKTU: dosya eksikken /api/ai/hazirlik YEŞİL kalıyor, ilk petri isteği (ve
     # araştırma AI Pro hazırlığı) FileNotFoundError ile ölüyordu. Kapı:
     # tests/test_ai_hazirlik_envanteri.py::test_KRITIK_URETIMDE_cozulen_her_agirlik_envanterde_OLCULUYOR
     (
         "petri_yolo",
-        "ai_hub.inference_petri_dish.petri_cv.petri_detector",
+        "ai_hub.inference_petri_dish.petri_cv_v2.petri_detector",  # AI-2: v1 petri_cv emekli
         "ai_hub/inference_petri_dish/yolo11m-seg.onnx",
     ),
     (

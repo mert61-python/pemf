@@ -12,6 +12,7 @@ PetriPredictor'ı çalıştırıp E_cancer/D/P üretiyordu. `apps/backend/utils/
   (b) ENTEGRASYON — gerçek test girdileriyle çapraz yükleme (yalnız YOLO ONNX varsa).
 """
 
+import os
 from pathlib import Path
 
 import cv2
@@ -155,6 +156,10 @@ def test_tel_sozlesmesi_ai_router_ile_ESLESIYOR():
 # (b) ENTEGRASYON — GERÇEK test girdileri + gerçek YOLO (model yoksa atlanır)
 # ══════════════════════════════════════════════════════════════════════════════
 def _yolo_yolu():
+    # AI-2 C6: gerçek ağırlık dizini (PEMF_AI_MODELS_DIR — kurulu düzen / koşucu) da aranır; yoksa eskisi gibi atlanır.
+    _md = os.environ.get("PEMF_AI_MODELS_DIR")
+    if _md and (Path(_md) / "ai_hub" / "inference_petri_dish" / "yolo11m-seg.onnx").exists():
+        return Path(_md) / "ai_hub" / "inference_petri_dish" / "yolo11m-seg.onnx"
     for aday in (
         KOK / "release_assets" / "ai_models" / "ai_hub" / "inference_petri_dish" / "yolo11m-seg.onnx",
         KOK / "ai_hub" / "inference_petri_dish" / "yolo11m-seg.onnx",
@@ -173,9 +178,26 @@ entegrasyon = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def boru_hatti():
-    from ai_hub.inference_petri_dish.petri_cv import PetriCvPipeline, load_cabin_config
+    """AI-2 C6: v1 `petri_cv` emekli → hocanın v2'si TEKİL kap kipinde (`plate_type=0`): bu bölümün denetimi (dairesellik /
+    güven / alan) v2'de tekil kipin kuralıdır. Plaka kipi (ürün varsayılanı) `plaka_hatti` ile ayrıca ölçülür."""
+    from ai_hub.inference_petri_dish.petri_cv_v2 import PetriCvPipeline, load_cabin_config
 
-    return PetriCvPipeline(load_cabin_config(None), yolo_model_path=_MODEL, yolo_device="cpu")
+    return PetriCvPipeline(load_cabin_config(None), yolo_model_path=_MODEL, yolo_device="cpu", plate_type=0)
+
+
+@pytest.fixture(scope="module")
+def plaka_hatti(boru_hatti):
+    """Ürün varsayılanı: hocanın 24 kuyucuklu plaka kipi (YAML `multiwell.plate_type`). Ağır modeller tekil hattan paylaşılır."""
+    from ai_hub.inference_petri_dish.petri_cv_v2 import PetriCvPipeline
+
+    h = PetriCvPipeline(boru_hatti.cfg, yolo_model_path=_MODEL, yolo_device="cpu")
+    h.yolo, h._predictor = boru_hatti.yolo, boru_hatti._predictor
+    return h
+
+
+@pytest.fixture(params=["tekil", "plaka"])
+def iki_kip(request):
+    return request.param, request.getfixturevalue("boru_hatti" if request.param == "tekil" else "plaka_hatti")
 
 
 @entegrasyon
@@ -190,21 +212,30 @@ def test_gercek_petri_GECER(boru_hatti, yol):
     assert r.n_wells > 0
 
 
+def _reddetti(kip, r):
+    """Tekil kip: makullik REDDİ (v1 sözleşmesi). Plaka kipi: plaka bulunamaz ya da ızgara doğrulanamaz — iki yolda da
+    kuyucuk YOK (ölçüldü: fantom / kedi / CT → plate_not_found)."""
+    if kip == "tekil":
+        return r.error == pl.PETRI_REJECT
+    return r.error in (pl.PETRI_REJECT, "plate_not_found")
+
+
 @entegrasyon
 @pytest.mark.parametrize("yol", [FANTOM, KEDI_SEG])
-def test_capraz_yukleme_REDDEDILIR(boru_hatti, yol):
-    """ASIL BULGU: fantom/kedi fotoğrafı sessizce 'kuyucuk' üretmemeli."""
+def test_capraz_yukleme_REDDEDILIR(iki_kip, yol):
+    """ASIL BULGU: fantom/kedi fotoğrafı sessizce 'kuyucuk' üretmemeli — AI-2: iki kipte de."""
     if not yol.exists():
         pytest.skip(f"girdi yok: {yol.name}")
+    kip, boru_hatti = iki_kip
     r, _ = boru_hatti.process_image(cv2.imread(str(yol)))
-    assert r.error == pl.PETRI_REJECT, f"reddedilmedi: success={r.success} hata={r.error} {r.plausibility}"
+    assert _reddetti(kip, r), f"{kip}: reddedilmedi: success={r.success} hata={r.error} {r.plausibility}"
     assert r.success is False
     assert r.wells == [], "reddedilen görüntüde kuyucuk tahmini üretilmemeli"
 
 
 @entegrasyon
 @pytest.mark.parametrize("yol", [CT_KIST, CT_NORMAL, CT_TAS])
-def test_bobrek_CT_kesiti_REDDEDILIR(boru_hatti, yol):
+def test_bobrek_CT_kesiti_REDDEDILIR(iki_kip, yol):
     """DENETİM 2026-08-06 (ASIL REGRESYON): `apps/backend/utils/image_domain.py` em_petri'ye GRAYSCALE'i
     açtığı gün CT kesitlerini bu uçta tutan modalite katmanı kalktı ve o anki geometri katmanı
     07b/07c'yi GEÇİRİYORDU (HTTP 200, success=True, n_wells=1, PetriPredictor çalıştı).
@@ -212,8 +243,9 @@ def test_bobrek_CT_kesiti_REDDEDILIR(boru_hatti, yol):
     kendisidir. İki katman da yerinde olmalı: modalite {COLOR,GRAYSCALE} ise alan VETO'su ŞART."""
     if not yol.exists():
         pytest.skip(f"girdi yok: {yol.name}")
+    kip, boru_hatti = iki_kip
     r, _ = boru_hatti.process_image(cv2.imread(str(yol)))
-    assert r.error == pl.PETRI_REJECT, f"CT kabul edildi: success={r.success} {r.plausibility}"
+    assert _reddetti(kip, r), f"{kip}: CT kabul edildi: success={r.success} {r.plausibility}"
     assert r.success is False and r.wells == []
 
 
@@ -235,8 +267,10 @@ def test_uc_fantom_fotografina_422_doner():
     from servers import api_server
 
     c = TestClient(api_server.app)
-    with open(FANTOM, "rb") as f:
-        r = c.post("/api/ai/vision/em_petri", files={"file": ("fantom.jpeg", f, "image/jpeg")})
+    with open(FANTOM, "rb") as f:  # AI-2: tekil kip (v1 sözleşmesi: 422 + neden); plaka kipi aşağıda
+        r = c.post(
+            "/api/ai/vision/em_petri", files={"file": ("fantom.jpeg", f, "image/jpeg")}, data={"plate_type": "0"}
+        )
     assert r.status_code == 422, f"HTTP {r.status_code}: {r.text[:300]}"
     detail = r.json().get("detail", "")
     assert "petri" in detail.lower(), detail
@@ -254,7 +288,7 @@ def test_uc_bobrek_CT_sine_422_doner():
         pytest.skip("girdi yok")
     c = TestClient(api_server.app)
     with open(CT_KIST, "rb") as f:
-        r = c.post("/api/ai/vision/em_petri", files={"file": ("ct.jpg", f, "image/jpeg")})
+        r = c.post("/api/ai/vision/em_petri", files={"file": ("ct.jpg", f, "image/jpeg")}, data={"plate_type": "0"})
     assert r.status_code == 422, f"HTTP {r.status_code}: {r.text[:300]}"
     assert "petri" in r.json().get("detail", "").lower()
 
@@ -265,7 +299,27 @@ def test_uc_gercek_petriyi_KABUL_eder():
     from servers import api_server
 
     c = TestClient(api_server.app)
-    with open(PETRI, "rb") as f:
-        r = c.post("/api/ai/vision/em_petri", files={"file": ("petri.jpg", f, "image/jpeg")})
+    with open(PETRI, "rb") as f:  # AI-2: 06 tekil kaplar (8) — plaka kipinde 24'lük ızgara doğrulanamaz (aşağıda)
+        r = c.post("/api/ai/vision/em_petri", files={"file": ("petri.jpg", f, "image/jpeg")}, data={"plate_type": "0"})
     assert r.status_code == 200, f"HTTP {r.status_code}: {r.text[:300]}"
     assert r.json().get("status") == "success", r.json().get("error")
+
+
+@entegrasyon
+def test_uc_PLAKA_kipinde_fantom_KUYUCUK_URETMEZ_ve_tekil_kap_YONLENDIRILIR():
+    """AI-2 (ürün varsayılanı plaka kipi): fantom → plaka yok (200 no_detection, kuyucuk 0); tekil kap fotoğrafı (06) →
+    422 + 'Tekil petri kapları' kipine yönlendiren metin (24'lük ızgara doğrulanamadı). Uydurulmuş kuyucuk YOK."""
+    from fastapi.testclient import TestClient
+    from servers import api_server
+
+    c = TestClient(api_server.app)
+    with open(FANTOM, "rb") as f:
+        r = c.post("/api/ai/vision/em_petri", files={"file": ("fantom.jpeg", f, "image/jpeg")})
+    assert r.status_code in (200, 422), f"HTTP {r.status_code}: {r.text[:300]}"
+    if r.status_code == 200:
+        j = r.json()
+        assert j.get("status") == "no_detection" and j.get("n_wells") == 0 and j.get("wells") == [], str(j)[:300]
+    with open(PETRI, "rb") as f:
+        r = c.post("/api/ai/vision/em_petri", files={"file": ("petri.jpg", f, "image/jpeg")})
+    assert r.status_code == 422, f"HTTP {r.status_code}: {r.text[:300]}"
+    assert "Tekil petri kapları" in r.json().get("detail", ""), r.json().get("detail")

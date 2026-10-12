@@ -25,7 +25,13 @@ import mosquitto_aparat as ma
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
-PROFILLER = ("ai_hub/inference_em_fantom/phantom_cv", "ai_hub/inference_petri_dish/petri_cv")
+#: (profil dizini, profilin kabin YAML'ı). AI-2 C6: v1 `phantom_cv` / `petri_cv` (`cabin_config_example.yaml`) emekli →
+#: hocanın v3 / v2'si; YAML'ları v1'in saha kabin çekirdeği + hocanın bölümü (output.mqtt AYNEN).
+PROFILLER = (
+    ("ai_hub/inference_em_fantom/phantom_cv_v3", "cabin_config_v3.yaml"),
+    ("ai_hub/inference_petri_dish/petri_cv_v2", "cabin_config_v2.yaml"),
+)
+PROFIL_IDLERI = [d.rsplit("/", 1)[1] for d, _ in PROFILLER]
 
 
 @pytest.fixture
@@ -96,11 +102,12 @@ def test_KRITIK_kabin_kimligi_YAN_DOSYAYA_yazilir_CLI_SIR_basmaz(mk, tmp_path, c
         assert deger not in cikti, "CLI çıktısında PAROLA DEĞERİ var (sır sızıntısı)"
 
 
-@pytest.mark.parametrize("profil", PROFILLER)
+@pytest.mark.parametrize("profil", PROFILLER, ids=PROFIL_IDLERI)
 def test_KRITIK_cabin_config_kimligi_YAN_DOSYADAN_okur_YAML_acigi_ustun(tmp_path, profil):
     from ai_hub.cv_ortak.cabin_config import load_cabin_config
 
-    ornek = (KOK / profil / "cabin_config_example.yaml").read_text(encoding="utf-8")
+    dizin, yaml_adi = profil
+    ornek = (KOK / dizin / yaml_adi).read_text(encoding="utf-8")
     yml = tmp_path / "kabin.yaml"
     yml.write_text(ornek, encoding="utf-8")
     assert load_cabin_config(yml).output.mqtt_username is None, "aparat: yan dosya yokken kimlik çıktı"
@@ -117,17 +124,18 @@ def test_KRITIK_cabin_config_kimligi_YAN_DOSYADAN_okur_YAML_acigi_ustun(tmp_path
     assert (out.mqtt_username, out.mqtt_password) == ("elle", "p2"), "YAML'daki açık kimlik yan dosyaya EZİLDİ"
 
 
-@pytest.mark.parametrize("profil", PROFILLER)
+@pytest.mark.parametrize("profil", PROFILLER, ids=PROFIL_IDLERI)
 def test_KRITIK_kabin_MQTT_varsayilan_KAPALI_YAMLda_SIR_YOK_yan_dosya_GITIGNORE(profil):
     import yaml
 
-    mq = yaml.safe_load((KOK / profil / "cabin_config_example.yaml").read_text(encoding="utf-8"))["output"]["mqtt"]
-    assert mq["enabled"] is False, f"{profil}: kabin MQTT'si varsayılan AÇIK"
-    assert mq.get("username") is None and mq.get("password") is None, f"{profil}: örnek YAML kimlik taşıyor"
-    r = subprocess.run(["git", "check-ignore", "-q", f"{profil}/cabin_mqtt_kimlik.yaml"], cwd=str(KOK))
+    dizin, yaml_adi = profil
+    mq = yaml.safe_load((KOK / dizin / yaml_adi).read_text(encoding="utf-8"))["output"]["mqtt"]
+    assert mq["enabled"] is False, f"{dizin}: kabin MQTT'si varsayılan AÇIK"
+    assert mq.get("username") is None and mq.get("password") is None, f"{dizin}: profil YAML'ı kimlik taşıyor"
+    r = subprocess.run(["git", "check-ignore", "-q", f"{dizin}/cabin_mqtt_kimlik.yaml"], cwd=str(KOK))
     if r.returncode == 128:
         pytest.skip("git deposu değil")
-    assert r.returncode == 0, f"{profil}/cabin_mqtt_kimlik.yaml gitignore'da DEĞİL (kabin parolası commit edilebilir)"
+    assert r.returncode == 0, f"{dizin}/cabin_mqtt_kimlik.yaml gitignore'da DEĞİL (kabin parolası commit edilebilir)"
 
 
 # ── GERÇEK broker ────────────────────────────────────────────────────────────────────────────────────────────────────

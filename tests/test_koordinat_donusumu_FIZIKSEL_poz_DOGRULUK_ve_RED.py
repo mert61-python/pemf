@@ -34,7 +34,8 @@ def _ct():
     return ct
 
 
-@pytest.fixture(params=["inference_em_fantom.phantom_cv", "inference_petri_dish.petri_cv"])
+# AI-2 C6: v1 `phantom_cv` / `petri_cv` emekli → hocanın v3 / v2'si (ürün yükleyicilerinin profili).
+@pytest.fixture(params=["inference_em_fantom.phantom_cv_v3", "inference_petri_dish.petri_cv_v2"])
 def kurulum(request):
     import importlib
 
@@ -230,7 +231,7 @@ def test_KARSIT_D1100_petri_ArUco_COZULEN_kuyu_konumlu_ve_dozlu(petri_hatti, mon
 
 def test_KRITIK_D1100_em_fantom_XAI_ve_canli_E_KONUMSUZ_ilk_bolgeden_KURULMAZ(fantom_ucu, fantom_hatti, monkeypatch):
     """İlk bölge çözülemiyor, ikinci çözülüyor: XAI ve canlı E bağlamı İKİNCİDEN; eski bağlam BAYAT kalmaz."""
-    from ai_hub.inference_em_fantom.phantom_cv.color_segment import Region
+    from ai_hub.inference_em_fantom.phantom_cv_v3.color_segment import Region
 
     c, ef, kutu, govde = fantom_ucu
     pl, _kos = fantom_hatti
@@ -298,7 +299,7 @@ def petri_ucu_d100(petri_hatti, monkeypatch):
     from fastapi.testclient import TestClient
     from servers import ai_router as air
     from servers import api_server as api
-    from test_em_ongorucu_SONLU_OLMAYAN_girdi_PIKSEL_kipi_ve_TOPLAM_sure import _kabin, _renkli_jpg
+    from test_em_ongorucu_SONLU_OLMAYAN_girdi_PIKSEL_kipi_ve_TOPLAM_sure import _kabin_petri_tekil, _renkli_jpg
 
     from ai_hub.inference_em_petri import inference_em_petri as iep
 
@@ -311,7 +312,7 @@ def petri_ucu_d100(petri_hatti, monkeypatch):
     def _yukle(ad, yukleyici):
         return {
             "cls": pp.PetriCvPipeline,
-            "cfg": _kabin("inference_petri_dish.petri_cv"),
+            "cfg": _kabin_petri_tekil(),
             "yolo_path": None,
             "yolo": _Yolo(),
             "predictor": _KayitciDoz(),
@@ -335,7 +336,12 @@ def test_KRITIK_D1100_em_petri_KONUMSUZ_kuyuda_XAI_000da_URETILMEZ(petri_ucu_d10
 
 @pytest.mark.parametrize("uc", ["em_fantom", "em_petri"])
 def test_KRITIK_D1100_servis_KONUMSUZ_bolgede_XAI_000da_URETILMEZ(fantom_hatti, petri_hatti, monkeypatch, uc):
-    from test_em_ongorucu_SONLU_OLMAYAN_girdi_PIKSEL_kipi_ve_TOPLAM_sure import _govde, _kabin, _servis_cagir
+    from test_em_ongorucu_SONLU_OLMAYAN_girdi_PIKSEL_kipi_ve_TOPLAM_sure import (
+        _govde,
+        _kabin,
+        _kabin_petri_tekil,
+        _servis_cagir,
+    )
 
     import ai_service.app as a
     from ai_hub.inference_em_fantom import inference_em_fantom as ief
@@ -352,12 +358,12 @@ def test_KRITIK_D1100_servis_KONUMSUZ_bolgede_XAI_000da_URETILMEZ(fantom_hatti, 
         if ad == "em_fantom":
             return {
                 "cls": pl.PhantomCvPipeline,
-                "cfg": _kabin("inference_em_fantom.phantom_cv"),
+                "cfg": _kabin("inference_em_fantom.phantom_cv_v3"),
                 "predictor": _KayitciDoz(),
             }
         return {
             "cls": pp.PetriCvPipeline,
-            "cfg": _kabin("inference_petri_dish.petri_cv"),
+            "cfg": _kabin_petri_tekil(),
             "yolo_path": None,
             "yolo": _Yolo(),
             "predictor": _KayitciDoz(),

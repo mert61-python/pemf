@@ -12,7 +12,7 @@ Her teşhis modelinin **inference kodunun** evi. **Küçük** modeller (tabular/
 | `PEMF_ArUco_Marker_5X5_50_ID0_15cm_A4.pdf` / `.png` | Yazdırılabilir ArUco fiducial (kabin kalibrasyonu) — kenar **15,0 cm**, `aruco.real_cm` ile AYNI olmak ZORUNDA (yanlış kenar = sessiz ölçek hatası); üretim: `python scripts/kabin_marker_a4.py` |
 | `PEMF_AI_Test_Girdileri/00_README_OKU.txt` | Her model için **gerçek test girdisi** + beklenen çıktı haritası (E2E test) |
 | `inference_human_kidney_disease/README.md` | CKD (24 klinik özellik) modeli notu |
-| `inference_em_fantom/phantom_cv/README.md`, `inference_petri_dish/petri_cv/README.md` | Klasik-CV pipeline paketleri |
+| `inference_em_fantom/phantom_cv_v3/`, `inference_petri_dish/petri_cv_v2/` | Klasik-CV pipeline paketleri — Çağlar Hoca'nın fantom v3 / petri v2'si (AI-2, 2026-10-12; v1 `phantom_cv` / `petri_cv` emekli) |
 
 ## Model alt-klasörleri (her birinde `inference_*.py`)
 | Klasör | Model / rol |

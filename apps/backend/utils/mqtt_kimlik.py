@@ -40,7 +40,8 @@ BACKEND_KULLANICI = "pemf_backend"
 ESP_KULLANICI = "pemf_esp"
 #: Y73 (sahip, S-G8): kabin kamerası (CV) MQTT yayıncısı — YALNIZ kendi konularına yazar (bobin control / ack YAZAMAZ).
 CV_KULLANICI = "pemf_cv"
-#: Kabin CV konuları (`ai_hub/*/cabin_config_example.yaml` `output.mqtt`): durum YAYINI + (isteğe bağlı) komut ABONELİĞİ.
+#: Kabin CV konuları (`output.mqtt` — kedi `ai_hub/inference_cat_organ/cabin_config_example.yaml`, AI-2'den beri petri
+#: `petri_cv_v2/cabin_config_v2.yaml` ve fantom `phantom_cv_v3/cabin_config_v3.yaml`): durum YAYINI + (isteğe bağlı) komut ABONELİĞİ.
 #: ⚠️ Kimlikli broker'da `pemf/coil/cmd`'ye YAZMA yetkisi olan rol YOK (geri besleme kanalı kullanılmıyor); durumu backend
 #: (`pemf/#` okur) görür, ESP göremez (kabin MQTT'si varsayılan KAPALI).
 CV_YAZMA_KONULARI = ("pemf/coil/state",)

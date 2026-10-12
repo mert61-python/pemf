@@ -1986,7 +1986,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
  * Fantom Tümör Analizi — sentetik böbrek fantomu fotoğrafından mavi tümör odaklarını
  * tespit eder (klasik CV), 3B konum + PhantomPredictor (BiLSTM ONNX) ile her tümör için
  * PEMF bobin duty (D1-7) + E-alan (E_cancer/E_healthy) tahmini üretir.
- * Backend: POST /api/ai/vision/em_fantom (phantom_cv). Canlı kamera/otonom YOK — tek foto.
+ * Backend: POST /api/ai/vision/em_fantom (phantom_cv_v3 — hocanın v3'ü). Canlı kamera/otonom YOK — tek foto.
  */
 function PhantomModule({ patientName }: { patientName: string }) {
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
@@ -2274,7 +2274,7 @@ const A1_KOSE_ADI = { auto: "otomatik", tl: "sol-üst", tr: "sağ-üst", br: "sa
  * Petri Kuyu Analizi — petri fotoğrafından YOLO11m-seg ile N kuyucuk tespit eder,
  * her kuyuda HSV kanser sınıflandırması yapar, 3B konum + PetriPredictor (BaggingRegressor
  * ONNX) ile kuyu başına PEMF bobin duty (D1-7) + E-alan (E_cancer/E_healthy) tahmini üretir.
- * Backend: POST /api/ai/vision/em_petri (petri_cv). Canlı kamera/otonom YOK — tek foto.
+ * Backend: POST /api/ai/vision/em_petri (petri_cv_v2 — hocanın v2'si). Canlı kamera/otonom YOK — tek foto.
  */
 function PetriModule({ patientName }: { patientName: string }) {
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.

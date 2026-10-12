@@ -52,9 +52,8 @@ ASGARI_TARANAN = 70
 KABUK_TAVANI = 70
 
 PROFILLER = {
-    "ai_hub/inference_em_fantom/phantom_cv": "phantom_cv_pipeline",
-    "ai_hub/inference_petri_dish/petri_cv": "petri_cv_pipeline",
-    # AI-2 (2026-10-12): hocanın v2 / v3'ü yeni profil paketleri — aynı profil kimliği (aynı kabin, aynı yayın konusu).
+    # AI-2 (2026-10-12): hocanın v2 / v3'ü profil paketleri — v1'le aynı profil kimliği (aynı kabin, aynı yayın konusu).
+    # v1 `phantom_cv` / `petri_cv` emekli (AI-2 C6, S-AI2.4): kabukları da silindi.
     "ai_hub/inference_em_fantom/phantom_cv_v3": "phantom_cv_pipeline",
     "ai_hub/inference_petri_dish/petri_cv_v2": "petri_cv_pipeline",
 }
@@ -62,8 +61,6 @@ ORTAK_MODULLER = ("coord_transform", "mqtt_publish", "cabin_config")
 #: Profil başına kabuk modülleri. ⚠️ v2 / v3'te `mqtt_publish` YOK: hocanın paho yayıncısı ALINMADI (plan §3.3; guii
 #: bobini kendi yolundan sürer) — kabuğu da yok. Kopyası geri gelirse kopya taraması yakalar (muafiyet dışı).
 PROFIL_MODULLERI = {
-    "ai_hub/inference_em_fantom/phantom_cv": ORTAK_MODULLER,
-    "ai_hub/inference_petri_dish/petri_cv": ORTAK_MODULLER,
     "ai_hub/inference_em_fantom/phantom_cv_v3": ("coord_transform", "cabin_config"),
     "ai_hub/inference_petri_dish/petri_cv_v2": ("coord_transform", "cabin_config"),
 }
@@ -135,8 +132,8 @@ def test_KRITIK_muafiyet_BASKA_kapiya_pinli():
         f"  yalnız muaf : {sorted(KABUK_YOLLARI - beklenen)}\n"
         f"  yalnız kapı : {sorted(beklenen - KABUK_YOLLARI)}"
     )
-    # 2 v1 profili × 3 + 2 v2/v3 profili × 2 (AI-2). v1 emekliye ayrılınca 4.
-    assert len(KABUK_YOLLARI) == 10, f"muafiyet listesi şişmiş: {sorted(KABUK_YOLLARI)}"
+    # 2 v2/v3 profili × 2 (AI-2; v1'in 2 × 3 kabuğu C6'da emekli: 10 → 4).
+    assert len(KABUK_YOLLARI) == 4, f"muafiyet listesi şişmiş: {sorted(KABUK_YOLLARI)}"
     assert set(PROFIL_MODULLERI) == set(PROFILLER), "kabuk modül listesi profil listesiyle örtüşmüyor"
 
 
@@ -161,8 +158,8 @@ def test_KRITIK_profil_dosyasi_KABUK_kaliyor(paket: str, modul: str):
 
 def test_KRITIK_CabinConfig_TEK_SINIF():
     """İki profil aynı sınıfı görmeli; ayrı sınıflar = hâlâ iki uygulama."""
-    from ai_hub.inference_em_fantom.phantom_cv.cabin_config import CabinConfig as C1
-    from ai_hub.inference_petri_dish.petri_cv.cabin_config import CabinConfig as C2
+    from ai_hub.inference_em_fantom.phantom_cv_v3.cabin_config import CabinConfig as C1
+    from ai_hub.inference_petri_dish.petri_cv_v2.cabin_config import CabinConfig as C2
 
     assert C1 is C2, "CabinConfig iki AYRI sınıf — birleştirme yalnız görünüşte"
 
@@ -173,8 +170,8 @@ def test_KRITIK_her_profil_KENDI_ornek_YAMLini_okuyor():
     `load_cabin_config(None)` üretimde dört yerden çağrılıyor; bu dal kırılırsa hepsi
     `FileNotFoundError` verir.
     """
-    from ai_hub.inference_em_fantom.phantom_cv.cabin_config import load_cabin_config as fy
-    from ai_hub.inference_petri_dish.petri_cv.cabin_config import load_cabin_config as py_
+    from ai_hub.inference_em_fantom.phantom_cv_v3.cabin_config import load_cabin_config as fy
+    from ai_hub.inference_petri_dish.petri_cv_v2.cabin_config import load_cabin_config as py_
 
     a, b = fy(None), py_(None)
     assert a.cabin_id != b.cabin_id, (
@@ -197,8 +194,8 @@ def test_KRITIK_profil_client_id_KIMLIGI_korundu(tmp_path):
       · sabit doğrudan okunur (kabuğun kimliği)
       · YAML'dan `client_id` SİLİNİP yüklenir → varsayılan dalı GERÇEKTEN koşar
     """
-    from ai_hub.inference_em_fantom.phantom_cv import cabin_config as fkab
-    from ai_hub.inference_petri_dish.petri_cv import cabin_config as pkab
+    from ai_hub.inference_em_fantom.phantom_cv_v3 import cabin_config as fkab
+    from ai_hub.inference_petri_dish.petri_cv_v2 import cabin_config as pkab
 
     # ── 1) Kabuk sabitleri ayrı olmalı ────────────────────────────────────────
     assert fkab.VARSAYILAN_CLIENT_ID != pkab.VARSAYILAN_CLIENT_ID, (

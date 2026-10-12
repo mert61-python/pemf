@@ -3,7 +3,7 @@
 """FANTOM / PETRİ SAĞLAYICILARI — GERÇEK boru hattıyla uçtan uca (Faz 2, 2026-09-09).
 
 Stub kapıları sağlayıcı MANTIĞINI ölçer (tests/test_ai_pro_arastirma_saglayicilari.py); bu dosya
-GERÇEK `phantom_cv` / `petri_cv` boru hatlarını gerçek örnek fotoğraflarla koşturur:
+GERÇEK `phantom_cv_v3` / `petri_cv_v2` boru hatlarını (AI-2: hocanın v3 / v2'si; v1 emekli) gerçek örnek fotoğraflarla koşturur:
 
   · sağlayıcı gerçek sonuç yapısından hedef çıkarabiliyor mu (alan adları sözleşmesi),
   · EM predictor gerçek ağırlıkla D/P/E üretiyor mu ve e_field > 0 mu,

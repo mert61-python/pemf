@@ -25,8 +25,9 @@ _TOL_MM = 1e-6
 
 @pytest.fixture()
 def donusum():
-    from ai_hub.inference_em_fantom.phantom_cv import coord_transform as ct
-    from ai_hub.inference_em_fantom.phantom_cv.cabin_config import load_cabin_config
+    # AI-2 C6: v1 `phantom_cv` emekli → hocanın v3'ü (aynı `cv_ortak` gövdesi, aynı saha kabin çekirdeği).
+    from ai_hub.inference_em_fantom.phantom_cv_v3 import coord_transform as ct
+    from ai_hub.inference_em_fantom.phantom_cv_v3.cabin_config import load_cabin_config
 
     cfg = load_cabin_config(None)  # depoya gömülü kabin geometrisi (65x50x50)
     intr = genis_aci_ic_parametre(ct)
@@ -84,8 +85,8 @@ def test_KRITIK_iki_profil_AYNI_uygulamayi_kullanir(donusum):
     Yeni ölçüt daha güçlü: iki profilin gördüğü fonksiyon NESNESİ aynı mı. Aynı nesne
     ayrışamaz — dosya kopyası ayrışabilirdi.
     """
-    from ai_hub.inference_em_fantom.phantom_cv import coord_transform as f_ct
-    from ai_hub.inference_petri_dish.petri_cv import coord_transform as p_ct
+    from ai_hub.inference_em_fantom.phantom_cv_v3 import coord_transform as f_ct
+    from ai_hub.inference_petri_dish.petri_cv_v2 import coord_transform as p_ct
 
     ortak = [ad for ad in dir(f_ct) if not ad.startswith("_") and callable(getattr(f_ct, ad, None))]
     assert len(ortak) >= 3, f"kabuk çok az sembol sunuyor ({ortak}) — yeniden-dışa-aktarım kırılmış"
@@ -143,8 +144,11 @@ def test_KRITIK_yaml_ve_parser_hedef_duzlemini_TASIYOR():
         "ortak yapılandırma sınıfı düzlem yardımcılarını sunmuyor"
     )
 
-    for kok_dizin in ("inference_em_fantom/phantom_cv", "inference_petri_dish/petri_cv"):
-        yaml_src = (kok / "ai_hub" / kok_dizin / "cabin_config_example.yaml").read_text(encoding="utf-8")
+    for kok_dizin, yaml_adi in (
+        ("inference_em_fantom/phantom_cv_v3", "cabin_config_v3.yaml"),
+        ("inference_petri_dish/petri_cv_v2", "cabin_config_v2.yaml"),
+    ):
+        yaml_src = (kok / "ai_hub" / kok_dizin / yaml_adi).read_text(encoding="utf-8")
         assert "hedef_duzlem_eksen" in yaml_src, f"{kok_dizin}: yaml hedef düzlemi taşımıyor"
         # ⚠️ Kabuk gerçekten ORTAK ayrıştırıcıya bağlı mı — yoksa yukarıdaki iddia boşa düşer.
         kabuk = (kok / "ai_hub" / kok_dizin / "cabin_config.py").read_text(encoding="utf-8")

@@ -170,9 +170,10 @@ def test_KARSIT_D186_em_kedi_TAM_girdiyle_calisir(servis):
 @pytest.fixture
 def fantom_hatti(monkeypatch):
     """GERÇEK `PhantomCvPipeline.process_image` (6. adım: piksel→mm, alan, öngörücü çağrısı); algılama/segmentasyon
-    sentetik bölgelerle (fantom test görüntüleri depoda izlenmiyor)."""
-    from ai_hub.inference_em_fantom.phantom_cv import pipeline as pl
-    from ai_hub.inference_em_fantom.phantom_cv.color_segment import PhantomDetection, Region
+    sentetik bölgelerle. AI-2 C6: hocanın v3'ü (`phantom_cv_v3`) — v3 önce kendi lacivert-hale tespitini dener, yapısal
+    tümör bulamazsa v1 HSV yoluna (`find_phantoms` / `segment_phantom`) düşer: sentetik bölgeler o yoldan girer."""
+    from ai_hub.inference_em_fantom.phantom_cv_v3 import pipeline as pl
+    from ai_hub.inference_em_fantom.phantom_cv_v3.color_segment import PhantomDetection, Region
 
     maske = np.zeros((480, 640), np.uint8)
     fantom = PhantomDetection(
@@ -547,7 +548,11 @@ def fantom_ucu(fantom_hatti, monkeypatch):
     monkeypatch.setattr(ief, "xai_hizli_sensitivity", lambda *a, **k: kutu["xai"].append(a) or {"sahte": 1})
 
     def _yukle(ad, yukleyici):
-        return {"cls": pl.PhantomCvPipeline, "cfg": _kabin("inference_em_fantom.phantom_cv"), "predictor": kutu["ong"]}
+        return {
+            "cls": pl.PhantomCvPipeline,
+            "cfg": _kabin("inference_em_fantom.phantom_cv_v3"),
+            "predictor": kutu["ong"],
+        }
 
     monkeypatch.setattr(air, "_get_or_load_model", _yukle)
     ef.set_context([])
@@ -617,7 +622,8 @@ def test_KARSIT_E07_em_fantom_OLCEKLI_kipte_baglam_KURULUR(fantom_ucu):
 
 # ── D1.E07 ek: kabin YAML'ında sonlu olmayan değer YÜKLEMEDE reddedilir (İG-5.80 BİLİNMİYOR kolu) ──────────────────
 
-_PROFILLER = ["inference_em_fantom.phantom_cv", "inference_petri_dish.petri_cv"]
+# AI-2 C6: v1 `phantom_cv` / `petri_cv` emekli → hocanın v3 / v2 profil YAML'ları.
+_PROFILLER = ["inference_em_fantom.phantom_cv_v3", "inference_petri_dish.petri_cv_v2"]
 
 
 @pytest.mark.parametrize("profil", _PROFILLER)
@@ -692,11 +698,13 @@ class _KayitciDoz:
 
 @pytest.fixture
 def petri_hatti(monkeypatch):
-    """GERÇEK `PetriCvPipeline.process_image` (+ gerçek render); YOLO sahte (tek dairesel kuyu), ArUco yok."""
+    """GERÇEK `PetriCvPipeline.process_image` (+ gerçek render); YOLO sahte (tek dairesel kuyu), ArUco yok.
+    AI-2 C6: hocanın v2'si (`petri_cv_v2`) TEKİL kap kipinde (`plate_type=0`) — v1'in ölçtüğü YOLO yolu; plaka kipinin
+    D1.E07 / D1.100 kapıları `test_petri_cv_v2_KAHIN_MAKULLIK_ONNX_AI2_C1.py`de."""
     import cv2 as _cv2
 
-    from ai_hub.inference_petri_dish.petri_cv import pipeline as pp
-    from ai_hub.inference_petri_dish.petri_cv.petri_detector import PetriDetection
+    from ai_hub.inference_petri_dish.petri_cv_v2 import pipeline as pp
+    from ai_hub.inference_petri_dish.petri_cv_v2.petri_detector import PetriDetection
 
     maske = np.zeros((480, 640), np.uint8)
     _cv2.circle(maske, (320, 240), 100, 255, -1)
@@ -722,7 +730,7 @@ def petri_hatti(monkeypatch):
     monkeypatch.setattr(pp._plaus, "evaluate", lambda *a, **k: (True, {}))
 
     def _kos(ong=None, **pkw):
-        hat = pp.PetriCvPipeline(None, yolo_device="cpu", **pkw)
+        hat = pp.PetriCvPipeline(None, yolo_device="cpu", plate_type=0, **pkw)
         hat.yolo = _Yolo()
         hat._predictor = ong or _KayitciDoz()
         sonuc, ctx = hat.process_image(_renkli_kare())
@@ -784,7 +792,7 @@ def petri_ucu(petri_hatti, monkeypatch):
     def _yukle(ad, yukleyici):
         return {
             "cls": pp.PetriCvPipeline,
-            "cfg": _kabin("inference_petri_dish.petri_cv"),
+            "cfg": _kabin_petri_tekil(),
             "yolo_path": None,
             "yolo": _Yolo(),
             "predictor": kutu["ong"],
@@ -857,12 +865,12 @@ def servis_cv(fantom_hatti, petri_hatti, monkeypatch):
         if ad == "em_fantom":
             return {
                 "cls": pl.PhantomCvPipeline,
-                "cfg": _kabin("inference_em_fantom.phantom_cv"),
+                "cfg": _kabin("inference_em_fantom.phantom_cv_v3"),
                 "predictor": kutu["ong"],
             }
         return {
             "cls": pp.PetriCvPipeline,
-            "cfg": _kabin("inference_petri_dish.petri_cv"),
+            "cfg": _kabin_petri_tekil(),
             "yolo_path": None,
             "yolo": _Yolo(),
             "predictor": kutu["ong"],
@@ -922,3 +930,13 @@ def test_KARSIT_E07_servis_OLCEKLI_kipte_XAI_uretilir(servis_cv, uc, olcek):
 def _kabin(profil):
     """Örnek kabin yapılandırması (uçlar XAI taban noktasını `cfg.phantom`dan okur)."""
     return importlib.import_module(f"ai_hub.{profil}.cabin_config").load_cabin_config(None)
+
+
+def _kabin_petri_tekil():
+    """AI-2 C6: petri v2 ürün yapılandırması, TEKİL kap kipinde (`multiwell.plate_type = 0`) — uç `plate_type`
+    gönderilmeyince YAML'a düşer; bu dosyanın petri kapıları v1'in tekil (YOLO) yolunu ölçer. Kopya üzerinde (paylaşılan
+    nesne değişmez)."""
+    import dataclasses
+
+    cfg = _kabin("inference_petri_dish.petri_cv_v2")
+    return dataclasses.replace(cfg, multiwell=dataclasses.replace(cfg.multiwell, plate_type=0))

@@ -38,7 +38,7 @@ Ayrıca asgari **atıf (NOTICE)** dosyası da yoktu — o eksik bu notla birlikt
 
 | Modül | Model dosyası | Üretim yolunda? | Not |
 |---|---|---|---|
-| `inference_petri_dish/petri_cv/petri_detector.py` | `yolo11m-seg.pt` | **EVET** | `ai_router` çağırıyor |
+| `inference_petri_dish/petri_cv_v2/petri_detector.py` (+ `plate_grid.py` aday ipucu) | `yolo11m-seg.onnx` (ultralytics ile) | **EVET** | `ai_router` çağırıyor (AI-2, 2026-10-12: v1 `petri_cv/` + `.pt` varsayılanı emekli) |
 | `inference_human_kidney_ct` | ultralytics + cv2 | **EVET** | `ai_router` çağırıyor |
 | `cat_segmentation` | `yolov8m-seg.pt` | **EVET** | `ai_router` çağırıyor (`ai_router.py:2496`, `/api/ai/vision/segmentation`) |
 | `feline_reticulocytes` | `yolov8s.pt` | **EVET** | `ai_router` çağırıyor (`ai_router.py:2649`, `:2702`) |

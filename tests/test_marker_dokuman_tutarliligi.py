@@ -38,16 +38,14 @@ def _basili_sayfalar() -> "list[pathlib.Path]":
 #: Kabin yaml'ları — hepsi AYNI işareti okumak zorunda (tek kabin, tek işaret).
 _YAMLLAR = (
     "inference_cat_organ/cabin_config_example.yaml",
-    "inference_em_fantom/phantom_cv/cabin_config_example.yaml",
-    "inference_petri_dish/petri_cv/cabin_config_example.yaml",
+    # AI-2 C6: v1 `phantom_cv` / `petri_cv` emekli → hocanın v3 / v2 profil YAML'ları.
+    "inference_em_fantom/phantom_cv_v3/cabin_config_v3.yaml",
+    "inference_petri_dish/petri_cv_v2/cabin_config_v2.yaml",
 )
 
-#: Kullanıcıyı işaret basmaya yönlendiren dokümanlar.
-_DOKUMANLAR = (
-    "inference_em_fantom/phantom_cv/README.md",
-    "inference_petri_dish/petri_cv/README.md",
-    "KABIN_KURULUM_KILAVUZU.md",
-)
+#: Kullanıcıyı işaret basmaya yönlendiren dokümanlar. AI-2 C6: v1 paket README'leri (`phantom_cv/`, `petri_cv/`) paketle
+#: birlikte emekli — hocanın v2 / v3'ü README getirmedi; kurulum yönergesi TEK yerde: kabin kılavuzu.
+_DOKUMANLAR = ("KABIN_KURULUM_KILAVUZU.md",)
 
 pytestmark = pytest.mark.skipif(not (_AI_HUB / _YAMLLAR[0]).exists(), reason="ai_hub kaynak ağacı yok")
 

@@ -215,7 +215,7 @@ def saglayici_al(model: "str | None"):
 # ARAŞTIRMA SAĞLAYICILARI — Fantom Tümör / Petri Kuyu (Faz 2, 2026-09-09)
 # ══════════════════════════════════════════════════════════════════════════════════════════
 # ⚠️ SÜRÜŞ BAYRAK ARKASINDA: `PEMF_ARASTIRMA_AIPRO` kapalıyken bu sağlayıcılarla ÖNERİ ve SEANS
-# reddedilir (ai_router `_arastirma_aipro_kapisi`). Neden: phantom_cv/petri_cv koordinat dönüşümü
+# reddedilir (ai_router `_arastirma_aipro_kapisi`). Neden: phantom_cv_v3/petri_cv_v2 koordinat dönüşümü
 # marker→kabin ROTASYONUNU uygulamıyor ve kesişimi kabin Z=plate_z düzleminde alıyor; kedi hattı
 # kabin-merkezli PnP kullanıyor → iki hattın AYNI çerçeveyi ürettiği KANITLANMADI (plan kararı #6).
 # Hazırlık/önizleme ve AI Hub tek-foto analizi bayraktan BAĞIMSIZ çalışır.
@@ -345,7 +345,7 @@ def _yaricap_px(bbox) -> float:
 
 
 class _EmCvSaglayici:
-    """phantom_cv / petri_cv ortak sağlayıcı iskeleti (hedef bulma + doz + takip).
+    """phantom_cv_v3 / petri_cv_v2 ortak sağlayıcı iskeleti (hedef bulma + doz + takip).
 
     Alt sınıflar `_yukleyici`, `_pipeline_kur`, `_adaylar`, `_ozne_yok_hatalari`,
     `_ipucu_ozne_yok`, `_egitim_araligi` ve `_xai_modulu`nu verir.

@@ -9,6 +9,10 @@ yolu — `ai_hub/inference_petri_dish/petri_cv/pipeline.py` — aynı adın **mo
 çakışmasını tersine çevirir ve `test_petri_plausibility.py`nin 11 testini kırar (ölçüldü,
 2026-08-10). Bu yüzden burada dosyadan BENZERSİZ adla yüklenir; `sys.modules`taki gerçek adlar
 hiç dokunulmaz.
+
+AI-2 C6 (2026-10-12): o üretim yolu (v1 `petri_cv`) emekli; hocanın v2'si (`petri_cv_v2`) `PetriPredictor`'ı PAKET yolundan
+alır ve `sys.path`e dokunmaz (`tests/test_petri_cv_v2_KAHIN_MAKULLIK_ONNX_AI2_C1.py` yapısal kapısı). Çakışmanın kaynağı
+kalktı; bu yükleyicinin `sys.path` temizliği ve `test_ai_golden_values` kapısı yine de korunur (ucuz sigorta).
 """
 
 import importlib.util
