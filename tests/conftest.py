@@ -244,13 +244,25 @@ def _estop_mandali_sizmaz():
 
 
 @pytest.fixture(autouse=True)
-def _kedi_aipro_surus_bugunku(monkeypatch):
+def _kedi_aipro_surus_bugunku():
     """Y142 (sahip 2026-10-13): ürünün varsayılanı kedi AI Pro sürüşü KAPALI (`PEMF_KEDI_AIPRO_SURUS` yok = kapalı). Süitin
     kedi AI Pro kapıları (başlatma, döngü, `/frame`, mühür, Y54/Y25/D1.8x …) bayrak AÇIKKEN bugünkü davranışı ölçer —
     Y142'nin "bayrak açıkken davranış AYNEN" şartının süit çapı kâhini onlardır. Varsayılanı ve kapalı kolu ölçen kapılar
-    değişkeni KENDİLERİ siler/bozar: tests/test_ai_pro_KEDI_surus_KAPALI_varsayilan_Y142.py."""
-    monkeypatch.setenv("PEMF_KEDI_AIPRO_SURUS", "1")
-    yield
+    değişkeni KENDİLERİ siler/bozar (testin `monkeypatch`i): tests/test_ai_pro_KEDI_surus_KAPALI_varsayilan_Y142.py.
+
+    ⚠️ `monkeypatch` İSTENMEZ (ölçüldü, AIK): autouse fikstür `monkeypatch` isterse o, D1.41 nöbeti gibi sonraki autouse
+    fikstürlerden ÖNCE kurulur → testin yamaları nöbet DENETLENDİKTEN SONRA geri alınır (`test_session_watchdog` kablolama
+    testi `_bg_threads_started=True` ile nöbete yakalandı). Ortam elle kaydedilip geri yüklenir; testin kendi `monkeypatch`i
+    bundan SONRA kurulduğu için ÖNCE geri alınır (değişkeni silen / bozan kapı etkilenmez)."""
+    once = os.environ.get("PEMF_KEDI_AIPRO_SURUS")
+    os.environ["PEMF_KEDI_AIPRO_SURUS"] = "1"
+    try:
+        yield
+    finally:
+        if once is None:
+            os.environ.pop("PEMF_KEDI_AIPRO_SURUS", None)
+        else:
+            os.environ["PEMF_KEDI_AIPRO_SURUS"] = once
 
 
 @pytest.fixture(autouse=True)
