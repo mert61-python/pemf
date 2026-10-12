@@ -137,6 +137,13 @@ class KediSaglayici:
             )
         except Exception:
             ood = False
+        # AII-2.6 (yalnız METİN): organ bulundu (güven > 0) ama konum reddedildi — `_extract_organ_target` kabin DIŞI / geçersiz
+        # konumda (0, 0, 0) + güven döner (düşük güvende kısılmış konum, organ yoksa güven 0) → ipucu açıyı değil KABİN İŞARETİNİ
+        # söyler. Eşik OKUNMAZ (A-23 bağımsızlığı); meta'ya yazılmaz (veteriner sözleşmesi: yalnız `ood`). Sürüş değişmez.
+        try:
+            self._kabin_disi = not bool(sonuc[0]) and float(sonuc[4]) > 0.0 and not any(float(v) for v in sonuc[1:4])
+        except Exception:
+            self._kabin_disi = False
         self._meta = {"ood": ood}
 
     def predict(self, x_mm: float, y_mm: float, z_mm: float, hedef_id: int) -> tuple:
@@ -159,6 +166,11 @@ class KediSaglayici:
         """2026-08-24 sahip isteği: "hayvan yok" ile "hayvan var, organ görünmüyor" AYRI eylem
         gerektirir; metinler o günkü hâliyle korunur (kaynak-regex kapısı bunları arar)."""
         ad = hedef_adi or "hedef organ"
+        if ozne_var and getattr(self, "_kabin_disi", False):
+            return (
+                f"{ad} konumu kabin DIŞINDA ölçüldü — açıyı değiştirmek çözmez: kabin işaretinin (arka duvardaki kare kod) "
+                "kadrajda, düz ve parlamasız göründüğünü kontrol edin; sürerse kabin yapılandırmasını teknik desteğe doğrulatın."
+            )
         if ozne_var:
             return f"Hayvan görünüyor ama {ad} seçilemedi — kamerayı biraz çevirip açıyı değiştirin."
         return "Kamerayı hastaya doğrultun; hayvan kadrajda görünmüyor."
