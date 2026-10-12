@@ -169,6 +169,10 @@ def _build_thermal_model_pt(pt_path: str, backbone_name: str = "ghostnetv2_100.i
 
 #: Tek lojitli (sigmoid) modelin iki karari. Lojit = Sick kaniti: Sick -> +lojit, Healthy -> -lojit aciklanir.
 TERMAL_XAI_SINIFLARI = ("Sick", "Healthy")
+#: Tek lojitte iki kararin haritasini AYIRAN yontemler (AII-3.1 olcumu: hirescam = gradcam, rho -0,48...-0,76).
+#: gradcam++ sinif-duyarsiz (rho 0,83-0,95), eigencam hedeften BAGIMSIZ (iki harita bayt-ayni) → bunlarda yanit
+#: karar IDDIA ETMEZ (hedef None → arayuz genel basligi, toplu CLI karti "aciklanan karar" yazmaz). Izin listesi DEGISMEZ.
+TERMAL_SINIF_AYIRAN_YONTEMLER = ("hirescam", "gradcam")
 
 
 def termal_cam_haritasi(image_path: str, hedef_sinif: str | None = None, pt_path: str | None = None,
@@ -247,7 +251,8 @@ def xai_termal_isi_haritasi(image_path: str, pt_path: str | None = None,
         raise RuntimeError("XAI overlay JPG encode basarisiz")
     import base64 as _b64
 
-    return {"xai_image_base64": _b64.b64encode(buf.tobytes()).decode("ascii"), "method": method, "hedef": hedef}
+    iddia = hedef if method in TERMAL_SINIF_AYIRAN_YONTEMLER else None
+    return {"xai_image_base64": _b64.b64encode(buf.tobytes()).decode("ascii"), "method": method, "hedef": iddia}
 
 
 def main():
