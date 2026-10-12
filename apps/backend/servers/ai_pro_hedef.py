@@ -375,6 +375,9 @@ class _EmCvSaglayici:
         self._kilit = threading.Lock()
         self._meta: dict = {}
         self._kimlikler: list = []  # kalıcı kimlikler: {"id", "ad", "px", "organ_id"}
+        # AII-2.1: kaybolan kimlikler (son konumlarıyla) ve verilmiş EN BÜYÜK kimlik — kimlik BAŞKA hedefe yeniden verilmez.
+        self._kayip_kimlikler: dict = {}
+        self._son_kimlik = 0
 
     # ── alt sınıf sözleşmesi ────────────────────────────────────────────────────────────
     def _yukleyici(self):
@@ -469,12 +472,15 @@ class _EmCvSaglayici:
         """
         with self._kilit:
             eski = list(self._kimlikler)
+            kayip = list(self._kayip_kimlikler.values())
+            son_kimlik = self._son_kimlik
         yeni, kullanilan = [], set()
-        for aday in adaylar:
+
+        def _en_yakin(aday, havuz):
             px = aday.get("px") or (0.0, 0.0)
             r = _yaricap_px(aday.get("bbox"))
             en_iyi, en_iyi_d = None, None
-            for k in eski:
+            for k in havuz:
                 if k["id"] in kullanilan:
                     continue
                 kpx = k.get("px") or (0.0, 0.0)
@@ -485,8 +491,18 @@ class _EmCvSaglayici:
                 kullanilan.add(en_iyi["id"])
                 aday["id"] = en_iyi["id"]
                 aday["label"] = en_iyi["ad"]
+
+        for aday in adaylar:
+            _en_yakin(aday, eski)
             yeni.append(aday)
-        sonraki = max([k["id"] for k in eski] + [a.get("id") or 0 for a in yeni] + [0]) + 1
+        # ⚠️ AII-2.1 (A-16 · D1.60 2. katman): mühür ve döngü KİMLİĞİ karşılaştırır. Eskiden yeni kimlik "önceki karenin
+        # en büyüğü + 1" idi → önceki karede görünmeyen (tespiti düşen) hedefin kimliği BAŞKA bir yeni adaya veriliyordu ve
+        # döngü onaylanan tümör yerine komşusunu sürüyordu (ölçüldü). Eşleşmeyen aday önce KAYBOLAN bir kimliğin son konumuna
+        # (yarıçap içinde) bakar — aynı hedef kimliğini geri alır; değilse HİÇ VERİLMEMİŞ bir kimlik alır.
+        for aday in yeni:
+            if not aday.get("id"):
+                _en_yakin(aday, kayip)
+        sonraki = max([son_kimlik] + [k["id"] for k in eski] + [a.get("id") or 0 for a in yeni] + [0]) + 1
         for aday in yeni:
             if not aday.get("id"):
                 aday["id"] = sonraki
@@ -495,6 +511,13 @@ class _EmCvSaglayici:
                 aday["label"] = aday.get("label") or f"{self.hedef_etiketi} {sonraki}"
                 sonraki += 1
         with self._kilit:
+            etkin = {a["id"] for a in yeni}
+            for k in eski:
+                if k["id"] not in etkin:
+                    self._kayip_kimlikler[k["id"]] = k
+            for kid in etkin:
+                self._kayip_kimlikler.pop(kid, None)
+            self._son_kimlik = max([self._son_kimlik] + list(etkin))
             self._kimlikler = [
                 {"id": a["id"], "ad": a["label"], "px": a.get("px"), "organ_id": a.get("organ_id")} for a in yeni
             ]
