@@ -41,6 +41,42 @@ def kabin_uyarisi(result: dict) -> str | None:
     """Sonuç kalibrasyonsuzsa (kabin yapılandırması yüklenemedi) operatör metni, değilse None."""
     return KABIN_UYARISI if ((result or {}).get("kabin_yapilandirmasi") or {}).get("yuklendi") is False else None
 
+
+# SG.G5 (2026-10-14, sahip gözlemi — canlı kip): "kedi / organ BULUNAMADI" BİLGİDİR, hata değil. `predict` bunları RuntimeError ile
+# bildiriyor ve AI Hub ucu hepsini 500 "Kedi organ analiz hatası"na çeviriyordu → canlı kipte kedisiz her kare sessizce düşüyor,
+# elle analizde operatör "hata" görüyordu (FGS / segmentasyon "bulunamadı"yı başarılı yanıtla söyler). Yalnız aşağıdaki BİLGİ
+# iletileri eşlenir; gerçek arızalar (model dosyası yok, resim okunamadı, solvePnP istisnası) hata olarak KALIR. Gömülü uç ve GPU
+# servisi AYNI işlevi kullanır (parite).
+BULUNAMADI_KEDI = "kedi_bulunamadi"
+BULUNAMADI_ORGAN = "organ_cikarilamadi"
+BULUNAMADI_METNI = {
+    BULUNAMADI_KEDI: "Görüntüde kedi bulunamadı. Kedinin tümü kadraja girsin; ışık iyi ve görüntü net olsun.",
+    BULUNAMADI_ORGAN: (
+        "Kedi bulundu ama organ konumları çıkarılamadı (vücut noktaları yetersiz). Kediyi yandan ya da üstten, tümü görünecek "
+        "şekilde çekin."
+    ),
+}
+_BULUNAMADI_ONEKLERI = (
+    ("segmentasyon: kedi tespit edilemedi", BULUNAMADI_KEDI),
+    ("pose: DLC kedi bulamadi", BULUNAMADI_KEDI),
+    ("pose: detector conf <", BULUNAMADI_KEDI),
+    ("PnP: yetersiz keypoint", BULUNAMADI_ORGAN),
+    ("PnP: yetersiz kp", BULUNAMADI_ORGAN),
+    ("PnP: weight toplami sifir", BULUNAMADI_ORGAN),
+    ("PnP: cat_pnp_fail", BULUNAMADI_ORGAN),
+)
+
+
+def bulunamadi_nedeni(exc: BaseException) -> str | None:
+    """`predict`in fırlattığı istisna bir "bulunamadı" BİLGİSİ ise kodu (`BULUNAMADI_*`), gerçek arızaysa None."""
+    if not isinstance(exc, RuntimeError):
+        return None
+    metin = str(exc)
+    for onek, kod in _BULUNAMADI_ONEKLERI:
+        if metin.startswith(onek):
+            return kod
+    return None
+
 _MODEL_FILES = {
     "yolo": "yolov8m-seg.onnx",
     "det":  "superanimal_quadruped_fasterrcnn_mobilenet_v3_large_fpn.onnx",

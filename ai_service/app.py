@@ -816,9 +816,11 @@ def _cat_kabin_uyarisi(result) -> Optional[str]:
 
 
 @app.post("/infer/cat_organ")
-def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(None)):
+def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(None), bulunamadi_bilgi: str = Form(None)):
     """Kedi görüntüsü → 10 organ 3B lokalizasyon (3 ONNX) + overlay (GPU).
-    target_oid (ops): AI Pro seçili organı → overlay o organa odaklanır (CPU-parite; 0/None=Tüm Vücut)."""
+    target_oid (ops): AI Pro seçili organı → overlay o organa odaklanır (CPU-parite; 0/None=Tüm Vücut).
+    bulunamadi_bilgi="1" (SG.G5, yalnız AI Hub ucu gönderir): "kedi / organ bulunamadı" 500 değil BİLGİ yanıtı (gömülü uçla aynı
+    alanlar). ⚠️ AI Pro GPU kolu bu alanı GÖNDERMEZ → onun "kedi yok" anlamı (CPU koluyla aynı) DEĞİŞMEZ."""
     import cv2
 
     tmp = None
@@ -833,7 +835,36 @@ def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(None)):
         tmp = _save_temp(data, ".jpg")
         t0 = time.time()
         _toid = (int(target_oid) or None) if target_oid is not None else None
-        result = clf.predict(tmp, render=True, target_oid=_toid)
+        try:
+            result = clf.predict(tmp, render=True, target_oid=_toid)
+        except Exception as e:
+            from ai_hub.inference_cat_organ.catorgan_predictor import BULUNAMADI_METNI, bulunamadi_nedeni
+
+            neden = bulunamadi_nedeni(e) if str(bulunamadi_bilgi or "") == "1" else None
+            if neden is None:
+                raise
+            img = _read_bgr(data)
+            oh, ow = img.shape[:2]
+            scale = min(1.0, 1280.0 / max(oh, ow))
+            if scale < 1.0:
+                img = cv2.resize(img, (int(ow * scale), int(oh * scale)), interpolation=cv2.INTER_AREA)
+            return {
+                "status": "success",
+                "device": getattr(clf, "device", "?"),
+                "n_organs": 0,
+                "organs": [],
+                "detected": False,
+                "bulunamadi": neden,
+                "bulunamadi_mesaji": BULUNAMADI_METNI[neden],
+                "pose_type": None,
+                "pnp_residual_px": None,
+                "pnp_scale_px_per_cm": None,
+                "mirror_warning": False,
+                "anatomic_consistency": None,
+                "kabin_uyarisi": None,
+                "image_base64": _jpg_b64(img),
+                **_kare_olcusu(img),
+            }
         infer_ms = round((time.time() - t0) * 1000, 1)
         overlay = result.get("_overlay_bgr")
         image_b64 = None

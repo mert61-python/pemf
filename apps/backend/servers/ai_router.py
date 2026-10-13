@@ -4719,6 +4719,37 @@ async def analyze_scratch(
         raise _ai_fail("Yara kapanma analiz hatası", e)
 
 
+#: SG.G5: GPU servisinin `/infer/cat_organ`ına AI Hub'ın gönderdiği İSTEK form alanı (yanıt alanı değil) — "bulunamadı"yı bilgi
+#: olarak ister; AI Pro GPU kolu göndermez (onun "kedi yok" anlamı değişmez).
+_KEDI_ORGAN_AI_HUB_FORMU = {"bulunamadi_bilgi": "1"}
+
+
+def _kedi_organ_bulunamadi_yaniti(img, neden: str) -> dict:
+    """SG.G5: kedi organ "bulunamadı" BİLGİ yanıtı — başarılı, boş organ listesi, nedeni ve eylemi söyleyen metin (tek kaynak
+    `catorgan_predictor.BULUNAMADI_METNI`); gösterim karesi girdinin kendisi (organ işareti YOK). GPU servisi aynı alanları döner."""
+    from ai_hub.inference_cat_organ.catorgan_predictor import BULUNAMADI_METNI
+
+    oh, ow = img.shape[:2]
+    scale = min(1.0, 1280.0 / max(oh, ow))
+    gosterim = cv2.resize(img, (int(ow * scale), int(oh * scale)), interpolation=cv2.INTER_AREA) if scale < 1.0 else img
+    return {
+        "status": "success",
+        "image_base64": _encode_jpg_b64(gosterim, quality=GOSTERIM_JPEG_KALITESI),
+        **_kare_boyutu(gosterim),
+        "n_organs": 0,
+        "organs": [],
+        "detected": False,
+        "bulunamadi": neden,
+        "bulunamadi_mesaji": BULUNAMADI_METNI[neden],
+        "pose_type": None,
+        "pnp_residual_px": None,
+        "pnp_scale_px_per_cm": None,
+        "mirror_warning": False,
+        "anatomic_consistency": None,
+        "kabin_uyarisi": None,
+    }
+
+
 @ai_router.post("/api/ai/vision/cat_organ")
 async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = Form(None)):
     """Kedi Organ 3B Lokalizasyon (YOLOv8m-seg + SuperAnimal FasterRCNN + RTMPose ONNX).
@@ -4728,7 +4759,10 @@ async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = F
     """
     try:
         if ai_service_enabled():
-            return await _kapili_devret("cat_organ", file=file, image_base64=image_base64)
+            # SG.G5: AI Hub "bulunamadı"yı bilgi olarak ister (servis bu alan olmadan AI Pro'nun eski davranışını korur).
+            return await _kapili_devret(
+                "cat_organ", file=file, image_base64=image_base64, data=_KEDI_ORGAN_AI_HUB_FORMU
+            )
         img = await _decode_image(file, image_base64, label="cat_organ")
 
         def _load_cat_organ():
@@ -4745,6 +4779,13 @@ async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = F
         _gecici_gorsel_yaz(tmp.name, img)
         try:
             result = await asyncio.to_thread(lambda: clf.predict(tmp.name, render=True))
+        except Exception as e:
+            # SG.G5: "kedi / organ bulunamadı" BİLGİDİR (FGS / segmentasyon sözleşmesi) — 500 değil, boş organ listeli yanıt.
+            from ai_hub.inference_cat_organ.catorgan_predictor import bulunamadi_nedeni
+
+            if bulunamadi_nedeni(e) is None:
+                raise
+            return _kedi_organ_bulunamadi_yaniti(img, bulunamadi_nedeni(e))
         finally:
             try:
                 os.unlink(tmp.name)

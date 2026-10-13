@@ -1,5 +1,5 @@
 // Author: mertaygn, cglrgrkn
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type MutableRefObject } from "react";
 import { StyleSheet, Text, View, Image, ActivityIndicator, TouchableOpacity, TextInput, Platform, Linking } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -22,6 +22,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { webIcinKucult } from "@/services/gorselKucult";
 import { apiGet, apiPost, authHeaders, platformAlert, AI_TIMEOUT_MS, aiHataMesaji } from "@/services/apiClient";
 import { aiDetayCumlesi } from "@/utils/aiHataDetayi";
+import { canliKareDurumu, canliSonrakiBekleme, type CanliDurum } from "@/utils/canliKare";
 import { ckdOnKontrol } from "@/utils/ckdOnKontrol"; // B5: CKD gönderim-öncesi eyleme dönük ön-kontrol (klinik_asgari paritesi)
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { serviceConfig } from "@/services/config";
@@ -231,12 +232,18 @@ interface AiResult {
   input_image_base64?: string; seg_image_base64?: string; overlay_image_base64?: string;
   analysis_image_base64?: string; closure_image_base64?: string; xai_side_by_side_base64?: string;
   _xai_istendi?: boolean; // B4 ScratchModule: ısı haritası bu analizde İSTENDİ mi (istenip gelmeyeni sessiz bırakmamak için)
+  // SG.G4: termal girdinin makullik doğrulaması (backend `utils/image_domain.termal_girdi_dogrulamasi`; arayüz yalnız gösterir)
+  girdi_dogrulama?: { durum: string; dogrulandi: boolean; uyari: string | null } | null;
+  // SG.G5: kedi organ "bulunamadı" BİLGİSİ (backend `catorgan_predictor.BULUNAMADI_METNI`)
+  bulunamadi?: string; bulunamadi_mesaji?: string;
 }
 
 function summarizeVision(d: any): string {
   if (d?.fgs_total !== undefined) return `FGS ${d.fgs_total}/10${d?.pain_level ? ` (${trValue(d.pain_level)})` : ""}`;
   if (d?.cat_count !== undefined) return `${d.cat_count} kedi tespit edildi`;
-  if (d?.prediction?.label) return `Termal: ${trValue(d.prediction.label)}`;
+  if (d?.prediction?.label) {
+    return `Termal: ${trValue(d.prediction.label)}${d?.girdi_dogrulama?.dogrulandi === false ? " · girdi termal olarak doğrulanamadı" : ""}`;
+  }
   if (d?.counts) return `Eritrosit ${d.counts["erythrocyte"] ?? "?"} / Retikülosit ${(d.counts["punctate reticulocyte"] ?? 0) + (d.counts["aggregate reticulocyte"] ?? 0)}`;
   return "Analiz tamamlandı";
 }
@@ -1258,6 +1265,65 @@ function resetAiCachesForOwner(owner: string | null): boolean {
   return true;
 }
 
+/**
+ * CANLI KAMERA KUTUSU — SG.G6 (sahip: "fgs de canlı kamera açınca görüntü soluk görünüyor sanki").
+ * ⚠️ Eskiden analiz edilmiş karenin TAMAMI canlı önizlemenin üstüne `opacity: 0.8` ile biniyordu (`styles.cameraOverlay`):
+ * (a) canlı akış %20 sızıyor → soluk / hayalet; (b) bindirilen kare saniyeler eski → hareketle çift görüntü; (c) web'de ön kamera
+ * önizlemesi AYNALI, sunucu karesi aynasız → yazılar ve noktalar ters tarafta; (d) `contain` ↔ kamera `cover` ölçek farkı.
+ * Artık iki görüntü ASLA yarı saydam üst üste binmez: son analiz karesi (noktalar / maske SUNUCUNUN çizdiği yerde, aynasız) OPAK
+ * ve kutunun tamamında; canlı önizleme köşede küçük pencere (nişan almak için). İlk sonuç gelene dek canlı önizleme tam kutu. Son
+ * karenin yaşı görünür ("Son analiz 1,8 sn önce"). `CameraView` hep aynı ağaç konumunda kalır (yeniden bağlanmaz; kare yakalama
+ * önizleme boyutundan bağımsızdır).
+ */
+function CanliKameraKutusu({ cameraRef, facing, onFlip, sonKareB64, sonKareYasMs, rozet }: {
+  cameraRef: MutableRefObject<any>; facing: "back" | "front"; onFlip: () => void;
+  sonKareB64: string | null; sonKareYasMs: number | null; rozet: string;
+}) {
+  const yas = sonKareB64 && sonKareYasMs != null ? (Math.max(0, sonKareYasMs) / 1000).toFixed(1).replace(".", ",") : null;
+  return (
+    <View style={styles.cameraContainer}>
+      {sonKareB64 ? (
+        <Image
+          source={{ uri: `data:image/jpeg;base64,${sonKareB64}` }}
+          style={styles.canliSonKare}
+          resizeMode="contain"
+          testID="canli-son-kare"
+          accessibilityLabel="Son analiz edilen kare"
+        />
+      ) : null}
+      <View style={sonKareB64 ? styles.canliOnizlemeKose : styles.canliOnizlemeTam} testID={sonKareB64 ? "canli-onizleme-kose" : "canli-onizleme-tam"}>
+        <CameraView ref={cameraRef} style={styles.cameraView} facing={facing} />
+      </View>
+      <TouchableOpacity style={styles.flipCameraBtn} onPress={onFlip} accessibilityRole="button" accessibilityLabel="Kamerayı çevir">
+        <SwitchCamera color={colors.white} size={20} />
+      </TouchableOpacity>
+      <View style={styles.liveIndicator}>
+        <View style={styles.liveDot} />
+        <Text style={styles.liveText}>{rozet}</Text>
+      </View>
+      {yas != null ? (
+        <View style={styles.canliYasEtiketi}>
+          <Text style={styles.liveText} testID="canli-son-kare-yasi">Son analiz {yas} sn önce</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** SG.G5: son canlı karenin durumu — SÜREKLİ görünür satır (toast yağmuru yok); metin backend yanıtından (`utils/canliKare`). */
+function CanliDurumSatiri({ durum }: { durum: CanliDurum }) {
+  const uyari = durum.tur === "red" || durum.tur === "hata";
+  return (
+    <Text
+      style={[styles.canliDurum, uyari ? styles.canliDurumUyari : durum.tur === "bulunamadi" ? styles.canliDurumBilgi : null]}
+      accessibilityLiveRegion="polite"
+      testID="canli-durum"
+    >
+      {durum.metin}
+    </Text>
+  );
+}
+
 function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, explainDestegi }: { endpoint: string, title: string, subtitle: string, patientName: string, galleryOnly?: boolean, explainDestegi?: boolean }) {
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
@@ -1288,8 +1354,11 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
   const [autoAdjust, setAutoAdjust] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<any>(null);
-  const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // BUG #2 FIX: loading state'ini useRef ile takip et, setInterval closure'u her zaman güncel değeri okur
+  // SG.G5 / G6: son canlı karenin durumu (sürekli görünür) + son analiz karesinin zamanı (yaş etiketi).
+  const [canliDurum, setCanliDurum] = useState<CanliDurum | null>(null);
+  const [sonKareZamani, setSonKareZamani] = useState<number | null>(null);
+  const [simdi, setSimdi] = useState(() => Date.now());
+  // BUG #2 FIX: loading state'ini useRef ile takip et, döngü closure'u her zaman güncel değeri okur
   const loadingRef = useRef(false);
   const autoAdjustRef = useRef(autoAdjust);
   const { aiVisionData, aiVisionFresh } = useLiveData();
@@ -1354,55 +1423,80 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
     // veriyor (eski "KARARSIZ referans" notu bayattı).
   }, [isLive, autoAdjust, showToast]);
 
-  // Canlı kamera (otonom-OLMAYAN mod): telefon kamerasından periyodik kare yakala → analiz et.
+  // Canlı kamera (otonom-OLMAYAN mod): telefon kamerasından kare yakala → analiz et.
+  // SG.G5 / G6 / G4-2 (sahip gözlemleri 2026-10-13): eskiden sabit `setInterval(capture, 2500)` + HER hata sessiz yutuluyordu
+  // (`catch {}`) ve yalnız başarılı yanıt gösteriliyordu → modalite kapısının 422'si alan segmentasyon karesi "hiç analiz yapmıyor"
+  // gibi görünüyor, termalde normal kamera reddedilince ESKİ teşhis ekranda kalıyordu. Artık (`utils/canliKare`): uyarlamalı döngü
+  // (önceki kare bitince, başlangıçlar arası en az ~1 sn; kuyruk birikmez) · son karenin durumu backend yanıtından türetilip SÜREKLİ
+  // görünür (toast yok) · ret (4xx) gelince bu kare için geçerli sonuç YOK → teşhis ekrandan kalkar.
   useEffect(() => {
     if (!isLive || autoAdjust) return;
-    const capture = async () => {
-      if (loadingRef.current || !cameraRef.current) return;
-      loadingRef.current = true;
-      try {
-        // shutterSound: false — canlı analiz döngüsü saniyeler arayla kare alır; her karede
-        // deklanşör sesi çalmak klinik ortamda rahatsız edici (saha bildirimi 2026-08-27).
-        const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.5, skipProcessing: true, shutterSound: false,
-        });
-        const shrunk = photo?.uri ? await shrinkForUpload(photo.uri) : { uri: "", base64: null };
-        if (shrunk.base64) {
-          const fd = new FormData();
-          fd.append("image_base64", shrunk.base64);
-          fd.append("auto_adjust", "false");
-          const ctrl = new AbortController();
-          // Uçuştaki istek unmount'ta İPTAL EDİLMİYORDU: ekran değişince model çıkarımı boşuna
-          // sürüyor, dönen sonuç sökülmüş bileşende setResult çağırıyordu. Controller'ı ref'e koy
-          // (cleanup abort eder) ve setState öncesi mountedRef'i kontrol et.
-          // CANLI-DONGU: kisa sinir ZORUNLU (uzun timeout kamera akisini kilitler)
-          const t = setTimeout(() => ctrl.abort(), 15000);
-          liveAbortRef.current = ctrl;
-          const r = await fetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
-            method: "POST", body: fd, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
+    let bitti = false;
+    let zamanlayici: ReturnType<typeof setTimeout> | null = null;
+    const tur = async () => {
+      if (bitti) return;
+      const bas = Date.now();
+      if (!loadingRef.current && cameraRef.current) {
+        loadingRef.current = true;
+        try {
+          // shutterSound: false — canlı analiz döngüsü sık kare alır; her karede deklanşör sesi klinikte rahatsız edici
+          // (saha bildirimi 2026-08-27).
+          const photo = await cameraRef.current.takePictureAsync({
+            quality: 0.5, skipProcessing: true, shutterSound: false,
           });
-          clearTimeout(t);
-          const data = await r.json();
-          if (!mountedRef.current) return;
-          if (r.ok && data?.status === "success") setResult(data); // overlay result.image_base64 ile güncellenir
+          const shrunk = photo?.uri ? await shrinkForUpload(photo.uri) : { uri: "", base64: null };
+          if (shrunk.base64 && !bitti) {
+            const fd = new FormData();
+            fd.append("image_base64", shrunk.base64);
+            fd.append("auto_adjust", "false");
+            // Uçuştaki istek unmount'ta / kip değişiminde İPTAL edilir (cleanup abort eder; setState öncesi mountedRef / bitti).
+            const ctrl = new AbortController();
+            // CANLI-DONGU: kisa sinir ZORUNLU (uzun timeout kamera akisini kilitler)
+            const t = setTimeout(() => ctrl.abort(), 15000);
+            liveAbortRef.current = ctrl;
+            try {
+              const r = await fetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
+                method: "POST", body: fd, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
+              });
+              const data = await r.json().catch(() => ({}));
+              if (!mountedRef.current || bitti) return;
+              setCanliDurum(canliKareDurumu(endpoint, r.ok, r.status, data));
+              if (r.ok && data?.status === "success") {
+                setResult(data);
+                setSonKareZamani(Date.now());
+              } else {
+                setResult(null);
+                setSonKareZamani(null);
+              }
+            } finally {
+              clearTimeout(t);
+            }
+          }
+        } catch (e) {
+          if (mountedRef.current && !bitti) setCanliDurum({ tur: "hata", metin: `Son kare analiz edilemedi: ${aiHataMesaji(e)}` });
+        } finally {
+          loadingRef.current = false;
         }
-      } catch {
-        /* canlı modda kare hatalarını sessiz geç */
-      } finally {
-        loadingRef.current = false;
       }
+      if (bitti) return;
+      zamanlayici = setTimeout(tur, canliSonrakiBekleme(Date.now() - bas));
     };
-    liveIntervalRef.current = setInterval(capture, 2500);
+    zamanlayici = setTimeout(tur, canliSonrakiBekleme(0));
     return () => {
-      if (liveIntervalRef.current) {
-        clearInterval(liveIntervalRef.current);
-        liveIntervalRef.current = null;
-      }
+      bitti = true;
+      if (zamanlayici) clearTimeout(zamanlayici);
       // Uçuştaki kare analizini de iptal et (boşa çıkarım + unmount sonrası setState).
       try { liveAbortRef.current?.abort(); } catch { /* ignore */ }
       liveAbortRef.current = null;
     };
   }, [isLive, autoAdjust, endpoint]);
+
+  // SG.G6: canlı kipte gösterilen son analiz karesinin yaşı ("1,8 sn önce") — kare eskidikçe operatör görür.
+  useEffect(() => {
+    if (!isLive) return;
+    const t = setInterval(() => setSimdi(Date.now()), 500);
+    return () => clearInterval(t);
+  }, [isLive]);
 
   // "Model hazırlanıyor" ipucu: analiz 8sn'den uzun sürerse (ilk-kullanım model indirme).
   const [longLoading, setLongLoading] = useState(false);
@@ -1428,12 +1522,15 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
     }
     const next = !isLive;
     setIsLive(next);
-    if (!next) {
-      setImageUri(null);
-      setImageBase64(null);
-      setImageFile(null);
-      setResult(null);
-    }
+    setCanliDurum(null);
+    setSonKareZamani(null);
+    // SG.G6: sıfırlama HER İKİ yönde (Kedi Organ B1 deseni) — canlı kip son analiz karesini OPAK gösterdiği için galeri
+    // fotoğrafının sonucu canlıya geçişte "son kare" gibi görünmemeli.
+    if (imageUri && imageUri.startsWith("blob:")) { try { URL.revokeObjectURL(imageUri); } catch { /* ignore */ } }
+    setImageUri(null);
+    setImageBase64(null);
+    setImageFile(null);
+    setResult(null);
   };
 
   const takePhoto = async () => {
@@ -1715,27 +1812,18 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
             <Text style={styles.serverCamNote}>🖥️ Sunucu (klinik) kamerası seansı sürüyor — telefon kamerası kullanılmıyor</Text>
           </View>
         ) : (
-          <View style={styles.cameraContainer}>
-            <CameraView ref={cameraRef} style={styles.cameraView} facing={facing} />
-            {result?.image_base64 && (
-              <Image source={{ uri: `data:image/jpeg;base64,${result.image_base64}` }} style={styles.cameraOverlay} />
-            )}
-            <TouchableOpacity
-              style={styles.flipCameraBtn}
-              onPress={() => setFacing((f) => (f === "back" ? "front" : "back"))}
-              accessibilityRole="button"
-              accessibilityLabel="Kamerayı çevir"
-            >
-              <SwitchCamera color={colors.white} size={20} />
-            </TouchableOpacity>
-            <View style={styles.liveIndicator}>
-              <View style={styles.liveDot} />
-              <Text style={styles.liveText}>KAMERA AKTİF</Text>
-            </View>
-          </View>
+          <CanliKameraKutusu
+            cameraRef={cameraRef}
+            facing={facing}
+            onFlip={() => setFacing((f) => (f === "back" ? "front" : "back"))}
+            sonKareB64={result?.image_base64 || null}
+            sonKareYasMs={sonKareZamani != null ? simdi - sonKareZamani : null}
+            rozet="KAMERA AKTİF"
+          />
         )}
       </View>
       )}
+      {isLive && !autoAdjust && canliDurum ? <CanliDurumSatiri durum={canliDurum} /> : null}
 
       <View style={[styles.btnRow, isCompact && { flexDirection: "column" }]}>
         <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
@@ -1779,6 +1867,10 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
 
       {result && !autoAdjust && (
         <View style={styles.resultBox}>
+          {/* SG.G4: termal girdi doğrulanamadıysa (akromatik / kararsız / denetim kapalı) sonuçtan ÖNCE ve görünür söylenir. */}
+          {result.girdi_dogrulama && result.girdi_dogrulama.dogrulandi === false && result.girdi_dogrulama.uyari ? (
+            <Text style={styles.scUyari} testID="termal-girdi-uyarisi">⚠ {result.girdi_dogrulama.uyari}</Text>
+          ) : null}
           {(() => {
             const notDet = result.detected === false || result.fgs_total === null || (typeof result.fgs_total === "number" && result.fgs_total < 0);
             // ── FGS / yüz ağrısı ──
@@ -1801,9 +1893,9 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
               const sick = result.prediction.label === "Sick";
               const prob = result.prediction.confidence !== undefined ? Math.round(result.prediction.confidence * 100) : null;
               return sick
-                ? <ResultInterpretation tone="alert" emoji="🌡️" title={`Termal anormallik${prob != null ? ` · %${prob} güven` : ""}`}
+                ? <ResultInterpretation tone="alert" emoji="🌡️" title={`Termal anormallik${prob != null ? ` · model güveni %${prob}` : ""}`}
                     text="Termal görüntüde olası bir sıcaklık anormalliği (iltihap/enfeksiyon odağı olabilir) tespit edildi. İlgili bölgeyi hekimle değerlendirin." />
-                : <ResultInterpretation tone="positive" emoji="🌡️" title={`Belirgin termal anormallik yok${prob != null ? ` · %${prob} güven` : ""}`}
+                : <ResultInterpretation tone="positive" emoji="🌡️" title={`Belirgin termal anormallik yok${prob != null ? ` · model güveni %${prob}` : ""}`}
                     text="Termal dağılımda dikkat çekici bir anormallik görülmedi." />;
             }
             // ── Segmentasyon ──
@@ -1892,7 +1984,8 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
           {result.prediction && (() => {
              const lbl = result.prediction.label === "Sick" ? "Hasta (Riskli)" : "Sağlıklı";
              const prob = result.prediction.confidence !== undefined ? (result.prediction.confidence * 100).toFixed(1) : "?";
-             return <Text style={styles.resultText}>Termal Tespit: <Text style={{fontWeight:'bold', color: result.prediction.label === "Sick" ? colors.danger : colors.success}}>{lbl}</Text> (Doğruluk: %{prob})</Text>;
+             // SG.G4-3: model güveni DOĞRULUK DEĞİLDİR (softmax alakasız girdide de %95 verir) — eski etiket "Doğruluk" yanıltıyordu.
+             return <Text style={styles.resultText}>Termal Tespit: <Text style={{fontWeight:'bold', color: result.prediction.label === "Sick" ? colors.danger : colors.success}}>{lbl}</Text> (Model güveni: %{prob} — modelin kendi tahminine güveni; doğruluk değildir)</Text>;
           })()}
           {result.counts && (
             <>
@@ -3982,7 +4075,10 @@ function CatOrganModule({ patientName }: { patientName: string }) {
   const [facing, setFacing] = useState<"back" | "front">("back");
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<any>(null);
-  const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // SG.G5 / G6: son canlı karenin durumu + son analiz karesinin yaşı (VisionModule ile AYNI kural — `utils/canliKare`).
+  const [canliDurum, setCanliDurum] = useState<CanliDurum | null>(null);
+  const [sonKareZamani, setSonKareZamani] = useState<number | null>(null);
+  const [simdi, setSimdi] = useState(() => Date.now());
   const liveLoadingRef = useRef(false);
   // B1: mod geçişinde UÇUŞTAKİ istek sonucu (statik analiz ↔ canlı kare) diğer modun ekranına düşmesin.
   const liveAbortRef = useRef<AbortController | null>(null);
@@ -3996,43 +4092,71 @@ function CatOrganModule({ patientName }: { patientName: string }) {
     return () => clearTimeout(t);
   }, [loading]);
 
-  // Canlı kare yakalama döngüsü (3 modelli ağır pipeline → 3.5sn aralık; önceki kare bitmeden yenisini başlatma).
+  // Canlı kare döngüsü — SG.G5 / G6: VisionModule ile AYNI kural (`utils/canliKare`): uyarlamalı (3 modelli ağır hat kendi
+  // hızında; önceki kare bitmeden yenisi başlamaz), hata YUTULMAZ (son kare durumu sürekli görünür), "kedi / organ bulunamadı"
+  // backend'in BİLGİ yanıtıdır (eskiden 500 → sessiz). Eski sabit `setInterval(capture, 3500)` + `catch {}` kalktı.
   useEffect(() => {
     if (!isLive) return;
-    const capture = async () => {
-      if (liveLoadingRef.current || !cameraRef.current) return;
-      liveLoadingRef.current = true;
-      try {
-        // shutterSound: false — canlı organ takibi ~3,5 sn'de bir kare alır (saha bildirimi).
-        const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.6, skipProcessing: true, shutterSound: false,
-        });
-        const shrunk = photo?.uri ? await shrinkForUpload(photo.uri) : { uri: "", base64: null };
-        if (shrunk.base64) {
-          const fd = new FormData();
-          fd.append("image_base64", shrunk.base64);
-          const ctrl = new AbortController();
-          liveAbortRef.current = ctrl;
-          // CANLI-DONGU: kisa sinir ZORUNLU (uzun timeout kamera akisini kilitler)
-          const t = setTimeout(() => ctrl.abort(), 25000);
-          const r = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/cat_organ", { method: "POST", body: fd, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
-          clearTimeout(t);
-          const data = await r.json();
-          // B1: "Canlıyı Durdur" sonrası geç gelen kare sonucu boş statik ekrana düşmesin.
-          if (r.ok && data?.status === "success" && isLiveRef.current) setResult(data); // overlay = data.image_base64
+    let bitti = false;
+    let zamanlayici: ReturnType<typeof setTimeout> | null = null;
+    const tur = async () => {
+      if (bitti) return;
+      const bas = Date.now();
+      if (!liveLoadingRef.current && cameraRef.current) {
+        liveLoadingRef.current = true;
+        try {
+          // shutterSound: false — canlı organ takibi sık kare alır (saha bildirimi).
+          const photo = await cameraRef.current.takePictureAsync({
+            quality: 0.6, skipProcessing: true, shutterSound: false,
+          });
+          const shrunk = photo?.uri ? await shrinkForUpload(photo.uri) : { uri: "", base64: null };
+          if (shrunk.base64 && !bitti) {
+            const fd = new FormData();
+            fd.append("image_base64", shrunk.base64);
+            const ctrl = new AbortController();
+            liveAbortRef.current = ctrl;
+            // CANLI-DONGU: kisa sinir ZORUNLU (uzun timeout kamera akisini kilitler); 3 modelli hat → 25 sn.
+            const t = setTimeout(() => ctrl.abort(), 25000);
+            try {
+              const r = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/cat_organ", { method: "POST", body: fd, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
+              const data = await r.json().catch(() => ({}));
+              // B1: "Canlıyı Durdur" sonrası geç gelen kare sonucu boş statik ekrana düşmesin.
+              if (bitti || !isLiveRef.current) return;
+              setCanliDurum(canliKareDurumu("/vision/cat_organ", r.ok, r.status, data));
+              if (r.ok && data?.status === "success") {
+                setResult(data);
+                setSonKareZamani(Date.now());
+              } else {
+                setResult(null);
+                setSonKareZamani(null);
+              }
+            } finally {
+              clearTimeout(t);
+            }
+          }
+        } catch (e) {
+          if (!bitti && isLiveRef.current) setCanliDurum({ tur: "hata", metin: `Son kare analiz edilemedi: ${aiHataMesaji(e)}` });
+        } finally {
+          liveLoadingRef.current = false;
         }
-      } catch {
-        /* canlı modda kare hatalarını sessiz geç */
-      } finally {
-        liveLoadingRef.current = false;
       }
+      if (bitti) return;
+      zamanlayici = setTimeout(tur, canliSonrakiBekleme(Date.now() - bas));
     };
-    liveIntervalRef.current = setInterval(capture, 3500);
+    zamanlayici = setTimeout(tur, canliSonrakiBekleme(0));
     return () => {
-      if (liveIntervalRef.current) { clearInterval(liveIntervalRef.current); liveIntervalRef.current = null; }
+      bitti = true;
+      if (zamanlayici) clearTimeout(zamanlayici);
       try { liveAbortRef.current?.abort(); } catch { /* ignore */ }
       liveAbortRef.current = null;
     };
+  }, [isLive]);
+
+  // SG.G6: son analiz karesinin yaşı.
+  useEffect(() => {
+    if (!isLive) return;
+    const t = setInterval(() => setSimdi(Date.now()), 500);
+    return () => clearInterval(t);
   }, [isLive]);
 
   const toggleLive = async () => {
@@ -4050,6 +4174,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
     // (~3,5 sn) gelene dek kullanıcı eski fotoğrafın keypoint'lerini canlı kedi üzerinde görüyordu.
     if (imageUri && imageUri.startsWith('blob:')) { try { URL.revokeObjectURL(imageUri); } catch { /* ignore */ } }
     setImageUri(null); setImageBase64(null); setImageFile(null); setResult(null);
+    setCanliDurum(null); setSonKareZamani(null);
   };
 
   const takePhoto = async () => {
@@ -4108,7 +4233,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
       if (isLiveRef.current) return;
       if (response.ok && data.status === "success") {
         setResult(data);
-        logAiResult(hasta, "Kedi Organ", `${data.n_organs} organ lokalize`, { moduleId: "cat_organ", inputType: "image", detail: data });
+        logAiResult(hasta, "Kedi Organ", data.bulunamadi ? (data.bulunamadi === "kedi_bulunamadi" ? "Kedi bulunamadı" : "Organ çıkarılamadı") : `${data.n_organs} organ lokalize`, { moduleId: "cat_organ", inputType: "image", detail: data });
       } else {
         showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
       }
@@ -4165,24 +4290,20 @@ function CatOrganModule({ patientName }: { patientName: string }) {
             setOnizlemeW((eski) => (eski > 0 ? eski : w));
           }}
         >
-          <View style={styles.cameraContainer}>
-            <CameraView ref={cameraRef} style={styles.cameraView} facing={facing} />
-            {result?.image_base64 && (
-              <Image source={{ uri: `data:image/jpeg;base64,${result.image_base64}` }} style={styles.cameraOverlay} />
-            )}
-            <TouchableOpacity style={styles.flipCameraBtn} onPress={() => setFacing((f) => (f === "back" ? "front" : "back"))} accessibilityRole="button" accessibilityLabel="Kamerayı çevir">
-              <SwitchCamera color={colors.white} size={20} />
-            </TouchableOpacity>
-            <View style={styles.liveIndicator}>
-              <View style={styles.liveDot} />
-              <Text style={styles.liveText}>{result ? `${result.n_organs ?? 0} ORGAN` : "ORGAN ARANIYOR…"}</Text>
-            </View>
-          </View>
+          <CanliKameraKutusu
+            cameraRef={cameraRef}
+            facing={facing}
+            onFlip={() => setFacing((f) => (f === "back" ? "front" : "back"))}
+            sonKareB64={result?.image_base64 || null}
+            sonKareYasMs={sonKareZamani != null ? simdi - sonKareZamani : null}
+            rozet={result ? `${result.n_organs ?? 0} ORGAN` : "ORGAN ARANIYOR…"}
+          />
         </View>
       )}
 
+      {isLive && canliDurum ? <CanliDurumSatiri durum={canliDurum} /> : null}
       {isLive && (
-        <Text style={styles.liveHint}>🎥 Canlı mod açık — kediyi kadraja alıp sabit tutun. Organ haritası ~3-4 saniyede bir güncellenir; barların rengi güven düzeyini gösterir.</Text>
+        <Text style={styles.liveHint}>🎥 Canlı mod açık — kediyi kadraja alıp sabit tutun. Organ haritası her kare analizi bitince güncellenir (3 modelli hat — makinenin hızına bağlı); büyük görüntü son analiz karesidir, canlı önizleme köşededir; barların rengi güven düzeyini gösterir.</Text>
       )}
 
       <View style={[styles.btnRow, isCompact && { flexDirection: "column" }]}>
@@ -4216,8 +4337,9 @@ function CatOrganModule({ patientName }: { patientName: string }) {
           {(() => {
             const organs = result.organs || [];
             if (organs.length === 0) {
-              return <ResultInterpretation tone="alert" emoji="🔍" title="Organ tespit edilemedi"
-                text="Bu görüntüde kedi/organ net seçilemedi. Kedinin tümü kadraja girsin, ışık iyi ve görüntü net olsun; yandan/üstten daha yakın bir kare deneyin." />;
+              // SG.G5: backend "bulunamadı" BİLGİSİNİ nedeniyle söylüyorsa (kedi yok / organ çıkarılamadı) o metin gösterilir.
+              return <ResultInterpretation tone="alert" emoji="🔍" title={result.bulunamadi === "kedi_bulunamadi" ? "Kedi bulunamadı" : "Organ tespit edilemedi"}
+                text={result.bulunamadi_mesaji || "Bu görüntüde kedi/organ net seçilemedi. Kedinin tümü kadraja girsin, ışık iyi ve görüntü net olsun; yandan/üstten daha yakın bir kare deneyin."} />;
             }
             const best = organs.reduce((a: AiOrgan, b: AiOrgan) => ((b.reliability || 0) > (a.reliability || 0) ? b : a), organs[0]);
             const bestPct = Math.round(Math.max(0, Math.min(1, best.reliability || 0)) * 100);
@@ -4337,7 +4459,17 @@ const styles = StyleSheet.create({
   xaiStage: { width: "100%", height: rs(300), borderRadius: radius.md, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, marginTop: 4 },
   cameraContainer: { width: "100%", height: "100%", position: "relative" },
   cameraView: { flex: 1 },
-  cameraOverlay: { position: "absolute", top: 0, left: 0, width: "100%", height: "100%", resizeMode: "contain", opacity: 0.8 },
+  // SG.G6: canlı kipte son analiz karesi OPAK (yarı saydam bindirme YOK) + canlı önizleme köşede küçük pencere.
+  canliSonKare: { position: "absolute", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "#000" },
+  canliOnizlemeTam: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
+  canliOnizlemeKose: {
+    position: "absolute", top: 12, left: 12, width: "30%", aspectRatio: 4 / 3, borderRadius: radius.sm,
+    overflow: "hidden", borderWidth: 2, borderColor: colors.white, backgroundColor: "#000",
+  },
+  canliYasEtiketi: { position: "absolute", bottom: 12, left: 12, backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  canliDurum: { color: colors.text, fontSize: typography.small, lineHeight: rf(17), marginTop: spacing.xs, backgroundColor: colors.primarySoft, borderRadius: radius.sm, padding: spacing.sm },
+  canliDurumUyari: { color: colors.warning, backgroundColor: colors.warning + "22" },
+  canliDurumBilgi: { color: colors.textMuted },
   liveIndicator: { position: "absolute", top: 12, right: 12, flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 6 },
   flipCameraBtn: { position: "absolute", bottom: 12, right: 12, width: touch.min, height: touch.min, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center" },
   liveDot: { width: rs(8), height: rs(8), borderRadius: 4, backgroundColor: colors.danger },

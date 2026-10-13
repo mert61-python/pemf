@@ -149,7 +149,9 @@ def test_KRITIK_iptal_HAM_DOM_METNI_gostermez():
     # 12 = 1 tanım + 11 çağrı (AI modüllerinin `catch` blokları). Yeni bir AI modülü
     # eklenince bu sayı BİLİNÇLİ güncellenmeli; `/simulator` rota sözleşmesiyle aynı mantık.
     # 2026-09-08: tanım apiClient.ts'e taşındı → ekranda yalnız 12 ÇAĞRI kalır (eski 13 = 1 tanım + 12).
-    BEKLENEN_GECIS = 12
+    # 2026-10-14 (SG.G5): 12 → 14 — VisionModule ve Kedi Organ CANLI döngüleri kare hatasını artık YUTMUYOR (eskiden `catch {}`),
+    # nedeni `aiHataMesaji` ile son kare durum satırında gösteriyor.
+    BEKLENEN_GECIS = 14
     kullanim = len(re.findall(r"aiHataMesaji\(", kod))
     assert kullanim == BEKLENEN_GECIS, (
         f"aiHataMesaji gecis sayisi {kullanim}, beklenen {BEKLENEN_GECIS} — bir AI modulu "
