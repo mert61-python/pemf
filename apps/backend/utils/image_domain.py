@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 
 import cv2
 import numpy as np
@@ -88,7 +89,8 @@ EXPECTED: dict[str, set[str]] = {
     # veto sökülürse burası da {COLOR}'a geri alınmalı, yoksa CT sessizce "kuyucuk" üretir.
     # AI-2: + STAINED (hocanın 24'lük plakaları 4/6 STAINED — yukarıdaki em_fantom notu; ikinci katman ölçümü aynı).
     "em_petri": {COLOR, GRAYSCALE, STAINED},
-    # "thermal" KASITLI DIŞARIDA: IR kamera hem gri hem renk-haritalı çıktı verebilir.
+    # "thermal" BU SÖZLÜKTE DEĞİL: IR kamera hem gri hem renk-haritalı çıktı verebilir → gri / renkli sınıfı termali ayıramaz.
+    # SG.G4 (2026-10-14): termal ucun KENDİ makullik kapısı var — aşağıdaki `termal_analiz` (palet uyumu), `check` çağırır.
     # "ai_pro_frame" KASITLI DIŞARIDA: canlı kamera karesi, kullanıcı yüklemesi değil.
 }
 
@@ -190,9 +192,191 @@ def analyze(img: np.ndarray) -> tuple[str, dict]:
     return COLOR, metrics
 
 
+# ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+# TERMAL MAKULLİK KAPISI — SG.G4 (2026-10-14, sahip gözlemi)
+# ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+# NEDEN: AI Hub "Termal Görüntü Analizi" CANLI kipte NORMAL web kamerasıyla (insan yüzü, oda) "Termal anormallik · %95 güven …
+# Hasta (Riskli)" verdi. Termal yukarıdaki EXPECTED'de değildi → modüle giren HER görüntü softmax ile en yakın sınıfa "güvenle"
+# teşhis alıyordu (2026-08-06 CT → "Grade 4 · %100" vakasının AYNI sınıfı).
+# ÖLÇÜT (model-bağımsız, deterministik): termal kamera görüntüsü ya RENK PALETLİDİR (inferno / iron / jet / rainbow …: her renkli
+# piksel renk uzayında TEK BOYUTLU bir palet eğrisinin üstündedir) ya da AKROMATİKTİR (white-hot / black-hot). Doğal fotoğrafın
+# renkleri 3 boyutta dağılır, hiçbir palete oturmaz. "Palet uyumu" = RENKLİ piksellerin (kroma > _TERMAL_KROMA) en iyi uyan TEK
+# palete (RGB uzaklığı < _TERMAL_TAU) düşen oranı; "yayılım" = o piksellerin palet indeksi p90 − p10 (paletin ne kadarını kullandığı).
+# ÖLÇÜLEN DAĞILIM (2026-10-14, `DENETIM\DUZELTME-SG.md` G4; tau 30, kroma 20):
+#   gerçek termal (hocanın paketi, 4)                  : uyum 0,967–0,975 · yayılım 73–86
+#   sentetik termal (8 palet × 3 kaynak, q85 + q50)     : uyum 0,926–0,995 · yayılım 40–90
+#   kamera kareleri (normal web kamerası, 3)            : uyum 0,000–0,010
+#   doğal / laboratuvar / patoloji fotoğrafları (~60)   : uyum ≤ 0,512 (en yüksek petri fotoğrafı)
+#   arayüz ekran görüntüleri (koyu lacivert, 12)        : uyum 0,66–0,94 AMA yayılım ≤ 22 (paletin yalnız koyu ucu)
+# KARAR: renkli piksel < %10 → akromatik / kararsız (GEÇER, uyarılı) · uyum < 0,70 → KESİN uyumsuz (422) · uyum ≥ 0,90 ve
+# yayılım ≥ 30 → termal paleti DOĞRULANDI · arası → kararsız (GEÇER, uyarılı). İki yönde marj: red eşiği doğal fotoğrafın en
+# yükseğinin ×1,37 üstünde, en kötü sentetik termalin ×1,32 altında. Meşru termali bloklamamak için kararsız GEÇER (yukarıdaki
+# muhafazakârlık ilkesi); ama sonuç "girdi termal olarak doğrulanamadı" uyarısını taşır (`termal_girdi_dogrulamasi`).
+# SINIRI (dürüstlük): akromatik bir görüntü (white-hot termal ile CT / röntgen / gri fotoğraf) ayırt EDİLEMEZ → geçer, uyarılır.
+# Tek renkli düz görüntü bir palet noktasına oturabilir (kararsız sayılır: yayılım 0). Kapı: tests/test_termal_makullik_kapisi_SG_G4.py
+TERMAL_PALET = "termal_paleti"
+TERMAL_AKROMATIK = "akromatik"
+TERMAL_KARARSIZ = "kararsiz"
+TERMAL_UYUMSUZ = "uyumsuz"
+
+_TERMAL_KROMA = 20
+_TERMAL_TAU = 30.0
+_TERMAL_Q = 8  # renk küpü 32×32×32 kutu (kutu merkezinin en yakın palet noktasına uzaklığı önceden hesaplanır)
+_TERMAL_RENKLI_ASGARI = 0.10
+_TERMAL_RED_ESIGI = 0.70
+_TERMAL_DOGRULAMA_ESIGI = 0.90
+_TERMAL_YAYILIM_ASGARI = 30
+_TERMAL_CV_PALETLERI = ("INFERNO", "MAGMA", "PLASMA", "HOT", "JET", "TURBO", "RAINBOW")
+#: FLIR "Iron" (ironbow) yaklaşık çapaları (RGB), siyah → lacivert → mor → kırmızı → turuncu → sarı → beyaz.
+_TERMAL_IRON = (
+    (0, 0, 0),
+    (0, 0, 80),
+    (60, 0, 140),
+    (140, 0, 160),
+    (210, 30, 110),
+    (240, 90, 30),
+    (255, 160, 0),
+    (255, 220, 40),
+    (255, 255, 255),
+)
+_TERMAL_TABLO: dict | None = None
+_TERMAL_KILIT = threading.Lock()
+
+TERMAL_UYUMSUZ_MESAJI = (
+    "Bu görüntü termal kamera görüntüsüne benzemiyor (renk paleti / sıcaklık eşlemesi yok). Termal kameradan çekin ya da "
+    "termal görüntü yükleyin."
+)
+TERMAL_UYARILARI = {
+    TERMAL_AKROMATIK: (
+        "Girdi termal olarak doğrulanamadı: görüntü renksiz (gri tonlamalı). Beyaz-sıcak / siyah-sıcak termal görüntü olabilir "
+        "ama gri bir fotoğraftan ya da tıbbi görüntüden ayırt edilemiyor — sonucu buna göre değerlendirin."
+    ),
+    TERMAL_KARARSIZ: (
+        "Girdi termal olarak doğrulanamadı: renkleri bilinen bir termal kamera paletine tam oturmuyor. Termal kameradan "
+        "çekilmiş görüntü kullanın; bu sonucu buna göre değerlendirin."
+    ),
+}
+
+
+def _termal_tablosu() -> dict:
+    """Palet başına {kutu → en yakın palet noktası uzaklığı, palet indeksi}. Bir kez (iş parçacığı güvenli) hesaplanır."""
+    global _TERMAL_TABLO
+    if _TERMAL_TABLO is not None:
+        return _TERMAL_TABLO
+    with _TERMAL_KILIT:
+        if _TERMAL_TABLO is not None:
+            return _TERMAL_TABLO
+        lutlar = {}
+        for ad in _TERMAL_CV_PALETLERI:
+            cm = getattr(cv2, f"COLORMAP_{ad}")
+            lutlar[ad.lower()] = (
+                cv2.applyColorMap(np.arange(256, dtype=np.uint8).reshape(-1, 1), cm).reshape(256, 3).astype(np.float32)
+            )
+        t = np.linspace(0.0, 1.0, len(_TERMAL_IRON))
+        x = np.linspace(0.0, 1.0, 256)
+        lutlar["iron"] = np.stack([np.interp(x, t, [c[k] for c in _TERMAL_IRON]) for k in (2, 1, 0)], axis=1).astype(
+            np.float32
+        )  # BGR
+        merkez = (np.arange(256 // _TERMAL_Q) * _TERMAL_Q + _TERMAL_Q / 2).astype(np.float32)
+        kutular = np.stack(np.meshgrid(merkez, merkez, merkez, indexing="ij"), -1).reshape(-1, 3)
+        tablo = {}
+        for ad, lut in lutlar.items():
+            uzaklik = np.empty(len(kutular), np.float32)
+            indeks = np.empty(len(kutular), np.int16)
+            for i in range(0, len(kutular), 4096):
+                d = kutular[i : i + 4096, None, :] - lut[None, :, :]
+                d2 = (d * d).sum(-1)
+                indeks[i : i + 4096] = np.argmin(d2, axis=1)
+                uzaklik[i : i + 4096] = np.sqrt(d2.min(axis=1))
+            tablo[ad] = (uzaklik, indeks)
+        _TERMAL_TABLO = tablo
+    return _TERMAL_TABLO
+
+
+def termal_analiz(img: np.ndarray) -> tuple[str, dict]:
+    """BGR görüntünün termal makulliği: (`TERMAL_*` durumu, ölçümler). Saf, yan etkisiz; iç hata yukarı fırlar (A-24: `check`
+    onu REDDE çevirir). Boş / çözülemeyen girdi: `UNKNOWN` (yukarıdaki modalite ilkesi — decode katmanı kendi iletisini verir)."""
+    if img is None or getattr(img, "size", 0) == 0:
+        return UNKNOWN, {}
+    if img.ndim == 2:
+        return TERMAL_AKROMATIK, {"akromatik_oran": 1.0, "renkli_oran": 0.0}
+    h, w = img.shape[:2]
+    if max(h, w) > 256:
+        k = 256.0 / max(h, w)
+        img = cv2.resize(img, (max(1, int(w * k)), max(1, int(h * k))), interpolation=cv2.INTER_AREA)
+    p = img[:, :, :3].reshape(-1, 3).astype(np.int16)
+    kroma = p.max(axis=1) - p.min(axis=1)
+    akromatik_oran = float(np.mean(kroma <= _ACHROMATIC_CHROMA))
+    renkli = kroma > _TERMAL_KROMA
+    renkli_oran = float(np.mean(renkli))
+    olcum = {"akromatik_oran": round(akromatik_oran, 4), "renkli_oran": round(renkli_oran, 4)}
+    if renkli_oran < _TERMAL_RENKLI_ASGARI:
+        return (TERMAL_AKROMATIK if akromatik_oran >= _GRAYSCALE_RATIO else TERMAL_KARARSIZ), olcum
+    q = (p[renkli] // _TERMAL_Q).astype(np.int32)
+    kutu = q[:, 0] * 1024 + q[:, 1] * 32 + q[:, 2]
+    en_ad, en_uyum, en_maske = "", -1.0, None
+    for ad, (uzaklik, _indeks) in _termal_tablosu().items():
+        maske = uzaklik[kutu] < _TERMAL_TAU
+        uyum = float(np.mean(maske))
+        if uyum > en_uyum:
+            en_ad, en_uyum, en_maske = ad, uyum, maske
+    secili = _termal_tablosu()[en_ad][1][kutu][en_maske]
+    yayilim = float(np.percentile(secili, 90) - np.percentile(secili, 10)) if secili.size else 0.0
+    olcum.update({"palet": en_ad, "palet_uyumu": round(en_uyum, 4), "palet_yayilimi": round(yayilim, 1)})
+    if en_uyum < _TERMAL_RED_ESIGI:
+        return TERMAL_UYUMSUZ, olcum
+    if en_uyum >= _TERMAL_DOGRULAMA_ESIGI and yayilim >= _TERMAL_YAYILIM_ASGARI:
+        return TERMAL_PALET, olcum
+    return TERMAL_KARARSIZ, olcum
+
+
+class TermalUyumsuz(DomainMismatch):
+    """Termal uca termal kamera görüntüsüne benzemeyen (palete oturmayan) görüntü verildi — analiz YAPILMAZ (422)."""
+
+    def __init__(self, metrics: dict):
+        super().__init__("thermal", TERMAL_UYUMSUZ, {TERMAL_PALET, TERMAL_AKROMATIK}, metrics)
+
+    def user_message(self) -> str:
+        return TERMAL_UYUMSUZ_MESAJI
+
+
+def termal_girdi_dogrulamasi(img: np.ndarray) -> dict:
+    """Termal yanıtına eklenen girdi doğrulaması: {durum, dogrulandi, uyari, olcum}. Arayüz yalnız GÖSTERİR (kural burada).
+
+    Kapı `check` içinde zaten koşmuş olur (uyumsuz girdi buraya gelmez); bu yalnız GEÇEN girdinin doğrulanıp doğrulanmadığını
+    söyler. Hata fırlatmaz: hesap düşerse "doğrulanamadı" der (kapı kararı `check`te verildi, analiz ondan sonra koşar)."""
+    if not guard_enabled():
+        return {
+            "durum": "kapali",
+            "dogrulandi": False,
+            "uyari": "Görüntü türü denetimi bu cihazda kapalı — girdi termal olarak doğrulanmadı; sonucu buna göre değerlendirin.",
+            "olcum": {},
+        }
+    try:
+        durum, olcum = termal_analiz(img)
+    except Exception:
+        logger.warning("termal girdi doğrulaması hesaplanamadı", exc_info=True)
+        durum, olcum = UNKNOWN, {}
+    if durum == TERMAL_PALET:
+        return {"durum": durum, "dogrulandi": True, "uyari": None, "olcum": olcum}
+    uyari = TERMAL_UYARILARI.get(durum) or TERMAL_UYARILARI[TERMAL_KARARSIZ]
+    return {"durum": durum, "dogrulandi": False, "uyari": uyari, "olcum": olcum}
+
+
 def check(img: np.ndarray, label: str) -> None:
     """`label` modülü için görüntü modalitesini denetle; uyuşmazsa DomainMismatch fırlat."""
     if not guard_enabled():
+        return
+    if label == "thermal":
+        # SG.G4: termal ucun kendi makullik kapısı (yukarıda). İç hata = REDDET (A-24), KESİN uyumsuz = 422, gerisi geçer.
+        try:
+            durum, metrics = termal_analiz(img)
+        except Exception as e:
+            logger.warning("TERMAL MAKULLİK DENETİMİ ÇALIŞTIRILAMADI — analiz REDDEDİLDİ (A-24)", exc_info=True)
+            raise DomainCheckError(label, f"{type(e).__name__}: {e}") from e
+        if durum == TERMAL_UYUMSUZ:
+            logger.warning("TERMAL UYUŞMAZLIĞI: termal kamera görüntüsüne benzemiyor ölçüm=%s", metrics)
+            raise TermalUyumsuz(metrics)
         return
     expected = EXPECTED.get(label)
     if not expected:

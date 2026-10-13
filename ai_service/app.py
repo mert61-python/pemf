@@ -48,6 +48,7 @@ from fastapi.responses import JSONResponse
 from utils.image_domain import DomainCheckError as _DomainCheckError
 from utils.image_domain import DomainMismatch as _DomainMismatch
 from utils.image_domain import check as _domain_check
+from utils.image_domain import termal_girdi_dogrulamasi as _termal_girdi_dogrulamasi
 
 # ⚠️ ASGARİ GİRDİ KAPILARI (denetim 2026-08-17) — router ile AYNI nesne, KOPYA DEĞİL.
 # Ölçüldü: bu iki uç boş gövdeyle 200 dönüyordu — `/infer/disease` → "Conjunctivitis %53" ve
@@ -782,6 +783,8 @@ def infer_thermal(file: UploadFile = File(...), explain: str = Form(None), xai_m
             "inference_ms": round((time.time() - t0) * 1000, 1),
             "prediction": result,
             **result,
+            # SG.G4 paritesi: geçen girdinin termal doğrulaması (router ile AYNI işlev; KESİN uyumsuz yukarıda 422 aldı).
+            "girdi_dogrulama": _termal_girdi_dogrulamasi(_read_bgr(data)),
         }
         if str(explain).lower() == "true":
             try:

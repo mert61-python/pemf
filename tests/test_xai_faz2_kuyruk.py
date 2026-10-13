@@ -273,7 +273,8 @@ def test_KRITIK_ai_service_inprocess_thermal_explain_SMOKE(tmp_path):
     sc = TestClient(sapp.app)
     yy, xx = np.mgrid[0:224, 0:224].astype(np.float32)
     sicak = np.exp(-(((yy - 112) ** 2 + (xx - 112) ** 2) / (2 * 40.0**2)))
-    img = np.stack([(1 - sicak) * 180, sicak * 120, sicak * 255], axis=-1).astype(np.uint8)  # BGR sıcak-renkli
+    # SG.G4: termal uç termal kamera görüntüsüne benzemeyen girdiyi 422'ler (palet uyumu) → sıcak leke GERÇEK bir termal paletle.
+    img = cv2.applyColorMap((sicak * 255).astype(np.uint8), cv2.COLORMAP_INFERNO)
     ok, buf = cv2.imencode(".jpg", img)
     r = sc.post(
         "/infer/thermal",

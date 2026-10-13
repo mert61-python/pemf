@@ -45,6 +45,15 @@ def _kare(h=48, w=64):
     return rng.integers(0, 255, (h, w, 3), dtype=np.uint8)
 
 
+def _termal_kare(h=48, w=64):
+    """SG.G4: termal uç termal kamera görüntüsüne benzemeyen girdiyi (rastgele gürültü dahil) 422'ler → inferno paletli sıcak leke."""
+    import cv2
+
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    sicak = np.exp(-(((yy - h / 2) ** 2 + (xx - w / 2) ** 2) / (2 * (min(h, w) / 3) ** 2)))
+    return cv2.applyColorMap((sicak * 255).astype(np.uint8), cv2.COLORMAP_INFERNO)
+
+
 def _b64(img) -> str:
     import cv2
 
@@ -82,7 +91,7 @@ def test_KRITIK_termal_ucu_ASCII_disi_TEMPte_gorseli_yazar(unicode_temp, istemci
             return {"label": "Healthy", "probability_sick": 0.1, "confidence": 0.9}
 
     monkeypatch.setattr(air, "_get_or_load_model", lambda ad, yukleyici: _Termal())
-    r = client.post("/api/ai/vision/thermal", data={"image_base64": _b64(_kare())})
+    r = client.post("/api/ai/vision/thermal", data={"image_base64": _b64(_termal_kare())})
     assert goren and goren[-1][0] > 0, f"geçici görsel BOŞ yazıldı (ASCII dışı TEMP): {goren} — yanıt {r.status_code}"
     assert goren[-1][1] == (48, 64, 3)
     assert r.status_code == 200, r.text[:200]

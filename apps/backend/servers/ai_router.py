@@ -3524,6 +3524,11 @@ async def analyze_thermal(
                 data=({"explain": "true", "xai_method": xai_method} if explain else None),
             )
         img = await _decode_image(file, image_base64, label="thermal")
+        # SG.G4: termal makullik kapısı `_decode_image` içinde koştu (KESİN uyumsuz → 422, analiz yok). Geçen girdi doğrulanamadıysa
+        # (akromatik / kararsız) sonuç bunu SÖYLER — arayüz yalnız gösterir (`utils/image_domain.termal_girdi_dogrulamasi`).
+        from utils import image_domain as _imgdom
+
+        girdi_dogrulama = _imgdom.termal_girdi_dogrulamasi(img)
 
         def _load_thermal():
             from ai_hub.cat_thermal.inference_cat_thermal import CatThermalPredictor
@@ -3568,7 +3573,14 @@ async def analyze_thermal(
 
         b64_image = _encode_jpg_b64(img, quality=GOSTERIM_JPEG_KALITESI)
 
-        return {"status": "success", "prediction": result, "image_base64": b64_image, **_kare_boyutu(img), **yanit}
+        return {
+            "status": "success",
+            "prediction": result,
+            "image_base64": b64_image,
+            **_kare_boyutu(img),
+            **yanit,
+            "girdi_dogrulama": girdi_dogrulama,
+        }
     except Exception as e:
         logger.error(f"Thermal inference error: {e}", exc_info=True)
         raise _ai_fail("Termal model hatası", e)
