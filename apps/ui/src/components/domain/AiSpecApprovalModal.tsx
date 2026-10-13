@@ -221,7 +221,8 @@ export function AiSpecApprovalModal({
             {surusKapali ? (
               // Y142: sürüş kapalıyken onay seans BAŞLATMAZ — düğme pasif ve etiketi bunu söyler (backend de 409 verir).
               <TouchableOpacity
-                style={[s.btn, s.btnPrimary, s.btnDisabled]}
+                // Dokunma hedefi tabanı satır içinde de (cırcır kapısı `s.X` stillerini çözmüyor; `s.btn` zaten touch.min taşır).
+                style={[s.btn, s.btnPrimary, s.btnDisabled, { minHeight: touch.min }]}
                 disabled
                 accessibilityRole="button"
                 accessibilityState={{ disabled: true }}
