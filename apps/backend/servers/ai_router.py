@@ -59,9 +59,18 @@ async def _allow_large_upload(request: Request) -> None:
 # ile aynı desen. `PEMF_JETON_ENFORCED` KAPALIYKEN tam no-op (bugünkü canlı; satış açılmadı).
 # ⚠️ Tedavi/kontrol uçları bu router'da DEĞİL ve jeton onları ASLA kapılamaz — yapısal kilit:
 # tests/test_jeton_gate.py::test_KRITIK_GUVENLIK_tedavi_uclari_jeton_kapisinin_ARKASINDA_DEGIL
-from servers.jeton import jeton_gate  # noqa: E402
+# SG.G4-5 / G5-4 (2026-10-14): `jeton_gate` yalnız KARAR verir (402 aynen); jeton `jeton_tuketimi` ile uç İSTİSNASIZ dönünce düşer
+# (`scope="function"`: yanıt gönderilmeden önce) — reddedilen (422), düşen (500) ya da istemcisi kopan analiz ücretlenmez.
+from servers.jeton import jeton_gate, jeton_tuketimi  # noqa: E402
 
-ai_router = APIRouter(dependencies=[Depends(_allow_large_upload), Depends(ai_queue_gate), Depends(jeton_gate)])
+ai_router = APIRouter(
+    dependencies=[
+        Depends(_allow_large_upload),
+        Depends(ai_queue_gate),
+        Depends(jeton_gate),
+        Depends(jeton_tuketimi, scope="function"),
+    ]
+)
 
 
 from utils.image_domain import DomainMismatch as _ImgDomainMismatch

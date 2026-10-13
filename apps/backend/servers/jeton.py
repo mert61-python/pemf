@@ -242,11 +242,24 @@ class JetonYoneticisi:
 
     # ── Ana kapı ────────────────────────────────────────────────────────────
     def izin(self, islem: str, istek_id: str | None = None, cihaz_id: str | None = None) -> Karar:
-        """ÜCRETLİ bir işlem (MALIYET anahtarı) için jeton kapısı. Tedavi / acil durdurma buraya GELMEZ — onları
-        `_islem_turu` None'a eşler ve `_jeton_kapisi_karari` karar vermeden döner (D4.11)."""
+        """ÜCRETLİ bir işlem (MALIYET anahtarı) için jeton kapısı: karar + tüketim BİRLİKTE (`on_izin` + tüketici). Tedavi / acil
+        durdurma buraya GELMEZ — onları `_islem_turu` None'a eşler ve kapı karar vermeden döner (D4.11)."""
+        karar, tuketici = self.on_izin(islem, istek_id, cihaz_id)
+        return tuketici() if tuketici is not None else karar
+
+    def on_izin(
+        self, islem: str, istek_id: str | None = None, cihaz_id: str | None = None
+    ) -> "tuple[Karar, Callable[[], Karar] | None]":
+        """İKİ AŞAMALI kapı (SG.G4-5 / G5-4, 2026-10-14): KARAR şimdi, TÜKETİM yalnız analiz BAŞARIYLA bitince.
+
+        Eskiden `izin` kararla birlikte jetonu da düşürüyordu ve router kapısı ucun ÖNÜNDE koşuyordu → modalite / makullik kapısının
+        422'si, model hatasının 500'ü, istemcinin iptal ettiği canlı kare de 1 jeton yakıyordu (ölçüldü 2026-10-13: segmentasyon
+        canlı kipinde 63 kare 422 aldı, hepsi ücretlendi). Dönüş: (karar, tüketici) — izinsizse tüketici None; izinliyse
+        tüketici() tüketimi YAPAR ve son kararı döndürür (fiyat, idempotans, çevrimdışı defter AYNEN). Kural (1 analiz = maliyet
+        tablosu) DEĞİŞMEDİ; değişen yalnız sıra: ücret, sonucu teslim edilen analize."""
         # 2) Bayrak kapalı → no-op (satış açılana kadar canlı davranış değişmez).
         if not JETON_ENFORCED:
-            return Karar(izinli=True, sebep="enforce_kapali")
+            return Karar(izinli=True, sebep="enforce_kapali"), None
 
         maliyet = MALIYET.get(islem, MALIYET["goruntu"])
         iid = istek_id or f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:12]}"
@@ -268,8 +281,10 @@ class JetonYoneticisi:
                         "yeni yapay zekâ analizi başlatılamadı. Ödemeniz alındığında sınır sıfırlanır. "
                         "Seans, acil durdurma ve sensör izleme ETKİLENMEZ."
                     ),
-                )
-            return self._tuket(maliyet, islem, iid, cihaz_id, tur="kullandikca")
+                ), None
+            return Karar(izinli=True, jeton_harcandi=maliyet, sebep="tuketilecek"), (
+                lambda: self._tuket(maliyet, islem, iid, cihaz_id, tur="kullandikca")
+            )
 
         # 3) Bakiye okunamıyorsa (çevrimdışı klinik) → tavana kadar İZİN + borç kaydı.
         try:
@@ -285,25 +300,31 @@ class JetonYoneticisi:
                         "Seans, acil durdurma ve sensör izleme ETKİLENMEZ."
                     ),
                     sebep="offline_tavan",
+                ), None
+
+            def _cevrimdisi_tuket() -> Karar:
+                self._bekleyene_ekle(
+                    {
+                        "istek_id": iid,
+                        "miktar": maliyet,
+                        "tur": "analiz",
+                        "detay": islem,
+                        "cihaz_id": cihaz_id,
+                        "sahip": self._sahip,
+                    }
                 )
-            self._bekleyene_ekle(
-                {
-                    "istek_id": iid,
-                    "miktar": maliyet,
-                    "tur": "analiz",
-                    "detay": islem,
-                    "cihaz_id": cihaz_id,
-                    "sahip": self._sahip,
-                }
-            )
-            return Karar(izinli=True, jeton_harcandi=maliyet, sebep="cevrimdisi")
+                return Karar(izinli=True, jeton_harcandi=maliyet, sebep="cevrimdisi")
+
+            return Karar(izinli=True, jeton_harcandi=maliyet, sebep="cevrimdisi"), _cevrimdisi_tuket
 
         # 4) Bakiye yetersiz → YALNIZ analiz reddedilir (tedavi yolu buraya hiç gelmez — `_islem_turu`).
         if bakiye < maliyet:
-            return Karar(izinli=False, mesaj=_YETERSIZ_MESAJ, sebep="yetersiz")
+            return Karar(izinli=False, mesaj=_YETERSIZ_MESAJ, sebep="yetersiz"), None
 
         # 5) Tüketimi gönder. Gönderim düşerse analiz DURMAZ — kayıt deftere düşer (fail-open).
-        return self._tuket(maliyet, islem, iid, cihaz_id, tur="analiz")
+        return Karar(izinli=True, jeton_harcandi=maliyet, sebep="tuketilecek"), (
+            lambda: self._tuket(maliyet, islem, iid, cihaz_id, tur="analiz")
+        )
 
     def _tuket(self, maliyet: int, islem: str, iid: str, cihaz_id: str | None, tur: str) -> Karar:
         """Tüketimi gönderir; gönderilemezse yerel deftere yazar (iki ödeme modelinde de ortak)."""
@@ -563,14 +584,23 @@ def _uzlastirmayi_tetikle(token: str) -> bool:
 
 
 def _jeton_kapisi_karari(request: Request) -> None:
-    """Senkron karar gövdesi (test yüzeyi). İzin yoksa HTTPException(402) fırlatır."""
+    """Senkron karar + tüketim (test yüzeyi; üretim `jeton_gate` + `jeton_tuketimi` AYNI iki parçayı ayrı anlarda çağırır).
+    İzin yoksa HTTPException(402) fırlatır."""
+    tuketici = _jeton_on_karari(request)
+    if tuketici is not None:
+        tuketici()
+
+
+def _jeton_on_karari(request: Request) -> "Callable[[], Karar] | None":
+    """Senkron KARAR gövdesi: izin yoksa HTTPException(402); izinliyse tüketiciyi (ya da serbest uçta None) döndürür — jeton
+    BURADA DÜŞMEZ (SG.G4-5 / G5-4: tüketim yalnız analiz başarıyla bitince, `jeton_tuketimi`)."""
     # ⚠️ SIRA: serbest-uç ve bayrak kontrolü HER ŞEYDEN ÖNCE — pro/stop için ağ çağrısı bile
     # yapılmaz (ağ gecikmesi seans durdurmayı geciktiremez; testle kilitli).
     islem = _islem_turu(getattr(getattr(request, "url", None), "path", "") or "")
     if islem is None:
-        return
+        return None
     if not JETON_ENFORCED:
-        return  # sahip kararı: satış kapalı — kapı bağlı ama uykuda (bayrak tek anahtar)
+        return None  # sahip kararı: satış kapalı — kapı bağlı ama uykuda (bayrak tek anahtar)
 
     token = _bearer_token(request)
     if not _jwt_sahip(token):
@@ -610,15 +640,21 @@ def _jeton_kapisi_karari(request: Request) -> None:
     )
     yonetici._kilit = _GATE_DEFTER_KILIT  # defter dosyası paylaşımlı → kilit de paylaşımlı
 
-    karar = yonetici.izin(islem)
+    karar, tuketici = yonetici.on_izin(islem)
     if not karar.izinli:
         # 402: ticari red. Mesaj TEDAVİNİN ETKİLENMEDİĞİNİ açıkça söyler (hasta güvenliği algısı).
         raise HTTPException(status_code=402, detail=karar.mesaj or _YETERSIZ_MESAJ)
+    return tuketici
+
+
+#: `jeton_gate`in izinli analize bıraktığı tüketicinin istek kapsamındaki adı (`request.state`; `jeton_tuketimi` okur).
+_BEKLEYEN_TUKETIM = "jeton_bekleyen_tuketim"
 
 
 async def jeton_gate(request: Request) -> None:
-    """Router-seviyesi bağımlılık. Bloklayan Supabase çağrısı threadpool'a atılır (belge 4.1;
-    ai_queue_gate ile aynı gerekçe — event loop bloklanmasın).
+    """Router-seviyesi bağımlılık — KARAR (402 ya da izin). Bloklayan Supabase çağrısı threadpool'a atılır (belge 4.1;
+    ai_queue_gate ile aynı gerekçe — event loop bloklanmasın). İzinli analizin tüketicisi `request.state`e bırakılır; jetonu
+    `jeton_tuketimi` (aynı router, `scope="function"`) yalnız uç İSTİSNASIZ dönünce düşürür (SG.G4-5 / G5-4).
 
     ⚠️ O-1.1 (Ö.4-Y8): serbest uç (AI Pro durdurma `/api/ai/pro/stop` …) ve KAPALI bayrak kararı OLAY DÖNGÜSÜNDE verilir —
     ortak iş parçacığı havuzuna HİÇ girmez. Eskiden bu ucuz karar da `to_thread`'deydi: havuz asılı G/Ç ile doluyken AI Pro
@@ -627,7 +663,40 @@ async def jeton_gate(request: Request) -> None:
 
     if _islem_turu(getattr(getattr(request, "url", None), "path", "") or "") is None or not JETON_ENFORCED:
         return
-    await asyncio.to_thread(_jeton_kapisi_karari, request)
+    tuketici = await asyncio.to_thread(_jeton_on_karari, request)
+    if tuketici is not None:
+        setattr(request.state, _BEKLEYEN_TUKETIM, tuketici)
+
+
+async def jeton_tuketimi(request: Request):
+    """Router-seviyesi `yield` bağımlılığı — TÜKETİM (SG.G4-5 / G5-4, 2026-10-14). `Depends(jeton_tuketimi, scope="function")`:
+    çıkış kodu uç DÖNDÜKTEN SONRA, yanıt gönderilmeden ÖNCE koşar; uç istisnayla biterse (modalite / makullik 422, model 500,
+    GPU servisi hatası, kimlik / onay 4xx) FastAPI istisnayı `yield` noktasına fırlatır ve aşağısı HİÇ koşmaz → jeton DÜŞMEZ.
+    İstemci yanıtı beklemeden koptuysa (canlı karenin iptali, sökülen ekran) sonuç teslim edilemez → jeton DÜŞMEZ.
+
+    ⚠️ Serbest uç / kapalı bayrak: `jeton_gate` tüketici bırakmaz → burada havuza da ağa da girilmez (O-1.1, Ö.4-Y8).
+    ⚠️ Tüketim hiçbir koşulda başarılı yanıtı bozmaz: gönderim düşerse kayıt yerel deftere yazılır (`_tuket`), beklenmeyen hata
+    yalnız günlüğe gider."""
+    yield
+    tuketici = getattr(request.state, _BEKLEYEN_TUKETIM, None)
+    if tuketici is None:
+        return
+    setattr(request.state, _BEKLEYEN_TUKETIM, None)
+    try:
+        if await request.is_disconnected():
+            logger.info(
+                "jeton: istemci yanıtı beklemeden koptu — sonuç teslim edilemedi, jeton DÜŞÜLMEDİ (%s)",
+                request.url.path,
+            )
+            return
+    except Exception:
+        pass  # kopma sorusu yanıtlanamazsa analiz teslim edilecek sayılır (bugünkü davranış)
+    import asyncio
+
+    try:
+        await asyncio.to_thread(tuketici)
+    except Exception:
+        logger.warning("jeton: tüketim kaydedilemedi (analiz yanıtı etkilenmedi)", exc_info=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════════
