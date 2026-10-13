@@ -45,7 +45,9 @@ jest.mock("@/hooks/useKeyboard", () => ({
   KAV_BEHAVIOR_MODAL: undefined,
 }));
 
-let mockKabuk: "bottom" | "rail" | "sidebar" = "bottom";
+// `as` ile: tip açıklamalı ilk atama `let`i "bottom"a daraltıyor, fabrikadaki karşılaştırmalar `tsc`de TS2367 veriyordu
+// (jest tip denetlemez; ilk gerçek derlemenin typecheck adımı yakaladı).
+let mockKabuk = "bottom" as "bottom" | "rail" | "sidebar";
 let mockEkstra: Record<string, unknown> = {};
 jest.mock("@/hooks/useResponsive", () => ({
   useResponsive: () => {
