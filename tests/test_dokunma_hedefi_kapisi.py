@@ -40,8 +40,10 @@ _PF = _KOK / "apps" / "ui" / "src"
 # taşımıyordu → ihlal kendiliğinden düştü.
 # ⚠️ Aynı turda EKLENEN dokunulabilir öğeler (SecimCubugu düğmeleri, seçim onay kutuları,
 # GenisletilebilirMetin) sayıyı ARTIRMADI: hepsi `touch.min` tabanıyla yazıldı.
+# 2026-10-14 (SG.G3): 117 → 116. Ayarlar → Veri Saklama Süresi seçenekleri `styles.btnOutline` + `flex: 0` yerine `touch.min`
+# tabanlı `styles.saklamaSecenek` kullanıyor (web'de taşan / kırılan düğmeler düzeldi).
 # Faz D hedefi: 0. Düşürdükçe bu sayıyı da düşürün.
-KALAN_IHLAL = 117
+KALAN_IHLAL = 116
 # Gerekçeli muafiyetler (perde/kart gibi dokunuş yutucular).
 MUAF_SAYISI = 2
 

@@ -40,6 +40,10 @@ function sonTurZamani(at: string | null | undefined): string {
 
 export function SettingsScreen() {
   const { setUserMode, isExpert, isResearcher } = useUserMode();
+  // SG.G3 (sahip, 2026-10-13: "araştırma profilinin ayarlar kısmında bunlar da olmalı … veri saklama süresi veri taşıma donanım
+  // bakım"): bakım / taşıma / saklama kartları UZMAN profillerde (veteriner VEYA araştırma); Ev Sahibi'nde GİZLİ kalır (KVKK).
+  // Profiller herkese açık (sahip kararı) → gerçek erişim genişlemez; uçlar profil bilmez. Taşıma ve saklama CİHAZ GENELİDİR.
+  const uzmanProfil = isExpert || isResearcher;
   const { reconnect: liveReconnect, wsConnected } = useLiveData();
   const guardTeardown = useTeardownGuard();
   // "Ayarlar kaydedildi" mesajını 3sn sonra silen zamanlayıcı — unmount'ta temizlenmesi için ref'te.
@@ -785,7 +789,7 @@ export function SettingsScreen() {
           </View>
         </>
 
-      {isExpert && (
+      {uzmanProfil && (
         <View style={{ marginTop: spacing.xl }}>
           <Card style={[styles.card as any, { borderColor: colors.danger, borderWidth: 1 }]}>
             <View style={styles.cardHeader}>
@@ -842,18 +846,21 @@ export function SettingsScreen() {
           Kayıtlar bilerek MAKİNEDE tutuluyor (bulut senkronu YOK: kişisel veri yurt dışına
           çıkmasın, kayıt kliniğin olsun). Bunun tek gerçek dezavantajı cihaz değişimiydi —
           çözümü bulut değil, kliniğin KENDİ kontrolündeki şifreli dosya.
-          Yalnız VETERİNER: klinik verisinin tamamını dışarı çıkarır. */}
-      {isExpert && Platform.OS === "web" && (
+          Uzman profillerde (veteriner / araştırma — SG.G3): cihazdaki verinin tamamını dışarı çıkarır; Ev Sahibi'nde gizli. */}
+      {uzmanProfil && Platform.OS === "web" && (
         <Card style={styles.card}>
           <Text style={styles.cardTitle}>Veri Taşıma (Cihaz Değişimi)</Text>
           <Text style={styles.intro}>
-            Hasta kayıtları, seans geçmişi ve AI analiz geçmişi tek bir ŞİFRELİ dosyaya aktarılır.
+            {isResearcher
+              ? "Bu cihazdaki TÜM kayıtlar — klinik ve araştırma: hasta / denek kartları, seans geçmişi ve AI analiz geçmişi — tek bir ŞİFRELİ dosyaya aktarılır. "
+              : "Hasta kayıtları, seans geçmişi ve AI analiz geçmişi tek bir ŞİFRELİ dosyaya aktarılır. "}
             Yeni bilgisayara aynı parolayla geri yüklenir. Dosya parolasız açılamaz —
             parolayı kaybederseniz yedek kurtarılamaz.
           </Text>
 
           <TouchableOpacity style={styles.btnOutline} disabled={!!tasimaMesgul} onPress={disaAktar}
-            accessibilityRole="button" accessibilityLabel="Klinik verilerini şifreli dosyaya aktar">
+            accessibilityRole="button"
+            accessibilityLabel={isResearcher ? "Bu cihazdaki tüm kayıtları şifreli dosyaya aktar" : "Klinik verilerini şifreli dosyaya aktar"}>
             <Text style={styles.btnOutlineText}>
               {tasimaMesgul === "export" ? "Hazırlanıyor…" : "Şifreli Yedek Oluştur"}
             </Text>
@@ -868,7 +875,9 @@ export function SettingsScreen() {
           </TouchableOpacity>
 
           <Text style={[styles.intro, { color: colors.warning }]}>
-            Geri yükleme, bu cihazda kayıt varsa mevcut seans ve analiz geçmişini SİLER. Hasta kartları silinmez.
+            {isResearcher
+              ? "Geri yükleme, bu cihazda kayıt varsa mevcut seans ve analiz geçmişini (klinik ve araştırma) SİLER. Hasta / denek kartları silinmez."
+              : "Geri yükleme, bu cihazda kayıt varsa mevcut seans ve analiz geçmişini SİLER. Hasta kartları silinmez."}
           </Text>
         </Card>
       )}
@@ -876,9 +885,12 @@ export function SettingsScreen() {
       {/* VERİ SAKLAMA — geri dönüşsüz maskeleme operatör kararıdır (2026-08-09 denetimi).
           Tıbbi-hukuki saklama süresi ülkeye/kliniğe göre değişir: KVKK silmeyi ister, açılmış
           bir dava dosyası saklamayı. Yazılım bu kararı sessizce almaz. */}
-      {isExpert && retention && (
+      {uzmanProfil && retention && (
         <Card style={styles.card}>
           <Text style={styles.cardTitle}>Veri Saklama Süresi</Text>
+          {isResearcher ? (
+            <Text style={styles.intro}>Saklama süresi bu cihazdaki TÜM seans kayıtlarına uygulanır (klinik ve araştırma).</Text>
+          ) : null}
           <Text style={styles.intro}>
             {/* F2-3.5 (A-06 · Legal §6): maskeleme klinik ONAYI olmadan başlamaz — onaysız durumda "maskelenir" diye olmuş gibi anlatılmaz. */}
             {retention.days > 0
@@ -980,18 +992,26 @@ export function SettingsScreen() {
             </>
           ) : null}
 
+          {/* SG.G3: `flex: 0` web'de esas genişliği %0 yapıyordu ("Kapalı" taşıyor, "1 yıl" iki satıra kırılıyordu) ve seçili
+              düğmenin kenar / yazı rengi seçilmeyenle AYNIYDI (`btnOutline` zaten primary) → seçili süre ayırt edilmiyordu.
+              Artık içerik genişliğinde, dokunma tabanında, seçili DOLGULU ve erişilebilir durumla söylenir. */}
           <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" }}>
-            {[0, 365, 730, 1825].map((g) => (
-              <TouchableOpacity key={g} style={[styles.btnOutline, { flex: 0, paddingHorizontal: spacing.md },
-                                                retention.days === g && { borderColor: colors.primary }]}
-                disabled={retMesgul} onPress={() => retentionKaydet({ days: g })}
-                accessibilityRole="button"
-                accessibilityLabel={g === 0 ? "Maskelemeyi kapat" : `Saklama süresi ${g} gün`}>
-                <Text style={[styles.btnOutlineText, retention.days === g && { color: colors.primary }]}>
-                  {g === 0 ? "Kapalı" : g === 365 ? "1 yıl" : g === 730 ? "2 yıl" : "5 yıl"}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {[0, 365, 730, 1825].map((g) => {
+              const secili = retention.days === g;
+              return (
+                <TouchableOpacity key={g} style={[styles.saklamaSecenek, secili && styles.saklamaSecenekSecili]}
+                  disabled={retMesgul} onPress={() => retentionKaydet({ days: g })}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: secili, disabled: retMesgul }}
+                  // RN-web 0.21 `accessibilityState`i DOM'a eşlemez (yalnız aria-*): web'de seçili durum aria-selected ile söylenir.
+                  aria-selected={secili}
+                  accessibilityLabel={g === 0 ? "Maskelemeyi kapat" : `Saklama süresi ${g} gün`}>
+                  <Text style={[styles.btnOutlineText, secili && styles.saklamaSecenekSeciliMetin]} numberOfLines={1}>
+                    {g === 0 ? "Kapalı" : g === 365 ? "1 yıl" : g === 730 ? "2 yıl" : "5 yıl"}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </Card>
       )}
@@ -1180,6 +1200,24 @@ const styles = StyleSheet.create({
   btnOutlineText: {
     color: colors.primary,
     fontWeight: "bold"
+  },
+  // SG.G3: saklama süresi seçenekleri — içerik genişliğinde (flex YOK), dokunma tabanı, seçili DOLGULU.
+  saklamaSecenek: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: touch.min,
+    minWidth: touch.min + 24,
+  },
+  saklamaSecenekSecili: {
+    backgroundColor: colors.primary,
+  },
+  saklamaSecenekSeciliMetin: {
+    color: colors.white,
   },
   statusText: {
     color: colors.primary,
