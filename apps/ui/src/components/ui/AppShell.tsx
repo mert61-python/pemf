@@ -309,7 +309,8 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
             {/* AKTİF OPERATÖR (2026-08-08): tek makineyi 3-4 veteriner paylaşıyor. Kayıtlara kimin
                 yazıldığı ÜST BARDA sürekli görünür olmalı — yanlış kimlikle çalışmak, kaydı
                 yanlış hekime atfeder (KVKK + klinik sorumluluk). Dokununca PIN ile hızlı geçiş. */}
-            <OperatorSwitcher />
+            {/* SG.G7: "Başka hesapla giriş yap" MEVCUT çıkış akışını (teardown korumalı) çağırır; profil yalnız metin içindir. */}
+            <OperatorSwitcher onBaskaHesap={handleLogout} kip={userMode} />
             {/* KALAN JETON (sahip isteği 2026-09-13): kullanıcı hakkının bittiğini, analiz
                 reddedilene kadar göremiyordu. ⚠️ Ücretlendirme KAPALIYKEN hiçbir şey çizmez
                 (karar backend'den gelir — arayüz "0" tahmin ETMEZ). Dar telefonda yalnız sayı. */}
