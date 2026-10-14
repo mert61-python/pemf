@@ -51,7 +51,13 @@ export function CoilCard({ coil }: { coil: CoilStatus }) {
           alt={`uygulanan ${uygulanan(coil.dutyEtkin)}`}
         />
         {/* D1.67 · Y6 (1-D inceleme i2-F-3): bayat / hiç ölçülmemiş alan sayı olarak gösterilmez ('—'). */}
-        <MiniMetric icon={<Activity color={colors.cyan} size={16} />} label="Alan" value={alanGosterilebilir(coil, "magneticMt") ? `${num(coil.magneticMt, 2)} mT` : "—"} />
+        {/* TD2: kazanç ayarı doğrulanmamış sensörün değeri gösterilmez (tezgâh ~5×); neden kısa ek satırda. */}
+        <MiniMetric
+          icon={<Activity color={colors.cyan} size={16} />}
+          label="Alan"
+          value={!coil.alanDogrulanamadi && alanGosterilebilir(coil, "magneticMt") ? `${num(coil.magneticMt, 2)} mT` : "—"}
+          alt={coil.alanDogrulanamadi ? "sensör doğrulanamadı" : undefined}
+        />
         <MiniMetric icon={<Thermometer color={colors.danger} size={16} />} label="Sıcaklık" value={alanGosterilebilir(coil, "objectTemp") ? `${num(coil.objectTemp, 1)} C` : "—"} />
       </View>
     </Card>

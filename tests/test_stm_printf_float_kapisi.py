@@ -219,7 +219,7 @@ def test_KRITIK_saglam_telemetri_satiri_TAM_cozulur():
 
     Bu satır, düzeltilmiş firmware'in bastığı biçimin birebir aynısıdır.
     """
-    saglam = "-> STM_TELE: C=6,T=34.20,A=27.10,B=1.842,N=412,XN=-1.203,XP=1.198,YN=-0.412,YP=0.407,ZN=-1.011,ZP=1.004"
+    saglam = "-> STM_TELE: C=6,T=34.20,A=27.10,B=1.842,N=412,XN=-1.203,XP=1.198,YN=-0.412,YP=0.407,ZN=-1.011,ZP=1.004,GS=0,RS=0"
     g = _cozumle(saglam)
     assert g is not None, "saglam satir REDDEDILDI -> ayristirici bicimle uyusmuyor"
     assert g["coil_id"] == 6

@@ -122,6 +122,19 @@ class SeriBaglantiDurumu:
 # 2 sn, kopuşun operatöre anında görünmesi ile numaralandırma maliyeti arasında denge.
 _PORT_CHECK_S = 2.0
 
+#: TD2: işaretsiz `B=` (ayar doğrulanmamış firmware — tezgâh ~5× ölçek) gelince `_parse_stm_tele`'nin attığı alan anahtarları.
+_ALAN_ANAHTARLARI = (
+    "magnetic_field",
+    "magnetic_samples",
+    "magnetic_saturated",
+    "mag_x_min",
+    "mag_x_max",
+    "mag_y_min",
+    "mag_y_max",
+    "mag_z_min",
+    "mag_z_max",
+)
+
 
 def _tum_duty_sifir_mi(stm_msg: Any) -> bool:
     """Porta yazılan STM paketi bir STOP mu (TÜM bobinlerin duty alanı 0)? (D1.55 · B-1.23)
@@ -877,6 +890,8 @@ class HeadlessCore:
         r"(?:.*?[,\s]ZP=(?P<zp>[+-]?[0-9]*[.]?[0-9]+))?"
         r"(?:.*?[,\s]I=(?P<i>[+-]?[0-9]*[.]?[0-9]+))?"
         r"(?:.*?[,\s]X=(?P<x>[01]))?"
+        # TD2: alan ayarının DOĞRULAMA İŞARETİ (`GS=` geri okunan kazanç; ardından `RS=`) — firmware yalnız doğrulanmış ayarla basar.
+        r"(?:.*?[,\s]GS=(?P<gs>[0-9]+))?"
     )
 
     def _parse_stm_tele(self, decoded: str) -> dict | None:
@@ -932,9 +947,37 @@ class HeadlessCore:
             govde["magnetic_saturated"] = True
         if m.group("x") == "1":
             govde["current_saturated"] = True
-        if not any(k in govde for k in ("object_temp", "ambient_temp", "magnetic_field", "current")):
+        # ⚠️ TD2 (tezgâh Oturum 13 · K6): MLX90393 kazanç ayarı geri okunmadan basılan alan ~5× BÜYÜK olabilir (ölçüldü:
+        # Dünya alanı 4–5×, sessiz). Doğrulama işareti (`GS=`) taşımayan `B=` GÖSTERİLMEZ, seans CSV'sine / ölçülen yoğunluğa
+        # YAZILMAZ — yerine `alan_dogrulanamadi` bayrağı (arayüz: "Alan sensörü doğrulanamadı — ölçülen değer gösterilmiyor").
+        # Firmware `GS=`'yi YALNIZ geri okunarak doğrulanmış ayarla basar → işaretin VARLIĞI yeter; değeri olay gövdesine girmez.
+        if "magnetic_field" in govde and m.group("gs") is None:
+            for _k in _ALAN_ANAHTARLARI:
+                govde.pop(_k, None)
+            govde["alan_dogrulanamadi"] = True
+        if not any(
+            k in govde for k in ("object_temp", "ambient_temp", "magnetic_field", "current", "alan_dogrulanamadi")
+        ):
             return None  # yalniz C (ve/veya X) geldi → tasinacak olcum yok
         return govde
+
+    #: TD2: açılış `-> STM_SENS: C=6 I2C2 sicaklik=0x00 alan=0x18 kazanc=7 res=0 ayar=DOGRULANAMADI` — ayar tutmadı.
+    _SENS_ALAN_DESENI = re.compile(
+        r"STM_SENS:\s*C=(?P<c>[0-9]+)\s+I2C\d+.*?\bayar=(?P<ayar>DOGRULANDI|DOGRULANAMADI)\b"
+    )
+
+    def _stm_sens_isle(self, decoded: str) -> None:
+        """TD2: açılış satırında alan sensörünün ayarı DOĞRULANAMADI ise telemetri olayıyla bildir (arayüz bandı / bildirim);
+        firmware o hatta `B=` basmayacağı için başka iz olmazdı."""
+        m = self._SENS_ALAN_DESENI.search(decoded)
+        if m is None or m.group("ayar") != "DOGRULANAMADI":
+            return
+        try:
+            coil_id = int(m.group("c"))
+        except ValueError:
+            return
+        if 1 <= coil_id <= 8:
+            self._publish_event("hardware.stm.telemetry", {"coil_id": coil_id, "alan_dogrulanamadi": True})
 
     def _tum_bobinleri_sifirla_yayinla(self) -> None:
         """Watchdog ve termal (STM_EVT) dallarının ORTAK bobin sıfırlama yayını (P4 · D1.30).
@@ -993,6 +1036,14 @@ class HeadlessCore:
         if "STM_ID:" in decoded:
             # Y68 (TD1): kimlik sorgusunun yanıtı — kartın beyan ettiği protokol revizyonu ve paket boyu.
             self._stm_kimlik_yanitini_isle(decoded)
+            return
+
+        if "STM_SENS" in decoded:
+            # TD2: açılış raporu — alan sensörü ayarı doğrulanamadıysa arayüze bildir (firmware o hatta alan basmaz).
+            try:
+                self._stm_sens_isle(decoded)
+            except Exception:
+                self.logger.debug("[STM32] STM_SENS islenemedi", exc_info=True)
             return
 
         if "STM_OK:" in decoded or "STM_NACK" in decoded:

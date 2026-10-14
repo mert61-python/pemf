@@ -1815,10 +1815,29 @@ def _handle_backend_event(event) -> None:
                 _t_coil[_hedef] = round(float(data[_kaynak]), _basamak)
                 _t_damga[_hedef] = _t_simdi
                 _t_yazildi = True
+            # TD2 (tezgâh · K6): alan ayarı doğrulanmamış firmware'in `B=`'si ayrıştırıcıda atıldı → değer YAZILMADI; arayüz
+            # "Alan sensörü doğrulanamadı — ölçülen değer gösterilmiyor" der. Doğrulanmış alan gelince bayrak iner.
+            _t_alan_onceki = bool(_t_coil.get("alanDogrulanamadi"))
+            if data.get("alan_dogrulanamadi"):
+                _t_coil["alanDogrulanamadi"] = True
+                # Önceki (doğrulanmış) alanın damgası da düşer → `measuredFields` / dakika ortalaması onu taze SAYMAZ.
+                if _t_damga.pop("magneticMt", None) is not None:
+                    _t_coil["measuredFields"] = sorted(_taze_alanlar_locked(_t_idx, _t_simdi))
+            elif "magnetic_field" in data:
+                _t_coil["alanDogrulanamadi"] = False
+            _t_alan_degisti = _t_alan_onceki != bool(_t_coil.get("alanDogrulanamadi"))
             if _t_yazildi:
                 # D1.67: liste = TAZE alanlar (bu satirda gelmeyen ama pencere icindekiler dahil).
                 _t_coil["measuredFields"] = sorted(_taze_alanlar_locked(_t_idx, _t_simdi))
             _t_snap = dict(_t_coil)
+        if _t_alan_degisti:
+            _ws_broadcast_sync({"type": "coil_status", "coilId": _t_coil_id, "data": _t_snap})
+            if _t_snap.get("alanDogrulanamadi"):
+                _push_notification(
+                    f"⚠️ Bobin {_t_coil_id} alan sensörü doğrulanamadı — ölçülen alan (mT) gösterilmiyor ve kayda "
+                    "yazılmıyor. Teknik desteğe bildirin (kod: FW-ALAN).",
+                    "warning",
+                )
         if not _t_yazildi:
             return
         _coil_last_telemetry[_t_idx] = time.monotonic()

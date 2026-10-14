@@ -32,13 +32,13 @@ _ALANLAR = ("objectTemp", "ambientTemp", "magneticMt", "currentA")
 
 # Firmware satırları (aday ölçümündeki değerler): bobin 6 sıcaklık + alan, bobin 7 YALNIZ sıcaklık, bobin 1 YALNIZ akım.
 _SATIRLAR = [
-    "STM_TELE: C=6,T=34.20,B=12.300",
+    "STM_TELE: C=6,T=34.20,B=12.300,GS=0,RS=0",
     "STM_TELE: C=7,T=33.10",
     "STM_TELE: C=1,I=0.42",
-    "STM_TELE: C=6,T=34.30,B=12.200",
+    "STM_TELE: C=6,T=34.30,B=12.200,GS=0,RS=0",
     "STM_TELE: C=7,T=33.20",
     "STM_TELE: C=1,I=0.43",
-    "STM_TELE: C=6,T=34.40,B=12.400",
+    "STM_TELE: C=6,T=34.40,B=12.400,GS=0,RS=0",
     "STM_TELE: C=7,T=33.30",
     "STM_TELE: C=1,I=0.41",
 ]

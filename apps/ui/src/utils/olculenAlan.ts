@@ -8,6 +8,12 @@
  *
  * `measuredFields` hiç YOKSA (alanı göndermeyen eski backend / aparat) karar çağıranın eski ölçütüne bırakılır (`true`).
  */
+/**
+ * TD2 (tezgâh Oturum 13 · K6): MLX90393 kazanç ayarı geri okunarak doğrulanamadıysa backend alanı YAZMAZ ve bobine
+ * `alanDogrulanamadi: true` koyar (eski firmware'in işaretsiz `B=`'si ~5× olabilir). Üç ekran AYNI metni gösterir.
+ */
+export const ALAN_DOGRULANAMADI_METNI = "Alan sensörü doğrulanamadı — ölçülen değer gösterilmiyor";
+
 export function alanGosterilebilir(coil: { measuredFields?: string[] } | null | undefined, alan: string): boolean {
   const mf = coil?.measuredFields;
   return Array.isArray(mf) ? mf.includes(alan) : true;

@@ -363,7 +363,34 @@ typedef struct {
   uint16_t kayit[16];
   float ortam_c, nesne_c;
   int16_t x, y, z;
+  /* TD2 (Oturum 13 MLX ölçeği ~5×) — GERÇEKÇİ MLX90393 kipi (senaryo `ALAN_UT`): alan µT cinsinden verilir, ham değer
+   * CONF1 GAIN_SEL'e (ve CONF3 RES'e) göre hesaplanır (Adafruit `mlx90393_lsb_lookup`, HALLCONF 0xC) → firmware'in
+   * varsaydığı kazanç uygulanmadıysa ölçek SAPAR. Açılış / RT varsayılanı CONF1 0x007C (GAIN_SEL 7). `MLX_RT_MESGUL`: RT
+   * sonrası bu kadar µs cihaz adresi NACK'ler (reset sürüyor). `MLX_YAZMA_YOK`: WR ACK'lenir ama kayda GEÇMEZ.
+   * `MLX_GUC_KESINTISI`: sensör kablosu çıktı-takıldı — süre boyunca adres NACK, ardından kayıtlar açılış varsayılanına. */
+  int alan_ut;
+  float bx_ut, by_ut, bz_ut;
+  uint64_t rt_mesgul_ns, mesgul_bitis;
+  int yazma_yok;
+  uint64_t wr_sayisi, rr_sayisi, rt_sayisi;
+  uint64_t kesinti_t_ns, kesinti_sure_ns;
+  int kesinti_oldu;
 } Cihaz;
+
+static const float k_mlx_lsb_xy[8] = {0.751f, 0.601f, 0.451f, 0.376f, 0.300f, 0.250f, 0.200f, 0.150f};
+static const float k_mlx_lsb_z[8] = {1.210f, 0.968f, 0.726f, 0.605f, 0.484f, 0.403f, 0.323f, 0.242f};
+
+static int16_t mlx_ham(float ut, float lsb) {
+  float v = ut / lsb;
+  v = (v >= 0.0f) ? (v + 0.5f) : (v - 0.5f);
+  if (v > 32767.0f) {
+    v = 32767.0f;
+  }
+  if (v < -32768.0f) {
+    v = -32768.0f;
+  }
+  return (int16_t)v;
+}
 typedef struct {
   uint32_t ofs;
   uint32_t sr1, sr2;
@@ -411,13 +438,32 @@ static void cihaz_isle(Cihaz *c) {
   memset(c->yanit, 0, sizeof(c->yanit));
   if (k == 0x50U) { /* RR: [0x50][kayıt<<2] → durum, MSB, LSB */
     const uint16_t v = c->kayit[(c->komut[1] >> 2) & 15U];
+    c->rr_sayisi++;
     c->yanit[1] = (uint8_t)(v >> 8);
     c->yanit[2] = (uint8_t)(v & 0xFFU);
     c->yanit_n = 3;
   } else if (k == 0x60U) { /* WR: [0x60][MSB][LSB][kayıt<<2] → durum */
-    c->kayit[(c->komut[3] >> 2) & 15U] = (uint16_t)((c->komut[1] << 8) | c->komut[2]);
+    c->wr_sayisi++;
+    if (!c->yazma_yok) {
+      c->kayit[(c->komut[3] >> 2) & 15U] = (uint16_t)((c->komut[1] << 8) | c->komut[2]);
+    }
+    c->yanit_n = 1;
+  } else if (k == 0xF0U) { /* RT: kayıtlar varsayılana, cihaz bir süre MEŞGUL (adres NACK) */
+    c->rt_sayisi++;
+    if (c->alan_ut) {
+      memset(c->kayit, 0, sizeof(c->kayit));
+      c->kayit[0] = 0x007CU; /* GAIN_SEL 7 · HALLCONF 0xC */
+    }
+    c->mesgul_bitis = g_vt + c->rt_mesgul_ns;
     c->yanit_n = 1;
   } else if ((k & 0xF0U) == 0x40U) { /* RM xyz → durum + X, Y, Z (büyük uçlu int16) */
+    if (c->alan_ut) {
+      const unsigned gain = (c->kayit[0] >> 4) & 7U;
+      const unsigned res_x = (c->kayit[2] >> 5) & 3U, res_y = (c->kayit[2] >> 7) & 3U, res_z = (c->kayit[2] >> 9) & 3U;
+      c->x = mlx_ham(c->bx_ut, k_mlx_lsb_xy[gain] * (float)(1U << res_x));
+      c->y = mlx_ham(c->by_ut, k_mlx_lsb_xy[gain] * (float)(1U << res_y));
+      c->z = mlx_ham(c->bz_ut, k_mlx_lsb_z[gain] * (float)(1U << res_z));
+    }
     const int16_t e[3] = {c->x, c->y, c->z};
     for (int i = 0; i < 3; i++) {
       c->yanit[1 + 2 * i] = (uint8_t)((uint16_t)e[i] >> 8);
@@ -468,8 +514,15 @@ static void h_guncelle(Hat *h) {
     case H_ADRES: {
       Cihaz *c = NULL;
       for (int i = 0; i < h->n; i++) {
-        if (h->cihaz[i].adres == (uint8_t)(h->adres_bayt >> 1)) {
-          c = &h->cihaz[i];
+        Cihaz *k = &h->cihaz[i];
+        if (k->kesinti_sure_ns && !k->kesinti_oldu && t0 >= k->kesinti_t_ns) { /* TD2: güç kesildi → varsayılana döner */
+          k->kesinti_oldu = 1;
+          memset(k->kayit, 0, sizeof(k->kayit));
+          k->kayit[0] = 0x007CU;
+          k->mesgul_bitis = k->kesinti_t_ns + k->kesinti_sure_ns;
+        }
+        if (h->cihaz[i].adres == (uint8_t)(h->adres_bayt >> 1) && h->cihaz[i].mesgul_bitis <= t0) {
+          c = &h->cihaz[i]; /* TD2: RT sonrası meşgul pencerede cihaz adresi NACK'ler */
         }
       }
       if (c) {
@@ -1171,6 +1224,17 @@ static void senaryo_bitir(int kod) {
          (unsigned long long)g_tx_bayt, (unsigned long long)U.rx_i, (unsigned long long)g_rx_ore,
          (unsigned long long)g_rx_kayip, (unsigned long long)g_tdr_ezildi, (unsigned)G(S_USART, U_BRR),
          (unsigned long)pclk1());
+  /* TD2: MLX90393 komut sayaçları ve son CONF1 / CONF3 (hat başına; cihaz yoksa satır yok). */
+  for (int hi = 0; hi < 2; hi++) {
+    for (int ci = 0; ci < g_hat[hi].n; ci++) {
+      const Cihaz *c = &g_hat[hi].cihaz[ci];
+      if (c->tur == 2) {
+        printf("MLX hat=%d wr=%llu rr=%llu rt=%llu conf1=0x%04X conf3=0x%04X\n", hi + 1, (unsigned long long)c->wr_sayisi,
+               (unsigned long long)c->rr_sayisi, (unsigned long long)c->rt_sayisi, (unsigned)c->kayit[0],
+               (unsigned)c->kayit[2]);
+      }
+    }
+  }
   fflush(stdout);
   dw_bitir(kod);
 }
@@ -1273,6 +1337,47 @@ static void senaryo_oku(const char *yol) {
           c->x = (int16_t)x;
           c->y = (int16_t)y;
           c->z = (int16_t)z;
+        }
+      }
+    } else if (!strcmp(ad, "ALAN_UT")) { /* TD2: gerçekçi kip — alan µT, ham değer kazanca göre */
+      int hat;
+      float x, y, z;
+      if (sscanf(satir + 7, "%d %f %f %f", &hat, &x, &y, &z) == 4) {
+        Cihaz *c = senaryo_cihaz(hat, 2);
+        if (c) {
+          c->alan_ut = 1;
+          c->bx_ut = x;
+          c->by_ut = y;
+          c->bz_ut = z;
+          memset(c->kayit, 0, sizeof(c->kayit));
+          c->kayit[0] = 0x007CU; /* açılış varsayılanı: GAIN_SEL 7 */
+        }
+      }
+    } else if (!strcmp(ad, "MLX_RT_MESGUL")) {
+      int hat;
+      unsigned long long us;
+      if (sscanf(satir + 13, "%d %llu", &hat, &us) == 2) {
+        Cihaz *c = senaryo_cihaz(hat, 2);
+        if (c) {
+          c->rt_mesgul_ns = us * 1000ULL;
+        }
+      }
+    } else if (!strcmp(ad, "MLX_GUC_KESINTISI")) {
+      int hat;
+      unsigned long long t_us, sure_us;
+      if (sscanf(satir + 17, "%d %llu %llu", &hat, &t_us, &sure_us) == 3) {
+        Cihaz *c = senaryo_cihaz(hat, 2);
+        if (c) {
+          c->kesinti_t_ns = t_us * 1000ULL;
+          c->kesinti_sure_ns = sure_us * 1000ULL;
+        }
+      }
+    } else if (!strcmp(ad, "MLX_YAZMA_YOK")) {
+      int hat;
+      if (sscanf(satir + 13, "%d", &hat) == 1) {
+        Cihaz *c = senaryo_cihaz(hat, 2);
+        if (c) {
+          c->yazma_yok = 1;
         }
       }
     } else if (!strcmp(ad, "PAKET")) {

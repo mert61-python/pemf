@@ -62,6 +62,8 @@ export interface CoilStatus {
    * Boş/tanımsız → hiçbir alan ölçülmemiş (henüz telemetri gelmedi ya da sensör yok).
    */
   measuredFields?: string[];
+  /** TD2: alan sensörünün kazanç ayarı doğrulanamadı — ölçülen mT GÖSTERİLMEZ (backend yazmaz). */
+  alanDogrulanamadi?: boolean;
   /**
    * Kartın ETKİN olarak uyguladığı sürüş kipi (ACK `K=` alanı). `true` = unipolar.
    *

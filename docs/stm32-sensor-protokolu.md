@@ -16,7 +16,8 @@
 STM32 → bilgisayar, UART3 @115200 8N1, satır sonu `\r\n`:
 
 ```
--> STM_TELE: C=<bobin>[,T=<°C>][,A=<°C>][,B=<mT>][,N=<örnek>][,S=1][,I=<A>][,X=1]
+-> STM_TELE: C=<bobin>[,T=<°C>][,A=<°C>][,B=<mT>,N=<örnek>,XN..ZP=<mT>[,S=1],GS=<kazanç>,RS=<çözünürlük>]
+-> STM_TELE: C=<bobin>,I=<A>[,X=1]
 ```
 
 | Alan | Anlam | Kim gönderir |
@@ -29,6 +30,7 @@ STM32 → bilgisayar, UART3 @115200 8N1, satır sonu `\r\n`:
 | `S` | `1` = ham eksen tam ölçeğe dayandı → `B` **GÜVENİLMEZ** | yalnız doygunlukta |
 | `I` | ACS712-30A akımı (A, RMS) | bobin 1-5 |
 | `X` | `1` = ADC tavanına dayandı → `I` **GÜVENİLMEZ** | yalnız doygunlukta |
+| `GS` / `RS` | MLX90393 kazanç / çözünürlük — **geri okunarak DOĞRULANMIŞ** ayar (TD2) | `B` ile birlikte, HEP |
 
 Ayrıştırıcı: `headless_core.HeadlessCore._parse_stm_tele`.
 
@@ -42,10 +44,19 @@ konmaz**, ve `_coil_olculen_alanlar` yalnız gerçekten gelen alanları "ölçü
 
 Aynı gerekçeyle `N` ve `S` de `B` olmadan asla gönderilmez.
 
+### ⚠️ `B` YALNIZ DOĞRULANMIŞ AYARLA (TD2 · tezgâh Oturum 13)
+
+MLX90393 açılış / reset varsayılanı GAIN_SEL 7'dir; firmware GAIN_SEL 0 varsayarak çevirir → ayar uygulanmazsa ölçek
+**TAM 5× büyük** ve sessizdir (tezgâhta Dünya alanı 4–5×, bobin |pp| 13,3 mT ≈ gerçekte 2,7–3,3). Firmware artık reset
+sonrası **bekler → yazar → GERİ OKUR**; tutmazsa `B` basmaz. Çalışırken de her pencerede ve her hat hatasından sonra
+CONF1 geri okunur (sensör kablosu çıkıp takılınca kayıtlar varsayılana döner, adres aynı kalır). `B`'li her satır
+`GS=`/`RS=` işaretini taşır; **işaretsiz `B=`** (ayarı doğrulanmamış eski firmware) backend'de ATILIR, bobine
+`alanDogrulanamadi` konur, arayüz "Alan sensörü doğrulanamadı — ölçülen değer gösterilmiyor" der (kod FW-ALAN).
+
 ### Açılış satırı
 
 ```
--> STM_SENS: C=<bobin> I2C<1|2> sicaklik=0x<adres> alan=0x<adres>[ (SENSOR YOK)]
+-> STM_SENS: C=<bobin> I2C<1|2> sicaklik=0x<adres> alan=0x<adres>[ kazanc=<0-7> res=<0-3> ayar=<DOGRULANDI|DOGRULANAMADI>][ (SENSOR YOK)]
 -> STM_SENS: C=<bobin> ACS712=<hazir|YOK|kalibre-EDILEMEDI>
 ```
 

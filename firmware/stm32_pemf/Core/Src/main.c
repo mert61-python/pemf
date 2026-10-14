@@ -1264,11 +1264,21 @@ int main(void) {
     uint8_t s_adr = 0U;
     uint8_t a_adr = 0U;
     PEMF_Sensor_Rapor(sr, &s_adr, &a_adr);
-    static char sens_msg[112];
+    /* TD2 (tezgâh MLX ölçeği ~5×): alan sensörü varsa GERİ OKUNAN kazanç / çözünürlük ve ayar durumu da basılır —
+     * "ayar=DOGRULANAMADI" ise firmware alanı HİÇ basmaz (backend / arayüz "alan sensörü doğrulanamadı" der). */
+    PEMF_SensorVerisi_t sv0;
+    PEMF_Sensor_Oku(sr, &sv0);
+    static char alan_ek[64];
+    alan_ek[0] = '\0';
+    if (a_adr != 0U) {
+      (void)snprintf(alan_ek, sizeof(alan_ek), " kazanc=%u res=%u ayar=%s", (unsigned)sv0.alan_kazanc,
+                     (unsigned)sv0.alan_cozunurluk, sv0.alan_ayar_dogrulandi ? "DOGRULANDI" : "DOGRULANAMADI");
+    }
+    static char sens_msg[160];
     int sl = snprintf(sens_msg, sizeof(sens_msg),
-                      "-> STM_SENS: C=%lu I2C%lu sicaklik=0x%02X alan=0x%02X%s\r\n",
+                      "-> STM_SENS: C=%lu I2C%lu sicaklik=0x%02X alan=0x%02X%s%s\r\n",
                       (unsigned long)PEMF_Sensor_BobinId(sr),
-                      (unsigned long)(sr + 1U), (unsigned)s_adr, (unsigned)a_adr,
+                      (unsigned long)(sr + 1U), (unsigned)s_adr, (unsigned)a_adr, alan_ek,
                       ((s_adr == 0U) && (a_adr == 0U)) ? " (SENSOR YOK)" : "");
     if ((sl > 0) && (sl < (int)sizeof(sens_msg))) {
       HAL_UART_Transmit(&huart3, (uint8_t *)sens_msg, (uint16_t)sl, 200U);
@@ -1361,6 +1371,12 @@ int main(void) {
                          (double)sv.uc_z_min, (double)sv.uc_z_max);
           if (sv.alan_doygun && (tl > 0) && (tl < (int)tele_kap)) {
             tl += snprintf(tele_msg + tl, tele_kap - (size_t)tl, ",S=1");
+          }
+          /* TD2: DOĞRULAMA İŞARETİ — geri okunan kazanç / çözünürlük (`alan_ok` yalnız doğrulanmış ayarla true). Backend
+           * işaretsiz `B=`'yi (eski firmware: ayar doğrulanmamış, ~5× olabilir) GÖSTERMEZ / KAYDETMEZ. */
+          if ((tl > 0) && (tl < (int)tele_kap)) {
+            tl += snprintf(tele_msg + tl, tele_kap - (size_t)tl, ",GS=%u,RS=%u", (unsigned)sv.alan_kazanc,
+                           (unsigned)sv.alan_cozunurluk);
           }
         }
         if ((tl > 0) && (tl < (int)tele_kap - 3)) {

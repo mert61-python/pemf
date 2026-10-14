@@ -192,6 +192,24 @@
 #define MLX90393_LSB_XY_UT 0.751f
 #define MLX90393_LSB_Z_UT 1.210f
 
+/**
+ * TD2 (tezgâh Oturum 13, 2026-10-14) — AYAR GERİ OKUNARAK DOĞRULANIR.
+ * ⚠️ ÖLÇÜLDÜ: Dünya alanı sınamasında ölçek ≈ 4–5× BÜYÜK (çip yukarı / 180° yarı fark 0,169 mT, beklenen ≈ 0,04). Eski
+ * `mag_yapilandir` RT'den HEMEN sonra CONF1'i okuyordu; okuma başarısızsa (cihaz reset sürerken NACK) yazma ATLANIYOR, yazma
+ * sonucu `(void)` ile atılıyor, geri okuma YOKTU → sensör varsayılanı GAIN_SEL 7 (0,150 / 0,242 µT/LSB) kalınca 0,751 / 1,210
+ * çarpanıyla TAM 5× büyük, SESSİZ (ana makine koşum takımı bunu birebir üretti: wr=0 rr=0, 5,00×). Artık: RT → bekle →
+ * oku → yaz → GERİ OKU; tutmazsa (yeniden RT'siz) bekleyip yeniden dene; yine tutmazsa ayar DOĞRULANAMADI → `B=` HİÇ basılmaz
+ * (fail-closed: yanlış ölçekli alan seans CSV'sine / AI Pro `achieved_B`'ye gitmesin). Çarpanı geri okunan kazançtan türetmek
+ * SEÇİLMEDİ: GAIN 7'de tam ölçek ±4,92 mT ve taşma SARAR (sessiz) — sahibin 1–10 mT bandını ölçemez (bkz. yukarıdaki gerekçe).
+ * ⚠️ HAL_Delay YOK (sensör kodu ana döngüyü tutamaz — tests/test_stm_sensor_firmware.py): AÇILIŞTA (ana döngü ve DDS ISR'ı
+ * başlamadan) bütçeli tick beklemesi; ÇALIŞMA ANINDA doğrulanamamış hat seyrek aralıkla (SENSOR_YENIDEN_ARAMA_TUR) RT alır ve
+ * damga dolunca TEK deneme yapılır (bloklamayan durum makinesi — diğer Poll adımları gibi birkaç kısa I2C işlemi).
+ */
+#define MLX90393_RT_BEKLEME_MS 10U /**< RT sonrası reset süresi payı (gerçek süre tezgâhta ölçülür — Tezgâh-2) */
+#define MLX90393_AYAR_DENEME 3U
+#define MLX90393_CONF1_KAZANC_MASKE 0x0070U
+#define MLX90393_CONF3_AYAR_MASKE (0x0060U | 0x0180U | 0x0600U | 0x001CU | 0x0003U)
+
 /** SYSCLK (MHz). main.c: SYSCLK 168 MHz, APB1 = /4 = 42 MHz → aşağıdaki iddia bunu pinler. */
 #define SISTEM_MHZ 168U
 _Static_assert(SISTEM_MHZ == (I2C_APB1_MHZ * 4U), "SISTEM_MHZ ile APB1 bolucusu uyusmuyor");
@@ -247,6 +265,9 @@ typedef struct {
   uint32_t zirve_ornek;      /**< pencere içi geçerli örnek sayısı */
   bool zirve_doygun;         /**< pencerede en az bir örnek tam ölçeğe dayandı */
   uint16_t ardisik_hata;
+  bool ayar_bekliyor;    /**< TD2: RT gönderildi, damga dolunca (`ayar_hazir_ms`) ayar denemesi yapılacak */
+  bool ayar_denetle;     /**< TD2: BOŞTA'da CONF1 geri okunup kazanç denetlenecek (hat hatası / pencere kapanışı) */
+  uint32_t ayar_hazir_ms;
   PEMF_SensorVerisi_t veri;
 } SensorHat_t;
 
@@ -447,6 +468,9 @@ static void i2c_hat_kurtar(SensorHat_t *h) {
 static void i2c_hata_islet(SensorHat_t *h) {
   h->veri.i2c_hata++;
   h->ardisik_hata++;
+  /* TD2: hata kablo çıkması olabilir — sensör yeniden güç alınca kayıtları açılış varsayılanına (GAIN_SEL 7 → ~5×) döner,
+   * adresi AYNI kalır. Bir sonraki ölçümden ÖNCE kazanç geri okunur. */
+  h->ayar_denetle = true;
   if (h->ardisik_hata >= I2C_KURTARMA_ESIGI) {
     i2c_hat_kurtar(h);
   }
@@ -537,22 +561,71 @@ static uint8_t mag_adres_bul(SensorHat_t *h) {
   return 0U;
 }
 
-static void mag_yapilandir(SensorHat_t *h) {
+/** TD2: CONF1 / CONF3'ü hedef değere yaz ve GERİ OKUYARAK doğrula (bir deneme). @return ayar tuttu mu */
+static bool mag_ayar_dene(SensorHat_t *h) {
+  uint16_t c1 = 0U;
+  uint16_t c3 = 0U;
+  if (!mag_kayit_oku(h, MLX90393_CONF1, &c1) || !mag_kayit_oku(h, MLX90393_CONF3, &c3)) {
+    return false; /* cihaz meşgul (reset sürüyor) ya da hat arızası — çağıran bekleyip yeniden dener */
+  }
+  const uint16_t c1_hedef = (uint16_t)((c1 & ~MLX90393_CONF1_KAZANC_MASKE) | (MLX90393_GAIN_SEL << 4U));
+  /* RES_X 6:5, RES_Y 8:7, RES_Z 10:9 → hepsi RES_16 (0) · DIG_FILT 4:2 · OSR 1:0 */
+  const uint16_t c3_hedef =
+      (uint16_t)((c3 & ~MLX90393_CONF3_AYAR_MASKE) | (MLX90393_DIG_FILT << 2U) | MLX90393_OSR);
+  if (!mag_kayit_yaz(h, MLX90393_CONF1, c1_hedef) || !mag_kayit_yaz(h, MLX90393_CONF3, c3_hedef)) {
+    return false;
+  }
+  uint16_t g1 = 0U;
+  uint16_t g3 = 0U;
+  if (!mag_kayit_oku(h, MLX90393_CONF1, &g1) || !mag_kayit_oku(h, MLX90393_CONF3, &g3)) {
+    return false;
+  }
+  h->veri.alan_kazanc = (uint8_t)((g1 >> 4U) & 7U);
+  h->veri.alan_cozunurluk = (uint8_t)((g3 >> 5U) & 3U);
+  return ((g1 & MLX90393_CONF1_KAZANC_MASKE) == (c1_hedef & MLX90393_CONF1_KAZANC_MASKE)) &&
+         ((g3 & MLX90393_CONF3_AYAR_MASKE) == (c3_hedef & MLX90393_CONF3_AYAR_MASKE));
+}
+
+/**
+ * YALNIZ AÇILIŞ (PEMF_Sensor_Init — ana döngü ve DDS ISR'ı BAŞLAMADAN): bütçeli tick beklemesi. ⚠️ Poll yolunda ÇAĞRILMAZ
+ * (orada `mag_ayar_zamanla` + damga kullanılır). Bütçe, tick ilerlemese de döngüyü sonlandırır.
+ */
+static void acilis_bekle_ms(uint32_t ms) {
+  const uint32_t bas = HAL_GetTick();
+  for (uint32_t butce = 4000000U; butce > 0U; butce--) {
+    if ((HAL_GetTick() - bas) >= ms) {
+      break;
+    }
+  }
+}
+
+/**
+ * TD2 AÇILIŞ: reset → bekle → yaz → GERİ OKU; tutmazsa (RT TEKRARLANMADAN — her RT meşgul pencereyi yeniden başlatırdı)
+ * bekleyip yeniden dener. @return ayar DOĞRULANDI mı (`veri.alan_ayar_dogrulandi`). Doğrulanamazsa alan BASILMAZ;
+ * çalışma anında `pencere_kapat` seyrek aralıkla yeniden zamanlar (bloklamadan).
+ */
+static bool mag_yapilandir_acilis(SensorHat_t *h) {
+  h->veri.alan_ayar_dogrulandi = false;
+  h->ayar_bekliyor = false;
   (void)mag_tek_komut(h, MLX90393_KOMUT_EX);
   (void)mag_tek_komut(h, MLX90393_KOMUT_RT);
+  for (uint32_t deneme = 0U; deneme < MLX90393_AYAR_DENEME; deneme++) {
+    acilis_bekle_ms(MLX90393_RT_BEKLEME_MS);
+    if (mag_ayar_dene(h)) {
+      h->veri.alan_ayar_dogrulandi = true;
+      return true;
+    }
+  }
+  return false;
+}
 
-  uint16_t c1 = 0U;
-  if (mag_kayit_oku(h, MLX90393_CONF1, &c1)) {
-    c1 = (uint16_t)((c1 & ~0x0070U) | (MLX90393_GAIN_SEL << 4U));
-    (void)mag_kayit_yaz(h, MLX90393_CONF1, c1);
-  }
-  uint16_t c3 = 0U;
-  if (mag_kayit_oku(h, MLX90393_CONF3, &c3)) {
-    /* RES_X 6:5, RES_Y 8:7, RES_Z 10:9 → hepsi RES_16 (0) · DIG_FILT 4:2 · OSR 1:0 */
-    c3 = (uint16_t)(c3 & ~(0x0060U | 0x0180U | 0x0600U | 0x001CU | 0x0003U));
-    c3 = (uint16_t)(c3 | (MLX90393_DIG_FILT << 2U) | MLX90393_OSR);
-    (void)mag_kayit_yaz(h, MLX90393_CONF3, c3);
-  }
+/** TD2 ÇALIŞMA ANI (bloklamaz): RT gönder, denemeyi damgaya bağla — `hat_ilerlet` S_BOSTA'da süre dolunca TEK deneme. */
+static void mag_ayar_zamanla(SensorHat_t *h, uint32_t simdi_ms) {
+  h->veri.alan_ayar_dogrulandi = false;
+  (void)mag_tek_komut(h, MLX90393_KOMUT_EX);
+  (void)mag_tek_komut(h, MLX90393_KOMUT_RT);
+  h->ayar_hazir_ms = simdi_ms + MLX90393_RT_BEKLEME_MS;
+  h->ayar_bekliyor = true;
 }
 
 /* ============================================================================
@@ -627,6 +700,12 @@ void PEMF_Sensor_Init(void) {
     h->veri.uc_y_min = h->veri.uc_y_max = 0.0f;
     h->veri.uc_z_min = h->veri.uc_z_max = 0.0f;
     h->veri.i2c_hata = 0U;
+    h->veri.alan_ayar_dogrulandi = false; /* TD2: ancak geri okunan ayarla true */
+    h->veri.alan_kazanc = 0xFFU;          /* geri okunmadı */
+    h->veri.alan_cozunurluk = 0xFFU;
+    h->ayar_bekliyor = false;
+    h->ayar_hazir_ms = 0U;
+    h->ayar_denetle = false;
   }
   /* AFR kaydırmaları: PB8/PB9 → AFR[1] bit 0/4 · PB10/PB11 → AFR[1] bit 8/12 */
   hat_donanim_kur(&g_hat[0], 0U, 4U);
@@ -639,7 +718,7 @@ void PEMF_Sensor_Init(void) {
     g_hat[i].sicaklik_adres = cihaz_var(&g_hat[i], MLX90614_ADRES) ? MLX90614_ADRES : 0U;
     g_hat[i].mag_adres = mag_adres_bul(&g_hat[i]);
     if (g_hat[i].mag_adres != 0U) {
-      mag_yapilandir(&g_hat[i]);
+      (void)mag_yapilandir_acilis(&g_hat[i]); /* TD2: sonuç `veri.alan_ayar_dogrulandi`te; STM_SENS bunu basar */
     }
   }
 }
@@ -672,7 +751,8 @@ static bool sicaklik_oku(SensorHat_t *h, uint8_t ram, float *cikti) {
  * ölçülmeyeni 0.0 göndermekle aynı sınıf yalandır (bkz. dosya başlığı).
  */
 static void pencere_kapat(SensorHat_t *h, uint32_t simdi_ms) {
-  if (h->zirve_ornek > 0U) {
+  /* TD2: ayar geri okunarak doğrulanmadıysa alan YOK sayılır (yanlış ölçekli değer basılmaz). */
+  if ((h->zirve_ornek > 0U) && h->veri.alan_ayar_dogrulandi) {
     h->veri.alan_mt = h->zirve_mt;
     h->veri.alan_ornek =
         (h->zirve_ornek > 65535U) ? (uint16_t)65535U : (uint16_t)h->zirve_ornek;
@@ -700,6 +780,10 @@ static void pencere_kapat(SensorHat_t *h, uint32_t simdi_ms) {
   h->sicaklik_taze = false;
   h->sicaklik_istegi = true;
   h->tur_sayaci++;
+  /* TD2: hatasız güç kesintisi (kısa düşüş) de kazancı varsayılana döndürür → her pencerede bir kez denetle (tek RR). */
+  if (h->veri.alan_ayar_dogrulandi) {
+    h->ayar_denetle = true;
+  }
 
   /* Sabit adım → kayma birikmez. Uzun bir duraklamadan sonra (hat kurtarma vb.)
    * geçmişte kalan damgayı şimdiye çekmezsek pencere ARDI ARDINA kapanır. */
@@ -716,8 +800,10 @@ static void pencere_kapat(SensorHat_t *h, uint32_t simdi_ms) {
     if (h->mag_adres == 0U) {
       h->mag_adres = mag_adres_bul(h);
       if (h->mag_adres != 0U) {
-        mag_yapilandir(h);
+        mag_ayar_zamanla(h, simdi_ms); /* TD2: sonradan takılan sensör — bloklamadan ayar */
       }
+    } else if (!h->veri.alan_ayar_dogrulandi && !h->ayar_bekliyor) {
+      mag_ayar_zamanla(h, simdi_ms); /* TD2: doğrulanamamış ayar seyrek aralıkla yeniden denenir (bloklamaz) */
     }
   }
 }
@@ -744,6 +830,27 @@ static bool hat_ilerlet(SensorHat_t *h, uint32_t simdi_ms) {
 
   switch (h->durum) {
   case S_BOSTA:
+    /* TD2: zamanlanmış ayar denemesi — reset süresi DAMGAYLA beklenir (bloklamaz), süre dolunca TEK deneme. */
+    if (h->ayar_bekliyor && (h->mag_adres != 0U) && ((int32_t)(simdi_ms - h->ayar_hazir_ms) >= 0)) {
+      h->ayar_bekliyor = false;
+      h->veri.alan_ayar_dogrulandi = mag_ayar_dene(h);
+      break;
+    }
+    /* TD2: doğrulanmış kazanç hâlâ yerinde mi? (sensör kablosu çıkıp takılınca adres aynı, kayıtlar varsayılan) Okunamazsa
+     * ölçüm BAŞLAMAZ, denetim bekler; saptıysa ölçüm durur ve ayar bloklamadan yeniden yapılır. */
+    if (h->ayar_denetle && (h->mag_adres != 0U) && h->veri.alan_ayar_dogrulandi) {
+      uint16_t c1 = 0U;
+      if (!mag_kayit_oku(h, MLX90393_CONF1, &c1)) {
+        i2c_hata_islet(h);
+      } else {
+        h->ayar_denetle = false;
+        h->ardisik_hata = 0U;
+        if ((c1 & MLX90393_CONF1_KAZANC_MASKE) != ((uint16_t)MLX90393_GAIN_SEL << 4U)) {
+          h->veri.alan_kazanc = (uint8_t)((c1 >> 4U) & 7U);
+          mag_ayar_zamanla(h, simdi_ms);
+        }
+      }
+    }
     /* Sıcaklık isteği varsa ÖNCE o; yoksa/sensör yoksa doğrudan manyetiğe dön. */
     if (h->sicaklik_istegi) {
       h->sicaklik_istegi = false;
@@ -754,7 +861,7 @@ static bool hat_ilerlet(SensorHat_t *h, uint32_t simdi_ms) {
       /* ⚠️ O BUS'TA SICAKLIK SENSÖRÜ YOK → hata SAYILMAZ (yoksa 5 turda bir hat
        * kurtarma tetikler ve AYNI bus'taki çalışan manyetik sensörü sakatlar). */
     }
-    if (h->mag_adres != 0U) {
+    if ((h->mag_adres != 0U) && h->veri.alan_ayar_dogrulandi && !h->ayar_denetle) { /* TD2: denetlenmemiş ayarla ölçüm YOK */
       h->durum = S_MAG_BASLAT;
     }
     break;

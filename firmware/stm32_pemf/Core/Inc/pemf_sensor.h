@@ -170,6 +170,15 @@ typedef struct {
   float uc_y_min, uc_y_max;
   float uc_z_min, uc_z_max;
   uint16_t i2c_hata; /**< kümülatif I2C hata sayacı — teşhis; 0 beklenir */
+  /**
+   * TD2 (tezgâh Oturum 13 — MLX90393 ölçeği ~5×): kazanç / çözünürlük ayarı GERİ OKUNARAK doğrulandı mı ve geri okunan
+   * değerler. ⚠️ `alan_ok` yalnız `alan_ayar_dogrulandi` iken true olur — doğrulanmamış ayarla (sensör varsayılanı GAIN_SEL 7
+   * → çevrim çarpanı 5× yanlış) alan BASILMAZ. Telemetri `B=` satırı `GS=<kazanç>,RS=<çözünürlük>` taşır (backend bunu
+   * doğrulama işareti sayar; eski firmware'in işaretsiz `B=`'si backend'de "doğrulanamadı" olur).
+   */
+  bool alan_ayar_dogrulandi;
+  uint8_t alan_kazanc;      /**< geri okunan CONF1 GAIN_SEL (beklenen 0) */
+  uint8_t alan_cozunurluk;  /**< geri okunan CONF3 RES_X (beklenen 0 = RES_16) */
 } PEMF_SensorVerisi_t;
 
 /**

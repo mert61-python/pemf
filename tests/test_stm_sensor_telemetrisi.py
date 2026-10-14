@@ -7,7 +7,7 @@ STM'in seri protokolünde sıcaklık/alan alanı **yoktu** (`api_server.py` bunu
 "STM bobinlerinde (1-5) sicaklik/akim/alan telemetrisi YOKTUR"), bu yüzden yeni bir satır
 sözleşmesi eklendi:
 
-    -> STM_TELE: C=6,T=34.20,A=27.10,B=1.842
+    -> STM_TELE: C=6,T=34.20,A=27.10,B=1.842,GS=0,RS=0
 
 ⚠️ **NEDEN BU KAPI GÜVENLİK KAPISI:** sahip kararıyla (A-47 + Y2) bobin 1-7'de HİÇBİR katmanda
 **termal kesme YOK** — 48 °C istemci interlock'u da 2026-10-02'de kaldırıldı; 48 °C üstünde yalnız
@@ -50,7 +50,7 @@ def ayristir():
 
 
 def test_KRITIK_tam_satir_UC_alani_da_tasir(ayristir):
-    g = ayristir("-> STM_TELE: C=6,T=34.20,A=27.10,B=1.842")
+    g = ayristir("-> STM_TELE: C=6,T=34.20,A=27.10,B=1.842,GS=0,RS=0")
     assert g == {
         "coil_id": 6,
         "object_temp": 34.20,
@@ -65,7 +65,7 @@ def test_KRITIK_EKSIK_alan_ANAHTARI_HIC_KONMAZ(ayristir):
     MUTASYON: ayrıştırıcıda eksik alanı `govde[alan] = 0.0` yap → KIRMIZI.
     Sahadaki etki: DB'ye "0.0 °C ölçüldü" yazılır, PDF'te hasta sahibine beyan edilir.
     """
-    g = ayristir("-> STM_TELE: C=7,B=0.512")
+    g = ayristir("-> STM_TELE: C=7,B=0.512,GS=0,RS=0")
     assert g == {"coil_id": 7, "magnetic_field": 0.512}, g
     assert "object_temp" not in g and "ambient_temp" not in g
 
@@ -85,7 +85,7 @@ def test_KRITIK_akim_alani_SOZLESMEDE_VAR(ayristir):
     g = ayristir("-> STM_TELE: C=1,I=0.350")
     assert g == {"coil_id": 1, "current": 0.350}, g
     # Karışık satır da desteklenir (ileride bir bobinde hepsi olabilir)
-    h = ayristir("-> STM_TELE: C=6,T=30.00,A=25.00,B=1.000,I=0.350")
+    h = ayristir("-> STM_TELE: C=6,T=30.00,A=25.00,B=1.000,I=0.350,GS=0,RS=0")
     assert h == {
         "coil_id": 6,
         "object_temp": 30.0,

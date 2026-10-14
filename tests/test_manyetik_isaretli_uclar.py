@@ -57,7 +57,7 @@ def _ayristir(satir: str) -> dict:
 
 def test_KRITIK_alti_uc_da_ayristirilir():
     """MUTASYON: desenden `ZN`/`ZP` grubunu sil → KIRMIZI."""
-    g = _ayristir("-> STM_TELE: C=6,B=1.842,N=412,XN=-1.203,XP=1.198,YN=-0.050,YP=0.062,ZN=-2.011,ZP=2.004")
+    g = _ayristir("-> STM_TELE: C=6,B=1.842,N=412,XN=-1.203,XP=1.198,YN=-0.050,YP=0.062,ZN=-2.011,ZP=2.004,GS=0,RS=0")
     assert g is not None
     for k in UCLAR:
         assert k in g, f"{k} ayristirilmadi -> surus kipi/faz kazanci OLCULEMEZ"
@@ -67,7 +67,7 @@ def test_KRITIK_alti_uc_da_ayristirilir():
 
 def test_KRITIK_NEGATIF_degerler_korunur():
     """⚠️ İşaret KAYBOLURSA bipolar ile unipolar ayırt EDİLEMEZ — kapının bütün amacı bu."""
-    g = _ayristir("-> STM_TELE: C=6,B=2.0,XN=-1.900,XP=1.950,ZN=-0.010,ZP=2.000")
+    g = _ayristir("-> STM_TELE: C=6,B=2.0,XN=-1.900,XP=1.950,ZN=-0.010,ZP=2.000,GS=0,RS=0")
     assert g["mag_x_min"] < 0, "negatif uc POZITIFE dondu -> bipolar tespiti imkansiz"
     # bipolar imzasi: min ~ -max (DC ofset ~0)
     assert abs((g["mag_x_max"] + g["mag_x_min"]) / 2) < 0.1, "bipolar imzasi (DC~0) bozuldu"
@@ -77,7 +77,7 @@ def test_KRITIK_NEGATIF_degerler_korunur():
 
 def test_KRITIK_UCLAR_YOKSA_anahtar_HIC_KONMAZ():
     """Eski firmware bu alanları basmaz → aşağı akış "ölçülmedi" ile "0.0"ı ayırabilmeli."""
-    g = _ayristir("-> STM_TELE: C=6,T=30.0,B=1.5")
+    g = _ayristir("-> STM_TELE: C=6,T=30.0,B=1.5,GS=0,RS=0")
     for k in UCLAR:
         assert k not in g, f"{k} olculmediği halde anahtar KONDU -> 0.0 'olculdu' sayilir"
 

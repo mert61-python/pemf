@@ -87,7 +87,10 @@ def test_KRITIK_STM_ornek_yoksa_BAYAT_ZIRVE_raporlanmaz():
     m = re.search(r"static void pencere_kapat\(SensorHat_t \*h, uint32_t simdi_ms\) \{(.*?)\n\}", kod, re.S)
     assert m, "pencere_kapat ayristirilamadi -> kapi BAYAT"
     govde = m.group(1)
-    assert re.search(r"if\s*\(h->zirve_ornek\s*>\s*0U\)", govde), "ornek sayisi KONTROL EDILMIYOR"
+    # TD2: pencere YALNIZ geri okunarak doğrulanmış kazançla alan raporlar (ayarsız örnek ~5× — tezgâh Oturum 13).
+    assert re.search(r"if\s*\(\(h->zirve_ornek\s*>\s*0U\)\s*&&\s*h->veri\.alan_ayar_dogrulandi\)", govde), (
+        "ornek sayisi / ayar dogrulamasi KONTROL EDILMIYOR"
+    )
     # else dalinda alan_ok KESINLIKLE false olmali
     else_i = govde.find("} else {")
     assert else_i > 0, "ornek YOKKEN dal YOK -> bayat zirve raporlanir"
@@ -127,9 +130,12 @@ def test_KRITIK_STM_manyetik_SUREKLI_ornekleniyor():
     assert m, "S_BOSTA ayristirilamadi -> kapi BAYAT"
     govde = m.group(1)
     # S_BOSTA, manyetigi ZAMANA degil yalnizca CIHAZ VARLIGINA kapilamali.
-    assert re.search(r"if\s*\(h->mag_adres\s*!=\s*0U\)\s*\{\s*\n\s*h->durum\s*=\s*S_MAG_BASLAT;", govde), (
-        "S_BOSTA manyetik olcumu dogrudan baslatmiyor -> ornekleme hizi 1 Hz'e duser"
-    )
+    # TD2: kazanç ayarı doğrulanmış ve denetlenmiş olmalı (aksi hâlde ~5× örnek) — ama ZAMANA bağlanmaz.
+    assert re.search(
+        r"if\s*\(\(h->mag_adres\s*!=\s*0U\)\s*&&\s*h->veri\.alan_ayar_dogrulandi\s*&&\s*!h->ayar_denetle\)\s*\{[^\n]*\n"
+        r"\s*h->durum\s*=\s*S_MAG_BASLAT;",
+        govde,
+    ), "S_BOSTA manyetik olcumu dogrudan baslatmiyor -> ornekleme hizi 1 Hz'e duser"
     assert "pencere_bitis_ms" not in govde, (
         "manyetik baslatma ZAMANLAYICIYA kapilanmis -> saniyede tek ornek, zirve TESADUF olur"
     )

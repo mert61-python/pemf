@@ -127,7 +127,7 @@ def test_KRITIK_telemetri_TEPE_ve_ORNEK_SAYISINI_tasir():
     ayristir = HeadlessCore._parse_stm_tele
     sahte = HeadlessCore.__new__(HeadlessCore)
 
-    g = ayristir(sahte, "-> STM_TELE: C=6,T=34.20,A=27.10,B=1.842,N=412")
+    g = ayristir(sahte, "-> STM_TELE: C=6,T=34.20,A=27.10,B=1.842,N=412,GS=0,RS=0")
     assert g == {
         "coil_id": 6,
         "object_temp": 34.2,
@@ -136,7 +136,7 @@ def test_KRITIK_telemetri_TEPE_ve_ORNEK_SAYISINI_tasir():
         "magnetic_samples": 412,
     }
 
-    g = ayristir(sahte, "-> STM_TELE: C=6,B=8.750,N=1,S=1")
+    g = ayristir(sahte, "-> STM_TELE: C=6,B=8.750,N=1,S=1,GS=0,RS=0")
     assert g["magnetic_saturated"] is True, "doygunluk bayragi TASINMIYOR -> guvenilmez deger sessizce doza girer"
     assert g["magnetic_samples"] == 1
 
@@ -154,7 +154,7 @@ def test_KRITIK_telemetri_TEPE_ve_ORNEK_SAYISINI_tasir():
     assert g["current"] == pytest.approx(1.5), "ayni satirdaki gecerli akim alani kayboldu"
 
     # Eski (N/S'siz) firmware satiri HALA ayristirilmali — atomik olmayan sevk penceresi.
-    g = ayristir(sahte, "-> STM_TELE: C=6,T=34.20,A=27.10,B=1.842")
+    g = ayristir(sahte, "-> STM_TELE: C=6,T=34.20,A=27.10,B=1.842,GS=0,RS=0")
     assert g["magnetic_field"] == pytest.approx(1.842)
     assert "magnetic_samples" not in g
 

@@ -198,7 +198,7 @@ def test_KRITIK_A47_tekil_surus_sirasinda_49_63_120C_STOP_YOK_ve_sicakken_START_
     assert r.status_code == 200, r.text[:300]
     once = len(o.hc.core._hw_send_queue.paketler)
     for t in (49.0, 63.0, 120.0):
-        o.satir(f"-> STM_TELE: C=6,T={t:.2f},A=27.10,B=1.842,N=412")
+        o.satir(f"-> STM_TELE: C=6,T={t:.2f},A=27.10,B=1.842,N=412,GS=0,RS=0")
         o.satir(f"-> STM_TELE: C=7,T={t:.2f},A=27.10")
         o.saat.ek += 1.0
         _tur(api)
@@ -216,7 +216,7 @@ def test_KRITIK_A47_tekil_surus_sirasinda_49_63_120C_STOP_YOK_ve_sicakken_START_
 def test_KRITIK_A47_SEANS_sicakken_baslar_ve_sicaklik_artinca_DURMAZ(o):
     api = o.api
     for cid in (6, 7):
-        o.satir(f"-> STM_TELE: C={cid},T=63.00,A=27.10,B=1.842,N=412")
+        o.satir(f"-> STM_TELE: C={cid},T=63.00,A=27.10,B=1.842,N=412,GS=0,RS=0")
     once = len(o.hc.core._hw_send_queue.paketler)
     r = o.c.post(
         "/api/session/start",
@@ -228,7 +228,7 @@ def test_KRITIK_A47_SEANS_sicakken_baslar_ve_sicaklik_artinca_DURMAZ(o):
     for k in range(6):
         o.saat.ek += 1.0
         for cid in (6, 7):
-            o.satir(f"-> STM_TELE: C={cid},T={70.0 + k:.2f},A=27.10,B=1.842,N=412")
+            o.satir(f"-> STM_TELE: C={cid},T={70.0 + k:.2f},A=27.10,B=1.842,N=412,GS=0,RS=0")
         _tur(api)
     with api._session_lock:
         aktif = bool(api._active_session.get("is_active"))
