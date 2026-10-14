@@ -33,6 +33,7 @@ import { useCokluSecim } from "@/hooks/useCokluSecim";
 import { hastaninSonAnalizi, hastayaGoreSonAnaliz, kapsamda, sonAnalizOzeti, type AnalizKaydi } from "@/utils/sonAnaliz";
 import { SecimCubugu } from "@/components/ui/SecimCubugu";
 import { TOPLU_SILME_ONAYI } from "@/services/topluSilme";
+import { profilSozlugu } from "@/utils/profilSozlugu";
 
 /** Y108: tekil silmede sunucu 404 (başka cihazda / sekmede zaten silinmiş) → bilgi; liste yenilenir. */
 export const ZATEN_SILINMIS_HASTA = "Bu hasta zaten silinmiş — liste yenilendi.";
@@ -41,6 +42,8 @@ export function PatientScreen() {
   const { showToast } = useToast();
   const { navigateTo, setSelectedPatient } = useAppNav();
   const { userMode, isExpert, isResearcher } = useUserMode();
+  // SG.G1 / G2: kapsam düğmelerinin dili profile göre (araştırmada "Tüm Ekip" / "Benim Örneklerim"; veteriner metinleri AYNEN).
+  const SK = profilSozlugu({ petOwner: userMode === "pet_owner", researcher: !!isResearcher || userMode === "researcher" });
   const { session } = useAuth();
   // ⚠️ DENETİM 2026-08-09 (Tier 1): kimlik AKTİF OPERATÖRDÜR, giriş e-postası değil.
   // Klinik tek Supabase hesabını paylaşıyor → her hasta aynı hesaba damgalanıyor ve
@@ -389,19 +392,19 @@ export function PatientScreen() {
           <TouchableOpacity
             style={[styles.segmentBtn, scope === "mine" && styles.segmentBtnActive]}
             onPress={() => setScope("mine")}
-            accessibilityLabel="Benim hastalarım"
+            accessibilityLabel={SK.benimListe.toLocaleLowerCase("tr-TR").replace(/^benim /, "Benim ")}
           >
             <Text style={[styles.segmentText, scope === "mine" && styles.segmentTextActive]} numberOfLines={1}>
-              Benim Hastalarım{mineCount ? ` (${mineCount})` : ""}
+              {SK.benimListe}{mineCount ? ` (${mineCount})` : ""}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.segmentBtn, scope === "all" && styles.segmentBtnActive]}
             onPress={() => setScope("all")}
-            accessibilityLabel="Tüm klinik hastaları"
+            accessibilityLabel={`Tüm ${SK.tumKapsamKucuk} ${SK.kayitlarAd}`}
           >
             <Text style={[styles.segmentText, scope === "all" && styles.segmentTextActive]} numberOfLines={1}>
-              Tüm Klinik ({patients.length})
+              {SK.tumKapsam} ({patients.length})
             </Text>
           </TouchableOpacity>
         </View>

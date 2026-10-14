@@ -80,6 +80,7 @@ const EKRAN = {
   hasta: {
     Bilesen: PatientScreen,
     tumKlinik: "Tüm klinik hastaları",
+    tumEkip: "Tüm ekip örnekleri",
     cubuk: "hasta-secim-cubugu",
     toplu: "/patients/delete_bulk",
     alan: "patient_ids",
@@ -90,6 +91,7 @@ const EKRAN = {
   seans: {
     Bilesen: TreatmentHistoryScreen,
     tumKlinik: "Tüm klinik seansları",
+    tumEkip: "Tüm ekip seansları",
     cubuk: "gecmis-secim-cubugu",
     toplu: "/history/delete_bulk",
     alan: "session_ids",
@@ -221,10 +223,11 @@ describe.each(["hasta", "seans"] as EkranAdi[])("D2.72 · Y92 — %s silme yaln�
     expect(t[0].operator).toBe(`JETON-${A}`);
   });
 
-  it("KRİTİK (B-6.26, Kural 2'de de): araştırma profili 'Tüm Klinik'te Tümünü Seç → Sil → YALNIZ kendi kaydı", async () => {
+  it("KRİTİK (B-6.26, Kural 2'de de): araştırma profili 'Tüm Ekip'te (eski adıyla 'Tüm Klinik') Tümünü Seç → Sil → YALNIZ kendi kaydı", async () => {
     const R = "arastirma@klinik.com";
     await kur(ekran, "researcher", R, [], { R, S: "", X: "eski@klinik.com" });
-    await s.tikla(e.tumKlinik);
+    // SG.G1 / G2: araştırma profilinde kapsam düğmesi "Tüm Ekip" (profilSozlugu); davranış AYNI.
+    await s.tikla(e.tumEkip);
     await tumunuSecVeSil(ekran);
     expect(topluKimlikler(ekran)).toEqual([[e.kimlik(0)]]);
   });

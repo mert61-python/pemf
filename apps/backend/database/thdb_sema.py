@@ -134,6 +134,11 @@ class SemaKarisimi:
         # KRİTİK: mevcut DB'lerde updated_at yoksa ekle — end_session ve
         # update_session_notes bu kolonu yazıyor; yoksa OperationalError (seans bitirme/not patlar).
         self._safe_add_column(cursor, "treatment_sessions", "updated_at TEXT")
+        # SG.G1 (2026-10-14): seansın açıldığı ARAYÜZ profili (veterinarian / researcher / pet_owner) — liste / rapor / KPI profile göre
+        # süzülür. EKLEMELİ ve boş varsayılan: eski satırlar DEĞİŞMEZ, profilleri okumada türetilir (`utils/profil.seans_profili`).
+        self._safe_add_column(
+            cursor, "treatment_sessions", "profil TEXT DEFAULT ''", "treatment_sessions.profil eklendi"
+        )
 
         # Tedavi parametreleri detay tablosu
         cursor.execute('''

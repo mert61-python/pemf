@@ -1,5 +1,6 @@
 // Author: mertaygn, cglrgrkn
-import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
+import { setProfilBasligi } from '@/services/apiClient';
 
 export type UserMode = 'pet_owner' | 'veterinarian' | 'researcher' | null;
 
@@ -24,7 +25,14 @@ export const UserModeProvider = ({ children }: { children: ReactNode }) => {
 
   // Yalnız oturum-içi state; hiçbir kalıcı depolamaya (AsyncStorage/localStorage) YAZILMAZ.
   // DÜŞÜK fix: setUserMode'u useCallback + value'yu useMemo ile sabitle → gereksiz tüketici-render önle.
-  const setUserMode = useCallback((mode: UserMode) => setUserModeState(mode), []);
+  // SG.G1 / G2: etkin profil isteklere `X-PEMF-Profil` olarak gider (backend kayıtları profile göre ayırır). Başlık EŞZAMANLI
+  // güncellenir — profil seçildikten hemen sonra açılan ekranın ilk isteği de doğru profille gider (efekt beklenmez).
+  const setUserMode = useCallback((mode: UserMode) => {
+    setProfilBasligi(mode);
+    setUserModeState(mode);
+  }, []);
+  // Sağlayıcı kalkınca (çıkış / test) başlık da kalkar — sonraki istek eski profili taşımasın.
+  useEffect(() => () => setProfilBasligi(null), []);
 
   const isExpert = userMode === 'veterinarian';
   const isResearcher = userMode === 'researcher';

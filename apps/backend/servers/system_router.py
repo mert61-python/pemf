@@ -486,9 +486,17 @@ async def discovery_info(request: Request):
 
 
 @router.get("/api/kpi/summary")
-def get_kpi_summary():
-    """KPI Özeti — DB'den seans istatistikleri."""
+def get_kpi_summary(request: Request = None):
+    """KPI Özeti — DB'den seans istatistikleri.
+
+    SG.G1 (2026-10-14): istek `X-PEMF-Profil` bildiriyorsa yalnız o profilin seansları sayılır (`utils/profil.seans_profili`);
+    bildirmeyen eski istemci bugünkü gibi tüm seansları görür. Bobin kullanımı da aynı seans kümesiyle süzülür."""
+    from utils.profil import istek_profili, sqlite_islevleri
+
     from servers import api_server as _api
+
+    _p = istek_profili(request) if request is not None else None  # doğrudan çağrı (iç okuyucu / test): süzgeç YOK
+    _ks, _kp = ("pemf_seans_profil(profil, treatment_mode) = ?", (_p,)) if _p else ("1 = 1", ())
 
     result = {
         "totalSessions": 0,
@@ -512,13 +520,17 @@ def get_kpi_summary():
         from datetime import timedelta
 
         with db._get_connection() as conn:
+            if _p:
+                sqlite_islevleri(conn)
             cur = conn.cursor()
 
-            cur.execute("SELECT COUNT(*) FROM treatment_sessions")
+            cur.execute(f"SELECT COUNT(*) FROM treatment_sessions WHERE {_ks}", _kp)
             total = int(cur.fetchone()[0] or 0)
 
             cur.execute(
-                "SELECT COUNT(*) FROM treatment_sessions WHERE LOWER(COALESCE(session_status,'')) = 'completed'"
+                "SELECT COUNT(*) FROM treatment_sessions WHERE LOWER(COALESCE(session_status,'')) = 'completed' "
+                f"AND {_ks}",
+                _kp,
             )
             completed = int(cur.fetchone()[0] or 0)
 
@@ -530,19 +542,24 @@ def get_kpi_summary():
 
             cur.execute(
                 "SELECT COUNT(*) FROM treatment_sessions "
-                "WHERE LOWER(COALESCE(session_status,'')) IN ('stopped','error','interrupted',?) "
-                "   OR LOWER(COALESCE(session_status,'')) LIKE '%abort%'",
-                (SEANS_DURUMU_ACIL_DURDURMA.lower(),),
+                "WHERE (LOWER(COALESCE(session_status,'')) IN ('stopped','error','interrupted',?) "
+                "   OR LOWER(COALESCE(session_status,'')) LIKE '%abort%') "
+                f"AND {_ks}",
+                (SEANS_DURUMU_ACIL_DURDURMA.lower(), *_kp),
             )
             stopped = int(cur.fetchone()[0] or 0)
 
-            cur.execute("SELECT AVG(duration_minutes) FROM treatment_sessions WHERE duration_minutes IS NOT NULL")
+            cur.execute(
+                f"SELECT AVG(duration_minutes) FROM treatment_sessions WHERE duration_minutes IS NOT NULL AND {_ks}",
+                _kp,
+            )
             _avg = cur.fetchone()[0]
             avg_dur = round(float(_avg), 1) if _avg is not None else 0.0
 
             modes = {}
             for _r in cur.execute(
-                "SELECT COALESCE(treatment_mode,'Manuel') AS m, COUNT(*) FROM treatment_sessions GROUP BY m"
+                f"SELECT COALESCE(treatment_mode,'Manuel') AS m, COUNT(*) FROM treatment_sessions WHERE {_ks} GROUP BY m",
+                _kp,
             ).fetchall():
                 modes[str(_r[0] or "Manuel")] = int(_r[1] or 0)
 
@@ -554,8 +571,8 @@ def get_kpi_summary():
             day_counts = {}
             for _r in cur.execute(
                 "SELECT substr(session_date,1,10) AS d, COUNT(*) FROM treatment_sessions "
-                "WHERE substr(session_date,1,10) >= ? GROUP BY d",
-                (since,),
+                f"WHERE substr(session_date,1,10) >= ? AND {_ks} GROUP BY d",
+                (since, *_kp),
             ).fetchall():
                 if _r[0]:
                     day_counts[str(_r[0])] = int(_r[1] or 0)
@@ -570,7 +587,14 @@ def get_kpi_summary():
 
             # coilUsage: bobin-bazli kosum sayisi (ayni SQLCipher-farkindali baglanti)
             try:
-                for _row in cur.execute("SELECT coil_id, COUNT(*) FROM session_coil_runs GROUP BY coil_id").fetchall():
+                # SG.G1: profil yoksa sorgu BİREBİR eskisi (seanssız koşular dahil); profilde yalnız o profilin seanslarının koşuları.
+                _kq = (
+                    "SELECT coil_id, COUNT(*) FROM session_coil_runs WHERE session_id IN "
+                    f"(SELECT id FROM treatment_sessions WHERE {_ks}) GROUP BY coil_id"
+                    if _p
+                    else "SELECT coil_id, COUNT(*) FROM session_coil_runs GROUP BY coil_id"
+                )
+                for _row in cur.execute(_kq, _kp).fetchall():
                     _cid = int(_row[0]) if _row[0] is not None else 0
                     if 1 <= _cid <= 8:
                         result["coilUsage"][str(_cid)] = int(_row[1] or 0)

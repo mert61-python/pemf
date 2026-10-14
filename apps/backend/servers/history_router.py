@@ -116,15 +116,18 @@ def get_pdf_gen():
 
 
 @router.get("/")
-def get_history(limit: int = 100, cursor: int = None, db=Depends(get_db)):
+def get_history(request: Request, limit: int = 100, cursor: int = None, db=Depends(get_db)):
     """Seans geçmişini listele (audit B-8.2: keyset/cursor pagination).
 
     - `limit`: sayfa boyutu (varsayılan 100).
     - `cursor`: bir önceki sayfanın SON öğesinin `id`'si → ondan ESKİ seanslar (sonraki sayfa).
       Verilmezse en yeni `limit` seans döner (ilk sayfa). "Sonraki sayfa var mı" = dönen kayıt == limit.
-    Geriye uyumlu: eski istemci `cursor` göndermez → eski davranış (en yeni `limit`)."""
+    Geriye uyumlu: eski istemci `cursor` göndermez → eski davranış (en yeni `limit`).
+    SG.G1: istek `X-PEMF-Profil` bildiriyorsa yalnız o profilin seansları (`utils/profil`); bildirmeyen eski istemci süzgeçsiz."""
+    from utils.profil import istek_profili
+
     try:
-        sessions = db.get_session_history(limit=limit, before_id=cursor)
+        sessions = db.get_session_history(limit=limit, before_id=cursor, profil=istek_profili(request))
         return sessions
     except Exception as e:
         logger.error(f"Error fetching history: {e}")
@@ -132,10 +135,13 @@ def get_history(limit: int = 100, cursor: int = None, db=Depends(get_db)):
 
 
 @router.get("/statistics")
-def get_statistics(db=Depends(get_db)):
-    """Klinik seans istatistiklerini getir"""
+def get_statistics(request: Request, db=Depends(get_db)):
+    """Seans istatistiklerini getir (SG.G1: istek profili bildiriyorsa yalnız o profilin seansları)."""
+    from utils.profil import istek_profili
+
     try:
-        stats = db.get_statistics()
+        _p = istek_profili(request)
+        stats = db.get_statistics(profil=_p) if _p else db.get_statistics()  # başlıksız çağrı BİREBİR eskisi
         return stats
     except Exception as e:
         logger.error(f"Error fetching statistics: {e}")
@@ -247,9 +253,13 @@ def export_csv(
             return JSONResponse(status_code=409, content={"detail": _CSV_GERI_YUKLEME_SURUYOR})
         sessions = []
         _once = None
+        # SG.G1: "Tümünü dışa aktar" da ekrandaki listeyle AYNI profil kümesi (başlıksız eski istemci süzgeçsiz).
+        from utils.profil import istek_profili
+
+        _profil = istek_profili(request) if request is not None else None
         while True:
             _sayfa = db.get_session_history(
-                limit=_CSV_SAYFA, internal_full=True, session_ids=_idset, before_id=_once
+                limit=_CSV_SAYFA, internal_full=True, session_ids=_idset, before_id=_once, profil=_profil
             )  # Audit P2: tam-export, 500'e kırpma
             sessions.extend(_sayfa)
             if len(_sayfa) < _CSV_SAYFA:

@@ -32,6 +32,7 @@ import { emitToast } from "@/services/toastBridge";
 import { TakipGrafigi } from "@/components/domain/TakipGrafigi";
 import { takipSerisiKur } from "@/utils/takipSerisi";
 import { kapsamda, kayitHastaAnahtari } from "@/utils/sonAnaliz";
+import { profilSozlugu } from "@/utils/profilSozlugu";
 import { serviceConfig } from "@/services/config";
 import { isDesktopHost } from "@/services/desktopSession";
 
@@ -122,6 +123,8 @@ export function AiHistoryScreen() {
   // kliniğin tüm AI analizlerini HASTA ADLARIYLA görebiliyordu. Kural utils/patientScope.ts'te
   // TEK yerde; iki ekran da onu kullanır ki bir daha ayrışmasın.
   const { isExpert, isResearcher } = useUserMode();
+  // SG.G2: kapsam düğmesinin dili profile göre (araştırmada "Tüm Ekip"; liste zaten profile göre ayrı — `X-PEMF-Profil`).
+  const SK = profilSozlugu({ researcher: !!isResearcher });
   // Y115: kayıtlı operatörlü cihazda ev sahibinin kapsamı sahipsiz kayıtları içermez.
   const roller = { isExpert, isResearcher, operatorKayitli: (op?.operators?.length ?? 0) > 0 };
   const etkinScope = effectiveScope(scope, roller);
@@ -388,8 +391,8 @@ export function AiHistoryScreen() {
           <TouchableOpacity style={[styles.segmentBtn, scope === "mine" && styles.segmentBtnActive]} onPress={() => setScope("mine")} accessibilityLabel="Benim analizlerim">
             <Text style={[styles.segmentText, scope === "mine" && styles.segmentTextActive]} numberOfLines={1}>Benim Analizlerim</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.segmentBtn, scope === "all" && styles.segmentBtnActive]} onPress={() => setScope("all")} accessibilityLabel="Tüm klinik analizleri">
-            <Text style={[styles.segmentText, scope === "all" && styles.segmentTextActive]} numberOfLines={1}>Tüm Klinik</Text>
+          <TouchableOpacity style={[styles.segmentBtn, scope === "all" && styles.segmentBtnActive]} onPress={() => setScope("all")} accessibilityLabel={`Tüm ${SK.tumKapsamKucuk} analizleri`}>
+            <Text style={[styles.segmentText, scope === "all" && styles.segmentTextActive]} numberOfLines={1}>{SK.tumKapsam}</Text>
           </TouchableOpacity>
         </View>
       ) : null}

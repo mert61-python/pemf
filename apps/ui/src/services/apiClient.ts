@@ -153,6 +153,20 @@ export function setOperatorToken(token: string | null): void {
   _operatorToken = token || null;
 }
 
+/**
+ * ETKİN ARAYÜZ PROFİLİ (SG.G1 / G2, sahip gözlemi 2026-10-13: "raporlar seans geçmişi vs de ayrılmalı profillere göre").
+ *
+ * `UserModeContext.setUserMode` günceller (profil KALICI DEĞİL — yalnız bellekte). Backend liste / rapor / KPI uçları
+ * `X-PEMF-Profil` VARSA o profilin kayıtlarını döndürür ve yeni kaydı profiliyle yazar (`apps/backend/utils/profil.py`);
+ * başlıksız (eski) istemci bugünkü gibi süzgeçsiz görür. ERİŞİM KAPISI DEĞİL (profiller herkese açık) — kimlik / sır taşımaz,
+ * bu yüzden güvenli-taban kapısına bağlı değildir.
+ */
+export const PROFIL_BASLIGI = "X-PEMF-Profil";
+let _profilBasligi: string | null = null;
+export function setProfilBasligi(profil: string | null): void {
+  _profilBasligi = profil || null;
+}
+
 /** `authHeaders()` + (verildiyse) isteğe özgü operatör jetonu (C2-4.3 — işin BAŞLADIĞI andaki hekim; bkz. `ApiOpts.operatorJetonu`). */
 function _istekBasliklari(opts?: ApiOpts): Record<string, string> {
   const h = authHeaders();
@@ -237,6 +251,8 @@ export function authHeaders(): Record<string, string> {
     // Operatör jetonu da aynı kapıdan geçer (bkz. setOperatorToken).
     ...(_operatorToken && isSafeBackendBase(serviceConfig.apiBaseUrl)
       ? { "X-PEMF-Operator": _operatorToken } : {}),
+    // SG.G1 / G2: etkin profil (bkz. setProfilBasligi) — görünüm ayrımı, kimlik değil.
+    ...(_profilBasligi ? { [PROFIL_BASLIGI]: _profilBasligi } : {}),
   };
 }
 

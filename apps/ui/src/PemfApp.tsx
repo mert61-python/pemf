@@ -8,6 +8,7 @@ import { colors } from "@/theme/tokens";
 import { RouteKey } from "@/types/domain";
 import { UserModeProvider, useUserMode } from "@/context/UserModeContext";
 import { canAccess, varsayilanRota } from "@/config/access";
+import { sayfaBasligi } from "@/config/sayfaBasliklari";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { LiveDataProvider, useLiveData } from "@/context/LiveDataContext";
 import { AppNavProvider } from "@/context/AppNavContext";
@@ -27,19 +28,6 @@ const PatientScreen = lazy(() => import("@/screens/PatientScreen").then((m) => (
 const AiHubScreen = lazy(() => import("@/screens/AiHubScreen").then((m) => ({ default: m.AiHubScreen })));
 const SettingsScreen = lazy(() => import("@/screens/SettingsScreen").then((m) => ({ default: m.SettingsScreen })));
 const AiHistoryScreen = lazy(() => import("@/screens/AiHistoryScreen").then((m) => ({ default: m.AiHistoryScreen })));
-
-const routeMeta: Record<RouteKey, { title: string; subtitle: string }> = {
-  dashboard: { title: "Hoş Geldiniz", subtitle: "Bugün Hangi Dostumuza Seans Yapıyoruz?" },
-  control: { title: "Seans Kontrol Merkezi", subtitle: "Akıllı Reçeteler ve Cihaz Yönetimi" },
-  sensors: { title: "Cihaz Durumu", subtitle: "Gerçek Zamanlı Sensör İzleme" },
-  history: { title: "Seans Geçmişi", subtitle: "Geçmiş seansları incele ve rapor al." },
-  patients: { title: "Hasta Kayıtları", subtitle: "Dostlarımızın bilgileri." },
-  kpi: { title: "Performans Raporu", subtitle: "Cihaz ve klinik göstergeleri." },
-  simulator: { title: "Etki Simülasyonu", subtitle: "Manyetik alanın dostumuza etkisini görselleştirin." },
-  ai: { title: "Akıllı Teşhis", subtitle: "Kamera üzerinden otonom ağrı analizi ve seans." },
-  ai_history: { title: "AI Analiz Geçmişi", subtitle: "Tüm modellerin analiz sonuçları — şifreli, detaylı kayıt." },
-  settings: { title: "Ayarlar", subtitle: "Cihaz tercihleri ve gelişmiş mod." },
-};
 
 function MainRouter() {
   const { userMode } = useUserMode();
@@ -62,7 +50,7 @@ function MainRouter() {
 
   return (
     <AppNavProvider navigateTo={setActiveRoute}>
-    <AppShell activeRoute={effectiveRoute} title={routeMeta[effectiveRoute].title} subtitle={routeMeta[effectiveRoute].subtitle} onRouteChange={setActiveRoute}>
+    <AppShell activeRoute={effectiveRoute} title={sayfaBasligi(userMode, effectiveRoute).title} subtitle={sayfaBasligi(userMode, effectiveRoute).subtitle} onRouteChange={setActiveRoute}>
       {/* audit B-10.3: EKRAN-bazlı ErrorBoundary — bir ekran çökse bile nav-shell hayatta kalır
           (tüm uygulama beyaz-ekrana düşmez). key={route} → route değişince boundary sıfırlanır. */}
       <ErrorBoundary key={effectiveRoute}>

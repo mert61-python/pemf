@@ -9,6 +9,7 @@ import os
 from database.patient_database import get_patient_database
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
+from utils.profil import istek_profili
 
 router = APIRouter(tags=["patients"])
 logger = logging.getLogger("patient_router")
@@ -66,10 +67,13 @@ def get_all_patients(request: Request, limit: int = 0, offset: int = 0):
     # kayitlik klinikte tum tabloyu desifre ediyor ve o sure boyunca hasta-DB'sini blokluyordu.
     # Sayfalama artik SQL'de; 'total' ise desifre gerektirmeyen COUNT ile alinir.
     off = max(0, offset)
+    # SG.G1 (sahip gözlemi 2026-10-13): istemci etkin profili bildirdiyse (`X-PEMF-Profil`) yalnız o profilin hasta / denekleri — liste
+    # ve 'total' AYNI koşulla (sayfalama tutarlı). Başlıksız eski istemci bugünkü gibi hepsini görür. Kapı: tests/test_profil_ayrimi_SG_G1_G2.py
+    profil = istek_profili(request)
     # ⚠️ D2-3.1 (2-D incelemesi · D2.66'nın ilk yarısı): okuma KATI — okunamayan hasta DB'si "hasta yok" (200 success, 0) DEĞİL, 503.
     # Eskiden arayüz "Henüz hasta kaydı yok." gösteriyordu; operatör masadaki hayvana yeni kart açıyordu (geçici arızada çift kart).
     try:
-        data = db.get_all_patients(limit=limit, offset=off, kati=True)
+        data = db.get_all_patients(limit=limit, offset=off, kati=True, profil=profil)
     except Exception:
         logger.warning(
             "Hasta listesi okunamadi (hasta DB'si acilamiyor) — 503; bu 'hasta yok' DEMEK DEGIL.", exc_info=True
@@ -79,7 +83,7 @@ def get_all_patients(request: Request, limit: int = 0, offset: int = 0):
             detail="Hasta kayıtları okunamadı (hasta veritabanı açılamıyor) — bu 'hasta yok' demek değil, yeni kart "
             "açmayın. Uygulamayı yeniden başlatın; sürerse teknik desteğe başvurun.",
         )
-    total = db.count_patients()
+    total = db.count_patients(profil=profil)
     return {"status": "success", "data": data, "total": total}
 
 
@@ -112,6 +116,8 @@ def add_new_patient(patient: PatientInput, request: Request):
                 "Operatör seçin — hasta eklemek için önce üst bardan hangi hekim olduğunuzu seçin."
             ),
         )
+    # SG.G1: yeni kayıt oluşturulduğu profille yazılır (başlık yoksa boş → eski kayıt kuralı, S-SG.7). Güncelleme (yukarıda) profile DOKUNMAZ.
+    payload["profil"] = istek_profili(request) or ""
     patient_id = db.add_patient(payload)
     return {"status": "success", "patient_id": patient_id}
 
@@ -260,7 +266,9 @@ def remove_all_patients(request: Request, payload: DeleteAllPayload = DeleteAllP
     # ⚠️ D2.57 (B-3.109): silinen sayı ve VACUUM durumu AYRI — DELETE commit edildikten sonra VACUUM düşerse silme
     # GERÇEKLEŞMİŞTİR: iz "ok" + gerçek sayı + `vacuum: False`, yanıt "success" + `vacuum_ok: false` (arayüz listeyi yeniler ve
     # disk temizliğinin tamamlanamadığını söyler). Eskiden "hata, 0"/"error" — kayıtlar gitmişken.
-    silinen, vacuum_ok = db.clear_all_patients()
+    # ⚠️ SG.G1: profil bildirildiyse kapsam YALNIZ DARALIR — o profilin listesinde görünen hastalar (araştırmada "Tümünü Sil" veteriner
+    # hastalarını silmez). Başlıksız istek bugünkü gibi tamamı (A-03 / Y106 kapıları yukarıda AYNEN).
+    silinen, vacuum_ok = db.clear_all_patients(profil=istek_profili(request))
     ok = silinen >= 0
     logging.getLogger(__name__).warning(
         "TOPLU HASTA SİLME: %s hasta silindi (VACUUM %s).",

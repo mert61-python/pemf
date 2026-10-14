@@ -213,6 +213,7 @@ class SeansKarisimi:
         operator_name: str = None,
         patient_name: str = None,
         operator_email: str = None,
+        profil: str = None,
     ) -> int:
         """
         Yeni tedavi seansı başlat
@@ -222,10 +223,14 @@ class SeansKarisimi:
             target_condition: Hedef durum (artrit, yara iyileşmesi, vb.)
             operator_name: Uygulayıcı adı
             patient_name: Hasta adı
+            profil: SG.G1 — isteğin bildirdiği arayüz profili (`utils/profil`); yoksa boş (okumada türetilir)
 
         Returns:
             int: Oluşturulan seans ID'si
         """
+        from utils.profil import gecerli_profil
+
+        profil = gecerli_profil(profil) or ""
         try:
             self._ensure_write_guardrail()
             # HIGH FIX: Use connection pool instead of new connection
@@ -241,8 +246,8 @@ class SeansKarisimi:
                     '''
                     INSERT INTO treatment_sessions
                     (session_date, start_time, treatment_mode, target_condition,
-                     operator_name, operator_email, patient_name, session_status, session_uuid)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)
+                     operator_name, operator_email, patient_name, session_status, session_uuid, profil)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
                 ''',
                     (
                         session_date,
@@ -253,6 +258,7 @@ class SeansKarisimi:
                         (operator_email or None),
                         self._redact_pii(patient_name),
                         session_uuid,
+                        profil,
                     ),
                 )
 
@@ -387,6 +393,7 @@ class SeansKarisimi:
         before_id: int = None,
         internal_full: bool = False,
         session_ids=None,
+        profil: str = None,
     ) -> List[Dict]:
         """
         Tedavi geçmişini getir
@@ -449,6 +456,15 @@ class SeansKarisimi:
                 if treatment_mode:
                     query += ' AND treatment_mode = ?'
                     params.append(treatment_mode)
+
+                # SG.G1: profil süzgeci SQL'de (sayfalama süzülmüş kümeyle tutarlı). Profil yok (eski istemci) → süzgeç YOK.
+                from utils.profil import gecerli_profil, sqlite_islevleri
+
+                _p = gecerli_profil(profil)
+                if _p:
+                    sqlite_islevleri(conn)
+                    query += ' AND pemf_seans_profil(ts.profil, ts.treatment_mode) = ?'
+                    params.append(_p)
 
                 # audit B-8.2: keyset (cursor) pagination — before_id verilirse ondan ESKI (daha kucuk id)
                 # satirlar. id PK (monoton+benzersiz, indexli) → buyuk-OFFSET taramasi YOK + araya yeni
@@ -609,54 +625,73 @@ class SeansKarisimi:
             self.logger.error(f"Seans detayları getirme hatası: {e}")
             raise
 
-    def get_statistics(self) -> Dict:
+    def get_statistics(self, profil: str = None) -> Dict:
         """
         Tedavi istatistiklerini getir
+
+        Args:
+            profil: SG.G1 — verilirse yalnız o profilin seansları sayılır (`utils/profil.seans_profili`; yoksa tüm seanslar)
 
         Returns:
             Dict: İstatistik bilgileri
         """
+        from utils.profil import gecerli_profil, sqlite_islevleri
+
+        _p = gecerli_profil(profil)
+        # SG.G1: tek süzgeç — her sorgu AYNI kümeyi sayar (profil yoksa koşul her zaman doğru).
+        _ks, _kp = ("pemf_seans_profil(profil, treatment_mode) = ?", (_p,)) if _p else ("1 = 1", ())
         try:
             with self._get_connection() as conn:
+                if _p:
+                    sqlite_islevleri(conn)
                 cursor = conn.cursor()
 
                 stats = {}
 
                 # Toplam seans sayısı
-                cursor.execute('SELECT COUNT(*) FROM treatment_sessions')
+                cursor.execute(f'SELECT COUNT(*) FROM treatment_sessions WHERE {_ks}', _kp)
                 stats['total_sessions'] = cursor.fetchone()[0]
 
                 # Tamamlanan seans (mobil KPI fallback 'completed_sessions' okuyor)
                 cursor.execute(
-                    "SELECT COUNT(*) FROM treatment_sessions WHERE LOWER(COALESCE(session_status,'')) = 'completed'"
+                    "SELECT COUNT(*) FROM treatment_sessions WHERE LOWER(COALESCE(session_status,'')) = 'completed' "
+                    f"AND {_ks}",
+                    _kp,
                 )
                 stats['completed_sessions'] = cursor.fetchone()[0]
 
                 # Bu ay seans sayısı
                 current_month = datetime.now().strftime('%Y-%m')
                 cursor.execute(
-                    '''
+                    f'''
                     SELECT COUNT(*) FROM treatment_sessions
-                    WHERE session_date LIKE ?
+                    WHERE session_date LIKE ? AND {_ks}
                 ''',
-                    (f"{current_month}%",),
+                    (f"{current_month}%", *_kp),
                 )
                 stats['monthly_sessions'] = cursor.fetchone()[0]
 
                 # Tedavi modlarına göre dağılım
-                cursor.execute('''
+                cursor.execute(
+                    f'''
                     SELECT treatment_mode, COUNT(*)
                     FROM treatment_sessions
+                    WHERE {_ks}
                     GROUP BY treatment_mode
-                ''')
+                ''',
+                    _kp,
+                )
                 stats['mode_distribution'] = dict(cursor.fetchall())
 
                 # Ortalama seans süresi
-                cursor.execute('''
+                cursor.execute(
+                    f'''
                     SELECT AVG(duration_minutes)
                     FROM treatment_sessions
-                    WHERE duration_minutes IS NOT NULL
-                ''')
+                    WHERE duration_minutes IS NOT NULL AND {_ks}
+                ''',
+                    _kp,
+                )
                 avg_duration = cursor.fetchone()[0]
                 stats['average_duration'] = round(avg_duration, 1) if avg_duration else 0
 

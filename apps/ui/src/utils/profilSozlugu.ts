@@ -28,6 +28,17 @@ export interface ProfilSozlugu {
   bos: string;
   ekle: string;
   uyari: string;
+  /**
+   * SG.G1 / G2 (sahip gözlemi 2026-10-13: "klinikle araştırma modunun alakası yok"): "Benim / Tüm" kapsam düğmelerinin dili.
+   * Kayıtlar artık profile göre AYRI (backend `X-PEMF-Profil`); araştırmada "Tüm Klinik" değil "Tüm Ekip". Veteriner metinleri AYNEN.
+   */
+  benimListe: string;
+  tumKapsam: string;
+  /** Erişilebilirlik etiketleri için küçük harfli kapsam + kayıt adı ("Tüm klinik hastaları" / "Tüm ekip örnekleri"). */
+  tumKapsamKucuk: string;
+  kayitlarAd: string;
+  /** Performans Raporu bölüm başlığı. */
+  kpiBaslik: string;
 }
 
 export function profilSozlugu({
@@ -47,6 +58,11 @@ export function profilSozlugu({
       bos: "Kayıtlı örnek yok.",
       ekle: "Örnek Ekle",
       uyari: "Analiz için önce bir örnek seçin — sonuç o kayda işlenecek.",
+      benimListe: "Benim Örneklerim",
+      tumKapsam: "Tüm Ekip",
+      tumKapsamKucuk: "ekip",
+      kayitlarAd: "örnekleri",
+      kpiBaslik: "📊 Araştırma Göstergeleri & Analitik",
     };
   }
   if (petOwner) {
@@ -59,6 +75,11 @@ export function profilSozlugu({
       bos: "Henüz kayıtlı hayvanınız yok.",
       ekle: "Hayvan Ekle",
       uyari: "Analiz için önce hayvanınızı seçin — sonuç onun geçmişine işlenecek.",
+      benimListe: "Hayvanlarım",
+      tumKapsam: "Tüm Klinik",
+      tumKapsamKucuk: "klinik",
+      kayitlarAd: "hastaları",
+      kpiBaslik: "📊 Klinik Göstergeler & Analitik",
     };
   }
   return {
@@ -70,5 +91,10 @@ export function profilSozlugu({
     bos: "Kayıtlı hasta yok.",
     ekle: "Hasta Ekle",
     uyari: "İşlem için önce hasta seçin — sonuç hasta geçmişine işlenecek.",
+    benimListe: "Benim Hastalarım",
+    tumKapsam: "Tüm Klinik",
+    tumKapsamKucuk: "klinik",
+    kayitlarAd: "hastaları",
+    kpiBaslik: "📊 Klinik Göstergeler & Analitik",
   };
 }

@@ -24,6 +24,7 @@ import {
   BASKA_HEKIM_SILME,
 } from "@/utils/patientScope";
 import { useUserMode } from "@/context/UserModeContext";
+import { profilSozlugu } from "@/utils/profilSozlugu";
 
 /** D2.43: tekil silmede seans sunucuda yoksa (başka cihaz/hekim az önce silmiş) gösterilen metin. */
 export const ZATEN_SILINMIS_SEANS = "Bu seans zaten silinmiş — liste yenilendi.";
@@ -77,7 +78,9 @@ export function TreatmentHistoryScreen() {
   const myEmail = (op ? op.operatorEmail : (session?.email || "")).toLowerCase();
   // Y113: kimlik veritabanı okunamıyorsa kimliksiz istemler arızayı ve çareyi söyler ("operatörünüzü seçin" DEMEZ).
   const kimlikDbOkunamiyor = Boolean(op?.kimlikDbOkunamiyor);
-  const { isExpert } = useUserMode();
+  const { isExpert, isResearcher } = useUserMode();
+  // SG.G1: kapsam düğmesinin dili profile göre (araştırmada "Tüm Ekip"; liste zaten profile göre ayrı — `X-PEMF-Profil`).
+  const SK = profilSozlugu({ researcher: !!isResearcher });
   // Klinik-içi görünüm: "mine" = benim başlattığım seanslar (+ sahipsiz eski), "all" = tüm klinik.
   const [scope, setScope] = useState<"mine" | "all">("mine");
   // D2.72 · Y92: seans (tıbbi kayıt) silme yetkisinin bağlamı — tek kaynak `silinebilir`; kayıtlı operatör yoksa Kural 2.
@@ -315,8 +318,8 @@ export function TreatmentHistoryScreen() {
           <TouchableOpacity style={[styles.segmentBtn, scope === "mine" && styles.segmentBtnActive]} onPress={() => setScope("mine")} accessibilityLabel="Benim seanslarım">
             <Text style={[styles.segmentText, scope === "mine" && styles.segmentTextActive]} numberOfLines={1}>Benim Seanslarım</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.segmentBtn, scope === "all" && styles.segmentBtnActive]} onPress={() => setScope("all")} accessibilityLabel="Tüm klinik seansları">
-            <Text style={[styles.segmentText, scope === "all" && styles.segmentTextActive]} numberOfLines={1}>Tüm Klinik</Text>
+          <TouchableOpacity style={[styles.segmentBtn, scope === "all" && styles.segmentBtnActive]} onPress={() => setScope("all")} accessibilityLabel={`Tüm ${SK.tumKapsamKucuk} seansları`}>
+            <Text style={[styles.segmentText, scope === "all" && styles.segmentTextActive]} numberOfLines={1}>{SK.tumKapsam}</Text>
           </TouchableOpacity>
         </View>
       ) : null}

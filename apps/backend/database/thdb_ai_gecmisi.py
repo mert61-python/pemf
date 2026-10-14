@@ -239,8 +239,12 @@ class AiGecmisiKarisimi:
         vacuum_ertele: bool = False,
         sahipsiz_dahil: bool = False,
         kayitli_epostalar=None,
+        profil: Optional[str] = None,
     ) -> int:
         """AI analiz geçmişini TOPLU siler; silinen kayıt sayısını döner (DELETE hatasında -1).
+
+        ⚠️ SG.G2 (2026-10-14): `profil` verilirse kapsam YALNIZ DARALIR — aşağıdaki sahiplik kapsamı ∩ o profilin kayıtları
+        (`utils/profil.ai_kaydi_profili`; liste ucuyla AYNI süzgeç: ekranda görünen küme dışındaki kayıt silinmez).
 
         ⚠️ VACUUM ŞART: `DELETE` satırları yalnız serbest listeye bırakır — hasta adı ve analiz
         özeti dosyada OKUNABİLİR kalır. `clear_all_patients` ile aynı kural (audit P3).
@@ -255,8 +259,14 @@ class AiGecmisiKarisimi:
         NULL/boş, ve `kayitli_epostalar` verilirse sahibi bu kümede OLMAYAN kayıtlar (Y104 tanımı: operatörler kurulmadan
         önceki ortak giriş). `kayitli_epostalar` boş küme ise (operatörsüz cihaz) her sahip "kayıtlı değil"dir.
         """
+        from utils.profil import gecerli_profil, sqlite_islevleri
+
+        _p = gecerli_profil(profil)
+        _pk, _pp = (" AND pemf_ai_profil(mode, module_id) = ?", [_p]) if _p else ("", [])
         try:
             with self._get_connection() as conn:
+                if _p:
+                    sqlite_islevleri(conn)
                 cursor = conn.cursor()
                 if operator_email and sahipsiz_dahil:
                     op = operator_email.strip().lower()
@@ -276,20 +286,20 @@ class AiGecmisiKarisimi:
                         else:
                             kosul = "1 = 1"  # operatörsüz cihaz: kayıtlı kimse yok → her sahip sahipsiz
                             params = []
-                    cursor.execute(f"SELECT COUNT(*) FROM ai_analyses WHERE {kosul}", params)
+                    cursor.execute(f"SELECT COUNT(*) FROM ai_analyses WHERE ({kosul}){_pk}", params + _pp)
                     n = int(cursor.fetchone()[0] or 0)
-                    cursor.execute(f"DELETE FROM ai_analyses WHERE {kosul}", params)
+                    cursor.execute(f"DELETE FROM ai_analyses WHERE ({kosul}){_pk}", params + _pp)
                 elif operator_email:
                     # ⚠️ D2.20 (A-10 · A-56): "kendi" kapsamı YALNIZ kimliğin kayıtları — sahipsizlere dokunulmaz (eskiden
                     # her "kendi geçmişimi sil" kliniğin TÜM sahipsiz AI kayıtlarını da VACUUM'lu götürüyordu — ölçüldü).
                     op = operator_email.strip().lower()
-                    cursor.execute("SELECT COUNT(*) FROM ai_analyses WHERE LOWER(operator_email) = ?", (op,))
+                    cursor.execute(f"SELECT COUNT(*) FROM ai_analyses WHERE LOWER(operator_email) = ?{_pk}", [op] + _pp)
                     n = int(cursor.fetchone()[0] or 0)
-                    cursor.execute("DELETE FROM ai_analyses WHERE LOWER(operator_email) = ?", (op,))
+                    cursor.execute(f"DELETE FROM ai_analyses WHERE LOWER(operator_email) = ?{_pk}", [op] + _pp)
                 else:
-                    cursor.execute("SELECT COUNT(*) FROM ai_analyses")
+                    cursor.execute(f"SELECT COUNT(*) FROM ai_analyses WHERE 1 = 1{_pk}", _pp)
                     n = int(cursor.fetchone()[0] or 0)
-                    cursor.execute("DELETE FROM ai_analyses")
+                    cursor.execute(f"DELETE FROM ai_analyses WHERE 1 = 1{_pk}", _pp)
                 conn.commit()
         except Exception:
             self.logger.exception("AI analiz geçmişi temizlenemedi.")
@@ -415,8 +425,12 @@ class AiGecmisiKarisimi:
         patient_name: Optional[str] = None,
         before_id: Optional[int] = None,
         patient_uuid: Optional[str] = None,
+        profil: Optional[str] = None,
     ) -> List[Dict]:
-        """AI analiz geçmişini getir (id DESC = yeni önce). Filtre: modül / hasta / keyset-pagination.
+        """AI analiz geçmişini getir (id DESC = yeni önce). Filtre: modül / hasta / keyset-pagination / profil.
+
+        ⚠️ SG.G2 (2026-10-14): `profil` verilirse yalnız o profilin kayıtları (`utils/profil.ai_kaydi_profili`: kayda yazılan
+        `mode`, yoksa modülün profili) — süzgeç SQL'de, `before_id` / `LIMIT` sayfalaması süzülmüş kümeyle tutarlı.
 
         ⚠️ `patient_uuid` TERCİH EDİLEN hasta süzgecidir (2026-09-12): ad bazlı süzme aynı adlı
         iki hayvanda karışır, ad düzeltilince kopar ve PII maskelemesi açıkken tümüyle çöker.
@@ -461,6 +475,13 @@ class AiGecmisiKarisimi:
                 if before_id:
                     clauses.append("id < ?")
                     params.append(int(before_id))
+                from utils.profil import gecerli_profil, sqlite_islevleri
+
+                _p = gecerli_profil(profil)
+                if _p:
+                    sqlite_islevleri(conn)
+                    clauses.append("pemf_ai_profil(mode, module_id) = ?")
+                    params.append(_p)
                 where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
                 params.append(max(1, min(int(limit), 500)))
                 cursor.execute(

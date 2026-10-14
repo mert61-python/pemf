@@ -3754,6 +3754,9 @@ async def start_session(payload: SessionStartPayload, request: Request):
     from servers.auth import cozumlenmis_operator, cozumlenmis_operator_adi
 
     _operator_kimligi = cozumlenmis_operator(request, payload.operator_email)
+    from utils.profil import istek_profili
+
+    _profil_istek = istek_profili(request)  # SG.G1
     # ⚠️ D2.41 (B-2.19): ADI da aynı kurala bağlı — e-posta sahipsiz düşerken `operator_name` beyanı seans satırına ve
     # `session_started` izine kayıtlı bir hekimin adını yazıyordu (ölçüldü). Jetonluda kayıtlı görünen ad; Kural 2'de beyan.
     _operator_adi = cozumlenmis_operator_adi(_operator_kimligi, payload.operator_name)
@@ -4018,6 +4021,8 @@ async def start_session(payload: SessionStartPayload, request: Request):
                 # ⚠️ 2026-08-09 (Tier 1): e-posta İSTEMCİ BEYANINDAN değil, doğrulanmış operatör
                 # jetonundan gelir. Beyan yalnız cihazda kayıtlı operatör YOKKEN kabul edilir.
                 operator_email=_operator_kimligi or None,
+                # SG.G1: seansın açıldığı arayüz profili (görünüm ayrımı; erişim kapısı DEĞİL). Bildirilmezse boş → türetilir.
+                profil=_profil_istek,
             )
             # Yeni kolonlar (start_session bunlari yazmaz): gercek baslangic epoch + patient_id FK.
             # ⚠️ Y116: seansın REÇETESİ (frekans / şiddet) de BURADA, sunucunun bildiği değerle yazılır — doz kaydı seansın
@@ -5908,9 +5913,15 @@ async def log_ai_result(payload: AiLogPayload, request: Request):
         _hasta_adi = str(payload.patient_name or "").strip()
         if _hasta_kimligi and not _hasta_adi and await asyncio.to_thread(_ad_doldurma_izni, request):
             _hasta_adi = await asyncio.to_thread(_hasta_adi_kimlikten, _hasta_kimligi)
+        # SG.G2: kayıt profili istemcinin gönderdiği `mode` (geçerliyse); değilse isteğin profili (`X-PEMF-Profil`); o da yoksa
+        # gönderilen değer AYNEN (okumada modülden türetilir — `utils/profil.ai_kaydi_profili`).
+        from utils.profil import gecerli_profil as _gecerli_profil
+        from utils.profil import istek_profili as _istek_profili
+
+        _kayit_profili = _gecerli_profil(payload.mode) or _istek_profili(request) or (payload.mode or "").strip()
         rid = await asyncio.to_thread(
             db.add_ai_analysis,
-            payload.mode,
+            _kayit_profili,
             payload.module_id,
             payload.module,
             _hasta_adi,
@@ -6014,6 +6025,7 @@ async def review_ai_analysis(payload: AiReviewPayload, request: Request):
 
 @app.get("/api/ai/log")
 async def get_ai_log(
+    request: Request,
     limit: int = 50,
     module_id: str = "",
     patient_name: str = "",
@@ -6031,7 +6043,11 @@ async def get_ai_log(
     ⚠️ OPERATÖR SÜZGECİ YOKTUR (bilinçli): kapsam kararı istemcide, `patientScope` tek
     kaynağıyla verilir. Çağıran ekranların hepsi `kapsamda()` ile süzmek ZORUNDADIR —
     kapı: tests/test_kapsam_sahipligi.py.
+    ⚠️ PROFİL SÜZGECİ BURADA (SG.G2, 2026-10-14): istek `X-PEMF-Profil` bildiriyorsa yalnız o profilin kayıtları (sayfalama
+    süzülmüş kümeyle tutarlı); bildirmeyen eski istemci (yayınlanmış APK) bugünkü gibi süzgeçsiz.
     """
+    from utils.profil import istek_profili
+
     try:
         db = _get_treatment_db()
         if db is None:
@@ -6043,6 +6059,7 @@ async def get_ai_log(
             patient_name or None,
             (int(before_id) or None),
             (patient_id or None),
+            istek_profili(request),
         )
         # ⚠️ Y126 (S-A2.3): bu liste LAN'dan JETONSUZ (A-02) — önceki değerlendirmelerin METİNLERİ (red gerekçesi, düzeltilmiş
         # teşhis; hasta adı / klinik bulgu taşıyabilir) listede TAŞINMAZ, yalnız SAYISI; metinler kayıt ayrıntısında
@@ -6334,7 +6351,11 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
     # silme hemen yapılır, VACUUM seans bitince / bakımda (`_bekleyen_vacuumu_arka_planda`).
     with _session_lock:
         _seans_suruyor = bool(_active_session.get("is_active"))
-    n = await asyncio.to_thread(db.clear_ai_analyses, op, _seans_suruyor, _sahipsiz_dahil, _kayitli_set)
+    # SG.G2: istek profil bildiriyorsa toplu silme YALNIZ o profilin kayıtlarına DARALIR (ekranda görünen küme; kapsam genişlemez).
+    from utils.profil import istek_profili as _istek_profili
+
+    _silme_profili = _istek_profili(request)
+    n = await asyncio.to_thread(db.clear_ai_analyses, op, _seans_suruyor, _sahipsiz_dahil, _kayitli_set, _silme_profili)
     # C2-4.1: DB okuması olay döngüsünde değil (tedavi DB'si kilitliyken döngüyü dondurmasın — Ö.4-Y8).
     _vacuum_bekliyor = bool(await asyncio.to_thread(getattr(db, "vacuum_bekliyor_mu", lambda: False)))
 

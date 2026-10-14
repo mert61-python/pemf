@@ -15,6 +15,17 @@ import { BarChart, PieChart } from "react-native-chart-kit";
 import { barBolumSayisi } from "@/utils/kpiGrafik";
 import { alanGosterilebilir } from "@/utils/olculenAlan";
 import { gorunurBobinler, STM_BOBIN_SAYISI, type GorunurlukGirdisi } from "@/services/bobinGorunurlugu";
+import { useUserMode, type UserMode } from "@/context/UserModeContext";
+import { profilSozlugu } from "@/utils/profilSozlugu";
+
+/** Etkin profil — sağlayıcı dışında (yalın ekran testi) `null`; yalnız başlık metni için (kancanın kendisi her çizimde çağrılır). */
+function useEtkinProfil(): UserMode {
+  try {
+    return useUserMode().userMode;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * KPI paydası (“x / N”) — ekranın geri kalanıyla AYNI görünürlük kuralından türer.
@@ -44,6 +55,8 @@ interface KpiSummary {
 export function KpiDashboardScreen() {
   const { snapshot, sensorHistory, connectionQuality } = useLiveData();
   const instantStale = connectionQuality !== "live";
+  // SG.G1: sayılar profilin seanslarıdır (backend `X-PEMF-Profil`) → başlık da profilin dilinde ("Klinik" araştırmada yok).
+  const SK = profilSozlugu({ researcher: useEtkinProfil() === "researcher" });
   const [kpi, setKpi] = useState<KpiSummary>({
     totalSessions: 0,
     completedSessions: 0,
@@ -266,7 +279,7 @@ export function KpiDashboardScreen() {
   keyboardShouldPersistTaps='handled' taşıyor. İç ScrollView'ın yükseklik sınırı
   olmadığı için kendi kaydırmasını hiç üretmiyordu; ama klavye açıkken dokunuşu
   yutup 'Kaydet/Bağlan' düğmelerini İKİ dokunuş gerektiriyordu. */}
-      <Text style={styles.sectionTitle}>📊 Klinik Göstergeler & Analitik</Text>
+      <Text style={styles.sectionTitle}>{SK.kpiBaslik}</Text>
       <ResponsiveGrid>
         <MetricCard
           label="Toplam Seans"

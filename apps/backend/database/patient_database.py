@@ -344,6 +344,9 @@ class PatientDatabase:
         # KVKK retention (2026-06-28): son tedavi tarihi + anonim bayragi (inaktiflik bazli anonimlestirme).
         self._safe_add_column(cursor, "patients", "last_treatment_at TEXT")
         self._safe_add_column(cursor, "patients", "anonymized INTEGER DEFAULT 0")
+        # SG.G1 (2026-10-14): kaydın oluşturulduğu ARAYÜZ profili (veterinarian / researcher / pet_owner; şifresiz üst veri — kişisel
+        # veri değil). EKLEMELİ, boş varsayılan: eski satırlar DEĞİŞMEZ (`utils/profil.hasta_profilde_mi` okumada türetir).
+        self._safe_add_column(cursor, "patients", "profil TEXT DEFAULT ''")
 
         cursor.execute(
             """
@@ -698,6 +701,10 @@ class PatientDatabase:
             guncelleme = _tarih("updated_at", olusturma)
             son_tedavi = _tarih("last_treatment_at", None)
             anonim = 1 if ice_aktarma and str(patient_info.get("anonymized") or 0) in ("1", "True", "true") else 0
+            # SG.G1: yeni kayıtta isteğin profili (router), içe aktarmada paketteki değer AYNEN (cihaz taşıma korur).
+            from utils.profil import gecerli_profil
+
+            profil = gecerli_profil(patient_info.get("profil")) or ""
             dizin_icin = {k: ("" if k in ham else v) for k, v in patient_info.items()}
 
             try:
@@ -707,8 +714,8 @@ class PatientDatabase:
                         """
                         INSERT INTO patients
                         (id, name, species, breed, age, weight, owner, vet_contact, owner_email, operator_email, created_at, updated_at,
-                         last_treatment_at, anonymized)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         last_treatment_at, anonymized, profil)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             patient_id,
@@ -725,6 +732,7 @@ class PatientDatabase:
                             guncelleme,
                             son_tedavi,
                             anonim,
+                            profil,
                         ),
                     )
                     self._index_patient_search_terms(cursor, patient_id, dizin_icin)
@@ -790,17 +798,35 @@ class PatientDatabase:
                 ).fetchall()
         return {str(s[0]): self._decrypt_field(s[1] or "") for s in satirlar}
 
-    def count_patients(self) -> int:
-        """Toplam hasta sayisi (sayfalamada 'total' icin — desifre GEREKTIRMEZ)."""
+    @staticmethod
+    def _profil_kosulu(profil: Optional[str]) -> tuple:
+        """SG.G1: hasta listesi / sayımı / toplu silme için TEK profil koşulu (`utils/profil.hasta_profilde_mi` ile aynı kural):
+        yazılmış profil → yalnız o; boş (eski) kayıt → `ESKI_HASTA_PROFILLERI`. Profil yok → koşul YOK (eski istemci)."""
+        from utils.profil import ESKI_HASTA_PROFILLERI, gecerli_profil
+
+        p = gecerli_profil(profil)
+        if not p:
+            return "1 = 1", ()
+        if p in ESKI_HASTA_PROFILLERI:
+            return "(COALESCE(profil, '') = ? OR COALESCE(profil, '') = '')", (p,)
+        return "COALESCE(profil, '') = ?", (p,)
+
+    def count_patients(self, profil: Optional[str] = None) -> int:
+        """Toplam hasta sayisi (sayfalamada 'total' icin — desifre GEREKTIRMEZ). SG.G1: `profil` verilirse o profilinkiler."""
+        kosul, param = self._profil_kosulu(profil)
         with self.lock:
             try:
                 with self._get_connection() as conn:
-                    return int(conn.cursor().execute("SELECT COUNT(*) FROM patients").fetchone()[0])
+                    return int(
+                        conn.cursor().execute(f"SELECT COUNT(*) FROM patients WHERE {kosul}", param).fetchone()[0]
+                    )
             except _DB_ERROR:
                 self._db_hatasini_yaz("hasta sayimi")
                 return 0
 
-    def get_all_patients(self, limit: int = 0, offset: int = 0, kati: bool = False) -> List[Dict[str, Any]]:
+    def get_all_patients(
+        self, limit: int = 0, offset: int = 0, kati: bool = False, profil: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """Hastalari getirir. limit>0 ise SAYFAYI SQL'de sinirlar (limit=0 → hepsi, geriye uyumlu).
 
         DENETIM P2: sayfalama YALNIZCA cagiran tarafinda (Python dilimi) yapiliyordu; bu metod
@@ -815,19 +841,21 @@ class PatientDatabase:
                 with self._get_connection() as conn:
                     conn.row_factory = self._row_factory
                     cursor = conn.cursor()
+                    # SG.G1: profil süzgeci SQL'de (sayfalama süzülmüş kümeyle tutarlı); profil yoksa koşul her zaman doğru.
+                    kosul, param = self._profil_kosulu(profil)
                     if limit and limit > 0:
                         cursor.execute(
-                            "SELECT * FROM patients ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                            (int(limit), max(0, int(offset))),
+                            f"SELECT * FROM patients WHERE {kosul} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                            (*param, int(limit), max(0, int(offset))),
                         )
                     elif offset and offset > 0:
                         # LIMIT olmadan OFFSET SQLite'ta gecersiz → -1 "sinirsiz" demektir.
                         cursor.execute(
-                            "SELECT * FROM patients ORDER BY created_at DESC LIMIT -1 OFFSET ?",
-                            (int(offset),),
+                            f"SELECT * FROM patients WHERE {kosul} ORDER BY created_at DESC LIMIT -1 OFFSET ?",
+                            (*param, int(offset)),
                         )
                     else:
-                        cursor.execute("SELECT * FROM patients ORDER BY created_at DESC")
+                        cursor.execute(f"SELECT * FROM patients WHERE {kosul} ORDER BY created_at DESC", param)
                     rows = cursor.fetchall()
 
                     patients: List[Dict[str, Any]] = []
@@ -1095,8 +1123,11 @@ class PatientDatabase:
         finally:
             self.lock.release()
 
-    def clear_all_patients(self) -> tuple:
+    def clear_all_patients(self, profil: Optional[str] = None) -> tuple:
         """Tum hasta kayitlarini temizler → `(silinen, vacuum_ok)`; DELETE düşerse `(-1, False)` (kayıtlar DURUR).
+
+        ⚠️ SG.G1: `profil` verilirse kapsam YALNIZ DARALIR — yalnız o profilin listesinde GÖRÜNEN hastalar (`_profil_kosulu`;
+        liste ile AYNI koşul). Profil yoksa bugünkü gibi tamamı.
 
         ⚠️ D2.57 (B-3.109): DELETE commit edildikten SONRA VACUUM düşerse (disk dolu / G-Ç) silme GERÇEKLEŞMİŞTİR — sonuç
         "silindi, VACUUM başarısız" olarak AYRI bildirilir. Eskiden ikisi tek `try`'daydı: `False` dönüyor, KVKK denetim izi
@@ -1105,10 +1136,17 @@ class PatientDatabase:
             try:
                 with self._get_connection() as conn:
                     cursor = conn.cursor()
-                    cursor.execute("SELECT COUNT(*) FROM patients")
+                    kosul, param = self._profil_kosulu(profil)
+                    cursor.execute(f"SELECT COUNT(*) FROM patients WHERE {kosul}", param)
                     silinen = int(cursor.fetchone()[0] or 0)
-                    cursor.execute("DELETE FROM patient_search_index")
-                    cursor.execute("DELETE FROM patients")
+                    if param:
+                        cursor.execute(
+                            f"DELETE FROM patient_search_index WHERE patient_id IN (SELECT id FROM patients WHERE {kosul})",
+                            param,
+                        )
+                    else:
+                        cursor.execute("DELETE FROM patient_search_index")
+                    cursor.execute(f"DELETE FROM patients WHERE {kosul}", param)
                     conn.commit()
             except _DB_ERROR:
                 self.logger.exception("Toplu hasta silme basarisiz (kayitlar DURUYOR).")
