@@ -29,6 +29,9 @@ interface EmergencyStopResponse {
   status?: string;
   stmStopped?: boolean;
   mqttResults?: { mqtt?: string }[];
+  /** TD3: kartın bu STOP'a yanıtı — "red" = STM_NACK (kabul yok) → teyit YOK, eylem: gücü kes / USB'yi çıkar. */
+  stmKartYaniti?: "kabul" | "red" | null;
+  stmRedMesaji?: string | null;
 }
 interface CommandResponse {
   status?: string;
@@ -40,10 +43,12 @@ const BRIDGE_TIMEOUT_MS = 5000;
 /**
  * Donanımı durdur. ASLA throw etmez.
  * @returns `confirmed` — donanımın durduğu SUNUCU TARAFINDAN teyit edildi mi.
- *          `false` ise bobinler hâlâ çalışıyor OLABİLİR; çağıran mutlaka uyarmalıdır.
+ *          `false` ise bobinler hâlâ çalışıyor OLABİLİR; çağıran mutlaka uyarmalıdır (`kartReddetti` → KART_RED metni).
+ *          `kartReddetti` — TD3: teyit yok VE kart STOP'u NACK'ledi (backend `stmKartYaniti: "red"`).
  */
-export async function performEmergencyStop(): Promise<{ confirmed: boolean }> {
+export async function performEmergencyStop(): Promise<{ confirmed: boolean; kartReddetti: boolean }> {
   let teyitli = false;
+  let kartRed = false;
   // 1) Bridge (tek atışta STM + ESP).
   try {
     const ctrl = new AbortController();
@@ -74,6 +79,7 @@ export async function performEmergencyStop(): Promise<{ confirmed: boolean }> {
     // operatöre "kesildi" demek, bu ekrandaki en ağır hata sınıfıdır.
       // ⚠️ D1.105 · A-63: teyitli olsa da ERKEN DÖNÜLMEZ — 2. ve 3. adım koşulsuz (Ö.4-Y8).
       if (data?.confirmed === true) teyitli = true;
+      if (data?.stmKartYaniti === "red") kartRed = true;
     } finally {
       clearTimeout(timer);
     }
@@ -88,6 +94,7 @@ export async function performEmergencyStop(): Promise<{ confirmed: boolean }> {
     const r = await apiPost<EmergencyStopResponse | null>(
       "/hardware/emergency_stop", {}, null, { silent: true });
     if (r?.confirmed === true) teyitli = true;
+    if (r?.stmKartYaniti === "red") kartRed = true;
   } catch {
     /* aşağıdaki son çareye düş */
   }
@@ -106,10 +113,18 @@ export async function performEmergencyStop(): Promise<{ confirmed: boolean }> {
   } catch {
     /* yut — teyit 1./2. adımdan gelir */
   }
-  return { confirmed: teyitli };
+  return { confirmed: teyitli, kartReddetti: !teyitli && kartRed };
 }
 
 /** Teyit edilemeyen durdurma için ORTAK uyarı metni (tüm çağıranlar aynı sözü versin). */
 export const EMERGENCY_STOP_UNCONFIRMED_TITLE = "⚠️ ACİL DURDURMA DOĞRULANAMADI";
 export const EMERGENCY_STOP_UNCONFIRMED_BODY =
   "Donanımın durduğu teyit edilemedi. Bobinler hâlâ çalışıyor olabilir — cihazı fiziksel güç düğmesinden kapatın.";
+
+/**
+ * TD3 (tezgâh Oturum 13): kart STOP'u REDDETTİ (STM_NACK). Backend `utils/stm32_kimlik.ESTOP_KART_RED_METNI` ile AYNI metin
+ * (eşlik: tests/test_TD3_estop_kartin_STOP_NACKi_teyit_DEGILDIR.py). Eylem söyler: gücü kes / USB'yi çıkar.
+ */
+export const EMERGENCY_STOP_KART_RED_TITLE = "⛔ KART STOP'U REDDETTİ";
+export const EMERGENCY_STOP_KART_RED_BODY =
+  "Cihaz kartı STOP komutunu reddetti — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın.";

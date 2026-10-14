@@ -24,6 +24,8 @@ import {
   performEmergencyStop,
   EMERGENCY_STOP_UNCONFIRMED_TITLE,
   EMERGENCY_STOP_UNCONFIRMED_BODY,
+  EMERGENCY_STOP_KART_RED_TITLE,
+  EMERGENCY_STOP_KART_RED_BODY,
 } from "@/services/emergencyStop";
 import { emitToast } from "@/services/toastBridge";
 import { useStmBelirsiz } from "@/hooks/useStmBelirsiz";
@@ -95,11 +97,17 @@ export function GlobalEmergencyStop({
     // görsel geri bildirim içindir, dokunuşu engellemez.
     setBusy(true);
     emitToast("Acil durdurma gönderiliyor…", "info");
-    const { confirmed } = await performEmergencyStop();
+    const { confirmed, kartReddetti } = await performEmergencyStop();
     setBusy(false);
     setYerelTeyitsiz(!confirmed);
     if (confirmed) emitToast("Tüm bobinler durduruldu ✓", "success");
-    else platformAlert(EMERGENCY_STOP_UNCONFIRMED_TITLE, EMERGENCY_STOP_UNCONFIRMED_BODY);
+    else {
+      // TD3: kart STOP'u reddettiyse eylem: gücü kes / USB'yi çıkar.
+      platformAlert(
+        kartReddetti ? EMERGENCY_STOP_KART_RED_TITLE : EMERGENCY_STOP_UNCONFIRMED_TITLE,
+        kartReddetti ? EMERGENCY_STOP_KART_RED_BODY : EMERGENCY_STOP_UNCONFIRMED_BODY
+      );
+    }
   };
 
   // D1.E05: web'de body düzeyine portal + en üst katman (her açık Modal'ın üstünde); native'de yerinde.

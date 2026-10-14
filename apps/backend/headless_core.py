@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import collections
 import logging
 import queue
 import re
@@ -248,6 +249,12 @@ class HeadlessCore:
             self._hw_yazim_sayaci = 0  # porta başarıyla yazılan paket sayısı
             self._hw_son_stop_yazimi = 0  # son tüm-duty-0 (STOP) yazımının sayaç değeri
             self._hw_son_stop_sirasi = 0  # porta yazılmış STOP'ların EN YÜKSEK kuyruk sırası (i5-F-2)
+        if getattr(self, "_stm_yanitlar", None) is None:
+            # TD3: kartın paket YANITLARI (STM_OK / STM_NACK) ve her STOP yazıldığında o ana dek gelmiş yanıt sayısı —
+            # E-stop'un STOP'una kartın ne dediği (`hw_stop_yaniti_bekle`). Yalnız RAPOR; STOP'u kapılamaz (Ö.4-Y8).
+            self._stm_yanit_sayaci = 0
+            self._stm_yanitlar = collections.deque(maxlen=64)  # (sayaç, "ok_sifir" | "ok" | "nack")
+            self._hw_stop_yanit_tabanlari = collections.deque(maxlen=64)  # (STOP kuyruk sırası, yazımdaki sayaç)
         if getattr(self, "_hw_canlandirma_kilidi", None) is None:
             self._hw_canlandirma_kilidi = threading.Lock()
             self._hw_son_canlandirma = 0.0
@@ -384,7 +391,38 @@ class HeadlessCore:
             if stop_mu:
                 self._hw_son_stop_yazimi = self._hw_yazim_sayaci
                 self._hw_son_stop_sirasi = max(getattr(self, "_hw_son_stop_sirasi", 0), int(sira or 0))
+                # TD3: aynı STOP'un NACK yeniden yazımı (aynı sıra) yeni taban AÇMAZ — teyit E-stop'un İLK yazımına bağlı.
+                _tabanlar = getattr(self, "_hw_stop_yanit_tabanlari", None)
+                if _tabanlar is not None and (not _tabanlar or _tabanlar[-1][0] != int(sira or 0)):
+                    _tabanlar.append((int(sira or 0), getattr(self, "_stm_yanit_sayaci", 0)))
             kosul.notify_all()
+
+    def _stm_yaniti_kaydet(self, tur: str) -> None:
+        """TD3 (okuyucu): kartın paket yanıtını yazım izine ekle — "ok_sifir" (tüm çıkışlar sıfır ACK), "ok", "nack"."""
+        self._hw_izlemeyi_kur()
+        with self._hw_yazim_kosulu:
+            self._stm_yanit_sayaci += 1
+            self._stm_yanitlar.append((self._stm_yanit_sayaci, tur))
+            self._hw_yazim_kosulu.notify_all()
+
+    def hw_stop_yaniti_bekle(self, sira: int, zaman_asimi: float) -> str | None:
+        """TD3: kuyruk sırası ≥ `sira` olan İLK STOP yazımından SONRA kartın yanıtı: "kabul" (tüm-sıfır `STM_OK` — gelir gelmez
+        döner), "red" (süre doldu, yalnız `STM_NACK`), None (yanıt yok ya da o STOP'un yazım izi yok — bugünkü anlam).
+
+        ⚠️ Tezgâh (Oturum 13): 120 B saha kartı STOP dahil her pakete CRC NACK dönerken E-stop "teyitli" diyordu; teyit yalnız
+        "porta yazıldı"ydı. Yalnız RAPOR: STOP'un kendisi ve NACK yeniden yazımı bundan BAĞIMSIZ sürer (Ö.4-Y8 · D1.55)."""
+        self._hw_izlemeyi_kur()
+        bitis = time.monotonic() + max(0.0, float(zaman_asimi))
+        with self._hw_yazim_kosulu:
+            while True:
+                taban = next((n for s, n in self._hw_stop_yanit_tabanlari if s >= int(sira)), None)
+                turler = [] if taban is None else [t for n, t in self._stm_yanitlar if n > taban]
+                if "ok_sifir" in turler:
+                    return "kabul"
+                kalan = bitis - time.monotonic()
+                if kalan <= 0:
+                    return "red" if "nack" in turler else None
+                self._hw_yazim_kosulu.wait(min(kalan, 0.05))
 
     #: `db_acilis_hatalari` anahtarı → operatöre gösterilen ad.
     _DB_ADI = {"hasta": "Hasta veritabanı", "tedavi": "Tedavi kaydı veritabanı"}
@@ -1079,10 +1117,17 @@ class HeadlessCore:
                 guncellemeler = self._parse_stm_ok(decoded)
                 for update in guncellemeler:
                     self._publish_event("hardware.stm.coil_update", update)
+                _sifir = bool(guncellemeler) and all(
+                    float(u["duty"]) == 0.0 and not u["running"] for u in guncellemeler
+                )
                 # D1.E04 (İG-6.7): kart GERÇEK bir ACK'le TÜM çıkışları sıfır bildirdi — teyitsiz bir ACİL DURDUR'un STM
                 # teyidi (sentetik sıfırlama yayını bu değildir; o, satır değil olay üretir).
-                if guncellemeler and all(float(u["duty"]) == 0.0 and not u["running"] for u in guncellemeler):
+                if _sifir:
                     self._publish_event("hardware.stm.stop_onayi", {"bobin_sayisi": len(guncellemeler)})
+                try:
+                    self._stm_yaniti_kaydet("ok_sifir" if _sifir else "ok")  # TD3: E-stop teyidi kartın yanıtını görür
+                except Exception:
+                    self.logger.exception("[STM32] ACK yanıt izi yazılamadı (ACK işlendi)")
             except Exception as exc:
                 self.logger.error("STM_OK parse error: %s", exc)
                 self._publish_event(
@@ -1094,6 +1139,12 @@ class HeadlessCore:
 
         if "STM_NACK" in decoded:
             self.logger.warning("[STM32 NACK] Packet rejected; retrying last payload once.")
+            try:
+                self._stm_yaniti_kaydet(
+                    "nack"
+                )  # TD3: STOP'a NACK → E-stop teyidi düşer (STOP yeniden oynatması aşağıda SÜRER)
+            except Exception:
+                self.logger.exception("[STM32] NACK yanıt izi yazılamadı (yeniden oynatma sürüyor)")
             self._publish_event(
                 "hardware.stm.nack",
                 {"message": decoded},

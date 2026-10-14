@@ -12,6 +12,8 @@ import {
   performEmergencyStop,
   EMERGENCY_STOP_UNCONFIRMED_TITLE,
   EMERGENCY_STOP_UNCONFIRMED_BODY,
+  EMERGENCY_STOP_KART_RED_TITLE,
+  EMERGENCY_STOP_KART_RED_BODY,
 } from "@/services/emergencyStop";
 import type { ActiveTreatment } from "@/types/domain";
 
@@ -352,7 +354,7 @@ export function useSessionControl(): SessionControlResult {
     emitToast("Acil durdurma gönderiliyor…", "info");
     // Durdurma mantığı services/emergencyStop.ts'te (tek kaynak) — çıkış/profil-değiştirme kapıları
     // da aynı fonksiyonu çağırır, böylece davranış hiçbir yerde ayrışmaz.
-    const { confirmed } = await performEmergencyStop();
+    const { confirmed, kartReddetti } = await performEmergencyStop();
     stopTimer();
     setIsActive(false);
     setTreatment((prev) => prev ? { ...prev, isActive: false } : null);
@@ -361,7 +363,11 @@ export function useSessionControl(): SessionControlResult {
     setStopping(false);
     if (!confirmed) {
       // Güvenlik: donanımın durduğu teyit edilemedi — web dahil HER platformda göster (Alert.alert web'de no-op).
-      platformAlert(EMERGENCY_STOP_UNCONFIRMED_TITLE, EMERGENCY_STOP_UNCONFIRMED_BODY);
+      // TD3: kart STOP'u reddettiyse eylem metni (gücü kes / USB'yi çıkar).
+      platformAlert(
+        kartReddetti ? EMERGENCY_STOP_KART_RED_TITLE : EMERGENCY_STOP_UNCONFIRMED_TITLE,
+        kartReddetti ? EMERGENCY_STOP_KART_RED_BODY : EMERGENCY_STOP_UNCONFIRMED_BODY
+      );
     } else {
       emitToast("Tüm bobinler durduruldu ✓", "success");
     }

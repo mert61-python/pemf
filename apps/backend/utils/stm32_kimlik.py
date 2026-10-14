@@ -195,6 +195,13 @@ KOMUT_RED_METNI = (
 )
 
 
+#: TD3: kart ACİL DURDUR'un STOP'una NACK döndü (kabul yok) — E-stop yanıtı `stmRedMesaji`, bildirim ve arayüz uyarısı. EYLEM
+#: söyler (hafıza "Hata mesajı EYLEM"); arayüz kopyası `apps/ui/src/services/emergencyStop.ts` (eşlik testi TD3).
+ESTOP_KART_RED_METNI = (
+    "Cihaz kartı STOP komutunu reddetti — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın."
+)
+
+
 def operator_metni(kod: str | None) -> str:
     """Uyum kodunun operatör metni; kod yoksa ""."""
     return OPERATOR_METNI.get(str(kod or ""), "")

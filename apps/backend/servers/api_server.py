@@ -7009,6 +7009,10 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
 #: belliyse hiç beklenmez (`hw_*_bekle` erken çıkar). Teyitsizlik yalnız istemcinin yedek adımlarını çalıştırır (A-63).
 _ESTOP_STM_YAZIM_BEKLEME_S = 0.5
 
+#: TD3: STOP porta yazıldıktan SONRA kartın yanıtını (tüm-sıfır `STM_OK` / `STM_NACK`) bekleme üst sınırı (sn). Kabul gelir gelmez
+#: döner (115200 baud'da ~20 ms); NACK'li ya da yanıtsız kartta bu kadar sürer. STOP'lar ÇOKTAN gitti — yalnız RAPOR (Ö.4-Y8).
+_ESTOP_STM_YANIT_BEKLEME_S = 0.25
+
 
 def _stm_yazim_isareti_al():
     """STOP'tan ÖNCE çekirdeğin yazım sayacı (yazım izi bildirmeyen çekirdekte None)."""
@@ -7069,6 +7073,19 @@ def _stm_stop_yazildi_mi(kuyruga_verildi: bool, isaret, stop_sirasi=None) -> boo
     except Exception:
         logging.getLogger(__name__).warning("E-stop: STM STOP yazimi dogrulanamadi", exc_info=True)
         return False
+
+
+def _stm_stop_kart_yaniti(stop_sirasi):
+    """TD3: bu E-stop'un STOP'una kartın yanıtı — "kabul" | "red" | None (yanıt yok / izi bildirmeyen çekirdek). Yalnız RAPOR."""
+    _bekle = getattr(getattr(state.hardware, "core", None), "hw_stop_yaniti_bekle", None)
+    if not stop_sirasi or not callable(_bekle):
+        return None
+    try:
+        yanit = _bekle(stop_sirasi, _ESTOP_STM_YANIT_BEKLEME_S)
+    except Exception:
+        logging.getLogger(__name__).warning("E-stop: kartin STOP yaniti okunamadi", exc_info=True)
+        return None
+    return yanit if yanit in ("kabul", "red") else None
 
 
 def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
@@ -7258,13 +7275,24 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
             "E-stop: firmware YAKILIYOR — STOP verildi ama kart işlemiyor olabilir; STM teyidi YOK sayıldı"
         )
         stm_stopped = False
-    _stm_ok = stm_stopped or state.hardware is None  # STM yoksa STM-basarisizligi sayma
+    # ⚠️ TD3 (tezgâh Oturum 13): "porta yazıldı" kartın KABULÜ değildir — uyumsuz kart STOP dahil her pakete CRC NACK dönerken
+    # E-stop "teyitli" diyordu. Yazılan STOP'a kartın yanıtı kısa süre beklenir: yalnız NACK → teyit DÜŞER (eylem metni); kabul
+    # ya da yanıt yok → bugünkü anlam. STOP'lar yukarıda GİTTİ, NACK yeniden yazımı ve keep-alive telafisi SÜRER (Ö.4-Y8).
+    _stm_kart_yaniti = _stm_stop_kart_yaniti(_stm_stop_sirasi) if stm_stopped else None
+    _stm_red = _stm_kart_yaniti == "red"
+    _stm_ok = (stm_stopped and not _stm_red) or state.hardware is None  # STM yoksa STM-basarisizligi sayma
     _status = "success" if (_stm_ok and _esp_ok) else ("error" if (not _stm_ok and not _esp_ok) else "partial")
     # D1.E04 · İG-6.7: teyit durumu `running:false` sıfırlamasından AYRI yayınlanır (istemci teyitsizken durdurmayı tutar).
     try:
-        live_state.estop_teyidi_yaz(bool(_stm_ok and _esp_ok), "estop")
+        live_state.estop_teyidi_yaz(bool(_stm_ok and _esp_ok), "stm_red" if _stm_red else "estop")
     except Exception:
         logging.getLogger(__name__).exception("E-stop: teyit durumu yayinlanamadi (durdurma tamam)")
+    if _stm_red:
+        logging.getLogger(__name__).error("E-stop: kart STOP'u REDDETTI (STM_NACK, kabul yok) — teyit YOK")
+        try:
+            _push_notification("⛔ " + _stm32_kimlik.ESTOP_KART_RED_METNI, "error")
+        except Exception:
+            logging.getLogger(__name__).exception("E-stop: kart reddi bildirilemedi (durdurma tamam)")
     return {
         "status": _status,
         "confirmed": bool(_stm_ok and _esp_ok),
@@ -7280,6 +7308,9 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
         "mandalDosyasi": estop_mandali.yazim_durumu(),
         # D1.114 (yalnız-ek): E-stop anında STM'e firmware yakılıyordu — STM teyidi neden yok, operatör/destek görsün.
         "firmwareYakiliyor": bool(_fw_yakiliyor),
+        # TD3 (yalnız-ek): kartın bu STOP'a yanıtı — "kabul" | "red" | None (yanıt yok); red'de operatör eylem metni.
+        "stmKartYaniti": _stm_kart_yaniti,
+        "stmRedMesaji": _stm32_kimlik.ESTOP_KART_RED_METNI if _stm_red else None,
     }
 
 

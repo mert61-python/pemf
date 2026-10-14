@@ -22,6 +22,8 @@ import {
   performEmergencyStop,
   EMERGENCY_STOP_UNCONFIRMED_TITLE,
   EMERGENCY_STOP_UNCONFIRMED_BODY,
+  EMERGENCY_STOP_KART_RED_TITLE,
+  EMERGENCY_STOP_KART_RED_BODY,
 } from "@/services/emergencyStop";
 import { useLiveData } from "@/context/LiveDataContext";
 
@@ -89,7 +91,7 @@ export function useTeardownGuard() {
           );
       if (!ok) return false;
 
-      const { confirmed } = await performEmergencyStop();
+      const { confirmed, kartReddetti } = await performEmergencyStop();
       if (!confirmed && stmBagliDegil) {
         // Y55: ACİL DURDUR GÖNDERİLDİ (yukarıda); STM paket gelmeyince bobinleri kendi bekçisiyle ~1,5 sn'de durdurur
         // (DENETİM-08 ölçümü). Operatör bilerek İKİNCİ kez onaylarsa çıkılır; vazgeçerse ekranda kalır.
@@ -101,9 +103,10 @@ export function useTeardownGuard() {
       }
       if (!confirmed) {
         // Durdurma teyit edilemedi → kabuğu SÖKME. Operatörün elinde ACİL DURDUR kalsın.
+        // TD3: kart STOP'u reddettiyse eylem metni (gücü kes / USB'yi çıkar).
         platformAlert(
-          EMERGENCY_STOP_UNCONFIRMED_TITLE,
-          `${EMERGENCY_STOP_UNCONFIRMED_BODY}\n\nGüvenlik için işlem iptal edildi — ekranda kalıyorsunuz.`
+          kartReddetti ? EMERGENCY_STOP_KART_RED_TITLE : EMERGENCY_STOP_UNCONFIRMED_TITLE,
+          `${kartReddetti ? EMERGENCY_STOP_KART_RED_BODY : EMERGENCY_STOP_UNCONFIRMED_BODY}\n\nGüvenlik için işlem iptal edildi — ekranda kalıyorsunuz.`
         );
         return false;
       }

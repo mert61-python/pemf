@@ -131,7 +131,8 @@ it("REGRESYON: bridge isteği X-API-Key ile gider (uzaktan 401 alıp yedek yola 
 it("KRİTİK: hiçbir koşulda THROW ETMEZ (acil durdurma akışı kırılmamalı)", async () => {
   fetchMock().mockImplementation(() => { throw new Error("boom"); });
   mockApiPost.mockImplementation(() => { throw new Error("boom2"); });
-  await expect(performEmergencyStop()).resolves.toEqual({ confirmed: false });
+  // TD3: dönüş kart reddini de taşır (yalnız-ek alan).
+  await expect(performEmergencyStop()).resolves.toEqual({ confirmed: false, kartReddetti: false });
 });
 
 
