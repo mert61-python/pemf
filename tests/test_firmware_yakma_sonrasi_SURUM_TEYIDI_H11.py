@@ -25,7 +25,8 @@ from pathlib import Path
 
 import pytest
 
-BANNER_FMT = "-> STM_READY: DDS v{} (7-ch KARMA uni=0x60 + HW_SYNC@PB1) Waiting for commands..."
+#: TD1 · Y68: yakılan (yeni) firmware paket boyunu BEYAN eder; beyansız `uni=` banner'ı 120 / 121'i ayırt edemez (None).
+BANNER_FMT = "-> STM_READY: DDS v{} (7-ch KARMA uni=0x60 + HW_SYNC@PB1) proto=3 pkt=121 Waiting for commands..."
 
 
 class _Kaynak:

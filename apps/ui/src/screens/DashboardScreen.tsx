@@ -15,6 +15,7 @@ import { useSessionControl } from "@/hooks/useSessionControl";
 import { gorunurBobinler } from "@/services/bobinGorunurlugu";
 import { canliYogunluk, YOGUNLUK_ETIKETI } from "@/utils/yogunlukGosterimi";
 import { KendiDurdurmaIsareti } from "@/components/ui/KendiDurdurmaKontrolu";
+import { donanimRozetDurumu } from "@/components/domain/StmUyumBandi";
 
 export function DashboardScreen() {
   const { snapshot, wsConnected } = useLiveData();
@@ -55,7 +56,8 @@ export function DashboardScreen() {
             (sahip, 2026-09-11) broker çalışmaz ve rozet kalıcı sarı/kırmızı kalırdı — kurulu
             olmayan bir alt sistem için alarm, gerçek alarmları görünmez yapar. */}
         {snapshot.mqtt !== "devre_disi" && <StatusPill label="ESP / MQTT" state={snapshot.mqtt} />}
-        <StatusPill label="Donanım" state={snapshot.stm} />
+        {/* TD1: kart bağlı ama yazılımı uyumsuzsa "Donanım" YEŞİL OLMAZ (tezgâh: uyumsuz kartta yeşildi). */}
+        <StatusPill label="Donanım" state={donanimRozetDurumu(snapshot)} />
         {/* İNTERNET — NÖTR BİLGİ, ARIZA DEĞİL. Bu cihaz internetsiz tam çalışır; internet
             yalnız UZAKTAN ERİŞİM içindir. Kırmızı rozet yerine ne kaybedildiğini söyler. */}
         {snapshot.internet === "offline" && (

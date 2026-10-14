@@ -80,6 +80,10 @@ NUM_COILS = 7
 PKT_FMT = "<BB {n}f {n}f {n}f {n}I H B I".format(n=NUM_COILS)
 PKT_SIZE = struct.calcsize(PKT_FMT)
 assert PKT_SIZE == 121, f"Paket boyutu {PKT_SIZE} != 121!"
+#: Y68 (TD1): protokol revizyonu ve kimlik sorgusu — firmware `main.c` PEMF_PROTOKOL_REV / KIMLIK_SORGU_B0..B3 ile AYNI
+#: (backend `utils/stm32_transport.STM_PROTOKOL_REV` / `STM_KIMLIK_SORGUSU`; kapı: tests/test_stm32_source_parity.py).
+PROTOKOL_REV = 3
+KIMLIK_SORGUSU = bytes((0xA5, 0x5A, 0x49, 0x44))
 
 DUTY_MIN = 0.0
 #: D1.101 · Y20: duty ÜST sınırı firmware'de NACK'lenir (`main.c` DUTY_MAX_BIPOLAR / DUTY_MAX_UNIPOLAR) — tavan kipe
@@ -330,18 +334,27 @@ class Stm32SimClient:
         except Exception as e:
             log.warning("Gönderim hatası: %s", e)
 
+    @staticmethod
+    def _kimlik_govdesi() -> str:
+        """Banner ve kimlik yanıtının ORTAK gövdesi (firmware'de STM_ID banner gövdesinden türer — main.c kimlik_govde)."""
+        return (
+            f"DDS v2.3 ({NUM_COILS}-ch {_banner_kipi(UNIPOLAR_YETENEK_MASKESI)} "
+            f"uni=0x{UNIPOLAR_YETENEK_MASKESI:02X} SIM) proto={PROTOKOL_REV} pkt={PKT_SIZE}"
+        )
+
     def _send_ready(self):
         time.sleep(READY_DELAY_S)  # USB enumerate simülasyonu
         # ⚠️ KANAL SAYISI TÜRETİLİR: elle yazılan "5-ch" 2026-09-10 geçişinde BAYATLADI ve
         # banner okuyan araçlar (scripts/stm_firmware_kimligi.py) simülatörü ESKİ firmware
         # sanardı. Tek kaynak `NUM_COILS`. ⚠️ D0Ö.13: kip ve maske de firmware'in derlenen maskesinden
-        # (main.c banner'ı: "%u-ch %s uni=0x%02X"); "SIM" eki gerçek karttan ayırt ettirir.
-        msg = (
-            f"-> STM_READY: DDS v2.3 ({NUM_COILS}-ch {_banner_kipi(UNIPOLAR_YETENEK_MASKESI)} "
-            f"uni=0x{UNIPOLAR_YETENEK_MASKESI:02X} SIM) Waiting for commands...\r\n"
-        )
+        # (main.c banner'ı: "%u-ch %s uni=0x%02X"); "SIM" eki gerçek karttan ayırt ettirir. Y68: proto / pkt eki.
+        msg = f"-> STM_READY: {self._kimlik_govdesi()} Waiting for commands...\r\n"
         self._send(msg)
         log.info("✅ STM_READY gönderildi → %s", self.addr)
+
+    def _send_kimlik(self):
+        """Y68: kimlik sorgusunun yanıtı (`-> STM_ID: <gövde>`)."""
+        self._send(f"-> STM_ID: {self._kimlik_govdesi()}\r\n")
 
     def _send_ack(self, duty, phase, freq, duration, kip_istegi: int = 0):
         # ⚠️ D0Ö.13 (B-10.267): firmware ACK'i NUM_COILS alan + ` K=<ETKİN maske>` basar (main.c ACK döngüsü;
@@ -420,9 +433,14 @@ class Stm32SimClient:
                     break
                 buf += chunk
 
-                # 88-byte paket ara (header 0xAA 0x55)
+                # 121 baytlık paket ara (header 0xAA 0x55); Y68 kimlik sorgusu (0xAA'sız 4 bayt) paketten ÖNCEYSE yanıtla.
                 while True:
                     aa_idx = buf.find(b"\xaa\x55")
+                    k_idx = buf.find(KIMLIK_SORGUSU)
+                    if k_idx >= 0 and (aa_idx < 0 or k_idx < aa_idx):
+                        buf = buf[k_idx + len(KIMLIK_SORGUSU) :]
+                        self._send_kimlik()
+                        continue
                     if aa_idx < 0:
                         buf = b""
                         break

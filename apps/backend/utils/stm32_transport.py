@@ -59,6 +59,8 @@ class Stm32OpenResult:
     serial: Any
     candidate: Stm32PortCandidate
     ready_line: str
+    #: TD1 · TD7: el sıkışma doğrulama yoklamasının özeti (`_dogrulama_yoklamasi`) — {kabul, kimlik, crc_nack, yoklama}.
+    dogrulama: Optional[dict] = None
 
 
 #: STM32 binary komut paketindeki BOBİN ALANI SAYISI = firmware `NUM_COILS`.
@@ -77,6 +79,26 @@ STM_PAKET_BOBIN_SAYISI = 7
 STM_PAKET_FMT = "<BB {n}f {n}f {n}f {n}I H B".format(n=STM_PAKET_BOBIN_SAYISI)
 #: crc32 dahil toplam boy (7 bobin → 121 bayt).
 STM_PAKET_BOYU = struct.calcsize(STM_PAKET_FMT) + 4
+
+#: Y68 (sahip; Oturum 13 / TD1): komut paketi PROTOKOL REVİZYONU — firmware `main.c::PEMF_PROTOKOL_REV` ile BİREBİR
+#: (kapı: tests/test_stm32_source_parity.py). 1 = 5 kanal / 88 B · 2 = 7 kanal / 120 B · 3 = 7 kanal + kip baytı / 121 B
+#: + kimlik sorgusu. Kart banner'da ve kimlik yanıtında `proto=` / `pkt=` basar.
+STM_PROTOKOL_REV = 3
+#: Y68: kimlik sorgusu çerçevesi (firmware `KIMLIK_SORGU_B0..B3`). ⚠️ 0xAA İÇERMEZ → eski firmware'in RX durum makinesi
+#: bu baytları SESSİZCE yok sayar (NACK yok, PWM'e dokunulmaz); yeni firmware `-> STM_ID: <banner gövdesi>` döner.
+STM_KIMLIK_SORGUSU = bytes((0xA5, 0x5A, 0x49, 0x44))
+
+#: TD1 · TD7: el sıkışmadan SONRA kartın paketimizi GERÇEKTEN kabul ettiğinin ölçümü (doğrulama yoklaması). Ölçüldü (tezgâh
+#: 2026-10-14): 120 baytlık saha imajı banner'ı 121 baytlık imajla AYNI basıyor ve boşta hiç paket gitmediği için kart
+#: uyumsuzluğu ancak seans başlatılınca (NACK) görünüyordu; USB yeniden bağlanmasında da hiç paket gitmiyordu (25 sn'de
+#: STM_OK 0). Yoklama = kimlik sorgusu + en çok `DOGRULAMA_YOKLAMA_SAYISI` sıfır-duty paketi (STOP — çıkışlara güvenli;
+#: el sıkışmanın kendi yoklamasıyla aynı paket). Doğrudan porta yazılır (HWSender kuyruğu DEĞİL → NACK'te yeniden oynatma
+#: yok). Sonuç `Stm32OpenResult.dogrulama`'da; karar `HeadlessCore` (çekirdek satırları `on_line`'dan ayrıca görür).
+DOGRULAMA_YOKLAMA_SAYISI = 3
+DOGRULAMA_ARALIK_SN = 0.1
+DOGRULAMA_SURESI_SN = 1.5
+#: Kimlik yanıtı gerçek kartta ~10 ms'de gelir; eski kart hiç yanıtlamaz → kabul görüldükten sonra en çok bu kadar beklenir.
+DOGRULAMA_KIMLIK_BEKLEME_SN = 0.6
 
 
 def build_stm32_zero_duty_packet(freq_hz: float = 100.0) -> bytes:
@@ -188,7 +210,10 @@ class Stm32SerialTransport:
             if self._ardisik_hata:
                 self._log_info("[STM32] Bağlantı %d başarısız denemeden sonra kuruldu.", self._ardisik_hata)
             self._durum_sifirla()
-            return Stm32OpenResult(serial=serial_obj, candidate=candidate, ready_line=ready_line)
+            # TD1 · TD7: kart paketimizi GERÇEKTEN kabul ediyor mu (banner bunu söyleyemez) — her bağlantıda, yeniden
+            # bağlanma dahil. Yoklama hatası bağlantıyı DÜŞÜRMEZ (yalnız kanıt eksik kalır).
+            dogrulama = self._dogrulama_yoklamasi(serial_obj, candidate, stop_event, on_line, ready_line)
+            return Stm32OpenResult(serial=serial_obj, candidate=candidate, ready_line=ready_line, dogrulama=dogrulama)
         except Exception as exc:
             if serial_obj is not None:
                 self.close_serial(serial_obj)
@@ -390,6 +415,84 @@ class Stm32SerialTransport:
             next_probe_at = now + HANDSHAKE_PROBE_INTERVAL_SEC
 
         return ""
+
+    def _dogrulama_yoklamasi(
+        self,
+        serial_obj: Any,
+        candidate: Stm32PortCandidate,
+        stop_event: Any,
+        on_line: Optional[Callable[[str], None]],
+        ready_line: str,
+    ) -> dict:
+        """TD1 · TD7 (Y68): el sıkışmadan SONRA kimlik sorgusu + en çok `DOGRULAMA_YOKLAMA_SAYISI` sıfır-duty paketi.
+
+        Çıkış: kabul (STM_OK / RANGE NACK) görüldü VE (kimlik geldi ya da `DOGRULAMA_KIMLIK_BEKLEME_SN` doldu) · arada kabul
+        olmadan `PAKET_RED_CRC_ESIGI` CRC NACK · `DOGRULAMA_SURESI_SN` doldu. Okunan her satır `on_line`'a verilir (karar
+        çekirdekte: `HeadlessCore` aynı satırları sınıflar). ⚠️ Sıfır-duty paketi STOP'tur (çıkışlara güvenli; el sıkışma
+        yoklamasının aynısı) ve DOĞRUDAN porta yazılır — HWSender kuyruğuna girmez, NACK'te yeniden oynatılmaz.
+        ⚠️ ESKİ kart kimlik sorgusunu (0xAA'sız çerçeve) yok sayar: NACK'i ve PWM etkisi YOK."""
+        from utils.stm32_kimlik import KANIT_KABUL, KIMLIK_YANIT_ONEKI, PAKET_RED_CRC_ESIGI, paket_yaniti_siniflandir
+
+        ozet: dict = {
+            "kabul": paket_yaniti_siniflandir(ready_line) == KANIT_KABUL,
+            "kimlik": None,
+            "crc_nack": 0,
+            "yoklama": 0,
+        }
+        try:
+            serial_obj.write(STM_KIMLIK_SORGUSU)
+        except Exception as exc:
+            self._log_warning("[STM32] Kimlik sorgusu yazılamadı %s: %s", candidate.device, exc)
+            return ozet
+        bas = time.monotonic()
+        sonraki_yoklama = bas
+        while time.monotonic() - bas < DOGRULAMA_SURESI_SN:
+            if stop_event is not None and getattr(stop_event, "is_set", lambda: False)():
+                break
+            if ozet["crc_nack"] >= PAKET_RED_CRC_ESIGI and not ozet["kabul"]:
+                break
+            if ozet["kabul"] and (ozet["kimlik"] or time.monotonic() - bas >= DOGRULAMA_KIMLIK_BEKLEME_SN):
+                break
+            simdi = time.monotonic()
+            if not ozet["kabul"] and ozet["yoklama"] < DOGRULAMA_YOKLAMA_SAYISI and simdi >= sonraki_yoklama:
+                try:
+                    serial_obj.write(build_stm32_zero_duty_packet())
+                except Exception as exc:
+                    self._log_warning("[STM32] Doğrulama yoklaması yazılamadı %s: %s", candidate.device, exc)
+                    break
+                ozet["yoklama"] += 1
+                sonraki_yoklama = simdi + DOGRULAMA_ARALIK_SN
+            try:
+                line = serial_obj.readline()
+            except Exception as exc:
+                self._log_warning("[STM32] Doğrulama okuma hatası %s: %s", candidate.device, exc)
+                break
+            if not line:
+                continue
+            decoded = line.decode("utf-8", errors="ignore").strip()
+            if not decoded:
+                continue
+            if on_line is not None:
+                try:
+                    on_line(decoded)
+                except Exception as exc:
+                    self._log_warning("[STM32] Doğrulama callback hatası: %s", exc)
+            if KIMLIK_YANIT_ONEKI in decoded:
+                ozet["kimlik"] = decoded
+            sinif = paket_yaniti_siniflandir(decoded)
+            if sinif == KANIT_KABUL:
+                ozet["kabul"] = True
+            elif sinif == "crc" and not ozet["kabul"]:
+                ozet["crc_nack"] += 1
+        self._log_info(
+            "[STM32] El sıkışma doğrulaması: kabul=%s kimlik=%s crc_nack=%d yoklama=%d (%.2f sn)",
+            ozet["kabul"],
+            "VAR" if ozet["kimlik"] else "YOK",
+            ozet["crc_nack"],
+            ozet["yoklama"],
+            time.monotonic() - bas,
+        )
+        return ozet
 
     # ── Yardımcı Metodlar ─────────────────────────────────────────────────────
 

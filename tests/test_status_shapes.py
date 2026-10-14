@@ -33,6 +33,9 @@ GOLDEN_SHAPES = {
         # Kapi: tests/test_stm_firmware_uyum_kapisi.py
         "stmUyumlu",
         "stmUyumsuzlukSebebi",
+        # ⚠️ BILINCLI SEKIL DEGISIKLIGI 2026-10-14 (TD1, tezgâh Oturum 13): operatör KODU (FW-PAKET = kartın yazılımı
+        # uyumsuz · FW-KIMLIK = doğrulanamadı · null = bant yok). `stmUyumsuzlukSebebi` destek metnidir (teknik).
+        "stmUyumKodu",
         "tunnelUrl",
         # DENETIM P2 (BILINCLI sekil degisikligi): bulut cihaz-registry durumu. 'secret_mismatch'
         # KALICI bir hatadir (TOFU muhru — yeniden kurulum sonrasi device_secret degisti) ve

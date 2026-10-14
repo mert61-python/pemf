@@ -311,17 +311,20 @@ class HardwareController:
             self.logger.debug("STM baglanti durumu okunamadi → baslatma ENGELLENMEDI", exc_info=True)
         core = getattr(self, "core", None)
         if getattr(core, "stm_uyumlu", None) is False:
-            sebep = getattr(core, "stm_uyumsuzluk_sebebi", "") or "kanal sayısı paket genişliğiyle uyuşmuyor"
-            return f"STM32 firmware'i bu sürümle UYUMSUZ ({sebep}). Kartı güncel firmware ile yeniden programlayın."
+            # TD1 · K1: operatöre sade metin + kod; teknik sebep (`stm_uyumsuzluk_sebebi`) günlükte / destek alanında.
+            self.logger.warning(
+                "STM baslatma engeli — firmware uyumsuz: %s", getattr(core, "stm_uyumsuzluk_sebebi", "")
+            )
+            from utils.stm32_kimlik import UYUM_KODU_PAKET, operator_metni
+
+            return operator_metni(UYUM_KODU_PAKET)
         try:
             if stm_komutlari_reddediyor():
                 # Y74 / 1-G §8 #2: son red DUTY reddiyse (kart güncel, istek geçersiz) eylem duty'dir — firmware DEĞİL.
                 from servers.live_state import stm_red_duty_metni
+                from utils.stm32_kimlik import KOMUT_RED_METNI
 
-                return (
-                    stm_red_duty_metni("bobin BAŞLATILMADI")
-                    or "STM32 kartı komutları sistematik olarak REDDEDİYOR (firmware/protokol uyuşmazlığı)."
-                )
+                return stm_red_duty_metni("bobin BAŞLATILMADI") or KOMUT_RED_METNI
         except Exception:
             self.logger.debug("STM red durumu okunamadi → baslatma ENGELLENMEDI", exc_info=True)
         return ""

@@ -283,6 +283,28 @@ void *const g_printf_float_zorla = (void *)&_printf_float;
 /** Bobin sayısı */
 #define NUM_COILS 7U
 
+/**
+ * Y68 (sahip; Oturum 13 / TD1) — KOMUT PAKETİ PROTOKOL REVİZYONU. Banner ve kimlik yanıtı (STM_ID) basar.
+ * ⚠️ NEDEN: 120 ve 121 baytlık firmware'ler AYNI banner'ı basıyordu (`DDS v2.3 (7-ch KARMA uni=0x60 + HW_SYNC@PB1)`, tezgâh
+ * 2026-10-14 ÖLÇTÜ) → uygulama uyumsuz kartı "uyumlu" sanıyordu, yakma akışı yakmanın gerçekleştiğini banner'dan
+ * ayıramıyordu. Revizyon = paket DÜZENİNİN sürümü (sürüm dizesinden AYRI): 1 = 5 kanal / 88 B · 2 = 7 kanal / 120 B (kip
+ * baytı yok) · 3 = 7 kanal + `unipolar_maskesi` / 121 B + kimlik sorgusu. Düzen değişirse ARTIRILIR.
+ * Backend karşılığı `utils/stm32_transport.STM_PROTOKOL_REV` (kapı: tests/test_stm32_source_parity.py). Paket boyu banner'a
+ * `BINARY_PKT_SIZE`'tan (sizeof) basılır — ELLE YAZILMAZ.
+ */
+#define PEMF_PROTOKOL_REV 3U
+
+/**
+ * Y68 — KİMLİK SORGUSU çerçevesi: 0xA5 0x5A 'I' 'D' (4 bayt). Kart `-> STM_ID: <banner gövdesi>` ile yanıtlar.
+ * ⚠️ 0xAA İÇERMEZ: ESKİ firmware'in RX durum makinesi IDLE'da yalnız 0xAA'yı bekler → bu baytları SESSİZCE yok sayar
+ * (NACK yok, PWM'e dokunulmaz). Yanıtın YOKLUĞU eski kartın işaretidir; backend o durumda paket kabul / red kanıtına düşer.
+ * Backend karşılığı `utils/stm32_transport.STM_KIMLIK_SORGUSU` (kapı: tests/test_stm32_source_parity.py).
+ */
+#define KIMLIK_SORGU_B0 0xA5U
+#define KIMLIK_SORGU_B1 0x5AU
+#define KIMLIK_SORGU_B2 0x49U /* 'I' */
+#define KIMLIK_SORGU_B3 0x44U /* 'D' */
+
 /** UART RX tampon boyutu (bayt) */
 #define UART_RX_BUF_SZ 128U
 
@@ -340,8 +362,8 @@ typedef struct PEMF_CoilGPIO_Tag {
   uint16_t const pinB;       /**< IN_B pin maskesi */
 } PEMF_CoilGPIO_t;
 
-/** UART alım durum makinesi durumları */
-typedef enum { RX_IDLE = 0, RX_WAIT_HEADER2, RX_DATA } UartRxState_t;
+/** UART alım durum makinesi durumları (RX_KIMLIK_*: Y68 kimlik sorgusu çerçevesinin 2., 3., 4. baytı beklenir) */
+typedef enum { RX_IDLE = 0, RX_WAIT_HEADER2, RX_DATA, RX_KIMLIK_1, RX_KIMLIK_2, RX_KIMLIK_3 } UartRxState_t;
 
 #pragma pack(push, 1)
 typedef struct {
@@ -598,6 +620,8 @@ static volatile uint16_t g_rxLen = 0;
 static volatile UartRxState_t g_rxState = RX_IDLE;
 static volatile uint8_t g_pktBuf[BINARY_PKT_SIZE];
 static volatile uint8_t g_pktReady = 0;
+/** Y68: tam bir kimlik sorgusu çerçevesi alındı (ISR kurar, ana döngü STM_ID'yi yuvaya yazıp indirir). */
+static volatile uint8_t g_kimlik_istendi = 0U;
 /* DENETIM 2026-08-04: cerceve senkronizasyonunda BAYT-ARASI ZAMAN ASIMI yoktu. Durum makinesi
  * yalnizca 0xAA/0x55 desenine ve paket-boyu sayimina dayaniyordu; bir bayt DUSERSE RX_DATA hedefi
  * doldurmak icin BIR SONRAKI paketten bayt yiyor, boylece iki paket birden bozuluyordu.
@@ -619,7 +643,7 @@ static volatile uint32_t g_rxLastByteMs = 0;
  * YENİ KURAL: her satır türünün KENDİ yuvası (tamponu) vardır; üretici yuvaya yazar ("bekliyor"),
  * `Tx_Pompala` TX boşaldıkça yuvayı TEK uçuş tamponuna KOPYALAYIP gönderir → uçuştaki bayt asla ezilmez,
  * hiçbir satır "TX meşgul" diye atılmaz. Bekleyen yuva yeniden yazılırsa EN YENİSİ kazanır (eski ACK/
- * telemetri değeri değil son durum gider). ÖNCELİK: Watchdog > STOPPED > NACK > ACK > READY > MAGCHK;
+ * telemetri değeri değil son durum gider). ÖNCELİK: Watchdog > STOPPED > NACK > ACK > KİMLİK (Y68) > READY > MAGCHK;
  * sonra telemetri (sensör + akım) DÖNÜŞÜMLÜ (hiçbiri aç kalmaz). Akım telemetrisine hız sınırı
  * (AKIM_TELE_PERIYOT_MS). Bobin kesme yolları (ölü adam, süre, ACİL) bu sıraya BAĞLI DEĞİL — satır
  * yalnız bildirimdir; termal kesme EKLENMEZ (sahip kararı).
@@ -631,6 +655,7 @@ typedef enum {
   TX_DURDU,   /* STM_STOPPED — süre doldu */
   TX_NACK,
   TX_ACK,
+  TX_KIMLIK, /* Y68: STM_ID — kimlik sorgusunun yanıtı */
   TX_READY,
   TX_MAGCHK,
   TX_TELE_0, /* sensör hattı başına (I2C1, I2C2) */
@@ -642,7 +667,8 @@ typedef struct {
   uint16_t kapasite;
   uint16_t uzunluk; /* 0 = boş; > 0 = gönderilmeyi bekliyor */
 } TxYuva_t;
-static char g_tx_wdt[80], g_tx_durdu[64], g_tx_nack[160], g_tx_ready[128], g_tx_magchk[176];
+static char g_tx_wdt[80], g_tx_durdu[64], g_tx_nack[160], g_tx_ready[160], g_tx_magchk[176];
+static char g_tx_kimlik[160]; /* Y68: "-> STM_ID: <banner gövdesi>" (banner gövdesi init_msg'den TÜRER) */
 /* ACK yuvası: adı `ack_msg` KALIR — ACK biçimi kapıları (test_stm_ack_firmwareden_TURETILIR) yorumsuz kaynaktan
  * `Coil_AckMetin(ack_msg, sizeof(ack_msg), …)` çağrılarını okur; dizi olduğu için sizeof doğru boyu verir. */
 static char ack_msg[420];
@@ -658,6 +684,7 @@ static void Tx_Kur(void) {
   g_tx[TX_DURDU] = (TxYuva_t){g_tx_durdu, (uint16_t)sizeof(g_tx_durdu), 0U};
   g_tx[TX_NACK] = (TxYuva_t){g_tx_nack, (uint16_t)sizeof(g_tx_nack), 0U};
   g_tx[TX_ACK] = (TxYuva_t){ack_msg, (uint16_t)sizeof(ack_msg), 0U};
+  g_tx[TX_KIMLIK] = (TxYuva_t){g_tx_kimlik, (uint16_t)sizeof(g_tx_kimlik), 0U};
   g_tx[TX_READY] = (TxYuva_t){g_tx_ready, (uint16_t)sizeof(g_tx_ready), 0U};
   g_tx[TX_MAGCHK] = (TxYuva_t){g_tx_magchk, (uint16_t)sizeof(g_tx_magchk), 0U};
   for (uint32_t i = 0U; i < PEMF_SENSOR_BOBIN_SAYISI; i++) {
@@ -1201,9 +1228,13 @@ int main(void) {
    * garanti edilir. */
   /* ⚠️ KANAL SAYISI DIZEYE ELLE YAZILMAZ: eskiden "5-ch" sabitti ve NUM_COILS degisince
    * READY satiri YALAN soyluyordu (ACK format dizesiyle ayni surukleme sinifi). */
-  static char init_msg[128];
+  /* ⚠️ Y68 (TD1): banner sürüm dizesinden SONRA `proto=<revizyon> pkt=<paket boyu>` basar → 120 / 121 baytlık kartlar
+   * artık AYIRT EDİLİR. SÜRÜM İLK SIRADA KALIR (O-1.3: backend `firmware_surumu` ilk noktalı sayıyı seçer; proto/pkt noktasız).
+   * Paket boyu sizeof'tan; revizyon PEMF_PROTOKOL_REV'den — ikisi de ELLE YAZILMAZ. Kimlik yanıtı (STM_ID) bu satırın
+   * GÖVDESİNİ yankılar (aşağıda, ana döngü) → sürüm dizesi tek yerde. */
+  static char init_msg[160];
   (void)snprintf(init_msg, sizeof(init_msg),
-                 "-> STM_READY: DDS v2.3 (%u-ch %s uni=0x%02X + HW_SYNC@PB1) Waiting for commands...\r\n",
+                 "-> STM_READY: DDS v2.3 (%u-ch %s uni=0x%02X + HW_SYNC@PB1) proto=%u pkt=%u Waiting for commands...\r\n",
                  (unsigned)NUM_COILS,
                  /* ⚠️ KIP DIZESI DE MASKEDEN TURER: elle yazilan etiket 2026-09-11 karma
                   * yapilandirmasinda YALAN soylerdi. Banner, flash sonrasi TEK dogrulama
@@ -1213,7 +1244,12 @@ int main(void) {
                  : (PEMF_BOBIN_UNIPOLAR_MASKESI == ((1U << NUM_COILS) - 1U))
                      ? "UNIPOLAR tek-bacak"
                      : "KARMA",
-                 (unsigned)PEMF_BOBIN_UNIPOLAR_MASKESI);
+                 (unsigned)PEMF_BOBIN_UNIPOLAR_MASKESI, (unsigned)PEMF_PROTOKOL_REV, (unsigned)BINARY_PKT_SIZE);
+  /* Y68: kimlik yanıtı gövdesi = banner'ın "-> STM_READY:" ile " Waiting" ARASI (sürüm · kanal · kip · maske · proto · pkt). */
+  static const char k_banner_onek[] = "-> STM_READY:";
+  const char *const kimlik_govde = init_msg + (sizeof(k_banner_onek) - 1U);
+  const char *const kimlik_son = strstr(init_msg, " Waiting");
+  const int kimlik_govde_n = (kimlik_son != NULL) ? (int)(kimlik_son - kimlik_govde) : 0;
   /* ⚠️ Banner YETENEK maskesini bildirir (acilista istek yoktur). Calisma-zamani ETKIN kip
    * her ACK satirinda `K=0xNN` olarak gider — arayuz dugmesinin GERCEKTEN uygulandigi
    * ancak oradan dogrulanir. */
@@ -1421,6 +1457,16 @@ int main(void) {
     if (g_pwm_started == 0 && (current_time - last_ping_ms >= 2000U)) {
       Tx_Metin(TX_READY, init_msg); /* D1.106: TX meşgulken HAL_BUSY'de DÜŞÜYORDU (20 sn'de 4/10) */
       last_ping_ms = current_time;
+    }
+
+    /* Y68 (TD1): KİMLİK SORGUSU → "-> STM_ID: <banner gövdesi>". Her durumda yanıtlanır (PWM başlamış olsa da — kart
+     * RESETLENMEDEN bağlanan backend kimliği buradan okur). PWM'e, watchdog'a, kipe DOKUNMAZ; yalnız satır kuyruklanır. */
+    if (g_kimlik_istendi) {
+      g_kimlik_istendi = 0U;
+      if (kimlik_govde_n > 0) {
+        int il = snprintf(g_tx_kimlik, sizeof(g_tx_kimlik), "-> STM_ID:%.*s\r\n", kimlik_govde_n, kimlik_govde);
+        Tx_Kuyrukla(TX_KIMLIK, il);
+      }
     }
 
     if (g_pktReady) {
@@ -2189,7 +2235,9 @@ static void Coil_UartStartReceive(void) {
  *  RX_WAIT_HEADER2 ──[0xAA]──► RX_WAIT_HEADER2 (yeniden hizalanma)
  *  RX_WAIT_HEADER2 ──[diğer]──► IDLE
  *  RX_DATA         ──[veri]──► RX_DATA         (BINARY_PKT_SIZE dolana kadar topla)
- *  RX_DATA         ──[88. byte]──► IDLE + g_pktReady=1
+ *  RX_DATA         ──[121. byte]──► IDLE + g_pktReady=1
+ *  IDLE ──[0xA5]──► RX_KIMLIK_1 ──[0x5A]──► _2 ──['I']──► _3 ──['D']──► IDLE + g_kimlik_istendi=1   (Y68)
+ *  RX_KIMLIK_* ──[0xAA]──► RX_WAIT_HEADER2 (paket önceliği) · ──[diğer]──► IDLE
  *
  * Paket: [0xAA][0x55][5×float duty][5×float phase][5×float freq]
  *        [7×uint32 duration][uint16 ref_ms][uint8 kip][uint32 crc32] = 121 byte
@@ -2221,8 +2269,37 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
       g_rxBuf[0] = b;
       g_rxLen = 1;
       g_rxState = RX_WAIT_HEADER2;
+    } else if (b == KIMLIK_SORGU_B0) {
+      g_rxState = RX_KIMLIK_1; /* Y68: kimlik sorgusu çerçevesi başlıyor olabilir */
     }
     break;
+
+  /* Y68 (TD1): kimlik sorgusu 0xA5 0x5A 'I' 'D'. Eşleşmeyen bayt çerçeveyi bırakır; o bayt 0xAA ise paket başlangıcı
+   * KAÇIRILMAZ (komut paketi önceliklidir). Bayt-arası boşluk kuralı (RX_FRAME_GAP_MS) bu durumlara da uygulanır. */
+  case RX_KIMLIK_1:
+  case RX_KIMLIK_2:
+  case RX_KIMLIK_3: {
+    const uint8_t beklenen = (g_rxState == RX_KIMLIK_1)   ? KIMLIK_SORGU_B1
+                             : (g_rxState == RX_KIMLIK_2) ? KIMLIK_SORGU_B2
+                                                          : KIMLIK_SORGU_B3;
+    if (b == beklenen) {
+      if (g_rxState == RX_KIMLIK_3) {
+        g_kimlik_istendi = 1U;
+        g_rxState = RX_IDLE;
+      } else {
+        g_rxState = (g_rxState == RX_KIMLIK_1) ? RX_KIMLIK_2 : RX_KIMLIK_3;
+      }
+    } else if (b == 0xAA) {
+      g_rxBuf[0] = b;
+      g_rxLen = 1;
+      g_rxState = RX_WAIT_HEADER2;
+    } else if (b == KIMLIK_SORGU_B0) {
+      g_rxState = RX_KIMLIK_1;
+    } else {
+      g_rxState = RX_IDLE;
+    }
+    break;
+  }
 
   case RX_WAIT_HEADER2:
     if (b == 0x55) {

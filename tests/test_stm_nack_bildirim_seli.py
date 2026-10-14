@@ -103,8 +103,11 @@ def test_KRITIK_CRC_mesaji_EYLEM_soyler(monkeypatch):
     assert basilan, "CRC olayinda hic bildirim basilmadi"
     mesaj, seviye = basilan[0]
     assert seviye == "error"
-    assert "firmware" in mesaj.lower(), f"mesaj firmware uyusmazligini SOYLEMIYOR: {mesaj}"
-    assert "7-ch" in mesaj, "dogrulama olcutu (banner '7-ch') mesajda YOK"
+    # TD1 · K1 (tezgâh 2026-10-14): eski metin "Açılış satırı '7-ch' demeli" diyordu — uyumsuz (120 B) kart da 7-ch
+    # basar (YANLIŞ YÖN); CubeIDE talimatı klinik personeline göre değil. Artık sade metin + tek eylem + kod.
+    assert "yazılımı" in mesaj and "uyumsuz" in mesaj, f"mesaj yazılım uyuşmazlığını SÖYLEMİYOR: {mesaj}"
+    assert "Teknik desteği arayın" in mesaj and "FW-PAKET" in mesaj, f"eylem / kod yok: {mesaj}"
+    assert "7-ch" not in mesaj and "CubeIDE" not in mesaj, f"yanıltıcı / jargon metin geri geldi: {mesaj}"
     assert mesaj.strip() != "-> STM_NACK: CRC", "ham firmware metni oldugu gibi basildi"
 
 

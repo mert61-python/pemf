@@ -58,15 +58,27 @@ BANNER_DESENI = re.compile(
 )
 
 
+#: Y68 (TD1): banner / kimlik yanıtında parantezden SONRA gelen protokol alanları (`proto=3 pkt=121`). Noktasız tam sayı →
+#: `firmware_surumu`nun ilk noktalı sayı kuralını bozmaz (O-1.3).
+_PROTO_DESENI = re.compile(r"(?<![\w=])proto=(\d+)\b")
+_PKT_DESENI = re.compile(r"(?<![\w=])pkt=(\d+)\b")
+
+
 @dataclass(frozen=True)
 class Stm32Kimlik:
-    """Kartin banner'da BEYAN ETTIGI kimlik. `maske` yoksa None (eski banner); `kip` yoksa None (v2.2 banner'i)."""
+    """Kartin banner'da BEYAN ETTIGI kimlik. `maske` yoksa None (eski banner); `kip` yoksa None (v2.2 banner'i).
+
+    Y68 (TD1): `protokol` / `paket_boyu` yalniz kart BASIYORSA dolu (proto=… pkt=…; 2026-10-14 sonrasi firmware); eski
+    banner'da None. `kaynak`: "banner" (STM_READY) ya da "sorgu" (kimlik sorgusunun yaniti, STM_ID)."""
 
     surum: str
     kanal: int
     kip: str | None
     maske: int | None
     ham: str
+    protokol: int | None = None
+    paket_boyu: int | None = None
+    kaynak: str = "banner"
 
 
 def firmware_paket_boyu(kimlik: Stm32Kimlik) -> int:
@@ -81,25 +93,111 @@ def firmware_paket_boyu(kimlik: Stm32Kimlik) -> int:
         121 sayilir; o kartta tepkisel kapi (sistematik NACK → seans durur, B-1.1) devrededir.
       * f367f85 (09-11 17:38) → HEAD: kip bayti (`unipolar_maskesi`) VAR → 16·7 + 9 = 121
     Kural: duty/faz/frekans float + sure uint32 (bobin basina 16) + baslik 2 + ref_ms 2 + CRC 4; `uni=` alani
-    (maske) VARSA sürüş kipi bayti var sayilir."""
+    (maske) VARSA sürüş kipi bayti var sayilir.
+
+    ⚠️ Y68 (TD1): kart paket boyunu BEYAN ediyorsa (`pkt=`) beyan esastir — tahmin yapilmaz."""
+    if kimlik.paket_boyu is not None:
+        return int(kimlik.paket_boyu)
     return 16 * kimlik.kanal + 8 + (1 if kimlik.maske is not None else 0)
 
 
 def banner_ayristir(satir: str) -> Stm32Kimlik | None:
-    """`STM_READY` satirindan kimligi cikar; taninmazsa None."""
+    """`STM_READY` satirindan kimligi cikar; taninmazsa None. Y68: parantezden sonraki `proto=` / `pkt=` alanlari okunur."""
     if not satir:
         return None
     m = BANNER_DESENI.search(satir)
     if not m:
         return None
     ham_maske = m.group("maske")
+    kalan = satir[m.end() :]
+    m_proto = _PROTO_DESENI.search(kalan)
+    m_pkt = _PKT_DESENI.search(kalan)
     return Stm32Kimlik(
         surum=m.group("surum").strip(),
         kanal=int(m.group("kanal")),
         kip=m.group("kip"),
         maske=int(ham_maske, 16) if ham_maske else None,
         ham=satir.strip(),
+        protokol=int(m_proto.group(1)) if m_proto else None,
+        paket_boyu=int(m_pkt.group(1)) if m_pkt else None,
     )
+
+
+#: Y68: kimlik sorgusunun yanıt satırı — `-> STM_ID: DDS v2.3 (7-ch KARMA uni=0x60 + HW_SYNC@PB1) proto=3 pkt=121`
+#: (gövde firmware'de banner'dan TÜRER: `main.c` kimlik_govde).
+KIMLIK_YANIT_ONEKI = "STM_ID:"
+
+
+def kimlik_yaniti_ayristir(satir: str) -> Stm32Kimlik | None:
+    """Y68 (TD1): `STM_ID:` satırını kimliğe çevir (banner ayrıştırıcısıyla AYNI kurallar — tek kaynak); değilse None."""
+    if not satir or KIMLIK_YANIT_ONEKI not in satir:
+        return None
+    k = banner_ayristir(satir.replace(KIMLIK_YANIT_ONEKI, "STM_READY:", 1))
+    if k is None:
+        return None
+    return Stm32Kimlik(
+        surum=k.surum,
+        kanal=k.kanal,
+        kip=k.kip,
+        maske=k.maske,
+        ham=satir.strip(),
+        protokol=k.protokol,
+        paket_boyu=k.paket_boyu,
+        kaynak="sorgu",
+    )
+
+
+# ── PAKET KABUL / RED KANITI (TD1, tezgâh 2026-10-14) ───────────────────────────────────────────────────────────────
+# ⚠️ ÖLÇÜLDÜ: 120 baytlık saha imajı ile 121 baytlık imaj AYNI banner'ı basar; banner tek başına paket boyunu SÖYLEYEMEZ.
+# Kartın paketimize verdiği YANIT söyler: 120 baytlık firmware 121 baytlık paketin CRC'sini YANLIŞ ofsetten okur → HER
+# paket `STM_NACK: CRC` (2^-32 dışında); 121 baytlık firmware `STM_OK` (ya da CRC'yi geçmiş paketin içeriğine `RANGE` NACK'i)
+# döner. Yani: STM_OK / RANGE NACK = paket boyu UYUMLU KANITI · ARADA KABUL OLMADAN ard arda ≥ eşik CRC NACK = UYUMSUZ kanıtı.
+# Tek NACK hat gürültüsü olabilir → eşik. Kabul görülmüş bağlantıda sonraki CRC NACK'ler (gürültü) kararı ÇEVİRMEZ.
+#: Arada kabul olmadan bu kadar CRC NACK → paket boyu uyumsuz (tepkisel kapının `STM_RED_ESIGI` ile aynı sayı, ayrı kavram).
+PAKET_RED_CRC_ESIGI = 3
+KANIT_KABUL = "kabul"
+KANIT_RED = "red"
+
+
+def paket_yaniti_siniflandir(satir: str) -> str | None:
+    """Kart satırı paket boyu hakkında ne söylüyor? `KANIT_KABUL` (STM_OK · RANGE NACK) · "crc" (CRC NACK) · None (ilgisiz)."""
+    s = str(satir or "")
+    if "STM_OK:" in s:
+        return KANIT_KABUL
+    if "STM_NACK" in s:
+        govde = s.split("STM_NACK", 1)[1].upper()
+        if "CRC" in govde:
+            return "crc"
+        if "RANGE" in govde:  # CRC'yi GEÇMİŞ paketin içerik reddi → kart paketi doğru boyla çerçeveledi
+            return KANIT_KABUL
+    return None
+
+
+# ── OPERATÖR METİNLERİ (K1 / K2 — tezgâh "Kullanıcı geri bildirimi", sahip: "o bir veteriner, yazılımcı değil") ─────
+#: Kod → arayüz bandı / 409 metni. Teknik ayrıntı (`uyum_denetle` sebebi, python / CubeIDE talimatı) YALNIZ destek alanında.
+UYUM_KODU_PAKET = "FW-PAKET"
+UYUM_KODU_KIMLIK = "FW-KIMLIK"
+OPERATOR_METNI = {
+    UYUM_KODU_PAKET: (
+        "Cihaz kartının yazılımı bu uygulama sürümüyle uyumsuz — bobinler çalışmaz. "
+        "Teknik desteği arayın (kod: FW-PAKET)."
+    ),
+    UYUM_KODU_KIMLIK: (
+        "Cihaz kartı doğrulanamadı. Kartın üzerindeki SİYAH sıfırlama düğmesine bir kez basın (mavi değil)."
+    ),
+}
+
+
+#: Kart komutları SİSTEMATİK reddederken (tepkisel kapı) operatör metni — api_server `STM_RED_MESAJI` ve HC başlatma engeli.
+KOMUT_RED_METNI = (
+    "Cihaz kartı komutları reddediyor — kartın yazılımı bu uygulama sürümüyle uyumsuz; bobinler çalışmaz. "
+    "Teknik desteği arayın (kod: FW-PAKET)."
+)
+
+
+def operator_metni(kod: str | None) -> str:
+    """Uyum kodunun operatör metni; kod yoksa ""."""
+    return OPERATOR_METNI.get(str(kod or ""), "")
 
 
 #: D1.120 (B-4.2): banner'in `surum` alani firmware ADINI da tasir (`DDS v2.3`, main.c banner bicimi); uyum karari
@@ -135,8 +233,11 @@ def uyum_denetle(
 
     ⚠️ D1.103 (B-1.20): eskiden YALNIZ kanal sayisi karsilastiriliyordu → 7 kanalli ama 120 baytlik (kip baytsiz)
     firmware revizyonlari "uyumlu" sayiliyordu (o kart 121 baytlik her paketi NACK'ler). Paket boyu
-    `firmware_paket_boyu` ile banner revizyonundan turer; sahadaki banner (`DDS v2.3 (7-ch KARMA uni=0x60 +
-    HW_SYNC@PB1)`, Y7) 121 → UYUMLU kalir.
+    `firmware_paket_boyu` ile banner revizyonundan turer.
+
+    ⚠️ TD1 (tezgâh 2026-10-14, A1 ÖLÇÜLDÜ): sahadaki banner (`DDS v2.3 (7-ch KARMA uni=0x60 + HW_SYNC@PB1)`, Y7) 120
+    BAYTLIK karttandir ve 121 baytlik firmware de AYNI banner'i basar → bu banner artik "bilinmiyor" (None) doner; kesin
+    karar kartin beyanindan (Y68 `pkt=` / kimlik sorgusu) ya da paket kabul / red kanitindan gelir (HeadlessCore).
 
     ⚠️ Zaten uyumsuz firmware'de bobinler CALISMIYOR; kapinin kazandirdigi sey calisirlik
     degil, TEsHIS: "yesil ama hicbir sey olmuyor" yerine EYLEM soyleyen bir mesaj.
@@ -151,8 +252,6 @@ def uyum_denetle(
 
         paket_boyu = STM_PAKET_BOYU
     fw_boyu = firmware_paket_boyu(kimlik)
-    if kimlik.kanal == paket_kanal and fw_boyu == paket_boyu:
-        return True, ""
     if kimlik.kanal != paket_kanal:
         return False, (
             f"Kart {kimlik.kanal} kanalli firmware kosuyor ({kimlik.surum}), uygulama "
@@ -160,9 +259,30 @@ def uyum_denetle(
             f"aksi halde firmware her paketi NACK'ler ve HICBIR bobin calismaz. "
             f"Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin."
         )
-    return False, (
-        f"Kart {kimlik.kanal} kanalli ama {fw_boyu} baytlik paket bekleyen ESKI bir firmware kosuyor "
-        f"({kimlik.surum}; banner'da surus kipi alani 'uni=' YOK — 2026-09-10/11 surumu), uygulama {paket_boyu} "
-        f"baytlik paket gonderiyor. Paket boyu birebir olmak ZORUNDA — aksi halde firmware her paketi NACK'ler ve "
-        f"HICBIR bobin calismaz. Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin."
-    )
+    if kimlik.paket_boyu is not None:
+        # Y68 (TD1): kart paket boyunu BEYAN ETTI (banner `pkt=` ya da kimlik sorgusu) → kesin karar.
+        if fw_boyu == paket_boyu:
+            return True, ""
+        return False, (
+            f"Kart {fw_boyu} baytlik paket bekledigini bildiriyor ({kimlik.surum}, proto={kimlik.protokol}), uygulama "
+            f"{paket_boyu} baytlik paket gonderiyor. Paket boyu birebir olmak ZORUNDA — aksi halde firmware her paketi "
+            f"NACK'ler ve HICBIR bobin calismaz. Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin."
+        )
+    if fw_boyu != paket_boyu:
+        return False, (
+            f"Kart {kimlik.kanal} kanalli ama {fw_boyu} baytlik paket bekleyen ESKI bir firmware kosuyor "
+            f"({kimlik.surum}; banner'da surus kipi alani 'uni=' YOK — 2026-09-10/11 surumu), uygulama {paket_boyu} "
+            f"baytlik paket gonderiyor. Paket boyu birebir olmak ZORUNDA — aksi halde firmware her paketi NACK'ler ve "
+            f"HICBIR bobin calismaz. Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin."
+        )
+    if kimlik.maske is not None:
+        # ⚠️ TD1 (tezgâh 2026-10-14 ÖLÇTÜ, A1): `uni=` basan ama `pkt=` basmayan banner 120 baytlik (e2b63a5…a280fa4,
+        # SAHA IMAJI) ve 121 baytlik (f367f85…TD1 oncesi) firmware'lerde BAYT BAYT AYNI. Eskiden 121 sayilip "uyumlu"
+        # deniyordu → sahadaki 120 baytlik kart HEAD ile yesil gorunurken HER paketi NACK'liyordu. Banner'dan karar
+        # VERILMEZ ("bilinmiyor" — seans engellenmez); kesin karar kartin paketimize yanitindan (paket_yaniti_siniflandir)
+        # ya da kimlik sorgusundan gelir (HeadlessCore el sikisma dogrulamasi).
+        return None, (
+            f"Banner paket boyunu soylemiyor (120 ve 121 B ayni banner'i basar); uyum kartin {paket_boyu} B pakete "
+            f"yanitiyla (STM_OK / CRC NACK) DOGRULANACAK."
+        )
+    return True, ""

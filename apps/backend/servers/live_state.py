@@ -618,7 +618,25 @@ def _build_ws_snapshot() -> dict:
             "estopMandali": estop_mandali.durum(),
             # D1.E04 (yalnız-ek): son E-stop teyitsizse arayüz kayan ACİL DURDUR'u "(teyitsiz)" ile ekranda tutar.
             "estopTeyit": _live_state.get("estopTeyit"),
+            # TD1 (yalnız-ek): kart ↔ uygulama paket uyumu — arayüz kalıcı bandı (K1 / K2) ve "Donanım" rozeti buradan.
+            "stmUyum": _live_state.get("stmUyum"),
         }
+
+
+def stm_uyum_yaz(veri: dict) -> dict:
+    """TD1: çekirdeğin `hardware.stm.uyum` kararını canlı duruma yaz ve yayınla (`stm_uyum`). Yalnız GÖRÜNÜRLÜK — STOP /
+    ACİL DURDUR'a dokunmaz (Ö.4-Y8). `ayrinti` destek metnidir (teknik); operatöre `mesaj` gösterilir."""
+    v = veri if isinstance(veri, dict) else {}
+    durum = {
+        "uyumlu": v.get("uyumlu") if v.get("uyumlu") in (True, False) else None,
+        "kod": v.get("kod") or None,
+        "mesaj": str(v.get("mesaj") or ""),
+        "ayrinti": str(v.get("sebep") or ""),
+    }
+    with _live_state_lock:
+        _live_state["stmUyum"] = durum
+    _ws_broadcast_sync({"type": "stm_uyum", "data": dict(durum)})
+    return durum
 
 
 def estop_teyidi_yaz(teyitli: bool, kaynak: str = "estop") -> dict:

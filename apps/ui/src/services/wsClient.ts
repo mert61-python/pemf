@@ -20,6 +20,7 @@ export type WsMessageType =
   | "coil_ack"   // ESP start onayı: data={ok:true|false|null, reason:"ack"|"nack"|"timeout", latencyMs, ts}
   | "estop_mandali" // D1.81 · Y4: acil durdurma mandalı kuruldu/sıfırlandı — data=EstopMandali
   | "estop_teyit" // D1.E04: son acil durdurmanın teyit durumu — data=EstopTeyit
+  | "stm_uyum" // TD1: kart ↔ uygulama paket uyumu kararı — data=StmUyum
   | "pong";  // heartbeat yanıtı (backend ping'e döner)
 
 export interface WsMessage {

@@ -445,3 +445,37 @@ def test_pending_yazan_yollar_biliniyor(fw_src):
         f"riski yok; ustelik PEMF_NTC_TERMAL_ENABLED=0 iken derlenmezler]). Yeni bir yol "
         f"eklendiyse ref_ms tek-atislik semantigini dogrula ve bu sayiyi guncelle."
     )
+
+
+# ── TD1 · Y68: protokol revizyonu + kimlik sorgusu — firmware ↔ backend ↔ simülatör ─────────────────────────────
+
+
+def _define_hex(src: str, name: str) -> int:
+    m = re.search(rf"^#define\s+{re.escape(name)}\s+0x([0-9A-Fa-f]+)U?\b", src, re.M)
+    assert m, f"firmware/main.c içinde #define {name} 0x.. bulunamadı"
+    return int(m.group(1), 16)
+
+
+def test_KRITIK_TD1_protokol_revizyonu_UC_kaynakta_AYNI(sim, fw_src):
+    """Y68: banner / kimlik yanıtı `proto=` basar; backend kendi revizyonuyla karşılaştırır (paket düzeni değişirse ARTAR)."""
+    from utils.stm32_transport import STM_PROTOKOL_REV
+
+    assert _define_int(fw_src, "PEMF_PROTOKOL_REV") == STM_PROTOKOL_REV == sim.PROTOKOL_REV == 3
+
+
+def test_KRITIK_TD1_kimlik_sorgusu_UC_kaynakta_AYNI_ve_0xAA_icermez(sim, fw_src):
+    """Y68: sorgu çerçevesi 0xAA İÇERMEMELİ — eski firmware'in RX makinesi IDLE'da yalnız 0xAA bekler ve sorguyu YOK sayar
+    (ölçüldü: ana makine koşum takımı, TD1)."""
+    from utils.stm32_transport import STM_KIMLIK_SORGUSU
+
+    fw = bytes(_define_hex(fw_src, f"KIMLIK_SORGU_B{i}") for i in range(4))
+    assert fw == STM_KIMLIK_SORGUSU == sim.KIMLIK_SORGUSU
+    assert 0xAA not in STM_KIMLIK_SORGUSU
+
+
+def test_KRITIK_TD1_banner_paket_boyunu_SIZEOFtan_basar(fw_src):
+    """Y68: banner `pkt=%u` → `BINARY_PKT_SIZE` (sizeof); elle yazılmış paket boyu (120 / 121) dizede YOK."""
+    m = re.search(r'"(-> STM_READY: DDS v[^"]*)"', fw_src)
+    assert m and "proto=%u pkt=%u" in m.group(1), m and m.group(1)
+    assert not re.search(r"pkt=1[0-9]{2}", m.group(1)), "paket boyu banner dizesine ELLE yazılmış"
+    assert re.search(r"\(unsigned\)PEMF_PROTOKOL_REV,\s*\(unsigned\)BINARY_PKT_SIZE\)", fw_src), "banner argümanları"

@@ -44,11 +44,13 @@ KURALLI = {
 
 
 def saha_banneri() -> str:
-    """Firmware'in GERÇEK biçim dizesinden (yorumsuz main.c) 7 kanal · KARMA · 0x60 banner'ı (sahadaki kart, Y7)."""
+    """Firmware'in GERÇEK biçim dizesinden (yorumsuz main.c) 7 kanal · KARMA · 0x60 banner'ı (TD1 · Y68: + proto / pkt)."""
     soy = c_soy(MAIN_C.read_text(encoding="utf-8"))
     m = re.search(r'"(-> STM_READY: DDS v[^"]*)"', soy)
     assert m, "main.c'de (yorum dışı) STM_READY biçim dizesi yok"
-    return (m.group(1).replace("\\r\\n", "") % (7, "KARMA", 0x60)).strip()
+    from utils.stm32_transport import STM_PAKET_BOYU, STM_PROTOKOL_REV
+
+    return (m.group(1).replace("\\r\\n", "") % (7, "KARMA", 0x60, STM_PROTOKOL_REV, STM_PAKET_BOYU)).strip()
 
 
 class _Cekirdek:

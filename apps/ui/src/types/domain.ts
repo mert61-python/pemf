@@ -217,6 +217,23 @@ export interface DashboardSnapshot {
   estopMandali?: EstopMandali | null;
   /** D1.E04 · İG-6.7: son ACİL DURDUR'un teyit durumu (backend `estop_teyit`). null = bu süreçte E-stop yok. */
   estopTeyit?: EstopTeyit | null;
+  /** TD1: kart ↔ uygulama paket uyumu (backend `hardware.stm.uyum` → WS `stm_uyum`). Yoksa eski backend → bant çizilmez. */
+  stmUyum?: StmUyum | null;
+}
+
+/**
+ * TD1 (tezgâh 2026-10-14): kartın yazılımı bu uygulama sürümüyle uyumlu mu. ⚠️ "BAĞLI" ile "UYUMLU" AYRI (bağlantı
+ * göstergesi 2 durumlu kalır): kart konuşuyor olabilir ama paketi reddeden eski bir yazılım koşuyor olabilir.
+ */
+export interface StmUyum {
+  /** true = uyumlu · false = KESİN uyumsuz (bobinler çalışmaz) · null = doğrulanamadı / henüz bilinmiyor */
+  uyumlu: boolean | null;
+  /** "FW-PAKET" (uyumsuz) · "FW-KIMLIK" (doğrulanamadı) · null = bant yok */
+  kod?: string | null;
+  /** Operatör metni (sade Türkçe + tek eylem) — backend `utils/stm32_kimlik.OPERATOR_METNI`. */
+  mesaj?: string;
+  /** Destek / servis ayrıntısı (teknik) — yalnız "Teknik ayrıntı" açılınca gösterilir. */
+  ayrinti?: string;
 }
 
 /** D1.E04: "durdu" (`running:false`) ile "teyit edildi" AYRI — teyit yalnız backend'in teyidi ya da kartın tüm-sıfır ACK'i. */

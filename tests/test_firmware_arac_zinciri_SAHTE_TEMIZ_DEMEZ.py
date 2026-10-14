@@ -98,7 +98,8 @@ def test_KARSIT_215_baglama_dosyalari_VARKEN_baglanir_ve_nm_yoksa_yine_1(tmp_pat
 
 
 def _banner(kanal: int) -> str:
-    return f"-> STM_READY: DDS v2.3 ({kanal}-ch KARMA uni=0x60 + HW_SYNC@PB1)"
+    # TD1 · Y68: kart paket boyunu BEYAN eder (pkt=); `uni=` basıp pkt= basmayan banner 120 / 121'i ayırt edemez (None).
+    return f"-> STM_READY: DDS v2.3 ({kanal}-ch KARMA uni=0x60 + HW_SYNC@PB1) proto=3 pkt={16 * kanal + 9}"
 
 
 @pytest.mark.parametrize("kanal", [5, 6, 7, 8])

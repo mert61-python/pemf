@@ -19,6 +19,8 @@ export function SystemInfoPanel() {
   // gösterme, "Bilinmiyor" de (yanlış-güvence yok).
   const stale = connectionQuality !== "live";
   const stmConnected = !stale && snapshot.stm === "online";
+  // TD1: "bağlı" ile "uyumlu" AYRI — bağlı ama kartın yazılımı uyumsuzsa yeşil "Bağlı ✅" YALAN olurdu (tezgâh ölçtü).
+  const stmUyumsuz = stmConnected && snapshot.stmUyum?.uyumlu === false;
 
   // Çalışma süresi: WS snapshot'taki startTime'dan (process başlangıcı) her saniye hesaplanır.
   // (/api/system/info `uptime` DÖNDÜRMÜYOR → eski `d.uptime` hep undefined idi, panel "00:00:00"
@@ -46,8 +48,10 @@ export function SystemInfoPanel() {
       <InfoRow label="Toplam Seans" value={`${sysInfo?.totalSessions ?? 0} seans`} />
       <InfoRow
         label="STM32 Bağlantısı"
-        value={stale ? "Bilinmiyor ⚠️" : stmConnected ? "Bağlı ✅" : "Bekleniyor ⏳"}
-        valueColor={stale ? "#94a3b8" : stmConnected ? "#22c55e" : "#f59e0b"}
+        value={
+          stale ? "Bilinmiyor ⚠️" : stmUyumsuz ? "Bağlı · yazılımı uyumsuz ⛔" : stmConnected ? "Bağlı ✅" : "Bekleniyor ⏳"
+        }
+        valueColor={stale ? "#94a3b8" : stmUyumsuz ? "#ef4444" : stmConnected ? "#22c55e" : "#f59e0b"}
       />
     </View>
   );

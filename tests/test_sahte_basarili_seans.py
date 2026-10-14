@@ -145,7 +145,10 @@ def test_KRITIK_hicbir_bobin_kabul_etmezse_seans_BASLAMAZ(istemci, monkeypatch, 
     assert y.status_code == 503, f"RED beklenirken {y.status_code}: {y.text[:300]}"
     assert sahte.cagrilar, "onkosul: update_coil hic cagrilmadi -> kapi yanlis yeri olcuyor"
     # ⚠️ Mesaj EYLEM söylemeli: "hata" demek operatöre ne yapacağını söylemez.
-    assert "firmware" in y.text.lower(), f"mesaj EYLEM soylemiyor: {y.text[:300]}"
+    # TD1 · K1: sade metin ("kartın yazılımı … uyumsuz") + tek eylem + kod — "firmware" / CubeIDE jargonu YOK.
+    assert "yazılımı" in y.text and "FW-PAKET" in y.text and "Teknik desteği arayın" in y.text, (
+        f"mesaj EYLEM soylemiyor: {y.text[:300]}"
+    )
 
 
 def test_KRITIK_reddedilen_seans_AKTIF_KALMAZ(istemci, monkeypatch, seans_kapat):
@@ -240,7 +243,7 @@ def test_KRITIK_sistematik_red_seans_baslatmayi_ENGELLER(istemci, monkeypatch, s
 
     y = _seans_baslat(istemci)
     assert y.status_code == 409, f"RED beklenirken {y.status_code}: {y.text[:300]}"
-    assert "firmware" in y.text.lower()
+    assert "yazılımı" in y.text and "FW-PAKET" in y.text  # TD1 · K1: sade metin + kod
 
 
 def test_KRITIK_TEK_nack_seansi_engellemez(istemci, monkeypatch, seans_kapat):

@@ -15,10 +15,12 @@ REVİZYON TABLOSU: aşağıdaki satırlar `git show <rev>:firmware/stm32_pemf*/C
 derleme bayrağıyla seçilen kip → iki satır). Paket boyu = 16·kanal + 8 (+1 kip baytı). Banner'lar literal: test git
 geçmişine bağlı DEĞİL. Sahadaki banner (SAHIP-CEVAPLARI Y7, 2026-09-30) UYUMLU kalmalı.
 
-⚠️ BİLİNEN SINIR (AYIRT EDİLEMEZ): e2b63a5 … a280fa4 (2026-09-11 13:53–15:21) 120 bayt ama banner'ı f367f85+ (121)
-ile BAYT BAYT AYNI → banner'dan ayrılamaz; bu tablo onları "uyumlu" (bugünkü karar) diye PİNLER ki biri sessizce
-değişmesin. Ayrım firmware banner'ına protokol revizyonu eklenip kart yeniden yakılınca (Oturum 13 / sahip Y1-Y2);
-o kartta tepkisel kapı (sistematik NACK → seans durur, B-1.1) devrededir.
+⚠️ AYIRT EDİLEMEZ (TD1, tezgâh 2026-10-14 ÖLÇTÜ): e2b63a5 … a280fa4 (2026-09-11 13:53–15:21) 120 bayt ama banner'ı f367f85+
+(121) ile BAYT BAYT AYNI — ve SAHA KARTI bu 120 baytlık imajı taşıyor (saha günlüğü 64 162 `STM_OK` 1.9.50'nin 120 baytına;
+aynı imajlı tezgâh kartı HEAD'in 121 baytına yalnız `STM_NACK: CRC`). Eskiden bu tablo onları "uyumlu" diye pinliyordu →
+uyumsuz kart yeşil görünüyordu (A2). Artık `uni=` basıp `pkt=` basmayan banner'dan karar VERİLMEZ (None — seans engellenmez);
+kesin karar Y68 beyanından (`proto=` / `pkt=`, kimlik sorgusu) ya da kartın paketimize yanıtından gelir
+(`tests/test_TD1_kart_paket_uyumu_Y68.py`).
 """
 
 from __future__ import annotations
@@ -89,7 +91,8 @@ def test_KRITIK_B120_her_firmware_revizyonunun_KARARI_paket_boyuyla_ESLESIR(rev,
     kimlik = banner_ayristir(banner)
     assert kimlik is not None, f"{rev}: gerçek firmware banner'ı TANINMADI (bilinmiyor) — {banner!r}"
     uyumlu, sebep = _karar(banner)
-    beklenen = True if rev in AYIRT_EDILEMEZ else (kimlik.kanal == 7 and boy == 121)
+    # TD1: 7 kanal + `uni=` (pkt= yok) → 120 / 121 ayırt edilemez → None; öteki revizyonlar banner'dan kesin.
+    beklenen = None if (kimlik.kanal == 7 and kimlik.maske is not None) else (kimlik.kanal == 7 and boy == 121)
     assert uyumlu is beklenen, (
         f"{rev} ({proje}, {kimlik.kanal} kanal, {boy} bayt): karar {uyumlu!r}, beklenen {beklenen!r} — {sebep!r}"
     )
@@ -98,9 +101,11 @@ def test_KRITIK_B120_her_firmware_revizyonunun_KARARI_paket_boyuyla_ESLESIR(rev,
         assert "SAHA-ISLERI-REHBERI" in sebep, f"sebep eylem söylemiyor: {sebep!r}"
 
 
-def test_KRITIK_Y7_SAHA_banner_i_UYUMLU():
+def test_KRITIK_Y7_SAHA_banner_i_TEK_BASINA_KARAR_DEGIL():
+    """TD1: saha banner'ı 120 baytlık imajdan (tezgâh A1) ama 121 baytlık imaj da aynı basar → banner'dan ne "uyumlu"
+    (uyumsuz kart yeşil görünürdü) ne "uyumsuz" (seans banner yüzünden reddedilirdi) — None; karar kanıttan."""
     uyumlu, sebep = _karar(SAHA_BANNER)
-    assert uyumlu is True, f"sahadaki kartın banner'ı UYUMSUZ sayıldı — sonraki yayında her START 409: {sebep!r}"
+    assert uyumlu is None, f"paket boyu söylemeyen banner'dan kesin karar: {uyumlu!r} {sebep!r}"
 
 
 def test_KARSIT_taninmayan_GELECEK_kip_kelimesi_BILINMIYOR_kalir_REDDEDILMEZ():
@@ -212,7 +217,9 @@ def isci(monkeypatch, caplog):
         assert core.baglanti[-1:] == [True], (
             f"aparat: el sıkışma bağlantı kurmadı {core.baglanti} (yazılan {kart.yazilan})"
         )
-        time.sleep(0.3)  # bağlantı sonrası adımlar
+        time.sleep(
+            1.2
+        )  # bağlantı sonrası adımlar (TD1: el sıkışma doğrulama yoklaması ≤ 1,5 sn — kimlik sorgusu yanıtı beklenir)
         return core
 
     yield _kos
@@ -227,18 +234,15 @@ def _kimlik_uyarilari(caplog) -> list[str]:
     ]
 
 
-def test_KRITIK_B121_resetsiz_baglantida_kimlik_okunamadi_GUNLUK_ve_OLAYLA_gorunur(isci, caplog):
-    core = isci(_Kart(acilis=[], yanit=_OK))  # banner YOK; yoklamaya STM_OK (kart zaten çalışıyordu)
+def test_KRITIK_B121_resetsiz_baglantida_kimlik_okunamadi_GUNLUKTE_gorunur_KABUL_kanitla_uyumlu(isci, caplog):
+    """Banner YOK; yoklamaya STM_OK (kart zaten çalışıyordu, kimlik sorgusuna STM_ID dönmüyor — eski Y68'siz imaj).
+    D1.103 görünürlüğü KORUNUR (günlükte WARNING). TD1: kart paketimizi KABUL ETTİ → paket boyu ölçüyle uyumlu (True);
+    eskiden None + `hardware.stm.uyumsuz` idi (çalışan kart için "doğrulanamadı" bandı gösterirdi)."""
+    core = isci(_Kart(acilis=[], yanit=_OK))
     uyarilar = _kimlik_uyarilari(caplog)
-    olaylar = [v for tur, v in core.olaylar if tur == "hardware.stm.uyumsuz"]
     assert uyarilar, "resetsiz bağlantıda kimliğin okunamadığı GÜNLÜKTE görünmüyor (sessiz)"
-    assert olaylar and olaylar[-1].get("uyumlu") is None, (
-        f"`hardware.stm.uyumsuz` (uyumlu=None) olayı yok: {core.olaylar}"
-    )
-    assert "resetlenmeden" in olaylar[-1].get("sebep", ""), olaylar[-1]
-    assert core.stm_uyumlu is None, (
-        "kimlik okunmadan karar verildi (False/True) — 'bilinmiyor' seansı ENGELLEMEZ kalmalı"
-    )
+    assert core.stm_uyumlu is True, f"paket KABUL kanıtına rağmen karar {core.stm_uyumlu!r}"
+    assert not [v for tur, v in core.olaylar if tur == "hardware.stm.uyumsuz" and v.get("uyumlu") is False]
     assert core.baglanti.count(True) >= 1 and False not in core.baglanti[1:], (
         "bağlantı göstergesi etkilendi (2 durumlu)"
     )
@@ -247,7 +251,8 @@ def test_KRITIK_B121_resetsiz_baglantida_kimlik_okunamadi_GUNLUK_ve_OLAYLA_gorun
 def test_KARSIT_B121_banner_gorulen_baglantida_UYARI_YOK_karar_UYUMLU(isci, caplog):
     core = isci(_Kart(acilis=[(SAHA_BANNER + _S + "\n").encode()], yanit=_OK))
     assert _kimlik_uyarilari(caplog) == [], f"banner okunan bağlantıda 'okunamadı' uyarısı: {_kimlik_uyarilari(caplog)}"
-    assert core.stm_uyumlu is True, f"saha banner'ı okununca karar {core.stm_uyumlu!r}"
+    # TD1: saha banner'ı tek başına karar değil; kart yoklamaya STM_OK verdi → paket uyumu ölçüldü → True.
+    assert core.stm_uyumlu is True, f"saha banner'ı + STM_OK sonrası karar {core.stm_uyumlu!r}"
 
 
 def _el_sikis(kart: _Kart, caplog):

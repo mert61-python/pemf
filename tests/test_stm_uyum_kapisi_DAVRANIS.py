@@ -25,7 +25,11 @@ import pytest
 from topoloji import TUM_STM
 
 ESKI_BANNER = "-> STM_READY: DDS v2.3 (5-ch SYM-BIPOLAR uni=0x00 + HW_SYNC@PB1) Waiting for commands..."
-YENI_BANNER = "-> STM_READY: DDS v2.3 (7-ch UNIPOLAR tek-bacak uni=0x60 + HW_SYNC@PB1) Waiting for commands..."
+#: TD1 · Y68: TD1 sonrası firmware paket boyunu BEYAN eder (`proto=` / `pkt=`); `uni=` basıp pkt= basmayan eski banner
+#: 120 / 121 baytı ayırt edemez → karar None (tezgâh 2026-10-14).
+YENI_BANNER = (
+    "-> STM_READY: DDS v2.3 (7-ch UNIPOLAR tek-bacak uni=0x60 + HW_SYNC@PB1) proto=3 pkt=121 Waiting for commands..."
+)
 #: SAHA (Y7, sahibin salt-okur ölçümü 2026-09-30): saha günlüğündeki `STM_READY` satırının banner'ı.
 SAHA_BANNER = "-> STM_READY: DDS v2.3 (7-ch KARMA uni=0x60 + HW_SYNC@PB1)"
 BOZUK_BANNER = "-> STM_READY: eski surum, kanal bilgisi yok"
@@ -104,7 +108,8 @@ STM_KUME_ID = ["ilk", "son", "son_iki", "tumu"]
 def test_KRITIK_UYUMLU_banner_STM_seansini_GERCEKTEN_baslatir(seans_ortami, monkeypatch, banner, kume):
     api, istemci, hc = seans_ortami
     uyumlu, sebep = _karar(banner)
-    assert uyumlu is True, f"ön koşul: {banner!r} uyumlu sayılmalı (karar {uyumlu}, {sebep!r}) — D1.103"
+    # TD1: saha banner'ı (pkt= yok) tek başına karar DEĞİL (None) — None seansı ENGELLEMEZ; yeni banner kesin uyumlu.
+    assert uyumlu is (None if banner == SAHA_BANNER else True), f"ön koşul: {banner!r} karar {uyumlu}, {sebep!r}"
     monkeypatch.setattr(api.state, "core", _Cekirdek(uyumlu, sebep), raising=False)
     r = istemci.post("/api/session/start", json={**_GOVDE, "coil_ids": kume})
     assert r.status_code == 200, f"UYUMLU firmware'de STM seansı {r.status_code}: {r.text[:200]} — kapı hep reddediyor"
@@ -150,7 +155,7 @@ def cekirdek():
 
 @pytest.mark.parametrize(
     ("banner", "beklenen"),
-    [(ESKI_BANNER, False), (YENI_BANNER, True), (SAHA_BANNER, True), (BOZUK_BANNER, None)],
+    [(ESKI_BANNER, False), (YENI_BANNER, True), (SAHA_BANNER, None), (BOZUK_BANNER, None)],
     ids=["eski_5ch", "repo_7ch", "SAHA_Y7", "bozuk"],
 )
 def test_KRITIK_banner_satiri_GERCEK_isleyiciden_UYUM_kararina_ulasir(cekirdek, banner, beklenen):

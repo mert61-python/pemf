@@ -299,6 +299,9 @@ async def health_check(request: Request):
         # reddedilir) · null=banner okunamadı/henüz görülmedi (seans ENGELLENMEZ).
         "stmUyumlu": getattr(_api.state.core, "stm_uyumlu", None) if _api.state.core else None,
         "stmUyumsuzlukSebebi": (getattr(_api.state.core, "stm_uyumsuzluk_sebebi", "") if _api.state.core else ""),
+        # TD1 (yalnız-ek): `stmUyumsuzlukSebebi` DESTEK metnidir (teknik); operatör kodu ayrı (FW-PAKET / FW-KIMLIK). Operatör
+        # metni canlı durumda (`stmUyum`, WS `stm_uyum`) — sağlık yanıtı küçük kalır (gzip eşiği 1024 B, saniyede birkaç çağrı).
+        "stmUyumKodu": (getattr(_api.state.core, "stm_uyum_kodu", None) if _api.state.core else None),
         "atRestEncrypted": at_rest_encrypted,
         # Tıbbi kayıt yazılabilir mi. false → yeni seans REDDEDİLİR (bkz. /api/session/start).
         "dbReady": db_ready,

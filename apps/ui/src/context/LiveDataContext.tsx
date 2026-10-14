@@ -33,6 +33,7 @@ import type {
   DashboardSnapshot,
   EstopMandali,
   EstopTeyit,
+  StmUyum,
 } from "@/types/domain";
 
 // ─── History max length ────────────────────────────────────────────────────
@@ -447,6 +448,12 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       // ekranda kalır (kartın tüm-sıfır ACK'i ya da teyitli bir E-stop gelene dek).
       case "estop_teyit": {
         updateSnapshot({ estopTeyit: msg.data as EstopTeyit });
+        break;
+      }
+
+      // TD1: kart ↔ uygulama paket uyumu kararı değişti → kalıcı bant (StmUyumBandi) ve "Donanım" rozeti buradan.
+      case "stm_uyum": {
+        updateSnapshot({ stmUyum: msg.data as StmUyum });
         break;
       }
 

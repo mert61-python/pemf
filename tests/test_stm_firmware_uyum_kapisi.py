@@ -42,7 +42,11 @@ if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
 
 ESKI_BANNER = "-> STM_READY: DDS v2.3 (5-ch SYM-BIPOLAR uni=0x00 + HW_SYNC@PB1) Waiting for commands..."
-YENI_BANNER = "-> STM_READY: DDS v2.3 (7-ch UNIPOLAR tek-bacak uni=0x60 + HW_SYNC@PB1) Waiting for commands..."
+#: TD1 · Y68: TD1 sonrası firmware paket boyunu BEYAN eder (`proto=` / `pkt=`); `uni=` basıp pkt= basmayan eski banner
+#: 120 / 121 baytı ayırt edemez → karar None (tezgâh 2026-10-14).
+YENI_BANNER = (
+    "-> STM_READY: DDS v2.3 (7-ch UNIPOLAR tek-bacak uni=0x60 + HW_SYNC@PB1) proto=3 pkt=121 Waiting for commands..."
+)
 BOZUK_BANNER = "-> STM_READY: eski surum, kanal bilgisi yok"
 
 
@@ -302,8 +306,12 @@ def test_KRITIK_UYUMSUZ_firmware_SEANS_BASLATMAYI_reddediyor(istemci, uyumsuz_ce
         f"UYUMSUZ firmware'de seans {y.status_code} ile gecti — bobinler calismayacakken "
         "operatore 'basladi' denmis olur (tam da cozulen ariza)."
     )
+    # TD1 · K1: 409 operatöre SADE metin + kod söyler (CubeIDE / kanal sayısı / '7-ch' YOK); çatışan kanal sayıları
+    # DESTEK ayrıntısında (`/api/health` `stmUyumsuzlukSebebi`) kalır.
     detay = str(y.json().get("detail", ""))
-    assert "5" in detay and "7" in detay, f"409 mesaji catisan kanal sayilarini soylemiyor: {detay!r}"
+    assert "FW-PAKET" in detay and "uyumsuz" in detay, f"409 metni sade + kodlu değil: {detay!r}"
+    assert "CubeIDE" not in detay and "7-ch" not in detay, f"409 metninde geliştirici talimatı: {detay!r}"
+    assert "5" in sebep and "7" in sebep, f"destek ayrıntısı çatışan kanal sayılarını söylemiyor: {sebep!r}"
 
 
 def test_KRITIK_saglik_ucu_UYUM_alanlarini_bildiriyor(istemci):

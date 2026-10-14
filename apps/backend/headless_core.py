@@ -171,6 +171,8 @@ class HeadlessCore:
         self.stm_kimlik = None
         self.stm_uyumlu: bool | None = None
         self.stm_uyumsuzluk_sebebi: str = ""
+        #: TD1: operatör koduna (`utils.stm32_kimlik.UYUM_KODU_*`) göre arayüz bandı / 409 metni; None = bant yok.
+        self.stm_uyum_kodu: str | None = None
         self._stm_state_lock = threading.RLock()
         self.stm_connected_signal.connect(self._on_stm_connected_slot)
 
@@ -535,38 +537,203 @@ class HeadlessCore:
         ⚠️ BU KAPI ACIL DURDURMAYI ENGELLEMEZ. Uyumsuz firmware'de bile STOP yolu acik
         kalir (depo degismezi: bobinler her seyden once durur).
         """
-        from utils.stm32_kimlik import banner_ayristir, uyum_denetle
-        from utils.stm32_transport import STM_PAKET_BOBIN_SAYISI
+        from utils.stm32_kimlik import KANIT_KABUL, banner_ayristir
 
         kimlik = banner_ayristir(banner)
-        uyumlu, sebep = uyum_denetle(kimlik, STM_PAKET_BOBIN_SAYISI)
+        ham = kimlik.ham if kimlik else banner.strip()
         with self._stm_state_lock:
-            onceki = self.stm_uyumlu
+            d = self._stm_kanit()
+            # TD1: kanıt SIFIRLANIR — banner DEĞİŞTİYSE (kart yeniden yakıldı / başka kart) ya da kart paketi KABUL ettikten
+            # sonra yeniden READY bastıysa (READY pingi yalnız hiç paket kabul etmemiş kartta sürer → kabulden sonraki
+            # READY = kart YENİDEN BAŞLADI). Paket kabul etmeyen eski kartın 2 sn'lik AYNI READY pingi kanıtı SİLMEZ.
+            yeniden = d["son_banner"] != ham or (
+                d["kanit"] == KANIT_KABUL and time.monotonic() - d["kabul_an"] > self._STM_KABUL_SONRASI_READY_S
+            )
+            if yeniden:
+                d.update(kanit=None, crc=0, sorgu=None, dogrulanamadi=False)
+            d["son_banner"] = ham
+            d["okunamadi"] = False
             self.stm_kimlik = kimlik
-            self.stm_uyumlu = uyumlu
-            self.stm_uyumsuzluk_sebebi = sebep
             # D1.114 (B-4.6): oto-firmware yakmasından SONRA kart kimliği portu BIRAKMADAN bu okuyucudan alınır
             # (`stm_banner_isareti` / `stm_banner_bekle`) — sayaç + son satır, kilit altında.
             self._stm_banner_sayaci = int(getattr(self, "_stm_banner_sayaci", 0)) + 1
-            self._stm_son_banner = kimlik.ham if kimlik else banner.strip()
-        if uyumlu is False:
-            # ⚠️ `error`: bu, operatorun SEANS BASLATAMAYACAGI anlamina gelir; `warning`
-            # destek log'unda kaybolurdu.
-            self.logger.error("STM32 FIRMWARE UYUMSUZ — %s", sebep)
-        elif uyumlu is None:
-            self.logger.warning("STM32 firmware kimligi okunamadi — %s", sebep)
-        elif onceki is not True:
-            self.logger.info(
-                "STM32 firmware uyumlu: %s, %d kanal, %s",
-                kimlik.surum,
-                kimlik.kanal,
-                kimlik.kip,
+            self._stm_son_banner = ham
+        self._stm_uyumu_hesapla("banner")
+
+    # ── TD1 (Oturum 13 · Y68): PAKET UYUMU = banner + kimlik sorgusu + kartın paketimize YANITI ───────────────────
+    #: Kabulden bu kadar sn sonra gelen READY "kart yeniden başladı" sayılır (READY pingi 2 sn; kabulle aynı anda TX
+    #: yuvasında bekleyen son ping kanıtı silmesin).
+    _STM_KABUL_SONRASI_READY_S = 2.5
+
+    def _stm_kanit(self) -> dict:
+        """Kanıt durumu (kilit ALTINDA çağrılır). `__new__` ile kurulan test çekirdekleri için tembel kurulur."""
+        d = getattr(self, "_stm_uyum_kaniti", None)
+        if d is None:
+            d = {
+                "kanit": None,  # KANIT_KABUL | KANIT_RED | None
+                "crc": 0,  # arada kabul olmadan ard arda CRC NACK
+                "kabul_an": 0.0,
+                "sorgu": None,  # Y68 kimlik yanıtı (Stm32Kimlik, kaynak="sorgu")
+                "okunamadi": False,  # resetsiz bağlantı: banner görülmedi (D1.103 B-1.21)
+                "dogrulanamadi": False,  # el sıkışma doğrulamasına hiç yanıt yok
+                "son_banner": None,
+            }
+            self._stm_uyum_kaniti = d
+        return d
+
+    def _stm_kanit_sifirla(self, neden: str) -> None:
+        """Kart fiziksel olarak gitti (port numaralandırmadan düştü): paket kanıtı artık bu karta ait değil."""
+        with self._stm_state_lock:
+            self._stm_kanit().update(kanit=None, crc=0, dogrulanamadi=False)
+        self._stm_uyumu_hesapla(neden)
+
+    def _stm_kimlik_yanitini_isle(self, satir: str) -> None:
+        """Y68: `-> STM_ID: …` (kimlik sorgusunun yanıtı) — kartın BEYAN ettiği paket boyu kesin karardır."""
+        from utils.stm32_kimlik import kimlik_yaniti_ayristir
+
+        kimlik = kimlik_yaniti_ayristir(satir)
+        if kimlik is None:
+            self.logger.warning("[STM32] kimlik yanıtı ayrıştırılamadı: %s", str(satir)[:120])
+            return
+        with self._stm_state_lock:
+            d = self._stm_kanit()
+            d["sorgu"] = kimlik
+            d["okunamadi"] = False
+            d["dogrulanamadi"] = False
+        self._stm_uyumu_hesapla("kimlik sorgusu")
+
+    def _stm_paket_yanitini_isle(self, satir: str) -> None:
+        """Kartın paketimize yanıtı: STM_OK / RANGE NACK = paket boyu KABUL; arada kabul olmadan ≥ eşik CRC NACK = RED."""
+        from utils.stm32_kimlik import KANIT_KABUL, KANIT_RED, PAKET_RED_CRC_ESIGI, paket_yaniti_siniflandir
+
+        sinif = paket_yaniti_siniflandir(satir)
+        if sinif is None:
+            return
+        with self._stm_state_lock:
+            d = self._stm_kanit()
+            onceki = d["kanit"]
+            if sinif == KANIT_KABUL:
+                d.update(kanit=KANIT_KABUL, crc=0, kabul_an=time.monotonic(), dogrulanamadi=False)
+            elif d["kanit"] != KANIT_KABUL:  # kabul görülmüş bağlantıda CRC NACK hat gürültüsüdür (tepkisel kapı ayrı)
+                d["crc"] += 1
+                if d["crc"] >= PAKET_RED_CRC_ESIGI:
+                    d["kanit"] = KANIT_RED
+            degisti = d["kanit"] != onceki
+        if degisti:
+            self._stm_uyumu_hesapla("paket yanıtı")
+
+    def _stm_dogrulama_sonucu(self, ozet: dict | None) -> None:
+        """El sıkışma doğrulama yoklamasının özeti (`Stm32OpenResult.dogrulama`): hiç yanıt yoksa "doğrulanamadı"."""
+        if not isinstance(ozet, dict):
+            return
+        from utils.stm32_kimlik import PAKET_RED_CRC_ESIGI
+
+        yanitsiz = (
+            not ozet.get("kabul") and not ozet.get("kimlik") and int(ozet.get("crc_nack") or 0) < PAKET_RED_CRC_ESIGI
+        )
+        with self._stm_state_lock:
+            self._stm_kanit()["dogrulanamadi"] = bool(yanitsiz)
+        self._stm_uyumu_hesapla("el sıkışma doğrulaması")
+
+    def _stm_uyumu_hesapla(self, neden: str) -> None:
+        """TD1: `stm_uyumlu` (üç durum) · `stm_uyumsuzluk_sebebi` (DESTEK metni) · `stm_uyum_kodu` (operatör bandı) — TEK karar.
+
+        Öncelik: (1) RED kanıtı (kart paketimizi sistematik CRC ile reddediyor — ESKİ firmware'li kartta da çalışır; banner
+        aynı olsa bile) → False · (2) kartın beyanı (Y68 kimlik yanıtı, yoksa banner) → `uyum_denetle` · beyan "bilinmiyor"
+        ama KABUL kanıtı varsa → True · (3) kimlik yok: kabul → True; resetsiz / yanıtsız → None + FW-KIMLIK.
+        ⚠️ KAPI DEĞİL, KARAR: False yalnız seans BAŞLATMAYI reddettirir; ACİL DURDUR ve STOP hiçbir koşulda bu karara
+        bağlı değildir (Ö.4-Y8). "Bilinmiyor" seansı ENGELLEMEZ (D1.103). Değişince olay yayınlanır (bant / WS)."""
+        from utils.stm32_kimlik import (
+            KANIT_KABUL,
+            KANIT_RED,
+            UYUM_KODU_KIMLIK,
+            UYUM_KODU_PAKET,
+            operator_metni,
+            uyum_denetle,
+        )
+        from utils.stm32_transport import STM_PAKET_BOBIN_SAYISI, STM_PAKET_BOYU
+
+        with self._stm_state_lock:
+            d = self._stm_kanit()
+            banner_kimligi = getattr(self, "stm_kimlik", None)
+            kimlik = d["sorgu"] or banner_kimligi
+            onceki = (
+                getattr(self, "stm_uyumlu", None),
+                getattr(self, "stm_uyum_kodu", None),
+                getattr(self, "stm_uyumsuzluk_sebebi", ""),
             )
+            if d["kanit"] == KANIT_RED:
+                uyumlu, kod = False, UYUM_KODU_PAKET
+                sebep = (
+                    f"Kart uygulamanin {STM_PAKET_BOYU} baytlik paketini SISTEMATIK reddediyor (arada STM_OK olmadan ard "
+                    f"arda {d['crc']} STM_NACK: CRC)"
+                    + (f"; kartin kimligi: {kimlik.ham}" if kimlik is not None else "")
+                    + ". Karttaki firmware farkli paket boyu bekliyor (or. 120 baytlik eski saha imaji). HICBIR bobin "
+                    "calismaz. Yapilacak: kart bu surumun firmware'i ile yakilmali (docs/SAHA-ISLERI-REHBERI.md B-2; "
+                    "scripts/stm_yak.py — dogrulama: el sikismada STM_OK, CRC NACK yok)."
+                )
+            elif kimlik is not None:
+                uyumlu, sebep = uyum_denetle(kimlik, STM_PAKET_BOBIN_SAYISI)
+                kod = UYUM_KODU_PAKET if uyumlu is False else None
+                if uyumlu is None and d["kanit"] == KANIT_KABUL:
+                    uyumlu, sebep = True, ""  # kart paketimizi KABUL etti → paket boyu ölçüyle uyumlu
+                elif uyumlu is None and d["dogrulanamadi"]:
+                    kod = UYUM_KODU_KIMLIK
+                    sebep = sebep + " El sikisma dogrulamasina (kimlik sorgusu + sifir-duty yoklamasi) yanit YOK."
+            elif d["kanit"] == KANIT_KABUL:
+                uyumlu, sebep, kod = True, "", None
+            elif d["okunamadi"] or d["dogrulanamadi"]:
+                uyumlu, kod = None, UYUM_KODU_KIMLIK
+                sebep = (
+                    "Kartin firmware kimligi OKUNAMADI: kart resetlenmeden baglandi (STM_READY gorulmedi; el sikisma "
+                    "sifir-duty yoklamasina STM_OK ile tamamlandi). Uyum DOGRULANAMADI — seans engellenmez; kart paketleri "
+                    "reddederse sistematik red seansi durdurur. Kimligi okutmak icin kartin RESET dugmesine basin ya da "
+                    "backend kapaliyken python scripts/stm_firmware_kimligi.py calistirin."
+                    if d["okunamadi"]
+                    else "Kart el sikisma dogrulamasina yanit vermedi (kimlik sorgusu yaniti, STM_OK ya da NACK yok) — uyum "
+                    "DOGRULANAMADI. Kartin RESET dugmesine basin ya da backend kapaliyken python "
+                    "scripts/stm_firmware_kimligi.py calistirin."
+                )
+            else:
+                uyumlu, sebep, kod = None, "", None
+            self.stm_uyumlu = uyumlu
+            self.stm_uyumsuzluk_sebebi = sebep
+            self.stm_uyum_kodu = kod
+            degisti = (uyumlu, kod, sebep) != onceki
+            ham = kimlik.ham if kimlik is not None else ""
+        if not degisti:
+            return
+        if uyumlu is False:
+            # ⚠️ `error`: operatör SEANS BAŞLATAMAZ; `warning` destek günlüğünde kaybolurdu.
+            self.logger.error("STM32 FIRMWARE UYUMSUZ — %s", sebep)
+        elif uyumlu is None and kod:
+            self.logger.warning("STM32 firmware kimligi okunamadi — %s", sebep)
+        elif uyumlu is None and sebep:
+            self.logger.info("STM32 firmware uyumu DOGRULANIYOR — %s", sebep)
+        elif uyumlu is True:
+            if kimlik is not None:
+                self.logger.info(
+                    "STM32 firmware uyumlu: %s, %d kanal, %s (%s%s)",
+                    kimlik.surum,
+                    kimlik.kanal,
+                    kimlik.kip,
+                    "kimlik sorgusu" if kimlik.kaynak == "sorgu" else "banner",
+                    ", paket kabul edildi" if d["kanit"] == KANIT_KABUL else "",
+                )
+            else:
+                self.logger.info("STM32 firmware uyumlu: kart paketi KABUL etti (kimlik okunmadi)")
+        veri = {
+            "uyumlu": uyumlu,
+            "kod": kod,
+            "sebep": sebep,
+            "mesaj": operator_metni(kod),
+            "banner": ham,
+            "neden": neden,
+        }
+        self._publish_event("hardware.stm.uyum", veri, priority=EventPriority.HIGH)
         if uyumlu is not True:
             self._publish_event(
-                "hardware.stm.uyumsuz",
-                {"uyumlu": uyumlu, "sebep": sebep, "banner": (kimlik.ham if kimlik else banner.strip())},
-                priority=EventPriority.HIGH,
+                "hardware.stm.uyumsuz", {"uyumlu": uyumlu, "sebep": sebep, "banner": ham}, priority=EventPriority.HIGH
             )
 
     def stm_banner_isareti(self) -> int:
@@ -597,28 +764,31 @@ class HeadlessCore:
         Aynı süreçte daha önce kimlik okunmadıysa WARNING + `hardware.stm.uyumsuz` olayı (uyumlu=None) — banner'ı
         tanınmayan kartla AYNI kanal. KARAR DEĞİŞMEZ: "bilinmiyor" seansı ENGELLEMEZ (kart paketleri reddederse
         tepkisel kapı — sistematik NACK — seansı durdurur); bağlantı göstergesine 3. durum EKLENMEZ. Önceki bağlantıda
-        okunmuş kimlik korunur (yalnız INFO). Firmware'e kimlik SORGUSU komutu: Oturum 13 (tezgâh)."""
+        okunmuş kimlik korunur (yalnız INFO).
+        TD1 (Y68): el sıkışma doğrulaması kimlik SORGUSU gönderir — yeni firmware `STM_ID` ile yanıtlar (kimlik okunur);
+        kart paketi KABUL ettiyse paket uyumu ölçülmüştür (True). Yalnız ikisi de yoksa "okunamadı" (None + FW-KIMLIK)."""
+        from utils.stm32_kimlik import KANIT_KABUL
+
         with self._stm_state_lock:
-            kimlik = self.stm_kimlik
+            d = self._stm_kanit()
+            kimlik = d["sorgu"] or self.stm_kimlik
+            if kimlik is None:
+                d["okunamadi"] = True
+            kabul = d["kanit"] == KANIT_KABUL
         if kimlik is not None:
             self.logger.info(
-                "[STM32] Kart resetlenmeden baglandi; kimlik onceki baglantidan: %s, %d kanal",
+                "[STM32] Kart resetlenmeden baglandi; kimlik %s: %s, %d kanal",
+                "kimlik sorgusundan" if kimlik.kaynak == "sorgu" else "onceki baglantidan",
                 kimlik.surum,
                 kimlik.kanal,
             )
             return
-        sebep = (
-            "Kartin firmware kimligi OKUNAMADI: kart resetlenmeden baglandi (STM_READY gorulmedi; el sikisma sifir-duty "
-            "yoklamasina STM_OK ile tamamlandi). Uyum DOGRULANAMADI — seans engellenmez; kart paketleri reddederse "
-            "sistematik red seansi durdurur. Kimligi okutmak icin kartin RESET dugmesine basin ya da backend kapaliyken "
-            "python scripts/stm_firmware_kimligi.py calistirin."
+        # D1.103 B-1.21 görünürlüğü KORUNUR: banner da kimlik yanıtı da yok → günlükte her zaman WARNING.
+        self.logger.warning(
+            "STM32 firmware kimligi okunamadi — kart resetlenmeden baglandi (STM_READY ve STM_ID gorulmedi)%s",
+            "; kart paketi KABUL etti → paket uyumu OLCULDU" if kabul else "",
         )
-        with self._stm_state_lock:
-            self.stm_uyumsuzluk_sebebi = sebep
-        self.logger.warning("STM32 firmware kimligi okunamadi — %s", sebep)
-        self._publish_event(
-            "hardware.stm.uyumsuz", {"uyumlu": None, "sebep": sebep, "banner": ""}, priority=EventPriority.HIGH
-        )
+        self._stm_uyumu_hesapla("kimlik okunamadi")
 
     def _on_stm_connected_slot(self, is_connected: bool) -> None:
         with self._stm_state_lock:
@@ -858,6 +1028,19 @@ class HeadlessCore:
 
         self.logger.info("[STM32] %s", decoded)
 
+        if "STM_ID:" in decoded:
+            # Y68 (TD1): kimlik sorgusunun yanıtı — kartın beyan ettiği protokol revizyonu ve paket boyu.
+            self._stm_kimlik_yanitini_isle(decoded)
+            return
+
+        if "STM_OK:" in decoded or "STM_NACK" in decoded:
+            # TD1: kartın paketimize yanıtı paket boyu KANITIDIR (banner 120 / 121 baytı ayırt edemez — tezgâh ölçtü).
+            # Yalnız karar/görünürlük; STOP / ACİL DURDUR yolu buna bağlı DEĞİL (Ö.4-Y8).
+            try:
+                self._stm_paket_yanitini_isle(decoded)
+            except Exception:
+                self.logger.exception("[STM32] paket yanıtı kanıtı işlenemedi (satır yine işleniyor)")
+
         if "STM_READY" in decoded or "STM_OK:" in decoded:
             # ⚠️ 1-E inceleme O-1.1: port kaybı dalı bağlantıyı geçersizleyip "kopuk" yazdıktan SONRA, elinde satır olan
             # ESKİ okuyucunun STM_OK'u koşulsuz "bağlı" yazıyordu (kablo çıkıkken; yeniden bağlanma başarısızsa KALICI).
@@ -1058,6 +1241,11 @@ class HeadlessCore:
                     self._stm_kimligi_okunamadi()
                 except Exception:
                     self.logger.debug("[STM32] kimlik gorunurlugu yazilamadi (baglanti SURUYOR)", exc_info=True)
+            # TD1 · TD7: el sıkışma doğrulama yoklamasının sonucu (hiç yanıt yoksa "doğrulanamadı" görünür olur).
+            try:
+                self._stm_dogrulama_sonucu(getattr(result, "dogrulama", None))
+            except Exception:
+                self.logger.debug("[STM32] dogrulama sonucu islenemedi (baglanti SURUYOR)", exc_info=True)
 
         def reader(conn, nesil: int) -> None:
             """Kendi `conn`unu okur — paylaşılan duruma KÖR. Kapanışta kimlik doğrular."""
@@ -1140,6 +1328,10 @@ class HeadlessCore:
                         with payload_lock:
                             last_payload[0] = None  # kopuk hatta BAYAT paketi tekrar oynatma
                         _conn = None
+                        try:  # TD1: kart fiziksel olarak gitti → paket kanıtı artık geçersiz (yeniden takılınca ölçülür)
+                            self._stm_kanit_sifirla("port kayboldu")
+                        except Exception:
+                            self.logger.debug("[STM32] kanit sifirlanamadi", exc_info=True)
                         dongu_hatasini_bildir(
                             "[STM32] Seri port kayboldu (%s) → bağlantı düşürülüyor, bobinler çevrimdışı.",
                             _kaybolan_port,

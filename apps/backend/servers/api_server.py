@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.gzip import GZipMiddleware
 from utils import estop_mandali  # D1.81 · Y4: acil durdurma mandalı + sürüş nesli
+from utils import stm32_kimlik as _stm32_kimlik  # TD1: operatör metinleri (K1 / K2) tek kaynak
 from utils.path_utils import get_app_version, get_build_id  # audit B-8.1: tek versiyon kaynağı
 
 from servers import (
@@ -838,11 +839,11 @@ def _stm_nack_bastir(mesaj: str) -> bool:
 #: Firmware uyuşmazlığında operatöre gösterilen EYLEM METNİ — tek kaynak.
 #: ⚠️ Aynı cümle hem bildirime hem `/session/start` reddine gider; iki yerde iki farklı
 #: açıklama, operatörün "hangisi doğru?" diye durmasına yol açardı.
-STM_RED_MESAJI = (
-    "STM32 kartı komutları REDDEDİYOR (firmware sürümü bu uygulamayla uyuşmuyor). "
-    "Hiçbir bobin çalışmaz — seans başlatılmadı. Kartı güncel firmware ile yeniden "
-    "programlayın (CubeIDE: Project → Clean → Build → Run). Açılış satırı '7-ch' demeli."
-)
+#: ⚠️ TD1 · K1 (tezgâh 2026-10-14, sahip: "o bir veteriner, yazılımcı değil"): eski metin CubeIDE talimatı ve "Açılış
+#: satırı '7-ch' demeli" diyordu — uyumsuz (120 baytlık) kart da "7-ch" basar (YANLIŞ YÖN), CubeIDE klinik personeline
+#: göre değil (JARGON). Geliştirici / servis talimatı yalnız destek ayrıntısında (`/api/health` `stmUyumsuzlukSebebi`,
+#: `docs/SAHA-ISLERI-REHBERI.md` B-2). Kod (FW-PAKET) arayüz bandıyla AYNI (`utils.stm32_kimlik.OPERATOR_METNI`).
+STM_RED_MESAJI = _stm32_kimlik.KOMUT_RED_METNI
 
 #: D1.53 (A-05): 0 Hz seans isteğinin nedeni — tek kaynak (mandallı ve mandalsız yol AYNI metni verir; 1-C i3-F-4).
 SIFIR_HZ_SEANS_MESAJI = "Frekans 0 Hz = DURDURMA (A-05): bobinler durduruldu, seans BAŞLATILMADI. Frekans girin."
@@ -1909,6 +1910,11 @@ def _handle_backend_event(event) -> None:
         # D1.E04: kart GERÇEK ACK'le tüm çıkışları sıfır bildirdi → bekleyen teyitsiz E-stop STM'ce teyit edilir (A-63).
         live_state.estop_teyidi_stm_ack()
         return
+    if event.event_type == "hardware.stm.uyum":
+        # TD1 (K1 / K2): kart ↔ uygulama paket uyumu kararı → canlı durum + WS `stm_uyum` (arayüz kalıcı bandı). Eskiden
+        # `hardware.stm.uyumsuz` yayınlanıyor ama hiçbir abonesi yoktu (tezgâh ölçtü: arayüzde iz yok).
+        live_state.stm_uyum_yaz(data)
+        return
     if event.event_type == "hardware.stm.watchdog_timeout":
         # STM firmware watchdog'u ateşledi → STM PWM'i BİLİNMEYEN/durmuş durumda (komuta uymuyor). Bu bir
         # donanım-fault EVENT'i (backend EŞİK DAYATMAZ; donanımın kararına tepki verir) → STM kullanan aktif
@@ -1964,12 +1970,7 @@ def _handle_backend_event(event) -> None:
         if _stm_nack_bastir(_ham):
             return
         if "CRC" in _ham.upper():
-            _push_notification(
-                "⚠️ STM32 komutları REDDEDİYOR (CRC) — karttaki firmware sürümü bu uygulamayla "
-                "uyuşmuyor. Hiçbir bobin çalışmaz. Kartı güncel firmware ile yeniden programlayın "
-                "(CubeIDE: Project → Clean → Build → Run). Açılış satırı '7-ch' demeli.",
-                "error",
-            )
+            _push_notification("⚠️ " + STM_RED_MESAJI, "error")  # TD1 · K1: sade metin + kod; teknik ayrıntı destekte
             return
         _push_notification(_ham, "error")
         return
@@ -3836,7 +3837,8 @@ async def start_session(payload: SessionStartPayload, request: Request):
     if stm_coils and getattr(state.core, "stm_uyumlu", None) is False:
         _sebep = getattr(state.core, "stm_uyumsuzluk_sebebi", "") or "Firmware kanal sayisi uyusmuyor."
         logging.getLogger(__name__).error("Seans REDDEDILDI — firmware kimligi uyumsuz: %s", _sebep)
-        raise HTTPException(status_code=409, detail=_sebep)
+        # TD1 · K1: operatöre SADE metin + kod (teknik sebep günlükte ve `/api/health` `stmUyumsuzlukSebebi`nde — destek).
+        raise HTTPException(status_code=409, detail="Seans BAŞLATILMADI: " + STM_RED_MESAJI)
 
     # ⚠️ DENETİM 2026-08-09 (ENGEL) — KAYITSIZ TEDAVİ ARTIK BAŞLAMAZ.
     # Aşağıdaki DB yazımları bilinçli olarak "best-effort"tur (DB hatası bobinleri durdurmasın).
