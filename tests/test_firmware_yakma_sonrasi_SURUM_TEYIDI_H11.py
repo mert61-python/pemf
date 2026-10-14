@@ -109,6 +109,9 @@ def _kos(z, kaynak):
         return 0, ""
 
     z["mp"].setattr(z["sy"], "_kos", _sahte_kos)
+    # TD1-e: yakma sonrası geri okuma + yeniden başlatma BU kapının konusu değil (başarılı — gerçek çıktı uzayından); gerçek akış EN ALT katta: test_TD1_yakma_ve_kimlik_betigi_KANITLA (flash öykünmesi).
+    z["mp"].setattr(z["sy"], "geri_oku", lambda _c, _i, _h: (True, "geri okuma: (aparat) bayt bayt AYNI"))
+    z["mp"].setattr(z["sy"], "baslat", lambda _c: (True, ""))
     d = dict(z["fm"].acilis_denetimi(firmware_surum="2.3", stm_bagli=True, uygula=True, banner_kaynagi=kaynak))
     return cagri, d
 

@@ -112,6 +112,9 @@ def akis(fm, monkeypatch, tmp_path):
 
     monkeypatch.setattr(sy, "programmer_cli", lambda: Path("sahte_cli.exe"))
     monkeypatch.setattr(sy, "_kos", _sahte_kos)
+    # TD1-e: yakma sonrası geri okuma + yeniden başlatma BU kapının konusu değil (başarılı — gerçek çıktı uzayından); gerçek akış EN ALT katta: test_TD1_yakma_ve_kimlik_betigi_KANITLA (flash öykünmesi).
+    monkeypatch.setattr(sy, "geri_oku", lambda _c, _i, _h: (True, "geri okuma: (aparat) bayt bayt AYNI"))
+    monkeypatch.setattr(sy, "baslat", lambda _c: (True, ""))
     monkeypatch.setattr(
         sy,
         "banner_dogrula",

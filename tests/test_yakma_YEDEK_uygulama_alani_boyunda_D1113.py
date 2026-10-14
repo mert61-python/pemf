@@ -46,6 +46,9 @@ def test_KRITIK_yedek_UYGULAMA_ALANI_boyunda_okunur_yeni_ikili_boyunda_DEGIL(mon
 
     monkeypatch.setattr(sy, "programmer_cli", lambda: Path("sahte_cli.exe"))
     monkeypatch.setattr(sy, "_kos", _sahte_kos)
+    # TD1-e: yakma sonrası geri okuma + yeniden başlatma BU kapının konusu değil (başarılı — gerçek çıktı uzayından); gerçek akış EN ALT katta: test_TD1_yakma_ve_kimlik_betigi_KANITLA (flash öykünmesi).
+    monkeypatch.setattr(sy, "geri_oku", lambda _c, _i, _h: (True, "geri okuma: (aparat) bayt bayt AYNI"))
+    monkeypatch.setattr(sy, "baslat", lambda _c: (True, ""))
     monkeypatch.setattr(sy, "banner_dogrula", lambda *a, **k: (True, "uyumlu", "-> STM_READY: 2.4.0 (7-ch ...)"))
     monkeypatch.setattr(sy.time, "sleep", lambda _s: None)
     s = sy.yakma_akisi(ikili, guvenlik_kontrolu=lambda: (True, "t"), yedek_dizin=tmp_path / "y")

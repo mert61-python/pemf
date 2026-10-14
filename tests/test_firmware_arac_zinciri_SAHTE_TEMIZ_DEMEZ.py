@@ -111,7 +111,8 @@ def test_KRITIK_219_betigin_karari_BACKEND_uyum_kapisiyla_AYNI(kanal, monkeypatc
     assert beklenen is not None, "ön koşul: banner backend'ce okunmalı"
     sk = betik_modulu("stm_firmware_kimligi")
     monkeypatch.setattr(sk, "_portlari_bul", lambda istenen: ["COM_TEST"])
-    monkeypatch.setattr(sk, "_dinle", lambda port, sure: (kanal, [_banner(kanal)]))
+    # TD1-d: betik dinleme + aktif doğrulamayı `_kart_dogrula` ile yapar (satırlar, yoklama özeti).
+    monkeypatch.setattr(sk, "_kart_dogrula", lambda port, sure: ([_banner(kanal)], {}))
     monkeypatch.setattr(sys, "argv", ["stm_firmware_kimligi.py", "--sure", "0"])
     rc = sk.main()
     assert (rc == 0) is beklenen, (

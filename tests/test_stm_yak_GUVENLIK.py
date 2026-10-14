@@ -144,6 +144,9 @@ def _sahte_kur(monkeypatch, m, banner_sonucu, yedek_olsun=True, yak_olsun=True):
 
     monkeypatch.setattr(m, "yedek_al", _yedek)
     monkeypatch.setattr(m, "yak", _yak)
+    # TD1-e: yakma sonrası geri okuma + yeniden başlatma BU kapının konusu değil (başarılı — gerçek çıktı uzayından); gerçek akış EN ALT katta: test_TD1_yakma_ve_kimlik_betigi_KANITLA (flash öykünmesi).
+    monkeypatch.setattr(m, "geri_oku", lambda _c, _i, _h: (True, "geri okuma: (aparat) bayt bayt AYNI"))
+    monkeypatch.setattr(m, "baslat", lambda _c: (True, ""))
     monkeypatch.setattr(m, "banner_dogrula", lambda _p: banner_sonucu)
     monkeypatch.setattr(m.time, "sleep", lambda _s: None)
     return sira

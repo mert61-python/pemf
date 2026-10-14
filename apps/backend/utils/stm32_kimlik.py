@@ -200,6 +200,99 @@ def operator_metni(kod: str | None) -> str:
     return OPERATOR_METNI.get(str(kod or ""), "")
 
 
+def uyum_karari(
+    kimlik: Stm32Kimlik | None,
+    kanit: str | None,
+    crc: int = 0,
+    *,
+    okunamadi: bool = False,
+    dogrulanamadi: bool = False,
+    paket_kanal: int | None = None,
+) -> tuple[bool | None, str, str | None]:
+    """TD1 — TEK KARAR (backend çekirdeği, servis betiği, yakma akışı AYNI işlevi çağırır): (uyumlu, destek sebebi, kod).
+
+    Öncelik: (1) RED kanıtı (arada kabul olmadan ≥ eşik CRC NACK — eski firmware'li kartta da, banner aynı olsa bile) →
+    False + FW-PAKET · (2) kartın beyanı (Y68 kimlik yanıtı, yoksa banner) → `uyum_denetle`; beyan "bilinmiyor" ama KABUL
+    kanıtı varsa → True · (3) kimlik yok: kabul → True; resetsiz / yanıtsız → None + FW-KIMLIK; kanıt da yoksa None (kod yok).
+    ⚠️ KARAR, KİLİT DEĞİL: False yalnız seans BAŞLATMAYI reddettirir; ACİL DURDUR / STOP buna bağlı DEĞİL (Ö.4-Y8)."""
+    if paket_kanal is None:
+        from utils.stm32_transport import STM_PAKET_BOBIN_SAYISI  # tembel: katman döngüsü yok
+
+        paket_kanal = STM_PAKET_BOBIN_SAYISI
+    from utils.stm32_transport import STM_PAKET_BOYU
+
+    if kanit == KANIT_RED:
+        return (
+            False,
+            f"Kart uygulamanin {STM_PAKET_BOYU} baytlik paketini SISTEMATIK reddediyor (arada STM_OK olmadan ard arda {crc} "
+            f"STM_NACK: CRC)"
+            + (f"; kartin kimligi: {kimlik.ham}" if kimlik is not None else "")
+            + ". Karttaki firmware farkli paket boyu bekliyor (or. 120 baytlik eski saha imaji). HICBIR bobin calismaz. "
+            "Yapilacak: kart bu surumun firmware'i ile yakilmali (docs/SAHA-ISLERI-REHBERI.md B-2; scripts/stm_yak.py — "
+            "dogrulama: el sikismada STM_OK, CRC NACK yok).",
+            UYUM_KODU_PAKET,
+        )
+    if kimlik is not None:
+        uyumlu, sebep = uyum_denetle(kimlik, paket_kanal)
+        if uyumlu is False:
+            return False, sebep, UYUM_KODU_PAKET
+        if uyumlu is None and kanit == KANIT_KABUL:
+            return True, "", None  # kart paketimizi KABUL etti → paket boyu ölçüyle uyumlu
+        if uyumlu is None and dogrulanamadi:
+            return (
+                None,
+                sebep + " El sikisma dogrulamasina (kimlik sorgusu + sifir-duty yoklamasi) yanit YOK.",
+                UYUM_KODU_KIMLIK,
+            )
+        return uyumlu, sebep, None
+    if kanit == KANIT_KABUL:
+        return True, "", None
+    if okunamadi:
+        return (
+            None,
+            "Kartin firmware kimligi OKUNAMADI: kart resetlenmeden baglandi (STM_READY gorulmedi; el sikisma sifir-duty "
+            "yoklamasina STM_OK ile tamamlandi). Uyum DOGRULANAMADI — seans engellenmez; kart paketleri reddederse sistematik "
+            "red seansi durdurur. Kimligi okutmak icin kartin RESET dugmesine basin ya da backend kapaliyken python "
+            "scripts/stm_firmware_kimligi.py calistirin.",
+            UYUM_KODU_KIMLIK,
+        )
+    if dogrulanamadi:
+        return (
+            None,
+            "Kart el sikisma dogrulamasina yanit vermedi (kimlik sorgusu yaniti, STM_OK ya da NACK yok) — uyum DOGRULANAMADI. "
+            "Kartin RESET dugmesine basin ya da backend kapaliyken python scripts/stm_firmware_kimligi.py calistirin.",
+            UYUM_KODU_KIMLIK,
+        )
+    return None, "", None
+
+
+def satirlardan_karar(
+    satirlar: list[str], paket_kanal: int | None = None
+) -> tuple[bool | None, str, Stm32Kimlik | None]:
+    """TD1-d / TD1-e: bir dinleme / doğrulama oturumunda toplanan kart satırlarından karar (servis betiği ve yakma akışı).
+    Çekirdeğin durum makinesinin tek seferlik karşılığı: son banner kimliği, Y68 kimlik yanıtı, paket kabul / red kanıtı →
+    `uyum_karari`. Döner: (uyumlu, sebep, kimlik)."""
+    banner_k: Stm32Kimlik | None = None
+    sorgu_k: Stm32Kimlik | None = None
+    kanit: str | None = None
+    crc = 0
+    for s in satirlar:
+        if "STM_READY" in s:
+            banner_k = banner_ayristir(s) or banner_k
+        elif KIMLIK_YANIT_ONEKI in s:
+            sorgu_k = kimlik_yaniti_ayristir(s) or sorgu_k
+        sinif = paket_yaniti_siniflandir(s)
+        if sinif == KANIT_KABUL:
+            kanit, crc = KANIT_KABUL, 0
+        elif sinif == "crc" and kanit != KANIT_KABUL:
+            crc += 1
+            if crc >= PAKET_RED_CRC_ESIGI:
+                kanit = KANIT_RED
+    kimlik = sorgu_k or banner_k
+    uyumlu, sebep, _kod = uyum_karari(kimlik, kanit, crc, paket_kanal=paket_kanal)
+    return uyumlu, sebep, kimlik
+
+
 #: D1.120 (B-4.2): banner'in `surum` alani firmware ADINI da tasir (`DDS v2.3`, main.c banner bicimi); uyum karari
 #: (`surum_uyumu.surum_demeti`) yalniz SAYIYI ayristirir. Sayi ad/ek icinde gomulu olabilir ("v2.3", "2.3-rc1").
 _SURUM_SAYISI = re.compile(r"(?<![\w.])v?(\d+(?:\.\d+)+)(?![\w.])")

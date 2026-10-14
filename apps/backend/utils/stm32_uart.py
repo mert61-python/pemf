@@ -24,8 +24,9 @@ from utils.stm32_kimlik import banner_ayristir
 
 BAUD = 115200
 
-#: Banner'ın yanı sıra toplanan ilgi çekici satırlar (tanılama için).
-ILGI_ANAHTARLARI = ("STM_READY", "STM_NACK", "STM_SENS", "STM_ERR", "STM_TELE")
+#: Banner'ın yanı sıra toplanan ilgi çekici satırlar (tanılama için). TD1: `STM_ID` (Y68 kimlik yanıtı) ve `STM_OK` (paket
+#: kabulü) de toplanır — uyum kararı bunlardan verilir (`utils.stm32_kimlik.satirlardan_karar`).
+ILGI_ANAHTARLARI = ("STM_READY", "STM_ID", "STM_OK", "STM_NACK", "STM_SENS", "STM_ERR", "STM_TELE")
 
 
 @dataclass(frozen=True)
@@ -86,3 +87,39 @@ def banner_dinle(port: str, sure: float = 12.0) -> tuple[int | None, list[str]]:
                 if kimlik:
                     return kimlik.kanal, satirlar
     return None, satirlar
+
+
+def kart_dogrula(port: str, sure: float = 12.0) -> tuple[list[str], dict]:
+    """TD1-d / TD1-e (tezgâh 2026-10-14): kartın uyumunu BANNER'LA DEĞİL KANITLA ölç — (toplanan satırlar, yoklama özeti).
+
+    ⚠️ NEDEN: 120 ve 121 baytlık firmware AYNI banner'ı basar; servis betiği uyumsuz kartta "UYUMLU" dedi, yakma akışı yakmayı
+    banner'dan "doğruladı". (1) `sure` boyunca banner beklenir (kart RESET'te basar; resetsiz kart basmaz — yine de doğrulanır),
+    (2) backend'in el sıkışmasıyla AYNI doğrulama yoklaması (`Stm32SerialTransport._dogrulama_yoklamasi`): Y68 kimlik sorgusu +
+    en çok 3 sıfır-duty paketi (STOP — çıkışlara güvenli). Karar çağıranda: `stm32_kimlik.satirlardan_karar(satirlar)`.
+    ⚠️ Seri port TEK KULLANICILIDIR: backend çalışıyorsa `SerialException` yükselir (çağıran "port meşgul" der)."""
+    import serial  # yerel import: modül, pyserial olmayan ortamda da import edilebilsin
+
+    from utils.stm32_transport import Stm32PortCandidate, Stm32SerialTransport
+
+    satirlar: list[str] = []
+
+    def _topla(satir: str) -> None:
+        if any(k in satir for k in ILGI_ANAHTARLARI):
+            satirlar.append(satir)
+
+    with serial.Serial(port, BAUD, timeout=0.3) as s:
+        hazir = ""
+        bitis = time.monotonic() + max(0.0, float(sure))
+        while time.monotonic() < bitis:
+            ham = s.readline()
+            if not ham:
+                continue
+            satir = ham.decode("utf-8", "replace").strip()
+            if not satir:
+                continue
+            _topla(satir)
+            if banner_ayristir(satir):
+                hazir = satir
+                break
+        ozet = Stm32SerialTransport(None)._dogrulama_yoklamasi(s, Stm32PortCandidate(device=port), None, _topla, hazir)
+    return satirlar, ozet

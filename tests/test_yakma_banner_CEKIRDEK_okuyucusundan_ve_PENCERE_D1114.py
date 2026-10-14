@@ -67,8 +67,12 @@ def test_KRITIK_CLI_port_ACILAMAZSA_PORT_MESGUL_hic_gorulmedi_DEGIL(monkeypatch,
 
     monkeypatch.setattr(sy, "programmer_cli", lambda: Path("sahte_cli.exe"))
     monkeypatch.setattr(sy, "_kos", _sahte_kos)
+    # TD1-e: yakma sonrası geri okuma + yeniden başlatma BU kapının konusu değil (başarılı — gerçek çıktı uzayından); gerçek akış EN ALT katta: test_TD1_yakma_ve_kimlik_betigi_KANITLA (flash öykünmesi).
+    monkeypatch.setattr(sy, "geri_oku", lambda _c, _i, _h: (True, "geri okuma: (aparat) bayt bayt AYNI"))
+    monkeypatch.setattr(sy, "baslat", lambda _c: (True, ""))
     monkeypatch.setattr(sy, "port_adaylari", lambda istenen=None: ["COM10"])
     monkeypatch.setattr(sy, "banner_dinle", _mesgul)
+    monkeypatch.setattr(sy, "kart_dogrula", _mesgul)  # TD1-e: CLI doğrulaması portu bu yoldan açar
     s = sy.yakma_akisi(ikili, guvenlik_kontrolu=lambda: (True, "test"), yedek_dizin=tmp_path / "y")
     assert s.kod != sy.BANNER_TANINMADI and "hiç görülmedi" not in s.ozet, (
         f"port açılamadı (backend tutuyor) ama sonuç '{s.ozet}' (kod {s.kod}) — 'hiç görülmedi' ile AYNI; destek yanlış yöne "
@@ -170,8 +174,12 @@ def zincir(monkeypatch, tmp_path):
 
     monkeypatch.setattr(sy, "programmer_cli", lambda: Path("sahte_cli.exe"))
     monkeypatch.setattr(sy, "_kos", _sahte_kos)
+    # TD1-e: yakma sonrası geri okuma + yeniden başlatma BU kapının konusu değil (başarılı — gerçek çıktı uzayından); gerçek akış EN ALT katta: test_TD1_yakma_ve_kimlik_betigi_KANITLA (flash öykünmesi).
+    monkeypatch.setattr(sy, "geri_oku", lambda _c, _i, _h: (True, "geri okuma: (aparat) bayt bayt AYNI"))
+    monkeypatch.setattr(sy, "baslat", lambda _c: (True, ""))
     monkeypatch.setattr(sy, "port_adaylari", lambda istenen=None: ["COM10"])
     monkeypatch.setattr(sy, "banner_dinle", _port_mesgul)
+    monkeypatch.setattr(sy, "kart_dogrula", _port_mesgul)  # TD1-e: CLI doğrulaması portu bu yoldan açar
     monkeypatch.setattr(sy, "BANNER_SURESI", 5.0)
 
     def _http(self, fullurl, *a, **k):

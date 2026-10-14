@@ -643,15 +643,7 @@ class HeadlessCore:
         ama KABUL kanıtı varsa → True · (3) kimlik yok: kabul → True; resetsiz / yanıtsız → None + FW-KIMLIK.
         ⚠️ KAPI DEĞİL, KARAR: False yalnız seans BAŞLATMAYI reddettirir; ACİL DURDUR ve STOP hiçbir koşulda bu karara
         bağlı değildir (Ö.4-Y8). "Bilinmiyor" seansı ENGELLEMEZ (D1.103). Değişince olay yayınlanır (bant / WS)."""
-        from utils.stm32_kimlik import (
-            KANIT_KABUL,
-            KANIT_RED,
-            UYUM_KODU_KIMLIK,
-            UYUM_KODU_PAKET,
-            operator_metni,
-            uyum_denetle,
-        )
-        from utils.stm32_transport import STM_PAKET_BOBIN_SAYISI, STM_PAKET_BOYU
+        from utils.stm32_kimlik import KANIT_KABUL, operator_metni, uyum_karari
 
         with self._stm_state_lock:
             d = self._stm_kanit()
@@ -662,40 +654,10 @@ class HeadlessCore:
                 getattr(self, "stm_uyum_kodu", None),
                 getattr(self, "stm_uyumsuzluk_sebebi", ""),
             )
-            if d["kanit"] == KANIT_RED:
-                uyumlu, kod = False, UYUM_KODU_PAKET
-                sebep = (
-                    f"Kart uygulamanin {STM_PAKET_BOYU} baytlik paketini SISTEMATIK reddediyor (arada STM_OK olmadan ard "
-                    f"arda {d['crc']} STM_NACK: CRC)"
-                    + (f"; kartin kimligi: {kimlik.ham}" if kimlik is not None else "")
-                    + ". Karttaki firmware farkli paket boyu bekliyor (or. 120 baytlik eski saha imaji). HICBIR bobin "
-                    "calismaz. Yapilacak: kart bu surumun firmware'i ile yakilmali (docs/SAHA-ISLERI-REHBERI.md B-2; "
-                    "scripts/stm_yak.py — dogrulama: el sikismada STM_OK, CRC NACK yok)."
-                )
-            elif kimlik is not None:
-                uyumlu, sebep = uyum_denetle(kimlik, STM_PAKET_BOBIN_SAYISI)
-                kod = UYUM_KODU_PAKET if uyumlu is False else None
-                if uyumlu is None and d["kanit"] == KANIT_KABUL:
-                    uyumlu, sebep = True, ""  # kart paketimizi KABUL etti → paket boyu ölçüyle uyumlu
-                elif uyumlu is None and d["dogrulanamadi"]:
-                    kod = UYUM_KODU_KIMLIK
-                    sebep = sebep + " El sikisma dogrulamasina (kimlik sorgusu + sifir-duty yoklamasi) yanit YOK."
-            elif d["kanit"] == KANIT_KABUL:
-                uyumlu, sebep, kod = True, "", None
-            elif d["okunamadi"] or d["dogrulanamadi"]:
-                uyumlu, kod = None, UYUM_KODU_KIMLIK
-                sebep = (
-                    "Kartin firmware kimligi OKUNAMADI: kart resetlenmeden baglandi (STM_READY gorulmedi; el sikisma "
-                    "sifir-duty yoklamasina STM_OK ile tamamlandi). Uyum DOGRULANAMADI — seans engellenmez; kart paketleri "
-                    "reddederse sistematik red seansi durdurur. Kimligi okutmak icin kartin RESET dugmesine basin ya da "
-                    "backend kapaliyken python scripts/stm_firmware_kimligi.py calistirin."
-                    if d["okunamadi"]
-                    else "Kart el sikisma dogrulamasina yanit vermedi (kimlik sorgusu yaniti, STM_OK ya da NACK yok) — uyum "
-                    "DOGRULANAMADI. Kartin RESET dugmesine basin ya da backend kapaliyken python "
-                    "scripts/stm_firmware_kimligi.py calistirin."
-                )
-            else:
-                uyumlu, sebep, kod = None, "", None
+            # TD1-d/e: karar TEK KAYNAKTA (servis betiği ve yakma akışı da `uyum_karari`yı çağırır).
+            uyumlu, sebep, kod = uyum_karari(
+                kimlik, d["kanit"], d["crc"], okunamadi=d["okunamadi"], dogrulanamadi=d["dogrulanamadi"]
+            )
             self.stm_uyumlu = uyumlu
             self.stm_uyumsuzluk_sebebi = sebep
             self.stm_uyum_kodu = kod

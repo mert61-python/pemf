@@ -44,9 +44,13 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from utils.stm32_kimlik import banner_ayristir, uyum_denetle
+from utils.stm32_kimlik import banner_ayristir, satirlardan_karar, uyum_denetle
 from utils.stm32_transport import STM_PAKET_BOBIN_SAYISI
-from utils.stm32_uart import banner_dinle, port_adaylari
+from utils.stm32_uart import (  # noqa: F401 — banner_dinle: eski çağıranlar / testler
+    banner_dinle,
+    kart_dogrula,
+    port_adaylari,
+)
 
 #: Uygulama alanı — bootloader'a dokunulmaz.
 YAKMA_ADRESI = "0x08000000"
@@ -79,6 +83,9 @@ PORT_ACILAMADI_ONEKI = "SERİ PORT AÇILAMADI"
 GERI_DONUS_BASARISIZ = 11
 #: D1.112: geri dönüş yakıldı (rc=0) ama kart geri dönülen firmware'le KİMLİĞİNİ söylemedi — "geri dönüldü" doğrulanamadı.
 GERI_DONUS_DOGRULANAMADI = 12
+#: TD1-e (tezgâh 2026-10-14): yakmadan sonra BAĞIMSIZ flash geri okuması yazılan ikiliyle bayt bayt AYNI DEĞİL → yazma tutmadı;
+#: otomatik geri dönüş yapıldı (geri dönüş de başarısızsa GERI_DONUS_BASARISIZ / GERI_DONUS_DOGRULANAMADI döner).
+GERI_OKUMA_TUTMADI = 13
 
 
 @dataclass(frozen=True)
@@ -254,10 +261,37 @@ def yak(cli: Path, ikili: Path) -> tuple[bool, str]:
     return rc == 0, cikti[-1200:]
 
 
-def banner_dogrula(port: str | None = None) -> tuple[bool | None, str, str]:
-    """(uyumlu, sebep, ham_banner) — portu KENDİSİ açıp dinler (CLI yolu). Kart KENDİ kimliğini söylemeden yakma başarılı
-    sayılmaz.
+def geri_oku(cli: Path, ikili: Path, hedef: Path) -> tuple[bool, str]:
+    """TD1-e (tezgâh 2026-10-14): yakıcının kendi `-v`'sinden BAĞIMSIZ flash geri okuması — uygulama alanının ilk
+    `len(ikili)` baytı yazılan ikiliyle bayt bayt AYNI mı. Tezgâhta yakmayı kanıtlayan tek şey buydu (banner iki imajda da
+    aynıydı). Okuma `yedek_al` ile AYNI komut biçimi (`-c port=SWD -r <adr> <boy> <dosya>`, tezgâhta doğrulandı)."""
+    hedef.parent.mkdir(parents=True, exist_ok=True)
+    boyut = ikili.stat().st_size
+    rc, cikti = _kos(cli, ["-c", "port=SWD", "-r", YAKMA_ADRESI, str(boyut), str(hedef)])
+    if rc != 0 or not hedef.is_file():
+        return False, "geri okuma YAPILAMADI: " + cikti[-300:]
+    okunan = hedef.read_bytes()[:boyut]
+    beklenen = ikili.read_bytes()
+    if okunan == beklenen:
+        return True, f"geri okuma: {boyut} B bayt bayt AYNI (sha256 {sha256(ikili)[:16]}…)"
+    ilk = next((i for i, (a, b) in enumerate(zip(okunan, beklenen)) if a != b), min(len(okunan), len(beklenen)))
+    return False, f"geri okuma FARKLI: ilk fark ofset {ilk} (okunan {len(okunan)} B / yazılan {boyut} B)"
 
+
+def baslat(cli: Path) -> tuple[bool, str]:
+    """TD1-e: geri okumadan SONRA kartı yeniden başlat (`-c port=SWD -rst` — tezgâhta kullanılan komut): SWD bağlantısı çekirdeği
+    durdurmuş olabilir; kart açılış satırlarını basar, doğrulama o satırlarla yapılır."""
+    rc, cikti = _kos(cli, ["-c", "port=SWD", "-rst"])
+    return rc == 0, cikti[-300:]
+
+
+def banner_dogrula(port: str | None = None) -> tuple[bool | None, str, str]:
+    """(uyumlu, sebep, ham) — portu KENDİSİ açar (CLI yolu): banner bekler + AKTİF kart doğrulaması (`kart_dogrula`: Y68 kimlik
+    sorgusu + sıfır-duty yoklaması). Kart KENDİNİ doğrulamadan yakma başarılı sayılmaz.
+
+    ⚠️ TD1-e (tezgâh 2026-10-14): yakmadan önceki ve sonraki banner birebir aynıydı → banner'a bakan adım iki yönde de "uyum=True"
+    dedi. Karar artık KANITTAN (`satirlardan_karar`, backend çekirdeğiyle aynı): Y68 beyanı (`pkt=`) ya da paket kabulü (STM_OK)
+    → True; arada kabul olmadan 3 CRC NACK (eski firmware hâlâ koşuyor) → False; yalnız banner → None ("doğrulanamadı").
     ⚠️ D1.114 (B-4.6): açılamayan port eskiden `except Exception: continue` ile YUTULUYOR, sonuç "hiç görülmedi" oluyordu
     (backend portu tutarken her seferinde). Artık TÜM adaylar açılamadıysa sebep `PORT_ACILAMADI_ONEKI` ile başlar
     (`banner_dinle` notu: "port meşgul" ile "hiçbir şey duyulmadı" farklı arızalardır)."""
@@ -267,15 +301,17 @@ def banner_dogrula(port: str | None = None) -> tuple[bool | None, str, str]:
     acilamayan: list[str] = []
     for p in portlar:
         try:
-            _kanal, satirlar = banner_dinle(p, BANNER_SURESI)
+            satirlar, _ozet = kart_dogrula(p, BANNER_SURESI)
         except Exception as e:  # noqa: BLE001 — port meşgul/yok: SAYILIR, sonraki adaya geç
             acilamayan.append(f"{p}: {type(e).__name__}: {str(e)[:120]}")
             continue
-        for satir in satirlar:
-            if "STM_READY" not in satir:
-                continue
-            uyumlu, sebep = uyum_denetle(banner_ayristir(satir), STM_PAKET_BOBIN_SAYISI)
-            return uyumlu, sebep or "banner uyumlu", satir
+        if not any("STM_" in s for s in satirlar):
+            continue
+        uyumlu, sebep, kimlik = satirlardan_karar(satirlar, STM_PAKET_BOBIN_SAYISI)
+        ham = kimlik.ham if kimlik is not None else next((s for s in satirlar if "STM_" in s), "")
+        if uyumlu is True:
+            sebep = "kart kendini doğruladı (Y68 kimlik beyanı / paket kabulü — STM_OK)"
+        return uyumlu, sebep or "kart uyumu doğrulanamadı (yalnız banner)", ham
     if len(acilamayan) == len(portlar):
         return (
             None,
@@ -359,34 +395,31 @@ def yakma_akisi(
     # D1.114: işaret yakmadan ÖNCE — `-rst` sonrası banner `yak` dönmeden gelebilir.
     isaret = banner_kaynagi.isaret() if banner_kaynagi is not None else 0
     tamam, cikti = yak(cli, ikili)
-    adimlar.append("yakma: " + ("yazıldı + doğrulandı" if tamam else "YAKICI HATA"))
+    adimlar.append("yakma: " + ("yazıldı + doğrulandı (-v)" if tamam else "YAKICI HATA"))
     if not tamam:
         return Sonuc(YAKMA_HATASI, cikti, sha256=ozet, yedek=str(yedek), adimlar=adimlar)
 
-    if banner_kaynagi is not None:
-        uyumlu, sebep, ham = _banner_kaynaktan(banner_kaynagi, isaret)
-    else:
-        time.sleep(2.0)  # kart açılış banner'ını bassın (CLI portu kendisi açar)
-        uyumlu, sebep, ham = banner_dogrula(port)
-    adimlar.append(f"banner: {ham or '(okunamadı)'} → uyum={uyumlu} ({sebep})")
+    # ⚠️ TD1-e (tezgâh 2026-10-14): yakmadan önceki ve sonraki banner BİREBİR aynıydı — banner adımı yakmayı KANITLAMAZ.
+    # Kanıt: (1) yakıcının `-v`'si (yukarıda) + (2) BAĞIMSIZ geri okuma (flash = yazılan ikili) + (3) kartın KENDİ doğrulaması
+    # (Y68 kimlik beyanı `pkt=` / paket kabulü STM_OK; eski firmware hâlâ koşuyorsa CRC NACK → uyumsuz → geri dönüş).
+    g_ok, g_bilgi = geri_oku(cli, ikili, kok / f"geri_okuma_{time.strftime('%Y%m%d_%H%M%S')}.bin")
+    adimlar.append(g_bilgi)
+    r_ok, r_bilgi = baslat(cli)
+    adimlar.append("yeniden başlatma: " + ("tamam (-rst)" if r_ok else f"YAPILAMADI ({r_bilgi})"))
 
-    if uyumlu is None and sebep.startswith(PORT_ACILAMADI_ONEKI):
-        # D1.114: "hiç görülmedi"den AYRI — uyum DOĞRULANAMADI, geri dönüş sebebi değil (üç-durumlu kural).
-        return Sonuc(PORT_MESGUL, sebep, banner=ham, sha256=ozet, yedek=str(yedek), adimlar=adimlar)
-
-    if uyumlu is False:
-        # ⚠️ D1.112 (B-4.7): geri dönüşün SONUCU ve geri dönülen firmware'in KİMLİĞİ sonuç koduna yansır. Eskiden yakıcı
-        # hatası yalnız adım metnine yazılıp HER durumda UYUMSUZ_GERI_DONULDU dönüyordu — kart ne yeni ne eski firmware'le
-        # doğrulanmışken durum "geri dönüldü" ile aynıydı.
+    def _geri_don(neden: str, basari_kodu: int, banner_ham: str) -> Sonuc:
+        """⚠️ D1.112 (B-4.7): geri dönüşün SONUCU ve geri dönülen firmware'in KİMLİĞİ sonuç koduna yansır. Eskiden yakıcı
+        hatası yalnız adım metnine yazılıp HER durumda UYUMSUZ_GERI_DONULDU dönüyordu — kart ne yeni ne eski firmware'le
+        doğrulanmışken durum "geri dönüldü" ile aynıydı. TD1-e: geri okuma tutmazsa da aynı yol (`basari_kodu` farklı)."""
         isaret_geri = banner_kaynagi.isaret() if banner_kaynagi is not None else 0
         geri, geri_cikti = yak(cli, yedek)
         if not geri:
             adimlar.append("GERİ DÖNÜŞ: YAKICI HATA")
             return Sonuc(
                 GERI_DONUS_BASARISIZ,
-                f"yeni firmware UYUMSUZ ({sebep}) VE eski firmware'e GERİ DÖNÜŞ YAKILAMADI — kart ne yeni ne eski firmware'le "
-                f"doğrulanmış. ST-Link ile ELLE kurtarın: yedek {yedek} → {YAKMA_ADRESI}. Yakıcı: {geri_cikti[-300:]}",
-                banner=ham,
+                f"{neden} VE eski firmware'e GERİ DÖNÜŞ YAKILAMADI — kart ne yeni ne eski firmware'le doğrulanmış. ST-Link ile "
+                f"ELLE kurtarın: yedek {yedek} → {YAKMA_ADRESI}. Yakıcı: {geri_cikti[-300:]}",
+                banner=banner_ham,
                 sha256=ozet,
                 yedek=str(yedek),
                 adimlar=adimlar,
@@ -401,27 +434,48 @@ def yakma_akisi(
         if not g_ham:
             return Sonuc(
                 GERI_DONUS_DOGRULANAMADI,
-                f"yeni firmware UYUMSUZ ({sebep}); eski firmware yakıldı ama kart KİMLİĞİNİ söylemedi ({g_sebep}) — geri "
-                f"dönüş DOĞRULANAMADI. Kartı yeniden başlatıp açılış satırını kontrol edin; açılmıyorsa ST-Link ile yedek "
-                f"{yedek} → {YAKMA_ADRESI}.",
-                banner=ham,
+                f"{neden}; eski firmware yakıldı ama kart KİMLİĞİNİ söylemedi ({g_sebep}) — geri dönüş DOĞRULANAMADI. Kartı "
+                f"yeniden başlatıp açılış satırını kontrol edin; açılmıyorsa ST-Link ile yedek {yedek} → {YAKMA_ADRESI}.",
+                banner=banner_ham,
                 sha256=ozet,
                 yedek=str(yedek),
                 adimlar=adimlar,
             )
         return Sonuc(
-            UYUMSUZ_GERI_DONULDU,
-            f"{sebep} — eski firmware'e geri dönüldü (kart açılışta: {g_ham})",
-            banner=ham,
+            basari_kodu,
+            f"{neden} — eski firmware'e geri dönüldü (kart açılışta: {g_ham})",
+            banner=banner_ham,
             sha256=ozet,
             yedek=str(yedek),
             adimlar=adimlar,
         )
 
+    if not g_ok:
+        return _geri_don(f"yazılan ikili flash'ta DOĞRULANAMADI ({g_bilgi})", GERI_OKUMA_TUTMADI, "")
+
+    if banner_kaynagi is not None:
+        uyumlu, sebep, ham = _banner_kaynaktan(banner_kaynagi, isaret)
+    else:
+        time.sleep(2.0)  # kart açılış banner'ını bassın (CLI portu kendisi açar)
+        uyumlu, sebep, ham = banner_dogrula(port)
+    adimlar.append(f"kart doğrulaması: {ham or '(okunamadı)'} → uyum={uyumlu} ({sebep})")
+
+    if uyumlu is None and sebep.startswith(PORT_ACILAMADI_ONEKI):
+        # D1.114: "hiç görülmedi"den AYRI — uyum DOĞRULANAMADI, geri dönüş sebebi değil (üç-durumlu kural).
+        return Sonuc(PORT_MESGUL, sebep, banner=ham, sha256=ozet, yedek=str(yedek), adimlar=adimlar)
+
+    if uyumlu is False:
+        return _geri_don(f"yeni firmware UYUMSUZ ({sebep})", UYUMSUZ_GERI_DONULDU, ham)
+
     if uyumlu is None:
-        # ⚠️ Geri dönüş sebebi DEĞİL — üç-durumlu karar (bkz. modül başlığı, 6).
+        # ⚠️ Geri dönüş sebebi DEĞİL — üç-durumlu karar (bkz. modül başlığı, 6). TD1-e: yakma DOĞRULANAMADI (TAMAM değil).
         return Sonuc(BANNER_TANINMADI, sebep, banner=ham, sha256=ozet, yedek=str(yedek), adimlar=adimlar)
 
     return Sonuc(
-        TAMAM, "yakıldı ve kart kendi kimliğiyle doğruladı", banner=ham, sha256=ozet, yedek=str(yedek), adimlar=adimlar
+        TAMAM,
+        "yakıldı; geri okuma bayt bayt AYNI; kart kendini doğruladı (Y68 kimlik beyanı / paket kabulü)",
+        banner=ham,
+        sha256=ozet,
+        yedek=str(yedek),
+        adimlar=adimlar,
     )
