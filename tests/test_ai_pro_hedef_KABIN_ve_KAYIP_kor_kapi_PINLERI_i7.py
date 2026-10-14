@@ -25,6 +25,15 @@ import pytest
 N_PIN = 3  # ⚠️ ürünün sabitinden OKUNMAZ (i7-F-5) — İG-5.1'in değeri
 
 
+@pytest.fixture(autouse=True)
+def _sabit_test_kabini(monkeypatch):
+    """TD4: sınır / bant kapıları sabit test kabininde (65×50×50) ölçülür — F-9 bandı x ∈ (300, 325] saha kabininde (yarı
+    genişlik 285) YOKTUR. Ürünün kabin izlemesi: test_ai_pro_hedef_KABIN_DISI_ve_HEDEF_KAYBI_STOP (D1.85)."""
+    from kabin_test_geometrisi import kedi_yukleyicisini_sabitle
+
+    kedi_yukleyicisini_sabitle(monkeypatch)
+
+
 def _hedef(koord_cm, rel=0.95):
     import servers.ai_router as air
 

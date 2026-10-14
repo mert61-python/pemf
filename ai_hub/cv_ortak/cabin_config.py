@@ -518,6 +518,8 @@ def load_cabin_config(
         },
     )
 
+    _up_cabin_denetle(p, aruco.normal_axis_in_cabin, cam_r.get("up_cabin"))
+
     return CabinConfig(
         cabin_id=str(raw["cabin_id"]),
         aruco=aruco, geometry=geom, camera=cam,
@@ -525,6 +527,27 @@ def load_cabin_config(
         phantom=ph, output=out, source_path=str(p),
         multiwell=mw, phantom_v2=pv2,
     )
+
+
+def _up_cabin_denetle(kaynak, normal: str, up_ham) -> None:
+    """TD4 (tezgâh Oturum 13): tavan / taban işaretinde (normal ±Y) `camera.up_cabin` ZORUNLU ve hiçbir işarette normale
+    PARALEL olamaz. Eskiden varsayılan +Y tavan işaretinin normaline paralel kalıyor, `_marker_to_cabin_R` sessizce TEKİL
+    (det 0) dönüşüm kuruyordu — kabin konumları bir düzleme çöker. Hata bozuk ANAHTARI ve ne yazılacağını söyler."""
+    nv = np.array(axis_to_vector(normal), dtype=np.float64)
+    if up_ham is None:
+        if abs(float(nv[1])) > 0.5:
+            raise ValueError(
+                f"Kabin yapılandırması geçersiz ({kaynak}): tavan / taban işaretinde (normal_axis_in_cabin {normal}) "
+                "'camera.up_cabin' ZORUNLU — işaretin ÜST kenarının baktığı kabin eksenini yazın (ör. [0, 0, -1])"
+            )
+        return
+    up = np.array([float(v) for v in up_ham], dtype=np.float64)
+    nu = float(np.linalg.norm(up))
+    if nu < 1e-9 or float(np.linalg.norm(np.cross(up / nu, nv))) < 1e-3:
+        raise ValueError(
+            f"Kabin yapılandırması geçersiz ({kaynak}): 'camera.up_cabin' {list(up_ham)} işaret normaline "
+            f"({normal}) paralel ya da sıfır — işaretin ÜST kenarının baktığı kabin eksenini yazın"
+        )
 
 
 def _multiwell(m: dict) -> MultiwellCfg:

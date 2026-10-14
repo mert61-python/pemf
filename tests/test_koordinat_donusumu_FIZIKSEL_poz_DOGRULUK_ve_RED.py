@@ -40,7 +40,11 @@ def kurulum(request):
     import importlib
 
     ct = _ct()
-    cfg = importlib.import_module(f"ai_hub.{request.param}.cabin_config").load_cabin_config(None)
+    from kabin_test_geometrisi import sabit_kabin
+
+    # TD4: sabit test kabini — ürün saha kabininde (2026-10-14) lens tabandan 2 cm ve hedef düzlemi (-20) tabanın ALTINDA;
+    # bu kapı dönüşümün DOĞRULUĞUNU tutarlı bir geometride ölçer (ürün geometrisi sahibe / Tezgâh-2).
+    cfg = sabit_kabin(importlib.import_module(f"ai_hub.{request.param}.cabin_config").load_cabin_config(None))
     return ct, cfg, genis_aci_ic_parametre(ct)  # geniş açı: aşağı bakan ışın da olsun (sentetik)
 
 
@@ -166,7 +170,9 @@ def _aruco_yamala(mod, monkeypatch, cozulemeyen, yalniz_kabul=None):
     class _Poz:
         marker_id = 0
         tvec = np.zeros((3, 1))
-        R = np.eye(3)
+        # TD4: fiziksel DÜZ işaret (üst kenarı görüntüde yukarı, yüzü kameraya). `R = I` kâğıdı TERS gösterir
+        # (işaretin +Y'si kamerada aşağı) → hat artık `marker_upside_down` der ve sonuç sürülmez.
+        R = np.diag([1.0, -1.0, -1.0])
         rvec = np.zeros((3, 1))
         reproj_error_px = 0.5
         marker_pos_cabin_mm = np.zeros(3)

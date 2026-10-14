@@ -36,8 +36,9 @@ import numpy as np
 from .cabin_config import CabinConfig, load_cabin_config
 from .coord_transform import (
     CameraIntrinsics, detect_aruco_marker, solve_cabin_pose, pixel_to_cabin_mm, KesisimGecersiz,
-    undistort_image, approx_intrinsics_from_marker,
+    undistort_image, approx_intrinsics_from_marker, isaret_ters_mi, olcekli_intrinsics,
 )
+from ...cv_ortak.pemf_kapisi import ISARET_TERS_METNI
 from .color_segment import segment_phantom, find_phantoms, Region, TUMOR, HEALTHY
 from .tumor_detect import TumorDetectCfg, detect_phantom_tumors
 from .ring_calib import detect_ring
@@ -184,6 +185,10 @@ class PhantomCvPipeline:
 
     def _ensure_intrinsics(self, image_bgr: np.ndarray) -> None:
         if self.intrinsics is not None:
+            # ⚠️ TD4: kalibrasyon (`intrinsics_npz`) / ilk karenin yaklaşık K'sı başka çözünürlükteyse kareye ÖLÇEKLE
+            # (petri v2 kuralı; ölçüldü: ölçeksiz K ile işaret mesafesi çözünürlük oranı kadar yanlış).
+            h, w = image_bgr.shape[:2]
+            self.intrinsics = olcekli_intrinsics(self.intrinsics, w, h)
             return
         approx = approx_intrinsics_from_marker(image_bgr, self.cfg)
         if approx is None:
@@ -237,6 +242,9 @@ class PhantomCvPipeline:
                 ctx["cabin_pose"] = cabin_pose
                 ctx["marker"] = {"marker_id": cabin_pose.marker_id,
                                  "corners_px": marker_det.corners_px.tolist()}
+                # TD4: ters takılı işaret (kâğıt 180°) → kabin X / Y aynalanır; uyarı pemf kapısında ENGELLEYİCİ.
+                if isaret_ters_mi(cabin_pose, self.cfg):
+                    result.warnings.append(f"marker_upside_down: {ISARET_TERS_METNI}")
         timings["aruco"] = (time.perf_counter() - t1) * 1000
 
         # 3) fantom + tumorler

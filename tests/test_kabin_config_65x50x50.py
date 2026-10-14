@@ -1,13 +1,14 @@
 # Author: mertaygn, cglrgrkn
-"""Kabin geometrisi 65×50×50 + basılı ArUco marker + cat_organ yaml'ı GERÇEKTEN okur (2026-09-08).
+"""Kabin geometrisi + basılı ArUco marker + cat_organ yaml'ı GERÇEKTEN okur (2026-09-08; ölçüler TD4 2026-10-14).
 
-Sahip ölçüsü: genişlik 65 · derinlik 50 · yükseklik 50 cm. Üç pipeline'ın örnek yaml'ı aynı kabini
-tanımlar (kamera sağ-alt-ön köşe, marker arka duvar sol-üst). Bu dosya ÖLÇER:
+⚠️ Dosya adı TARİHÇEDİR (65×50×50). Güncel SAHA kabini (tezgâh Oturum 13, sahip şerit metreyle): iç 57 × 34 × 32 cm;
+işaret arka duvar merkez (-1.5, +1.5, +16), 10 cm; kamera lensi sağdan 8 / tabandan 2 / önden 8 → (-20.5, -15, -8).
+Eksen kuralı: +X = ÖNDEN BAKANIN SOLU (eski açıklamalar "sağ = +X" diyordu — aynaydı). Bu dosya ÖLÇER:
   (a) üç yaml parse edilir, aynı geometriyi taşır, mesafeler vektörlerden hesaplananla ±0.2 cm uyuşur,
       marker sözlüğü/kenarı basılı sayfa üreticisinin sabitleriyle aynıdır;
   (b) cat_organ `CatOrganPredictor` paketli yaml'ı yükler → kamera-sabitli + perspektif verisi VAR
       (2026-09-08'e kadar `load_cabin_config(None)` DEFAULT döndürüyordu: yaml güncellemeleri etkisizdi);
-  (c) basılı marker sayfası üretildiğinde cv2.aruco onu ID 0 ve 10,0 cm (300 DPI) olarak bulur;
+  (c) basılı marker sayfası üretildiğinde cv2.aruco onu ID 0 ve `real_cm` kenarıyla (300 DPI) bulur;
   (d) kılavuz aynı sayıları söyler.
 Mutasyonla KIRMIZI: predictor `load_cabin_config(None)`'a döndürülünce (b) düşer; yaml'da to_marker
 değiştirilince (a) düşer.
@@ -28,12 +29,11 @@ YAMLLAR = {
     "em_fantom": KOK / "ai_hub" / "inference_em_fantom" / "phantom_cv_v3" / "cabin_config_v3.yaml",
     "petri": KOK / "ai_hub" / "inference_petri_dish" / "petri_cv_v2" / "cabin_config_v2.yaml",
 }
-EXTENT = [65.0, 50.0, 50.0]
-KAMERA = [32.5, -25.0, -25.0]
-# 2026-09-09: isaret 10 -> 15 cm buyudu; kose yerlesimi 8/8 -> 11/11 cm tasindi
-# (15 cm isaretin yarisi 7,5 + 2 cm sessiz bolge = asgari 9,5 cm merkez mesafesi).
-MARKER = [-21.5, 14.0, 25.0]
-ISARET_KENAR_CM = 15.0
+# TD4 (2026-10-14 saha olcusu, tezgah Oturum 13 yamasi). Sessiz bolge kurali kenardan TURETILIR (asagida).
+EXTENT = [57.0, 34.0, 32.0]
+KAMERA = [-20.5, -15.0, -8.0]
+MARKER = [-1.5, 1.5, 16.0]
+ISARET_KENAR_CM = 10.0
 SESSIZ_CM = 2.0
 
 
@@ -110,7 +110,7 @@ def test_marker_sayfasi_uretici_sabitleri_yaml_ile_AYNI():
     assert re.search(r'^DICT_ADI = "DICT_5X5_50"$', src, re.M) and re.search(r"^MARKER_ID = 0$", src, re.M)
     assert re.search(rf"^KENAR_CM = {ISARET_KENAR_CM:g}\.0", src, re.M)
     # sayfadaki talimat kabin sayılarını yaml ile aynı söyler
-    assert "[-21.5, +14.0, +25.0]" in src and "[32.5, -25.0, -25.0]" in src and "[21.5, -14.0, -25.0]" in src
+    assert "[-1.5, +1.5, +16.0]" in src and "[-20.5, -15.0, -8.0]" in src and "[1.5, -1.5, -16.0]" in src
 
 
 def test_marker_sayfasi_cv2_ile_ID0_ve_KENAR_bulunur():
@@ -129,7 +129,7 @@ def test_marker_sayfasi_cv2_ile_ID0_ve_KENAR_bulunur():
 
 def test_kilavuz_ayni_sayilari_soyler_ve_marker_png_depoda():
     k = (KOK / "ai_hub" / "KABIN_KURULUM_KILAVUZU.md").read_text(encoding="utf-8")
-    for s in ("[65, 50, 50]", "[32.5, -25, -25]", "[-21.5, +14, +25]", "[21.5, -14, -25]", "48.0", "83.3"):
+    for s in ("[57, 34, 32]", "[-20.5, -15, -8]", "[-1.5, +1.5, +16]", "[1.5, -1.5, -16]", "26.6", "34.8"):
         assert s in k, f"kılavuzda {s} yok"
     sayfa = f"PEMF_ArUco_Marker_5X5_50_ID0_{ISARET_KENAR_CM:g}cm_A4"
     assert f"{sayfa}.pdf" in k and "kabin_marker_a4.py" in k

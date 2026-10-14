@@ -298,11 +298,39 @@ def _marker_to_cabin_R(cfg) -> "np.ndarray":
     # y'yi z'ye dik hale getir (Gram-Schmidt) — kilavuz disi kurulumda bile tutarli kalsin.
     y = y - z * float(np.dot(y, z))
     n = float(np.linalg.norm(y))
-    y = y / n if n > 1e-9 else np.array([0.0, 1.0, 0.0])
+    if n < 1e-6:
+        # ⚠️ TD4 (tezgâh Oturum 13): up_cabin işaret normaline PARALEL (tavan / taban işareti, up_cabin verilmemiş →
+        # varsayılan +Y) ya da sıfır. Eskiden y = +Y'ye, x = +X'e düşülüyordu → matris TEKİL (det 0): kabin konumları
+        # bir düzleme çöküyor, uyarı yoktu. Yükleme (`load_cabin_config`) bunu reddeder; programatik yapılandırma burada.
+        raise ValueError(
+            "camera.up_cabin işaret normaline paralel ya da sıfır — tavan / taban işaretinde up_cabin, işaretin ÜST "
+            "kenarının baktığı kabin eksenini vermeli (ör. [0, 0, -1])"
+        )
+    y = y / n
     x = np.cross(y, z)
-    nx = float(np.linalg.norm(x))
-    x = x / nx if nx > 1e-9 else np.array([1.0, 0.0, 0.0])
     return np.column_stack([x, y, z])
+
+
+#: TD4: düz (üst kenarı tavana bakan) duvar işaretinde R[1, 1] ≈ −0,85, 180° ters yapıştırılmışta ≈ +0,85 (saha geometrisinde
+#: sentetik görüntüyle ölçüldü). 0,5 eşiği yana (90°) yatırılmış işaretle ya da hafif eğik kamerayla karar VERMEZ.
+ISARET_TERS_ESIGI = 0.5
+
+
+def isaret_ters_mi(pose, cfg) -> bool:
+    """TD4 (tezgâh 2026-10-14: saha kabininde işaret kâğıdı 180° TERS bulundu): `_marker_to_cabin_R` işaretin ÜST kenarının
+    `up_cabin`e (duvar işaretinde tavan, +Y) baktığını VARSAYAR; ters kâğıtla kabin X ve Y aynalanır (ölçüldü: her hedef
+    "kabin dışında" reddedildi, neden söylenmeden). Ölçüt rvec'ten: işaretin +Y ekseninin kameradaki yönü (R'nin 2. sütunu)
+    görüntüde AŞAĞIYI (kamera +y) gösteriyorsa ters. Kamera dik (görüntünün üstü tavana) varsayılır. Tavan / taban işaretinde
+    (`up_cabin` yatay) kameranın "yukarısı" ölçüt değildir → False."""
+    up = np.asarray(getattr(cfg.camera, "up_cabin", [0.0, 1.0, 0.0]), dtype=np.float64).reshape(3)
+    n = float(np.linalg.norm(up))
+    if n < 1e-9 or float(up[1]) / n < 0.9:
+        return False
+    R = getattr(pose, "R", None)
+    if R is None:
+        return False  # rotasyon taşımayan poz nesnesi (ör. test ikizi) — karar verilmez
+    R = np.asarray(R, dtype=np.float64)
+    return bool(R[1, 1] > ISARET_TERS_ESIGI)
 
 
 def _axis_vec(axis_str: str) -> list[float]:
@@ -310,6 +338,24 @@ def _axis_vec(axis_str: str) -> list[float]:
     """
     from .cabin_config import axis_to_vector
     return axis_to_vector(axis_str)
+
+
+def olcekli_intrinsics(intrinsics: CameraIntrinsics, w: int, h: int) -> CameraIntrinsics:
+    """K'yı (fx, fy, cx, cy — piksel) kalibrasyon çözünürlüğünden kare çözünürlüğüne ÖLÇEKLE (petri v2 kuralı, 2026-09-09).
+
+    ⚠️ TD4: `intrinsics_npz` başka çözünürlükte üretildiyse ölçeklenmemiş K ile solvePnP mesafeyi çözünürlük oranı kadar
+    yanlış verir (ölçüldü: fantom v3 2560×1440 kalibrasyonu 1280×720 karede f = 1000 kullanıyordu). Aynı çözünürlükte ya da
+    boyut bilinmiyorsa (0) değişmeden döner."""
+    kw, kh = (int(v) for v in intrinsics.image_size)
+    if (kw, kh) == (int(w), int(h)) or kw <= 0 or kh <= 0:
+        return intrinsics
+    sx, sy = float(w) / float(kw), float(h) / float(kh)
+    Kx = np.array(intrinsics.K, dtype=np.float64).copy()
+    Kx[0, 0] *= sx
+    Kx[0, 2] *= sx
+    Kx[1, 1] *= sy
+    Kx[1, 2] *= sy
+    return CameraIntrinsics(K=Kx, D=intrinsics.D, image_size=(int(w), int(h)), rms=intrinsics.rms)
 
 
 def undistort_image(image_bgr: np.ndarray,

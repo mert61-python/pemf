@@ -112,16 +112,18 @@ def _kabin_yari_mm() -> tuple:
 
 
 def test_ARAC_kabin_yapilandirmasi_beklenen_yari_boyut():
-    assert _kabin_yari_mm() == (325.0, 250.0, 250.0), f"paketli kabin yapılandırması değişti: {_kabin_yari_mm()}"
+    # TD4 (2026-10-14 saha ölçüsü, tezgâh Oturum 13): iç 57 × 34 × 32 cm (eski 65 × 50 × 50).
+    assert _kabin_yari_mm() == (285.0, 170.0, 160.0), f"paketli kabin yapılandırması değişti: {_kabin_yari_mm()}"
 
 
 @pytest.mark.parametrize(
     "koord_cm",
     [
-        (0.0, 25.5, 0.0),  # y: 255 mm > 250 (ölçülen)
+        (0.0, 25.5, 0.0),  # y: 255 mm (eski kabinde ölçülen) > 170
         (30.0, -30.0, -30.0),  # telde 51/51 sürülen nokta (kıskaç öncesi): y/z kabin dışı
-        (0.0, 0.0, 25.1),  # z sınırın hemen dışı
-        (32.6, 0.0, 0.0),  # x sınırın hemen dışı (325 mm)
+        (0.0, 17.1, 0.0),  # y sınırın hemen dışı (170 mm — TD4 saha kabini)
+        (0.0, 0.0, 16.1),  # z sınırın hemen dışı (160 mm)
+        (28.6, 0.0, 0.0),  # x sınırın hemen dışı (285 mm)
         (math.nan, 0.0, 0.0),
         (0.0, math.inf, 0.0),
         (0.0, 0.0, -math.inf),

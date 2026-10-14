@@ -38,8 +38,9 @@ from .cabin_config import CabinConfig, load_cabin_config
 from .coord_transform import (
     CameraIntrinsics, CabinPose,
     detect_aruco_marker, solve_cabin_pose, pixel_to_cabin_mm, KesisimGecersiz,
-    undistort_image, approx_intrinsics_from_marker,
+    undistort_image, approx_intrinsics_from_marker, isaret_ters_mi, olcekli_intrinsics,
 )
+from ...cv_ortak.pemf_kapisi import ISARET_TERS_METNI
 from .petri_detector import PetriYoloDetector, PetriDetection
 from .color_segment import (segment_cancer_in_petri, classify_plate_wells,
                             Region, TUMOR, HEALTHY)
@@ -244,17 +245,8 @@ class PetriCvPipeline:
         """
         if self.intrinsics is None:
             return
-        kw, kh = (int(v) for v in self.intrinsics.image_size)
-        if (kw, kh) == (w, h) or kw <= 0 or kh <= 0:
-            return
-        sx, sy = float(w) / float(kw), float(h) / float(kh)
-        K = self.intrinsics.K.copy()
-        K[0, 0] *= sx
-        K[0, 2] *= sx
-        K[1, 1] *= sy
-        K[1, 2] *= sy
-        self.intrinsics = CameraIntrinsics(K=K, D=self.intrinsics.D,
-                                           image_size=(w, h), rms=self.intrinsics.rms)
+        # TD4: kural ortak işlevde (fantom v3 de kullanır — orada eksikti).
+        self.intrinsics = olcekli_intrinsics(self.intrinsics, w, h)
 
     def _ensure_intrinsics(self, image_bgr: np.ndarray) -> bool:
         if self.intrinsics is not None:
@@ -381,6 +373,9 @@ class PetriCvPipeline:
                 }
                 # Kedi `R_matrix` + `pnp_fit` alanlari
                 result.R_matrix = cabin_pose.R.tolist()
+                # TD4: ters takılı işaret (kâğıt 180°) → kabin X / Y aynalanır; uyarı pemf kapısında ENGELLEYİCİ.
+                if isaret_ters_mi(cabin_pose, self.cfg):
+                    result.warnings.append(f"marker_upside_down: {ISARET_TERS_METNI}")
                 result.pnp_fit = {
                     "yaw_deg": yaw,
                     "pitch_deg": pitch,

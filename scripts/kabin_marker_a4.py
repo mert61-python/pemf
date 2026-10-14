@@ -1,5 +1,5 @@
 # Author: mertaygn, cglrgrkn
-"""A4 basılabilir ArUco marker sayfası — PEMF kabin kalibrasyonu (DICT_5X5_50 · ID 0 · kenar 15,0 cm).
+"""A4 basılabilir ArUco marker sayfası — PEMF kabin kalibrasyonu (DICT_5X5_50 · ID 0 · kenar 10,0 cm).
 
 Neden ayrı bir sayfa: eski `PEMF_ArUco_Marker_5X5_50_ID0_10cm.png` DPI bilgisi taşımıyordu; yazıcı
 sürücüsü/görüntüleyici "sayfaya sığdır" ile ölçeği bozunca marker istenen boyutta çıkmıyor, ölçek (mm/px)
@@ -30,9 +30,10 @@ DPI = 300
 PX_CM = DPI / 2.54  # 118.11 px/cm
 A4_PX = (int(round(21.0 * PX_CM)), int(round(29.7 * PX_CM)))  # 2480 x 3508
 # ⚠️ TEK KAYNAK: bu deger cabin_config `aruco.real_cm` ile AYNI olmak ZORUNDA.
-# 2026-09-09 sahip olcumu: kabin isareti kenari 15 cm (onceki sayfa 10 cm idi).
+# 2026-10-14 SAHA OLCUSU (tezgah Oturum 13, cetvel): kabindeki isaretin kenari 10 cm. (2026-09-09'da sayfa 15 cm'ye
+# cikarilmisti; sahadaki kagit 10 cm cikti → YAML'lar ve bu sayfa 10 cm'ye dondu.)
 # Yanlis kenar = tespit CALISIR ama olcek yanlis olur ve 3B konum SESSIZCE kayar.
-KENAR_CM = 15.0  # cabin_config: aruco.real_cm
+KENAR_CM = 10.0  # cabin_config: aruco.real_cm
 SESSIZ_CM = 2.0  # beyaz sessiz bölge (her kenarda)
 DICT_ADI = "DICT_5X5_50"
 MARKER_ID = 0
@@ -118,11 +119,11 @@ def sayfa_uret() -> Image.Image:
     satirlar = [
         "BASKI: %100 / 'gerçek boyut' — 'sayfaya sığdır' ve 'ölçekle' KAPALI. Mat kâğıt (parlama yok).",
         "KESME: kesik çizgiden kes (14 × 14 cm). Beyaz kenar (sessiz bölge) KALSIN — ArUco için zorunlu.",
-        "YER: ARKA duvar (kameranın karşısı), SOL-ÜST köşe — marker MERKEZİ sol duvardan 8 cm,",
-        "     tavandan 8 cm. Kabin frame: merkez = [-21.5, +14.0, +25.0] cm  (65 × 50 × 50 kabin).",
+        "YER: ARKA duvar (kameranın karşısı) — 2026-10-14 saha: MERKEZ soldan ~30, sağdan ~28,5, tabandan 18,5 cm.",
+        "     Kabin frame: merkez = [-1.5, +1.5, +16.0] cm  (57 × 34 × 32 kabin; +X = ÖNDEN BAKANIN SOLU).",
         "YÖN: siyah yüz kameraya (öne) baksın, '▲ ÜST' tavana. Düz yapıştır (kırışık/eğri değil).",
-        "KAMERA: sağ-alt-ÖN köşe, lens [32.5, -25.0, -25.0] cm, kabin merkezine (origin) bakar.",
-        "CONFIG: qr_to_origin_cm [21.5, -14.0, -25.0] · to_marker_cm 86.7 · to_origin_cm 48.0",
+        "KAMERA: lens sağdan 8 / tabandan 2 / önden 8 cm → [-20.5, -15.0, -8.0] cm, kabin merkezine (origin) bakar.",
+        "CONFIG: qr_to_origin_cm [1.5, -1.5, -16.0] · to_marker_cm 34.8 · to_origin_cm 26.6",
         "Farklı boyutta basarsan 3 cabin_config'te aruco.real_cm'i ölçtüğün kenara çek.",
     ]
     ty = cy + _cm(2.6)

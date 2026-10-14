@@ -31,12 +31,15 @@ HOCA_SENTETIK = {
 
 @pytest.fixture
 def ortam(monkeypatch):
+    from kabin_test_geometrisi import kedi_yukleyicisini_sabitle
     from servers import ai_approval
     from servers import ai_pro_hedef as aph
     from servers import ai_router as air
 
     from ai_hub.em_kedi import inference_em_kedi as iek
 
+    # TD4: senaryo "kabin içi ama eğitim dışı" bölgeyi sabit test kabininde (65×50×50) örnekler.
+    kedi_yukleyicisini_sabitle(monkeypatch)
     monkeypatch.setattr(air, "ai_service_enabled", lambda: False)
     monkeypatch.setattr(air, "_ai_hedef_modeli", "kedi")
     monkeypatch.setattr(air, "_predict_and_drive", lambda x, y, z, oid: ([0.5] * 7, [0.0] * 7, 0.01))

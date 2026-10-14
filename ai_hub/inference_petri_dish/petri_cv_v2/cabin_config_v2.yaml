@@ -44,7 +44,8 @@
 #                   Standart petri capi: 5 cm, 9 cm, 10 cm
 #   3. Hicbiri yoksa: piksel modu (mm = px, manuel cevirme)
 #
-# AXIS:  +X lateral  +Y dorsal  +Z kamera tarafi
+# AXIS:  +X lateral  +Y dorsal  +Z kamera tarafi   <- ⚠️ YUKARIDAKI CIZIM ESKI 20 cm DUZENEK (tarihce).
+#        ArUco kipinde GECERLI kabin cercevesi: +X = ONDEN BAKANIN SOLU, +Y yukari, +Z ARKAYA (cat_organ yaml).
 #
 # =============================================================================
 
@@ -57,7 +58,7 @@ cabin_id: "petri_helmholtz_v1"
 # -----------------------------------------------------------------------------
 aruco:
   dict: DICT_5X5_50              # OpenCV ArUco sozluk
-  real_cm: 15.0                    # marker kenar uzunlugu (sahip olcumu 2026-09-09; basili sayfa ile AYNI)
+  real_cm: 10.0                    # isaret kenar uzunlugu (saha olcusu 2026-10-14, cetvel; basili sayfa ile AYNI)
   plane_offset_cm: 0.0
   normal_axis_in_cabin: "-Z"     # marker ARKA duvarda, siyah yuzu one (kameraya) bakar
   refine_corners: true
@@ -68,11 +69,12 @@ aruco:
 # 2) GEOMETRY — ArUco modunda kullanilir (kedi paterni)
 # -----------------------------------------------------------------------------
 geometry:
-  # ONAYLI GEOMETRI 2026-09-08 (sahip olcusu 65x50x50): marker ARKA duvar sol-ust,
-  # merkezi (-21.5,+14,+25) -> origin vektoru; kamera sag-alt-ON kose. Ayrinti: cat_organ yaml.
-  # (2026-09-09: 15 cm isaret icin merkez 8/8 -> 11/11 cm tasindi; sessiz bolge duvardan tasmasin.)
-  qr_to_origin_cm: [21.5, -14.0, -25.0]
-  cabin_extent_cm: [65.0, 50.0, 50.0]
+  # SAHA OLCUSU 2026-10-14 (tezgah Oturum 13; ayrinti + eksen kurali: cat_organ yaml). ⚠️ +X = ONDEN BAKANIN SOLU
+  # (eski "kamera sag-alt-ON = +X" AYNAYDI). Kabin ic 57x34x32; isaret ARKA duvar, merkez (-1.5,+1.5,+16), 10 cm;
+  # kamera lensi SAGDAN 8 / tabandan 2 / onden 8 -> (-20.5,-15,-8). Kamera ve isaret YENIDEN yerlesecek (sahip):
+  # qr_to_origin / fixed_position / to_* o zaman yeniden olculur.
+  qr_to_origin_cm: [1.5, -1.5, -16.0]
+  cabin_extent_cm: [57.0, 34.0, 32.0]
   axes: "x=lateral,y=dorsal,z=camera"
 
 
@@ -80,11 +82,11 @@ geometry:
 # 3) CAMERA — ArUco modunda kullanilir (kedi paterni)
 # -----------------------------------------------------------------------------
 camera:
-  fixed_position_cm: [32.5, -25.0, -25.0]
+  fixed_position_cm: [-20.5, -15.0, -8.0]
   look_at_cm: [0.0, 0.0, 0.0]
   up_cabin: [0.0, 1.0, 0.0]
-  to_marker_cm: 83.3
-  to_origin_cm: 48.0
+  to_marker_cm: 34.8
+  to_origin_cm: 26.6
   intrinsics_npz: null            # null -> approx intrinsics
 
 
@@ -120,6 +122,10 @@ phantom_plate:
   # (bkz. docs/VERIFICATION.md §15). Kamera lensi taban hizasinda (Y=-25) oldugu icin isin
   # bu duzlemi hala sig bir aciyla keser; okunan konumun kabin ICINDE ve elle olculen yerle
   # ±2 cm uyumlu oldugu gorulmeden bayrak acilmamalidir.
+  # ⚠️ TD4 (2026-10-14 saha kabini, Y ±17): -20 cm TABANIN ALTINDA -> ArUco kipinde her hedef "kabin disinda"
+  #    reddedilir (fail-closed, olculdu). DEGISTIRILMEDI: tezgah "tepsi yok, plaka yerlesimi kamera kararina bagli"
+  #    dedi; yeni lens tabandan yalniz 2 cm (Y=-15) -> taban duzlemi isinla neredeyse PARALEL (sig aci, yukaridaki
+  #    2026-09-09 olcumunun aynisi). Kamera yeniden yerlesince plaka duzlemi olculup yazilir (sahibe / Tezgah-2).
   hedef_duzlem_eksen: "Y"
   hedef_duzlem_cm: -20.0
   plate_z_cm: 0.0
@@ -230,8 +236,8 @@ output:
 #      (Standart petri kabi capi: 5/6/9/10 cm)
 #
 # 2) ArUco modu (gercek mm/px + cabin frame):
-#      a) Kabin isaretini BAS: ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_15cm_A4.pdf
-#         (DICT_5X5_50, kenar 15,0 cm — asagidaki aruco.real_cm ile AYNI olmali;
+#      a) Kabin isaretini BAS: ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf
+#         (DICT_5X5_50, kenar 10,0 cm — 2026-10-14 saha olcusu; asagidaki aruco.real_cm ile AYNI olmali;
 #          yanlis kenar uzunlugu SESSIZ olcek hatasi verir). Kendin uretmek icin:
 #           python -c "import cv2; d=cv2.aruco.getPredefinedDictionary(
 #                       cv2.aruco.DICT_5X5_50);

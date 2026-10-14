@@ -124,7 +124,8 @@ def test_KRITIK_ArUco_kipinde_KIMLIK_KAYDI_yoksa_GORUNUR_uyari(fantom_v3):
     import cv2
 
     kok = Path(__file__).resolve().parents[1]
-    isaret = _oku(kok / "ai_hub" / "PEMF_ArUco_Marker_5X5_50_ID0_15cm_A4.png")
+    # TD4: tek basılı sayfa 10 cm (saha); işaret kırpılıp 260 px'e ölçeklenir — fiziksel boyut bu kapıda önemsiz.
+    isaret = _oku(kok / "ai_hub" / "PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.png")
     g = cv2.cvtColor(isaret, cv2.COLOR_BGR2GRAY)
     ys, xs = np.where(g < 128)
     kirp = isaret[ys.min() - 20 : ys.max() + 21, xs.min() - 20 : xs.max() + 21]

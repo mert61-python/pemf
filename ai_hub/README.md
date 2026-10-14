@@ -9,7 +9,7 @@ Her teşhis modelinin **inference kodunun** evi. **Küçük** modeller (tabular/
 | Dosya | İçerik |
 |---|---|
 | `KABIN_KURULUM_KILAVUZU.md` | Kabin / ArUco koordinat-kalibrasyon kurulumu (AI-Pro 3B lokalizasyon) |
-| `PEMF_ArUco_Marker_5X5_50_ID0_15cm_A4.pdf` / `.png` | Yazdırılabilir ArUco fiducial (kabin kalibrasyonu) — kenar **15,0 cm**, `aruco.real_cm` ile AYNI olmak ZORUNDA (yanlış kenar = sessiz ölçek hatası); üretim: `python scripts/kabin_marker_a4.py` |
+| `PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf` / `.png` | Yazdırılabilir ArUco fiducial (kabin kalibrasyonu) — kenar **10,0 cm** (saha ölçüsü 2026-10-14), `aruco.real_cm` ile AYNI olmak ZORUNDA (yanlış kenar = sessiz ölçek hatası); üretim: `python scripts/kabin_marker_a4.py` (2026-09-09 – 10-14 arası üretilen 15 cm sayfa kaldırıldı) |
 | `PEMF_AI_Test_Girdileri/00_README_OKU.txt` | Her model için **gerçek test girdisi** + beklenen çıktı haritası (E2E test) |
 | `inference_human_kidney_disease/README.md` | CKD (24 klinik özellik) modeli notu |
 | `inference_em_fantom/phantom_cv_v3/`, `inference_petri_dish/petri_cv_v2/` | Klasik-CV pipeline paketleri — Çağlar Hoca'nın fantom v3 / petri v2'si (AI-2, 2026-10-12; v1 `phantom_cv` / `petri_cv` emekli) |

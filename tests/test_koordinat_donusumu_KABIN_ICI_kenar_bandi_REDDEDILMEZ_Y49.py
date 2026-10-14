@@ -60,7 +60,11 @@ def _cevir(ct, cfg, kur, P):
 @pytest.fixture(params=PROFILLER)
 def profil(request):
     ct = importlib.import_module("ai_hub.cv_ortak.coord_transform")
-    cfg = importlib.import_module(f"ai_hub.{request.param}").load_cabin_config(None)
+    from kabin_test_geometrisi import sabit_kabin
+
+    # TD4: sabit test kabini (65×50×50) — ürün YAML'ı saha ölçüsüne (57×34×32) döndü; bu kapının hedef mutantı
+    # (`min(300, extent/2)`) yarı genişlik 285'te EŞDEĞER olurdu. Ürün geometrisi: test_kabin_config_65x50x50.
+    cfg = sabit_kabin(importlib.import_module(f"ai_hub.{request.param}").load_cabin_config(None))
     eksen = cfg.phantom_plate.hedef_duzlem_indeksi
     duzlem = float(cfg.phantom_plate.hedef_duzlem_mm)
     yari = [float(v) * 10.0 / 2.0 for v in cfg.geometry.cabin_extent_cm]

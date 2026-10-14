@@ -26,10 +26,12 @@ _TOL_MM = 1e-6
 @pytest.fixture()
 def donusum():
     # AI-2 C6: v1 `phantom_cv` emekli → hocanın v3'ü (aynı `cv_ortak` gövdesi, aynı saha kabin çekirdeği).
+    from kabin_test_geometrisi import sabit_kabin
+
     from ai_hub.inference_em_fantom.phantom_cv_v3 import coord_transform as ct
     from ai_hub.inference_em_fantom.phantom_cv_v3.cabin_config import load_cabin_config
 
-    cfg = load_cabin_config(None)  # depoya gömülü kabin geometrisi (65x50x50)
+    cfg = sabit_kabin(load_cabin_config(None))  # TD4: sabit test kabini (65x50x50); ürün YAML'ı saha ölçüsünde
     intr = genis_aci_ic_parametre(ct)
     poz, R_kk, C = fiziksel_poz(ct, cfg)
     return ct, cfg, intr, poz, R_kk, C

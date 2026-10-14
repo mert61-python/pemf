@@ -24,8 +24,12 @@ from __future__ import annotations
 
 import re
 
-#: Hocanın §3'ü: bu uyarılardan biri varsa sonuç KULLANILMAZ.
-ENGELLEYICI = ("layout_mismatch", "control_cancer_missed", "control_healthy_flagged")
+#: TD4 (tezgâh 2026-10-14): işaret kâğıdı ters takılı — kabin X / Y aynalanır, konumlar yanlış. Hat uyarısı
+#: (`marker_upside_down: <bu metin>`) ve kapı eylemi AYNI metin.
+ISARET_TERS_METNI = "Kabin işareti ters takılmış görünüyor — üst kenar tavana bakacak şekilde çevirin"
+
+#: Hocanın §3'ü: bu uyarılardan biri varsa sonuç KULLANILMAZ. TD4: + `marker_upside_down` (aynalanmış kabin konumu).
+ENGELLEYICI = ("layout_mismatch", "control_cancer_missed", "control_healthy_flagged", "marker_upside_down")
 #: Hocanın §3'ü: bu uyarılardan biri varsa çekim TEKRARLANIR (kapalı döngüde kare sürülmez).
 #: AII-1.1 (AI incelemesi): + hocanın petri README'sindeki çekim protokolü uyarıları — `plate_cropped` ("kadrajı genişlet"),
 #: `few_candidates` ("sonucu gözle kontrol et": kapalı döngüde göz yok), `ecc_failed` ("ışık / odak kontrol"). ÖLÇÜLDÜ: kırpık
@@ -56,6 +60,7 @@ _EYLEM = {
         "Sağlıklı kontrol kuyucuğu kanser işaretlendi — bu plakada eşikler güvenilmez, sonuç kullanılamaz. "
         "Kontrol kuyucuklarını ve ışığı denetleyip yeniden çekin."
     ),
+    "marker_upside_down": ISARET_TERS_METNI + ".",
     "oblique_view": "Kamera {nesne_yalin} dik değil — kamerayı tam tepeden tutup yeniden çekin.",
     "low_resolution": "Görüntü çözünürlüğü düşük — yaklaşın ya da yakınlaştırıp yeniden çekin.",
     "ring_partial": "Yeşil bobin halkasının büyük kısmı kadrajda değil — halkayı kadraja alıp yeniden çekin.",
