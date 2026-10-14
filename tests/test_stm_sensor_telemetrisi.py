@@ -105,7 +105,8 @@ def test_KRITIK_ADC_DOYGUNLUGU_isaretli_gelir(ayristir):
     MUTASYON: ayrıştırıcıdan `X` grubunu sil → KIRMIZI.
     """
     g = ayristir("-> STM_TELE: C=3,I=12.100,X=1")
-    assert g["current"] == 12.1 and g.get("current_saturated") is True, g
+    # TD5 (tezgâh Oturum 13 · K4): doygun akımın SAYISI taşınmaz (ekrana / doz kaydına girmez) — işaret + bayrak taşınır.
+    assert "current" not in g and g.get("current_saturated") is True and g.get("akim_guvenilmez") is True, g
     t = ayristir("-> STM_TELE: C=3,I=2.000")
     assert "current_saturated" not in t, t
 
@@ -322,18 +323,18 @@ def test_KRITIK_dakika_akumulatoru_OLCULMEYEN_alani_BIRIKTIRMEZ(kur, monkeypatch
 def test_KRITIK_ADC_doygunlugu_operatore_bildirilir_ve_TEKRARLAMAZ(kur, monkeypatch):
     """`X=1` → uyarı çıkmalı; ama her saniye DEĞİL (alarm yorgunluğu).
 
-    ⚠️ Doygun akım doz kaydına giriyor: operatör "12 A" görürken gerçek 25 A olabilir.
-    Sessiz kalmak kabul edilemez. Ama 1 Hz'de bildirim basmak da gerçek olayları boğar →
-    yalnız 0→1 GEÇİŞİNDE bildir.
-    MUTASYON: geçiş kontrolünü (`if _t_doygun != ...`) kaldır → ikinci assert KIRMIZI.
+    ⚠️ TD5 (tezgâh Oturum 13 · K4): doygun akım artık ekrana / doz kaydına GİRMEZ (ayrıştırıcı atar) ve uyarı bobin başına
+    STM bağlantısı boyunca TEK'tir — eskiden her 0→1 geçişinde basılıyordu, yüzen girişte 46 bildirim geldi. Yeni bağlantıda
+    (kart değişmiş / yakılmış olabilir) yeniden hak eder.
+    MUTASYON: tek-uyarı kümesini kaldır → ikinci / üçüncü assert KIRMIZI.
     """
     api, _ = kur
     bildirimler: list = []
     monkeypatch.setattr(api, "_push_notification", lambda msg, sev="info": bildirimler.append((msg, sev)))
-    api._akim_doygun_son.pop(2, None)
+    api._akim_guvenilmez_bildirildi.discard(2)
 
     api._handle_backend_event(_Olay({"coil_id": 3, "current": 12.1, "current_saturated": True}))
-    assert any("aral" in m.lower() for m, _ in bildirimler), (
+    assert any("güvenilir değil" in m for m, _ in bildirimler), (
         f"ADC doygunlugu operatore BILDIRILMEDI: {bildirimler!r} — kirpilmis akim sessizce doz kaydina girer"
     )
     ilk = len(bildirimler)
@@ -342,7 +343,10 @@ def test_KRITIK_ADC_doygunlugu_operatore_bildirilir_ve_TEKRARLAMAZ(kur, monkeypa
         f"doygunluk SURERKEN her turda bildirim basiliyor ({len(bildirimler)} > {ilk}) — "
         "alarm yorgunlugu, gercek olaylar bogulur"
     )
-    # Normale dönüş yeni bir episode açmalı (bir daha doygunlukta yine uyarılsın).
+    # TD5: normale dönüp yeniden doygunluk AYNI bağlantıda yeni uyarı DEĞİL (tezgâhtaki sel); yeni bağlantıda yeniden.
     api._handle_backend_event(_Olay({"coil_id": 3, "current": 2.0}))
     api._handle_backend_event(_Olay({"coil_id": 3, "current": 12.1, "current_saturated": True}))
-    assert len(bildirimler) > ilk, "normale dondukten sonraki YENI doygunluk bildirilmedi"
+    assert len(bildirimler) == ilk, f"aynı bağlantıda ikinci akım uyarısı (sel): {bildirimler!r}"
+    api._akim_guvenilmez_bildirildi.clear()  # = `hardware.stm.connected`
+    api._handle_backend_event(_Olay({"coil_id": 3, "current": 12.1, "current_saturated": True}))
+    assert len(bildirimler) > ilk, "yeni bağlantıdaki doygunluk bildirilmedi"

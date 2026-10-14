@@ -1285,13 +1285,17 @@ int main(void) {
     }
   }
 
-  /* Bobin 1-5 akim kanallarinin kalibrasyon sonucu (0 = o kanal okunamadi/olcek yok). */
+  /* Bobin 1-5 akim kanallarinin kalibrasyon SONUCU. ⚠️ TD5: eskiden `av.ok` okunuyordu — o bayrak ilk Poll'dan ONCE hep
+   * false oldugu icin rapor HER ZAMAN "YOK" diyordu (tezgah). Neden + ortalama + tepeden-tepeye: teshis (yuzen giris). */
   for (uint32_t sr = 0U; sr < PEMF_AKIM_BOBIN_SAYISI; sr++) {
-    PEMF_AkimVerisi_t av;
-    PEMF_Akim_Oku(sr, &av);
-    static char akal_msg[96];
-    int kl = snprintf(akal_msg, sizeof(akal_msg), "-> STM_SENS: C=%lu ACS712=%s\r\n",
-                      (unsigned long)(sr + 1U), av.ok ? "hazir" : "YOK/kalibre-EDILEMEDI");
+    static const char *const k_akim_neden[4] = {"", "okunamadi", "pencere", "degisken"};
+    float kal_ofs = 0.0f;
+    float kal_pp = 0.0f;
+    const PEMF_AkimKalibrasyon_t kd = PEMF_Akim_KalibrasyonDurumu(sr, &kal_ofs, &kal_pp);
+    static char akal_msg[128];
+    int kl = snprintf(akal_msg, sizeof(akal_msg), "-> STM_SENS: C=%lu ACS712=%s%s ofset=%.2fV pp=%.3fV\r\n",
+                      (unsigned long)(sr + 1U), (kd == PEMF_AKIM_KALIBRE) ? "hazir" : "YOK/kalibre-EDILEMEDI neden=",
+                      k_akim_neden[((unsigned)kd < 4U) ? (unsigned)kd : 1U], (double)kal_ofs, (double)kal_pp);
     if ((kl > 0) && (kl < (int)sizeof(akal_msg))) {
       HAL_UART_Transmit(&huart3, (uint8_t *)akal_msg, (uint16_t)kl, 200U);
     }

@@ -64,6 +64,8 @@ export interface CoilStatus {
   measuredFields?: string[];
   /** TD2: alan sensörünün kazanç ayarı doğrulanamadı — ölçülen mT GÖSTERİLMEZ (backend yazmaz). */
   alanDogrulanamadi?: boolean;
+  /** TD5: akım ölçümü güvenilmez (ADC tavanı / aralık dışı) — `currentA` GÖSTERİLMEZ (backend yazmaz). */
+  akimGuvenilmez?: boolean;
   /**
    * Kartın ETKİN olarak uyguladığı sürüş kipi (ACK `K=` alanı). `true` = unipolar.
    *

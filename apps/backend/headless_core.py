@@ -123,6 +123,10 @@ class SeriBaglantiDurumu:
 # 2 sn, kopuşun operatöre anında görünmesi ile numaralandırma maliyeti arasında denge.
 _PORT_CHECK_S = 2.0
 
+#: TD5: ACS712-30A ölçüm aralığı (A). Bunun üstündeki RMS fiziksel değildir (yüzen giriş gürültüsü — tezgâh: PSU kapalıyken
+#: 74,6 A); `X=1` (ADC tavanı ~12 A, bölücüsüz) de güvenilmez. İkisinde de akım YAZILMAZ, `akim_guvenilmez` bayrağı taşınır.
+ACS712_AZAMI_A = 30.0
+
 #: TD2: işaretsiz `B=` (ayar doğrulanmamış firmware — tezgâh ~5× ölçek) gelince `_parse_stm_tele`'nin attığı alan anahtarları.
 _ALAN_ANAHTARLARI = (
     "magnetic_field",
@@ -985,6 +989,12 @@ class HeadlessCore:
             govde["magnetic_saturated"] = True
         if m.group("x") == "1":
             govde["current_saturated"] = True
+        # ⚠️ TD5 (tezgâh Oturum 13 · K4): doygun (`X=1`) ya da aralık dışı akım GÜVENİLMEZ — ekrana, sensör kaydına ve doz
+        # kaydına (dakika ortalaması) GİRMEZ; `akim_guvenilmez` bayrağı arayüze "akım ölçümü yok" dedirtir. Eskiden kırpılmış /
+        # yüzen girişin sayısı "ölçülmüş" yayınlanıyor, her geçişte bildirim basılıyordu (46 bildirim, 115 A).
+        if "current" in govde and (govde.get("current_saturated") or not (0.0 <= govde["current"] <= ACS712_AZAMI_A)):
+            govde.pop("current", None)
+            govde["akim_guvenilmez"] = True
         # ⚠️ TD2 (tezgâh Oturum 13 · K6): MLX90393 kazanç ayarı geri okunmadan basılan alan ~5× BÜYÜK olabilir (ölçüldü:
         # Dünya alanı 4–5×, sessiz). Doğrulama işareti (`GS=`) taşımayan `B=` GÖSTERİLMEZ, seans CSV'sine / ölçülen yoğunluğa
         # YAZILMAZ — yerine `alan_dogrulanamadi` bayrağı (arayüz: "Alan sensörü doğrulanamadı — ölçülen değer gösterilmiyor").
@@ -994,7 +1004,15 @@ class HeadlessCore:
                 govde.pop(_k, None)
             govde["alan_dogrulanamadi"] = True
         if not any(
-            k in govde for k in ("object_temp", "ambient_temp", "magnetic_field", "current", "alan_dogrulanamadi")
+            k in govde
+            for k in (
+                "object_temp",
+                "ambient_temp",
+                "magnetic_field",
+                "current",
+                "alan_dogrulanamadi",
+                "akim_guvenilmez",
+            )
         ):
             return None  # yalniz C (ve/veya X) geldi → tasinacak olcum yok
         return govde

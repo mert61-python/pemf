@@ -14,6 +14,7 @@ import { apiGet } from "@/services/apiClient";
 import { BarChart, PieChart } from "react-native-chart-kit";
 import { barBolumSayisi } from "@/utils/kpiGrafik";
 import { alanGosterilebilir } from "@/utils/olculenAlan";
+import { ANLIK_GUC_GORUNUR, bobinGucuW } from "@/utils/bobinGucu";
 import { gorunurBobinler, STM_BOBIN_SAYISI, type GorunurlukGirdisi } from "@/services/bobinGorunurlugu";
 import { useUserMode, type UserMode } from "@/context/UserModeContext";
 import { profilSozlugu } from "@/utils/profilSozlugu";
@@ -114,8 +115,11 @@ export function KpiDashboardScreen() {
   // Bkz. `hesaplaOrtSicaklik` (dosya sonunda) — ortalama, ÖLÇÜM YAPAN bobinler üzerinden alınır.
   const coilCount = hesaplaBobinSayisi(snapshot.coils ?? []);
 
-  const COIL_R = 0.5;
-  const instantPowerW = runningCoils.reduce((sum, c) => sum + c.currentA * c.currentA * COIL_R, 0);
+  // TD5 · A-64: "Anlık Güç" akım güvenilir olana dek GİZLİ (eski `COIL_R = 0.5` × sahte akım² → PSU kapalıyken 6,3 W).
+  // Direnç tek kaynakta (`utils/bobinGucu`, 8,9 Ω); açılırsa yalnız güvenilir, ölçülmüş akım sayılır.
+  const instantPowerW = runningCoils
+    .filter((c) => !c.akimGuvenilmez && alanGosterilebilir(c, "currentA"))
+    .reduce((sum, c) => sum + bobinGucuW(c.currentA), 0);
   const sicaklik = hesaplaOrtSicaklik(connectedCoils);
   // ⚠️ İNCELEME-2 i6-F-1 (D1.76 · B-1.24 · Y6): ortalama YALNIZ alanı ÖLÇÜLEN çalışan bobinlerden (`alanGosterilebilir`).
   // Ölçülmeyen bobinin 0.0'ı (ya da bayat değeri) ortalamaya girerse 7 bobin çalışırken yalnız bobin 6 ölçüyorsa (1,842 mT)
@@ -311,7 +315,9 @@ export function KpiDashboardScreen() {
       )}
       <View style={instantStale ? { opacity: 0.55 } : undefined}>
         <ResponsiveGrid>
-          <MetricCard label="Anlık Güç" value={`${instantPowerW.toFixed(1)} W`} tone={colors.cyan} />
+          {ANLIK_GUC_GORUNUR ? (
+            <MetricCard label="Anlık Güç" value={`${instantPowerW.toFixed(1)} W`} tone={colors.cyan} />
+          ) : null}
           <MetricCard label="Bağlı Bobin" value={`${connectedCoils.length} / ${coilCount}`} tone={colors.primary} />
           <MetricCard label="Çalışan Bobin" value={`${runningCoils.length} / ${coilCount}`} tone={colors.success} />
           <MetricCard label="Cihaz Oranı" value={`${uptimePct}%`} tone={colors.violet} />
@@ -346,7 +352,9 @@ export function KpiDashboardScreen() {
               <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>mT</Text>
               <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>°C</Text>
               <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>A</Text>
-              <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>W</Text>
+              {ANLIK_GUC_GORUNUR ? (
+                <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>W</Text>
+              ) : null}
               <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>Hz</Text>
             </View>
             {coils.map((c) => {
@@ -355,19 +363,21 @@ export function KpiDashboardScreen() {
               const mag = latest?.magneticMt ?? c.magneticMt;
               const temp = latest?.objectTemp ?? c.objectTemp;
               const cur = latest?.currentA ?? c.currentA;
-              const power = cur * cur * COIL_R;
+              const power = bobinGucuW(cur);
               // D1.67 · Y6 (1-D inceleme i2-F-3): bayat / hiç ölçülmemiş alan sayı olarak gösterilmez ('—'); geçmişin SON
               // noktası da sensör sustuğundan beri bayattır — ölçüt bobinin GÜNCEL `measuredFields`'i.
               const magVar = alanGosterilebilir(c, "magneticMt");
               const tempVar = alanGosterilebilir(c, "objectTemp");
-              const curVar = alanGosterilebilir(c, "currentA");
+              const curVar = !c.akimGuvenilmez && alanGosterilebilir(c, "currentA");
               return (
                 <View key={c.id} style={[styles.tableRow, !c.connected && styles.tableRowOff]}>
                   <Text style={styles.tableCell} numberOfLines={1} adjustsFontSizeToFit>{c.id}</Text>
                   <Text style={[styles.tableCell, { color: "#22c55e" }]} numberOfLines={1} adjustsFontSizeToFit>{magVar ? mag.toFixed(2) : "—"}</Text>
                   <Text style={[styles.tableCell, { color: tempVar && temp > 45 ? "#ef4444" : "#fb923c" }]} numberOfLines={1} adjustsFontSizeToFit>{tempVar ? temp.toFixed(1) : "—"}</Text>
                   <Text style={[styles.tableCell, { color: "#60a5fa" }]} numberOfLines={1} adjustsFontSizeToFit>{curVar ? cur.toFixed(3) : "—"}</Text>
-                  <Text style={[styles.tableCell, { color: "#a78bfa" }]} numberOfLines={1} adjustsFontSizeToFit>{curVar && cur > 0 ? power.toFixed(2) : "—"}</Text>
+                  {ANLIK_GUC_GORUNUR ? (
+                    <Text style={[styles.tableCell, { color: "#a78bfa" }]} numberOfLines={1} adjustsFontSizeToFit>{curVar && cur > 0 ? power.toFixed(2) : "—"}</Text>
+                  ) : null}
                   <Text style={styles.tableCell} numberOfLines={1} adjustsFontSizeToFit>{c.frequencyHz > 0 ? c.frequencyHz : "—"}</Text>
                 </View>
               );

@@ -91,6 +91,13 @@ HAL_StatusTypeDef HAL_RCC_ClockConfig(RCC_ClkInitTypeDef *c, uint32_t l) { (void
 void PEMF_Akim_Init(void) {}
 bool PEMF_Akim_Poll(void) { return false; }
 void PEMF_Akim_Oku(uint32_t sira, PEMF_AkimVerisi_t *hedef) { (void)sira; memset(hedef, 0, sizeof(*hedef)); }
+/* TD5: açılış raporu kalibrasyon SONUCUNU okur (ISR koşumu akım ölçmez → okunamadı). */
+PEMF_AkimKalibrasyon_t PEMF_Akim_KalibrasyonDurumu(uint32_t sira, float *offset_v, float *pp_v) {
+  (void)sira;
+  if (offset_v) { *offset_v = 0.0f; }
+  if (pp_v) { *pp_v = 0.0f; }
+  return PEMF_AKIM_OKUNAMADI;
+}
 uint32_t PEMF_Sensor_BobinId(uint32_t sira) { return sira + 6U; }
 void PEMF_Sensor_Init(void) {}
 bool PEMF_Sensor_Poll(uint32_t simdi_ms) { (void)simdi_ms; return false; }

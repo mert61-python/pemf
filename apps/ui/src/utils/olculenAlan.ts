@@ -14,6 +14,12 @@
  */
 export const ALAN_DOGRULANAMADI_METNI = "Alan sensörü doğrulanamadı — ölçülen değer gösterilmiyor";
 
+/**
+ * TD5 (tezgâh Oturum 13 · K4): ADC tavanına dayanmış ya da ACS712 aralığı dışı akım GÜVENİLMEZ — backend yazmaz, bobine
+ * `akimGuvenilmez: true` koyar (takılı olmayan girişte 10–115 A "ölçülüyordu"). Ekranlar AYNI metni gösterir.
+ */
+export const AKIM_OLCUMU_YOK_METNI = "Akım ölçümü yok";
+
 export function alanGosterilebilir(coil: { measuredFields?: string[] } | null | undefined, alan: string): boolean {
   const mf = coil?.measuredFields;
   return Array.isArray(mf) ? mf.includes(alan) : true;

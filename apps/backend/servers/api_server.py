@@ -803,8 +803,23 @@ def _olculen_alanlari_tazele() -> None:
             logging.exception("susan alan sensörünün anlık yoğunluğu temizlenemedi")
 
 
-#: bobin indeksi → son bilinen ADC doygunluk durumu (bildirimi yalniz GECISTE basmak icin).
-_akim_doygun_son: dict = {}
+#: TD5: "akım güvenilmez" bildirimi BASILMIŞ bobin indeksleri — STM bağlantısı boyunca bobin başına TEK birleşik uyarı (tezgâh:
+#: her 0→1 geçişinde basılan doygunluk bildirimi yüzen girişte 46 kez geldi). Yeniden bağlanınca (yeni kart / yakma) sıfırlanır.
+_akim_guvenilmez_bildirildi: set = set()
+
+#: TD5: ACS712-30A ölçüm aralığı (A) — `headless_core.ACS712_AZAMI_A` ile AYNI (eşlik: tests/test_TD5_akim_GUVENILMEZ_…).
+_ACS712_AZAMI_A = 30.0
+
+
+def _akim_guvenilmez_mi(data: dict) -> bool:
+    """TD5: telemetri akımı güvenilmez mi — ADC tavanı (`current_saturated`), aralık dışı ya da sayı değil."""
+    if data.get("current_saturated"):
+        return True
+    try:
+        return not (0.0 <= float(data["current"]) <= _ACS712_AZAMI_A)
+    except (TypeError, ValueError):
+        return True
+
 
 #: STM_NACK bildirim kısıtlayıcısı: {ozet: son_bildirim_ani}. Bkz. `_stm_nack_bastir`.
 _stm_nack_son: dict = {}
@@ -1718,6 +1733,7 @@ def _handle_backend_event(event) -> None:
     """Route core EventBus events into FastAPI live-state/WebSocket."""
     data = event.data or {}
     if event.event_type == "hardware.stm.connected":
+        _akim_guvenilmez_bildirildi.clear()  # TD5: yeni bağlantı (kart değişmiş / yakılmış olabilir) → uyarı yeniden hak eder
         update_live_stm_status(True)
         return
     if event.event_type == "hardware.stm.disconnected":
@@ -1787,6 +1803,10 @@ def _handle_backend_event(event) -> None:
         _t_idx = _t_coil_id - 1
         if not (0 <= _t_idx < 8):
             return
+        # TD5: ayrıştırıcıyı atlayan üretici (ör. eski olay biçimi) için de AYNI kural — güvenilmez akım YAZILMAZ.
+        if "current" in data and _akim_guvenilmez_mi(data):
+            data = {k: v for k, v in data.items() if k != "current"}
+            data["akim_guvenilmez"] = True
         # ⚠️ ALAN BAZINDA KAYIT — SAHTE OLCUM SINIFININ IKINCI DALGASI.
         #
         # 2026-09-10'da bobin 1-5'e ACS712 eklendi ve o bobinler ARTIK telemetri
@@ -1826,12 +1846,29 @@ def _handle_backend_event(event) -> None:
             elif "magnetic_field" in data:
                 _t_coil["alanDogrulanamadi"] = False
             _t_alan_degisti = _t_alan_onceki != bool(_t_coil.get("alanDogrulanamadi"))
+            # TD5: güvenilmez akım YAZILMADI (ayrıştırıcı attı); önceki güvenilir değerin tazelik damgası da düşer → `measuredFields`
+            # / dakika ortalaması (doz kaydı) onu taze saymaz. Güvenilir akım gelince bayrak iner.
+            _t_akim_onceki = bool(_t_coil.get("akimGuvenilmez"))
+            if data.get("akim_guvenilmez"):
+                _t_coil["akimGuvenilmez"] = True
+                if _t_damga.pop("currentA", None) is not None:
+                    _t_coil["measuredFields"] = sorted(_taze_alanlar_locked(_t_idx, _t_simdi))
+            elif "current" in data:
+                _t_coil["akimGuvenilmez"] = False
+            _t_akim_degisti = _t_akim_onceki != bool(_t_coil.get("akimGuvenilmez"))
             if _t_yazildi:
                 # D1.67: liste = TAZE alanlar (bu satirda gelmeyen ama pencere icindekiler dahil).
                 _t_coil["measuredFields"] = sorted(_taze_alanlar_locked(_t_idx, _t_simdi))
             _t_snap = dict(_t_coil)
-        if _t_alan_degisti:
+        if _t_alan_degisti or _t_akim_degisti:
             _ws_broadcast_sync({"type": "coil_status", "coilId": _t_coil_id, "data": _t_snap})
+        if data.get("akim_guvenilmez") and _t_idx not in _akim_guvenilmez_bildirildi:
+            _akim_guvenilmez_bildirildi.add(_t_idx)
+            _push_notification(
+                f"⚠️ Bobin {_t_coil_id}: Akım ölçümü bu bobinde güvenilir değil — doz kaydına akım yazılmadı.",
+                "warning",
+            )
+        if _t_alan_degisti:
             if _t_snap.get("alanDogrulanamadi"):
                 _push_notification(
                     f"⚠️ Bobin {_t_coil_id} alan sensörü doğrulanamadı — ölçülen alan (mT) gösterilmiyor ve kayda "
@@ -1850,18 +1887,9 @@ def _handle_backend_event(event) -> None:
             _sensor_kaydedici.kaydet_arka_planda(_t_coil_id, "sensors", data)
         except Exception:
             logging.getLogger(__name__).debug("STM telemetrisi sensor kaydina yazilamadi", exc_info=True)
-        # ⚠️ DOYGUNLUK: deger geldi ama ADC tavanina dayandi → sayi guvenilmez ve
-        # DOZ KAYDINA giriyor. Operatore SOYLENMELI. Yalnız 0→1 gecisinde bildir:
-        # her saniye bildirim basmak alarm yorgunlugu uretir ve gercek olaylari bogar.
-        _t_doygun = bool(data.get("current_saturated"))
-        if _t_doygun != bool(_akim_doygun_son.get(_t_idx)):
-            _akim_doygun_son[_t_idx] = _t_doygun
-            if _t_doygun:
-                _push_notification(
-                    f"⚠️ Bobin {_t_coil_id} akımı ölçüm aralığını AŞTI (ADC tavanı ~12 A) — "
-                    "gösterilen akım GÜVENİLMEZ ve doz kaydına öyle giriyor",
-                    "warning",
-                )
+        # ⚠️ DOYGUNLUK (`X=1`): TD5'ten beri ayrıştırıcı akımı ATAR (`akim_guvenilmez`) — sayı ekrana / doz kaydına girmez;
+        # operatör bobin başına TEK birleşik uyarı alır (yukarıda). Eskiden her 0→1 geçişinde "ölçüm aralığını AŞTI (ADC tavanı
+        # ~12 A)" basılıyor, yüzen girişte 46 kez geliyordu.
         # ⚠️ MANYETIK DOYGUNLUK: ham eksen tam ölçeğe DAYANDI → |B| GÜVENİLMEZ ve seansın
         # "ölçülen yoğunluk"una öyle giriyor. RES_16'da taşma KIRPILMAZ, SARAR: gerçek alan
         # KÜÇÜK görünür — yani doygunluk bayrağı, sayının düşük çıkabileceğinin de habercisi.

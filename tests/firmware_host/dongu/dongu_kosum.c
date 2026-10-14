@@ -286,6 +286,8 @@ static void usart_yaz(uint32_t ofs, uint32_t v) {
 #define A_DR 0x04CU
 #define A_CCR 0x304U
 static int g_acs_mv[19];
+/* TD5: YÜZEN giriş (sensör takılı değil) — her dönüşüm merkez ± genlik içinde rastgele (genlik 0 = kapalı). */
+static int g_acs_yuzen_merkez[19], g_acs_yuzen_genlik[19];
 static uint32_t g_gurultu = 12345U;
 static struct {
   uint32_t sr, dr, kanal;
@@ -298,7 +300,13 @@ static void a_guncelle(void) {
     A.donusum = 0;
     int ham = 0;
     const int mv = g_acs_mv[A.kanal];
-    if (mv > 0) {
+    if (g_acs_yuzen_genlik[A.kanal] > 0) {
+      g_gurultu = g_gurultu * 1103515245U + 12345U;
+      const int g = g_acs_yuzen_genlik[A.kanal];
+      const int ymv = g_acs_yuzen_merkez[A.kanal] + (int)((g_gurultu >> 8) % (uint32_t)(2 * g + 1)) - g;
+      ham = (int)((int64_t)ymv * 4095 / 3300);
+      ham = (ham < 0) ? 0 : ((ham > 4095) ? 4095 : ham);
+    } else if (mv > 0) {
       g_gurultu = g_gurultu * 1103515245U + 12345U;
       ham = (int)((int64_t)mv * 4095 / 3300) + (int)((g_gurultu >> 16) % 5U) - 2;
       ham = (ham < 0) ? 0 : ((ham > 4095) ? 4095 : ham);
@@ -1299,6 +1307,12 @@ static void senaryo_oku(const char *yol) {
       unsigned long long v;
       sscanf(satir + 9, "%llu", &v);
       g_erisim_ns = v;
+    } else if (!strcmp(ad, "ACS_YUZEN")) {
+      int ch, merkez, genlik;
+      if (sscanf(satir + 9, "%d %d %d", &ch, &merkez, &genlik) == 3 && ch >= 0 && ch < 19) {
+        g_acs_yuzen_merkez[ch] = merkez;
+        g_acs_yuzen_genlik[ch] = genlik;
+      }
     } else if (!strcmp(ad, "ACS")) {
       int ch, mv;
       if (sscanf(satir + 3, "%d %d", &ch, &mv) == 2 && ch >= 0 && ch < 19) {

@@ -86,6 +86,21 @@ void PEMF_Akim_Init(void);
  */
 bool PEMF_Akim_Poll(void);
 
+/**
+ * TD5 (tezgâh Oturum 13): açılış kalibrasyonunun kanal başına SONUCU. `ok` bayrağı ilk `Poll`'dan ÖNCE hep false'tur —
+ * açılış raporu (`STM_SENS … ACS712=`) bunu okumalı. YÜZEN (takılı olmayan) giriş ortalaması pencereye düşse de geniş
+ * salınır → `PEMF_AKIM_DEGISKEN` (tezgâh: PSU kapalıyken 74 A "ölçülüyordu").
+ */
+typedef enum {
+  PEMF_AKIM_KALIBRE = 0,     /**< ölçek kuruldu, akım basılır */
+  PEMF_AKIM_OKUNAMADI = 1,   /**< ADC dönüşümü bütçede bitmedi (arıza) */
+  PEMF_AKIM_PENCERE_DISI = 2, /**< ortalama 0,5–3,2 V dışında (sensör yok / kısa devre / hat açık) */
+  PEMF_AKIM_DEGISKEN = 3     /**< örnekler tepeden-tepeye çok salınıyor (yüzen giriş) */
+} PEMF_AkimKalibrasyon_t;
+
+/** TD5: kanalın kalibrasyon sonucu; `offset_v` / `pp_v` (NULL olabilir) teşhis için ortalama ve tepeden-tepeye gerilim. */
+PEMF_AkimKalibrasyon_t PEMF_Akim_KalibrasyonDurumu(uint32_t sira, float *offset_v, float *pp_v);
+
 /** Son okumayı kopyalar. @param sira 0 = bobin 1 … 4 = bobin 5 */
 void PEMF_Akim_Oku(uint32_t sira, PEMF_AkimVerisi_t *hedef);
 

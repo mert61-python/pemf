@@ -18,7 +18,7 @@ import { RealtimeChart } from "@/components/visual/RealtimeChart";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { gorunurBobinler } from "@/services/bobinGorunurlugu";
 import { Chip } from "@/components/ui/Chip";
-import { ALAN_DOGRULANAMADI_METNI } from "@/utils/olculenAlan";
+import { AKIM_OLCUMU_YOK_METNI, ALAN_DOGRULANAMADI_METNI } from "@/utils/olculenAlan";
 import { useResponsive } from "@/hooks/useResponsive";
 
 // Grafikteki çizgi renkleriyle BİREBİR aynı kategorik palet (legend/filtre butonu + stat kartı tutarlılığı).
@@ -168,6 +168,7 @@ export function SensorMonitorScreen() {
               frequencyHz={coil?.frequencyHz ?? 0}
               measuredFields={coil?.measuredFields}
               alanDogrulanamadi={coil?.alanDogrulanamadi === true}
+              akimGuvenilmez={coil?.akimGuvenilmez === true}
             />
           );
         })}
@@ -180,13 +181,15 @@ export function SensorMonitorScreen() {
 // reconcile etmesin). Tüm prop'lar primitive → shallow-compare kesin.
 const CoilStatCard = memo(function CoilStatCard({
   id, color, connected, running,
-  magneticMt, objectTemp, currentA, frequencyHz, measuredFields, alanDogrulanamadi = false,
+  magneticMt, objectTemp, currentA, frequencyHz, measuredFields, alanDogrulanamadi = false, akimGuvenilmez = false,
 }: {
   id: number; color: string; connected: boolean; running: boolean;
   magneticMt: number; objectTemp: number; currentA: number; frequencyHz: number;
   measuredFields?: string[];
   /** TD2: alan sensörü ayarı doğrulanamadı → değer gösterilmez, neden yazılır. */
   alanDogrulanamadi?: boolean;
+  /** TD5: akım ölçümü güvenilmez → değer gösterilmez, "Akım ölçümü yok". */
+  akimGuvenilmez?: boolean;
 }) {
   // ⚠️ ÖLÇÜLMEYEN ALAN KISA ÇİZGİ (—), SIFIR DEĞİL. Bobin 1-5'te yalnız ACS712 (akım),
   // bobin 6-7'de yalnız MLX (sıcaklık/alan) var. `0.00 mT` / `0.0 °C` yazmak "ölçtüm,
@@ -196,7 +199,10 @@ const CoilStatCard = memo(function CoilStatCard({
   // kümesi DEĞİŞİNCE yeniden üretir (`sorted(set)`), her tick'te değil — yine de referans
   // değişebilir; en kötü hâl gereksiz bir render, yanlış değer değil.
   const olcum = (alan: string) =>
-    !(alan === "magneticMt" && alanDogrulanamadi) && Array.isArray(measuredFields) && measuredFields.includes(alan);
+    !(alan === "magneticMt" && alanDogrulanamadi) &&
+    !(alan === "currentA" && akimGuvenilmez) &&
+    Array.isArray(measuredFields) &&
+    measuredFields.includes(alan);
   return (
     <View style={[styles.statCard, { borderColor: connected ? color + "44" : "#1e293b" }]}>
       <View style={styles.statCardHeader}>
@@ -221,6 +227,7 @@ const CoilStatCard = memo(function CoilStatCard({
             color="#22c55e"
           />
           {alanDogrulanamadi ? <Text style={styles.offlineText}>{ALAN_DOGRULANAMADI_METNI}</Text> : null}
+          {akimGuvenilmez ? <Text style={styles.offlineText}>{AKIM_OLCUMU_YOK_METNI}</Text> : null}
           <Metric
             label="Sıcaklık"
             value={olcum("objectTemp") ? `${objectTemp.toFixed(1)} °C` : "—"}

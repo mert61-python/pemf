@@ -66,6 +66,12 @@ _Static_assert(sizeof(g_kanal) / sizeof(g_kanal[0]) == PEMF_AKIM_BOBIN_SAYISI,
 
 /** Offset kalibrasyonunda kanal başına örnek sayısı (ESP'de 100). */
 #define KALIBRASYON_ORNEK 100U
+/**
+ * TD5: kalibrasyon örneklerinin izin verilen TEPEDEN-TEPEYE salınımı (V). Bobinler kapalıyken takılı ACS712'nin çıkışı
+ * kararlıdır (datasheet gürültüsü onlarca mV'un altında + ADC ±2 LSB); YÜZEN giriş volt mertebesinde salınır (tezgâh: ortalaması
+ * pencereye düşen yüzen pin 74 A RMS "ölçtü"). 0,10 V ≈ 1,5 A (k = 1). [ÖNERİLEN — Tezgâh-2: gerçek sensörde pp ölçülecek]
+ */
+#define KALIBRASYON_AZAMI_PP_V 0.10f
 /** RMS penceresi: kanal başına örnek sayısı (ESP'de 10 → aynı büyüklük). */
 #define RMS_ORNEK 10U
 
@@ -86,6 +92,8 @@ static float g_hassasiyet[PEMF_AKIM_BOBIN_SAYISI]; /**< V/A, `k` ile düzeltilmi
 static PEMF_AkimVerisi_t g_veri[PEMF_AKIM_BOBIN_SAYISI];
 static uint32_t g_sira = 0U;
 static bool g_kalibre = false;
+static PEMF_AkimKalibrasyon_t g_kal_durum[PEMF_AKIM_BOBIN_SAYISI]; /**< TD5: açılış raporu için */
+static float g_kal_pp_v[PEMF_AKIM_BOBIN_SAYISI];
 
 /* ============================================================================
  * REGISTRE SEVİYESİ ADC1
@@ -149,20 +157,27 @@ void PEMF_Akim_Init(void) {
     /* ⚠️ BOBİNLER KAPALIYKEN: offset = 0 A çıkışı. Akım varken kalibre edilirse
      * offset yanlış olur ve o bobinin TÜM ölçümleri kalıcı olarak kayar. */
     float toplam = 0.0f;
+    float en_az = 1.0e9f;
+    float en_cok = -1.0e9f;
     uint32_t gecerli = 0U;
     for (uint32_t n = 0U; n < KALIBRASYON_ORNEK; n++) {
       const uint16_t ham = adc_oku(g_kanal[i]);
       if (ham == 0xFFFFU) {
         continue;
       }
-      toplam += ham_volt(ham);
+      const float v = ham_volt(ham);
+      toplam += v;
+      en_az = (v < en_az) ? v : en_az;
+      en_cok = (v > en_cok) ? v : en_cok;
       gecerli++;
     }
+    g_kal_pp_v[i] = (gecerli > 0U) ? (en_cok - en_az) : 0.0f;
     if (gecerli < (KALIBRASYON_ORNEK / 2U)) {
       /* Kanal okunamıyor (ADC arızası) → bu bobin için akım BİLDİRİLMEZ.
        * Sahte 0.0 A göndermek "ölçüldü" gibi kaydedilir. */
       g_offset_v[i] = 0.0f;
       g_hassasiyet[i] = 0.0f;
+      g_kal_durum[i] = PEMF_AKIM_OKUNAMADI;
       hepsi_ok = false;
       continue;
     }
@@ -176,10 +191,20 @@ void PEMF_Akim_Init(void) {
      * ~2,5 V; 10k/20k bölücüyle ~1,67 V. 0,5-3,2 V penceresi ikisini de kapsar. */
     if ((g_offset_v[i] < 0.5f) || (g_offset_v[i] > 3.2f) || (k <= 0.05f)) {
       g_hassasiyet[i] = 0.0f;
+      g_kal_durum[i] = PEMF_AKIM_PENCERE_DISI;
+      hepsi_ok = false;
+      continue;
+    }
+    /* ⚠️ TD5: ortalamanın pencerede olması YETMEZ — takılı olmayan (yüzen) giriş geniş salınır ama ortalaması pencereye
+     * düşebilir; o zaman gürültünün RMS'i amper diye basılıyordu (tezgâh: PSU kapalıyken C=1 I=74,6 A). Kararlılık şart. */
+    if (g_kal_pp_v[i] > KALIBRASYON_AZAMI_PP_V) {
+      g_hassasiyet[i] = 0.0f;
+      g_kal_durum[i] = PEMF_AKIM_DEGISKEN;
       hepsi_ok = false;
       continue;
     }
     g_hassasiyet[i] = ACS712_30A_V_PER_A * k;
+    g_kal_durum[i] = PEMF_AKIM_KALIBRE;
   }
   g_kalibre = true;
   (void)hepsi_ok; /* kanal başına `ok` bayrağı Poll'da kuruluyor */
@@ -238,6 +263,19 @@ bool PEMF_Akim_Poll(void) {
     return true; /* tur tamamlandı */
   }
   return false;
+}
+
+PEMF_AkimKalibrasyon_t PEMF_Akim_KalibrasyonDurumu(uint32_t sira, float *offset_v, float *pp_v) {
+  if (sira >= PEMF_AKIM_BOBIN_SAYISI) {
+    return PEMF_AKIM_OKUNAMADI;
+  }
+  if (offset_v != 0) {
+    *offset_v = g_offset_v[sira];
+  }
+  if (pp_v != 0) {
+    *pp_v = g_kal_pp_v[sira];
+  }
+  return g_kalibre ? g_kal_durum[sira] : PEMF_AKIM_OKUNAMADI;
 }
 
 void PEMF_Akim_Oku(uint32_t sira, PEMF_AkimVerisi_t *hedef) {
