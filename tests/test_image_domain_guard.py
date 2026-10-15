@@ -159,7 +159,9 @@ def test_em_petri_GRAYSCALE_i_kabul_eder_CT_yi_GEOMETRI_tutar():
 
 
 # ── kapsam dışı uçlar denetlenmemeli (geriye uyumluluk) ─────────────────────
-@pytest.mark.parametrize("etiket", ["thermal", "ai_pro_frame", "yeni_model_2027"])
+# TD10 notu: "thermal" çıkarıldı — SG.G4 (2026-10-14) termal uca KENDİ makullik kapısını ekledi (CT / kedi karesi 422 almalı;
+# tests/test_termal_makullik_kapisi_SG_G4.py). Bu parametre test girdileri klonda olmadığı için atlanıyor, bayatlığı görünmüyordu.
+@pytest.mark.parametrize("etiket", ["ai_pro_frame", "yeni_model_2027"])
 def test_kapsam_disi_uclar_serbest(etiket):
     dom.check(oku(CT), etiket)
     dom.check(oku(KEDI), etiket)

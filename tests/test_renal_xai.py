@@ -53,14 +53,44 @@ def _b64_gorsel(b64: str) -> np.ndarray:
 
 
 def _hne_benzeri_goruntu(tmp_path: Path) -> str:
-    """H&E-benzeri pembe-mor doku dokusu (modalite kapısından geçebilen sınıfta)."""
+    """H&E-benzeri kesit: pembe eozin zemin + lif dokusu + boşluklar + mor hematoksilen çekirdekleri (modalite kapısından geçer).
+
+    TD10 (Y149): eski yer tutucu piksel başına düzgün GÜRÜLTÜYDÜ — H&E ayırt edicisi gürültüyü STAINED saymaz (JPEG sonrası
+    iki_boya 0,03 → 422). Bu kurgu ölçüldü: iki_boya 0,21 · doku 20 · bulanik_oran 1,005 (gerçek patoloji aralığında).
+    """
     import cv2
 
     rng = np.random.default_rng(21)
-    img = np.zeros((224, 224, 3), dtype=np.uint8)
-    img[..., 2] = (rng.random((224, 224)) * 90 + 150).astype(np.uint8)  # R yüksek
-    img[..., 0] = (rng.random((224, 224)) * 90 + 120).astype(np.uint8)  # B orta (mor ton)
-    img[..., 1] = (rng.random((224, 224)) * 70 + 60).astype(np.uint8)  # G düşük
+    lif = cv2.GaussianBlur(rng.normal(0, 1, (224, 224)).astype(np.float32), (0, 0), 2)
+    lif = (lif - lif.min()) / (lif.max() - lif.min())
+    img = np.zeros((224, 224, 3), np.float32)
+    img[:] = (190, 140, 225)  # eozin (BGR)
+    img *= (0.75 + 0.45 * lif)[:, :, None]
+    for _ in range(6):  # boşluklar (lümen)
+        merkez = (int(rng.integers(0, 224)), int(rng.integers(0, 224)))
+        cv2.ellipse(
+            img,
+            merkez,
+            (int(rng.integers(8, 16)), int(rng.integers(5, 11))),
+            float(rng.integers(0, 180)),
+            0,
+            360,
+            (235, 230, 240),
+            -1,
+        )
+    for _ in range(300):  # hematoksilen çekirdekleri
+        merkez = (int(rng.integers(0, 224)), int(rng.integers(0, 224)))
+        cv2.ellipse(
+            img,
+            merkez,
+            (int(rng.integers(2, 5)), int(rng.integers(2, 4))),
+            float(rng.integers(0, 180)),
+            0,
+            360,
+            (150, 55, 95),
+            -1,
+        )
+    img = np.clip(img + rng.normal(0, 6, img.shape), 0, 255).astype(np.uint8)
     p = tmp_path / "kesit.jpg"
     cv2.imwrite(str(p), img)
     return str(p)

@@ -107,6 +107,31 @@ _STAIN_MIN_SAT = 0.18
 # 3.6 katı üstünde, en düşük gerçek patolojinin 2.3 katı altında → her İKİ yönde de marj.
 _STAIN_RATIO = 0.15
 
+# ── TD10 (Y149, sahip 2026-10-14) — H&E AYIRT EDİCİSİ ───────────────────────────────────────────────────────────────────────
+# NEDEN (SG S-SG.3 ölçtü): sıcak oda ışığındaki doğal kareler (ten, pembe-bej perde) `stain_ratio` 0,16–0,51 ile STAINED sayılıyor
+# — gerçek patoloji 0,352–0,882 → iki dağılım ÇAKIŞIYOR, eşikle ayrılmaz; canlı segmentasyon / FGS / organ bu ışıkta 422 alıyordu.
+# RGB gürültü de 0,29 ile STAINED → histopath "grade2 %63" üretiyordu. Ek ölçüt (`_he_yapisi`, boya maskesi üzerinde):
+#   iki_boya   = boyalı piksellerin hematoksilen (H 125–152) ve eozin (153–178) bantlarına dağılımının KÜÇÜĞÜ — H&E iki boyadır;
+#   doku       = boyalı piksellerde 5×5 yerel gri std ortalaması — preparat dokuludur, perde / ten / düz renk düzdür;
+#   bulanik_oran = 9×9 Gauss bulanıklıktan SONRAKİ boya oranı / önceki — gürültü bulanıkta griye çöker, doku korunur.
+# ÖLÇÜLEN DAĞILIM (2026-10-15, `DENETIM\DUZELTME-TD.md` TD10; sahibin fotoğrafları depoya GİRMEDİ):
+#   gerçek patoloji 08a/08b/08c (tam görüntü)     : iki_boya 0,175–0,418 · doku 12,2–16,5 · bulanik_oran 1,03
+#   aynı preparatların dörtte-birleri (12)        : iki_boya 0,007–0,448 · doku 11,8–19,4 · bulanik_oran 1,02–1,05
+#   sentetik sıcak ışık sahneleri (stain 0,22–0,50): iki_boya 0,000 · doku 7,0–7,7
+#   RGB gürültü                                   : iki_boya 0,48 · doku 48 · bulanik_oran 0,33–0,36
+#   düz renk (pembe / mor / eflatun / iki blok)   : doku 0,0–0,4
+#   tek boya DOKULU yüzey (pembe havlu, eflatun)  : iki_boya 0,000–0,035 · doku 13–16,5 · bulanik_oran 1,0
+# KARAR: STAINED ⇔ stain ≥ 0,15 VE bulanik_oran ≥ 0,70 VE doku ≥ 10 VE iki_boya ≥ 0,08; aksi COLOR. Marj: iki_boya patolojinin en
+# düşüğünün (tam görüntü) ×2,2 altında; doku patolojinin en düşüğünün ×1,18 altında, sıcak sahnenin en yükseğinin ×1,30 üstünde;
+# bulanik_oran gürültünün ×1,9 üstünde, patolojinin ×1,45 altında. SINIRI (dürüstlük): hematoksilensiz (yalnız eozin) bir kırpıntı
+# (08b'nin iki dörtte-biri) STAINED SAYILMAZ → histopath o kırpıntıyı 422'ler (güvenlik yönü); tam preparat görüntüsü geçer.
+# Yalnız boya tonları arasında piksel başına gürültü (dar bant, sıkıştırmasız) yapıyı taklit eder — gerçek kamerada / JPEG'de
+# oluşmaz (JPEG sonrası iki_boya 0,03 → COLOR); kapsam dışı.
+_HE_IKI_BOYA_ASGARI = 0.08
+_HE_DOKU_ASGARI = 10.0
+_HE_BULANIK_ORAN_ASGARI = 0.70
+_HE_HEMATOKSILEN_UST = 152  # OpenCV H: 125–152 hematoksilen (mor-mavi), 153–178 eozin (pembe)
+
 
 class DomainMismatch(Exception):
     """Görüntü modalitesi modülün beklediğiyle uyuşmuyor."""
@@ -154,6 +179,24 @@ def guard_enabled() -> bool:
     return os.getenv("PEMF_AI_DOMAIN_GUARD", "1") != "0"
 
 
+def _he_yapisi(img: np.ndarray, hue: np.ndarray, stain_mask: np.ndarray) -> dict:
+    """TD10: boya maskesinin H&E yapısı ölçütleri (bkz. `_HE_*`). `img` analiz ölçeğindeki BGR."""
+    n = int(stain_mask.sum())
+    if n == 0:
+        return {"iki_boya": 0.0, "doku": 0.0, "bulanik_oran": 0.0}
+    hema = float(((hue <= _HE_HEMATOKSILEN_UST) & stain_mask).sum()) / n
+    iki_boya = min(hema, 1.0 - hema)
+    gri = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    ort = cv2.blur(gri, (5, 5))
+    yerel_std = np.sqrt(np.maximum(0.0, cv2.blur(gri * gri, (5, 5)) - ort * ort))
+    doku = float(yerel_std[stain_mask].mean())
+    hsv_b = cv2.cvtColor(cv2.GaussianBlur(img, (9, 9), 0), cv2.COLOR_BGR2HSV)
+    hue_b = hsv_b[:, :, 0].astype(np.int16)
+    maske_b = (hue_b >= _STAIN_HUE_LO) & (hue_b <= _STAIN_HUE_HI) & (hsv_b[:, :, 1] / 255.0 >= _STAIN_MIN_SAT)
+    bulanik_oran = float(maske_b.sum()) / n
+    return {"iki_boya": round(iki_boya, 4), "doku": round(doku, 2), "bulanik_oran": round(bulanik_oran, 4)}
+
+
 def analyze(img: np.ndarray) -> tuple[str, dict]:
     """BGR görüntüden modalite + ölçümleri döndür. Saf fonksiyon, yan etkisiz."""
     if img is None or getattr(img, "size", 0) == 0:
@@ -188,7 +231,16 @@ def analyze(img: np.ndarray) -> tuple[str, dict]:
     if achromatic_ratio >= _GRAYSCALE_RATIO:
         return GRAYSCALE, metrics
     if stain_ratio >= _STAIN_RATIO:
-        return STAINED, metrics
+        # TD10: boya tonu eşiği TEK BAŞINA H&E değildir (sıcak ışık / gürültü / düz renk) — yapı da şart.
+        he = _he_yapisi(img, hue, stain_mask)
+        metrics.update(he)
+        if (
+            he["iki_boya"] >= _HE_IKI_BOYA_ASGARI
+            and he["doku"] >= _HE_DOKU_ASGARI
+            and he["bulanik_oran"] >= _HE_BULANIK_ORAN_ASGARI
+        ):
+            return STAINED, metrics
+        metrics["he_yapisi_yok"] = True
     return COLOR, metrics
 
 
