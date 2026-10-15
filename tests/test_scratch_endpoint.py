@@ -23,10 +23,9 @@ KOK = Path(__file__).resolve().parents[1]
 
 
 def _ornek_goruntu_b64(tmp_path) -> str:
-    img = np.random.default_rng(7).integers(0, 255, (64, 96, 3), dtype=np.uint8)
-    yol = tmp_path / "hucre.png"
-    assert cv2.imwrite(str(yol), img)
-    return base64.b64encode(yol.read_bytes()).decode()
+    """TD11 (Y150): uçta mikroskopi makullik kapısı var — eski yer tutucu (64×96 gürültü) artık 422 alır; izlenen gerçek scratch
+    kesiti (12a'dan, `tests/xai_veri/KAYNAK.md`) kapıdan geçer."""
+    return base64.b64encode((KOK / "tests" / "xai_veri" / "yara_0H_kesit_640x600.png").read_bytes()).decode()
 
 
 _SAHTE_SONUC = {

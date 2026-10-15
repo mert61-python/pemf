@@ -424,8 +424,12 @@ def infer_scratch(
         data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "görüntü boş/çok küçük"}, status_code=400)
-        # Modalite kapısı YOK (karar 0.3) — boş görüntüyü scratch_analiz'in
-        # n_cells==0 yapılandırılmış uyarısı yakalar. KAYIPSIZ .png tmp (ölçüm!).
+        # TD11 (Y150): mikroskopi makullik kapısı (router ile AYNI nesne; eski "karar 0.3: kapı YOK" kalktı — nesne fotoğrafı
+        # "488 hücre" alıyordu). Kapıdan geçip hücre bulunamayan görüntüyü scratch_analiz'in n_cells==0 uyarısı yakalar.
+        kapi = _kapi(data, "scratch")
+        if kapi is not None:
+            return kapi
+        # KAYIPSIZ .png tmp (ölçüm!).
         tmp = _save_temp(data, ".png")
         t0 = time.time()
         try:

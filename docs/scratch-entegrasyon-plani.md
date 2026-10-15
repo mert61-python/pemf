@@ -86,7 +86,7 @@
 |---|---|---|
 | 0.1 | Mimari | **FROZEN'A CELLDETECTION EKLENİR** (sahip, öneriden farklı seçti — mikroservis de kalır, gömülü yol GERÇEK çalışır). **Sonuçları:** (a) celldetection dört yüzeye girer: requirements.txt + myenv-requirements.txt + spec hiddenimports (+requirements-ai zaten) + çift-cv2 kontrolü CPU tarafında da; (b) **deps 6. kez DEĞİŞİR** (1.19 GB katman yeniden yüklenir — v2'deki "deps değişmez" vaadi düşer, bilinçli); (c) CPU'da CPN dakikalar sürer → UI bekleme UX'i kritik + backend süreç belleği +~2 GB (872 MB model in-process); (d) ⚠️ **ağırlık dağıtımı çözülmüş OLMAZ**: PT 2 GiB nedeniyle research.zip'e giremez → **launcher çoklu-model-zip (1.9.39) bu modülün sahaya inişinin ÖN KOŞULU oldu — backlog'dan Faz 4.5'e çekildi** |
 | 0.2 | Profil | **Yalnız researcher** (UI modes + require_research; kapı bugün uykuda — fiili gizleme UI'da) |
-| 0.3 | Girdi kapısı | **Kapısız + n_cells==0 yapılandırılmış uyarısı** |
+| 0.3 | Girdi kapısı | ~~Kapısız~~ → **TD11 (Y150, 2026-10-15): mikroskopi makullik kapısı** (`apps/backend/utils/image_domain.py::scratch_analizi`; router iki kol + `:8100` aynı nesne; ret 422 + eylem metni, jeton düşmez). Neden: nesne fotoğrafı "488 hücre, kapanma %29,5" alıyordu. n_cells==0 yapılandırılmış uyarısı İKİNCİ katman olarak kalır |
 | 0.4 | UI adı | **"Yara Kapanma (Scratch)"** |
 | 0.5 | XAI ücreti | **Analizin parçası, ek jeton yok** — TAM-YOL 'serbest' kaydı Faz 2'de |
 | 0.6 | Jeton sınıfı | **3 jeton (ağır araştırma)** — `_AGIR_UCLAR` + pemf-vet-web `config.ts::JETON.maliyet` paritesi + test kilidi |

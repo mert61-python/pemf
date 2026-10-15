@@ -4626,8 +4626,10 @@ async def analyze_scratch(
 
     TEK girdi → ÇOKLU görsel çıktı (seg/overlay/analysis/closure + opsiyonel XAI),
     bellek-içi base64 (plan: docs/scratch-entegrasyon-plani.md v3). Karar 0.6: ağır
-    araştırma = 3 jeton (jeton.py::_AGIR_UCLAR). Karar 0.3: modalite kapısı YOK —
-    boş/yanlış görüntü `uyari` alanıyla döner. Karar 0.5: explain EK jeton değil.
+    araştırma = 3 jeton (jeton.py::_AGIR_UCLAR). TD11 (Y150): mikroskopi makullik kapısı
+    (`image_domain.scratch_analizi`; eski karar 0.3 "kapı YOK" kalktı) — mikroskopi olmayan görüntü
+    422 + eylem metni, jeton düşmez; hücre bulunamayan görüntü `uyari` ile döner. Karar 0.5: explain
+    EK jeton değil.
     `/vision/` auth-muaf.
     """
     from ai_hub.inference_paper_dilek_hoca.inference_paper_dilek_hoca import (
@@ -4674,7 +4676,7 @@ async def analyze_scratch(
 
         # Gömülü yol (karar 0.1: celldetection frozen'da). Girdi 25MB/50MP kapısından
         # geçer; analize KAYIPSIZ PNG tmp ile gider — ölçüm görüntüsü (µm/mm²)
-        # JPEG'e SIKIŞTIRILMAZ. "scratch" EXPECTED'da yok → modalite denetimi atlanır.
+        # JPEG'e SIKIŞTIRILMAZ. TD11: scratch mikroskopi kapısı `_decode_image` → `image_domain.check` içinde (422, jeton düşmez).
         img = await _decode_image(file, image_base64, label="scratch")
 
         import tempfile

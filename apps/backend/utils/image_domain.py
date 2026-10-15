@@ -91,6 +91,7 @@ EXPECTED: dict[str, set[str]] = {
     "em_petri": {COLOR, GRAYSCALE, STAINED},
     # "thermal" BU SÖZLÜKTE DEĞİL: IR kamera hem gri hem renk-haritalı çıktı verebilir → gri / renkli sınıfı termali ayıramaz.
     # SG.G4 (2026-10-14): termal ucun KENDİ makullik kapısı var — aşağıdaki `termal_analiz` (palet uyumu), `check` çağırır.
+    # "scratch" de burada DEĞİL (TD11, Y150): hücre mikroskopisi gri / renkli olabilir — kendi kapısı `scratch_analizi`, `check` çağırır.
     # "ai_pro_frame" KASITLI DIŞARIDA: canlı kamera karesi, kullanıcı yüklemesi değil.
 }
 
@@ -415,6 +416,139 @@ def termal_girdi_dogrulamasi(img: np.ndarray) -> dict:
     return {"durum": durum, "dogrulandi": False, "uyari": uyari, "olcum": olcum}
 
 
+# ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+# SCRATCH MİKROSKOPİ MAKULLİK KAPISI — TD11 (Y150, sahip 2026-10-14)
+# ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+# NEDEN (SG ölçtü): araştırma Scratch (yara kapanma) ucu "karar 0.3: modalite kapısı YOK" ile HER görüntüyü CPN hücre
+# segmentasyonuna veriyordu — nesne fotoğrafına "488 hücre, kapanma %29,5" döndü ve 3 jeton düştü (termal vakasının AYNI sınıfı:
+# model girdinin türünü sorgulamaz). ÖLÇÜT (termal kapının ilkesi: model-bağımsız, deterministik, ölçülmüş eşik, iki yönlü marj):
+# faz-kontrast / parlak alan hücre tabakası gri seviyede HÜCRE ÖLÇEĞİNDE yoğun doku taşır; fotoğrafın enerjisi büyük ölçekli
+# kenarlarda, gürültününki piksel ölçeğindedir. Gri görüntüde (en uzun kenar 512 ve 256'ya INTER_AREA ile küçültülmüş İKİ ölçek):
+#   doku      = 5×5 yerel std ortalaması (düz / boş görüntü ≈ 0)
+#   korunma   = 3×3 Gauss SONRASI doku / önceki (gürültü bulanıkta çöker ≈ 0,45; hücre dokusu korunur)
+#   orta      = var(G2 − G6) / var(G6 − G16) — hücre ölçeği bandının (σ 2–6) büyük ölçek bandına (σ 6–16) oranı
+#   ince_oran = doku / genel std (nesne fotoğrafında büyük düz alanlar ve kenarlar baskın)
+# ÖLÇÜLEN DAĞILIM (2026-10-15, `DENETIM\DUZELTME-TD.md` TD11):
+#   gerçek scratch 12a / 12b (1600×1200, 4× objektif) + izlenen kesit ve türevleri (2× / 3× büyütme, odak σ2–3, vinyet,
+#   kontrast ×0,5, JPEG q70, 90°, tek kanal; 23 görüntü) — HEPSİ geçer; geçen ölçekte orta 2,13–4,60 · ince_oran ≥ 0,31 ·
+#   korunma ≥ 0,66 · doku ≥ 3,7; en zoru (kesitin 2× büyütmesi) en iyi ölçeğinde orta 2,25
+#   mikroskopi OLMAYAN 40 (izlenen kedi / CT / termal / retikülosit / ArUco 8, fantom + petri 20, yerel test girdileri 11 —
+#   H&E 3 dahil, oda) İKİ ölçekte de: orta ≤ 1,61 (izlenen kedi segmentasyon sonucu, 256) · RGB / gri gürültü: orta ≥ 8,14,
+#   korunma ≤ 0,45 · düz renk: doku 0
+#   EN YAKIN olumsuz: küçültülmüş böbrek BT (07c, 150–290 px taraması; en kötüsü 190 px): orta 1,77 (eşiğin ×1,07 altı) VE
+#   ince_oran 0,25 (×1,10 altı) — iki ayrı engel
+#   gürültülü mikroskopi (kesit + Gauss gürültü): σ ≤ 45 GEÇER; σ ≥ 55 korunma < 0,55 (iki ölçekte) → "gürültü baskın"
+# KARAR: iki ölçekten BİRİNDE doku ≥ 2 VE korunma ≥ 0,55 VE 1,9 ≤ orta ≤ 6,5 VE ince_oran ≥ 0,28 → mikroskopi (GEÇER); aksi 422.
+# Marj: orta alt eşiği (iki dağılımın geometrik ortası) mikroskopinin en zorunun ×1,18 altında, mikroskopi olmayanın en
+# yükseğinin ×1,18 üstünde; üst eşik mikroskopinin ×1,41 üstünde, gürültünün ×1,25 altında (korunma ayrıca ×1,23).
+# İKİ ÖLÇEK NEDENİ: yalnız 512'de izlenen kesitin 2× büyütmesi (orta 1,37) ve odak dışı σ2 (1,54) REDDEDİLİYORDU; 128 eklenince H&E
+# patoloji (3,07) ve fantom (2,08) GEÇİYORDU → 512 + 256.
+# SINIRI (dürüstlük): hücre ölçeğinde GRANÜLER doku (σ 1,5–4 bulanık gürültü ≈ kum / köpük / halı yakın çekimi) mikroskopi gibi
+# GEÇER (ölçüldü) — doku istatistiği hücreyi kumdan ayıramaz; yalnız güçlü gölge altında ince_oran reddeder. Ölçülen gerçek
+# mikroskopi 2 görüntü (aynı deney, faz-kontrast) ve türevleri; floresan ve çok yüksek büyütme
+# (izlenen kesitin 3× büyütmesi: orta 1,70 → REDDEDİLİR) ölçülmedi. Yanlış ret görülürse eşik ÖLÇÜMLE genişletilir; araştırma
+# kaçış kapağı PEMF_AI_DOMAIN_GUARD=0. CPN'in `n_cells == 0` uyarısı İKİNCİ katman olarak kalır. Kapı:
+# tests/test_TD11_scratch_mikroskopi_makullik_kapisi_Y150.py
+SCRATCH_MIKROSKOPI = "mikroskopi"
+SCRATCH_UYUMSUZ = "uyumsuz"
+
+_SCRATCH_OLCEKLER = (512, 256)
+_SCRATCH_DOKU_ASGARI = 2.0
+_SCRATCH_KORUNMA_ASGARI = 0.55
+_SCRATCH_ORTA_ALT = 1.9
+_SCRATCH_ORTA_UST = 6.5
+_SCRATCH_INCE_ASGARI = 0.28
+
+#: Ret metni nedene göre — ne olduğunu ve NE YAPILACAĞINI söyler (eylem).
+SCRATCH_UYUMSUZ_MESAJLARI = {
+    "duz": (
+        "Görüntü düz / boş görünüyor; hücre bulunamadı. Yara kapanma analizi için hücre kültürünün mikroskop kamerasıyla "
+        "çekilmiş görüntüsünü yükleyin."
+    ),
+    "gurultu": (
+        "Görüntüde gürültü baskın; hücre yapısı ayırt edilemiyor. Mikroskop kamerasıyla çekilmiş, net (gürültüsüz) bir "
+        "faz-kontrast / parlak alan hücre kültürü görüntüsü yükleyin."
+    ),
+    "yapi_yok": (
+        "Bu görüntü yara kapanma (scratch) mikroskopi görüntüsüne benzemiyor; hücre tabakası dokusu bulunamadı. Mikroskop "
+        "kamerasıyla çekilmiş hücre kültürü (faz-kontrast / parlak alan) görüntüsü yükleyin; fotoğraf ya da ekran görüntüsü "
+        "analiz edilmez."
+    ),
+}
+
+
+def _yerel_std(gri: np.ndarray, k: int) -> np.ndarray:
+    ort = cv2.blur(gri, (k, k))
+    return np.sqrt(np.maximum(0.0, cv2.blur(gri * gri, (k, k)) - ort * ort))
+
+
+def _scratch_olcumu(gri: np.ndarray) -> dict:
+    """TD11: tek ölçekte ölçütler (gri float32; bkz. bölüm başı)."""
+    s5 = _yerel_std(gri, 5)
+    doku = float(s5.mean())
+    korunma = float(_yerel_std(cv2.GaussianBlur(gri, (3, 3), 0), 5).mean()) / max(1e-6, doku)
+    ince_oran = doku / max(1e-6, float(gri.std()))
+    g2 = cv2.GaussianBlur(gri, (0, 0), 2)
+    g6 = cv2.GaussianBlur(gri, (0, 0), 6)
+    g16 = cv2.GaussianBlur(gri, (0, 0), 16)
+    orta = float(np.var(g2 - g6)) / max(1e-6, float(np.var(g6 - g16)))
+    return {"doku": doku, "korunma": korunma, "orta": orta, "ince_oran": ince_oran}
+
+
+def _scratch_uygun(m: dict) -> bool:
+    return (
+        m["doku"] >= _SCRATCH_DOKU_ASGARI
+        and m["korunma"] >= _SCRATCH_KORUNMA_ASGARI
+        and _SCRATCH_ORTA_ALT <= m["orta"] <= _SCRATCH_ORTA_UST
+        and m["ince_oran"] >= _SCRATCH_INCE_ASGARI
+    )
+
+
+def _scratch_neden(m: dict) -> str:
+    if m["doku"] < _SCRATCH_DOKU_ASGARI:
+        return "duz"
+    # Gürültü = piksel ölçeği enerjisi baskın (orta > üst) YA DA hücre ölçeğinde yapı var ama bulanıkta çöküyor (korunma düşük:
+    # gürültü baskın mikroskopi). Düz sahnedeki sensör gürültüsü de korunmayı düşürür (oda 0,43) ama orta'sı düşüktür — ona
+    # "gürültü" demek yanıltır, o "yapı yok" sayılır.
+    if m["orta"] > _SCRATCH_ORTA_UST or (m["korunma"] < _SCRATCH_KORUNMA_ASGARI and m["orta"] >= _SCRATCH_ORTA_ALT):
+        return "gurultu"
+    return "yapi_yok"
+
+
+def scratch_analizi(img: np.ndarray) -> tuple[str, dict]:
+    """BGR / gri görüntünün scratch mikroskopi makulliği: (`SCRATCH_*` durumu, ölçümler). Saf, yan etkisiz; iç hata yukarı fırlar
+    (A-24: `check` onu REDDE çevirir). Boş girdi: `UNKNOWN` (decode katmanı kendi iletisini verir)."""
+    if img is None or getattr(img, "size", 0) == 0:
+        return UNKNOWN, {}
+    olcum: dict = {}
+    ilk = None
+    for kenar in _SCRATCH_OLCEKLER:
+        x = img
+        h, w = x.shape[:2]
+        if max(h, w) > kenar:
+            k = kenar / max(h, w)
+            x = cv2.resize(x, (max(1, int(w * k)), max(1, int(h * k))), interpolation=cv2.INTER_AREA)
+        gri = x if x.ndim == 2 else cv2.cvtColor(x[:, :, :3], cv2.COLOR_BGR2GRAY)
+        m = _scratch_olcumu(gri.astype(np.float32))
+        olcum[str(kenar)] = {a: round(v, 3) for a, v in m.items()}
+        ilk = ilk or m
+        if _scratch_uygun(m):
+            olcum["olcek"] = kenar
+            return SCRATCH_MIKROSKOPI, olcum
+    olcum["neden"] = _scratch_neden(ilk)
+    return SCRATCH_UYUMSUZ, olcum
+
+
+class ScratchUyumsuz(DomainMismatch):
+    """Scratch ucuna hücre tabakası mikroskopisine benzemeyen görüntü verildi — analiz YAPILMAZ (422)."""
+
+    def __init__(self, metrics: dict):
+        super().__init__("scratch", SCRATCH_UYUMSUZ, {SCRATCH_MIKROSKOPI}, metrics)
+
+    def user_message(self) -> str:
+        return SCRATCH_UYUMSUZ_MESAJLARI.get(self.metrics.get("neden"), SCRATCH_UYUMSUZ_MESAJLARI["yapi_yok"])
+
+
 def check(img: np.ndarray, label: str) -> None:
     """`label` modülü için görüntü modalitesini denetle; uyuşmazsa DomainMismatch fırlat."""
     if not guard_enabled():
@@ -429,6 +563,17 @@ def check(img: np.ndarray, label: str) -> None:
         if durum == TERMAL_UYUMSUZ:
             logger.warning("TERMAL UYUŞMAZLIĞI: termal kamera görüntüsüne benzemiyor ölçüm=%s", metrics)
             raise TermalUyumsuz(metrics)
+        return
+    if label == "scratch":
+        # TD11: scratch ucunun kendi makullik kapısı (yukarıda). İç hata = REDDET (A-24), uyumsuz = 422.
+        try:
+            durum, metrics = scratch_analizi(img)
+        except Exception as e:
+            logger.warning("SCRATCH MAKULLİK DENETİMİ ÇALIŞTIRILAMADI — analiz REDDEDİLDİ (A-24)", exc_info=True)
+            raise DomainCheckError(label, f"{type(e).__name__}: {e}") from e
+        if durum == SCRATCH_UYUMSUZ:
+            logger.warning("SCRATCH UYUŞMAZLIĞI: hücre mikroskopisine benzemiyor ölçüm=%s", metrics)
+            raise ScratchUyumsuz(metrics)
         return
     expected = EXPECTED.get(label)
     if not expected:

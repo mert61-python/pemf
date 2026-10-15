@@ -257,7 +257,7 @@ def test_KRITIK_yara_yonu_METRIKLERE_ve_CIZIME_gercekten_ulasir(monkeypatch, gir
 
 
 def test_KRITIK_hucre_yoksa_yapilandirilmis_uyari(monkeypatch, girdi_png):
-    """Karar 0.3: modalite kapısı YOK — boş görüntü bu uyarıyla yakalanır;
+    """Uçtaki mikroskopi kapısından (TD11) geçip hücre bulunamayan görüntü bu uyarıyla yakalanır (ikinci katman);
     dejenere çizimler ÜRETİLMEZ ama orijinal önizleme DÖNER."""
     m = _modul()
     monkeypatch.setitem(m._PREDICTOR_CACHE, "cpn", _SahtePred(n_cells=0))

@@ -19,6 +19,7 @@ der. Kilitlenen davranışlar bu sınıfı görünür kılar:
 """
 
 import logging
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -78,7 +79,8 @@ def test_KRITIK_scratch_kurulum_eksigi_503_ama_LOGLANIR(client, monkeypatch, cap
         with caplog.at_level(logging.ERROR, logger="ai_router"):
             r = client.post(
                 "/api/ai/vision/scratch",
-                files={"file": ("x.png", _kucuk_png(), "image/png")},
+                # TD11: 1×1 PNG mikroskopi kapısında 422 alır — kurulum eksiği yoluna gerçek scratch kesiti ulaşır.
+                files={"file": ("x.png", _KESIT.read_bytes(), "image/png")},
                 data={"scratch_yonu": "dikey", "pixel_mm": "0.0016"},
             )
     finally:
@@ -91,6 +93,9 @@ def test_KRITIK_scratch_kurulum_eksigi_503_ama_LOGLANIR(client, monkeypatch, cap
     # ...ama sunucu kaydında kök neden VAR (saha teşhisinin tek dayanağı)
     kayit = "\n".join(caplog.messages)
     assert "sahte_bagimlilik" in kayit, f"kök neden loglanmadı: {kayit[:300]}"
+
+
+_KESIT = Path(__file__).resolve().parent / "xai_veri" / "yara_0H_kesit_640x600.png"
 
 
 def _kucuk_png() -> bytes:
