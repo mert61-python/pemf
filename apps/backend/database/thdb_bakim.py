@@ -514,4 +514,10 @@ class BakimKarisimi:
             if replace:
                 # F2-2.3 (Y13 · D2.29 ilkesi): REPLACE_ALL'ın sildiği eski kayıtların sayfaları denetim noktasına kadar ana dosyada kalıyordu.
                 self._silme_sonrasi_denetim_noktasi(conn, "REPLACE_ALL ice aktarma")
+        # CH3 · Y152: CH3 ÖNCESİ bir dışa aktarım dosyasının satırları düzeltme işareti TAŞIMAZ ('' = eski, ~5× ölçek) → aynı göç
+        # içe aktarmadan sonra yeniden uygulanır (CH3 sonrası dosyanın 'yok' / 'bolu5' satırlarına dokunmaz). Ayrı işlem: düşerse
+        # içe aktarma geri alınmaz; göç ayarı "bekliyor"a çekilir → bir sonraki açılış yeniden dener (günlüğe yazılır).
+        _goc = getattr(self, "_mt_bolu5_gocu", None)
+        if callable(_goc):
+            _goc(zorla=True)
         return sonuc

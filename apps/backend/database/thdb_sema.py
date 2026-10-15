@@ -455,6 +455,16 @@ class SemaKarisimi:
         self._safe_add_column(
             cursor, "sensor_samples", "sample_count INTEGER", "sensor_samples.sample_count sütunu eklendi"
         )
+        # CH3 · Y152 (sahip 2026-10-15): ölçülen alanın DÜZELTME İŞARETİ + ORİJİNALİ (eklemeli; eski satırlar '' = göç adayı).
+        # '' eski · 'yok' TD2 sonrası yazım (düzeltilmez) · 'bolu5' ÷5 uygulandı — bkz. utils/mt_duzeltme, thdb_telemetri._mt_bolu5_gocu.
+        for _tablo, _orijinal in (
+            ("sensor_samples", "magnetic_field_mt_orijinal"),
+            ("sensor_run_summary", "field_avg_orijinal"),
+        ):
+            self._safe_add_column(
+                cursor, _tablo, "alan_duzeltme TEXT DEFAULT ''", f"{_tablo}.alan_duzeltme sütunu eklendi (CH3)"
+            )
+            self._safe_add_column(cursor, _tablo, f"{_orijinal} REAL", f"{_tablo}.{_orijinal} sütunu eklendi (CH3)")
 
     def _create_vet_indexes(self, cursor):
         """Veteriner tablo indeksleri + (migration SONRASI) treatment_sessions.patient_id indeksi."""

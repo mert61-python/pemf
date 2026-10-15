@@ -140,6 +140,8 @@ class TreatmentHistoryDB(
         # Veritabanını başlat
         self._init_database()
         self._run_startup_migrations_with_rollback()
+        # CH3 · Y152: TD2 öncesi firmware'in ~5× ölçülen alanı BİR KEZ 5'e bölünür (orijinal saklı, tek işlem; düşerse DB yine açılır).
+        self._mt_bolu5_gocu()
         # ⚠️ 0 = YAŞ FİLTRESİ YOK. Burası AÇILIŞ yoludur; açılışta bu cihazın hiçbir seansı
         # canlı olamaz. Eski 12 saatlik eşik yüzünden çökmeden kalan seanslar `active` kalıyor
         # ve uygulanan doz hiç yazılmıyordu (kampanya bulgusu S01).

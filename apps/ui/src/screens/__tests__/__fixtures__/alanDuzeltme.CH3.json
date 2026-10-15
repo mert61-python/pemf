@@ -1,0 +1,122 @@
+{
+ "eski": {
+  "coil_runs": [
+   {
+    "coil_id": 6,
+    "duration_seconds": 60.0,
+    "duty_percent": 40.0,
+    "ended_epoch": 61.0,
+    "frequency_hz": 50.0,
+    "hw_type": "stm32",
+    "intensity_mt": 2.0,
+    "phase": null,
+    "started_epoch": 1.0,
+    "summary": {
+     "alan_duzeltme": "bolu5",
+     "alan_notu": "düzeltildi (÷5, yaklaşık — tezgâhta 4–5× ölçüldü)",
+     "current_avg": null,
+     "field_avg": 2.33,
+     "field_avg_orijinal": 11.65,
+     "sample_count": 2,
+     "temp_avg": 30.5,
+     "temp_max": null,
+     "temp_min": null
+    }
+   }
+  ],
+  "sensor_samples": [
+   {
+    "alan_duzeltildi": true,
+    "ambient_temp_c": null,
+    "coil_id": "6",
+    "coil_run_id": 1,
+    "current_a": null,
+    "magnetic_field_mt": 2.66,
+    "sample_count": null,
+    "sample_ts": 10.0,
+    "temperature_c": 30.0
+   },
+   {
+    "alan_duzeltildi": true,
+    "ambient_temp_c": null,
+    "coil_id": "6",
+    "coil_run_id": 1,
+    "current_a": null,
+    "magnetic_field_mt": 2.0,
+    "sample_count": null,
+    "sample_ts": 70.0,
+    "temperature_c": 31.0
+   },
+   {
+    "alan_duzeltildi": false,
+    "ambient_temp_c": null,
+    "coil_id": "1",
+    "coil_run_id": 1,
+    "current_a": null,
+    "magnetic_field_mt": null,
+    "sample_count": null,
+    "sample_ts": 70.0,
+    "temperature_c": null
+   }
+  ],
+  "session": {
+   "alan_notu": "düzeltildi (÷5, yaklaşık — tezgâhta 4–5× ölçüldü)",
+   "duration_minutes": "SABIT",
+   "end_time": "SABIT",
+   "ended_epoch": null,
+   "id": 7,
+   "operator_name": null,
+   "patient_name": "SABIT",
+   "patient_notes": null,
+   "session_date": "SABIT",
+   "session_status": "SABIT",
+   "start_time": "SABIT",
+   "started_epoch": null,
+   "target_condition": null,
+   "treatment_mode": "SABIT"
+  }
+ },
+ "yeni": {
+  "coil_runs": [
+   {
+    "coil_id": 6,
+    "duration_seconds": 60.0,
+    "duty_percent": null,
+    "ended_epoch": 61.0,
+    "frequency_hz": null,
+    "hw_type": null,
+    "intensity_mt": null,
+    "phase": null,
+    "started_epoch": 1.0,
+    "summary": {
+     "alan_duzeltme": "yok",
+     "alan_notu": "",
+     "current_avg": null,
+     "field_avg": 2.5,
+     "field_avg_orijinal": null,
+     "sample_count": 1,
+     "temp_avg": null,
+     "temp_max": null,
+     "temp_min": null
+    }
+   }
+  ],
+  "sensor_samples": [],
+  "session": {
+   "alan_notu": "",
+   "duration_minutes": null,
+   "end_time": null,
+   "ended_epoch": null,
+   "id": 7,
+   "operator_name": null,
+   "patient_name": "SABIT",
+   "patient_notes": null,
+   "session_date": "SABIT",
+   "session_status": "SABIT",
+   "start_time": "SABIT",
+   "started_epoch": null,
+   "target_condition": null,
+   "treatment_mode": "SABIT"
+  }
+ }
+}

@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
+from utils import mt_duzeltme
 from utils.akim_olcumu import akim_olcumu_acik
 from utils.path_utils import get_app_data_directory
 from utils.pdf_report_generator import get_pdf_generator
@@ -26,6 +27,13 @@ def _akimsiz_ozet(ozet, akim_acik: bool):
     if akim_acik or not isinstance(ozet, dict):
         return ozet
     return {**ozet, "current_avg": None}
+
+
+def _alan_notlu_ozet(ozet):
+    """CH3 · Y152: ÷5 düzeltilmiş koşu özetine notu ekler (`alan_notu`; düzeltilmemişte boş). Kopya; DB değişmez."""
+    if not isinstance(ozet, dict):
+        return ozet
+    return {**ozet, "alan_notu": mt_duzeltme.alan_notu(ozet.get("alan_duzeltme"))}
 
 
 class HistoryDeletePayload(BaseModel):
@@ -596,7 +604,7 @@ def get_session_full_details(session_id: int, db=Depends(get_db)):
                     "duty_percent": r.get("duty_percent"),
                     "phase": r.get("phase"),
                     "intensity_mt": r.get("intensity_mt"),
-                    "summary": _akimsiz_ozet(summaries.get(r.get("id")), _akim),
+                    "summary": _alan_notlu_ozet(_akimsiz_ozet(summaries.get(r.get("id")), _akim)),
                 }
             )
 
@@ -610,10 +618,17 @@ def get_session_full_details(session_id: int, db=Depends(get_db)):
                     "ambient_temp_c": s.get("ambient_temp_c"),
                     "current_a": s.get("current_a") if _akim else None,
                     "magnetic_field_mt": s.get("magnetic_field_mt"),
+                    # CH3 · Y152: bu dakikanın alanı ÷5 düzeltildi mi (grafik / rapor notu).
+                    "alan_duzeltildi": mt_duzeltme.duzeltildi_mi(s.get("alan_duzeltme")),
                     "coil_run_id": s.get("coil_run_id"),
                     "sample_count": s.get("sample_count"),
                 }
             )
+        # CH3 · Y152: seansın herhangi bir ölçülen alanı düzeltildiyse seans düzeyinde TEK not (ekran / rapor üstünde).
+        _duzeltildi = any(s["alan_duzeltildi"] for s in sensor_samples) or any(
+            (k.get("summary") or {}).get("alan_notu") for k in coil_runs
+        )
+        session["alan_notu"] = mt_duzeltme.NOT_METNI if _duzeltildi else ""
 
         return {
             "session": session,
@@ -652,6 +667,8 @@ def export_coil_runs_csv(session_id: int, db=Depends(get_db)):
             "Ort.Akim(A)",
             "Ort.Alan(mT)",
             "Ornek",
+            # CH3 · Y152: SONA eklendi (mevcut sütun sırası değişmez) — ÷5 düzeltilmiş koşunun notu.
+            "Alan notu",
         ]
         writer.writerow(headers)
 
@@ -675,6 +692,7 @@ def export_coil_runs_csv(session_id: int, db=Depends(get_db)):
                     summ.get("current_avg", ""),
                     summ.get("field_avg", ""),
                     summ.get("sample_count", ""),
+                    mt_duzeltme.alan_notu(summ.get("alan_duzeltme")),
                 ]
             )
 

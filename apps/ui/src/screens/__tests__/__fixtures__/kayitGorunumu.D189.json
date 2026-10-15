@@ -102,8 +102,11 @@
     "phase": 0.0,
     "started_epoch": 0,
     "summary": {
+     "alan_duzeltme": "yok",
+     "alan_notu": "",
      "current_avg": 0.4000000000000001,
      "field_avg": 0.8000000000000002,
+     "field_avg_orijinal": null,
      "sample_count": 3,
      "temp_avg": null,
      "temp_max": null,
@@ -121,8 +124,11 @@
     "phase": 0.0,
     "started_epoch": 0,
     "summary": {
+     "alan_duzeltme": "yok",
+     "alan_notu": "",
      "current_avg": 0.4000000000000001,
      "field_avg": null,
+     "field_avg_orijinal": null,
      "sample_count": 3,
      "temp_avg": null,
      "temp_max": null,
@@ -132,6 +138,7 @@
   ],
   "sensor_samples": [
    {
+    "alan_duzeltildi": false,
     "ambient_temp_c": null,
     "coil_id": "1",
     "coil_run_id": 1,
@@ -142,6 +149,7 @@
     "temperature_c": null
    },
    {
+    "alan_duzeltildi": false,
     "ambient_temp_c": null,
     "coil_id": "2",
     "coil_run_id": 1,
@@ -153,6 +161,7 @@
    }
   ],
   "session": {
+   "alan_notu": "",
    "duration_minutes": 0,
    "end_time": "SABIT",
    "ended_epoch": 0,

@@ -72,6 +72,8 @@ interface SessionInfo {
   patient_name?: string;
   patient_notes?: string;
   session_status?: string;
+  /** CH3 · Y152: seansın ölçülen alanı ÷5 düzeltildiyse not (backend `utils/mt_duzeltme.NOT_METNI`); değilse boş. */
+  alan_notu?: string;
 }
 
 interface CoilRunSummary {
@@ -81,6 +83,10 @@ interface CoilRunSummary {
   temp_avg?: number;
   current_avg?: number;
   field_avg?: number;
+  /** CH3 · Y152: `field_avg` TD2 öncesi firmware'in ~5× ölçeğinden ÷5 düzeltildi → orijinal + not (backend tek kaynak). */
+  field_avg_orijinal?: number | null;
+  alan_duzeltme?: string;
+  alan_notu?: string;
 }
 
 interface CoilRun {
@@ -357,7 +363,8 @@ function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
                     {kayitYogunlugu(run.intensity_mt)}
                   </Text>
                   <Text style={[styles.td, styles.colNum]} {...VERI_HUCRE} testID={`seans-bobin-olculen-alan-${coilId}`}>
-                    {olculenAlanOrt(summary?.field_avg)}
+                    {/* CH3 · Y152: ÷5 düzeltilmiş değer " *" ile işaretli (TEK dizge); not tablonun altında (backend metni). */}
+                    {`${olculenAlanOrt(summary?.field_avg)}${summary?.alan_notu ? " *" : ""}`}
                   </Text>
                   <Text style={[styles.td, styles.colHw]} {...VERI_HUCRE}>{hwLabel(run.hw_type)}</Text>
                   <Text style={[styles.td, styles.colNum]} {...VERI_HUCRE}>
@@ -379,6 +386,12 @@ function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
       {/* ⚠️ Uyarı YALNIZ gerçekten sökülü-donanım satırı olan eski seanslarda çıkar — her
           seansın altına kalıcı bir uyarı koymak, operatörün uyarıları okumayı bırakmasına
           yol açardı (alarm yorgunluğu). */}
+      {/* CH3 · Y152: eski firmware'in ~5× ölçtüğü alan ÷5 düzeltildiyse NEDEN ve KAPSAM söylenir (yalnız o seanslarda). */}
+      {coilRuns.find((r) => r.summary?.alan_notu)?.summary?.alan_notu ? (
+        <Text style={[styles.hwNote, styles.hwNoteUyari]} testID="seans-alan-duzeltme-notu">
+          {`* Alan (ölçülen): ${coilRuns.find((r) => r.summary?.alan_notu)?.summary?.alan_notu}. Eski cihaz yazılımı alanı yaklaşık 5 kat büyük ölçüyordu; özgün değer kayıtta saklıdır.`}
+        </Text>
+      ) : null}
       {coilRuns.some((r) => sokuluDonanim(r.hw_type)) ? (
         <Text style={[styles.hwNote, styles.hwNoteUyari]} testID="seans-sokulu-uyarisi">
           ⚠️ Bu seans, sistemden çıkarılmış ESP donanımına ait satırlar içeriyor (bobin 8 dahil).

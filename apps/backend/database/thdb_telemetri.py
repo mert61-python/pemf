@@ -24,8 +24,22 @@ import json
 from datetime import datetime
 from typing import Dict, List, Optional
 
+from utils import mt_duzeltme
+
 # SQLCipher + sqlite3 istisna demetleri TEK KAYNAKTAN (bkz. database/db_hatalari.py).
 from database.db_hatalari import _DB_ERROR, _DB_INTEGRITY  # noqa: F401
+
+#: CH3 · Y152 — ESKİ (işaretsiz) ölçülen alanı 5'e böler, ORİJİNALİ saklar, satırı işaretler. İki deyim TEK İŞLEMDE koşar
+#: (`_mt_bolu5_gocu`): biri düşerse hiçbir satır değişmez. `COALESCE`: içe aktarılan satır işareti NULL taşıyabilir.
+#: ⚠️ Modül düzeyi ad: yarım-göç kapısı ikinci deyimi bozarak işlem bütünlüğünü sınar (tests/test_CH3_gecmis_mT_BOLU5_Y152.py).
+MT_ORNEK_BOL_SQL = (
+    "UPDATE sensor_samples SET magnetic_field_mt_orijinal = magnetic_field_mt, magnetic_field_mt = magnetic_field_mt / ?, "
+    "alan_duzeltme = ? WHERE COALESCE(alan_duzeltme, '') = '' AND magnetic_field_mt IS NOT NULL"
+)
+MT_OZET_BOL_SQL = (
+    "UPDATE sensor_run_summary SET field_avg_orijinal = field_avg, field_avg = field_avg / ?, "
+    "alan_duzeltme = ? WHERE COALESCE(alan_duzeltme, '') = '' AND field_avg IS NOT NULL"
+)
 
 
 class KanitOkunamadi(Exception):
@@ -187,6 +201,8 @@ class TelemetriKarisimi:
                         sample.get('ambient_temp_c'),
                         sample.get('phase'),
                         sample.get('sample_count'),
+                        # CH3 · Y152: TD2 sonrası (doğrulanmış ölçek) yazım → 'yok'; ÷5 göçü bu satıra ASLA dokunmaz.
+                        mt_duzeltme.YOK,
                     )
                 )
 
@@ -197,8 +213,8 @@ class TelemetriKarisimi:
                     INSERT INTO sensor_samples
                     (session_id, coil_id, sample_ts, temperature_c, magnetic_field_mt,
                      current_a, pwm_frequency_hz, pwm_duty_percent, payload, created_at,
-                     coil_run_id, ambient_temp_c, phase, sample_count)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     coil_run_id, ambient_temp_c, phase, sample_count, alan_duzeltme)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''',
                     rows,
                 )
@@ -311,10 +327,21 @@ class TelemetriKarisimi:
                     '''
                     INSERT OR REPLACE INTO sensor_run_summary
                     (coil_run_id, sample_count, temp_min, temp_max, temp_avg,
-                     current_avg, field_avg, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                     current_avg, field_avg, created_at, alan_duzeltme)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''',
-                    (int(coil_run_id), sample_count, temp_min, temp_max, temp_avg, current_avg, field_avg, now_ts),
+                    # CH3 · Y152: yeni özet TD2 sonrası (doğrulanmış ölçek) → 'yok'; ÷5 göçü dokunmaz.
+                    (
+                        int(coil_run_id),
+                        sample_count,
+                        temp_min,
+                        temp_max,
+                        temp_avg,
+                        current_avg,
+                        field_avg,
+                        now_ts,
+                        mt_duzeltme.YOK,
+                    ),
                 )
                 conn.commit()
         except Exception as e:
@@ -356,7 +383,7 @@ class TelemetriKarisimi:
                 cursor.execute(
                     '''
                     SELECT s.coil_run_id, s.sample_count, s.temp_min, s.temp_max,
-                           s.temp_avg, s.current_avg, s.field_avg
+                           s.temp_avg, s.current_avg, s.field_avg, s.field_avg_orijinal, s.alan_duzeltme
                     FROM sensor_run_summary s
                     JOIN session_coil_runs r ON r.id = s.coil_run_id
                     WHERE r.session_id = ?
@@ -374,6 +401,9 @@ class TelemetriKarisimi:
                         'temp_avg': d.get('temp_avg'),
                         'current_avg': d.get('current_avg'),
                         'field_avg': d.get('field_avg'),
+                        # CH3 · Y152: düzeltme işareti + orijinal (rapor / CSV notu bunlardan).
+                        'field_avg_orijinal': d.get('field_avg_orijinal'),
+                        'alan_duzeltme': d.get('alan_duzeltme') or '',
                     }
                 return summaries
         except _DB_ERROR as e:
@@ -384,7 +414,7 @@ class TelemetriKarisimi:
         """Bir seansin sensor orneklerini grafik icin getir (sample_ts ASC).
         Donus alanlari: coil_id, sample_ts, temperature_c, ambient_temp_c,
         current_a, magnetic_field_mt, pwm_frequency_hz, pwm_duty_percent,
-        coil_run_id, sample_count."""
+        coil_run_id, sample_count, magnetic_field_mt_orijinal, alan_duzeltme (CH3)."""
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
@@ -392,7 +422,8 @@ class TelemetriKarisimi:
                     '''
                     SELECT coil_id, sample_ts, temperature_c, ambient_temp_c,
                            current_a, magnetic_field_mt, pwm_frequency_hz,
-                           pwm_duty_percent, coil_run_id, sample_count
+                           pwm_duty_percent, coil_run_id, sample_count,
+                           magnetic_field_mt_orijinal, alan_duzeltme
                     FROM sensor_samples
                     WHERE session_id = ?
                     ORDER BY sample_ts ASC
@@ -404,3 +435,55 @@ class TelemetriKarisimi:
         except _DB_ERROR as e:
             self.logger.error(f"Sensor sample listeleme hatası: {e}")
             return []
+
+    def _mt_bolu5_gocu(self, zorla: bool = False) -> int:
+        """CH3 · Y152 (sahip 2026-10-15): ESKİ (işaretsiz, TD2 öncesi firmware) ölçülen alanı 5'e BÖL — BİR KEZ, TEK İŞLEMDE.
+
+        · Yalnız `alan_duzeltme = ''` VE ölçülen alanı DOLU satırlar (NULL "ölçülmedi" — dokunulmaz, not uydurulmaz).
+        · Orijinal `*_orijinal` sütununda SAKLANIR (geri alma: değer = orijinal, orijinal = NULL, işaret ≠ 'bolu5'); satır 'bolu5' olur.
+        · İki deyim + sistem ayarı `mt_bolu5_goc = tamam` aynı işlemde: biri düşerse `_get_connection` geri alır, hiçbir satır değişmez,
+          DB yine açılır (istisna yutulur, günlüğe yazılır) ve sonraki açılış yeniden dener.
+        · Idempotent: ayar "tamam" ise koşmaz; koşsa da işaretli satıra dokunmaz. Yeni yazımlar 'yok' taşır → asla bölünmez.
+        · `zorla=True`: içe aktarma (`import_rows`) SONRASI — eski bir dışa aktarım dosyasının işaretsiz satırları da düzeltilir.
+        Dönüş: düzeltilen satır sayısı (örnek + özet); düşerse -1."""
+        if not zorla and self._get_system_setting(mt_duzeltme.GOC_ANAHTARI) == "tamam":
+            return 0
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(MT_ORNEK_BOL_SQL, (mt_duzeltme.BOLEN, mt_duzeltme.BOLUNDU))
+                n_ornek = max(cursor.rowcount, 0)
+                cursor.execute(MT_OZET_BOL_SQL, (mt_duzeltme.BOLEN, mt_duzeltme.BOLUNDU))
+                n_ozet = max(cursor.rowcount, 0)
+                cursor.execute(
+                    '''
+                    INSERT INTO system_settings (setting_key, setting_value, description, updated_at)
+                    VALUES (?, 'tamam', ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(setting_key) DO UPDATE SET setting_value = 'tamam', updated_at = CURRENT_TIMESTAMP
+                ''',
+                    (mt_duzeltme.GOC_ANAHTARI, "CH3 Y152: gecmis olculen mT /5 gocu"),
+                )
+                conn.commit()
+        except Exception:
+            self.logger.error(
+                "CH3 · Y152: gecmis olculen mT /5 gocu YAPILAMADI — hicbir satir degismedi (islem geri alindi); "
+                "bir sonraki acilista yeniden denenecek.",
+                exc_info=True,
+            )
+            if zorla:
+                # İçe aktarma sonrası düştü: ayar "tamam" kalırsa açılış yeniden denemez → "bekliyor" (en-iyi-çaba).
+                try:
+                    self._set_system_setting(
+                        mt_duzeltme.GOC_ANAHTARI, "bekliyor", "CH3 Y152: ice aktarma sonrasi bekliyor"
+                    )
+                except Exception:
+                    self.logger.warning("CH3 · Y152: goc ayari 'bekliyor'a cekilemedi", exc_info=True)
+            return -1
+        if n_ornek or n_ozet:
+            self.logger.warning(
+                "CH3 · Y152: TD2 oncesi firmware ile olculen alan 5'e bolundu — %d dakika ornegi, %d kosu ozeti "
+                "(orijinal *_orijinal sutununda saklandi; isaret 'bolu5').",
+                n_ornek,
+                n_ozet,
+            )
+        return n_ornek + n_ozet
