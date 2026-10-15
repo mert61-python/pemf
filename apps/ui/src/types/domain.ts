@@ -262,6 +262,8 @@ export interface EstopMandali {
   nesil?: number;
   /** Y46: mandal önceki süreçten (diskten) yüklendi — "Sıfırla"ya basılmadan yeniden başlatıldı. */
   oncekiOturum?: boolean;
+  /** TD6 · K12: backend'in nedene özgü EYLEM metni (ör. kart reddinde duty / uyumsuzluk metni); boş → arayüz nedenden türetir. */
+  eylem?: string;
 }
 
 // ─── WebSocket live data ──────────────────────────────────────────────────────

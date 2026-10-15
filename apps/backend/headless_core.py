@@ -257,7 +257,7 @@ class HeadlessCore:
             # TD3: kartın paket YANITLARI (STM_OK / STM_NACK) ve her STOP yazıldığında o ana dek gelmiş yanıt sayısı —
             # E-stop'un STOP'una kartın ne dediği (`hw_stop_yaniti_bekle`). Yalnız RAPOR; STOP'u kapılamaz (Ö.4-Y8).
             self._stm_yanit_sayaci = 0
-            self._stm_yanitlar = collections.deque(maxlen=64)  # (sayaç, "ok_sifir" | "ok" | "nack")
+            self._stm_yanitlar = collections.deque(maxlen=64)  # (sayaç, "ok_sifir" | "ok" | "nack", satır — TD6)
             self._hw_stop_yanit_tabanlari = collections.deque(maxlen=64)  # (STOP kuyruk sırası, yazımdaki sayaç)
         if getattr(self, "_hw_canlandirma_kilidi", None) is None:
             self._hw_canlandirma_kilidi = threading.Lock()
@@ -401,12 +401,13 @@ class HeadlessCore:
                     _tabanlar.append((int(sira or 0), getattr(self, "_stm_yanit_sayaci", 0)))
             kosul.notify_all()
 
-    def _stm_yaniti_kaydet(self, tur: str) -> None:
-        """TD3 (okuyucu): kartın paket yanıtını yazım izine ekle — "ok_sifir" (tüm çıkışlar sıfır ACK), "ok", "nack"."""
+    def _stm_yaniti_kaydet(self, tur: str, satir: str = "") -> None:
+        """TD3 (okuyucu): kartın paket yanıtını yazım izine ekle — "ok_sifir" (tüm çıkışlar sıfır ACK), "ok", "nack".
+        TD6: satırın kendisi de tutulur (tekil bobin başlatması yanıtı İÇERİKLE eşler — `stm_yanitlari_sonra`)."""
         self._hw_izlemeyi_kur()
         with self._hw_yazim_kosulu:
             self._stm_yanit_sayaci += 1
-            self._stm_yanitlar.append((self._stm_yanit_sayaci, tur))
+            self._stm_yanitlar.append((self._stm_yanit_sayaci, tur, str(satir or "")[:400]))
             self._hw_yazim_kosulu.notify_all()
 
     def hw_stop_yaniti_bekle(self, sira: int, zaman_asimi: float) -> str | None:
@@ -420,13 +421,25 @@ class HeadlessCore:
         with self._hw_yazim_kosulu:
             while True:
                 taban = next((n for s, n in self._hw_stop_yanit_tabanlari if s >= int(sira)), None)
-                turler = [] if taban is None else [t for n, t in self._stm_yanitlar if n > taban]
+                turler = [] if taban is None else [t for n, t, _s in self._stm_yanitlar if n > taban]
                 if "ok_sifir" in turler:
                     return "kabul"
                 kalan = bitis - time.monotonic()
                 if kalan <= 0:
                     return "red" if "nack" in turler else None
                 self._hw_yazim_kosulu.wait(min(kalan, 0.05))
+
+    def stm_yanit_sayaci(self) -> int:
+        """TD6 · K3: şu ana dek gelen kart yanıtı sayısı — komuttan ÖNCE alınır, `stm_yanitlari_sonra` tabanıdır."""
+        self._hw_izlemeyi_kur()
+        with self._hw_yazim_kosulu:
+            return int(self._stm_yanit_sayaci)
+
+    def stm_yanitlari_sonra(self, taban: int) -> list[tuple[str, str]]:
+        """TD6 · K3: `taban`dan SONRA gelen kart yanıtları [(tür, satır)]. BEKLEMEZ (çağıran asenkron yoklar); yalnız RAPOR."""
+        self._hw_izlemeyi_kur()
+        with self._hw_yazim_kosulu:
+            return [(t, s) for n, t, s in self._stm_yanitlar if n > int(taban)]
 
     #: `db_acilis_hatalari` anahtarı → operatöre gösterilen ad.
     _DB_ADI = {"hasta": "Hasta veritabanı", "tedavi": "Tedavi kaydı veritabanı"}
@@ -1143,7 +1156,9 @@ class HeadlessCore:
                 if _sifir:
                     self._publish_event("hardware.stm.stop_onayi", {"bobin_sayisi": len(guncellemeler)})
                 try:
-                    self._stm_yaniti_kaydet("ok_sifir" if _sifir else "ok")  # TD3: E-stop teyidi kartın yanıtını görür
+                    self._stm_yaniti_kaydet(
+                        "ok_sifir" if _sifir else "ok", decoded
+                    )  # TD3: E-stop teyidi kartın yanıtını görür
                 except Exception:
                     self.logger.exception("[STM32] ACK yanıt izi yazılamadı (ACK işlendi)")
             except Exception as exc:
@@ -1159,7 +1174,7 @@ class HeadlessCore:
             self.logger.warning("[STM32 NACK] Packet rejected; retrying last payload once.")
             try:
                 self._stm_yaniti_kaydet(
-                    "nack"
+                    "nack", decoded
                 )  # TD3: STOP'a NACK → E-stop teyidi düşer (STOP yeniden oynatması aşağıda SÜRER)
             except Exception:
                 self.logger.exception("[STM32] NACK yanıt izi yazılamadı (yeniden oynatma sürüyor)")

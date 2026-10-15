@@ -141,7 +141,9 @@ def _aktif_seans_kur(api, db, coil_ids):
 
 
 def _duty_bildirimleri(bildirimler) -> list[str]:
-    return [m for m, _t in bildirimler if "duty" in m and "REDDETTİ" in m]
+    # TD6 · K3: sade metin ("Bobin N çift yönlü kipte en fazla %… çalışabilir; %… kabul edilmedi. Duty'yi …") — eski
+    # "UYGULANAMAZ — kart komutu REDDETTİ" jargonu kalktı.
+    return [m for m, _t in bildirimler if "Duty'yi" in m and "kabul edilmedi" in m]
 
 
 # ── sayaç: duty reddi gürültü değil — TEK NACK sistematik karardır; CRC eşiği DEĞİŞMEDİ ──────────────────────────
@@ -191,7 +193,7 @@ def test_KRITIK_seansta_ILK_duty_reddi_seansi_DURDURUR_neden_ve_eylem_SOYLER(ort
     metinler = _duty_bildirimleri(bildirimler)
     assert len(metinler) == 1, f"tek red için {len(metinler)} duty bildirimi: {bildirimler!r}"
     m = metinler[0]
-    for parca in ("Bobin 1", "%80", "bipolar", "%50", "seans DURDURULDU", "Sürüş Kipi", "Unipolar"):
+    for parca in ("Bobin 1", "%80", "çift yönlü", "%50", "seans DURDURULDU", "Sürüş Kipi", "Unipolar"):
         assert parca in m, f"bildirimde {parca!r} yok: {m!r}"
     assert not any(y in m for y in _YANLIS_EYLEM), f"duty reddi firmware uyuşmazlığı gibi anlatıldı: {m!r}"
     assert not any("firmware sürümü" in b for b, _t in bildirimler), (
@@ -206,7 +208,7 @@ def test_KRITIK_tek_bacak_tavani_reddi_UNIPOLAR_eylemi_soyler(ortam, monkeypatch
     core._handle_stm_line(_nack_satiri(bobin=6, duty=120.0), None)
     assert _estop_bekle()
     m = _duty_bildirimleri(bildirimler)
-    assert m and all(p in m[0] for p in ("Bobin 6", "%120", "unipolar", "%100")), f"{bildirimler!r}"
+    assert m and all(p in m[0] for p in ("Bobin 6", "%120", "tek yönlü", "%100")), f"{bildirimler!r}"
     assert "Sürüş Kipi" not in m[0], f"tek-bacak tavanında kip önerisi anlamsız: {m[0]!r}"
 
 

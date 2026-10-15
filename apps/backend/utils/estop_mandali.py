@@ -85,7 +85,12 @@ _durum = {
     "onceki_oturum": False,
     # D1.75 (B-1.22): KAPANIŞ — bu mandalın ikinci durumu (aşağıda `kapanis_kur`). Diske YAZILMAZ, Sıfırla KALDIRMAZ.
     "kapanis": False,
+    # TD6 · K12: bandın göstereceği EYLEM metni (ör. kart reddinde duty / uyumsuzluk metni). Diske YAZILMAZ.
+    "eylem": "",
 }
+#: TD6 · K12: neden → (metin, monotonik an) — bir SONRAKİ `mandalla(neden)` çağrısı alır (`eylem_birak`).
+_bekleyen_eylem: dict = {}
+_BEKLEYEN_EYLEM_OMRU_S = 5.0
 _nesil = 0
 _baglam: contextvars.ContextVar = contextvars.ContextVar("pemf_surus_nesli", default=None)
 # 1-C inceleme i7-F-1: HEDEF-KAYBI nesli (AI Pro) — sürüş neslinden AYRI (bkz. `kayip_nesli_artir`).
@@ -106,12 +111,22 @@ def mandalli_mi() -> bool:
         return bool(_durum["aktif"] or _durum["kapanis"])
 
 
+def eylem_birak(neden: str, metin: str) -> None:
+    """TD6 · K12 (tezgâh Oturum 13): bir SONRAKİ `mandalla(neden)`ın bantta göstereceği EYLEM metni — mandalı kuran yol
+    (ör. STM reddinde `_emergency_stop_async`) imzası değişmeden nedenini söyleyebilsin. Yalnız METİN: mandal kurmaz, beklemez,
+    STOP'u kapılamaz (Ö.4-Y8); başka nedenli mandal onu almaz, 5 sn içinde alınmazsa düşer."""
+    with _kilit:
+        _bekleyen_eylem[str(neden or "")[:80]] = (str(metin or "")[:500], time.monotonic())
+
+
 def mandalla(neden: str = "") -> int:
     """Acil durdurma: mandalı KUR ve nesli artır. Kilit dışında hiçbir şey beklemez (STOP'u geciktirmez)."""
     global _nesil
     with _kilit:
         _durum["aktif"] = True
         _durum["neden"] = str(neden or "")[:80]
+        _bek = _bekleyen_eylem.pop(_durum["neden"], None)
+        _durum["eylem"] = _bek[0] if _bek and time.monotonic() - _bek[1] <= _BEKLEYEN_EYLEM_OMRU_S else ""
         _durum["zaman"] = time.time()
         _durum["onceki_oturum"] = False
         _nesil += 1
@@ -139,6 +154,7 @@ def sifirla(kaynak: str = "") -> bool:
         onceki = bool(_durum["aktif"])
         _durum["aktif"] = False
         _durum["onceki_oturum"] = False
+        _durum["eylem"] = ""
         if onceki:
             _durum["sifirlama_zamani"] = time.time()
             _durum["sifirlayan"] = str(kaynak or "")[:80]
@@ -180,6 +196,8 @@ def durum() -> dict:
             "nesil": _nesil,
             # Y46: mandal önceki süreçten (diskten) geldi — arayüz "önceki oturumda ACİL DURDUR — sıfırlanmadı" der.
             "oncekiOturum": bool(_durum["onceki_oturum"]),
+            # TD6 · K12: nedene göre EYLEM (boş → arayüz nedenin kendi eylemini yazar).
+            "eylem": str(_durum.get("eylem") or ""),
         }
 
 
@@ -280,6 +298,7 @@ def kalicilik_kur(yol) -> dict:
             _durum["neden"] = f"{ONCEKI_OTURUM_NEDENI}:{onceki_neden}"[:80]
             _durum["zaman"] = time.time()
             _durum["onceki_oturum"] = True
+            _durum["eylem"] = ""
             _nesil += 1
         _log.warning("ACIL DURDUR mandali onceki oturumdan KURULU (sifirlanmadi): %s", onceki_neden)
     if _engel:

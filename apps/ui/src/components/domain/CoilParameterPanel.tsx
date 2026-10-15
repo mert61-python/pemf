@@ -160,7 +160,7 @@ export function CoilParameterPanel({
       // YÜKSEK fix: apiPost ağ-hatası/non-2xx'te THROW ETMEZ (fallback=null döner) → dönüşü DOĞRULA.
       // Eskiden yanıt kontrol edilmeden "başarılı" sayılıyordu → STOP sessizce düşse bile kullanıcı
       // bobinin durduğunu sanıyordu (bobin ÇALIŞMAYA DEVAM). null/status:error → açık uyarı ver.
-      const res = await apiPost<{ status?: string; command_id?: string } | null>(`/coil/${coilId}/control`, {
+      const res = await apiPost<{ status?: string; command_id?: string; mesaj?: string } | null>(`/coil/${coilId}/control`, {
         freq: f,
         duty: d,
         phase: ph,
@@ -193,8 +193,12 @@ export function CoilParameterPanel({
       // ack yayınlamaz → onlarda bekleme YOK.
       setBekleyenKomut(start && ok && !stm32Driven && typeof res?.command_id === "string" ? res.command_id : null);
       if (!ok) {
+        // TD6 · K3 (tezgâh Oturum 13): kart duty'yi REDDETTİYSE backend nedeni ve eylemi `mesaj`la verir ("Bobin 1 çift yönlü
+        // kipte en fazla %50 çalışabilir; %80 kabul edilmedi. …"); eskiden API "success" dönüyor, bobin sessizce başlamıyordu.
         setError(start
-          ? "Komut onaylanamadı — bobin başlatılamamış olabilir, tekrar deneyin."
+          ? (typeof res?.mesaj === "string" && res.mesaj.trim()
+            ? res.mesaj
+            : "Komut onaylanamadı — bobin başlatılamamış olabilir, tekrar deneyin.")
           : "DURDURMA ONAYLANAMADI — bobin HÂLÂ ÇALIŞIYOR olabilir. ACİL DURDUR'a basın.");
       }
       return ok;

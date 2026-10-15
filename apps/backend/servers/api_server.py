@@ -1021,6 +1021,16 @@ def _stm_red_aktif_seansi_durdur(ham: str) -> bool:
         )
         # Y74 (sahip): seansta red ACİL DURDUR yolundan durdurur ve mandal KURULU KALIR → metin "sonra 'Sıfırla'ya basın" der.
         _duty_metni = live_state.stm_duty_reddi_metni(ham, "seans DURDURULDU", sifirla=True)
+        # TD6 · K12: mandal bandı nedene göre EYLEM söylesin — duty reddinde K3 metni, aksi kart uyumsuzluğu metni. Yalnız
+        # METİN (mandal aşağıdaki E-stop yolunda kurulur; imza ve sıra DEĞİŞMEDİ).
+        try:
+            estop_mandali.eylem_birak(
+                "stm_komut_reddi", live_state.stm_duty_reddi_metni(ham, sifirla=True) or STM_RED_MESAJI
+            )
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "K12: mandal eylem metni bırakılamadı (durdurma SÜRÜYOR)", exc_info=True
+            )
         _push_notification(
             "⛔ " + _duty_metni if _duty_metni else "⛔ Seans DURDURULDU: " + STM_RED_MESAJI,
             "error",
@@ -3409,6 +3419,62 @@ async def cleanup_stale_esp():
 
 
 # ── Per-coil MQTT control (direct ESP command via MQTT) ───────────────────────
+#: TD6 · K3: tekil bobin BAŞLATMASINDA kartın yanıtı en çok bu kadar beklenir (121 B @115200 ≈ 10,5 ms + kartın satırı).
+_STM_BASLATMA_YANIT_BEKLEME_S = 0.5
+
+
+def _stm_yanit_tabani():
+    """TD6 · K3: kart yanıtı sayacı (komuttan ÖNCE) — izi bildirmeyen çekirdekte None (bekleme yapılmaz)."""
+    _f = getattr(getattr(state.hardware, "core", None), "stm_yanit_sayaci", None)
+    if not callable(_f):
+        return None
+    try:
+        return int(_f())
+    except Exception:
+        return None
+
+
+async def _stm_baslatma_kart_yaniti(coil_id: int, duty_yuzde: float, taban) -> str:
+    """TD6 · K3 (tezgâh Oturum 13): tekil bobin başlatmasına kartın yanıtı — bu bobinin duty TAVANI reddi gelirse operatörün
+    EYLEM metni (`live_state.stm_duty_reddi_metni`), aksi "".
+
+    ÖLÇÜLEN: kart %80'i (çift yönlü) reddettiği hâlde API `success` dönüyordu; bobin başlamıyor, sebep görünmüyordu. Yanıt
+    İÇERİKLE eşlenir (önceki canlı tutma paketinin yanıtı karışmasın): bu bobinin duty reddi → ret; bu bobini istenen duty ile
+    ÇALIŞIR gösteren `STM_OK` → kabul (beklemeyi erken bitirir); süre dolarsa bugünkü anlam DEĞİŞMEZ. Kıskaç YOK (Ö.4-Y9)."""
+    if taban is None:
+        return ""
+    core = getattr(state.hardware, "core", None)
+    _sonra = getattr(core, "stm_yanitlari_sonra", None)
+    _ack_coz = getattr(core, "_parse_stm_ok", None)
+    if not callable(_sonra):
+        return ""
+    bitis = time.monotonic() + _STM_BASLATMA_YANIT_BEKLEME_S
+    while True:
+        try:
+            yanitlar = _sonra(taban)
+        except Exception:
+            return ""
+        for tur, satir in yanitlar:
+            if tur == "nack":
+                r = live_state.stm_duty_reddi_coz(satir)
+                if r is not None and r["bobin"] == int(coil_id):
+                    return live_state.stm_duty_reddi_metni(satir)
+            elif callable(_ack_coz):
+                try:
+                    for u in _ack_coz(satir):
+                        if (
+                            int(u.get("coil_id", 0)) == int(coil_id)
+                            and u.get("running")
+                            and abs(float(u.get("duty", 0.0)) - float(duty_yuzde)) <= 1.0
+                        ):
+                            return ""
+                except Exception:
+                    pass
+        if time.monotonic() >= bitis:
+            return ""
+        await asyncio.sleep(0.02)
+
+
 @app.post("/api/coil/{coil_id}/control")
 async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     """Send a start/stop command to a coil.
@@ -3454,6 +3520,7 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
         if not state.hardware:
             raise HTTPException(status_code=503, detail="STM32 donanım kontrolcüsü hazır değil.")
         stm_duration_min = _duration_seconds_to_stm_minutes(payload.duration)
+        _yanit_tabani = _stm_yanit_tabani() if payload.start else None  # TD6 · K3: komuttan ÖNCE
         _stm_sonuc = state.hardware.update_coil(
             coil_id,
             payload.freq,
@@ -3472,6 +3539,13 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
         # yaziliyor hem istemciye "success" donuyordu. Kosu kaydi yalniz KABUL edilen start'ta;
         # STOP'ta finish HER halde calisir (acik kaydi kapatmak guvenli taraftir).
         _stm_kabul = bool(_stm_sonuc)
+        # TD6 · K3 (tezgâh Oturum 13): kart bu bobinin duty'sini REDDETTİYSE "success" DÖNÜLMEZ ve koşu kaydı açılmaz; operatör
+        # nedeni ve eylemi görür. Yalnız START bekler (≤ 0,5 sn); STOP ASLA beklemez (Ö.4-Y8).
+        _kart_red_metni = ""
+        if payload.start and _stm_kabul:
+            _kart_red_metni = await _stm_baslatma_kart_yaniti(coil_id, payload.duty, _yanit_tabani)
+            if _kart_red_metni:
+                _stm_kabul = False
         if payload.start:
             if _stm_kabul:
                 _begin_coil_run(coil_id, _uyg["freq"], _uyg["duty_yuzde"], _uyg["faz"], None, "stm")  # D1.99
@@ -3484,6 +3558,9 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
         }
         if _sifir_hz:
             _stm_yanit["sifirHzDurdurma"] = True  # D1.53: istek DURDURMA olarak uygulandı
+        if _kart_red_metni:
+            _stm_yanit["kartReddetti"] = True
+            _stm_yanit["mesaj"] = _kart_red_metni
         return _stm_yanit
 
     if payload.start:

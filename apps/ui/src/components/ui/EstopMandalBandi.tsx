@@ -46,11 +46,30 @@ export function mandalNedeni(neden?: string): string {
   return "acil durdurma";
 }
 
+/**
+ * TD6 · K12 (tezgâh Oturum 13): nedene göre NE YAPILACAĞI — eskiden her neden aynı cümleyi alıyordu. Backend `eylem` verdiyse
+ * (kart reddi: duty metni ya da kart uyumsuzluğu) o; bağlantı kopması / watchdog → kablo; boş → yalnız genel cümle.
+ */
+export function mandalEylemi(neden?: string, eylem?: string): string {
+  const e = String(eylem || "").trim();
+  if (e) return e;
+  const n = String(neden || "");
+  const ic = n.startsWith("onceki_oturum:") ? n.slice("onceki_oturum:".length) : n;
+  if (ic === "stm_disconnected" || ic === "stm_watchdog_timeout") return "USB kablosunu kontrol edin.";
+  if (ic === "stm_komut_reddi") {
+    return "Cihaz kartı komutu reddetti — bobin ayarlarını (duty / sürüş kipi) kontrol edin; sürerse teknik desteği arayın.";
+  }
+  return "";
+}
+
 export function EstopMandalBandi() {
   const { snapshot } = useLiveData();
   const [mesgul, setMesgul] = useState(false);
   const mandal = snapshot?.estopMandali;
   if (!mandal?.aktif) return null;
+  const eylem = mandalEylemi(mandal.neden, mandal.eylem);
+  // Eylem metni "Sıfırla" adımını ZATEN söylüyorsa (duty reddi, Y74) bant onu ikinci kez yazmaz.
+  const sifirlaSoylendi = /Sıfırla/.test(eylem);
 
   const sifirla = async () => {
     const onay = await platformConfirm(
@@ -78,8 +97,10 @@ export function EstopMandalBandi() {
         {/* 1-C inceleme i3-F-2: "Bobinler durduruldu" GÜVENCESİ yazılmaz — mandal iletisi teyit taşımaz, E-stop teyitsiz
             bitebilir (kablo çıkık / ölü gönderici). Bant EYLEM söyler. */}
         <Text style={styles.alt}>
-          {`Neden: ${mandalNedeni(mandal.neden)}. Bobinlerin durduğunu cihazda kontrol edin. Yeniden başlatmak için ` +
-            'önce "Sıfırla"; sıfırlama bobinleri başlatmaz.'}
+          {`Neden: ${mandalNedeni(mandal.neden)}. ${eylem ? eylem + " " : ""}Bobinlerin durduğunu cihazda kontrol edin. ` +
+            (sifirlaSoylendi
+              ? "Sıfırlama bobinleri başlatmaz."
+              : 'Yeniden başlatmak için önce "Sıfırla"; sıfırlama bobinleri başlatmaz.')}
         </Text>
       </View>
       <Pressable

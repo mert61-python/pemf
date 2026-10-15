@@ -13,7 +13,12 @@
  * Testler ÇİZİLEN metni ve GÖNDERİLEN gövdeyi ölçer — iç state'i değil.
  */
 const mockApiPost = jest.fn(async () => ({ status: "success" }));
-jest.mock("@/services/apiClient", () => ({ apiPost: (...a: unknown[]) => mockApiPost(...(a as [])) }));
+// TD6 · K8: tek yönlüye geçiş onay ister — bu dosyanın senaryoları onayı VERİLMİŞ varsayar (onay davranışı:
+// SurusKipiSecici.TD6.K8.onay.test.tsx).
+jest.mock("@/services/apiClient", () => ({
+  apiPost: (...a: unknown[]) => mockApiPost(...(a as [])),
+  platformConfirm: async () => true,
+}));
 
 import { render, fireEvent, waitFor } from "@testing-library/react-native";
 import { SurusKipiSecici } from "@/components/domain/SurusKipiSecici";

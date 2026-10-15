@@ -299,25 +299,18 @@ def is_plate_plausible(metrics: dict) -> bool:
 
 
 def plate_user_message(metrics: dict | None = None) -> str:
-    """Plaka kipi reddi — ne ölçüldü, ne beklendi, ne yapılmalı (eylem söyleyen hata)."""
-    m = metrics or {}
-    try:
-        n = m.get("n_inliers")
-        olcum = " (ölçülen: ızgarayı doğrulayan kuyucuk adayı {n} — beklenen ≥{e}; ince hizalama {h})".format(
-            n="ölçülemedi" if n is None else int(n),
-            e=_PLAKA_MIN_DOGRULANMIS,
-            h="başarılı" if m.get("ecc_ok") else "başarısız",
-        )
-    except Exception:
-        olcum = ""
-    return ("Bu modül 24 kuyucuklu petri plakası fotoğrafı bekliyor; yüklenen görüntüde plaka ızgarası "
-            "doğrulanamadı{olcum}. Fantom fotoğrafını 'Fantom Tümör' modülüne, hayvan fotoğrafını ilgili kedi "
-            "modülüne yükleyin — yanlış modülde üretilen kuyucuk sonucu yanıltıcıdır. Görüntü gerçekten bir "
-            "plakaysa tepeden, dik ve yakın çekin (plaka karenin en az yarısını kaplasın); tekil petri kapları "
-            "için 'Tekil petri kapları' kipini seçin. Araştırma için denetim Petri modülündeki 'Gelişmiş "
-            "(araştırma) ayarları' bölümünden kapatılabilir."
-            # AIK K4: ortam değişkeni adı kullanıcı metnine yazılmaz (bkz. `user_message`).
-            ).format(olcum=olcum)
+    """Plaka kipi reddi — SADE metin ve tek eylem (TD6 · K9, tezgâh Oturum 13).
+
+    Eskiden ölçüm sayıları cümlenin ortasındaydı ("ızgarayı doğrulayan kuyucuk adayı 3 — beklenen ≥2; ince hizalama
+    başarısız"): jargon ve çelişkili görünen sayı (3 ≥ 2 ama ret — ret ince hizalamadan). Sayılar artık YALNIZ ölçümde
+    (`evaluate_plate` günlüğü + yanıtın `plausibility` alanı = destek ayrıntısı). `metrics` imza uyumu için kalır."""
+    del metrics
+    return (
+        "24 kuyucuklu plaka ızgarası oturmadı. Plakayı kareyi dolduracak kadar yakından, tepeden ve dik çekin. Tekil petri kapları için "
+        "'Tekil petri kapları' kipini seçin; fantom ya da hayvan fotoğrafını ilgili modüle yükleyin. Araştırma için denetim "
+        "Petri modülündeki 'Gelişmiş (araştırma) ayarları' bölümünden kapatılabilir."
+        # AIK K4: ortam değişkeni adı kullanıcı metnine yazılmaz (bkz. `user_message`).
+    )
 
 
 def evaluate_plate(plate: "dict | None", guard: "bool | None" = None) -> tuple[bool, dict[str, Any]]:

@@ -27,10 +27,31 @@ import { useState, useCallback, useMemo } from "react";
 import { Text, View, StyleSheet, TouchableOpacity } from "react-native";
 import { colors, spacing, typography, touch } from "@/theme/tokens";
 import type { CoilStatus } from "@/types/domain";
-import { apiPost } from "@/services/apiClient";
+import { apiPost, platformConfirm } from "@/services/apiClient";
 
 /** STM sürücüsüne bağlı bobin sayısı (1..7). Backend `STM_COIL_IDS` ile AYNI olmalı. */
 const STM_BOBIN = 7;
+
+/** TD6 · K8 (tezgâh Oturum 13): tek dokunuş, tam köprülü bobini DC bileşenli tek yönlü sürüşe KALICI geçiriyordu — onay ister.
+ *  Ters yön (tek yönlüden çift yönlüye) firmware varsayılanına dönüştür; onay istemez. */
+export const TEK_YONLU_ONAY_BASLIK = "Tek yönlü sürüşe geçilsin mi?";
+export const TEK_YONLU_ONAY_METNI =
+  "Tek yönlü sürüş bobinde DC bileşen oluşturur ve alan değerlerini değiştirir. Emin misiniz?";
+
+/** TD6 · K8: kaydedilen değişikliğin SONUÇ cümlesi — neyin değiştiğini söyler ("Kaydedildi" tek başına yetmiyordu). */
+export function surusKipiSonucu(onceki: boolean[], yeni: boolean[], yetenekli: boolean[]): string {
+  const tek: number[] = [];
+  const cift: number[] = [];
+  yeni.forEach((u, i) => {
+    if (!yetenekli[i] || u === onceki[i]) return;
+    (u ? tek : cift).push(i + 1);
+  });
+  const parca: string[] = [];
+  if (tek.length) parca.push(`Bobin ${tek.join(", ")} tek yönlü (Unipolar)`);
+  if (cift.length) parca.push(`Bobin ${cift.join(", ")} çift yönlü (Bipolar)`);
+  if (!parca.length) return "Kip değişmedi — kaydedildi.";
+  return `${parca.join("; ")} sürüşe alındı — bir sonraki başlatmada uygulanır.`;
+}
 
 export function SurusKipiSecici({
   coils,
@@ -62,9 +83,16 @@ export function SurusKipiSecici({
   );
   const [gonderiliyor, setGonderiliyor] = useState(false);
   const [durum, setDurum] = useState<string | null>(null);
+  const yetenekliDizi = useMemo(() => stmCoils.map((c) => bipolarYetenek(c)), [stmCoils, bipolarYetenek]);
 
   const gonder = useCallback(
     async (yeni: boolean[]) => {
+      const onceki = istek;
+      // K8: yetenekli bir bobin çift yönlüden TEK YÖNLÜYE geçiyorsa onay; vazgeçilirse hiçbir şey değişmez/gönderilmez.
+      if (yeni.some((u, i) => u && !onceki[i] && yetenekliDizi[i])) {
+        const onay = await platformConfirm(TEK_YONLU_ONAY_BASLIK, TEK_YONLU_ONAY_METNI, "Tek yönlü yap");
+        if (!onay) return;
+      }
       setIstek(yeni);
       setGonderiliyor(true);
       setDurum(null);
@@ -75,7 +103,7 @@ export function SurusKipiSecici({
           null, // fallback: ağ/HTTP hatasında null → aşağıdaki "Gönderilemedi" dalı
         );
         if (res?.status === "success") {
-          setDurum("Kaydedildi — bir sonraki başlatmada uygulanır.");
+          setDurum(surusKipiSonucu(onceki, yeni, yetenekliDizi));
         } else {
           // ⚠️ Başarısızlık SESSİZ KALMAZ: istek geri alınmaz ama kullanıcı kipin
           // gitmediğini görür, yoksa arayüz "bipolar" gösterirken kart unipolar sürer.
@@ -87,7 +115,7 @@ export function SurusKipiSecici({
         setGonderiliyor(false);
       }
     },
-    [],
+    [istek, yetenekliDizi],
   );
 
   const cevir = useCallback(

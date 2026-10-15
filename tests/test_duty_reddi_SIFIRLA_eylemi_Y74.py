@@ -121,7 +121,9 @@ def ortam(tmp_path, monkeypatch):
 
 
 def _duty_bildirimleri(bildirimler) -> list[str]:
-    return [m for m, _t in bildirimler if "duty" in m and "REDDETTİ" in m]
+    # TD6 · K3: sade metin ("Bobin N çift yönlü kipte en fazla %… çalışabilir; %… kabul edilmedi. Duty'yi …") — eski
+    # "UYGULANAMAZ — kart komutu REDDETTİ" jargonu kalktı.
+    return [m for m, _t in bildirimler if "Duty'yi" in m and "kabul edilmedi" in m]
 
 
 def test_KRITIK_seansta_duty_reddi_bildirimi_SIFIRLA_der_mandal_KURULU_STOP_gider(ortam, monkeypatch):

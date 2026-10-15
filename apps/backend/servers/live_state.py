@@ -395,17 +395,18 @@ def stm_duty_reddi_metni(mesaj: str, sonuc: str = "", sifirla: bool = False) -> 
 
     tavan = _yuzde(r["tavan_milli"])
     bipolar = r["kip"] == "bipolar"
-    kip = "iki yönlü (bipolar)" if bipolar else "tek yönlü (unipolar)"
+    # TD6 · K3 (tezgâh Oturum 13): SADE metin — "çift / tek yönlü kip"; jargon ("bipolar", "UYGULANAMAZ", "REDDETTİ", milli)
+    # YOK. Sayılar firmware satırından (tavan firmware'de değişirse metin kendiliğinden doğru kalır).
+    kip = "çift yönlü" if bipolar else "tek yönlü"
+    # Y74 (sahip) seçeneği KORUNUR: bipolar bobin Sürüş Kipi'nden Unipolar yapılabilir (K8 onayı DC bileşenini söyler).
+    secenek = " (ya da ⚡ Sürüş Kipi'nden bu bobini Unipolar yapın)" if bipolar else ""
     if sifirla:
-        # Y74 sahip metni: "Duty'yi %50 ya da altına indirin (ya da bobini Unipolar yapın), sonra 'Sıfırla'ya basın."
-        parantez = " (ya da bobini ⚡ Sürüş Kipi'nden Unipolar yapın)" if bipolar else ""
-        eylem = f"Duty'yi %{tavan} ya da altına indirin{parantez}, sonra 'Sıfırla'ya basın."
+        eylem = f"Duty'yi %{tavan} veya altına indirin{secenek}, sonra 'Sıfırla'ya basın ve yeniden başlatın."
     else:
-        oneri = " veya ⚡ Sürüş Kipi'nden bu bobini Unipolar yapın" if bipolar else ""
-        eylem = f"Duty'yi %{tavan} ya da altına indirin{oneri}."
+        eylem = f"Duty'yi %{tavan} veya altına indirip yeniden başlatın{secenek}."
     return (
-        f"Bobin {r['bobin']}: %{_yuzde(r['istenen_milli'])} duty {kip} sürüşte UYGULANAMAZ — kart komutu REDDETTİ "
-        f"(üst sınır %{tavan}){'; ' + sonuc if sonuc else ''}. {eylem}"
+        f"Bobin {r['bobin']} {kip} kipte en fazla %{tavan} çalışabilir; %{_yuzde(r['istenen_milli'])} kabul edilmedi"
+        f"{'; ' + sonuc if sonuc else ''}. {eylem}"
     )
 
 
