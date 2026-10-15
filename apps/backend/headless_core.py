@@ -122,6 +122,30 @@ class SeriBaglantiDurumu:
 # Port varlığı kesin ölçüttür: USB çekilince COM portu numaralandırmadan düşer.
 # 2 sn, kopuşun operatöre anında görünmesi ile numaralandırma maliyeti arasında denge.
 _PORT_CHECK_S = 2.0
+#: TD7 (tezgâh Oturum 13): `STM_TELE` DEBUG günlüğü bobin başına bu aralıkta BİR satır (arası sayılır) — olay yayını her satırda.
+_STM_TELE_GUNLUK_ARALIGI_S = 60.0
+
+
+def _stm_tele_gunluge_yaz(cekirdek, decoded: str, govde: dict | None) -> None:
+    """TD7: `STM_TELE` satırını DEBUG'a ÖRNEKLEYEREK yaz — bobin başına `_STM_TELE_GUNLUK_ARALIGI_S`'de bir satır; arada atlananların
+    sayısı bir sonraki örnekte söylenir (veri kaybolmaz, yalnız günlük seyrelir). Yalnız günlük: olay yayını ve ayrıştırma ETKİLENMEZ;
+    okuyucu iş parçacığında koşar (tek yazar). Modül düzeyinde: çekirdeğe yeni yöntem bağımlılığı eklemez (sahte `self`li çağıranlar)."""
+    logger = getattr(cekirdek, "logger", None)
+    if logger is None or not logger.isEnabledFor(logging.DEBUG):
+        return
+    izler = cekirdek.__dict__.setdefault("_stm_tele_gunluk_izi", {})
+    anahtar = govde.get("coil_id") if isinstance(govde, dict) else None
+    simdi = time.monotonic()
+    son, atlanan = izler.get(anahtar, (None, 0))
+    if son is not None and simdi - son < _STM_TELE_GUNLUK_ARALIGI_S:
+        izler[anahtar] = (son, atlanan + 1)
+        return
+    izler[anahtar] = (simdi, 0)
+    if atlanan:
+        logger.debug("[STM32] %s (önceki %d satır günlüğe yazılmadı — örnekleme, TD7)", decoded, atlanan)
+    else:
+        logger.debug("[STM32] %s", decoded)
+
 
 #: TD5: ACS712-30A ölçüm aralığı (A). Bunun üstündeki RMS fiziksel değildir (yüzen giriş gürültüsü — tezgâh: PSU kapalıyken
 #: 74,6 A); `X=1` (ADC tavanı ~12 A, bölücüsüz) de güvenilmez. İkisinde de akım YAZILMAZ, `akim_guvenilmez` bayrağı taşınır.
@@ -1094,8 +1118,10 @@ class HeadlessCore:
         if "STM_TELE" in decoded:
             # ⚠️ INFO'ya YAZILMAZ: 1 Hz x 2 bobin = gunde ~170k satir; log'u bogar ve gercek
             # olaylari (NACK/watchdog/termal) goze batmaz hale getirir. DEBUG yeterli.
-            self.logger.debug("[STM32] %s", decoded)
+            # TD7 (tezgâh Oturum 13): DEBUG'da da HER satır yazılmaz — ölçüldü: ilk ~1 dakikada 9 646 satır (~4 000 satır/dk)
+            # günlüğü boğuyordu. Bobin başına `_STM_TELE_GUNLUK_ARALIGI_S`'de bir örnek + atlanan satır sayısı (`_stm_tele_gunluge_yaz`).
             govde = self._parse_stm_tele(decoded)
+            _stm_tele_gunluge_yaz(self, decoded, govde)
             if govde is not None:
                 self._publish_event("hardware.stm.telemetry", govde)
             return

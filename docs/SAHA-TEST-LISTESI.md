@@ -41,7 +41,7 @@ Bu bölümdeki her başarısızlık yayını durdurur.
 | 1.8 | ACİL DURDUR sonrası yeni seans başlat | Temiz başlar; önceki seansın parametreleri sızmaz |
 | 1.9 | Seans sürerken mobilde güncelleme çıksın (manifest'i geçici yükselt) | Güncelleme bandı **gösterilmez**; operatörün ekranı bölünmez |
 | 1.10 | Seans sürerken profil değiştirmeyi / çıkış yapmayı dene | Önce onay + durdurma istenir; sessizce kesilmez |
-| 1.11 | **Firmware sürümü uyumsuzken seans başlat** (eski firmware'li STM tak) | Seans **BAŞLAMAZ** — 503 + "hiçbir bobin komutu kabul etmedi"; sahte ilerleme çubuğu YOK. Geçmişte kayıt "Donanım Reddetti" olur |
+| 1.11 | **Firmware sürümü uyumsuzken seans başlat** (eski firmware'li STM tak) | Ana Ekran'da kalıcı KIRMIZI bant "Cihaz kartının yazılımı bu uygulama sürümüyle uyumsuz — bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET)." Seans **BAŞLAMAZ** — **409** + "Seans BAŞLATILMADI: Cihaz kartı komutları reddediyor … (kod: FW-PAKET)"; sahte ilerleme çubuğu YOK. *(TD8 2026-10-15: eskiden "503 + hiçbir bobin komutu kabul etmedi" yazıyordu — tezgâh Oturum 13 409 ölçtü; metin TD1 sonrası.)* |
 | 1.12 | 1.11'in karşıtı: firmware doğruyken aynı seansı başlat | Normal başlar — kapı her seansı engellemiyor |
 | 1.13 | Seans ortasında STM komutları reddetmeye başlasın (kabloyu gevşet) | Arayüz **durdurur** ve söyler; ekranda "sürüyor" kalmaz |
 | 1.14 | Seans sürerken ACİL DURDUR'a bas, **hemen** ardından geç bir telemetri paketi gelsin | Bobin yeniden "çalışıyor" görünmez (yapışkan E-stop) |
@@ -307,7 +307,7 @@ Bu bölümdeki her başarısızlık yayını durdurur.
 |---|---|---|
 | 8.1 | Bobin 1-5'i uzun süre yüksek duty'de sür, sıcaklığı ölç | **Cihazda termal kesme YOK** (NTC derleme-kapılı). Yalnız süre sınırı ve operatör keser. ⚠️ Canlı üzerinde denemeyin — fantom/boş bobin |
 | 8.2 | Bobin 6-7 sıcaklığına bak | Ölçülür ve **gösterilir**; otomatik kesme yok (sahip kararı) |
-| 8.3 | Bobin 6-7 akım değerine bak | `0.0` gösterir — ACS712 taşınmadı (bilinçli). Sahte bir değer üretiliyorsa bulgudur |
+| 8.3 | Bobin 6-7 akım değerine bak | **"—"** gösterir: `measuredFields`'te `currentA` YOK (ACS712 bu bobinlerde taşınmadı — bilinçli). Bobin 1–5'te ACS712 doğrulanamıyorsa (takılı değil / yüzen giriş) orada da akım gösterilmez ("Akım ölçümü yok"), "Anlık Güç" gizlidir (TD5). Güç kapalıyken akım değeri (ör. 10–115 A) görünüyorsa bulgudur. *(TD8 2026-10-15: eskiden "`0.0` gösterir" yazıyordu.)* |
 | 8.4 | Ödeme/abonelik ekranlarını dene | Satış **kapalı** (FREE_MODE); jeton kapısı uykuda. Ücret istiyorsa bulgudur |
 | 8.5 | Uzaktan erişim (tünel) ile bağlan | Çalışır; ⚠️ `resolve_device` tazelik SQL'i canlı Supabase'e uygulanmadıysa bayat cihaz görünebilir |
 | 8.6 | Araştırma AI Pro (fantom/petri) sürüşünü dene | **Bayrak kapalı** — sürüş yok, yalnız görüntüleme. Bobin sürüyorsa bulgudur |
