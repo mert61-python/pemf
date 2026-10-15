@@ -20,12 +20,32 @@ import {
   pushDesktopSession,
   type DesktopSession,
 } from "@/services/desktopSession";
+import { epostaAnahtari, parkEt, parkHesaplari, parktanCikar, type ParkHesap } from "@/services/hesapDeposu";
+import {
+  etkinOturum,
+  hesabaGec as hesabaGecServisi,
+  hesapKimliginiDusur,
+  parkHesabindanCik,
+  tumParkHesaplardanCik,
+  type GecisSonucu,
+} from "@/services/hesapGecisi";
 
 interface AuthContextValue {
   session: AuthSession | null;
   loading: boolean;       // saklı oturum kontrol edilirken VE masaüstü devri denenirken (ilk açılış)
   isResearch: boolean;    // e-posta .edu → araştırma modu görünür
+  /** TÜM hesaplardan çık (mevcut "Çıkış Yap"): etkin + bu cihazda açık tutulan diğer e-posta hesapları. */
   logout: () => Promise<void>;
+  /** CH1 · Y151: bu cihazda AÇIK e-posta hesapları (etkin önce). Tek hesaplı kullanımda yalnız etkin hesap. */
+  hesaplar?: string[];
+  /** CH1: "Hesap ekle" — giriş ekranı açık; etkin hesap park edildi ve vazgeçilirse geri döner. */
+  hesapEkleniyor?: boolean;
+  hesapEkle?: () => Promise<void>;
+  hesapEklemeVazgec?: () => Promise<void>;
+  /** CH1: açık başka bir hesaba geç (seans koruması ÇAĞIRANDA — `hesapGecisiEngeli`). */
+  hesabaGec?: (eposta: string) => Promise<GecisSonucu>;
+  /** CH1: TEK hesaptan çık — etkin değilse yalnız o; etkinse açık başka hesaba geçilir (yoksa tümden çıkış). */
+  hesaptanCik?: (eposta: string) => Promise<GecisSonucu>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -103,6 +123,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // D1.87 · A-70: Supabase'e ulaşılamadığı için devirden açılan çevrimdışı oturum. Gerçek oturum gelince yerini alır;
   // `INITIAL_SESSION(null)` gibi "oturum yok" olayları onu DÜŞÜRMEZ — yalnız açık çıkış (SIGNED_OUT / logout).
   const cevrimdisiRef = useRef<AuthSession | null>(null);
+  // ── CH1 · Y151 ÇOKLU HESAP ─────────────────────────────────────────────────────────────────
+  // Park edilmiş (etkin OLMAYAN) hesapların e-postaları; belirteçler `services/hesapDeposu`ta (supabase-js ile AYNI güvenli depo).
+  const [parkListesi, setParkListesi] = useState<string[]>([]);
+  const [hesapEkleniyor, setHesapEkleniyor] = useState(false);
+  const hesapEkleniyorRef = useRef(false);
+  // "Hesap ekle" başlarken etkin olan oturum (park edildi): yeni GİRİŞ (farklı belirteç) gelince ekleme biter; vazgeçilirse parktan çıkar.
+  const eklemeOncesiRef = useRef<ParkHesap | null>(null);
+  // Son görülen etkin e-posta — DEĞİŞİNCE (geçiş / ekleme / çıkış-giriş) kimlik başlıkları HEMEN düşer ve hesap kuşağı artar.
+  const sonEpostaRef = useRef<string>("");
+  const hesaplariYenile = useCallback(async () => {
+    setParkListesi((await parkHesaplari()).map((h) => h.email));
+  }, []);
+
+  useEffect(() => {
+    void hesaplariYenile();
+  }, [hesaplariYenile]);
 
   useEffect(() => {
     let alive = true;
@@ -123,6 +159,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return; // D1.87: çevrimdışı açılış "oturum yok" olayıyla düşmez
       }
       if (yeni || _event === "SIGNED_OUT") cevrimdisiRef.current = null;
+      // CH1 · Y151: etkin e-posta DEĞİŞTİ → önceki hesabın Bearer'ı / abonelik başlıkları bu andan sonraki isteklere GİTMEZ ve uçuştaki
+      // yanıtları atılır (`apiClient.hesapKusagi`). Uygulama ağacı hesap anahtarıyla yeniden kurulur (`PemfApp.AuthGate`).
+      const yeniEposta = epostaAnahtari(yeni?.email);
+      if (yeniEposta && sonEpostaRef.current && yeniEposta !== sonEpostaRef.current) hesapKimliginiDusur();
+      if (yeniEposta) sonEpostaRef.current = yeniEposta;
+      // CH1: "Hesap ekle" kipinde YENİ bir giriş (ekleme öncesinden farklı belirteç) geldi → ekleme biter; giriş yapılan hesap artık
+      // etkindir, park listesinde kalmaz (önceki etkin hesap parkta kalır).
+      if (hesapEkleniyorRef.current && yeni && s?.access_token && s.access_token !== eklemeOncesiRef.current?.access_token) {
+        hesapEkleniyorRef.current = false;
+        eklemeOncesiRef.current = null;
+        setHesapEkleniyor(false);
+        void parktanCikar(yeni.email).then(hesaplariYenile);
+      }
       setSession(yeni);
       setLoading(false);
       // 🔴 SAHA ARIZASI (2026-08-24) — "Beni hatırla" bozuluyordu.
@@ -177,6 +226,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     cevrimdisiRef.current = null; // D1.87: çevrimdışı açılış da açık çıkışla kapanır
+    // CH1 · Y151: "Çıkış Yap" = TÜM hesaplardan çık — bu cihazda açık tutulan diğer hesapların belirteçleri de silinir (sunucuda
+    // iptal en-iyi-çaba, beklenmez). Ekleme kipi de kapanır.
+    hesapEkleniyorRef.current = false;
+    eklemeOncesiRef.current = null;
+    setHesapEkleniyor(false);
+    await tumParkHesaplardanCik();
+    setParkListesi([]);
     // ÖNCE backend'in bellekteki devir oturumunu sil: aksi halde sayfa yenilenince uygulama
     // kendini tekrar hydrate eder ve masaüstünde çıkış İŞLEMEZ. En-iyi-çaba (hata yutulur).
     await clearDesktopSession();
@@ -184,14 +240,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
   }, []);
 
+  // ── CH1 · Y151 eylemleri ───────────────────────────────────────────────────────────────────
+  const hesapEkle = useCallback(async () => {
+    const etkin = await etkinOturum();
+    if (etkin) await parkEt(etkin); // giriş ekranında vazgeçilirse ya da başka hesap girilirse bu hesap KAYBOLMAZ
+    eklemeOncesiRef.current = etkin;
+    hesapEkleniyorRef.current = true;
+    setHesapEkleniyor(true);
+    await hesaplariYenile();
+  }, [hesaplariYenile]);
+
+  const hesapEklemeVazgec = useCallback(async () => {
+    const once = eklemeOncesiRef.current;
+    hesapEkleniyorRef.current = false;
+    eklemeOncesiRef.current = null;
+    setHesapEkleniyor(false);
+    if (once) await parktanCikar(once.email); // hâlâ etkin — park kopyası kalmasın
+    await hesaplariYenile();
+  }, [hesaplariYenile]);
+
+  const hesabaGec = useCallback(async (eposta: string): Promise<GecisSonucu> => {
+    const r = await hesabaGecServisi(eposta);
+    await hesaplariYenile();
+    return r;
+  }, [hesaplariYenile]);
+
+  const hesaptanCik = useCallback(async (eposta: string): Promise<GecisSonucu> => {
+    const etkinEposta = epostaAnahtari((await etkinOturum())?.email ?? session?.email);
+    if (epostaAnahtari(eposta) !== etkinEposta) {
+      await parkHesabindanCik(eposta);
+      await hesaplariYenile();
+      return { ok: true };
+    }
+    const sonraki = (await parkHesaplari()).find((h) => epostaAnahtari(h.email) !== etkinEposta);
+    if (!sonraki) {
+      await logout(); // açık başka hesap yok → bugünkü çıkış
+      return { ok: true };
+    }
+    const r = await hesabaGecServisi(sonraki.email); // etkin hesap park edilir…
+    if (!r.ok) {
+      await hesaplariYenile();
+      return r;
+    }
+    await clearDesktopSession(); // masaüstü: çıkılan hesabın devri sayfa yenilemede geri gelmesin
+    await parkHesabindanCik(eposta); // …sonra cihazdan silinir (+ sunucuda iptal, en-iyi-çaba)
+    await hesaplariYenile();
+    return { ok: true };
+  }, [session, logout, hesaplariYenile]);
+
   const isResearch = !!session && isResearchEmail(session.email);
 
   // Devir sürerken de "yükleniyor" say → AuthGate splash'te kalır, login ekranı yanıp sönmez.
   const busy = loading || hydrating;
 
+  const hesaplar = useMemo(() => {
+    const etkin = session?.email ? [session.email] : [];
+    return [...etkin, ...parkListesi.filter((e) => epostaAnahtari(e) !== epostaAnahtari(session?.email))];
+  }, [session, parkListesi]);
+
   const value = useMemo(
-    () => ({ session, loading: busy, isResearch, logout }),
-    [session, busy, isResearch, logout],
+    () => ({
+      session, loading: busy, isResearch, logout,
+      hesaplar, hesapEkleniyor, hesapEkle, hesapEklemeVazgec, hesabaGec, hesaptanCik,
+    }),
+    [session, busy, isResearch, logout, hesaplar, hesapEkleniyor, hesapEkle, hesapEklemeVazgec, hesabaGec, hesaptanCik],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

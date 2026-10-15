@@ -45,7 +45,7 @@ test("KRİTİK: başlık ne yaptığını söyler (bu cihazdaki hekimler arası 
   expect(s.metin()).toContain("Hekim Değiştir (bu cihaz)");
   expect(s.metin()).not.toContain("Kullanıcı Değiştir");
   expect(metin("operator-aciklama")).toBe(
-    "Bu cihazı ortak kullanan hekimler arasında PIN ile hızlı geçiş. E-posta hesabını değiştirmek için çıkış yapıp diğer hesapla giriş yapın.",
+    "Bu cihazı ortak kullanan hekimler arasında PIN ile hızlı geçiş. E-posta hesabını değiştirmek ya da eklemek için \"E-posta hesapları\"nı açın.",
   );
 });
 
@@ -70,11 +70,12 @@ test("KRİTİK: seçim / PIN eksikken neden söylenir; PIN tamamlanınca düğme
   expect(window.getComputedStyle(d).opacity).not.toBe("0.6");
 });
 
-test("KRİTİK: 'Başka hesapla giriş yap' MEVCUT çıkış akışını çağırır (yeni akış yok)", async () => {
-  const cikis = jest.fn();
-  await ac([{ email: "dr.a@klinik.com", display_name: "Dr A" }], { kip: "veterinarian", onBaskaHesap: cikis });
-  await s.tikla("Başka hesapla giriş yap");
-  expect(cikis).toHaveBeenCalledTimes(1);
+// CH1 · Y151 (bilinçli güncelleme): bağlantı artık çıkış akışını DEĞİL, e-posta hesapları menüsünü açar (AppShell → HesapMenusu).
+test("KRİTİK: 'E-posta hesapları' bağlantısı hesap menüsünü açar (onBaskaHesap)", async () => {
+  const menu = jest.fn();
+  await ac([{ email: "dr.a@klinik.com", display_name: "Dr A" }], { kip: "veterinarian", onBaskaHesap: menu });
+  await s.tikla("E-posta hesapları");
+  expect(menu).toHaveBeenCalledTimes(1);
 });
 
 test("KRİTİK: 'Bu cihaza kaydol' amacını ve SONUCUNU söyler; ad alanı harf aralıklı DEĞİL (PIN alanı aynen)", async () => {
@@ -102,11 +103,11 @@ test("KRİTİK: Ev Sahibi + tek kullanıcılı cihaz → yalnız hesap penceresi
   await ac([], { kip: "pet_owner", onBaskaHesap: cikis });
   expect(s.metin()).toContain("Hesap");
   expect(metin("operator-aciklama")).toBe(
-    "Giriş yapılan hesap: dr.a@klinik.com. Başka bir e-posta hesabına geçmek için çıkış yapıp o hesapla giriş yapın.",
+    "Giriş yapılan hesap: dr.a@klinik.com. Başka bir e-posta hesabına geçmek ya da hesap eklemek için \"E-posta hesapları\"nı açın.",
   );
   expect(s.varMi("Geçiş yap")).toBe(false);
   expect(s.varMi("Bu cihaza kaydol")).toBe(false);
-  await s.tikla("Başka hesapla giriş yap");
+  await s.tikla("E-posta hesapları");
   expect(cikis).toHaveBeenCalledTimes(1);
 });
 

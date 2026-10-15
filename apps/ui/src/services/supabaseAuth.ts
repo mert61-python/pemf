@@ -160,10 +160,18 @@ if (masaustuLoopbackMi()) {
   }
 }
 
+/**
+ * Oturum deposu — supabase-js'in KULLANDIĞI depo (masaüstü loopback = BELLEK · native = SecureStore parçalı · LAN/mobil web = AsyncStorage).
+ * ⚠️ CH1 · Y151 (çoklu hesap): etkin OLMAYAN hesapların oturumları (`services/hesapDeposu`) AYNI depoya yazılır → her hesabın yenileme
+ * belirteci bugünkü tek hesapla AYNI güvenlik düzeyinde (daha zayıf bir depoya — ör. masaüstünde kalıcı tarayıcı deposuna — düşmez).
+ */
+export const oturumDeposu: { getItem(k: string): Promise<string | null>; setItem(k: string, v: string): Promise<void>; removeItem(k: string): Promise<void> } =
+  masaustuLoopbackMi() ? bellekStorage : supabaseSecureStorage;
+
 export const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
     // masaüstü loopback = BELLEK (launcher otorite); native=SecureStore(parçalı); LAN/mobil web=AsyncStorage
-    storage: (masaustuLoopbackMi() ? bellekStorage : supabaseSecureStorage) as unknown as any,
+    storage: oturumDeposu as unknown as any,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false, // native: URL-token ayrıştırma yok

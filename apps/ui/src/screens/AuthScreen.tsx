@@ -24,7 +24,11 @@ const LOGO = require("../../assets/icon.png");
 
 type Mode = "login" | "register" | "reset";
 
-export function AuthScreen() {
+/**
+ * CH1 · Y151 (çoklu hesap): `hesapEkleme` → "Hesap ekle" kipi. Etkin hesap bu cihazda AÇIK KALIR (park edildi); giriş yapılan yeni hesap
+ * etkin olur, ikisi arasında üst menüdeki "E-posta hesapları"ndan geçilir. `onVazgec` → giriş yapmadan önceki hesaba dön.
+ */
+export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: boolean; onVazgec?: () => void } = {}) {
   const insets = useSafeAreaInsets();
   const { width: winW, height: winH } = useWindowDimensions();
   const [mode, setMode] = useState<Mode>("login");
@@ -201,6 +205,24 @@ export function AuthScreen() {
           {/* D1.81 · Y4 (Y23 ile tutarlı): oturum açılmamışken de mandal durumu ve "Sıfırla" görünür
               (masaüstü yerel istemcidir: sıfırlama ucu oturum istemez). */}
           <EstopMandalBandi />
+          {hesapEkleme ? (
+            <View style={styles.eklemeBandi} testID="hesap-ekleme-bandi">
+              <Text style={styles.eklemeMetni}>
+                Başka bir e-posta hesabı ekleniyor. Şu anki hesabınız bu cihazda açık kalır; giriş yaptıktan sonra hesaplar arasında
+                üst menüdeki &quot;E-posta hesapları&quot;ndan geçebilirsiniz.
+              </Text>
+              {onVazgec ? (
+                <TouchableOpacity
+                  style={[styles.eklemeVazgec, { minHeight: touch.min }]}
+                  onPress={onVazgec}
+                  accessibilityRole="button"
+                  accessibilityLabel="Vazgeç, önceki hesaba dön"
+                >
+                  <Text style={styles.eklemeVazgecMetni}>Vazgeç — önceki hesaba dön</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
           <View style={styles.card}>
             {/* Logo + marka */}
             <View style={styles.brand}>
@@ -476,6 +498,14 @@ function Rule({ ok, label }: { ok: boolean; label: string }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  // CH1 · Y151: "Hesap ekle" kipinin bandı (etkin hesap açık kalır + vazgeç).
+  eklemeBandi: {
+    width: "100%", maxWidth: rs(460), marginBottom: spacing.md, padding: spacing.md, gap: spacing.sm,
+    borderRadius: radius.lg, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.panel,
+  },
+  eklemeMetni: { color: colors.text, fontSize: rf(13), lineHeight: rf(19) },
+  eklemeVazgec: { alignSelf: "flex-start", justifyContent: "center", paddingHorizontal: spacing.md },
+  eklemeVazgecMetni: { color: colors.primary, fontSize: rf(13), fontWeight: "700" },
   flex: { flex: 1 },
   // Yatay dolgu inline verilir (çentik güvenli alanı) — bkz. render.
   scroll: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingVertical: spacing.xxl },

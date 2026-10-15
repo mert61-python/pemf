@@ -184,6 +184,21 @@ export function setAuthBearer(token: string | null): void {
   _authBearer = token || null;
 }
 
+/**
+ * HESAP KUŞAĞI (CH1 · Y151, çoklu hesap) — e-posta hesabı her değiştiğinde (`hesapKusagiArtir`, `services/hesapGecisi`) artar.
+ * `apiGet` / `apiPost` / `apiDelete` isteğin BAŞLADIĞI kuşağı tutar; yanıt geldiğinde kuşak değişmişse yanıt ATILIR (çağırana
+ * `fallback`, hata balonu / `onHttpError` YOK). Yarış: eski hesabın belirteciyle başlamış uçuştaki bir istek (jeton bakiyesi, liste,
+ * abonelik) geçişten SONRA dönüp yeni hesabın ekranına eski hesabın verisini yazamaz.
+ */
+let _hesapKusagi = 0;
+export function hesapKusagi(): number {
+  return _hesapKusagi;
+}
+export function hesapKusagiArtir(): number {
+  _hesapKusagi += 1;
+  return _hesapKusagi;
+}
+
 /** Backend tabanı GÜVENLİ mi: https (tünel, TLS) VEYA RFC1918-LAN/localhost (yerel cihaz TLS'siz).
  * Keşfedilen/elle-girilen KEYFİ bir host'a (zehirli Supabase devices kaydı / sahte tünel) kurbanın
  * Supabase JWT'sini teslim etmemek için Authorization yalnız buraya eklenir. */
@@ -296,11 +311,13 @@ export async function apiGet<T>(path: string, fallback: T, opts?: ApiOpts): Prom
   // audit B-10.3: GET İDEMPOTENT → geçici ağ hatasında (fetch throw/timeout) 1 kez daha dene
   // (400ms sonra). HTTP hatasında (sunucu yanıt verdi) TEKRAR DENENMEZ. POST asla denenmez.
   const MAX_ATTEMPTS = 2;
+  const kusak = _hesapKusagi; // CH1: yanıt başka hesabın kuşağında dönerse atılır
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), opts?.timeoutMs ?? REQUEST_TIMEOUT_MS);
     try {
       const response = await fetch(url, { headers: authHeaders(), signal: ctrl.signal });
+      if (kusak !== _hesapKusagi) return fallback; // CH1: hesap değişti — eski hesabın yanıtı ATILIR
       if (!response.ok) {
         console.error(`API GET Hatası [${response.status}]: ${url}`);
         // Y113: apiPost ile AYNI sözleşme — durum kodu ve sunucunun gerekçesi (`detail`) çağırana verilir (ör. `/operators`
@@ -320,8 +337,10 @@ export async function apiGet<T>(path: string, fallback: T, opts?: ApiOpts): Prom
         if (!opts?.silent) showError("Sunucu Hatası", "Sunucu ile iletişimde bir sorun oluştu.");
         return fallback;
       }
-      return await parseJsonSafe(response, fallback);
+      const veri = await parseJsonSafe(response, fallback);
+      return kusak === _hesapKusagi ? veri : fallback;
     } catch (error) {
+      if (kusak !== _hesapKusagi) return fallback;
       if (attempt < MAX_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, 400)); // kısa geri-çekilme, sonra bir kez daha
         continue;
@@ -352,6 +371,7 @@ export async function apiDelete<T>(path: string, fallback: T, opts?: ApiOpts): P
   }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), opts?.timeoutMs ?? REQUEST_TIMEOUT_MS);
+  const kusak = _hesapKusagi; // CH1
   try {
     const url = `${serviceConfig.apiBaseUrl}${path}`;
     const response = await fetch(url, {
@@ -359,12 +379,14 @@ export async function apiDelete<T>(path: string, fallback: T, opts?: ApiOpts): P
       headers: { Accept: "application/json", ...authHeaders() },
       signal: ctrl.signal,
     });
+    if (kusak !== _hesapKusagi) return fallback; // CH1: hesap değişti — eski hesabın yanıtı ATILIR
     if (!response.ok) {
       console.error(`API DELETE Hatası [${response.status}]: ${url}`);
       if (!opts?.silent) showError("Sunucu Hatası", "Sunucuda kayıt silinirken bir hata oluştu.");
       return fallback;
     }
-    return await parseJsonSafe(response, fallback);
+    const veri = await parseJsonSafe(response, fallback);
+    return kusak === _hesapKusagi ? veri : fallback;
   } catch (error) {
     console.error(`API DELETE İstek Başarısız: ${path}`, error);
     return fallback;
@@ -381,6 +403,7 @@ export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?
   }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), opts?.timeoutMs ?? REQUEST_TIMEOUT_MS);
+  const kusak = _hesapKusagi; // CH1
   try {
     const url = `${serviceConfig.apiBaseUrl}${path}`;
     const response = await fetch(url, {
@@ -393,6 +416,7 @@ export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?
       body: JSON.stringify(body),
       signal: ctrl.signal,
     });
+    if (kusak !== _hesapKusagi) return fallback; // CH1: hesap değişti — eski hesabın yanıtı ATILIR
     if (!response.ok) {
       console.error(`API POST Hatası [${response.status}]: ${url}`);
       // Sunucunun gerekçesi (FastAPI `detail`). Gövde okunamazsa akış BOZULMAZ — hata yolunda
@@ -424,8 +448,10 @@ export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?
       if (!opts?.silent) showError("Sunucu Hatası", detail || "Sunucuya veri gönderilirken bir hata oluştu.");
       return fallback;
     }
-    return await parseJsonSafe(response, fallback);
+    const veri = await parseJsonSafe(response, fallback);
+    return kusak === _hesapKusagi ? veri : fallback;
   } catch (error) {
+    if (kusak !== _hesapKusagi) return fallback; // CH1: eski hesabın zaman aşımı / ağ hatası yeni hesaba balon göstermez
     console.error(`API POST İstek Başarısız: ${path}`, error);
     // ZAMAN AŞIMI ≠ bağlantı kopması. Kopmayı global "Çevrimdışı" banner'ı zaten bildiriyor, o
     // yüzden pop-up göstermiyoruz. Ama zaman aşımında bağlantı VARDIR ve banner çıkmaz → kullanıcı

@@ -2,7 +2,7 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View, PanResponder } from "react-native";
-import { Activity, BarChart3, Bell, BrainCircuit, ClipboardList, History, LayoutDashboard, MoreHorizontal, Settings, SlidersHorizontal, Waves, Users, Heart, Stethoscope, FlaskConical, ChevronDown, LogOut, Check, type LucideIcon } from "lucide-react-native";
+import { Activity, BarChart3, Bell, BrainCircuit, ClipboardList, History, LayoutDashboard, MoreHorizontal, Settings, SlidersHorizontal, Waves, Users, Heart, Stethoscope, FlaskConical, ChevronDown, LogOut, Check, Mail, type LucideIcon } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -33,6 +33,7 @@ import { EstopMandalBandi } from "@/components/ui/EstopMandalBandi";
 import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
 import { useKendiDurdurmaKaydi } from "@/components/ui/KendiDurdurmaKontrolu";
 import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
+import { HesapMenusu } from "@/components/domain/HesapMenusu";
 import { JetonRozeti } from "@/components/ui/JetonRozeti";
 
 /** Uygulama ikonu — AuthScreen ile AYNI kaynak (assets/icon.png) → tek görsel kimlik. */
@@ -119,7 +120,10 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
   const { userMode, setUserMode } = useUserMode();
-  const { logout } = useAuth();
+  const { logout, session, hesaplar } = useAuth();
+  // CH1 · Y151: bu cihazda açık e-posta hesapları (etkin dahil). >1 iken "Çıkış Yap" TÜM hesaplardan çıkar → etiket bunu söyler.
+  const hesapSayisi = hesaplar?.length ?? (session ? 1 : 0);
+  const [hesapMenusuAcik, setHesapMenusuAcik] = useState(false);
   const { unreadCount, connectionQuality, reconnect } = useLiveData();
 
   const [rehberAcik, setRehberAcik] = useState(false);
@@ -190,11 +194,18 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
    */
   const handleLogout = async () => {
     const ok = await guardTeardown("Çıkış yapmak", {
-      confirmWhenIdle: {
-        title: "Çıkış Yap",
-        body: "Oturum kapatılacak; tekrar girmek için e-posta ve şifre gerekir.",
-        confirmLabel: "Çıkış yap",
-      },
+      confirmWhenIdle: hesapSayisi > 1
+        ? {
+            // CH1 · Y151: etiket gerçeği söylesin — açık TÜM hesaplardan çıkılır.
+            title: "Tüm hesaplardan çık",
+            body: `Bu cihazda açık ${hesapSayisi} e-posta hesabının hepsinden çıkılacak; tekrar girmek için e-posta ve şifre gerekir.`,
+            confirmLabel: "Tümünden çık",
+          }
+        : {
+            title: "Çıkış Yap",
+            body: "Oturum kapatılacak; tekrar girmek için e-posta ve şifre gerekir.",
+            confirmLabel: "Çıkış yap",
+          },
     });
     if (!ok) return;
     setProfileMenuOpen(false);
@@ -311,7 +322,8 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                 yazıldığı ÜST BARDA sürekli görünür olmalı — yanlış kimlikle çalışmak, kaydı
                 yanlış hekime atfeder (KVKK + klinik sorumluluk). Dokununca PIN ile hızlı geçiş. */}
             {/* SG.G7: "Başka hesapla giriş yap" MEVCUT çıkış akışını (teardown korumalı) çağırır; profil yalnız metin içindir. */}
-            <OperatorSwitcher onBaskaHesap={handleLogout} kip={userMode} />
+            {/* CH1 · Y151: "E-posta hesapları" bağlantısı hesap menüsünü açar (geçiş / ekleme / hesap başına çıkış). */}
+            <OperatorSwitcher onBaskaHesap={() => setHesapMenusuAcik(true)} kip={userMode} />
             {/* KALAN JETON (sahip isteği 2026-09-13): kullanıcı hakkının bittiğini, analiz
                 reddedilene kadar göremiyordu. ⚠️ Ücretlendirme KAPALIYKEN hiçbir şey çizmez
                 (karar backend'den gelir — arayüz "0" tahmin ETMEZ). Dar telefonda yalnız sayı. */}
@@ -389,6 +401,20 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                 );
               })}
               <View style={styles.profileMenuDivider} />
+              {/* CH1 · Y151: e-posta HESAPLARI (profil ≠ hesap ≠ hekim). Etkin e-posta + açık hesap sayısı; dokununca hesap menüsü. */}
+              <Pressable
+                onPress={() => { setProfileMenuOpen(false); setHesapMenusuAcik(true); }}
+                style={[styles.profileMenuRow, { minHeight: touch.min }]}
+                accessibilityRole="button"
+                accessibilityLabel="E-posta hesapları"
+                testID="profil-menu-hesaplar"
+              >
+                <Mail size={18} color={colors.textMuted} />
+                <Text style={styles.profileMenuLabel} numberOfLines={1}>
+                  {`E-posta hesapları${session?.email ? ` · ${session.email}` : ""}${hesapSayisi > 1 ? ` (+${hesapSayisi - 1})` : ""}`}
+                </Text>
+              </Pressable>
+              <View style={styles.profileMenuDivider} />
               {/* HASTA GÜVENLİĞİ: çıkış kabuğu (ve tüm ACİL DURDUR erişimini) söker → seans
                   sürerken önce onay al + bobinleri durdur. Ayrıca satırı profil satırlarından
                   görsel olarak AYIR: eskiden aynı stille dizildiği için yanlış dokunuş çok kolaydı. */}
@@ -396,14 +422,19 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                 onPress={handleLogout}
                 style={[styles.profileMenuRow, styles.profileMenuDanger]}
                 accessibilityRole="button"
-                accessibilityLabel="Çıkış yap"
+                accessibilityLabel={hesapSayisi > 1 ? "Tüm hesaplardan çık" : "Çıkış yap"}
               >
                 <LogOut size={18} color={colors.danger} />
-                <Text style={[styles.profileMenuLabel, { color: colors.danger }]}>Çıkış Yap</Text>
+                <Text style={[styles.profileMenuLabel, { color: colors.danger }]}>
+                  {hesapSayisi > 1 ? "Tüm hesaplardan çık" : "Çıkış Yap"}
+                </Text>
               </Pressable>
             </Pressable>
           </Pressable>
         </Modal>
+
+        {/* CH1 · Y151: e-posta hesapları menüsü ("Tüm hesaplardan çık" = mevcut teardown korumalı çıkış). */}
+        <HesapMenusu visible={hesapMenusuAcik} onClose={() => setHesapMenusuAcik(false)} onTumundenCik={handleLogout} />
 
         {/* ⚠️ 2026-08-13 — İKİNCİ TUR. İlk denemede şerit "daha önce eşleşilmiş mi" diye
             `getStoredDeviceId()`e bakıyordu ve eşleşme yoksa rehberi açıyordu. YANLIŞ SİNYALDİ:

@@ -142,7 +142,21 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
+  // CH1 · Y151 (çoklu hesap): e-posta A → B DOĞRUDAN değişince (çıkış olmadan) A'nın "bilinen hakkı" B'ye TAŞINMAZ. Eskiden yalnız
+  // `session === null` sıfırlıyordu: B'nin ilk okuması düşerse (çevrimdışı / Supabase yavaş) A'nın tier'ı ve X-PEMF-Tier başlığı B'nin
+  // ekranında ve isteklerinde KALIYORDU (D1.63'ün "bilinen hak korunur" kuralı aynı hesap için doğru, başka hesap için sızıntı).
+  const hakEpostasiRef = useRef<string>("");
   useEffect(() => {
+    const eposta = (session?.email || "").trim().toLowerCase();
+    if (session && hakEpostasiRef.current && eposta !== hakEpostasiRef.current) {
+      genRef.current++; // A'nın uçuştaki okuması B'ye yazılmasın
+      bilinenRef.current = false;
+      setDogrulanamadi(false);
+      setEntitlement(defaultEntitlement());
+      setEntitlementHeaders(null);
+      setAuthBearer(null);
+    }
+    hakEpostasiRef.current = session ? eposta : "";
     if (session) {
       refresh();
     } else {

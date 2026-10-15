@@ -17,6 +17,9 @@
  * çıkışı), pasif düğme soluk + erişilebilir pasif + neden satırı. Ev Sahibi profilinde cihaz tek kullanıcılıysa (kayıtlı operatör
  * yok) çok-hekimli klinik kavramı (liste / PIN / kaydol) gösterilmez; çip oturum e-postasını göstermeye devam eder. PIN kilidi,
  * kilitlenme (`lock`), Y113 davranışı DEĞİŞMEDİ.
+ *
+ * CH1 · Y151 (çoklu hesap): "Başka hesapla giriş yap" (çıkış akışı) → "E-posta hesapları" bağlantısı: `onBaskaHesap` artık hesap
+ * menüsünü açar (`HesapMenusu` — açık hesaplar, geçiş, ekleme, hesap başına çıkış). Metin hesap (e-posta) ile hekimi (PIN) AYIRIR.
  */
 import { useCallback, useEffect, useState } from "react";
 import { KeyboardAvoidingView, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView } from "react-native";
@@ -41,7 +44,7 @@ const TERIM = {
 type Kip = keyof typeof TERIM;
 
 export function OperatorSwitcher({ onBaskaHesap, kip }: {
-  /** Mevcut çıkış akışı (AppShell `handleLogout`: teardown korumalı) — "Başka hesapla giriş yap" onu çağırır. */
+  /** CH1: e-posta hesapları menüsünü aç (AppShell → `HesapMenusu`) — "E-posta hesapları" bağlantısı onu çağırır. */
   onBaskaHesap?: () => void;
   /** Etkin arayüz profili (yalnız metin ve Ev Sahibi tek-kullanıcı sadeleştirmesi için; erişim kapısı DEĞİL). */
   kip?: Kip | null;
@@ -157,8 +160,8 @@ export function OperatorSwitcher({ onBaskaHesap, kip }: {
 
             {yalnizHesap ? (
               <Text style={styles.not} testID="operator-aciklama">
-                {session?.email ? `Giriş yapılan hesap: ${session.email}. ` : ""}Başka bir e-posta hesabına geçmek için çıkış yapıp
-                o hesapla giriş yapın.
+                {session?.email ? `Giriş yapılan hesap: ${session.email}. ` : ""}Başka bir e-posta hesabına geçmek ya da hesap
+                eklemek için &quot;E-posta hesapları&quot;nı açın.
               </Text>
             ) : kayitKipi ? (
               <>
@@ -182,8 +185,8 @@ export function OperatorSwitcher({ onBaskaHesap, kip }: {
             ) : (
               <>
               <Text style={styles.not} testID="operator-aciklama">
-                Bu cihazı ortak kullanan {t.cogul} arasında PIN ile hızlı geçiş. E-posta hesabını değiştirmek için çıkış yapıp diğer
-                hesapla giriş yapın.
+                Bu cihazı ortak kullanan {t.cogul} arasında PIN ile hızlı geçiş. E-posta hesabını değiştirmek ya da eklemek için
+                &quot;E-posta hesapları&quot;nı açın.
               </Text>
               <ScrollView style={styles.liste} nestedScrollEnabled>
                 {/* Y113: kimlik DB'si okunamıyorsa "kayıtlı operatör yok" DENMEZ — arıza + çare. */}
@@ -221,8 +224,8 @@ export function OperatorSwitcher({ onBaskaHesap, kip }: {
               {yalnizHesap ? (
                 onBaskaHesap ? (
                   <TouchableOpacity style={styles.birincil} onPress={() => { kapat(); onBaskaHesap(); }}
-                    accessibilityRole="button" accessibilityLabel="Başka hesapla giriş yap">
-                    <Text style={styles.birincilText}>Başka hesapla giriş yap</Text>
+                    accessibilityRole="button" accessibilityLabel="E-posta hesapları">
+                    <Text style={styles.birincilText}>E-posta hesapları</Text>
                   </TouchableOpacity>
                 ) : null
               ) : kayitKipi ? (
@@ -249,9 +252,9 @@ export function OperatorSwitcher({ onBaskaHesap, kip }: {
 
             {!yalnizHesap && !kayitKipi && onBaskaHesap ? (
               <TouchableOpacity style={[styles.metinBtn, { minHeight: touch.min }]} onPress={() => { kapat(); onBaskaHesap(); }}
-                accessibilityRole="button" accessibilityLabel="Başka hesapla giriş yap">
+                accessibilityRole="button" accessibilityLabel="E-posta hesapları">
                 <LogIn color={colors.primary} size={rs(13)} />
-                <Text style={styles.metinBtnText}>Başka hesapla giriş yap</Text>
+                <Text style={styles.metinBtnText}>E-posta hesapları (değiştir / ekle)</Text>
               </TouchableOpacity>
             ) : null}
 

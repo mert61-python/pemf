@@ -74,8 +74,9 @@ function MainRouter() {
   );
 }
 
-function AuthGate() {
-  const { session, loading } = useAuth();
+/** Giriş kapısı + hesap kapsamı. Dışa açık YALNIZ test için (CH1 yeniden kurulum kapısı: `__tests__/AuthGate.CH1.hesapKapsami`). */
+export function AuthGate() {
+  const { session, loading, hesapEkleniyor, hesapEklemeVazgec } = useAuth();
   if (loading) {
     // Saklı oturum kontrol edilirken kısa yükleme (splash)
     return (
@@ -89,16 +90,29 @@ function AuthGate() {
     return <AuthScreen />;
   }
   // Giriş yapıldı → profil seçimi + uygulama.
+  // ⚠️ CH1 · Y151 (çoklu hesap): profil sağlayıcısı (`UserModeProvider`) hesap değişiminde SÖKÜLMEZ — profil seçimi hesaptan BAĞIMSIZ
+  // ve kalıcı DEĞİL (sahip 07-07): geçiş onu sıfırlamaz, diske de yazmaz; `X-PEMF-Profil` aynen. "Hesap ekle" giriş ekranı da bu yüzden
+  // sağlayıcının İÇİNDE. Altındaki ağaç (operatör + tüm ekranlar + kabuk) hesap anahtarıyla YENİDEN KURULUR: jeton rozeti, liste /
+  // geçmiş / "Benim" kapsamı, operatör seçimi ve ekran önbellekleri önceki hesabın verisini bir an bile taşımaz.
   return (
     <UserModeProvider>
-      {/* AKTİF OPERATÖR (2026-08-08): tek makineyi paylaşan veterinerler kendi kimlikleriyle
-          çalışsın. `sessionActive` → seans sürerken hareketsizlik kilidi ERTELENİR (hasta
-          güvenliği: bobinler çalışırken operatörü PIN ekranına sokma). */}
-      <OperatorKapsayici>
-        <MainRouter />
-      </OperatorKapsayici>
+      {hesapEkleniyor ? (
+        <AuthScreen hesapEkleme onVazgec={hesapEklemeVazgec} />
+      ) : (
+        /* AKTİF OPERATÖR (2026-08-08): tek makineyi paylaşan veterinerler kendi kimlikleriyle
+           çalışsın. `sessionActive` → seans sürerken hareketsizlik kilidi ERTELENİR (hasta
+           güvenliği: bobinler çalışırken operatörü PIN ekranına sokma). */
+        <OperatorKapsayici key={hesapAnahtari(session.email)}>
+          <MainRouter />
+        </OperatorKapsayici>
+      )}
     </UserModeProvider>
   );
+}
+
+/** CH1: uygulama ağacının hesap anahtarı — e-posta değişince (geçiş) ağaç yeniden kurulur. */
+export function hesapAnahtari(eposta: string | null | undefined): string {
+  return `hesap:${(eposta || "").trim().toLowerCase()}`;
 }
 
 
