@@ -15,6 +15,7 @@ import logging
 import threading
 
 import pytest
+from akim_olcumu_aparati import akim_olcumu_acik  # noqa: F401  (CH4 · Y154: akım sensörü AÇIKKEN yolu)
 
 #: Tezgâh kanıtındaki GERÇEK satırlar (`tz13\kanit\C6_yeni_imaj_acilis.txt`).
 YUZEN_74A = "-> STM_TELE: C=1,I=74.630"

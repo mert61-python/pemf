@@ -28,8 +28,8 @@ STM32 → bilgisayar, UART3 @115200 8N1, satır sonu `\r\n`:
 | `B` | **son 1 saniyenin TEPE** \|B\| (mT) | bobin 6 |
 | `N` | `B` tepesinin kaç örnekten türediği | `B` ile birlikte |
 | `S` | `1` = ham eksen tam ölçeğe dayandı → `B` **GÜVENİLMEZ** | yalnız doygunlukta |
-| `I` | ACS712-30A akımı (A, RMS) | bobin 1-5 |
-| `X` | `1` = ADC tavanına dayandı → `I` **GÜVENİLMEZ** | yalnız doygunlukta |
+| `I` | ACS712-30A akımı (A, RMS) — ⚠️ Y154 (CH4): backend varsayılan olarak **YOK SAYAR** (akım sensörü tümden kapalı; `PEMF_AKIM_OLCUMU=1` açar, `utils/akim_olcumu.py`) | bobin 1-5 |
+| `X` | `1` = ADC tavanına dayandı → `I` **GÜVENİLMEZ** (yalnız `I` gibi, bayrak açıkken işlenir) | yalnız doygunlukta |
 | `GS` / `RS` | MLX90393 kazanç / çözünürlük — **geri okunarak DOĞRULANMIŞ** ayar (TD2) | `B` ile birlikte, HEP |
 
 Ayrıştırıcı: `headless_core.HeadlessCore._parse_stm_tele`.

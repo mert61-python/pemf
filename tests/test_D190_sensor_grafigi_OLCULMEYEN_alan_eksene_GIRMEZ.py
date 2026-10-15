@@ -23,6 +23,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from akim_olcumu_aparati import akim_olcumu_acik  # noqa: F401  (CH4 · Y154: akım sensörü AÇIKKEN yolu)
 
 _KOK = Path(__file__).resolve().parents[1]
 _FIKSTUR = (

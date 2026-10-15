@@ -34,6 +34,7 @@ import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { SurusKipiSecici } from "@/components/domain/SurusKipiSecici";
 import { gorunurBobinler, espSlotuGorunur, STM_BOBIN_SAYISI } from "@/services/bobinGorunurlugu";
 import { KendiDurdurmaIsareti } from "@/components/ui/KendiDurdurmaKontrolu";
+import { akimOlcumuAcik } from "@/utils/olculenAlan";
 
 // ─── Tab types ────────────────────────────────────────────────────────────────
 type TabKey = "automatic" | "manual" | "aipro";
@@ -745,6 +746,7 @@ export function ControlScreen() {
                 dutyEtkin={coil.dutyEtkin}
                 magneticMt={coil.magneticMt}
                 currentA={coil.currentA}
+                akimOlcumu={akimOlcumuAcik(snapshot)}
                 measuredFields={coil.measuredFields}
                 defaultFreq={parseFloat(masterFreq) || 100}
                 defaultDuty={parseFloat(masterDuty) || 25}

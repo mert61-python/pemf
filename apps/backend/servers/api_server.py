@@ -219,6 +219,7 @@ async def lifespan(app: FastAPI):
 # 2026-08-30: scratch/base64 uçlarında "Part exceeded maximum size of 1024KB"). Bkz.
 # utils/multipart_limit — Starlette varsayılanı 1MB, base64 görüntüler bunu aşıyordu.
 from utils.agir_import import torch_isit as _torch_isit  # noqa: E402  (A9)
+from utils.akim_olcumu import akim_olcumu_acik, akimsiz  # noqa: E402  (CH4 · Y154: akım sensörü tek bayrak)
 from utils.dongu_guvenligi import dongu_hatasini_bildir as _dongu_hatasini_bildir  # noqa: E402
 from utils.multipart_limit import buyuk_form_alani_limitini_uygula as _buyuk_form_limiti
 
@@ -1231,6 +1232,11 @@ def _on_mqtt_message_api(client, userdata, msg):
             if not is_retained:
                 _coil_last_telemetry[coil_index] = time.monotonic()
 
+            # CH4 · Y154: akım sensörü (ESP'de de ACS712) KAPALIYKEN ölçüm yükünün (sensors / status) akım alanları canlı duruma,
+            # WS'ye ve sensör CSV'sine GİRMEZ. Alarm / ACK yükleri SÜZÜLMEZ (Ö.4-Y8: "overcurrent" alarmı TAM acil durdurmaya gider).
+            if msg_type in ("sensors", "status"):
+                payload = akimsiz(payload)
+
             # YEREL SENSOR KAYDI (sahip karari 2026-09-09: "bilgisayar tarafi" + "her zaman
             # acik"). Buraya takiliyor cunku backend BU KONULARA ZATEN ABONE — yeni abonelik,
             # ekstra ag yuku ve cihaz tarafinda degisiklik GEREKMEZ.
@@ -1813,6 +1819,9 @@ def _handle_backend_event(event) -> None:
         _t_idx = _t_coil_id - 1
         if not (0 <= _t_idx < 8):
             return
+        # CH4 · Y154: akım sensörü KAPALIYKEN (varsayılan) ayrıştırıcıyı atlayan üreticinin (eski olay biçimi / simülatör) akım
+        # alanları da burada atılır → canlı durum / WS / sensör kaydı / bildirim akım görmez. Açıkken TD5 kuralı aşağıda aynen.
+        data = akimsiz(data)
         # TD5: ayrıştırıcıyı atlayan üretici (ör. eski olay biçimi) için de AYNI kural — güvenilmez akım YAZILMAZ.
         if "current" in data and _akim_guvenilmez_mi(data):
             data = {k: v for k, v in data.items() if k != "current"}
@@ -5216,6 +5225,8 @@ def _hardware_simulation_loop():
             scoils = set(sess.get("coil_ids") or [])
             snaps = []
             esp_acik = live_state.esp_etkin()
+            # CH4 · Y154: akım sensörü KAPALIYKEN sim de akım UYDURMAZ (0.0 = canlı durumun "ölçülmedi" varsayılanı).
+            _akim = akim_olcumu_acik()
             with _live_state_lock:
                 # ESP kapalıyken MQTT/gateway "online" DEĞİLDİR — sim gerçeği aşmasın.
                 _live_state["gateway"] = "online" if esp_acik else "devre_disi"
@@ -5237,7 +5248,9 @@ def _hardware_simulation_loop():
                         coil["magneticMt"] = round(
                             d / 25.0 * 2.0 + 0.25 * math.sin(el * 2 + idx) + random.uniform(-0.04, 0.04), 3
                         )
-                        coil["currentA"] = round(0.35 + d / 100.0 * 0.6 + random.uniform(-0.02, 0.02), 3)
+                        coil["currentA"] = (
+                            round(0.35 + d / 100.0 * 0.6 + random.uniform(-0.02, 0.02), 3) if _akim else 0.0
+                        )
                         coil["objectTemp"] = (
                             round(
                                 26.0
@@ -5253,7 +5266,7 @@ def _hardware_simulation_loop():
                         coil["frequencyHz"] = 0
                         coil["dutyCycle"] = 0
                         coil["magneticMt"] = round(abs(random.uniform(0, 0.05)), 3)
-                        coil["currentA"] = round(abs(random.uniform(0, 0.02)), 3)
+                        coil["currentA"] = round(abs(random.uniform(0, 0.02)), 3) if _akim else 0.0
                         coil["objectTemp"] = (
                             round(24.0 + 0.3 * math.sin(el * 0.3 + idx) + random.uniform(-0.2, 0.2), 1)
                             if sicaklik_olculur

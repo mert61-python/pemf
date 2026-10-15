@@ -13,7 +13,7 @@ import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet } from "@/services/apiClient";
 import { BarChart, PieChart } from "react-native-chart-kit";
 import { barBolumSayisi } from "@/utils/kpiGrafik";
-import { alanGosterilebilir } from "@/utils/olculenAlan";
+import { akimOlcumuAcik, alanGosterilebilir } from "@/utils/olculenAlan";
 import { ANLIK_GUC_GORUNUR, bobinGucuW } from "@/utils/bobinGucu";
 import { gorunurBobinler, STM_BOBIN_SAYISI, type GorunurlukGirdisi } from "@/services/bobinGorunurlugu";
 import { useUserMode, type UserMode } from "@/context/UserModeContext";
@@ -115,6 +115,8 @@ export function KpiDashboardScreen() {
   // Bkz. `hesaplaOrtSicaklik` (dosya sonunda) — ortalama, ÖLÇÜM YAPAN bobinler üzerinden alınır.
   const coilCount = hesaplaBobinSayisi(snapshot.coils ?? []);
 
+  // CH4 · Y154: akım sensörü KAPALIYKEN (varsayılan) bobin tablosunda "A" sütunu hiç çizilmez.
+  const akimOlcumu = akimOlcumuAcik(snapshot);
   // TD5 · A-64: "Anlık Güç" akım güvenilir olana dek GİZLİ (eski `COIL_R = 0.5` × sahte akım² → PSU kapalıyken 6,3 W).
   // Direnç tek kaynakta (`utils/bobinGucu`, 8,9 Ω); açılırsa yalnız güvenilir, ölçülmüş akım sayılır.
   const instantPowerW = runningCoils
@@ -351,7 +353,9 @@ export function KpiDashboardScreen() {
               <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>Bobin</Text>
               <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>mT</Text>
               <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>°C</Text>
-              <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>A</Text>
+              {akimOlcumu ? (
+                <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>A</Text>
+              ) : null}
               {ANLIK_GUC_GORUNUR ? (
                 <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>W</Text>
               ) : null}
@@ -374,7 +378,9 @@ export function KpiDashboardScreen() {
                   <Text style={styles.tableCell} numberOfLines={1} adjustsFontSizeToFit>{c.id}</Text>
                   <Text style={[styles.tableCell, { color: "#22c55e" }]} numberOfLines={1} adjustsFontSizeToFit>{magVar ? mag.toFixed(2) : "—"}</Text>
                   <Text style={[styles.tableCell, { color: tempVar && temp > 45 ? "#ef4444" : "#fb923c" }]} numberOfLines={1} adjustsFontSizeToFit>{tempVar ? temp.toFixed(1) : "—"}</Text>
-                  <Text style={[styles.tableCell, { color: "#60a5fa" }]} numberOfLines={1} adjustsFontSizeToFit>{curVar ? cur.toFixed(3) : "—"}</Text>
+                  {akimOlcumu ? (
+                    <Text style={[styles.tableCell, { color: "#60a5fa" }]} numberOfLines={1} adjustsFontSizeToFit>{curVar ? cur.toFixed(3) : "—"}</Text>
+                  ) : null}
                   {ANLIK_GUC_GORUNUR ? (
                     <Text style={[styles.tableCell, { color: "#a78bfa" }]} numberOfLines={1} adjustsFontSizeToFit>{curVar && cur > 0 ? power.toFixed(2) : "—"}</Text>
                   ) : null}

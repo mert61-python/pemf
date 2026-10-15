@@ -20,6 +20,7 @@ Tasarım: `_event_loop` None → `_ws_broadcast_sync` no-op; saf state geçişle
 """
 
 import pytest
+from akim_olcumu_aparati import akim_olcumu_acik  # noqa: F401  (CH4 · Y154: akım sensörü AÇIKKEN yolu)
 
 
 @pytest.fixture()

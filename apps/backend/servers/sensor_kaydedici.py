@@ -41,6 +41,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from utils.akim_olcumu import akimsiz
 from utils.dongu_guvenligi import dongu_hatasini_bildir
 
 logger = logging.getLogger(__name__)
@@ -265,7 +266,9 @@ class SensorKaydedici:
             satir["ts_epoch_ms"] = str(int(_t * 1000))
             satir["bobin"] = str(bobin)
             satir["msg_type"] = str(msg_type)
-            for anahtar, deger in yuk.items():
+            # CH4 · Y154: akım sensörü KAPALIYKEN akım sütunları (current / current_saturated / max_current / current_sensor_ok)
+            # BOŞ kalır — STM ve ESP kaydının ortak tek girişi; sütun sırası (sözleşme) DEĞİŞMEZ.
+            for anahtar, deger in akimsiz(yuk).items():
                 sutun = _ESLEME.get(anahtar)
                 if not sutun:
                     continue

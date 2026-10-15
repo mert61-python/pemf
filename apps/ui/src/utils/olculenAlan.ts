@@ -20,6 +20,15 @@ export const ALAN_DOGRULANAMADI_METNI = "Alan sensörü doğrulanamadı — öl�
  */
 export const AKIM_OLCUMU_YOK_METNI = "Akım ölçümü yok";
 
+/**
+ * CH4 · Y154 (sahip 2026-10-15): AKIM SENSÖRÜ (ACS712) TÜMDEN KAPALI — akım HİÇ GÖSTERİLMEZ (satır / sütun çizilmez). Tek bayrak
+ * backend'de (`apps/backend/utils/akim_olcumu.py`, `PEMF_AKIM_OLCUMU`, varsayılan KAPALI) → anlık görüntünün `akimOlcumu` alanı.
+ * Akım YALNIZ `true` iken çizilir; alanı göndermeyen eski backend → gizli (sahte akım gösterme riski yerine eksik satır).
+ */
+export function akimOlcumuAcik(snapshot: { akimOlcumu?: boolean } | null | undefined): boolean {
+  return snapshot?.akimOlcumu === true;
+}
+
 export function alanGosterilebilir(coil: { measuredFields?: string[] } | null | undefined, alan: string): boolean {
   const mf = coil?.measuredFields;
   return Array.isArray(mf) ? mf.includes(alan) : true;

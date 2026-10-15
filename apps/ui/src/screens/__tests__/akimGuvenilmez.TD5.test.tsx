@@ -60,6 +60,8 @@ function snap(coils: any[]) {
     patient: { name: "", species: "", breed: "", owner: "" },
     activeTreatment: { isActive: true, mode: "Manuel", frequencyHz: 100, intensityMt: 1, remainingMin: 5, elapsedSec: 0, durationSec: 300 },
     notifications: [], coils, system: {}, sessions: [],
+    // CH4 · Y154: akım sensörü varsayılan KAPALI (akım hiç çizilmez); TD5 yolu yalnız bayrak AÇIKKEN geçerlidir.
+    akimOlcumu: true,
   };
 }
 

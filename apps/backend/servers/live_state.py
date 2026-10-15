@@ -20,6 +20,7 @@ from datetime import datetime
 
 from fastapi import WebSocket
 from utils import estop_mandali
+from utils.akim_olcumu import akim_olcumu_acik
 from utils.path_utils import HARDWARE_VERSION, get_app_version
 
 _APP_VERSION = get_app_version()
@@ -621,6 +622,9 @@ def _build_ws_snapshot() -> dict:
             "estopTeyit": _live_state.get("estopTeyit"),
             # TD1 (yalnız-ek): kart ↔ uygulama paket uyumu — arayüz kalıcı bandı (K1 / K2) ve "Donanım" rozeti buradan.
             "stmUyum": _live_state.get("stmUyum"),
+            # CH4 · Y154 (yalnız-ek): akım sensörü bayrağı (`utils.akim_olcumu`, varsayılan KAPALI) — arayüz akım satırlarını YALNIZ
+            # `true` iken çizer (alanı göndermeyen eski backend → gizli).
+            "akimOlcumu": akim_olcumu_acik(),
         }
 
 

@@ -26,6 +26,7 @@ import re
 from pathlib import Path
 
 import pytest
+from akim_olcumu_aparati import akim_olcumu_acik  # noqa: F401  (CH4 · Y154: akım sensörü AÇIKKEN yolu)
 from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 REPO = Path(__file__).resolve().parent.parent

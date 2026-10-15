@@ -43,7 +43,7 @@ const temel = {
   measuredFields: [] as string[],
 };
 
-const ciz = (ek: Partial<typeof temel> = {}) =>
+const ciz = (ek: Partial<typeof temel> & { akimOlcumu?: boolean } = {}) =>
   render(<CoilParameterPanel {...temel} {...ek} />);
 
 /**
@@ -97,7 +97,8 @@ it("ölçüm VARSA sıcaklık normal gösterilir", () => {
 
 it("KRİTİK: bobin 1-5 AKIM ölçer, sıcaklık/alan KISA ÇİZGİ", () => {
   // Sahip kararı 2026-09-10: bobin 1-5'e ACS712-30A bağlanıyor, MLX sensörü YOK.
-  const u = ciz({ coilId: 2, objectTemp: 0, magneticMt: 0, currentA: 0.412, measuredFields: ["currentA"] });
+  // CH4 · Y154: akım sensörü varsayılan KAPALI ("A" hiç çizilmez) — bu karşıt yalnız bayrak AÇIKKEN geçerli (`akimOlcumu`).
+  const u = ciz({ coilId: 2, objectTemp: 0, magneticMt: 0, currentA: 0.412, measuredFields: ["currentA"], akimOlcumu: true });
   expect(u.getByText("0.412")).toBeTruthy();   // akım GÖSTERİLİR
   expect(u.getAllByText("-").length).toBeGreaterThanOrEqual(2);  // sıcaklık + mT
 });

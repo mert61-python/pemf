@@ -95,6 +95,8 @@ async function kpiTablosu(coils: any[], gecmis: any = {}) {
     patient: { name: "", species: "", breed: "", owner: "" },
     activeTreatment: { isActive: true, mode: "Manuel", frequencyHz: 100, intensityMt: 1, remainingMin: 5, elapsedSec: 0, durationSec: 300 },
     notifications: [], coils, system: {}, sessions: [],
+    // CH4 · Y154: akım sensörü varsayılan KAPALI ("A" sütunu yok); bu kapının akım karşıtı yalnız bayrak AÇIKKEN geçerli.
+    akimOlcumu: true,
   };
   const u = render(<KpiDashboardScreen />);
   await waitFor(() => expect(apiGet).toHaveBeenCalled());

@@ -12,12 +12,20 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
+from utils.akim_olcumu import akim_olcumu_acik
 from utils.path_utils import get_app_data_directory
 from utils.pdf_report_generator import get_pdf_generator
 from utils.seans_durum import durum_etiketi
 
 router = APIRouter(prefix="/api/history", tags=["history"])
 logger = logging.getLogger("HistoryRouter")
+
+
+def _akimsiz_ozet(ozet, akim_acik: bool):
+    """CH4 · Y154: akım sensörü KAPALIYKEN bobin çalışması özetinin `current_avg`'ı verilmez (kopya; DB'deki değer değişmez)."""
+    if akim_acik or not isinstance(ozet, dict):
+        return ozet
+    return {**ozet, "current_avg": None}
 
 
 class HistoryDeletePayload(BaseModel):
@@ -573,6 +581,8 @@ def get_session_full_details(session_id: int, db=Depends(get_db)):
 
         summaries = db.get_run_summaries(session_id)
         runs = db.get_session_coil_runs(session_id)
+        # CH4 · Y154: akım sensörü KAPALIYKEN eski kayıtlardaki akım (TD5 öncesi yüzen girişten SAHTE olabilir) VERİLMEZ; veri SİLİNMEZ.
+        _akim = akim_olcumu_acik()
         coil_runs = []
         for r in runs:
             coil_runs.append(
@@ -586,7 +596,7 @@ def get_session_full_details(session_id: int, db=Depends(get_db)):
                     "duty_percent": r.get("duty_percent"),
                     "phase": r.get("phase"),
                     "intensity_mt": r.get("intensity_mt"),
-                    "summary": summaries.get(r.get("id")),
+                    "summary": _akimsiz_ozet(summaries.get(r.get("id")), _akim),
                 }
             )
 
@@ -598,7 +608,7 @@ def get_session_full_details(session_id: int, db=Depends(get_db)):
                     "sample_ts": s.get("sample_ts"),
                     "temperature_c": s.get("temperature_c"),
                     "ambient_temp_c": s.get("ambient_temp_c"),
-                    "current_a": s.get("current_a"),
+                    "current_a": s.get("current_a") if _akim else None,
                     "magnetic_field_mt": s.get("magnetic_field_mt"),
                     "coil_run_id": s.get("coil_run_id"),
                     "sample_count": s.get("sample_count"),
@@ -645,8 +655,10 @@ def export_coil_runs_csv(session_id: int, db=Depends(get_db)):
         ]
         writer.writerow(headers)
 
+        _akim = akim_olcumu_acik()
         for r in runs:
-            summ = summaries.get(r.get("id")) or {}
+            # CH4 · Y154: akım sensörü KAPALIYKEN "Ort.Akim(A)" sütunu BOŞ (sütun sırası — dışa aktarım biçimi — değişmez).
+            summ = _akimsiz_ozet(summaries.get(r.get("id")) or {}, _akim)
             writer.writerow(
                 [
                     r.get("coil_id", ""),

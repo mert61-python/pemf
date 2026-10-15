@@ -223,6 +223,8 @@ export interface DashboardSnapshot {
   estopTeyit?: EstopTeyit | null;
   /** TD1: kart ↔ uygulama paket uyumu (backend `hardware.stm.uyum` → WS `stm_uyum`). Yoksa eski backend → bant çizilmez. */
   stmUyum?: StmUyum | null;
+  /** CH4 · Y154: akım sensörü açık mı (backend `utils/akim_olcumu`, varsayılan KAPALI). Yalnız `true` iken akım çizilir. */
+  akimOlcumu?: boolean;
 }
 
 /**

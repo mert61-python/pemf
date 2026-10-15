@@ -47,6 +47,8 @@ interface Props {
   stmConnected?: boolean;   // STM32 USB bağlı mı?
   /** Son START komutunun CİHAZ onayı (ESP `coil_ack`); commandId ile HTTP yanıtındaki command_id eşleşir. */
   deviceAck?: CoilDeviceAck;
+  /** CH4 · Y154: akım sensörü açık mı (backend bayrağı, `akimOlcumuAcik(snapshot)`). Kapalıyken "A" okuması ÇİZİLMEZ. */
+  akimOlcumu?: boolean;
 }
 
 export function CoilParameterPanel({
@@ -68,6 +70,7 @@ export function CoilParameterPanel({
   stm32Driven = false,
   stmConnected = false,
   deviceAck,
+  akimOlcumu = false,
 }: Props) {
   const [freq, setFreq] = useState(String(defaultFreq));
   const [duty, setDuty] = useState(String(defaultDuty));
@@ -311,7 +314,10 @@ export function CoilParameterPanel({
           numarasından TAHMİN ETMEZ (topoloji değişince arayüz kendiliğinden doğru kalır). */}
       <View style={styles.readings}>
         <Reading label="mT" value={olcum("magneticMt") ? magneticMt.toFixed(2) : "-"} active={running} />
-        <Reading label="A" value={olcum("currentA") ? currentA.toFixed(3) : "-"} active={running} />
+        {/* CH4 · Y154: akım sensörü KAPALIYKEN (varsayılan) "A" okuması hiç çizilmez. */}
+        {akimOlcumu ? (
+          <Reading label="A" value={olcum("currentA") ? currentA.toFixed(3) : "-"} active={running} />
+        ) : null}
         <Reading label="Hz" value={frequencyHz > 0 ? String(frequencyHz) : "-"} active={running} />
         <Reading label="DC%" value={dutyCycle > 0 ? String(dutyCycle) : "-"} active={running} />
         {/* Y69 (sahip, S-G4): İSTENEN DC%'nin yanında kartın UYGULADIĞI (ACK `E=`; 1 kHz bipolar %50 → 46.0).

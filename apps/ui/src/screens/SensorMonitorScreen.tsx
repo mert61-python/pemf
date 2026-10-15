@@ -18,7 +18,7 @@ import { RealtimeChart } from "@/components/visual/RealtimeChart";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { gorunurBobinler } from "@/services/bobinGorunurlugu";
 import { Chip } from "@/components/ui/Chip";
-import { AKIM_OLCUMU_YOK_METNI, ALAN_DOGRULANAMADI_METNI } from "@/utils/olculenAlan";
+import { AKIM_OLCUMU_YOK_METNI, ALAN_DOGRULANAMADI_METNI, akimOlcumuAcik } from "@/utils/olculenAlan";
 import { useResponsive } from "@/hooks/useResponsive";
 
 // Grafikteki çizgi renkleriyle BİREBİR aynı kategorik palet (legend/filtre butonu + stat kartı tutarlılığı).
@@ -41,6 +41,8 @@ export function SensorMonitorScreen() {
   // yön için container'a tam oturur; tablet/geniş ekranda 1200'de sınırlanır.
   const [chartW, setChartW] = useState(0);
   const coils = snapshot.coils ?? [];
+  // CH4 · Y154: akım sensörü KAPALIYKEN (varsayılan) "Akım" satırı hiç çizilmez.
+  const akimOlcumu = akimOlcumuAcik(snapshot);
   /**
    * ÇİZİLECEK BOBİNLER — Kontrol sekmesiyle AYNI kural (tek kaynak).
    *
@@ -169,6 +171,7 @@ export function SensorMonitorScreen() {
               measuredFields={coil?.measuredFields}
               alanDogrulanamadi={coil?.alanDogrulanamadi === true}
               akimGuvenilmez={coil?.akimGuvenilmez === true}
+              akimOlcumu={akimOlcumu}
             />
           );
         })}
@@ -182,6 +185,7 @@ export function SensorMonitorScreen() {
 const CoilStatCard = memo(function CoilStatCard({
   id, color, connected, running,
   magneticMt, objectTemp, currentA, frequencyHz, measuredFields, alanDogrulanamadi = false, akimGuvenilmez = false,
+  akimOlcumu = false,
 }: {
   id: number; color: string; connected: boolean; running: boolean;
   magneticMt: number; objectTemp: number; currentA: number; frequencyHz: number;
@@ -190,6 +194,8 @@ const CoilStatCard = memo(function CoilStatCard({
   alanDogrulanamadi?: boolean;
   /** TD5: akım ölçümü güvenilmez → değer gösterilmez, "Akım ölçümü yok". */
   akimGuvenilmez?: boolean;
+  /** CH4 · Y154: akım sensörü açık mı (backend bayrağı). Kapalıyken "Akım" satırı ve TD5 metni ÇİZİLMEZ. */
+  akimOlcumu?: boolean;
 }) {
   // ⚠️ ÖLÇÜLMEYEN ALAN KISA ÇİZGİ (—), SIFIR DEĞİL. Bobin 1-5'te yalnız ACS712 (akım),
   // bobin 6-7'de yalnız MLX (sıcaklık/alan) var. `0.00 mT` / `0.0 °C` yazmak "ölçtüm,
@@ -227,17 +233,19 @@ const CoilStatCard = memo(function CoilStatCard({
             color="#22c55e"
           />
           {alanDogrulanamadi ? <Text style={styles.offlineText}>{ALAN_DOGRULANAMADI_METNI}</Text> : null}
-          {akimGuvenilmez ? <Text style={styles.offlineText}>{AKIM_OLCUMU_YOK_METNI}</Text> : null}
+          {akimOlcumu && akimGuvenilmez ? <Text style={styles.offlineText}>{AKIM_OLCUMU_YOK_METNI}</Text> : null}
           <Metric
             label="Sıcaklık"
             value={olcum("objectTemp") ? `${objectTemp.toFixed(1)} °C` : "—"}
             color={olcum("objectTemp") && objectTemp > 45 ? "#ef4444" : "#fb923c"}
           />
-          <Metric
-            label="Akım"
-            value={olcum("currentA") ? `${currentA.toFixed(3)} A` : "—"}
-            color="#60a5fa"
-          />
+          {akimOlcumu ? (
+            <Metric
+              label="Akım"
+              value={olcum("currentA") ? `${currentA.toFixed(3)} A` : "—"}
+              color="#60a5fa"
+            />
+          ) : null}
           <Metric label="Frekans" value={frequencyHz > 0 ? `${frequencyHz} Hz` : "—"} color="#a78bfa" />
         </>
       ) : (

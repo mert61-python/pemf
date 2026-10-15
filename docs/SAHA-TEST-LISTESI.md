@@ -307,7 +307,7 @@ Bu bölümdeki her başarısızlık yayını durdurur.
 |---|---|---|
 | 8.1 | Bobin 1-5'i uzun süre yüksek duty'de sür, sıcaklığı ölç | **Cihazda termal kesme YOK** (NTC derleme-kapılı). Yalnız süre sınırı ve operatör keser. ⚠️ Canlı üzerinde denemeyin — fantom/boş bobin |
 | 8.2 | Bobin 6-7 sıcaklığına bak | Ölçülür ve **gösterilir**; otomatik kesme yok (sahip kararı) |
-| 8.3 | Bobin 6-7 akım değerine bak | **"—"** gösterir: `measuredFields`'te `currentA` YOK (ACS712 bu bobinlerde taşınmadı — bilinçli). Bobin 1–5'te ACS712 doğrulanamıyorsa (takılı değil / yüzen giriş) orada da akım gösterilmez ("Akım ölçümü yok"), "Anlık Güç" gizlidir (TD5). Güç kapalıyken akım değeri (ör. 10–115 A) görünüyorsa bulgudur. *(TD8 2026-10-15: eskiden "`0.0` gösterir" yazıyordu.)* |
+| 8.3 | Bobinlerin akım değerine bak | **Akım hiç gösterilmez** (Y154 · CH4: akım sensörü tümden kapalı, `PEMF_AKIM_OLCUMU` kapalı): Sensörler'de "Akım" satırı, Kontrol panelinde "A" okuması ve Performans Raporu bobin tablosunda "A" sütunu YOK; "Anlık Güç" gizli; akım bildirimi gelmez. Herhangi bir ekranda akım değeri (ör. 10–115 A) görünüyorsa bulgudur. *(CH4 2026-10-15. Önceki hâli TD8: bobin 6–7 "—", bobin 1–5'te doğrulanamayan akım gizli; daha önce "`0.0` gösterir".)* |
 | 8.4 | Ödeme/abonelik ekranlarını dene | Satış **kapalı** (FREE_MODE); jeton kapısı uykuda. Ücret istiyorsa bulgudur |
 | 8.5 | Uzaktan erişim (tünel) ile bağlan | Çalışır; ⚠️ `resolve_device` tazelik SQL'i canlı Supabase'e uygulanmadıysa bayat cihaz görünebilir |
 | 8.6 | Araştırma AI Pro (fantom/petri) sürüşünü dene | **Bayrak kapalı** — sürüş yok, yalnız görüntüleme. Bobin sürüyorsa bulgudur |

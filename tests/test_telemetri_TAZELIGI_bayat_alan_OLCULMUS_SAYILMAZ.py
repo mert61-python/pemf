@@ -27,6 +27,7 @@ import time as _gercek_zaman
 from pathlib import Path
 
 import pytest
+from akim_olcumu_aparati import akim_olcumu_acik  # noqa: F401  (CH4 · Y154: akım sensörü AÇIKKEN yolu)
 
 KOK = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(KOK))

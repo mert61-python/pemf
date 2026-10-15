@@ -16,6 +16,7 @@ import csv
 from datetime import datetime
 
 import pytest
+from akim_olcumu_aparati import akim_olcumu_acik  # noqa: F401  (CH4 · Y154: akım sensörü AÇIKKEN yolu)
 
 
 class _Olay:

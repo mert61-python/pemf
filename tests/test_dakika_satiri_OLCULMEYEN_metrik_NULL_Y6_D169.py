@@ -15,6 +15,7 @@ o iş parçacığında atlanır) → GERÇEK `_emit_minute_averages` → tampond
 from __future__ import annotations
 
 import pytest
+from akim_olcumu_aparati import akim_olcumu_acik  # noqa: F401  (CH4 · Y154: akım sensörü AÇIKKEN yolu)
 from dongu_tek_tur import bir_tur_kos
 
 

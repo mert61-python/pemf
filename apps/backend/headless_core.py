@@ -16,6 +16,7 @@ from database.patient_database import get_patient_database
 from database.session_manager import get_session_manager
 from event_bus import EventPriority, get_event_bus
 from services.headless_services import MosquittoSupervisor, NetworkStatusService, UdpDiscoveryService
+from utils.akim_olcumu import akim_olcumu_acik
 from utils.dongu_guvenligi import dongu_hatasini_bildir
 from utils.simple_signal import SimpleSignal
 from utils.stm32_transport import Stm32SerialTransport
@@ -1026,10 +1027,16 @@ class HeadlessCore:
             govde["magnetic_saturated"] = True
         if m.group("x") == "1":
             govde["current_saturated"] = True
+        # ⚠️ CH4 · Y154 (sahip 2026-10-15): AKIM SENSÖRÜ TÜMDEN KAPALI (varsayılan) → `I=` / `X=` burada ATILIR: canlı duruma, sensör
+        # kaydına, doz kaydına ve bildirime hiç girmez (firmware satırı basmayı sürdürür, yok sayılır). Yalnız akım taşıyan satır olay
+        # üretmez (aşağıdaki "taşınacak ölçüm yok"). Tek bayrak: `utils.akim_olcumu` (`PEMF_AKIM_OLCUMU=1` → TD5 yolu aynen).
+        if not akim_olcumu_acik():
+            govde.pop("current", None)
+            govde.pop("current_saturated", None)
         # ⚠️ TD5 (tezgâh Oturum 13 · K4): doygun (`X=1`) ya da aralık dışı akım GÜVENİLMEZ — ekrana, sensör kaydına ve doz
         # kaydına (dakika ortalaması) GİRMEZ; `akim_guvenilmez` bayrağı arayüze "akım ölçümü yok" dedirtir. Eskiden kırpılmış /
         # yüzen girişin sayısı "ölçülmüş" yayınlanıyor, her geçişte bildirim basılıyordu (46 bildirim, 115 A).
-        if "current" in govde and (govde.get("current_saturated") or not (0.0 <= govde["current"] <= ACS712_AZAMI_A)):
+        elif "current" in govde and (govde.get("current_saturated") or not (0.0 <= govde["current"] <= ACS712_AZAMI_A)):
             govde.pop("current", None)
             govde["akim_guvenilmez"] = True
         # ⚠️ TD2 (tezgâh Oturum 13 · K6): MLX90393 kazanç ayarı geri okunmadan basılan alan ~5× BÜYÜK olabilir (ölçüldü:
