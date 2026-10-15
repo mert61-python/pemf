@@ -22,7 +22,15 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { webIcinKucult } from "@/services/gorselKucult";
 import { apiGet, apiPost, authHeaders, platformAlert, AI_TIMEOUT_MS, aiHataMesaji } from "@/services/apiClient";
 import { aiDetayCumlesi } from "@/utils/aiHataDetayi";
-import { canliKareDurumu, canliSonrakiBekleme, type CanliDurum } from "@/utils/canliKare";
+import {
+  CANLI_OTURUM_BASLIGI,
+  canliJetonMetni,
+  canliKareDurumu,
+  canliOturumBaslat,
+  canliSonrakiBekleme,
+  type CanliDurum,
+} from "@/utils/canliKare";
+import { jetonBakiyesiGetir } from "@/services/jetonBakiye";
 import { ckdOnKontrol } from "@/utils/ckdOnKontrol"; // B5: CKD gönderim-öncesi eyleme dönük ön-kontrol (klinik_asgari paritesi)
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { serviceConfig } from "@/services/config";
@@ -1311,17 +1319,43 @@ function CanliKameraKutusu({ cameraRef, facing, onFlip, sonKareB64, sonKareYasMs
 }
 
 /** SG.G5: son canlı karenin durumu — SÜREKLİ görünür satır (toast yağmuru yok); metin backend yanıtından (`utils/canliKare`). */
-function CanliDurumSatiri({ durum }: { durum: CanliDurum }) {
+function CanliDurumSatiri({ durum, jeton }: { durum: CanliDurum; jeton?: number | null }) {
   const uyari = durum.tur === "red" || durum.tur === "hata";
   return (
-    <Text
-      style={[styles.canliDurum, uyari ? styles.canliDurumUyari : durum.tur === "bulunamadi" ? styles.canliDurumBilgi : null]}
-      accessibilityLiveRegion="polite"
-      testID="canli-durum"
-    >
-      {durum.metin}
-    </Text>
+    <>
+      <Text
+        style={[styles.canliDurum, uyari ? styles.canliDurumUyari : durum.tur === "bulunamadi" ? styles.canliDurumBilgi : null]}
+        accessibilityLiveRegion="polite"
+        testID="canli-durum"
+      >
+        {durum.metin}
+      </Text>
+      {/* TD9 [ÖNERİLEN]: ücretlendirme etkinken canlı oturumun jetonu (dakika başına). */}
+      {typeof jeton === "number" ? (
+        <Text style={[styles.canliDurum, styles.canliDurumBilgi]} testID="canli-jeton">
+          {canliJetonMetni(jeton)}
+        </Text>
+      ) : null}
+    </>
   );
+}
+
+/** TD9: canlı kip açıkken ücretlendirme ETKİN mi (sayaç yalnız o zaman); okunamazsa sayaç gösterilmez. */
+function useCanliJetonEtkin(canli: boolean): boolean {
+  const [etkin, setEtkin] = useState(false);
+  useEffect(() => {
+    if (!canli) return;
+    let iptal = false;
+    jetonBakiyesiGetir()
+      .then((b) => {
+        if (!iptal) setEtkin(Boolean(b?.etkin));
+      })
+      .catch(() => undefined);
+    return () => {
+      iptal = true;
+    };
+  }, [canli]);
+  return etkin;
 }
 
 function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, explainDestegi }: { endpoint: string, title: string, subtitle: string, patientName: string, galleryOnly?: boolean, explainDestegi?: boolean }) {
@@ -1356,6 +1390,9 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
   const cameraRef = useRef<any>(null);
   // SG.G5 / G6: son canlı karenin durumu (sürekli görünür) + son analiz karesinin zamanı (yaş etiketi).
   const [canliDurum, setCanliDurum] = useState<CanliDurum | null>(null);
+  // TD9 (Y148): canlı oturumun dakika-başı jetonu (sayaç yalnız ücretlendirme etkinken).
+  const [canliJeton, setCanliJeton] = useState(0);
+  const canliJetonEtkin = useCanliJetonEtkin(isLive && !autoAdjust);
   const [sonKareZamani, setSonKareZamani] = useState<number | null>(null);
   const [simdi, setSimdi] = useState(() => Date.now());
   // BUG #2 FIX: loading state'ini useRef ile takip et, döngü closure'u her zaman güncel değeri okur
@@ -1433,6 +1470,8 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
     if (!isLive || autoAdjust) return;
     let bitti = false;
     let zamanlayici: ReturnType<typeof setTimeout> | null = null;
+    const oturum = canliOturumBaslat(); // TD9: dakika başı jeton — oturum kimliği her kare isteğinde
+    setCanliJeton(0);
     const tur = async () => {
       if (bitti) return;
       const bas = Date.now();
@@ -1456,11 +1495,16 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
             liveAbortRef.current = ctrl;
             try {
               const r = await fetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
-                method: "POST", body: fd, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
+                method: "POST", body: fd,
+                headers: { Accept: "application/json", ...authHeaders(), [CANLI_OTURUM_BASLIGI]: oturum.kimlik },
+                signal: ctrl.signal,
               });
               const data = await r.json().catch(() => ({}));
               if (!mountedRef.current || bitti) return;
-              setCanliDurum(canliKareDurumu(endpoint, r.ok, r.status, data));
+              const kareDurumu = canliKareDurumu(endpoint, r.ok, r.status, data);
+              setCanliDurum(kareDurumu);
+              oturum.kareBildir(kareDurumu, bas);
+              setCanliJeton(oturum.jetonSayisi());
               if (r.ok && data?.status === "success") {
                 setResult(data);
                 setSonKareZamani(Date.now());
@@ -1823,7 +1867,9 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
         )}
       </View>
       )}
-      {isLive && !autoAdjust && canliDurum ? <CanliDurumSatiri durum={canliDurum} /> : null}
+      {isLive && !autoAdjust && canliDurum ? (
+        <CanliDurumSatiri durum={canliDurum} jeton={canliJetonEtkin ? canliJeton : null} />
+      ) : null}
 
       <View style={[styles.btnRow, isCompact && { flexDirection: "column" }]}>
         <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
@@ -4077,6 +4123,9 @@ function CatOrganModule({ patientName }: { patientName: string }) {
   const cameraRef = useRef<any>(null);
   // SG.G5 / G6: son canlı karenin durumu + son analiz karesinin yaşı (VisionModule ile AYNI kural — `utils/canliKare`).
   const [canliDurum, setCanliDurum] = useState<CanliDurum | null>(null);
+  // TD9 (Y148): canlı oturumun dakika-başı jetonu (sayaç yalnız ücretlendirme etkinken).
+  const [canliJeton, setCanliJeton] = useState(0);
+  const canliJetonEtkin = useCanliJetonEtkin(isLive);
   const [sonKareZamani, setSonKareZamani] = useState<number | null>(null);
   const [simdi, setSimdi] = useState(() => Date.now());
   const liveLoadingRef = useRef(false);
@@ -4099,6 +4148,8 @@ function CatOrganModule({ patientName }: { patientName: string }) {
     if (!isLive) return;
     let bitti = false;
     let zamanlayici: ReturnType<typeof setTimeout> | null = null;
+    const oturum = canliOturumBaslat(); // TD9: dakika başı jeton — oturum kimliği her kare isteğinde
+    setCanliJeton(0);
     const tur = async () => {
       if (bitti) return;
       const bas = Date.now();
@@ -4118,11 +4169,18 @@ function CatOrganModule({ patientName }: { patientName: string }) {
             // CANLI-DONGU: kisa sinir ZORUNLU (uzun timeout kamera akisini kilitler); 3 modelli hat → 25 sn.
             const t = setTimeout(() => ctrl.abort(), 25000);
             try {
-              const r = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/cat_organ", { method: "POST", body: fd, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
+              const r = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/cat_organ", {
+                method: "POST", body: fd,
+                headers: { Accept: "application/json", ...authHeaders(), [CANLI_OTURUM_BASLIGI]: oturum.kimlik },
+                signal: ctrl.signal,
+              });
               const data = await r.json().catch(() => ({}));
               // B1: "Canlıyı Durdur" sonrası geç gelen kare sonucu boş statik ekrana düşmesin.
               if (bitti || !isLiveRef.current) return;
-              setCanliDurum(canliKareDurumu("/vision/cat_organ", r.ok, r.status, data));
+              const kareDurumu = canliKareDurumu("/vision/cat_organ", r.ok, r.status, data);
+              setCanliDurum(kareDurumu);
+              oturum.kareBildir(kareDurumu, bas);
+              setCanliJeton(oturum.jetonSayisi());
               if (r.ok && data?.status === "success") {
                 setResult(data);
                 setSonKareZamani(Date.now());
@@ -4301,7 +4359,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
         </View>
       )}
 
-      {isLive && canliDurum ? <CanliDurumSatiri durum={canliDurum} /> : null}
+      {isLive && canliDurum ? <CanliDurumSatiri durum={canliDurum} jeton={canliJetonEtkin ? canliJeton : null} /> : null}
       {isLive && (
         <Text style={styles.liveHint}>🎥 Canlı mod açık — kediyi kadraja alıp sabit tutun. Organ haritası her kare analizi bitince güncellenir (3 modelli hat — makinenin hızına bağlı); büyük görüntü son analiz karesidir, canlı önizleme köşededir; barların rengi güven düzeyini gösterir.</Text>
       )}

@@ -32,10 +32,13 @@ davranış değişmez (entitlement.py deseniyle birebir).
 from __future__ import annotations
 
 import base64
+import contextvars
+import functools
 import hashlib
 import json
 import logging
 import os
+import re
 import threading
 import time
 import uuid
@@ -87,7 +90,87 @@ MALIYET: dict[str, int] = {
     "sensor": 1,
     "agir_arastirma": 3,
     "ai_pro_seans": 5,
+    # TD9 (Y148, sahip 2026-10-14): CANLI kamera kipi (AI Hub görüntü modülleri, kedi organ) DAKİKA BAŞINA — kareler ücretsiz.
+    "canli_dakika": 1,
 }
+
+# ── CANLI KİP (TD9 · Y148) ──────────────────────────────────────────────────────────────────────────────────────────────
+# Eskiden canlı kipte her BAŞARILI kare 1 jeton ("goruntu"); uyarlamalı döngüyle dakikada ~60'a kadar (SG ölçtü). Sahip kararı:
+# canlı oturumun her DAKİKASI 1 jeton, yalnız en az bir SONUÇ teslim edilen dakika ("bulunamadı" / ret / hata dakikası 0).
+# Kimlik: istemci canlı oturum başına rastgele bir kimlik gönderir (`CANLI_OTURUM_BASLIGI`). Dakika = oturumun bu süreçte
+# görülen İLK karesinden itibaren 60 sn'lik kova → 10 dk canlı kullanım ≤ 10 jeton. İdempotans: `istek_id` =
+# `canli-<oturum>-<dakika>` (sunucu RPC'si UNIQUE + çevrimdışı defter aynı kimliği iki kez tutmaz) ve aynı süreçte bir kova için
+# TEK tüketim çağrısı. `token_ledger.tur` CHECK listesine YENİ tür EKLENMEZ (Supabase şeması canlı): tür mevcut
+# ("analiz" / "kullandikca"), ayırt edici `detay` = "canli_dakika". Çevrimdışı rezerv / borç tavanı / elle analiz / AI Pro
+# kare muafiyeti DEĞİŞMEZ.
+CANLI_OTURUM_BASLIGI = "x-pemf-canli-oturum"
+_CANLI_KIMLIK = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+_CANLI_KOVA_SN = 60.0
+_CANLI_UNUTMA_SN = 4 * 3600.0
+_canli_kilit = threading.Lock()
+#: (sahip, oturum) → {"t0": ilk karenin monotonic anı, "kovalar": tüketimi başlatılmış dakika kovaları}
+_canli_oturumlar: dict = {}
+#: TD9: uç bu isteğin sonucunu SONUÇSUZ işaretledi ("bulunamadı") → canlı dakika bu kareyle ücretlenmez (`sonuc_izle`).
+_SONUC_YOK: contextvars.ContextVar = contextvars.ContextVar("jeton_sonuc_yok", default=False)
+
+
+def _canli_kova(sahip: str, oturum: str, simdi: float | None = None) -> int:
+    """(sahip, oturum) için şimdiki dakika kovası; oturum ilk kez görülüyorsa başlangıç şimdi. Eski oturumlar unutulur."""
+    t = time.monotonic() if simdi is None else simdi
+    with _canli_kilit:
+        for k in [k for k, v in _canli_oturumlar.items() if t - v["t0"] > _CANLI_UNUTMA_SN]:
+            _canli_oturumlar.pop(k, None)
+        d = _canli_oturumlar.setdefault((sahip, oturum), {"t0": t, "kovalar": set()})
+        return int((t - d["t0"]) // _CANLI_KOVA_SN)
+
+
+def _canli_kova_ucretli_mi(sahip: str, oturum: str, kova: int) -> bool:
+    with _canli_kilit:
+        d = _canli_oturumlar.get((sahip, oturum))
+        return bool(d and kova in d["kovalar"])
+
+
+def _canli_kovayi_al(sahip: str, oturum: str, kova: int) -> bool:
+    """Kovanın tüketimini BU çağrı mı yapacak? (aynı süreçte kova başına tek tüketim — eşzamanlı iki kare iki kez düşmez)"""
+    with _canli_kilit:
+        d = _canli_oturumlar.setdefault((sahip, oturum), {"t0": time.monotonic(), "kovalar": set()})
+        if kova in d["kovalar"]:
+            return False
+        d["kovalar"].add(kova)
+        return True
+
+
+def sonucsuz_mu(veri) -> bool:
+    """TD9: canlı kare sonucu SONUÇSUZ mu (kedi / yüz / organ bulunamadı)? Arayüzün `canliKareDurumu` "bulunamadi" kuralıyla AYNI."""
+    if not isinstance(veri, dict) or veri.get("status") != "success":
+        return False
+    if veri.get("detected") is False or veri.get("bulunamadi_mesaji"):
+        return True
+    try:
+        return "cat_count" in veri and int(veri.get("cat_count")) == 0
+    except (TypeError, ValueError):
+        return False
+
+
+def sonuc_izle(fn):
+    """TD9: canlı kipte kullanılan async AI uçlarının sarmalayıcısı — dönen sonuç SONUÇSUZSA (`sonucsuz_mu`) isteğin bağlamına
+    işaret koyar; `jeton_tuketimi` canlı dakikayı bu kareyle ÜCRETLENDİRMEZ. Uç imzası korunur (`functools.wraps`)."""
+
+    @functools.wraps(fn)
+    async def _sar(*a, **k):
+        sonuc = await fn(*a, **k)
+        try:
+            govde = sonuc if isinstance(sonuc, dict) else None
+            if govde is None and getattr(sonuc, "body", None):
+                govde = json.loads(bytes(sonuc.body).decode("utf-8"))
+            if sonucsuz_mu(govde):
+                _SONUC_YOK.set(True)
+        except Exception:
+            logger.debug("jeton: canlı kare sonucu incelenemedi (ücret kuralı değişmedi)", exc_info=True)
+        return sonuc
+
+    return _sar
+
 
 # ⚠️ GÜVENLİK YOLLARI (D4.11 · B-2.14, 2026-10-10): seans, acil durdurma, sensör ve cihaz kontrolü jetondan BAĞIMSIZDIR.
 # Bunu taşıyan `_islem_turu`dur (aşağıda): ai_router DIŞINDAKİ her yol ve `_SERBEST_AI_UCLARI` → None → kapı karar vermeden
@@ -640,6 +723,27 @@ def _jeton_on_karari(request: Request) -> "Callable[[], Karar] | None":
     )
     yonetici._kilit = _GATE_DEFTER_KILIT  # defter dosyası paylaşımlı → kilit de paylaşımlı
 
+    # ── TD9 (Y148): canlı kip — dakika başına ────────────────────────────────────────────────────────────────────────────
+    oturum = (request.headers.get(CANLI_OTURUM_BASLIGI) or "").strip() if hasattr(request, "headers") else ""
+    canli = islem == "goruntu" and bool(_CANLI_KIMLIK.match(oturum))
+    if canli:
+        sahip = _jwt_sahip(token) or ""
+        kova = _canli_kova(sahip, oturum)
+        karar, tuketici = yonetici.on_izin("canli_dakika", istek_id=f"canli-{oturum}-{kova}")
+        if karar.izinli and tuketici is not None:
+            asil = tuketici
+
+            def _canli_tuketici(asil=asil, sahip=sahip, oturum=oturum, kova=kova) -> Karar:
+                if not _canli_kovayi_al(sahip, oturum, kova):
+                    return Karar(izinli=True, sebep="canli_dakika_odendi")
+                return asil()
+
+            _canli_tuketici.canli = True  # type: ignore[attr-defined]
+            tuketici = _canli_tuketici
+        if not karar.izinli:
+            raise HTTPException(status_code=402, detail=karar.mesaj or _YETERSIZ_MESAJ)
+        return tuketici
+
     karar, tuketici = yonetici.on_izin(islem)
     if not karar.izinli:
         # 402: ticari red. Mesaj TEDAVİNİN ETKİLENMEDİĞİNİ açıkça söyler (hasta güvenliği algısı).
@@ -682,6 +786,9 @@ async def jeton_tuketimi(request: Request):
     if tuketici is None:
         return
     setattr(request.state, _BEKLEYEN_TUKETIM, None)
+    if getattr(tuketici, "canli", False) and _SONUC_YOK.get():
+        # TD9: canlı karede kedi / yüz / organ BULUNAMADI → bu kare dakikayı ücretlendirmez (kedisiz dakika 0 jeton).
+        return
     try:
         if await request.is_disconnected():
             logger.info(

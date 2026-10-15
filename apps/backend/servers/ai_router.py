@@ -61,7 +61,7 @@ async def _allow_large_upload(request: Request) -> None:
 # tests/test_jeton_gate.py::test_KRITIK_GUVENLIK_tedavi_uclari_jeton_kapisinin_ARKASINDA_DEGIL
 # SG.G4-5 / G5-4 (2026-10-14): `jeton_gate` yalnız KARAR verir (402 aynen); jeton `jeton_tuketimi` ile uç İSTİSNASIZ dönünce düşer
 # (`scope="function"`: yanıt gönderilmeden önce) — reddedilen (422), düşen (500) ya da istemcisi kopan analiz ücretlenmez.
-from servers.jeton import jeton_gate, jeton_tuketimi  # noqa: E402
+from servers.jeton import jeton_gate, jeton_tuketimi, sonuc_izle  # noqa: E402
 
 ai_router = APIRouter(
     dependencies=[
@@ -454,6 +454,7 @@ OTONOM_FGS_ONAY_MESAJI = (
 
 
 @ai_router.post("/api/ai/vision/landmark")
+@sonuc_izle  # TD9: canlı kipte "yüz bulunamadı" karesi dakikayı ücretlendirmez
 async def analyze_landmark(
     request: Request, file: UploadFile = File(None), image_base64: str = Form(None), auto_adjust: bool = Form(False)
 ):
@@ -3434,6 +3435,7 @@ async def ai_pro_frame(
 
 
 @ai_router.post("/api/ai/vision/segmentation")
+@sonuc_izle  # TD9: "kedi bulunamadı" (cat_count 0) ücretsiz
 async def analyze_segmentation(file: UploadFile = File(None), image_base64: str = Form(None)):
     """YOLO Seg Kedi Segmentasyonu"""
     try:
@@ -4751,6 +4753,7 @@ def _kedi_organ_bulunamadi_yaniti(img, neden: str) -> dict:
 
 
 @ai_router.post("/api/ai/vision/cat_organ")
+@sonuc_izle  # TD9: "kedi / organ bulunamadı" ücretsiz
 async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = Form(None)):
     """Kedi Organ 3B Lokalizasyon (YOLOv8m-seg + SuperAnimal FasterRCNN + RTMPose ONNX).
 

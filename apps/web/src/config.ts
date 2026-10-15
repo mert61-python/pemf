@@ -92,7 +92,8 @@ export const JETON = {
   /** Planın her dönem yenilenen hakkı (devretmez). */
   planHaklari: { baslangic: 50, pro: 500, pro_plus: 2000 },
   /** Bir işlemin kaç jeton yaktığı. Ağır araştırma modelleri daha çok kaynak tüketir. */
-  maliyet: { goruntu: 1, ses: 1, sensor: 1, agir_arastirma: 3, ai_pro_seans: 5 },
+  // TD9 (Y148): `canli_dakika` = canlı kamera kipinde DAKİKA başına (kareler ve sonuçsuz dakika ücretsiz) — servers/jeton.py.
+  maliyet: { goruntu: 1, ses: 1, sensor: 1, agir_arastirma: 3, ai_pro_seans: 5, canli_dakika: 1 },
   /** Ek jeton paketleri — satın alınan jeton süresizdir; adet arttıkça birim fiyat düşer. */
   paketler: [
     { ad: '100 jeton', adet: 100, fiyat: 249 },

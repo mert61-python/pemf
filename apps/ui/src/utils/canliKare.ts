@@ -11,6 +11,39 @@
  */
 import { aiDetayCumlesi } from "@/utils/aiHataDetayi";
 
+/**
+ * TD9 (Y148): canlı kip jetonu DAKİKA BAŞINA. Her canlı kare isteği oturum kimliğini bu başlıkla taşır; backend
+ * (`servers/jeton.py`) oturumun ilk karesinden itibaren 60 sn'lik kova başına, yalnız SONUÇ teslim edilen kovada 1 jeton düşer.
+ */
+export const CANLI_OTURUM_BASLIGI = "X-PEMF-Canli-Oturum";
+
+export interface CanliOturum {
+  kimlik: string;
+  /** Kare GÖNDERİLDİĞİ an (ms) + sonucu: sayaç backend kuralının aynası (yalnız "sonuc" kovası sayılır). */
+  kareBildir(durum: CanliDurum, gonderimMs: number): void;
+  jetonSayisi(): number;
+}
+
+/** Yeni canlı oturum: rastgele kimlik + ücretlenen dakika sayacı (backend kuralının AYNASI; tahmin — kesin defter sunucuda). */
+export function canliOturumBaslat(): CanliOturum {
+  const kimlik = `canli-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  let t0: number | null = null;
+  const kovalar = new Set<number>();
+  return {
+    kimlik,
+    kareBildir(durum, gonderimMs) {
+      if (t0 === null) t0 = gonderimMs;
+      if (durum.tur === "sonuc") kovalar.add(Math.floor((gonderimMs - t0) / 60000));
+    },
+    jetonSayisi: () => kovalar.size,
+  };
+}
+
+/** [ÖNERİLEN] sayaç metni — yalnız ücretlendirme ETKİNKEN gösterilir (kapalıyken "0 jeton" yazmak yanlış bilgi olurdu). */
+export function canliJetonMetni(n: number): string {
+  return `Bu canlı oturumda ${n} jeton (dakika başına 1; sonuçsuz kareler ücretsiz)`;
+}
+
 /** Canlı karelerin başlangıçları arası en kısa süre (ms). */
 export const CANLI_ASGARI_ARALIK_MS = 1000;
 /** Analiz aralıktan uzun sürse de iki kare arası en az bu kadar beklenir (arayüz / kamera nefes alsın). */
