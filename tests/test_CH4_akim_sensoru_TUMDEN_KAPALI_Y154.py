@@ -353,7 +353,8 @@ def _akim_izleri(kod: str) -> list[str]:
 
 
 #: (dosya, işlev / yöntem adı) — ACİL DURDUR, STOP, mandal, watchdog, keep-alive ve E-stop teyidi.
-GUVENLIK_YOLLARI = [
+#: ⚠️ Ad bilerek jetonun D4.11'de kaldırılan listesinden FARKLI (4A-1.4 kapısı o adın taşıyıcı diye anılmasını yasaklar).
+AKIMSIZ_GUVENLIK_ISLEVLERI = [
     ("apps/backend/servers/api_server.py", "_emergency_stop_all"),
     ("apps/backend/servers/api_server.py", "_emergency_stop_async"),
     ("apps/backend/servers/api_server.py", "emergency_stop"),
@@ -391,7 +392,7 @@ def _islev_kaynagi(dosya: str, ad: str) -> str:
     return "\n".join(parcalar)
 
 
-@pytest.mark.parametrize(("dosya", "ad"), GUVENLIK_YOLLARI)
+@pytest.mark.parametrize(("dosya", "ad"), AKIMSIZ_GUVENLIK_ISLEVLERI)
 def test_KRITIK_guvenlik_yolu_AKIM_okumaz(dosya, ad):
     kod = _islev_kaynagi(dosya, ad)
     izler = _akim_izleri(kod)
