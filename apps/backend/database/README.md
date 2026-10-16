@@ -76,6 +76,18 @@ Bu `.sql` dosyaları da bu dizindedir ama yukarıdaki v1→v2 sırasından **ba�
 | `supabase_sertlestirme.sql` | Canlı-şema sertleştirme — `public` tablolarındaki `anon`/`authenticated` **doğrudan tablo yetkilerini** (Supabase varsayılanı) geri alır. Bugün RLS sızıntıyı önlüyor; bu, "gizli mayını" (ileride izin-verici politika ya da göç sırasında RLS kapanması) kapatır | Evet (savunma-derinliği) |
 | `supabase_okuma_rpc.sql` | Kullanıcı okumalarını **SECURITY DEFINER** RPC'lere taşır — tablolarda HİÇBİR role yetki kalmaz; her fonksiyon `auth.uid()` kullanır (kimliği parametre olarak ALMAZ), `anon`a grant verilmez, dönen alan kümesi imzada sabitlenir | Evet (sertleştirme ile birlikte) |
 
+### Profil buluta — CH2 (S-SG.8 / sahip kararı Y151)
+
+Seans ve hasta / denek kaydının **arayüz profili** (veterinarian / researcher / pet_owner) bulut kopyasına da yazılır. Yalnız
+**eklemelidir** (kolon ekler, RPC imzaları AYNI kalır) ve cihaz kodu bu dosya uygulanmadan da çalışır — canlıya **yayın
+hazırlığında, sahiple** uygulanır. ⚠️ Ön koşul (dosyanın başındaki kapı denetler, eksikse hiçbir şey yapmadan durur):
+`supabase_secure_v2.sql` ve `../../../supabase/seans_kimligi_bilesik_anahtar.sql` uygulanmış olmalı.
+
+| Dosya | Ne yapar | Zorunlu mu |
+|---|---|---|
+| `supabase_profil.sql` | `treatment_sessions.profil` + `patients.profil` (`text not null default ''`); `upsert_session` / `upsert_patient` aynı imzayla yükteki `profil`i yazar (normalize, boş gelen dolu değeri ezmez); yetkiler rol rol (yalnız `anon`). Uygulama: `python scripts/supabase_sql.py --dosya apps/backend/database/supabase_profil.sql --yaz` | Hasta / seans bulut senkronu (`PEMF_CLOUD_PATIENT_SYNC=1`) açılacaksa |
+| `supabase_profil_geri_al.sql` | Geri alma: iki fonksiyonu önceki gövdelerine döndürür; kolonları SİLMEZ (veri kaybı yok) | Yalnız geri dönüş gerekirse |
+
 ## Şifreleme modeli (iki katman)
 1. **Tüm-DB SQLCipher** — `PEMF_ENCRYPT_AT_REST=1` ile; anahtar OS keyring'de (`sqlcipher_util.py`).
 2. **Alan-başı Fernet** — hasta PII'si (`patient_database.py`), DB şifreli olsa da ekstra.

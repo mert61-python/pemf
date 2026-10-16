@@ -16,6 +16,7 @@ from database.patient_database import get_patient_database
 from database.sqlcipher_util import dict_satir_fabrikasi
 from database.treatment_history_db import get_treatment_db
 from utils.dongu_guvenligi import dongu_hatasini_bildir
+from utils.profil import gecerli_profil
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,10 @@ class CloudSyncWorker:
         self._istemci_hatasi_bildirildi = False
         # F2-3.6: bulutun KALICI reddettiği seanslar — ret seans başına bir kez ERROR, sonra DEBUG (yeniden deneme sürer).
         self._push_ret_bildirilen: set = set()
+        # CH2 (S-SG.8): bulutun `profil` kolonu algılanınca (resolve satırı anahtarı taşır) profilsiz gönderilmiş kaydın geri doldurması
+        # kayıt başına süreç ömründe BİR KEZ istenir — yarım uygulanmış şemada (kolon var, upsert eski) her turda yeniden PUSH seli olmaz.
+        self._profil_geri_doldurulan_seans: set = set()
+        self._profil_geri_doldurulan_hasta: set = set()
 
         # GİZLİLİK (tıbbi cihaz): Hasta/seans PII'sinin buluta sync'i VARSAYILAN KAPALI.
         # Açmak için ortam değişkeni PEMF_CLOUD_PATIENT_SYNC=1. Açıkken bile tüm push/pull
@@ -156,6 +161,23 @@ class CloudSyncWorker:
             else:
                 logger.debug("Supabase client kurulamadi (tekrar): %s", e)
             return False
+
+    @staticmethod
+    def _bulut_profili(satir: dict, denenen: set) -> tuple:
+        """CH2 (S-SG.8): buluttan inen satırın profili + geri doldurma isteği → (profil, 0 | 1).
+        · `profil` anahtarı YOK → bulut şeması eski (`database/supabase_profil.sql` uygulanmamış): ('', 0) — yerel profil ezilmez,
+          yeniden gönderme YOK (eski fonksiyon profili hiç yazmadığı için yoksa her turda sonsuz PUSH seli olurdu);
+        · anahtar VAR, bilinen profil → (o profil, 0);
+        · anahtar VAR, boş / bilinmeyen → kayıt yeni şemadan önce profilsiz gönderilmiş: ('', 1) — yerel profil doluysa PULL sorgusu
+          kaydı BİR KEZ PUSH kuyruğuna alır (kayıt başına süreç ömründe bir kez: yarım uygulanmış şemada da sel yok)."""
+        profil = gecerli_profil(satir.get("profil")) or ""
+        if profil or "profil" not in satir:
+            return profil, 0
+        anahtar = str(satir.get("id"))
+        if anahtar in denenen:
+            return "", 0
+        denenen.add(anahtar)
+        return "", 1
 
     def _registry_secret(self) -> str:
         """Coverage-audit P1: bulut capability-token (device_registry_secret) — Supabase RPC'lerinde
@@ -290,6 +312,9 @@ class CloudSyncWorker:
                     "vet_contact": patient_data["vet_contact"],
                     "created_at": patient_data["created_at"],
                     "updated_at": patient_data["updated_at"],
+                    # CH2 (S-SG.8): kaydın arayüz profili (şifresiz üst veri, kişisel veri DEĞİL). Yazılmış değer AYNEN; profilsiz eski
+                    # kayıt '' gider (türetme okumada — veri değiştirilmez). Eski bulut şeması yükteki bu anahtarı yok sayar (imza aynı).
+                    "profil": gecerli_profil(patient_data.get("profil")) or "",
                 }
                 # P1 audit 2026-06-28: RLS+RPC — dogrudan tablo upsert (anon, RLS-yok) YERINE
                 # SECURITY DEFINER upsert_patient RPC (device_id'yi SUNUCU-TARAFI zorlar). KİLİTSİZ.
@@ -339,6 +364,7 @@ class CloudSyncWorker:
                             if dec == "[okunamayan kayıt]":
                                 skipped += 1
                                 continue
+                            bulut_profil, geri_doldur = self._bulut_profili(rp, self._profil_geri_doldurulan_hasta)
                             # D-1: INSERT OR REPLACE YERİNE ON CONFLICT DO UPDATE. REPLACE = DELETE+INSERT →
                             # (a) sync'e-ait-OLMAYAN kolonları (owner_email/last_treatment_at/anonymized)
                             # varsayılana sıfırlıyordu; (b) FK-cascade patient_search_index'i siliyordu
@@ -347,12 +373,17 @@ class CloudSyncWorker:
                             cursor.execute(
                                 """
                                 INSERT INTO patients
-                                (id, name, species, breed, age, weight, owner, vet_contact, created_at, updated_at, sync_status)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                                (id, name, species, breed, age, weight, owner, vet_contact, created_at, updated_at, sync_status, profil)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
                                 ON CONFLICT(id) DO UPDATE SET
                                     name=excluded.name, species=excluded.species, breed=excluded.breed,
                                     age=excluded.age, weight=excluded.weight, owner=excluded.owner,
-                                    vet_contact=excluded.vet_contact, updated_at=excluded.updated_at, sync_status=1
+                                    vet_contact=excluded.vet_contact, updated_at=excluded.updated_at,
+                                    -- CH2 (S-SG.8): yerel profil buluttan gelen BOŞLA ve PUSH bekleyen yerel kayıt bayat bulut değeriyle EZİLMEZ.
+                                    profil=CASE WHEN patients.sync_status = 0 OR excluded.profil = ''
+                                                THEN patients.profil ELSE excluded.profil END,
+                                    -- CH2: geri doldurma (bulut kolonu var, bu kayıtta boş, yerelde dolu) → BİR KEZ yeniden gönder.
+                                    sync_status=CASE WHEN ? = 1 AND COALESCE(patients.profil, '') <> '' THEN 0 ELSE 1 END
                                 """,
                                 (
                                     rp.get("id"),
@@ -365,6 +396,8 @@ class CloudSyncWorker:
                                     rp.get("vet_contact", ""),
                                     rp.get("created_at"),
                                     rp.get("updated_at"),
+                                    bulut_profil,
+                                    geri_doldur,
                                 ),
                             )
                         conn.commit()
@@ -411,6 +444,9 @@ class CloudSyncWorker:
                         "patient_notes": None,
                         "session_status": session_data["session_status"],
                         "created_at": session_data["created_at"],
+                        # CH2 (S-SG.8): seansın arayüz profili (kişisel veri DEĞİL). Yazılmış değer AYNEN; profilsiz eski seans '' gider
+                        # (türetme okumada). Eski bulut şeması yükteki bu anahtarı yok sayar (imza aynı → geriye uyum).
+                        "profil": gecerli_profil(session_data.get("profil")) or "",
                     }
 
                     # P1 audit 2026-06-28: RLS+RPC — upsert_session RPC (device_id sunucu-tarafi).
@@ -450,6 +486,7 @@ class CloudSyncWorker:
                 ).execute()
                 if res.data:
                     for rs in res.data:
+                        bulut_profil, geri_doldur = self._bulut_profili(rs, self._profil_geri_doldurulan_seans)
                         # D-1: INSERT OR REPLACE YERİNE ON CONFLICT DO UPDATE. REPLACE = DELETE+INSERT →
                         # (a) FK-cascade seansın TÜM child kayıtlarını (session_parameters/sensor_samples/
                         # session_events/session_coil_runs) SİLERDİ = seans-detayı kaybı; (b) PUSH PII'yi
@@ -458,8 +495,8 @@ class CloudSyncWorker:
                         cursor.execute(
                             """
                             INSERT INTO treatment_sessions
-                            (id, session_date, start_time, end_time, duration_minutes, treatment_mode, target_condition, frequency_hz, intensity_mt, pulse_duration_ms, operator_name, patient_name, patient_notes, session_status, created_at, sync_status)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                            (id, session_date, start_time, end_time, duration_minutes, treatment_mode, target_condition, frequency_hz, intensity_mt, pulse_duration_ms, operator_name, patient_name, patient_notes, session_status, created_at, profil, sync_status)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                             ON CONFLICT(id) DO UPDATE SET
                                 session_date=excluded.session_date, start_time=excluded.start_time,
                                 -- MONOTONIK KAPANIS (eksik-taramasi P2, 2026-08-22): kapanis GERI ALINAMAZ.
@@ -485,6 +522,9 @@ class CloudSyncWorker:
                                 pulse_duration_ms=excluded.pulse_duration_ms,
                                 session_status=CASE WHEN treatment_sessions.end_time IS NOT NULL AND excluded.end_time IS NULL
                                               THEN treatment_sessions.session_status ELSE excluded.session_status END,
+                                -- CH2 (S-SG.8): yerel profil buluttan gelen BOŞLA ve PUSH bekleyen (0) yerel kayıt bayat bulut değeriyle EZİLMEZ.
+                                profil=CASE WHEN treatment_sessions.sync_status = 0 OR excluded.profil = ''
+                                              THEN treatment_sessions.profil ELSE excluded.profil END,
                                 -- D1 (denetim 2026-08-24): korunan yerel kapanisin bekleyen PUSH bayragini
                                 -- KORU. Kosulsuz sync_status=1, monotonik-kapanis CASE'i yerel kapanisi
                                 -- KORUSA BILE onun sync_status=0'ini (PUSH bekliyor) siliyordu → kapanis
@@ -493,6 +533,8 @@ class CloudSyncWorker:
                                 -- normal PULL sonrasi (yerel = bulutla ayni) senkron sayilir (1).
                                 -- D2.65: PUSH bekleyen (0) yerel degisikligin bayragi PULL'da SILINMEZ (yoksa hic gonderilmez).
                                 sync_status=CASE WHEN treatment_sessions.sync_status = 0 THEN 0
+                                              -- CH2: geri doldurma (bulut kolonu var, bu kayıtta boş, yerelde dolu) → BİR KEZ yeniden gönder.
+                                              WHEN ? = 1 AND COALESCE(treatment_sessions.profil, '') <> '' THEN 0
                                               WHEN treatment_sessions.end_time IS NOT NULL AND excluded.end_time IS NULL
                                               THEN treatment_sessions.sync_status ELSE 1 END
                             """,
@@ -512,6 +554,8 @@ class CloudSyncWorker:
                                 rs.get("patient_notes"),
                                 rs.get("session_status"),
                                 rs.get("created_at"),
+                                bulut_profil,
+                                geri_doldur,
                             ),
                         )
                     conn.commit()
