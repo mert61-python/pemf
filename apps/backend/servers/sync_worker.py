@@ -379,11 +379,15 @@ class CloudSyncWorker:
                                     name=excluded.name, species=excluded.species, breed=excluded.breed,
                                     age=excluded.age, weight=excluded.weight, owner=excluded.owner,
                                     vet_contact=excluded.vet_contact, updated_at=excluded.updated_at,
-                                    -- CH2 (S-SG.8): yerel profil buluttan gelen BOŞLA ve PUSH bekleyen yerel kayıt bayat bulut değeriyle EZİLMEZ.
-                                    profil=CASE WHEN patients.sync_status = 0 OR excluded.profil = ''
-                                                THEN patients.profil ELSE excluded.profil END,
+                                    -- CH2 (S-SG.8): yerel profil buluttan gelen BOŞLA EZİLMEZ.
+                                    profil=CASE WHEN excluded.profil = '' THEN patients.profil ELSE excluded.profil END,
                                     -- CH2: geri doldurma (bulut kolonu var, bu kayıtta boş, yerelde dolu) → BİR KEZ yeniden gönder.
                                     sync_status=CASE WHEN ? = 1 AND COALESCE(patients.profil, '') <> '' THEN 0 ELSE 1 END
+                                -- S-CH.11: PUSH BEKLEYEN (0) yerel satır HİÇ güncellenmez. Anonimleştirme adı / sahibi `[ANONIM]` yapıp 0 koyar ve
+                                -- PUSH'un yaymasını bekler; PUSH o turda DÜŞERSE bu PULL buluttaki ESKİ şifreli adı / sahibi geri yazıyor ve bayrağı 1'e
+                                -- çekiyordu → hasta `anonymized=1` iken adı geri geliyor, anonimleştirme buluta hiç gitmiyordu (ölçüldü). Seans yolunun
+                                -- D2.65 kuralının hasta ikizi; kapı: tests/test_S_CH11_hasta_PULL_bekleyen_yerel_kaydi_EZMEZ.py
+                                WHERE COALESCE(patients.sync_status, 0) <> 0
                                 """,
                                 (
                                     rp.get("id"),
