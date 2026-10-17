@@ -6509,9 +6509,11 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
         )
         raise HTTPException(status_code=500, detail="Geçmiş temizlenemedi")
     # KVKK "sildim" kanıtı: kapsam + sayı loglanır (kayıt İÇERİĞİ loglanmaz).
+    # SGI-1.6: kapsam profil süzgeciyle DARALDIYSA iz ve günlük bunu söyler (yoksa "TÜM KLİNİK silindi" yanlış kanıt olur).
     logging.getLogger(__name__).warning(
-        "KVKK: AI analiz geçmişi TOPLU silindi (kapsam=%s, %d kayıt, VACUUM %s).",
+        "KVKK: AI analiz geçmişi TOPLU silindi (kapsam=%s%s, %d kayıt, VACUUM %s).",
         "KENDİ + SAHİPSİZ" if _sahipsiz_dahil else (op or "TÜM KLİNİK"),
+        f" · yalnız profil {_silme_profili}" if _silme_profili else "",
         n,
         "ERTELENDİ (seans sonu/bakım)" if _vacuum_bekliyor else "uygulandı",
     )
@@ -6523,7 +6525,12 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
         beyan=_beyan,
         scope=("KENDI_VE_SAHIPSIZ" if _sahipsiz_dahil else (op or "TUM_KLINIK")),
         item_count=n,
-        detail={"all_operators": tum_klinik, "kapsam": _kapsam, "vacuum": not _vacuum_bekliyor},
+        detail={
+            "all_operators": tum_klinik,
+            "kapsam": _kapsam,
+            "vacuum": not _vacuum_bekliyor,
+            **({"profil": _silme_profili} if _silme_profili else {}),
+        },
     )
     return {"status": "success", "deleted": n, "vacuumErtelendi": _vacuum_bekliyor, "kapsam": _kapsam}
 

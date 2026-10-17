@@ -268,11 +268,14 @@ def remove_all_patients(request: Request, payload: DeleteAllPayload = DeleteAllP
     # disk temizliğinin tamamlanamadığını söyler). Eskiden "hata, 0"/"error" — kayıtlar gitmişken.
     # ⚠️ SG.G1: profil bildirildiyse kapsam YALNIZ DARALIR — o profilin listesinde görünen hastalar (araştırmada "Tümünü Sil" veteriner
     # hastalarını silmez). Başlıksız istek bugünkü gibi tamamı (A-03 / Y106 kapıları yukarıda AYNEN).
-    silinen, vacuum_ok = db.clear_all_patients(profil=istek_profili(request))
+    _silme_profili = istek_profili(request)
+    silinen, vacuum_ok = db.clear_all_patients(profil=_silme_profili)
     ok = silinen >= 0
+    # SGI-1.6: kapsam profil süzgeciyle DARALDIYSA iz ve günlük bunu söyler (yoksa "tüm hastalar silindi" yanlış kanıt olur).
     logging.getLogger(__name__).warning(
-        "TOPLU HASTA SİLME: %s hasta silindi (VACUUM %s).",
+        "TOPLU HASTA SİLME: %s hasta silindi%s (VACUUM %s).",
         silinen if ok else "HİÇ",
+        f" (yalnız profil {_silme_profili})" if _silme_profili else "",
         "tamam" if vacuum_ok else "YAPILAMADI",
     )
     from servers import audit_log as _iz
@@ -283,7 +286,7 @@ def remove_all_patients(request: Request, payload: DeleteAllPayload = DeleteAllP
         scope="TUM_HASTALAR",
         item_count=silinen if ok else 0,
         outcome="ok" if ok else "hata",
-        detail={"vacuum": vacuum_ok},
+        detail={"vacuum": vacuum_ok, **({"profil": _silme_profili} if _silme_profili else {})},
     )
     if not ok:
         return {"status": "error", "deleted": 0, "detail": "Hastalar silinemedi — kayıtlar duruyor."}
