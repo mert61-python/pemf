@@ -402,6 +402,19 @@ class BakimKarisimi:
         except Exception:
             self.logger.exception("Dışa aktarma için satırlar okunamadı.")
             raise
+        # SGI-1.1 (CH3 · Y152): ÷5 düzeltilmiş satır pakete ÖZGÜN değer + BOŞ işaretle girer. ESKİ sürüm (CH3 öncesi) içe aktarırken
+        # işaret / orijinal sütunlarını atar; ÷5'li değer işaretsiz kalır ve o cihaz yükseltilince yeniden bölünürdü (÷25, "orijinal"
+        # yanlış — ölçüldü). Böyle her sürüm satırı "eski kayıt" alır: yeni sürüm içe aktarmada bir kez böler (import_rows → göç),
+        # eski sürüm kendi eski verisiyle tutarlı saklar ve yükseltmede bir kez bölünür. Yeni → yeni taşımanın sonucu değişmez.
+        from utils import mt_duzeltme as _mt
+
+        for _tablo, _alan, _orj in (
+            ("sensor_samples", "magnetic_field_mt", "magnetic_field_mt_orijinal"),
+            ("sensor_run_summary", "field_avg", "field_avg_orijinal"),
+        ):
+            for _s in out.get(_tablo) or []:
+                if _mt.duzeltildi_mi(_s.get("alan_duzeltme")) and _s.get(_orj) is not None:
+                    _s[_alan], _s[_orj], _s["alan_duzeltme"] = _s[_orj], None, _mt.ESKI
         return out
 
     def import_rows(self, data: Dict[str, List[Dict]], replace: bool = False) -> Dict[str, int]:
