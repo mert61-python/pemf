@@ -31,6 +31,10 @@ _RETRY_MAX_AGE_S = 0.75
 #: gönderimi azaltılmaz.
 _NACK_RUN_TEKRAR_SINIRI = 1
 
+#: SGI-3.1: STM okuyucusunun satır sonu gelmeden biriktirdiği yarım satırın üst sınırı (bayt). En uzun satır ACK'tir (~130 B);
+#: satır sonu basmayan bir akış belleği şişirmesin — sınırı aşan parça satır olarak işlenir (bugünkü davranış).
+_STM_YARIM_SATIR_AZAMI = 1024
+
 
 class _NackTekrari:
     """STM_NACK yeniden oynatma İSTEĞİ (D1.72 · B-1.17): kuyruğa paketin KENDİSİ değil bu işaret girer.
@@ -1379,17 +1383,26 @@ class HeadlessCore:
 
         def reader(conn, nesil: int) -> None:
             """Kendi `conn`unu okur — paylaşılan duruma KÖR. Kapanışta kimlik doğrular."""
+            # ⚠️ SGI-3.1: `readline()` portun zaman aşımında (0,3 sn) satır sonunu BEKLEMEDEN döner (ölçüldü: satır ortasında
+            # 0,35 sn boşlukta 40 B + 44 B). Yarım parça ayrı satır sayılınca yarım READY "banner değişti" olup TD1 kanıtını
+            # siliyor, kalan parça çöp satır oluyordu. Satır sonsuz parça bir sonraki okumayla birleştirilir; sonraki okuma boş
+            # dönerse (gerçekten kesik satır) parça bugünkü gibi işlenir — satır en çok bir okuma gecikir, kaybolmaz.
+            parca = b""
             try:
                 while not self._hw_sender_stop.is_set():
                     try:
                         if not conn.is_open:
                             break
-                        line = conn.readline()
+                        okunan = conn.readline()
                     except Exception as exc:
                         dongu_hatasini_bildir(  # D1.19 (B-10.121)
                             "[STM32 READER] %s", exc, logger=self.logger, seviye=logging.WARNING, exc_info=False
                         )
                         break
+                    if okunan and not okunan.endswith(b"\n") and len(parca) + len(okunan) < _STM_YARIM_SATIR_AZAMI:
+                        parca += okunan
+                        continue
+                    line, parca = parca + (okunan or b""), b""
                     if line:
                         decoded = line.decode("utf-8", errors="ignore").strip()
                         self._handle_stm_line(
