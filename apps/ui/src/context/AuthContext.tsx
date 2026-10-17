@@ -166,7 +166,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (yeniEposta) sonEpostaRef.current = yeniEposta;
       // CH1: "Hesap ekle" kipinde YENİ bir giriş (ekleme öncesinden farklı belirteç) geldi → ekleme biter; giriş yapılan hesap artık
       // etkindir, park listesinde kalmaz (önceki etkin hesap parkta kalır).
-      if (hesapEkleniyorRef.current && yeni && s?.access_token && s.access_token !== eklemeOncesiRef.current?.access_token) {
+      // SGI-1.3: ekleme sürerken ETKİN (park edilmiş) hesabın arka plan YENİLEMESİ yeni giriş DEĞİLDİR — ekleme SÜRER ve park kopyası
+      // taze belirteçle güncellenir (harcanmış yenileme belirteci saklanırsa sonraki geçişte yeniden kullanılır → GoTrue aileyi iptal eder).
+      const oncesi = eklemeOncesiRef.current;
+      const etkinYenilendi = _event === "TOKEN_REFRESHED" && !!oncesi && epostaAnahtari(oncesi.email) === yeniEposta;
+      if (hesapEkleniyorRef.current && etkinYenilendi && oncesi && s?.access_token && s?.refresh_token) {
+        const taze: ParkHesap = {
+          email: oncesi.email,
+          access_token: s.access_token,
+          refresh_token: s.refresh_token,
+          expires_at: typeof s.expires_at === "number" ? s.expires_at : undefined,
+        };
+        eklemeOncesiRef.current = taze;
+        void parkEt(taze).then(hesaplariYenile);
+      } else if (hesapEkleniyorRef.current && yeni && s?.access_token && s.access_token !== eklemeOncesiRef.current?.access_token) {
         hesapEkleniyorRef.current = false;
         eklemeOncesiRef.current = null;
         setHesapEkleniyor(false);
