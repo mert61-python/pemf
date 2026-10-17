@@ -113,7 +113,16 @@ def test_KRITIK_10_dakika_canli_kullanim_EN_COK_10_jeton(ortam):
     toplam = sum(int(k["miktar"]) for k in o.giden)
     assert toplam <= 10, f"10 dk canlı kullanımda {toplam} jeton ({len(o.giden)} tüketim) — dakika başına olmalı"
     assert toplam == 10 and all(k["detay"] == "canli_dakika" and k["tur"] == "analiz" for k in o.giden), o.giden[:3]
-    assert sorted(k["istek_id"] for k in o.giden) == sorted(f"canli-{OTURUM}-{d}" for d in range(10)), o.giden
+    assert sorted(_kova_no(k["istek_id"]) for k in o.giden) == list(range(10)), o.giden
+
+
+def _kova_no(iid: str) -> int:
+    """`canli-<oturum>-<nesil>-<kova>` (SGI-2.2: nesil yeniden başlayan süreçte kimlik tekrarını önler) → kova."""
+    import re
+
+    m = re.fullmatch(rf"canli-{OTURUM}-[0-9a-f]{{8}}-(\d+)", iid)
+    assert m, iid
+    return int(m.group(1))
 
 
 def test_KRITIK_kedisiz_ve_hatali_dakika_UCRETSIZ(ortam):
@@ -129,7 +138,7 @@ def test_KRITIK_kedisiz_ve_hatali_dakika_UCRETSIZ(ortam):
     assert o.giden == [], f"kedisiz / hatalı dakika ücretlendi: {o.giden}"
     o.seg.kedi = 1
     assert _kare(o, uc="segmentation").status_code == 200  # dakika 2: sonuç → 1 jeton
-    assert [k["istek_id"] for k in o.giden] == [f"canli-{OTURUM}-2"], o.giden
+    assert [_kova_no(k["istek_id"]) for k in o.giden] == [2], o.giden
 
 
 def test_KRITIK_ayni_dakika_IKI_KEZ_dusmez_cevrimdisi_defterde_de(ortam):
@@ -139,7 +148,7 @@ def test_KRITIK_ayni_dakika_IKI_KEZ_dusmez_cevrimdisi_defterde_de(ortam):
         assert _kare(o).status_code == 200
         o.saat[0] += 3.0
     kayitlar = json.loads(o.defter.read_text(encoding="utf-8"))
-    assert [k["istek_id"] for k in kayitlar] == [f"canli-{OTURUM}-0"] and kayitlar[0]["miktar"] == 1, kayitlar
+    assert [_kova_no(k["istek_id"]) for k in kayitlar] == [0] and kayitlar[0]["miktar"] == 1, kayitlar
 
 
 def test_KARSIT_elle_analiz_DEGISMEZ_her_analiz_1_goruntu(ortam):

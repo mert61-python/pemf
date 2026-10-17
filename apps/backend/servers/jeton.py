@@ -99,29 +99,59 @@ MALIYET: dict[str, int] = {
 # canlı oturumun her DAKİKASI 1 jeton, yalnız en az bir SONUÇ teslim edilen dakika ("bulunamadı" / ret / hata dakikası 0).
 # Kimlik: istemci canlı oturum başına rastgele bir kimlik gönderir (`CANLI_OTURUM_BASLIGI`). Dakika = oturumun bu süreçte
 # görülen İLK karesinden itibaren 60 sn'lik kova → 10 dk canlı kullanım ≤ 10 jeton. İdempotans: `istek_id` =
-# `canli-<oturum>-<dakika>` (sunucu RPC'si UNIQUE + çevrimdışı defter aynı kimliği iki kez tutmaz) ve aynı süreçte bir kova için
-# TEK tüketim çağrısı. `token_ledger.tur` CHECK listesine YENİ tür EKLENMEZ (Supabase şeması canlı): tür mevcut
-# ("analiz" / "kullandikca"), ayırt edici `detay` = "canli_dakika". Çevrimdışı rezerv / borç tavanı / elle analiz / AI Pro
+# `canli-<oturum>-<nesil>-<dakika>` (sunucu RPC'si UNIQUE + çevrimdışı defter aynı kimliği iki kez tutmaz; nesil = bu süreçteki
+# izleme kaydının kimliği — SGI-2.2) ve aynı süreçte bir kova için TEK tüketim çağrısı. `token_ledger.tur` CHECK listesine YENİ tür
+# EKLENMEZ (Supabase şeması canlı): tür mevcut ("analiz" / "kullandikca"), ayırt edici `detay` = "canli_dakika". Çevrimdışı rezerv / borç tavanı / elle analiz / AI Pro
 # kare muafiyeti DEĞİŞMEZ.
 CANLI_OTURUM_BASLIGI = "x-pemf-canli-oturum"
 _CANLI_KIMLIK = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 _CANLI_KOVA_SN = 60.0
 _CANLI_UNUTMA_SN = 4 * 3600.0
+#: SGI-2.1: dakika başı ücret YALNIZ arayüzün canlı kamera kipi olan uçlarda (AI Hub VisionModule canlı: FGS / segmentasyon /
+#: termal — retikülosit `galleryOnly` — ve Kedi Organ). Başka bir "goruntu" ucuna (araştırma em_fantom / em_petri, retikülosit,
+#: hastalık) başlık eklemek elle analizin kare başı ücretini dakika başına ÇEVİRMEZ (Y148: elle analiz maliyeti DEĞİŞMEZ).
+_CANLI_UCLAR: frozenset = frozenset(
+    {"/api/ai/vision/landmark", "/api/ai/vision/segmentation", "/api/ai/vision/thermal", "/api/ai/vision/cat_organ"}
+)
+
+
+def _istek_yolu(request) -> str:
+    return (getattr(getattr(request, "url", None), "path", "") or "").rstrip("/")
+
+
 _canli_kilit = threading.Lock()
-#: (sahip, oturum) → {"t0": ilk karenin monotonic anı, "kovalar": tüketimi başlatılmış dakika kovaları}
+#: (sahip, oturum) → {"t0": ilk karenin monotonic anı, "son": son karenin anı, "nesil": izleme kaydının kimliği,
+#: "kovalar": tüketimi başlatılmış dakika kovaları}
 _canli_oturumlar: dict = {}
 #: TD9: uç bu isteğin sonucunu SONUÇSUZ işaretledi ("bulunamadı") → canlı dakika bu kareyle ücretlenmez (`sonuc_izle`).
 _SONUC_YOK: contextvars.ContextVar = contextvars.ContextVar("jeton_sonuc_yok", default=False)
 
 
+def _yeni_canli_kaydi(t: float) -> dict:
+    return {"t0": t, "son": t, "nesil": uuid.uuid4().hex[:8], "kovalar": set()}
+
+
 def _canli_kova(sahip: str, oturum: str, simdi: float | None = None) -> int:
-    """(sahip, oturum) için şimdiki dakika kovası; oturum ilk kez görülüyorsa başlangıç şimdi. Eski oturumlar unutulur."""
+    """(sahip, oturum) için şimdiki dakika kovası; oturum ilk kez görülüyorsa başlangıç şimdi. Eski oturumlar unutulur.
+
+    ⚠️ SGI-2.2: unutma SON kareden ölçülür (kesintisiz oturum 4 sa'te sıfırlanmaz) ve her yeni izleme kaydı YENİ bir nesil alır —
+    sunucu RPC'si `istek_id`de idempotent olduğu için yeniden başlayan süreç / unutulan oturum eski kova kimliklerini YENİDEN
+    kullanırsa o dakikalar ücretsiz geçiyordu (30 dk canlı + yeniden başlatma → sonraki 30 dk 0 jeton; 4 sa'ten sonraki her dakika
+    ücretsiz — ölçüldü). Bedel: yeniden başlatmada en çok bir dakika iki kez ücretlenir."""
     t = time.monotonic() if simdi is None else simdi
     with _canli_kilit:
-        for k in [k for k, v in _canli_oturumlar.items() if t - v["t0"] > _CANLI_UNUTMA_SN]:
+        for k in [k for k, v in _canli_oturumlar.items() if t - v.get("son", v["t0"]) > _CANLI_UNUTMA_SN]:
             _canli_oturumlar.pop(k, None)
-        d = _canli_oturumlar.setdefault((sahip, oturum), {"t0": t, "kovalar": set()})
+        d = _canli_oturumlar.setdefault((sahip, oturum), _yeni_canli_kaydi(t))
+        d["son"] = t
         return int((t - d["t0"]) // _CANLI_KOVA_SN)
+
+
+def _canli_istek_id(sahip: str, oturum: str, kova: int) -> str:
+    """SGI-2.2: kova tüketiminin idempotans anahtarı — `canli-<oturum>-<nesil>-<kova>`."""
+    with _canli_kilit:
+        d = _canli_oturumlar.get((sahip, oturum)) or {}
+        return f"canli-{oturum}-{d.get('nesil', '0')}-{kova}"
 
 
 def _canli_kova_ucretli_mi(sahip: str, oturum: str, kova: int) -> bool:
@@ -133,7 +163,7 @@ def _canli_kova_ucretli_mi(sahip: str, oturum: str, kova: int) -> bool:
 def _canli_kovayi_al(sahip: str, oturum: str, kova: int) -> bool:
     """Kovanın tüketimini BU çağrı mı yapacak? (aynı süreçte kova başına tek tüketim — eşzamanlı iki kare iki kez düşmez)"""
     with _canli_kilit:
-        d = _canli_oturumlar.setdefault((sahip, oturum), {"t0": time.monotonic(), "kovalar": set()})
+        d = _canli_oturumlar.setdefault((sahip, oturum), _yeni_canli_kaydi(time.monotonic()))
         if kova in d["kovalar"]:
             return False
         d["kovalar"].add(kova)
@@ -692,6 +722,17 @@ def _jeton_on_karari(request: Request) -> "Callable[[], Karar] | None":
         # cihaz-geneli OFFLINE_TAVAN'ı doldurur → tavan dolunca cihazdaki HER kullanıcının çevrimdışı analizi KALICI 402. Ücretlendirme
         # açıkken yeni AI analizi hesap ister; tedavi / E-stop / seans bu kapıya HİÇ gelmez (`_islem_turu` → None, Ö.4-Y8).
         raise HTTPException(status_code=402, detail=_KIMLIK_GEREKLI_MESAJ)
+
+    # ── TD9 (Y148): canlı kip — dakika başına (SGI-2.1: yalnız canlı kipli uçlar) ─────────────────────────────────────────
+    oturum = (request.headers.get(CANLI_OTURUM_BASLIGI) or "").strip() if hasattr(request, "headers") else ""
+    canli = islem == "goruntu" and _istek_yolu(request) in _CANLI_UCLAR and bool(_CANLI_KIMLIK.match(oturum))
+    if canli:
+        sahip = _jwt_sahip(token) or ""
+        kova = _canli_kova(sahip, oturum)
+        if _canli_kova_ucretli_mi(sahip, oturum, kova):
+            # SGI-2.3 (Y148 "kareler ücretsiz"): bu canlı dakika ZATEN ödendi → kare ağa çıkmadan serbest; bakiye okunmaz, 402
+            # verilmez (eskiden son jetonla ödenen dakikanın sonraki kareleri bakiye 0 görüp 402 alıyordu — ölçüldü).
+            return None
     try:
         satir = _bakiye_satiri_oku(token)
     except Exception:
@@ -723,13 +764,8 @@ def _jeton_on_karari(request: Request) -> "Callable[[], Karar] | None":
     )
     yonetici._kilit = _GATE_DEFTER_KILIT  # defter dosyası paylaşımlı → kilit de paylaşımlı
 
-    # ── TD9 (Y148): canlı kip — dakika başına ────────────────────────────────────────────────────────────────────────────
-    oturum = (request.headers.get(CANLI_OTURUM_BASLIGI) or "").strip() if hasattr(request, "headers") else ""
-    canli = islem == "goruntu" and bool(_CANLI_KIMLIK.match(oturum))
     if canli:
-        sahip = _jwt_sahip(token) or ""
-        kova = _canli_kova(sahip, oturum)
-        karar, tuketici = yonetici.on_izin("canli_dakika", istek_id=f"canli-{oturum}-{kova}")
+        karar, tuketici = yonetici.on_izin("canli_dakika", istek_id=_canli_istek_id(sahip, oturum, kova))
         if karar.izinli and tuketici is not None:
             asil = tuketici
 
