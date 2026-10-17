@@ -772,6 +772,26 @@ async def jeton_gate(request: Request) -> None:
         setattr(request.state, _BEKLEYEN_TUKETIM, tuketici)
 
 
+#: SGI-2.4: kopma yoklamasının üst sınırı (sn). Bağlı istemcide başarılı analiz yanıtı en çok bu kadar gecikir (yalnız tüketici varken).
+_KOPMA_YOKLAMA_SN = 0.02
+
+
+async def _istemci_koptu_mu(request: Request) -> bool:
+    """İstemci yanıtı beklemeden koptu mu? ⚠️ SGI-2.4: `Request.is_disconnected()` iptal edilmiş kapsamda TEK yoklama yapar;
+    `@app.middleware("http")` (BaseHTTPMiddleware — api_server'da üç tane) iç uygulamaya verdiği `receive`'i görev grubuyla
+    sardığı için o yoklama her zaman boş döner → kopan istemci de jeton ödüyordu (ASGI katında ölçüldü). Kısa ve SINIRLI bir
+    gerçek bekleme ara katmanlardan geçer: uvicorn kopmuş bağlantıda `http.disconnect`ı beklemeden verir.
+    Kapı: tests/test_jeton_KOPAN_istemci_ARA_KATMAN_arkasinda_DUSMEZ_SGI_2_4.py"""
+    if await request.is_disconnected():
+        return True
+    import anyio
+
+    mesaj: dict = {}
+    with anyio.move_on_after(_KOPMA_YOKLAMA_SN):
+        mesaj = await request.receive()
+    return mesaj.get("type") == "http.disconnect"
+
+
 async def jeton_tuketimi(request: Request):
     """Router-seviyesi `yield` bağımlılığı — TÜKETİM (SG.G4-5 / G5-4, 2026-10-14). `Depends(jeton_tuketimi, scope="function")`:
     çıkış kodu uç DÖNDÜKTEN SONRA, yanıt gönderilmeden ÖNCE koşar; uç istisnayla biterse (modalite / makullik 422, model 500,
@@ -790,7 +810,7 @@ async def jeton_tuketimi(request: Request):
         # TD9: canlı karede kedi / yüz / organ BULUNAMADI → bu kare dakikayı ücretlendirmez (kedisiz dakika 0 jeton).
         return
     try:
-        if await request.is_disconnected():
+        if await _istemci_koptu_mu(request):
             logger.info(
                 "jeton: istemci yanıtı beklemeden koptu — sonuç teslim edilemedi, jeton DÜŞÜLMEDİ (%s)",
                 request.url.path,
