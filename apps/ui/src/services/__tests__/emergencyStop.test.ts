@@ -45,7 +45,8 @@ it("backend confirmed:true → confirmed:true ve YEDEK yollar YİNE gönderilir 
   bridge({ status: "success", confirmed: true, stmStopped: true, mqttResults: [{ mqtt: "success" }] });
   const res = await performEmergencyStop();
   expect(res.confirmed).toBe(true);
-  expect(mockApiPost.mock.calls.map((c) => c[0])).toEqual(["/hardware/emergency_stop", "/session/stop", "/hardware/command"]);
+  // SGI-3.2: `stop_all_coils` 1. adımın yanıtını beklemeden gider; `/session/stop` 1./2. adımdan SONRA.
+  expect(mockApiPost.mock.calls.map((c) => c[0])).toEqual(["/hardware/emergency_stop", "/hardware/command", "/session/stop"]);
 });
 
 it("KRİTİK: STM durdu ama ESP bobinleri DURMADI → teyit YOK", async () => {
@@ -101,15 +102,15 @@ it("KRİTİK: son çare (STM-only) yolu teyit İDDİA ETMEZ — ESP'yi kapsamıy
   bridge({}, false, 500);
   mockApiPost
     .mockResolvedValueOnce(null)                    // yetkili uç da başarısız
-    .mockResolvedValueOnce({ status: "ok" })        // /session/stop
-    .mockResolvedValueOnce({ status: "success" });  // /hardware/command → STM durdu
+    .mockResolvedValueOnce({ status: "success" })   // /hardware/command → STM durdu (SGI-3.2: 1. adımı beklemeden)
+    .mockResolvedValueOnce({ status: "ok" });       // /session/stop
   const res = await performEmergencyStop();
   expect(res.confirmed).toBe(false);
   // ...ama komutlar YİNE DE gönderilmiş olmalı (teyit edememek, denememek demek değildir).
   const yollar = mockApiPost.mock.calls.map((c) => c[0]);
   expect(yollar).toContain("/session/stop");
   expect(yollar).toContain("/hardware/command");
-  expect(mockApiPost.mock.calls[2][1]).toEqual({ command: "stop_all_coils", params: {} });
+  expect(mockApiPost.mock.calls[1][1]).toEqual({ command: "stop_all_coils", params: {} });
 });
 
 it("hiçbir yol teyit veremezse confirmed:false (kullanıcı fiziksel düğmeye yönlendirilmeli)", async () => {

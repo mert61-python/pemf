@@ -49,6 +49,57 @@ const BRIDGE_TIMEOUT_MS = 5000;
 export async function performEmergencyStop(): Promise<{ confirmed: boolean; kartReddetti: boolean }> {
   let teyitli = false;
   let kartRed = false;
+  // ⚠️ SGI-3.2 (A-63 · 1-C i3-F-5 · Ö.4-Y8 — gecikme de kapılanmadır): TD3'ten beri backend E-stop yanıtı, STOP porta yazıldıktan
+  // SONRA kartın yanıtını ≤ 0,25 sn bekliyor (NACK'li / yanıtsız kartta tam süre). Adımlar sırayla `await` edildiğinde 2. adım ve
+  // `stop_all_coils` bu RAPOR beklemesi kadar (×2) GEÇ gidiyordu. Yedek STOP'lar artık 1. adımın yanıtını BEKLEMEDEN gider;
+  // `/session/stop` 1./2. adımdan SONRA kalır (seans kaydı "acil-durdurma" olarak kapanır — E-stop ile yarışmaz).
+  const adim1 = adim1Bridge();
+  const adim2 = (async () => {
+    try {
+      const r = await apiPost<EmergencyStopResponse | null>(
+        "/hardware/emergency_stop", {}, null, { silent: true });
+      if (r?.confirmed === true) teyitli = true;
+      if (r?.stmKartYaniti === "red") kartRed = true;
+    } catch {
+      /* aşağıdaki son çareye düş */
+    }
+  })();
+  const stopAll = (async () => {
+    try {
+      await apiPost<CommandResponse | null>(
+        "/hardware/command",
+        { command: "stop_all_coils", params: {} },
+        null,
+        { silent: true }
+      );
+    } catch {
+      /* yut — teyit 1./2. adımdan gelir */
+    }
+  })();
+  const d1 = await adim1;
+  if (d1?.confirmed === true) teyitli = true;
+  if (d1?.stmKartYaniti === "red") kartRed = true;
+
+  // 2) Yedek: AYNI yetkili uç standart istemciyle (yukarıda, 1. adımla AYNI anda başladı). Birincil yol ham `fetch` + bridge
+  // adresini kullanır; bu ise apiPost'un taban adresi/auth'u/timeout'u üzerinden gider (tünel
+  // dahil) → gerçekten FARKLI bir taşıma yolu, ama teyit yine tek ve doğru kaynaktan gelir.
+  await adim2;
+
+  // 3) Son çare: seansı kapat + STM'e STOP (`stop_all_coils` yukarıda HEMEN gitti) — 1./2. adım teyitli olsa da GÖNDERİLİR
+  // (A-63). ⚠️ Bu yol ESP'yi KAPSAMAZ ve porta yazımı teyit etmez: kendi başına `confirmed` VERMEZ. Eskiden burada
+  // `status === "success"` teyit sayılıyordu — STM'in durması, ESP bobinleri hastanın üzerinde çalışırken "hepsi kesildi" diye
+  // raporlanıyordu.
+  try {
+    await apiPost<CommandResponse | null>("/session/stop", {}, null, { silent: true });
+  } catch {
+    /* yut — teyit 1./2. adımdan gelir */
+  }
+  await stopAll;
+  return { confirmed: teyitli, kartReddetti: !teyitli && kartRed };
+}
+
+/** 1. adım: bridge ucu (tek atışta STM + ESP). ASLA throw etmez; gövde yoksa / okunamazsa null. */
+async function adim1Bridge(): Promise<EmergencyStopResponse | null> {
   // 1) Bridge (tek atışta STM + ESP).
   try {
     const ctrl = new AbortController();
@@ -78,42 +129,14 @@ export async function performEmergencyStop(): Promise<{ confirmed: boolean; kart
     // gevşek kuralını uyguluyordu. Bir bobin hastanın üzerinde çalışmaya devam ederken
     // operatöre "kesildi" demek, bu ekrandaki en ağır hata sınıfıdır.
       // ⚠️ D1.105 · A-63: teyitli olsa da ERKEN DÖNÜLMEZ — 2. ve 3. adım koşulsuz (Ö.4-Y8).
-      if (data?.confirmed === true) teyitli = true;
-      if (data?.stmKartYaniti === "red") kartRed = true;
+      return data;
     } finally {
       clearTimeout(timer);
     }
   } catch {
     /* bridge erişilemedi → yedek yol */
+    return null;
   }
-
-  // 2) Yedek: AYNI yetkili ucu standart istemciyle dene. Birincil yol ham `fetch` + bridge
-  // adresini kullanır; bu ise apiPost'un taban adresi/auth'u/timeout'u üzerinden gider (tünel
-  // dahil) → gerçekten FARKLI bir taşıma yolu, ama teyit yine tek ve doğru kaynaktan gelir.
-  try {
-    const r = await apiPost<EmergencyStopResponse | null>(
-      "/hardware/emergency_stop", {}, null, { silent: true });
-    if (r?.confirmed === true) teyitli = true;
-    if (r?.stmKartYaniti === "red") kartRed = true;
-  } catch {
-    /* aşağıdaki son çareye düş */
-  }
-
-  // 3) Son çare: seansı kapat + STM'e STOP — 1./2. adım teyitli olsa da GÖNDERİLİR (A-63). ⚠️ Bu yol ESP'yi KAPSAMAZ
-  // ve porta yazımı teyit etmez: kendi başına `confirmed` VERMEZ. Eskiden burada `status === "success"` teyit sayılıyordu —
-  // STM'in durması, ESP bobinleri hastanın üzerinde çalışırken "hepsi kesildi" diye raporlanıyordu.
-  try {
-    await apiPost<CommandResponse | null>("/session/stop", {}, null, { silent: true });
-    await apiPost<CommandResponse | null>(
-      "/hardware/command",
-      { command: "stop_all_coils", params: {} },
-      null,
-      { silent: true }
-    );
-  } catch {
-    /* yut — teyit 1./2. adımdan gelir */
-  }
-  return { confirmed: teyitli, kartReddetti: !teyitli && kartRed };
 }
 
 /** Teyit edilemeyen durdurma için ORTAK uyarı metni (tüm çağıranlar aynı sözü versin). */

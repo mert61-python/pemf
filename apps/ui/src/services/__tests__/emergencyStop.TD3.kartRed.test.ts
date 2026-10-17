@@ -34,7 +34,7 @@ it("KRİTİK: backend kart reddi → confirmed:false, kartReddetti:true ve yedek
   mockApiPost.mockImplementation(async (p: string) => (p === "/hardware/emergency_stop" ? RED : null));
   const res = await performEmergencyStop();
   expect(res).toEqual({ confirmed: false, kartReddetti: true });
-  expect(mockApiPost.mock.calls.map((c) => c[0])).toEqual(["/hardware/emergency_stop", "/session/stop", "/hardware/command"]);
+  expect(mockApiPost.mock.calls.map((c) => c[0])).toEqual(["/hardware/emergency_stop", "/hardware/command", "/session/stop"]);
 });
 
 it("KARŞIT: yedek adım teyit verdiyse kartReddetti false", async () => {

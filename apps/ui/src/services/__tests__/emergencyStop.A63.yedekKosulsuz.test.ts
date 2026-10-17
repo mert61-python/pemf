@@ -41,8 +41,9 @@ it("KRİTİK: 1. adım TEYİTLİ (ESP kapalı, STM onayı — A-63) → 2. ve 3.
   const res = await performEmergencyStop();
   expect(res.confirmed).toBe(true);
   expect(fetchMock()).toHaveBeenCalledTimes(1);
-  expect(yollar()).toEqual(["/hardware/emergency_stop", "/session/stop", "/hardware/command"]);
-  expect(mockApiPost.mock.calls[2][1]).toEqual({ command: "stop_all_coils", params: {} });
+  // SGI-3.2: `stop_all_coils` 1. adımın yanıtını beklemeden gider; `/session/stop` 1./2. adımdan SONRA.
+  expect(yollar()).toEqual(["/hardware/emergency_stop", "/hardware/command", "/session/stop"]);
+  expect(mockApiPost.mock.calls[1][1]).toEqual({ command: "stop_all_coils", params: {} });
 });
 
 it("KRİTİK: 2. adım teyitli olsa da 3. adım (seans + stop_all) YİNE gönderilir", async () => {
@@ -50,7 +51,7 @@ it("KRİTİK: 2. adım teyitli olsa da 3. adım (seans + stop_all) YİNE gönder
   mockApiPost.mockResolvedValueOnce({ status: "success", confirmed: true }).mockResolvedValue({ status: "success" });
   const res = await performEmergencyStop();
   expect(res.confirmed).toBe(true);
-  expect(yollar()).toEqual(["/hardware/emergency_stop", "/session/stop", "/hardware/command"]);
+  expect(yollar()).toEqual(["/hardware/emergency_stop", "/hardware/command", "/session/stop"]);
 });
 
 it("KARŞIT: son çare (3. adım) başarısı tek başına teyit DEĞİL (ESP/STM teyidi yok)", async () => {
@@ -58,5 +59,5 @@ it("KARŞIT: son çare (3. adım) başarısı tek başına teyit DEĞİL (ESP/ST
   mockApiPost.mockResolvedValueOnce({ status: "partial", confirmed: false }).mockResolvedValue({ status: "success" });
   const res = await performEmergencyStop();
   expect(res.confirmed).toBe(false);
-  expect(yollar()).toEqual(["/hardware/emergency_stop", "/session/stop", "/hardware/command"]);
+  expect(yollar()).toEqual(["/hardware/emergency_stop", "/hardware/command", "/session/stop"]);
 });
