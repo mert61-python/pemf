@@ -327,7 +327,7 @@ export function PatientScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Hasta Veritabanı</Text>
+        <Text style={styles.title}>{SK.veritabani}</Text>
         <View style={{flexDirection: 'row', gap: spacing.sm}}>
           {/* Güvenlik/KVKK (inceleme): "Tümünü Sil" paylaşılan hasta-DB'sini yıkar → yalnız VETERİNER (isExpert).
               Araştırma modu (PIN'li de olsa) tüm klinik kayıtlarını silememeli.
@@ -349,7 +349,7 @@ export function PatientScreen() {
             onPress={secim.secimModunuDegistir}
           />
           <Button
-            label={isAdding ? "İptal" : "Yeni Hasta Kayıt"}
+            label={isAdding ? "İptal" : SK.yeniKayit}
             icon={!isAdding ? <PlusCircle color={colors.white} size={16} /> : undefined}
             variant={isAdding ? "secondary" : "primary"}
             onPress={() => {

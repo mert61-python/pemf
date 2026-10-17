@@ -39,7 +39,24 @@ export interface ProfilSozlugu {
   kayitlarAd: string;
   /** Performans Raporu bölüm başlığı. */
   kpiBaslik: string;
+  /**
+   * SGI-4.1 (bağımsız inceleme 2026-10-17, sahip G1 "metinler de bu profillere göre uyarlanmalı"): ekran İÇİ metinler.
+   * Kum havuzunda araştırma profilinde ölçüldü: Hastalar "Hasta Veritabanı" / "Yeni Hasta Kayıt", Seans Geçmişi "Hastalarınıza
+   * ait …", AI Geçmişi "Tüm hastalar" çipi. Veteriner ve ev sahibi metinleri AYNEN (yalnız araştırma farklı).
+   */
+  veritabani: string;
+  yeniKayit: string;
+  seansGecmisiGiris: string;
+  tumListeCipi: string;
 }
+
+/** SGI-4.1: veteriner ve ev sahibi profillerinde bugünkü (değişmeyen) ekran içi metinler. */
+const KLINIK_EKRAN_METINLERI = {
+  veritabani: "Hasta Veritabanı",
+  yeniKayit: "Yeni Hasta Kayıt",
+  seansGecmisiGiris: "Hastalarınıza ait geçmiş seans kayıtları ve raporlamalar.",
+  tumListeCipi: "Tüm hastalar",
+} as const;
 
 export function profilSozlugu({
   petOwner = false,
@@ -63,6 +80,10 @@ export function profilSozlugu({
       tumKapsamKucuk: "ekip",
       kayitlarAd: "örnekleri",
       kpiBaslik: "📊 Araştırma Göstergeleri & Analitik",
+      veritabani: "Örnek / Denek Veritabanı",
+      yeniKayit: "Yeni Örnek Kaydı",
+      seansGecmisiGiris: "Örneklerinize ait geçmiş seans kayıtları ve raporlamalar.",
+      tumListeCipi: "Tüm örnekler",
     };
   }
   if (petOwner) {
@@ -80,6 +101,7 @@ export function profilSozlugu({
       tumKapsamKucuk: "klinik",
       kayitlarAd: "hastaları",
       kpiBaslik: "📊 Klinik Göstergeler & Analitik",
+      ...KLINIK_EKRAN_METINLERI,
     };
   }
   return {
@@ -96,5 +118,6 @@ export function profilSozlugu({
     tumKapsamKucuk: "klinik",
     kayitlarAd: "hastaları",
     kpiBaslik: "📊 Klinik Göstergeler & Analitik",
+    ...KLINIK_EKRAN_METINLERI,
   };
 }

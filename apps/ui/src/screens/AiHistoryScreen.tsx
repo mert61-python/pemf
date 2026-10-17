@@ -401,7 +401,7 @@ export function AiHistoryScreen() {
           "bu hastaya hangi modül uygulandı, sonucu neydi" sorusunu doğrudan cevaplar. */}
       {hastalar.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
-          <Chip label="Tüm hastalar" active={hastaFiltre === "__all__"} onPress={() => setHastaFiltre("__all__")} />
+          <Chip label={SK.tumListeCipi} active={hastaFiltre === "__all__"} onPress={() => setHastaFiltre("__all__")} />
           {hastalar.map((h) => (
             <Chip key={h.anahtar} label={h.etiket} active={hastaFiltre === h.anahtar} onPress={() => setHastaFiltre(h.anahtar)} />
           ))}

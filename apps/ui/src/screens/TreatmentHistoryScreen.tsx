@@ -293,7 +293,7 @@ export function TreatmentHistoryScreen() {
   olmadığı için kendi kaydırmasını hiç üretmiyordu; ama klavye açıkken dokunuşu
   yutup 'Kaydet/Bağlan' düğmelerini İKİ dokunuş gerektiriyordu. */}
       <View style={styles.headerRow}>
-        <Text style={styles.intro}>Hastalarınıza ait geçmiş seans kayıtları ve raporlamalar.</Text>
+        <Text style={styles.intro}>{SK.seansGecmisiGiris}</Text>
         <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm}}>
           <TouchableOpacity
             style={[styles.btnOutline, secim.secimModu && styles.btnOutlineAktif]}
