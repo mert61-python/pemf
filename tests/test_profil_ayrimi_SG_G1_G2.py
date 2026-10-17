@@ -41,8 +41,14 @@ def test_KAPI_arastirma_modulleri_ARAYUZUN_modul_tablosuyla_AYNI():
     from utils.profil import ARASTIRMA_AI_MODULLERI
 
     kaynak = (KOK / "apps/ui/src/screens/AiHubScreen.tsx").read_text(encoding="utf-8")
-    satirlar = re.findall(r'\{\s*id:\s*"([a-z_]+)"[^\n]*?modes:\s*\[([^\]]*)\]', kaynak)
-    assert len(satirlar) >= 10, f"ALL_MODULES okunamadı ({len(satirlar)} satır) — kapı kör"
+    # SGI-1.5: tablo bloğu ayrı okunur ve girdi çok satıra yayılsa da yakalanır; blokta geçen HER `id:` ayrıştırılmış olmalı (biçim
+    # değişikliği bir girdiyi sessizce dışarıda bırakırsa kapı kör kalmasın — eskiden tek satır deseni + `>= 10` alt sınırı vardı).
+    blok = re.search(r"const ALL_MODULES\b.*?=\s*\[(.*?)\n\s*\];", kaynak, re.S)
+    assert blok, "ALL_MODULES bloğu bulunamadı — kapı kör"
+    satirlar = re.findall(r'id:\s*"([a-z_]+)"[^{}]*?modes:\s*\[([^\]]*)\]', blok.group(1), re.S)
+    assert len(satirlar) == len(re.findall(r"\bid:\s*\"", blok.group(1))) >= 10, (
+        f"ALL_MODULES girdilerinin hepsi okunamadı ({len(satirlar)} ayrıştırıldı) — kapı kör"
+    )
     arastirma = {m for m, modlar in satirlar if '"researcher"' in modlar}
     assert arastirma == set(ARASTIRMA_AI_MODULLERI), (
         f"arayüz ↔ backend araştırma modülleri AYRIŞTI: arayüzde {sorted(arastirma)}, backend {sorted(ARASTIRMA_AI_MODULLERI)}"
