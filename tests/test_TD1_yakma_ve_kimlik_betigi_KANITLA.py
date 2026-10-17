@@ -148,7 +148,9 @@ def test_KRITIK_GERI_OKUMA_tutmazsa_TAMAM_degil_ve_GERI_DONULUR(yakma, tmp_path,
     sy, ikili = yakma
     flash = _Flash(b"ESKI" * 32, bozuk=True)
     s = _kos(sy, ikili, tmp_path, monkeypatch, flash, [YENI_BANNER, YENI_KIMLIK, GERCEK_ACK])
-    assert s.kod == sy.GERI_OKUMA_TUTMADI, f"{s.kod} {s.ozet}"
+    # SGI-3.4: bu sahte flash geri dönüş yazımını da BOZAR (her `-w`) → geri dönüş TUTMADI; "geri dönüldü" (13) yalan olurdu.
+    # Yedek tutunca 13: tests/test_TD1_yakma_GERI_DONUS_geri_okumayla_SGI_3_4.py::test_KARSIT_GERI_DONUS_tuttu_GERI_DONULDU_der
+    assert s.kod == sy.GERI_DONUS_BASARISIZ, f"{s.kod} {s.ozet}"
     assert sum(1 for c in flash.cagri if "-w" in c) == 2, f"otomatik geri dönüş yazımı yok: {flash.cagri}"
 
 

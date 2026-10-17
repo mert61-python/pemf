@@ -425,6 +425,23 @@ def yakma_akisi(
                 adimlar=adimlar,
             )
         adimlar.append("GERİ DÖNÜŞ: eski firmware yakıldı")
+        # ⚠️ SGI-3.4 (TD1-e'nin ilkesi geri dönüşe de): "banner yakmayı KANITLAMAZ" — geri dönüş yazımı da BAĞIMSIZ geri okumayla
+        # yedekle bayt bayt AYNI olmadan "geri dönüldü" denmez (tezgâh geri dönüşü 2 MB geri okumayla doğruladı). Aynı arızalı
+        # flash / ST-Link yeni ikiliyi tutmadıysa yedeği de tutmayabilir; kart o zaman ne yeni ne eski imajdadır.
+        gd_ok, gd_bilgi = geri_oku(cli, yedek, kok / f"geri_donus_okuma_{time.strftime('%Y%m%d_%H%M%S')}.bin")
+        adimlar.append("geri dönüş " + gd_bilgi)
+        gr_ok, gr_bilgi = baslat(cli)
+        adimlar.append("geri dönüş yeniden başlatma: " + ("tamam (-rst)" if gr_ok else f"YAPILAMADI ({gr_bilgi})"))
+        if not gd_ok:
+            return Sonuc(
+                GERI_DONUS_BASARISIZ,
+                f"{neden} VE eski firmware'e GERİ DÖNÜŞ TUTMADI ({gd_bilgi}) — kart ne yeni ne eski firmware'le doğrulanmış. "
+                f"Kartı sahaya TAKMAYIN; ST-Link ile ELLE kurtarın: yedek {yedek} → {YAKMA_ADRESI}, ardından tam geri okuma.",
+                banner=banner_ham,
+                sha256=ozet,
+                yedek=str(yedek),
+                adimlar=adimlar,
+            )
         if banner_kaynagi is not None:
             g_uyumlu, g_sebep, g_ham = _banner_kaynaktan(banner_kaynagi, isaret_geri)
         else:
