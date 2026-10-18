@@ -54,7 +54,7 @@ const MAX_SYMLINK_LEN: u64 = 4096;
 /// Listenin bir daha eskimemesi `tests/test_profil_paketi_kok_dosyalari.py` ile sağlanır: kapı
 /// adları değil KAYNAĞI ölçer — `install_root.join("...")` ile üretilen her kök girdisi ya bu
 /// listede olmalı ya da açıkça meşru sayılmalı (tek istisna `ai_models`, profillerin hedefi).
-const PROFILE_FORBIDDEN_TOP: [&str; 16] = [
+const PROFILE_FORBIDDEN_TOP: [&str; 17] = [
     "runtime",
     // Sahneleme/geri-dönüş kardeşleri: `runtime` korunup bunların açıkta kalması korumayı
     // anlamsız kılıyordu — özellikle `runtime.old`, sağlık kapısı düştüğünde dönülecek sürüm.
@@ -88,6 +88,8 @@ const PROFILE_FORBIDDEN_TOP: [&str; 16] = [
     "auth_session.bin",
     // 2026-10-18 (auth_session.bin kaybı): oturum tanı günlüğü de kökte — profil paketi onu ezip silme nedenini GİZLEYEMEZ.
     "launcher_oturum.log",
+    // 2026-10-18: "Beni hatırla" tercih işareti — profil paketi koyarsa kullanıcının seçmediği kalıcılığı kurardı.
+    "auth_remember.flag",
 ];
 
 /// `archive` içeriğini `dest` altına açar. Girdi yolları `dest` dışına çıkamaz.
@@ -799,6 +801,7 @@ mod tests {
             // kullanıcının kayıtlı oturumunu EZEMEZ (aksi halde sessiz "çıkış yaptırma").
             "auth_session.bin",
             "launcher_oturum.log",
+            "auth_remember.flag",
         ] {
             let (_d, zip_path) = build_zip(&[(kotu, b"sahte" as &[u8])]);
             let out = tempfile::tempdir().unwrap();

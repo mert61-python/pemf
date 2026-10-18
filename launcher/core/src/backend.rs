@@ -386,24 +386,59 @@ pub fn pull_desktop_session(port: u16) -> Option<crate::auth::Session> {
 /// bütçeyle (`PULL_TEARDOWN_TIMEOUT_S`) çağırır; 60 sn döngüsü 5 sn ile çağırmaya devam eder.
 /// Loopback sözleşmesi + boş-oturum (`{}`) → `None` semantiği DEĞİŞMEZ (aynı gövde).
 pub fn pull_desktop_session_kisa(port: u16, timeout_s: u64) -> Option<crate::auth::Session> {
+    match devir_cek_kisa(port, timeout_s) {
+        DevirCekme::Oturum(s) => Some(s),
+        DevirCekme::Cikis | DevirCekme::Yok => None,
+    }
+}
+
+/// Devir çekmenin sonucu. ⚠️ 2026-10-18 (auth_session.bin kaybı, sahip kararı): pencerede "Çıkış Yap" artık AYRI bir
+/// durumdur — backend çıkıştan sonra `{"cikis": true}` döner; launcher kendi "Beni hatırla" kaydını HEMEN siler.
+/// Eskiden çıkış da `{}` (oturum yok) görünüyor, launcher sunucuda silinmiş oturumun jetonunu diskte tutuyordu.
+#[derive(Debug, Clone)]
+pub enum DevirCekme {
+    /// Backend'te devredilmiş (ya da pencerenin geri yazdığı) oturum var.
+    Oturum(crate::auth::Session),
+    /// Pencerede çıkış yapıldı (yeni devir gelene kadar).
+    Cikis,
+    /// Oturum yok / ulaşılamadı / gövde bozuk (backend yeniden başladıysa da bu — çıkış SAYILMAZ).
+    Yok,
+}
+
+/// `pull_desktop_session_kisa`nın üç durumlu hâli (loopback sözleşmesi aynı).
+pub fn devir_cek_kisa(port: u16, timeout_s: u64) -> DevirCekme {
     let url = desktop_session_url(port);
     if !is_loopback_http_url(&url) {
-        return None;
+        return DevirCekme::Yok;
     }
     let govde = ureq::get(&url)
         .timeout(Duration::from_secs(timeout_s))
         .call()
         .ok()
         .filter(|r| r.status() == 200)
-        .and_then(|r| r.into_string().ok())?;
-    let v: serde_json::Value = serde_json::from_str(&govde).ok()?;
+        .and_then(|r| r.into_string().ok());
+    govde.map(|g| devir_govdesini_coz(&g)).unwrap_or(DevirCekme::Yok)
+}
+
+/// `devir_cek_kisa` + 60 sn döngüsünün bütçesi.
+pub fn devir_cek(port: u16) -> DevirCekme {
+    devir_cek_kisa(port, SESSION_PUSH_TIMEOUT_S)
+}
+
+/// Devir ucunun gövdesini çöz (saf → birim-testlenebilir). Jeton varsa `Oturum` (çıkış işareti yok sayılır),
+/// yalnız `{"cikis": true}` ise `Cikis`, aksi hâlde `Yok`.
+pub fn devir_govdesini_coz(govde: &str) -> DevirCekme {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(govde) else {
+        return DevirCekme::Yok;
+    };
     let al = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
     let refresh = al("refresh_token");
     let access = al("access_token");
     if refresh.is_empty() || access.is_empty() {
-        return None; // oturum yok ({}) → senkronlanacak bir şey de yok
+        // oturum yok ({}) → senkronlanacak bir şey de yok; çıkış işareti varsa launcher kaydını temizler
+        return if v.get("cikis").and_then(|x| x.as_bool()) == Some(true) { DevirCekme::Cikis } else { DevirCekme::Yok };
     }
-    Some(crate::auth::Session {
+    DevirCekme::Oturum(crate::auth::Session {
         access_token: access,
         refresh_token: refresh,
         email: al("email"),
@@ -1019,6 +1054,22 @@ mod tests {
         let busy = listener.local_addr().unwrap().port();
         let found = find_free_port(busy, 20).unwrap();
         assert_ne!(found, busy, "mesgul port bos sanildi");
+    }
+
+    /// 2026-10-18 (auth_session.bin kaybı): pencerede çıkış backend'te `{"cikis": true}` bırakır; launcher bunu `Yok`tan
+    /// AYIRMALI (backend yeniden başladıysa `{}` = çıkış DEĞİL). Jeton varsa işaret yok sayılır.
+    #[test]
+    fn devir_govdesi_cikis_isaretini_oturum_yokundan_AYIRIR() {
+        assert!(matches!(devir_govdesini_coz(r#"{"cikis": true}"#), DevirCekme::Cikis));
+        assert!(matches!(devir_govdesini_coz("{}"), DevirCekme::Yok));
+        assert!(matches!(devir_govdesini_coz(r#"{"cikis": false}"#), DevirCekme::Yok));
+        assert!(matches!(devir_govdesini_coz(r#"{"cikis": "true"}"#), DevirCekme::Yok), "yalniz JSON true");
+        assert!(matches!(devir_govdesini_coz("bozuk"), DevirCekme::Yok));
+        match devir_govdesini_coz(r#"{"access_token":"A","refresh_token":"R","email":"e@k.tr","expires_at":"42","cikis":true}"#) {
+            DevirCekme::Oturum(s) => assert_eq!((s.refresh_token.as_str(), s.expires_at), ("R", 42)),
+            d => panic!("jetonlu govde oturum sayilmadi: {d:?}"),
+        }
+        assert!(matches!(devir_govdesini_coz(r#"{"access_token":"A","cikis":true}"#), DevirCekme::Cikis), "eksik jeton = oturum yok");
     }
 
     #[test]

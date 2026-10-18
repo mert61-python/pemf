@@ -146,10 +146,32 @@ fn stop_backend_for_teardown(
 /// ⚠️ Yalnız BU oturumun TRACKED backend'inde çağrılır; orphan/backend.port dalında ASLA —
 /// başka sürecin portundan jeton okumak loopback-jeton-zehirlenmesi savunmasını deler.
 fn son_oturumu_yakala(port: u16, root: &std::path::Path, bellek: &Mutex<Option<auth::Session>>) {
-    if let Some(s) = backend::pull_desktop_session_kisa(port, backend::PULL_TEARDOWN_TIMEOUT_S) {
-        let _ = secret_store::rotasyonu_isle(root, &s);
-        bellek_rotasyonu_uygula(bellek, &s); // [S4] bellek de taze kalsın (yeniden devir bayat itmesin)
+    match backend::devir_cek_kisa(port, backend::PULL_TEARDOWN_TIMEOUT_S) {
+        backend::DevirCekme::Oturum(s) => {
+            let _ = secret_store::rotasyonu_isle(root, &s);
+            bellek_rotasyonu_uygula(bellek, &s); // [S4] bellek de taze kalsın (yeniden devir bayat itmesin)
+        }
+        backend::DevirCekme::Cikis => {
+            pencere_cikisini_uygula(root, bellek);
+        }
+        backend::DevirCekme::Yok => {}
     }
+}
+
+/// Pencerede "Çıkış Yap" (backend `{"cikis": true}`) → launcher'ın "Beni hatırla" kaydı ve bellekteki oturumu HEMEN
+/// temizlenir (sahip kararı 2026-10-18; auth_session.bin kaybı — eskiden ölü jeton diskte kalıp sonraki açılışta sessizce
+/// siliniyordu). Kullanıcının "Beni hatırla" TERCİHİ korunur (pencerede sonraki giriş yeniden hatırlansın). 60 sn döngüsü
+/// her turda aynı işareti görür → yalnız gerçekten bir şey temizlendiyse günlüğe yazar. Dönüş: temizlendi mi.
+fn pencere_cikisini_uygula(root: &std::path::Path, bellek: &Mutex<Option<auth::Session>>) -> bool {
+    secret_store::hatirla_isaretini_tamamla(root);
+    let diskte = secret_store::blob_path(root).exists();
+    let bellekte = bellek.lock().unwrap().take().is_some();
+    if !diskte && !bellekte {
+        return false;
+    }
+    secret_store::clear(root);
+    secret_store::oturum_gunlugune_yaz(root, "pencerede cikis yapildi -> 'Beni hatirla' kaydi ve launcher oturumu temizlendi");
+    true
 }
 
 /// [S4] (saha arızası 2026-09-03, ÖLÇÜLDÜ): rotasyonla gelen oturum yalnız DİSKE yazılıyor, bellekteki
@@ -158,19 +180,23 @@ fn son_oturumu_yakala(port: u16, root: &std::path::Path, bellek: &Mutex<Option<a
 /// BAYAT jeton gidiyor, pencere onunla yenilemeye kalkıyor ve GoTrue reuse-detection TÜM AİLEYİ iptal
 /// ediyordu → sonraki açılışta SessionRevoked → "Beni hatırla" parola istiyordu (bugün 17:07'den beri
 /// açık launcher, 20:3x app 1.9.39 güncellemesi, 20:38 yeniden giriş). Bellek kuralı diskten AYRI:
-/// "Beni hatırla" kapalı olsa da bellek taze kalmalı. Aynı e-posta + dolu + DEĞİŞMİŞ refresh → uygula;
-/// bellekte oturum yoksa (giriş yapılmamış) devralma YOK (uydurma/otomatik giriş olmasın).
+/// "Beni hatırla" kapalı olsa da bellek taze kalmalı. Dolu + DEĞİŞMİŞ refresh → uygula.
+/// ⚠️ SAHİP KARARI 2026-10-18 (auth_session.bin kaybı): launcher pencerenin SON hesabını izler — başka hesap da, bellek
+/// boşken (launcher'da giriş yok / pencerede çıkış yapıldı) pencerede yapılan giriş de uygulanır. Eskiden ikisi de reddediliyor,
+/// pencerede yeniden girilen oturum launcher'a hiç geçmiyordu. Kaynak yalnız sıkı-loopback devir ucu (A-03).
 fn bellek_rotasyonu_gerekli(mevcut: Option<&auth::Session>, yeni: &auth::Session) -> bool {
     if yeni.refresh_token.trim().is_empty() {
         return false;
     }
     match mevcut {
-        None => false,
-        // [S4-yön] daha ESKİ jeton (bayat devir ekosu) belleği GERİYE çekemez; expires_at bilinmiyorsa (0) kabul.
+        None => true,
+        // [S4-yön] AYNI hesabın daha ESKİ jetonu (bayat devir ekosu) belleği GERİYE çekemez; expires_at bilinmiyorsa (0) kabul.
         Some(m) => {
-            m.email.eq_ignore_ascii_case(&yeni.email)
-                && m.refresh_token != yeni.refresh_token
-                && !(m.expires_at > 0 && yeni.expires_at > 0 && yeni.expires_at < m.expires_at)
+            m.refresh_token != yeni.refresh_token
+                && !(m.email.eq_ignore_ascii_case(&yeni.email)
+                    && m.expires_at > 0
+                    && yeni.expires_at > 0
+                    && yeni.expires_at < m.expires_at)
         }
     }
 }
@@ -331,13 +357,18 @@ fn oturum_rotasyon_senkronu_baslat(aktif: Arc<AtomicBool>, port: u16, bellek: Ar
         let mut ardisik_hata = 0u32;
         loop {
             std::thread::sleep(std::time::Duration::from_secs(60));
-            match backend::pull_desktop_session(port) {
-                Some(s) => {
+            match backend::devir_cek(port) {
+                backend::DevirCekme::Oturum(s) => {
                     ardisik_hata = 0;
                     let _ = secret_store::rotasyonu_isle(&root, &s);
                     bellek_rotasyonu_uygula(&bellek, &s); // [S4] bellek de taze kalsın
                 }
-                None => {
+                // 2026-10-18 (sahip kararı): pencerede "Çıkış Yap" → launcher kaydı + belleği HEMEN temizlenir.
+                backend::DevirCekme::Cikis => {
+                    ardisik_hata = 0;
+                    pencere_cikisini_uygula(&root, &bellek);
+                }
+                backend::DevirCekme::Yok => {
                     // F4 (denetim 2026-08-24): None'ı sınıfla — backend KESİN ÖLÜ mü (TCP reddedildi)
                     // yoksa CANLI ama meşgul/oturum-boş mu? Yalnız kesin-ölüde say; meşgul-timeout
                     // (uzun AI yükü) thread'i öldürmemeli (bkz. rotasyon_ardisik).
@@ -738,10 +769,17 @@ async fn start_installed(
             let bellek = state.session.clone();
             let root_c = root.clone();
             let _ = tauri::async_runtime::spawn_blocking(move || {
-                if let Some(s) = backend::pull_desktop_session_kisa(port, backend::PULL_TEARDOWN_TIMEOUT_S) {
-                    if bellek_rotasyonu_uygula(&bellek, &s) {
-                        let _ = secret_store::rotasyonu_isle(&root_c, &s);
+                match backend::devir_cek_kisa(port, backend::PULL_TEARDOWN_TIMEOUT_S) {
+                    backend::DevirCekme::Oturum(s) => {
+                        if bellek_rotasyonu_uygula(&bellek, &s) {
+                            let _ = secret_store::rotasyonu_isle(&root_c, &s);
+                        }
                     }
+                    // 2026-10-18: sahiplenilen backend'te pencere çıkış yapmış → launcher da çıkışa geçer (devir YAPILMAZ).
+                    backend::DevirCekme::Cikis => {
+                        pencere_cikisini_uygula(&root_c, &bellek);
+                    }
+                    backend::DevirCekme::Yok => {}
                 }
             })
             .await;
@@ -1468,6 +1506,9 @@ async fn auth_login(
     let s2 = session.clone();
     let hatirla = remember && secret_store::available();
     let _ = tauri::async_runtime::spawn_blocking(move || {
+        // 2026-10-18: kutunun kararı AYRICA tercih işaretine yazılır — pencerede çıkış kaydı siler ama bu kararı silmez,
+        // pencerede yapılan sonraki giriş yeniden hatırlanır (secret_store::rotasyonu_isle rıza kapısı).
+        secret_store::hatirla_tercihini_yaz(&root, hatirla);
         if hatirla {
             secret_store::save(&root, &s2);
         } else {
@@ -2608,8 +2649,13 @@ mod tests {
         assert!(bellek_rotasyonu_gerekli(Some(&m), &s("VET@K.TR", "r2")), "e-posta büyük/küçük duyarsız");
         assert!(!bellek_rotasyonu_gerekli(Some(&m), &s("vet@k.tr", "r1")), "aynı jeton → boşuna yazma");
         assert!(!bellek_rotasyonu_gerekli(Some(&m), &s("vet@k.tr", "  ")), "boş refresh → uygulama");
-        assert!(!bellek_rotasyonu_gerekli(Some(&m), &s("baska@k.tr", "r2")), "başka kullanıcı → uygulama");
-        assert!(!bellek_rotasyonu_gerekli(None, &s("vet@k.tr", "r2")), "giriş yokken devralma YOK");
+        // SAHİP KARARI 2026-10-18 (auth_session.bin kaybı): launcher pencerenin SON hesabını izler — eskiden bu iki satır
+        // tersini pinliyordu (başka hesap / bellek boşken devralma YOK) ve pencerede yeniden giriş launcher'a geçmiyordu.
+        assert!(bellek_rotasyonu_gerekli(Some(&m), &s("baska@k.tr", "r2")), "pencerenin son hesabı uygulanmalı");
+        assert!(bellek_rotasyonu_gerekli(None, &s("vet@k.tr", "r2")), "bellek boşken pencere girişi uygulanmalı");
+        let eski_baska = auth::Session { access_token: "a".into(), refresh_token: "b1".into(), email: "b@k.tr".into(), expires_at: 50 };
+        let m_exp = auth::Session { expires_at: 100, ..m.clone() };
+        assert!(bellek_rotasyonu_gerekli(Some(&m_exp), &eski_baska), "[S4-yön] yalnız AYNI hesapta — başka hesap engellenmez");
         let se = |rt: &str, exp: i64| auth::Session { access_token: "a".into(), refresh_token: rt.into(), email: "vet@k.tr".into(), expires_at: exp };
         assert!(bellek_rotasyonu_gerekli(Some(&se("r1", 100)), &se("r2", 200)), "daha YENİ jeton uygulanmalı");
         assert!(!bellek_rotasyonu_gerekli(Some(&se("r1", 200)), &se("r2", 100)), "daha ESKİ jeton (bayat devir ekosu) uygulanMAMALI [S4-yön]");
@@ -2618,6 +2664,58 @@ mod tests {
         assert!(bellek_rotasyonu_uygula(&bellek, &s("vet@k.tr", "r2")));
         assert_eq!(bellek.lock().unwrap().as_ref().unwrap().refresh_token, "r2");
         assert!(!bellek_rotasyonu_uygula(&bellek, &s("vet@k.tr", "r2")), "ikinci kez aynı → false");
+    }
+
+    /// 2026-10-18 (sahip kararı, auth_session.bin kaybı): pencerede "Çıkış Yap" → launcher kaydı + belleği temizlenir,
+    /// "Beni hatırla" TERCİHİ korunur; zaten temizse ikinci kez yazmaz (60 sn döngüsü günlüğü şişirmesin).
+    #[test]
+    fn pencere_cikisi_launcher_kaydini_ve_bellegini_temizler_tercihi_korur() {
+        let d = std::env::temp_dir().join(format!("pemf_cikis_testi_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let kok = d.as_path();
+        let s = auth::Session { access_token: "a".into(), refresh_token: "r".into(), email: "v@k.tr".into(), expires_at: 0 };
+        secret_store::save(kok, &s); // işaretsiz eski kurulum
+        let bellek = Mutex::new(Some(s));
+        assert!(pencere_cikisini_uygula(kok, &bellek), "pencere cikisi uygulanmadi");
+        assert!(secret_store::load(kok).is_none(), "launcher kaydi silinmedi");
+        assert!(bellek.lock().unwrap().is_none(), "launcher bellegi temizlenmedi");
+        assert!(secret_store::hatirla_isareti_path(kok).exists(), "'Beni hatirla' tercihi kayboldu");
+        let gunluk = std::fs::read_to_string(secret_store::oturum_gunlugu_path(kok)).unwrap();
+        assert!(gunluk.contains("pencerede cikis"), "{gunluk}");
+        assert!(!pencere_cikisini_uygula(kok, &bellek), "temizken yine yazdi (gunluk sisirir)");
+        assert_eq!(std::fs::read_to_string(secret_store::oturum_gunlugu_path(kok)).unwrap().lines().count(), 1);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Çıkış işareti üç çekme yolunda da ele alınır (60 sn döngüsü, kapanış son-yakalaması, sahiplenme). MUTASYON: biri
+    /// `Cikis` kolunu kaybederse kırmızı.
+    #[test]
+    fn cikis_isareti_uc_cekme_yolunda_da_uygulanir() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs"));
+        for (bas, ad) in [
+            ("fn oturum_rotasyon_senkronu_baslat", "60 sn döngüsü"),
+            ("fn son_oturumu_yakala", "kapanış son-yakalaması"),
+            ("if let Some(port) = backend::detect_running_backend(&root) {", "sahiplenme"),
+        ] {
+            let i = soy.find(bas).unwrap_or_else(|| panic!("{ad} yok"));
+            let son = soy[i + 1..].find("\nfn ").map(|j| i + 1 + j).unwrap_or(soy.len());
+            let b = &soy[i..son];
+            assert!(
+                b.contains("DevirCekme::Cikis") && b.contains("pencere_cikisini_uygula("),
+                "{ad}: pencere cikisi ele alinmiyor"
+            );
+        }
+    }
+
+    /// 2026-10-18: giriş ekranındaki "Beni hatırla" kararı tercih işaretine yazılır (pencere çıkışından sonra sonraki girişin
+    /// hatırlanıp hatırlanmayacağını bu belirler). MUTASYON: `auth_login` işareti yazmazsa kırmızı.
+    #[test]
+    fn giris_beni_hatirla_kararini_tercih_isaretine_yazar() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs"));
+        let i = soy.find("async fn auth_login(").expect("auth_login yok");
+        let son = soy[i + 1..].find("\nasync fn ").map(|j| i + 1 + j).unwrap_or(soy.len());
+        assert!(soy[i..son].contains("secret_store::hatirla_tercihini_yaz(&root, hatirla)"), "giris tercihi isarete yazilmiyor");
     }
 
     /// [S4] Parite: rotasyon senkron thread'i ve F5 yakalama BELLEĞİ de güncellemeli; orphan
@@ -2634,7 +2732,8 @@ mod tests {
         let o = soy.find("if let Some(port) = backend::detect_running_backend(&root) {").expect("orphan sahiplenme yok");
         let oson = soy[o..].find("open_app_window(").map(|j| o + j).unwrap_or(soy.len());
         let blok = &soy[o..oson];
-        let cek = blok.find("pull_desktop_session_kisa(").expect("sahiplenmede ÖNCE çekme yok (S4)");
+        // 2026-10-18: çekme `devir_cek_kisa` (üç durumlu: oturum / ÇIKIŞ / yok); sözleşme aynı — devirden ÖNCE çek.
+        let cek = blok.find("devir_cek_kisa(").expect("sahiplenmede ÖNCE çekme yok (S4)");
         let devir = blok.find("hand_off_session(").expect("sahiplenmede devir yok");
         assert!(cek < devir, "sahiplenme devirden SONRA çekiyor — bayat itme (S4)");
     }

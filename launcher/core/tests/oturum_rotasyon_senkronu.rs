@@ -57,8 +57,8 @@ fn KARSIT_KANIT_ayni_jeton_tekrar_YAZILMAZ() {
 
 #[test]
 fn KRITIK_KAYITLI_OTURUM_YOKKEN_yazilmaz() {
-    // ⚠️ Kullanıcı "Beni hatırla"yı SEÇMEDİYSE blob yoktur. Devir oturumunu diske yazmak,
-    // kullanıcının AÇIKÇA istemediği kalıcılığı arkasından kurmak olurdu.
+    // ⚠️ Kullanıcı "Beni hatırla"yı SEÇMEDİYSE blob da tercih işareti de yoktur. Devir oturumunu diske yazmak,
+    // kullanıcının AÇIKÇA istemediği kalıcılığı arkasından kurmak olurdu (2026-10-18: RIZA kapısı aynen — işaret yok).
     let d = tempfile::tempdir().unwrap();
     let kok = d.path();
     assert!(secret_store::load(kok).is_none(), "onkosul: blob olmamali");
@@ -81,15 +81,45 @@ fn KARSIT_KANIT_BOS_jeton_kaydi_BOZMAZ() {
 }
 
 #[test]
-fn KRITIK_BASKA_KULLANICI_oturumu_ISLENMEZ() {
-    // ⚠️ Devir oturumu farkli bir e-postaya aitse bu bir ROTASYON degil, BASKA bir giristir.
-    // Sessizce diske yazmak, A kullanicisinin "beni hatirla" kaydini B ile degistirirdi.
+fn KRITIK_BASKA_HESAP_pencerenin_SON_hesabi_olarak_ISLENIR() {
+    // ⚠️ SAHİP KARARI 2026-10-18 (auth_session.bin kaybı): launcher pencerenin SON hesabını hatırlar (çıkış + yeniden giriş,
+    // CH1 hesap geçişi). Eskiden bu test tersini pinliyordu ("başka kullanıcı işlenmez") — pencerede başka hesapla giriş
+    // launcher'a yansımıyor, launcher sunucuda silinmiş oturumla kalıp sonraki açılışta "Beni hatırla"yı sessizce siliyordu.
     let d = tempfile::tempdir().unwrap();
     let kok = d.path();
-    secret_store::save(kok, &oturum("A-JETON", 1000));
-    let mut baskasi = oturum("B-JETON", 5000);
+    secret_store::save(kok, &oturum("A-JETON", 5000));
+    let mut baskasi = oturum("B-JETON", 1000); // daha ESKİ son-kullanma: [S4-yön] yalnız AYNI hesapta geçerli
     baskasi.email = "baska@klinik.tr".into();
 
-    assert!(!secret_store::rotasyonu_isle(kok, &baskasi), "baska kullanicinin oturumu islendi");
-    assert_eq!(secret_store::load(kok).unwrap().refresh_token, "A-JETON");
+    assert!(secret_store::rotasyonu_isle(kok, &baskasi), "pencerenin son hesabi launcher'a islenmedi");
+    let okunan = secret_store::load(kok).unwrap();
+    assert_eq!((okunan.refresh_token.as_str(), okunan.email.as_str()), ("B-JETON", "baska@klinik.tr"));
+}
+
+#[test]
+fn KRITIK_pencere_cikisindan_sonra_TERCIH_isaretiyle_yeni_giris_hatirlanir() {
+    // 10-13 olayının düzeltilmiş hâli: "Beni hatırla" ile giriş (işaret) → pencerede çıkış (kayıt silinir, işaret KALIR)
+    // → pencerede yeni giriş → launcher onu hatırlar.
+    let d = tempfile::tempdir().unwrap();
+    let kok = d.path();
+    secret_store::hatirla_tercihini_yaz(kok, true);
+    secret_store::save(kok, &oturum("S-ESKI", 1000));
+    secret_store::clear(kok); // pencerede çıkış
+    assert!(secret_store::hatirla_isareti_path(kok).exists(), "cikis tercih isaretini de sildi");
+    assert!(secret_store::rotasyonu_isle(kok, &oturum("YENI-GIRIS", 9000)), "cikistan sonraki yeni giris hatirlanmadi");
+    assert_eq!(secret_store::load(kok).unwrap().refresh_token, "YENI-GIRIS");
+}
+
+#[test]
+fn KARSIT_KANIT_isaretsiz_eski_kurulumda_kayit_TERCIH_sayilir() {
+    // İşaret dosyası bu sürümde geldi: önceden "Beni hatırla" ile girmiş kullanıcının kaydı var ama işareti yok → ilk
+    // rotasyonda işaret tamamlanır (sonraki pencere çıkışı tercihi kaybettirmesin).
+    let d = tempfile::tempdir().unwrap();
+    let kok = d.path();
+    secret_store::save(kok, &oturum("ESKI", 1000));
+    assert!(!secret_store::hatirla_isareti_path(kok).exists(), "onkosul");
+    secret_store::rotasyonu_isle(kok, &oturum("YENI", 5000));
+    assert!(secret_store::hatirla_isareti_path(kok).exists(), "eski kurulumun tercihi tamamlanmadi");
+    secret_store::hatirla_tercihini_yaz(kok, false);
+    assert!(!secret_store::hatirla_isareti_path(kok).exists(), "isaretsiz giris tercihi silmedi");
 }

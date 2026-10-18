@@ -99,34 +99,58 @@ pub fn load(install_root: &Path) -> Option<Session> {
 ///
 /// Pencere artık döndürdüğü oturumu backend'e geri yazıyor; bu fonksiyon onu diske işler.
 ///
-/// ⚠️ ÜÇ KAPI (hepsi kasıtlı):
-///   1. **Kayıtlı oturum YOKSA yazma.** Kullanıcı "Beni hatırla"yı seçmediyse blob yoktur;
-///      devir oturumunu diske yazmak, açıkça istemediği kalıcılığı arkasından kurmak olurdu.
-///   2. **Boş refresh jetonu yazma.** Backend `{}` ya da eksik alan dönebilir; boş jetonu
-///      işlemek sağlam kaydı YOK EDERDİ.
-///   3. **Başka e-posta yazma.** Farklı kullanıcı = rotasyon değil, BAŞKA bir giriş; sessizce
-///      yazmak A'nın kaydını B ile değiştirirdi.
-/// Ayrıca jeton AYNIYSA yazılmaz — periyodik senkron diski boşuna yormasın.
+/// ⚠️ KAPILAR (hepsi kasıtlı):
+///   1. **"Beni hatırla" seçilmediyse yazma (RIZA).** Kayıt da tercih işareti de yoksa devir oturumunu diske yazmak,
+///      kullanıcının açıkça istemediği kalıcılığı arkasından kurmak olurdu. ⚠️ 2026-10-18: pencerede çıkış kaydı siler
+///      ama tercihi (işaret dosyası) KORUR → ardından pencerede yapılan yeni giriş hatırlanır.
+///   2. **Boş refresh jetonu yazma.** Backend `{}` ya da eksik alan dönebilir; boş jetonu işlemek sağlam kaydı YOK EDERDİ.
+///   3. ~~Başka e-posta yazma~~ — KALDIRILDI (sahip kararı 2026-10-18, auth_session.bin kaybı): launcher pencerenin SON
+///      hesabını hatırlar (çıkış + yeniden giriş, CH1 hesap geçişi). Kaynak yalnız sıkı-loopback devir ucu (A-03).
+/// Ayrıca jeton AYNIYSA yazılmaz — periyodik senkron diski boşuna yormasın; AYNI hesabın daha ESKİ jetonu da yazılmaz [S4-yön].
 pub fn rotasyonu_isle(install_root: &Path, yeni: &Session) -> bool {
     if yeni.refresh_token.trim().is_empty() {
         return false;
     }
     let Some(mevcut) = load(install_root) else {
-        return false; // "Beni hatırla" kapalı → kalıcılık kurma
+        // Kayıt yok: yalnız kullanıcı "Beni hatırla"yı SEÇMİŞSE (işaret) yaz.
+        return hatirla_isareti_path(install_root).exists() && save(install_root, yeni);
     };
-    if !mevcut.email.eq_ignore_ascii_case(&yeni.email) {
-        return false; // başka kullanıcı
-    }
+    hatirla_isaretini_tamamla(install_root); // eski kurulum: kayıt var = tercih var (işaret sonradan geldi)
     if mevcut.refresh_token == yeni.refresh_token {
         return false; // değişmemiş → boşuna yazma
     }
     // [S4-yön] (saha 2026-09-03): posta kutusundan/devirden gelen jeton diskteki kayıttan daha ESKİ
     // olabilir (bayat devir ekosu). Daha eski jetonu yazmak diski GERİYE çeker → GoTrue reuse-
-    // detection aileyi iptal eder. expires_at bilinmiyorsa (0) kapı devre dışı (eski backend).
-    if mevcut.expires_at > 0 && yeni.expires_at > 0 && yeni.expires_at < mevcut.expires_at {
+    // detection aileyi iptal eder. expires_at bilinmiyorsa (0) kapı devre dışı (eski backend). Yalnız AYNI hesapta anlamlı.
+    let ayni_hesap = mevcut.email.eq_ignore_ascii_case(&yeni.email);
+    if ayni_hesap && mevcut.expires_at > 0 && yeni.expires_at > 0 && yeni.expires_at < mevcut.expires_at {
         return false;
     }
     save(install_root, yeni)
+}
+
+/// "Beni hatırla" TERCİHİ (sır değil; jeton İÇERMEZ). ⚠️ 2026-10-18: pencerede çıkış oturum kaydını siler ama kullanıcının
+/// girişte verdiği "Beni hatırla" kararını silmez — pencerede yapılan sonraki giriş bu işaretle yeniden hatırlanır.
+pub fn hatirla_isareti_path(install_root: &Path) -> PathBuf {
+    install_root.join("auth_remember.flag")
+}
+
+/// Girişteki "Beni hatırla" kutusunun kararını yaz (işaretli → dosya, işaretsiz → yok). Best-effort.
+pub fn hatirla_tercihini_yaz(install_root: &Path, hatirla: bool) {
+    let yol = hatirla_isareti_path(install_root);
+    if hatirla {
+        let _ = std::fs::create_dir_all(install_root);
+        let _ = std::fs::write(&yol, b"1");
+    } else {
+        let _ = std::fs::remove_file(&yol);
+    }
+}
+
+/// İşaret dosyası eklenmeden ÖNCE "Beni hatırla" ile giriş yapmış kurulum: kayıt varsa tercih vardır → işareti tamamla.
+pub fn hatirla_isaretini_tamamla(install_root: &Path) {
+    if blob_path(install_root).exists() && !hatirla_isareti_path(install_root).exists() {
+        hatirla_tercihini_yaz(install_root, true);
+    }
 }
 
 /// Saklanan oturumu sil ("Çıkış yap" ve iptal edilmiş jeton yolları).
