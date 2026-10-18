@@ -73,25 +73,31 @@ def test_KRITIK_1b_geri_yazma_ucu_dogru():
 def test_KRITIK_2_launcher_backendten_OKUR():
     """Halka 2: okuma yoksa geri yazilan jeton backend belleginde olur."""
     s = _oku(_BACKEND)
-    assert "pub fn pull_desktop_session" in s, "launcher devir oturumunu OKUMUYOR"
-    # 3. tur F5: okuma gövdesi timeout-parametrized `pull_desktop_session_kisa`e çıkarıldı (60 sn
-    # döngüsü 5 sn, teardown son-yakalama KISA bütçeyle çağırır). Loopback doğrulaması O gövdede →
-    # gerçek okuma+loopback-kontrolü taşıyan fonksiyona pinle (thin wrapper'a değil).
-    m = re.search(r"pub fn pull_desktop_session_kisa\(.*?\n\}", s, re.S)
-    assert m and "is_loopback_http_url" in m.group(0), (
+    # 3. tur F5: okuma gövdesi timeout-parametrized fonksiyona çıkarıldı (60 sn döngüsü 5 sn, teardown son-yakalama KISA bütçe).
+    # SGI KARARLARI C17 (2026-10-18): gövde `devir_cek_kisa`ya taşındı (oturum / pencere ÇIKIŞI / yok ayrımı — `DevirCekme`);
+    # `pull_desktop_session[_kisa]` artık onun ince sarmalayıcısı. Loopback doğrulaması GERÇEK okumayı yapan gövdede olmalı.
+    m = re.search(r"pub fn devir_cek_kisa\(.*?\n\}", s, re.S)
+    assert m, "launcher devir oturumunu OKUMUYOR (devir_cek_kisa yok)"
+    assert "is_loopback_http_url" in m.group(0) and "ureq::get" in m.group(0), (
         "okuma loopback dogrulamasi yapmiyor — oturum yalniz 127.0.0.1'den alinmali"
     )
+    for sar in ("pub fn pull_desktop_session_kisa(", "pub fn devir_cek("):
+        g = re.search(re.escape(sar) + r".*?\n\}", s, re.S)
+        assert g and "devir_cek_kisa(" in g.group(0) and "ureq::" not in g.group(0), (
+            f"{sar} loopback denetimli gövdeyi ATLAYIP kendi isteğini atıyor"
+        )
 
 
 def test_KRITIK_3_launcher_diske_ISLER():
     """Halka 3: okunan jeton diske islenmezse bir sonraki acilista yine bayat kopya kullanilir."""
     s = _oku(_MAIN)
-    assert "pull_desktop_session" in s, "senkron gorevi backend'ten OKUMUYOR"
-    # 3. tur F4: doc-comment'ler artik `pull_desktop_session` adini metinde daha once aniyor →
-    # cipla ilk-gecise degil GERCEK CAGRI YERINE (`pull_desktop_session(port)`) pinle.
-    i = s.find("pull_desktop_session(port)")
-    assert i > 0, "gercek pull_desktop_session(port) cagrisi bulunamadi"
-    assert "rotasyonu_isle" in s[i : i + 600], "okunan oturum diske ISLENMIYOR"
+    # 3. tur F4: doc-comment'ler adı metinde daha önce anıyor → çıplak ilk geçişe değil 60 sn döngüsünün GERÇEK ÇAĞRISINA pinle.
+    # SGI KARARLARI C17: döngü `backend::devir_cek(port)` çağırır (oturum → diske işle; pencere çıkışı → kaydı temizle).
+    d = re.search(r"fn oturum_rotasyon_senkronu_baslat\(.*?\n\}\n", s, re.S)
+    assert d, "senkron gorevi bulunamadi"
+    i = d.group(0).find("backend::devir_cek(port)")
+    assert i > 0, "senkron gorevi backend'ten OKUMUYOR (devir_cek(port) cagrisi yok)"
+    assert "rotasyonu_isle" in d.group(0)[i : i + 600], "okunan oturum diske ISLENMIYOR"
     assert "oturum_rotasyon_senkronu_baslat" in s, "senkron gorevi HIC baslatilmiyor"
     # Gorev backend hazir olunca baslamali (port o an bilinir).
     j = s.find("fn on_backend_ready")
@@ -142,12 +148,18 @@ def test_KARSIT_KANIT_senkron_CIFT_thread_baslatmaz():
     "kapi,mesaj",
     [
         ("load(install_root)", "kayitli oturum YOKKEN yazmama kapisi"),
-        ("eq_ignore_ascii_case", "baska e-posta kapisi"),
+        (
+            "hatirla_isareti_path(install_root).exists()",
+            "kayit yokken yalniz 'Beni hatirla' TERCIHIYLE yazma (riza) kapisi",
+        ),
+        ("ayni_hesap && mevcut.expires_at > 0", "[S4-yon] daha ESKI jeton kapisi (ayni hesapta)"),
         ("refresh_token.trim().is_empty()", "bos jeton kapisi"),
     ],
 )
 def test_KRITIK_yazma_kapilari_YERINDE(kapi, mesaj):
-    """⚠️ Uc kapi da pazarlik edilemez — ayrintili gerekce `rotasyonu_isle` docstring'inde."""
+    """⚠️ Kapılar pazarlık edilemez — ayrıntılı gerekçe `rotasyonu_isle` docstring'inde.
+    SAHİP KARARI 2026-10-18 (SGI KARARLARI C17): "başka e-posta yazılmaz" kapısı KALDIRILDI — launcher pencerenin SON hesabını
+    hatırlar; kayıt yokken yazma yalnız "Beni hatırla" tercih işaretiyle (`auth_remember.flag`)."""
     m = re.search(r"pub fn rotasyonu_isle\(.*?\n\}", _oku(_STORE), re.S)
     assert m, "rotasyonu_isle yok"
     assert kapi in m.group(0), f"{mesaj} kaldirilmis"

@@ -123,3 +123,27 @@ fn KARSIT_KANIT_isaretsiz_eski_kurulumda_kayit_TERCIH_sayilir() {
     secret_store::hatirla_tercihini_yaz(kok, false);
     assert!(!secret_store::hatirla_isareti_path(kok).exists(), "isaretsiz giris tercihi silmedi");
 }
+
+#[test]
+fn KRITIK_S4_AYNI_hesapta_daha_ESKI_jeton_diski_GERIYE_cekmez() {
+    // [S4-yön] (saha 2026-09-03): bayat devir ekosu diskteki kayıttan daha ESKİ jeton getirebilir; yazmak diski geriye çeker ve
+    // GoTrue reuse-detection aileyi iptal eder. SGI KARARLARI (2026-10-18) bu kapıyı yalnız AYNI hesapta bıraktı — davranış testi
+    // yoktu (metin kapısı `false &&` önekini göremez; mutant tüm çekirdek testlerinden sağ çıkıyordu).
+    let d = tempfile::tempdir().unwrap();
+    let kok = d.path();
+    secret_store::save(kok, &oturum("YENI", 5000));
+    let mut eko = oturum("ESKI-EKO", 1000);
+    eko.email = "VET@klinik.tr".into(); // aynı hesap, farklı büyük/küçük harf
+    assert!(!secret_store::rotasyonu_isle(kok, &eko), "ayni hesabin daha ESKI jetonu diske yazildi");
+    assert_eq!(secret_store::load(kok).unwrap().refresh_token, "YENI");
+}
+
+#[test]
+fn KARSIT_KANIT_S4_son_kullanma_BILINMIYORSA_kapi_devre_disi() {
+    // Eski backend `expires_at` göndermez (0) → kapı devre dışı, döndürülmüş jeton yine işlenir.
+    let d = tempfile::tempdir().unwrap();
+    let kok = d.path();
+    secret_store::save(kok, &oturum("ESKI", 5000));
+    assert!(secret_store::rotasyonu_isle(kok, &oturum("YENI-BILINMEYEN", 0)), "son-kullanma bilinmeyen jeton islenmedi");
+    assert_eq!(secret_store::load(kok).unwrap().refresh_token, "YENI-BILINMEYEN");
+}
