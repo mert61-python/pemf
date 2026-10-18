@@ -24,7 +24,7 @@ import { useLiveData } from "@/context/LiveDataContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
 import { platformConfirm } from "@/services/apiClient";
 import { epostaAnahtari } from "@/services/hesapDeposu";
-import { hesapGecisiEngeli } from "@/services/hesapGecisi";
+import { hesapGecisiEngeli, onaySonrasiEngel } from "@/services/hesapGecisi";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 
 export const HESAP_MENUSU_ACIKLAMA =
@@ -86,7 +86,16 @@ export function HesapMenusu({
     if (!ok) return;
     setMesgul(true);
     setHata("");
-    if (etkin) hekimiKilitle();
+    if (etkin) {
+      // S-SGI.6: onay penceresi açıkken seans başladıysa etkin hesaptan çıkış (= söküm / geçiş) İPTAL — taze durum backend'den.
+      const sonra = await onaySonrasiEngel();
+      if (sonra) {
+        setMesgul(false);
+        setHata(sonra);
+        return;
+      }
+      hekimiKilitle();
+    }
     const r = await hesaptanCik(eposta);
     setMesgul(false);
     if (!r.ok) setHata(r.hata || "Hesaptan çıkılamadı.");

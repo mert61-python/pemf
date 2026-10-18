@@ -16,7 +16,7 @@
  * ⚠️ Belirteç DEĞERİ hiçbir günlüğe / iletiye yazılmaz.
  */
 import type { DashboardSnapshot } from "@/types/domain";
-import { hesapKusagiArtir, setAuthBearer, setEntitlementHeaders } from "@/services/apiClient";
+import { apiGet, hesapKusagiArtir, setAuthBearer, setEntitlementHeaders } from "@/services/apiClient";
 import { supabaseAuth } from "@/services/supabaseAuth";
 import {
   epostaAnahtari,
@@ -52,6 +52,25 @@ export function hesapGecisiEngeli(
   if (calisan || aktif) return HESAP_GECIS_SEANS_ENGELI;
   if (donanimBelirsiz === true) return HESAP_GECIS_BELIRSIZ_ENGELI;
   return null;
+}
+
+export const ONAY_SIRASINDA_SEANS_BASLADI =
+  "Onay penceresi açıkken bobinler çalışmaya / seans başladı — işlem iptal edildi. ACİL DURDUR ekranda kalır; seansı bitirip tekrar deneyin.";
+
+/**
+ * S-SGI.6 (sahip kararı 2026-10-18): onay penceresi KAPANDIKTAN SONRA durumu backend'den TAZE oku. Web'de `window.confirm` JS'i
+ * bloklar ve yerelde `Alert` beklerken çağıranın kapanışındaki anlık görüntü güncellenmez → pencere açıkken başlayan seans görülmezdi.
+ * Backend'e ulaşılamazsa `null` (bugünkü davranış — çevrimdışı çıkış kilitlenmesin; ön koşul zaten onaydan önce denetlendi).
+ */
+export async function onaySonrasiEngel(): Promise<string | null> {
+  let taze: Pick<DashboardSnapshot, "coils" | "activeTreatment"> | null = null;
+  try {
+    taze = await apiGet<Pick<DashboardSnapshot, "coils" | "activeTreatment"> | null>("/dashboard-snapshot", null, { silent: true });
+  } catch {
+    return null;
+  }
+  if (!taze) return null;
+  return hesapGecisiEngeli(taze) ? ONAY_SIRASINDA_SEANS_BASLADI : null;
 }
 
 /** Supabase'in şu an etkin oturumu (park biçiminde) — yoksa null. */

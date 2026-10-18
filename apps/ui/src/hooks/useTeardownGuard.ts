@@ -26,6 +26,7 @@ import {
   EMERGENCY_STOP_KART_RED_BODY,
 } from "@/services/emergencyStop";
 import { useLiveData } from "@/context/LiveDataContext";
+import { onaySonrasiEngel } from "@/services/hesapGecisi";
 
 /** Donanım BOŞTAYKEN istenen (opsiyonel) ikinci onay — bkz. `TeardownOpts`. */
 export interface IdleConfirm {
@@ -71,7 +72,14 @@ export function useTeardownGuard() {
         // Boşta: tıbbi risk YOK. Yalnız çağıran açıkça istediyse (kazara dokunuş koruması) sor.
         if (!opts?.confirmWhenIdle) return true;
         const { title, body, confirmLabel } = opts.confirmWhenIdle;
-        return platformConfirm(title, body, confirmLabel ?? "Devam et");
+        if (!(await platformConfirm(title, body, confirmLabel ?? "Devam et"))) return false;
+        // S-SGI.6: pencere açıkken seans başladıysa (anlık görüntü pencere süresince bayat) söküm İPTAL — taze durum backend'den.
+        const engel = await onaySonrasiEngel();
+        if (engel) {
+          platformAlert("İşlem iptal edildi", engel);
+          return false;
+        }
+        return true;
       }
 
       const ok = belirsiz
