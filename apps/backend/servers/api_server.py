@@ -7213,10 +7213,12 @@ def _stm_stop_kart_yaniti(stop_sirasi):
     return yanit if yanit in ("kabul", "red") else None
 
 
-def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
+def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma", kalici: bool = True):
     """Tüm transport'lardan (STM 1-5 + ESP 6-8) DONANIM STOP + seans kapat + WS bildir.
     Manuel acil-durdurma + ESP firmware ALARM'ı + STM bağlantı kaybı ortak bunu çağırır.
-    NOT: backend bir sıcaklık/parametre EŞİĞİ dayatmaz; donanımın/operatörün kararına tepki verir."""
+    NOT: backend bir sıcaklık/parametre EŞİĞİ dayatmaz; donanımın/operatörün kararına tepki verir.
+    `kalici=False` YALNIZ launcher'ın BOŞTA kapanış durdurması (`kapanis_durdur`): STOP'lar ve bellekteki mandal AYNEN, yalnız
+    mandal DİSKE yazılmaz (temiz kapanış yeniden başlatmada "önceki oturumda ACİL DURDUR" doğurmasın — D1.75 ilkesi)."""
     import time as _t
 
     # ⚠️ D1.81 · Y4 — MANDAL HER ŞEYDEN ÖNCE (bütün kaynaklar: düğme, STM kopması/reddi/watchdog'u, ESP alarmı). STOP'tan
@@ -7318,9 +7320,10 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     with _cf.ThreadPoolExecutor(max_workers=max(1, len(_estop_coils))) as _ex:
         mqtt_results = list(_ex.map(_estop_one, _estop_coils))
     # ⚠️ Y46: mandal DİSKE — STM ve ESP STOP'ları gönderildikten SONRA, arka planda. Yazma hatası E-stop'u geciktirmez
-    # ya da engellemez (yalnız günlük; Ö.4-Y8).
+    # ya da engellemez (yalnız günlük; Ö.4-Y8). `kalici=False`: boşta kapanış — disk DEĞİŞMEZ (önceki kurulu mandal korunur).
     try:
-        estop_mandali.diske_yaz_arka_planda()
+        if kalici:
+            estop_mandali.diske_yaz_arka_planda()
     except Exception:
         logging.getLogger(__name__).exception("E-stop: mandal diske yazdirilamadi (durdurma tamam)")
     with _live_state_lock:
@@ -7497,6 +7500,54 @@ async def emergency_stop():
     # asılı G/Ç ile doluyken ACİL DURDUR sıra beklemez.
     result = await _durdurma_is_parcaciginda(_emergency_stop_all, "manual", ad="estop-manual")
     _push_notification("Acil durdurma uygulandı", "error")
+    return result
+
+
+#: Launcher'ın kapanış durdurmasının mandal nedeni (arayüz: `EstopMandalBandi.mandalNedeni`).
+KAPANIS_DURDURMA_NEDENI = "uygulama_kapanisi"
+
+
+@app.post("/api/hardware/kapanis_durdur")
+async def kapanis_durdur(request: Request):
+    """Launcher'ın KAPANIŞ durdurması (`launcher/core/src/backend.rs::safe_stop_coils`) — backend öldürülmeden hemen önce.
+
+    SAHİP BİLDİRİMİ (2026-10-18): "uygulama ilk açılışta niye bu uyarıyı veriyor daha yeni açtık … sürekli çıkmasın". ÖLÇÜLDÜ:
+    launcher her pencere kapanışında operatörün ACİL DURDUR ucunu (`/api/hardware/emergency_stop`, neden "manual") çağırıyordu →
+    mandal kurulup DİSKE yazılıyor (Y46) → her açılışta "önceki oturumda ACİL DURDUR — sıfırlanmadı (ACİL DURDUR düğmesi)"
+    (bu makinede 13.10 20:22:26'daki launcher kapanışından). Temiz kapanış bir acil durdurma değildir (D1.75, `kapanis_kur`).
+
+    Davranış: STOP'lar ACİL DURDUR'la BİREBİR (`_emergency_stop_all`; Ö.4-Y8 — gönderim azalmaz) ve bellekteki mandal kurulur
+    (öldürmeye dek START reddi; backend yaşarsa operatör Sıfırla'yı görür). Mandal DİSKE yalnız kapanış anında herhangi bir bobin
+    çalışıyorsa ya da seans sürüyorsa yazılır (Y45 ilkesi: boştayken kesinti mandal kurmaz; seans sürerken kapatma GERÇEK kesinti →
+    yeniden açılışta Sıfırla ister). Durum okunamazsa ÇALIŞIYOR sayılır (`_herhangi_bobin_calisiyor` — güvenli taraf).
+    Yalnız launcher çağırır: SIKI loopback + `{"onay": true}` JSON (tarayıcı çapraz kökenden ön-uçuşsuz gönderemez). Reddedilirse
+    launcher ACİL DURDUR ucuna düşer (bobin durdurma yine olur)."""
+    _istemci = (getattr(getattr(request, "client", None), "host", "") or "").strip()
+    if _istemci not in ("127.0.0.1", "::1"):
+        raise HTTPException(
+            status_code=403, detail="Kapanış durdurması yalnız bu bilgisayardaki launcher'dan çağrılabilir."
+        )
+    if "application/json" not in (request.headers.get("content-type") or "").lower():
+        raise HTTPException(status_code=415, detail='Kapanış durdurması JSON gövde ister: {"onay": true}.')
+    try:
+        _govde = await request.json()
+    except Exception:
+        _govde = None
+    if not isinstance(_govde, dict) or _govde.get("onay") is not True:
+        raise HTTPException(status_code=400, detail='Kapanış durdurması onay ister: {"onay": true}.')
+    with _session_lock:
+        _seans = bool(_active_session.get("is_active"))
+    _kalici = _seans or _herhangi_bobin_calisiyor()
+    result = await _durdurma_is_parcaciginda(
+        _emergency_stop_all, KAPANIS_DURDURMA_NEDENI, "Uygulama Kapanışı", _kalici, ad="estop-kapanis"
+    )
+    result["mandalKalici"] = _kalici
+    if _kalici:
+        _push_notification(
+            "🔒 Uygulama seans / bobin çalışırken kapatıldı — bobinler durduruldu, ACİL DURDUR mandalı kuruldu. Yeniden "
+            'başlatmadan önce bobinleri kontrol edin ve "Sıfırla".',
+            "error",
+        )
     return result
 
 

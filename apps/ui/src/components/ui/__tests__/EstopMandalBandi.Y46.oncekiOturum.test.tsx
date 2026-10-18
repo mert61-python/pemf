@@ -38,6 +38,12 @@ describe("Y46 — önceki oturumdan kalan mandalın bandı", () => {
     expect(u.queryByText(/mandal dosyası okunamadı/)).not.toBeNull();
   });
 
+  it("KRİTİK 2026-10-18: seans / bobin çalışırken kapatılan uygulamanın mandalı nedenini söyler ('ACİL DURDUR düğmesi' DEMEZ)", () => {
+    const u = bant("onceki_oturum:uygulama_kapanisi");
+    expect(u.queryByText(/önceki oturumda ACİL DURDUR — sıfırlanmadı \(uygulama seans ya da bobin çalışırken kapatıldı\)/)).not.toBeNull();
+    expect(u.queryByText(/ACİL DURDUR düğmesi/)).toBeNull();
+  });
+
   it("KARŞIT: bu oturumdaki mandal 'önceki oturum' DEMEZ", () => {
     const u = bant("manual", false);
     expect(u.queryByText(/önceki oturumda/)).toBeNull();

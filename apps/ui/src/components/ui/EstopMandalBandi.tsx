@@ -39,6 +39,8 @@ export function mandalNedeni(neden?: string): string {
     return `önceki oturumda ACİL DURDUR — sıfırlanmadı (${asil})`;
   }
   if (n === "manual") return "ACİL DURDUR düğmesi";
+  // 2026-10-18: launcher kapanışı (`/api/hardware/kapanis_durdur`) — diske YALNIZ bobin çalışırken / seans sürerken yazılır.
+  if (n === "uygulama_kapanisi") return "uygulama seans ya da bobin çalışırken kapatıldı";
   if (n === "stm_disconnected") return "STM32 bağlantı kaybı";
   if (n === "stm_komut_reddi") return "kart komutları reddetti";
   if (n === "stm_watchdog_timeout") return "STM32 watchdog zaman aşımı";

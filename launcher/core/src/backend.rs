@@ -655,8 +655,78 @@ const ESTOP_TIMEOUT_S: u64 = 10;
 /// ALTINDAYDI → kuyruk boşalmadan süreç öldürülebiliyordu.
 const ESTOP_FLUSH_MS: u64 = 1600;
 
+/// Launcher'ın kapanış durdurma ucu (backend `kapanis_durdur`). SAHİP BİLDİRİMİ 2026-10-18 ("uygulama ilk açılışta niye bu
+/// uyarıyı veriyor daha yeni açtık … sürekli çıkmasın"): her pencere kapanışı operatörün ACİL DURDUR ucunu çağırıyordu → mandal
+/// DİSKE yazılıyor, her açılışta "önceki oturumda ACİL DURDUR — sıfırlanmadı" bandı çıkıyordu. Bu uç STOP'ları AYNEN gönderir;
+/// mandalı diske yalnız kapanış anında bobin çalışıyor / seans sürüyorsa yazar.
+const KAPANIS_DURDUR_YOLU: &str = "/api/hardware/kapanis_durdur";
+const ESTOP_YOLU: &str = "/api/hardware/emergency_stop";
+/// Yanıtsız kapanış denemesi bundan KISA sürdüyse (bağlantı reddi) ACİL DURDUR ucu yine denenir; uzun sürdüyse (asılı backend,
+/// zaman aşımı) denenmez — pencere kapanışındaki donma katlanmaz (aşağıdaki DENETİM 2026-08-04 notu).
+const HIZLI_HATA_ESIGI: Duration = Duration::from_secs(2);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DurdurDenemesi {
+    /// Sözleşme yanıtı, `confirmed: true`.
+    Dogrulandi,
+    /// Sözleşme yanıtı, `confirmed: false` ("STM durdu ama MQTT yayınlanamadı") — bir kez daha denenir.
+    Dogrulanmadi,
+    /// HTTP hata durumu (eski backend: 404 / 405; reddedilen istek: 403 / 415 / 400) ya da 200 ama sözleşme yanıtı değil
+    /// (ör. statik sayfa) — uç bu backend'de YOK sayılır.
+    UcYok,
+    /// Yanıt gelmedi (bağlantı reddi / zaman aşımı).
+    Yanitsiz,
+}
+
+fn durdur_iste(url: &str, onay_govdesi: bool) -> DurdurDenemesi {
+    let istek = ureq::post(url).timeout(Duration::from_secs(ESTOP_TIMEOUT_S));
+    let sonuc = if onay_govdesi {
+        istek.set("Content-Type", "application/json").send_string(r#"{"onay":true}"#)
+    } else {
+        istek.call()
+    };
+    match sonuc {
+        Ok(r) => match r
+            .into_string()
+            .ok()
+            .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
+            .and_then(|v| v.get("confirmed").and_then(|c| c.as_bool()))
+        {
+            Some(true) => DurdurDenemesi::Dogrulandi,
+            Some(false) => DurdurDenemesi::Dogrulanmadi,
+            None => DurdurDenemesi::UcYok,
+        },
+        Err(ureq::Error::Status(..)) => DurdurDenemesi::UcYok,
+        Err(_) => DurdurDenemesi::Yanitsiz,
+    }
+}
+
+/// Bobinleri durdur (backend öldürülmeden ÖNCE). Önce kapanış ucu; bu backend'de yoksa ya da reddederse (eski runtime / beklenmeyen
+/// yanıt) ya da bağlantı HIZLA reddedildiyse operatörün ACİL DURDUR ucu — bobin durdurma hiçbir yolda AZALMAZ (Ö.4-Y8).
 pub fn safe_stop_coils(port: u16) {
-    let url = format!("http://127.0.0.1:{port}/api/hardware/emergency_stop");
+    let kapanis = format!("http://127.0.0.1:{port}{KAPANIS_DURDUR_YOLU}");
+    let t0 = Instant::now();
+    let estop_gerekli = match durdur_iste(&kapanis, true) {
+        DurdurDenemesi::Dogrulandi => false,
+        DurdurDenemesi::Dogrulanmadi => {
+            std::thread::sleep(Duration::from_millis(300));
+            let _ = durdur_iste(&kapanis, true);
+            false
+        }
+        DurdurDenemesi::UcYok => true,
+        DurdurDenemesi::Yanitsiz => t0.elapsed() < HIZLI_HATA_ESIGI,
+    };
+    if estop_gerekli {
+        estop_ucuyla_durdur(port);
+    }
+    // Best-effort: doğrulanmasa bile çağıran süreci YİNE öldürür (bu adım güvenliği artırır,
+    // engellemez). Doğrulanmadıysa kuyruğun yazılması için tam bütçeyi tanı.
+    std::thread::sleep(Duration::from_millis(ESTOP_FLUSH_MS));
+}
+
+/// Eski yol (ve kapanış ucu yoksa yedek): operatörün ACİL DURDUR ucu — mandalı diske yazar.
+fn estop_ucuyla_durdur(port: u16) {
+    let url = format!("http://127.0.0.1:{port}{ESTOP_YOLU}");
     // Backend `{"status":"success|partial|error","confirmed":bool,...}` döner ve "bir transport
     // doğrulanamadı" durumunu BİLEREK bildirir. Eski kod yanıtı `let _ =` ile tamamen atıyordu →
     // "STM durdu ama MQTT yayınlanamadı" sinyali görülmüyordu. Doğrulanmazsa BİR KEZ daha dene:
@@ -674,31 +744,13 @@ pub fn safe_stop_coils(port: u16) {
     // ikinci istek hızlı döner ve anlamlıdır ("STM durdu, MQTT yayınlanamadı" → tekrar dene).
     // Yanıt HİÇ gelmediyse (timeout) ikinci 10 sn beklemek hiçbir şey kazandırmaz, yalnız donmayı
     // ikiye katlar. Yeni en kötü durum: ~11,6 sn (10 + flush), yanıtlı-doğrulanmamışta ~12 sn.
+    // Yanıt YOKSA (ulaşılamadı/timeout) ya da sözleşme yanıtı değilse tekrar denemenin faydası yok — donmayı katlamaz.
     for attempt in 0..2u8 {
-        let yanit = ureq::post(&url)
-            .timeout(Duration::from_secs(ESTOP_TIMEOUT_S))
-            .call()
-            .ok()
-            .and_then(|r| r.into_string().ok())
-            .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok());
-        let confirmed = yanit
-            .as_ref()
-            .and_then(|v| v.get("confirmed").and_then(|c| c.as_bool()))
-            .unwrap_or(false);
-        if confirmed {
-            break;
-        }
-        // Yanıt YOKSA (ulaşılamadı/timeout) tekrar denemenin faydası yok — donmayı katlamaz.
-        if yanit.is_none() {
-            break;
-        }
-        if attempt == 0 {
-            std::thread::sleep(Duration::from_millis(300));
+        match durdur_iste(&url, false) {
+            DurdurDenemesi::Dogrulanmadi if attempt == 0 => std::thread::sleep(Duration::from_millis(300)),
+            _ => break,
         }
     }
-    // Best-effort: doğrulanmasa bile çağıran süreci YİNE öldürür (bu adım güvenliği artırır,
-    // engellemez). Doğrulanmadıysa kuyruğun yazılması için tam bütçeyi tanı.
-    std::thread::sleep(Duration::from_millis(ESTOP_FLUSH_MS));
 }
 
 /// ARTAKALAN (orphan) backend süreçlerini sistem-genelinde durdur.
@@ -1293,7 +1345,106 @@ mod tests {
         );
     }
 
-    /// TIBBİ GÜVENLİK: safe_stop_coils, süreç öldürülmeden önce E-stop endpoint'ini POST etmeli.
+    /// Sahte backend: her GERÇEK bağlantıya sıradaki yanıt (`None` = isteği okuyup YANITSIZ kapat → hızlı bağlantı hatası).
+    /// Gelen istek metinleri kanala yazılır.
+    fn sahte_backend(yanitlar: Vec<Option<(u16, &'static str)>>) -> (u16, std::sync::mpsc::Receiver<String>) {
+        use std::io::Read;
+        let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut sira = yanitlar.into_iter();
+            for stream in listener.incoming() {
+                let Ok(mut s) = stream else { continue };
+                // Başlık + `Content-Length` kadar gövde (ureq ikisini ayrı yazabilir).
+                let mut al: Vec<u8> = Vec::new();
+                let mut buf = [0u8; 2048];
+                loop {
+                    let n = s.read(&mut buf).unwrap_or(0);
+                    if n == 0 {
+                        break;
+                    }
+                    al.extend_from_slice(&buf[..n]);
+                    let metin = String::from_utf8_lossy(&al).to_string();
+                    if let Some(son) = metin.find("\r\n\r\n") {
+                        let uzunluk = metin[..son]
+                            .lines()
+                            .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().to_string()))
+                            .and_then(|v| v.parse::<usize>().ok())
+                            .unwrap_or(0);
+                        if al.len() >= son + 4 + uzunluk {
+                            break;
+                        }
+                    }
+                }
+                if al.is_empty() {
+                    continue; // boş yoklama bağlantısı
+                }
+                let _ = tx.send(String::from_utf8_lossy(&al).into_owned());
+                match sira.next() {
+                    Some(Some((kod, govde))) => {
+                        let _ = write!(
+                            s,
+                            "HTTP/1.1 {kod} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{govde}",
+                            govde.len()
+                        );
+                    }
+                    Some(None) => drop(s),
+                    None => break,
+                }
+            }
+        });
+        (port, rx)
+    }
+
+    fn istekler(rx: &std::sync::mpsc::Receiver<String>) -> Vec<String> {
+        let mut v = Vec::new();
+        while let Ok(r) = rx.recv_timeout(Duration::from_millis(300)) {
+            v.push(r);
+        }
+        v
+    }
+
+    /// 2026-10-18 (sahip: "uygulama ilk açılışta niye bu uyarıyı veriyor … sürekli çıkmasın"): kapanış durdurması operatörün
+    /// ACİL DURDUR ucunu DEĞİL kapanış ucunu, bilinçli JSON onayıyla çağırır; uç doğruladıysa ACİL DURDUR ucu ÇAĞRILMAZ (mandal
+    /// diske yazılmaz → sonraki açılışta "önceki oturumda ACİL DURDUR" bandı çıkmaz).
+    #[test]
+    fn KRITIK_kapanis_durdurmasi_KAPANIS_ucunu_onayla_cagirir_ACIL_DURDUR_ucunu_cagirmaz() {
+        let (port, rx) = sahte_backend(vec![Some((200, r#"{"status":"success","confirmed":true,"mandalKalici":false}"#))]);
+        safe_stop_coils(port);
+        let v = istekler(&rx);
+        assert_eq!(v.len(), 1, "fazladan istek: {v:?}");
+        assert!(v[0].starts_with("POST /api/hardware/kapanis_durdur "), "yanlış uç: {}", v[0]);
+        let kucuk = v[0].to_ascii_lowercase();
+        assert!(kucuk.contains("content-type: application/json"), "JSON içerik türü yok: {}", v[0]);
+        assert!(v[0].contains(r#"{"onay":true}"#), "onay gövdesi yok: {}", v[0]);
+    }
+
+    /// TIBBİ GÜVENLİK: kapanış ucu bu backend'de YOKSA (eski runtime: StaticFiles bilinmeyen POST'a 405) ya da sözleşme dışı 200
+    /// dönerse bobin durdurma ATLANMAZ — operatörün ACİL DURDUR ucuna düşülür.
+    #[test]
+    fn KRITIK_eski_backend_ya_da_sozlesme_disi_yanitta_ACIL_DURDUR_ucuna_duser() {
+        for ilk in [(405u16, r#"{"detail":"Method Not Allowed"}"#), (200u16, "<!doctype html><html></html>")] {
+            let (port, rx) = sahte_backend(vec![Some(ilk), Some((200, r#"{"status":"success","confirmed":true}"#))]);
+            safe_stop_coils(port);
+            let v = istekler(&rx);
+            assert_eq!(v.len(), 2, "{ilk:?}: istekler {v:?}");
+            assert!(v[0].starts_with("POST /api/hardware/kapanis_durdur "), "{}", v[0]);
+            assert!(v[1].starts_with("POST /api/hardware/emergency_stop "), "{ilk:?}: ACİL DURDUR'a DÜŞMEDİ: {}", v[1]);
+        }
+    }
+
+    /// TIBBİ GÜVENLİK: bağlantı HIZLA koparsa (yanıtsız) ACİL DURDUR ucu yine denenir.
+    #[test]
+    fn KRITIK_kapanis_ucunda_hizli_baglanti_hatasi_ACIL_DURDUR_ucuna_duser() {
+        let (port, rx) = sahte_backend(vec![None, Some((200, r#"{"status":"success","confirmed":true}"#))]);
+        safe_stop_coils(port);
+        let v = istekler(&rx);
+        assert_eq!(v.len(), 2, "istekler {v:?}");
+        assert!(v[1].starts_with("POST /api/hardware/emergency_stop "), "ACİL DURDUR'a DÜŞMEDİ: {}", v[1]);
+    }
+
+    /// TIBBİ GÜVENLİK: safe_stop_coils, süreç öldürülmeden önce bir durdurma ucunu POST etmeli (kapanış ucu yoksa ACİL DURDUR).
     /// (Bu çağrı kalkarsa seans sürerken pencere kapanışında bobinler açık kalır.)
     #[test]
     fn safe_stop_coils_estop_endpointini_post_eder() {
@@ -1327,9 +1478,10 @@ mod tests {
         safe_stop_coils(port);
         let req = rx
             .recv_timeout(Duration::from_secs(5))
-            .expect("safe_stop_coils E-stop endpoint'ini ÇAĞIRMADI");
+            .expect("safe_stop_coils durdurma ucunu ÇAĞIRMADI");
+        // 2026-10-18: ilk istek kapanış ucudur (bu sahte backend her isteğe `confirmed:true` döner → tek istek).
         assert!(
-            req.starts_with("POST /api/hardware/emergency_stop"),
+            req.starts_with("POST /api/hardware/kapanis_durdur"),
             "yanlış istek gönderildi: {req}"
         );
     }

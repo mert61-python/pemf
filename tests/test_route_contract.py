@@ -91,6 +91,8 @@ GOLDEN_ROUTES = {
     ("/api/hardware/command", "POST"),
     ("/api/hardware/emergency_stop", "POST"),
     ("/api/hardware/estop_mandali/sifirla", "POST"),
+    # 2026-10-18 sahip bildirimi: launcher kapanış durdurması (boşta kapanış mandalı diske yazmaz)
+    ("/api/hardware/kapanis_durdur", "POST"),
     ("/api/hardware/reset_pwm", "POST"),
     ("/api/hardware/selftest", "POST"),
     ("/api/health", "GET"),
@@ -221,4 +223,5 @@ def test_route_contract_unchanged():
     # → 105 (+1 acil durdurma mandalını sıfırla: hardware/estop_mandali/sifirla POST — D1.81 · Y4), 2026-10-01
     # → 106 (+1 operatör sunucu kilidi: operators/lock POST — D2.E14 · İG-6.63), 2026-10-08
     # → 107 (+1 AI kaydı ayrıntısı: ai/log/{analiz_id} GET — Y122/Y126), 2026-10-10
-    assert len(current) == len(beklenen) == 107 - (0 if _simulator_mountlu() else 1)
+    # → 108 (+1 launcher kapanış durdurması: hardware/kapanis_durdur POST — "önceki oturumda ACİL DURDUR" bandı), 2026-10-18
+    assert len(current) == len(beklenen) == 108 - (0 if _simulator_mountlu() else 1)
