@@ -511,8 +511,19 @@ fn home_dir() -> std::path::PathBuf {
         .unwrap_or_else(std::env::temp_dir)
 }
 
+/// ⚠️ 2026-10-18 (sahip: "aynı sorunlu başka işlem de olabilir detaylı incele"): bu komut `async` DEĞİLDİ → pencere iş parçacığında
+/// koşuyordu ve HER açılışta `yarim_takasi_kurtar` → `olu_sahne_agaclarini_temizle` yarım güncellemeden kalan `runtime.new` /
+/// `runtime.bozuk` ağaçlarını (~1,2 GB, binlerce dosya) `remove_dir_all` ile siliyor, geri alma yolunda yeniden adlandırıyordu →
+/// kesilen bir güncellemeden sonra açılış (pencere) saniyelerce donar. `firewall_durumu` ile AYNI desen.
 #[tauri::command]
-fn detect_environment() -> Environment {
+async fn detect_environment() -> Environment {
+    tauri::async_runtime::spawn_blocking(detect_environment_blocking)
+        .await
+        // Görev çökerse kurtarmasız yerel özet (kurtarma bir sonraki açılışta yeniden denenir).
+        .unwrap_or_else(|_| ortam_ozeti(&install::default_install_root(&home_dir())))
+}
+
+fn detect_environment_blocking() -> Environment {
     let root = install::default_install_root(&home_dir());
     // ⚠️ HER ŞEYDEN ÖNCE: yarım kalan çalışma-zamanı takasını kurtar. Güncellemenin iki `rename`i
     // arasında kapanma olduysa `runtime` diskte YOKTUR ve aşağıdaki `already_installed` kontrolü
@@ -521,6 +532,11 @@ fn detect_environment() -> Environment {
     if pemf_launcher_core::flow::yarim_takasi_kurtar(&root) {
         eprintln!("[kurtarma] yarim kalan calisma-zamani takasi onarildi");
     }
+    ortam_ozeti(&root)
+}
+
+fn ortam_ozeti(root: &std::path::Path) -> Environment {
+    let root = root.to_path_buf();
     Environment {
         platform: platform::current().to_string(),
         launcher_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -1008,8 +1024,17 @@ fn plan_to_json(plan: &flow::UpdatePlan) -> serde_json::Value {
 /// Diskteki kurulum manifest'e göre bayat mı? (AĞA ÇIKMAZ — manifest UI'da zaten çekilmiştir.)
 ///
 /// SAHİP KARARI 2026-08-08: kullanıcı "Onar"a basmasın; client açılışta kendi anlasın.
+///
+/// 2026-10-18: diske kayıt yazar / okur (`adopt_unknown_models`, `pending_updates`) ve açılışta + uygulama açıkken PERİYODİK
+/// (`recheckUpdates`) çağrılır → pencere iş parçacığında koşmasın (yavaş disk / virüs taraması pencereyi dondururdu).
 #[tauri::command]
-fn check_runtime_update(manifest_raw: String) -> Result<serde_json::Value, String> {
+async fn check_runtime_update(manifest_raw: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || check_runtime_update_blocking(manifest_raw))
+        .await
+        .map_err(|e| format!("güncelleme denetimi görevi çöktü: {e}"))?
+}
+
+fn check_runtime_update_blocking(manifest_raw: String) -> Result<serde_json::Value, String> {
     let root = install::default_install_root(&home_dir());
     // Kaydı olmayan ESKİ kurulumlarda profil sha'larını önce benimse — yoksa üç profil birden
     // (~2,2 GB) boşuna iner. Base bilerek kapsam dışı: o gerçekten değişmiştir.
@@ -1635,8 +1660,16 @@ fn resume_install(state: tauri::State<'_, AppState>) {
 /// o an inen ≤1,4 GB'lık güncellemeyi çöpe atıyordu. Artık GÜNCEL PLANIN `.part`ları korunuyor.
 /// ⚠️ Manifest YOKSA hiç silme yapılmaz: hangi `.part`ın aktif indirmeye ait olduğu bilinemez ve
 /// yer kazanmak, süren bir güncellemeyi çöpe atmaktan daha az önemlidir (fail-safe).
+///
+/// 2026-10-18: önbellekteki yarım indirme dosyalarını SİLER — pencere iş parçacığında koşmasın (bkz. `firewall_durumu`).
 #[tauri::command]
-fn discard_pending(manifest_raw: Option<String>) -> Result<(), String> {
+async fn discard_pending(manifest_raw: Option<String>) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || discard_pending_blocking(manifest_raw))
+        .await
+        .map_err(|e| format!("temizlik görevi çöktü: {e}"))?
+}
+
+fn discard_pending_blocking(manifest_raw: Option<String>) -> Result<(), String> {
     let root = install::default_install_root(&home_dir());
     install::clear_pending(&root);
     if let Some(m) = manifest_raw {
@@ -2405,6 +2438,15 @@ fn main() {
                     //   • "main" kapandı → SÜREÇ ÇIKIYOR → BLOKLA (yoksa bobin durdurma yarıda
                     //     kalabilir). Ayrıca aşağıda, uçuşta bir arka-plan işi varsa `join` edilir.
                     let is_main = window.label() == "main";
+                    if is_main {
+                        // 2026-10-18 (sahip: "aynı sorunlu başka işlem de olabilir"): ana pencere kapanınca aşağıdaki bobin durdurma
+                        // (E-stop + 1,6 sn kuyruk boşaltma + son oturum yakalama + kill ≈ 2–4 sn) BİLEREK pencere iş parçacığında
+                        // beklenir (süreç çıkıyor, durdurma bitmeden dönülmez). O sürede açık kalan uygulama penceresi DONUK
+                        // görünüyordu ("Yanıt vermiyor"). Önce GİZLE — durdurma AYNEN beklenir, pencere iş bitince kapatılır.
+                        if let Some(appwin) = window.app_handle().get_webview_window("app") {
+                            let _ = appwin.hide();
+                        }
+                    }
                     if let Some((mut child, port)) = state.proc.lock().unwrap().take() {
                         let root = install::default_install_root(&home_dir());
                         let bellek = state.session.clone(); // [S4] job'a taşınır (F5 belleği de tazeler)
@@ -2515,8 +2557,19 @@ mod tests {
     #[test]
     fn KRITIK_bekleyen_is_yapan_komut_PENCERE_is_parcaciginda_kosmaz() {
         let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n"); // çalışma kopyası CRLF olabilir
-        const BEKLEYEN: [&str; 6] =
-            ["gizli_komut(", "durum_icin(", "ps_yukselterek_kos(", "dizin_yazilabilir_mi", "ureq::", "fetch_string"];
+        // 2026-10-18 genişletme (sahip: "aynı sorunlu başka işlem de olabilir detaylı incele"): disk işleri de (ağaç silme / takas
+        // kurtarma / kayıt yazma / yarım indirme silme) — `detect_environment`, `check_runtime_update`, `discard_pending` senkrondu.
+        const BEKLEYEN: [&str; 15] = [
+            "gizli_komut(", "durum_icin(", "ps_yukselterek_kos(", "dizin_yazilabilir_mi", "ureq::", "fetch_string",
+            "yarim_takasi_kurtar(", "adopt_unknown_models(", "pending_updates(", "clear_partials(", "clear_pending(",
+            "remove_dir_all", "fs::remove_file", "fs::rename", "fs::write",
+        ];
+        // Senkron kalmasına İZİN verilen komutlar: yalnız ANLIK iş (atomik bayrak, kısa kilitli kopya, pencere yoklaması,
+        // beklemeden süreç başlatma). Listede olmayan YENİ senkron komut → kırmızı: pencere iş parçacığında koşar, gözden geçir.
+        const ANLIK: [&str; 8] = [
+            "app_window_open", "get_progress", "get_prefetch_progress", "pause_install", "cancel_install", "resume_install",
+            "guncelleme_modu", "open_url",
+        ];
         let mut ihlal = Vec::new();
         for parca in soy.split("#[tauri::command]").skip(1) {
             let govde = &parca[..parca.find("\n}\n").unwrap_or(parca.len())];
@@ -2525,15 +2578,32 @@ mod tests {
                 let ad = bas[3..].split('(').next().unwrap_or("?").to_string();
                 if let Some(m) = BEKLEYEN.iter().find(|m| govde.contains(**m)) {
                     ihlal.push(format!("{ad} ({m})"));
+                } else if !ANLIK.contains(&ad.as_str()) {
+                    ihlal.push(format!("{ad} (anlık iş listesinde değil)"));
                 }
             }
         }
         assert!(ihlal.is_empty(), "pencere iş parçacığında bekleyen senkron komut(lar): {ihlal:?}");
-        for ad in ["fetch_profiles", "firewall_durumu", "firewall_kurali_ekle", "yedek_hedefi_durumu", "yedek_hedefi_sec"] {
+        for ad in [
+            "fetch_profiles", "firewall_durumu", "firewall_kurali_ekle", "yedek_hedefi_durumu", "yedek_hedefi_sec",
+            "detect_environment", "check_runtime_update", "discard_pending",
+        ] {
             let bas = soy.find(&format!("async fn {ad}(")).unwrap_or_else(|| panic!("{ad} async DEĞİL"));
             let govde = &soy[bas..bas + soy[bas..].find("\n}\n").expect("gövde sonu")];
             assert!(govde.contains("spawn_blocking"), "{ad}: bekleyen gövde ayrı iş parçacığına alınmıyor");
         }
+    }
+
+    /// 2026-10-18: ana pencere kapanınca bobin durdurma BİLEREK beklenir (süreç çıkıyor) — ama açık uygulama penceresi o 2–4 sn
+    /// DONUK görünmesin: gizleme, bekleyen işten (`job()`) ÖNCE gelmeli; durdurma yine BEKLENİR (arka plana atılmaz).
+    #[test]
+    fn KRITIK_ana_pencere_kapanisinda_uygulama_penceresi_bekleyen_durdurmadan_ONCE_gizlenir() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n");
+        let bas = soy.find(".on_window_event(").expect("pencere olay işleyicisi yok");
+        let blok = &soy[bas..bas + soy[bas..].find(".run(ctx)").expect("olay işleyicisi sonu")];
+        let gizle = blok.find("appwin.hide()").expect("ana pencere kapanışında uygulama penceresi GİZLENMİYOR");
+        let bekle = blok.find("job();").expect("ana pencere kapanışında bobin durdurma artık BEKLENMİYOR");
+        assert!(gizle < bekle, "uygulama penceresi bobin durdurma bekleyişinden SONRA gizleniyor (o sürede donuk görünür)");
     }
 
     /// C2 (denetim 2026-08-24): `check_runtime_update`'in UI'ya döndürdüğü JSON, flow'un
