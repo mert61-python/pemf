@@ -166,11 +166,17 @@ async def _get_desktop_session(request: Request):
 
 @router.delete("/api/auth/desktop-session")
 async def _clear_desktop_session(request: Request):
-    """Çıkış — idempotent (oturum yoksa da 200; client tekrar denemek zorunda kalmasın)."""
+    """Çıkış — idempotent (oturum yoksa da 200; client tekrar denemek zorunda kalmasın).
+
+    ⚠️ 2026-10-18 (auth_session.bin kaybı, sahip kararı): çıkış İŞARETİ bırakılır — sonraki GET `{"cikis": true}` döner
+    (jeton YOK). Launcher'ın çekme döngüsü bunu görüp kendi "Beni hatırla" kaydını HEMEN siler; eskiden boş devri `{}`
+    "oturum yok" sayıp yok sayıyor, ölü jeton diskte kalıyor ve sonraki açılışta kayıt SESSİZCE siliniyordu. Yeni devir
+    (POST) sözlüğü baştan kurar → işaret kalkar. Backend yeniden başlarsa işaret de gider (`{}` ≠ çıkış)."""
     if _desktop_forbidden(request):
         return _desktop_403()
     with _desktop_lock:
         _desktop_session.clear()
+        _desktop_session["cikis"] = True
     return {"ok": True}
 
 

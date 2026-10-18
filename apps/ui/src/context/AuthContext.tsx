@@ -194,8 +194,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // yenileme deneniyor, GoTrue açıkça reddediyor ve client kayıtlı oturumu SİLİYORDU →
       // kullanıcıdan yeniden e-posta+parola isteniyordu.
       // Döngüyü burada kapatıyoruz: her döndürmede yeni oturumu client'a geri yaz.
+      // 🔴 SAHA (2026-10-17, auth_session.bin kaybı · sahip kararı 2026-10-18): pencerede YENİ giriş (`SIGNED_IN` — çıkış +
+      // yeniden giriş, hesap ekleme / geçiş) launcher'a hiç gitmiyordu; launcher sunucuda silinmiş oturumun jetonuyla kalıyor,
+      // sonraki açılışta "Beni hatırla" sessizce siliniyordu. Launcher pencerenin SON hesabını hatırlar → yeni giriş de yazılır
+      // (devirden kurulan aynı oturumun yankısı zararsız: launcher değişmemiş jetonu yazmaz).
       // ⚠️ Yalnız masaüstünde ve SESSİZ (mobilde `pushDesktopSession` zaten erken döner).
-      if (_event === "TOKEN_REFRESHED" && s?.access_token && s?.refresh_token) {
+      const launcheraYaz = _event === "TOKEN_REFRESHED" || _event === "SIGNED_IN";
+      if (launcheraYaz && s?.access_token && s?.refresh_token) {
         void pushDesktopSession({
           access_token: s.access_token,
           refresh_token: s.refresh_token,
@@ -295,7 +300,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await hesaplariYenile();
       return r;
     }
-    await clearDesktopSession(); // masaüstü: çıkılan hesabın devri sayfa yenilemede geri gelmesin
+    // S-SGI.7 (sahip kararı 2026-10-18): devir SİLİNMEZ — geçilen hesabın `SIGNED_IN`i onu devre (ve launcher'ın "Beni
+    // hatırla"sına) yazar. Eskiden burada `clearDesktopSession()` vardı: launcher hesabı OLMAYAN ikinci hesaptan çıkınca da
+    // devir siliniyor, pencere yenilenince launcher hesabı da giriş istiyordu (yeni sözleşmede silme = launcher'a ÇIKIŞ işareti).
     await parkHesabindanCik(eposta); // …sonra cihazdan silinir (+ sunucuda iptal, en-iyi-çaba)
     await hesaplariYenile();
     return { ok: true };

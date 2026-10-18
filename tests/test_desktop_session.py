@@ -65,7 +65,9 @@ def test_yuvarlak_yol_post_get_delete():
     assert veri["expires_at"] == 1893456000  # sayı olarak KORUNMALI (Supabase int gönderir)
 
     assert c.delete("/api/auth/desktop-session").json() == {"ok": True}
-    assert c.get("/api/auth/desktop-session").json() == {}
+    # 2026-10-18 (sahip kararı): çıkıştan sonra jeton YOK, launcher için çıkış işareti var
+    # (tests/test_desktop_session_CIKIS_isareti_launcher_kaydini_temizler.py).
+    assert c.get("/api/auth/desktop-session").json() == {"cikis": True}
 
 
 def test_oturum_yokken_GET_bos_sozluk_200():
