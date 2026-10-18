@@ -113,6 +113,12 @@ _CANLI_UNUTMA_SN = 4 * 3600.0
 _CANLI_UCLAR: frozenset = frozenset(
     {"/api/ai/vision/landmark", "/api/ai/vision/segmentation", "/api/ai/vision/thermal", "/api/ai/vision/cat_organ"}
 )
+#: S-SGI.2 (sahip kararı 2026-10-18 "Kare tavanını şimdi ekle"): canlı dakika kovası başına kare TAVANI. Ölçüldü (SGI-2.1): canlı
+#: başlığını ekleyen DEĞİŞTİRİLMİŞ istemci dakikada sınırsız elle analizi 1 jetona yaptırabiliyordu. Arayüzün canlı döngüsü kare
+#: başlangıçları arasında en az 1 sn bekler (`utils/canliKare.CANLI_ASGARI_ARALIK_MS`) → meşru canlı kip 60 sn'lik kovada ≤ 60 kare.
+#: Tavanı AŞAN kare canlı dakika fiyatından ÇIKAR, elle analiz gibi kare başı ("goruntu") ücretlenir (402 değil — analiz sürer).
+#: Ticari ayar: `PEMF_JETON_CANLI_KARE_TAVANI` (bozuk değer → varsayılan; 1'in altı 1).
+CANLI_KARE_TAVANI: int = max(1, _sayi("PEMF_JETON_CANLI_KARE_TAVANI", 60))
 
 
 def _istek_yolu(request) -> str:
@@ -152,6 +158,16 @@ def _canli_istek_id(sahip: str, oturum: str, kova: int) -> str:
     with _canli_kilit:
         d = _canli_oturumlar.get((sahip, oturum)) or {}
         return f"canli-{oturum}-{d.get('nesil', '0')}-{kova}"
+
+
+def _canli_kare_say(sahip: str, oturum: str, kova: int) -> int:
+    """S-SGI.2: (sahip, oturum)'un bu dakika kovasında KARAR'a gelen kaçıncı kare (1'den başlar). Yalnız güncel kova tutulur."""
+    with _canli_kilit:
+        d = _canli_oturumlar.setdefault((sahip, oturum), _yeni_canli_kaydi(time.monotonic()))
+        if d.get("kare_kova") != kova:
+            d["kare_kova"], d["kare_sayi"] = kova, 0
+        d["kare_sayi"] += 1
+        return d["kare_sayi"]
 
 
 def _canli_kova_ucretli_mi(sahip: str, oturum: str, kova: int) -> bool:
@@ -729,7 +745,11 @@ def _jeton_on_karari(request: Request) -> "Callable[[], Karar] | None":
     if canli:
         sahip = _jwt_sahip(token) or ""
         kova = _canli_kova(sahip, oturum)
-        if _canli_kova_ucretli_mi(sahip, oturum, kova):
+        if _canli_kare_say(sahip, oturum, kova) > CANLI_KARE_TAVANI:
+            # S-SGI.2: meşru canlı döngünün (≥ 1 sn) bir dakikada ulaşamayacağı kare → canlı dakika fiyatından çıkar, kare başı
+            # ("goruntu") ücretlenir — ödenmiş dakikanın "kareler ücretsiz" kısa devresi de UYGULANMAZ.
+            canli = False
+        elif _canli_kova_ucretli_mi(sahip, oturum, kova):
             # SGI-2.3 (Y148 "kareler ücretsiz"): bu canlı dakika ZATEN ödendi → kare ağa çıkmadan serbest; bakiye okunmaz, 402
             # verilmez (eskiden son jetonla ödenen dakikanın sonraki kareleri bakiye 0 görüp 402 alıyordu — ölçüldü).
             return None
