@@ -52,8 +52,12 @@ def test_KRITIK_1_pencere_DONDURULEN_jetonu_geri_yazar():
         "AuthContext jeton DONDURME olayini dinlemiyor — pencere jetonu yeniler, launcher "
         "haberdar olmaz ve diskteki kopya bayatlar (saha arizasi 2026-08-24)"
     )
-    i = s.find("TOKEN_REFRESHED")
-    assert "pushDesktopSession" in s[i : i + 500], "olay dinleniyor ama oturum GERI YAZILMIYOR"
+    # SGI-1.3 (bağımsız inceleme): dosyada `TOKEN_REFRESHED` birden çok yerde geçebilir ("Hesap ekle" sürerken etkin hesabın yenilemesi
+    # park kopyasını tazeler) — eskiden yalnız İLK geçişe bakılıyordu ve o ekleme kapıyı yanlış yere baktırdı. Ölçüt aynı: olayın
+    # dalında (koşulun hemen ardında) oturum geri yazılır.
+    assert any(
+        "pushDesktopSession" in s[m.start() : m.start() + 500] for m in re.finditer(r'_event === "TOKEN_REFRESHED"', s)
+    ), "olay dinleniyor ama oturum GERI YAZILMIYOR"
 
 
 def test_KRITIK_1b_geri_yazma_ucu_dogru():
