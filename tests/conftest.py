@@ -290,6 +290,22 @@ def _kosu_kaydi_sizmaz():
 
 
 @pytest.fixture(autouse=True)
+def _jeton_rezervleri_sizmaz():
+    """S-SGI.3: eşzamanlı analiz ayrımları (`servers.jeton._rezervler`) modül-geneldir. Kararı alıp tüketmeyen test (yalnız kararı
+    sınayan kapı testleri) ayrımı 300 sn bırakır → aynı sahiple sonraki testin son jetonu SIRAYA bağlı 402 alır. Her test ayrımları
+    kendinden ÖNCEKİ hâline YERİNDE geri alarak biter (`_kosu_kaydi_sizmaz` ilkesi; modül İÇE AKTARILMAZ, `monkeypatch` istenmez)."""
+    jt = sys.modules.get("servers.jeton")
+    once = {k: {r: list(v) for r, v in d.items()} for k, d in getattr(jt, "_rezervler", {}).items()}
+    yield
+    jt = sys.modules.get("servers.jeton")
+    if jt is None or not hasattr(jt, "_rezervler"):
+        return
+    with jt._REZERV_KILIT:
+        jt._rezervler.clear()
+        jt._rezervler.update(once)
+
+
+@pytest.fixture(autouse=True)
 def _canli_tedavi_durumu_sizmaz():
     """H-5.2 (1-H incelemesi) — canlı durumun `activeTreatment`'ı (`live_state._live_state`) modül-geneldir. Ölçüldü:
     `test_nack_gorunurlugu.py` `_active_session`'ı kapatıp `activeTreatment.isActive=True` BIRAKIYOR (D1.41 nöbeti yalnız

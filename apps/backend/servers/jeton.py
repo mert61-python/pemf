@@ -246,6 +246,98 @@ class Karar:
     sebep: str = ""
 
 
+# ── EŞZAMANLI ANALİZ REZERVASYONU (S-SGI.3 · sahip kararı 2026-10-18 "Rezervasyon ekle") ─────────────────────────────────────
+# Ölçülen boşluk (SGI-2.5): KARAR analiz başlarken, TÜKETİM analiz teslim edilince — aradaki pencere analiz süresi kadar. Bakiye 1
+# iken eşzamanlı 4 analiz 4 teslim aldı (1 düşüldü, 3 deftere "borç"); çevrimdışı tavan 50 (49 dolu) iken eşzamanlı 4 analiz →
+# defter 53. KURAL: karar anında `kalan − ayrılmış ≥ maliyet`; izinli analiz maliyetini AYIRIR; teslimde "tüketildi" işaretlenir,
+# teslim edilmezse (uç istisnası, sonuçsuz canlı kare, kopan istemci) BIRAKILIR. Anahtar: çevrimiçi ön ödemede SAHİP (hesap
+# bakiyesi), çevrimdışında CİHAZ geneli (tavan cihazın defterini sayar). Kullandıkça öde (borç tavanı) DEĞİŞMEDİ.
+# ⚠️ Tüketilmiş ayrım, tüketimden ÖNCE başlamış bakiye okumalarına `_TUKETILMIS_IZ_SN` boyunca görünür kalır: okuma eski bakiyeyi
+# getirip karar tüketimden SONRA verilirse tüketim iki kez yok sayılmasın. Süreç içidir (aynı hesabın iki cihazı arasındaki yarışı
+# sunucunun satır kilidi çözer; o yarışın `yetersiz` cevabı deftere borç YAZILMAZ — `_tuket`).
+_REZERV_KILIT = threading.Lock()
+#: anahtar → {istek_id: [miktar, ayrılma anı, tüketim anı | None]}
+_rezervler: dict = {}
+#: Açık bırakma kaçarsa (karar ile tüketim bağımlılığı arasında kesilen istek) ayrımın sızıntı tavanı.
+_REZERV_OMRU_SN = 300.0
+#: Tüketilmiş ayrımın eski okumalara görünür kaldığı süre (bakiye okuması `_SUPABASE_TIMEOUT` ile sınırlı).
+_TUKETILMIS_IZ_SN = 30.0
+_CEVRIMDISI_ANAHTAR = "cevrimdisi:cihaz"
+
+
+def _rezerve_et(anahtar: str, rid: str, miktar: int, kalan: int, okuma_ani: float) -> bool:
+    """`kalan` (okuma_ani'nda başlamış okumanın gördüğü) − ayrılmış ≥ miktar ise ayır ve True. Aynı `rid` (canlı dakika kovası:
+    sunucuda idempotent) ikinci kez sayılmaz."""
+    simdi = time.monotonic()
+    with _REZERV_KILIT:
+        d = _rezervler.setdefault(anahtar, {})
+        for k in [
+            k
+            for k, (_m, t, tc) in d.items()
+            if (tc is None and simdi - t > _REZERV_OMRU_SN) or (tc is not None and simdi - tc > _TUKETILMIS_IZ_SN)
+        ]:
+            d.pop(k, None)
+        if rid in d:
+            return True
+        ayrilan = sum(m for (m, _t, tc) in d.values() if tc is None or tc > okuma_ani)
+        if kalan - ayrilan < miktar:
+            return False
+        d[rid] = [miktar, simdi, None]
+        return True
+
+
+def _rezervi_kapat(anahtar: str, rid: str, tuketildi: bool) -> None:
+    with _REZERV_KILIT:
+        d = _rezervler.get(anahtar) or {}
+        r = d.get(rid)
+        if r is None or r[2] is not None:
+            return
+        if tuketildi:
+            r[2] = time.monotonic()
+        else:
+            d.pop(rid, None)
+
+
+class _RezervliTuketici:
+    """S-SGI.3: tüketici + ayrım. Çağrı tüketir ve ayrımı kapatır (jeton düştüyse "tüketildi", düşmediyse bırakılır); `birak()`
+    tüketmeden bırakır. İkisi de yalnız bir kez etkilidir."""
+
+    def __init__(self, fn: "Callable[[], Karar]", anahtar: str, rid: str) -> None:
+        self._fn, self._anahtar, self._rid = fn, anahtar, rid
+
+    def __call__(self) -> Karar:
+        try:
+            k = self._fn()
+        except BaseException:
+            self.birak()
+            raise
+        self._kapat(bool(getattr(k, "jeton_harcandi", 0)))
+        return k
+
+    def birak(self) -> None:
+        self._kapat(False)
+
+    def _kapat(self, tuketildi: bool) -> None:
+        if self._rid is not None:
+            _rezervi_kapat(self._anahtar, self._rid, tuketildi)
+            self._rid = None
+
+
+class _KesinRed:
+    """Sunucu tüketimi KESİN reddetti (`jeton_tuket` → `yetersiz`). Yanlış değerlidir (eski `bool(...)` çağıranlar için "gitmedi")."""
+
+    __slots__ = ()
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __repr__(self) -> str:
+        return "TUKETIM_REDDEDILDI"
+
+
+TUKETIM_REDDEDILDI = _KesinRed()
+
+
 #: 4B-1.4: atomik yazımın geçici dosyası ve bozuk defterin karantina dosyası (`<defter>` + ek). SABİT adlar: KVKK tam temizliği
 #: (`scripts/pemf_footprint.ps1`) defterle BİRLİKTE bunları da siler — ek değişirse orası da güncellenmeli.
 DEFTER_GECICI_EKI = ".tmp"
@@ -290,12 +382,15 @@ class JetonYoneticisi:
         odeme_modeli: str = "on_odemeli",
         borc_okuyucu: Callable[[], int] | None = None,
         sahip: str | None = None,
+        okuma_ani: float | None = None,
     ) -> None:
         """`odeme_modeli`:
         · "on_odemeli"  → plan hakkı/satın alınan jetondan düşer; bakiye biterse analiz durur.
         · "kullandikca" → önden ödeme YOK; tüketim borç olarak birikir, dönem sonunda faturalanır.
         `borc_okuyucu` yalnız kullandıkça-öde modelinde kullanılır (birikmiş, faturalanmamış jeton).
         `sahip`: jetonu kullananın kimlik özeti (`_jwt_sahip`) — çevrimdışı kayda yazılır; uzlaştırma yalnız bu sahibin kayıtlarını gönderir.
+        `okuma_ani`: S-SGI.3 — bakiye okumasının BAŞLADIĞI an (`time.monotonic`), okuyucu önceden okunmuş değeri döndürüyorsa (kapı);
+        verilmezse `on_izin` okumadan hemen önceki anı kullanır.
         """
         self._bakiye_oku = bakiye_okuyucu
         self._tuketim_gonder = tuketim_gonderici
@@ -304,6 +399,7 @@ class JetonYoneticisi:
         self._odeme_modeli = odeme_modeli
         self._borc_oku = borc_okuyucu or (lambda: 0)
         self._sahip = sahip
+        self._okuma_ani = okuma_ani
 
     # ── Yerel defter (çevrimdışı tüketim) ───────────────────────────────────
     def _defteri_oku(self) -> list[dict]:
@@ -416,11 +512,16 @@ class JetonYoneticisi:
             )
 
         # 3) Bakiye okunamıyorsa (çevrimdışı klinik) → tavana kadar İZİN + borç kaydı.
+        okuma_ani = self._okuma_ani if self._okuma_ani is not None else time.monotonic()
         try:
             bakiye = int(self._bakiye_oku())
         except Exception:
+            defter_ani = time.monotonic()
             bekleyen = self.bekleyen_tuketim_sayisi()
-            if bekleyen >= OFFLINE_TAVAN:
+            # S-SGI.3: tavan cihazın defterini sayar → eşzamanlı çevrimdışı analizler kayıt yerini CİHAZ genelinde ayırır.
+            if bekleyen >= OFFLINE_TAVAN or not _rezerve_et(
+                _CEVRIMDISI_ANAHTAR, iid, 1, OFFLINE_TAVAN - bekleyen, defter_ani
+            ):
                 return Karar(
                     izinli=False,
                     mesaj=(
@@ -444,23 +545,33 @@ class JetonYoneticisi:
                 )
                 return Karar(izinli=True, jeton_harcandi=maliyet, sebep="cevrimdisi")
 
-            return Karar(izinli=True, jeton_harcandi=maliyet, sebep="cevrimdisi"), _cevrimdisi_tuket
+            return Karar(izinli=True, jeton_harcandi=maliyet, sebep="cevrimdisi"), _RezervliTuketici(
+                _cevrimdisi_tuket, _CEVRIMDISI_ANAHTAR, iid
+            )
 
         # 4) Bakiye yetersiz → YALNIZ analiz reddedilir (tedavi yolu buraya hiç gelmez — `_islem_turu`).
-        if bakiye < maliyet:
+        # S-SGI.3: aynı hesabın bu süreçte SÜREN analizlerinin ayırdığı jeton da düşülür (eşzamanlı N analiz bakiyeyi aşamaz).
+        anahtar = f"sahip:{self._sahip or ''}"
+        if bakiye < maliyet or not _rezerve_et(anahtar, iid, maliyet, bakiye, okuma_ani):
             return Karar(izinli=False, mesaj=_YETERSIZ_MESAJ, sebep="yetersiz"), None
 
         # 5) Tüketimi gönder. Gönderim düşerse analiz DURMAZ — kayıt deftere düşer (fail-open).
-        return Karar(izinli=True, jeton_harcandi=maliyet, sebep="tuketilecek"), (
-            lambda: self._tuket(maliyet, islem, iid, cihaz_id, tur="analiz")
+        return Karar(izinli=True, jeton_harcandi=maliyet, sebep="tuketilecek"), _RezervliTuketici(
+            lambda: self._tuket(maliyet, islem, iid, cihaz_id, tur="analiz"), anahtar, iid
         )
 
     def _tuket(self, maliyet: int, islem: str, iid: str, cihaz_id: str | None, tur: str) -> Karar:
         """Tüketimi gönderir; gönderilemezse yerel deftere yazar (iki ödeme modelinde de ortak)."""
         try:
-            gitti = bool(self._tuketim_gonder(miktar=maliyet, tur=tur, detay=islem, istek_id=iid, cihaz_id=cihaz_id))
+            sonuc = self._tuketim_gonder(miktar=maliyet, tur=tur, detay=islem, istek_id=iid, cihaz_id=cihaz_id)
         except Exception:
-            gitti = False
+            sonuc = False
+        if sonuc is TUKETIM_REDDEDILDI:
+            # S-SGI.3: sunucu KESİN reddetti (bakiye başka cihazda / süreçte bitti) — deftere "borç" YAZILMAZ: kayıt bakiye
+            # yüklenene dek her uzlaştırmada yeniden reddedilirdi. Analiz teslim edildi; bu tek analiz ücretsiz kalır (sahip kararı).
+            logger.warning("jeton: sunucu tüketimi reddetti (yetersiz) — analiz teslim edildi, deftere borç yazılmadı")
+            return Karar(izinli=True, jeton_harcandi=0, sebep="sunucu_yetersiz")
+        gitti = bool(sonuc)
         if not gitti:
             self._bekleyene_ekle(
                 {
@@ -617,8 +728,8 @@ def _bakiye_satiri_oku(token: str) -> dict:
     return rows[0]
 
 
-def _tuketim_gonder_canli(token: str, **k) -> bool:
-    """rpc/jeton_tuket — atomik düşüm (satır kilidi + istek_id idempotansı RPC içinde)."""
+def _tuketim_gonder_canli(token: str, **k) -> "bool | _KesinRed":
+    """rpc/jeton_tuket — atomik düşüm (satır kilidi + istek_id idempotansı RPC içinde). Kesin `yetersiz` → `TUKETIM_REDDEDILDI`."""
     from utils.secrets_manager import get_secret
 
     base = (get_secret("supabase_url", default="", generate=False) or "").rstrip("/")
@@ -643,6 +754,8 @@ def _tuketim_gonder_canli(token: str, **k) -> bool:
         if not r.ok:
             return False
         sonuc = r.json() if r.content else {}
+        if isinstance(sonuc, dict) and sonuc.get("ok") is False and sonuc.get("sebep") == "yetersiz":
+            return TUKETIM_REDDEDILDI  # S-SGI.3: kesin red (yanlış değerli — uzlaştırmada kayıt AYNEN kalır, Y24)
         return bool(isinstance(sonuc, dict) and sonuc.get("ok"))
     except Exception:
         return False
@@ -753,6 +866,7 @@ def _jeton_on_karari(request: Request) -> "Callable[[], Karar] | None":
             # SGI-2.3 (Y148 "kareler ücretsiz"): bu canlı dakika ZATEN ödendi → kare ağa çıkmadan serbest; bakiye okunmaz, 402
             # verilmez (eskiden son jetonla ödenen dakikanın sonraki kareleri bakiye 0 görüp 402 alıyordu — ölçüldü).
             return None
+    okuma_ani = time.monotonic()  # S-SGI.3: okumanın başladığı an — okuma sürerken tamamlanan tüketim yok sayılmasın
     try:
         satir = _bakiye_satiri_oku(token)
     except Exception:
@@ -781,6 +895,7 @@ def _jeton_on_karari(request: Request) -> "Callable[[], Karar] | None":
         odeme_modeli=model,
         borc_okuyucu=lambda borc=borc: borc,
         sahip=_jwt_sahip(token),  # D4.23 eki: çevrimdışı kayıt tüketene bağlanır
+        okuma_ani=okuma_ani,
     )
     yonetici._kilit = _GATE_DEFTER_KILIT  # defter dosyası paylaşımlı → kilit de paylaşımlı
 
@@ -791,10 +906,12 @@ def _jeton_on_karari(request: Request) -> "Callable[[], Karar] | None":
 
             def _canli_tuketici(asil=asil, sahip=sahip, oturum=oturum, kova=kova) -> Karar:
                 if not _canli_kovayi_al(sahip, oturum, kova):
+                    _tuketmeden_birak(asil)  # S-SGI.3: kova başka karede ödendi — bu karenin ayrımı bırakılır
                     return Karar(izinli=True, sebep="canli_dakika_odendi")
                 return asil()
 
             _canli_tuketici.canli = True  # type: ignore[attr-defined]
+            _canli_tuketici.birak = lambda asil=asil: _tuketmeden_birak(asil)  # type: ignore[attr-defined]
             tuketici = _canli_tuketici
         if not karar.izinli:
             raise HTTPException(status_code=402, detail=karar.mesaj or _YETERSIZ_MESAJ)
@@ -809,6 +926,16 @@ def _jeton_on_karari(request: Request) -> "Callable[[], Karar] | None":
 
 #: `jeton_gate`in izinli analize bıraktığı tüketicinin istek kapsamındaki adı (`request.state`; `jeton_tuketimi` okur).
 _BEKLEYEN_TUKETIM = "jeton_bekleyen_tuketim"
+
+
+def _tuketmeden_birak(tuketici) -> None:
+    """S-SGI.3: analiz teslim edilmedi → tüketicinin ayırdığı jeton / defter yeri bırakılır (ayrımsız tüketicide no-op)."""
+    birak = getattr(tuketici, "birak", None)
+    if callable(birak):
+        try:
+            birak()
+        except Exception:
+            logger.debug("jeton: ayrım bırakılamadı (ömür dolunca düşer)", exc_info=True)
 
 
 async def jeton_gate(request: Request) -> None:
@@ -856,14 +983,21 @@ async def jeton_tuketimi(request: Request):
 
     ⚠️ Serbest uç / kapalı bayrak: `jeton_gate` tüketici bırakmaz → burada havuza da ağa da girilmez (O-1.1, Ö.4-Y8).
     ⚠️ Tüketim hiçbir koşulda başarılı yanıtı bozmaz: gönderim düşerse kayıt yerel deftere yazılır (`_tuket`), beklenmeyen hata
-    yalnız günlüğe gider."""
-    yield
+    yalnız günlüğe gider.
+    ⚠️ S-SGI.3: teslim edilmeyen her yolda (istisna, sonuçsuz canlı kare, kopan istemci) kararın AYIRDIĞI jeton bırakılır."""
+    try:
+        yield
+    except BaseException:
+        _tuketmeden_birak(getattr(request.state, _BEKLEYEN_TUKETIM, None))
+        setattr(request.state, _BEKLEYEN_TUKETIM, None)
+        raise
     tuketici = getattr(request.state, _BEKLEYEN_TUKETIM, None)
     if tuketici is None:
         return
     setattr(request.state, _BEKLEYEN_TUKETIM, None)
     if getattr(tuketici, "canli", False) and _SONUC_YOK.get():
         # TD9: canlı karede kedi / yüz / organ BULUNAMADI → bu kare dakikayı ücretlendirmez (kedisiz dakika 0 jeton).
+        _tuketmeden_birak(tuketici)
         return
     try:
         if await _istemci_koptu_mu(request):
@@ -871,6 +1005,7 @@ async def jeton_tuketimi(request: Request):
                 "jeton: istemci yanıtı beklemeden koptu — sonuç teslim edilemedi, jeton DÜŞÜLMEDİ (%s)",
                 request.url.path,
             )
+            _tuketmeden_birak(tuketici)
             return
     except Exception:
         pass  # kopma sorusu yanıtlanamazsa analiz teslim edilecek sayılır (bugünkü davranış)
