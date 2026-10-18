@@ -2082,8 +2082,19 @@ fn spawn_uninstaller_detached(uninstaller: &std::path::Path) -> Result<(), Strin
 /// kurulumda inbound kural HİÇ oluşturulmuyordu (client kurulumu `currentUser` → NSIS
 /// yükseltilmiş değil; kuralları yalnız ESKİ servis kurulumu ekliyor). Sonuç: yayınlanan mobil
 /// APK klinik WiFi'sinde cihaza HİÇ bağlanamıyor ve sebebi hiçbir yerde yazmıyor.
+///
+/// ⚠️ SAHİP BİLDİRİMİ 2026-10-18 ("güncelleme kontrol ediliyor yazarken pencere bloklanıyor hareket ettiremiyorum"): bu komut
+/// `async` DEĞİLDİ → Tauri senkron komutu OLAY DÖNGÜSÜ (pencere) iş parçacığında koşturur; gövde `powershell` başlatıp
+/// `Get-NetFirewallApplicationFilter` ile TÜM kuralları tarıyor (bu makinede 713 kural: ölçüldü 2,2–2,4 sn, soğuk açılışta
+/// daha uzun). Launcher açılışta (`refreshEnv` → `firewallKontrol(false)`) ve backend başlayınca bunu çağırıyordu → pencere
+/// o süre sürüklenemiyor / tıklamalara yanıt vermiyordu. `fetch_profiles` ile AYNI desen: `async fn` + `spawn_blocking`.
 #[tauri::command]
-fn firewall_durumu() -> serde_json::Value {
+async fn firewall_durumu() -> serde_json::Value {
+    // Görev çökerse boş nesne: arayüz uyarı göstermez (okunamayan durum ENGEL sayılmaz — firewall.rs fail-open notu).
+    tauri::async_runtime::spawn_blocking(firewall_durumu_blocking).await.unwrap_or_else(|_| serde_json::json!({}))
+}
+
+fn firewall_durumu_blocking() -> serde_json::Value {
     use pemf_launcher_core::firewall::{durum_icin, Durum};
     // ⚠️ backend exe YOLUNU ver: Windows'un KENDİ otomatik izni de sayılsın. Yol verilmezse
     // denetim yalnız bizim adlandırılmış kurallarımıza bakar ve Windows zaten izin vermiş
@@ -2139,8 +2150,15 @@ fn ps_yukselterek_kos(betik: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// 2026-10-18: UAC istemi + yükseltilmiş PowerShell BEKLENİR — pencere iş parçacığında koşmasın (bkz. `firewall_durumu`).
 #[tauri::command]
-fn firewall_kurali_ekle() -> Result<serde_json::Value, String> {
+async fn firewall_kurali_ekle() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(firewall_kurali_ekle_blocking)
+        .await
+        .map_err(|e| format!("Güvenlik duvarı görevi çöktü: {e}"))?
+}
+
+fn firewall_kurali_ekle_blocking() -> Result<serde_json::Value, String> {
     #[cfg(not(windows))]
     { return Ok(serde_json::json!({ "status": "gereksiz" })); }
     #[cfg(windows)]
@@ -2162,8 +2180,15 @@ fn firewall_kurali_ekle() -> Result<serde_json::Value, String> {
 /// ⚠️ Yedekler bugüne kadar hasta verisiyle AYNI DİSKE alınıyordu; disk arızasında ya da fidye
 /// yazılımında veri VE yedek birlikte gidiyordu. Backend `PEMF_BACKUP_DIR` desteğini zaten
 /// taşıyordu ama hiçbir yerde ayarlanmadığı için özellik sahada HİÇ çalışmadı.
+///
+/// 2026-10-18: yazılabilirlik denetimi yedek klasörüne DOSYA YAZAR — çıkarılmış USB / yanıt vermeyen ağ paylaşımında saniyelerce
+/// asılabilir; açılışta pencere iş parçacığında koşmasın (bkz. `firewall_durumu`). Görev çökerse `null` → arayüz not göstermez.
 #[tauri::command]
-fn yedek_hedefi_durumu() -> serde_json::Value {
+async fn yedek_hedefi_durumu() -> serde_json::Value {
+    tauri::async_runtime::spawn_blocking(yedek_hedefi_durumu_blocking).await.unwrap_or(serde_json::Value::Null)
+}
+
+fn yedek_hedefi_durumu_blocking() -> serde_json::Value {
     let root = install::default_install_root(&home_dir());
     let secili = install::backup_dir_oku(&root);
     let erisilebilir = secili.as_deref().map(install::dizin_yazilabilir_mi).unwrap_or(false);
@@ -2199,8 +2224,16 @@ fn klasor_secici_sonucu(basarili: bool, kod: Option<i32>, stdout: &[u8], stderr:
 
 /// Klasör seçtir ve doğrula. Tauri dialog eklentisi YOK (yeni bağımlılık istemiyoruz) →
 /// Windows'un kendi klasör seçicisi PowerShell üzerinden açılır.
+///
+/// 2026-10-18: klasör seçici penceresi kapanana dek PowerShell BEKLENİR — launcher penceresi o süre donmasın (bkz. `firewall_durumu`).
 #[tauri::command]
-fn yedek_hedefi_sec() -> Result<serde_json::Value, String> {
+async fn yedek_hedefi_sec() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(yedek_hedefi_sec_blocking)
+        .await
+        .map_err(|e| format!("Klasör seçici görevi çöktü: {e}"))?
+}
+
+fn yedek_hedefi_sec_blocking() -> Result<serde_json::Value, String> {
     #[cfg(not(windows))]
     { return Err("Bu platformda desteklenmiyor".to_string()); }
     #[cfg(windows)]
@@ -2473,6 +2506,35 @@ fn guncelleme_ekranini_calistir(ctx: tauri::Context<tauri::Wry>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// SAHİP BİLDİRİMİ 2026-10-18: "güncelleme kontrol ediliyor yazarken pencere bloklanıyor hareket ettiremiyorum".
+    /// Tauri SENKRON komutları pencere (olay döngüsü) iş parçacığında koşar; PowerShell / ağ / yavaş disk bekleyen bir senkron
+    /// komut pencereyi dondurur (ölçüldü: `firewall_durumu`'nun PowerShell sorgusu 2,2–2,4 sn, açılışta ve backend başlayınca).
+    /// Kural: bu tür bekleyen bir çağrı taşıyan HİÇBİR `#[tauri::command]` senkron olamaz; adı bilinen komutlar `async` +
+    /// `spawn_blocking` olmalı (gövdeleri `*_blocking`).
+    #[test]
+    fn KRITIK_bekleyen_is_yapan_komut_PENCERE_is_parcaciginda_kosmaz() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n"); // çalışma kopyası CRLF olabilir
+        const BEKLEYEN: [&str; 6] =
+            ["gizli_komut(", "durum_icin(", "ps_yukselterek_kos(", "dizin_yazilabilir_mi", "ureq::", "fetch_string"];
+        let mut ihlal = Vec::new();
+        for parca in soy.split("#[tauri::command]").skip(1) {
+            let govde = &parca[..parca.find("\n}\n").unwrap_or(parca.len())];
+            let bas = govde.trim_start();
+            if bas.starts_with("fn ") {
+                let ad = bas[3..].split('(').next().unwrap_or("?").to_string();
+                if let Some(m) = BEKLEYEN.iter().find(|m| govde.contains(**m)) {
+                    ihlal.push(format!("{ad} ({m})"));
+                }
+            }
+        }
+        assert!(ihlal.is_empty(), "pencere iş parçacığında bekleyen senkron komut(lar): {ihlal:?}");
+        for ad in ["fetch_profiles", "firewall_durumu", "firewall_kurali_ekle", "yedek_hedefi_durumu", "yedek_hedefi_sec"] {
+            let bas = soy.find(&format!("async fn {ad}(")).unwrap_or_else(|| panic!("{ad} async DEĞİL"));
+            let govde = &soy[bas..bas + soy[bas..].find("\n}\n").expect("gövde sonu")];
+            assert!(govde.contains("spawn_blocking"), "{ad}: bekleyen gövde ayrı iş parçacığına alınmıyor");
+        }
+    }
 
     /// C2 (denetim 2026-08-24): `check_runtime_update`'in UI'ya döndürdüğü JSON, flow'un
     /// hesapladığı `otomatik_durduruldu` bayrağını TAŞIMALI. Bayrak `flow.rs`'te hesaplanıyor
