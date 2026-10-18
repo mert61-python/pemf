@@ -2995,7 +2995,12 @@ mod tests {
         // Üretimde kurulum daima .exe'dir; burada dönüş yapan zararsız bir sistem exe'si kullanılır
         // ("/S" onun için geçersiz argüman → hemen çıkar). Adımın koştuğu GÜNLÜKTEN doğrulanır.
         let sahte_kur = std::path::PathBuf::from(r"C:\Windows\System32\findstr.exe");
-        let sahte_uyg = tmp.join("pemf_kapi_uyg.bat");
+        // ⚠️ 2026-10-18 (sahip oyundayken bu test GÖRÜNÜR bir `cmd /K` penceresi açıp odağı çaldı — "KOMUT İSTEMLERİNİ SESSİZ
+        // ARKA PLANDA AÇ"): batch'teki `start "" "<uyg>"` bir `.bat` için YENİ ve GÖRÜNÜR konsol açar; test dosyayı erken silince
+        // pencere "The batch file cannot be found." ile açık kalıyordu. Üretimde hedef PENCERELİ `PEMFVetClient.exe`'dir (konsol yok).
+        // Sahte uygulama artık penceresiz Windows Script Host betiği: `.vbs` → wscript (GUI alt sistemi), `start` onu ShellExecute ile
+        // KONSOLSUZ açar; `On Error Resume Next` → hata olsa bile diyalog (odak çalan) çıkmaz.
+        let sahte_uyg = tmp.join("pemf_kapi_uyg.vbs");
         let betik = tmp.join("pemf_kapi_relaunch.bat");
         let gunluk = tmp.join(format!("pemf_selfupdate_{pid}.log"));
         for p in [&uyg_iz, &gunluk] {
@@ -3004,10 +3009,17 @@ mod tests {
         // Bulgu #6: Rust tarafı aynı günlüğe pencere sonucunu ÖNCE yazar; batch `>>` ile eklemeli.
         // `>`'a dönülürse bu satır kaybolur → aşağıdaki assert kırmızı yanar.
         std::fs::write(&gunluk, pencere_gunluk_satiri(&Err("kapi-onsatir".to_string()))).unwrap();
-        // ⚠️ Sondaki `exit` ŞART: batch'teki `start "" "<uyg>"` bir .bat için `cmd /K` açar (pencere batch
-        // bitince KAPANMAZ). Üretimde hedef .exe'dir (sorun yok); testte ise sağ kalan `cmd /K`, devraldığı
-        // stdout borusunu tutup cargo'yu çağıran süreci ASIYORDU (ölçüldü: iki yetim cmd /K).
-        std::fs::write(&sahte_uyg, format!("@echo off\r\necho acildi > \"{}\"\r\nexit\r\n", uyg_iz.display())).unwrap();
+        // (Eski `.bat` sahtesinde sağ kalan `cmd /K` devraldığı stdout borusunu tutup cargo'yu ASIYORDU — `.vbs` konsol ve boru
+        // devralmaz.)
+        std::fs::write(
+            &sahte_uyg,
+            format!(
+                "On Error Resume Next\r\nSet f = CreateObject(\"Scripting.FileSystemObject\").CreateTextFile(\"{}\", True)\r\n\
+                 f.WriteLine \"acildi\"\r\nf.Close\r\n",
+                uyg_iz.display()
+            ),
+        )
+        .unwrap();
         std::fs::write(&pencere, b"x").unwrap();
 
         let s = build_relaunch_script(
