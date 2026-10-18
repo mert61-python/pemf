@@ -1364,9 +1364,12 @@ async fn auth_status(state: tauri::State<'_, AppState>) -> Result<AuthStatus, St
     // 4) Sessiz yenileme (duvar saati bütçeli → açılışı bloklamaz).
     let eposta = kayitli.email.clone();
     let rt = kayitli.refresh_token.clone();
-    let sonuc = tauri::async_runtime::spawn_blocking(move || auth::refresh_budgeted(&rt, &eposta))
-        .await
-        .map_err(|e| format!("oturum yenileme görevi çöktü: {e}"))?;
+    let (sonuc, red) = tauri::async_runtime::spawn_blocking(move || {
+        let r = auth::refresh_budgeted(&rt, &eposta);
+        (r, auth::son_yenileme_reddi())
+    })
+    .await
+    .map_err(|e| format!("oturum yenileme görevi çöktü: {e}"))?;
 
     match (oturum_karari(&sonuc), sonuc) {
         (OturumKarari::Yenilendi, Ok(yeni)) => {
@@ -1380,11 +1383,23 @@ async fn auth_status(state: tauri::State<'_, AppState>) -> Result<AuthStatus, St
         }
         (OturumKarari::Sil, _) => {
             let root4 = root.clone();
-            let _ = tauri::async_runtime::spawn_blocking(move || secret_store::clear(&root4)).await;
+            // 🔴 SAHA (2026-10-17): silme NEDENİ günlüğe (yalnız HTTP durumu + GoTrue kodu; jeton / e-posta YOK).
+            let olay = oturum_gunlugu_olayi(&OturumKarari::Sil, red.as_deref());
+            let _ = tauri::async_runtime::spawn_blocking(move || {
+                if let Some(o) = olay {
+                    secret_store::oturum_gunlugune_yaz(&root4, &o);
+                }
+                secret_store::clear(&root4);
+            })
+            .await;
             Ok(AuthStatus::cikis_yapildi(false))
         }
         // ÇEVRİMDIŞI / geçici sunucu hatası → kayıtlı oturumla devam (yukarıdaki OFFLINE KARARI).
         _ => {
+            if let Some(o) = oturum_gunlugu_olayi(&OturumKarari::CevrimdisiDevam, red.as_deref()) {
+                let root5 = root.clone();
+                let _ = tauri::async_runtime::spawn_blocking(move || secret_store::oturum_gunlugune_yaz(&root5, &o)).await;
+            }
             let email = kayitli.email.clone();
             *state.session.lock().unwrap() = Some(kayitli);
             Ok(AuthStatus::giris_yapildi(&email, "cached", true))
@@ -1406,6 +1421,22 @@ enum OturumKarari {
     CevrimdisiDevam,
     /// Sunucu jetonu AÇIKÇA reddetti → kaydı SİL, giriş ekranına dön.
     Sil,
+}
+
+/// Açılış yenilemesinin oturum tanı günlüğü satırı (saf → birim-testlenebilir). `red`: `auth::son_yenileme_reddi()`
+/// (yalnız HTTP durumu + GoTrue kodu). Silmede HER ZAMAN satır; korumada yalnız sunucu yanıt verdiyse (ağ yoksa günlük
+/// boşuna büyümesin); yenilendiyse satır yok.
+fn oturum_gunlugu_olayi(karar: &OturumKarari, red: Option<&str>) -> Option<String> {
+    match karar {
+        OturumKarari::Sil => Some(format!(
+            "acilis yenilemesi REDDEDILDI ({}) -> 'Beni hatirla' kaydi SILINDI, giris ekrani",
+            red.unwrap_or("kayitli refresh jetonu bos")
+        )),
+        OturumKarari::CevrimdisiDevam => {
+            red.map(|r| format!("acilis yenilemesi basarisiz ({r}) -> kayit KORUNDU, cevrimdisi devam"))
+        }
+        OturumKarari::Yenilendi => None,
+    }
 }
 
 fn oturum_karari(sonuc: &Result<auth::Session, auth::AuthError>) -> OturumKarari {
@@ -2977,6 +3008,21 @@ mod tests {
             OturumKarari::Sil,
             "iptal edilmis jeton diskte birakildi — oturum devralinabilir"
         );
+        // 401 "Invalid API key" gibi iptal OLMAYAN red artık `Server(401)` → kayıt korunur (auth::yenileme_hatasi).
+        assert_eq!(oturum_karari(&Err(auth::AuthError::Server(401))), OturumKarari::CevrimdisiDevam);
+    }
+
+    /// 🔴 SAHA (2026-10-17): "Beni hatırla" kaydı sessizce silindi, nedeni hiçbir yerde yoktu. Silmede HER ZAMAN,
+    /// korumada sunucu yanıt verdiyse günlüğe satır; satır yalnız durum + kod taşır.
+    #[test]
+    fn acilis_yenilemesi_silme_ve_koruma_NEDENI_gunluge() {
+        let s = oturum_gunlugu_olayi(&OturumKarari::Sil, Some("HTTP 400 refresh_token_not_found")).unwrap();
+        assert!(s.contains("SILINDI") && s.contains("HTTP 400 refresh_token_not_found"), "{s}");
+        assert!(oturum_gunlugu_olayi(&OturumKarari::Sil, None).unwrap().contains("SILINDI"), "neden yokken satir yazilmadi");
+        let k = oturum_gunlugu_olayi(&OturumKarari::CevrimdisiDevam, Some("HTTP 401")).unwrap();
+        assert!(k.contains("KORUNDU") && k.contains("HTTP 401"), "{k}");
+        assert_eq!(oturum_gunlugu_olayi(&OturumKarari::CevrimdisiDevam, None), None, "ag yokken gunluk sisiyor");
+        assert_eq!(oturum_gunlugu_olayi(&OturumKarari::Yenilendi, Some("x")), None);
     }
 
     /// ⚠️ SÖZLEŞME: UI'ya dönen durum nesnesi JETON İÇERMEZ. (Birisi `AuthStatus`'a oturumu

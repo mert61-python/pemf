@@ -219,6 +219,8 @@
     ; "blob install_root içinde tutulur → uygulama kaldırılınca oturum da gider" güvencesi
     ; GERÇEK DEĞİLDİ: kullanıcı uygulamayı kaldırsa da jetonu diskte kalıyordu.
     Delete "$INSTDIR\auth_session.bin"
+    ; 2026-10-18: oturum tanı günlüğü (secret_store::oturum_gunlugu_path) — kaldırmada birlikte gider.
+    Delete "$INSTDIR\launcher_oturum.log"
     ; DENETİM 2026-08-23 (C14): liste ÜÇÜNCÜ kez geride kalmıştı. 2026-08-08/09'da eklenen üç kök
     ; durum dosyası buraya işlenmemişti; aynı yorumun (yukarıda) koyduğu kural fiilen bozuktu.
     ; `installed_packages.json` = kurulu paket kaydı, `install_id.txt` = kademeli-yayın dilimi

@@ -164,6 +164,24 @@ fn agent() -> ureq::Agent {
 ///
 /// Gövde yalnız SINIFLANDIRMA için okunur, mesaja ASLA konmaz.
 pub fn classify_error(status: u16, body: &str) -> AuthError {
+    let (kod, msg) = hata_alanlari(body);
+
+    if kod.contains("email_not_confirmed") || msg.contains("email not confirmed") {
+        return AuthError::EmailNotConfirmed;
+    }
+    if status == 429 || kod.contains("rate_limit") || msg.contains("rate limit") {
+        return AuthError::RateLimited;
+    }
+    // `invalid_grant` hem "parola yanlış" hem "refresh token geçersiz" için gelir; ayrımı
+    // çağıran yapar (login → BadCredentials, refresh → SessionRevoked).
+    if status == 400 || status == 401 || status == 403 {
+        return AuthError::BadCredentials;
+    }
+    AuthError::Server(status)
+}
+
+/// GoTrue gövdesinden (hata kodu, ileti) — küçük harf; JSON değilse boş. Yalnız SINIFLANDIRMA içindir.
+fn hata_alanlari(body: &str) -> (String, String) {
     let v: Option<serde_json::Value> = serde_json::from_str(body).ok();
     let al = |k: &str| -> String {
         v.as_ref()
@@ -180,19 +198,57 @@ pub fn classify_error(status: u16, body: &str) -> AuthError {
         let a = al("msg");
         if a.is_empty() { al("error_description") } else { a }
     };
+    (kod, msg)
+}
 
-    if kod.contains("email_not_confirmed") || msg.contains("email not confirmed") {
-        return AuthError::EmailNotConfirmed;
-    }
+/// GoTrue'nun AÇIK oturum iptali kodları (yenileme yolu). Yalnız bunlar "Beni hatırla" kaydını sildirir.
+const IPTAL_KODLARI: &[&str] = &[
+    "refresh_token_not_found",
+    "refresh_token_already_used",
+    "session_not_found",
+    "session_expired",
+    "user_not_found",
+    "user_banned",
+];
+
+/// Son yenileme reddinin TANI özeti (`HTTP <durum> <kod>`; jeton / e-posta / gövde İÇERMEZ). Çağıran okur ve günlüğe yazar.
+static SON_YENILEME_REDDI: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// Reddin günlüğe yazılabilir özeti — yalnız HTTP durumu + GoTrue hata kodu (yalnız `[a-z0-9_]`, ≤ 48 karakter).
+pub fn yenileme_reddi_ozeti(status: u16, body: &str) -> String {
+    let (kod, _) = hata_alanlari(body);
+    let kod: String = kod.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_').take(48).collect();
+    if kod.is_empty() { format!("HTTP {status}") } else { format!("HTTP {status} {kod}") }
+}
+
+/// Son yenileme reddinin özetini AL (okununca temizlenir).
+pub fn son_yenileme_reddi() -> Option<String> {
+    SON_YENILEME_REDDI.lock().unwrap_or_else(|e| e.into_inner()).take()
+}
+
+/// Yenileme (`grant_type=refresh_token`) yolunda sunucu hatasının KARARI (saf → birim-testlenebilir).
+///
+/// 🔴 SAHA (2026-10-17): eskiden `classify_error`'ın HER 400/401/403'ü (`BadCredentials`) burada
+/// `SessionRevoked`e çevriliyordu → çağıran "Beni hatırla" kaydını SİLİYORDU. Anahtar hatası (401
+/// "Invalid API key"), WAF / ağ geçidi 403'ü ya da istek doğrulama 400'ü jetonun iptal edildiği
+/// anlamına GELMEZ — kayıt korunur, çevrimdışı devam edilir (OFFLINE KARARI). Yalnız GoTrue'nun
+/// AÇIK iptal yanıtı (`IPTAL_KODLARI` ya da eski biçim `invalid_grant` + "refresh token") siler.
+pub fn yenileme_hatasi(status: u16, body: &str) -> AuthError {
+    let (kod, msg) = hata_alanlari(body);
     if status == 429 || kod.contains("rate_limit") || msg.contains("rate limit") {
         return AuthError::RateLimited;
     }
-    // `invalid_grant` hem "parola yanlış" hem "refresh token geçersiz" için gelir; ayrımı
-    // çağıran yapar (login → BadCredentials, refresh → SessionRevoked).
-    if status == 400 || status == 401 || status == 403 {
-        return AuthError::BadCredentials;
+    let acik_iptal = IPTAL_KODLARI.contains(&kod.as_str()) || (kod == "invalid_grant" && msg.contains("refresh token"));
+    if (400..500).contains(&status) && acik_iptal {
+        return AuthError::SessionRevoked;
     }
     AuthError::Server(status)
+}
+
+/// `yenileme_hatasi` + tanı özetini sakla (`post_json_ile`'ye verilen sınıflayıcı).
+fn yenileme_hatasi_kaydet(status: u16, body: &str) -> AuthError {
+    *SON_YENILEME_REDDI.lock().unwrap_or_else(|e| e.into_inner()) = Some(yenileme_reddi_ozeti(status, body));
+    yenileme_hatasi(status, body)
 }
 
 /// Auth ucuna JSON POST. `bearer`: kullanıcının access_token'ı (logout için); yoksa anon anahtar.
@@ -200,6 +256,16 @@ fn post_json(
     url: &str,
     body: &str,
     bearer: Option<&str>,
+) -> Result<serde_json::Value, AuthError> {
+    post_json_ile(url, body, bearer, classify_error)
+}
+
+/// `post_json` + çağıranın HTTP hata sınıflayıcısı (yenileme yolu kendi kararını verir).
+fn post_json_ile(
+    url: &str,
+    body: &str,
+    bearer: Option<&str>,
+    sinifla: fn(u16, &str) -> AuthError,
 ) -> Result<serde_json::Value, AuthError> {
     validate_supabase_url(url)?;
     let req = agent()
@@ -220,7 +286,7 @@ fn post_json(
         }
         Err(ureq::Error::Status(status, r)) => {
             let txt = r.into_string().unwrap_or_default();
-            Err(classify_error(status, &txt))
+            Err(sinifla(status, &txt))
         }
         // Bağlantı kurulamadı/koptu → ÇEVRİMDIŞI. (Ayrıntı mesaja konmaz: ureq hata metni URL
         // ve bazen başlık parçaları içerir.)
@@ -300,13 +366,11 @@ pub fn refresh(refresh_token: &str, bilinen_eposta: &str) -> Result<Session, Aut
     }
     let url = format!("{}/token?grant_type=refresh_token", auth_base());
     let body = serde_json::json!({ "refresh_token": refresh_token }).to_string();
-    match post_json(&url, &body, None) {
-        Ok(v) => session_from_json(&v, bilinen_eposta),
-        // Yenileme yolunda "geçersiz kimlik" = jeton iptal edilmiş demektir (kullanıcı parola
-        // girmedi ki hatalı olsun). Çağıranın kaydı silebilmesi için AYRI hata.
-        Err(AuthError::BadCredentials) => Err(AuthError::SessionRevoked),
-        Err(e) => Err(e),
-    }
+    // Yenileme yolunda sunucu hatasının kararı `yenileme_hatasi`nda (çağıran `SessionRevoked`te kaydı siler);
+    // reddin özeti `son_yenileme_reddi()` ile okunur (önceki koşunun özeti burada temizlenir).
+    let _ = son_yenileme_reddi();
+    let v = post_json_ile(&url, &body, None, yenileme_hatasi_kaydet)?;
+    session_from_json(&v, bilinen_eposta)
 }
 
 /// Sunucu tarafında oturumu kapat. BEST-EFFORT: ağ yoksa yerel temizlik yine yapılır
@@ -632,5 +696,56 @@ mod tests {
         assert!(!mk(now + 3600).needs_refresh(now), "taze jeton bosuna yenileniyor");
         // expires_at bilinmiyorsa (0) yenilemeye ZORLAMA — çevrimdışı kullanıcıyı kilitler.
         assert!(!mk(0).needs_refresh(now));
+    }
+
+    /// 🔴 SAHA (2026-10-17, auth_session.bin kaybı): yenileme yolunda HER 400/401/403 "oturum iptal"
+    /// sayılıyor ve çağıran "Beni hatırla" kaydını SİLİYORDU. Yalnız GoTrue'nun AÇIK iptal yanıtı
+    /// kaydı silmeli; anahtar / WAF / doğrulama gibi başka bir 4xx kaydı KORUMALI (çevrimdışı devam).
+    #[test]
+    fn yenileme_IPTAL_olmayan_4xx_kaydi_SILDIRMEZ() {
+        for (s, govde) in [
+            (401u16, r#"{"message":"Invalid API key","hint":"Double check your Supabase anon or service_role API key."}"#),
+            (403, "{}"),
+            (403, "<html>forbidden</html>"),
+            (400, r#"{"code":400,"error_code":"validation_failed","msg":"Unsupported grant type"}"#),
+            (400, r#"{"error":"invalid_request","error_description":"bad body"}"#),
+        ] {
+            assert!(
+                !matches!(yenileme_hatasi(s, govde), AuthError::SessionRevoked),
+                "HTTP {s} {govde}: iptal OLMAYAN yanit kaydi sildiriyor"
+            );
+        }
+    }
+
+    #[test]
+    fn yenileme_ACIK_iptal_kodlari_kaydi_siler() {
+        for govde in [
+            r#"{"code":400,"error_code":"refresh_token_not_found","msg":"Invalid Refresh Token: Refresh Token Not Found"}"#,
+            r#"{"code":400,"error_code":"refresh_token_already_used","msg":"Invalid Refresh Token: Already Used"}"#,
+            r#"{"code":403,"error_code":"session_not_found","msg":"Session from session_id claim in JWT does not exist"}"#,
+            r#"{"code":400,"error_code":"session_expired","msg":"Session expired"}"#,
+            r#"{"code":400,"error_code":"user_banned","msg":"User is banned"}"#,
+            r#"{"code":403,"error_code":"user_not_found","msg":"User not found"}"#,
+            // Eski GoTrue biçimi (error_code yok):
+            r#"{"error":"invalid_grant","error_description":"Invalid Refresh Token: Refresh Token Not Found"}"#,
+        ] {
+            assert!(matches!(yenileme_hatasi(400, govde), AuthError::SessionRevoked), "iptal tanınmadı: {govde}");
+        }
+        assert!(matches!(yenileme_hatasi(429, "{}"), AuthError::RateLimited));
+        assert!(matches!(yenileme_hatasi(503, "down"), AuthError::Server(503)));
+    }
+
+    /// Tanı özeti günlüğe gider: yalnız HTTP durumu + GoTrue hata kodu; gövdedeki e-posta / jeton SIZMAZ.
+    #[test]
+    fn yenileme_reddi_ozeti_yalniz_durum_ve_kod() {
+        let o = yenileme_reddi_ozeti(
+            400,
+            r#"{"error_code":"refresh_token_not_found","msg":"vet@klinik.com token eyJABCDEF"}"#,
+        );
+        assert_eq!(o, "HTTP 400 refresh_token_not_found");
+        assert_eq!(yenileme_reddi_ozeti(401, r#"{"message":"Invalid API key"}"#), "HTTP 401");
+        assert_eq!(yenileme_reddi_ozeti(403, "<html>"), "HTTP 403");
+        let o = yenileme_reddi_ozeti(400, r#"{"error_code":"a@b.com eyJ\n<x>"}"#);
+        assert!(!o.contains('@') && !o.contains('\n') && !o.contains('<'), "kod temizlenmedi: {o}");
     }
 }

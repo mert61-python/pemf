@@ -134,6 +134,55 @@ pub fn clear(install_root: &Path) {
     let _ = std::fs::remove_file(blob_path(install_root));
 }
 
+/// Oturum tanı günlüğü — "Beni hatırla" kaydı NEDEN silindi / korundu.
+///
+/// 🔴 SAHA (2026-10-17): kayıt açılışta sessizce silindi ve nedeni hiçbir yerde yoktu (yanıt gövdesi
+/// bilerek atılıyor); kök neden ancak Supabase tablolarından çıkarılabildi. Bu dosya yalnız OLAYI ve
+/// `auth::yenileme_reddi_ozeti` biçiminde özeti tutar — JETON, e-posta ve gövde YAZILMAZ (çağıranın sözleşmesi).
+pub fn oturum_gunlugu_path(install_root: &Path) -> PathBuf {
+    install_root.join("launcher_oturum.log")
+}
+
+/// Günlüğün üst sınırı (bayt): aşınca en yeni yarısı tutulur (dosya büyümez).
+const OTURUM_GUNLUGU_AZAMI: usize = 64 * 1024;
+
+/// Günlüğe tek satır ekle (UTC zaman damgalı; satır sonu karakterleri boşluğa çevrilir). Best-effort.
+pub fn oturum_gunlugune_yaz(install_root: &Path, olay: &str) {
+    let saniye = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let satir = format!("{} {}\n", utc_zaman(saniye), olay.replace(['\r', '\n'], " "));
+    let yol = oturum_gunlugu_path(install_root);
+    let mut icerik = std::fs::read(&yol).unwrap_or_default();
+    if icerik.len() + satir.len() > OTURUM_GUNLUGU_AZAMI {
+        let kes = icerik.len().saturating_sub(OTURUM_GUNLUGU_AZAMI / 2);
+        icerik.drain(..kes);
+        if let Some(i) = icerik.iter().position(|b| *b == b'\n') {
+            icerik.drain(..=i); // yarım kalan ilk satırı at
+        }
+    }
+    icerik.extend_from_slice(satir.as_bytes());
+    let _ = std::fs::create_dir_all(install_root);
+    let _ = std::fs::write(&yol, icerik);
+}
+
+/// Unix saniyesi → `YYYY-MM-DDTHH:MM:SSZ` (bağımlılıksız; Howard Hinnant'ın civil_from_days algoritması).
+fn utc_zaman(saniye: i64) -> String {
+    let gun = saniye.div_euclid(86_400);
+    let s = saniye.rem_euclid(86_400);
+    let z = gun + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
+    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z", s / 3_600, (s % 3_600) / 60, s % 60)
+}
+
 // ── Platform katmanı ────────────────────────────────────────────────────────────────────────
 
 /// Uygulamaya özel ek entropi: aynı kullanıcının BAŞKA bir uygulaması bu blob'u
@@ -329,5 +378,25 @@ mod tests {
         assert!(!available());
         assert!(!save(d.path(), &ornek()));
         assert!(!blob_path(d.path()).exists(), "korumasiz platformda oturum diske yazildi");
+    }
+
+    /// Oturum tanı günlüğü: UTC zaman damgalı tek satır, satır sonu enjeksiyonu yok, boyut sınırlı.
+    #[test]
+    fn oturum_gunlugu_zaman_damgali_tek_satir_ve_SINIRLI() {
+        assert_eq!(utc_zaman(0), "1970-01-01T00:00:00Z");
+        assert_eq!(utc_zaman(1_792_142_674), "2026-10-16T09:24:34Z");
+        assert_eq!(utc_zaman(951_782_400), "2000-02-29T00:00:00Z");
+        let d = tempfile::tempdir().unwrap();
+        oturum_gunlugune_yaz(d.path(), "yenileme REDDEDILDI (HTTP 400 refresh_token_not_found)\nsahte satir");
+        let t = std::fs::read_to_string(oturum_gunlugu_path(d.path())).unwrap();
+        assert_eq!(t.lines().count(), 1, "satir sonu enjeksiyonu: {t:?}");
+        assert!(t.contains("HTTP 400 refresh_token_not_found") && t.ends_with('\n'));
+        for i in 0..3_000 {
+            oturum_gunlugune_yaz(d.path(), &format!("olay {i} {}", "x".repeat(40)));
+        }
+        let t = std::fs::read_to_string(oturum_gunlugu_path(d.path())).unwrap();
+        assert!(t.len() <= OTURUM_GUNLUGU_AZAMI, "gunluk sinirsiz buyudu: {} bayt", t.len());
+        assert!(t.trim_end().ends_with(&format!("olay 2999 {}", "x".repeat(40))), "en yeni satir kayboldu");
+        assert!(t.lines().all(|s| s.len() > 20 && s.as_bytes()[4] == b'-'), "yarim satir kaldi");
     }
 }
