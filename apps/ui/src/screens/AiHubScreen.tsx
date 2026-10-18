@@ -241,7 +241,8 @@ interface AiResult {
   analysis_image_base64?: string; closure_image_base64?: string; xai_side_by_side_base64?: string;
   _xai_istendi?: boolean; // B4 ScratchModule: ısı haritası bu analizde İSTENDİ mi (istenip gelmeyeni sessiz bırakmamak için)
   // SG.G4: termal girdinin makullik doğrulaması (backend `utils/image_domain.termal_girdi_dogrulamasi`; arayüz yalnız gösterir)
-  girdi_dogrulama?: { durum: string; dogrulandi: boolean; uyari: string | null } | null;
+  // S-SGI.4: `yon_notu` — kapı palet YÖNÜNÜ ölçmez; eşleşen paletin kamera yönü ("doğrulandı" sonucunda da gösterilir)
+  girdi_dogrulama?: { durum: string; dogrulandi: boolean; uyari: string | null; yon_notu?: string | null } | null;
   // SG.G5: kedi organ "bulunamadı" BİLGİSİ (backend `catorgan_predictor.BULUNAMADI_METNI`)
   bulunamadi?: string; bulunamadi_mesaji?: string;
 }
@@ -1916,6 +1917,10 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
           {/* SG.G4: termal girdi doğrulanamadıysa (akromatik / kararsız / denetim kapalı) sonuçtan ÖNCE ve görünür söylenir. */}
           {result.girdi_dogrulama && result.girdi_dogrulama.dogrulandi === false && result.girdi_dogrulama.uyari ? (
             <Text style={styles.scUyari} testID="termal-girdi-uyarisi">⚠ {result.girdi_dogrulama.uyari}</Text>
+          ) : null}
+          {/* S-SGI.4: ters palette model teşhisi tersine çevirir (ölçüldü) — "doğrulandı" sonucunda da yön notu sonuçtan ÖNCE. */}
+          {result.girdi_dogrulama?.yon_notu ? (
+            <Text style={styles.scUyari} testID="termal-yon-notu">ⓘ {result.girdi_dogrulama.yon_notu}</Text>
           ) : null}
           {(() => {
             const notDet = result.detected === false || result.fgs_total === null || (typeof result.fgs_total === "number" && result.fgs_total < 0);

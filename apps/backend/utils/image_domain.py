@@ -394,7 +394,7 @@ class TermalUyumsuz(DomainMismatch):
 
 
 def termal_girdi_dogrulamasi(img: np.ndarray) -> dict:
-    """Termal yanıtına eklenen girdi doğrulaması: {durum, dogrulandi, uyari, olcum}. Arayüz yalnız GÖSTERİR (kural burada).
+    """Termal yanıtına eklenen girdi doğrulaması: {durum, dogrulandi, uyari, yon_notu, olcum}. Arayüz yalnız GÖSTERİR (kural burada).
 
     Kapı `check` içinde zaten koşmuş olur (uyumsuz girdi buraya gelmez); bu yalnız GEÇEN girdinin doğrulanıp doğrulanmadığını
     söyler. Hata fırlatmaz: hesap düşerse "doğrulanamadı" der (kapı kararı `check`te verildi, analiz ondan sonra koşar)."""
@@ -403,6 +403,7 @@ def termal_girdi_dogrulamasi(img: np.ndarray) -> dict:
             "durum": "kapali",
             "dogrulandi": False,
             "uyari": "Görüntü türü denetimi bu cihazda kapalı — girdi termal olarak doğrulanmadı; sonucu buna göre değerlendirin.",
+            "yon_notu": termal_yon_notu("kapali", {}),
             "olcum": {},
         }
     try:
@@ -410,10 +411,37 @@ def termal_girdi_dogrulamasi(img: np.ndarray) -> dict:
     except Exception:
         logger.warning("termal girdi doğrulaması hesaplanamadı", exc_info=True)
         durum, olcum = UNKNOWN, {}
+    yon_notu = termal_yon_notu(durum, olcum)
     if durum == TERMAL_PALET:
-        return {"durum": durum, "dogrulandi": True, "uyari": None, "olcum": olcum}
+        return {"durum": durum, "dogrulandi": True, "uyari": None, "yon_notu": yon_notu, "olcum": olcum}
     uyari = TERMAL_UYARILARI.get(durum) or TERMAL_UYARILARI[TERMAL_KARARSIZ]
-    return {"durum": durum, "dogrulandi": False, "uyari": uyari, "olcum": olcum}
+    return {"durum": durum, "dogrulandi": False, "uyari": uyari, "yon_notu": yon_notu, "olcum": olcum}
+
+
+# S-SGI.4 (sahip kararı 2026-10-18 "Uyarı + tezgâh ölçümü", seçenek a): kapı palet ÜYELİĞİNİ ölçer, YÖNÜNÜ ölçmez. Ölçüldü (SGI-2.6,
+# gerçek GhostNetV2): aynı sıcaklık alanının 5 palet × 2 yön boyamasının HEPSİ "doğrulandı"; TERS palette model teşhisi tersine çevirir
+# (hasta 03b inferno TERS → "Sağlıklı %1,8" — yanlış negatif; sağlıklı 03a jet / hot TERS → "Hasta"). Kapı kararı DEĞİŞMEZ; yanıt, eşleşen
+# paletin KAMERA yönünü söyleyen kısa `yon_notu` taşır ("doğrulandı" dahil). Yön SEZGİSİ (seçenek c) T2-SGI.4 gerçek kamera ölçümünden
+# SONRA — ölçülmeden yazılmaz. Renksiz (akromatik) girdide not YOK: beyaz-sıcak / siyah-sıcak yönü ölçülmedi, `uyari` zaten "doğrulanamadı".
+TERMAL_YON_VARSAYILAN = "soğuk = koyu / mor, sıcak = sarı / beyaz"
+TERMAL_YON_IPUCLARI = {
+    "inferno": "soğuk = siyah / mor, sıcak = sarı",
+    "magma": "soğuk = siyah / mor, sıcak = açık sarı / beyaz",
+    "plasma": "soğuk = lacivert / mor, sıcak = sarı",
+    "iron": "soğuk = siyah / mor, sıcak = sarı / beyaz",
+    "hot": "soğuk = siyah, sıcak = sarı / beyaz",
+    "jet": "soğuk = mavi, sıcak = kırmızı",
+    "turbo": "soğuk = mavi / mor, sıcak = kırmızı",
+    "rainbow": "soğuk = mavi / mor, sıcak = kırmızı",
+}
+
+
+def termal_yon_notu(durum: str, olcum: dict) -> str | None:
+    """S-SGI.4: sonuca eklenen palet YÖNÜ notu (kapı kararını etkilemez). Eşleşen palet biliniyorsa onun kamera yönü; renksiz girdide None."""
+    if durum == TERMAL_AKROMATIK:
+        return None
+    ipucu = TERMAL_YON_IPUCLARI.get(str((olcum or {}).get("palet") or ""), TERMAL_YON_VARSAYILAN)
+    return f"Paletin kamera yönünde olduğundan emin olun ({ipucu}) — ters palette sonuç tersine dönebilir."
 
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════

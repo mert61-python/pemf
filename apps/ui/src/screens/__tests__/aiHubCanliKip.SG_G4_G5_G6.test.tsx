@@ -186,3 +186,25 @@ it("KRİTİK G5: kedi organ canlıda 'bulunamadı' BİLGİSİ görünür (eskide
   expect(u.getByTestId("canli-durum").props.children).toBe("Son kare: Görüntüde kedi bulunamadı. Kedinin tümü kadraja girsin; ışık iyi ve görüntü net olsun.");
   expect(u.getByText(/Kedi bulunamadı/)).toBeTruthy();
 });
+
+const YON_NOTU = "Paletin kamera yönünde olduğundan emin olun (soğuk = siyah / mor, sıcak = sarı) — ters palette sonuç tersine dönebilir.";
+
+it("KRİTİK S-SGI.4: 'doğrulandı' termal sonuçta da palet YÖNÜ notu görünür (canlı kipte de); 'doğrulanamadı' uyarısı ÇIKMAZ", async () => {
+  kuyruk = [yanit({
+    status: "success", image_base64: "SONKARE_TERMAL", prediction: { label: "Sick", confidence: 0.953 },
+    girdi_dogrulama: { durum: "termal_paleti", dogrulandi: true, uyari: null, yon_notu: YON_NOTU },
+  })];
+  const u = await canliAc(/^Termal/);
+  await ilerle(1100);
+  expect(u.queryByText(/Termal anormallik ·/)).toBeTruthy();
+  expect(u.getByTestId("termal-yon-notu").props.children.join("")).toBe(`ⓘ ${YON_NOTU}`);
+  expect(u.queryByTestId("termal-girdi-uyarisi")).toBeNull();
+});
+
+it("KARŞIT S-SGI.4: notu taşımayan (eski) yanıtta yön notu satırı ÇİZİLMEZ", async () => {
+  kuyruk = [TERMAL_HASTA];
+  const u = await canliAc(/^Termal/);
+  await ilerle(1100);
+  expect(u.queryByText(/Termal anormallik ·/)).toBeTruthy();
+  expect(u.queryByTestId("termal-yon-notu")).toBeNull();
+});

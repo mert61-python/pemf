@@ -34,6 +34,7 @@ UYUMSUZ_METNI = (
     "Bu görüntü termal kamera görüntüsüne benzemiyor (renk paleti / sıcaklık eşlemesi yok). Termal kameradan çekin ya da "
     "termal görüntü yükleyin."
 )
+INFERNO_YON_NOTU = "Paletin kamera yönünde olduğundan emin olun (soğuk = siyah / mor, sıcak = sarı) — ters palette sonuç tersine dönebilir."
 
 
 def _oku(p: Path) -> np.ndarray:
@@ -149,6 +150,8 @@ def test_KRITIK_GERCEK_termal_GECER_DOGRULANDI_ve_goruntuye_DOKUNULMAZ(uc, monke
         g = j["girdi_dogrulama"]
         assert g["durum"] == "termal_paleti" and g["dogrulandi"] is True and g["uyari"] is None, g
         assert g["olcum"]["palet"] == "inferno" and g["olcum"]["palet_uyumu"] >= 0.95, g
+        # S-SGI.4: kapı yönü ölçmez → "doğrulandı" yanıtı da paletin kamera yönü notunu TAŞIR (uç geçirir)
+        assert g["yon_notu"] == INFERNO_YON_NOTU, g
         assert j["prediction"]["label"] == "Sick"
         # Kâhin (kapı geçen görüntüye DOKUNMAZ): modele giden piksel dizisi çözülen girdiyle BİREBİR aynı.
         beklenen = cv2.imdecode(np.frombuffer(veri, np.uint8), cv2.IMREAD_COLOR)
@@ -248,6 +251,7 @@ def test_KRITIK_GPU_servisi_PARITE_ret_ve_girdi_dogrulama(monkeypatch):
     assert (
         r2.json()["girdi_dogrulama"]["durum"] == "termal_paleti" and r2.json()["girdi_dogrulama"]["dogrulandi"] is True
     )
+    assert r2.json()["girdi_dogrulama"]["yon_notu"] == INFERNO_YON_NOTU  # S-SGI.4 eşliği
 
 
 def test_olcum_dagilimi_IKI_YONDE_marj():
