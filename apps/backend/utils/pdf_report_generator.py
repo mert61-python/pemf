@@ -108,8 +108,9 @@ class PDFReportGenerator:
                 app_data_dir = get_app_data_directory()
             except Exception as e:
                 self.logger.warning(f"app_data_dir alınamadı, varsayılan kullanılıyor: {e}")
-                from pathlib import Path
-
+                # ⚠️ 2026-10-18: burada `from pathlib import Path` vardı → Python `Path`'i TÜM __init__ için YEREL sayıyordu;
+                # dizgi `app_data_dir` verilince aşağıdaki `Path(app_data_dir)` UnboundLocalError atıyordu. Modül düzeyindeki
+                # `Path` kullanılır.
                 app_data_dir = Path.home() / ".pemf_gui"
 
         # Path'e çevir

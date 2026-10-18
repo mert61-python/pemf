@@ -215,3 +215,11 @@ def test_KARSIT_bilinen_tum_alanlar_TURKCE_etiketli_ve_sonda_kesin_tani_notu():
     assert "Yara kapanma oranı (%): 42,3" in metin and "Hücre sayısı: 318" in metin, metin
     assert "uygulamadaki analiz geçmişinde" not in metin, "bilinen / teknik alanlarda 'atlandı' notu çıktı"
     assert metin.rstrip().splitlines()[-1].startswith("Önemli: Bu rapor yapay zekâ ile hazırlanmış"), metin
+
+
+def test_KRITIK_rapor_ureticisi_DIZGI_veri_yoluyla_da_kurulur(tmp_path):
+    """2026-10-18: `__init__` içindeki yerel `from pathlib import Path` dizgi yolda UnboundLocalError attırıyordu (ölçüldü)."""
+    from utils.pdf_report_generator import PDFReportGenerator
+
+    u = PDFReportGenerator(str(tmp_path / "veri"))
+    assert str(u.app_data_dir).endswith("veri")
