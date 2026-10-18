@@ -140,10 +140,11 @@ def test_KRITIK_sayisal_detaylar_raporda_VAR(istemci, analiz):
     y = istemci.get(f"/api/ai/log/{sid}/pdf")
     with fitz.open(stream=y.content, filetype="pdf") as d:
         metin = "\n".join(p.get_text() for p in d)
-    # "Ortalama gap", "156,7" ve "cuda" YALNIZ result_detail'de var (özette geçmiyor).
-    assert "Ortalama gap" in metin, f"detay ETIKETI yok:\n{metin[:500]}"
+    # "Ortalama yara aralığı" ve "156,7" YALNIZ result_detail'de var (özette geçmiyor).
+    assert "Ortalama yara aralığı" in metin, f"detay ETIKETI yok:\n{metin[:500]}"
     assert "156,7" in metin, f"detay DEGERI yok (ondalik ayirac virgul olmali):\n{metin[:500]}"
-    assert "cuda" in metin, "cihaz alani raporda yok"
+    # 2026-10-18 (sahip: okuyucu veteriner + hayvan sahibi): teknik cihaz alanı ("cuda") rapora GİRMEZ.
+    assert "cuda" not in metin, "teknik cihaz alani rapora sizdi"
 
 
 # ============================================================================
@@ -192,8 +193,9 @@ def test_KRITIK_liste_OKUNUR_bicimde_yazilir():
     """
     from utils.ai_rapor_ogeleri import analiz_pdf_ogeleri
 
-    ogeler = analiz_pdf_ogeleri({"result_detail": {"seri": list(range(30))}})
-    metin = next(o["aciklama"] for o in ogeler if o["etiket"] == "seri")
+    # 2026-10-18: bilinmeyen alan adı HAM yazılmaz → bilinen bir liste alanı ("warnings" → "Uyarılar").
+    ogeler = analiz_pdf_ogeleri({"result_detail": {"warnings": list(range(30))}})
+    metin = next(o["aciklama"] for o in ogeler if o["etiket"] == "Uyarılar")
     assert "[" not in metin and "]" not in metin, f"Python sozdizimi sizdi: {metin[:60]}"
     assert "(30 öğe)" in metin, f"uzun liste kirpildigi SOYLENMIYOR: {metin[:80]}"
     assert metin.startswith("0, 1, 2"), metin[:40]
@@ -204,7 +206,7 @@ def test_uzun_deger_KIRPILIR_ama_SOYLENIR():
     from utils.ai_rapor_ogeleri import analiz_pdf_ogeleri
 
     ogeler = analiz_pdf_ogeleri({"result_detail": {"not": "y" * 5000}})
-    metin = next(o["aciklama"] for o in ogeler if o["etiket"] == "not")
+    metin = next(o["aciklama"] for o in ogeler if o["etiket"] == "Not")
     assert "toplam 5000 karakter" in metin, metin[-60:]
 
 

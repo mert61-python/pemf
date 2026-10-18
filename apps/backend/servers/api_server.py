@@ -6319,7 +6319,8 @@ async def ai_analiz_pdf(request: Request, analiz_id: int, kaydet: int = 0):
         from utils.ai_rapor_ogeleri import analiz_pdf_ogeleri
 
         ogeler = analiz_pdf_ogeleri(kayit)
-        baslik = f"AI Analiz Raporu — {kayit.get('module_label') or kayit.get('module_id') or 'AI'}"
+        # 2026-10-18 (sahip: "tamamen türkçe ve anlaşılır olmalı" — okuyucu veteriner + hayvan sahibi)
+        baslik = f"Yapay Zekâ Analizi — {kayit.get('module_label') or 'Analiz'}"
         tmp_dir = _app_data_dir() / "temp_reports"
         tmp_dir.mkdir(parents=True, exist_ok=True)
         cikti = str(tmp_dir / f"ai_{analiz_id}_{int(time.time() * 1000)}.pdf")
@@ -6327,7 +6328,15 @@ async def ai_analiz_pdf(request: Request, analiz_id: int, kaydet: int = 0):
         from utils.pdf_report_generator import get_pdf_generator
 
         uretici = get_pdf_generator(_app_data_dir())
-        yol = await asyncio.to_thread(uretici.generate_xai_report, baslik, ogeler, cikti)
+        yol = await asyncio.to_thread(
+            uretici.generate_xai_report,
+            baslik,
+            ogeler,
+            cikti,
+            "YAPAY ZEKÂ ANALİZ RAPORU",
+            "Hayvan sahibi ve veteriner hekim için özet",
+            "Bu rapor PEMF Vet uygulamasında yapay zekâ ile oluşturuldu.",
+        )
 
         _ad = f"PEMF_AI_{_dosya_adi_guvenli(kayit.get('patient_name') or 'analiz')}_{analiz_id}.pdf"
         if kaydet:

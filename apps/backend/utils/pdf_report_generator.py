@@ -403,22 +403,36 @@ class PDFReportGenerator:
             self.logger.error(f"Hasta raporu oluşturma hatası: {e}")
             raise
 
-    def generate_xai_report(self, baslik: str, ogeler: list, output_path: str = None) -> str:
+    def generate_xai_report(
+        self,
+        baslik: str,
+        ogeler: list,
+        output_path: str = None,
+        ust_baslik: str | None = None,
+        alt_baslik: str | None = None,
+        alt_bilgi: str | None = None,
+    ) -> str:
         """XAI toplu çıktısını PDF'e derle (xai-entegrasyon-plani §KALAN B — opsiyonel XAI görseli).
 
         Args:
             baslik: rapor üst başlığı (serbest metin — kaçırılır)
-            ogeler: [{"etiket": str, "goruntu": str|Path|None, "aciklama": str|None}, ...]
+            ogeler: [{"etiket": str, "goruntu": str|Path|None, "aciklama": str|None, "satirlar": [str]|None}, ...]
             output_path: çıktı .pdf yolu (None → masaüstü, zaman damgalı)
+            ust_baslik / alt_baslik / alt_bilgi: sayfa başlığı, alt başlığı ve altbilgisi (None → tedavi raporu varsayılanları).
+                2026-10-18 (sahip: AI analiz raporu "tamamen türkçe ve anlaşılır olmalı"): AI analiz PDF'i "PEMF TEDAVİ RAPORU"
+                ve İngilizce alt başlık / altbilgi YERİNE kendi Türkçe metnini verir.
 
         Görüntüsü olmayan öğe yalnız metin satırı olur; OKUNAMAYAN görüntü öğeyi
-        DÜŞÜRMEZ (uyarı + metin — zarif düşüş: tek bozuk PNG raporu 500 yapmamalı).
+        DÜŞÜRMEZ (uyarı + metin — zarif düşüş: tek bozuk PNG raporu 500 yapmamalı). `satirlar` madde madde yazılır.
         """
         from reportlab.lib.utils import ImageReader
 
         output_path = output_path or self._default_output_path("PEMF_XAI_Raporu")
         story = []
-        self._add_header(story)
+        if ust_baslik is None and alt_baslik is None:
+            self._add_header(story)
+        else:
+            self._add_header(story, ust_baslik or "", alt_baslik or "")
         story.append(Paragraph(_esc(baslik), self.styles['SectionHeader']))
         story.append(Spacer(1, 8))
         for oge in ogeler:
@@ -442,8 +456,10 @@ class PDFReportGenerator:
                     story.append(Paragraph(_esc(f"(görüntü okunamadı: {g})"), self.styles['UnicodeNormal']))
             if oge.get('aciklama'):
                 story.append(Paragraph(_esc(oge['aciklama']), self.styles['UnicodeNormal']))
+            for satir in oge.get('satirlar') or []:
+                story.append(Paragraph("• " + _esc(str(satir)), self.styles['UnicodeNormal']))
             story.append(Spacer(1, 12))
-        self._add_footer(story)
+        self._add_footer(story, alt_bilgi)
         return self._build_pdf(story, output_path, "XAI raporu")
 
     def _default_output_path(self, prefix: str, name_hint: str = "") -> str:
@@ -515,8 +531,13 @@ class PDFReportGenerator:
             )
         return found
 
-    def _add_header(self, story):
-        """Rapor başlığını ekle"""
+    def _add_header(
+        self,
+        story,
+        baslik: str = "PEMF TEDAVİ RAPORU",
+        alt_baslik: str = "Pulsed Electromagnetic Field Therapy - Veteriner Uygulaması",
+    ):
+        """Rapor başlığını ekle (boş başlık / alt başlık yazılmaz)."""
         # Logo (eğer varsa)
         logo_path = Path(__file__).parent / "assets" / "pemf_logo.png"
         if logo_path.exists():
@@ -528,13 +549,14 @@ class PDFReportGenerator:
                 pass
 
         # Ana başlık
-        title = Paragraph("PEMF TEDAVİ RAPORU", self.styles['CustomTitle'])
-        story.append(title)
+        if baslik:
+            story.append(Paragraph(_esc(baslik), self.styles['CustomTitle']))
 
         # Alt başlık
-        subtitle = Paragraph("Pulsed Electromagnetic Field Therapy - Veteriner Uygulaması", self.styles['Normal'])
-        subtitle.alignment = TA_CENTER
-        story.append(subtitle)
+        if alt_baslik:
+            subtitle = Paragraph(_esc(alt_baslik), self.styles['Normal'])
+            subtitle.alignment = TA_CENTER
+            story.append(subtitle)
         story.append(Spacer(1, 20))
 
     def _add_report_info(self, story, session_count):
@@ -909,9 +931,16 @@ class PDFReportGenerator:
 
         story.append(history_table)
 
-    def _add_footer(self, story):
-        """Rapor alt bilgisini ekle"""
+    def _add_footer(self, story, metin: str | None = None):
+        """Rapor alt bilgisini ekle (`metin` verilirse o + rapor tarihi)."""
         story.append(Spacer(1, 30))
+        if metin:
+            story.append(
+                Paragraph(
+                    _esc(f"{metin} Rapor tarihi: {datetime.now().strftime('%d.%m.%Y %H:%M')}"), self.styles['Footer']
+                )
+            )
+            return
 
         footer_text = f"""
         Bu rapor PEMF (Pulsed Electromagnetic Field) tedavi cihazı tarafından otomatik olarak oluşturulmuştur.
