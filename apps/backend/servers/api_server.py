@@ -266,6 +266,8 @@ app.add_middleware(
     allow_credentials=False,  # API stateless (cookie yok)
     allow_methods=["*"],
     allow_headers=["*"],
+    # Jeton 402'sinin ret sebebi (servers/jeton.py `JETON_SEBEP_BASLIGI`): tarayıcı yalnız açıkça izin verilen yanıt başlığını okur.
+    expose_headers=["X-PEMF-Jeton-Sebep"],
     **_cors_kwargs,
 )
 

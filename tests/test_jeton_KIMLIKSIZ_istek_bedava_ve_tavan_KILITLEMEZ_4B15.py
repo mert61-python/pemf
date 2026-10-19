@@ -6,6 +6,9 @@ UZLAŞTIRILMAZ" dedi → bu kayıtlar HİÇBİR ZAMAN düşülmez (Y24 "geriye d
 ileti "internete bağlanınca devam edersiniz" der, bağlanmak çözmez. Aynı anda bakiyesi 0 olan GİRİŞ YAPMIŞ kullanıcı reddedilir.
 
 Ölçüm: GERÇEK `_jeton_kapisi_karari` + GERÇEK `_bakiye_satiri_oku` (Supabase "erişilebilir": `get_secret` + `requests.post` SAHTE; canlı YOK).
+
+2026-10-19 (S-4B.5 + S-4BI.8): çevrimdışı analiz ve cihaz-geneli çevrimdışı tavan KALDIRILDI — internetsiz kimlikli istek de 402
+(`cevrimdisi`). Kimliksiz isteğin hiçbir cihaz-geneli durumu (defter / sayaç) değiştirmediği ve tedavi uçlarının serbestliği AYNEN ölçülür.
 """
 
 from __future__ import annotations
@@ -38,7 +41,6 @@ def j(tmp_path, monkeypatch):
     mod = importlib.import_module("servers.jeton")
     monkeypatch.setattr(mod, "JETON_ENFORCED", True)
     monkeypatch.setattr(mod, "_son_uzlastirma", None, raising=False)
-    monkeypatch.setattr(mod, "OFFLINE_TAVAN", 50)
     yield mod
     t = getattr(mod, "_son_uzlastirma", None)
     if t is not None:
@@ -124,23 +126,27 @@ def test_KRITIK_kimliksiz_istek_BEDAVA_analiz_ve_SAHIPSIZ_kayit_URETMEZ(j, supab
         )
 
 
-def test_KRITIK_kimliksiz_istekler_GIRIS_YAPMIS_kullanicinin_cevrimdisi_analizini_KILITLEMEZ(
+def test_KRITIK_kimliksiz_istekler_GIRIS_YAPMIS_kullanicinin_analizini_KILITLEMEZ(
     j, supabase_erisilebilir, monkeypatch
 ):
-    monkeypatch.setattr(j, "OFFLINE_TAVAN", 3)
     for _ in range(3):
-        _sonuc(j, _Istek(None))
+        assert _sonuc(j, _Istek(None)) == "402"
+    assert _defter(j) == [], f"kimliksiz istekler cihaz defterine iz bıraktı: {_defter(j)}"
     b = _jwt("kullanici-B")
-    monkeypatch.setattr(j, "_bakiye_satiri_oku", lambda _t: (_ for _ in ()).throw(ConnectionError("ag yok")))
-    assert _sonuc(j, _Istek(b)) == "izin", (
-        "B'nin kendi bekleyeni yok; kimliksiz isteklerin uzlaşmayacak kayıtları cihaz tavanını doldurduğu için B çevrimdışı 402 aldı"
+    monkeypatch.setattr(
+        j,
+        "_bakiye_satiri_oku",
+        lambda _t: {"aylik_hak": 1, "satin_alinan": 0, "odeme_modeli": "on_odemeli", "kullandikca_borc": 0},
     )
+    assert _sonuc(j, _Istek(b)) == "izin", "kimliksiz istekler giriş yapmış B'nin (bakiye 1) analizini kilitledi"
 
 
-def test_KARSIT_giris_yapmis_kullanici_cevrimdisi_izin_ve_SAHIPLI_kayit(j, monkeypatch):
+def test_KRITIK_giris_yapmis_kullanici_INTERNETSIZ_402_cevrimdisi_ve_kayit_YOK_S4B5(j, monkeypatch):
+    """S-4B.5 (2026-10-19): eskiden internetsiz kimlikli istek İZİN + sahipli defter kaydı alıyordu; artık 402 ve kayıt YOK."""
     monkeypatch.setattr(j, "_bakiye_satiri_oku", lambda _t: (_ for _ in ()).throw(ConnectionError("ag yok")))
-    assert _sonuc(j, _Istek(_jwt("kullanici-A"))) == "izin"
-    assert [bool(k.get("sahip")) for k in _defter(j)] == [True]
+    assert _sonuc(j, _Istek(_jwt("kullanici-A"))) == "402"
+    assert "internet gerekir" in _SON_DETAY["detay"] and "ETKİLENMEZ" in _SON_DETAY["detay"], _SON_DETAY
+    assert _defter(j) == []
 
 
 def test_KARSIT_bakiyesi_sifir_giris_yapmis_kullanici_402(j, supabase_erisilebilir):

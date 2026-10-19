@@ -4,7 +4,8 @@
 ÖLÇÜLEN DURUM (SG S-SG.4): canlı kipte her BAŞARILI kare 1 jeton ("goruntu"); uyarlamalı döngüyle dakikada ~60'a kadar (10 dk ≈ 600).
 SÖZLEŞME: istemci canlı oturum başına `X-PEMF-Canli-Oturum` gönderir; oturumun ilk karesinden itibaren 60 sn'lik her kova için, en az
 bir SONUÇ teslim edildiyse TEK tüketim (`istek_id` = `canli-<oturum>-<kova>`, `detay` = "canli_dakika", `tur` MEVCUT tür — yeni
-`token_ledger.tur` YOK). "Kedi bulunamadı" ve ret / hata kareleri ücretlendirmez. Çevrimdışı defterde de kova başına tek kayıt.
+`token_ledger.tur` YOK). "Kedi bulunamadı" ve ret / hata kareleri ücretlendirmez. Yolda kalan ödeme defterinde de kova başına tek
+kayıt; internetsiz canlı kare 402 (2026-10-19 S-4B.5 — çevrimdışı analiz yok).
 Elle analiz (başlıksız) ve AI Pro kare muafiyeti DEĞİŞMEZ.
 Ölçüm: GERÇEK uygulama + GERÇEK `jeton_gate` / `jeton_tuketimi` + GERÇEK uçlar; sahte yalnız Supabase taşıması, model ve saat.
 """
@@ -141,14 +142,27 @@ def test_KRITIK_kedisiz_ve_hatali_dakika_UCRETSIZ(ortam):
     assert [_kova_no(k["istek_id"]) for k in o.giden] == [2], o.giden
 
 
-def test_KRITIK_ayni_dakika_IKI_KEZ_dusmez_cevrimdisi_defterde_de(ortam):
+def test_KRITIK_ayni_dakika_IKI_KEZ_dusmez_yolda_kalan_odeme_defterinde_de(ortam, monkeypatch):
+    """Düşüm ağ kopukluğuyla gönderilemedi (yolda kalan ödeme, 2026-10-19 — çevrimdışı analiz artık yok): dakika kovası defterde de TEK."""
     o = ortam
-    o.bakiye["_cevrimdisi"] = True
+    monkeypatch.setattr(o.j, "_tuketim_gonder_canli", lambda token, **k: False)
     for _ in range(5):
         assert _kare(o).status_code == 200
         o.saat[0] += 3.0
     kayitlar = json.loads(o.defter.read_text(encoding="utf-8"))
     assert [_kova_no(k["istek_id"]) for k in kayitlar] == [0] and kayitlar[0]["miktar"] == 1, kayitlar
+
+
+def test_KRITIK_internetsiz_canli_kare_402_cevrimdisi_ve_defter_YOK_S4B5(ortam):
+    """S-4B.5 (2026-10-19): internetsiz canlı kare de analiz değildir — 402, sebep başlığı `cevrimdisi`, defter yazılmaz (eskiden
+    çevrimdışı izin + defter)."""
+    o = ortam
+    o.bakiye["_cevrimdisi"] = True
+    r = _kare(o)
+    assert r.status_code == 402, r.text[:200]
+    assert r.headers.get("x-pemf-jeton-sebep") == "cevrimdisi", dict(r.headers)
+    assert "internet gerekir" in r.json().get("detail", ""), r.text[:200]
+    assert not o.defter.exists() and o.giden == [], "internetsiz canlı kare deftere / sunucuya tüketim yazdı"
 
 
 def test_KARSIT_elle_analiz_DEGISMEZ_her_analiz_1_goruntu(ortam):

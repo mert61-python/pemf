@@ -844,12 +844,12 @@ def grup_c() -> None:
     veri = CALISMA / "c"
     sil(veri)
     veri.mkdir(parents=True, exist_ok=True)
-    # ⚠️ `PEMF_JETON_OFFLINE_TAVAN=0` SART: cevrimdisi tavan (varsayilan 50) olmasa kapi ilk
-    # ~50 istegi ZATEN gecirirdi ve C1-C4 "kapilanmiyor" derken aslinda HICBIR SEY olcmezdi.
+    # Kapi ucretli analizi GERCEKTEN reddedebilmeli (C0): eskiden `PEMF_JETON_OFFLINE_TAVAN=0` SARTTI (cevrimdisi tavan ilk
+    # ~50 istegi gecirirdi). 2026-10-19 (S-4B.5) cevrimdisi analiz ve tavan KALDIRILDI — internetsiz / kimliksiz istek zaten 402.
     p, log, ok, port = kostur(
         veri,
         sifreli=True,
-        ek={"PEMF_JETON_ENFORCED": "1", "PEMF_JETON_OFFLINE_TAVAN": "0", "PEMF_JETON_BORC_TAVANI": "0"},
+        ek={"PEMF_JETON_ENFORCED": "1", "PEMF_JETON_BORC_TAVANI": "0"},
     )
     if not ok:
         kayit("C-ACILIS1", "backend acilisi (jeton zorlamasi ACIK)", False, f"backend DUSTU; log={log}")

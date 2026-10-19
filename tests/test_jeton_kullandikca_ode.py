@@ -29,7 +29,6 @@ def _yeni(tmp_path, **env):
         "PEMF_JETON_ENFORCED": "1",
         "PEMF_DATA_DIR": str(tmp_path),
         "PEMF_JETON_BORC_TAVANI": "300",
-        "PEMF_JETON_OFFLINE_TAVAN": "50",
     }
     ortam.update(env)
     for k, v in ortam.items():
@@ -97,20 +96,77 @@ def test_KARSIT_KANIT_on_odemeli_planda_bakiye_0_HALA_reddeder(tmp_path):
     assert not y.izin("goruntu").izinli, "ön-ödemeli planda bakiye 0 iken analiz izinli çıktı"
 
 
-def test_KARSIT_KANIT_PAYG_cevrimdisi_de_calisir(tmp_path):
-    """İnternet yokken kullandıkça-öde üyelik de durmaz; tüketim yerel deftere yazılır."""
+def test_KRITIK_PAYG_borc_OKUNAMAZSA_analiz_BASLATILMAZ_S4B5(tmp_path):
+    """S-4B.5 (sahip kararı 2026-10-19): borç okunamıyorsa (internet yok) yeni analiz başlatılmaz — eskiden borç 0 sayılıp İZİN
+    veriliyordu (fail-open). Ücret çevrimiçi düşülür; tedavi yolu bu kapıya hiç gelmez."""
 
     def patlayan():
         raise ConnectionError("ağ yok")
 
     j = _yeni(tmp_path)
+    gonderilen: list = []
     y = j.JetonYoneticisi(
-        bakiye_okuyucu=patlayan,
+        bakiye_okuyucu=lambda: 0,
+        tuketim_gonderici=lambda **k: (gonderilen.append(k), True)[1],
+        odeme_modeli="kullandikca",
+        borc_okuyucu=patlayan,
+    )
+    karar = y.izin("goruntu")
+    assert not karar.izinli and karar.sebep == "cevrimdisi" and "internet gerekir" in karar.mesaj, karar
+    assert not gonderilen and y.bekleyen_tuketim_sayisi() == 0
+
+
+def test_KARSIT_KANIT_PAYG_yolda_kalan_odeme_deftere_ve_BORCA_eklenir(tmp_path):
+    """Düşüm o an gönderilemezse (ağ koptu) kayıt defterde bekler ("Bir süre yeniden dene") ve sonraki kararlarda BORCA eklenir —
+    tavan, gönderilemeyen kullanım yüzünden aşılamaz."""
+    j = _yeni(tmp_path, PEMF_JETON_BORC_TAVANI="3")
+    y = j.JetonYoneticisi(
+        bakiye_okuyucu=lambda: 0,
         tuketim_gonderici=lambda **k: False,
         odeme_modeli="kullandikca",
+        borc_okuyucu=lambda: 1,
+        sahip="payg-1",
     )
-    assert y.izin("goruntu").izinli
-    assert y.bekleyen_tuketim_sayisi() == 1
+    assert y.izin("goruntu").izinli  # borç 1 + yolda 0 < 3
+    assert y.bekleyen_tuketim_sayisi() == 1, "gönderilemeyen kullanım deftere yazılmadı"
+    assert y.izin("goruntu").izinli  # 1 + 1 < 3
+    son = y.izin("goruntu")  # 1 + 2 = 3 → tavan
+    assert not son.izinli and son.sebep == "borc_tavani", f"yolda kalan kullanım borca eklenmedi: {son}"
+
+
+def test_KRITIK_PAYG_tavanin_1_altinda_ES_ZAMANLI_analizler_TAVANI_ASAMAZ(tmp_path):
+    """Eşzamanlılık açığı (2026-10-19, sahip "bunları yap"): karar analiz başlarken, tüketim teslimde. Tavanın 1 altındaki borçta
+    eşzamanlı 4 analiz 4 izin alıyordu — sunucu kullandıkça modelinde borcu SINIRSIZ artırır (tavan yalnız cihazda,
+    supabase_jetonlar.sql). Kural AYNI (`borç + ayrılmış < tavan`); teslim edilmeyen analiz ayrımı bırakır; başka hesap etkilenmez."""
+    j = _yeni(tmp_path, PEMF_JETON_BORC_TAVANI="3")
+
+    def yonetici(sahip: str):
+        return j.JetonYoneticisi(
+            bakiye_okuyucu=lambda: 0,
+            tuketim_gonderici=lambda **k: True,
+            odeme_modeli="kullandikca",
+            borc_okuyucu=lambda: 2,
+            sahip=sahip,
+        )
+
+    kararlar = [yonetici("payg-2").on_izin("goruntu") for _ in range(4)]  # dördü de karar aldı, hiçbiri teslim edilmedi
+    assert [k.izinli for k, _ in kararlar] == [True, False, False, False], [k for k, _ in kararlar]
+    kararlar[0][1].birak()  # ilk analiz teslim edilmeden düştü (uç istisnası) → ayrım bırakılır
+    assert yonetici("payg-2").on_izin("goruntu")[0].izinli, "teslim edilmeyen analizin ayrımı sızdı — tavan kilitlendi"
+    assert yonetici("payg-3").on_izin("goruntu")[0].izinli, "bir hesabın ayrımı başka hesabın tavanından düşüldü"
+
+
+def test_KARSIT_PAYG_tavanin_ALTINDA_agir_analiz_ESKISI_GIBI_izinli(tmp_path):
+    """Kural değişmedi: tavanın altındaki borçta analiz izinlidir, maliyeti tavanı aşabilir (borç 2, tavan 3, ağır araştırma 3)."""
+    j = _yeni(tmp_path, PEMF_JETON_BORC_TAVANI="3")
+    y = j.JetonYoneticisi(
+        bakiye_okuyucu=lambda: 0,
+        tuketim_gonderici=lambda **k: True,
+        odeme_modeli="kullandikca",
+        borc_okuyucu=lambda: 2,
+        sahip="payg-4",
+    )
+    assert y.izin("agir_arastirma").izinli, "tavanın altındaki borçta ağır analiz reddedildi (kural sıkılaştı)"
 
 
 def test_KARSIT_KANIT_web_ile_ayni_PAYG_parametreleri(tmp_path):

@@ -10,8 +10,9 @@ karşılamak zorundadır:
      durdurmayı, ACİL DURDURMAYI, sensör okumayı ve cihaz kontrolünü ASLA engellemez.
      Yalnız YENİ yapay zekâ ANALİZİ isteğini kapılar. (Depo emsali: entitlement.py aynı ilkeyi
      "compute-önceliği kapısı, güvenlik kontrolü DEĞİL" diye yazıyor ve fail-open davranıyor.)
-  2. ÇEVRİMDIŞI KLİNİK: internet yokken analiz durmaz — tüketim yerel deftere yazılır, bağlantı
-     gelince uzlaşır. Sınırsız değil: `OFFLINE_TAVAN` kadar (aksi hâlde ücretlendirme anlamsızlaşır).
+  2. İNTERNET ŞARTI (S-4B.5 + S-4BI.8, sahip kararı 2026-10-19; yalnız ücretlendirme AÇIKKEN): bakiye okunamıyorsa yeni
+     analiz BAŞLATILMAZ (eskiden çevrimdışı tavana kadar izin + defter + "eksi bakiye"). Defterde yalnız YOLDA KALAN ÖDEME
+     olur (karar çevrimiçi alındı, düşüm tam o an gönderilemedi) — sonra yeniden denenir ve o zamana dek bakiyeden düşülür.
   3. ÇİFT DÜŞME YOK: her tüketimin `istek_id`si vardır; yeniden deneme/uzlaştırma aynı jetonu
      iki kez harcayamaz (sunucu tarafında da UNIQUE ile kilitli).
 
@@ -43,11 +44,20 @@ def _yeni(tmp_path, **env):
 
 
 class _Istek:
-    """`_jeton_kapisi_karari`nın kullandığı en küçük Request yüzeyi (kimlikli istek)."""
+    """`_jeton_kapisi_karari`nın kullandığı en küçük Request yüzeyi. ⚠️ "test-jwt" `sub` TAŞIMAZ → zorlama açıkken analiz yolu
+    kimlik reddi (402 `kimlik_yok`) alır; kimlikli analiz için `_IstekKimlikli`."""
 
     def __init__(self, path: str):
         self.url = type("U", (), {"path": path})()
         self.headers = {"authorization": "Bearer test-jwt"}
+
+
+class _IstekKimlikli(_Istek):
+    """`sub` taşıyan JWT ({"sub": "test-kullanici"}) — kapı kimliği çözer, karar bakiye/internet üzerinden verilir."""
+
+    def __init__(self, path: str):
+        super().__init__(path)
+        self.headers = {"authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0LWt1bGxhbmljaSJ9.imza"}
 
 
 _GUVENLIK_YOLLARI_ORNEK = (
@@ -98,41 +108,52 @@ def test_KRITIK_bayrak_KAPALIYKEN_hicbir_sey_kapilanmaz(tmp_path):
     assert karar.izinli, "bayrak kapalıyken analiz engellendi (canlı davranış bozuldu)"
 
 
-def test_KRITIK_sunucuya_ULASILAMAZSA_analiz_durmaz(tmp_path):
-    """Çevrimdışı klinik: bakiye okunamıyor → yerel tavana kadar İZİN + borç kaydı."""
+def test_KRITIK_sunucuya_ULASILAMAZSA_analiz_BASLATILMAZ_S4B5(tmp_path):
+    """S-4B.5 + S-4BI.8 (sahip kararı 2026-10-19 "internetsizken analiz yapılmasın"): bakiye okunamıyor (internet yok) → yeni analiz
+    BAŞLATILMAZ, deftere / sunucuya tüketim YAZILMAZ (eskiden: çevrimdışı tavana kadar izin + borç kaydı). Mesaj nedenini ve tedavinin
+    etkilenmediğini söyler."""
 
     def patlayan():
         raise ConnectionError("ağ yok")
 
     j = _yeni(tmp_path, PEMF_JETON_ENFORCED="1")
-    y = j.JetonYoneticisi(bakiye_okuyucu=patlayan, tuketim_gonderici=lambda **k: False)
+    gonderilen: list = []
+    y = j.JetonYoneticisi(bakiye_okuyucu=patlayan, tuketim_gonderici=lambda **k: (gonderilen.append(k), True)[1])
 
     karar = y.izin("goruntu")
-    assert karar.izinli, "internet yokken analiz engellendi — klinik çalışamaz hâle gelir"
-    assert y.bekleyen_tuketim_sayisi() == 1, "çevrimdışı tüketim yerel deftere yazılmadı"
+    assert not karar.izinli and karar.sebep == "cevrimdisi", f"internetsiz analiz izin aldı: {karar}"
+    assert "internet gerekir" in karar.mesaj and "ETKİLENMEZ" in karar.mesaj, karar.mesaj
+    assert y.bekleyen_tuketim_sayisi() == 0 and not gonderilen, "internetsiz analiz deftere / sunucuya tüketim yazdı"
 
 
-def test_KRITIK_cevrimdisi_TAVAN_asilinca_reddedilir(tmp_path, monkeypatch):
-    """Sınırsız çevrimdışı kullanım ücretlendirmeyi anlamsız yapardı."""
-    from fastapi import HTTPException
-
-    j = _yeni(tmp_path, PEMF_JETON_ENFORCED="1", PEMF_JETON_OFFLINE_TAVAN="3")
+def test_KARSIT_bayrak_KAPALIYKEN_internetsiz_analiz_SERBEST(tmp_path):
+    """İnternet şartı YALNIZ ücretlendirme açıkken (sahip seçimi): bugünkü ücretsiz kipte internetsiz klinik analiz yapar."""
 
     def patlayan():
         raise ConnectionError("ağ yok")
 
+    j = _yeni(tmp_path, PEMF_JETON_ENFORCED="0")
     y = j.JetonYoneticisi(bakiye_okuyucu=patlayan, tuketim_gonderici=lambda **k: False)
-    for _ in range(3):
-        assert y.izin("goruntu").izinli
-    son = y.izin("goruntu")
-    assert not son.izinli, "çevrimdışı tavan aşıldığı hâlde analiz sürdü"
-    # ⚠️ Tavan aşılsa BİLE tedavi yolu serbest kalmalı — GERÇEK kapı gövdesiyle (D4.11: eskiden ölü `GUVENLIK_YOLLARI`
-    # adına `izin("acil_durdur")` soruluyordu). Aynı defter (PEMF_DATA_DIR) kapıda da dolu: analiz 402, acil durdurma serbest.
-    monkeypatch.setattr(j, "_bakiye_satiri_oku", lambda token: patlayan())
+    assert y.izin("goruntu").izinli, "ücretlendirme KAPALIYKEN internetsiz analiz engellendi (bugünkü davranış bozuldu)"
+
+
+def test_KRITIK_kapida_internetsiz_analiz_402_SEBEP_basligi_ve_tedavi_SERBEST(tmp_path, monkeypatch):
+    """GERÇEK kapı gövdesi: internet yok → 402 + `X-PEMF-Jeton-Sebep: cevrimdisi` (arayüz "İnternet bağlantısı gerekli" başlığını
+    seçer); ACİL DURDUR yolu kapıya hiç girmez. (Eski sürüm `sub`'sız jetonla ölçüyordu — 402'yi kimlik reddi veriyordu, kördü.)"""
+    from fastapi import HTTPException
+
+    j = _yeni(tmp_path, PEMF_JETON_ENFORCED="1")
+
+    def patlayan(token):
+        raise ConnectionError("ağ yok")
+
+    monkeypatch.setattr(j, "_bakiye_satiri_oku", patlayan)
     with pytest.raises(HTTPException) as ex:
-        j._jeton_kapisi_karari(_Istek("/api/ai/vision/landmark"))
-    assert ex.value.status_code == 402, "karşıt: kapıdaki çevrimdışı defter dolu değil — ölçüm kör"
-    j._jeton_kapisi_karari(_Istek("/api/hardware/emergency_stop"))  # 402 fırlatmamalı
+        j._jeton_kapisi_karari(_IstekKimlikli("/api/ai/vision/landmark"))
+    assert ex.value.status_code == 402
+    assert (ex.value.headers or {}).get(j.JETON_SEBEP_BASLIGI) == "cevrimdisi", ex.value.headers
+    assert "internet gerekir" in str(ex.value.detail), ex.value.detail
+    assert j._jeton_kapisi_karari(_IstekKimlikli("/api/hardware/emergency_stop")) is None  # 402 fırlatmamalı
 
 
 # ─────────────────────── 3) TÜKETİM / İDEMPOTANS ───────────────────────
@@ -166,17 +187,13 @@ def test_KRITIK_AYNI_istek_iki_kez_dusmez(tmp_path):
     assert len({g["istek_id"] for g in gonderilen}) == 1, "aynı istek iki farklı kimlikle gönderildi"
 
 
-def test_KRITIK_bekleyen_tuketim_UZLASTIRILIR_ve_defterden_dusulur(tmp_path):
-    """Bağlantı gelince biriken çevrimdışı tüketim gönderilir; başarılı olanlar defterden silinir."""
+def test_KRITIK_yolda_kalan_odeme_UZLASTIRILIR_ve_defterden_dusulur(tmp_path):
+    """ "Bir süre yeniden dene" (sahip, 2026-10-19): analiz çevrimiçi karar aldı ve teslim edildi ama düşüm tam o an gönderilemedi →
+    kayıt defterde bekler; bağlantı gelince gönderilir, başarılı olanlar defterden silinir."""
     j = _yeni(tmp_path, PEMF_JETON_ENFORCED="1")
-
-    def patlayan():
-        raise ConnectionError("ağ yok")
-
-    y = j.JetonYoneticisi(bakiye_okuyucu=patlayan, tuketim_gonderici=lambda **k: False)
-    y.izin("goruntu")
-    y.izin("ses")
-    assert y.bekleyen_tuketim_sayisi() == 2
+    y = j.JetonYoneticisi(bakiye_okuyucu=lambda: 100, tuketim_gonderici=lambda **k: False)
+    assert y.izin("goruntu").izinli and y.izin("ses").izinli, "düşüm gönderilemedi diye teslim edilen analiz reddedildi"
+    assert y.bekleyen_tuketim_sayisi() == 2, "gönderilemeyen düşüm deftere yazılmadı (yolda kalan ödeme kayboldu)"
 
     gonderilen = []
     y2 = j.JetonYoneticisi(
@@ -184,24 +201,59 @@ def test_KRITIK_bekleyen_tuketim_UZLASTIRILIR_ve_defterden_dusulur(tmp_path):
         tuketim_gonderici=lambda **k: (gonderilen.append(k), True)[1],
     )
     gonderilen_sayisi = y2.bekleyenleri_uzlastir()
-    assert gonderilen_sayisi == 2, "bekleyen tüketim uzlaştırılmadı"
+    assert gonderilen_sayisi == 2, "yolda kalan ödeme uzlaştırılmadı"
     assert y2.bekleyen_tuketim_sayisi() == 0, "uzlaşan kayıtlar defterden düşmedi"
 
 
-def test_KARSIT_KANIT_uzlastirma_BASARISIZSA_kayit_KORUNUR(tmp_path):
-    """Aşırı-düzeltme koruması: gönderim düşerse kayıt silinirse tüketim SESSİZCE kaybolurdu."""
+def test_KARSIT_KANIT_uzlastirma_GECICI_hatada_kayit_KORUNUR(tmp_path):
+    """Aşırı-düzeltme koruması: gönderim (ağ / 5xx) düşerse kayıt silinseydi tüketim SESSİZCE kaybolurdu."""
     j = _yeni(tmp_path, PEMF_JETON_ENFORCED="1")
-
-    def patlayan():
-        raise ConnectionError("ağ yok")
-
-    y = j.JetonYoneticisi(bakiye_okuyucu=patlayan, tuketim_gonderici=lambda **k: False)
+    y = j.JetonYoneticisi(bakiye_okuyucu=lambda: 100, tuketim_gonderici=lambda **k: False)
     y.izin("goruntu")
     assert y.bekleyen_tuketim_sayisi() == 1
 
     y2 = j.JetonYoneticisi(bakiye_okuyucu=lambda: 100, tuketim_gonderici=lambda **k: False)
     y2.bekleyenleri_uzlastir()
     assert y2.bekleyen_tuketim_sayisi() == 1, "gönderim başarısızken kayıt silindi — tüketim kayboldu"
+
+
+def test_KRITIK_uzlastirmada_KESIN_red_kaydi_DUSURUR_eksi_bakiye_YOK_S4BI8(tmp_path, monkeypatch):
+    """S-4BI.8 (sahip "eksi bakiyeyi temizleyelim"): sunucu kaydı KESİN reddederse (`yetersiz`) kayıt defterden düşer ve günlüğe
+    yazılır (eskiden Y24: bakiye yüklenene dek "eksi bakiye" olarak bekliyor, her uzlaştırmada yeniden reddediliyordu). Aynı turda
+    GEÇİCİ hata alan kayıt KALIR."""
+    j = _yeni(tmp_path, PEMF_JETON_ENFORCED="1")
+    y = j.JetonYoneticisi(bakiye_okuyucu=lambda: 100, tuketim_gonderici=lambda **k: False)
+    y.izin("goruntu")
+    y.izin("ses")
+    uyarilar: list = []
+    monkeypatch.setattr(j.logger, "warning", lambda m, *a, **k: uyarilar.append(m % a if a else m))
+    y2 = j.JetonYoneticisi(
+        bakiye_okuyucu=lambda: 0,
+        tuketim_gonderici=lambda **k: j.TUKETIM_REDDEDILDI if k.get("detay") == "goruntu" else False,
+    )
+    assert y2.bekleyenleri_uzlastir() == 0, "kesin red 'gönderildi' sayıldı"
+    assert [k.get("detay") for k in y2._defteri_oku()] == ["ses"], (
+        "kesin reddedilen kayıt defterde kaldı (eksi bakiye) ya da geçici hata alan kayıt silindi"
+    )
+    assert any("KESİN reddedildi" in u for u in uyarilar), f"kesin red günlüğe yazılmadı: {uyarilar}"
+
+
+def test_KRITIK_yolda_kalan_odeme_SONRAKI_kararda_BAKIYEDEN_dusulur(tmp_path):
+    """Bakiye 1: analiz teslim edildi, düşüm gönderilemedi (sunucu hâlâ 1 der). Sonraki analiz o jetonu ALAMAZ — alsaydı yolda kalan
+    ödeme uzlaştırmada `yetersiz` alıp düşer, bir analiz BEDAVA olurdu. Defter sahibe bağlı: başka hesabın bakiyesi etkilenmez."""
+    j = _yeni(tmp_path, PEMF_JETON_ENFORCED="1")
+    y = j.JetonYoneticisi(bakiye_okuyucu=lambda: 1, tuketim_gonderici=lambda **k: False, sahip="sahip-1")
+    assert y.izin("goruntu").izinli and y.bekleyen_tuketim_sayisi() == 1
+    ikinci = j.JetonYoneticisi(bakiye_okuyucu=lambda: 1, tuketim_gonderici=lambda **k: True, sahip="sahip-1").izin(
+        "goruntu"
+    )
+    assert not ikinci.izinli and ikinci.sebep == "yetersiz", (
+        f"yolda kalan ödeme sayılmadı — aynı jeton iki analize: {ikinci}"
+    )
+    baska = j.JetonYoneticisi(bakiye_okuyucu=lambda: 1, tuketim_gonderici=lambda **k: True, sahip="sahip-2").izin(
+        "goruntu"
+    )
+    assert baska.izinli, "bir hesabın yolda kalan ödemesi başka hesabın bakiyesinden düşüldü"
 
 
 def test_KARSIT_KANIT_maliyet_tablosu_WEB_ile_AYNI(tmp_path):

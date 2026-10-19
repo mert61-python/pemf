@@ -37,7 +37,8 @@ TESTLER = Path(__file__).resolve().parent
 
 #: (bayrak, bozuk değer, modül, öznitelik, beklenen varsayılan)
 BAYRAKLAR = [
-    ("PEMF_JETON_OFFLINE_TAVAN", "elli", "servers.jeton", "OFFLINE_TAVAN", 50),
+    # 2026-10-19: `PEMF_JETON_OFFLINE_TAVAN` kaldırıldı (S-4B.5 — çevrimdışı analiz yok); jeton modülünün öteki sayısal bayrağı.
+    ("PEMF_JETON_CANLI_KARE_TAVANI", "altmis", "servers.jeton", "CANLI_KARE_TAVANI", 60),
     ("PEMF_JETON_BORC_TAVANI", "yuz", "servers.jeton", "BORC_TAVANI", 300),
     ("PEMF_JETON_TIMEOUT", "dort", "servers.jeton", "_SUPABASE_TIMEOUT", 4.0),
     ("PEMF_AI_QUEUE_CONCURRENCY", "bir", "servers.entitlement", "AI_QUEUE_CONCURRENCY", 1),
@@ -247,7 +248,7 @@ def test_KRITIK_bozuk_bayrak_backendi_OLDURMEZ_ACIL_DURDUR_calisir(
 #: (`min(float(env), 180.0)`) sekiz bayrağın dördünde KÖRDÜ. `AI_QUEUE_CONCURRENCY`'de varsayılan = taban (1):
 #: altı geçerli değer YOK, yalnız üstü.
 GECERLI = {
-    "PEMF_JETON_OFFLINE_TAVAN": [("7", 7), ("500", 500)],
+    "PEMF_JETON_CANLI_KARE_TAVANI": [("7", 7), ("500", 500)],
     "PEMF_JETON_BORC_TAVANI": [("11", 11), ("900", 900)],
     "PEMF_JETON_TIMEOUT": [("2.5", 2.5), ("7.5", 7.5)],
     "PEMF_AI_QUEUE_CONCURRENCY": [("3", 3)],
@@ -348,7 +349,7 @@ def test_KARSIT_bekci_gercek_ESTOP_bulut_aynasi_denemesini_GORUR(tmp_path):
     )
     env = _ortam(tmp_path)
     env["PEMF_CLOUD_PROVISION_PATH"] = str(prov)
-    p = _kos(tmp_path, "PEMF_JETON_OFFLINE_TAVAN", None, "servers.jeton", "OFFLINE_TAVAN", env=env)
+    p = _kos(tmp_path, "PEMF_JETON_BORC_TAVANI", None, "servers.jeton", "BORC_TAVANI", env=env)
     s = _sonuc(p.stdout)
     assert p.returncode == 0 and s is not None, p.stderr[-600:]
     assert s["durum"] == 200 and s["stop"] >= 1, s

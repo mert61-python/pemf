@@ -73,20 +73,26 @@ serbestliği ayrıca `tests/test_jeton_kapisi_TUM_ROTALARDA_guvenlik_uclari_SERB
 rotalarında gerçek kapı gövdesiyle ölçülür ve mutasyonla doğrulanmıştır (`/api/hardware/` yollarını ücretli sınıfa
 sokan mutasyon kırmızı yanar).
 
-## 3. Çevrimdışı klinik
+## 3. İnternet şartı ve yolda kalan ödeme
 
-İnternet yokken analiz **durmaz**: tüketim `PEMF_DATA_DIR/jeton_bekleyen.json` defterine yazılır,
-bağlantı dönünce `bekleyenleri_uzlastir()` ile gönderilir — tetik: bir bakiye okuması (`/api/jeton/bakiye`) ya da
-analiz isteği Supabase'e ULAŞTIĞINDA, o isteğin kimliğiyle; arka planda ve tek uçuşla (istek beklemez, aynı kayıt iki
-kez gönderilmez); gönderilemeyen kayıt defterde kalır (D4.23, Y24: geriye dönük düşülür, rozet sunucu bakiyesini
-gösterir, `bekleyen` uzlaşmamış kayıt sayısını söyler). ⚠️ Açık: sunucu `jeton_tuket` ön ödemeli modelde yetersiz
-bakiyede uzlaştırmayı da `yetersiz` ile reddeder → kayıt defterde kalır; Y24'ün "bakiye eksiye düşebilir" kısmı
-SQL değişikliği + canlı Supabase uygulaması ister (sahip). Sınır: `PEMF_JETON_OFFLINE_TAVAN`
-(varsayılan 50) — sınırsız olsaydı ücretlendirme anlamsızlaşırdı. Tavan aşılsa bile **tedavi yolu
-serbest** kalır.
+**Sahip kararı (2026-10-19, S-4B.5 + S-4BI.8):** ücretlendirme AÇIKKEN (`PEMF_JETON_ENFORCED=1`) yapay zekâ analizi
+internet ister. Bakiye / borç okunamıyorsa yeni analiz **başlatılmaz** — 402, mesaj nedenini ve tedavinin etkilenmediğini
+söyler, `X-PEMF-Jeton-Sebep: cevrimdisi` başlığıyla (arayüz "İnternet bağlantısı gerekli" başlığını gösterir). Seans,
+acil durdurma ve sensör izleme internetsiz de çalışır (bu kapıya hiç gelmez). Eskiden internetsiz analiz çevrimdışı
+tavana (`PEMF_JETON_OFFLINE_TAVAN`, 50) kadar izin alıp deftere yazılıyordu; çevrimdışı analiz, tavan ve "eksi bakiye"
+(sunucunun reddettiği tüketimin defterde borç olarak beklemesi — Y24'ün SQL isteyen kısmı) **kaldırıldı**. Ücretlendirme
+kapalıyken davranış değişmedi (internetsiz analiz serbest).
 
-**Başarısız gönderim kaydı silmez** — silseydi tüketim sessizce kaybolurdu. `istek_id` sayesinde
-tekrar gönderim güvenlidir (sunucu ikinciyi yok sayar).
+**Yolda kalan ödeme ("Bir süre yeniden dene"):** analiz çevrimiçi karar aldı ve teslim edildi ama düşüm tam o an
+gönderilemediyse kayıt `PEMF_DATA_DIR/jeton_bekleyen.json` defterine yazılır ve `bekleyenleri_uzlastir()` ile yeniden
+gönderilir — tetik: sahibin bir bakiye okuması (`/api/jeton/bakiye`) ya da analiz isteği Supabase'e ULAŞTIĞINDA, o isteğin
+kimliğiyle; arka planda ve tek uçuşla (istek beklemez, aynı kayıt iki kez gönderilmez). Gönderilene dek kayıt sahibin
+sonraki kararlarında bakiyeden düşülmüş (kullandıkça öde: borca eklenmiş) sayılır → aynı jeton ikinci analize verilmez,
+bakiye eksiye düşmez. `bekleyen` alanı henüz gönderilemeyen kayıt sayısını söyler.
+
+**Geçici hata kaydı silmez** — silseydi tüketim sessizce kaybolurdu. `istek_id` sayesinde tekrar gönderim güvenlidir
+(sunucu ikinciyi yok sayar). **Kesin red** (`jeton_tuket` → `yetersiz`: aynı hesabı başka cihaz harcadı) kaydı düşürür ve
+günlüğe yazar — teslimdeki kesin redle aynı sonuç: o tek analiz ücretsiz kalır, borç tutulmaz.
 
 ## 4. Parçalar
 
@@ -94,7 +100,7 @@ tekrar gönderim güvenlidir (sunucu ikinciyi yok sayar).
 |---|---|---|
 | Şema | `apps/backend/database/supabase_jetonlar.sql` | `token_balances` + `token_ledger`, RLS, atomik `jeton_tuket` RPC, `jeton_donem_yenile` |
 | Uç | `apps/web/api/tokens.ts` | GET bakiye · POST tüketim (idempotans zorunlu) |
-| Cihaz | `apps/backend/servers/jeton.py` | Kapı + çevrimdışı defter + uzlaştırma; bayraklı, fail-open |
+| Cihaz | `apps/backend/servers/jeton.py` | Kapı + yolda kalan ödeme defteri + uzlaştırma; bayraklı; ücretlendirme açıkken internet şartı |
 | Web modeli | `apps/web/src/config.ts::JETON` | Plan hakları, maliyetler, paketler (kullanıcı metninin kaynağı) |
 | Arayüz | `src/components/AccountButton.tsx`, `src/lib/jeton.ts` | Hesap menüsünde kalan jeton |
 | Fiyat metni | `apps/web/src/lib/planFiyat.ts` | Plan fiyat gösterimi — **tek kaynak**; aylık ücreti olmayan planı "₺0/ay" diye basmayı önler |
@@ -345,8 +351,8 @@ Bu adım bitene kadar kullandıkça-öde planı sitede görünür ama **satılma
 
 ### Adım 6 — Bayrağı aç *(çalıştırma işi, ~1 dk + izleme)*
 
-`PEMF_JETON_ENFORCED=1` (klinik cihazının servis ortamında). İsteğe bağlı:
-`PEMF_JETON_OFFLINE_TAVAN=50`.
+`PEMF_JETON_ENFORCED=1` (klinik cihazının servis ortamında). Açıldığı andan itibaren yapay zekâ analizi
+internet ister (§3); seans / acil durdurma internetsiz çalışmayı sürdürür. (`PEMF_JETON_OFFLINE_TAVAN` 2026-10-19'da kaldırıldı.)
 
 **Kademeli açmayı öner:** önce tek bir test kliniğinde aç, bir hafta izle (`token_ledger`'da
 tüketim akıyor mu, `jeton_bekleyen.json` şişiyor mu), sonra yaygınlaştır.

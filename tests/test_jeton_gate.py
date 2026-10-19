@@ -17,8 +17,8 @@ SÖZLEŞME:
   4. ⚠️ TIBBİ GÜVENLİK (4.3): tedavi/kontrol uçları (`/api/session/*`, `/api/coil/*`, acil
      durdurma) jeton kapısının ARKASINDA DEĞİLDİR — yapısal olarak doğrulanır.
   5. Bayrak AÇIK + bakiye 0 → 402 + Türkçe mesaj; mesaj tedavinin ETKİLENMEDİĞİNİ söyler.
-  6. Bakiye OKUNAMIYORSA (çevrimdışı klinik) analiz DURMAZ (fail-open + yerel defter) —
-     internet yokluğu kliniği çalışamaz hâle getirmez.
+  6. Bakiye OKUNAMIYORSA (internet yok) yeni analiz BAŞLATILMAZ — 402, `X-PEMF-Jeton-Sebep: cevrimdisi` (S-4B.5 + S-4BI.8,
+     sahip kararı 2026-10-19; eskiden fail-open + yerel defter). Seans / acil durdurma / sensör internetsiz de SERBEST.
 """
 
 from __future__ import annotations
@@ -197,15 +197,51 @@ def test_KRITIK_PAYG_borc_tavaninda_402(jeton, monkeypatch):
     assert ex.value.status_code == 402
 
 
-def test_KARSIT_KANIT_cevrimdisi_klinikte_analiz_DURMAZ(jeton, monkeypatch):
-    """İnternet yokluğu kliniği çalışamaz hâle GETİRMEZ (fail-open + yerel defter)."""
+def test_KRITIK_internetsiz_klinikte_ANALIZ_402_cevrimdisi_tedavi_SERBEST_S4B5(jeton, monkeypatch):
+    """S-4B.5 (sahip "internetsizken analiz yapılmasın"): bakiye okunamıyor → analiz 402 + sebep başlığı `cevrimdisi`, mesaj interneti
+    ve tedavinin etkilenmediğini söyler; aynı anda seans / ACİL DURDUR yolları kapıya girmez (internetsiz klinik TEDAVİ yapar)."""
     monkeypatch.setattr(jeton, "JETON_ENFORCED", True)
 
     def _patlayan(token):
         raise ConnectionError("ag yok")
 
     monkeypatch.setattr(jeton, "_bakiye_satiri_oku", _patlayan)
-    jeton._jeton_kapisi_karari(_Istek("/api/ai/vision/landmark"))  # istisna atmamalı (izin)
+    with pytest.raises(HTTPException) as ex:
+        jeton._jeton_kapisi_karari(_Istek("/api/ai/vision/landmark"))
+    assert ex.value.status_code == 402
+    assert (ex.value.headers or {}).get("X-PEMF-Jeton-Sebep") == "cevrimdisi", ex.value.headers
+    assert "internet gerekir" in str(ex.value.detail) and "ETKİLENMEZ" in str(ex.value.detail), ex.value.detail
+    for yol in ("/api/hardware/emergency_stop", "/api/session/stop", "/api/ai/pro/stop"):
+        assert jeton._jeton_kapisi_karari(_Istek(yol)) is None, f"internetsizken tedavi yolu kapılandı: {yol}"
+
+
+def test_KARSIT_KANIT_402_sebep_basligi_YETERSIZ_bakiyede_yetersiz(jeton, monkeypatch):
+    """Başlık sebebi ayırt eder: bakiye 0 (çevrimiçi) → `yetersiz` (arayüz "Jeton hakkı" başlığı) — her 402'ye `cevrimdisi` yazan
+    mutantı yakalar."""
+    monkeypatch.setattr(jeton, "JETON_ENFORCED", True)
+    monkeypatch.setattr(
+        jeton,
+        "_bakiye_satiri_oku",
+        lambda token: {"aylik_hak": 0, "satin_alinan": 0, "odeme_modeli": "on_odemeli", "kullandikca_borc": 0},
+    )
+    with pytest.raises(HTTPException) as ex:
+        jeton._jeton_kapisi_karari(_Istek("/api/ai/vision/landmark"))
+    assert (ex.value.headers or {}).get("X-PEMF-Jeton-Sebep") == "yetersiz", ex.value.headers
+
+
+def test_KRITIK_402_sebep_basligi_TARAYICIYA_acik_CORS_expose():
+    """Arayüz (web paneli / webview) cihaza başka KÖKENDEN istek atar: tarayıcı yalnız `Access-Control-Expose-Headers`'ta adı geçen
+    yanıt başlığını JS'e verir — yoksa `cevrimdisi` sebebi hiç okunmaz, pencere başlığı "Jeton hakkı" kalır (gerçek uygulama)."""
+    from fastapi.testclient import TestClient
+    from servers import api_server
+
+    c = TestClient(api_server.app, client=("127.0.0.1", 51241))
+    r = c.get("/api/health", headers={"Origin": "http://localhost:8081"})
+    assert r.headers.get("access-control-allow-origin") == "http://localhost:8081", (
+        "ölçüm aracı: LAN kökeni CORS'tan geçmedi"
+    )
+    acik = [h.strip().lower() for h in r.headers.get("access-control-expose-headers", "").split(",")]
+    assert "x-pemf-jeton-sebep" in acik, f"402 sebep başlığı tarayıcıya kapalı: {dict(r.headers)}"
 
 
 def test_KARSIT_KANIT_serbest_uc_bayrak_ACIKKEN_bile_ag_cagrisi_yapmaz(jeton, monkeypatch):

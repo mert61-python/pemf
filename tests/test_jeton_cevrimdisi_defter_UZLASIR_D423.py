@@ -10,6 +10,8 @@ gösterir; `bekleyen` alanı uzlaşmamış sayıyı söyler).
 
 Ölçüm: GERÇEK `bakiye_ozeti` / `_jeton_kapisi_karari` üretim yolları; Supabase taşıma katmanı (`_bakiye_satiri_oku`,
 `_tuketim_gonder_canli`) sahte — canlı Supabase YOK. Defter gerçek dosya (`PEMF_DATA_DIR` = tmp_path).
+2026-10-19 (S-4B.5 + S-4BI.8): çevrimdışı analiz kaldırıldı — defterde yalnız YOLDA KALAN ÖDEME olur (çevrimiçi karar, düşüm o an
+gönderilemedi); uzlaştırma sözleşmesi aynen, yalnız sunucunun KESİN reddi (`yetersiz`) kaydı artık DÜŞÜRÜR (eksi bakiye yok).
 """
 
 from __future__ import annotations
@@ -167,6 +169,21 @@ def test_KARSIT_gonderilemeyen_kayit_KORUNUR(j, monkeypatch):
     j.bakiye_ozeti(_SahteIstek("tok-6"))
     _bitir(j)
     assert [k.get("istek_id") for k in _defter(j)] == ["g-2"], "başarısız gönderim defterden silindi (tüketim kaybolur)"
+
+
+def test_KRITIK_uzlastirmada_KESIN_red_kaydi_DUSURUR_gecici_hata_KORUR_S4BI8(j, monkeypatch):
+    """Arka plan uzlaştırması (gerçek tetik): `yetersiz` alan kayıt düşer (eksi bakiye tutulmaz), geçici hata alan kalır."""
+    gonderilen = []
+    _cevrimici(
+        j, monkeypatch, gonderilen, cevap=lambda k: j.TUKETIM_REDDEDILDI if k.get("istek_id") == "h-1" else False
+    )
+    _defter_yaz(j, [{"istek_id": "h-1", "miktar": 1}, {"istek_id": "h-2", "miktar": 1}], "tok-8")
+    j.bakiye_ozeti(_SahteIstek("tok-8"))
+    _bitir(j)
+    assert sorted(i for _, i in gonderilen) == ["h-1", "h-2"], gonderilen
+    assert [k.get("istek_id") for k in _defter(j)] == ["h-2"], (
+        "kesin red defterde kaldı ya da geçici hata alan kayıt silindi"
+    )
 
 
 def test_KARSIT_bayrak_KAPALIYKEN_hicbir_sey_yapilmaz(tmp_path, monkeypatch):

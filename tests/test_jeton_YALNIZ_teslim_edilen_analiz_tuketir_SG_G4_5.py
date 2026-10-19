@@ -74,7 +74,7 @@ def ortam(tmp_path, monkeypatch):
 
     def _gonder(token, **k):
         giden.append(k)
-        return True
+        return not bakiye.get("_odeme_kopuk")  # okuma gider, düşüm gitmez → yolda kalan ödeme (2026-10-19)
 
     monkeypatch.setattr(j, "_bakiye_satiri_oku", _oku)
     monkeypatch.setattr(j, "_tuketim_gonder_canli", _gonder)
@@ -134,15 +134,33 @@ def test_KRITIK_istemci_KOPTUYSA_sonuc_teslim_edilemez_JETON_DUSURMEZ(ortam, mon
     assert giden == [], f"istemcisi kopan (iptal edilen canlı kare) analiz için jeton DÜŞTÜ: {giden}"
 
 
-def test_KRITIK_cevrimdisi_defter_YALNIZ_basarili_analizde_yazilir(ortam):
+def test_KRITIK_yolda_kalan_odeme_YALNIZ_basarili_analizde_deftere_yazilir(ortam):
+    """Düşüm ağ kopukluğuyla gönderilemiyor (2026-10-19 — çevrimdışı analiz yok; defter = yolda kalan ödeme): reddedilen analiz
+    deftere yazmaz, başarılı analiz yazar."""
     client, j, bakiye, okunan, giden, _ = ortam
-    bakiye["_cevrimdisi"] = True
+    bakiye["_odeme_kopuk"] = True
     sayac = lambda: j._defter_yoneticisi(sahip=j._jwt_sahip(_jwt("hekim-a"))).sahibin_bekleyen_sayisi()  # noqa: E731
     assert sayac() == 0
     assert _termal(client, _kamera_karesi()).status_code == 422
-    assert sayac() == 0, "çevrimdışı: reddedilen analiz deftere tüketim yazdı"
+    assert sayac() == 0, "reddedilen analiz deftere tüketim yazdı"
     assert _termal(client, TERMAL.read_bytes()).status_code == 200
-    assert sayac() == 1, "çevrimdışı: başarılı analiz deftere YAZILMADI (çevrimdışı ücretlendirme bozuldu)"
+    assert sayac() == 1, "başarılı analizin gönderilemeyen düşümü deftere YAZILMADI (yolda kalan ödeme kayboldu)"
+
+
+def test_KRITIK_internetsiz_analiz_402_model_KOSMAZ_tuketim_YOK_S4B5(ortam, monkeypatch):
+    """S-4B.5 (2026-10-19): internetsiz (bakiye okunamıyor) analiz uca HİÇ girmez — 402 + sebep başlığı, model çağrılmaz, tüketim yok."""
+    client, j, bakiye, okunan, giden, tahminci = ortam
+    bakiye["_cevrimdisi"] = True
+    cagri: list = []
+    gercek = tahminci.predict
+    monkeypatch.setattr(tahminci, "predict", lambda *a, **k: (cagri.append(1), gercek(*a, **k))[1])
+    r = _termal(client, TERMAL.read_bytes())
+    assert r.status_code == 402, r.text[:200]
+    assert r.headers.get("x-pemf-jeton-sebep") == "cevrimdisi", dict(r.headers)
+    assert okunan, "KARŞIT: kapı bakiyeyi hiç okumadı — ölçüm kör"
+    assert cagri == [] and giden == [], (
+        f"internetsiz analiz modeli koşturdu ({len(cagri)}) ya da tüketim gönderdi ({giden})"
+    )
 
 
 def test_KARSIT_KANIT_yetersiz_bakiye_402_ve_tuketim_YOK(ortam):

@@ -10,8 +10,9 @@ kümesinde (48 dosya, 436 test) YEŞİL kalıyordu → istemcinin "çift düşme
 Ölçüm: (1) SQL metni (yorumlar soyulmuş; D4.26 ayrıştırıcısının `_strip_comments`'i) — tablo kısıtı ve RPC'deki denetimin SIRASI;
 (2) davranış: GERÇEK `bakiye_ozeti` / `_jeton_kapisi_karari` / uzlaştırma ipliği, Supabase taşıma katmanı yerine SQL'in ANLAMINI taklit
 eden sahte (kullanıcı = JWT `sub`; işlenmiş `(kullanıcı, istek_id)` → `ok` ve düşüm YOK). Karşıt kanıt: aynı senaryo idempotansız
-sahteyle çift düşüm GÖSTERİR (ölçüm aracı kör değil). (3) Ö.4-Y8: tavan dolu + çevrimdışı + defter dolu iken serbest uçlar (AI Pro
-durdurma vb.) ve /api/ai dışı tedavi / ACİL DURDUR yolları defteri OKUMAZ, uzlaştırmayı tetiklemez, bakiye okumaz (gecikme yok).
+sahteyle çift düşüm GÖSTERİR (ölçüm aracı kör değil). (3) Ö.4-Y8: internetsiz + defter dolu iken serbest uçlar (AI Pro durdurma vb.)
+ve /api/ai dışı tedavi / ACİL DURDUR yolları defteri OKUMAZ, uzlaştırmayı tetiklemez, bakiye okumaz (gecikme yok).
+2026-10-19 (S-4B.5): defterde yalnız YOLDA KALAN ÖDEME olur (çevrimiçi karar, düşüm o an gönderilemedi) — kayıtlar artık öyle üretilir.
 """
 
 from __future__ import annotations
@@ -107,6 +108,9 @@ class SahteSupabase:
         self.defter: list[tuple[str, str, int]] = []
         self.tekilsiz = tekilsiz
         self.cevrimici = True
+        self.odeme_kopuk = (
+            False  # okuma gider, DÜŞÜM gitmez (analiz teslim edildi, ağ tam o an koptu → yolda kalan ödeme)
+        )
         self.kilit = threading.Lock()
 
     def bakiye_oku(self, token):
@@ -115,7 +119,7 @@ class SahteSupabase:
         return {"aylik_hak": self.bakiye.get(_sub(token), 0), "satin_alinan": 0, "odeme_modeli": "on_odemeli"}
 
     def tuket(self, token, **k):
-        if not self.cevrimici:
+        if not self.cevrimici or self.odeme_kopuk:
             return False
         u, iid, m = _sub(token), str(k.get("istek_id") or ""), int(k.get("miktar") or 0)
         with self.kilit:
@@ -133,9 +137,6 @@ def j(tmp_path, monkeypatch):
     monkeypatch.setenv("PEMF_DATA_DIR", str(tmp_path))
     mod = importlib.import_module("servers.jeton")
     monkeypatch.setattr(mod, "JETON_ENFORCED", True)
-    monkeypatch.setattr(
-        mod, "OFFLINE_TAVAN", 50
-    )  # test_jeton_yoneticisi.py:119 modülü tavan 3 ile yeniden yükleyip bırakabilir
     monkeypatch.setattr(mod, "_son_uzlastirma", None, raising=False)
     yield mod
     t = getattr(mod, "_son_uzlastirma", None)
@@ -163,17 +164,19 @@ def _defter(j):
 ANALIZ = "/api/ai/vision/ornek_analiz"  # goruntu sınıfı (1 jeton)
 
 
-def _cevrimdisi_analizler(j, sb, sub, n):
-    sb.cevrimici = False
+def _yolda_kalan_odemeler(j, sb, sub, n):
+    """n analiz çevrimiçi karar alır ve teslim edilir; düşüm ağ kopukluğuyla gönderilemez → defterde n yolda kalan ödeme."""
+    sb.odeme_kopuk = True
     for _ in range(n):
         j._jeton_kapisi_karari(_Istek(sub, ANALIZ))
-    sb.cevrimici = True
+    _bekle(j)  # kopukken başlamış uzlaştırma bitsin (bağlantı "dönünce" eski iplik göndermesin)
+    sb.odeme_kopuk = False
 
 
 def test_KRITIK_baglanti_donunce_ESZAMANLI_tetikler_CIFT_DUSMEZ(j, monkeypatch):
     sb = SahteSupabase({"A": 10, "B": 10})
     _bagla(j, monkeypatch, sb)
-    _cevrimdisi_analizler(j, sb, "A", 3)
+    _yolda_kalan_odemeler(j, sb, "A", 3)
     assert len(_defter(j)) == 3
     hatalar: list[str] = []
 
@@ -201,7 +204,7 @@ def test_KRITIK_baglanti_donunce_ESZAMANLI_tetikler_CIFT_DUSMEZ(j, monkeypatch):
     assert not hatalar, hatalar
     assert _defter(j) == [], f"defter uzlaşmadı: {_defter(j)}"
     a = [d for d in sb.defter if d[0] == "A"]
-    assert len(a) == 4 and len({d[1] for d in a}) == 4, f"A: {a}"  # 3 çevrimdışı + 1 çevrimiçi
+    assert len(a) == 4 and len({d[1] for d in a}) == 4, f"A: {a}"  # 3 yolda kalan + 1 çevrimiçi
     assert sb.bakiye == {"A": 6, "B": 10}, sb.bakiye
 
 
@@ -209,7 +212,7 @@ def test_KRITIK_baglanti_donunce_ESZAMANLI_tetikler_CIFT_DUSMEZ(j, monkeypatch):
 def test_KRITIK_gonderim_sonrasi_defter_yazilamazsa_YENIDEN_gonderim_CIFT_DUSMEZ(j, monkeypatch, tekilsiz):
     sb = SahteSupabase({"A": 10}, tekilsiz=tekilsiz)
     _bagla(j, monkeypatch, sb)
-    _cevrimdisi_analizler(j, sb, "A", 2)
+    _yolda_kalan_odemeler(j, sb, "A", 2)
     gercek_yaz = j.JetonYoneticisi._defteri_yaz
     durum = {"dusur": True}
 
@@ -232,17 +235,17 @@ def test_KRITIK_gonderim_sonrasi_defter_yazilamazsa_YENIDEN_gonderim_CIFT_DUSMEZ
         assert sb.bakiye["A"] == 8, f"ÇİFT DÜŞÜM: {sb.bakiye} (beklenen 8)"
 
 
-def test_KRITIK_tavan_doluyken_SERBEST_ve_TEDAVI_uclari_deftere_ve_aga_DOKUNMAZ(j, monkeypatch):
-    """Ö.4-Y8: zorlama açık, çevrimdışı, tavan DOLU, defter dolu → serbest AI uçları ve /api/ai dışı tedavi / ACİL DURDUR yolları
-    kapıya girmez: defter okunmaz, uzlaştırma tetiklenmez, bakiye okunmaz (asılı ağ bile gecikme yaratmaz)."""
-    monkeypatch.setattr(j, "OFFLINE_TAVAN", 2)
-    sb = SahteSupabase({"A": 0})
+def test_KRITIK_internetsiz_ve_defter_doluyken_SERBEST_ve_TEDAVI_uclari_deftere_ve_aga_DOKUNMAZ(j, monkeypatch):
+    """Ö.4-Y8: zorlama açık, internet YOK (analiz 402 `cevrimdisi`), defterde yolda kalan ödeme → serbest AI uçları ve /api/ai dışı
+    tedavi / ACİL DURDUR yolları kapıya girmez: defter okunmaz, uzlaştırma tetiklenmez, bakiye okunmaz (asılı ağ bile gecikme yaratmaz)."""
+    sb = SahteSupabase({"A": 10})
     _bagla(j, monkeypatch, sb)
-    _cevrimdisi_analizler(j, sb, "A", 2)
+    _yolda_kalan_odemeler(j, sb, "A", 2)
+    assert len(_defter(j)) == 2, "ölçüm aracı: defter dolmadı"
     sb.cevrimici = False
     with pytest.raises(Exception) as e:
         j._jeton_kapisi_karari(_Istek("A", ANALIZ))
-    assert getattr(e.value, "status_code", None) == 402, "ölçüm aracı: tavan dolu analiz 402 almalı"
+    assert getattr(e.value, "status_code", None) == 402, "ölçüm aracı: internetsiz analiz 402 almalı"
     sayac = {"oku": 0, "tetik": 0, "bakiye": 0}
     gercek_oku = j.JetonYoneticisi._defteri_oku
 

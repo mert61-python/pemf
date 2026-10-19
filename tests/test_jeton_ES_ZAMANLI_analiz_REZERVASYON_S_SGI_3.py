@@ -4,11 +4,13 @@
 Ölçülen boşluk (SGI-2.5, A2): karar analiz başlarken, tüketim teslimde → pencere = analiz süresi. Bakiye 1, eşzamanlı 4 analiz →
 4 teslim, 1 düşüldü, 3 deftere "borç"; çevrimdışı tavan 50 (49 dolu), eşzamanlı 4 → defter 53.
 SÖZLEŞME:
- · karar anında `kalan − ayrılmış ≥ maliyet` (çevrimiçi: SAHİP başına; çevrimdışı: CİHAZ geneli defter yeri) → fazlası 402;
+ · karar anında `kalan − ayrılmış ≥ maliyet` (SAHİP başına; kullandıkça öde: `borç + ayrılmış < tavan`) → fazlası 402; internetsiz
+   karar YOK (2026-10-19 S-4B.5: 402 `cevrimdisi` — eski çevrimdışı tavan ayrımı kaldırıldı); yolda kalan ödeme bakiyeden düşülür;
  · teslim edilmeyen analiz (uç istisnası) ayrımı BIRAKIR — sonraki analiz son jetonu kullanabilir; kesilen istekte ayrım 300 sn'de düşer;
  · tüketim okunan bakiyeye yansımadan (okuma tüketimden ÖNCE başladı) verilen karar o tüketimi yok SAYMAZ;
  · aynı canlı dakika kovası (sunucuda idempotent) ikinci kez ayrılmaz; sıralı analizler eskisi gibi (çifte sayım yok);
- · sunucunun KESİN `yetersiz` cevabı (başka cihaz bakiyeyi bitirdi) deftere "borç" YAZILMAZ; ağ hatası yine deftere (fail-open).
+ · sunucunun KESİN `yetersiz` cevabı (başka cihaz bakiyeyi bitirdi) deftere "borç" YAZILMAZ, uzlaştırmada da kaydı DÜŞÜRÜR (S-4BI.8);
+   ağ hatası yine deftere (yolda kalan ödeme — "Bir süre yeniden dene").
 GERÇEK karar gövdesi (`_jeton_on_karari`) / `JetonYoneticisi` / uygulama + `jeton_gate` / `jeton_tuketimi`; sahte yalnız EN ALT katta:
 Supabase taşıması (bakiye satırı + `rpc/jeton_tuket` taklidi — `supabase_jetonlar.sql`: satır kilidi, idempotans, `yetersiz`), termal
 model, saat. Ömür değerleri DAVRANIŞLA pinlenir (modül sabiti okunmaz).
@@ -59,7 +61,12 @@ def ortam(tmp_path, monkeypatch):
         if sunucu["okurken"]:
             f, sunucu["okurken"] = sunucu["okurken"], None
             f()  # okuma sürerken başka analiz tüketir (okuma ESKİ bakiyeyi getirir)
-        return {"aylik_hak": 0, "satin_alinan": gorulen, "odeme_modeli": "on_odemeli", "kullandikca_borc": 0}
+        return {
+            "aylik_hak": 0,
+            "satin_alinan": gorulen,
+            "odeme_modeli": sunucu.get("model", "on_odemeli"),
+            "kullandikca_borc": sunucu.get("borc", 0),
+        }
 
     def _rpc(token, **k):
         if sunucu["ag_hatasi"]:
@@ -111,19 +118,47 @@ def test_KRITIK_bakiye_1_es_zamanli_4_analiz_YALNIZ_1_izin_ve_deftere_BORC_yok(o
     assert _defter(o) == [], f"eşzamanlı analizler deftere borç yazdı: {_defter(o)}"
 
 
-def test_KRITIK_cevrimdisi_tavan_49_dolu_es_zamanli_4_analiz_defter_50yi_ASMAZ(ortam):
+def test_KRITIK_internetsiz_analiz_KARAR_almaz_402_cevrimdisi_defter_DEGISMEZ_S4B5(ortam):
+    """S-4B.5 + S-4BI.8 (2026-10-19): eskiden çevrimdışı tavan 50 (49 dolu) iken bir analiz daha İZİN + deftere borç alıyordu.
+    İnternetsiz karar artık YOK: dördü de 402, sebep başlığı `cevrimdisi`, defter ve sunucu DEĞİŞMEZ."""
     o = ortam
-    j = o.j
-    o.monkeypatch.setattr(j, "OFFLINE_TAVAN", 50)
     o.sunucu["cevrimdisi"] = True
-    j._defter_yolu().write_text(
-        json.dumps([{"istek_id": f"eski-{i}", "miktar": 1, "tur": "analiz", "sahip": "x"} for i in range(49)]),
-        encoding="utf-8",
-    )
+    for _ in range(4):
+        with pytest.raises(HTTPException) as ex:
+            o.j._jeton_on_karari(_istek())
+        assert ex.value.status_code == 402, ex.value.status_code
+        assert (ex.value.headers or {}).get(o.j.JETON_SEBEP_BASLIGI) == "cevrimdisi", ex.value.headers
+    assert _defter(o) == [] and o.sunucu["dusulen"] == [], (_defter(o), o.sunucu["dusulen"])
+
+
+def test_KRITIK_kullandikca_tavanin_1_altinda_es_zamanli_4_analiz_YALNIZ_1_izin(ortam):
+    """Kapı (gerçek karar gövdesi): kullandıkça öde, borç 2, tavan 3 → eşzamanlı 4 analizden YALNIZ biri izin alır (2026-10-19
+    eşzamanlılık açığı: sunucu borcu sınırsız artırır, tavan yalnız cihazda). Sebep başlığı `borc_tavani`."""
+    o = ortam
+    o.monkeypatch.setattr(o.j, "BORC_TAVANI", 3)
+    o.sunucu["model"], o.sunucu["borc"] = "kullandikca", 2
     kararlar = [_karar(o) for _ in range(4)]
-    assert kararlar[1:] == [402, 402, 402], f"çevrimdışı tavanda eşzamanlı analizler: {kararlar}"
-    kararlar[0]()
-    assert len(_defter(o)) == 50, len(_defter(o))
+    assert callable(kararlar[0]) and kararlar[1:] == [402, 402, 402], kararlar
+    with pytest.raises(HTTPException) as ex:
+        o.j._jeton_on_karari(_istek())
+    assert (ex.value.headers or {}).get(o.j.JETON_SEBEP_BASLIGI) == "borc_tavani", ex.value.headers
+
+
+def test_KRITIK_yolda_kalan_odeme_SONRAKI_kararda_bakiyeden_dusulur_bedava_analiz_YOK(ortam):
+    """Bakiye 1: analiz teslim edildi, düşüm ağ hatasıyla gönderilemedi (sunucu hâlâ 1, defterde 1). 31 sn sonra (tüketilmiş ayrım
+    artık hiçbir okumaya görünmez) yeni analiz o jetonu ALAMAZ; uzlaştırma kaydı düşer → bakiye 0, defter boş. Bakiye yüklenince
+    uzlaşmış ödeme ikinci kez düşülmez."""
+    o = ortam
+    o.sunucu["ag_hatasi"] = True
+    _karar(o)()
+    assert len(_defter(o)) == 1 and o.sunucu["bakiye"] == 1, (_defter(o), o.sunucu)
+    o.sunucu["ag_hatasi"] = False
+    o.saat[0] += 31.0
+    assert _karar(o) == 402, "yolda kalan ödeme sonraki kararda sayılmadı — aynı jeton ikinci analize verildi"
+    y = o.j._defter_yoneticisi(lambda **k: o.j._tuketim_gonder_canli("t", **k), sahip=o.j._jwt_sahip(_jwt("hekim-a")))
+    assert y.bekleyenleri_uzlastir() == 1 and _defter(o) == [] and o.sunucu["bakiye"] == 0, (_defter(o), o.sunucu)
+    o.sunucu["bakiye"] = 1
+    assert callable(_karar(o)), "uzlaşmış ödeme hâlâ düşülüyor (çifte sayım)"
 
 
 def test_KRITIK_teslim_EDILMEYEN_analiz_ayrimi_BIRAKIR_son_jeton_sonraki_analize_kalir(ortam):
@@ -213,8 +248,9 @@ def test_KRITIK_sunucu_KESIN_yetersiz_deftere_BORC_yazilmaz_ag_hatasi_yine_defte
     assert len(_defter(o)) == 1, "ağ hatasında tüketim deftere düşmedi (fail-open bozuldu)"
 
 
-def test_KARSIT_kesin_red_UZLASTIRMADA_kaydi_SILMEZ_Y24(ortam):
-    """Çevrimdışı defterdeki kayıt uzlaştırmada `yetersiz` alırsa KALIR (bakiye yüklenince geriye dönük düşer — Y24)."""
+def test_KRITIK_kesin_red_UZLASTIRMADA_kaydi_DUSURUR_eksi_bakiye_YOK_S4BI8(ortam):
+    """S-4BI.8 (sahip "eksi bakiyeyi temizleyelim", 2026-10-19): defterdeki kayıt uzlaştırmada `yetersiz` alırsa DÜŞER (eskiden Y24:
+    bakiye yüklenene dek "eksi bakiye" olarak kalıyor, her uzlaştırmada yeniden reddediliyordu)."""
     o = ortam
     j = o.j
     o.sunucu["bakiye"] = 0
@@ -233,8 +269,9 @@ def test_KARSIT_kesin_red_UZLASTIRMADA_kaydi_SILMEZ_Y24(ortam):
         encoding="utf-8",
     )
     y = j._defter_yoneticisi(lambda **k: j._tuketim_gonder_canli("t", **k), sahip=j._jwt_sahip(_jwt("hekim-a")))
-    assert y.bekleyenleri_uzlastir() == 0
-    assert len(_defter(o)) == 1
+    assert y.bekleyenleri_uzlastir() == 0, "kesin red 'gönderildi' sayıldı"
+    assert _defter(o) == [], f"kesin reddedilen kayıt defterde kaldı (eksi bakiye): {_defter(o)}"
+    assert o.sunucu["bakiye"] == 0 and o.sunucu["dusulen"] == []
 
 
 @pytest.mark.parametrize(
