@@ -1,3 +1,5 @@
+// I18N-0: dil katmanı İLK içe aktarılır — senkron başlar, ilk karede metin hazır (bkz. src/i18n/index.ts).
+import "@/i18n";
 import { useEffect, useState } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";

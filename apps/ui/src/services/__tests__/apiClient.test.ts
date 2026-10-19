@@ -251,14 +251,15 @@ describe("AI zaman aşımı ve sessiz iptal", () => {
 
 describe("authHeaders", () => {
 
+  // I18N-0: her istek etkin arayüz dilini `X-PEMF-Dil` ile taşır (jest kurulumu tr başlatır). Başka başlık EKLENMEZ (birebir eşitlik).
   it("token varsa X-API-Key gönderir", () => {
     serviceConfig.apiToken = "secret-token-123";
-    expect(authHeaders()).toEqual({ "X-API-Key": "secret-token-123" });
+    expect(authHeaders()).toEqual({ "X-API-Key": "secret-token-123", "X-PEMF-Dil": "tr" });
   });
 
-  it("token yoksa boş header (geriye uyumlu)", () => {
+  it("token yoksa kimlik başlığı yok — yalnız dil başlığı (geriye uyumlu)", () => {
     serviceConfig.apiToken = "";
-    expect(authHeaders()).toEqual({});
+    expect(authHeaders()).toEqual({ "X-PEMF-Dil": "tr" });
   });
 });
 

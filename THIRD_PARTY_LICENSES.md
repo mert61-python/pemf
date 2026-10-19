@@ -156,3 +156,15 @@ pakette bulunamayan satırlarda doğrulanmış sabit tablodan gelir.
 | `werkzeug` | 3.1.8 | BSD-3-Clause |
 | `xgboost` | — | Apache-2.0 |
 | `zeroconf` | — | LGPL-2.1 |
+
+### Arayüz ve site (npm) — çok dillilik (I18N)
+
+Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` (çalışma-zamanı girdileri; sürüm ve lisans kilit
+dosyasından). ⚠️ Yalnız çok dillilik kütüphaneleri ve dolaylı bağımlılıkları listelenir.
+
+| Paket | Sürüm | Lisans |
+|---|---|---|
+| `html-parse-stringify` | 4.0.1 | MIT |
+| `i18next` | 26.4.2 | MIT |
+| `react-i18next` | 17.0.15 | MIT |
+| `use-sync-external-store` | 1.7.0 | MIT |

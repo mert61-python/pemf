@@ -22,6 +22,8 @@ import { FIRMA } from "@/config/firma";
 import { bulutKayitRozeti, eslestirmeKoduUzaktanGecerliMi } from "@/services/bulutKayit";
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 import { backendBuMakinede } from "@/services/backendKonumu";
+import { DilSecimKarti } from "@/components/domain/DilSecimKarti";
+import { dilSecimiGorunur } from "@/i18n";
 import {
   DISA_AKTARMA_AG_HATASI_MESAJI,
   DISA_AKTARMA_ZAMAN_ASIMI_MESAJI,
@@ -526,6 +528,9 @@ export function SettingsScreen() {
           <Text style={styles.btnOutlineText}>Farklı Bir Profile Geçiş Yap</Text>
         </TouchableOpacity>
       </Card>
+
+      {/* I18N (Y161): "Dil / Language" — İngilizce bayrağı kapalıyken HİÇ çizilmez (Türkçe görünüm aynen kalır). */}
+      {dilSecimiGorunur() ? <DilSecimKarti /> : null}
 
       {/* Hesap/Klinik bilgileri — kayıt (login) formunda girildi; buradan düzenlenebilir (Supabase user_metadata). */}
       <Card style={styles.card}>

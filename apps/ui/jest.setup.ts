@@ -4,6 +4,12 @@ jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
 
+// I18N-0 (T13): i18n TR + SENKRON başlar → mevcut Türkçe metin / rol sorguları DEĞİŞMEDEN geçer. KATI kip: katalogda olmayan anahtar
+// `t()` içinde HATA atar (ekrana anahtarı basıp sorguyu sessizce geçirmez). EN'i deneyen test `__bayrakTestiAyarla(true)` +
+// `i18n.changeLanguage("en")` kullanır ve sonunda geri alır (bkz. `src/i18n/__tests__/altyapi.test.tsx`).
+(globalThis as { __PEMF_I18N_KATI__?: boolean }).__PEMF_I18N_KATI__ = true;
+require("@/i18n");
+
 // audit B-10.2: expo-secure-store native modülü → test'te AsyncStorage-mock'una delege (in-memory;
 // AsyncStorage.clear() ikisini de temizler; token round-trip testleri değişmeden çalışır).
 jest.mock("expo-secure-store", () => {

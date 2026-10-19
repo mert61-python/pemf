@@ -30,6 +30,7 @@ KUCUK gosterir — ticari bir urunde bu, eksik atif demektir.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import zipfile
@@ -41,6 +42,13 @@ _PAKET = KOK / "pemf-app-packages" / "base-deps.zip"
 _HEDEF = KOK / "THIRD_PARTY_LICENSES.md"
 
 _BASLIK_SONU = "## Dağıtılan pakette tespit edilen bileşenler"
+_NPM_BASLIGI = "### Arayüz ve site (npm) — çok dillilik (I18N)"
+
+#: I18N-0 (Y157, 2026-10-19): arayüze (`apps/ui`) ve siteye (`apps/web`) eklenen çok dillilik kütüphaneleri ve DOLAYLI bağımlılıkları.
+#: Sürüm ve lisans KİLİT DOSYASINDAN okunur (`package-lock.json` → `packages["node_modules/<ad>"]`); tahmin YAZILMAZ.
+#: ⚠️ Diğer npm bağımlılıkları (react, expo …) bu envanterde HİÇ YOK — I18N-0'dan önce de yoktu (S-I18N kaydı, sahibe).
+_NPM_KILITLERI = (KOK / "apps" / "ui" / "package-lock.json", KOK / "apps" / "web" / "package-lock.json")
+_NPM_PAKETLERI = ("i18next", "react-i18next", "html-parse-stringify", "void-elements", "use-sync-external-store")
 
 #: Paket adi -> lisans. `dist-info/METADATA` okunamayan paketler icin elle dogrulanmis
 #: degerler. ⚠️ Her satir PyPI sayfasindan dogrulanmistir; tahmin YAZILMAZ.
@@ -225,9 +233,34 @@ def envanter() -> list[tuple[str, str, str]]:
     return sorted(satirlar, key=lambda t: t[0])
 
 
+def npm_envanteri() -> list[tuple[str, str, str]]:
+    """(paket, sürüm, lisans) — `_NPM_PAKETLERI`, kilit dosyalarından (geliştirme bağımlılığı olanlar HARİÇ). Ad + sürüm tekil."""
+    gorulen: dict[tuple[str, str], str] = {}
+    for kilit in _NPM_KILITLERI:
+        if not kilit.exists():
+            continue
+        paketler = json.loads(kilit.read_text(encoding="utf-8")).get("packages") or {}
+        for yol, p in paketler.items():
+            ad = yol.rsplit("node_modules/", 1)[-1] if yol else ""
+            if ad in _NPM_PAKETLERI and not p.get("dev"):
+                gorulen.setdefault((ad, str(p.get("version") or "—")), str(p.get("license") or "⚠️ doğrulanmadı"))
+    return sorted((a, s, li) for (a, s), li in gorulen.items())
+
+
 def _tablo(satirlar) -> str:
     bas = "| Paket | Sürüm | Lisans |\n|---|---|---|\n"
     return bas + "\n".join(f"| `{a}` | {s} | {li} |" for a, s, li in satirlar) + "\n"
+
+
+def _npm_bolumu() -> str:
+    satirlar = npm_envanteri()
+    if not satirlar:
+        return ""
+    return (
+        f"\n{_NPM_BASLIGI}\n\n"
+        "Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` (çalışma-zamanı girdileri; sürüm ve lisans kilit\n"
+        "dosyasından). ⚠️ Yalnız çok dillilik kütüphaneleri ve dolaylı bağımlılıkları listelenir.\n\n" + _tablo(satirlar)
+    )
 
 
 def main() -> int:
@@ -255,7 +288,7 @@ def main() -> int:
         "düzenlemeyin. Kaynaklar: `requirements.txt` (sevk edilen çalışma-zamanı\n"
         "bağımlılıkları) + `pemf-app-packages/base-deps.zip` içindeki `dist-info/METADATA`.\n\n"
         "⚠️ PyInstaller çoğu paketin metadata'sını ayıkladığı için sürüm/lisans alanları\n"
-        "pakette bulunamayan satırlarda doğrulanmış sabit tablodan gelir.\n\n" + _tablo(satirlar)
+        "pakette bulunamayan satırlarda doğrulanmış sabit tablodan gelir.\n\n" + _tablo(satirlar) + _npm_bolumu()
     )
     yeni = ust + yeni_govde
 

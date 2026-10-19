@@ -140,3 +140,17 @@ def test_KARSIT_KANIT_paket_YOKKEN_kontrol_kipi_de_BASARI_demez(monkeypatch, tmp
     rc, once, sonra = _uretec_kos(monkeypatch, tmp_path, "--kontrol")
     assert rc != 0 and sonra == once, f"rc={rc}"
     assert "[OK]" not in capsys.readouterr().out
+
+
+def test_KRITIK_NOTICE_i18n_npm_paketlerini_LISTELER():
+    """I18N-0 (Y157): arayüze / siteye eklenen `i18next` + `react-i18next` ve dolaylı bağımlılıkları kilit dosyasındaki sürüm ve
+    lisansla NOTICE'ta. Kaynak kilit dosyası (her yerde okunur) → CI'da da koşar, skip YOK."""
+    from scripts.lisans_envanteri_uret import npm_envanteri
+
+    satirlar = npm_envanteri()
+    adlar = {a for a, _, _ in satirlar}
+    assert {"i18next", "react-i18next"} <= adlar, f"kilit dosyasında i18n paketleri okunamadı: {sorted(adlar)}"
+    metin = (KOK / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
+    eksik = [(a, s, li) for a, s, li in satirlar if f"| `{a}` | {s} | {li} |" not in metin]
+    assert not eksik, f"NOTICE'ta olmayan npm bileşenleri: {eksik} → `python scripts/lisans_envanteri_uret.py`"
+    assert all("doğrulanmadı" not in li for _, _, li in satirlar), f"lisansı kilitte boş npm paketi: {satirlar}"

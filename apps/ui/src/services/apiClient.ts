@@ -2,6 +2,7 @@
 import { serviceConfig } from "@/services/config";
 import { Alert, Platform } from "react-native";
 import { emitToast } from "@/services/toastBridge";
+import { etkinDilDegeri } from "@/i18n/durum";
 
 /** Web-güvenli uyarı — Alert.alert web'de no-op olduğundan window.alert'e düşer. */
 export function platformAlert(title: string, message: string) {
@@ -178,6 +179,14 @@ export function setProfilBasligi(profil: string | null): void {
   _profilBasligi = profil || null;
 }
 
+/**
+ * ARAYÜZ DİLİ (I18N · Y157–Y161): `X-PEMF-Dil: tr|en` HER istekte — sunucu iletileri, PDF ve AI metinleri bu dilde döner
+ * (`apps/backend/utils/ceviri.py`). Değer `i18n/durum.ts`'ten (i18n katmanı dil değişiminde EŞZAMANLI günceller; ayrı modül → içe
+ * aktarma döngüsü yok). ⚠️ `Accept-Language` KULLANILMAZ: WebView2 / tarayıcı onu işletim sistemi dilinden kendisi doldurur; İngilizce
+ * Windows'ta Türkçe seçili arayüze İngilizce yanıt dönerdi. Başlıksız eski istemci (yayındaki APK) = tr. Kimlik / sır TAŞIMAZ.
+ */
+export const DIL_BASLIGI = "X-PEMF-Dil";
+
 /** `authHeaders()` + (verildiyse) isteğe özgü operatör jetonu (C2-4.3 — işin BAŞLADIĞI andaki hekim; bkz. `ApiOpts.operatorJetonu`). */
 function _istekBasliklari(opts?: ApiOpts): Record<string, string> {
   const h = authHeaders();
@@ -279,7 +288,15 @@ export function authHeaders(): Record<string, string> {
       ? { "X-PEMF-Operator": _operatorToken } : {}),
     // SG.G1 / G2: etkin profil (bkz. setProfilBasligi) — görünüm ayrımı, kimlik değil.
     ...(_profilBasligi ? { [PROFIL_BASLIGI]: _profilBasligi } : {}),
+    // I18N: etkin arayüz dili (bkz. DIL_BASLIGI) — her istekte.
+    [DIL_BASLIGI]: etkinDilDegeri(),
   };
+}
+
+/** URL ile açılan (başlık taşıyamayan) kaynaklara dil parametresi: `?dil=tr|en` (ör. DEMA iframe / WebView). */
+export function dilParametresiEkle(url: string): string {
+  const ayirac = url.includes("?") ? "&" : "?";
+  return `${url}${ayirac}dil=${etkinDilDegeri()}`;
 }
 
 // Asılı bağlantı (yarı-açık tünel / backend restart / captive portal) UI'yi sonsuza dek
