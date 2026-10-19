@@ -41,6 +41,8 @@ def _ayna(tmp: Path, yerel: bytes | None) -> Path:
     (md / "infer.py").write_text("# ornek\n", encoding="utf-8")
     if yerel is not None:
         (md / "scaler.pkl").write_bytes(yerel)
+    # I18N-0: spec sunucu çeviri kataloğu (apps/backend/i18n) YOKSA derlemeyi DURDURUR (katalog sessizce paketlenmesin) → ayna da taşır.
+    shutil.copytree(KOK / "apps" / "backend" / "i18n", kok / "apps" / "backend" / "i18n")
     return kok
 
 

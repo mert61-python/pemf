@@ -123,6 +123,10 @@ APP_ROOTS = [
     # kaldigi surece frontendOta her degistiginde 1,49 GB'lik deps katmani "bayat" gorunur ve
     # HER KLINIK HER YAYINDA 1,49 GB indirir — katmanli paketin varlik sebebi tam olarak budur.
     'PEMF_Backend/_internal/frontend_version.json',
+    # I18N-0 (Y157, 2026-10-19): sunucu ceviri kataloglari (`apps/backend/i18n` -> `_internal/i18n`; `utils/ceviri.py` okur). HER
+    # yayinda degisir (goc partileri anahtar ekler) ve KODLA birlikte gitmeli: deps'te kalsalardi (1) her katalog degisikligi kliniklere
+    # 1,49 GB indirtirdi, (2) yalniz app katmani guncellenince yeni kod ESKI katalogu okur, yeni anahtarlar anahtar adiyla gorunurdu.
+    'PEMF_Backend/_internal/i18n',
     # Sinir dosyasi KENDISI de app katmanina aittir. Listede olmazsa launcher onu yedege almaz
     # ve geri alma sinirini okuyamaz -> basarisiz guncelleme geri alinamaz (2026-08-08'de test
     # yakaladi). Launcher ayrica savunma amacli marker'i yedege KOPYALAR; bu satir tutarlilik icin.

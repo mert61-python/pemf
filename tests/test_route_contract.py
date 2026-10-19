@@ -134,6 +134,10 @@ GOLDEN_ROUTES = {
     # yerine [REDACTED] gorup sebebini bulamiyordu. Karar artik operatorun ve GORUNUR.
     ("/api/settings/retention", "GET"),
     ("/api/settings/retention", "POST"),
+    # 2026-10-19 I18N-0 (Y161): cihaz duzeyindeki ARAYUZ DILI — masaustu arayuz dil secince yazar; launcher ve istek disi
+    # uretimler (zamanlanmis bildirim, arka plan PDF) okur. Profil / hesap DEGIL.
+    ("/api/settings/arayuz-dili", "GET"),
+    ("/api/settings/arayuz-dili", "POST"),
     # 2026-08-09 DENETIM IZI (Tier 3): geri donussuz islemlerin (toplu silme, disa/ice aktarma,
     # operator ekleme-cikarma, PII redaksiyonu) tek izi 60 MB'lik DONEN bir metin log'unda
     # KIMLIKSIZ tek bir satirdi. Artik sifreli DB icinde EKLEME-ONLY `audit_events` tablosu var;
@@ -224,4 +228,5 @@ def test_route_contract_unchanged():
     # → 106 (+1 operatör sunucu kilidi: operators/lock POST — D2.E14 · İG-6.63), 2026-10-08
     # → 107 (+1 AI kaydı ayrıntısı: ai/log/{analiz_id} GET — Y122/Y126), 2026-10-10
     # → 108 (+1 launcher kapanış durdurması: hardware/kapanis_durdur POST — "önceki oturumda ACİL DURDUR" bandı), 2026-10-18
-    assert len(current) == len(beklenen) == 108 - (0 if _simulator_mountlu() else 1)
+    # → 110 (+2 cihaz arayüz dili: settings/arayuz-dili GET+POST — I18N-0 · Y161), 2026-10-19
+    assert len(current) == len(beklenen) == 110 - (0 if _simulator_mountlu() else 1)

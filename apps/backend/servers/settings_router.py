@@ -113,3 +113,37 @@ def update_settings(payload: SettingsModel):
             raise HTTPException(status_code=503, detail=str(e))
         raise
     return {"status": "success"}
+
+
+# ── ARAYÜZ DİLİ — cihaz düzeyi (I18N · Y161, T5) ────────────────────────────────────────────────────────────────────────────
+# Masaüstü arayüz (backend bu makinede) dil seçince buraya bildirir; launcher ve istek DIŞI üretimler (zamanlanmış bildirim, arka plan
+# PDF) bu ayarı kullanır (`utils.ceviri.etkin_dil`). Profil / hesap DEĞİLDİR (Y161) — profil seçiminin kalıcı OLMAMASI kuralı ayrı.
+# Bayrak (`I18N_EN_ACIK`) arayüzde: kapalıyken arayüz bu ucu hiç çağırmaz (dil kartı gizli).
+
+
+class ArayuzDiliModel(BaseModel):
+    dil: str
+
+
+@router.get("/arayuz-dili")
+def arayuz_dili_al():
+    """Cihaz düzeyindeki arayüz dili; hiç seçilmemişse `null` (istek dışı üretimler o zaman Türkçe)."""
+    from utils import ceviri
+
+    return {"dil": ceviri.cihaz_dili_ayarli_mi()}
+
+
+@router.post("/arayuz-dili")
+def arayuz_dili_yaz(payload: ArayuzDiliModel):
+    from utils import ceviri
+
+    if not ceviri.gecerli_dil(payload.dil):
+        raise HTTPException(
+            status_code=400, detail=ceviri.t("ayarlar.arayuzDili.gecersiz", dilKodu=str(payload.dil)[:20])
+        )
+    try:
+        dil = ceviri.cihaz_dili_yaz(payload.dil)
+    except OSError as e:
+        logger.warning("arayuz dili yazilamadi: %r", e)
+        raise HTTPException(status_code=503, detail=ceviri.t("ayarlar.arayuzDili.yazilamadi", neden=type(e).__name__))
+    return {"status": "success", "dil": dil}

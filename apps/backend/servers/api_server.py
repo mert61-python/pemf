@@ -669,6 +669,42 @@ class _SurusNiyetiVarisDamgasi:
             await self.app(scope, receive, send)
 
 
+class _IstekDiliBaglami:
+    """I18N (Y157–Y161 · T5/T6): isteğin DİLİ — `X-PEMF-Dil: tr|en` başlığı > `?dil=` (URL ile açılan PDF / görsel / iframe) > `tr`.
+
+    ⚠️ `Accept-Language` OKUNMAZ (bilinçli): WebView2 / tarayıcı onu işletim sisteminin dilinden kendisi doldurur; İngilizce Windows'ta
+    Türkçe seçili arayüze İngilizce ileti dönerdi. Başlık göndermeyen eski istemci (yayındaki APK) = tr. Dil `utils.ceviri.istek_dili_var`
+    bağlamına yazılır; işleyiciler `ceviri.t()` ile o dilde metin üretir. Saf ASGI (bağlam alt katmanlara kesin geçer); bütün
+    `@app.middleware("http")` katmanlarının DIŞINDA (kimlik / hız sınırı iletileri de istek dilinde), sürüş damgasının hemen İÇİNDE
+    (damga en dışta kalır). WebSocket'e dokunmaz (WS olayları `kod` + `parametreler` taşır, arayüz çevirir). Güvenlik kapısı DEĞİL."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        from urllib.parse import parse_qs
+
+        from utils import ceviri
+
+        baslik = None
+        for ad, deger in scope.get("headers") or ():
+            if ad == b"x-pemf-dil":
+                baslik = deger.decode("latin-1")
+                break
+        sorgu = (parse_qs((scope.get("query_string") or b"").decode("latin-1")).get(ceviri.DIL_PARAMETRESI) or [None])[
+            0
+        ]
+        jeton = ceviri.istek_dili_var.set(ceviri.dil_coz(baslik, sorgu))
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            ceviri.istek_dili_var.reset(jeton)
+
+
+app.add_middleware(_IstekDiliBaglami)
 app.add_middleware(_SurusNiyetiVarisDamgasi)
 
 

@@ -1,0 +1,25 @@
+{
+  "ayarlar": {
+    "arayuzDili": {
+      "gecersiz": "Geçersiz dil: \"{{dilKodu}}\". Kullanılabilen diller: tr, en.",
+      "yazilamadi": "Dil ayarı kaydedilemedi ({{neden}}). Veri klasörünün yazılabilir olduğunu kontrol edin."
+    }
+  },
+  "tarih": {
+    "ay": {
+      "1": "Ocak",
+      "10": "Ekim",
+      "11": "Kasım",
+      "12": "Aralık",
+      "2": "Şubat",
+      "3": "Mart",
+      "4": "Nisan",
+      "5": "Mayıs",
+      "6": "Haziran",
+      "7": "Temmuz",
+      "8": "Ağustos",
+      "9": "Eylül"
+    },
+    "tarihSaat": "{{tarih}}, {{saat}}"
+  }
+}

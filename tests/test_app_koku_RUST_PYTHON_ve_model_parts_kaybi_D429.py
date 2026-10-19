@@ -45,6 +45,9 @@ RUST_TATBIKATINDA_HENUZ_YOK = frozenset(
         "PEMF_Backend/pemf_footprint.ps1",
         "PEMF_Backend/pemf_teardown.ps1",
         "PEMF_Backend/pemf_uninstall_all.ps1",
+        # I18N-0 (2026-10-19): sunucu çeviri katalogları app katmanında (gerekçe make_base_zip.APP_ROOTS); tatbikat bu kökü henüz
+        # kurmuyor — eklenince bu satırı silin.
+        "PEMF_Backend/_internal/i18n",
     }
 )
 

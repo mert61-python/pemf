@@ -257,6 +257,14 @@ ver_json = os.path.join(project_path, 'frontend_version.json')
 if os.path.exists(ver_json):
     datas.append((ver_json, '.'))
 
+# I18N-0 (Y157): sunucu çeviri katalogları — `utils/ceviri.py` donmuş EXE'de `_MEIPASS/i18n`'den okur (donmuş dal önce). Katalog YOKSA
+# derleme DURUR: sessizce paketlenmeyen katalog sahada her sunucu iletisini anahtar adıyla gösterirdi. App katmanı kökü:
+# make_base_zip.APP_ROOTS. Kapı: tests/test_i18n_sunucu_altyapi.py (+ K-6).
+_i18n_dir = os.path.join(backend_path, 'i18n')
+if not (os.path.isfile(os.path.join(_i18n_dir, 'tr.json')) and os.path.isfile(os.path.join(_i18n_dir, 'en.json'))):
+    raise SystemExit(f"apps/backend/i18n/{{tr,en}}.json yok ({_i18n_dir}) — sunucu çevirileri paketlenemez (I18N K-6)")
+datas.append((_i18n_dir, 'i18n'))
+
 # DEMA simülatör (FastAPI '/simulator')
 sim_dir = os.path.join(project_path, 'dema-terapi-simülatörü', 'dist')
 if os.path.exists(sim_dir):

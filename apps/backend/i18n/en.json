@@ -1,0 +1,25 @@
+{
+  "ayarlar": {
+    "arayuzDili": {
+      "gecersiz": "Invalid language: \"{{dilKodu}}\". Available languages: tr, en.",
+      "yazilamadi": "The language setting could not be saved ({{neden}}). Check that the data folder is writable."
+    }
+  },
+  "tarih": {
+    "ay": {
+      "1": "Jan",
+      "10": "Oct",
+      "11": "Nov",
+      "12": "Dec",
+      "2": "Feb",
+      "3": "Mar",
+      "4": "Apr",
+      "5": "May",
+      "6": "Jun",
+      "7": "Jul",
+      "8": "Aug",
+      "9": "Sep"
+    },
+    "tarihSaat": "{{tarih}}, {{saat}}"
+  }
+}
