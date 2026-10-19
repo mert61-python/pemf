@@ -61,6 +61,15 @@ describe('1) SSS kapsamı', () => {
     )
     expect(`${cevrimdisi!.a}`).toMatch(/fark/i) // ilgili maddeye yönlendirme duruyor
   })
+
+  it('KRİTİK S-4B.5 (sahip kararı 2026-10-19): internet sorusu yapay zekâ ANALİZİNİN internet istediğini, tedavinin internetsiz sürdüğünü söyler', () => {
+    // Ücretlendirme açıkken internetsiz AI analizi başlatılmaz (servers/jeton.py, 402 `cevrimdisi`). SSS "internet yalnız
+    // güncelleme / hesap doğrulama için kullanılır" deseydi satın alan klinik internetsiz analiz bekler, 402 ile karşılaşırdı.
+    const a = `${FAQ.find((f) => /çevrimdışı|[İi]nternet olmadan/.test(f.q))!.a}`
+    expect(a, 'analizin internet istediği yazılmamış').toContain('analizi ise internet ister')
+    expect(a, 'tedavinin internetsiz sürdüğü yazılmamış').toMatch(/seans, acil durdurma ve sensör izleme için internet şart değildir/)
+    expect(a, 'eski "internet yalnız güncelleme…" vaadi geri gelmiş').not.toMatch(/[İi]nternet yalnız/)
+  })
 })
 
 // ─────────────────────────── 2) İletişim yolu ───────────────────────────

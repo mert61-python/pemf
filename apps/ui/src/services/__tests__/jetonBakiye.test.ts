@@ -10,7 +10,7 @@
  *     Bu ürün internetsiz çalışır; bakiye Supabase'den okunur ve o an düşer.
  *  3. Kullandıkça-öde modelinde "kalan" yazmak → o modelde bakiye KAVRAMI yok, borç birikir.
  */
-import { bakiyeDurumu, bakiyeMetni, JETON_KAPALI } from "@/services/jetonBakiye";
+import { bakiyeDurumu, bakiyeMetni, bilinmeyenBakiyeAciklamasi, JETON_KAPALI } from "@/services/jetonBakiye";
 
 describe("bakiyeMetni", () => {
   it("KRİTİK: ücretlendirme KAPALIYKEN null döner (rozet ÇİZİLMEZ)", () => {
@@ -70,5 +70,21 @@ describe("bakiyeDurumu", () => {
     expect(bakiyeDurumu({ ...t, borc: 300 })).toBe("bitti");
     expect(bakiyeDurumu({ ...t, borc: 275 })).toBe("az");
     expect(bakiyeDurumu({ ...t, borc: 10 })).toBe("normal");
+  });
+});
+
+describe("bilinmeyenBakiyeAciklamasi (S-4B.5 · sahip kararı 2026-10-19)", () => {
+  it("KRİTİK: internetsizken 'analize devam edebilirsiniz' DEMEZ — analiz internet ister, tedavi internetsiz sürer", () => {
+    // Ücretlendirme açıkken internetsiz AI analizi 402 alır; eski metin kullanıcıyı denemeye yönlendiriyordu.
+    const m = bilinmeyenBakiyeAciklamasi({ etkin: true, bilinmiyor: true, sebep: "cevrimdisi" });
+    expect(m).not.toMatch(/devam edebilirsiniz|uzlaşır/);
+    expect(m).toContain("internet gerekir");
+    expect(m).toContain("acil durdurma");
+  });
+
+  it("kimlik yoksa giriş ister (internet metni DEĞİL)", () => {
+    const m = bilinmeyenBakiyeAciklamasi({ etkin: true, bilinmiyor: true, sebep: "kimlik_yok" });
+    expect(m).toContain("giriş");
+    expect(m).not.toContain("internet");
   });
 });

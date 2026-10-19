@@ -32,6 +32,17 @@ function showError(title: string, message: string) {
   if (!emitToast(`${title}: ${message}`, "error")) platformAlert(title, message);
 }
 
+/** Jeton 402'sinin ret sebebi (backend `servers/jeton.py::JETON_SEBEP_BASLIGI`; CORS `expose_headers`'ta):
+ *  yetersiz · borc_tavani · cevrimdisi · kimlik_yok. */
+export const JETON_SEBEP_BASLIGI = "X-PEMF-Jeton-Sebep";
+
+/** 402 penceresinin başlığı — S-4B.5 (sahip kararı 2026-10-19): ücretlendirme açıkken internetsiz AI analizi yapılmaz; bu ret
+ *  "jeton bitti" DEĞİL, "internet yok"tur ve öyle söylenmeli (kullanıcı jeton almaya kalkmasın). Başlık okunamazsa (eski backend /
+ *  CORS) "Jeton hakkı" kalır — `detail` metni yine nedeni söyler. */
+export function jetonRedBasligi(sebep: string | null | undefined): string {
+  return sebep === "cevrimdisi" ? "İnternet bağlantısı gerekli" : "Jeton hakkı";
+}
+
 /** İstek opsiyonları — `silent: true` arka-plan poll'lerinde hata pop-up'ını bastırır. */
 export interface ApiOpts {
   silent?: boolean;
@@ -440,7 +451,21 @@ export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?
       // "jeton bitti, tedavi çalışıyor" ve kapının `detail` mesajı bunu zaten Türkçe söylüyor.
       // Bayrak (PEMF_JETON_ENFORCED) kapalıyken bu dal HİÇ tetiklenmez — bugünkü canlı davranış.
       if (response.status === 402) {
-        if (!opts?.silent) showError("Jeton hakkı", detail || "Jeton hakkınız yetersiz. Seans ve acil durdurma etkilenmez.");
+        let sebep: string | null = null;
+        try {
+          sebep = response.headers?.get?.(JETON_SEBEP_BASLIGI) ?? null;
+        } catch {
+          /* başlık okunamadı → genel "Jeton hakkı" başlığı */
+        }
+        if (!opts?.silent) {
+          showError(
+            jetonRedBasligi(sebep),
+            detail ||
+              (sebep === "cevrimdisi"
+                ? "Yapay zekâ analizi için internet gerekir. Seans ve acil durdurma etkilenmez."
+                : "Jeton hakkınız yetersiz. Seans ve acil durdurma etkilenmez."),
+          );
+        }
         return fallback;
       }
       // Gerekçe varsa ONU göster: "veritabanı açılamadı, seans başlatılamaz" ile "bir hata oluştu"

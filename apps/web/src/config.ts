@@ -83,8 +83,9 @@ export const FREE_MODE = true
  * SÜRESİZDİR. Tüketim önce plan hakkından düşer → kullanıcı parasıyla aldığını kaybetmez.
  *
  * ⚠️ TIBBİ GÜVENLİK: jeton TİCARİ kapıdır; süren seansı, acil durdurmayı, sensör okumayı ve
- * cihaz kontrolünü ASLA engellemez. Yalnız YENİ analiz isteğini kapılar. Çevrimdışı klinikte
- * yerel rezervden düşülür, bağlantı gelince uzlaşır (servers/jeton.py).
+ * cihaz kontrolünü ASLA engellemez. Yalnız YENİ analiz isteğini kapılar. Analiz İNTERNET ister
+ * (sahip kararı 2026-10-19, S-4B.5): jeton çevrimiçi düşülür, internetsiz analiz başlatılmaz; tam
+ * düşüm anında kopan bağlantının ödemesi cihazda bekler, sonra uzlaşır (servers/jeton.py).
  *
  * Şema: database/supabase_jetonlar.sql · Uçlar: api/tokens.ts · Cihaz tarafı: servers/jeton.py
  */
@@ -599,7 +600,7 @@ export const FAQ = [
   },
   {
     q: 'İnternet olmadan çalışır mı?',
-    a: 'İlk kurulum ve güncellemeler için internet gerekir. Kurulumdan sonra yapay zekâ modelleri cihazınızda çalışır ve klinik verileriniz cihazda şifreli tutulur — seans yapmak için internet şart değildir. İnternet yalnız güncelleme, hesap doğrulama ve (açtıysanız) klinik dışından erişim için kullanılır. Planınız ise ayda kaç yapay zekâ analizi yapabileceğinizi belirler (bkz. “Pro ile Pro+ arasındaki fark ne?”).',
+    a: 'İlk kurulum ve güncellemeler için internet gerekir. Kurulumdan sonra yapay zekâ modelleri cihazınızda çalışır ve klinik verileriniz cihazda şifreli tutulur — seans, acil durdurma ve sensör izleme için internet şart değildir. Yapay zekâ analizi ise internet ister: her analizin jetonu hesabınızdan çevrimiçi düşülür, internet yokken yeni analiz başlatılmaz (süren seans etkilenmez). İnternet ayrıca güncelleme, hesap doğrulama ve (açtıysanız) klinik dışından erişim için kullanılır. Planınız ayda kaç yapay zekâ analizi yapabileceğinizi belirler (bkz. “Pro ile Pro+ arasındaki fark ne?”).',
   },
   {
     q: 'Jeton nedir, neye harcanır?',

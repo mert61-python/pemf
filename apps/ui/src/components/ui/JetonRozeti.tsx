@@ -18,6 +18,7 @@ import { emitToast } from "@/services/toastBridge";
 import {
   bakiyeDurumu,
   bakiyeMetni,
+  bilinmeyenBakiyeAciklamasi,
   jetonBakiyesiGetir,
   JETON_KAPALI,
   type JetonBakiyesi,
@@ -70,13 +71,7 @@ export function JetonRozeti({ kompakt = false }: { kompakt?: boolean }) {
 
   const aciklama = () => {
     if (durum === "bilinmiyor") {
-      emitToast(
-        bakiye.sebep === "kimlik_yok"
-          ? "Jeton bakiyesi için giriş yapmanız gerekiyor."
-          : "Jeton bakiyesi okunamadı (çevrimdışı). Analiz yapmaya devam edebilirsiniz; " +
-              "kullanım internet gelince uzlaşır.",
-        "info",
-      );
+      emitToast(bilinmeyenBakiyeAciklamasi(bakiye), "info"); // S-4B.5: metin tek yerde (jetonBakiye)
       return;
     }
     if (bakiye.odemeModeli === "kullandikca") {

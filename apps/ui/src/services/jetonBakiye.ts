@@ -11,7 +11,8 @@
  *
  * ⚠️ "0 jeton" YAZMAK, bilinmeyen durumun karşılığı DEĞİLDİR. Bugün canlıda ücretlendirme
  * kapalı ve kimsenin bakiye satırı yok; rozet "0" deseydi operatör hakkının bittiğini sanırdı.
- * Aynısı çevrimdışı klinik için de geçerli — bu ürün internetsiz çalışır.
+ * Aynısı internetsiz klinik için de geçerli: bakiye okunamaz ama seans / acil durdurma / sensör
+ * internetsiz çalışır. (S-4B.5, 2026-10-19: ücretlendirme açıkken yapay zekâ analizi internet ister.)
  */
 import { apiGet } from "@/services/apiClient";
 
@@ -30,7 +31,7 @@ export interface JetonBakiyesi {
   odemeModeli?: "on_odemeli" | "kullandikca" | string;
   /** İşlem başına maliyet ("1 analiz kaç jeton" ipucu için). */
   maliyet?: Record<string, number>;
-  /** Çevrimdışı biriken, henüz uzlaşmamış tüketim sayısı. */
+  /** Henüz gönderilemeyen (yolda kalan) ödeme sayısı — bağlantı gelince uzlaşır (2026-10-19'dan beri çevrimdışı analiz yok). */
   bekleyen?: number;
 }
 
@@ -60,6 +61,19 @@ export function bakiyeMetni(b: JetonBakiyesi | null | undefined): string | null 
     return typeof b.borc === "number" ? `${b.borc} kullanım` : "—";
   }
   return typeof b.kalan === "number" ? String(b.kalan) : "—";
+}
+
+/**
+ * Rozet "—" iken dokununca gösterilen açıklama (tek yer). ⚠️ S-4B.5 (sahip kararı 2026-10-19): ücretlendirme açıkken
+ * internetsiz yapay zekâ analizi YAPILMAZ — eski metin "Analiz yapmaya devam edebilirsiniz; kullanım internet gelince uzlaşır"
+ * artık yanlış (kullanıcı analiz dener, 402 alır). Tedavinin internetsiz sürdüğü AYRICA söylenir.
+ */
+export function bilinmeyenBakiyeAciklamasi(b: JetonBakiyesi | null | undefined): string {
+  if (b?.sebep === "kimlik_yok") return "Jeton bakiyesi için giriş yapmanız gerekiyor.";
+  return (
+    "Jeton bakiyesi okunamadı (internet yok). Yapay zekâ analizi için internet gerekir; " +
+    "seans, acil durdurma ve sensör izleme internetsiz de çalışır."
+  );
 }
 
 /** Bakiye azaldığında rozet rengi değişsin (uyarı eşiği). */

@@ -8,12 +8,12 @@
      düşme işlemi Supabase RPC `jeton_tuket` içinde ATOMİK yapılır (satır kilidi) → iki cihaz
      aynı anda analiz isterse bakiye çift düşmez.
    · İDEMPOTANS ZORUNLU: `istek_id` benzersizdir. Ağ kopar da istemci yeniden denerse jeton İKİ
-     KEZ düşmez (defterdeki UNIQUE ihlali yakalanır ve mevcut bakiye döner). Çevrimdışı klinikte
-     biriken tüketimin uzlaştırılması da bu anahtara dayanır.
+     KEZ düşmez (defterdeki UNIQUE ihlali yakalanır ve mevcut bakiye döner). Düşüm anında kopan
+     bağlantının cihazda bekleyen (yolda kalan) ödemesinin uzlaştırılması da bu anahtara dayanır.
    · ⚠️ TIBBİ CİHAZ GÜVENLİĞİ: bu uç TİCARİ bir kapıdır. Cihaz tarafı (servers/jeton.py) yetersiz
      bakiyede YALNIZ yeni yapay zekâ analizini reddeder; süren seansı, acil durdurmayı, sensör
-     okumayı ve cihaz kontrolünü ASLA engellemez. Uç erişilemezse cihaz FAIL-OPEN davranır
-     (yerel rezerv + sonradan uzlaştırma) — internet yokluğu kliniği durdurmaz.
+     okumayı ve cihaz kontrolünü ASLA engellemez. Bakiye okunamazsa (internet yok) yeni ANALİZ
+     başlatılmaz (sahip kararı 2026-10-19, S-4B.5) — tedavi / acil durdurma internetsiz sürer.
    ============================================================================================== */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { env, verifyUser } from './_lib/util.js'
