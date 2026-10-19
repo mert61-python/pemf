@@ -1,6 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
+import { withTranslation, type WithTranslation } from "react-i18next";
 import { colors, spacing, typography, radius, rf, rs } from "@/theme/tokens";
 import { apiPost } from "@/services/apiClient";
 
@@ -48,7 +49,8 @@ installGlobalErrorHandler();
 
 /** Uygulama genelinde React hata sınırı — bir ekran çökse bile beyaz-ekran yerine
  *  kurtarılabilir bir hata kartı gösterir (tıbbi cihazda donup kalma önlenir). */
-export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, State> {
+// I18N: sınıf bileşeni hook kullanamaz → `withTranslation` `t`'yi prop olarak verir ve dil değişince yeniden çizer.
+class ErrorBoundaryIc extends React.Component<{ children: React.ReactNode } & WithTranslation, State> {
   state: State = { hasError: false };
 
   static getDerivedStateFromError(error: Error): State {
@@ -80,19 +82,20 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
   reset = () => this.setState({ hasError: false, error: undefined });
 
   render() {
+    const { t } = this.props;
     if (this.state.hasError) {
       return (
         <View style={styles.container}>
           <Text style={styles.icon}>⚠️</Text>
-          <Text style={styles.title}>Beklenmeyen bir hata oluştu</Text>
+          <Text style={styles.title}>{t("ortak.hata.beklenmeyen")}</Text>
           {/* #93 maskelemesi yalnız BACKEND'e giden kopyaya uygulanıyordu; ekrandaki metin hamdı.
               Hata mesajı hasta adı/e-posta/telefon içerebilir ve bu ekran ekran-görüntüsü alınıp
               destek kanallarına gönderiliyor. Aynı maskeyi görünen metne de uygula. */}
           <ScrollView style={styles.msgBox} contentContainerStyle={{ padding: spacing.sm }}>
-            <Text style={styles.msg}>{_redactPII(String(this.state.error?.message || "")) || "Bilinmeyen hata."}</Text>
+            <Text style={styles.msg}>{_redactPII(String(this.state.error?.message || "")) || t("ortak.hata.bilinmeyen")}</Text>
           </ScrollView>
           <TouchableOpacity style={styles.btn} onPress={this.reset} accessibilityRole="button">
-            <Text style={styles.btnText}>Tekrar Dene</Text>
+            <Text style={styles.btnText}>{t("ortak.tekrarDene")}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -100,6 +103,8 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
     return this.props.children;
   }
 }
+
+export const ErrorBoundary = withTranslation()(ErrorBoundaryIc);
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.md },

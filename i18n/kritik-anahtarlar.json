@@ -1378,8 +1378,8 @@
   {
    "dosya": "apps/ui/src/components/domain/SessionProgressCard.tsx",
    "satir": 109,
-   "metin": "Parametreleri ayarlayıp &quot;Seans Başlat&quot; butonuna basın.",
-   "ham": "Parametreleri ayarlayıp &quot;Seans Başlat&quot; butonuna basın."
+   "metin": "Parametreleri ayarlayıp \"Seans Başlat\" butonuna basın.",
+   "ham": "Parametreleri ayarlayıp \"Seans Başlat\" butonuna basın."
   },
   {
    "dosya": "apps/ui/src/components/domain/SessionProgressCard.tsx",

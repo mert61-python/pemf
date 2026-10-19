@@ -119,11 +119,15 @@ def py_uygula(dosya: str, metin: str, islemler: list[dict]) -> tuple[str, list[d
                         ok = False
                         break
                     ad = a["yertutucular"][sira - 1]
+                    ad = (is_.get("yerAdlari") or {}).get(ad, ad)
                     argumanlar.append(f"{ad}={ast.get_source_segment(metin, v.value)}")
             if not ok:
                 red.append({**is_, "neden": "f-string biçim belirteci ({x:.1f} / !r) — değeri önce biçimleyip elle"})
                 continue
-            cakisan = YASAK_YER_TUTUCU & set(a["yertutucular"])
+            adlar = is_.get("yerAdlari") or {}
+            cakisan = YASAK_YER_TUTUCU & {
+                adlar.get(x, x) for x in a["yertutucular"]
+            }  # yeniden adlandırma çakışmayı çözebilir
             if cakisan:
                 red.append(
                     {
@@ -139,6 +143,7 @@ def py_uygula(dosya: str, metin: str, islemler: list[dict]) -> tuple[str, list[d
         son = _bayt_konumu(satir_baslari, n.end_lineno, n.end_col_offset)
         duzen.append((bas, son, yeni.encode("utf-8")))
         uygulanan.append({**is_, "ham": a["ham"]})
+    ss = b"\r\n" if b"\r\n" in kodlu else b"\n"  # eklenen satır dosyanın satır sonunu izler (karışık satır sonu yok)
     if duzen and not any(
         isinstance(s, ast.ImportFrom) and s.module == "utils" and any(al.name == "ceviri" for al in s.names)
         for s in agac.body
@@ -147,9 +152,9 @@ def py_uygula(dosya: str, metin: str, islemler: list[dict]) -> tuple[str, list[d
         if ithal:
             son = ithal[-1]
             konum = _bayt_konumu(satir_baslari, son.end_lineno, son.end_col_offset)
-            duzen.append((konum, konum, b"\nfrom utils import ceviri"))
+            duzen.append((konum, konum, ss + b"from utils import ceviri"))
         else:
-            duzen.append((0, 0, b"from utils import ceviri\n"))
+            duzen.append((0, 0, b"from utils import ceviri" + ss))
     for bas, son, yeni in sorted(duzen, key=lambda x: (-x[0], -x[1])):
         kodlu = kodlu[:bas] + yeni + kodlu[son:]
     return kodlu.decode("utf-8"), uygulanan, red
@@ -162,7 +167,9 @@ def ts_uygula(kok: Path, dosya: str, metin: str, islemler: list[dict]) -> tuple[
     girdi = {
         "dosya": dosya,
         "metin": metin,
-        "islemler": [{k: i[k] for k in ("satir", "sutun", "metin", "anahtar")} for i in islemler],
+        "islemler": [
+            {k: i[k] for k in ("satir", "sutun", "metin", "anahtar", "yerAdlari") if k in i} for i in islemler
+        ],
     }
     r = subprocess.run(["node", str(UYGULA_TS)], input=json.dumps(girdi).encode("utf-8"), capture_output=True, cwd=kok)
     if r.returncode != 0:
@@ -175,6 +182,32 @@ def ts_uygula(kok: Path, dosya: str, metin: str, islemler: list[dict]) -> tuple[
 
 
 # ── Orkestra ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+def _katalog_yaz(kok: Path, yuzey: str, u: dict) -> None:
+    """TR = aracın ham değeri (BAYT BAYT), `yerAdlari` ile yeniden adlandırılmış. `cogul: true` → `_one` + `_other` (TR ikisi de aynı
+    — Türkçe tekil/çoğul ayırmaz; EN `{"one": …, "other": …}`), çağrı `t(k, { count })` ile seçer (yer tutucu adı `count` olmalı)."""
+    tr = u["ham"]
+    for eski, yeni in (u.get("yerAdlari") or {}).items():
+        tr = tr.replace("{{" + eski + "}}", "{{" + yeni + "}}")
+    if u.get("cogul"):
+        if "count" not in ortak.yer_tutuculari(tr):
+            raise SystemExit("cogul: TR değerinde {{count}} yok (yerAdlari ile sayıyı 'count' adlandırın)")
+        en = u.get("en") or {}
+        if en and not (isinstance(en, dict) and set(en) == {"one", "other"}):
+            raise SystemExit('cogul: en {"one": "…", "other": "…"} olmalı')
+        for bicim in ("one", "other"):
+            katalog.anahtar_yaz(kok, yuzey, "tr", f"{u['anahtar']}_{bicim}", tr)
+            if en:
+                if ortak.yer_tutuculari(tr) != ortak.yer_tutuculari(en[bicim]):
+                    raise SystemExit(f"en yer tutucuları tr ile farklı: {u['anahtar']}_{bicim}")
+                katalog.anahtar_yaz(kok, yuzey, "en", f"{u['anahtar']}_{bicim}", en[bicim], ustune_yaz=True)
+        return
+    katalog.anahtar_yaz(kok, yuzey, "tr", u["anahtar"], tr)
+    if str(u.get("en") or "").strip():
+        if ortak.yer_tutuculari(tr) != ortak.yer_tutuculari(u["en"]):
+            raise SystemExit(f"en yer tutucuları tr ile farklı: {u['anahtar']}")
+        katalog.anahtar_yaz(kok, yuzey, "en", u["anahtar"], u["en"], ustune_yaz=True)
 
 
 def uygula(kok: Path, eslem: dict, kuru: bool = False) -> dict:
@@ -204,11 +237,7 @@ def uygula(kok: Path, eslem: dict, kuru: bool = False) -> dict:
         for u in uyg:
             try:
                 if not kuru:
-                    katalog.anahtar_yaz(kok, yuzey, "tr", u["anahtar"], u["ham"])
-                    if str(u.get("en") or "").strip():
-                        if ortak.yer_tutuculari(u["ham"]) != ortak.yer_tutuculari(u["en"]):
-                            raise SystemExit(f"en yer tutucuları tr ile farklı: {u['anahtar']}")
-                        katalog.anahtar_yaz(kok, yuzey, "en", u["anahtar"], u["en"], ustune_yaz=True)
+                    _katalog_yaz(kok, yuzey, u)
             except SystemExit as e:
                 rapor["katalogHatasi"].append(f"{dosya}:{u['satir']} {u['anahtar']}: {e}")
         if not kuru and uyg and not rapor["katalogHatasi"]:

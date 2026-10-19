@@ -1,0 +1,71 @@
+{
+  "alan": {
+    "ad": "Ad",
+    "cepTelefonu": "Cep telefonu — opsiyonel",
+    "eposta": "E-posta adresi",
+    "sifre": "Şifre",
+    "sifreGoster": "Şifreyi göster/gizle",
+    "sifreTekrar": "Şifre tekrar",
+    "soyad": "Soyad",
+    "unvan": "Ünvan (örn. Vet. Hekim) — opsiyonel",
+    "yeniSifreTekrar": "Yeni şifre tekrar"
+  },
+  "altBilgi": "PEMF Vet · Yalnız yetkili operatör kullanımı içindir.",
+  "arastirmaIpucu": "Akademik e-posta algılandı — Araştırma Modu profili açılacak.",
+  "gecis": {
+    "girisYap": "Giriş yap",
+    "hesapVar": "Zaten hesabın var mı? ",
+    "hesapYok": "Hesabın yok mu? ",
+    "kayitOl": "Kayıt ol"
+  },
+  "girisYap": "Giriş Yap",
+  "giriseDon": "← Giriş'e dön",
+  "hata": {
+    "adSoyadEksik": "Lütfen ad ve soyad alanlarını doldurun.",
+    "gecersizEposta": "Geçerli bir e-posta adresi girin.",
+    "girisBasarisiz": "Giriş başarısız.",
+    "kayitBasarisiz": "Kayıt başarısız.",
+    "klinikBilgisiEksik": "Lütfen ad, soyad, klinik adı, şehir ve ilçe alanlarını doldurun.",
+    "sifreGir": "Şifreni gir.",
+    "sifreKurallari": "Şifre kurallarını karşılamıyor.",
+    "sifrelerEslesmiyor": "Şifreler eşleşmiyor."
+  },
+  "hesapEkleme": {
+    "aciklama": "Başka bir e-posta hesabı ekleniyor. Şu anki hesabınız bu cihazda açık kalır; giriş yaptıktan sonra hesaplar arasında üst menüdeki \"E-posta hesapları\"ndan geçebilirsiniz.",
+    "vazgec": "Vazgeç — önceki hesaba dön",
+    "vazgecEtiketi": "Vazgeç, önceki hesaba dön"
+  },
+  "hesapOlustur": "Hesap Oluştur",
+  "kayitOl": "Kayıt Ol",
+  "klinik": {
+    "acilTelefon": "Klinik acil telefon — opsiyonel",
+    "ad": "Klinik / Muayenehane adı",
+    "adres": "Açık adres — opsiyonel",
+    "baslik": "Klinik / Muayenehane",
+    "ilce": "İlçe",
+    "kurumAdi": "Kurum / Üniversite adı — opsiyonel",
+    "kurumBaslik": "Kurum (opsiyonel)",
+    "sehir": "Şehir (İl)"
+  },
+  "kural": {
+    "buyukHarf": "Bir büyük harf",
+    "enAz8": "En az 8 karakter",
+    "kucukHarf": "Bir küçük harf",
+    "rakam": "Bir rakam"
+  },
+  "marka": {
+    "altBaslik": "Manyetik Alan Seans Sistemi"
+  },
+  "oneri": {
+    "buEpostayla": "Bu e-postayla ",
+    "hesapOlustur": "hesap oluştur →"
+  },
+  "sifirlama": {
+    "aciklama": "E-postana bir sıfırlama bağlantısı göndereceğiz.",
+    "baslik": "Şifre Sıfırlama",
+    "gonder": "Sıfırlama Linki Gönder",
+    "gonderildi": "Şifre sıfırlama bağlantısı e-postana gönderildi. Linke tıklayıp yeni şifreni belirle.",
+    "gonderilemedi": "Gönderilemedi."
+  },
+  "sifremiUnuttum": "Şifremi unuttum?"
+}

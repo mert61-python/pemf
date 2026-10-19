@@ -12,8 +12,19 @@
  */
 import { readFileSync } from "fs";
 import { join } from "path";
+import { EN, TR, gorunenMetinler } from "@/i18n/__tests__/kaynakMetni";
 
 const SRC = readFileSync(join(__dirname, "..", "SettingsScreen.tsx"), "utf8");
+
+/**
+ * I18N-0: etiketler kataloğa taşındı — ölçüt GEVŞEMEDİ, yer değiştirdi (`kaynakMetni.ts`): yapısal koşul (isExpert / isResearcher)
+ * ANAHTARIN kullanıldığı yerde aranır, anahtarın TR değeri eski metinle BİREBİR, EN değeri dolu olmalı.
+ */
+function etiket(anahtar: string, tr: string): string {
+  expect(TR[anahtar]).toBe(tr);
+  expect(String(EN[anahtar] ?? "").trim()).not.toBe("");
+  return `t("${anahtar}")`;
+}
 
 /** `startEditProfile` gövdesini çıkarır (formun hangi alanları yüklediğini görmek için). */
 function startEditBody(): string {
@@ -24,17 +35,19 @@ function startEditBody(): string {
 
 describe("Ayarlar → hesap bilgileri profile göre ayrışır", () => {
   it("VETERİNER alanları isExpert ile koşullanır", () => {
-    expect(SRC).toMatch(/isExpert && \(\s*<>\s*<Text style=\{styles\.label\}>Klinik \/ Muayenehane/);
+    expect(SRC).toMatch(/isExpert && \(\s*<>\s*<Text style=\{styles\.label\}>\{t\("ayarlar\.hesap\.klinik"\)\}/);
+    expect(SRC).toContain(etiket("ayarlar.hesap.klinik", "Klinik / Muayenehane")); // test İÇİNDE: kırmızı, çökme değil
   });
 
   it("ARAŞTIRMA alanları (kurum/bölüm) isResearcher ile koşullanır", () => {
     expect(SRC).toMatch(/isResearcher && \(/);
-    expect(SRC).toContain("Üniversite / Kurum");
-    expect(SRC).toContain("Bölüm / Anabilim Dalı");
+    expect(gorunenMetinler(SRC)).toContain("Üniversite / Kurum");
+    expect(gorunenMetinler(SRC)).toContain("Bölüm / Anabilim Dalı");
   });
 
   it("klinik acil telefon da yalnız veterinerde sorulur", () => {
-    const i = SRC.indexOf("Klinik Acil Telefon");
+    const i = SRC.indexOf(etiket("ayarlar.hesap.klinikAcilTelefon", "Klinik Acil Telefon"));
+    expect(i).toBeGreaterThan(-1);
     const once = SRC.slice(Math.max(0, i - 260), i);
     expect(once).toContain("isExpert");
   });
@@ -67,7 +80,8 @@ describe("Ayarlar → hesap bilgileri profile göre ayrışır", () => {
 
   it("EV SAHİBİ için klinik ya da kurum alanı KOŞULSUZ render EDİLMEZ", () => {
     // Koşulsuz bir "Klinik / Muayenehane" etiketi kalmamalı — ev sahibi onu görürdü.
-    const kosulsuz = SRC.match(/\n\s*<Text style=\{styles\.label\}>Klinik \/ Muayenehane<\/Text>/g) || [];
+    const kosulsuz = SRC.match(/\n\s*<Text style=\{styles\.label\}>\{t\("ayarlar\.hesap\.klinik"\)\}<\/Text>/g) || [];
+    expect(kosulsuz.length).toBeGreaterThan(0); // I18N-0: boş eşleşme kapıyı sessizce geçirmesin (anahtar değişirse KIRMIZI)
     for (const m of kosulsuz) {
       const idx = SRC.indexOf(m);
       expect(SRC.slice(Math.max(0, idx - 200), idx)).toContain("isExpert");

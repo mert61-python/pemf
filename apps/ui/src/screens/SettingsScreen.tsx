@@ -31,6 +31,7 @@ import {
   ICE_AKTARMA_ZAMAN_ASIMI_MESAJI,
   VERI_TASIMA_ZAMAN_ASIMI_MS,
 } from "@/services/veriTasima";
+import { useTranslation } from "react-i18next";
 
 
 /** S-F2-1.1: denetim izinin UTC ISO zamanını yerel tarih-saate çevirir; okunamazsa ham metin. */
@@ -41,6 +42,7 @@ function sonTurZamani(at: string | null | undefined): string {
 }
 
 export function SettingsScreen() {
+  const { t } = useTranslation();
   const { setUserMode, isExpert, isResearcher } = useUserMode();
   // SG.G3 (sahip, 2026-10-13: "araştırma profilinin ayarlar kısmında bunlar da olmalı … veri saklama süresi veri taşıma donanım
   // bakım"): bakım / taşıma / saklama kartları UZMAN profillerde (veteriner VEYA araştırma); Ev Sahibi'nde GİZLİ kalır (KVKK).
@@ -137,17 +139,17 @@ export function SettingsScreen() {
     setTasimaMesgul("");
     if (!res) return;                                 // hata mesajını apiPost gösterdi
     const c = res.counts || {};
-    const sayim = `${c.patients ?? 0} hasta, ${c.treatment_sessions ?? 0} seans, ${c.ai_analyses ?? 0} analiz`;
+    const sayim = t("ayarlar.yedek.sayim", { hasta: c.patients ?? 0, seans: c.treatment_sessions ?? 0, analiz: c.ai_analyses ?? 0 });
     if (yerel) {
       if (res.status === "success" && res.yol && (res.bayt ?? 0) > 0) {
-        showToast(`Yedek oluşturuldu ve doğrulandı: ${res.yol} (${sayim}).`, "success");
+        showToast(t("ayarlar.yedek.olusturuldu", { yol: res.yol, sayim }), "success");
       } else {
-        showToast("Yedek dosyası kaydedilemedi — cihaz dosya yolunu bildirmedi; yedek OLUŞTURULMADI sayın.", "error");
+        showToast(t("ayarlar.yedek.yolYok"), "error");
       }
       return;
     }
     if (!res.data_b64) {
-      showToast("Yedek alınamadı — cihaz dosya içeriğini döndürmedi.", "error");
+      showToast(t("ayarlar.yedek.icerikYok"), "error");
       return;
     }
     try {
@@ -162,13 +164,13 @@ export function SettingsScreen() {
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
       showToast(
-        `İndirme başlatıldı: ${ad} (${sayim}). Dosyanın indirme klasörüne geldiğini doğrulayın — tarayıcı indirmeyi engellemiş olabilir.`,
+        t("ayarlar.yedek.indirmeBasladi", { dosyaAdi: ad, sayim }),
         "info",
       );
     } catch {
-      showToast("Yedek dosyası kaydedilemedi.", "error");
+      showToast(t("ayarlar.yedek.kaydedilemedi"), "error");
     }
-  }, [showToast, parolaSor]);
+  }, [showToast, parolaSor, t]);
 
   const iceAktar = useCallback(async () => {
     const inp = document.createElement("input");
@@ -180,12 +182,10 @@ export function SettingsScreen() {
       const parola = await parolaSor("gir");
       if (!parola) return;
       if (!(await platformConfirm(
-        "Yedekten geri yükle",
+        t("ayarlar.yedek.geriYukleBaslik"),
         // ⚠️ Y12: metin GERÇEĞİ söyler — tedavi geçmişinin TAMAMI değişir; hasta kartları SİLİNMEZ (yedekte olmayanların kartı kalır).
-        "Bu cihazda kayıt varsa mevcut tedavi geçmişi (seanslar, bobin koşuları, sensör verisi, AI analizleri) SİLİNİP " +
-          "yedektekiyle değiştirilecek. Hasta kartları silinmez: yedekte olmayan hastaların kartı kalır ama bu cihazdaki seans " +
-          "geçmişleri silinir.\n\nDevam edilsin mi?",
-        "Geri yükle"))) return;
+        t("ayarlar.yedek.geriYukleOnay"),
+        t("ayarlar.yedek.geriYukleDugme")))) return;
       setTasimaMesgul("import");
       // ⚠️ D2-3.5 (2-D incelemesi): dosya okunamazsa (arrayBuffer reddi) kilit açılır ve neden söylenir — eskiden düğmeler KALICI
       // kilitli, "Yükleniyor…" sonsuza dek kalıyordu (işlenmeyen ret). Kapı: screens/__tests__/VeriTasimaAgHatasi.D2_3_5.web.test.tsx
@@ -195,7 +195,7 @@ export function SettingsScreen() {
         for (let i = 0; i < buf.length; i++) s += String.fromCharCode(buf[i]);
       } catch {
         setTasimaMesgul("");
-        showToast("Yedek dosyası okunamadı — dosyayı yeniden seçin; geri yükleme BAŞLAMADI.", "error");
+        showToast(t("ayarlar.yedek.okunamadi"), "error");
         return;
       }
       // ⚠️ D2.E03 (Y84): UZUN zaman aşımı; zaman aşımında metin "Tekrar deneyin" DEMEZ — geri yükleme cihazda sürüyor olabilir.
@@ -212,11 +212,11 @@ export function SettingsScreen() {
       const zatenVardi = c.patient_db_zaten_vardi ?? 0;
       const basarisiz = c.patient_db_basarisiz ?? 0;
       const ek = [
-        zatenVardi > 0 ? `${zatenVardi} hasta zaten vardı` : "",
-        basarisiz > 0 ? `${basarisiz} hasta AKTARILAMADI` : "",
+        zatenVardi > 0 ? t("ayarlar.yedek.zatenVardi", { count: zatenVardi }) : "",
+        basarisiz > 0 ? t("ayarlar.yedek.aktarilamadi", { count: basarisiz }) : "",
       ].filter(Boolean).join(", ");
       showToast(
-        `Geri yüklendi: ${c.patients ?? 0} hasta, ${c.treatment_sessions ?? 0} seans, ${c.ai_analyses ?? 0} analiz.`
+        t("ayarlar.yedek.geriYuklendi", { hasta: c.patients ?? 0, seans: c.treatment_sessions ?? 0, analiz: c.ai_analyses ?? 0 })
         + (ek ? ` (${ek})` : "")
         // ⚠️ Y12: yedekte olmayan hastaların kartı korundu ama seans geçmişleri silindi — sunucu söyler, ekran GÖSTERİR.
         + (res.uyari ? ` ${res.uyari}` : ""),
@@ -224,7 +224,7 @@ export function SettingsScreen() {
       );
     };
     inp.click();
-  }, [showToast, parolaSor]);
+  }, [showToast, parolaSor, t]);
   // Klinik/profil bilgisi artık KAYIT (login) formunda toplanır (Supabase user_metadata) → burada salt-okunur gösterilir.
   const [settings, setSettings] = useState({
     ble_gateway_mac: "",
@@ -275,7 +275,7 @@ export function SettingsScreen() {
   };
   const saveProfile = async () => {
     if (!pForm.first_name.trim() || !pForm.last_name.trim()) {
-      showToast("Ad ve soyad boş olamaz.", "error");
+      showToast(t("ayarlar.hesap.adSoyadBos"), "error");
       return;
     }
     setSavingP(true);
@@ -287,8 +287,8 @@ export function SettingsScreen() {
     };
     const r = await updateProfile(meta);
     setSavingP(false);
-    if (r.ok) { showToast("Profil güncellendi.", "success"); setEditP(false); }
-    else showToast(r.error || "Profil güncellenemedi.", "error");
+    if (r.ok) { showToast(t("ayarlar.hesap.guncellendi"), "success"); setEditP(false); }
+    else showToast(r.error || t("ayarlar.hesap.guncellenemedi"), "error");
   };
 
   useEffect(() => {
@@ -342,7 +342,7 @@ export function SettingsScreen() {
         setTimeout(() => controller.abort(), 5000);
         const res = await fetch(`${origin}/api/health`, { signal: controller.signal });
         setConnectionStatus(res.ok ? "ok" : "fail");
-        showToast(res.ok ? "✅ Sunucuya bağlısınız." : "❌ Sunucuya ulaşılamadı.", res.ok ? "success" : "error");
+        showToast(res.ok ? t("ayarlar.baglanti.bagli") : t("ayarlar.baglanti.ulasilamadi"), res.ok ? "success" : "error");
       } else {
         const addr = settings.server_ip;
         // GÜVENLİK (#24): eskiden yalnız `res.ok` kontrol ediliyordu → /api/health'e 200 dönen
@@ -354,7 +354,7 @@ export function SettingsScreen() {
         if (ok) {
           if (!updateServiceConfig(addr)) {   // #63 doğrulaması: geçersiz biçimde ayarı BOZMA
             setConnectionStatus("fail");
-            showToast("❌ Geçersiz adres biçimi.", "error");
+            showToast(t("ayarlar.baglanti.gecersizAdres"), "error");
             return;
           }
           await AsyncStorage.setItem("@pemf_server_address", addr).catch(() => {});
@@ -364,15 +364,15 @@ export function SettingsScreen() {
           // ediyordu; bu yol atlanmıştı.
           liveReconnect();
           setConnectionStatus("ok");
-          showToast("✅ Bağlantı başarılı! Adres kaydedildi.", "success");
+          showToast(t("ayarlar.baglanti.basarili"), "success");
         } else {
           setConnectionStatus("fail");
-          showToast("❌ Bu adreste bir PEMF cihazı bulunamadı.", "error");
+          showToast(t("ayarlar.baglanti.cihazYok"), "error");
         }
       }
     } catch {
       setConnectionStatus("fail");
-      showToast("❌ Bağlantı zaman aşımına uğradı.", "error");
+      showToast(t("ayarlar.baglanti.zamanAsimi"), "error");
     }
     setSearching(false);
   };
@@ -389,8 +389,8 @@ export function SettingsScreen() {
         setTimeout(() => ctrl.abort(), 5000);
         const res = await fetch(`${origin}/api/health`, { signal: ctrl.signal });
         setConnectionStatus(res.ok ? "ok" : "fail");
-        showToast(res.ok ? "✅ Sunucuya bağlısınız (bu sayfanın sunucusu)." : "❌ Sunucuya ulaşılamadı.", res.ok ? "success" : "error");
-      } catch { setConnectionStatus("fail"); showToast("❌ Sunucuya ulaşılamadı.", "error"); }
+        showToast(res.ok ? t("ayarlar.baglanti.bagliBuSayfa") : t("ayarlar.baglanti.ulasilamadi"), res.ok ? "success" : "error");
+      } catch { setConnectionStatus("fail"); showToast(t("ayarlar.baglanti.ulasilamadi"), "error"); }
       setSearching(false);
       return;
     }
@@ -398,22 +398,22 @@ export function SettingsScreen() {
     // TAM /24 subnet 1-254). Eski sabit-liste [100,1,101,2,102,110,50,200] backend'in DHCP IP'sini
     // (ör. .37) KAÇIRIYORDU → "bağlı olmasına rağmen bulunamadı". discoverBackend zaten config'i uygular +
     // PEMF kimliğini doğrular; bağlıyken kayıtlı adresi ilk sırada onaylar (yanlış-negatif biter).
-    showToast("🔍 Ağ taranıyor...", "info");
+    showToast(t("ayarlar.baglanti.taraniyor"), "info");
     try {
       const found = await discoverBackend();
       if (found) {
         const ipOnly = found.address.replace(/^https?:\/\//, "").replace(/:\d+$/, "");
         setSettings(prev => ({ ...prev, server_ip: ipOnly }));
         setConnectionStatus("ok");
-        showToast(`✅ PEMF cihazı bulundu: ${ipOnly}`, "success");
+        showToast(t("ayarlar.baglanti.bulundu", { adres: ipOnly }), "success");
         liveReconnect(); // doğrulanmış/yeni adrese WS'i bağla
       } else {
         setConnectionStatus("fail");
-        showToast("⚠️ Ağda PEMF cihazı bulunamadı. Cihazla aynı WiFi'de olduğunuzdan emin olun ya da IP'yi elle girin.", "info");
+        showToast(t("ayarlar.baglanti.agdaYok"), "info");
       }
     } catch {
       setConnectionStatus("fail");
-      showToast("⚠️ Tarama başarısız. Cihaz IP'sini elle girin.", "info");
+      showToast(t("ayarlar.baglanti.taramaBasarisiz"), "info");
     }
     setSearching(false);
   };
@@ -458,18 +458,18 @@ export function SettingsScreen() {
     if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
       try {
         await navigator.clipboard.writeText(value);
-        showToast(`${label} panoya kopyalandı ✓`, "success");
+        showToast(t("ayarlar.kopyala.kopyalandi", { etiket: label }), "success");
       } catch {
         platformAlert(label, value);
       }
     } else {
-      platformAlert(label, `Bu değeri kopyalayın:\n\n${value}`);
+      platformAlert(label, t("ayarlar.kopyala.elle", { deger: value }));
     }
   };
 
   const handleSave = async () => {
     setLoading(true);
-    setSaveStatus("Kaydediliyor...");
+    setSaveStatus(t("ayarlar.kaydediliyor"));
     try {
       // #72: adres eskiden DOĞRULANMADAN kaydediliyor ve updateServiceConfig'in `false` dönüşü
       // yok sayılıyordu → boş/bozuk bir server_ip kalıcı hâle gelip sonraki açılışta keşfi
@@ -481,7 +481,7 @@ export function SettingsScreen() {
         const applied = Platform.OS === "web" ? true : updateServiceConfig(addr);
         if (!applied) {
           setLoading(false);
-          setSaveStatus("Geçersiz sunucu adresi — kaydedilmedi.");
+          setSaveStatus(t("ayarlar.baglanti.adresKaydedilmedi"));
           return;
         }
         // Canonical anahtar @pemf_server_address (discovery + ilk-yükleme bunu okur) + geri-uyum için ip.
@@ -493,13 +493,13 @@ export function SettingsScreen() {
     const result = await apiPost<any>("/settings/", settings, { status: "error" });
     setLoading(false);
     if (result.status === "success") {
-      setSaveStatus("Ayarlar başarıyla kaydedildi.");
+      setSaveStatus(t("ayarlar.kaydedildi"));
       // #124: bu zamanlayıcı takip edilmiyordu → ekran 3sn dolmadan kapatılırsa unmount sonrası
       // setState (React uyarısı + boşa iş). Ref'te tut, unmount'ta temizle.
       if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current);
       saveStatusTimerRef.current = setTimeout(() => setSaveStatus(""), 3000);
     } else {
-      setSaveStatus("Kaydetme hatası.");
+      setSaveStatus(t("ayarlar.kayitHatasi"));
     }
   };
 
@@ -509,23 +509,23 @@ export function SettingsScreen() {
   keyboardShouldPersistTaps='handled' taşıyor. İç ScrollView'ın yükseklik sınırı
   olmadığı için kendi kaydırmasını hiç üretmiyordu; ama klavye açıkken dokunuşu
   yutup 'Kaydet/Bağlan' düğmelerini İKİ dokunuş gerektiriyordu. */}
-      <Text style={styles.headerTitle}>Sistem Ayarları</Text>
-      <Text style={styles.intro}>Uygulama tercihleri ve cihaz bağlantı ayarları.</Text>
+      <Text style={styles.headerTitle}>{t("ayarlar.baslik")}</Text>
+      <Text style={styles.intro}>{t("ayarlar.altBaslik")}</Text>
 
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <UserCog color={colors.primary} size={20} />
-          <Text style={styles.cardTitle}>Profil Ayarları</Text>
+          <Text style={styles.cardTitle}>{t("ayarlar.profil.baslik")}</Text>
         </View>
-        <Text style={styles.label}>Şu anki mod: {isExpert ? 'Veteriner Hekim' : isResearcher ? 'Araştırma Modu' : 'Evcil Hayvan Sahibi'}</Text>
+        <Text style={styles.label}>{t("ayarlar.profil.suankiMod", { mod: isExpert ? t("ayarlar.profil.modVeteriner") : isResearcher ? t("ayarlar.profil.modArastirma") : t("ayarlar.profil.modSahip") })}</Text>
         {/* HASTA GÜVENLİĞİ: profil sıfırlama MainRouter'ı söküp WelcomeScreen'e düşürür →
             ACİL DURDUR ve çevrimdışı uyarısı ekrandan kaybolur. Seans sürerken önce durdur. */}
         <TouchableOpacity
           style={[styles.btnOutline, { marginTop: spacing.md }]}
-          onPress={async () => { if (await guardTeardown("Profil değiştirmek")) setUserMode(null); }}
+          onPress={async () => { if (await guardTeardown(t("ayarlar.profil.degistirmekEylem"))) setUserMode(null); }}
           accessibilityRole="button"
         >
-          <Text style={styles.btnOutlineText}>Farklı Bir Profile Geçiş Yap</Text>
+          <Text style={styles.btnOutlineText}>{t("ayarlar.profil.gecisYap")}</Text>
         </TouchableOpacity>
       </Card>
 
@@ -537,11 +537,11 @@ export function SettingsScreen() {
         <View style={styles.cardHeaderRow}>
           <View style={styles.cardHeader}>
             <UserCog color={colors.primary} size={20} />
-            <Text style={styles.cardTitle}>Hesap Bilgileri</Text>
+            <Text style={styles.cardTitle}>{t("ayarlar.hesap.baslik")}</Text>
           </View>
           {!editP ? (
-            <TouchableOpacity onPress={startEditProfile} accessibilityLabel="Profili düzenle">
-              <Text style={styles.editLink}>Düzenle</Text>
+            <TouchableOpacity onPress={startEditProfile} accessibilityLabel={t("ayarlar.hesap.duzenleEtiketi")}>
+              <Text style={styles.editLink}>{t("ayarlar.hesap.duzenle")}</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -550,81 +550,81 @@ export function SettingsScreen() {
           <>
             <View style={styles.row2}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Ad</Text>
-                <TextInput style={styles.input} value={pForm.first_name} onChangeText={t => setPForm({ ...pForm, first_name: t })} placeholder="Ad" />
+                <Text style={styles.label}>{t("ayarlar.hesap.ad")}</Text>
+                <TextInput style={styles.input} value={pForm.first_name} onChangeText={t => setPForm({ ...pForm, first_name: t })} placeholder={t("ayarlar.hesap.ad")} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Soyad</Text>
-                <TextInput style={styles.input} value={pForm.last_name} onChangeText={t => setPForm({ ...pForm, last_name: t })} placeholder="Soyad" />
+                <Text style={styles.label}>{t("ayarlar.hesap.soyad")}</Text>
+                <TextInput style={styles.input} value={pForm.last_name} onChangeText={t => setPForm({ ...pForm, last_name: t })} placeholder={t("ayarlar.hesap.soyad")} />
               </View>
             </View>
-            <Text style={styles.label}>Ünvan</Text>
-            <TextInput style={styles.input} value={pForm.title} onChangeText={t => setPForm({ ...pForm, title: t })} placeholder="Örn. Vet. Hekim" />
-            <Text style={styles.label}>Telefon</Text>
-            <TextInput style={styles.input} value={pForm.phone} onChangeText={t => setPForm({ ...pForm, phone: t })} placeholder="Cep telefonu" keyboardType="phone-pad" />
+            <Text style={styles.label}>{t("ayarlar.hesap.unvan")}</Text>
+            <TextInput style={styles.input} value={pForm.title} onChangeText={t => setPForm({ ...pForm, title: t })} placeholder={t("ayarlar.hesap.unvanOrnek")} />
+            <Text style={styles.label}>{t("ayarlar.hesap.telefon")}</Text>
+            <TextInput style={styles.input} value={pForm.phone} onChangeText={t => setPForm({ ...pForm, phone: t })} placeholder={t("ayarlar.hesap.cepTelefonu")} keyboardType="phone-pad" />
             {/* PROFİLE ÖZEL ALANLAR (2026-08-07): klinik bilgisi yalnız veterinerde, kurum
                 bilgisi yalnız araştırmada sorulur. Ev sahibinde ikisi de sorulmaz — evcil
                 hayvan sahibinden klinik adı istemek anlamsızdı. */}
             {isExpert && (
               <>
-                <Text style={styles.label}>Klinik / Muayenehane</Text>
-                <TextInput style={styles.input} value={pForm.clinic_name} onChangeText={t => setPForm({ ...pForm, clinic_name: t })} placeholder="Klinik adı" />
+                <Text style={styles.label}>{t("ayarlar.hesap.klinik")}</Text>
+                <TextInput style={styles.input} value={pForm.clinic_name} onChangeText={t => setPForm({ ...pForm, clinic_name: t })} placeholder={t("ayarlar.hesap.klinikAdi")} />
               </>
             )}
             {isResearcher && (
               <>
-                <Text style={styles.label}>Üniversite / Kurum</Text>
-                <TextInput style={styles.input} value={pForm.institution} onChangeText={t => setPForm({ ...pForm, institution: t })} placeholder="Üniversite / enstitü / kurum" />
-                <Text style={styles.label}>Bölüm / Anabilim Dalı</Text>
-                <TextInput style={styles.input} value={pForm.department} onChangeText={t => setPForm({ ...pForm, department: t })} placeholder="Bölüm" />
-                <Text style={styles.label}>Akademik Ünvan</Text>
-                <TextInput style={styles.input} value={pForm.academic_title} onChangeText={t => setPForm({ ...pForm, academic_title: t })} placeholder="Örn. Dr. Öğr. Üyesi (opsiyonel)" />
+                <Text style={styles.label}>{t("ayarlar.hesap.kurum")}</Text>
+                <TextInput style={styles.input} value={pForm.institution} onChangeText={t => setPForm({ ...pForm, institution: t })} placeholder={t("ayarlar.hesap.kurumOrnek")} />
+                <Text style={styles.label}>{t("ayarlar.hesap.bolum")}</Text>
+                <TextInput style={styles.input} value={pForm.department} onChangeText={t => setPForm({ ...pForm, department: t })} placeholder={t("ayarlar.hesap.bolumOrnek")} />
+                <Text style={styles.label}>{t("ayarlar.hesap.akademikUnvan")}</Text>
+                <TextInput style={styles.input} value={pForm.academic_title} onChangeText={t => setPForm({ ...pForm, academic_title: t })} placeholder={t("ayarlar.hesap.akademikUnvanOrnek")} />
               </>
             )}
             <View style={styles.row2}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Şehir (İl)</Text>
-                <TextInput style={styles.input} value={pForm.city} onChangeText={t => setPForm({ ...pForm, city: t })} placeholder="Şehir" />
+                <Text style={styles.label}>{t("ayarlar.hesap.sehirIl")}</Text>
+                <TextInput style={styles.input} value={pForm.city} onChangeText={t => setPForm({ ...pForm, city: t })} placeholder={t("ayarlar.hesap.sehir")} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>İlçe</Text>
-                <TextInput style={styles.input} value={pForm.district} onChangeText={t => setPForm({ ...pForm, district: t })} placeholder="İlçe" />
+                <Text style={styles.label}>{t("ayarlar.hesap.ilce")}</Text>
+                <TextInput style={styles.input} value={pForm.district} onChangeText={t => setPForm({ ...pForm, district: t })} placeholder={t("ayarlar.hesap.ilce")} />
               </View>
             </View>
-            <Text style={styles.label}>Adres</Text>
-            <TextInput style={styles.input} value={pForm.address} onChangeText={t => setPForm({ ...pForm, address: t })} placeholder="Açık adres" />
+            <Text style={styles.label}>{t("ayarlar.hesap.adres")}</Text>
+            <TextInput style={styles.input} value={pForm.address} onChangeText={t => setPForm({ ...pForm, address: t })} placeholder={t("ayarlar.hesap.acikAdres")} />
             {isExpert && (
               <>
-                <Text style={styles.label}>Klinik Acil Telefon</Text>
-                <TextInput style={styles.input} value={pForm.clinic_phone} onChangeText={t => setPForm({ ...pForm, clinic_phone: t })} placeholder="Klinik acil telefon" keyboardType="phone-pad" />
+                <Text style={styles.label}>{t("ayarlar.hesap.klinikAcilTelefon")}</Text>
+                <TextInput style={styles.input} value={pForm.clinic_phone} onChangeText={t => setPForm({ ...pForm, clinic_phone: t })} placeholder={t("ayarlar.hesap.klinikAcilTelefonOrnek")} keyboardType="phone-pad" />
               </>
             )}
             <View style={styles.actions}>
               <TouchableOpacity style={styles.btnPrimary} onPress={saveProfile} disabled={savingP}>
                 <Save color="#fff" size={16} />
-                <Text style={styles.btnPrimaryText}>{savingP ? "Kaydediliyor..." : "Kaydet"}</Text>
+                <Text style={styles.btnPrimaryText}>{savingP ? t("ayarlar.kaydediliyor") : t("ayarlar.kaydet")}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.btnOutline, { marginLeft: spacing.md }]} onPress={() => setEditP(false)} disabled={savingP}>
-                <Text style={styles.btnOutlineText}>İptal</Text>
+                <Text style={styles.btnOutlineText}>{t("ayarlar.iptal")}</Text>
               </TouchableOpacity>
             </View>
           </>
         ) : (
           <>
-            <Info label="Ad Soyad" value={prof.full_name || [prof.first_name, prof.last_name].filter(Boolean).join(" ")} />
-            {prof.title ? <Info label="Ünvan" value={prof.title} /> : null}
-            <Info label="E-posta" value={session?.email} />
+            <Info label={t("ayarlar.hesap.adSoyad")} value={prof.full_name || [prof.first_name, prof.last_name].filter(Boolean).join(" ")} />
+            {prof.title ? <Info label={t("ayarlar.hesap.unvan")} value={prof.title} /> : null}
+            <Info label={t("ayarlar.hesap.eposta")} value={session?.email} />
             {/* PROFİLE ÖZEL (2026-08-07): ev sahibine klinik/kurum bilgisi GÖSTERİLMEZ.
                 Veri silinmez, yalnız o profille ilgisi olmadığı için gizlenir. */}
-            {isExpert && prof.clinic_name ? <Info label="Klinik / Muayenehane" value={prof.clinic_name} /> : null}
-            {isResearcher && prof.institution ? <Info label="Üniversite / Kurum" value={prof.institution} /> : null}
-            {isResearcher && prof.department ? <Info label="Bölüm / Anabilim Dalı" value={prof.department} /> : null}
-            {isResearcher && prof.academic_title ? <Info label="Akademik Ünvan" value={prof.academic_title} /> : null}
-            {(prof.city || prof.district) ? <Info label="Şehir / İlçe" value={[prof.city, prof.district].filter(Boolean).join(" / ")} /> : null}
-            {prof.address ? <Info label="Adres" value={prof.address} /> : null}
-            {prof.phone ? <Info label="Telefon" value={prof.phone} /> : null}
-            {isExpert && prof.clinic_phone ? <Info label="Klinik Acil Telefon" value={prof.clinic_phone} /> : null}
-            <Text style={styles.mutedNote}>{'E-posta hesap kimliğidir, değiştirilemez. Diğer bilgileri "Düzenle" ile güncelleyebilirsin.'}</Text>
+            {isExpert && prof.clinic_name ? <Info label={t("ayarlar.hesap.klinik")} value={prof.clinic_name} /> : null}
+            {isResearcher && prof.institution ? <Info label={t("ayarlar.hesap.kurum")} value={prof.institution} /> : null}
+            {isResearcher && prof.department ? <Info label={t("ayarlar.hesap.bolum")} value={prof.department} /> : null}
+            {isResearcher && prof.academic_title ? <Info label={t("ayarlar.hesap.akademikUnvan")} value={prof.academic_title} /> : null}
+            {(prof.city || prof.district) ? <Info label={t("ayarlar.hesap.sehirIlce")} value={[prof.city, prof.district].filter(Boolean).join(" / ")} /> : null}
+            {prof.address ? <Info label={t("ayarlar.hesap.adres")} value={prof.address} /> : null}
+            {prof.phone ? <Info label={t("ayarlar.hesap.telefon")} value={prof.phone} /> : null}
+            {isExpert && prof.clinic_phone ? <Info label={t("ayarlar.hesap.klinikAcilTelefon")} value={prof.clinic_phone} /> : null}
+            <Text style={styles.mutedNote}>{t("ayarlar.hesap.epostaAciklama")}</Text>
           </>
         )}
       </Card>
@@ -635,20 +635,17 @@ export function SettingsScreen() {
           <Card style={styles.card}>
             <View style={styles.cardHeader}>
               <Network color={colors.primary} size={20} />
-              <Text style={styles.cardTitle}>Uzaktan Erişim Bağlantısı</Text>
+              <Text style={styles.cardTitle}>{t("ayarlar.uzakErisim.baslik")}</Text>
             </View>
             <Text style={styles.helperText}>
-              Cihaz OTOMATİK bağlanır — IP girmeniz gerekmez.{'\n'}
-              📡 Aynı Wi-Fi → mDNS ile anında bulunur.{'\n'}
-              🌐 Farklı ağ → bir kez eşleştikten sonra cihazın buluttaki güncel adresinden otomatik bağlanır.{'\n'}
-              Aşağısı yalnız otomatik bağlantı olmazsa MANUEL yedektir.
+              {t("ayarlar.uzakErisim.aciklama")}
             </Text>
 
             {/* EŞLEŞTİRME — Bu cihazın kimliği + uzak cihaza kod/kimlik ile bağlan */}
             <View style={styles.pairBox}>
               <View style={styles.pairHeaderRow}>
                 <Link2 color={colors.primary} size={16} />
-                <Text style={styles.pairTitle}>Cihaz Eşleştirme</Text>
+                <Text style={styles.pairTitle}>{t("ayarlar.eslestirme.baslik")}</Text>
               </View>
 
               {/* Denetim #02: bulut kaydı bozuksa KODDAN ÖNCE söyle. Eskiden kod koşulsuz
@@ -670,17 +667,17 @@ export function SettingsScreen() {
               {(pairingCode || deviceId) ? (
                 <View style={styles.pairIdentity}>
                   <Text style={styles.helperText}>
-                    Bu cihazı uzaktan açmak için aşağıdaki kimliği başka bir cihazla paylaşın.
+                    {t("ayarlar.eslestirme.paylasin")}
                   </Text>
                   {pairingCode ? (
                     <TouchableOpacity
                       style={styles.copyRow}
-                      onPress={() => copyValue("Eşleştirme kodu", pairingCode)}
+                      onPress={() => copyValue(t("ayarlar.eslestirme.kod"), pairingCode)}
                     >
                       <Text selectable style={styles.pairCodeText}>
-                        Bu cihazın eşleştirme kodu: <Text style={styles.pairCodeValue}>{pairingCode}</Text>
+                        {t("ayarlar.eslestirme.koduEtiketi")}<Text style={styles.pairCodeValue}>{pairingCode}</Text>
                         {!eslestirmeKoduUzaktanGecerliMi(cloudRegistry) ? (
-                          <Text style={styles.bulutKayitHata}> (uzaktan geçersiz)</Text>
+                          <Text style={styles.bulutKayitHata}>{t("ayarlar.eslestirme.uzaktanGecersiz")}</Text>
                         ) : null}
                       </Text>
                       <Copy color={colors.primary} size={16} />
@@ -689,7 +686,7 @@ export function SettingsScreen() {
                   {deviceId ? (
                     <TouchableOpacity
                       style={styles.copyRow}
-                      onPress={() => copyValue("Cihaz kimliği", deviceId)}
+                      onPress={() => copyValue(t("ayarlar.eslestirme.cihazKimligi"), deviceId)}
                     >
                       <Text
                         selectable
@@ -697,7 +694,7 @@ export function SettingsScreen() {
                         numberOfLines={1}
                         ellipsizeMode="middle"
                       >
-                        Cihaz kimliği: <Text style={styles.pairDeviceValue}>{deviceId}</Text>
+                        {t("ayarlar.eslestirme.cihazKimligiEtiketi")}<Text style={styles.pairDeviceValue}>{deviceId}</Text>
                       </Text>
                       <Copy color={colors.primary} size={16} />
                     </TouchableOpacity>
@@ -705,17 +702,17 @@ export function SettingsScreen() {
                 </View>
               ) : (
                 <Text style={styles.helperText}>
-                  Bu cihazın eşleştirme kimliği yalnızca cihaza bağlıyken görünür.
+                  {t("ayarlar.eslestirme.kimlikYalnizBagliyken")}
                 </Text>
               )}
 
-              <Text style={[styles.label, { marginTop: spacing.md }]}>Uzak cihaza bağlan (kod ya da kimlik)</Text>
+              <Text style={[styles.label, { marginTop: spacing.md }]}>{t("ayarlar.eslestirme.uzakBaglanBaslik")}</Text>
               <TextInput
                 style={styles.input}
-                accessibilityLabel="Uzak cihaza bağlan: eşleştirme kodu veya cihaz kimliği"
+                accessibilityLabel={t("ayarlar.eslestirme.uzakBaglanEtiketi")}
                 value={remoteInput}
                 onChangeText={(v) => setRemoteInput(v.replace(/\s+/g, "").toUpperCase())}
-                placeholder="Eşleştirme kodu (örn: A3F9K2) veya cihaz kimliği"
+                placeholder={t("ayarlar.eslestirme.uzakBaglanIpucu")}
                 autoCapitalize="characters"
                 autoCorrect={false}
               />
@@ -727,7 +724,7 @@ export function SettingsScreen() {
                 {connecting
                   ? <ActivityIndicator size="small" color="#fff" />
                   : <Link2 color="#fff" size={16} />}
-                <Text style={styles.btnPrimaryText}>{connecting ? "Bağlanıyor..." : "Cihaza Bağlan"}</Text>
+                <Text style={styles.btnPrimaryText}>{connecting ? t("ayarlar.eslestirme.baglaniyor") : t("ayarlar.eslestirme.baglan")}</Text>
               </TouchableOpacity>
             </View>
 
@@ -742,7 +739,7 @@ export function SettingsScreen() {
                   ? <ActivityIndicator size="small" color={colors.primary} />
                   : <Search color={colors.primary} size={16} />}
                 <Text style={[styles.autoBtnText, { color: colors.primary }]}>
-                  {searching ? "Aranıyor..." : "Ağı Yeniden Tara"}
+                  {searching ? t("ayarlar.baglanti.araniyor") : t("ayarlar.baglanti.yenidenTara")}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -751,7 +748,7 @@ export function SettingsScreen() {
             {connectionStatus !== "idle" && (
               <View style={[styles.connStatus, { backgroundColor: connectionStatus === "ok" ? "#1a3a1a" : "#3a1a1a" }]}>
                 <Text style={{ color: connectionStatus === "ok" ? "#4ade80" : "#f87171", fontWeight: "700" }}>
-                  {connectionStatus === "ok" ? "✅ Bağlı" : "❌ Bağlanamadı"}
+                  {connectionStatus === "ok" ? t("ayarlar.baglanti.durumBagli") : t("ayarlar.baglanti.durumBaglanamadi")}
                 </Text>
                 <Text style={{ color: colors.textMuted, fontSize: rf(12), marginTop: 2 }}>{settings.server_ip}</Text>
               </View>
@@ -764,22 +761,22 @@ export function SettingsScreen() {
                 bunlar bağlantıyı/donanımı bozabilecek bakım işlemleri, araştırma iş akışının parçası değil. */}
             {isExpert && (
               <>
-                <Text style={styles.label}>Manuel Sunucu Adresi</Text>
+                <Text style={styles.label}>{t("ayarlar.baglanti.manuelBaslik")}</Text>
                 <TextInput
                   style={styles.input}
-                  accessibilityLabel="Manuel sunucu adresi"
+                  accessibilityLabel={t("ayarlar.baglanti.manuelEtiketi")}
                   value={settings.server_ip}
                   onChangeText={val => setSettings({...settings, server_ip: val})}
-                  placeholder="192.168.1.100 veya https://xxxx.trycloudflare.com"
+                  placeholder={t("ayarlar.baglanti.manuelIpucu")}
                   autoCapitalize="none"
                   keyboardType="default"
                 />
                 <TouchableOpacity style={styles.testBtn} onPress={handleTestConnection} disabled={searching}>
                   <Wifi color={colors.text} size={14} />
-                  <Text style={styles.testBtnText}>Bağlantıyı Test Et</Text>
+                  <Text style={styles.testBtnText}>{t("ayarlar.baglanti.testEt")}</Text>
                 </TouchableOpacity>
                 <Text style={styles.helperText}>
-                  Manuel yedek: aynı Wi-Fi&apos;de IP (192.168.x.x:8000), farklı ağda tünel linki (https://...trycloudflare.com).
+                  {t("ayarlar.baglanti.manuelAciklama")}
                 </Text>
               </>
             )}
@@ -788,7 +785,7 @@ export function SettingsScreen() {
           <View style={styles.actions}>
             <TouchableOpacity style={styles.btnPrimary} onPress={handleSave} disabled={loading}>
               <Save color="#fff" size={16} />
-              <Text style={styles.btnPrimaryText}>{loading ? "Kaydediliyor..." : "Ayarları Kaydet"}</Text>
+              <Text style={styles.btnPrimaryText}>{loading ? t("ayarlar.kaydediliyor") : t("ayarlar.kaydetDugme")}</Text>
             </TouchableOpacity>
             {saveStatus ? <Text style={styles.statusText}>{saveStatus}</Text> : null}
           </View>
@@ -799,9 +796,9 @@ export function SettingsScreen() {
           <Card style={[styles.card as any, { borderColor: colors.danger, borderWidth: 1 }]}>
             <View style={styles.cardHeader}>
               <ServerCrash color={colors.danger} size={20} />
-              <Text style={[styles.cardTitle, {color: colors.danger}]}>Donanım Bakım ve Servis</Text>
+              <Text style={[styles.cardTitle, {color: colors.danger}]}>{t("ayarlar.bakim.baslik")}</Text>
             </View>
-            <Text style={styles.helperText}>Sadece acil durumlarda veya sistem kilitlenmelerinde kullanın.</Text>
+            <Text style={styles.helperText}>{t("ayarlar.bakim.aciklama")}</Text>
 
             <View style={{ gap: spacing.md, marginTop: spacing.md }}>
               <TouchableOpacity
@@ -809,19 +806,19 @@ export function SettingsScreen() {
                 onPress={async () => {
                   // HASTA GÜVENLİĞİ: self-test bobinleri sürebilir. Tedavi sürerken çalıştırmak
                   // devam eden protokolü bozar → tek dokunuşla değil, onaylı ve seans-kontrollü.
-                  if (!(await guardTeardown("Donanım self-test çalıştırmak"))) return;
+                  if (!(await guardTeardown(t("ayarlar.bakim.selfTestEylem")))) return;
                   if (!(await platformConfirm(
-                    "Donanım Self-Test",
-                    "Cihaz kendi kendini test edecek; bu sırada bobinler kısa süre enerjilenebilir. Hayvanın kabinde OLMADIĞINDAN emin olun.",
-                    "Testi başlat"
+                    t("ayarlar.bakim.selfTestBaslik"),
+                    t("ayarlar.bakim.selfTestGovde"),
+                    t("ayarlar.bakim.selfTestBaslat")
                   ))) return;
                   const res = await apiPost<any>("/hardware/selftest", {}, {status: "error"});
-                  if (res.status === "success") showToast("Self-Test komutu donanıma gönderildi.", "success");
-                  else showToast("Self-Test gönderilemedi.", "error");
+                  if (res.status === "success") showToast(t("ayarlar.bakim.selfTestGonderildi"), "success");
+                  else showToast(t("ayarlar.bakim.selfTestGonderilemedi"), "error");
                 }}
               >
                 <RefreshCcw color={colors.warning} size={16} style={{marginRight: 8}} />
-                <Text style={[styles.btnOutlineText, { color: colors.warning }]}>Donanım Self-Test Başlat</Text>
+                <Text style={[styles.btnOutlineText, { color: colors.warning }]}>{t("ayarlar.bakim.selfTestDugme")}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -830,17 +827,17 @@ export function SettingsScreen() {
                   // Yön olarak GÜVENLİ (çıkışı sıfırlar) ama süren bir tedaviyi habersiz keser →
                   // onay iste. Not: burada guardTeardown KULLANILMAZ; bu eylemin kendisi durdurmadır.
                   if (!(await platformConfirm(
-                    "Tüm PWM sinyallerini sıfırla",
-                    "Tüm bobinlerin çıkışı sıfırlanacak. Devam eden bir seans varsa KESİLİR.",
-                    "Sıfırla"
+                    t("ayarlar.bakim.pwmBaslik"),
+                    t("ayarlar.bakim.pwmGovde"),
+                    t("ayarlar.bakim.pwmSifirla")
                   ))) return;
                   const res = await apiPost<any>("/hardware/reset_pwm", {}, {status: "error"});
-                  if (res.status === "success") showToast("Tüm bobin PWM sinyalleri sıfırlandı.", "success");
-                  else showToast("PWM sıfırlama başarısız.", "error");
+                  if (res.status === "success") showToast(t("ayarlar.bakim.pwmSifirlandi"), "success");
+                  else showToast(t("ayarlar.bakim.pwmBasarisiz"), "error");
                 }}
               >
                 <Trash2 color={colors.danger} size={16} style={{marginRight: 8}} />
-                <Text style={[styles.btnOutlineText, { color: colors.danger }]}>Tüm PWM Sinyallerini Sıfırla (Reset)</Text>
+                <Text style={[styles.btnOutlineText, { color: colors.danger }]}>{t("ayarlar.bakim.pwmDugme")}</Text>
               </TouchableOpacity>
             </View>
           </Card>
@@ -854,35 +851,34 @@ export function SettingsScreen() {
           Uzman profillerde (veteriner / araştırma — SG.G3): cihazdaki verinin tamamını dışarı çıkarır; Ev Sahibi'nde gizli. */}
       {uzmanProfil && Platform.OS === "web" && (
         <Card style={styles.card}>
-          <Text style={styles.cardTitle}>Veri Taşıma (Cihaz Değişimi)</Text>
+          <Text style={styles.cardTitle}>{t("ayarlar.veriTasima.baslik")}</Text>
           <Text style={styles.intro}>
             {isResearcher
-              ? "Bu cihazdaki TÜM kayıtlar — klinik ve araştırma: hasta / denek kartları, seans geçmişi ve AI analiz geçmişi — tek bir ŞİFRELİ dosyaya aktarılır. "
-              : "Hasta kayıtları, seans geçmişi ve AI analiz geçmişi tek bir ŞİFRELİ dosyaya aktarılır. "}
-            Yeni bilgisayara aynı parolayla geri yüklenir. Dosya parolasız açılamaz —
-            parolayı kaybederseniz yedek kurtarılamaz.
+              ? t("ayarlar.veriTasima.aciklamaArastirma")
+              : t("ayarlar.veriTasima.aciklama")}
+            {t("ayarlar.veriTasima.parolaUyarisi")}
           </Text>
 
           <TouchableOpacity style={styles.btnOutline} disabled={!!tasimaMesgul} onPress={disaAktar}
             accessibilityRole="button"
-            accessibilityLabel={isResearcher ? "Bu cihazdaki tüm kayıtları şifreli dosyaya aktar" : "Klinik verilerini şifreli dosyaya aktar"}>
+            accessibilityLabel={isResearcher ? t("ayarlar.veriTasima.disaAktarEtiketiArastirma") : t("ayarlar.veriTasima.disaAktarEtiketi")}>
             <Text style={styles.btnOutlineText}>
-              {tasimaMesgul === "export" ? "Hazırlanıyor…" : "Şifreli Yedek Oluştur"}
+              {tasimaMesgul === "export" ? t("ayarlar.veriTasima.hazirlaniyor") : t("ayarlar.veriTasima.yedekOlustur")}
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={[styles.btnOutline, { borderColor: colors.warning }]}
             disabled={!!tasimaMesgul} onPress={iceAktar}
-            accessibilityRole="button" accessibilityLabel="Şifreli yedekten geri yükle">
+            accessibilityRole="button" accessibilityLabel={t("ayarlar.veriTasima.geriYukleEtiketi")}>
             <Text style={[styles.btnOutlineText, { color: colors.warning }]}>
-              {tasimaMesgul === "import" ? "Yükleniyor…" : "Yedekten Geri Yükle"}
+              {tasimaMesgul === "import" ? t("ayarlar.veriTasima.yukleniyor") : t("ayarlar.veriTasima.geriYukleDugme")}
             </Text>
           </TouchableOpacity>
 
           <Text style={[styles.intro, { color: colors.warning }]}>
             {isResearcher
-              ? "Geri yükleme, bu cihazda kayıt varsa mevcut seans ve analiz geçmişini (klinik ve araştırma) SİLER. Hasta / denek kartları silinmez."
-              : "Geri yükleme, bu cihazda kayıt varsa mevcut seans ve analiz geçmişini SİLER. Hasta kartları silinmez."}
+              ? t("ayarlar.veriTasima.geriYukleUyariArastirma")
+              : t("ayarlar.veriTasima.geriYukleUyari")}
           </Text>
         </Card>
       )}
@@ -892,33 +888,31 @@ export function SettingsScreen() {
           bir dava dosyası saklamayı. Yazılım bu kararı sessizce almaz. */}
       {uzmanProfil && retention && (
         <Card style={styles.card}>
-          <Text style={styles.cardTitle}>Veri Saklama Süresi</Text>
+          <Text style={styles.cardTitle}>{t("ayarlar.saklama.baslik")}</Text>
           {isResearcher ? (
-            <Text style={styles.intro}>Saklama süresi bu cihazdaki TÜM seans kayıtlarına uygulanır (klinik ve araştırma).</Text>
+            <Text style={styles.intro}>{t("ayarlar.saklama.kapsam")}</Text>
           ) : null}
           <Text style={styles.intro}>
             {/* F2-3.5 (A-06 · Legal §6): maskeleme klinik ONAYI olmadan başlamaz — onaysız durumda "maskelenir" diye olmuş gibi anlatılmaz. */}
             {retention.days > 0
               ? retention.acknowledged
-                ? `Seans kayıtlarındaki hasta ve operatör adları ${retention.days} gün sonra kalıcı olarak maskelenir ([REDACTED]). Tedavi verileri (doz, süre, sensör) KALIR.`
-                : `Maskeleme onayınızı bekliyor: onay verilmeden hiçbir seans kaydı maskelenmez. Onaylarsanız ${retention.days} günden eski kayıtlardaki hasta ve operatör adları kalıcı olarak maskelenir ([REDACTED]); tedavi verileri (doz, süre, sensör) KALIR.`
-              : "Maskeleme KAPALI — hasta ve operatör adları süresiz saklanır."}
+                ? t("ayarlar.saklama.maskelenir", { gun: retention.days })
+                : t("ayarlar.saklama.onayBekliyor", { gun: retention.days })
+              : t("ayarlar.saklama.kapali")}
           </Text>
 
           {/* F2-1.2 · A-73: saat ileri sıçradıysa ya da geride kaldıysa geri dönüşsüz adımlar operatör saati onaylayana dek bekler. */}
           {retention.clockSuspect ? (
             <>
               <Text style={[styles.intro, { color: colors.warning }]}>
-                Cihaz saati şüpheli ({retention.clockSuspect}). Saat doğrulanana kadar maskeleme, anonimleştirme ve süresi dolan
-                kayıtların silinmesi YAPILMAZ; veri kaybolmaz, yalnız bekler. Önce cihazın tarih ve saatini düzeltin. Saat bir süre
-                geride kaldıysa o sırada yazılan kayıtlar eski tarihli görünür ve onaydan sonra saklama süresine göre işlenir.
+                {t("ayarlar.saklama.saatSupheli", { saat: retention.clockSuspect })}
               </Text>
               <TouchableOpacity style={[styles.btnOutline, { borderColor: colors.warning, minHeight: touch.min }]}
                 disabled={retMesgul} onPress={() => retentionKaydet({ clock_confirm: true })}
                 accessibilityRole="button"
-                accessibilityLabel="Cihaz saatinin doğru olduğunu onayla">
+                accessibilityLabel={t("ayarlar.saklama.saatOnayEtiketi")}>
                 <Text style={[styles.btnOutlineText, { color: colors.warning }]}>
-                  {retMesgul ? "…" : "Saat doğru, saklamayı sürdür"}
+                  {retMesgul ? "…" : t("ayarlar.saklama.saatOnay")}
                 </Text>
               </TouchableOpacity>
             </>
@@ -926,8 +920,7 @@ export function SettingsScreen() {
 
           {retention.pending === null ? (
             <Text style={[styles.intro, { color: colors.warning }]}>
-              Maskelenmeyi bekleyen seans kaydı sayısı okunamadı — tedavi veritabanını kontrol edin. Sayı görülmeden onay verilemez;
-              onay verilene kadar hiçbir kayda dokunulmaz.
+              {t("ayarlar.saklama.bekleyenOkunamadi")}
             </Text>
           ) : retention.pending > 0 ? (
             <>
@@ -935,20 +928,19 @@ export function SettingsScreen() {
               {retention.approvalStale ? (
                 <Text style={[styles.intro, { color: colors.warning }]}>
                   {retention.approvedDays
-                    ? `Önceki onay ${retention.approvedDays} günlük süre içindi; süre ya da maskeleme kapsamı değiştiği için yeni onay gerekiyor.`
-                    : "Önceki onay hangi süreye verildiğini taşımıyor (eski sürüm); yeni onay gerekiyor."}
+                    ? t("ayarlar.saklama.oncekiOnaySure", { gun: retention.approvedDays })
+                    : t("ayarlar.saklama.oncekiOnayEski")}
                 </Text>
               ) : null}
               <Text style={[styles.intro, { color: colors.warning }]}>
-                {retention.pending} seans kaydı {retention.days} günlük süreyle maskelenmeyi bekliyor. Bu işlem GERİ ALINAMAZ:
-                hasta adları kalıcı olarak silinir. Onaylayana kadar hiçbir kayda dokunulmaz.
+                {t("ayarlar.saklama.maskeBekleyen", { count: retention.pending, gun: retention.days })}
               </Text>
               <TouchableOpacity style={[styles.btnOutline, { borderColor: colors.warning }]}
                 disabled={retMesgul} onPress={() => retentionKaydet({ acknowledge: true, acknowledge_days: retention.days })}
                 accessibilityRole="button"
-                accessibilityLabel="Geri dönüşsüz maskelemeyi onayla ve başlat">
+                accessibilityLabel={t("ayarlar.saklama.maskeOnayEtiketi")}>
                 <Text style={[styles.btnOutlineText, { color: colors.warning }]}>
-                  {retMesgul ? "…" : "Anladım, maskelemeyi başlat"}
+                  {retMesgul ? "…" : t("ayarlar.saklama.maskeOnay")}
                 </Text>
               </TouchableOpacity>
             </>
@@ -958,21 +950,19 @@ export function SettingsScreen() {
           {retention.anonymization && !retention.anonymization.acknowledged ? (
             retention.anonymization.pending === null ? (
               <Text style={[styles.intro, { color: colors.warning }]}>
-                Anonimleştirmeyi bekleyen hasta sayısı okunamadı — hasta veritabanını kontrol edin. Onay verilmeden hiçbir kayda dokunulmaz.
+                {t("ayarlar.saklama.anonimOkunamadi")}
               </Text>
             ) : retention.anonymization.pending > 0 ? (
               <>
                 <Text style={[styles.intro, { color: colors.warning }]}>
-                  {retention.anonymization.pending} hasta {retention.anonymization.days} gündür (5 yıl) tedavi görmedi ve anonimleştirmeyi
-                  bekliyor. Bu işlem GERİ ALINAMAZ: hastanın adı, sahibinin adı ve iletişim bilgileri, yaşı ve kilosu, seans ve AI kayıtlarındaki adı
-                  kalıcı olarak silinir; tedavi verileri ve hekim adı kalır. Onaylayana kadar hiçbir kayda dokunulmaz.
+                  {t("ayarlar.saklama.anonimBekleyen", { count: retention.anonymization.pending, gun: retention.anonymization.days })}
                 </Text>
                 <TouchableOpacity style={[styles.btnOutline, { borderColor: colors.warning, minHeight: touch.min }]}
                   disabled={retMesgul} onPress={() => retentionKaydet({ anonymize_acknowledge: true })}
                   accessibilityRole="button"
-                  accessibilityLabel="Geri dönüşsüz anonimleştirmeyi onayla ve başlat">
+                  accessibilityLabel={t("ayarlar.saklama.anonimOnayEtiketi")}>
                   <Text style={[styles.btnOutlineText, { color: colors.warning }]}>
-                    {retMesgul ? "…" : "Anladım, anonimleştirmeyi başlat"}
+                    {retMesgul ? "…" : t("ayarlar.saklama.anonimOnay")}
                   </Text>
                 </TouchableOpacity>
               </>
@@ -981,17 +971,17 @@ export function SettingsScreen() {
             <>
               {/* S-F2-1.1 (2-F incelemesi · Y123 · A-06): onay süresiz değil — operatör son turu görür ve onayı GERİ ALABİLİR. */}
               <Text style={styles.intro}>
-                Anonimleştirme onaylı — {retention.anonymization.days} gün (5 yıl) tedavi görmeyen hastalar otomatik anonimleştirilir.
+                {t("ayarlar.saklama.anonimOnayli", { gun: retention.anonymization.days })}
                 {retention.anonymization.lastRun
-                  ? ` Son tur: ${sonTurZamani(retention.anonymization.lastRun.at)} — ${retention.anonymization.lastRun.count ?? 0} hasta.`
-                  : " Henüz anonimleştirme turu yapılmadı."}
+                  ? t("ayarlar.saklama.sonTur", { zaman: sonTurZamani(retention.anonymization.lastRun.at), sayi: retention.anonymization.lastRun.count ?? 0 })
+                  : t("ayarlar.saklama.henuzTurYok")}
               </Text>
               <TouchableOpacity style={[styles.btnOutline, { minHeight: touch.min }]}
                 disabled={retMesgul} onPress={() => retentionKaydet({ anonymize_revoke: true })}
                 accessibilityRole="button"
-                accessibilityLabel="Anonimleştirme onayını geri al">
+                accessibilityLabel={t("ayarlar.saklama.anonimGeriAlEtiketi")}>
                 <Text style={styles.btnOutlineText}>
-                  {retMesgul ? "…" : "Anonimleştirmeyi durdur"}
+                  {retMesgul ? "…" : t("ayarlar.saklama.anonimDurdur")}
                 </Text>
               </TouchableOpacity>
             </>
@@ -1010,9 +1000,9 @@ export function SettingsScreen() {
                   accessibilityState={{ selected: secili, disabled: retMesgul }}
                   // RN-web 0.21 `accessibilityState`i DOM'a eşlemez (yalnız aria-*): web'de seçili durum aria-selected ile söylenir.
                   aria-selected={secili}
-                  accessibilityLabel={g === 0 ? "Maskelemeyi kapat" : `Saklama süresi ${g} gün`}>
+                  accessibilityLabel={g === 0 ? t("ayarlar.saklama.maskeKapatEtiketi") : t("ayarlar.saklama.sureEtiketi", { gun: g })}>
                   <Text style={[styles.btnOutlineText, secili && styles.saklamaSecenekSeciliMetin]} numberOfLines={1}>
-                    {g === 0 ? "Kapalı" : g === 365 ? "1 yıl" : g === 730 ? "2 yıl" : "5 yıl"}
+                    {g === 0 ? t("ayarlar.saklama.secenekKapali") : g === 365 ? t("ayarlar.saklama.secenek1Yil") : g === 730 ? t("ayarlar.saklama.secenek2Yil") : t("ayarlar.saklama.secenek5Yil")}
                   </Text>
                 </TouchableOpacity>
               );
@@ -1027,13 +1017,13 @@ export function SettingsScreen() {
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <Building2 color={colors.primary} size={20} />
-          <Text style={styles.cardTitle}>Hakkında</Text>
+          <Text style={styles.cardTitle}>{t("ayarlar.hakkinda.baslik")}</Text>
         </View>
         <Text style={styles.label}>{FIRMA.urun}</Text>
         <Text style={styles.kunyeSatir}>{FIRMA.unvan}</Text>
         <Text style={styles.kunyeSatir}>{FIRMA.adres}</Text>
-        <Text style={styles.kunyeSatir}>Tel: {FIRMA.tel}  ·  {FIRMA.eposta}</Text>
-        <Text style={styles.kunyeSatir}>MERSİS: {FIRMA.mersis}  ·  VKN: {FIRMA.vkn}</Text>
+        <Text style={styles.kunyeSatir}>{t("ayarlar.hakkinda.tel")}{FIRMA.tel}  ·  {FIRMA.eposta}</Text>
+        <Text style={styles.kunyeSatir}>{t("ayarlar.hakkinda.mersis")}{FIRMA.mersis}{t("ayarlar.hakkinda.vkn")}{FIRMA.vkn}</Text>
         <Text style={styles.kunyeSatir}>© {FIRMA.yil} {FIRMA.kisaUnvan}</Text>
       </Card>
 

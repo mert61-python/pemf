@@ -28,13 +28,8 @@ if str(KOK) not in sys.path:
 
 from scripts.i18n import ortak  # noqa: E402
 
-#: Kaynakta anahtar kullanımı: t("…") / t('…') / i18n.t("…") / ceviri.t("…") / kritikMetin("…") / dil::t("…") / t_ile("…" /
-#: tf("…") / data-i18n="…" — ilk argüman DEĞİŞMEZ dizgi olmalı (dinamik anahtar K-3 izin listesinde).
-ANAHTAR_KULLANIMI = re.compile(
-    r"""(?:\b(?:t|tf|kritikMetin|t_ile)|\bi18n\.t|\bceviri\.t|\bdil::t|\bdil::t_ile)\(\s*["']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)["']"""
-    r"""|data-i18n(?:-[a-z]+)?=["']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)["']"""
-    r"""|\$\(PEMF_([A-Za-z0-9_]+)\)"""
-)
+#: Kaynakta anahtar kullanımı — TEK KAYNAK `scripts/i18n/ortak.py` (aynı düzenli ifadeyi `katalog.py taban` da kullanır).
+ANAHTAR_KULLANIMI = ortak.ANAHTAR_KULLANIMI
 
 
 def kaynak(dosya: str) -> str:
@@ -42,13 +37,7 @@ def kaynak(dosya: str) -> str:
 
 
 def kullanilan_anahtarlar(metin: str) -> set[str]:
-    sonuc = set()
-    for m in ANAHTAR_KULLANIMI.finditer(metin):
-        if m.group(1) or m.group(2):
-            sonuc.add(m.group(1) or m.group(2))
-        elif m.group(3):
-            sonuc.add("nsis." + m.group(3).replace("_", "."))
-    return sonuc
+    return ortak.kullanilan_anahtarlar(metin)
 
 
 @lru_cache(maxsize=None)

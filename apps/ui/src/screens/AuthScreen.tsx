@@ -19,6 +19,7 @@ import { passwordChecks, isPasswordValid, isEmailValid, isResearchEmail } from "
 import { signUpUser, signInUser, sendPasswordReset } from "@/services/supabaseAuth";
 import { EstopMandalBandi } from "@/components/ui/EstopMandalBandi";
 import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
+import { useTranslation } from "react-i18next";
 
 const LOGO = require("../../assets/icon.png");
 
@@ -29,6 +30,7 @@ type Mode = "login" | "register" | "reset";
  * etkin olur, ikisi arasında üst menüdeki "E-posta hesapları"ndan geçilir. `onVazgec` → giriş yapmadan önceki hesaba dön.
  */
 export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: boolean; onVazgec?: () => void } = {}) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { width: winW, height: winH } = useWindowDimensions();
   const [mode, setMode] = useState<Mode>("login");
@@ -110,14 +112,14 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
 
   const doSubmit = async () => {
     setError(""); setNotice("");
-    if (!emailOk) { setError("Geçerli bir e-posta adresi girin."); return; }
-    if (isRegister && !pwOk) { setError("Şifre kurallarını karşılamıyor."); return; }
-    if (isRegister && !confirmOk) { setError("Şifreler eşleşmiyor."); return; }
+    if (!emailOk) { setError(t("giris.hata.gecersizEposta")); return; }
+    if (isRegister && !pwOk) { setError(t("giris.hata.sifreKurallari")); return; }
+    if (isRegister && !confirmOk) { setError(t("giris.hata.sifrelerEslesmiyor")); return; }
     if (isRegister && !profileOk) {
-      setError(isResearchReg ? "Lütfen ad ve soyad alanlarını doldurun." : "Lütfen ad, soyad, klinik adı, şehir ve ilçe alanlarını doldurun.");
+      setError(isResearchReg ? t("giris.hata.adSoyadEksik") : t("giris.hata.klinikBilgisiEksik"));
       return;
     }
-    if (!isReset && !isRegister && password.length === 0) { setError("Şifreni gir."); return; }
+    if (!isReset && !isRegister && password.length === 0) { setError(t("giris.hata.sifreGir")); return; }
     setLoading(true);
 
     // Şifre sıfırlama — e-postaya bağlantı gider; yeni şifre onay-sayfasında belirlenir (Supabase).
@@ -126,8 +128,8 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
       setLoading(false);
       if (r.ok) {
         setMode("login"); setPassword(""); setConfirm("");
-        setNotice("Şifre sıfırlama bağlantısı e-postana gönderildi. Linke tıklayıp yeni şifreni belirle.");
-      } else setError(r.error || "Gönderilemedi.");
+        setNotice(t("giris.sifirlama.gonderildi"));
+      } else setError(r.error || t("giris.sifirlama.gonderilemedi"));
       return;
     }
 
@@ -149,14 +151,14 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
       setLoading(false);
       // Kayıt başarılıysa oturum zaten açıldı → AuthContext.onAuthStateChange uygulamayı
       // OTOMATİK açar. Kullanıcıyı login formuna geri atıp e-posta beklettirmiyoruz.
-      if (!r.ok) setError(r.error || "Kayıt başarısız.");
+      if (!r.ok) setError(r.error || t("giris.hata.kayitBasarisiz"));
       return;
     }
 
     // Giriş — başarıda AuthContext (onAuthStateChange) uygulamayı OTOMATİK açar.
     const r = await signInUser(email, password);
     setLoading(false);
-    if (!r.ok) setError(r.error || "Giriş başarısız.");
+    if (!r.ok) setError(r.error || t("giris.hata.girisBasarisiz"));
   };
 
   const showResearchHint = isRegister && email.length > 3 && isResearchEmail(email);
@@ -208,17 +210,16 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
           {hesapEkleme ? (
             <View style={styles.eklemeBandi} testID="hesap-ekleme-bandi">
               <Text style={styles.eklemeMetni}>
-                Başka bir e-posta hesabı ekleniyor. Şu anki hesabınız bu cihazda açık kalır; giriş yaptıktan sonra hesaplar arasında
-                üst menüdeki &quot;E-posta hesapları&quot;ndan geçebilirsiniz.
+                {t("giris.hesapEkleme.aciklama")}
               </Text>
               {onVazgec ? (
                 <TouchableOpacity
                   style={[styles.eklemeVazgec, { minHeight: touch.min }]}
                   onPress={onVazgec}
                   accessibilityRole="button"
-                  accessibilityLabel="Vazgeç, önceki hesaba dön"
+                  accessibilityLabel={t("giris.hesapEkleme.vazgecEtiketi")}
                 >
-                  <Text style={styles.eklemeVazgecMetni}>Vazgeç — önceki hesaba dön</Text>
+                  <Text style={styles.eklemeVazgecMetni}>{t("giris.hesapEkleme.vazgec")}</Text>
                 </TouchableOpacity>
               ) : null}
             </View>
@@ -230,14 +231,14 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
                 <Image source={LOGO} style={styles.logo} resizeMode="contain" />
               </View>
               <Text style={styles.brandTitle}>PEMF Vet</Text>
-              <Text style={styles.brandSub}>Manyetik Alan Seans Sistemi</Text>
+              <Text style={styles.brandSub}>{t("giris.marka.altBaslik")}</Text>
             </View>
 
             {/* Sekmeler (giriş/kayıt) veya sıfırlama başlığı */}
             {isReset ? (
               <View style={styles.resetHead}>
-                <Text style={styles.resetTitle}>Şifre Sıfırlama</Text>
-                <Text style={styles.resetSub}>E-postana bir sıfırlama bağlantısı göndereceğiz.</Text>
+                <Text style={styles.resetTitle}>{t("giris.sifirlama.baslik")}</Text>
+                <Text style={styles.resetSub}>{t("giris.sifirlama.aciklama")}</Text>
               </View>
             ) : (
               <View style={styles.tabs}>
@@ -246,14 +247,14 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
                   onPress={() => switchMode("login")}
                   accessibilityRole="button"
                 >
-                  <Text style={[styles.tabText, !isRegister && styles.tabTextActive]}>Giriş Yap</Text>
+                  <Text style={[styles.tabText, !isRegister && styles.tabTextActive]}>{t("giris.girisYap")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.tab, isRegister && styles.tabActive]}
                   onPress={() => switchMode("register")}
                   accessibilityRole="button"
                 >
-                  <Text style={[styles.tabText, isRegister && styles.tabTextActive]}>Kayıt Ol</Text>
+                  <Text style={[styles.tabText, isRegister && styles.tabTextActive]}>{t("giris.kayitOl")}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -262,11 +263,11 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
             {isRegister && (
               <>
                 <View style={styles.row}>
-                  <ProfileField Icon={User} value={firstName} onChange={(t) => { setFirstName(t); setError(""); }} placeholder="Ad" flex autoCapitalize="words" onSubmitEditing={() => lastNameRef.current?.focus()} />
-                  <ProfileField Icon={User} value={lastName} onChange={(t) => { setLastName(t); setError(""); }} placeholder="Soyad" flex autoCapitalize="words" inputRef={lastNameRef} onSubmitEditing={() => titleRef.current?.focus()} />
+                  <ProfileField Icon={User} value={firstName} onChange={(t) => { setFirstName(t); setError(""); }} placeholder={t("giris.alan.ad")} flex autoCapitalize="words" onSubmitEditing={() => lastNameRef.current?.focus()} />
+                  <ProfileField Icon={User} value={lastName} onChange={(t) => { setLastName(t); setError(""); }} placeholder={t("giris.alan.soyad")} flex autoCapitalize="words" inputRef={lastNameRef} onSubmitEditing={() => titleRef.current?.focus()} />
                 </View>
-                <ProfileField Icon={Stethoscope} value={title} onChange={setTitle} placeholder="Ünvan (örn. Vet. Hekim) — opsiyonel" autoCapitalize="words" inputRef={titleRef} onSubmitEditing={() => phoneRef.current?.focus()} />
-                <ProfileField Icon={Phone} value={phone} onChange={setPhone} placeholder="Cep telefonu — opsiyonel" keyboardType="phone-pad" inputRef={phoneRef} onSubmitEditing={() => emailRef.current?.focus()} />
+                <ProfileField Icon={Stethoscope} value={title} onChange={setTitle} placeholder={t("giris.alan.unvan")} autoCapitalize="words" inputRef={titleRef} onSubmitEditing={() => phoneRef.current?.focus()} />
+                <ProfileField Icon={Phone} value={phone} onChange={setPhone} placeholder={t("giris.alan.cepTelefonu")} keyboardType="phone-pad" inputRef={phoneRef} onSubmitEditing={() => emailRef.current?.focus()} />
               </>
             )}
 
@@ -278,7 +279,7 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
                 style={styles.input}
                 value={email}
                 onChangeText={(t) => { setEmail(t); setError(""); setSuggestRegister(false); }}
-                placeholder="E-posta adresi"
+                placeholder={t("giris.alan.eposta")}
                 placeholderTextColor={colors.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -307,7 +308,7 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
                   // Baştaki/sondaki boşluğu GİRİŞTE at → kullanıcının GÖRDÜĞÜ ile GÖNDERİLEN aynı olur.
                   // İç boşluklara dokunulmaz (gerçek bir parola karakteri olabilir).
                   onChangeText={(t) => { setPassword(t.replace(/^\s+|\s+$/g, "")); setError(""); }}
-                  placeholder="Şifre"
+                  placeholder={t("giris.alan.sifre")}
                   placeholderTextColor={colors.textMuted}
                   secureTextEntry={!showPw}
                   autoCapitalize="none"
@@ -318,7 +319,7 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
                   blurOnSubmit={!isRegister}
                   onSubmitEditing={isRegister ? () => confirmRef.current?.focus() : submit}
                 />
-                <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPw((v) => !v)} accessibilityLabel="Şifreyi göster/gizle">
+                <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPw((v) => !v)} accessibilityLabel={t("giris.alan.sifreGoster")}>
                   {showPw ? <EyeOff size={18} color={colors.textMuted} /> : <Eye size={18} color={colors.textMuted} />}
                 </TouchableOpacity>
               </View>
@@ -327,7 +328,7 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
             {/* Şifremi unuttum (yalnız giriş) */}
             {mode === "login" && (
               <TouchableOpacity onPress={() => switchMode("reset")} style={styles.forgotRow} accessibilityRole="button">
-                <Text style={styles.forgotText}>Şifremi unuttum?</Text>
+                <Text style={styles.forgotText}>{t("giris.sifremiUnuttum")}</Text>
               </TouchableOpacity>
             )}
 
@@ -342,7 +343,7 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
                   // Şifre alanıyla AYNI kural — yoksa "Şifreler eşleşmiyor" hatası, iki alan
                   // ekranda birebir aynı görünürken ortaya çıkardı.
                   onChangeText={(t) => { setConfirm(t.replace(/^\s+|\s+$/g, "")); setError(""); }}
-                  placeholder={isReset ? "Yeni şifre tekrar" : "Şifre tekrar"}
+                  placeholder={isReset ? t("giris.alan.yeniSifreTekrar") : t("giris.alan.sifreTekrar")}
                   placeholderTextColor={colors.textMuted}
                   secureTextEntry={!showPw}
                   autoCapitalize="none"
@@ -364,24 +365,24 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
             {/* Şifre kuralları (kayıt + sıfırlama) — canlı gösterge */}
             {showRules && (
               <View style={styles.rules}>
-                <Rule ok={checks.length} label="En az 8 karakter" />
-                <Rule ok={checks.upper} label="Bir büyük harf" />
-                <Rule ok={checks.lower} label="Bir küçük harf" />
-                <Rule ok={checks.digit} label="Bir rakam" />
+                <Rule ok={checks.length} label={t("giris.kural.enAz8")} />
+                <Rule ok={checks.upper} label={t("giris.kural.buyukHarf")} />
+                <Rule ok={checks.lower} label={t("giris.kural.kucukHarf")} />
+                <Rule ok={checks.digit} label={t("giris.kural.rakam")} />
               </View>
             )}
 
             {/* Klinik bilgileri (yalnız Kayıt) */}
             {isRegister && (
               <>
-                <Text style={styles.sectionLabel}>{isResearchReg ? "Kurum (opsiyonel)" : "Klinik / Muayenehane"}</Text>
-                <ProfileField Icon={Building2} value={clinicName} onChange={(t) => { setClinicName(t); setError(""); }} placeholder={isResearchReg ? "Kurum / Üniversite adı — opsiyonel" : "Klinik / Muayenehane adı"} autoCapitalize="words" inputRef={clinicNameRef} onSubmitEditing={() => cityRef.current?.focus()} />
+                <Text style={styles.sectionLabel}>{isResearchReg ? t("giris.klinik.kurumBaslik") : t("giris.klinik.baslik")}</Text>
+                <ProfileField Icon={Building2} value={clinicName} onChange={(t) => { setClinicName(t); setError(""); }} placeholder={isResearchReg ? t("giris.klinik.kurumAdi") : t("giris.klinik.ad")} autoCapitalize="words" inputRef={clinicNameRef} onSubmitEditing={() => cityRef.current?.focus()} />
                 <View style={styles.row}>
-                  <ProfileField Icon={MapPin} value={city} onChange={(t) => { setCity(t); setError(""); }} placeholder="Şehir (İl)" flex autoCapitalize="words" inputRef={cityRef} onSubmitEditing={() => districtRef.current?.focus()} />
-                  <ProfileField Icon={MapPin} value={district} onChange={(t) => { setDistrict(t); setError(""); }} placeholder="İlçe" flex autoCapitalize="words" inputRef={districtRef} onSubmitEditing={() => addressRef.current?.focus()} />
+                  <ProfileField Icon={MapPin} value={city} onChange={(t) => { setCity(t); setError(""); }} placeholder={t("giris.klinik.sehir")} flex autoCapitalize="words" inputRef={cityRef} onSubmitEditing={() => districtRef.current?.focus()} />
+                  <ProfileField Icon={MapPin} value={district} onChange={(t) => { setDistrict(t); setError(""); }} placeholder={t("giris.klinik.ilce")} flex autoCapitalize="words" inputRef={districtRef} onSubmitEditing={() => addressRef.current?.focus()} />
                 </View>
-                <ProfileField Icon={Home} value={address} onChange={setAddress} placeholder="Açık adres — opsiyonel" autoCapitalize="sentences" inputRef={addressRef} onSubmitEditing={() => clinicPhoneRef.current?.focus()} />
-                <ProfileField Icon={Phone} value={clinicPhone} onChange={setClinicPhone} placeholder="Klinik acil telefon — opsiyonel" keyboardType="phone-pad" inputRef={clinicPhoneRef} returnKeyType="done" onSubmitEditing={submit} />
+                <ProfileField Icon={Home} value={address} onChange={setAddress} placeholder={t("giris.klinik.adres")} autoCapitalize="sentences" inputRef={addressRef} onSubmitEditing={() => clinicPhoneRef.current?.focus()} />
+                <ProfileField Icon={Phone} value={clinicPhone} onChange={setClinicPhone} placeholder={t("giris.klinik.acilTelefon")} keyboardType="phone-pad" inputRef={clinicPhoneRef} returnKeyType="done" onSubmitEditing={submit} />
               </>
             )}
 
@@ -389,7 +390,7 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
             {showResearchHint && (
               <View style={styles.eduHint}>
                 <GraduationCap size={16} color={colors.violet} />
-                <Text style={styles.eduHintText}>Akademik e-posta algılandı — Araştırma Modu profili açılacak.</Text>
+                <Text style={styles.eduHintText}>{t("giris.arastirmaIpucu")}</Text>
               </View>
             )}
 
@@ -405,7 +406,7 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
             {/* Kayıtsız e-posta → tek dokunuşla Kayıt Ol'a geç (e-posta/şifre korunur) */}
             {suggestRegister && !isRegister ? (
               <TouchableOpacity style={styles.suggestBtn} onPress={() => switchMode("register")} accessibilityRole="button">
-                <Text style={styles.suggestText}>Bu e-postayla <Text style={styles.suggestLink}>hesap oluştur →</Text></Text>
+                <Text style={styles.suggestText}>{t("giris.oneri.buEpostayla")}<Text style={styles.suggestLink}>{t("giris.oneri.hesapOlustur")}</Text></Text>
               </TouchableOpacity>
             ) : null}
 
@@ -420,7 +421,7 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
                 <ActivityIndicator color={colors.white} />
               ) : (
                 <>
-                  <Text style={styles.submitText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{isReset ? "Sıfırlama Linki Gönder" : isRegister ? "Hesap Oluştur" : "Giriş Yap"}</Text>
+                  <Text style={styles.submitText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{isReset ? t("giris.sifirlama.gonder") : isRegister ? t("giris.hesapOlustur") : t("giris.girisYap")}</Text>
                   <ArrowRight size={18} color={colors.white} />
                 </>
               )}
@@ -429,19 +430,19 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
             {/* Alt geçiş */}
             {isReset ? (
               <TouchableOpacity onPress={() => switchMode("login")} style={styles.switchRow}>
-                <Text style={styles.switchText}><Text style={styles.switchLink}>{"← Giriş'e dön"}</Text></Text>
+                <Text style={styles.switchText}><Text style={styles.switchLink}>{t("giris.giriseDon")}</Text></Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity onPress={() => switchMode(isRegister ? "login" : "register")} style={styles.switchRow}>
                 <Text style={styles.switchText}>
-                  {isRegister ? "Zaten hesabın var mı? " : "Hesabın yok mu? "}
-                  <Text style={styles.switchLink}>{isRegister ? "Giriş yap" : "Kayıt ol"}</Text>
+                  {isRegister ? t("giris.gecis.hesapVar") : t("giris.gecis.hesapYok")}
+                  <Text style={styles.switchLink}>{isRegister ? t("giris.gecis.girisYap") : t("giris.gecis.kayitOl")}</Text>
                 </Text>
               </TouchableOpacity>
             )}
           </View>
 
-          <Text style={styles.footer}>PEMF Vet · Yalnız yetkili operatör kullanımı içindir.</Text>
+          <Text style={styles.footer}>{t("giris.altBilgi")}</Text>
         </ScrollView>
       </KeyboardAvoidingView>
       {/* D1.87 · A-58 / Y23 (sahip) + 1-C §9 #1: oturum açılmamışken / internet yokken de çalışan bobin DURDURULABİLİR.

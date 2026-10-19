@@ -3,6 +3,7 @@ import { serviceConfig } from "@/services/config";
 import { Alert, Platform } from "react-native";
 import { emitToast } from "@/services/toastBridge";
 import { etkinDilDegeri } from "@/i18n/durum";
+import i18n from "i18next";
 
 /** Web-güvenli uyarı — Alert.alert web'de no-op olduğundan window.alert'e düşer. */
 export function platformAlert(title: string, message: string) {
@@ -14,13 +15,13 @@ export function platformAlert(title: string, message: string) {
 }
 
 /** Web-güvenli onay diyaloğu — Alert.alert çoklu-buton web'de tetiklenmez (window.confirm'e düşer). */
-export function platformConfirm(title: string, message: string, confirmLabel = "Onayla"): Promise<boolean> {
+export function platformConfirm(title: string, message: string, confirmLabel: string = i18n.t("ortak.onayla")): Promise<boolean> {
   if (Platform.OS === "web") {
     return Promise.resolve(typeof window !== "undefined" ? window.confirm(`${title}\n\n${message}`) : false);
   }
   return new Promise((resolve) => {
     Alert.alert(title, message, [
-      { text: "İptal", style: "cancel", onPress: () => resolve(false) },
+      { text: i18n.t("ortak.iptal"), style: "cancel", onPress: () => resolve(false) },
       { text: confirmLabel, style: "destructive", onPress: () => resolve(true) },
     ]);
   });

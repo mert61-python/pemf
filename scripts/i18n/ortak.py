@@ -164,6 +164,31 @@ def yer_tutuculari(metin) -> set[str]:
     return set(YER_TUTUCU.findall(str(metin))) if isinstance(metin, str) else set()
 
 
+def yer_tutucu_normal(metin: str) -> str:
+    """Yer tutucu ADLARI yok sayılarak karşılaştırma için: `{{gun}}` ≡ `{{days}}` → `{{}}` (göçte anlamlı ad verilir, metin aynı kalır)."""
+    return YER_TUTUCU.sub("{{}}", str(metin))
+
+
+#: Kaynakta katalog anahtarı kullanımı: t("…") / t('…') / i18n.t("…") / ceviri.t("…") / kritikMetin("…") / dil::t("…") / t_ile("…" /
+#: tf("…") / data-i18n="…" / NSIS $(PEMF_…) — ilk argüman DEĞİŞMEZ dizgi (dinamik anahtar K-3 izin listesinde). TEK KAYNAK: araçlar
+#: (`katalog.py taban`) ve kapılar (`tests/i18n_yardimci.py`).
+ANAHTAR_KULLANIMI = re.compile(
+    r"""(?:\b(?:t|tf|kritikMetin|t_ile)|\bi18n\.t|\bceviri\.t|\bdil::t|\bdil::t_ile)\(\s*["']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)["']"""
+    r"""|data-i18n(?:-[a-z]+)?=["']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)["']"""
+    r"""|\$\(PEMF_([A-Za-z0-9_]+)\)"""
+)
+
+
+def kullanilan_anahtarlar(metin: str) -> set[str]:
+    sonuc = set()
+    for m in ANAHTAR_KULLANIMI.finditer(metin):
+        if m.group(1) or m.group(2):
+            sonuc.add(m.group(1) or m.group(2))
+        elif m.group(3):
+            sonuc.add("nsis." + m.group(3).replace("_", "."))
+    return sonuc
+
+
 def anahtar_kullanilabilir(anahtar: str, duz: dict[str, str]) -> bool:
     """Anahtar katalogda var mı (çoğul anahtar `x` için `x_one` / `x_other` de sayılır)."""
     if anahtar in duz:

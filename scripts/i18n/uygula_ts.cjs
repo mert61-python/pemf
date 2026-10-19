@@ -29,6 +29,8 @@ function uygulaKaynak(metin, dosya, islemler, secenek) {
   const q = tek > cift ? "'" : '"';
   const sonIceAktarma = iceAktarmalar.length ? iceAktarmalar[iceAktarmalar.length - 1] : null;
   const nv = sonIceAktarma && !sonIceAktarma.getText(sf).trim().endsWith(";") ? "" : ";";
+  // Eklenen satırlar dosyanın satır sonunu izler (autocrlf'li kopyada CRLF — yalnız LF eklemek karışık satır sonu üretirdi, ölçüldü).
+  const ss = metin.includes("\r\n") ? "\r\n" : "\n";
   const tCagri = (anahtar, ek) => `t(${q}${anahtar}${q}${ek || ""})`;
   const duzenler = []; // {bas, son, yeni}
   const uygulanan = [];
@@ -58,6 +60,26 @@ function uygulaKaynak(metin, dosya, islemler, secenek) {
       x = x.parent;
     }
     return null;
+  };
+
+  // Bağımlılık dizili kanca (useCallback / useMemo / useEffect / useLayoutEffect) içindeki geri çağırma `t`'yi KAPATIR: dizide `t` yoksa
+  // dil değişince eski dilde kalır (React yeni `t` ile yeniden oluşturmaz). Dönüştürülen metnin yolundaki her böyle dizi `t` alır.
+  const KANCA = new Set(["useCallback", "useMemo", "useEffect", "useLayoutEffect"]);
+  const bagimlilikDizileri = new Map(); // dizi başlangıcı → {bas, yeni}
+  const bagimliligaEkle = (n, govde) => {
+    let x = n.parent;
+    while (x && x !== govde) {
+      const ust = x.parent;
+      if ((ts.isArrowFunction(x) || ts.isFunctionExpression(x)) && ust && ts.isCallExpression(ust) && ust.arguments[0] === x) {
+        const ad = ts.isIdentifier(ust.expression) ? ust.expression.text : ts.isPropertyAccessExpression(ust.expression) ? ust.expression.name.text : "";
+        const dizi = ust.arguments[1];
+        if (KANCA.has(ad) && dizi && ts.isArrayLiteralExpression(dizi) && !dizi.elements.some((e) => ts.isIdentifier(e) && e.text === "t")) {
+          const el = dizi.elements;
+          bagimlilikDizileri.set(dizi.getStart(sf), el.length ? { bas: el[el.length - 1].getEnd(), yeni: ", t" } : { bas: dizi.getStart(sf) + 1, yeni: "t" });
+        }
+      }
+      x = ust;
+    }
   };
 
   for (const is of islemler) {
@@ -103,7 +125,13 @@ function uygulaKaynak(metin, dosya, islemler, secenek) {
       continue;
     }
     let yeni = null;
+    let bas = a.bas;
+    let son = a.son;
     if (ts.isJsxText(n)) {
+      // JsxText: `getStart()` baştaki boşluğu ATLAR ama `n.text` onu içerir → değiştirilen aralık TAM metin (`pos..end`); yoksa satır
+      // sonlu baş boşluk iki kez yazılıp yalnız boşluktan oluşan satır çıkardı (ölçüldü: AuthScreen hesap ekleme bandı).
+      bas = n.pos;
+      son = n.end;
       const ham = n.text;
       const onBosluk = (ham.match(/^\s*/) || [""])[0];
       const sonBosluk = (ham.match(/\s*$/) || [""])[0];
@@ -111,11 +139,19 @@ function uygulaKaynak(metin, dosya, islemler, secenek) {
     } else if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) {
       yeni = ts.isJsxAttribute(n.parent) ? `{${tCagri(is.anahtar)}}` : tCagri(is.anahtar);
     } else if (ts.isTemplateExpression(n)) {
+      // `yerAdlari` (eşlemede, isteğe bağlı): aracın verdiği yer tutucu adını anlamlısıyla değiştirir ({"deger1": "hasta"}); katalog
+      // değeri uygula.py'de AYNI eşlemeyle yeniden adlandırılır. Bilinmeyen ad → RED (yazım hatası sessiz geçmesin).
+      const adlar = is.yerAdlari || {};
+      const yabanci = Object.keys(adlar).filter((k) => !a.yertutucular.includes(k));
+      if (yabanci.length) {
+        ret(`yerAdlari'nda adayda olmayan yer tutucu: ${yabanci.join(", ")} (adaydakiler: ${a.yertutucular.join(", ")})`);
+        continue;
+      }
       const parcalar = [];
       let ic = false;
       n.templateSpans.forEach((sp, i) => {
         if (ts.isTemplateExpression(sp.expression) || ts.isConditionalExpression(sp.expression)) ic = true;
-        const ad = a.yertutucular[i];
+        const ad = adlar[a.yertutucular[i]] || a.yertutucular[i];
         const ifade = sp.expression.getText(sf);
         parcalar.push(ad === ifade ? ad : `${ad}: ${ifade}`);
       });
@@ -128,20 +164,22 @@ function uygulaKaynak(metin, dosya, islemler, secenek) {
       ret("desteklenmeyen düğüm");
       continue;
     }
-    duzenler.push({ bas: a.bas, son: a.son, yeni });
+    duzenler.push({ bas, son, yeni });
     uygulanan.push({ ...is, tur: a.tur, ham: a.ham, yertutucular: a.yertutucular });
+    bagimliligaEkle(n, govde);
     if (!a.tVar) {
       const ilk = govde.statements[0];
       const girinti = ilk ? metin.slice(metin.lastIndexOf("\n", ilk.getStart(sf)) + 1, ilk.getStart(sf)) : "  ";
       hookGerekenler.set(govde.getStart(sf) + 1, /^\s*$/.test(girinti) ? girinti : "  ");
     }
   }
-  for (const [konum, girinti] of hookGerekenler) duzenler.push({ bas: konum, son: konum, yeni: `\n${girinti}const { t } = useTranslation()${nv}` });
+  for (const [konum, girinti] of hookGerekenler) duzenler.push({ bas: konum, son: konum, yeni: `${ss}${girinti}const { t } = useTranslation()${nv}` });
   if (hookGerekenler.size && !/import\s*\{[^}]*\buseTranslation\b[^}]*\}\s*from\s*["']react-i18next["']/.test(metin)) {
     const konum = sonIceAktarma ? sonIceAktarma.getEnd() : 0;
     const satir = `import { useTranslation } from ${q}react-i18next${q}${nv}`;
-    duzenler.push({ bas: konum, son: konum, yeni: konum ? "\n" + satir : satir + "\n" });
+    duzenler.push({ bas: konum, son: konum, yeni: konum ? ss + satir : satir + ss });
   }
+  for (const d of bagimlilikDizileri.values()) duzenler.push({ bas: d.bas, son: d.bas, yeni: d.yeni });
   duzenler.sort((x, y) => y.bas - x.bas || y.son - x.son);
   let cikti = metin;
   for (const d of duzenler) cikti = cikti.slice(0, d.bas) + d.yeni + cikti.slice(d.son);

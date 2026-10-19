@@ -1,0 +1,71 @@
+{
+  "alan": {
+    "ad": "First name",
+    "cepTelefonu": "Mobile phone — optional",
+    "eposta": "Email address",
+    "sifre": "Password",
+    "sifreGoster": "Show/hide password",
+    "sifreTekrar": "Repeat password",
+    "soyad": "Last name",
+    "unvan": "Title (e.g. Veterinarian) — optional",
+    "yeniSifreTekrar": "Repeat new password"
+  },
+  "altBilgi": "PEMF Vet · For authorized operators only.",
+  "arastirmaIpucu": "Academic email detected — the Research Mode profile will be enabled.",
+  "gecis": {
+    "girisYap": "Sign in",
+    "hesapVar": "Already have an account? ",
+    "hesapYok": "Don't have an account? ",
+    "kayitOl": "Sign up"
+  },
+  "girisYap": "Sign in",
+  "giriseDon": "← Back to sign in",
+  "hata": {
+    "adSoyadEksik": "Please fill in the first name and last name fields.",
+    "gecersizEposta": "Enter a valid email address.",
+    "girisBasarisiz": "Sign-in failed.",
+    "kayitBasarisiz": "Sign-up failed.",
+    "klinikBilgisiEksik": "Please fill in the first name, last name, clinic name, city and district fields.",
+    "sifreGir": "Enter your password.",
+    "sifreKurallari": "The password does not meet the rules.",
+    "sifrelerEslesmiyor": "The passwords do not match."
+  },
+  "hesapEkleme": {
+    "aciklama": "Adding another email account. Your current account stays signed in on this device; after signing in you can switch between accounts from \"Email accounts\" in the top menu.",
+    "vazgec": "Cancel — return to the previous account",
+    "vazgecEtiketi": "Cancel, return to the previous account"
+  },
+  "hesapOlustur": "Create account",
+  "kayitOl": "Sign up",
+  "klinik": {
+    "acilTelefon": "Clinic emergency phone — optional",
+    "ad": "Clinic / Practice name",
+    "adres": "Full address — optional",
+    "baslik": "Clinic / Practice",
+    "ilce": "District",
+    "kurumAdi": "Institution / University name — optional",
+    "kurumBaslik": "Institution (optional)",
+    "sehir": "City (province)"
+  },
+  "kural": {
+    "buyukHarf": "One uppercase letter",
+    "enAz8": "At least 8 characters",
+    "kucukHarf": "One lowercase letter",
+    "rakam": "One digit"
+  },
+  "marka": {
+    "altBaslik": "Magnetic Field Session System"
+  },
+  "oneri": {
+    "buEpostayla": "With this email, ",
+    "hesapOlustur": "create an account →"
+  },
+  "sifirlama": {
+    "aciklama": "We will send a reset link to your email.",
+    "baslik": "Password Reset",
+    "gonder": "Send reset link",
+    "gonderildi": "A password reset link was sent to your email. Click the link to set a new password.",
+    "gonderilemedi": "Could not be sent."
+  },
+  "sifremiUnuttum": "Forgot password?"
+}

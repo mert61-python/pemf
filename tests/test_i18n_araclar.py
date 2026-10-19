@@ -356,3 +356,19 @@ def test_cli_taban_bicimi(tmp_path):
     assert veri["metinler"], "seans_durum.py Türkçe durum etiketleri taşır"
     assert set(veri["metinler"][0]) == {"yuzey", "dosya", "satir", "metin", "ham", "tur", "baglam", "birlesik"}
     assert any(x["metin"] == "Tamamlandı" for x in veri["metinler"])
+
+
+@ts_gerekli
+def test_ts_jsx_html_varliklari_react_gibi_COZULUR():
+    """`&quot;` / `&apos;` / `&gt;` JSX metninde ve öznitelikte React tarafından çözülür; ham değer (= katalog TR) da çözülmüş olmalı —
+    yoksa t() düz dizgi döndüğü için ekranda `&quot;` görünürdü. JS dizgisindeki `&amp;` ise çözülmez (React onu olduğu gibi basar)."""
+    kaynak = (
+        "export function A() {\n"
+        '  const x = "Ham &amp; kalır";\n'
+        '  return <Text title="Kedi &amp; köpek">Üst menüdeki &quot;E-posta hesapları&quot;ndan &gt; geçin</Text>;\n'
+        "}\n"
+    )
+    a = {x["metin"]: x for x in _ts(kaynak)["adaylar"]}
+    assert a['Üst menüdeki "E-posta hesapları"ndan > geçin']["ham"] == 'Üst menüdeki "E-posta hesapları"ndan > geçin'
+    assert a["Kedi & köpek"]["ham"] == "Kedi & köpek"
+    assert a["Ham &amp; kalır"]["ham"] == "Ham &amp; kalır"

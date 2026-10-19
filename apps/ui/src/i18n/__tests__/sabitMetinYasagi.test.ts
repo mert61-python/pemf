@@ -63,3 +63,51 @@ it("K-2: tamam işaretli arayüz dosyalarında kullanıcıya görünen sabit met
   const hepsi = tamamTs.flatMap(([d, k]) => ihlaller(d, k));
   expect(hepsi).toEqual([]);
 });
+
+/**
+ * KANCA BAĞIMLILIĞI (I18N-0): `useCallback` / `useMemo` / `useEffect` / `useLayoutEffect` geri çağırması `t(` çağırıyorsa bağımlılık
+ * dizisinde `t` OLMALI — yoksa dil değişince kapalı (closure) eski `t` kalır ve o ileti eski dilde çıkar. `uygula_ts` ekler; bu kapı elle
+ * yapılan / sonradan bozulan durumu yakalar. Kapsam: `useTranslation` kullanan her arayüz dosyası.
+ */
+const KANCA = new Set(["useCallback", "useMemo", "useEffect", "useLayoutEffect"]);
+function kancaIhlalleri(metin: string, dosya: string): string[] {
+  const sf = ts.createSourceFile(dosya, metin, ts.ScriptTarget.Latest, true, /\.tsx$/.test(dosya) ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  const sorun: string[] = [];
+  const tCagiriyor = (n: any): boolean => {
+    let var_ = false;
+    const gez = (x: any) => {
+      if (var_) return;
+      if (ts.isCallExpression(x) && ts.isIdentifier(x.expression) && x.expression.text === "t") var_ = true;
+      else ts.forEachChild(x, gez);
+    };
+    gez(n);
+    return var_;
+  };
+  const gez = (n: any) => {
+    if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && KANCA.has(n.expression.text)) {
+      const [geri, dizi] = n.arguments;
+      if (geri && dizi && ts.isArrayLiteralExpression(dizi) && tCagiriyor(geri)) {
+        if (!dizi.elements.some((e: any) => ts.isIdentifier(e) && e.text === "t")) {
+          const s = sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1;
+          sorun.push(`${dosya}:${s} ${n.expression.text} t() çağırıyor ama bağımlılığında t YOK`);
+        }
+      }
+    }
+    ts.forEachChild(n, gez);
+  };
+  gez(sf);
+  return sorun;
+}
+
+it("kanca bağımlılığı: t() çağıran useCallback / useMemo / useEffect dizisinde t var (dil değişince eski dilde kalmaz)", () => {
+  const ornek = 'const f = useCallback(() => goster(t("a.b")), [x]);';
+  expect(kancaIhlalleri(ornek, "x.tsx")).toHaveLength(1); // karşıt kanıt: kapı kör değil
+  expect(kancaIhlalleri(ornek.replace("[x]", "[x, t]"), "x.tsx")).toEqual([]);
+  const hepsi = Object.entries(defter.dosyalar)
+    .filter(([d, k]) => k.yuzey === "arayuz" && /\.(ts|tsx)$/.test(d))
+    .flatMap(([d]) => {
+      const metin = readFileSync(join(KOK, d), "utf8");
+      return metin.includes("useTranslation") ? kancaIhlalleri(metin, d) : [];
+    });
+  expect(hepsi).toEqual([]);
+});

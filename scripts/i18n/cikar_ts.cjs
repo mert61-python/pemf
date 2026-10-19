@@ -186,6 +186,22 @@ function jsxMetni(text) {
   return s;
 }
 
+/**
+ * JSX metni / öznitelik dizgisindeki HTML varlıkları React'in ÇİZDİĞİ gibi çözülür (`&quot;` → `"`; önce boşluk kuralı, sonra varlık —
+ * dönüştürücünün sırası). TypeScript düğüm metnini HAM tutar; çözülmezse katalog TR değeri `&quot;` taşır ve t() düz dizgi döndüğü için
+ * ekranda AYNEN `&quot;` görünürdü (ölçüldü: AuthScreen hesap ekleme bandı). Tablo dışı adlı varlık olduğu gibi kalır (depoda yok).
+ */
+const VARLIK = {
+  quot: '"', apos: "'", amp: "&", lt: "<", gt: ">", nbsp: " ", copy: "©", reg: "®", trade: "™", hellip: "…",
+  mdash: "—", ndash: "–", laquo: "«", raquo: "»", middot: "·", bull: "•", rarr: "→", larr: "←", deg: "°", times: "×",
+};
+function jsxVarlikCoz(s) {
+  return String(s).replace(/&(#[xX][0-9a-fA-F]+|#[0-9]+|[A-Za-z]+);/g, (m, v) => {
+    if (v[0] === "#") return String.fromCodePoint(v[1] === "x" || v[1] === "X" ? parseInt(v.slice(2), 16) : parseInt(v.slice(1), 10));
+    return Object.prototype.hasOwnProperty.call(VARLIK, v) ? VARLIK[v] : m;
+  });
+}
+
 /** Kaynak metinden aday + ölçüm çıkarır. `dosya` yalnız rapor ve ad alanı önerisi içindir. */
 function cikarKaynak(metin, dosya, secenek) {
   const ts = (secenek && secenek.ts) || tsYukle();
@@ -477,13 +493,13 @@ function cikarKaynak(metin, dosya, secenek) {
 
     // --- adaylar ---
     if (ts.isJsxText(n)) {
-      const m = tekSatir(n.text);
+      const m = tekSatir(jsxVarlikCoz(n.text));
       if (m && /\p{L}/u.test(m)) {
         const kardes = n.parent && n.parent.children ? n.parent.children : [];
         const karisik = kardes.some((c) => c !== n && ts.isJsxExpression(c) && c.expression);
         ekle(n, m, "jsx-metin", n.parent && n.parent.openingElement ? n.parent.openingElement.tagName.getText(sf) : "", {
           birlesik: karisik,
-          ham: jsxMetni(n.text),
+          ham: jsxVarlikCoz(jsxMetni(n.text)),
         });
       }
     } else if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) {
@@ -509,7 +525,8 @@ function cikarKaynak(metin, dosya, secenek) {
           // şablon içi koşullu parça ("yok", "lar") çoğu zaman görünen metin / Türkçe ektir → kararsızsa aday
           (sinif.tur === "sablon-parcasi" && /\p{L}{2,}/u.test(n.text) && !/[\/_.=#@:]/.test(n.text))
         ) {
-          ekle(n, n.text, sinif.tur, sinif.baglam);
+          // JSX öznitelik dizgisi de varlık çözülerek çizilir (`title="a &amp; b"` → "a & b"); JS dizgisi çözülmez.
+          ekle(n, n.parent && ts.isJsxAttribute(n.parent) ? jsxVarlikCoz(n.text) : n.text, sinif.tur, sinif.baglam);
         }
       }
     } else if (ts.isTemplateExpression(n)) {
@@ -546,7 +563,7 @@ function cikarDosya(yol, secenek) {
   return cikarKaynak(metin, (secenek && secenek.goreliAd) || goreli, secenek);
 }
 
-module.exports = { cikarKaynak, cikarDosya, dogalMi, sablonDogalMi, jsxMetni, anahtarParcasi, adAlaniOnerisi, asciiKatla, tsYukle, DEPO_KOKU };
+module.exports = { cikarKaynak, cikarDosya, dogalMi, sablonDogalMi, jsxMetni, jsxVarlikCoz, anahtarParcasi, adAlaniOnerisi, asciiKatla, tsYukle, DEPO_KOKU };
 
 if (require.main === module) {
   // Kipler: `node cikar_ts.cjs [--olcum] <dosya>...`  ya da  `node cikar_ts.cjs --stdin [--olcum]` (stdin: JSON liste

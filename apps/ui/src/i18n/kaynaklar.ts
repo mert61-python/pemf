@@ -12,17 +12,21 @@ import enAyarlar from "./en/ayarlar.json";
 import enOrtak from "./en/ortak.json";
 import trGuvenlik from "./tr/guvenlik.json";
 import enGuvenlik from "./en/guvenlik.json";
+import trGiris from "./tr/giris.json";
+import enGiris from "./en/giris.json";
 
 export const trKaynak = {
   ayarlar: trAyarlar,
   ortak: trOrtak,
   guvenlik: trGuvenlik,
+  giris: trGiris,
 };
 
 export const enKaynak: typeof trKaynak = {
   ayarlar: enAyarlar,
   ortak: enOrtak,
   guvenlik: enGuvenlik,
+  giris: enGiris,
 };
 
 export const kaynaklar = {

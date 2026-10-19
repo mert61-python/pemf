@@ -531,3 +531,181 @@ def test_kapsam_metin_tarayan_listesi_bilinen_kapilari_bulur():
     andigi, cevrildi = liste["tests/test_D191_dema_simulator_A37_tanitim_etiketi_iddiasiz.py"]
     assert "dema-terapi-simülatörü/src/App.tsx" in andigi and not cevrildi
     assert len(liste) >= 150, len(liste)
+
+
+@ts_gerekli
+def test_uygula_tsx_CRLF_cok_satirli_jsx_metni_ve_html_varligi(tmp_path):
+    """autocrlf'li çalışma kopyası (CRLF): eklenen hook / içe aktarma CRLF; çok satırlı JSX metni yalnız-boşluk satırı BIRAKMAZ (JsxText
+    getStart baştaki boşluğu atlar); `&quot;` katalogda çözülmüş (React'in çizdiği gibi)."""
+    dosya = "apps/ui/src/components/Kart.tsx"
+    satirlar = [
+        'import React from "react";',
+        'import { Text } from "react-native";',
+        "",
+        "export function Kart() {",
+        "  return (",
+        "    <Text>",
+        "      Uzun bir açıklama",
+        "      iki satırda &quot;tırnaklı&quot;.",
+        "    </Text>",
+        "  );",
+        "}",
+        "",
+    ]
+    _yaz(tmp_path, dosya, "\r\n".join(satirlar))
+    for dil in ("tr", "en"):
+        _yaz(tmp_path, f"apps/ui/src/i18n/{dil}/kart.json", "{}\n")
+    _uctan_uca(tmp_path, dosya, {'Uzun bir açıklama iki satırda "tırnaklı".': "kart.aciklama"}, {}, {})
+    beklenen = [
+        'import React from "react";',
+        'import { Text } from "react-native";',
+        'import { useTranslation } from "react-i18next";',
+        "",
+        "export function Kart() {",
+        "  const { t } = useTranslation();",
+        "  return (",
+        "    <Text>",
+        '      {t("kart.aciklama")}',
+        "    </Text>",
+        "  );",
+        "}",
+        "",
+    ]
+    assert (tmp_path / dosya).read_bytes().decode("utf-8") == "\r\n".join(beklenen)
+    assert _json(tmp_path, "apps/ui/src/i18n/tr/kart.json") == {"aciklama": 'Uzun bir açıklama iki satırda "tırnaklı".'}
+
+
+def test_uygula_python_CRLF_ice_aktarma_satir_sonu_dosyaninki(tmp_path):
+    dosya = "apps/backend/servers/ornek.py"
+    _yaz(tmp_path, dosya, _PY.replace("\n", "\r\n"))
+    for dil in ("tr", "en"):
+        _yaz(tmp_path, f"apps/backend/i18n/{dil}.json", "{}\n")
+    _yaz(tmp_path, "i18n/kapsam.json", '{"dosyalar": {}}\n')
+    _uctan_uca(tmp_path, dosya, {"Hasta bulunamadı": "ornek.hastaBulunamadi"}, {}, {})
+    b = (tmp_path / dosya).read_bytes()
+    assert b.count(b"\n") == b.count(b"\r\n"), "karışık satır sonu"
+    assert b"\r\nfrom utils import ceviri\r\n" in b
+
+
+_TSX_KANCA = """import React, { useCallback } from "react";
+import { Text } from "react-native";
+
+export function Liste({ basarisiz, ad }: { basarisiz: number; ad: string }) {
+  const kaydet = useCallback(async () => {
+    goster(`${basarisiz} hasta AKTARILAMADI`);
+    goster(`${ad} kaydedildi`);
+  }, [basarisiz, ad]);
+  const bos = useCallback(() => goster("Boş liste"), []);
+  return <Text onPress={kaydet}>{bos.name}</Text>;
+}
+"""
+
+
+@ts_gerekli
+def test_uygula_tsx_kanca_bagimliligi_yer_adi_ve_cogul(tmp_path):
+    """useCallback içindeki metin çevrilince dizisine `t` eklenir (yoksa dil değişince eski `t` kapalı kalır); `yerAdlari` yer tutucuyu
+    anlamlı adla değiştirir (çağrı + katalog); `cogul` → `_one` / `_other`, çağrı `count` ile."""
+    dosya = "apps/ui/src/components/Liste.tsx"
+    _yaz(tmp_path, dosya, _TSX_KANCA)
+    for dil in ("tr", "en"):
+        _yaz(tmp_path, f"apps/ui/src/i18n/{dil}/liste.json", "{}\n")
+    assert (
+        _kos("cikar.py", "--kok", str(tmp_path), "--dosya", dosya, "--cikti", str(tmp_path / "aday.json")).returncode
+        == 0
+    )
+    assert (
+        _kos(
+            "uygula.py",
+            "--kok",
+            str(tmp_path),
+            "sablon",
+            str(tmp_path / "aday.json"),
+            "--cikti",
+            str(tmp_path / "e.json"),
+        ).returncode
+        == 0
+    )
+    e = json.loads((tmp_path / "e.json").read_text(encoding="utf-8"))
+    ayar = {
+        "{{basarisiz}} hasta AKTARILAMADI": {
+            "anahtar": "liste.aktarilamadi",
+            "yerAdlari": {"basarisiz": "count"},
+            "cogul": True,
+            "en": {
+                "one": "{{count}} patient could NOT be imported",
+                "other": "{{count}} patients could NOT be imported",
+            },
+        },
+        "{{ad}} kaydedildi": {
+            "anahtar": "liste.kaydedildi",
+            "yerAdlari": {"ad": "hastaAdi"},
+            "en": "{{hastaAdi}} saved",
+        },
+        "Boş liste": {"anahtar": "liste.bos", "en": "Empty list"},
+    }
+    for i in e["islemler"]:
+        i.update(ayar[i["metin"]])
+    (tmp_path / "e.json").write_text(json.dumps(e, ensure_ascii=False), encoding="utf-8")
+    r = _kos("uygula.py", "--kok", str(tmp_path), "uygula", str(tmp_path / "e.json"))
+    assert r.returncode == 0, r.stdout.decode("utf-8", "replace")
+    s = (tmp_path / dosya).read_text(encoding="utf-8")
+    assert 'goster(t("liste.aktarilamadi", { count: basarisiz }));' in s
+    assert 'goster(t("liste.kaydedildi", { hastaAdi: ad }));' in s
+    assert "}, [basarisiz, ad, t]);" in s, "useCallback bağımlılığına t eklenmedi"
+    assert 'useCallback(() => goster(t("liste.bos")), [t]);' in s, "boş bağımlılık dizisine t eklenmedi"
+    tr, en = _json(tmp_path, "apps/ui/src/i18n/tr/liste.json"), _json(tmp_path, "apps/ui/src/i18n/en/liste.json")
+    assert tr == {
+        "aktarilamadi_one": "{{count}} hasta AKTARILAMADI",
+        "aktarilamadi_other": "{{count}} hasta AKTARILAMADI",
+        "bos": "Boş liste",
+        "kaydedildi": "{{hastaAdi}} kaydedildi",
+    }
+    assert en["aktarilamadi_one"].startswith("{{count}} patient ") and en["kaydedildi"] == "{{hastaAdi}} saved"
+
+
+def test_taban_yer_tutucu_adi_ve_birlesik_parca_KENDI_anahtarinda(tmp_path):
+    """Göçte meşru dönüşümler gerileme sayılmaz: yer tutucu yeniden adlandırma (`{{days}}` → `{{gun}}`) ve şablon / birleşik cümlenin
+    parçası (`' seans kaydı '`) dosyanın KENDİ kullandığı anahtarın TR değerinde. Aynı parça BAŞKA dosyanın anahtarındaysa karşılanmaz."""
+    metinler = [
+        {
+            "yuzey": "arayuz",
+            "dosya": "apps/ui/src/A.tsx",
+            "satir": 1,
+            "metin": "{{days}} gün sonra silinir",
+            "ham": "{{days}} gün sonra silinir",
+            "tur": "sablon",
+        },
+        {
+            "yuzey": "arayuz",
+            "dosya": "apps/ui/src/A.tsx",
+            "satir": 2,
+            "metin": "seans kaydı",
+            "ham": " seans kaydı ",
+            "tur": "jsx-metin",
+        },
+        {
+            "yuzey": "arayuz",
+            "dosya": "apps/ui/src/B.tsx",
+            "satir": 1,
+            "metin": "seans kaydı",
+            "ham": " seans kaydı ",
+            "tur": "jsx-metin",
+        },
+    ]
+    _yaz(tmp_path, "taban.json", json.dumps({"metinler": metinler}, ensure_ascii=False))
+    _yaz(
+        tmp_path,
+        "apps/ui/src/i18n/tr/x.json",
+        json.dumps(
+            {
+                "sil": "{{gun}} gün sonra silinir",
+                "bekleyen_one": "{{count}} seans kaydı bekliyor",
+                "bekleyen_other": "{{count}} seans kaydı bekliyor",
+            },
+            ensure_ascii=False,
+        ),
+    )
+    _yaz(tmp_path, "apps/ui/src/A.tsx", 'export const A = () => t("x.sil") + t("x.bekleyen", { count: 2 });\n')
+    _yaz(tmp_path, "apps/ui/src/B.tsx", "export const B = () => null;\n")
+    sorun = katalog.taban_karsilastir(tmp_path, ["apps/ui/src/A.tsx", "apps/ui/src/B.tsx"], tmp_path / "taban.json")
+    assert len(sorun) == 1 and "B.tsx" in sorun[0], sorun

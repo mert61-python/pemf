@@ -166,7 +166,7 @@
    "sira": 3,
    "kritik": false,
    "aciklama": "Ayarlar ekranı (SettingsScreen) + dil kartı",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 180,
    "dosyaSayisi": 2
   },
@@ -536,12 +536,25 @@
    "yuzey": "arayuz",
    "grup": "arayuz-01-ortak-kabuk",
    "sira": 1,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 6,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "[global] {{route}}",
+     "gerekce": "çökme raporunun rota etiketi — arka uca giden tanılama kaydı, ekranda görünmez"
+    },
+    {
+     "metin": "FATAL",
+     "gerekce": "çökme raporu önem etiketi — tanılama kaydı"
+    },
+    {
+     "metin": "non-fatal",
+     "gerekce": "çökme raporu önem etiketi — tanılama kaydı"
+    }
+   ],
    "birlesikIstisna": [],
-   "not": ""
+   "not": "I18N-0 pilotu"
   },
   "apps/ui/src/components/ui/FadeInView.tsx": {
    "yuzey": "arayuz",
@@ -668,12 +681,17 @@
    "yuzey": "arayuz",
    "grup": "arayuz-01-ortak-kabuk",
    "sira": 1,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "useToast must be used within ToastProvider",
+     "gerekce": "geliştirici hatası (yanlış kullanım) — kullanıcıya ulaşmaz"
+    }
+   ],
    "birlesikIstisna": [],
-   "not": ""
+   "not": "I18N-0 pilotu"
   },
   "apps/ui/src/components/ui/UpdateBanner.tsx": {
    "yuzey": "arayuz",
@@ -954,12 +972,12 @@
    "yuzey": "arayuz",
    "grup": "arayuz-02-giris-hesap",
    "sira": 2,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 53,
    "kritik": false,
    "muaf": [],
    "birlesikIstisna": [],
-   "not": ""
+   "not": "I18N-0 pilotu"
   },
   "apps/ui/src/screens/WelcomeScreen.tsx": {
    "yuzey": "arayuz",
@@ -1042,12 +1060,12 @@
    "yuzey": "arayuz",
    "grup": "arayuz-03a-ayarlar-ekran",
    "sira": 3,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 180,
    "kritik": false,
    "muaf": [],
    "birlesikIstisna": [],
-   "not": ""
+   "not": "I18N-0 pilotu"
   },
   "apps/ui/src/components/domain/BackupPassphraseDialog.tsx": {
    "yuzey": "arayuz",

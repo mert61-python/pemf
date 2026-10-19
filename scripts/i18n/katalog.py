@@ -234,25 +234,52 @@ def parca_geri_al(kok: Path, parca: list[dict], yuzey: str) -> tuple[int, list[s
 # ── taban (Türkçe gerilemesi) ────────────────────────────────────────────────────────────────────────────────
 
 
+def _kenar_yer_tutucusuz(s: str) -> str:
+    """Normalleştirilmiş metnin baş / sonundaki yer tutucu ve boşluklar: şablon PARÇASI (`' seans kaydı '`, `'… analiz.{{}}{{}}'`)
+    tam cümle anahtarının içinde aranırken kenarlar yok sayılır (sayı / ek yerine gelen ifade)."""
+    return re.sub(r"^(?:\s|\{\{\}\})+|(?:\s|\{\{\}\})+$", "", s)
+
+
 def taban_karsilastir(kok: Path, dosyalar: list[str], taban_yolu: Path) -> list[str]:
+    """Göç ÖNCESİ TR metni hâlâ kullanıcıya ulaşıyor mu? Karşılanma sırası:
+      1) katalogda BİREBİR (yer tutucu adları yok sayılarak: `{{days}}` → `{{gun}}` yeniden adlandırma gerileme DEĞİL);
+      2) dosyanın KENDİ kullandığı bir anahtarın TR değeri metni İÇERİYOR (şablon / birleşik cümle tek anahtara toplandı — parça başka
+         dosyanın anahtarında aranmaz, kısa parça yanlışlıkla karşılanmaz) — en az bir harf taşıyan parça;
+      3) gerekçeli muaf (`kapsam.muaf_mi`) ya da `birlesikIstisna`.
+    Karşılanmayan → Türkçe gerilemesi (çıkış 1)."""
     taban = json.loads(Path(taban_yolu).read_text(encoding="utf-8"))
     defter_yolu = kok / "i18n" / "kapsam.json"
     defter = json.loads(defter_yolu.read_text(encoding="utf-8")) if defter_yolu.exists() else {"dosyalar": {}}
-    tr_degerleri: dict[str, set[str]] = {}
+    duz: dict[str, dict[str, str]] = {}
+    tum_normal: dict[str, set[str]] = {}
+    kullanilan: dict[str, list[str]] = {}
     sorun = []
     hedef = set(dosyalar)
     for m in taban["metinler"]:
         if m["dosya"] not in hedef:
             continue
         y = m["yuzey"]
-        if y not in tr_degerleri:
-            tr_degerleri[y] = (
-                set(ortak.duzlestir(ortak.katalog_yukle(y, "tr", kok)).values()) if y in ortak.KATALOGLAR else set()
-            )
+        if y not in duz:
+            duz[y] = ortak.duzlestir(ortak.katalog_yukle(y, "tr", kok)) if y in ortak.KATALOGLAR else {}
+            tum_normal[y] = {ortak.yer_tutucu_normal(v) for v in duz[y].values()}
+        if m["dosya"] not in kullanilan:
+            p = kok / m["dosya"]
+            anahtarlar = ortak.kullanilan_anahtarlar(p.read_text(encoding="utf-8")) if p.exists() else set()
+            kullanilan[m["dosya"]] = [
+                ortak.yer_tutucu_normal(v)
+                for k in anahtarlar
+                for x, v in duz[y].items()
+                if x == k
+                or (x.startswith(k + "_") and x[len(k) + 1 :] in {s.lstrip("_") for s in ortak.COGUL_SONEKLERI})
+            ]
         kayit = defter["dosyalar"].get(m["dosya"], {})
         birlesik = {x.get("once") for x in kayit.get("birlesikIstisna", [])}
         ham = m.get("ham") or m["metin"]
-        if ham in tr_degerleri[y] or m["metin"] in tr_degerleri[y] or m["metin"] in birlesik:
+        n_ham, n_metin = ortak.yer_tutucu_normal(ham), ortak.yer_tutucu_normal(m["metin"])
+        if n_ham in tum_normal[y] or n_metin in tum_normal[y] or m["metin"] in birlesik:
+            continue
+        parca = _kenar_yer_tutucusuz(n_ham)
+        if re.search(r"[^\W\d_]", parca) and any(parca in v for v in kullanilan[m["dosya"]]):
             continue
         if kapsam.muaf_mi(defter, m["dosya"], m["metin"]):
             continue
