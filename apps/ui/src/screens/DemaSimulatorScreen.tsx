@@ -5,11 +5,15 @@ import { WebView } from "react-native-webview";
 import { Card } from "@/components/ui/Card";
 import { colors, spacing, typography, radius, rf, rs, layoutMax } from "@/theme/tokens";
 import { serviceConfig } from "@/services/config";
+import { dilParametresiEkle } from "@/services/apiClient";
 import { RefreshCcw } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import { EFieldBar } from "@/components/domain/EFieldBar";
 
 export function DemaSimulatorScreen() {
   const [key, setKey] = useState(0); // WebView'ı yeniden yüklemek için
+  // I18N (Y159): simülatör ayrı sayfa — dili başlıkla değil URL'de (`?dil=`) alır; dil değişince çerçeve yeniden yüklenir.
+  const { i18n } = useTranslation();
   // İlk açılışta simülatör (ayrı Vite app) yavaş yüklenir → boş kutu yerine "yükleniyor" göster.
   const [loading, setLoading] = useState(true);
   const { height } = useWindowDimensions();
@@ -33,6 +37,9 @@ export function DemaSimulatorScreen() {
     .replace(/\/api\/?$/, "")       // /api sonunu kaldır
     .replace(/\/$/, "");            // trailing slash kaldır
   const simulatorUrl = `${baseUrl}/simulator/index.html`;
+  // Ekranda yazan adres AYNI kalır (parametresiz); çerçeve dil parametreli adresi yükler.
+  const simulatorKaynak = dilParametresiEkle(simulatorUrl);
+  const cerceveAnahtari = `${key}:${i18n.language}`;
 
   return (
     <View style={styles.container}>
@@ -59,16 +66,16 @@ export function DemaSimulatorScreen() {
       <View style={[styles.simulatorContainer, { height: webHeight }]}>
         {Platform.OS === "web" ? (
           <iframe
-            key={key}
-            src={simulatorUrl}
+            key={cerceveAnahtari}
+            src={simulatorKaynak}
             style={{ width: "100%", height: "100%", border: "none", borderRadius: 8 }}
             title="DEMA Simulator"
             onLoad={() => setLoading(false)}
           />
         ) : (
           <WebView
-            key={key}
-            source={{ uri: simulatorUrl }}
+            key={cerceveAnahtari}
+            source={{ uri: simulatorKaynak }}
             style={styles.webview}
             javaScriptEnabled={true}
             domStorageEnabled={true}

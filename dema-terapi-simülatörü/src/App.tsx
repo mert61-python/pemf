@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { t } from './i18n';
 import {
   Activity,
   Zap,
@@ -108,7 +109,7 @@ export default function App() {
         {/* Header */}
         <header className="bg-blue-50 p-4 md:p-6 text-slate-800 border-b border-blue-100 text-center">
           {/* D1.91 · A-37 (sahip): dayanaksız uyumluluk iddiası KALDIRILDI; açık tanıtım/eğitim etiketi. */}
-          <h1 className="text-sm md:text-xl font-bold leading-tight">DEMA Terapi Simülatörü</h1>
+          <h1 className="text-sm md:text-xl font-bold leading-tight">{t('baslik.uygulama')}</h1>
           <p className="mt-1 text-[11px] md:text-xs font-semibold text-amber-700">
             Tanıtım/eğitim amaçlıdır, cihaz davranışını temsil etmez.
           </p>

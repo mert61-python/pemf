@@ -38,8 +38,11 @@ _BAYAT_JS = (
 
 def _kaynak_kopyasi(tmp_path: Path) -> Path:
     hedef = tmp_path / "kaynak"
-    (hedef / "src").mkdir(parents=True)
-    for rel in ("src/App.tsx", "index.html", "metadata.json"):
+    (hedef / "src" / "i18n").mkdir(parents=True)
+    # I18N-0: görünen metinler çeviri kataloğuna taşınır — katalog (iki dil) da taranmazsa yasaklı iddia oraya kaçardı.
+    katalog = [p.relative_to(_DEMA).as_posix() for p in sorted((_DEMA / "src" / "i18n").glob("*.json"))]
+    assert katalog, "DEMA çeviri kataloğu yok (src/i18n/*.json)"
+    for rel in ("src/App.tsx", "index.html", "metadata.json", *katalog):
         (hedef / rel).write_bytes((_DEMA / rel).read_bytes())
     return hedef
 
