@@ -31,7 +31,7 @@ from pathlib import Path
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from scripts.i18n import ortak  # noqa: E402
+from scripts.i18n import kapsam, ortak  # noqa: E402
 
 VARSAYILAN_TABAN = ortak.varsayilan_taban()
 NSIS_DEGISKEN = re.compile(r"\$(?:\{\w+\}|\w+)")
@@ -249,10 +249,11 @@ def taban_karsilastir(kok: Path, dosyalar: list[str], taban_yolu: Path) -> list[
                 set(ortak.duzlestir(ortak.katalog_yukle(y, "tr", kok)).values()) if y in ortak.KATALOGLAR else set()
             )
         kayit = defter["dosyalar"].get(m["dosya"], {})
-        muaf = {x.get("metin") for x in kayit.get("muaf", [])} | {x.get("metin") for x in defter.get("genelMuaf", [])}
         birlesik = {x.get("once") for x in kayit.get("birlesikIstisna", [])}
         ham = m.get("ham") or m["metin"]
-        if ham in tr_degerleri[y] or m["metin"] in tr_degerleri[y] or m["metin"] in muaf or m["metin"] in birlesik:
+        if ham in tr_degerleri[y] or m["metin"] in tr_degerleri[y] or m["metin"] in birlesik:
+            continue
+        if kapsam.muaf_mi(defter, m["dosya"], m["metin"]):
             continue
         sorun.append(f"{m['dosya']}:{m['satir']} [{m['tur']}] tr katalogda YOK / muaf değil: {ham!r}")
     return sorun

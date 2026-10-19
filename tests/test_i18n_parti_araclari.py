@@ -460,9 +460,9 @@ def test_kapsam_her_yuzey_dosyasi_kendi_yuzeyinin_grubunda_her_grup_dolu():
     [
         ("apps/ui/src/components/ui/GlobalEmergencyStop.tsx", "arayuz-05b-guvenlik-kritik"),
         ("apps/ui/src/screens/ControlScreen.tsx", "arayuz-05a-kontrol-kritik"),
-        ("apps/backend/servers/api_server.py", "sunucu-10b-api-server"),
-        ("launcher/app/windows/hooks.nsi", "launcher-11c-nsis"),
-        ("apps/web/src/pages/Legal.tsx", "site-12c-yasal"),
+        ("apps/backend/servers/api_server.py", "sunucu-10b-ana-sunucu"),
+        ("launcher/app/windows/hooks.nsi", "launcher-11d-nsis"),
+        ("apps/web/src/pages/Legal.tsx", "site-12e-yasal"),
     ],
 )
 def test_kapsam_kritik_ve_yasal_dosyalar_dogru_grupta(dosya, grup):
@@ -470,7 +470,7 @@ def test_kapsam_kritik_ve_yasal_dosyalar_dogru_grupta(dosya, grup):
     assert kapsam.grup_bul(dosya) == grup
     assert kapsam._GRUP[grup][2] == (
         grup
-        in {"arayuz-05a-kontrol-kritik", "arayuz-05b-guvenlik-kritik", "sunucu-10b-api-server", "launcher-11c-nsis"}
+        in {"arayuz-05a-kontrol-kritik", "arayuz-05b-guvenlik-kritik", "sunucu-10b-ana-sunucu", "launcher-11d-nsis"}
     )
 
 
@@ -486,7 +486,7 @@ def test_kapsam_uret_durumu_korur_isaretle_muafi_bozmaz(tmp_path):
     assert {k: v["grup"] for k, v in d["dosyalar"].items()} == {
         "apps/backend/servers/a_router.py": "sunucu-10a-yonlendirici",
         "apps/backend/servers/b_router.py": "sunucu-10a-yonlendirici",
-        "apps/backend/x.py": "sunucu-10g-diger",
+        "apps/backend/x.py": "sunucu-10h-servis",
     }
     assert (
         kapsam.main(["--kok", str(tmp_path), "dosya", "apps/backend/servers/b_router.py", "muaf", "--gerekce", "iç"])
@@ -503,3 +503,27 @@ def test_kapsam_uret_durumu_korur_isaretle_muafi_bozmaz(tmp_path):
     assert {g["ad"]: g["durum"] for g in d["gruplar"]}["sunucu-10a-yonlendirici"] == "tamam"
     with pytest.raises(SystemExit, match="GEREKÇE"):
         kapsam.main(["--kok", str(tmp_path), "dosya", "apps/backend/x.py", "muaf"])
+
+
+def test_kapsam_muaf_mi_dosya_genel_desen_ve_muaf_dosya():
+    defter = {
+        "genelMuaf": [{"metin": "PEMF Vet", "gerekce": "ürün"}],
+        "genelMuafDesen": [{"desen": r"btn-\w+", "gerekce": "CSS"}],
+        "dosyalar": {
+            "a.tsx": {"durum": "tamam", "muaf": [{"metin": "İç ad", "gerekce": "iç"}]},
+            "b.tsx": {"durum": "muaf", "not": "altyapı"},
+        },
+    }
+    assert kapsam.muaf_mi(defter, "a.tsx", "İç ad") and not kapsam.muaf_mi(defter, "c.tsx", "İç ad")
+    assert kapsam.muaf_mi(defter, "c.tsx", "PEMF Vet") and kapsam.muaf_mi(defter, "c.tsx", "btn-primary")
+    assert not kapsam.muaf_mi(defter, "c.tsx", "btn-primary ve metin")  # desen TAM eşleşmeli
+    assert kapsam.muaf_mi(defter, "b.tsx", "Her şey")
+
+
+def test_kapsam_metin_tarayan_listesi_bilinen_kapilari_bulur():
+    liste = {t: (andigi, cevrildi) for t, andigi, cevrildi in kapsam.metin_tarayan_testler(KOK)}
+    andigi, cevrildi = liste["tests/test_kaldirma_yetim_surec_temizligi.py"]
+    assert "launcher/app/windows/hooks.nsi" in andigi and cevrildi
+    andigi, cevrildi = liste["tests/test_D191_dema_simulator_A37_tanitim_etiketi_iddiasiz.py"]
+    assert "dema-terapi-simülatörü/src/App.tsx" in andigi and not cevrildi
+    assert len(liste) >= 150, len(liste)

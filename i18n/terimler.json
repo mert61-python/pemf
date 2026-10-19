@@ -1,0 +1,93 @@
+{
+ "aciklama": "I18N TERİM SÖZLÜĞÜ (T12) — K-4 kapısı (tests/test_i18n_terim_K4.py) her katalogda uygular: TR değerinde `tr` deseni geçiyorsa EN değerinde `en` deseni geçmeli; `yasakEn` deseni EN'de yalnız TR'de `yasakIstisnaTr` deseni varsa olabilir. Desenler küçük harfe katlanmış metinde (Türkçe kuralı: İ→i, I→ı) düzenli ifadedir. Okunur tablo: DENETIM\\I18N\\TERIMLER.md. Yeni terim: buraya + TERIMLER.md + KURALLAR.md §Terim sözlüğü.",
+ "uslup": [
+  "ABD İngilizcesi yazımı (color, center, canceled).",
+  "Sade ve kısa; okuyucu veteriner hekim ve hayvan sahibi — mühendis değil.",
+  "Düğmelerde cümle düzeni: 'Start session' (her sözcük büyük DEĞİL).",
+  "TR'de BÜYÜK harfli vurgu EN'de de büyük harf ('ELLE kontrol edin' → 'check MANUALLY').",
+  "Hata iletisi EYLEM söyler; düğme gerçeği söyler (kapsamı, sonucu).",
+  "Ürün / marka adları çevrilmez: PEMF Vet, PEMF Vet Client, AI Pro, DEMA, FGS, ArUco, STM, ESP.",
+  "Birimler iki dilde aynı (mT, °C, Hz, %, dk → min, sn → s); fiyatlar ₺ kalır."
+ ],
+ "terimler": [
+  {
+   "tr": "seans",
+   "en": "session",
+   "not": "Seans → Session. İngilizcede de 'treatment / therapy' iddiası YOK (TR 'tedavi → seans' kararının karşılığı, 2026-08-08)."
+  },
+  {
+   "tr": "acil durdur",
+   "en": "emergency stop",
+   "not": "Düğme: EMERGENCY STOP (büyük harf) · metin içi: Emergency stop / emergency stop."
+  },
+  {
+   "tr": "bobin",
+   "en": "coil"
+  },
+  {
+   "tr": "alan şiddet",
+   "en": "field strength"
+  },
+  {
+   "tr": "hayvan sahib",
+   "en": "owner",
+   "not": "Hayvan sahibi / Evcil hayvan sahibi → Owner / Pet owner."
+  },
+  {
+   "tr": "hekim",
+   "en": "veterinarian|\\bvets?\\b",
+   "not": "Hekim / Veteriner hekim → Veterinarian (kısa 'vet' YALNIZ dar alanda: rozet, sekme)."
+  },
+  {
+   "tr": "seans geçmiş",
+   "en": "session history"
+  },
+  {
+   "tr": "jeton",
+   "en": "credit",
+   "not": "Jeton → Credit (oturum 'token'ı ile karışmasın)."
+  },
+  {
+   "tr": "kullandıkça öde",
+   "en": "pay as you go"
+  },
+  {
+   "tr": "araştırma mod",
+   "en": "research mode"
+  },
+  {
+   "tr": "veteriner mod",
+   "en": "veterinary mode"
+  },
+  {
+   "tr": "termal",
+   "en": "thermal"
+  },
+  {
+   "tr": "segmentasyon",
+   "en": "segmentation"
+  },
+  {
+   "tr": "ana ekran",
+   "en": "home"
+  },
+  {
+   "tr": "\\bhasta(?!l[ıi]k|l[ıi]\\b|n[ıi]n hastal)",
+   "en": "patient",
+   "not": "Hasta (hayvan) → Patient. 'Hastalık' (disease) ve 'hasta (riskli)' (sick) bu terim DEĞİL — istisnalarda anahtarıyla."
+  }
+ ],
+ "yasakEn": [
+  {
+   "en": "\\btreatment|\\btherap",
+   "yasakIstisnaTr": "tedavi|terapi",
+   "not": "Seans metinleri 'treatment / therapy' demez. İstisna: TR'de 'tedavi / terapi' geçen metin (hukuki sorumluluk cümlesi 'tıbbi teşhis ve tedavisinin yerine geçmez' → 'treatment'; ürün adı 'DEMA Terapi Simülatörü')."
+  },
+  {
+   "en": "\\btoken",
+   "yasakIstisnaTr": "token|belirteç",
+   "not": "Jeton → Credit; 'token' yalnız oturum / API belirteci anlamında (TR'de de 'token' / 'belirteç' geçer)."
+  }
+ ],
+ "istisnalar": []
+}

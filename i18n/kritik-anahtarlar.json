@@ -1,0 +1,2145 @@
+{
+ "aciklama": "I18N KRİTİK (GÜVENLİK) METİNLERİ (T11) — en sıkı kural. K-5 (tests/test_i18n_kritik_K5.py): (1) `anahtarlar`'daki her anahtar kendi yüzeyinin İKİ katalogunda dolu; (2) ACİL DURDUR yedeği (`apps/ui/src/i18n/kritik.ts::KRITIK_YEDEK`) katalogla aynı; (3) kapsam defterinde `tamam` olan dosyada `bekleyen` her metin ya bu listedeki bir anahtarın TR değeridir ya da gerekçeli muaftır (günlük / iç). Parti kritik bir metni taşırken anahtarını BURAYA ekler (yuzey, anahtar, tur, kaynak). Çeviri anlamı birebir korur: yumuşatma / kısaltma / eksik uyarı YOK; her kritik anahtar için iki dilde jest testi + ekran kanıtı; inceleme TR / EN tablosunu sahip / hoca onayına çıkarır.",
+ "turler": {
+  "estop": "ACİL DURDUR / STOP — çeviri sisteminden BAĞIMSIZ görünür (KRITIK_YEDEK)",
+  "seans": "seans başlat / durdur / duraklat ve sonuç iletileri",
+  "bobin": "bobin ve alan uyarıları (sıcaklık, telemetri, self-test, akım)",
+  "firmware": "firmware bantları (FW-PAKET, FW-KIMLIK), STM uyumu, yakma",
+  "donanim": "donanım hata ve onay iletileri (bağlantı, kart, port, mandal)"
+ },
+ "secimDeseni": "acil durdur|durdur|\\bstop\\b|başlat|bobin|alan|firmware|\\bfw|donanım|cihaz|kart|mandal|güç|kablo|usb|akım|sensör|seans",
+ "kritikGruplar": [
+  "arayuz-05a-kontrol-kritik",
+  "arayuz-05b-guvenlik-kritik",
+  "sunucu-10b-ana-sunucu",
+  "sunucu-10f-bildirim-ws",
+  "launcher-11d-nsis"
+ ],
+ "anahtarlar": [],
+ "bekleyen": [
+  {
+   "dosya": "apps/backend/controllers/hardware_controller.py",
+   "satir": 89,
+   "metin": "Sürüş parametresi donanım paketine çevrilemiyor ({{__name__}}: sayı değil ya da taşıyor).",
+   "ham": "Sürüş parametresi donanım paketine çevrilemiyor ({{__name__}}: sayı değil ya da taşıyor)."
+  },
+  {
+   "dosya": "apps/backend/controllers/hardware_controller.py",
+   "satir": 309,
+   "metin": "STM32 bağlı değil. USB (ST-Link) kablosunu takın; bağlantı gelince komutu yeniden verin.",
+   "ham": "STM32 bağlı değil. USB (ST-Link) kablosunu takın; bağlantı gelince komutu yeniden verin."
+  },
+  {
+   "dosya": "apps/backend/controllers/hardware_controller.py",
+   "satir": 327,
+   "metin": "bobin BAŞLATILMADI",
+   "ham": "bobin BAŞLATILMADI"
+  },
+  {
+   "dosya": "apps/backend/controllers/hardware_controller.py",
+   "satir": 381,
+   "metin": "ACİL: HWSender ÖLÜ ve yeniden başlatılamadı — paketler porta YAZILMIYOR (firmware ölü-adam 1,5 sn'de keser).",
+   "ham": "ACİL: HWSender ÖLÜ ve yeniden başlatılamadı — paketler porta YAZILMIYOR (firmware ölü-adam 1,5 sn'de keser)."
+  },
+  {
+   "dosya": "apps/backend/headless_core.py",
+   "satir": 324,
+   "metin": "[HWSender] ÖLÜ ve yeniden BAŞLATILAMADI — STM'e paket yazılamıyor (firmware ölü-adam 1,5 sn'de keser).",
+   "ham": "[HWSender] ÖLÜ ve yeniden BAŞLATILAMADI — STM'e paket yazılamıyor (firmware ölü-adam 1,5 sn'de keser)."
+  },
+  {
+   "dosya": "apps/backend/headless_core.py",
+   "satir": 330,
+   "metin": "[HWSender] ÖLÜ bulundu → yeniden başlatıldı (seri bağlantı yeniden kurulacak).",
+   "ham": "[HWSender] ÖLÜ bulundu → yeniden başlatıldı (seri bağlantı yeniden kurulacak)."
+  },
+  {
+   "dosya": "apps/backend/headless_core.py",
+   "satir": 496,
+   "metin": "{{ad_metni}} göç bekliyor: at-rest şifreleme göçü tamamlanmadı (dosya kilitli olabilir); dosya korunuyor, karantinaya alınmadı. Göç arka planda yeniden deneniyor; düzelmezse cihazı yeniden başlatın.",
+   "ham": "{{ad_metni}} göç bekliyor: at-rest şifreleme göçü tamamlanmadı (dosya kilitli olabilir); dosya korunuyor, karantinaya alınmadı. Göç arka planda yeniden deneniyor; düzelmezse cihazı yeniden başlatın."
+  },
+  {
+   "dosya": "apps/backend/headless_core.py",
+   "satir": 502,
+   "metin": "{{ad_metni}} açılamadı ({{__name__}}). Arka planda yeniden deneniyor; sürerse cihazı yeniden başlatın, yine sürerse teknik desteğe başvurun.",
+   "ham": "{{ad_metni}} açılamadı ({{__name__}}). Arka planda yeniden deneniyor; sürerse cihazı yeniden başlatın, yine sürerse teknik desteğe başvurun."
+  },
+  {
+   "dosya": "apps/backend/headless_core.py",
+   "satir": 1479,
+   "metin": "[STM32] Seri port kayboldu (%s) → bağlantı düşürülüyor, bobinler çevrimdışı.",
+   "ham": "[STM32] Seri port kayboldu (%s) → bağlantı düşürülüyor, bobinler çevrimdışı."
+  },
+  {
+   "dosya": "apps/backend/headless_core.py",
+   "satir": 1572,
+   "metin": "[HWSender] tur hatasi — dongu SURUYOR (kuyruktaki STOP dahil paketler yazilmaya devam eder)",
+   "ham": "[HWSender] tur hatasi — dongu SURUYOR (kuyruktaki STOP dahil paketler yazilmaya devam eder)"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 82,
+   "metin": "seans kapandı",
+   "ham": "seans kapandı"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 84,
+   "metin": "📄 Seans alan kaydı masaüstüne yazıldı: {{name}}",
+   "ham": "📄 Seans alan kaydı masaüstüne yazıldı: {{name}}"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 867,
+   "metin": "Frekans 0 Hz = DURDURMA (A-05): bobinler durduruldu, seans BAŞLATILMADI. Frekans girin.",
+   "ham": "Frekans 0 Hz = DURDURMA (A-05): bobinler durduruldu, seans BAŞLATILMADI. Frekans girin."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 870,
+   "metin": "Tedavi kaydı açılamadı — seans BAŞLATILMADI; birkaç saniye sonra yeniden deneyin",
+   "ham": "Tedavi kaydı açılamadı — seans BAŞLATILMADI; birkaç saniye sonra yeniden deneyin"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 948,
+   "metin": "Bobin {{b}} AI Pro planından çıkarıldı — operatör durdurdu; seans sonuna kadar AI Pro bu bobini sürmez, diğer bobinler sürüyor.",
+   "ham": "Bobin {{b}} AI Pro planından çıkarıldı — operatör durdurdu; seans sonuna kadar AI Pro bu bobini sürmez, diğer bobinler sürüyor."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1026,
+   "metin": "seans DURDURULDU",
+   "ham": "seans DURDURULDU"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1038,
+   "metin": "⛔ Seans DURDURULDU:",
+   "ham": "⛔ Seans DURDURULDU: "
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1078,
+   "metin": "STM bobin çıkışları durduruldu",
+   "ham": "STM bobin çıkışları durduruldu"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1141,
+   "metin": "⚠️ Bobin {{cid}} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı, STOP gönderildi",
+   "ham": "⚠️ Bobin {{cid}} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı, STOP gönderildi"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1149,
+   "metin": "⚠️ Bobin {{cid}} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı; STOP GÖNDERİLEMEDİ (broker erişilemiyor) — bobin HÂLÂ ENERJİLİ olabilir, elle kontrol edin",
+   "ham": "⚠️ Bobin {{cid}} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı; STOP GÖNDERİLEMEDİ (broker erişilemiyor) — bobin HÂLÂ ENERJİLİ olabilir, elle kontrol edin"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1165,
+   "metin": "akım",
+   "ham": "akım"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1192,
+   "metin": "🌡️ Bobin {{coil_id}} kartı AŞIRI SICAKLIK bildirdi ({{atype}}) — yalnız bobin {{coil_id3}} durduruldu; diğer bobinler sürüyor. Bobini kontrol edin.",
+   "ham": "🌡️ Bobin {{coil_id}} kartı AŞIRI SICAKLIK bildirdi ({{atype}}) — yalnız bobin {{coil_id3}} durduruldu; diğer bobinler sürüyor. Bobini kontrol edin."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1193,
+   "metin": "⚠️ Bu bobinin STOP'u DOĞRULANAMADI.",
+   "ham": " ⚠️ Bu bobinin STOP'u DOĞRULANAMADI."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1391,
+   "metin": "🚨 Bobin {{coil_id_str}} self-test BAŞARISIZ — {{_st_msg}}",
+   "ham": "🚨 Bobin {{coil_id_str}} self-test BAŞARISIZ — {{_st_msg}}"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1395,
+   "metin": "Bobin {{coil_id_str}} self-test:",
+   "ham": "Bobin {{coil_id_str}} self-test: "
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1419,
+   "metin": "🔥 Bobin {{coil_id_str}} YEREL TERMAL KESME — PWM cihaz tarafından durduruldu",
+   "ham": "🔥 Bobin {{coil_id_str}} YEREL TERMAL KESME — PWM cihaz tarafından durduruldu"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1426,
+   "metin": "⚠️ Bobin {{coil_id_str}} sıcak: start reddedildi — soğuması bekleniyor",
+   "ham": "⚠️ Bobin {{coil_id_str}} sıcak: start reddedildi — soğuması bekleniyor"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1431,
+   "metin": "✅ Bobin {{coil_id_str}} soğudu — start yeniden serbest",
+   "ham": "✅ Bobin {{coil_id_str}} soğudu — start yeniden serbest"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1450,
+   "metin": "⚠️ Bobin {{coil_id_str}} komutu REDDETTİ — {{deger2}}",
+   "ham": "⚠️ Bobin {{coil_id_str}} komutu REDDETTİ — {{deger2}}"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1480,
+   "metin": "⚠️ Bobin {{coil_id_str}} bağlantısı kesildi",
+   "ham": "⚠️ Bobin {{coil_id_str}} bağlantısı kesildi"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1488,
+   "metin": "✅ Bobin {{coil_id_str}} bağlandı",
+   "ham": "✅ Bobin {{coil_id_str}} bağlandı"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1516,
+   "metin": "🚨 Bobin {{coil_id_str}} ALARM ({{atype}}) — seans güvenlik için durduruldu",
+   "ham": "🚨 Bobin {{coil_id_str}} ALARM ({{atype}}) — seans güvenlik için durduruldu"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1741,
+   "metin": "🔒 Bobin çalışırken",
+   "ham": "🔒 Bobin çalışırken "
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1743,
+   "metin": "— ACİL DURDUR mandalı kuruldu. Bobinleri kontrol edin; yeniden başlatmak için önce \"Sıfırla\".",
+   "ham": " — ACİL DURDUR mandalı kuruldu. Bobinleri kontrol edin; yeniden başlatmak için önce \"Sıfırla\"."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1775,
+   "metin": "⚠️ STM32 bağlantısı koptu — seans güvenlik için durduruldu",
+   "ham": "⚠️ STM32 bağlantısı koptu — seans güvenlik için durduruldu"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1889,
+   "metin": "⚠️ Bobin {{_t_coil_id}}: Akım ölçümü bu bobinde güvenilir değil — doz kaydına akım yazılmadı.",
+   "ham": "⚠️ Bobin {{_t_coil_id}}: Akım ölçümü bu bobinde güvenilir değil — doz kaydına akım yazılmadı."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1895,
+   "metin": "⚠️ Bobin {{_t_coil_id}} alan sensörü doğrulanamadı — ölçülen alan (mT) gösterilmiyor ve kayda yazılmıyor. Teknik desteğe bildirin (kod: FW-ALAN).",
+   "ham": "⚠️ Bobin {{_t_coil_id}} alan sensörü doğrulanamadı — ölçülen alan (mT) gösterilmiyor ve kayda yazılmıyor. Teknik desteğe bildirin (kod: FW-ALAN)."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 1923,
+   "metin": "⚠️ Bobin {{_t_coil_id}} manyetik alanı sensör aralığını AŞTI (±24,6 mT) — gösterilen mT GÜVENİLMEZ (taşma sarar, değer DÜŞÜK görünebilir)",
+   "ham": "⚠️ Bobin {{_t_coil_id}} manyetik alanı sensör aralığını AŞTI (±24,6 mT) — gösterilen mT GÜVENİLMEZ (taşma sarar, değer DÜŞÜK görünebilir)"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 2008,
+   "metin": "⚠️ STM32 watchdog zaman aşımı — seans güvenlik için durduruldu",
+   "ham": "⚠️ STM32 watchdog zaman aşımı — seans güvenlik için durduruldu"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 2010,
+   "metin": "⚠️ STM32 watchdog zaman aşımı — bobin çıkışları durduruldu (aktif seans yoktu)",
+   "ham": "⚠️ STM32 watchdog zaman aşımı — bobin çıkışları durduruldu (aktif seans yoktu)"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 2251,
+   "metin": "Aktif seans (1/0)",
+   "ham": "Aktif seans (1/0)"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 2252,
+   "metin": "Bagli bobin sayisi",
+   "ham": "Bagli bobin sayisi"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 2253,
+   "metin": "Calisan bobin sayisi",
+   "ham": "Calisan bobin sayisi"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 2662,
+   "metin": "Telafi STOP'u (START yayını sürerken durdurma geldi)",
+   "ham": "Telafi STOP'u (START yayını sürerken durdurma geldi)"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 2779,
+   "metin": "⚠️ Bobin {{coil_id}}: önceki start komutu reddedildi — sonraki komut geçerli; durumu panelden doğrulayın",
+   "ham": "⚠️ Bobin {{coil_id}}: önceki start komutu reddedildi — sonraki komut geçerli; durumu panelden doğrulayın"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 2802,
+   "metin": "⚠️ Bobin {{coil_id}}: start komutu cihaz tarafından REDDEDİLDİ — bobin ÇALIŞMIYOR",
+   "ham": "⚠️ Bobin {{coil_id}}: start komutu cihaz tarafından REDDEDİLDİ — bobin ÇALIŞMIYOR"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 2817,
+   "metin": "⚠️ Bobin {{coil_id}}: start onayı gelmedi — bobinin gerçekten çalıştığını panelden kontrol edin",
+   "ham": "⚠️ Bobin {{coil_id}}: start onayı gelmedi — bobinin gerçekten çalıştığını panelden kontrol edin"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 2879,
+   "metin": "⚠️ Bobin {{coil_id}}: acil durdurma komutu ESP tarafından REDDEDİLDİ — bobini elle kontrol edin",
+   "ham": "⚠️ Bobin {{coil_id}}: acil durdurma komutu ESP tarafından REDDEDİLDİ — bobini elle kontrol edin"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 2891,
+   "metin": "⚠️ Bobin {{coil_id}}: acil durdurma ESP onayı GELMEDİ — bobini elle kontrol edin",
+   "ham": "⚠️ Bobin {{coil_id}}: acil durdurma ESP onayı GELMEDİ — bobini elle kontrol edin"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 2997,
+   "metin": "⚠️ Bobin {{coil_id}} beklenmedik şekilde çalışıyordu — güvenlik durdurması gönderildi",
+   "ham": "⚠️ Bobin {{coil_id}} beklenmedik şekilde çalışıyordu — güvenlik durdurması gönderildi"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 3373,
+   "metin": "Donanım komutu başarısız",
+   "ham": "Donanım komutu başarısız"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 3382,
+   "metin": "Donanım hazır değil.",
+   "ham": "Donanım hazır değil."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 3402,
+   "metin": "Donanım hazır değil.",
+   "ham": "Donanım hazır değil."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 3498,
+   "metin": "Geçersiz bobin ID (1-8)",
+   "ham": "Geçersiz bobin ID (1-8)"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 3532,
+   "metin": "STM32 donanım kontrolcüsü hazır değil.",
+   "ham": "STM32 donanım kontrolcüsü hazır değil."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 3595,
+   "metin": "STM bobin-1 {{deger1}} Hz çalışırken bobin {{coil_id}} için {{esp_freq}} Hz istendi (≥50× ayrışma) — faz senkronu kilitlenmez, S3 DC-koruma latch'i devreye girebilir. Faz gerekmiyorsa sorun değil; gerekiyorsa frekansları yaklaştırın.",
+   "ham": "STM bobin-1 {{deger1}} Hz çalışırken bobin {{coil_id}} için {{esp_freq}} Hz istendi (≥50× ayrışma) — faz senkronu kilitlenmez, S3 DC-koruma latch'i devreye girebilir. Faz gerekmiyorsa sorun değil; gerekiyorsa frekansları yaklaştırın."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 3667,
+   "metin": "unipolar dizisi {{n}} elemanli olmali (bobin {{deger2}}-{{deger3}}), {{deger4}} geldi",
+   "ham": "unipolar dizisi {{n}} elemanli olmali (bobin {{deger2}}-{{deger3}}), {{deger4}} geldi"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 3780,
+   "metin": "STM bobin-1 {{deger1}} Hz çalışırken bobin {{coil_id}} için {{_b_esp_freq}} Hz istendi (≥50× ayrışma) — faz senkronu kilitlenmez.",
+   "ham": "STM bobin-1 {{deger1}} Hz çalışırken bobin {{coil_id}} için {{_b_esp_freq}} Hz istendi (≥50× ayrışma) — faz senkronu kilitlenmez."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 3851,
+   "metin": "{{neden}}. Sürülen bobinlerin STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın.",
+   "ham": "{{neden}}. Sürülen bobinlerin STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 3882,
+   "metin": "0 Hz seans isteği (A-05) — mandallıyken",
+   "ham": "0 Hz seans isteği (A-05) — mandallıyken"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 3933,
+   "metin": "STM32 donanım kontrolcüsü hazır değil.",
+   "ham": "STM32 donanım kontrolcüsü hazır değil."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 3956,
+   "metin": "seans BAŞLATILMADI",
+   "ham": "seans BAŞLATILMADI"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 3973,
+   "metin": "Firmware kanal sayisi uyusmuyor.",
+   "ham": "Firmware kanal sayisi uyusmuyor."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 3976,
+   "metin": "Seans BAŞLATILMADI:",
+   "ham": "Seans BAŞLATILMADI: "
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 3992,
+   "metin": "Tıbbi kayıt veritabanı açılamadı; seans başlatılamaz. Tedavi kaydı tutulamayacağı için işlem güvenli değildir. Cihazı yeniden başlatın, sorun sürerse teknik desteğe başvurun.",
+   "ham": "Tıbbi kayıt veritabanı açılamadı; seans başlatılamaz. Tedavi kaydı tutulamayacağı için işlem güvenli değildir. Cihazı yeniden başlatın, sorun sürerse teknik desteğe başvurun."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 4000,
+   "metin": "Seans başlatılamaz: {{_db_sebep}}",
+   "ham": "Seans başlatılamaz: {{_db_sebep}}"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 4012,
+   "metin": "Güncelleme uygulanıyor; işlem bitene kadar yeni seans başlatılamaz.",
+   "ham": "Güncelleme uygulanıyor; işlem bitene kadar yeni seans başlatılamaz."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 4024,
+   "metin": "Zaten aktif bir seans var.",
+   "ham": "Zaten aktif bir seans var."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 4251,
+   "metin": "Seans başlatma sırasında durduruldu (bobinler açılmadı).",
+   "ham": "Seans başlatma sırasında durduruldu (bobinler açılmadı)."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 4347,
+   "metin": "Seans hazırlığı sırasında hata oluştu; seans BAŞLATILMADI",
+   "ham": "Seans hazırlığı sırasında hata oluştu; seans BAŞLATILMADI"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 4348,
+   "metin": "bobinlere STOP gönderildi. Yeniden deneyin; sürerse teknik desteğe başvurun.",
+   "ham": "bobinlere STOP gönderildi. Yeniden deneyin; sürerse teknik desteğe başvurun."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 4397,
+   "metin": "Bobin sürüşü sırasında hata oluştu; seans BAŞLATILMADI",
+   "ham": "Bobin sürüşü sırasında hata oluştu; seans BAŞLATILMADI"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 4398,
+   "metin": "sürülen bobinler durduruldu. Bağlantıyı kontrol edip yeniden deneyin.",
+   "ham": "sürülen bobinler durduruldu. Bağlantıyı kontrol edip yeniden deneyin."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 4431,
+   "metin": "Hiçbir bobin komutu kabul etmedi; seans BAŞLATILMADI.",
+   "ham": "Hiçbir bobin komutu kabul etmedi; seans BAŞLATILMADI. "
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 4448,
+   "metin": "Seans başlatma sürerken durduruldu; bu seans BAŞLATILMADI.",
+   "ham": "Seans başlatma sürerken durduruldu; bu seans BAŞLATILMADI."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 4507,
+   "metin": "📄 Seans alan kaydı başladı: {{_csv_yolu}}",
+   "ham": "📄 Seans alan kaydı başladı: {{_csv_yolu}}"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 4509,
+   "metin": "⚠️ Seans alan kaydı (CSV) açılamadı — tedavi etkilenmedi",
+   "ham": "⚠️ Seans alan kaydı (CSV) açılamadı — tedavi etkilenmedi"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 4548,
+   "metin": "Sistem bağlantısı yok — ESP bobinleri {{esp_coils}} aktif OLMAYABİLİR (STM bobinleri çalışıyor).",
+   "ham": "Sistem bağlantısı yok — ESP bobinleri {{esp_coils}} aktif OLMAYABİLİR (STM bobinleri çalışıyor)."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 4695,
+   "metin": "⚠️ {{kaynak}}: bobin(ler) {{deger2}} için donanım STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da bobinleri elle kontrol edin.",
+   "ham": "⚠️ {{kaynak}}: bobin(ler) {{deger2}} için donanım STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da bobinleri elle kontrol edin."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 4861,
+   "metin": "Sahipsiz bobin durdurması",
+   "ham": "Sahipsiz bobin durdurması"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 5156,
+   "metin": "Süre doldu — otomatik durdurma",
+   "ham": "Süre doldu — otomatik durdurma"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 5404,
+   "metin": "olculen alan tazelik denetimi hatasi",
+   "ham": "olculen alan tazelik denetimi hatasi"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 5706,
+   "metin": "Aktif seans yok. Çalışan bobin kalmasın diye STOP gönderildi.",
+   "ham": "Aktif seans yok. Çalışan bobin kalmasın diye STOP gönderildi."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 5820,
+   "metin": "Seans durduruldu.",
+   "ham": "Seans durduruldu."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 5852,
+   "metin": "Bobin {{deger1}} için donanım STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın.",
+   "ham": "Bobin {{deger1}} için donanım STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 6562,
+   "metin": "Geri yükleme bu cihazda sürüyor — bitince kayıtlar görünür. İşlemi tekrarlamayın ve uygulamayı yeniden başlatmayın; birkaç dakika sonra Seans Geçmişi'ni yenileyin.",
+   "ham": "Geri yükleme bu cihazda sürüyor — bitince kayıtlar görünür. İşlemi tekrarlamayın ve uygulamayı yeniden başlatmayın; birkaç dakika sonra Seans Geçmişi'ni yenileyin."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 6567,
+   "metin": "Bu cihazda bir yedek alma işlemi sürüyor — bitmesini bekleyin (büyük klinikte birkaç dakika sürebilir); işlemi tekrarlamayın.",
+   "ham": "Bu cihazda bir yedek alma işlemi sürüyor — bitmesini bekleyin (büyük klinikte birkaç dakika sürebilir); işlemi tekrarlamayın."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 6570,
+   "metin": "Geri yükleme bu cihazda sürüyor — seans BAŞLATILMADI; geri yükleme bitince yeniden başlatın.",
+   "ham": "Geri yükleme bu cihazda sürüyor — seans BAŞLATILMADI; geri yükleme bitince yeniden başlatın."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 6573,
+   "metin": "Tedavi seansı sürüyor — geri yükleme cihazdaki tüm tedavi kayıtlarını değiştirir (süren seansın kaydı da silinirdi); önce seansı durdurun. Hiçbir kayıt değişmedi.",
+   "ham": "Tedavi seansı sürüyor — geri yükleme cihazdaki tüm tedavi kayıtlarını değiştirir (süren seansın kaydı da silinirdi); önce seansı durdurun. Hiçbir kayıt değişmedi."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 6697,
+   "metin": "Yedeği cihaza kaydetme yalnız cihazın kendi ekranından yapılır; bu istemcide dosya indirilir.",
+   "ham": "Yedeği cihaza kaydetme yalnız cihazın kendi ekranından yapılır; bu istemcide dosya indirilir."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 6722,
+   "metin": "Hasta kayıtları okunamadı (hasta veritabanı açılamıyor) — yedek OLUŞTURULMADI. Uygulamayı yeniden başlatın; sürerse teknik desteğe başvurun.",
+   "ham": "Hasta kayıtları okunamadı (hasta veritabanı açılamıyor) — yedek OLUŞTURULMADI. Uygulamayı yeniden başlatın; sürerse teknik desteğe başvurun."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 6799,
+   "metin": "Yedek dosyası cihaza yazılamadı ya da doğrulanamadı — yedek OLUŞTURULMADI. Disk alanını ve masaüstü klasörünün yazılabilir olduğunu denetleyin.",
+   "ham": "Yedek dosyası cihaza yazılamadı ya da doğrulanamadı — yedek OLUŞTURULMADI. Disk alanını ve masaüstü klasörünün yazılabilir olduğunu denetleyin."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 6869,
+   "metin": "Bu cihazda kayıt var: geri yükleme (cihazdaki tüm tedavi kayıtlarını değiştirir) yalnız cihazın kendi ekranından yapılabilir.",
+   "ham": "Bu cihazda kayıt var: geri yükleme (cihazdaki tüm tedavi kayıtlarını değiştirir) yalnız cihazın kendi ekranından yapılabilir."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 6938,
+   "metin": "Bu cihazın hasta kayıtları okunamadı (hasta veritabanı açılamıyor) — geri yükleme YAPILMADI, cihazdaki kayıtlar DEĞİŞMEDİ. Uygulamayı yeniden başlatın; sürerse teknik desteğe başvurun.",
+   "ham": "Bu cihazın hasta kayıtları okunamadı (hasta veritabanı açılamıyor) — geri yükleme YAPILMADI, cihazdaki kayıtlar DEĞİŞMEDİ. Uygulamayı yeniden başlatın; sürerse teknik desteğe başvurun."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 6973,
+   "metin": "Operatör seçin — dolu cihazda geri yükleme için önce üst bardan hangi hekim olduğunuzu seçin.",
+   "ham": "Operatör seçin — dolu cihazda geri yükleme için önce üst bardan hangi hekim olduğunuzu seçin."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 6981,
+   "metin": "Bu cihazda zaten kayıt var. Geri yükleme bu cihazdaki TÜM tedavi kayıtlarını (seanslar, bobin koşuları, sensör verisi, seans olayları, AI analizleri) SİLER ve yedektekilerle değiştirir. Hasta kartları SİLİNMEZ: yedekte olmayan hastaların kartı kalır ama bu cihazdaki seans ve analiz geçmişleri silinir. Onaylamak için {\"confirm\":\"REPLACE_ALL\"} gönderin.",
+   "ham": "Bu cihazda zaten kayıt var. Geri yükleme bu cihazdaki TÜM tedavi kayıtlarını (seanslar, bobin koşuları, sensör verisi, seans olayları, AI analizleri) SİLER ve yedektekilerle değiştirir. Hasta kartları SİLİNMEZ: yedekte olmayan hastaların kartı kalır ama bu cihazdaki seans ve analiz geçmişleri silinir. Onaylamak için {\"confirm\":\"REPLACE_ALL\"} gönderin."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 7028,
+   "metin": "Geri yükleme YAPILAMADI — tedavi veritabanı yazılamadı (meşgul ya da disk hatası). Cihazdaki kayıtlar DEĞİŞMEDİ. Veritabanını kullanan işlem (bakım, ikinci uygulama) bitince geri yüklemeyi yeniden başlatabilirsiniz.",
+   "ham": "Geri yükleme YAPILAMADI — tedavi veritabanı yazılamadı (meşgul ya da disk hatası). Cihazdaki kayıtlar DEĞİŞMEDİ. Veritabanını kullanan işlem (bakım, ikinci uygulama) bitince geri yüklemeyi yeniden başlatabilirsiniz."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 7114,
+   "metin": "Yedekte olmayan {{deger1}} hastanın kartı korundu; bu hastaların bu cihazdaki seans ve analiz geçmişi geri yüklemeyle silindi (yedekte yoktu).",
+   "ham": "Yedekte olmayan {{deger1}} hastanın kartı korundu; bu hastaların bu cihazdaki seans ve analiz geçmişi geri yüklemeyle silindi (yedekte yoktu)."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 7121,
+   "metin": "{{_basarisiz}} hastanın kartı içe aktarılamadı (hasta veritabanı yazılamadı) — tedavi geçmişi geri yüklendi ama bu hastaların kartı yok; sorun giderilince aynı yedeği yeniden geri yükleyin.",
+   "ham": "{{_basarisiz}} hastanın kartı içe aktarılamadı (hasta veritabanı yazılamadı) — tedavi geçmişi geri yüklendi ama bu hastaların kartı yok; sorun giderilince aynı yedeği yeniden geri yükleyin. "
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 7227,
+   "metin": "Acil Durdurma",
+   "ham": "Acil Durdurma"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 7456,
+   "metin": "Acil Durdurma",
+   "ham": "Acil Durdurma"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 7513,
+   "metin": "Acil durdurma uygulandı",
+   "ham": "Acil durdurma uygulandı"
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 7539,
+   "metin": "Kapanış durdurması yalnız bu bilgisayardaki launcher'dan çağrılabilir.",
+   "ham": "Kapanış durdurması yalnız bu bilgisayardaki launcher'dan çağrılabilir."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 7542,
+   "metin": "Kapanış durdurması JSON gövde ister: {\"onay\": true}.",
+   "ham": "Kapanış durdurması JSON gövde ister: {\"onay\": true}."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 7548,
+   "metin": "Kapanış durdurması onay ister: {\"onay\": true}.",
+   "ham": "Kapanış durdurması onay ister: {\"onay\": true}."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 7558,
+   "metin": "🔒 Uygulama seans / bobin çalışırken kapatıldı — bobinler durduruldu, ACİL DURDUR mandalı kuruldu. Yeniden başlatmadan önce bobinleri kontrol edin ve \"Sıfırla\".",
+   "ham": "🔒 Uygulama seans / bobin çalışırken kapatıldı — bobinler durduruldu, ACİL DURDUR mandalı kuruldu. Yeniden başlatmadan önce bobinleri kontrol edin ve \"Sıfırla\"."
+  },
+  {
+   "dosya": "apps/backend/servers/api_server.py",
+   "satir": 7627,
+   "metin": "Acil durdurma mandalı SIFIRLANDI — bobinler başlatılmadı; tedavi için başlatmayı ayrıca verin.",
+   "ham": "Acil durdurma mandalı SIFIRLANDI — bobinler başlatılmadı; tedavi için başlatmayı ayrıca verin."
+  },
+  {
+   "dosya": "apps/backend/servers/efield_live.py",
+   "satir": 328,
+   "metin": "E-alanı döngü hatası",
+   "ham": "E-alanı döngü hatası"
+  },
+  {
+   "dosya": "apps/backend/servers/firmware_manager.py",
+   "satir": 120,
+   "metin": "firmware uyum varlığı bir JSON nesnesi değil",
+   "ham": "firmware uyum varlığı bir JSON nesnesi değil"
+  },
+  {
+   "dosya": "apps/backend/servers/firmware_manager.py",
+   "satir": 154,
+   "metin": "manifest firmware url'i vermiyor",
+   "ham": "manifest firmware url'i vermiyor"
+  },
+  {
+   "dosya": "apps/backend/servers/firmware_manager.py",
+   "satir": 156,
+   "metin": "manifest SHA256 vermiyor — doğrulanmamış firmware YAKILMAZ",
+   "ham": "manifest SHA256 vermiyor — doğrulanmamış firmware YAKILMAZ"
+  },
+  {
+   "dosya": "apps/backend/servers/firmware_manager.py",
+   "satir": 162,
+   "metin": "firmware url'i reddedildi: {{neden}}",
+   "ham": "firmware url'i reddedildi: {{neden}}"
+  },
+  {
+   "dosya": "apps/backend/servers/firmware_manager.py",
+   "satir": 237,
+   "metin": "AKTİF SEANS VAR (süreç içi) — yakma MCU'yu resetler, bobinler ANİDEN durur; yakılmaz",
+   "ham": "AKTİF SEANS VAR (süreç içi) — yakma MCU'yu resetler, bobinler ANİDEN durur; yakılmaz"
+  },
+  {
+   "dosya": "apps/backend/servers/firmware_manager.py",
+   "satir": 241,
+   "metin": "BOBİN SÜRÜLÜYOR (süreç içi, STM): {{deger1}} — yakılmaz",
+   "ham": "BOBİN SÜRÜLÜYOR (süreç içi, STM): {{deger1}} — yakılmaz"
+  },
+  {
+   "dosya": "apps/backend/servers/firmware_manager.py",
+   "satir": 243,
+   "metin": "AKTİF TEDAVİ / SÜRÜLEN BOBİN VAR (süreç içi canlı durum) — yakılmaz",
+   "ham": "AKTİF TEDAVİ / SÜRÜLEN BOBİN VAR (süreç içi canlı durum) — yakılmaz"
+  },
+  {
+   "dosya": "apps/backend/servers/firmware_manager.py",
+   "satir": 245,
+   "metin": "seans/bobin durumu süreç içinden OKUNAMADI ({{__name__}}) — yakılmaz",
+   "ham": "seans/bobin durumu süreç içinden OKUNAMADI ({{__name__}}) — yakılmaz"
+  },
+  {
+   "dosya": "apps/backend/servers/firmware_manager.py",
+   "satir": 246,
+   "metin": "seans yok, bobin sürülmüyor (süreç içi)",
+   "ham": "seans yok, bobin sürülmüyor (süreç içi)"
+  },
+  {
+   "dosya": "apps/backend/servers/firmware_manager.py",
+   "satir": 273,
+   "metin": "manifest okunamadı (internet yok ya da sunucu erişilemez) — donanım güncellemesi kontrolü ERTELENDİ",
+   "ham": "manifest okunamadı (internet yok ya da sunucu erişilemez) — donanım güncellemesi kontrolü ERTELENDİ"
+  },
+  {
+   "dosya": "apps/backend/servers/firmware_manager.py",
+   "satir": 315,
+   "metin": "— otomatik yakma KAPALI (Y1: yalnız açık PEMF_FW_AUTO_UPDATE=1 yakar): yalnız ölçüldü, kart DEĞİŞTİRİLMEDİ",
+   "ham": " — otomatik yakma KAPALI (Y1: yalnız açık PEMF_FW_AUTO_UPDATE=1 yakar): yalnız ölçüldü, kart DEĞİŞTİRİLMEDİ"
+  },
+  {
+   "dosya": "apps/backend/servers/firmware_manager.py",
+   "satir": 317,
+   "metin": "STM bağlı değil (kart sürümü okunamadı) — {{gerekce}}",
+   "ham": "STM bağlı değil (kart sürümü okunamadı) — {{gerekce}}"
+  },
+  {
+   "dosya": "apps/backend/servers/firmware_manager.py",
+   "satir": 377,
+   "metin": "yakıldı ama kart hedef sürümü bildirmedi: kart {{deger1}}, hedef {{hedef_surum}} — yayınlanan ikilinin banner sürümü uyum varlığındaki sürümle UYUŞMUYOR (yayın hatası); sonraki açılışta yeniden denenir",
+   "ham": "yakıldı ama kart hedef sürümü bildirmedi: kart {{deger1}}, hedef {{hedef_surum}} — yayınlanan ikilinin banner sürümü uyum varlığındaki sürümle UYUŞMUYOR (yayın hatası); sonraki açılışta yeniden denenir"
+  },
+  {
+   "dosya": "apps/backend/servers/live_state.py",
+   "satir": 403,
+   "metin": "(ya da ⚡ Sürüş Kipi'nden bu bobini Unipolar yapın)",
+   "ham": " (ya da ⚡ Sürüş Kipi'nden bu bobini Unipolar yapın)"
+  },
+  {
+   "dosya": "apps/backend/servers/live_state.py",
+   "satir": 405,
+   "metin": "Duty'yi %{{tavan}} veya altına indirin{{secenek}}, sonra 'Sıfırla'ya basın ve yeniden başlatın.",
+   "ham": "Duty'yi %{{tavan}} veya altına indirin{{secenek}}, sonra 'Sıfırla'ya basın ve yeniden başlatın."
+  },
+  {
+   "dosya": "apps/backend/servers/live_state.py",
+   "satir": 407,
+   "metin": "Duty'yi %{{tavan}} veya altına indirip yeniden başlatın{{secenek}}.",
+   "ham": "Duty'yi %{{tavan}} veya altına indirip yeniden başlatın{{secenek}}."
+  },
+  {
+   "dosya": "apps/backend/servers/live_state.py",
+   "satir": 409,
+   "metin": "Bobin {{deger1}} {{kip}} kipte en fazla %{{tavan}} çalışabilir; %{{deger4}} kabul edilmedi{{deger5}}. {{eylem}}",
+   "ham": "Bobin {{deger1}} {{kip}} kipte en fazla %{{tavan}} çalışabilir; %{{deger4}} kabul edilmedi{{deger5}}. {{eylem}}"
+  },
+  {
+   "dosya": "apps/backend/servers/live_state.py",
+   "satir": 740,
+   "metin": "Acil Durdurma",
+   "ham": "Acil Durdurma"
+  },
+  {
+   "dosya": "apps/backend/servers/seans_alan_kaydi.py",
+   "satir": 128,
+   "metin": "yeni seans başladı",
+   "ham": "yeni seans başladı"
+  },
+  {
+   "dosya": "apps/backend/servers/seans_alan_kaydi.py",
+   "satir": 141,
+   "metin": "# PEMF seans alan kaydı",
+   "ham": "# PEMF seans alan kaydı"
+  },
+  {
+   "dosya": "apps/backend/servers/seans_alan_kaydi.py",
+   "satir": 147,
+   "metin": "alan_mt = O SANIYENIN TEPE degeri (anlik degil)",
+   "ham": "alan_mt = O SANIYENIN TEPE degeri (anlik degil)"
+  },
+  {
+   "dosya": "apps/backend/utils/estop_mandali.py",
+   "satir": 69,
+   "metin": "ACİL DURDURMA MANDALLI — yeni başlatma reddedildi. Bobinleri kontrol edin, ekrandaki 'Sıfırla' ile mandalı kaldırın ve başlatmayı yeniden verin.",
+   "ham": "ACİL DURDURMA MANDALLI — yeni başlatma reddedildi. Bobinleri kontrol edin, ekrandaki 'Sıfırla' ile mandalı kaldırın ve başlatmayı yeniden verin."
+  },
+  {
+   "dosya": "apps/backend/utils/estop_mandali.py",
+   "satir": 72,
+   "metin": "Komut bir durdurma ya da acil durdurmadan ÖNCEYE ait (bayat sürüş niyeti) — uygulanmadı. Gerekirse yeniden başlatın.",
+   "ham": "Komut bir durdurma ya da acil durdurmadan ÖNCEYE ait (bayat sürüş niyeti) — uygulanmadı. Gerekirse yeniden başlatın."
+  },
+  {
+   "dosya": "apps/backend/utils/estop_mandali.py",
+   "satir": 74,
+   "metin": "Hedef gözlemi bir hedef-kaybı durdurmasından ÖNCEYE ait (bayat gözlem) — sürülmedi.",
+   "ham": "Hedef gözlemi bir hedef-kaybı durdurmasından ÖNCEYE ait (bayat gözlem) — sürülmedi."
+  },
+  {
+   "dosya": "apps/backend/utils/estop_mandali.py",
+   "satir": 76,
+   "metin": "Backend KAPANIYOR — yeni başlatma reddedildi (bobinler durduruluyor).",
+   "ham": "Backend KAPANIYOR — yeni başlatma reddedildi (bobinler durduruluyor)."
+  },
+  {
+   "dosya": "apps/backend/utils/estop_mandali.py",
+   "satir": 250,
+   "metin": "Mandal dosyası yazılamadı{{yer}} — yeniden başlatmada mandal {{sonuc}}; dosya iznini düzeltin.",
+   "ham": "Mandal dosyası yazılamadı{{yer}} — yeniden başlatmada mandal {{sonuc}}; dosya iznini düzeltin."
+  },
+  {
+   "dosya": "apps/backend/utils/firmware_yakma_penceresi.py",
+   "satir": 27,
+   "metin": "STM32 firmware'i YAZILIYOR (donanım güncellemesi) — bitene kadar bobin başlatılamaz; ACİL DURDUR çalışır.",
+   "ham": "STM32 firmware'i YAZILIYOR (donanım güncellemesi) — bitene kadar bobin başlatılamaz; ACİL DURDUR çalışır."
+  },
+  {
+   "dosya": "apps/backend/utils/stm32_kimlik.py",
+   "satir": 182,
+   "metin": "Cihaz kartının yazılımı bu uygulama sürümüyle uyumsuz — bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET).",
+   "ham": "Cihaz kartının yazılımı bu uygulama sürümüyle uyumsuz — bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET)."
+  },
+  {
+   "dosya": "apps/backend/utils/stm32_kimlik.py",
+   "satir": 186,
+   "metin": "Cihaz kartı doğrulanamadı. Kartın üzerindeki SİYAH sıfırlama düğmesine bir kez basın (mavi değil).",
+   "ham": "Cihaz kartı doğrulanamadı. Kartın üzerindeki SİYAH sıfırlama düğmesine bir kez basın (mavi değil)."
+  },
+  {
+   "dosya": "apps/backend/utils/stm32_kimlik.py",
+   "satir": 193,
+   "metin": "Cihaz kartı komutları reddediyor — kartın yazılımı bu uygulama sürümüyle uyumsuz; bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET).",
+   "ham": "Cihaz kartı komutları reddediyor — kartın yazılımı bu uygulama sürümüyle uyumsuz; bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET)."
+  },
+  {
+   "dosya": "apps/backend/utils/stm32_kimlik.py",
+   "satir": 201,
+   "metin": "Cihaz kartı STOP komutunu reddetti — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın.",
+   "ham": "Cihaz kartı STOP komutunu reddetti — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın."
+  },
+  {
+   "dosya": "apps/backend/utils/stm32_kimlik.py",
+   "satir": 234,
+   "metin": "Kart uygulamanin {{STM_PAKET_BOYU}} baytlik paketini SISTEMATIK reddediyor (arada STM_OK olmadan ard arda {{crc}} STM_NACK: CRC)",
+   "ham": "Kart uygulamanin {{STM_PAKET_BOYU}} baytlik paketini SISTEMATIK reddediyor (arada STM_OK olmadan ard arda {{crc}} STM_NACK: CRC)"
+  },
+  {
+   "dosya": "apps/backend/utils/stm32_kimlik.py",
+   "satir": 236,
+   "metin": "; kartin kimligi: {{ham}}",
+   "ham": "; kartin kimligi: {{ham}}"
+  },
+  {
+   "dosya": "apps/backend/utils/stm32_kimlik.py",
+   "satir": 237,
+   "metin": ". Karttaki firmware farkli paket boyu bekliyor (or. 120 baytlik eski saha imaji). HICBIR bobin calismaz. Yapilacak: kart bu surumun firmware'i ile yakilmali (docs/SAHA-ISLERI-REHBERI.md B-2; scripts/stm_yak.py — dogrulama: el sikismada STM_OK, CRC NACK yok).",
+   "ham": ". Karttaki firmware farkli paket boyu bekliyor (or. 120 baytlik eski saha imaji). HICBIR bobin calismaz. Yapilacak: kart bu surumun firmware'i ile yakilmali (docs/SAHA-ISLERI-REHBERI.md B-2; scripts/stm_yak.py — dogrulama: el sikismada STM_OK, CRC NACK yok)."
+  },
+  {
+   "dosya": "apps/backend/utils/stm32_kimlik.py",
+   "satir": 260,
+   "metin": "Kartin firmware kimligi OKUNAMADI: kart resetlenmeden baglandi (STM_READY gorulmedi; el sikisma sifir-duty yoklamasina STM_OK ile tamamlandi). Uyum DOGRULANAMADI — seans engellenmez; kart paketleri reddederse sistematik red seansi durdurur. Kimligi okutmak icin kartin RESET dugmesine basin ya da backend kapaliyken python scripts/stm_firmware_kimligi.py calistirin.",
+   "ham": "Kartin firmware kimligi OKUNAMADI: kart resetlenmeden baglandi (STM_READY gorulmedi; el sikisma sifir-duty yoklamasina STM_OK ile tamamlandi). Uyum DOGRULANAMADI — seans engellenmez; kart paketleri reddederse sistematik red seansi durdurur. Kimligi okutmak icin kartin RESET dugmesine basin ya da backend kapaliyken python scripts/stm_firmware_kimligi.py calistirin."
+  },
+  {
+   "dosya": "apps/backend/utils/stm32_kimlik.py",
+   "satir": 269,
+   "metin": "Kart el sikisma dogrulamasina yanit vermedi (kimlik sorgusu yaniti, STM_OK ya da NACK yok) — uyum DOGRULANAMADI. Kartin RESET dugmesine basin ya da backend kapaliyken python scripts/stm_firmware_kimligi.py calistirin.",
+   "ham": "Kart el sikisma dogrulamasina yanit vermedi (kimlik sorgusu yaniti, STM_OK ya da NACK yok) — uyum DOGRULANAMADI. Kartin RESET dugmesine basin ya da backend kapaliyken python scripts/stm_firmware_kimligi.py calistirin."
+  },
+  {
+   "dosya": "apps/backend/utils/stm32_kimlik.py",
+   "satir": 347,
+   "metin": "Kartin firmware kimligi OKUNAMADI (STM_READY satiri taninmadi). Eski ya da yabanci bir firmware olabilir. Dogrulama: python scripts/stm_firmware_kimligi.py",
+   "ham": "Kartin firmware kimligi OKUNAMADI (STM_READY satiri taninmadi). Eski ya da yabanci bir firmware olabilir. Dogrulama: python scripts/stm_firmware_kimligi.py"
+  },
+  {
+   "dosya": "apps/backend/utils/stm32_kimlik.py",
+   "satir": 357,
+   "metin": "Kart {{kanal}} kanalli firmware kosuyor ({{surum}}), uygulama {{paket_kanal}} kanalli paket gonderiyor. Paket genisligi birebir olmak ZORUNDA — aksi halde firmware her paketi NACK'ler ve HICBIR bobin calismaz. Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin.",
+   "ham": "Kart {{kanal}} kanalli firmware kosuyor ({{surum}}), uygulama {{paket_kanal}} kanalli paket gonderiyor. Paket genisligi birebir olmak ZORUNDA — aksi halde firmware her paketi NACK'ler ve HICBIR bobin calismaz. Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin."
+  },
+  {
+   "dosya": "apps/backend/utils/stm32_kimlik.py",
+   "satir": 367,
+   "metin": "Kart {{fw_boyu}} baytlik paket bekledigini bildiriyor ({{surum}}, proto={{protokol}}), uygulama {{paket_boyu}} baytlik paket gonderiyor. Paket boyu birebir olmak ZORUNDA — aksi halde firmware her paketi NACK'ler ve HICBIR bobin calismaz. Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin.",
+   "ham": "Kart {{fw_boyu}} baytlik paket bekledigini bildiriyor ({{surum}}, proto={{protokol}}), uygulama {{paket_boyu}} baytlik paket gonderiyor. Paket boyu birebir olmak ZORUNDA — aksi halde firmware her paketi NACK'ler ve HICBIR bobin calismaz. Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin."
+  },
+  {
+   "dosya": "apps/backend/utils/stm32_kimlik.py",
+   "satir": 373,
+   "metin": "Kart {{kanal}} kanalli ama {{fw_boyu}} baytlik paket bekleyen ESKI bir firmware kosuyor ({{surum}}; banner'da surus kipi alani 'uni=' YOK — 2026-09-10/11 surumu), uygulama {{paket_boyu}} baytlik paket gonderiyor. Paket boyu birebir olmak ZORUNDA — aksi halde firmware her paketi NACK'ler ve HICBIR bobin calismaz. Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin.",
+   "ham": "Kart {{kanal}} kanalli ama {{fw_boyu}} baytlik paket bekleyen ESKI bir firmware kosuyor ({{surum}}; banner'da surus kipi alani 'uni=' YOK — 2026-09-10/11 surumu), uygulama {{paket_boyu}} baytlik paket gonderiyor. Paket boyu birebir olmak ZORUNDA — aksi halde firmware her paketi NACK'ler ve HICBIR bobin calismaz. Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin."
+  },
+  {
+   "dosya": "apps/backend/utils/stm32_kimlik.py",
+   "satir": 385,
+   "metin": "Banner paket boyunu soylemiyor (120 ve 121 B ayni banner'i basar); uyum kartin {{paket_boyu}} B pakete yanitiyla (STM_OK / CRC NACK) DOGRULANACAK.",
+   "ham": "Banner paket boyunu soylemiyor (120 ve 121 B ayni banner'i basar); uyum kartin {{paket_boyu}} B pakete yanitiyla (STM_OK / CRC NACK) DOGRULANACAK."
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 183,
+   "metin": "backend kapalı (bağlantı reddedildi — portta kimse dinlemiyor, kimse bobin sürmüyor) — güvenli",
+   "ham": "backend kapalı (bağlantı reddedildi — portta kimse dinlemiyor, kimse bobin sürmüyor) — güvenli"
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 186,
+   "metin": "Backend durumu DOĞRULANAMADI (`/api/health` 5xx / 4xx / zaman aşımı / JSON-dışı yanıt): o portta bir süreç VAR ama seans/bobin durumu okunamıyor. Doğrulanamayan durumda yakılmaz — backend'i kapatıp tekrar deneyin.",
+   "ham": "Backend durumu DOĞRULANAMADI (`/api/health` 5xx / 4xx / zaman aşımı / JSON-dışı yanıt): o portta bir süreç VAR ama seans/bobin durumu okunamıyor. Doğrulanamayan durumda yakılmaz — backend'i kapatıp tekrar deneyin."
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 191,
+   "metin": "`/api/health` yanıtı seans bilgisini (`sessionActive`) vermiyor — o portta PEMF backend'i olmayan bir servis olabilir ya da istek loopback değil. Doğrulanamayan durumda yakılmaz.",
+   "ham": "`/api/health` yanıtı seans bilgisini (`sessionActive`) vermiyor — o portta PEMF backend'i olmayan bir servis olabilir ya da istek loopback değil. Doğrulanamayan durumda yakılmaz."
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 196,
+   "metin": "AKTİF SEANS VAR. Yakma MCU'yu resetler ve bobinler ANİDEN durur; hasta üzerindeyken bu kabul edilemez. Seansı bitirip tekrar deneyin.",
+   "ham": "AKTİF SEANS VAR. Yakma MCU'yu resetler ve bobinler ANİDEN durur; hasta üzerindeyken bu kabul edilemez. Seansı bitirip tekrar deneyin."
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 202,
+   "metin": "Bobin durumu DOĞRULANAMADI (`/api/dashboard-snapshot` okunamadı). Doğrulanamayan durumda yakılmaz — backend'i kapatıp tekrar deneyin.",
+   "ham": "Bobin durumu DOĞRULANAMADI (`/api/dashboard-snapshot` okunamadı). Doğrulanamayan durumda yakılmaz — backend'i kapatıp tekrar deneyin."
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 209,
+   "metin": "BOBİN SÜRÜLÜYOR: {{calisan}}. Hepsini durdurmadan yakılmaz.",
+   "ham": "BOBİN SÜRÜLÜYOR: {{calisan}}. Hepsini durdurmadan yakılmaz."
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 210,
+   "metin": "seans yok, bobin sürülmüyor",
+   "ham": "seans yok, bobin sürülmüyor"
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 313,
+   "metin": "kart kendini doğruladı (Y68 kimlik beyanı / paket kabulü — STM_OK)",
+   "ham": "kart kendini doğruladı (Y68 kimlik beyanı / paket kabulü — STM_OK)"
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 314,
+   "metin": "kart uyumu doğrulanamadı (yalnız banner)",
+   "ham": "kart uyumu doğrulanamadı (yalnız banner)"
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 319,
+   "metin": "{{PORT_ACILAMADI_ONEKI}} — kart kimliği okunamadı, uyum DOĞRULANAMADI. Port başka bir süreçte açık (backend çalışıyorsa portu o tutar: kapatıp yeniden deneyin). Ayrıntı: {{deger2}}",
+   "ham": "{{PORT_ACILAMADI_ONEKI}} — kart kimliği okunamadı, uyum DOĞRULANAMADI. Port başka bir süreçte açık (backend çalışıyorsa portu o tutar: kapatıp yeniden deneyin). Ayrıntı: {{deger2}}"
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 324,
+   "metin": "STM_READY satırı hiç görülmedi (karta RESET atmayı deneyin)",
+   "ham": "STM_READY satırı hiç görülmedi (karta RESET atmayı deneyin)"
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 368,
+   "metin": "seans/bobin durumu DOĞRULANAMADI ({{__name__}}) — yakılmaz",
+   "ham": "seans/bobin durumu DOĞRULANAMADI ({{__name__}}) — yakılmaz"
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 371,
+   "metin": "donanım: {{aciklama}}",
+   "ham": "donanım: {{aciklama}}"
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 408,
+   "metin": "yeniden başlatma:",
+   "ham": "yeniden başlatma: "
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 420,
+   "metin": "{{neden}} VE eski firmware'e GERİ DÖNÜŞ YAKILAMADI — kart ne yeni ne eski firmware'le doğrulanmış. ST-Link ile ELLE kurtarın: yedek {{yedek}} → {{YAKMA_ADRESI}}. Yakıcı: {{deger4}}",
+   "ham": "{{neden}} VE eski firmware'e GERİ DÖNÜŞ YAKILAMADI — kart ne yeni ne eski firmware'le doğrulanmış. ST-Link ile ELLE kurtarın: yedek {{yedek}} → {{YAKMA_ADRESI}}. Yakıcı: {{deger4}}"
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 427,
+   "metin": "GERİ DÖNÜŞ: eski firmware yakıldı",
+   "ham": "GERİ DÖNÜŞ: eski firmware yakıldı"
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 434,
+   "metin": "geri dönüş yeniden başlatma:",
+   "ham": "geri dönüş yeniden başlatma: "
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 438,
+   "metin": "{{neden}} VE eski firmware'e GERİ DÖNÜŞ TUTMADI ({{gd_bilgi}}) — kart ne yeni ne eski firmware'le doğrulanmış. Kartı sahaya TAKMAYIN; ST-Link ile ELLE kurtarın: yedek {{yedek}} → {{YAKMA_ADRESI}}, ardından tam geri okuma.",
+   "ham": "{{neden}} VE eski firmware'e GERİ DÖNÜŞ TUTMADI ({{gd_bilgi}}) — kart ne yeni ne eski firmware'le doğrulanmış. Kartı sahaya TAKMAYIN; ST-Link ile ELLE kurtarın: yedek {{yedek}} → {{YAKMA_ADRESI}}, ardından tam geri okuma."
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 454,
+   "metin": "{{neden}}; eski firmware yakıldı ama kart KİMLİĞİNİ söylemedi ({{g_sebep}}) — geri dönüş DOĞRULANAMADI. Kartı yeniden başlatıp açılış satırını kontrol edin; açılmıyorsa ST-Link ile yedek {{yedek}} → {{YAKMA_ADRESI}}.",
+   "ham": "{{neden}}; eski firmware yakıldı ama kart KİMLİĞİNİ söylemedi ({{g_sebep}}) — geri dönüş DOĞRULANAMADI. Kartı yeniden başlatıp açılış satırını kontrol edin; açılmıyorsa ST-Link ile yedek {{yedek}} → {{YAKMA_ADRESI}}."
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 463,
+   "metin": "{{neden}} — eski firmware'e geri dönüldü (kart açılışta: {{g_ham}})",
+   "ham": "{{neden}} — eski firmware'e geri dönüldü (kart açılışta: {{g_ham}})"
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 478,
+   "metin": "kart doğrulaması: {{deger1}} → uyum={{uyumlu}} ({{sebep}})",
+   "ham": "kart doğrulaması: {{deger1}} → uyum={{uyumlu}} ({{sebep}})"
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 485,
+   "metin": "yeni firmware UYUMSUZ ({{sebep}})",
+   "ham": "yeni firmware UYUMSUZ ({{sebep}})"
+  },
+  {
+   "dosya": "apps/backend/utils/stm_yakma.py",
+   "satir": 493,
+   "metin": "yakıldı; geri okuma bayt bayt AYNI; kart kendini doğruladı (Y68 kimlik beyanı / paket kabulü)",
+   "ham": "yakıldı; geri okuma bayt bayt AYNI; kart kendini doğruladı (Y68 kimlik beyanı / paket kabulü)"
+  },
+  {
+   "dosya": "apps/backend/utils/surum_uyumu.py",
+   "satir": 99,
+   "metin": "firmware sürümü ayrıştırılamadı: {{firmware}}",
+   "ham": "firmware sürümü ayrıştırılamadı: {{firmware}}"
+  },
+  {
+   "dosya": "apps/backend/utils/surum_uyumu.py",
+   "satir": 109,
+   "metin": "client {{client}} ↔ firmware {{firmware}} kuralla eşleşti",
+   "ham": "client {{client}} ↔ firmware {{firmware}} kuralla eşleşti"
+  },
+  {
+   "dosya": "apps/backend/utils/surum_uyumu.py",
+   "satir": 113,
+   "metin": "client {{client}} ile firmware {{firmware}} birlikte çalışmıyor ({{deger3}} kuralın hiçbirine uymuyor)",
+   "ham": "client {{client}} ile firmware {{firmware}} birlikte çalışmıyor ({{deger3}} kuralın hiçbirine uymuyor)"
+  },
+  {
+   "dosya": "apps/backend/utils/surum_uyumu.py",
+   "satir": 170,
+   "metin": "STM bağlı değil — firmware güncellenemez, karar erteleniyor",
+   "ham": "STM bağlı değil — firmware güncellenemez, karar erteleniyor"
+  },
+  {
+   "dosya": "apps/backend/utils/surum_uyumu.py",
+   "satir": 172,
+   "metin": "internet yok — firmware indirilemez, karar erteleniyor",
+   "ham": "internet yok — firmware indirilemez, karar erteleniyor"
+  },
+  {
+   "dosya": "apps/backend/utils/surum_uyumu.py",
+   "satir": 180,
+   "metin": "firmware {{firmware}} → {{yeni_firmware}} ile client {{client}} uyumlu olacak",
+   "ham": "firmware {{firmware}} → {{yeni_firmware}} ile client {{client}} uyumlu olacak"
+  },
+  {
+   "dosya": "apps/backend/utils/surum_uyumu.py",
+   "satir": 189,
+   "metin": "ileri gidilemedi; client {{client}} → {{onceki_client}} ile mevcut firmware {{firmware}} uyumlu olacak",
+   "ham": "ileri gidilemedi; client {{client}} → {{onceki_client}} ile mevcut firmware {{firmware}} uyumlu olacak"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilCard.tsx",
+   "satir": 25,
+   "metin": "Kablolu senkron",
+   "ham": "Kablolu senkron"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilCard.tsx",
+   "satir": 25,
+   "metin": "Kablosuz senkron",
+   "ham": "Kablosuz senkron"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilCard.tsx",
+   "satir": 32,
+   "metin": "Bobin",
+   "ham": "Bobin "
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilCard.tsx",
+   "satir": 57,
+   "metin": "Alan",
+   "ham": "Alan"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilCard.tsx",
+   "satir": 59,
+   "metin": "sensör doğrulanamadı",
+   "ham": "sensör doğrulanamadı"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 160,
+   "metin": "Süre girilmedi — bobin klinik gözetimsiz sınıra kadar çalışır (sunucu tarafında uygulanır); süre belirtmeniz önerilir.",
+   "ham": "Süre girilmedi — bobin klinik gözetimsiz sınıra kadar çalışır (sunucu tarafında uygulanır); süre belirtmeniz önerilir."
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 183,
+   "metin": "DURDURMA ONAYLANAMADI — bobin HÂLÂ ÇALIŞIYOR olabilir. ACİL DURDUR'a basın.",
+   "ham": "DURDURMA ONAYLANAMADI — bobin HÂLÂ ÇALIŞIYOR olabilir. ACİL DURDUR'a basın."
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 204,
+   "metin": "Komut onaylanamadı — bobin başlatılamamış olabilir, tekrar deneyin.",
+   "ham": "Komut onaylanamadı — bobin başlatılamamış olabilir, tekrar deneyin."
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 205,
+   "metin": "DURDURMA ONAYLANAMADI — bobin HÂLÂ ÇALIŞIYOR olabilir. ACİL DURDUR'a basın.",
+   "ham": "DURDURMA ONAYLANAMADI — bobin HÂLÂ ÇALIŞIYOR olabilir. ACİL DURDUR'a basın."
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 237,
+   "metin": "⏳ Cihaz onayı bekleniyor…",
+   "ham": "⏳ Cihaz onayı bekleniyor…"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 240,
+   "metin": "✓ Cihaz onayladı — PWM bobinde çalışıyor{{ms}}",
+   "ham": "✓ Cihaz onayladı — PWM bobinde çalışıyor{{ms}}"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 243,
+   "metin": "✗ Cihaz komutu REDDETTİ — bobin ÇALIŞMIYOR (termal kilit / geçersiz parametre)",
+   "ham": "✗ Cihaz komutu REDDETTİ — bobin ÇALIŞMIYOR (termal kilit / geçersiz parametre)"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 246,
+   "metin": "⚠ Cihaz onayı gelmedi — bobin komutu almamış olabilir; Aktif rozetini ve bobin bağlantısını kontrol edin",
+   "ham": "⚠ Cihaz onayı gelmedi — bobin komutu almamış olabilir; Aktif rozetini ve bobin bağlantısını kontrol edin"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 256,
+   "metin": "Bobin",
+   "ham": "Bobin "
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 287,
+   "metin": "Bu bobinde sıcaklık ölçümü yok — otomatik termal durdurma uygulanmaz",
+   "ham": "Bu bobinde sıcaklık ölçümü yok — otomatik termal durdurma uygulanmaz"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 301,
+   "metin": "Durum: Aktif, bobin çalışıyor",
+   "ham": "Durum: Aktif, bobin çalışıyor"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 301,
+   "metin": "Durum: Hazır, bobin durdu",
+   "ham": "Durum: Hazır, bobin durdu"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 374,
+   "metin": "⚠ Sıcaklık {{SICAKLIK_UYARI_ESIGI_C}} °C üstünde ({{deger2}} °C) — otomatik durdurma yok; bobini kontrol edin, gerekirse ⏹ Durdur.",
+   "ham": "⚠ Sıcaklık {{SICAKLIK_UYARI_ESIGI_C}} °C üstünde ({{deger2}} °C) — otomatik durdurma yok; bobini kontrol edin, gerekirse ⏹ Durdur."
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 412,
+   "metin": "Bobinin parametrelerini güncelle",
+   "ham": "Bobinin parametrelerini güncelle"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 412,
+   "metin": "Bobini başlat",
+   "ham": "Bobini başlat"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 414,
+   "metin": "▶ Başlat",
+   "ham": "▶ Başlat"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 427,
+   "metin": "Bobini durdur",
+   "ham": "Bobini durdur"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 429,
+   "metin": "⏹ Durdur",
+   "ham": "⏹ Durdur"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "satir": 435,
+   "metin": "⚡ Bobin bağlı değil",
+   "ham": "⚡ Bobin bağlı değil"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/EFieldBar.tsx",
+   "satir": 62,
+   "metin": "Çalışan bobinlerde alan (B) ölçülmüyor — E hesaplanmadı.",
+   "ham": "Çalışan bobinlerde alan (B) ölçülmüyor — E hesaplanmadı."
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/EFieldBar.tsx",
+   "satir": 68,
+   "metin": "Canlı elektrik alanı göstergesi",
+   "ham": "Canlı elektrik alanı göstergesi"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/EFieldBar.tsx",
+   "satir": 71,
+   "metin": "Canlı E-Alanı",
+   "ham": "Canlı E-Alanı"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/EFieldBar.tsx",
+   "satir": 79,
+   "metin": "bobin · B=",
+   "ham": " bobin · B="
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/EFieldBar.tsx",
+   "satir": 90,
+   "metin": "Bobinler durdu — alan üretilmiyor.",
+   "ham": "Bobinler durdu — alan üretilmiyor."
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/EFieldBar.tsx",
+   "satir": 100,
+   "metin": "{{label}} alan {{deger2}}",
+   "ham": "{{label}} alan {{deger2}}"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/EmDozSatiri.tsx",
+   "satir": 52,
+   "metin": "· Alan:",
+   "ham": "   ·   Alan: "
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "satir": 108,
+   "metin": "Seans Bekleniyor",
+   "ham": "Seans Bekleniyor"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "satir": 109,
+   "metin": "Parametreleri ayarlayıp &quot;Seans Başlat&quot; butonuna basın.",
+   "ham": "Parametreleri ayarlayıp &quot;Seans Başlat&quot; butonuna basın."
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "satir": 121,
+   "metin": "AKTİF SEANS",
+   "ham": "AKTİF SEANS"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "satir": 149,
+   "metin": "KALAN",
+   "ham": "KALAN"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "satir": 179,
+   "metin": "TEPE (seans)",
+   "ham": "TEPE (seans)"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "satir": 190,
+   "metin": "Seansı durdur",
+   "ham": "Seansı durdur"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "satir": 192,
+   "metin": "⏳ Durduruluyor…",
+   "ham": "⏳ Durduruluyor…"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "satir": 192,
+   "metin": "⏹ Durdur",
+   "ham": "⏹ Durdur"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "satir": 198,
+   "metin": "Acil durdurma — tüm bobinleri anında durdur",
+   "ham": "Acil durdurma — tüm bobinleri anında durdur"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "satir": 200,
+   "metin": "🚨 DURDURULUYOR…",
+   "ham": "🚨 DURDURULUYOR…"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "satir": 200,
+   "metin": "🚨 ACİL DURDUR",
+   "ham": "🚨 ACİL DURDUR"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/StmUyumBandi.tsx",
+   "satir": 27,
+   "metin": "Cihaz kartının yazılımı bu uygulama sürümüyle uyumsuz — bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET).",
+   "ham": "Cihaz kartının yazılımı bu uygulama sürümüyle uyumsuz — bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET)."
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/StmUyumBandi.tsx",
+   "satir": 28,
+   "metin": "Cihaz kartı doğrulanamadı. Kartın üzerindeki SİYAH sıfırlama düğmesine bir kez basın (mavi değil).",
+   "ham": "Cihaz kartı doğrulanamadı. Kartın üzerindeki SİYAH sıfırlama düğmesine bir kez basın (mavi değil)."
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "satir": 39,
+   "metin": "Tek yönlü sürüş bobinde DC bileşen oluşturur ve alan değerlerini değiştirir. Emin misiniz?",
+   "ham": "Tek yönlü sürüş bobinde DC bileşen oluşturur ve alan değerlerini değiştirir. Emin misiniz?"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "satir": 50,
+   "metin": "Bobin {{deger1}} tek yönlü (Unipolar)",
+   "ham": "Bobin {{deger1}} tek yönlü (Unipolar)"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "satir": 51,
+   "metin": "Bobin {{deger1}} çift yönlü (Bipolar)",
+   "ham": "Bobin {{deger1}} çift yönlü (Bipolar)"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "satir": 53,
+   "metin": "{{deger1}} sürüşe alındı — bir sonraki başlatmada uygulanır.",
+   "ham": "{{deger1}} sürüşe alındı — bir sonraki başlatmada uygulanır."
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "satir": 145,
+   "metin": "Bipolar = iki PWM dönüşümlü (alan ±B) · Unipolar = yalnız IN_A (alan 0…+B)",
+   "ham": "Bipolar = iki PWM dönüşümlü (alan ±B) · Unipolar = yalnız IN_A (alan 0…+B)"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "satir": 154,
+   "metin": "Yetenekli tüm bobinleri bipolar sür",
+   "ham": "Yetenekli tüm bobinleri bipolar sür"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "satir": 163,
+   "metin": "Tüm bobinleri unipolar sür",
+   "ham": "Tüm bobinleri unipolar sür"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "satir": 191,
+   "metin": "Bobin {{id}}, {{deger2}}{{deger1}}{{deger22}}",
+   "ham": "Bobin {{id}}, {{deger2}}{{deger1}}{{deger22}}"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "satir": 193,
+   "metin": ", kart henüz bildirmedi",
+   "ham": ", kart henüz bildirmedi"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "satir": 193,
+   "metin": ", kartın uyguladığı {{deger1}}",
+   "ham": ", kartın uyguladığı {{deger1}}"
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "satir": 205,
+   "metin": "🔒 Bobin 6-7 sürücüleri tek yönlü — bipolar sürülemez.",
+   "ham": "🔒 Bobin 6-7 sürücüleri tek yönlü — bipolar sürülemez."
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "satir": 208,
+   "metin": "Kartın uyguladığı kip sürüş başlayınca görünür.",
+   "ham": "Kartın uyguladığı kip sürüş başlayınca görünür."
+  },
+  {
+   "dosya": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "satir": 211,
+   "metin": "Kartın uyguladığı:",
+   "ham": "Kartın uyguladığı:"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 38,
+   "metin": "mandal dosyası okunamadı",
+   "ham": "mandal dosyası okunamadı"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 39,
+   "metin": "önceki oturumda ACİL DURDUR — sıfırlanmadı ({{asil}})",
+   "ham": "önceki oturumda ACİL DURDUR — sıfırlanmadı ({{asil}})"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 41,
+   "metin": "ACİL DURDUR düğmesi",
+   "ham": "ACİL DURDUR düğmesi"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 43,
+   "metin": "uygulama seans ya da bobin çalışırken kapatıldı",
+   "ham": "uygulama seans ya da bobin çalışırken kapatıldı"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 45,
+   "metin": "kart komutları reddetti",
+   "ham": "kart komutları reddetti"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 48,
+   "metin": "acil durdurma",
+   "ham": "acil durdurma"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 60,
+   "metin": "USB kablosunu kontrol edin.",
+   "ham": "USB kablosunu kontrol edin."
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 62,
+   "metin": "Cihaz kartı komutu reddetti — bobin ayarlarını (duty / sürüş kipi) kontrol edin; sürerse teknik desteği arayın.",
+   "ham": "Cihaz kartı komutu reddetti — bobin ayarlarını (duty / sürüş kipi) kontrol edin; sürerse teknik desteği arayın."
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 78,
+   "metin": "Acil durdurma mandalı sıfırlansın mı?",
+   "ham": "Acil durdurma mandalı sıfırlansın mı?"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 79,
+   "metin": "Sıfırlama bobinleri BAŞLATMAZ. Bobinlerin durduğunu ve hastanın güvende olduğunu kontrol edin; tedaviye devam etmek için başlatmayı ayrıca verin.",
+   "ham": "Sıfırlama bobinleri BAŞLATMAZ. Bobinlerin durduğunu ve hastanın güvende olduğunu kontrol edin; tedaviye devam etmek için başlatmayı ayrıca verin."
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 88,
+   "metin": "Mandal sıfırlandı — başlatma yeniden mümkün (bobinler başlatılmadı)",
+   "ham": "Mandal sıfırlandı — başlatma yeniden mümkün (bobinler başlatılmadı)"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 90,
+   "metin": "Mandal sıfırlanamadı",
+   "ham": "Mandal sıfırlanamadı"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 90,
+   "metin": "Cihaza ulaşılamadı ya da istek reddedildi. Bağlantıyı kontrol edip yeniden deneyin.",
+   "ham": "Cihaza ulaşılamadı ya da istek reddedildi. Bağlantıyı kontrol edip yeniden deneyin."
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 98,
+   "metin": "ACİL DURDURMA MANDALLI — yeni başlatma kapalı",
+   "ham": "ACİL DURDURMA MANDALLI — yeni başlatma kapalı"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 102,
+   "metin": "Neden: {{deger1}}. {{deger2}}Bobinlerin durduğunu cihazda kontrol edin. {{deger11}}",
+   "ham": "Neden: {{deger1}}. {{deger2}}Bobinlerin durduğunu cihazda kontrol edin. {{deger11}}"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 104,
+   "metin": "Sıfırlama bobinleri başlatmaz.",
+   "ham": "Sıfırlama bobinleri başlatmaz."
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 105,
+   "metin": "Yeniden başlatmak için önce \"Sıfırla\"; sıfırlama bobinleri başlatmaz.",
+   "ham": "Yeniden başlatmak için önce \"Sıfırla\"; sıfırlama bobinleri başlatmaz."
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 113,
+   "metin": "Acil durdurma mandalını sıfırla",
+   "ham": "Acil durdurma mandalını sıfırla"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "satir": 114,
+   "metin": "Mandalı kaldırır; bobinleri başlatmaz",
+   "ham": "Mandalı kaldırır; bobinleri başlatmaz"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "satir": 99,
+   "metin": "Acil durdurma gönderiliyor…",
+   "ham": "Acil durdurma gönderiliyor…"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "satir": 103,
+   "metin": "Tüm bobinler durduruldu ✓",
+   "ham": "Tüm bobinler durduruldu ✓"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "satir": 133,
+   "metin": "Acil durdur",
+   "ham": "Acil durdur"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "satir": 134,
+   "metin": "Tüm bobinleri anında durdurur ve aktif seansı sonlandırır",
+   "ham": "Tüm bobinleri anında durdurur ve aktif seansı sonlandırır"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "satir": 138,
+   "metin": "🚨 DURDURULUYOR…",
+   "ham": "🚨 DURDURULUYOR…"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "satir": 140,
+   "metin": "🚨 ACİL DURDUR (teyitsiz)",
+   "ham": "🚨 ACİL DURDUR (teyitsiz)"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "satir": 142,
+   "metin": "🚨 ACİL DURDUR (bağlantı yok)",
+   "ham": "🚨 ACİL DURDUR (bağlantı yok)"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "satir": 143,
+   "metin": "🚨 ACİL DURDUR{{deger1}}",
+   "ham": "🚨 ACİL DURDUR{{deger1}}"
+  },
+  {
+   "dosya": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "satir": 143,
+   "metin": "({{running}} bobin)",
+   "ham": " ({{running}} bobin)"
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useSessionControl.ts",
+   "satir": 252,
+   "metin": "Durdurma onaylanamadı",
+   "ham": "Durdurma onaylanamadı"
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useSessionControl.ts",
+   "satir": 253,
+   "metin": "Sunucuya ulaşılamadı — donanım HÂLÂ ÇALIŞIYOR olabilir. Lütfen ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın.",
+   "ham": "Sunucuya ulaşılamadı — donanım HÂLÂ ÇALIŞIYOR olabilir. Lütfen ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useSessionControl.ts",
+   "satir": 268,
+   "metin": "Durdurma onaylanamadı",
+   "ham": "Durdurma onaylanamadı"
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useSessionControl.ts",
+   "satir": 269,
+   "metin": "Bobin(ler) {{deger1}} için donanım STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın.",
+   "ham": "Bobin(ler) {{deger1}} için donanım STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useSessionControl.ts",
+   "satir": 316,
+   "metin": "Başlatma, uçuştayken verilen DURDUR ile geri alındı.",
+   "ham": "Başlatma, uçuştayken verilen DURDUR ile geri alındı."
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useSessionControl.ts",
+   "satir": 338,
+   "metin": "Seans başlatılamadı.",
+   "ham": "Seans başlatılamadı."
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useSessionControl.ts",
+   "satir": 354,
+   "metin": "Acil durdurma gönderiliyor…",
+   "ham": "Acil durdurma gönderiliyor…"
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useSessionControl.ts",
+   "satir": 372,
+   "metin": "Tüm bobinler durduruldu ✓",
+   "ham": "Tüm bobinler durduruldu ✓"
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "satir": 87,
+   "metin": "Bobinler çalışıyor olabilir",
+   "ham": "Bobinler çalışıyor olabilir"
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "satir": 88,
+   "metin": "STM bağlantısı yok — bobinlerin durumu BİLİNMİYOR (çalışıyor olabilir). {{actionLabel}} tüm durdurma kontrollerini ekrandan kaldırır. Devam edilirse ÖNCE ACİL DURDUR gönderilecek.",
+   "ham": "STM bağlantısı yok — bobinlerin durumu BİLİNMİYOR (çalışıyor olabilir). {{actionLabel}} tüm durdurma kontrollerini ekrandan kaldırır.\n\nDevam edilirse ÖNCE ACİL DURDUR gönderilecek."
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "satir": 91,
+   "metin": "Durdur ve devam et",
+   "ham": "Durdur ve devam et"
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "satir": 94,
+   "metin": "Seans sürüyor",
+   "ham": "Seans sürüyor"
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "satir": 95,
+   "metin": "{{deger1}}{{actionLabel}} tüm durdurma kontrollerini ekrandan kaldırır. Devam edilirse bobinler ÖNCE durdurulacak.",
+   "ham": "{{deger1}}{{actionLabel}} tüm durdurma kontrollerini ekrandan kaldırır.\n\nDevam edilirse bobinler ÖNCE durdurulacak."
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "satir": 95,
+   "metin": "{{running}} bobin ÇALIŞIYOR.",
+   "ham": "{{running}} bobin ÇALIŞIYOR. "
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "satir": 95,
+   "metin": "Aktif bir seans var.",
+   "ham": "Aktif bir seans var. "
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "satir": 98,
+   "metin": "Durdur ve devam et",
+   "ham": "Durdur ve devam et"
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "satir": 107,
+   "metin": "ACİL DURDUR teyit edilemedi",
+   "ham": "ACİL DURDUR teyit edilemedi"
+  },
+  {
+   "dosya": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "satir": 108,
+   "metin": "ACİL DURDUR teyit edilemedi — STM bağlı değil, bobinleri kontrol edin. Yine de çıkılsın mı?",
+   "ham": "ACİL DURDUR teyit edilemedi — STM bağlı değil, bobinleri kontrol edin. Yine de çıkılsın mı?"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 193,
+   "metin": "En az bir bobin seçin.",
+   "ham": "En az bir bobin seçin."
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 201,
+   "metin": "Seçili bobinler için aktif bağlantı yok (STM32/WiFi çevrimdışı).",
+   "ham": "Seçili bobinler için aktif bağlantı yok (STM32/WiFi çevrimdışı)."
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 205,
+   "metin": "Bazı bobinler çevrimdışı",
+   "ham": "Bazı bobinler çevrimdışı"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 205,
+   "metin": "Bağlı olmayan bobinler atlandı; yalnızca aktif bobinlere komut gönderiliyor.",
+   "ham": "Bağlı olmayan bobinler atlandı; yalnızca aktif bobinlere komut gönderiliyor."
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 223,
+   "metin": "Seansı başlatmadan önce yukarıdan hasta seçin. Seans, geçmişe hasta bilgisiyle birlikte kaydedilir.",
+   "ham": "Seansı başlatmadan önce yukarıdan hasta seçin. Seans, geçmişe hasta bilgisiyle birlikte kaydedilir."
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 246,
+   "metin": "\"{{raw}}\" sayı olarak okunamadı. Lütfen {{key}} alanını kontrol edin.",
+   "ham": "\"{{raw}}\" sayı olarak okunamadı. Lütfen {{key}} alanını kontrol edin."
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 280,
+   "metin": "Seans başlatılamadı.",
+   "ham": "Seans başlatılamadı."
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 311,
+   "metin": "Manuel seans başlatılamadı (zaten aktif seans olabilir).",
+   "ham": "Manuel seans başlatılamadı (zaten aktif seans olabilir)."
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 333,
+   "metin": "Çalışan bobin yok",
+   "ham": "Çalışan bobin yok"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 333,
+   "metin": "Parametre güncelleme yalnız ÇALIŞAN bobinlere uygulanır.",
+   "ham": "Parametre güncelleme yalnız ÇALIŞAN bobinlere uygulanır."
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 370,
+   "metin": "Bir veya daha fazla bobine yeni parametre ULAŞMADI — bobinler ESKİ parametrelerle sürülmeye devam ediyor olabilir.",
+   "ham": "Bir veya daha fazla bobine yeni parametre ULAŞMADI — bobinler ESKİ parametrelerle sürülmeye devam ediyor olabilir."
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 382,
+   "metin": "{{length}} bobin güncellendi: {{freq}} Hz · %{{duty}} · {{phase}}° · {{duration}} dk",
+   "ham": "{{length}} bobin güncellendi: {{freq}} Hz · %{{duty}} · {{phase}}° · {{duration}} dk"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 388,
+   "metin": "Uygulandı — kart tazelenemedi",
+   "ham": "Uygulandı — kart tazelenemedi"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 389,
+   "metin": "Bobinler {{freq}} Hz'e geçti, ancak seans kartı/kaydı güncellenemedi. Üstteki özet eski değeri gösteriyor olabilir; bobin kartlarındaki değerler doğrudur.",
+   "ham": "Bobinler {{freq}} Hz'e geçti, ancak seans kartı/kaydı güncellenemedi. Üstteki özet eski değeri gösteriyor olabilir; bobin kartlarındaki değerler doğrudur."
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 468,
+   "metin": "Durdurma onaylanamadı",
+   "ham": "Durdurma onaylanamadı"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 469,
+   "metin": "Bir veya daha fazla bobinin durduğu teyit edilemedi — bobinler HÂLÂ ÇALIŞIYOR olabilir. ACİL DURDUR'a basın.",
+   "ham": "Bir veya daha fazla bobinin durduğu teyit edilemedi — bobinler HÂLÂ ÇALIŞIYOR olabilir. ACİL DURDUR'a basın."
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 542,
+   "metin": "⚠️ DONANIM ÇALIŞIYOR —",
+   "ham": "⚠️ DONANIM ÇALIŞIYOR — "
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 542,
+   "metin": "bobin enerjili, seans bağlamı dışında. Aşağıdaki ACİL DURDUR ile durdurabilirsiniz.",
+   "ham": " bobin enerjili, seans bağlamı dışında. Aşağıdaki ACİL DURDUR ile durdurabilirsiniz."
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 580,
+   "metin": "Tüm bobinleri acil durdur",
+   "ham": "Tüm bobinleri acil durdur"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 581,
+   "metin": "Tüm bobinleri anında durdurur ve aktif seansı sonlandırır",
+   "ham": "Tüm bobinleri anında durdurur ve aktif seansı sonlandırır"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 582,
+   "metin": "🚨 TÜM BOBİNLERİ ACİL DURDUR",
+   "ham": "🚨 TÜM BOBİNLERİ ACİL DURDUR"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 614,
+   "metin": "Seans Hedefi",
+   "ham": "Seans Hedefi"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 657,
+   "metin": "🤖 Otomatik Seansı Başlat",
+   "ham": "🤖 Otomatik Seansı Başlat"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 667,
+   "metin": "Manuel Mod — Bobin Bazlı Kontrol",
+   "ham": "Manuel Mod — Bobin Bazlı Kontrol"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 687,
+   "metin": "▶ Başlat",
+   "ham": "▶ Başlat"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 710,
+   "metin": "⏳ Durduruluyor…",
+   "ham": "⏳ Durduruluyor…"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 710,
+   "metin": "⏹ Durdur",
+   "ham": "⏹ Durdur"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 734,
+   "metin": "🔌 Bobinler (1–8)",
+   "ham": "🔌 Bobinler (1–8)"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 734,
+   "metin": "🔌 Bobinler (1–7)",
+   "ham": "🔌 Bobinler (1–7)"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 839,
+   "metin": "Bobin Seçimi",
+   "ham": "Bobin Seçimi"
+  },
+  {
+   "dosya": "apps/ui/src/screens/ControlScreen.tsx",
+   "satir": 865,
+   "metin": "Bobin {{id}}, {{deger2}}, {{deger3}}",
+   "ham": "Bobin {{id}}, {{deger2}}, {{deger3}}"
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 54,
+   "metin": "Cihaz Ağı",
+   "ham": "Cihaz Ağı"
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 60,
+   "metin": "Donanım",
+   "ham": "Donanım"
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 87,
+   "metin": "Kalan Süre",
+   "ham": "Kalan Süre"
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 88,
+   "metin": "Bağlı Bobin",
+   "ham": "Bağlı Bobin"
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 108,
+   "metin": "Aktif hasta yok — hasta seçip seans başlatınca burada görünür.",
+   "ham": "Aktif hasta yok — hasta seçip seans başlatınca burada görünür."
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 116,
+   "metin": "Aktif Seans",
+   "ham": "Aktif Seans"
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 123,
+   "metin": "Aktif Seans",
+   "ham": "Aktif Seans"
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 125,
+   "metin": "⚠️ DONANIM ÇALIŞIYOR",
+   "ham": "⚠️ DONANIM ÇALIŞIYOR"
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 131,
+   "metin": "Çalışan bobin:",
+   "ham": "Çalışan bobin: "
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 133,
+   "metin": "| Kalan: {{remainingMin}} dk",
+   "ham": " | Kalan: {{remainingMin}} dk"
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 134,
+   "metin": "| Seans bağlamı dışı — donanım enerjili",
+   "ham": " | Seans bağlamı dışı — donanım enerjili"
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 142,
+   "metin": "Acil durdur",
+   "ham": "Acil durdur"
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 143,
+   "metin": "Tüm bobinleri anında durdurur ve aktif seansı sonlandırır",
+   "ham": "Tüm bobinleri anında durdurur ve aktif seansı sonlandırır"
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 145,
+   "metin": "🚨 ACİL DURDUR",
+   "ham": "🚨 ACİL DURDUR"
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 151,
+   "metin": "Kontrol panelinden seans başlatabilirsiniz.",
+   "ham": "Kontrol panelinden seans başlatabilirsiniz."
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 159,
+   "metin": "Bobin Durumları",
+   "ham": "Bobin Durumları"
+  },
+  {
+   "dosya": "apps/ui/src/screens/DashboardScreen.tsx",
+   "satir": 163,
+   "metin": "Bobin verisi bekleniyor… (bağlantı kurulunca görünecek)",
+   "ham": "Bobin verisi bekleniyor… (bağlantı kurulunca görünecek)"
+  },
+  {
+   "dosya": "apps/ui/src/screens/DemaSimulatorScreen.tsx",
+   "satir": 45,
+   "metin": "Tanıtım/eğitim amaçlıdır, cihaz davranışını temsil etmez.",
+   "ham": "Tanıtım/eğitim amaçlıdır, cihaz davranışını temsil etmez."
+  },
+  {
+   "dosya": "apps/ui/src/screens/SensorMonitorScreen.tsx",
+   "satir": 80,
+   "metin": "📡 Sensör Monitörü",
+   "ham": "📡 Sensör Monitörü"
+  },
+  {
+   "dosya": "apps/ui/src/screens/SensorMonitorScreen.tsx",
+   "satir": 82,
+   "metin": "Gerçek zamanlı manyetik alan ve sıcaklık izleme",
+   "ham": "Gerçek zamanlı manyetik alan ve sıcaklık izleme"
+  },
+  {
+   "dosya": "apps/ui/src/screens/SensorMonitorScreen.tsx",
+   "satir": 122,
+   "metin": "Bobin {{id}}",
+   "ham": "Bobin {{id}}"
+  },
+  {
+   "dosya": "apps/ui/src/screens/SensorMonitorScreen.tsx",
+   "satir": 125,
+   "metin": "Bobin {{id}} grafiğini göster/gizle",
+   "ham": "Bobin {{id}} grafiğini göster/gizle"
+  },
+  {
+   "dosya": "apps/ui/src/screens/SensorMonitorScreen.tsx",
+   "satir": 216,
+   "metin": "Bobin",
+   "ham": "Bobin "
+  },
+  {
+   "dosya": "apps/ui/src/screens/SensorMonitorScreen.tsx",
+   "satir": 231,
+   "metin": "Alan (sonda)",
+   "ham": "Alan (sonda)"
+  },
+  {
+   "dosya": "apps/ui/src/screens/SensorMonitorScreen.tsx",
+   "satir": 244,
+   "metin": "Akım",
+   "ham": "Akım"
+  },
+  {
+   "dosya": "apps/ui/src/services/emergencyStop.ts",
+   "satir": 143,
+   "metin": "⚠️ ACİL DURDURMA DOĞRULANAMADI",
+   "ham": "⚠️ ACİL DURDURMA DOĞRULANAMADI"
+  },
+  {
+   "dosya": "apps/ui/src/services/emergencyStop.ts",
+   "satir": 145,
+   "metin": "Donanımın durduğu teyit edilemedi. Bobinler hâlâ çalışıyor olabilir — cihazı fiziksel güç düğmesinden kapatın.",
+   "ham": "Donanımın durduğu teyit edilemedi. Bobinler hâlâ çalışıyor olabilir — cihazı fiziksel güç düğmesinden kapatın."
+  },
+  {
+   "dosya": "apps/ui/src/services/emergencyStop.ts",
+   "satir": 151,
+   "metin": "⛔ KART STOP'U REDDETTİ",
+   "ham": "⛔ KART STOP'U REDDETTİ"
+  },
+  {
+   "dosya": "apps/ui/src/services/emergencyStop.ts",
+   "satir": 153,
+   "metin": "Cihaz kartı STOP komutunu reddetti — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın.",
+   "ham": "Cihaz kartı STOP komutunu reddetti — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın."
+  },
+  {
+   "dosya": "apps/ui/src/utils/olculenAlan.ts",
+   "satir": 15,
+   "metin": "Alan sensörü doğrulanamadı — ölçülen değer gösterilmiyor",
+   "ham": "Alan sensörü doğrulanamadı — ölçülen değer gösterilmiyor"
+  },
+  {
+   "dosya": "apps/ui/src/utils/olculenAlan.ts",
+   "satir": 21,
+   "metin": "Akım ölçümü yok",
+   "ham": "Akım ölçümü yok"
+  },
+  {
+   "dosya": "apps/ui/src/utils/yogunlukGosterimi.ts",
+   "satir": 54,
+   "metin": "Duty (AI planı, bobin 1)",
+   "ham": "Duty (AI planı, bobin 1)"
+  },
+  {
+   "dosya": "apps/ui/src/utils/yogunlukGosterimi.ts",
+   "satir": 62,
+   "metin": "DUTY (AI planı, bobin 1)",
+   "ham": "DUTY (AI planı, bobin 1)"
+  },
+  {
+   "dosya": "launcher/app/windows/hooks.nsi",
+   "satir": 66,
+   "metin": "PEMF: backend.port geçersiz ('$1') — E-stop atlandı.",
+   "ham": "PEMF: backend.port geçersiz ('$1') — E-stop atlandı."
+  },
+  {
+   "dosya": "launcher/app/windows/hooks.nsi",
+   "satir": 69,
+   "metin": "PEMF: aktif seans güvenliği — bobinlere E-stop gönderiliyor (port $2)…",
+   "ham": "PEMF: aktif seans güvenliği — bobinlere E-stop gönderiliyor (port $2)…"
+  },
+  {
+   "dosya": "launcher/app/windows/hooks.nsi",
+   "satir": 103,
+   "metin": "PEMF: bobin E-stop DOĞRULANDI — $1",
+   "ham": "PEMF: bobin E-stop DOĞRULANDI — $1"
+  },
+  {
+   "dosya": "launcher/app/windows/hooks.nsi",
+   "satir": 105,
+   "metin": "PEMF: bobin E-stop DOĞRULANAMADI (nsExec=$0 $1) — bobinleri ELLE kontrol edin; iz: %APPDATA%\\PEMF_GUI\\logs\\uninstall_estop.log",
+   "ham": "PEMF: bobin E-stop DOĞRULANAMADI (nsExec=$0 $1) — bobinleri ELLE kontrol edin; iz: %APPDATA%\\PEMF_GUI\\logs\\uninstall_estop.log"
+  },
+  {
+   "dosya": "launcher/app/windows/hooks.nsi",
+   "satir": 132,
+   "metin": "PEMF: bobin acil-durdurma DOĞRULANAMADI ($0). Bobinleri ELLE kontrol edin (cihaz üzerindeki göstergeler / fiziksel kapatma). Ayrıntı: $1 Kayıt: %APPDATA%\\PEMF_GUI\\logs\\uninstall_estop.log",
+   "ham": "PEMF: bobin acil-durdurma DOĞRULANAMADI ($0).$\\r$\\n$\\r$\\nBobinleri ELLE kontrol edin (cihaz üzerindeki göstergeler / fiziksel kapatma).$\\r$\\n$\\r$\\nAyrıntı: $1$\\r$\\nKayıt: %APPDATA%\\PEMF_GUI\\logs\\uninstall_estop.log"
+  },
+  {
+   "dosya": "launcher/app/windows/hooks.nsi",
+   "satir": 141,
+   "metin": "PEMF: artık backend süreçleri durduruluyor…",
+   "ham": "PEMF: artık backend süreçleri durduruluyor…"
+  },
+  {
+   "dosya": "launcher/app/windows/hooks.nsi",
+   "satir": 271,
+   "metin": "PEMF: Hasta kayıtları, seans geçmişi ve AI analiz geçmişi KORUNDU (tıbbi kayıt) — %APPDATA%\\PEMF_GUI",
+   "ham": "PEMF: Hasta kayıtları, seans geçmişi ve AI analiz geçmişi KORUNDU (tıbbi kayıt) — %APPDATA%\\PEMF_GUI"
+  },
+  {
+   "dosya": "launcher/app/windows/hooks.nsi",
+   "satir": 274,
+   "metin": "PEMF Vet kaldırıldı. HASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ. Tıbbi kayıt oldukları için kaldırma sırasında korunurlar. Konum: $APPDATA\\PEMF_GUI Kalıcı silmek isterseniz bu klasörü elle silin ya da yeniden kurup uygulama içinden silin (Hastalar → 'Tümünü Sil', AI Geçmişi → 'Geçmişi Sil').",
+   "ham": "PEMF Vet kaldırıldı.$\\r$\\n$\\r$\\nHASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ.$\\r$\\nTıbbi kayıt oldukları için kaldırma sırasında korunurlar.$\\r$\\n$\\r$\\nKonum:$\\r$\\n$APPDATA\\PEMF_GUI$\\r$\\n$\\r$\\nKalıcı silmek isterseniz bu klasörü elle silin ya da yeniden kurup uygulama içinden silin (Hastalar → 'Tümünü Sil', AI Geçmişi → 'Geçmişi Sil')."
+  }
+ ]
+}

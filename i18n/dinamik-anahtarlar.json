@@ -1,0 +1,21 @@
+{
+ "aciklama": "K-3 dinamik anahtar izin listesi (tests/test_i18n_anahtar_K3.py). İlk argümanı değişmez dizgi olmayan çeviri çağrısı yalnız burada ise geçer; önek + değerlerin HEPSİ katalogda olmalı. Kayıt: {yuzey, dosya, ifade (satırda geçen ayırt edici parça), onek, degerler: [...], gerekce}. Değer kümesi KAPALI olmalı (enum / sabit tablo); açık kümeli değer (kullanıcı girdisi, sunucu metni) dinamik anahtar OLAMAZ — eşlemesiz değer olduğu gibi gösterilir (T8).",
+ "izinler": [
+  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/utils/ceviri.py",
+   "ifade": "t(f\"tarih.ay.",
+   "onek": "tarih.ay.",
+   "degerler": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
+   "gerekce": "tarih_metni: ay adı ayın numarasından (datetime.month 1–12)"
+  },
+  {
+   "yuzey": "launcher",
+   "dosya": "launcher/core/src/dil.rs",
+   "ifade": "t_ile(anahtar, &[])",
+   "onek": "",
+   "degerler": [],
+   "gerekce": "çevirmenin iç geçişi: t(anahtar) → t_ile(anahtar, boş parametre) — anahtarı çağıran verir (o çağrı statik denetlenir)"
+  }
+ ]
+}

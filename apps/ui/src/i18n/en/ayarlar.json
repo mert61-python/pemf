@@ -1,9 +1,9 @@
 {
   "dil": {
-    "baslik": "Language / Dil",
     "aciklama": "App language. Your choice is remembered on this device and does not depend on your account or profile.",
-    "secenekTr": "Türkçe",
+    "baslik": "Language / Dil",
+    "kayitHatasi": "The language choice could not be saved on this device. The device language will be used when the app reopens.",
     "secenekEn": "English",
-    "kayitHatasi": "The language choice could not be saved on this device. The device language will be used when the app reopens."
+    "secenekTr": "Türkçe"
   }
 }

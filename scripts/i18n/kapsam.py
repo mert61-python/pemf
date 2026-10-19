@@ -12,6 +12,9 @@ Kullanım:
   ..\\python.exe scripts\\i18n\\kapsam.py durum                  # grup tablosu + SIRADAKİ grup
   ..\\python.exe scripts\\i18n\\kapsam.py isaretle <grup> tamam   # grup + dosyaları (muaf dosyalar muaf kalır)
   ..\\python.exe scripts\\i18n\\kapsam.py dosya <yol> <tamam|bekliyor|muaf> [--gerekce "…"]
+  ..\\python.exe scripts\\i18n\\kapsam.py metin-tarayan          # i18n/metin-tarayan-testler.txt'i yeniden üretir
+
+Muaf metin (dosya `muaf` listesi · `genelMuaf` birebir · `genelMuafDesen` düzenli ifade) tek yerde: `muaf_mi` (K-2 + `katalog.py taban`).
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
@@ -30,7 +34,9 @@ from scripts.i18n import ortak  # noqa: E402
 DEFTER = "i18n/kapsam.json"
 VARSAYILAN_TABAN = ortak.varsayilan_taban()
 
-#: (grup, sıra, kritik, açıklama) — sıra istemdeki T15 sırasıdır; büyük gruplar alt harfle bölünür.
+#: (grup, sıra, kritik, açıklama) — sıra istemdeki T15 sırasıdır; çok dosyalı büyük gruplar alt harfle ~80–200 metne bölünür. TEK DOSYALI
+#: büyük gruplar (AiHubScreen ~770, launcher index.html ~420, Legal.tsx ~250, aiDetail ~220) bölünemez → KURALLAR §Büyük dosya: bölüm bölüm,
+#: birden çok commit, dosya EN SONDA `tamam`. Küçük gruplar (jeton, yardımcı, NSIS) bir partide komşusuyla birlikte biter.
 GRUPLAR = [
     (
         "arayuz-01-ortak-kabuk",
@@ -39,7 +45,13 @@ GRUPLAR = [
         "ortak bileşenler + kabuk (AppShell, bildirim, toast, hata sınırı, sayfa başlıkları, tema)",
     ),
     ("arayuz-02-giris-hesap", 2, False, "giriş / hesap / operatör (+ Supabase dönüş sayfaları)"),
-    ("arayuz-03-ayarlar", 3, False, "ayarlar, eşleştirme, sistem bilgisi, güncelleme bantları"),
+    ("arayuz-03a-ayarlar-ekran", 3, False, "Ayarlar ekranı (SettingsScreen) + dil kartı"),
+    (
+        "arayuz-03b-ayarlar-bilesen",
+        3,
+        False,
+        "eşleştirme, yedek parolası, sistem bilgisi, ağ geçidi, güncelleme bantları",
+    ),
     ("arayuz-04-hasta", 4, False, "hasta ekranı, hasta kapısı, gözlem notu, profil sözlüğü"),
     ("arayuz-05a-kontrol-kritik", 5, True, "kontrol / bobin parametreleri / sürüş kipi / doz göstergeleri (KRİTİK)"),
     (
@@ -48,15 +60,11 @@ GRUPLAR = [
         True,
         "ACİL DURDUR, mandal bandı, seans ilerleme, söküm koruması, ana ekran (KRİTİK)",
     ),
-    (
-        "arayuz-06a-ai-hub",
-        6,
-        False,
-        "AiHubScreen (tek dosya, ~770 metin — bir oturumda bitmezse alt bölümlere: KURALLAR §Büyük dosya)",
-    ),
+    ("arayuz-06a-ai-hub", 6, False, "AiHubScreen (TEK dosya ~770 metin — KURALLAR §Büyük dosya)"),
     ("arayuz-06b-ai-bilesen", 6, False, "AI Pro paneli, hedef / model seçimi, onay / değerlendirme"),
     ("arayuz-06c-ai-etiket", 6, False, "AI sonuç etiketleri (aiDetail — K-7 sunucu eşliği) + AI yardımcıları"),
-    ("arayuz-07-rapor-gecmis-kpi", 7, False, "seans / AI geçmişi, seans ayrıntısı, KPI, indirme"),
+    ("arayuz-07a-seans-gecmisi", 7, False, "seans geçmişi, seans ayrıntısı, indirme"),
+    ("arayuz-07b-ai-gecmisi-kpi", 7, False, "AI geçmişi, KPI panosu"),
     ("arayuz-08-jeton", 8, False, "jeton / abonelik / erişim"),
     ("arayuz-09-yardimci", 9, False, "kalan servis / yardımcı / tür dosyaları"),
     (
@@ -65,25 +73,41 @@ GRUPLAR = [
         False,
         "yönlendirici hata iletileri (hasta, geçmiş, seans, kimlik, sistem, güncelleme, jeton)",
     ),
-    ("sunucu-10b-api-server", 10, True, "api_server.py — donanım / seans / ACİL DURDUR iletileri (KRİTİK)"),
+    ("sunucu-10b-ana-sunucu", 10, True, "api_server.py — donanım / seans / ACİL DURDUR iletileri (KRİTİK)"),
     ("sunucu-10c-ai", 10, False, "AI yönlendirici + AI Pro hedef + görüntü alanı iletileri"),
     ("sunucu-10d-ai-rapor", 10, False, "AI rapor öğeleri (ETIKETLER / DEGERLER / BELIRTILER — K-7)"),
     ("sunucu-10e-pdf", 10, False, "PDF raporu, seans durum etiketleri, dışa aktarma"),
     ("sunucu-10f-bildirim-ws", 10, True, "bildirim / WS / STM / firmware / mandal iletileri (KRİTİK)"),
     (
-        "sunucu-10g-diger",
+        "sunucu-10g-veritabani",
         10,
         False,
-        "veritabanı, servisler, güncelleme, kalan yardımcılar (çoğu muaf: iç / günlük / DB değeri)",
+        "veritabanı / şema / yedek / KVKK iletileri (çoğu muaf: iç / günlük / DB değeri)",
     ),
-    ("launcher-11a-ui", 11, False, "launcher arayüzü (index.html — mevcut TR/EN sözlüğü kataloğa)"),
-    ("launcher-11b-rust", 11, False, "launcher Rust iletileri (main.rs + core)"),
-    ("launcher-11c-nsis", 11, True, "kurulum sihirbazı iletileri (hooks.nsi — LangString)"),
-    ("site-12a-sayfa", 12, False, "site üst menü / alt bilgi / ana sayfa / özellikler / indirme / destek bileşenleri"),
-    ("site-12b-ticari", 12, False, "fiyatlar, ödeme, hesap, site işlevleri (api — makine-okur kod → istemcide çeviri)"),
-    ("site-12c-yasal", 12, False, "YASAL metinler (EN SON; 'Türkçe metin bağlayıcıdır' notu, hukuki onay sahipte)"),
+    ("sunucu-10h-servis", 10, False, "servisler, güncelleme, sırlar, kalan yardımcılar (çoğu muaf: iç / günlük)"),
+    ("launcher-11a-ui", 11, False, "launcher arayüzü (index.html TEK dosya — mevcut TR/EN sözlüğü kataloğa)"),
+    ("launcher-11b-rust-uygulama", 11, False, "launcher Rust iletileri — uygulama (launcher/app/src)"),
+    ("launcher-11c-rust-cekirdek", 11, False, "launcher Rust iletileri — çekirdek (launcher/core)"),
+    ("launcher-11d-nsis", 11, True, "kurulum sihirbazı iletileri (hooks.nsi — LangString)"),
+    ("site-12a-sayfa", 12, False, "site üst menü / alt bilgi / ana sayfa / özellikler / destek / hata sayfaları"),
+    (
+        "site-12b-indirme-hesap",
+        12,
+        False,
+        "indirme sayfası ve düğmeleri, paket oluşturucu, hesap / giriş / parola sıfırlama",
+    ),
+    (
+        "site-12c-icerik",
+        12,
+        False,
+        "site içerik yapılandırması (config.ts: marka, planlar, özellikler, SSS, menü — modül düzeyi)",
+    ),
+    ("site-12d-ticari", 12, False, "fiyatlar, ödeme, site işlevleri (api — makine-okur kod → istemcide çeviri)"),
+    ("site-12e-yasal", 12, False, "YASAL metinler (EN SON; 'Türkçe metin bağlayıcıdır' notu, hukuki onay sahipte)"),
     ("dema-13", 13, False, "DEMA simülatörü"),
 ]
+
+_VT = r"(thdb_\w+|patient_database|treatment_history_db|auth_db|sqlcipher_util|kvkk_anonimlestirme|backup_recovery|yedek_dosyasi|headless_db_maintenance|encrypted_import|dongu_disi_yazim)"
 
 #: (düzenli ifade, grup) — İLK eşleşen kazanır. Yollar depo-göreli.
 KURALLAR = [
@@ -101,9 +125,10 @@ KURALLAR = [
         r"^apps/ui/(auth-pages/|src/screens/(AuthScreen|WelcomeScreen)\.tsx|src/components/domain/(HesapMenusu|OperatorSwitcher)\.tsx|src/context/(AuthContext|OperatorContext)\.tsx|src/services/(authApi|supabaseAuth|hesapGecisi|hesapDeposu|desktopSession)\.ts)",
         "arayuz-02-giris-hesap",
     ),
+    (r"^apps/ui/src/(screens/SettingsScreen\.tsx|components/domain/DilSecimKarti\.tsx)$", "arayuz-03a-ayarlar-ekran"),
     (
-        r"^apps/ui/src/(screens/SettingsScreen\.tsx|components/domain/(DilSecimKarti|BackupPassphraseDialog|DevicePairingGuide|SystemInfoPanel|GatewayStatusPanel|RecoveryCodeBanner|KayitDbBandi|VeriKokuAgBandi|MobileUpdateBanner|MobileUpdateGate|SurumFarkiBanner)\.tsx|services/(pairing|veriTasima|bulutKayit|agTanisi|deviceRegistry|discovery|mobileUpdate|updates)\.ts|hooks/useApkGuncelleme\.ts)",
-        "arayuz-03-ayarlar",
+        r"^apps/ui/src/(components/domain/(BackupPassphraseDialog|DevicePairingGuide|SystemInfoPanel|GatewayStatusPanel|RecoveryCodeBanner|KayitDbBandi|VeriKokuAgBandi|MobileUpdateBanner|MobileUpdateGate|SurumFarkiBanner)\.tsx|services/(pairing|veriTasima|bulutKayit|agTanisi|deviceRegistry|discovery|mobileUpdate|updates)\.ts|hooks/useApkGuncelleme\.ts)",
+        "arayuz-03b-ayarlar-bilesen",
     ),
     (
         r"^apps/ui/src/(screens/PatientScreen\.tsx|components/domain/(PatientGate|ObservationNotesModal)\.tsx|utils/(hastaGuncelleme|patientScope|profilSozlugu|aramaNormalize)\.ts)",
@@ -127,15 +152,19 @@ KURALLAR = [
         "arayuz-06c-ai-etiket",
     ),
     (
-        r"^apps/ui/src/(screens/(TreatmentHistoryScreen|AiHistoryScreen|KpiDashboardScreen)\.tsx|components/domain/SessionDetailModal\.tsx|utils/(kpiGrafik|uptime)\.ts|services/(dosyaIndir|topluSilme)\.ts)",
-        "arayuz-07-rapor-gecmis-kpi",
+        r"^apps/ui/src/(screens/TreatmentHistoryScreen\.tsx|components/domain/SessionDetailModal\.tsx|services/(dosyaIndir|topluSilme)\.ts)",
+        "arayuz-07a-seans-gecmisi",
+    ),
+    (
+        r"^apps/ui/src/(screens/(AiHistoryScreen|KpiDashboardScreen)\.tsx|utils/(kpiGrafik|uptime)\.ts)",
+        "arayuz-07b-ai-gecmisi-kpi",
     ),
     (
         r"^apps/ui/src/(services/jetonBakiye\.ts|config/(entitlement|access|firma)\.ts|context/EntitlementContext\.tsx)",
         "arayuz-08-jeton",
     ),
     (r"^apps/ui/", "arayuz-09-yardimci"),
-    (r"^apps/backend/servers/api_server\.py$", "sunucu-10b-api-server"),
+    (r"^apps/backend/servers/api_server\.py$", "sunucu-10b-ana-sunucu"),
     (
         r"^apps/backend/servers/(ai_router|ai_pro_hedef|ai_client)\.py$|^apps/backend/utils/(image_domain|klinik_asgari|ses_kalitesi)\.py$",
         "sunucu-10c-ai",
@@ -150,12 +179,19 @@ KURALLAR = [
         r"^apps/backend/(servers/(live_state|seans_alan_kaydi|sensor_kaydedici|firmware_manager|efield_live|coil_run_tracker|session_state)\.py|headless_core\.py|controllers/|utils/(estop_mandali|stm32_\w+|stm_yakma|surum_uyumu|panel_yayin|mqtt_kimlik|mt_duzeltme|akim_olcumu|firmware_yakma_penceresi)\.py)",
         "sunucu-10f-bildirim-ws",
     ),
-    (r"^apps/backend/", "sunucu-10g-diger"),
+    (rf"^apps/backend/(.*/)?{_VT}\.py$", "sunucu-10g-veritabani"),
+    (r"^apps/backend/", "sunucu-10h-servis"),
     (r"^launcher/app/ui/", "launcher-11a-ui"),
-    (r"^launcher/app/windows/", "launcher-11c-nsis"),
-    (r"^launcher/", "launcher-11b-rust"),
-    (r"^apps/web/src/(pages/Legal\.tsx|config\.ts)$", "site-12c-yasal"),
-    (r"^apps/web/(api/|src/pages/(Pricing|Odeme)\.tsx|src/lib/|src/context/)", "site-12b-ticari"),
+    (r"^launcher/app/windows/", "launcher-11d-nsis"),
+    (r"^launcher/core/", "launcher-11c-rust-cekirdek"),
+    (r"^launcher/", "launcher-11b-rust-uygulama"),
+    (r"^apps/web/src/pages/Legal\.tsx$", "site-12e-yasal"),
+    (r"^apps/web/src/config\.ts$", "site-12c-icerik"),
+    (
+        r"^apps/web/src/(pages/(Download|ResetPassword|AuthRoute)\.tsx|components/(Download\w*|PackageBuilder|AccountButton)\.tsx|context/(AuthModal|AuthContext)\.tsx|lib/(authHatalari|supabase|download|os|usageStats)\.ts)$",
+        "site-12b-indirme-hesap",
+    ),
+    (r"^apps/web/(api/|src/pages/(Pricing|Odeme)\.tsx|src/lib/)", "site-12d-ticari"),
     (r"^apps/web/", "site-12a-sayfa"),
     (r"^dema-terapi-simülatörü/", "dema-13"),
 ]
@@ -215,6 +251,7 @@ def uret(kok: Path, taban_yolu: Path) -> dict:
         "surum": 1,
         "k2Kapsam": eski.get("k2Kapsam", "tamam-dosyalar"),
         "genelMuaf": eski.get("genelMuaf", []),
+        "genelMuafDesen": eski.get("genelMuafDesen", []),
         "gruplar": [
             {"ad": g, "sira": s, "kritik": k, "aciklama": a, "durum": "bekliyor", "metin": 0, "dosyaSayisi": 0}
             for g, s, k, a in GRUPLAR
@@ -223,6 +260,66 @@ def uret(kok: Path, taban_yolu: Path) -> dict:
     }
     defter_yaz(kok, d)
     return d
+
+
+def muaf_mi(defter: dict, dosya: str, metin: str) -> bool:
+    """Metin bu dosyada muaf mı: dosyanın `muaf` listesi · `genelMuaf` (birebir; ürün adı, birim, kod belirteci) · `genelMuafDesen`
+    (tam eşleşen düzenli ifade; ör. CSS sınıfı). Muaf dosya (`durum: muaf`) bütünüyle muaftır. Tek kaynak: K-2 ve `katalog.py taban`."""
+    kayit = defter.get("dosyalar", {}).get(dosya, {})
+    if kayit.get("durum") == "muaf":
+        return True
+    if any(x.get("metin") == metin for x in kayit.get("muaf", [])):
+        return True
+    if any(x.get("metin") == metin for x in defter.get("genelMuaf", [])):
+        return True
+    return any(re.fullmatch(x["desen"], metin) for x in defter.get("genelMuafDesen", []))
+
+
+#: Kaynak METNİ tarayan pytest kapıları: test bir yüzey dosyasını adıyla anıyor VE dosya içeriği okuyor. Parti bir dosyayı taşırken
+#: buradan o dosyayı anan testleri bulur ve `tests/i18n_yardimci.py` ile çevirir (zayıflatmadan; her çevrilen kapıya iki mutant).
+METIN_TARAYAN = "i18n/metin-tarayan-testler.txt"
+_OKUMA = re.compile(r"\.read_text\(|\.read_bytes\(|\bopen\(|\.open\(")
+
+
+def metin_tarayan_testler(kok: Path) -> list[tuple[str, list[str], bool]]:
+    """[(test, [andığı yüzey dosyaları], çevrildi mi)] — çevrildi: `i18n_yardimci` kullanıyor."""
+    kaynaklar = sorted({f for y in ortak.YUZEYLER for f in ortak.yuzey_dosyalari(y, kok)})
+    ad_sayisi = Counter(f.rsplit("/", 1)[-1] for f in kaynaklar)
+    testler = subprocess.run(
+        ["git", "-C", str(kok), "-c", "core.quotepath=off", "ls-files", "-z", "tests"], capture_output=True, check=True
+    ).stdout.decode("utf-8")
+    sonuc = []
+    for t in sorted(x for x in testler.split("\0") if x.endswith(".py") and "/test_" in "/" + x):
+        metin = (kok / t).read_text(encoding="utf-8", errors="replace").replace("\\", "/")
+        if not _OKUMA.search(metin):
+            continue
+        andigi = []
+        for f in kaynaklar:
+            parca = f.split("/")
+            # tam yol > son iki parça > (yalnız eşsizse) dosya adı — `App.tsx` / `index.html` gibi ortak adlar yanlış eşleşmesin
+            if (
+                f in metin
+                or "/".join(parca[-2:]) in metin
+                or (ad_sayisi[parca[-1]] == 1 and re.search(rf"\b{re.escape(parca[-1])}\b", metin))
+            ):
+                andigi.append(f)
+        if andigi:
+            sonuc.append((t, andigi, "i18n_yardimci" in metin))
+    return sonuc
+
+
+def metin_tarayan_yaz(kok: Path) -> int:
+    satirlar = [
+        "# I18N — kaynak METNİ tarayan pytest kapıları (T13). ÜRETİLİR: `python scripts/i18n/kapsam.py metin-tarayan` — elle düzenlemeyin.",
+        "# Biçim: <test> [ÇEVRİLDİ]? :: <andığı yüzey dosyaları>. Parti bir dosyayı taşırken: grep \"<dosya yolu>\" i18n/metin-tarayan-testler.txt",
+        "# → listelenen her testi `tests/i18n_yardimci.py` ile çevir (KURALLAR §Metin tarayan kapı) — ZAYIFLATMA, SİLME; iki mutant.",
+    ]
+    liste = metin_tarayan_testler(kok)
+    for t, andigi, cevrildi in liste:
+        satirlar.append(f"{t}{' [ÇEVRİLDİ]' if cevrildi else ''} :: {' '.join(andigi)}")
+    (kok / METIN_TARAYAN).parent.mkdir(parents=True, exist_ok=True)
+    (kok / METIN_TARAYAN).write_bytes(("\n".join(satirlar) + "\n").encode("utf-8"))
+    return len(liste)
 
 
 def durum_tablosu(d: dict) -> str:
@@ -253,11 +350,15 @@ def main(argv=None) -> int:
     f.add_argument("yol")
     f.add_argument("durum", choices=["tamam", "bekliyor", "muaf"])
     f.add_argument("--gerekce", default="")
+    alt.add_parser("metin-tarayan")
     a = ap.parse_args(argv)
     kok = Path(a.kok).resolve() if a.kok else ortak.KOK
     if a.komut == "uret":
         d = uret(kok, Path(a.taban))
         print(durum_tablosu(d))
+        return 0
+    if a.komut == "metin-tarayan":
+        print(f"[OK] {metin_tarayan_yaz(kok)} test → {METIN_TARAYAN}")
         return 0
     d = defter_oku(kok)
     if a.komut == "durum":

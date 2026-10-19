@@ -1,9 +1,9 @@
 {
   "dil": {
-    "baslik": "Dil / Language",
     "aciklama": "Uygulama dili. Seçiminiz bu cihazda hatırlanır; hesabınızdan ve profilinizden bağımsızdır.",
-    "secenekTr": "Türkçe",
+    "baslik": "Dil / Language",
+    "kayitHatasi": "Dil seçimi bu cihaza kaydedilemedi. Uygulama yeniden açıldığında cihaz dili kullanılır.",
     "secenekEn": "English",
-    "kayitHatasi": "Dil seçimi bu cihaza kaydedilemedi. Uygulama yeniden açıldığında cihaz dili kullanılır."
+    "secenekTr": "Türkçe"
   }
 }

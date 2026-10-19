@@ -1,0 +1,384 @@
+{
+ "aciklama": "K-7 (tests/test_i18n_ai_etiket_K7.py) — AI etiketlerinin arayüz (aiDetail.ts / AiHubScreen.DISEASE_FEATURE_TR) ile sunucu PDF'i (ai_rapor_ogeleri) arasındaki BİLİNÇLİ farkları. Ölçüldü I18N-0, taban c1e098ef. Ortak kimlikte TR farkı: ekran kısa, PDF sade / açıklamalı (78099b44, sahip bildirimi 2026-10-18 'raporda ne olduğu anlaşılmıyor'). TR birebir kuralı (Y158) bunları dondurur; birleştirme ayrı bir sahip kararıdır (S-I18N.3). Yeni AI etiketi: İKİ tarafa birlikte ekle ya da buraya gerekçeyle yaz.",
+ "gerekce": {
+  "farkli": "ekran kısa etiket ↔ PDF sade cümle (78099b44) — bilinçli",
+  "yalnizArayuz": "arayüzün ayrıntı satırında gösterilen teknik / ara alanlar; PDF bunları gizler (IC_ALANLAR / GIZLI_ALAN_PARCALARI)",
+  "yalnizSunucu": "PDF'te gösterilen, ekranda ayrı bileşenle (ResultInterpretation vb.) anlatılan alanlar"
+ },
+ "etiket": {
+  "farkli": {
+   "cancer_reasons": {
+    "arayuz": "Kanser gerekçesi",
+    "sunucu": "Kanser değerlendirmesinin gerekçesi"
+   },
+   "cat_count": {
+    "arayuz": "Kedi sayısı",
+    "sunucu": "Görüntüdeki kedi sayısı"
+   },
+   "class_counts": {
+    "arayuz": "Sınıf sayıları",
+    "sunucu": "Bulgu sayıları"
+   },
+   "closure": {
+    "arayuz": "Kapanma metrikleri",
+    "sunucu": "Yara kapanma ölçümleri"
+   },
+   "closure_pct": {
+    "arayuz": "Kapanma (%)",
+    "sunucu": "Yara kapanma oranı (%)"
+   },
+   "coverage_ratio": {
+    "arayuz": "Hücre kaplama oranı",
+    "sunucu": "Hücrelerin kapladığı alan oranı"
+   },
+   "detected": {
+    "arayuz": "Yüz tespit edildi",
+    "sunucu": "Yüz bulundu mu"
+   },
+   "eylem": {
+    "arayuz": "Yapılacak",
+    "sunucu": "Yapılması gereken"
+   },
+   "fgs_score": {
+    "arayuz": "FGS ağrı skoru",
+    "sunucu": "Yüz ifadesine göre ağrı skoru (FGS, 0–10)"
+   },
+   "fgs_total": {
+    "arayuz": "FGS ağrı skoru",
+    "sunucu": "Yüz ifadesine göre ağrı skoru (FGS, 0–10)"
+   },
+   "gap_area_mm2": {
+    "arayuz": "Gap alanı (mm²)",
+    "sunucu": "Açık kalan yara alanı (mm²)"
+   },
+   "localized": {
+    "arayuz": "Lokalize edildi",
+    "sunucu": "Konumu belirlendi mi"
+   },
+   "max_gap_um": {
+    "arayuz": "Maks gap (µm)",
+    "sunucu": "En geniş yara aralığı (µm)"
+   },
+   "mean_gap_um": {
+    "arayuz": "Ortalama gap (µm)",
+    "sunucu": "Ortalama yara aralığı (µm)"
+   },
+   "n_cancer": {
+    "arayuz": "Kanserli kuyu",
+    "sunucu": "Kanserli kuyucuk sayısı"
+   },
+   "n_detections": {
+    "arayuz": "Tespit sayısı",
+    "sunucu": "Bulgu sayısı"
+   },
+   "n_healthy": {
+    "arayuz": "Sağlıklı kuyu",
+    "sunucu": "Sağlıklı kuyucuk sayısı"
+   },
+   "n_masks": {
+    "arayuz": "Maske sayısı",
+    "sunucu": "Bulunan bölge sayısı"
+   },
+   "n_organs": {
+    "arayuz": "Lokalize organ",
+    "sunucu": "Konumu bulunan organ sayısı"
+   },
+   "n_patients": {
+    "arayuz": "Örnek/hasta sayısı",
+    "sunucu": "Örnek sayısı"
+   },
+   "n_wells": {
+    "arayuz": "Kuyu sayısı",
+    "sunucu": "Kuyucuk sayısı"
+   },
+   "n_wells_cancer": {
+    "arayuz": "Kanserli kuyu",
+    "sunucu": "Kanserli kuyucuk sayısı"
+   },
+   "pain_level": {
+    "arayuz": "Ağrı seviyesi",
+    "sunucu": "Ağrı düzeyi"
+   },
+   "pemf_gecerli": {
+    "arayuz": "PEMF geçerli",
+    "sunucu": "PEMF uygulamasına uygun mu"
+   },
+   "pemf_kapisi": {
+    "arayuz": "PEMF kapısı",
+    "sunucu": "PEMF uygunluk denetimi"
+   },
+   "pemf_valid": {
+    "arayuz": "PEMF girdisi geçerli",
+    "sunucu": "PEMF uygulamasına uygun mu"
+   },
+   "pose_type": {
+    "arayuz": "Poz tipi",
+    "sunucu": "Hayvanın duruşu"
+   },
+   "reliable": {
+    "arayuz": "Tespit güvenilir",
+    "sunucu": "Tespit güvenilir mi"
+   },
+   "risk_level": {
+    "arayuz": "Risk seviyesi",
+    "sunucu": "Risk düzeyi"
+   },
+   "surulebilir": {
+    "arayuz": "Bobin sürüşüne esas alınabilir",
+    "sunucu": "Bobin ayarına esas alınabilir mi"
+   },
+   "top_2_class": {
+    "arayuz": "2. tahmin",
+    "sunucu": "İkinci olası sonuç"
+   },
+   "top_2_prob": {
+    "arayuz": "2. olasılık",
+    "sunucu": "İkinci sonucun olasılığı"
+   },
+   "top_3_class": {
+    "arayuz": "3. tahmin",
+    "sunucu": "Üçüncü olası sonuç"
+   },
+   "top_3_prob": {
+    "arayuz": "3. olasılık",
+    "sunucu": "Üçüncü sonucun olasılığı"
+   },
+   "tumor_regions": {
+    "arayuz": "Tümör bölgeleri",
+    "sunucu": "Tümörlü bölgeler"
+   }
+  },
+  "yalnizArayuz": [
+   "E_avg",
+   "E_cancer",
+   "E_healthy",
+   "active",
+   "area",
+   "calibrated",
+   "cell_area_mean",
+   "cell_area_median",
+   "centroid_cabin_cm",
+   "classes",
+   "coord_frame",
+   "detections",
+   "device",
+   "driven",
+   "durationMin",
+   "duty",
+   "eField",
+   "freq",
+   "inference_ms",
+   "low_confidence",
+   "method",
+   "mm_per_px",
+   "n_cancer_pixels",
+   "name",
+   "nokta_gorunurlugu_dogrulanmadi",
+   "organId",
+   "organName",
+   "pemf_source",
+   "perCoil",
+   "phase",
+   "pixel_mm",
+   "predictions",
+   "prob_KIRC",
+   "prob_other",
+   "probabilities",
+   "remainingSec",
+   "results",
+   "score_mean",
+   "score_min",
+   "sessionActive",
+   "source",
+   "target",
+   "top_k",
+   "top_probability",
+   "tumor_id",
+   "tumors",
+   "well_id",
+   "wells"
+  ],
+  "yalnizSunucu": [
+   "bulunamadi_mesaji",
+   "n_tumors",
+   "not",
+   "predicted_class",
+   "probability_sick",
+   "yon_notu"
+  ]
+ },
+ "deger": {
+  "farkli": {
+   "ckd": {
+    "arayuz": "Kronik Böbrek Hastalığı (KBH) var",
+    "sunucu": "Kronik böbrek hastalığı (KBH) bulgusu var"
+   },
+   "feline asthma": {
+    "arayuz": "Kedi Astımı",
+    "sunucu": "Kedi astımı"
+   },
+   "feline calicivirus": {
+    "arayuz": "Kedi Kalisivirüsü",
+    "sunucu": "Kedi kalisivirüs enfeksiyonu"
+   },
+   "feline chlamydiosis": {
+    "arayuz": "Kedi Klamidyozu",
+    "sunucu": "Kedi klamidyozu"
+   },
+   "feline herpesvirus": {
+    "arayuz": "Kedi Herpesvirüsü",
+    "sunucu": "Kedi herpes virüs enfeksiyonu"
+   },
+   "feline immunodeficiency virus": {
+    "arayuz": "Kedi Bağışıklık Yetmezliği Virüsü (FIV)",
+    "sunucu": "Kedi bağışıklık yetmezliği virüsü (FIV)"
+   },
+   "feline infectious peritonitis": {
+    "arayuz": "Kedi Enfeksiyöz Peritoniti (FIP)",
+    "sunucu": "Kedi enfeksiyöz peritoniti (FIP)"
+   },
+   "feline leukemia virus": {
+    "arayuz": "Kedi Lösemi Virüsü (FeLV)",
+    "sunucu": "Kedi lösemi virüsü (FeLV)"
+   },
+   "feline panleukopenia": {
+    "arayuz": "Kedi Panlökopenisi",
+    "sunucu": "Kedi panlökopenisi (kedi gençlik hastalığı)"
+   },
+   "feline renal disease": {
+    "arayuz": "Kedi Böbrek Hastalığı",
+    "sunucu": "Kedi böbrek hastalığı"
+   },
+   "fungal infection": {
+    "arayuz": "Mantar Enfeksiyonu",
+    "sunucu": "Mantar enfeksiyonu"
+   },
+   "gastroenteritis": {
+    "arayuz": "Gastroenterit",
+    "sunucu": "Gastroenterit (mide-bağırsak iltihabı)"
+   },
+   "huntingmind": {
+    "arayuz": "Av modu",
+    "sunucu": "Av modunda"
+   },
+   "hyperthyroidism": {
+    "arayuz": "Hipertiroidizm",
+    "sunucu": "Hipertiroidizm (tiroid bezi aşırı çalışması)"
+   },
+   "inflammatory bowel disease": {
+    "arayuz": "İnflamatuar Bağırsak Hastalığı (IBD)",
+    "sunucu": "İnflamatuvar bağırsak hastalığı (IBD)"
+   },
+   "intestinal parasites": {
+    "arayuz": "Bağırsak Parazitleri",
+    "sunucu": "Bağırsak parazitleri"
+   },
+   "kirc": {
+    "arayuz": "Böbrek berrak hücreli karsinom (KIRC)",
+    "sunucu": "Böbrek berrak hücreli kanseri (KIRC)"
+   },
+   "kutu_butun": {
+    "arayuz": "Tüm Vücut",
+    "sunucu": "Tüm vücut"
+   },
+   "lateral": {
+    "arayuz": "Yandan (lateral)",
+    "sunucu": "Yandan"
+   },
+   "mating": {
+    "arayuz": "Çiftleşme",
+    "sunucu": "Çiftleşme çağrısı"
+   },
+   "notckd": {
+    "arayuz": "KBH yok (sağlıklı)",
+    "sunucu": "Kronik böbrek hastalığı bulgusu yok"
+   },
+   "oblique": {
+    "arayuz": "Eğik / çapraz",
+    "sunucu": "Çapraz açıdan"
+   },
+   "pancreatitis": {
+    "arayuz": "Pankreatit",
+    "sunucu": "Pankreatit (pankreas iltihabı)"
+   },
+   "ringworm": {
+    "arayuz": "Saçkıran (Dermatofitoz)",
+    "sunucu": "Saçkıran (deri mantarı, dermatofitoz)"
+   },
+   "sphinx": {
+    "arayuz": "Sfenks (oturmuş, önden)",
+    "sunucu": "Oturmuş (önden)"
+   },
+   "upper respiratory infection": {
+    "arayuz": "Üst Solunum Yolu Enfeksiyonu",
+    "sunucu": "Üst solunum yolu enfeksiyonu"
+   }
+  },
+  "yalnizArayuz": [
+   "aruco",
+   "aruco_pnp",
+   "cabin_aruco",
+   "cabin_cst_phantom_box",
+   "cabin_placement",
+   "coil_ring",
+   "cst_phantom_box",
+   "idle",
+   "patoloji",
+   "petri_diameter",
+   "phantom_layout",
+   "phantom_length",
+   "pixel",
+   "placement",
+   "plate",
+   "plate_grid",
+   "running",
+   "stopped",
+   "updated"
+  ],
+  "yalnizSunucu": [
+   "aggregate reticulocyte",
+   "erythrocyte",
+   "kidney stone",
+   "punctate reticulocyte",
+   "sick"
+  ]
+ },
+ "belirti": {
+  "farkli": {
+   "Appetite_Loss_bin": {
+    "arayuz": "İştah kaybı",
+    "sunucu": "İştahsızlık"
+   },
+   "Body_Temperature": {
+    "arayuz": "Ateş",
+    "sunucu": "Vücut ısısı (ateş)"
+   },
+   "Duration_days": {
+    "arayuz": "Şikâyet süresi",
+    "sunucu": "Şikâyetin süresi"
+   },
+   "Labored_Breathing_bin": {
+    "arayuz": "Zor solunum",
+    "sunucu": "Zor nefes alma"
+   },
+   "Skin_Lesions_bin": {
+    "arayuz": "Deri lezyonu",
+    "sunucu": "Deride yara / lezyon"
+   },
+   "has_Dehydration": {
+    "arayuz": "Dehidrasyon",
+    "sunucu": "Susuz kalma"
+   },
+   "has_Fever": {
+    "arayuz": "Ateş (semptom)",
+    "sunucu": "Ateş"
+   },
+   "has_Sneezing": {
+    "arayuz": "Hapşırık",
+    "sunucu": "Hapşırma"
+   }
+  },
+  "yalnizArayuz": [],
+  "yalnizSunucu": []
+ }
+}
