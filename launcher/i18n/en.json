@@ -1,0 +1,18 @@
+{
+  "nsis": {
+    "estopDogrulanamadi": "PEMF: coil E-stop could NOT be confirmed (nsExec=$0 $1) — check the coils MANUALLY; log: %APPDATA%\\PEMF_GUI\\logs\\uninstall_estop.log",
+    "estopDogrulanamadiKutu": "PEMF: coil emergency stop could NOT be confirmed ($0).$\\r$\\n$\\r$\\nCheck the coils MANUALLY (indicators on the device / switch the device off).$\\r$\\n$\\r$\\nDetails: $1$\\r$\\nLog: %APPDATA%\\PEMF_GUI\\logs\\uninstall_estop.log",
+    "estopDogrulandi": "PEMF: coil E-stop CONFIRMED — $1",
+    "estopGonderiliyor": "PEMF: active session safety — sending E-stop to the coils (port $2)…",
+    "kaldirildiKutu": "PEMF Vet was uninstalled.$\\r$\\n$\\r$\\nPATIENT RECORDS, SESSION HISTORY and AI ANALYSIS HISTORY WERE NOT DELETED.$\\r$\\nThey are medical records, so they are kept when uninstalling.$\\r$\\n$\\r$\\nLocation:$\\r$\\n$APPDATA\\PEMF_GUI$\\r$\\n$\\r$\\nTo delete them permanently, delete this folder manually, or reinstall and delete them from within the app (Patients → 'Delete All', AI History → 'Delete History').",
+    "kayitlarKorundu": "PEMF: Patient records, session history and AI analysis history were KEPT (medical records) — %APPDATA%\\PEMF_GUI",
+    "portGecersiz": "PEMF: backend.port is invalid ('$1') — E-stop skipped.",
+    "portVeriKokunden": "PEMF: backend.port not found in $INSTDIR — read from the data folder.",
+    "surecDurduruluyor": "PEMF: stopping the remaining backend processes…",
+    "temizlikTamam": "PEMF Vet Client cleanup completed.",
+    "veriSilIsaretli": "PEMF: 'Delete the application data' is checked — removing the downloaded runtime and models…",
+    "veriSilIsaretsiz": "PEMF: 'Delete the application data' is not checked — downloaded profiles/models are KEPT (they will not be downloaded again when you reinstall). To delete them completely, check the box when uninstalling.",
+    "yukseltmeKorunuyor": "PEMF: upgrade — downloaded models and cache are kept (they will not be downloaded again)."
+  },
+  "ui": {}
+}

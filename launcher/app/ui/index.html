@@ -687,6 +687,8 @@
       </div>
     </div>
 
+    <!-- I18N: launcher/i18n/{tr,en}.json → ui.* (ÜRETİLİR: scripts/i18n/launcher_uret.py). Modül betiğinden ÖNCE eşzamanlı yüklenir. -->
+    <script src="i18n_katalog.js"></script>
     <script type="module">
       const { invoke } = window.__TAURI__.core;
       const { listen } = window.__TAURI__.event;
@@ -1616,8 +1618,9 @@
         if (typeof yedekNotuDiliYenile === "function") yedekNotuDiliYenile();
         renderCards(); renderChips();
       }
-      $("lang-tr").onclick = () => { LANG = "tr"; applyLang(); };
-      $("lang-en").onclick = () => { LANG = "en"; applyLang(); };
+      // I18N: düğme Rust iletilerinin dilini de ayarlar (bayrak kapalıyken Rust tr kalır — dil.rs).
+      $("lang-tr").onclick = () => { LANG = "tr"; applyLang(); invoke("dil_ayarla", { kod: LANG }).catch(() => {}); };
+      $("lang-en").onclick = () => { LANG = "en"; applyLang(); invoke("dil_ayarla", { kod: LANG }).catch(() => {}); };
 
       // ---------- select cards ----------
       function orderedKeys() {
@@ -2550,6 +2553,12 @@
         applyLang();
         try {
           if (await invoke("guncelleme_modu")) { guncellemeEkrani(); return; }
+        } catch (_) {}
+        // I18N (Y161): açılış dili Rust'tan — bayrak kapalıyken HER ZAMAN tr (bugünkü gibi); açıkken uygulamanın seçimi / Windows dili.
+        // ⚠️ `guncelleme_modu`ndan SONRA: güncelleme ekranı kipinin işleyici listesinde yalnız o komut var (test_elle_aynalar_ESIT).
+        try {
+          const d = await invoke("dil_bilgisi");
+          if (d && (d.dil === "tr" || d.dil === "en") && d.dil !== LANG) { LANG = d.dil; applyLang(); }
         } catch (_) {}
         // 1) Giriş kapısı EN BAŞTA. `auth_status` yalnız YEREL blob'u okur; jeton tazeyse ağa
         //    hiç çıkmaz, süresi dolmuşsa duvar-saati bütçeli sessiz yenileme dener.

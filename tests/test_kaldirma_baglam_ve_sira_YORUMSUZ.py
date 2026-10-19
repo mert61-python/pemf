@@ -136,7 +136,9 @@ def test_ARAC_nsis_ayiklayici_iki_yorum_bicimini_ve_bloku_tanir():
 
 
 _SATIR = '    RMDir /r "$LOCALAPPDATA\\PEMF_System"\n'
-_ISARETSIZ = "  ${Else}\n    DetailPrint \"PEMF: 'uygulama verisini sil' işaretsiz"  # POSTUNINSTALL'ın ${Else}'i
+# POSTUNINSTALL'ın ${Else}'i. I18N-0: ileti LangString'e taşındı ("'uygulama verisini sil' işaretsiz …" → $(PEMF_veriSilIsaretsiz));
+# çapa aynı YAPISAL konumu işaretler (mutant uygulanmazsa test "iki denetleyici de YEŞİL" diye kırmızı — ölçüldü).
+_ISARETSIZ = "  ${Else}\n    DetailPrint \"$(PEMF_veriSilIsaretsiz)"
 _MUTANTLAR = {
     "M1_satir_dalin_DISINA": lambda m: m.replace(_SATIR, "", 1).replace(
         "  ${EndIf}\n  ; ── KVKK AÇIKLIĞI",

@@ -637,6 +637,23 @@ fn fetch_profiles_blocking() -> Result<serde_json::Value, String> {
     }))
 }
 
+/// I18N (Y161): arayüzün açılış dili + İngilizce bayrağı. Anlık iş (kilitli değişken okuma). Etkin dil açılışta `dil::baslat()` ile
+/// kurulur: bayrak kapalıyken HER ZAMAN tr; açıkken uygulamanın seçimi (`arayuz_dili.json`) > Windows görüntüleme dili > tr.
+#[tauri::command]
+fn dil_bilgisi() -> serde_json::Value {
+    serde_json::json!({ "dil": pemf_launcher_core::dil::etkin().kod(), "enAcik": pemf_launcher_core::dil::I18N_EN_ACIK })
+}
+
+/// I18N: arayüzdeki TR / EN düğmesi Rust iletilerinin dilini de ayarlar (bayrak kapalıyken tr kalır). Anlık iş. Dönüş: etkin dil.
+#[tauri::command]
+fn dil_ayarla(kod: String) -> String {
+    use pemf_launcher_core::dil;
+    match dil::Dil::coz(&kod) {
+        Some(d) => dil::ayarla(d).kod().to_string(),
+        None => dil::etkin().kod().to_string(),
+    }
+}
+
 /// Güncelleme indirme sayfasını varsayılan tarayıcıda aç. Manifest host-pinli kaynaktan gelir;
 /// yine de savunma: yalnız https + bilinen indirme host'ları (poisoned-manifest keyfi/zararlı
 /// URL açamasın). Sondaki "/" şart → "github.com.evil" ve userinfo (github.com@evil) hileleri geçmez.
@@ -2339,6 +2356,8 @@ fn uygulama_pencere_boyutu(wa_w: f64, wa_h: f64) -> ((f64, f64), (f64, f64)) {
 
 fn main() {
     let ctx = tauri::generate_context!();
+    // I18N: etkin dil (Rust iletileri + arayüzün açılış dili) — bayrak kapalıyken tr. Okuma hatası açılışı DURDURMAZ (tr'de kalır).
+    pemf_launcher_core::dil::baslat();
     // [GÜNCELLEME EKRANI] bilgilendirme penceresi kipi: normal açılışın hiçbiri koşmaz.
     if std::env::args().any(|a| a == GUNCELLEME_EKRANI_ARG) {
         guncelleme_ekranini_calistir(ctx);
@@ -2408,7 +2427,9 @@ fn main() {
             auth_status,
             auth_login,
             auth_logout,
-            guncelleme_modu
+            guncelleme_modu,
+            dil_bilgisi,
+            dil_ayarla
         ])
         .on_window_event(|window, event| {
             // Pencere kapanınca backend'i BIRAKMA: yetim süreç portu tutar ve sonraki açılışta
@@ -2566,9 +2587,9 @@ mod tests {
         ];
         // Senkron kalmasına İZİN verilen komutlar: yalnız ANLIK iş (atomik bayrak, kısa kilitli kopya, pencere yoklaması,
         // beklemeden süreç başlatma). Listede olmayan YENİ senkron komut → kırmızı: pencere iş parçacığında koşar, gözden geçir.
-        const ANLIK: [&str; 8] = [
+        const ANLIK: [&str; 10] = [
             "app_window_open", "get_progress", "get_prefetch_progress", "pause_install", "cancel_install", "resume_install",
-            "guncelleme_modu", "open_url",
+            "guncelleme_modu", "open_url", "dil_bilgisi", "dil_ayarla",
         ];
         let mut ihlal = Vec::new();
         for parca in soy.split("#[tauri::command]").skip(1) {

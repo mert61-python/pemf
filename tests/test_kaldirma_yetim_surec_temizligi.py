@@ -38,6 +38,10 @@ from pathlib import Path
 import pytest
 
 _KOK = Path(__file__).resolve().parent.parent
+if str(_KOK / "tests") not in sys.path:
+    sys.path.insert(0, str(_KOK / "tests"))
+import i18n_yardimci as _iy  # noqa: E402  — I18N: hooks iletileri LangString; görünen TR metin katalogdan (ölçüt aynı)
+
 _HOOKS = _KOK / "launcher" / "app" / "windows" / "hooks.nsi"
 _BACKEND_RS = _KOK / "launcher" / "core" / "src" / "backend.rs"
 
@@ -394,7 +398,8 @@ def test_estop_sonucu_yigindan_okunur_ve_gunluklenir(preuninstall_satirlari):
     assert "$0" in yazim and "$1" in yazim and "$2" in yazim, (
         f"Günlük satırı eksik ({yazim!r}): port ($2), nsExec dönüşü ($0) ve çıktı ($1) hepsi yazılmalı."
     )
-    assert any(s.startswith("MessageBox") and "ELLE" in s for s in ara), (
+    # I18N-0: ileti `$(PEMF_…)` LangString'i — kullanıcının gördüğü TR metin katalogdan (EN boşsa açılmaz → kırmızı).
+    assert any(s.startswith("MessageBox") and "ELLE" in _iy.gorunur_satir(s, "launcher") for s in ara), (
         "Doğrulanamayan E-stop etkileşimli kaldırmada kullanıcıya SÖYLENMİYOR — "
         "'bobinleri ELLE kontrol edin' MessageBox'ı (Silent/UpdateMode dışı) eklenmeli."
     )

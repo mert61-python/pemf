@@ -12,6 +12,7 @@
 //! Bu crate UI içermez ve ağ katmanından bağımsızdır; böylece indirme/doğrulama/
 //! kurulum mantığı headless olarak test edilebilir.
 
+pub mod dil;
 pub mod disk;
 pub mod firewall;
 pub mod auth;

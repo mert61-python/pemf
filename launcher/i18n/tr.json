@@ -1,0 +1,18 @@
+{
+  "nsis": {
+    "estopDogrulanamadi": "PEMF: bobin E-stop DOĞRULANAMADI (nsExec=$0 $1) — bobinleri ELLE kontrol edin; iz: %APPDATA%\\PEMF_GUI\\logs\\uninstall_estop.log",
+    "estopDogrulanamadiKutu": "PEMF: bobin acil-durdurma DOĞRULANAMADI ($0).$\\r$\\n$\\r$\\nBobinleri ELLE kontrol edin (cihaz üzerindeki göstergeler / fiziksel kapatma).$\\r$\\n$\\r$\\nAyrıntı: $1$\\r$\\nKayıt: %APPDATA%\\PEMF_GUI\\logs\\uninstall_estop.log",
+    "estopDogrulandi": "PEMF: bobin E-stop DOĞRULANDI — $1",
+    "estopGonderiliyor": "PEMF: aktif seans güvenliği — bobinlere E-stop gönderiliyor (port $2)…",
+    "kaldirildiKutu": "PEMF Vet kaldırıldı.$\\r$\\n$\\r$\\nHASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ.$\\r$\\nTıbbi kayıt oldukları için kaldırma sırasında korunurlar.$\\r$\\n$\\r$\\nKonum:$\\r$\\n$APPDATA\\PEMF_GUI$\\r$\\n$\\r$\\nKalıcı silmek isterseniz bu klasörü elle silin ya da yeniden kurup uygulama içinden silin (Hastalar → 'Tümünü Sil', AI Geçmişi → 'Geçmişi Sil').",
+    "kayitlarKorundu": "PEMF: Hasta kayıtları, seans geçmişi ve AI analiz geçmişi KORUNDU (tıbbi kayıt) — %APPDATA%\\PEMF_GUI",
+    "portGecersiz": "PEMF: backend.port geçersiz ('$1') — E-stop atlandı.",
+    "portVeriKokunden": "PEMF: backend.port $INSTDIR'de yok — veri kökünden okundu.",
+    "surecDurduruluyor": "PEMF: artık backend süreçleri durduruluyor…",
+    "temizlikTamam": "PEMF Vet Client temizliği tamamlandı.",
+    "veriSilIsaretli": "PEMF: 'uygulama verisini sil' işaretli — indirilen çalışma-zamanı ve modeller kaldırılıyor…",
+    "veriSilIsaretsiz": "PEMF: 'uygulama verisini sil' işaretsiz — indirilen profiller/modeller KORUNUYOR (yeniden kurulumda tekrar inmez). Tamamen silmek için kaldırırken kutuyu işaretleyin.",
+    "yukseltmeKorunuyor": "PEMF: yükseltme — indirilen modeller ve önbellek korunuyor (tekrar inmez)."
+  },
+  "ui": {}
+}

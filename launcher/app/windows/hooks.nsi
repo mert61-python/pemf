@@ -10,6 +10,26 @@
 ; PEMF_GUI) KVKK gereği client-kaldırmada KASITLI SİLİNMEZ.
 ; =============================================================================
 
+; I18N (Y157): kullanıcı iletileri launcher/i18n/{tr,en}.json → nsis.* içinde; aşağıdaki blok ÜRETİLİR (scripts/i18n/launcher_uret.py).
+; Hooks dosyası MUI_LANGUAGE'dan ÖNCE !include edilir → dil kimliği sayısal (1055 Türkçe, 1033 İngilizce); yalnız tauri.conf.json
+; bundle.windows.nsis.languages dilleri yazılır (yüklenmemiş dile LangString = yarım tablo; ölçüldü, -WX kırmızı).
+; >>> I18N-DIL — ÜRETİLMİŞ (scripts/i18n/launcher_uret.py): ELLE DÜZENLEMEYİN. Kaynak launcher/i18n/{tr,en}.json → nsis.*
+; Yalnız tauri.conf.json bundle.windows.nsis.languages dilleri yazılır (yüklenmemiş dil = yarım tablo, -WX kırmızı).
+LangString PEMF_estopDogrulanamadi 1055 "PEMF: bobin E-stop DOĞRULANAMADI (nsExec=$0 $1) — bobinleri ELLE kontrol edin; iz: %APPDATA%\PEMF_GUI\logs\uninstall_estop.log"
+LangString PEMF_estopDogrulanamadiKutu 1055 "PEMF: bobin acil-durdurma DOĞRULANAMADI ($0).$\r$\n$\r$\nBobinleri ELLE kontrol edin (cihaz üzerindeki göstergeler / fiziksel kapatma).$\r$\n$\r$\nAyrıntı: $1$\r$\nKayıt: %APPDATA%\PEMF_GUI\logs\uninstall_estop.log"
+LangString PEMF_estopDogrulandi 1055 "PEMF: bobin E-stop DOĞRULANDI — $1"
+LangString PEMF_estopGonderiliyor 1055 "PEMF: aktif seans güvenliği — bobinlere E-stop gönderiliyor (port $2)…"
+LangString PEMF_kaldirildiKutu 1055 "PEMF Vet kaldırıldı.$\r$\n$\r$\nHASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ.$\r$\nTıbbi kayıt oldukları için kaldırma sırasında korunurlar.$\r$\n$\r$\nKonum:$\r$\n$APPDATA\PEMF_GUI$\r$\n$\r$\nKalıcı silmek isterseniz bu klasörü elle silin ya da yeniden kurup uygulama içinden silin (Hastalar → 'Tümünü Sil', AI Geçmişi → 'Geçmişi Sil')."
+LangString PEMF_kayitlarKorundu 1055 "PEMF: Hasta kayıtları, seans geçmişi ve AI analiz geçmişi KORUNDU (tıbbi kayıt) — %APPDATA%\PEMF_GUI"
+LangString PEMF_portGecersiz 1055 "PEMF: backend.port geçersiz ('$1') — E-stop atlandı."
+LangString PEMF_portVeriKokunden 1055 "PEMF: backend.port $INSTDIR'de yok — veri kökünden okundu."
+LangString PEMF_surecDurduruluyor 1055 "PEMF: artık backend süreçleri durduruluyor…"
+LangString PEMF_temizlikTamam 1055 "PEMF Vet Client temizliği tamamlandı."
+LangString PEMF_veriSilIsaretli 1055 "PEMF: 'uygulama verisini sil' işaretli — indirilen çalışma-zamanı ve modeller kaldırılıyor…"
+LangString PEMF_veriSilIsaretsiz 1055 "PEMF: 'uygulama verisini sil' işaretsiz — indirilen profiller/modeller KORUNUYOR (yeniden kurulumda tekrar inmez). Tamamen silmek için kaldırırken kutuyu işaretleyin."
+LangString PEMF_yukseltmeKorunuyor 1055 "PEMF: yükseltme — indirilen modeller ve önbellek korunuyor (tekrar inmez)."
+; <<< I18N-DIL
+
 !macro NSIS_HOOK_PREUNINSTALL
   ; --- HASTA GÜVENLİĞİ: backend'i ÖLDÜRMEDEN ÖNCE bobinlere E-stop gönder ---
   ; Launcher pencereyle birlikte düzgün kapandıysa bobinler zaten durduruldu. AMA launcher
@@ -51,7 +71,7 @@
   IfErrors pemf_estop_done
   FileRead $0 $1
   FileClose $0
-  DetailPrint "PEMF: backend.port $INSTDIR'de yok — veri kökünden okundu."
+  DetailPrint "$(PEMF_portVeriKokunden)"
   pemf_estop_haveport:
   StrCmp $1 "" pemf_estop_done
   ; DENETİM 2026-08-04: $1 HAM satırdı ve doğrudan PowerShell -Command dizesine gömülüyordu.
@@ -63,10 +83,10 @@
   IntOp $2 $1 + 0
   ${If} $2 < 1
   ${OrIf} $2 > 65535
-    DetailPrint "PEMF: backend.port geçersiz ('$1') — E-stop atlandı."
+    DetailPrint "$(PEMF_portGecersiz)"
     Goto pemf_estop_done
   ${EndIf}
-  DetailPrint "PEMF: aktif seans güvenliği — bobinlere E-stop gönderiliyor (port $2)…"
+  DetailPrint "$(PEMF_estopGonderiliyor)"
   ; -TimeoutSec 10: backend bu ucu "senkron MQTT publish ~7sn worst-case" diye belgeliyor;
   ; 3 sn ESP bobinleri (6-8) yayınlanmadan dolabiliyordu. /TIMEOUT: powershell.exe'nin kendisi
   ; (AV taraması / bozuk PSModulePath) asılırsa kaldırma SÜRESİZ donmasın.
@@ -100,9 +120,9 @@
   Pop $1  ; yakalanan çıktı (OK …/FAIL=…); $1'in ham port satırı $2'ye sanitize edildi, artık gerekmez.
           ; İki Pop ŞART: ExecToStack yığına İKİ öğe iter; biri kalsa aşağıdaki kayıt geri-yüklemesi kayar.
   ${If} $0 == "0"
-    DetailPrint "PEMF: bobin E-stop DOĞRULANDI — $1"
+    DetailPrint "$(PEMF_estopDogrulandi)"
   ${Else}
-    DetailPrint "PEMF: bobin E-stop DOĞRULANAMADI (nsExec=$0 $1) — bobinleri ELLE kontrol edin; iz: %APPDATA%\PEMF_GUI\logs\uninstall_estop.log"
+    DetailPrint "$(PEMF_estopDogrulanamadi)"
   ${EndIf}
   ; Kaldırıcının kendi günlüğü yoktur; kaldırmadan SONRA da okunabilen tek satırlık iz bırak.
   ; %APPDATA%\PEMF_GUI = KVKK gereği client-kaldırmanın ASLA silmediği veri kökü (bkz. dosya başlığı +
@@ -129,7 +149,7 @@
   ${If} $0 != "0"
     ${IfNot} ${Silent}
     ${AndIf} $UpdateMode <> 1
-      MessageBox MB_OK|MB_ICONEXCLAMATION "PEMF: bobin acil-durdurma DOĞRULANAMADI ($0).$\r$\n$\r$\nBobinleri ELLE kontrol edin (cihaz üzerindeki göstergeler / fiziksel kapatma).$\r$\n$\r$\nAyrıntı: $1$\r$\nKayıt: %APPDATA%\PEMF_GUI\logs\uninstall_estop.log"
+      MessageBox MB_OK|MB_ICONEXCLAMATION "$(PEMF_estopDogrulanamadiKutu)"
     ${EndIf}
   ${EndIf}
   ; STM STOP'un async seri-kuyruktan porta yazılması için bekle (backend flush deadline'ı 1.5s).
@@ -138,7 +158,7 @@
   ; --- Ardından backend sürecini durdur (orphan runtime/ dosya kilidini bırak) ---
   ; (Servis modunda NSSM yeniden başlatır; o senaryo Inno-backend uninstaller'ının alanı.)
   ; taskkill'i kayıt-geri-yüklemeden ÖNCE yap; her iki yolda (atla/ilerle) yığın burada [$3o,$2o,$1o,$0o].
-  DetailPrint "PEMF: artık backend süreçleri durduruluyor…"
+  DetailPrint "$(PEMF_surecDurduruluyor)"
   nsExec::Exec /TIMEOUT=30000 'taskkill /F /IM PEMF_Backend.exe /T'
   Pop $0  ; taskkill nsExec dönüş-kodunu da AT
   ; ⚠️ DENETİM 2026-08-15 (kur→kaldır→yeniden-kur BOZULMASI): burada YALNIZ PEMF_Backend.exe
@@ -194,9 +214,9 @@
   ; Section'dan ÖNCE ayrıştırılıyor → hook çalışırken DOLUDUR.)
   ${If} ${Silent}
   ${OrIf} $UpdateMode = 1
-    DetailPrint "PEMF: yükseltme — indirilen modeller ve önbellek korunuyor (tekrar inmez)."
+    DetailPrint "$(PEMF_yukseltmeKorunuyor)"
   ${ElseIf} $DeleteAppDataCheckboxState = 1
-    DetailPrint "PEMF: 'uygulama verisini sil' işaretli — indirilen çalışma-zamanı ve modeller kaldırılıyor…"
+    DetailPrint "$(PEMF_veriSilIsaretli)"
     RMDir /r "$INSTDIR\runtime"
     RMDir /r "$INSTDIR\ai_models"
     RMDir /r "$INSTDIR\cache"
@@ -258,9 +278,9 @@
     ; kaldırmadan sonra `hotspot.log` geride kaldı. Buradaki yol kullanıcı-kapsamlıdır ve
     ; admin GEREKTİRMEZ → kancanın işi. (ProgramData tarafı gerçekten admin uninstaller'da.)
     RMDir /r "$LOCALAPPDATA\PEMF_System"
-    DetailPrint "PEMF Vet Client temizliği tamamlandı."
+    DetailPrint "$(PEMF_temizlikTamam)"
   ${Else}
-    DetailPrint "PEMF: 'uygulama verisini sil' işaretsiz — indirilen profiller/modeller KORUNUYOR (yeniden kurulumda tekrar inmez). Tamamen silmek için kaldırırken kutuyu işaretleyin."
+    DetailPrint "$(PEMF_veriSilIsaretsiz)"
   ${EndIf}
   ; ── KVKK AÇIKLIĞI (2026-08-08) ────────────────────────────────────────────────────────────
   ; "Uygulama verisini sil" kutusu tıbbi veriyi SİLMEZ (yalnız indirilen runtime/model/önbellek).
@@ -268,10 +288,10 @@
   ; Denetim Masası'ndan kaldıranlar client'ın açıklayıcı diyaloğunu GÖRMEZ; burada söylemek
   ; tek şansımız. Log'a her zaman yazılır; etkileşimli kaldırmada ayrıca gösterilir.
   ; ⚠️ ${Silent} kontrolü ŞART: self-update `/S` ile kurar; orada MessageBox kurulumu KİLİTLERDİ.
-  DetailPrint "PEMF: Hasta kayıtları, seans geçmişi ve AI analiz geçmişi KORUNDU (tıbbi kayıt) — %APPDATA%\PEMF_GUI"
+  DetailPrint "$(PEMF_kayitlarKorundu)"
   ${IfNot} ${Silent}
   ${AndIf} $UpdateMode <> 1
-    MessageBox MB_OK|MB_ICONINFORMATION "PEMF Vet kaldırıldı.$\r$\n$\r$\nHASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ.$\r$\nTıbbi kayıt oldukları için kaldırma sırasında korunurlar.$\r$\n$\r$\nKonum:$\r$\n$APPDATA\PEMF_GUI$\r$\n$\r$\nKalıcı silmek isterseniz bu klasörü elle silin ya da yeniden kurup uygulama içinden silin (Hastalar → 'Tümünü Sil', AI Geçmişi → 'Geçmişi Sil')."
+    MessageBox MB_OK|MB_ICONINFORMATION "$(PEMF_kaldirildiKutu)"
   ${EndIf}
   ; NOT: %APPDATA%\PEMF_GUI (hasta DB + SQLCipher/Fernet anahtarları) HER YOLDA KORUNUR (KVKK).
   ; Servisler (PemfBackend/mosquitto), C:\Program Files\PEMF Backend, C:\ProgramData\*,
