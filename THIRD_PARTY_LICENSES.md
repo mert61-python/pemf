@@ -164,6 +164,7 @@ dosyasından). ⚠️ Yalnız çok dillilik kütüphaneleri ve dolaylı bağıml
 
 | Paket | Sürüm | Lisans |
 |---|---|---|
+| `@babel/runtime` | 7.29.7 | MIT |
 | `html-parse-stringify` | 4.0.1 | MIT |
 | `i18next` | 26.4.2 | MIT |
 | `react-i18next` | 17.0.15 | MIT |

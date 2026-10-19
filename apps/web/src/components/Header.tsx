@@ -4,6 +4,7 @@ import { Link, NavLink } from 'react-router-dom'
 import { BRAND, NAV } from '../config'
 import { Logo, Download, Menu, Close } from './Icons'
 import AccountButton from './AccountButton'
+import DilDugmesi from './DilDugmesi'
 
 export default function Header() {
   const [open, setOpen] = useState(false)
@@ -38,6 +39,8 @@ export default function Header() {
         </nav>
 
         <div className="hidden items-center gap-3 lg:flex">
+          {/* I18N (Y161): dil düğmesi — İngilizce bayrağı kapalıyken hiç çizilmez. */}
+          <DilDugmesi />
           <AccountButton />
           <Link to="/download" className="btn-primary text-sm whitespace-nowrap">
             <Download className="h-4 w-4" />
@@ -73,6 +76,9 @@ export default function Header() {
             ))}
             <div className="mt-2 px-3">
               <AccountButton onNavigate={() => setOpen(false)} inline />
+            </div>
+            <div className="mt-2 px-3">
+              <DilDugmesi />
             </div>
             <Link to="/download" onClick={() => setOpen(false)} className="btn-primary mt-2 text-sm">
               <Download className="h-4 w-4" />

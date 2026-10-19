@@ -13,9 +13,11 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.109.0",
+    "i18next": "26.4.2",
     "iyzipay": "^2.0.69",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-i18next": "17.0.15",
     "react-router-dom": "^7.18.1"
   },
   "devDependencies": {

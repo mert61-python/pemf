@@ -48,7 +48,14 @@ _NPM_BASLIGI = "### Arayüz ve site (npm) — çok dillilik (I18N)"
 #: Sürüm ve lisans KİLİT DOSYASINDAN okunur (`package-lock.json` → `packages["node_modules/<ad>"]`); tahmin YAZILMAZ.
 #: ⚠️ Diğer npm bağımlılıkları (react, expo …) bu envanterde HİÇ YOK — I18N-0'dan önce de yoktu (S-I18N kaydı, sahibe).
 _NPM_KILITLERI = (KOK / "apps" / "ui" / "package-lock.json", KOK / "apps" / "web" / "package-lock.json")
-_NPM_PAKETLERI = ("i18next", "react-i18next", "html-parse-stringify", "void-elements", "use-sync-external-store")
+_NPM_PAKETLERI = (
+    "i18next",
+    "react-i18next",
+    "html-parse-stringify",
+    "void-elements",
+    "use-sync-external-store",
+    "@babel/runtime",
+)
 
 #: Paket adi -> lisans. `dist-info/METADATA` okunamayan paketler icin elle dogrulanmis
 #: degerler. ⚠️ Her satir PyPI sayfasindan dogrulanmistir; tahmin YAZILMAZ.
