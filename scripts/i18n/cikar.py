@@ -10,7 +10,9 @@ Kullanım (depo kökünden; gömülü Python):
     ..\\python.exe scripts\\i18n\\cikar.py --yuzey hepsi --olcum --cikti olcum.json   # ön ölçüm (karşılaştırma, upper/lower …)
 
 Aday kaydı: {yuzey, dosya, satir, sutun, metin (tek satır), ham (ekrandaki birebir), tur, baglam, oneri, yertutucular,
-birlesik, modulDuzeyi, bilesen, tVar, kaynakSatiri}. `tur`:
+birlesik, modulDuzeyi, bilesen, tVar, tGolge, kaynakSatiri}. `tVar`: çeviri işlevi (`useTranslation`'dan `t`) kapsamda · `tGolge`:
+yolda başka bir `t` (geri çağırma parametresi / yerel değişken) onu gölgeliyor — `uygula` reddeder. `modulDuzeyi` (Python): metin
+çağrı anında DEĞİL içe aktarmada değerlendirilir (modül / sınıf gövdesi, varsayılan argüman, bezeyici) — dil donar. `tur`:
   · TS/TSX: jsx-metin · oznitelik · oznitelik? (görünürlüğü bilinmeyen öznitelik) · ileti (Alert/toast/onay) · hata (new Error /
     throw) · nesne (nesne değeri; baglam = anahtar) · sabit (değişken ilk değeri) · sablon · sablon-parcasi · cagri · donus · dizi ·
     atama · varsayilan · jsx-ifade · dizgi
@@ -312,13 +314,15 @@ def py_adaylari(yol: str, metin: str) -> tuple[list[dict], list[dict]]:
     ns = Path(yol).stem
 
     def kapsam(n):
-        x = eb.get(n)
-        islev = None
+        """Metni ÇAĞRI ANINDA değerlendiren en içteki işlev; yoksa None (modül düzeyi). Varsayılan argüman, bezeyici ve tür ek
+        açıklaması işlev TANIMLANIRKEN değerlendirilir → o işlev sayılmaz (modül düzeyindeki `def f(x="Metin")` dili içe aktarmada
+        dondururdu)."""
+        c, x = n, eb.get(n)
         while x is not None:
-            if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef)) and islev is None:
-                islev = x.name
-            x = eb.get(x)
-        return islev
+            if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef)) and any(c is s for s in x.body):
+                return x.name
+            c, x = x, eb.get(x)
+        return None
 
     def sinif(n) -> tuple[str, str] | None:
         """None = kesin kod / günlük. Aksi hâlde (tür, bağlam)."""

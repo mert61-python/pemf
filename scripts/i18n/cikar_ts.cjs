@@ -208,12 +208,40 @@ function cikarKaynak(metin, dosya, secenek) {
     return tekSatir(metin.slice(bas, son)).slice(0, 200);
   };
 
-  /** Düğümün içinde bulunduğu bileşen / işlev ve `t` kapsamda mı. */
+  // `t` bağlaması. ÇEVİRİ işlevi yalnız `const { t } = useTranslation(…)` (ya da `TFunction` türlü parametre). Düğümden yukarı yolda
+  // EN İÇTEKİ `t` bağlaması kazanır; o başka bir şeyse (geri çağırma parametresi `.map((t) => …)`, yerel değişken, döngü / catch
+  // değişkeni, modül düzeyi içe aktarma) çeviri işlevini GÖLGELER → `tGolge` (uygula reddeder: eklenen `t("…")` yanlış işlevi çağırırdı).
+  const tBaglar = (ad) =>
+    !!ad &&
+    ((ts.isIdentifier(ad) && ad.text === "t") ||
+      ((ts.isObjectBindingPattern(ad) || ts.isArrayBindingPattern(ad)) &&
+        ad.elements.some((el) => !ts.isOmittedExpression(el) && tBaglar(el.name))));
+  const useTranslationCagrisi = (e) => {
+    while (e && (ts.isAwaitExpression(e) || ts.isParenthesizedExpression(e) || ts.isAsExpression(e))) e = e.expression;
+    return !!e && ts.isCallExpression(e) && ts.isIdentifier(e.expression) && e.expression.text === "useTranslation";
+  };
+  const bildirimTuru = (d) => (ts.isObjectBindingPattern(d.name) && useTranslationCagrisi(d.initializer) ? "ceviri" : "golge");
+  function blokBaglamasi(ifadeler) {
+    for (const st of ifadeler) {
+      if (ts.isVariableStatement(st)) {
+        for (const d of st.declarationList.declarations) if (tBaglar(d.name)) return bildirimTuru(d);
+      } else if ((ts.isFunctionDeclaration(st) || ts.isClassDeclaration(st)) && st.name && st.name.text === "t") {
+        return "golge";
+      } else if (ts.isImportDeclaration(st) && st.importClause) {
+        const ic = st.importClause;
+        if (ic.name && ic.name.text === "t") return "golge";
+        if (ic.namedBindings && ts.isNamedImports(ic.namedBindings) && ic.namedBindings.elements.some((el) => el.name.text === "t")) return "golge";
+      }
+    }
+    return null;
+  }
+
+  /** Düğümün içinde bulunduğu bileşen / işlev ve `t` bağlaması (`tVar`: çeviri işlevi kapsamda · `tGolge`: başka bir `t` gölgeliyor). */
   function kapsam(n) {
     let x = n.parent;
     let islev = null;
     let bilesen = null;
-    let tVar = false;
+    let tDurum = null;
     while (x) {
       if (ts.isFunctionDeclaration(x) || ts.isFunctionExpression(x) || ts.isArrowFunction(x) || ts.isMethodDeclaration(x)) {
         let ad = "";
@@ -222,26 +250,25 @@ function cikarKaynak(metin, dosya, secenek) {
         else if (x.parent && ts.isPropertyAssignment(x.parent) && ts.isIdentifier(x.parent.name)) ad = x.parent.name.text;
         if (!islev) islev = ad || "(adsız)";
         if (!bilesen && /^[A-Z]/.test(ad)) bilesen = ad;
-        if (!tVar && x.body && ts.isBlock(x.body)) {
-          for (const st of x.body.statements) {
-            if (!ts.isVariableStatement(st)) continue;
-            for (const d of st.declarationList.declarations) {
-              const ad2 = d.name;
-              if (ts.isIdentifier(ad2) && ad2.text === "t") tVar = true;
-              if (ts.isObjectBindingPattern(ad2) && ad2.elements.some((el) => el.name && ts.isIdentifier(el.name) && el.name.text === "t")) tVar = true;
-            }
-          }
-        }
-        if (!tVar && x.parameters) {
+        if (tDurum === null && x.body && ts.isBlock(x.body)) tDurum = blokBaglamasi(x.body.statements);
+        if (tDurum === null && x.parameters) {
           for (const p of x.parameters) {
-            if (ts.isIdentifier(p.name) && p.name.text === "t") tVar = true;
-            if (ts.isObjectBindingPattern(p.name) && p.name.elements.some((el) => el.name && ts.isIdentifier(el.name) && el.name.text === "t")) tVar = true;
+            if (!tBaglar(p.name)) continue;
+            tDurum = ts.isIdentifier(p.name) && p.type && /\bTFunction\b/.test(p.type.getText(sf)) ? "ceviri" : "golge";
+            break;
           }
         }
+      } else if (tDurum === null && (ts.isBlock(x) || ts.isSourceFile(x) || ts.isModuleBlock(x) || ts.isCaseClause(x) || ts.isDefaultClause(x))) {
+        tDurum = blokBaglamasi(x.statements);
+      } else if (tDurum === null && (ts.isForOfStatement(x) || ts.isForInStatement(x) || ts.isForStatement(x))) {
+        const b = x.initializer;
+        if (b && ts.isVariableDeclarationList(b) && b.declarations.some((d) => tBaglar(d.name))) tDurum = "golge";
+      } else if (tDurum === null && ts.isCatchClause(x)) {
+        if (x.variableDeclaration && tBaglar(x.variableDeclaration.name)) tDurum = "golge";
       }
       x = x.parent;
     }
-    return { islev, bilesen, tVar, modulDuzeyi: !islev };
+    return { islev, bilesen, tVar: tDurum === "ceviri", tGolge: tDurum === "golge", modulDuzeyi: !islev };
   }
 
   function ekle(n, metinDegeri, turAdi, baglam, ek) {
@@ -267,6 +294,7 @@ function cikarKaynak(metin, dosya, secenek) {
           bilesen: kp.bilesen,
           islev: kp.islev,
           tVar: kp.tVar,
+          tGolge: kp.tGolge,
           modulDuzeyi: kp.modulDuzeyi,
           kaynakSatiri: satirMetni(n),
         },

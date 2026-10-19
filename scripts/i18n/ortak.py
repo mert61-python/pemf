@@ -11,6 +11,7 @@ uygulamayı aynı örnek listesiyle karşılaştırır (sürüklenme kapısı).
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -18,6 +19,15 @@ from pathlib import Path
 KOK = Path(__file__).resolve().parents[2]
 DILLER = ("tr", "en")
 YEDEK_DIL = "tr"
+
+
+def varsayilan_taban() -> Path:
+    """Göç öncesi TR tabanı (`cikar.py --taban` çıktısı) — depo DIŞINDA, denetim klasöründe. `PEMF_I18N_TABAN` ile değişir; sahte
+    evli kafes koşucusunda (ev / PEMF_* sıfırlanır) araçlara `--taban <yol>` AÇIKÇA verilir."""
+    return Path(
+        os.environ.get("PEMF_I18N_TABAN") or Path.home() / "Desktop" / "DENETIM" / "I18N" / "taban-tr-metinler.json"
+    )
+
 
 #: Yüzey → katalog düzeni. "dizin": {dil}/<ad-alanı>.json (ad alanı = dosya adı, kök anahtar) · "dosya": {dil}.json (tek dosya).
 KATALOGLAR = {
