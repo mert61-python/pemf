@@ -168,6 +168,7 @@ Tam adım-adım: **[`BUILD.md`](BUILD.md)**. En kısa hâli (guii kökünden):
 - 🌐 **AI offline** — `apps/backend/utils/model_downloader.py` yalnız yerel kökleri arar; internetten model çekmez.
 - ✏️ Web/mobil UI'yi **`apps/ui/`'te düzenle** — `frontend/src` bayat kopyadır.
 - 🚀 **Launcher AYRI yayınlanır** (base-app/APK republish onu güncellemez).
+- 🌍 **Çok dillilik (TR + EN):** kullanıcıya görünen her metin katalogdan gelir; yeni metin **iki dilde birlikte** eklenir, var olan Türkçe bayt bayt aynı kalır. İngilizce bayrağı kapalı (`i18n/bayrak.json`). Kısa kural: [`CLAUDE.md`](CLAUDE.md) · ayrıntı: [`i18n/KURALLAR.md`](i18n/KURALLAR.md) · göç durumu: `i18n/kapsam.json` · araçlar `scripts/i18n/`.
 
 ---
 İlgili: [BUILD.md](BUILD.md) · [docs/ (doküman indeksi)](docs/README.md) · [ARCHITECTURE.md](docs/ARCHITECTURE.md) · [RUNBOOK.md](docs/RUNBOOK.md)
