@@ -120,7 +120,9 @@ def py_uygula(dosya: str, metin: str, islemler: list[dict]) -> tuple[str, list[d
                         break
                     ad = a["yertutucular"][sira - 1]
                     ad = (is_.get("yerAdlari") or {}).get(ad, ad)
-                    argumanlar.append(f"{ad}={ast.get_source_segment(metin, v.value)}")
+                    # ast.unparse — konumdan BAĞIMSIZ: Python 3.10'da çok satırlı f-string içindeki ifade konumları yanlış; kaynak
+                    # dilimi (get_source_segment) bozuk kod üretiyordu (ölçüldü: PDF altbilgisi `tarih=('%d/%m/%Y %H:%M')}`).
+                    argumanlar.append(f"{ad}={ast.unparse(v.value)}")
             if not ok:
                 red.append({**is_, "neden": "f-string biçim belirteci ({x:.1f} / !r) — değeri önce biçimleyip elle"})
                 continue

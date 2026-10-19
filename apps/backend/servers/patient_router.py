@@ -9,6 +9,7 @@ import os
 from database.patient_database import get_patient_database
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
+from utils import ceviri
 from utils.profil import istek_profili
 
 router = APIRouter(tags=["patients"])
@@ -24,10 +25,10 @@ def _enforce_patient_auth(request: Request) -> None:
     try:
         from servers.auth import check_token
     except Exception:
-        raise HTTPException(status_code=503, detail="Auth altyapisi kullanilamiyor")
+        raise HTTPException(status_code=503, detail=ceviri.t("hasta.hata.kimlikAltyapisiYok"))
     tok = request.headers.get("X-API-Key") or request.query_params.get("token") or ""
     if not check_token(tok):
-        raise HTTPException(status_code=401, detail="Operator token gerekli (hasta verisi korumali).")
+        raise HTTPException(status_code=401, detail=ceviri.t("hasta.hata.operatorJetonuGerekli"))
 
 
 class PatientInput(BaseModel):
@@ -80,8 +81,7 @@ def get_all_patients(request: Request, limit: int = 0, offset: int = 0):
         )
         raise HTTPException(
             status_code=503,
-            detail="Hasta kayıtları okunamadı (hasta veritabanı açılamıyor) — bu 'hasta yok' demek değil, yeni kart "
-            "açmayın. Uygulamayı yeniden başlatın; sürerse teknik desteğe başvurun.",
+            detail=ceviri.t("hasta.hata.listeOkunamadi"),
         )
     total = db.count_patients(profil=profil)
     return {"status": "success", "data": data, "total": total}
@@ -112,9 +112,7 @@ def add_new_patient(patient: PatientInput, request: Request):
     if not payload["operator_email"] and kayitli_operator_var():
         raise HTTPException(
             status_code=428,
-            detail=kimliksiz_detayi(
-                "Operatör seçin — hasta eklemek için önce üst bardan hangi hekim olduğunuzu seçin."
-            ),
+            detail=kimliksiz_detayi(ceviri.t("hasta.hata.ekleOperatorSecin")),
         )
     # SG.G1: yeni kayıt oluşturulduğu profille yazılır (başlık yoksa boş → eski kayıt kuralı, S-SG.7). Güncelleme (yukarıda) profile DOKUNMAZ.
     payload["profil"] = istek_profili(request) or ""
@@ -144,7 +142,7 @@ def remove_patient(patient_id: str, request: Request):
     # Kapı: tests/test_hasta_TEKIL_silme_OLMAYAN_404_Y108.py
     if str(patient_id) not in sahipler:
         _iz.kimlikli_yaz(request, "patient.delete", scope=f"id={patient_id}", item_count=0, outcome="bulunamadi")
-        raise HTTPException(status_code=404, detail="Hasta bulunamadı — zaten silinmiş olabilir; listeyi yenileyin.")
+        raise HTTPException(status_code=404, detail=ceviri.t("hasta.hata.bulunamadi"))
     success = db.delete_patient(patient_id)
     _iz.kimlikli_yaz(
         request,
@@ -154,9 +152,7 @@ def remove_patient(patient_id: str, request: Request):
         outcome="ok" if success else "hata",
     )
     if not success:
-        raise HTTPException(
-            status_code=500, detail="Hasta silinemedi — kayıt duruyor; birkaç saniye sonra yeniden deneyin."
-        )
+        raise HTTPException(status_code=500, detail=ceviri.t("hasta.hata.silinemedi"))
     return {"status": "success"}
 
 
@@ -184,11 +180,11 @@ def remove_patients_bulk(request: Request, payload: BulkDeletePayload):
     if payload.confirm != "DELETE_SELECTED":
         raise HTTPException(
             status_code=400,
-            detail='Toplu silme için onay gerekli: gövdede {"confirm":"DELETE_SELECTED"} gönderin.',
+            detail=ceviri.t("hasta.hata.topluSilmeOnaySecili"),
         )
     istenen = sorted({str(x) for x in (payload.patient_ids or []) if str(x or "").strip()})
     if not istenen:
-        raise HTTPException(status_code=400, detail="Silinecek hasta seçilmedi.")
+        raise HTTPException(status_code=400, detail=ceviri.t("hasta.hata.silinecekSecilmedi"))
     db = get_patient_database()
     if not db:
         raise HTTPException(status_code=500, detail="Patient DB not initialized")
@@ -234,8 +230,7 @@ def remove_all_patients(request: Request, payload: DeleteAllPayload = DeleteAllP
         _iz.kimlikli_yaz(request, "patient.delete_all", scope="TUM_HASTALAR", item_count=0, outcome="reddedildi")
         raise HTTPException(
             status_code=403,
-            detail="Tüm hastaları silmek yalnız cihazın kendi ekranından yapılabilir (telefon ya da ağdaki başka "
-            "bir cihazdan değil).",
+            detail=ceviri.t("hasta.hata.tumunuSilYalnizCihaz"),
         )
     # ⚠️ Y106 (S-B.3): kayıtlı operatörlü klinikte kliniğin TAMAMINI silme SEÇİLİ operatör (jeton) ister — kimliksiz (kimse
     # seçili değil, kilit sonrası eski jeton) 428; silme izi o hekimin adına (`kimlikli_yaz` jetondan). Eskiden cihaz ekranından
@@ -249,14 +244,10 @@ def remove_all_patients(request: Request, payload: DeleteAllPayload = DeleteAllP
         _iz.kimlikli_yaz(request, "patient.delete_all", scope="TUM_HASTALAR", item_count=0, outcome="reddedildi")
         raise HTTPException(
             status_code=428,
-            detail=kimliksiz_detayi(
-                "Operatör seçin — tüm hastaları silmek için önce üst bardan hangi hekim olduğunuzu seçin."
-            ),
+            detail=kimliksiz_detayi(ceviri.t("hasta.hata.tumunuSilOperatorSecin")),
         )
     if payload.confirm != "DELETE_ALL":
-        raise HTTPException(
-            status_code=400, detail="Toplu silme için onay gerekli: gövdede {\"confirm\":\"DELETE_ALL\"} gönderin."
-        )
+        raise HTTPException(status_code=400, detail=ceviri.t("hasta.hata.topluSilmeOnayTumu"))
     db = get_patient_database()
     if not db:
         raise HTTPException(status_code=500, detail="Patient DB not initialized")
@@ -289,5 +280,5 @@ def remove_all_patients(request: Request, payload: DeleteAllPayload = DeleteAllP
         detail={"vacuum": vacuum_ok, **({"profil": _silme_profili} if _silme_profili else {})},
     )
     if not ok:
-        return {"status": "error", "deleted": 0, "detail": "Hastalar silinemedi — kayıtlar duruyor."}
+        return {"status": "error", "deleted": 0, "detail": ceviri.t("hasta.hata.topluSilinemedi")}
     return {"status": "success", "deleted": silinen, "vacuum_ok": vacuum_ok}

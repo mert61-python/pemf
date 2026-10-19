@@ -709,3 +709,52 @@ def test_taban_yer_tutucu_adi_ve_birlesik_parca_KENDI_anahtarinda(tmp_path):
     _yaz(tmp_path, "apps/ui/src/B.tsx", "export const B = () => null;\n")
     sorun = katalog.taban_karsilastir(tmp_path, ["apps/ui/src/A.tsx", "apps/ui/src/B.tsx"], tmp_path / "taban.json")
     assert len(sorun) == 1 and "B.tsx" in sorun[0], sorun
+
+
+def test_uygula_python_COK_SATIRLI_fstring_ifadesi_konumdan_bagimsiz(tmp_path):
+    """Python 3.10'da çok satırlı f-string içindeki ifade konumları yanlış — kaynak dilimi bozuk kod üretiyordu (PDF altbilgisi);
+    argüman `ast.unparse` ile yazılır, sonuç derlenir ve ifade AYNEN taşınır."""
+    import ast as _ast
+
+    dosya = "apps/backend/servers/rapor.py"
+    kaynak = (
+        "from datetime import datetime\n\n\n"
+        "def altbilgi(n):\n"
+        '    metin = f"""\n'
+        "    Toplam {n} seans.\n"
+        "    Rapor tarihi: {datetime.now().strftime('%d/%m/%Y')}\n"
+        '    """\n'
+        "    return metin\n"
+    )
+    _yaz(tmp_path, dosya, kaynak)
+    for dil in ("tr", "en"):
+        _yaz(tmp_path, f"apps/backend/i18n/{dil}.json", "{}\n")
+    _yaz(tmp_path, "i18n/kapsam.json", '{"dosyalar": {}}\n')
+    assert (
+        _kos("cikar.py", "--kok", str(tmp_path), "--dosya", dosya, "--cikti", str(tmp_path / "aday.json")).returncode
+        == 0
+    )
+    assert (
+        _kos(
+            "uygula.py",
+            "--kok",
+            str(tmp_path),
+            "sablon",
+            str(tmp_path / "aday.json"),
+            "--cikti",
+            str(tmp_path / "e.json"),
+        ).returncode
+        == 0
+    )
+    e = json.loads((tmp_path / "e.json").read_text(encoding="utf-8"))
+    assert len(e["islemler"]) == 1
+    e["islemler"][0].update({"anahtar": "rapor.altbilgi", "yerAdlari": {"deger2": "tarih"}})
+    (tmp_path / "e.json").write_text(json.dumps(e, ensure_ascii=False), encoding="utf-8")
+    assert _kos("uygula.py", "--kok", str(tmp_path), "uygula", str(tmp_path / "e.json")).returncode == 0
+    agac = _ast.parse((tmp_path / dosya).read_text(encoding="utf-8"))  # bozuk kod → SyntaxError
+    cagri = next(n for n in _ast.walk(agac) if isinstance(n, _ast.Call) and _ast.unparse(n.func) == "ceviri.t")
+    assert {k.arg: _ast.unparse(k.value) for k in cagri.keywords} == {
+        "n": "n",
+        "tarih": "datetime.now().strftime('%d/%m/%Y')",
+    }
+    assert _json(tmp_path, "apps/backend/i18n/tr.json")["rapor"]["altbilgi"].count("{{tarih}}") == 1

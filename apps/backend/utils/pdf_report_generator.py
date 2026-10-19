@@ -46,6 +46,8 @@ except ImportError:
 
 from database.treatment_history_db import get_treatment_db
 
+from utils import ceviri
+
 # DENETIM P2: rapor sorgulari SABIT limit=1000 kullaniyordu → yogun bir klinikte en yeni 1000
 # seansin DISINDA kalan kayitlar rapora SESSIZCE girmiyordu (hasta raporunda eksik gecmis;
 # ID ile ACIKCA istenen seanslar ise hic uyari vermeden dusuyordu). Limit yukseltildi ve
@@ -535,10 +537,15 @@ class PDFReportGenerator:
     def _add_header(
         self,
         story,
-        baslik: str = "PEMF TEDAVİ RAPORU",
-        alt_baslik: str = "Pulsed Electromagnetic Field Therapy - Veteriner Uygulaması",
+        baslik: str | None = None,
+        alt_baslik: str | None = None,
     ):
-        """Rapor başlığını ekle (boş başlık / alt başlık yazılmaz)."""
+        """Rapor başlığını ekle (boş başlık / alt başlık yazılmaz; verilmezse varsayılan — rapor dilinde)."""
+        # I18N: varsayılan argüman tanım anında (içe aktarmada) değerlendirilirdi → dil donardı. None → çağrı anında çeviri.
+        if baslik is None:
+            baslik = ceviri.t("pdf.baslik.varsayilan")
+        if alt_baslik is None:
+            alt_baslik = ceviri.t("pdf.baslik.altVarsayilan")
         # Logo (eğer varsa)
         logo_path = Path(__file__).parent / "assets" / "pemf_logo.png"
         if logo_path.exists():
@@ -565,9 +572,9 @@ class PDFReportGenerator:
         report_date = datetime.now().strftime("%d/%m/%Y %H:%M")
 
         info_data = [
-            ["Rapor Tarihi:", report_date],
-            ["Toplam Seans:", str(session_count)],
-            ["Rapor Türü:", "Tedavi Geçmişi Raporu"],
+            [ceviri.t("pdf.bilgi.raporTarihi"), report_date],
+            [ceviri.t("pdf.bilgi.toplamSeans"), str(session_count)],
+            [ceviri.t("pdf.bilgi.raporTuru"), ceviri.t("pdf.bilgi.seansGecmisiRaporu")],
         ]
 
         info_table = Table(info_data, colWidths=[3 * cm, 5 * cm])
@@ -938,17 +945,15 @@ class PDFReportGenerator:
         if metin:
             story.append(
                 Paragraph(
-                    _esc(f"{metin} Rapor tarihi: {datetime.now().strftime('%d.%m.%Y %H:%M')}"), self.styles['Footer']
+                    _esc(
+                        ceviri.t("pdf.altBilgi.tarihli", metin=metin, tarih=datetime.now().strftime('%d.%m.%Y %H:%M'))
+                    ),
+                    self.styles['Footer'],
                 )
             )
             return
 
-        footer_text = f"""
-        Bu rapor PEMF (Pulsed Electromagnetic Field) tedavi cihazı tarafından otomatik olarak oluşturulmuştur.
-        Rapor tarihi: {datetime.now().strftime('%d/%m/%Y %H:%M')}
-
-        Veteriner PEMF Tedavi Sistemi v1.0
-        """
+        footer_text = ceviri.t("pdf.altBilgi.varsayilan", tarih=datetime.now().strftime('%d/%m/%Y %H:%M'))
 
         footer = Paragraph(footer_text, self.styles['Footer'])
         story.append(footer)

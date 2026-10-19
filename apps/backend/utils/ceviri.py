@@ -50,10 +50,13 @@ _YER_TUTUCU = re.compile(r"\{\{\s*(\w+)\s*\}\}")
 
 
 def katalog_dizini() -> Path:
-    """Katalog dizini. Donmuş EXE'de `_MEIPASS/i18n` (ÖNCE); kaynak çalışmada `apps/backend/i18n`."""
+    """Katalog dizini. Donmuş EXE'de `_MEIPASS/i18n` (ÖNCE); kaynak çalışmada `apps/backend/i18n` — kök DERİNLİKTEN BAĞIMSIZ
+    bulunur (`kaynak_kokunu_bul`; elle `parents[N]` çıpası yasak: tests/test_kok_capasi_derinlikten_bagimsiz.py)."""
     if getattr(sys, "frozen", False):
         return Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent)) / "i18n"
-    return Path(__file__).resolve().parents[1] / "i18n"
+    from utils.path_utils import kaynak_kokunu_bul
+
+    return Path(kaynak_kokunu_bul(Path(__file__))) / "apps" / "backend" / "i18n"
 
 
 def _duzlestir(d: dict, onek: str = "") -> dict[str, str]:

@@ -439,7 +439,7 @@ async def analyze_disease(data: DiseaseInput):
                 )
             except Exception as xe:
                 logger.warning("cat_disease XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
-                yanit["xai_error"] = "Açıklama üretilemedi"
+                yanit["xai_error"] = ceviri.t("ai.sonuc.aciklamaUretilemedi")
         return yanit
     except Exception as e:
         logger.error(f"Disease inference error: {e}", exc_info=True)
@@ -636,6 +636,8 @@ def _ai_kare_yabanci(client_id) -> bool:
 
 
 import threading as _ai_threading
+
+from utils import ceviri
 
 # TOCTOU koruma: start/stop check-and-set atomik olsun → iki es-zamanli /ai/pro/start ikinci bir
 # kamera loop'u acip VideoCapture(0)'i cakistiramasin / bobinleri cift suremesin.
@@ -1199,7 +1201,7 @@ def _pemf_alanlari(payload: dict, model: str) -> dict:
         return _pk.yanit_alanlari(payload, model=model)
     except Exception:
         logger.warning("%s PEMF kapısı alanları üretilemedi → geçersiz işaretlendi", model, exc_info=True)
-        _m = "PEMF geçerliliği hesaplanamadı — D/P/E değerleri kullanılmamalı; analizi yineleyin."
+        _m = ceviri.t("ai.pemf.gecerlilikHesaplanamadi")
         return {
             "pemf_valid": False,
             "pemf_kapisi": {

@@ -89,5 +89,12 @@
    "not": "Jeton → Credit; 'token' yalnız oturum / API belirteci anlamında (TR'de de 'token' / 'belirteç' geçer)."
   }
  ],
- "istisnalar": []
+ "istisnalar": [
+  {
+   "yuzey": "sunucu",
+   "anahtar": "pdf.baslik.altVarsayilan",
+   "terim": "\\btreatment|\\btherap",
+   "gerekce": "PEMF açılımı (Pulsed Electromagnetic Field Therapy — teknoloji adı); TR metinde de İngilizce aynen geçer"
+  }
+ ]
 }

@@ -1,8 +1,48 @@
 {
+  "ai": {
+    "pemf": {
+      "gecerlilikHesaplanamadi": "PEMF validity could not be calculated — D/P/E values must not be used; repeat the analysis."
+    },
+    "sonuc": {
+      "aciklamaUretilemedi": "Explanation could not be generated"
+    }
+  },
   "ayarlar": {
     "arayuzDili": {
       "gecersiz": "Invalid language: \"{{dilKodu}}\". Available languages: tr, en.",
       "yazilamadi": "The language setting could not be saved ({{neden}}). Check that the data folder is writable."
+    }
+  },
+  "hasta": {
+    "hata": {
+      "bulunamadi": "Patient not found — it may already have been deleted; refresh the list.",
+      "ekleOperatorSecin": "Select an operator — to add a patient, first select which veterinarian you are from the top bar.",
+      "kimlikAltyapisiYok": "Authentication service is unavailable",
+      "listeOkunamadi": "Patient records could not be read (the patient database cannot be opened) — this does not mean 'no patients'; do not create new cards. Restart the app; if it persists, contact technical support.",
+      "operatorJetonuGerekli": "Operator token required (patient data is protected).",
+      "silinecekSecilmedi": "No patients selected for deletion.",
+      "silinemedi": "The patient could not be deleted — the record remains; try again in a few seconds.",
+      "topluSilinemedi": "The patients could not be deleted — the records remain.",
+      "topluSilmeOnaySecili": "Confirmation required for bulk delete: send {\"confirm\":\"DELETE_SELECTED\"} in the body.",
+      "topluSilmeOnayTumu": "Confirmation required for bulk delete: send {\"confirm\":\"DELETE_ALL\"} in the body.",
+      "tumunuSilOperatorSecin": "Select an operator — to delete all patients, first select which veterinarian you are from the top bar.",
+      "tumunuSilYalnizCihaz": "Deleting all patients can only be done from the device's own screen (not from a phone or another device on the network)."
+    }
+  },
+  "pdf": {
+    "altBilgi": {
+      "tarihli": "{{metin}} Report date: {{tarih}}",
+      "varsayilan": "This report was generated automatically by the PEMF (Pulsed Electromagnetic Field) device. Report date: {{tarih}} Veterinary PEMF Session System v1.0"
+    },
+    "baslik": {
+      "altVarsayilan": "Pulsed Electromagnetic Field Therapy - Veterinary Application",
+      "varsayilan": "PEMF SESSION REPORT"
+    },
+    "bilgi": {
+      "raporTarihi": "Report Date:",
+      "raporTuru": "Report Type:",
+      "seansGecmisiRaporu": "Session History Report",
+      "toplamSeans": "Total Sessions:"
     }
   },
   "tarih": {

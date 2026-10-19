@@ -1,8 +1,48 @@
 {
+  "ai": {
+    "pemf": {
+      "gecerlilikHesaplanamadi": "PEMF geçerliliği hesaplanamadı — D/P/E değerleri kullanılmamalı; analizi yineleyin."
+    },
+    "sonuc": {
+      "aciklamaUretilemedi": "Açıklama üretilemedi"
+    }
+  },
   "ayarlar": {
     "arayuzDili": {
       "gecersiz": "Geçersiz dil: \"{{dilKodu}}\". Kullanılabilen diller: tr, en.",
       "yazilamadi": "Dil ayarı kaydedilemedi ({{neden}}). Veri klasörünün yazılabilir olduğunu kontrol edin."
+    }
+  },
+  "hasta": {
+    "hata": {
+      "bulunamadi": "Hasta bulunamadı — zaten silinmiş olabilir; listeyi yenileyin.",
+      "ekleOperatorSecin": "Operatör seçin — hasta eklemek için önce üst bardan hangi hekim olduğunuzu seçin.",
+      "kimlikAltyapisiYok": "Auth altyapisi kullanilamiyor",
+      "listeOkunamadi": "Hasta kayıtları okunamadı (hasta veritabanı açılamıyor) — bu 'hasta yok' demek değil, yeni kart açmayın. Uygulamayı yeniden başlatın; sürerse teknik desteğe başvurun.",
+      "operatorJetonuGerekli": "Operator token gerekli (hasta verisi korumali).",
+      "silinecekSecilmedi": "Silinecek hasta seçilmedi.",
+      "silinemedi": "Hasta silinemedi — kayıt duruyor; birkaç saniye sonra yeniden deneyin.",
+      "topluSilinemedi": "Hastalar silinemedi — kayıtlar duruyor.",
+      "topluSilmeOnaySecili": "Toplu silme için onay gerekli: gövdede {\"confirm\":\"DELETE_SELECTED\"} gönderin.",
+      "topluSilmeOnayTumu": "Toplu silme için onay gerekli: gövdede {\"confirm\":\"DELETE_ALL\"} gönderin.",
+      "tumunuSilOperatorSecin": "Operatör seçin — tüm hastaları silmek için önce üst bardan hangi hekim olduğunuzu seçin.",
+      "tumunuSilYalnizCihaz": "Tüm hastaları silmek yalnız cihazın kendi ekranından yapılabilir (telefon ya da ağdaki başka bir cihazdan değil)."
+    }
+  },
+  "pdf": {
+    "altBilgi": {
+      "tarihli": "{{metin}} Rapor tarihi: {{tarih}}",
+      "varsayilan": "\n        Bu rapor PEMF (Pulsed Electromagnetic Field) tedavi cihazı tarafından otomatik olarak oluşturulmuştur.\n        Rapor tarihi: {{tarih}}\n\n        Veteriner PEMF Tedavi Sistemi v1.0\n        "
+    },
+    "baslik": {
+      "altVarsayilan": "Pulsed Electromagnetic Field Therapy - Veteriner Uygulaması",
+      "varsayilan": "PEMF TEDAVİ RAPORU"
+    },
+    "bilgi": {
+      "raporTarihi": "Rapor Tarihi:",
+      "raporTuru": "Rapor Türü:",
+      "seansGecmisiRaporu": "Tedavi Geçmişi Raporu",
+      "toplamSeans": "Toplam Seans:"
     }
   },
   "tarih": {

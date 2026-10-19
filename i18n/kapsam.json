@@ -2297,12 +2297,17 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10a-yonlendirici",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 16,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Patient DB not initialized",
+     "gerekce": "iç durum iletisi (İngilizce, geliştirici / tanılama): 503 — veritabanı başlatılmamış; arayüz genel hata gösterir"
+    }
+   ],
    "birlesikIstisna": [],
-   "not": ""
+   "not": "I18N-0 pilotu (yönlendirici hata iletileri)"
   },
   "apps/backend/servers/session_router.py": {
    "yuzey": "sunucu",
@@ -2412,7 +2417,7 @@
    "kritik": false,
    "muaf": [],
    "birlesikIstisna": [],
-   "not": ""
+   "not": "I18N-0 pilotu KISMİ (dilim: PDF başlık/bilgi/altbilgi · AI sonuç metni) — dosyanın kalanı bekliyor"
   },
   "apps/backend/utils/image_domain.py": {
    "yuzey": "sunucu",
@@ -2478,7 +2483,7 @@
    "kritik": false,
    "muaf": [],
    "birlesikIstisna": [],
-   "not": ""
+   "not": "I18N-0 pilotu KISMİ (dilim: PDF başlık/bilgi/altbilgi · AI sonuç metni) — dosyanın kalanı bekliyor"
   },
   "apps/backend/utils/seans_durum.py": {
    "yuzey": "sunucu",
