@@ -8,7 +8,8 @@
 
 export const BRAND = {
   name: 'PEMF Vet',
-  tagline: 'Veteriner PEMF Terapisinde Yeni Kontrol Standardı',
+  // I18N-0: başlık metni katalogda (ana.slogan) — modül düzeyi sabit ANAHTAR saklar, gösterimde çevrilir.
+  sloganAnahtari: 'ana.slogan',
   // Telif satırında TESCİLLİ ünvanın kısa hâli kullanılır; ürün markası 'PEMF Vet' ayrı kalır.
   company: 'İBİA Teknoloji Ltd. Şti.',
   year: 2026,
@@ -232,11 +233,12 @@ export const CLIENT = {
   },
 }
 
+// I18N-0: menü etiketi katalogda (ortak.nav.*) — gösterimde t(n.anahtar).
 export const NAV = [
-  { label: 'Özellikler', to: '/features' },
-  { label: 'Fiyatlandırma', to: '/pricing' },
-  { label: 'İndir', to: '/download' },
-  { label: 'Destek', to: '/support' },
+  { anahtar: 'ortak.nav.ozellikler', to: '/features' },
+  { anahtar: 'ortak.nav.fiyatlandirma', to: '/pricing' },
+  { anahtar: 'ortak.nav.indir', to: '/download' },
+  { anahtar: 'ortak.nav.destek', to: '/support' },
 ] as const
 
 /** Kurulum modülleri (kullanım profili). Kullanıcı çoklu seçer; client yalnız seçilenlerin

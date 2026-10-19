@@ -1,6 +1,22 @@
 {
+  "altBilgi": {
+    "haklar": ". All rights reserved.",
+    "mersis": "MERSIS: ",
+    "tel": "Phone: {{telefon}} · ",
+    "vergiDairesi": "Tax office: ",
+    "vkn": " · Tax ID (VKN/TCKN): ",
+    "yasal": "Legal"
+  },
   "dil": {
     "dugme": "TR",
     "dugmeEtiketi": "Change language: Türkçe"
+  },
+  "indirDugmesi": "Download PEMF Vet",
+  "menu": "Menu",
+  "nav": {
+    "destek": "Support",
+    "fiyatlandirma": "Pricing",
+    "indir": "Download",
+    "ozellikler": "Features"
   }
 }

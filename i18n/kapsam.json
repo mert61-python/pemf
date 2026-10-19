@@ -138,8 +138,8 @@
  ],
  "genelMuafDesen": [
   {
-   "desen": "(?:(?:[a-z0-9-]+:)*(?:btn|text|bg|border|ring|shadow|rounded|font|opacity|hover|focus|from|to|via|lg|md|sm|xl|2xl|w|h|min-w|min-h|max-w|max-h|p[xytblr]?|m[xytblr]?|gap|grid|flex|items|justify|space-[xy]|tracking|leading)-[\\w./\\[\\]%-]+\\s*)+",
-   "gerekce": "Tailwind / CSS sınıf adı (şablon parçası) — kullanıcıya görünmez"
+   "desen": "(?:(?:(?:[a-z0-9-]+:)*(?:btn|text|bg|border|ring|shadow|rounded|font|opacity|hover|focus|from|to|via|lg|md|sm|xl|2xl|w|h|min-w|min-h|max-w|max-h|p[xytblr]?|m[xytblr]?|gap|grid|flex|items|justify|space-[xy]|tracking|leading|transition|duration|ease|z|inset|top|left|right|bottom|col|row|self|place|object|aspect|overflow|cursor|translate|scale|outline|fill|stroke|underline|decoration)-[\\w./\\[\\]%-]+|\\{\\{\\w+\\}\\})\\s*)+",
+   "gerekce": "Tailwind / CSS sınıf adı (şablon parçası; sınıf ekleyen yer tutucu dahil) — kullanıcıya görünmez"
   }
  ],
  "gruplar": [
@@ -3567,23 +3567,23 @@
    "yuzey": "site",
    "grup": "site-12a-sayfa",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 7,
    "kritik": false,
    "muaf": [],
    "birlesikIstisna": [],
-   "not": ""
+   "not": "I18N-0 pilotu"
   },
   "apps/web/src/components/Header.tsx": {
    "yuzey": "site",
    "grup": "site-12a-sayfa",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 9,
    "kritik": false,
    "muaf": [],
    "birlesikIstisna": [],
-   "not": ""
+   "not": "I18N-0 pilotu"
   },
   "apps/web/src/components/Icons.tsx": {
    "yuzey": "site",
@@ -3682,7 +3682,7 @@
    "kritik": false,
    "muaf": [],
    "birlesikIstisna": [],
-   "not": ""
+   "not": "I18N-0 pilotu KISMİ (başlık / menü anahtarları) — kalanı bekliyor"
   },
   "apps/web/src/pages/NotFound.tsx": {
    "yuzey": "site",
@@ -3693,7 +3693,7 @@
    "kritik": false,
    "muaf": [],
    "birlesikIstisna": [],
-   "not": ""
+   "not": "I18N-0 pilotu KISMİ (başlık / menü anahtarları) — kalanı bekliyor"
   },
   "apps/web/src/pages/Support.tsx": {
    "yuzey": "site",
@@ -3880,7 +3880,7 @@
    "kritik": false,
    "muaf": [],
    "birlesikIstisna": [],
-   "not": ""
+   "not": "I18N-0 pilotu KISMİ (başlık / menü anahtarları) — kalanı bekliyor"
   },
   "apps/web/api/_lib/iyzico.ts": {
    "yuzey": "site",

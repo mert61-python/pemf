@@ -16,6 +16,38 @@
    "onek": "",
    "degerler": [],
    "gerekce": "çevirmenin iç geçişi: t(anahtar) → t_ile(anahtar, boş parametre) — anahtarı çağıran verir (o çağrı statik denetlenir)"
+  },
+  {
+   "yuzey": "site",
+   "dosya": "apps/web/src/components/Header.tsx",
+   "ifade": "t(n.anahtar)",
+   "onek": "",
+   "degerler": ["ortak.nav.ozellikler", "ortak.nav.fiyatlandirma", "ortak.nav.indir", "ortak.nav.destek"],
+   "gerekce": "menü etiketi config.ts NAV'da ANAHTAR olarak saklanır (modül düzeyi sabit deseni) — değer kümesi NAV dizisi"
+  },
+  {
+   "yuzey": "site",
+   "dosya": "apps/web/src/components/Footer.tsx",
+   "ifade": "t(n.anahtar)",
+   "onek": "",
+   "degerler": ["ortak.nav.ozellikler", "ortak.nav.fiyatlandirma", "ortak.nav.indir", "ortak.nav.destek"],
+   "gerekce": "menü etiketi config.ts NAV'da ANAHTAR olarak saklanır (modül düzeyi sabit deseni) — değer kümesi NAV dizisi"
+  },
+  {
+   "yuzey": "site",
+   "dosya": "apps/web/src/pages/NotFound.tsx",
+   "ifade": "t(n.anahtar)",
+   "onek": "",
+   "degerler": ["ortak.nav.ozellikler", "ortak.nav.fiyatlandirma", "ortak.nav.indir", "ortak.nav.destek"],
+   "gerekce": "menü etiketi config.ts NAV'da ANAHTAR olarak saklanır (modül düzeyi sabit deseni) — değer kümesi NAV dizisi"
+  },
+  {
+   "yuzey": "site",
+   "dosya": "apps/web/src/pages/Home.tsx",
+   "ifade": "t(BRAND.sloganAnahtari)",
+   "onek": "",
+   "degerler": ["ana.slogan"],
+   "gerekce": "ana sayfa başlığı config.ts BRAND'da ANAHTAR olarak saklanır (modül düzeyi sabit deseni)"
   }
  ]
 }

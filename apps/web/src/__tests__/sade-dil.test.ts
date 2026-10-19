@@ -20,6 +20,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { kaynakSoy } from './_soyucu'
+import { EN, TR, gorunenMetinler } from './_kaynakMetni'
 
 import HOME_SRC from '../pages/Home.tsx?raw'
 import DOWNLOAD_SRC from '../pages/Download.tsx?raw'
@@ -79,7 +80,12 @@ describe('adlandırma: tek ürün, tek ad', () => {
   })
 
   it('KRİTİK: indirme çağrıları ÜRÜN adını kullanır ("PEMF Vet\'i İndir")', () => {
-    expect(soy(HEADER_SRC)).toMatch(/PEMF Vet['’]i İndir/)
+    // I18N-0: metin katalogda — ölçüt GEVŞEMEDİ, yer değiştirdi (`_kaynakMetni.ts`): üst menü anahtarı KULLANIYOR, TR değeri ürün
+    // adını taşıyor, EN değeri dolu.
+    expect(soy(HEADER_SRC)).toContain("t('ortak.indirDugmesi')")
+    expect(TR['ortak.indirDugmesi']).toMatch(/PEMF Vet['’]i İndir/)
+    expect(String(EN['ortak.indirDugmesi'] ?? '').trim()).not.toBe('')
+    expect(gorunenMetinler(soy(HEADER_SRC))).toMatch(/PEMF Vet['’]i İndir/)
   })
 
   it('KARŞIT-KANIT: süreci anlatan yerlerde TEK ara-katman adı "başlatıcı" KULLANILIR', () => {

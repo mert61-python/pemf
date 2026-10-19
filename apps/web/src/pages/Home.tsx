@@ -7,8 +7,10 @@ import { Sparkle, ArrowRight, Check, Bolt } from '../components/Icons'
 import DownloadButtons from '../components/DownloadButtons'
 import LauncherMock from '../components/LauncherMock'
 import AppScreenshots from '../components/AppScreenshots'
+import { useTranslation } from 'react-i18next'
 
 export default function Home() {
+  const { t } = useTranslation()
   return (
     <>
       {/* ── HERO ─────────────────────────────────────────── */}
@@ -21,10 +23,10 @@ export default function Home() {
                 aşağıdaki satırda (ve İndir sayfasında) durur. */}
             <span className="chip">
               <Sparkle className="h-3.5 w-3.5" />
-              Veteriner klinikleri için · Yayında
+              {t('ana.rozet')}
             </span>
             <h1 className="mt-5 text-4xl font-extrabold leading-[1.08] sm:text-5xl lg:text-[3.4rem]">
-              <span className="text-gradient">{BRAND.tagline}</span>
+              <span className="text-gradient">{t(BRAND.sloganAnahtari)}</span>
             </h1>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-muted sm:text-lg">
               Veteriner kliniğiniz için elektromanyetik alan terapisini tek ekrandan yönetin.

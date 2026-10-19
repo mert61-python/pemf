@@ -1,8 +1,10 @@
 // Author: mertaygn, cglrgrkn
 import { Link } from 'react-router-dom'
 import { NAV } from '../config'
+import { useTranslation } from 'react-i18next'
 
 export default function NotFound() {
+  const { t } = useTranslation()
   return (
     <section className="mx-auto grid min-h-[60vh] max-w-2xl place-items-center px-4 py-20 text-center">
       <div>
@@ -15,7 +17,7 @@ export default function NotFound() {
           <Link to="/" className="btn-primary">Ana sayfaya dön</Link>
           {NAV.map((n) => (
             <Link key={n.to} to={n.to} className="rounded-lg border border-border px-4 py-2 text-sm text-muted hover:border-primary/40 hover:text-fg">
-              {n.label}
+              {t(n.anahtar)}
             </Link>
           ))}
         </div>

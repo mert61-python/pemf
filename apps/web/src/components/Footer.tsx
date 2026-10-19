@@ -2,8 +2,10 @@
 import { Link } from 'react-router-dom'
 import { BRAND, COMPANY, LEGAL_DOCS, MEDICAL_DISCLAIMER, NAV } from '../config'
 import { Logo } from './Icons'
+import { useTranslation } from 'react-i18next'
 
 export default function Footer() {
+  const { t } = useTranslation()
   return (
     <footer className="border-t border-border/70">
       <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-12 sm:px-6">
@@ -20,9 +22,9 @@ export default function Footer() {
               <div className="font-medium text-fg/80">{COMPANY.legalName}</div>
               <div>{COMPANY.address}, {COMPANY.city}</div>
               {/* Telefon YOKSA hiç gösterilmez — boş "Tel:" satırı kırık görünür (2026-08-07). */}
-              <div>{COMPANY.phone ? `Tel: ${COMPANY.phone} · ` : ""}{COMPANY.email}</div>
-              <div>Vergi Dairesi: {COMPANY.taxOffice} · VKN/TCKN: {COMPANY.taxNo}</div>
-              <div>MERSIS: {COMPANY.mersis}</div>
+              <div>{COMPANY.phone ? t('ortak.altBilgi.tel', { telefon: COMPANY.phone }) : ""}{COMPANY.email}</div>
+              <div>{t('ortak.altBilgi.vergiDairesi')}{COMPANY.taxOffice}{t('ortak.altBilgi.vkn')}{COMPANY.taxNo}</div>
+              <div>{t('ortak.altBilgi.mersis')}{COMPANY.mersis}</div>
             </div>
           </div>
 
@@ -33,13 +35,13 @@ export default function Footer() {
               "İptal, İade ve Cayma Hakkı" üç satıra sarıyordu. 400 px altında tek sütun. */}
           <div className="grid grid-cols-1 gap-y-6 text-sm text-muted min-[400px]:grid-cols-2 min-[400px]:gap-x-6 min-[400px]:gap-y-0 sm:gap-x-10">
             <div className="flex flex-col">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg/60">Menü</div>
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg/60">{t('ortak.menu')}</div>
               {NAV.map((n) => (
-                <Link key={n.to} to={n.to} className="tap hover:text-fg">{n.label}</Link>
+                <Link key={n.to} to={n.to} className="tap hover:text-fg">{t(n.anahtar)}</Link>
               ))}
             </div>
             <div className="flex flex-col">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg/60">Yasal</div>
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg/60">{t('ortak.altBilgi.yasal')}</div>
               {LEGAL_DOCS.map((d) => (
                 <Link key={d.slug} to={`/${d.slug}`} className="tap hover:text-fg">{d.title}</Link>
               ))}
@@ -53,7 +55,7 @@ export default function Footer() {
         </p>
 
         <div className="mt-6 text-xs text-muted">
-          © {BRAND.year} {COMPANY.legalName}. Tüm hakları saklıdır.
+          © {BRAND.year} {COMPANY.legalName}{t('ortak.altBilgi.haklar')}
         </div>
       </div>
     </footer>

@@ -4,13 +4,17 @@
  */
 import trOrtak from './tr/ortak.json'
 import enOrtak from './en/ortak.json'
+import trAna from './tr/ana.json'
+import enAna from './en/ana.json'
 
 export const trKaynak = {
   ortak: trOrtak,
+  ana: trAna,
 }
 
 export const enKaynak: typeof trKaynak = {
   ortak: enOrtak,
+  ana: enAna,
 }
 
 export const kaynaklar = {

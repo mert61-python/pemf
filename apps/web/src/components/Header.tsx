@@ -5,8 +5,10 @@ import { BRAND, NAV } from '../config'
 import { Logo, Download, Menu, Close } from './Icons'
 import AccountButton from './AccountButton'
 import DilDugmesi from './DilDugmesi'
+import { useTranslation } from 'react-i18next'
 
 export default function Header() {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
 
   return (
@@ -33,7 +35,7 @@ export default function Header() {
                 }`
               }
             >
-              {n.label}
+              {t(n.anahtar)}
             </NavLink>
           ))}
         </nav>
@@ -44,14 +46,14 @@ export default function Header() {
           <AccountButton />
           <Link to="/download" className="btn-primary text-sm whitespace-nowrap">
             <Download className="h-4 w-4" />
-            PEMF Vet’i İndir
+            {t('ortak.indirDugmesi')}
           </Link>
         </div>
 
         <button
           className="grid h-11 w-11 place-items-center rounded-md text-muted hover:text-fg lg:hidden"
           onClick={() => setOpen((v) => !v)}
-          aria-label="Menü"
+          aria-label={t('ortak.menu')}
         >
           {open ? <Close className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
         </button>
@@ -71,7 +73,7 @@ export default function Header() {
                   }`
                 }
               >
-                {n.label}
+                {t(n.anahtar)}
               </NavLink>
             ))}
             <div className="mt-2 px-3">
@@ -82,7 +84,7 @@ export default function Header() {
             </div>
             <Link to="/download" onClick={() => setOpen(false)} className="btn-primary mt-2 text-sm">
               <Download className="h-4 w-4" />
-              PEMF Vet’i İndir
+              {t('ortak.indirDugmesi')}
             </Link>
           </nav>
         </div>

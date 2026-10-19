@@ -1,6 +1,22 @@
 {
+  "altBilgi": {
+    "haklar": ". Tüm hakları saklıdır.",
+    "mersis": "MERSIS: ",
+    "tel": "Tel: {{telefon}} · ",
+    "vergiDairesi": "Vergi Dairesi: ",
+    "vkn": " · VKN/TCKN: ",
+    "yasal": "Yasal"
+  },
   "dil": {
     "dugme": "EN",
     "dugmeEtiketi": "Dili değiştir: English"
+  },
+  "indirDugmesi": "PEMF Vet’i İndir",
+  "menu": "Menü",
+  "nav": {
+    "destek": "Destek",
+    "fiyatlandirma": "Fiyatlandırma",
+    "indir": "İndir",
+    "ozellikler": "Özellikler"
   }
 }
