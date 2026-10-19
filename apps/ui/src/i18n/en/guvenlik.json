@@ -1,0 +1,18 @@
+{
+  "acilDurdur": {
+    "dugme": "🚨 EMERGENCY STOP",
+    "dugmeBaglantiYok": "🚨 EMERGENCY STOP (no connection)",
+    "dugmeBobin_one": "🚨 EMERGENCY STOP ({{count}} coil)",
+    "dugmeBobin_other": "🚨 EMERGENCY STOP ({{count}} coils)",
+    "dugmeTeyitsiz": "🚨 EMERGENCY STOP (unconfirmed)",
+    "durduruldu": "All coils stopped ✓",
+    "durduruluyor": "🚨 STOPPING…",
+    "erisimEtiketi": "Emergency stop",
+    "erisimIpucu": "Stops all coils immediately and ends the active session",
+    "gonderiliyor": "Sending emergency stop…",
+    "kartRedBaslik": "⛔ BOARD REJECTED THE STOP",
+    "kartRedGovde": "The device board rejected the STOP command — the coils may not have stopped. Cut the device's power or unplug the USB cable.",
+    "teyitsizBaslik": "⚠️ EMERGENCY STOP NOT CONFIRMED",
+    "teyitsizGovde": "Could not confirm that the hardware stopped. The coils may still be running — switch the device off with its physical power button."
+  }
+}

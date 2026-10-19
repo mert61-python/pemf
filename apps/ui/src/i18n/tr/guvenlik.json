@@ -1,0 +1,18 @@
+{
+  "acilDurdur": {
+    "dugme": "🚨 ACİL DURDUR",
+    "dugmeBaglantiYok": "🚨 ACİL DURDUR (bağlantı yok)",
+    "dugmeBobin_one": "🚨 ACİL DURDUR ({{count}} bobin)",
+    "dugmeBobin_other": "🚨 ACİL DURDUR ({{count}} bobin)",
+    "dugmeTeyitsiz": "🚨 ACİL DURDUR (teyitsiz)",
+    "durduruldu": "Tüm bobinler durduruldu ✓",
+    "durduruluyor": "🚨 DURDURULUYOR…",
+    "erisimEtiketi": "Acil durdur",
+    "erisimIpucu": "Tüm bobinleri anında durdurur ve aktif seansı sonlandırır",
+    "gonderiliyor": "Acil durdurma gönderiliyor…",
+    "kartRedBaslik": "⛔ KART STOP'U REDDETTİ",
+    "kartRedGovde": "Cihaz kartı STOP komutunu reddetti — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın.",
+    "teyitsizBaslik": "⚠️ ACİL DURDURMA DOĞRULANAMADI",
+    "teyitsizGovde": "Donanımın durduğu teyit edilemedi. Bobinler hâlâ çalışıyor olabilir — cihazı fiziksel güç düğmesinden kapatın."
+  }
+}

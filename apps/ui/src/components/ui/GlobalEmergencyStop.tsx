@@ -20,14 +20,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { platformAlert } from "@/services/apiClient";
-import {
-  performEmergencyStop,
-  EMERGENCY_STOP_UNCONFIRMED_TITLE,
-  EMERGENCY_STOP_UNCONFIRMED_BODY,
-  EMERGENCY_STOP_KART_RED_TITLE,
-  EMERGENCY_STOP_KART_RED_BODY,
-} from "@/services/emergencyStop";
+import { performEmergencyStop } from "@/services/emergencyStop";
 import { emitToast } from "@/services/toastBridge";
+// I18N (T11a): metinler `kritikMetin` ile — katalog bozuk / anahtar eksik / i18n başlatılamamış olsa da sabit iki dilli yedek;
+// react-i18next'e (Suspense / hazır-değil) BAĞLANMAZ. Kapı: tests/test_i18n_kritik_K5.py + GlobalEmergencyStop.I18N0.kritik.test.tsx.
+import { kritikMetin, useKritikDil } from "@/i18n/kritik";
 import { useStmBelirsiz } from "@/hooks/useStmBelirsiz";
 import { UstKatman } from "@/components/ui/UstKatman";
 
@@ -64,6 +61,7 @@ export function GlobalEmergencyStop({
   const { snapshot } = useLiveData();
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
+  useKritikDil(); // dil değişince yeniden çiz (abonelik bozulursa yedek dilde kalır)
 
   const running = (snapshot.coils ?? []).filter((c) => c?.running).length;
   const active = snapshot.activeTreatment?.isActive === true;
@@ -96,17 +94,16 @@ export function GlobalEmergencyStop({
     // Çift-tık koruması YOK (bilinçli): panik anındaki ikinci dokunuş yutulmamalı. `busy` yalnız
     // görsel geri bildirim içindir, dokunuşu engellemez.
     setBusy(true);
-    emitToast("Acil durdurma gönderiliyor…", "info");
+    emitToast(kritikMetin("guvenlik.acilDurdur.gonderiliyor"), "info");
     const { confirmed, kartReddetti } = await performEmergencyStop();
     setBusy(false);
     setYerelTeyitsiz(!confirmed);
-    if (confirmed) emitToast("Tüm bobinler durduruldu ✓", "success");
+    if (confirmed) emitToast(kritikMetin("guvenlik.acilDurdur.durduruldu"), "success");
     else {
       // TD3: kart STOP'u reddettiyse eylem: gücü kes / USB'yi çıkar.
-      platformAlert(
-        kartReddetti ? EMERGENCY_STOP_KART_RED_TITLE : EMERGENCY_STOP_UNCONFIRMED_TITLE,
-        kartReddetti ? EMERGENCY_STOP_KART_RED_BODY : EMERGENCY_STOP_UNCONFIRMED_BODY
-      );
+      if (kartReddetti)
+        platformAlert(kritikMetin("guvenlik.acilDurdur.kartRedBaslik"), kritikMetin("guvenlik.acilDurdur.kartRedGovde"));
+      else platformAlert(kritikMetin("guvenlik.acilDurdur.teyitsizBaslik"), kritikMetin("guvenlik.acilDurdur.teyitsizGovde"));
     }
   };
 
@@ -130,17 +127,19 @@ export function GlobalEmergencyStop({
           onPress={onPress}
           style={[styles.btn, compact && styles.btnCompact]}
           accessibilityRole="button"
-          accessibilityLabel="Acil durdur"
-          accessibilityHint="Tüm bobinleri anında durdurur ve aktif seansı sonlandırır"
+          accessibilityLabel={kritikMetin("guvenlik.acilDurdur.erisimEtiketi")}
+          accessibilityHint={kritikMetin("guvenlik.acilDurdur.erisimIpucu")}
         >
           <Text style={styles.text} numberOfLines={1} adjustsFontSizeToFit>
             {busy
-              ? "🚨 DURDURULUYOR…"
+              ? kritikMetin("guvenlik.acilDurdur.durduruluyor")
               : teyitsiz
-                ? "🚨 ACİL DURDUR (teyitsiz)"
+                ? kritikMetin("guvenlik.acilDurdur.dugmeTeyitsiz")
                 : belirsiz
-                  ? "🚨 ACİL DURDUR (bağlantı yok)"
-                  : `🚨 ACİL DURDUR${running > 0 ? ` (${running} bobin)` : ""}`}
+                  ? kritikMetin("guvenlik.acilDurdur.dugmeBaglantiYok")
+                  : running > 0
+                    ? kritikMetin("guvenlik.acilDurdur.dugmeBobin", { count: running })
+                    : kritikMetin("guvenlik.acilDurdur.dugme")}
           </Text>
         </Pressable>
       </View>

@@ -175,12 +175,16 @@ def test_taban_katalogda_ya_da_muaf_olmayan_TR_metni_GERILEME(tmp_path):
     assert katalog.taban_karsilastir(tmp_path, ["apps/backend/x.py"], tmp_path / "taban.json") == []
 
 
-def test_adalani_ekle_kaynaklar_ts_ve_bos_kataloglar(tmp_path):
+@pytest.mark.parametrize("sonu", ["\n", "\r\n"], ids=["LF", "CRLF"])
+def test_adalani_ekle_kaynaklar_ts_ve_bos_kataloglar(tmp_path, sonu):
+    """autocrlf'li çalışma kopyasında kaynaklar.ts CRLF'dir — ekleme `\\r\\r\\n` (sondaki boşluk, pre-commit kırmızısı) üretmemeli."""
     rel = "apps/ui/src/i18n/kaynaklar.ts"
-    _yaz(tmp_path, rel, (KOK / rel).read_text(encoding="utf-8"))
+    _yaz(tmp_path, rel, (KOK / rel).read_bytes().decode("utf-8").replace("\r\n", "\n").replace("\n", sonu))
     katalog.adalani_ekle(tmp_path, "arayuz", "hastaListesi")
     katalog.adalani_ekle(tmp_path, "arayuz", "hastaListesi")  # ikinci kez: değişmez
-    ts = (tmp_path / rel).read_text(encoding="utf-8")
+    ts = (tmp_path / rel).read_bytes().decode("utf-8")
+    assert "\r\r" not in ts and all(s == s.rstrip() for s in ts.split(sonu)), "satır sonunda boşluk / yarım CR"
+    assert sonu == "\n" or "\n" not in ts.replace("\r\n", ""), "karışık satır sonu"
     assert ts.count('import trHastaListesi from "./tr/hastaListesi.json";') == 1
     assert ts.count('import enHastaListesi from "./en/hastaListesi.json";') == 1
     assert ts.count("  hastaListesi: trHastaListesi,") == 1 and ts.count("  hastaListesi: enHastaListesi,") == 1

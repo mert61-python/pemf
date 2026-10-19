@@ -18,6 +18,7 @@ Davranışsal kanıt: apps/ui/src/components/ui/__tests__/GlobalEmergencyStop.be
 import pathlib
 
 import capraz
+import i18n_yardimci as iy
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
@@ -69,5 +70,12 @@ def test_KRITIK_kayan_estop_stm_belirsizken_gizlenmez():
 
 
 def test_belirsizlik_etiketi_nedenini_soyler():
-    """Operatör düğmenin neden sayaçsız çıktığını görmeli."""
-    assert "bağlantı yok" in _oku(_GES), "Belirsizlik durumunda etiket nedenini söylemiyor ('bağlantı yok' ibaresi yok)"
+    """Operatör düğmenin neden sayaçsız çıktığını görmeli.
+
+    I18N-0: metin kataloğa taşındı — ölçüt GEVŞEMEDİ, yer değiştirdi (`tests/i18n_yardimci.py`): düğme belirsizlik anahtarını KULLANIYOR,
+    TR değeri nedeni BİREBİR söylüyor, EN değeri boş değil."""
+    iy.metin_kapisi(
+        "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+        "guvenlik.acilDurdur.dugmeBaglantiYok",
+        "🚨 ACİL DURDUR (bağlantı yok)",
+    )

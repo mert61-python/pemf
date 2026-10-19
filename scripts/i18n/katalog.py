@@ -136,11 +136,12 @@ def adalani_ekle(kok: Path, yuzey: str, ad: str) -> None:
     for dil in ("tr", "en"):
         satir = f"import {dil}{buyuk} from {tirnak}./{dil}/{ad}.json{tirnak}{noktali_virgul}"
         if satir not in metin:
-            son_import = [m.end() for m in re.finditer(r"^import .*$", metin, re.M)]
+            # `[^\r\n]*` — `.*$` CRLF dosyada `\r`'yi de yutar, ekleme `\r`'den SONRA düşüp `\r\r\n` (sondaki boşluk) üretirdi (ölçüldü)
+            son_import = [m.end() for m in re.finditer(r"^import [^\r\n]*", metin, re.M)]
             konum = son_import[-1] if son_import else 0
             metin = metin[:konum] + nl + satir + metin[konum:]
     for dil in ("tr", "en"):
-        blok = re.search(rf"export const {dil}Kaynak[^=]*= \{{(.*?)\n\}}", metin, re.S)
+        blok = re.search(rf"export const {dil}Kaynak[^=]*= \{{(.*?)\r?\n\}}", metin, re.S)
         if not blok:
             raise SystemExit(f"kaynaklar.ts içinde {dil}Kaynak bloğu bulunamadı")
         girdi = f"  {ad}: {dil}{buyuk},"

@@ -15,7 +15,99 @@
   "sunucu-10f-bildirim-ws",
   "launcher-11d-nsis"
  ],
- "anahtarlar": [],
+ "anahtarlar": [
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.acilDurdur.dugme",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "aciklama": "ACİL DURDUR düğmesi / iletisi — çeviri sisteminden bağımsız (kritik.ts yedeği)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.acilDurdur.dugmeBobin",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "aciklama": "ACİL DURDUR düğmesi / iletisi — çeviri sisteminden bağımsız (kritik.ts yedeği)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.acilDurdur.dugmeTeyitsiz",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "aciklama": "ACİL DURDUR düğmesi / iletisi — çeviri sisteminden bağımsız (kritik.ts yedeği)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.acilDurdur.dugmeBaglantiYok",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "aciklama": "ACİL DURDUR düğmesi / iletisi — çeviri sisteminden bağımsız (kritik.ts yedeği)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.acilDurdur.durduruluyor",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "aciklama": "ACİL DURDUR düğmesi / iletisi — çeviri sisteminden bağımsız (kritik.ts yedeği)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.acilDurdur.erisimEtiketi",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "aciklama": "ACİL DURDUR düğmesi / iletisi — çeviri sisteminden bağımsız (kritik.ts yedeği)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.acilDurdur.erisimIpucu",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "aciklama": "ACİL DURDUR düğmesi / iletisi — çeviri sisteminden bağımsız (kritik.ts yedeği)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.acilDurdur.gonderiliyor",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "aciklama": "ACİL DURDUR düğmesi / iletisi — çeviri sisteminden bağımsız (kritik.ts yedeği)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.acilDurdur.durduruldu",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "aciklama": "ACİL DURDUR düğmesi / iletisi — çeviri sisteminden bağımsız (kritik.ts yedeği)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.acilDurdur.teyitsizBaslik",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "aciklama": "ACİL DURDUR düğmesi / iletisi — çeviri sisteminden bağımsız (kritik.ts yedeği)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.acilDurdur.teyitsizGovde",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "aciklama": "ACİL DURDUR düğmesi / iletisi — çeviri sisteminden bağımsız (kritik.ts yedeği)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.acilDurdur.kartRedBaslik",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "aciklama": "ACİL DURDUR düğmesi / iletisi — çeviri sisteminden bağımsız (kritik.ts yedeği)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.acilDurdur.kartRedGovde",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
+   "aciklama": "ACİL DURDUR düğmesi / iletisi — çeviri sisteminden bağımsız (kritik.ts yedeği)"
+  }
+ ],
  "bekleyen": [
   {
    "dosya": "apps/backend/controllers/hardware_controller.py",

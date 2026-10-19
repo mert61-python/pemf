@@ -150,7 +150,7 @@
    "aciklama": "ortak bileşenler + kabuk (AppShell, bildirim, toast, hata sınırı, sayfa başlıkları, tema)",
    "durum": "bekliyor",
    "metin": 140,
-   "dosyaSayisi": 40
+   "dosyaSayisi": 41
   },
   {
    "ad": "arayuz-02-giris-hesap",
@@ -829,6 +829,17 @@
    "birlesikIstisna": [],
    "not": "I18N altyapısı — kullanıcı metni katalogda; buradaki dizgiler geliştirici iletisi / dil kodu (KATI kipte test hatası)"
   },
+  "apps/ui/src/i18n/kritik.ts": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-01-ortak-kabuk",
+   "sira": 1,
+   "durum": "muaf",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "ACİL DURDUR yedeği — iki dilli metin BİLEREK kodda (T11a: katalog bozukken de görünür); K-5 katalogla birebir eşliğini denetler"
+  },
   "apps/ui/src/theme/breakpoints.ts": {
    "yuzey": "arayuz",
    "grup": "arayuz-01-ortak-kabuk",
@@ -1482,12 +1493,28 @@
    "yuzey": "arayuz",
    "grup": "arayuz-05b-guvenlik-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 9,
    "kritik": true,
    "muaf": [],
-   "birlesikIstisna": [],
-   "not": ""
+   "birlesikIstisna": [
+    {
+     "once": "🚨 ACİL DURDUR{{deger1}}",
+     "sonra": [
+      "guvenlik.acilDurdur.dugme",
+      "guvenlik.acilDurdur.dugmeBobin"
+     ],
+     "gerekce": "koşullu şablon → iki tam metin (bobin sayısı çoğul)"
+    },
+    {
+     "once": "({{running}} bobin)",
+     "sonra": [
+      "guvenlik.acilDurdur.dugmeBobin"
+     ],
+     "gerekce": "şablon parçası → çoğul anahtarın parçası"
+    }
+   ],
+   "not": "I18N-0 pilotu (kritik desen)"
   },
   "apps/ui/src/components/ui/KendiDurdurmaKontrolu.tsx": {
    "yuzey": "arayuz",

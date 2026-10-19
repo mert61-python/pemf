@@ -25,12 +25,11 @@ jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 let mockSonuc: { confirmed: boolean; kartReddetti: boolean } = { confirmed: false, kartReddetti: true };
+// I18N-0: GES metni artık katalogdan (`kritikMetin("guvenlik.acilDurdur.kartRed…")`, T11a). Beklenen değer GERÇEK sabitler: dal doğru
+// VE katalogdaki TR metni `emergencyStop.ts` sabitleriyle birebir (öteki çağıranlar göçene dek iki kaynak AYNI kalmalı).
 jest.mock("@/services/emergencyStop", () => ({
+  ...jest.requireActual("@/services/emergencyStop"),
   performEmergencyStop: jest.fn(async () => mockSonuc),
-  EMERGENCY_STOP_UNCONFIRMED_TITLE: "ortak-baslik",
-  EMERGENCY_STOP_UNCONFIRMED_BODY: "ortak-govde",
-  EMERGENCY_STOP_KART_RED_TITLE: "red-baslik",
-  EMERGENCY_STOP_KART_RED_BODY: "red-govde",
 }));
 const mockWs: { onMessage?: (m: any) => void; onState?: (c: boolean) => void } = {};
 jest.mock("@/services/wsClient", () => ({
@@ -44,6 +43,12 @@ jest.mock("@/services/wsClient", () => ({
 import React from "react";
 import { act, fireEvent, render } from "@testing-library/react-native";
 import { platformAlert } from "@/services/apiClient";
+import {
+  EMERGENCY_STOP_KART_RED_BODY,
+  EMERGENCY_STOP_KART_RED_TITLE,
+  EMERGENCY_STOP_UNCONFIRMED_BODY,
+  EMERGENCY_STOP_UNCONFIRMED_TITLE,
+} from "@/services/emergencyStop";
 import { LiveDataProvider } from "@/context/LiveDataContext";
 import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
 
@@ -84,12 +89,12 @@ describe("TD3 — kart STOP'u reddetti → eylem metni", () => {
   it("KRİTİK: kartReddetti → KART_RED başlık ve gövde", async () => {
     mockSonuc = { confirmed: false, kartReddetti: true };
     await bas();
-    expect(platformAlert).toHaveBeenCalledWith("red-baslik", "red-govde");
+    expect(platformAlert).toHaveBeenCalledWith(EMERGENCY_STOP_KART_RED_TITLE, EMERGENCY_STOP_KART_RED_BODY);
   });
 
   it("KARŞIT: yalnız teyitsiz (kart reddi yok) → ortak metin", async () => {
     mockSonuc = { confirmed: false, kartReddetti: false };
     await bas();
-    expect(platformAlert).toHaveBeenCalledWith("ortak-baslik", "ortak-govde");
+    expect(platformAlert).toHaveBeenCalledWith(EMERGENCY_STOP_UNCONFIRMED_TITLE, EMERGENCY_STOP_UNCONFIRMED_BODY);
   });
 });
