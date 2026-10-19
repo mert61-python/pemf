@@ -191,6 +191,19 @@ def test_KRITIK_ESTOP_yordami_GERCEKTEN_gonderiyor():
     assert "Invoke-RestMethod" in g, "E-stop HTTP istegi yapilmiyor"
 
 
+def test_KRITIK_ESTOP_yordami_ONCE_kapanis_ucu_sonra_HIZLI_hatada_ACIL_DURDUR():
+    """2026-10-18 (sahip: "önceki oturumda ACİL DURDUR" bandı): NSIS ikizi + launcher `safe_stop_coils` ile AYNI kural —
+    ÖNCE `/api/hardware/kapanis_durdur` (bilinçli `{"onay":true}`: tırnaksız `ConvertTo-Json`), uç yoksa ya da 2 sn içinde hata
+    dönerse operatörün ACİL DURDUR ucu (bobin durdurma AZALMAZ); zaman aşımında ikinci istek yok. (NSIS ikizi davranışla
+    `test_kaldirma_yetim_surec_temizligi`'nde koşturulur.)"""
+    g = "\n".join(s for s in _estop_yordami().splitlines() if not s.strip().startswith("//"))
+    k, e = g.find("kapanis_durdur"), g.find("emergency_stop")
+    assert k >= 0, "Inno E-stop yordamı kapanış ucunu ÇAĞIRMIYOR — boşta kurulum / kaldırma mandalı diske yazar"
+    assert e > k, "ACİL DURDUR ucu kapanış ucunun YEDEĞİ olarak (SONRA) gelmeli"
+    assert "ConvertTo-Json" in g and "onay=$true" in g, "kapanış ucuna bilinçli onay gövdesi gitmiyor (backend 415/400)"
+    assert re.search(r"TotalSeconds\s+-ge\s+2\)\s*\{\s*throw", g), "yavaş hatada (≥ 2 sn) ikinci istek atılmamalı"
+
+
 def test_KRITIK_ESTOP_ile_kill_arasinda_BEKLEME_var():
     """MQTT publish + STM seri-kuyruk flush zaman ister; NSIS ikizi 1800 ms bekliyor.
 

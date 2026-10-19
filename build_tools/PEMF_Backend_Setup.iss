@@ -264,9 +264,16 @@ begin
   // cikis 2 = 200 ama confirmed<>true (STM/ESP yolu DOGRULANAMADI), cikis 1 = istisna (FAIL=<mesaj>).
   // Tirnak kullanilmaz (-Command sinirlayicisiyla cakismasin). Sonuc Log()'a yazilir; kurulum
   // hicbir kosulda bloklanmaz (yukaridaki "SESSIZ BASARISIZLIK KABUL" notu gecerli) - amac iz + teshis.
-  Komut := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $r = Invoke-RestMethod' +
-           ' -Uri http://127.0.0.1:' + IntToStr(Port) + '/api/hardware/emergency_stop' +
-           ' -Method POST -TimeoutSec 10; Write-Host -NoNewline OK status=$($r.status) confirmed=$($r.confirmed)' +
+  // 2026-10-18 (sahip: "onceki oturumda ACIL DURDUR" bandi): ONCE kapanis ucu /api/hardware/kapanis_durdur (STOP'lar AYNEN;
+  // bosta kapanis mandali DISKE yazmaz, seans / bobin calisirken yazar - launcher safe_stop_coils ve NSIS ikiziyle AYNI kural).
+  // Uc YOKSA (eski backend 405) ya da 2 sn icinde hata donerse operatorun ACIL DURDUR ucu (uc=2) - bobin durdurma AZALMAZ;
+  // zaman asiminda ikinci istek YOK. Govde {"onay":true} tirnaksiz uretilir (@{onay=$true} | ConvertTo-Json).
+  Komut := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $u = 1; $t0 = Get-Date; try { $r = Invoke-RestMethod' +
+           ' -Uri http://127.0.0.1:' + IntToStr(Port) + '/api/hardware/kapanis_durdur -Method POST -ContentType application/json' +
+           ' -Body (@{onay=$true} | ConvertTo-Json -Compress) -TimeoutSec 10 }' +
+           ' catch { if (((Get-Date) - $t0).TotalSeconds -ge 2) { throw }; $u = 2; $r = Invoke-RestMethod' +
+           ' -Uri http://127.0.0.1:' + IntToStr(Port) + '/api/hardware/emergency_stop -Method POST -TimeoutSec 10 };' +
+           ' Write-Host -NoNewline OK uc=$u status=$($r.status) confirmed=$($r.confirmed)' +
            ' t=$(Get-Date -Format s); if ($r.confirmed -ne $true) { exit 2 }; exit 0 }' +
            ' catch { Write-Host -NoNewline FAIL=$($_.Exception.Message) t=$(Get-Date -Format s); exit 1 }"';
   if Exec('powershell.exe', Komut, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then

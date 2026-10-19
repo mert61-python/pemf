@@ -84,11 +84,15 @@ $script:HttpDavranis = 'basari'; $script:AcikPortlar = @()
 # O-7.1: porta göre YABANCI yerel servis yanıtı (2xx ama PEMF ACİL DURDUR yanıtı DEĞİL) — senaryo doldurur.
 $script:YabanciPortlar = @{}
 function Invoke-RestMethod {
-    [CmdletBinding()] param([string]$Uri, [string]$Method, $TimeoutSec, [Parameter(ValueFromRemainingArguments = $true)]$R)
+    [CmdletBinding()] param([string]$Uri, [string]$Method, $TimeoutSec, [string]$ContentType, $Body, [Parameter(ValueFromRemainingArguments = $true)]$R)
     K ("HTTP " + $Method + " " + $Uri)
     K ("HTTP-SURE " + $TimeoutSec)
+    if ($Body) { K ("HTTP-GOVDE " + $ContentType + " " + $Body) }
     if ($script:HttpDavranis -eq 'hata') { throw "sahte: baglanti reddedildi" }
     if ($script:HttpDavranis -eq 'zaman') { throw [System.TimeoutException]::new("sahte: zaman asimi") }
+    # 2026-10-18: kapanış ucu (`kapanis_durdur`) — eski backend'de YOK (405, hızlı) ya da yavaş hata (≥ 2 sn: ikinci istek atılmaz).
+    if ($script:HttpDavranis -eq 'kapanis_yok' -and $Uri -like '*kapanis_durdur') { throw "sahte: 405 Method Not Allowed" }
+    if ($script:HttpDavranis -eq 'kapanis_yavas' -and $Uri -like '*kapanis_durdur') { [System.Threading.Thread]::Sleep(2300); throw "sahte: zaman asimi" }
     $port = ([uri]$Uri).Port
     if ($script:YabanciPortlar.ContainsKey($port)) { return $script:YabanciPortlar[$port] }
     # O-13.1 (1-H): GERÇEK `_emergency_stop_all` yanıtının şekli — status + confirmed + stmStopped + mqttResults.
@@ -119,7 +123,7 @@ $script:Kayit.Clear()
 # öldürürdü. Denetim KOŞTURMADAN ÖNCE yapılır; ihlalde hiçbir şey çağrılmadan çıkılır (çıkış 3).
 $kayitcilar = 'Write-PemfLog','Remove-PemfCredentials','Remove-PemfSystemCredentials','Remove-PemfTasks','Remove-PemfFirewall','Remove-PemfEnv','Remove-PemfRegistry','Get-PemfProfileRoots','Get-PemfFootprint','Log','Invoke-PemfTeardown','Test-PemfPortAcik','Get-PemfMakineDisiYedekHedefleri','Write-PemfMakineDisiYedekRaporu'
 $yuklenenler = 'Test-PemfScope','Assert-PemfRemoved','Remove-PemfPaths','Stop-PemfProcessesAndServices','Invoke-PemfTeardown','Stop-AppProcs','Send-PemfAcilDurdur','Get-PemfBackendPortAdaylari','Invoke-PemfAcilDurdurIstegi','Get-PemfProfilEnvDosyasi','Read-PemfProfilEnv'
-$salt_okur = 'Test-Path','Join-Path','Split-Path','Sort-Object','ForEach-Object','Where-Object','Select-Object','Get-Content'
+$salt_okur = 'Test-Path','Join-Path','Split-Path','Sort-Object','ForEach-Object','Where-Object','Select-Object','Get-Content','ConvertTo-Json','Get-Date'
 $izinli = @($golgeler) + $kayitcilar + $yuklenenler + $salt_okur
 $izinli_degisken = 'NssmExe','teardownScript'
 function Denetle($agac, [string]$ne) {
@@ -210,6 +214,8 @@ switch -Wildcard ($Senaryo) {
             'estop_basari' { Set-Content -LiteralPath $portDosyasi -Value '48123'; $script:AcikPortlar = @(48123) }
             'estop_hata' { Set-Content -LiteralPath $portDosyasi -Value '48123'; $script:AcikPortlar = @(48123); $script:HttpDavranis = 'hata' }
             'estop_zaman' { Set-Content -LiteralPath $portDosyasi -Value '48123'; $script:AcikPortlar = @(48123); $script:HttpDavranis = 'zaman' }
+            'estop_kapanis_yok' { Set-Content -LiteralPath $portDosyasi -Value '48123'; $script:AcikPortlar = @(48123); $script:HttpDavranis = 'kapanis_yok' }
+            'estop_kapanis_yavas' { Set-Content -LiteralPath $portDosyasi -Value '48123'; $script:AcikPortlar = @(48123); $script:HttpDavranis = 'kapanis_yavas' }
             'estop_portyok' { }
             'estop_sira' { Set-Content -LiteralPath $portDosyasi -Value '48123'; $script:AcikPortlar = @(8001, 8002) }
             'estop_bozukdosya' { Set-Content -LiteralPath $portDosyasi -Value '8000; KANARYA'; $script:AcikPortlar = @(8000) }
@@ -550,8 +556,13 @@ def _sondalar(kayit: list[str]) -> list[int]:
 def test_KRITIK_D192_teardown_ACIL_DURDURU_servis_durdurma_ve_KILLden_ONCE_gonderir(tmp_path):
     s = _kos(tmp_path, "estop_basari")
     k = s["kayit"]
-    post = _ilk(k, "HTTP Post http://127.0.0.1:48123/api/hardware/emergency_stop")
-    assert post >= 0, f"teardown ACİL DURDUR GÖNDERMEDİ (backend.port 48123 açık): {k[:14]}"
+    # 2026-10-18: önce kapanış ucu (boşta kapanış "önceki oturumda ACİL DURDUR" mandalı yazmaz); başarılıysa ACİL DURDUR ucu ÇAĞRILMAZ.
+    post = _ilk(k, "HTTP Post http://127.0.0.1:48123/api/hardware/kapanis_durdur")
+    assert post >= 0, f"teardown bobin durdurma GÖNDERMEDİ (backend.port 48123 açık): {k[:14]}"
+    assert _ilk(k, "HTTP Post http://127.0.0.1:48123/api/hardware/emergency_stop") < 0, (
+        "kapanış ucu başarılıyken ACİL DURDUR da çağrıldı"
+    )
+    assert "HTTP-GOVDE application/json {\"onay\":true}" in k, f"kapanış ucuna bilinçli onay gövdesi gitmedi: {k[:14]}"
     stop, kill = _ilk(k, "sc stop "), _ilk(k, "Stop-Process")
     assert kill > post and stop > post, (
         f"ACİL DURDUR (#{post}) servis durdurma (#{stop}) / force-kill'den (#{kill}) SONRA — bobin kill anında enerjili"
@@ -625,7 +636,7 @@ def test_KRITIK_D192_port_SIRASI_backend_port_8000_8001_ve_ILK_basarida_durur(tm
     sonda = _sondalar(k)
     assert sonda[:3] == [48123, 8000, 8001], f"port sırası backend.port → 8000 → 8001 değil: {sonda[:5]}"
     http = [x for x in k if x.startswith("HTTP ")]
-    assert http == ["HTTP Post http://127.0.0.1:8001/api/hardware/emergency_stop"], http
+    assert http == ["HTTP Post http://127.0.0.1:8001/api/hardware/kapanis_durdur"], http
     assert 8002 not in sonda, "ilk başarılı ACİL DURDUR'dan sonra taramaya devam edildi (yabancı servislere istek)"
 
 
@@ -649,8 +660,8 @@ def test_KRITIK_O71_YABANCI_servisin_2xxi_GONDERILDI_sayilmaz_tarama_SURER(tmp_p
     k = s["kayit"]
     http = [x for x in k if x.startswith("HTTP ")]
     assert http == [
-        "HTTP Post http://127.0.0.1:8000/api/hardware/emergency_stop",
-        "HTTP Post http://127.0.0.1:8001/api/hardware/emergency_stop",
+        "HTTP Post http://127.0.0.1:8000/api/hardware/kapanis_durdur",
+        "HTTP Post http://127.0.0.1:8001/api/hardware/kapanis_durdur",
     ], (
         f"{senaryo}: 8000'deki YABANCI servisin 2xx'i 'gönderildi' sayıldı, tarama durdu — backend (8001) E-stop almadı: {http}"
     )
@@ -674,7 +685,33 @@ def test_KRITIK_D192_bozuk_backend_port_dosyasi_KULLANILMAZ_tarama_SURER(tmp_pat
     s = _kos(tmp_path, "estop_bozukdosya")
     k = s["kayit"]
     assert _sondalar(k)[:1] == [8000], _sondalar(k)[:3]
-    assert [x for x in k if x.startswith("HTTP ")] == ["HTTP Post http://127.0.0.1:8000/api/hardware/emergency_stop"]
+    assert [x for x in k if x.startswith("HTTP ")] == ["HTTP Post http://127.0.0.1:8000/api/hardware/kapanis_durdur"]
+
+
+def test_KRITIK_kapanis_ucu_YOKSA_hizla_ACIL_DURDUR_ucuna_duser_kill_SONRA(tmp_path):
+    """2026-10-18: eski backend'de kapanış ucu yok (405, hızlı hata) → AYNI porta operatörün ACİL DURDUR ucu — bobin durdurma
+    hiçbir yolda AZALMAZ; ikisi de force-kill'den ÖNCE."""
+    s = _kos(tmp_path, "estop_kapanis_yok")
+    k = s["kayit"]
+    http = [x for x in k if x.startswith("HTTP ")]
+    assert http == [
+        "HTTP Post http://127.0.0.1:48123/api/hardware/kapanis_durdur",
+        "HTTP Post http://127.0.0.1:48123/api/hardware/emergency_stop",
+    ], http
+    assert any(x.startswith("LOG ACİL DURDUR gönderildi: 127.0.0.1:48123") for x in k), (
+        "yedek ACİL DURDUR başarısı günlükte yok"
+    )
+    assert k.index("Stop-Process") > _ilk(k, "HTTP Post http://127.0.0.1:48123/api/hardware/emergency_stop")
+
+
+def test_KARSIT_kapanis_ucu_YAVAS_hata_verirse_ikinci_istek_YOK_kaldirma_uzamaz(tmp_path):
+    """Zaman aşımı (≥ 2 sn) asılı backend demektir: ikinci 10 sn'lik istek kaldırmayı uzatır, kazandırmaz (launcher kuralıyla aynı)."""
+    s = _kos(tmp_path, "estop_kapanis_yavas")
+    k = s["kayit"]
+    http = [x for x in k if x.startswith("HTTP ")]
+    assert http == ["HTTP Post http://127.0.0.1:48123/api/hardware/kapanis_durdur"], http
+    assert any(x.startswith("LOG ACİL DURDUR başarısız: 127.0.0.1:48123") for x in k), "hata günlüğe yazılmadı"
+    assert "Stop-Process" in k, "kapanış ucunun hatası kaldırmayı durdurdu"
 
 
 def test_KRITIK_D192_setup_services_kaldirma_ACIL_DURDURU_nssm_stop_ve_KILLden_ONCE(tmp_path):

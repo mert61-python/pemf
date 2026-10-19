@@ -91,7 +91,11 @@
   ; BOŞ dizgeye çözüyordu → derlenmiş kaldırıcı fiilen "OK status= confirmed= t=" / "FAIL=" gönderiyordu
   ; (gerçek derleme + koşturmayla ölçüldü). Çıkış kodları etkilenmiyordu ama günlük/uyarı teşhis
   ; değerini yitiriyordu. test_kanca_gercekten_nsis_ile_derlenir artık 6040/6000 uyarısında KIRMIZI.
-  nsExec::ExecToStack /OEM /TIMEOUT=20000 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $$r = Invoke-RestMethod -Uri http://127.0.0.1:$2/api/hardware/emergency_stop -Method POST -TimeoutSec 10; Write-Host -NoNewline OK status=$$($$r.status) confirmed=$$($$r.confirmed) t=$$(Get-Date -Format s); if ($$r.confirmed -ne $$true) { exit 2 }; exit 0 } catch { Write-Host -NoNewline FAIL=$$($$_.Exception.Message) t=$$(Get-Date -Format s); exit 1 }"'
+  ; ⚠️ 2026-10-18 (sahip: "önceki oturumda ACİL DURDUR" bandı): ÖNCE kapanış ucu `/api/hardware/kapanis_durdur` (STOP'lar AYNEN;
+  ; boşta kapanış mandalı DİSKE yazmaz, seans / bobin çalışırken yazar — launcher `safe_stop_coils` ile AYNI kural). Uç YOKSA
+  ; (eski backend 405) ya da 2 sn içinde hata dönerse operatörün ACİL DURDUR ucu (`uc=2`) — bobin durdurma AZALMAZ; zaman
+  ; aşımında ikinci istek YOK (kaldırma uzamasın). Gövde `{"onay":true}` tırnaksız üretilir (`@{onay=$true} | ConvertTo-Json`).
+  nsExec::ExecToStack /OEM /TIMEOUT=20000 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $$u = 1; $$t0 = Get-Date; try { $$r = Invoke-RestMethod -Uri http://127.0.0.1:$2/api/hardware/kapanis_durdur -Method POST -ContentType application/json -Body (@{onay=$$true} | ConvertTo-Json -Compress) -TimeoutSec 10 } catch { if (((Get-Date) - $$t0).TotalSeconds -ge 2) { throw }; $$u = 2; $$r = Invoke-RestMethod -Uri http://127.0.0.1:$2/api/hardware/emergency_stop -Method POST -TimeoutSec 10 }; Write-Host -NoNewline OK uc=$$u status=$$($$r.status) confirmed=$$($$r.confirmed) t=$$(Get-Date -Format s); if ($$r.confirmed -ne $$true) { exit 2 }; exit 0 } catch { Write-Host -NoNewline FAIL=$$($$_.Exception.Message) t=$$(Get-Date -Format s); exit 1 }"'
   Pop $0  ; nsExec dönüş: süreç çıkış kodu YA DA "error" (başlatılamadı) / "timeout" (20 sn aşıldı)
   Pop $1  ; yakalanan çıktı (OK …/FAIL=…); $1'in ham port satırı $2'ye sanitize edildi, artık gerekmez.
           ; İki Pop ŞART: ExecToStack yığına İKİ öğe iter; biri kalsa aşağıdaki kayıt geri-yüklemesi kayar.

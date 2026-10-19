@@ -31,6 +31,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -422,15 +423,34 @@ def _estop_komutu(preuninstall_satirlari: list[str], port: int) -> str:
 
 
 class _EstopStub:
-    """`POST /api/hardware/emergency_stop` için tek-amaçlı HTTP taklidi (gerçek yanıt şeması)."""
+    """Backend'in bobin durdurma uçları için tek-amaçlı HTTP taklidi (gerçek yanıt şeması: `_emergency_stop_all`).
 
-    def __init__(self, confirmed: bool):
+    2026-10-18: `kapanis_var=False` → eski backend: `/api/hardware/kapanis_durdur` YOK (405); `kapanis_yavas=True` → kapanış
+    ucu 2,3 sn sonra 500 (asılı/meşgul backend). İstek gövdeleri `govdeler`de."""
+
+    def __init__(self, confirmed: bool, kapanis_var: bool = True, kapanis_yavas: bool = False):
         self.istekler: list[tuple[str, str]] = []
+        self.govdeler: list[tuple[str, str, bytes]] = []
         stub = self
 
         class H(BaseHTTPRequestHandler):
             def do_POST(self):  # noqa: N802
                 stub.istekler.append(("POST", self.path))
+                n = int(self.headers.get("Content-Length") or 0)
+                stub.govdeler.append(
+                    (self.path, self.headers.get("Content-Type") or "", self.rfile.read(n) if n else b"")
+                )
+                if not kapanis_var and self.path.endswith("/kapanis_durdur"):
+                    self.send_response(405)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                if kapanis_yavas and self.path.endswith("/kapanis_durdur"):
+                    time.sleep(2.3)
+                    self.send_response(500)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
                 govde = json.dumps(
                     {
                         "status": "success" if confirmed else "partial",
@@ -496,8 +516,9 @@ def test_estop_tek_satiri_confirmed_false_ise_cikis_2(preuninstall_satirlari):
         rc, cikti = _komutu_kos(_estop_komutu(preuninstall_satirlari, stub.port))
     finally:
         stub.kapat()
-    assert stub.istekler == [("POST", "/api/hardware/emergency_stop")], (
-        f"Beklenen tek POST /api/hardware/emergency_stop; gelen: {stub.istekler}"
+    # 2026-10-18: önce kapanış ucu (boşta kapanış "önceki oturumda ACİL DURDUR" mandalı YAZMAZ); yanıt verdiyse ACİL DURDUR çağrılmaz.
+    assert stub.istekler == [("POST", "/api/hardware/kapanis_durdur")], (
+        f"Beklenen tek POST /api/hardware/kapanis_durdur; gelen: {stub.istekler}"
     )
     assert rc == 2, f"confirmed=false için çıkış 2 beklenir, {rc} geldi (çıktı: {cikti!r})"
     assert cikti.startswith("OK") and "confirmed=False" in cikti, (
@@ -525,7 +546,43 @@ def test_estop_tek_satiri_confirmed_true_ise_cikis_0_OK(preuninstall_satirlari):
         rc, cikti = _komutu_kos(_estop_komutu(preuninstall_satirlari, stub.port))
     finally:
         stub.kapat()
-    assert stub.istekler == [("POST", "/api/hardware/emergency_stop")]
+    assert stub.istekler == [("POST", "/api/hardware/kapanis_durdur")]
     assert rc == 0, f"confirmed=true için çıkış 0 beklenir, {rc} geldi (çıktı: {cikti!r})"
-    assert cikti.startswith("OK") and "confirmed=True" in cikti, f"Çıktı 'OK … confirmed=True' olmalı: {cikti!r}"
+    assert cikti.startswith("OK uc=1") and "confirmed=True" in cikti, (
+        f"Çıktı 'OK uc=1 … confirmed=True' olmalı: {cikti!r}"
+    )
     assert "\n" not in cikti, f"Çıktı TEK satır olmalı (günlük satırı bozulur): {cikti!r}"
+    yol, tur, govde = stub.govdeler[0]
+    assert "application/json" in tur and json.loads(govde) == {"onay": True}, (
+        f"kapanış ucuna bilinçli onay gövdesi gitmedi (tür={tur!r}, gövde={govde!r}) — backend 415/400 döner"
+    )
+
+
+@pytest.mark.skipif(_powershell() is None, reason="pwsh/powershell yok")
+def test_estop_tek_satiri_ESKI_backendde_kapanis_ucu_YOKSA_ACIL_DURDUR_ucuna_duser(preuninstall_satirlari):
+    """🔴 TIBBİ GÜVENLİK (2026-10-18): kapanış ucu yoksa (eski backend: 405) AYNI porta operatörün ACİL DURDUR ucu — bobin
+    durdurma kaldırmada hiçbir yolda AZALMAZ. Çıktı hangi ucun kullanıldığını söyler (`uc=2`)."""
+    stub = _EstopStub(confirmed=True, kapanis_var=False)
+    try:
+        rc, cikti = _komutu_kos(_estop_komutu(preuninstall_satirlari, stub.port))
+    finally:
+        stub.kapat()
+    assert stub.istekler == [("POST", "/api/hardware/kapanis_durdur"), ("POST", "/api/hardware/emergency_stop")], (
+        stub.istekler
+    )
+    assert rc == 0 and cikti.startswith("OK uc=2") and "confirmed=True" in cikti, f"rc={rc} çıktı={cikti!r}"
+
+
+@pytest.mark.skipif(_powershell() is None, reason="pwsh/powershell yok")
+def test_estop_tek_satiri_kapanis_ucu_YAVAS_hata_verirse_ikinci_istek_YOK(preuninstall_satirlari):
+    """KARŞIT (2026-10-18): kapanış ucu ≥ 2 sn sonra hata verdiyse backend asılı/meşgul — ikinci istek (ACİL DURDUR) kaldırmayı
+    nsExec'in 20 sn sınırına kadar uzatırdı. Çıkış FAIL (1); sonraki taskkill yine koşar (launcher `HIZLI_HATA_ESIGI` ikizi)."""
+    stub = _EstopStub(confirmed=True, kapanis_yavas=True)
+    try:
+        rc, cikti = _komutu_kos(_estop_komutu(preuninstall_satirlari, stub.port))
+    finally:
+        stub.kapat()
+    assert stub.istekler == [("POST", "/api/hardware/kapanis_durdur")], (
+        f"yavaş hatadan sonra ikinci istek atıldı: {stub.istekler}"
+    )
+    assert rc == 1 and cikti.startswith("FAIL"), f"rc={rc} çıktı={cikti!r}"

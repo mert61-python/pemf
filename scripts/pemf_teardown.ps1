@@ -93,8 +93,19 @@ function Test-PemfPortAcik([int]$Port) {
 
 # 10 sn: Inno (`PemfEstopPortaGonder`) ve NSIS (`hooks.nsi`) ikizleriyle AYNI — backend bu ucu "senkron MQTT publish
 # ~7 sn worst-case" diye belgeler; daha kısa değer ESP STOP'ları yayınlanmadan doluyordu (NSIS ikizinde ölçüldü).
+# ⚠️ 2026-10-18 (sahip: "önceki oturumda ACİL DURDUR" bandı): ÖNCE kapanış ucu `/api/hardware/kapanis_durdur` — STOP'lar AYNEN; boşta
+# kapanış mandalı DİSKE yazmaz, seans / bobin çalışırken yazar (launcher `safe_stop_coils`, Inno / NSIS ikizleriyle AYNI kural). Uç YOKSA
+# (eski backend 405) ya da 2 sn içinde hata dönerse operatörün ACİL DURDUR ucu — bobin durdurma AZALMAZ; zaman aşımında ikinci istek YOK.
+# Yanıt imzası iki uçta AYNI (`_emergency_stop_all`: status + stmStopped + mqttResults) → çağıranın PEMF denetimi değişmez.
 function Invoke-PemfAcilDurdurIstegi([int]$Port) {
-    Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/hardware/emergency_stop" -Method Post -TimeoutSec 10
+    $t0 = Get-Date
+    try {
+        $govde = @{ onay = $true } | ConvertTo-Json -Compress
+        return Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/hardware/kapanis_durdur" -Method Post -ContentType 'application/json' -Body $govde -TimeoutSec 10
+    } catch {
+        if (((Get-Date) - $t0).TotalSeconds -ge 2) { throw }
+        return Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/hardware/emergency_stop" -Method Post -TimeoutSec 10
+    }
 }
 
 # @return gönderilen ACİL DURDUR sayısı (yalnız RAPOR — çağıran buna göre kill'i ATLAMAZ).
