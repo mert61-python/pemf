@@ -3330,7 +3330,7 @@
    "kritik": false,
    "muaf": [],
    "birlesikIstisna": [],
-   "not": ""
+   "not": "I18N-0 pilotu KISMİ: açılış / ilerleme paneli (15 anahtar) kataloğa; kalan sözlük anahtarları + işlev değerleri bekliyor"
   },
   "launcher/app/src/main.rs": {
    "yuzey": "launcher",
@@ -3341,7 +3341,7 @@
    "kritik": false,
    "muaf": [],
    "birlesikIstisna": [],
-   "not": ""
+   "not": "I18N-0 pilotu KISMİ: bir hata yolu (uygulama kurulu değil) dil::t; kalan iletiler bekliyor"
   },
   "launcher/core/src/auth.rs": {
    "yuzey": "launcher",

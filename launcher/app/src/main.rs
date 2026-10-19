@@ -776,7 +776,7 @@ async fn start_installed(
 ) -> Result<String, String> {
     let root = install::default_install_root(&home_dir());
     if !install::backend_path(&root).exists() {
-        return Err("Uygulama kurulu değil — önce profil seçip kurun.".to_string());
+        return Err(pemf_launcher_core::dil::t("rust.hata.uygulamaKuruluDegil"));
     }
     // Zaten bu oturumda çalışıyorsa: yeni süreç başlatma, uygulamayı pencerede tekrar göster.
     let running_port = state.proc.lock().unwrap().as_ref().map(|(_, p)| *p);

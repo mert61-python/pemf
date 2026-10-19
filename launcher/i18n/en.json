@@ -14,5 +14,26 @@
     "veriSilIsaretsiz": "PEMF: 'Delete the application data' is not checked — downloaded profiles/models are KEPT (they will not be downloaded again when you reinstall). To delete them completely, check the box when uninstalling.",
     "yukseltmeKorunuyor": "PEMF: upgrade — downloaded models and cache are kept (they will not be downloaded again)."
   },
-  "ui": {}
+  "rust": {
+    "hata": {
+      "uygulamaKuruluDegil": "The app is not installed — select a profile and install it first."
+    }
+  },
+  "ui": {
+    "appCore": "App files",
+    "calc": "calculating",
+    "cancelDl": "Cancel",
+    "detect": "Detecting environment…",
+    "instDl": "Downloading…",
+    "instExtract": "Installing…",
+    "instStart": "Starting…",
+    "instVerify": "Verifying…",
+    "pause": "Pause",
+    "pausedLead": "Download paused — the downloaded part is kept on your computer. You can resume where you left off.",
+    "pausedTitle": "Paused",
+    "readyLead": "PEMF Vet is installed. Start the app or update your profiles.",
+    "readyTitle": "Ready!",
+    "resume": "Resume",
+    "tagline": "Veterinary PEMF session + AI diagnostics platform"
+  }
 }

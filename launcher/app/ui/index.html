@@ -697,8 +697,7 @@
       // ---------- i18n ----------
       const I18N = {
         tr: {
-          tagline: "Veteriner PEMF seans + yapay zekâ teşhis platformu",
-          web: "Web Sitesi", about: "Hakkında", guide: "Kılavuz", guideTitle: "Kullanım Kılavuzu", detect: "Ortam algılanıyor…", authSlow: "Bağlantı yavaş — oturum arka planda doğrulanıyor. Uygulamayı şimdi başlatabilirsiniz.",
+          web: "Web Sitesi", about: "Hakkında", guide: "Kılavuz", guideTitle: "Kullanım Kılavuzu", authSlow: "Bağlantı yavaş — oturum arka planda doğrulanıyor. Uygulamayı şimdi başlatabilirsiniz.",
           selTitle: "Kullanım profilinizi seçin",
           selLead: "Ana uygulama her kurulumda gelir (kaldırılamaz). Profillerden en az birini seçin — yalnız seçtikleriniz indirilir.",
           // Ana uygulama kartı (2026-09-06): en üstte, önceden seçili, KALDIRILAMAZ; boyutu katmanlardan.
@@ -715,14 +714,8 @@
           backupUnreachable: (yol) => `Yedek hedefi şu an erişilemiyor: ${yol} — harici diski takın ya da yeni bir hedef seçin.`,
           backupSameDisk: "Yedekler şu anda hasta verisiyle AYNI diskte. Disk arızasında ikisi de kaybolur; harici bir disk ya da ağ paylaşımı seçin.",
           backupChoose: "Yedek hedefi seç",
-          instDl: "İndiriliyor…", instVerify: "Doğrulanıyor…", instExtract: "Kuruluyor…", instStart: "Başlatılıyor…",
-          appCore: "Uygulama dosyaları", calc: "hesaplanıyor",
-          pause: "Duraklat", resume: "Devam Et", cancelDl: "İptal",
-          pausedTitle: "Duraklatıldı", pausedLead: "İndirme duraklatıldı — inen kısım bilgisayarınızda korundu. Kaldığınız yerden devam edebilirsiniz.",
           resumeTitle: "Kurulum yarım kaldı", resumeBody: "Önceki kurulum tamamlanmadı (internet kesilmiş veya kapatılmış olabilir). İndirilen kısım korundu — kaldığınız yerden devam edilsin mi?",
           resumeYes: "Devam Et", resumeNo: "İptal et",
-          readyTitle: "Hazır!",
-          readyLead: "PEMF Vet kuruldu. Uygulamayı başlatın veya profillerinizi güncelleyin.",
           start: "Başlat", change: "Profilleri değiştir", repair: "Kurulumu onar", uninstall: "Uygulamayı kaldır",
           backToApp: "Uygulamaya dön", runningLead: "PEMF Vet çalışıyor. Uygulama penceresini kapatırsanız buradan yeniden başlatabilirsiniz.",
           footWeb: "Web Sitesi", footSupport: "Destek", ok: "Tamam", cancel: "Vazgeç", cont: "Devam",
@@ -808,8 +801,7 @@
           retry: "Tekrar dene",
         },
         en: {
-          tagline: "Veterinary PEMF session + AI diagnostics platform",
-          web: "Website", about: "About", guide: "Guide", guideTitle: "User Guide", detect: "Detecting environment…", authSlow: "Slow connection — verifying your session in the background. You can start the app now.",
+          web: "Website", about: "About", guide: "Guide", guideTitle: "User Guide", authSlow: "Slow connection — verifying your session in the background. You can start the app now.",
           selTitle: "Choose your usage profile",
           selLead: "The main application is always installed (cannot be removed). Pick at least one profile — only the ones you pick are downloaded.",
           coreName: "Main application", coreDesc: "Interface and shared models — required by every profile",
@@ -821,14 +813,8 @@
           backupUnreachable: (path) => `Backup destination is currently unreachable: ${path} — plug in the external drive or choose a new destination.`,
           backupSameDisk: "Backups are currently on the SAME disk as patient data. A disk failure would lose both; choose an external drive or a network share.",
           backupChoose: "Choose backup destination",
-          instDl: "Downloading…", instVerify: "Verifying…", instExtract: "Installing…", instStart: "Starting…",
-          appCore: "App files", calc: "calculating",
-          pause: "Pause", resume: "Resume", cancelDl: "Cancel",
-          pausedTitle: "Paused", pausedLead: "Download paused — the downloaded part is kept on your computer. You can resume where you left off.",
           resumeTitle: "Installation unfinished", resumeBody: "The previous installation didn't complete (internet may have dropped or the device was closed). The downloaded part is kept — resume where you left off?",
           resumeYes: "Resume", resumeNo: "Discard",
-          readyTitle: "Ready!",
-          readyLead: "PEMF Vet is installed. Start the app or update your profiles.",
           start: "Start", change: "Change profiles", repair: "Repair installation", uninstall: "Uninstall",
           backToApp: "Back to app", runningLead: "PEMF Vet is running. If you close the app window you can start it again from here.",
           footWeb: "Website", footSupport: "Support", ok: "OK", cancel: "Cancel", cont: "Continue",
@@ -1049,7 +1035,9 @@
         box.appendChild(tips);
       }
       let LANG = "tr";
-      const t = () => I18N[LANG];
+      // I18N-0: katalog (launcher/i18n → i18n_katalog.js, ÜRETİLMİŞ) sözlüğün ÜSTÜNE biner; göçen anahtar sözlükten silinir.
+      // Parti: kalan anahtarlar kataloğa taşındıkça sözlük küçülür (KURALLAR §Launcher).
+      const t = () => Object.assign({}, I18N[LANG], (window.PEMF_I18N_KATALOG || {})[LANG] || {});
 
       // ---------- app state ----------
       let manifestRaw = null;

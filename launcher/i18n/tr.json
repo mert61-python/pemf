@@ -14,5 +14,26 @@
     "veriSilIsaretsiz": "PEMF: 'uygulama verisini sil' işaretsiz — indirilen profiller/modeller KORUNUYOR (yeniden kurulumda tekrar inmez). Tamamen silmek için kaldırırken kutuyu işaretleyin.",
     "yukseltmeKorunuyor": "PEMF: yükseltme — indirilen modeller ve önbellek korunuyor (tekrar inmez)."
   },
-  "ui": {}
+  "rust": {
+    "hata": {
+      "uygulamaKuruluDegil": "Uygulama kurulu değil — önce profil seçip kurun."
+    }
+  },
+  "ui": {
+    "appCore": "Uygulama dosyaları",
+    "calc": "hesaplanıyor",
+    "cancelDl": "İptal",
+    "detect": "Ortam algılanıyor…",
+    "instDl": "İndiriliyor…",
+    "instExtract": "Kuruluyor…",
+    "instStart": "Başlatılıyor…",
+    "instVerify": "Doğrulanıyor…",
+    "pause": "Duraklat",
+    "pausedLead": "İndirme duraklatıldı — inen kısım bilgisayarınızda korundu. Kaldığınız yerden devam edebilirsiniz.",
+    "pausedTitle": "Duraklatıldı",
+    "readyLead": "PEMF Vet kuruldu. Uygulamayı başlatın veya profillerinizi güncelleyin.",
+    "readyTitle": "Hazır!",
+    "resume": "Devam Et",
+    "tagline": "Veteriner PEMF seans + yapay zekâ teşhis platformu"
+  }
 }
