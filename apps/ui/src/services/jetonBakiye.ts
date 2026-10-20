@@ -15,6 +15,7 @@
  * internetsiz çalışır. (S-4B.5, 2026-10-19: ücretlendirme açıkken yapay zekâ analizi internet ister.)
  */
 import { apiGet } from "@/services/apiClient";
+import i18n from "i18next";
 
 /** Backend `GET /api/jeton/bakiye` yanıtı (servers/jeton.py::bakiye_ozeti). */
 export interface JetonBakiyesi {
@@ -58,7 +59,7 @@ export function bakiyeMetni(b: JetonBakiyesi | null | undefined): string | null 
   if (!b || !b.etkin) return null;              // kapalı → rozet yok
   if (b.bilinmiyor) return "—";                  // okunamadı → sayı UYDURMA
   if (b.odemeModeli === "kullandikca") {
-    return typeof b.borc === "number" ? `${b.borc} kullanım` : "—";
+    return typeof b.borc === "number" ? i18n.t("ana.jeton.kullanim", { count: b.borc }) : "—";
   }
   return typeof b.kalan === "number" ? String(b.kalan) : "—";
 }
@@ -69,11 +70,8 @@ export function bakiyeMetni(b: JetonBakiyesi | null | undefined): string | null 
  * artık yanlış (kullanıcı analiz dener, 402 alır). Tedavinin internetsiz sürdüğü AYRICA söylenir.
  */
 export function bilinmeyenBakiyeAciklamasi(b: JetonBakiyesi | null | undefined): string {
-  if (b?.sebep === "kimlik_yok") return "Jeton bakiyesi için giriş yapmanız gerekiyor.";
-  return (
-    "Jeton bakiyesi okunamadı (internet yok). Yapay zekâ analizi için internet gerekir; " +
-    "seans, acil durdurma ve sensör izleme internetsiz de çalışır."
-  );
+  if (b?.sebep === "kimlik_yok") return i18n.t("ana.jeton.girisGerekli");
+  return i18n.t("ana.jeton.okunamadi");
 }
 
 /** Bakiye azaldığında rozet rengi değişsin (uyarı eşiği). */

@@ -23,6 +23,7 @@ import {
   JETON_KAPALI,
   type JetonBakiyesi,
 } from "@/services/jetonBakiye";
+import { useTranslation } from "react-i18next";
 
 /** Rozet kendi kendine tazelenir; analiz sonrası sayı elle yenilenmeden düşsün. */
 const TAZELEME_MS = 60_000;
@@ -42,6 +43,7 @@ const TAZELEME_MS = 60_000;
 const KAPALI_TAZELEME_MS = 600_000;
 
 export function JetonRozeti({ kompakt = false }: { kompakt?: boolean }) {
+  const { t } = useTranslation();
   const [bakiye, setBakiye] = useState<JetonBakiyesi>(JETON_KAPALI);
 
   const tazele = useCallback(async () => {
@@ -75,15 +77,12 @@ export function JetonRozeti({ kompakt = false }: { kompakt?: boolean }) {
       return;
     }
     if (bakiye.odemeModeli === "kullandikca") {
-      emitToast(`Faturalanmamış kullanım: ${bakiye.borc ?? 0} analiz.`, "info");
+      emitToast(t("ana.jeton.faturalanmamis", { count: bakiye.borc ?? 0 }), "info");
       return;
     }
     const m = bakiye.maliyet || {};
     emitToast(
-      `Kalan analiz hakkı: ${bakiye.kalan}. ` +
-        `Görüntü/ses ${m.goruntu ?? 1} · araştırma ${m.agir_arastirma ?? 3} · ` +
-        `otonom seans ${m.ai_pro_seans ?? 5} jeton. ` +
-        "Seans ve acil durdurma jetondan etkilenmez.",
+      t("ana.jeton.aciklama", { kalan: bakiye.kalan, goruntu: m.goruntu ?? 1, arastirma: m.agir_arastirma ?? 3, otonom: m.ai_pro_seans ?? 5 }),
       durum === "bitti" ? "error" : "info",
     );
   };
@@ -93,7 +92,7 @@ export function JetonRozeti({ kompakt = false }: { kompakt?: boolean }) {
       onPress={aciklama}
       style={[styles.kutu, durum === "bitti" && styles.kutuBitti, durum === "az" && styles.kutuAz]}
       accessibilityRole="button"
-      accessibilityLabel={`Kalan jeton: ${metin}. Ayrıntı için dokunun.`}
+      accessibilityLabel={t("ana.jeton.etiket", { metin })}
     >
       <Coins size={14} color={renk} />
       <Text style={[styles.metin, { color: renk }]} numberOfLines={1}>
@@ -101,7 +100,7 @@ export function JetonRozeti({ kompakt = false }: { kompakt?: boolean }) {
       </Text>
       {!kompakt && (
         <Text style={styles.etiket} numberOfLines={1}>
-          jeton
+          {t("ana.jeton.birim")}
         </Text>
       )}
     </Pressable>

@@ -11,7 +11,7 @@ import { IconButton } from "@/components/ui/IconButton";
 import { colors, spacing, typography, rf, rs, touch } from "@/theme/tokens";
 import { Sparkles, X, Zap, FlaskConical } from "lucide-react-native";
 import { useEntitlement } from "@/context/EntitlementContext";
-import { TIER_LABEL } from "@/config/entitlement";
+import { tierEtiketi } from "@/config/entitlement";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 
@@ -80,7 +80,7 @@ export function UpgradeModal({
 
       <View style={styles.planRow}>
         <Text style={styles.planLabel}>{t("kabuk.planModal.mevcutPlan")}</Text>
-        <Text style={styles.planVal}>{TIER_LABEL[tier]}</Text>
+        <Text style={styles.planVal}>{tierEtiketi(tier)}</Text>
       </View>
 
       {/* A1 / Apple 3.1.1 uyumu: satın-alma linki/CTA YOK. */}

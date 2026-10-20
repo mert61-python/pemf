@@ -15,6 +15,17 @@
   "donanimCalisiyor": "⚠️ DONANIM ÇALIŞIYOR",
   "hastaOzeti": "Hasta Özeti",
   "internetYok": "İnternet yok — uzaktan erişim kapalı",
+  "jeton": {
+    "aciklama": "Kalan analiz hakkı: {{kalan}}. Görüntü/ses {{goruntu}} · araştırma {{arastirma}} · otonom seans {{otonom}} jeton. Seans ve acil durdurma jetondan etkilenmez.",
+    "birim": "jeton",
+    "etiket": "Kalan jeton: {{metin}}. Ayrıntı için dokunun.",
+    "faturalanmamis_one": "Faturalanmamış kullanım: {{count}} analiz.",
+    "faturalanmamis_other": "Faturalanmamış kullanım: {{count}} analiz.",
+    "girisGerekli": "Jeton bakiyesi için giriş yapmanız gerekiyor.",
+    "kullanim_one": "{{count}} kullanım",
+    "kullanim_other": "{{count}} kullanım",
+    "okunamadi": "Jeton bakiyesi okunamadı (internet yok). Yapay zekâ analizi için internet gerekir; seans, acil durdurma ve sensör izleme internetsiz de çalışır."
+  },
   "kalanSure": "Kalan Süre",
   "kontrolPanelinden": "Kontrol panelinden seans başlatabilirsiniz.",
   "kpi": {
@@ -40,6 +51,12 @@
     "tamamlanmaOrani": "Tamamlanma Oranı",
     "toplamRozet": "Toplam {{n}}",
     "veriYok": "Veri Yok"
+  },
+  "plan": {
+    "baslangic": "Başlangıç",
+    "deneme_one": "Deneme · {{count}} gün kaldı",
+    "deneme_other": "Deneme · {{count}} gün kaldı",
+    "dogrulanamadi": "Abonelik doğrulanamadı (internet yok)"
   },
   "rozetCanli": "CANLI",
   "rozetCevrimdisi": "OFFLINE",

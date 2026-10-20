@@ -16,6 +16,7 @@
  *    onPress'ine + gateFeature'ı AiHub modül-açma/autoAdjust'a BAĞLANMALI, sonra bayrak açılmalı.
  */
 import type { UserMode } from "@/context/UserModeContext";
+import i18n from "i18next";
 
 export const ENTITLEMENT_ENFORCED = false;
 
@@ -33,14 +34,11 @@ export type Entitlement = {
 };
 
 export const TRIAL_DAYS = 14;
-export const TIER_LABEL: Record<Tier, string> = {
-  baslangic: "Başlangıç",
-  pro: "Pro",
-  pro_plus: "Pro+",
-};
+/** Plan etiketi — çağrı anında katalogdan; `Pro` / `Pro+` plan (ürün) adlarıdır, iki dilde aynı. */
+export const tierEtiketi = (tier: Tier): string => (tier === "baslangic" ? i18n.t("ana.plan.baslangic") : tier === "pro_plus" ? "Pro+" : "Pro");
 
 /** Y58 (sahip): hak BİLİNMİYORKEN (ilk açılış internetsiz, bilinen son hak yok) rozet metni. */
-export const ABONELIK_DOGRULANAMADI = "Abonelik doğrulanamadı (internet yok)";
+export const abonelikDogrulanamadi = (): string => i18n.t("ana.plan.dogrulanamadi");
 
 /** Karşılama rozeti: hak bilinmiyorsa "doğrulanamadı" — "Başlangıç"/deneme UYDURULMAZ (Y58). */
 export function planRozetiMetni(p: {
@@ -49,8 +47,8 @@ export function planRozetiMetni(p: {
   trialDaysLeft: number;
   tier: Tier;
 }): string {
-  if (p.dogrulanamadi) return ABONELIK_DOGRULANAMADI;
-  return p.trialing ? `Deneme · ${p.trialDaysLeft} gün kaldı` : TIER_LABEL[p.tier];
+  if (p.dogrulanamadi) return abonelikDogrulanamadi();
+  return p.trialing ? i18n.t("ana.plan.deneme", { count: p.trialDaysLeft }) : tierEtiketi(p.tier);
 }
 
 /** Abonelik satırı yoksa varsayılan: 14 günlük deneme (hesap oluşturma anından). */

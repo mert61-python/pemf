@@ -15,6 +15,17 @@
   "donanimCalisiyor": "⚠️ HARDWARE IS RUNNING",
   "hastaOzeti": "Patient Summary",
   "internetYok": "No internet — remote access is off",
+  "jeton": {
+    "aciklama": "Remaining analysis credits: {{kalan}}. Image/audio {{goruntu}} · research {{arastirma}} · autonomous session {{otonom}} credits. Sessions and emergency stop are not affected by credits.",
+    "birim": "credits",
+    "etiket": "Remaining credits: {{metin}}. Tap for details.",
+    "faturalanmamis_one": "Unbilled usage: {{count}} analysis.",
+    "faturalanmamis_other": "Unbilled usage: {{count}} analyses.",
+    "girisGerekli": "You need to sign in to see your credit balance.",
+    "kullanim_one": "{{count}} use",
+    "kullanim_other": "{{count}} uses",
+    "okunamadi": "The credit balance could not be read (no internet). AI analysis requires the internet; sessions, emergency stop and sensor monitoring also work offline."
+  },
   "kalanSure": "Time Remaining",
   "kontrolPanelinden": "You can start a session from the control panel.",
   "kpi": {
@@ -40,6 +51,12 @@
     "tamamlanmaOrani": "Completion Rate",
     "toplamRozet": "Total {{n}}",
     "veriYok": "No Data"
+  },
+  "plan": {
+    "baslangic": "Starter",
+    "deneme_one": "Trial · {{count}} day left",
+    "deneme_other": "Trial · {{count}} days left",
+    "dogrulanamadi": "Subscription could not be verified (no internet)"
   },
   "rozetCanli": "LIVE",
   "rozetCevrimdisi": "OFFLINE",

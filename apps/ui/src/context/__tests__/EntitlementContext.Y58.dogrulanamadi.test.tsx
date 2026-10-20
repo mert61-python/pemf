@@ -30,7 +30,7 @@ import { AuthRetryableFetchError } from "@supabase/supabase-js";
 import { setEntitlementHeaders } from "@/services/apiClient";
 import { supabaseAuth } from "@/services/supabaseAuth";
 import { EntitlementProvider, useEntitlement, HAK_YENIDEN_DENEME_MS } from "@/context/EntitlementContext";
-import { planRozetiMetni, ABONELIK_DOGRULANAMADI } from "@/config/entitlement";
+import { planRozetiMetni, abonelikDogrulanamadi } from "@/config/entitlement";
 
 const sb = supabaseAuth as unknown as { auth: { getUser: jest.Mock; getSession: jest.Mock }; from: jest.Mock };
 const basliklar = setEntitlementHeaders as jest.Mock;
@@ -64,7 +64,7 @@ it("KRİTİK: internetsiz İLK açılış → rozet 'doğrulanamadı', Başlang�
   sb.auth.getUser.mockResolvedValue(AG_HATASI);
   const u = kur();
   await waitFor(() => expect(sb.auth.getUser).toHaveBeenCalled());
-  await waitFor(() => expect(rozet(u)).toBe(ABONELIK_DOGRULANAMADI));
+  await waitFor(() => expect(rozet(u)).toBe(abonelikDogrulanamadi()));
   expect(rozet(u)).not.toMatch(/Başlangıç|Deneme|gün kaldı/);
   expect(basliklar.mock.calls.filter(([t]) => t)).toEqual([]); // hiçbir tier başlığı (baslangic dahil) kurulmadı
   expect(mockDepo.setItem).not.toHaveBeenCalled();
@@ -77,7 +77,7 @@ it("KRİTİK: internet GELİNCE gerçek hak kendiliğinden görünür (yeniden b
   await act(async () => {
     await Promise.resolve();
   });
-  await waitFor(() => expect(rozet(u)).toBe(ABONELIK_DOGRULANAMADI));
+  await waitFor(() => expect(rozet(u)).toBe(abonelikDogrulanamadi()));
   sb.auth.getUser.mockResolvedValue(KULLANICI); // internet geldi
   await act(async () => {
     jest.advanceTimersByTime(HAK_YENIDEN_DENEME_MS);
@@ -137,6 +137,6 @@ it("KRİTİK (1-F inceleme): A'nın hakkı BİLİNİYORKEN A ÇIKAR, B internets
     );
   });
   await waitFor(() => expect(sb.auth.getUser).toHaveBeenCalledTimes(2));
-  await waitFor(() => expect(rozet(u)).toBe(ABONELIK_DOGRULANAMADI));
+  await waitFor(() => expect(rozet(u)).toBe(abonelikDogrulanamadi()));
   expect(rozet(u)).not.toMatch(/Başlangıç|Deneme|gün kaldı|Pro/);
 });

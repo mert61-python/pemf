@@ -256,7 +256,7 @@
    "sira": 8,
    "kritik": false,
    "aciklama": "jeton / abonelik / erişim",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 18,
    "dosyaSayisi": 6
   },
@@ -2752,7 +2752,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-08-jeton",
    "sira": 8,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 4,
    "kritik": false,
    "muaf": [],
@@ -2763,7 +2763,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-08-jeton",
    "sira": 8,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -2774,10 +2774,19 @@
    "yuzey": "arayuz",
    "grup": "arayuz-08-jeton",
    "sira": 8,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 5,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Pro",
+     "gerekce": "plan adı (Pro) — ürün adı, iki dilde aynı"
+    },
+    {
+     "metin": "Pro+",
+     "gerekce": "plan adı (Pro+) — ürün adı, iki dilde aynı"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -2785,10 +2794,31 @@
    "yuzey": "arayuz",
    "grup": "arayuz-08-jeton",
    "sira": 8,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 5,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "PEMF Vet",
+     "gerekce": "ürün adı (PEMF Vet) — çevrilmez"
+    },
+    {
+     "metin": "İBİA Teknoloji Makina Arge Danışmanlık Sanayi ve Ticaret Limited Şirketi",
+     "gerekce": "tüzel kişi unvanı (özel ad / yasal kimlik) — çevrilmez"
+    },
+    {
+     "metin": "İBİA Teknoloji Ltd. Şti.",
+     "gerekce": "tüzel kişi kısa unvanı (özel ad / yasal kimlik) — çevrilmez"
+    },
+    {
+     "metin": "Yeşiltepe Mah. İsmet İnönü 2 Cad. No: 2-57, Tepebaşı / Eskişehir",
+     "gerekce": "yasal adres (özel ad / yasal kimlik) — çevrilmez"
+    },
+    {
+     "metin": "Eskişehir Vergi Dairesi Başkanlığı",
+     "gerekce": "vergi dairesi adı (özel ad / yasal kimlik) — çevrilmez"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -2796,10 +2826,15 @@
    "yuzey": "arayuz",
    "grup": "arayuz-08-jeton",
    "sira": 8,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "useEntitlement must be used within EntitlementProvider",
+     "gerekce": "geliştirici hata iletisi (bağlam dışı kullanım) — kullanıcıya gösterilmez"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -2807,7 +2842,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-08-jeton",
    "sira": 8,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 3,
    "kritik": false,
    "muaf": [],
