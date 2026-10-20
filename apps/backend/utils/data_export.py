@@ -28,6 +28,8 @@ import json
 import os
 from typing import Any, Dict
 
+from utils import ceviri
+
 MAGIC = b"PEMFDATA1"
 SALT_LEN = 16
 _KDF_ROUNDS = 200_000
@@ -60,14 +62,11 @@ def parola_gecerli_mi(passphrase: str) -> tuple:
     """(gecerli, sebep). Sunucu ve istemci AYNI kuralı uygulasın diye tek yerde."""
     p = (passphrase or "").strip()
     if not p:
-        return False, "Parola boş olamaz — şifresiz tıbbi veri dosyası üretilmez."
+        return False, ceviri.t("yedek.parola.bos")
     if len(p) < MIN_PAROLA:
-        return False, (
-            f"Parola en az {MIN_PAROLA} karakter olmalı. Bu dosya kliniğin tüm hasta "
-            "geçmişini taşır ve tek koruması bu paroladır."
-        )
+        return False, ceviri.t("yedek.parola.kisa", min=MIN_PAROLA)
     if len(set(p)) < 4:
-        return False, "Parola çok basit (aynı karakterlerin tekrarı). Farklı karakterler kullanın."
+        return False, ceviri.t("yedek.parola.basit")
     return True, ""
 
 
@@ -89,23 +88,23 @@ def decrypt_bundle(blob: bytes, passphrase: str) -> Dict[str, Any]:
     from cryptography.fernet import Fernet, InvalidToken
 
     if not blob.startswith(MAGIC):
-        raise ExportError("Bu dosya bir PEMF Vet veri yedeği değil.")
+        raise ExportError(ceviri.t("yedek.dosya.degil"))
     salt = blob[len(MAGIC) : len(MAGIC) + SALT_LEN]
     token = blob[len(MAGIC) + SALT_LEN :]
     if len(salt) != SALT_LEN or not token:
-        raise ExportError("Dosya bozuk (eksik başlık).")
+        raise ExportError(ceviri.t("yedek.dosya.bozukBaslik"))
     try:
         duz = Fernet(_derive_key(passphrase, salt)).decrypt(token)
     except InvalidToken as e:
         # Yanlış parola ile kurcalanmış dosyayı AYIRMAYIZ: ikisi de "açılamadı"dır.
-        raise ExportError("Parola yanlış ya da dosya bozulmuş.") from e
+        raise ExportError(ceviri.t("yedek.dosya.parolaYanlis")) from e
     try:
         payload = json.loads(gzip.decompress(duz).decode("utf-8"))
     except Exception as e:
-        raise ExportError("Dosya içeriği okunamadı.") from e
+        raise ExportError(ceviri.t("yedek.dosya.icerikOkunamadi")) from e
     if not isinstance(payload, dict):
-        raise ExportError("Dosya içeriği beklenen biçimde değil.")
+        raise ExportError(ceviri.t("yedek.dosya.icerikBicim"))
     surum = int(payload.get("bundle_version") or 0)
     if surum > BUNDLE_VERSION:
-        raise ExportError(f"Bu yedek daha yeni bir sürümle üretilmiş (v{surum}). Önce uygulamayı güncelleyin.")
+        raise ExportError(ceviri.t("yedek.dosya.yeniSurum", surum=surum))
     return payload

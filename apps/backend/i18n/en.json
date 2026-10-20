@@ -620,14 +620,89 @@
       "altVarsayilan": "Pulsed Electromagnetic Field Therapy - Veterinary Application",
       "varsayilan": "PEMF SESSION REPORT"
     },
+    "belirtilmemis": "Not specified",
     "bilgi": {
       "raporTarihi": "Report Date:",
       "raporTuru": "Report Type:",
       "seansGecmisiRaporu": "Session History Report",
       "toplamSeans": "Total Sessions:"
+    },
+    "hasta": {
+      "adi": "Patient Name:",
+      "agirlik": "Weight:",
+      "baslik": "PATIENT REPORT: {{ad}}",
+      "frekansHz": "Frequency (Hz)",
+      "ilkTedavi": "First Treatment:",
+      "ilkTedaviTarihi": "First Treatment Date",
+      "irk": "Breed:",
+      "istatistikler": "PATIENT STATISTICS",
+      "sahip": "Owner:",
+      "sonTedaviTarihi": "Last Treatment Date",
+      "soyadi": "Patient Surname:",
+      "sureDk": "Duration (min)",
+      "tedaviGecmisi": "TREATMENT HISTORY",
+      "tur": "Species:",
+      "veteriner": "Veterinarian:",
+      "yas": "Age:"
+    },
+    "seans": {
+      "agirlik": "Weight",
+      "ayarlananMt": "Set (mT)",
+      "baslangicSaati": "Start Time",
+      "baslik": "Session {{no}} - {{tarih}}",
+      "bitisSaati": "End Time",
+      "bobinCalismalari": "Coil Runs",
+      "frekans": "Frequency",
+      "hastaAdi": "Patient Name",
+      "hastaNotlari": "<b>Patient Notes:</b>",
+      "hastaYasi": "Patient Age",
+      "hedefDurum": "Target Condition",
+      "istatistikYok": "No statistics data was found.",
+      "istatistikler": "STATISTICS",
+      "maksSic": "Max. Temp. (C)",
+      "modu": "{{mode}} Mode",
+      "ortSic": "Avg. Temp. (C)",
+      "ortalamaSeansSuresi": "Average Session Duration",
+      "saat": "Time",
+      "sahip": "Owner",
+      "seansSayisi_one": "{{count}} session",
+      "seansSayisi_other": "{{count}} sessions",
+      "sure": "Duration",
+      "sureSn": "Duration (s)",
+      "tedaviModu": "Treatment Mode",
+      "tedaviSeanslari": "TREATMENT SESSIONS",
+      "toplamSeansSayisi": "Total Number of Sessions",
+      "toplamTedaviSuresi": "Total Treatment Duration",
+      "turIrk": "Species/Breed",
+      "uyariEksik": "WARNING: {{eksik}} of the {{istenen}} requested sessions were not found (they may have been deleted) and are NOT included in this report.",
+      "veteriner": "Veterinarian"
+    },
+    "sure": {
+      "dakika": "{{n}} min"
+    },
+    "xai": {
+      "goruntuOkunamadi": "(image could not be read: {{g}})"
     }
   },
   "seans": {
+    "durum": {
+      "aborted_due_to_power": "Power Outage",
+      "aborted_recovered": "Recovered",
+      "active": "Active",
+      "canceled": "Canceled",
+      "cancelled": "Canceled",
+      "completed": "Completed",
+      "emergency_stopped": "Emergency Stopped",
+      "error": "Error",
+      "failed": "Failed",
+      "hardware_rejected": "Hardware Rejected",
+      "in_progress": "In Progress",
+      "interrupted": "Interrupted",
+      "pending": "Pending",
+      "running": "Running",
+      "stopped": "Stopped",
+      "success": "Successful"
+    },
     "hata": {
       "aiSure": "The duration of an AI session is the seal of the veterinarian's approval — it was NOT CHANGED from here (a new recommendation/approval is required).",
       "aktifYok": "No active session — there are no parameters to update.",
@@ -720,6 +795,14 @@
     "tarihSaat": "{{tarih}}, {{saat}}"
   },
   "yedek": {
+    "dosya": {
+      "bozukBaslik": "The file is corrupt (missing header).",
+      "degil": "This file is not a PEMF Vet data backup.",
+      "icerikBicim": "The file contents are not in the expected format.",
+      "icerikOkunamadi": "The file contents could not be read.",
+      "parolaYanlis": "The password is wrong or the file is corrupt.",
+      "yeniSurum": "This backup was produced by a newer version (v{{surum}}). Update the app first."
+    },
     "hata": {
       "cihazDisiGeriYukleme": "There are records on this device: a restore (it replaces all treatment records on the device) can only be done from the device's own screen.",
       "cihazaKaydetEkran": "Saving the backup to the device can only be done from the device's own screen; on this client the file is downloaded.",
@@ -740,6 +823,11 @@
     "kimlik": {
       "disaAktar": "Select an operator — to back up all the clinic's records, first choose which veterinarian you are from the top bar.",
       "geriYukleme": "Select an operator — to restore on a device that already has records, first choose which veterinarian you are from the top bar."
+    },
+    "parola": {
+      "basit": "The password is too simple (a repetition of the same characters). Use different characters.",
+      "bos": "The password cannot be empty — an unencrypted medical data file is never produced.",
+      "kisa": "The password must be at least {{min}} characters. This file carries the whole patient history of the clinic and the password is its only protection."
     },
     "uyari": {
       "kartAktarilamadi_one": "The card of {{count}} patient could not be imported (the patient database could not be written) — the treatment history was restored but this patient has no card; once the problem is fixed, restore the same backup again.",

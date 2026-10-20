@@ -359,15 +359,8 @@ class PDFReportGenerator:
             self._add_header(story)
             self._add_report_info(story, len(bulunan))
             if len(bulunan) < len(session_ids):
-                story.append(
-                    Paragraph(
-                        _esc(
-                            f"UYARI: İstenen {len(session_ids)} seanstan {len(session_ids) - len(bulunan)} tanesi bulunamadı "
-                            "(silinmiş olabilir) ve bu rapora GİRMEDİ."
-                        ),
-                        self.styles['UnicodeNormal'],
-                    )
-                )
+                _ek = {"istenen": len(session_ids), "eksik": len(session_ids) - len(bulunan)}
+                story.append(Paragraph(_esc(ceviri.t("pdf.seans.uyariEksik", **_ek)), self.styles['UnicodeNormal']))
             if include_statistics:
                 self._add_statistics_section(story, session_ids)
             self._add_sessions_section(story, session_ids, include_patient_info)
@@ -456,7 +449,9 @@ class PDFReportGenerator:
                     story.append(Image(str(g), width=iw * olcek, height=ih * olcek))
                 except Exception as e:
                     self.logger.warning("XAI raporu: görüntü okunamadı, metinle geçildi (%s): %s", g, e)
-                    story.append(Paragraph(_esc(f"(görüntü okunamadı: {g})"), self.styles['UnicodeNormal']))
+                    story.append(
+                        Paragraph(_esc(ceviri.t("pdf.xai.goruntuOkunamadi", g=g)), self.styles['UnicodeNormal'])
+                    )
             if oge.get('aciklama'):
                 story.append(Paragraph(_esc(oge['aciklama']), self.styles['UnicodeNormal']))
             for satir in oge.get('satirlar') or []:
@@ -595,10 +590,10 @@ class PDFReportGenerator:
 
     def _add_statistics_section(self, story, session_ids):
         """İstatistik bölümünü ekle (toplam/ortalama süre + tedavi-modu dağılımı)."""
-        story.append(Paragraph("İSTATİSTİKLER", self.styles['SectionHeader']))
+        story.append(Paragraph(ceviri.t("pdf.seans.istatistikler"), self.styles['SectionHeader']))
         sessions = self._fetch_sessions(session_ids)
         if not sessions:
-            story.append(Paragraph("İstatistik verisi bulunamadı.", self.styles['UnicodeNormal']))
+            story.append(Paragraph(ceviri.t("pdf.seans.istatistikYok"), self.styles['UnicodeNormal']))
             return
         story.append(self._build_stats_table(sessions))
         story.append(Spacer(1, 20))
@@ -609,16 +604,16 @@ class PDFReportGenerator:
         avg_duration = total_duration / len(sessions) if sessions else 0
         mode_counts = {}
         for session in sessions:
-            mode = session.get('treatment_mode', 'Bilinmiyor')
+            mode = session.get('treatment_mode', ceviri.t("ai.deger.unknown"))
             mode_counts[mode] = mode_counts.get(mode, 0) + 1
 
         stats_data = [
-            ["Toplam Seans Sayısı", str(len(sessions))],
-            ["Toplam Tedavi Süresi", f"{total_duration} dakika"],
-            ["Ortalama Seans Süresi", f"{avg_duration:.1f} dakika"],
+            [ceviri.t("pdf.seans.toplamSeansSayisi"), str(len(sessions))],
+            [ceviri.t("pdf.seans.toplamTedaviSuresi"), ceviri.t("pdf.sure.dakika", n=total_duration)],
+            [ceviri.t("pdf.seans.ortalamaSeansSuresi"), ceviri.t("pdf.sure.dakika", n=f"{avg_duration:.1f}")],
         ]
         for mode, count in mode_counts.items():
-            stats_data.append([f"{mode} Modu", f"{count} seans"])
+            stats_data.append([ceviri.t("pdf.seans.modu", mode=mode), ceviri.t("pdf.seans.seansSayisi", count=count)])
 
         table = Table(stats_data, colWidths=[6 * cm, 4 * cm])
         table.setStyle(
@@ -637,7 +632,7 @@ class PDFReportGenerator:
 
     def _add_sessions_section(self, story, session_ids, include_patient_info):
         """Seans detayları bölümünü ekle"""
-        story.append(Paragraph("TEDAVİ SEANSLARI", self.styles['SectionHeader']))
+        story.append(Paragraph(ceviri.t("pdf.seans.tedaviSeanslari"), self.styles['SectionHeader']))
         sessions = self._fetch_sessions(session_ids)
         sessions.sort(key=lambda x: (x.get('session_date', ''), x.get('start_time', '')))
 
@@ -648,7 +643,8 @@ class PDFReportGenerator:
 
     def _add_single_session(self, story, session, session_num, include_patient_info):
         """Tek seans detayını ekle: başlık + bilgi tablosu + hasta notları + bobin çalışmaları."""
-        title = f"Seans {session_num} - {_esc(session.get('session_date', 'Bilinmiyor'))}"
+        tarih = _esc(session.get('session_date', ceviri.t("ai.deger.unknown")))
+        title = ceviri.t("pdf.seans.baslik", no=session_num, tarih=tarih)
         story.append(Paragraph(title, self.styles['Heading3']))
 
         details = self.db.get_session_details(session.get('id'))
@@ -675,7 +671,7 @@ class PDFReportGenerator:
         patient_notes = session.get('patient_notes', '')
         if patient_notes:
             story.append(Spacer(1, 10))
-            story.append(Paragraph("<b>Hasta Notları:</b>", self.styles['UnicodeNormal']))
+            story.append(Paragraph(ceviri.t("pdf.seans.hastaNotlari"), self.styles['UnicodeNormal']))
             story.append(Paragraph(_esc(patient_notes), self.styles['PatientInfo']))
 
         # Bobin çalışmaları tablosu (best-effort; hata olursa mevcut PDF'i bozmadan atla).
@@ -701,13 +697,16 @@ class PDFReportGenerator:
     def _session_info_rows(self, session: dict, parameters: dict, include_patient_info: bool):
         """Seans bilgi tablosunun satırları; istenirse hasta bilgileri araya eklenir (aynı sıra)."""
         rows = [
-            ["Tarih", session.get('session_date', 'Bilinmiyor')],
-            ["Başlangıç Saati", session.get('start_time', 'Bilinmiyor')],
-            ["Bitiş Saati", session.get('end_time', 'Bilinmiyor')],
-            ["Süre", f"{self._format_duration(parameters, session)} dakika"],
-            ["Tedavi Modu", session.get('treatment_mode', 'Bilinmiyor')],
-            ["Hedef Durum", session.get('target_condition', 'Belirtilmemiş')],
-            ["Frekans", f"{parameters.get('frequency', {}).get('value', session.get('frequency_hz', 0)) or 0} Hz"],
+            [ceviri.t("gecmis.csv.tarih"), session.get('session_date', ceviri.t("ai.deger.unknown"))],
+            [ceviri.t("pdf.seans.baslangicSaati"), session.get('start_time', ceviri.t("ai.deger.unknown"))],
+            [ceviri.t("pdf.seans.bitisSaati"), session.get('end_time', ceviri.t("ai.deger.unknown"))],
+            [ceviri.t("pdf.seans.sure"), ceviri.t("pdf.sure.dakika", n=self._format_duration(parameters, session))],
+            [ceviri.t("pdf.seans.tedaviModu"), session.get('treatment_mode', ceviri.t("ai.deger.unknown"))],
+            [ceviri.t("pdf.seans.hedefDurum"), session.get('target_condition', ceviri.t("pdf.belirtilmemis"))],
+            [
+                ceviri.t("pdf.seans.frekans"),
+                f"{parameters.get('frequency', {}).get('value', session.get('frequency_hz', 0)) or 0} Hz",
+            ],
             # ⚠️ DENETİM 2026-08-09 (Tier 2) — "Yoğunluk: X mT" SATIRI KALDIRILDI.
             # Operatörün girdiği mT değeri CİHAZA HİÇ ULAŞMIYOR: STM binary paketi
             # (`<BB 5f 5f 5f 5I H` = duty/phase/freq/duration) ve ESP MQTT komutu
@@ -716,8 +715,10 @@ class PDFReportGenerator:
             # gösteriyordu — üçüncü kişiye yanlış tıbbi beyan. Gerçek çözüm firmware'dedir
             # (paketi genişlet + osiloskopla doğrula); o yapılana kadar rapor bunu İDDİA ETMEZ.
             [
-                "Veteriner",
-                parameters.get('patient_vet_contact', {}).get('value', session.get('operator_name', 'Belirtilmemiş')),
+                ceviri.t("pdf.seans.veteriner"),
+                parameters.get('patient_vet_contact', {}).get(
+                    'value', session.get('operator_name', ceviri.t("pdf.belirtilmemis"))
+                ),
             ],
         ]
         if include_patient_info:
@@ -742,19 +743,37 @@ class PDFReportGenerator:
                 parameters.get('patient_surname', {}).get('value', '') or session.get('patient_surname') or ''
             )
             patient_full_name = f"{patient_name} {patient_surname}".strip()
-            rows.insert(4, ["Hasta Adı", patient_full_name or 'Bilinmiyor'])
-            rows.insert(5, ["Hasta Yaşı", parameters.get('patient_age', {}).get('value', 'Belirtilmemiş')])
+            rows.insert(4, [ceviri.t("pdf.seans.hastaAdi"), patient_full_name or ceviri.t("ai.deger.unknown")])
+            rows.insert(
+                5,
+                [
+                    ceviri.t("pdf.seans.hastaYasi"),
+                    parameters.get('patient_age', {}).get('value', ceviri.t("pdf.belirtilmemis")),
+                ],
+            )
             rows.insert(
                 6,
                 [
-                    "Tür/Irk",
+                    ceviri.t("pdf.seans.turIrk"),
                     f"{parameters.get('patient_species', {}).get('value', '')} / {parameters.get('patient_breed', {}).get('value', '')}".strip(
                         ' /'
                     ),
                 ],
             )
-            rows.insert(7, ["Ağırlık", parameters.get('patient_weight', {}).get('value', 'Belirtilmemiş')])
-            rows.insert(8, ["Sahip", parameters.get('patient_owner', {}).get('value', 'Belirtilmemiş')])
+            rows.insert(
+                7,
+                [
+                    ceviri.t("pdf.seans.agirlik"),
+                    parameters.get('patient_weight', {}).get('value', ceviri.t("pdf.belirtilmemis")),
+                ],
+            )
+            rows.insert(
+                8,
+                [
+                    ceviri.t("pdf.seans.sahip"),
+                    parameters.get('patient_owner', {}).get('value', ceviri.t("pdf.belirtilmemis")),
+                ],
+            )
         return rows
 
     def _add_coil_runs_table(self, story, session_id):
@@ -767,7 +786,7 @@ class PDFReportGenerator:
             return
         summaries = self.db.get_run_summaries(session_id)
         story.append(Spacer(1, 10))
-        story.append(Paragraph("Bobin Çalışmaları", self.styles['Heading3']))
+        story.append(Paragraph(ceviri.t("pdf.seans.bobinCalismalari"), self.styles['Heading3']))
         story.append(self._build_coil_runs_table(runs, summaries))
 
     def _build_coil_runs_table(self, runs, summaries) -> "Table":
@@ -776,7 +795,16 @@ class PDFReportGenerator:
         # uyguladığı ölçülmüş bir şiddet DEĞİLDİR (STM/ESP paketlerinde mT alanı yok).
         # Klinik-içi bir tabloda kaydı tutmak meşru; "şiddet" demek ölçülmüş gibi okutur.
         table_data = [
-            ["Bobin", "Saat", "Süre (sn)", "Hz", "Duty (%)", "Ayarlanan (mT)", "Ort. Sıc. (C)", "Maks. Sıc. (C)"]
+            [
+                ceviri.t("gecmis.csv.bobin"),
+                ceviri.t("pdf.seans.saat"),
+                ceviri.t("pdf.seans.sureSn"),
+                "Hz",
+                "Duty (%)",
+                ceviri.t("pdf.seans.ayarlananMt"),
+                ceviri.t("pdf.seans.ortSic"),
+                ceviri.t("pdf.seans.maksSic"),
+            ]
         ]
         for r in runs:
             summ = summaries.get(r.get('id')) or {}
@@ -815,7 +843,9 @@ class PDFReportGenerator:
 
     def _add_patient_header(self, story, session, patient_name):
         """Hasta raporu başlığını ekle"""
-        story.append(Paragraph(f"HASTA RAPORU: {_esc(patient_name).upper()}", self.styles['SectionHeader']))
+        story.append(
+            Paragraph(ceviri.t("pdf.hasta.baslik", ad=_esc(patient_name).upper()), self.styles['SectionHeader'])
+        )
 
         # Hasta bilgileri - Parametrelerden al
         session_details = self.db.get_session_details(session.get('id'))
@@ -828,20 +858,39 @@ class PDFReportGenerator:
         # (tek yazılan seans-parametresi `patient_owner_email`). Ad, seans satırında durur.
         patient_info = [
             [
-                "Hasta Adı:",
-                parameters.get('patient_name', {}).get('value') or session.get('patient_name') or 'Belirtilmemiş',
+                ceviri.t("pdf.hasta.adi"),
+                parameters.get('patient_name', {}).get('value')
+                or session.get('patient_name')
+                or ceviri.t("pdf.belirtilmemis"),
             ],
             [
-                "Hasta Soyadı:",
-                parameters.get('patient_surname', {}).get('value') or session.get('patient_surname') or 'Belirtilmemiş',
+                ceviri.t("pdf.hasta.soyadi"),
+                parameters.get('patient_surname', {}).get('value')
+                or session.get('patient_surname')
+                or ceviri.t("pdf.belirtilmemis"),
             ],
-            ["Yaş:", parameters.get('patient_age', {}).get('value', 'Belirtilmemiş')],
-            ["Tür:", parameters.get('patient_species', {}).get('value', 'Belirtilmemiş')],
-            ["Irk:", parameters.get('patient_breed', {}).get('value', 'Belirtilmemiş')],
-            ["Ağırlık:", parameters.get('patient_weight', {}).get('value', 'Belirtilmemiş')],
-            ["Sahip:", parameters.get('patient_owner', {}).get('value', 'Belirtilmemiş')],
-            ["Veteriner:", parameters.get('patient_vet_contact', {}).get('value', 'Belirtilmemiş')],
-            ["İlk Tedavi:", session.get('session_date', 'Bilinmiyor')],
+            [ceviri.t("pdf.hasta.yas"), parameters.get('patient_age', {}).get('value', ceviri.t("pdf.belirtilmemis"))],
+            [
+                ceviri.t("pdf.hasta.tur"),
+                parameters.get('patient_species', {}).get('value', ceviri.t("pdf.belirtilmemis")),
+            ],
+            [
+                ceviri.t("pdf.hasta.irk"),
+                parameters.get('patient_breed', {}).get('value', ceviri.t("pdf.belirtilmemis")),
+            ],
+            [
+                ceviri.t("pdf.hasta.agirlik"),
+                parameters.get('patient_weight', {}).get('value', ceviri.t("pdf.belirtilmemis")),
+            ],
+            [
+                ceviri.t("pdf.hasta.sahip"),
+                parameters.get('patient_owner', {}).get('value', ceviri.t("pdf.belirtilmemis")),
+            ],
+            [
+                ceviri.t("pdf.hasta.veteriner"),
+                parameters.get('patient_vet_contact', {}).get('value', ceviri.t("pdf.belirtilmemis")),
+            ],
+            [ceviri.t("pdf.hasta.ilkTedavi"), session.get('session_date', ceviri.t("ai.deger.unknown"))],
         ]
 
         patient_table = Table(patient_info, colWidths=[3 * cm, 7 * cm])
@@ -862,7 +911,7 @@ class PDFReportGenerator:
 
     def _add_patient_statistics(self, story, sessions):
         """Hasta istatistiklerini ekle"""
-        story.append(Paragraph("HASTA İSTATİSTİKLERİ", self.styles['SectionHeader']))
+        story.append(Paragraph(ceviri.t("pdf.hasta.istatistikler"), self.styles['SectionHeader']))
 
         total_sessions = len(sessions)
         total_duration = sum(s.get('duration_minutes', 0) or 0 for s in sessions)
@@ -870,15 +919,15 @@ class PDFReportGenerator:
 
         # Tarih aralığı
         dates = [s.get('session_date', '') for s in sessions if s.get('session_date')]
-        first_date = min(dates) if dates else 'Bilinmiyor'
-        last_date = max(dates) if dates else 'Bilinmiyor'
+        first_date = min(dates) if dates else ceviri.t("ai.deger.unknown")
+        last_date = max(dates) if dates else ceviri.t("ai.deger.unknown")
 
         stats_data = [
-            ["Toplam Seans Sayısı", str(total_sessions)],
-            ["Toplam Tedavi Süresi", f"{total_duration} dakika"],
-            ["Ortalama Seans Süresi", f"{avg_duration:.1f} dakika"],
-            ["İlk Tedavi Tarihi", first_date],
-            ["Son Tedavi Tarihi", last_date],
+            [ceviri.t("pdf.seans.toplamSeansSayisi"), str(total_sessions)],
+            [ceviri.t("pdf.seans.toplamTedaviSuresi"), ceviri.t("pdf.sure.dakika", n=total_duration)],
+            [ceviri.t("pdf.seans.ortalamaSeansSuresi"), ceviri.t("pdf.sure.dakika", n=f"{avg_duration:.1f}")],
+            [ceviri.t("pdf.hasta.ilkTedaviTarihi"), first_date],
+            [ceviri.t("pdf.hasta.sonTedaviTarihi"), last_date],
         ]
 
         stats_table = Table(stats_data, colWidths=[5 * cm, 5 * cm])
@@ -900,7 +949,7 @@ class PDFReportGenerator:
 
     def _add_patient_treatment_history(self, story, sessions):
         """Hasta tedavi geçmişini ekle"""
-        story.append(Paragraph("TEDAVİ GEÇMİŞİ", self.styles['SectionHeader']))
+        story.append(Paragraph(ceviri.t("pdf.hasta.tedaviGecmisi"), self.styles['SectionHeader']))
 
         # Seansları tarihe göre sırala
         sessions.sort(key=lambda x: (x.get('session_date', ''), x.get('start_time', '')))
@@ -908,16 +957,22 @@ class PDFReportGenerator:
         # Tablo başlıkları
         table_data = [
             # "Yoğunluk (mT)" sütunu KALDIRILDI — bkz. yukarıdaki not (cihaza ulaşmayan değer).
-            ["Tarih", "Süre (dk)", "Mod", "Frekans (Hz)", "Hedef"]
+            [
+                ceviri.t("gecmis.csv.tarih"),
+                ceviri.t("pdf.hasta.sureDk"),
+                ceviri.t("gecmis.csv.mod"),
+                ceviri.t("pdf.hasta.frekansHz"),
+                ceviri.t("gecmis.csv.hedef"),
+            ]
         ]
 
         for session in sessions:
             row = [
-                session.get('session_date', 'Bilinmiyor'),
+                session.get('session_date', ceviri.t("ai.deger.unknown")),
                 str(session.get('duration_minutes', 0) or 0),
-                session.get('treatment_mode', 'Bilinmiyor'),
+                session.get('treatment_mode', ceviri.t("ai.deger.unknown")),
                 str(session.get('frequency_hz', 0) or 0),
-                session.get('target_condition', 'Belirtilmemiş'),
+                session.get('target_condition', ceviri.t("pdf.belirtilmemis")),
             ]
             table_data.append(row)
 

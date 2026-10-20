@@ -22,30 +22,32 @@ tersi). `tests/test_seans_durum_etiketi.py` iki haritayı ANAHTAR ANAHTAR karş�
 
 from __future__ import annotations
 
-#: Ham backend durumu (küçük harf) -> Türkçe gösterim etiketi.
-#: ⚠️ `apps/ui/src/screens/TreatmentHistoryScreen.tsx::STATUS_LABELS_TR` ile BİREBİR AYNI olmalı.
+from utils import ceviri
+
+#: Ham backend durumu (küçük harf) -> katalog ANAHTARI (`seans.durum.*`; metin istek dilinde — I18N-P1). Anahtar kümesi arayüz `STATUS_ANAHTARLARI` ile AYNI
+#: (`tests/test_seans_durum_etiketi.py` iki tabloyu ANAHTAR ANAHTAR ve çözülen Türkçe etiketle karşılaştırır).
 DURUM_ETIKETLERI: dict[str, str] = {
-    "completed": "Tamamlandı",
-    "active": "Aktif",
-    "running": "Çalışıyor",
-    "in_progress": "Devam Ediyor",
-    "pending": "Bekliyor",
-    "stopped": "Durduruldu",
-    "interrupted": "Kesintiye Uğradı",
-    "aborted_recovered": "Kurtarıldı",
-    "cancelled": "İptal Edildi",
-    "canceled": "İptal Edildi",
-    "error": "Hata",
-    "failed": "Başarısız",
-    "success": "Başarılı",
+    "completed": "seans.durum.completed",
+    "active": "seans.durum.active",
+    "running": "seans.durum.running",
+    "in_progress": "seans.durum.in_progress",
+    "pending": "seans.durum.pending",
+    "stopped": "seans.durum.stopped",
+    "interrupted": "seans.durum.interrupted",
+    "aborted_recovered": "seans.durum.aborted_recovered",
+    "cancelled": "seans.durum.cancelled",
+    "canceled": "seans.durum.canceled",
+    "error": "seans.durum.error",
+    "failed": "seans.durum.failed",
+    "success": "seans.durum.success",
     # ⚠️ ÜRETİMDE KULLANILAN AMA HİÇBİR HARİTADA OLMAYAN İKİ DURUM (2026-09-12'de bulundu).
     # `database/treatment_history_db.py` bunları GERÇEKTEN yazıyor
     # (`SEANS_DURUMU_ACIL_DURDURMA`, güç-kesintisi mutabakatı) ama ne CSV ne de ekran
     # çevirebiliyordu → operatör "Emergency_stopped" görüyordu. Sahibin şikâyetiyle AYNI sınıf.
-    "emergency_stopped": "Acil Durduruldu",
-    "aborted_due_to_power": "Elektrik Kesintisi",
+    "emergency_stopped": "seans.durum.emergency_stopped",
+    "aborted_due_to_power": "seans.durum.aborted_due_to_power",
     # ⚠️ Donanım komutu reddetti → seans HİÇ başlamadı (2026-09-12 sahte-başarılı düzeltmesi).
-    "hardware_rejected": "Donanım Reddetti",
+    "hardware_rejected": "seans.durum.hardware_rejected",
 }
 
 
@@ -62,7 +64,7 @@ def durum_etiketi(durum) -> str:
     ham = str(durum).strip()
     if not ham:
         return ""
-    etiket = DURUM_ETIKETLERI.get(ham.lower())
-    if etiket:
-        return etiket
+    durum_anahtari = DURUM_ETIKETLERI.get(ham.lower())
+    if durum_anahtari:
+        return ceviri.t(durum_anahtari)
     return ham[0].upper() + ham[1:]

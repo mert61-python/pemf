@@ -205,6 +205,14 @@
    "onek": "ai.belirti.",
    "degerler": ["Age", "Appetite_Loss_bin", "Body_Temperature", "Coughing_bin", "Diarrhea_bin", "Duration_days", "Eye_Discharge_bin", "Heart_Rate", "Labored_Breathing_bin", "Lameness_bin", "Nasal_Discharge_bin", "Skin_Lesions_bin", "Vomiting_bin", "Weight", "has_Dehydration", "has_Fever", "has_Lethargy", "has_Sneezing", "has_Weight_Loss"],
    "gerekce": "PDF belirti adı: BELIRTILER tablosu model girdi adını katalog ANAHTARINA eşler (kapalı küme); bilinmeyen ad HAM yazılmaz"
+  },
+  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/utils/seans_durum.py",
+   "ifade": "ceviri.t(durum_anahtari)",
+   "onek": "seans.durum.",
+   "degerler": ["aborted_due_to_power", "aborted_recovered", "active", "canceled", "cancelled", "completed", "emergency_stopped", "error", "failed", "hardware_rejected", "in_progress", "interrupted", "pending", "running", "stopped", "success"],
+   "gerekce": "Seans durumu etiketi DURUM_ETIKETLERI'nde ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (16 durum), DB'den gelen ham durum anahtara EŞLENİR, kendisi çevrilmez; bilinmeyen durum ham (baş harfi büyük) yazılır"
   }
  ]
 }

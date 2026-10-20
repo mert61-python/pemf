@@ -144,8 +144,18 @@ def test_KRITIK_python_ve_TS_sozlukleri_AYNI():
         f"anahtarlar AYRISTI. yalniz TS: {sorted(set(ts) - set(DURUM_ETIKETLERI))}, "
         f"yalniz PY: {sorted(set(DURUM_ETIKETLERI) - set(ts))}"
     )
-    farkli = {k: (ts[k], DURUM_ETIKETLERI[k]) for k in ts if ts[k] != DURUM_ETIKETLERI[k]}
+    # I18N-P1: sunucu tablosu da katalog ANAHTARI saklar (arayüz `STATUS_ANAHTARLARI` deseni) → ölçüt GEVŞEMEDİ, yer değiştirdi:
+    # iki taraftaki ÇÖZÜLEN Türkçe etiket aynı olmalı; İngilizce de iki tarafta dolu ve aynı.
+    import i18n_yardimci as iy
+
+    sv_tr, sv_en = iy.katalog("sunucu", "tr"), iy.katalog("sunucu", "en")
+    ui_en = iy.katalog("arayuz", "en")
+    py_tr = {k: sv_tr.get(DURUM_ETIKETLERI[k], f"<katalogda yok: {DURUM_ETIKETLERI[k]}>") for k in DURUM_ETIKETLERI}
+    farkli = {k: (ts[k], py_tr[k]) for k in ts if ts[k] != py_tr[k]}
     assert not farkli, f"ayni durum IKI FARKLI Turkce etikete cevriliyor: {farkli}"
+    for k, anahtar in DURUM_ETIKETLERI.items():
+        assert str(sv_en.get(anahtar, "")).strip(), f"{anahtar} EN degeri BOS"
+        assert sv_en[anahtar] == ui_en.get(f"seans.durum.{k}"), f"{k}: EN sunucu ≠ arayuz"
 
 
 def test_KRITIK_URETIMDE_yazilan_her_durum_cevrilebiliyor():

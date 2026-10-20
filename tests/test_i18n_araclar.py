@@ -371,13 +371,14 @@ def test_yuzey_dosyalari_testleri_dislar_ve_bilinen_dosyalari_kapsar():
 
 def test_cli_taban_bicimi(tmp_path):
     cikti = tmp_path / "taban.json"
-    rc = cikar.main(["--dosya", "apps/backend/utils/seans_durum.py", "--taban", "--cikti", str(cikti)])
+    # Örnek dosya: `klinik_asgari.py` (AI mikroservisiyle ORTAK yaprak modül → Türkçe sabitleri kaynakta KALIR; `seans_durum.py` P1-10e'de katalog anahtarına taşındı).
+    rc = cikar.main(["--dosya", "apps/backend/utils/klinik_asgari.py", "--taban", "--cikti", str(cikti)])
     assert rc == 0
     veri = json.loads(cikti.read_text(encoding="utf-8"))
-    assert veri["dosyalar"] == ["apps/backend/utils/seans_durum.py"]
-    assert veri["metinler"], "seans_durum.py Türkçe durum etiketleri taşır"
+    assert veri["dosyalar"] == ["apps/backend/utils/klinik_asgari.py"]
+    assert veri["metinler"], "klinik_asgari.py Türkçe iletiler taşır"
     assert set(veri["metinler"][0]) == {"yuzey", "dosya", "satir", "metin", "ham", "tur", "baglam", "birlesik"}
-    assert any(x["metin"] == "Tamamlandı" for x in veri["metinler"])
+    assert any(x["metin"] == "yaş negatif olamaz" for x in veri["metinler"])
 
 
 @ts_gerekli

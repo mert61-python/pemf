@@ -310,7 +310,7 @@
    "sira": 10,
    "kritik": false,
    "aciklama": "PDF raporu, seans durum etiketleri, dışa aktarma",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 108,
    "dosyaSayisi": 3
   },
@@ -4283,7 +4283,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10e-pdf",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 9,
    "kritik": false,
    "muaf": [],
@@ -4294,10 +4294,71 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10e-pdf",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 83,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "ReportLab kütüphanesi gerekli. 'pip install reportlab' komutunu çalıştırın.",
+     "gerekce": "geliştirici hata iletisi (kurulum bağımlılığı; ImportError) — operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "Helvetica",
+     "gerekce": "PDF yazı tipi adı — metin değil"
+    },
+    {
+     "metin": "Courier",
+     "gerekce": "PDF yazı tipi adı — metin değil"
+    },
+    {
+     "metin": "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+     "gerekce": "yazı tipi dosya yolu — metin değil"
+    },
+    {
+     "metin": "/System/Library/Fonts/Supplemental/Arial Italic.ttf",
+     "gerekce": "yazı tipi dosya yolu — metin değil"
+    },
+    {
+     "metin": "/System/Library/Fonts/Supplemental/Arial Bold Italic.ttf",
+     "gerekce": "yazı tipi dosya yolu — metin değil"
+    },
+    {
+     "metin": "{{aile}}-Bold",
+     "gerekce": "PDF yazı tipi yüz adı — metin değil"
+    },
+    {
+     "metin": "{{aile}}-Italic",
+     "gerekce": "PDF yazı tipi yüz adı — metin değil"
+    },
+    {
+     "metin": "PDF raporu",
+     "gerekce": "günlük etiketi (`_build_pdf` yalnız logger.info) — geliştirici içindir"
+    },
+    {
+     "metin": "Hasta raporu",
+     "gerekce": "günlük etiketi (`_build_pdf` yalnız logger.info) — geliştirici içindir"
+    },
+    {
+     "metin": "XAI raporu",
+     "gerekce": "günlük etiketi (`_build_pdf` yalnız logger.info) — geliştirici içindir"
+    },
+    {
+     "metin": "~/Desktop",
+     "gerekce": "dizin adı — metin değil"
+    },
+    {
+     "metin": "'{{patient_name}}' adlı hasta için seans bulunamadı",
+     "gerekce": "iç istisna iletisi — uç günlüğe yazıp genel 500 `gecmis.hata.islemBasarisiz` döner; kullanıcıya gitmez"
+    },
+    {
+     "metin": "Table",
+     "gerekce": "tür açıklaması (tip ipucu) — metin değil"
+    },
+    {
+     "metin": "Duty (%)",
+     "gerekce": "teknik kısaltma (iki dilde aynı: duty yüzdesi sütun başlığı)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": "I18N-0 pilotu KISMİ (dilim: PDF başlık/bilgi/altbilgi · AI sonuç metni) — dosyanın kalanı bekliyor"
   },
@@ -4305,7 +4366,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10e-pdf",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 16,
    "kritik": false,
    "muaf": [],

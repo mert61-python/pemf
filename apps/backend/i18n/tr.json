@@ -620,14 +620,89 @@
       "altVarsayilan": "Pulsed Electromagnetic Field Therapy - Veteriner Uygulaması",
       "varsayilan": "PEMF TEDAVİ RAPORU"
     },
+    "belirtilmemis": "Belirtilmemiş",
     "bilgi": {
       "raporTarihi": "Rapor Tarihi:",
       "raporTuru": "Rapor Türü:",
       "seansGecmisiRaporu": "Tedavi Geçmişi Raporu",
       "toplamSeans": "Toplam Seans:"
+    },
+    "hasta": {
+      "adi": "Hasta Adı:",
+      "agirlik": "Ağırlık:",
+      "baslik": "HASTA RAPORU: {{ad}}",
+      "frekansHz": "Frekans (Hz)",
+      "ilkTedavi": "İlk Tedavi:",
+      "ilkTedaviTarihi": "İlk Tedavi Tarihi",
+      "irk": "Irk:",
+      "istatistikler": "HASTA İSTATİSTİKLERİ",
+      "sahip": "Sahip:",
+      "sonTedaviTarihi": "Son Tedavi Tarihi",
+      "soyadi": "Hasta Soyadı:",
+      "sureDk": "Süre (dk)",
+      "tedaviGecmisi": "TEDAVİ GEÇMİŞİ",
+      "tur": "Tür:",
+      "veteriner": "Veteriner:",
+      "yas": "Yaş:"
+    },
+    "seans": {
+      "agirlik": "Ağırlık",
+      "ayarlananMt": "Ayarlanan (mT)",
+      "baslangicSaati": "Başlangıç Saati",
+      "baslik": "Seans {{no}} - {{tarih}}",
+      "bitisSaati": "Bitiş Saati",
+      "bobinCalismalari": "Bobin Çalışmaları",
+      "frekans": "Frekans",
+      "hastaAdi": "Hasta Adı",
+      "hastaNotlari": "<b>Hasta Notları:</b>",
+      "hastaYasi": "Hasta Yaşı",
+      "hedefDurum": "Hedef Durum",
+      "istatistikYok": "İstatistik verisi bulunamadı.",
+      "istatistikler": "İSTATİSTİKLER",
+      "maksSic": "Maks. Sıc. (C)",
+      "modu": "{{mode}} Modu",
+      "ortSic": "Ort. Sıc. (C)",
+      "ortalamaSeansSuresi": "Ortalama Seans Süresi",
+      "saat": "Saat",
+      "sahip": "Sahip",
+      "seansSayisi_one": "{{count}} seans",
+      "seansSayisi_other": "{{count}} seans",
+      "sure": "Süre",
+      "sureSn": "Süre (sn)",
+      "tedaviModu": "Tedavi Modu",
+      "tedaviSeanslari": "TEDAVİ SEANSLARI",
+      "toplamSeansSayisi": "Toplam Seans Sayısı",
+      "toplamTedaviSuresi": "Toplam Tedavi Süresi",
+      "turIrk": "Tür/Irk",
+      "uyariEksik": "UYARI: İstenen {{istenen}} seanstan {{eksik}} tanesi bulunamadı (silinmiş olabilir) ve bu rapora GİRMEDİ.",
+      "veteriner": "Veteriner"
+    },
+    "sure": {
+      "dakika": "{{n}} dakika"
+    },
+    "xai": {
+      "goruntuOkunamadi": "(görüntü okunamadı: {{g}})"
     }
   },
   "seans": {
+    "durum": {
+      "aborted_due_to_power": "Elektrik Kesintisi",
+      "aborted_recovered": "Kurtarıldı",
+      "active": "Aktif",
+      "canceled": "İptal Edildi",
+      "cancelled": "İptal Edildi",
+      "completed": "Tamamlandı",
+      "emergency_stopped": "Acil Durduruldu",
+      "error": "Hata",
+      "failed": "Başarısız",
+      "hardware_rejected": "Donanım Reddetti",
+      "in_progress": "Devam Ediyor",
+      "interrupted": "Kesintiye Uğradı",
+      "pending": "Bekliyor",
+      "running": "Çalışıyor",
+      "stopped": "Durduruldu",
+      "success": "Başarılı"
+    },
     "hata": {
       "aiSure": "AI seansının süresi hekim onayının mührüdür — buradan DEĞİŞTİRİLMEDİ (yeni öneri/onay gerekir).",
       "aktifYok": "Aktif seans yok — güncellenecek parametre yok.",
@@ -720,6 +795,14 @@
     "tarihSaat": "{{tarih}}, {{saat}}"
   },
   "yedek": {
+    "dosya": {
+      "bozukBaslik": "Dosya bozuk (eksik başlık).",
+      "degil": "Bu dosya bir PEMF Vet veri yedeği değil.",
+      "icerikBicim": "Dosya içeriği beklenen biçimde değil.",
+      "icerikOkunamadi": "Dosya içeriği okunamadı.",
+      "parolaYanlis": "Parola yanlış ya da dosya bozulmuş.",
+      "yeniSurum": "Bu yedek daha yeni bir sürümle üretilmiş (v{{surum}}). Önce uygulamayı güncelleyin."
+    },
     "hata": {
       "cihazDisiGeriYukleme": "Bu cihazda kayıt var: geri yükleme (cihazdaki tüm tedavi kayıtlarını değiştirir) yalnız cihazın kendi ekranından yapılabilir.",
       "cihazaKaydetEkran": "Yedeği cihaza kaydetme yalnız cihazın kendi ekranından yapılır; bu istemcide dosya indirilir.",
@@ -740,6 +823,11 @@
     "kimlik": {
       "disaAktar": "Operatör seçin — kliniğin tüm kayıtlarının yedeğini almak için önce üst bardan hangi hekim olduğunuzu seçin.",
       "geriYukleme": "Operatör seçin — dolu cihazda geri yükleme için önce üst bardan hangi hekim olduğunuzu seçin."
+    },
+    "parola": {
+      "basit": "Parola çok basit (aynı karakterlerin tekrarı). Farklı karakterler kullanın.",
+      "bos": "Parola boş olamaz — şifresiz tıbbi veri dosyası üretilmez.",
+      "kisa": "Parola en az {{min}} karakter olmalı. Bu dosya kliniğin tüm hasta geçmişini taşır ve tek koruması bu paroladır."
     },
     "uyari": {
       "kartAktarilamadi_one": "{{count}} hastanın kartı içe aktarılamadı (hasta veritabanı yazılamadı) — tedavi geçmişi geri yüklendi ama bu hastaların kartı yok; sorun giderilince aynı yedeği yeniden geri yükleyin.",
