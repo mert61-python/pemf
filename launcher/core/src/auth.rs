@@ -605,10 +605,19 @@ mod tests {
             // turunda ölçüldü). Düğmenin GERÇEKTEN var olduğunu id niteliği kanıtlar.
             (r#"id="btn-pw-toggle""#, "parola goster/gizle DUGMESI yok — maskeli alanda hata gorunmez kalir"),
             ("function parolaUyarisi", "gorunmez karakter/bosluk uyarisi fonksiyonu YOK"),
-            ("loginPwSpace:", "bosluk uyari metni (sozlukte) YOK"),
-            ("loginPwInvisible:", "gorunmez-karakter uyari metni (sozlukte) YOK"),
         ] {
             assert!(s.contains(parca), "{neden} ({parca})");
+        }
+        // I18N-P1 · 11a: arayuz sozlukleri index.html'den katalogdan (launcher/i18n/{tr,en}.json -> ui.*) tasindi; iki uyari metni IKI dilde de tanimli olmali.
+        for dil in ["tr", "en"] {
+            let kp = format!("{}/../i18n/{dil}.json", env!("CARGO_MANIFEST_DIR"));
+            let kat = std::fs::read_to_string(&kp).expect("katalog okunamadi");
+            for (parca, neden) in [
+                (r#""loginPwSpace":"#, "bosluk uyari metni (katalogda) YOK"),
+                (r#""loginPwInvisible":"#, "gorunmez-karakter uyari metni (katalogda) YOK"),
+            ] {
+                assert!(kat.contains(parca), "{dil}: {neden} ({parca})");
+            }
         }
         // Düğmenin bir İŞİ de olmalı: tıklanınca alanın tipini değiştirmeli.
         assert!(

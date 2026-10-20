@@ -355,7 +355,7 @@
    "sira": 11,
    "kritik": false,
    "aciklama": "launcher Rust iletileri — uygulama (launcher/app/src)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 102,
    "dosyaSayisi": 1
   },
@@ -7314,10 +7314,191 @@
    "yuzey": "launcher",
    "grup": "launcher-11b-rust-uygulama",
    "sira": 11,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 102,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "pencerede cikis yapildi -> 'Beni hatirla' kaydi ve launcher oturumu temizlendi",
+     "gerekce": "günlük satırı — geliştirici / destek içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "kurulum/onarım sürüyor — ön-indirme ertelendi",
+     "gerekce": "`prefetch` durum JSON'unda `reason` — arayüz OKUMAZ (günlük / destek verisi)"
+    },
+    {
+     "metin": "yeni sürüm açıldı ama tıbbi kayıt veritabanı hazır değil — cihaz hiçbir seans başlatamazdı; eski sürüme dönüldü",
+     "gerekce": "`GuncellemeSonucu::GeriAlindi.sebep` — arayüz OKUMAZ (günlük / destek verisi); `geri_alma_hatasi` ile birlikte kayda gider"
+    },
+    {
+     "metin": "acilis yenilemesi REDDEDILDI ({{deger1}}) -> 'Beni hatirla' kaydi SILINDI, giris ekrani",
+     "gerekce": "günlük satırı — geliştirici / destek içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "kayitli refresh jetonu bos",
+     "gerekce": "günlük satırı — geliştirici / destek içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "acilis yenilemesi basarisiz ({{r}}) -> kayit KORUNDU, cevrimdisi devam",
+     "gerekce": "günlük satırı — geliştirici / destek içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "PEMFVetClient-Update-{{sfx}}.exe",
+     "gerekce": "geçici dosya adı kalıbı — metin değil"
+    },
+    {
+     "metin": "Güncelleme",
+     "gerekce": "`Progress.what` VERİ kimliği — arayüz `pkgLabel` ile gösterimde çevirir (değer→anahtar: `updateWhat`)"
+    },
+    {
+     "metin": "pemf_selfupdate_{{deger1}}.log",
+     "gerekce": "geçici dosya adı kalıbı — metin değil"
+    },
+    {
+     "metin": "PEMFVetClient-Guncelleme-{{sfx}}.exe",
+     "gerekce": "geçici dosya adı kalıbı — metin değil"
+    },
+    {
+     "metin": "[rust] pencere=1 {{deger1}}",
+     "gerekce": "günlük satırı — geliştirici / destek içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "[rust] pencere=0 {{e}}",
+     "gerekce": "günlük satırı — geliştirici / destek içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "/S /C \"\"{{yol}}\"\"",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "%SystemRoot%\\System32\\tasklist.exe",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "%SystemRoot%\\System32\\findstr.exe",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "%TEMP%\\pemf_upd_{{eski_pid}}.txt",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "%TEMP%\\pemf_selfupdate_{{eski_pid}}.log",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "@echo off",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "set \"T={{t}}\" set \"G={{g}}\"",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "echo [%DATE% %TIME%] yardimci basladi >> \"%G%\"",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "set /a n=0 :bekle",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "{{TL}} /FI \"PID eq {{eski_pid}}\" /NH > \"%T%\" 2>nul",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "{{FS}} /C:\" {{eski_pid}} \" \"%T%\" >nul 2>&1",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "if errorlevel 1 goto kur set /a n+=1 if %n% GEQ 30 goto kur",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "ping -n 2 127.0.0.1 >nul goto bekle :kur",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "echo [%TIME%] kurulum baslatiliyor (bekleme turu %n%) >> \"%G%\"",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "echo [%TIME%] kurulum bitti errorlevel=%ERRORLEVEL% >> \"%G%\"",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "ping -n 2 127.0.0.1 >nul",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "{{TL}} /FI \"IMAGENAME eq {{exe_adi}}\" /NH /FO CSV > \"%T%\" 2>nul",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "{{FS}} /I /C:\"{{exe_adi}}\" \"%T%\" >nul 2>&1",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "if errorlevel 1 start \"\" \"{{exe}}\"",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "echo [%TIME%] baslatma adimi gecildi >> \"%G%\"",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "del \"%T%\" >nul 2>&1",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "set /a k=0 :sil",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "del \"{{pk}}\" >nul 2>&1 if not exist \"{{pk}}\" goto son",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "set /a k+=1 if %k% GEQ 40 goto son ping -n 2 127.0.0.1 >nul goto sil :son",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "echo [%TIME%] yardimci bitti >> \"%G%\"",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "@echo off ping -n 6 127.0.0.1 >nul start \"\" \"{{unins}}\" del \"%~f0\"",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil"
+    },
+    {
+     "metin": "Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','{{b64}}'",
+     "gerekce": "PowerShell komutu / argümanı — metin değil"
+    },
+    {
+     "metin": "-Command",
+     "gerekce": "PowerShell komutu / argümanı — metin değil"
+    },
+    {
+     "metin": "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = 'Yedeklerin kopyalanacagi harici disk / ag paylasimi'; if ($d.ShowDialog() -eq 'OK') { $d.SelectedPath }",
+     "gerekce": "PowerShell komut dosyası — klasör seçici penceresinin AÇIKLAMA metni `rust.klasorSecici.aciklama` ile ayrıca çevrilir (elle)"
+    },
+    {
+     "metin": "orphan/backend.port dalında son-yakalama var — başka sürecin jetonunu okur (zehirlenme)",
+     "gerekce": "Rust birim testi iletisi (derlemede yok; geliştirici içindir)"
+    },
+    {
+     "metin": "let mut job = move ||",
+     "gerekce": "Rust birim testi iletisi (derlemede yok; geliştirici içindir)"
+    },
+    {
+     "metin": "Destroyed job sırası bozuk (E-stop→yakala→kill)",
+     "gerekce": "Rust birim testi iletisi (derlemede yok; geliştirici içindir)"
+    },
+    {
+     "metin": "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = '{{deger1}}'; if ($d.ShowDialog() -eq 'OK') {{ $d.SelectedPath }}",
+     "gerekce": "klasör seçici PowerShell komut dosyası (`format!` ile kurulur) — komut, kullanıcı metni değil; penceresinin AÇIKLAMA metni ayrıca `rust.klasorSecici.aciklama` ile katalogdan gelir"
+    }
+   ],
    "birlesikIstisna": [],
    "not": "I18N-0 pilotu KISMİ: bir hata yolu (uygulama kurulu değil) dil::t; kalan iletiler bekliyor"
   },

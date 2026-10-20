@@ -562,7 +562,7 @@ fn ortam_ozeti(root: &std::path::Path) -> Environment {
 async fn fetch_profiles() -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(fetch_profiles_blocking)
         .await
-        .map_err(|e| format!("manifest görevi çöktü: {e}"))?
+        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.manifestGorevCoktu", &[("e", &e.to_string())]))?
 }
 
 fn fetch_profiles_blocking() -> Result<serde_json::Value, String> {
@@ -571,7 +571,7 @@ fn fetch_profiles_blocking() -> Result<serde_json::Value, String> {
     // deadline + duvar saati tavanı (DNS'e deadline uygulanamıyor) + redirect-sonrası host
     // yeniden-doğrulama + into_string ~10MB metin-DoS sınırı.
     let raw = net::fetch_string_pinned_budgeted(MANIFEST_URL)
-        .map_err(|e| format!("Manifest indirilemedi: {e}"))?;
+        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.manifestIndirilemedi", &[("e", &e.to_string())]))?;
 
     let manifest =
         pemf_launcher_core::Manifest::parse(&raw).map_err(|e| e.to_string())?;
@@ -666,13 +666,13 @@ fn open_url(url: String) -> Result<(), String> {
         "https://github.com/mert61-python/pemf-update/",
     ];
     if !ALLOWED.iter().any(|p| url.starts_with(p)) {
-        return Err(format!("İzin verilmeyen indirme adresi: {url}"));
+        return Err(pemf_launcher_core::dil::t_ile("rust.hata.indirmeAdresiIzinsiz", &[("url", &url.to_string())]));
     }
     // Derinlik-savunması: open_browser artık rundll32 kullansa da (kabuk yok), manifest-türevi
     // URL'yi asla riske atma — kabuk-metakarakteri, kontrol-karakteri veya boşluk içeren URL'yi
     // reddet. Meşru GitHub/Vercel indirme URL'lerinde bunlar bulunmaz.
     if url.len() > 2048 || url.chars().any(|c| c.is_control() || "&|^<>\"'`{} \t\r\n".contains(c)) {
-        return Err("Geçersiz karakter içeren indirme adresi reddedildi".to_string());
+        return Err(pemf_launcher_core::dil::t("rust.hata.indirmeAdresiGecersizKarakter"));
     }
     backend::open_browser(&url).map_err(|e| e.to_string())
 }
@@ -737,7 +737,7 @@ async fn install_and_launch(
             .map_err(|e| e.to_string())
     })
     .await
-    .map_err(|e| format!("kurulum görevi çöktü: {e}"))?;
+    .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.kurulumGorevCoktu", &[("e", &e.to_string())]))?;
 
     match result {
         Ok(InstallOutcome::Ready(child, url, port)) => {
@@ -838,7 +838,7 @@ async fn start_installed(
         flow::start_backend(&root2, &mut on).map_err(|e| e.to_string())
     })
     .await
-    .map_err(|e| format!("başlatma görevi çöktü: {e}"))?;
+    .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.baslatmaGorevCoktu", &[("e", &e.to_string())]))?;
 
     match result {
         Ok((child, url, port)) => {
@@ -875,8 +875,7 @@ async fn repair(
     // `stop_tracked_backend` her iki yolda da kill'den ÖNCE `safe_stop_coils` gönderir.
     if let Some(p) = backend::detect_running_backend(&root) {
         if backend::session_active(p) == Some(true) {
-            return Err("Şu anda bir seans sürüyor — onarım seans bittikten sonra yapılabilir."
-                .to_string());
+            return Err(pemf_launcher_core::dil::t("rust.hata.onarimSeansSuruyor"));
         }
     }
     stop_tracked_backend(&state, &root);
@@ -910,7 +909,7 @@ async fn repair(
             .map_err(|e| e.to_string())
     })
     .await
-    .map_err(|e| format!("onarım görevi çöktü: {e}"))?;
+    .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.onarimGorevCoktu", &[("e", &e.to_string())]))?;
 
     match result {
         Ok(InstallOutcome::Ready(child, url, port)) => {
@@ -956,8 +955,7 @@ async fn remove_profiles(
     if let Some(p) = backend::detect_running_backend(&root) {
         if backend::session_active(p) == Some(true) {
             return Err(
-                "Şu anda bir seans sürüyor — profil kaldırma seans bittikten sonra yapılabilir."
-                    .to_string(),
+                pemf_launcher_core::dil::t("rust.hata.profilKaldirmaSeansSuruyor"),
             );
         }
     }
@@ -973,7 +971,7 @@ async fn remove_profiles(
         flow::remove_profiles(&root2, &manifest, &profiles, &mut |_| {}).map_err(|e| e.to_string())
     })
     .await
-    .map_err(|e| format!("profil kaldırma görevi çöktü: {e}"))??;
+    .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.profilKaldirmaGorevCoktu", &[("e", &e.to_string())]))??;
 
     Ok(serde_json::json!({
         "status": "ok",
@@ -1001,10 +999,10 @@ fn aktif_seans_kapisi(root: &std::path::Path) -> Result<(), String> {
     match backend::session_active(p) {
         Some(false) => Ok(()),
         Some(true) => Err(
-            "Şu anda bir seans sürüyor — güncelleme seans bittikten sonra yapılacak.".to_string(),
+            pemf_launcher_core::dil::t("rust.hata.guncellemeSeansSuruyor"),
         ),
         None => Err(
-            "Backend yanıt vermiyor, seans sürüyor olabilir — güncelleme ertelendi.".to_string(),
+            pemf_launcher_core::dil::t("rust.hata.guncellemeBackendYanitsiz"),
         ),
     }
 }
@@ -1048,7 +1046,7 @@ fn plan_to_json(plan: &flow::UpdatePlan) -> serde_json::Value {
 async fn check_runtime_update(manifest_raw: String) -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(move || check_runtime_update_blocking(manifest_raw))
         .await
-        .map_err(|e| format!("güncelleme denetimi görevi çöktü: {e}"))?
+        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.guncellemeDenetimiGorevCoktu", &[("e", &e.to_string())]))?
 }
 
 fn check_runtime_update_blocking(manifest_raw: String) -> Result<serde_json::Value, String> {
@@ -1126,7 +1124,7 @@ async fn prefetch_runtime_update(
         })
     })
     .await
-    .map_err(|e| format!("arka plan indirme çöktü: {e}"))?;
+    .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.arkaPlanIndirmeCoktu", &[("e", &e.to_string())]))?;
     // Bittiğinde kanalı KAPAT: UI bunu "indirme tamamlandı" olarak okur ve yoklamayı durdurur.
     // Aksi halde son snapshot ekranda donmuş bir yüzde olarak kalırdı.
     *store.lock().unwrap() = None;
@@ -1262,7 +1260,7 @@ async fn apply_runtime_update(
         }
     })
     .await
-    .map_err(|e| format!("güncelleme görevi çöktü: {e}"))?;
+    .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.guncellemeGorevCoktu", &[("e", &e.to_string())]))?;
 
     match sonuc? {
         GuncellemeSonucu::Hazir(child, url, port) => {
@@ -1328,7 +1326,7 @@ async fn uninstall(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> 
         stop_backend_for_teardown(tracked, &root2, bellek2);
     })
     .await
-    .map_err(|e| format!("kaldırma hazırlığı çöktü: {e}"))?;
+    .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.kaldirmaHazirligiCoktu", &[("e", &e.to_string())]))?;
 
     #[cfg(windows)]
     {
@@ -1355,8 +1353,7 @@ async fn uninstall(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> 
             .and_then(|p| p.parent().map(|d| d.join("uninstall.exe")))
             .filter(|p| p.exists())
             .ok_or_else(|| {
-                "Kaldırıcı (uninstall.exe) bulunamadı. Windows 'Ayarlar → Uygulamalar'dan kaldırabilirsiniz."
-                    .to_string()
+                pemf_launcher_core::dil::t("rust.hata.kaldiriciYok")
             })?;
         spawn_uninstaller_detached(&uninstaller)?;
         app.exit(0); // launcher ÇIKMALI ki uninstaller çalışan PEMFVetClient.exe'yi silebilsin
@@ -1366,7 +1363,7 @@ async fn uninstall(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> 
     {
         let _ = app; // mac/linux: platform paket-kaldırıcısı ayrı → indirilen payload'u temizle
         install::remove_install(&root)
-            .map_err(|e| format!("Kaldırma başarısız (uygulama çalışıyor olabilir): {e}"))
+            .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.kaldirmaBasarisiz", &[("e", &e.to_string())]))
     }
 }
 
@@ -1430,7 +1427,7 @@ async fn auth_status(state: tauri::State<'_, AppState>) -> Result<AuthStatus, St
     let root2 = root.clone();
     let kayitli = tauri::async_runtime::spawn_blocking(move || secret_store::load(&root2))
         .await
-        .map_err(|e| format!("oturum okuma görevi çöktü: {e}"))?;
+        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.oturumOkumaGorevCoktu", &[("e", &e.to_string())]))?;
     let Some(kayitli) = kayitli else {
         return Ok(AuthStatus::cikis_yapildi(false));
     };
@@ -1449,7 +1446,7 @@ async fn auth_status(state: tauri::State<'_, AppState>) -> Result<AuthStatus, St
         (r, auth::son_yenileme_reddi())
     })
     .await
-    .map_err(|e| format!("oturum yenileme görevi çöktü: {e}"))?;
+    .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.oturumYenilemeGorevCoktu", &[("e", &e.to_string())]))?;
 
     match (oturum_karari(&sonuc), sonuc) {
         (OturumKarari::Yenilendi, Ok(yeni)) => {
@@ -1540,7 +1537,7 @@ async fn auth_login(
     let (e, p) = (email.trim().to_string(), password);
     let sonuc = tauri::async_runtime::spawn_blocking(move || auth::login_budgeted(&e, &p))
         .await
-        .map_err(|err| format!("giriş görevi çöktü: {err}"))?;
+        .map_err(|err| pemf_launcher_core::dil::t_ile("rust.hata.girisGorevCoktu", &[("err", &err.to_string())]))?;
     // `AuthError`'ın Display'i zaten TÜRKÇE ve HTTP gövdesini yansıtmaz (bkz. core/auth.rs).
     let session = sonuc.map_err(|err| err.to_string())?;
 
@@ -1592,7 +1589,7 @@ async fn auth_logout(state: tauri::State<'_, AppState>) -> Result<AuthStatus, St
         }
     })
     .await
-    .map_err(|e| format!("çıkış görevi çöktü: {e}"))?;
+    .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.cikisGorevCoktu", &[("e", &e.to_string())]))?;
 
     Ok(AuthStatus::cikis_yapildi(false))
 }
@@ -1683,7 +1680,7 @@ fn resume_install(state: tauri::State<'_, AppState>) {
 async fn discard_pending(manifest_raw: Option<String>) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || discard_pending_blocking(manifest_raw))
         .await
-        .map_err(|e| format!("temizlik görevi çöktü: {e}"))?
+        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.temizlikGorevCoktu", &[("e", &e.to_string())]))?
 }
 
 fn discard_pending_blocking(manifest_raw: Option<String>) -> Result<(), String> {
@@ -1713,14 +1710,14 @@ async fn apply_self_update(
     #[cfg(not(windows))]
     {
         let _ = (&app, &state, &url, &sha256, size, &version);
-        Err("Bu platformda oto-güncelleme desteklenmiyor".to_string())
+        Err(pemf_launcher_core::dil::t("rust.hata.otoGuncellemeDesteklenmiyor"))
     }
     #[cfg(windows)]
     {
         // GÜVENLİK: imzasız setup exe çalıştırılacak → SHA256 ZORUNLU (manifest host-pinli kaynaktan
         // geldiği için sha güven çıpasıdır). url host-pinlemesi download_to_file içinde uygulanır.
         if sha256.trim().is_empty() {
-            return Err("Güncelleme SHA256 yok — güvenlik gereği atlandı".to_string());
+            return Err(pemf_launcher_core::dil::t("rust.hata.guncellemeSha256Yok"));
         }
         // ⚠️ DENETİM 2026-08-04: AKTİF TEDAVİ SIRASINDA GÜNCELLEME YOK.
         // Bu akış açılışta SESSİZ çalışır ve sonunda `/S` kurulum yapar; NSIS yükseltme kancası
@@ -1790,12 +1787,12 @@ async fn apply_self_update(
             verify::verify_file(&dest2, &sha).map_err(|e| {
                 // Bozuk/sahte setup'ı ASLA çalıştırma → sil.
                 let _ = std::fs::remove_file(&dest2);
-                format!("Güncelleme doğrulanamadı: {e}")
+                pemf_launcher_core::dil::t_ile("rust.hata.guncellemeDogrulanamadi", &[("e", &e.to_string())])
             })?;
             Ok(())
         })
         .await
-        .map_err(|e| format!("güncelleme görevi çöktü: {e}"))??;
+        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.guncellemeGorevCoktu", &[("e", &e.to_string())]))??;
 
         // DENETİM 2026-08-04: denemeyi installer'ı BAŞLATMADAN ÖNCE kaydet. Kurulum "başarılı"
         // olup sürüm DEĞİŞMEZSE (manifest sürümü ile paketin gerçek sürümü ayrışmışsa) bir sonraki
@@ -1812,14 +1809,12 @@ async fn apply_self_update(
                 match backend::session_active(p) {
                     Some(true) => {
                         return Err(
-                            "Seans başladı — güncelleme kuruldu değil, ertelendi. İndirilen dosya saklandı."
-                                .to_string(),
+                            pemf_launcher_core::dil::t("rust.hata.seansBasladiGuncellemeErtelendi"),
                         )
                     }
                     None => {
                         return Err(
-                            "Backend yanıt vermiyor, seans sürüyor olabilir — kurulum ertelendi."
-                                .to_string(),
+                            pemf_launcher_core::dil::t("rust.hata.kurulumBackendYanitsiz"),
                         )
                     }
                     Some(false) => {}
@@ -1899,10 +1894,10 @@ fn guncelleme_modu() -> bool {
 /// DURDURMAZ (eski davranışa düşer).
 #[cfg(windows)]
 fn guncelleme_penceresini_ac(sfx: &str) -> Result<std::path::PathBuf, String> {
-    let exe = std::env::current_exe().map_err(|e| format!("exe yolu okunamadı: {e}"))?;
+    let exe = std::env::current_exe().map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.exeYoluOkunamadi", &[("e", &e.to_string())]))?;
     let kopya = std::env::temp_dir().join(format!("PEMFVetClient-Guncelleme-{sfx}.exe"));
     let _ = std::fs::remove_file(&kopya);
-    std::fs::copy(&exe, &kopya).map_err(|e| format!("kopyalanamadı ({}): {e}", kopya.display()))?;
+    std::fs::copy(&exe, &kopya).map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.kopyalanamadi", &[("yol", &kopya.display().to_string()), ("e", &e.to_string())]))?;
     // Konsol-penceresi kapısı (core/tests/konsol_penceresi.rs): her spawn CREATE_NO_WINDOW taşır.
     // Kopya GUI alt-sisteminde (Tauri) olduğundan bayrak davranışı değiştirmez, kuralı korur.
     use std::os::windows::process::CommandExt;
@@ -1912,10 +1907,8 @@ fn guncelleme_penceresini_ac(sfx: &str) -> Result<std::path::PathBuf, String> {
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .map_err(|e| {
-            format!(
-                "başlatılamadı ({}): {e} — Defender ASR / AppLocker %TEMP%'teki kopyayı engelliyor olabilir",
-                kopya.display()
-            )
+            let (yol, e) = (kopya.display().to_string(), e.to_string());
+            pemf_launcher_core::dil::t_ile("rust.hata.baslatilamadi", &[("yol", &yol), ("e", &e)])
         })?;
     Ok(kopya)
 }
@@ -1978,9 +1971,9 @@ const YARDIMCI_BATCH_BAYRAKLARI: u32 = 0x0000_0200 /* CREATE_NEW_PROCESS_GROUP *
 #[cfg(windows)]
 fn yardimci_batch_baslat(bat: &std::path::Path) -> Result<std::process::Child, String> {
     use std::os::windows::process::CommandExt;
-    let yol = bat.to_str().ok_or("yardımcı batch yolu UTF-8 değil")?;
+    let yol = bat.to_str().ok_or_else(|| pemf_launcher_core::dil::t("rust.hata.yardimciBatchYoluUtf8"))?;
     if yol.contains('"') || yol.contains('\r') || yol.contains('\n') {
-        return Err("yardımcı batch yolu güvensiz karakter içeriyor".to_string());
+        return Err(pemf_launcher_core::dil::t("rust.hata.yardimciBatchYoluGuvensiz"));
     }
     // ⚠️ stdio NULL (2026-09-06): ayrık yardımcı ebeveynin tutamaçlarını DEVRALMAMALI. Launcher
     // GUI olduğundan üretimde zaten konsol yok; ama `cargo test`/CI altında test ikilisinin stdout'u
@@ -1994,17 +1987,14 @@ fn yardimci_batch_baslat(bat: &std::path::Path) -> Result<std::process::Child, S
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
-        .map_err(|e| format!("yardımcı başlatılamadı ({yol}): {e}"))?;
+        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.yardimciBaslatilamadi", &[("yol", &yol.to_string()), ("e", &e.to_string())]))?;
     std::thread::sleep(std::time::Duration::from_millis(300));
     if let Ok(Some(durum)) = cocuk.try_wait() {
         if !durum.success() {
             let _ = std::fs::remove_file(bat);
-            return Err(format!(
-                "Yardımcı komut dosyası hemen sonlandı (cmd çıkış kodu {}) — yol: {}. \
-                 Geçici klasör yolunda özel karakter (&, ^) olabilir; %TEMP% değişkenini denetleyin.",
-                durum.code().map(|k| k.to_string()).unwrap_or_else(|| "yok".into()),
-                bat.display()
-            ));
+            let kod = durum.code().map(|k| k.to_string()).unwrap_or_else(|| pemf_launcher_core::dil::t("rust.hata.yok"));
+            let yol = bat.display().to_string();
+            return Err(pemf_launcher_core::dil::t_ile("rust.hata.yardimciHemenSonlandi", &[("kod", &kod), ("yol", &yol)]));
         }
     }
     Ok(cocuk)
@@ -2014,7 +2004,7 @@ fn yardimci_batch_baslat(bat: &std::path::Path) -> Result<std::process::Child, S
 fn build_relaunch_script(installer: &str, exe: &str, eski_pid: u32, pencere: Option<&str>) -> Result<String, String> {
     for p in [Some(installer), Some(exe), pencere].into_iter().flatten() {
         if p.contains('"') || p.contains('\r') || p.contains('\n') {
-            return Err("Güncelleme yolu güvensiz karakter içeriyor".to_string());
+            return Err(pemf_launcher_core::dil::t("rust.hata.guncellemeYoluGuvensiz"));
         }
     }
     let exe_adi = std::path::Path::new(exe)
@@ -2072,10 +2062,10 @@ fn build_relaunch_script(installer: &str, exe: &str, eski_pid: u32, pencere: Opt
 #[cfg(windows)]
 fn spawn_update_relauncher(installer: &std::path::Path, pencere: Option<&std::path::Path>) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let exe_s = exe.to_str().ok_or("launcher yolu UTF-8 değil")?;
-    let inst_s = installer.to_str().ok_or("setup yolu UTF-8 değil")?;
+    let exe_s = exe.to_str().ok_or_else(|| pemf_launcher_core::dil::t("rust.hata.launcherYoluUtf8"))?;
+    let inst_s = installer.to_str().ok_or_else(|| pemf_launcher_core::dil::t("rust.hata.setupYoluUtf8"))?;
     let pencere_s = match pencere {
-        Some(p) => Some(p.to_str().ok_or("pencere yolu UTF-8 değil")?),
+        Some(p) => Some(p.to_str().ok_or_else(|| pemf_launcher_core::dil::t("rust.hata.pencereYoluUtf8"))?),
         None => None,
     };
     let script = build_relaunch_script(inst_s, exe_s, std::process::id(), pencere_s)?;
@@ -2101,7 +2091,7 @@ fn spawn_update_relauncher(installer: &std::path::Path, pencere: Option<&std::pa
 #[cfg(windows)]
 fn build_uninstall_script(uninstaller: &str) -> Result<String, String> {
     if uninstaller.contains('"') || uninstaller.contains('\r') || uninstaller.contains('\n') {
-        return Err("Kaldırıcı yolu güvensiz karakter içeriyor".to_string());
+        return Err(pemf_launcher_core::dil::t("rust.hata.kaldiriciYoluGuvensiz"));
     }
     Ok(format!(
         "@echo off\r\n\
@@ -2116,7 +2106,7 @@ fn build_uninstall_script(uninstaller: &str) -> Result<String, String> {
 /// relauncher'la aynı desen). Launcher exe kilidi kalkınca uninstaller $INSTDIR'ı (launcher+runtime) siler.
 #[cfg(windows)]
 fn spawn_uninstaller_detached(uninstaller: &std::path::Path) -> Result<(), String> {
-    let unins_s = uninstaller.to_str().ok_or("kaldırıcı yolu UTF-8 değil")?;
+    let unins_s = uninstaller.to_str().ok_or_else(|| pemf_launcher_core::dil::t("rust.hata.kaldiriciYoluUtf8"))?;
     let script = build_uninstall_script(unins_s)?;
     let bat = std::env::temp_dir().join("pemf_uninstall.bat");
     std::fs::write(&bat, script).map_err(|e| e.to_string())?;
@@ -2193,9 +2183,9 @@ fn ps_yukselterek_kos(betik: &str) -> Result<(), String> {
     let cikti = pemf_launcher_core::platform::gizli_komut("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &arg])
         .output()
-        .map_err(|e| format!("Yükseltme başlatılamadı: {e}"))?;
+        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.yukseltmeBaslatilamadi", &[("e", &e.to_string())]))?;
     if !cikti.status.success() {
-        return Err("Yönetici izni verilmedi.".to_string());
+        return Err(pemf_launcher_core::dil::t("rust.hata.yoneticiIzniVerilmedi"));
     }
     Ok(())
 }
@@ -2205,7 +2195,7 @@ fn ps_yukselterek_kos(betik: &str) -> Result<(), String> {
 async fn firewall_kurali_ekle() -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(firewall_kurali_ekle_blocking)
         .await
-        .map_err(|e| format!("Güvenlik duvarı görevi çöktü: {e}"))?
+        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.guvenlikDuvariGorevCoktu", &[("e", &e.to_string())]))?
 }
 
 fn firewall_kurali_ekle_blocking() -> Result<serde_json::Value, String> {
@@ -2216,11 +2206,11 @@ fn firewall_kurali_ekle_blocking() -> Result<serde_json::Value, String> {
         use pemf_launcher_core::firewall::ekleme_betigi;
         let exe = install::backend_path(&install::default_install_root(&home_dir()));
         if !exe.exists() {
-            return Err("Backend henüz kurulu değil — önce kurulumu tamamlayın.".to_string());
+            return Err(pemf_launcher_core::dil::t("rust.hata.backendKurulDegil"));
         }
         // Ortak yardımcı (base64 + UAC) — silme yolu da aynısını kullanır, kopya yok.
         ps_yukselterek_kos(&ekleme_betigi(&exe))
-            .map_err(|_| "Yönetici izni verilmedi — güvenlik duvarı kuralı eklenemedi.".to_string())?;
+            .map_err(|_| pemf_launcher_core::dil::t("rust.hata.guvenlikDuvariIzinYok"))?;
         Ok(serde_json::json!({ "status": "ok" }))
     }
 }
@@ -2262,12 +2252,9 @@ fn klasor_secici_sonucu(basarili: bool, kod: Option<i32>, stdout: &[u8], stderr:
     let yol = String::from_utf8_lossy(stdout).trim().to_string();
     let hata = String::from_utf8_lossy(stderr).trim().to_string();
     if !basarili || (yol.is_empty() && !hata.is_empty()) {
-        return Err(format!(
-            "Klasör seçici çalışmadı (PowerShell çıkış kodu {}): {}. PowerShell bu makinede kısıtlı \
-             olabilir (ConstrainedLanguage/WDAC) — bu mesajı BT yöneticinize iletin.",
-            kod.map(|k| k.to_string()).unwrap_or_else(|| "yok".into()),
-            if hata.is_empty() { "ayrıntı yok".to_string() } else { hata }
-        ));
+        let kod = kod.map(|k| k.to_string()).unwrap_or_else(|| pemf_launcher_core::dil::t("rust.hata.yok"));
+        let ayrinti = if hata.is_empty() { pemf_launcher_core::dil::t("rust.hata.ayrintiYok") } else { hata };
+        return Err(pemf_launcher_core::dil::t_ile("rust.hata.klasorSecici", &[("kod", &kod), ("ayrinti", &ayrinti)]));
     }
     Ok(if yol.is_empty() { None } else { Some(yol) })
 }
@@ -2280,27 +2267,31 @@ fn klasor_secici_sonucu(basarili: bool, kod: Option<i32>, stdout: &[u8], stderr:
 async fn yedek_hedefi_sec() -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(yedek_hedefi_sec_blocking)
         .await
-        .map_err(|e| format!("Klasör seçici görevi çöktü: {e}"))?
+        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.klasorSeciciGorevCoktu", &[("e", &e.to_string())]))?
 }
 
 fn yedek_hedefi_sec_blocking() -> Result<serde_json::Value, String> {
     #[cfg(not(windows))]
-    { return Err("Bu platformda desteklenmiyor".to_string()); }
+    { return Err(pemf_launcher_core::dil::t("rust.hata.platformDesteklenmiyor")); }
     #[cfg(windows)]
     {
         // `OutputEncoding=UTF8` (bulgu #3, bitişik): Türkçe karakterli yol (ör. "D:\Yedek Çekmece")
         // varsayılan OEM kod sayfasında bozuluyor → sonraki "yazılamıyor" hatası yanlış teşhis.
-        let betik = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
+        // Pencere AÇIKLAMASI kullanıcıya görünür → katalogdan (tek tırnak PowerShell'de iki tırnakla kaçışlanır).
+        let betik = format!(
+            "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
             Add-Type -AssemblyName System.Windows.Forms; \
             $d = New-Object System.Windows.Forms.FolderBrowserDialog; \
-            $d.Description = 'Yedeklerin kopyalanacagi harici disk / ag paylasimi'; \
-            if ($d.ShowDialog() -eq 'OK') { $d.SelectedPath }";
+            $d.Description = '{}'; \
+            if ($d.ShowDialog() -eq 'OK') {{ $d.SelectedPath }}",
+            pemf_launcher_core::dil::t("rust.klasorSecici.aciklama").replace('\'', "''")
+        );
         // Konsol penceresi AÇMADAN (bkz. platform::gizli_komut). Açılan klasör-seçici bir
         // WinForms diyaloğudur; onu başlatan kabuğun görünmesi gerekmez.
         let o = pemf_launcher_core::platform::gizli_komut("powershell")
-            .args(["-NoProfile", "-STA", "-Command", betik])
+            .args(["-NoProfile", "-STA", "-Command", betik.as_str()])
             .output()
-            .map_err(|e| format!("Klasör seçici açılamadı: {e}"))?;
+            .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.klasorSeciciAcilamadi", &[("e", &e.to_string())]))?;
         // Bulgu #3: çıkış kodu + stderr OKUNUR; boş stdout ancak PowerShell başarılıysa "iptal"dir.
         let yol = match klasor_secici_sonucu(o.status.success(), o.status.code(), &o.stdout, &o.stderr)? {
             Some(y) => y,
@@ -2310,7 +2301,7 @@ fn yedek_hedefi_sec_blocking() -> Result<serde_json::Value, String> {
         // Veri kökü makine-geneli olabilir; kıyaslamayı GERÇEK hedefle yap.
         let veri = install::cozulmus_veri_dizini(|k| std::env::var(k).ok()).unwrap_or(root.clone());
         install::yedek_hedefi_gecerli_mi(std::path::Path::new(&yol), &veri)?;
-        install::backup_dir_yaz(&root, &yol).map_err(|e| format!("Kaydedilemedi: {e}"))?;
+        install::backup_dir_yaz(&root, &yol).map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.kaydedilemedi", &[("e", &e.to_string())]))?;
         Ok(serde_json::json!({ "status": "ok", "yol": yol }))
     }
 }
@@ -2530,7 +2521,7 @@ fn guncelleme_ekranini_calistir(ctx: tauri::Context<tauri::Wry>) {
         .invoke_handler(tauri::generate_handler![guncelleme_modu])
         .setup(move |app| {
             if let Some(w) = app.get_webview_window("main") {
-                let _ = w.set_title("PEMF Vet — güncelleniyor");
+                let _ = w.set_title(&pemf_launcher_core::dil::t("rust.pencere.guncelleniyor"));
                 let _ = w.set_always_on_top(true);
                 // Boyut/konum: pencere yaratılırken uygulanan config (880×600, minWidth 700, center)
                 // bu çağrıları `setup` içinde EZİYORDU (ölçüldü: pencere 880×600 kaldı, ekran
@@ -3072,7 +3063,9 @@ mod tests {
             }
             std::thread::sleep(std::time::Duration::from_millis(250));
         }
-        let g = std::fs::read_to_string(&gunluk).unwrap_or_default();
+        // ⚠️ Batch günlüğü `%DATE%` yazar: Türkçe OEM kod sayfasında gün adı UTF-8 DEĞİLDİR (Çarşamba → "Çar"). `read_to_string` o gün Err
+        // döner → boş günlük → bu kapı YANLIŞ-KIRMIZI yanardı (2026-10-21 Çarşamba ölçüldü). Bayt oku, kayıplı çevir.
+        let g = String::from_utf8_lossy(&std::fs::read(&gunluk).unwrap_or_default()).into_owned();
         assert!(
             g.contains("kurulum bitti errorlevel="),
             "KURULUM ADIMI HİÇ KOŞMADI/DÖNMEDİ — batch erken öldü (1.9.45 arızası). Günlük:\n{g}"

@@ -859,7 +859,8 @@
         if (sec < 3600) return "~" + Math.ceil(sec / 60) + " dk";
         return "~" + (sec / 3600).toFixed(1) + " sa";
       };
-      const pkgLabel = (what) => (what === "base" ? t().appCore : profName(what));
+      // `what` = Rust'tan gelen VERİ kimliği: "base" · profil anahtarı · "Güncelleme" (launcher kendini güncellerken) — gösterimde çevrilir.
+      const pkgLabel = (what) => (what === "base" ? t().appCore : what === "Güncelleme" ? t().updateWhat : profName(what));
       function resetInstallUI() {
         dl = { what: null, done: 0, t: 0, speed: 0 };
         const bar = $("bar"); bar.classList.add("indet"); bar.querySelector("i").style.width = "0%";
@@ -1873,7 +1874,7 @@
           // kurulum SAĞLAM, yalnız güncelleme ertelendi.
           show("s-ready");
           const m = String(e || "");
-          if (m.includes("seans")) notice(t().rtBusy); else fail(e);
+          if (/seans|session/i.test(m)) notice(t().rtBusy); else fail(e);
         }
         finally { busy = false; stopPolling(); }
         return true;
