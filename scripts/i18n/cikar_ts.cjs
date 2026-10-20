@@ -522,6 +522,9 @@ function cikarKaynak(metin, dosya, secenek) {
         } else if (
           dogalMi(n.text) ||
           (sinif.tur === "oznitelik" && /\p{L}/u.test(n.text)) ||
+          // JSX alt ifadesi (`{ok ? "CANLI" : "OFFLINE"}`) EKRANA yazılır: tek sözcüklü harf dizisi sabit adı sanılmamalı
+          // ("kararsızsan ÇEVRİLİR say" — I18N-P1 ekran taramasında yakalanan boşluk)
+          (sinif.tur === "jsx-ifade" && /^\p{L}{2,}$/u.test(n.text.trim())) ||
           // şablon içi koşullu parça ("yok", "lar") çoğu zaman görünen metin / Türkçe ektir → kararsızsa aday
           (sinif.tur === "sablon-parcasi" && /\p{L}{2,}/u.test(n.text) && !/[\/_.=#@:]/.test(n.text))
         ) {

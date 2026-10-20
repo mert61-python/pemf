@@ -245,6 +245,28 @@ def test_ts_jsx_oznitelik_ileti_sablon_aday():
 
 
 @ts_gerekli
+def test_ts_jsx_ifadesindeki_tek_sozcuk_buyuk_harf_aday_ama_sabit_ve_karsilastirma_degil():
+    # P1 ekran taraması: `{bagli ? "CANLI" : "OFFLINE"}` ekrana yazılır; eski sezgi tek sözcüklü büyük harfi SABIT_ADI sanıp atlıyordu
+    kaynak = """
+import { Text } from "react-native";
+const MOD_AD = "ILERI";
+export function Rozet({ bagli, mod }: { bagli: boolean; mod: string }) {
+  const kip = mod === "HIZLI" ? 1 : 2;
+  return (
+    <Text>
+      {bagli ? "CANLI" : "OFFLINE"}
+      {kip}
+    </Text>
+  );
+}
+"""
+    m = _metinler(_ts(kaynak)["adaylar"])
+    assert "CANLI" in m and "OFFLINE" in m, "JSX alt ifadesindeki tek sözcük aday"
+    assert "HIZLI" not in m, "karşılaştırma değeri aday değil"
+    assert "ILERI" not in m, "JSX dışı sabit tanımlayıcı aday değil"
+
+
+@ts_gerekli
 def test_ts_olcum_karsilastirma_ve_sayi_ayristirma():
     kaynak = """
     export function f(eylem: string, s: string) {
