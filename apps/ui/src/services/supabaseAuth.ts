@@ -18,6 +18,7 @@
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import i18n from "i18next";
 import * as SecureStore from "expo-secure-store";
 import { createClient, Session } from "@supabase/supabase-js";
 
@@ -192,21 +193,21 @@ function mapError(msg: string): string {
   // zaten sızdırmıyor (doğrulanmamış hesaba da jenerik hata döner); kayıt tarafını da hizala.
   // Kullanıcı yönü kaybolmasın diye "giriş yapmayı deneyin" yönlendirmesi KORUNUR.
   if (m.includes("already registered") || m.includes("already been registered") || m.includes("user already"))
-    return "Kayıt tamamlanamadı. Bu adresi zaten kullanıyorsanız giriş yapmayı ya da şifrenizi sıfırlamayı deneyin.";
+    return i18n.t("giris.hata.kayitTamamlanamadi");
   // Doğrulama akışı kaldırıldığı için mesaj artık SADE: hesap doğrulanmamış olamaz
   // (Supabase autoconfirm açık). Kullanıcıyı olmayan bir e-postayı beklemeye yönlendirme.
   // Boşluk ipucu bilinçli: şifrenin sonundaki görünmez boşluk gerçek bir giriş hatası sebebiydi.
   if (m.includes("invalid login") || m.includes("invalid credentials"))
-    return "E-posta veya şifre hatalı. Şifrede istemsiz boşluk olabilir; büyük/küçük harfe de dikkat edin.";
+    return i18n.t("giris.hata.epostaVeyaSifreHatali");
   if (m.includes("rate") || m.includes("too many") || m.includes("29 seconds") || m.includes("security purposes"))
-    return "Çok fazla deneme. Biraz bekleyip tekrar dene.";
+    return i18n.t("giris.hata.cokFazlaDeneme");
   if (m.includes("network") || m.includes("fetch") || m.includes("failed to"))
-    return "Sunucuya ulaşılamadı. İnternet bağlantını kontrol et.";
+    return i18n.t("giris.hata.sunucuyaUlasilamadi");
   if (m.includes("password") && m.includes("6"))
-    return "Şifre en az 6 karakter olmalı.";
+    return i18n.t("giris.hata.sifreEnAz6");
   if (m.includes("504") || m.includes("503") || m.includes("502") || m.includes("timeout") || m.includes("timed out") || m.includes("gateway") || /"status":\s*5\d\d/.test(m))
-    return "Sunucu şu an yanıt vermiyor. Birkaç dakika sonra tekrar dene.";
-  return msg || "İşlem başarısız.";
+    return i18n.t("giris.hata.sunucuYanitVermiyor");
+  return msg || i18n.t("giris.hata.islemBasarisiz");
 }
 
 /** Yeni hesap. Supabase autoconfirm AÇIK → oturum ANINDA kurulur; doğrulama e-postası YOK.
@@ -231,7 +232,7 @@ export async function signUpUser(
     if (!data.session) {
       return {
         ok: false,
-        error: "Hesap oluşturuldu ama oturum açılamadı. Sunucuda e-posta onayı açık olabilir — yöneticinize bildirin.",
+        error: i18n.t("giris.hata.hesapOlusturuldu"),
       };
     }
     return { ok: true };

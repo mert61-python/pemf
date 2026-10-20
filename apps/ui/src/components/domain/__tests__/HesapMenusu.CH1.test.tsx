@@ -31,7 +31,7 @@ jest.mock("@/components/ui/GlobalEmergencyStop", () => {
 import React from "react";
 import { act, fireEvent, render } from "@testing-library/react-native";
 import { HesapMenusu } from "@/components/domain/HesapMenusu";
-import { HESAP_GECIS_SEANS_ENGELI } from "@/services/hesapGecisi";
+import { hesapGecisSeansEngeli } from "@/services/hesapGecisi";
 
 const sira: string[] = [];
 const BOSTA = { coils: [{ id: 1, running: false }], activeTreatment: { isActive: false } };
@@ -69,7 +69,7 @@ it("KRİTİK: açık hesaplar listelenir, etkin işaretli; diğerine geçişte �
 it("KRİTİK seans sürerken: geçiş / hesap ekle / ETKİN hesaptan çıkış KAPALI + neden; park edilmiş hesaptan çıkış AÇIK", async () => {
   mockSnap = SEANSTA;
   const { u } = ciz();
-  expect(u.getByTestId("hesap-menusu-engel").props.children).toBe(HESAP_GECIS_SEANS_ENGELI);
+  expect(u.getByTestId("hesap-menusu-engel").props.children).toBe(hesapGecisSeansEngeli());
   const gec = u.getByLabelText("b@klinik.com hesabına geç");
   expect(pasif(gec)).toBe(true);
   await act(async () => { fireEvent.press(gec); });

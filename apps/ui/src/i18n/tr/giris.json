@@ -22,13 +22,21 @@
   "giriseDon": "← Giriş'e dön",
   "hata": {
     "adSoyadEksik": "Lütfen ad ve soyad alanlarını doldurun.",
+    "cokFazlaDeneme": "Çok fazla deneme. Biraz bekleyip tekrar dene.",
+    "epostaVeyaSifreHatali": "E-posta veya şifre hatalı. Şifrede istemsiz boşluk olabilir; büyük/küçük harfe de dikkat edin.",
     "gecersizEposta": "Geçerli bir e-posta adresi girin.",
     "girisBasarisiz": "Giriş başarısız.",
+    "hesapOlusturuldu": "Hesap oluşturuldu ama oturum açılamadı. Sunucuda e-posta onayı açık olabilir — yöneticinize bildirin.",
+    "islemBasarisiz": "İşlem başarısız.",
     "kayitBasarisiz": "Kayıt başarısız.",
+    "kayitTamamlanamadi": "Kayıt tamamlanamadı. Bu adresi zaten kullanıyorsanız giriş yapmayı ya da şifrenizi sıfırlamayı deneyin.",
     "klinikBilgisiEksik": "Lütfen ad, soyad, klinik adı, şehir ve ilçe alanlarını doldurun.",
+    "sifreEnAz6": "Şifre en az 6 karakter olmalı.",
     "sifreGir": "Şifreni gir.",
     "sifreKurallari": "Şifre kurallarını karşılamıyor.",
-    "sifrelerEslesmiyor": "Şifreler eşleşmiyor."
+    "sifrelerEslesmiyor": "Şifreler eşleşmiyor.",
+    "sunucuYanitVermiyor": "Sunucu şu an yanıt vermiyor. Birkaç dakika sonra tekrar dene.",
+    "sunucuyaUlasilamadi": "Sunucuya ulaşılamadı. İnternet bağlantını kontrol et."
   },
   "hesapEkleme": {
     "aciklama": "Başka bir e-posta hesabı ekleniyor. Şu anki hesabınız bu cihazda açık kalır; giriş yaptıktan sonra hesaplar arasında üst menüdeki \"E-posta hesapları\"ndan geçebilirsiniz.",
@@ -36,6 +44,21 @@
     "vazgecEtiketi": "Vazgeç, önceki hesaba dön"
   },
   "hesapOlustur": "Hesap Oluştur",
+  "hosGeldin": {
+    "altBaslik": "Lütfen kullanım profilinizi seçin",
+    "arastirmaAciklama": "Kamera destekli klinik kanser araştırma analizleri: fantom tümör, petri kuyu ve böbrek (RNA · CT · patoloji · hastalık) modelleriyle detaylı sonuç kaydı.",
+    "arastirmaEklentisi": "Araştırma eklentisi gerektirir",
+    "arastirmaIpucu": "Kamera destekli klinik kanser araştırma analizleri: fantom tümör, petri kuyu ve böbrek modelleri",
+    "arastirmaProfilEtiketi": "Araştırma Modu profili",
+    "baslik": "PEMF Sistemine Hoş Geldiniz",
+    "gercekZamanli": "Gerçek-zamanlı",
+    "sahipAciklama": "Kamerayı kullanarak akıllı teşhis yapın ve tek tuşla güvenli seans başlatın. Karmaşık ayarlarla uğraşmayın.",
+    "sahipIpucu": "Kamerayla akıllı teşhis ve tek-tuş güvenli seans modu",
+    "sahipProfilEtiketi": "Evcil Hayvan Sahibi profili",
+    "veterinerAciklama": "Manuel frekans kontrolü, sensör takibi, geçmiş seans analizleri ve klinik ayarlarına tam erişim sağlayın.",
+    "veterinerIpucu": "Manuel frekans kontrolü, sensör takibi ve klinik ayarlarına tam erişim",
+    "veterinerProfilEtiketi": "Veteriner Hekim profili"
+  },
   "kayitOl": "Kayıt Ol",
   "klinik": {
     "acilTelefon": "Klinik acil telefon — opsiyonel",

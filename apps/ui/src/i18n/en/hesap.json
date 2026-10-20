@@ -1,0 +1,92 @@
+{
+  "gecis": {
+    "belirsizEngeli": "The coil status is unknown (no device connection) — the email account cannot be switched. Check the connection and the coils first.",
+    "degistirilemediSunucu": "Could not switch accounts: the server could not be reached (switching requires internet). You stayed on the previous account.",
+    "hesapAcikDegil": "This account is no longer open on this device — sign in again with \"Add account\".",
+    "onayAcikkenSeansBasladi": "The coils started running / a session started while the confirmation window was open — the action was canceled. EMERGENCY STOP stays on screen; finish the session and try again.",
+    "oturumSonaErmis": "The session for {{email}} has expired — sign in again with \"Add account\".",
+    "seansEngeli": "The email account cannot be switched while a session is running (coils are active) — finish the session first. EMERGENCY STOP stays on screen."
+  },
+  "menu": {
+    "aciklama": "Account = the email you sign in with (credits, subscription, AI history). You can switch between open accounts with one tap. To switch between veterinarians who share this device, use \"Switch Veterinarian (this device)\" (PIN).",
+    "cikilamadi": "Could not sign out of the account.",
+    "cikisBaslik": "Sign out of account",
+    "cikisGovdeBaska": "{{eposta}} will be removed from this device; your active account ({{etkin}}) will not change.",
+    "cikisGovdeGecer": "You will be signed out of {{eposta}}. The device will switch to the other account that is open on it.",
+    "cikisGovdeTekrar": "You will be signed out of {{eposta}}. You will need your email and password to sign in again.",
+    "degistirilemedi": "Could not switch accounts.",
+    "epostaHesaplariBuCihaz": "Email accounts (this device)",
+    "etkin": "Active",
+    "etkinHesapEtiketi": "{{e}} — active account",
+    "gec": "Switch",
+    "hesabaGecEtiketi": "Switch to account {{e}}",
+    "hesapEkle": "Add account",
+    "hesaptanCikEtiketi": "Sign out of account {{e}}"
+  },
+  "operator": {
+    "aktifOperatorEtiketi": "Active operator: {{display_name}}. Switch.",
+    "baskaHesapAciklama": "To switch to another email account or add one, open \"Email accounts\".",
+    "baslikDegistir": "Switch {{baslik}} (this device)",
+    "buCihazaKaydol": "Register on this device",
+    "cihazaUlasilamadi": "Could not reach the device.",
+    "cokHataliKilitli": "Too many failed attempts — this operator is temporarily locked. Wait a few minutes.",
+    "dogrulaniyor": "Verifying…",
+    "epostaHesaplariDegistirEkle": "Email accounts (switch / add)",
+    "gecisYap": "Switch",
+    "gecisYapEtiketi": "Switch",
+    "girisYapilanHesap": "Signed-in account: {{email}}. ",
+    "gorunenAd": "Display name",
+    "gorunenAdYer": "Your display name (e.g. Dr. Jane Smith)",
+    "hesap": "Account",
+    "kaydediliyor": "Saving…",
+    "kaydol": "Register",
+    "kayitAciklama": "You will be registered as {{email}}. If you share this device with other {{cogulIle}}, register: patient, session and AI records are saved under your name, the \"My …\" filters show you, and switching between {{cogul}} uses a PIN (offline). Once registered, the device switches to multi-user mode: actions that write records require a selected {{tekil}}, lists show no records until a {{tekil}} is selected, and the selection clears after {{dakika}} min of inactivity (not while a session is running).",
+    "kayitYapilamadi": "Registration failed. The PIN must be 6 digits.",
+    "kayitliYok": "No {{tekil}} is registered on this device.",
+    "kilitle": "Lock",
+    "kilitleEtiketi": "Lock session",
+    "kimlikDbEtiketi": "Identity database cannot be read. Tap for details.",
+    "kimlikDbOkunamiyor": "Identity database cannot be read",
+    "listeyeDon": "Back to list",
+    "listeyeDonEtiketi": "Back to list",
+    "mevcutPin": "Current PIN",
+    "mevcutPinYer": "Your current PIN",
+    "operatorSecEtiketi": "Select operator",
+    "operatorSecin": "Select an operator",
+    "ortakKullanimAciklama": "PIN-based quick switching between {{cogul}} who share this device. To switch or add an email account, open \"Email accounts\".",
+    "pasifAdPin": "Enter your display name and set a 6-digit PIN.",
+    "pasifKayitliYok": "No {{tekil}} is registered on this device — first choose \"Register on this device\".",
+    "pasifListedenSec": "Select a {{tekil}} from the list and enter the 6-digit PIN.",
+    "pasifMevcutPin": "Enter your current 6-digit PIN.",
+    "pasifPinBelirle": "Set a 6-digit PIN.",
+    "pasifPinGir": "Enter the 6-digit PIN.",
+    "pin": "PIN",
+    "pinDegistir": "Change PIN",
+    "pinDegistirEtiketi": "Change PIN",
+    "pinHatali": "Incorrect PIN.",
+    "pinYer": "6-digit PIN",
+    "secEtiketi": "Select: {{ad}}",
+    "yeniPinYer": "New 6-digit PIN",
+    "zatenKayitli": "This email is already registered on this device. To change the PIN, enter your current PIN."
+  },
+  "terim": {
+    "arastirmaci": {
+      "baslik": "Researcher",
+      "cogul": "researchers",
+      "cogulIle": "researchers",
+      "tekil": "researcher"
+    },
+    "hekim": {
+      "baslik": "Veterinarian",
+      "cogul": "veterinarians",
+      "cogulIle": "veterinarians",
+      "tekil": "veterinarian"
+    },
+    "kisi": {
+      "baslik": "Person",
+      "cogul": "people",
+      "cogulIle": "people",
+      "tekil": "person"
+    }
+  }
+}

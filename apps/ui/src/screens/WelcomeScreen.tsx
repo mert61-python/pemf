@@ -16,8 +16,10 @@ import { installedModes } from "@/services/installedProfiles";
 import { useTeardownGuard } from "@/hooks/useTeardownGuard";
 import { EstopMandalBandi } from "@/components/ui/EstopMandalBandi";
 import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
+import { useTranslation } from "react-i18next";
 
 export function WelcomeScreen() {
+  const { t } = useTranslation();
   const { setUserMode } = useUserMode();
   // `.edu` gate KALDIRILDI — araştırma modu tüm hesaplarda görünür. (Erişim, client-kurulumu +
   // aboneliğe göre belirlenecek; app tarafında e-posta şartı yok.)
@@ -60,17 +62,17 @@ export function WelcomeScreen() {
               dönmek) da kapatır → önce onay + durdurma. */}
           <TouchableOpacity
             style={styles.logoutBtn}
-            onPress={async () => { if (await guardTeardown("Çıkış yapmak")) logout(); }}
+            onPress={async () => { if (await guardTeardown(t("kabuk.cikis.eylemAdi"))) logout(); }}
             accessibilityRole="button"
-            accessibilityLabel="Çıkış yap"
+            accessibilityLabel={t("kabuk.cikis.etiket")}
           >
             <LogOut size={16} color={colors.textMuted} />
-            <Text style={styles.logoutText}>Çıkış</Text>
+            <Text style={styles.logoutText}>{t("ortak.cikis")}</Text>
           </TouchableOpacity>
         </View>
         <FadeInView style={styles.header}>
-          <Text style={styles.title}>PEMF Sistemine Hoş Geldiniz</Text>
-          <Text style={styles.subtitle}>Lütfen kullanım profilinizi seçin</Text>
+          <Text style={styles.title}>{t("giris.hosGeldin.baslik")}</Text>
+          <Text style={styles.subtitle}>{t("giris.hosGeldin.altBaslik")}</Text>
           <View style={styles.planRow}>
             <View style={styles.planPill}>
               <Sparkles size={13} color={colors.primary} />
@@ -81,7 +83,7 @@ export function WelcomeScreen() {
             {realtime && !dogrulanamadi && (
               <View style={styles.rtPill}>
                 <Zap size={12} color={colors.primary} />
-                <Text style={styles.rtPillText}>Gerçek-zamanlı</Text>
+                <Text style={styles.rtPillText}>{t("giris.hosGeldin.gercekZamanli")}</Text>
               </View>
             )}
           </View>
@@ -93,14 +95,14 @@ export function WelcomeScreen() {
             <TouchableOpacity
               onPress={() => setUserMode('pet_owner')}
               accessibilityRole="button"
-              accessibilityLabel="Evcil Hayvan Sahibi profili"
-              accessibilityHint="Kamerayla akıllı teşhis ve tek-tuş güvenli seans modu"
+              accessibilityLabel={t("giris.hosGeldin.sahipProfilEtiketi")}
+              accessibilityHint={t("giris.hosGeldin.sahipIpucu")}
             >
               <Card variant="glass" style={styles.card}>
                 <View style={[styles.iconRing, styles.ownerRing]}><Heart size={40} color={colors.primary} /></View>
-                <Text style={styles.cardTitle}>Evcil Hayvan Sahibi</Text>
+                <Text style={styles.cardTitle}>{t("ayarlar.profil.modSahip")}</Text>
                 <Text style={styles.cardDesc}>
-                  Kamerayı kullanarak akıllı teşhis yapın ve tek tuşla güvenli seans başlatın. Karmaşık ayarlarla uğraşmayın.
+                  {t("giris.hosGeldin.sahipAciklama")}
                 </Text>
               </Card>
             </TouchableOpacity>
@@ -112,14 +114,14 @@ export function WelcomeScreen() {
             <TouchableOpacity
               onPress={() => setUserMode('veterinarian')}
               accessibilityRole="button"
-              accessibilityLabel="Veteriner Hekim profili"
-              accessibilityHint="Manuel frekans kontrolü, sensör takibi ve klinik ayarlarına tam erişim"
+              accessibilityLabel={t("giris.hosGeldin.veterinerProfilEtiketi")}
+              accessibilityHint={t("giris.hosGeldin.veterinerIpucu")}
             >
               <Card variant="glass" style={styles.card}>
                 <View style={[styles.iconRing, styles.vetRing]}><Stethoscope size={40} color={colors.warning} /></View>
-                <Text style={styles.cardTitle}>Veteriner Hekim</Text>
+                <Text style={styles.cardTitle}>{t("ayarlar.profil.modVeteriner")}</Text>
                 <Text style={styles.cardDesc}>
-                  Manuel frekans kontrolü, sensör takibi, geçmiş seans analizleri ve klinik ayarlarına tam erişim sağlayın.
+                  {t("giris.hosGeldin.veterinerAciklama")}
                 </Text>
               </Card>
             </TouchableOpacity>
@@ -131,19 +133,19 @@ export function WelcomeScreen() {
               <TouchableOpacity
                 onPress={() => setUserMode('researcher')}
                 accessibilityRole="button"
-                accessibilityLabel="Araştırma Modu profili"
-                accessibilityHint="Kamera destekli klinik kanser araştırma analizleri: fantom tümör, petri kuyu ve böbrek modelleri"
+                accessibilityLabel={t("giris.hosGeldin.arastirmaProfilEtiketi")}
+                accessibilityHint={t("giris.hosGeldin.arastirmaIpucu")}
               >
                 <Card variant="glass" style={styles.card}>
                   <View style={[styles.iconRing, styles.researchRing]}><FlaskConical size={40} color={colors.violet} /></View>
-                  <Text style={styles.cardTitle}>Araştırma Modu</Text>
+                  <Text style={styles.cardTitle}>{t("ayarlar.profil.modArastirma")}</Text>
                   <Text style={styles.cardDesc}>
-                    Kamera destekli klinik kanser araştırma analizleri: fantom tümör, petri kuyu ve böbrek (RNA · CT · patoloji · hastalık) modelleriyle detaylı sonuç kaydı.
+                    {t("giris.hosGeldin.arastirmaAciklama")}
                   </Text>
                   {/* Y58: hak doğrulanamadıysa yer tutucu hakka dayalı "eklenti gerekir" iddiası YAZILMAZ */}
                   {!research && !dogrulanamadi && (
                     <View style={styles.addonNote}>
-                      <Text style={styles.addonNoteText}>Araştırma eklentisi gerektirir</Text>
+                      <Text style={styles.addonNoteText}>{t("giris.hosGeldin.arastirmaEklentisi")}</Text>
                     </View>
                   )}
                 </Card>

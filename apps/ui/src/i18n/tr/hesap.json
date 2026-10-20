@@ -1,0 +1,92 @@
+{
+  "gecis": {
+    "belirsizEngeli": "Bobinlerin durumu bilinmiyor (cihaz bağlantısı yok) — e-posta hesabı değiştirilemez. Önce bağlantıyı ve bobinleri kontrol edin.",
+    "degistirilemediSunucu": "Hesap değiştirilemedi: sunucuya ulaşılamadı (geçiş için internet gerekir). Önceki hesapta kalındı.",
+    "hesapAcikDegil": "Bu hesap artık bu cihazda açık değil — \"Hesap ekle\" ile yeniden giriş yapın.",
+    "onayAcikkenSeansBasladi": "Onay penceresi açıkken bobinler çalışmaya / seans başladı — işlem iptal edildi. ACİL DURDUR ekranda kalır; seansı bitirip tekrar deneyin.",
+    "oturumSonaErmis": "{{email}} hesabının oturumu sona ermiş — \"Hesap ekle\" ile yeniden giriş yapın.",
+    "seansEngeli": "Seans sürerken (bobinler çalışırken) e-posta hesabı değiştirilemez — önce seansı bitirin. ACİL DURDUR ekranda kalır."
+  },
+  "menu": {
+    "aciklama": "Hesap = giriş yaptığınız e-posta (jeton, abonelik, AI geçmişi). Açık hesaplar arasında tek dokunuşla geçebilirsiniz. Bu cihazı ortak kullanan hekimler arasında geçmek için \"Hekim Değiştir (bu cihaz)\" (PIN) kullanılır.",
+    "cikilamadi": "Hesaptan çıkılamadı.",
+    "cikisBaslik": "Hesaptan çık",
+    "cikisGovdeBaska": "{{eposta}} bu cihazdan çıkarılacak; etkin hesabınız ({{etkin}}) değişmez.",
+    "cikisGovdeGecer": "{{eposta}} hesabından çıkılacak. Bu cihazda açık diğer hesaba geçilir.",
+    "cikisGovdeTekrar": "{{eposta}} hesabından çıkılacak. Tekrar girmek için e-posta ve şifre gerekir.",
+    "degistirilemedi": "Hesap değiştirilemedi.",
+    "epostaHesaplariBuCihaz": "E-posta hesapları (bu cihaz)",
+    "etkin": "Etkin",
+    "etkinHesapEtiketi": "{{e}} — etkin hesap",
+    "gec": "Geç",
+    "hesabaGecEtiketi": "{{e}} hesabına geç",
+    "hesapEkle": "Hesap ekle",
+    "hesaptanCikEtiketi": "{{e}} hesabından çık"
+  },
+  "operator": {
+    "aktifOperatorEtiketi": "Aktif operatör: {{display_name}}. Değiştir.",
+    "baskaHesapAciklama": "Başka bir e-posta hesabına geçmek ya da hesap eklemek için \"E-posta hesapları\"nı açın.",
+    "baslikDegistir": "{{baslik}} Değiştir (bu cihaz)",
+    "buCihazaKaydol": "Bu cihaza kaydol",
+    "cihazaUlasilamadi": "Cihaza ulaşılamadı.",
+    "cokHataliKilitli": "Çok fazla hatalı deneme — bu operatör geçici olarak kilitlendi. Birkaç dakika bekleyin.",
+    "dogrulaniyor": "Doğrulanıyor…",
+    "epostaHesaplariDegistirEkle": "E-posta hesapları (değiştir / ekle)",
+    "gecisYap": "Geçiş Yap",
+    "gecisYapEtiketi": "Geçiş yap",
+    "girisYapilanHesap": "Giriş yapılan hesap: {{email}}. ",
+    "gorunenAd": "Görünen ad",
+    "gorunenAdYer": "Görünen adınız (ör. Dr. Ayşe Yılmaz)",
+    "hesap": "Hesap",
+    "kaydediliyor": "Kaydediliyor…",
+    "kaydol": "Kaydol",
+    "kayitAciklama": "{{email}} olarak kaydolacaksınız. Bu cihazı başka {{cogulIle}} ortak kullanıyorsanız kaydolun: hasta, seans ve AI kayıtları adınıza işlenir, \"Benim …\" süzgeçleri sizi gösterir, {{cogul}} arasında PIN'le (internetsiz) geçilir. Kaydolunca cihaz çok kullanıcılı kipe geçer: kayıt yazan işlemler seçili {{tekil}} ister, {{tekil}} seçilmeden listeler kayıt göstermez ve {{dakika}} dk hareketsizlikte seçim düşer (seans sürerken düşmez).",
+    "kayitYapilamadi": "Kayıt yapılamadı. PIN 6 haneli olmalı.",
+    "kayitliYok": "Bu cihazda kayıtlı {{tekil}} yok.",
+    "kilitle": "Kilitle",
+    "kilitleEtiketi": "Oturumu kilitle",
+    "kimlikDbEtiketi": "Kimlik veritabanı okunamıyor. Ayrıntı için dokunun.",
+    "kimlikDbOkunamiyor": "Kimlik veritabanı okunamıyor",
+    "listeyeDon": "Listeye dön",
+    "listeyeDonEtiketi": "Listeye dön",
+    "mevcutPin": "Mevcut PIN",
+    "mevcutPinYer": "Mevcut PIN'iniz",
+    "operatorSecEtiketi": "Operatör seç",
+    "operatorSecin": "Operatör seçin",
+    "ortakKullanimAciklama": "Bu cihazı ortak kullanan {{cogul}} arasında PIN ile hızlı geçiş. E-posta hesabını değiştirmek ya da eklemek için \"E-posta hesapları\"nı açın.",
+    "pasifAdPin": "Görünen adınızı yazın ve 6 haneli PIN belirleyin.",
+    "pasifKayitliYok": "Bu cihazda kayıtlı {{tekil}} yok — önce \"Bu cihaza kaydol\".",
+    "pasifListedenSec": "Listeden {{tekil}} seçin ve 6 haneli PIN'i girin.",
+    "pasifMevcutPin": "Mevcut 6 haneli PIN'inizi girin.",
+    "pasifPinBelirle": "6 haneli PIN belirleyin.",
+    "pasifPinGir": "6 haneli PIN'i girin.",
+    "pin": "PIN",
+    "pinDegistir": "PIN'i Değiştir",
+    "pinDegistirEtiketi": "PIN'i değiştir",
+    "pinHatali": "PIN hatalı.",
+    "pinYer": "6 haneli PIN",
+    "secEtiketi": "Seç: {{ad}}",
+    "yeniPinYer": "Yeni 6 haneli PIN",
+    "zatenKayitli": "Bu e-posta bu cihazda zaten kayıtlı. PIN'i değiştirmek için mevcut PIN'inizi girin."
+  },
+  "terim": {
+    "arastirmaci": {
+      "baslik": "Araştırmacı",
+      "cogul": "araştırmacılar",
+      "cogulIle": "araştırmacılarla",
+      "tekil": "araştırmacı"
+    },
+    "hekim": {
+      "baslik": "Hekim",
+      "cogul": "hekimler",
+      "cogulIle": "hekimlerle",
+      "tekil": "hekim"
+    },
+    "kisi": {
+      "baslik": "Kişi",
+      "cogul": "kişiler",
+      "cogulIle": "kişilerle",
+      "tekil": "kişi"
+    }
+  }
+}

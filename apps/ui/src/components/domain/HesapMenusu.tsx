@@ -26,10 +26,7 @@ import { platformConfirm } from "@/services/apiClient";
 import { epostaAnahtari } from "@/services/hesapDeposu";
 import { hesapGecisiEngeli, onaySonrasiEngel } from "@/services/hesapGecisi";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
-
-export const HESAP_MENUSU_ACIKLAMA =
-  "Hesap = giriş yaptığınız e-posta (jeton, abonelik, AI geçmişi). Açık hesaplar arasında tek dokunuşla geçebilirsiniz. Bu cihazı ortak " +
-  "kullanan hekimler arasında geçmek için \"Hekim Değiştir (bu cihaz)\" (PIN) kullanılır.";
+import { useTranslation } from "react-i18next";
 
 export function HesapMenusu({
   visible,
@@ -41,6 +38,7 @@ export function HesapMenusu({
   /** Kabuğun teardown korumalı çıkışı (AppShell `handleLogout`) — TÜM hesaplardan çıkar. */
   onTumundenCik: () => void;
 }) {
+  const { t } = useTranslation();
   const { session, hesaplar, hesabaGec, hesaptanCik, hesapEkle } = useAuth();
   const { snapshot, donanimBelirsiz } = useLiveData();
   const op = useOperatorOptional();
@@ -68,7 +66,7 @@ export function HesapMenusu({
     const r = await hesabaGec(eposta);
     setMesgul(false);
     if (r.ok) kapat();
-    else setHata(r.hata || "Hesap değiştirilemedi.");
+    else setHata(r.hata || t("hesap.menu.degistirilemedi"));
   };
 
   const cik = async (eposta: string) => {
@@ -77,11 +75,11 @@ export function HesapMenusu({
     if (etkin && engel) return; // etkin hesaptan çıkış = geçiş / söküm → seans sürerken kapalı
     const baska = liste.length > 1;
     const ok = await platformConfirm(
-      "Hesaptan çık",
+      t("hesap.menu.cikisBaslik"),
       etkin
-        ? `${eposta} hesabından çıkılacak.` + (baska ? " Bu cihazda açık diğer hesaba geçilir." : " Tekrar girmek için e-posta ve şifre gerekir.")
-        : `${eposta} bu cihazdan çıkarılacak; etkin hesabınız (${session?.email ?? ""}) değişmez.`,
-      "Çıkış yap",
+        ? (baska ? t("hesap.menu.cikisGovdeGecer", { eposta }) : t("hesap.menu.cikisGovdeTekrar", { eposta }))
+        : t("hesap.menu.cikisGovdeBaska", { eposta, etkin: session?.email ?? "" }),
+      t("kabuk.cikis.etiket"),
     );
     if (!ok) return;
     setMesgul(true);
@@ -98,7 +96,7 @@ export function HesapMenusu({
     }
     const r = await hesaptanCik(eposta);
     setMesgul(false);
-    if (!r.ok) setHata(r.hata || "Hesaptan çıkılamadı.");
+    if (!r.ok) setHata(r.hata || t("hesap.menu.cikilamadi"));
   };
 
   const ekle = async () => {
@@ -114,8 +112,8 @@ export function HesapMenusu({
         <Pressable onPress={() => {}} style={styles.kartKap}>
           <Card style={styles.kart}>
             <ScrollView contentContainerStyle={styles.govde} showsVerticalScrollIndicator={false}>
-              <Text style={styles.baslik}>E-posta hesapları (bu cihaz)</Text>
-              <Text style={styles.not} testID="hesap-menusu-aciklama">{HESAP_MENUSU_ACIKLAMA}</Text>
+              <Text style={styles.baslik}>{t("hesap.menu.epostaHesaplariBuCihaz")}</Text>
+              <Text style={styles.not} testID="hesap-menusu-aciklama">{t("hesap.menu.aciklama")}</Text>
               {engel ? (
                 <Text style={[styles.not, styles.uyari]} accessibilityRole="alert" testID="hesap-menusu-engel">{engel}</Text>
               ) : null}
@@ -134,11 +132,11 @@ export function HesapMenusu({
                         accessibilityState={{ disabled: gecPasif, selected: etkin }}
                         aria-disabled={gecPasif}
                         aria-selected={etkin}
-                        accessibilityLabel={etkin ? `${e} — etkin hesap` : `${e} hesabına geç`}
+                        accessibilityLabel={etkin ? t("hesap.menu.etkinHesapEtiketi", { e }) : t("hesap.menu.hesabaGecEtiketi", { e })}
                       >
                         {etkin ? <Check size={rs(15)} color={colors.primary} /> : <View style={{ width: rs(15) }} />}
                         <Text style={[styles.eposta, etkin && styles.epostaEtkin]} numberOfLines={1}>{e}</Text>
-                        <Text style={etkin ? styles.rozetEtkin : styles.rozetGec}>{etkin ? "Etkin" : "Geç"}</Text>
+                        <Text style={etkin ? styles.rozetEtkin : styles.rozetGec}>{etkin ? t("hesap.menu.etkin") : t("hesap.menu.gec")}</Text>
                       </Pressable>
                       <Pressable
                         style={[styles.cikis, { minHeight: touch.min }, cikPasif && styles.pasif]}
@@ -147,10 +145,10 @@ export function HesapMenusu({
                         accessibilityRole="button"
                         accessibilityState={{ disabled: cikPasif }}
                         aria-disabled={cikPasif}
-                        accessibilityLabel={`${e} hesabından çık`}
+                        accessibilityLabel={t("hesap.menu.hesaptanCikEtiketi", { e })}
                       >
                         <LogOut size={rs(14)} color={colors.danger} />
-                        <Text style={styles.cikisMetni}>Çıkış</Text>
+                        <Text style={styles.cikisMetni}>{t("ortak.cikis")}</Text>
                       </Pressable>
                     </View>
                   );
@@ -164,10 +162,10 @@ export function HesapMenusu({
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !!engel || mesgul }}
                 aria-disabled={!!engel || mesgul}
-                accessibilityLabel="Hesap ekle"
+                accessibilityLabel={t("hesap.menu.hesapEkle")}
               >
                 <UserPlus size={rs(15)} color="#04121F" />
-                <Text style={styles.birincilMetin}>Hesap ekle</Text>
+                <Text style={styles.birincilMetin}>{t("hesap.menu.hesapEkle")}</Text>
               </Pressable>
               <View style={styles.altSatir}>
                 <Pressable
@@ -177,19 +175,19 @@ export function HesapMenusu({
                     onTumundenCik();
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={liste.length > 1 ? "Tüm hesaplardan çık" : "Çıkış yap"}
+                  accessibilityLabel={liste.length > 1 ? t("kabuk.cikis.tumHesaplar") : t("kabuk.cikis.etiket")}
                 >
                   <Text style={[styles.ikincilMetin, { color: colors.danger }]}>
-                    {liste.length > 1 ? "Tüm hesaplardan çık" : "Çıkış yap"}
+                    {liste.length > 1 ? t("kabuk.cikis.tumHesaplar") : t("kabuk.cikis.etiket")}
                   </Text>
                 </Pressable>
                 <Pressable
                   style={[styles.ikincil, { minHeight: touch.min }]}
                   onPress={kapat}
                   accessibilityRole="button"
-                  accessibilityLabel="Kapat"
+                  accessibilityLabel={t("ortak.kapat")}
                 >
-                  <Text style={styles.ikincilMetin}>Kapat</Text>
+                  <Text style={styles.ikincilMetin}>{t("ortak.kapat")}</Text>
                 </Pressable>
               </View>
             </ScrollView>

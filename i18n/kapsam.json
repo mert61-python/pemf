@@ -981,7 +981,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-02-giris-hesap",
    "sira": 2,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 24,
    "kritik": false,
    "muaf": [],
@@ -992,7 +992,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-02-giris-hesap",
    "sira": 2,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 70,
    "kritik": false,
    "muaf": [],
@@ -1003,10 +1003,15 @@
    "yuzey": "arayuz",
    "grup": "arayuz-02-giris-hesap",
    "sira": 2,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "useAuth must be used within AuthProvider",
+     "gerekce": "geliştirici iletisi (useAuth must be used within AuthProvider)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -1014,10 +1019,15 @@
    "yuzey": "arayuz",
    "grup": "arayuz-02-giris-hesap",
    "sira": 2,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "useOperator, OperatorProvider içinde kullanılmalı",
+     "gerekce": "geliştirici iletisi (useOperator, OperatorProvider içinde kullanılmalı)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -1036,7 +1046,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-02-giris-hesap",
    "sira": 2,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 19,
    "kritik": false,
    "muaf": [],
@@ -1047,7 +1057,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-02-giris-hesap",
    "sira": 2,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -1058,7 +1068,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-02-giris-hesap",
    "sira": 2,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -1069,7 +1079,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-02-giris-hesap",
    "sira": 2,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -1080,7 +1090,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-02-giris-hesap",
    "sira": 2,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 6,
    "kritik": false,
    "muaf": [],
@@ -1091,10 +1101,15 @@
    "yuzey": "arayuz",
    "grup": "arayuz-02-giris-hesap",
    "sira": 2,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 9,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "sb-{{deger1}}-auth-token",
+     "gerekce": "depolama anahtarı (sb-<ref>-auth-token) — kullanıcıya görünmez"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },

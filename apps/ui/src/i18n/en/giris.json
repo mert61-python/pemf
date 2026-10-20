@@ -22,13 +22,21 @@
   "giriseDon": "← Back to sign in",
   "hata": {
     "adSoyadEksik": "Please fill in the first name and last name fields.",
+    "cokFazlaDeneme": "Too many attempts. Wait a bit and try again.",
+    "epostaVeyaSifreHatali": "Incorrect email or password. The password may contain an unintended space; also check upper/lower case.",
     "gecersizEposta": "Enter a valid email address.",
     "girisBasarisiz": "Sign-in failed.",
+    "hesapOlusturuldu": "The account was created but sign-in failed. Email confirmation may be enabled on the server — tell your administrator.",
+    "islemBasarisiz": "The operation failed.",
     "kayitBasarisiz": "Sign-up failed.",
+    "kayitTamamlanamadi": "Registration could not be completed. If you already use this address, try signing in or resetting your password.",
     "klinikBilgisiEksik": "Please fill in the first name, last name, clinic name, city and district fields.",
+    "sifreEnAz6": "The password must be at least 6 characters.",
     "sifreGir": "Enter your password.",
     "sifreKurallari": "The password does not meet the rules.",
-    "sifrelerEslesmiyor": "The passwords do not match."
+    "sifrelerEslesmiyor": "The passwords do not match.",
+    "sunucuYanitVermiyor": "The server is not responding right now. Try again in a few minutes.",
+    "sunucuyaUlasilamadi": "Could not reach the server. Check your internet connection."
   },
   "hesapEkleme": {
     "aciklama": "Adding another email account. Your current account stays signed in on this device; after signing in you can switch between accounts from \"Email accounts\" in the top menu.",
@@ -36,6 +44,21 @@
     "vazgecEtiketi": "Cancel, return to the previous account"
   },
   "hesapOlustur": "Create account",
+  "hosGeldin": {
+    "altBaslik": "Please select your usage profile",
+    "arastirmaAciklama": "Camera-assisted clinical cancer research analyses with phantom tumor, petri well, and kidney (RNA · CT · pathology · disease) models, with detailed result records.",
+    "arastirmaEklentisi": "Requires the Research add-on",
+    "arastirmaIpucu": "Camera-assisted clinical cancer research analyses: phantom tumor, petri well, and kidney models",
+    "arastirmaProfilEtiketi": "Research Mode profile",
+    "baslik": "Welcome to the PEMF System",
+    "gercekZamanli": "Real-time",
+    "sahipAciklama": "Use the camera for smart diagnosis and start a safe session with one tap. No need to deal with complex settings.",
+    "sahipIpucu": "Smart camera diagnosis and one-touch safe session mode",
+    "sahipProfilEtiketi": "Pet Owner profile",
+    "veterinerAciklama": "Get manual frequency control, sensor monitoring, past session analyses, and full access to clinic settings.",
+    "veterinerIpucu": "Manual frequency control, sensor monitoring, and full access to clinic settings",
+    "veterinerProfilEtiketi": "Veterinarian profile"
+  },
   "kayitOl": "Sign up",
   "klinik": {
     "acilTelefon": "Clinic emergency phone — optional",

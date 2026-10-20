@@ -49,7 +49,7 @@ import React from "react";
 import { act, fireEvent, render, renderHook } from "@testing-library/react-native";
 import { useTeardownGuard } from "@/hooks/useTeardownGuard";
 import { HesapMenusu } from "@/components/domain/HesapMenusu";
-import { ONAY_SIRASINDA_SEANS_BASLADI } from "@/services/hesapGecisi";
+import { onaySirasindaSeansBasladi } from "@/services/hesapGecisi";
 
 const BOSTA = { coils: [{ id: 1, running: false }], activeTreatment: { isActive: false } };
 const BOBIN_CALISIYOR = { coils: [{ id: 1, running: false }, { id: 2, running: true }], activeTreatment: { isActive: false } };
@@ -83,7 +83,7 @@ describe("teardown koruması — boşta onay yolu", () => {
     mockTaze = async () => BOBIN_CALISIYOR;
     await expect(koru()).resolves.toBe(false);
     expect(sira).toEqual(["onay", "get:/dashboard-snapshot"]);
-    expect(mockAlert).toHaveBeenCalledWith("İşlem iptal edildi", ONAY_SIRASINDA_SEANS_BASLADI);
+    expect(mockAlert).toHaveBeenCalledWith("İşlem iptal edildi", onaySirasindaSeansBasladi());
   });
 
   it("KRİTİK: pencere açıkken SEANS başladıysa (bobin bayrağı henüz yok) söküm İPTAL", async () => {
@@ -123,7 +123,7 @@ describe("E-posta hesapları — etkin hesaptan çıkış", () => {
     await act(async () => { fireEvent.press(u.getByLabelText("a@klinik.com hesabından çık")); });
     expect(mockAuth.hesaptanCik).not.toHaveBeenCalled();
     expect(mockOp.lock).not.toHaveBeenCalled();
-    expect(u.getByTestId("hesap-menusu-hata").props.children).toBe(ONAY_SIRASINDA_SEANS_BASLADI);
+    expect(u.getByTestId("hesap-menusu-hata").props.children).toBe(onaySirasindaSeansBasladi());
     expect(sira).toEqual(["onay", "get:/dashboard-snapshot"]);
   });
 

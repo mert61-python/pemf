@@ -15,6 +15,7 @@
  * AYNI koşullar — A-59 / Y55). ACİL DURDUR geçişten etkilenmez (ekran kabuğu geçiş bitene dek yerinde, sonra yeniden kurulur).
  * ⚠️ Belirteç DEĞERİ hiçbir günlüğe / iletiye yazılmaz.
  */
+import i18n from "i18next";
 import type { DashboardSnapshot } from "@/types/domain";
 import { apiGet, hesapKusagiArtir, setAuthBearer, setEntitlementHeaders } from "@/services/apiClient";
 import { supabaseAuth } from "@/services/supabaseAuth";
@@ -33,10 +34,8 @@ export interface GecisSonucu {
   hata?: string;
 }
 
-export const HESAP_GECIS_SEANS_ENGELI =
-  "Seans sürerken (bobinler çalışırken) e-posta hesabı değiştirilemez — önce seansı bitirin. ACİL DURDUR ekranda kalır.";
-export const HESAP_GECIS_BELIRSIZ_ENGELI =
-  "Bobinlerin durumu bilinmiyor (cihaz bağlantısı yok) — e-posta hesabı değiştirilemez. Önce bağlantıyı ve bobinleri kontrol edin.";
+export const hesapGecisSeansEngeli = (): string => i18n.t("hesap.gecis.seansEngeli");
+export const hesapGecisBelirsizEngeli = (): string => i18n.t("hesap.gecis.belirsizEngeli");
 
 /**
  * Hesap değiştirme / ekleme / etkin hesaptan çıkma ŞU AN yapılabilir mi? `null` = evet; aksi hâlde NEDEN (kullanıcıya gösterilir).
@@ -49,13 +48,12 @@ export function hesapGecisiEngeli(
 ): string | null {
   const calisan = (snapshot?.coils ?? []).some((c) => c?.running === true);
   const aktif = snapshot?.activeTreatment?.isActive === true;
-  if (calisan || aktif) return HESAP_GECIS_SEANS_ENGELI;
-  if (donanimBelirsiz === true) return HESAP_GECIS_BELIRSIZ_ENGELI;
+  if (calisan || aktif) return hesapGecisSeansEngeli();
+  if (donanimBelirsiz === true) return hesapGecisBelirsizEngeli();
   return null;
 }
 
-export const ONAY_SIRASINDA_SEANS_BASLADI =
-  "Onay penceresi açıkken bobinler çalışmaya / seans başladı — işlem iptal edildi. ACİL DURDUR ekranda kalır; seansı bitirip tekrar deneyin.";
+export const onaySirasindaSeansBasladi = (): string => i18n.t("hesap.gecis.onayAcikkenSeansBasladi");
 
 /**
  * S-SGI.6 (sahip kararı 2026-10-18): onay penceresi KAPANDIKTAN SONRA durumu backend'den TAZE oku. Web'de `window.confirm` JS'i
@@ -70,7 +68,7 @@ export async function onaySonrasiEngel(): Promise<string | null> {
     return null;
   }
   if (!taze) return null;
-  return hesapGecisiEngeli(taze) ? ONAY_SIRASINDA_SEANS_BASLADI : null;
+  return hesapGecisiEngeli(taze) ? onaySirasindaSeansBasladi() : null;
 }
 
 /** Supabase'in şu an etkin oturumu (park biçiminde) — yoksa null. */
@@ -118,7 +116,7 @@ async function oturumKur(h: ParkHesap): Promise<unknown> {
 /** Park edilmiş bir hesaba geç. Etkin hesap park edilir; düşerse önceki hesapta kalınır. */
 export async function hesabaGec(hedefEposta: string): Promise<GecisSonucu> {
   const hedef = await parkHesabi(hedefEposta);
-  if (!hedef) return { ok: false, hata: "Bu hesap artık bu cihazda açık değil — \"Hesap ekle\" ile yeniden giriş yapın." };
+  if (!hedef) return { ok: false, hata: i18n.t("hesap.gecis.hesapAcikDegil") };
   const onceki = await etkinOturum();
   if (onceki && epostaAnahtari(onceki.email) === epostaAnahtari(hedef.email)) {
     await parktanCikar(hedef.email); // zaten etkin — yinelenen park kaydı temizlenir
@@ -140,8 +138,8 @@ export async function hesabaGec(hedefEposta: string): Promise<GecisSonucu> {
   return {
     ok: false,
     hata: kalici
-      ? `${hedef.email} hesabının oturumu sona ermiş — "Hesap ekle" ile yeniden giriş yapın.`
-      : "Hesap değiştirilemedi: sunucuya ulaşılamadı (geçiş için internet gerekir). Önceki hesapta kalındı.",
+      ? i18n.t("hesap.gecis.oturumSonaErmis", { email: hedef.email })
+      : i18n.t("hesap.gecis.degistirilemediSunucu"),
   };
 }
 

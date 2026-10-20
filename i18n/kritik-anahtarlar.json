@@ -127,6 +127,27 @@
    "tur": "seans",
    "kaynak": "apps/ui/src/components/ui/AppShell.tsx",
    "aciklama": "çıkış yapmak — durdurma kapısı (useTeardownGuard) cümlesinin eylem adı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "hesap.gecis.seansEngeli",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/services/hesapGecisi.ts",
+   "aciklama": "seans / bobin çalışırken hesap geçişi kapalı — neden iletisi (ACİL DURDUR ekranda kalır)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "hesap.gecis.belirsizEngeli",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/services/hesapGecisi.ts",
+   "aciklama": "bobin durumu bilinmiyorken hesap geçişi kapalı — neden iletisi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "hesap.gecis.onayAcikkenSeansBasladi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/services/hesapGecisi.ts",
+   "aciklama": "onay penceresi açıkken seans başladı — işlem iptal iletisi (ACİL DURDUR ekranda kalır)"
   }
  ],
  "bekleyen": [

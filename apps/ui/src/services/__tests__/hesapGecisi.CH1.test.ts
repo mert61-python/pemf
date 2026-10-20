@@ -32,7 +32,7 @@ jest.mock("@/services/apiClient", () => ({
   setEntitlementHeaders: jest.fn((v: unknown) => { mockSira.push(`hak:${v}`); }),
 }));
 
-import { hesabaGec, hesapGecisiEngeli, parkHesabindanCik, tumParkHesaplardanCik, HESAP_GECIS_SEANS_ENGELI, HESAP_GECIS_BELIRSIZ_ENGELI } from "@/services/hesapGecisi";
+import { hesabaGec, hesapGecisiEngeli, parkHesabindanCik, tumParkHesaplardanCik, hesapGecisSeansEngeli, hesapGecisBelirsizEngeli } from "@/services/hesapGecisi";
 import { parkEt, parkHesaplari } from "@/services/hesapDeposu";
 
 const oturum = (email: string, rt: string) => ({
@@ -94,9 +94,9 @@ it("parkta olmayan hesaba geçilmez (setSession çağrılmaz)", async () => {
 describe("KRİTİK seans koruması (teardown koruması ile AYNI koşullar)", () => {
   const bos = { coils: [{ id: 1, running: false }], activeTreatment: { isActive: false } } as never;
   it.each([
-    ["bobin çalışıyor", { coils: [{ id: 2, running: true }], activeTreatment: { isActive: false } }, false, HESAP_GECIS_SEANS_ENGELI],
-    ["aktif seans", { coils: [], activeTreatment: { isActive: true } }, false, HESAP_GECIS_SEANS_ENGELI],
-    ["donanım belirsiz", { coils: [], activeTreatment: { isActive: false } }, true, HESAP_GECIS_BELIRSIZ_ENGELI],
+    ["bobin çalışıyor", { coils: [{ id: 2, running: true }], activeTreatment: { isActive: false } }, false, hesapGecisSeansEngeli()],
+    ["aktif seans", { coils: [], activeTreatment: { isActive: true } }, false, hesapGecisSeansEngeli()],
+    ["donanım belirsiz", { coils: [], activeTreatment: { isActive: false } }, true, hesapGecisBelirsizEngeli()],
   ])("%s → geçiş KAPALI + neden", (_ad, snap, belirsiz, metin) => {
     expect(hesapGecisiEngeli(snap as never, belirsiz as boolean)).toBe(metin);
   });

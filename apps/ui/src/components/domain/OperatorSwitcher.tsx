@@ -31,17 +31,19 @@ import { useAuth } from "@/context/AuthContext";
 import { AUTO_LOCK_MS, useOperatorOptional } from "@/context/OperatorContext";
 import { KIMLIK_DB_OKUNAMIYOR } from "@/utils/patientScope";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 
 const PIN_UZUNLUK = 6;
 
 /** Profile göre kişi terimi (karar #12: araştırmacı bir HEKİM değildir). Varsayılan: klinik (hekim). */
-const TERIM = {
-  veterinarian: { tekil: "hekim", cogul: "hekimler", cogulIle: "hekimlerle", baslik: "Hekim" },
-  researcher: { tekil: "araştırmacı", cogul: "araştırmacılar", cogulIle: "araştırmacılarla", baslik: "Araştırmacı" },
-  pet_owner: { tekil: "kişi", cogul: "kişiler", cogulIle: "kişilerle", baslik: "Kişi" },
-} as const;
+const terimler = (t: TFunction) => ({
+  veterinarian: { tekil: t("hesap.terim.hekim.tekil"), cogul: t("hesap.terim.hekim.cogul"), cogulIle: t("hesap.terim.hekim.cogulIle"), baslik: t("hesap.terim.hekim.baslik") },
+  researcher: { tekil: t("hesap.terim.arastirmaci.tekil"), cogul: t("hesap.terim.arastirmaci.cogul"), cogulIle: t("hesap.terim.arastirmaci.cogulIle"), baslik: t("hesap.terim.arastirmaci.baslik") },
+  pet_owner: { tekil: t("hesap.terim.kisi.tekil"), cogul: t("hesap.terim.kisi.cogul"), cogulIle: t("hesap.terim.kisi.cogulIle"), baslik: t("hesap.terim.kisi.baslik") },
+});
 
-type Kip = keyof typeof TERIM;
+type Kip = "veterinarian" | "researcher" | "pet_owner";
 
 export function OperatorSwitcher({ onBaskaHesap, kip }: {
   /** CH1: e-posta hesapları menüsünü aç (AppShell → `HesapMenusu`) — "E-posta hesapları" bağlantısı onu çağırır. */
@@ -49,6 +51,7 @@ export function OperatorSwitcher({ onBaskaHesap, kip }: {
   /** Etkin arayüz profili (yalnız metin ve Ev Sahibi tek-kullanıcı sadeleştirmesi için; erişim kapısı DEĞİL). */
   kip?: Kip | null;
 } = {}) {
+  const { t } = useTranslation();
   const { session } = useAuth();
   // Sağlayıcı yoksa (ör. AppShell'i tek başına render eden testler) çip HİÇ çizilmez —
   // uygulamayı çökertmek yerine görünmez olur. Kayıt yazan tüketiciler `useOperator` kullanır
@@ -85,9 +88,9 @@ export function OperatorSwitcher({ onBaskaHesap, kip }: {
     setPin("");
     // ⚠️ Kilitliyken "PIN hatalı" DEME: kullanıcı boşuna denemeye devam eder.
     setHata(r.error === "locked"
-      ? "Çok fazla hatalı deneme — bu operatör geçici olarak kilitlendi. Birkaç dakika bekleyin."
-      : r.error === "net" ? "Cihaza ulaşılamadı." : "PIN hatalı.");
-  }, [pin, secili, ctx, kapat]);
+      ? t("hesap.operator.cokHataliKilitli")
+      : r.error === "net" ? t("hesap.operator.cihazaUlasilamadi") : t("hesap.operator.pinHatali"));
+  }, [pin, secili, ctx, kapat, t]);
 
   const kaydet = useCallback(async () => {
     if (pin.length !== PIN_UZUNLUK || !ad.trim()) return;
@@ -100,25 +103,26 @@ export function OperatorSwitcher({ onBaskaHesap, kip }: {
       // ⚠️ 2026-08-09: e-posta zaten kayıtlı. Bu bir hata değil, PIN DEĞİŞTİRME akışıdır —
       // sahipliği kanıtlamak için mevcut PIN istenir (bkz. auth_db.enroll_operator).
       setEskiPinGerek(true); setEskiPin("");
-      setHata("Bu e-posta bu cihazda zaten kayıtlı. PIN'i değiştirmek için mevcut PIN'inizi girin.");
+      setHata(t("hesap.operator.zatenKayitli"));
       return;
     }
     if (r.error === "locked") {
       setEskiPin("");
-      setHata("Çok fazla hatalı deneme — bu operatör geçici olarak kilitlendi. Birkaç dakika bekleyin.");
+      setHata(t("hesap.operator.cokHataliKilitli"));
       return;
     }
     setPin("");
-    setHata(r.error === "net" ? "Cihaza ulaşılamadı." : "Kayıt yapılamadı. PIN 6 haneli olmalı.");
-  }, [pin, ad, eskiPin, eskiPinGerek, ctx, kapat]);
+    setHata(r.error === "net" ? t("hesap.operator.cihazaUlasilamadi") : t("hesap.operator.kayitYapilamadi"));
+  }, [pin, ad, eskiPin, eskiPinGerek, ctx, kapat, t]);
 
   if (!ctx) return null;
   const { operators, active, multiUser, lock, kimlikDbOkunamiyor } = ctx;
   // Y113: kimlik veritabanı okunamıyorsa çip "Operatör seçin" DEMEZ (liste okunamıyor, seçmek imkânsız) — arızayı adlandırır;
   // dokununca açılan pencere arızayı ve çareyi tam metinle söyler.
   const etiket = active?.display_name
-    || (kimlikDbOkunamiyor ? "Kimlik veritabanı okunamıyor" : (multiUser ? "Operatör seçin" : (session?.email || "")));
-  const t = TERIM[(kip && kip in TERIM ? kip : "veterinarian") as Kip];
+    || (kimlikDbOkunamiyor ? t("hesap.operator.kimlikDbOkunamiyor") : (multiUser ? t("hesap.operator.operatorSecin") : (session?.email || "")));
+  const TERIM = terimler(t);
+  const terim = TERIM[(kip && kip in TERIM ? kip : "veterinarian") as Kip];
   // SG.G7: Ev Sahibi + tek kullanıcılı cihaz → pencere yalnız hesap bilgisi (çok-hekimli klinik kavramı gösterilmez). Cihazda
   // kayıtlı operatör VARSA (çok kullanıcılı kip) tam pencere kalır: yazma yolları seçili kişi ister (Y103 / Y110 / Y116).
   const yalnizHesap = kip === "pet_owner" && !multiUser && !active && !kimlikDbOkunamiyor;
@@ -127,19 +131,19 @@ export function OperatorSwitcher({ onBaskaHesap, kip }: {
   const gecisPasif = mesgul || !secili || pin.length !== PIN_UZUNLUK;
   const kaydolPasif = mesgul || !ad.trim() || pin.length !== PIN_UZUNLUK || (eskiPinGerek && eskiPin.length !== PIN_UZUNLUK);
   const pasifNedeni = mesgul ? "" : kayitKipi
-    ? (!ad.trim() ? "Görünen adınızı yazın ve 6 haneli PIN belirleyin."
-      : (eskiPinGerek && eskiPin.length !== PIN_UZUNLUK) ? "Mevcut 6 haneli PIN'inizi girin."
-      : pin.length !== PIN_UZUNLUK ? "6 haneli PIN belirleyin." : "")
-    : (operators.length === 0 ? (kimlikDbOkunamiyor ? "" : `Bu cihazda kayıtlı ${t.tekil} yok — önce "Bu cihaza kaydol".`)
-      : !secili ? `Listeden ${t.tekil} seçin ve 6 haneli PIN'i girin.`
-      : pin.length !== PIN_UZUNLUK ? "6 haneli PIN'i girin." : "");
+    ? (!ad.trim() ? t("hesap.operator.pasifAdPin")
+      : (eskiPinGerek && eskiPin.length !== PIN_UZUNLUK) ? t("hesap.operator.pasifMevcutPin")
+      : pin.length !== PIN_UZUNLUK ? t("hesap.operator.pasifPinBelirle") : "")
+    : (operators.length === 0 ? (kimlikDbOkunamiyor ? "" : t("hesap.operator.pasifKayitliYok", { tekil: terim.tekil }))
+      : !secili ? t("hesap.operator.pasifListedenSec", { tekil: terim.tekil })
+      : pin.length !== PIN_UZUNLUK ? t("hesap.operator.pasifPinGir") : "");
 
   return (
     <>
       <TouchableOpacity style={styles.cip} onPress={() => setAcik(true)}
         accessibilityRole="button"
-        accessibilityLabel={active ? `Aktif operatör: ${active.display_name}. Değiştir.`
-          : kimlikDbOkunamiyor ? "Kimlik veritabanı okunamıyor. Ayrıntı için dokunun." : "Operatör seç"}>
+        accessibilityLabel={active ? t("hesap.operator.aktifOperatorEtiketi", { display_name: active.display_name })
+          : kimlikDbOkunamiyor ? t("hesap.operator.kimlikDbEtiketi") : t("hesap.operator.operatorSecEtiketi")}>
         <UserCheck color={active ? colors.primary : colors.warning} size={rs(14)} />
         <Text style={[styles.cipText, !active && { color: colors.warning }]} numberOfLines={1}>{etiket}</Text>
       </TouchableOpacity>
@@ -155,38 +159,33 @@ export function OperatorSwitcher({ onBaskaHesap, kip }: {
               showsVerticalScrollIndicator={false}
             >
             <Text style={styles.baslik}>
-              {kayitKipi ? "Bu cihaza kaydol" : yalnizHesap ? "Hesap" : `${t.baslik} Değiştir (bu cihaz)`}
+              {kayitKipi ? t("hesap.operator.buCihazaKaydol") : yalnizHesap ? t("hesap.operator.hesap") : t("hesap.operator.baslikDegistir", { baslik: terim.baslik })}
             </Text>
 
             {yalnizHesap ? (
               <Text style={styles.not} testID="operator-aciklama">
-                {session?.email ? `Giriş yapılan hesap: ${session.email}. ` : ""}Başka bir e-posta hesabına geçmek ya da hesap
-                eklemek için &quot;E-posta hesapları&quot;nı açın.
+                {session?.email ? t("hesap.operator.girisYapilanHesap", { email: session.email }) : ""}{t("hesap.operator.baskaHesapAciklama")}
               </Text>
             ) : kayitKipi ? (
               <>
                 <Text style={styles.not} testID="operator-aciklama">
-                  {session?.email} olarak kaydolacaksınız. Bu cihazı başka {t.cogulIle} ortak kullanıyorsanız kaydolun: hasta, seans ve
-                  AI kayıtları adınıza işlenir, &quot;Benim …&quot; süzgeçleri sizi gösterir, {t.cogul} arasında PIN&apos;le (internetsiz)
-                  geçilir. Kaydolunca cihaz çok kullanıcılı kipe geçer: kayıt yazan işlemler seçili {t.tekil} ister,{" "}
-                  {t.tekil} seçilmeden listeler kayıt göstermez ve {dakika} dk hareketsizlikte seçim düşer (seans sürerken düşmez).
+                  {t("hesap.operator.kayitAciklama", { email: session?.email ?? "", cogulIle: terim.cogulIle, cogul: terim.cogul, tekil: terim.tekil, dakika })}
                 </Text>
                 <TextInput style={styles.girisAd} value={ad} onChangeText={setAd}
-                  placeholder="Görünen adınız (ör. Dr. Ayşe Yılmaz)" placeholderTextColor={colors.textSubtle}
-                  accessibilityLabel="Görünen ad" />
+                  placeholder={t("hesap.operator.gorunenAdYer")} placeholderTextColor={colors.textSubtle}
+                  accessibilityLabel={t("hesap.operator.gorunenAd")} />
                 {eskiPinGerek ? (
                   <TextInput style={styles.giris} value={eskiPin}
-                    onChangeText={(t) => setEskiPin(t.replace(/\D/g, "").slice(0, PIN_UZUNLUK))}
-                    placeholder="Mevcut PIN'iniz" placeholderTextColor={colors.textSubtle}
+                    onChangeText={(v) => setEskiPin(v.replace(/\D/g, "").slice(0, PIN_UZUNLUK))}
+                    placeholder={t("hesap.operator.mevcutPinYer")} placeholderTextColor={colors.textSubtle}
                     keyboardType="number-pad" secureTextEntry maxLength={PIN_UZUNLUK}
-                    accessibilityLabel="Mevcut PIN" />
+                    accessibilityLabel={t("hesap.operator.mevcutPin")} />
                 ) : null}
               </>
             ) : (
               <>
               <Text style={styles.not} testID="operator-aciklama">
-                Bu cihazı ortak kullanan {t.cogul} arasında PIN ile hızlı geçiş. E-posta hesabını değiştirmek ya da eklemek için
-                &quot;E-posta hesapları&quot;nı açın.
+                {t("hesap.operator.ortakKullanimAciklama", { cogul: terim.cogul })}
               </Text>
               <ScrollView style={styles.liste} nestedScrollEnabled>
                 {/* Y113: kimlik DB'si okunamıyorsa "kayıtlı operatör yok" DENMEZ — arıza + çare. */}
@@ -194,12 +193,12 @@ export function OperatorSwitcher({ onBaskaHesap, kip }: {
                   <Text style={[styles.not, { color: colors.warning }]} accessibilityRole="alert">{KIMLIK_DB_OKUNAMIYOR}</Text>
                 ) : null}
                 {operators.length === 0 ? (
-                  kimlikDbOkunamiyor ? null : <Text style={styles.not}>Bu cihazda kayıtlı {t.tekil} yok.</Text>
+                  kimlikDbOkunamiyor ? null : <Text style={styles.not}>{t("hesap.operator.kayitliYok", { tekil: terim.tekil })}</Text>
                 ) : operators.map((o) => (
                   <TouchableOpacity key={o.email}
                     style={[styles.satir, secili === o.email && styles.satirSecili]}
                     onPress={() => { setSecili(o.email); setPin(""); setHata(""); }}
-                    accessibilityRole="button" accessibilityLabel={`Seç: ${o.display_name || o.email}`}>
+                    accessibilityRole="button" accessibilityLabel={t("hesap.operator.secEtiketi", { ad: o.display_name || o.email })}>
                     <Text style={styles.satirAd} numberOfLines={1}>{o.display_name || o.email}</Text>
                     {o.locked ? <Lock color={colors.danger} size={rs(13)} /> : null}
                   </TouchableOpacity>
@@ -209,11 +208,11 @@ export function OperatorSwitcher({ onBaskaHesap, kip }: {
             )}
 
             {!yalnizHesap && (secili || kayitKipi) ? (
-              <TextInput style={styles.giris} value={pin} onChangeText={(t) => setPin(t.replace(/\D/g, "").slice(0, PIN_UZUNLUK))}
-                placeholder={eskiPinGerek ? "Yeni 6 haneli PIN" : "6 haneli PIN"}
+              <TextInput style={styles.giris} value={pin} onChangeText={(v) => setPin(v.replace(/\D/g, "").slice(0, PIN_UZUNLUK))}
+                placeholder={eskiPinGerek ? t("hesap.operator.yeniPinYer") : t("hesap.operator.pinYer")}
                 placeholderTextColor={colors.textSubtle}
                 keyboardType="number-pad" secureTextEntry maxLength={PIN_UZUNLUK}
-                accessibilityLabel="PIN" />
+                accessibilityLabel={t("hesap.operator.pin")} />
             ) : null}
 
             {hata ? <Text style={styles.hata}>{hata}</Text> : null}
@@ -224,37 +223,37 @@ export function OperatorSwitcher({ onBaskaHesap, kip }: {
               {yalnizHesap ? (
                 onBaskaHesap ? (
                   <TouchableOpacity style={styles.birincil} onPress={() => { kapat(); onBaskaHesap(); }}
-                    accessibilityRole="button" accessibilityLabel="E-posta hesapları">
-                    <Text style={styles.birincilText}>E-posta hesapları</Text>
+                    accessibilityRole="button" accessibilityLabel={t("kabuk.profil.epostaHesaplari")}>
+                    <Text style={styles.birincilText}>{t("kabuk.profil.epostaHesaplari")}</Text>
                   </TouchableOpacity>
                 ) : null
               ) : kayitKipi ? (
                 <TouchableOpacity style={[styles.birincil, kaydolPasif && styles.birincilPasif]} onPress={kaydet}
                   disabled={kaydolPasif}
                   accessibilityRole="button" accessibilityState={{ disabled: kaydolPasif }} aria-disabled={kaydolPasif}
-                  accessibilityLabel={eskiPinGerek ? "PIN'i değiştir" : "Kaydol"}>
+                  accessibilityLabel={eskiPinGerek ? t("hesap.operator.pinDegistirEtiketi") : t("hesap.operator.kaydol")}>
                   <Text style={[styles.birincilText, kaydolPasif && styles.birincilTextPasif]}>
-                    {mesgul ? "Kaydediliyor…" : eskiPinGerek ? "PIN'i Değiştir" : "Kaydol"}
+                    {mesgul ? t("hesap.operator.kaydediliyor") : eskiPinGerek ? t("hesap.operator.pinDegistir") : t("hesap.operator.kaydol")}
                   </Text>
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity style={[styles.birincil, gecisPasif && styles.birincilPasif]} disabled={gecisPasif}
                   onPress={gecisYap} accessibilityRole="button" accessibilityState={{ disabled: gecisPasif }}
-                  aria-disabled={gecisPasif} accessibilityLabel="Geçiş yap">
-                  <Text style={[styles.birincilText, gecisPasif && styles.birincilTextPasif]}>{mesgul ? "Doğrulanıyor…" : "Geçiş Yap"}</Text>
+                  aria-disabled={gecisPasif} accessibilityLabel={t("hesap.operator.gecisYapEtiketi")}>
+                  <Text style={[styles.birincilText, gecisPasif && styles.birincilTextPasif]}>{mesgul ? t("hesap.operator.dogrulaniyor") : t("hesap.operator.gecisYap")}</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={styles.ikincil} onPress={kapat}
-                accessibilityRole="button" accessibilityLabel="Kapat">
-                <Text style={styles.ikincilText}>Kapat</Text>
+                accessibilityRole="button" accessibilityLabel={t("ortak.kapat")}>
+                <Text style={styles.ikincilText}>{t("ortak.kapat")}</Text>
               </TouchableOpacity>
             </View>
 
             {!yalnizHesap && !kayitKipi && onBaskaHesap ? (
               <TouchableOpacity style={[styles.metinBtn, { minHeight: touch.min }]} onPress={() => { kapat(); onBaskaHesap(); }}
-                accessibilityRole="button" accessibilityLabel="E-posta hesapları">
+                accessibilityRole="button" accessibilityLabel={t("kabuk.profil.epostaHesaplari")}>
                 <LogIn color={colors.primary} size={rs(13)} />
-                <Text style={styles.metinBtnText}>E-posta hesapları (değiştir / ekle)</Text>
+                <Text style={styles.metinBtnText}>{t("hesap.operator.epostaHesaplariDegistirEkle")}</Text>
               </TouchableOpacity>
             ) : null}
 
@@ -262,22 +261,22 @@ export function OperatorSwitcher({ onBaskaHesap, kip }: {
               {yalnizHesap ? <View /> : !kayitKipi ? (
                 <TouchableOpacity style={styles.metinBtn}
                   onPress={() => { setKayitKipi(true); setPin(""); setHata(""); setEskiPin(""); setEskiPinGerek(false); }}
-                  accessibilityRole="button" accessibilityLabel="Bu cihaza kaydol">
+                  accessibilityRole="button" accessibilityLabel={t("hesap.operator.buCihazaKaydol")}>
                   <UserPlus color={colors.primary} size={rs(13)} />
-                  <Text style={styles.metinBtnText}>Bu cihaza kaydol</Text>
+                  <Text style={styles.metinBtnText}>{t("hesap.operator.buCihazaKaydol")}</Text>
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity style={styles.metinBtn}
                   onPress={() => { setKayitKipi(false); setPin(""); setHata(""); setEskiPin(""); setEskiPinGerek(false); }}
-                  accessibilityRole="button" accessibilityLabel="Listeye dön">
-                  <Text style={styles.metinBtnText}>Listeye dön</Text>
+                  accessibilityRole="button" accessibilityLabel={t("hesap.operator.listeyeDonEtiketi")}>
+                  <Text style={styles.metinBtnText}>{t("hesap.operator.listeyeDon")}</Text>
                 </TouchableOpacity>
               )}
               {active ? (
                 <TouchableOpacity style={styles.metinBtn} onPress={() => { lock(); kapat(); }}
-                  accessibilityRole="button" accessibilityLabel="Oturumu kilitle">
+                  accessibilityRole="button" accessibilityLabel={t("hesap.operator.kilitleEtiketi")}>
                   <LogOut color={colors.textMuted} size={rs(13)} />
-                  <Text style={[styles.metinBtnText, { color: colors.textMuted }]}>Kilitle</Text>
+                  <Text style={[styles.metinBtnText, { color: colors.textMuted }]}>{t("hesap.operator.kilitle")}</Text>
                 </TouchableOpacity>
               ) : null}
             </View>
