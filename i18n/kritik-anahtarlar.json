@@ -1961,6 +1961,20 @@
    "tur": "bobin",
    "kaynak": "apps/ui/src/components/domain/SessionDetailModal.tsx",
    "aciklama": "eski firmware alan ölçümü ÷5 düzeltme notu"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ana.kpi.olcumYok",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/KpiDashboardScreen.tsx",
+   "aciklama": "ölçüm yok (sahte sıcaklık / alan sayısı gösterilmez)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ana.kpi.bayatUyari",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/screens/KpiDashboardScreen.tsx",
+   "aciklama": "bağlantı bayat / çevrimdışı: anlık değerler gerçek zamanlı değil"
   }
  ],
  "bekleyen": [

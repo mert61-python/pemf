@@ -247,7 +247,7 @@
    "sira": 7,
    "kritik": false,
    "aciklama": "AI geçmişi, KPI panosu",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 86,
    "dosyaSayisi": 4
   },
@@ -2654,10 +2654,31 @@
    "yuzey": "arayuz",
    "grup": "arayuz-07b-ai-gecmisi-kpi",
    "sira": 7,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 55,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "/ai/log?limit={{AI_HISTORY_LIMIT}}&before_id={{beforeId}}",
+     "gerekce": "API yolu (sunucuya giden) — metin değil"
+    },
+    {
+     "metin": "AI",
+     "gerekce": "kısaltma / ürün adı (AI) — iki dilde aynı"
+    },
+    {
+     "metin": "{{apiBaseUrl}}/ai/log/{{id}}/pdf",
+     "gerekce": "API yolu (sunucuya giden) — metin değil"
+    },
+    {
+     "metin": "PEMF_AI_{{deger1}}_{{id}}.pdf",
+     "gerekce": "indirilen dosya adı (veri) — dilden bağımsız"
+    },
+    {
+     "metin": "analiz",
+     "gerekce": "indirilen dosya adı yedek parçası (veri) — dilden bağımsız"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -2665,10 +2686,43 @@
    "yuzey": "arayuz",
    "grup": "arayuz-07b-ai-gecmisi-kpi",
    "sira": 7,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 31,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "rgba(167, 139, 250, {{opacity}})",
+     "gerekce": "renk değeri (rgba) — metin değil"
+    },
+    {
+     "metin": "rgba(203, 213, 225, {{opacity}})",
+     "gerekce": "renk değeri (rgba) — metin değil"
+    },
+    {
+     "metin": "{{deger1}} mT",
+     "gerekce": "birim (mT) — iki dilde aynı"
+    },
+    {
+     "metin": "mT",
+     "gerekce": "birim başlığı (mT) — iki dilde aynı"
+    },
+    {
+     "metin": "°C",
+     "gerekce": "birim başlığı (°C) — iki dilde aynı"
+    },
+    {
+     "metin": "A",
+     "gerekce": "birim başlığı (A) — iki dilde aynı"
+    },
+    {
+     "metin": "W",
+     "gerekce": "birim başlığı (W) — iki dilde aynı"
+    },
+    {
+     "metin": "Hz",
+     "gerekce": "birim başlığı (Hz) — iki dilde aynı"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -2676,7 +2730,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-07b-ai-gecmisi-kpi",
    "sira": 7,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -2687,7 +2741,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-07b-ai-gecmisi-kpi",
    "sira": 7,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],

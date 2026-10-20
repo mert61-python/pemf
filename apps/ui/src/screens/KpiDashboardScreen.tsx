@@ -18,6 +18,7 @@ import { ANLIK_GUC_GORUNUR, bobinGucuW } from "@/utils/bobinGucu";
 import { gorunurBobinler, STM_BOBIN_SAYISI, type GorunurlukGirdisi } from "@/services/bobinGorunurlugu";
 import { useUserMode, type UserMode } from "@/context/UserModeContext";
 import { profilSozlugu } from "@/utils/profilSozlugu";
+import { useTranslation } from "react-i18next";
 
 /** Etkin profil — sağlayıcı dışında (yalın ekran testi) `null`; yalnız başlık metni için (kancanın kendisi her çizimde çağrılır). */
 function useEtkinProfil(): UserMode {
@@ -54,6 +55,7 @@ interface KpiSummary {
 }
 
 export function KpiDashboardScreen() {
+  const { t } = useTranslation();
   const { snapshot, sensorHistory, connectionQuality } = useLiveData();
   const instantStale = connectionQuality !== "live";
   // SG.G1: sayılar profilin seanslarıdır (backend `X-PEMF-Profil`) → başlık da profilin dilinde ("Klinik" araştırmada yok).
@@ -210,16 +212,16 @@ export function KpiDashboardScreen() {
           color: PIE_COLORS[i % PIE_COLORS.length],
           legendFontColor: "#94a3b8", legendFontSize: rf(12)
         }))
-      : [{ name: "Veri Yok", population: 1, color: "#334155", legendFontColor: "#94a3b8", legendFontSize: rf(12) }];
+      : [{ name: t("ana.kpi.veriYok"), population: 1, color: "#334155", legendFontColor: "#94a3b8", legendFontSize: rf(12) }];
     return (
       <ResponsiveGrid minItemWidth={300}>
         <Card style={styles.chartCard}>
           <View style={styles.chartHeader}>
-            <Text style={styles.chartTitle}>Son 7 Gün — Seans Sayısı</Text>
+            <Text style={styles.chartTitle}>{t("ana.kpi.sonYediGun")}</Text>
             {/* ⚠️ TOPLAM ROZETİ: hepsi sıfır olan bir grafik "veri mi yok, grafik mi bozuk?"
                 sorusunu doğuruyordu. Rozet cevabı peşinen verir. */}
             <Text style={styles.chartToplam}>
-              Toplam {barData.datasets[0].data.reduce((a, b) => a + b, 0)}
+              {t("ana.kpi.toplamRozet", { n: barData.datasets[0].data.reduce((a, b) => a + b, 0) })}
             </Text>
           </View>
           <View style={styles.chartInner} onLayout={(e) => setChartW(e.nativeEvent.layout.width)}>
@@ -242,7 +244,7 @@ export function KpiDashboardScreen() {
           </View>
         </Card>
         <Card style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Seans Modu Dağılımı</Text>
+          <Text style={styles.chartTitle}>{t("ana.kpi.modDagilimi")}</Text>
           <View style={styles.chartInner} onLayout={(e) => setChartW(e.nativeEvent.layout.width)}>
             {chartW > 0 && (
               <>
@@ -277,7 +279,7 @@ export function KpiDashboardScreen() {
         </Card>
       </ResponsiveGrid>
     );
-  }, [kpi.last7Days, kpi.modeDistribution, chartW]);
+  }, [kpi.last7Days, kpi.modeDistribution, chartW, t]);
 
   return (
     <View style={styles.container}>
@@ -288,69 +290,69 @@ export function KpiDashboardScreen() {
       <Text style={styles.sectionTitle}>{SK.kpiBaslik}</Text>
       <ResponsiveGrid>
         <MetricCard
-          label="Toplam Seans"
+          label={t("ayarlar.sistemBilgi.toplamSeans")}
           value={loading ? "…" : String(kpi.totalSessions)}
           tone={colors.primary}
         />
         <MetricCard
-          label="Tamamlanma Oranı"
+          label={t("ana.kpi.tamamlanmaOrani")}
           value={loading ? "…" : completionRate !== null ? `${completionRate}%` : "—"}
           tone={colors.success}
         />
         <MetricCard
-          label="Ort. Süre"
-          value={loading ? "…" : `${Math.round(kpi.avgDurationMin)} dk`}
+          label={t("ana.kpi.ortSure")}
+          value={loading ? "…" : t("ana.kpi.sureDk", { sure: Math.round(kpi.avgDurationMin) })}
           tone={colors.violet}
         />
         <MetricCard
-          label="Dur. / Hata"
+          label={t("ana.kpi.durHata")}
           value={loading ? "…" : String(kpi.stoppedSessions)}
           tone={colors.magenta}
         />
       </ResponsiveGrid>
 
-      <Text style={styles.sectionTitle}>⚡ Anlık Cihaz Durumu</Text>
+      <Text style={styles.sectionTitle}>{t("ana.kpi.anlikCihaz")}</Text>
       {instantStale && (
         <Text style={styles.staleBanner} accessibilityRole="alert" accessibilityLiveRegion="polite">
-          ⚠️ Bağlantı bayat/çevrimdışı — aşağıdaki anlık değerler son bilinen veriden olabilir, GERÇEK ZAMANLI DEĞİL.
+          {t("ana.kpi.bayatUyari")}
         </Text>
       )}
       <View style={instantStale ? { opacity: 0.55 } : undefined}>
         <ResponsiveGrid>
           {ANLIK_GUC_GORUNUR ? (
-            <MetricCard label="Anlık Güç" value={`${instantPowerW.toFixed(1)} W`} tone={colors.cyan} />
+            <MetricCard label={t("ana.kpi.anlikGuc")} value={`${instantPowerW.toFixed(1)} W`} tone={colors.cyan} />
           ) : null}
-          <MetricCard label="Bağlı Bobin" value={`${connectedCoils.length} / ${coilCount}`} tone={colors.primary} />
-          <MetricCard label="Çalışan Bobin" value={`${runningCoils.length} / ${coilCount}`} tone={colors.success} />
-          <MetricCard label="Cihaz Oranı" value={`${uptimePct}%`} tone={colors.violet} />
+          <MetricCard label={t("ana.bagliBobin")} value={`${connectedCoils.length} / ${coilCount}`} tone={colors.primary} />
+          <MetricCard label={t("ana.kpi.calisanBobin")} value={`${runningCoils.length} / ${coilCount}`} tone={colors.success} />
+          <MetricCard label={t("ana.kpi.cihazOrani")} value={`${uptimePct}%`} tone={colors.violet} />
           {/* ⚠️ DENETİM 2026-08-17: ortalama `connectedCoils.length`'e bölünüyordu ve STM bobinleri
               (1-5) sıcaklık ÖLÇMEDİĞİ için `objectTemp: 0` ile ortalamayı seyreltiyordu — 3 bobin
               50 °C iken kart 18,8 °C, yalnız-STM kabinde 0,0 °C ("serin" diye okunur) gösteriyordu.
               Bu, `CoilThermalHonesty.test.tsx` ile kilitli dürüstlük değişmezinin ihlaliydi:
               "ölçüm yokken SAHTE bir sıcaklık değeri gösterilmez". */}
           <MetricCard
-            label={sicaklik.olcumVar ? `Ort. Sıcaklık (${sicaklik.olcenSayisi} bobin)` : "Ort. Sıcaklık"}
-            value={sicaklik.olcumVar ? `${sicaklik.deger.toFixed(1)} °C` : "ölçüm yok"}
+            label={sicaklik.olcumVar ? t("ana.kpi.ortSicaklikBobin", { count: sicaklik.olcenSayisi }) : t("ana.kpi.ortSicaklik")}
+            value={sicaklik.olcumVar ? `${sicaklik.deger.toFixed(1)} °C` : t("ana.kpi.olcumYok")}
             tone={colors.warning}
           />
           <MetricCard
-            label={avgMag !== null ? `Ort. Manyetik (${alanOlcenler.length} bobin)` : "Ort. Manyetik"}
-            value={avgMag !== null ? `${avgMag.toFixed(2)} mT` : "ölçüm yok"}
+            label={avgMag !== null ? t("ana.kpi.ortManyetikBobin", { count: alanOlcenler.length }) : t("ana.kpi.ortManyetik")}
+            value={avgMag !== null ? `${avgMag.toFixed(2)} mT` : t("ana.kpi.olcumYok")}
             tone={colors.cyan}
           />
         </ResponsiveGrid>
       </View>
 
-      <Text style={styles.sectionTitle}>📈 Performans Grafikleri</Text>
+      <Text style={styles.sectionTitle}>{t("ana.kpi.performansGrafikleri")}</Text>
       {chartsSection}
 
       {/* Per-coil instant table */}
       {connectedCoils.length > 0 && (
         <>
-          <Text style={styles.sectionTitle}>🔬 Bobin Detayları</Text>
+          <Text style={styles.sectionTitle}>{t("ana.kpi.bobinDetaylari")}</Text>
           <Card style={styles.tableCard}>
             <View style={styles.tableHeader}>
-              <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>Bobin</Text>
+              <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>{t("ai.pro.tablo.bobin")}</Text>
               <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>mT</Text>
               <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>°C</Text>
               {akimOlcumu ? (

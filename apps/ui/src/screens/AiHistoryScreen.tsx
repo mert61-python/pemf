@@ -28,6 +28,7 @@ import {
   yalnizKendiSilmeMetni,
 } from "@/utils/patientScope";
 import { downloadFileWithAuth } from "@/services/dosyaIndir";
+import i18n from "i18next";
 import { emitToast } from "@/services/toastBridge";
 import { TakipGrafigi } from "@/components/domain/TakipGrafigi";
 import { takipSerisiKur } from "@/utils/takipSerisi";
@@ -35,6 +36,7 @@ import { kapsamda, kayitHastaAnahtari } from "@/utils/sonAnaliz";
 import { profilSozlugu } from "@/utils/profilSozlugu";
 import { serviceConfig } from "@/services/config";
 import { isDesktopHost } from "@/services/desktopSession";
+import { useTranslation } from "react-i18next";
 
 /** Şifreli ai_analyses tablosundan bir kayıt (backend get_ai_log). result_detail = tam ham sonuç. */
 interface AiAnalysis {
@@ -63,11 +65,15 @@ interface AiAnalysis {
 /** Y122: önceki bir değerlendirme (karar, metin, hekim, zaman) — `GET /api/ai/log/{id}` ayrıntısından. */
 interface OncekiDegerlendirme { status: ReviewStatus; note?: string; reviewed_by?: string; reviewed_at?: string }
 
-const MODE_LABEL: Record<string, string> = {
-  pet_owner: "Evcil Sahibi",
-  veterinarian: "Veteriner",
-  researcher: "Araştırma",
-};
+/** Profil rozeti — çağrı anında katalogdan (dil değişince tazelenir); bilinmeyen profil → boş dize (çağıran ham değeri gösterir). */
+const modeEtiketi = (mode: string): string =>
+  mode === "pet_owner"
+    ? i18n.t("ai.gecmis.modEvcil")
+    : mode === "veterinarian"
+      ? i18n.t("kabuk.mod.veterinerKisa")
+      : mode === "researcher"
+        ? i18n.t("kabuk.mod.arastirmaKisa")
+        : "";
 const AI_HISTORY_LIMIT = 300; // sayfa başına çekilen maks. kayıt (backend before_id keyset-pagination'a hazır)
 
 function fmtDate(iso: unknown): string {
@@ -86,6 +92,7 @@ function fmtDate(iso: unknown): string {
 }
 
 export function AiHistoryScreen() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<AiAnalysis[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -148,13 +155,13 @@ export function AiHistoryScreen() {
   // istemle geçer. Eskiden değerlendirme kendi `!myEmail` koşulunu taşıyordu (eşdeğerdi; biri değişince sessizce ayrışırdı).
   // Kapı: tests/test_kapsam_sahipligi.py::test_KRITIK_AI_gecmisi_KIMLIK_kapisi_TEK_kaynak_OB4 + __tests__/aiKimlikKapisi.OB4.web.test.tsx
   const kimlikIste = useCallback(async (eylem: string) => {
-    if (kimlikDbOkunamiyor) await platformConfirm("Kimlik veritabanı okunamıyor", kimlikDbOkunamiyorMetni());
-    else await platformConfirm("Operatör seçin", `${eylem} için önce üst bardan hangi hekim olduğunuzu seçin.`);
+    if (kimlikDbOkunamiyor) await platformConfirm(i18n.t("hesap.operator.kimlikDbOkunamiyor"), kimlikDbOkunamiyorMetni());
+    else await platformConfirm(i18n.t("hesap.operator.operatorSecin"), i18n.t("ai.gecmis.kimlikSecin", { eylem }));
   }, [kimlikDbOkunamiyor]);
 
   const kaydiSil = useCallback(async (id: number) => {
     if (kimlikYok) {
-      await kimlikIste("Silme işlemi");
+      await kimlikIste(i18n.t("ai.gecmis.eylemSilme"));
       return;
     }
     // ⚠️ D2.20 (A-10 · Y83): tekil silme YALNIZ kimliğin kendi kaydına — SAHİPSİZ kayıt da değil (sahipsizler yalnız
@@ -162,13 +169,10 @@ export function AiHistoryScreen() {
     // e-postayı "sahip filtresi yok" sayıp HER kaydı siliyordu. Backend aynı kuralı jetondan uygular (404 / 428).
     const hedef = items.find((x) => x.id === id);
     if (!hedef || (hedef.operator_email || "").trim().toLowerCase() !== myEmail) {
-      await platformConfirm("Silinemez", yalnizKendiSilmeMetni());
+      await platformConfirm(i18n.t("ai.gecmis.silinemez"), yalnizKendiSilmeMetni());
       return;
     }
-    const onay = await platformConfirm(
-      "Kaydı sil",
-      "Bu AI analiz kaydı kalıcı olarak silinecek. Bu işlem geri alınamaz.",
-    );
+    const onay = await platformConfirm(i18n.t("ai.gecmis.kaydiSilBaslik"), i18n.t("ai.gecmis.kaydiSilGovde"));
     if (!onay) return;
     setSilinen(id);
     const res = await apiPost<{ status?: string } | null>(
@@ -202,7 +206,7 @@ export function AiHistoryScreen() {
 
   const tumunuSil = useCallback(async () => {
     if (kimlikYok) {
-      await kimlikIste("Silme işlemi");
+      await kimlikIste(i18n.t("ai.gecmis.eylemSilme"));
       return;
     }
     // ⚠️ Y112 (S-B2.4): cihaz DIŞINDAN (LAN / telefon / tünel) kayıtlı operatörlü klinikte "Tüm Klinik" yalnız KENDİ + SAHİPSİZ
@@ -213,14 +217,11 @@ export function AiHistoryScreen() {
     // ⚠️ Y105 (S-B.2): operatörsüz (tek kullanıcılı) cihazda "kendi" silmesi SAHİPSİZ eski kayıtları da siler (backend kapsamı);
     // onay bunu söyler. Kapı: __tests__/aiKendiSilme.Y105.web.test.tsx
     const kapsamMetni = kendiKapsami
-      ? (operatorKayitli ? "Kendi AI analiz kayıtlarınızın TAMAMI" : "Kendi ve sahipsiz (eski) AI analiz kayıtlarınızın TAMAMI")
+      ? (operatorKayitli ? i18n.t("ai.gecmis.kapsam.kendi") : i18n.t("ai.gecmis.kapsam.kendiSahipsiz"))
       : uzaktanKayitli
-        ? "Kendi ve sahipsiz AI analiz kayıtlarınız (başka hekimlerin kayıtları yalnız cihazın kendi ekranından silinebilir)"
-        : "Kliniğin TÜM AI analiz geçmişi";
-    const onay = await platformConfirm(
-      "Geçmişi sil",
-      `${kapsamMetni} kalıcı olarak silinecek. Bu işlem geri alınamaz.\n\nHasta kayıtları ve seans geçmişi ETKİLENMEZ.`,
-    );
+        ? i18n.t("ai.gecmis.kapsam.uzaktan")
+        : i18n.t("ai.gecmis.kapsam.klinik");
+    const onay = await platformConfirm(i18n.t("ai.gecmis.gecmisiSilBaslik"), i18n.t("ai.gecmis.gecmisiSilGovde", { kapsamMetni }));
     if (!onay) return;
     const res = await apiPost<{ status?: string; deleted?: number } | null>(
       "/ai/log/delete_all",
@@ -241,7 +242,7 @@ export function AiHistoryScreen() {
     // GÖNDERİLMEZ (eskiden `reviewed_by: ""` ile gidiyor, ekranda imzasız "Hekim onayladı" görünüyordu). Operatörsüz
     // klinikte `myEmail` oturum e-postasıdır (Kural 2). Backend ayrıca 428 döner (Y88).
     if (kimlikYok) {
-      await kimlikIste("Değerlendirme");
+      await kimlikIste(i18n.t("ai.gecmis.eylemDegerlendirme"));
       return false;
     }
     setReviewing(id);
@@ -333,9 +334,9 @@ export function AiHistoryScreen() {
     for (const { ad } of anahtarlar.values()) adSayisi.set(ad, (adSayisi.get(ad) || 0) + 1);
     return Array.from(anahtarlar, ([anahtar, { ad, kimlik }]) => ({
       anahtar,
-      etiket: (adSayisi.get(ad) || 0) > 1 ? `${ad} · ${kimlik ? `#${kimlik.slice(-4)}` : "eski kayıt"}` : ad,
+      etiket: (adSayisi.get(ad) || 0) > 1 ? `${ad} · ${kimlik ? `#${kimlik.slice(-4)}` : i18n.t("ai.gecmis.eskiKayit")}` : ad,
     })).sort((a, b) => a.etiket.localeCompare(b.etiket, "tr"));
-  }, [items, myEmail, etkinScope]);
+  }, [items, myEmail, etkinScope, t]);
   // Kapsam değişip seçili hasta listeden çıkarsa süzgeç "Tüm hastalar"a döner (boş listeye kilitli kalmasın).
   useEffect(() => {
     if (hastaFiltre !== "__all__" && !hastalar.some((h) => h.anahtar === hastaFiltre)) setHastaFiltre("__all__");
@@ -368,30 +369,30 @@ export function AiHistoryScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-        <Text style={styles.count}>{shown.length} kayıt{(filter !== "__all__" || hastaFiltre !== "__all__") ? " (filtreli)" : ""}</Text>
+        <Text style={styles.count}>{(filter !== "__all__" || hastaFiltre !== "__all__") ? t("ai.gecmis.kayitSayisiFiltreli", { count: shown.length }) : t("ai.gecmis.kayitSayisi", { count: shown.length })}</Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
           {/* KVKK silme hakkı: kayıt yokken düğmeyi gösterme (ölü aksiyon). */}
           {items.length > 0 ? (
             <TouchableOpacity style={styles.refreshBtn} onPress={tumunuSil}
               accessibilityRole="button"
-              accessibilityLabel={kendiKapsami ? "Kendi AI analiz geçmişimi sil" : "Kliniğin tüm AI analiz geçmişini sil"}>
+              accessibilityLabel={kendiKapsami ? t("ai.gecmis.kendiSilEtiketi") : t("ai.gecmis.klinikSilEtiketi")}>
               <Trash2 color={colors.danger} size={16} />
-              <Text style={[styles.refreshText, { color: colors.danger }]}>Geçmişi Sil</Text>
+              <Text style={[styles.refreshText, { color: colors.danger }]}>{t("ai.gecmis.gecmisiSil")}</Text>
             </TouchableOpacity>
           ) : null}
-          <TouchableOpacity style={styles.refreshBtn} onPress={load} accessibilityRole="button" accessibilityLabel="Geçmişi yenile">
+          <TouchableOpacity style={styles.refreshBtn} onPress={load} accessibilityRole="button" accessibilityLabel={t("ai.gecmis.yenileEtiketi")}>
             <RefreshCcw color={colors.primary} size={16} />
-            <Text style={styles.refreshText}>Yenile</Text>
+            <Text style={styles.refreshText}>{t("ai.gecmis.yenile")}</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {canChooseScope(myEmail, roller) ? (
         <View style={styles.segment}>
-          <TouchableOpacity style={[styles.segmentBtn, scope === "mine" && styles.segmentBtnActive]} onPress={() => setScope("mine")} accessibilityLabel="Benim analizlerim">
-            <Text style={[styles.segmentText, scope === "mine" && styles.segmentTextActive]} numberOfLines={1}>Benim Analizlerim</Text>
+          <TouchableOpacity style={[styles.segmentBtn, scope === "mine" && styles.segmentBtnActive]} onPress={() => setScope("mine")} accessibilityLabel={t("ai.gecmis.benimEtiket")}>
+            <Text style={[styles.segmentText, scope === "mine" && styles.segmentTextActive]} numberOfLines={1}>{t("ai.gecmis.benim")}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.segmentBtn, scope === "all" && styles.segmentBtnActive]} onPress={() => setScope("all")} accessibilityLabel={`Tüm ${SK.tumKapsamKucuk} analizleri`}>
+          <TouchableOpacity style={[styles.segmentBtn, scope === "all" && styles.segmentBtnActive]} onPress={() => setScope("all")} accessibilityLabel={t("ai.gecmis.tumKapsamEtiketi", { tumKapsamKucuk: SK.tumKapsamKucuk })}>
             <Text style={[styles.segmentText, scope === "all" && styles.segmentTextActive]} numberOfLines={1}>{SK.tumKapsam}</Text>
           </TouchableOpacity>
         </View>
@@ -410,7 +411,7 @@ export function AiHistoryScreen() {
 
       {modules.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
-          <Chip label="Tümü" active={filter === "__all__"} onPress={() => setFilter("__all__")} />
+          <Chip label={t("ai.gecmis.tumu")} active={filter === "__all__"} onPress={() => setFilter("__all__")} />
           {modules.map((m) => (
             <Chip key={m} label={m} active={filter === m} onPress={() => setFilter(m)} />
           ))}
@@ -429,14 +430,14 @@ export function AiHistoryScreen() {
       {loading ? (
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: spacing.xxl }} />
       ) : error ? (
-        <Text style={styles.empty}>{"Geçmiş yüklenemedi. Cihaza bağlı olduğunuzdan emin olun, sonra Yenile'ye dokunun."}</Text>
+        <Text style={styles.empty}>{t("ai.gecmis.yuklenemedi")}</Text>
       ) : shown.length === 0 ? (
         <Text style={styles.empty}>
           {!myEmail
             ? kimlikIstemi(kimlikIstemiMetni(), kimlikDbOkunamiyor)
             : filter !== "__all__"
-            ? 'Bu filtre için kayıt yok. Farklı bir hasta/modül seçin ya da "Tümü"ye dönün.'
-            : "Henüz AI analiz kaydı yok. Akıllı Teşhis'ten bir analiz çalıştırın — sonuç burada şifreli, detaylı saklanır."}
+            ? t("ai.gecmis.filtreKayitYok")
+            : t("ai.gecmis.kayitYok")}
         </Text>
       ) : (
         <View style={styles.list}>
@@ -464,8 +465,8 @@ export function AiHistoryScreen() {
                     onPress={() => setExpanded(open ? null : it.id)}
                     accessibilityRole="button"
                     accessibilityState={{ expanded: open }}
-                    accessibilityLabel={`${it.module_label || it.module_id || "AI"} kaydi${open ? ", acik" : ""}`}
-                    accessibilityHint={open ? "Ayrintilari kapatir" : "Ayrintilari acar"}
+                    accessibilityLabel={t("ai.gecmis.kayitEtiketi", { ad: it.module_label || it.module_id || "AI", acik: open ? t("ai.gecmis.acikEk") : "" })}
+                    accessibilityHint={open ? t("ai.gecmis.ayrintiKapat") : t("ai.gecmis.ayrintiAc")}
                   >
                     <View style={styles.cardHead}>
                       <Brain color={colors.primary} size={18} />
@@ -479,15 +480,15 @@ export function AiHistoryScreen() {
                     <View style={styles.metaRow}>
                       <Text style={styles.meta}>{fmtDate(it.created_at)}</Text>
                       {it.patient_name ? <Text style={styles.meta} numberOfLines={1}>· {it.patient_name}</Text> : null}
-                      {it.mode ? <Text style={styles.badge}>{MODE_LABEL[it.mode] || it.mode}</Text> : null}
+                      {it.mode ? <Text style={styles.badge}>{modeEtiketi(it.mode) || it.mode}</Text> : null}
                     </View>
                   </TouchableOpacity>
 
                   {open ? (
                     <View style={styles.detail}>
-                      {it.input_type ? <Text style={styles.detailLine}>Girdi tipi: {girdiAdi(it.input_type) || it.input_type}</Text> : null}
+                      {it.input_type ? <Text style={styles.detailLine}>{t("ai.gecmis.girdiTipi", { tip: girdiAdi(it.input_type) || it.input_type })}</Text> : null}
                       {it.confidence != null ? (
-                        <Text style={styles.detailLine}>Güven: %{Math.round(it.confidence * 100)}</Text>
+                        <Text style={styles.detailLine}>{t("ai.gecmis.guven", { yuzde: Math.round(it.confidence * 100) })}</Text>
                       ) : null}
                       {rows.length > 0 ? (
                         <View style={styles.detailGrid}>
@@ -499,7 +500,7 @@ export function AiHistoryScreen() {
                           ))}
                         </View>
                       ) : (
-                        <Text style={styles.detailLine}>Bu analiz için ek sayısal detay yok.</Text>
+                        <Text style={styles.detailLine}>{t("ai.gecmis.ekDetayYok")}</Text>
                       )}
 
                       {/* HEKİM DEĞERLENDİRMESİ (2026-08-06): AI çıktısı öneri, klinik karar hekimin.
@@ -515,24 +516,24 @@ export function AiHistoryScreen() {
                         busy={reviewing === it.id}
                         onSubmit={(st, nt) => submitReview(it.id, st, nt)}
                         taslak={taslaklar[it.id]}
-                        onTaslakDegis={(t) => setTaslaklar((p) => ({ ...p, [it.id]: t }))}
+                        onTaslakDegis={(tas) => setTaslaklar((p) => ({ ...p, [it.id]: tas }))}
                       />
 
                       {/* Y122 (S-C.4): ÖNCEKİ DEĞERLENDİRMELER — karar, metin, hekim, zaman (eskiden yeniye). PDF'e GİRMEZ. */}
                       {(it.review_history_count ?? 0) > 0 ? (
                         <View style={styles.onceki}>
-                          <Text style={styles.detailKey}>Önceki değerlendirmeler ({it.review_history_count})</Text>
+                          <Text style={styles.detailKey}>{t("ai.gecmis.oncekiDegerlendirmeler", { adet: it.review_history_count })}</Text>
                           {gecmisler[it.id] === undefined || gecmisler[it.id] === "yukleniyor" ? (
                             <ActivityIndicator color={colors.primary} />
                           ) : gecmisler[it.id] === "hata" ? (
                             <Text style={styles.detailLine}>
-                              Önceki değerlendirmeler yüklenemedi — kayıtlı hekimli cihazda üst bardan hangi hekim olduğunuzu seçin.
+                              {t("ai.gecmis.oncekiYuklenemedi")}
                             </Text>
                           ) : (
                             (gecmisler[it.id] as OncekiDegerlendirme[]).map((g, i) => (
                               <View key={i} style={styles.oncekiSatir}>
                                 <Text style={styles.detailLine}>
-                                  {reviewEtiketi(g.status) || g.status} · {g.reviewed_by || "imzasız"}
+                                  {reviewEtiketi(g.status) || g.status} · {g.reviewed_by || t("ai.gecmis.imzasiz")}
                                   {g.reviewed_at ? ` · ${fmtDate(g.reviewed_at)}` : ""}
                                 </Text>
                                 {g.note ? <Text style={styles.oncekiMetin} selectable>{g.note}</Text> : null}
@@ -560,14 +561,14 @@ export function AiHistoryScreen() {
                             // yani bir paylaşım düğmesi eklemek, ilgisiz dört testi
                             // kırıyordu. Köprü kayıtlı değilse sessizce false döner.
                             // `GlobalEmergencyStop` da aynı sebeple köprüyü kullanıyor.
-                            (m, t) => { emitToast(m, t); },
+                            (m, tur) => { emitToast(m, tur); },
                           )
                         }
                         accessibilityRole="button"
-                        accessibilityLabel={`${it.module_label || it.module_id} sonucunu paylaş`}
+                        accessibilityLabel={t("ai.gecmis.paylasEtiketi", { ad: it.module_label || it.module_id })}
                         testID={`ai-paylas-${it.id}`}>
                         <Share2 color={colors.primary} size={rs(14)} />
-                        <Text style={styles.paylasText}>Sonucu paylaş (PDF)</Text>
+                        <Text style={styles.paylasText}>{t("ai.gecmis.paylas")}</Text>
                       </TouchableOpacity>
                       {/* KVKK: tek kaydı silme. Kart AÇIKKEN görünür → listede kazara dokunma riski yok. */}
                       <TouchableOpacity
@@ -575,10 +576,10 @@ export function AiHistoryScreen() {
                         disabled={silinen === it.id}
                         onPress={() => kaydiSil(it.id)}
                         accessibilityRole="button"
-                        accessibilityLabel={`${it.module_label || it.module_id} kaydını sil`}>
+                        accessibilityLabel={t("ai.gecmis.kaydiSilEtiketi", { ad: it.module_label || it.module_id })}>
                         <Trash2 color={colors.danger} size={rs(14)} />
                         <Text style={styles.silText}>
-                          {silinen === it.id ? "Siliniyor…" : "Bu kaydı sil"}
+                          {silinen === it.id ? t("ai.gecmis.siliniyor") : t("ai.gecmis.kaydiSil")}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -593,9 +594,9 @@ export function AiHistoryScreen() {
               onPress={loadMore}
               disabled={loadingMore}
               accessibilityRole="button"
-              accessibilityLabel="Daha fazla AI analizi yükle"
+              accessibilityLabel={t("ai.gecmis.dahaFazlaEtiket")}
             >
-              {loadingMore ? <ActivityIndicator color={colors.primary} /> : <Text style={{ color: colors.primary, fontWeight: "700" }}>Daha Fazla Yükle</Text>}
+              {loadingMore ? <ActivityIndicator color={colors.primary} /> : <Text style={{ color: colors.primary, fontWeight: "700" }}>{t("seans.gecmis.dahaFazla")}</Text>}
             </TouchableOpacity>
           )}
         </View>
@@ -610,12 +611,13 @@ export function AiHistoryScreen() {
  * ile aynen taşındığı için GÖRSEL DEĞİŞİKLİK YOK; yalnız dokunma alanı büyüdü.
  */
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const { t } = useTranslation();
   return (
     <OrtakChip
       label={label}
       active={active}
       onPress={onPress}
-      accessibilityLabel={`Filtre: ${label}`}
+      accessibilityLabel={t("ai.gecmis.filtreEtiketi", { label })}
       style={styles.chip}
       activeStyle={styles.chipActive}
       textStyle={styles.chipText}
