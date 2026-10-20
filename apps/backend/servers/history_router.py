@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
-from utils import mt_duzeltme
+from utils import ceviri, mt_duzeltme
 from utils.akim_olcumu import akim_olcumu_acik
 from utils.path_utils import get_app_data_directory
 from utils.pdf_report_generator import get_pdf_generator
@@ -147,7 +147,7 @@ def get_history(request: Request, limit: int = 100, cursor: int = None, db=Depen
         return sessions
     except Exception as e:
         logger.error(f"Error fetching history: {e}")
-        raise HTTPException(status_code=500, detail="İşlem başarısız")
+        raise HTTPException(status_code=500, detail=ceviri.t("gecmis.hata.islemBasarisiz"))
 
 
 @router.get("/statistics")
@@ -161,7 +161,7 @@ def get_statistics(request: Request, db=Depends(get_db)):
         return stats
     except Exception as e:
         logger.error(f"Error fetching statistics: {e}")
-        raise HTTPException(status_code=500, detail="İşlem başarısız")
+        raise HTTPException(status_code=500, detail=ceviri.t("gecmis.hata.islemBasarisiz"))
 
 
 @router.get("/export_pdf")
@@ -204,16 +204,16 @@ def export_pdf(
         )
     except Exception as e:
         logger.error(f"Error generating PDF: {e}")
-        raise HTTPException(status_code=500, detail="İşlem başarısız")
+        raise HTTPException(status_code=500, detail=ceviri.t("gecmis.hata.islemBasarisiz"))
 
 
 #: D2.16: CSV dışa aktarmasının geçmiş SAYFA boyu (tavan DEĞİL — sayfalar sonuna kadar okunur).
 _CSV_SAYFA = 5000
+
+
 #: D2-3.3: okuma sırasında geri yükleme oldu/sürüyor — dosya verilmez.
-_CSV_GERI_YUKLEME_SURUYOR = (
-    "Seans geçmişi okunurken bu cihazda geri yükleme yapıldı ya da sürüyor — tutarsız dosya OLUŞTURULMADI. Geri yükleme bitince "
-    "dışa aktarmayı yeniden başlatın."
-)
+def _csv_geri_yukleme_suruyor() -> str:
+    return ceviri.t("gecmis.hata.geriYukleme")
 
 
 def _geri_yukleme_nesli(db) -> int:
@@ -244,9 +244,7 @@ def export_csv(
         if kayitli_operator_var() and not cozumlenmis_operator(request):
             raise HTTPException(
                 status_code=428,
-                detail=kimliksiz_detayi(
-                    "Operatör seçin — tüm seans geçmişini dışa aktarmak için önce üst bardan hangi hekim olduğunuzu seçin."
-                ),
+                detail=kimliksiz_detayi(ceviri.t("gecmis.kimlik.disaAktar")),
             )
     try:
         # DENETIM P3: session_ids SQL'e HIC girmiyordu → birkac seans istense bile 10.000 satir
@@ -257,7 +255,9 @@ def export_csv(
             try:
                 _idset = [int(x.strip()) for x in _sid.split(",") if x.strip()]
             except ValueError:
-                return Response(content="Geçersiz session_ids", media_type="text/plain", status_code=400)
+                return Response(
+                    content=ceviri.t("gecmis.hata.gecersizSessionIds"), media_type="text/plain", status_code=400
+                )
         # ⚠️ D2.16 (B-3.24): geçmiş anahtar kümesi (keyset, `before_id`) SAYFALARIYLA sonuna kadar okunur — sınır YOK. Eskiden
         # tek sorgu `limit=10000` ile kırpıyordu: yoğun klinikte "Tümünü dışa aktar" CSV'sinde EN ESKİ tıbbi kayıtlar işaretsiz
         # düşüyordu (ölçüldü: 10.001 seansta 10.000 satır). Kapı: tests/test_csv_TUMU_disa_aktarim_KESILMEZ_D216.py
@@ -266,7 +266,7 @@ def export_csv(
         # Nesil sayacı (`_ice_aktar`; tek = sürüyor) değiştiyse dosya VERİLMEZ, 409. Kapı: tests/test_csv_TUMU_sayfalar_arasi_GERI_YUKLEME_kesik_dosya_VERMEZ_D233.py
         _nesil = _geri_yukleme_nesli(db)
         if _nesil % 2:
-            return JSONResponse(status_code=409, content={"detail": _CSV_GERI_YUKLEME_SURUYOR})
+            return JSONResponse(status_code=409, content={"detail": _csv_geri_yukleme_suruyor()})
         sessions = []
         _once = None
         # SG.G1: "Tümünü dışa aktar" da ekrandaki listeyle AYNI profil kümesi (başlıksız eski istemci süzgeçsiz).
@@ -283,14 +283,14 @@ def export_csv(
             _once = _sayfa[-1]["id"]
         if _geri_yukleme_nesli(db) != _nesil:
             logger.warning("CSV disa aktarma: okuma sirasinda geri yukleme oldu — tutarsiz dosya VERILMEDI (409).")
-            return JSONResponse(status_code=409, content={"detail": _CSV_GERI_YUKLEME_SURUYOR})
+            return JSONResponse(status_code=409, content={"detail": _csv_geri_yukleme_suruyor()})
         if not sessions:
             # ⚠️ ESKIDEN BU DA "indirilen dosya" oluyordu: istemci 200'ü başarı sayıp içinde
             # "Veri bulunamadi" yazan bir `PEMF_Gecmis.csv` kaydediyordu. Operatör dosyayı
             # açana kadar kayıt olmadığını anlamıyordu.
             if kaydet:
-                return {"status": "bos", "mesaj": "Dışa aktarılacak seans kaydı yok."}
-            return Response(content="Veri bulunamadi", media_type="text/plain")
+                return {"status": "bos", "mesaj": ceviri.t("gecmis.csv.kayitYok")}
+            return Response(content=ceviri.t("gecmis.csv.veriYok"), media_type="text/plain")
 
         output = io.StringIO()
         writer = csv.writer(output)
@@ -304,16 +304,16 @@ def export_csv(
         # Headers
         headers = [
             "ID",
-            "Hasta",
-            "Hedef",
-            "Mod",
-            "Sure(dk)",
-            "Frekans(Hz)",
-            "Ayarlanan(mT)",
-            "Tarih",
-            "Baslangic",
-            "Durum",
-            "Notlar",
+            ceviri.t("gecmis.csv.hasta"),
+            ceviri.t("gecmis.csv.hedef"),
+            ceviri.t("gecmis.csv.mod"),
+            ceviri.t("gecmis.csv.sure"),
+            ceviri.t("gecmis.csv.frekans"),
+            ceviri.t("gecmis.csv.ayarlanan"),
+            ceviri.t("gecmis.csv.tarih"),
+            ceviri.t("gecmis.csv.baslangic"),
+            ceviri.t("gecmis.csv.durum"),
+            ceviri.t("gecmis.csv.notlar"),
         ]
         writer.writerow(headers)
 
@@ -356,7 +356,7 @@ def export_csv(
         )
     except Exception as e:
         logger.error(f"Error generating CSV: {e}")
-        raise HTTPException(status_code=500, detail="İşlem başarısız")
+        raise HTTPException(status_code=500, detail=ceviri.t("gecmis.hata.islemBasarisiz"))
 
 
 @router.get("/export_patient_pdf")
@@ -377,7 +377,7 @@ def export_patient_pdf(patient_name: str, pdf_gen=Depends(get_pdf_gen)):
         )
     except Exception as e:
         logger.error(f"Error generating patient PDF: {e}")
-        raise HTTPException(status_code=500, detail="İşlem başarısız")
+        raise HTTPException(status_code=500, detail=ceviri.t("gecmis.hata.islemBasarisiz"))
 
 
 def _seans_sahipligi(request: Request, db, kimlikler: list, olay: str, scope: str) -> dict:
@@ -391,7 +391,8 @@ def _seans_sahipligi(request: Request, db, kimlikler: list, olay: str, scope: st
     return sahipler
 
 
-SURUYOR_DETAY = "Seans sürüyor — süren tedavinin kaydı silinemez; önce seansı durdurun."
+def _suruyor_detay() -> str:
+    return ceviri.t("gecmis.hata.seansSuruyor")
 
 
 def _suren_seans_reddi(request: Request, kimlikler, olay: str, scope: str) -> None:
@@ -410,7 +411,7 @@ def _suren_seans_reddi(request: Request, kimlikler, olay: str, scope: str) -> No
     from servers import audit_log as _iz
 
     _iz.kimlikli_yaz(request, olay, scope=scope, item_count=0, outcome="reddedildi", detail={"neden": "seans_suruyor"})
-    raise HTTPException(status_code=409, detail=SURUYOR_DETAY)
+    raise HTTPException(status_code=409, detail=_suruyor_detay())
 
 
 def _tekil_seans_sil(request: Request, db, session_id: int) -> dict:
@@ -429,7 +430,7 @@ def _tekil_seans_sil(request: Request, db, session_id: int) -> dict:
     sahiplik_kapisi(request, sahipler, olay="history.delete", scope=scope)
     if not sahipler:
         _iz.kimlikli_yaz(request, "history.delete", scope=scope, item_count=0, outcome="bulunamadi")
-        raise HTTPException(status_code=404, detail="Seans bulunamadı — zaten silinmiş olabilir; listeyi yenileyin.")
+        raise HTTPException(status_code=404, detail=ceviri.t("gecmis.hata.seansYok"))
     _suren_seans_reddi(request, [session_id], "history.delete", scope)
     # ⚠️ D2.17 (B-3.27): "bu hastanın acil durdurma kaydını ve dozunu kim sildi" — bağlı kayıtların SAYILARI silmeden
     # ÖNCE alınır ve ize girer (içerik değil). Özet okunamazsa silme KISITLANMAZ; iz bunu söyler.
@@ -443,7 +444,7 @@ def _tekil_seans_sil(request: Request, db, session_id: int) -> dict:
         db.delete_session(session_id)
     except Exception as e:
         logger.error(f"Error deleting session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail="İşlem başarısız")
+        raise HTTPException(status_code=500, detail=ceviri.t("gecmis.hata.islemBasarisiz"))
     _iz.kimlikli_yaz(request, "history.delete", scope=scope, item_count=1, detail=ozet)
     return {"status": "success"}
 
@@ -476,11 +477,11 @@ def delete_sessions_bulk(request: Request, payload: HistoryBulkDeletePayload, db
     if payload.confirm != "DELETE_SELECTED":
         raise HTTPException(
             status_code=400,
-            detail='Toplu silme için onay gerekli: gövdede {"confirm":"DELETE_SELECTED"} gönderin.',
+            detail=ceviri.t("hasta.hata.topluSilmeOnaySecili"),
         )
     istenen = sorted({int(x) for x in (payload.session_ids or [])})
     if not istenen:
-        raise HTTPException(status_code=400, detail="Silinecek seans seçilmedi.")
+        raise HTTPException(status_code=400, detail=ceviri.t("gecmis.hata.silinecekSecilmedi"))
     denetlenen = _seans_sahipligi(request, db, istenen, "history.delete_bulk", f"{len(istenen)} seans")
     _suren_seans_reddi(request, istenen, "history.delete_bulk", f"{len(istenen)} seans")
     # ⚠️ O-B.7 (D2.17'nin toplu ikizi): silinecek seansların bağlı kayıt SAYILARI (olay, ACİL DURDUR, doz = bobin koşusu, sensör)
@@ -498,7 +499,7 @@ def delete_sessions_bulk(request: Request, payload: HistoryBulkDeletePayload, db
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Toplu seans silme hatasi: {e}")
-        raise HTTPException(status_code=500, detail="İşlem başarısız")
+        raise HTTPException(status_code=500, detail=ceviri.t("gecmis.hata.islemBasarisiz"))
     try:
         from servers import audit_log as _iz
 
@@ -531,15 +532,13 @@ def update_notes(request: Request, payload: HistoryNotesPayload, db=Depends(get_
         _iz.kimlikli_yaz(request, "history.notes", scope=f"id={payload.session_id}", item_count=0, outcome="reddedildi")
         raise HTTPException(
             status_code=428,
-            detail=kimliksiz_detayi(
-                "Operatör seçin — seans notunu düzenlemek için önce üst bardan hangi hekim olduğunuzu seçin."
-            ),
+            detail=kimliksiz_detayi(ceviri.t("gecmis.kimlik.notDuzenle")),
         )
     try:
         db.update_session_notes(payload.session_id, payload.notes)
     except Exception as e:
         logger.error(f"Error updating notes for session {payload.session_id}: {e}")
-        raise HTTPException(status_code=500, detail="İşlem başarısız")
+        raise HTTPException(status_code=500, detail=ceviri.t("gecmis.hata.islemBasarisiz"))
     # ⚠️ D2.43 (B-2.10): tıbbi kaydın değişmesi izlenir — kim, hangi seans. İÇERİK YAZILMAZ: not METNİ ize girmez
     # (denetim izi verinin ikinci kopyası olamaz), yalnız notun var olup olmadığı.
     _iz.kimlikli_yaz(
@@ -639,7 +638,7 @@ def get_session_full_details(session_id: int, db=Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error fetching session details {session_id}: {e}")
-        raise HTTPException(status_code=500, detail="İşlem başarısız")
+        raise HTTPException(status_code=500, detail=ceviri.t("gecmis.hata.islemBasarisiz"))
 
 
 @router.get("/{session_id}/coil_runs.csv")
@@ -653,22 +652,22 @@ def export_coil_runs_csv(session_id: int, db=Depends(get_db)):
         writer = csv.writer(output)
 
         headers = [
-            "Bobin",
-            "Donanim",
-            "Baslangic",
-            "Bitis",
-            "Sure(sn)",
-            "Frekans(Hz)",
-            "Duty(%)",
-            "Faz",
-            "Ayarlanan(mT)",
-            "Ort.Sicaklik(C)",
-            "Maks.Sicaklik(C)",
-            "Ort.Akim(A)",
-            "Ort.Alan(mT)",
-            "Ornek",
+            ceviri.t("gecmis.csv.bobin"),
+            ceviri.t("gecmis.csv.donanim"),
+            ceviri.t("gecmis.csv.baslangic"),
+            ceviri.t("gecmis.csv.bitis"),
+            ceviri.t("gecmis.csv.sureSn"),
+            ceviri.t("gecmis.csv.frekans"),
+            ceviri.t("gecmis.csv.duty"),
+            ceviri.t("gecmis.csv.faz"),
+            ceviri.t("gecmis.csv.ayarlanan"),
+            ceviri.t("gecmis.csv.ortSicaklik"),
+            ceviri.t("gecmis.csv.maksSicaklik"),
+            ceviri.t("gecmis.csv.ortAkim"),
+            ceviri.t("gecmis.csv.ortAlan"),
+            ceviri.t("gecmis.csv.ornek"),
             # CH3 · Y152: SONA eklendi (mevcut sütun sırası değişmez) — ÷5 düzeltilmiş koşunun notu.
-            "Alan notu",
+            ceviri.t("gecmis.csv.alanNotu"),
         ]
         writer.writerow(headers)
 
@@ -710,7 +709,7 @@ def export_coil_runs_csv(session_id: int, db=Depends(get_db)):
         )
     except Exception as e:
         logger.error(f"Error generating coil runs CSV for session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail="İşlem başarısız")
+        raise HTTPException(status_code=500, detail=ceviri.t("gecmis.hata.islemBasarisiz"))
 
 
 @router.get("/{session_id}")
@@ -728,7 +727,7 @@ def get_session_detail(session_id: int, db=Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error fetching session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail="İşlem başarısız")
+        raise HTTPException(status_code=500, detail=ceviri.t("gecmis.hata.islemBasarisiz"))
 
 
 @router.delete("/{session_id}")

@@ -6414,7 +6414,7 @@ async def delete_ai_log_entry(payload: AiLogDeletePayload, request: Request):
         raise HTTPException(status_code=500, detail="Geçmiş veritabanı hazır değil")
     from servers import audit_log as _iz
     from servers.auth import cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
-    from servers.silme_yetkisi import KIMLIKSIZ_DETAY
+    from servers.silme_yetkisi import kimliksiz_detay
 
     # ⚠️ D2.20 (B-3.38 · A-10 · Y83): kapsam OTURUM KİMLİĞİNDEN (jeton; kayıtlı operatör yoksa — Kural 2 — beyan), gövdedeki
     # beyandan DEĞİL. Eskiden beyan edilen e-posta kapsamdı ve sahipsiz kayıtlar da "kendi" sayılıyordu → başka hekimin
@@ -6438,7 +6438,7 @@ async def delete_ai_log_entry(payload: AiLogDeletePayload, request: Request):
             detail={"kanitsiz_beyan": _ham_beyan[:200]} if (_kayitli and _ham_beyan) else None,
         )
         if _kayitli:
-            raise HTTPException(status_code=428, detail=kimliksiz_detayi(KIMLIKSIZ_DETAY))  # Y113
+            raise HTTPException(status_code=428, detail=kimliksiz_detayi(kimliksiz_detay()))  # Y113
         raise HTTPException(
             status_code=400, detail="Silme kapsamı belirsiz: kendi kaydınızı silmek için operatör seçin."
         )
@@ -6479,7 +6479,7 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
         raise HTTPException(status_code=500, detail="Geçmiş veritabanı hazır değil")
     from servers import audit_log as _iz
     from servers.auth import cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
-    from servers.silme_yetkisi import KIMLIKSIZ_DETAY
+    from servers.silme_yetkisi import kimliksiz_detay
 
     # ⚠️ D2.20 (B-3.38 · A-10 · A-56): "kendi" kapsamı OTURUM KİMLİĞİNDEN (jeton; kayıtlı operatör yoksa — Kural 2 — beyan)
     # ve YALNIZ kimliğin kayıtları — sahipsizlere dokunulmaz (eskiden beyan kapsamdı ve sahipsizler de gidiyordu: başka
@@ -6502,7 +6502,7 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
             outcome="reddedildi",
             detail={"kanitsiz_beyan": beyan[:200]} if beyan else None,
         )
-        raise HTTPException(status_code=428, detail=kimliksiz_detayi(KIMLIKSIZ_DETAY))  # Y113
+        raise HTTPException(status_code=428, detail=kimliksiz_detayi(kimliksiz_detay()))  # Y113
     op = None if tum_klinik else (kimlik or None)
     # ⚠️ Y112 (S-B2.4): "Tüm Klinik" TAMAMI yalnız CİHAZIN KENDİ ekranından (loopback; tünel/ters-proxy sayılmaz — A-03 ile
     # aynı) ve kimlikli hekimle. Cihaz DIŞINDAN (LAN cihaz token'ı, tünel) "Tüm Klinik" = kimliğin kayıtları + SAHİPSİZ

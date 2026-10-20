@@ -1,4 +1,10 @@
 {
+  "abonelik": {
+    "mesaj": {
+      "dogrulanmisGerekir": "Araştırma modelleri doğrulanmış abonelik gerektirir (kimlik doğrulama gerekli).",
+      "eklentiGerekir": "Araştırma modelleri Araştırma eklentisi gerektirir."
+    }
+  },
   "ai": {
     "pemf": {
       "gecerlilikHesaplanamadi": "PEMF geçerliliği hesaplanamadı — D/P/E değerleri kullanılmamalı; analizi yineleyin."
@@ -11,6 +17,52 @@
     "arayuzDili": {
       "gecersiz": "Geçersiz dil: \"{{dilKodu}}\". Kullanılabilen diller: tr, en.",
       "yazilamadi": "Dil ayarı kaydedilemedi ({{neden}}). Veri klasörünün yazılabilir olduğunu kontrol edin."
+    }
+  },
+  "gecmis": {
+    "csv": {
+      "alanNotu": "Alan notu",
+      "ayarlanan": "Ayarlanan(mT)",
+      "baslangic": "Baslangic",
+      "bitis": "Bitis",
+      "bobin": "Bobin",
+      "donanim": "Donanim",
+      "durum": "Durum",
+      "duty": "Duty(%)",
+      "faz": "Faz",
+      "frekans": "Frekans(Hz)",
+      "hasta": "Hasta",
+      "hedef": "Hedef",
+      "kayitYok": "Dışa aktarılacak seans kaydı yok.",
+      "maksSicaklik": "Maks.Sicaklik(C)",
+      "mod": "Mod",
+      "notlar": "Notlar",
+      "ornek": "Ornek",
+      "ortAkim": "Ort.Akim(A)",
+      "ortAlan": "Ort.Alan(mT)",
+      "ortSicaklik": "Ort.Sicaklik(C)",
+      "sure": "Sure(dk)",
+      "sureSn": "Sure(sn)",
+      "tarih": "Tarih",
+      "veriYok": "Veri bulunamadi"
+    },
+    "hata": {
+      "gecersizSessionIds": "Geçersiz session_ids",
+      "geriYukleme": "Seans geçmişi okunurken bu cihazda geri yükleme yapıldı ya da sürüyor — tutarsız dosya OLUŞTURULMADI. Geri yükleme bitince dışa aktarmayı yeniden başlatın.",
+      "islemBasarisiz": "İşlem başarısız",
+      "seansSuruyor": "Seans sürüyor — süren tedavinin kaydı silinemez; önce seansı durdurun.",
+      "seansYok": "Seans bulunamadı — zaten silinmiş olabilir; listeyi yenileyin.",
+      "silinecekSecilmedi": "Silinecek seans seçilmedi."
+    },
+    "kimlik": {
+      "disaAktar": "Operatör seçin — tüm seans geçmişini dışa aktarmak için önce üst bardan hangi hekim olduğunuzu seçin.",
+      "notDuzenle": "Operatör seçin — seans notunu düzenlemek için önce üst bardan hangi hekim olduğunuzu seçin."
+    }
+  },
+  "guncelleme": {
+    "hata": {
+      "rollbackUygulanamadi": "rollback uygulanamadi",
+      "uygulanamadi": "guncelleme uygulanamadi"
     }
   },
   "hasta": {
@@ -29,6 +81,57 @@
       "tumunuSilYalnizCihaz": "Tüm hastaları silmek yalnız cihazın kendi ekranından yapılabilir (telefon ya da ağdaki başka bir cihazdan değil)."
     }
   },
+  "jeton": {
+    "mesaj": {
+      "borcTavani": "Kullandıkça öde üyeliğinizde faturalanmamış kullanım sınırına ulaşıldı; yeni yapay zekâ analizi başlatılamadı. Ödemeniz alındığında sınır sıfırlanır. Seans, acil durdurma ve sensör izleme ETKİLENMEZ.",
+      "cevrimdisi": "İnternet bağlantısı yok — yapay zekâ analizi şu an başlatılamadı. Analiz ücreti hesabınızdan çevrimiçi düşüldüğü için internet gerekir; bağlantı gelince yeniden deneyin. Seans, acil durdurma ve sensör izleme ETKİLENMEZ.",
+      "kimlikGerekli": "Ücretli yapay zekâ analizi için hesabınızla giriş yapın (analiz jetonu hesabınızdan düşülür). Seans, acil durdurma ve sensör izleme bundan ETKİLENMEZ.",
+      "yetersiz": "Jeton hakkınız bitti; yeni yapay zekâ analizi başlatılamadı. Seans, acil durdurma ve sensör izleme bundan ETKİLENMEZ. Ek jeton paketiyle hemen devam edebilirsiniz."
+    }
+  },
+  "kimlik": {
+    "dbOkunamiyor": "Cihazın kimlik veritabanı okunamıyor — kayıtların hangi hekime ait olduğu doğrulanamıyor; değerlendirme, silme ve kimlik isteyen kayıt işlemleri şimdilik yapılamaz. Çare: uygulamayı kapatıp yeniden açın; sorun sürerse veri klasöründeki auth_users.db dosyasının erişim iznini ve diski teknik desteğe denetletin. ACİL DURDUR ve STOP etkilenmez.",
+    "hata": {
+      "cihazdanYapilir": "Bu işlem cihazın kendisinden ya da eşleştirilmiş bir istemciden yapılabilir. Yerel ağda olmak yeterli değildir.",
+      "epostaKayitli": "Bu e-posta zaten kayıtlı. PIN'i değiştirmek için mevcut PIN'i girin.",
+      "epostaSifreHatali": "E-posta veya şifre hatalı.",
+      "gecersizEposta": "Geçerli bir e-posta adresi girin.",
+      "hesapYok": "Bu e-posta ile kayıtlı bir hesap yok. Yeni hesap için Kayıt Ol'u kullanın.",
+      "operatorKaydedilemedi": "Operatör kaydedilemedi.",
+      "operatorKilitli": "Çok fazla hatalı deneme — bu operatör geçici olarak kilitlendi.",
+      "operatorYok": "Operatör bulunamadı.",
+      "pinHane": "PIN 6 haneli bir sayı olmalı.",
+      "pinHatali": "PIN hatalı.",
+      "sifreHatali": "Şifre hatalı. Lütfen tekrar deneyin.",
+      "sifreKurali": "Şifre en az 8 karakter olmalı; en az bir büyük harf, bir küçük harf ve bir rakam içermeli.",
+      "yeniSifreKurali": "Yeni şifre en az 8 karakter olmalı; bir büyük harf, bir küçük harf ve bir rakam içermeli.",
+      "yoneticiKodu": "Yönetici kodu hatalı. Kodu cihaz Ayarlar'ında veya ProgramData'daki api_token.txt'de bulabilirsiniz."
+    }
+  },
+  "onay": {
+    "hata": {
+      "onayKullanildi": "Bu onay zaten kullanıldı. Yeni öneri alın.",
+      "onaySuresiDoldu": "Onayın süresi doldu; yeniden öneri alın.",
+      "onayYok": "Onay bulunamadı. Önce AI önerisini alıp onaylayın.",
+      "onaylanmadi": "Öneri henüz onaylanmadı.",
+      "oneriSuresiDoldu": "Önerinin süresi doldu; yeniden öneri alın.",
+      "oneriYok": "Öneri bulunamadı (süresi dolmuş olabilir).",
+      "reddedildi": "Bu öneri REDDEDİLDİ; uygulanamaz.",
+      "zatenKarar": "Bu öneri zaten karara bağlanmış: {{durum}}"
+    }
+  },
+  "oturum": {
+    "hata": {
+      "accessTokenGerekli": "access_token gerekli",
+      "alanlarBuyuk": "Oturum alanlari cok buyuk",
+      "cokFazlaBasarisiz": "Cok fazla basarisiz deneme. Lutfen biraz bekleyin.",
+      "cokFazlaDeneme": "Cok fazla deneme, biraz bekleyin",
+      "eslestirmeKodu": "Eslestirme kodu hatali",
+      "masaustuYerel": "Masaustu oturumu yalniz bu bilgisayardan (127.0.0.1) yonetilebilir",
+      "tokenAlinamadi": "token alinamadi",
+      "tokenYerel": "Token yalniz yerel agdan alinabilir"
+    }
+  },
   "pdf": {
     "altBilgi": {
       "tarihli": "{{metin}} Rapor tarihi: {{tarih}}",
@@ -43,6 +146,48 @@
       "raporTuru": "Rapor Türü:",
       "seansGecmisiRaporu": "Tedavi Geçmişi Raporu",
       "toplamSeans": "Toplam Seans:"
+    }
+  },
+  "seans": {
+    "hata": {
+      "aiSure": "AI seansının süresi hekim onayının mührüdür — buradan DEĞİŞTİRİLMEDİ (yeni öneri/onay gerekir).",
+      "aktifYok": "Aktif seans yok — güncellenecek parametre yok.",
+      "cokHasta": "Bu adla birden çok hastanın yakın tarihli seansı var — not hangi hastanın olduğu belirlenemediği için kaydedilmedi. Notunuz ekranda duruyor; uygulamayı güncelleyin (yeni sürüm notu seansın kendisine bağlar).",
+      "dbHazirDegil": "Tedavi kaydı veritabanı hazır değil — not kaydedilmedi.",
+      "kayitYok": "Seans kaydı bulunamadı — not kaydedilmedi.",
+      "notYazilamadi": "Not kaydedilemedi — kayıt veritabanına yazılamadı (kilitli ya da disk dolu olabilir). Notunuz ekranda duruyor; birazdan tekrar deneyin.",
+      "seansBelirsiz": "Notun ait olduğu seans belirlenemedi — not kaydedilmedi (yeni seans kaydı AÇILMAZ).",
+      "seansDegisti": "Seans bu sırada değişti — süre değişikliği UYGULANMADI.",
+      "sureEnAz": "Kalan süre en az 1 dakika olmalı — süre değişikliği UYGULANMADI."
+    },
+    "kimlik": {
+      "guncelleEki": " Uygulamanız hekim seçimi sunmuyorsa güncelleyin.",
+      "notKaydet": "Operatör seçin — seans notunu kaydetmek için hangi hekim olduğunuzu seçin; notunuz ekranda duruyor."
+    }
+  },
+  "silme": {
+    "kimliksiz": "Operatör seçin — silmek için önce üst bardan hangi hekim olduğunuzu seçin.",
+    "yabanci_one": "Yalnız kendi ve sahipsiz kayıtları silebilirsiniz — seçimdeki {{count}} kayıt başka bir hekime ait; hiçbir kayıt silinmedi.",
+    "yabanci_other": "Yalnız kendi ve sahipsiz kayıtları silebilirsiniz — seçimdeki {{count}} kayıt başka bir hekime ait; hiçbir kayıt silinmedi."
+  },
+  "sistem": {
+    "hata": {
+      "anonimGeriAlma": "Aynı istekte anonimleştirme onayı ve geri alması olmaz.",
+      "ayarKaydedilemedi": "Ayar kaydedilemedi.",
+      "ayarOkunamadi": "Ayar okunamadı.",
+      "dbHazirDegil": "Tıbbi kayıt veritabanı hazır değil; yeni seans başlatılamaz.",
+      "dbYanitsiz": "Tıbbi kayıt veritabanı yanıt vermiyor",
+      "dbYanitsizAyrinti": "{{onek}} (disk ya da ağ sürücüsü takılmış olabilir); durum bilinmiyor.",
+      "denetimOkunamadi": "Denetim izi okunamadı.",
+      "destekPaketi": "Destek paketi oluşturulamadı.",
+      "kurtarmaDosyaYok": "Kurtarma kodu dosyası bu cihazda yok: ya henüz yazılmadı (kurtarılacak anahtar varsa bir sonraki yedek turunda yazılır; yazılamıyorsa günlükte 'kurtarma kodu dosyasi YAZILAMADI' satırına bakın) ya da kod dışarı alındıktan sonra silindi.",
+      "kurtarmaEkran": "Kurtarma kodu yalnızca cihazın kendi ekranından görüntülenebilir.",
+      "kurtarmaOkunamadi": "Kurtarma kodu okunamadı.",
+      "maskelenecekOkunamadi": "Maskelenecek kayıt sayısı okunamadı — onay kaydedilmedi. Tedavi veritabanını kontrol edip yeniden deneyin.",
+      "onayKaydedilemedi": "Onay kaydedilemedi.",
+      "onaySaklamaSuresi": "Onay, ekranın gösterdiği saklama süresiyle birlikte gönderilmeli. Ekranı yenileyin, etkilenecek kayıt sayısını görüp yeniden onaylayın — onay kaydedilmedi.",
+      "saklamaAraligi": "Saklama süresi 0–36500 gün aralığında olmalı.",
+      "saklamaDegisti": "Saklama süresi bu ekran açıldıktan sonra değişti ({{gun}} gün). Ekranı yenileyin, etkilenecek kayıt sayısını görüp yeniden onaylayın — onay kaydedilmedi."
     }
   },
   "tarih": {

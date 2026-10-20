@@ -27,6 +27,8 @@ import threading
 import time
 import uuid
 
+from utils import ceviri
+
 # Onay ömrü. Kısa tutuldu: hekim öneriyi görüp karar verip başlatana kadar dakikalar yeter.
 TTL_S = 600.0
 
@@ -84,12 +86,12 @@ def _decide(pid: str, status: str, operator: str, reason: str) -> dict:
     with _lock:
         r = _store.get(str(pid or ""))
         if not r:
-            raise KeyError("Öneri bulunamadı (süresi dolmuş olabilir).")
+            raise KeyError(ceviri.t("onay.hata.oneriYok"))
         if r["status"] != PENDING:
-            raise ValueError(f"Bu öneri zaten karara bağlanmış: {r['status']}")
+            raise ValueError(ceviri.t("onay.hata.zatenKarar", durum=r['status']))
         if now > r["expires_at"]:
             r["status"] = EXPIRED
-            raise ValueError("Önerinin süresi doldu; yeniden öneri alın.")
+            raise ValueError(ceviri.t("onay.hata.oneriSuresiDoldu"))
         r["status"] = status
         r["decided_at"] = now
         r["operator"] = str(operator or "")
@@ -109,16 +111,16 @@ def _kullanilabilir_locked(pid: str, now: float) -> dict:
     """`_lock` ALTINDA: kayıt tüketilebilir mi — değilse ValueError (metinler `consume` ile aynı)."""
     r = _store.get(str(pid or ""))
     if not r:
-        raise ValueError("Onay bulunamadı. Önce AI önerisini alıp onaylayın.")
+        raise ValueError(ceviri.t("onay.hata.onayYok"))
     if r["status"] == CONSUMED:
-        raise ValueError("Bu onay zaten kullanıldı. Yeni öneri alın.")
+        raise ValueError(ceviri.t("onay.hata.onayKullanildi"))
     if r["status"] == REJECTED:
-        raise ValueError("Bu öneri REDDEDİLDİ; uygulanamaz.")
+        raise ValueError(ceviri.t("onay.hata.reddedildi"))
     if r["status"] == PENDING:
-        raise ValueError("Öneri henüz onaylanmadı.")
+        raise ValueError(ceviri.t("onay.hata.onaylanmadi"))
     if now > r["expires_at"]:
         r["status"] = EXPIRED
-        raise ValueError("Onayın süresi doldu; yeniden öneri alın.")
+        raise ValueError(ceviri.t("onay.hata.onaySuresiDoldu"))
     return r
 
 

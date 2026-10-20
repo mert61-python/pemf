@@ -8,6 +8,7 @@ import logging
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from utils import ceviri
 
 router = APIRouter(tags=["update"])
 logger = logging.getLogger("update_router")
@@ -53,7 +54,7 @@ async def update_apply(request: Request):
         return await asyncio.to_thread(apply_update)
     except Exception:
         logger.exception("update apply hatasi")
-        return JSONResponse(status_code=500, content={"detail": "guncelleme uygulanamadi"})
+        return JSONResponse(status_code=500, content={"detail": ceviri.t("guncelleme.hata.uygulanamadi")})
 
 
 @router.post("/api/update/rollback")
@@ -67,4 +68,4 @@ async def update_rollback(request: Request):
         return await asyncio.to_thread(rollback)
     except Exception:
         logger.exception("update rollback hatasi")
-        return JSONResponse(status_code=500, content={"detail": "rollback uygulanamadi"})
+        return JSONResponse(status_code=500, content={"detail": ceviri.t("guncelleme.hata.rollbackUygulanamadi")})

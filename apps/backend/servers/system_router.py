@@ -22,6 +22,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
+from utils import ceviri
 from utils.path_utils import HARDWARE_VERSION  # TEK donanim-surumu kaynagi (M6); leaf util, circular yok
 
 router = APIRouter(tags=["system"])
@@ -197,15 +198,10 @@ async def health_check(request: Request):
     if not db_ready:
         try:
             _disk = str(_hazir_sebep or "") if str(_hazir_sebep or "").startswith("Disk boş alanı kritik") else ""
-            _yanitsiz = str(_hazir_sebep or "") if str(_hazir_sebep or "").startswith(_DB_YANITSIZ) else ""
-            db_sebep = (
-                _api._db_acilis_hatasi()
-                or _disk
-                or _yanitsiz
-                or "Tıbbi kayıt veritabanı hazır değil; yeni seans başlatılamaz."
-            )
+            _yanitsiz = str(_hazir_sebep or "") if str(_hazir_sebep or "").startswith(_db_yanitsiz()) else ""
+            db_sebep = _api._db_acilis_hatasi() or _disk or _yanitsiz or ceviri.t("sistem.hata.dbHazirDegil")
         except Exception:
-            db_sebep = "Tıbbi kayıt veritabanı hazır değil; yeni seans başlatılamaz."
+            db_sebep = ceviri.t("sistem.hata.dbHazirDegil")
     # ── DENETİM 2026-08-04 (P2 #13): LAUNCHER NONCE'U ────────────────────────────────────
     # SORUN: launcher `find_free_port` ile portu bind edip HEMEN BIRAKIYOR; frozen backend'in
     # o portu gerçekten bind etmesi onlarca saniye sürüyor. Bu pencerede loopback'e bağlanabilen
@@ -329,8 +325,12 @@ async def health_check(request: Request):
 _veri_agda_ucusta = None  # (anahtar, concurrent.futures.Future) — sürmekte olan TEK sürücü türü sorgusu
 _veri_agda_kilit = threading.Lock()
 
+
 #: A-8 / A-9: süre sınırında yanıt gelmezse sağlığın söylediği neden (yol / istisna içermez — uç auth-muaf ve tünelden erişilebilir).
-_DB_YANITSIZ = "Tıbbi kayıt veritabanı yanıt vermiyor"
+def _db_yanitsiz() -> str:
+    return ceviri.t("sistem.hata.dbYanitsiz")
+
+
 _saglik_db_ucusta = None  # (anahtar, concurrent.futures.Future) — sürmekte olan TEK sağlık DB sorgusu
 _saglik_db_kilit = threading.Lock()
 
@@ -380,7 +380,7 @@ async def _saglik_db_durumu_dongu_disi(_api, sinir_sn: float = 2.5) -> tuple:
     try:
         return await asyncio.wait_for(asyncio.shield(asyncio.wrap_future(f)), timeout=sinir_sn)
     except Exception:
-        return None, None, f"{_DB_YANITSIZ} (disk ya da ağ sürücüsü takılmış olabilir); durum bilinmiyor."
+        return None, None, ceviri.t("sistem.hata.dbYanitsizAyrinti", onek=_db_yanitsiz())
 
 
 async def _veri_koku_agda_dongu_disi(_api, sinir_sn: float = 2.0):
@@ -773,7 +773,7 @@ async def recovery_code(request: Request):
     from fastapi import HTTPException
 
     if not _loopback_mu(request):
-        raise HTTPException(status_code=403, detail="Kurtarma kodu yalnızca cihazın kendi ekranından görüntülenebilir.")
+        raise HTTPException(status_code=403, detail=ceviri.t("sistem.hata.kurtarmaEkran"))
     from pathlib import Path
 
     from utils.backup_recovery import CODE_FILE_NAME
@@ -786,15 +786,13 @@ async def recovery_code(request: Request):
         # alıp sildikten sonra da yok olabilir (o durumda geri yazılmaz).
         raise HTTPException(
             status_code=404,
-            detail="Kurtarma kodu dosyası bu cihazda yok: ya henüz yazılmadı (kurtarılacak anahtar varsa bir sonraki yedek turunda "
-            "yazılır; yazılamıyorsa günlükte 'kurtarma kodu dosyasi YAZILAMADI' satırına bakın) ya da kod dışarı alındıktan sonra "
-            "silindi.",
+            detail=ceviri.t("sistem.hata.kurtarmaDosyaYok"),
         )
     try:
         return {"status": "success", "codeFilePath": str(yol), "content": yol.read_text(encoding="utf-8")}
     except Exception:
         logging.getLogger("system_router").exception("kurtarma kodu okunamadi")
-        raise HTTPException(status_code=500, detail="Kurtarma kodu okunamadı.")
+        raise HTTPException(status_code=500, detail=ceviri.t("sistem.hata.kurtarmaOkunamadi"))
 
 
 @router.post("/api/system/recovery-ack")
@@ -841,7 +839,7 @@ async def recovery_ack(request: Request):
         await asyncio.to_thread(_yaz)
     except Exception:
         logging.getLogger("system_router").exception("kurtarma onayi yazilamadi")
-        raise HTTPException(status_code=500, detail="Onay kaydedilemedi.")
+        raise HTTPException(status_code=500, detail=ceviri.t("sistem.hata.onayKaydedilemedi"))
     return {"status": "success"}
 
 
@@ -913,7 +911,7 @@ async def retention_durumu(request: Request):
         }
     except Exception:
         logger.exception("retention durumu okunamadi")
-        raise HTTPException(status_code=500, detail="Ayar okunamadı.")
+        raise HTTPException(status_code=500, detail=ceviri.t("sistem.hata.ayarOkunamadi"))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -946,7 +944,7 @@ async def denetim_olaylari(request: Request, limit: int = 200, event_type: str =
         return await asyncio.to_thread(_oku)
     except Exception:
         logger.exception("denetim izi okunamadi")
-        raise HTTPException(status_code=500, detail="Denetim izi okunamadı.")
+        raise HTTPException(status_code=500, detail=ceviri.t("sistem.hata.denetimOkunamadi"))
 
 
 @router.post("/api/support/bundle")
@@ -980,7 +978,7 @@ async def destek_paketi(request: Request):
         veri, ozet = await _a.to_thread(olustur, _Path(_api._app_data_dir()))
     except Exception:
         logger.exception("destek paketi olusturulamadi")
-        raise HTTPException(status_code=500, detail="Destek paketi oluşturulamadı.")
+        raise HTTPException(status_code=500, detail=ceviri.t("sistem.hata.destekPaketi"))
     # Paketin üretilmesi de bir dışa-aktarma olayıdır: denetim izine yazılır.
     try:
         from servers import audit_log as _iz
@@ -1062,9 +1060,9 @@ async def retention_ayarla(payload: _RetentionAyar, request: Request):
 
     enforce_privileged(request)
     if payload.anonymize_acknowledge and payload.anonymize_revoke:
-        raise HTTPException(status_code=400, detail="Aynı istekte anonimleştirme onayı ve geri alması olmaz.")
+        raise HTTPException(status_code=400, detail=ceviri.t("sistem.hata.anonimGeriAlma"))
     if payload.days is not None and (payload.days < 0 or payload.days > 36500):
-        raise HTTPException(status_code=400, detail="Saklama süresi 0–36500 gün aralığında olmalı.")
+        raise HTTPException(status_code=400, detail=ceviri.t("sistem.hata.saklamaAraligi"))
     try:
         # D2.55 (Ö.4-Y8): süre ve onay yazımları da olay döngüsü DIŞINDA — eskiden döngüde senkron yazılıyordu (D2.54 yalnız
         # anonimleştirme onayını taşımıştı); tedavi DB'si kilitliyken döngü donup ACİL DURDUR bekliyordu.
@@ -1108,19 +1106,17 @@ async def retention_ayarla(payload: _RetentionAyar, request: Request):
         if s.get("gun_yok"):
             raise HTTPException(
                 status_code=409,
-                detail="Onay, ekranın gösterdiği saklama süresiyle birlikte gönderilmeli. Ekranı yenileyin, etkilenecek kayıt sayısını "
-                "görüp yeniden onaylayın — onay kaydedilmedi.",
+                detail=ceviri.t("sistem.hata.onaySaklamaSuresi"),
             )
         if "cakisma" in s:
             raise HTTPException(
                 status_code=409,
-                detail=f"Saklama süresi bu ekran açıldıktan sonra değişti ({s['cakisma']} gün). Ekranı yenileyin, etkilenecek "
-                "kayıt sayısını görüp yeniden onaylayın — onay kaydedilmedi.",
+                detail=ceviri.t("sistem.hata.saklamaDegisti", gun=s['cakisma']),
             )
         if s.get("sayilamadi"):
             raise HTTPException(
                 status_code=503,
-                detail="Maskelenecek kayıt sayısı okunamadı — onay kaydedilmedi. Tedavi veritabanını kontrol edip yeniden deneyin.",
+                detail=ceviri.t("sistem.hata.maskelenecekOkunamadi"),
             )
         if payload.days is not None:
             _iz.kimlikli_yaz(
@@ -1191,7 +1187,7 @@ async def retention_ayarla(payload: _RetentionAyar, request: Request):
         raise
     except Exception:
         logger.exception("retention ayarlanamadi")
-        raise HTTPException(status_code=500, detail="Ayar kaydedilemedi.")
+        raise HTTPException(status_code=500, detail=ceviri.t("sistem.hata.ayarKaydedilemedi"))
 
 
 @router.get("/api/jeton/bakiye")

@@ -1,4 +1,10 @@
 {
+  "abonelik": {
+    "mesaj": {
+      "dogrulanmisGerekir": "Research models require a verified subscription (authentication required).",
+      "eklentiGerekir": "Research models require the Research add-on."
+    }
+  },
   "ai": {
     "pemf": {
       "gecerlilikHesaplanamadi": "PEMF validity could not be calculated — D/P/E values must not be used; repeat the analysis."
@@ -11,6 +17,52 @@
     "arayuzDili": {
       "gecersiz": "Invalid language: \"{{dilKodu}}\". Available languages: tr, en.",
       "yazilamadi": "The language setting could not be saved ({{neden}}). Check that the data folder is writable."
+    }
+  },
+  "gecmis": {
+    "csv": {
+      "alanNotu": "Field note",
+      "ayarlanan": "Set(mT)",
+      "baslangic": "Start",
+      "bitis": "End",
+      "bobin": "Coil",
+      "donanim": "Hardware",
+      "durum": "Status",
+      "duty": "Duty(%)",
+      "faz": "Phase",
+      "frekans": "Frequency(Hz)",
+      "hasta": "Patient",
+      "hedef": "Target",
+      "kayitYok": "There are no session records to export.",
+      "maksSicaklik": "Max.Temperature(C)",
+      "mod": "Mode",
+      "notlar": "Notes",
+      "ornek": "Samples",
+      "ortAkim": "Avg.Current(A)",
+      "ortAlan": "Avg.Field(mT)",
+      "ortSicaklik": "Avg.Temperature(C)",
+      "sure": "Duration(min)",
+      "sureSn": "Duration(s)",
+      "tarih": "Date",
+      "veriYok": "No data found"
+    },
+    "hata": {
+      "gecersizSessionIds": "Invalid session_ids",
+      "geriYukleme": "A restore was performed on this device while the session history was being read, or one is in progress — no inconsistent file was CREATED. Restart the export once the restore has finished.",
+      "islemBasarisiz": "The operation failed",
+      "seansSuruyor": "The session is running — the record of an ongoing session cannot be deleted; stop the session first.",
+      "seansYok": "Session not found — it may already have been deleted; refresh the list.",
+      "silinecekSecilmedi": "No session was selected for deletion."
+    },
+    "kimlik": {
+      "disaAktar": "Select an operator — to export the whole session history, first choose which veterinarian you are from the top bar.",
+      "notDuzenle": "Select an operator — to edit the session note, first choose which veterinarian you are from the top bar."
+    }
+  },
+  "guncelleme": {
+    "hata": {
+      "rollbackUygulanamadi": "The rollback could not be applied",
+      "uygulanamadi": "The update could not be applied"
     }
   },
   "hasta": {
@@ -29,6 +81,57 @@
       "tumunuSilYalnizCihaz": "Deleting all patients can only be done from the device's own screen (not from a phone or another device on the network)."
     }
   },
+  "jeton": {
+    "mesaj": {
+      "borcTavani": "Your pay as you go membership has reached its unbilled usage limit; a new AI analysis could not be started. The limit resets when your payment is received. Sessions, emergency stop and sensor monitoring are NOT affected.",
+      "cevrimdisi": "No internet connection — the AI analysis could not be started right now. Because the analysis fee is deducted from your account online, the internet is required; try again when the connection is back. Sessions, emergency stop and sensor monitoring are NOT affected.",
+      "kimlikGerekli": "Sign in with your account for paid AI analysis (the analysis credit is deducted from your account). Sessions, emergency stop and sensor monitoring are NOT affected by this.",
+      "yetersiz": "Your credit allowance has run out; a new AI analysis could not be started. Sessions, emergency stop and sensor monitoring are NOT affected by this. You can continue right away with an extra credit pack."
+    }
+  },
+  "kimlik": {
+    "dbOkunamiyor": "The device's identity database cannot be read — it cannot be verified which veterinarian the records belong to; evaluation, deletion and other record actions that require identity cannot be performed for now. Remedy: close and reopen the application; if the problem continues, have the access permission of auth_users.db in the data folder and the disk checked by technical support. EMERGENCY STOP and STOP are not affected.",
+    "hata": {
+      "cihazdanYapilir": "This action can be performed from the device itself or from a paired client. Being on the local network is not enough.",
+      "epostaKayitli": "This email is already registered. Enter the current PIN to change the PIN.",
+      "epostaSifreHatali": "Wrong email or password.",
+      "gecersizEposta": "Enter a valid email address.",
+      "hesapYok": "There is no account registered with this email. Use Sign Up to create a new account.",
+      "operatorKaydedilemedi": "The operator could not be saved.",
+      "operatorKilitli": "Too many wrong attempts — this operator is temporarily locked.",
+      "operatorYok": "Operator not found.",
+      "pinHane": "The PIN must be a 6-digit number.",
+      "pinHatali": "Wrong PIN.",
+      "sifreHatali": "Wrong password. Please try again.",
+      "sifreKurali": "The password must be at least 8 characters and contain at least one uppercase letter, one lowercase letter and one digit.",
+      "yeniSifreKurali": "The new password must be at least 8 characters and contain one uppercase letter, one lowercase letter and one digit.",
+      "yoneticiKodu": "Wrong administrator code. You can find the code in the device Settings or in api_token.txt in ProgramData."
+    }
+  },
+  "onay": {
+    "hata": {
+      "onayKullanildi": "This approval has already been used. Get a new recommendation.",
+      "onaySuresiDoldu": "The approval has expired; get a new recommendation.",
+      "onayYok": "Approval not found. First get the AI recommendation and approve it.",
+      "onaylanmadi": "The recommendation has not been approved yet.",
+      "oneriSuresiDoldu": "The recommendation has expired; get a new recommendation.",
+      "oneriYok": "Recommendation not found (it may have expired).",
+      "reddedildi": "This recommendation was REJECTED; it cannot be applied.",
+      "zatenKarar": "This recommendation has already been decided: {{durum}}"
+    }
+  },
+  "oturum": {
+    "hata": {
+      "accessTokenGerekli": "access_token is required",
+      "alanlarBuyuk": "The session fields are too large",
+      "cokFazlaBasarisiz": "Too many failed attempts. Please wait a moment.",
+      "cokFazlaDeneme": "Too many attempts, please wait a moment",
+      "eslestirmeKodu": "The pairing code is wrong",
+      "masaustuYerel": "The desktop session can only be managed from this computer (127.0.0.1)",
+      "tokenAlinamadi": "The token could not be obtained",
+      "tokenYerel": "The token can only be obtained from the local network"
+    }
+  },
   "pdf": {
     "altBilgi": {
       "tarihli": "{{metin}} Report date: {{tarih}}",
@@ -43,6 +146,48 @@
       "raporTuru": "Report Type:",
       "seansGecmisiRaporu": "Session History Report",
       "toplamSeans": "Total Sessions:"
+    }
+  },
+  "seans": {
+    "hata": {
+      "aiSure": "The duration of an AI session is the seal of the veterinarian's approval — it was NOT CHANGED from here (a new recommendation/approval is required).",
+      "aktifYok": "No active session — there are no parameters to update.",
+      "cokHasta": "More than one patient with this name has a recent session — the note was not saved because it cannot be determined which patient it belongs to. Your note is still on screen; update the app (the new version attaches the note to the session itself).",
+      "dbHazirDegil": "The treatment record database is not ready — the note was not saved.",
+      "kayitYok": "Session record not found — the note was not saved.",
+      "notYazilamadi": "The note could not be saved — the record could not be written to the database (it may be locked or the disk may be full). Your note is still on screen; try again in a moment.",
+      "seansBelirsiz": "The session the note belongs to could not be determined — the note was not saved (a new session record is NOT opened).",
+      "seansDegisti": "The session changed in the meantime — the duration change was NOT APPLIED.",
+      "sureEnAz": "The remaining time must be at least 1 minute — the duration change was NOT APPLIED."
+    },
+    "kimlik": {
+      "guncelleEki": " If your app does not offer veterinarian selection, update it.",
+      "notKaydet": "Select an operator — to save the session note, choose which veterinarian you are; your note is still on screen."
+    }
+  },
+  "silme": {
+    "kimliksiz": "Select an operator — to delete, first choose which veterinarian you are from the top bar.",
+    "yabanci_one": "You can only delete your own and ownerless records — {{count}} of the selected records belongs to another veterinarian; no records were deleted.",
+    "yabanci_other": "You can only delete your own and ownerless records — {{count}} of the selected records belong to another veterinarian; no records were deleted."
+  },
+  "sistem": {
+    "hata": {
+      "anonimGeriAlma": "Anonymization confirmation and its rollback cannot be in the same request.",
+      "ayarKaydedilemedi": "The setting could not be saved.",
+      "ayarOkunamadi": "The setting could not be read.",
+      "dbHazirDegil": "The medical record database is not ready; a new session cannot be started.",
+      "dbYanitsiz": "The medical record database is not responding",
+      "dbYanitsizAyrinti": "{{onek}} (the disk or a network drive may be stuck); the status is unknown.",
+      "denetimOkunamadi": "The audit trail could not be read.",
+      "destekPaketi": "The support package could not be created.",
+      "kurtarmaDosyaYok": "The recovery code file is not on this device: either it has not been written yet (if there is a key to recover, it is written in the next backup round; if it cannot be written, look for the line 'kurtarma kodu dosyasi YAZILAMADI' in the log) or it was deleted after the code was taken out.",
+      "kurtarmaEkran": "The recovery code can only be viewed from the device's own screen.",
+      "kurtarmaOkunamadi": "The recovery code could not be read.",
+      "maskelenecekOkunamadi": "The number of records to be masked could not be read — the confirmation was not saved. Check the treatment database and try again.",
+      "onayKaydedilemedi": "The confirmation could not be saved.",
+      "onaySaklamaSuresi": "The confirmation must be sent together with the retention period shown on the screen. Refresh the screen, see the number of affected records and confirm again — the confirmation was not saved.",
+      "saklamaAraligi": "The retention period must be between 0 and 36500 days.",
+      "saklamaDegisti": "The retention period changed after this screen was opened ({{gun}} days). Refresh the screen, see the number of affected records and confirm again — the confirmation was not saved."
     }
   },
   "tarih": {

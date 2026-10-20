@@ -274,7 +274,7 @@
    "sira": 10,
    "kritik": false,
    "aciklama": "yönlendirici hata iletileri (hasta, geçmiş, seans, kimlik, sistem, güncelleme, jeton)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 160,
    "dosyaSayisi": 14
   },
@@ -3050,7 +3050,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10a-yonlendirici",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 8,
    "kritik": false,
    "muaf": [],
@@ -3061,10 +3061,35 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10a-yonlendirici",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 8,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Library",
+     "gerekce": "dosya yolu bileşeni (macOS dizin adı) — metin değil"
+    },
+    {
+     "metin": "Application Support",
+     "gerekce": "dosya yolu bileşeni (macOS dizin adı) — metin değil"
+    },
+    {
+     "metin": "kanıtsız beyan REDDEDİLİYOR",
+     "gerekce": "günlük etiketi (logger) — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "kimliksiz istek REDDEDİLİYOR",
+     "gerekce": "günlük etiketi (logger) — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "kayıtlı operatör listesi okunamadı — sahiplik fail-closed",
+     "gerekce": "günlük etiketi (logger) — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "operatör adı YAZILMIYOR",
+     "gerekce": "günlük etiketi (logger) — geliştirici içindir, Türkçe kalır"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -3072,7 +3097,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10a-yonlendirici",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 25,
    "kritik": false,
    "muaf": [],
@@ -3083,10 +3108,23 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10a-yonlendirici",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 5,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Entitlement",
+     "gerekce": "tür açıklaması (Entitlement) — metin değil"
+    },
+    {
+     "metin": "Entitlement | None",
+     "gerekce": "tür açıklaması (Entitlement | None) — metin değil"
+    },
+    {
+     "metin": "Bearer {{token}}",
+     "gerekce": "HTTP başlığı (Bearer) — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -3094,10 +3132,35 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10a-yonlendirici",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 43,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "report_{{deger1}}_{{deger2}}.pdf",
+     "gerekce": "indirilen dosya adı (veri) — dilden bağımsız"
+    },
+    {
+     "metin": "PEMF_Rapor_{{deger1}}_seans.pdf",
+     "gerekce": "indirilen dosya adı (veri) — dilden bağımsız"
+    },
+    {
+     "metin": "attachment; filename=PEMF_History.csv",
+     "gerekce": "HTTP başlığı (dosya adı) — metin değil"
+    },
+    {
+     "metin": "patient_report_{{deger1}}.pdf",
+     "gerekce": "indirilen dosya adı (veri) — dilden bağımsız"
+    },
+    {
+     "metin": "Session not found",
+     "gerekce": "İngilizce geliştirici iletisi (iki dilde aynı)"
+    },
+    {
+     "metin": "attachment; filename=PEMF_Session_{{session_id}}_Coils.csv",
+     "gerekce": "HTTP başlığı (dosya adı) — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -3105,10 +3168,51 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10a-yonlendirici",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 15,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "int | None",
+     "gerekce": "tür açıklaması — metin değil"
+    },
+    {
+     "metin": "Callable[[], Karar]",
+     "gerekce": "tür açıklaması — metin değil"
+    },
+    {
+     "metin": "tuple[Karar, Callable[[], Karar] | None]",
+     "gerekce": "tür açıklaması — metin değil"
+    },
+    {
+     "metin": "str | None",
+     "gerekce": "tür açıklaması — metin değil"
+    },
+    {
+     "metin": "jeton: supabase yapilandirmasi/token yok",
+     "gerekce": "iç hata iletisi (yakalanır; günlüğe gider) — kullanıcıya gösterilmez"
+    },
+    {
+     "metin": "Bearer",
+     "gerekce": "HTTP başlığı (Bearer) — metin değil"
+    },
+    {
+     "metin": "bool | _KesinRed",
+     "gerekce": "tür açıklaması — metin değil"
+    },
+    {
+     "metin": "threading.Thread | None",
+     "gerekce": "tür açıklaması — metin değil"
+    },
+    {
+     "metin": "Callable[[], Karar] | None",
+     "gerekce": "tür açıklaması — metin değil"
+    },
+    {
+     "metin": "jeton: bakiye okunamadi (cevrimdisi)",
+     "gerekce": "iç hata iletisi (yakalanır; günlüğe gider) — kullanıcıya gösterilmez"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -3116,10 +3220,15 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10a-yonlendirici",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "bos e-posta icin jeton uretilemez",
+     "gerekce": "iç hata iletisi (yakalanır) — kullanıcıya gösterilmez"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -3143,10 +3252,19 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10a-yonlendirici",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 13,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Manuel",
+     "gerekce": "DB'ye yazılan seans modu değeri (veri) — çevrilmez"
+    },
+    {
+     "metin": "dk (kalan)",
+     "gerekce": "DB'ye yazılan alan birimi etiketi (veri) — çevrilmez"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -3154,7 +3272,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10a-yonlendirici",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -3165,7 +3283,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10a-yonlendirici",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 2,
    "kritik": false,
    "muaf": [],
@@ -3176,10 +3294,27 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10a-yonlendirici",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 21,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "pemf_seans_profil(profil, treatment_mode) = ?",
+     "gerekce": "geliştirici iç iletisi (günlük / iddia) — kullanıcıya gösterilmez"
+    },
+    {
+     "metin": "Manuel",
+     "gerekce": "DB'ye yazılan seans modu değeri (veri) — çevrilmez"
+    },
+    {
+     "metin": "Onaylanan KURTARMA-KODU.txt iceriginin parmak izi (kod degisirse onay gecersiz)",
+     "gerekce": "DB'ye yazılan ayar açıklaması (veri) — çevrilmez"
+    },
+    {
+     "metin": "Operator kurtarma kodunu makine disina kopyaladigini onayladi",
+     "gerekce": "DB'ye yazılan ayar açıklaması (veri) — çevrilmez"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -3187,10 +3322,15 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10a-yonlendirici",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 3,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "update_manager yok",
+     "gerekce": "geliştirici iletisi (güncelleme yöneticisi yok) — kullanıcıya gösterilmez"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -3201,7 +3341,16 @@
    "durum": "muaf",
    "metin": 0,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "ceviri: katalogda olmayan anahtar '{{anahtar}}'",
+     "gerekce": "geliştirici iç hata iletisi (KeyError) — kullanıcıya gösterilmez"
+    },
+    {
+     "metin": "ceviri: '{{anahtar}}' için '{{ad}}' yer tutucusu verilmedi",
+     "gerekce": "geliştirici iç hata iletisi (KeyError) — kullanıcıya gösterilmez"
+    }
+   ],
    "birlesikIstisna": [],
    "not": "I18N altyapısı — kullanıcı metni katalogda; buradaki dizgiler geliştirici iletisi / dil kodu (KATI kipte test hatası)"
   },

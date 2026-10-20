@@ -16,6 +16,8 @@ import secrets
 import sys
 from pathlib import Path
 
+from utils import ceviri
+
 logger = logging.getLogger(__name__)
 
 _token = None
@@ -393,8 +395,7 @@ def enforce_privileged(request) -> None:
 
     raise HTTPException(
         status_code=403,
-        detail="Bu işlem cihazın kendisinden ya da eşleştirilmiş bir istemciden yapılabilir. "
-        "Yerel ağda olmak yeterli değildir.",
+        detail=ceviri.t("kimlik.hata.cihazdanYapilir"),
     )
 
 
@@ -439,11 +440,11 @@ def _operator_jetonu(request) -> str:
 # eyleme yönlendiriliyordu. 428 iletisi, günlük ve arayüz ARIZAYI ve ÇAREYİ söyler. Tek kaynak bu metin (arayüz ikizi:
 # apps/ui/src/utils/patientScope.ts `KIMLIK_DB_OKUNAMIYOR`). ACİL DURDUR ve STOP kimlik DB'si okumaz (B2B2-1 ölçümü).
 # Kapı: tests/test_kimlik_DB_okunamazken_ileti_ARIZA_ve_CARE_Y113.py
-KIMLIK_DB_OKUNAMIYOR = (
-    "Cihazın kimlik veritabanı okunamıyor — kayıtların hangi hekime ait olduğu doğrulanamıyor; değerlendirme, silme ve "
-    "kimlik isteyen kayıt işlemleri şimdilik yapılamaz. Çare: uygulamayı kapatıp yeniden açın; sorun sürerse veri "
-    "klasöründeki auth_users.db dosyasının erişim iznini ve diski teknik desteğe denetletin. ACİL DURDUR ve STOP etkilenmez."
-)
+def kimlik_db_okunamiyor_metni(dil: str | None = None) -> str:
+    """İsteğin dilinde ARIZA + ÇARE metni (`dil` verilirse o dilde — günlük `tr` ister)."""
+    return ceviri.t("kimlik.dbOkunamiyor", dil=dil)
+
+
 # Bu istekte (bağlam) kimlik DB'si okunabildi mi — kimlik kararları yazar, `kimliksiz_detayi` okur (ikinci bir okuma yapılmaz:
 # kilitte her okuma döngüyü ~0,8 sn tutar, B2B2-1). İstek görevleri bağlamı kopyalar → istekler arası SIZMAZ.
 _KIMLIK_DB_ARIZASI: contextvars.ContextVar = contextvars.ContextVar("kimlik_db_arizasi", default=None)
@@ -461,7 +462,7 @@ def _kimlik_db_yolu() -> str:
 def _kimlik_db_arizasi_bildir(ne: str) -> None:
     """Kimlik DB arızasını günlüğe ARIZA + ÇARE olarak yazar ve bu isteğin bağlamında işaretler (`kimliksiz_detayi` okur)."""
     _KIMLIK_DB_ARIZASI.set(True)
-    logger.exception("%s [%s — FAIL-CLOSED; dosya: %s]", KIMLIK_DB_OKUNAMIYOR, ne, _kimlik_db_yolu())
+    logger.exception("%s [%s — FAIL-CLOSED; dosya: %s]", kimlik_db_okunamiyor_metni("tr"), ne, _kimlik_db_yolu())
 
 
 def kimlik_db_okunamiyor() -> bool:
@@ -481,7 +482,7 @@ def kimlik_db_okunamiyor() -> bool:
 def kimliksiz_detayi(varsayilan: str) -> str:
     """Kimliksiz istek reddinin (428) iletisi: kimlik DB'si okunamıyorsa ARIZA + ÇARE (Y113), değilse `varsayilan`
     ("Operatör seçin — …")."""
-    return KIMLIK_DB_OKUNAMIYOR if kimlik_db_okunamiyor() else varsayilan
+    return kimlik_db_okunamiyor_metni() if kimlik_db_okunamiyor() else varsayilan
 
 
 def _kayitli_operator_mu(email: str) -> bool:

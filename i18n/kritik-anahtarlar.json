@@ -2003,6 +2003,146 @@
    "tur": "seans",
    "kaynak": "apps/ui/src/services/apiClient.ts",
    "aciklama": "jeton hakkı yetersiz; seans ve acil durdurma etkilenmez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "onay.hata.oneriYok",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_approval.py",
+   "aciklama": "AI önerisi bulunamadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "onay.hata.zatenKarar",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_approval.py",
+   "aciklama": "öneri zaten karara bağlandı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "onay.hata.oneriSuresiDoldu",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_approval.py",
+   "aciklama": "önerinin süresi doldu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "onay.hata.onayYok",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_approval.py",
+   "aciklama": "onay yok — önce öneriyi alıp onaylayın"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "onay.hata.onayKullanildi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_approval.py",
+   "aciklama": "onay zaten kullanıldı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "onay.hata.reddedildi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_approval.py",
+   "aciklama": "öneri reddedildi; uygulanamaz"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "onay.hata.onaylanmadi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_approval.py",
+   "aciklama": "öneri henüz onaylanmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "onay.hata.onaySuresiDoldu",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_approval.py",
+   "aciklama": "onayın süresi doldu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "kimlik.dbOkunamiyor",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/auth.py",
+   "aciklama": "kimlik veritabanı okunamıyor: ARIZA + ÇARE; ACİL DURDUR ve STOP etkilenmez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "jeton.mesaj.yetersiz",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/jeton.py",
+   "aciklama": "jeton bitti: seans, acil durdurma ve sensör izleme etkilenmez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "jeton.mesaj.kimlikGerekli",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/jeton.py",
+   "aciklama": "giriş gerekli: seans, acil durdurma ve sensör izleme etkilenmez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "jeton.mesaj.cevrimdisi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/jeton.py",
+   "aciklama": "internet yok: seans, acil durdurma ve sensör izleme etkilenmez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "jeton.mesaj.borcTavani",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/jeton.py",
+   "aciklama": "kullanım sınırı: seans, acil durdurma ve sensör izleme etkilenmez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.aiSure",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/session_router.py",
+   "aciklama": "AI seansının süresi onay mührüdür; buradan değişmez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.sureEnAz",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/session_router.py",
+   "aciklama": "kalan süre en az 1 dakika; süre değişikliği uygulanmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.seansDegisti",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/session_router.py",
+   "aciklama": "seans bu sırada değişti; süre değişikliği uygulanmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.notYazilamadi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/session_router.py",
+   "aciklama": "seans notu yazılamadı; not ekranda duruyor"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "gecmis.hata.seansSuruyor",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/history_router.py",
+   "aciklama": "süren seansın kaydı silinemez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "sistem.hata.dbHazirDegil",
+   "tur": "donanim",
+   "kaynak": "apps/backend/servers/system_router.py",
+   "aciklama": "tıbbi kayıt veritabanı hazır değil; yeni seans başlatılamaz"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "sistem.hata.dbYanitsiz",
+   "tur": "donanim",
+   "kaynak": "apps/backend/servers/system_router.py",
+   "aciklama": "tıbbi kayıt veritabanı yanıt vermiyor"
   }
  ],
  "bekleyen": [

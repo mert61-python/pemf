@@ -15,6 +15,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
+from utils import ceviri
 
 router = APIRouter(tags=["session"])
 
@@ -92,7 +93,7 @@ def _not_hedefi(payload: "SessionNotesPayload", db, bellek: dict) -> tuple[int, 
     if payload.session_id is not None:
         ozet = db.seans_ozeti(int(payload.session_id))
         if not ozet:
-            raise HTTPException(status_code=404, detail="Seans kaydı bulunamadı — not kaydedilmedi.")
+            raise HTTPException(status_code=404, detail=ceviri.t("seans.hata.kayitYok"))
         return int(payload.session_id), "kimlik"
     b_sid = bellek.get("db_session_id")
     b_hasta = (bellek.get("patient_name") or "").strip()
@@ -103,8 +104,7 @@ def _not_hedefi(payload: "SessionNotesPayload", db, bellek: dict) -> tuple[int, 
     if p_hasta and db.son_biten_seans_belirsiz_mi(p_hasta):
         raise HTTPException(
             status_code=409,
-            detail="Bu adla birden çok hastanın yakın tarihli seansı var — not hangi hastanın olduğu belirlenemediği için "
-            "kaydedilmedi. Notunuz ekranda duruyor; uygulamayı güncelleyin (yeni sürüm notu seansın kendisine bağlar).",
+            detail=ceviri.t("seans.hata.cokHasta"),
         )
     # ⚠️ 1-F inceleme: istemci hasta adı gönderdiyse bellek dalı YALNIZ AYNI ad için — hastası bilinmeyen (anonim) bellek
     # seansı başka hastanın notunu almaz (ölçüldü: "Rex" notu başka istemcinin hastasız seansına yazılıyordu); o durumda
@@ -116,7 +116,7 @@ def _not_hedefi(payload: "SessionNotesPayload", db, bellek: dict) -> tuple[int, 
         return int(sid), "hasta"
     raise HTTPException(
         status_code=409,
-        detail="Notun ait olduğu seans belirlenemedi — not kaydedilmedi (yeni seans kaydı AÇILMAZ).",
+        detail=ceviri.t("seans.hata.seansBelirsiz"),
     )
 
 
@@ -147,7 +147,7 @@ def save_session_notes(payload: SessionNotesPayload, request: Request):
 
     db = _api._get_treatment_db()
     if db is None:
-        raise HTTPException(status_code=503, detail="Tedavi kaydı veritabanı hazır değil — not kaydedilmedi.")
+        raise HTTPException(status_code=503, detail=ceviri.t("seans.hata.dbHazirDegil"))
     if kayitli_operator_var() and not cozumlenmis_operator(request):  # beyan YOK → jeton
         eski_istemci = payload.session_id is None
         _iz.kimlikli_yaz(
@@ -160,8 +160,7 @@ def save_session_notes(payload: SessionNotesPayload, request: Request):
         raise HTTPException(
             status_code=428,
             detail=kimliksiz_detayi(
-                "Operatör seçin — seans notunu kaydetmek için hangi hekim olduğunuzu seçin; notunuz ekranda duruyor."
-                + (" Uygulamanız hekim seçimi sunmuyorsa güncelleyin." if eski_istemci else "")
+                ceviri.t("seans.kimlik.notKaydet") + (ceviri.t("seans.kimlik.guncelleEki") if eski_istemci else "")
             ),
         )
     with _api._session_lock:
@@ -219,8 +218,7 @@ def save_session_notes(payload: SessionNotesPayload, request: Request):
         logging.exception("save_session_notes failed")
         raise HTTPException(
             status_code=500,
-            detail="Not kaydedilemedi — kayıt veritabanına yazılamadı (kilitli ya da disk dolu olabilir). "
-            "Notunuz ekranda duruyor; birazdan tekrar deneyin.",
+            detail=ceviri.t("seans.hata.notYazilamadi"),
         )
 
 
@@ -274,7 +272,7 @@ def parametre_guncelle(payload: ParametreGuncellePayload):
         seans_kimligi = _api._active_session.get("session_id")
         _seans_anlik = dict(_api._active_session)
     if not aktif:
-        raise HTTPException(status_code=409, detail="Aktif seans yok — güncellenecek parametre yok.")
+        raise HTTPException(status_code=409, detail=ceviri.t("seans.hata.aktifYok"))
 
     # ── D1.70 (B-1.8 · sahip kararı Y5): girilen süre KALAN süredir (şimdiden itibaren) ───────────────────────
     # Arayüz yeni süreyi bobinlere "şimdiden itibaren" gönderir (`/coil/batch` duration = dk × 60). Eskiden burada
@@ -283,15 +281,13 @@ def parametre_guncelle(payload: ParametreGuncellePayload):
     # sürede kesiyordu. Kayda GERÇEK sürüş süresi yazılır (bekçi/durdurma `_kayit_suresi_dk` — monotonik geçen süre).
     if payload.duration_minutes is not None:
         if int(payload.duration_minutes) <= 0:
-            raise HTTPException(
-                status_code=422, detail="Kalan süre en az 1 dakika olmalı — süre değişikliği UYGULANMADI."
-            )
+            raise HTTPException(status_code=422, detail=ceviri.t("seans.hata.sureEnAz"))
         from servers.ai_router import _ai_seansi_mi
 
         if _ai_seansi_mi(_seans_anlik):
             raise HTTPException(
                 status_code=409,
-                detail="AI seansının süresi hekim onayının mührüdür — buradan DEĞİŞTİRİLMEDİ (yeni öneri/onay gerekir).",
+                detail=ceviri.t("seans.hata.aiSure"),
             )
         import math as _m
         import time as _tm
@@ -299,7 +295,7 @@ def parametre_guncelle(payload: ParametreGuncellePayload):
         with _api._session_lock:
             s = _api._active_session
             if not (s.get("is_active") and s.get("session_id") == seans_kimligi):
-                raise HTTPException(status_code=409, detail="Seans bu sırada değişti — süre değişikliği UYGULANMADI.")
+                raise HTTPException(status_code=409, detail=ceviri.t("seans.hata.seansDegisti"))
             _simdi = _tm.monotonic()
             _kalan_s = int(payload.duration_minutes) * 60
             s["bitis_mono"] = _simdi + _kalan_s

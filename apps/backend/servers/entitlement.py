@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from dataclasses import replace as _replace
 
 from fastapi import HTTPException, Request
+from utils import ceviri
 
 logger = logging.getLogger(__name__)
 
@@ -265,7 +266,7 @@ def require_research(request: Request) -> None:
             status_code=402,
             detail={
                 "error": "research_required",
-                "message": "Araştırma modelleri doğrulanmış abonelik gerektirir (kimlik doğrulama gerekli).",
+                "message": ceviri.t("abonelik.mesaj.dogrulanmisGerekir"),
             },
         )
     ent = resolve_entitlement(request)
@@ -278,7 +279,7 @@ def require_research(request: Request) -> None:
             status_code=402,
             detail={
                 "error": "research_required",
-                "message": "Araştırma modelleri Araştırma eklentisi gerektirir.",
+                "message": ceviri.t("abonelik.mesaj.eklentiGerekir"),
             },
         )
 

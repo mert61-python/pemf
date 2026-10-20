@@ -50,6 +50,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from utils import ceviri
+
 logger = logging.getLogger(__name__)
 
 
@@ -230,23 +232,19 @@ def sonuc_izle(fn):
 # (96 rotada kesişim ∅) — testler ölü değeri koruyordu. Küme kaldırıldı; kapı
 # `tests/test_jeton_kapisi_TUM_ROTALARDA_guvenlik_uclari_SERBEST_D411.py` (gerçek karar, uygulamanın TÜM rotaları).
 
-_YETERSIZ_MESAJ = (
-    "Jeton hakkınız bitti; yeni yapay zekâ analizi başlatılamadı. "
-    "Seans, acil durdurma ve sensör izleme bundan ETKİLENMEZ. "
-    "Ek jeton paketiyle hemen devam edebilirsiniz."
-)
+
+def _yetersiz_mesaj() -> str:
+    return ceviri.t("jeton.mesaj.yetersiz")
 
 
-_KIMLIK_GEREKLI_MESAJ = (
-    "Ücretli yapay zekâ analizi için hesabınızla giriş yapın (analiz jetonu hesabınızdan düşülür). "
-    "Seans, acil durdurma ve sensör izleme bundan ETKİLENMEZ."
-)
+def _kimlik_gerekli_mesaj() -> str:
+    return ceviri.t("jeton.mesaj.kimlikGerekli")
+
 
 #: S-4B.5 + S-4BI.8 (sahip kararı 2026-10-19): ücretlendirme açıkken internetsiz analiz YOK.
-_CEVRIMDISI_MESAJ = (
-    "İnternet bağlantısı yok — yapay zekâ analizi şu an başlatılamadı. Analiz ücreti hesabınızdan çevrimiçi düşüldüğü için "
-    "internet gerekir; bağlantı gelince yeniden deneyin. Seans, acil durdurma ve sensör izleme ETKİLENMEZ."
-)
+def _cevrimdisi_mesaj() -> str:
+    return ceviri.t("jeton.mesaj.cevrimdisi")
+
 
 #: 402 yanıtında ret SEBEBİ (`Karar.sebep`: yetersiz / borc_tavani / cevrimdisi / kimlik_yok) — arayüz pencere başlığını buna göre
 #: seçer (`apiClient`: "cevrimdisi" → "İnternet bağlantısı gerekli"). Tarayıcı okuyabilsin diye CORS `expose_headers`'ta (api_server).
@@ -539,7 +537,7 @@ class JetonYoneticisi:
             except Exception:
                 # S-4B.5 (2026-10-19): eskiden borç 0 sayılıyordu (fail-open). Ücret çevrimiçi düşüldüğü için borç okunamıyorsa
                 # yeni analiz başlatılmaz; tedavi yolu bu kapıya hiç gelmez.
-                return Karar(izinli=False, mesaj=_CEVRIMDISI_MESAJ, sebep="cevrimdisi"), None
+                return Karar(izinli=False, mesaj=_cevrimdisi_mesaj(), sebep="cevrimdisi"), None
             borc += yolda
 
             def tuket() -> Karar:
@@ -554,11 +552,7 @@ class JetonYoneticisi:
                 return Karar(
                     izinli=False,
                     sebep="borc_tavani",
-                    mesaj=(
-                        "Kullandıkça öde üyeliğinizde faturalanmamış kullanım sınırına ulaşıldı; "
-                        "yeni yapay zekâ analizi başlatılamadı. Ödemeniz alındığında sınır sıfırlanır. "
-                        "Seans, acil durdurma ve sensör izleme ETKİLENMEZ."
-                    ),
+                    mesaj=(ceviri.t("jeton.mesaj.borcTavani")),
                 ), None
             return Karar(izinli=True, jeton_harcandi=maliyet, sebep="tuketilecek"), _RezervliTuketici(
                 tuket, anahtar, iid
@@ -570,7 +564,7 @@ class JetonYoneticisi:
         try:
             bakiye = int(self._bakiye_oku())
         except Exception:
-            return Karar(izinli=False, mesaj=_CEVRIMDISI_MESAJ, sebep="cevrimdisi"), None
+            return Karar(izinli=False, mesaj=_cevrimdisi_mesaj(), sebep="cevrimdisi"), None
 
         # 4) Bakiye yetersiz → YALNIZ analiz reddedilir (tedavi yolu buraya hiç gelmez — `_islem_turu`).
         # S-SGI.3: aynı hesabın bu süreçte SÜREN analizlerinin ayırdığı jeton da düşülür (eşzamanlı N analiz bakiyeyi aşamaz).
@@ -578,7 +572,7 @@ class JetonYoneticisi:
         bakiye -= yolda
         anahtar = f"sahip:{self._sahip or ''}"
         if bakiye < maliyet or not _rezerve_et(anahtar, iid, maliyet, bakiye, okuma_ani):
-            return Karar(izinli=False, mesaj=_YETERSIZ_MESAJ, sebep="yetersiz"), None
+            return Karar(izinli=False, mesaj=_yetersiz_mesaj(), sebep="yetersiz"), None
 
         # 5) Tüketimi gönder. Gönderim düşerse analiz DURMAZ — kayıt deftere düşer (yolda kalan ödeme; sonra yeniden denenir).
         return Karar(izinli=True, jeton_harcandi=maliyet, sebep="tuketilecek"), _RezervliTuketici(
@@ -876,7 +870,7 @@ def _red(karar: Karar) -> HTTPException:
     """402: ticari red. Mesaj TEDAVİNİN ETKİLENMEDİĞİNİ açıkça söyler (hasta güvenliği algısı); sebep `JETON_SEBEP_BASLIGI`nda."""
     return HTTPException(
         status_code=402,
-        detail=karar.mesaj or _YETERSIZ_MESAJ,
+        detail=karar.mesaj or _yetersiz_mesaj(),
         headers={JETON_SEBEP_BASLIGI: karar.sebep or "yetersiz"},
     )
 
@@ -898,7 +892,7 @@ def _jeton_on_karari(request: Request) -> "Callable[[], Karar] | None":
         # İZİN alıyor, deftere SAHİPSİZ kayıt yazıyordu: hiçbir hesaptan düşülmez (bedava analiz; eki uzlaştırmayı sahibe bağladı) ama
         # cihaz-geneli çevrimdışı tavanı doldururdu (tavan 2026-10-19'da kaldırıldı). Ücretlendirme açıkken yeni AI analizi hesap
         # ister; tedavi / E-stop / seans bu kapıya HİÇ gelmez (`_islem_turu` → None, Ö.4-Y8).
-        raise _red(Karar(izinli=False, mesaj=_KIMLIK_GEREKLI_MESAJ, sebep="kimlik_yok"))
+        raise _red(Karar(izinli=False, mesaj=_kimlik_gerekli_mesaj(), sebep="kimlik_yok"))
 
     # ── TD9 (Y148): canlı kip — dakika başına (SGI-2.1: yalnız canlı kipli uçlar) ─────────────────────────────────────────
     oturum = (request.headers.get(CANLI_OTURUM_BASLIGI) or "").strip() if hasattr(request, "headers") else ""

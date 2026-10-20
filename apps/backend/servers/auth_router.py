@@ -16,6 +16,7 @@ fonksiyonları (fonksiyon-içi import, api_server'daki gibi). `_exchange_throttl
 """
 
 import asyncio
+import json
 import logging
 import re as _re
 import threading
@@ -41,7 +42,7 @@ async def _get_auth_token(request: Request):
         if not is_local_request(request.client.host if request.client else "", _via_proxy):
             return Response(
                 status_code=403,
-                content='{"detail":"Token yalniz yerel agdan alinabilir"}',
+                content=_json_govde(ceviri.t("oturum.hata.tokenYerel")),
                 media_type="application/json",
             )
         # ⚠️ E2-4.1 (2-E incelemesi · Ö.4-Y8): sır deposu soğuk / okunamazken `get_api_token` `icacls` (alt süreç, 10 sn zaman
@@ -50,7 +51,9 @@ async def _get_auth_token(request: Request):
         return {"token": await asyncio.to_thread(get_api_token)}
     except Exception:
         logging.exception("auth token endpoint hatasi")
-        return Response(status_code=500, content='{"detail":"token alinamadi"}', media_type="application/json")
+        return Response(
+            status_code=500, content=_json_govde(ceviri.t("oturum.hata.tokenAlinamadi")), media_type="application/json"
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════════════════════════
@@ -97,7 +100,7 @@ def _desktop_403() -> Response:
     yol açar. `_throttle_429()` ile aynı desen."""
     return Response(
         status_code=403,
-        content='{"detail":"Masaustu oturumu yalniz bu bilgisayardan (127.0.0.1) yonetilebilir"}',
+        content=_json_govde(ceviri.t("oturum.hata.masaustuYerel")),
         media_type="application/json",
     )
 
@@ -139,13 +142,17 @@ async def _set_desktop_session(request: Request):
 
     access = _s("access_token")
     if not access:
-        return Response(status_code=422, content='{"detail":"access_token gerekli"}', media_type="application/json")
+        return Response(
+            status_code=422,
+            content=_json_govde(ceviri.t("oturum.hata.accessTokenGerekli")),
+            media_type="application/json",
+        )
     exp = body.get("expires_at")
     exp_val = exp if isinstance(exp, (int, float)) and not isinstance(exp, bool) else _s("expires_at")
     oturum = {"access_token": access, "refresh_token": _s("refresh_token"), "email": _s("email"), "expires_at": exp_val}
     if any(isinstance(v, str) and len(v) > _DESKTOP_MAX_FIELD for v in oturum.values()):
         return Response(
-            status_code=413, content='{"detail":"Oturum alanlari cok buyuk"}', media_type="application/json"
+            status_code=413, content=_json_govde(ceviri.t("oturum.hata.alanlarBuyuk")), media_type="application/json"
         )
     with _desktop_lock:
         _desktop_session.clear()
@@ -263,7 +270,7 @@ def _exchange_bucket(ip: str) -> dict:
 def _throttle_429() -> Response:
     return Response(
         status_code=429,
-        content='{"ok":false,"error":"Cok fazla basarisiz deneme. Lutfen biraz bekleyin."}',
+        content=_json_govde(ceviri.t("oturum.hata.cokFazlaBasarisiz"), "error", ok=False),
         media_type="application/json",
     )
 
@@ -282,7 +289,7 @@ async def _exchange_code_for_token(request: Request):
     _bkt = _exchange_bucket(_cip)
     if _bkt["until"] > now:
         return Response(
-            status_code=429, content='{"detail":"Cok fazla deneme, biraz bekleyin"}', media_type="application/json"
+            status_code=429, content=_json_govde(ceviri.t("oturum.hata.cokFazlaDeneme")), media_type="application/json"
         )
     try:
         body = await request.json()
@@ -301,7 +308,9 @@ async def _exchange_code_for_token(request: Request):
         if _bkt["fails"] >= 8:
             _bkt["until"] = now + 60.0
             _bkt["fails"] = 0
-        return Response(status_code=403, content='{"detail":"Eslestirme kodu hatali"}', media_type="application/json")
+        return Response(
+            status_code=403, content=_json_govde(ceviri.t("oturum.hata.eslestirmeKodu")), media_type="application/json"
+        )
     _bkt["fails"] = 0
     try:
         from servers.auth import get_api_token
@@ -309,12 +318,20 @@ async def _exchange_code_for_token(request: Request):
         return {"token": await asyncio.to_thread(get_api_token)}
     except Exception:
         logging.exception("exchange token alinamadi")
-        return Response(status_code=500, content='{"detail":"token alinamadi"}', media_type="application/json")
+        return Response(
+            status_code=500, content=_json_govde(ceviri.t("oturum.hata.tokenAlinamadi")), media_type="application/json"
+        )
 
 
 # ── Operatör hesapları: e-posta/şifre KAYIT + GİRİŞ (yerel; PBKDF2). AUTH-EXEMPT (kullanıcı-katmanı cihaz-
 # token'dan bağımsız; cihaz-token tüm GERÇEK API aksiyonlarını yine de gate'ler). Kayıt = ANINDA giriş. ──
 from pydantic import BaseModel
+from utils import ceviri
+
+
+def _json_govde(mesaj: str, alan: str = "detail", **ek) -> str:
+    """Hata gövdesi (JSON) — iletisi isteğin dilinde; TR (ASCII) bayt bayt eskisiyle aynı."""
+    return json.dumps({**ek, alan: mesaj}, separators=(",", ":"))
 
 
 class _AuthCredentials(BaseModel):
@@ -383,9 +400,9 @@ async def _operators_list():
     try:
         veri = await asyncio.to_thread(get_auth_db().list_operators, True)
     except Exception:
-        from servers.auth import KIMLIK_DB_OKUNAMIYOR
+        from servers.auth import kimlik_db_okunamiyor_metni
 
-        raise HTTPException(status_code=503, detail=KIMLIK_DB_OKUNAMIYOR) from None  # Y113: arıza + çare
+        raise HTTPException(status_code=503, detail=kimlik_db_okunamiyor_metni()) from None  # Y113: arıza + çare
     return {"ok": True, "data": veri}
 
 
@@ -405,18 +422,14 @@ async def _operators_enroll(payload: _OperatorEnroll, request: Request):
     )
     if not ok:
         if err == "locked":
-            raise HTTPException(
-                status_code=423, detail="Çok fazla hatalı deneme — bu operatör geçici olarak kilitlendi."
-            )
+            raise HTTPException(status_code=423, detail=ceviri.t("kimlik.hata.operatorKilitli"))
         if err == "wrong_old_pin":
             # 401: kimlik kanıtlanamadı. Mevcut bir kaydın PIN'i sahibi olmadan değiştirilemez.
-            raise HTTPException(
-                status_code=401, detail="Bu e-posta zaten kayıtlı. PIN'i değiştirmek için mevcut PIN'i girin."
-            )
+            raise HTTPException(status_code=401, detail=ceviri.t("kimlik.hata.epostaKayitli"))
         mesaj = {
-            "invalid_email": "Geçerli bir e-posta adresi girin.",
-            "invalid_pin": "PIN 6 haneli bir sayı olmalı.",
-        }.get(err, "Operatör kaydedilemedi.")
+            "invalid_email": ceviri.t("kimlik.hata.gecersizEposta"),
+            "invalid_pin": ceviri.t("kimlik.hata.pinHane"),
+        }.get(err, ceviri.t("kimlik.hata.operatorKaydedilemedi"))
         raise HTTPException(status_code=400, detail=mesaj)
     _e = (payload.email or "").strip().lower()
     # ⚠️ 2026-08-09 (Tier 1): kaydolan kişi ANINDA aktif olur (PIN yeniden sorulmaz) — dolayısıyla
@@ -463,9 +476,9 @@ async def _operators_verify(payload: _OperatorPin):
         }
     if err == "locked":
         # 423 Locked: istemci "PIN yanlış" değil "kilitli" demeli (kullanıcı boşuna denemesin).
-        raise HTTPException(status_code=423, detail="Çok fazla hatalı deneme — bu operatör geçici olarak kilitlendi.")
+        raise HTTPException(status_code=423, detail=ceviri.t("kimlik.hata.operatorKilitli"))
     # ⚠️ 'no_operator' ile 'bad_pin' AYNI mesaj: hangi e-postaların kayıtlı olduğunu sızdırma.
-    raise HTTPException(status_code=401, detail="PIN hatalı.")
+    raise HTTPException(status_code=401, detail=ceviri.t("kimlik.hata.pinHatali"))
 
 
 @router.post("/api/operators/lock")
@@ -497,7 +510,7 @@ async def _operators_remove(payload: _OperatorRemove, request: Request):
     cikaran = await asyncio.to_thread(_jeton_kimligi, request)
     ok = await asyncio.to_thread(get_auth_db().remove_operator, payload.email)
     if not ok:
-        raise HTTPException(status_code=404, detail="Operatör bulunamadı.")
+        raise HTTPException(status_code=404, detail=ceviri.t("kimlik.hata.operatorYok"))
     # ⚠️ Jetonları da düşür: aksi hâlde cihazdan ÇIKARILMIŞ bir hekim, elindeki jeton süresi
     # dolana kadar (12 saat) onun adına kayıt yazmaya devam ederdi.
     from servers import operator_tokens
@@ -522,11 +535,11 @@ async def _register_user(payload: _AuthCredentials):
 
     email = (payload.email or "").strip().lower()
     if not EMAIL_RE.match(email):
-        return {"ok": False, "error": "Geçerli bir e-posta adresi girin."}
+        return {"ok": False, "error": ceviri.t("kimlik.hata.gecersizEposta")}
     if not PASSWORD_RE.match(payload.password or ""):
         return {
             "ok": False,
-            "error": "Şifre en az 8 karakter olmalı; en az bir büyük harf, bir küçük harf ve bir rakam içermeli.",
+            "error": ceviri.t("kimlik.hata.sifreKurali"),
         }
     # DENETIM P1: PBKDF2 (200k tur) EVENT-LOOP'ta calisiyordu → kimliksiz istemci arka arkaya
     # /register atarak tek-thread'li loop'u CPU'ya bogup TUM API'yi (WS yayinlari + seans
@@ -563,17 +576,17 @@ async def _login_user(payload: _AuthCredentials):
                 )  # dummy: no_user'ı bad_password ile eşitle (timing)
             except Exception:
                 pass
-            return {"ok": False, "code": "invalid", "error": "E-posta veya şifre hatalı."}
+            return {"ok": False, "code": "invalid", "error": ceviri.t("kimlik.hata.epostaSifreHatali")}
         return {
             "ok": False,
             "code": "no_user",
-            "error": "Bu e-posta ile kayıtlı bir hesap yok. Yeni hesap için Kayıt Ol'u kullanın.",
+            "error": ceviri.t("kimlik.hata.hesapYok"),
         }
     if not await asyncio.to_thread(db.verify, email, payload.password or ""):
         _throttle_note_fail(bucket)
         if _generic:
-            return {"ok": False, "code": "invalid", "error": "E-posta veya şifre hatalı."}
-        return {"ok": False, "code": "bad_password", "error": "Şifre hatalı. Lütfen tekrar deneyin."}
+            return {"ok": False, "code": "invalid", "error": ceviri.t("kimlik.hata.epostaSifreHatali")}
+        return {"ok": False, "code": "bad_password", "error": ceviri.t("kimlik.hata.sifreHatali")}
     _throttle_clear(bucket)  # başarılı giriş → sayaç sıfırla
     return {"ok": True, "email": email, "token": _issue_session_token(email)}
 
@@ -632,16 +645,16 @@ async def _reset_password(payload: _ResetPayload, request: Request):
             _reset_throttle["fails"] = 0
         return {
             "ok": False,
-            "error": "Yönetici kodu hatalı. Kodu cihaz Ayarlar'ında veya ProgramData'daki api_token.txt'de bulabilirsiniz.",
+            "error": ceviri.t("kimlik.hata.yoneticiKodu"),
         }
     _throttle_clear(_rbkt)  # doğru admin-kod → sayaç sıfırla
     _throttle_clear(_reset_throttle)
     if not EMAIL_RE.match(email):
-        return {"ok": False, "error": "Geçerli bir e-posta adresi girin."}
+        return {"ok": False, "error": ceviri.t("kimlik.hata.gecersizEposta")}
     if not PASSWORD_RE.match(payload.new_password or ""):
         return {
             "ok": False,
-            "error": "Yeni şifre en az 8 karakter olmalı; bir büyük harf, bir küçük harf ve bir rakam içermeli.",
+            "error": ceviri.t("kimlik.hata.yeniSifreKurali"),
         }
     ok, err = await asyncio.to_thread(get_auth_db().reset_password, email, payload.new_password)
     return {"ok": True} if ok else {"ok": False, "error": err}

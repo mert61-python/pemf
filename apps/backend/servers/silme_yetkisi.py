@@ -24,15 +24,15 @@ Kliniğin TAMAMINI silme (`/api/patients/delete_all`) ayrı kural: A-03 · D2.11
 from __future__ import annotations
 
 from fastapi import HTTPException
+from utils import ceviri
 
-KIMLIKSIZ_DETAY = "Operatör seçin — silmek için önce üst bardan hangi hekim olduğunuzu seçin."
+
+def kimliksiz_detay() -> str:
+    return ceviri.t("silme.kimliksiz")
 
 
 def yabanci_detayi(n: int) -> str:
-    return (
-        f"Yalnız kendi ve sahipsiz kayıtları silebilirsiniz — seçimdeki {n} kayıt başka bir hekime ait; "
-        "hiçbir kayıt silinmedi."
-    )
+    return ceviri.t("silme.yabanci", count=n)
 
 
 def sahiplik_kapisi(request, sahipler: dict, *, olay: str, scope: str) -> None:
@@ -48,7 +48,7 @@ def sahiplik_kapisi(request, sahipler: dict, *, olay: str, scope: str) -> None:
         # Y113: kimlik DB'si okunamıyorsa ileti arızayı ve çareyi söyler ("Operatör seçin" DEMEZ); iz nedeni ayırır.
         neden = "kimlik_db_okunamiyor" if kimlik_db_okunamiyor() else "kimliksiz"
         _iz.yaz(request, olay, scope=scope, item_count=0, outcome="reddedildi", detail={"neden": neden})
-        raise HTTPException(status_code=428, detail=kimliksiz_detayi(KIMLIKSIZ_DETAY))
+        raise HTTPException(status_code=428, detail=kimliksiz_detayi(kimliksiz_detay()))
 
     def _yabanci(sahip) -> bool:
         s = (sahip or "").strip().lower()
