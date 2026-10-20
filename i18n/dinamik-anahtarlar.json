@@ -176,6 +176,35 @@
    "onek": "",
    "degerler": ["seans.durum.aborted_due_to_power", "seans.durum.aborted_recovered", "seans.durum.active", "seans.durum.canceled", "seans.durum.cancelled", "seans.durum.completed", "seans.durum.emergency_stopped", "seans.durum.error", "seans.durum.failed", "seans.durum.hardware_rejected", "seans.durum.in_progress", "seans.durum.interrupted", "seans.durum.pending", "seans.durum.running", "seans.durum.stopped", "seans.durum.success"],
    "gerekce": "Seans durumu etiketi STATUS_ANAHTARLARI'nda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (16 durum), sunucudan gelen ham durum dizgisi anahtara EŞLENİR, kendisi çevrilmez"
+  },
+  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/utils/ai_rapor_ogeleri.py",
+   "ifade": "ceviri.t(etiket_anahtari)",
+   "onek": "ai.etiket.",
+   "degerler": ["area_mm2", "bulunamadi_mesaji", "cancer_reasons", "cat_count", "class", "class_counts", "class_name", "closure", "closure_pct", "closure_uyari", "conf", "confidence", "counts", "coverage_ratio", "detected", "disease", "eylem", "fgs_score", "fgs_total", "gap_area_mm2", "grade", "healthy_regions", "label", "localized", "max_gap_um", "mean_gap_um", "n_cancer", "n_cells", "n_detections", "n_healthy", "n_masks", "n_organs", "n_patients", "n_tumor", "n_tumors", "n_wells", "n_wells_cancer", "not", "note", "organ", "organ_name", "organs", "pain", "pain_level", "pemf_gecerli", "pemf_kapisi", "pemf_valid", "pose_type", "predicted_class", "prediction", "prob", "prob_pct", "probability", "probability_sick", "recommendation", "reliability", "reliable", "result", "risk", "risk_level", "scratch_yonu", "severity", "stage", "summary", "surulebilir", "top_1_class", "top_1_prob", "top_2_class", "top_2_prob", "top_3_class", "top_3_prob", "tumor_regions", "uyari", "warnings", "yon_notu"],
+   "gerekce": "PDF etiketi: ETIKETLER tablosu alan kimliğini katalog ANAHTARINA eşler (KURALLAR §4.5; K-7); kimlik kümesi KAPALI (tablo)"
+  },  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/utils/ai_rapor_ogeleri.py",
+   "ifade": "ceviri.t(etiket_anahtari)",
+   "onek": "ai.deger.",
+   "degerler": ["abnormal", "aggregate_reticulocyte", "akciger_sag", "akciger_sol", "angry", "bagirsak", "bobrek", "cancer", "ckd", "conjunctivitis", "cyst", "dalak", "defence", "dorsal", "erythrocyte", "feline_asthma", "feline_calicivirus", "feline_chlamydiosis", "feline_herpesvirus", "feline_immunodeficiency_virus", "feline_infectious_peritonitis", "feline_leukemia_virus", "feline_panleukopenia", "feline_renal_disease", "fighting", "frontal", "fungal_infection", "gastroenteritis", "grade0", "grade1", "grade2", "grade3", "grade4", "happy", "healthy", "huntingmind", "hyperthyroidism", "inflammatory_bowel_disease", "intestinal_parasites", "kalp", "karaciger", "kidney", "kidney_cyst", "kidney_stone", "kirc", "kutu_butun", "lateral", "mating", "mesane", "mide", "mild", "mild_pain", "moderate", "moderate_pain", "mothercall", "negative", "no", "no_pain", "none", "normal", "notckd", "oblique", "other", "paining", "pancreatitis", "pankreas", "positive", "punctate_reticulocyte", "resting", "ringworm", "severe", "severe_pain", "sick", "sphinx", "standing", "stone", "tumor", "unknown", "upper_respiratory_infection", "warning", "yes"],
+   "gerekce": "PDF alan etiketi yedeği: DEGERLER tablosu (kapalı küme) — iç içe sözlükte alan adı değer tablosunda da aranır"
+  },  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/utils/ai_rapor_ogeleri.py",
+   "ifade": "ceviri.t(deger_anahtari)",
+   "onek": "ai.deger.",
+   "degerler": ["abnormal", "aggregate_reticulocyte", "akciger_sag", "akciger_sol", "angry", "bagirsak", "bobrek", "cancer", "ckd", "conjunctivitis", "cyst", "dalak", "defence", "dorsal", "erythrocyte", "feline_asthma", "feline_calicivirus", "feline_chlamydiosis", "feline_herpesvirus", "feline_immunodeficiency_virus", "feline_infectious_peritonitis", "feline_leukemia_virus", "feline_panleukopenia", "feline_renal_disease", "fighting", "frontal", "fungal_infection", "gastroenteritis", "grade0", "grade1", "grade2", "grade3", "grade4", "happy", "healthy", "huntingmind", "hyperthyroidism", "inflammatory_bowel_disease", "intestinal_parasites", "kalp", "karaciger", "kidney", "kidney_cyst", "kidney_stone", "kirc", "kutu_butun", "lateral", "mating", "mesane", "mide", "mild", "mild_pain", "moderate", "moderate_pain", "mothercall", "negative", "no", "no_pain", "none", "normal", "notckd", "oblique", "other", "paining", "pancreatitis", "pankreas", "positive", "punctate_reticulocyte", "resting", "ringworm", "severe", "severe_pain", "sick", "sphinx", "standing", "stone", "tumor", "unknown", "upper_respiratory_infection", "warning", "yes"],
+   "gerekce": "PDF değer metni: DEGERLER tablosu bilinen model çıktısını katalog ANAHTARINA eşler; bilinmeyen değer çevrilmeden aynen yazılır (T8)"
+  },  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/utils/ai_rapor_ogeleri.py",
+   "ifade": "ceviri.t(belirti_anahtari)",
+   "onek": "ai.belirti.",
+   "degerler": ["Age", "Appetite_Loss_bin", "Body_Temperature", "Coughing_bin", "Diarrhea_bin", "Duration_days", "Eye_Discharge_bin", "Heart_Rate", "Labored_Breathing_bin", "Lameness_bin", "Nasal_Discharge_bin", "Skin_Lesions_bin", "Vomiting_bin", "Weight", "has_Dehydration", "has_Fever", "has_Lethargy", "has_Sneezing", "has_Weight_Loss"],
+   "gerekce": "PDF belirti adı: BELIRTILER tablosu model girdi adını katalog ANAHTARINA eşler (kapalı küme); bilinmeyen ad HAM yazılmaz"
   }
  ]
 }

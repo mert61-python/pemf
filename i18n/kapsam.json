@@ -301,7 +301,7 @@
    "sira": 10,
    "kritik": false,
    "aciklama": "AI rapor öğeleri (ETIKETLER / DEGERLER / BELIRTILER — K-7)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 220,
    "dosyaSayisi": 1
   },
@@ -339,7 +339,7 @@
    "aciklama": "servisler, güncelleme, sırlar, kalan yardımcılar (çoğu muaf: iç / günlük)",
    "durum": "bekliyor",
    "metin": 136,
-   "dosyaSayisi": 35
+   "dosyaSayisi": 36
   },
   {
    "ad": "launcher-11a-ui",
@@ -4272,7 +4272,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10d-ai-rapor",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 220,
    "kritik": false,
    "muaf": [],
@@ -4812,6 +4812,17 @@
    "grup": "sunucu-10h-servis",
    "sira": 10,
    "durum": "bekliyor",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
+  "apps/backend/servers/ai_kapi_metni.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10h-servis",
+   "sira": 10,
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],

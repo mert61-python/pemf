@@ -31,6 +31,8 @@ import math
 from datetime import datetime
 from typing import Any
 
+from utils import ceviri
+
 #: Rapora ALINMAYACAK alanlar (ad parçası) — base64 görseller ve görsel türevleri. ⚠️ Değer bazlı değil AD bazlı eleme.
 GIZLI_ALAN_PARCALARI = (
     "base64",
@@ -160,191 +162,191 @@ IC_ALANLAR = frozenset(
     }
 )
 
-#: Alan → sade Türkçe etiket.
+#: Alan → sade etiket (katalog ANAHTARI `ai.etiket.*`; metin istek dilinde — I18N-P1, K-7: arayüzle ortak kimlikte aynı İngilizce).
 ETIKETLER = {
-    "detected": "Yüz bulundu mu",
-    "fgs_total": "Yüz ifadesine göre ağrı skoru (FGS, 0–10)",
-    "fgs_score": "Yüz ifadesine göre ağrı skoru (FGS, 0–10)",
-    "pain": "Ağrı belirtisi",
-    "pain_level": "Ağrı düzeyi",
-    "cat_count": "Görüntüdeki kedi sayısı",
-    "n_tumor": "Tümör sayısı",
-    "n_tumors": "Tümör sayısı",
-    "n_wells": "Kuyucuk sayısı",
-    "n_cancer": "Kanserli kuyucuk sayısı",
-    "n_wells_cancer": "Kanserli kuyucuk sayısı",
-    "n_healthy": "Sağlıklı kuyucuk sayısı",
-    "n_detections": "Bulgu sayısı",
-    "n_organs": "Konumu bulunan organ sayısı",
-    "n_patients": "Örnek sayısı",
-    "n_masks": "Bulunan bölge sayısı",
-    "top_1_class": "Tahmin",
-    "top_1_prob": "Olasılık",
-    "top_2_class": "İkinci olası sonuç",
-    "top_2_prob": "İkinci sonucun olasılığı",
-    "top_3_class": "Üçüncü olası sonuç",
-    "top_3_prob": "Üçüncü sonucun olasılığı",
-    "prediction": "Tahmin",
-    "predicted_class": "Tahmin",
-    "class_name": "Bulgu türü",
-    "disease": "Hastalık",
-    "label": "Sonuç",
-    "class": "Sınıf",
-    "prob": "Olasılık",
-    "probability": "Olasılık",
-    "prob_pct": "Olasılık (%)",
-    "probability_sick": "Hastalık olasılığı",
-    "confidence": "Güven",
-    "conf": "Güven",
-    "grade": "Derece",
-    "counts": "Hücre sayımı",
-    "class_counts": "Bulgu sayıları",
-    "pose_type": "Hayvanın duruşu",
-    "area_mm2": "Alan (mm²)",
-    "organs": "Organlar",
-    "organ": "Organ",
-    "organ_name": "Organ",
-    "localized": "Konumu belirlendi mi",
-    "reliability": "Güvenilirlik",
-    "risk": "Risk",
-    "risk_level": "Risk düzeyi",
-    "stage": "Evre",
-    "severity": "Şiddet",
-    "recommendation": "Öneri",
-    "note": "Not",
-    "not": "Not",
-    "summary": "Özet",
-    "result": "Sonuç",
-    "n_cells": "Hücre sayısı",
-    "coverage_ratio": "Hücrelerin kapladığı alan oranı",
-    "closure": "Yara kapanma ölçümleri",
-    "closure_pct": "Yara kapanma oranı (%)",
-    "mean_gap_um": "Ortalama yara aralığı (µm)",
-    "max_gap_um": "En geniş yara aralığı (µm)",
-    "gap_area_mm2": "Açık kalan yara alanı (mm²)",
-    "scratch_yonu": "Yara yönü",
-    "uyari": "Uyarı",
-    "closure_uyari": "Kapanma uyarısı",
-    "warnings": "Uyarılar",
-    "pemf_valid": "PEMF uygulamasına uygun mu",
-    "pemf_gecerli": "PEMF uygulamasına uygun mu",
-    "reliable": "Tespit güvenilir mi",
-    "surulebilir": "Bobin ayarına esas alınabilir mi",
-    "pemf_kapisi": "PEMF uygunluk denetimi",
-    "eylem": "Yapılması gereken",
-    "cancer_reasons": "Kanser değerlendirmesinin gerekçesi",
-    "bulunamadi_mesaji": "Not",
-    "tumor_regions": "Tümörlü bölgeler",
-    "healthy_regions": "Sağlıklı bölgeler",
-    "yon_notu": "Not",
+    "detected": "ai.etiket.detected",
+    "fgs_total": "ai.etiket.fgs_total",
+    "fgs_score": "ai.etiket.fgs_score",
+    "pain": "ai.etiket.pain",
+    "pain_level": "ai.etiket.pain_level",
+    "cat_count": "ai.etiket.cat_count",
+    "n_tumor": "ai.etiket.n_tumor",
+    "n_tumors": "ai.etiket.n_tumors",
+    "n_wells": "ai.etiket.n_wells",
+    "n_cancer": "ai.etiket.n_cancer",
+    "n_wells_cancer": "ai.etiket.n_wells_cancer",
+    "n_healthy": "ai.etiket.n_healthy",
+    "n_detections": "ai.etiket.n_detections",
+    "n_organs": "ai.etiket.n_organs",
+    "n_patients": "ai.etiket.n_patients",
+    "n_masks": "ai.etiket.n_masks",
+    "top_1_class": "ai.etiket.top_1_class",
+    "top_1_prob": "ai.etiket.top_1_prob",
+    "top_2_class": "ai.etiket.top_2_class",
+    "top_2_prob": "ai.etiket.top_2_prob",
+    "top_3_class": "ai.etiket.top_3_class",
+    "top_3_prob": "ai.etiket.top_3_prob",
+    "prediction": "ai.etiket.prediction",
+    "predicted_class": "ai.etiket.predicted_class",
+    "class_name": "ai.etiket.class_name",
+    "disease": "ai.etiket.disease",
+    "label": "ai.etiket.label",
+    "class": "ai.etiket.class",
+    "prob": "ai.etiket.prob",
+    "probability": "ai.etiket.probability",
+    "prob_pct": "ai.etiket.prob_pct",
+    "probability_sick": "ai.etiket.probability_sick",
+    "confidence": "ai.etiket.confidence",
+    "conf": "ai.etiket.conf",
+    "grade": "ai.etiket.grade",
+    "counts": "ai.etiket.counts",
+    "class_counts": "ai.etiket.class_counts",
+    "pose_type": "ai.etiket.pose_type",
+    "area_mm2": "ai.etiket.area_mm2",
+    "organs": "ai.etiket.organs",
+    "organ": "ai.etiket.organ",
+    "organ_name": "ai.etiket.organ_name",
+    "localized": "ai.etiket.localized",
+    "reliability": "ai.etiket.reliability",
+    "risk": "ai.etiket.risk",
+    "risk_level": "ai.etiket.risk_level",
+    "stage": "ai.etiket.stage",
+    "severity": "ai.etiket.severity",
+    "recommendation": "ai.etiket.recommendation",
+    "note": "ai.etiket.note",
+    "not": "ai.etiket.not",
+    "summary": "ai.etiket.summary",
+    "result": "ai.etiket.result",
+    "n_cells": "ai.etiket.n_cells",
+    "coverage_ratio": "ai.etiket.coverage_ratio",
+    "closure": "ai.etiket.closure",
+    "closure_pct": "ai.etiket.closure_pct",
+    "mean_gap_um": "ai.etiket.mean_gap_um",
+    "max_gap_um": "ai.etiket.max_gap_um",
+    "gap_area_mm2": "ai.etiket.gap_area_mm2",
+    "scratch_yonu": "ai.etiket.scratch_yonu",
+    "uyari": "ai.etiket.uyari",
+    "closure_uyari": "ai.etiket.closure_uyari",
+    "warnings": "ai.etiket.warnings",
+    "pemf_valid": "ai.etiket.pemf_valid",
+    "pemf_gecerli": "ai.etiket.pemf_gecerli",
+    "reliable": "ai.etiket.reliable",
+    "surulebilir": "ai.etiket.surulebilir",
+    "pemf_kapisi": "ai.etiket.pemf_kapisi",
+    "eylem": "ai.etiket.eylem",
+    "cancer_reasons": "ai.etiket.cancer_reasons",
+    "bulunamadi_mesaji": "ai.etiket.bulunamadi_mesaji",
+    "tumor_regions": "ai.etiket.tumor_regions",
+    "healthy_regions": "ai.etiket.healthy_regions",
+    "yon_notu": "ai.etiket.yon_notu",
 }
 
-#: Bilinen İngilizce / iç değerler → Türkçe (küçük harf anahtar). Arayüz `VALUE_LABELS` + sade açıklamalar.
+#: Bilinen İngilizce / iç değerler → okunur metin (küçük harf anahtar; katalog ANAHTARI `ai.deger.*`). Arayüz `VALUE_LABELS` + sade açıklamalar.
 DEGERLER = {
-    "no pain": "Ağrı yok",
-    "mild": "Hafif",
-    "mild pain": "Hafif ağrı",
-    "moderate": "Orta",
-    "moderate pain": "Orta ağrı",
-    "severe": "Şiddetli",
-    "severe pain": "Şiddetli ağrı",
-    "normal": "Normal",
-    "healthy": "Sağlıklı",
-    "sick": "Hasta (riskli)",
-    "cancer": "Kanser",
-    "abnormal": "Anormal",
-    "positive": "Pozitif",
-    "negative": "Negatif",
-    "unknown": "Bilinmiyor",
-    "none": "Yok",
-    "yes": "Evet",
-    "no": "Hayır",
-    "stone": "Taş",
-    "cyst": "Kist",
-    "tumor": "Tümör",
-    "kidney": "Böbrek",
-    "happy": "Mutlu",
-    "resting": "Dinleniyor",
-    "mothercall": "Anne çağrısı",
-    "mating": "Çiftleşme çağrısı",
-    "huntingmind": "Av modunda",
-    "warning": "Uyarı",
-    "defence": "Savunma",
-    "angry": "Kızgın",
-    "fighting": "Kavga",
-    "paining": "Ağrı belirtisi",
-    "mide": "Mide",
-    "bobrek": "Böbrek",
-    "karaciger": "Karaciğer",
-    "mesane": "Mesane",
-    "pankreas": "Pankreas",
-    "bagirsak": "Bağırsak",
-    "kalp": "Kalp",
-    "dalak": "Dalak",
-    "akciger_sag": "Akciğer (sağ)",
-    "akciger_sol": "Akciğer (sol)",
-    "kutu_butun": "Tüm vücut",
-    "lateral": "Yandan",
-    "sphinx": "Oturmuş (önden)",
-    "standing": "Ayakta",
-    "dorsal": "Sırtüstü",
-    "frontal": "Önden",
-    "oblique": "Çapraz açıdan",
-    "kidney stone": "Böbrek taşı",
-    "kidney cyst": "Böbrek kisti",
-    "grade0": "Derece 0",
-    "grade1": "Derece 1",
-    "grade2": "Derece 2",
-    "grade3": "Derece 3",
-    "grade4": "Derece 4",
-    "kirc": "Böbrek berrak hücreli kanseri (KIRC)",
-    "other": "Diğer",
-    "ckd": "Kronik böbrek hastalığı (KBH) bulgusu var",
-    "notckd": "Kronik böbrek hastalığı bulgusu yok",
-    "erythrocyte": "Eritrosit (alyuvar)",
-    "punctate reticulocyte": "Noktalı retikülosit (genç alyuvar)",
-    "aggregate reticulocyte": "Kümeli retikülosit (genç alyuvar)",
-    "conjunctivitis": "Konjonktivit (göz nezlesi)",
-    "feline asthma": "Kedi astımı",
-    "feline calicivirus": "Kedi kalisivirüs enfeksiyonu",
-    "feline chlamydiosis": "Kedi klamidyozu",
-    "feline herpesvirus": "Kedi herpes virüs enfeksiyonu",
-    "feline immunodeficiency virus": "Kedi bağışıklık yetmezliği virüsü (FIV)",
-    "feline infectious peritonitis": "Kedi enfeksiyöz peritoniti (FIP)",
-    "feline leukemia virus": "Kedi lösemi virüsü (FeLV)",
-    "feline panleukopenia": "Kedi panlökopenisi (kedi gençlik hastalığı)",
-    "feline renal disease": "Kedi böbrek hastalığı",
-    "fungal infection": "Mantar enfeksiyonu",
-    "gastroenteritis": "Gastroenterit (mide-bağırsak iltihabı)",
-    "hyperthyroidism": "Hipertiroidizm (tiroid bezi aşırı çalışması)",
-    "inflammatory bowel disease": "İnflamatuvar bağırsak hastalığı (IBD)",
-    "intestinal parasites": "Bağırsak parazitleri",
-    "pancreatitis": "Pankreatit (pankreas iltihabı)",
-    "ringworm": "Saçkıran (deri mantarı, dermatofitoz)",
-    "upper respiratory infection": "Üst solunum yolu enfeksiyonu",
+    "no pain": "ai.deger.no_pain",
+    "mild": "ai.deger.mild",
+    "mild pain": "ai.deger.mild_pain",
+    "moderate": "ai.deger.moderate",
+    "moderate pain": "ai.deger.moderate_pain",
+    "severe": "ai.deger.severe",
+    "severe pain": "ai.deger.severe_pain",
+    "normal": "ai.deger.normal",
+    "healthy": "ai.deger.healthy",
+    "sick": "ai.deger.sick",
+    "cancer": "ai.deger.cancer",
+    "abnormal": "ai.deger.abnormal",
+    "positive": "ai.deger.positive",
+    "negative": "ai.deger.negative",
+    "unknown": "ai.deger.unknown",
+    "none": "ai.deger.none",
+    "yes": "ai.deger.yes",
+    "no": "ai.deger.no",
+    "stone": "ai.deger.stone",
+    "cyst": "ai.deger.cyst",
+    "tumor": "ai.deger.tumor",
+    "kidney": "ai.deger.kidney",
+    "happy": "ai.deger.happy",
+    "resting": "ai.deger.resting",
+    "mothercall": "ai.deger.mothercall",
+    "mating": "ai.deger.mating",
+    "huntingmind": "ai.deger.huntingmind",
+    "warning": "ai.deger.warning",
+    "defence": "ai.deger.defence",
+    "angry": "ai.deger.angry",
+    "fighting": "ai.deger.fighting",
+    "paining": "ai.deger.paining",
+    "mide": "ai.deger.mide",
+    "bobrek": "ai.deger.bobrek",
+    "karaciger": "ai.deger.karaciger",
+    "mesane": "ai.deger.mesane",
+    "pankreas": "ai.deger.pankreas",
+    "bagirsak": "ai.deger.bagirsak",
+    "kalp": "ai.deger.kalp",
+    "dalak": "ai.deger.dalak",
+    "akciger_sag": "ai.deger.akciger_sag",
+    "akciger_sol": "ai.deger.akciger_sol",
+    "kutu_butun": "ai.deger.kutu_butun",
+    "lateral": "ai.deger.lateral",
+    "sphinx": "ai.deger.sphinx",
+    "standing": "ai.deger.standing",
+    "dorsal": "ai.deger.dorsal",
+    "frontal": "ai.deger.frontal",
+    "oblique": "ai.deger.oblique",
+    "kidney stone": "ai.deger.kidney_stone",
+    "kidney cyst": "ai.deger.kidney_cyst",
+    "grade0": "ai.deger.grade0",
+    "grade1": "ai.deger.grade1",
+    "grade2": "ai.deger.grade2",
+    "grade3": "ai.deger.grade3",
+    "grade4": "ai.deger.grade4",
+    "kirc": "ai.deger.kirc",
+    "other": "ai.deger.other",
+    "ckd": "ai.deger.ckd",
+    "notckd": "ai.deger.notckd",
+    "erythrocyte": "ai.deger.erythrocyte",
+    "punctate reticulocyte": "ai.deger.punctate_reticulocyte",
+    "aggregate reticulocyte": "ai.deger.aggregate_reticulocyte",
+    "conjunctivitis": "ai.deger.conjunctivitis",
+    "feline asthma": "ai.deger.feline_asthma",
+    "feline calicivirus": "ai.deger.feline_calicivirus",
+    "feline chlamydiosis": "ai.deger.feline_chlamydiosis",
+    "feline herpesvirus": "ai.deger.feline_herpesvirus",
+    "feline immunodeficiency virus": "ai.deger.feline_immunodeficiency_virus",
+    "feline infectious peritonitis": "ai.deger.feline_infectious_peritonitis",
+    "feline leukemia virus": "ai.deger.feline_leukemia_virus",
+    "feline panleukopenia": "ai.deger.feline_panleukopenia",
+    "feline renal disease": "ai.deger.feline_renal_disease",
+    "fungal infection": "ai.deger.fungal_infection",
+    "gastroenteritis": "ai.deger.gastroenteritis",
+    "hyperthyroidism": "ai.deger.hyperthyroidism",
+    "inflammatory bowel disease": "ai.deger.inflammatory_bowel_disease",
+    "intestinal parasites": "ai.deger.intestinal_parasites",
+    "pancreatitis": "ai.deger.pancreatitis",
+    "ringworm": "ai.deger.ringworm",
+    "upper respiratory infection": "ai.deger.upper_respiratory_infection",
 }
 
-#: Hastalık modelinin girdi belirtileri → sade Türkçe (arayüz `DISEASE_FEATURE_TR`).
+#: Hastalık modelinin girdi belirtileri → sade ad (katalog ANAHTARI `ai.belirti.*`; arayüz `DISEASE_FEATURE_TR`).
 BELIRTILER = {
-    "Age": "Yaş",
-    "Weight": "Kilo",
-    "Heart_Rate": "Nabız",
-    "Body_Temperature": "Vücut ısısı (ateş)",
-    "Duration_days": "Şikâyetin süresi",
-    "Appetite_Loss_bin": "İştahsızlık",
-    "Vomiting_bin": "Kusma",
-    "Diarrhea_bin": "İshal",
-    "Coughing_bin": "Öksürük",
-    "Labored_Breathing_bin": "Zor nefes alma",
-    "Lameness_bin": "Topallama",
-    "Skin_Lesions_bin": "Deride yara / lezyon",
-    "Nasal_Discharge_bin": "Burun akıntısı",
-    "Eye_Discharge_bin": "Göz akıntısı",
-    "has_Lethargy": "Halsizlik",
-    "has_Weight_Loss": "Kilo kaybı",
-    "has_Sneezing": "Hapşırma",
-    "has_Dehydration": "Susuz kalma",
-    "has_Fever": "Ateş",
+    "Age": "ai.belirti.Age",
+    "Weight": "ai.belirti.Weight",
+    "Heart_Rate": "ai.belirti.Heart_Rate",
+    "Body_Temperature": "ai.belirti.Body_Temperature",
+    "Duration_days": "ai.belirti.Duration_days",
+    "Appetite_Loss_bin": "ai.belirti.Appetite_Loss_bin",
+    "Vomiting_bin": "ai.belirti.Vomiting_bin",
+    "Diarrhea_bin": "ai.belirti.Diarrhea_bin",
+    "Coughing_bin": "ai.belirti.Coughing_bin",
+    "Labored_Breathing_bin": "ai.belirti.Labored_Breathing_bin",
+    "Lameness_bin": "ai.belirti.Lameness_bin",
+    "Skin_Lesions_bin": "ai.belirti.Skin_Lesions_bin",
+    "Nasal_Discharge_bin": "ai.belirti.Nasal_Discharge_bin",
+    "Eye_Discharge_bin": "ai.belirti.Eye_Discharge_bin",
+    "has_Lethargy": "ai.belirti.has_Lethargy",
+    "has_Weight_Loss": "ai.belirti.has_Weight_Loss",
+    "has_Sneezing": "ai.belirti.has_Sneezing",
+    "has_Dehydration": "ai.belirti.has_Dehydration",
+    "has_Fever": "ai.belirti.has_Fever",
 }
 
 #: Olasılık taşıyan alanlar (0–1 ise yüzde olarak yazılır).
@@ -363,16 +365,19 @@ _AD_ALANLARI = (
     "predicted_class",
 )
 _OLASILIK_SIRASI = ("probability", "prob", "confidence", "conf", "score")
-_AYLAR = ("Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık")
 
-#: Rapor sonundaki sabit not (okuyucu: hayvan sahibi + veteriner).
-KESIN_TANI_NOTU = (
-    "Bu rapor yapay zekâ ile hazırlanmış bir ön değerlendirmedir. Kesin tanı ve tedavi kararını veteriner hekim verir."
-)
-EKSIK_ALAN_NOTU = "Bazı teknik ölçümler bu rapora alınmadı; tamamı uygulamadaki analiz geçmişinde görülebilir."
-DUSUK_GUVEN_NOTU = (
-    "Yapay zekânın bu sonuca güveni düşük. Sonucu tek başına kullanmayın; mutlaka veteriner hekiminize danışın."
-)
+
+#: Rapor sonundaki sabit not (okuyucu: hayvan sahibi + veteriner) — istek dilinde.
+def kesin_tani_notu() -> str:
+    return ceviri.t("ai.rapor.kesinTani")
+
+
+def eksik_alan_notu() -> str:
+    return ceviri.t("ai.rapor.eksikAlan")
+
+
+def dusuk_guven_notu() -> str:
+    return ceviri.t("ai.rapor.dusukGuven")
 
 
 def _gizli_mi(anahtar: str) -> bool:
@@ -383,7 +388,10 @@ def _gizli_mi(anahtar: str) -> bool:
 def turkce_deger(v: Any) -> str:
     """Bilinen İngilizce / iç değeri Türkçeye çevir; bilinmiyorsa aynen."""
     s = str(v if v is not None else "").strip()
-    return DEGERLER.get(s.lower(), s) if s else "—"
+    if not s:
+        return "—"
+    deger_anahtari = DEGERLER.get(s.lower())
+    return ceviri.t(deger_anahtari) if deger_anahtari else s
 
 
 def _sayi(v: float, basamak: int = 2) -> str:
@@ -391,7 +399,7 @@ def _sayi(v: float, basamak: int = 2) -> str:
         return "—"
     if float(v).is_integer():
         return str(int(v))
-    return f"{v:.{basamak}f}".rstrip("0").rstrip(",.").replace(".", ",")
+    return f"{v:.{basamak}f}".rstrip("0").rstrip(",.").replace(".", "," if ceviri.etkin_dil() == "tr" else ".")
 
 
 def _yuzde(p: Any) -> str | None:
@@ -403,13 +411,13 @@ def _yuzde(p: Any) -> str | None:
         p *= 100.0
     if not 0.0 <= p <= 100.0:
         return None
-    return f"%{round(p)}" if p >= 1 or p == 0 else "%1'in altında"
+    return ceviri.t("ai.rapor.yuzde", deger=round(p)) if p >= 1 or p == 0 else ceviri.t("ai.rapor.yuzdeAlti")
 
 
 def _metne_cevir(deger: Any, anahtar: str = "") -> str:
     """Bir değeri okunur tek satıra çevirir (uzunsa KIRPAR ama SÖYLER). İç içe sözlükte bilinmeyen alt alan ATLANIR."""
     if isinstance(deger, bool):
-        return "Evet" if deger else "Hayır"
+        return ceviri.t("ai.rapor.evet") if deger else ceviri.t("ai.rapor.hayir")
     if isinstance(deger, (int, float)):
         if anahtar in OLASILIK_ALANLARI:
             y = _yuzde(deger)
@@ -421,22 +429,24 @@ def _metne_cevir(deger: Any, anahtar: str = "") -> str:
             return "—"
         parcalar = [_metne_cevir(x) for x in deger[:8] if not isinstance(x, (dict, list, tuple))]
         if not parcalar:
-            return f"{len(deger)} kayıt"
-        kuyruk = f" … ({len(deger)} öğe)" if len(deger) > 8 else ""
+            return ceviri.t("ai.rapor.kayit", count=len(deger))
+        kuyruk = ceviri.t("ai.rapor.kuyruk", count=len(deger)) if len(deger) > 8 else ""
         return ", ".join(parcalar) + kuyruk
     if isinstance(deger, dict):
         ic = []
         for k, v in list(deger.items())[:12]:
             if _gizli_mi(k) or isinstance(v, (dict, list, tuple)):
                 continue
-            etiket = ETIKETLER.get(str(k)) or (DEGERLER.get(str(k).lower()) if str(k).lower() in DEGERLER else None)
-            if not etiket:
+            etiket_anahtari = ETIKETLER.get(str(k)) or (
+                DEGERLER.get(str(k).lower()) if str(k).lower() in DEGERLER else None
+            )
+            if not etiket_anahtari:
                 continue
-            ic.append(f"{etiket}: {_metne_cevir(v, str(k))}")
+            ic.append(f"{ceviri.t(etiket_anahtari)}: {_metne_cevir(v, str(k))}")
         return ("; ".join(ic) or "—")[:AZAMI_DEGER_UZUNLUGU]
     s = turkce_deger(deger)
     if len(s) > AZAMI_DEGER_UZUNLUGU:
-        return s[:AZAMI_DEGER_UZUNLUGU] + f"… (toplam {len(s)} karakter)"
+        return s[:AZAMI_DEGER_UZUNLUGU] + ceviri.t("ai.rapor.kirpildi", n=len(s))
     return s
 
 
@@ -449,7 +459,7 @@ def _tarih(v: Any) -> str:
         t = datetime.fromisoformat(s.replace("Z", "+00:00"))
     except ValueError:
         return s
-    return f"{t.day} {_AYLAR[t.month - 1]} {t.year}, {t:%H:%M}"
+    return ceviri.tarih_metni(t)
 
 
 def _olasi_sonuclar(liste: Any) -> list[str]:
@@ -491,12 +501,16 @@ def _etkileyen_belirtiler(xai: Any) -> list[str]:
     for f in ozellikler[:5]:
         a = float(f["attribution"])
         oran = abs(a) / en_buyuk
-        guc = "güçlü etki" if oran >= 0.66 else ("orta etki" if oran >= 0.33 else "zayıf etki")
-        yon = "bu tanının olasılığını artırdı" if a >= 0 else "bu tanının olasılığını azalttı"
-        ad = BELIRTILER.get(str(f["feature"]))
-        if not ad:
+        guc = (
+            ceviri.t("ai.rapor.gucluEtki")
+            if oran >= 0.66
+            else (ceviri.t("ai.rapor.ortaEtki") if oran >= 0.33 else ceviri.t("ai.rapor.zayifEtki"))
+        )
+        yon = ceviri.t("ai.rapor.yonArtirdi") if a >= 0 else ceviri.t("ai.rapor.yonAzaltti")
+        belirti_anahtari = BELIRTILER.get(str(f["feature"]))
+        if not belirti_anahtari:
             continue  # bilinmeyen model girdisi adı HAM yazılmaz
-        satirlar.append(f"{ad}: {guc} — {yon}")
+        satirlar.append(ceviri.t("ai.rapor.etkiSatiri", ad=ceviri.t(belirti_anahtari), guc=guc, yon=yon))
     return satirlar
 
 
@@ -520,18 +534,18 @@ def analiz_pdf_ogeleri(kayit: dict) -> list[dict]:
                 o["aciklama"] = aciklama
             ogeler.append(o)
 
-    ekle("Hasta", kayit.get("patient_name"))
+    ekle(ceviri.t("ai.rapor.hasta"), kayit.get("patient_name"))
     tarih = _tarih(kayit.get("created_at"))
     if tarih != "—":
-        ogeler.append({"etiket": "Analiz tarihi", "aciklama": tarih})
-    ekle("Analiz türü", kayit.get("module_label") or kayit.get("module_id"))
-    ekle("Sonuç", kayit.get("result_summary"))
+        ogeler.append({"etiket": ceviri.t("ai.rapor.analizTarihi"), "aciklama": tarih})
+    ekle(ceviri.t("ai.rapor.analizTuru"), kayit.get("module_label") or kayit.get("module_id"))
+    ekle(ceviri.t("ai.rapor.sonuc"), kayit.get("result_summary"))
     g = kayit.get("confidence")
     if isinstance(g, (int, float)) and not isinstance(g, bool) and _yuzde(g):
         ogeler.append(
             {
-                "etiket": "Yapay zekânın bu sonuca güveni",
-                "aciklama": f"{_yuzde(g)} — modelin kendi tahminine ne kadar güvendiğini gösterir; kesin tanı değildir.",
+                "etiket": ceviri.t("ai.rapor.guven"),
+                "aciklama": ceviri.t("ai.rapor.guvenAciklama", yuzde=_yuzde(g)),
             }
         )
 
@@ -539,46 +553,45 @@ def analiz_pdf_ogeleri(kayit: dict) -> list[dict]:
     atlanan = 0
     if isinstance(detay, dict):
         if detay.get("low_confidence") is True:
-            ogeler.append({"etiket": "Dikkat", "aciklama": DUSUK_GUVEN_NOTU})
+            ogeler.append({"etiket": ceviri.t("ai.rapor.dikkat"), "aciklama": dusuk_guven_notu()})
         bolum(
-            "Olası tanılar (olasılık sırasıyla)",
+            ceviri.t("ai.rapor.olasiTanilar"),
             _olasi_sonuclar(detay.get("results") or detay.get("top_k") or detay.get("probabilities")),
         )
         bolum(
-            "Sonucu en çok etkileyen belirtiler",
+            ceviri.t("ai.rapor.etkileyenBelirtiler"),
             _etkileyen_belirtiler(detay.get("xai")),
-            "Yapay zekânın bu sonuca varırken en çok dikkate aldığı bilgiler. Belirtinin hayvanda bulunması ya da "
-            "bulunmaması sonucu bu yönde etkiledi.",
+            ceviri.t("ai.rapor.etkileyenAciklama"),
         )
         gd = detay.get("girdi_dogrulama")
         if isinstance(gd, dict):
             if gd.get("dogrulandi") is True:
                 ogeler.append(
-                    {"etiket": "Görüntü kontrolü", "aciklama": "Görüntü termal kamera görüntüsü olarak doğrulandı."}
+                    {"etiket": ceviri.t("ai.rapor.goruntuKontrolu"), "aciklama": ceviri.t("ai.rapor.termalDogrulandi")}
                 )
             elif isinstance(gd.get("uyari"), str) and gd["uyari"]:
-                ogeler.append({"etiket": "Görüntü kontrolü", "aciklama": gd["uyari"]})
+                ogeler.append({"etiket": ceviri.t("ai.rapor.goruntuKontrolu"), "aciklama": gd["uyari"]})
             if isinstance(gd.get("yon_notu"), str) and gd["yon_notu"]:
-                ogeler.append({"etiket": "Not", "aciklama": gd["yon_notu"]})
+                ogeler.append({"etiket": ceviri.t("ai.rapor.not"), "aciklama": gd["yon_notu"]})
         tahmin = detay.get("prediction")
         if isinstance(tahmin, dict):
             if tahmin.get("label"):
-                ekle("Tahmin", tahmin.get("label"))
+                ekle(ceviri.t("ai.rapor.tahmin"), tahmin.get("label"))
             ps = tahmin.get("probability_sick")
             if isinstance(ps, (int, float)) and not isinstance(ps, bool):
-                ekle("Hastalık olasılığı", ps, "probability_sick")
+                ekle(ceviri.t("ai.rapor.hastalikOlasiligi"), ps, "probability_sick")
         for anahtar, deger in detay.items():
             if _gizli_mi(anahtar) or (anahtar == "prediction" and isinstance(deger, dict)):
                 continue
-            etiket = ETIKETLER.get(str(anahtar))
-            if not etiket:
+            etiket_anahtari = ETIKETLER.get(str(anahtar))
+            if not etiket_anahtari:
                 atlanan += 1  # bilinmeyen alan adı HAM gösterilmez (okuyucu: veteriner / hayvan sahibi)
                 continue
-            ekle(etiket, deger, str(anahtar))
+            ekle(ceviri.t(etiket_anahtari), deger, str(anahtar))
 
     # ⚠️ HEKİM DEĞERLENDİRMESİ EN SONDA ve AYRI: AI çıktısı öneridir, klinik karar hekimindir.
-    ekle("Veteriner hekim değerlendirmesi", kayit.get("review_note") or kayit.get("vet_review"))
+    ekle(ceviri.t("ai.rapor.vetDegerlendirme"), kayit.get("review_note") or kayit.get("vet_review"))
     if atlanan:
-        ogeler.append({"etiket": "Not", "aciklama": EKSIK_ALAN_NOTU})
-    ogeler.append({"etiket": "Önemli", "aciklama": KESIN_TANI_NOTU})
+        ogeler.append({"etiket": ceviri.t("ai.rapor.not"), "aciklama": eksik_alan_notu()})
+    ogeler.append({"etiket": ceviri.t("ai.rapor.onemli"), "aciklama": kesin_tani_notu()})
     return ogeler
