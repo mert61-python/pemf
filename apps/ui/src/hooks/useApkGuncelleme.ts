@@ -19,6 +19,8 @@ import {
   kurulumErtelemesiniKaldir,
   type MobilSurum,
 } from "@/services/mobileUpdate";
+import i18n from "i18next";
+import { useTranslation } from "react-i18next";
 
 /**
  * Kurulum ekranını AÇMAK şu an güvenli mi? (cihazda tedavi sürüyor mu?)
@@ -71,10 +73,10 @@ async function seansSuruyorMu(): Promise<boolean> {
 export function etaMetni(kalanSn: number): string {
   if (!Number.isFinite(kalanSn) || kalanSn < 0) return "";
   const s = Math.round(kalanSn);
-  if (s < 60) return `~${Math.max(1, s)} sn kaldı`;
+  if (s < 60) return i18n.t("guncelleme.eta.sn", { sn: Math.max(1, s) });
   const dk = Math.floor(s / 60);
-  if (dk < 60) return `~${dk} dk ${s % 60} sn kaldı`;
-  return `~${Math.floor(dk / 60)} sa ${dk % 60} dk kaldı`;
+  if (dk < 60) return i18n.t("guncelleme.eta.dkSn", { dk, sn: s % 60 });
+  return i18n.t("guncelleme.eta.saDk", { sa: Math.floor(dk / 60), dk: dk % 60 });
 }
 
 /** ETA hız penceresi: son 15 sn'lik örneklerden anlık hız (launcher'dakiyle aynı yaklaşım). */
@@ -100,6 +102,7 @@ export interface ApkGuncelleme {
 }
 
 export function useApkGuncelleme(surum: MobilSurum | null): ApkGuncelleme {
+  const { t } = useTranslation();
   const [oran, setOran] = useState<number | null>(null);
   const [eta, setEta] = useState("");
   const [hata, setHata] = useState("");
@@ -148,10 +151,10 @@ export function useApkGuncelleme(surum: MobilSurum | null): ApkGuncelleme {
           // ⚠️ AYRI METİN (denetim 2026-08-23): sunucu 2xx dışı yanıt verdi — varlık silinmiş ya
           // da yanlış etikete taşınmış olabilir. Burada "bağlantınızı kontrol edin" demek
           // kullanıcıyı işe yaramayacak bir döngüye sokar: tekrar denemek DURUMU DEĞİŞTİRMEZ.
-          ? "Güncelleme paketine şu an ulaşılamıyor (sunucu hatası). Bağlantınızla ilgili değil; kısa süre sonra tekrar deneyin."
+          ? t("guncelleme.hata.sunucu")
           : ind.hata === "boyut"
-            ? "İndirme eksik kaldı. Bağlantınızı kontrol edip tekrar deneyin."
-            : "Güncelleme indirilemedi. Bağlantınızı kontrol edip tekrar deneyin.",
+            ? t("guncelleme.hata.eksik")
+            : t("guncelleme.hata.indirilemedi"),
       );
       return;
     }
@@ -163,8 +166,7 @@ export function useApkGuncelleme(surum: MobilSurum | null): ApkGuncelleme {
     // bekler ve seans bitince hazır-dosya hızlı yolu tek bayt bile yeniden indirmez.
     if (await seansSuruyorMu()) {
       setBilgi(
-        "Güncelleme indirildi ama cihazda tedavi sürüyor (seans ya da çalışan bobin) — kurulum " +
-          "ekranı açılmadı. Bobinler durduktan sonra 'Güncelle'ye dokunun; paket hazır, yeniden indirilmeyecek.",
+        t("guncelleme.bilgi.seansSuruyor"),
       );
       return;
     }
@@ -175,8 +177,7 @@ export function useApkGuncelleme(surum: MobilSurum | null): ApkGuncelleme {
     // kullanıcı hazır olduğunda tek dokunuşla (yeniden indirmeden) kurar.
     if (kurulumErtelendiMi(surum.versionCode)) {
       setBilgi(
-        "Güncelleme indirildi ve hazır — güncellemeyi ertelediğiniz için kurulum ekranı açılmadı. " +
-          "Hazır olduğunuzda 'Güncelle'ye dokunun; paket yeniden indirilmeyecek.",
+        t("guncelleme.bilgi.ertelendi"),
       );
       return;
     }
@@ -184,22 +185,22 @@ export function useApkGuncelleme(surum: MobilSurum | null): ApkGuncelleme {
     switch (await kurulumuBaslat(ind.dosyaUri)) {
       case "acildi":
         setKurulumAcildi(true);
-        setBilgi("Kurulum başlatıldı — telefonunuzun onayını bekleyin. Vazgeçerseniz bu ekrandan tekrar deneyebilirsiniz.");
+        setBilgi(t("guncelleme.bilgi.kurulumBaslatildi"));
         break;
       case "izin_gerekli":
         // İzin ekranı zaten açıldı; kullanıcı ne yapacağını ve sonra nereye döneceğini bilmeli.
-        setHata("Kurulum için izin gerekiyor. Açılan ekranda bu uygulamaya izin verip tekrar deneyin.");
+        setHata(t("guncelleme.hata.izinGerekli"));
         break;
       case "paylasim":
         // Yerel modül kaydolmamış (olmaması gereken durum). Sessizce "oldu" demek YANLIŞ olurdu:
         // kullanıcı paylaşım sayfası görüyor ve kurulumun neden açılmadığını bilmeli.
         setKurulumAcildi(true);
-        setBilgi("Kurulum ekranı açılamadı; dosyayı kaydedip telefonunuzdan elle kurabilirsiniz.");
+        setBilgi(t("guncelleme.bilgi.kurulumAcilamadi"));
         break;
       default:
-        setHata("Kurulum açılamadı. Telefon ayarlarından bu uygulamaya 'bilinmeyen kaynak' izni verip tekrar deneyin.");
+        setHata(t("guncelleme.hata.bilinmeyenKaynak"));
     }
-  }, [surum]);
+  }, [surum, t]);
 
   return { oran, eta, hata, bilgi, kurulumAcildi, paketHazir, guncelle };
 }

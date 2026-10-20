@@ -8,8 +8,10 @@ import { useState, useEffect } from "react";
 import { colors, spacing, typography, rs, radius } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { formatUptime } from "@/utils/uptime";
+import { useTranslation } from "react-i18next";
 
 export function SystemInfoPanel() {
+  const { t } = useTranslation();
   const { snapshot, connectionQuality, haveRealData } = useLiveData();
   const sysInfo = snapshot.system;
   const [uptime, setUptime] = useState("00:00:00");
@@ -40,16 +42,16 @@ export function SystemInfoPanel() {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>💻 Sistem Bilgileri</Text>
+      <Text style={styles.title}>{t("ayarlar.sistemBilgi.baslik")}</Text>
 
-      <InfoRow label="Yazılım Sürümü" value={`v${sysInfo?.softwareVersion ?? "1"}`} accent />
-      <InfoRow label="Cihaz ID" value={sysInfo?.deviceId ?? "PEMF-001"} />
-      <InfoRow label="Çalışma Süresi" value={uptime} />
-      <InfoRow label="Toplam Seans" value={`${sysInfo?.totalSessions ?? 0} seans`} />
+      <InfoRow label={t("ayarlar.sistemBilgi.yazilimSurumu")} value={`v${sysInfo?.softwareVersion ?? "1"}`} accent />
+      <InfoRow label={t("ayarlar.sistemBilgi.cihazId")} value={sysInfo?.deviceId ?? "PEMF-001"} />
+      <InfoRow label={t("ayarlar.sistemBilgi.calismaSuresi")} value={uptime} />
+      <InfoRow label={t("ayarlar.sistemBilgi.toplamSeans")} value={t("ayarlar.sistemBilgi.seansSayisi", { count: sysInfo?.totalSessions ?? 0 })} />
       <InfoRow
-        label="STM32 Bağlantısı"
+        label={t("ayarlar.sistemBilgi.stmBaglantisi")}
         value={
-          stale ? "Bilinmiyor ⚠️" : stmUyumsuz ? "Bağlı · yazılımı uyumsuz ⛔" : stmConnected ? "Bağlı ✅" : "Bekleniyor ⏳"
+          stale ? t("ayarlar.sistemBilgi.stmBilinmiyor") : stmUyumsuz ? t("ayarlar.sistemBilgi.stmUyumsuz") : stmConnected ? t("ayarlar.sistemBilgi.stmBagli") : t("ayarlar.sistemBilgi.stmBekleniyor")
         }
         valueColor={stale ? "#94a3b8" : stmUyumsuz ? "#ef4444" : stmConnected ? "#22c55e" : "#f59e0b"}
       />

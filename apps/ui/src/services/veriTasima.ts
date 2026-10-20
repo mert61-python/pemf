@@ -1,3 +1,4 @@
+import i18n from "i18next";
 // Author: mertaygn, cglrgrkn
 /**
  * VERİ TAŞIMA (Ayarlar → şifreli yedek / geri yükleme) — zaman aşımı ve metinler TEK kaynakta (2-D).
@@ -16,20 +17,17 @@
 export const VERI_TASIMA_ZAMAN_ASIMI_MS = 30 * 60 * 1000;
 
 /** Geri yükleme zaman aşımına uğrarsa: işlem cihazda SÜRÜYOR olabilir — tekrarlamak kayıtları çoğaltabilirdi. */
-export const ICE_AKTARMA_ZAMAN_ASIMI_MESAJI =
-  "Geri yükleme cihazda sürüyor olabilir — bitince kayıtlar görünür. İşlemi tekrarlamayın ve uygulamayı yeniden başlatmayın; " +
-  "birkaç dakika sonra Seans Geçmişi'ni yenileyin.";
+export const iceAktarmaZamanAsimiMesaji = (): string =>
+  i18n.t("ayarlar.veriTasima.iceZamanAsimi");
 
 /** Yedek alma zaman aşımına uğrarsa: dosya cihazda hazırlanıyor olabilir. */
-export const DISA_AKTARMA_ZAMAN_ASIMI_MESAJI =
-  "Yedek alma cihazda sürüyor olabilir — cihaz zamanında yanıt vermedi (veri büyük olabilir). Bir süre bekleyip yedek dosyasının " +
-  "oluşup oluşmadığını denetleyin.";
+export const disaAktarmaZamanAsimiMesaji = (): string =>
+  i18n.t("ayarlar.veriTasima.disaZamanAsimi");
 
 /** ⚠️ D2-3.5: geri yükleme isteği bağlantı kopmasıyla düşerse (zaman aşımı DEĞİL): işlem cihazda başlamış olabilir. */
-export const ICE_AKTARMA_AG_HATASI_MESAJI =
-  "Bağlantı koptu — geri yükleme cihazda başlamış olabilir. İşlemi tekrarlamayın; bağlantı dönünce birkaç dakika sonra Seans " +
-  "Geçmişi'ni yenileyin.";
+export const iceAktarmaAgHatasiMesaji = (): string =>
+  i18n.t("ayarlar.veriTasima.iceAgHatasi");
 
 /** ⚠️ D2-3.5: yedek alma isteği bağlantı kopmasıyla düşerse: dosya bu istemciye ulaşmadı. */
-export const DISA_AKTARMA_AG_HATASI_MESAJI =
-  "Bağlantı koptu — yedek bu cihaza ulaşmadı, yedek OLUŞTURULMADI sayın. Bağlantıyı denetleyip yedeği yeniden alın.";
+export const disaAktarmaAgHatasiMesaji = (): string =>
+  i18n.t("ayarlar.veriTasima.disaAgHatasi");

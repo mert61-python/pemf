@@ -25,10 +25,10 @@ import { backendBuMakinede } from "@/services/backendKonumu";
 import { DilSecimKarti } from "@/components/domain/DilSecimKarti";
 import { dilSecimiGorunur } from "@/i18n";
 import {
-  DISA_AKTARMA_AG_HATASI_MESAJI,
-  DISA_AKTARMA_ZAMAN_ASIMI_MESAJI,
-  ICE_AKTARMA_AG_HATASI_MESAJI,
-  ICE_AKTARMA_ZAMAN_ASIMI_MESAJI,
+  disaAktarmaAgHatasiMesaji,
+  disaAktarmaZamanAsimiMesaji,
+  iceAktarmaAgHatasiMesaji,
+  iceAktarmaZamanAsimiMesaji,
   VERI_TASIMA_ZAMAN_ASIMI_MS,
 } from "@/services/veriTasima";
 import { useTranslation } from "react-i18next";
@@ -134,8 +134,8 @@ export function SettingsScreen() {
     const res = await apiPost<{ status?: string; filename?: string; data_b64?: string; yol?: string; ad?: string;
                                bayt?: number; counts?: Record<string, number> } | null>(
       "/data/export", yerel ? { passphrase: parola, kaydet: true } : { passphrase: parola }, null,
-      { timeoutMs: VERI_TASIMA_ZAMAN_ASIMI_MS, zamanAsimiMesaji: DISA_AKTARMA_ZAMAN_ASIMI_MESAJI,
-        agHatasiMesaji: DISA_AKTARMA_AG_HATASI_MESAJI });
+      { timeoutMs: VERI_TASIMA_ZAMAN_ASIMI_MS, zamanAsimiMesaji: disaAktarmaZamanAsimiMesaji(),
+        agHatasiMesaji: disaAktarmaAgHatasiMesaji() });
     setTasimaMesgul("");
     if (!res) return;                                 // hata mesajını apiPost gösterdi
     const c = res.counts || {};
@@ -201,8 +201,8 @@ export function SettingsScreen() {
       // ⚠️ D2.E03 (Y84): UZUN zaman aşımı; zaman aşımında metin "Tekrar deneyin" DEMEZ — geri yükleme cihazda sürüyor olabilir.
       const res = await apiPost<{ status?: string; counts?: Record<string, number>; uyari?: string } | null>(
         "/data/import", { passphrase: parola, blob_b64: btoa(s), confirm: "REPLACE_ALL" }, null,
-        { timeoutMs: VERI_TASIMA_ZAMAN_ASIMI_MS, zamanAsimiMesaji: ICE_AKTARMA_ZAMAN_ASIMI_MESAJI,
-          agHatasiMesaji: ICE_AKTARMA_AG_HATASI_MESAJI });
+        { timeoutMs: VERI_TASIMA_ZAMAN_ASIMI_MS, zamanAsimiMesaji: iceAktarmaZamanAsimiMesaji(),
+          agHatasiMesaji: iceAktarmaAgHatasiMesaji() });
       setTasimaMesgul("");
       if (!res?.counts) return;
       const c = res.counts;

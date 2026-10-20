@@ -1,4 +1,12 @@
 {
+  "ag": {
+    "cevrimdisiBaslik": "The device appears to be offline",
+    "cevrimdisiMetin": "The device is registered but is not responding. Make sure it is on and connected to the internet; remote access may also have been turned off from the device's own screen.",
+    "farkliAgBaslik": "You are on a different network",
+    "farkliAgMetin": "Your phone is not on the same Wi-Fi as the device. This is normal — the pairing code below is exactly for this; you connect to the device over the internet.",
+    "izolasyonBaslik": "Your modem is isolating devices from each other",
+    "izolasyonMetin": "The device can be reached over the internet, but not directly on the same Wi-Fi ({{cihazIp}}). \"Client isolation\" (AP Isolation) may be enabled on your modem, or your phone may be on a guest network. Turn this option off in the modem settings or move your phone to the main Wi-Fi network. If you prefer, you can also connect over the internet with the code below."
+  },
   "altBaslik": "App preferences and device connection settings.",
   "baglanti": {
     "adresKaydedilmedi": "Invalid server address — not saved.",
@@ -41,6 +49,12 @@
     "selfTestGovde": "The device will test itself; the coils may be energized briefly during the test. Make sure the animal is NOT in the cabin."
   },
   "baslik": "System Settings",
+  "bulut": {
+    "guncellenemiyor": "The device's cloud record cannot be updated right now (network or server error). Remote access information may be outdated; if the problem persists, tell the support team.",
+    "istemciYok": "Cloud connection was not established: the device is not registering for remote access. Connections on the same network are not affected.",
+    "rpcEksik": "The cloud record is being written with an incomplete configuration: the pairing code is not sent to the cloud, so connecting remotely with the code will not work. Connections on the same network are not affected.",
+    "secretUyusmazligi": "Remote access is not updating: this device's identity is registered in the cloud with a different security key (usually happens after a reinstall). The pairing code below will NOT work for connecting remotely. Connections on the same network are not affected. Ask the support team to reset the device's cloud record."
+  },
   "dil": {
     "aciklama": "App language. Your choice is remembered on this device and does not depend on your account or profile.",
     "baslik": "Language / Dil",
@@ -58,10 +72,39 @@
     "kod": "Pairing code",
     "koduEtiketi": "This device's pairing code: ",
     "paylasin": "To open this device remotely, share the identity below with another device.",
+    "sonuc": {
+      "adresYok": "The device was found but has no remote access address. If the device is on and remote access is enabled, check the cloud record warning on the device's Settings screen.",
+      "adresYokBayat_one": "The device is registered but has no remote access address, and its cloud record has not been updated for {{count}} day. This usually means the device cannot write to the cloud (even if the device is on). Check the warning on the device's Settings screen; if the problem persists, tell the support team.",
+      "adresYokBayat_other": "The device is registered but has no remote access address, and its cloud record has not been updated for {{count}} days. This usually means the device cannot write to the cloud (even if the device is on). Check the warning on the device's Settings screen; if the problem persists, tell the support team.",
+      "bayat": "The device is registered but appears to be offline right now. Make sure it is on and connected to the internet.",
+      "bulunamadi": "No online device matches this code/ID. You also get this message if the device has been off/offline for a long time: first make sure the device is on and connected to the internet, then check the code.",
+      "bulutaUlasilamadi": "Could not reach the cloud (connection/timeout). Check your internet and try again.",
+      "gecersizAdres": "Invalid device address format.",
+      "kodReddi": "The pairing code was not accepted. The connection setting was not changed; check the code and try again.",
+      "kodReddiOnceki": "The device was found but the pairing code was not accepted — the connection stayed on the previous device. Check the code and try again.",
+      "ulasilamiyor": "The device was found but is offline right now, or its identity could not be verified."
+    },
+    "sonucOk": "Device paired and connected ✓",
     "uzakBaglanBaslik": "Connect to a remote device (code or ID)",
     "uzakBaglanEtiketi": "Connect to a remote device: pairing code or device ID",
     "uzakBaglanIpucu": "Pairing code (e.g. A3F9K2) or device ID",
     "uzaktanGecersiz": " (invalid remotely)"
+  },
+  "eslestirmeRehberi": {
+    "ayniWifi": "Are you on the same Wi-Fi?",
+    "ayniWifiKodGerekmez": "If you connect to the same Wi-Fi as the device, no code is needed; the app finds the device by itself.",
+    "baglaniyor": "Connecting…",
+    "baslik": "Connect to the device",
+    "birKezEslesme": "Once paired, this screen won't appear again — the app connects automatically on later launches.",
+    "bulunamadi": "Device not found. This is normal if your phone is <kalin>not on the same Wi-Fi as the device</kalin> (mobile data or another network).",
+    "ekranAciklama": "In the PEMF Vet app, the <kalin>6-digit pairing code</kalin> appears under <kalin>More → Remote Access Connection</kalin>.",
+    "ekranaBakin": "Check the device screen",
+    "farkliAg": "if you're on a different network",
+    "gecici": "If the connection dropped briefly, searching again is enough — no code needed.",
+    "kimlikIpucu": "You can also paste the device ID instead of the code (longer than {{max}} characters).",
+    "kodGirin": "Enter the code here",
+    "kodOrnek": "E.G.: A3F9K2",
+    "yenidenDene": "Try Again"
   },
   "hakkinda": {
     "baslik": "About",
@@ -154,6 +197,35 @@
     "sonTur": " Last run: {{zaman}} — patients: {{sayi}}.",
     "sureEtiketi": "Retention period {{gun}} days"
   },
+  "sistemBilgi": {
+    "baslik": "💻 System Information",
+    "calismaSuresi": "Uptime",
+    "cihazId": "Device ID",
+    "seansSayisi_one": "{{count}} session",
+    "seansSayisi_other": "{{count}} sessions",
+    "stmBaglantisi": "STM32 Connection",
+    "stmBagli": "Connected ✅",
+    "stmBekleniyor": "Waiting ⏳",
+    "stmBilinmiyor": "Unknown ⚠️",
+    "stmUyumsuz": "Connected · firmware incompatible ⛔",
+    "toplamSeans": "Total Sessions",
+    "yazilimSurumu": "Software Version"
+  },
+  "sistemDurumu": {
+    "aktif": "Active",
+    "baslik": "🌐 System Status",
+    "bilinmiyor": "Unknown",
+    "cihazKoprusu": "Device Bridge",
+    "donanimSurucusu": "Hardware Driver",
+    "hata": "Error",
+    "internetBaglantisi": "Internet Connection",
+    "kablosuzBaglanti": "Wireless Connection",
+    "kuruluDegil": "Not installed",
+    "sistemBaglantisi": "System Connection",
+    "uyari": "Warning",
+    "uygulamaBaglantisi": "App Connection",
+    "yenileEtiketi": "Refresh system status"
+  },
   "uzakErisim": {
     "aciklama": "The device connects AUTOMATICALLY — you do not need to enter an IP.\n📡 Same Wi-Fi → found instantly via mDNS.\n🌐 Different network → after pairing once, it connects automatically to the device's current address in the cloud.\nThe options below are only a MANUAL fallback if the automatic connection fails.",
     "baslik": "Remote Access Connection"
@@ -162,13 +234,17 @@
     "aciklama": "Patient records, session history and AI analysis history are exported to a single ENCRYPTED file. ",
     "aciklamaArastirma": "ALL records on this device — clinical and research: patient / subject cards, session history and AI analysis history — are exported to a single ENCRYPTED file. ",
     "baslik": "Data Transfer (Device Change)",
+    "disaAgHatasi": "Connection lost — the backup did not reach this device; consider the backup NOT CREATED. Check the connection and take the backup again.",
     "disaAktarEtiketi": "Export clinical data to an encrypted file",
     "disaAktarEtiketiArastirma": "Export all records on this device to an encrypted file",
+    "disaZamanAsimi": "The backup may still be running on the device — the device did not respond in time (the data may be large). Wait a while and check whether the backup file has been created.",
     "geriYukleDugme": "Restore from Backup",
     "geriYukleEtiketi": "Restore from encrypted backup",
     "geriYukleUyari": "Restoring DELETES the existing session and analysis history if there are records on this device. Patient cards are not deleted.",
     "geriYukleUyariArastirma": "Restoring DELETES the existing session and analysis history (clinical and research) if there are records on this device. Patient / subject cards are not deleted.",
     "hazirlaniyor": "Preparing…",
+    "iceAgHatasi": "Connection lost — the restore may have started on the device. Do not repeat the operation; once the connection returns, refresh Session History after a few minutes.",
+    "iceZamanAsimi": "The restore may still be running on the device — your records will appear when it finishes. Do not repeat the operation or restart the app; refresh Session History in a few minutes.",
     "parolaUyarisi": "It is restored on the new computer with the same password. The file cannot be opened without the password — if you lose the password, the backup cannot be recovered.",
     "yedekOlustur": "Create Encrypted Backup",
     "yukleniyor": "Loading…"
@@ -189,5 +265,24 @@
     "yolYok": "The backup file could not be saved — the device did not report the file path; consider the backup NOT CREATED.",
     "zatenVardi_one": "{{count}} patient already existed",
     "zatenVardi_other": "{{count}} patients already existed"
+  },
+  "yedekParola": {
+    "belirleAciklama": "Without this passphrase the backup file CANNOT be opened or recovered. It must be at least {{min}} characters; save it in a password manager.",
+    "belirleBaslik": "Set a backup passphrase",
+    "devam": "Continue",
+    "devamEtiketi": "Continue",
+    "enAz": "Must be at least {{min}} characters.",
+    "girAciklama": "Enter the passphrase you set when the backup was created.",
+    "girBaslik": "Enter the backup passphrase",
+    "gizle": "Hide passphrase",
+    "goster": "Show passphrase",
+    "olustur": "Create Backup",
+    "olusturEtiketi": "Create backup",
+    "parolaEnAzYer": "Passphrase (at least {{min}} characters)",
+    "parolaEtiketi": "Backup passphrase",
+    "parolaYer": "Passphrase",
+    "tekrarEtiketi": "Backup passphrase (repeat)",
+    "tekrarYer": "Re-enter the passphrase",
+    "uyusmuyor": "The passphrases do not match."
   }
 }

@@ -9,6 +9,7 @@ import { useLiveData } from "@/context/LiveDataContext";
 import { agTanisiYap, taniMesaji, type AgTanisi } from "@/services/agTanisi";
 import { cihazaBaglan, eslesmeMesaji, KOD_MAX_UZUNLUK } from "@/services/pairing";
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
+import { Trans, useTranslation } from "react-i18next";
 
 /**
  * CİHAZA BAĞLANMA REHBERİ (2026-08-13, sahip bildirimi).
@@ -35,6 +36,7 @@ import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
  * yerde durur; ikinci bir kopya onların birinde eskimesi demekti.
  */
 export function DevicePairingGuide({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const { reconnect, wsConnected } = useLiveData();
   const [kod, setKod] = useState("");
@@ -83,12 +85,12 @@ export function DevicePairingGuide({ visible, onClose }: { visible: boolean; onC
         <View style={styles.sheet}>
           <View style={styles.header}>
             <Link2 size={20} color={colors.primary} />
-            <Text style={styles.title}>Cihaza bağlanın</Text>
+            <Text style={styles.title}>{t("ayarlar.eslestirmeRehberi.baslik")}</Text>
             <Pressable
               onPress={onClose}
               style={styles.close}
               accessibilityRole="button"
-              accessibilityLabel="Kapat"
+              accessibilityLabel={t("ortak.kapat")}
               hitSlop={10}
             >
               <X size={20} color={colors.textMuted} />
@@ -97,8 +99,7 @@ export function DevicePairingGuide({ visible, onClose }: { visible: boolean; onC
 
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
             <Text style={styles.lead}>
-              Cihaz bulunamadı. Telefonunuz cihazla <Text style={styles.bold}>aynı Wi-Fi&apos;de değilse</Text>{" "}
-              (mobil veri ya da başka bir ağ) bu normaldir.
+              <Trans i18nKey="ayarlar.eslestirmeRehberi.bulunamadi" components={{ kalin: <Text style={styles.bold} /> }} />
             </Text>
 
             {/* SEBEP KUTUSU — yalnız KANIT varken çıkar (bkz. services/agTanisi). Tanı
@@ -118,12 +119,12 @@ export function DevicePairingGuide({ visible, onClose }: { visible: boolean; onC
                 yanlıştı — bkz. AppShell notu). Aynı ağdaki geçici kopma için "yeniden dene",
                 farklı ağ için kod girişi; kullanıcı hangisinin geçerli olduğunu kendisi bilir. */}
             <View style={styles.hizli}>
-              <Text style={styles.hizliBaslik}>Aynı Wi-Fi&apos;de misiniz?</Text>
+              <Text style={styles.hizliBaslik}>{t("ayarlar.eslestirmeRehberi.ayniWifi")}</Text>
               <Text style={styles.hizliMetin}>
-                Bağlantı geçici koptuysa yeniden aramak yeterlidir — kod gerekmez.
+                {t("ayarlar.eslestirmeRehberi.gecici")}
               </Text>
               <Button
-                label="Yeniden Dene"
+                label={t("ayarlar.eslestirmeRehberi.yenidenDene")}
                 variant="secondary"
                 onPress={() => {
                   reconnect();
@@ -135,7 +136,7 @@ export function DevicePairingGuide({ visible, onClose }: { visible: boolean; onC
 
             <View style={styles.ayirac}>
               <View style={styles.ayiracCizgi} />
-              <Text style={styles.ayiracMetin}>farklı ağdaysanız</Text>
+              <Text style={styles.ayiracMetin}>{t("ayarlar.eslestirmeRehberi.farkliAg")}</Text>
               <View style={styles.ayiracCizgi} />
             </View>
 
@@ -144,10 +145,9 @@ export function DevicePairingGuide({ visible, onClose }: { visible: boolean; onC
                 <Text style={styles.adimNoText}>1</Text>
               </View>
               <View style={styles.adimIcerik}>
-                <Text style={styles.adimBaslik}>Cihazın ekranına bakın</Text>
+                <Text style={styles.adimBaslik}>{t("ayarlar.eslestirmeRehberi.ekranaBakin")}</Text>
                 <Text style={styles.adimMetin}>
-                  PEMF Vet uygulamasında <Text style={styles.bold}>Daha Fazla → Uzaktan Erişim Bağlantısı</Text>{" "}
-                  bölümünde <Text style={styles.bold}>6 haneli eşleştirme kodu</Text> yazar.
+                  <Trans i18nKey="ayarlar.eslestirmeRehberi.ekranAciklama" components={{ kalin: <Text style={styles.bold} /> }} />
                 </Text>
               </View>
             </View>
@@ -157,28 +157,28 @@ export function DevicePairingGuide({ visible, onClose }: { visible: boolean; onC
                 <Text style={styles.adimNoText}>2</Text>
               </View>
               <View style={styles.adimIcerik}>
-                <Text style={styles.adimBaslik}>Kodu buraya girin</Text>
+                <Text style={styles.adimBaslik}>{t("ayarlar.eslestirmeRehberi.kodGirin")}</Text>
                 <TextInput
                   value={kod}
                   onChangeText={(t) => setKod(t.toUpperCase())}
-                  placeholder="ÖRN: A3F9K2"
+                  placeholder={t("ayarlar.eslestirmeRehberi.kodOrnek")}
                   placeholderTextColor={colors.textMuted}
                   autoCapitalize="characters"
                   autoCorrect={false}
                   maxLength={64}
                   style={styles.input}
-                  accessibilityLabel="Eşleştirme kodu"
+                  accessibilityLabel={t("ayarlar.eslestirme.kod")}
                   onSubmitEditing={bagla}
                   returnKeyType="go"
                 />
                 <Text style={styles.ipucu}>
-                  Kod yerine cihaz kimliğini de yapıştırabilirsiniz ({KOD_MAX_UZUNLUK} karakterden uzun).
+                  {t("ayarlar.eslestirmeRehberi.kimlikIpucu", { max: KOD_MAX_UZUNLUK })}
                 </Text>
               </View>
             </View>
 
             <Button
-              label={baglaniyor ? "Bağlanıyor…" : "Cihaza Bağlan"}
+              label={baglaniyor ? t("ayarlar.eslestirmeRehberi.baglaniyor") : t("ayarlar.eslestirme.baglan")}
               onPress={bagla}
               disabled={baglaniyor || !kod.trim()}
               icon={baglaniyor ? <ActivityIndicator size="small" color={colors.white} /> : <Link2 size={16} color={colors.white} />}
@@ -187,13 +187,13 @@ export function DevicePairingGuide({ visible, onClose }: { visible: boolean; onC
             <View style={styles.altBilgi}>
               <Wifi size={14} color={colors.textMuted} />
               <Text style={styles.altBilgiText}>
-                Cihazla aynı Wi-Fi&apos;ye bağlanırsanız kod hiç gerekmez; uygulama cihazı kendi bulur.
+                {t("ayarlar.eslestirmeRehberi.ayniWifiKodGerekmez")}
               </Text>
             </View>
             <View style={styles.altBilgi}>
               <MonitorSmartphone size={14} color={colors.textMuted} />
               <Text style={styles.altBilgiText}>
-                Bir kez eşleştikten sonra bu ekran bir daha çıkmaz — sonraki açılışlarda otomatik bağlanır.
+                {t("ayarlar.eslestirmeRehberi.birKezEslesme")}
               </Text>
             </View>
           </ScrollView>

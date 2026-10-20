@@ -1,0 +1,23 @@
+{
+  "kayitDb": {
+    "aciklama": "{{sebep}}\nEMERGENCY STOP and coil stopping still work.",
+    "baslik": "The medical record database is not ready — a new session CANNOT BE STARTED",
+    "varsayilanSebep": "The medical record database is not ready; a new session cannot be started."
+  },
+  "kurtarma": {
+    "aciklama": "Patient records are encrypted with a key tied to this computer. If the computer fails, the recovery code is the only way to open backups — and right now the code exists only on this computer:",
+    "baslik": "Save your recovery code somewhere other than this computer",
+    "kaydettim": "I saved it",
+    "onayEtiketi": "I confirm that I have saved the recovery code somewhere other than this computer"
+  },
+  "surumFarki": {
+    "aciklama": "The connection and emergency stop work normally; however, some fixes and warnings may be missing on this phone. The update will be suggested again when the app is reopened.",
+    "baslik": "Your phone's version is outdated: {{mevcut}} → {{yeni}}",
+    "buSurum": "this version",
+    "kapatEtiketi": "Dismiss version notice"
+  },
+  "veriKokuAg": {
+    "aciklama": "SQLite is not reliable in this mode — move the folder to a local disk. The folder path is written in the service log.",
+    "baslik": "Data folder is on a network share"
+  }
+}

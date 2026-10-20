@@ -23,6 +23,7 @@
  */
 import { getStoredDeviceId } from "@/services/config";
 import { uzakCihaziKimlikleCoz, type UzakCozumleme } from "@/services/deviceRegistry";
+import i18n from "i18next";
 
 const YOKLAMA_TIMEOUT_MS = 2500;
 
@@ -132,26 +133,21 @@ export function taniMesaji(t: AgTanisi): { baslik: string; metin: string } | nul
   switch (t.durum) {
     case "izolasyon":
       return {
-        baslik: "Modeminiz cihazları birbirinden ayırıyor",
+        baslik: i18n.t("ayarlar.ag.izolasyonBaslik"),
         metin:
-          `Cihaza internet üzerinden ulaşılıyor ama aynı Wi-Fi'de doğrudan ulaşılamıyor ` +
-          `(${t.cihazIp}). Modeminizde "istemci izolasyonu" (AP Isolation) açık olabilir ya da ` +
-          `telefonunuz misafir ağında olabilir. Modem ayarlarından bu seçeneği kapatın veya ` +
-          `telefonu ana Wi-Fi ağına alın. Dilerseniz aşağıdaki kodla internet üzerinden de bağlanabilirsiniz.`,
+          i18n.t("ayarlar.ag.izolasyonMetin", { cihazIp: t.cihazIp }),
       };
     case "farkli_ag":
       return {
-        baslik: "Farklı bir ağdasınız",
+        baslik: i18n.t("ayarlar.ag.farkliAgBaslik"),
         metin:
-          `Telefonunuz cihazla aynı Wi-Fi'de değil. Bu normaldir — aşağıdaki eşleştirme kodu ` +
-          `tam bunun içindir; cihaza internet üzerinden bağlanırsınız.`,
+          i18n.t("ayarlar.ag.farkliAgMetin"),
       };
     case "cihaz_kapali":
       return {
-        baslik: "Cihaz şu an çevrimdışı görünüyor",
+        baslik: i18n.t("ayarlar.ag.cevrimdisiBaslik"),
         metin:
-          `Cihaz kayıtlı ama yanıt vermiyor. Cihazın açık ve internete bağlı olduğundan emin olun; ` +
-          `uzaktan erişim cihazın kendi ekranından kapatılmış da olabilir.`,
+          i18n.t("ayarlar.ag.cevrimdisiMetin"),
       };
     default:
       return null; // bilinmiyor → SUS (yanlış teşhis, teşhissizlikten kötüdür)

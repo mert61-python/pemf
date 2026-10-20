@@ -148,6 +148,76 @@
    "tur": "seans",
    "kaynak": "apps/ui/src/services/hesapGecisi.ts",
    "aciklama": "onay penceresi açıkken seans başladı — işlem iptal iletisi (ACİL DURDUR ekranda kalır)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "bant.kayitDb.varsayilanSebep",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/KayitDbBandi.tsx",
+   "aciklama": "tıbbi kayıt DB hazır değil — yeni seans başlatılamaz (varsayılan neden)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "bant.kayitDb.baslik",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/KayitDbBandi.tsx",
+   "aciklama": "tıbbi kayıt DB hazır değil — yeni seans BAŞLATILAMAZ bandı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "bant.kayitDb.aciklama",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/domain/KayitDbBandi.tsx",
+   "aciklama": "ACİL DURDUR ve bobin durdurma çalışır cümlesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "bant.surumFarki.baslik",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/domain/SurumFarkiBanner.tsx",
+   "aciklama": "telefon sürümü eski bandı (güvenlik sözleşmesi)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "bant.surumFarki.aciklama",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/domain/SurumFarkiBanner.tsx",
+   "aciklama": "bağlantı ve acil durdurma normal çalışır; düzeltmeler / uyarılar eksik olabilir"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guncelleme.bilgi.seansSuruyor",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/hooks/useApkGuncelleme.ts",
+   "aciklama": "güncelleme indirildi ama cihazda seans sürüyor — kurulum ekranı açılmadı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ayarlar.sistemBilgi.stmBilinmiyor",
+   "tur": "firmware",
+   "kaynak": "apps/ui/src/components/domain/SystemInfoPanel.tsx",
+   "aciklama": "STM32 bağlantısı bilinmiyor"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ayarlar.sistemBilgi.stmUyumsuz",
+   "tur": "firmware",
+   "kaynak": "apps/ui/src/components/domain/SystemInfoPanel.tsx",
+   "aciklama": "STM32 bağlı · yazılımı uyumsuz (FW uyum kapısı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ayarlar.sistemBilgi.stmBagli",
+   "tur": "firmware",
+   "kaynak": "apps/ui/src/components/domain/SystemInfoPanel.tsx",
+   "aciklama": "STM32 bağlı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ayarlar.sistemBilgi.stmBekleniyor",
+   "tur": "firmware",
+   "kaynak": "apps/ui/src/components/domain/SystemInfoPanel.tsx",
+   "aciklama": "STM32 bağlantısı bekleniyor"
   }
  ],
  "bekleyen": [

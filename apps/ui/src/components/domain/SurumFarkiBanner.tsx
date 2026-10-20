@@ -31,6 +31,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useDonanimCalisiyor } from "@/hooks/useDonanimCalisiyor";
 import { atlandiMi, guncellemeVarMi, mevcutVersionCode, type MobilSurum } from "@/services/mobileUpdate";
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
+import { useTranslation } from "react-i18next";
 
 /** Kapatma, GÖRÜLEN sürüm çiftine bağlıdır: yeni bir yayın çıkınca bant yeniden görünür. */
 const ANAHTAR = "pemf.surumFarki.kapatilan";
@@ -45,6 +46,7 @@ function uygulamaSurumu(): string {
 }
 
 export function SurumFarkiBanner() {
+  const { t } = useTranslation();
   const donanimCalisiyor = useDonanimCalisiyor();
   const [surum, setSurum] = useState<MobilSurum | null>(null);
   const [kapatilan, setKapatilan] = useState<string | null>(null);
@@ -83,11 +85,10 @@ export function SurumFarkiBanner() {
       <Info size={rs(16)} color={colors.primary} />
       <View style={s.metin}>
         <Text style={s.baslik}>
-          Telefon sürümü eski: {uygulamaSurumu() || "bu sürüm"} → {surum.version}
+          {t("bant.surumFarki.baslik", { mevcut: uygulamaSurumu() || t("bant.surumFarki.buSurum"), yeni: surum.version })}
         </Text>
         <Text style={s.aciklama}>
-          Bağlantı ve acil durdurma normal çalışır; ancak bu telefonda bazı düzeltmeler ve
-          uyarılar eksik olabilir. Güncelleme, uygulama yeniden açıldığında tekrar önerilecek.
+          {t("bant.surumFarki.aciklama")}
         </Text>
       </View>
       <TouchableOpacity
@@ -96,7 +97,7 @@ export function SurumFarkiBanner() {
           AsyncStorage.setItem(ANAHTAR, cift).catch(() => {});
         }}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        accessibilityLabel="Sürüm bildirimini kapat"
+        accessibilityLabel={t("bant.surumFarki.kapatEtiketi")}
       >
         <X size={rs(16)} color={colors.textMuted} />
       </TouchableOpacity>

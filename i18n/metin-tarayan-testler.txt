@@ -77,7 +77,7 @@ tests/test_gzip_sikistirma.py :: apps/backend/servers/api_server.py
 tests/test_hasta_LISTESI_okunamazken_BOS_demez_D266b.py :: apps/backend/servers/patient_router.py apps/ui/src/screens/PatientScreen.tsx
 tests/test_hasta_arama_turkce.py :: apps/backend/database/patient_database.py apps/backend/utils/pdf_report_generator.py apps/ui/src/utils/aramaNormalize.ts
 tests/test_hata_mesaji_anlasilir.py :: launcher/core/src/flow.rs launcher/core/src/net.rs
-tests/test_hotspot_autostart.py :: apps/backend/backend_service.py apps/ui/src/components/domain/GatewayStatusPanel.tsx
+tests/test_hotspot_autostart.py [ÇEVRİLDİ] :: apps/backend/backend_service.py apps/ui/src/components/domain/GatewayStatusPanel.tsx
 tests/test_i18n_ai_etiket_K7.py :: apps/backend/utils/ai_rapor_ogeleri.py apps/ui/src/screens/AiHubScreen.tsx apps/ui/src/utils/aiDetail.ts
 tests/test_i18n_araclar.py :: apps/backend/servers/api_server.py apps/backend/utils/seans_durum.py apps/ui/src/components/ui/GlobalEmergencyStop.tsx apps/ui/src/screens/AuthScreen.tsx apps/web/src/App.tsx apps/web/src/pages/Home.tsx dema-terapi-simülatörü/src/App.tsx launcher/app/src/main.rs launcher/app/ui/index.html launcher/app/windows/hooks.nsi
 tests/test_i18n_auth_sayfa.py :: apps/ui/auth-pages/reset.html apps/ui/auth-pages/verified.html

@@ -1,0 +1,38 @@
+{
+  "atla": "Atla",
+  "atlaEtiketi": "Güncelleme kontrolünü atla ve uygulamayı aç",
+  "bildirimiKapat": "Güncelleme bildirimini kapat",
+  "bilgi": {
+    "ertelendi": "Güncelleme indirildi ve hazır — güncellemeyi ertelediğiniz için kurulum ekranı açılmadı. Hazır olduğunuzda 'Güncelle'ye dokunun; paket yeniden indirilmeyecek.",
+    "kurulumAcilamadi": "Kurulum ekranı açılamadı; dosyayı kaydedip telefonunuzdan elle kurabilirsiniz.",
+    "kurulumBaslatildi": "Kurulum başlatıldı — telefonunuzun onayını bekleyin. Vazgeçerseniz bu ekrandan tekrar deneyebilirsiniz.",
+    "seansSuruyor": "Güncelleme indirildi ama cihazda tedavi sürüyor (seans ya da çalışan bobin) — kurulum ekranı açılmadı. Bobinler durduktan sonra 'Güncelle'ye dokunun; paket hazır, yeniden indirilmeyecek."
+  },
+  "dokunun": "Güncellemek için dokunun.",
+  "ertele": "Güncellemeyi ertele ve uygulamayı aç",
+  "eta": {
+    "dkSn": "~{{dk}} dk {{sn}} sn kaldı",
+    "saDk": "~{{sa}} sa {{dk}} dk kaldı",
+    "sn": "~{{sn}} sn kaldı"
+  },
+  "guncelle": "Güncelle",
+  "guncelleVeKur": "Güncelle ve kur",
+  "hata": {
+    "bilinmeyenKaynak": "Kurulum açılamadı. Telefon ayarlarından bu uygulamaya 'bilinmeyen kaynak' izni verip tekrar deneyin.",
+    "eksik": "İndirme eksik kaldı. Bağlantınızı kontrol edip tekrar deneyin.",
+    "indirilemedi": "Güncelleme indirilemedi. Bağlantınızı kontrol edip tekrar deneyin.",
+    "izinGerekli": "Kurulum için izin gerekiyor. Açılan ekranda bu uygulamaya izin verip tekrar deneyin.",
+    "sunucu": "Güncelleme paketine şu an ulaşılamıyor (sunucu hatası). Bağlantınızla ilgili değil; kısa süre sonra tekrar deneyin."
+  },
+  "hazir": "Yeni sürüm hazır: {{version}}",
+  "indirKurEtiketi": "Sürüm {{version}} güncellemesini indir ve kur",
+  "indiriliyor": "İndiriliyor… %{{yuzde}} · {{mb}} / {{toplam}} MB{{eta}}",
+  "indiriliyorKapi": "İndiriliyor… %{{yuzde}} · {{mb}} / {{toplam}}{{eta}}",
+  "indirmeBildirimi": "PEMF Vet {{version}} indiriliyor",
+  "kapiOneri": "Kullanmadan önce güncellemeniz önerilir.",
+  "kontrolEdiliyor": "Güncelleme kontrol ediliyor…",
+  "kur": "Kur",
+  "kurmaBaslik": "Güncellemeyi kur",
+  "kurulumuTekrarAc": "Kurulumu tekrar aç",
+  "simdilikDevam": "Şimdilik devam et"
+}

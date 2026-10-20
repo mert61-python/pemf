@@ -24,6 +24,7 @@ import { ShieldAlert } from "lucide-react-native";
 import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet, apiPost } from "@/services/apiClient";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
+import { useTranslation } from "react-i18next";
 
 interface KurtarmaDurumu {
   warn?: boolean;
@@ -31,6 +32,7 @@ interface KurtarmaDurumu {
 }
 
 export function RecoveryCodeBanner() {
+  const { t } = useTranslation();
   const { snapshot } = useLiveData();
   const seansAktif = !!snapshot?.activeTreatment?.isActive;
   const [durum, setDurum] = useState<KurtarmaDurumu | null>(null);
@@ -60,17 +62,16 @@ export function RecoveryCodeBanner() {
     <View style={styles.bant} accessibilityRole="alert">
       <ShieldAlert color={colors.warning} size={rs(16)} />
       <View style={{ flex: 1 }}>
-        <Text style={styles.baslik}>Kurtarma kodunuzu makine dışına kaydedin</Text>
+        <Text style={styles.baslik}>{t("bant.kurtarma.baslik")}</Text>
         <Text style={styles.alt}>
-          Hasta kayıtları bu bilgisayara bağlı bir anahtarla şifreli. Bilgisayar bozulursa
-          yedekleri açmanın tek yolu kurtarma kodudur — ve kod şu an yalnızca bu bilgisayarda:
+          {t("bant.kurtarma.aciklama")}
           {"\n"}{durum.codeFilePath || "KURTARMA-KODU.txt"}
         </Text>
       </View>
       <TouchableOpacity style={styles.btn} onPress={onayla} disabled={mesgul}
         accessibilityRole="button"
-        accessibilityLabel="Kurtarma kodunu makine dışına kaydettiğimi onaylıyorum">
-        <Text style={styles.btnText}>{mesgul ? "…" : "Kaydettim"}</Text>
+        accessibilityLabel={t("bant.kurtarma.onayEtiketi")}>
+        <Text style={styles.btnText}>{mesgul ? "…" : t("bant.kurtarma.kaydettim")}</Text>
       </TouchableOpacity>
     </View>
   );

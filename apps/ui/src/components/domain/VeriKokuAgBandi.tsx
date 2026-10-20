@@ -18,6 +18,8 @@ import { HardDrive } from "lucide-react-native";
 import { useDonanimCalisiyor } from "@/hooks/useDonanimCalisiyor";
 import { apiGet } from "@/services/apiClient";
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
+import i18n from "i18next";
+import { useTranslation } from "react-i18next";
 
 /** Sağlık ucunun bu banda gereken alanı. */
 export interface VeriKokuSagligi {
@@ -28,13 +30,14 @@ export interface VeriKokuSagligi {
 export function veriKokuAgBandiMetni(s: VeriKokuSagligi | null): { baslik: string; aciklama: string } | null {
   if (!s || s.veriKokuAgda !== true) return null;
   return {
-    baslik: "Veri klasörü ağ paylaşımında",
+    baslik: i18n.t("bant.veriKokuAg.baslik"),
     aciklama:
-      "SQLite bu kipte güvenilir değil — yerel diske taşıyın. Klasör yolu servis günlüğünde yazar.",
+      i18n.t("bant.veriKokuAg.aciklama"),
   };
 }
 
 export function VeriKokuAgBandi() {
+  useTranslation(); // bant metni çağrı anında çevrilir (`veriKokuAgBandiMetni`) → dil değişince yeniden çiz
   const donanimCalisiyor = useDonanimCalisiyor();
   const [saglik, setSaglik] = useState<VeriKokuSagligi | null>(null);
 

@@ -25,6 +25,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { servisTabanlariniCoz, setStoredDeviceId, updateServiceConfig } from "@/services/config";
 import { uzakCihaziKimlikleCoz, uzakCihaziKodlaCoz } from "@/services/deviceRegistry";
 import { checkHealth, exchangeCodeForToken } from "@/services/discovery";
+import i18n from "i18next";
 
 /** Girdi 8 karakteri aşmıyorsa EŞLEŞTİRME KODU, aşıyorsa CİHAZ KİMLİĞİ kabul edilir. */
 export const KOD_MAX_UZUNLUK = 8;
@@ -56,7 +57,7 @@ export type EslesmeBaglami = {
 export function eslesmeMesaji(s: EslesmeSonuc, baglam: EslesmeBaglami = {}): string {
   switch (s.durum) {
     case "ok":
-      return "Cihaz eşleştirildi ve bağlanıldı ✓";
+      return i18n.t("ayarlar.eslestirme.sonucOk");
     case "adres_yok": {
       // ⚠️ DENETİM 2026-08-28 #02 — ESKİ CÜMLE İKİ KEZ YANLIŞ YÖNE KİLİTLİYORDU:
       // "Cihazın kendi ekranından uzaktan erişimi açın; kod doğru."
@@ -66,31 +67,28 @@ export function eslesmeMesaji(s: EslesmeSonuc, baglam: EslesmeBaglami = {}): str
       const gun = s.sonGorulme ? Math.floor((Date.now() - new Date(s.sonGorulme).getTime()) / 86400000) : null;
       if (gun !== null && gun >= 1) {
         return (
-          `Cihaz kayıtlı ama uzaktan erişim adresi yok ve bulut kaydı ${gun} gündür güncellenmemiş. `
-          + "Bu genellikle cihazın buluta yazamadığı anlamına gelir (cihaz açık olsa bile). "
-          + "Cihazın Ayarlar ekranındaki uyarıyı kontrol edin; sorun sürerse destek ekibine bildirin."
+          i18n.t("ayarlar.eslestirme.sonuc.adresYokBayat", { count: gun })
         );
       }
       return (
-        "Cihaz bulundu ama uzaktan erişim adresi yok. Cihaz açıksa ve uzaktan erişim etkinse, "
-        + "cihazın Ayarlar ekranındaki bulut kaydı uyarısını kontrol edin."
+        i18n.t("ayarlar.eslestirme.sonuc.adresYok")
       );
     }
     case "bayat":
-      return "Cihaz kayıtlı ama şu an çevrimdışı görünüyor. Cihazın açık ve internete bağlı olduğundan emin olun.";
+      return i18n.t("ayarlar.eslestirme.sonuc.bayat");
     case "hata":
-      return "Buluta ulaşılamadı (bağlantı/zaman aşımı). İnternetinizi kontrol edip tekrar deneyin.";
+      return i18n.t("ayarlar.eslestirme.sonuc.bulutaUlasilamadi");
     case "ulasilamiyor":
-      return "Cihaz bulundu ama şu an çevrimdışı ya da kimlik doğrulanamadı.";
+      return i18n.t("ayarlar.eslestirme.sonuc.ulasilamiyor");
     case "gecersiz_adres":
-      return "Geçersiz cihaz adresi biçimi.";
+      return i18n.t("ayarlar.eslestirme.sonuc.gecersizAdres");
     case "kod_reddedildi":
       // ⚠️ Y42 (sahip, 2026-10-01): A-52 cümlesi ("bağlantı önceki cihazda kaldı") YALNIZ bir cihaza
       // bağlıyken doğrudur. Çevrimdışı rehberde "önceki cihaz" yoktur; bağlam bilinmiyorsa da iddia edilmez.
       if (baglam.oncekiCihazaBagli === true) {
-        return "Cihaz bulundu ama eşleştirme kodu kabul edilmedi — bağlantı önceki cihazda kaldı. Kodu kontrol edip tekrar deneyin.";
+        return i18n.t("ayarlar.eslestirme.sonuc.kodReddiOnceki");
       }
-      return "Eşleştirme kodu kabul edilmedi. Bağlantı ayarı değiştirilmedi; kodu kontrol edip yeniden deneyin.";
+      return i18n.t("ayarlar.eslestirme.sonuc.kodReddi");
     default:
       // ⚠️ DÜRÜST MESAJ (denetim 2026-08-17): bu dal YALNIZ "kod yanlış" demek DEĞİL. Sunucudaki
       // `resolve_device` tazelik penceresi dışında kalan (uzun süredir kapalı) cihaz da buraya
@@ -98,9 +96,7 @@ export function eslesmeMesaji(s: EslesmeSonuc, baglam: EslesmeBaglami = {}): str
       // defalarca kontrol ediyordu — 2026-08-12 saha bildiriminin aynısı. Cümle pencere
       // genişletilmeden ÖNCE de SONRA da doğru: 30 günden eski cihaz hâlâ buraya düşer.
       return (
-        "Bu kod/kimlikle eşleşen çevrimiçi cihaz bulunamadı. Cihaz uzun süredir kapalı/çevrimdışıysa "
-        + "da bu mesajı alırsınız: önce cihazın açık ve internete bağlı olduğundan emin olun, sonra "
-        + "kodu kontrol edin."
+        i18n.t("ayarlar.eslestirme.sonuc.bulunamadi")
       );
   }
 }

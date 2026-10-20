@@ -44,6 +44,7 @@ import { Download } from "lucide-react-native";
 import { useApkGuncelleme } from "@/hooks/useApkGuncelleme";
 import { guncellemeVarMi, guncellemeyiAtla, kurulumunuErtele, type MobilSurum } from "@/services/mobileUpdate";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
+import { useTranslation } from "react-i18next";
 
 /** Uygulama ikonu — AuthScreen/AppShell ile AYNI kaynak (tek görsel kimlik). */
 const LOGO = require("../../../assets/icon.png");
@@ -71,6 +72,7 @@ function mb(bayt: number): string {
 }
 
 export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   // Android DIŞI (web + iOS): kapı hiç kurulmaz. Web'i masaüstü client güncelliyor, iOS'ta
   // doğrudan APK kurulumu yok → beklemenin karşılığı sıfır olurdu.
@@ -157,16 +159,16 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
       {durum === "kontrol" ? (
         <>
           <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: spacing.lg }} />
-          <Text style={styles.durum}>Güncelleme kontrol ediliyor…</Text>
+          <Text style={styles.durum}>{t("guncelleme.kontrolEdiliyor")}</Text>
           {atlaGorunur ? (
             <TouchableOpacity
               onPress={kapiyiAc}
               style={styles.atla}
               testID="kapi-atla"
               accessibilityRole="button"
-              accessibilityLabel="Güncelleme kontrolünü atla ve uygulamayı aç"
+              accessibilityLabel={t("guncelleme.atlaEtiketi")}
             >
-              <Text style={styles.atlaText}>Atla</Text>
+              <Text style={styles.atlaText}>{t("guncelleme.atla")}</Text>
             </TouchableOpacity>
           ) : null}
         </>
@@ -174,7 +176,7 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
         <View style={styles.kart}>
           <View style={styles.baslikSatiri}>
             <Download color={colors.cyan} size={rs(18)} />
-            <Text style={styles.baslik}>Yeni sürüm hazır: {surum?.version}</Text>
+            <Text style={styles.baslik}>{t("guncelleme.hazir", { version: surum?.version })}</Text>
           </View>
           <Text style={[styles.alt, hata ? styles.altHata : null]}>
             {hata ||
@@ -183,8 +185,8 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
                 ? // ⚠️ Yalnız yüzde YETMEZ: 128 MB'lık bir pakette kullanıcı ne kadar veri
                   // harcadığını da görmeli (mobil kota). MB'ler manifest boyutundan türetilir.
                   // Kalan süre anlık hızdan (launcher paritesi, 2026-08-27) — ölçülemediyse gizli.
-                  `İndiriliyor… %${Math.round((oran ?? 0) * 100)} · ${mb((oran ?? 0) * (surum?.size ?? 0))} / ${mb(surum?.size ?? 0)}${eta ? ` · ${eta}` : ""}`
-                : surum?.notes || "Kullanmadan önce güncellemeniz önerilir.")}
+                  t("guncelleme.indiriliyorKapi", { yuzde: Math.round((oran ?? 0) * 100), mb: mb((oran ?? 0) * (surum?.size ?? 0)), toplam: mb(surum?.size ?? 0), eta: eta ? ` · ${eta}` : "" })
+                : surum?.notes || t("guncelleme.kapiOneri"))}
           </Text>
 
           {indiriliyor ? (
@@ -197,12 +199,12 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
               onPress={guncelle}
               testID="kapi-guncelle"
               accessibilityRole="button"
-              accessibilityLabel={`Sürüm ${surum?.version} güncellemesini indir ve kur`}
+              accessibilityLabel={t("guncelleme.indirKurEtiketi", { version: surum?.version })}
             >
               {/* Kurulum bir kez açıldıysa düğme "tekrar dene" işlevindedir; aynı metni bırakmak
                   kullanıcıya hiçbir şey olmamış gibi görünürdü. İkinci dokunuş İNDİRMEZ:
                   dosya diskte tamdır, doğrudan yükleyici açılır. */}
-              <Text style={styles.btnText}>{kurulumAcildi ? "Kurulumu tekrar aç" : "Güncelle ve kur"}</Text>
+              <Text style={styles.btnText}>{kurulumAcildi ? t("guncelleme.kurulumuTekrarAc") : t("guncelleme.guncelleVeKur")}</Text>
             </TouchableOpacity>
           )}
 
@@ -214,9 +216,9 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
             style={styles.atla}
             testID="kapi-devam"
             accessibilityRole="button"
-            accessibilityLabel="Güncellemeyi ertele ve uygulamayı aç"
+            accessibilityLabel={t("guncelleme.ertele")}
           >
-            <Text style={styles.atlaText}>Şimdilik devam et</Text>
+            <Text style={styles.atlaText}>{t("guncelleme.simdilikDevam")}</Text>
           </TouchableOpacity>
         </View>
       )}

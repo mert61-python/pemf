@@ -19,6 +19,8 @@ import { DatabaseZap } from "lucide-react-native";
 
 import { apiGet } from "@/services/apiClient";
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
+import i18n from "i18next";
+import { useTranslation } from "react-i18next";
 
 /** Sağlık ucunun bu banda gereken alanları. */
 export interface KayitDbSagligi {
@@ -30,19 +32,20 @@ export interface KayitDbSagligi {
  *  açılınca bant en geç bu aralıkta kalkar. */
 export const KAYIT_DB_YOKLAMA_MS = 30_000;
 
-const VARSAYILAN_SEBEP = "Tıbbi kayıt veritabanı hazır değil; yeni seans başlatılamaz.";
+const varsayilanSebep = (): string => i18n.t("bant.kayitDb.varsayilanSebep");
 
 /** Gösterilecek metin; bant gerekmiyorsa null. YALNIZ `dbReady === false` iken (alan yok/okunamadı → sessiz). */
 export function kayitDbBandiMetni(s: KayitDbSagligi | null): { baslik: string; aciklama: string } | null {
   if (!s || s.dbReady !== false) return null;
-  const sebep = typeof s.dbSebep === "string" && s.dbSebep.trim() ? s.dbSebep.trim() : VARSAYILAN_SEBEP;
+  const sebep = typeof s.dbSebep === "string" && s.dbSebep.trim() ? s.dbSebep.trim() : varsayilanSebep();
   return {
-    baslik: "Tıbbi kayıt veritabanı hazır değil — yeni seans BAŞLATILAMAZ",
-    aciklama: `${sebep}\nACİL DURDUR ve bobin durdurma çalışır.`,
+    baslik: i18n.t("bant.kayitDb.baslik"),
+    aciklama: i18n.t("bant.kayitDb.aciklama", { sebep }),
   };
 }
 
 export function KayitDbBandi() {
+  useTranslation(); // bant metni çağrı anında çevrilir (`kayitDbBandiMetni`) → dil değişince yeniden çiz
   const [saglik, setSaglik] = useState<KayitDbSagligi | null>(null);
 
   useEffect(() => {
@@ -53,10 +56,10 @@ export function KayitDbBandi() {
       if (!iptal) setSaglik(r);
     };
     void yokla();
-    const t = setInterval(() => void yokla(), KAYIT_DB_YOKLAMA_MS);
+    const zamanlayici = setInterval(() => void yokla(), KAYIT_DB_YOKLAMA_MS);
     return () => {
       iptal = true;
-      clearInterval(t);
+      clearInterval(zamanlayici);
     };
   }, []);
 

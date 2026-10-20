@@ -9,6 +9,7 @@ import { colors, spacing, typography, rf, rs, radius } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet } from "@/services/apiClient";
 import type { ConnectionState } from "@/types/domain";
+import { useTranslation } from "react-i18next";
 
 interface GatewayInfo {
   mqttConnected: boolean;
@@ -23,6 +24,7 @@ interface GatewayInfo {
 type RowState = ConnectionState | "unknown";
 
 export function GatewayStatusPanel() {
+  const { t } = useTranslation();
   const { snapshot, wsConnected } = useLiveData();
   const [gwInfo, setGwInfo] = useState<GatewayInfo>({
     mqttConnected: false,
@@ -56,30 +58,30 @@ export function GatewayStatusPanel() {
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <Text style={styles.title}>🌐 Sistem Durumu</Text>
+        <Text style={styles.title}>{t("ayarlar.sistemDurumu.baslik")}</Text>
         <TouchableOpacity
           onPress={refresh}
           style={styles.refreshBtn}
           accessibilityRole="button"
-          accessibilityLabel="Sistem durumunu yenile"
+          accessibilityLabel={t("ayarlar.sistemDurumu.yenileEtiketi")}
         >
           <Text style={styles.refreshText}>↻</Text>
         </TouchableOpacity>
       </View>
 
-      <GatewayRow label="Uygulama Bağlantısı" state={wsConnected ? "online" : "offline"} />
-      <GatewayRow label="Sistem Bağlantısı" state={gated(snapshot.mqtt, "offline")} />
-      <GatewayRow label="Cihaz Köprüsü" state={gated(snapshot.gateway, "offline")} />
-      <GatewayRow label="Donanım Sürücüsü" state={gated(snapshot.stm, "warning")} />
+      <GatewayRow label={t("ayarlar.sistemDurumu.uygulamaBaglantisi")} state={wsConnected ? "online" : "offline"} />
+      <GatewayRow label={t("ayarlar.sistemDurumu.sistemBaglantisi")} state={gated(snapshot.mqtt, "offline")} />
+      <GatewayRow label={t("ayarlar.sistemDurumu.cihazKoprusu")} state={gated(snapshot.gateway, "offline")} />
+      <GatewayRow label={t("ayarlar.sistemDurumu.donanimSurucusu")} state={gated(snapshot.stm, "warning")} />
       {/* gwInfo ayrı bir poll'den gelir; başarısız poll SON İYİ değeri korur (bilinçli) → bağlantı
           yokken o değeri de "Bilinmiyor" olarak göster, yeşil "Aktif" bırakma. */}
-      <GatewayRow label="İnternet Bağlantısı" state={stale ? "unknown" : gwInfo.networkOnline ? "online" : "offline"} />
+      <GatewayRow label={t("ayarlar.sistemDurumu.internetBaglantisi")} state={stale ? "unknown" : gwInfo.networkOnline ? "online" : "offline"} />
       {/* ⚠️ KABLOSUZ BAĞLANTI (2026-08-10). `hotspotActive` zaten çekiliyordu ama HİÇ
           GÖSTERİLMİYORDU — yani PEMF-Gateway kapalıyken 6-8 numaralı bobinler sessizce
           bağlanamıyor, operatör sebebini hiçbir yerden göremiyordu. Backend hotspot'u açılışta
           otomatik başlatır (backend_service._start_hotspot_safe); bu satır sonucu görünür kılar. */}
       <GatewayRow
-        label="Kablosuz Bağlantı"
+        label={t("ayarlar.sistemDurumu.kablosuzBaglanti")}
         state={stale ? "unknown" : gwInfo.hotspotActive ? "online" : "offline"}
       />
     </View>
@@ -87,6 +89,7 @@ export function GatewayStatusPanel() {
 }
 
 function GatewayRow({ label, state }: { label: string; state: RowState | boolean }) {
+  const { t } = useTranslation();
   let resolvedState: RowState;
   if (typeof state === "boolean") {
     resolvedState = state ? "online" : "offline";
@@ -95,14 +98,14 @@ function GatewayRow({ label, state }: { label: string; state: RowState | boolean
   }
 
   const cfg = {
-    online:  { color: "#22c55e", text: "Aktif",      dot: "#22c55e" },
-    warning: { color: "#f59e0b", text: "Uyarı",      dot: "#f59e0b" },
-    offline: { color: "#ef4444", text: "Kapalı",     dot: "#ef4444" },
-    error:   { color: "#ef4444", text: "Hata",       dot: "#ef4444" },
-    unknown: { color: "#94a3b8", text: "Bilinmiyor", dot: "#94a3b8" },
+    online:  { color: "#22c55e", text: t("ayarlar.sistemDurumu.aktif"),      dot: "#22c55e" },
+    warning: { color: "#f59e0b", text: t("ayarlar.sistemDurumu.uyari"),      dot: "#f59e0b" },
+    offline: { color: "#ef4444", text: t("ayarlar.saklama.secenekKapali"),     dot: "#ef4444" },
+    error:   { color: "#ef4444", text: t("ayarlar.sistemDurumu.hata"),       dot: "#ef4444" },
+    unknown: { color: "#94a3b8", text: t("ayarlar.sistemDurumu.bilinmiyor"), dot: "#94a3b8" },
     // KURULU DEĞİL ≠ ARIZALI (ESP söküldü, 2026-09-11). Nötr gri + açık metin.
-    devre_disi: { color: "#94a3b8", text: "Kurulu değil", dot: "#475569" },
-  }[resolvedState] ?? { color: "#475569", text: "Bilinmiyor", dot: "#475569" };
+    devre_disi: { color: "#94a3b8", text: t("ayarlar.sistemDurumu.kuruluDegil"), dot: "#475569" },
+  }[resolvedState] ?? { color: "#475569", text: t("ayarlar.sistemDurumu.bilinmiyor"), dot: "#475569" };
 
   return (
     <View style={styles.row}>

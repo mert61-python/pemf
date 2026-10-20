@@ -1,3 +1,4 @@
+import i18n from "i18next";
 // Author: mertaygn, cglrgrkn
 /**
  * Bulut cihaz-kaydı (device registry) durumunun operatöre gösterilecek karşılığı.
@@ -29,31 +30,25 @@ export function bulutKayitRozeti(durum: string | null | undefined): BulutKayitRo
       return {
         seviye: "hata",
         metin:
-          "Uzaktan erişim güncellenmiyor: bu cihazın kimliği bulutta başka bir güvenlik " +
-          "anahtarıyla kayıtlı (genellikle yeniden kurulum sonrası olur). Aşağıdaki " +
-          "eşleştirme kodu uzaktan bağlanmak için ÇALIŞMAZ. Aynı ağdaki bağlantı etkilenmez. " +
-          "Destek ekibinden cihazın bulut kaydının sıfırlanmasını isteyin.",
+          i18n.t("ayarlar.bulut.secretUyusmazligi"),
       };
     case "rpc_missing":
       return {
         seviye: "uyari",
         metin:
-          "Bulut kaydı eksik yapılandırmayla yazılıyor: eşleştirme kodu buluta gönderilmiyor, " +
-          "bu yüzden kodla uzaktan bağlanma çalışmaz. Aynı ağdaki bağlantı etkilenmez.",
+          i18n.t("ayarlar.bulut.rpcEksik"),
       };
     case "error":
       return {
         seviye: "uyari",
         metin:
-          "Cihazın bulut kaydı şu an güncellenemiyor (ağ ya da sunucu hatası). Uzaktan " +
-          "erişim bilgileri eskimiş olabilir; sorun sürerse destek ekibine bildirin.",
+          i18n.t("ayarlar.bulut.guncellenemiyor"),
       };
     case "istemci_yok":
       return {
         seviye: "uyari",
         metin:
-          "Bulut bağlantısı kurulmadı: cihaz uzaktan erişim için kayıt olmuyor. " +
-          "Aynı ağdaki bağlantı etkilenmez.",
+          i18n.t("ayarlar.bulut.istemciYok"),
       };
     default:
       // "ok" → sağlıklı; "unknown" → bulut hiç yapılandırılmamış olabilir. İkisinde de sus.

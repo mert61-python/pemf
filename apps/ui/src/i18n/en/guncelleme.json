@@ -1,0 +1,38 @@
+{
+  "atla": "Skip",
+  "atlaEtiketi": "Skip the update check and open the app",
+  "bildirimiKapat": "Dismiss update notification",
+  "bilgi": {
+    "ertelendi": "The update has been downloaded and is ready — the installer was not opened because you postponed the update. When you are ready, tap 'Update'; the package will not be downloaded again.",
+    "kurulumAcilamadi": "The installer could not be opened; you can save the file and install it manually from your phone.",
+    "kurulumBaslatildi": "Installation started — wait for your phone's confirmation. If you cancel, you can try again from this screen.",
+    "seansSuruyor": "The update was downloaded, but a session is in progress on the device (a session or running coil) — the installer was not opened. After the coils stop, tap 'Update'; the package is ready and will not be downloaded again."
+  },
+  "dokunun": "Tap to update.",
+  "ertele": "Postpone the update and open the app",
+  "eta": {
+    "dkSn": "~{{dk}} min {{sn}} s left",
+    "saDk": "~{{sa}} h {{dk}} min left",
+    "sn": "~{{sn}} s left"
+  },
+  "guncelle": "Update",
+  "guncelleVeKur": "Update and install",
+  "hata": {
+    "bilinmeyenKaynak": "The installer could not be opened. In your phone settings, grant this app the 'unknown sources' permission and try again.",
+    "eksik": "The download is incomplete. Check your connection and try again.",
+    "indirilemedi": "The update could not be downloaded. Check your connection and try again.",
+    "izinGerekli": "Permission is required to install. Allow this app on the screen that opens, then try again.",
+    "sunucu": "The update package cannot be reached right now (server error). It is not a problem with your connection; try again shortly."
+  },
+  "hazir": "New version ready: {{version}}",
+  "indirKurEtiketi": "Download and install version {{version}}",
+  "indiriliyor": "Downloading… {{yuzde}}% · {{mb}} / {{toplam}} MB{{eta}}",
+  "indiriliyorKapi": "Downloading… {{yuzde}}% · {{mb}} / {{toplam}}{{eta}}",
+  "indirmeBildirimi": "Downloading PEMF Vet {{version}}",
+  "kapiOneri": "We recommend updating before you use the app.",
+  "kontrolEdiliyor": "Checking for updates…",
+  "kur": "Install",
+  "kurmaBaslik": "Install the update",
+  "kurulumuTekrarAc": "Reopen the installer",
+  "simdilikDevam": "Continue for now"
+}

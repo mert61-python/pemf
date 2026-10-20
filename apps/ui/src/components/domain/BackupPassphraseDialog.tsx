@@ -19,6 +19,7 @@ import { Eye, EyeOff } from "lucide-react-native";
 
 import { Card } from "@/components/ui/Card";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
+import { useTranslation } from "react-i18next";
 
 /** Backend `utils/data_export.MIN_PAROLA` ile AYNI olmalı. */
 export const MIN_PAROLA = 12;
@@ -34,6 +35,7 @@ export function BackupPassphraseDialog({
   onCancel: () => void;
   onSubmit: (parola: string) => void;
 }) {
+  const { t } = useTranslation();
   const [p1, setP1] = useState("");
   const [p2, setP2] = useState("");
   const [gizli, setGizli] = useState(true);
@@ -62,23 +64,23 @@ export function BackupPassphraseDialog({
             showsVerticalScrollIndicator={false}
           >
           <Text style={styles.baslik}>
-            {olustur ? "Yedek parolası belirleyin" : "Yedek parolasını girin"}
+            {olustur ? t("ayarlar.yedekParola.belirleBaslik") : t("ayarlar.yedekParola.girBaslik")}
           </Text>
           <Text style={styles.not}>
             {olustur
-              ? `Bu parola olmadan yedek dosyası AÇILAMAZ ve kurtarılamaz. En az ${MIN_PAROLA} karakter olmalı; bir parola yöneticisine kaydedin.`
-              : "Yedek oluşturulurken belirlediğiniz parolayı girin."}
+              ? t("ayarlar.yedekParola.belirleAciklama", { min: MIN_PAROLA })
+              : t("ayarlar.yedekParola.girAciklama")}
           </Text>
 
           <View style={styles.girisSatiri}>
             <TextInput style={styles.giris} value={p1} onChangeText={setP1}
-              placeholder={olustur ? `Parola (en az ${MIN_PAROLA} karakter)` : "Parola"}
+              placeholder={olustur ? t("ayarlar.yedekParola.parolaEnAzYer", { min: MIN_PAROLA }) : t("ayarlar.yedekParola.parolaYer")}
               placeholderTextColor={colors.textSubtle}
               secureTextEntry={gizli} autoCapitalize="none" autoCorrect={false}
-              accessibilityLabel="Yedek parolası" />
+              accessibilityLabel={t("ayarlar.yedekParola.parolaEtiketi")} />
             <TouchableOpacity onPress={() => setGizli((g) => !g)} style={styles.goz}
               accessibilityRole="button"
-              accessibilityLabel={gizli ? "Parolayı göster" : "Parolayı gizle"}>
+              accessibilityLabel={gizli ? t("ayarlar.yedekParola.goster") : t("ayarlar.yedekParola.gizle")}>
               {gizli ? <Eye color={colors.textMuted} size={rs(16)} />
                      : <EyeOff color={colors.textMuted} size={rs(16)} />}
             </TouchableOpacity>
@@ -86,23 +88,23 @@ export function BackupPassphraseDialog({
 
           {olustur ? (
             <TextInput style={styles.giris} value={p2} onChangeText={setP2}
-              placeholder="Parolayı tekrar girin" placeholderTextColor={colors.textSubtle}
+              placeholder={t("ayarlar.yedekParola.tekrarYer")} placeholderTextColor={colors.textSubtle}
               secureTextEntry={gizli} autoCapitalize="none" autoCorrect={false}
-              accessibilityLabel="Yedek parolası tekrar" />
+              accessibilityLabel={t("ayarlar.yedekParola.tekrarEtiketi")} />
           ) : null}
 
-          {kisa ? <Text style={styles.hata}>En az {MIN_PAROLA} karakter olmalı.</Text> : null}
-          {uyusmuyor ? <Text style={styles.hata}>Parolalar aynı değil.</Text> : null}
+          {kisa ? <Text style={styles.hata}>{t("ayarlar.yedekParola.enAz", { min: MIN_PAROLA })}</Text> : null}
+          {uyusmuyor ? <Text style={styles.hata}>{t("ayarlar.yedekParola.uyusmuyor")}</Text> : null}
 
           <View style={styles.satirBtn}>
             <TouchableOpacity style={[styles.birincil, !gecerli && styles.pasif]}
               disabled={!gecerli} onPress={() => onSubmit(p1)}
-              accessibilityRole="button" accessibilityLabel={olustur ? "Yedeği oluştur" : "Devam et"}>
-              <Text style={styles.birincilText}>{olustur ? "Yedeği Oluştur" : "Devam"}</Text>
+              accessibilityRole="button" accessibilityLabel={olustur ? t("ayarlar.yedekParola.olusturEtiketi") : t("ayarlar.yedekParola.devamEtiketi")}>
+              <Text style={styles.birincilText}>{olustur ? t("ayarlar.yedekParola.olustur") : t("ayarlar.yedekParola.devam")}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.ikincil} onPress={onCancel}
-              accessibilityRole="button" accessibilityLabel="Vazgeç">
-              <Text style={styles.ikincilText}>Vazgeç</Text>
+              accessibilityRole="button" accessibilityLabel={t("ortak.vazgec")}>
+              <Text style={styles.ikincilText}>{t("ortak.vazgec")}</Text>
             </TouchableOpacity>
           </View>
           </ScrollView>

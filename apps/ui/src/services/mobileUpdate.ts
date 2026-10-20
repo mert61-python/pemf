@@ -41,6 +41,7 @@ import {
   izinEkraniniAc,
   kurulumIzniVarMi,
 } from "../../modules/apk-installer";
+import i18n from "i18next";
 
 /**
  * İndirme sürerken ekranı uyanık tut (2026-08-27 saha bildirimi: "ekranı kilitleyince
@@ -618,7 +619,7 @@ async function _apkIndirGercek(
   // Servis tarafı da ayrıca sağlamlaştırıldı (IndirmeServisi: startForeground her yolda ilk iş),
   // ama sırayı burada da korumak iki tarafı birbirine bağımlı olmaktan çıkarır.
   const servisSozu = Promise.resolve(
-    indirmeServisiniBaslat?.(`PEMF Vet ${surum.version} indiriliyor`),
+    indirmeServisiniBaslat?.(i18n.t("guncelleme.indirmeBildirimi", { version: surum.version })),
   ).catch(() => {});
   try {
     for (let deneme = 0; ; deneme++) {
@@ -701,7 +702,7 @@ async function _kurulumuBaslatIc(dosyaUri: string): Promise<KurulumSonucu> {
     if (!(await Sharing.isAvailableAsync())) return "hata";
     await Sharing.shareAsync(dosyaUri, {
       mimeType: "application/vnd.android.package-archive",
-      dialogTitle: "Güncellemeyi kur",
+      dialogTitle: i18n.t("guncelleme.kurmaBaslik"),
     });
     return "paylasim";
   } catch {

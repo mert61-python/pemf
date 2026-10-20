@@ -18,8 +18,10 @@ import { useDonanimCalisiyor } from "@/hooks/useDonanimCalisiyor";
 import { atlandiMi, guncellemeVarMi, type MobilSurum } from "@/services/mobileUpdate";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 import { useResponsive } from "@/hooks/useResponsive";
+import { useTranslation } from "react-i18next";
 
 export function MobileUpdateBanner() {
+  const { t } = useTranslation();
   const { width } = useResponsive();
   const dar = width < 360;
   // ⚠️ Ölçü `useDonanimCalisiyor`: seans kaydı açık olmasa da çalışan bobin bandı susturur
@@ -54,7 +56,7 @@ export function MobileUpdateBanner() {
     <View style={[styles.bant, dar && styles.bantDar]}>
       <Download color={colors.primary} size={rs(16)} />
       <View style={{ flex: 1 }}>
-        <Text style={styles.baslik}>Yeni sürüm hazır: {surum.version}</Text>
+        <Text style={styles.baslik}>{t("guncelleme.hazir", { version: surum.version })}</Text>
         {/* ⚠️ KIRPMA YOK (denetim 2026-08-23, M12): `numberOfLines={3}` kancanın ~180-200
             karakterlik mesajlarını kesiyordu ve kesilen kısım tam da kullanıcıya NE YAPACAĞINI
             söyleyen cümleydi ("Bobinler durduktan sonra 'Güncelle'ye dokunun; paket hazır,
@@ -66,20 +68,20 @@ export function MobileUpdateBanner() {
             (oran !== null
               // Yüzdenin yanında MB: 128 MB'lık pakette kullanıcı kotasını görsün.
               // Kalan süre anlık hızdan (launcher paritesi, 2026-08-27) — ölçülemediyse gizli.
-              ? `İndiriliyor… %${Math.round(oran * 100)} · ${Math.round((oran * surum.size) / 1_000_000)} / ${Math.round(surum.size / 1_000_000)} MB${eta ? ` · ${eta}` : ""}`
-              : surum.notes || "Güncellemek için dokunun.")}
+              ? t("guncelleme.indiriliyor", { yuzde: Math.round(oran * 100), mb: Math.round((oran * surum.size) / 1_000_000), toplam: Math.round(surum.size / 1_000_000), eta: eta ? ` · ${eta}` : "" })
+              : surum.notes || t("guncelleme.dokunun"))}
         </Text>
       </View>
       {oran === null ? (
         <View style={dar ? styles.eylemlerDar : undefined}>
           <TouchableOpacity style={[styles.btn, dar && { flex: 1 }]} onPress={guncelle}
-            accessibilityRole="button" accessibilityLabel={`Sürüm ${surum.version} güncellemesini indir ve kur`}>
+            accessibilityRole="button" accessibilityLabel={t("guncelleme.indirKurEtiketi", { version: surum.version })}>
             {/* Kurulum bir kez açıldıysa ikinci dokunuş İNDİRMEZ (dosya diskte tam),
                 doğrudan yükleyiciyi tekrar açar. */}
-            <Text style={styles.btnText}>{kurulumAcildi ? "Kur" : "Güncelle"}</Text>
+            <Text style={styles.btnText}>{kurulumAcildi ? t("guncelleme.kur") : t("guncelleme.guncelle")}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setGizli(true)}
-            accessibilityRole="button" accessibilityLabel="Güncelleme bildirimini kapat">
+            accessibilityRole="button" accessibilityLabel={t("guncelleme.bildirimiKapat")}>
             <X color={colors.textMuted} size={rs(15)} />
           </TouchableOpacity>
         </View>

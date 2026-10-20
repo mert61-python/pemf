@@ -1,4 +1,12 @@
 {
+  "ag": {
+    "cevrimdisiBaslik": "Cihaz şu an çevrimdışı görünüyor",
+    "cevrimdisiMetin": "Cihaz kayıtlı ama yanıt vermiyor. Cihazın açık ve internete bağlı olduğundan emin olun; uzaktan erişim cihazın kendi ekranından kapatılmış da olabilir.",
+    "farkliAgBaslik": "Farklı bir ağdasınız",
+    "farkliAgMetin": "Telefonunuz cihazla aynı Wi-Fi'de değil. Bu normaldir — aşağıdaki eşleştirme kodu tam bunun içindir; cihaza internet üzerinden bağlanırsınız.",
+    "izolasyonBaslik": "Modeminiz cihazları birbirinden ayırıyor",
+    "izolasyonMetin": "Cihaza internet üzerinden ulaşılıyor ama aynı Wi-Fi'de doğrudan ulaşılamıyor ({{cihazIp}}). Modeminizde \"istemci izolasyonu\" (AP Isolation) açık olabilir ya da telefonunuz misafir ağında olabilir. Modem ayarlarından bu seçeneği kapatın veya telefonu ana Wi-Fi ağına alın. Dilerseniz aşağıdaki kodla internet üzerinden de bağlanabilirsiniz."
+  },
   "altBaslik": "Uygulama tercihleri ve cihaz bağlantı ayarları.",
   "baglanti": {
     "adresKaydedilmedi": "Geçersiz sunucu adresi — kaydedilmedi.",
@@ -41,6 +49,12 @@
     "selfTestGovde": "Cihaz kendi kendini test edecek; bu sırada bobinler kısa süre enerjilenebilir. Hayvanın kabinde OLMADIĞINDAN emin olun."
   },
   "baslik": "Sistem Ayarları",
+  "bulut": {
+    "guncellenemiyor": "Cihazın bulut kaydı şu an güncellenemiyor (ağ ya da sunucu hatası). Uzaktan erişim bilgileri eskimiş olabilir; sorun sürerse destek ekibine bildirin.",
+    "istemciYok": "Bulut bağlantısı kurulmadı: cihaz uzaktan erişim için kayıt olmuyor. Aynı ağdaki bağlantı etkilenmez.",
+    "rpcEksik": "Bulut kaydı eksik yapılandırmayla yazılıyor: eşleştirme kodu buluta gönderilmiyor, bu yüzden kodla uzaktan bağlanma çalışmaz. Aynı ağdaki bağlantı etkilenmez.",
+    "secretUyusmazligi": "Uzaktan erişim güncellenmiyor: bu cihazın kimliği bulutta başka bir güvenlik anahtarıyla kayıtlı (genellikle yeniden kurulum sonrası olur). Aşağıdaki eşleştirme kodu uzaktan bağlanmak için ÇALIŞMAZ. Aynı ağdaki bağlantı etkilenmez. Destek ekibinden cihazın bulut kaydının sıfırlanmasını isteyin."
+  },
   "dil": {
     "aciklama": "Uygulama dili. Seçiminiz bu cihazda hatırlanır; hesabınızdan ve profilinizden bağımsızdır.",
     "baslik": "Dil / Language",
@@ -58,10 +72,39 @@
     "kod": "Eşleştirme kodu",
     "koduEtiketi": "Bu cihazın eşleştirme kodu: ",
     "paylasin": "Bu cihazı uzaktan açmak için aşağıdaki kimliği başka bir cihazla paylaşın.",
+    "sonuc": {
+      "adresYok": "Cihaz bulundu ama uzaktan erişim adresi yok. Cihaz açıksa ve uzaktan erişim etkinse, cihazın Ayarlar ekranındaki bulut kaydı uyarısını kontrol edin.",
+      "adresYokBayat_one": "Cihaz kayıtlı ama uzaktan erişim adresi yok ve bulut kaydı {{count}} gündür güncellenmemiş. Bu genellikle cihazın buluta yazamadığı anlamına gelir (cihaz açık olsa bile). Cihazın Ayarlar ekranındaki uyarıyı kontrol edin; sorun sürerse destek ekibine bildirin.",
+      "adresYokBayat_other": "Cihaz kayıtlı ama uzaktan erişim adresi yok ve bulut kaydı {{count}} gündür güncellenmemiş. Bu genellikle cihazın buluta yazamadığı anlamına gelir (cihaz açık olsa bile). Cihazın Ayarlar ekranındaki uyarıyı kontrol edin; sorun sürerse destek ekibine bildirin.",
+      "bayat": "Cihaz kayıtlı ama şu an çevrimdışı görünüyor. Cihazın açık ve internete bağlı olduğundan emin olun.",
+      "bulunamadi": "Bu kod/kimlikle eşleşen çevrimiçi cihaz bulunamadı. Cihaz uzun süredir kapalı/çevrimdışıysa da bu mesajı alırsınız: önce cihazın açık ve internete bağlı olduğundan emin olun, sonra kodu kontrol edin.",
+      "bulutaUlasilamadi": "Buluta ulaşılamadı (bağlantı/zaman aşımı). İnternetinizi kontrol edip tekrar deneyin.",
+      "gecersizAdres": "Geçersiz cihaz adresi biçimi.",
+      "kodReddi": "Eşleştirme kodu kabul edilmedi. Bağlantı ayarı değiştirilmedi; kodu kontrol edip yeniden deneyin.",
+      "kodReddiOnceki": "Cihaz bulundu ama eşleştirme kodu kabul edilmedi — bağlantı önceki cihazda kaldı. Kodu kontrol edip tekrar deneyin.",
+      "ulasilamiyor": "Cihaz bulundu ama şu an çevrimdışı ya da kimlik doğrulanamadı."
+    },
+    "sonucOk": "Cihaz eşleştirildi ve bağlanıldı ✓",
     "uzakBaglanBaslik": "Uzak cihaza bağlan (kod ya da kimlik)",
     "uzakBaglanEtiketi": "Uzak cihaza bağlan: eşleştirme kodu veya cihaz kimliği",
     "uzakBaglanIpucu": "Eşleştirme kodu (örn: A3F9K2) veya cihaz kimliği",
     "uzaktanGecersiz": " (uzaktan geçersiz)"
+  },
+  "eslestirmeRehberi": {
+    "ayniWifi": "Aynı Wi-Fi'de misiniz?",
+    "ayniWifiKodGerekmez": "Cihazla aynı Wi-Fi'ye bağlanırsanız kod hiç gerekmez; uygulama cihazı kendi bulur.",
+    "baglaniyor": "Bağlanıyor…",
+    "baslik": "Cihaza bağlanın",
+    "birKezEslesme": "Bir kez eşleştikten sonra bu ekran bir daha çıkmaz — sonraki açılışlarda otomatik bağlanır.",
+    "bulunamadi": "Cihaz bulunamadı. Telefonunuz cihazla <kalin>aynı Wi-Fi'de değilse</kalin> (mobil veri ya da başka bir ağ) bu normaldir.",
+    "ekranAciklama": "PEMF Vet uygulamasında <kalin>Daha Fazla → Uzaktan Erişim Bağlantısı</kalin> bölümünde <kalin>6 haneli eşleştirme kodu</kalin> yazar.",
+    "ekranaBakin": "Cihazın ekranına bakın",
+    "farkliAg": "farklı ağdaysanız",
+    "gecici": "Bağlantı geçici koptuysa yeniden aramak yeterlidir — kod gerekmez.",
+    "kimlikIpucu": "Kod yerine cihaz kimliğini de yapıştırabilirsiniz ({{max}} karakterden uzun).",
+    "kodGirin": "Kodu buraya girin",
+    "kodOrnek": "ÖRN: A3F9K2",
+    "yenidenDene": "Yeniden Dene"
   },
   "hakkinda": {
     "baslik": "Hakkında",
@@ -154,6 +197,35 @@
     "sonTur": " Son tur: {{zaman}} — {{sayi}} hasta.",
     "sureEtiketi": "Saklama süresi {{gun}} gün"
   },
+  "sistemBilgi": {
+    "baslik": "💻 Sistem Bilgileri",
+    "calismaSuresi": "Çalışma Süresi",
+    "cihazId": "Cihaz ID",
+    "seansSayisi_one": "{{count}} seans",
+    "seansSayisi_other": "{{count}} seans",
+    "stmBaglantisi": "STM32 Bağlantısı",
+    "stmBagli": "Bağlı ✅",
+    "stmBekleniyor": "Bekleniyor ⏳",
+    "stmBilinmiyor": "Bilinmiyor ⚠️",
+    "stmUyumsuz": "Bağlı · yazılımı uyumsuz ⛔",
+    "toplamSeans": "Toplam Seans",
+    "yazilimSurumu": "Yazılım Sürümü"
+  },
+  "sistemDurumu": {
+    "aktif": "Aktif",
+    "baslik": "🌐 Sistem Durumu",
+    "bilinmiyor": "Bilinmiyor",
+    "cihazKoprusu": "Cihaz Köprüsü",
+    "donanimSurucusu": "Donanım Sürücüsü",
+    "hata": "Hata",
+    "internetBaglantisi": "İnternet Bağlantısı",
+    "kablosuzBaglanti": "Kablosuz Bağlantı",
+    "kuruluDegil": "Kurulu değil",
+    "sistemBaglantisi": "Sistem Bağlantısı",
+    "uyari": "Uyarı",
+    "uygulamaBaglantisi": "Uygulama Bağlantısı",
+    "yenileEtiketi": "Sistem durumunu yenile"
+  },
   "uzakErisim": {
     "aciklama": "Cihaz OTOMATİK bağlanır — IP girmeniz gerekmez.\n📡 Aynı Wi-Fi → mDNS ile anında bulunur.\n🌐 Farklı ağ → bir kez eşleştikten sonra cihazın buluttaki güncel adresinden otomatik bağlanır.\nAşağısı yalnız otomatik bağlantı olmazsa MANUEL yedektir.",
     "baslik": "Uzaktan Erişim Bağlantısı"
@@ -162,13 +234,17 @@
     "aciklama": "Hasta kayıtları, seans geçmişi ve AI analiz geçmişi tek bir ŞİFRELİ dosyaya aktarılır. ",
     "aciklamaArastirma": "Bu cihazdaki TÜM kayıtlar — klinik ve araştırma: hasta / denek kartları, seans geçmişi ve AI analiz geçmişi — tek bir ŞİFRELİ dosyaya aktarılır. ",
     "baslik": "Veri Taşıma (Cihaz Değişimi)",
+    "disaAgHatasi": "Bağlantı koptu — yedek bu cihaza ulaşmadı, yedek OLUŞTURULMADI sayın. Bağlantıyı denetleyip yedeği yeniden alın.",
     "disaAktarEtiketi": "Klinik verilerini şifreli dosyaya aktar",
     "disaAktarEtiketiArastirma": "Bu cihazdaki tüm kayıtları şifreli dosyaya aktar",
+    "disaZamanAsimi": "Yedek alma cihazda sürüyor olabilir — cihaz zamanında yanıt vermedi (veri büyük olabilir). Bir süre bekleyip yedek dosyasının oluşup oluşmadığını denetleyin.",
     "geriYukleDugme": "Yedekten Geri Yükle",
     "geriYukleEtiketi": "Şifreli yedekten geri yükle",
     "geriYukleUyari": "Geri yükleme, bu cihazda kayıt varsa mevcut seans ve analiz geçmişini SİLER. Hasta kartları silinmez.",
     "geriYukleUyariArastirma": "Geri yükleme, bu cihazda kayıt varsa mevcut seans ve analiz geçmişini (klinik ve araştırma) SİLER. Hasta / denek kartları silinmez.",
     "hazirlaniyor": "Hazırlanıyor…",
+    "iceAgHatasi": "Bağlantı koptu — geri yükleme cihazda başlamış olabilir. İşlemi tekrarlamayın; bağlantı dönünce birkaç dakika sonra Seans Geçmişi'ni yenileyin.",
+    "iceZamanAsimi": "Geri yükleme cihazda sürüyor olabilir — bitince kayıtlar görünür. İşlemi tekrarlamayın ve uygulamayı yeniden başlatmayın; birkaç dakika sonra Seans Geçmişi'ni yenileyin.",
     "parolaUyarisi": "Yeni bilgisayara aynı parolayla geri yüklenir. Dosya parolasız açılamaz — parolayı kaybederseniz yedek kurtarılamaz.",
     "yedekOlustur": "Şifreli Yedek Oluştur",
     "yukleniyor": "Yükleniyor…"
@@ -189,5 +265,24 @@
     "yolYok": "Yedek dosyası kaydedilemedi — cihaz dosya yolunu bildirmedi; yedek OLUŞTURULMADI sayın.",
     "zatenVardi_one": "{{count}} hasta zaten vardı",
     "zatenVardi_other": "{{count}} hasta zaten vardı"
+  },
+  "yedekParola": {
+    "belirleAciklama": "Bu parola olmadan yedek dosyası AÇILAMAZ ve kurtarılamaz. En az {{min}} karakter olmalı; bir parola yöneticisine kaydedin.",
+    "belirleBaslik": "Yedek parolası belirleyin",
+    "devam": "Devam",
+    "devamEtiketi": "Devam et",
+    "enAz": "En az {{min}} karakter olmalı.",
+    "girAciklama": "Yedek oluşturulurken belirlediğiniz parolayı girin.",
+    "girBaslik": "Yedek parolasını girin",
+    "gizle": "Parolayı gizle",
+    "goster": "Parolayı göster",
+    "olustur": "Yedeği Oluştur",
+    "olusturEtiketi": "Yedeği oluştur",
+    "parolaEnAzYer": "Parola (en az {{min}} karakter)",
+    "parolaEtiketi": "Yedek parolası",
+    "parolaYer": "Parola",
+    "tekrarEtiketi": "Yedek parolası tekrar",
+    "tekrarYer": "Parolayı tekrar girin",
+    "uyusmuyor": "Parolalar aynı değil."
   }
 }

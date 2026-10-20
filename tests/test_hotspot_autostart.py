@@ -197,8 +197,13 @@ def test_KRITIK_arayuzde_KABLOSUZ_BAGLANTI_satiri_VAR():
     # `FileNotFoundError` ile düşerdi (2026-08-12). Atlanır; `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`
     # ile atlama yasaklanabilir. Bu dosyanın hotspot davranış testleri depo içidir, koşar.
     s = capraz.oku("apps/ui/src/components/domain/GatewayStatusPanel.tsx")
-    assert "Kablosuz Bağlantı" in s, "durum panelinde 'Kablosuz Bağlantı' satiri YOK"
+    # I18N: etiket kataloğa taşındı — ölçüt GEVŞEMEDİ, yer değiştirdi (kaynak anahtarı kullanıyor + TR birebir "Kablosuz Bağlantı" + EN dolu).
+    # İşlev içinde içe aktarım: meta kapılar (D404) asgari ağaca yalnız capraz.py + c_soyucu.py kopyalar (dosya yoksa yukarıda atlanır).
+    import i18n_yardimci as iy
+
+    anahtar = "ayarlar.sistemDurumu.kablosuzBaglanti"
+    iy.metin_kapisi("apps/ui/src/components/domain/GatewayStatusPanel.tsx", anahtar, "Kablosuz Bağlantı")
     assert "gwInfo.hotspotActive" in s, "satir hotspotActive'e BAGLI degil (olu gosterge)"
     # Bağlantı yokken bayat "Aktif" göstermemeli (panelin genel kuralı).
-    kesit = s[s.index("Kablosuz Bağlantı") - 200 : s.index("Kablosuz Bağlantı") + 300]
+    kesit = s[s.index(anahtar) - 200 : s.index(anahtar) + 300]
     assert "stale" in kesit, "bayat-durum korumasi yok — WS kopukken yesil 'Aktif' donar"

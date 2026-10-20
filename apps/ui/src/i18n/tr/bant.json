@@ -1,0 +1,23 @@
+{
+  "kayitDb": {
+    "aciklama": "{{sebep}}\nACİL DURDUR ve bobin durdurma çalışır.",
+    "baslik": "Tıbbi kayıt veritabanı hazır değil — yeni seans BAŞLATILAMAZ",
+    "varsayilanSebep": "Tıbbi kayıt veritabanı hazır değil; yeni seans başlatılamaz."
+  },
+  "kurtarma": {
+    "aciklama": "Hasta kayıtları bu bilgisayara bağlı bir anahtarla şifreli. Bilgisayar bozulursa yedekleri açmanın tek yolu kurtarma kodudur — ve kod şu an yalnızca bu bilgisayarda:",
+    "baslik": "Kurtarma kodunuzu makine dışına kaydedin",
+    "kaydettim": "Kaydettim",
+    "onayEtiketi": "Kurtarma kodunu makine dışına kaydettiğimi onaylıyorum"
+  },
+  "surumFarki": {
+    "aciklama": "Bağlantı ve acil durdurma normal çalışır; ancak bu telefonda bazı düzeltmeler ve uyarılar eksik olabilir. Güncelleme, uygulama yeniden açıldığında tekrar önerilecek.",
+    "baslik": "Telefon sürümü eski: {{mevcut}} → {{yeni}}",
+    "buSurum": "bu sürüm",
+    "kapatEtiketi": "Sürüm bildirimini kapat"
+  },
+  "veriKokuAg": {
+    "aciklama": "SQLite bu kipte güvenilir değil — yerel diske taşıyın. Klasör yolu servis günlüğünde yazar.",
+    "baslik": "Veri klasörü ağ paylaşımında"
+  }
+}
