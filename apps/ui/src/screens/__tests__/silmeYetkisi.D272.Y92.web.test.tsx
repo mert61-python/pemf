@@ -49,7 +49,7 @@ import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
 import { PatientScreen } from "@/screens/PatientScreen";
 import { TreatmentHistoryScreen } from "@/screens/TreatmentHistoryScreen";
 import { baskaHekimSilmeMetni } from "@/utils/patientScope";
-import { ZATEN_SILINMIS_SEANS } from "@/screens/TreatmentHistoryScreen";
+import { zatenSilinmisSeans } from "@/screens/TreatmentHistoryScreen";
 import { aktifOperator, pinleSec, Sahne, sahteSunucu, type Istek, type SahteOperator } from "../../context/__tests__/operatorAparati";
 
 const A = "dr.a@klinik.com";
@@ -277,7 +277,7 @@ describe("D2.43 · B-2.7 — tekil seans silmesi 404 (zaten silinmiş)", () => {
     await s.tikla(EKRAN.seans.tekilEtiket("A"));
     await s.bosalt(10);
     expect(silmeler("seans").length).toBe(1); // ARA DOĞRULAMA: istek gitti, sunucu 404 dedi
-    expect(mockToast.mock.calls).toContainEqual([ZATEN_SILINMIS_SEANS, "info"]);
+    expect(mockToast.mock.calls).toContainEqual([zatenSilinmisSeans(), "info"]);
     expect(kayit.filter((k) => k.yontem === "GET" && k.yol.startsWith("/history/")).length).toBeGreaterThan(once);
   });
 
@@ -288,7 +288,7 @@ describe("D2.43 · B-2.7 — tekil seans silmesi 404 (zaten silinmiş)", () => {
     tekilDurum = 500;
     await s.tikla(EKRAN.seans.tekilEtiket("A"));
     await s.bosalt(10);
-    expect(toastlar()).not.toContain(ZATEN_SILINMIS_SEANS);
+    expect(toastlar()).not.toContain(zatenSilinmisSeans());
     expect(mockToast.mock.calls.some((c) => c[1] === "error")).toBe(true);
   });
 });

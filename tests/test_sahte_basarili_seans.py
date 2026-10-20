@@ -434,8 +434,11 @@ def test_KRITIK_arayuz_sokulu_ESP_satirini_ETIKETLER():
 
     MUTASYON: `hwLabel`daki "ESP (sökülü)" değerini "ESP"ye geri çevir → KIRMIZI.
     """
+    # I18N: etiket katalogda — kaynak anahtari KULLANIR, TR degeri birebir "ESP (sökülü)" ve EN dolu (metin_kapisi).
+    import i18n_yardimci as iy
     from c_soyucu import c_soy
 
+    dosya = "apps/ui/src/components/domain/SessionDetailModal.tsx"
     src = c_soy((_PF / "components" / "domain" / "SessionDetailModal.tsx").read_text(encoding="utf-8"))
-    assert '"ESP (sökülü)"' in src, "sokulu ESP satiri hala sanki mevcut donanimmis gibi gosteriliyor"
+    iy.metin_kapisi(dosya, "seans.detay.espSokulu", "ESP (sökülü)")
     assert "seans-sokulu-uyarisi" in src, "eski ESP satiri tasiyan seansta aciklama uyarisi YOK"

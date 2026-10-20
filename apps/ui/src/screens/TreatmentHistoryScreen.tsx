@@ -25,50 +25,54 @@ import {
 } from "@/utils/patientScope";
 import { useUserMode } from "@/context/UserModeContext";
 import { profilSozlugu } from "@/utils/profilSozlugu";
+import i18n from "i18next";
 
 /** D2.43: tekil silmede seans sunucuda yoksa (başka cihaz/hekim az önce silmiş) gösterilen metin. */
-export const ZATEN_SILINMIS_SEANS = "Bu seans zaten silinmiş — liste yenilendi.";
+export const zatenSilinmisSeans = (): string => i18n.t("seans.gecmis.zatenSilinmis");
 import { downloadFileWithAuth } from "@/services/dosyaIndir";
 import { useCokluSecim } from "@/hooks/useCokluSecim";
 import { SecimCubugu } from "@/components/ui/SecimCubugu";
 import { TOPLU_SILME_ONAYI } from "@/services/topluSilme";
 import { kayitYogunlugu } from "@/utils/yogunlukGosterimi";
+import { useTranslation } from "react-i18next";
 
 // Backend ham seans durumlarını (İngilizce) görüntüleme için Türkçeye çevirir.
 // NOT: Yalnızca gösterim amaçlıdır; backend ham değerleri (renk/durum mantığı) değiştirilmez.
-const STATUS_LABELS_TR: Record<string, string> = {
-  completed: "Tamamlandı",
-  active: "Aktif",
-  running: "Çalışıyor",
-  in_progress: "Devam Ediyor",
-  pending: "Bekliyor",
-  stopped: "Durduruldu",
-  interrupted: "Kesintiye Uğradı",
-  aborted_recovered: "Kurtarıldı",
-  cancelled: "İptal Edildi",
-  canceled: "İptal Edildi",
-  error: "Hata",
-  failed: "Başarısız",
-  success: "Başarılı",
+const STATUS_ANAHTARLARI: Record<string, string> = {
+  completed: "seans.durum.completed",
+  active: "seans.durum.active",
+  running: "seans.durum.running",
+  in_progress: "seans.durum.in_progress",
+  pending: "seans.durum.pending",
+  stopped: "seans.durum.stopped",
+  interrupted: "seans.durum.interrupted",
+  aborted_recovered: "seans.durum.aborted_recovered",
+  cancelled: "seans.durum.cancelled",
+  canceled: "seans.durum.canceled",
+  error: "seans.durum.error",
+  failed: "seans.durum.failed",
+  success: "seans.durum.success",
   // ⚠️ ÜRETİMDE KULLANILAN AMA HARİTADA OLMAYAN İKİ DURUM (2026-09-12'de bulundu):
   // backend bunları gerçekten yazıyor (acil durdurma / güç kesintisi mutabakatı) ama
   // harita çeviremediği için ekranda ham "Emergency_stopped" görünüyordu.
-  emergency_stopped: "Acil Durduruldu",
-  aborted_due_to_power: "Elektrik Kesintisi",
+  emergency_stopped: "seans.durum.emergency_stopped",
+  aborted_due_to_power: "seans.durum.aborted_due_to_power",
   // ⚠️ Donanım komutu reddetti → seans HİÇ başlamadı. "Tamamlandı" yazmak,
   // uygulanmamış bir tedaviyi uygulanmış olarak belgelemek olurdu.
-  hardware_rejected: "Donanım Reddetti"
+  hardware_rejected: "seans.durum.hardware_rejected"
 };
 
-function statusLabelTr(status?: string): string {
-  if (!status) return "Bilinmiyor";
+function statusEtiketi(status?: string): string {
+  if (!status) return i18n.t("ai.deger.unknown");
   const key = status.toLowerCase();
-  if (STATUS_LABELS_TR[key]) return STATUS_LABELS_TR[key];
+  const anahtar = STATUS_ANAHTARLARI[key];
+  if (typeof anahtar === "string") return i18n.t(anahtar as never) as string;
   // Bilinmeyen durumu en azından okunaklı göster (ilk harf büyük).
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 export function TreatmentHistoryScreen() {
+  const { t } = useTranslation();
   const { selectedPatient } = useAppNav();
   const { session } = useAuth();
   // ⚠️ DENETİM 2026-08-09 (Tier 1): "Benim Seanslarım" filtresi AKTİF OPERATÖRE göre olmalı.
@@ -171,15 +175,14 @@ export function TreatmentHistoryScreen() {
     // kayıt varsa AÇIKÇA söyle ve onay iste.
     if (hasMore) {
       const go = await platformConfirm(
-        "Yalnızca yüklenen kayıtlar",
-        `Şu ana kadar ${sessions.length} seans yüklendi ve daha fazlası var. Rapor YALNIZ yüklenmiş ` +
-        `${list.length} kaydı içerecek.\n\nTümünü almak için önce "Daha Fazla Yükle" ile listeyi tamamlayın.`,
-        "Yüklenenleri aktar"
+        t("seans.gecmis.yalnizYuklenen"),
+        t("seans.gecmis.yuklenenOnayRapor", { yuklenen: sessions.length, liste: list.length }),
+        t("seans.gecmis.yuklenenleriAktar")
       );
       if (!go) return;
     }
     if (list.length > PDF_MAX) {
-      platformAlert("Çok fazla kayıt", `${list.length} seans var; ilk ${PDF_MAX} tanesi PDF'e aktarılacak. Aramayı daraltın.`);
+      platformAlert(t("seans.gecmis.cokKayit"), t("seans.gecmis.pdfSinir", { adet: list.length, enCok: PDF_MAX }));
     }
     const sessionIds = list.slice(0, PDF_MAX).map(s => s.id).join(",");
     downloadFileWithAuth(`${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${sessionIds}`, `PEMF_Rapor_${list.length}_seans.pdf`, showToast);
@@ -208,27 +211,25 @@ export function TreatmentHistoryScreen() {
   // ⚠️ B2-3.4 (2-B incelemesi): KİMLİKSİZKEN de daraltılmış (Y103 · D2.70) — kilitten sonra `scope` "all" kalınca id listesiz
   // istek kliniğin TÜM seans geçmişini (hasta adı, not) indiriyordu; liste boşken döküm dolu. Kural 2'de `myEmail` = oturum.
   const kapsamDaraltilmis = !myEmail || scope === "mine" || searchQuery.trim().length > 0;
-  const disaAktarimOneki = kapsamDaraltilmis ? "Görünenleri" : "Tümünü";
 
   const downloadCsv = async () => {
     const filtered = kapsamDaraltilmis;
     let url = `${serviceConfig.apiBaseUrl}/history/export_csv`;
     if (filtered) {
       const list = filteredSessions;
-      if (list.length === 0) { showToast("Dışa aktarılacak kayıt yok.", "error"); return; }
+      if (list.length === 0) { showToast(t("seans.gecmis.disaAktarilacakYok"), "error"); return; }
       // Filtreli CSV, id listesiyle gider → yalnız YÜKLENMİŞ kayıtları kapsar (aynı kapsam
       // sorunu PDF'te olduğu gibi). Filtresiz dal sunucu-tarafı tam export yaptığı için etkilenmez.
       if (hasMore) {
         const go = await platformConfirm(
-          "Yalnızca yüklenen kayıtlar",
-          `Filtre aktif olduğu için dışa aktarım YALNIZ yüklenmiş ${list.length} kaydı içerecek; ` +
-          `listede daha fazlası var.\n\nTümü için önce "Daha Fazla Yükle" ile listeyi tamamlayın.`,
-          "Yüklenenleri aktar"
+          t("seans.gecmis.yalnizYuklenen"),
+          t("seans.gecmis.yuklenenOnayCsv", { adet: list.length }),
+          t("seans.gecmis.yuklenenleriAktar")
         );
         if (!go) return;
       }
       if (list.length > CSV_MAX) {
-        platformAlert("Çok fazla kayıt", `${list.length} seans var; ilk ${CSV_MAX} tanesi CSV'ye aktarılacak. Aramayı daraltın.`);
+        platformAlert(t("seans.gecmis.cokKayit"), t("seans.gecmis.csvSinir", { adet: list.length, enCok: CSV_MAX }));
       }
       url += `?session_ids=${list.slice(0, CSV_MAX).map(s => s.id).join(",")}`;
     }
@@ -255,10 +256,9 @@ export function TreatmentHistoryScreen() {
     });
     if (kimlikler.length === 0) { showToast(baskaHekimSilmeMetni(), "error"); return; }
     const ok = await platformConfirm(
-      "Seçili Kayıtları Sil",
-      `${kimlikler.length} seans kaydı KALICI olarak silinecek. Bu işlem geri alınamaz.` +
-        silinmeyecekNotu(secilenler.length - kimlikler.length),
-      "Sil",
+      t("seans.gecmis.topluSilBaslik"),
+      t("seans.gecmis.topluSilGovde", { adet: kimlikler.length, not: silinmeyecekNotu(secilenler.length - kimlikler.length) }),
+      t("ortak.sil"),
     );
     if (!ok) return;
     setSiliniyor(true);
@@ -275,13 +275,13 @@ export function TreatmentHistoryScreen() {
       // olabilir. "5 silindi" demek yerine sunucunun söylediği gerçeği göster.
       const n = res.silinen ?? kimlikler.length;
       showToast(
-        n === kimlikler.length ? `${n} seans silindi.` : `${n}/${kimlikler.length} seans silindi.`,
+        n === kimlikler.length ? t("seans.gecmis.silindi", { count: n }) : t("seans.gecmis.silindiKismi", { n, adet: kimlikler.length }),
         "success",
       );
       secim.temizle();
       fetchHistory();
     } else {
-      showToast("Toplu silme başarısız.", "error");
+      showToast(t("hasta.sil.topluBasarisizKisa"), "error");
     }
   };
 
@@ -299,26 +299,26 @@ export function TreatmentHistoryScreen() {
             style={[styles.btnOutline, secim.secimModu && styles.btnOutlineAktif]}
             onPress={secim.secimModunuDegistir}
             accessibilityRole="button"
-            accessibilityLabel="Toplu seçim kipini aç veya kapat"
+            accessibilityLabel={t("seans.gecmis.secimKipiEtiketi")}
             testID="gecmis-secim-kipi"
           >
-            <Text style={styles.btnOutlineText}>{secim.secimModu ? "Seçimi Kapat" : "Seç"}</Text>
+            <Text style={styles.btnOutlineText}>{secim.secimModu ? t("hasta.liste.secimiKapat") : t("hasta.liste.sec")}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.btnOutline} onPress={downloadCsv}>
-            <Text style={styles.btnOutlineText}>{disaAktarimOneki} Excel/CSV İndir</Text>
+            <Text style={styles.btnOutlineText}>{kapsamDaraltilmis ? t("seans.gecmis.csvGorunen") : t("seans.gecmis.csvTumu")}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.btnPrimary} onPress={downloadAllPdf}>
-            <Text style={styles.btnPrimaryText}>{disaAktarimOneki} PDF İndir</Text>
+            <Text style={styles.btnPrimaryText}>{kapsamDaraltilmis ? t("seans.gecmis.pdfGorunen") : t("seans.gecmis.pdfTumu")}</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {myEmail ? (
         <View style={styles.segment}>
-          <TouchableOpacity style={[styles.segmentBtn, scope === "mine" && styles.segmentBtnActive]} onPress={() => setScope("mine")} accessibilityLabel="Benim seanslarım">
-            <Text style={[styles.segmentText, scope === "mine" && styles.segmentTextActive]} numberOfLines={1}>Benim Seanslarım</Text>
+          <TouchableOpacity style={[styles.segmentBtn, scope === "mine" && styles.segmentBtnActive]} onPress={() => setScope("mine")} accessibilityLabel={t("seans.gecmis.benimEtiket")}>
+            <Text style={[styles.segmentText, scope === "mine" && styles.segmentTextActive]} numberOfLines={1}>{t("seans.gecmis.benim")}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.segmentBtn, scope === "all" && styles.segmentBtnActive]} onPress={() => setScope("all")} accessibilityLabel={`Tüm ${SK.tumKapsamKucuk} seansları`}>
+          <TouchableOpacity style={[styles.segmentBtn, scope === "all" && styles.segmentBtnActive]} onPress={() => setScope("all")} accessibilityLabel={t("seans.gecmis.tumKapsamEtiketi", { tumKapsamKucuk: SK.tumKapsamKucuk })}>
             <Text style={[styles.segmentText, scope === "all" && styles.segmentTextActive]} numberOfLines={1}>{SK.tumKapsam}</Text>
           </TouchableOpacity>
         </View>
@@ -327,7 +327,7 @@ export function TreatmentHistoryScreen() {
       <View style={styles.searchBox}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Hasta, Not veya Tarih ara..."
+          placeholder={t("seans.gecmis.araPlaceholder")}
           placeholderTextColor={colors.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -338,9 +338,9 @@ export function TreatmentHistoryScreen() {
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: spacing.xl }} />
       ) : loadError ? (
         <View style={{ alignItems: "center", gap: spacing.md, marginTop: spacing.xl }}>
-          <Text style={[styles.intro, { flex: undefined }]}>Geçmiş yüklenemedi. Bağlantıyı kontrol edin.</Text>
+          <Text style={[styles.intro, { flex: undefined }]}>{t("seans.gecmis.yuklenemedi")}</Text>
           <TouchableOpacity style={styles.btnOutline} onPress={fetchHistory}>
-            <Text style={styles.btnOutlineText}>Tekrar Dene</Text>
+            <Text style={styles.btnOutlineText}>{t("ortak.tekrarDene")}</Text>
           </TouchableOpacity>
         </View>
       ) : filteredSessions.length === 0 ? (
@@ -349,9 +349,9 @@ export function TreatmentHistoryScreen() {
             ? kimlikIstemi(kimlikIstemiMetni(), kimlikDbOkunamiyor)
             : searchQuery
             ? (hasMore
-                ? "Yüklü sayfalarda eşleşme yok — daha eski kayıtlarda olabilir, aşağıdan “Daha Fazla Yükle”."
-                : "Aramayla eşleşen kayıt yok.")
-            : "Geçmiş seans kaydı bulunamadı."}
+                ? t("seans.gecmis.eslesmeYok")
+                : t("hasta.liste.aramaBos"))
+            : t("seans.gecmis.kayitYok")}
         </Text>
       ) : (
         <>
@@ -395,11 +395,11 @@ export function TreatmentHistoryScreen() {
           onPress={loadMore}
           disabled={loading || loadingMore}
           accessibilityRole="button"
-          accessibilityLabel="Daha fazla geçmiş yükle"
+          accessibilityLabel={t("seans.gecmis.dahaFazlaEtiket")}
         >
           {loadingMore
             ? <ActivityIndicator color={colors.primary} />
-            : <Text style={styles.loadMoreText}>Daha Fazla Yükle</Text>}
+            : <Text style={styles.loadMoreText}>{t("seans.gecmis.dahaFazla")}</Text>}
         </TouchableOpacity>
       )}
 
@@ -430,6 +430,7 @@ function SessionCard({
   secili?: boolean;
   onSecimDegistir?: () => void;
 }) {
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notes, setNotes] = useState(session.patient_notes || "");
@@ -456,16 +457,16 @@ function SessionCard({
     const res = await apiPost<{status: string}>("/history/update_notes", { session_id: session.id, notes }, { status: "error" });
     if (res.status === "success") {
       setIsEditingNotes(false);
-      showToast("Notlar kaydedildi.", "success");
+      showToast(t("seans.gecmis.notlarKaydedildi"), "success");
       onRefresh();
     } else {
-      showToast("Notlar kaydedilemedi.", "error");
+      showToast(t("seans.gecmis.notlarKaydedilemedi"), "error");
     }
   };
 
   const handleDelete = async () => {
     if (silmeEngeli) { showToast(silmeEngeli, "error"); return; }   // D2.72 · Y92 (karar üst bileşende, tek kaynak)
-    const ok = await platformConfirm("Kaydı Sil", "Bu seans kaydını silmek istediğinizden emin misiniz?", "Sil");
+    const ok = await platformConfirm(t("seans.gecmis.kaydiSilBaslik"), t("seans.gecmis.kaydiSilSorusu"), t("ortak.sil"));
     if (!ok) return;
     // ⚠️ D2.43 (B-2.7): olmayan seansın silinmesi artık 404 (eskiden 'success'). "Zaten silinmiş" bir HATA değildir —
     // başka bir cihaz/hekim az önce silmiş olabilir: söylenir ve liste yenilenir. Diğer hatalarda sunucunun gerekçesi.
@@ -477,13 +478,13 @@ function SessionCard({
       { silent: true, onHttpError: (durum, detay) => { hata.durum = durum; hata.detay = detay || ""; } },
     );
     if (res.status === "success") {
-      showToast("Seans silindi.", "success");
+      showToast(t("seans.gecmis.seansSilindi"), "success");
       onRefresh();
     } else if (hata.durum === 404) {
-      showToast(ZATEN_SILINMIS_SEANS, "info");
+      showToast(zatenSilinmisSeans(), "info");
       onRefresh();
     } else {
-      showToast(hata.detay || "Silme işlemi başarısız.", "error");
+      showToast(hata.detay || t("seans.gecmis.silmeBasarisiz"), "error");
     }
   };
 
@@ -498,7 +499,7 @@ function SessionCard({
             onPress={onSecimDegistir}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: secili }}
-            accessibilityLabel={`${session.patient_name || "Kayıt"} seçimi`}
+            accessibilityLabel={t("seans.gecmis.secimEtiketi", { ad: session.patient_name || t("seans.gecmis.kayit") })}
             testID={`gecmis-secim-${session.id}`}
           >
             {secili ? <Check color={colors.white} size={16} /> : null}
@@ -507,14 +508,14 @@ function SessionCard({
         <TouchableOpacity
           style={styles.titleArea}
           onPress={secimModu ? onSecimDegistir : onOpenDetails}
-          accessibilityLabel={secimModu ? "Kaydı seç" : "Seans detayını aç"}
+          accessibilityLabel={secimModu ? t("seans.gecmis.kaydiSec") : t("seans.gecmis.detayiAc")}
         >
-          <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{session.patient_name || "Bilinmeyen Hasta"}</Text>
+          <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{session.patient_name || t("seans.gecmis.bilinmeyenHasta")}</Text>
           <Text style={styles.muted} numberOfLines={1} ellipsizeMode="tail">{session.session_date} {session.start_time}</Text>
-          {secimModu ? null : <Text style={styles.detailsHint} numberOfLines={1}>Bobin detayını gör ›</Text>}
+          {secimModu ? null : <Text style={styles.detailsHint} numberOfLines={1}>{t("seans.gecmis.bobinDetayi")}</Text>}
         </TouchableOpacity>
         <View style={{flexShrink: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.sm}}>
-          <StatusPill label={statusLabelTr(session.session_status)} state={state} />
+          <StatusPill label={statusEtiketi(session.session_status)} state={state} />
           {/* ⚠️ SAHİP BİLDİRİMİ (2026-09-12): "paylaşım seçeneği ve pdf butonu aynı işi
               yapıyor seans başına. birini tutalım birini kaldır."
               ÖLÇÜLDÜ — DOĞRUYDU: `handleShareReport` ile `downloadPdf` AYNI uca, AYNI dosya
@@ -523,34 +524,34 @@ function SessionCard({
               ⚠️ MOBİLDE İŞLEV KAYBI YOK: `downloadFileWithAuth` native tarafta zaten
               `Sharing.shareAsync` ile paylaşım sayfasını açar — yani bu TEK düğme
               masaüstünde kaydeder, telefonda paylaşır. */}
-          <TouchableOpacity style={styles.btnOutline} onPress={downloadPdf} accessibilityLabel="Seans raporunu PDF olarak al">
+          <TouchableOpacity style={styles.btnOutline} onPress={downloadPdf} accessibilityLabel={t("seans.gecmis.pdfEtiketi")}>
             <Text style={styles.btnOutlineText}>PDF</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconBtn}
             onPress={handleDelete}
             accessibilityRole="button"
-            accessibilityLabel={`${session.patient_name || "Bilinmeyen Hasta"} kaydını sil`}
+            accessibilityLabel={t("seans.gecmis.kaydiSilEtiketi", { ad: session.patient_name || t("seans.gecmis.bilinmeyenHasta") })}
           >
             <Trash2 color={colors.danger} size={18} />
           </TouchableOpacity>
         </View>
       </View>
       <View style={styles.detailGrid}>
-        <Detail label="Mod" value={session.treatment_mode || "-"} />
-        <Detail label="Hedef" value={session.target_condition || "-"} />
-        <Detail label="Süre" value={`${session.duration_minutes || 0} dk`} />
-        <Detail label="Frekans" value={`${session.frequency_hz || 0} Hz`} />
+        <Detail label={t("seans.detay.mod")} value={session.treatment_mode || "-"} />
+        <Detail label={t("ai.pro.adim.hedef")} value={session.target_condition || "-"} />
+        <Detail label={t("kontrol.sinir.sure")} value={t("seans.gecmis.sureDk", { sure: session.duration_minutes || 0 })} />
+        <Detail label={t("kontrol.bobin.frekans")} value={`${session.frequency_hz || 0} Hz`} />
         {/* D1.89 · B-6.27: reçete CİHAZA GÖNDERİLMEZ → "(kayıt)"; reçetesiz seans "0 mT" değil "—". */}
-        <Detail label="Yoğunluk (kayıt)" value={kayitYogunlugu(session.intensity_mt)} />
+        <Detail label={t("kontrol.yogunluk.kayit")} value={kayitYogunlugu(session.intensity_mt)} />
       </View>
       <View style={styles.notesContainer}>
         <View style={styles.notesHeader}>
-          <Text style={styles.detailLabel}>Notlar:</Text>
+          <Text style={styles.detailLabel}>{t("seans.gecmis.notlar")}</Text>
           {isEditingNotes ? (
              <View style={{flexDirection: 'row', gap: spacing.sm}}>
-                <TouchableOpacity onPress={handleSaveNotes}><Text style={{color: colors.success, fontWeight: "bold"}}>Kaydet</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => { setIsEditingNotes(false); setNotes(session.patient_notes || ""); }}><Text style={{color: colors.danger, fontWeight: "bold"}}>İptal</Text></TouchableOpacity>
+                <TouchableOpacity onPress={handleSaveNotes}><Text style={{color: colors.success, fontWeight: "bold"}}>{t("ayarlar.kaydet")}</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => { setIsEditingNotes(false); setNotes(session.patient_notes || ""); }}><Text style={{color: colors.danger, fontWeight: "bold"}}>{t("ayarlar.iptal")}</Text></TouchableOpacity>
              </View>
           ) : (
             <TouchableOpacity onPress={() => setIsEditingNotes(true)}><Edit3 color={colors.textMuted} size={14} /></TouchableOpacity>
@@ -563,12 +564,12 @@ function SessionCard({
             value={notes}
             onChangeText={setNotes}
             multiline
-            placeholder="Seans notu..."
+            placeholder={t("seans.gecmis.notPlaceholder")}
             placeholderTextColor={colors.textMuted}
           />
         ) : (
           <Text style={[styles.notesText, !session.patient_notes && {color: colors.textSubtle}]}>
-            {session.patient_notes || "Not eklenmemiş."}
+            {session.patient_notes || t("seans.gecmis.notYok")}
           </Text>
         )}
       </View>

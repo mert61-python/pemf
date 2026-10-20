@@ -114,13 +114,19 @@ def test_KRITIK_HAM_deger_API_yanitinda_DEGISMEDI(istemci, dolu_db):
 
 
 def _ts_haritasi() -> dict[str, str]:
-    """`STATUS_LABELS_TR` gövdesini TS kaynağından ayıklar (yorumlar sökülür)."""
+    """`STATUS_ANAHTARLARI` gövdesini TS kaynağından ayıklar (yorumlar sökülür). I18N: değerler katalog ANAHTARIDIR → TR değeri katalogdan çözülür
+    (ölçüt YER DEĞİŞTİRDİ, gevşemedi: ekrandaki Türkçe etiket ↔ Python `DURUM_ETIKETLERI`); EN değeri de dolu olmalı."""
+    import i18n_yardimci as iy
     from c_soyucu import c_soy
 
     src = c_soy(_TS.read_text(encoding="utf-8"))
-    m = re.search(r"STATUS_LABELS_TR:\s*Record<string,\s*string>\s*=\s*\{(.*?)\};", src, re.S)
-    assert m, "STATUS_LABELS_TR govdesi bulunamadi -> capa bayatladi"
-    return dict(re.findall(r'(\w+)\s*:\s*"([^"]*)"', m.group(1)))
+    m = re.search(r"STATUS_ANAHTARLARI:\s*Record<string,\s*string>\s*=\s*\{(.*?)\};", src, re.S)
+    assert m, "STATUS_ANAHTARLARI govdesi bulunamadi -> capa bayatladi"
+    cift = dict(re.findall(r'(\w+)\s*:\s*"([^"]*)"', m.group(1)))
+    tr, en = iy.katalog("arayuz", "tr"), iy.katalog("arayuz", "en")
+    for k, anahtar in cift.items():
+        assert str(en.get(anahtar, "")).strip(), f"{anahtar} EN degeri BOS"
+    return {k: tr.get(anahtar, f"<katalogda yok: {anahtar}>") for k, anahtar in cift.items()}
 
 
 def test_KRITIK_python_ve_TS_sozlukleri_AYNI():

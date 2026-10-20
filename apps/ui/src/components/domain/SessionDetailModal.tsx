@@ -27,6 +27,8 @@ import { colors, spacing, typography, rs, layoutMax } from "@/theme/tokens";
 import { apiGet } from "@/services/apiClient";
 import { kayitYogunlugu, olculenAlanOrt } from "@/utils/yogunlukGosterimi";
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
+import i18n from "i18next";
+import { useTranslation } from "react-i18next";
 
 // Grafik/tablo renkleriyle BİREBİR aynı kategorik palet (RealtimeChart COIL_COLORS).
 const COIL_COLORS = [
@@ -34,26 +36,27 @@ const COIL_COLORS = [
   "#A855F7", "#06B6D4", "#EC4899", "#EAB308",
 ];
 
-const STATUS_LABELS_TR: Record<string, string> = {
-  completed: "Tamamlandı",
-  active: "Aktif",
-  running: "Çalışıyor",
-  in_progress: "Devam Ediyor",
-  pending: "Bekliyor",
-  stopped: "Durduruldu",
-  interrupted: "Kesintiye Uğradı",
-  aborted_recovered: "Kurtarıldı",
-  cancelled: "İptal Edildi",
-  canceled: "İptal Edildi",
-  error: "Hata",
-  failed: "Başarısız",
-  success: "Başarılı",
+const STATUS_ANAHTARLARI: Record<string, string> = {
+  completed: "seans.durum.completed",
+  active: "seans.durum.active",
+  running: "seans.durum.running",
+  in_progress: "seans.durum.in_progress",
+  pending: "seans.durum.pending",
+  stopped: "seans.durum.stopped",
+  interrupted: "seans.durum.interrupted",
+  aborted_recovered: "seans.durum.aborted_recovered",
+  cancelled: "seans.durum.cancelled",
+  canceled: "seans.durum.canceled",
+  error: "seans.durum.error",
+  failed: "seans.durum.failed",
+  success: "seans.durum.success",
 };
 
-function statusLabelTr(status?: string): string {
-  if (!status) return "Bilinmiyor";
+function statusEtiketi(status?: string): string {
+  if (!status) return i18n.t("ai.deger.unknown");
   const key = status.toLowerCase();
-  if (STATUS_LABELS_TR[key]) return STATUS_LABELS_TR[key];
+  const anahtar = STATUS_ANAHTARLARI[key];
+  if (typeof anahtar === "string") return i18n.t(anahtar as never) as string;
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
@@ -138,8 +141,8 @@ function fmtDuration(seconds?: number): string {
   const total = Math.round(seconds);
   const m = Math.floor(total / 60);
   const s = total % 60;
-  if (m > 0) return `${m}dk ${s}sn`;
-  return `${s}sn`;
+  if (m > 0) return i18n.t("seans.detay.sureDkSn", { m, s });
+  return i18n.t("seans.detay.sureSn", { s });
 }
 
 function fmtNum(v?: number, digits = 1): string {
@@ -162,7 +165,7 @@ function fmtNum(v?: number, digits = 1): string {
 function hwLabel(hw?: string): string {
   const t = (hw || "").toLowerCase();
   if (t === "stm") return "STM";
-  if (t === "esp") return "ESP (sökülü)";
+  if (t === "esp") return i18n.t("seans.detay.espSokulu");
   return hw ? hw.toUpperCase() : "—";
 }
 
@@ -188,6 +191,7 @@ export function SessionDetailModal({
   sessionId: string | number | null;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [details, setDetails] = useState<SessionDetails | null>(null);
 
@@ -229,21 +233,21 @@ export function SessionDetailModal({
           {/* Başlık + Kapat */}
           <View style={styles.headerRow}>
             <Text style={styles.title} numberOfLines={1}>
-              Seans Detayı
+              {t("seans.detay.baslik")}
             </Text>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose} accessibilityLabel="Kapat">
-              <Text style={styles.closeBtnText}>Kapat</Text>
+            <TouchableOpacity style={styles.closeBtn} onPress={onClose} accessibilityLabel={t("ortak.kapat")}>
+              <Text style={styles.closeBtnText}>{t("ortak.kapat")}</Text>
             </TouchableOpacity>
           </View>
 
           {loading ? (
             <View style={styles.centerBox}>
               <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.mutedText}>Detaylar yükleniyor…</Text>
+              <Text style={styles.mutedText}>{t("seans.detay.yukleniyor")}</Text>
             </View>
           ) : details === null ? (
             <View style={styles.centerBox}>
-              <Text style={styles.mutedText}>Seans detayları yüklenemedi.</Text>
+              <Text style={styles.mutedText}>{t("seans.detay.yuklenemedi")}</Text>
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.scrollBody}>
@@ -260,8 +264,9 @@ export function SessionDetailModal({
 
 // ─── Seans özeti ──────────────────────────────────────────────────────────────
 function SummarySection({ session }: { session: SessionInfo | null }) {
+  const { t } = useTranslation();
   if (!session) {
-    return <Text style={styles.mutedText}>Seans bilgisi yok.</Text>;
+    return <Text style={styles.mutedText}>{t("seans.detay.bilgiYok")}</Text>;
   }
   const timeRange =
     session.start_time || session.end_time
@@ -269,22 +274,22 @@ function SummarySection({ session }: { session: SessionInfo | null }) {
       : "—";
   return (
     <View style={styles.section}>
-      <Text style={styles.patientName}>{session.patient_name || "Bilinmeyen Hasta"}</Text>
+      <Text style={styles.patientName}>{session.patient_name || t("seans.gecmis.bilinmeyenHasta")}</Text>
       <View style={styles.summaryGrid}>
-        <SummaryItem label="Tarih" value={session.session_date || "—"} />
-        <SummaryItem label="Saat" value={timeRange} />
+        <SummaryItem label={t("seans.detay.tarih")} value={session.session_date || "—"} />
+        <SummaryItem label={t("seans.detay.saat")} value={timeRange} />
         <SummaryItem
-          label="Süre"
-          value={session.duration_minutes ? `${session.duration_minutes} dk` : "—"}
+          label={t("kontrol.sinir.sure")}
+          value={session.duration_minutes ? t("ai.pro.onay.sureDk", { duration_minutes: session.duration_minutes }) : "—"}
         />
-        <SummaryItem label="Mod" value={session.treatment_mode || "—"} />
-        <SummaryItem label="Hedef" value={session.target_condition || "—"} />
-        <SummaryItem label="Operatör" value={session.operator_name || "—"} />
-        <SummaryItem label="Durum" value={statusLabelTr(session.session_status)} />
+        <SummaryItem label={t("seans.detay.mod")} value={session.treatment_mode || "—"} />
+        <SummaryItem label={t("ai.pro.adim.hedef")} value={session.target_condition || "—"} />
+        <SummaryItem label={t("seans.detay.operator")} value={session.operator_name || "—"} />
+        <SummaryItem label={t("seans.detay.durum")} value={statusEtiketi(session.session_status)} />
       </View>
       {session.patient_notes ? (
         <View style={styles.notesBox}>
-          <Text style={styles.itemLabel}>Notlar</Text>
+          <Text style={styles.itemLabel}>{t("hasta.gozlem.notlar")}</Text>
           <Text style={styles.notesText}>{session.patient_notes}</Text>
         </View>
       ) : null}
@@ -309,27 +314,28 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
 
 // ─── Bobin çalışmaları tablosu ────────────────────────────────────────────────
 function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Bobin Çalışmaları</Text>
+      <Text style={styles.sectionTitle}>{t("seans.detay.bobinCalismalari")}</Text>
       {coilRuns.length === 0 ? (
-        <Text style={styles.mutedText}>Bu seansta bobin çalışma kaydı yok.</Text>
+        <Text style={styles.mutedText}>{t("seans.detay.bobinKaydiYok")}</Text>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
             {/* Tablo başlığı */}
             <View style={[styles.tableRow, styles.tableHeaderRow]}>
-              <Text style={[styles.th, styles.colCoil]} {...BASLIK_HUCRE}>Bobin</Text>
-              <Text style={[styles.th, styles.colTime]} {...BASLIK_HUCRE}>Başlangıç</Text>
-              <Text style={[styles.th, styles.colDur]} {...BASLIK_HUCRE}>Süre</Text>
-              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Frekans</Text>
-              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Duty</Text>
+              <Text style={[styles.th, styles.colCoil]} {...BASLIK_HUCRE}>{t("ai.pro.tablo.bobin")}</Text>
+              <Text style={[styles.th, styles.colTime]} {...BASLIK_HUCRE}>{t("seans.detay.baslangic")}</Text>
+              <Text style={[styles.th, styles.colDur]} {...BASLIK_HUCRE}>{t("kontrol.sinir.sure")}</Text>
+              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>{t("kontrol.bobin.frekans")}</Text>
+              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>{t("kontrol.bobin.duty")}</Text>
               {/* D1.89 · B-6.27: reçete (kayıt) ile koşunun ÖLÇÜLEN alan ortalaması (summary.field_avg) AYRI sütun. */}
-              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Şiddet (kayıt)</Text>
-              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Alan (ölçülen)</Text>
-              <Text style={[styles.th, styles.colHw]} {...BASLIK_HUCRE}>Donanım</Text>
-              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Ort. °C</Text>
-              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Maks. °C</Text>
+              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>{t("seans.detay.siddetKayit")}</Text>
+              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>{t("seans.detay.alanOlculen")}</Text>
+              <Text style={[styles.th, styles.colHw]} {...BASLIK_HUCRE}>{t("ana.donanim")}</Text>
+              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>{t("seans.detay.ortC")}</Text>
+              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>{t("seans.detay.maksC")}</Text>
             </View>
             {coilRuns.map((run, idx) => {
               const coilId = run.coil_id ?? 0;
@@ -348,7 +354,7 @@ function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
                   <View style={[styles.colCoil, styles.coilCell]}>
                     <View style={[styles.coilDot, { backgroundColor: color }]} />
                     <Text style={[styles.td, { color, fontWeight: "700" }]} {...VERI_HUCRE}>
-                      Bobin {coilId || "—"}
+                      {t("seans.detay.bobinNo", { no: coilId || "—" })}
                     </Text>
                   </View>
                   <Text style={[styles.td, styles.colTime]} {...VERI_HUCRE}>{fmtClock(run.started_epoch)}</Text>
@@ -380,8 +386,7 @@ function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
         </ScrollView>
       )}
       <Text style={styles.hwNote}>
-        Not: STM bobinleri (1-5) gerçek donanımda sıcaklık/akım/alan sensörü içermez; bu
-        değerler boş (—) görünebilir.
+        {t("seans.detay.stmNotu")}
       </Text>
       {/* ⚠️ Uyarı YALNIZ gerçekten sökülü-donanım satırı olan eski seanslarda çıkar — her
           seansın altına kalıcı bir uyarı koymak, operatörün uyarıları okumayı bırakmasına
@@ -389,14 +394,12 @@ function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
       {/* CH3 · Y152: eski firmware'in ~5× ölçtüğü alan ÷5 düzeltildiyse NEDEN ve KAPSAM söylenir (yalnız o seanslarda). */}
       {coilRuns.find((r) => r.summary?.alan_notu)?.summary?.alan_notu ? (
         <Text style={[styles.hwNote, styles.hwNoteUyari]} testID="seans-alan-duzeltme-notu">
-          {`* Alan (ölçülen): ${coilRuns.find((r) => r.summary?.alan_notu)?.summary?.alan_notu}. Eski cihaz yazılımı alanı yaklaşık 5 kat büyük ölçüyordu; özgün değer kayıtta saklıdır.`}
+          {t("seans.detay.alanDuzeltmeNotu", { alan_notu: coilRuns.find((r) => r.summary?.alan_notu)?.summary?.alan_notu })}
         </Text>
       ) : null}
       {coilRuns.some((r) => sokuluDonanim(r.hw_type)) ? (
         <Text style={[styles.hwNote, styles.hwNoteUyari]} testID="seans-sokulu-uyarisi">
-          ⚠️ Bu seans, sistemden çıkarılmış ESP donanımına ait satırlar içeriyor (bobin 8 dahil).
-          Sistem 7 bobinlidir; o satırlar GEÇMİŞ kayıttır ve gerçekten uygulandıkları
-          doğrulanmamıştır. Yeni seanslarda bu satırlar oluşmaz.
+          {t("seans.detay.sokuluUyari")}
         </Text>
       ) : null}
     </View>
@@ -405,6 +408,7 @@ function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
 
 // ─── Sıcaklık grafiği ─────────────────────────────────────────────────────────
 function TemperatureSection({ samples }: { samples: SensorSample[] }) {
+  const { t } = useTranslation();
   // coil_id'ye göre grupla; her bobin için { ts, temp } noktaları (sample_ts ASC varsayımı).
   const byCoil = new Map<number, { ts: number; temp: number }[]>();
   let minTs = Infinity;
@@ -432,10 +436,10 @@ function TemperatureSection({ samples }: { samples: SensorSample[] }) {
 
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Sıcaklık Grafiği</Text>
+      <Text style={styles.sectionTitle}>{t("seans.detay.sicaklikGrafigi")}</Text>
       {!hasData ? (
         <Text style={styles.mutedText}>
-          Bu seansta sensör verisi yok (gerçek STM bobinleri sıcaklık sensörü içermez).
+          {t("seans.detay.sensorVerisiYok")}
         </Text>
       ) : (
         <>
@@ -447,7 +451,7 @@ function TemperatureSection({ samples }: { samples: SensorSample[] }) {
               return (
                 <View key={id} style={styles.legendItem}>
                   <View style={[styles.legendDot, { backgroundColor: color }]} />
-                  <Text style={styles.legendText}>Bobin {id}</Text>
+                  <Text style={styles.legendText}>{t("seans.detay.bobinNo", { no: id })}</Text>
                 </View>
               );
             })}
@@ -467,6 +471,7 @@ function TempChart({
   coilIds: number[];
   minTs: number;
 }) {
+  const { t } = useTranslation();
   /**
    * [S7 adım 1 / ekranC-3] GENİŞLİK ÖLÇÜLÜR, sabit DEĞİL.
    * Eski kod `viewBox="0 0 720 260"` ile çiziyor ve SVG'yi `width="100%"` ile geriyordu: 360 px'lik
@@ -578,7 +583,7 @@ function TempChart({
           fontSize={10}
           textAnchor="middle"
         >
-          Dakika
+          {t("seans.detay.dakika")}
         </SvgText>
         {/* Çizgiler */}
         {coilIds.map((id) => {

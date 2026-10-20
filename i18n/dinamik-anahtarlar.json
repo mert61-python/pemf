@@ -160,6 +160,22 @@
    "onek": "",
    "degerler": ["ai.pro.metrik.guven", "ai.pro.profil.fantom.hedefEtiketi", "ai.pro.profil.petri.hedefEtiketi", "ai.scratch.galeri.kapanma.ad"],
    "gerekce": "Ölçüt etiketi IZLENEN_OLCUTLER / VARSAYILAN_OLCUT'ta ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (3 modül + varsayılan), kullanıcı girdisi değil"
+  },
+  {
+   "yuzey": "arayuz",
+   "dosya": "apps/ui/src/components/domain/SessionDetailModal.tsx",
+   "ifade": "i18n.t(anahtar as never)",
+   "onek": "",
+   "degerler": ["seans.durum.aborted_recovered", "seans.durum.active", "seans.durum.canceled", "seans.durum.cancelled", "seans.durum.completed", "seans.durum.error", "seans.durum.failed", "seans.durum.in_progress", "seans.durum.interrupted", "seans.durum.pending", "seans.durum.running", "seans.durum.stopped", "seans.durum.success"],
+   "gerekce": "Seans durumu etiketi STATUS_ANAHTARLARI'nda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (13 durum), sunucudan gelen ham durum dizgisi anahtara EŞLENİR, kendisi çevrilmez"
+  },
+  {
+   "yuzey": "arayuz",
+   "dosya": "apps/ui/src/screens/TreatmentHistoryScreen.tsx",
+   "ifade": "i18n.t(anahtar as never)",
+   "onek": "",
+   "degerler": ["seans.durum.aborted_due_to_power", "seans.durum.aborted_recovered", "seans.durum.active", "seans.durum.canceled", "seans.durum.cancelled", "seans.durum.completed", "seans.durum.emergency_stopped", "seans.durum.error", "seans.durum.failed", "seans.durum.hardware_rejected", "seans.durum.in_progress", "seans.durum.interrupted", "seans.durum.pending", "seans.durum.running", "seans.durum.stopped", "seans.durum.success"],
+   "gerekce": "Seans durumu etiketi STATUS_ANAHTARLARI'nda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (16 durum), sunucudan gelen ham durum dizgisi anahtara EŞLENİR, kendisi çevrilmez"
   }
  ]
 }

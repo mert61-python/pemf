@@ -17,6 +17,7 @@ import * as Sharing from "expo-sharing";
 // Web → fetch+blob+<a> indir; Native → FileSystem.downloadAsync+header → paylaş menüsü. Token hep header'da.
 import { backendBuMakinede } from "@/services/backendKonumu";
 import { authHeaders } from "@/services/apiClient";
+import i18n from "i18next";
 
 export { backendBuMakinede };
 
@@ -35,25 +36,25 @@ export async function downloadFileWithAuth(
     if (Platform.OS === "web" && backendBuMakinede()) {
       const ayirac = url.includes("?") ? "&" : "?";
       const res = await fetch(`${url}${ayirac}kaydet=1`, { headers });
-      if (!res.ok) { toast?.(`Kaydedilemedi (${res.status}).`, "error"); return; }
+      if (!res.ok) { toast?.(i18n.t("seans.indir.kaydedilemediDurum", { status: res.status }), "error"); return; }
       const g = await res.json().catch(() => null);
       if (g?.status === "success" && g?.yol) {
-        toast?.(`Masaüstüne kaydedildi: ${g.ad}`, "success");
+        toast?.(i18n.t("seans.indir.masaustuneKaydedildi", { ad: g.ad }), "success");
         return;
       }
-      if (g?.status === "bos") { toast?.(g.mesaj || "Dışa aktarılacak kayıt yok.", "info"); return; }
+      if (g?.status === "bos") { toast?.(g.mesaj || i18n.t("seans.gecmis.disaAktarilacakYok"), "info"); return; }
       // ⚠️ SESSİZ DÜŞME YOK: sunucu beklenmedik bir şey döndürdüyse operatöre SÖYLE.
-      toast?.("Kaydedilemedi — sunucu beklenmeyen yanıt verdi.", "error");
+      toast?.(i18n.t("seans.indir.sunucuBeklenmeyen"), "error");
       return;
     }
     if (Platform.OS === "web") {
       const res = await fetch(url, { headers });
-      if (!res.ok) { toast?.(`İndirilemedi (${res.status}).`, "error"); return; }
+      if (!res.ok) { toast?.(i18n.t("seans.indir.indirilemediDurum", { status: res.status }), "error"); return; }
       // ⚠️ "Veri bulunamadi" 200 + text/plain olarak dönüyor: eskiden bu da dosya olarak
       // indiriliyordu (içinde o metin yazan bir .csv). Kayıt yoksa TOAST göster, dosya ÜRETME.
       const tur = res.headers.get("content-type") || "";
       if (tur.startsWith("text/plain")) {
-        toast?.((await res.text()).slice(0, 200) || "Dışa aktarılacak kayıt yok.", "info");
+        toast?.((await res.text()).slice(0, 200) || i18n.t("seans.gecmis.disaAktarilacakYok"), "info");
         return;
       }
       const blob = await res.blob();
@@ -64,21 +65,21 @@ export async function downloadFileWithAuth(
       setTimeout(() => URL.revokeObjectURL(objUrl), 10000);
       // ⚠️ Başarı bildirimi ŞART: tarayıcı indirme çubuğu gizliyse (ya da bir kabuk
       // `<a download>`i yutuyorsa) operatörün elinde HİÇBİR ipucu kalmıyordu.
-      toast?.(`İndirme başlatıldı: ${safeName}`, "success");
+      toast?.(i18n.t("seans.indir.baslatildi", { safeName }), "success");
       return;
     }
     const localPath = `${FileSystem.cacheDirectory}${safeName}`;
     const { uri, status } = await FileSystem.downloadAsync(url, localPath, { headers });
-    if (status !== 200) { toast?.("İndirilemedi.", "error"); return; }
+    if (status !== 200) { toast?.(i18n.t("seans.indir.indirilemedi"), "error"); return; }
     try {
       if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri);
-      else toast?.(`İndirildi: ${safeName}`, "success");
+      else toast?.(i18n.t("seans.indir.indirildi", { safeName }), "success");
     } finally {
       // #84 (KVKK): paylaşım/indirme SONRASI önbellekteki hasta-raporu PDF'ini SİL — aksi halde
       // hasta PII'si app cache'inde sınırsız birikir. (shareAsync resolve → share-sheet kapandı.)
       FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
     }
   } catch {
-    toast?.("İndirme sırasında hata oluştu.", "error");
+    toast?.(i18n.t("seans.indir.hata"), "error");
   }
 }

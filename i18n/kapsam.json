@@ -238,7 +238,7 @@
    "sira": 7,
    "kritik": false,
    "aciklama": "seans geçmişi, seans ayrıntısı, indirme",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 152,
    "dosyaSayisi": 4
   },
@@ -2568,10 +2568,23 @@
    "yuzey": "arayuz",
    "grup": "arayuz-07a-seans-gecmisi",
    "sira": 7,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 55,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "/history/{{sessionId}}/details",
+     "gerekce": "API yolu (sunucuya giden) — metin değil"
+    },
+    {
+     "metin": "{{frequency_hz}} Hz",
+     "gerekce": "birim (Hz) — iki dilde aynı"
+    },
+    {
+     "metin": "°C",
+     "gerekce": "birim (°C) — iki dilde aynı"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -2579,10 +2592,39 @@
    "yuzey": "arayuz",
    "grup": "arayuz-07a-seans-gecmisi",
    "sira": 7,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 87,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "/history/?limit={{PAGE_SIZE}}&cursor={{lastId}}",
+     "gerekce": "API yolu (sunucuya giden) — metin değil"
+    },
+    {
+     "metin": "PEMF_Rapor_{{length}}_seans.pdf",
+     "gerekce": "indirilen dosya adı (veri) — dilden bağımsız"
+    },
+    {
+     "metin": "?session_ids={{deger1}}",
+     "gerekce": "URL sorgu dizgisi (sunucuya giden) — metin değil"
+    },
+    {
+     "metin": "PEMF_Rapor_{{deger1}}_{{id}}.pdf",
+     "gerekce": "indirilen dosya adı (veri) — dilden bağımsız"
+    },
+    {
+     "metin": "hasta",
+     "gerekce": "indirilen dosya adı yedek parçası (veri) — dilden bağımsız"
+    },
+    {
+     "metin": "PDF",
+     "gerekce": "biçim adı (PDF) — iki dilde aynı"
+    },
+    {
+     "metin": "{{deger1}} Hz",
+     "gerekce": "birim (Hz) — iki dilde aynı"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -2590,7 +2632,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-07a-seans-gecmisi",
    "sira": 7,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 10,
    "kritik": false,
    "muaf": [],
@@ -2601,7 +2643,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-07a-seans-gecmisi",
    "sira": 7,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],

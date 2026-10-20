@@ -1919,6 +1919,48 @@
    "tur": "seans",
    "kaynak": "apps/ui/src/components/domain/aipro/ModelSecimKartlari.tsx",
    "aciklama": "fantom / petri hedefine doz ONAYLANAMAZ"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.durum.emergency_stopped",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/screens/TreatmentHistoryScreen.tsx",
+   "aciklama": "seans durumu: Acil Durduruldu"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.durum.aborted_due_to_power",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/TreatmentHistoryScreen.tsx",
+   "aciklama": "seans durumu: Elektrik Kesintisi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.durum.hardware_rejected",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/screens/TreatmentHistoryScreen.tsx",
+   "aciklama": "seans durumu: Donanım Reddetti (seans hiç başlamadı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.detay.sokuluUyari",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/domain/SessionDetailModal.tsx",
+   "aciklama": "sökülü ESP donanımına ait eski kayıt uyarısı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.detay.stmNotu",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/SessionDetailModal.tsx",
+   "aciklama": "STM bobinlerinde sıcaklık / akım / alan sensörü yok notu"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.detay.alanDuzeltmeNotu",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/SessionDetailModal.tsx",
+   "aciklama": "eski firmware alan ölçümü ÷5 düzeltme notu"
   }
  ],
  "bekleyen": [
