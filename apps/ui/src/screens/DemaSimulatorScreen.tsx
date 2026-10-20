@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { EFieldBar } from "@/components/domain/EFieldBar";
 
 export function DemaSimulatorScreen() {
+  const { t } = useTranslation();
   const [key, setKey] = useState(0); // WebView'ı yeniden yüklemek için
   // I18N (Y159): simülatör ayrı sayfa — dili başlıkla değil URL'de (`?dil=`) alır; dil değişince çerçeve yeniden yüklenir.
   const { i18n } = useTranslation();
@@ -46,13 +47,13 @@ export function DemaSimulatorScreen() {
       <Card style={styles.headerCard}>
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.title}>DEMA Terapi Simülatörü</Text>
+            <Text style={styles.title}>{t("dema.baslik")}</Text>
             {/* D1.91 · A-37 (sahip): simülatör tanıtım/eğitim aracıdır — "canlı izleme" demez. */}
             <Text style={styles.muted}>
-              Tanıtım/eğitim amaçlıdır, cihaz davranışını temsil etmez.
+              {t("dema.egitimEtiketi")}
             </Text>
           </View>
-          <TouchableOpacity style={styles.refreshBtn} onPress={reload} accessibilityRole="button" accessibilityLabel="Simülatörü yeniden yükle">
+          <TouchableOpacity style={styles.refreshBtn} onPress={reload} accessibilityRole="button" accessibilityLabel={t("dema.yenidenYukleEtiketi")}>
             <RefreshCcw color={colors.textMuted} size={18} />
           </TouchableOpacity>
         </View>
@@ -123,8 +124,8 @@ export function DemaSimulatorScreen() {
         {loading && (
           <View style={styles.loadingOverlay} pointerEvents="none">
             <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Simülatör yükleniyor…</Text>
-            <Text style={styles.loadingHint}>İlk açılış birkaç saniye sürebilir</Text>
+            <Text style={styles.loadingText}>{t("dema.yukleniyor")}</Text>
+            <Text style={styles.loadingHint}>{t("dema.ilkAcilis")}</Text>
           </View>
         )}
       </View>

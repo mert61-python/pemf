@@ -28,6 +28,14 @@ import trHasta from "./tr/hasta.json";
 import enHasta from "./en/hasta.json";
 import trKontrol from "./tr/kontrol.json";
 import enKontrol from "./en/kontrol.json";
+import trSeans from "./tr/seans.json";
+import enSeans from "./en/seans.json";
+import trAna from "./tr/ana.json";
+import enAna from "./en/ana.json";
+import trDema from "./tr/dema.json";
+import enDema from "./en/dema.json";
+import trSensor from "./tr/sensor.json";
+import enSensor from "./en/sensor.json";
 
 export const trKaynak = {
   ayarlar: trAyarlar,
@@ -41,6 +49,10 @@ export const trKaynak = {
   guncelleme: trGuncelleme,
   hasta: trHasta,
   kontrol: trKontrol,
+  seans: trSeans,
+  ana: trAna,
+  dema: trDema,
+  sensor: trSensor,
 };
 
 export const enKaynak: typeof trKaynak = {
@@ -55,6 +67,10 @@ export const enKaynak: typeof trKaynak = {
   guncelleme: enGuncelleme,
   hasta: enHasta,
   kontrol: enKontrol,
+  seans: enSeans,
+  ana: enAna,
+  dema: enDema,
+  sensor: enSensor,
 };
 
 export const kaynaklar = {

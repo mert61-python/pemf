@@ -16,8 +16,12 @@ import { gorunurBobinler } from "@/services/bobinGorunurlugu";
 import { canliYogunluk, YOGUNLUK_ETIKETI } from "@/utils/yogunlukGosterimi";
 import { KendiDurdurmaIsareti } from "@/components/ui/KendiDurdurmaKontrolu";
 import { donanimRozetDurumu } from "@/components/domain/StmUyumBandi";
+import { useTranslation } from "react-i18next";
+import { kritikMetin, useKritikDil } from "@/i18n/kritik";
 
 export function DashboardScreen() {
+  const { t } = useTranslation();
+  useKritikDil(); // ACİL DURDUR yazıları (kritikMetin) dil değişince yeniden çizilir
   const { snapshot, wsConnected } = useLiveData();
   const { emergencyStop } = useSessionControl();
 
@@ -51,18 +55,18 @@ export function DashboardScreen() {
   yutup 'Kaydet/Bağlan' düğmelerini İKİ dokunuş gerektiriyordu. */}
       {/* Connection status row */}
       <View style={styles.statusRow}>
-        <StatusPill label="Cihaz Ağı" state={snapshot.gateway} />
+        <StatusPill label={t("ana.cihazAgi")} state={snapshot.gateway} />
         {/* ⚠️ "Sistem" (MQTT) rozeti YALNIZ ESP kuruluysa çizilir. ESP kartları söküldüğünde
             (sahip, 2026-09-11) broker çalışmaz ve rozet kalıcı sarı/kırmızı kalırdı — kurulu
             olmayan bir alt sistem için alarm, gerçek alarmları görünmez yapar. */}
         {snapshot.mqtt !== "devre_disi" && <StatusPill label="ESP / MQTT" state={snapshot.mqtt} />}
         {/* TD1: kart bağlı ama yazılımı uyumsuzsa "Donanım" YEŞİL OLMAZ (tezgâh: uyumsuz kartta yeşildi). */}
-        <StatusPill label="Donanım" state={donanimRozetDurumu(snapshot)} />
+        <StatusPill label={t("ana.donanim")} state={donanimRozetDurumu(snapshot)} />
         {/* İNTERNET — NÖTR BİLGİ, ARIZA DEĞİL. Bu cihaz internetsiz tam çalışır; internet
             yalnız UZAKTAN ERİŞİM içindir. Kırmızı rozet yerine ne kaybedildiğini söyler. */}
         {snapshot.internet === "offline" && (
           <View style={styles.internetYok}>
-            <Text style={styles.internetYokText}>İnternet yok — uzaktan erişim kapalı</Text>
+            <Text style={styles.internetYokText}>{t("ana.internetYok")}</Text>
           </View>
         )}
         <View style={[styles.wsBadge, !wsConnected && styles.wsBadgeOff]}>
@@ -75,17 +79,17 @@ export function DashboardScreen() {
 
       {!wsConnected && (
         <View style={styles.offlineBanner}>
-          <Text style={styles.offlineBannerText}>⚠️ Canlı bağlantı yok — gösterilen değerler güncel olmayabilir.</Text>
+          <Text style={styles.offlineBannerText}>{t("ana.canliBaglantiYok")}</Text>
         </View>
       )}
 
       {/* Metrics */}
       <ResponsiveGrid>
-        <MetricCard label="Aktif Frekans" value={`${at.frequencyHz || 0} Hz`} tone={colors.primary} />
+        <MetricCard label={t("ana.aktifFrekans")} value={`${at.frequencyHz || 0} Hz`} tone={colors.primary} />
         {/* D1.89 · B-6.27: etiket HANGİ sayının gösterildiğini söyler (ölçülen / kayıt / AI Pro duty); yoksa "—". */}
         <MetricCard label={YOGUNLUK_ETIKETI[yogunluk.tur]} value={yogunluk.deger} tone={colors.warning} />
-        <MetricCard label="Kalan Süre" value={`${at.remainingMin || 0} dk`} tone={colors.success} />
-        <MetricCard label="Bağlı Bobin" value={`${connectedCount} / ${coilTotal}`} tone={colors.magenta} />
+        <MetricCard label={t("ana.kalanSure")} value={t("ana.dakika", { dk: at.remainingMin || 0 })} tone={colors.success} />
+        <MetricCard label={t("ana.bagliBobin")} value={`${connectedCount} / ${coilTotal}`} tone={colors.magenta} />
       </ResponsiveGrid>
 
       {/* Hero row */}
@@ -94,7 +98,7 @@ export function DashboardScreen() {
         <Card style={styles.patientCard}>
           <View style={styles.cardHeader}>
             <HeartPulse color={colors.magenta} size={22} />
-            <Text style={styles.cardTitle}>Hasta Özeti</Text>
+            <Text style={styles.cardTitle}>{t("ana.hastaOzeti")}</Text>
           </View>
           {snapshot.patient?.name ? (
             <>
@@ -102,10 +106,10 @@ export function DashboardScreen() {
               <Text style={styles.body}>
                 {snapshot.patient.species ?? ""} · {snapshot.patient.breed ?? ""}
               </Text>
-              <Text style={styles.body}>Sahip: {snapshot.patient.owner ?? "—"}</Text>
+              <Text style={styles.body}>{t("hasta.kart.sahip")}{snapshot.patient.owner ?? "—"}</Text>
             </>
           ) : (
-            <Text style={styles.body}>Aktif hasta yok — hasta seçip seans başlatınca burada görünür.</Text>
+            <Text style={styles.body}>{t("ana.aktifHastaYok")}</Text>
           )}
         </Card>
 
@@ -113,25 +117,24 @@ export function DashboardScreen() {
         <Card style={styles.treatmentCard}>
           <View style={styles.cardHeader}>
             <Clock color={hardwareRunning ? colors.success : colors.textMuted} size={22} />
-            <Text style={styles.cardTitle}>Aktif Seans</Text>
+            <Text style={styles.cardTitle}>{t("ana.aktifSeans")}</Text>
             {hardwareRunning && (
               <View style={styles.activeDot} />
             )}
           </View>
           <Text style={styles.patientName}>
             {at.isActive
-              ? (at.mode || "Aktif Seans")
+              ? (at.mode || t("ana.aktifSeans"))
               : hardwareRunning
-                ? "⚠️ DONANIM ÇALIŞIYOR"
-                : "Sistem Hazır"}
+                ? t("ana.donanimCalisiyor")
+                : t("ana.sistemHazir")}
           </Text>
           {hardwareRunning ? (
             <>
               <Text style={styles.body}>
-                Çalışan bobin: {runningCount}
                 {at.isActive
-                  ? ` | Kalan: ${at.remainingMin} dk`
-                  : " | Seans bağlamı dışı — donanım enerjili"}
+                  ? t("ana.calisanBobinKalan", { count: runningCount, kalan: at.remainingMin })
+                  : t("ana.calisanBobinDisi", { count: runningCount })}
               </Text>
               {/* F-1 a11y: ekran-okuyucu için rol+etiket+ipucu (WCAG 4.1.2). Çift-tık koruması BİLEREK YOK —
                   acil-durdurma her dokunuşta anında ateşlenmeli (panik çift-dokunuş yutulmamalı). */}
@@ -139,16 +142,16 @@ export function DashboardScreen() {
                 style={styles.emergencyBtn}
                 onPress={emergencyStop}
                 accessibilityRole="button"
-                accessibilityLabel="Acil durdur"
-                accessibilityHint="Tüm bobinleri anında durdurur ve aktif seansı sonlandırır"
+                accessibilityLabel={kritikMetin("guvenlik.acilDurdur.erisimEtiketi")}
+                accessibilityHint={kritikMetin("guvenlik.acilDurdur.erisimIpucu")}
               >
-                <Text style={styles.emergencyBtnText}>🚨 ACİL DURDUR</Text>
+                <Text style={styles.emergencyBtnText}>{kritikMetin("guvenlik.acilDurdur.dugme")}</Text>
               </TouchableOpacity>
               {/* D1.E02 · A-51: düğme ÇİZİLDİĞİ sürece kayan ACİL DURDUR gizlenir (aynı koşulun içinde). */}
               <KendiDurdurmaIsareti />
             </>
           ) : (
-            <Text style={styles.body}>Kontrol panelinden seans başlatabilirsiniz.</Text>
+            <Text style={styles.body}>{t("ana.kontrolPanelinden")}</Text>
           )}
         </Card>
       </View>
@@ -156,11 +159,11 @@ export function DashboardScreen() {
       {/* Coil grid */}
       <View style={styles.sectionHeader}>
         <RadioTower color={colors.primary} size={20} />
-        <Text style={styles.sectionTitle}>Bobin Durumları</Text>
-        <Text style={styles.sectionBadge}>{connectedCount}/{coilTotal} Bağlı</Text>
+        <Text style={styles.sectionTitle}>{t("ana.bobinDurumlari")}</Text>
+        <Text style={styles.sectionBadge}>{t("ana.bagliSayisi", { bagli: connectedCount, toplam: coilTotal })}</Text>
       </View>
       {coils.length === 0 ? (
-        <Text style={styles.coilEmptyText}>Bobin verisi bekleniyor… (bağlantı kurulunca görünecek)</Text>
+        <Text style={styles.coilEmptyText}>{t("ana.bobinVerisiBekleniyor")}</Text>
       ) : (
         <ResponsiveGrid minItemWidth={280}>
           {coils.map((coil) => (

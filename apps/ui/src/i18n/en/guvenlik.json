@@ -12,9 +12,60 @@
     "gonderiliyor": "Sending emergency stop…",
     "kartRedBaslik": "⛔ BOARD REJECTED THE STOP",
     "kartRedGovde": "The device board rejected the STOP command — the coils may not have stopped. Cut the device's power or unplug the USB cable.",
+    "seansKartiEtiketi": "Emergency stop — stop all coils immediately",
     "teyitsizBaslik": "⚠️ EMERGENCY STOP NOT CONFIRMED",
     "teyitsizGovde": "Could not confirm that the hardware stopped. The coils may still be running — switch the device off with its physical power button.",
     "tumBobinlerDugme": "🚨 EMERGENCY STOP ALL COILS",
     "tumBobinlerEtiketi": "Emergency stop all coils"
+  },
+  "mandal": {
+    "altMetin": "Reason: {{neden}}. {{eylem}}Check on the device that the coils have stopped. {{sonuc}}",
+    "baslik": "EMERGENCY STOP LATCHED — new starts are disabled",
+    "dosyaOkunamadi": "latch file could not be read",
+    "eylem": {
+      "kablo": "Check the USB cable.",
+      "komutReddi": "The device board rejected the command — check the coil settings (duty / drive mode); if it continues, call technical support."
+    },
+    "neden": {
+      "espAlarm": "ESP safety alarm",
+      "genel": "emergency stop",
+      "komutReddi": "the board rejected commands",
+      "manual": "EMERGENCY STOP button",
+      "stmKopusu": "STM32 connection lost",
+      "uygulamaKapanisi": "the app was closed while a session or coil was running",
+      "watchdog": "STM32 watchdog timeout"
+    },
+    "onceSifirla": "To start again, press \"Reset\" first; resetting does not start the coils.",
+    "oncekiOturum": "EMERGENCY STOP in a previous session — not reset ({{asil}})",
+    "sifirlaBaslik": "Reset the emergency stop latch?",
+    "sifirlaEtiketi": "Reset the emergency stop latch",
+    "sifirlaGovde": "Resetting does NOT start the coils. Check that the coils have stopped and that the patient is safe; give the start command separately to continue the session.",
+    "sifirlaIpucu": "Clears the latch; does not start the coils",
+    "sifirlamaBaslatmaz": "Resetting does not start the coils.",
+    "sifirlanamadi": "The latch could not be reset",
+    "sifirlanamadiGovde": "The device could not be reached or the request was rejected. Check the connection and try again.",
+    "sifirlandi": "Latch reset — starting is possible again (the coils were not started)",
+    "sifirlaniyor": "Resetting…"
+  },
+  "stmUyum": {
+    "ayrintiGizle": "Hide technical details",
+    "ayrintiGoster": "Technical details (for support)",
+    "ayrintiGosterEtiketi": "Show technical details (for support)",
+    "k1Yedek": "The device board's firmware is incompatible with this app version — the coils will not run. Call technical support (code: FW-PAKET).",
+    "k2Yedek": "The device board could not be verified. Press the BLACK reset button on the board once (not the blue one)."
+  },
+  "teardown": {
+    "belirsizGovde": "No STM connection — the state of the coils is UNKNOWN (they may be running). {{eylem}} removes all stop controls from the screen.\n\nIf you continue, EMERGENCY STOP will be sent FIRST.",
+    "calisiyorGovde_one": "{{count}} coil is RUNNING. {{eylem}} removes all stop controls from the screen.\n\nIf you continue, the coils will be stopped FIRST.",
+    "calisiyorGovde_other": "{{count}} coils are RUNNING. {{eylem}} removes all stop controls from the screen.\n\nIf you continue, the coils will be stopped FIRST.",
+    "calisiyorOlabilir": "The coils may be running",
+    "durdurVeDevam": "Stop and continue",
+    "iptalEdildi": "Action canceled",
+    "iptalGovde": "{{neden}}\n\nThe action was canceled for safety — you are staying on this screen.",
+    "seansSuruyor": "Session in progress",
+    "seansVarGovde": "There is an active session. {{eylem}} removes all stop controls from the screen.\n\nIf you continue, the coils will be stopped FIRST.",
+    "teyitEdilemediBaslik": "EMERGENCY STOP could not be confirmed",
+    "teyitEdilemediGovde": "EMERGENCY STOP could not be confirmed — the STM is not connected, check the coils. Leave anyway?",
+    "yineDeCik": "Leave anyway"
   }
 }

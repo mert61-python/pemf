@@ -12,9 +12,60 @@
     "gonderiliyor": "Acil durdurma gönderiliyor…",
     "kartRedBaslik": "⛔ KART STOP'U REDDETTİ",
     "kartRedGovde": "Cihaz kartı STOP komutunu reddetti — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın.",
+    "seansKartiEtiketi": "Acil durdurma — tüm bobinleri anında durdur",
     "teyitsizBaslik": "⚠️ ACİL DURDURMA DOĞRULANAMADI",
     "teyitsizGovde": "Donanımın durduğu teyit edilemedi. Bobinler hâlâ çalışıyor olabilir — cihazı fiziksel güç düğmesinden kapatın.",
     "tumBobinlerDugme": "🚨 TÜM BOBİNLERİ ACİL DURDUR",
     "tumBobinlerEtiketi": "Tüm bobinleri acil durdur"
+  },
+  "mandal": {
+    "altMetin": "Neden: {{neden}}. {{eylem}}Bobinlerin durduğunu cihazda kontrol edin. {{sonuc}}",
+    "baslik": "ACİL DURDURMA MANDALLI — yeni başlatma kapalı",
+    "dosyaOkunamadi": "mandal dosyası okunamadı",
+    "eylem": {
+      "kablo": "USB kablosunu kontrol edin.",
+      "komutReddi": "Cihaz kartı komutu reddetti — bobin ayarlarını (duty / sürüş kipi) kontrol edin; sürerse teknik desteği arayın."
+    },
+    "neden": {
+      "espAlarm": "ESP güvenlik alarmı",
+      "genel": "acil durdurma",
+      "komutReddi": "kart komutları reddetti",
+      "manual": "ACİL DURDUR düğmesi",
+      "stmKopusu": "STM32 bağlantı kaybı",
+      "uygulamaKapanisi": "uygulama seans ya da bobin çalışırken kapatıldı",
+      "watchdog": "STM32 watchdog zaman aşımı"
+    },
+    "onceSifirla": "Yeniden başlatmak için önce \"Sıfırla\"; sıfırlama bobinleri başlatmaz.",
+    "oncekiOturum": "önceki oturumda ACİL DURDUR — sıfırlanmadı ({{asil}})",
+    "sifirlaBaslik": "Acil durdurma mandalı sıfırlansın mı?",
+    "sifirlaEtiketi": "Acil durdurma mandalını sıfırla",
+    "sifirlaGovde": "Sıfırlama bobinleri BAŞLATMAZ. Bobinlerin durduğunu ve hastanın güvende olduğunu kontrol edin; tedaviye devam etmek için başlatmayı ayrıca verin.",
+    "sifirlaIpucu": "Mandalı kaldırır; bobinleri başlatmaz",
+    "sifirlamaBaslatmaz": "Sıfırlama bobinleri başlatmaz.",
+    "sifirlanamadi": "Mandal sıfırlanamadı",
+    "sifirlanamadiGovde": "Cihaza ulaşılamadı ya da istek reddedildi. Bağlantıyı kontrol edip yeniden deneyin.",
+    "sifirlandi": "Mandal sıfırlandı — başlatma yeniden mümkün (bobinler başlatılmadı)",
+    "sifirlaniyor": "Sıfırlanıyor…"
+  },
+  "stmUyum": {
+    "ayrintiGizle": "Teknik ayrıntıyı gizle",
+    "ayrintiGoster": "Teknik ayrıntı (destek için)",
+    "ayrintiGosterEtiketi": "Teknik ayrıntıyı göster (destek için)",
+    "k1Yedek": "Cihaz kartının yazılımı bu uygulama sürümüyle uyumsuz — bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET).",
+    "k2Yedek": "Cihaz kartı doğrulanamadı. Kartın üzerindeki SİYAH sıfırlama düğmesine bir kez basın (mavi değil)."
+  },
+  "teardown": {
+    "belirsizGovde": "STM bağlantısı yok — bobinlerin durumu BİLİNMİYOR (çalışıyor olabilir). {{eylem}} tüm durdurma kontrollerini ekrandan kaldırır.\n\nDevam edilirse ÖNCE ACİL DURDUR gönderilecek.",
+    "calisiyorGovde_one": "{{count}} bobin ÇALIŞIYOR. {{eylem}} tüm durdurma kontrollerini ekrandan kaldırır.\n\nDevam edilirse bobinler ÖNCE durdurulacak.",
+    "calisiyorGovde_other": "{{count}} bobin ÇALIŞIYOR. {{eylem}} tüm durdurma kontrollerini ekrandan kaldırır.\n\nDevam edilirse bobinler ÖNCE durdurulacak.",
+    "calisiyorOlabilir": "Bobinler çalışıyor olabilir",
+    "durdurVeDevam": "Durdur ve devam et",
+    "iptalEdildi": "İşlem iptal edildi",
+    "iptalGovde": "{{neden}}\n\nGüvenlik için işlem iptal edildi — ekranda kalıyorsunuz.",
+    "seansSuruyor": "Seans sürüyor",
+    "seansVarGovde": "Aktif bir seans var. {{eylem}} tüm durdurma kontrollerini ekrandan kaldırır.\n\nDevam edilirse bobinler ÖNCE durdurulacak.",
+    "teyitEdilemediBaslik": "ACİL DURDUR teyit edilemedi",
+    "teyitEdilemediGovde": "ACİL DURDUR teyit edilemedi — STM bağlı değil, bobinleri kontrol edin. Yine de çıkılsın mı?",
+    "yineDeCik": "Yine de çık"
   }
 }

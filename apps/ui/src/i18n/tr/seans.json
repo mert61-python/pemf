@@ -1,0 +1,21 @@
+{
+  "denetim": {
+    "baslatmaGeriAlindi": "Başlatma, uçuştayken verilen DURDUR ile geri alındı.",
+    "hataOlustu": "Hata oluştu.",
+    "stopDogrulanamadi": "Bobin(ler) {{liste}} için donanım STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın.",
+    "sunucuyaUlasilamadi": "Sunucuya ulaşılamadı — donanım HÂLÂ ÇALIŞIYOR olabilir. Lütfen ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
+  },
+  "kart": {
+    "aktifSeans": "AKTİF SEANS",
+    "bayatBaglanti": "⚠️ Bağlantı bayat/çevrimdışı — gösterilen süre ve değerler gerçek zamanlı doğrulanamıyor.",
+    "bekleniyor": "Seans Bekleniyor",
+    "bekleniyorAlt": "Parametreleri ayarlayıp \"Seans Başlat\" butonuna basın.",
+    "durdurEtiketi": "Seansı durdur",
+    "frekans": "FREKANS",
+    "gecen": "GEÇEN",
+    "kalan": "KALAN",
+    "suresiz": "Süresiz",
+    "tepe": "TEPE (seans)",
+    "veriDogrulanmadi": "VERİ DOĞRULANMADI"
+  }
+}

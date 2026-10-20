@@ -1,0 +1,21 @@
+{
+  "aktifFrekans": "Aktif Frekans",
+  "aktifHastaYok": "Aktif hasta yok — hasta seçip seans başlatınca burada görünür.",
+  "aktifSeans": "Aktif Seans",
+  "bagliBobin": "Bağlı Bobin",
+  "bagliSayisi": "{{bagli}}/{{toplam}} Bağlı",
+  "bobinDurumlari": "Bobin Durumları",
+  "bobinVerisiBekleniyor": "Bobin verisi bekleniyor… (bağlantı kurulunca görünecek)",
+  "calisanBobinDisi": "Çalışan bobin: {{count}} | Seans bağlamı dışı — donanım enerjili",
+  "calisanBobinKalan": "Çalışan bobin: {{count}} | Kalan: {{kalan}} dk",
+  "canliBaglantiYok": "⚠️ Canlı bağlantı yok — gösterilen değerler güncel olmayabilir.",
+  "cihazAgi": "Cihaz Ağı",
+  "dakika": "{{dk}} dk",
+  "donanim": "Donanım",
+  "donanimCalisiyor": "⚠️ DONANIM ÇALIŞIYOR",
+  "hastaOzeti": "Hasta Özeti",
+  "internetYok": "İnternet yok — uzaktan erişim kapalı",
+  "kalanSure": "Kalan Süre",
+  "kontrolPanelinden": "Kontrol panelinden seans başlatabilirsiniz.",
+  "sistemHazir": "Sistem Hazır"
+}

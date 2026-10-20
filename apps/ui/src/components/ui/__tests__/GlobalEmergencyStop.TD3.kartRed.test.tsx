@@ -43,12 +43,11 @@ jest.mock("@/services/wsClient", () => ({
 import React from "react";
 import { act, fireEvent, render } from "@testing-library/react-native";
 import { platformAlert } from "@/services/apiClient";
-import {
-  EMERGENCY_STOP_KART_RED_BODY,
-  EMERGENCY_STOP_KART_RED_TITLE,
-  EMERGENCY_STOP_UNCONFIRMED_BODY,
-  EMERGENCY_STOP_UNCONFIRMED_TITLE,
-} from "@/services/emergencyStop";
+// I18N: uyarı metinleri artık katalogda (kritikMetin); bu test TÜRKÇE göç öncesi metni BAYT BAYT pinler.
+const KART_RED_TITLE = "⛔ KART STOP'U REDDETTİ";
+const KART_RED_BODY = "Cihaz kartı STOP komutunu reddetti — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın.";
+const UNCONFIRMED_TITLE = "⚠️ ACİL DURDURMA DOĞRULANAMADI";
+const UNCONFIRMED_BODY = "Donanımın durduğu teyit edilemedi. Bobinler hâlâ çalışıyor olabilir — cihazı fiziksel güç düğmesinden kapatın.";
 import { LiveDataProvider } from "@/context/LiveDataContext";
 import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
 
@@ -89,12 +88,12 @@ describe("TD3 — kart STOP'u reddetti → eylem metni", () => {
   it("KRİTİK: kartReddetti → KART_RED başlık ve gövde", async () => {
     mockSonuc = { confirmed: false, kartReddetti: true };
     await bas();
-    expect(platformAlert).toHaveBeenCalledWith(EMERGENCY_STOP_KART_RED_TITLE, EMERGENCY_STOP_KART_RED_BODY);
+    expect(platformAlert).toHaveBeenCalledWith(KART_RED_TITLE, KART_RED_BODY);
   });
 
   it("KARŞIT: yalnız teyitsiz (kart reddi yok) → ortak metin", async () => {
     mockSonuc = { confirmed: false, kartReddetti: false };
     await bas();
-    expect(platformAlert).toHaveBeenCalledWith(EMERGENCY_STOP_UNCONFIRMED_TITLE, EMERGENCY_STOP_UNCONFIRMED_BODY);
+    expect(platformAlert).toHaveBeenCalledWith(UNCONFIRMED_TITLE, UNCONFIRMED_BODY);
   });
 });

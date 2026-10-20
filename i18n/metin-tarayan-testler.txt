@@ -7,7 +7,6 @@ tests/test_CH4_akim_sensoru_TUMDEN_KAPALI_Y154.py :: apps/backend/controllers/ha
 tests/test_D1105_Y8_jest_bekcisi_backend_teyit_degisince_KOSAR.py :: apps/backend/servers/api_server.py apps/backend/servers/live_state.py
 tests/test_D190_sensor_grafigi_OLCULMEYEN_alan_eksene_GIRMEZ.py :: apps/ui/src/components/visual/RealtimeChart.tsx
 tests/test_D191_dema_simulator_A37_tanitim_etiketi_iddiasiz.py :: apps/web/src/App.tsx dema-terapi-simülatörü/src/App.tsx
-tests/test_TD3_estop_kartin_STOP_NACKi_teyit_DEGILDIR.py :: apps/ui/src/services/emergencyStop.ts
 tests/test_TD9_canli_kip_jetonu_DAKIKA_basina_Y148.py :: apps/ui/src/screens/AiHubScreen.tsx apps/ui/src/utils/canliKare.ts
 tests/test_acil_durdurma_gecmiste_gorunur.py :: apps/backend/servers/system_router.py
 tests/test_acilis_DB_acilamasa_ACIL_DURDUR_yasar.py :: launcher/app/src/main.rs launcher/core/src/backend.rs

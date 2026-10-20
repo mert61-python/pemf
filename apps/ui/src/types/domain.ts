@@ -264,6 +264,8 @@ export interface EstopMandali {
   nesil?: number;
   /** Y46: mandal önceki süreçten (diskten) yüklendi — "Sıfırla"ya basılmadan yeniden başlatıldı. */
   oncekiOturum?: boolean;
+  /** 13 §2-d: `eylem` metni ZATEN "Sıfırla" adımını söylüyor mu (makine-okur; metin eşleşmesi gerekmesin). Eski sunucu: yok. */
+  eylemSifirlaSoyler?: boolean;
   /** TD6 · K12: backend'in nedene özgü EYLEM metni (ör. kart reddinde duty / uyumsuzluk metni); boş → arayüz nedenden türetir. */
   eylem?: string;
 }

@@ -202,7 +202,7 @@
    "sira": 5,
    "kritik": true,
    "aciklama": "ACİL DURDUR, mandal bandı, seans ilerleme, söküm koruması, ana ekran (KRİTİK)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 141,
    "dosyaSayisi": 14
   },
@@ -1827,10 +1827,19 @@
    "yuzey": "arayuz",
    "grup": "arayuz-05b-guvenlik-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 18,
    "kritik": true,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "{{frequencyHz}} Hz",
+     "gerekce": "birim biçimi (\"N Hz\") — sayı + birim, kullanıcı metni değil"
+    },
+    {
+     "metin": "{{deger1}} mT",
+     "gerekce": "birim biçimi (\"N mT\") — sayı + birim, kullanıcı metni değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -1838,7 +1847,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-05b-guvenlik-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 6,
    "kritik": true,
    "muaf": [],
@@ -1849,11 +1858,18 @@
    "yuzey": "arayuz",
    "grup": "arayuz-05b-guvenlik-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 25,
    "kritik": true,
    "muaf": [],
-   "birlesikIstisna": [],
+   "birlesikIstisna": [
+    {
+     "once": "Neden: {{deger1}}. {{deger2}}Bobinlerin durduğunu cihazda kontrol edin. {{deger11}}",
+     "sonra": [
+      "guvenlik.mandal.altMetin"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/ui/src/components/ui/GlobalEmergencyStop.tsx": {
@@ -1887,7 +1903,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-05b-guvenlik-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": true,
    "muaf": [],
@@ -1898,7 +1914,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-05b-guvenlik-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": true,
    "muaf": [],
@@ -1909,7 +1925,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-05b-guvenlik-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": true,
    "muaf": [],
@@ -1920,18 +1936,25 @@
    "yuzey": "arayuz",
    "grup": "arayuz-05b-guvenlik-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 9,
    "kritik": true,
    "muaf": [],
-   "birlesikIstisna": [],
+   "birlesikIstisna": [
+    {
+     "once": "Bobin(ler) {{deger1}} için donanım STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın.",
+     "sonra": [
+      "seans.denetim.stopDogrulanamadi"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/ui/src/hooks/useStmBelirsiz.ts": {
    "yuzey": "arayuz",
    "grup": "arayuz-05b-guvenlik-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": true,
    "muaf": [],
@@ -1942,32 +1965,99 @@
    "yuzey": "arayuz",
    "grup": "arayuz-05b-guvenlik-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 14,
    "kritik": true,
    "muaf": [],
-   "birlesikIstisna": [],
+   "birlesikIstisna": [
+    {
+     "once": "STM bağlantısı yok — bobinlerin durumu BİLİNMİYOR (çalışıyor olabilir). {{actionLabel}} tüm durdurma kontrollerini ekrandan kaldırır. Devam edilirse ÖNCE ACİL DURDUR gönderilecek.",
+     "sonra": [
+      "guvenlik.teardown.belirsizGovde"
+     ]
+    },
+    {
+     "once": "{{running}} bobin ÇALIŞIYOR.",
+     "sonra": [
+      "guvenlik.teardown.calisiyorGovde"
+     ]
+    },
+    {
+     "once": "Aktif bir seans var.",
+     "sonra": [
+      "guvenlik.teardown.seansVarGovde"
+     ]
+    },
+    {
+     "once": "{{deger1}}{{actionLabel}} tüm durdurma kontrollerini ekrandan kaldırır. Devam edilirse bobinler ÖNCE durdurulacak.",
+     "sonra": [
+      "guvenlik.teardown.calisiyorGovde",
+      "guvenlik.teardown.seansVarGovde"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/ui/src/screens/DashboardScreen.tsx": {
    "yuzey": "arayuz",
    "grup": "arayuz-05b-guvenlik-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 27,
    "kritik": true,
-   "muaf": [],
-   "birlesikIstisna": [],
+   "muaf": [
+    {
+     "metin": "ESP / MQTT",
+     "gerekce": "protokol / donanım adları (ESP / MQTT) — kullanıcı metni değil"
+    },
+    {
+     "metin": "{{deger1}} Hz",
+     "gerekce": "birim biçimi (\"N Hz\") — sayı + birim, kullanıcı metni değil"
+    }
+   ],
+   "birlesikIstisna": [
+    {
+     "once": "Çalışan bobin:",
+     "sonra": [
+      "ana.calisanBobinDisi"
+     ]
+    },
+    {
+     "once": "| Kalan: {{remainingMin}} dk",
+     "sonra": [
+      "ana.calisanBobinKalan"
+     ]
+    },
+    {
+     "once": "| Seans bağlamı dışı — donanım enerjili",
+     "sonra": [
+      "ana.calisanBobinDisi"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/ui/src/screens/DemaSimulatorScreen.tsx": {
    "yuzey": "arayuz",
    "grup": "arayuz-05b-guvenlik-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 8,
    "kritik": true,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "DEMA Simulator",
+     "gerekce": "WebView başlık özniteliği (ürün adı: \"DEMA Simulator\") — kullanıcı metni değil"
+    },
+    {
+     "metin": "(function(){ // Simülatör Tailwind-responsive (sm:640/md:768). device-width vererek app KENDİ // mobil layout'unu kullanır — width=1024 zorlaması desktop-layout'u küçültüp bozuyordu. var m=document.querySelector('meta[name=viewport]'); if(!m){m=document.createElement('meta');m.name='viewport';(document.head||document.documentElement).appendChild(m);} m.setAttribute('content','width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover'); })(); true;",
+     "gerekce": "WebView'e enjekte edilen JavaScript kodu (yorumlar dahil) — kullanıcı metni değil"
+    },
+    {
+     "metin": "(function(){ // Yatay taşmayı (iç içe geçen yazı/kaydırma) kesin engelle. var s=document.createElement('style'); s.innerHTML='html,body,#root{overflow-x:hidden!important;max-width:100vw!important}img,canvas,svg{max-width:100%!important;height:auto}'; (document.head||document.documentElement).appendChild(s); // İçeriğin TAM yüksekliğini RN'e bildir → WebView içeriğe göre büyür, dış // ScrollView tüm simülatör sayfasını kaydırır (WebView jesti yutup kilitlemez). function postH(){ try { var h = Math.max(document.body.scrollHeight||0, document.documentElement.scrollHeight||0, document.body.offsetHeight||0); if (h && window.ReactNativeWebView) window.ReactNativeWebView.postMessage(String(h)); } catch(e){} } window.addEventListener('load', postH); window.addEventListener('resize', postH); [300,800,1500,3000].forEach(function(t){ setTimeout(postH, t); }); try { new ResizeObserver(postH).observe(document.body); } catch(e){} })(); true;",
+     "gerekce": "WebView'e enjekte edilen JavaScript kodu (yorumlar dahil) — kullanıcı metni değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -1975,21 +2065,42 @@
    "yuzey": "arayuz",
    "grup": "arayuz-05b-guvenlik-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 20,
    "kritik": true,
-   "muaf": [],
-   "birlesikIstisna": [],
+   "muaf": [
+    {
+     "metin": "{{deger1}} mT",
+     "gerekce": "birim biçimi (\"N mT\") — sayı + birim, kullanıcı metni değil"
+    },
+    {
+     "metin": "{{frequencyHz}} Hz",
+     "gerekce": "birim biçimi (\"N Hz\") — sayı + birim, kullanıcı metni değil"
+    }
+   ],
+   "birlesikIstisna": [
+    {
+     "once": "Bobin",
+     "sonra": [
+      "ana.bagliBobin"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/ui/src/services/emergencyStop.ts": {
    "yuzey": "arayuz",
    "grup": "arayuz-05b-guvenlik-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 5,
    "kritik": true,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "emergency_stop HTTP {{status}}",
+     "gerekce": "geliştirici iletisi (emergency_stop HTTP <durum>) — iç hata nedeni, kullanıcıya gösterilmez"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },

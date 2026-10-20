@@ -139,15 +139,14 @@ async function adim1Bridge(): Promise<EmergencyStopResponse | null> {
   }
 }
 
-/** Teyit edilemeyen durdurma için ORTAK uyarı metni (tüm çağıranlar aynı sözü versin). */
-export const EMERGENCY_STOP_UNCONFIRMED_TITLE = "⚠️ ACİL DURDURMA DOĞRULANAMADI";
-export const EMERGENCY_STOP_UNCONFIRMED_BODY =
-  "Donanımın durduğu teyit edilemedi. Bobinler hâlâ çalışıyor olabilir — cihazı fiziksel güç düğmesinden kapatın.";
+/**
+ * Teyit edilemeyen durdurma için ORTAK uyarı metni (tüm çağıranlar aynı sözü versin) — I18N: metin artık katalogda ve çeviri sisteminden BAĞIMSIZ
+ * (`kritikMetin("guvenlik.acilDurdur.teyitsizBaslik" | "…teyitsizGovde")`, `i18n/kritik.ts` KRITIK_YEDEK); çağıranlar (useSessionControl,
+ * useTeardownGuard) doğrudan onu kullanır.
+ */
 
 /**
  * TD3 (tezgâh Oturum 13): kart STOP'u REDDETTİ (STM_NACK). Backend `utils/stm32_kimlik.ESTOP_KART_RED_METNI` ile AYNI metin
  * (eşlik: tests/test_TD3_estop_kartin_STOP_NACKi_teyit_DEGILDIR.py). Eylem söyler: gücü kes / USB'yi çıkar.
  */
-export const EMERGENCY_STOP_KART_RED_TITLE = "⛔ KART STOP'U REDDETTİ";
-export const EMERGENCY_STOP_KART_RED_BODY =
-  "Cihaz kartı STOP komutunu reddetti — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın.";
+// I18N: `kritikMetin("guvenlik.acilDurdur.kartRedBaslik" | "…kartRedGovde")` (yukarıdaki not).

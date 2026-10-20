@@ -1,0 +1,16 @@
+{
+  "aciklama": "Real-time magnetic field and temperature monitoring",
+  "akim": "Current",
+  "alanSonda": "Field (probe)",
+  "anlikDegerler": "Live Values",
+  "baglantiYok": "NO CONNECTION",
+  "bagliDegil": "Not connected",
+  "baslik": "📡 Sensor Monitor",
+  "eksen": "Axis:",
+  "gecikmeli": "DELAYED",
+  "geziciSonda": "🧲 roving probe",
+  "grafikGosterGizle": "Show/hide chart for coil {{id}}",
+  "manyetik": "● Magnetic (mT)",
+  "manyetikEtiket": "Magnetic",
+  "sicaklik": "-- Temperature (°C)"
+}

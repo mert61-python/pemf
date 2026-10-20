@@ -255,6 +255,9 @@ ACİL DURDUR / STOP, seans başlat / durdur, bobin ve alan uyarıları, firmware
 - `useTeardownGuard` cümlesi (`${actionLabel} tüm durdurma kontrollerini …`) `{{eylem}}` şablonuna geçer; eylem adları cümle başı biçimdedir
   (EN "Changing the profile").
 - Anlam birebir: yumuşatma, kısaltma, eksik uyarı YOK. Her kritik anahtar için iki dilde jest testi + kum havuzunda TR + EN ekran görüntüsü.
+- Sunucu METNİNE göre dallanma YASAK (kritik yolda özellikle): arayüz sunucunun metnini kalıp eşleştirmeyle yorumlamaz; sunucu makine-okur alan EKLER
+  (örn. `estop_mandali.durum()["eylemSifirlaSoyler"]`), arayüz önce ona bakar, yoksa (eski sunucu) eski eşleşmeye düşer. ACİL DURDUR yazıları ve
+  `kritikMetin()` kullanan her yer `useKritikDil()` ile dile abone olur; `EMERGENCY_STOP_*`-türü sabit YOK (metin tek yerde, katalogda + KRITIK_YEDEK).
 
 ## 9. Kapılar
 
@@ -263,7 +266,7 @@ bağımlılığı kuralı da orada) · K-3 kullanılan anahtar katalogda + dinam
 `i18n/dinamik-anahtarlar.json`) · K-4 terim (`test_i18n_terim_K4.py`) · K-5 kritik + bayrak + bekleyen (`test_i18n_kritik_K5.py`) · K-6 paket
 (`test_i18n_paket_K6.py`) · K-7 AI etiket eşliği (`test_i18n_ai_etiket_K7.py`) · araçlar (`test_i18n_araclar.py`,
 `test_i18n_parti_araclari.py`) · yardımcı (`test_i18n_yardimci.py`) · altyapı (`test_i18n_sunucu_altyapi.py`, `test_i18n_launcher_altyapi.py`,
-`test_i18n_dema_altyapi.py`, `test_i18n_auth_sayfa.py`) · pilot (`test_i18n_pilot_sunucu.py`). Arayüz jest: `src/i18n/__tests__`, site vitest: `src/i18n/__tests__`.
+`test_i18n_dema_altyapi.py`, `test_i18n_auth_sayfa.py`) · mandal bandı makine-okur alanı (`test_i18n_estop_mandali_eylem_kodu.py`) · pilot (`test_i18n_pilot_sunucu.py`). Arayüz jest: `src/i18n/__tests__`, site vitest: `src/i18n/__tests__`.
 
 ## 10. Sık hatalar (ÖLÇÜLMÜŞ — I18N-0)
 

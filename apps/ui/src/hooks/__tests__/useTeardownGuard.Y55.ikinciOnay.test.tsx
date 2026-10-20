@@ -136,7 +136,7 @@ describe("Y55 — STM bağlı değilken teyitsiz ACİL DURDUR'dan sonra İKİNC�
     await kur(dizi.slice(0, 16)); // kopuştan ÖNCE: STM online, bobin çalıştı
     const sonuc = await cik();
     expect(mockConfirm).toHaveBeenCalledTimes(1);
-    expect(mockSira).toEqual([mockSira[0], "estop", "uyari:TEYITSIZ"]);
+    expect(mockSira).toEqual([mockSira[0], "estop", "uyari:⚠️ ACİL DURDURMA DOĞRULANAMADI"]);
     expect(sonuc).toBe(false);
   });
 

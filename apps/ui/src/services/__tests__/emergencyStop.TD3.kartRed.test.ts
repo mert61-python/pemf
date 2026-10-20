@@ -13,11 +13,8 @@ jest.mock("@/services/config", () => ({
 }));
 
 import { apiPost } from "@/services/apiClient";
-import {
-  EMERGENCY_STOP_KART_RED_BODY,
-  EMERGENCY_STOP_KART_RED_TITLE,
-  performEmergencyStop,
-} from "@/services/emergencyStop";
+import { performEmergencyStop } from "@/services/emergencyStop";
+import { kritikMetin } from "@/i18n/kritik";
 
 const mockApiPost = apiPost as jest.Mock;
 const fetchMock = () => (global as unknown as { fetch: jest.Mock }).fetch;
@@ -52,6 +49,7 @@ it("KARŞIT: yalnız teyitsiz (kart yanıtı yok) → kartReddetti false", async
 });
 
 it("metin EYLEM söyler (gücü kes / USB)", () => {
-  expect(EMERGENCY_STOP_KART_RED_TITLE).toContain("REDDETTİ");
-  expect(EMERGENCY_STOP_KART_RED_BODY).toMatch(/gücünü kesin ya da USB kablosunu çıkarın/);
+  // I18N: metin artık katalogda (kritikMetin, çeviri sisteminden BAĞIMSIZ) — ölçüt aynı.
+  expect(kritikMetin("guvenlik.acilDurdur.kartRedBaslik")).toContain("REDDETTİ");
+  expect(kritikMetin("guvenlik.acilDurdur.kartRedGovde")).toMatch(/gücünü kesin ya da USB kablosunu çıkarın/);
 });

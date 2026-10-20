@@ -1063,8 +1063,10 @@ def _stm_red_aktif_seansi_durdur(ham: str) -> bool:
         # TD6 · K12: mandal bandı nedene göre EYLEM söylesin — duty reddinde K3 metni, aksi kart uyumsuzluğu metni. Yalnız
         # METİN (mandal aşağıdaki E-stop yolunda kurulur; imza ve sıra DEĞİŞMEDİ).
         try:
+            _duty_eylem = live_state.stm_duty_reddi_metni(ham, sifirla=True)
+            # I18N-P1: duty reddi metni "Sıfırla"ya basın der (Y74) → makine-okur bayrak; kart uyumsuzluğu metni demez.
             estop_mandali.eylem_birak(
-                "stm_komut_reddi", live_state.stm_duty_reddi_metni(ham, sifirla=True) or STM_RED_MESAJI
+                "stm_komut_reddi", _duty_eylem or STM_RED_MESAJI, sifirla_soyler=bool(_duty_eylem)
             )
         except Exception:
             logging.getLogger(__name__).warning(

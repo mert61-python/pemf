@@ -1,0 +1,16 @@
+{
+  "aciklama": "Gerçek zamanlı manyetik alan ve sıcaklık izleme",
+  "akim": "Akım",
+  "alanSonda": "Alan (sonda)",
+  "anlikDegerler": "Anlık Değerler",
+  "baglantiYok": "BAĞLANTI YOK",
+  "bagliDegil": "Bağlı değil",
+  "baslik": "📡 Sensör Monitörü",
+  "eksen": "Eksen:",
+  "gecikmeli": "GECİKMELİ",
+  "geziciSonda": "🧲 gezici sonda",
+  "grafikGosterGizle": "Bobin {{id}} grafiğini göster/gizle",
+  "manyetik": "● Manyetik (mT)",
+  "manyetikEtiket": "Manyetik",
+  "sicaklik": "-- Sıcaklık (°C)"
+}

@@ -244,14 +244,16 @@ def test_ESP_ACIK_kolu_STM_reddi_teyidi_yine_DUSURUR(ortam, monkeypatch):
 
 
 def test_red_metni_backend_ve_arayuzde_AYNI():
-    """Tek kaynak çifti: `stm32_kimlik.ESTOP_KART_RED_METNI` ↔ `emergencyStop.ts::EMERGENCY_STOP_KART_RED_BODY`."""
-    import re
-    from pathlib import Path
-
+    """Tek kaynak çifti: `stm32_kimlik.ESTOP_KART_RED_METNI` ↔ arayüz kataloğu `guvenlik.acilDurdur.kartRedGovde` (kritik; `emergencyStop.ts`
+    sabiti I18N-P1'de kataloğa taşındı — ölçüt GEVŞEMEDİ, yer değiştirdi: iki taraf hâlâ BAYT BAYT aynı metin)."""
+    import i18n_yardimci as iy
     from utils.stm32_kimlik import ESTOP_KART_RED_METNI
 
-    ts = (Path(__file__).resolve().parents[1] / "apps" / "ui" / "src" / "services" / "emergencyStop.ts").read_text(
-        encoding="utf-8"
+    anahtar = "guvenlik.acilDurdur.kartRedGovde"
+    assert iy.katalog("arayuz", "tr")[anahtar] == ESTOP_KART_RED_METNI, (
+        iy.katalog("arayuz", "tr")[anahtar],
+        ESTOP_KART_RED_METNI,
     )
-    m = re.search(r'EMERGENCY_STOP_KART_RED_BODY =\s*"([^"]+)"', ts)
-    assert m and m.group(1) == ESTOP_KART_RED_METNI, (m and m.group(1), ESTOP_KART_RED_METNI)
+    # metin ekrana GERÇEKTEN bu anahtardan ulaşıyor (çağıranlar kritikMetin ile; EN dolu)
+    for dosya in ("apps/ui/src/hooks/useSessionControl.ts", "apps/ui/src/hooks/useTeardownGuard.ts"):
+        iy.metin_kapisi(dosya, anahtar, ESTOP_KART_RED_METNI)

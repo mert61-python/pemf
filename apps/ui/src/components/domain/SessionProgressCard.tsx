@@ -8,6 +8,8 @@ import { StyleSheet, Text, View, TouchableOpacity, Animated as RNAnimated, Easin
 import { useEffect as useEff, useRef as useR } from "react";
 import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import { canliYogunluk, YOGUNLUK_ETIKETI_BUYUK } from "@/utils/yogunlukGosterimi";
+import { useTranslation } from "react-i18next";
+import { kritikMetin, useKritikDil } from "@/i18n/kritik";
 
 interface Props {
   isActive: boolean;
@@ -80,6 +82,8 @@ export function SessionProgressCard({
   stopping = false,
   stale = false,
 }: Props) {
+  const { t } = useTranslation();
+  useKritikDil(); // ACİL DURDUR yazıları (kritikMetin) dil değişince yeniden çizilir
   const progress = durationSec > 0 ? Math.min(1, elapsedSec / durationSec) : 0;
   const indefinite = durationSec <= 0; // #72: süresiz seans → 00:00/%0 yerine "Süresiz"
   const pulseAnim = useR(new RNAnimated.Value(1)).current;
@@ -105,8 +109,8 @@ export function SessionProgressCard({
     return (
       <View style={styles.idleCard}>
         <Text style={styles.idleIcon}>⚡</Text>
-        <Text style={styles.idleTitle}>Seans Bekleniyor</Text>
-        <Text style={styles.idleSubtitle}>Parametreleri ayarlayıp &quot;Seans Başlat&quot; butonuna basın.</Text>
+        <Text style={styles.idleTitle}>{t("seans.kart.bekleniyor")}</Text>
+        <Text style={styles.idleSubtitle}>{t("seans.kart.bekleniyorAlt")}</Text>
       </View>
     );
   }
@@ -118,7 +122,7 @@ export function SessionProgressCard({
         <View style={[styles.activeBadge, stale && styles.staleBadge]}>
           <View style={[styles.pulseDot, stale && styles.staleDot]} />
           <Text style={[styles.activeBadgeText, stale && styles.staleBadgeText]}>
-            {stale ? "VERİ DOĞRULANMADI" : "AKTİF SEANS"}
+            {stale ? t("seans.kart.veriDogrulanmadi") : t("seans.kart.aktifSeans")}
           </Text>
         </View>
         <Text style={styles.modeText}>{mode}</Text>
@@ -127,7 +131,7 @@ export function SessionProgressCard({
       {stale && (
         <Text style={styles.staleNote}
           accessibilityRole="alert" accessibilityLiveRegion="polite">
-          ⚠️ Bağlantı bayat/çevrimdışı — gösterilen süre ve değerler gerçek zamanlı doğrulanamıyor.
+          {t("seans.kart.bayatBaglanti")}
         </Text>
       )}
 
@@ -139,26 +143,26 @@ export function SessionProgressCard({
       {/* Times */}
       <View style={styles.timeRow}>
         <View style={styles.timeBlock}>
-          <Text style={styles.timeLabel}>GEÇEN</Text>
+          <Text style={styles.timeLabel}>{t("seans.kart.gecen")}</Text>
           <Text style={styles.timeValue} {...SURE_METNI}>{formatTime(elapsedSec)}</Text>
         </View>
         <View style={styles.timeBlockCenter}>
           <Text style={styles.progressPct}>{indefinite ? "∞" : `${Math.round(progress * 100)}%`}</Text>
         </View>
         <View style={[styles.timeBlock, { alignItems: "flex-end" }]}>
-          <Text style={styles.timeLabel}>KALAN</Text>
+          <Text style={styles.timeLabel}>{t("seans.kart.kalan")}</Text>
           <Text
             style={[styles.timeValue, { color: indefinite ? colors.textMuted : remainingSec < 60 ? "#ef4444" : colors.primary }]}
             {...SURE_METNI}
           >
-            {indefinite ? "Süresiz" : formatTime(remainingSec)}
+            {indefinite ? t("seans.kart.suresiz") : formatTime(remainingSec)}
           </Text>
         </View>
       </View>
 
       {/* Params */}
       <View style={styles.paramRow}>
-        <ParamChip label="FREKANS" value={`${frequencyHz} Hz`} />
+        <ParamChip label={t("seans.kart.frekans")} value={`${frequencyHz} Hz`} />
         {/* ⚠️ İKİ FARKLI YOĞUNLUK — ETİKET HANGİSİ OLDUĞUNU SÖYLER.
             M3 (denetim 2026-09-03): reçete mT'si CIHAZA GÖNDERİLMEZ (STM/ESP paketi mT
             taşımaz), yalnız kayda yazılır; FREKANS ile yan yana eşit gösterilince operatör
@@ -176,7 +180,7 @@ export function SessionProgressCard({
             frekansı değiştirince düşmeyen bir "ölçüm" görürdü.
             ⚠️ Ölçüm yokken ÇİZİLMEZ: 0 göstermek "0 mT ölçtük" demektir. */}
         {measuredPeakMt != null && (
-          <ParamChip label="TEPE (seans)" value={`${measuredPeakMt.toFixed(2)} mT`} />
+          <ParamChip label={t("seans.kart.tepe")} value={`${measuredPeakMt.toFixed(2)} mT`} />
         )}
       </View>
 
@@ -187,17 +191,17 @@ export function SessionProgressCard({
             ikinci basış yeni bir `/session/stop` gönderir (idempotent). */}
         <TouchableOpacity style={[styles.btnStop, loading && styles.btnBusy]} onPress={onStop}
           accessibilityRole="button" accessibilityState={{ busy: loading }}
-          accessibilityLabel="Seansı durdur">
+          accessibilityLabel={t("seans.kart.durdurEtiketi")}>
           <Text style={styles.btnStopText} numberOfLines={1} adjustsFontSizeToFit>
-            {loading ? "⏳ Durduruluyor…" : "⏹ Durdur"}
+            {loading ? t("kontrol.ekran.durduruluyor") : t("kontrol.panel.durdur")}
           </Text>
         </TouchableOpacity>
         {/* ACİL DURDUR asla disabled DEĞİL (panik anında dokunuş yutulmamalı); yalnız durum yazısı değişir. */}
         <TouchableOpacity style={styles.btnEmergency} onPress={onEmergencyStop}
           accessibilityRole="button" accessibilityState={{ busy: stopping }}
-          accessibilityLabel="Acil durdurma — tüm bobinleri anında durdur">
+          accessibilityLabel={kritikMetin("guvenlik.acilDurdur.seansKartiEtiketi")}>
           <Text style={styles.btnEmergencyText} numberOfLines={1} adjustsFontSizeToFit>
-            {stopping ? "🚨 DURDURULUYOR…" : "🚨 ACİL DURDUR"}
+            {stopping ? kritikMetin("guvenlik.acilDurdur.durduruluyor") : kritikMetin("guvenlik.acilDurdur.dugme")}
           </Text>
         </TouchableOpacity>
       </View>

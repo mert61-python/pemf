@@ -18,15 +18,11 @@
  */
 import { useCallback } from "react";
 import { platformAlert, platformConfirm } from "@/services/apiClient";
-import {
-  performEmergencyStop,
-  EMERGENCY_STOP_UNCONFIRMED_TITLE,
-  EMERGENCY_STOP_UNCONFIRMED_BODY,
-  EMERGENCY_STOP_KART_RED_TITLE,
-  EMERGENCY_STOP_KART_RED_BODY,
-} from "@/services/emergencyStop";
+import { performEmergencyStop } from "@/services/emergencyStop";
+import { kritikMetin } from "@/i18n/kritik";
 import { useLiveData } from "@/context/LiveDataContext";
 import { onaySonrasiEngel } from "@/services/hesapGecisi";
+import { useTranslation } from "react-i18next";
 
 /** Donanım BOŞTAYKEN istenen (opsiyonel) ikinci onay — bkz. `TeardownOpts`. */
 export interface IdleConfirm {
@@ -47,6 +43,7 @@ export interface TeardownOpts {
 }
 
 export function useTeardownGuard() {
+  const { t } = useTranslation();
   const { snapshot, donanimBelirsiz } = useLiveData();
 
   /**
@@ -72,11 +69,11 @@ export function useTeardownGuard() {
         // Boşta: tıbbi risk YOK. Yalnız çağıran açıkça istediyse (kazara dokunuş koruması) sor.
         if (!opts?.confirmWhenIdle) return true;
         const { title, body, confirmLabel } = opts.confirmWhenIdle;
-        if (!(await platformConfirm(title, body, confirmLabel ?? "Devam et"))) return false;
+        if (!(await platformConfirm(title, body, confirmLabel ?? t("ayarlar.yedekParola.devamEtiketi")))) return false;
         // S-SGI.6: pencere açıkken seans başladıysa (anlık görüntü pencere süresince bayat) söküm İPTAL — taze durum backend'den.
         const engel = await onaySonrasiEngel();
         if (engel) {
-          platformAlert("İşlem iptal edildi", engel);
+          platformAlert(t("guvenlik.teardown.iptalEdildi"), engel);
           return false;
         }
         return true;
@@ -84,18 +81,16 @@ export function useTeardownGuard() {
 
       const ok = belirsiz
         ? await platformConfirm(
-            "Bobinler çalışıyor olabilir",
-            "STM bağlantısı yok — bobinlerin durumu BİLİNMİYOR (çalışıyor olabilir). " +
-              `${actionLabel} tüm durdurma kontrollerini ekrandan kaldırır.\n\n` +
-              "Devam edilirse ÖNCE ACİL DURDUR gönderilecek.",
-            "Durdur ve devam et"
+            t("guvenlik.teardown.calisiyorOlabilir"),
+            t("guvenlik.teardown.belirsizGovde", { eylem: actionLabel }),
+            t("guvenlik.teardown.durdurVeDevam")
           )
         : await platformConfirm(
-            "Seans sürüyor",
-            `${running > 0 ? `${running} bobin ÇALIŞIYOR. ` : "Aktif bir seans var. "}` +
-              `${actionLabel} tüm durdurma kontrollerini ekrandan kaldırır.\n\n` +
-              "Devam edilirse bobinler ÖNCE durdurulacak.",
-            "Durdur ve devam et"
+            t("guvenlik.teardown.seansSuruyor"),
+            running > 0
+              ? t("guvenlik.teardown.calisiyorGovde", { count: running, eylem: actionLabel })
+              : t("guvenlik.teardown.seansVarGovde", { eylem: actionLabel }),
+            t("guvenlik.teardown.durdurVeDevam")
           );
       if (!ok) return false;
 
@@ -104,22 +99,24 @@ export function useTeardownGuard() {
         // Y55: ACİL DURDUR GÖNDERİLDİ (yukarıda); STM paket gelmeyince bobinleri kendi bekçisiyle ~1,5 sn'de durdurur
         // (DENETİM-08 ölçümü). Operatör bilerek İKİNCİ kez onaylarsa çıkılır; vazgeçerse ekranda kalır.
         return platformConfirm(
-          "ACİL DURDUR teyit edilemedi",
-          "ACİL DURDUR teyit edilemedi — STM bağlı değil, bobinleri kontrol edin. Yine de çıkılsın mı?",
-          "Yine de çık"
+          t("guvenlik.teardown.teyitEdilemediBaslik"),
+          t("guvenlik.teardown.teyitEdilemediGovde"),
+          t("guvenlik.teardown.yineDeCik")
         );
       }
       if (!confirmed) {
         // Durdurma teyit edilemedi → kabuğu SÖKME. Operatörün elinde ACİL DURDUR kalsın.
         // TD3: kart STOP'u reddettiyse eylem metni (gücü kes / USB'yi çıkar).
         platformAlert(
-          kartReddetti ? EMERGENCY_STOP_KART_RED_TITLE : EMERGENCY_STOP_UNCONFIRMED_TITLE,
-          `${kartReddetti ? EMERGENCY_STOP_KART_RED_BODY : EMERGENCY_STOP_UNCONFIRMED_BODY}\n\nGüvenlik için işlem iptal edildi — ekranda kalıyorsunuz.`
+          kartReddetti ? kritikMetin("guvenlik.acilDurdur.kartRedBaslik") : kritikMetin("guvenlik.acilDurdur.teyitsizBaslik"),
+          t("guvenlik.teardown.iptalGovde", {
+            neden: kartReddetti ? kritikMetin("guvenlik.acilDurdur.kartRedGovde") : kritikMetin("guvenlik.acilDurdur.teyitsizGovde"),
+          })
         );
         return false;
       }
       return true;
     },
-    [snapshot, donanimBelirsiz]
+    [snapshot, donanimBelirsiz, t]
   );
 }

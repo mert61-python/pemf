@@ -25,6 +25,8 @@ import { useLiveData } from "@/context/LiveDataContext";
 import { apiPost, platformAlert, platformConfirm } from "@/services/apiClient";
 import { emitToast } from "@/services/toastBridge";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
+import i18n from "i18next";
+import { useTranslation } from "react-i18next";
 
 /** Backend ucu (apiClient tabanı `/api`). */
 export const SIFIRLA_YOLU = "/hardware/estop_mandali/sifirla";
@@ -35,17 +37,17 @@ export function mandalNedeni(neden?: string): string {
   // Y46: mandal önceki süreçten (diskten) geldi — `onceki_oturum:<asıl neden>`; dosya okunamadıysa güvenli tarafta kurulu.
   if (n.startsWith("onceki_oturum:")) {
     const ic = n.slice("onceki_oturum:".length);
-    const asil = ic === "dosya_okunamadi" ? "mandal dosyası okunamadı" : mandalNedeni(ic);
-    return `önceki oturumda ACİL DURDUR — sıfırlanmadı (${asil})`;
+    const asil = ic === "dosya_okunamadi" ? i18n.t("guvenlik.mandal.dosyaOkunamadi") : mandalNedeni(ic);
+    return i18n.t("guvenlik.mandal.oncekiOturum", { asil });
   }
-  if (n === "manual") return "ACİL DURDUR düğmesi";
+  if (n === "manual") return i18n.t("guvenlik.mandal.neden.manual");
   // 2026-10-18: launcher kapanışı (`/api/hardware/kapanis_durdur`) — diske YALNIZ bobin çalışırken / seans sürerken yazılır.
-  if (n === "uygulama_kapanisi") return "uygulama seans ya da bobin çalışırken kapatıldı";
-  if (n === "stm_disconnected") return "STM32 bağlantı kaybı";
-  if (n === "stm_komut_reddi") return "kart komutları reddetti";
-  if (n === "stm_watchdog_timeout") return "STM32 watchdog zaman aşımı";
-  if (n.startsWith("esp_alarm")) return "ESP güvenlik alarmı";
-  return "acil durdurma";
+  if (n === "uygulama_kapanisi") return i18n.t("guvenlik.mandal.neden.uygulamaKapanisi");
+  if (n === "stm_disconnected") return i18n.t("guvenlik.mandal.neden.stmKopusu");
+  if (n === "stm_komut_reddi") return i18n.t("guvenlik.mandal.neden.komutReddi");
+  if (n === "stm_watchdog_timeout") return i18n.t("guvenlik.mandal.neden.watchdog");
+  if (n.startsWith("esp_alarm")) return i18n.t("guvenlik.mandal.neden.espAlarm");
+  return i18n.t("guvenlik.mandal.neden.genel");
 }
 
 /**
@@ -57,37 +59,38 @@ export function mandalEylemi(neden?: string, eylem?: string): string {
   if (e) return e;
   const n = String(neden || "");
   const ic = n.startsWith("onceki_oturum:") ? n.slice("onceki_oturum:".length) : n;
-  if (ic === "stm_disconnected" || ic === "stm_watchdog_timeout") return "USB kablosunu kontrol edin.";
+  if (ic === "stm_disconnected" || ic === "stm_watchdog_timeout") return i18n.t("guvenlik.mandal.eylem.kablo");
   if (ic === "stm_komut_reddi") {
-    return "Cihaz kartı komutu reddetti — bobin ayarlarını (duty / sürüş kipi) kontrol edin; sürerse teknik desteği arayın.";
+    return i18n.t("guvenlik.mandal.eylem.komutReddi");
   }
   return "";
 }
 
 export function EstopMandalBandi() {
+  const { t } = useTranslation();
   const { snapshot } = useLiveData();
   const [mesgul, setMesgul] = useState(false);
   const mandal = snapshot?.estopMandali;
   if (!mandal?.aktif) return null;
   const eylem = mandalEylemi(mandal.neden, mandal.eylem);
   // Eylem metni "Sıfırla" adımını ZATEN söylüyorsa (duty reddi, Y74) bant onu ikinci kez yazmaz.
-  const sifirlaSoylendi = /Sıfırla/.test(eylem);
+  // 13 §2-d: sunucu METNİNE göre dallanma YOK — makine-okur alan (`eylemSifirlaSoyler`) önce; alan yoksa (eski sunucu) eski metin eşleşmesi.
+  const sifirlaSoylendi = typeof mandal.eylemSifirlaSoyler === "boolean" ? mandal.eylemSifirlaSoyler : /Sıfırla/.test(eylem);
 
   const sifirla = async () => {
     const onay = await platformConfirm(
-      "Acil durdurma mandalı sıfırlansın mı?",
-      "Sıfırlama bobinleri BAŞLATMAZ. Bobinlerin durduğunu ve hastanın güvende olduğunu kontrol edin; " +
-        "tedaviye devam etmek için başlatmayı ayrıca verin.",
-      "Sıfırla"
+      t("guvenlik.mandal.sifirlaBaslik"),
+      t("guvenlik.mandal.sifirlaGovde"),
+      t("ayarlar.bakim.pwmSifirla")
     );
     if (!onay) return;
     setMesgul(true);
     const r = await apiPost<{ status?: string } | null>(SIFIRLA_YOLU, { onay: true }, null);
     setMesgul(false);
     if (r?.status === "success") {
-      emitToast("Mandal sıfırlandı — başlatma yeniden mümkün (bobinler başlatılmadı)", "success");
+      emitToast(t("guvenlik.mandal.sifirlandi"), "success");
     } else {
-      platformAlert("Mandal sıfırlanamadı", "Cihaza ulaşılamadı ya da istek reddedildi. Bağlantıyı kontrol edip yeniden deneyin.");
+      platformAlert(t("guvenlik.mandal.sifirlanamadi"), t("guvenlik.mandal.sifirlanamadiGovde"));
     }
   };
 
@@ -95,14 +98,15 @@ export function EstopMandalBandi() {
     <View style={styles.bant} accessibilityRole="alert">
       <Lock color={colors.danger} size={rs(18)} />
       <View style={{ flex: 1 }}>
-        <Text style={styles.baslik}>ACİL DURDURMA MANDALLI — yeni başlatma kapalı</Text>
+        <Text style={styles.baslik}>{t("guvenlik.mandal.baslik")}</Text>
         {/* 1-C inceleme i3-F-2: "Bobinler durduruldu" GÜVENCESİ yazılmaz — mandal iletisi teyit taşımaz, E-stop teyitsiz
             bitebilir (kablo çıkık / ölü gönderici). Bant EYLEM söyler. */}
         <Text style={styles.alt}>
-          {`Neden: ${mandalNedeni(mandal.neden)}. ${eylem ? eylem + " " : ""}Bobinlerin durduğunu cihazda kontrol edin. ` +
-            (sifirlaSoylendi
-              ? "Sıfırlama bobinleri başlatmaz."
-              : 'Yeniden başlatmak için önce "Sıfırla"; sıfırlama bobinleri başlatmaz.')}
+          {t("guvenlik.mandal.altMetin", {
+            neden: mandalNedeni(mandal.neden),
+            eylem: eylem ? eylem + " " : "",
+            sonuc: sifirlaSoylendi ? t("guvenlik.mandal.sifirlamaBaslatmaz") : t("guvenlik.mandal.onceSifirla"),
+          })}
         </Text>
       </View>
       <Pressable
@@ -110,10 +114,10 @@ export function EstopMandalBandi() {
         disabled={mesgul}
         style={[styles.dugme, mesgul && { opacity: 0.6 }]}
         accessibilityRole="button"
-        accessibilityLabel="Acil durdurma mandalını sıfırla"
-        accessibilityHint="Mandalı kaldırır; bobinleri başlatmaz"
+        accessibilityLabel={t("guvenlik.mandal.sifirlaEtiketi")}
+        accessibilityHint={t("guvenlik.mandal.sifirlaIpucu")}
       >
-        <Text style={styles.dugmeMetni}>{mesgul ? "Sıfırlanıyor…" : "Sıfırla"}</Text>
+        <Text style={styles.dugmeMetni}>{mesgul ? t("guvenlik.mandal.sifirlaniyor") : t("ayarlar.bakim.pwmSifirla")}</Text>
       </Pressable>
     </View>
   );

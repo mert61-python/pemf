@@ -8,14 +8,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiPost, apiGet, platformAlert } from "@/services/apiClient";
 import { emitToast } from "@/services/toastBridge";
-import {
-  performEmergencyStop,
-  EMERGENCY_STOP_UNCONFIRMED_TITLE,
-  EMERGENCY_STOP_UNCONFIRMED_BODY,
-  EMERGENCY_STOP_KART_RED_TITLE,
-  EMERGENCY_STOP_KART_RED_BODY,
-} from "@/services/emergencyStop";
+import { performEmergencyStop } from "@/services/emergencyStop";
+import { kritikMetin } from "@/i18n/kritik";
 import type { ActiveTreatment } from "@/types/domain";
+import { useTranslation } from "react-i18next";
 
 export interface SessionStartParams {
   patientId?: string;
@@ -82,6 +78,7 @@ interface SessionActionResponse {
 }
 
 export function useSessionControl(): SessionControlResult {
+  const { t } = useTranslation();
   const [isActive, setIsActive] = useState(false);
   const [treatment, setTreatment] = useState<ActiveTreatment | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
@@ -249,8 +246,8 @@ export function useSessionControl(): SessionControlResult {
       });
       if (teyitsizHttp === null && (!res || res.status === "error")) {
         platformAlert(
-          "Durdurma onaylanamadı",
-          "Sunucuya ulaşılamadı — donanım HÂLÂ ÇALIŞIYOR olabilir. Lütfen ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
+          t("kontrol.ekran.durdurmaOnaylanamadi"),
+          t("seans.denetim.sunucuyaUlasilamadi")
         );
         return false;
       }
@@ -265,9 +262,8 @@ export function useSessionControl(): SessionControlResult {
         teyitsizHttp ?? (Array.isArray(res?.hardware_stop_unconfirmed) ? res.hardware_stop_unconfirmed : []);
       if (teyitsiz.length > 0) {
         platformAlert(
-          "Durdurma onaylanamadı",
-          `Bobin(ler) ${teyitsiz.join(", ")} için donanım STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR ` +
-            "olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
+          t("kontrol.ekran.durdurmaOnaylanamadi"),
+          t("seans.denetim.stopDogrulanamadi", { liste: teyitsiz.join(", ") })
         );
       }
       stopTimer();
@@ -281,7 +277,7 @@ export function useSessionControl(): SessionControlResult {
     } finally {
       setSessionStopping(false);
     }
-  }, [stopTimer]);
+  }, [stopTimer, t]);
 
   const startSession = useCallback(async (params: SessionStartParams): Promise<boolean> => {
     startUcustaRef.current = true;
@@ -313,7 +309,7 @@ export function useSessionControl(): SessionControlResult {
         // sunucu isteği yine işlemiş olabilir) STOP YENİDEN gider; seans açık GÖSTERİLMEZ. Son söz durdurmanındır.
         startSonrasiDurdurRef.current = false;
         await stopSession();
-        setErrorBoth("Başlatma, uçuştayken verilen DURDUR ile geri alındı.");
+        setErrorBoth(t("seans.denetim.baslatmaGeriAlindi"));
         return false;
       }
 
@@ -335,23 +331,23 @@ export function useSessionControl(): SessionControlResult {
         startTimer(totalSec);
         return true;
       }
-      setErrorBoth(sunucuGerekce || "Seans başlatılamadı.");
+      setErrorBoth(sunucuGerekce || t("kontrol.ekran.seansBaslatilamadi"));
       return false;
     } catch (e) {
-      setErrorBoth(e instanceof Error ? e.message : "Hata oluştu.");
+      setErrorBoth(e instanceof Error ? e.message : t("seans.denetim.hataOlustu"));
       return false;
     } finally {
       startUcustaRef.current = false;
       setStarting(false);
     }
-  }, [startTimer, setErrorBoth, stopSession]);
+  }, [startTimer, setErrorBoth, stopSession, t]);
 
   const emergencyStop = useCallback(async (): Promise<void> => {
     // GERİ BİLDİRİM (#17): en kötü durumda bridge 5sn + iki yedek istek 8+8sn = ~21sn sürebilir.
     // Eskiden bu sürenin TAMAMI boyunca ekranda HİÇBİR şey olmuyordu → operatör butonun çalışmadığını
     // sanıp tekrar tekrar basıyordu. Komut gider gitmez durumu bildir.
     setStopping(true);
-    emitToast("Acil durdurma gönderiliyor…", "info");
+    emitToast(kritikMetin("guvenlik.acilDurdur.gonderiliyor"), "info");
     // Durdurma mantığı services/emergencyStop.ts'te (tek kaynak) — çıkış/profil-değiştirme kapıları
     // da aynı fonksiyonu çağırır, böylece davranış hiçbir yerde ayrışmaz.
     const { confirmed, kartReddetti } = await performEmergencyStop();
@@ -365,11 +361,11 @@ export function useSessionControl(): SessionControlResult {
       // Güvenlik: donanımın durduğu teyit edilemedi — web dahil HER platformda göster (Alert.alert web'de no-op).
       // TD3: kart STOP'u reddettiyse eylem metni (gücü kes / USB'yi çıkar).
       platformAlert(
-        kartReddetti ? EMERGENCY_STOP_KART_RED_TITLE : EMERGENCY_STOP_UNCONFIRMED_TITLE,
-        kartReddetti ? EMERGENCY_STOP_KART_RED_BODY : EMERGENCY_STOP_UNCONFIRMED_BODY
+        kartReddetti ? kritikMetin("guvenlik.acilDurdur.kartRedBaslik") : kritikMetin("guvenlik.acilDurdur.teyitsizBaslik"),
+        kartReddetti ? kritikMetin("guvenlik.acilDurdur.kartRedGovde") : kritikMetin("guvenlik.acilDurdur.teyitsizGovde")
       );
     } else {
-      emitToast("Tüm bobinler durduruldu ✓", "success");
+      emitToast(kritikMetin("guvenlik.acilDurdur.durduruldu"), "success");
     }
   }, [stopTimer]);
 

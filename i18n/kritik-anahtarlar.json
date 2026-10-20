@@ -841,6 +841,461 @@
    "tur": "bobin",
    "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
    "aciklama": "sürücüsü yalnız unipolar — değiştirilemez (etiket parçası)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.acilDurdur.seansKartiEtiketi",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "aciklama": "seans kartı: acil durdurma — tüm bobinleri anında durdur (erişim etiketi) — KRITIK_YEDEK"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.stmUyum.k1Yedek",
+   "tur": "firmware",
+   "kaynak": "apps/ui/src/components/domain/StmUyumBandi.tsx",
+   "aciklama": "FW-PAKET yedek ileti: kart yazılımı uyumsuz — bobinler çalışmaz"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.stmUyum.k2Yedek",
+   "tur": "firmware",
+   "kaynak": "apps/ui/src/components/domain/StmUyumBandi.tsx",
+   "aciklama": "kart doğrulanamadı — SİYAH sıfırlama düğmesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.baslik",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "ACİL DURDURMA MANDALLI — yeni başlatma kapalı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.altMetin",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "mandal bandı: neden + eylem + 'bobinlerin durduğunu kontrol edin'"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.sifirlamaBaslatmaz",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "sıfırlama bobinleri başlatmaz"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.onceSifirla",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "yeniden başlatmak için önce Sıfırla"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.sifirlaBaslik",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "mandal sıfırlama onayı (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.sifirlaGovde",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "sıfırlama bobinleri BAŞLATMAZ — onay gövdesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.sifirlandi",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "mandal sıfırlandı (bobinler başlatılmadı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.sifirlanamadi",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "mandal sıfırlanamadı (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.sifirlanamadiGovde",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "mandal sıfırlanamadı — bağlantıyı kontrol edin"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.sifirlaEtiketi",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "mandal sıfırla (erişim etiketi)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.sifirlaIpucu",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "mandalı kaldırır; bobinleri başlatmaz (erişim ipucu)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.oncekiOturum",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "önceki oturumda ACİL DURDUR — sıfırlanmadı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.neden.manual",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "neden: ACİL DURDUR düğmesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.neden.uygulamaKapanisi",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "neden: uygulama seans / bobin çalışırken kapatıldı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.neden.stmKopusu",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "neden: STM32 bağlantı kaybı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.neden.komutReddi",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "neden: kart komutları reddetti"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.neden.watchdog",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "neden: STM32 watchdog zaman aşımı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.neden.espAlarm",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "neden: ESP güvenlik alarmı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.neden.genel",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "neden: acil durdurma (genel)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.eylem.kablo",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "eylem: USB kablosunu kontrol edin"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.eylem.komutReddi",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "eylem: kart komutu reddetti — duty / sürüş kipi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.dosyaOkunamadi",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "mandal dosyası okunamadı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.teardown.calisiyorOlabilir",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "aciklama": "bobinler çalışıyor olabilir (onay başlığı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.teardown.belirsizGovde",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "aciklama": "STM bağlantısı yok — bobinlerin durumu BİLİNMİYOR"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.teardown.seansSuruyor",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "aciklama": "seans sürüyor (onay başlığı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.teardown.calisiyorGovde",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "aciklama": "N bobin ÇALIŞIYOR — söküm onayı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.teardown.seansVarGovde",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "aciklama": "aktif seans var — söküm onayı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.teardown.durdurVeDevam",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "aciklama": "durdur ve devam et"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.teardown.iptalEdildi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "aciklama": "işlem iptal edildi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.teardown.teyitEdilemediBaslik",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "aciklama": "ACİL DURDUR teyit edilemedi (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.teardown.teyitEdilemediGovde",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "aciklama": "ACİL DURDUR teyit edilemedi — STM bağlı değil"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.teardown.yineDeCik",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "aciklama": "yine de çık"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.teardown.iptalGovde",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/hooks/useTeardownGuard.ts",
+   "aciklama": "güvenlik için işlem iptal edildi — ekranda kalıyorsunuz"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.denetim.sunucuyaUlasilamadi",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/hooks/useSessionControl.ts",
+   "aciklama": "sunucuya ulaşılamadı — donanım HÂLÂ ÇALIŞIYOR olabilir"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.denetim.stopDogrulanamadi",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/hooks/useSessionControl.ts",
+   "aciklama": "bobin(ler) için donanım STOP'u DOĞRULANAMADI"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.denetim.baslatmaGeriAlindi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/hooks/useSessionControl.ts",
+   "aciklama": "başlatma uçuştayken verilen DURDUR ile geri alındı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.denetim.hataOlustu",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/hooks/useSessionControl.ts",
+   "aciklama": "hata oluştu (seans)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.kart.bekleniyor",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "aciklama": "K-5 bekleyen: Seans Bekleniyor"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.kart.bekleniyorAlt",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "aciklama": "K-5 bekleyen: Parametreleri ayarlayıp \"Seans Başlat\" butonuna basın."
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.kart.aktifSeans",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "aciklama": "K-5 bekleyen: AKTİF SEANS"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.kart.kalan",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "aciklama": "K-5 bekleyen: KALAN"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.kart.tepe",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "aciklama": "K-5 bekleyen: TEPE (seans)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.kart.durdurEtiketi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "aciklama": "K-5 bekleyen: Seansı durdur"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ana.cihazAgi",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/screens/DashboardScreen.tsx",
+   "aciklama": "K-5 bekleyen: Cihaz Ağı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ana.donanim",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/screens/DashboardScreen.tsx",
+   "aciklama": "K-5 bekleyen: Donanım"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ana.kalanSure",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/DashboardScreen.tsx",
+   "aciklama": "K-5 bekleyen: Kalan Süre"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ana.bagliBobin",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/DashboardScreen.tsx",
+   "aciklama": "K-5 bekleyen: Bağlı Bobin"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ana.aktifHastaYok",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/DashboardScreen.tsx",
+   "aciklama": "K-5 bekleyen: Aktif hasta yok — hasta seçip seans başlatınca burada görünü"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ana.aktifSeans",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/DashboardScreen.tsx",
+   "aciklama": "K-5 bekleyen: Aktif Seans"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ana.donanimCalisiyor",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/DashboardScreen.tsx",
+   "aciklama": "K-5 bekleyen: ⚠️ DONANIM ÇALIŞIYOR"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ana.calisanBobinDisi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/DashboardScreen.tsx",
+   "aciklama": "K-5 bekleyen: Çalışan bobin:"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ana.calisanBobinKalan",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/DashboardScreen.tsx",
+   "aciklama": "K-5 bekleyen: | Kalan: {{remainingMin}} dk"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ana.kontrolPanelinden",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/DashboardScreen.tsx",
+   "aciklama": "K-5 bekleyen: Kontrol panelinden seans başlatabilirsiniz."
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ana.bobinDurumlari",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/DashboardScreen.tsx",
+   "aciklama": "K-5 bekleyen: Bobin Durumları"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ana.bobinVerisiBekleniyor",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/DashboardScreen.tsx",
+   "aciklama": "K-5 bekleyen: Bobin verisi bekleniyor… (bağlantı kurulunca görünecek)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "dema.egitimEtiketi",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/screens/DemaSimulatorScreen.tsx",
+   "aciklama": "K-5 bekleyen: Tanıtım/eğitim amaçlıdır, cihaz davranışını temsil etmez."
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "sensor.baslik",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/SensorMonitorScreen.tsx",
+   "aciklama": "K-5 bekleyen: 📡 Sensör Monitörü"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "sensor.aciklama",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/SensorMonitorScreen.tsx",
+   "aciklama": "K-5 bekleyen: Gerçek zamanlı manyetik alan ve sıcaklık izleme"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.bobin.baslik",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/SensorMonitorScreen.tsx",
+   "aciklama": "K-5 bekleyen: Bobin {{id}}"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "sensor.grafikGosterGizle",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/SensorMonitorScreen.tsx",
+   "aciklama": "K-5 bekleyen: Bobin {{id}} grafiğini göster/gizle"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "sensor.alanSonda",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/SensorMonitorScreen.tsx",
+   "aciklama": "K-5 bekleyen: Alan (sonda)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "sensor.akim",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/SensorMonitorScreen.tsx",
+   "aciklama": "K-5 bekleyen: Akım"
   }
  ],
  "bekleyen": [

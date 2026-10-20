@@ -1,0 +1,21 @@
+{
+  "denetim": {
+    "baslatmaGeriAlindi": "The start was canceled by a STOP issued while it was in flight.",
+    "hataOlustu": "An error occurred.",
+    "stopDogrulanamadi": "Hardware STOP could NOT be verified for coil(s) {{liste}} — they MAY STILL BE RUNNING. Press EMERGENCY STOP or use the device's physical power button.",
+    "sunucuyaUlasilamadi": "Could not reach the server — the hardware MAY STILL BE RUNNING. Please press EMERGENCY STOP or use the device's physical power button."
+  },
+  "kart": {
+    "aktifSeans": "ACTIVE SESSION",
+    "bayatBaglanti": "⚠️ Connection is stale/offline — the time and values shown cannot be verified in real time.",
+    "bekleniyor": "Waiting for a Session",
+    "bekleniyorAlt": "Set the parameters and press the \"Start Session\" button.",
+    "durdurEtiketi": "Stop the session",
+    "frekans": "FREQUENCY",
+    "gecen": "ELAPSED",
+    "kalan": "REMAINING",
+    "suresiz": "Unlimited",
+    "tepe": "PEAK (session)",
+    "veriDogrulanmadi": "DATA NOT VERIFIED"
+  }
+}

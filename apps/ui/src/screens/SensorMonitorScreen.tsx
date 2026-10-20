@@ -20,6 +20,7 @@ import { gorunurBobinler } from "@/services/bobinGorunurlugu";
 import { Chip } from "@/components/ui/Chip";
 import { akimOlcumuYokMetni, alanDogrulanamadiMetni, akimOlcumuAcik } from "@/utils/olculenAlan";
 import { useResponsive } from "@/hooks/useResponsive";
+import { useTranslation } from "react-i18next";
 
 // Grafikteki çizgi renkleriyle BİREBİR aynı kategorik palet (legend/filtre butonu + stat kartı tutarlılığı).
 const COIL_COLORS = [
@@ -28,6 +29,7 @@ const COIL_COLORS = [
 ];
 
 export function SensorMonitorScreen() {
+  const { t } = useTranslation();
   // [S5 adım 11 / ekranB-3] Grafik yüksekliği pencereye bağlı: sabit rs(280) yatay telefonda
   // (yükseklik 360-430) ekranın neredeyse tamamını yiyor, kart ızgarası görünmüyordu.
   // Taban rs(160): RealtimeChart PAD sabitleriyle çizim alanı ~100 px'in altına düşmesin.
@@ -77,33 +79,33 @@ export function SensorMonitorScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>📡 Sensör Monitörü</Text>
+          <Text style={styles.title}>{t("sensor.baslik")}</Text>
           <Text style={styles.subtitle}>
-            Gerçek zamanlı manyetik alan ve sıcaklık izleme
+            {t("sensor.aciklama")}
           </Text>
         </View>
         <View style={[styles.wsBadge, telemetryStale && styles.wsBadgeStale, connectionQuality === "offline" && styles.wsBadgeOff]}>
           <View style={[styles.wsDot, telemetryStale && styles.wsDotStale, connectionQuality === "offline" && styles.wsDotOff]} />
           <Text style={[styles.wsText, telemetryStale && { color: "#f59e0b" }, connectionQuality === "offline" && { color: "#ef4444" }]}>
-            {connectionQuality === "offline" ? "BAĞLANTI YOK" : telemetryStale ? "GECİKMELİ" : "CANLI"}
+            {connectionQuality === "offline" ? t("sensor.baglantiYok") : telemetryStale ? t("sensor.gecikmeli") : "CANLI"}
           </Text>
         </View>
       </View>
 
       {/* Chart controls */}
       <View style={styles.controlRow}>
-        <Text style={styles.controlLabel}>Eksen:</Text>
+        <Text style={styles.controlLabel}>{t("sensor.eksen")}</Text>
         <TouchableOpacity
           style={[styles.axisChip, showMagnetic && styles.axisChipMag]}
           onPress={() => setShowMagnetic((v) => !v)}
         >
-          <Text style={styles.axisChipText}>● Manyetik (mT)</Text>
+          <Text style={styles.axisChipText}>{t("sensor.manyetik")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.axisChip, showTemp && styles.axisChipTemp]}
           onPress={() => setShowTemp((v) => !v)}
         >
-          <Text style={styles.axisChipText}>-- Sıcaklık (°C)</Text>
+          <Text style={styles.axisChipText}>{t("sensor.sicaklik")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -119,10 +121,10 @@ export function SensorMonitorScreen() {
             // ve 8 düğme 4 px aralıkla diziliyordu → komşu bobin filtresine basılıyordu.
             <Chip
               key={id}
-              label={`Bobin ${id}`}
+              label={t("kontrol.bobin.baslik", { id })}
               active={active}
               onPress={() => toggleCoil(id)}
-              accessibilityLabel={`Bobin ${id} grafiğini göster/gizle`}
+              accessibilityLabel={t("sensor.grafikGosterGizle", { id })}
               style={[styles.coilBtn, !connected && styles.coilBtnOffline]}
               activeStyle={{ backgroundColor: color + "33", borderColor: color }}
               textStyle={styles.coilBtnText}
@@ -150,7 +152,7 @@ export function SensorMonitorScreen() {
       </View>
 
       {/* Coil stats grid */}
-      <Text style={styles.statsTitle}>Anlık Değerler</Text>
+      <Text style={styles.statsTitle}>{t("sensor.anlikDegerler")}</Text>
       <ResponsiveGrid minItemWidth={160}>
         {cizilecek.map((id) => {
           const coil = coils.find((c) => c.id === id);
@@ -197,6 +199,7 @@ const CoilStatCard = memo(function CoilStatCard({
   /** CH4 · Y154: akım sensörü açık mı (backend bayrağı). Kapalıyken "Akım" satırı ve TD5 metni ÇİZİLMEZ. */
   akimOlcumu?: boolean;
 }) {
+  const { t } = useTranslation();
   // ⚠️ ÖLÇÜLMEYEN ALAN KISA ÇİZGİ (—), SIFIR DEĞİL. Bobin 1-5'te yalnız ACS712 (akım),
   // bobin 6-7'de yalnız MLX (sıcaklık/alan) var. `0.00 mT` / `0.0 °C` yazmak "ölçtüm,
   // sıfır çıktı" diye okunur → operatör var olmayan bir sensöre güvenir. Kaynak backend'in
@@ -213,7 +216,7 @@ const CoilStatCard = memo(function CoilStatCard({
     <View style={[styles.statCard, { borderColor: connected ? color + "44" : "#1e293b" }]}>
       <View style={styles.statCardHeader}>
         <View style={[styles.statDot, { backgroundColor: running ? "#22c55e" : connected ? color : "#334155" }]} />
-        <Text style={styles.statCardTitle}>Bobin {id}</Text>
+        <Text style={styles.statCardTitle}>{t("kontrol.bobin.baslik", { id })}</Text>
         {/* ⚠️ GEZİCİ SONDA ROZETİ (sahip kurulumu 2026-09-11: "1 tane sensör kullanıp
             onu kutu içerisinde gezdirmeyi planlıyorum").
             Manyetik değer, firmware'in o sensörü BAĞLADIĞI bobin numarasıyla geliyor
@@ -223,33 +226,33 @@ const CoilStatCard = memo(function CoilStatCard({
             + dünya alanı). Rozet bu yanlış okumayı keser.
             ⚠️ Bobin numarasından TAHMİN EDİLMEZ: hangi bobinin `magneticMt` ölçtüğü
             `measuredFields`ten gelir → sensör başka bir kanala taşınırsa rozet onu izler. */}
-        {olcum("magneticMt") && <Text style={styles.sondaRozet}>🧲 gezici sonda</Text>}
+        {olcum("magneticMt") && <Text style={styles.sondaRozet}>{t("sensor.geziciSonda")}</Text>}
       </View>
       {connected ? (
         <>
           <Metric
-            label={olcum("magneticMt") ? "Alan (sonda)" : "Manyetik"}
+            label={olcum("magneticMt") ? t("sensor.alanSonda") : t("sensor.manyetikEtiket")}
             value={olcum("magneticMt") ? `${magneticMt.toFixed(2)} mT` : "—"}
             color="#22c55e"
           />
           {alanDogrulanamadi ? <Text style={styles.offlineText}>{alanDogrulanamadiMetni()}</Text> : null}
           {akimOlcumu && akimGuvenilmez ? <Text style={styles.offlineText}>{akimOlcumuYokMetni()}</Text> : null}
           <Metric
-            label="Sıcaklık"
+            label={t("kontrol.bobin.sicaklik")}
             value={olcum("objectTemp") ? `${objectTemp.toFixed(1)} °C` : "—"}
             color={olcum("objectTemp") && objectTemp > 45 ? "#ef4444" : "#fb923c"}
           />
           {akimOlcumu ? (
             <Metric
-              label="Akım"
+              label={t("sensor.akim")}
               value={olcum("currentA") ? `${currentA.toFixed(3)} A` : "—"}
               color="#60a5fa"
             />
           ) : null}
-          <Metric label="Frekans" value={frequencyHz > 0 ? `${frequencyHz} Hz` : "—"} color="#a78bfa" />
+          <Metric label={t("kontrol.bobin.frekans")} value={frequencyHz > 0 ? `${frequencyHz} Hz` : "—"} color="#a78bfa" />
         </>
       ) : (
-        <Text style={styles.offlineText}>Bağlı değil</Text>
+        <Text style={styles.offlineText}>{t("sensor.bagliDegil")}</Text>
       )}
     </View>
   );

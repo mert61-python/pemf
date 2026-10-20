@@ -1,0 +1,21 @@
+{
+  "aktifFrekans": "Active Frequency",
+  "aktifHastaYok": "No active patient — it will appear here once you select a patient and start a session.",
+  "aktifSeans": "Active Session",
+  "bagliBobin": "Connected Coils",
+  "bagliSayisi": "{{bagli}}/{{toplam}} Connected",
+  "bobinDurumlari": "Coil Statuses",
+  "bobinVerisiBekleniyor": "Waiting for coil data… (it will appear once connected)",
+  "calisanBobinDisi": "Running coils: {{count}} | Outside a session context — hardware is energized",
+  "calisanBobinKalan": "Running coils: {{count}} | Remaining: {{kalan}} min",
+  "canliBaglantiYok": "⚠️ No live connection — the values shown may be out of date.",
+  "cihazAgi": "Device Network",
+  "dakika": "{{dk}} min",
+  "donanim": "Hardware",
+  "donanimCalisiyor": "⚠️ HARDWARE IS RUNNING",
+  "hastaOzeti": "Patient Summary",
+  "internetYok": "No internet — remote access is off",
+  "kalanSure": "Time Remaining",
+  "kontrolPanelinden": "You can start a session from the control panel.",
+  "sistemHazir": "System Ready"
+}

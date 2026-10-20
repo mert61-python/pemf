@@ -22,10 +22,11 @@ import { Cpu } from "lucide-react-native";
 import { useLiveData } from "@/context/LiveDataContext";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 import type { ConnectionState, DashboardSnapshot, StmUyum } from "@/types/domain";
+import { useTranslation } from "react-i18next";
+import i18n from "i18next";
 
-const K1_YEDEK =
-  "Cihaz kartının yazılımı bu uygulama sürümüyle uyumsuz — bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET).";
-const K2_YEDEK = "Cihaz kartı doğrulanamadı. Kartın üzerindeki SİYAH sıfırlama düğmesine bir kez basın (mavi değil).";
+const k1Yedek = (): string => i18n.t("guvenlik.stmUyum.k1Yedek");
+const k2Yedek = (): string => i18n.t("guvenlik.stmUyum.k2Yedek");
 
 export interface StmUyumBandiMetni {
   tur: "kirmizi" | "sari";
@@ -38,8 +39,8 @@ export function stmUyumBandiMetni(u: StmUyum | null | undefined): StmUyumBandiMe
   if (!u) return null;
   const mesaj = typeof u.mesaj === "string" ? u.mesaj.trim() : "";
   const ayrinti = typeof u.ayrinti === "string" ? u.ayrinti.trim() : "";
-  if (u.uyumlu === false) return { tur: "kirmizi", mesaj: mesaj || K1_YEDEK, ayrinti };
-  if (u.uyumlu === null && u.kod) return { tur: "sari", mesaj: mesaj || K2_YEDEK, ayrinti };
+  if (u.uyumlu === false) return { tur: "kirmizi", mesaj: mesaj || k1Yedek(), ayrinti };
+  if (u.uyumlu === null && u.kod) return { tur: "sari", mesaj: mesaj || k2Yedek(), ayrinti };
   return null;
 }
 
@@ -51,6 +52,7 @@ export function donanimRozetDurumu(s: Pick<DashboardSnapshot, "stm" | "stmUyum">
 }
 
 export function StmUyumBandi() {
+  const { t } = useTranslation();
   const { snapshot } = useLiveData();
   const [ayrintiAcik, setAyrintiAcik] = useState(false);
   const bant = stmUyumBandiMetni(snapshot.stmUyum);
@@ -65,11 +67,11 @@ export function StmUyumBandi() {
           <Pressable
             onPress={() => setAyrintiAcik((a) => !a)}
             accessibilityRole="button"
-            accessibilityLabel={ayrintiAcik ? "Teknik ayrıntıyı gizle" : "Teknik ayrıntıyı göster (destek için)"}
+            accessibilityLabel={ayrintiAcik ? t("guvenlik.stmUyum.ayrintiGizle") : t("guvenlik.stmUyum.ayrintiGosterEtiketi")}
             style={styles.ayrintiDugme}
           >
             <Text style={styles.ayrintiDugmeYazi}>
-              {ayrintiAcik ? "Teknik ayrıntıyı gizle" : "Teknik ayrıntı (destek için)"}
+              {ayrintiAcik ? t("guvenlik.stmUyum.ayrintiGizle") : t("guvenlik.stmUyum.ayrintiGoster")}
             </Text>
           </Pressable>
         ) : null}
