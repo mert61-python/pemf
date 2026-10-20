@@ -1036,3 +1036,164 @@ describe("bölüm 8 — Kedi Sesi modülü (veteriner)", () => {
     }
   });
 });
+
+describe("bölüm 9 — Böbrek CT ve Böbrek Patoloji modülleri (araştırma)", () => {
+  const CT = {
+    status: "success", n_detections: 3, image_base64: "QUJD",
+    class_counts: { "Kidney Stone": 1, "Kidney Cyst": 2, "Kidney": 2 },
+    detections: [
+      { class_name: "Kidney Stone", conf: 0.91, bbox_xyxy: [0, 0, 10, 10] },
+      { class_name: "Kidney", conf: 0.89, bbox_xyxy: [0, 0, 5, 5] },
+      { class_name: "Kidney", conf: 0.87, bbox_xyxy: [50, 0, 60, 5] },
+    ],
+  };
+  const PATOLOJI = {
+    status: "success", top_1_class: "grade2", top_1_prob: 0.6, image_base64: "QUJD",
+    top_k: [{ class: "grade2", prob: 0.6 }, { class: "grade3", prob: 0.3 }, { class: "grade1", prob: 0.1 }],
+  };
+  const logKayitlari = () => mockApiPost.mock.calls.filter((c) => c[0] === "/ai/log").map((c) => c[1] as Record<string, unknown>);
+  async function gorselAnaliz2(u: ReturnType<typeof render>, modul: string, galeri: string, baslat: string, cevap: unknown) {
+    mockFetchCevap = cevap;
+    fireEvent.press(u.getByLabelText(modul));
+    await act(async () => {
+      fireEvent.press(u.getByRole("button", { name: galeri }));
+    });
+    await act(async () => {
+      fireEvent.press(u.getByRole("button", { name: baslat }));
+    });
+    for (let i = 0; i < 12; i++)
+      await act(async () => {
+        await Promise.resolve();
+      });
+  }
+
+  it("Türkçe: CT modülü başlık / ipuçları / düğmeler göç öncesiyle aynı", () => {
+    mockMode = "researcher";
+    const u = render(<AiHubScreen />);
+    fireEvent.press(u.getByLabelText("Böbrek CT"));
+    expect(u.getAllByText("Böbrek CT Analizi").length).toBeGreaterThan(0);
+    expect(u.getByText("Böbrek CT görüntüsünde taş, kist ve böbrek dokusu tespiti (YOLOv8s).")).toBeTruthy();
+    expect(u.getByText("🩻 CT görüntü ipuçları")).toBeTruthy();
+    expect(u.getByText("• Kırmızı=taş, yeşil=böbrek, turuncu=kist olarak işaretlenir")).toBeTruthy();
+    expect(u.getByText("☐ 🔍 Isı haritası üret (tespit hedefli HiRes-CAM — modeli tespitlere götüren bölgeler)")).toBeTruthy();
+    expect(u.getByText("CT Analizini Başlat")).toBeTruthy();
+  });
+
+  it("İngilizce: CT modülü başlık / ipuçları / düğmeler", async () => {
+    mockMode = "researcher";
+    await enYap();
+    const u = render(<AiHubScreen />);
+    fireEvent.press(u.getByLabelText("Kidney CT"));
+    expect(u.getAllByText("Kidney CT Analysis").length).toBeGreaterThan(0);
+    expect(u.getByText("Detection of stones, cysts and kidney tissue in a kidney CT image (YOLOv8s).")).toBeTruthy();
+    expect(u.getByText("🩻 CT image tips")).toBeTruthy();
+    expect(u.getByText("• Red = stone, green = kidney, orange = cyst")).toBeTruthy();
+    expect(u.getByText("☐ 🔍 Generate heat map (detection-targeted HiRes-CAM — the regions that led the model to the detections)")).toBeTruthy();
+    expect(u.getByText("Start CT Analysis")).toBeTruthy();
+  });
+
+  it("CT sonucu iki dilde (çoğul özet / bulgu çipi / tespit satırları / konum / yüzde); AI geçmişi kaydı TR ile BAYT BAYT aynı", async () => {
+    mockMode = "researcher";
+    const tr = render(<AiHubScreen />);
+    await gorselAnaliz2(tr, "Böbrek CT", "Galeriden Seç", "CT Analizini Başlat", CT);
+    expect(tr.getByText("Görüntüde 2 böbrek dokusu, 2 kist, 1 taş tespit edildi.")).toBeTruthy();
+    expect(tr.getByText("⚠ 1 böbrek taşı + 2 kist bulgusu")).toBeTruthy();
+    expect(tr.getByText("Böbrek Taşı: 1")).toBeTruthy();
+    expect(tr.getByText("Böbrek Kisti: 2")).toBeTruthy();
+    expect(tr.getByText("Böbrek (doku): 2")).toBeTruthy();
+    expect(tr.getByText("1. Böbrek Taşı — güven %91")).toBeTruthy();
+    expect(tr.getByText("2. Böbrek (görüntüde solda) — güven %89")).toBeTruthy();
+    expect(tr.getByText("3. Böbrek (görüntüde sağda) — güven %87")).toBeTruthy();
+    const trKayit = logKayitlari();
+    expect(trKayit).toHaveLength(1);
+    expect(trKayit[0].module).toBe("Böbrek CT");
+    expect(trKayit[0].summary).toBe("3 tespit (taş:1 kist:2)");
+    tr.unmount();
+    mockApiPost.mockReset().mockResolvedValue(null);
+    mockHastaNo += 1;
+    await enYap();
+    const en = render(<AiHubScreen />);
+    await gorselAnaliz2(en, "Kidney CT", "Choose from Gallery", "Start CT Analysis", CT);
+    expect(en.getByText("2 kidney tissues, 2 cysts, 1 stone detected in the image.")).toBeTruthy();
+    expect(en.getByText("⚠ Finding: 1 kidney stone + 2 cysts")).toBeTruthy();
+    expect(en.getByText("Kidney Stones: 1")).toBeTruthy();
+    expect(en.getByText("Kidney Cysts: 2")).toBeTruthy();
+    expect(en.getByText("Kidney (tissue): 2")).toBeTruthy();
+    expect(en.getByText("1. Kidney Stone — confidence 91%")).toBeTruthy();
+    expect(en.getByText("2. Kidney (on the left of the image) — confidence 89%")).toBeTruthy();
+    expect(en.getByText("3. Kidney (on the right of the image) — confidence 87%")).toBeTruthy();
+    const enKayit = logKayitlari();
+    expect(enKayit).toHaveLength(1);
+    expect(enKayit[0].module).toBe(trKayit[0].module);
+    expect(enKayit[0].summary).toBe(trKayit[0].summary);
+  });
+
+  it("CT: tek tespit / üçten fazla aynı sınıf konumları ve boş sonuç iki dilde", async () => {
+    mockMode = "researcher";
+    const bos = { status: "success", n_detections: 0, class_counts: {}, detections: [], image_base64: "QUJD" };
+    const uc = {
+      status: "success", n_detections: 3, class_counts: { Kidney: 3 }, image_base64: "QUJD",
+      detections: [{ class_name: "Kidney", conf: 0.9, bbox_xyxy: [0, 0, 2, 2] }, { class_name: "Kidney", conf: 0.8, bbox_xyxy: [10, 0, 12, 2] }, { class_name: "Kidney", conf: 0.7, bbox_xyxy: [20, 0, 22, 2] }],
+    };
+    const tr = render(<AiHubScreen />);
+    await gorselAnaliz2(tr, "Böbrek CT", "Galeriden Seç", "CT Analizini Başlat", bos);
+    expect(tr.getByText("Görüntüde böbrek yapısı tespit edilemedi.")).toBeTruthy();
+    expect(tr.getByText("✓ Taş veya kist bulgusu yok")).toBeTruthy();
+    tr.unmount();
+    mockHastaNo += 1;
+    const tr2 = render(<AiHubScreen />);
+    await gorselAnaliz2(tr2, "Böbrek CT", "Galeriden Seç", "CT Analizini Başlat", uc);
+    expect(tr2.getByText("2. Böbrek (soldan 2.) — güven %80")).toBeTruthy();
+    tr2.unmount();
+    mockHastaNo += 1;
+    await enYap();
+    const en = render(<AiHubScreen />);
+    await gorselAnaliz2(en, "Kidney CT", "Choose from Gallery", "Start CT Analysis", bos);
+    expect(en.getByText("No kidney structure could be detected in the image.")).toBeTruthy();
+    expect(en.getByText("✓ No stone or cyst finding")).toBeTruthy();
+    en.unmount();
+    mockHastaNo += 1;
+    const en2 = render(<AiHubScreen />);
+    await gorselAnaliz2(en2, "Kidney CT", "Choose from Gallery", "Start CT Analysis", uc);
+    expect(en2.getByText("2. Kidney (#2 from the left) — confidence 80%")).toBeTruthy();
+  });
+
+  it("Patoloji: TR + EN statik; sonuç (derece adı / yüzde / çubuklar); AI geçmişi kaydı TR ile BAYT BAYT aynı", async () => {
+    mockMode = "researcher";
+    const tr = render(<AiHubScreen />);
+    fireEvent.press(tr.getByLabelText("Böbrek Patoloji"));
+    expect(tr.getAllByText("Böbrek Histopatoloji Analizi").length).toBeGreaterThan(0);
+    expect(tr.getByText("• Grade 0 = en hafif, Grade 4 = en ileri histopatolojik derece")).toBeTruthy();
+    expect(tr.getByText("Patoloji Analizini Başlat")).toBeTruthy();
+    tr.unmount();
+    mockHastaNo += 1;
+    const tr2 = render(<AiHubScreen />);
+    await gorselAnaliz2(tr2, "Böbrek Patoloji", "Galeriden Seç", "Patoloji Analizini Başlat", PATOLOJI);
+    expect(tr2.getByText("Tahmin: Grade 2 · güven %60")).toBeTruthy();
+    expect(tr2.getByText("Tüm dereceler")).toBeTruthy();
+    expect(tr2.getByText("%30")).toBeTruthy();
+    const trKayit = logKayitlari();
+    expect(trKayit).toHaveLength(1);
+    expect(trKayit[0].module).toBe("Böbrek Patoloji");
+    tr2.unmount();
+    mockApiPost.mockReset().mockResolvedValue(null);
+    mockHastaNo += 1;
+    await enYap();
+    const en = render(<AiHubScreen />);
+    fireEvent.press(en.getByLabelText("Kidney Pathology"));
+    expect(en.getAllByText("Kidney Histopathology Analysis").length).toBeGreaterThan(0);
+    expect(en.getByText("• Grade 0 = mildest, Grade 4 = most advanced histopathological grade")).toBeTruthy();
+    expect(en.getByText("Start Pathology Analysis")).toBeTruthy();
+    en.unmount();
+    mockHastaNo += 1;
+    const en2 = render(<AiHubScreen />);
+    await gorselAnaliz2(en2, "Kidney Pathology", "Choose from Gallery", "Start Pathology Analysis", PATOLOJI);
+    expect(en2.getByText("Prediction: Grade 2 · confidence 60%")).toBeTruthy();
+    expect(en2.getByText("All grades")).toBeTruthy();
+    expect(en2.getByText("30%")).toBeTruthy();
+    const enKayit = logKayitlari();
+    expect(enKayit).toHaveLength(1);
+    expect(enKayit[0].module).toBe(trKayit[0].module);
+    expect(enKayit[0].summary).toBe(trKayit[0].summary);
+  });
+});

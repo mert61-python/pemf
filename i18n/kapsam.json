@@ -2227,6 +2227,18 @@
     {
      "metin": "Böbrek Hastalığı (CKD)",
      "gerekce": "AI geçmişi kaydına giden modül adı — veri"
+    },
+    {
+     "metin": "Böbrek CT",
+     "gerekce": "AI geçmişi kaydına giden modül adı — veri"
+    },
+    {
+     "metin": "{{n_detections}} tespit (taş:{{deger2}} kist:{{deger3}})",
+     "gerekce": "AI geçmişi kaydına giden özet — veri"
+    },
+    {
+     "metin": "Böbrek Patoloji",
+     "gerekce": "AI geçmişi kaydına giden modül adı — veri"
     }
    ],
    "birlesikIstisna": [],

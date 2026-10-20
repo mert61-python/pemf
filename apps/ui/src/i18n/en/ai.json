@@ -59,6 +59,44 @@
     },
     "tamamlanamadi": "The kidney analysis could not be completed. Check the values and try again."
   },
+  "ct": {
+    "aciklama": "Detection of stones, cysts and kidney tissue in a kidney CT image (YOLOv8s).",
+    "analiziBaslat": "Start CT Analysis",
+    "baslik": "Kidney CT Analysis",
+    "bulgu": "⚠ Finding: {{parcalar}}",
+    "bulguTas_one": "{{count}} kidney stone",
+    "bulguTas_other": "{{count}} kidney stones",
+    "bulguYok": "✓ No stone or cyst finding",
+    "detaylar": "Detection details",
+    "guven": " — confidence ",
+    "guvenNotu": "“Confidence” is the probability that the model recognizes that region correctly. The confidence of the two kidney tissues may differ (e.g. 89% and 87%) — these are not two measurements of the same kidney but two separate kidney regions in the image.",
+    "ipucuBaslik": "🩻 CT image tips",
+    "ipucuNet": "• Choose / photograph a sharp, single-slice kidney CT image",
+    "ipucuRenk": "• Red = stone, green = kidney, orange = cyst",
+    "isiHaritasi": "🔍 Heat map (detection-targeted HiRes-CAM)",
+    "isiHaritasiNot": "The red regions are the areas the model relied on most when deciding on the detections in the boxes (not diagnostic evidence; read it together with the boxes).",
+    "isiHaritasiUret": " 🔍 Generate heat map (detection-targeted HiRes-CAM — the regions that led the model to the detections)",
+    "ozet": "{{parcalar}} detected in the image.",
+    "ozetYok": "No kidney structure could be detected in the image.",
+    "parcaBobrek_one": "{{count}} kidney tissue",
+    "parcaBobrek_other": "{{count}} kidney tissues",
+    "parcaKist_one": "{{count}} cyst",
+    "parcaKist_other": "{{count}} cysts",
+    "parcaTas_one": "{{count}} stone",
+    "parcaTas_other": "{{count}} stones",
+    "sagda": " (on the right of the image)",
+    "sayiDoku": "Kidney (tissue): ",
+    "sayiKist": "Kidney Cysts: ",
+    "sayiTas": "Kidney Stones: ",
+    "sayilar": "Detection counts",
+    "sinif": {
+      "bobrek": "Kidney",
+      "kist": "Kidney Cyst",
+      "tas": "Kidney Stone"
+    },
+    "solda": " (on the left of the image)",
+    "soldanSira": " (#{{sira}} from the left)"
+  },
   "fantom": {
     "aciklama": "Detects blue tumor foci in a synthetic kidney phantom; produces a 3D position + PEMF coil / E-field estimate.",
     "analiziBaslat": "Start Phantom Analysis",
@@ -332,6 +370,7 @@
   },
   "ortak": {
     "analizEdiliyor": "Analyzing...",
+    "analizSonucu": "Analysis Result",
     "galeridenSec": "Choose from Gallery",
     "goruntuSecilmedi": "No image selected",
     "modelHazirlaniyor": "Preparing the model (the first use may take a while)…",
@@ -369,6 +408,30 @@
     "yayinDurdu": "STREAM STOPPED — NOT CURRENT",
     "yayinDurduNot": "It cannot be confirmed that the session is running. Confirm the status on the Control screen.",
     "yayinDurduUyari": "⚠️ Live stream stopped — the frame shown is NOT CURRENT"
+  },
+  "patoloji": {
+    "aciklama": "Grade classification on a kidney tissue (biopsy) image: Grade 0–4 (V22-KMC-ClassicTrio).",
+    "analiziBaslat": "Start Pathology Analysis",
+    "baslik": "Kidney Histopathology Analysis",
+    "derece": {
+      "g0": "Grade 0 (mildest)",
+      "g1": "Grade 1",
+      "g2": "Grade 2",
+      "g3": "Grade 3",
+      "g4": "Grade 4 (most advanced)"
+    },
+    "guvenNotu": "“Confidence” is the probability that the model assigns the image to that grade. Grade 0 is the mildest and Grade 4 the most advanced histopathological grade; neighboring grades (e.g. 2↔3) may look similar.",
+    "ipucuBaslik": "🔬 Tissue image tips",
+    "ipucuDerece": "• Grade 0 = mildest, Grade 4 = most advanced histopathological grade",
+    "ipucuNet": "• Choose a sharp, single-slice histopathology (microscope) image",
+    "isiHaritasiUret": "🔍 Generate heat map (3-model consensus + uncertainty — may take minutes on CPU)",
+    "kararsizlikEtiketi": "⚠ Model uncertainty map",
+    "kararsizlikNot": "In the bright regions the three models DISAGREE — the grade is less reliable there.",
+    "konsensusEtiketi": "🔍 Consensus heat map (3-model HiRes-CAM)",
+    "konsensusNot": "The tissue regions that all three models rely on.",
+    "modelHazirlaniyor": "Preparing the model (large model, the first use may take a while)…",
+    "tahmin": "Prediction: {{derece}}  ·  confidence {{pct}}%",
+    "tumDereceler": "All grades"
   },
   "petri": {
     "a1Kose": "A1 corner",

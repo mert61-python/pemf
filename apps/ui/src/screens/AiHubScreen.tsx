@@ -3469,13 +3469,19 @@ function CatSoundModule({ patientName }: { patientName: string }) {
   );
 }
 
-const CT_TR: Record<string, string> = { "Kidney Stone": "Böbrek Taşı", "Kidney": "Böbrek", "Kidney Cyst": "Böbrek Kisti" };
+/** CT sınıf kimliği → katalog ANAHTARI (gösterimde `ctSinifAdi` çevirir; bilinmeyen sınıf HAM). */
+const CT_ANAHTARI: Record<string, string> = { "Kidney Stone": "ai.ct.sinif.tas", "Kidney": "ai.ct.sinif.bobrek", "Kidney Cyst": "ai.ct.sinif.kist" };
+const ctSinifAdi = (ad: string): string => {
+  const k = CT_ANAHTARI[ad];
+  return k ? i18n.t(k as never) : ad;
+};
 
 /**
  * Böbrek CT Analizi — CT görüntüsünde YOLOv8s ile taş/böbrek/kist tespiti (3 sınıf).
  * Backend: POST /api/ai/vision/kidney_ct → annotated görsel + sınıf sayıları + tespit listesi.
  */
 function KidneyCTModule({ patientName }: { patientName: string }) {
+  const { t } = useTranslation();
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
   // Galeri ASIL okuma yuzeyi: daha yuksek tavan, AYNI responsive oran (bkz. useGaleriYuksekligi).
@@ -3557,7 +3563,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
         const c = data.class_counts || {};
         logAiResult(hasta, "Böbrek CT", `${data.n_detections} tespit (taş:${c["Kidney Stone"] ?? 0} kist:${c["Kidney Cyst"] ?? 0})`, { moduleId: "kidney_ct", inputType: "image", detail: data });
       } else {
-        showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
+        showToast(aiDetayCumlesi(data?.detail, t("ai.hata.analizSirasinda")), "error");
       }
     } catch (e) {
       showToast(aiHataMesaji(e), "error");
@@ -3573,10 +3579,10 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
   const dets = result?.detections || [];
   // Özet cümle
   const parts: string[] = [];
-  if (nKidney) parts.push(`${nKidney} böbrek dokusu`);
-  if (nCyst) parts.push(`${nCyst} kist`);
-  if (nStone) parts.push(`${nStone} taş`);
-  const summary = parts.length ? `Görüntüde ${parts.join(", ")} tespit edildi.` : "Görüntüde böbrek yapısı tespit edilemedi.";
+  if (nKidney) parts.push(t("ai.ct.parcaBobrek", { count: nKidney }));
+  if (nCyst) parts.push(t("ai.ct.parcaKist", { count: nCyst }));
+  if (nStone) parts.push(t("ai.ct.parcaTas", { count: nStone }));
+  const summary = parts.length ? t("ai.ct.ozet", { parcalar: parts.join(", ") }) : t("ai.ct.ozetYok");
   // Aynı sınıftan birden çok tespiti görüntüdeki yatay konuma göre ayırt et (kullanıcı hangi böbrek olduğunu görsün)
   const byClass: Record<string, any[]> = {};
   dets.forEach((d: AiDetection) => { (byClass[d.class_name] = byClass[d.class_name] || []).push(d); });
@@ -3586,19 +3592,19 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
     if (g.length < 2) return "";
     const sorted = [...g].sort((a, b) => cx(a) - cx(b));
     const idx = sorted.indexOf(d);
-    if (g.length === 2) return idx === 0 ? " (görüntüde solda)" : " (görüntüde sağda)";
-    return ` (soldan ${idx + 1}.)`;
+    if (g.length === 2) return idx === 0 ? t("ai.ct.solda") : t("ai.ct.sagda");
+    return t("ai.ct.soldanSira", { sira: idx + 1 });
   };
   return (
     <Card style={styles.card}>
-      <Text style={styles.title}>Böbrek CT Analizi</Text>
-      <Text style={styles.subtitle}>Böbrek CT görüntüsünde taş, kist ve böbrek dokusu tespiti (YOLOv8s).</Text>
+      <Text style={styles.title}>{t("ai.ct.baslik")}</Text>
+      <Text style={styles.subtitle}>{t("ai.ct.aciklama")}</Text>
 
       {!imageUri && (
         <View style={styles.photoGuide}>
-          <Text style={styles.photoGuideTitle}>🩻 CT görüntü ipuçları</Text>
-          <Text style={styles.photoGuideItem}>• Net, tek kesitli bir böbrek CT görüntüsü seçin/çekin</Text>
-          <Text style={styles.photoGuideItem}>• Kırmızı=taş, yeşil=böbrek, turuncu=kist olarak işaretlenir</Text>
+          <Text style={styles.photoGuideTitle}>{t("ai.ct.ipucuBaslik")}</Text>
+          <Text style={styles.photoGuideItem}>{t("ai.ct.ipucuNet")}</Text>
+          <Text style={styles.photoGuideItem}>{t("ai.ct.ipucuRenk")}</Text>
         </View>
       )}
 
@@ -3614,27 +3620,27 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
         testID="kidneyct-sahne"
           bos={
             <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
-              <View style={styles.placeholderBox}><ImageIcon color={colors.textMuted} size={48} /><Text style={styles.placeholderText}>Görüntü seçilmedi</Text></View>
+              <View style={styles.placeholderBox}><ImageIcon color={colors.textMuted} size={48} /><Text style={styles.placeholderText}>{t("ai.ortak.goruntuSecilmedi")}</Text></View>
             </View>
           }
       />
 
       <View style={styles.btnRow}>
-        <View style={{ flex: 1 }}><Button label="Galeriden Seç" icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} /></View>
+        <View style={{ flex: 1 }}><Button label={t("ai.ortak.galeridenSec")} icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} /></View>
       </View>
 
       <TouchableOpacity style={styles.xaiToggle} accessibilityRole="switch" accessibilityState={{ checked: isiHaritasi }} onPress={() => setIsiHaritasi(!isiHaritasi)}>
-        <Text style={styles.xaiToggleText}>{isiHaritasi ? "☑" : "☐"} 🔍 Isı haritası üret (tespit hedefli HiRes-CAM — modeli tespitlere götüren bölgeler)</Text>
+        <Text style={styles.xaiToggleText}>{isiHaritasi ? "☑" : "☐"}{t("ai.ct.isiHaritasiUret")}</Text>
       </TouchableOpacity>
 
       <View style={styles.analyzeBtn}>
-        <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "CT Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyze} />
+        <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.ct.analiziBaslat")} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyze} />
       </View>
-      {longLoading && <Text style={styles.modelHint}>Model hazırlanıyor (ilk kullanım uzun sürebilir)…</Text>}
+      {longLoading && <Text style={styles.modelHint}>{t("ai.ortak.modelHazirlaniyor")}</Text>}
 
       {result && (
         <View style={styles.resultBox}>
-          <Text style={styles.resultTitle}>Analiz Sonucu</Text>
+          <Text style={styles.resultTitle}>{t("ai.ortak.analizSonucu")}</Text>
 
           {/* Özet cümle */}
           <Text style={[styles.resultText, { marginBottom: 6 }]}>{summary}</Text>
@@ -3643,40 +3649,40 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
           {(nStone > 0 || nCyst > 0) ? (
             <View style={[styles.ctFindingChip, { backgroundColor: nStone > 0 ? colors.danger + "22" : colors.warning + "22", borderColor: nStone > 0 ? colors.danger : colors.warning }]}>
               <Text style={[styles.resultText, { fontWeight: "800", color: nStone > 0 ? colors.danger : colors.warning }]}>
-                ⚠ {[nStone > 0 ? `${nStone} böbrek taşı` : "", nCyst > 0 ? `${nCyst} kist` : ""].filter(Boolean).join(" + ")} bulgusu
+                {t("ai.ct.bulgu", { parcalar: [nStone > 0 ? t("ai.ct.bulguTas", { count: nStone }) : "", nCyst > 0 ? t("ai.ct.parcaKist", { count: nCyst }) : ""].filter(Boolean).join(" + ") })}
               </Text>
             </View>
           ) : (
             <View style={[styles.ctFindingChip, { backgroundColor: colors.success + "22", borderColor: colors.success }]}>
-              <Text style={[styles.resultText, { fontWeight: "800", color: colors.success }]}>✓ Taş veya kist bulgusu yok</Text>
+              <Text style={[styles.resultText, { fontWeight: "800", color: colors.success }]}>{t("ai.ct.bulguYok")}</Text>
             </View>
           )}
 
           {/* Tespit sayıları */}
-          <Text style={styles.ctSubLabel}>Tespit sayıları</Text>
-          <Text style={styles.resultText}>Böbrek Taşı: <Text style={{ fontWeight: "bold", color: nStone > 0 ? colors.danger : colors.textMuted }}>{nStone}</Text></Text>
-          <Text style={styles.resultText}>Böbrek Kisti: <Text style={{ fontWeight: "bold", color: nCyst > 0 ? colors.warning : colors.textMuted }}>{nCyst}</Text></Text>
-          <Text style={styles.resultText}>Böbrek (doku): <Text style={{ fontWeight: "bold", color: nKidney > 0 ? colors.success : colors.textMuted }}>{nKidney}</Text></Text>
+          <Text style={styles.ctSubLabel}>{t("ai.ct.sayilar")}</Text>
+          <Text style={styles.resultText}>{t("ai.ct.sayiTas")}<Text style={{ fontWeight: "bold", color: nStone > 0 ? colors.danger : colors.textMuted }}>{nStone}</Text></Text>
+          <Text style={styles.resultText}>{t("ai.ct.sayiKist")}<Text style={{ fontWeight: "bold", color: nCyst > 0 ? colors.warning : colors.textMuted }}>{nCyst}</Text></Text>
+          <Text style={styles.resultText}>{t("ai.ct.sayiDoku")}<Text style={{ fontWeight: "bold", color: nKidney > 0 ? colors.success : colors.textMuted }}>{nKidney}</Text></Text>
 
           {/* Tespit detayları — numaralı + konumlu + güven açıklamalı */}
           {dets.length > 0 && (
             <>
-              <Text style={styles.ctSubLabel}>Tespit detayları</Text>
+              <Text style={styles.ctSubLabel}>{t("ai.ct.detaylar")}</Text>
               {dets.map((d: AiDetection, i: number) => (
                 <Text key={i} style={[styles.resultText, { fontSize: typography.small }]}>
-                  {i + 1}. {CT_TR[d.class_name] || d.class_name}
+                  {i + 1}. {ctSinifAdi(d.class_name)}
                   <Text style={{ color: colors.textMuted }}>{posLabel(d)}</Text>
-                  {" — güven "}
-                  <Text style={{ fontWeight: "bold" }}>%{Math.round((d.conf || 0) * 100)}</Text>
+                  {t("ai.ct.guven")}
+                  <Text style={{ fontWeight: "bold" }}>{t("ai.ortak.yuzde", { deger: Math.round((d.conf || 0) * 100) })}</Text>
                 </Text>
               ))}
-              <Text style={styles.ctHint}>“Güven”, modelin o bölgeyi doğru tanıma olasılığıdır. İki böbrek dokusunun güveni farklı olabilir (ör. %89 ve %87) — bunlar aynı böbreğin iki ölçümü değil, görüntüdeki iki ayrı böbrek bölgesidir.</Text>
+              <Text style={styles.ctHint}>{t("ai.ct.guvenNotu")}</Text>
             </>
           )}
           {result.xai_image_base64 ? (
-            <XaiIsiHaritasi base64={result.xai_image_base64} etiket="🔍 Isı haritası (tespit hedefli HiRes-CAM)"
+            <XaiIsiHaritasi base64={result.xai_image_base64} etiket={t("ai.ct.isiHaritasi")}
               not={dets.length > 0
-                ? "Kırmızı bölgeler modelin kutulardaki tespitlere karar verirken en çok dayandığı alanlardır (tanı kanıtı değildir; kutuyla birlikte okuyun)."
+                ? t("ai.ct.isiHaritasiNot")
                 : tespitYokHaritaNotu()} />
           ) : null}
           {result.xai_error ? <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text> : null}
@@ -3687,7 +3693,12 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
   );
 }
 
-const HISTO_TR: Record<string, string> = { grade0: "Grade 0 (en hafif)", grade1: "Grade 1", grade2: "Grade 2", grade3: "Grade 3", grade4: "Grade 4 (en ileri)" };
+/** Histopatoloji sınıf kimliği → katalog ANAHTARI (gösterimde `dereceAdi` çevirir; bilinmeyen kimlik HAM). */
+const HISTO_ANAHTARI: Record<string, string> = { grade0: "ai.patoloji.derece.g0", grade1: "ai.patoloji.derece.g1", grade2: "ai.patoloji.derece.g2", grade3: "ai.patoloji.derece.g3", grade4: "ai.patoloji.derece.g4" };
+const dereceAdi = (derece: string): string => {
+  const k = HISTO_ANAHTARI[derece];
+  return k ? i18n.t(k as never) : derece;
+};
 const HISTO_COLOR: Record<string, string> = { grade0: colors.success, grade1: "#84CC16", grade2: colors.warning, grade3: "#F97316", grade4: colors.danger };
 
 /**
@@ -3696,6 +3707,7 @@ const HISTO_COLOR: Record<string, string> = { grade0: colors.success, grade1: "#
  * olasılıklar (sınıflandırıcı, detektör değil → overlay yok, orijinal görüntü gösterilir).
  */
 function HistopathModule({ patientName }: { patientName: string }) {
+  const { t } = useTranslation();
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
   const { showToast } = useToast();
@@ -3774,7 +3786,7 @@ function HistopathModule({ patientName }: { patientName: string }) {
         setResult(data);
         logAiResult(hasta, "Böbrek Patoloji", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob || 0) * 100)}`, { moduleId: "histopath", inputType: "image", detail: data, confidence: data.top_1_prob });
       } else {
-        showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
+        showToast(aiDetayCumlesi(data?.detail, t("ai.hata.analizSirasinda")), "error");
       }
     } catch (e) {
       showToast(aiHataMesaji(e), "error");
@@ -3786,14 +3798,14 @@ function HistopathModule({ patientName }: { patientName: string }) {
   const topClass = result?.top_1_class ?? "";
   return (
     <Card style={styles.card}>
-      <Text style={styles.title}>Böbrek Histopatoloji Analizi</Text>
-      <Text style={styles.subtitle}>Böbrek doku (biyopsi) görüntüsünde derece sınıflandırması: Grade 0–4 (V22-KMC-ClassicTrio).</Text>
+      <Text style={styles.title}>{t("ai.patoloji.baslik")}</Text>
+      <Text style={styles.subtitle}>{t("ai.patoloji.aciklama")}</Text>
 
       {!imageUri && (
         <View style={styles.photoGuide}>
-          <Text style={styles.photoGuideTitle}>🔬 Doku görüntü ipuçları</Text>
-          <Text style={styles.photoGuideItem}>• Net, tek kesitli bir histopatoloji (mikroskop) görüntüsü seçin</Text>
-          <Text style={styles.photoGuideItem}>• Grade 0 = en hafif, Grade 4 = en ileri histopatolojik derece</Text>
+          <Text style={styles.photoGuideTitle}>{t("ai.patoloji.ipucuBaslik")}</Text>
+          <Text style={styles.photoGuideItem}>{t("ai.patoloji.ipucuNet")}</Text>
+          <Text style={styles.photoGuideItem}>{t("ai.patoloji.ipucuDerece")}</Text>
         </View>
       )}
 
@@ -3801,53 +3813,53 @@ function HistopathModule({ patientName }: { patientName: string }) {
         {imageUri ? (
           <Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="contain" />
         ) : (
-          <View style={styles.placeholderBox}><ImageIcon color={colors.textMuted} size={48} /><Text style={styles.placeholderText}>Görüntü seçilmedi</Text></View>
+          <View style={styles.placeholderBox}><ImageIcon color={colors.textMuted} size={48} /><Text style={styles.placeholderText}>{t("ai.ortak.goruntuSecilmedi")}</Text></View>
         )}
       </View>
 
       <View style={styles.btnRow}>
-        <View style={{ flex: 1 }}><Button label="Galeriden Seç" icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} /></View>
+        <View style={{ flex: 1 }}><Button label={t("ai.ortak.galeridenSec")} icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} /></View>
       </View>
 
       <TouchableOpacity style={styles.xaiToggle} accessibilityRole="switch" accessibilityState={{ checked: isiHaritasi }} onPress={() => setIsiHaritasi(!isiHaritasi)}>
-        <Text style={styles.xaiToggleText}>{isiHaritasi ? "☑" : "☐"} {"🔍 Isı haritası üret (3-model konsensus + kararsızlık — CPU'da dakikalar sürebilir)"}</Text>
+        <Text style={styles.xaiToggleText}>{isiHaritasi ? "☑" : "☐"} {t("ai.patoloji.isiHaritasiUret")}</Text>
       </TouchableOpacity>
 
       <View style={styles.analyzeBtn}>
-        <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Patoloji Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyze} />
+        <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.patoloji.analiziBaslat")} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyze} />
       </View>
-      {longLoading && <Text style={styles.modelHint}>Model hazırlanıyor (büyük model, ilk kullanım uzun sürebilir)…</Text>}
+      {longLoading && <Text style={styles.modelHint}>{t("ai.patoloji.modelHazirlaniyor")}</Text>}
 
       {result && (
         <View style={styles.resultBox}>
-          <Text style={styles.resultTitle}>Analiz Sonucu</Text>
+          <Text style={styles.resultTitle}>{t("ai.ortak.analizSonucu")}</Text>
           <View style={[styles.ctFindingChip, { backgroundColor: (HISTO_COLOR[topClass] || colors.text) + "22", borderColor: HISTO_COLOR[topClass] || colors.text }]}>
             <Text style={[styles.resultText, { fontWeight: "800", color: HISTO_COLOR[topClass] || colors.text }]}>
-              Tahmin: {HISTO_TR[topClass] || topClass}  ·  güven %{Math.round((result.top_1_prob || 0) * 100)}
+              {t("ai.patoloji.tahmin", { derece: dereceAdi(topClass), pct: Math.round((result.top_1_prob || 0) * 100) })}
             </Text>
           </View>
 
-          <Text style={styles.ctSubLabel}>Tüm dereceler</Text>
-          {(result.top_k || []).map((t: AiTopK, i: number) => {
-            const pct = Math.round((t.prob || 0) * 100);
+          <Text style={styles.ctSubLabel}>{t("ai.patoloji.tumDereceler")}</Text>
+          {(result.top_k || []).map((sk: AiTopK, i: number) => {
+            const pct = Math.round((sk.prob || 0) * 100);
             return (
               <View key={i} style={styles.soundBarRow}>
-                <Text style={styles.soundBarLabel} numberOfLines={1}>{String(t.class).replace("grade", "Grade ")}</Text>
+                <Text style={styles.soundBarLabel} numberOfLines={1}>{String(sk.class).replace("grade", "Grade ")}</Text>
                 <View style={styles.soundBarTrack}>
-                  <View style={[styles.soundBarFill, { width: (`${Math.max(2, pct)}%` as any), backgroundColor: HISTO_COLOR[t.class] || colors.primary }]} />
+                  <View style={[styles.soundBarFill, { width: (`${Math.max(2, pct)}%` as any), backgroundColor: HISTO_COLOR[sk.class] || colors.primary }]} />
                 </View>
-                <Text style={styles.soundBarPct}>%{pct}</Text>
+                <Text style={styles.soundBarPct}>{t("ai.ortak.yuzde", { deger: pct })}</Text>
               </View>
             );
           })}
-          <Text style={styles.ctHint}>“Güven”, modelin görüntüyü o dereceye atama olasılığıdır. Grade 0 en hafif, Grade 4 en ileri histopatolojik derecedir; komşu dereceler (ör. 2↔3) benzer görünebilir.</Text>
+          <Text style={styles.ctHint}>{t("ai.patoloji.guvenNotu")}</Text>
           {result.xai_image_base64 ? (
-            <XaiIsiHaritasi base64={result.xai_image_base64} etiket="🔍 Konsensus ısı haritası (3-model HiRes-CAM)"
-              not="Üç modelin ORTAK dayandığı doku bölgeleri." />
+            <XaiIsiHaritasi base64={result.xai_image_base64} etiket={t("ai.patoloji.konsensusEtiketi")}
+              not={t("ai.patoloji.konsensusNot")} />
           ) : null}
           {result.xai_disagreement_base64 ? (
-            <XaiIsiHaritasi base64={result.xai_disagreement_base64} etiket="⚠ Model kararsızlık haritası" testID="xai-kararsizlik-haritasi"
-              not="Parlak bölgelerde üç model AYRIŞIYOR — derece o bölgede daha az güvenilirdir." />
+            <XaiIsiHaritasi base64={result.xai_disagreement_base64} etiket={t("ai.patoloji.kararsizlikEtiketi")} testID="xai-kararsizlik-haritasi"
+              not={t("ai.patoloji.kararsizlikNot")} />
           ) : null}
           {result.xai_error ? <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text> : null}
           <MedicalDisclaimer />

@@ -104,6 +104,22 @@
    "onek": "",
    "degerler": ["ai.ses.sinif.agri", "ai.ses.sinif.anneCagrisi", "ai.ses.sinif.avModu", "ai.ses.sinif.ciftlesme", "ai.ses.sinif.dinlenme", "ai.ses.sinif.kavga", "ai.ses.sinif.kizgin", "ai.ses.sinif.mutlu", "ai.ses.sinif.savunma", "ai.ses.sinif.uyari"],
    "gerekce": "Ses sınıfı adı CATSOUND_ANAHTARI'nda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (10 sınıf), kullanıcı girdisi değil"
+  },
+  {
+   "yuzey": "arayuz",
+   "dosya": "apps/ui/src/screens/AiHubScreen.tsx",
+   "ifade": "return k ? i18n.t(k as never) : ad;",
+   "onek": "",
+   "degerler": ["ai.ct.sinif.tas", "ai.ct.sinif.bobrek", "ai.ct.sinif.kist"],
+   "gerekce": "CT sınıf adı CT_ANAHTARI'nda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (3 sınıf), kullanıcı girdisi değil"
+  },
+  {
+   "yuzey": "arayuz",
+   "dosya": "apps/ui/src/screens/AiHubScreen.tsx",
+   "ifade": "return k ? i18n.t(k as never) : derece;",
+   "onek": "",
+   "degerler": ["ai.patoloji.derece.g0", "ai.patoloji.derece.g1", "ai.patoloji.derece.g2", "ai.patoloji.derece.g3", "ai.patoloji.derece.g4"],
+   "gerekce": "Histopatoloji derecesi HISTO_ANAHTARI'nda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (5 derece), kullanıcı girdisi değil"
   }
  ]
 }

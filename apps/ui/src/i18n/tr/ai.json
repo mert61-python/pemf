@@ -59,6 +59,44 @@
     },
     "tamamlanamadi": "Böbrek analizi tamamlanamadı. Değerleri kontrol edip tekrar deneyin."
   },
+  "ct": {
+    "aciklama": "Böbrek CT görüntüsünde taş, kist ve böbrek dokusu tespiti (YOLOv8s).",
+    "analiziBaslat": "CT Analizini Başlat",
+    "baslik": "Böbrek CT Analizi",
+    "bulgu": "⚠ {{parcalar}} bulgusu",
+    "bulguTas_one": "{{count}} böbrek taşı",
+    "bulguTas_other": "{{count}} böbrek taşı",
+    "bulguYok": "✓ Taş veya kist bulgusu yok",
+    "detaylar": "Tespit detayları",
+    "guven": " — güven ",
+    "guvenNotu": "“Güven”, modelin o bölgeyi doğru tanıma olasılığıdır. İki böbrek dokusunun güveni farklı olabilir (ör. %89 ve %87) — bunlar aynı böbreğin iki ölçümü değil, görüntüdeki iki ayrı böbrek bölgesidir.",
+    "ipucuBaslik": "🩻 CT görüntü ipuçları",
+    "ipucuNet": "• Net, tek kesitli bir böbrek CT görüntüsü seçin/çekin",
+    "ipucuRenk": "• Kırmızı=taş, yeşil=böbrek, turuncu=kist olarak işaretlenir",
+    "isiHaritasi": "🔍 Isı haritası (tespit hedefli HiRes-CAM)",
+    "isiHaritasiNot": "Kırmızı bölgeler modelin kutulardaki tespitlere karar verirken en çok dayandığı alanlardır (tanı kanıtı değildir; kutuyla birlikte okuyun).",
+    "isiHaritasiUret": " 🔍 Isı haritası üret (tespit hedefli HiRes-CAM — modeli tespitlere götüren bölgeler)",
+    "ozet": "Görüntüde {{parcalar}} tespit edildi.",
+    "ozetYok": "Görüntüde böbrek yapısı tespit edilemedi.",
+    "parcaBobrek_one": "{{count}} böbrek dokusu",
+    "parcaBobrek_other": "{{count}} böbrek dokusu",
+    "parcaKist_one": "{{count}} kist",
+    "parcaKist_other": "{{count}} kist",
+    "parcaTas_one": "{{count}} taş",
+    "parcaTas_other": "{{count}} taş",
+    "sagda": " (görüntüde sağda)",
+    "sayiDoku": "Böbrek (doku): ",
+    "sayiKist": "Böbrek Kisti: ",
+    "sayiTas": "Böbrek Taşı: ",
+    "sayilar": "Tespit sayıları",
+    "sinif": {
+      "bobrek": "Böbrek",
+      "kist": "Böbrek Kisti",
+      "tas": "Böbrek Taşı"
+    },
+    "solda": " (görüntüde solda)",
+    "soldanSira": " (soldan {{sira}}.)"
+  },
   "fantom": {
     "aciklama": "Sentetik böbrek fantomundan mavi tümör odaklarını tespit eder; 3B konum + PEMF bobin/E-alan tahmini üretir.",
     "analiziBaslat": "Fantom Analizini Başlat",
@@ -332,6 +370,7 @@
   },
   "ortak": {
     "analizEdiliyor": "Analiz Ediliyor...",
+    "analizSonucu": "Analiz Sonucu",
     "galeridenSec": "Galeriden Seç",
     "goruntuSecilmedi": "Görüntü seçilmedi",
     "modelHazirlaniyor": "Model hazırlanıyor (ilk kullanım uzun sürebilir)…",
@@ -369,6 +408,30 @@
     "yayinDurdu": "YAYIN DURDU — GÜNCEL DEĞİL",
     "yayinDurduNot": "Seansın sürdüğü doğrulanamıyor. Kontrol ekranından durumu teyit edin.",
     "yayinDurduUyari": "⚠️ Canlı yayın durdu — gösterilen kare GÜNCEL DEĞİL"
+  },
+  "patoloji": {
+    "aciklama": "Böbrek doku (biyopsi) görüntüsünde derece sınıflandırması: Grade 0–4 (V22-KMC-ClassicTrio).",
+    "analiziBaslat": "Patoloji Analizini Başlat",
+    "baslik": "Böbrek Histopatoloji Analizi",
+    "derece": {
+      "g0": "Grade 0 (en hafif)",
+      "g1": "Grade 1",
+      "g2": "Grade 2",
+      "g3": "Grade 3",
+      "g4": "Grade 4 (en ileri)"
+    },
+    "guvenNotu": "“Güven”, modelin görüntüyü o dereceye atama olasılığıdır. Grade 0 en hafif, Grade 4 en ileri histopatolojik derecedir; komşu dereceler (ör. 2↔3) benzer görünebilir.",
+    "ipucuBaslik": "🔬 Doku görüntü ipuçları",
+    "ipucuDerece": "• Grade 0 = en hafif, Grade 4 = en ileri histopatolojik derece",
+    "ipucuNet": "• Net, tek kesitli bir histopatoloji (mikroskop) görüntüsü seçin",
+    "isiHaritasiUret": "🔍 Isı haritası üret (3-model konsensus + kararsızlık — CPU'da dakikalar sürebilir)",
+    "kararsizlikEtiketi": "⚠ Model kararsızlık haritası",
+    "kararsizlikNot": "Parlak bölgelerde üç model AYRIŞIYOR — derece o bölgede daha az güvenilirdir.",
+    "konsensusEtiketi": "🔍 Konsensus ısı haritası (3-model HiRes-CAM)",
+    "konsensusNot": "Üç modelin ORTAK dayandığı doku bölgeleri.",
+    "modelHazirlaniyor": "Model hazırlanıyor (büyük model, ilk kullanım uzun sürebilir)…",
+    "tahmin": "Tahmin: {{derece}}  ·  güven %{{pct}}",
+    "tumDereceler": "Tüm dereceler"
   },
   "petri": {
     "a1Kose": "A1 köşesi",
