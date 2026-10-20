@@ -72,6 +72,8 @@ def test_K4_hastalik_cekimleri_hasta_terimi_DEGIL_ama_hasta_hala_zorunlu():
         "c": "Hastalığa işaret",
         "d": "Hasta seçin",
         "e": "Hastalar",
+        "f": "Klinik / hastane adı",
+        "g": "Hastanede takip",
     }
     en = {
         "a": "Kidney Disease",
@@ -79,7 +81,10 @@ def test_K4_hastalik_cekimleri_hasta_terimi_DEGIL_ama_hasta_hala_zorunlu():
         "c": "Points to the disease",
         "d": "Select a patient",
         "e": "Patients",
+        "f": "Clinic / animal hospital name",
+        "g": "Follow-up at the hospital",
     }
+    # "hastane" (hospital) hasta (patient) terimi DEĞİL; yine de "hasta" bulunduğu cümle "patient" ister (kotu aşağıda)
     assert not ihlaller(tr, en, "arayuz", SOZLUK)
     kotu = {"d": "Select an animal", "e": "Animals"}
     s = "\n".join(ihlaller({k: tr[k] for k in kotu}, kotu, "arayuz", SOZLUK))

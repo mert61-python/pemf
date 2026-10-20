@@ -72,9 +72,9 @@
    "en": "home"
   },
   {
-   "tr": "\\bhasta(?!l[ıi]k|l[ıi]ğ|l[ıi]\\b|n[ıi]n hastal)",
+   "tr": "\\bhasta(?!l[ıi]k|l[ıi]ğ|l[ıi]\\b|n[ıi]n hastal|ne)",
    "en": "patient",
-   "not": "Hasta (hayvan) → Patient. 'Hastalık' / 'hastalığı' (disease; ğ yumuşaması dahil) ve 'hasta (riskli)' (sick) bu terim DEĞİL — istisnalarda anahtarıyla."
+   "not": "Hasta (hayvan) → Patient. 'Hastalık' / 'hastalığı' (disease; ğ yumuşaması dahil), 'hastane / hastanede' (hospital) ve 'hasta (riskli)' (sick) bu terim DEĞİL — istisnalarda anahtarıyla."
   }
  ],
  "yasakEn": [
@@ -99,13 +99,13 @@
   {
    "yuzey": "arayuz",
    "anahtar": "ai.xai.isiHaritasiHasta",
-   "terim": "\\bhasta(?!l[ıi]k|l[ıi]ğ|l[ıi]\\b|n[ıi]n hastal)",
+   "terim": "\\bhasta(?!l[ıi]k|l[ıi]ğ|l[ıi]\\b|n[ıi]n hastal|ne)",
    "gerekce": "Hasta (Riskli) = sick: model sınıfı 'Sick' (EN 'Sick (At Risk)'), hasta (hayvan = patient) DEĞİL"
   },
   {
    "yuzey": "arayuz",
    "anahtar": "ai.termal.hastaRiskli",
-   "terim": "\\bhasta(?!l[ıi]k|l[ıi]ğ|l[ıi]\\b|n[ıi]n hastal)",
+   "terim": "\\bhasta(?!l[ıi]k|l[ıi]ğ|l[ıi]\\b|n[ıi]n hastal|ne)",
    "gerekce": "Hasta (Riskli) = sick: model sınıfı 'Sick' (EN 'Sick (At Risk)'), hasta (hayvan = patient) DEĞİL"
   }
  ]
