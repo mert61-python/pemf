@@ -765,3 +765,42 @@ def test_uygula_python_COK_SATIRLI_fstring_ifadesi_konumdan_bagimsiz(tmp_path):
         "tarih": "datetime.now().strftime('%d/%m/%Y')",
     }
     assert _json(tmp_path, "apps/backend/i18n/tr.json")["rapor"]["altbilgi"].count("{{tarih}}") == 1
+
+
+# ── bileşen / hook DIŞI işlev (I18N-P1): `i18n.t` + `import i18n from "i18next"` ────────────────────────────────
+
+_TS_YARDIMCI = """import { apiGet } from "@/services/apiClient";
+
+export function hataMetni(n: number): string {
+  if (n === 404) return "Hasta bulunamadı";
+  return `Sunucu hatası (${n})`;
+}
+
+export const SABIT = "Modül düzeyi başlık";
+"""
+
+
+@ts_gerekli
+def test_uygula_ts_bilesen_disi_islev_i18n_t_ve_import(tmp_path):
+    dosya = "apps/ui/src/services/hata.ts"
+    _yaz(tmp_path, dosya, _TS_YARDIMCI)
+    for dil in ("tr", "en"):
+        _yaz(tmp_path, f"apps/ui/src/i18n/{dil}/hata.json", "{}\n")
+    rapor = _uctan_uca(
+        tmp_path,
+        dosya,
+        {"Hasta bulunamadı": "hata.hastaBulunamadi", "Sunucu hatası ({{n}})": "hata.sunucu"},
+        {"Hasta bulunamadı": "Patient not found"},
+        {},
+    )
+    sonuc = (tmp_path / dosya).read_text(encoding="utf-8")
+    assert 'import i18n from "i18next";' in sonuc and sonuc.count("import i18n") == 1
+    assert 'return i18n.t("hata.hastaBulunamadi");' in sonuc
+    assert 'return i18n.t("hata.sunucu", { n });' in sonuc
+    assert "useTranslation" not in sonuc and "const { t }" not in sonuc  # bileşen DEĞİL: hook eklenmez
+    nedenler = {r["metin"]: r["neden"] for r in rapor["reddedilen"]}
+    assert "modül düzeyi" in nedenler.get("Modül düzeyi başlık", "")
+    assert _json(tmp_path, "apps/ui/src/i18n/tr/hata.json") == {
+        "hastaBulunamadi": "Hasta bulunamadı",
+        "sunucu": "Sunucu hatası ({{n}})",
+    }

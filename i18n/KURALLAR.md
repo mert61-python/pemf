@@ -63,8 +63,9 @@ sonrası). Sahip kararları Y157–Y161. Kısa özet kökteki `CLAUDE.md`'de. Ö
 ```
 - `uygula` kendiliğinden: `t` kapsamda değilse bileşen gövdesine `const { t } = useTranslation()` + içe aktarma; `useCallback` / `useMemo` /
   `useEffect` içindeki metin çevrilince bağımlılık dizisine `t` (yoksa dil değişince ileti eski dilde kalır — kalıcı jest kapısı denetler);
-  dosyanın tırnak / noktalı virgül / satır sonu biçimi. Reddeder: modül düzeyi, `+` birleştirme, ifadeyle karışık JSX, iç içe şablon,
-  bileşen dışı yardımcı, GÖLGELEYEN `t` (`.map((t) => …)`), `dil` / `anahtar` yer tutucusu.
+  dosyanın tırnak / noktalı virgül / satır sonu biçimi. Bileşen / hook DIŞI işlevde (servis / yardımcı) kendiliğinden `i18n.t("…")` + `import i18n from "i18next"` (gösterim anında
+  çevirir; metni çizen bileşen `useTranslation()` ile dile abone OLMALI). Reddeder: modül düzeyi, `+` birleştirme, ifadeyle karışık JSX,
+  iç içe şablon, GÖLGELEYEN `t` (bileşen içinde) (`.map((t) => …)`), `dil` / `anahtar` yer tutucusu.
 - Taban dosyası depo DIŞINDA (`DENETIM\I18N\taban-tr-metinler.json`); sahte evli kafes koşucusunda `--taban` AÇIKÇA verilir.
 - Arayüz / site: tür denetimi (`tsc`, anahtar türü). Kapılar §9. Commit kapısına metin tarayan testler (§5).
 

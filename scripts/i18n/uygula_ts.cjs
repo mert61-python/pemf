@@ -5,7 +5,8 @@
 //   · görünür öznitelik  baslik="X"            → baslik={t("anahtar")}
 //   · bileşen İÇİNDE dizgi değişmezi            → t("anahtar")     (ileti / jsx-ifade / nesne / dönüş / dizi / çağrı / atama)
 //   · bileşen İÇİNDE şablon `a ${x} b`          → t("anahtar", { x })  (iç içe şablon / koşullu parça HARİÇ)
-// Reddedilen: modül düzeyi sabit, bileşen / hook olmayan işlev (yardımcı), `+` birleştirme, iç içe şablon, ifadeyle karışık JSX metni,
+//   · bileşen / hook DIŞI işlev (yardımcı / servis)  → i18n.t("anahtar") (gösterim anında; `import i18n from "i18next"` eklenir)
+// Reddedilen: modül düzeyi sabit, `+` birleştirme, iç içe şablon, ifadeyle karışık JSX metni,
 // gövdesi blok olmayan ok işlevi bileşen, kapsamda çeviri işlevini GÖLGELEYEN başka bir `t` (`.map((t) => …)`, yerel `const t`).
 // `t` kapsamda değilse bileşen gövdesinin başına `const { t } = useTranslation();`, dosyaya `useTranslation` içe aktarması eklenir.
 // Tırnak ve noktalı virgül dosyanın kendi biçimini izler (arayüz "…"; — site '…').
@@ -31,7 +32,8 @@ function uygulaKaynak(metin, dosya, islemler, secenek) {
   const nv = sonIceAktarma && !sonIceAktarma.getText(sf).trim().endsWith(";") ? "" : ";";
   // Eklenen satırlar dosyanın satır sonunu izler (autocrlf'li kopyada CRLF — yalnız LF eklemek karışık satır sonu üretirdi, ölçüldü).
   const ss = metin.includes("\r\n") ? "\r\n" : "\n";
-  const tCagri = (anahtar, ek) => `t(${q}${anahtar}${q}${ek || ""})`;
+  const tCagri = (anahtar, ek, fn) => `${fn || "t"}(${q}${anahtar}${q}${ek || ""})`;
+  let i18nGerek = false; // bileşen dışı çağrı üretildi → `import i18n from "i18next"`
   const duzenler = []; // {bas, son, yeni}
   const uygulanan = [];
   const reddedilen = [];
@@ -101,13 +103,15 @@ function uygulaKaynak(metin, dosya, islemler, secenek) {
       ret("modül düzeyi sabit — anahtar saklanır, gösterimde çevrilir (elle; KURALLAR §Modül düzeyi sabit)");
       continue;
     }
-    if (a.tGolge) {
-      ret("kapsamda çeviri işlevini GÖLGELEYEN başka bir `t` var (geri çağırma parametresi / yerel değişken) — onu yeniden adlandırıp elle");
-      continue;
-    }
     const n = dugumBul(a.bas, a.son);
     if (!n) {
       ret("düğüm konumu bulunamadı");
+      continue;
+    }
+    const govde = bilesenGovdesi(n);
+    // Bileşen / hook DIŞINDAKİ işlevde `i18n.t` kullanılır: kapsamdaki başka bir `t` onu gölgelemez.
+    if (a.tGolge && govde !== null) {
+      ret("kapsamda çeviri işlevini GÖLGELEYEN başka bir `t` var (geri çağırma parametresi / yerel değişken) — onu yeniden adlandırıp elle");
       continue;
     }
     // Birleşik aday: yalnız şablon (`a ${x} b` → tek anahtar + yer tutucu) otomatik; `+` zinciri ve ifadeyle karışık JSX metni ELLE.
@@ -115,11 +119,8 @@ function uygulaKaynak(metin, dosya, islemler, secenek) {
       ret(ts.isJsxText(n) ? "ifadeyle karışık JSX metni — elle tek anahtar + yer tutucu" : "`+` birleştirme — elle tek anahtar + yer tutucu");
       continue;
     }
-    const govde = bilesenGovdesi(n);
-    if (govde === null) {
-      ret("bileşen / hook dışında (yardımcı işlev) — i18n.t gösterim anında, elle");
-      continue;
-    }
+    const dis = govde === null;
+    const fn = dis ? "i18n.t" : "t";
     if (govde === "blok-degil") {
       ret("bileşen gövdesi blok değil (=> (...)) — elle");
       continue;
@@ -135,9 +136,9 @@ function uygulaKaynak(metin, dosya, islemler, secenek) {
       const ham = n.text;
       const onBosluk = (ham.match(/^\s*/) || [""])[0];
       const sonBosluk = (ham.match(/\s*$/) || [""])[0];
-      yeni = (onBosluk.includes("\n") ? onBosluk : "") + `{${tCagri(is.anahtar)}}` + (sonBosluk.includes("\n") ? sonBosluk : "");
+      yeni = (onBosluk.includes("\n") ? onBosluk : "") + `{${tCagri(is.anahtar, "", fn)}}` + (sonBosluk.includes("\n") ? sonBosluk : "");
     } else if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) {
-      yeni = ts.isJsxAttribute(n.parent) ? `{${tCagri(is.anahtar)}}` : tCagri(is.anahtar);
+      yeni = ts.isJsxAttribute(n.parent) ? `{${tCagri(is.anahtar, "", fn)}}` : tCagri(is.anahtar, "", fn);
     } else if (ts.isTemplateExpression(n)) {
       // `yerAdlari` (eşlemede, isteğe bağlı): aracın verdiği yer tutucu adını anlamlısıyla değiştirir ({"deger1": "hasta"}); katalog
       // değeri uygula.py'de AYNI eşlemeyle yeniden adlandırılır. Bilinmeyen ad → RED (yazım hatası sessiz geçmesin).
@@ -159,13 +160,17 @@ function uygulaKaynak(metin, dosya, islemler, secenek) {
         ret("iç içe şablon / koşullu parça — elle (iki tam cümle anahtarı)");
         continue;
       }
-      yeni = tCagri(is.anahtar, `, { ${parcalar.join(", ")} }`);
+      yeni = tCagri(is.anahtar, `, { ${parcalar.join(", ")} }`, fn);
     } else {
       ret("desteklenmeyen düğüm");
       continue;
     }
     duzenler.push({ bas, son, yeni });
     uygulanan.push({ ...is, tur: a.tur, ham: a.ham, yertutucular: a.yertutucular });
+    if (dis) {
+      i18nGerek = true;
+      continue;
+    }
     bagimliligaEkle(n, govde);
     if (!a.tVar) {
       const ilk = govde.statements[0];
@@ -177,6 +182,11 @@ function uygulaKaynak(metin, dosya, islemler, secenek) {
   if (hookGerekenler.size && !/import\s*\{[^}]*\buseTranslation\b[^}]*\}\s*from\s*["']react-i18next["']/.test(metin)) {
     const konum = sonIceAktarma ? sonIceAktarma.getEnd() : 0;
     const satir = `import { useTranslation } from ${q}react-i18next${q}${nv}`;
+    duzenler.push({ bas: konum, son: konum, yeni: konum ? ss + satir : satir + ss });
+  }
+  if (i18nGerek && !/import\s+i18n\s+from\s*["']i18next["']/.test(metin)) {
+    const konum = sonIceAktarma ? sonIceAktarma.getEnd() : 0;
+    const satir = `import i18n from ${q}i18next${q}${nv}`;
     duzenler.push({ bas: konum, son: konum, yeni: konum ? ss + satir : satir + ss });
   }
   for (const d of bagimlilikDizileri.values()) duzenler.push({ bas: d.bas, son: d.bas, yeni: d.yeni });
