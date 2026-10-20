@@ -117,7 +117,10 @@ def test_klinik_ici_tablo_AYARLANAN_der_siddet_DEMEZ():
 def test_CSV_basliklari_AYARLANAN_der():
     hr = (KOK / "apps" / "backend" / "servers" / "history_router.py").read_text(encoding="utf-8")
     assert "Siddet(mT)" not in hr, "CSV basligi hala 'Siddet(mT)'"
-    assert "Ayarlanan(mT)" in hr, "CSV basligi duzeltilmemis"
+    # I18N: CSV basligi kataloga tasindi — olcut GEVSEMEDI, yer degistirdi (kaynak anahtari KULLANIR + TR birebir "Ayarlanan(mT)" + EN dolu).
+    import i18n_yardimci as iy
+
+    iy.metin_kapisi("apps/backend/servers/history_router.py", "gecmis.csv.ayarlanan", "Ayarlanan(mT)", yuzey="sunucu")
 
 
 # ── arayüz ───────────────────────────────────────────────────────────────────
