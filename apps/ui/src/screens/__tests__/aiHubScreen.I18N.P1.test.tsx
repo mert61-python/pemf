@@ -6,6 +6,7 @@
 let mockMode: "veterinarian" | "researcher" | "pet_owner" = "veterinarian";
 let mockResearch = true;
 let mockFetchCevap: unknown = null;
+let mockCompact: boolean | null = null; // null = gerçek kanca; true / false = düzen zorlanır
 let mockHastaNo = 0; // her testte YENİ hasta kimliği → modül önbelleği (resetAiCachesForOwner) temizlenir
 const mockApiPost = jest.fn(async (..._a: unknown[]): Promise<unknown> => null);
 const mockShowToast = jest.fn();
@@ -50,6 +51,10 @@ jest.mock("expo-document-picker", () => ({
   getDocumentAsync: jest.fn(async () => ({ canceled: false, assets: [{ name: "veri.csv", uri: "file:///veri.csv" }] })),
 }));
 jest.mock("expo-file-system/legacy", () => ({ readAsStringAsync: jest.fn(async () => "QUJD") }));
+jest.mock("@/hooks/useResponsive", () => {
+  const gercek = jest.requireActual("@/hooks/useResponsive");
+  return { ...gercek, useResponsive: () => ({ ...gercek.useResponsive(), ...(mockCompact === null ? {} : { isCompact: mockCompact }) }) };
+});
 jest.mock("expo-audio", () => ({
   useAudioRecorder: () => ({ record: jest.fn(), stop: jest.fn(), uri: null }),
   RecordingPresets: { HIGH_QUALITY: {} },
@@ -72,6 +77,7 @@ beforeEach(() => {
   mockMode = "veterinarian";
   mockResearch = true;
   mockHastaNo += 1;
+  mockCompact = null;
   mockFetchCevap = null;
   (global as any).fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => mockFetchCevap }));
   mockApiPost.mockReset().mockResolvedValue(null);
@@ -929,5 +935,104 @@ describe("bölüm 7 — Böbrek RNA (KIRC) ve Böbrek Hastalığı (CKD) modüll
     expect(enKayit).toHaveLength(1);
     expect(enKayit[0].module).toBe(trKayit[0].module);
     expect(enKayit[0].summary).toBe(trKayit[0].summary);
+  });
+});
+
+describe("bölüm 8 — Kedi Sesi modülü (veteriner)", () => {
+  const SES = {
+    status: "success", top_1_class: "Happy", top_1_prob: 0.7,
+    top_k: [{ class: "Happy", prob: 0.7 }, { class: "Resting", prob: 0.2 }, { class: "Warning", prob: 0.1 }],
+  };
+  const logKayitlari = () => mockApiPost.mock.calls.filter((c) => c[0] === "/ai/log").map((c) => c[1] as Record<string, unknown>);
+  async function sesAnaliz(u: ReturnType<typeof render>, modul: string, yukle: string, baslat: string) {
+    mockFetchCevap = SES;
+    fireEvent.press(u.getByLabelText(modul));
+    await act(async () => {
+      fireEvent.press(u.getByRole("button", { name: yukle }));
+    });
+    await act(async () => {
+      fireEvent.press(u.getByRole("button", { name: baslat }));
+    });
+    for (let i = 0; i < 12; i++)
+      await act(async () => {
+        await Promise.resolve();
+      });
+  }
+
+  it("Türkçe: ses modülü başlık / ipuçları / düğmeler göç öncesiyle aynı", () => {
+    const u = render(<AiHubScreen />);
+    fireEvent.press(u.getByLabelText("Kedi Sesi"));
+    expect(u.getAllByText("Kedi Sesi Analizi").length).toBeGreaterThan(0);
+    expect(u.getByText("Kedi miyavından duygu/durum sınıflandırması (10 sınıf). Mikrofonla kaydet ya da ses dosyası yükle.")).toBeTruthy();
+    expect(u.getByText("🎙️ İpuçları")).toBeTruthy();
+    expect(u.getByText("• Kediye yakın, sessiz ortamda ~5 saniye kaydet")).toBeTruthy();
+    expect(u.getByText("• Tek miyav/ses net olsun (arka plan gürültüsü az)")).toBeTruthy();
+    expect(u.getByText("Ses seçilmedi")).toBeTruthy();
+    expect(u.getByText("☐ 🔍 Isı haritası üret (modelin dinlediği frekans/zaman bandı — analiz biraz uzar)")).toBeTruthy();
+    expect(u.getByLabelText("Mel ısı haritası üret (Grad-CAM)")).toBeTruthy();
+    expect(u.getByText("Ses Analizini Başlat")).toBeTruthy();
+  });
+
+  it("İngilizce: ses modülü başlık / ipuçları / düğmeler", async () => {
+    await enYap();
+    const u = render(<AiHubScreen />);
+    fireEvent.press(u.getByLabelText("Cat Sound"));
+    expect(u.getAllByText("Cat Sound Analysis").length).toBeGreaterThan(0);
+    expect(u.getByText("Emotion / state classification from a cat's meow (10 classes). Record with the microphone or upload an audio file.")).toBeTruthy();
+    expect(u.getByText("🎙️ Tips")).toBeTruthy();
+    expect(u.getByText("• Close to the cat, in a quiet place, record for ~5 seconds")).toBeTruthy();
+    expect(u.getByText("No audio selected")).toBeTruthy();
+    expect(u.getByText("☐ 🔍 Generate heat map (the frequency / time band the model listened to — the analysis takes a bit longer)")).toBeTruthy();
+    expect(u.getByLabelText("Generate mel heat map (Grad-CAM)")).toBeTruthy();
+    expect(u.getByText("Start Sound Analysis")).toBeTruthy();
+  });
+
+  it("ses sonucu iki dilde (sınıf adı tablodan, yüzde biçimi dile göre); AI geçmişi kaydı TR ile BAYT BAYT aynı", async () => {
+    const tr = render(<AiHubScreen />);
+    await sesAnaliz(tr, "Kedi Sesi", "Ses Yükle", "Ses Analizini Başlat");
+    expect(tr.getByText(/Mutlu ve Keyifli · %70$/)).toBeTruthy();
+    expect(tr.getByText("En olası 3 durum")).toBeTruthy();
+    expect(tr.getByText("1. Mutlu")).toBeTruthy();
+    expect(tr.getByText("2. Dinlenme")).toBeTruthy();
+    expect(tr.getByText("3. Uyarı")).toBeTruthy();
+    expect(tr.getByText("%70")).toBeTruthy();
+    const trKayit = logKayitlari();
+    expect(trKayit).toHaveLength(1);
+    expect(trKayit[0].module).toBe("Kedi Sesi");
+    tr.unmount();
+    mockApiPost.mockReset().mockResolvedValue(null);
+    mockHastaNo += 1;
+    await enYap();
+    const en = render(<AiHubScreen />);
+    await sesAnaliz(en, "Cat Sound", "Upload Audio", "Start Sound Analysis");
+    expect(en.getByText(/Happy and Content · 70%$/)).toBeTruthy();
+    expect(en.getByText("3 most likely states")).toBeTruthy();
+    expect(en.getByText("1. Happy")).toBeTruthy();
+    expect(en.getByText("2. Resting")).toBeTruthy();
+    expect(en.getByText("3. Warning")).toBeTruthy();
+    expect(en.getByText("70%")).toBeTruthy();
+    const enKayit = logKayitlari();
+    expect(enKayit).toHaveLength(1);
+    expect(enKayit[0].module).toBe(trKayit[0].module);
+    expect(enKayit[0].summary).toBe(trKayit[0].summary);
+  });
+  it("ses sonucu: dar ve geniş düzende yüzde biçimi (çubuk satırı) dile göre", async () => {
+    for (const kompakt of [true, false]) {
+      mockCompact = kompakt;
+      mockHastaNo += 1;
+      const tr = render(<AiHubScreen />);
+      await sesAnaliz(tr, "Kedi Sesi", "Ses Yükle", "Ses Analizini Başlat");
+      expect(tr.getByText("%70")).toBeTruthy();
+      tr.unmount();
+      mockHastaNo += 1;
+      await enYap();
+      const en = render(<AiHubScreen />);
+      await sesAnaliz(en, "Cat Sound", "Upload Audio", "Start Sound Analysis");
+      expect(en.getByText("70%")).toBeTruthy();
+      en.unmount();
+      await act(async () => {
+        await dilSec("tr", depo);
+      });
+    }
   });
 });

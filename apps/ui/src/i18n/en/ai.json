@@ -519,15 +519,28 @@
   "ses": {
     "aciklama": "Record your furry friend's meow and let the AI interpret their mood. About 5 seconds in a quiet place is enough.",
     "analizEdildi": "Sound analyzed.",
+    "analiziBaslat": "Start Sound Analysis",
     "baslik": "Let's Listen to Their Voice",
+    "baslikYuzde": "{{ad}} · {{pct}}%",
     "durdur": "Stop",
+    "enOlasi3": "3 most likely states",
     "guvenilirDegil": "⚠️ This result is not reliable — no clear cat sound could be made out in the recording. In a quiet place, bring the microphone closer and record again.",
+    "ipuclariBaslik": "🎙️ Tips",
+    "ipucuDosya": "• You can also upload a ready-made audio file (mp3 / wav / m4a)",
+    "ipucuKayit": "• Close to the cat, in a quiet place, record for <kalin>~5 seconds</kalin> ",
+    "ipucuNet": "• Make the single meow / sound clear (little background noise)",
     "kaydediliyor": "Recording…",
     "kaydet": "Record",
     "kayitBaslatilamadi": "Could not start recording (microphone?).",
     "kayitDurdurulamadi": "Could not stop recording.",
     "kayitYok": "No audio recorded",
+    "melEtiketi": "Generate mel heat map (Grad-CAM)",
+    "melGoster": " 🔍 Generate heat map (the frequency / time band the model listened to — the analysis takes a bit longer)",
+    "melIsiHaritasi": "🔍 Mel heat map — the regions the model listened to (red = strong influence on the decision)",
     "mikrofonIzni": "Microphone permission is required.",
+    "modulAciklama": "Emotion / state classification from a cat's meow (10 classes). Record with the microphone or upload an audio file.",
+    "modulBaslik": "Cat Sound Analysis",
+    "nokta1": "The model's 3 most likely states are listed below, sorted by confidence.",
     "oneri": {
       "agri": {
         "baslik": "May Be a Sign of Pain",
@@ -570,8 +583,21 @@
         "metin": "They may be bothered or uneasy about something. Check the surroundings and calm them down."
       }
     },
+    "sesSecilmedi": "No audio selected",
     "sesYukle": "Upload Audio",
     "sesiAnalizEt": "Analyze Audio",
+    "sinif": {
+      "agri": "Pain",
+      "anneCagrisi": "Mother call",
+      "avModu": "Hunting mode",
+      "ciftlesme": "Mating",
+      "dinlenme": "Resting",
+      "kavga": "Fighting",
+      "kizgin": "Angry",
+      "mutlu": "Happy",
+      "savunma": "Defensive",
+      "uyari": "Warning"
+    },
     "yorumBaslik": "AI Interpretation"
   },
   "termal": {

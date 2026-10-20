@@ -519,15 +519,28 @@
   "ses": {
     "aciklama": "Dostunuzun miyavını kaydedin, yapay zeka ruh halini yorumlasın. Sessiz bir ortamda ~5 saniye kaydetmeniz yeterli.",
     "analizEdildi": "Ses analiz edildi.",
+    "analiziBaslat": "Ses Analizini Başlat",
     "baslik": "Sesini Dinleyelim",
+    "baslikYuzde": "{{ad}} · %{{pct}}",
     "durdur": "Durdur",
+    "enOlasi3": "En olası 3 durum",
     "guvenilirDegil": "⚠️ Bu sonuç güvenilir değil — kayıtta net bir kedi sesi ayırt edilemedi. Sessiz bir ortamda, mikrofonu yaklaştırıp tekrar kaydedin.",
+    "ipuclariBaslik": "🎙️ İpuçları",
+    "ipucuDosya": "• Hazır ses dosyası (mp3/wav/m4a) da yükleyebilirsin",
+    "ipucuKayit": "• Kediye yakın, sessiz ortamda <kalin>~5 saniye</kalin> kaydet",
+    "ipucuNet": "• Tek miyav/ses net olsun (arka plan gürültüsü az)",
     "kaydediliyor": "Kaydediliyor…",
     "kaydet": "Kaydet",
     "kayitBaslatilamadi": "Kayıt başlatılamadı (mikrofon?).",
     "kayitDurdurulamadi": "Kayıt durdurulamadı.",
     "kayitYok": "Ses kaydedilmedi",
+    "melEtiketi": "Mel ısı haritası üret (Grad-CAM)",
+    "melGoster": " 🔍 Isı haritası üret (modelin dinlediği frekans/zaman bandı — analiz biraz uzar)",
+    "melIsiHaritasi": "🔍 Mel ısı haritası — modelin dinlediği bölgeler (kırmızı = karara güçlü etki)",
     "mikrofonIzni": "Mikrofon izni gerekli.",
+    "modulAciklama": "Kedi miyavından duygu/durum sınıflandırması (10 sınıf). Mikrofonla kaydet ya da ses dosyası yükle.",
+    "modulBaslik": "Kedi Sesi Analizi",
+    "nokta1": "Aşağıda modelin en olası 3 durumu güvene göre sıralı.",
     "oneri": {
       "agri": {
         "baslik": "Ağrı Belirtisi Olabilir",
@@ -570,8 +583,21 @@
         "metin": "Bir şeyden rahatsız ya da tedirgin olabilir. Ortamı kontrol edip onu sakinleştirin."
       }
     },
+    "sesSecilmedi": "Ses seçilmedi",
     "sesYukle": "Ses Yükle",
     "sesiAnalizEt": "Sesi Analiz Et",
+    "sinif": {
+      "agri": "Ağrı",
+      "anneCagrisi": "Anne çağrısı",
+      "avModu": "Av modu",
+      "ciftlesme": "Çiftleşme",
+      "dinlenme": "Dinlenme",
+      "kavga": "Kavga",
+      "kizgin": "Kızgın",
+      "mutlu": "Mutlu",
+      "savunma": "Savunma",
+      "uyari": "Uyarı"
+    },
     "yorumBaslik": "Yapay Zeka Yorumu"
   },
   "termal": {

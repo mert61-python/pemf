@@ -96,6 +96,14 @@
    "onek": "",
    "degerler": ["ai.ckd.secenek.anormal", "ai.ckd.secenek.evet", "ai.ckd.secenek.hayir", "ai.ckd.secenek.iyi", "ai.ckd.secenek.kotu", "ai.ckd.secenek.normal", "ai.ckd.secenek.var", "ai.ckd.secenek.yok"],
    "gerekce": "CKD kategorik seçenek etiketi: CKD_NUMERIC / CKD_CATEGORICAL tablosunda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI, kullanıcı girdisi değil"
+  },
+  {
+   "yuzey": "arayuz",
+   "dosya": "apps/ui/src/screens/AiHubScreen.tsx",
+   "ifade": "return k ? i18n.t(k as never) : sinif;",
+   "onek": "",
+   "degerler": ["ai.ses.sinif.agri", "ai.ses.sinif.anneCagrisi", "ai.ses.sinif.avModu", "ai.ses.sinif.ciftlesme", "ai.ses.sinif.dinlenme", "ai.ses.sinif.kavga", "ai.ses.sinif.kizgin", "ai.ses.sinif.mutlu", "ai.ses.sinif.savunma", "ai.ses.sinif.uyari"],
+   "gerekce": "Ses sınıfı adı CATSOUND_ANAHTARI'nda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (10 sınıf), kullanıcı girdisi değil"
   }
  ]
 }

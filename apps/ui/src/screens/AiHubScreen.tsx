@@ -3243,10 +3243,22 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
   );
 }
 
-const CATSOUND_TR: Record<string, string> = {
-  Angry: "Kızgın", Defence: "Savunma", Fighting: "Kavga", Happy: "Mutlu",
-  HuntingMind: "Av modu", Mating: "Çiftleşme", MotherCall: "Anne çağrısı",
-  Paining: "Ağrı", Resting: "Dinlenme", Warning: "Uyarı",
+/** Ses sınıfı kimliği → katalog ANAHTARI (gösterimde `sesSinifAdi` çevirir; bilinmeyen sınıf HAM). */
+const CATSOUND_ANAHTARI: Record<string, string> = {
+  Angry: "ai.ses.sinif.kizgin",
+  Defence: "ai.ses.sinif.savunma",
+  Fighting: "ai.ses.sinif.kavga",
+  Happy: "ai.ses.sinif.mutlu",
+  HuntingMind: "ai.ses.sinif.avModu",
+  Mating: "ai.ses.sinif.ciftlesme",
+  MotherCall: "ai.ses.sinif.anneCagrisi",
+  Paining: "ai.ses.sinif.agri",
+  Resting: "ai.ses.sinif.dinlenme",
+  Warning: "ai.ses.sinif.uyari",
+};
+const sesSinifAdi = (sinif: string): string => {
+  const k = CATSOUND_ANAHTARI[sinif];
+  return k ? i18n.t(k as never) : sinif;
 };
 
 /**
@@ -3255,6 +3267,7 @@ const CATSOUND_TR: Record<string, string> = {
  * POST /api/ai/sound/cat (ffmpeg→WAV→librosa mel→EfficientNet_Lite0 ONNX).
  */
 function CatSoundModule({ patientName }: { patientName: string }) {
+  const { t } = useTranslation();
   const { isCompact } = useResponsive();
   const { showToast } = useToast();
   const [audioUri, setAudioUri] = useState<string | null>(moduleCache.cat_sound?.audioUri ?? null);
@@ -3278,13 +3291,13 @@ function CatSoundModule({ patientName }: { patientName: string }) {
   const startRecording = async () => {
     try {
       const perm = await requestRecordingPermissionsAsync();
-      if (!perm.granted) { showToast("Mikrofon izni gerekli.", "error"); return; }
+      if (!perm.granted) { showToast(t("ai.ses.mikrofonIzni"), "error"); return; }
       await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
       await recorder.prepareToRecordAsync();
       recorder.record();
       setIsRecording(true); setResult(null); setAudioUri(null); setWebFile(null);
     } catch (e) {
-      showToast("Kayıt başlatılamadı (mikrofon?).", "error");
+      showToast(t("ai.ses.kayitBaslatilamadi"), "error");
     }
   };
 
@@ -3295,7 +3308,7 @@ function CatSoundModule({ patientName }: { patientName: string }) {
       const uri = recorder.uri;
       setAudioUri(uri || null); setFileName("kayıt.m4a");
     } catch (e) {
-      showToast("Kayıt durdurulamadı.", "error");
+      showToast(t("ai.ses.kayitDurdurulamadi"), "error");
     }
   };
 
@@ -3342,10 +3355,10 @@ function CatSoundModule({ patientName }: { patientName: string }) {
         setResult(data);
         logAiResult(hasta, "Kedi Sesi", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob ?? 0) * 100)}`, { moduleId: "cat_sound", inputType: "audio", detail: data, confidence: data.top_1_prob });
       } else {
-        showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
+        showToast(aiDetayCumlesi(data?.detail, t("ai.hata.analizSirasinda")), "error");
       }
     } catch (e) {
-      showToast(aiHataMesaji(e, "Hata: " + errorMessage(e).slice(0, 120)), "error");
+      showToast(aiHataMesaji(e, t("ai.hata.hataIleti", { ileti: errorMessage(e).slice(0, 120) })), "error");
     } finally {
       setLoading(false);
     }
@@ -3353,21 +3366,21 @@ function CatSoundModule({ patientName }: { patientName: string }) {
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.title}>Kedi Sesi Analizi</Text>
-      <Text style={styles.subtitle}>Kedi miyavından duygu/durum sınıflandırması (10 sınıf). Mikrofonla kaydet ya da ses dosyası yükle.</Text>
+      <Text style={styles.title}>{t("ai.ses.modulBaslik")}</Text>
+      <Text style={styles.subtitle}>{t("ai.ses.modulAciklama")}</Text>
 
       <View style={styles.photoGuide}>
-        <Text style={styles.photoGuideTitle}>🎙️ İpuçları</Text>
-        <Text style={styles.photoGuideItem}>• Kediye yakın, sessiz ortamda <Text style={styles.photoGuideBold}>~5 saniye</Text> kaydet</Text>
-        <Text style={styles.photoGuideItem}>• Tek miyav/ses net olsun (arka plan gürültüsü az)</Text>
-        <Text style={styles.photoGuideItem}>• Hazır ses dosyası (mp3/wav/m4a) da yükleyebilirsin</Text>
+        <Text style={styles.photoGuideTitle}>{t("ai.ses.ipuclariBaslik")}</Text>
+        <Text style={styles.photoGuideItem}><Trans i18nKey="ai.ses.ipucuKayit" components={{ kalin: <Text style={styles.photoGuideBold} /> }} /></Text>
+        <Text style={styles.photoGuideItem}>{t("ai.ses.ipucuNet")}</Text>
+        <Text style={styles.photoGuideItem}>{t("ai.ses.ipucuDosya")}</Text>
       </View>
 
       <View style={styles.soundStatusBox}>
         {isRecording ? (
           <View style={{ alignItems: "center" }}>
             <View style={styles.recDot} />
-            <Text style={styles.recText}>Kaydediliyor…</Text>
+            <Text style={styles.recText}>{t("ai.ses.kaydediliyor")}</Text>
           </View>
         ) : audioUri ? (
           <View style={{ alignItems: "center" }}>
@@ -3377,7 +3390,7 @@ function CatSoundModule({ patientName }: { patientName: string }) {
         ) : (
           <View style={{ alignItems: "center" }}>
             <Mic color={colors.textMuted} size={40} />
-            <Text style={styles.placeholderText}>Ses seçilmedi</Text>
+            <Text style={styles.placeholderText}>{t("ai.ses.sesSecilmedi")}</Text>
           </View>
         )}
       </View>
@@ -3385,14 +3398,14 @@ function CatSoundModule({ patientName }: { patientName: string }) {
       <View style={styles.btnRow}>
         <View style={{ flex: 1 }}>
           <Button
-            label={isRecording ? "Durdur" : "Kaydet"}
+            label={isRecording ? t("ai.ses.durdur") : t("ai.ses.kaydet")}
             variant={isRecording ? "danger" : "primary"}
             icon={isRecording ? <Square color={colors.white} size={16} /> : <Mic color={colors.white} size={16} />}
             onPress={isRecording ? stopRecording : startRecording}
           />
         </View>
         <View style={{ flex: 1 }}>
-          <Button label="Ses Yükle" variant="secondary" icon={<FileText color={colors.primary} size={16} />} onPress={pickAudio} disabled={isRecording} />
+          <Button label={t("ai.ses.sesYukle")} variant="secondary" icon={<FileText color={colors.primary} size={16} />} onPress={pickAudio} disabled={isRecording} />
         </View>
       </View>
 
@@ -3401,16 +3414,16 @@ function CatSoundModule({ patientName }: { patientName: string }) {
         onPress={() => setIsiHaritasi((v) => !v)}
         accessibilityRole="switch"
         accessibilityState={{ checked: isiHaritasi }}
-        accessibilityLabel="Mel ısı haritası üret (Grad-CAM)"
+        accessibilityLabel={t("ai.ses.melEtiketi")}
       >
         <Text style={styles.xaiToggleText}>
-          {isiHaritasi ? "☑" : "☐"} 🔍 Isı haritası üret (modelin dinlediği frekans/zaman bandı — analiz biraz uzar)
+          {isiHaritasi ? "☑" : "☐"}{t("ai.ses.melGoster")}
         </Text>
       </TouchableOpacity>
       <View style={styles.analyzeBtn}>
-        <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Ses Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!audioUri || loading || isRecording} onPress={analyze} />
+        <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.ses.analiziBaslat")} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!audioUri || loading || isRecording} onPress={analyze} />
       </View>
-      {longLoading && <Text style={styles.modelHint}>Model hazırlanıyor (ilk kullanım uzun sürebilir)…</Text>}
+      {longLoading && <Text style={styles.modelHint}>{t("ai.ortak.modelHazirlaniyor")}</Text>}
 
       {result && (
         <View style={styles.resultBox}>
@@ -3420,33 +3433,33 @@ function CatSoundModule({ patientName }: { patientName: string }) {
             const tone: InterpTone = a ? (a.tone === "positive" ? "positive" : a.tone === "pain" ? "critical" : a.tone === "alert" ? "alert" : "info") : "info";
             const pct = Math.round((result.top_1_prob || 0) * 100);
             return <ResultInterpretation tone={tone} emoji={a?.emoji || "🐈"}
-              title={`${a?.title || CATSOUND_TR[tc] || tc} · %${pct}`}
-              text={a?.text || "Ses analiz edildi."}
-              points={["Aşağıda modelin en olası 3 durumu güvene göre sıralı."]} />;
+              title={t("ai.ses.baslikYuzde", { ad: a?.title || sesSinifAdi(tc), pct })}
+              text={a?.text || t("ai.ses.analizEdildi")}
+              points={[t("ai.ses.nokta1")]} />;
           })()}
-          <Text style={styles.ctSubLabel}>En olası 3 durum</Text>
+          <Text style={styles.ctSubLabel}>{t("ai.ses.enOlasi3")}</Text>
           <View style={{ marginTop: 2 }}>
-            {(result.top_k || []).map((t: AiTopK, i: number) => {
-              const pct = Math.round(t.prob * 100);
+            {(result.top_k || []).map((sk: AiTopK, i: number) => {
+              const pct = Math.round(sk.prob * 100);
               return (
                 <View key={i} style={[styles.soundBarRow, isCompact && styles.soundBarRowCompact]}>
                   {/* [S7 adım 9] Dar ekranda etiket ve yüzde ÜSTTE tek satırda, çubuk altta tam
                       genişlikte: aynı satırda çubuk 30-40 px'e düşüp okunmaz oluyordu. */}
                   <View style={isCompact ? styles.soundBarUst : styles.soundBarSatirIci}>
-                    <Text style={styles.soundBarLabel} numberOfLines={1}>{i + 1}. {CATSOUND_TR[t.class] || t.class}</Text>
-                    {isCompact ? <Text style={styles.soundBarPct}>%{pct}</Text> : null}
+                    <Text style={styles.soundBarLabel} numberOfLines={1}>{i + 1}. {sesSinifAdi(sk.class)}</Text>
+                    {isCompact ? <Text style={styles.soundBarPct}>{t("ai.ortak.yuzde", { deger: pct })}</Text> : null}
                   </View>
                   <View style={[styles.soundBarTrack, isCompact && { flex: 0, width: "100%" }]}>
                     <View style={[styles.soundBarFill, { width: (`${Math.max(2, pct)}%` as any) }]} />
                   </View>
-                  {isCompact ? null : <Text style={styles.soundBarPct}>%{pct}</Text>}
+                  {isCompact ? null : <Text style={styles.soundBarPct}>{t("ai.ortak.yuzde", { deger: pct })}</Text>}
                 </View>
               );
             })}
           </View>
           {/* Sunum-katmanı XAI (Faz 2): mel-spektrogram ısı haritası — istenip üretildiyse. */}
           {result.xai_image_base64 && (
-            <XaiIsiHaritasi base64={result.xai_image_base64} etiket="🔍 Mel ısı haritası — modelin dinlediği bölgeler (kırmızı = karara güçlü etki)" />
+            <XaiIsiHaritasi base64={result.xai_image_base64} etiket={t("ai.ses.melIsiHaritasi")} />
           )}
           {result.xai_error && <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text>}
           <MedicalDisclaimer />
