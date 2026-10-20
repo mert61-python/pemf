@@ -28,6 +28,7 @@ import re
 from pathlib import Path
 
 import pytest
+from i18n_yardimci import launcher_ui as ui
 
 _KOK = Path(__file__).resolve().parents[1]
 _UI = _KOK / "launcher" / "app" / "ui" / "index.html"
@@ -104,16 +105,14 @@ def test_KRITIK_arayuz_HAM_metni_TEK_BASINA_gostermiyor():
 
 @pytest.mark.parametrize("anahtar", ["errDns", "errTimeout", "errSunucu", "errDisk"])
 def test_hata_metinleri_IKI_DILDE(anahtar):
-    m = _ui()
-    assert m.count(f"{anahtar}:") >= 2, f"'{anahtar}' iki dilde tanımlı değil"
+    assert ui("tr").get(anahtar) and ui("en").get(anahtar), (
+        f"'{anahtar}' iki dilde tanımlı değil"
+    )  # I18N-P1 · 11a: katalog
 
 
 def test_KRITIK_DNS_cumlesi_DOGRU_YERI_isaret_ediyor():
     """Kullanıcı ağını kontrol etmeli; "sunucu hatası" demek yanlış yöne sokar."""
-    m = _ui()
-    i = m.find("errDns:")
-    assert i != -1
-    cumle = m[i : i + 320]
+    cumle = ui("tr")["errDns"]  # I18N-P1 · 11a: sözlük kataloğa taşındı
     assert re.search(r"Wi-?Fi|ağ bağlantı", cumle, re.I), "DNS mesajı kullanıcıyı ağına yönlendirmiyor"
     assert "sunucu hatası" not in cumle, "DNS hatası 'sunucu hatası' diye sunulmuş (yanlış yön)"
 

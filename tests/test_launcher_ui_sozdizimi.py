@@ -85,11 +85,20 @@ def test_KRITIK_cok_satirli_metinler_KACIS_kullaniyor():
     """Kullanıcıya çok satırlı metin gösteren anahtarlar `\\n` KAÇIŞI içermeli.
 
     Onay kutusundaki paragraf ayrımı `\\n\\n` ile yapılır; gerçek satır sonu JS'i bozar."""
-    govde = _script_govdesi()
+    # I18N-P1 · 11a: metin kataloğa taşındı; ÜRETİLEN `i18n_katalog.js` içinde (json.dumps) tek satırlık dize + `\\n` kaçışı olmalı
+    govde = (_KOK / "launcher" / "app" / "ui" / "i18n_katalog.js").read_text(encoding="utf-8")
     for anahtar in ("bgCancelConfirm",):
-        m = re.search(rf'{anahtar}:\s*"([^"\\]*(?:\\.[^"\\]*)*)"', govde)
+        m = re.search(rf'"{anahtar}":\s*"([^"\\]*(?:\\.[^"\\]*)*)"', govde)
         assert m, f"'{anahtar}' tek satırlık bir dize olarak bulunamadı — satır sonu içeriyor olabilir"
         assert "\\n" in m.group(1), f"'{anahtar}' paragraf ayrımı için `\\n` kaçışı kullanmıyor"
+
+
+@pytest.mark.skipif(not _NODE, reason="node yok")
+def test_KRITIK_UI_KATALOG_JAVASCRIPTI_AYRISTIRILABILIYOR():
+    """I18N-P1 · 11a: tüm arayüz metni `i18n_katalog.js`te — o dosya ayrıştırılamazsa arayüz METİNSİZ açılır (asıl arızanın katalog biçimi)."""
+    f = _KOK / "launcher" / "app" / "ui" / "i18n_katalog.js"
+    r = subprocess.run([_NODE, "--check", str(f)], capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, f"i18n_katalog.js AYRIŞTIRILAMIYOR:\n{r.stderr[:1200]}"
 
 
 @pytest.mark.skipif(not _NODE, reason="node yok")

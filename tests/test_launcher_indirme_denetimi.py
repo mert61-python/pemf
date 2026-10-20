@@ -25,6 +25,7 @@ import re
 from pathlib import Path
 
 import pytest
+from i18n_yardimci import launcher_ui as ui
 
 _KOK = Path(__file__).resolve().parents[1]
 _MAIN_RS = _KOK / "launcher" / "app" / "src" / "main.rs"
@@ -135,9 +136,7 @@ def test_KRITIK_iptal_ONAY_soruyor_ve_KAYBI_soyluyor():
     handler = m[i_iptal : i_iptal + 900]
     assert "confirm(" in handler, "iptal ONAY SORMUYOR — tek tıkla 1,4 GB çöpe gider"
     assert "bgCancelConfirm" in handler, "onay metni yerelleştirilmiş anahtardan gelmiyor"
-    i = m.find("bgCancelConfirm:")
-    assert i != -1
-    metin = m[i : i + 400]
+    metin = ui("tr")["bgCancelConfirm"]  # I18N-P1 · 11a: sözlük kataloğa taşındı
     assert "SİLİNİR" in metin or "BAŞTAN" in metin, f"onay metni kaybı açıkça söylemiyor: {metin[:160]}"
     assert "Duraklat" in metin, "onay metni daha ucuz seçeneği (Duraklat) önermiyor"
 
@@ -171,9 +170,9 @@ def test_KRITIK_periyodik_tur_KULLANICI_kararini_EZMIYOR():
 )
 def test_metinler_IKI_DILDE_de_var(anahtar):
     """Launcher iki dilli; eksik anahtar `undefined` düğme etiketi demektir."""
-    m = _ui()
-    assert m.count(f"{anahtar}:") >= 2, (
-        f"'{anahtar}' iki dilde tanımlı değil ({m.count(f'{anahtar}:')} kez) → bir dilde boş görünür"
+    # I18N-P1 · 11a: sözlük kataloğa taşındı — her iki dilde de dolu olmalı
+    assert ui("tr").get(anahtar) and ui("en").get(anahtar), (
+        f"'{anahtar}' iki dilde tanımlı değil → bir dilde boş görünür"
     )
 
 

@@ -22,6 +22,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from i18n_yardimci import launcher_ui as ui
 
 _KOK = Path(__file__).resolve().parent.parent
 _UI = _KOK / "launcher" / "app" / "ui" / "index.html"
@@ -61,6 +62,11 @@ _SOZLUK = {
         "willRemove": "KALDIR_EN",
     },
 }
+
+
+def _sozluk_gercek_profil() -> dict:
+    """Sentinel sözlüğe GERÇEK profil adları (kataloğun `profilMeta`sı) eklenir — kart etiketi `profName(key)`den gelir."""
+    return {d: {**_SOZLUK[d], "profilMeta": ui(d)["profilMeta"]} for d in _SOZLUK}
 
 
 def _fonksiyon(ham: str, imza: str) -> str:
@@ -106,6 +112,8 @@ def _kos(
     kod = "\n".join(
         [
             _blok(ham, "      const PROFILE_META = {", "\n      };"),
+            _satir(ham, "const profName = "),
+            _satir(ham, "const profAciklama = "),
             _satir(ham, "const PROFILE_DEPS"),
             _satir(ham, "const PROFILE_SOFT_DEPS"),
             _satir(ham, "const PROFILE_ORDER"),
@@ -121,7 +129,7 @@ def _kos(
         ]
     )
     js = f"""
-const SOZLUK = {json.dumps(_SOZLUK, ensure_ascii=False)};
+const SOZLUK = {json.dumps(_sozluk_gercek_profil(), ensure_ascii=False)};
 let LANG = {json.dumps(lang)};
 const t = () => SOZLUK[LANG];
 let busy = false, installed = {json.dumps(list(kurulu))};
@@ -252,20 +260,15 @@ def test_manifest_boyutsuz_gelmeden_cekirdek_boyutu_bos(tmp_path):
 
 def test_sozluk_iki_dilde_cekirdek_anahtarlarini_tasir_ve_aciklama_cekirdegi_soyler():
     ham = _UI.read_text(encoding="utf-8")
-    tr = _blok(ham, "        tr: {", "\n        },")
-    en = _blok(ham, "        en: {", "\n        },")
+    tr, en = ui("tr"), ui("en")  # I18N-P1 · 11a: sözlük kataloğa taşındı (launcher/i18n → ui.*)
     for ad in ("coreName", "coreDesc", "coreTag", "coreInstalled", "coreLocked"):
-        assert re.search(rf"\b{ad}:\s*\"[^\"]+\"", tr), f"tr sözlüğünde {ad} yok/boş"
-        assert re.search(rf"\b{ad}:\s*\"[^\"]+\"", en), f"en sözlüğünde {ad} yok/boş"
-    assert "ana uygulama" in re.search(r'selLead:\s*"([^"]+)"', tr).group(1).lower(), (
-        "tr selLead ana uygulamayı anlatmıyor"
-    )
-    assert "main application" in re.search(r'selLead:\s*"([^"]+)"', en).group(1).lower(), (
-        "en selLead main application'ı anlatmıyor"
-    )
+        assert tr.get(ad), f"tr kataloğunda {ad} yok/boş"
+        assert en.get(ad), f"en kataloğunda {ad} yok/boş"
+    assert "ana uygulama" in tr["selLead"].lower(), "tr selLead ana uygulamayı anlatmıyor"
+    assert "main application" in en["selLead"].lower(), "en selLead main application'ı anlatmıyor"
     # statik HTML varsayılanı tr selLead ile AYNI (JS çalışmadan da doğru metin görünsün)
     statik = re.search(r'id="t-sel-lead">([^<]+)<', ham).group(1)
-    assert statik == re.search(r'selLead:\s*"([^"]+)"', tr).group(1), "statik #t-sel-lead tr selLead ile ayrıştı"
+    assert statik == tr["selLead"], "statik #t-sel-lead tr selLead ile ayrıştı"
 
 
 def test_cekirdek_boyutu_katmanlardan_hesaplanir():
@@ -278,10 +281,10 @@ def test_cekirdek_boyutu_katmanlardan_hesaplanir():
 
 
 def test_kilavuz_iki_dilde_cekirdek_kartini_anlatir():
-    ham = _UI.read_text(encoding="utf-8")
-    assert "Ana uygulama" in _blok(ham, "Profil(ler)inizi seçin", "\"],"), (
-        "TR kılavuz 1. adım çekirdek kartını anlatmıyor"
-    )
-    assert "Main application" in _blok(ham, "Choose your profile(s)", "\"],"), (
+    # I18N-P1 · 11a: kılavuz kataloğa taşındı (ui.kilavuz.steps.s01 = 1. adım: başlık `t`, gövde `b`)
+    assert "Profil(ler)inizi seçin" in ui("tr")["kilavuz"]["steps"]["s01"]["t"]
+    assert "Ana uygulama" in ui("tr")["kilavuz"]["steps"]["s01"]["b"], "TR kılavuz 1. adım çekirdek kartını anlatmıyor"
+    assert "Choose your profile(s)" in ui("en")["kilavuz"]["steps"]["s01"]["t"]
+    assert "Main application" in ui("en")["kilavuz"]["steps"]["s01"]["b"], (
         "EN kılavuz 1. adım çekirdek kartını anlatmıyor"
     )

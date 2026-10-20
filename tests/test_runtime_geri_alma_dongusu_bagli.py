@@ -22,6 +22,7 @@ import re
 from pathlib import Path
 
 import pytest
+from i18n_yardimci import launcher_ui as katalog_ui
 from launcher_onay_karari import err_kolu_denetle, onay_sirasi_denetle
 
 _KOK = Path(__file__).resolve().parents[1]
@@ -133,12 +134,14 @@ def test_KRITIK_5_kullaniciya_SEBEP_soylenir(ui):
     i = ui.find("plan.otomatik_durduruldu")
     blok = ui[i : i + 260]
     assert "notice(" in blok, "otomatik kurulum SESSIZCE durduruldu — kullanici sebebini gormez"
-    assert ui.count("rtBlocked:") == 2, "bildirim metni iki dilde tanimli degil"
+    assert katalog_ui("tr").get("rtBlocked") and katalog_ui("en").get("rtBlocked"), (
+        "bildirim metni iki dilde tanimli degil"
+    )
     # Metin ne YAPILACAGINI soylemeli (yalniz "hata oldu" demek akisi cikmaza sokar).
     # ⚠️ Desen KACISLI TIRNAGI da yutmali: metnin kendisi `\"Onar\"` iciyor ve naif `[^"]+`
     # dizeyi tam orada kesiyor (ilk yazimda yanlis-KIRMIZI verdi).
-    tr = re.search(r'rtBlocked:\s*"((?:[^"\\]|\\.)*)"', ui)
-    assert tr and "Onar" in tr.group(1), f"metin cikis yolunu ('Onar') soylemiyor: {tr and tr.group(1)!r}"
+    tr = katalog_ui("tr")["rtBlocked"]  # I18N-P1 · 11a: sözlük kataloğa taşındı (kaçışlı tırnak sorunu da kalktı)
+    assert "Onar" in tr, f"metin cikis yolunu ('Onar') soylemiyor: {tr!r}"
 
 
 def test_KARSIT_KANIT_needed_bayraktan_ETKILENMEZ(flow_rs):

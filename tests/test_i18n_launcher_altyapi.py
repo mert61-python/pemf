@@ -118,20 +118,18 @@ _JS_T = r"""
 const fs = require("fs");
 const vm = require("vm");
 const [html, katalogJs] = [fs.readFileSync(process.argv[2], "utf8"), fs.readFileSync(process.argv[3], "utf8")];
-const bas = html.indexOf("      const I18N = {");
-const son = html.indexOf("const t = () =>", bas);
-const satirSonu = html.indexOf("\n", son);
-const kod = html.slice(bas, satirSonu).replace("const I18N", "var I18N").replace("const t =", "var t =");
+const m = html.match(/^[ \t]*const t = \(\) => .*$/m);
+if (!m) throw new Error("index.html'de `const t = () =>` bulunamadı");
+const kod = m[0].replace("const t =", "var t =");
 const sonuc = {};
 for (const dil of ["tr", "en"]) {
   const ctx = { window: {} };
   vm.createContext(ctx);
   vm.runInContext(katalogJs, ctx);
-  const dilli = kod.replace(/let LANG = "tr";/, `var LANG = ${JSON.stringify(dil)};`);
-  if (dilli === kod) throw new Error("index.html'de `let LANG = \"tr\";` bulunamadı");
-  vm.runInContext(dilli, ctx);
+  vm.runInContext(`var LANG = ${JSON.stringify(dil)};`, ctx);
+  vm.runInContext(kod, ctx);
   const x = vm.runInContext("t()", ctx);
-  sonuc[dil] = { t: Object.fromEntries(Object.entries(x).filter(([, v]) => typeof v === "string")), sozluk: Object.keys(vm.runInContext("I18N", ctx)[dil]) };
+  sonuc[dil] = { t: Object.fromEntries(Object.entries(x).filter(([, v]) => typeof v === "string")), sozluk: [] };
 }
 process.stdout.write(JSON.stringify(sonuc));
 """
@@ -139,8 +137,8 @@ process.stdout.write(JSON.stringify(sonuc));
 
 @pytest.mark.skipif(not shutil.which("node"), reason="node yok")
 def test_arayuz_t_KATALOGU_sozlugun_ustune_bindirir_gocen_anahtar_TEK_kaynakta(tmp_path):
-    """Pilot (açılış / ilerleme paneli): `t()` = sözlük + katalog; göçen her `ui.*` anahtarı iki dilde katalogdaki değeri verir ve
-    sözlükte ARTIK YOK (iki kaynak ayrışamaz). Sözlükte kalanlar değişmeden çalışır (ör. `web`)."""
+    """P1 · 11a: `t()` YALNIZ katalogdan okur; her `ui.*` (düz metin) anahtarı iki dilde katalogdaki değeri verir ve index.html'de ESKİ
+    `I18N` sözlüğü ARTIK YOK (iki kaynak olamaz). Eski sözlükteki anahtarlar (ör. `web`) katalogdan aynen gelir."""
     betik = tmp_path / "t.cjs"
     betik.write_text(_JS_T, encoding="utf-8")
     r = subprocess.run(
@@ -149,12 +147,18 @@ def test_arayuz_t_KATALOGU_sozlugun_ustune_bindirir_gocen_anahtar_TEK_kaynakta(t
     )
     assert r.returncode == 0, r.stderr.decode("utf-8", "replace")
     sonuc = json.loads(r.stdout.decode("utf-8"))
+    assert "const I18N" not in (KOK / "launcher/app/ui/index.html").read_text(encoding="utf-8"), (
+        "eski I18N sözlüğü geri gelmiş"
+    )
     for dil in ortak.DILLER:
         ui = ortak.duzlestir(ortak.katalog_yukle("launcher", dil)).items()
         gocen = {k.split(".", 1)[1]: v for k, v in ui if k.startswith("ui.")}
         assert gocen, "katalogda ui.* anahtarı yok"
         for k, v in gocen.items():
+            if (
+                "." in k
+            ):  # iç içe alt ağaçlar (kilavuz / profilMeta) `t()`te nesne olarak gelir; düz metinler burada ölçülür
+                continue
             assert sonuc[dil]["t"].get(k) == v, f"{dil}: t().{k} katalogdan gelmiyor"
-            assert k not in sonuc[dil]["sozluk"], f"{dil}: {k} hem katalogda hem sözlükte (iki kaynak)"
     assert sonuc["tr"]["t"]["readyTitle"] == "Hazır!" and sonuc["en"]["t"]["readyTitle"] == "Ready!"
     assert sonuc["tr"]["t"]["web"] == "Web Sitesi", "sözlükte kalan anahtar bozulmamalı"

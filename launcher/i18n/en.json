@@ -20,20 +20,232 @@
     }
   },
   "ui": {
+    "about": "About",
+    "aboutBody": "PEMF Vet launcher. It downloads your selected usage profiles, verifies the downloaded files, installs them and opens the app. It connects automatically to the PEMF device on your network.",
+    "aboutPlat": "Platform",
+    "aboutTitle": "About PEMF Vet",
+    "aboutVer": "Version",
     "appCore": "App files",
+    "applyStart": "Apply & Start",
+    "authSlow": "Slow connection — verifying your session in the background. You can start the app now.",
+    "backToApp": "Back to app",
+    "backupChoose": "Choose backup destination",
+    "backupSameDisk": "Backups are currently on the SAME disk as patient data. A disk failure would lose both; choose an external drive or a network share.",
+    "backupUnreachable": "Backup destination is currently unreachable: {{yol}} — plug in the external drive or choose a new destination.",
+    "bgCancel": "Cancel",
+    "bgCancelConfirm": "Cancel the download?\n\nThe part downloaded so far will be DELETED and the update will start OVER on the next launch.\n\nIf you only want a break, use \"Pause\" — the downloaded part is kept and resumes where it left off.",
+    "bgPause": "Pause",
+    "bgResume": "Resume",
+    "cached": "already downloaded",
     "calc": "calculating",
+    "cancel": "Cancel",
     "cancelDl": "Cancel",
+    "change": "Change profiles",
+    "cont": "Continue",
+    "coreDesc": "Interface and shared models — required by every profile",
+    "coreInstalled": "installed",
+    "coreLocked": "The main application is part of every installation; it cannot be unselected.",
+    "coreName": "Main application",
+    "coreTag": "required",
+    "depAdd": "Add {{profil}}",
+    "depNotice": "“{{secili}}” is selected without “{{eksik}}”. They install independently; only AI Pro’s organ localization uses models from the {{eksik}} package — that feature will not work. Everything else works.",
     "detect": "Detecting environment…",
+    "dl": "downloading",
+    "errDisk": "Not enough disk space. Free up space and try again.",
+    "errDns": "Could not reach the internet — the server address could not be resolved. Check your Wi-Fi/network and try again. If you are online, retry in a few minutes.",
+    "errSunucu": "The update server is unreachable right now. This is not about your connection; try again shortly.",
+    "errTimeout": "The connection timed out. Your network may be slow or briefly interrupted; please try again.",
+    "etaLeft": "left",
+    "extracting": "installing",
+    "footSupport": "Support",
+    "footWeb": "Website",
+    "fwEngel": "Windows Firewall is BLOCKING incoming connections to this app — the mobile app cannot find the device. Use from the device screen is not affected.",
+    "fwIzinVer": "Allow (administrator)",
+    "fwKuralYok": "The mobile app may not be able to connect to this device: Windows Firewall has no rule allowing incoming connections. Use from the device screen is not affected.",
+    "guide": "Guide",
+    "guideClose": "close",
+    "guideTitle": "User Guide",
+    "guncLead": "Please wait — the new version is being installed. PEMF Vet will reopen by itself; you don't need to close this window or start the app again.",
+    "guncSlow": "Taking a bit longer — installation can take 1–2 minutes depending on your computer. If this window doesn't close on its own, open PEMF Vet from the Start menu.",
+    "guncTitle": "Updating launcher…",
     "instDl": "Downloading…",
     "instExtract": "Installing…",
     "instStart": "Starting…",
     "instVerify": "Verifying…",
+    "install": "Install & Start",
+    "keepOne": "Keep at least one profile",
+    "kilavuz": {
+      "connect": "In veterinary mode the PEMF hardware must be on the SAME Wi-Fi network as your computer. The app finds it automatically; if not, enter the device IP manually in the app's Settings.",
+      "connectTitle": "Connecting to the device (Vet)",
+      "intro": "PEMF Vet is a platform for AI-assisted diagnosis and PEMF (pulsed magnetic field) sessions in cats. This client downloads, installs and starts the app on your computer. The steps below are written for someone with no prior experience — just follow them in order.",
+      "profTitle": "3 Profiles — which one is for you?",
+      "profiles": {
+        "p01": {
+          "does": "Runs AI pre-diagnosis from your cat's camera image: disease, organ, imaging and sound analysis. Does NOT include a device or session.",
+          "key": "home",
+          "use": {
+            "u01": "When the app opens, choose ‘Pet Owner’ and sign in.",
+            "u02": "Go to the ‘Smart Diagnosis’ screen.",
+            "u03": "Point your camera at the cat or upload a photo/sound file.",
+            "u04": "Read the result and suggestions — always consult a veterinarian for a definitive diagnosis."
+          },
+          "who": "For pet (cat) owners"
+        },
+        "p02": {
+          "does": "Diagnosis + PEMF device sessions + patient records, session history, sensor tracking, KPI panel and simulator. Also includes the Pet Owner diagnostic models (hence the larger size).",
+          "key": "vet",
+          "use": {
+            "u01": "Choose ‘Veterinarian’ and sign in.",
+            "u02": "Add a new patient from ‘Patients’.",
+            "u03": "Start a session from ‘Control’; adjust coils manually or run autonomously with ‘AI Pro’.",
+            "u04": "Track the session via ‘Sensors’ and ‘History’; see clinic stats in ‘KPI’."
+          },
+          "who": "For veterinarians and clinics"
+        },
+        "p03": {
+          "does": "Petri, histopathology, kidney and phantom AI models; sample/data records and history. Does NOT include a device.",
+          "key": "research",
+          "use": {
+            "u01": "Choose ‘Research Mode’ and sign in.",
+            "u02": "Pick the relevant research model from ‘Smart Diagnosis’.",
+            "u03": "Upload your image or data file.",
+            "u04": "Review the results and save them to ‘History’."
+          },
+          "who": "For researchers and laboratories"
+        }
+      },
+      "steps": {
+        "s01": {
+          "b": "The 'Main application' card at the top is part of every installation and cannot be removed (interface and shared models; its size is shown on the right, or 'installed' if already present). Tick at least one of the 3 profiles below it (Pet Owner, Veterinarian, Research). You can pick several; each card shows ONLY its own download size, and the button total counts only what will actually download (the main application if not yet installed + your new picks). In 'Change profiles', an already installed profile says 'installed' and is not counted; unticking an installed profile marks it 'will be removed' and it is deleted from this computer when you press the button.",
+          "t": "Choose your profile(s)"
+        },
+        "s02": {
+          "b": "Your selected models download and install. The bar shows percent, speed (MB/s) and time left. You can Pause or Cancel anytime; even if the internet drops or the computer shuts down, you can resume where you left off when you reopen.",
+          "t": "Click ‘Install & Start’"
+        },
+        "s03": {
+          "b": "When installation finishes, the app opens in your browser. Next time, use the ‘Start’ button in this window to open it in seconds.",
+          "t": "The app opens automatically"
+        }
+      },
+      "stepsTitle": "Installation — 3 steps",
+      "trouble": {
+        "k01": {
+          "b": "Click ‘Repair’ in this window — it re-verifies the packages and fills in what's missing.",
+          "t": "The app won't open or a model is missing"
+        },
+        "k02": {
+          "b": "Reopen the app; answer ‘Resume where you left off?’ with ‘Resume’. The downloaded part is kept.",
+          "t": "Download interrupted (internet dropped / computer closed)"
+        },
+        "k03": {
+          "b": "Click ‘Uninstall’ (your patient data is KEPT), then install again.",
+          "t": "I want to reinstall from scratch"
+        },
+        "k04": {
+          "b": "Use the ‘Website’ link at the top or ‘Support’ at the bottom.",
+          "t": "More help"
+        }
+      },
+      "troubleTitle": "Troubleshooting"
+    },
+    "langLabel": "language",
+    "loginBtn": "Sign in",
+    "loginEmail": "Email",
+    "loginEmpty": "Email and password are required.",
+    "loginForgot": "Forgot password",
+    "loginLead": "Sign in with your PEMF Vet account — the app won't ask you again.",
+    "loginNoPersist": "This platform can't store the session securely — sign-in applies to this launch only.",
+    "loginPass": "Password",
+    "loginPwInvisible": "The password contains an invisible character (likely from copy-paste). Clear it and type it manually.",
+    "loginPwSpace": "Your password starts or ends with a space — usually from pasting. Use “Show” to check.",
+    "loginRemember": "Remember me",
+    "loginRequired": "Sign in to install or repair.",
+    "loginSignup": "Create account",
+    "loginTitle": "Sign in",
+    "loginWait": "Signing in…",
+    "logout": "Sign out",
+    "logoutBody": "Your session on this computer will be removed and the app will be signed out. Continue?",
+    "logoutTitle": "Sign out",
+    "luReady": "PEMF Vet Client {{surum}} is available — it will be installed when you close and reopen the app.",
+    "noChange": "No changes",
+    "notInstalled": "App is not installed.",
+    "notSupported": "The package for this platform ({{platform}}) is not published yet.",
+    "offline": "Offline",
+    "offlineLogin": "No internet connection — sign-in unavailable. You can start the installed app offline.",
+    "offlineReady": "No internet connection — update check and profile list unavailable. You can still start the installed app.",
+    "offlineSelect": "No internet connection; installation requires one. Check your connection and try again.",
+    "offlineStart": "Start offline",
+    "ok": "OK",
     "pause": "Pause",
     "pausedLead": "Download paused — the downloaded part is kept on your computer. You can resume where you left off.",
     "pausedTitle": "Paused",
+    "profilMeta": {
+      "home": {
+        "aciklama": "Feline diagnostic models — disease, organ, imaging, sound",
+        "ad": "Pet Owner"
+      },
+      "research": {
+        "aciklama": "Research models — petri, histopathology, kidney, phantom",
+        "ad": "Research Mode"
+      },
+      "vet": {
+        "aciklama": "Clinical diagnosis + session (em_kedi, thermal)",
+        "ad": "Veterinarian"
+      }
+    },
+    "pwHide": "Hide",
+    "pwHideTitle": "Hide password",
+    "pwShow": "Show",
+    "pwShowTitle": "Show password",
+    "ready": "ready — opened in browser",
     "readyLead": "PEMF Vet is installed. Start the app or update your profiles.",
     "readyTitle": "Ready!",
+    "reconnTitle": "Reconnecting…",
+    "reconnecting": "connection lost, retrying",
+    "removeFailed": "Profile could not be removed: {{neden}}",
+    "removing": "Removing…",
+    "repair": "Repair installation",
+    "repairBody": "Installed packages will be re-verified and missing/corrupt files repaired. This may take a few minutes. Continue?",
+    "repairTitle": "Repair installation",
     "resume": "Resume",
-    "tagline": "Veterinary PEMF session + AI diagnostics platform"
+    "resumeBody": "The previous installation didn't complete (internet may have dropped or the device was closed). The downloaded part is kept — resume where you left off?",
+    "resumeNo": "Discard",
+    "resumeTitle": "Installation unfinished",
+    "resumeYes": "Resume",
+    "retry": "Retry",
+    "rtBg": "A new version is downloading in the background — you can use the app now; it will be installed on the next launch.",
+    "rtBgCancelled": "Update download cancelled — it will be retried on the next launch.",
+    "rtBgDone": "New version downloaded — it will be installed on the next launch.",
+    "rtBgFail": "Background download did not finish — it will resume on the next launch.",
+    "rtBgPaused": "Update download paused — the downloaded part is kept; \"Resume\" continues where it left off.",
+    "rtBgPrep": "Preparing…",
+    "rtBlocked": "The new version failed to start on this device, so the previous one was restored. Automatic retries are paused — use \"Repair\" to try again, or wait for the next release.",
+    "rtBusy": "Updates are not applied during a session — it will update automatically once the session ends.",
+    "rtDone": "App updated.",
+    "rtLead": "A new app version was found — downloading and installing. You can start it when this finishes.",
+    "rtReady": "Update ready — it will be installed when you close and reopen the app.",
+    "rtRecall": "⚠️ IMPORTANT SAFETY UPDATE pending. This version is no longer supported; please CLOSE AND REOPEN the app so the update installs. If a session is running, wait for it to finish.",
+    "rtRollback": "The new version failed to start; rolled back to the previous working version. The app is usable.",
+    "rtRollbackFail": "The new version failed to start and the rollback could not finish. Please use \"Repair\" to reinstall.",
+    "rtTitle": "Updating app…",
+    "runningLead": "PEMF Vet is running. If you close the app window you can start it again from here.",
+    "selCancel": "Back",
+    "selLead": "The main application is always installed (cannot be removed). Pick at least one profile — only the ones you pick are downloaded.",
+    "selTitle": "Choose your usage profile",
+    "selfUpdateFailed": "Launcher update could not be completed — the app is opening normally. It will be retried on the next launch.",
+    "start": "Start",
+    "startChecking": "Checking for updates…",
+    "starting": "starting",
+    "tagline": "Veterinary PEMF session + AI diagnostics platform",
+    "uninBody": "The downloaded app and AI models will be removed.\n\nDATA THAT IS KEPT (medical records — NOT deleted by uninstall):\n• Patient records\n• Session history\n• AI analysis history\nLocation: %APPDATA%\\PEMF_GUI\n\nIf you also want these deleted, delete them from inside the app BEFORE uninstalling (Patients → \"Delete All\", AI History → \"Delete History\").\n\nContinue?",
+    "uninTitle": "Uninstall app",
+    "uninstall": "Uninstall",
+    "updatingApply": "Applying update, restarting the app…",
+    "updatingLead": "A new launcher version was found — downloading and installing. The app will restart automatically.",
+    "updatingTitle": "Updating launcher…",
+    "verifying": "verifying integrity",
+    "web": "Website",
+    "willRemove": "will be removed"
   }
 }

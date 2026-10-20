@@ -19,6 +19,7 @@ import re
 from pathlib import Path
 
 import pytest
+from i18n_yardimci import launcher_ui as katalog_ui
 
 _KOK = Path(__file__).resolve().parent.parent
 _MAIN_RS = _KOK / "launcher" / "app" / "src" / "main.rs"
@@ -203,14 +204,15 @@ def test_KRITIK_basarisiz_on_indirme_BASARILI_denmez(rs, ui):
 
 
 def test_basarisizlik_mesaji_iki_dilde(ui):
-    assert ui.count("rtBgFail:") == 2, "rtBgFail iki dilde de tanımlı olmalı"
+    # I18N-P1 · 11a: sözlük kataloğa taşındı — iki dilde de dolu olmalı
+    assert katalog_ui("tr").get("rtBgFail") and katalog_ui("en").get("rtBgFail"), "rtBgFail iki dilde de tanımlı olmalı"
 
 
 def test_i18n_iki_dilde_de_TAM(ui):
     """Eksik anahtar `undefined` basar — kullanıcı boş metin görür."""
     for anahtar in ("rtBgDone", "rtBgPrep"):
-        assert ui.count(f"{anahtar}:") == 2, (
-            f"`{anahtar}` iki dilde de tanımlı olmalı (bulunan: {ui.count(f'{anahtar}:')})"
+        assert katalog_ui("tr").get(anahtar) and katalog_ui("en").get(anahtar), (
+            f"`{anahtar}` iki dilde de tanımlı olmalı"
         )
 
 
@@ -227,7 +229,7 @@ def test_KRITIK_kalan_sure_ETA_gosterilir(ui):
         "ETA Content-Length'siz (has=false) durumda da basılıyor — belirsiz toplamla ETA saçmalar"
     )
     assert "etaLeft" in govde, "ETA'nın 'kaldı/left' etiketi yok"
-    assert ui.count("etaLeft:") == 2, "etaLeft iki dilde de tanımlı olmalı"
+    assert katalog_ui("tr").get("etaLeft") and katalog_ui("en").get("etaLeft"), "etaLeft iki dilde de tanımlı olmalı"
 
 
 def test_KRITIK_FAZ45_profil_boyutu_PARCALARI_da_toplar(ui):

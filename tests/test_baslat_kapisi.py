@@ -23,6 +23,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from i18n_yardimci import launcher_ui as katalog_ui
 
 _KOK = Path(__file__).resolve().parent.parent
 _UI = _KOK / "launcher" / "app" / "ui" / "index.html"
@@ -137,7 +138,9 @@ def test_kapi_acilinca_dogru_etiket_geri_gelir(ui):
 
 
 def test_i18n_iki_dilde_TAM(ui):
-    assert ui.count("startChecking:") == 2, "`startChecking` iki dilde de tanımlı olmalı"
+    assert katalog_ui("tr").get("startChecking") and katalog_ui("en").get("startChecking"), (
+        "`startChecking` iki dilde de tanımlı olmalı"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

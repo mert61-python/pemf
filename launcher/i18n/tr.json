@@ -20,20 +20,232 @@
     }
   },
   "ui": {
+    "about": "Hakkında",
+    "aboutBody": "PEMF Vet başlatıcısı. Seçtiğiniz kullanım profillerini indirir, inen dosyaların bütünlüğünü doğrular, kurar ve uygulamayı açar. Aynı ağdaki PEMF cihazınıza otomatik bağlanır.",
+    "aboutPlat": "Platform",
+    "aboutTitle": "PEMF Vet hakkında",
+    "aboutVer": "Sürüm",
     "appCore": "Uygulama dosyaları",
+    "applyStart": "Uygula ve Başlat",
+    "authSlow": "Bağlantı yavaş — oturum arka planda doğrulanıyor. Uygulamayı şimdi başlatabilirsiniz.",
+    "backToApp": "Uygulamaya dön",
+    "backupChoose": "Yedek hedefi seç",
+    "backupSameDisk": "Yedekler şu anda hasta verisiyle AYNI diskte. Disk arızasında ikisi de kaybolur; harici bir disk ya da ağ paylaşımı seçin.",
+    "backupUnreachable": "Yedek hedefi şu an erişilemiyor: {{yol}} — harici diski takın ya da yeni bir hedef seçin.",
+    "bgCancel": "İptal",
+    "bgCancelConfirm": "İndirmeyi iptal etmek istiyor musunuz?\n\nŞu ana kadar inen kısım SİLİNİR ve güncelleme bir sonraki açılışta BAŞTAN indirilir.\n\nSadece ara vermek istiyorsanız \"Duraklat\" kullanın — inen kısım korunur ve kaldığı yerden devam eder.",
+    "bgPause": "Duraklat",
+    "bgResume": "Devam et",
+    "cached": "zaten indirilmiş",
     "calc": "hesaplanıyor",
+    "cancel": "Vazgeç",
     "cancelDl": "İptal",
+    "change": "Profilleri değiştir",
+    "cont": "Devam",
+    "coreDesc": "Arayüz ve ortak modeller — her profil için gerekli",
+    "coreInstalled": "kurulu",
+    "coreLocked": "Ana uygulama her kurulumda gelir; seçimi kaldırılamaz.",
+    "coreName": "Ana uygulama",
+    "coreTag": "zorunlu",
+    "depAdd": "{{profil}} ekle",
+    "depNotice": "“{{secili}}” seçildi ama “{{eksik}}” yok. Bunlar bağımsız kurulur; yalnız AI Pro’nun organ lokalizasyonu {{eksik}} paketindeki modelleri kullanır — o özellik çalışmaz. Diğer her şey çalışır.",
     "detect": "Ortam algılanıyor…",
+    "dl": "indiriliyor",
+    "errDisk": "Diskte yeterli yer yok. Yer açıp tekrar deneyin.",
+    "errDns": "İnternet bağlantısı kurulamadı — sunucu adresi çözümlenemedi. Wi-Fi/ağ bağlantınızı kontrol edip tekrar deneyin. Bağlantı varsa birkaç dakika sonra yeniden deneyin.",
+    "errSunucu": "Güncelleme sunucusuna şu an ulaşılamıyor. Bağlantınızla ilgili değil; kısa süre sonra tekrar deneyin.",
+    "errTimeout": "Bağlantı zaman aşımına uğradı. Ağınız yavaş ya da geçici olarak kesilmiş olabilir; tekrar deneyin.",
+    "etaLeft": "kaldı",
+    "extracting": "kuruluyor",
+    "footSupport": "Destek",
+    "footWeb": "Web Sitesi",
+    "fwEngel": "Windows güvenlik duvarı bu uygulamanın ağdan bağlantı almasını ENGELLİYOR — mobil uygulama cihazı bulamaz. Cihaz ekranından kullanım etkilenmez.",
+    "fwIzinVer": "İzin ver (yönetici)",
+    "fwKuralYok": "Mobil uygulama bu cihaza bağlanamayabilir: Windows güvenlik duvarında gelen bağlantı izni yok. Cihaz ekranından kullanım etkilenmez.",
+    "guide": "Kılavuz",
+    "guideClose": "kapat",
+    "guideTitle": "Kullanım Kılavuzu",
+    "guncLead": "Lütfen bekleyin — yeni sürüm kuruluyor. PEMF Vet birazdan kendiliğinden açılacak; bu pencereyi kapatmanız ya da uygulamayı yeniden açmanız gerekmez.",
+    "guncSlow": "Biraz uzun sürdü — kurulum bilgisayarın hızına göre 1-2 dakika alabilir. Bu pencere kendiliğinden kapanmazsa PEMF Vet'i Başlat menüsünden açabilirsiniz.",
+    "guncTitle": "Başlatıcı güncelleniyor…",
     "instDl": "İndiriliyor…",
     "instExtract": "Kuruluyor…",
     "instStart": "Başlatılıyor…",
     "instVerify": "Doğrulanıyor…",
+    "install": "Kur ve Başlat",
+    "keepOne": "En az bir profil seçili kalmalı",
+    "kilavuz": {
+      "connect": "Veteriner modunda PEMF donanımı, bilgisayarınızla AYNI Wi-Fi ağında olmalıdır. Uygulama cihazı otomatik bulur. Bulamazsa uygulama içindeki Ayarlar’dan cihazın IP adresini elle girebilirsiniz.",
+      "connectTitle": "Cihaza bağlanma (Veteriner)",
+      "intro": "PEMF Vet; kedilerde yapay zekâ ile teşhis ve PEMF (darbeli manyetik alan) ile seans uygulayan bir platformdur. Bu client, uygulamayı bilgisayarınıza indirir, kurar ve başlatır. Aşağıdaki adımlar hiç deneyimi olmayan biri için hazırlanmıştır — sırayla takip etmeniz yeterli.",
+      "profTitle": "3 Profil — hangisi sizin için?",
+      "profiles": {
+        "p01": {
+          "does": "Kedinizin kamera görüntüsüyle yapay zekâ ön-teşhisi yapar: hastalık, organ, görüntü ve ses analizi. Cihaz veya seans İÇERMEZ.",
+          "key": "home",
+          "use": {
+            "u01": "Uygulama açılınca ‘Ev Sahibi’ profilini seçip hesabınızla girin.",
+            "u02": "‘Akıllı Teşhis’ ekranına gidin.",
+            "u03": "Kameranızı kediye doğrultun ya da bir fotoğraf/ses dosyası yükleyin.",
+            "u04": "Sonucu ve önerileri okuyun — kesin tanı için mutlaka bir veteriner hekime danışın."
+          },
+          "who": "Evcil hayvan (kedi) sahipleri için"
+        },
+        "p02": {
+          "does": "Teşhis + PEMF cihazıyla seans uygulama + hasta kaydı, seans geçmişi, sensör takibi, KPI paneli ve simülatör. Ev Sahibi teşhis modellerini de içerir (bu yüzden boyutu daha büyüktür).",
+          "key": "vet",
+          "use": {
+            "u01": "‘Veteriner Hekim’ profilini seçip girin.",
+            "u02": "‘Hastalar’ ekranından yeni hasta ekleyin.",
+            "u03": "‘Kontrol’ ekranından seansı başlatın; bobinleri elle ayarlayın veya ‘AI Pro’ ile otonom sürün.",
+            "u04": "‘Sensörler’ ve ‘Geçmiş’ ile seansı izleyin; ‘KPI’ ile klinik istatistiklerinizi görün."
+          },
+          "who": "Veteriner hekimler ve klinikler için"
+        },
+        "p03": {
+          "does": "Petri, histopatoloji, böbrek ve fantom yapay zekâ modelleri; örnek/veri kaydı ve geçmiş. Cihaz İÇERMEZ.",
+          "key": "research",
+          "use": {
+            "u01": "‘Araştırma Modu’ profilini seçip girin.",
+            "u02": "‘Akıllı Teşhis’ten ilgili araştırma modelini seçin.",
+            "u03": "Görüntü veya veri dosyanızı yükleyin.",
+            "u04": "Sonuçları inceleyip ‘Geçmiş’e kaydedin."
+          },
+          "who": "Araştırmacılar ve laboratuvarlar için"
+        }
+      },
+      "steps": {
+        "s01": {
+          "b": "En üstteki 'Ana uygulama' kartı her kurulumda gelir ve kaldırılamaz (arayüz ve ortak modeller; boyutu sağında yazar, kuruluysa 'kurulu' der). Altındaki 3 profilden en az birini işaretleyin (Ev Sahibi, Veteriner Hekim, Araştırma). Birden fazla seçebilirsiniz; her kartın sağında YALNIZ kendi indirme boyutu yazar, düğmedeki toplam yalnız gerçekten inecekleri sayar (kurulu değilse ana uygulama + yeni seçtikleriniz). 'Profilleri değiştir'de zaten kurulu profil 'kurulu' der ve sayılmaz; işaretini kaldırdığınız kurulu profil 'kaldırılacak' rozeti alır ve düğmeye basınca bu bilgisayardan silinir.",
+          "t": "Profil(ler)inizi seçin"
+        },
+        "s02": {
+          "b": "Seçtiğiniz modeller inip kurulur. Çubukta yüzde, hız (MB/s) ve kalan süre görünür. İstediğinizde Duraklat veya İptal edebilir; internet kesilse ya da bilgisayar kapansa bile tekrar açtığınızda kaldığınız yerden devam edebilirsiniz.",
+          "t": "‘Kur ve Başlat’a tıklayın"
+        },
+        "s03": {
+          "b": "Kurulum bitince uygulama tarayıcınızda açılır. Sonraki açılışlarda bu penceredeki ‘Başlat’ düğmesiyle saniyeler içinde açarsınız.",
+          "t": "Uygulama otomatik açılır"
+        }
+      },
+      "stepsTitle": "Kurulum — 3 adım",
+      "trouble": {
+        "k01": {
+          "b": "Bu penceredeki ‘Onar’a basın — paketleri yeniden doğrular ve eksikleri tamamlar.",
+          "t": "Uygulama açılmıyor veya bir model eksik"
+        },
+        "k02": {
+          "b": "Uygulamayı tekrar açın; ‘Kaldığınız yerden devam edilsin mi?’ sorusuna ‘Devam Et’ deyin. İndirilen kısım korunmuştur.",
+          "t": "İndirme yarıda kaldı (internet kesildi / bilgisayar kapandı)"
+        },
+        "k03": {
+          "b": "‘Uygulamayı kaldır’a basın (hasta verileriniz KORUNUR), sonra tekrar kurun.",
+          "t": "Baştan kurmak istiyorum"
+        },
+        "k04": {
+          "b": "Üstteki ‘Web Sitesi’ veya alttaki ‘Destek’ bağlantısını kullanın.",
+          "t": "Daha fazla yardım"
+        }
+      },
+      "troubleTitle": "Sorun giderme"
+    },
+    "langLabel": "dil",
+    "loginBtn": "Giriş yap",
+    "loginEmail": "E-posta",
+    "loginEmpty": "E-posta ve parola gerekli.",
+    "loginForgot": "Şifremi unuttum",
+    "loginLead": "PEMF Vet hesabınızla giriş yapın — uygulama sizden bir daha giriş istemeyecek.",
+    "loginNoPersist": "Bu platformda oturum güvenli biçimde saklanamıyor — giriş yalnız bu açılış için geçerli.",
+    "loginPass": "Parola",
+    "loginPwInvisible": "Parolada görünmeyen bir karakter var (kopyala-yapıştırdan gelmiş olabilir). Silip elle yazmayı deneyin.",
+    "loginPwSpace": "Parolanızın başında veya sonunda boşluk var — genelde yapıştırmadan gelir. “Göster” ile kontrol edin.",
+    "loginRemember": "Beni hatırla",
+    "loginRequired": "Kurulum ve onarım için giriş yapmalısınız.",
+    "loginSignup": "Hesap oluştur",
+    "loginTitle": "Giriş yapın",
+    "loginWait": "Giriş yapılıyor…",
+    "logout": "Çıkış",
+    "logoutBody": "Bu bilgisayardaki oturumunuz silinecek ve uygulamadaki giriş kapatılacak. Devam edilsin mi?",
+    "logoutTitle": "Çıkış yap",
+    "luReady": "PEMF Vet Client {{surum}} yayınlandı — uygulamayı kapatıp açtığınızda kurulacak.",
+    "noChange": "Değişiklik yok",
+    "notInstalled": "Uygulama kurulu değil.",
+    "notSupported": "Bu platform ({{platform}}) için uygulama paketi henüz yayınlanmadı.",
+    "offline": "Çevrimdışı",
+    "offlineLogin": "İnternet bağlantısı yok — giriş yapılamıyor. Kurulu uygulamayı çevrimdışı başlatabilirsiniz.",
+    "offlineReady": "İnternet bağlantısı yok — güncelleme kontrolü ve profil listesi alınamadı. Kurulu uygulamayı yine de başlatabilirsiniz.",
+    "offlineSelect": "İnternet bağlantısı yok; kurulum için bağlantı gerekli. Bağlantıyı kontrol edip tekrar deneyin.",
+    "offlineStart": "Çevrimdışı başlat",
+    "ok": "Tamam",
     "pause": "Duraklat",
     "pausedLead": "İndirme duraklatıldı — inen kısım bilgisayarınızda korundu. Kaldığınız yerden devam edebilirsiniz.",
     "pausedTitle": "Duraklatıldı",
+    "profilMeta": {
+      "home": {
+        "aciklama": "Kedi teşhis modelleri — hastalık, organ, görüntü, ses",
+        "ad": "Ev Sahibi"
+      },
+      "research": {
+        "aciklama": "Araştırma modelleri — petri, histopatoloji, böbrek, fantom",
+        "ad": "Araştırma Modu"
+      },
+      "vet": {
+        "aciklama": "Klinik teşhis + seans (em_kedi, termal)",
+        "ad": "Veteriner Hekim"
+      }
+    },
+    "pwHide": "Gizle",
+    "pwHideTitle": "Parolayı gizle",
+    "pwShow": "Göster",
+    "pwShowTitle": "Parolayı göster",
+    "ready": "hazır — tarayıcıda açıldı",
     "readyLead": "PEMF Vet kuruldu. Uygulamayı başlatın veya profillerinizi güncelleyin.",
     "readyTitle": "Hazır!",
+    "reconnTitle": "Yeniden bağlanılıyor…",
+    "reconnecting": "bağlantı koptu, yeniden deneniyor",
+    "removeFailed": "Profil kaldırılamadı: {{neden}}",
+    "removing": "Kaldırılıyor…",
+    "repair": "Kurulumu onar",
+    "repairBody": "Kurulu paketler yeniden doğrulanıp eksik/bozuk dosyalar onarılacak. Bu birkaç dakika sürebilir. Devam edilsin mi?",
+    "repairTitle": "Kurulumu onar",
     "resume": "Devam Et",
-    "tagline": "Veteriner PEMF seans + yapay zekâ teşhis platformu"
+    "resumeBody": "Önceki kurulum tamamlanmadı (internet kesilmiş veya kapatılmış olabilir). İndirilen kısım korundu — kaldığınız yerden devam edilsin mi?",
+    "resumeNo": "İptal et",
+    "resumeTitle": "Kurulum yarım kaldı",
+    "resumeYes": "Devam Et",
+    "retry": "Tekrar dene",
+    "rtBg": "Yeni sürüm arka planda indiriliyor — uygulamayı şimdi kullanabilirsiniz, güncelleme bir sonraki açılışta kurulacak.",
+    "rtBgCancelled": "Güncelleme indirmesi iptal edildi — bir sonraki açılışta yeniden denenecek.",
+    "rtBgDone": "Yeni sürüm indirildi — güncelleme bir sonraki açılışta kurulacak.",
+    "rtBgFail": "Arka plan indirmesi tamamlanamadı — bir sonraki açılışta kaldığı yerden denenecek.",
+    "rtBgPaused": "Güncelleme indirmesi duraklatıldı — inen kısım korundu, \"Devam et\" ile kaldığı yerden sürer.",
+    "rtBgPrep": "Hazırlanıyor…",
+    "rtBlocked": "Yeni sürüm kurulmayı denedi ama cihazda başlayamadı; güvenlik için eski sürüme dönüldü. Otomatik deneme durduruldu — \"Onar\" ile yeniden deneyebilir ya da bir sonraki sürümü bekleyebilirsiniz.",
+    "rtBusy": "Seans sürerken güncelleme yapılmaz — seans bitince otomatik güncellenecek.",
+    "rtDone": "Uygulama güncellendi.",
+    "rtLead": "Yeni bir uygulama sürümü bulundu — indirilip kuruluyor. Bittiğinde başlatabilirsiniz.",
+    "rtReady": "Güncelleme hazır — uygulamayı kapatıp açtığınızda kurulacak.",
+    "rtRecall": "⚠️ ÖNEMLİ GÜVENLİK GÜNCELLEMESİ bekliyor. Bu sürüm artık desteklenmiyor; uygulamayı KAPATIP AÇIN ki güncelleme kurulsun. Seans sürüyorsa bitmesini bekleyin.",
+    "rtRollback": "Yeni sürüm açılamadı; önceki çalışan sürüme geri dönüldü. Uygulama kullanılabilir.",
+    "rtRollbackFail": "Yeni sürüm açılamadı ve geri alma tamamlanamadı. Lütfen \"Onar\" ile kurulumu yenileyin.",
+    "rtTitle": "Uygulama güncelleniyor…",
+    "runningLead": "PEMF Vet çalışıyor. Uygulama penceresini kapatırsanız buradan yeniden başlatabilirsiniz.",
+    "selCancel": "Geri dön",
+    "selLead": "Ana uygulama her kurulumda gelir (kaldırılamaz). Profillerden en az birini seçin — yalnız seçtikleriniz indirilir.",
+    "selTitle": "Kullanım profilinizi seçin",
+    "selfUpdateFailed": "Başlatıcı güncellemesi tamamlanamadı — uygulama normal açılıyor. Bir sonraki açılışta yeniden denenecek.",
+    "start": "Başlat",
+    "startChecking": "Güncelleme kontrol ediliyor…",
+    "starting": "başlatılıyor",
+    "tagline": "Veteriner PEMF seans + yapay zekâ teşhis platformu",
+    "uninBody": "İndirilen uygulama ve AI modelleri silinecek.\n\nKORUNAN VERİLER (tıbbi kayıt — kaldırma ile SİLİNMEZ):\n• Hasta kayıtları\n• Seans geçmişi\n• AI analiz geçmişi\nKonum: %APPDATA%\\PEMF_GUI\n\nBunları da silmek istiyorsanız KALDIRMADAN ÖNCE uygulama içinden silin (Hastalar → \"Tümünü Sil\", AI Geçmişi → \"Geçmişi Sil\").\n\nDevam edilsin mi?",
+    "uninTitle": "Uygulamayı kaldır",
+    "uninstall": "Uygulamayı kaldır",
+    "updatingApply": "Güncelleme uygulanıyor, uygulama yeniden başlatılıyor…",
+    "updatingLead": "Yeni bir başlatıcı sürümü bulundu — indirilip kuruluyor. Uygulama kendiliğinden yeniden açılacak.",
+    "updatingTitle": "Başlatıcı güncelleniyor…",
+    "verifying": "bütünlük doğrulanıyor",
+    "web": "Web Sitesi",
+    "willRemove": "kaldırılacak"
   }
 }

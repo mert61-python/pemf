@@ -25,6 +25,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from i18n_yardimci import launcher_katalog_js as katalog_js
+from i18n_yardimci import launcher_ui as ui
 
 _KOK = Path(__file__).resolve().parent.parent
 _UI = _KOK / "launcher" / "app" / "ui" / "index.html"
@@ -81,8 +83,9 @@ def _kos(
 ) -> dict:
     ham = _UI.read_text(encoding="utf-8")
     parcalar = [
-        _blok(ham, "      const I18N = {", "\n      };"),
         _blok(ham, "      const PROFILE_META = {", "\n      };"),
+        _satir(ham, "const tf = "),
+        _satir(ham, "const profAciklama = "),
         _satir(ham, "const PROFILE_DEPS"),
         _satir(ham, "const PROFILE_SOFT_DEPS"),
         _satir(ham, "const PROFILE_ORDER"),
@@ -111,7 +114,8 @@ def _kos(
     kod = "\n".join(parcalar)
     js = f"""
 let LANG = {json.dumps(lang)};
-const t = () => I18N[LANG];
+const KATALOG = {katalog_js()};
+const t = () => KATALOG[LANG];
 let busy = false, installed = {json.dumps(list(kurulu))};
 let profileKeys = ["home", "vet", "research"];
 let sizes = {{ home: {HOME}, vet: {VET}, research: {RESEARCH} }};
@@ -375,15 +379,14 @@ def test_yedek_hedefi_saglamsa_not_yok(tmp_path):
 
 
 def test_sozluk_iki_dilde_yeni_anahtarlari_tasir():
-    ham = _UI.read_text(encoding="utf-8")
-    tr = _blok(ham, "        tr: {", "\n        },")
-    en = _blok(ham, "        en: {", "\n        },")
+    # I18N-P1 · 11a: sözlük kataloğa taşındı; işlev değerli anahtarlar `{{ad}}` yer tutuculu şablon (`tf`)
+    tr, en = ui("tr"), ui("en")
     for ad in ("applyStart", "noChange", "keepOne", "willRemove", "removing", "backupSameDisk", "backupChoose"):
-        assert re.search(rf"\b{ad}:\s*\"[^\"]+\"", tr), f"tr sözlüğünde {ad} yok/boş"
-        assert re.search(rf"\b{ad}:\s*\"[^\"]+\"", en), f"en sözlüğünde {ad} yok/boş"
-    for ad in ("removeFailed", "backupUnreachable"):
-        assert re.search(rf"\b{ad}:\s*\(\w+\)\s*=>", tr), f"tr sözlüğünde {ad} fonksiyonu yok"
-        assert re.search(rf"\b{ad}:\s*\(\w+\)\s*=>", en), f"en sözlüğünde {ad} fonksiyonu yok"
+        assert tr.get(ad), f"tr kataloğunda {ad} yok/boş"
+        assert en.get(ad), f"en kataloğunda {ad} yok/boş"
+    for ad, yer in (("removeFailed", "{{neden}}"), ("backupUnreachable", "{{yol}}")):
+        assert yer in tr[ad], f"tr kataloğunda {ad} şablonu {yer} taşımıyor"
+        assert yer in en[ad], f"en kataloğunda {ad} şablonu {yer} taşımıyor"
 
 
 def test_kur_dugmesi_fark_akisina_bagli_ve_yedek_notu_kodda_gomulu_degil():

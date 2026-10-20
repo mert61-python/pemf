@@ -13,17 +13,17 @@ tests/test_acilis_DB_acilamasa_ACIL_DURDUR_yasar.py :: launcher/app/src/main.rs 
 tests/test_agir_import_YARIS_YOK.py :: apps/backend/backend_service.py apps/backend/servers/ai_router.py apps/backend/servers/api_server.py apps/backend/utils/agir_import.py
 tests/test_ai_analiz_hasta_kimligi.py :: apps/ui/src/screens/AiHubScreen.tsx apps/ui/src/utils/sonAnaliz.ts
 tests/test_ai_analiz_pdf.py :: apps/backend/servers/api_server.py apps/backend/servers/auth.py
-tests/test_ai_donanim_rozeti_gurultusu.py :: apps/backend/servers/ai_router.py apps/ui/src/screens/AiHubScreen.tsx
+tests/test_ai_donanim_rozeti_gurultusu.py [ÇEVRİLDİ] :: apps/backend/servers/ai_router.py apps/ui/src/screens/AiHubScreen.tsx
 tests/test_ai_gomulu_gpu_paritesi.py :: apps/backend/servers/ai_client.py apps/backend/servers/ai_router.py apps/ui/src/screens/AiHubScreen.tsx
 tests/test_ai_gorsel_kodlama_kalitesi.py :: apps/backend/servers/ai_router.py
 tests/test_ai_gorsel_sahne_capalari.py :: apps/ui/src/components/domain/AiProPanel.tsx apps/ui/src/components/ui/GorselSahne.tsx apps/ui/src/screens/AiHubScreen.tsx apps/ui/src/utils/kameraKutusu.ts
 tests/test_ai_hazirlik_envanteri.py :: apps/backend/servers/ai_router.py
 tests/test_ai_kare_boyutu.py :: apps/backend/servers/ai_router.py apps/ui/src/utils/kameraKutusu.ts
 tests/test_ai_mikroservis_modalite_kapisi.py :: apps/backend/servers/ai_router.py
-tests/test_ai_panel_yayini.py :: apps/backend/servers/ai_router.py
-tests/test_ai_pro_arayuz_profil_tablosu.py :: apps/backend/servers/ai_pro_hedef.py apps/ui/src/components/domain/AiProPanel.tsx apps/ui/src/components/domain/aiProProfilleri.ts apps/ui/src/components/domain/aipro/HedefSecici.tsx apps/ui/src/components/domain/aipro/KalibrasyonRozeti.tsx apps/ui/src/components/domain/aipro/ModelSecimKartlari.tsx apps/ui/src/screens/AiHubScreen.tsx
-tests/test_ai_pro_asamali_akis.py :: apps/backend/servers/ai_router.py apps/ui/src/components/domain/AiProPanel.tsx
-tests/test_ai_pro_red_gerekcesi_ETIKETI_gercegi_soyler_C2_1_14.py :: apps/ui/src/components/domain/AiSpecApprovalModal.tsx
+tests/test_ai_panel_yayini.py [ÇEVRİLDİ] :: apps/backend/servers/ai_router.py
+tests/test_ai_pro_arayuz_profil_tablosu.py [ÇEVRİLDİ] :: apps/backend/servers/ai_pro_hedef.py apps/ui/src/components/domain/AiProPanel.tsx apps/ui/src/components/domain/aiProProfilleri.ts apps/ui/src/components/domain/aipro/HedefSecici.tsx apps/ui/src/components/domain/aipro/KalibrasyonRozeti.tsx apps/ui/src/components/domain/aipro/ModelSecimKartlari.tsx apps/ui/src/screens/AiHubScreen.tsx
+tests/test_ai_pro_asamali_akis.py [ÇEVRİLDİ] :: apps/backend/servers/ai_router.py apps/ui/src/components/domain/AiProPanel.tsx
+tests/test_ai_pro_red_gerekcesi_ETIKETI_gercegi_soyler_C2_1_14.py [ÇEVRİLDİ] :: apps/ui/src/components/domain/AiSpecApprovalModal.tsx
 tests/test_ai_pro_saglayici_delegasyon.py :: apps/backend/servers/ai_pro_hedef.py
 tests/test_ai_pro_surus_degismezleri.py :: apps/backend/servers/ai_pro_hedef.py apps/backend/servers/ai_router.py
 tests/test_ai_pro_web_hazirlik.py :: apps/ui/src/components/domain/AiProPanel.tsx
@@ -31,7 +31,7 @@ tests/test_ai_servis_8100_kapisi.py :: apps/backend/servers/ai_router.py apps/ba
 tests/test_alan_anahtari_ICE_AKTARMADA_alinmaz_A21.py :: apps/backend/backend_service.py
 tests/test_allowed_hosts_rebinding.py :: launcher/core/src/install.rs
 tests/test_arayuz_yazi_olcegi_kapisi.py :: apps/ui/src/components/domain/CoilParameterPanel.tsx apps/ui/src/components/domain/SessionProgressCard.tsx apps/ui/src/theme/fonts.ts apps/ui/src/theme/tokens.ts
-tests/test_arkaplan_indirme_gostergesi.py :: launcher/app/src/main.rs
+tests/test_arkaplan_indirme_gostergesi.py [ÇEVRİLDİ] :: launcher/app/src/main.rs
 tests/test_at_rest_encryption_rollout.py :: apps/backend/database/sqlcipher_util.py launcher/core/src/install.rs
 tests/test_bakim_TEK_silici_sensor_sozlesmesi_D244.py :: apps/backend/services/headless_db_maintenance.py
 tests/test_bayat_cihaz_gorunur.py :: apps/ui/src/services/deviceRegistry.ts
@@ -49,7 +49,6 @@ tests/test_calisma_ani_pip_yasagi.py :: apps/backend/backend_service.py apps/bac
 tests/test_cekirdek_model_cozumu.py :: launcher/core/src/install.rs
 tests/test_changelog_buildid_etiketi.py :: launcher/core/src/flow.rs launcher/core/src/install.rs
 tests/test_ci_bagimlilik_kapanisi.py :: apps/backend/backend_service.py
-tests/test_client_arayuz_sade_dil.py :: launcher/app/ui/index.html
 tests/test_cv_ortak_tek_uygulama.py :: apps/backend/servers/ai_router.py
 tests/test_data_dir_migration.py :: launcher/core/src/install.rs
 tests/test_denetim_kalan_maddeler_OLCULDU.py :: apps/backend/database/treatment_history_db.py apps/backend/servers/ai_pro_hedef.py apps/backend/servers/ai_router.py apps/backend/servers/api_server.py
@@ -75,12 +74,13 @@ tests/test_guncelleme_uclari_yetki.py :: apps/backend/servers/api_server.py apps
 tests/test_gzip_sikistirma.py :: apps/backend/servers/api_server.py
 tests/test_hasta_LISTESI_okunamazken_BOS_demez_D266b.py :: apps/backend/servers/patient_router.py apps/ui/src/screens/PatientScreen.tsx
 tests/test_hasta_arama_turkce.py :: apps/backend/database/patient_database.py apps/backend/utils/pdf_report_generator.py apps/ui/src/utils/aramaNormalize.ts
-tests/test_hata_mesaji_anlasilir.py :: launcher/core/src/flow.rs launcher/core/src/net.rs
+tests/test_hata_mesaji_anlasilir.py [ÇEVRİLDİ] :: launcher/core/src/flow.rs launcher/core/src/net.rs
 tests/test_hotspot_autostart.py [ÇEVRİLDİ] :: apps/backend/backend_service.py apps/ui/src/components/domain/GatewayStatusPanel.tsx
 tests/test_i18n_ai_etiket_K7.py :: apps/backend/utils/ai_rapor_ogeleri.py apps/ui/src/screens/AiHubScreen.tsx apps/ui/src/utils/aiDetail.ts
-tests/test_i18n_araclar.py :: apps/backend/servers/api_server.py apps/backend/utils/seans_durum.py apps/ui/src/components/ui/GlobalEmergencyStop.tsx apps/ui/src/screens/AuthScreen.tsx apps/web/src/App.tsx apps/web/src/pages/Home.tsx dema-terapi-simülatörü/src/App.tsx launcher/app/src/main.rs launcher/app/ui/index.html launcher/app/windows/hooks.nsi
+tests/test_i18n_araclar.py :: apps/backend/servers/api_server.py apps/backend/utils/klinik_asgari.py apps/backend/utils/seans_durum.py apps/ui/src/components/ui/GlobalEmergencyStop.tsx apps/ui/src/screens/AuthScreen.tsx apps/web/src/App.tsx apps/web/src/pages/Home.tsx dema-terapi-simülatörü/src/App.tsx launcher/app/src/main.rs launcher/app/ui/index.html launcher/app/windows/hooks.nsi
 tests/test_i18n_auth_sayfa.py :: apps/ui/auth-pages/reset.html apps/ui/auth-pages/verified.html
 tests/test_i18n_esle_K1.py :: launcher/app/windows/hooks.nsi
+tests/test_i18n_estop_mandali_eylem_kodu.py :: apps/ui/src/components/ui/EstopMandalBandi.tsx apps/ui/src/types/domain.ts
 tests/test_i18n_kritik_K5.py :: apps/ui/src/components/ui/GlobalEmergencyStop.tsx apps/ui/src/i18n/kritik.ts
 tests/test_i18n_launcher_altyapi.py :: launcher/app/src/main.rs launcher/app/ui/index.html launcher/app/windows/hooks.nsi launcher/core/src/dil.rs
 tests/test_i18n_paket_K6.py :: apps/backend/utils/ceviri.py apps/ui/app/_layout.tsx apps/ui/src/i18n/index.ts apps/ui/src/i18n/kaynaklar.ts apps/web/src/i18n/index.ts apps/web/src/i18n/kaynaklar.ts apps/web/src/main.tsx dema-terapi-simülatörü/src/i18n/index.ts dema-terapi-simülatörü/src/main.tsx launcher/app/ui/index.html launcher/core/src/dil.rs
@@ -114,7 +114,7 @@ tests/test_kurtarma_kodu_AYNI_metin_degisince_E2_1_9.py :: apps/backend/utils/ba
 tests/test_kurtarma_zarfi_saglamlik.py :: apps/backend/utils/support_bundle.py
 tests/test_kurulum_kilidi_tum_akislarda.py :: launcher/app/src/main.rs
 tests/test_kvkk_transfer_claims.py :: apps/backend/database/thdb_pii.py apps/backend/database/thdb_seans.py apps/backend/servers/api_server.py apps/backend/servers/sync_worker.py apps/backend/servers/system_router.py apps/backend/services/headless_db_maintenance.py apps/backend/services/kvkk_anonimlestirme.py apps/web/src/pages/Legal.tsx
-tests/test_launcher_indirme_denetimi.py :: launcher/app/src/main.rs
+tests/test_launcher_indirme_denetimi.py [ÇEVRİLDİ] :: launcher/app/src/main.rs
 tests/test_launcher_onay_geri_alma_DALLARA_pinli.py :: launcher/app/src/main.rs
 tests/test_launcher_responsive_kapisi.py :: launcher/app/src/main.rs
 tests/test_launcher_site_yol_sozlesmesi.py :: apps/web/src/App.tsx apps/web/src/context/AuthModal.tsx apps/web/src/pages/AuthRoute.tsx dema-terapi-simülatörü/src/App.tsx launcher/app/ui/index.html
@@ -132,7 +132,7 @@ tests/test_ota_host_pini_PYTHON_RUST_aynasi_D1109.py :: apps/backend/servers/upd
 tests/test_oturum_rotasyonu_bagli.py :: apps/ui/src/services/desktopSession.ts launcher/app/src/main.rs launcher/core/src/backend.rs launcher/core/src/secret_store.rs
 tests/test_pdf_turkce_karakter.py :: apps/backend/utils/pdf_report_generator.py
 tests/test_pemf_simulate_tek_kaynak.py :: apps/backend/servers/api_server.py
-tests/test_periyodik_guncelleme_kontrolu.py :: launcher/app/src/main.rs launcher/core/src/flow.rs launcher/core/src/install.rs
+tests/test_periyodik_guncelleme_kontrolu.py [ÇEVRİLDİ] :: launcher/app/src/main.rs launcher/core/src/flow.rs launcher/core/src/install.rs
 tests/test_petri_ayar_parametreleri.py :: apps/backend/servers/ai_router.py apps/ui/src/screens/AiHubScreen.tsx
 tests/test_petri_plausibility.py :: apps/backend/utils/image_domain.py
 tests/test_pii_retention_gate.py :: apps/backend/controllers/hardware_controller.py
@@ -144,11 +144,11 @@ tests/test_recovery_reachable.py :: apps/backend/backend_service.py apps/backend
 tests/test_responsive_grafik_kapisi.py :: apps/ui/src/components/domain/AiProPanel.tsx apps/ui/src/components/domain/SessionDetailModal.tsx apps/ui/src/components/visual/RealtimeChart.tsx apps/ui/src/components/visual/chartLayout.ts apps/ui/src/context/LiveDataContext.tsx apps/ui/src/screens/AiHubScreen.tsx apps/ui/src/screens/KpiDashboardScreen.tsx apps/ui/src/screens/SensorMonitorScreen.tsx apps/ui/src/utils/kameraKutusu.ts
 tests/test_rollback_wal_temizligi.py :: apps/backend/database/auth_db.py apps/backend/database/treatment_history_db.py
 tests/test_runbook_GOC_GERI_ALMA_kenar_dosyalari_Y128.py :: apps/backend/database/thdb_sema.py apps/backend/database/treatment_history_db.py
-tests/test_runtime_geri_alma_dongusu_bagli.py :: launcher/app/src/main.rs launcher/core/src/flow.rs
+tests/test_runtime_geri_alma_dongusu_bagli.py [ÇEVRİLDİ] :: launcher/app/src/main.rs launcher/core/src/flow.rs
 tests/test_saglik_db_kapisi_bagli.py :: launcher/app/src/main.rs launcher/core/src/backend.rs
-tests/test_sahte_basarili_seans.py :: apps/backend/servers/api_server.py apps/ui/src/components/domain/SessionDetailModal.tsx
+tests/test_sahte_basarili_seans.py [ÇEVRİLDİ] :: apps/backend/servers/api_server.py apps/ui/src/components/domain/SessionDetailModal.tsx
 tests/test_scratch_endpoint.py :: apps/backend/servers/ai_router.py
-tests/test_seans_durum_etiketi.py :: apps/backend/database/thdb_seans.py apps/backend/database/treatment_history_db.py apps/ui/src/screens/TreatmentHistoryScreen.tsx
+tests/test_seans_durum_etiketi.py [ÇEVRİLDİ] :: apps/backend/database/thdb_seans.py apps/backend/database/treatment_history_db.py apps/ui/src/screens/TreatmentHistoryScreen.tsx
 tests/test_self_update_ekran_kilidi.py :: launcher/app/src/main.rs
 tests/test_sema_gocu_KILITTE_sessiz_gecmez_D224.py :: apps/backend/database/patient_database.py apps/backend/database/thdb_sema.py
 tests/test_sensor_kaydedici.py :: apps/backend/servers/api_server.py apps/backend/servers/sensor_kaydedici.py
@@ -163,7 +163,7 @@ tests/test_stm_uyumluluk_denetimi_2026_09_03.py :: apps/backend/servers/live_sta
 tests/test_stm_yak_GUVENLIK.py :: apps/backend/utils/stm_yakma.py
 tests/test_supabase_okuma_rpc_uzerinden.py :: apps/web/api/_lib/util.ts
 tests/test_supabase_sql_invariants.py :: apps/backend/servers/jeton.py
-tests/test_surum_kaymasi_guvenlik_sozlesmesi.py :: apps/backend/servers/api_server.py apps/ui/src/components/domain/SurumFarkiBanner.tsx apps/ui/src/components/ui/AppShell.tsx apps/ui/src/hooks/useDonanimCalisiyor.ts apps/ui/src/hooks/useSessionControl.ts apps/ui/src/services/apiClient.ts apps/ui/src/services/discovery.ts
+tests/test_surum_kaymasi_guvenlik_sozlesmesi.py [ÇEVRİLDİ] :: apps/backend/servers/api_server.py apps/ui/src/components/domain/SurumFarkiBanner.tsx apps/ui/src/components/ui/AppShell.tsx apps/ui/src/hooks/useDonanimCalisiyor.ts apps/ui/src/hooks/useSessionControl.ts apps/ui/src/services/apiClient.ts apps/ui/src/services/discovery.ts
 tests/test_tam_temizlik_JETON_uc_yol_ve_ESKI_kurulum_kaydi_E2_2_5.py :: apps/backend/servers/jeton.py
 tests/test_teardown_kimlik_dogrulama.py :: apps/backend/database/sqlcipher_util.py apps/backend/utils/secrets_manager.py
 tests/test_teardown_system_kasasi.py :: apps/backend/database/sqlcipher_util.py

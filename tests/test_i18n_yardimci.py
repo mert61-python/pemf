@@ -70,3 +70,15 @@ def test_gorunur_satir_NSIS_iletisini_TR_degeriyle_acar():
     assert (
         iy.gorunur_satir('DetailPrint "$(PEMF_olmayanAnahtar)"', "launcher") == 'DetailPrint "$(PEMF_olmayanAnahtar)"'
     )
+
+
+def test_launcher_ui_agaci_iki_dilde_ayni_anahtarlar_ve_js_sabiti():
+    """P1 · 11a: launcher arayüz sözlükleri kataloğa taşındı; testler bu iki yardımcıdan okur."""
+    import json
+
+    tr, en = iy.launcher_ui("tr"), iy.launcher_ui("en")
+    assert tr.keys() == en.keys(), sorted(tr.keys() ^ en.keys())
+    assert tr["profilMeta"]["home"]["ad"] == "Ev Sahibi" and en["profilMeta"]["home"]["ad"] == "Pet Owner"
+    assert tr["kilavuz"]["steps"]["s01"]["t"] and en["kilavuz"]["steps"]["s01"]["t"]
+    js = json.loads(iy.launcher_katalog_js())
+    assert set(js) == {"tr", "en"} and js["tr"] == tr and js["en"] == en

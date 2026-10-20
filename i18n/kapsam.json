@@ -346,7 +346,7 @@
    "sira": 11,
    "kritik": false,
    "aciklama": "launcher arayüzü (index.html TEK dosya — mevcut TR/EN sözlüğü kataloğa)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 421,
    "dosyaSayisi": 1
   },
@@ -7046,10 +7046,267 @@
    "yuzey": "launcher",
    "grup": "launcher-11a-ui",
    "sira": 11,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 421,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Veteriner PEMF seans + yapay zekâ teşhis platformu",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.tagline` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "dil",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.langLabel` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "TR",
+     "gerekce": "dil düğmesi kodu (TR / EN) — iki dilde aynı, dilin kendi adı"
+    },
+    {
+     "metin": "EN",
+     "gerekce": "dil düğmesi kodu (TR / EN) — iki dilde aynı, dilin kendi adı"
+    },
+    {
+     "metin": "Web Sitesi",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.footWeb` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Kılavuz",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.guide` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Hakkında",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.about` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Çıkış",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.logout` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Çevrimdışı",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.offline` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "v—",
+     "gerekce": "sürüm yer tutucusu — çalışma anında gerçek sürümle değişir"
+    },
+    {
+     "metin": "Ortam algılanıyor…",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.detect` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Giriş yapın",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.loginTitle` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "PEMF Vet hesabınızla giriş yapın — uygulama sizden bir daha giriş istemeyecek.",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.loginLead` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "E-posta",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.loginEmail` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Parola",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.loginPass` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Parolayı göster",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.pwShowTitle` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Göster",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.pwShow` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Beni hatırla",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.loginRemember` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Giriş yap",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.loginBtn` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Şifremi unuttum",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.loginForgot` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Hesap oluştur",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.loginSignup` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Çevrimdışı başlat",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.offlineStart` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Kullanım profilinizi seçin",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.selTitle` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Ana uygulama her kurulumda gelir (kaldırılamaz). Profillerden en az birini seçin — yalnız seçtikleriniz indirilir.",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.selLead` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Kur ve Başlat",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.install` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Geri dön",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.selCancel` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "İndiriliyor…",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.instDl` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Duraklat",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.bgPause` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Devam Et",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.resume` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "İptal",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.bgCancel` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Başlatıcı güncelleniyor…",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.guncTitle` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Hazır!",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.readyTitle` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "PEMF Vet kuruldu. Uygulamayı başlatın veya profillerinizi güncelleyin.",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.readyLead` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Başlat",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.start` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Profilleri değiştir",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.change` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Onar",
+     "gerekce": "HTML'deki varsayılan metin — `applyLang()` `t-repair` öğesini `ui.repair` ile ÜZERİNE YAZAR"
+    },
+    {
+     "metin": "Uygulamayı kaldır",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.uninTitle` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "© İBİA Teknoloji Ltd. Şti.",
+     "gerekce": "tüzel kişi (şirket) adı — iki dilde aynı"
+    },
+    {
+     "metin": "Destek",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.footSupport` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "PEMF Vet hakkında",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.aboutTitle` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Hafif client. Seçtiğiniz kullanım profillerini indirir, SHA-256 ile doğrular, kurar ve uygulamayı tarayıcıda açar. Cihazınıza aynı ağdaki PEMF donanımına otomatik bağlanır.",
+     "gerekce": "HTML'deki eski varsayılan metin — `applyLang()` `t-about-body` öğesini `ui.aboutBody` ile ÜZERİNE YAZAR (ekranda görünmez)"
+    },
+    {
+     "metin": "Sürüm",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.aboutVer` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Platform",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.aboutPlat` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Tamam",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.ok` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Kullanım Kılavuzu",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.guideTitle` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "kapat",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.guideClose` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Emin misiniz?",
+     "gerekce": "onay penceresi varsayılan başlığı — `askConfirm` her çağrıda `confirm-title`ı çağıranın başlığıyla ÜZERİNE YAZAR"
+    },
+    {
+     "metin": "Vazgeç",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.cancel` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "Devam",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.cont` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "<svg class=\"icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">{{iconInner}}</svg>",
+     "gerekce": "SVG simge işaretlemesi / yolu — metin değil"
+    },
+    {
+     "metin": "<path d=\"M12 3v12m0 0 4-4m-4 4-4-4\"/><path d=\"M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2\"/>",
+     "gerekce": "SVG simge işaretlemesi / yolu — metin değil"
+    },
+    {
+     "metin": "<circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2\"/>",
+     "gerekce": "SVG simge işaretlemesi / yolu — metin değil"
+    },
+    {
+     "metin": "<svg viewBox=\"0 0 24 24\"><path d=\"{{deger1}}\"/></svg>",
+     "gerekce": "SVG simge işaretlemesi / yolu — metin değil"
+    },
+    {
+     "metin": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18\"/>",
+     "gerekce": "SVG simge işaretlemesi / yolu — metin değil"
+    },
+    {
+     "metin": "<svg class=\"icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m5 13 4 4L19 7\"/></svg>",
+     "gerekce": "SVG simge işaretlemesi / yolu — metin değil"
+    },
+    {
+     "metin": "bgbtn bgbtn-danger",
+     "gerekce": "CSS sınıf adı — metin değil"
+    },
+    {
+     "metin": "kaldı",
+     "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.etaLeft` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"
+    },
+    {
+     "metin": "· {{deger1}} GB",
+     "gerekce": "sayı + birim (GB) — iki dilde aynı, metin değil"
+    },
+    {
+     "metin": "card sel core",
+     "gerekce": "CSS sınıf adı — metin değil"
+    },
+    {
+     "metin": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#04211d\"><path d=\"m5 13 4 4L19 7\"/></svg>",
+     "gerekce": "SVG simge işaretlemesi / yolu — metin değil"
+    },
+    {
+     "metin": "<svg class=\"icon\" viewBox=\"0 0 24 24\"><path d=\"M4 6h16v10H4zM9 20h6M12 16v4\"/></svg>",
+     "gerekce": "SVG simge işaretlemesi / yolu — metin değil"
+    },
+    {
+     "metin": "{{deger1}} GB",
+     "gerekce": "sayı + birim (GB) — iki dilde aynı, metin değil"
+    },
+    {
+     "metin": "<svg class=\"icon\" viewBox=\"0 0 24 24\">{{deger1}}</svg>",
+     "gerekce": "SVG simge işaretlemesi / yolu — metin değil"
+    },
+    {
+     "metin": "<svg class=\"icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\"><path d=\"m5 13 4 4L19 7\"/></svg>",
+     "gerekce": "SVG simge işaretlemesi / yolu — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": "I18N-0 pilotu KISMİ: açılış / ilerleme paneli (15 anahtar) kataloğa; kalan sözlük anahtarları + işlev değerleri bekliyor"
   },

@@ -21,6 +21,7 @@ import re
 from pathlib import Path
 
 import pytest
+from i18n_yardimci import launcher_ui as katalog_ui
 
 _KOK = Path(__file__).resolve().parent.parent
 _UI = _KOK / "launcher" / "app" / "ui" / "index.html"
@@ -149,15 +150,18 @@ def test_geri_cagirmada_mesaj_YUKSELTILIR(ui):
 
 def test_geri_cagirma_metni_ne_YAPILACAGINI_soyler(ui):
     """'Desteklenmiyor' demek yetmez; kullanıcı ne yapacağını okumalı."""
-    for dil_ipucu in ("KAPATIP AÇIN", "CLOSE AND REOPEN"):
-        assert dil_ipucu in ui, f"geri çağırma metni eylem söylemiyor ({dil_ipucu})"
+    # I18N-P1 · 11a: sözlük kataloğa taşındı — eylem ipucu `rtRecall` metninde (her dil kendi metninde)
+    for dil, dil_ipucu in (("tr", "KAPATIP AÇIN"), ("en", "CLOSE AND REOPEN")):
+        assert dil_ipucu in katalog_ui(dil)["rtRecall"], f"geri çağırma metni eylem söylemiyor ({dil_ipucu})"
     # Seans sürüyorsa beklemesi gerektiği de yazmalı (kesme YOK).
-    assert "Seans sürüyorsa" in ui
+    assert "Seans sürüyorsa" in katalog_ui("tr")["rtRecall"]
 
 
 def test_i18n_iki_dilde_TAM(ui):
     for anahtar in ("rtReady", "rtRecall"):
-        assert ui.count(f"{anahtar}:") == 2, f"`{anahtar}` iki dilde de tanımlı olmalı"
+        assert katalog_ui("tr").get(anahtar) and katalog_ui("en").get(anahtar), (
+            f"`{anahtar}` iki dilde de tanımlı olmalı"
+        )
 
 
 def test_ayni_bildirim_TEKRAR_TEKRAR_basilmaz(ui):
@@ -287,4 +291,7 @@ def test_KRITIK_otomatik_kurulum_kapaliyken_SESSIZ_kalinmaz(ui):
 
 
 def test_launcher_bildirim_metni_IKI_DILDE(ui):
-    assert ui.count("luReady:") == 2, "launcher güncelleme bildirimi iki dilde tanımlı değil"
+    assert katalog_ui("tr").get("luReady") and katalog_ui("en").get("luReady"), (
+        "launcher güncelleme bildirimi iki dilde tanımlı değil"
+    )
+    assert "{{surum}}" in katalog_ui("tr")["luReady"] and "{{surum}}" in katalog_ui("en")["luReady"]

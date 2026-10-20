@@ -473,7 +473,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <div class="seg" role="group" aria-label="dil">
+        <div class="seg" id="lang-seg" role="group" aria-label="dil">
           <button id="lang-tr" class="on">TR</button>
           <button id="lang-en">EN</button>
         </div>
@@ -695,204 +695,33 @@
       const $ = (id) => document.getElementById(id);
 
       // ---------- i18n ----------
-      const I18N = {
-        tr: {
-          web: "Web Sitesi", about: "Hakkında", guide: "Kılavuz", guideTitle: "Kullanım Kılavuzu", authSlow: "Bağlantı yavaş — oturum arka planda doğrulanıyor. Uygulamayı şimdi başlatabilirsiniz.",
-          selTitle: "Kullanım profilinizi seçin",
-          selLead: "Ana uygulama her kurulumda gelir (kaldırılamaz). Profillerden en az birini seçin — yalnız seçtikleriniz indirilir.",
-          // Ana uygulama kartı (2026-09-06): en üstte, önceden seçili, KALDIRILAMAZ; boyutu katmanlardan.
-          // ⚠️ Ekranda "çekirdek" DENMEZ: sade-dil kapısı (test_client_arayuz_sade_dil) onu iç terim sayar.
-          coreName: "Ana uygulama", coreDesc: "Arayüz ve ortak modeller — her profil için gerekli",
-          coreTag: "zorunlu", coreInstalled: "kurulu", coreLocked: "Ana uygulama her kurulumda gelir; seçimi kaldırılamaz.",
-          install: "Kur ve Başlat", selCancel: "Geri dön",
-          // "Profilleri değiştir" FARK akışı (denetim 2026-09-06): ekle = seçili−kurulu,
-          // kaldır = kurulu−seçili. Düğme yalnız GERÇEK işi söyler; kurulu profil toplama girmez.
-          applyStart: "Uygula ve Başlat", noChange: "Değişiklik yok", keepOne: "En az bir profil seçili kalmalı",
-          willRemove: "kaldırılacak", removing: "Kaldırılıyor…",
-          removeFailed: (neden) => `Profil kaldırılamadı: ${neden}`,
-          // Yedek hedefi notu (denetim 2026-09-06): metin koda gömülüydü → EN'de Türkçe kalıyordu.
-          backupUnreachable: (yol) => `Yedek hedefi şu an erişilemiyor: ${yol} — harici diski takın ya da yeni bir hedef seçin.`,
-          backupSameDisk: "Yedekler şu anda hasta verisiyle AYNI diskte. Disk arızasında ikisi de kaybolur; harici bir disk ya da ağ paylaşımı seçin.",
-          backupChoose: "Yedek hedefi seç",
-          resumeTitle: "Kurulum yarım kaldı", resumeBody: "Önceki kurulum tamamlanmadı (internet kesilmiş veya kapatılmış olabilir). İndirilen kısım korundu — kaldığınız yerden devam edilsin mi?",
-          resumeYes: "Devam Et", resumeNo: "İptal et",
-          start: "Başlat", change: "Profilleri değiştir", repair: "Kurulumu onar", uninstall: "Uygulamayı kaldır",
-          backToApp: "Uygulamaya dön", runningLead: "PEMF Vet çalışıyor. Uygulama penceresini kapatırsanız buradan yeniden başlatabilirsiniz.",
-          footWeb: "Web Sitesi", footSupport: "Destek", ok: "Tamam", cancel: "Vazgeç", cont: "Devam",
-          aboutTitle: "PEMF Vet hakkında",
-          aboutBody: "PEMF Vet başlatıcısı. Seçtiğiniz kullanım profillerini indirir, inen dosyaların bütünlüğünü doğrular, kurar ve uygulamayı açar. Aynı ağdaki PEMF cihazınıza otomatik bağlanır.",
-          aboutVer: "Sürüm", aboutPlat: "Platform",
-          repairTitle: "Kurulumu onar", repairBody: "Kurulu paketler yeniden doğrulanıp eksik/bozuk dosyalar onarılacak. Bu birkaç dakika sürebilir. Devam edilsin mi?",
-          // ⚠️ KVKK AÇIKLIĞI (2026-08-08): eski metin yalnız "hasta verileriniz KORUNUR" diyordu.
-          // Kullanıcı NEYİN korunduğunu, NEREDE durduğunu ve nasıl silineceğini bilmiyordu; ayrıca
-          // kurulum sihirbazındaki "uygulama verisini sil" kutusu tıbbi veriyi SİLMEZ (yalnız
-          // indirilenleri) — bu da yanlış güvence veriyordu. Artık üçü de açıkça yazıyor.
-          uninTitle: "Uygulamayı kaldır",
-          uninBody: "İndirilen uygulama ve AI modelleri silinecek.\n\n" +
-                    "KORUNAN VERİLER (tıbbi kayıt — kaldırma ile SİLİNMEZ):\n" +
-                    "• Hasta kayıtları\n• Seans geçmişi\n• AI analiz geçmişi\n" +
-                    "Konum: %APPDATA%\\PEMF_GUI\n\n" +
-                    "Bunları da silmek istiyorsanız KALDIRMADAN ÖNCE uygulama içinden silin " +
-                    "(Hastalar → \"Tümünü Sil\", AI Geçmişi → \"Geçmişi Sil\").\n\n" +
-                    "Devam edilsin mi?",
-          notInstalled: "Uygulama kurulu değil.",
-          dl: "indiriliyor", verifying: "bütünlük doğrulanıyor", extracting: "kuruluyor",
-          reconnecting: "bağlantı koptu, yeniden deneniyor", reconnTitle: "Yeniden bağlanılıyor…",
-          cached: "zaten indirilmiş", starting: "başlatılıyor", ready: "hazır — tarayıcıda açıldı",
-          notSupported: (p) => `Bu platform (${p}) için uygulama paketi henüz yayınlanmadı.`,
-          updatingTitle: "Başlatıcı güncelleniyor…", updatingLead: "Yeni bir başlatıcı sürümü bulundu — indirilip kuruluyor. Uygulama kendiliğinden yeniden açılacak.",
-          updatingApply: "Güncelleme uygulanıyor, uygulama yeniden başlatılıyor…",
-          guncTitle: "Başlatıcı güncelleniyor…",
-          guncLead: "Lütfen bekleyin — yeni sürüm kuruluyor. PEMF Vet birazdan kendiliğinden açılacak; bu pencereyi kapatmanız ya da uygulamayı yeniden açmanız gerekmez.",
-          guncSlow: "Biraz uzun sürdü — kurulum bilgisayarın hızına göre 1-2 dakika alabilir. Bu pencere kendiliğinden kapanmazsa PEMF Vet'i Başlat menüsünden açabilirsiniz.",
-          rtTitle: "Uygulama güncelleniyor…",
-          rtLead: "Yeni bir uygulama sürümü bulundu — indirilip kuruluyor. Bittiğinde başlatabilirsiniz.",
-          rtDone: "Uygulama güncellendi.",
-          rtBusy: "Seans sürerken güncelleme yapılmaz — seans bitince otomatik güncellenecek.",
-          rtBg: "Yeni sürüm arka planda indiriliyor — uygulamayı şimdi kullanabilirsiniz, güncelleme bir sonraki açılışta kurulacak.",
-          etaLeft: "kaldı",
-          rtBgDone: "Yeni sürüm indirildi — güncelleme bir sonraki açılışta kurulacak.",
-          rtBgFail: "Arka plan indirmesi tamamlanamadı — bir sonraki açılışta kaldığı yerden denenecek.",
-          rtReady: "Güncelleme hazır — uygulamayı kapatıp açtığınızda kurulacak.",
-          luReady: (v) => `PEMF Vet Client ${v} yayınlandı — uygulamayı kapatıp açtığınızda kurulacak.`,
-          rtBlocked: "Yeni sürüm kurulmayı denedi ama cihazda başlayamadı; güvenlik için eski sürüme dönüldü. Otomatik deneme durduruldu — \"Onar\" ile yeniden deneyebilir ya da bir sonraki sürümü bekleyebilirsiniz.",
-          startChecking: "Güncelleme kontrol ediliyor…",
-          // DENETİM 2026-08-17: başarısız self-update ekranı "Client güncelleniyor…"da hapsediyordu
-          // ve başarı ile başarısızlık ayırt edilemiyordu. Nötr BİLGİ notu (kırmızı hata değil):
-          // uygulama normal açılıyor, kullanıcının yapacağı bir şey yok.
-          selfUpdateFailed: "Başlatıcı güncellemesi tamamlanamadı — uygulama normal açılıyor. Bir sonraki açılışta yeniden denenecek.",
-          rtRecall: "⚠️ ÖNEMLİ GÜVENLİK GÜNCELLEMESİ bekliyor. Bu sürüm artık desteklenmiyor; uygulamayı KAPATIP AÇIN ki güncelleme kurulsun. Seans sürüyorsa bitmesini bekleyin.",
-          rtBgPrep: "Hazırlanıyor…",
-          // Arka plan indirmesi kullanıcı denetimi (saha bildirimi 2026-08-28).
-          bgPause: "Duraklat", bgResume: "Devam et", bgCancel: "İptal",
-          // Teknik hata metinlerinin kullanıcı karşılığı (saha bildirimi 2026-08-29).
-          errDns: "İnternet bağlantısı kurulamadı — sunucu adresi çözümlenemedi. Wi-Fi/ağ bağlantınızı kontrol edip tekrar deneyin. Bağlantı varsa birkaç dakika sonra yeniden deneyin.",
-          errTimeout: "Bağlantı zaman aşımına uğradı. Ağınız yavaş ya da geçici olarak kesilmiş olabilir; tekrar deneyin.",
-          errSunucu: "Güncelleme sunucusuna şu an ulaşılamıyor. Bağlantınızla ilgili değil; kısa süre sonra tekrar deneyin.",
-          errDisk: "Diskte yeterli yer yok. Yer açıp tekrar deneyin.",
-          bgCancelConfirm: "İndirmeyi iptal etmek istiyor musunuz?\n\nŞu ana kadar inen kısım SİLİNİR ve güncelleme bir sonraki açılışta BAŞTAN indirilir.\n\nSadece ara vermek istiyorsanız \"Duraklat\" kullanın — inen kısım korunur ve kaldığı yerden devam eder.",
-          rtBgPaused: "Güncelleme indirmesi duraklatıldı — inen kısım korundu, \"Devam et\" ile kaldığı yerden sürer.",
-          rtBgCancelled: "Güncelleme indirmesi iptal edildi — bir sonraki açılışta yeniden denenecek.",
-          rtRollback: "Yeni sürüm açılamadı; önceki çalışan sürüme geri dönüldü. Uygulama kullanılabilir.",
-          rtRollbackFail: "Yeni sürüm açılamadı ve geri alma tamamlanamadı. Lütfen \"Onar\" ile kurulumu yenileyin.",
-          // ── Giriş (Supabase) ──
-          loginTitle: "Giriş yapın",
-          loginLead: "PEMF Vet hesabınızla giriş yapın — uygulama sizden bir daha giriş istemeyecek.",
-          loginEmail: "E-posta", loginPass: "Parola", loginRemember: "Beni hatırla",
-          loginBtn: "Giriş yap", loginWait: "Giriş yapılıyor…",
-          loginForgot: "Şifremi unuttum", loginSignup: "Hesap oluştur",
-          loginNoPersist: "Bu platformda oturum güvenli biçimde saklanamıyor — giriş yalnız bu açılış için geçerli.",
-          loginEmpty: "E-posta ve parola gerekli.",
-    // ── 2026-08-10 saha hatasi: dogru parola "hatali" dendi, alan silinip tekrar yazilinca gecti.
-    // Maskeli alanda icerigi kimse goremiyordu. Gorunurluk + gorunmez karakter uyarilari.
-    pwShow: "Göster", pwHide: "Gizle",
-    pwShowTitle: "Parolayı göster", pwHideTitle: "Parolayı gizle",
-    loginPwSpace: "Parolanızın başında veya sonunda boşluk var — genelde yapıştırmadan gelir. “Göster” ile kontrol edin.",
-    loginPwInvisible: "Parolada görünmeyen bir karakter var (kopyala-yapıştırdan gelmiş olabilir). Silip elle yazmayı deneyin.",
-          loginRequired: "Kurulum ve onarım için giriş yapmalısınız.",
-          logout: "Çıkış", logoutTitle: "Çıkış yap",
-          logoutBody: "Bu bilgisayardaki oturumunuz silinecek ve uygulamadaki giriş kapatılacak. Devam edilsin mi?",
-          offlineStart: "Çevrimdışı başlat",
-          // ── Çevrimdışı ──
-          offline: "Çevrimdışı",
-          offlineReady: "İnternet bağlantısı yok — güncelleme kontrolü ve profil listesi alınamadı. Kurulu uygulamayı yine de başlatabilirsiniz.",
-          offlineSelect: "İnternet bağlantısı yok; kurulum için bağlantı gerekli. Bağlantıyı kontrol edip tekrar deneyin.",
-          offlineLogin: "İnternet bağlantısı yok — giriş yapılamıyor. Kurulu uygulamayı çevrimdışı başlatabilirsiniz.",
-          retry: "Tekrar dene",
-        },
-        en: {
-          web: "Website", about: "About", guide: "Guide", guideTitle: "User Guide", authSlow: "Slow connection — verifying your session in the background. You can start the app now.",
-          selTitle: "Choose your usage profile",
-          selLead: "The main application is always installed (cannot be removed). Pick at least one profile — only the ones you pick are downloaded.",
-          coreName: "Main application", coreDesc: "Interface and shared models — required by every profile",
-          coreTag: "required", coreInstalled: "installed", coreLocked: "The main application is part of every installation; it cannot be unselected.",
-          install: "Install & Start", selCancel: "Back",
-          applyStart: "Apply & Start", noChange: "No changes", keepOne: "Keep at least one profile",
-          willRemove: "will be removed", removing: "Removing…",
-          removeFailed: (reason) => `Profile could not be removed: ${reason}`,
-          backupUnreachable: (path) => `Backup destination is currently unreachable: ${path} — plug in the external drive or choose a new destination.`,
-          backupSameDisk: "Backups are currently on the SAME disk as patient data. A disk failure would lose both; choose an external drive or a network share.",
-          backupChoose: "Choose backup destination",
-          resumeTitle: "Installation unfinished", resumeBody: "The previous installation didn't complete (internet may have dropped or the device was closed). The downloaded part is kept — resume where you left off?",
-          resumeYes: "Resume", resumeNo: "Discard",
-          start: "Start", change: "Change profiles", repair: "Repair installation", uninstall: "Uninstall",
-          backToApp: "Back to app", runningLead: "PEMF Vet is running. If you close the app window you can start it again from here.",
-          footWeb: "Website", footSupport: "Support", ok: "OK", cancel: "Cancel", cont: "Continue",
-          aboutTitle: "About PEMF Vet",
-          aboutBody: "PEMF Vet launcher. It downloads your selected usage profiles, verifies the downloaded files, installs them and opens the app. It connects automatically to the PEMF device on your network.",
-          aboutVer: "Version", aboutPlat: "Platform",
-          repairTitle: "Repair installation", repairBody: "Installed packages will be re-verified and missing/corrupt files repaired. This may take a few minutes. Continue?",
-          uninTitle: "Uninstall app",
-          uninBody: "The downloaded app and AI models will be removed.\n\n" +
-                    "DATA THAT IS KEPT (medical records — NOT deleted by uninstall):\n" +
-                    "• Patient records\n• Session history\n• AI analysis history\n" +
-                    "Location: %APPDATA%\\PEMF_GUI\n\n" +
-                    "If you also want these deleted, delete them from inside the app BEFORE " +
-                    "uninstalling (Patients → \"Delete All\", AI History → \"Delete History\").\n\n" +
-                    "Continue?",
-          notInstalled: "App is not installed.",
-          dl: "downloading", verifying: "verifying integrity", extracting: "installing",
-          reconnecting: "connection lost, retrying", reconnTitle: "Reconnecting…",
-          cached: "already downloaded", starting: "starting", ready: "ready — opened in browser",
-          notSupported: (p) => `The package for this platform (${p}) is not published yet.`,
-          updatingTitle: "Updating launcher…", updatingLead: "A new launcher version was found — downloading and installing. The app will restart automatically.",
-          updatingApply: "Applying update, restarting the app…",
-          guncTitle: "Updating launcher…",
-          guncLead: "Please wait — the new version is being installed. PEMF Vet will reopen by itself; you don't need to close this window or start the app again.",
-          guncSlow: "Taking a bit longer — installation can take 1–2 minutes depending on your computer. If this window doesn't close on its own, open PEMF Vet from the Start menu.",
-          rtTitle: "Updating app…",
-          rtLead: "A new app version was found — downloading and installing. You can start it when this finishes.",
-          rtDone: "App updated.",
-          rtBusy: "Updates are not applied during a session — it will update automatically once the session ends.",
-          rtBg: "A new version is downloading in the background — you can use the app now; it will be installed on the next launch.",
-          etaLeft: "left",
-          rtBgDone: "New version downloaded — it will be installed on the next launch.",
-          rtBgFail: "Background download did not finish — it will resume on the next launch.",
-          rtReady: "Update ready — it will be installed when you close and reopen the app.",
-          luReady: (v) => `PEMF Vet Client ${v} is available — it will be installed when you close and reopen the app.`,
-          rtBlocked: "The new version failed to start on this device, so the previous one was restored. Automatic retries are paused — use \"Repair\" to try again, or wait for the next release.",
-          startChecking: "Checking for updates…",
-          selfUpdateFailed: "Launcher update could not be completed — the app is opening normally. It will be retried on the next launch.",
-          rtRecall: "⚠️ IMPORTANT SAFETY UPDATE pending. This version is no longer supported; please CLOSE AND REOPEN the app so the update installs. If a session is running, wait for it to finish.",
-          rtBgPrep: "Preparing…",
-          bgPause: "Pause", bgResume: "Resume", bgCancel: "Cancel",
-          errDns: "Could not reach the internet — the server address could not be resolved. Check your Wi-Fi/network and try again. If you are online, retry in a few minutes.",
-          errTimeout: "The connection timed out. Your network may be slow or briefly interrupted; please try again.",
-          errSunucu: "The update server is unreachable right now. This is not about your connection; try again shortly.",
-          errDisk: "Not enough disk space. Free up space and try again.",
-          bgCancelConfirm: "Cancel the download?\n\nThe part downloaded so far will be DELETED and the update will start OVER on the next launch.\n\nIf you only want a break, use \"Pause\" — the downloaded part is kept and resumes where it left off.",
-          rtBgPaused: "Update download paused — the downloaded part is kept; \"Resume\" continues where it left off.",
-          rtBgCancelled: "Update download cancelled — it will be retried on the next launch.",
-          rtRollback: "The new version failed to start; rolled back to the previous working version. The app is usable.",
-          rtRollbackFail: "The new version failed to start and the rollback could not finish. Please use \"Repair\" to reinstall.",
-          // ── Sign in (Supabase) ──
-          loginTitle: "Sign in",
-          loginLead: "Sign in with your PEMF Vet account — the app won't ask you again.",
-          loginEmail: "Email", loginPass: "Password", loginRemember: "Remember me",
-          loginBtn: "Sign in", loginWait: "Signing in…",
-          loginForgot: "Forgot password", loginSignup: "Create account",
-          loginNoPersist: "This platform can't store the session securely — sign-in applies to this launch only.",
-          loginEmpty: "Email and password are required.",
-    pwShow: "Show", pwHide: "Hide",
-    pwShowTitle: "Show password", pwHideTitle: "Hide password",
-    loginPwSpace: "Your password starts or ends with a space — usually from pasting. Use “Show” to check.",
-    loginPwInvisible: "The password contains an invisible character (likely from copy-paste). Clear it and type it manually.",
-          loginRequired: "Sign in to install or repair.",
-          logout: "Sign out", logoutTitle: "Sign out",
-          logoutBody: "Your session on this computer will be removed and the app will be signed out. Continue?",
-          offlineStart: "Start offline",
-          // ── Offline ──
-          offline: "Offline",
-          offlineReady: "No internet connection — update check and profile list unavailable. You can still start the installed app.",
-          offlineSelect: "No internet connection; installation requires one. Check your connection and try again.",
-          offlineLogin: "No internet connection — sign-in unavailable. You can start the installed app offline.",
-          retry: "Retry",
-        },
-      };
+      // Metin KAYNAĞI: launcher/i18n/{tr,en}.json → ui.* (ÜRETİLİR: i18n_katalog.js — scripts/i18n/launcher_uret.py). Sözlük artık burada YOK;
+      // `t()` yalnız katalogdan okur. Taşınan anahtarların gerekçe notları (JSON yorum taşıyamaz — gerekçe KAYBOLMASIN):
+      //   Ana uygulama kartı (2026-09-06): en üstte, önceden seçili, KALDIRILAMAZ; boyutu katmanlardan.
+      //   ⚠️ Ekranda "çekirdek" DENMEZ: sade-dil kapısı (test_client_arayuz_sade_dil) onu iç terim sayar.
+      //   "Profilleri değiştir" FARK akışı (denetim 2026-09-06): ekle = seçili−kurulu,
+      //   kaldır = kurulu−seçili. Düğme yalnız GERÇEK işi söyler; kurulu profil toplama girmez.
+      //   Yedek hedefi notu (denetim 2026-09-06): metin koda gömülüydü → EN'de Türkçe kalıyordu.
+      //   ⚠️ KVKK AÇIKLIĞI (2026-08-08): eski metin yalnız "hasta verileriniz KORUNUR" diyordu.
+      //   Kullanıcı NEYİN korunduğunu, NEREDE durduğunu ve nasıl silineceğini bilmiyordu; ayrıca
+      //   kurulum sihirbazındaki "uygulama verisini sil" kutusu tıbbi veriyi SİLMEZ (yalnız
+      //   indirilenleri) — bu da yanlış güvence veriyordu. Artık üçü de açıkça yazıyor.
+      //   DENETİM 2026-08-17: başarısız self-update ekranı "Client güncelleniyor…"da hapsediyordu
+      //   ve başarı ile başarısızlık ayırt edilemiyordu. Nötr BİLGİ notu (kırmızı hata değil):
+      //   uygulama normal açılıyor, kullanıcının yapacağı bir şey yok.
+      //   Arka plan indirmesi kullanıcı denetimi (saha bildirimi 2026-08-28).
+      //   Teknik hata metinlerinin kullanıcı karşılığı (saha bildirimi 2026-08-29).
+      //   ── Giriş (Supabase) ──
+      //   ── 2026-08-10 saha hatasi: dogru parola "hatali" dendi, alan silinip tekrar yazilinca gecti.
+      //   Maskeli alanda icerigi kimse goremiyordu. Gorunurluk + gorunmez karakter uyarilari.
+      //   ── Çevrimdışı ──
+      //   ── Sign in (Supabase) ──
+      //   ── Offline ──
+      // Profil adı / açıklaması katalogda (ui.profilMeta.<anahtar>.ad|aciklama); burada yalnız simge yolu.
       const PROFILE_META = {
-        home:     { tr: ["Ev Sahibi", "Kedi teşhis modelleri — hastalık, organ, görüntü, ses"], en: ["Pet Owner", "Feline diagnostic models — disease, organ, imaging, sound"], icon: "M4 11l8-7 8 7M6 10v9h12v-9" },
-        vet:      { tr: ["Veteriner Hekim", "Klinik teşhis + seans (em_kedi, termal)"], en: ["Veterinarian", "Clinical diagnosis + session (em_kedi, thermal)"], icon: "M12 3v18M3 12h18M8 7l8 10M16 7 8 17" },
-        research: { tr: ["Araştırma Modu", "Araştırma modelleri — petri, histopatoloji, böbrek, fantom"], en: ["Research Mode", "Research models — petri, histopathology, kidney, phantom"], icon: "M9 3v6l-5 8a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-8V3M9 3h6" },
+        home: { icon: "M4 11l8-7 8 7M6 10v9h12v-9" },
+        vet: { icon: "M12 3v18M3 12h18M8 7l8 10M16 7 8 17" },
+        research: { icon: "M9 3v6l-5 8a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-8V3M9 3h6" },
       };
       // ── PROFİLLER BAĞIMSIZ SEÇİLİR (2026-08-10, sahip kararı) ─────────────────────────────
       // ÖNCEKİ DAVRANIŞ: `vet: ["home"]` → "Veteriner" seçilince "Ev Sahibi" ZORLA ekleniyordu.
@@ -929,70 +758,24 @@
       function cumBytes(key) { let s = 0; withDeps([key]).forEach((k) => { s += sizes[k] || 0; }); return s; }
 
       // ---------- Kullanım Kılavuzu içeriği (görsel, adım-adım, 3 profil) ----------
-      const GUIDE = {
-        tr: {
-          intro: "PEMF Vet; kedilerde yapay zekâ ile teşhis ve PEMF (darbeli manyetik alan) ile seans uygulayan bir platformdur. Bu client, uygulamayı bilgisayarınıza indirir, kurar ve başlatır. Aşağıdaki adımlar hiç deneyimi olmayan biri için hazırlanmıştır — sırayla takip etmeniz yeterli.",
-          stepsTitle: "Kurulum — 3 adım",
-          steps: [
-            ["Profil(ler)inizi seçin", "En üstteki 'Ana uygulama' kartı her kurulumda gelir ve kaldırılamaz (arayüz ve ortak modeller; boyutu sağında yazar, kuruluysa 'kurulu' der). Altındaki 3 profilden en az birini işaretleyin (Ev Sahibi, Veteriner Hekim, Araştırma). Birden fazla seçebilirsiniz; her kartın sağında YALNIZ kendi indirme boyutu yazar, düğmedeki toplam yalnız gerçekten inecekleri sayar (kurulu değilse ana uygulama + yeni seçtikleriniz). 'Profilleri değiştir'de zaten kurulu profil 'kurulu' der ve sayılmaz; işaretini kaldırdığınız kurulu profil 'kaldırılacak' rozeti alır ve düğmeye basınca bu bilgisayardan silinir."],
-            ["‘Kur ve Başlat’a tıklayın", "Seçtiğiniz modeller inip kurulur. Çubukta yüzde, hız (MB/s) ve kalan süre görünür. İstediğinizde Duraklat veya İptal edebilir; internet kesilse ya da bilgisayar kapansa bile tekrar açtığınızda kaldığınız yerden devam edebilirsiniz."],
-            ["Uygulama otomatik açılır", "Kurulum bitince uygulama tarayıcınızda açılır. Sonraki açılışlarda bu penceredeki ‘Başlat’ düğmesiyle saniyeler içinde açarsınız."],
-          ],
-          profTitle: "3 Profil — hangisi sizin için?",
-          profiles: [
-            { key: "home", who: "Evcil hayvan (kedi) sahipleri için",
-              does: "Kedinizin kamera görüntüsüyle yapay zekâ ön-teşhisi yapar: hastalık, organ, görüntü ve ses analizi. Cihaz veya seans İÇERMEZ.",
-              use: ["Uygulama açılınca ‘Ev Sahibi’ profilini seçip hesabınızla girin.", "‘Akıllı Teşhis’ ekranına gidin.", "Kameranızı kediye doğrultun ya da bir fotoğraf/ses dosyası yükleyin.", "Sonucu ve önerileri okuyun — kesin tanı için mutlaka bir veteriner hekime danışın."] },
-            { key: "vet", who: "Veteriner hekimler ve klinikler için",
-              does: "Teşhis + PEMF cihazıyla seans uygulama + hasta kaydı, seans geçmişi, sensör takibi, KPI paneli ve simülatör. Ev Sahibi teşhis modellerini de içerir (bu yüzden boyutu daha büyüktür).",
-              use: ["‘Veteriner Hekim’ profilini seçip girin.", "‘Hastalar’ ekranından yeni hasta ekleyin.", "‘Kontrol’ ekranından seansı başlatın; bobinleri elle ayarlayın veya ‘AI Pro’ ile otonom sürün.", "‘Sensörler’ ve ‘Geçmiş’ ile seansı izleyin; ‘KPI’ ile klinik istatistiklerinizi görün."] },
-            { key: "research", who: "Araştırmacılar ve laboratuvarlar için",
-              does: "Petri, histopatoloji, böbrek ve fantom yapay zekâ modelleri; örnek/veri kaydı ve geçmiş. Cihaz İÇERMEZ.",
-              use: ["‘Araştırma Modu’ profilini seçip girin.", "‘Akıllı Teşhis’ten ilgili araştırma modelini seçin.", "Görüntü veya veri dosyanızı yükleyin.", "Sonuçları inceleyip ‘Geçmiş’e kaydedin."] },
-          ],
-          connectTitle: "Cihaza bağlanma (Veteriner)",
-          connect: "Veteriner modunda PEMF donanımı, bilgisayarınızla AYNI Wi-Fi ağında olmalıdır. Uygulama cihazı otomatik bulur. Bulamazsa uygulama içindeki Ayarlar’dan cihazın IP adresini elle girebilirsiniz.",
-          troubleTitle: "Sorun giderme",
-          trouble: [
-            ["Uygulama açılmıyor veya bir model eksik", "Bu penceredeki ‘Onar’a basın — paketleri yeniden doğrular ve eksikleri tamamlar."],
-            ["İndirme yarıda kaldı (internet kesildi / bilgisayar kapandı)", "Uygulamayı tekrar açın; ‘Kaldığınız yerden devam edilsin mi?’ sorusuna ‘Devam Et’ deyin. İndirilen kısım korunmuştur."],
-            ["Baştan kurmak istiyorum", "‘Uygulamayı kaldır’a basın (hasta verileriniz KORUNUR), sonra tekrar kurun."],
-            ["Daha fazla yardım", "Üstteki ‘Web Sitesi’ veya alttaki ‘Destek’ bağlantısını kullanın."],
-          ],
-        },
-        en: {
-          intro: "PEMF Vet is a platform for AI-assisted diagnosis and PEMF (pulsed magnetic field) sessions in cats. This client downloads, installs and starts the app on your computer. The steps below are written for someone with no prior experience — just follow them in order.",
-          stepsTitle: "Installation — 3 steps",
-          steps: [
-            ["Choose your profile(s)", "The 'Main application' card at the top is part of every installation and cannot be removed (interface and shared models; its size is shown on the right, or 'installed' if already present). Tick at least one of the 3 profiles below it (Pet Owner, Veterinarian, Research). You can pick several; each card shows ONLY its own download size, and the button total counts only what will actually download (the main application if not yet installed + your new picks). In 'Change profiles', an already installed profile says 'installed' and is not counted; unticking an installed profile marks it 'will be removed' and it is deleted from this computer when you press the button."],
-            ["Click ‘Install & Start’", "Your selected models download and install. The bar shows percent, speed (MB/s) and time left. You can Pause or Cancel anytime; even if the internet drops or the computer shuts down, you can resume where you left off when you reopen."],
-            ["The app opens automatically", "When installation finishes, the app opens in your browser. Next time, use the ‘Start’ button in this window to open it in seconds."],
-          ],
-          profTitle: "3 Profiles — which one is for you?",
-          profiles: [
-            { key: "home", who: "For pet (cat) owners",
-              does: "Runs AI pre-diagnosis from your cat's camera image: disease, organ, imaging and sound analysis. Does NOT include a device or session.",
-              use: ["When the app opens, choose ‘Pet Owner’ and sign in.", "Go to the ‘Smart Diagnosis’ screen.", "Point your camera at the cat or upload a photo/sound file.", "Read the result and suggestions — always consult a veterinarian for a definitive diagnosis."] },
-            { key: "vet", who: "For veterinarians and clinics",
-              does: "Diagnosis + PEMF device sessions + patient records, session history, sensor tracking, KPI panel and simulator. Also includes the Pet Owner diagnostic models (hence the larger size).",
-              use: ["Choose ‘Veterinarian’ and sign in.", "Add a new patient from ‘Patients’.", "Start a session from ‘Control’; adjust coils manually or run autonomously with ‘AI Pro’.", "Track the session via ‘Sensors’ and ‘History’; see clinic stats in ‘KPI’."] },
-            { key: "research", who: "For researchers and laboratories",
-              does: "Petri, histopathology, kidney and phantom AI models; sample/data records and history. Does NOT include a device.",
-              use: ["Choose ‘Research Mode’ and sign in.", "Pick the relevant research model from ‘Smart Diagnosis’.", "Upload your image or data file.", "Review the results and save them to ‘History’."] },
-          ],
-          connectTitle: "Connecting to the device (Vet)",
-          connect: "In veterinarian mode the PEMF hardware must be on the SAME Wi-Fi network as your computer. The app finds it automatically; if not, enter the device IP manually in the app's Settings.",
-          troubleTitle: "Troubleshooting",
-          trouble: [
-            ["The app won't open or a model is missing", "Click ‘Repair’ in this window — it re-verifies the packages and fills in what's missing."],
-            ["Download interrupted (internet dropped / computer closed)", "Reopen the app; answer ‘Resume where you left off?’ with ‘Resume’. The downloaded part is kept."],
-            ["I want to reinstall from scratch", "Click ‘Uninstall’ (your patient data is KEPT), then install again."],
-            ["More help", "Use the ‘Website’ link at the top or ‘Support’ at the bottom."],
-          ],
-        },
-      };
+      // Kılavuz içeriği katalogdan (ui.kilavuz.*) kurulur. Diziler katalogda SIRALI anahtarlı nesnedir (s01, s02 … / p01 … / u01 … / k01 …): sıra = anahtar sırası.
+      function guideKur() {
+        const c = t().kilavuz || {};
+        const sirali = (o) => Object.keys(o || {}).sort().map((k) => o[k]);
+        return {
+          intro: c.intro,
+          stepsTitle: c.stepsTitle,
+          steps: sirali(c.steps).map((x) => [x.t, x.b]),
+          profTitle: c.profTitle,
+          profiles: sirali(c.profiles).map((p) => ({ key: p.key, who: p.who, does: p.does, use: sirali(p.use) })),
+          connectTitle: c.connectTitle,
+          connect: c.connect,
+          troubleTitle: c.troubleTitle,
+          trouble: sirali(c.trouble).map((x) => [x.t, x.b]),
+        };
+      }
       function renderGuide() {
-        const g = GUIDE[LANG], box = $("guide-body"); box.textContent = "";
+        const g = guideKur(), box = $("guide-body"); box.textContent = "";
         const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
         const secTitle = (iconInner, text) => {
           const h = el("div", "gsec-title");
@@ -1035,9 +818,10 @@
         box.appendChild(tips);
       }
       let LANG = "tr";
-      // I18N-0: katalog (launcher/i18n → i18n_katalog.js, ÜRETİLMİŞ) sözlüğün ÜSTÜNE biner; göçen anahtar sözlükten silinir.
-      // Parti: kalan anahtarlar kataloğa taşındıkça sözlük küçülür (KURALLAR §Launcher).
-      const t = () => Object.assign({}, I18N[LANG], (window.PEMF_I18N_KATALOG || {})[LANG] || {});
+      // I18N (P1 · 11a): tüm arayüz metni katalogdan (launcher/i18n → i18n_katalog.js, ÜRETİLMİŞ); eski I18N / GUIDE / PROFILE_META sözlükleri taşındı.
+      const t = () => (window.PEMF_I18N_KATALOG || {})[LANG] || {};
+      // Yer tutuculu metin: `tf("anahtar", { ad: değer })` — `{{ad}}` yerine değer (eski işlev değerli anahtarların yerini alır).
+      const tf = (k, p) => String(t()[k] ?? k).replace(/\{\{\s*(\w+)\s*\}\}/g, (_, a) => (p && a in p ? String(p[a]) : ""));
 
       // ---------- app state ----------
       let manifestRaw = null;
@@ -1063,7 +847,8 @@
 
       const mb = (n) => (n / 1048576).toFixed(0);
       const gb = (n) => (n / 1073741824).toFixed(n >= 1073741824 ? 1 : 2);
-      const profName = (k) => (PROFILE_META[k]?.[LANG]?.[0]) ?? k;
+      const profName = (k) => ((t().profilMeta || {})[k] || {}).ad ?? k;
+      const profAciklama = (k) => ((t().profilMeta || {})[k] || {}).aciklama ?? "";
       // İndirme ilerleme durumu (hız/ETA JS'te done-deltalarından hesaplanır — performance.now() webview'de var).
       let dl = { what: null, done: 0, t: 0, speed: 0 };
       const fmtBytes = (n) => (n >= 1073741824 ? (n / 1073741824).toFixed(2) + " GB" : (n / 1048576).toFixed(0) + " MB");
@@ -1332,7 +1117,7 @@
         // kapatıp açtığında — zaten güvenli olan anda — yapılır.
         if (info.update && info.update.version && sonBildirim !== "launcher") {
           sonBildirim = "launcher";
-          notice(t().luReady(info.update.version));
+          notice(tf("luReady", { surum: info.update.version }));
         }
 
         let plan;
@@ -1416,7 +1201,7 @@
         const x = t();
         const box = $("notice"); box.textContent = "";
         const p1 = document.createElement("div");
-        p1.textContent = d.yol ? x.backupUnreachable(d.yol) : x.backupSameDisk;
+        p1.textContent = d.yol ? tf("backupUnreachable", { yol: d.yol }) : x.backupSameDisk;
         box.appendChild(p1);
         const b = document.createElement("button");
         b.className = "nbtn"; b.textContent = x.backupChoose;
@@ -1469,14 +1254,10 @@
         if (!engel && !kuralYok) return;
         const box = $("notice"); box.textContent = "";
         const p1 = document.createElement("div");
-        p1.textContent = engel
-          ? "Windows güvenlik duvarı bu uygulamanın ağdan bağlantı almasını ENGELLİYOR — "
-            + "mobil uygulama cihazı bulamaz. Cihaz ekranından kullanım etkilenmez."
-          : "Mobil uygulama bu cihaza bağlanamayabilir: Windows güvenlik duvarında gelen "
-            + "bağlantı izni yok. Cihaz ekranından kullanım etkilenmez.";
+        p1.textContent = engel ? t().fwEngel : t().fwKuralYok;
         box.appendChild(p1);
         const b = document.createElement("button");
-        b.className = "nbtn"; b.textContent = "İzin ver (yönetici)";
+        b.className = "nbtn"; b.textContent = t().fwIzinVer;
         b.onclick = async () => {
           b.disabled = true;
           try { await invoke("firewall_kurali_ekle"); clearNotice(); }
@@ -1566,6 +1347,8 @@
           el.setAttribute("aria-label", ad);
         }
         $("t-guide").textContent = x.guide; $("t-guide-title").textContent = x.guideTitle;
+        $("lang-seg").setAttribute("aria-label", x.langLabel);
+        $("guide-close").setAttribute("aria-label", x.guideClose);
         if ($("guide") && !$("guide").hidden) renderGuide();
         $("t-detect").textContent = x.detect;
         $("t-sel-title").textContent = x.selTitle; $("t-sel-lead").textContent = x.selLead;
@@ -1696,7 +1479,7 @@
         box.appendChild(cekirdekKarti()); // her zaman İLK sırada, önceden seçili, kaldırılamaz
         for (const key of orderedKeys()) {
           const meta = PROFILE_META[key];
-          const [name, desc] = meta ? meta[LANG] : [key, ""];
+          const [name, desc] = meta ? [profName(key), profAciklama(key)] : [key, ""];
           const on = eff.has(key);
           const isDep = on && !selected.has(key);       // başka profil için otomatik dahil
           // [L adım 6 / launcher-6] Kart <div> idi: klavyeyle SEÇİLEMİYORDU ve ekran okuyucu
@@ -1766,14 +1549,12 @@
         if (!eksik.length) { kutu.hidden = true; kutu.textContent = ""; return; }
         kutu.textContent = "";
         const [k, d] = eksik[0];
-        const ad = (x) => (PROFILE_META[x] ? PROFILE_META[x][LANG][0] : x);
+        const ad = (x) => (PROFILE_META[x] ? profName(x) : x);
         const p = document.createElement("span");
-        p.textContent = LANG === "tr"
-          ? `“${ad(k)}” seçildi ama “${ad(d)}” yok. Bunlar bağımsız kurulur; yalnız AI Pro’nun organ lokalizasyonu ${ad(d)} paketindeki modelleri kullanır — o özellik çalışmaz. Diğer her şey çalışır.`
-          : `“${ad(k)}” is selected without “${ad(d)}”. They install independently; only AI Pro’s organ localization uses models from the ${ad(d)} package — that feature will not work. Everything else works.`;
+        p.textContent = tf("depNotice", { secili: ad(k), eksik: ad(d) });
         const btn = document.createElement("button");
         btn.className = "link";
-        btn.textContent = LANG === "tr" ? `${ad(d)} ekle` : `Add ${ad(d)}`;
+        btn.textContent = tf("depAdd", { profil: ad(d) });
         btn.onclick = () => { if (!busy) { selected.add(d); renderCards(); } };
         kutu.append(p, btn);
         kutu.hidden = false;
@@ -1965,7 +1746,7 @@
           return true;
         } catch (e) {
           try { await refreshEnv(); } catch (_) {}
-          renderCards(); show("s-select"); fail(t().removeFailed(String(e)));
+          renderCards(); show("s-select"); fail(tf("removeFailed", { neden: String(e) }));
           return false;
         } finally { busy = false; }
       }
@@ -2228,7 +2009,7 @@
           // bildirim yoktu. Deneme sınırı dolduğunda ya da rollout dilimi henüz açılmamışken
           // cihaz launcher güncellemesini bir daha otomatik almaz ve kullanıcı bunu HİÇBİR
           // yerden öğrenemezdi — üstelik güncelleme zincirini YÖNETEN bileşen odur.
-          if (u.version) notice(t().luReady(u.version));
+          if (u.version) notice(tf("luReady", { surum: u.version }));
           return false;
         }
         // ⚠️ DENETİM 2026-08-17 — EKRAN DEVRALINIYOR AMA GERİ ALINMIYORDU.
@@ -2465,7 +2246,7 @@
 
         if (!info.platform_supported) {
           startKapisiAc();
-          if (!busy) { show("s-select"); $("cards").textContent = ""; fail(t().notSupported(info.platform)); }
+          if (!busy) { show("s-select"); $("cards").textContent = ""; fail(tf("notSupported", { platform: info.platform })); }
           return;
         }
 

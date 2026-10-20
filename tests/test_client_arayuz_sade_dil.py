@@ -24,6 +24,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from i18n_yardimci import launcher_ui as ui
+
 KOK = Path(__file__).resolve().parent.parent
 UI = KOK / "launcher" / "app" / "ui" / "index.html"
 
@@ -78,15 +80,22 @@ def _i18n_tr() -> str:
     """
     # ⚠️ Blok sınırlarını burada YENİDEN hesaplamaya gerek yok: `_i18n_tr_ham()` aynı işi
     # yapıyor ve işaretler bulunamazsa zaten patlıyor. (Refaktörden kalan ölü satırlar silindi.)
-    return "\n".join(re.findall(r'"([^"]*)"', _i18n_tr_ham()))
+    return "\n".join(_ui_degerleri("tr"))
 
 
-def _i18n_tr_ham() -> str:
-    """TÜRKÇE bloğun HAM hâli — anahtar adıyla arama yapan testler için (ör. `repair:`)."""
-    s = _soy(UI.read_text(encoding="utf-8", errors="replace"))
-    i = s.index("const I18N")
-    j = s.index("en: {", i)
-    return s[i:j]
+def _ui_degerleri(dil: str) -> list[str]:
+    """I18N-P1 · 11a: arayüz sözlükleri `launcher/i18n/<dil>.json → ui.*` kataloğuna taşındı; ekran DEĞERLERİ (anahtar adı değil) sırayla."""
+    out: list[str] = []
+
+    def gez(d):
+        for v in d.values():
+            if isinstance(v, dict):
+                gez(v)
+            else:
+                out.append(v)
+
+    gez(ui(dil))
+    return out
 
 
 def test_KRITIK_urun_adi_ekranda_client_DEGIL():
@@ -105,9 +114,9 @@ def test_KRITIK_gelistirici_terimleri_YOK():
 
 def test_KRITIK_onar_dugmesi_NE_ONARDIGINI_soyler():
     """Tek kelimelik "Onar" neyin onarılacağını söylemiyordu (denetim bulgusu)."""
-    m = re.search(r'repair:\s*"([^"]+)"', _i18n_tr_ham())
-    assert m, "repair düğmesi bulunamadı"
-    assert len(m.group(1)) > 5, f"'Onar' tek başına belirsiz: {m.group(1)!r}"
+    onar = ui("tr").get("repair")
+    assert onar, "repair düğmesi bulunamadı"
+    assert len(onar) > 5, f"'Onar' tek başına belirsiz: {onar!r}"
 
 
 def test_KARSIT_KANIT_basaltici_adi_TANIMLI_ve_marka_KORUNUR():
@@ -120,7 +129,6 @@ def test_KARSIT_KANIT_basaltici_adi_TANIMLI_ve_marka_KORUNUR():
 
 def test_KARSIT_KANIT_INGILIZCE_bolum_de_guncellenmis():
     """İki dil AYNI şeyi söylemeli — yalnız Türkçesini düzeltmek çeviriyi ayrıştırırdı."""
-    s = _soy(UI.read_text(encoding="utf-8", errors="replace"))
-    en = s[s.index("en: {") :]
+    en = "\n".join(_ui_degerleri("en"))
     assert "Lightweight client" not in en, "İngilizce metin eski adlandırmada kalmış"
     assert "SHA-256" not in en, "İngilizce metinde kriptografi terimi kalmış"

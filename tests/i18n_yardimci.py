@@ -112,3 +112,20 @@ def gorunur_satir(satir: str, yuzey: str) -> str:
         return m.group(0)
 
     return ANAHTAR_KULLANIMI.sub(degistir, satir)
+
+
+def launcher_ui(dil: str) -> dict:
+    """`launcher/i18n/<dil>.json` → `ui` alt ağacı (iç içe sözlük; kılavuz / profilMeta alt ağaçları dahil).
+
+    I18N-P1 · 11a: launcher arayüzünün (index.html) JS sözlükleri kataloğa taşındı; sözlük metnini regex'le arayan / sayan testler bunu
+    okur — TR / EN değerleri taşıma ÖNCESİNDEKİYLE AYNI (göçte 248 karşılaştırma, 0 fark)."""
+    import json
+
+    return json.loads((KOK / "launcher" / "i18n" / f"{dil}.json").read_text(encoding="utf-8"))["ui"]
+
+
+def launcher_katalog_js() -> str:
+    """Harness için `{tr: {...}, en: {...}}` JS sabiti (gerçek `PEMF_I18N_KATALOG` ile aynı şekil)."""
+    import json
+
+    return json.dumps({d: launcher_ui(d) for d in ("tr", "en")}, ensure_ascii=False)
