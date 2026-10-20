@@ -1989,6 +1989,20 @@
    "tur": "seans",
    "kaynak": "apps/ui/src/services/jetonBakiye.ts",
    "aciklama": "bakiye okunamadı: seans, acil durdurma ve sensör izleme internetsiz çalışır"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ortak.hata.aiInternetGerekir",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/services/apiClient.ts",
+   "aciklama": "AI analizi için internet gerekir; seans ve acil durdurma etkilenmez"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ortak.hata.jetonYetersiz",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/services/apiClient.ts",
+   "aciklama": "jeton hakkı yetersiz; seans ve acil durdurma etkilenmez"
   }
  ],
  "bekleyen": [

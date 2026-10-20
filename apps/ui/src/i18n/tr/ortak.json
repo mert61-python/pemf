@@ -1,8 +1,25 @@
 {
   "cikis": "Çıkış",
   "hata": {
+    "agSunucu": "Ağ veya sunucu hatası.",
+    "aiGecersizYanit": "Cihaz yazılımı geçersiz yanıt döndürdü (JSON değil). Tekrar deneyin; sürerse uygulama günlüklerini destek ekibine iletin.",
+    "aiGonderilemedi": "İstek cihaz yazılımına GÖNDERİLEMEDİ (tarayıcı isteği kesti: bağlantı koptu, ağ değişti ya da seçilen dosya okunamadı). Üstteki gösterge 'Çevrimdışı' ise önce bağlantıyı düzeltin; değilse dosyayı yeniden seçip tekrar deneyin. Sürerse uygulamayı yeniden başlatın.",
+    "aiInternetGerekir": "Yapay zekâ analizi için internet gerekir. Seans ve acil durdurma etkilenmez.",
+    "aiZamanAsimi": "Analiz zaman aşımına uğradı. Bir modelin İLK çalıştırılması ~30 saniye sürebilir; aynı anda başka analizler çalışıyorsa daha da uzar. Tekrar deneyin — model artık hazır olduğu için bu kez hızlı sonuçlanır.",
     "beklenmeyen": "Beklenmeyen bir hata oluştu",
-    "bilinmeyen": "Bilinmeyen hata."
+    "bilinmeyen": "Bilinmeyen hata.",
+    "cihazaUlasilamadi": "Cihaza ulaşılamadı",
+    "gondermeHatasi": "Sunucuya veri gönderilirken bir hata oluştu.",
+    "guvensizBaglanti": "Güvensiz bağlantı",
+    "internetGerekli": "İnternet bağlantısı gerekli",
+    "jetonHakki": "Jeton hakkı",
+    "jetonYetersiz": "Jeton hakkınız yetersiz. Seans ve acil durdurma etkilenmez.",
+    "sifresizAdres": "Cihaz adresi şifresiz (http) ve yerel ağda değil — istek gönderilmedi.",
+    "silmeHatasi": "Sunucuda kayıt silinirken bir hata oluştu.",
+    "sunucuHatasi": "Sunucu Hatası",
+    "sunucuIletisim": "Sunucu ile iletişimde bir sorun oluştu.",
+    "zamanAsimiBaslik": "İşlem zaman aşımına uğradı",
+    "zamanAsimiGovde": "Sunucu zamanında yanıt vermedi. Tekrar deneyin — ilk analiz model yüklemesi nedeniyle uzun sürebilir."
   },
   "iptal": "İptal",
   "kapat": "Kapat",

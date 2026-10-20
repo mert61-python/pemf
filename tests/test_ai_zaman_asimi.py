@@ -140,7 +140,7 @@ def test_KRITIK_iptal_HAM_DOM_METNI_gostermez():
         "aiHataMesaji ICINDE AbortError kontrolu yok → ham DOM metni "
         '("signal is aborted without reason") kullaniciya gosterilir'
     )
-    assert "AI_ZAMAN_ASIMI_MESAJI" in govde, "yardimci zaman asimi mesajini DONDURMUYOR"
+    assert "aiZamanAsimiMesaji()" in govde, "yardimci zaman asimi mesajini DONDURMUYOR"
     # Yardımcı GERÇEKTEN kullanılmalı; tanımlı ama çağrılmayan bir fonksiyon boş güvencedir.
     #
     # ⚠️ TAM SAYI aranır, `>=` DEĞİL. İlk yazımda `>= 10` idi ve mutasyon turunda bir çağrıyı
@@ -165,9 +165,15 @@ def test_zaman_asimi_mesaji_TEKRAR_DENEMEYI_soyler():
     src = capraz.oku(YARDIMCI)  # 2026-09-08: sabit de yardımcıyla birlikte apiClient.ts'te
     # ⚠️ `(.+?);` KULLANMAYIN: mesaj çok satırlı `"..." + "..."` birleştirmesidir ve non-greedy
     # eşleşme ilk satırda kesiliyordu (test yanlış-kırmızı verdi). Sabitten sonraki pencereye bak.
+    # I18N: mesaj katalogda — `aiZamanAsimiMesaji()` anahtari KULLANIR; TR degeri ne oldugunu + ne yapacagini soyler, EN de ayni (ölçüt YER DEĞİŞTİRDİ).
+    import i18n_yardimci as iy
+
     kod = _kod(src)
-    i = kod.find("AI_ZAMAN_ASIMI_MESAJI =")
-    assert i >= 0, "AI_ZAMAN_ASIMI_MESAJI sabiti bulunamadi (apiClient.ts)"
-    mesaj = kod[i : i + 500]
-    assert "zaman aşımı" in mesaj.lower(), "mesaj ne oldugunu SOYLEMIYOR"
-    assert "Tekrar deneyin" in mesaj, "mesaj kullaniciya NE YAPACAGINI soylemiyor"
+    i = kod.find("const aiZamanAsimiMesaji")
+    assert i >= 0, "aiZamanAsimiMesaji tanimi bulunamadi (apiClient.ts)"
+    assert '"ortak.hata.aiZamanAsimi"' in kod[i : i + 200], "aiZamanAsimiMesaji katalog anahtarini KULLANMIYOR"
+    tr = iy.katalog("arayuz", "tr")["ortak.hata.aiZamanAsimi"]
+    en = iy.katalog("arayuz", "en")["ortak.hata.aiZamanAsimi"]
+    assert "zaman aşımı" in tr.lower(), "mesaj ne oldugunu SOYLEMIYOR"
+    assert "Tekrar deneyin" in tr, "mesaj kullaniciya NE YAPACAGINI soylemiyor"
+    assert "timed out" in en and "Try again" in en, f"EN mesaj ayni seyi soylemiyor: {en!r}"

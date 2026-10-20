@@ -1,8 +1,25 @@
 {
   "cikis": "Sign out",
   "hata": {
+    "agSunucu": "Network or server error.",
+    "aiGecersizYanit": "The device software returned an invalid response (not JSON). Try again; if it continues, send the application logs to the support team.",
+    "aiGonderilemedi": "The request could NOT BE SENT to the device software (the browser cut the request: the connection dropped, the network changed or the selected file could not be read). If the indicator above says 'Offline', fix the connection first; otherwise select the file again and try again. If it continues, restart the application.",
+    "aiInternetGerekir": "AI analysis requires the internet. Sessions and emergency stop are not affected.",
+    "aiZamanAsimi": "The analysis timed out. The FIRST run of a model can take ~30 seconds; it takes even longer if other analyses are running at the same time. Try again — the model is ready now, so this time it will finish quickly.",
     "beklenmeyen": "An unexpected error occurred",
-    "bilinmeyen": "Unknown error."
+    "bilinmeyen": "Unknown error.",
+    "cihazaUlasilamadi": "Device unreachable",
+    "gondermeHatasi": "An error occurred while sending data to the server.",
+    "guvensizBaglanti": "Insecure connection",
+    "internetGerekli": "Internet connection required",
+    "jetonHakki": "Credit allowance",
+    "jetonYetersiz": "Your credit allowance is insufficient. Sessions and emergency stop are not affected.",
+    "sifresizAdres": "The device address is unencrypted (http) and not on the local network — the request was not sent.",
+    "silmeHatasi": "An error occurred while deleting the record on the server.",
+    "sunucuHatasi": "Server Error",
+    "sunucuIletisim": "A problem occurred while communicating with the server.",
+    "zamanAsimiBaslik": "The operation timed out",
+    "zamanAsimiGovde": "The server did not respond in time. Try again — the first analysis may take a long time because of model loading."
   },
   "iptal": "Cancel",
   "kapat": "Close",

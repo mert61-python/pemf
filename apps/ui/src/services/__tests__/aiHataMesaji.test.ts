@@ -7,9 +7,9 @@
  * geçersiz yanıt / bağlama-özel varsayılan. (Mutasyon: TypeError dalı silinince 2. test düşer.)
  */
 import {
-  AI_GECERSIZ_YANIT_MESAJI,
-  AI_ISTEK_GONDERILEMEDI_MESAJI,
-  AI_ZAMAN_ASIMI_MESAJI,
+  aiGecersizYanitMesaji,
+  aiIstekGonderilemediMesaji,
+  aiZamanAsimiMesaji,
   aiHataMesaji,
 } from "@/services/apiClient";
 
@@ -21,15 +21,15 @@ function adli(name: string, message: string): Error {
 
 describe("aiHataMesaji sınıflandırması", () => {
   it("AbortError/TimeoutError → zaman aşımı mesajı (tekrar denemek işe yarar)", () => {
-    expect(aiHataMesaji(adli("AbortError", "signal is aborted without reason"))).toBe(AI_ZAMAN_ASIMI_MESAJI);
-    expect(aiHataMesaji(adli("TimeoutError", "x"))).toBe(AI_ZAMAN_ASIMI_MESAJI);
+    expect(aiHataMesaji(adli("AbortError", "signal is aborted without reason"))).toBe(aiZamanAsimiMesaji());
+    expect(aiHataMesaji(adli("TimeoutError", "x"))).toBe(aiZamanAsimiMesaji());
   });
 
   it("KRİTİK: tarayıcı fetch reddi (TypeError: Failed to fetch / Network request failed) → GÖNDERİLEMEDİ + eylem", () => {
     const m1 = aiHataMesaji(new TypeError("Failed to fetch"));
-    expect(m1).toBe(AI_ISTEK_GONDERILEMEDI_MESAJI);
-    expect(aiHataMesaji(new TypeError("Network request failed"))).toBe(AI_ISTEK_GONDERILEMEDI_MESAJI);
-    expect(aiHataMesaji(new TypeError("Load failed"))).toBe(AI_ISTEK_GONDERILEMEDI_MESAJI);
+    expect(m1).toBe(aiIstekGonderilemediMesaji());
+    expect(aiHataMesaji(new TypeError("Network request failed"))).toBe(aiIstekGonderilemediMesaji());
+    expect(aiHataMesaji(new TypeError("Load failed"))).toBe(aiIstekGonderilemediMesaji());
     // Mesaj EYLEM söyler ve ham teknik metin içermez
     expect(m1).toMatch(/Çevrimdışı/);
     expect(m1).toMatch(/yeniden seç/);
@@ -45,7 +45,7 @@ describe("aiHataMesaji sınıflandırması", () => {
   });
 
   it("SyntaxError (response.json JSON değil) → geçersiz yanıt mesajı", () => {
-    expect(aiHataMesaji(adli("SyntaxError", "Unexpected token < in JSON at position 0"))).toBe(AI_GECERSIZ_YANIT_MESAJI);
+    expect(aiHataMesaji(adli("SyntaxError", "Unexpected token < in JSON at position 0"))).toBe(aiGecersizYanitMesaji());
   });
 
   it("sınıflandırılamayan hata → çağıranın varsayılanı; verilmezse genel metin", () => {

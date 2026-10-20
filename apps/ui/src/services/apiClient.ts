@@ -42,7 +42,7 @@ export const JETON_SEBEP_BASLIGI = "X-PEMF-Jeton-Sebep";
  *  "jeton bitti" DEĞİL, "internet yok"tur ve öyle söylenmeli (kullanıcı jeton almaya kalkmasın). Başlık okunamazsa (eski backend /
  *  CORS) "Jeton hakkı" kalır — `detail` metni yine nedeni söyler. */
 export function jetonRedBasligi(sebep: string | null | undefined): string {
-  return sebep === "cevrimdisi" ? "İnternet bağlantısı gerekli" : "Jeton hakkı";
+  return sebep === "cevrimdisi" ? i18n.t("ortak.hata.internetGerekli") : i18n.t("ortak.hata.jetonHakki");
 }
 
 /** İstek opsiyonları — `silent: true` arka-plan poll'lerinde hata pop-up'ını bastırır. */
@@ -108,39 +108,31 @@ export const AI_TIMEOUT_MS = 120000;
  *   • İptal mesajı ham DOM metniydi. Zaman aşımı ile ağ hatası AYRI şeylerdir: ilkinde
  *     tekrar denemek İŞE YARAR (model artık bellekte), ikincisinde yaramaz.
  */
-export const AI_ZAMAN_ASIMI_MESAJI =
-  "Analiz zaman aşımına uğradı. Bir modelin İLK çalıştırılması ~30 saniye sürebilir; " +
-  "aynı anda başka analizler çalışıyorsa daha da uzar. Tekrar deneyin — model artık " +
-  "hazır olduğu için bu kez hızlı sonuçlanır.";
+export const aiZamanAsimiMesaji = (): string => i18n.t("ortak.hata.aiZamanAsimi");
 
 /** SAHA 2026-09-08 (masaüstü): her `fetch` reddi "Ağ veya sunucu hatası." diye gösteriliyordu.
  *  Gerçek sebep backend'e HİÇ ulaşmayan bir istekti (tarayıcı CSP ile `fetch(blob:)`'u kesti);
  *  kullanıcı "internet yok diye çalışmıyor" sandı, günlükte iz yoktu. Tarayıcının fetch reddi
  *  (`TypeError: Failed to fetch` / RN `Network request failed`) sunucu hatasından AYRI bir sınıftır:
  *  istek gönderilememiştir → eylem: bağlantı göstergesi + dosyayı yeniden seçme + yeniden başlatma. */
-export const AI_ISTEK_GONDERILEMEDI_MESAJI =
-  "İstek cihaz yazılımına GÖNDERİLEMEDİ (tarayıcı isteği kesti: bağlantı koptu, ağ değişti ya da " +
-  "seçilen dosya okunamadı). Üstteki gösterge 'Çevrimdışı' ise önce bağlantıyı düzeltin; değilse " +
-  "dosyayı yeniden seçip tekrar deneyin. Sürerse uygulamayı yeniden başlatın.";
+export const aiIstekGonderilemediMesaji = (): string => i18n.t("ortak.hata.aiGonderilemedi");
 
 /** `response.json()` JSON olmayan gövdede düşer (vekil/portal sayfası, kesik yanıt). */
-export const AI_GECERSIZ_YANIT_MESAJI =
-  "Cihaz yazılımı geçersiz yanıt döndürdü (JSON değil). Tekrar deneyin; sürerse uygulama " +
-  "günlüklerini destek ekibine iletin.";
+export const aiGecersizYanitMesaji = (): string => i18n.t("ortak.hata.aiGecersizYanit");
 
 const _FETCH_REDDI = /failed to fetch|network request failed|networkerror|load failed/i;
 
 /** AI isteği `catch`inden kullanıcıya gösterilecek TEK mesaj kaynağı (eylem söyler, ham metin
  *  göstermez). `varsayilan` çağıranın bağlamına özel metnidir; yalnız sınıflandırılamayan
  *  hatalarda kullanılır. */
-export function aiHataMesaji(e: unknown, varsayilan = "Ağ veya sunucu hatası."): string {
+export function aiHataMesaji(e: unknown, varsayilan = i18n.t("ortak.hata.agSunucu")): string {
   // `AbortController.abort()` → DOMException(name: "AbortError"). `instanceof DOMException`
   // React Native'de güvenilir DEĞİL (DOM yok) → ada bakılır; tarayıcı ve RN'de de aynı.
   const ad = (e as { name?: string } | null)?.name;
   const mesaj = String((e as { message?: unknown } | null)?.message ?? "");
-  if (ad === "AbortError" || ad === "TimeoutError") return AI_ZAMAN_ASIMI_MESAJI;
-  if (ad === "TypeError" && _FETCH_REDDI.test(mesaj)) return AI_ISTEK_GONDERILEMEDI_MESAJI;
-  if (ad === "SyntaxError") return AI_GECERSIZ_YANIT_MESAJI;
+  if (ad === "AbortError" || ad === "TimeoutError") return aiZamanAsimiMesaji();
+  if (ad === "TypeError" && _FETCH_REDDI.test(mesaj)) return aiIstekGonderilemediMesaji();
+  if (ad === "SyntaxError") return aiGecersizYanitMesaji();
   return varsayilan;
 }
 
@@ -334,7 +326,7 @@ export async function apiGet<T>(path: string, fallback: T, opts?: ApiOpts): Prom
   const url = `${serviceConfig.apiBaseUrl}${path}`;
   if (!isCleartextAllowed(serviceConfig.apiBaseUrl)) {
     console.error("Şifresiz istek engellendi (public host, http):", serviceConfig.apiBaseUrl);
-    if (!opts?.silent) showError("Güvensiz bağlantı", "Cihaz adresi şifresiz (http) ve yerel ağda değil — istek gönderilmedi.");
+    if (!opts?.silent) showError(i18n.t("ortak.hata.guvensizBaglanti"), i18n.t("ortak.hata.sifresizAdres"));
     return fallback;
   }
   // audit B-10.3: GET İDEMPOTENT → geçici ağ hatasında (fetch throw/timeout) 1 kez daha dene
@@ -363,7 +355,7 @@ export async function apiGet<T>(path: string, fallback: T, opts?: ApiOpts): Prom
           }
           opts.onHttpError(response.status, detail, govdeHam);
         }
-        if (!opts?.silent) showError("Sunucu Hatası", "Sunucu ile iletişimde bir sorun oluştu.");
+        if (!opts?.silent) showError(i18n.t("ortak.hata.sunucuHatasi"), i18n.t("ortak.hata.sunucuIletisim"));
         return fallback;
       }
       const veri = await parseJsonSafe(response, fallback);
@@ -395,7 +387,7 @@ export async function apiGet<T>(path: string, fallback: T, opts?: ApiOpts): Prom
 export async function apiDelete<T>(path: string, fallback: T, opts?: ApiOpts): Promise<T> {
   if (!isCleartextAllowed(serviceConfig.apiBaseUrl)) {
     console.error("Şifresiz istek engellendi (public host, http):", serviceConfig.apiBaseUrl);
-    if (!opts?.silent) showError("Güvensiz bağlantı", "Cihaz adresi şifresiz (http) ve yerel ağda değil — istek gönderilmedi.");
+    if (!opts?.silent) showError(i18n.t("ortak.hata.guvensizBaglanti"), i18n.t("ortak.hata.sifresizAdres"));
     return fallback;
   }
   const ctrl = new AbortController();
@@ -411,7 +403,7 @@ export async function apiDelete<T>(path: string, fallback: T, opts?: ApiOpts): P
     if (kusak !== _hesapKusagi) return fallback; // CH1: hesap değişti — eski hesabın yanıtı ATILIR
     if (!response.ok) {
       console.error(`API DELETE Hatası [${response.status}]: ${url}`);
-      if (!opts?.silent) showError("Sunucu Hatası", "Sunucuda kayıt silinirken bir hata oluştu.");
+      if (!opts?.silent) showError(i18n.t("ortak.hata.sunucuHatasi"), i18n.t("ortak.hata.silmeHatasi"));
       return fallback;
     }
     const veri = await parseJsonSafe(response, fallback);
@@ -427,7 +419,7 @@ export async function apiDelete<T>(path: string, fallback: T, opts?: ApiOpts): P
 export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?: ApiOpts): Promise<T> {
   if (!isCleartextAllowed(serviceConfig.apiBaseUrl)) {
     console.error("Şifresiz istek engellendi (public host, http):", serviceConfig.apiBaseUrl);
-    if (!opts?.silent) showError("Güvensiz bağlantı", "Cihaz adresi şifresiz (http) ve yerel ağda değil — istek gönderilmedi.");
+    if (!opts?.silent) showError(i18n.t("ortak.hata.guvensizBaglanti"), i18n.t("ortak.hata.sifresizAdres"));
     return fallback;
   }
   const ctrl = new AbortController();
@@ -480,15 +472,15 @@ export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?
             jetonRedBasligi(sebep),
             detail ||
               (sebep === "cevrimdisi"
-                ? "Yapay zekâ analizi için internet gerekir. Seans ve acil durdurma etkilenmez."
-                : "Jeton hakkınız yetersiz. Seans ve acil durdurma etkilenmez."),
+                ? i18n.t("ortak.hata.aiInternetGerekir")
+                : i18n.t("ortak.hata.jetonYetersiz")),
           );
         }
         return fallback;
       }
       // Gerekçe varsa ONU göster: "veritabanı açılamadı, seans başlatılamaz" ile "bir hata oluştu"
       // arasındaki fark, veterinerin sorunu çözebilmesi ile çözememesi arasındaki farktır.
-      if (!opts?.silent) showError("Sunucu Hatası", detail || "Sunucuya veri gönderilirken bir hata oluştu.");
+      if (!opts?.silent) showError(i18n.t("ortak.hata.sunucuHatasi"), detail || i18n.t("ortak.hata.gondermeHatasi"));
       return fallback;
     }
     const veri = await parseJsonSafe(response, fallback);
@@ -502,12 +494,12 @@ export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?
     // AI ilk çağrısı 8sn sınırını aşıp sessizce iptal ediliyordu). Zaman aşımını AÇIKÇA söyle.
     if ((error as { name?: string })?.name === "AbortError" && !opts?.silent) {
       showError(
-        "İşlem zaman aşımına uğradı",
+        i18n.t("ortak.hata.zamanAsimiBaslik"),
         opts?.zamanAsimiMesaji ??
-          "Sunucu zamanında yanıt vermedi. Tekrar deneyin — ilk analiz model yüklemesi nedeniyle uzun sürebilir.",
+          i18n.t("ortak.hata.zamanAsimiGovde"),
       );
     } else if (opts?.agHatasiMesaji && !opts?.silent) {
-      showError("Cihaza ulaşılamadı", opts.agHatasiMesaji);
+      showError(i18n.t("ortak.hata.cihazaUlasilamadi"), opts.agHatasiMesaji);
     }
     return fallback;
   } finally {
