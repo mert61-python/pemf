@@ -1,6 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import { useEffect, useState } from 'react'
 import { fetchUsageStats, type UsageStats } from '../lib/usageStats'
+import { useTranslation } from 'react-i18next'
 
 /**
  * KULLANIM SAYACI (2026-08-13) — eskiden İNDİRME sayacıydı.
@@ -18,6 +19,7 @@ import { fetchUsageStats, type UsageStats } from '../lib/usageStats'
  * sayı göstermek, hiç göstermemekten daha kötüdür.
  */
 export function DownloadStats() {
+  const { t } = useTranslation()
   const [s, setS] = useState<UsageStats | null>(null)
 
   useEffect(() => {
@@ -30,7 +32,7 @@ export function DownloadStats() {
 
   return (
     <section className="mx-auto mt-10 max-w-3xl rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
-      <h2 className="text-lg font-semibold text-white">Kayıtlı kullanıcı</h2>
+      <h2 className="text-lg font-semibold text-white">{t('indirme.istatistik.kayitliKullanici')}</h2>
       <p className="mt-1 text-4xl font-bold text-teal-300">{s.accounts.toLocaleString('tr-TR')}</p>
       {/* ⚠️ "Kurulu cihaz TOPLAMI" BİLEREK GÖSTERİLMİYOR (2026-08-13, ölçümle):
           `get_unique_device_id()` kimliği veri kökündeki `device_id.txt`te saklar; kök silinince
@@ -41,11 +43,11 @@ export function DownloadStats() {
           kendiliğinden eler ve gerçekten kullanımda olanı gösterir. */}
       {s.devicesActive > 0 && (
         <div className="mt-4 flex flex-wrap justify-center gap-6 text-sm text-white/70">
-          <Stat label="Aktif cihaz (30 gün)" value={s.devicesActive} />
+          <Stat label={t('indirme.istatistik.aktifCihaz')} value={s.devicesActive} />
         </div>
       )}
       <p className="mt-4 text-xs text-white/40">
-        E-posta adresi doğrulanmış hesap sayısı ile son 30 günde bağlanan cihaz sayısıdır.
+        {t('indirme.istatistik.aciklama')}
       </p>
     </section>
   )

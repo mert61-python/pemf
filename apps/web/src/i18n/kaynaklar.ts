@@ -18,6 +18,10 @@ import trDestek from './tr/destek.json'
 import enDestek from './en/destek.json'
 import trBulunamadi from './tr/bulunamadi.json'
 import enBulunamadi from './en/bulunamadi.json'
+import trHesap from './tr/hesap.json'
+import enHesap from './en/hesap.json'
+import trIndirme from './tr/indirme.json'
+import enIndirme from './en/indirme.json'
 
 export const trKaynak = {
   ortak: trOrtak,
@@ -28,6 +32,8 @@ export const trKaynak = {
   ozellikler: trOzellikler,
   destek: trDestek,
   bulunamadi: trBulunamadi,
+  hesap: trHesap,
+  indirme: trIndirme,
 }
 
 export const enKaynak: typeof trKaynak = {
@@ -39,6 +45,8 @@ export const enKaynak: typeof trKaynak = {
   ozellikler: enOzellikler,
   destek: enDestek,
   bulunamadi: enBulunamadi,
+  hesap: enHesap,
+  indirme: enIndirme,
 }
 
 export const kaynaklar = {

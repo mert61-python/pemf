@@ -5,6 +5,7 @@ import { Windows, Apple, Linux, Android, Download } from './Icons'
 import { detectOS, type OS } from '../lib/os'
 import { useDownloadGate, DownloadGateNote } from './DownloadGate'
 import type { DownloadTarget } from '../lib/download'
+import { useTranslation } from 'react-i18next'
 
 // DENETIM 2026-08-06: `key` string idi ve tıklamada `as DownloadTarget` ile zorlanıyordu.
 // config.ts'e kapıda tanımsız bir platform eklenirse (ör. 'ios') `resolveDownload` switch'i
@@ -16,6 +17,7 @@ type Dl = { key: DownloadTarget; label: string; ready: boolean }
 /** Windows + macOS + Linux indirme butonları. Kullanıcının OS'u birincil olur; hazır
  *  olmayan platform (ör. macOS imzalı .dmg beklerken) "Yakında" gösterir. */
 export default function DownloadButtons({ size = 'md' }: { size?: 'md' | 'lg' }) {
+  const { t } = useTranslation()
   const [os, setOs] = useState<OS>('other')
   useEffect(() => setOs(detectOS()), [])
   // İndirme kapısı (kayıt adımı — erişim kontrolü DEĞİL, bkz. lib/download.ts).
@@ -29,17 +31,17 @@ export default function DownloadButtons({ size = 'md' }: { size?: 'md' | 'lg' })
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <span className={`btn-primary ${pad} cursor-not-allowed opacity-60`} aria-disabled>
           <Download className="h-5 w-5" />
-          Yakında · v{CLIENT.version}
+          {t('indirme.yakindaSurum', { surum: CLIENT.version })}
         </span>
         <span className="text-sm text-muted">
-          Çıkınca haber vermemiz için{' '}
+          {t('indirme.haberOnce')}{' '}
           {/* ⚠️ ADRES BURADA STATİK — üstteki kapı kuralı yüzünden. `download-gate-wiring`
               testi bu dosyada dinamik `href={...}` YASAKLAR; `COMPANY.email`i şablona
               koymak o kapıyı gevşetirdi. Adres değişirse `config.ts::COMPANY.email` ile
               BİRLİKTE güncellenir — `tests/test_destek_adresi_tek_kaynak.py` ikisinin
               ayrışmasını yakalar. */}
           <a href="mailto:ibiatechnology@gmail.com?subject=PEMF%20Vet%20s%C3%BCr%C3%BCm%20bildirimi" className="text-primary hover:underline">
-            bize yazın
+            {t('indirme.haberBaglanti')}
           </a>
           .
         </span>
@@ -60,7 +62,7 @@ export default function DownloadButtons({ size = 'md' }: { size?: 'md' | 'lg' })
       return (
         <span key={d.key} className={`btn-ghost ${pad} cursor-not-allowed opacity-60`} aria-disabled>
           <Icon className="h-5 w-5" />
-          {d.label} · Yakında
+          {t('indirme.platformYakinda', { label: d.label })}
         </span>
       )
     }
@@ -73,11 +75,11 @@ export default function DownloadButtons({ size = 'md' }: { size?: 'md' | 'lg' })
         onClick={() => download(d.key)}
         disabled={loading}
         aria-busy={loading}
-        aria-label={gated ? `${d.label} için giriş yapıp indir` : `${d.label} için indir`}
+        aria-label={gated ? t('indirme.girisYapipIndir', { label: d.label }) : t('indirme.icinIndir', { label: d.label })}
         className={`${isPrimary ? 'btn-primary' : 'btn-ghost'} ${pad} cursor-pointer disabled:cursor-wait disabled:opacity-60`}
       >
         <Icon className="h-5 w-5" />
-        {isPrimary ? (gated ? 'Giriş yap ve indir' : `${d.label} için indir`) : d.label}
+        {isPrimary ? (gated ? t('indirme.girisYapVeIndir') : t('indirme.icinIndir', { label: d.label })) : d.label}
       </button>
     )
   }

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useAuthModal } from '../context/AuthModal'
 import { requestDownload, type DownloadTarget, type GateDecision } from '../lib/download'
+import { useTranslation } from 'react-i18next'
 
 /** Oturum okuması bu kadar sürerse artık bekleme (ms). Bkz. useDownloadGate içindeki gerekçe. */
 const OTURUM_BEKLEME_MS = 8000
@@ -65,12 +66,12 @@ export function useDownloadGate() {
  *  olan şeye indir: aynı hesap uygulamada ve destekte geçerli. (Aynı gerekçeyle Download.tsx'te
  *  "SHA-256 doğrulanır" ifadesi de daha önce düzeltilmişti.) */
 export function DownloadGateNote() {
+  const { t } = useTranslation()
   const { gated } = useDownloadGate()
   if (!gated) return null
   return (
     <p className="mt-4 text-sm text-muted">
-      İndirmek için ücretsiz hesap oluşturun veya giriş yapın — aynı hesapla uygulamaya ve
-      destek taleplerinize giriş yaparsınız. Kart bilgisi istenmez.
+      {t('indirme.kapiNotu')}
     </p>
   )
 }

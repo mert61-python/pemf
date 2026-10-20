@@ -10,38 +10,38 @@
  * arasındaki sözleşme `tests/test_launcher_site_yol_sozlesmesi.py` ile kilitli.
  */
 import { useEffect } from 'react'
+import type { ParseKeys } from 'i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useAuthModal, type AuthMode } from '../context/AuthModal'
+import { useTranslation } from 'react-i18next'
 
 export type AuthRouteKind = 'register' | 'login' | 'forgot'
 
-const METIN: Record<AuthRouteKind, { baslik: string; aciklama: string; dugme: string; mode: AuthMode }> = {
+// `baslik` / `aciklama` / `dugme` katalog ANAHTARIDIR (modül düzeyi sabit; gösterimde `t(m.baslik)` ile çevrilir).
+const METIN: Record<AuthRouteKind, { baslik: ParseKeys; aciklama: ParseKeys; dugme: ParseKeys; mode: AuthMode }> = {
   register: {
-    baslik: 'Hesap oluştur',
-    aciklama:
-      'Ücretsiz hesap masaüstü uygulaması, telefon uygulaması ve bu site için ortaktır; kart bilgisi istenmez. ' +
-      'Kayıt penceresi kapandıysa aşağıdaki düğmeyle yeniden açabilirsiniz.',
-    dugme: 'Kayıt penceresini aç',
+    baslik: 'hesap.hesapOlustur',
+    aciklama: 'hesap.rota.kayit.aciklama',
+    dugme: 'hesap.rota.kayit.dugme',
     mode: 'signup',
   },
   login: {
-    baslik: 'Giriş yap',
-    aciklama: 'Hesabınızla giriş yapın. Pencere kapandıysa aşağıdaki düğmeyle yeniden açabilirsiniz.',
-    dugme: 'Giriş penceresini aç',
+    baslik: 'hesap.girisYap',
+    aciklama: 'hesap.rota.giris.aciklama',
+    dugme: 'hesap.rota.giris.dugme',
     mode: 'login',
   },
   forgot: {
-    baslik: 'Şifremi unuttum',
-    aciklama:
-      'Giriş penceresinde e-postanızı yazıp "Şifremi unuttum" bağlantısına basın; size yeni şifre ' +
-      'belirleme bağlantısı göndeririz. Pencere kapandıysa aşağıdaki düğmeyle yeniden açabilirsiniz.',
-    dugme: 'Giriş penceresini aç',
+    baslik: 'hesap.sifremiUnuttum',
+    aciklama: 'hesap.rota.sifre.aciklama',
+    dugme: 'hesap.rota.giris.dugme',
     mode: 'login',
   },
 }
 
 export default function AuthRoute({ kind }: { kind: AuthRouteKind }) {
+  const { t } = useTranslation()
   const { session, ready } = useAuth()
   const { requireAuth } = useAuthModal()
   const navigate = useNavigate()
@@ -63,19 +63,19 @@ export default function AuthRoute({ kind }: { kind: AuthRouteKind }) {
   return (
     <section className="mx-auto grid min-h-[60vh] max-w-2xl place-items-center px-4 py-20 text-center">
       <div>
-        <p className="text-sm font-semibold uppercase tracking-widest text-primary">Hesap</p>
-        <h1 className="mt-3 text-3xl font-bold sm:text-4xl">{m.baslik}</h1>
-        <p className="mx-auto mt-3 max-w-md text-muted">{m.aciklama}</p>
+        <p className="text-sm font-semibold uppercase tracking-widest text-primary">{t('hesap.rota.rozet')}</p>
+        <h1 className="mt-3 text-3xl font-bold sm:text-4xl">{t(m.baslik)}</h1>
+        <p className="mx-auto mt-3 max-w-md text-muted">{t(m.aciklama)}</p>
         <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
           <button
             type="button"
             onClick={() => requireAuth(() => navigate('/', { replace: true }), 'download', m.mode)}
             className="btn-primary"
           >
-            {m.dugme}
+            {t(m.dugme)}
           </button>
           <Link to="/" className="tap rounded-lg border border-border px-4 py-2 text-sm text-muted hover:border-primary/40 hover:text-fg">
-            Ana sayfa
+            {t('ortak.anaSayfa')}
           </Link>
         </div>
       </div>

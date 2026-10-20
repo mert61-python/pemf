@@ -19,6 +19,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { kaynakSoy as soy } from './_soyucu'
+import { TR, gorunenMetinler } from './_kaynakMetni'
 
 import ACCOUNT_SRC from '../components/AccountButton.tsx?raw'
 import NOTFOUND_SRC from '../pages/NotFound.tsx?raw'
@@ -38,7 +39,7 @@ describe('1) hesap alanı', () => {
   it('KRİTİK: giriş yapan kullanıcı HESABINI görür (e-posta + durum)', () => {
     // Header'da yalnız "Aboneliği iptal et" + "Çıkış" vardı; kullanıcı hangi hesapla girdiğini
     // bile göremiyordu (yalnız `title` ipucunda vardı — dokunmatikte görünmez).
-    const s = soy(ACCOUNT_SRC)
+    const s = gorunenMetinler(soy(ACCOUNT_SRC))
     expect(s).toMatch(/\{email\}/)
     expect(s).toMatch(/Hesabım|Hesap/)
   })
@@ -50,7 +51,7 @@ describe('1) hesap alanı', () => {
     // yazılmıyor; hak katmanları yalnız `status`e bakıp `canceled`ı pasif sayıyor). Yani eski
     // kapı, tutulamayacak bir vaadi KİLİTLİYORDU. Ölçülen gerçeğe göre daraltıldı; vaadin
     // yokluğu ayrıca `dogruluk.test.ts` içinde kilitli.
-    const s = soy(ACCOUNT_SRC)
+    const s = gorunenMetinler(soy(ACCOUNT_SRC))
     expect(s).toMatch(/yenileme/i)
     expect(s).toMatch(/bir daha ücret alınmaz/i)
   })
@@ -79,7 +80,9 @@ describe('2) kalan kalemler', () => {
   it('KRİTİK: "Yakında" olan platformda haber-verme yolu var', () => {
     // Devre dışı buton hiçbir çıkış sunmuyordu; ana sayfadaki aynı durum e-posta bağlantısı veriyor.
     const s = soy(DOWNLOAD_SRC)
-    const i = s.indexOf('Yakında')
+    // Metin kataloğa taşındı (I18N): çapa = anahtar çağrısı, metin iddiası = katalog Türkçe değeri.
+    expect(TR['indirme.yakinda']).toBe('Yakında')
+    const i = s.indexOf("t('indirme.yakinda')")
     expect(i).toBeGreaterThan(-1)
     expect(s.slice(i - 300, i + 600)).toMatch(/mailto:/)
   })

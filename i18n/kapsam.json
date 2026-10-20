@@ -391,7 +391,7 @@
    "sira": 12,
    "kritik": false,
    "aciklama": "indirme sayfası ve düğmeleri, paket oluşturucu, hesap / giriş / parola sıfırlama",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 207,
    "dosyaSayisi": 15
   },
@@ -8195,10 +8195,27 @@
    "yuzey": "site",
    "grup": "site-12b-indirme-hesap",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 19,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "static w-full",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "absolute right-0 w-72 max-w-[calc(100vw-2.5rem)]",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "border-emerald-500/40 bg-emerald-500/10 text-success",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "border-red-500/40 bg-red-500/10 text-danger",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -8206,10 +8223,23 @@
    "yuzey": "site",
    "grup": "site-12b-indirme-hesap",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 11,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "!px-6 !py-3.5 text-[15px]",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "btn-primary",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "btn-ghost",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -8217,7 +8247,7 @@
    "yuzey": "site",
    "grup": "site-12b-indirme-hesap",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
    "muaf": [],
@@ -8228,7 +8258,7 @@
    "yuzey": "site",
    "grup": "site-12b-indirme-hesap",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 3,
    "kritik": false,
    "muaf": [],
@@ -8239,10 +8269,27 @@
    "yuzey": "site",
    "grup": "site-12b-indirme-hesap",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 19,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "ring-2 ring-primary/60 glow-ring",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "border-primary bg-primary text-primary-fg",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "border-border-strong text-transparent",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "GB",
+     "gerekce": "birim `GB` — iki dilde aynı"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -8250,10 +8297,15 @@
    "yuzey": "site",
    "grup": "site-12b-indirme-hesap",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "useAuth must be used within AuthProvider",
+     "gerekce": "geliştirici hata iletisi (`useAuth must be used within AuthProvider`, bileşen ağacı kurulumu hatası) — ekran metni değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -8261,10 +8313,35 @@
    "yuzey": "site",
    "grup": "site-12b-indirme-hesap",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 56,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "useAuthModal must be used within AuthModalProvider",
+     "gerekce": "geliştirici hata iletisi (`useAuthModal must be used within AuthModalProvider`) — ekran metni değil"
+    },
+    {
+     "metin": "w-full rounded-lg border border-border bg-bg-soft px-3.5 py-2.5 text-sm outline-none focus:border-primary/60",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "border-primary/60 bg-primary/10 ring-1 ring-primary/40",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "border-border bg-bg-soft hover:border-primary/40",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "border-primary",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "border-border",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -8272,7 +8349,7 @@
    "yuzey": "site",
    "grup": "site-12b-indirme-hesap",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 17,
    "kritik": false,
    "muaf": [],
@@ -8283,10 +8360,19 @@
    "yuzey": "site",
    "grup": "site-12b-indirme-hesap",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 2,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": ".AppImage (universal)",
+     "gerekce": "Linux paket biçimi adı + dağıtım adları (`.AppImage (universal)`, `.rpm (Fedora / RHEL)`) — dosya biçimi / ürün adı, iki dilde aynı"
+    },
+    {
+     "metin": ".rpm (Fedora / RHEL)",
+     "gerekce": "Linux paket biçimi adı + dağıtım adları (`.AppImage (universal)`, `.rpm (Fedora / RHEL)`) — dosya biçimi / ürün adı, iki dilde aynı"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -8294,7 +8380,7 @@
    "yuzey": "site",
    "grup": "site-12b-indirme-hesap",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -8305,7 +8391,7 @@
    "yuzey": "site",
    "grup": "site-12b-indirme-hesap",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -8316,7 +8402,7 @@
    "yuzey": "site",
    "grup": "site-12b-indirme-hesap",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -8327,7 +8413,7 @@
    "yuzey": "site",
    "grup": "site-12b-indirme-hesap",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 11,
    "kritik": false,
    "muaf": [],
@@ -8338,10 +8424,39 @@
    "yuzey": "site",
    "grup": "site-12b-indirme-hesap",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 54,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "btn-primary",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "btn-ghost",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "text-success",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "text-primary",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "GB",
+     "gerekce": "birim `GB` — 171 ile aynı şablon anahtarında (`indirme.profil.indirmeBoyutu`)"
+    },
+    {
+     "metin": "· Apple Silicon / Intel",
+     "gerekce": "ürün / platform adı (`Apple Silicon / Intel`) — iki dilde aynı"
+    },
+    {
+     "metin": ".rpm (Fedora / RHEL)",
+     "gerekce": "Linux paket biçimi adı + dağıtım adları (`.AppImage (universal)`, `.rpm (Fedora / RHEL)`) — dosya biçimi / ürün adı, iki dilde aynı"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -8349,7 +8464,7 @@
    "yuzey": "site",
    "grup": "site-12b-indirme-hesap",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 13,
    "kritik": false,
    "muaf": [],

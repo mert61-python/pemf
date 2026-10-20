@@ -1,0 +1,58 @@
+{
+  "abonelikBasladi": "✓ Your subscription has started. Download PEMF Vet below and sign in with the same account; your plan is recognised automatically, you do not need to enter a code.",
+  "appImage": ".AppImage (all distributions)",
+  "baslaticiAciklama": "Install the small launcher you downloaded; it downloads and installs the main app, and the app opens with “Start”.",
+  "butunluk": " The integrity of the downloaded files is verified automatically during installation",
+  "gereksinim": {
+    "baslik": "System requirements",
+    "disk": "• 3–5 GB free disk space — the exact size depends on the number of profiles you select",
+    "internet": "• Internet connection for the first installation",
+    "ram": "• 8 GB RAM (16 GB recommended for AI models)"
+  },
+  "girisYapVeIndir": "Sign in and download",
+  "girisYapipIndir": "Sign in and download for {{label}}",
+  "haberBaglanti": "write to us",
+  "haberOnce": "To be notified when it is released,",
+  "haberVer": "Notify me when available",
+  "icinIndir": "Download for {{label}}",
+  "istatistik": {
+    "aciklama": "The number of accounts with a verified email address and the number of devices connected in the last 30 days.",
+    "aktifCihaz": "Active devices (30 days)",
+    "kayitliKullanici": "Registered users"
+  },
+  "kapiNotu": "Create a free account or sign in to download — the same account signs you in to the app and to your support requests. No card details are required.",
+  "kurulumDosyasi": "The installer you download is ≈ {{sizeMB}} MB · the app is downloaded during installation",
+  "kurulumSonrasi": "After installation",
+  "paket": {
+    "ayArti": "+{{tutar}}/mo",
+    "aylikEklenti": "Monthly add-on",
+    "aylikEklentiEk": "+{{tutar}}/mo add-on",
+    "onerilen": "Recommended",
+    "planaDahil": "Included in your plan",
+    "planaDahilNotu": "The Pet Owner and Veterinarian profiles are included in your plan; Research is a paid add-on.",
+    "seciliProfil": "Selected profiles",
+    "secimOnce": "You choose your profile ",
+    "secimSonra": " — only the models you select are downloaded.",
+    "secimVurgu": "during installation",
+    "tahminiIndirme": "Estimated download",
+    "testUcretsiz": "During the test phase all profiles (including Research) are free.",
+    "yokDahil": "None — included"
+  },
+  "platformYakinda": "{{label}} · Coming soon",
+  "profil": {
+    "aciklama": "You choose your usage profile during installation; only the AI models you select are downloaded. You can select more than one profile and change it at any time.",
+    "baslik": "Choose your profile during installation",
+    "indirmeBoyutu": "Download ≈ {{gb}} GB",
+    "planOnce": "The Pet Owner and Veterinarian profiles are included in your plan; the Research profile is a paid add-on. Details are on the",
+    "planSonra": " page.",
+    "testOnce": "During the test phase ",
+    "testSonra": " — download whichever you like.",
+    "testVurgu": "all profiles (including Research) are free",
+    "ucretsiz": "Free"
+  },
+  "rozetSurum": "Download · v{{surum}}",
+  "surumTarih": "Version {{surum}} · {{tarih}}",
+  "telefonaTekDosya": "Downloads to your phone as a single file",
+  "yakinda": "Coming soon",
+  "yakindaSurum": "Coming soon · v{{surum}}"
+}

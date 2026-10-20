@@ -1,0 +1,122 @@
+{
+  "abonelik": {
+    "evetIptal": "Yes, cancel",
+    "iptalEdildi": "Your subscription has been cancelled; automatic renewal has been stopped.",
+    "iptalEdiliyor": "Cancelling…",
+    "iptalEt": "Cancel subscription",
+    "iptalSorusu": "Cancel your subscription? Automatic renewal stops and you will not be charged again.",
+    "testAsamasi": "We are in the testing phase: all plans are free right now and you are not charged.",
+    "vazgec": "Go back"
+  },
+  "alan": {
+    "adSoyad": "Full name",
+    "bolum": "Department / division",
+    "eposta": "Email",
+    "epostaKurumsal": "Email (does not have to be institutional)",
+    "klinikAdi": "Clinic / animal hospital name",
+    "klinikBilgileri": "Clinic details",
+    "kurumAdi": "University / institution / institute",
+    "kurumBilgileri": "Institution details",
+    "sehir": "City",
+    "sifre": "Password",
+    "sifreKurala": "Password ({{kural}})",
+    "telefon": "Phone",
+    "unvan": "Academic title (optional)",
+    "veterinerOda": "Veterinary chamber / diploma no. (optional)"
+  },
+  "bekleyin": "Please wait…",
+  "bilgi": {
+    "dogrulama": "A verification email has been sent. Sign in after you confirm it.",
+    "dogrulamaIndirme": "A verification email has been sent. Confirm it and sign in here — your download will continue where it left off.",
+    "sifirlamaGonderildi": "A password reset link has been sent to your email. Check your inbox."
+  },
+  "cikisYap": "Sign out",
+  "girisYap": "Sign in",
+  "girisYapildi": "Signed in",
+  "girisYapin": "Sign in",
+  "hata": {
+    "beklenmeyen": "An unexpected error occurred. Please try again.",
+    "cokFazlaDeneme": "Too many attempts were made. Please try again in a few minutes.",
+    "cokSikDenendi": "Too many attempts in a short time. For security you need to wait a moment; try again in a few seconds.",
+    "epostaDogrulanmadi": "Your email address has not been verified yet. Click the verification link we sent you, then sign in again.",
+    "epostaGecersiz": "The email address does not look valid. Check the address and try again.",
+    "epostaGirin": "Enter your email address first.",
+    "epostaKabulEdilmedi": "This email address was not accepted. Try a different address.",
+    "epostaSifreHatali": "Incorrect email or password. If you do not remember your password, use the \"Forgot password\" link.",
+    "hesapZatenVar": "An account with this email address already exists. Try signing in, or reset your password with \"Forgot password\".",
+    "islemTamamlanamadi": "The operation could not be completed. Please try again; if the problem continues, write to {{email}}.",
+    "sifreAyni": "The new password cannot be the same as the old one. Choose a different password.",
+    "sifreZayif": "The password is not strong enough. {{aciklama}}",
+    "sifrelerEslesmiyor": "The passwords do not match.",
+    "sunucuyaUlasilamadi": "Could not reach the server. Check your internet connection and try again."
+  },
+  "hesabim": "My account",
+  "hesabinizVar": "Already have an account? ",
+  "hesabinizYok": "Don't have an account? ",
+  "hesapOlustur": "Create account",
+  "jeton": {
+    "aylikHak": "{{sayi}} monthly allowance (renews at the end of the period) ·",
+    "satinAlinan": "{{sayi}} purchased (never expire)"
+  },
+  "jetonNotu": "Your credits are used only for AI analyses; sessions and emergency stop do not depend on credits.",
+  "kalanJeton": "Credits left",
+  "kapat": "Close",
+  "kayit": {
+    "gizlilik": "Privacy Policy",
+    "kullanimSartlari": "Terms of Use",
+    "kvkk": "KVKK Privacy Notice",
+    "once": "By signing up you accept the",
+    "sonrasi": ".",
+    "ve": " and"
+  },
+  "kayitOl": "Sign up",
+  "kayitOlun": "Sign up",
+  "odeme": {
+    "abonelikYok": "No active subscription appears on your account. If the problem continues, write to {{email}}.",
+    "bankaDogrulamadi": "Your bank could not verify the transaction. Check your card details and try again.",
+    "tahsilEdilemedi": "The payment could not be collected from your card (limit/balance). You can try again with a different card."
+  },
+  "pencere": {
+    "abonelikAciklama": "Your subscription is attached to this account (the same as on mobile and desktop).",
+    "formdaKal": "Never mind, stay on the form",
+    "hesapTuru": "Account type",
+    "indirmeAciklama": "A free account is enough to download — no card details are required. The download starts on its own once you sign in.",
+    "kapatmaSorusu": "The information you entered will be lost. Close the window?",
+    "servisYok": "The sign-in service is unavailable right now. Try again shortly; if the problem continues, write to {{eposta}}."
+  },
+  "rota": {
+    "giris": {
+      "aciklama": "Sign in with your account. If the window closed, you can reopen it with the button below.",
+      "dugme": "Open the sign-in window"
+    },
+    "kayit": {
+      "aciklama": "A free account is shared by the desktop app, the phone app and this site; no card details are required. If the sign-up window closed, you can reopen it with the button below.",
+      "dugme": "Open the sign-up window"
+    },
+    "rozet": "Account",
+    "sifre": {
+      "aciklama": "In the sign-in window, enter your email and press the \"Forgot password\" link; we will send you a link to set a new password. If the window closed, you can reopen it with the button below."
+    }
+  },
+  "sifirla": {
+    "anaSayfaBaglanti": "open the sign-in window from the home page and",
+    "baslik": "Set a new password",
+    "dogrulaniyor": "Verifying the reset link… If this message stays, the link may have expired. To get a new link,",
+    "girisYapabilirsiniz": "You can now sign in with your new password.",
+    "guncelle": "Update password",
+    "guncellendi": "Your password has been updated",
+    "guncelleniyor": "Updating…",
+    "tekrarlayin": "repeat the “Forgot password” step.",
+    "yeniSifre": "New password",
+    "yeniSifreTekrar": "New password (again)"
+  },
+  "sifreKurali": "At least 8 characters; must include an uppercase letter, a lowercase letter and a number.",
+  "sifremiUnuttum": "Forgot password",
+  "tur": {
+    "arastirmaci": "Researcher / Institution",
+    "bireyselAlt": "Personal use",
+    "klinikAlt": "With clinic details",
+    "kurumAlt": "University · institute",
+    "veteriner": "Veterinarian / Clinic"
+  }
+}

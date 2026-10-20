@@ -6,6 +6,7 @@ import { cancelSubscription } from '../lib/checkout'
 import { FREE_MODE } from '../config'
 import { odemeHatasiTurkce } from '../lib/authHatalari'
 import { jetonBakiyesiniOku, type JetonBakiyesi } from '../lib/jeton'
+import { useTranslation } from 'react-i18next'
 
 /* Header hesap kontrolü: giriş yoksa "Giriş yap" (AuthModal); varsa hesap menüsü.
    Supabase yapılandırılmadıysa hiç gösterilmez.
@@ -21,6 +22,7 @@ import { jetonBakiyesiniOku, type JetonBakiyesi } from '../lib/jeton'
    alanına bu depoda HİÇBİR yol değer yazmıyor (bkz. api/cancel.ts içindeki ölçüm notu) →
    tarih göstermek uydurma veri olurdu. Satış açılınca gerçek "Hesabım" sayfası ayrı iş. */
 export default function AccountButton({ onNavigate, inline }: { onNavigate?: () => void; inline?: boolean }) {
+  const { t } = useTranslation()
   const { session, email, signOut, ready } = useAuth()
   const { requireAuth } = useAuthModal()
   const [acik, setAcik] = useState(false)
@@ -56,7 +58,7 @@ export default function AccountButton({ onNavigate, inline }: { onNavigate?: () 
   if (!session) {
     return (
       <button onClick={() => { requireAuth(); onNavigate?.() }} className="btn-ghost text-sm">
-        Giriş yap
+        {t('hesap.girisYap')}
       </button>
     )
   }
@@ -69,7 +71,7 @@ export default function AccountButton({ onNavigate, inline }: { onNavigate?: () 
     setSonuc({
       ok: !!ok,
       mesaj: ok
-        ? 'Aboneliğiniz iptal edildi; otomatik yenileme durduruldu.'
+        ? t('hesap.abonelik.iptalEdildi')
         : odemeHatasiTurkce(error),
     })
   }
@@ -82,7 +84,7 @@ export default function AccountButton({ onNavigate, inline }: { onNavigate?: () 
         aria-haspopup="menu"
         aria-expanded={acik}
       >
-        Hesabım
+        {t('hesap.hesabim')}
       </button>
 
       {acik && (
@@ -96,7 +98,7 @@ export default function AccountButton({ onNavigate, inline }: { onNavigate?: () 
             inline ? 'static w-full' : 'absolute right-0 w-72 max-w-[calc(100vw-2.5rem)]'
           }`}
         >
-          <div className="text-xs text-muted">Giriş yapıldı</div>
+          <div className="text-xs text-muted">{t('hesap.girisYapildi')}</div>
           <div className="mt-0.5 truncate text-sm font-medium" title={email ?? undefined}>{email}</div>
 
           {/* JETON BAKİYESİ (7. parti): kullanıcı kalan analiz hakkını buradan görür.
@@ -106,20 +108,20 @@ export default function AccountButton({ onNavigate, inline }: { onNavigate?: () 
           {jeton && (
             <div className="mt-3 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2">
               <div className="flex items-baseline justify-between">
-                <span className="text-xs text-muted">Kalan jeton</span>
+                <span className="text-xs text-muted">{t('hesap.kalanJeton')}</span>
                 <span className="text-lg font-bold text-primary">{jeton.kalan.toLocaleString('tr-TR')}</span>
               </div>
               <div className="mt-1 text-[11px] leading-snug text-muted">
-                {jeton.aylikHak.toLocaleString('tr-TR')} aylık hak (dönem sonunda yenilenir) ·{' '}
-                {jeton.satinAlinan.toLocaleString('tr-TR')} satın alınan (süresi dolmaz)
+                {t('hesap.jeton.aylikHak', { sayi: jeton.aylikHak.toLocaleString('tr-TR') })}{' '}
+                {t('hesap.jeton.satinAlinan', { sayi: jeton.satinAlinan.toLocaleString('tr-TR') })}
               </div>
             </div>
           )}
 
           <div className="mt-3 rounded-lg border border-border bg-bg-soft/60 px-3 py-2 text-xs leading-relaxed text-muted">
             {FREE_MODE
-              ? 'Test aşamasındayız: tüm planlar şu an ücretsiz, sizden ödeme alınmıyor.'
-              : 'Jetonunuz yalnız yapay zekâ analizlerinde harcanır; seans ve acil durdurma jetondan bağımsızdır.'}
+              ? t('hesap.abonelik.testAsamasi')
+              : t('hesap.jetonNotu')}
           </div>
 
           {!FREE_MODE && !onay && !sonuc && (
@@ -127,21 +129,21 @@ export default function AccountButton({ onNavigate, inline }: { onNavigate?: () 
               onClick={() => setOnay(true)}
               className="mt-3 w-full rounded-lg border border-border px-3 py-2 text-sm text-muted transition hover:border-red-500/40 hover:text-red-500"
             >
-              Aboneliği iptal et
+              {t('hesap.abonelik.iptalEt')}
             </button>
           )}
 
           {onay && (
             <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
               <p className="text-xs leading-relaxed text-warning">
-                Aboneliğiniz iptal edilsin mi? Otomatik yenileme durur ve bir daha ücret alınmaz.
+                {t('hesap.abonelik.iptalSorusu')}
               </p>
               <div className="mt-3 flex gap-2">
                 <button onClick={iptalEt} disabled={busy} className="btn-primary flex-1 py-1.5 text-xs disabled:opacity-60">
-                  {busy ? 'İptal ediliyor…' : 'Evet, iptal et'}
+                  {busy ? t('hesap.abonelik.iptalEdiliyor') : t('hesap.abonelik.evetIptal')}
                 </button>
                 <button onClick={() => setOnay(false)} disabled={busy} className="btn-ghost flex-1 py-1.5 text-xs">
-                  Vazgeç
+                  {t('hesap.abonelik.vazgec')}
                 </button>
               </div>
             </div>
@@ -163,7 +165,7 @@ export default function AccountButton({ onNavigate, inline }: { onNavigate?: () 
             onClick={() => { setAcik(false); signOut() }}
             className="mt-3 w-full rounded-lg px-3 py-2 text-sm text-muted transition hover:bg-bg-soft hover:text-fg"
           >
-            Çıkış yap
+            {t('hesap.cikisYap')}
           </button>
         </div>
       )}

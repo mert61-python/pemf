@@ -1,0 +1,58 @@
+{
+  "abonelikBasladi": "✓ Aboneliğiniz başladı. Aşağıdan PEMF Vet’i indirip aynı hesapla giriş yapın; planınız otomatik tanınır, ayrıca kod girmeniz gerekmez.",
+  "appImage": ".AppImage (tüm dağıtımlar)",
+  "baslaticiAciklama": "İndirdiğiniz küçük başlatıcıyı kurun; asıl uygulamayı o indirip kurar ve “Başlat” ile açılır.",
+  "butunluk": " İnen dosyaların bütünlüğü kurulumda otomatik doğrulanır",
+  "gereksinim": {
+    "baslik": "Sistem gereksinimleri",
+    "disk": "• 3–5 GB boş disk — kesin boyut seçtiğiniz profil sayısına göre değişir",
+    "internet": "• İlk kurulum için internet bağlantısı",
+    "ram": "• 8 GB RAM (yapay zekâ modelleri için 16 GB önerilir)"
+  },
+  "girisYapVeIndir": "Giriş yap ve indir",
+  "girisYapipIndir": "{{label}} için giriş yapıp indir",
+  "haberBaglanti": "bize yazın",
+  "haberOnce": "Çıkınca haber vermemiz için",
+  "haberVer": "Çıkınca haber ver",
+  "icinIndir": "{{label}} için indir",
+  "istatistik": {
+    "aciklama": "E-posta adresi doğrulanmış hesap sayısı ile son 30 günde bağlanan cihaz sayısıdır.",
+    "aktifCihaz": "Aktif cihaz (30 gün)",
+    "kayitliKullanici": "Kayıtlı kullanıcı"
+  },
+  "kapiNotu": "İndirmek için ücretsiz hesap oluşturun veya giriş yapın — aynı hesapla uygulamaya ve destek taleplerinize giriş yaparsınız. Kart bilgisi istenmez.",
+  "kurulumDosyasi": "İndirilen kurulum dosyası ≈ {{sizeMB}} MB · uygulama kurulum sırasında iner",
+  "kurulumSonrasi": "Kurulumdan sonra",
+  "paket": {
+    "ayArti": "+{{tutar}}/ay",
+    "aylikEklenti": "Aylık eklenti",
+    "aylikEklentiEk": "+{{tutar}}/ay eklenti",
+    "onerilen": "Önerilen",
+    "planaDahil": "Planınıza dahil",
+    "planaDahilNotu": "Evcil Hayvan Sahibi ve Veteriner profilleri planınıza dahildir; Araştırma ücretli eklentidir.",
+    "seciliProfil": "Seçili profil",
+    "secimOnce": "Profil seçimini ",
+    "secimSonra": " yaparsınız — yalnız seçtiğiniz modeller iner.",
+    "secimVurgu": "kurulum sırasında",
+    "tahminiIndirme": "Tahmini indirme",
+    "testUcretsiz": "Test aşamasında tüm profiller (Araştırma dahil) ücretsizdir.",
+    "yokDahil": "Yok — dahil"
+  },
+  "platformYakinda": "{{label}} · Yakında",
+  "profil": {
+    "aciklama": "Kurulum sırasında kullanım profilinizi seçersiniz; yalnız seçtiğiniz yapay zekâ modelleri iner. Birden fazla profil seçebilir, dilediğiniz zaman değiştirebilirsiniz.",
+    "baslik": "Kurulumda profilinizi seçin",
+    "indirmeBoyutu": "İndirme ≈ {{gb}} GB",
+    "planOnce": "Evcil Hayvan Sahibi ve Veteriner profilleri planınıza dahildir; Araştırma profili ücretli eklentidir. Ayrıntılar",
+    "planSonra": " sayfasında.",
+    "testOnce": "Test aşamasında ",
+    "testSonra": " — dilediğinizi indirin.",
+    "testVurgu": "tüm profiller (Araştırma dahil) ücretsizdir",
+    "ucretsiz": "Ücretsiz"
+  },
+  "rozetSurum": "İndir · v{{surum}}",
+  "surumTarih": "Sürüm {{surum}} · {{tarih}}",
+  "telefonaTekDosya": "Telefona tek dosya olarak iner",
+  "yakinda": "Yakında",
+  "yakindaSurum": "Yakında · v{{surum}}"
+}

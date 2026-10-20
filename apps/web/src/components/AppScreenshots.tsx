@@ -13,7 +13,7 @@ const SHOTS = [
   { src: '/screenshots/06-dashboard.jpg', baslik: 'ekranlar.ekran.panel.baslik',      aciklama: 'ekranlar.ekran.panel.aciklama' },
   { src: '/screenshots/07-hastalar.jpg',  baslik: 'ekranlar.ekran.hastalar.baslik',     aciklama: 'ekranlar.ekran.hastalar.aciklama' },
   { src: '/screenshots/08-gecmis.jpg',    baslik: 'ekranlar.ekran.gecmis.baslik',    aciklama: 'ekranlar.ekran.gecmis.aciklama' },
-]
+] as const
 
 export default function AppScreenshots() {
   const { t } = useTranslation()

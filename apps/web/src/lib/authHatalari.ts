@@ -1,4 +1,6 @@
 import { COMPANY } from '../config'
+import type { ParseKeys } from 'i18next'
+import i18n from '../i18n'
 // Author: mertaygn, cglrgrkn
 /**
  * GİRİŞ/KAYIT HATALARININ TÜRKÇESİ + TEK ŞİFRE KURALI (metin denetimi 1. parti, 2026-08-20).
@@ -20,8 +22,10 @@ import { COMPANY } from '../config'
 /** Kayıt + şifre yenileme için TEK politika (uygulamanın kendi kuralıyla aynı). */
 export const SIFRE_KURALI = {
   minUzunluk: 8,
-  /** Kullanıcıya gösterilecek tek cümlelik açıklama (iki ekranda da aynı metin). */
-  aciklama: 'En az 8 karakter; büyük harf, küçük harf ve rakam içermeli.',
+  /** Kullanıcıya gösterilecek tek cümlelik açıklama (iki ekranda da aynı metin) — etkin dile göre OKUNUR (getter). */
+  get aciklama(): string {
+    return i18n.t('hesap.sifreKurali')
+  },
 } as const
 
 export function sifreGecerliMi(pw: string): boolean {
@@ -34,52 +38,22 @@ export function sifreGecerliMi(pw: string): boolean {
 }
 
 /**
- * Supabase mesaj metinleri → kullanıcının anlayacağı, EYLEM SÖYLEYEN Türkçe karşılık.
+ * Supabase mesaj metinleri → kullanıcının anlayacağı, EYLEM SÖYLEYEN karşılık (etkin dilde; tablo katalog ANAHTARI saklar).
  *
  * Eşleşme KÜÇÜK HARFE indirgenmiş "içerir" mantığıyla yapılır: Supabase mesajları sürümler
  * arasında noktalama/ek kelime düzeyinde değişiyor, tam eşitlik kırılgan olurdu.
  */
-const ESLESMELER: ReadonlyArray<readonly [RegExp, string]> = [
-  [
-    /invalid login credentials|invalid credentials/i,
-    'E-posta veya şifre hatalı. Şifrenizi hatırlamıyorsanız "Şifremi unuttum" bağlantısını kullanın.',
-  ],
-  [
-    /email not confirmed|email_not_confirmed/i,
-    'E-posta adresiniz henüz doğrulanmadı. Size gönderdiğimiz doğrulama bağlantısına tıklayın, sonra tekrar giriş yapın.',
-  ],
-  [
-    /user already registered|already been registered/i,
-    'Bu e-posta adresiyle zaten kayıtlı bir hesap var. Giriş yapmayı ya da "Şifremi unuttum" ile şifrenizi yenilemeyi deneyin.',
-  ],
-  [
-    /password should be at least|password is too short|weak password/i,
-    `Şifre yeterince güçlü değil. ${SIFRE_KURALI.aciklama}`,
-  ],
-  [
-    /after (\d+) seconds?/i,
-    'Çok sık denendi. Güvenlik gereği kısa bir süre beklemeniz gerekiyor; birkaç saniye sonra tekrar deneyin.',
-  ],
-  [
-    /rate limit|too many requests/i,
-    'Çok fazla deneme yapıldı. Lütfen birkaç dakika sonra tekrar deneyin.',
-  ],
-  [
-    /unable to validate email|invalid email/i,
-    'E-posta adresi geçerli görünmüyor. Adresi kontrol edip tekrar deneyin.',
-  ],
-  [
-    /network|fetch failed|failed to fetch/i,
-    'Sunucuya ulaşılamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.',
-  ],
-  [
-    /email address .*invalid|email_address_invalid/i,
-    'Bu e-posta adresi kabul edilmedi. Farklı bir adres deneyin.',
-  ],
-  [
-    /same password|new password should be different/i,
-    'Yeni şifre eskisiyle aynı olamaz. Farklı bir şifre belirleyin.',
-  ],
+const ESLESMELER: ReadonlyArray<readonly [RegExp, ParseKeys]> = [
+  [/invalid login credentials|invalid credentials/i, 'hesap.hata.epostaSifreHatali'],
+  [/email not confirmed|email_not_confirmed/i, 'hesap.hata.epostaDogrulanmadi'],
+  [/user already registered|already been registered/i, 'hesap.hata.hesapZatenVar'],
+  [/password should be at least|password is too short|weak password/i, 'hesap.hata.sifreZayif'],
+  [/after (\d+) seconds?/i, 'hesap.hata.cokSikDenendi'],
+  [/rate limit|too many requests/i, 'hesap.hata.cokFazlaDeneme'],
+  [/unable to validate email|invalid email/i, 'hesap.hata.epostaGecersiz'],
+  [/network|fetch failed|failed to fetch/i, 'hesap.hata.sunucuyaUlasilamadi'],
+  [/email address .*invalid|email_address_invalid/i, 'hesap.hata.epostaKabulEdilmedi'],
+  [/same password|new password should be different/i, 'hesap.hata.sifreAyni'],
 ]
 
 /**
@@ -90,9 +64,9 @@ const ESLESMELER: ReadonlyArray<readonly [RegExp, string]> = [
  */
 export function authHatasiTurkce(ham?: string | null): string {
   const m = (ham ?? '').trim()
-  if (!m) return 'Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.'
-  for (const [desen, karsilik] of ESLESMELER) if (desen.test(m)) return karsilik
-  return `İşlem tamamlanamadı. Lütfen tekrar deneyin; sorun sürerse ${COMPANY.email} adresine yazın.`
+  if (!m) return i18n.t('hesap.hata.beklenmeyen')
+  for (const [desen, anahtar] of ESLESMELER) if (desen.test(m)) return i18n.t(anahtar, { aciklama: SIFRE_KURALI.aciklama })
+  return i18n.t('hesap.hata.islemTamamlanamadi', { email: COMPANY.email })
 }
 
 /**
@@ -107,13 +81,13 @@ export function odemeHatasiTurkce(ham?: string | null): string {
   const m = (ham ?? '').trim()
   if (m) console.error('[ödeme] sağlayıcı mesajı:', m)
   if (/insufficient|limit|yetersiz/i.test(m)) {
-    return 'Ödeme kartınızdan tahsil edilemedi (limit/bakiye). Farklı bir kartla tekrar deneyebilirsiniz.'
+    return i18n.t('hesap.odeme.tahsilEdilemedi')
   }
   if (/3d|secure|authenticat/i.test(m)) {
-    return 'Bankanız işlemi doğrulayamadı. Kart bilgilerinizi kontrol edip tekrar deneyin.'
+    return i18n.t('hesap.odeme.bankaDogrulamadi')
   }
   if (/not found|no_subscription|bulunamadı/i.test(m)) {
-    return `Hesabınızda aktif bir abonelik görünmüyor. Sorun sürerse ${COMPANY.email} adresine yazın.`
+    return i18n.t('hesap.odeme.abonelikYok', { email: COMPANY.email })
   }
-  return `İşlem tamamlanamadı. Lütfen tekrar deneyin; sorun sürerse ${COMPANY.email} adresine yazın.`
+  return i18n.t('hesap.hata.islemTamamlanamadi', { email: COMPANY.email })
 }

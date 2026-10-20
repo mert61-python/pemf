@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { MODULES, CLIENT_BASE_MB, FREE_MODE } from '../config'
 import { Check } from './Icons'
+import { useTranslation } from 'react-i18next'
 
 const tl = (n: number) => `₺${n.toLocaleString('tr-TR')}`
 
@@ -10,6 +11,7 @@ const tl = (n: number) => `₺${n.toLocaleString('tr-TR')}`
  *  kullanıcı seçtikçe tahmini indirme boyutu + varsa eklenti ücretini gösterir.
  *  Ev Sahibi & Veteriner seviyeye dahil; Araştırma ücretli eklentidir. */
 export default function PackageBuilder() {
+  const { t } = useTranslation()
   const [sel, setSel] = useState<Set<string>>(new Set(['home', 'vet']))
 
   const toggle = (id: string) =>
@@ -52,7 +54,7 @@ export default function PackageBuilder() {
                 <span className="min-w-0 flex-1 text-lg font-bold">{m.name}</span>
                 {m.recommended && (
                   <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                    Önerilen
+                    {t('indirme.paket.onerilen')}
                   </span>
                 )}
               </div>
@@ -62,9 +64,9 @@ export default function PackageBuilder() {
                 <span className="font-semibold text-fg">≈ {m.sizeGB.toFixed(1)} GB</span>
                 <span className="text-muted">·</span>
                 {m.included ? (
-                  <span className="font-semibold text-success">Planınıza dahil</span>
+                  <span className="font-semibold text-success">{t('indirme.paket.planaDahil')}</span>
                 ) : (
-                  <span className="font-semibold text-primary">+{tl(m.addonMonthly)}/ay eklenti</span>
+                  <span className="font-semibold text-primary">{t('indirme.paket.aylikEklentiEk', { tutar: tl(m.addonMonthly) })}</span>
                 )}
               </div>
 
@@ -85,31 +87,30 @@ export default function PackageBuilder() {
       <div className="card mt-6 flex flex-col items-center justify-between gap-4 p-6 sm:flex-row">
         <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
           <div>
-            <div className="text-xs text-muted">Seçili profil</div>
+            <div className="text-xs text-muted">{t('indirme.paket.seciliProfil')}</div>
             <div className="text-lg font-bold">{chosen.length || '—'}</div>
           </div>
           <div>
-            <div className="text-xs text-muted">Tahmini indirme</div>
+            <div className="text-xs text-muted">{t('indirme.paket.tahminiIndirme')}</div>
             <div className="text-lg font-bold">≈ {gb.toFixed(1)} GB</div>
           </div>
           <div>
-            <div className="text-xs text-muted">Aylık eklenti</div>
+            <div className="text-xs text-muted">{t('indirme.paket.aylikEklenti')}</div>
             <div className="text-lg font-bold text-primary">
-              {addon === 0 ? 'Yok — dahil' : `+${tl(addon)}/ay`}
+              {addon === 0 ? t('indirme.paket.yokDahil') : t('indirme.paket.ayArti', { tutar: tl(addon) })}
             </div>
           </div>
         </div>
         <Link to="/download" className="btn-primary shrink-0">
-          PEMF Vet’i İndir
+          {t('ortak.indirDugmesi')}
         </Link>
       </div>
 
       <p className="mt-3 text-center text-xs text-muted">
-        Profil seçimini <span className="font-medium text-fg/80">kurulum sırasında</span> yaparsınız — yalnız
-        seçtiğiniz modeller iner.{' '}
+        {t('indirme.paket.secimOnce')}<span className="font-medium text-fg/80">{t('indirme.paket.secimVurgu')}</span>{t('indirme.paket.secimSonra')}{' '}
         {FREE_MODE
-          ? 'Test aşamasında tüm profiller (Araştırma dahil) ücretsizdir.'
-          : 'Evcil Hayvan Sahibi ve Veteriner profilleri planınıza dahildir; Araştırma ücretli eklentidir.'}
+          ? t('indirme.paket.testUcretsiz')
+          : t('indirme.paket.planaDahilNotu')}
       </p>
     </div>
   )

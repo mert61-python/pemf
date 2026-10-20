@@ -6,6 +6,7 @@ import { Windows, Apple, Linux, Android, Check, Download } from '../components/I
 import { useDownloadGate, DownloadGateNote } from '../components/DownloadGate'
 import { DownloadStats } from '../components/DownloadStats'
 import type { DownloadTarget } from '../lib/download'
+import { useTranslation } from 'react-i18next'
 
 function PlatformCard({
   Icon,
@@ -34,6 +35,7 @@ function PlatformCard({
   /** Bu HEDEFİN sürümü — `CLIENT.version` DEĞİL (Android kartı 1.9.x yazıp 2.3.x APK veriyordu). */
   version: string
 }) {
+  const { t } = useTranslation()
   const { loading, gated, download } = useDownloadGate()
   return (
     <div className="card flex flex-col p-5 xl:p-7">
@@ -53,11 +55,11 @@ function PlatformCard({
           onClick={() => download(target)}
           disabled={loading}
           aria-busy={loading}
-          aria-label={gated ? `${label} için giriş yapıp indir` : `${label} için indir`}
+          aria-label={gated ? t('indirme.girisYapipIndir', { label }) : t('indirme.icinIndir', { label })}
           className={`mt-6 ${primary ? 'btn-primary' : 'btn-ghost'} cursor-pointer disabled:cursor-wait disabled:opacity-60`}
         >
           <Download className="h-4 w-4" />
-          {gated ? 'Giriş yap ve indir' : `${label} için indir`}
+          {gated ? t('indirme.girisYapVeIndir') : t('indirme.icinIndir', { label })}
         </button>
       ) : (
         /* Metin denetimi 2026-08-20: devre dışı buton hiçbir ÇIKIŞ sunmuyordu (tarih yok, haber
@@ -66,7 +68,7 @@ function PlatformCard({
         <>
           <span className={`mt-6 ${primary ? 'btn-primary' : 'btn-ghost'} cursor-not-allowed opacity-60`} aria-disabled>
             <Download className="h-4 w-4" />
-            Yakında
+            {t('indirme.yakinda')}
           </span>
           {/* ⚠️ href STATİK: `download-gate-wiring.test.ts` bu dosyada dinamik `href={...}`
               YASAKLAR — indirme kapısını atlayan bir bağlantı böyle sızabilir. Platform adını
@@ -77,7 +79,7 @@ function PlatformCard({
                muafiyetiyle geçiriyor (komşu hedef yok) ama parmakla ıskalanıyordu. */
             className="tap mt-1 justify-center text-center text-xs text-primary hover:underline"
           >
-            Çıkınca haber ver
+            {t('indirme.haberVer')}
           </a>
         </>
       )}
@@ -105,7 +107,7 @@ function PlatformCard({
         </button>
       )}
       <div className="mt-4 space-y-1.5 text-xs text-muted">
-        <div className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> Sürüm {version} · {CLIENT.releaseDate}</div>
+        <div className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> {t('indirme.surumTarih', { surum: version, tarih: CLIENT.releaseDate })}</div>
         {/* İNDİRME BOYUTU (metin denetimi 2026-08-20): dört kartın hiçbirinde boyut yoktu;
             kullanıcı ne indireceğini bilmiyordu. Masaüstünde inen dosya KÜÇÜKTÜR (kurulum
             dosyası); asıl uygulama sonra iner — ikisi ayrı ayrı söylenir ki ne 3 MB'lık dosya
@@ -113,8 +115,8 @@ function PlatformCard({
         <div className="inline-flex items-center gap-1.5">
           <Check className="h-3.5 w-3.5 text-primary" />
           {target === 'android'
-            ? 'Telefona tek dosya olarak iner'
-            : `İndirilen kurulum dosyası ≈ ${CLIENT.sizeMB} MB · uygulama kurulum sırasında iner`}
+            ? t('indirme.telefonaTekDosya')
+            : t('indirme.kurulumDosyasi', { sizeMB: CLIENT.sizeMB })}
         </div>
         {/* İki kart iki farklı sürüm gösteriyordu (1.9.32 ↔ 2.3.18) ve sebebi yazmıyordu;
             ayrıca telefon uygulamasının masaüstünün yanında mı çalıştığı hiç yazmıyordu. */}
@@ -127,13 +129,14 @@ function PlatformCard({
         {/* Eskiden düz "SHA-256 doğrulanır" yazıyordu; sitede yayımlanan bir hash yok, bu yüzden
             ziyaretçi indirdiği kurulum dosyasını KENDİSİ doğrulayamıyordu. İfadeyi gerçekte olan
             şeye bağla: bütünlük doğrulaması client'ın indirdiği uygulama paketi için yapılıyor. */}
-        <div className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> İnen dosyaların bütünlüğü kurulumda otomatik doğrulanır</div>
+        <div className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" />{t('indirme.butunluk')}</div>
       </div>
     </div>
   )
 }
 
 export default function DownloadPage() {
+  const { t } = useTranslation()
   const [sp] = useSearchParams()
   const success = sp.get('checkout') === 'success'
   return (
@@ -141,16 +144,16 @@ export default function DownloadPage() {
       {success && (
         <div className="mx-auto max-w-5xl px-5 pt-6 sm:px-6">
           <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-success">
-            ✓ Aboneliğiniz başladı. Aşağıdan PEMF Vet’i indirip aynı hesapla giriş yapın; planınız otomatik tanınır, ayrıca kod girmeniz gerekmez.
+            {t('indirme.abonelikBasladi')}
           </div>
         </div>
       )}
       <section className="bg-hero border-b border-border/60">
         <div className="mx-auto max-w-5xl px-5 py-16 text-center sm:px-6 sm:py-20">
-          <span className="chip">İndir · v{CLIENT.version}</span>
-          <h1 className="mt-5 text-4xl font-extrabold sm:text-5xl">PEMF Vet’i indirin</h1>
+          <span className="chip">{t('indirme.rozetSurum', { surum: CLIENT.version })}</span>
+          <h1 className="mt-5 text-4xl font-extrabold sm:text-5xl">{t('ana.hero.vurgu')}</h1>
           <p className="mx-auto mt-4 max-w-xl text-muted">
-            İndirdiğiniz küçük başlatıcıyı kurun; asıl uygulamayı o indirip kurar ve “Başlat” ile açılır.
+            {t('indirme.baslaticiAciklama')}
           </p>
           {/* Kapı yalnız İNDİRME DÜĞMELERİNE uygulanır; sayfanın kalanı (gereksinimler, kurulum
               adımları, profiller) herkese açık kalır — aksi halde arama motoru boş sayfa görür. */}
@@ -164,7 +167,7 @@ export default function DownloadPage() {
           <div className="mx-auto mt-10 grid max-w-5xl gap-5 sm:grid-cols-2 lg:grid-cols-4">
             <PlatformCard Icon={Windows} label="Windows" os={CLIENT.downloads.windows.os} target="windows" ready={CLIENT.downloads.windows.ready} version={CLIENT.downloads.windows.version} primary />
             <PlatformCard Icon={Android} label="Android" os={CLIENT.downloads.android.os} target="android" ready={CLIENT.downloads.android.ready} version={CLIENT.downloads.android.version} />
-            <PlatformCard Icon={Linux} label="Linux" os={CLIENT.downloads.linux.os} target="linux" ready={CLIENT.downloads.linux.ready} altTarget={CLIENT.downloads.linux.appImageReady ? 'linux-appimage' : undefined} altLabel=".AppImage (tüm dağıtımlar)" alt2Target={CLIENT.downloads.linux.rpmReady ? 'linux-rpm' : undefined} alt2Label=".rpm (Fedora / RHEL)" version={CLIENT.downloads.linux.version} />
+            <PlatformCard Icon={Linux} label="Linux" os={CLIENT.downloads.linux.os} target="linux" ready={CLIENT.downloads.linux.ready} altTarget={CLIENT.downloads.linux.appImageReady ? 'linux-appimage' : undefined} altLabel={t('indirme.appImage')} alt2Target={CLIENT.downloads.linux.rpmReady ? 'linux-rpm' : undefined} alt2Label=".rpm (Fedora / RHEL)" version={CLIENT.downloads.linux.version} />
             <PlatformCard Icon={Apple} label="macOS" os={CLIENT.downloads.macos.os} target="macos" ready={CLIENT.downloads.macos.ready} version={CLIENT.downloads.macos.version} />
           </div>
         </div>
@@ -174,10 +177,9 @@ export default function DownloadPage() {
       <section className="border-b border-border/60">
         <div className="mx-auto max-w-5xl px-5 py-16 sm:px-6">
           <div className="max-w-2xl">
-            <h2 className="text-2xl font-bold sm:text-3xl">Kurulumda profilinizi seçin</h2>
+            <h2 className="text-2xl font-bold sm:text-3xl">{t('indirme.profil.baslik')}</h2>
             <p className="mt-3 text-muted">
-              Kurulum sırasında kullanım profilinizi seçersiniz; yalnız seçtiğiniz yapay zekâ modelleri iner.
-              Birden fazla profil seçebilir, dilediğiniz zaman değiştirebilirsiniz.
+              {t('indirme.profil.aciklama')}
             </p>
           </div>
           <div className="mt-8 grid gap-5 sm:grid-cols-3">
@@ -186,23 +188,22 @@ export default function DownloadPage() {
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="font-semibold">{m.name}</h3>
                   <span className={`shrink-0 text-xs font-semibold ${m.included ? 'text-success' : 'text-primary'}`}>
-                    {FREE_MODE ? 'Ücretsiz' : m.included ? 'Dahil' : `+₺${m.addonMonthly}/ay`}
+                    {FREE_MODE ? t('indirme.profil.ucretsiz') : m.included ? t('ana.dahil') : t('ana.ekAylik', { addonMonthly: m.addonMonthly })}
                   </span>
                 </div>
                 <p className="mt-2 text-sm text-muted">{m.tagline}</p>
                 <div className="mt-3 inline-flex items-center gap-1.5 text-xs text-muted">
-                  <Download className="h-3.5 w-3.5" /> İndirme ≈ {m.sizeGB.toFixed(1)} GB
+                  <Download className="h-3.5 w-3.5" /> {t('indirme.profil.indirmeBoyutu', { gb: m.sizeGB.toFixed(1) })}
                 </div>
               </div>
             ))}
           </div>
           <p className="mt-4 text-xs text-muted">
             {FREE_MODE ? (
-              <>Test aşamasında <span className="font-medium text-fg/80">tüm profiller (Araştırma dahil) ücretsizdir</span> — dilediğinizi indirin.</>
+              <>{t('indirme.profil.testOnce')}<span className="font-medium text-fg/80">{t('indirme.profil.testVurgu')}</span>{t('indirme.profil.testSonra')}</>
             ) : (
-              <>Evcil Hayvan Sahibi ve Veteriner profilleri planınıza dahildir; Araştırma profili ücretli
-              eklentidir. Ayrıntılar{' '}
-              <a href="/pricing" className="text-primary hover:underline">Fiyatlandırma</a> sayfasında.</>
+              <>{t('indirme.profil.planOnce')}{' '}
+              <a href="/pricing" className="text-primary hover:underline">{t('ortak.nav.fiyatlandirma')}</a>{t('indirme.profil.planSonra')}</>
             )}
           </p>
         </div>
@@ -211,7 +212,7 @@ export default function DownloadPage() {
       {/* Kurulumdan sonra ne olur */}
       <section className="border-b border-border/60">
         <div className="mx-auto max-w-5xl px-5 py-16 sm:px-6">
-          <h2 className="text-2xl font-bold sm:text-3xl">Kurulumdan sonra</h2>
+          <h2 className="text-2xl font-bold sm:text-3xl">{t('indirme.kurulumSonrasi')}</h2>
           <div className="mt-8 grid gap-6 md:grid-cols-3">
             {LAUNCHER_STEPS.map((s) => (
               <div key={s.step} className="flex gap-4">
@@ -231,33 +232,33 @@ export default function DownloadPage() {
       {/* Sistem gereksinimleri */}
       <section>
         <div className="mx-auto max-w-5xl px-5 py-16 sm:px-6">
-          <h2 className="text-2xl font-bold sm:text-3xl">Sistem gereksinimleri</h2>
+          <h2 className="text-2xl font-bold sm:text-3xl">{t('indirme.gereksinim.baslik')}</h2>
           <div className="mt-8 grid gap-5 sm:grid-cols-3">
             <div className="card p-6">
               <div className="mb-3 inline-flex items-center gap-2 font-semibold"><Windows className="h-5 w-5" /> Windows</div>
               <ul className="space-y-2 text-sm text-muted">
                 <li>• {CLIENT.downloads.windows.os}</li>
-                <li>• 8 GB RAM (yapay zekâ modelleri için 16 GB önerilir)</li>
-                <li>• 3–5 GB boş disk — kesin boyut seçtiğiniz profil sayısına göre değişir</li>
-                <li>• İlk kurulum için internet bağlantısı</li>
+                <li>{t('indirme.gereksinim.ram')}</li>
+                <li>{t('indirme.gereksinim.disk')}</li>
+                <li>{t('indirme.gereksinim.internet')}</li>
               </ul>
             </div>
             <div className="card p-6">
               <div className="mb-3 inline-flex items-center gap-2 font-semibold"><Linux className="h-5 w-5" /> Linux</div>
               <ul className="space-y-2 text-sm text-muted">
                 <li>• {CLIENT.downloads.linux.os}</li>
-                <li>• 8 GB RAM (yapay zekâ modelleri için 16 GB önerilir)</li>
-                <li>• 3–5 GB boş disk — kesin boyut seçtiğiniz profil sayısına göre değişir</li>
-                <li>• İlk kurulum için internet bağlantısı</li>
+                <li>{t('indirme.gereksinim.ram')}</li>
+                <li>{t('indirme.gereksinim.disk')}</li>
+                <li>{t('indirme.gereksinim.internet')}</li>
               </ul>
             </div>
             <div className="card p-6">
               <div className="mb-3 inline-flex items-center gap-2 font-semibold"><Apple className="h-5 w-5" /> macOS</div>
               <ul className="space-y-2 text-sm text-muted">
                 <li>• {CLIENT.downloads.macos.os} · Apple Silicon / Intel</li>
-                <li>• 8 GB RAM (yapay zekâ modelleri için 16 GB önerilir)</li>
-                <li>• 3–5 GB boş disk — kesin boyut seçtiğiniz profil sayısına göre değişir</li>
-                <li>• İlk kurulum için internet bağlantısı</li>
+                <li>{t('indirme.gereksinim.ram')}</li>
+                <li>{t('indirme.gereksinim.disk')}</li>
+                <li>{t('indirme.gereksinim.internet')}</li>
               </ul>
             </div>
           </div>

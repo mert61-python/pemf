@@ -2,10 +2,12 @@
 import {
   createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode,
 } from 'react'
+import type { ParseKeys } from 'i18next'
 import { useAuth } from './AuthContext'
 import { Close } from '../components/Icons'
 import { SIFRE_KURALI, sifreGecerliMi } from '../lib/authHatalari'
 import { COMPANY } from '../config'
+import { useTranslation } from 'react-i18next'
 
 /** Modalın hangi akış için açıldığı — yalnız alt başlık metnini değiştirir.
  *  Opsiyonel: mevcut `requireAuth(cb)` çağrıları (ödeme, hesap düğmesi) aynen çalışır. */
@@ -70,17 +72,19 @@ export function useAuthModal(): ModalCtx {
 }
 
 // Hesap tipleri — profile göre form alanları + (ileride) abonelik/erişim eşlemesi.
+// `title` / `sub` katalog ANAHTARIDIR (modül düzeyi sabit; gösterimde `t(tur.title)` ile çevrilir).
 type AccountType = 'individual' | 'veterinarian' | 'researcher'
-const ACCOUNT_TYPES: { id: AccountType; title: string; sub: string; icon: string }[] = [
-  { id: 'individual', title: 'Evcil Hayvan Sahibi', sub: 'Bireysel kullanım', icon: '🐾' },
-  { id: 'veterinarian', title: 'Veteriner Hekim / Klinik', sub: 'Klinik bilgileriyle', icon: '🩺' },
-  { id: 'researcher', title: 'Araştırmacı / Kurum', sub: 'Üniversite · enstitü', icon: '🔬' },
+const ACCOUNT_TYPES: { id: AccountType; title: ParseKeys; sub: ParseKeys; icon: string }[] = [
+  { id: 'individual', title: 'baslatici.profil.ev', sub: 'hesap.tur.bireyselAlt', icon: '🐾' },
+  { id: 'veterinarian', title: 'hesap.tur.veteriner', sub: 'hesap.tur.klinikAlt', icon: '🩺' },
+  { id: 'researcher', title: 'hesap.tur.arastirmaci', sub: 'hesap.tur.kurumAlt', icon: '🔬' },
 ]
 
 const FIELD =
   'w-full rounded-lg border border-border bg-bg-soft px-3.5 py-2.5 text-sm outline-none focus:border-primary/60'
 
 function AuthModal({ ready, reason, initialMode = 'login', onClose }: { ready: boolean; reason: AuthReason; initialMode?: AuthMode; onClose: () => void }) {
+  const { t, i18n } = useTranslation()
   const { signIn, signUp, resetPassword } = useAuth()
   const [mode, setMode] = useState<AuthMode>(initialMode)
   const [accountType, setAccountType] = useState<AccountType>('individual')
@@ -114,7 +118,7 @@ function AuthModal({ ready, reason, initialMode = 'login', onClose }: { ready: b
       } else if (!sifreGecerliMi(pw)) {
         // Kuralı SUNUCUYA bırakmak, kullanıcıya İngilizce "Password should be at least…" mesajı
         // döndürüyordu; burada Türkçe ve tam kuralı söyleyerek erken uyar.
-        setMsg(`Şifre yeterince güçlü değil. ${SIFRE_KURALI.aciklama}`)
+        setMsg(t('hesap.hata.sifreZayif', { aciklama: SIFRE_KURALI.aciklama }))
       } else {
         // Rol + profil bilgilerini Supabase user_metadata'ya yaz (abonelik e-postaya bağlanır).
         const meta: Record<string, unknown> = {
@@ -139,8 +143,8 @@ function AuthModal({ ready, reason, initialMode = 'login', onClose }: { ready: b
         else if (needConfirm)
           setInfo(
             reason === 'download'
-              ? 'Doğrulama e-postası gönderildi. Onaylayıp buradan giriş yapın — indirme kaldığı yerden devam eder.'
-              : 'Doğrulama e-postası gönderildi. Onayladıktan sonra giriş yapın.',
+              ? t('hesap.bilgi.dogrulamaIndirme')
+              : t('hesap.bilgi.dogrulama'),
           )
       }
     } finally {
@@ -149,12 +153,12 @@ function AuthModal({ ready, reason, initialMode = 'login', onClose }: { ready: b
   }
 
   async function handleReset() {
-    if (!email.trim()) { setMsg('Önce e-posta adresinizi girin.'); return }
+    if (!email.trim()) { setMsg(t('hesap.hata.epostaGirin')); return }
     setMsg(null); setInfo(null); setBusy(true)
     try {
       const { error } = await resetPassword(email.trim())
       if (error) setMsg(error)
-      else setInfo('Şifre sıfırlama bağlantısı e-postanıza gönderildi. E-postanızı kontrol edin.')
+      else setInfo(t('hesap.bilgi.sifirlamaGonderildi'))
     } finally {
       setBusy(false)
     }
@@ -233,16 +237,16 @@ function AuthModal({ ready, reason, initialMode = 'login', onClose }: { ready: b
       >
         <div className="flex items-start justify-between">
           <div>
-            <h2 id="auth-modal-title" className="text-lg font-bold">{isSignup ? 'Hesap oluştur' : 'Giriş yap'}</h2>
+            <h2 id="auth-modal-title" className="text-lg font-bold">{isSignup ? t('hesap.hesapOlustur') : t('hesap.girisYap')}</h2>
             {/* Alt başlık akışa göre: indirme kapısında "aboneliğiniz tanımlanır" demek yanıltıcıydı
                 (indirme ücretsiz, kart istenmiyor). */}
             <p className="mt-1 text-sm text-muted">
               {reason === 'download'
-                ? 'İndirme için ücretsiz hesap yeterli — kart bilgisi istenmez. Giriş yapınca indirme kendiliğinden başlar.'
-                : 'Aboneliğiniz bu hesaba tanımlanır (mobil ve masaüstü ile aynı).'}
+                ? t('hesap.pencere.indirmeAciklama')
+                : t('hesap.pencere.abonelikAciklama')}
             </p>
           </div>
-          <button onClick={requestClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted hover:text-fg" aria-label="Kapat">
+          <button onClick={requestClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted hover:text-fg" aria-label={t('hesap.kapat')}>
             <Close className="h-5 w-5" />
           </button>
         </div>
@@ -251,14 +255,14 @@ function AuthModal({ ready, reason, initialMode = 'login', onClose }: { ready: b
         {kapatmaOnayi && (
           <div className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
             <p className="text-sm text-warning">
-              Girdiğiniz bilgiler kaybolacak. Pencere kapatılsın mı?
+              {t('hesap.pencere.kapatmaSorusu')}
             </p>
             <div className="mt-3 flex gap-2">
               <button type="button" onClick={onClose} className="btn-ghost flex-1 py-1.5 text-xs">
-                Kapat
+                {t('hesap.kapat')}
               </button>
               <button type="button" onClick={() => setKapatmaOnayi(false)} className="btn-primary flex-1 py-1.5 text-xs">
-                Vazgeç, formda kal
+                {t('hesap.pencere.formdaKal')}
               </button>
             </div>
           </div>
@@ -269,8 +273,7 @@ function AuthModal({ ready, reason, initialMode = 'login', onClose }: { ready: b
             şey de yok. Kullanıcıya DURUMU ve ÇIKIŞ YOLUNU söyle; teknik ayrıntı konsola gider. */}
         {!ready && (
           <p className="mt-5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-warning">
-            Giriş servisine şu anda ulaşılamıyor. Kısa süre sonra tekrar deneyin; sürerse
-            {COMPANY.email} adresine yazın.
+            {t('hesap.pencere.servisYok', { eposta: COMPANY.email })}
           </p>
         )}
 
@@ -278,15 +281,15 @@ function AuthModal({ ready, reason, initialMode = 'login', onClose }: { ready: b
           {/* Kayıt: hesap tipi seçimi → profile göre form alanları */}
           {isSignup && (
             <fieldset>
-              <legend className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Hesap türü</legend>
+              <legend className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">{t('hesap.pencere.hesapTuru')}</legend>
               <div className="grid gap-2">
-                {ACCOUNT_TYPES.map((t) => {
-                  const active = accountType === t.id
+                {ACCOUNT_TYPES.map((tur) => {
+                  const active = accountType === tur.id
                   return (
                     <button
                       type="button"
-                      key={t.id}
-                      onClick={() => setAccountType(t.id)}
+                      key={tur.id}
+                      onClick={() => setAccountType(tur.id)}
                       aria-pressed={active}
                       className={`flex items-center gap-3 rounded-lg border px-3.5 py-2.5 text-left transition ${
                         active
@@ -294,10 +297,10 @@ function AuthModal({ ready, reason, initialMode = 'login', onClose }: { ready: b
                           : 'border-border bg-bg-soft hover:border-primary/40'
                       }`}
                     >
-                      <span className="text-xl leading-none">{t.icon}</span>
+                      <span className="text-xl leading-none">{tur.icon}</span>
                       <span className="min-w-0">
-                        <span className="block text-sm font-semibold">{t.title}</span>
-                        <span className="block text-xs text-muted">{t.sub}</span>
+                        <span className="block text-sm font-semibold">{t(tur.title)}</span>
+                        <span className="block text-xs text-muted">{t(tur.sub)}</span>
                       </span>
                       <span className={`ml-auto grid h-4 w-4 shrink-0 place-items-center rounded-full border ${active ? 'border-primary' : 'border-border'}`}>
                         {active && <span className="h-2 w-2 rounded-full bg-primary" />}
@@ -312,13 +315,13 @@ function AuthModal({ ready, reason, initialMode = 'login', onClose }: { ready: b
           {isSignup && (
             <input
               type="text" required value={fullName} onChange={(e) => setFullName(e.target.value)}
-              placeholder="Ad Soyad" autoComplete="name" className={FIELD}
+              placeholder={t('hesap.alan.adSoyad')} autoComplete="name" className={FIELD}
             />
           )}
 
           <input
             type="email" required autoFocus={!isSignup} value={email} onChange={(e) => setEmail(e.target.value)}
-            placeholder={isResearch ? 'E-posta (kurumsal olması gerekmez)' : 'E-posta'} autoComplete="email" className={FIELD}
+            placeholder={isResearch ? t('hesap.alan.epostaKurumsal') : t('hesap.alan.eposta')} autoComplete="email" className={FIELD}
           />
           {/* ŞİFRE KURALI TEK KAYNAK (metin denetimi 2026-08-20): kayıt `minLength={6}` iken şifre
               yenileme ekranı "en az 8 + büyük/küçük/rakam" istiyordu → kayıtta kabul edilen şifre
@@ -329,14 +332,14 @@ function AuthModal({ ready, reason, initialMode = 'login', onClose }: { ready: b
             type="password" required
             minLength={isSignup ? SIFRE_KURALI.minUzunluk : undefined}
             value={pw} onChange={(e) => setPw(e.target.value)}
-            placeholder={isSignup ? `Şifre (${SIFRE_KURALI.aciklama.toLocaleLowerCase('tr')})` : 'Şifre'}
+            placeholder={isSignup ? t('hesap.alan.sifreKurala', { kural: SIFRE_KURALI.aciklama.toLocaleLowerCase(i18n.language || 'tr') }) : t('hesap.alan.sifre')}
             autoComplete={isSignup ? 'new-password' : 'current-password'} className={FIELD}
           />
 
           {!isSignup && (
             <div className="-mt-1 text-right">
               <button type="button" onClick={handleReset} disabled={busy} className="text-xs text-muted hover:text-primary disabled:opacity-60">
-                Şifremi unuttum
+                {t('hesap.sifremiUnuttum')}
               </button>
             </div>
           )}
@@ -344,23 +347,23 @@ function AuthModal({ ready, reason, initialMode = 'login', onClose }: { ready: b
           {/* Veteriner / klinik alanları */}
           {isSignup && isVet && (
             <div className="space-y-3 rounded-lg border border-border/70 bg-bg-soft/40 p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted">Klinik bilgileri</p>
-              <input type="text" required value={clinicName} onChange={(e) => setClinicName(e.target.value)} placeholder="Klinik / hastane adı" autoComplete="organization" className={FIELD} />
+              <p className="text-xs font-medium uppercase tracking-wide text-muted">{t('hesap.alan.klinikBilgileri')}</p>
+              <input type="text" required value={clinicName} onChange={(e) => setClinicName(e.target.value)} placeholder={t('hesap.alan.klinikAdi')} autoComplete="organization" className={FIELD} />
               <div className="grid grid-cols-2 gap-3">
-                <input type="text" required value={city} onChange={(e) => setCity(e.target.value)} placeholder="Şehir" autoComplete="address-level2" className={FIELD} />
-                <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Telefon" autoComplete="tel" className={FIELD} />
+                <input type="text" required value={city} onChange={(e) => setCity(e.target.value)} placeholder={t('hesap.alan.sehir')} autoComplete="address-level2" className={FIELD} />
+                <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t('hesap.alan.telefon')} autoComplete="tel" className={FIELD} />
               </div>
-              <input type="text" value={vetLicense} onChange={(e) => setVetLicense(e.target.value)} placeholder="Veteriner oda / diploma no (isteğe bağlı)" className={FIELD} />
+              <input type="text" value={vetLicense} onChange={(e) => setVetLicense(e.target.value)} placeholder={t('hesap.alan.veterinerOda')} className={FIELD} />
             </div>
           )}
 
           {/* Araştırmacı / kurum alanları */}
           {isSignup && isResearch && (
             <div className="space-y-3 rounded-lg border border-border/70 bg-bg-soft/40 p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted">Kurum bilgileri</p>
-              <input type="text" required value={institution} onChange={(e) => setInstitution(e.target.value)} placeholder="Üniversite / kurum / enstitü" autoComplete="organization" className={FIELD} />
-              <input type="text" required value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="Bölüm / anabilim dalı" className={FIELD} />
-              <input type="text" value={academicTitle} onChange={(e) => setAcademicTitle(e.target.value)} placeholder="Akademik unvan (isteğe bağlı)" className={FIELD} />
+              <p className="text-xs font-medium uppercase tracking-wide text-muted">{t('hesap.alan.kurumBilgileri')}</p>
+              <input type="text" required value={institution} onChange={(e) => setInstitution(e.target.value)} placeholder={t('hesap.alan.kurumAdi')} autoComplete="organization" className={FIELD} />
+              <input type="text" required value={department} onChange={(e) => setDepartment(e.target.value)} placeholder={t('hesap.alan.bolum')} className={FIELD} />
+              <input type="text" value={academicTitle} onChange={(e) => setAcademicTitle(e.target.value)} placeholder={t('hesap.alan.unvan')} className={FIELD} />
             </div>
           )}
 
@@ -368,15 +371,15 @@ function AuthModal({ ready, reason, initialMode = 'login', onClose }: { ready: b
           {info && <p className="text-sm text-primary">{info}</p>}
 
           <button type="submit" disabled={busy || !ready} className="btn-primary w-full disabled:opacity-60">
-            {busy ? 'Lütfen bekleyin…' : isSignup ? 'Kayıt ol' : 'Giriş yap'}
+            {busy ? t('hesap.bekleyin') : isSignup ? t('hesap.kayitOl') : t('hesap.girisYap')}
           </button>
 
           {isSignup && (
             <p className="text-center text-xs leading-relaxed text-muted">
-              Kayıt olarak{' '}
-              <a href="/kvkk" target="_blank" rel="noreferrer" className="text-primary hover:underline">KVKK Aydınlatma Metni</a>,{' '}
-              <a href="/kullanim-sartlari" target="_blank" rel="noreferrer" className="text-primary hover:underline">Kullanım Şartları</a> ve{' '}
-              <a href="/gizlilik" target="_blank" rel="noreferrer" className="text-primary hover:underline">Gizlilik Politikası</a>'nı kabul edersiniz.
+              {t('hesap.kayit.once')}{' '}
+              <a href="/kvkk" target="_blank" rel="noreferrer" className="text-primary hover:underline">{t('hesap.kayit.kvkk')}</a>,{' '}
+              <a href="/kullanim-sartlari" target="_blank" rel="noreferrer" className="text-primary hover:underline">{t('hesap.kayit.kullanimSartlari')}</a>{t('hesap.kayit.ve')}{' '}
+              <a href="/gizlilik" target="_blank" rel="noreferrer" className="text-primary hover:underline">{t('hesap.kayit.gizlilik')}</a>{t('hesap.kayit.sonrasi')}
             </p>
           )}
         </form>
@@ -384,11 +387,11 @@ function AuthModal({ ready, reason, initialMode = 'login', onClose }: { ready: b
         <div className="mt-4 shrink-0 text-center text-sm text-muted">
           {mode === 'login' ? (
             <button onClick={() => { setMode('signup'); setMsg(null); setInfo(null) }} className="hover:text-fg">
-              Hesabınız yok mu? <span className="font-medium text-primary">Kayıt olun</span>
+              {t('hesap.hesabinizYok')}<span className="font-medium text-primary">{t('hesap.kayitOlun')}</span>
             </button>
           ) : (
             <button onClick={() => { setMode('login'); setMsg(null); setInfo(null) }} className="hover:text-fg">
-              Zaten hesabınız var mı? <span className="font-medium text-primary">Giriş yapın</span>
+              {t('hesap.hesabinizVar')}<span className="font-medium text-primary">{t('hesap.girisYapin')}</span>
             </button>
           )}
         </div>

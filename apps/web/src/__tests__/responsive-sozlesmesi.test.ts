@@ -26,6 +26,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { kaynakSoy } from './_soyucu'
+import { TR } from './_kaynakMetni'
 
 import ACCOUNT_SRC from '../components/AccountButton.tsx?raw'
 import AUTHMODAL_SRC from '../context/AuthModal.tsx?raw'
@@ -163,7 +164,9 @@ describe('dokunma hedefi kalanları', () => {
     // ⚠️ Kapı bunu WCAG 2.5.8 ARALIK muafiyetiyle geçiriyor (komşu hedef yok) —
     // yani kapı yeşilken de bu hedef parmakla ıskalanıyordu. Kapı tabanı ≠ kullanılabilirlik.
     const indir = kaynakSoy(DOWNLOAD_SRC)
-    const i = indir.indexOf('Çıkınca haber ver')
+    // Metin kataloğa taşındı (I18N): çapa = anahtar çağrısı, metin iddiası = katalog Türkçe değeri.
+    expect(TR['indirme.haberVer']).toBe('Çıkınca haber ver')
+    const i = indir.indexOf("t('indirme.haberVer')")
     expect(i).toBeGreaterThan(-1)
     expect(indir.slice(Math.max(0, i - 400), i)).toMatch(/className="tap /)
   })

@@ -242,6 +242,48 @@
    "onek": "",
    "degerler": ["ekranlar.ekran.profil.aciklama", "ekranlar.ekran.teshis.aciklama", "ekranlar.ekran.modeller.aciklama", "ekranlar.ekran.aipro.aciklama", "ekranlar.ekran.kontrol.aciklama", "ekranlar.ekran.panel.aciklama", "ekranlar.ekran.hastalar.aciklama", "ekranlar.ekran.gecmis.aciklama"],
    "gerekce": "ekran görüntüsü açıklaması SHOTS tablosunda (modül düzeyi sabit) ANAHTAR olarak saklanır — değer kümesi 8 satırlık kapalı tablo"
+  },  {
+   "yuzey": "site",
+   "dosya": "apps/web/src/context/AuthModal.tsx",
+   "ifade": "t(tur.title)",
+   "onek": "",
+   "degerler": ["baslatici.profil.ev", "hesap.tur.veteriner", "hesap.tur.arastirmaci"],
+   "gerekce": "hesap türü başlığı ACCOUNT_TYPES tablosunda (modül düzeyi sabit) ANAHTAR olarak saklanır — değer kümesi 3 satırlık kapalı tablo"
+  },  {
+   "yuzey": "site",
+   "dosya": "apps/web/src/context/AuthModal.tsx",
+   "ifade": "t(tur.sub)",
+   "onek": "",
+   "degerler": ["hesap.tur.bireyselAlt", "hesap.tur.klinikAlt", "hesap.tur.kurumAlt"],
+   "gerekce": "hesap türü alt başlığı ACCOUNT_TYPES tablosunda (modül düzeyi sabit) ANAHTAR olarak saklanır — değer kümesi 3 satırlık kapalı tablo"
+  },  {
+   "yuzey": "site",
+   "dosya": "apps/web/src/pages/AuthRoute.tsx",
+   "ifade": "t(m.baslik)",
+   "onek": "",
+   "degerler": ["hesap.hesapOlustur", "hesap.girisYap", "hesap.sifremiUnuttum"],
+   "gerekce": "iniş sayfası başlığı METIN tablosunda (modül düzeyi sabit) ANAHTAR olarak saklanır — değer kümesi 3 satırlık kapalı tablo"
+  },  {
+   "yuzey": "site",
+   "dosya": "apps/web/src/pages/AuthRoute.tsx",
+   "ifade": "t(m.aciklama)",
+   "onek": "",
+   "degerler": ["hesap.rota.kayit.aciklama", "hesap.rota.giris.aciklama", "hesap.rota.sifre.aciklama"],
+   "gerekce": "iniş sayfası açıklaması METIN tablosunda (modül düzeyi sabit) ANAHTAR olarak saklanır — değer kümesi 3 satırlık kapalı tablo"
+  },  {
+   "yuzey": "site",
+   "dosya": "apps/web/src/pages/AuthRoute.tsx",
+   "ifade": "t(m.dugme)",
+   "onek": "",
+   "degerler": ["hesap.rota.kayit.dugme", "hesap.rota.giris.dugme"],
+   "gerekce": "iniş sayfası düğme etiketi METIN tablosunda (modül düzeyi sabit) ANAHTAR olarak saklanır — değer kümesi kapalı tablo"
+  },  {
+   "yuzey": "site",
+   "dosya": "apps/web/src/lib/authHatalari.ts",
+   "ifade": "i18n.t(anahtar,",
+   "onek": "",
+   "degerler": ["hesap.hata.epostaSifreHatali", "hesap.hata.epostaDogrulanmadi", "hesap.hata.hesapZatenVar", "hesap.hata.sifreZayif", "hesap.hata.cokSikDenendi", "hesap.hata.cokFazlaDeneme", "hesap.hata.epostaGecersiz", "hesap.hata.sunucuyaUlasilamadi", "hesap.hata.epostaKabulEdilmedi", "hesap.hata.sifreAyni"],
+   "gerekce": "Supabase mesajı → karşılık tablosu ESLESMELER (modül düzeyi sabit) ANAHTAR saklar — değer kümesi 10 satırlık kapalı tablo"
   }
  ]
 }

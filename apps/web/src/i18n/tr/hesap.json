@@ -1,0 +1,122 @@
+{
+  "abonelik": {
+    "evetIptal": "Evet, iptal et",
+    "iptalEdildi": "Aboneliğiniz iptal edildi; otomatik yenileme durduruldu.",
+    "iptalEdiliyor": "İptal ediliyor…",
+    "iptalEt": "Aboneliği iptal et",
+    "iptalSorusu": "Aboneliğiniz iptal edilsin mi? Otomatik yenileme durur ve bir daha ücret alınmaz.",
+    "testAsamasi": "Test aşamasındayız: tüm planlar şu an ücretsiz, sizden ödeme alınmıyor.",
+    "vazgec": "Vazgeç"
+  },
+  "alan": {
+    "adSoyad": "Ad Soyad",
+    "bolum": "Bölüm / anabilim dalı",
+    "eposta": "E-posta",
+    "epostaKurumsal": "E-posta (kurumsal olması gerekmez)",
+    "klinikAdi": "Klinik / hastane adı",
+    "klinikBilgileri": "Klinik bilgileri",
+    "kurumAdi": "Üniversite / kurum / enstitü",
+    "kurumBilgileri": "Kurum bilgileri",
+    "sehir": "Şehir",
+    "sifre": "Şifre",
+    "sifreKurala": "Şifre ({{kural}})",
+    "telefon": "Telefon",
+    "unvan": "Akademik unvan (isteğe bağlı)",
+    "veterinerOda": "Veteriner oda / diploma no (isteğe bağlı)"
+  },
+  "bekleyin": "Lütfen bekleyin…",
+  "bilgi": {
+    "dogrulama": "Doğrulama e-postası gönderildi. Onayladıktan sonra giriş yapın.",
+    "dogrulamaIndirme": "Doğrulama e-postası gönderildi. Onaylayıp buradan giriş yapın — indirme kaldığı yerden devam eder.",
+    "sifirlamaGonderildi": "Şifre sıfırlama bağlantısı e-postanıza gönderildi. E-postanızı kontrol edin."
+  },
+  "cikisYap": "Çıkış yap",
+  "girisYap": "Giriş yap",
+  "girisYapildi": "Giriş yapıldı",
+  "girisYapin": "Giriş yapın",
+  "hata": {
+    "beklenmeyen": "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.",
+    "cokFazlaDeneme": "Çok fazla deneme yapıldı. Lütfen birkaç dakika sonra tekrar deneyin.",
+    "cokSikDenendi": "Çok sık denendi. Güvenlik gereği kısa bir süre beklemeniz gerekiyor; birkaç saniye sonra tekrar deneyin.",
+    "epostaDogrulanmadi": "E-posta adresiniz henüz doğrulanmadı. Size gönderdiğimiz doğrulama bağlantısına tıklayın, sonra tekrar giriş yapın.",
+    "epostaGecersiz": "E-posta adresi geçerli görünmüyor. Adresi kontrol edip tekrar deneyin.",
+    "epostaGirin": "Önce e-posta adresinizi girin.",
+    "epostaKabulEdilmedi": "Bu e-posta adresi kabul edilmedi. Farklı bir adres deneyin.",
+    "epostaSifreHatali": "E-posta veya şifre hatalı. Şifrenizi hatırlamıyorsanız \"Şifremi unuttum\" bağlantısını kullanın.",
+    "hesapZatenVar": "Bu e-posta adresiyle zaten kayıtlı bir hesap var. Giriş yapmayı ya da \"Şifremi unuttum\" ile şifrenizi yenilemeyi deneyin.",
+    "islemTamamlanamadi": "İşlem tamamlanamadı. Lütfen tekrar deneyin; sorun sürerse {{email}} adresine yazın.",
+    "sifreAyni": "Yeni şifre eskisiyle aynı olamaz. Farklı bir şifre belirleyin.",
+    "sifreZayif": "Şifre yeterince güçlü değil. {{aciklama}}",
+    "sifrelerEslesmiyor": "Şifreler eşleşmiyor.",
+    "sunucuyaUlasilamadi": "Sunucuya ulaşılamadı. İnternet bağlantınızı kontrol edip tekrar deneyin."
+  },
+  "hesabim": "Hesabım",
+  "hesabinizVar": "Zaten hesabınız var mı? ",
+  "hesabinizYok": "Hesabınız yok mu? ",
+  "hesapOlustur": "Hesap oluştur",
+  "jeton": {
+    "aylikHak": "{{sayi}} aylık hak (dönem sonunda yenilenir) ·",
+    "satinAlinan": "{{sayi}} satın alınan (süresi dolmaz)"
+  },
+  "jetonNotu": "Jetonunuz yalnız yapay zekâ analizlerinde harcanır; seans ve acil durdurma jetondan bağımsızdır.",
+  "kalanJeton": "Kalan jeton",
+  "kapat": "Kapat",
+  "kayit": {
+    "gizlilik": "Gizlilik Politikası",
+    "kullanimSartlari": "Kullanım Şartları",
+    "kvkk": "KVKK Aydınlatma Metni",
+    "once": "Kayıt olarak",
+    "sonrasi": "'nı kabul edersiniz.",
+    "ve": " ve"
+  },
+  "kayitOl": "Kayıt ol",
+  "kayitOlun": "Kayıt olun",
+  "odeme": {
+    "abonelikYok": "Hesabınızda aktif bir abonelik görünmüyor. Sorun sürerse {{email}} adresine yazın.",
+    "bankaDogrulamadi": "Bankanız işlemi doğrulayamadı. Kart bilgilerinizi kontrol edip tekrar deneyin.",
+    "tahsilEdilemedi": "Ödeme kartınızdan tahsil edilemedi (limit/bakiye). Farklı bir kartla tekrar deneyebilirsiniz."
+  },
+  "pencere": {
+    "abonelikAciklama": "Aboneliğiniz bu hesaba tanımlanır (mobil ve masaüstü ile aynı).",
+    "formdaKal": "Vazgeç, formda kal",
+    "hesapTuru": "Hesap türü",
+    "indirmeAciklama": "İndirme için ücretsiz hesap yeterli — kart bilgisi istenmez. Giriş yapınca indirme kendiliğinden başlar.",
+    "kapatmaSorusu": "Girdiğiniz bilgiler kaybolacak. Pencere kapatılsın mı?",
+    "servisYok": "Giriş servisine şu anda ulaşılamıyor. Kısa süre sonra tekrar deneyin; sürerse{{eposta}} adresine yazın."
+  },
+  "rota": {
+    "giris": {
+      "aciklama": "Hesabınızla giriş yapın. Pencere kapandıysa aşağıdaki düğmeyle yeniden açabilirsiniz.",
+      "dugme": "Giriş penceresini aç"
+    },
+    "kayit": {
+      "aciklama": "Ücretsiz hesap masaüstü uygulaması, telefon uygulaması ve bu site için ortaktır; kart bilgisi istenmez. Kayıt penceresi kapandıysa aşağıdaki düğmeyle yeniden açabilirsiniz.",
+      "dugme": "Kayıt penceresini aç"
+    },
+    "rozet": "Hesap",
+    "sifre": {
+      "aciklama": "Giriş penceresinde e-postanızı yazıp \"Şifremi unuttum\" bağlantısına basın; size yeni şifre belirleme bağlantısı göndeririz. Pencere kapandıysa aşağıdaki düğmeyle yeniden açabilirsiniz."
+    }
+  },
+  "sifirla": {
+    "anaSayfaBaglanti": "ana sayfadan giriş penceresini açıp",
+    "baslik": "Yeni şifre belirle",
+    "dogrulaniyor": "Sıfırlama bağlantısı doğrulanıyor… Bu mesaj kalıcıysa bağlantının süresi dolmuş olabilir. Yeni bir bağlantı almak için",
+    "girisYapabilirsiniz": "Yeni şifrenizle giriş yapabilirsiniz.",
+    "guncelle": "Şifreyi güncelle",
+    "guncellendi": "Şifreniz güncellendi",
+    "guncelleniyor": "Güncelleniyor…",
+    "tekrarlayin": "“Şifremi unuttum” adımını tekrarlayın.",
+    "yeniSifre": "Yeni şifre",
+    "yeniSifreTekrar": "Yeni şifre (tekrar)"
+  },
+  "sifreKurali": "En az 8 karakter; büyük harf, küçük harf ve rakam içermeli.",
+  "sifremiUnuttum": "Şifremi unuttum",
+  "tur": {
+    "arastirmaci": "Araştırmacı / Kurum",
+    "bireyselAlt": "Bireysel kullanım",
+    "klinikAlt": "Klinik bilgileriyle",
+    "kurumAlt": "Üniversite · enstitü",
+    "veteriner": "Veteriner Hekim / Klinik"
+  }
+}

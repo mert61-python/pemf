@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { kaynakSoy as soy } from './_soyucu'
-import { gorunenMetinler } from './_kaynakMetni'
+import { TR, gorunenMetinler } from './_kaynakMetni'
 
 import DOWNLOAD_SRC from '../pages/Download.tsx?raw'
 import PRICING_SRC from '../pages/Pricing.tsx?raw'
@@ -112,7 +112,9 @@ describe('3) hata ekranlarında ÇIKIŞ YOLU', () => {
   it('KRİTİK: şifre sıfırlama "yeniden başlatın" derken bir YOL gösterir', () => {
     // Sayfada hiçbir bağlantı/buton yoktu; kullanıcı akışı yeniden başlatamıyordu.
     const s = soy(RESET_SRC)
-    const i = s.indexOf('süresi dolmuş')
+    // Metin kataloğa taşındı (I18N): çapa = anahtar çağrısı, metin iddiası = katalog Türkçe değeri.
+    expect(TR['hesap.sifirla.dogrulaniyor']).toMatch(/süresi dolmuş/)
+    const i = s.indexOf("t('hesap.sifirla.dogrulaniyor')")
     expect(i).toBeGreaterThan(-1)
     expect(s.slice(i, i + 700)).toMatch(/Link to=|href=/)
   })
@@ -136,9 +138,10 @@ describe('4) indirme sayfası kararı', () => {
   it('KRİTİK: disk gereksinimi ile paket hesaplayıcı ÇELİŞMEZ', () => {
     // Sistem gereksinimi "~5 GB", hesaplayıcı "≈1.8 GB" diyordu; ikisi de açıklamasızdı.
     const s = soy(DOWNLOAD_SRC)
-    const i = s.search(/GB boş disk/)
-    expect(i).toBeGreaterThan(-1)
-    expect(s.slice(i - 200, i + 260)).toMatch(/seçtiğiniz profil|profil sayısına|değişir/i)
+    // Metin kataloğa taşındı (I18N): kullanım = anahtar çağrısı, iddia = katalog Türkçe değeri.
+    expect(s).toMatch(/t\('indirme\.gereksinim\.disk'\)/)
+    expect(TR['indirme.gereksinim.disk']).toMatch(/GB boş disk/)
+    expect(TR['indirme.gereksinim.disk']).toMatch(/seçtiğiniz profil|profil sayısına|değişir/i)
   })
 
   it('KARŞIT-KANIT: kurulum dosyası boyutu (küçük) ile toplam indirme AYRI AYRI anlatılır', () => {
