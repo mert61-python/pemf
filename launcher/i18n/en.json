@@ -15,6 +15,74 @@
     "yukseltmeKorunuyor": "PEMF: upgrade — downloaded models and cache are kept (they will not be downloaded again)."
   },
   "rust": {
+    "acma": {
+      "butce": "extraction size budget exceeded",
+      "butceSymlink": "extraction size budget exceeded (symlink)",
+      "cokGirdi": "too many entries: {{adet}}",
+      "disinaYazma": "SECURITY: an archive entry tried to write outside the install directory: {{yol}}",
+      "dizinDisinaCikiyor": "{{ad}} -> {{hedef}} (escapes the install directory)",
+      "dosyaSistemi": "file system error: {{hata}}",
+      "iptal": "extraction was cancelled",
+      "kaynakLimiti": "SECURITY: the archive exceeded its resource limit (zip bomb?): {{ayrinti}}",
+      "mutlakHedef": "{{ad}} -> {{hedef}} (absolute target)",
+      "profilAltinaYazamaz": "{{ad}} (the profile package '{{profil}}' cannot write under it — a verified runtime/state file)",
+      "symlinkDesteklenmiyor": "{{ad}}: symbolic links are not supported on this platform",
+      "symlinkDisari": "{{ad}} (the target directory resolved outside the install root through a symlink/junction)",
+      "zipOkunamadi": "the zip could not be read: {{hata}}"
+    },
+    "ag": {
+      "acilamadi": "{{yol}} could not be opened: {{hata}}",
+      "agDosyaHatasi": "network/file error: {{hata}}",
+      "aktarimBasarisiz": "download transfer failed: {{hata}}",
+      "aralikVerilmedi": "the server did not give the requested range (expected offset {{beklenen}}, got {{gelen}}) — .part was reset",
+      "beklenenRepo": "github.com{{yol}} — expected repository {{repo}}",
+      "boyutSiniri": "the download exceeded the size limit ({{done}} > {{tavan}} bytes) — cancelled",
+      "dns": "network name could not be resolved (DNS): {{hata}}",
+      "duraklatildi": "download paused",
+      "gorevSonlandi": "{{etiket}}: the network task ended unexpectedly",
+      "hostBeklenmeyen": "The host is not the expected release server ({{host}}) — not downloaded (security)",
+      "iptalEdildi": "download cancelled",
+      "manifestAlinamadi": "the manifest could not be fetched",
+      "olusturulamadi": "{{yol}} could not be created: {{hata}}",
+      "politikaSiniri": "download policy limit: {{ayrinti}}",
+      "sureSiniri": "the download exceeded the global time limit ({{sn}} s) — cancelled",
+      "tasinamadi": "{{yol}} could not be moved: {{hata}}",
+      "urlCozumlenemedi": "the URL could not be parsed: {{url}}",
+      "urlHttpsDegil": "the URL is not HTTPS — not downloaded (security): {{url}}",
+      "yanitYok": "{{etiket}}: no response within {{sn}} s — treated as offline",
+      "yazilamadi": "could not write to disk: {{hata}}",
+      "yazilamadiFlush": "could not write to disk (flush): {{hata}}",
+      "yerelDosya": "local file error: {{hata}}",
+      "yolNoktaSegmenti": "github.com{{yol}} — the path contains dot segments/encoded separators (pin bypass)"
+    },
+    "backend": {
+      "baslatilamadi": "backend could not be started: {{hata}}",
+      "bulunamadi": "backend executable not found: {{yol}}",
+      "gunlukBayat": "⚠️ The lines below are from {{dk}} min BEFORE — they may not belong to this run (the backend may have crashed without writing to the log). Log: {{yol}}",
+      "gunlukIpucu": "For details see the backend log: {{yol}}",
+      "hazirOlmadi": "backend was not ready within {{timeout_s}} s (port {{port}}). Last output:\n{{tail}}",
+      "oturumDevredilemedi": "the session could not be handed over to the backend (no connection)",
+      "oturumKabulEdilmedi": "the backend did not accept the session (HTTP {{s}})",
+      "oturumSerilestirilemedi": "the session could not be serialized",
+      "oturumYalnizYerel": "The session can only be handed over to the local backend (127.0.0.1)",
+      "portYok": "no free port found ({{start}}..{{end}})",
+      "sonlandi": "backend exited while starting (exit code {{code}}). Last output:\n{{tail}}"
+    },
+    "dogrulama": {
+      "dosyaOkunamadi": "the file could not be read: {{hata}}",
+      "sha256Uyusmadi": "SHA256 MISMATCH — the file is corrupt or has been modified. expected={{beklenen}} actual={{gercek}}"
+    },
+    "giris": {
+      "adresDogrulanamadi": "The sign-in server address could not be verified — the operation was cancelled (security)",
+      "cevrimdisi": "No internet connection — you can continue offline",
+      "cokDeneme": "Too many attempts — try again in a few minutes",
+      "epostaDogrulanmamis": "Your email address has not been verified — check your inbox",
+      "girdiBos": "Email and password cannot be left empty",
+      "kimlikHatali": "Incorrect email or password",
+      "oturumGecersiz": "The saved sign-in is no longer valid — please sign in again",
+      "sunucuHatasi": "The sign-in server returned an error (HTTP {{kod}})",
+      "yanitOkunamadi": "The sign-in response could not be read"
+    },
     "hata": {
       "arkaPlanIndirmeCoktu": "The background download crashed: {{e}}",
       "ayrintiYok": "no details",
@@ -74,8 +142,50 @@
     "klasorSecici": {
       "aciklama": "External disk / network share to copy the backups to"
     },
+    "kurulum": {
+      "appGeriAlinamadi": "the app update could NOT BE ROLLED BACK ({{geri}}) — the device may be left with an unverified/half-written app tree; run 'Repair'. (step that triggered the rollback: {{adim}})",
+      "appYedegiYok": "app backup not found — the rollback COULD NOT BE DONE (the device is on an unverified version)",
+      "baskaPencere": "Another PEMF Vet Client window is installing/updating. Wait for it to finish or close the other window. ({{hata}})",
+      "enAzBirProfil": "At least one profile must stay installed — install another profile first, then remove this one.",
+      "eskiAppYedekleniyor": "backing up the old app version",
+      "eskiKurulumAlgilandi": "old installation detected ({{adet}} profiles)",
+      "eskiPaketlerTemizlendi": "old packages cleaned up ({{boyut}})",
+      "eskiSurumTemizleniyor": "cleaning up the old version",
+      "guncellemeGeriAlinamadi": "the update could NOT BE ROLLED BACK ({{geri}}) — the device may be on an unverified new version; run 'Repair'. (step that triggered the rollback: {{adim}})",
+      "kalanOnbellekYok": "The cache has no {{dosya}} for the remaining profile '{{profil}}' — shared files cannot be calculated safely. Try again after 'Repair installation'.",
+      "katmanEksikDonuldu": "the new app layer is missing — returned to the old version",
+      "katmanEksikGeriAlinamadi": "the new app layer is missing and COULD NOT BE ROLLED BACK (no backup) — the device is on an unverified version; reinstall with 'Repair'",
+      "kayitOkunamadi": "The installed profile record could not be read but model data EXISTS on disk — it is not known which profiles to repair. Select the profiles again and install (downloads come from the cache, nothing is downloaded again).",
+      "onbellekBozuk": "{{profil}}: the cached {{dosya}} is corrupt ({{hata}}) — try again after 'Repair installation'",
+      "onbellekOkunamadi": "{{profil}}: the cached {{dosya}} could not be read ({{hata}}) — try again after 'Repair installation'",
+      "onbellekYok": "{{profil}}: the cache has no {{dosya}} — try again after 'Repair installation'",
+      "paketGuvensiz": "The {{profil}} package contains an unsafe entry ({{sebep}}) — no file was deleted. This profile cannot be removed from here: if the package looks corrupt, try 'Repair installation'; if the problem persists, uninstall the app and reinstall with only the profiles you want.",
+      "profilKurulDegil": "'{{profil}}' does not appear to be installed — refresh the profile list and try again.",
+      "profilManifestteYok": "The profile '{{ad}}' is not in the manifest — shared files cannot be calculated. Refresh the manifest and try again.",
+      "profilSecilmedi": "No profile was selected for removal.",
+      "silinemedi": "{{yol}} could not be deleted ({{hata}}) — the app or antivirus may have locked the file; close open apps and try again with 'Repair installation'. The profile record was not changed.",
+      "silmeKokDisi": "SECURITY: {{yol}} resolved outside the install root — the deletion was stopped.",
+      "yeniKurulumEksik": "the new installation is incomplete (exe/web not found) — no swap was made",
+      "yetersizDisk": "Not enough disk space: {{gerek}} needed, {{bos}} free on this disk. Free up space and try again.",
+      "yolAiModelsDisi": "entry outside ai_models/: {{ad}}",
+      "yolGuvensizKarakter": "unsafe path character: {{ad}}",
+      "yolMutlak": "absolute or empty path segment: {{ad}}",
+      "yolSonuNokta": "segment ending with a dot/space: {{ad}}",
+      "yolUstDizin": "escape to the parent directory: {{ad}}"
+    },
+    "manifest": {
+      "alanYok": "the manifest has no '{{alan}}' field",
+      "ayristirilamadi": "the manifest could not be parsed as JSON: {{hata}}",
+      "platformPaketiYok": "The manifest has NO package for this platform ({{platform}}). Available keys: [{{available}}]. A package for the wrong platform is NOT installed — this platform's base package is missing from the release process.",
+      "profilYok": "The profile '{{profile}}' is not in the manifest. Available profiles: [{{available}}]",
+      "sha256Gecersiz": "The sha256 value of record '{{key}}' is invalid (64 hex expected, got: {{got}})"
+    },
     "pencere": {
       "guncelleniyor": "PEMF Vet — updating"
+    },
+    "yedek": {
+      "ayniSurucu": "The backup destination is on the SAME drive as the patient data. If the disk fails, both are lost — choose an external drive or a network share.",
+      "yazilamiyor": "This folder cannot be written to. The drive must be connected and writable."
     }
   },
   "ui": {

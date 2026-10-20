@@ -15,6 +15,74 @@
     "yukseltmeKorunuyor": "PEMF: yükseltme — indirilen modeller ve önbellek korunuyor (tekrar inmez)."
   },
   "rust": {
+    "acma": {
+      "butce": "açılım boyut bütçesi aşıldı",
+      "butceSymlink": "açılım boyut bütçesi aşıldı (symlink)",
+      "cokGirdi": "çok fazla girdi: {{adet}}",
+      "disinaYazma": "GÜVENLİK: arşiv girdisi kurulum dizininin dışına yazmaya çalıştı: {{yol}}",
+      "dizinDisinaCikiyor": "{{ad}} -> {{hedef}} (kurulum dizini disina cikiyor)",
+      "dosyaSistemi": "dosya sistemi hatası: {{hata}}",
+      "iptal": "açma iptal edildi",
+      "kaynakLimiti": "GÜVENLİK: arşiv kaynak-limitini aştı (zip-bomb?): {{ayrinti}}",
+      "mutlakHedef": "{{ad}} -> {{hedef}} (mutlak hedef)",
+      "profilAltinaYazamaz": "{{ad}} (profil paketi '{{profil}}' altına yazamaz — doğrulanmış runtime/durum dosyası)",
+      "symlinkDesteklenmiyor": "{{ad}}: bu platformda sembolik link desteklenmiyor",
+      "symlinkDisari": "{{ad}} (hedef dizin symlink/junction üzerinden kurulum kökünün DIŞINA çözümlendi)",
+      "zipOkunamadi": "zip okunamadı: {{hata}}"
+    },
+    "ag": {
+      "acilamadi": "{{yol}} açılamadı: {{hata}}",
+      "agDosyaHatasi": "ağ/dosya hatası: {{hata}}",
+      "aktarimBasarisiz": "indirme aktarımı başarısız: {{hata}}",
+      "aralikVerilmedi": "sunucu istenen aralığı vermedi (beklenen ofset {{beklenen}}, gelen {{gelen}}) — .part sıfırlandı",
+      "beklenenRepo": "github.com{{yol}} — beklenen repo {{repo}}",
+      "boyutSiniri": "indirme boyut sınırını aştı ({{done}} > {{tavan}} bayt) — iptal edildi",
+      "dns": "ağ adı çözümlenemedi (DNS): {{hata}}",
+      "duraklatildi": "indirme duraklatıldı",
+      "gorevSonlandi": "{{etiket}}: ağ görevi beklenmedik şekilde sonlandı",
+      "hostBeklenmeyen": "Host beklenen release sunucusu değil ({{host}}) — indirilmedi (güvenlik)",
+      "iptalEdildi": "indirme iptal edildi",
+      "manifestAlinamadi": "manifest alınamadı",
+      "olusturulamadi": "{{yol}} oluşturulamadı: {{hata}}",
+      "politikaSiniri": "indirme politika sınırı: {{ayrinti}}",
+      "sureSiniri": "indirme küresel süre sınırını aştı ({{sn}} sn) — iptal edildi",
+      "tasinamadi": "{{yol}} taşınamadı: {{hata}}",
+      "urlCozumlenemedi": "URL çözümlenemedi: {{url}}",
+      "urlHttpsDegil": "URL HTTPS değil — indirilmedi (güvenlik): {{url}}",
+      "yanitYok": "{{etiket}}: {{sn}} sn içinde yanıt gelmedi — çevrimdışı sayıldı",
+      "yazilamadi": "diske yazılamadı: {{hata}}",
+      "yazilamadiFlush": "diske yazılamadı (flush): {{hata}}",
+      "yerelDosya": "yerel dosya hatası: {{hata}}",
+      "yolNoktaSegmenti": "github.com{{yol}} — yol nokta-segmenti/kodlanmış ayraç içeriyor (pin atlatma)"
+    },
+    "backend": {
+      "baslatilamadi": "backend başlatılamadı: {{hata}}",
+      "bulunamadi": "backend çalıştırılabiliri bulunamadı: {{yol}}",
+      "gunlukBayat": "⚠️ Aşağıdaki satırlar {{dk}} dk ÖNCESİNE ait — bu çalışmaya ait OLMAYABİLİR (backend              günlüğe hiç yazamadan çökmüş olabilir). Günlük: {{yol}}",
+      "gunlukIpucu": "Ayrıntı için backend günlüğü: {{yol}}",
+      "hazirOlmadi": "backend {{timeout_s}} sn içinde hazır olmadı (port {{port}}). Son çıktı:\n{{tail}}",
+      "oturumDevredilemedi": "backend'e oturum devredilemedi (bağlantı yok)",
+      "oturumKabulEdilmedi": "backend oturumu kabul etmedi (HTTP {{s}})",
+      "oturumSerilestirilemedi": "oturum serileştirilemedi",
+      "oturumYalnizYerel": "Oturum yalnız yerel backend'e (127.0.0.1) devredilebilir",
+      "portYok": "boş port bulunamadı ({{start}}..{{end}})",
+      "sonlandi": "backend başlarken sonlandı (çıkış kodu {{code}}). Son çıktı:\n{{tail}}"
+    },
+    "dogrulama": {
+      "dosyaOkunamadi": "dosya okunamadı: {{hata}}",
+      "sha256Uyusmadi": "SHA256 UYUŞMADI — dosya bozuk ya da değiştirilmiş. beklenen={{beklenen}} gerçek={{gercek}}"
+    },
+    "giris": {
+      "adresDogrulanamadi": "Giriş sunucusu adresi doğrulanamadı — işlem iptal edildi (güvenlik)",
+      "cevrimdisi": "İnternet bağlantısı yok — çevrimdışı devam edebilirsiniz",
+      "cokDeneme": "Çok fazla deneme yapıldı — birkaç dakika sonra tekrar deneyin",
+      "epostaDogrulanmamis": "E-posta adresiniz doğrulanmamış — gelen kutunuzu kontrol edin",
+      "girdiBos": "E-posta ve parola boş bırakılamaz",
+      "kimlikHatali": "E-posta veya parola hatalı",
+      "oturumGecersiz": "Kayıtlı oturum geçersiz — lütfen tekrar giriş yapın",
+      "sunucuHatasi": "Giriş sunucusu hata verdi (HTTP {{kod}})",
+      "yanitOkunamadi": "Giriş yanıtı okunamadı"
+    },
     "hata": {
       "arkaPlanIndirmeCoktu": "arka plan indirme çöktü: {{e}}",
       "ayrintiYok": "ayrıntı yok",
@@ -74,8 +142,50 @@
     "klasorSecici": {
       "aciklama": "Yedeklerin kopyalanacagi harici disk / ag paylasimi"
     },
+    "kurulum": {
+      "appGeriAlinamadi": "app guncellemesi GERI ALINAMADI ({{geri}}) — cihaz DOGRULANMAMIS/yarim app agaciyla kalmis olabilir; 'Onar' calistirin. (geri almayi tetikleyen adim: {{adim}})",
+      "appYedegiYok": "app yedeği bulunamadı — geri alma YAPILAMADI (cihaz doğrulanmamış sürümde)",
+      "baskaPencere": "Başka bir PEMF Vet Client penceresi kurulum/güncelleme yapıyor. Onun bitmesini bekleyin ya da diğer pencereyi kapatın. ({{hata}})",
+      "enAzBirProfil": "En az bir profil kurulu kalmalı — önce başka bir profil kurun, sonra bunu kaldırın.",
+      "eskiAppYedekleniyor": "eski uygulama sürümü yedekleniyor",
+      "eskiKurulumAlgilandi": "eski kurulum algılandı ({{adet}} profil)",
+      "eskiPaketlerTemizlendi": "eski paketler temizlendi ({{boyut}})",
+      "eskiSurumTemizleniyor": "eski sürüm temizleniyor",
+      "guncellemeGeriAlinamadi": "guncelleme GERI ALINAMADI ({{geri}}) — cihaz DOGRULANMAMIS yeni surumde olabilir; 'Onar' calistirin. (geri almayi tetikleyen adim: {{adim}})",
+      "kalanOnbellekYok": "Kalan profil '{{profil}}' için önbellekte {{dosya}} yok — ortak dosyalar güvenle hesaplanamaz. 'Kurulumu onar' sonrası tekrar deneyin.",
+      "katmanEksikDonuldu": "yeni uygulama katmanı eksik — eski sürüme dönüldü",
+      "katmanEksikGeriAlinamadi": "yeni uygulama katmanı eksik ve GERİ ALINAMADI (yedek yok) — cihaz doğrulanmamış sürümde; 'Onar' ile yeniden kurun",
+      "kayitOkunamadi": "Kurulu profil kaydı okunamadı ama diskte model verisi VAR — hangi profillerin onarılacağı bilinmiyor. Profilleri yeniden seçip kurun (indirilenler önbellekten gelir, yeniden İNMEZ).",
+      "onbellekBozuk": "{{profil}} için önbellekteki {{dosya}} bozuk ({{hata}}) — 'Kurulumu onar' sonrası tekrar deneyin",
+      "onbellekOkunamadi": "{{profil}} için önbellekteki {{dosya}} okunamadı ({{hata}}) — 'Kurulumu onar' sonrası tekrar deneyin",
+      "onbellekYok": "{{profil}} için önbellekte {{dosya}} yok — 'Kurulumu onar' sonrası tekrar deneyin",
+      "paketGuvensiz": "{{profil}} paketinde güvensiz girdi ({{sebep}}) — hiçbir dosya silinmedi. Bu profil buradan kaldırılamıyor: paket bozuk görünüyorsa 'Kurulumu onar' deneyin; sorun sürerse uygulamayı kaldırıp yalnız istediğiniz profillerle yeniden kurun.",
+      "profilKurulDegil": "'{{profil}}' kurulu görünmüyor — profil listesini yenileyip tekrar deneyin.",
+      "profilManifestteYok": "'{{ad}}' profili manifestte yok — ortak dosyalar hesaplanamaz. Manifesti yenileyip tekrar deneyin.",
+      "profilSecilmedi": "Kaldırılacak profil seçilmedi.",
+      "silinemedi": "{{yol}} silinemedi ({{hata}}) — uygulama ya da antivirüs dosyayı kilitlemiş olabilir; açık uygulamaları kapatıp 'Kurulumu onar' ile tekrar deneyin. Profil kaydı değişmedi.",
+      "silmeKokDisi": "GÜVENLİK: {{yol}} kurulum kökünün dışına çözümlendi — silme durduruldu.",
+      "yeniKurulumEksik": "yeni kurulum eksik (exe/web bulunamadı) — takas yapılmadı",
+      "yetersizDisk": "Yetersiz disk alanı: {{gerek}} gerekiyor, bu diskte {{bos}} boş. Yer açıp tekrar deneyin.",
+      "yolAiModelsDisi": "ai_models/ disinda girdi: {{ad}}",
+      "yolGuvensizKarakter": "guvensiz yol karakteri: {{ad}}",
+      "yolMutlak": "mutlak ya da bos parcali yol: {{ad}}",
+      "yolSonuNokta": "sonu nokta/bosluk ile biten parca: {{ad}}",
+      "yolUstDizin": "ust dizine kacis: {{ad}}"
+    },
+    "manifest": {
+      "alanYok": "manifest'te '{{alan}}' alanı yok",
+      "ayristirilamadi": "manifest JSON olarak ayrıştırılamadı: {{hata}}",
+      "platformPaketiYok": "Bu platform ({{platform}}) için manifest'te paket YOK. Mevcut anahtarlar: [{{available}}]. Yanlış platformun paketi KURULMAZ — yayın sürecinde bu platformun base paketi eksik.",
+      "profilYok": "'{{profile}}' profili manifest'te yok. Mevcut profiller: [{{available}}]",
+      "sha256Gecersiz": "'{{key}}' kaydının sha256 değeri geçersiz (64 hex bekleniyor, gelen: {{got}})"
+    },
     "pencere": {
       "guncelleniyor": "PEMF Vet — güncelleniyor"
+    },
+    "yedek": {
+      "ayniSurucu": "Yedek hedefi hasta verisiyle AYNI sürücüde. Disk arızasında ikisi de kaybolur — harici bir disk ya da ağ paylaşımı seçin.",
+      "yazilamiyor": "Bu klasöre yazılamıyor. Sürücü takılı ve yazılabilir olmalı."
     }
   },
   "ui": {

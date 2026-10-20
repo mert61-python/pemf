@@ -364,7 +364,7 @@
    "sira": 11,
    "kritik": false,
    "aciklama": "launcher Rust iletileri — çekirdek (launcher/core)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 139,
    "dosyaSayisi": 14
   },
@@ -7506,10 +7506,43 @@
    "yuzey": "launcher",
    "grup": "launcher-11c-rust-cekirdek",
    "sira": 11,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 18,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Session",
+     "gerekce": "`Debug` çıktısında yapı adı — metin değil"
+    },
+    {
+     "metin": "email not confirmed",
+     "gerekce": "sunucu hata dizgisi eşleştirmesi (`email not confirmed`) — İngilizce sunucu yanıtı, ekran metni değil"
+    },
+    {
+     "metin": "rate limit",
+     "gerekce": "sunucu hata dizgisi eşleştirmesi (`rate limit`) — İngilizce sunucu yanıtı, ekran metni değil"
+    },
+    {
+     "metin": "refresh token",
+     "gerekce": "sunucu hata dizgisi eşleştirmesi (`refresh token`) — İngilizce sunucu yanıtı, ekran metni değil"
+    },
+    {
+     "metin": "Authorization",
+     "gerekce": "HTTP başlık adı — protokol"
+    },
+    {
+     "metin": "Bearer {{deger1}}",
+     "gerekce": "HTTP başlık değeri (`Bearer …`) — protokol"
+    },
+    {
+     "metin": "hatali giriste parola alani TEMIZLENMIYOR — kullanici gorunmeyen kalintinin ustune yazar",
+     "gerekce": "günlük / test iletisi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "hata dalinda gorunmez-karakter uyarisi cagrilmiyor",
+     "gerekce": "günlük / test iletisi — geliştirici içindir (operatöre gitmez)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -7517,10 +7550,15 @@
    "yuzey": "launcher",
    "grup": "launcher-11c-rust-cekirdek",
    "sira": 11,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 12,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "HTTP/1.1 {{kod}} X Content-Type: application/json Content-Length: {{deger2}} Connection: close {{govde}}",
+     "gerekce": "Rust birim testinin sahte HTTP yanıtı — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -7539,7 +7577,7 @@
    "yuzey": "launcher",
    "grup": "launcher-11c-rust-cekirdek",
    "sira": 11,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -7550,7 +7588,7 @@
    "yuzey": "launcher",
    "grup": "launcher-11c-rust-cekirdek",
    "sira": 11,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 13,
    "kritik": false,
    "muaf": [],
@@ -7561,10 +7599,43 @@
    "yuzey": "launcher",
    "grup": "launcher-11c-rust-cekirdek",
    "sira": 11,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 8,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "PEMF Backend API",
+     "gerekce": "Windows Güvenlik Duvarı KURAL ADI — makine verisi: kural bu adla aranır / silinir (değişirse mevcut kurallar yetim kalır); ekran metni değil"
+    },
+    {
+     "metin": "PEMF UDP Discovery",
+     "gerekce": "Windows Güvenlik Duvarı KURAL ADI — makine verisi: kural bu adla aranır / silinir (değişirse mevcut kurallar yetim kalır); ekran metni değil"
+    },
+    {
+     "metin": "$ErrorActionPreference='Stop'; $p='{{p}}'; if (-not (Get-NetFirewallRule -DisplayName '{{api}}' -ErrorAction SilentlyContinue)) {{ New-NetFirewallRule -DisplayName '{{api}}' -Direction Inbound -Program $p -Action Allow -Protocol TCP -LocalPort {{tcp}} -Profile Any | Out-Null }}; if (-not (Get-NetFirewallRule -DisplayName '{{kesif}}' -ErrorAction SilentlyContinue)) {{ New-NetFirewallRule -DisplayName '{{kesif}}' -Direction Inbound -Program $p -Action Allow -Protocol UDP -LocalPort {{udp}} -Profile Any | Out-Null }}",
+     "gerekce": "PowerShell komut metni — komut, kullanıcı metni değil"
+    },
+    {
+     "metin": "$ErrorActionPreference='SilentlyContinue'; foreach ($ad in @('{{api}}','{{kesif}}')) {{ Get-NetFirewallRule -DisplayName $ad -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue }}",
+     "gerekce": "PowerShell komut metni — komut, kullanıcı metni değil"
+    },
+    {
+     "metin": "$a = Get-NetFirewallRule -DisplayName '{{api}}' -ErrorAction SilentlyContinue; $b = Get-NetFirewallRule -DisplayName '{{kesif}}' -ErrorAction SilentlyContinue; $adli = [bool]($a -and $b);",
+     "gerekce": "PowerShell komut metni — komut, kullanıcı metni değil"
+    },
+    {
+     "metin": "{{adli}} if ($adli) {{ 'VAR' }} else {{ 'YOKSA' }}",
+     "gerekce": "PowerShell komut çıktısı işareti (`VAR` / `YOKSA`) — makine-okur, ekran metni değil"
+    },
+    {
+     "metin": "{{adli}} $exe='{{p}}'; $izin=$false; $engel=$false; try {{ $f = Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | Where-Object {{ $_.Program -and ($_.Program -ieq $exe) }}; foreach ($x in $f) {{ $r = $x | Get-NetFirewallRule -ErrorAction SilentlyContinue; foreach ($rr in $r) {{ if ($rr.Direction -eq 'Inbound' -and $rr.Enabled -eq 'True') {{ if ($rr.Action -eq 'Block') {{ $engel = $true }} elseif ($rr.Action -eq 'Allow') {{ $izin = $true }} }} }} }} }} catch {{ }} if ($engel) {{ 'ENGEL' }} elseif ($adli -or $izin) {{ 'VAR' }} else {{ 'YOKSA' }}",
+     "gerekce": "PowerShell komut metni — komut, kullanıcı metni değil"
+    },
+    {
+     "metin": "-Command",
+     "gerekce": "PowerShell argümanı — komut"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -7572,10 +7643,27 @@
    "yuzey": "launcher",
    "grup": "launcher-11c-rust-cekirdek",
    "sira": 11,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 35,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "app:{{deger1}}|deps:{{deger2}}",
+     "gerekce": "önbellek anahtarı (`app:…|deps:…`) — makine verisi"
+    },
+    {
+     "metin": "Bypass",
+     "gerekce": "PowerShell argümanı — komut"
+    },
+    {
+     "metin": "-File",
+     "gerekce": "PowerShell argümanı — komut"
+    },
+    {
+     "metin": "-Kaldir",
+     "gerekce": "PowerShell argümanı — komut"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -7583,10 +7671,43 @@
    "yuzey": "launcher",
    "grup": "launcher-11c-rust-cekirdek",
    "sira": 11,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 15,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "*S-1-5-32-545:(OI)(CI)M",
+     "gerekce": "icacls komut argümanı — komut"
+    },
+    {
+     "metin": "pemf-kurulum-{{h}}.lock",
+     "gerekce": "kilit dosyası adı kalıbı — metin değil"
+    },
+    {
+     "metin": "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\PEMF Vet Client",
+     "gerekce": "Windows kayıt defteri anahtarı — makine verisi"
+    },
+    {
+     "metin": "Roaming",
+     "gerekce": "işletim sistemi dizin adı / ürün klasör adı — dosya yolu parçası, metin değil"
+    },
+    {
+     "metin": "Library",
+     "gerekce": "işletim sistemi dizin adı / ürün klasör adı — dosya yolu parçası, metin değil"
+    },
+    {
+     "metin": "Application Support",
+     "gerekce": "işletim sistemi dizin adı / ürün klasör adı — dosya yolu parçası, metin değil"
+    },
+    {
+     "metin": "Local",
+     "gerekce": "işletim sistemi dizin adı / ürün klasör adı — dosya yolu parçası, metin değil"
+    },
+    {
+     "metin": "PEMF Vet Client",
+     "gerekce": "işletim sistemi dizin adı / ürün klasör adı — dosya yolu parçası, metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -7594,7 +7715,7 @@
    "yuzey": "launcher",
    "grup": "launcher-11c-rust-cekirdek",
    "sira": 11,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -7605,7 +7726,7 @@
    "yuzey": "launcher",
    "grup": "launcher-11c-rust-cekirdek",
    "sira": 11,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 5,
    "kritik": false,
    "muaf": [],
@@ -7616,10 +7737,27 @@
    "yuzey": "launcher",
    "grup": "launcher-11c-rust-cekirdek",
    "sira": 11,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 28,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Dns Failed",
+     "gerekce": "ureq hata dizgisi eşleştirmesi (`Dns Failed`) — İngilizce kütüphane iletisi, ekran metni değil"
+    },
+    {
+     "metin": "dns error",
+     "gerekce": "ureq hata dizgisi eşleştirmesi (`dns error`) — İngilizce kütüphane iletisi, ekran metni değil"
+    },
+    {
+     "metin": "resolve dns name",
+     "gerekce": "ureq hata dizgisi eşleştirmesi (`resolve dns name`) — İngilizce kütüphane iletisi, ekran metni değil"
+    },
+    {
+     "metin": "Range",
+     "gerekce": "HTTP başlık adı — protokol"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -7627,10 +7765,15 @@
    "yuzey": "launcher",
    "grup": "launcher-11c-rust-cekirdek",
    "sira": 11,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Desteklenmeyen platform: launcher yalnız win-x64 / linux-x64 / mac-arm64 / mac-x64 hedefler.",
+     "gerekce": "`compile_error!` — DERLEME ZAMANI ileti (desteklenmeyen hedef platform); çalışma zamanı metni değil, geliştirici içindir"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -7638,10 +7781,19 @@
    "yuzey": "launcher",
    "grup": "launcher-11c-rust-cekirdek",
    "sira": 11,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 2,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "auth_session.bin.{{deger1}}.tmp",
+     "gerekce": "geçici dosya adı kalıbı — metin değil"
+    },
+    {
+     "metin": "{{y}}-{{m}}-{{d}}T{{deger4}}:{{deger5}}:{{deger6}}Z",
+     "gerekce": "ISO zaman biçimi — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -7649,7 +7801,7 @@
    "yuzey": "launcher",
    "grup": "launcher-11c-rust-cekirdek",
    "sira": 11,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 2,
    "kritik": false,
    "muaf": [],

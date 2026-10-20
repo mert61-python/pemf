@@ -96,13 +96,10 @@ where
     });
     match rx.recv_timeout(budget) {
         Ok(r) => r,
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(NetError::PolicyLimit(format!(
-            "{etiket}: {} sn içinde yanıt gelmedi — çevrimdışı sayıldı",
-            budget.as_secs()
-        ))),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(NetError::PolicyLimit(crate::dil::t_ile("rust.ag.yanitYok", &[("etiket", &(etiket).to_string()), ("sn", &(budget.as_secs()).to_string())]))),
         // Gönderen thread panikledi → kanal koptu. Bunu "geçici aktarım hatası" say.
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-            Err(NetError::Transport(format!("{etiket}: ağ görevi beklenmedik şekilde sonlandı")))
+            Err(NetError::Transport(crate::dil::t_ile("rust.ag.gorevSonlandi", &[("etiket", &(etiket).to_string())])))
         }
     }
 }
@@ -178,16 +175,10 @@ pub fn validate_download_source(url: &str) -> Result<String, NetError> {
         // `apply_self_update` imzasız setup.exe'yi `/S` ile SESSİZCE kurar.
         // Çözüm: normalize edenle bizim aramızda AYRIŞMA üreten her yazımı REDDET.
         if path_has_traversal(path) {
-            return Err(NetError::HostNotAllowed(format!(
-                "github.com{} — yol nokta-segmenti/kodlanmış ayraç içeriyor (pin atlatma)",
-                path.split("/releases").next().unwrap_or(path)
-            )));
+            return Err(NetError::HostNotAllowed(crate::dil::t_ile("rust.ag.yolNoktaSegmenti", &[("yol", &(path.split("/releases").next().unwrap_or(path)).to_string())])));
         }
         if !path.starts_with(UPDATE_REPO_PATH) {
-            return Err(NetError::HostNotAllowed(format!(
-                "github.com{} — beklenen repo {UPDATE_REPO_PATH}",
-                path.split("/releases").next().unwrap_or(path)
-            )));
+            return Err(NetError::HostNotAllowed(crate::dil::t_ile("rust.ag.beklenenRepo", &[("yol", &(path.split("/releases").next().unwrap_or(path)).to_string()), ("repo", &(UPDATE_REPO_PATH).to_string())])));
         }
         return Ok(host);
     }
@@ -217,17 +208,17 @@ const SOURCE_OBJECT_HOSTS: &[&str] = &[
 
 #[derive(Debug, thiserror::Error)]
 pub enum NetError {
-    #[error("URL çözümlenemedi: {0:?}")]
+    #[error("{}", crate::dil::t_ile("rust.ag.urlCozumlenemedi", &[("url", &format!("{:?}", .0))]))]
     Malformed(String),
-    #[error("URL HTTPS değil — indirilmedi (güvenlik): {0}")]
+    #[error("{}", crate::dil::t_ile("rust.ag.urlHttpsDegil", &[("url", &(.0).to_string())]))]
     NotHttps(String),
-    #[error("Host beklenen release sunucusu değil ({0}) — indirilmedi (güvenlik)")]
+    #[error("{}", crate::dil::t_ile("rust.ag.hostBeklenmeyen", &[("host", &(.0).to_string())]))]
     HostNotAllowed(String),
     #[error("HTTP {status} — {url}")]
     HttpStatus { status: u16, url: String },
-    #[error("ağ/dosya hatası: {0}")]
+    #[error("{}", crate::dil::t_ile("rust.ag.agDosyaHatasi", &[("hata", &(.0).to_string())]))]
     Io(#[from] io::Error),
-    #[error("indirme aktarımı başarısız: {0}")]
+    #[error("{}", crate::dil::t_ile("rust.ag.aktarimBasarisiz", &[("hata", &(.0).to_string())]))]
     Transport(String),
     /// AĞ ADI ÇÖZÜMLENEMEDİ (DNS). Kullanıcıya AYRI söylenir (saha bildirimi 2026-08-29).
     ///
@@ -238,19 +229,19 @@ pub enum NetError {
     /// sunucuda sanmasına yol açar — oysa sebep neredeyse her zaman YEREL ağdadır (Wi-Fi düştü,
     /// DNS sunucusu yanıtsız, captive portal). Ayrı varyant, arayüzün doğru cümleyi kurmasını
     /// sağlar. Sınıf GEÇİCİ sayılır (`is_retriable`): DNS anlık olarak düşüp geri gelebilir.
-    #[error("ağ adı çözümlenemedi (DNS): {0}")]
+    #[error("{}", crate::dil::t_ile("rust.ag.dns", &[("hata", &(.0).to_string())]))]
     Dns(String),
     /// Kullanıcı DURAKLATTI — `.part` KORUNUR, sonra Range ile kaldığı yerden sürer.
-    #[error("indirme duraklatıldı")]
+    #[error("{}", crate::dil::t("rust.ag.duraklatildi"))]
     Paused,
     /// Kullanıcı İPTAL etti — `.part` SİLİNİR.
-    #[error("indirme iptal edildi")]
+    #[error("{}", crate::dil::t("rust.ag.iptalEdildi"))]
     Cancelled,
     /// ⚠️ DENETİM 2026-08-04 (P2): boyut tavanı / küresel süre aşımı gibi DETERMİNİSTİK politika
     /// iptalleri eskiden `Transport` olarak dönüyordu; `flow::is_retriable` `Transport`'u koşulsuz
     /// GEÇİCİ saydığı için aynı hata 6 kez TAM YENİDEN İNDİRME tetikliyordu (klinik hattında
     /// gigabaytlarca boşuna trafik ve dakikalarca donma). Bunlar yeniden denemeyle DÜZELMEZ.
-    #[error("indirme politika sınırı: {0}")]
+    #[error("{}", crate::dil::t_ile("rust.ag.politikaSiniri", &[("ayrinti", &(.0).to_string())]))]
     PolicyLimit(String),
     /// ⚠️ DENETİM 2026-08-23 (C8): YEREL dosya-sistemi hatası — `Io`dan AYRI tutulur.
     ///
@@ -263,7 +254,7 @@ pub enum NetError {
     /// aynı hata). Bunlar yeniden denemeyle DÜZELMEZ: disk dolu dolu kalır, kilit kilitli kalır.
     ///
     /// 2026-08-04'te `PolicyLimit` için kapatılan sınıfın aynısı, bir katman aşağıda.
-    #[error("yerel dosya hatası: {0}")]
+    #[error("{}", crate::dil::t_ile("rust.ag.yerelDosya", &[("hata", &(.0).to_string())]))]
     LocalIo(String),
 }
 
@@ -387,7 +378,7 @@ pub fn download_to_file(
     validate_download_source(url)?;
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent)
-            .map_err(|e| NetError::LocalIo(format!("{} oluşturulamadı: {e}", parent.display())))?;
+            .map_err(|e| NetError::LocalIo(crate::dil::t_ile("rust.ag.olusturulamadi", &[("yol", &(parent.display()).to_string()), ("hata", &(e).to_string())])))?;
     }
     // ⚠️ DENETİM 2026-08-04 (#95): `.part`'ın HANGİ İÇERİĞE ait olduğu hiçbir yerde kayıtlı
     // değildi ve adı yalnız URL'nin son parçasından türüyordu — bu projede SABİTTİR: manifest
@@ -454,9 +445,7 @@ pub fn download_to_file(
         let got = content_range_start(&resp);
         if got != Some(done) {
             let _ = fs::remove_file(&part); // bozuk devam noktası → bir sonraki deneme SIFIRDAN
-            return Err(NetError::Transport(format!(
-                "sunucu istenen aralığı vermedi (beklenen ofset {done}, gelen {got:?}) — .part sıfırlandı"
-            )));
+            return Err(NetError::Transport(crate::dil::t_ile("rust.ag.aralikVerilmedi", &[("beklenen", &(done).to_string()), ("gelen", &format!("{:?}", got))])));
         }
     }
 
@@ -499,10 +488,10 @@ pub fn download_to_file(
         fs::OpenOptions::new()
             .append(true)
             .open(&part)
-            .map_err(|e| NetError::LocalIo(format!("{} açılamadı: {e}", part.display())))?
+            .map_err(|e| NetError::LocalIo(crate::dil::t_ile("rust.ag.acilamadi", &[("yol", &(part.display()).to_string()), ("hata", &(e).to_string())])))?
     } else {
         fs::File::create(&part)
-            .map_err(|e| NetError::LocalIo(format!("{} oluşturulamadı: {e}", part.display())))?
+            .map_err(|e| NetError::LocalIo(crate::dil::t_ile("rust.ag.olusturulamadi", &[("yol", &(part.display()).to_string()), ("hata", &(e).to_string())])))?
     };
     let mut reader = resp.into_reader();
     let mut buf = vec![0u8; 256 * 1024];
@@ -514,9 +503,7 @@ pub fn download_to_file(
         // zaman aşımına uğramaz. Duraklat/İptal'de `.part` korunur, saat sonraki denemede sıfırlanır.
         if started.elapsed() > Duration::from_secs(MAX_DOWNLOAD_DURATION_S) {
             let _ = out.flush(); // `.part` KORUNUR → sonraki deneme Range ile sürer
-            return Err(NetError::PolicyLimit(format!(
-                "indirme küresel süre sınırını aştı ({MAX_DOWNLOAD_DURATION_S} sn) — iptal edildi"
-            )));
+            return Err(NetError::PolicyLimit(crate::dil::t_ile("rust.ag.sureSiniri", &[("sn", &(MAX_DOWNLOAD_DURATION_S).to_string())])));
         }
         match control() {
             Control::Pause => {
@@ -537,24 +524,22 @@ pub fn download_to_file(
         }
         done += n as u64;
         if done > ceiling {
-            return Err(NetError::PolicyLimit(format!(
-                "indirme boyut sınırını aştı ({done} > {ceiling} bayt) — iptal edildi"
-            )));
+            return Err(NetError::PolicyLimit(crate::dil::t_ile("rust.ag.boyutSiniri", &[("done", &(done).to_string()), ("tavan", &(ceiling).to_string())])));
         }
         // ⚠️ Diske yazamamak (disk dolu / izin / AV) yeniden denemeyle DÜZELMEZ → LocalIo.
         out.write_all(&buf[..n])
-            .map_err(|e| NetError::LocalIo(format!("diske yazılamadı: {e}")))?;
+            .map_err(|e| NetError::LocalIo(crate::dil::t_ile("rust.ag.yazilamadi", &[("hata", &(e).to_string())])))?;
         progress(done, total);
     }
     out.flush()
-        .map_err(|e| NetError::LocalIo(format!("diske yazılamadı (flush): {e}")))?;
+        .map_err(|e| NetError::LocalIo(crate::dil::t_ile("rust.ag.yazilamadiFlush", &[("hata", &(e).to_string())])))?;
     drop(out);
     // ⚠️ EN KRİTİK NOKTA: buraya gelindiğinde indirme TAMAMLANMIŞTIR. `rename` düşerse (AV
     // taraması, os error 32 sharing violation) eskiden `Io` dönüyordu → 6 yeniden deneme → her
     // denemede tamamlanmış `.part` SİLİNİP 1,19 GB sıfırdan iniyordu. Artık kalıcı hata:
     // tamamlanmış baytlar korunur ve kullanıcı gerçek sebebi görür.
     fs::rename(&part, dest)
-        .map_err(|e| NetError::LocalIo(format!("{} taşınamadı: {e}", dest.display())))?;
+        .map_err(|e| NetError::LocalIo(crate::dil::t_ile("rust.ag.tasinamadi", &[("yol", &(dest.display()).to_string()), ("hata", &(e).to_string())])))?;
     Ok(done)
 }
 
@@ -620,7 +605,7 @@ where
             }
         }
     }
-    Err(son.unwrap_or_else(|| NetError::Transport("manifest alınamadı".into())))
+    Err(son.unwrap_or_else(|| NetError::Transport(crate::dil::t("rust.ag.manifestAlinamadi"))))
 }
 
 pub fn fetch_string_pinned_budgeted(url: &str) -> Result<String, NetError> {

@@ -38,15 +38,11 @@ pub enum FlowError {
     Extract(#[from] extract::ExtractError),
     #[error(transparent)]
     Backend(#[from] crate::backend::BackendError),
-    #[error("dosya sistemi hatası: {0}")]
+    #[error("{}", crate::dil::t_ile("rust.acma.dosyaSistemi", &[("hata", &(.0).to_string())]))]
     Io(#[from] std::io::Error),
     /// DENETİM 2026-08-04: onarım, hangi profillerin kurulu olduğunu bilmeden model paketlerini
     /// SESSİZCE atlayıp "Hazır" diyordu. Artık kullanıcıya ne yapacağını söyleyen açık hata.
-    #[error(
-        "Kurulu profil kaydı okunamadı ama diskte model verisi VAR — hangi profillerin \
-         onarılacağı bilinmiyor. Profilleri yeniden seçip kurun (indirilenler önbellekten gelir, \
-         yeniden İNMEZ)."
-    )]
+    #[error("{}", crate::dil::t("rust.kurulum.kayitOkunamadi"))]
     ProfileRecordUnreadable,
     /// Profil kaldirma reddi (denetim 2026-09-06). Metin NE olduğunu ve NE yapilacagini soyler;
     /// UI dogrudan gosterir. Hicbir dosya silinmeden once uretilir (bkz. `remove_profiles`).
@@ -348,7 +344,7 @@ pub(crate) fn disk_kapisi(
     let silinen = crate::disk::olu_onbellek_temizle(cache, &korunacak);
     if silinen > 0 {
         on(Progress::Extracting {
-            what: format!("eski paketler temizlendi ({})", crate::disk::insan_okur(silinen)),
+            what: crate::dil::t_ile("rust.kurulum.eskiPaketlerTemizlendi", &[("boyut", &(crate::disk::insan_okur(silinen)).to_string())]),
         });
     }
 
@@ -369,11 +365,7 @@ pub(crate) fn disk_kapisi(
         crate::disk::gereken_alan(&[], &inecek)
     };
     if let Err((gerek, bos)) = crate::disk::yeterli_alan_var_mi(install_root, gereken) {
-        return Err(FlowError::Io(std::io::Error::other(format!(
-            "Yetersiz disk alanı: {} gerekiyor, bu diskte {} boş. Yer açıp tekrar deneyin.",
-            crate::disk::insan_okur(gerek),
-            crate::disk::insan_okur(bos)
-        ))));
+        return Err(FlowError::Io(std::io::Error::other(crate::dil::t_ile("rust.kurulum.yetersizDisk", &[("gerek", &(crate::disk::insan_okur(gerek)).to_string()), ("bos", &(crate::disk::insan_okur(bos)).to_string())]))));
     }
     Ok(())
 }
@@ -522,7 +514,7 @@ pub fn install_profiles(
     // (Backend bu noktada zaten durdurulmuştur: install/repair yolları `stop_tracked_backend`
     //  çağırır. Dosya kilidi varsa burada AÇIK hata veririz — sessiz karışık-kurulumdan iyidir.)
     if rt.exists() {
-        on(Progress::Extracting { what: "eski sürüm temizleniyor".into() });
+        on(Progress::Extracting { what: crate::dil::t("rust.kurulum.eskiSurumTemizleniyor") });
         fs::remove_dir_all(&rt)?;
     }
     on(Progress::Extracting { what: "base".into() });
@@ -629,7 +621,7 @@ pub struct RemoveReport {
 /// acilmaz, bkz. extract::PROFILE_FORBIDDEN_TOP).
 fn model_yolunu_normalize_et(ad: &str) -> Result<Option<String>, String> {
     if ad.contains('\\') || ad.contains(':') || ad.contains('\0') {
-        return Err(format!("guvensiz yol karakteri: {ad:?}"));
+        return Err(crate::dil::t_ile("rust.kurulum.yolGuvensizKarakter", &[("ad", &format!("{:?}", ad))]));
     }
     let dizin_girdisi = ad.ends_with('/');
     let mut parcalar: Vec<&str> = Vec::new();
@@ -637,7 +629,7 @@ fn model_yolunu_normalize_et(ad: &str) -> Result<Option<String>, String> {
         if seg.is_empty() {
             // Sondaki bos parca dizin girdisidir; bastaki bos parca MUTLAK yoldur.
             if i == 0 || !dizin_girdisi || parcalar.is_empty() {
-                return Err(format!("mutlak ya da bos parcali yol: {ad:?}"));
+                return Err(crate::dil::t_ile("rust.kurulum.yolMutlak", &[("ad", &format!("{:?}", ad))]));
             }
             continue;
         }
@@ -645,19 +637,19 @@ fn model_yolunu_normalize_et(ad: &str) -> Result<Option<String>, String> {
             continue;
         }
         if seg == ".." {
-            return Err(format!("ust dizine kacis: {ad:?}"));
+            return Err(crate::dil::t_ile("rust.kurulum.yolUstDizin", &[("ad", &format!("{:?}", ad))]));
         }
         // Sondaki nokta/bosluk (sahip incelemesi 2026-09-06): Windows yol normalizasyonu bunlari
         // DUSURUR ("em_kedi." → "em_kedi"), KEEP kiyasi ise dusurmez → kalan profilin dosyasi
         // "ortak degil" sanilip silinebilirdi. Muhafazakar: boyle parca tasiyan paket kaldirilamaz.
         let kirp = seg.trim_end_matches(['.', ' ']);
         if kirp.len() != seg.len() {
-            return Err(format!("sonu nokta/bosluk ile biten parca: {ad:?}"));
+            return Err(crate::dil::t_ile("rust.kurulum.yolSonuNokta", &[("ad", &format!("{:?}", ad))]));
         }
         parcalar.push(seg);
     }
     if parcalar.first().copied() != Some("ai_models") {
-        return Err(format!("ai_models/ disinda girdi: {ad:?}"));
+        return Err(crate::dil::t_ile("rust.kurulum.yolAiModelsDisi", &[("ad", &format!("{:?}", ad))]));
     }
     if dizin_girdisi || parcalar.len() == 1 {
         return Ok(None);
@@ -679,10 +671,7 @@ fn profil_onbellek_zipleri(
     ad: &str,
 ) -> Result<Vec<(String, PathBuf)>, FlowError> {
     let ciftler = profil_paketleri(manifest, ad).map_err(|_| {
-        FlowError::ProfilKaldirma(format!(
-            "'{ad}' profili manifestte yok — ortak dosyalar hesaplanamaz. Manifesti yenileyip \
-             tekrar deneyin."
-        ))
+        FlowError::ProfilKaldirma(crate::dil::t_ile("rust.kurulum.profilManifestteYok", &[("ad", &(ad).to_string())]))
     })?;
     Ok(ciftler
         .into_iter()
@@ -697,16 +686,10 @@ fn profil_onbellek_zipleri(
 /// ACILMAZ — yalniz girdi adlari (1 GB'lik zip'te bile milisaniyeler).
 fn zip_dosya_listesi(zip_yolu: &Path, profil: &str) -> Result<Vec<String>, FlowError> {
     let f = fs::File::open(zip_yolu).map_err(|e| {
-        FlowError::ProfilKaldirma(format!(
-            "{profil} için önbellekteki {} okunamadı ({e}) — 'Kurulumu onar' sonrası tekrar deneyin",
-            zip_yolu.file_name().and_then(|s| s.to_str()).unwrap_or("paket")
-        ))
+        FlowError::ProfilKaldirma(crate::dil::t_ile("rust.kurulum.onbellekOkunamadi", &[("profil", &(profil).to_string()), ("dosya", &(zip_yolu.file_name().and_then(|s| s.to_str()).unwrap_or("paket")).to_string()), ("hata", &(e).to_string())]))
     })?;
     let arsiv = zip::ZipArchive::new(f).map_err(|e| {
-        FlowError::ProfilKaldirma(format!(
-            "{profil} için önbellekteki {} bozuk ({e}) — 'Kurulumu onar' sonrası tekrar deneyin",
-            zip_yolu.file_name().and_then(|s| s.to_str()).unwrap_or("paket")
-        ))
+        FlowError::ProfilKaldirma(crate::dil::t_ile("rust.kurulum.onbellekBozuk", &[("profil", &(profil).to_string()), ("dosya", &(zip_yolu.file_name().and_then(|s| s.to_str()).unwrap_or("paket")).to_string()), ("hata", &(e).to_string())]))
     })?;
     let mut v = Vec::with_capacity(arsiv.len());
     for ad in arsiv.file_names() {
@@ -719,11 +702,7 @@ fn zip_dosya_listesi(zip_yolu: &Path, profil: &str) -> Result<Vec<String>, FlowE
             // Boyle bir profil kurulabilir ama buradan kaldirilamaz → kullaniciya acik yol: paket
             // bozuksa Onar, degilse uygulamayi kaldirip yalniz istenen profillerle yeniden kur.
             Err(sebep) => {
-                return Err(FlowError::ProfilKaldirma(format!(
-                    "{profil} paketinde güvensiz girdi ({sebep}) — hiçbir dosya silinmedi. Bu profil \
-                     buradan kaldırılamıyor: paket bozuk görünüyorsa 'Kurulumu onar' deneyin; \
-                     sorun sürerse uygulamayı kaldırıp yalnız istediğiniz profillerle yeniden kurun."
-                )))
+                return Err(FlowError::ProfilKaldirma(crate::dil::t_ile("rust.kurulum.paketGuvensiz", &[("profil", &(profil).to_string()), ("sebep", &(sebep).to_string())])))
             }
         }
     }
@@ -737,10 +716,7 @@ fn zip_dosya_listesi(zip_yolu: &Path, profil: &str) -> Result<Vec<String>, FlowE
 /// tamamlar; kullanici bunu bilmeli. Tipik sebep: antivirus taramasi ya da acik kalan bir
 /// uygulama dosyayi kilitlemistir (os error 5/32).
 fn silme_hatasi(yol: &str, e: &std::io::Error) -> FlowError {
-    FlowError::ProfilKaldirma(format!(
-        "{yol} silinemedi ({e}) — uygulama ya da antivirüs dosyayı kilitlemiş olabilir; açık \
-         uygulamaları kapatıp 'Kurulumu onar' ile tekrar deneyin. Profil kaydı değişmedi."
-    ))
+    FlowError::ProfilKaldirma(crate::dil::t_ile("rust.kurulum.silinemedi", &[("yol", &(yol).to_string()), ("hata", &(e).to_string())]))
 }
 
 /// Kurulu profil(ler)i KALDIR: model dosyalari (ortaklar haric) + onbellek zip'leri + kayitlar.
@@ -765,15 +741,13 @@ pub fn remove_profiles(
 ) -> Result<RemoveReport, FlowError> {
     if profiles.is_empty() {
         return Err(FlowError::ProfilKaldirma(
-            "Kaldırılacak profil seçilmedi.".to_string(),
+            crate::dil::t("rust.kurulum.profilSecilmedi"),
         ));
     }
     let kurulu = install::read_installed_profiles(install_root);
     for p in profiles {
         if !kurulu.iter().any(|k| k == p) {
-            return Err(FlowError::ProfilKaldirma(format!(
-                "'{p}' kurulu görünmüyor — profil listesini yenileyip tekrar deneyin."
-            )));
+            return Err(FlowError::ProfilKaldirma(crate::dil::t_ile("rust.kurulum.profilKurulDegil", &[("profil", &(p).to_string())])));
         }
     }
     let kalan: Vec<String> = kurulu
@@ -783,8 +757,7 @@ pub fn remove_profiles(
         .collect();
     if kalan.is_empty() {
         return Err(FlowError::ProfilKaldirma(
-            "En az bir profil kurulu kalmalı — önce başka bir profil kurun, sonra bunu kaldırın."
-                .to_string(),
+            crate::dil::t("rust.kurulum.enAzBirProfil"),
         ));
     }
 
@@ -796,11 +769,7 @@ pub fn remove_profiles(
     for q in &kalan {
         for (_etiket, zip_yolu) in profil_onbellek_zipleri(manifest, &cache, q)? {
             if !zip_yolu.is_file() {
-                return Err(FlowError::ProfilKaldirma(format!(
-                    "Kalan profil '{q}' için önbellekte {} yok — ortak dosyalar güvenle \
-                     hesaplanamaz. 'Kurulumu onar' sonrası tekrar deneyin.",
-                    zip_yolu.file_name().and_then(|s| s.to_str()).unwrap_or("paket")
-                )));
+                return Err(FlowError::ProfilKaldirma(crate::dil::t_ile("rust.kurulum.kalanOnbellekYok", &[("profil", &(q).to_string()), ("dosya", &(zip_yolu.file_name().and_then(|s| s.to_str()).unwrap_or("paket")).to_string())])));
             }
             for yol in zip_dosya_listesi(&zip_yolu, q)? {
                 keep.insert(yol_anahtari(&yol));
@@ -816,10 +785,7 @@ pub fn remove_profiles(
     for p in profiles {
         for (_etiket, zip_yolu) in profil_onbellek_zipleri(manifest, &cache, p)? {
             if !zip_yolu.is_file() {
-                return Err(FlowError::ProfilKaldirma(format!(
-                    "{p} için önbellekte {} yok — 'Kurulumu onar' sonrası tekrar deneyin",
-                    zip_yolu.file_name().and_then(|s| s.to_str()).unwrap_or("paket")
-                )));
+                return Err(FlowError::ProfilKaldirma(crate::dil::t_ile("rust.kurulum.onbellekYok", &[("profil", &(p).to_string()), ("dosya", &(zip_yolu.file_name().and_then(|s| s.to_str()).unwrap_or("paket")).to_string())])));
             }
             for yol in zip_dosya_listesi(&zip_yolu, p)? {
                 let anahtar = yol_anahtari(&yol);
@@ -849,9 +815,7 @@ pub fn remove_profiles(
             Err(e) => return Err(silme_hatasi(yol, &e)),
         };
         if !extract::is_within(&models, hedef.parent().unwrap_or(&models)) {
-            return Err(FlowError::ProfilKaldirma(format!(
-                "GÜVENLİK: {yol} kurulum kökünün dışına çözümlendi — silme durduruldu."
-            )));
+            return Err(FlowError::ProfilKaldirma(crate::dil::t_ile("rust.kurulum.silmeKokDisi", &[("yol", &(yol).to_string())])));
         }
         if meta.is_dir() {
             continue; // zip'te dosya, diskte dizin: dokunma (budama asamasi bossa alir)
@@ -947,7 +911,7 @@ fn temizle_ve_ac(
     control: &dyn Fn() -> net::Control,
 ) -> Result<(), FlowError> {
     if rt.exists() {
-        on(Progress::Extracting { what: "eski sürüm temizleniyor".into() });
+        on(Progress::Extracting { what: crate::dil::t("rust.kurulum.eskiSurumTemizleniyor") });
         fs::remove_dir_all(rt)?;
     }
     on(Progress::Extracting { what: "base".into() });
@@ -989,7 +953,7 @@ fn app_katmanini_degistir(
         // kalınca (iptal/disk/G-Ç) ne eski ne yeni app kalırdı → kurulum ölür ve 1,2 GB'lık deps
         // sağlam olduğu hâlde her şey baştan inmek zorunda kalırdı. Taşıma aynı birimde metadata
         // işlemidir (~anlık), 1,2 GB kopyalamaya gerek yok.
-        on(Progress::Extracting { what: "eski uygulama sürümü yedekleniyor".into() });
+        on(Progress::Extracting { what: crate::dil::t("rust.kurulum.eskiAppYedekleniyor") });
         // ⚠️ ÖNCE SINIR DOSYASI: geri alma, yedeğin İÇİNDEKİ `_app_roots.json`'dan kökleri okur.
         // Marker kök listesinde olmadığı için taşınmıyordu → yedek "sınırsız" kalıyor ve geri alma
         // HİÇBİR ŞEY yapmıyordu (bu hatayı `basarisiz_guncelleme_kurulumu_bozmaz` testi yakaladı).
@@ -1034,10 +998,7 @@ fn app_katmanini_degistir(
             if let Err(g) = guncellemeyi_geri_al(install_root, &b) {
                 return Err(FlowError::Io(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    format!(
-                        "app guncellemesi GERI ALINAMADI ({g}) — cihaz DOGRULANMAMIS/yarim app \
-                         agaciyla kalmis olabilir; 'Onar' calistirin. (geri almayi tetikleyen adim: {e})"
-                    ),
+                    crate::dil::t_ile("rust.kurulum.appGeriAlinamadi", &[("geri", &(g).to_string()), ("adim", &(e).to_string())]),
                 )));
             }
         }
@@ -1255,7 +1216,7 @@ pub fn guncellemeyi_geri_al(install_root: &Path, b: &GeriAlmaBilgisi) -> Result<
         if !yedek.is_dir() {
             return Err(FlowError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
-                "app yedeği bulunamadı — geri alma YAPILAMADI (cihaz doğrulanmamış sürümde)",
+                crate::dil::t("rust.kurulum.appYedegiYok"),
             )));
         }
         {
@@ -1628,7 +1589,7 @@ pub fn update_installed(
                 let _ = fs::remove_dir_all(&yeni);
                 return Err(FlowError::Io(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    "yeni kurulum eksik (exe/web bulunamadı) — takas yapılmadı",
+                    crate::dil::t("rust.kurulum.yeniKurulumEksik"),
                 )));
             }
             atomik_takas(install_root)?;
@@ -1651,8 +1612,8 @@ pub fn update_installed(
                     match geri_hata {
                         // Geri alma da yapılamadıysa operatöre BUNU söyle: cihaz doğrulanmamış
                         // sürümde kaldı ve "Onar" gerekiyor. Sessizce "dönüldü" demek yalandır.
-                        Some(_) => "yeni uygulama katmanı eksik ve GERİ ALINAMADI (yedek yok) — cihaz doğrulanmamış sürümde; 'Onar' ile yeniden kurun",
-                        None => "yeni uygulama katmanı eksik — eski sürüme dönüldü",
+                        Some(_) => crate::dil::t("rust.kurulum.katmanEksikGeriAlinamadi"),
+                        None => crate::dil::t("rust.kurulum.katmanEksikDonuldu"),
                     },
                 )));
             }
@@ -1675,7 +1636,7 @@ pub fn update_installed(
             let _ = fs::remove_dir_all(&yeni);
             return Err(FlowError::Io(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "yeni kurulum eksik (exe/web bulunamadı) — takas yapılmadı",
+                crate::dil::t("rust.kurulum.yeniKurulumEksik"),
             )));
         }
         atomik_takas(install_root)?;
@@ -1710,10 +1671,7 @@ pub fn update_installed(
             if let Err(g) = guncellemeyi_geri_al(install_root, &geri) {
                 return Err(FlowError::Io(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    format!(
-                        "guncelleme GERI ALINAMADI ({g}) — cihaz DOGRULANMAMIS yeni surumde \
-                         olabilir; 'Onar' calistirin. (geri almayi tetikleyen adim: {e})"
-                    ),
+                    crate::dil::t_ile("rust.kurulum.guncellemeGeriAlinamadi", &[("geri", &(g).to_string()), ("adim", &(e).to_string())]),
                 )));
             }
         }
@@ -1846,7 +1804,7 @@ pub fn repair(
         install::ProfileRecord::Missing if install::has_model_data(install_root) => {
             let v = install::infer_profiles_from_disk(install_root);
             on(Progress::Extracting {
-                what: format!("eski kurulum algılandı ({} profil)", v.len()),
+                what: crate::dil::t_ile("rust.kurulum.eskiKurulumAlgilandi", &[("adet", &(v.len()).to_string())]),
             });
             v
         }

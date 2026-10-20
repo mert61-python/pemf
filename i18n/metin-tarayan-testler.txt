@@ -69,7 +69,7 @@ tests/test_firmware_manifest_KURAL_YOK_ayrimi_D156.py :: apps/backend/servers/up
 tests/test_frontend_tek_kaynak.py :: apps/ui/src/services/agTanisi.ts apps/ui/src/utils/sesYukleme.ts launcher/core/src/flow.rs
 tests/test_gitleaks_config_derlenir.py :: apps/backend/servers/api_server.py
 tests/test_goc_yarim_kalirsa_db_kaybolmaz.py :: apps/backend/backend_service.py apps/backend/database/sqlcipher_util.py apps/backend/database/thdb_sema.py apps/backend/database/treatment_history_db.py apps/backend/utils/path_utils.py
-tests/test_guncelleme_kurulum_kilidi.py :: launcher/app/src/main.rs launcher/core/src/install.rs
+tests/test_guncelleme_kurulum_kilidi.py [ÇEVRİLDİ] :: launcher/app/src/main.rs launcher/core/src/install.rs
 tests/test_guncelleme_uclari_yetki.py :: apps/backend/servers/api_server.py apps/backend/servers/update_router.py
 tests/test_gzip_sikistirma.py :: apps/backend/servers/api_server.py
 tests/test_hasta_LISTESI_okunamazken_BOS_demez_D266b.py :: apps/backend/servers/patient_router.py apps/ui/src/screens/PatientScreen.tsx
@@ -117,6 +117,7 @@ tests/test_kvkk_transfer_claims.py :: apps/backend/database/thdb_pii.py apps/bac
 tests/test_launcher_indirme_denetimi.py [ÇEVRİLDİ] :: launcher/app/src/main.rs
 tests/test_launcher_onay_geri_alma_DALLARA_pinli.py :: launcher/app/src/main.rs
 tests/test_launcher_responsive_kapisi.py :: launcher/app/src/main.rs
+tests/test_launcher_rust_uygulama_iletileri_P1.py [ÇEVRİLDİ] :: launcher/app/src/main.rs
 tests/test_launcher_site_yol_sozlesmesi.py :: apps/web/src/App.tsx apps/web/src/context/AuthModal.tsx apps/web/src/pages/AuthRoute.tsx dema-terapi-simülatörü/src/App.tsx launcher/app/ui/index.html
 tests/test_linux_runtime_YOKLUGU_karardir.py :: launcher/core/src/manifest.rs
 tests/test_literatur_hedef_sozlesmesi.py :: apps/ui/src/screens/ControlScreen.tsx

@@ -16,15 +16,15 @@ use crate::install;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BackendError {
-    #[error("backend çalıştırılabiliri bulunamadı: {0}")]
+    #[error("{}", crate::dil::t_ile("rust.backend.bulunamadi", &[("yol", &(.0).to_string())]))]
     NotFound(String),
-    #[error("backend başlatılamadı: {0}")]
+    #[error("{}", crate::dil::t_ile("rust.backend.baslatilamadi", &[("hata", &(.0).to_string())]))]
     Spawn(#[source] io::Error),
-    #[error("backend {timeout_s} sn içinde hazır olmadı (port {port}). Son çıktı:\n{tail}")]
+    #[error("{}", crate::dil::t_ile("rust.backend.hazirOlmadi", &[("timeout_s", &(.timeout_s).to_string()), ("port", &(.port).to_string()), ("tail", &(.tail).to_string())]))]
     Timeout { port: u16, timeout_s: u64, tail: String },
-    #[error("backend başlarken sonlandı (çıkış kodu {code:?}). Son çıktı:\n{tail}")]
+    #[error("{}", crate::dil::t_ile("rust.backend.sonlandi", &[("code", &format!("{:?}", .code)), ("tail", &(.tail).to_string())]))]
     Exited { code: Option<i32>, tail: String },
-    #[error("boş port bulunamadı ({start}..{end})")]
+    #[error("{}", crate::dil::t_ile("rust.backend.portYok", &[("start", &(.start).to_string()), ("end", &(.end).to_string())]))]
     NoFreePort { start: u16, end: u16 },
 }
 
@@ -355,9 +355,9 @@ fn authority_is_loopback(rest: &str) -> bool {
 /// Uygulama o durumda kendi giriş ekranını gösterir; kimse kilitlenmez.
 pub fn push_desktop_session_to(url: &str, session: &crate::auth::Session) -> Result<(), String> {
     if !is_loopback_http_url(url) {
-        return Err("Oturum yalnız yerel backend'e (127.0.0.1) devredilebilir".to_string());
+        return Err(crate::dil::t("rust.backend.oturumYalnizYerel"));
     }
-    let body = serde_json::to_string(session).map_err(|_| "oturum serileştirilemedi".to_string())?;
+    let body = serde_json::to_string(session).map_err(|_| crate::dil::t("rust.backend.oturumSerilestirilemedi"))?;
     match ureq::post(url)
         .timeout(Duration::from_secs(SESSION_PUSH_TIMEOUT_S))
         .set("Content-Type", "application/json")
@@ -366,8 +366,8 @@ pub fn push_desktop_session_to(url: &str, session: &crate::auth::Session) -> Res
         Ok(_) => Ok(()),
         Err(ureq::Error::Status(404 | 405 | 501, _)) => Ok(()),
         // ⚠️ Hata metnine ASLA gövde koyma: gövde jetonların ta kendisiydi.
-        Err(ureq::Error::Status(s, _)) => Err(format!("backend oturumu kabul etmedi (HTTP {s})")),
-        Err(_) => Err("backend'e oturum devredilemedi (bağlantı yok)".to_string()),
+        Err(ureq::Error::Status(s, _)) => Err(crate::dil::t_ile("rust.backend.oturumKabulEdilmedi", &[("s", &(s).to_string())])),
+        Err(_) => Err(crate::dil::t("rust.backend.oturumDevredilemedi")),
     }
 }
 
@@ -624,12 +624,8 @@ fn read_log_tail(path: &Path, n: usize) -> String {
         .and_then(|t| std::time::SystemTime::now().duration_since(t).ok());
     let bayat = yas.map(|d| d > Duration::from_secs(120)).unwrap_or(false);
     let hint = match yas {
-        Some(d) if bayat => format!(
-            "⚠️ Aşağıdaki satırlar {} dk ÖNCESİNE ait — bu çalışmaya ait OLMAYABİLİR (backend              günlüğe hiç yazamadan çökmüş olabilir). Günlük: {}",
-            d.as_secs() / 60,
-            path.display()
-        ),
-        _ => format!("Ayrıntı için backend günlüğü: {}", path.display()),
+        Some(d) if bayat => crate::dil::t_ile("rust.backend.gunlukBayat", &[("dk", &(d.as_secs() / 60).to_string()), ("yol", &(path.display()).to_string())]),
+        _ => crate::dil::t_ile("rust.backend.gunlukIpucu", &[("yol", &(path.display()).to_string())]),
     };
     if tail.trim().is_empty() { hint } else { format!("{tail}
 {hint}") }

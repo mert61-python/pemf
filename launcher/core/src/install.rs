@@ -332,12 +332,10 @@ pub fn ayni_birim(a: &Path, b: &Path) -> Option<bool> {
 /// Seçilen hedef off-site yedek için uygun mu? `Ok(())` ya da kullanıcıya gösterilecek sebep.
 pub fn yedek_hedefi_gecerli_mi(hedef: &Path, veri_dizini: &Path) -> Result<(), String> {
     if !dizin_yazilabilir_mi(hedef) {
-        return Err("Bu klasöre yazılamıyor. Sürücü takılı ve yazılabilir olmalı.".to_string());
+        return Err(crate::dil::t("rust.yedek.yazilamiyor"));
     }
     if ayni_birim(hedef, veri_dizini) == Some(true) {
-        return Err("Yedek hedefi hasta verisiyle AYNI sürücüde. Disk arızasında ikisi de \
-                    kaybolur — harici bir disk ya da ağ paylaşımı seçin."
-            .to_string());
+        return Err(crate::dil::t("rust.yedek.ayniSurucu"));
     }
     Ok(())
 }
@@ -424,10 +422,7 @@ pub fn kurulum_kilidi_al(install_root: &Path) -> Result<KurulumKilidi, String> {
     }
     match secenek.open(&yol) {
         Ok(f) => Ok(KurulumKilidi { _dosya: f }),
-        Err(e) => Err(format!(
-            "Başka bir PEMF Vet Client penceresi kurulum/güncelleme yapıyor. \
-             Onun bitmesini bekleyin ya da diğer pencereyi kapatın. ({e})"
-        )),
+        Err(e) => Err(crate::dil::t_ile("rust.kurulum.baskaPencere", &[("hata", &(e).to_string())])),
     }
 }
 

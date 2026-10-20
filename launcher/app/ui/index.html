@@ -893,7 +893,7 @@
       function hataCumlesi(msg) {
         const m = String(msg);
         const x = t();
-        if (/ağ adı çözümlenemedi|Dns Failed|dns error|resolve dns name/i.test(m)) return x.errDns;
+        if (/ağ adı çözümlenemedi|could not be resolved \(DNS\)|Dns Failed|dns error|resolve dns name/i.test(m)) return x.errDns;
         if (/zaman aşımı|timed out|timeout|os error 10060/i.test(m)) return x.errTimeout;
         if (/HTTP 5\d\d|HTTP 429|HTTP 408/i.test(m)) return x.errSunucu;
         if (/disk|yer kalmadı|No space|os error 112/i.test(m)) return x.errDisk;
@@ -2127,7 +2127,7 @@
           // kimse göremiyordu. Eskiden alan yalnız BAŞARIDA temizleniyordu → kullanıcı üstüne
           // yazmaya devam ediyor, hata birikiyordu. Artık her kimlik hatasında sıfırlanır ve
           // odak parolaya döner: her deneme TEMİZ başlar.
-          if (m.includes("parola hatalı") || m.includes("parola hatali")) {
+          if (m.includes("parola hatalı") || m.includes("parola hatali") || /incorrect email or password/i.test(m)) {
             const uyari = parolaUyarisi(password);
             $("login-pass").value = "";
             pwGoster(false);                // parola ekranda unutulmasın
@@ -2138,7 +2138,7 @@
           // ⚠️ Bu metin `core/auth.rs::AuthError::Offline`'ın Display'iyle SÖZLEŞMELİDİR; orada
           // `cevrimdisi_mesaji_ui_sozlesmesini_korur` testi metni kilitliyor (yeniden
           // yazılırsa çıkış yolu sessizce kaybolurdu).
-          if (m.includes("İnternet bağlantısı yok")) {
+          if (m.includes("İnternet bağlantısı yok") || /no internet connection/i.test(m)) {
             setOffline(true);
             if (envCache && envCache.already_installed) {
               $("btn-offline-start").hidden = false;

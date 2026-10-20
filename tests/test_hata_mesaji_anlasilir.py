@@ -28,6 +28,7 @@ import re
 from pathlib import Path
 
 import pytest
+from i18n_yardimci import katalog
 from i18n_yardimci import launcher_ui as ui
 
 _KOK = Path(__file__).resolve().parents[1]
@@ -47,7 +48,9 @@ def test_KRITIK_DNS_ayri_hata_sinifi():
     """`Transport` içinde erirse arayüz doğru cümleyi kuramaz."""
     kaynak = _NET_RS.read_text(encoding="utf-8")
     assert "Dns(String)" in kaynak, "DNS hatası ayrı NetError varyantı değil"
-    assert re.search(r'#\[error\("ağ adı çözümlenemedi', kaynak), "DNS varyantının mesajı yok"
+    # I18N-P1 · 11c: DNS varyantının iletisi katalogda (`rust.ag.dns`); TR "ağ adı çözümlenemedi" (arayüz koşulu buna bakar)
+    assert re.search(r'#\[error\("\{\}", crate::dil::t_ile\("rust\.ag\.dns"', kaynak), "DNS varyantının mesajı yok"
+    assert katalog("launcher", "tr")["rust.ag.dns"].startswith("ağ adı çözümlenemedi")
 
 
 def test_KRITIK_DNS_varyanti_GERCEKTEN_URETILIYOR():

@@ -16,19 +16,15 @@ use crate::platform;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ManifestError {
-    #[error("manifest JSON olarak ayrıştırılamadı: {0}")]
+    #[error("{}", crate::dil::t_ile("rust.manifest.ayristirilamadi", &[("hata", &(.0).to_string())]))]
     Json(#[from] serde_json::Error),
-    #[error("manifest'te '{0}' alanı yok")]
+    #[error("{}", crate::dil::t_ile("rust.manifest.alanYok", &[("alan", &(.0).to_string())]))]
     MissingField(&'static str),
-    #[error(
-        "Bu platform ({platform}) için manifest'te paket YOK. \
-         Mevcut anahtarlar: [{available}]. Yanlış platformun paketi KURULMAZ — \
-         yayın sürecinde bu platformun base paketi eksik."
-    )]
+    #[error("{}", crate::dil::t_ile("rust.manifest.platformPaketiYok", &[("platform", &(.platform).to_string()), ("available", &(.available).to_string())]))]
     UnsupportedPlatform { platform: String, available: String },
-    #[error("'{profile}' profili manifest'te yok. Mevcut profiller: [{available}]")]
+    #[error("{}", crate::dil::t_ile("rust.manifest.profilYok", &[("profile", &(.profile).to_string()), ("available", &(.available).to_string())]))]
     UnknownProfile { profile: String, available: String },
-    #[error("'{key}' kaydının sha256 değeri geçersiz (64 hex bekleniyor, gelen: {got:?})")]
+    #[error("{}", crate::dil::t_ile("rust.manifest.sha256Gecersiz", &[("key", &(.key).to_string()), ("got", &format!("{:?}", .got))]))]
     BadDigest { key: String, got: String },
 }
 

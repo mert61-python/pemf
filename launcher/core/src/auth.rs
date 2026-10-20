@@ -52,30 +52,30 @@ pub fn auth_base() -> String {
 #[derive(Debug, thiserror::Error)]
 pub enum AuthError {
     /// Host/şema/yol pini tutmadı — istek HİÇ gönderilmedi.
-    #[error("Giriş sunucusu adresi doğrulanamadı — işlem iptal edildi (güvenlik)")]
+    #[error("{}", crate::dil::t("rust.giris.adresDogrulanamadi"))]
     UrlPin,
-    #[error("İnternet bağlantısı yok — çevrimdışı devam edebilirsiniz")]
+    #[error("{}", crate::dil::t("rust.giris.cevrimdisi"))]
     Offline,
-    #[error("E-posta veya parola hatalı")]
+    #[error("{}", crate::dil::t("rust.giris.kimlikHatali"))]
     BadCredentials,
     /// ⚠️ 2026-08-10: BOŞ girdi eskiden `BadCredentials` dönüyordu — yani arayüzde bir hata
     /// (alan okunamadı, otomatik doldurma state'i kaçtı, yanlış id) kullanıcıya "parolanız
     /// yanlış" diye görünüyordu ve HİÇBİR yerde ayırt edilemiyordu. İki durum farklı: biri
     /// kullanıcının, diğeri bizim hatamız. Ayrı tutulunca saha kaydında da ayrışır.
-    #[error("E-posta ve parola boş bırakılamaz")]
+    #[error("{}", crate::dil::t("rust.giris.girdiBos"))]
     MissingInput,
-    #[error("E-posta adresiniz doğrulanmamış — gelen kutunuzu kontrol edin")]
+    #[error("{}", crate::dil::t("rust.giris.epostaDogrulanmamis"))]
     EmailNotConfirmed,
-    #[error("Çok fazla deneme yapıldı — birkaç dakika sonra tekrar deneyin")]
+    #[error("{}", crate::dil::t("rust.giris.cokDeneme"))]
     RateLimited,
     /// Kayıtlı oturum sunucu tarafında geçersiz (parola değişti / oturum kapatıldı).
-    #[error("Kayıtlı oturum geçersiz — lütfen tekrar giriş yapın")]
+    #[error("{}", crate::dil::t("rust.giris.oturumGecersiz"))]
     SessionRevoked,
     /// ⚠️ HTTP gövdesi KASITLI olarak yansıtılmıyor: yanıtta e-posta/token parçaları olabilir
     /// ve UI hata metnini ekrana basıyor (index.html `fail`).
-    #[error("Giriş sunucusu hata verdi (HTTP {0})")]
+    #[error("{}", crate::dil::t_ile("rust.giris.sunucuHatasi", &[("kod", &(.0).to_string())]))]
     Server(u16),
-    #[error("Giriş yanıtı okunamadı")]
+    #[error("{}", crate::dil::t("rust.giris.yanitOkunamadi"))]
     Malformed,
 }
 

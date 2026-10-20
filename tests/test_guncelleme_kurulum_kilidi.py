@@ -25,6 +25,7 @@ import re
 from pathlib import Path
 
 import pytest
+from i18n_yardimci import katalog
 
 _KOK = Path(__file__).resolve().parent.parent
 _MAIN_RS = _KOK / "launcher" / "app" / "src" / "main.rs"
@@ -98,7 +99,10 @@ def test_AGACI_DEGISTIREN_tum_yollar_kilitli(rs, komut):
 def test_kilit_mesaji_kullaniciya_NE_YAPACAGINI_soyler():
     """Kilit hatası kullanıcıya gösteriliyor; anlaşılır olmalı."""
     kaynak = (_KOK / "launcher" / "core" / "src" / "install.rs").read_text(encoding="utf-8")
-    m = re.search(r"pub fn kurulum_kilidi_al.*?Err\(format!\(\s*\"(.*?)\"", kaynak, re.S)
-    assert m, "kilit hata mesajı bulunamadı"
-    mesaj = m.group(1)
+    # I18N-P1 · 11c: ileti katalogda (`rust.kurulum.baskaPencere`); kaynak anahtarı KULLANIYOR ve TR metin sebebi söylüyor
+    assert re.search(r'pub fn kurulum_kilidi_al.*?t_ile\("rust\.kurulum\.baskaPencere"', kaynak, re.S), (
+        "kilit hata mesajı katalog anahtarına bağlı değil"
+    )
+    mesaj = katalog("launcher", "tr")["rust.kurulum.baskaPencere"]
     assert "pencere" in mesaj.lower(), f"mesaj sebebi söylemiyor: {mesaj!r}"
+    assert "window" in katalog("launcher", "en")["rust.kurulum.baskaPencere"].lower()

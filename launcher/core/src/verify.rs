@@ -9,11 +9,9 @@ use sha2::{Digest, Sha256};
 
 #[derive(Debug, thiserror::Error)]
 pub enum VerifyError {
-    #[error("dosya okunamadı: {0}")]
+    #[error("{}", crate::dil::t_ile("rust.dogrulama.dosyaOkunamadi", &[("hata", &(.0).to_string())]))]
     Io(#[from] io::Error),
-    #[error(
-        "SHA256 UYUŞMADI — dosya bozuk ya da değiştirilmiş. beklenen={expected} gerçek={actual}"
-    )]
+    #[error("{}", crate::dil::t_ile("rust.dogrulama.sha256Uyusmadi", &[("beklenen", &(.expected).to_string()), ("gercek", &(.actual).to_string())]))]
     Mismatch { expected: String, actual: String },
 }
 

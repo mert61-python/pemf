@@ -12,17 +12,17 @@ use std::path::{Component, Path, PathBuf};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExtractError {
-    #[error("dosya sistemi hatası: {0}")]
+    #[error("{}", crate::dil::t_ile("rust.acma.dosyaSistemi", &[("hata", &(.0).to_string())]))]
     Io(#[from] io::Error),
-    #[error("zip okunamadı: {0}")]
+    #[error("{}", crate::dil::t_ile("rust.acma.zipOkunamadi", &[("hata", &(.0).to_string())]))]
     Zip(#[from] zip::result::ZipError),
-    #[error("GÜVENLİK: arşiv girdisi kurulum dizininin dışına yazmaya çalıştı: {0:?}")]
+    #[error("{}", crate::dil::t_ile("rust.acma.disinaYazma", &[("yol", &format!("{:?}", .0))]))]
     PathEscape(String),
-    #[error("GÜVENLİK: arşiv kaynak-limitini aştı (zip-bomb?): {0}")]
+    #[error("{}", crate::dil::t_ile("rust.acma.kaynakLimiti", &[("ayrinti", &(.0).to_string())]))]
     ResourceLimit(String),
     /// Kullanıcı açma sırasında İPTAL etti. Yarım açılmış `runtime/` bir sonraki kurulumda
     /// zaten silinir (bkz. `flow::install_profiles`), durum dosyaları güncellenmez.
-    #[error("açma iptal edildi")]
+    #[error("{}", crate::dil::t("rust.acma.iptal"))]
     Cancelled,
 }
 
@@ -139,7 +139,7 @@ pub fn extract_zip_cancellable(
     fs::create_dir_all(dest)?;
 
     if zip.len() > MAX_ENTRIES {
-        return Err(ExtractError::ResourceLimit(format!("çok fazla girdi: {}", zip.len())));
+        return Err(ExtractError::ResourceLimit(crate::dil::t_ile("rust.acma.cokGirdi", &[("adet", &(zip.len()).to_string())])));
     }
 
     let mut written = 0usize;
@@ -174,9 +174,7 @@ pub fn extract_zip_cancellable(
                     // bu da ikinci bir atlatma yazımıdır. Normalize edip karşılaştırıyoruz.
                     let norm = t.trim_end_matches(['.', ' ']).to_ascii_lowercase();
                     if PROFILE_FORBIDDEN_TOP.iter().any(|f| f.eq_ignore_ascii_case(&norm)) {
-                        return Err(ExtractError::PathEscape(format!(
-                            "{raw_name} (profil paketi '{t}' altına yazamaz — doğrulanmış runtime/durum dosyası)"
-                        )));
+                        return Err(ExtractError::PathEscape(crate::dil::t_ile("rust.acma.profilAltinaYazamaz", &[("ad", &(raw_name).to_string()), ("profil", &(t).to_string())])));
                     }
                 }
             }
@@ -199,9 +197,7 @@ pub fn extract_zip_cancellable(
         };
         if last_checked_parent.as_deref() != Some(hedef_dizin) {
             if !is_within(dest, hedef_dizin) {
-                return Err(ExtractError::PathEscape(format!(
-                    "{raw_name} (hedef dizin symlink/junction üzerinden kurulum kökünün DIŞINA çözümlendi)"
-                )));
+                return Err(ExtractError::PathEscape(crate::dil::t_ile("rust.acma.symlinkDisari", &[("ad", &(raw_name).to_string())])));
             }
             last_checked_parent = Some(hedef_dizin.to_path_buf());
         }
@@ -225,7 +221,7 @@ pub fn extract_zip_cancellable(
             *used = used.saturating_add(target.len() as u64);
             if *used > MAX_TOTAL_UNCOMPRESSED {
                 return Err(ExtractError::ResourceLimit(
-                    "açılım boyut bütçesi aşıldı (symlink)".to_string(),
+                    crate::dil::t("rust.acma.butceSymlink"),
                 ));
             }
             create_symlink(&target, &out, dest, &raw_name)?;
@@ -244,7 +240,7 @@ pub fn extract_zip_cancellable(
             drop(target);
             let _ = fs::remove_file(&out);
             return Err(ExtractError::ResourceLimit(
-                "açılım boyut bütçesi aşıldı".to_string(),
+                crate::dil::t("rust.acma.butce"),
             ));
         }
         written += 1;
@@ -333,16 +329,12 @@ fn create_symlink(
 ) -> Result<(), ExtractError> {
     let target_path = Path::new(target);
     if target_path.is_absolute() {
-        return Err(ExtractError::PathEscape(format!(
-            "{raw_name} -> {target} (mutlak hedef)"
-        )));
+        return Err(ExtractError::PathEscape(crate::dil::t_ile("rust.acma.mutlakHedef", &[("ad", &(raw_name).to_string()), ("hedef", &(target).to_string())])));
     }
     // Linkin bulunduğu dizine göre normalize et; `..` fazlaysa kökten çıkar.
     let base = link_path.parent().unwrap_or(root);
     if !stays_within(root, base, target_path) {
-        return Err(ExtractError::PathEscape(format!(
-            "{raw_name} -> {target} (kurulum dizini disina cikiyor)"
-        )));
+        return Err(ExtractError::PathEscape(crate::dil::t_ile("rust.acma.dizinDisinaCikiyor", &[("ad", &(raw_name).to_string()), ("hedef", &(target).to_string())])));
     }
     if let Some(parent) = link_path.parent() {
         fs::create_dir_all(parent)?;
@@ -359,9 +351,7 @@ fn create_symlink(
     // sessizce düz dosya yazmaktansa açıkça reddet.
     #[cfg(not(unix))]
     {
-        Err(ExtractError::PathEscape(format!(
-            "{raw_name}: bu platformda sembolik link desteklenmiyor"
-        )))
+        Err(ExtractError::PathEscape(crate::dil::t_ile("rust.acma.symlinkDesteklenmiyor", &[("ad", &(raw_name).to_string())])))
     }
 }
 
