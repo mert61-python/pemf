@@ -1,3 +1,4 @@
+import i18n from "i18next";
 // Author: mertaygn, cglrgrkn
 /**
  * AI hata YANITINDAKİ `detail`i kullanıcıya gösterilmeden ÖNCE anlaşılır kıl — TEK KAYNAK.
@@ -13,7 +14,7 @@
  * (Ayrı dosya: AiHubScreen native modüller (expo-audio/camera) yüklüyor; bu saf fonksiyon jest'te
  * bağımsız test edilebilsin diye buraya taşındı.)
  */
-export function aiDetayCumlesi(detail: unknown, varsayilan = "Analiz sırasında bir hata oluştu."): string {
+export function aiDetayCumlesi(detail: unknown, varsayilan = i18n.t("ai.hata.analizHatasi")): string {
   const s = typeof detail === "string" ? detail.trim() : "";
   if (!s) return varsayilan;
   const alt = s.toLowerCase();
@@ -25,11 +26,11 @@ export function aiDetayCumlesi(detail: unknown, varsayilan = "Analiz sırasında
     alt.includes("payload too large") ||
     alt.includes("request entity too large")
   ) {
-    return "Görüntü/dosya çok büyük. Lütfen daha küçük çözünürlüklü bir görüntü seçip tekrar deneyin.";
+    return i18n.t("ai.hata.dosyaBuyuk");
   }
   // Görüntü çözümlenemedi (Pillow/decode İngilizce).
   if (alt.includes("cannot identify image") || alt.includes("unsupported image") || alt.includes("cannot decode")) {
-    return "Görüntü okunamadı. Lütfen geçerli bir dosya seçin (.png, .jpg veya .tif).";
+    return i18n.t("ai.hata.goruntuOkunamadi");
   }
   // Backend Türkçe/anlaşılır mesaj verdiyse AYNEN göster; saf-ASCII (İngilizce) teknik metinse gizle.
   const turkceİpucu =

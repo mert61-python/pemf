@@ -229,7 +229,7 @@
    "sira": 6,
    "kritik": false,
    "aciklama": "AI sonuç etiketleri (aiDetail — K-7 sunucu eşliği) + AI yardımcıları",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 242,
    "dosyaSayisi": 10
   },
@@ -2435,7 +2435,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-06c-ai-etiket",
    "sira": 6,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 217,
    "kritik": false,
    "muaf": [],
@@ -2446,7 +2446,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-06c-ai-etiket",
    "sira": 6,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 3,
    "kritik": false,
    "muaf": [],
@@ -2457,10 +2457,15 @@
    "yuzey": "arayuz",
    "grup": "arayuz-06c-ai-etiket",
    "sira": 6,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 10,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "termal kamera görüntüsüne benzemiyor",
+     "gerekce": "sunucu iletisinin değişmez parçası (eşleştirme sabiti) — ekranda görünmez; sunucu iletisi 10x'te makine-okur alanla yönetilir"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -2468,7 +2473,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-06c-ai-etiket",
    "sira": 6,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
    "muaf": [],
@@ -2479,10 +2484,15 @@
    "yuzey": "arayuz",
    "grup": "arayuz-06c-ai-etiket",
    "sira": 6,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 3,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "data:image/jpeg;base64,{{b64}}",
+     "gerekce": "veri: önizleme data URI'si (base64), ekranda metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -2490,7 +2500,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-06c-ai-etiket",
    "sira": 6,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -2501,10 +2511,23 @@
    "yuzey": "arayuz",
    "grup": "arayuz-06c-ai-etiket",
    "sira": 6,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 4,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Kayıt okunamadı (HTTP {{status}}).",
+     "gerekce": "`aiHataMesaji` genel Error iletisini göstermez (varsayılan gösterilir); bu ileti kullanıcıya ulaşmaz"
+    },
+    {
+     "metin": "Kayıt boş — ses alınamamış olabilir.",
+     "gerekce": "`aiHataMesaji` genel Error iletisini göstermez (varsayılan gösterilir); bu ileti kullanıcıya ulaşmaz"
+    },
+    {
+     "metin": "Analiz edilecek ses yok.",
+     "gerekce": "`aiHataMesaji` genel Error iletisini göstermez (varsayılan gösterilir); bu ileti kullanıcıya ulaşmaz"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -2512,7 +2535,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-06c-ai-etiket",
    "sira": 6,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -2523,7 +2546,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-06c-ai-etiket",
    "sira": 6,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 4,
    "kritik": false,
    "muaf": [],
@@ -2534,7 +2557,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-06c-ai-etiket",
    "sira": 6,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],

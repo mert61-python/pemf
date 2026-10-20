@@ -10,6 +10,7 @@
  * kendi hızında; kuyruk birikmez). Kural arayüzde UYDURULMAZ: "bulunamadı" ve ret metinleri backend yanıtından gelir.
  */
 import { aiDetayCumlesi } from "@/utils/aiHataDetayi";
+import i18n from "i18next";
 
 /**
  * TD9 (Y148): canlı kip jetonu DAKİKA BAŞINA. Her canlı kare isteği oturum kimliğini bu başlıkla taşır; backend
@@ -41,7 +42,7 @@ export function canliOturumBaslat(): CanliOturum {
 
 /** [ÖNERİLEN] sayaç metni — yalnız ücretlendirme ETKİNKEN gösterilir (kapalıyken "0 jeton" yazmak yanlış bilgi olurdu). */
 export function canliJetonMetni(n: number): string {
-  return `Bu canlı oturumda ${n} jeton (dakika başına 1; sonuçsuz kareler ücretsiz)`;
+  return i18n.t("ai.canli.jetonMetni", { count: n });
 }
 
 /** Canlı karelerin başlangıçları arası en kısa süre (ms). */
@@ -64,23 +65,23 @@ export function canliSonrakiBekleme(gecenMs: number): number {
 export function canliKareDurumu(endpoint: string, ok: boolean, httpDurum: number, data: any): CanliDurum {
   if (ok && data?.status === "success") {
     if (endpoint === "/vision/landmark" && data.detected === false) {
-      return { tur: "bulunamadi", metin: "Son kare: kedi yüzü bulunamadı — kedinin yüzünü kameraya karşıdan ve yakın tutun." };
+      return { tur: "bulunamadi", metin: i18n.t("ai.canli.durum.yuzYok") };
     }
     if (endpoint === "/vision/segmentation" && Number(data.cat_count) === 0) {
-      return { tur: "bulunamadi", metin: "Son kare: kedi bulunamadı — kedinin tümü kadraja girsin." };
+      return { tur: "bulunamadi", metin: i18n.t("ai.canli.durum.kediYok") };
     }
     if (typeof data.bulunamadi_mesaji === "string" && data.bulunamadi_mesaji) {
-      return { tur: "bulunamadi", metin: `Son kare: ${data.bulunamadi_mesaji}` };
+      return { tur: "bulunamadi", metin: i18n.t("ai.canli.durum.bulunamadi", { bulunamadi_mesaji: data.bulunamadi_mesaji }) };
     }
     const g = data.girdi_dogrulama;
     if (g && g.dogrulandi === false && typeof g.uyari === "string" && g.uyari) {
-      return { tur: "sonuc", metin: `Son kare analiz edildi — ${g.uyari}` };
+      return { tur: "sonuc", metin: i18n.t("ai.canli.durum.analizEdildiUyari", { uyari: g.uyari }) };
     }
-    return { tur: "sonuc", metin: "Son kare analiz edildi." };
+    return { tur: "sonuc", metin: i18n.t("ai.canli.durum.analizEdildi") };
   }
-  const detay = aiDetayCumlesi(data?.detail, `sunucu yanıtı ${httpDurum}`);
+  const detay = aiDetayCumlesi(data?.detail, i18n.t("ai.canli.sunucuYaniti", { httpDurum }));
   if (endpoint === "/vision/thermal" && httpDurum === 422 && detay.includes(TERMAL_UYUMSUZ_IZI)) {
-    return { tur: "red", metin: `Seçili kamera termal görüntü vermiyor — termal kamerayı seçin. (${detay})` };
+    return { tur: "red", metin: i18n.t("ai.canli.durum.termalYok", { detay }) };
   }
-  return { tur: "red", metin: `Son kare analiz edilemedi: ${detay}` };
+  return { tur: "red", metin: i18n.t("ai.canli.durum.analizEdilemedi", { detay }) };
 }

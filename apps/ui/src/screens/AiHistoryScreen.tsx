@@ -6,7 +6,7 @@ import { colors, spacing, typography, radius, rf, rs, layoutMax, touch } from "@
 import { Chip as OrtakChip } from "@/components/ui/Chip";
 import { apiGet, apiPost, platformConfirm } from "@/services/apiClient";
 import { useAuth } from "@/context/AuthContext";
-import { detailRows, INPUT_LABELS } from "@/utils/aiDetail";
+import { detailRows, girdiAdi } from "@/utils/aiDetail";
 import { Brain, ChevronDown, ChevronRight, RefreshCcw, Trash2, Share2 } from "lucide-react-native";
 import {
   AiReviewControls,
@@ -485,7 +485,7 @@ export function AiHistoryScreen() {
 
                   {open ? (
                     <View style={styles.detail}>
-                      {it.input_type ? <Text style={styles.detailLine}>Girdi tipi: {INPUT_LABELS[it.input_type] || it.input_type}</Text> : null}
+                      {it.input_type ? <Text style={styles.detailLine}>Girdi tipi: {girdiAdi(it.input_type) || it.input_type}</Text> : null}
                       {it.confidence != null ? (
                         <Text style={styles.detailLine}>Güven: %{Math.round(it.confidence * 100)}</Text>
                       ) : null}

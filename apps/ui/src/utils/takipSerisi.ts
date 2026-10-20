@@ -18,17 +18,18 @@
  * ⚠️ TEK NOKTA ÇİZİLMEZ: iki ölçümden azı "eğilim" göstermez; tek noktalı bir grafik
  * kullanıcıya var olmayan bir takip vaat eder.
  */
+import i18n from "i18next";
 import type { AnalizKaydi } from "@/utils/sonAnaliz";
 
-/** Zaman serisine alınabilecek sayısal ölçütler — modül bazında, TÜRKÇE etiketleriyle. */
+/** Zaman serisine alınabilecek sayısal ölçütler — modül bazında; `etiket` bir katalog ANAHTARIDIR (gösterimde çevrilir). */
 export const IZLENEN_OLCUTLER: Record<string, { alan: string; etiket: string; birim: string }> = {
-  cell_scratch: { alan: "closure_pct", etiket: "Kapanma", birim: "%" },
-  em_petri: { alan: "n_wells", etiket: "Kuyu", birim: "" },
-  em_fantom: { alan: "n_tumors", etiket: "Tümör", birim: "" },
+  cell_scratch: { alan: "closure_pct", etiket: "ai.scratch.galeri.kapanma.ad", birim: "%" },
+  em_petri: { alan: "n_wells", etiket: "ai.pro.profil.petri.hedefEtiketi", birim: "" },
+  em_fantom: { alan: "n_tumors", etiket: "ai.pro.profil.fantom.hedefEtiketi", birim: "" },
 };
 
 /** Hiçbir modüle özgü ölçüt yoksa kullanılan evrensel ölçüt. */
-export const VARSAYILAN_OLCUT = { alan: "confidence", etiket: "Güven", birim: "%" };
+export const VARSAYILAN_OLCUT = { alan: "confidence", etiket: "ai.pro.metrik.guven", birim: "%" };
 
 export interface TakipNoktasi {
   /** Epoch ms — sıralama ve eksen için. */
@@ -108,7 +109,7 @@ export function takipSerisiKur(kayitlar: readonly DetayliKayit[] | null | undefi
 
   return {
     moduleId: modul,
-    baslik: olcut.etiket,
+    baslik: i18n.t(olcut.etiket as never) as string,
     birim: olcut.birim,
     noktalar,
     disaridaKalan: liste.length - ayni.length,

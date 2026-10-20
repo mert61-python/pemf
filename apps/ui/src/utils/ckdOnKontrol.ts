@@ -13,6 +13,8 @@
  * Saf fonksiyon (AiHubScreen native modül yüklediği için ayrı dosyada; aiHataDetayi.ts deseni).
  */
 
+import i18n from "i18next";
+
 /** klinik_asgari.py CKD_MIN_ALAN paritesi. */
 export const CKD_MIN_ALAN = 6;
 /** klinik_asgari.py CKD_CEKIRDEK paritesi — böbrek işlevine dair en az biri gerekli. */
@@ -31,8 +33,5 @@ export function ckdOnKontrol(
   const cekirdekVar = CKD_CEKIRDEK.some((k) => k in payload);
   if (dolu >= CKD_MIN_ALAN && cekirdekVar) return null;
   const eksik = CKD_CEKIRDEK.filter((k) => !(k in payload)).map(etiket).join(", ");
-  return (
-    `Analiz için en az ${CKD_MIN_ALAN} alan doldurun (şu an ${dolu}) ve böbrek işlevine dair ` +
-    `en az bir değer girin: ${eksik}. Bulgu düğmeleri tek başına yeterli değildir.`
-  );
+  return i18n.t("ai.ckd.onKontrol", { minAlan: CKD_MIN_ALAN, dolu, eksik });
 }

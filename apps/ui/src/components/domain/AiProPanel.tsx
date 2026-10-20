@@ -34,7 +34,7 @@ import { getClientInstanceId, serviceConfig } from "@/services/config";
 import { useAuth } from "@/context/AuthContext";
 import { AiSpecApprovalModal, type AiProposalMeta, type AiProposalSpecs } from "@/components/domain/AiSpecApprovalModal";
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
-import { trValue } from "@/utils/aiDetail";
+import { degerAdi } from "@/utils/aiDetail";
 import { useTranslation } from "react-i18next";
 import i18n, { type TFunction } from "i18next";
 
@@ -193,7 +193,7 @@ interface GuvenDokumu {
 /** AI1.K3: güven dökümünün hat-kalitesi eki. Sorun varsa operatöre NE YAPACAĞINI söyler; yalnız gösterim (güven/sürüş değişmez). */
 function hatKalitesiMetni(g: GuvenDokumu): string {
   return (
-    (g.poz_turu ? i18n.t("ai.pro.guven.pozTuru", { tur: trValue(g.poz_turu) }) : "") +
+    (g.poz_turu ? i18n.t("ai.pro.guven.pozTuru", { tur: degerAdi(g.poz_turu) }) : "") +
     (typeof g.pnp_hata_cm === "number" ? i18n.t("ai.pro.guven.pnpHata", { cm: ondalik(g.pnp_hata_cm, 1) }) : "") +
     (g.ayna_uyarisi ? i18n.t("ai.pro.guven.ayna") : "") +
     (g.anatomik_gecti === false

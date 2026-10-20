@@ -1,3 +1,4 @@
+import i18n from "i18next";
 // Author: mertaygn, cglrgrkn
 // AI analiz sonuç-detayı için PAYLAŞILAN yardımcılar — TEK KAYNAK (config/access.ts prensibi).
 // Yazma tarafı (cleanDetail) ile okuma/gösterim tarafı (detailRows) aynı gizli-anahtar + Türkçe
@@ -39,129 +40,156 @@ export const INTERNAL_KEYS = new Set([
   "D", "P", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "P1", "P2", "P3", "P4", "P5", "P6", "P7",
 ]);
 
-/** Sonuç anahtarları → Türkçe etiket (bilinmeyen anahtar VALUE_LABELS'a, o da yoksa ham gösterilir). */
+/**
+ * Katalog metni. Tablo DEĞERLERİ katalog ANAHTARIDIR (KURALLAR §4.5; kapalı küme — K-3 izni). `lng` verilirse O dilde (VERİ yolu: kayda / özete
+ * giden metin arayüz dili EN olsa da TR kalır), verilmezse arayüz dilinde (EKRAN).
+ */
+const katalogMetni = (anahtar: string, lng?: "tr"): string => i18n.t(anahtar as never, lng ? { lng } : {}) as string;
+
+/** Sonuç anahtarları → etiket KATALOG ANAHTARI (bilinmeyen anahtar VALUE_LABELS'a, o da yoksa ham gösterilir). */
 export const DETAIL_LABELS: Record<string, string> = {
-  detected: "Yüz tespit edildi",
-  fgs_total: "FGS ağrı skoru", fgs_score: "FGS ağrı skoru",
-  pain: "Ağrı belirtisi", pain_level: "Ağrı seviyesi",
+  detected: "ai.etiket.detected",
+  fgs_total: "ai.etiket.fgs_total", fgs_score: "ai.etiket.fgs_score",
+  pain: "ai.etiket.pain", pain_level: "ai.etiket.pain_level",
   // D1.E09 (1-D inceleme i3-F-8): landmark modeli nokta görünürlüğünü bildirmiyor (örtülü yüzde skor yanıltıcı olabilir).
-  nokta_gorunurlugu_dogrulanmadi: "Nokta görünürlüğü doğrulanmadı",
-  n_tumor: "Tümör sayısı", n_wells: "Kuyu sayısı", n_cancer: "Kanserli kuyu", n_healthy: "Sağlıklı kuyu",
-  n_wells_cancer: "Kanserli kuyu", n_detections: "Tespit sayısı", n_organs: "Lokalize organ",
-  n_patients: "Örnek/hasta sayısı", n_masks: "Maske sayısı", cat_count: "Kedi sayısı",
-  E_cancer: "Kanser EM alanı", E_healthy: "Sağlıklı EM alanı",
-  top_1_class: "Tahmin", top_1_prob: "Olasılık", top_2_class: "2. tahmin", top_2_prob: "2. olasılık",
-  top_3_class: "3. tahmin", top_3_prob: "3. olasılık",
-  prediction: "Tahmin", disease: "Hastalık", label: "Sonuç", class: "Sınıf",
-  prob: "Olasılık", probability: "Olasılık", prob_pct: "Olasılık (%)", confidence: "Güven",
-  grade: "Derece", counts: "Hücre sayımı", class_counts: "Sınıf sayıları",
-  pose_type: "Poz tipi", area_mm2: "Alan (mm²)", area: "Alan",
-  organs: "Organlar", tumors: "Tümörler", wells: "Kuyular", detections: "Tespitler",
-  reliability: "Güvenilirlik", localized: "Lokalize edildi", organ: "Organ", organ_name: "Organ",
-  risk: "Risk", risk_level: "Risk seviyesi", stage: "Evre", severity: "Şiddet",
-  recommendation: "Öneri", note: "Not", summary: "Özet", result: "Sonuç",
+  nokta_gorunurlugu_dogrulanmadi: "ai.etiket.nokta_gorunurlugu_dogrulanmadi",
+  n_tumor: "ai.etiket.n_tumor", n_wells: "ai.etiket.n_wells", n_cancer: "ai.etiket.n_cancer", n_healthy: "ai.etiket.n_healthy",
+  n_wells_cancer: "ai.etiket.n_wells_cancer", n_detections: "ai.etiket.n_detections", n_organs: "ai.etiket.n_organs",
+  n_patients: "ai.etiket.n_patients", n_masks: "ai.etiket.n_masks", cat_count: "ai.etiket.cat_count",
+  E_cancer: "ai.etiket.E_cancer", E_healthy: "ai.etiket.E_healthy",
+  top_1_class: "ai.etiket.top_1_class", top_1_prob: "ai.etiket.top_1_prob", top_2_class: "ai.etiket.top_2_class", top_2_prob: "ai.etiket.top_2_prob",
+  top_3_class: "ai.etiket.top_3_class", top_3_prob: "ai.etiket.top_3_prob",
+  prediction: "ai.etiket.prediction", disease: "ai.etiket.disease", label: "ai.etiket.label", class: "ai.etiket.class",
+  prob: "ai.etiket.prob", probability: "ai.etiket.probability", prob_pct: "ai.etiket.prob_pct", confidence: "ai.etiket.confidence",
+  grade: "ai.etiket.grade", counts: "ai.etiket.counts", class_counts: "ai.etiket.class_counts",
+  pose_type: "ai.etiket.pose_type", area_mm2: "ai.etiket.area_mm2", area: "ai.etiket.area",
+  organs: "ai.etiket.organs", tumors: "ai.etiket.tumors", wells: "ai.etiket.wells", detections: "ai.etiket.detections",
+  reliability: "ai.etiket.reliability", localized: "ai.etiket.localized", organ: "ai.etiket.organ", organ_name: "ai.etiket.organ_name",
+  risk: "ai.etiket.risk", risk_level: "ai.etiket.risk_level", stage: "ai.etiket.stage", severity: "ai.etiket.severity",
+  recommendation: "ai.etiket.recommendation", note: "ai.etiket.note", summary: "ai.etiket.summary", result: "ai.etiket.result",
   // Kapsamlı AI-model denetimi (2026-07-28) — tüm modeller Türkçe:
-  name: "Ad", calibrated: "Kalibre edildi", top_k: "İlk tahminler", probabilities: "Olasılıklar",
-  method: "Kalibrasyon yöntemi", mm_per_px: "Ölçek (mm/piksel)", tumor_regions: "Tümör bölgeleri",
-  healthy_regions: "Sağlıklı bölgeler", centroid_cabin_cm: "Konum (cm)", E_avg: "Ortalama EM alanı",
-  well_id: "Kuyu no", n_cancer_pixels: "Kanser piksel sayısı", driven: "Bobinler sürüldü",
-  sessionActive: "Seans aktif", organId: "Organ no", organName: "Organ adı", target: "Hedef konum (mm)",
-  eField: "Elektrik alanı (E)", perCoil: "Bobin ayarları", freq: "Frekans (Hz)", duty: "Doluluk (%)",
-  phase: "Faz (°)", durationMin: "Toplam süre (dk)", remainingSec: "Kalan süre (sn)", active: "Aktif",
-  class_name: "Bulgu türü", conf: "Güven", classes: "Sınıflar", predictions: "Tahminler",
-  prob_KIRC: "Olasılık (KIRC)", prob_other: "Olasılık (diğer)", results: "Tahmin sonuçları",
-  top_probability: "En yüksek olasılık", low_confidence: "Düşük güven uyarısı",
+  name: "ai.etiket.name", calibrated: "ai.etiket.calibrated", top_k: "ai.etiket.top_k", probabilities: "ai.etiket.probabilities",
+  method: "ai.etiket.method", mm_per_px: "ai.etiket.mm_per_px", tumor_regions: "ai.etiket.tumor_regions",
+  healthy_regions: "ai.etiket.healthy_regions", centroid_cabin_cm: "ai.etiket.centroid_cabin_cm", E_avg: "ai.etiket.E_avg",
+  well_id: "ai.etiket.well_id", n_cancer_pixels: "ai.etiket.n_cancer_pixels", driven: "ai.etiket.driven",
+  sessionActive: "ai.etiket.sessionActive", organId: "ai.etiket.organId", organName: "ai.etiket.organName", target: "ai.etiket.target",
+  eField: "ai.etiket.eField", perCoil: "ai.etiket.perCoil", freq: "ai.etiket.freq", duty: "ai.etiket.duty",
+  phase: "ai.etiket.phase", durationMin: "ai.etiket.durationMin", remainingSec: "ai.etiket.remainingSec", active: "ai.etiket.active",
+  class_name: "ai.etiket.class_name", conf: "ai.etiket.conf", classes: "ai.etiket.classes", predictions: "ai.etiket.predictions",
+  prob_KIRC: "ai.etiket.prob_KIRC", prob_other: "ai.etiket.probDiger", results: "ai.etiket.results",
+  top_probability: "ai.etiket.top_probability", low_confidence: "ai.etiket.low_confidence",
   // cell_scratch — Yara Kapanma (2026-08-26): metrikler geçmiş detayında Türkçe görünsün
-  n_cells: "Hücre sayısı", coverage_ratio: "Hücre kaplama oranı",
-  closure: "Kapanma metrikleri", closure_pct: "Kapanma (%)",
-  mean_gap_um: "Ortalama gap (µm)", max_gap_um: "Maks gap (µm)",
-  gap_area_mm2: "Gap alanı (mm²)", scratch_yonu: "Yara yönü",
-  pixel_mm: "Kalibrasyon (mm/px)", uyari: "Uyarı", closure_uyari: "Kapanma uyarısı",
-  inference_ms: "Analiz süresi (ms)", device: "Cihaz",
-  cell_area_mean: "Hücre alanı (ort. px)", cell_area_median: "Hücre alanı (medyan px)",
-  score_mean: "Ortalama skor", score_min: "En düşük skor",
+  n_cells: "ai.etiket.n_cells", coverage_ratio: "ai.etiket.coverage_ratio",
+  closure: "ai.etiket.closure", closure_pct: "ai.etiket.closure_pct",
+  mean_gap_um: "ai.etiket.mean_gap_um", max_gap_um: "ai.etiket.max_gap_um",
+  gap_area_mm2: "ai.etiket.gap_area_mm2", scratch_yonu: "ai.etiket.scratch_yonu",
+  pixel_mm: "ai.etiket.pixel_mm", uyari: "ai.etiket.uyari", closure_uyari: "ai.etiket.closure_uyari",
+  inference_ms: "ai.etiket.inference_ms", device: "ai.etiket.device",
+  cell_area_mean: "ai.etiket.cell_area_mean", cell_area_median: "ai.etiket.cell_area_median",
+  score_mean: "ai.etiket.score_mean", score_min: "ai.etiket.score_min",
   // AI-2 (hoca petri v2 / fantom v3): geçerlilik + tüketim kapısı geçmiş ayrıntısında Türkçe görünsün
-  pemf_valid: "PEMF girdisi geçerli", reliable: "Tespit güvenilir", coord_frame: "Koordinat çerçevesi",
-  pemf_source: "PEMF yerleşim kaynağı", warnings: "Uyarılar", tumor_id: "Tümör kimliği",
-  pemf_kapisi: "PEMF kapısı", surulebilir: "Bobin sürüşüne esas alınabilir", pemf_gecerli: "PEMF geçerli",
-  eylem: "Yapılacak", cancer_reasons: "Kanser gerekçesi", source: "Kuyucuk kaynağı",
+  pemf_valid: "ai.etiket.pemf_valid", reliable: "ai.etiket.reliable", coord_frame: "ai.etiket.coord_frame",
+  pemf_source: "ai.etiket.pemf_source", warnings: "ai.etiket.warnings", tumor_id: "ai.etiket.tumor_id",
+  pemf_kapisi: "ai.etiket.pemf_kapisi", surulebilir: "ai.etiket.surulebilir", pemf_gecerli: "ai.etiket.pemf_gecerli",
+  eylem: "ai.etiket.eylem", cancer_reasons: "ai.etiket.cancer_reasons", source: "ai.etiket.source",
 };
 
-/** Girdi tipi → Türkçe. */
+/** Girdi tipi → katalog anahtarı (`girdiAdi()` ile gösterilir). */
 export const INPUT_LABELS: Record<string, string> = {
-  image: "Görüntü", clinical: "Klinik değerler", audio: "Ses", csv: "CSV / tablo", form: "Form",
+  image: "ai.girdi.image", clinical: "ai.girdi.clinical", audio: "ai.girdi.audio", csv: "ai.girdi.csv", form: "ai.girdi.form",
 };
 
 /**
- * Bilinen İngilizce/enum DEĞERLER → Türkçe (yalnız gösterim; sonuç semantiği korunur). Anahtar
+ * Bilinen İngilizce/enum DEĞERLER → katalog anahtarı (yalnız gösterim; sonuç semantiği korunur). Anahtar
  * küçük-harf. class_counts gibi nesnelerde ALT-ANAHTAR da (stone/cyst...) bu tablodan çevrilir.
  */
 const VALUE_LABELS: Record<string, string> = {
   // FGS ağrı seviyeleri
-  "no pain": "Ağrı yok", "mild": "Hafif", "mild pain": "Hafif ağrı",
-  "moderate": "Orta", "moderate pain": "Orta ağrı", "severe": "Şiddetli", "severe pain": "Şiddetli ağrı",
+  "no pain": "ai.deger.no_pain", "mild": "ai.deger.mild", "mild pain": "ai.deger.mild_pain",
+  "moderate": "ai.deger.moderate", "moderate pain": "ai.deger.moderate_pain", "severe": "ai.deger.severe", "severe pain": "ai.deger.severe_pain",
   // genel durum
-  "normal": "Normal", "healthy": "Sağlıklı", "cancer": "Kanser", "abnormal": "Anormal",
-  "positive": "Pozitif", "negative": "Negatif", "unknown": "Bilinmiyor", "none": "Yok",
-  "idle": "Boşta", "updated": "Güncellendi", "running": "Çalışıyor", "stopped": "Durdu",
-  "yes": "Evet", "no": "Hayır",
+  "normal": "ai.deger.normal", "healthy": "ai.deger.healthy", "cancer": "ai.deger.cancer", "abnormal": "ai.deger.abnormal",
+  "positive": "ai.deger.positive", "negative": "ai.deger.negative", "unknown": "ai.deger.unknown", "none": "ai.deger.none",
+  "idle": "ai.deger.idle", "updated": "ai.deger.updated", "running": "ai.deger.running", "stopped": "ai.deger.stopped",
+  "yes": "ai.deger.yes", "no": "ai.deger.no",
   // böbrek CT sınıfları
-  "stone": "Taş", "cyst": "Kist", "tumor": "Tümör", "kidney": "Böbrek",
+  "stone": "ai.deger.stone", "cyst": "ai.deger.cyst", "tumor": "ai.deger.tumor", "kidney": "ai.deger.kidney",
   // kedi sesi sınıfları
-  "happy": "Mutlu", "resting": "Dinleniyor", "mothercall": "Anne çağrısı", "mating": "Çiftleşme",
-  "huntingmind": "Av modu", "warning": "Uyarı", "defence": "Savunma", "angry": "Kızgın",
-  "fighting": "Kavga", "paining": "Ağrı belirtisi",
+  "happy": "ai.deger.happy", "resting": "ai.deger.resting", "mothercall": "ai.deger.mothercall", "mating": "ai.deger.mating",
+  "huntingmind": "ai.deger.huntingmind", "warning": "ai.deger.warning", "defence": "ai.deger.defence", "angry": "ai.deger.angry",
+  "fighting": "ai.deger.fighting", "paining": "ai.deger.paining",
   // Organlar (cat_organ / em_kedi):
-  "mide": "Mide", "bobrek": "Böbrek", "karaciger": "Karaciğer", "mesane": "Mesane",
-  "pankreas": "Pankreas", "bagirsak": "Bağırsak", "kalp": "Kalp", "dalak": "Dalak",
-  "akciger_sag": "Akciğer (sağ)", "akciger_sol": "Akciğer (sol)", "kutu_butun": "Tüm Vücut",
+  "mide": "ai.deger.mide", "bobrek": "ai.deger.bobrek", "karaciger": "ai.deger.karaciger", "mesane": "ai.deger.mesane",
+  "pankreas": "ai.deger.pankreas", "bagirsak": "ai.deger.bagirsak", "kalp": "ai.deger.kalp", "dalak": "ai.deger.dalak",
+  "akciger_sag": "ai.deger.akciger_sag", "akciger_sol": "ai.deger.akciger_sol", "kutu_butun": "ai.deger.kutu_butun",
   // Poz tipleri (cat_organ):
-  "lateral": "Yandan (lateral)", "sphinx": "Sfenks (oturmuş, önden)", "standing": "Ayakta",
-  "dorsal": "Sırtüstü", "frontal": "Önden", "oblique": "Eğik / çapraz",
+  "lateral": "ai.deger.lateral", "sphinx": "ai.deger.sphinx", "standing": "ai.deger.standing",
+  "dorsal": "ai.deger.dorsal", "frontal": "ai.deger.frontal", "oblique": "ai.deger.oblique",
   // Kalibrasyon yöntemi (em_fantom / em_petri):
-  "aruco_pnp": "ArUco PnP (3B kalibre)", "phantom_length": "Fantom uzunluğu ölçekli",
-  "petri_diameter": "Petri çapı ölçekli", "pixel": "Piksel modu (ölçeksiz)",
+  "aruco_pnp": "ai.deger.aruco_pnp", "phantom_length": "ai.deger.phantom_length",
+  "petri_diameter": "ai.deger.petri_diameter", "pixel": "ai.deger.pixel",
   // AI-2: v2 / v3 yöntem ve çerçeve değerleri
-  "plate_grid": "Plaka ızgarası (kuyucuk aralığı ölçekli)", "coil_ring": "Yeşil halka ölçekli",
-  "phantom_layout": "Yerleşim referansı ölçekli", "cabin_aruco": "Kabin (ArUco)", "plate": "Plaka çerçevesi (kabin konumu yok)",
-  "cabin_placement": "Kabin (ölçülmüş yerleşim)", "cabin_cst_phantom_box": "CST eğitim kutusu (VARSAYIM)",
-  "cst_phantom_box": "CST eğitim kutusu (VARSAYIM)", "aruco": "ArUco kabin işareti", "placement": "Ölçülmüş yerleşim",
+  "plate_grid": "ai.deger.plate_grid", "coil_ring": "ai.deger.coil_ring",
+  "phantom_layout": "ai.deger.phantom_layout", "cabin_aruco": "ai.deger.cabin_aruco", "plate": "ai.deger.plate",
+  "cabin_placement": "ai.deger.cabin_placement", "cabin_cst_phantom_box": "ai.deger.cabin_cst_phantom_box",
+  "cst_phantom_box": "ai.deger.cst_phantom_box", "aruco": "ai.deger.aruco", "placement": "ai.deger.placement",
   // Böbrek CT / patoloji:
-  "kidney stone": "Böbrek taşı", "kidney cyst": "Böbrek kisti",
-  "grade0": "Derece 0", "grade1": "Derece 1", "grade2": "Derece 2", "grade3": "Derece 3", "grade4": "Derece 4",
-  "kirc": "Böbrek berrak hücreli karsinom (KIRC)", "other": "Diğer",
+  "kidney stone": "ai.deger.kidney_stone", "kidney cyst": "ai.deger.kidney_cyst",
+  "grade0": "ai.deger.grade0", "grade1": "ai.deger.grade1", "grade2": "ai.deger.grade2", "grade3": "ai.deger.grade3", "grade4": "ai.deger.grade4",
+  "kirc": "ai.deger.kirc", "other": "ai.deger.other",
   // KBH (böbrek hastalığı):
-  "ckd": "Kronik Böbrek Hastalığı (KBH) var", "notckd": "KBH yok (sağlıklı)",
+  "ckd": "ai.deger.ckd", "notckd": "ai.deger.notckd",
   // Kedi hastalıkları (disease):
-  "conjunctivitis": "Konjonktivit (göz nezlesi)", "feline asthma": "Kedi Astımı",
-  "feline calicivirus": "Kedi Kalisivirüsü", "feline chlamydiosis": "Kedi Klamidyozu",
-  "feline herpesvirus": "Kedi Herpesvirüsü", "feline immunodeficiency virus": "Kedi Bağışıklık Yetmezliği Virüsü (FIV)",
-  "feline infectious peritonitis": "Kedi Enfeksiyöz Peritoniti (FIP)", "feline leukemia virus": "Kedi Lösemi Virüsü (FeLV)",
-  "feline panleukopenia": "Kedi Panlökopenisi", "feline renal disease": "Kedi Böbrek Hastalığı",
-  "fungal infection": "Mantar Enfeksiyonu", "gastroenteritis": "Gastroenterit",
-  "hyperthyroidism": "Hipertiroidizm", "inflammatory bowel disease": "İnflamatuar Bağırsak Hastalığı (IBD)",
-  "intestinal parasites": "Bağırsak Parazitleri", "pancreatitis": "Pankreatit",
-  "ringworm": "Saçkıran (Dermatofitoz)", "upper respiratory infection": "Üst Solunum Yolu Enfeksiyonu",
+  "conjunctivitis": "ai.deger.conjunctivitis", "feline asthma": "ai.deger.feline_asthma",
+  "feline calicivirus": "ai.deger.feline_calicivirus", "feline chlamydiosis": "ai.deger.feline_chlamydiosis",
+  "feline herpesvirus": "ai.deger.feline_herpesvirus", "feline immunodeficiency virus": "ai.deger.feline_immunodeficiency_virus",
+  "feline infectious peritonitis": "ai.deger.feline_infectious_peritonitis", "feline leukemia virus": "ai.deger.feline_leukemia_virus",
+  "feline panleukopenia": "ai.deger.feline_panleukopenia", "feline renal disease": "ai.deger.feline_renal_disease",
+  "fungal infection": "ai.deger.fungal_infection", "gastroenteritis": "ai.deger.gastroenteritis",
+  "hyperthyroidism": "ai.deger.hyperthyroidism", "inflammatory bowel disease": "ai.deger.inflammatory_bowel_disease",
+  "intestinal parasites": "ai.deger.intestinal_parasites", "pancreatitis": "ai.deger.pancreatitis",
+  "ringworm": "ai.deger.ringworm", "upper respiratory infection": "ai.deger.upper_respiratory_infection",
 };
 
-/** Bilinen İngilizce/enum bir değeri Türkçe'ye çevir (yoksa aynen döner). Dışa açık — özet üreticiler de kullanır. */
-export function trValue(v: unknown): string {
+function degerCevir(v: unknown, lng?: "tr"): string {
   const s = String(v ?? "").trim();
   if (!s) return "—";
-  return VALUE_LABELS[s.toLowerCase()] || s;
+  const anahtar = VALUE_LABELS[s.toLowerCase()];
+  return typeof anahtar === "string" && anahtar ? katalogMetni(anahtar, lng) : s;
 }
 
-/** Anahtar → etiket: önce DETAIL_LABELS, sonra VALUE_LABELS (class_counts alt-anahtarları için), yoksa ham. */
-function trLabel(k: string): string {
-  return DETAIL_LABELS[k] || VALUE_LABELS[k.trim().toLowerCase()] || k;
+/**
+ * Bilinen İngilizce/enum bir değeri TÜRKÇE'ye çevir (yoksa aynen döner). VERİ YOLU: AI geçmişi kaydına / özete giden metin (`logAiResult`,
+ * `summarizeVision`) arayüz dili EN olsa da TR kalır (kayıt dilden bağımsız). Ekranda gösterim için `degerAdi()` kullanılır.
+ */
+export function trValue(v: unknown): string {
+  return degerCevir(v, "tr");
+}
+
+/** Bilinen İngilizce/enum bir değeri ARAYÜZ DİLİNDE gösterim metnine çevir (yoksa aynen döner). Yalnız EKRAN. */
+export function degerAdi(v: unknown): string {
+  return degerCevir(v);
+}
+
+/** Girdi tipi (`image` / `clinical` / `audio` / `csv` / `form`) → arayüz dilinde ad (bilinmeyen tip → boş dize). */
+export function girdiAdi(tip: string): string {
+  const anahtar = INPUT_LABELS[tip];
+  return typeof anahtar === "string" ? katalogMetni(anahtar) : "";
+}
+
+/** Anahtar → etiket (arayüz dilinde): önce DETAIL_LABELS, sonra VALUE_LABELS (class_counts alt-anahtarları için), yoksa ham. */
+function etiketAdi(k: string): string {
+  const d = DETAIL_LABELS[k];
+  const anahtar = (typeof d === "string" && d) || VALUE_LABELS[k.trim().toLowerCase()];
+  return typeof anahtar === "string" && anahtar ? katalogMetni(anahtar) : k;
 }
 
 /** Skaler değeri güvenli string'e çevir — nesne/dizi buraya düşerse ASLA "[object Object]" yazma. */
 function fmtScalar(v: unknown): string {
   if (v == null) return "—";
   if (typeof v === "number") return Number.isInteger(v) ? String(v) : v.toFixed(2);
-  if (typeof v === "boolean") return v ? "Evet" : "Hayır";
-  if (typeof v === "string") return trValue(v);
+  if (typeof v === "boolean") return v ? i18n.t("ai.ckd.secenek.evet") : i18n.t("ai.ckd.secenek.hayir");
+  if (typeof v === "string") return degerAdi(v);
   return "—"; // nesne/dizi → burada özetlenmez (fmtVal ayrı ele alır)
 }
 
@@ -171,9 +199,9 @@ function fmtFlatObject(o: Record<string, unknown>): string {
   const parts: string[] = [];
   for (const k of keys.slice(0, 8)) {
     const val = o[k];
-    if (val != null && typeof val !== "object") parts.push(`${trLabel(k)}: ${fmtScalar(val)}`);
+    if (val != null && typeof val !== "object") parts.push(`${etiketAdi(k)}: ${fmtScalar(val)}`);
   }
-  if (parts.length === 0) return keys.length ? `${keys.length} alan` : "—";
+  if (parts.length === 0) return keys.length ? i18n.t("ai.etiket.alanSayisi", { count: keys.length }) : "—";
   return parts.join(", ") + (keys.length > parts.length ? "…" : "");
 }
 
@@ -181,17 +209,17 @@ function fmtFlatObject(o: Record<string, unknown>): string {
 export function fmtVal(v: unknown): string {
   if (v == null) return "—";
   if (typeof v === "number") return Number.isInteger(v) ? String(v) : v.toFixed(3);
-  if (typeof v === "boolean") return v ? "Evet" : "Hayır";
+  if (typeof v === "boolean") return v ? i18n.t("ai.ckd.secenek.evet") : i18n.t("ai.ckd.secenek.hayir");
   if (typeof v === "string") {
     const s = v.length > VALUE_TRUNC_LEN ? v.slice(0, VALUE_TRUNC_LEN) + "…" : v;
-    return trValue(s);
+    return degerAdi(s);
   }
   if (Array.isArray(v)) {
     // skaler dizi → değerleri (çevrili); nesne dizisi → "N öğe"
     if (v.every((x) => x == null || typeof x !== "object")) {
       return v.slice(0, 8).map((x) => fmtScalar(x)).join(", ") + (v.length > 8 ? "…" : "");
     }
-    return `${v.length} öğe`;
+    return i18n.t("ai.etiket.ogeSayisi", { count: v.length });
   }
   if (typeof v === "object") return fmtFlatObject(v as Record<string, unknown>);
   return "—";
@@ -226,7 +254,7 @@ export function detailRows(detail: unknown): { label: string; value: string }[] 
     const value = fmtVal(v);
     // Anlamsız boş satırları atla (null/boş nesne → "—"), ama gerçek 0/false gösterilir.
     if (value === "—") continue;
-    rows.push({ label: trLabel(k), value });
+    rows.push({ label: etiketAdi(k), value });
   }
   return rows;
 }

@@ -28,6 +28,8 @@
  * sabit ASCII literal olarak karşılaştırılır (bkz. `turkce-collation-lower-tuzagi`).
  */
 
+import i18n from "i18next";
+
 /** Backend'in `paneller` öğesi (ADIM 3 sözleşmesi). */
 export interface PanelYanit {
   k: string;
@@ -66,10 +68,10 @@ export const BIRLESIK_ANAHTARI = "07_combined";
  */
 export const VARSAYILAN_SAYFA_SIRASI = ["06_predictions", BIRLESIK_ANAHTARI];
 
-/** Panelsiz (tek görselli) modüllerde sonuç sayfasının adı. */
-export const SONUC_ADI = "Sonuç";
-/** Girdi sayfasının adı. */
-export const GIRDI_ADI = "Girdi";
+/** Panelsiz (tek görselli) modüllerde sonuç sayfasının adı (çağrı anında, arayüz dilinde). */
+const sonucAdi = (): string => i18n.t("ai.gorsel.sayfaSonuc");
+/** Girdi sayfasının adı (çağrı anında, arayüz dilinde). */
+const girdiSayfaAdi = (): string => i18n.t("ai.gorsel.sayfaGirdi");
 
 interface YanitBenzeri {
   paneller?: PanelYanit[] | null;
@@ -111,7 +113,7 @@ export function sahneSayfalari(yanit: YanitBenzeri | null | undefined, yerelUri:
         if (yerelUri) {
           sayfalar.push({
             k: p.k,
-            ad: p.ad || GIRDI_ADI,
+            ad: p.ad || girdiSayfaAdi(),
             uri: yerelUri,
             image_w: p.image_w,
             image_h: p.image_h,
@@ -132,11 +134,11 @@ export function sahneSayfalari(yanit: YanitBenzeri | null | undefined, yerelUri:
   }
 
   // Panelsiz yol: Girdi + Sonuç.
-  if (yerelUri) sayfalar.push({ k: GIRDI_ANAHTARI, ad: GIRDI_ADI, uri: yerelUri });
+  if (yerelUri) sayfalar.push({ k: GIRDI_ANAHTARI, ad: girdiSayfaAdi(), uri: yerelUri });
   if (yanit?.image_base64) {
     sayfalar.push({
       k: BIRLESIK_ANAHTARI,
-      ad: SONUC_ADI,
+      ad: sonucAdi(),
       uri: _dataUri(yanit.image_base64),
       image_w: yanit.image_w,
       image_h: yanit.image_h,
