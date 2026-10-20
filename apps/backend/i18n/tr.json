@@ -562,9 +562,42 @@
     }
   },
   "guncelleme": {
+    "apply": {
+      "basladi": "Güncelleme indirildi + doğrulandı, kurulum başladı. Servis birazdan yeni sürümle yeniden başlar.",
+      "imzaGecersiz": "Installer imzası GEÇERSİZ/kurcalanmış (Authenticode) — güncelleme İPTAL.",
+      "indirmedeTedavi": "İndirme sırasında tedavi başladı — güncelleme iptal edildi (seans bitince tekrar deneyin).",
+      "sha256Uyusmadi": "SHA256 uyuşmadı (beklenen {{beklenen}}… geldi {{gelen}}…) — güncelleme İPTAL.",
+      "sha256Yok": "Güncelleme manifest'inde SHA256 yok — doğrulanamayan installer ÇALIŞTIRILMADI (güvenlik).",
+      "tedaviSuruyor": "Aktif tedavi sürüyor — güncelleme seans bitince yapılabilir.",
+      "uygulanamadi": "Güncelleme uygulanamadı",
+      "yok": "Uygulanacak güncelleme yok.",
+      "zatenSuruyor": "Güncelleme zaten sürüyor."
+    },
     "hata": {
       "rollbackUygulanamadi": "rollback uygulanamadi",
       "uygulanamadi": "guncelleme uygulanamadi"
+    },
+    "kanalKapali": "Bu cihazın güncellemelerini PEMF Vet Client (launcher) yönetiyor. Eski EXE güncelleme kanalı kapalıdır — iki ayrı kurulum ve ikiye bölünmüş hasta veritabanı riski taşır.",
+    "kontrolBasarisiz": "Güncelleme kontrolü başarısız",
+    "rollback": {
+      "basarisiz": "Geri alma başarısız",
+      "donuluyor": "Önceki kararlı sürüme ({{ver}}) dönülüyor. Servis birazdan yeniden başlar.",
+      "imzaGecersiz": "Rollback installer imzası GEÇERSİZ/kurcalanmış — İPTAL.",
+      "indirmedeTedavi": "İndirme sırasında tedavi başladı — rollback iptal edildi (seans bitince tekrar deneyin).",
+      "oncekiYok": "Geri dönülecek önceki kararlı sürüm tanımlı değil (manifest 'previousStable' yok).",
+      "sha256Uyusmadi": "SHA256 uyuşmadı (rollback İPTAL): beklenen {{beklenen}}…",
+      "sha256Yok": "previousStable SHA256 yok — doğrulanamayan installer ÇALIŞTIRILMADI (güvenlik).",
+      "tedaviSuruyor": "Aktif tedavi sürüyor — rollback seans bitince yapılabilir.",
+      "zatenSuruyor": "Bir güncelleme/rollback zaten sürüyor."
+    },
+    "url": {
+      "cozumlenemedi": "Güncelleme URL'si çözümlenemedi (güvenlik).",
+      "hostBeklenmeyen": "Güncelleme host'u beklenen release sunucusu değil ({{host}}) — indirilmedi (güvenlik).",
+      "httpsDegil": "Güncelleme URL'si HTTPS değil — indirilmedi (güvenlik).",
+      "kullaniciBilgisi": "Güncelleme URL'si kullanıcı bilgisi (@) içeriyor — indirilmedi (güvenlik).",
+      "noktaSegmenti": "Güncelleme URL'si nokta-segmenti/kodlanmış ayraç içeriyor (repo pini atlatma) — indirilmedi (güvenlik).",
+      "repoDisi": "Güncelleme URL'si beklenen repo dışında ({{yol}}) — indirilmedi (güvenlik).",
+      "yolPiniYok": "Güncelleme kaynağı ({{host}}) yol pini uygulanamayan bir GitHub adresi — yalnız beklenen deponun sürüm varlığı kabul edilir; indirilmedi (güvenlik)."
     }
   },
   "hasta": {
@@ -805,6 +838,7 @@
     "hata": {
       "anonimGeriAlma": "Aynı istekte anonimleştirme onayı ve geri alması olmaz.",
       "ayarKaydedilemedi": "Ayar kaydedilemedi.",
+      "ayarKaydedilmedi": "Ayar KAYDEDILMEDI: config.json okunamiyor ({{neden}}). Mevcut dosya korunuyor (varsayilanlarla ezilmedi). Yapilacak: dosyayi uygulamayi kuran Windows hesabiyla acin ya da izinlerini duzelttirin; bozuksa yedekteki pemf_config_<tarih>.json dosyasini config.json olarak geri yukleyin.",
       "ayarOkunamadi": "Ayar okunamadı.",
       "dbHazirDegil": "Tıbbi kayıt veritabanı hazır değil; yeni seans başlatılamaz.",
       "dbYanitsiz": "Tıbbi kayıt veritabanı yanıt vermiyor",

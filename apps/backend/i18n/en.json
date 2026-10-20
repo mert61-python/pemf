@@ -562,9 +562,42 @@
     }
   },
   "guncelleme": {
+    "apply": {
+      "basladi": "The update was downloaded and verified, installation has started. The service will restart shortly with the new version.",
+      "imzaGecersiz": "The installer signature is INVALID/tampered (Authenticode) — update CANCELLED.",
+      "indirmedeTedavi": "A treatment started during the download — the update was cancelled (try again after the session ends).",
+      "sha256Uyusmadi": "SHA256 mismatch (expected {{beklenen}}… got {{gelen}}…) — update CANCELLED.",
+      "sha256Yok": "The update manifest has no SHA256 — the installer that could not be verified was NOT RUN (security).",
+      "tedaviSuruyor": "A treatment is in progress — the update can be applied after the session ends.",
+      "uygulanamadi": "The update could not be applied.",
+      "yok": "There is no update to apply.",
+      "zatenSuruyor": "An update is already in progress."
+    },
     "hata": {
       "rollbackUygulanamadi": "The rollback could not be applied",
       "uygulanamadi": "The update could not be applied"
+    },
+    "kanalKapali": "This device's updates are managed by PEMF Vet Client (launcher). The old EXE update channel is closed — it risks two separate installations and a split patient database.",
+    "kontrolBasarisiz": "Update check failed",
+    "rollback": {
+      "basarisiz": "The rollback failed.",
+      "donuluyor": "Going back to the previous stable version ({{ver}}). The service will restart shortly.",
+      "imzaGecersiz": "The rollback installer signature is INVALID/tampered — CANCELLED.",
+      "indirmedeTedavi": "A treatment started during the download — the rollback was cancelled (try again after the session ends).",
+      "oncekiYok": "No previous stable version is defined to go back to (the manifest has no 'previousStable').",
+      "sha256Uyusmadi": "SHA256 mismatch (rollback CANCELLED): expected {{beklenen}}…",
+      "sha256Yok": "previousStable has no SHA256 — the installer that could not be verified was NOT RUN (security).",
+      "tedaviSuruyor": "A treatment is in progress — the rollback can be done after the session ends.",
+      "zatenSuruyor": "An update/rollback is already in progress."
+    },
+    "url": {
+      "cozumlenemedi": "The update URL could not be parsed (security).",
+      "hostBeklenmeyen": "The update host ({{host}}) is not the expected release server — not downloaded (security).",
+      "httpsDegil": "The update URL is not HTTPS — not downloaded (security).",
+      "kullaniciBilgisi": "The update URL contains user information (@) — not downloaded (security).",
+      "noktaSegmenti": "The update URL contains dot segments / encoded separators (repository pin bypass) — not downloaded (security).",
+      "repoDisi": "The update URL is outside the expected repository ({{yol}}) — not downloaded (security).",
+      "yolPiniYok": "The update source ({{host}}) is a GitHub address where the path pin cannot be applied — only a release asset of the expected repository is accepted; not downloaded (security)."
     }
   },
   "hasta": {
@@ -805,6 +838,7 @@
     "hata": {
       "anonimGeriAlma": "Anonymization confirmation and its rollback cannot be in the same request.",
       "ayarKaydedilemedi": "The setting could not be saved.",
+      "ayarKaydedilmedi": "Setting NOT SAVED: config.json cannot be read ({{neden}}). The existing file is kept (it was not overwritten with defaults). To do: open the file with the Windows account that installed the app or have its permissions fixed; if it is corrupt, restore the pemf_config_<date>.json backup as config.json.",
       "ayarOkunamadi": "The setting could not be read.",
       "dbHazirDegil": "The medical record database is not ready; a new session cannot be started.",
       "dbYanitsiz": "The medical record database is not responding",

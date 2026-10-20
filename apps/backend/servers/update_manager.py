@@ -32,6 +32,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from utils import ceviri
 from utils.dongu_guvenligi import dongu_hatasini_bildir
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,7 @@ logger = logging.getLogger(__name__)
 # exe branch manifest'i (mobil ayrı branch'te; karışmaz). raw.githubusercontent → API rate-limit yok.
 _UPDATE_REPO = "mert61-python/pemf-update"  # host-pin bu repoya daraltilir (bkz. _validate_installer_url)
 _MANIFEST_URL = f"https://raw.githubusercontent.com/{_UPDATE_REPO}/exe/latest.json"
+
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════
 # ⚠️ BU KANAL VARSAYILAN OLARAK KAPALIDIR (2026-08-09 denetimi, Tier 3 — "tek güncelleme kanalı")
@@ -67,10 +69,14 @@ _MANIFEST_URL = f"https://raw.githubusercontent.com/{_UPDATE_REPO}/exe/latest.js
 #
 # Geri açmak (yalnız launcher'sız bir kurulumda): PEMF_LEGACY_EXE_UPDATE=1
 # ═══════════════════════════════════════════════════════════════════════════════════════════
-_KANAL_KAPALI_MESAJ = (
-    "Bu cihazın güncellemelerini PEMF Vet Client (launcher) yönetiyor. Eski EXE güncelleme "
-    "kanalı kapalıdır — iki ayrı kurulum ve ikiye bölünmüş hasta veritabanı riski taşır."
-)
+def _kanal_kapali_mesaji() -> str:
+    """Eski kanal kapalı iletisi — İSTEK DİLİNDE (modül sabiti içe aktarmada dili dondururdu)."""
+    return ceviri.t("guncelleme.kanalKapali")
+
+
+#: Durum önbelleğine (`_status['error']`) yazılan Türkçe VERİ (kontrol işi arka plan iş parçacığında koşar; istek dili YOK) —
+#: `get_status` onu ekranda istek dilinde gösterir (değer→anahtar). Değer DEĞİŞMEZ.
+_KONTROL_BASARISIZ = "Güncelleme kontrolü başarısız"
 
 
 def eski_kanal_acik_mi() -> bool:
@@ -132,12 +138,12 @@ def _validate_installer_url(url: str):
     try:
         p = urllib.parse.urlparse(url or "")
     except Exception:
-        return False, "Güncelleme URL'si çözümlenemedi (güvenlik)."
+        return False, ceviri.t("guncelleme.url.cozumlenemedi")
     if p.scheme != "https":
-        return False, "Güncelleme URL'si HTTPS değil — indirilmedi (güvenlik)."
+        return False, ceviri.t("guncelleme.url.httpsDegil")
     if "@" in (p.netloc or ""):
         # Rust ikizi gibi: `evil@github.com` biçimi ayrıştırıcılar arasında farklı yorumlanabilir — TAMAMEN reddedilir.
-        return False, "Güncelleme URL'si kullanıcı bilgisi (@) içeriyor — indirilmedi (güvenlik)."
+        return False, ceviri.t("guncelleme.url.kullaniciBilgisi")
     host = (p.hostname or "").lower()
     # DENETIM P3: host-pin TUM github.com'u (yani HERHANGI bir kullanicinin repo/release'ini) ve
     # TUM *.githubusercontent.com alt alanlarini kabul ediyordu → "pin" pratikte yalnizca
@@ -148,23 +154,15 @@ def _validate_installer_url(url: str):
     if host == "github.com":
         # P0 (2026-08-04): önce pin-atlatma yazımlarını ele — bkz. _path_has_traversal.
         if _path_has_traversal(p.path):
-            return False, (
-                "Güncelleme URL'si nokta-segmenti/kodlanmış ayraç içeriyor "
-                "(repo pini atlatma) — indirilmedi (güvenlik)."
-            )
+            return False, (ceviri.t("guncelleme.url.noktaSegmenti"))
         if not p.path.startswith(f"/{_UPDATE_REPO}/"):
-            return False, (
-                f"Güncelleme URL'si beklenen repo dışında ({p.path.split('/releases')[0]}) — indirilmedi (güvenlik)."
-            )
+            return False, (ceviri.t("guncelleme.url.repoDisi", yol=p.path.split('/releases')[0]))
         return True, ""
     if host in _SOURCE_OBJECT_HOSTS:
         return True, ""
     if host in _ALLOWED_UPDATE_HOSTS or host.endswith(".githubusercontent.com"):
-        return False, (
-            f"Güncelleme kaynağı ({host}) yol pini uygulanamayan bir GitHub adresi — yalnız beklenen deponun sürüm "
-            "varlığı kabul edilir; indirilmedi (güvenlik)."
-        )
-    return False, f"Güncelleme host'u beklenen release sunucusu değil ({host}) — indirilmedi (güvenlik)."
+        return False, (ceviri.t("guncelleme.url.yolPiniYok", host=host))
+    return False, ceviri.t("guncelleme.url.hostBeklenmeyen", host=host)
 
 
 def _yonlendirme_hedefi_dogrula(url: str):
@@ -442,7 +440,7 @@ def check_for_update(timeout: float = 15.0) -> dict:
             "sha256": "",
             "mandatory": False,
             "previousStable": None,
-            "error": "Güncelleme kontrolü başarısız",
+            "error": _KONTROL_BASARISIZ,
         }
     with _status_lock:
         _status.clear()
@@ -453,6 +451,8 @@ def check_for_update(timeout: float = 15.0) -> dict:
 def get_status() -> dict:
     with _status_lock:
         s = dict(_status)
+    if s.get("error") == _KONTROL_BASARISIZ:
+        s["error"] = ceviri.t("guncelleme.kontrolBasarisiz")  # önbellekteki Türkçe VERİ → gösterimde istek dilinde
     s["applying"] = _applying
     if not s.get("currentVersion"):
         # ilk kontrol öncesi (checker henüz çalışmadı) bile kurulu sürümü ver — setdefault
@@ -476,7 +476,7 @@ def get_status() -> dict:
                 "error": "",
                 "channel": "launcher",
                 "legacyChannelEnabled": False,
-                "message": _KANAL_KAPALI_MESAJ,
+                "message": _kanal_kapali_mesaji(),
             }
         )
     else:
@@ -593,19 +593,19 @@ def apply_update() -> dict:
     """Operatör onayıyla: installer'ı indir → SHA256 doğrula → aktif tedavi yoksa sessiz kur."""
     global _applying, _applying_since
     if not eski_kanal_acik_mi():
-        return {"ok": False, "error": _KANAL_KAPALI_MESAJ}
+        return {"ok": False, "error": _kanal_kapali_mesaji()}
     st = get_status()
     if not st.get("available") or not st.get("installerUrl"):
-        return {"ok": False, "error": "Uygulanacak güncelleme yok."}
+        return {"ok": False, "error": ceviri.t("guncelleme.apply.yok")}
     if _has_active_treatment():
-        return {"ok": False, "error": "Aktif tedavi sürüyor — güncelleme seans bitince yapılabilir."}
+        return {"ok": False, "error": ceviri.t("guncelleme.apply.tedaviSuruyor")}
     # K2 (defense-in-depth): installerUrl'yi indirmeden ÖNCE HTTPS + release-host'a pinle (kilit almadan).
     _ok_url, _url_err = _validate_installer_url(st.get("installerUrl", ""))
     if not _ok_url:
         return {"ok": False, "error": _url_err}
     with _apply_lock:
         if _applying:
-            return {"ok": False, "error": "Güncelleme zaten sürüyor."}
+            return {"ok": False, "error": ceviri.t("guncelleme.apply.zatenSuruyor")}
         _applying = True
         _applying_since = time.monotonic()
     url = st["installerUrl"]
@@ -633,7 +633,7 @@ def apply_update() -> dict:
                 pass
             return {
                 "ok": False,
-                "error": "Güncelleme manifest'inde SHA256 yok — doğrulanamayan installer ÇALIŞTIRILMADI (güvenlik).",
+                "error": ceviri.t("guncelleme.apply.sha256Yok"),
             }
         actual = _sha256(dest)
         if actual != expected:
@@ -643,7 +643,7 @@ def apply_update() -> dict:
                 pass
             return {
                 "ok": False,
-                "error": f"SHA256 uyuşmadı (beklenen {expected[:12]}… geldi {actual[:12]}…) — güncelleme İPTAL.",
+                "error": ceviri.t("guncelleme.apply.sha256Uyusmadi", beklenen=expected[:12], gelen=actual[:12]),
             }
         # EK savunma: Authenticode imzası açıkça kurcalanmışsa reddet (imzasız = SHA ile geçer).
         if _verify_authenticode(dest) == "tampered":
@@ -651,7 +651,7 @@ def apply_update() -> dict:
                 dest.unlink()
             except Exception:
                 pass
-            return {"ok": False, "error": "Installer imzası GEÇERSİZ/kurcalanmış (Authenticode) — güncelleme İPTAL."}
+            return {"ok": False, "error": ceviri.t("guncelleme.apply.imzaGecersiz")}
         # TOCTOU (Audit P1): indirme+imza penceresi ~200sn — bu sürede tedavi BAŞLAMIŞ olabilir.
         # Installer'ı ÇALIŞTIRMADAN hemen önce tekrar kontrol et; aktifse kur BAŞLATMA (servis-restart
         # bobinleri kontrolcüsüz bırakır → ESP son komutu sürdürür → aşırı-doz/yanık riski).
@@ -662,7 +662,7 @@ def apply_update() -> dict:
                 pass
             return {
                 "ok": False,
-                "error": "İndirme sırasında tedavi başladı — güncelleme iptal edildi (seans bitince tekrar deneyin).",
+                "error": ceviri.t("guncelleme.apply.indirmedeTedavi"),
             }
         # Detached: installer servisi (bu süreci) durdursa da hayatta kalır → değiştir → yeniden başlat.
         # Konsol penceresi AÇMADAN + AYRIK (bkz. utils.gizli_surec.bayraklar): installer bu
@@ -670,6 +670,8 @@ def apply_update() -> dict:
         from utils.gizli_surec import bayraklar as _bayraklar
 
         flags = _bayraklar(ayrik=True)
+        # Popen'dan ÖNCE: ileti hatası başlamış kurulumu "uygulanamadı" göstermesin
+        _basladi_mesaji = ceviri.t("guncelleme.apply.basladi")
         subprocess.Popen(
             [str(dest), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOCANCEL"],
             creationflags=flags,
@@ -679,11 +681,11 @@ def apply_update() -> dict:
         logger.info("Güncelleme kurulumu başlatıldı: %s", dest)
         return {
             "ok": True,
-            "message": "Güncelleme indirildi + doğrulandı, kurulum başladı. Servis birazdan yeni sürümle yeniden başlar.",
+            "message": _basladi_mesaji,
         }
     except Exception:
         logger.exception("apply_update hatası")
-        return {"ok": False, "error": "Güncelleme uygulanamadı"}
+        return {"ok": False, "error": ceviri.t("guncelleme.apply.uygulanamadi")}
     finally:
         if not _installer_launched:
             _applying = False  # basarisiz → normale don
@@ -705,7 +707,7 @@ def rollback() -> dict:
     Kötü bir güncelleme sahada sorun çıkarırsa operatör tek-tıkla son iyi sürüme döner."""
     global _applying, _applying_since
     if not eski_kanal_acik_mi():
-        return {"ok": False, "error": _KANAL_KAPALI_MESAJ}
+        return {"ok": False, "error": _kanal_kapali_mesaji()}
     st = get_status()
     # Audit P3: previousStable dict DEĞİLSE (bozuk manifest: string/liste) `or {}` truthy-non-dict'i
     # geçirir → prev.get() AttributeError → try'dan önce olduğu için generic 500 (operatör dönemez).
@@ -718,17 +720,17 @@ def rollback() -> dict:
     if not url:
         return {
             "ok": False,
-            "error": "Geri dönülecek önceki kararlı sürüm tanımlı değil (manifest 'previousStable' yok).",
+            "error": ceviri.t("guncelleme.rollback.oncekiYok"),
         }
     # Öncelik: aktif-tedavi güvenlik-guard'ı URL-doğrulamasından ÖNCE (apply_update ile tutarlı).
     if _has_active_treatment():
-        return {"ok": False, "error": "Aktif tedavi sürüyor — rollback seans bitince yapılabilir."}
+        return {"ok": False, "error": ceviri.t("guncelleme.rollback.tedaviSuruyor")}
     _ok_url, _url_err = _validate_installer_url(url)
     if not _ok_url:
         return {"ok": False, "error": _url_err}
     with _apply_lock:
         if _applying:
-            return {"ok": False, "error": "Bir güncelleme/rollback zaten sürüyor."}
+            return {"ok": False, "error": ceviri.t("guncelleme.rollback.zatenSuruyor")}
         _applying = True
         # ⚠️ D1.118 (B-4.4): apply_update gibi DAMGALA — installer başladıktan sonra guard açık kalır (B-10.151) ama
         # damgasız bayrak `is_update_in_progress()`'in süre dolumuna HİÇ girmiyordu: başarısız geri alma kurulumundan
@@ -746,7 +748,7 @@ def rollback() -> dict:
         if not expected:
             return {
                 "ok": False,
-                "error": "previousStable SHA256 yok — doğrulanamayan installer ÇALIŞTIRILMADI (güvenlik).",
+                "error": ceviri.t("guncelleme.rollback.sha256Yok"),
             }
         dest = _private_temp_path(f"PEMF_Rollback_{_safe_ver(ver)}.exe")
         # D1.110: yönlendirme hedefi her adımda doğrulanır (kaynak yukarıda `_validate_installer_url` ile pinlendi).
@@ -758,13 +760,13 @@ def rollback() -> dict:
                 dest.unlink()
             except Exception:
                 pass
-            return {"ok": False, "error": f"SHA256 uyuşmadı (rollback İPTAL): beklenen {expected[:12]}…"}
+            return {"ok": False, "error": ceviri.t("guncelleme.rollback.sha256Uyusmadi", beklenen=expected[:12])}
         if _verify_authenticode(dest) == "tampered":
             try:
                 dest.unlink()
             except Exception:
                 pass
-            return {"ok": False, "error": "Rollback installer imzası GEÇERSİZ/kurcalanmış — İPTAL."}
+            return {"ok": False, "error": ceviri.t("guncelleme.rollback.imzaGecersiz")}
         # TOCTOU (Audit P1): apply_update ile aynı — Popen'dan hemen önce tedavi re-check.
         if _has_active_treatment():
             try:
@@ -773,13 +775,14 @@ def rollback() -> dict:
                 pass
             return {
                 "ok": False,
-                "error": "İndirme sırasında tedavi başladı — rollback iptal edildi (seans bitince tekrar deneyin).",
+                "error": ceviri.t("guncelleme.rollback.indirmedeTedavi"),
             }
         # Konsol penceresi AÇMADAN + AYRIK (bkz. utils.gizli_surec.bayraklar): installer bu
         # süreci durdursa da yaşamalı. Eskiden CREATE_NO_WINDOW verilmiyordu.
         from utils.gizli_surec import bayraklar as _bayraklar
 
         flags = _bayraklar(ayrik=True)
+        _donuluyor_mesaji = ceviri.t("guncelleme.rollback.donuluyor", ver=ver)  # Popen'dan ÖNCE (bkz. apply_update)
         subprocess.Popen(
             [str(dest), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOCANCEL"],
             creationflags=flags,
@@ -787,10 +790,10 @@ def rollback() -> dict:
         )
         _installer_launched = True
         logger.warning("ROLLBACK kurulumu başlatıldı → önceki kararlı sürüm %s (%s)", ver, dest)
-        return {"ok": True, "message": f"Önceki kararlı sürüme ({ver}) dönülüyor. Servis birazdan yeniden başlar."}
+        return {"ok": True, "message": _donuluyor_mesaji}
     except Exception:
         logger.exception("rollback hatası")
-        return {"ok": False, "error": "Geri alma başarısız"}
+        return {"ok": False, "error": ceviri.t("guncelleme.rollback.basarisiz")}
     finally:
         if not _installer_launched:
             _applying = False  # basarisiz → normale don

@@ -26,6 +26,8 @@ from typing import Any, Dict, Optional
 
 from cryptography.fernet import Fernet
 
+from utils import ceviri
+
 try:
     from .path_utils import get_app_data_directory as get_shared_app_data_directory
     from .path_utils import kaynak_kokunu_bul
@@ -246,9 +248,7 @@ class ProductionConfigManager:
             )
             if getattr(self, "_kirli", False):
                 raise sahip.ConfigKaydiReddedildi(
-                    f"Ayar KAYDEDILMEDI: config.json okunamiyor ({self._user_config_unreadable}). Mevcut dosya korunuyor "
-                    "(varsayilanlarla ezilmedi). Yapilacak: dosyayi uygulamayi kuran Windows hesabiyla acin ya da izinlerini "
-                    "duzelttirin; bozuksa yedekteki pemf_config_<tarih>.json dosyasini config.json olarak geri yukleyin."
+                    ceviri.t("sistem.hata.ayarKaydedilmedi", neden=self._user_config_unreadable)
                 )
             return
         user_config_path = self._get_app_data_dir() / 'config.json'

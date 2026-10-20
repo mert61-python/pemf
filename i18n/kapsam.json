@@ -337,7 +337,7 @@
    "sira": 10,
    "kritik": false,
    "aciklama": "servisler, güncelleme, sırlar, kalan yardımcılar (çoğu muaf: iç / günlük)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 136,
    "dosyaSayisi": 36
   },
@@ -6218,10 +6218,63 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 14,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "%Y-%m-%dT%H:%M:%S",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "%(asctime)s %(levelname)s [%(name)s] [%(rid)s] %(message)s",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "PEMF_API_PORT={{ham}} gecersiz (1-65535 arasi tamsayi bekleniyor) -> varsayilan {{_VARSAYILAN_PORT}} kullaniliyor",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "pemf/coil/{{coil_id}}/control",
+     "gerekce": "MQTT konu adı / dosya adı kalıbı — protokol verisi, metin değil"
+    },
+    {
+     "metin": "pemf/esp32_{{coil_id}}/command",
+     "gerekce": "MQTT konu adı / dosya adı kalıbı — protokol verisi, metin değil"
+    },
+    {
+     "metin": "===== CRASH [{{where}}] {{deger2}} =====",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "pemf/coil/{{_cid}}/control",
+     "gerekce": "MQTT konu adı / dosya adı kalıbı — protokol verisi, metin değil"
+    },
+    {
+     "metin": "False",
+     "gerekce": "mantıksal sabit — metin değil"
+    },
+    {
+     "metin": "STM el sıkışması (hardware.stm.connected)",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "STM zaten bağlı (el sıkışma kurulumdan önce)",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "Bypass",
+     "gerekce": "komut / PowerShell / SDDL / ortam argümanı — metin değil"
+    },
+    {
+     "metin": "Hidden",
+     "gerekce": "komut / PowerShell / SDDL / ortam argümanı — metin değil"
+    },
+    {
+     "metin": "-File",
+     "gerekce": "komut / PowerShell / SDDL / ortam argümanı — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6229,7 +6282,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6240,7 +6293,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6251,10 +6304,27 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 4,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "config.json not found in candidate paths",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "Seans başlatma hatası: {{deger1}}",
+     "gerekce": "`session_error` sinyaline + günlüğe gider; sinyali dinleyen YOK (arayüze ulaşmaz) — geliştirici iletisi"
+    },
+    {
+     "metin": "Seans sonlandırma hatası: {{deger1}}",
+     "gerekce": "`session_error` sinyaline + günlüğe gider; sinyali dinleyen YOK (arayüze ulaşmaz) — geliştirici iletisi"
+    },
+    {
+     "metin": "Seans zorla sonlandırıldı",
+     "gerekce": "DB / dosyaya yazılan VERİ (saklanır ya da karşılaştırılır) — ekranda gösterilmez"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6262,7 +6332,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6273,7 +6343,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6295,7 +6365,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6306,7 +6376,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6317,10 +6387,23 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 3,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Device registry publish hatasi: %s",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "Sync sirasinda beklenmeyen hata: %s",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "[okunamayan kayıt]",
+     "gerekce": "veri yer tutucusu — aynı değerle KARŞILAŞTIRILIR (`dec == \"[okunamayan kayıt]\"`); metin değil, işaret"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6328,10 +6411,23 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 3,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "cloudflared indirmesi çok küçük ({{_sz}} bytes) — bozuk/kesik.",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "cloudflared .tgz icinde 'cloudflared' ikilisi bulunamadi.",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "Tünel watchdog döngü hatası (devam ediliyor).",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6339,10 +6435,71 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 42,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "True",
+     "gerekce": "mantıksal sabit — metin değil"
+    },
+    {
+     "metin": "yönlendirme hedefi çözümlenemedi",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "yönlendirme hedefi HTTPS değil ({{deger1}}://)",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "yönlendirme hedefi kullanıcı bilgisi (@) içeriyor",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "yönlendirme hedefi beklenen release sunucusu değil ({{host}})",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "yönlendirme reddedildi (güvenlik): {{hata}}",
+     "gerekce": "yönlendirme reddi `HTTPError` iletisi — apply / indirme `except` bloğu günlüğe yazar, operatöre genel `Güncelleme uygulanamadı` döner"
+    },
+    {
+     "metin": "{{what}} boyut siniri asildi ({{limit}} bayt) — indirme IPTAL.",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "manifest boyut tavanini asti (> {{_MAX_MANIFEST_BYTES}} bayt) — reddedildi",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "Güncelleme kontrolü başarısız",
+     "gerekce": "DB'siz durum önbelleğine yazılan VERİ (`_status['error']`); `get_status` ekranda `guncelleme.kontrolBasarisiz` ile istek dilinde gösterir (değer→anahtar)"
+    },
+    {
+     "metin": "$s=(Get-AuthenticodeSignature -LiteralPath '{{deger1}}').Status; Write-Output $s",
+     "gerekce": "komut / PowerShell / SDDL / ortam argümanı — metin değil"
+    },
+    {
+     "metin": "-Command",
+     "gerekce": "komut / PowerShell / SDDL / ortam argümanı — metin değil"
+    },
+    {
+     "metin": "PEMF_Update_{{deger1}}.exe",
+     "gerekce": "MQTT konu adı / dosya adı kalıbı — protokol verisi, metin değil"
+    },
+    {
+     "metin": "Installer",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "PEMF_Rollback_{{deger1}}.exe",
+     "gerekce": "MQTT konu adı / dosya adı kalıbı — protokol verisi, metin değil"
+    },
+    {
+     "metin": "update checker döngü hatası",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6350,7 +6507,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6361,10 +6518,75 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 16,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "PEMF_MASTER_SECRET ortam değişkeni ayarlanmamış! Üretim dağıtımı için lütfen güçlü bir değer atayın.",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "# PEMF MQTT Access Control List",
+     "gerekce": "üretilen dosyanın içeriği / sabit etiket (mosquitto ACL, C başlığı, sır dosyası şablonu, destek paketi) — geliştirici / yapılandırma dosyası, ekran metni değil"
+    },
+    {
+     "metin": "# Otomatik oluşturulmuştur — CredentialManager tarafından",
+     "gerekce": "üretilen dosyanın içeriği / sabit etiket (mosquitto ACL, C başlığı, sır dosyası şablonu, destek paketi) — geliştirici / yapılandırma dosyası, ekran metni değil"
+    },
+    {
+     "metin": "topic write {{topic}}",
+     "gerekce": "üretilen dosyanın içeriği / sabit etiket (mosquitto ACL, C başlığı, sır dosyası şablonu, destek paketi) — geliştirici / yapılandırma dosyası, ekran metni değil"
+    },
+    {
+     "metin": "topic read {{topic}}",
+     "gerekce": "üretilen dosyanın içeriği / sabit etiket (mosquitto ACL, C başlığı, sır dosyası şablonu, destek paketi) — geliştirici / yapılandırma dosyası, ekran metni değil"
+    },
+    {
+     "metin": "// AUTO-GENERATED — PEMF CredentialManager tarafından üretilmiştir. // Değiştirmeyin. Yeniden üretmek için: python -m services.credential_manager generate --coil-id {{coil_id}} #ifndef SECRETS_GENERATED_H #define SECRETS_GENERATED_H // Cihaz Kimliği #define FACTORY_COIL_ID {{coil_id2}} // Cloud MQTT Kimlik Bilgileri (Bu bobine özgü, sınırlı yetkili) static const char* DEFAULT_CLOUD_MQTT_USER = \"{{username}}\"; static const char* DEFAULT_CLOUD_MQTT_PASS = \"{{password}}\"; #endif // SECRETS_GENERATED_H",
+     "gerekce": "üretilen dosyanın içeriği / sabit etiket (mosquitto ACL, C başlığı, sır dosyası şablonu, destek paketi) — geliştirici / yapılandırma dosyası, ekran metni değil"
+    },
+    {
+     "metin": "pemf/coil/{{coil_id}}/status",
+     "gerekce": "MQTT konu adı / dosya adı kalıbı — protokol verisi, metin değil"
+    },
+    {
+     "metin": "pemf/coil/{{coil_id}}/sensors",
+     "gerekce": "MQTT konu adı / dosya adı kalıbı — protokol verisi, metin değil"
+    },
+    {
+     "metin": "pemf/coil/{{coil_id}}/events",
+     "gerekce": "MQTT konu adı / dosya adı kalıbı — protokol verisi, metin değil"
+    },
+    {
+     "metin": "pemf/coil/{{coil_id}}/ack",
+     "gerekce": "MQTT konu adı / dosya adı kalıbı — protokol verisi, metin değil"
+    },
+    {
+     "metin": "pemf/coil/{{coil_id}}/system/log",
+     "gerekce": "MQTT konu adı / dosya adı kalıbı — protokol verisi, metin değil"
+    },
+    {
+     "metin": "pemf/coil/{{coil_id}}/control",
+     "gerekce": "MQTT konu adı / dosya adı kalıbı — protokol verisi, metin değil"
+    },
+    {
+     "metin": "ESP32 Bobin #{{coil_id}} — Sadece kendi topic'i",
+     "gerekce": "DB / dosyaya yazılan VERİ (saklanır ya da karşılaştırılır) — ekranda gösterilmez"
+    },
+    {
+     "metin": "LattePanda MQTT Bridge — Tam pemf/# erişimi",
+     "gerekce": "DB / dosyaya yazılan VERİ (saklanır ya da karşılaştırılır) — ekranda gösterilmez"
+    },
+    {
+     "metin": "Android App ({{uid}}) — Kontrol + Okuma, yönetim yok",
+     "gerekce": "DB / dosyaya yazılan VERİ (saklanır ya da karşılaştırılır) — ekranda gösterilmez"
+    },
+    {
+     "metin": "PEMF_MASTER_SECRET ayarlanmamış ve PEMF_REQUIRE_MASTER_SECRET=1 → fail-fast (üretim güvenlik politikası: master secret zorunlu).",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6372,10 +6594,63 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 14,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "C:\\Program Files\\mosquitto\\mosquitto.exe",
+     "gerekce": "dosya yolu — metin değil"
+    },
+    {
+     "metin": "C:\\Program Files (x86)\\mosquitto\\mosquitto.exe",
+     "gerekce": "dosya yolu — metin değil"
+    },
+    {
+     "metin": "Mosquitto executable or service was not found.",
+     "gerekce": "`mqtt.broker.error` olayı → bildirim; metin İngilizce ve TR arayüzde de İNGİLİZCE görünür (mevcut davranış; TR birebir → dokunulmadı) — [İNCELE]"
+    },
+    {
+     "metin": "Mosquitto process start failed: {{exc}}",
+     "gerekce": "`mqtt.broker.error` olayı → bildirim; metin İngilizce ve TR arayüzde de İNGİLİZCE görünür (mevcut davranış; TR birebir → dokunulmadı) — [İNCELE]"
+    },
+    {
+     "metin": "Mosquitto monitor error: %s",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "persistence false",
+     "gerekce": "komut / PowerShell / SDDL / ortam argümanı — metin değil"
+    },
+    {
+     "metin": "IMAGENAME eq mosquitto.exe",
+     "gerekce": "komut / PowerShell / SDDL / ortam argümanı — metin değil"
+    },
+    {
+     "metin": "Network monitor error: %s",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "-Command",
+     "gerekce": "komut / PowerShell / SDDL / ortam argümanı — metin değil"
+    },
+    {
+     "metin": "Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -like '192.168.137.*' } | Select-Object -ExpandProperty IPAddress",
+     "gerekce": "komut / PowerShell / SDDL / ortam argümanı — metin değil"
+    },
+    {
+     "metin": "Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } | Select-Object IPAddress, InterfaceAlias | Format-Table -HideTableHeaders",
+     "gerekce": "komut / PowerShell / SDDL / ortam argümanı — metin değil"
+    },
+    {
+     "metin": "UDP kesif soketi yeniden kurulamadi: %s",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "UDP kesif soket hatasi: %s → soket yeniden kuruluyor.",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6383,10 +6658,23 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 3,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "mDNS arka plan kurulum hatasi (30 sn'de bir yeniden denenecek):",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "mDNS kurulumu hala basarisiz (%d. deneme) - arayuz monitoru CALISIYOR.",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "mDNS arayüz-monitör hatası: %s",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6394,7 +6682,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6405,7 +6693,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6416,7 +6704,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6427,10 +6715,19 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 2,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "{{_SYSTEM_SID}}:(OI)(CI)F",
+     "gerekce": "komut / PowerShell / SDDL / ortam argümanı — metin değil"
+    },
+    {
+     "metin": "{{_ADMINS_SID}}:(OI)(CI)F",
+     "gerekce": "komut / PowerShell / SDDL / ortam argümanı — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6438,7 +6735,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6449,10 +6746,15 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Model bulunamadı: {{repo_path}}. Modeller EXE'ye gömülü ya da ProgramData\\PEMF_GUI\\ai_models / release_assets altında olmalı (Hugging Face indirme kaldırıldı).",
+     "gerekce": "iç istisna iletisi — `ai_router` yakalar (10c: `_ai_hazirlik_hata_goster`); operatöre `ai.hata.*` gider"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6460,7 +6762,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6471,10 +6773,19 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 2,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Library",
+     "gerekce": "işletim sistemi dizin adı — metin değil"
+    },
+    {
+     "metin": "Application Support",
+     "gerekce": "işletim sistemi dizin adı — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6482,7 +6793,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6493,7 +6804,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
    "muaf": [],
@@ -6504,10 +6815,19 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 2,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "AI Pro · Fantom",
+     "gerekce": "seans `treatment_mode` ÖNEKİ — DB'ye yazılan VERİ (ai_router `AI Pro · {sağlayıcı}`); karşılaştırılır"
+    },
+    {
+     "metin": "AI Pro · Petri",
+     "gerekce": "seans `treatment_mode` ÖNEKİ — DB'ye yazılan VERİ (ai_router `AI Pro · {sağlayıcı}`); karşılaştırılır"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6515,7 +6835,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6526,7 +6846,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6537,10 +6857,91 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 22,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "DPAPI:",
+     "gerekce": "DB / dosyaya yazılan VERİ (saklanır ya da karşılaştırılır) — ekranda gösterilmez"
+    },
+    {
+     "metin": "[onceki %d sn icinde ayni nedenle %d kez daha]",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "[NEDEN DEGISTI: onceki neden (%s) bastirilmis %d kez daha tekrarlanmisti]",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "pemf_secrets.json OKUNAMADI (%s) — dosya BOZUK SAYILMADI, yerinde birakildi, YENI ANAHTAR URETILMEDI.",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "erişim reddedildi",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "G/Ç hatası",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "pemf_secrets.json OKUNAMADI — {{tur}} ({{__name__}}). Dosya BOZUK DEĞİL, yerinde bırakıldı; yeni anahtar ÜRETİLMEDİ. Yapılacak: uygulamayı bu veri klasörünü kuran Windows hesabıyla açın ya da yöneticiye '{{parent}}' klasörünün ve '{{name}}' dosyasının izinlerini düzelttirin (SYSTEM, Administrators ve uygulamayı çalıştıran hesap tam erişim).",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "DPAPI {{deger1}} başarısız",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "MKEY:",
+     "gerekce": "DB / dosyaya yazılan VERİ (saklanır ya da karşılaştırılır) — ekranda gösterilmez"
+    },
+    {
+     "metin": "makine kimliği bulunamadı (machine-id/IOPlatformUUID)",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "Kritik anahtar DPAPI ile sifrelenemedi → düz-metin YAZILMIYOR (fail-closed): {{e}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "Kritik anahtar makine-bagli sifrelenemedi → düz-metin YAZILMIYOR (fail-closed): {{e}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "PEMF tüm sırları. 'operator' bölümünü doldurun; 'auto' kendiliğinden dolar; kritik kripto anahtarları DPAPI ile makineye-bağlı şifreli. BU DOSYAYI YEDEKLEYİN.",
+     "gerekce": "`pemf_secrets.json` şablonundaki `_comment` — sır DOSYASININ içeriği (diske yazılır), ekran metni değil"
+    },
+    {
+     "metin": "pemf_secrets.json okunamadi/bozuk. Mevcut sifreli hasta verisini korumak icin yeni anahtar URETILMEDI ve dosya EZILMEDI. Yedekten geri yukleyin",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "(bozuk kopya {{_saklandi}} olarak saklandi).",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "(bozuk dosya YERINDE birakildi — kenara alinamadi).",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "pemf_secrets.json yok, ama yaninda karantinaya alinmis bozuk kopya(lar) var ({{_adlar}}). Mevcut sifreli hasta verisini korumak icin yeni anahtar URETILMEDI. Yapilacak: (1) pemf_secrets.json'i yedekten geri yukleyin — tercih edilen yol; ya da (2) sifreli verinin kalici kaybini KABUL ediyorsaniz karantina dosyalarini (*.corrupt.*) kaldirin; cihaz o zaman temiz anahtarlarla acilir.",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "Bilinmeyen sır anahtarı: {{deger1}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    },
+    {
+     "metin": "Linux/Docker: makine kimliği {{deger1}} — kimlik birimini (compose: pemf_kimlik) veri birimiyle BİRLİKTE geri yükleyin.",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "Depolanmış sır '{{key}}' çözülemedi (DPAPI/makine/profil değişmiş olabilir). Var olan şifreli veriyi korumak için yeni anahtar ÜRETİLMEDİ ve dosya EZİLMEDİ. Doğru makineyi kullanın veya pemf_secrets.json yedeğinden geri yükleyin.{{_linux_ipucu}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6548,10 +6949,15 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Signal callback must be callable",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6559,10 +6965,19 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 2,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Parola boş olamaz.",
+     "gerekce": "komut satırı aracı (kaynak şifreleme) iletisi — geliştirici aracı"
+    },
+    {
+     "metin": "Şifreli kaynak dosyası değil (imza uyuşmuyor).",
+     "gerekce": "komut satırı aracı (kaynak şifreleme) iletisi — geliştirici aracı"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6570,10 +6985,27 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 4,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Authorization: [MASKELENDI]",
+     "gerekce": "destek paketine yazılan maske işareti — veri"
+    },
+    {
+     "metin": "Bu paket KİŞİSEL VERİ İÇERMEMEK ÜZERE maskelenmiştir; maskeleme en iyi gayrettir. Göndermeden önce içeriğe bakabilirsiniz. Sır dosyaları, veritabanları ve kurtarma zarfı BİLİNÇLİ OLARAK dâhil edilmez.",
+     "gerekce": "destek paketi (zip) içindeki `not` — destekçi / geliştirici belgesi; Türkçe (paketi destek ekibi okur)"
+    },
+    {
+     "metin": "Hasta/operatör listesi okunamadı (şifreli veritabanı açılamadı). Yalnız genel desenler maskelendi; loglarda GERÇEK HASTA ADI kalmış olabilir. Göndermeden önce logs/ içeriğini gözden geçirin ya da paketi cihazın kendi arayüzünden (Destek paketi düğmesi) üretin.",
+     "gerekce": "destek paketi özetindeki `UYARI` — destekçi / geliştirici belgesi; Türkçe (paketi destek ekibi okur)"
+    },
+    {
+     "metin": "pemf-destek-{{deger1}}.zip",
+     "gerekce": "dosya adı kalıbı — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6581,7 +7013,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6592,7 +7024,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -6603,7 +7035,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
