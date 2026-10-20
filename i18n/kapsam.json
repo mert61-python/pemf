@@ -2111,7 +2111,32 @@
    "durum": "bekliyor",
    "metin": 766,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "FGS {{fgs_total}}/10{{deger2}}",
+     "gerekce": "kalıcı AI geçmişi kaydına (ai_analyses.summary) giden özet — veri; EN iken de TR gider (S-I18N-P1.2 deseni), gösterimde 06c/07b"
+    },
+    {
+     "metin": "{{cat_count}} kedi tespit edildi",
+     "gerekce": "kalıcı AI geçmişi kaydına giden özet — veri"
+    },
+    {
+     "metin": "Termal: {{deger1}}{{deger2}}",
+     "gerekce": "kalıcı AI geçmişi kaydına giden özet — veri"
+    },
+    {
+     "metin": "· girdi termal olarak doğrulanamadı",
+     "gerekce": "kalıcı AI geçmişi kaydına giden özet — veri"
+    },
+    {
+     "metin": "Eritrosit {{deger1}} / Retikülosit {{deger2}}",
+     "gerekce": "kalıcı AI geçmişi kaydına giden özet — veri"
+    },
+    {
+     "metin": "Analiz tamamlandı",
+     "gerekce": "kalıcı AI geçmişi kaydına giden özet — veri"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },

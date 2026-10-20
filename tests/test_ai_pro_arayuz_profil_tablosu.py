@@ -224,11 +224,23 @@ def test_KRITIK_kopru_FANTOM_ve_PETRI_sonuclarinda_RENDER_EDILIR():
 
 def test_KRITIK_otonom_kapisi_metni_PROFILE_gore():
     """Terminoloji (karar #12): araştırmacı bir HEKİM değildir. Kapı AYNI, metin role uygun."""
+    # I18N-P1: metin kataloğa taşındı — ölçüt GEVŞEMEDİ, yer değiştirdi (kaynak iki anahtarı role göre seçer; TR değerleri aynı ölçütten
+    # geçer, EN değerleri de rol ayrımını korur)
+    import i18n_yardimci as iy
+
     src = _oku(_AIHUB)
-    m = re.search(r'currentAiMode === "researcher"\s*\n\s*\?\s*"([^"]+)"\s*\n\s*:\s*"([^"]+)"', src)
+    m = re.search(
+        r'currentAiMode === "researcher"\s*\n\s*\?\s*i18n\.t\("([^"]+)"\)\s*\n\s*:\s*i18n\.t\("([^"]+)"\)', src
+    )
     assert m, "otonom kapısı metni profile göre ayrılmıyor"
-    arastirma, veteriner = m.group(1), m.group(2)
+    tr, en = iy.katalog("arayuz", "tr"), iy.katalog("arayuz", "en")
+    arastirma, veteriner = tr[m.group(1)], tr[m.group(2)]
     assert "hekim" not in arastirma.lower(), f"araştırma metni hekim rolü atfediyor: {arastirma!r}"
     assert "hekim onayı" in veteriner, f"veteriner metni değişmiş: {veteriner!r}"
     for metin in (arastirma, veteriner):
         assert "onay" in metin.lower(), f"kapı sebebini söylemiyor: {metin!r}"
+    en_arastirma, en_veteriner = en[m.group(1)], en[m.group(2)]
+    assert "veterinarian" not in en_arastirma.lower(), f"EN araştırma metni hekim rolü atfediyor: {en_arastirma!r}"
+    assert "veterinarian approval" in en_veteriner, f"EN veteriner metni değişmiş: {en_veteriner!r}"
+    for metin in (en_arastirma, en_veteriner):
+        assert "approv" in metin.lower() or "confirm" in metin.lower(), f"EN kapı sebebini söylemiyor: {metin!r}"

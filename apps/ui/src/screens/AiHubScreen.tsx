@@ -48,18 +48,31 @@ import { PatientGate } from "@/components/domain/PatientGate";
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 import { hastaninSonAnalizi, hastayaGoreSonAnaliz, kapsamda, sonAnalizOzeti, type AnalizKaydi } from "@/utils/sonAnaliz";
 import { effectiveScope } from "@/utils/patientScope";
+import i18n from "i18next";
+import { Trans, useTranslation } from "react-i18next";
 
 type AiModule = "disease" | "landmark" | "segmentation" | "thermal" | "reticulocytes" | "em_fantom" | "em_petri" | "kidney_rna" | "kidney_disease" | "cat_sound" | "kidney_ct" | "histopath" | "cat_organ" | "cell_scratch";
 
 // D1.E09 (İG-5.31): model nokta görünürlüğünü bildirmiyor → örtülü yüzde skor yanıltıcı olabilir. TEK KAYNAK: hekim/araştırma
 // kartı ve hayvan sahibi kartı aynı metni gösterir (1-D inceleme i3-F-2: sahip kartında uyarı yoktu).
-const NOKTA_GORUNURLUGU_UYARISI =
-  "ℹ️ Bu model yüz noktalarının görünürlüğünü bildirmiyor: kulak, göz gibi bir bölge örtülüyse skor yanıltıcı olabilir — yüzün tamamen açık göründüğü bir fotoğraf kullanın.";
+const noktaGorunurluguUyarisi = (): string => i18n.t("ai.ortak.noktaGorunurluguUyarisi");
 
-const SYMPTOMS = [
-  "İştah Kaybı", "Kusma", "İshal", "Öksürük", "Solunum Güçlüğü",
-  "Topallık", "Deri Lezyonları", "Burun Akıntısı", "Göz Akıntısı",
-  "Halsizlik / Uyuşukluk", "Kilo Kaybı", "Hapşırma", "Dehidrasyon", "Ateş"
+// Görüntü yalnız ekranda: seçim İNDEKS ile gider (`symptom_indices`), metin sunucuya gitmez → dil değişince çevrilir.
+const semptomlar = (): string[] => [
+  i18n.t("ai.hastalik.semptom.istahKaybi"),
+  i18n.t("ai.hastalik.semptom.kusma"),
+  i18n.t("ai.hastalik.semptom.ishal"),
+  i18n.t("ai.hastalik.semptom.oksuruk"),
+  i18n.t("ai.hastalik.semptom.solunumGuclugu"),
+  i18n.t("ai.hastalik.semptom.topallik"),
+  i18n.t("ai.hastalik.semptom.deriLezyonlari"),
+  i18n.t("ai.hastalik.semptom.burunAkintisi"),
+  i18n.t("ai.hastalik.semptom.gozAkintisi"),
+  i18n.t("ai.hastalik.semptom.halsizlik"),
+  i18n.t("ai.hastalik.semptom.kiloKaybi"),
+  i18n.t("ai.hastalik.semptom.hapsirma"),
+  i18n.t("ai.hastalik.semptom.dehidrasyon"),
+  i18n.t("ai.hastalik.semptom.ates"),
 ];
 
 /**
@@ -88,8 +101,8 @@ async function shrinkForUpload(uri: string): Promise<{ uri: string; base64: stri
  *  Terminoloji (karar #12): araştırmacı bir HEKİM değildir; "hekim onayı" metni araştırma modunda yanlış rol atfeder. */
 function otonomYonlendirmeMetni(): string {
   return currentAiMode === "researcher"
-    ? "Otonom Biofeedback onay gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın."
-    : "Otonom Biofeedback hekim onayı gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın.";
+    ? i18n.t("ai.ortak.otonomOnayArastirma")
+    : i18n.t("ai.ortak.otonomOnayHekim");
 }
 
 /** AI teşhis sonucunu kalıcı audit loguna gönderir (hasta + modül + özet). */
@@ -258,6 +271,7 @@ function summarizeVision(d: any): string {
 }
 
 export function AiHubScreen() {
+  const { t } = useTranslation();
   const { userMode, hasAiHub } = useUserMode();
   const { selectedPatient } = useAppNav();
   const { session } = useAuth();
@@ -327,20 +341,20 @@ export function AiHubScreen() {
   // 2026-08-06 sahip kararı araştırma profiline CİHAZ ROTALARINI açtı (config/access.ts); AI Hub'ın
   // bu bölüşümü BİLİNÇLİ olarak DEĞİŞMEDİ — kedi modelleri klinik, araştırma modelleri laboratuvar işi.
   const ALL_MODULES: { id: AiModule; label: string; desc: string; icon: any; modes: UserMode[] }[] = [
-    { id: "landmark", label: "Yüz Ağrısı (FGS)", desc: "YOLO-pose ile yüz ağrı skoru", icon: Scan, modes: ["veterinarian"] },
-    { id: "disease", label: "Hastalık", desc: "XGBoost ile hastalık tahmini", icon: Stethoscope, modes: ["veterinarian"] },
-    { id: "segmentation", label: "Segmentasyon", desc: "Vücut sınırı tespiti", icon: Scan, modes: ["veterinarian"] },
-    { id: "thermal", label: "Termal", desc: "Termal anormallik analizi", icon: Activity, modes: ["veterinarian"] },
-    { id: "reticulocytes", label: "Retikülosit", desc: "Mikroskobik hücre sayımı", icon: Microscope, modes: ["veterinarian"] },
-    { id: "em_fantom", label: "Fantom Tümör", desc: "Fantomda tümör + EM alan tahmini", icon: Crosshair, modes: ["researcher"] },
-    { id: "em_petri", label: "Petri Kuyu", desc: "Kuyularda kanser + EM alan tahmini", icon: FlaskConical, modes: ["researcher"] },
-    { id: "kidney_rna", label: "Böbrek RNA", desc: "RNA-seq → KIRC sınıflandırma", icon: Dna, modes: ["researcher"] },
-    { id: "kidney_disease", label: "Böbrek Hastalığı", desc: "Klinik değerlerden CKD tahmini", icon: HeartPulse, modes: ["researcher"] },
-    { id: "cat_sound", label: "Kedi Sesi", desc: "Miyavdan duygu/durum sınıflandırma", icon: AudioLines, modes: ["veterinarian"] },
-    { id: "kidney_ct", label: "Böbrek CT", desc: "CT'de taş / kist tespiti", icon: ScanLine, modes: ["researcher"] },
-    { id: "histopath", label: "Böbrek Patoloji", desc: "Histopatoloji derece (grade 0–4)", icon: Microscope, modes: ["researcher"] },
-    { id: "cell_scratch", label: "Yara Kapanma (Scratch)", desc: "Hücre segmentasyonu + kapanma metrikleri", icon: FlaskConical, modes: ["researcher"] },
-    { id: "cat_organ", label: "Kedi Organ", desc: "Organ 3B lokalizasyon (10 organ)", icon: PawPrint, modes: ["veterinarian"] },
+    { id: "landmark", label: t("ai.modul.yuzAgrisi.ad"), desc: t("ai.modul.yuzAgrisi.aciklama"), icon: Scan, modes: ["veterinarian"] },
+    { id: "disease", label: t("ai.modul.hastalik.ad"), desc: t("ai.modul.hastalik.aciklama"), icon: Stethoscope, modes: ["veterinarian"] },
+    { id: "segmentation", label: t("ai.modul.segmentasyon.ad"), desc: t("ai.modul.segmentasyon.aciklama"), icon: Scan, modes: ["veterinarian"] },
+    { id: "thermal", label: t("ai.modul.termal.ad"), desc: t("ai.modul.termal.aciklama"), icon: Activity, modes: ["veterinarian"] },
+    { id: "reticulocytes", label: t("ai.modul.retikulosit.ad"), desc: t("ai.modul.retikulosit.aciklama"), icon: Microscope, modes: ["veterinarian"] },
+    { id: "em_fantom", label: t("ai.modul.fantomTumor.ad"), desc: t("ai.modul.fantomTumor.aciklama"), icon: Crosshair, modes: ["researcher"] },
+    { id: "em_petri", label: t("ai.modul.petriKuyu.ad"), desc: t("ai.modul.petriKuyu.aciklama"), icon: FlaskConical, modes: ["researcher"] },
+    { id: "kidney_rna", label: t("ai.modul.bobrekRna.ad"), desc: t("ai.modul.bobrekRna.aciklama"), icon: Dna, modes: ["researcher"] },
+    { id: "kidney_disease", label: t("ai.modul.bobrekHastaligi.ad"), desc: t("ai.modul.bobrekHastaligi.aciklama"), icon: HeartPulse, modes: ["researcher"] },
+    { id: "cat_sound", label: t("ai.modul.kediSesi.ad"), desc: t("ai.modul.kediSesi.aciklama"), icon: AudioLines, modes: ["veterinarian"] },
+    { id: "kidney_ct", label: t("ai.modul.bobrekCt.ad"), desc: t("ai.modul.bobrekCt.aciklama"), icon: ScanLine, modes: ["researcher"] },
+    { id: "histopath", label: t("ai.modul.bobrekPatoloji.ad"), desc: t("ai.modul.bobrekPatoloji.aciklama"), icon: Microscope, modes: ["researcher"] },
+    { id: "cell_scratch", label: t("ai.modul.yaraKapanma.ad"), desc: t("ai.modul.yaraKapanma.aciklama"), icon: FlaskConical, modes: ["researcher"] },
+    { id: "cat_organ", label: t("ai.modul.kediOrgan.ad"), desc: t("ai.modul.kediOrgan.aciklama"), icon: PawPrint, modes: ["veterinarian"] },
   ];
   const MODULES = ALL_MODULES.filter((m) => userMode != null && m.modes.includes(userMode));
 
@@ -348,10 +362,10 @@ export function AiHubScreen() {
   const renderModuleBody = (id: AiModule) => {
     switch (id) {
       case "disease": return <DiseaseModule patientName={patientName} />;
-      case "landmark": return <VisionModule key="landmark" endpoint="/vision/landmark" title="Yüz Ağrısı Skoru (FGS)" subtitle="YOLO-pose modeli ile yüzdeki kilit noktaları analiz eder." patientName={patientName} />;
-      case "segmentation": return <VisionModule key="segmentation" endpoint="/vision/segmentation" title="Kedi Segmentasyonu" subtitle="YOLOv8-seg modeli ile kedinin vücut sınırlarını tespit eder." patientName={patientName} />;
-      case "thermal": return <VisionModule key="thermal" endpoint="/vision/thermal" title="Termal Görüntü Analizi" subtitle="GhostNetV2 ile termal anormallikleri tespit eder." patientName={patientName} explainDestegi />;
-      case "reticulocytes": return <VisionModule key="reticulocytes" endpoint="/vision/reticulocytes" title="Retikülosit Sayımı" subtitle="Mikroskop görüntüsünden hücreleri otomatik sayar." patientName={patientName} galleryOnly explainDestegi />;
+      case "landmark": return <VisionModule key="landmark" endpoint="/vision/landmark" title={t("ai.gorsel.yuzAgrisi.baslik")} subtitle={t("ai.gorsel.yuzAgrisi.altBaslik")} patientName={patientName} />;
+      case "segmentation": return <VisionModule key="segmentation" endpoint="/vision/segmentation" title={t("ai.gorsel.segmentasyon.baslik")} subtitle={t("ai.gorsel.segmentasyon.altBaslik")} patientName={patientName} />;
+      case "thermal": return <VisionModule key="thermal" endpoint="/vision/thermal" title={t("ai.gorsel.termal.baslik")} subtitle={t("ai.gorsel.termal.altBaslik")} patientName={patientName} explainDestegi />;
+      case "reticulocytes": return <VisionModule key="reticulocytes" endpoint="/vision/reticulocytes" title={t("ai.gorsel.retikulosit.baslik")} subtitle={t("ai.gorsel.retikulosit.altBaslik")} patientName={patientName} galleryOnly explainDestegi />;
       case "em_fantom": return <PhantomModule key="em_fantom" patientName={patientName} />;
       case "em_petri": return <PetriModule key="em_petri" patientName={patientName} />;
       case "kidney_rna": return <RnaModule key="kidney_rna" patientName={patientName} />;
@@ -376,16 +390,14 @@ export function AiHubScreen() {
             güvenlik-kritik bir kontrol (ACİL DURDUR vb.) yok → sert kapı güvenli.
             Kontrol ekranında ise `soft` kip kullanılır, bkz. PatientGate prop açıklaması. */}
         <PatientGate>
-        <Text style={styles.selectorHeading}>Tanı Modülleri</Text>
+        <Text style={styles.selectorHeading}>{t("ai.hub.baslik")}</Text>
         <View style={styles.aiWelcome}>
-          <Text style={styles.aiWelcomeTitle}>👋 Nasıl çalışır?</Text>
+          <Text style={styles.aiWelcomeTitle}>{t("ai.hub.nasilCalisir")}</Text>
           <Text style={styles.aiWelcomeText}>
-            Bir modüle <Text style={styles.aiWelcomeBold}>dokunun</Text> → hemen altında açılır; <Text style={styles.aiWelcomeBold}>birden fazlasını aynı anda açık tutabilirsiniz</Text>. İhtiyaca göre
-            <Text style={styles.aiWelcomeBold}> fotoğraf/canlı kamera</Text>, <Text style={styles.aiWelcomeBold}>ses</Text> ya da
-            <Text style={styles.aiWelcomeBold}> klinik değer</Text> girip analizi başlatın. Her modülün başında kısa bir kullanım ipucu var.
+            <Trans i18nKey="ai.hub.nasilCalisirGovde" components={{ kalin: <Text style={styles.aiWelcomeBold} /> }} />
           </Text>
           <Text style={styles.aiWelcomeNote}>
-            ℹ️ İlk analiz model hazırlığından dolayı biraz uzun sürebilir. Sonuçlar bir <Text style={styles.aiWelcomeBold}>ön-değerlendirmedir</Text>, kesin tanı değildir.
+            <Trans i18nKey="ai.hub.ilkAnalizNotu" components={{ kalin: <Text style={styles.aiWelcomeBold} /> }} />
           </Text>
         </View>
         <View style={styles.moduleGrid}>
@@ -403,8 +415,8 @@ export function AiHubScreen() {
                   activeOpacity={0.85}
                   accessibilityRole="button"
                   accessibilityState={{ expanded: active }}
-                  accessibilityLabel={`${m.label}${gated ? " — araştırma eklentisi gerekli" : ""}`}
-                  accessibilityHint={active ? "Kapatmak için dokunun" : "Açmak için dokunun"}
+                  accessibilityLabel={gated ? t("ai.hub.modulEtiketiEklenti", { ad: m.label }) : m.label}
+                  accessibilityHint={active ? t("ai.hub.kapatmakIcin") : t("ai.hub.acmakIcin")}
                 >
                   <View style={[styles.moduleIconWrap, active && styles.moduleIconWrapActive]}>
                     <Icon size={22} color={active ? colors.white : colors.primary} />
@@ -418,10 +430,10 @@ export function AiHubScreen() {
                       onPress={() => setUpgradeFor("research")}
                       style={styles.gateBadge}
                       accessibilityRole="button"
-                      accessibilityLabel="Araştırma eklentisi gerekli"
+                      accessibilityLabel={t("ai.hub.eklentiGerekli")}
                     >
                       <Lock size={11} color={colors.violet} />
-                      <Text style={styles.gateBadgeText}>Eklenti</Text>
+                      <Text style={styles.gateBadgeText}>{t("ai.hub.eklenti")}</Text>
                     </TouchableOpacity>
                   )}
                   <Text style={[styles.moduleChevron, active && styles.moduleChevronActive]}>{active ? "▲" : "▼"}</Text>
@@ -741,7 +753,7 @@ function PetOwnerAiScreen() {
               {/* D1.E09 · 1-D inceleme i3-F-2: hekimsiz kullanıcıya örtülü yüzde uyarısız "ağrı yok" güvencesi verilmez. */}
               {!notDetected && result.nokta_gorunurlugu_dogrulanmadi ? (
                 <Text style={[styles.body, { fontSize: typography.small, color: colors.textMuted, marginBottom: spacing.sm }]}>
-                  {NOKTA_GORUNURLUGU_UYARISI}
+                  {noktaGorunurluguUyarisi()}
                 </Text>
               ) : null}
 
@@ -1190,7 +1202,7 @@ function DiseaseModule({ patientName }: { patientName: string }) {
         ama girerseniz tahmin belirginleşir (ör. ateş/nabız yüksekse model daha spesifik hastalığa yönelir).
       </Text>
       <View style={styles.symptomsGrid}>
-        {SYMPTOMS.map((s, idx) => (
+        {semptomlar().map((s, idx) => (
           <TouchableOpacity key={idx} style={[styles.symptomBtn, selectedSymptoms.includes(idx) && styles.symptomBtnActive]} onPress={() => toggleSymptom(idx)}>
             <Text style={[styles.symptomLabel, selectedSymptoms.includes(idx) && styles.symptomLabelActive]}>{s}</Text>
           </TouchableOpacity>
@@ -1978,7 +1990,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
               {/* D1.E09 (İG-5.31): model nokta görünürlüğünü bildirmiyor → örtülü yüzde skor yanıltıcı olabilir. */}
               {result.nokta_gorunurlugu_dogrulanmadi ? (
                 <Text style={[styles.resultText, { fontSize: typography.small, color: colors.textMuted }]}>
-                  {NOKTA_GORUNURLUGU_UYARISI}
+                  {noktaGorunurluguUyarisi()}
                 </Text>
               ) : null}
               {result.raw_fgs?.action_units && (

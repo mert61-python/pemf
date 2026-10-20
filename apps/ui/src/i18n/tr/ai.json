@@ -1,0 +1,112 @@
+{
+  "gorsel": {
+    "retikulosit": {
+      "altBaslik": "Mikroskop görüntüsünden hücreleri otomatik sayar.",
+      "baslik": "Retikülosit Sayımı"
+    },
+    "segmentasyon": {
+      "altBaslik": "YOLOv8-seg modeli ile kedinin vücut sınırlarını tespit eder.",
+      "baslik": "Kedi Segmentasyonu"
+    },
+    "termal": {
+      "altBaslik": "GhostNetV2 ile termal anormallikleri tespit eder.",
+      "baslik": "Termal Görüntü Analizi"
+    },
+    "yuzAgrisi": {
+      "altBaslik": "YOLO-pose modeli ile yüzdeki kilit noktaları analiz eder.",
+      "baslik": "Yüz Ağrısı Skoru (FGS)"
+    }
+  },
+  "hastalik": {
+    "semptom": {
+      "ates": "Ateş",
+      "burunAkintisi": "Burun Akıntısı",
+      "dehidrasyon": "Dehidrasyon",
+      "deriLezyonlari": "Deri Lezyonları",
+      "gozAkintisi": "Göz Akıntısı",
+      "halsizlik": "Halsizlik / Uyuşukluk",
+      "hapsirma": "Hapşırma",
+      "ishal": "İshal",
+      "istahKaybi": "İştah Kaybı",
+      "kiloKaybi": "Kilo Kaybı",
+      "kusma": "Kusma",
+      "oksuruk": "Öksürük",
+      "solunumGuclugu": "Solunum Güçlüğü",
+      "topallik": "Topallık"
+    }
+  },
+  "hub": {
+    "acmakIcin": "Açmak için dokunun",
+    "baslik": "Tanı Modülleri",
+    "eklenti": "Eklenti",
+    "eklentiGerekli": "Araştırma eklentisi gerekli",
+    "ilkAnalizNotu": "ℹ️ İlk analiz model hazırlığından dolayı biraz uzun sürebilir. Sonuçlar bir <kalin>ön-değerlendirmedir</kalin>, kesin tanı değildir.",
+    "kapatmakIcin": "Kapatmak için dokunun",
+    "modulEtiketiEklenti": "{{ad}} — araştırma eklentisi gerekli",
+    "nasilCalisir": "👋 Nasıl çalışır?",
+    "nasilCalisirGovde": "Bir modüle <kalin>dokunun</kalin> → hemen altında açılır; <kalin>birden fazlasını aynı anda açık tutabilirsiniz</kalin>. İhtiyaca göre<kalin> fotoğraf/canlı kamera</kalin>, <kalin>ses</kalin> ya da<kalin> klinik değer</kalin> girip analizi başlatın. Her modülün başında kısa bir kullanım ipucu var."
+  },
+  "modul": {
+    "bobrekCt": {
+      "aciklama": "CT'de taş / kist tespiti",
+      "ad": "Böbrek CT"
+    },
+    "bobrekHastaligi": {
+      "aciklama": "Klinik değerlerden CKD tahmini",
+      "ad": "Böbrek Hastalığı"
+    },
+    "bobrekPatoloji": {
+      "aciklama": "Histopatoloji derece (grade 0–4)",
+      "ad": "Böbrek Patoloji"
+    },
+    "bobrekRna": {
+      "aciklama": "RNA-seq → KIRC sınıflandırma",
+      "ad": "Böbrek RNA"
+    },
+    "fantomTumor": {
+      "aciklama": "Fantomda tümör + EM alan tahmini",
+      "ad": "Fantom Tümör"
+    },
+    "hastalik": {
+      "aciklama": "XGBoost ile hastalık tahmini",
+      "ad": "Hastalık"
+    },
+    "kediOrgan": {
+      "aciklama": "Organ 3B lokalizasyon (10 organ)",
+      "ad": "Kedi Organ"
+    },
+    "kediSesi": {
+      "aciklama": "Miyavdan duygu/durum sınıflandırma",
+      "ad": "Kedi Sesi"
+    },
+    "petriKuyu": {
+      "aciklama": "Kuyularda kanser + EM alan tahmini",
+      "ad": "Petri Kuyu"
+    },
+    "retikulosit": {
+      "aciklama": "Mikroskobik hücre sayımı",
+      "ad": "Retikülosit"
+    },
+    "segmentasyon": {
+      "aciklama": "Vücut sınırı tespiti",
+      "ad": "Segmentasyon"
+    },
+    "termal": {
+      "aciklama": "Termal anormallik analizi",
+      "ad": "Termal"
+    },
+    "yaraKapanma": {
+      "aciklama": "Hücre segmentasyonu + kapanma metrikleri",
+      "ad": "Yara Kapanma (Scratch)"
+    },
+    "yuzAgrisi": {
+      "aciklama": "YOLO-pose ile yüz ağrı skoru",
+      "ad": "Yüz Ağrısı (FGS)"
+    }
+  },
+  "ortak": {
+    "noktaGorunurluguUyarisi": "ℹ️ Bu model yüz noktalarının görünürlüğünü bildirmiyor: kulak, göz gibi bir bölge örtülüyse skor yanıltıcı olabilir — yüzün tamamen açık göründüğü bir fotoğraf kullanın.",
+    "otonomOnayArastirma": "Otonom Biofeedback onay gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın.",
+    "otonomOnayHekim": "Otonom Biofeedback hekim onayı gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın."
+  }
+}

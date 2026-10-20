@@ -36,6 +36,8 @@ import trDema from "./tr/dema.json";
 import enDema from "./en/dema.json";
 import trSensor from "./tr/sensor.json";
 import enSensor from "./en/sensor.json";
+import trAi from "./tr/ai.json";
+import enAi from "./en/ai.json";
 
 export const trKaynak = {
   ayarlar: trAyarlar,
@@ -53,6 +55,7 @@ export const trKaynak = {
   ana: trAna,
   dema: trDema,
   sensor: trSensor,
+  ai: trAi,
 };
 
 export const enKaynak: typeof trKaynak = {
@@ -71,6 +74,7 @@ export const enKaynak: typeof trKaynak = {
   ana: enAna,
   dema: enDema,
   sensor: enSensor,
+  ai: enAi,
 };
 
 export const kaynaklar = {

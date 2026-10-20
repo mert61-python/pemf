@@ -1,0 +1,112 @@
+{
+  "gorsel": {
+    "retikulosit": {
+      "altBaslik": "Automatically counts cells from a microscope image.",
+      "baslik": "Reticulocyte Count"
+    },
+    "segmentasyon": {
+      "altBaslik": "Detects the cat's body outline with the YOLOv8-seg model.",
+      "baslik": "Cat Segmentation"
+    },
+    "termal": {
+      "altBaslik": "Detects thermal anomalies with GhostNetV2.",
+      "baslik": "Thermal Image Analysis"
+    },
+    "yuzAgrisi": {
+      "altBaslik": "Analyzes key facial landmarks with the YOLO-pose model.",
+      "baslik": "Facial Pain Score (FGS)"
+    }
+  },
+  "hastalik": {
+    "semptom": {
+      "ates": "Fever",
+      "burunAkintisi": "Nasal discharge",
+      "dehidrasyon": "Dehydration",
+      "deriLezyonlari": "Skin lesions",
+      "gozAkintisi": "Eye discharge",
+      "halsizlik": "Weakness / Lethargy",
+      "hapsirma": "Sneezing",
+      "ishal": "Diarrhea",
+      "istahKaybi": "Loss of appetite",
+      "kiloKaybi": "Weight loss",
+      "kusma": "Vomiting",
+      "oksuruk": "Coughing",
+      "solunumGuclugu": "Breathing difficulty",
+      "topallik": "Lameness"
+    }
+  },
+  "hub": {
+    "acmakIcin": "Tap to open",
+    "baslik": "Diagnosis Modules",
+    "eklenti": "Add-on",
+    "eklentiGerekli": "Research add-on required",
+    "ilkAnalizNotu": "ℹ️ The first analysis may take a little longer while the model warms up. Results are a <kalin>preliminary assessment</kalin>, not a definitive diagnosis. ",
+    "kapatmakIcin": "Tap to close",
+    "modulEtiketiEklenti": "{{ad}} — research add-on required",
+    "nasilCalisir": "👋 How it works",
+    "nasilCalisirGovde": "<kalin>Tap</kalin> a module → it opens right below; <kalin>you can keep several open at the same time</kalin>. Depending on what you need, use a <kalin>photo or the live camera</kalin>, <kalin>audio</kalin> or <kalin>clinical values</kalin>, then start the analysis. Each module begins with a short usage tip. "
+  },
+  "modul": {
+    "bobrekCt": {
+      "aciklama": "Stone / cyst detection on CT",
+      "ad": "Kidney CT"
+    },
+    "bobrekHastaligi": {
+      "aciklama": "CKD prediction from clinical values",
+      "ad": "Kidney Disease"
+    },
+    "bobrekPatoloji": {
+      "aciklama": "Histopathology grade (grade 0–4)",
+      "ad": "Kidney Pathology"
+    },
+    "bobrekRna": {
+      "aciklama": "RNA-seq → KIRC classification",
+      "ad": "Kidney RNA"
+    },
+    "fantomTumor": {
+      "aciklama": "Tumor + EM field estimate in a phantom",
+      "ad": "Phantom Tumor"
+    },
+    "hastalik": {
+      "aciklama": "Disease prediction with XGBoost",
+      "ad": "Disease"
+    },
+    "kediOrgan": {
+      "aciklama": "3D organ localization (10 organs)",
+      "ad": "Cat Organ"
+    },
+    "kediSesi": {
+      "aciklama": "Emotion / state classification from meows",
+      "ad": "Cat Sound"
+    },
+    "petriKuyu": {
+      "aciklama": "Cancer + EM field estimate in wells",
+      "ad": "Petri Well"
+    },
+    "retikulosit": {
+      "aciklama": "Microscopic cell count",
+      "ad": "Reticulocyte"
+    },
+    "segmentasyon": {
+      "aciklama": "Body outline detection",
+      "ad": "Segmentation"
+    },
+    "termal": {
+      "aciklama": "Thermal anomaly analysis",
+      "ad": "Thermal"
+    },
+    "yaraKapanma": {
+      "aciklama": "Cell segmentation + closure metrics",
+      "ad": "Wound Closure (Scratch)"
+    },
+    "yuzAgrisi": {
+      "aciklama": "Facial pain score using YOLO-pose",
+      "ad": "Facial Pain (FGS)"
+    }
+  },
+  "ortak": {
+    "noktaGorunurluguUyarisi": "ℹ️ This model does not report whether facial landmarks are visible: if a region such as an ear or an eye is covered, the score may be misleading — use a photo where the whole face is clearly visible.",
+    "otonomOnayArastirma": "Autonomous Biofeedback requires confirmation: get the recommendation from the Control → AI Pro tab and approve it.",
+    "otonomOnayHekim": "Autonomous Biofeedback requires veterinarian approval: get the recommendation from the Control → AI Pro tab and approve it."
+  }
+}
