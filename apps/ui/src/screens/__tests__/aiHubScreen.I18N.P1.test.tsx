@@ -492,3 +492,111 @@ describe("bölüm 4 — görsel modüller (FGS / termal / segmentasyon / retikü
     expect(en3.getByText("Erythrocytes: 90")).toBeTruthy();
   });
 });
+
+describe("bölüm 5 — Fantom Tümör modülü (araştırma)", () => {
+  async function fantomAnaliz(u: ReturnType<typeof render>, modul: string, galeri: string, baslat: string, cevap: unknown) {
+    mockFetchCevap = cevap;
+    fireEvent.press(u.getByLabelText(modul));
+    await act(async () => {
+      fireEvent.press(u.getByRole("button", { name: galeri }));
+    });
+    await act(async () => {
+      fireEvent.press(u.getByRole("button", { name: baslat }));
+    });
+    for (let i = 0; i < 12; i++)
+      await act(async () => {
+        await Promise.resolve();
+      });
+  }
+  const FANTOM = {
+    status: "success", success: true, n_tumor: 2, mm_per_px: 0.5, method: "mm", image_base64: "QUJD",
+    tumor_regions: [
+      { tumor_id: "T1", centroid_cabin_mm: [1, 2, 3], E_cancer: 1.5, E_healthy: 0.5, D: [0.1, 0.2] },
+      { centroid_cabin_mm: [4, 5, 6], D: [] },
+    ],
+  };
+  const logKayitlari = () => mockApiPost.mock.calls.filter((c) => c[0] === "/ai/log").map((c) => c[1] as Record<string, unknown>);
+
+  it("Türkçe: fantom modülü başlık / ipuçları / boy alanı / düğmeler göç öncesiyle aynı", () => {
+    mockMode = "researcher";
+    const u = render(<AiHubScreen />);
+    fireEvent.press(u.getByLabelText("Fantom Tümör"));
+    expect(u.getAllByText("Fantom Tümör Analizi").length).toBeGreaterThan(0);
+    expect(u.getByText("Sentetik böbrek fantomundan mavi tümör odaklarını tespit eder; 3B konum + PEMF bobin/E-alan tahmini üretir.")).toBeTruthy();
+    expect(u.getByText("📸 Fantom fotoğraf ipuçları")).toBeTruthy();
+    expect(u.getByText("• Fantomu tam tepeden, net ve iyi aydınlatılmış çekin")).toBeTruthy();
+    expect(u.getByText("• Yeşil bobin halkasının büyük kısmı kadrajda olsun — ölçek ondan gelir")).toBeTruthy();
+    expect(u.getByText("• Fantom boyu (cm) yalnız halka ya da kabin işareti görünmüyorsa kullanılır")).toBeTruthy();
+    expect(u.getByText("Fantom boyu (cm)")).toBeTruthy();
+    expect(u.getByPlaceholderText("halka/işaret yoksa · ör. 10")).toBeTruthy();
+    expect(u.getByText("Fantom Analizini Başlat")).toBeTruthy();
+  });
+
+  it("İngilizce: fantom modülü başlık / ipuçları / boy alanı / düğmeler", async () => {
+    mockMode = "researcher";
+    await enYap();
+    const u = render(<AiHubScreen />);
+    fireEvent.press(u.getByLabelText("Phantom Tumor"));
+    expect(u.getAllByText("Phantom Tumor Analysis").length).toBeGreaterThan(0);
+    expect(u.getByText("Detects blue tumor foci in a synthetic kidney phantom; produces a 3D position + PEMF coil / E-field estimate.")).toBeTruthy();
+    expect(u.getByText("📸 Phantom photo tips")).toBeTruthy();
+    expect(u.getByText("• Photograph the phantom straight from above, sharp and well lit")).toBeTruthy();
+    expect(u.getByText("• Most of the green coil ring should be in the frame — the scale comes from it")).toBeTruthy();
+    expect(u.getByText("Phantom length (cm)")).toBeTruthy();
+    expect(u.getByPlaceholderText("if no ring / marker · e.g. 10")).toBeTruthy();
+    expect(u.getByText("Start Phantom Analysis")).toBeTruthy();
+  });
+
+  it("sonuç (mm kipi): özet / tümör başlıkları / köprü etiketi iki dilde; AI geçmişi kaydı TR ile BAYT BAYT aynı", async () => {
+    mockMode = "researcher";
+    const tr = render(<AiHubScreen />);
+    await fantomAnaliz(tr, "Fantom Tümör", "Galeriden Seç", "Fantom Analizini Başlat", FANTOM);
+    expect(tr.getByText(/2 tümör odağı bulundu$/)).toBeTruthy();
+    // getByText boşlukları tek boşluğa indirger (RNTL normalizer)
+    expect(tr.getByText("Tespit edilen tümör: 2 · Ölçek: 0.5 mm/px")).toBeTruthy();
+    expect(tr.getByText("Tümör T1 · (1.0, 2.0, 3.0) mm")).toBeTruthy();
+    expect(tr.getByText("Tümör 2 · (4.0, 5.0, 6.0) mm")).toBeTruthy();
+    const kopru = tr.getByLabelText("Bu tümör için AI Pro seansı: Kontrol ekranına git");
+    expect(kopru.props.accessibilityHint).toBe("Seans onaydan sonra başlar; bu düğme yalnız Kontrol ekranını açar");
+    const trKayit = logKayitlari();
+    expect(trKayit).toHaveLength(1);
+    expect(trKayit[0].module).toBe("Fantom Tümör Analizi");
+    tr.unmount();
+    mockApiPost.mockReset().mockResolvedValue(null);
+    mockHastaNo += 1;
+    await enYap();
+    const en = render(<AiHubScreen />);
+    await fantomAnaliz(en, "Phantom Tumor", "Choose from Gallery", "Start Phantom Analysis", FANTOM);
+    expect(en.getByText(/2 tumor foci found$/)).toBeTruthy();
+    expect(en.getByText("Detected tumors: 2 · Scale: 0.5 mm/px")).toBeTruthy();
+    expect(en.getByText("Tumor T1 · (1.0, 2.0, 3.0) mm")).toBeTruthy();
+    expect(en.getByText("Tumor 2 · (4.0, 5.0, 6.0) mm")).toBeTruthy();
+    const koprEn = en.getByLabelText("AI Pro session for this tumor: go to the Control screen");
+    expect(koprEn.props.accessibilityHint).toBe("The session starts only after approval; this button only opens the Control screen.");
+    const enKayit = logKayitlari();
+    expect(enKayit).toHaveLength(1);
+    expect(enKayit[0].module).toBe(trKayit[0].module);
+    expect(enKayit[0].summary).toBe(trKayit[0].summary);
+  });
+
+  it("piksel kipi: ölçek notu ve 'piksel' iki dilde; tek tümör çoğulu", async () => {
+    mockMode = "researcher";
+    const piksel = { ...FANTOM, method: "pixel", n_tumor: 1, tumor_regions: [{ centroid_cabin_mm: [1, 2, 3], D: [] }] };
+    const tr = render(<AiHubScreen />);
+    await fantomAnaliz(tr, "Fantom Tümör", "Galeriden Seç", "Fantom Analizini Başlat", piksel);
+    expect(tr.getByText("Tespit edilen tümör: 1 · Ölçek: piksel")).toBeTruthy();
+    expect(
+      tr.getByText("Ölçek yok (piksel kipi): koordinatlar piksel farkıdır; doz (D1–D7) ve E hesaplanmadı. Gerçek ölçek için fantom boyunu (cm) girip yeniden analiz edin."),
+    ).toBeTruthy();
+    tr.unmount();
+    mockHastaNo += 1;
+    await enYap();
+    const en = render(<AiHubScreen />);
+    await fantomAnaliz(en, "Phantom Tumor", "Choose from Gallery", "Start Phantom Analysis", piksel);
+    expect(en.getByText(/1 tumor focus found$/)).toBeTruthy();
+    expect(en.getByText("Detected tumors: 1 · Scale: pixel")).toBeTruthy();
+    expect(
+      en.getByText("No scale (pixel mode): coordinates are pixel differences; dose (D1–D7) and E were not calculated. Enter the phantom length (cm) for the real scale and re-run the analysis."),
+    ).toBeTruthy();
+  });
+});

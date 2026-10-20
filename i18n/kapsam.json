@@ -2175,6 +2175,26 @@
     {
      "metin": "data:image/jpeg;base64,{{image_base64}}",
      "gerekce": "veri: önizleme data URI'si (base64), ekranda metin değil"
+    },
+    {
+     "metin": "Görüntü hazırlanamadı.",
+     "gerekce": "yakalanır; kullanıcıya aiHataMesaji varsayılanı gösterilir, bu ileti gösterilmez"
+    },
+    {
+     "metin": "Fantom Tümör Analizi",
+     "gerekce": "AI geçmişi kaydına giden modül adı — veri"
+    },
+    {
+     "metin": "{{n_tumor}} tümör{{deger2}}",
+     "gerekce": "AI geçmişi kaydına giden özet — veri"
+    },
+    {
+     "metin": "{{mm_per_px}} mm/px",
+     "gerekce": "birim biçimi (\"N mm/px\") — sayı + birim, dilden bağımsız"
+    },
+    {
+     "metin": "D",
+     "gerekce": "bobin etiketi kodu (\"D1…D7\") — dilden bağımsız"
     }
    ],
    "birlesikIstisna": [],

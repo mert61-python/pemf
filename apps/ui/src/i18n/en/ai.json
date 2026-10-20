@@ -7,6 +7,33 @@
     "sonKare": "Last analyzed frame",
     "sonKareHata": "The last frame could not be analyzed: {{hata}}"
   },
+  "fantom": {
+    "aciklama": "Detects blue tumor foci in a synthetic kidney phantom; produces a 3D position + PEMF coil / E-field estimate.",
+    "analiziBaslat": "Start Phantom Analysis",
+    "baslik": "Phantom Tumor Analysis",
+    "boy": "Phantom length (cm)",
+    "boyYerTutucu": "if no ring / marker · e.g. 10",
+    "hesaplandi": "An electric field (E) falling on cancerous and healthy tissue was calculated for each tumor; the duty settings (D1–D7) of the 7 PEMF coils were produced accordingly.",
+    "ipucuBaslik": "📸 Phantom photo tips",
+    "ipucuBoy": "• The phantom length (cm) is used only if the ring or the cabin marker is not visible",
+    "ipucuHalka": "• <kalin>Most of the green coil ring</kalin> should be in the frame — the scale comes from it",
+    "ipucuMavi": "• Blue tumor dots should be clearly visible; the phantom should be at least ~300 px in the frame",
+    "ipucuUst": "• Photograph the phantom <kalin>straight from above</kalin>, sharp and well lit ",
+    "nokta1": "A higher E_cancer means the field is more focused on that region.",
+    "nokta2": "The D1–D7 bars show each coil's drive ratio (duty %).",
+    "nokta3": "3D coordinate: the position of the tumor center within the scale / cabin frame.",
+    "odak": {
+      "baslik_one": "{{count}} tumor focus found",
+      "baslik_other": "{{count}} tumor foci found"
+    },
+    "olcekGirdisi": "the phantom length (cm)",
+    "ozet": "Detected tumors: <kalin>{{n}}</kalin>   ·   Scale: <kalin>{{olcek}}</kalin> ",
+    "tespitYok": {
+      "baslik": "Phantom / tumor not detected",
+      "metin": "Try again with a sharp, well-lit photo taken from above."
+    },
+    "tumorBaslik": "Tumor {{id}}"
+  },
   "fgs": {
     "agriYok": {
       "baslik": "No signs of pain (FGS 0/10)",
@@ -259,6 +286,7 @@
     "noktaGorunurluguUyarisi": "ℹ️ This model does not report whether facial landmarks are visible: if a region such as an ear or an eye is covered, the score may be misleading — use a photo where the whole face is clearly visible.",
     "otonomOnayArastirma": "Autonomous Biofeedback requires confirmation: get the recommendation from the Control → AI Pro tab and approve it.",
     "otonomOnayHekim": "Autonomous Biofeedback requires veterinarian approval: get the recommendation from the Control → AI Pro tab and approve it.",
+    "piksel": "pixel",
     "tibbiSorumlulukReddi": "⚠️ This AI result is for decision support only; it does not replace a veterinary examination and diagnosis. The final decision rests with the veterinarian."
   },
   "otonom": {

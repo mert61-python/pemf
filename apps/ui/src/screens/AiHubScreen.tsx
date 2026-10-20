@@ -2187,6 +2187,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
  * Backend: POST /api/ai/vision/em_fantom (phantom_cv_v3 — hocanın v3'ü). Canlı kamera/otonom YOK — tek foto.
  */
 function PhantomModule({ patientName }: { patientName: string }) {
+  const { t } = useTranslation();
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
   // Galeri ASIL okuma yuzeyi: daha yuksek tavan, AYNI responsive oran (bkz. useGaleriYuksekligi).
@@ -2295,7 +2296,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
           logAiResult(hasta, "Fantom Tümör Analizi", `${data.n_tumor} tümör${ec != null ? `, E_c≈${Number(ec).toFixed(3)}` : ""}`, { moduleId: "em_fantom", inputType: "image", detail: data });
         }
       } else {
-        showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
+        showToast(aiDetayCumlesi(data?.detail, t("ai.hata.analizSirasinda")), "error");
       }
     } catch (e) {
       showToast(aiHataMesaji(e), "error");
@@ -2309,16 +2310,16 @@ function PhantomModule({ patientName }: { patientName: string }) {
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.title}>Fantom Tümör Analizi</Text>
-      <Text style={styles.subtitle}>Sentetik böbrek fantomundan mavi tümör odaklarını tespit eder; 3B konum + PEMF bobin/E-alan tahmini üretir.</Text>
+      <Text style={styles.title}>{t("ai.fantom.baslik")}</Text>
+      <Text style={styles.subtitle}>{t("ai.fantom.aciklama")}</Text>
 
       {!imageUri && (
         <View style={styles.photoGuide}>
-          <Text style={styles.photoGuideTitle}>📸 Fantom fotoğraf ipuçları</Text>
-          <Text style={styles.photoGuideItem}>• Fantomu <Text style={styles.photoGuideBold}>tam tepeden</Text>, net ve iyi aydınlatılmış çekin</Text>
-          <Text style={styles.photoGuideItem}>• Mavi tümör noktaları belirgin görünsün; fantom karede en az ~300 px olsun</Text>
-          <Text style={styles.photoGuideItem}>• <Text style={styles.photoGuideBold}>Yeşil bobin halkasının</Text> büyük kısmı kadrajda olsun — ölçek ondan gelir</Text>
-          <Text style={styles.photoGuideItem}>• Fantom boyu (cm) yalnız halka ya da kabin işareti görünmüyorsa kullanılır</Text>
+          <Text style={styles.photoGuideTitle}>{t("ai.fantom.ipucuBaslik")}</Text>
+          <Text style={styles.photoGuideItem}><Trans i18nKey="ai.fantom.ipucuUst" components={{ kalin: <Text style={styles.photoGuideBold} /> }} /></Text>
+          <Text style={styles.photoGuideItem}>{t("ai.fantom.ipucuMavi")}</Text>
+          <Text style={styles.photoGuideItem}><Trans i18nKey="ai.fantom.ipucuHalka" components={{ kalin: <Text style={styles.photoGuideBold} /> }} /></Text>
+          <Text style={styles.photoGuideItem}>{t("ai.fantom.ipucuBoy")}</Text>
         </View>
       )}
 
@@ -2336,19 +2337,19 @@ function PhantomModule({ patientName }: { patientName: string }) {
             <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
               <View style={styles.placeholderBox}>
                 <ImageIcon color={colors.textMuted} size={48} />
-                <Text style={styles.placeholderText}>Görüntü seçilmedi</Text>
+                <Text style={styles.placeholderText}>{t("ai.ortak.goruntuSecilmedi")}</Text>
               </View>
             </View>
           }
       />
 
       <View style={styles.fantomLenRow}>
-        <Text style={styles.fantomLenLabel}>Fantom boyu (cm)</Text>
+        <Text style={styles.fantomLenLabel}>{t("ai.fantom.boy")}</Text>
         <TextInput
           style={styles.fantomLenInput}
           keyboardType="numeric"
-          accessibilityLabel="Fantom boyu (cm)"
-          placeholder="halka/işaret yoksa · ör. 10"
+          accessibilityLabel={t("ai.fantom.boy")}
+          placeholder={t("ai.fantom.boyYerTutucu")}
           placeholderTextColor={colors.textMuted}
           value={phantomLen}
           onChangeText={setPhantomLen}
@@ -2357,40 +2358,40 @@ function PhantomModule({ patientName }: { patientName: string }) {
 
       <View style={[styles.btnRow, isCompact && { flexDirection: "column" }]}>
         <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
-          <Button label="Galeriden Seç" icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} />
+          <Button label={t("ai.ortak.galeridenSec")} icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} />
         </View>
         <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
-          <Button label="Fotoğraf Çek" icon={<Camera color={colors.white} size={16} />} onPress={takePhoto} />
+          <Button label={t("ai.gorsel.fotografCek")} icon={<Camera color={colors.white} size={16} />} onPress={takePhoto} />
         </View>
       </View>
 
       <View style={styles.analyzeBtn}>
-        <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Fantom Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyze} />
+        <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.fantom.analiziBaslat")} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyze} />
       </View>
-      {longLoading && <Text style={styles.modelHint}>Model hazırlanıyor (ilk kullanım uzun sürebilir)…</Text>}
+      {longLoading && <Text style={styles.modelHint}>{t("ai.ortak.modelHazirlaniyor")}</Text>}
 
       {result && (
         <View style={styles.resultBox}>
           {(result.status === "no_detection" || !result.success) ? (
-            <ResultInterpretation tone="alert" emoji="⚠️" title="Fantom / tümör tespit edilemedi"
-              text="Net, tepeden ve iyi aydınlatılmış bir fotoğrafla tekrar deneyin." />
+            <ResultInterpretation tone="alert" emoji="⚠️" title={t("ai.fantom.tespitYok.baslik")}
+              text={t("ai.fantom.tespitYok.metin")} />
           ) : (
             <>
               {(() => {
                 const n = result.n_tumor || 0;
-                return <ResultInterpretation tone={n > 0 ? "alert" : "info"} emoji="🎯" title={`${n} tümör odağı bulundu`}
-                  text={method === "pixel" ? pikselKipiNotu("fantom boyunu (cm)") : "Her tümör için kanserli ve sağlıklı dokuya düşen elektrik alanı (E) hesaplandı; 7 PEMF bobininin duty ayarı (D1–D7) buna göre üretildi."}
-                  points={["E_kanser yüksekse alan o bölgeye daha odaklıdır.", "D1–D7 çubukları her bobinin sürüş oranını (duty %) gösterir.", "3B koordinat: tümör merkezinin ölçek/kabin çerçevesindeki konumu."]} />;
+                return <ResultInterpretation tone={n > 0 ? "alert" : "info"} emoji="🎯" title={t("ai.fantom.odak.baslik", { count: n })}
+                  text={method === "pixel" ? pikselKipiNotu(t("ai.fantom.olcekGirdisi")) : t("ai.fantom.hesaplandi")}
+                  points={[t("ai.fantom.nokta1"), t("ai.fantom.nokta2"), t("ai.fantom.nokta3")]} />;
               })()}
-              <Text style={styles.resultText}>Tespit edilen tümör: <Text style={{ fontWeight: "bold" }}>{result.n_tumor}</Text>   ·   Ölçek: <Text style={{ fontWeight: "bold" }}>{method === "pixel" ? "piksel" : `${result.mm_per_px} mm/px`}</Text></Text>
+              <Text style={styles.resultText}><Trans i18nKey="ai.fantom.ozet" values={{ n: result.n_tumor ?? "", olcek: method === "pixel" ? t("ai.ortak.piksel") : `${result.mm_per_px} mm/px` }} components={{ kalin: <Text style={{ fontWeight: "bold" }} /> }} /></Text>
               {/* AI-2: hocanın tüketim kontrolleri (pemf_valid / reliable / uyarılar / VARSAYIMLAR) — metin backend'den. */}
               <PemfKapisiKutusu kapi={result.pemf_kapisi} reliable={result.reliable} model="fantom" />
-              {(result.tumor_regions || []).map((t: AiTumorRegion, i: number) => {
-                const D: number[] = Array.isArray(t.D) ? t.D : [];
+              {(result.tumor_regions || []).map((bolge: AiTumorRegion, i: number) => {
+                const D: number[] = Array.isArray(bolge.D) ? bolge.D : [];
                 return (
                   <View key={i} style={styles.tumorRow}>
-                    <Text style={styles.tumorHeader}>{t.tumor_id ? `Tümör ${t.tumor_id}` : `Tümör ${i + 1}`}   ·   {konumMetni(t.centroid_cabin_mm, unit)}</Text>
-                    <EmDozSatiri r={t} style={[styles.resultText, { fontSize: typography.small }]} />
+                    <Text style={styles.tumorHeader}>{bolge.tumor_id ? t("ai.fantom.tumorBaslik", { id: bolge.tumor_id }) : t("ai.fantom.tumorBaslik", { id: i + 1 })}   ·   {konumMetni(bolge.centroid_cabin_mm, unit)}</Text>
+                    <EmDozSatiri r={bolge} style={[styles.resultText, { fontSize: typography.small }]} />
                     {D.length > 0 && (
                       <View style={styles.dBarRow}>
                         {D.map((d: number, j: number) => (
@@ -2410,7 +2411,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
           )}
           {/* Analizden seansa köprü (Faz 3): bu ekran otonom seans BAŞLATMAZ, yalnız
               Kontrol → AI Pro'ya geçer ve model kartını ön-seçer. */}
-          {result.success ? <AiProKopruDugmesi model="fantom" hedefEtiketi="Tümör" /> : null}
+          {result.success ? <AiProKopruDugmesi model="fantom" /> : null}
           <MedicalDisclaimer />
         </View>
       )}

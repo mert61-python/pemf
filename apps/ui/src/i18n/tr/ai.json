@@ -7,6 +7,33 @@
     "sonKare": "Son analiz edilen kare",
     "sonKareHata": "Son kare analiz edilemedi: {{hata}}"
   },
+  "fantom": {
+    "aciklama": "Sentetik böbrek fantomundan mavi tümör odaklarını tespit eder; 3B konum + PEMF bobin/E-alan tahmini üretir.",
+    "analiziBaslat": "Fantom Analizini Başlat",
+    "baslik": "Fantom Tümör Analizi",
+    "boy": "Fantom boyu (cm)",
+    "boyYerTutucu": "halka/işaret yoksa · ör. 10",
+    "hesaplandi": "Her tümör için kanserli ve sağlıklı dokuya düşen elektrik alanı (E) hesaplandı; 7 PEMF bobininin duty ayarı (D1–D7) buna göre üretildi.",
+    "ipucuBaslik": "📸 Fantom fotoğraf ipuçları",
+    "ipucuBoy": "• Fantom boyu (cm) yalnız halka ya da kabin işareti görünmüyorsa kullanılır",
+    "ipucuHalka": "• <kalin>Yeşil bobin halkasının</kalin> büyük kısmı kadrajda olsun — ölçek ondan gelir",
+    "ipucuMavi": "• Mavi tümör noktaları belirgin görünsün; fantom karede en az ~300 px olsun",
+    "ipucuUst": "• Fantomu <kalin>tam tepeden</kalin>, net ve iyi aydınlatılmış çekin",
+    "nokta1": "E_kanser yüksekse alan o bölgeye daha odaklıdır.",
+    "nokta2": "D1–D7 çubukları her bobinin sürüş oranını (duty %) gösterir.",
+    "nokta3": "3B koordinat: tümör merkezinin ölçek/kabin çerçevesindeki konumu.",
+    "odak": {
+      "baslik_one": "{{count}} tümör odağı bulundu",
+      "baslik_other": "{{count}} tümör odağı bulundu"
+    },
+    "olcekGirdisi": "fantom boyunu (cm)",
+    "ozet": "Tespit edilen tümör: <kalin>{{n}}</kalin>   ·   Ölçek: <kalin>{{olcek}}</kalin>",
+    "tespitYok": {
+      "baslik": "Fantom / tümör tespit edilemedi",
+      "metin": "Net, tepeden ve iyi aydınlatılmış bir fotoğrafla tekrar deneyin."
+    },
+    "tumorBaslik": "Tümör {{id}}"
+  },
   "fgs": {
     "agriYok": {
       "baslik": "Ağrı belirtisi yok (FGS 0/10)",
@@ -259,6 +286,7 @@
     "noktaGorunurluguUyarisi": "ℹ️ Bu model yüz noktalarının görünürlüğünü bildirmiyor: kulak, göz gibi bir bölge örtülüyse skor yanıltıcı olabilir — yüzün tamamen açık göründüğü bir fotoğraf kullanın.",
     "otonomOnayArastirma": "Otonom Biofeedback onay gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın.",
     "otonomOnayHekim": "Otonom Biofeedback hekim onayı gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın.",
+    "piksel": "piksel",
     "tibbiSorumlulukReddi": "⚠️ Bu yapay zeka sonucu yalnızca karar-destek amaçlıdır; veteriner hekim muayenesi ve teşhisinin yerine geçmez. Nihai karar hekime aittir."
   },
   "otonom": {
