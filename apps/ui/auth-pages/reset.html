@@ -6,7 +6,8 @@
 <!-- GÜVENLİK (#59): CSP — script yalnız self + pinlenmiş jsdelivr; ağ yalnız Supabase'e; obje yok,
      base-uri kilitli. (frame-ancestors meta ile uygulanmaz; GitHub Pages header'ı ayrı.) -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'" />
-<title>PEMF Vet — Yeni Şifre Belirle</title>
+<title data-i18n="authSayfa.reset.sayfaBasligi">PEMF Vet</title>
+<script src="i18n_katalog.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
 <style>
@@ -36,12 +37,12 @@
   <div class="aurora"><div class="blob b1"></div><div class="blob b2"></div></div>
   <div class="card" id="card">
     <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
-    <h1>Yeni Şifre Belirle</h1>
-    <p id="sub">Hesabın için yeni bir şifre gir.</p>
+    <h1 data-i18n="authSayfa.reset.baslik"></h1>
+    <p id="sub" data-i18n="authSayfa.reset.aciklama"></p>
     <div id="form">
-      <input id="pw" type="password" placeholder="Yeni şifre (en az 6 karakter)" autocomplete="new-password" />
-      <input id="pw2" type="password" placeholder="Yeni şifre (tekrar)" autocomplete="new-password" />
-      <button id="go">Şifreyi Güncelle</button>
+      <input id="pw" type="password" data-i18n-placeholder="authSayfa.reset.sifreYer" autocomplete="new-password" />
+      <input id="pw2" type="password" data-i18n-placeholder="authSayfa.reset.sifreTekrarYer" autocomplete="new-password" />
+      <button id="go" data-i18n="authSayfa.reset.guncelle"></button>
       <div class="msg" id="msg"></div>
     </div>
   </div>
@@ -51,6 +52,8 @@
           integrity="sha384-UQ9Ztz63gzT2JZCuDRkNXV8RP/gXxdPUuM9LKlz2BzqGx9xFYNAK8yAEgbfZHs7P"
           crossorigin="anonymous"></script>
   <script>
+    uygulaDil(); // i18n_katalog.js (ÜRETİLMİŞ): metinler data-i18n özniteliklerinden dolar
+
     // Supabase (publishable/anon — istemci-güvenli). Kendi projene göre değiştir.
     const SUPABASE_URL = "https://wmsxonunkphjeregpvuj.supabase.co";
     const SUPABASE_KEY = "sb_publishable_D2SaRML_PIhRtr3kqlXxaw_1cS75GKT";
@@ -59,16 +62,16 @@
     const msg = document.getElementById("msg");
     const setMsg = (t, ok) => { msg.textContent = t; msg.className = "msg " + (ok ? "ok" : "err"); };
 
-    // Supabase İngilizce hatalarını Türkçe'ye çevir (süreç tamamen Türkçe).
+    // Supabase İngilizce hatalarını sayfa diline çevir (metinler katalogdan: tf).
     function mapErr(raw) {
       const m = (raw || "").toLowerCase();
-      if (m.includes("different from the old") || m.includes("should be different") || m.includes("same_password") || m.includes("same as")) return "Yeni şifre eskisiyle aynı olamaz.";
-      if (m.includes("at least") || (m.includes("password") && m.includes("6")) || m.includes("too short")) return "Şifre en az 6 karakter olmalı.";
-      if (m.includes("weak") || m.includes("pwned") || m.includes("leaked")) return "Şifre çok zayıf, daha güçlü bir şifre seç.";
-      if (m.includes("session") || m.includes("expired") || m.includes("invalid") || m.includes("token") || m.includes("missing")) return "Bağlantı süresi dolmuş. E-postandaki sıfırlama linkine tekrar tıkla.";
-      if (m.includes("rate") || m.includes("too many") || m.includes("seconds") || m.includes("security purposes")) return "Çok fazla deneme. Biraz bekleyip tekrar dene.";
-      if (m.includes("network") || m.includes("fetch") || m.includes("failed to")) return "Bağlantı hatası. İnternetini kontrol et.";
-      return "İşlem başarısız. Lütfen tekrar dene.";
+      if (m.includes("different from the old") || m.includes("should be different") || m.includes("same_password") || m.includes("same as")) return tf("authSayfa.reset.hata.ayni");
+      if (m.includes("at least") || (m.includes("password") && m.includes("6")) || m.includes("too short")) return tf("authSayfa.reset.hata.en6");
+      if (m.includes("weak") || m.includes("pwned") || m.includes("leaked")) return tf("authSayfa.reset.hata.zayif");
+      if (m.includes("session") || m.includes("expired") || m.includes("invalid") || m.includes("token") || m.includes("missing")) return tf("authSayfa.reset.hata.sureDolmus");
+      if (m.includes("rate") || m.includes("too many") || m.includes("seconds") || m.includes("security purposes")) return tf("authSayfa.reset.hata.cokDeneme");
+      if (m.includes("network") || m.includes("fetch") || m.includes("failed to")) return tf("authSayfa.reset.hata.baglanti");
+      return tf("authSayfa.reset.hata.basarisiz");
     }
 
     // Recovery token'ı URL'den okuyup (detectSessionInUrl) oturum kurulur; sonra updateUser çalışır.
@@ -82,18 +85,19 @@
       // kayıt politikasını atlatan bir arka kapıydı: mevcut bir hesap 6 haneli zayıf bir şifreye
       // DÜŞÜRÜLEBİLİYORDU.
       if (pw.length < 8 || !/[A-Z]/.test(pw) || !/[a-z]/.test(pw) || !/\d/.test(pw)) {
-        return setMsg("Şifre en az 8 karakter olmalı; büyük harf, küçük harf ve rakam içermeli.", false);
+        return setMsg(tf("authSayfa.reset.hata.kurallar"), false);
       }
-      if (pw !== pw2) return setMsg("Şifreler eşleşmiyor.", false);
-      setMsg("Güncelleniyor…", true);
+      if (pw !== pw2) return setMsg(tf("authSayfa.reset.hata.eslesmiyor"), false);
+      setMsg(tf("authSayfa.reset.guncelleniyor"), true);
       const { error } = await sb.auth.updateUser({ password: pw });
       if (error) return setMsg(mapErr(error.message), false);
       document.getElementById("card").className = "card done";
       document.getElementById("sub").style.display = "none";
       document.getElementById("form").innerHTML =
-        '<h1 style="color:#5BE38B">Şifren güncellendi ✓</h1>' +
-        '<p>Uygulamaya dönüp yeni şifrenle giriş yapabilirsin.</p>' +
-        '<a class="btn-link" href="pemfvet://">Uygulamaya Dön</a>';
+        '<h1 style="color:#5BE38B" data-i18n="authSayfa.reset.guncellendiBaslik"></h1>' +
+        '<p data-i18n="authSayfa.reset.guncellendiAciklama"></p>' +
+        '<a class="btn-link" href="pemfvet://" data-i18n="authSayfa.ortak.uygulamayaDon"></a>';
+      uygulaDil();
     };
   </script>
 </body>

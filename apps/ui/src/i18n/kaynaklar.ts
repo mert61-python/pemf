@@ -18,6 +18,8 @@ import trKabuk from "./tr/kabuk.json";
 import enKabuk from "./en/kabuk.json";
 import trHesap from "./tr/hesap.json";
 import enHesap from "./en/hesap.json";
+import trAuthSayfa from "./tr/authSayfa.json";
+import enAuthSayfa from "./en/authSayfa.json";
 
 export const trKaynak = {
   ayarlar: trAyarlar,
@@ -26,6 +28,7 @@ export const trKaynak = {
   giris: trGiris,
   kabuk: trKabuk,
   hesap: trHesap,
+  authSayfa: trAuthSayfa,
 };
 
 export const enKaynak: typeof trKaynak = {
@@ -35,6 +38,7 @@ export const enKaynak: typeof trKaynak = {
   giris: enGiris,
   kabuk: enKabuk,
   hesap: enHesap,
+  authSayfa: enAuthSayfa,
 };
 
 export const kaynaklar = {

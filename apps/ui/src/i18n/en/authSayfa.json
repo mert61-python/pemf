@@ -1,0 +1,33 @@
+{
+  "ortak": {
+    "uygulamayaDon": "Back to the App"
+  },
+  "reset": {
+    "aciklama": "Enter a new password for your account.",
+    "baslik": "Set a New Password",
+    "guncelle": "Update Password",
+    "guncellendiAciklama": "Go back to the app and sign in with your new password.",
+    "guncellendiBaslik": "Your password has been updated ✓",
+    "guncelleniyor": "Updating…",
+    "hata": {
+      "ayni": "The new password cannot be the same as the old one.",
+      "baglanti": "Connection error. Check your internet connection.",
+      "basarisiz": "The operation failed. Please try again.",
+      "cokDeneme": "Too many attempts. Wait a bit and try again.",
+      "en6": "The password must be at least 6 characters.",
+      "eslesmiyor": "Passwords do not match.",
+      "kurallar": "The password must be at least 8 characters and include an uppercase letter, a lowercase letter, and a digit.",
+      "sureDolmus": "The link has expired. Click the reset link in your email again.",
+      "zayif": "The password is too weak — choose a stronger one."
+    },
+    "sayfaBasligi": "PEMF Vet — Set a New Password",
+    "sifreTekrarYer": "New password (repeat)",
+    "sifreYer": "New password (at least 6 characters)"
+  },
+  "verified": {
+    "aciklama": "Your account has been verified. You can now go back to the <b>PEMF Vet</b> app and sign in with your email and password.",
+    "baslik": "Your email is verified!",
+    "kapatabilirsin": "You can safely close this tab.",
+    "sayfaBasligi": "PEMF Vet — Email Verified"
+  }
+}

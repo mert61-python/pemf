@@ -27,7 +27,7 @@ import pytest
 KOK = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(KOK))
 
-from scripts.i18n import bayrak, kapsam, katalog, launcher_uret, ortak, uygula  # noqa: E402
+from scripts.i18n import auth_uret, bayrak, kapsam, katalog, launcher_uret, ortak, uygula  # noqa: E402
 
 _NODE = shutil.which("node")
 _TS_VAR = any((KOK / a / "node_modules" / "typescript" / "package.json").is_file() for a in ("apps/ui", "apps/web"))
@@ -406,6 +406,10 @@ _BAYRAK_DOSYALARI = (
     launcher_uret.JS_YOLU,
     "launcher/i18n/tr.json",
     "launcher/i18n/en.json",
+    # I18N-P1: auth sayfaları kataloğu bayrakla birlikte üretilir (`auth_uret.py`) — kaynağı (authSayfa) + üretilen dosya
+    auth_uret.JS_YOLU,
+    "apps/ui/src/i18n/tr/authSayfa.json",
+    "apps/ui/src/i18n/en/authSayfa.json",
 )
 
 
@@ -428,6 +432,9 @@ def test_bayrak_ac_hepsini_acar_kapat_BAYT_BAYT_geri_getirir(tmp_path):
     assert degerler[launcher_uret.TAURI_CONF] == ["Turkish", "English"]
     hooks = (tmp_path / launcher_uret.HOOKS_YOLU).read_text(encoding="utf-8")
     assert ' 1033 "' in hooks and ' 1055 "' in hooks  # İngilizce + Türkçe LangString
+    assert "var EN_ACIK = true;" in (tmp_path / auth_uret.JS_YOLU).read_text(
+        encoding="utf-8"
+    )  # auth sayfaları bayrakla açıldı
     assert bayrak.main(["--kapat", "--kok", str(tmp_path)]) == 0
     farkli = [rel for rel in _BAYRAK_DOSYALARI if (tmp_path / rel).read_bytes() != once[rel]]
     assert farkli == [], f"--kapat dosyaları geri getirmedi: {farkli}"

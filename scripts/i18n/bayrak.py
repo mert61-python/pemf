@@ -9,7 +9,8 @@ Bayrağı YALNIZ inceleme oturumu açar:
 
 Yüzey sabitleri (elle DEĞİŞTİRİLMEZ): arayüz / site / DEMA `src/i18n/bayrak.ts` (`I18N_EN_ACIK: boolean = …`), launcher
 `core/src/dil.rs` (`pub const I18N_EN_ACIK: bool = …;`), `launcher/app/tauri.conf.json` `bundle.windows.nsis.languages`
-(kapalı: ["Turkish"] · açık: ["Turkish", "English"] — Windows Türkçe ise Türkçe, değilse İngilizce sihirbaz).
+(kapalı: ["Turkish"] · açık: ["Turkish", "English"] — Windows Türkçe ise Türkçe, değilse İngilizce sihirbaz);
+`apps/ui/auth-pages/i18n_katalog.js` (auth sayfaları: kapalıyken HER ZAMAN Türkçe — `scripts/i18n/auth_uret.py` üretir).
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from pathlib import Path
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from scripts.i18n import launcher_uret, ortak  # noqa: E402
+from scripts.i18n import auth_uret, launcher_uret, ortak  # noqa: E402
 
 ANA = "i18n/bayrak.json"
 TS_SABITLERI = (
@@ -67,6 +68,13 @@ def denetle(kok: Path) -> list[str]:
             )
     except SystemExit as e:
         sorun.append(str(e))
+    try:
+        yeni_js = auth_uret.js_metni(kok)
+        eski_js = (kok / auth_uret.JS_YOLU).read_bytes().decode("utf-8")
+        if yeni_js.replace("\r\n", "\n") != eski_js.replace("\r\n", "\n"):
+            sorun.append(f"{auth_uret.JS_YOLU}: katalog / bayrakla ayrışmış → scripts/i18n/auth_uret.py")
+    except (OSError, SystemExit) as e:
+        sorun.append(f"{auth_uret.JS_YOLU}: {e}")
     return sorun
 
 
@@ -91,6 +99,7 @@ def ayarla(kok: Path, acik: bool) -> None:
         raise SystemExit(f"{launcher_uret.TAURI_CONF}: bundle.windows.nsis.languages bulunamadı")
     p.write_bytes(yeni.encode("utf-8"))
     launcher_uret.main(["--kok", str(kok)])
+    auth_uret.main(["--kok", str(kok)])
 
 
 def main(argv=None) -> int:

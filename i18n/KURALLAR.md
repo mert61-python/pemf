@@ -26,6 +26,7 @@ sonrası). Sahip kararları Y157–Y161. Kısa özet kökteki `CLAUDE.md`'de. Ö
 | launcher arayüz | aynı katalog → `ui.*` (ÜRETİLİR: `ui/i18n_katalog.js`) | `index.html`'de `t().anahtar` — `t()` = eski sözlük + katalog (§4.11) |
 | NSIS | aynı katalog → `nsis.*` (ÜRETİLİR: `hooks.nsi` LangString bloğu) | `"$(PEMF_<anahtar>)"` |
 | DEMA | `dema-terapi-simülatörü/src/i18n/{tr,en}.json` | `t("baslik.uygulama")` (`src/i18n/index.ts`; i18next YOK) |
+| auth sayfaları (`apps/ui/auth-pages/*.html`, uygulama DIŞINDA barınır) | arayüz kataloğu `authSayfa.*` → ÜRETİLİR: `auth-pages/i18n_katalog.js` | `data-i18n="authSayfa.x"` / `tf("authSayfa.x")` — HTML'de sabit metin YOK |
 
 - Biçim: i18next JSON v4 — iç içe nesne, `{{ad}}` yer tutucu, çoğul `_one` / `_other` (tr ve en ikisi de). Dosyalar KANONİK (2 boşluk,
   anahtarlar alfabetik, UTF-8, LF): `katalog.py bicimle`.
@@ -186,6 +187,13 @@ koda geçer, sonra göçer. `scripts/i18n/launcher_uret.py` `i18n_katalog.js` + 
 Arayüzle aynı (`useTranslation`). Vercel işlevleri (`apps/web/api`) metni ÇEVİRMEZ: yanıt makine-okur `error` kodu taşır, istemci koddan
 gösterir, `message` Türkçe yedek kalır (S-I18N.5). Yasal metinler en SON grup; EN sayfada "Türkçe metin bağlayıcıdır" notu, hukuki onay sahipte.
 
+### 4.13b Auth sayfaları (şifre sıfırlama / e-posta onayı)
+Uygulamanın dışında (GitHub Pages) barınan statik sayfalar i18next'e erişemez: metin `authSayfa.*` kataloğundan `scripts/i18n/auth_uret.py` ile
+`i18n_katalog.js`'e ÜRETİLİR (elle düzenlenmez; `bayrak.py --ac|--kapat` birlikte üretir, `--denetle` ayrışmayı yakalar). HTML'de metin YOK:
+`<h1 data-i18n="authSayfa.reset.baslik"></h1>`, `data-i18n-html` (yalnız `<b>` gibi yazı biçimi), `data-i18n-placeholder`; betikte `tf("…")`.
+Bayrak KAPALIYKEN sayfa tarayıcı dili ne olursa olsun Türkçedir. Dağıtım (sahibin elle yaptığı GitHub Pages kopyası) `i18n_katalog.js`'i de
+kopyalamalıdır — yoksa sayfa metinsiz açılır. Kapı: `tests/test_i18n_auth_sayfa.py`.
+
 ### 4.14 DEMA
 `src/i18n/index.ts` (i18next YOK): sayfa dili `?dil=` > tarayıcı dili; uygulama çerçeveyi `dilParametresiEkle` ile açar. D1.91 kapısı
 kataloğu da tarar (yasaklı iddia kataloğa kaçamaz); İngilizce katalog da "cihaz davranışını temsil etmez" etiketinin karşılığını taşır.
@@ -244,7 +252,7 @@ bağımlılığı kuralı da orada) · K-3 kullanılan anahtar katalogda + dinam
 `i18n/dinamik-anahtarlar.json`) · K-4 terim (`test_i18n_terim_K4.py`) · K-5 kritik + bayrak + bekleyen (`test_i18n_kritik_K5.py`) · K-6 paket
 (`test_i18n_paket_K6.py`) · K-7 AI etiket eşliği (`test_i18n_ai_etiket_K7.py`) · araçlar (`test_i18n_araclar.py`,
 `test_i18n_parti_araclari.py`) · yardımcı (`test_i18n_yardimci.py`) · altyapı (`test_i18n_sunucu_altyapi.py`, `test_i18n_launcher_altyapi.py`,
-`test_i18n_dema_altyapi.py`) · pilot (`test_i18n_pilot_sunucu.py`). Arayüz jest: `src/i18n/__tests__`, site vitest: `src/i18n/__tests__`.
+`test_i18n_dema_altyapi.py`, `test_i18n_auth_sayfa.py`) · pilot (`test_i18n_pilot_sunucu.py`). Arayüz jest: `src/i18n/__tests__`, site vitest: `src/i18n/__tests__`.
 
 ## 10. Sık hatalar (ÖLÇÜLMÜŞ — I18N-0)
 

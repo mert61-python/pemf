@@ -157,7 +157,7 @@
    "sira": 2,
    "kritik": false,
    "aciklama": "giriş / hesap / operatör (+ Supabase dönüş sayfaları)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 208,
    "dosyaSayisi": 13
   },
@@ -959,18 +959,36 @@
    "yuzey": "arayuz",
    "grup": "arayuz-02-giris-hesap",
    "sira": 2,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 18,
    "kritik": false,
-   "muaf": [],
-   "birlesikIstisna": [],
+   "muaf": [
+    {
+     "metin": "card done",
+     "gerekce": "CSS sınıf adı (görünür metin değil)"
+    },
+    {
+     "metin": "<h1 style=\"color:#5BE38B\" data-i18n=\"authSayfa.reset.guncellendiBaslik\"></h1><p data-i18n=\"authSayfa.reset.guncellendiAciklama\"></p><a class=\"btn-link\" href=\"pemfvet://\" data-i18n=\"authSayfa.ortak.uygulamayaDon\"></a>",
+     "gerekce": "HTML iskeleti — yalnız data-i18n öznitelikleri taşır; metin üretilmiş katalogdan (i18n_katalog.js) dolar"
+    }
+   ],
+   "birlesikIstisna": [
+    {
+     "once": "<h1 style=\"color:#5BE38B\">Şifren güncellendi ✓</h1><p>Uygulamaya dönüp yeni şifrenle giriş yapabilirsin.</p><a class=\"btn-link\" href=\"pemfvet://\">Uygulamaya Dön</a>",
+     "sonra": [
+      "authSayfa.reset.guncellendiBaslik",
+      "authSayfa.reset.guncellendiAciklama",
+      "authSayfa.ortak.uygulamayaDon"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/ui/auth-pages/verified.html": {
    "yuzey": "arayuz",
    "grup": "arayuz-02-giris-hesap",
    "sira": 2,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 7,
    "kritik": false,
    "muaf": [],

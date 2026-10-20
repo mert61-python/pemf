@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>PEMF Vet — E-posta Onaylandı</title>
+<title data-i18n="authSayfa.verified.sayfaBasligi">PEMF Vet</title>
+<script src="i18n_katalog.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
 <style>
@@ -27,10 +28,11 @@
   <div class="aurora"><div class="blob b1"></div><div class="blob b2"></div></div>
   <div class="card">
     <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="#053b1a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></div>
-    <h1>E-postan onaylandı!</h1>
-    <p>Hesabın başarıyla doğrulandı. Artık <b>PEMF Vet</b> uygulamasına geri dönüp e-posta ve şifrenle giriş yapabilirsin.</p>
-    <a class="btn" href="pemfvet://">Uygulamaya Dön</a>
-    <div class="foot">Bu sekmeyi güvenle kapatabilirsin.</div>
+    <h1 data-i18n="authSayfa.verified.baslik"></h1>
+    <p data-i18n-html="authSayfa.verified.aciklama"></p>
+    <a class="btn" href="pemfvet://" data-i18n="authSayfa.ortak.uygulamayaDon"></a>
+    <div class="foot" data-i18n="authSayfa.verified.kapatabilirsin"></div>
   </div>
+<script>uygulaDil();</script>
 </body>
 </html>
