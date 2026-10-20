@@ -3158,6 +3158,62 @@
    "tur": "donanim",
    "kaynak": "apps/backend/headless_core.py",
    "aciklama": "DB açılamadı: yeni seans 503"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "nsis.estopGonderiliyor",
+   "tur": "estop",
+   "kaynak": "launcher/app/windows/hooks.nsi",
+   "aciklama": "kaldırma sırasında aktif seans için bobinlere E-stop gönderiliyor"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "nsis.estopDogrulandi",
+   "tur": "estop",
+   "kaynak": "launcher/app/windows/hooks.nsi",
+   "aciklama": "kaldırma sırasında bobin E-stop DOĞRULANDI"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "nsis.estopDogrulanamadi",
+   "tur": "estop",
+   "kaynak": "launcher/app/windows/hooks.nsi",
+   "aciklama": "kaldırma sırasında bobin E-stop DOĞRULANAMADI — bobinleri ELLE kontrol edin (günlük satırı)"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "nsis.estopDogrulanamadiKutu",
+   "tur": "estop",
+   "kaynak": "launcher/app/windows/hooks.nsi",
+   "aciklama": "kaldırma sırasında bobin E-stop DOĞRULANAMADI — ELLE kontrol uyarı kutusu"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "nsis.portGecersiz",
+   "tur": "estop",
+   "kaynak": "launcher/app/windows/hooks.nsi",
+   "aciklama": "geçersiz backend.port — E-stop ATLANDI"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "nsis.surecDurduruluyor",
+   "tur": "estop",
+   "kaynak": "launcher/app/windows/hooks.nsi",
+   "aciklama": "E-stop sonrası kalan backend süreçleri durduruluyor"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "nsis.kayitlarKorundu",
+   "tur": "seans",
+   "kaynak": "launcher/app/windows/hooks.nsi",
+   "aciklama": "hasta kayıtları / seans geçmişi / AI analiz geçmişi KORUNDU (tıbbi kayıt; günlük satırı)"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "nsis.kaldirildiKutu",
+   "tur": "seans",
+   "kaynak": "launcher/app/windows/hooks.nsi",
+   "aciklama": "kaldırma bitti: HASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ (kutu)"
   }
  ],
  "bekleyen": [

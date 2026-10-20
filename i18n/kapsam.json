@@ -373,7 +373,7 @@
    "sira": 11,
    "kritik": true,
    "aciklama": "kurulum sihirbazı iletileri (hooks.nsi — LangString)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 13,
    "dosyaSayisi": 1
   },
@@ -7812,10 +7812,115 @@
    "yuzey": "launcher",
    "grup": "launcher-11d-nsis",
    "sira": 11,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 13,
    "kritik": true,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "PEMF: bobin E-stop DOĞRULANAMADI (nsExec=$0 $1) — bobinleri ELLE kontrol edin; iz: %APPDATA%\\PEMF_GUI\\logs\\uninstall_estop.log",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "PEMF: bobin acil-durdurma DOĞRULANAMADI ($0). Bobinleri ELLE kontrol edin (cihaz üzerindeki göstergeler / fiziksel kapatma). Ayrıntı: $1 Kayıt: %APPDATA%\\PEMF_GUI\\logs\\uninstall_estop.log",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "PEMF: bobin E-stop DOĞRULANDI — $1",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "PEMF: aktif seans güvenliği — bobinlere E-stop gönderiliyor (port $2)…",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "PEMF Vet kaldırıldı. HASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ. Tıbbi kayıt oldukları için kaldırma sırasında korunurlar. Konum: $APPDATA\\PEMF_GUI Kalıcı silmek isterseniz bu klasörü elle silin ya da yeniden kurup uygulama içinden silin (Hastalar → 'Tümünü Sil', AI Geçmişi → 'Geçmişi Sil').",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "PEMF: Hasta kayıtları, seans geçmişi ve AI analiz geçmişi KORUNDU (tıbbi kayıt) — %APPDATA%\\PEMF_GUI",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "PEMF: backend.port geçersiz ('$1') — E-stop atlandı.",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "PEMF: backend.port $INSTDIR'de yok — veri kökünden okundu.",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "PEMF: artık backend süreçleri durduruluyor…",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "PEMF Vet Client temizliği tamamlandı.",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "PEMF: 'uygulama verisini sil' işaretli — indirilen çalışma-zamanı ve modeller kaldırılıyor…",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "PEMF: 'uygulama verisini sil' işaretsiz — indirilen profiller/modeller KORUNUYOR (yeniden kurulumda tekrar inmez). Tamamen silmek için kaldırırken kutuyu işaretleyin.",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "PEMF: yükseltme — indirilen modeller ve önbellek korunuyor (tekrar inmez).",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "$(PEMF_portVeriKokunden)",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "$(PEMF_portGecersiz)",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "$(PEMF_estopGonderiliyor)",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "$(PEMF_estopDogrulandi)",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "$(PEMF_estopDogrulanamadi)",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "$(PEMF_estopDogrulanamadiKutu)",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "$(PEMF_surecDurduruluyor)",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "$(PEMF_yukseltmeKorunuyor)",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "$(PEMF_veriSilIsaretli)",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "$(PEMF_temizlikTamam)",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "$(PEMF_veriSilIsaretsiz)",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "$(PEMF_kayitlarKorundu)",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    },
+    {
+     "metin": "$(PEMF_kaldirildiKutu)",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
