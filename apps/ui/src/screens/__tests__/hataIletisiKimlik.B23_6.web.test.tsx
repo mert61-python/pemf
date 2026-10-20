@@ -36,7 +36,7 @@ import { OperatorProvider } from "@/context/OperatorContext";
 import { AppNavProvider } from "@/context/AppNavContext";
 import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
 import { AiHistoryScreen } from "@/screens/AiHistoryScreen";
-import { KAYDEDILEMEDI_METNI } from "@/components/domain/AiReviewControls";
+import { kaydedilemediMetni } from "@/components/domain/AiReviewControls";
 import { aktifOperator, pinleSec, Sahne, sahteSunucu, type SahteOperator } from "../../context/__tests__/operatorAparati";
 
 const A = "dr.a@klinik.com";
@@ -93,13 +93,13 @@ describe("B2-3.6 — kimlik değişince 'gerekçeniz korunuyor' iletisi de düş
     sunucu.review = 500;
     await s.tikla("Reddi kaydet");
     await s.bosalt(10);
-    expect(s.metin()).toContain(KAYDEDILEMEDI_METNI); // ARA DOĞRULAMA: A için ileti + gerekçe duruyor
+    expect(s.metin()).toContain(kaydedilemediMetni()); // ARA DOĞRULAMA: A için ileti + gerekçe duruyor
     expect(alan()).toBe(GEREKCE);
     await pinleSec(s, "Dr. B");
     await s.bosalt(10);
     expect(aktifOperator()).toBe("Dr. B");
     expect(s.metin()).not.toContain(GEREKCE); // B2B-2 (2-B): taslak taşınmaz
-    expect(s.metin()).not.toContain(KAYDEDILEMEDI_METNI);
+    expect(s.metin()).not.toContain(kaydedilemediMetni());
   });
 
   it("KRİTİK: istek UÇUŞTAYKEN B'ye geçiş, sunucu 500 → B'de 'gerekçeniz korunuyor' YOK", async () => {
@@ -112,7 +112,7 @@ describe("B2-3.6 — kimlik değişince 'gerekçeniz korunuyor' iletisi de düş
     await s.ilerlet(2500);
     await s.bosalt(10);
     expect(aktifOperator()).toBe("Dr. B");
-    expect(s.metin()).not.toContain(KAYDEDILEMEDI_METNI);
+    expect(s.metin()).not.toContain(kaydedilemediMetni());
   });
 
   it("KARŞIT (D2.E12): aynı hekimde 500 sonrası ileti ve gerekçe birlikte durur", async () => {
@@ -121,6 +121,6 @@ describe("B2-3.6 — kimlik değişince 'gerekçeniz korunuyor' iletisi de düş
     await s.tikla("Reddi kaydet");
     await s.bosalt(10);
     expect(alan()).toBe(GEREKCE);
-    expect(s.metin()).toContain(KAYDEDILEMEDI_METNI);
+    expect(s.metin()).toContain(kaydedilemediMetni());
   });
 });

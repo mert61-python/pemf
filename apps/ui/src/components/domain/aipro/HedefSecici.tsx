@@ -15,6 +15,7 @@
  */
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { colors, spacing, typography, touch } from "@/theme/tokens";
+import { useTranslation } from "react-i18next";
 
 /** `/ai/pro/status` ve WS `ai_vision` içindeki hedef adayı (yalnız-ek alanlar). */
 export interface HedefAdayi {
@@ -48,6 +49,7 @@ export function HedefHalkalari({
   kutu: { width: number; height: number } | null;
   kilitli?: boolean;
 }) {
+  const { t } = useTranslation();
   if (!kutu || hedefler.length === 0) return null;
   return (
     <View style={styles.katman} pointerEvents="box-none">
@@ -72,10 +74,13 @@ export function HedefHalkalari({
             disabled={kilitli}
             accessibilityRole="button"
             accessibilityState={{ selected: secim, disabled: kilitli }}
-            accessibilityLabel={
-              `Hedef ${i + 1} / ${hedefler.length}: ${h.label || "hedef"}, güven yüzde ${guven}` +
-              (secim ? ", seçili" : "")
-            }
+            accessibilityLabel={t("ai.pro.hedef.etiket", {
+              sira: i + 1,
+              toplam: hedefler.length,
+              ad: h.label || t("ai.pro.hedef.adsiz"),
+              guven,
+              durum: secim ? t("ai.pro.hedef.durumSecili") : "",
+            })}
           >
             <Text style={[styles.halkaMetin, secim && styles.halkaMetinSecili]} numberOfLines={1}>
               {secim ? "✓" : String(i + 1)}
@@ -102,10 +107,11 @@ export function HedefListesi({
   /** Hiçbir hedef elle seçilmediyse (seciliId 0) etiket "otomatik seçildi" der. */
   otomatikMi?: boolean;
 }) {
+  const { t } = useTranslation();
   if (hedefler.length === 0) return null;
   return (
     <View style={styles.liste}>
-      <Text style={styles.label}>🎯 Hedefler (kare üstünden ya da buradan seçin)</Text>
+      <Text style={styles.label}>{t("ai.pro.hedef.baslik")}</Text>
       {hedefler.map((h, i) => {
         const secim = seciliId > 0 ? h.id === seciliId : Boolean(h.secili);
         const guven = Math.round((Number(h.reliability) || 0) * 100);
@@ -119,17 +125,20 @@ export function HedefListesi({
             disabled={kilitli}
             accessibilityRole="button"
             accessibilityState={{ selected: secim, disabled: kilitli }}
-            accessibilityLabel={
-              `Hedef ${i + 1} / ${hedefler.length}: ${h.label || "hedef"}, güven yüzde ${guven}` +
-              (oto ? ", otomatik seçildi" : secim ? ", seçili" : "")
-            }
+            accessibilityLabel={t("ai.pro.hedef.etiket", {
+              sira: i + 1,
+              toplam: hedefler.length,
+              ad: h.label || t("ai.pro.hedef.adsiz"),
+              guven,
+              durum: oto ? t("ai.pro.hedef.durumOtomatik") : secim ? t("ai.pro.hedef.durumSecili") : "",
+            })}
           >
             <Text style={[styles.satirAd, secim && styles.satirAdSecili]} numberOfLines={1}>
               {secim ? "● " : "○ "}
-              {h.label || `Hedef ${i + 1}`}
+              {h.label || t("ai.pro.hedef.numara", { sira: i + 1 })}
             </Text>
-            <Text style={styles.satirGuven}>{`%${guven}`}</Text>
-            {oto ? <Text style={styles.oto}>otomatik seçildi</Text> : null}
+            <Text style={styles.satirGuven}>{t("ai.ortak.yuzde", { deger: guven })}</Text>
+            {oto ? <Text style={styles.oto}>{t("ai.pro.hedef.otomatik")}</Text> : null}
           </TouchableOpacity>
         );
       })}

@@ -10,27 +10,39 @@
  * ayrışamaz.
  */
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { colors, spacing, typography, touch } from "@/theme/tokens";
 
-/** Sihirbaz adımları — sıra ve adlar tek yerde. */
-export const ADIMLAR = ["Model", "Kamera", "Hedef", "Onay", "Seans"] as const;
+/** Sihirbaz adımları — sıra ve adlar tek yerde (adlar katalogdan: ai.pro.adim.*). */
+const adimAdlari = (t: TFunction): string[] => [
+  t("ai.pro.adim.model"),
+  t("ai.pro.adim.kamera"),
+  t("ai.pro.adim.hedef"),
+  t("ai.pro.adim.onay"),
+  t("ai.pro.adim.seans"),
+];
 export type Adim = 1 | 2 | 3 | 4 | 5;
 
 export function AdimGostergesi({
   adim,
   onGeri,
-  geriEtiketi = "Geri",
+  geriEtiketi,
 }: {
   adim: Adim;
   /** Geri dönüş eylemi — verilmezse düğme çizilmez (Adım 1). */
   onGeri?: () => void;
   geriEtiketi?: string;
 }) {
-  const ad = ADIMLAR[adim - 1] ?? "";
+  const { t } = useTranslation();
+  const adlar = adimAdlari(t);
+  const toplam = adlar.length;
+  const ad = adlar[adim - 1] ?? "";
+  const geri = geriEtiketi ?? t("ai.pro.adim.geri");
   return (
     <View style={styles.wrap}>
       <View style={styles.noktalar}>
-        {ADIMLAR.map((a, i) => (
+        {adlar.map((a, i) => (
           <View
             key={a}
             style={[styles.nokta, i + 1 === adim && styles.noktaAktif, i + 1 < adim && styles.noktaGecti]}
@@ -42,18 +54,18 @@ export function AdimGostergesi({
         style={styles.metin}
         numberOfLines={1}
         accessibilityRole="header"
-        accessibilityLabel={`Adım ${adim} / ${ADIMLAR.length}: ${ad}`}
+        accessibilityLabel={t("ai.pro.adim.etiket", { adim, toplam, ad })}
       >
-        {`Adım ${adim}/${ADIMLAR.length} · ${ad}`}
+        {t("ai.pro.adim.metin", { adim, toplam, ad })}
       </Text>
       {onGeri ? (
         <TouchableOpacity
           style={styles.geri}
           onPress={onGeri}
           accessibilityRole="button"
-          accessibilityLabel={`${geriEtiketi}: önceki adıma dön`}
+          accessibilityLabel={t("ai.pro.adim.geriEtiket", { geriEtiketi: geri })}
         >
-          <Text style={styles.geriMetin}>{`‹ ${geriEtiketi}`}</Text>
+          <Text style={styles.geriMetin}>{`‹ ${geri}`}</Text>
         </TouchableOpacity>
       ) : null}
     </View>

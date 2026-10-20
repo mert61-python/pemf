@@ -51,7 +51,12 @@ def _tum_tablolarda(db, metin: str) -> list:
 
 def test_KRITIK_C2_1_14_red_gerekcesi_etiketi_KAYDA_GECER_diyorsa_metin_kayitta(o):
     kaynak = PENCERE.read_text(encoding="utf-8")
-    etiket = re.search(r"<Text style=\{s\.rejectLabel\}>([^<]*)</Text>", kaynak).group(1)
+    # I18N: etiket katalogda — kaynak anahtari KULLANIYOR, TR degeri birebir ve EN dolu (metin_kapisi); kapi metni bu degerden okur.
+    import i18n_yardimci as iy
+
+    anahtar = re.search(r'<Text style=\{s\.rejectLabel\}>\{t\("([^"]+)"\)\}</Text>', kaynak).group(1)
+    iy.metin_kapisi("apps/ui/src/components/domain/AiSpecApprovalModal.tsx", anahtar, "Red gerekçesi (kayda geçer)")
+    etiket = iy.katalog("arayuz", "tr")[anahtar]
     o.air._ai_organ_id = 2
     with o.air._ai_cache_lock:
         o.air._ai_organ_cache.update(

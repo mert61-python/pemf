@@ -15,6 +15,7 @@ import React from "react";
 import { Text, View } from "react-native";
 
 import { colors, typography } from "@/theme/tokens";
+import { useTranslation } from "react-i18next";
 
 export interface PemfKapisi {
   surulebilir?: boolean;
@@ -34,6 +35,7 @@ export function PemfKapisiKutusu({
   reliable?: boolean | null;
   model: "petri" | "fantom";
 }) {
+  const { t } = useTranslation();
   if (!kapi || typeof kapi !== "object") return null;
   const mesajlar = Array.isArray(kapi.mesajlar) ? kapi.mesajlar : [];
   const varsayimlar = Array.isArray(kapi.varsayimlar) ? kapi.varsayimlar : [];
@@ -56,29 +58,26 @@ export function PemfKapisiKutusu({
           (kırmızı "ESAS ALINMAZ" ile çelişiyordu; göz ilk satırı okur). */}
       <Text style={{ fontSize: typography.small, fontWeight: "bold", color: surulebilir ? colors.success : colors.danger }}>
         {surulebilir
-          ? "✔ PEMF girdisi geçerli"
+          ? t("ai.pro.kapi.gecerli")
           : gecerli
-            ? "⛔ Sonuç bobin sürüşüne KULLANILAMAZ (kabin konumu geçerli — nedenler aşağıda)"
-            : "⛔ PEMF girdisi GEÇERSİZ"}
+            ? t("ai.pro.kapi.kullanilamaz")
+            : t("ai.pro.kapi.gecersiz")}
         {model === "fantom" && reliable != null ? (
           <Text style={{ color: !reliable ? colors.danger : surulebilir ? colors.success : colors.textMuted }}>
-            {!reliable ? "   ·   ⛔ tespit güvenilir DEĞİL" : surulebilir ? "   ·   ✔ tespit güvenilir" : "   ·   tespit güvenilir"}
+            {!reliable ? t("ai.pro.kapi.tespitGuvenilirDegil") : surulebilir ? t("ai.pro.kapi.tespitGuvenilirTik") : t("ai.pro.kapi.tespitGuvenilir")}
           </Text>
         ) : null}
       </Text>
       {!surulebilir ? (
         <Text style={{ fontSize: typography.small, color: colors.text, marginTop: 4 }}>
-          Aşağıdaki D / P / E değerleri bobin sürüşüne ESAS ALINMAZ:
+          {t("ai.pro.kapi.esasAlinmaz")}
         </Text>
       ) : null}
       {/* Y144 (sahip 2026-10-13): backend sürülemez sonuçta canlı E bağlamını ve EM "dozu belirleyen" açıklamasını KURMAZ —
           operatör seansta canlı E barını göremeyince "bozuk" sanmasın; neden burada söylenir (kutunun kendi hükmünden). */}
       {!surulebilir ? (
         <Text testID="pemf-kapisi-baglam-kurulmadi" style={{ fontSize: typography.small, color: colors.textMuted, marginTop: 2 }}>
-          {(model === "fantom"
-            ? "Canlı E göstergesi ve “dozu en çok belirleyen” açıklaması bu sonuçtan kurulmadı"
-            : "“Dozu en çok belirleyen” açıklaması bu sonuçtan üretilmedi") +
-            " — sonuç sürülebilir değil (nedenler aşağıda)."}
+          {model === "fantom" ? t("ai.pro.kapi.baglamFantom") : t("ai.pro.kapi.baglamPetri")}
         </Text>
       ) : null}
       {mesajlar.map((m) => (

@@ -1443,6 +1443,482 @@
    "tur": "seans",
    "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
    "aciklama": "seansın sürdüğü doğrulanamıyor — Kontrol ekranından teyit"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.kediSurusKapali",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "kedi AI Pro sürüşü kapalı: neden + eylem (sunucu mesajıyla aynı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.not.arastirmaMobil",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "araştırma modelleri telefonda: kabin kamerası gerekir"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.not.arastirmaGiris",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "araştırma giriş cümlesi: onaysız bobin çalışmaz"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.not.kediWebOneri",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "kedi (web) sürüş kapalı: yalnız doz önerisi, bobin sürülmez"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.not.kediMobilOneri",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "kedi (mobil) sürüş kapalı: yalnız doz önerisi, bobin sürülmez"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.not.kediWebSeans",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "kedi (web) canlı otonom seans: 7 bobin"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.not.kediMobilSeans",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "kedi (mobil) otonom seans: 7 bobin per-coil sürülür"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.modelKilitli",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "seans / hazırlık sürerken model değiştirilemez"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.baslatKapali.mobil",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "başlatma kapalı nedeni: masaüstü kabin kamerası"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.baslatKapali.modelYok",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "başlatma kapalı nedeni: model seçilmedi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.dugme.durdurEtiket",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "AI Pro otonom seans durdur (erişim adı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.dugme.analizOneriEtiket",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "analiz + öneri, sürüş kapalı (erişim adı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.dugme.baslatEtiket",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "AI Pro otonom seans başlat (erişim adı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.dugme.durdurIpucu",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "durdur düğmesi ipucu: bobinleri durdurur"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.dugme.analizOneriIpucu",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "analiz düğmesi ipucu: bobin sürmez"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.dugme.baslatIpucu",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "başlat düğmesi ipucu: bobinleri otomatik sürer"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.dugme.durdur",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "AI Pro durdur düğmesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.dugme.hazirlaniyor",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "hazırlanıyor düğmesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.dugme.hazirligiBaslat",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "hazırlığı başlat düğmesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.dugme.analizOneri",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "analiz ve öneri düğmesi (sürüş kapalı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.dugme.baslat",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "AI Pro başlat düğmesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.planDisiBobin",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "bobin AI Pro planından çıkarıldı (operatör durdurdu)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.tablo.planDisi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "bobin tablosu: plandan çıkarıldı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.tablo.surulmedi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "bobin tablosu: sürülmedi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.tablo.surulmediPlan",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "bobin tablosu: sürülmedi (plan duty)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.sunucuKamerasi",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "sunucu kamerası başlatılamadı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.modelSecilmedi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "model seçilmedi (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.modelSecilmediGovde",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "model seçilmedi (gövde)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.kabinKamerasi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "bu seans kabin kamerasıyla yapılır (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.kabinKamerasiGovde",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "bu seans kabin kamerasıyla yapılır (gövde)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.hastasizBaslik",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "hasta / örnek seçilmedi (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.hastasizGovdeDeney",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "deney seansı hastasız kaydedilecek onayı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.hastasizGovdeOtonom",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "otonom seans hastasız kaydedilecek onayı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.hata.hazirlikKomutu",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "hazırlık komutu sunucuya ulaşmadı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.hata.oneriDenenecek",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "öneri alınamadı (yeniden denenecek)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.hata.oneriDeneniyor",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "öneri alınamadı (yeniden deneniyor)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.konumlandirmaTamamlanamadi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "konumlandırma tamamlanamadı (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.konumlandirmaTamamlanamadiGovde",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "hayvan bulunamadı; kamera durduruldu (gövde)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.surusKapali",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "sürüş kapalı uyarısı (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.gerekceKaydedilemedi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "red gerekçesi kaydedilemedi (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.gerekceKaydedilemediGovde",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "öneri reddedildi, seans başlamadı; gerekçe yazılamadı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.durdurulamadi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "durdurulamadı (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.durdurulamadiGovde",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "durdurma komutu ulaşmadı; ACİL DURDUR yönlendirmesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.hedefDegistirilemedi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "hedef değiştirilemedi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.organDegistirilemedi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "organ değiştirilemedi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.sunucuReddetti",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "sunucu isteği reddetti"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.komutUlasmadi",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "komut sunucuya ulaşmadı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.uyari.yenidenKonumlanamadi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiProPanel.tsx",
+   "aciklama": "yeniden konumlandırılamadı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.onay.pencereEtiketi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiSpecApprovalModal.tsx",
+   "aciklama": "AI seans önerisi onay penceresi (erişim adı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.onay.surusKapaliEtiket",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiSpecApprovalModal.tsx",
+   "aciklama": "sürüş kapalı — onay seansı başlatmaz (erişim adı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.onay.surusKapali",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiSpecApprovalModal.tsx",
+   "aciklama": "sürüş kapalı düğmesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.onay.onaylaEtiket",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiSpecApprovalModal.tsx",
+   "aciklama": "öneriyi onayla ve seansı başlat (erişim adı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.onay.onaylaBaslat",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiSpecApprovalModal.tsx",
+   "aciklama": "onayla ve başlat düğmesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.onay.baslatiliyor",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiSpecApprovalModal.tsx",
+   "aciklama": "başlatılıyor"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.onay.surusKapaliLead",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiSpecApprovalModal.tsx",
+   "aciklama": "sürüş kapalı: bu ekrandan seans başlatılamaz"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.onay.leadDeney",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiSpecApprovalModal.tsx",
+   "aciklama": "deney seansı onaylanmadan başlamaz"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.onay.leadOtonom",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiSpecApprovalModal.tsx",
+   "aciklama": "otonom seans onaylanmadan başlamaz"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.onay.otomatikMuhur",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiSpecApprovalModal.tsx",
+   "aciklama": "otomatik seçim hedefe mühürlendi; hedef kaybolursa sürüş durur"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.onay.redGerekcesiKayit",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiSpecApprovalModal.tsx",
+   "aciklama": "red gerekçesi (kayda geçer)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.onay.rediOnayla",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiSpecApprovalModal.tsx",
+   "aciklama": "reddi onayla (erişim adı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.onay.oneriyiReddet",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/AiSpecApprovalModal.tsx",
+   "aciklama": "öneriyi reddet (erişim adı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.kapi.gecerli",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/PemfKapisiKutusu.tsx",
+   "aciklama": "PEMF girdisi geçerli"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.kapi.kullanilamaz",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/PemfKapisiKutusu.tsx",
+   "aciklama": "sonuç bobin sürüşüne KULLANILAMAZ"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.kapi.gecersiz",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/PemfKapisiKutusu.tsx",
+   "aciklama": "PEMF girdisi GEÇERSİZ"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.kapi.esasAlinmaz",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/PemfKapisiKutusu.tsx",
+   "aciklama": "D / P / E değerleri bobin sürüşüne esas alınmaz"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.kapi.baglamFantom",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/PemfKapisiKutusu.tsx",
+   "aciklama": "canlı E göstergesi ve açıklama kurulmadı (fantom)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.kapi.baglamPetri",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/PemfKapisiKutusu.tsx",
+   "aciklama": "açıklama üretilmedi (petri)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.pro.model.dozOnaylanamaz",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/aipro/ModelSecimKartlari.tsx",
+   "aciklama": "fantom / petri hedefine doz ONAYLANAMAZ"
   }
  ],
  "bekleyen": [

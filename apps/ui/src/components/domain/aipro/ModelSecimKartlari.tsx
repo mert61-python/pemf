@@ -14,7 +14,8 @@
  */
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { colors, spacing, typography, touch } from "@/theme/tokens";
-import { type HedefModeli, MODEL_PROFILLERI } from "@/components/domain/aiProProfilleri";
+import { type HedefModeli, modelProfili } from "@/components/domain/aiProProfilleri";
+import { useTranslation } from "react-i18next";
 
 /** Modelin kurulum durumu — `GET /api/ai/hazirlik` envanterinden türetilir. */
 export type KurulumDurumu = "hazir" | "eksik" | "bilinmiyor";
@@ -38,11 +39,12 @@ export function ModelSecimKartlari({
   /** `arastirmaAiProAcik`: null = bilinmiyor (eski sunucu / durum okunamadı). */
   arastirmaAcik?: boolean | null;
 }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>🔬 Hedef Modeli</Text>
+      <Text style={styles.label}>{t("ai.pro.model.baslik")}</Text>
       {modeller.map((m) => {
-        const p = MODEL_PROFILLERI[m];
+        const p = modelProfili(m);
         const secim = secili === m;
         const durum = kurulum[m] ?? "bilinmiyor";
         const eksik = durum === "eksik";
@@ -67,14 +69,14 @@ export function ModelSecimKartlari({
             <Text style={styles.aciklama}>{p.aciklama}</Text>
             <View style={styles.rozetler}>
               {durum === "hazir" ? (
-                <Text style={[styles.rozet, styles.rozetIyi]}>Model kurulu ✓</Text>
+                <Text style={[styles.rozet, styles.rozetIyi]}>{t("ai.pro.model.kurulu")}</Text>
               ) : eksik ? (
-                <Text style={[styles.rozet, styles.rozetKotu]}>Araştırma model paketi bu cihazda kurulu değil</Text>
+                <Text style={[styles.rozet, styles.rozetKotu]}>{t("ai.pro.model.kurulumEksik")}</Text>
               ) : (
-                <Text style={styles.rozet}>Kurulum durumu okunamadı</Text>
+                <Text style={styles.rozet}>{t("ai.pro.model.kurulumBilinmiyor")}</Text>
               )}
               {arastirmaAcik === false ? (
-                <Text style={[styles.rozet, styles.rozetUyari]}>Deneysel — şimdilik yalnız görüntüleme</Text>
+                <Text style={[styles.rozet, styles.rozetUyari]}>{t("ai.pro.model.deneysel")}</Text>
               ) : null}
             </View>
           </TouchableOpacity>
@@ -83,8 +85,7 @@ export function ModelSecimKartlari({
       {kilitli && kilitNedeni ? <Text style={styles.kilit}>{kilitNedeni}</Text> : null}
       {arastirmaAcik === false ? (
         <Text style={styles.note}>
-          Bu sürümde fantom/petri hedefine doz ONAYLANAMAZ: 3B konum dönüşümü tezgâhta
-          doğrulanmadı. Kamerayı açıp hedefi ve konumu görebilir, yerleşimi ölçebilirsiniz.
+          {t("ai.pro.model.dozOnaylanamaz")}
         </Text>
       ) : null}
     </View>

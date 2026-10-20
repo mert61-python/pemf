@@ -23,6 +23,8 @@ import { CheckCircle2, X, XCircle } from "lucide-react-native";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 import { modelProfili } from "@/components/domain/aiProProfilleri";
 import { KalibrasyonRozeti } from "@/components/domain/aipro/KalibrasyonRozeti";
+import { Trans, useTranslation } from "react-i18next";
+import i18n from "i18next";
 
 export interface AiProposalSpecs {
   organ_id: number;
@@ -83,28 +85,26 @@ export function xaiSatirlari(liste: XaiDuyarlilik[] | undefined, etiket: Record<
   const l = Array.isArray(liste) ? liste : [];
   return {
     belirleyen: l.filter((t) => !t.ogrenilmemis && t.surukleyen !== false)
-      .map((t) => ad(t.feature) + (t.egitim_disi ? " (eğitim aralığı dışı)" : "")),
+      .map((t) => ad(t.feature) + (t.egitim_disi ? i18n.t("ai.pro.xai.egitimDisiEk") : "")),
     egitimDisi: l.filter((t) => t.egitim_disi).map((t) => ad(t.feature)),
     ogrenilmemis: l.filter((t) => t.ogrenilmemis).map((t) => ad(t.feature)),
   };
 }
 
 /** EM girdi adları → hekim diline (öneri ekranı). */
-const XAI_ETIKET: Record<string, string> = {
-  x: "konum X",
-  y: "konum Y",
-  z: "konum Z",
-  organ_id: "organ seçimi",
-  achieved_B: "hedef alan (B)",
-  duty_sum: "güç bütçesi",
-};
+const xaiEtiketleri = (arastirma: boolean): Record<string, string> => ({
+  x: i18n.t("ai.pro.xai.konumX"),
+  y: i18n.t("ai.pro.xai.konumY"),
+  z: i18n.t("ai.pro.xai.konumZ"),
+  // Araştırma hattında `organ_id` kanalı ORGAN değil DOKU SINIFIDIR (kanserli / sağlıklı).
+  organ_id: arastirma ? i18n.t("ai.pro.xai.dokuTipi") : i18n.t("ai.pro.xai.organSecimi"),
+  achieved_B: i18n.t("ai.pro.xai.hedefAlan"),
+  duty_sum: i18n.t("ai.pro.xai.gucButcesi"),
+});
 
-/** Araştırma hattında `organ_id` kanalı ORGAN değil DOKU SINIFIDIR (kanserli / sağlıklı). */
-const XAI_ETIKET_ARASTIRMA: Record<string, string> = { ...XAI_ETIKET, organ_id: "doku tipi" };
-
-/** Türkçe ondalık ayırıcı — ekranda "0,13" (klinik/akademik yazım), kodda nokta. */
+/** Dile uyan ondalık ayırıcı — TR ekranda "0,13" (klinik/akademik yazım), EN "0.13"; kodda nokta. */
 function tr(n: number, basamak = 2): string {
-  return Number(n ?? 0).toFixed(basamak).replace(".", ",");
+  return Number(n ?? 0).toFixed(basamak).replace(".", i18n.language === "en" ? "." : ",");
 }
 
 export function AiSpecApprovalModal({
@@ -122,6 +122,7 @@ export function AiSpecApprovalModal({
    *  Öneri yine incelenir ve reddedilebilir; onay düğmesi pasiftir ve bunu SÖYLER (düğme etiketi gerçeği söyler). */
   surusKapali?: string;
 }) {
+  const { t } = useTranslation();
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
 
@@ -138,7 +139,7 @@ export function AiSpecApprovalModal({
   const model = String(specs.model || "kedi");
   const arastirma = model !== "kedi";
   const modelAdi = arastirma ? modelProfili(model).baslik : "";
-  const hedefEtiketi = arastirma ? modelProfili(model).hedefEtiketi : "Organ";
+  const hedefEtiketi = arastirma ? modelProfili(model).hedefEtiketi : t("ai.pro.profil.kedi.hedefEtiketi");
   const hedefAdi = specs.target_label || organName || `#${specs.organ_id}`;
   const eHedef = Number(specs.e_cancer ?? specs.e_field ?? 0);
   const eCevre = Number(specs.e_healthy ?? 0);
@@ -161,19 +162,19 @@ export function AiSpecApprovalModal({
       onBackdropPress={kapat}
       maxWidth={rs(520)}
       testID="ai-onay"
-      accessibilityLabel="AI seans önerisi onay penceresi"
+      accessibilityLabel={t("ai.pro.onay.pencereEtiketi")}
       contentStyle={s.icerik}
       header={
         <View style={s.head}>
           <View style={{ flex: 1 }}>
             <Text style={s.title} numberOfLines={2}>
-              {arastirma ? `AI Seans Önerisi — ${modelAdi} · ${hedefAdi}` : "AI Seans Önerisi"}
+              {arastirma ? t("ai.pro.onay.baslikArastirma", { modelAdi, hedefAdi }) : t("ai.pro.onay.baslik")}
             </Text>
             {/* ⚠️ DÜRÜSTLÜK: fantom/petri klinik bir teşhis değil; onaylayan kişi bunu BAŞLIKTA
                 görmeli (küçük bir dipnot yeterli olmazdı). */}
-            {arastirma ? <Text style={s.altBaslik}>Araştırma amaçlı model tahmini</Text> : null}
+            {arastirma ? <Text style={s.altBaslik}>{t("ai.pro.onay.altBaslik")}</Text> : null}
           </View>
-          <IconButton label="Kapat" onPress={kapat}>
+          <IconButton label={t("ortak.kapat")} onPress={kapat}>
             <X size={rs(20)} color={colors.textMuted} />
           </IconButton>
         </View>
@@ -181,28 +182,28 @@ export function AiSpecApprovalModal({
       footer={
         rejecting ? (
           <View style={s.rejectBox}>
-            <Text style={s.rejectLabel}>Red gerekçesi (kayda geçer)</Text>
+            <Text style={s.rejectLabel}>{t("ai.pro.onay.redGerekcesiKayit")}</Text>
             <TextInput
               style={s.input}
               value={reason}
               onChangeText={setReason}
-              placeholder="Örn. lokalizasyon hatalı, duty çok yüksek…"
+              placeholder={t("ai.pro.onay.redOrnek")}
               placeholderTextColor={colors.textSubtle}
               multiline
-              accessibilityLabel="Red gerekçesi"
+              accessibilityLabel={t("ai.pro.degerlendirme.redGerekcesi")}
             />
             <View style={s.actions}>
               <TouchableOpacity style={[s.btn, s.btnGhost]} onPress={() => setRejecting(false)}>
-                <Text style={s.btnGhostText}>Vazgeç</Text>
+                <Text style={s.btnGhostText}>{t("ortak.vazgec")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.btn, s.btnDanger, (!reason.trim() || busy) && s.btnDisabled]}
                 disabled={!reason.trim() || !!busy}
                 onPress={() => onReject(reason.trim())}
                 accessibilityRole="button"
-                accessibilityLabel="Reddi onayla"
+                accessibilityLabel={t("ai.pro.onay.rediOnayla")}
               >
-                <Text style={s.btnDangerText}>Reddet</Text>
+                <Text style={s.btnDangerText}>{t("ai.pro.onay.reddet")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -213,10 +214,10 @@ export function AiSpecApprovalModal({
               onPress={() => setRejecting(true)}
               disabled={!!busy}
               accessibilityRole="button"
-              accessibilityLabel="Öneriyi reddet"
+              accessibilityLabel={t("ai.pro.onay.oneriyiReddet")}
             >
               <XCircle size={rs(16)} color={colors.danger} />
-              <Text style={s.btnGhostText}>Reddet</Text>
+              <Text style={s.btnGhostText}>{t("ai.pro.onay.reddet")}</Text>
             </TouchableOpacity>
             {surusKapali ? (
               // Y142: sürüş kapalıyken onay seans BAŞLATMAZ — düğme pasif ve etiketi bunu söyler (backend de 409 verir).
@@ -226,9 +227,9 @@ export function AiSpecApprovalModal({
                 disabled
                 accessibilityRole="button"
                 accessibilityState={{ disabled: true }}
-                accessibilityLabel="Sürüş kapalı — onay seansı başlatmaz"
+                accessibilityLabel={t("ai.pro.onay.surusKapaliEtiket")}
               >
-                <Text style={s.btnPrimaryText}>Sürüş kapalı</Text>
+                <Text style={s.btnPrimaryText}>{t("ai.pro.onay.surusKapali")}</Text>
               </TouchableOpacity>
             ) : (
             <TouchableOpacity
@@ -236,10 +237,10 @@ export function AiSpecApprovalModal({
               onPress={onApprove}
               disabled={!!busy}
               accessibilityRole="button"
-              accessibilityLabel="Öneriyi onayla ve seansı başlat"
+              accessibilityLabel={t("ai.pro.onay.onaylaEtiket")}
             >
               <CheckCircle2 size={rs(16)} color="#04121F" />
-              <Text style={s.btnPrimaryText}>{busy ? "Başlatılıyor…" : "Onayla ve Başlat"}</Text>
+              <Text style={s.btnPrimaryText}>{busy ? t("ai.pro.onay.baslatiliyor") : t("ai.pro.onay.onaylaBaslat")}</Text>
             </TouchableOpacity>
             )}
           </View>
@@ -250,32 +251,33 @@ export function AiSpecApprovalModal({
             <>
               <Text style={s.surusKapali} testID="ai-onay-surus-kapali">{surusKapali}</Text>
               <Text style={s.lead}>
-                Parametreleri inceleyebilir ya da gerekçesiyle reddedebilirsiniz; bu ekrandan{" "}
-                <Text style={s.bold}>seans başlatılamaz</Text>.
+                <Trans i18nKey="ai.pro.onay.surusKapaliLead" components={{ kalin: <Text style={s.bold} /> }} />
               </Text>
             </>
           ) : (
           <Text style={s.lead}>
-            {arastirma ? "Deney seansı " : "Otonom seans "}
-            <Text style={s.bold}>onaylanmadan başlamaz</Text>. Aşağıdaki parametreleri inceleyip
-            onaylayın veya gerekçesiyle reddedin.
+            {arastirma ? (
+              <Trans i18nKey="ai.pro.onay.leadDeney" components={{ kalin: <Text style={s.bold} /> }} />
+            ) : (
+              <Trans i18nKey="ai.pro.onay.leadOtonom" components={{ kalin: <Text style={s.bold} /> }} />
+            )}
           </Text>
           )}
 
           <View style={s.summary}>
             {/* D2.E15: onaylanan seansın HASTASI (mühürden) — "A için onaylat, B'ye başlat" imkânsız; hekim kimi onayladığını görür. */}
-            <Meta label={arastirma ? "Örnek" : "Hasta"} value={specs.patient_name || "— seçilmedi (sahipsiz kaydedilir)"} />
+            <Meta label={arastirma ? t("hasta.sozluk.arastirma.tekilKisa") : t("hasta.sozluk.klinik.tekil")} value={specs.patient_name || t("ai.pro.onay.hastaSecilmedi")} />
             <Meta label={hedefEtiketi} value={hedefAdi} />
-            <Meta label="Süre" value={`${specs.duration_minutes} dk`} />
-            <Meta label="Sürülen bobin" value={`${surulen}/${rows.length}`} />
-            {arastirma ? null : <Meta label="E (öngörü)" value={Number(specs.e_field ?? 0).toFixed(4)} />}
+            <Meta label={t("kontrol.sinir.sure")} value={t("ai.pro.onay.sureDk", { duration_minutes: specs.duration_minutes })} />
+            <Meta label={t("ai.pro.onay.surulenBobin")} value={`${surulen}/${rows.length}`} />
+            {arastirma ? null : <Meta label={t("ai.pro.onay.eOngoru")} value={Number(specs.e_field ?? 0).toFixed(4)} />}
           </View>
 
           {/* KONUM: araştırmada dozu belirleyen tek girdi 3B konumdur → onaylayan kişi SAYIYI görmeli
               (kedi hattında panelde zaten metrik satırı var, modal kalabalıklaşmasın). */}
           {arastirma && konumVar ? (
             <Text style={s.konum}>
-              {`Konum (mm): x ${tr(meta!.x_mm!, 1)} · y ${tr(meta!.y_mm!, 1)} · z ${tr(meta!.z_mm!, 1)}`}
+              {t("ai.pro.onay.konum", { x: tr(meta!.x_mm!, 1), y: tr(meta!.y_mm!, 1), z: tr(meta!.z_mm!, 1) })}
             </Text>
           ) : null}
 
@@ -283,8 +285,8 @@ export function AiSpecApprovalModal({
               Çevre değeri ölçülebilir düzeydeyse (>0,01) SEÇİCİLİK oranı da gösterilir. */}
           {arastirma ? (
             <Text style={s.konum}>
-              {`Tahmini alan (göreli, birimsiz): hedefte ${tr(eHedef)}` +
-                (eCevre > 0.01 ? ` · çevrede ${tr(eCevre)} (oran ${tr(eHedef / eCevre, 1)}×)` : "")}
+              {t("ai.pro.onay.alan", { hedef: tr(eHedef) }) +
+                (eCevre > 0.01 ? t("ai.pro.onay.alanCevre", { cevre: tr(eCevre), oran: tr(eHedef / eCevre, 1) }) : "")}
             </Text>
           ) : null}
 
@@ -295,42 +297,41 @@ export function AiSpecApprovalModal({
           {/* Y143: otomatik seçim onay anında MÜHÜRLENDİ — onaylanan hedef seans boyunca DEĞİŞMEZ (görülen = sürülen). */}
           {arastirma && meta?.otomatik_secim ? (
             <Text style={s.uyari} testID="ai-onay-otomatik-muhur">
-              {`Otomatik seçim bu hedefe mühürlendi: seans boyunca yalnız «${hedefAdi}» sürülür; hedef kaybolursa sürüş durur.`}
+              {t("ai.pro.onay.otomatikMuhur", { hedefAdi })}
             </Text>
           ) : null}
 
           {arastirma && meta?.ood ? (
             <Text style={s.uyari}>
-              Konum, modelin eğitim aralığı dışında olabilir — sonuç araştırma amaçlıdır.
+              {t("ai.pro.konumEgitimDisi")}
             </Text>
           ) : null}
 
           {model === "petri" ? (
-            <Text style={s.uyari}>Kanserli/sağlıklı ayrımı bu modelde sınırlı doğrulanmıştır.</Text>
+            <Text style={s.uyari}>{t("ai.pro.onay.petriSinirli")}</Text>
           ) : null}
 
           {guven !== null && (
             <Text style={[s.rel, dusukGuven && s.relWarn]}>
-              Lokalizasyon güveni: %{Math.round(guven * 100)}
-              {dusukGuven ? " — DÜŞÜK, konumu doğrulayın" : ""}
+              {t("ai.pro.onay.guven", { guven: Math.round(guven * 100) })}
+              {dusukGuven ? t("ai.pro.onay.guvenDusuk") : ""}
             </Text>
           )}
 
           {/* Sunum-katmanı XAI (2026-08-26): hekim onaylamadan "dozu ne belirledi" görür. */}
           {(() => {
-            const x = xaiSatirlari(meta?.xaiSensitivity, arastirma ? XAI_ETIKET_ARASTIRMA : XAI_ETIKET);
+            const x = xaiSatirlari(meta?.xaiSensitivity, xaiEtiketleri(arastirma));
             return (
               <>
-                {x.belirleyen.length > 0 && <Text style={s.xai}>{"Dozu en çok belirleyen: " + x.belirleyen.join(" · ")}</Text>}
+                {x.belirleyen.length > 0 && <Text style={s.xai}>{t("ai.pro.onay.xaiBelirleyen", { liste: x.belirleyen.join(" · ") })}</Text>}
                 {x.egitimDisi.length > 0 && (
                   <Text style={s.xai}>
-                    {"⚠ Açıklamadaki değer eğitim aralığı dışında (" + x.egitimDisi.join(", ") +
-                      ") — açıklama tahmin dışı bölgeye uzanıyor; konumu ve parametreleri doğrulayın."}
+                    {t("ai.pro.onay.xaiEgitimDisi", { liste: x.egitimDisi.join(", ") })}
                   </Text>
                 )}
                 {x.ogrenilmemis.length > 0 && (
                   <Text style={s.xai}>
-                    {"Öğrenilmemiş girdi: " + x.ogrenilmemis.join(", ") + " — model eğitiminde sabitti, dozu etkilemez; açıklamaya katılmadı."}
+                    {t("ai.pro.onay.xaiOgrenilmemis", { liste: x.ogrenilmemis.join(", ") })}
                   </Text>
                 )}
               </>
@@ -341,15 +342,15 @@ export function AiSpecApprovalModal({
               Tablo artık tek kaydırıcının (kart gövdesi) parçası. */}
           <View style={s.tableWrap}>
             <View style={[s.tr, s.trHead]}>
-              <Text style={[s.th, s.cCoil]}>Bobin</Text>
-              <Text style={[s.th, s.cDuty]}>Duty</Text>
-              <Text style={[s.th, s.cPhase]}>Faz</Text>
+              <Text style={[s.th, s.cCoil]}>{t("ai.pro.tablo.bobin")}</Text>
+              <Text style={[s.th, s.cDuty]}>{t("kontrol.bobin.duty")}</Text>
+              <Text style={[s.th, s.cPhase]}>{t("kontrol.sinir.faz")}</Text>
             </View>
             {rows.map((r) => (
               <View key={r.cid} style={s.tr}>
                 <Text style={[s.td, s.cCoil]}>{r.cid}</Text>
                 <Text style={[s.td, s.cDuty, r.duty > 0 ? s.on : s.off]}>
-                  %{(r.duty * 100).toFixed(1)}
+                  {t("ai.ortak.yuzde", { deger: (r.duty * 100).toFixed(1) })}
                 </Text>
                 <Text style={[s.td, s.cPhase]}>{r.phase.toFixed(0)}°</Text>
               </View>

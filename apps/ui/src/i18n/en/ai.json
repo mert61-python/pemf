@@ -380,7 +380,8 @@
       "karaciger": "Liver",
       "mesane": "Bladder",
       "mide": "Stomach",
-      "pankreas": "Pancreas"
+      "pankreas": "Pancreas",
+      "tumVucut": "Whole Body"
     },
     "analiziBaslat": "Start Organ Analysis",
     "anatomik": "⚠ Anatomical consistency warning: the organ arrangement contradicts the expected anatomy — treat the localization with caution.",
@@ -578,6 +579,254 @@
     "varsayilan": "default {{vars}}",
     "varsayilanaDon": "Reset settings to default",
     "varsayilanlaraDon": "↺ Reset to defaults"
+  },
+  "pro": {
+    "adim": {
+      "etiket": "Step {{adim}} / {{toplam}}: {{ad}}",
+      "geri": "Back",
+      "geriEtiket": "{{geriEtiketi}}: go back to the previous step",
+      "hedef": "Target",
+      "kamera": "Camera",
+      "metin": "Step {{adim}}/{{toplam}} · {{ad}}",
+      "model": "Model",
+      "onay": "Approval",
+      "seans": "Session"
+    },
+    "asama": {
+      "dogrulaniyor": "✓ {{organAdi}} seen — verifying ({{ardisik}}/{{onay}}) · waiting for the second measurement…",
+      "hayvanAraniyor": "🐾 Looking for the animal… point the camera at the patient{{gecikmeIpucu}}",
+      "hayvanGorunuyor": "🔎 The animal is visible, looking for {{organAdi}}… (turn the camera slightly){{gecikmeIpucu}}",
+      "konumlandi": "✓ {{organAdi}} located — confidence {{guvenYuzde}}%{{sinirda}} · calculating the recommendation…",
+      "sinirda": " ⚠️ borderline"
+    },
+    "asamaArastirma": {
+      "hedefAraniyor": "🔎 The {{ozne}} is visible, looking for the {{hedefEtiketiKucuk}}…{{gecikmeIpucu}}",
+      "konumOlculemedi": "✓ {{hedefEtiketi}} found, but the position could not be measured — the cabin marker (the square code on the back wall) is not visible in the frame. Adjust the camera so that the marker and the target stay in the same frame.",
+      "konumlandi": "✓ {{hedefEtiketi}} located — confidence {{guvenYuzde}}% · calculating the recommendation…",
+      "ozneAraniyor": "🔎 Looking for the {{ozne}}… {{ozneIpucu}}{{gecikmeIpucu}}"
+    },
+    "baslatKapali": {
+      "mobil": "This model needs the desktop cabin camera — use the Control → AI Pro screen on the computer.",
+      "modelYok": "First choose a target model in Step 1."
+    },
+    "bobinDiagnostigi": "📊 Coil Diagnostics",
+    "degerlendirme": {
+      "degerlendirilmedi": "This AI result has not been evaluated. The clinical decision belongs to the veterinarian.",
+      "dogruTeshis": "Correct diagnosis / correction",
+      "duzelt": "Correct",
+      "duzeltEtiket": "Correct the AI result",
+      "duzeltmeAciklamasi": "Correction description",
+      "duzeltmeOrnek": "E.g. actual diagnosis: idiopathic cystitis",
+      "duzeltmeyiKaydet": "Save correction",
+      "hekimDuzeltti": "Veterinarian corrected",
+      "hekimOnayladi": "Veterinarian approved",
+      "hekimReddetti": "Veterinarian rejected",
+      "kaydedilemedi": "The evaluation could not be saved — your reason is preserved. Try again.",
+      "onayla": "Approve",
+      "onaylaEtiket": "Approve the AI result",
+      "redGerekcesi": "Rejection reason",
+      "redOrnek": "E.g. does not match the clinical findings",
+      "reddet": "Reject",
+      "reddetEtiket": "Reject the AI result",
+      "rediKaydet": "Save rejection"
+    },
+    "dugme": {
+      "analizOneri": "🔎 Analysis and Recommendation (driving off)",
+      "analizOneriEtiket": "AI Pro analysis and recommendation — cat driving is off",
+      "analizOneriIpucu": "Locates the organ and prepares a dose recommendation; no coil is driven",
+      "baslat": "🚀 Start AI Pro (1Hz DDS)",
+      "baslatEtiket": "Start the AI Pro autonomous session",
+      "baslatIpucu": "Drives the coils automatically with the camera closed loop",
+      "durdur": "⏹ Stop AI Pro",
+      "durdurEtiket": "Stop the AI Pro autonomous session",
+      "durdurIpucu": "Stops the coils",
+      "hazirlaniyor": "🔎 Preparing…",
+      "hazirligiBaslat": "🚀 Start Preparation"
+    },
+    "gecikmeIpucu": " · Not found: increase the ambient light, move 1-2 meters away, and get the animal fully in the frame.",
+    "guven": {
+      "anatomikGecti": " · anatomical check passed",
+      "anatomikTutarsiz": " · ⚠️ anatomical inconsistency — the organ placement could not be verified; change the angle and re-locate",
+      "ayna": " · ⚠️ left-right (mirror) ambiguity — turn the camera slightly to change the angle",
+      "dokum": "Confidence breakdown: pose {{poz}}% × depth {{derinlik}}{{maske}} × uncertainty {{belirsizlik}}{{kalibrasyon}}",
+      "kalibrasyonsuz": " · ⚠️ uncalibrated — cap {{tavan}}%",
+      "maskeDisi": " × outside-mask ×0.6",
+      "pnpHata": " · PnP fit error ≈ {{cm}} cm",
+      "pozTuru": " · pose type {{tur}}"
+    },
+    "hata": {
+      "hazirlikKomutu": "The preparation command did not reach the server — check the connection and try again.",
+      "oneriDenenecek": "The recommendation could not be obtained — localization is continuing, it will be retried.",
+      "oneriDeneniyor": "The recommendation could not be obtained — localization is continuing, it is being retried."
+    },
+    "hazirlikIptal": "Cancel the preparation",
+    "hedef": {
+      "adsiz": "target",
+      "baslik": "🎯 Targets (select on the frame or here)",
+      "durumOtomatik": ", selected automatically",
+      "durumSecili": ", selected",
+      "etiket": "Target {{sira}} / {{toplam}}: {{ad}}, confidence {{guven}} percent{{durum}}",
+      "numara": "Target {{sira}}",
+      "otomatik": "selected automatically"
+    },
+    "hedefOrgan": "🧠 Target Organ",
+    "hedefOrganEtiket": "Target organ: {{name}}",
+    "kalan": "Remaining",
+    "kalibrasyon": {
+      "bekliyor": "3D position: not measured yet — it is measured once the camera opens.",
+      "dogrulandi": "3D position: verified with the cabin marker ✓",
+      "olculemedi": "The position could not be measured — the cabin marker (the square code on the back wall) is not visible in the frame. Adjust the camera so that the marker and the target stay in the same frame."
+    },
+    "kamera": {
+      "cevirEtiketi": "Flip the camera (front/back)",
+      "durdu": "AI Pro stopped.",
+      "durduBaslat": "AI Pro stopped. Start → the camera opens.",
+      "goruntuBekleniyor": "Waiting for image…",
+      "izinBekleniyor": "Waiting for camera permission…",
+      "sunucuAciliyor": "Opening the server camera… waiting for image"
+    },
+    "kapi": {
+      "baglamFantom": "The live E indicator and the “main dose determinant” explanation were not built from this result — the result is not drivable (reasons below).",
+      "baglamPetri": "The “main dose determinant” explanation was not produced from this result — the result is not drivable (reasons below).",
+      "esasAlinmaz": "The D / P / E values below are NOT used as the basis for coil driving:",
+      "gecerli": "✔ PEMF input is valid",
+      "gecersiz": "⛔ PEMF input is INVALID",
+      "kullanilamaz": "⛔ The result CANNOT BE USED for coil driving (cabin position is valid — reasons below)",
+      "tespitGuvenilir": "   ·   detection is reliable",
+      "tespitGuvenilirDegil": "   ·   ⛔ detection is NOT reliable",
+      "tespitGuvenilirTik": "   ·   ✔ detection is reliable"
+    },
+    "kediSurusKapali": "Cat AI Pro driving is off until the cabin position is verified. You can review the analysis and the recommendation; start the session manually from the Control screen.",
+    "konumEgitimDisi": "The position may be outside the model's training range — the result is for research purposes.",
+    "metrik": {
+      "bulundu": "✓ Found",
+      "guven": "Confidence",
+      "organ": "Organ"
+    },
+    "model": {
+      "baslik": "🔬 Target Model",
+      "deneysel": "Experimental — view-only for now",
+      "dozOnaylanamaz": "In this version a dose for a phantom/petri target CANNOT be approved: the 3D position transform has not been verified on the bench. You can open the camera and see the target and its position, and measure the placement.",
+      "kurulu": "Model installed ✓",
+      "kurulumBilinmiyor": "Installation status could not be read",
+      "kurulumEksik": "The research model package is not installed on this device"
+    },
+    "modelKilitli": "The model cannot be changed while a session or preparation is running — stop it first.",
+    "not": {
+      "arastirmaGiris": "🔬 This screen finds the experiment target with the cabin camera, recommends a dose for the 7 coils, and does NOT run any coil until YOU approve.",
+      "arastirmaMobil": "🔬 These models need the desktop CABIN camera: the position is measured relative to the cabin marker, and a phone cannot do this. Use the Control → AI Pro screen on the computer; here you can only watch.",
+      "kediMobilOneri": "📷 Point your phone camera at the CAT — organ localization and em_kedi dose RECOMMENDATION; driving is off, no coil is driven.",
+      "kediMobilSeans": "📷 Point your phone camera at the CAT — the 7 coils are driven per coil using organ localization (em_kedi).",
+      "kediWebOneri": "📷 Cat organ localization from the server camera → em_kedi dose RECOMMENDATION — driving is off, no coil is driven.",
+      "kediWebSeans": "📷 Live autonomous session from the server camera: cat organ localization → em_kedi → 7 coils."
+    },
+    "onay": {
+      "alan": "Estimated field (relative, unitless): at the target {{hedef}}",
+      "alanCevre": " · surroundings {{cevre}} (ratio {{oran}}×)",
+      "altBaslik": "Model estimate for research purposes",
+      "baslatiliyor": "Starting…",
+      "baslik": "AI Session Recommendation",
+      "baslikArastirma": "AI Session Recommendation — {{modelAdi}} · {{hedefAdi}}",
+      "eOngoru": "E (predicted)",
+      "guven": "Localization confidence: {{guven}}%",
+      "guvenDusuk": " — LOW, verify the position",
+      "hastaSecilmedi": "— not selected (saved without an owner)",
+      "konum": "Position (mm): x {{x}} · y {{y}} · z {{z}}",
+      "leadDeney": "An experiment session <kalin>does not start without approval</kalin>. Review the parameters below and approve, or reject with a reason.",
+      "leadOtonom": "An autonomous session <kalin>does not start without approval</kalin>. Review the parameters below and approve, or reject with a reason.",
+      "onaylaBaslat": "Approve and Start",
+      "onaylaEtiket": "Approve the recommendation and start the session",
+      "oneriyiReddet": "Reject the recommendation",
+      "otomatikMuhur": "The automatic selection was sealed to this target: only «{{hedefAdi}}» is driven during the session; if the target is lost, driving stops.",
+      "pencereEtiketi": "AI session recommendation approval dialog",
+      "petriSinirli": "The cancerous/healthy distinction has been validated only to a limited extent in this model.",
+      "redGerekcesiKayit": "Rejection reason (will be recorded)",
+      "redOrnek": "E.g. localization is wrong, duty is too high…",
+      "reddet": "Reject",
+      "rediOnayla": "Confirm rejection",
+      "sureDk": "{{duration_minutes}} min",
+      "surulenBobin": "Driven coils",
+      "surusKapali": "Driving off",
+      "surusKapaliEtiket": "Driving is off — approval does not start a session",
+      "surusKapaliLead": "You can review the parameters or reject with a reason; a session <kalin>cannot be started</kalin> from this screen.",
+      "xaiBelirleyen": "Main dose determinants: {{liste}}",
+      "xaiEgitimDisi": "⚠ A value in the explanation is outside the training range ({{liste}}) — the explanation extends into a region beyond the prediction; verify the position and the parameters.",
+      "xaiOgrenilmemis": "Unlearned input: {{liste}} — it was constant in the model training, does not affect the dose, and was excluded from the explanation."
+    },
+    "planDisiBobin": "Coil {{id}} was removed from the AI Pro plan",
+    "profil": {
+      "fantom": {
+        "aciklama": "Finds the blue tumor foci in the silicone phantom; recommends a dose for the focus.",
+        "hedefEtiketi": "Tumor",
+        "hedefEtiketiKucuk": "tumor",
+        "ozne": "phantom",
+        "ozneIpucu": "Place the phantom flat in the middle of the tray; keep the cabin marker in the frame too."
+      },
+      "kedi": {
+        "aciklama": "Finds the selected organ of the animal in the camera; recommends a dose for the organ.",
+        "hedefEtiketi": "Organ",
+        "hedefEtiketiKucuk": "organ",
+        "ozne": "animal",
+        "ozneIpucu": "Point the camera at the patient."
+      },
+      "petri": {
+        "aciklama": "Finds the wells in the Petri plate; recommends a dose for the cancerous well.",
+        "hedefEtiketi": "Well",
+        "hedefEtiketiKucuk": "well",
+        "ozne": "petri plate",
+        "ozneIpucu": "Place the plate flat on the tray; frame it fully with the camera from above."
+      }
+    },
+    "sure": "⏱ Duration (min)",
+    "tablo": {
+      "bobin": "Coil",
+      "planDisi": "removed from the plan",
+      "surulmedi": "not driven",
+      "surulmediPlan": "not driven (plan {{duty}}%)"
+    },
+    "takip": {
+      "baslik": "📈 {{ad}} · {{baslik}} change",
+      "disarida_one": "Only analyses of the same type are compared — {{count}} analysis of a different type was not included in the chart.",
+      "disarida_other": "Only analyses of the same type are compared — {{count}} analyses of a different type were not included in the chart."
+    },
+    "uyari": {
+      "durdurulamadi": "Could not be stopped",
+      "durdurulamadiGovde": "The autonomous session stop command did not reach the server. Check the connection and try again; if the problem continues, use EMERGENCY STOP.",
+      "gerekceKaydedilemedi": "The reason could not be saved",
+      "gerekceKaydedilemediGovde": "The recommendation was rejected and treatment was NOT started; however, the rejection reason could not be written to the device's records. Add the reason to the patient note; if the problem continues, report it to technical support.",
+      "hastasizBaslik": "{{tekilKisa}} not selected",
+      "hastasizGovdeDeney": "The experiment session will be saved without being linked to any {{belirtme}}; it will appear without an owner in the session history.\n\nDo you still want to start it?",
+      "hastasizGovdeOtonom": "The autonomous session will be saved without being linked to any {{belirtme}}; it will appear without an owner in the session history.\n\nDo you still want to start it?",
+      "hedefDegistirilemedi": "Could not change the target",
+      "kabinKamerasi": "This session is done with the cabin camera",
+      "kabinKamerasiGovde": "A phantom or petri target is measured relative to the cabin marker; a phone camera cannot do this measurement. Use the Control → AI Pro screen on the computer.",
+      "komutUlasmadi": "The command did not reach the server — try again.",
+      "konumlandirmaTamamlanamadi": "Localization could not be completed",
+      "konumlandirmaTamamlanamadiGovde": "The animal could not be found in the frame for two minutes; the camera was stopped (battery protection). Increase the light, bring the phone 1-2 meters away, get the animal fully in the frame, then start again.",
+      "modelSecilmedi": "No model selected",
+      "modelSecilmediGovde": "First select the Phantom or Petri card in Step 1.",
+      "organDegistirilemedi": "Could not change the organ",
+      "sunucuKamerasi": "The server camera could not be started",
+      "sunucuReddetti": "The server rejected the request ({{durum}}).",
+      "surusKapali": "Driving off",
+      "yenidenKonumlanamadi": "Could not re-locate"
+    },
+    "xai": {
+      "dokuTipi": "tissue type",
+      "egitimDisiEk": " (outside the training range)",
+      "gucButcesi": "power budget",
+      "hedefAlan": "target field (B)",
+      "konumX": "position X",
+      "konumY": "position Y",
+      "konumZ": "position Z",
+      "organSecimi": "organ selection"
+    },
+    "yenidenKonumla": {
+      "dugme": "🎯 Re-locate",
+      "etiket": "Re-locate the target organ",
+      "konumlandi": "✓ Located",
+      "konumlandiEtiket": "Target organ located, re-locate"
+    }
   },
   "retikulosit": {
     "agrege": "Aggregate Reticulocytes: {{sayi}}",

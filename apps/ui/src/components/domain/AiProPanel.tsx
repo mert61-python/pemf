@@ -35,26 +35,29 @@ import { useAuth } from "@/context/AuthContext";
 import { AiSpecApprovalModal, type AiProposalMeta, type AiProposalSpecs } from "@/components/domain/AiSpecApprovalModal";
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 import { trValue } from "@/utils/aiDetail";
+import { useTranslation } from "react-i18next";
+import i18n, { type TFunction } from "i18next";
 
-const ORGANS = [
-  { id: 0, name: "Tüm Vücut" }, { id: 1, name: "Mide" }, { id: 2, name: "Böbrek" },
-  { id: 3, name: "Karaciğer" }, { id: 4, name: "Mesane" }, { id: 5, name: "Pankreas" }, { id: 6, name: "Bağırsak" },
+const organListesi = (t: TFunction) => [
+  { id: 0, name: t("ai.organ.ad.tumVucut") }, { id: 1, name: t("ai.organ.ad.mide") }, { id: 2, name: t("ai.organ.ad.bobrek") },
+  { id: 3, name: t("ai.organ.ad.karaciger") }, { id: 4, name: t("ai.organ.ad.mesane") }, { id: 5, name: t("ai.organ.ad.pankreas") }, { id: 6, name: t("ai.organ.ad.bagirsak") },
 ];
+
+/** Ondalık ayırıcı dile uyar: TR "0,13", EN "0.13" (kodda nokta). */
+const ondalik = (n: number, basamak: number): string => n.toFixed(basamak).replace(".", i18n.language === "en" ? "." : ",");
 
 const IS_WEB = Platform.OS === "web";
 
 /** Y142 (sahip 2026-10-13): kedi AI Pro sürüşü kapalıyken gösterilen NEDEN + EYLEM (backend `KEDI_AIPRO_SURUS_KAPALI_MESAJI`
  *  ile aynı metin; öneri yanıtı kendi metnini taşırsa o gösterilir). */
-const KEDI_SURUS_KAPALI_METNI =
-  "Kedi AI Pro sürüşü, kabin konumu doğrulanana kadar kapalı. Analizi ve öneriyi inceleyebilirsiniz; " +
-  "seansı Kontrol ekranından elle başlatın.";
+const kediSurusKapaliMetni = (): string => i18n.t("ai.pro.kediSurusKapali");
 
 /** Y142: bu öneriyle sürüş başlatılabilir mi? Öneri yanıtı (`surusAcik: false`) YA DA durum ucu (`kediAiProSurusAcik: false`,
  *  kedi önerisi) kapalı diyorsa kapalı (ikisinden biri yeter). Alanlar yoksa (eski backend) "" = eski davranış. → neden metni. */
 function oneriSurusuKapali(oneri: AiProposeResponse | null, kediSurusAcik: boolean | null): string {
   if (!oneri) return "";
-  if (oneri.surusAcik === false) return oneri.surusKapaliNedeni || KEDI_SURUS_KAPALI_METNI;
-  if (String(oneri.specs?.model || "kedi") === "kedi" && kediSurusAcik === false) return KEDI_SURUS_KAPALI_METNI;
+  if (oneri.surusAcik === false) return oneri.surusKapaliNedeni || kediSurusKapaliMetni();
+  if (String(oneri.specs?.model || "kedi") === "kedi" && kediSurusAcik === false) return kediSurusKapaliMetni();
   return "";
 }
 
@@ -126,7 +129,7 @@ type FrameResult = {
  *
  * ⚠️ NEDEN AYRI FONKSİYON: kedi `asamaMetni` bloğu, dört aşamanın birbirinden ayırt edilebilir
  * kaldığını kanıtlayan bir kaynak-regex kapısına bağlıdır (tests/test_ai_pro_asamali_akis.py:362 —
- * blokta TAM 4 backtick'li metin sayar). Araştırma dallarını o bloğa eklemek kapıyı kırar ve
+ * blokta TAM 4 aşama anahtarı çağrısı sayar). Araştırma dallarını o bloğa eklemek kapıyı kırar ve
  * kedinin doğrulama/konumlandı ayrımının korunduğunu kimse ölçmez olurdu.
  *
  * Aşamalar kediyle AYNI mantıkta ama özneyi ve eylemi model adıyla söyler: özne yok → yerleşim,
@@ -137,6 +140,7 @@ function asamaMetniArastirma(a: {
   ozne: string;
   ozneIpucu: string;
   hedefEtiketi: string;
+  hedefEtiketiKucuk: string;
   ozneVar: boolean;
   localized: boolean;
   hedefSayisi: number;
@@ -145,18 +149,19 @@ function asamaMetniArastirma(a: {
   gecikmeIpucu: string;
 }): string {
   if (a.localized) {
-    return `✓ ${a.hedefEtiketi} konumlandı — güven %${a.guvenYuzde} · öneri hesaplanıyor…`;
+    return i18n.t("ai.pro.asamaArastirma.konumlandi", { hedefEtiketi: a.hedefEtiketi, guvenYuzde: a.guvenYuzde });
   }
   if (!a.ozneVar) {
-    return `🔎 ${a.ozne} aranıyor… ${a.ozneIpucu}${a.gecikmeIpucu}`;
+    return i18n.t("ai.pro.asamaArastirma.ozneAraniyor", { ozne: a.ozne, ozneIpucu: a.ozneIpucu, gecikmeIpucu: a.gecikmeIpucu });
   }
   if (a.hedefSayisi > 0 && a.yontem && a.yontem !== "aruco_pnp") {
-    return (
-      `✓ ${a.hedefEtiketi} bulundu, konum ölçülemedi — kabin işareti (arka duvardaki kare kod) ` +
-      `kadrajda görünmüyor. Kamerayı işaret ve hedef aynı karede kalacak şekilde ayarlayın.`
-    );
+    return i18n.t("ai.pro.asamaArastirma.konumOlculemedi", { hedefEtiketi: a.hedefEtiketi });
   }
-  return `🔎 ${a.ozne} görünüyor, ${a.hedefEtiketi.toLocaleLowerCase("tr")} aranıyor…${a.gecikmeIpucu}`;
+  return i18n.t("ai.pro.asamaArastirma.hedefAraniyor", {
+    ozne: a.ozne,
+    hedefEtiketiKucuk: a.hedefEtiketiKucuk,
+    gecikmeIpucu: a.gecikmeIpucu,
+  });
 }
 
 function fmtSec(sec: number): string {
@@ -188,13 +193,13 @@ interface GuvenDokumu {
 /** AI1.K3: güven dökümünün hat-kalitesi eki. Sorun varsa operatöre NE YAPACAĞINI söyler; yalnız gösterim (güven/sürüş değişmez). */
 function hatKalitesiMetni(g: GuvenDokumu): string {
   return (
-    (g.poz_turu ? ` · poz türü ${trValue(g.poz_turu)}` : "") +
-    (typeof g.pnp_hata_cm === "number" ? ` · PnP uyum hatası ≈ ${g.pnp_hata_cm.toFixed(1).replace(".", ",")} cm` : "") +
-    (g.ayna_uyarisi ? " · ⚠️ sağ-sol (ayna) belirsizliği — kamerayı biraz çevirip açıyı değiştirin" : "") +
+    (g.poz_turu ? i18n.t("ai.pro.guven.pozTuru", { tur: trValue(g.poz_turu) }) : "") +
+    (typeof g.pnp_hata_cm === "number" ? i18n.t("ai.pro.guven.pnpHata", { cm: ondalik(g.pnp_hata_cm, 1) }) : "") +
+    (g.ayna_uyarisi ? i18n.t("ai.pro.guven.ayna") : "") +
     (g.anatomik_gecti === false
-      ? " · ⚠️ anatomik tutarsızlık — organ yerleşimi doğrulanamadı; açıyı değiştirip yeniden konumlayın"
+      ? i18n.t("ai.pro.guven.anatomikTutarsiz")
       : g.anatomik_gecti === true
-        ? " · anatomik kontrol geçti"
+        ? i18n.t("ai.pro.guven.anatomikGecti")
         : "")
   );
 }
@@ -275,6 +280,8 @@ export function AiProPanel({
   secilebilirModeller?: HedefModeli[];
   kullaniciKipi?: string;
 }) {
+  const { t } = useTranslation();
+  const ORGANS = organListesi(t);
   const { width: pencereX, height: pencereY } = useResponsive();
   const { aiVisionData: v } = useLiveData();
 
@@ -507,7 +514,7 @@ export function AiProPanel({
         setHazirlik(false);
         oneriIstendiRef.current = false;
         setHazirlikHata(st.hazirlikHata);
-        platformAlert("Sunucu kamerası başlatılamadı", st.hazirlikHata);
+        platformAlert(i18n.t("ai.pro.uyari.sunucuKamerasi"), st.hazirlikHata);
       }
       // ORTA fix: organId'yi YALNIZ aktif seansta backend'den senkronla. Seans yokken kullanıcının seçtiği
       // organ'ı 3sn'lik poll EZMESİN (kullanıcı organ seçerken seçim geri zıplıyordu).
@@ -523,17 +530,13 @@ export function AiProPanel({
     // ARAŞTIRMA KAPISI 1: model seçilmeden hazırlık başlatılamaz. Backend boş `model`i "kedi"
     // sayar (eski istemci uyumu) → seçim yapılmadan başlatmak SESSİZCE kedi hattını açardı.
     if (arastirmaKipi && !hedefModeliRef.current) {
-      platformAlert("Model seçilmedi", "Önce Adım 1'de Fantom ya da Petri kartını seçin.");
+      platformAlert(i18n.t("ai.pro.uyari.modelSecilmedi"), i18n.t("ai.pro.uyari.modelSecilmediGovde"));
       return;
     }
     // ARAŞTIRMA KAPISI 2 (sahip kararı #15): fantom/petri konumu KABİN çerçevesinde ölçülür;
     // telefon kamerası o çerçevenin dışındadır → konum ölçülemez, öneri hiç üretilmez.
     if (arastirmaMobilKapali) {
-      platformAlert(
-        "Bu seans kabin kamerasıyla yapılır",
-        "Fantom ve petri hedefi kabin işaretine göre ölçülür; telefon kamerası bu ölçümü yapamaz. " +
-          "Bilgisayardaki Kontrol → AI Pro ekranını kullanın.",
-      );
+      platformAlert(i18n.t("ai.pro.uyari.kabinKamerasi"), i18n.t("ai.pro.uyari.kabinKamerasiGovde"));
       return;
     }
     // DENETİM İZİ: AI Pro otonom tedavisi hiçbir hastaya BAĞLANMADAN başlatılabiliyordu —
@@ -545,9 +548,10 @@ export function AiProPanel({
       // kendisi ve denetim izi AYNI; yalnız arayüz dili role uyar (sözlük: utils/profilSozlugu).
       const S = profilSozlugu({ researcher: arastirmaKipi });
       const go = await platformConfirm(
-        `${S.tekilKisa} seçilmedi`,
-        `${arastirmaKipi ? "Deney" : "Otonom"} seansı hiçbir ${S.belirtme} bağlanmadan kaydedilecek; ` +
-          "seans geçmişinde sahipsiz görünür.\n\nYine de başlatmak istiyor musunuz?",
+        i18n.t("ai.pro.uyari.hastasizBaslik", { tekilKisa: S.tekilKisa }),
+        arastirmaKipi
+          ? i18n.t("ai.pro.uyari.hastasizGovdeDeney", { belirtme: S.belirtme })
+          : i18n.t("ai.pro.uyari.hastasizGovdeOtonom", { belirtme: S.belirtme }),
         S.sizBaslat
       );
       if (!go) return;
@@ -603,7 +607,7 @@ export function AiProPanel({
     // B3: komut sunucuya ULAŞMADIYSA hazırlığa girme — aksi hâlde düğme 120 sn "Hazırlanıyor…"da
     // takılır, kamera kutusu kapkara kalır ve operatör sebebi göremez.
     if (!hz) {
-      setHazirlikHata("Hazırlık komutu sunucuya ulaşmadı — bağlantıyı kontrol edip tekrar deneyin.");
+      setHazirlikHata(i18n.t("ai.pro.hata.hazirlikKomutu"));
       return;
     }
     setHazirlik(true);   // status /localized görününce web-öneri efekti propose'u tetikler
@@ -667,7 +671,7 @@ export function AiProPanel({
       } else {
         // Öneri alınamadı (ör. model bu konum için sürülebilir parametre üretmedi): hazırlıkta
         // KAL ve tekrar denenebilsin — ama ARALIKLI (bkz. oneriBeklemeRef).
-        setOneriHatasi("Öneri alınamadı — konumlandırma sürüyor, tekrar denenecek.");
+        setOneriHatasi(i18n.t("ai.pro.hata.oneriDenenecek"));
         oneriBeklemeRef.current = Date.now() + ONERI_BEKLEME_MS;
         oneriIstendiRef.current = false;
       }
@@ -722,7 +726,7 @@ export function AiProPanel({
         // sabit boolean olduğundan efekt kendiliğinden yeniden koşmaz → localized'ı sıfırla: sonraki 3sn'lik
         // status poll (backend cache hâlâ localized) onu tekrar true yapar ve efekt ARALIKLI (bekleme)
         // yeniden dener. (Adversaryal inceleme MINOR: mobil retry paritesi.)
-        setOneriHatasi("Öneri alınamadı — konumlandırma sürüyor, tekrar deneniyor.");
+        setOneriHatasi(i18n.t("ai.pro.hata.oneriDeneniyor"));
         oneriBeklemeRef.current = Date.now() + ONERI_BEKLEME_MS;
         oneriIstendiRef.current = false;
         setLocalized(false);
@@ -752,12 +756,7 @@ export function AiProPanel({
         webLokalizeSayacRef.current = 0;
         if (IS_WEB) apiPost<AiProAction | null>("/ai/pro/hazirlik/durdur", {}, null); // sunucu önizlemesini bırak
         setOneriHatasi("");
-        platformAlert(
-          "Konumlandırma tamamlanamadı",
-          "Hayvan iki dakikadır kadrajda bulunamadı; kamera durduruldu (pil koruması). " +
-            "Ortamın ışığını artırın, telefonu 1-2 metre mesafeye getirin ve hayvanı kadraja tam alın, " +
-            "sonra tekrar başlatın."
-        );
+        platformAlert(i18n.t("ai.pro.uyari.konumlandirmaTamamlanamadi"), i18n.t("ai.pro.uyari.konumlandirmaTamamlanamadiGovde"));
       }
     }, 1000);
     return () => clearInterval(id);
@@ -769,7 +768,7 @@ export function AiProPanel({
     // Y142: sürüş kapalıyken onay seans BAŞLATMAZ — /approve ve /start GÖNDERİLMEZ (düğme zaten pasif; klavye/otomasyon yolu).
     const kapali = oneriSurusuKapali(proposal, kediSurusAcik);
     if (kapali) {
-      platformAlert("Sürüş kapalı", kapali);
+      platformAlert(i18n.t("ai.pro.uyari.surusKapali"), kapali);
       return;
     }
     setApprovalBusy(true);
@@ -814,11 +813,7 @@ export function AiProPanel({
     setProposal(null);
     // S-F2-1.2 (2-F incelemesi · Y123 · C2-1.14): pencere "Red gerekçesi (kayda geçer)" diyor — sunucu yazamadıysa hekim bilmeli.
     if (r && r.gerekceKaydedildi === false) {
-      platformAlert(
-        "Gerekçe kaydedilemedi",
-        "Öneri reddedildi ve tedavi BAŞLAMADI; ancak red gerekçesi cihazın kayıtlarına yazılamadı. Gerekçeyi hasta notuna ekleyin; "
-          + "sorun sürerse teknik desteğe bildirin.",
-      );
+      platformAlert(i18n.t("ai.pro.uyari.gerekceKaydedilemedi"), i18n.t("ai.pro.uyari.gerekceKaydedilemediGovde"));
     }
   }, [proposal, operatorEmail]);
 
@@ -832,10 +827,7 @@ export function AiProPanel({
       setRunning(false);
       setMobileResult(null);
     } else {
-      platformAlert(
-        "Durdurulamadı",
-        "Otonom seans durdurma komutu sunucuya ulaşmadı. Bağlantıyı kontrol edip tekrar deneyin; sorun sürerse ACİL DURDUR kullanın."
-      );
+      platformAlert(i18n.t("ai.pro.uyari.durdurulamadi"), i18n.t("ai.pro.uyari.durdurulamadiGovde"));
     }
     setBusy(false);
   }, []);
@@ -861,11 +853,11 @@ export function AiProPanel({
       setOrganId(onceki);
       // Araştırmada "Organ" kelimesi yanıltıcıdır (hedef bir tümör odağı / kuyudur). Ref'ten
       // okunur ki bu callback'in boş bağımlılık dizisi korunsun.
-      const ad = hedefModeliRef.current && hedefModeliRef.current !== "kedi" ? "Hedef" : "Organ";
+      const hedefMi = hedefModeliRef.current && hedefModeliRef.current !== "kedi";
       const r = red as { durum: number; detay?: string } | null;
       platformAlert(
-        `${ad} değiştirilemedi`,
-        r ? r.detay || `Sunucu isteği reddetti (${r.durum}).` : "Komut sunucuya ulaşmadı — tekrar deneyin."
+        hedefMi ? i18n.t("ai.pro.uyari.hedefDegistirilemedi") : i18n.t("ai.pro.uyari.organDegistirilemedi"),
+        r ? r.detay || i18n.t("ai.pro.uyari.sunucuReddetti", { durum: r.durum }) : i18n.t("ai.pro.uyari.komutUlasmadi")
       );
     }
   }, []);
@@ -874,7 +866,7 @@ export function AiProPanel({
     // Bir sonraki karede cat_organ organ-lokalizasyonunu zorla tazele (avuç-Z kalibrasyonu KALKTI).
     const res = await apiPost<AiProAction | null>("/ai/pro/calibrate", { client_id: clientIdRef.current }, null);
     if (!res) {
-      platformAlert("Yeniden konumlandırılamadı", "Komut sunucuya ulaşmadı — tekrar deneyin.");
+      platformAlert(i18n.t("ai.pro.uyari.yenidenKonumlanamadi"), i18n.t("ai.pro.uyari.komutUlasmadi"));
       return;
     }
     // 🔴 2026-08-24: bu düğme YALNIZ sunucuda bayrak set ediyordu. Mobilde kareler seans
@@ -898,7 +890,7 @@ export function AiProPanel({
         // B3: start() ile AYNI kapı — komut sunucuya ULAŞMADIYSA hazırlığa girme; aksi hâlde bu
         // düğmeyle de eski kör 120 sn "Hazırlanıyor…" davranışı geri gelirdi.
         if (!hz) {
-          setHazirlikHata("Hazırlık komutu sunucuya ulaşmadı — bağlantıyı kontrol edip tekrar deneyin.");
+          setHazirlikHata(i18n.t("ai.pro.hata.hazirlikKomutu"));
           return;
         }
       }
@@ -931,13 +923,13 @@ export function AiProPanel({
           // sahip-yokken zaten bastırmaz — güvenli.
           fd.append("client_id", clientIdRef.current);
           const ctrl = new AbortController();
-          const t = setTimeout(() => ctrl.abort(), 15000);
+          const zamanAsimi = setTimeout(() => ctrl.abort(), 15000);
           const headers: Record<string, string> = { Accept: "application/json" };
           if (serviceConfig.apiToken) headers["X-API-Key"] = serviceConfig.apiToken;
           const r = await fetch(serviceConfig.apiBaseUrl + "/ai/ai_pro/frame", {
             method: "POST", body: fd, headers, signal: ctrl.signal,
           });
-          clearTimeout(t);
+          clearTimeout(zamanAsimi);
           const data = await r.json();
           if (r.ok && data?.status === "success") setMobileResult(data);
         }
@@ -1038,21 +1030,21 @@ export function AiProPanel({
   /** Gecikmede SOMUT yönlendirme (yalnız "tekrar deneyin" demek işe yaramaz). */
   const gecikmeIpucu =
     hazirlik && hazirlikGecen >= HAZIRLIK_UYARI_MS
-      ? " · Bulunamıyor: ortamın ışığını artırın, 1-2 metre mesafeye gelin, hayvanı kadraja tam alın."
+      ? t("ai.pro.gecikmeIpucu")
       : "";
   const asamaMetni = !hazirlik
     ? ""
     : detected
       // B3: web'de ardisik sayaci HİÇ artmaz (mobil efekti); detected artık hazırlıkta web'de de true
       // olabildiğinden şerit "doğrulanıyor (0/2) · ikinci ölçüm bekleniyor…" derdi — oysa web öneriyi ilk
-      // localized anında zaten ister. (Yorumda backtick YOK: test_ai_pro_asamali_akis kaynak-regex kapısı
-      // bu bloktaki backtick'li metinleri asama sayar — tam 4 olmalı.)
+      // localized anında zaten ister. (Yorumda anahtar çağrısı YOK: test_ai_pro_asamali_akis kaynak-regex kapısı
+      // bu bloktaki aşama anahtarı çağrılarını asama sayar — tam 4 olmalı.)
       ? (!IS_WEB && ardisik < ARDISIK_ONAY)
-        ? `✓ ${organAdi} görüldü — doğrulanıyor (${ardisik}/${ARDISIK_ONAY}) · ikinci ölçüm bekleniyor…`
-        : `✓ ${organAdi} konumlandı — güven %${guvenYuzde}${dusukGuven ? " ⚠️ sınırda" : ""} · öneri hesaplanıyor…`
+        ? t("ai.pro.asama.dogrulaniyor", { organAdi, ardisik, onay: ARDISIK_ONAY })
+        : t("ai.pro.asama.konumlandi", { organAdi, guvenYuzde, sinirda: dusukGuven ? t("ai.pro.asama.sinirda") : "" })
       : catDetected
-        ? `🔎 Hayvan görünüyor, ${organAdi} aranıyor… (kamerayı biraz çevirin)${gecikmeIpucu}`
-        : `🐾 Hayvan aranıyor… kamerayı hastaya doğrultun${gecikmeIpucu}`;
+        ? t("ai.pro.asama.hayvanGorunuyor", { organAdi, gecikmeIpucu })
+        : t("ai.pro.asama.hayvanAraniyor", { gecikmeIpucu });
 
   // ── ARAŞTIRMA SUNUMU (kedi hattı yukarıda BİREBİR korunur) ────────────────────────────────
   const modelProf = modelProfili(hedefModeli || "kedi");
@@ -1067,6 +1059,7 @@ export function AiProPanel({
           ozne: modelProf.ozne,
           ozneIpucu: modelProf.ozneIpucu,
           hedefEtiketi: modelProf.hedefEtiketi,
+          hedefEtiketiKucuk: modelProf.hedefEtiketiKucuk,
           ozneVar: IS_WEB ? ozneVar || catDetected : catDetected,
           localized: detected,
           hedefSayisi: hedefAdaylari.length,
@@ -1100,8 +1093,8 @@ export function AiProPanel({
   /** Y142: kedi panelinde sürüş KAPALI (durum ucu söyledi) → başlatma düğmesi yalnız analiz + öneri yapar ve bunu SÖYLER. */
   const kediSurusKapali = !arastirmaKipi && kediSurusAcik === false;
   const baslatKapaliNedeni = arastirmaMobilKapali
-    ? "Bu model masaüstü kabin kamerası ister — bilgisayardaki Kontrol → AI Pro ekranını kullanın."
-    : "Önce Adım 1'de bir hedef modeli seçin.";
+    ? t("ai.pro.baslatKapali.mobil")
+    : t("ai.pro.baslatKapali.modelYok");
 
   return (
     <View style={styles.wrap}>
@@ -1128,22 +1121,22 @@ export function AiProPanel({
       {/* SİHİRBAZ (yalnız araştırma): neredeyim + geri nasıl dönerim. Veterinerde RENDER EDİLMEZ →
           bugünkü ekran birebir korunur. */}
       {arastirmaKipi ? (
-        <AdimGostergesi adim={adim} onGeri={hazirlik ? vazgec : undefined} geriEtiketi="Geri" />
+        <AdimGostergesi adim={adim} onGeri={hazirlik ? vazgec : undefined} geriEtiketi={t("ai.pro.adim.geri")} />
       ) : null}
 
       {/* GİRİŞ CÜMLESİ: bir iddia değil KURAL — bu ekran onay olmadan bobin çalıştırmaz. */}
       <Text style={styles.note}>
         {arastirmaKipi
           ? arastirmaMobilKapali
-            ? "🔬 Bu modeller masaüstü KABİN kamerası ister: konum kabin işaretine göre ölçülür, telefon bunu yapamaz. Bilgisayardaki Kontrol → AI Pro ekranını kullanın; burada yalnız izleyebilirsiniz."
-            : "🔬 Bu ekran deney hedefini kabin kamerasıyla bulur, 7 bobin için doz önerir ve SİZ onaylamadan hiçbir bobini çalıştırmaz."
+            ? t("ai.pro.not.arastirmaMobil")
+            : t("ai.pro.not.arastirmaGiris")
           : kediSurusKapali
             ? IS_WEB
-              ? "📷 Sunucu kamerasından kedi organ lokalizasyonu → em_kedi doz ÖNERİSİ — sürüş kapalı, bobin sürülmez."
-              : "📷 Telefon kameranızı KEDİYE doğrultun — organ lokalizasyonu ve em_kedi doz ÖNERİSİ; sürüş kapalı, bobin sürülmez."
+              ? t("ai.pro.not.kediWebOneri")
+              : t("ai.pro.not.kediMobilOneri")
             : IS_WEB
-            ? "📷 Sunucu kamerasından canlı otonom seans: kedi organ lokalizasyonu → em_kedi → 7 bobin."
-            : "📷 Telefon kameranızı KEDİYE doğrultun — organ lokalizasyonu (em_kedi) ile 7 bobin per-coil sürülür."}
+            ? t("ai.pro.not.kediWebSeans")
+            : t("ai.pro.not.kediMobilSeans")}
       </Text>
 
       {/* ADIM 1 — MODEL: yalnız araştırma kipinde (karar #13: gizleme SİMETRİK). */}
@@ -1153,7 +1146,7 @@ export function AiProPanel({
           secili={hedefModeli}
           onSec={setHedefModeli}
           kilitli={modelKilitli}
-          kilitNedeni="Seans/hazırlık sürerken model değiştirilemez — önce durdurun."
+          kilitNedeni={t("ai.pro.modelKilitli")}
           kurulum={kurulum}
           arastirmaAcik={arastirmaAcik}
         />
@@ -1180,10 +1173,10 @@ export function AiProPanel({
               {hazirlikHata
                 ? `⚠️ ${hazirlikHata}`
                 : running
-                  ? "Görüntü bekleniyor…"
+                  ? t("ai.pro.kamera.goruntuBekleniyor")
                   : hazirlik
-                    ? "Sunucu kamerası açılıyor… görüntü bekleniyor"
-                    : "AI Pro durdu."}
+                    ? t("ai.pro.kamera.sunucuAciliyor")
+                    : t("ai.pro.kamera.durdu")}
             </Text>
           )
         ) : (running || hazirlik) && permission?.granted ? (
@@ -1197,13 +1190,13 @@ export function AiProPanel({
               <Image source={{ uri: `data:image/jpeg;base64,${overlayB64}` }} style={styles.camOverlay} resizeMode="contain" />
             ) : null}
             <TouchableOpacity style={styles.flipBtn} onPress={() => setFacing((f) => (f === "back" ? "front" : "back"))}
-              accessibilityRole="button" accessibilityLabel="Kamerayı çevir (ön/arka)">
+              accessibilityRole="button" accessibilityLabel={t("ai.pro.kamera.cevirEtiketi")}>
               <Text style={styles.flipText}>🔄</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <Text style={styles.camPlaceholder}>
-            {running || hazirlik ? "Kamera izni bekleniyor…" : "AI Pro durdu. Başlat → kamera açılır."}
+            {running || hazirlik ? t("ai.pro.kamera.izinBekleniyor") : t("ai.pro.kamera.durduBaslat")}
           </Text>
         )}
         {/* ADIM 3 — hedefi KARE ÜSTÜNDEN seç (yalnız araştırma; kedide hedef organ çiplerinden).
@@ -1221,8 +1214,8 @@ export function AiProPanel({
 
       {/* Canlı metrikler */}
       <View style={styles.metricRow}>
-        <Metric label={arastirmaKipi ? modelProf.hedefEtiketi : "Organ"} value={detected ? "✓ Bulundu" : "—"} />
-        <Metric label="Güven" value={typeof reliability === "number" ? `%${Math.round(reliability * 100)}` : "—"} />
+        <Metric label={arastirmaKipi ? modelProf.hedefEtiketi : t("ai.pro.metrik.organ")} value={detected ? t("ai.pro.metrik.bulundu") : "—"} />
+        <Metric label={t("ai.pro.metrik.guven")} value={typeof reliability === "number" ? t("ai.ortak.yuzde", { deger: Math.round(reliability * 100) }) : "—"} />
         <Metric label="X (mm)" value={`${targetX ?? "—"}`} />
         <Metric label="Y (mm)" value={`${targetY ?? "—"}`} />
         <Metric label="Z (mm)" value={`${targetZ ?? "—"}`} />
@@ -1235,13 +1228,16 @@ export function AiProPanel({
           okunamıyordu. Artık dokunuşla açılıyor. */}
       {guvenDokumu && typeof guvenDokumu.pose_confidence === "number" ? (
         <GenisletilebilirMetin style={styles.guvenDokumu} satir={2} testID="aipro-guven-dokumu">
-          {`Güven dökümü: poz %${Math.round((guvenDokumu.pose_confidence ?? 0) * 100)}` +
-            ` × derinlik ${(guvenDokumu.depth_factor ?? 1).toFixed(2).replace(".", ",")}` +
-            ((guvenDokumu.mask_factor ?? 1) < 1 ? " × maske-dışı ×0,6" : "") +
-            ` × belirsizlik ${(guvenDokumu.uncertainty_factor ?? 1).toFixed(2).replace(".", ",")}` +
-            (guvenDokumu.calibration_cap != null
-              ? ` · ⚠️ kalibrasyonsuz — tavan %${Math.round(guvenDokumu.calibration_cap * 100)}`
-              : "") +
+          {t("ai.pro.guven.dokum", {
+            poz: Math.round((guvenDokumu.pose_confidence ?? 0) * 100),
+            derinlik: ondalik(guvenDokumu.depth_factor ?? 1, 2),
+            maske: (guvenDokumu.mask_factor ?? 1) < 1 ? t("ai.pro.guven.maskeDisi") : "",
+            belirsizlik: ondalik(guvenDokumu.uncertainty_factor ?? 1, 2),
+            kalibrasyon:
+              guvenDokumu.calibration_cap != null
+                ? t("ai.pro.guven.kalibrasyonsuz", { tavan: Math.round(guvenDokumu.calibration_cap * 100) })
+                : "",
+          }) +
             hatKalitesiMetni(guvenDokumu)}
         </GenisletilebilirMetin>
       ) : null}
@@ -1253,7 +1249,7 @@ export function AiProPanel({
           <KalibrasyonRozeti yontem={yontemAktif} gorunur={hazirlik || running} />
           {ood ? (
             <Text style={styles.note}>
-              Konum, modelin eğitim aralığı dışında olabilir — sonuç araştırma amaçlıdır.
+              {t("ai.pro.konumEgitimDisi")}
             </Text>
           ) : null}
           <HedefListesi
@@ -1275,9 +1271,9 @@ export function AiProPanel({
             style={styles.hazirlikIptal}
             onPress={vazgec}
             accessibilityRole="button"
-            accessibilityLabel="Hazırlığı iptal et"
+            accessibilityLabel={t("ai.pro.hazirlikIptal")}
           >
-            <Text style={styles.hazirlikIptalMetin}>Vazgeç</Text>
+            <Text style={styles.hazirlikIptalMetin}>{t("ortak.vazgec")}</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -1285,7 +1281,7 @@ export function AiProPanel({
       {/* Organ seçimi — KEDİ hattı. Araştırmada GİZLİ: fantom/petri hedefi kare üstünden seçilir. */}
       {arastirmaKipi ? null : (
         <>
-      <Text style={styles.label}>🧠 Hedef Organ</Text>
+      <Text style={styles.label}>{t("ai.pro.hedefOrgan")}</Text>
       <View style={styles.organGrid}>
         {ORGANS.map((o) => (
           <TouchableOpacity
@@ -1294,7 +1290,7 @@ export function AiProPanel({
             onPress={() => changeOrgan(o.id)}
             accessibilityRole="button"
             accessibilityState={{ selected: organId === o.id }}
-            accessibilityLabel={`Hedef organ: ${o.name}`}
+            accessibilityLabel={t("ai.pro.hedefOrganEtiket", { name: o.name })}
           >
             <Text style={[styles.organText, organId === o.id && styles.organTextActive]}>{o.name}</Text>
           </TouchableOpacity>
@@ -1306,11 +1302,11 @@ export function AiProPanel({
       {/* Süre + kalibrasyon */}
       <View style={styles.row}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.label}>⏱ Süre (dk)</Text>
+          <Text style={styles.label}>{t("ai.pro.sure")}</Text>
           <TextInput style={styles.input} value={duration} onChangeText={setDuration} keyboardType="numeric" editable={!running} selectTextOnFocus />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.label}>Kalan</Text>
+          <Text style={styles.label}>{t("ai.pro.kalan")}</Text>
           <Text style={styles.countdown}>{running ? fmtSec(remaining) : "—"}</Text>
         </View>
         <View style={{ flex: 1, justifyContent: "flex-end" }}>
@@ -1318,9 +1314,9 @@ export function AiProPanel({
           style={[styles.calBtn, localized && styles.calBtnDone]}
           onPress={relocalize}
           accessibilityRole="button"
-          accessibilityLabel={localized ? "Hedef organ konumlandırıldı, yeniden konumla" : "Hedef organı yeniden konumla"}
+          accessibilityLabel={localized ? t("ai.pro.yenidenKonumla.konumlandiEtiket") : t("ai.pro.yenidenKonumla.etiket")}
         >
-            <Text style={styles.calBtnText} numberOfLines={1} adjustsFontSizeToFit>{localized ? "✓ Konumlandı" : "🎯 Yeniden Konumla"}</Text>
+            <Text style={styles.calBtnText} numberOfLines={1} adjustsFontSizeToFit>{localized ? t("ai.pro.yenidenKonumla.konumlandi") : t("ai.pro.yenidenKonumla.dugme")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1340,48 +1336,48 @@ export function AiProPanel({
         accessibilityState={{ busy, selected: running, disabled: busy || baslatKapali }}
         accessibilityLabel={
           running
-            ? "AI Pro otonom seansı durdur"
+            ? t("ai.pro.dugme.durdurEtiket")
             : kediSurusKapali
-              ? "AI Pro analiz ve öneri — kedi sürüşü kapalı"
-              : "AI Pro otonom seansı başlat"
+              ? t("ai.pro.dugme.analizOneriEtiket")
+              : t("ai.pro.dugme.baslatEtiket")
         }
         accessibilityHint={
           running
-            ? "Bobinleri durdurur"
+            ? t("ai.pro.dugme.durdurIpucu")
             : baslatKapali
               ? baslatKapaliNedeni
               : kediSurusKapali
-                ? "Organı konumlar ve doz önerisi hazırlar; bobin sürmez"
-                : "Kamera kapalı-döngüsüyle bobinleri otomatik sürer"
+                ? t("ai.pro.dugme.analizOneriIpucu")
+                : t("ai.pro.dugme.baslatIpucu")
         }
       >
-        <Text style={styles.toggleText} numberOfLines={1} adjustsFontSizeToFit>{running ? "⏹ AI Pro'yu Durdur" : hazirlik ? "🔎 Hazırlanıyor…" : arastirmaKipi ? "🚀 Hazırlığı Başlat" : kediSurusKapali ? "🔎 Analiz ve Öneri (sürüş kapalı)" : "🚀 AI Pro Başlat (1Hz DDS)"}</Text>
+        <Text style={styles.toggleText} numberOfLines={1} adjustsFontSizeToFit>{running ? t("ai.pro.dugme.durdur") : hazirlik ? t("ai.pro.dugme.hazirlaniyor") : arastirmaKipi ? t("ai.pro.dugme.hazirligiBaslat") : kediSurusKapali ? t("ai.pro.dugme.analizOneri") : t("ai.pro.dugme.baslat")}</Text>
       </TouchableOpacity>
       {/* Y142: neden + eylem GÖRÜNÜR (yalnız erişilebilirlik ipucuna yazmak "düğme bozuk" izlenimi verirdi). */}
       {kediSurusKapali && !running ? (
-        <Text style={styles.note} testID="ai-pro-kedi-surus-kapali">{KEDI_SURUS_KAPALI_METNI}</Text>
+        <Text style={styles.note} testID="ai-pro-kedi-surus-kapali">{kediSurusKapaliMetni()}</Text>
       ) : null}
       {/* ⚠️ Pasif düğmenin SEBEBİ GÖRÜNÜR olmalı: yalnız `accessibilityHint`e yazmak, ekran
           okuyucu kullanmayan operatöre "düğme çalışmıyor" (yazılım arızası) izlenimi verirdi. */}
       {baslatKapali ? <Text style={styles.note}>{baslatKapaliNedeni}</Text> : null}
 
       {/* Per-coil diagnostik tablo (7 bobin; bobin 8 kapalı) */}
-      <Text style={styles.label}>📊 Bobin Diagnostiği</Text>
+      <Text style={styles.label}>{t("ai.pro.bobinDiagnostigi")}</Text>
       {/* Y54 (sahip): operatörün durdurduğu bobin otomasyona yenilmez — neden AÇIKÇA yazılır ("sürülmedi" yetmez). */}
       {perCoil.some((c) => c.planDisi) ? (
         <Text style={styles.note} testID="ai-pro-plan-disi">
           {perCoil
             .filter((c) => c.planDisi)
-            .map((c) => `Bobin ${c.id} AI Pro planından çıkarıldı`)
+            .map((c) => t("ai.pro.planDisiBobin", { id: c.id }))
             .join(" · ")}
         </Text>
       ) : null}
       <View style={styles.table}>
         <View style={styles.tr}>
-          <Text style={[styles.th, { flex: 1 }]}>Bobin</Text>
-          <Text style={[styles.th, { flex: 1 }]}>Frekans</Text>
-          <Text style={[styles.th, { flex: 1 }]}>Duty</Text>
-          <Text style={[styles.th, { flex: 1 }]}>Faz</Text>
+          <Text style={[styles.th, { flex: 1 }]}>{t("ai.pro.tablo.bobin")}</Text>
+          <Text style={[styles.th, { flex: 1 }]}>{t("kontrol.bobin.frekans")}</Text>
+          <Text style={[styles.th, { flex: 1 }]}>{t("kontrol.bobin.duty")}</Text>
+          <Text style={[styles.th, { flex: 1 }]}>{t("kontrol.sinir.faz")}</Text>
         </View>
         {(perCoil.length ? perCoil : Array.from({ length: 7 }, (_, i): Coil => ({ id: i + 1, freq: 0, duty: 0, phase: 0 }))).map((c) => (
           <View key={c.id} style={styles.tr}>
@@ -1389,11 +1385,11 @@ export function AiProPanel({
             <Text style={[styles.td, { flex: 1 }]}>{c.freq} Hz</Text>
             <Text style={[styles.td, { flex: 1 }]}>
               {c.planDisi
-                ? "plandan çıkarıldı"
+                ? t("ai.pro.tablo.planDisi")
                 : c.suruldu === false
                   ? c.duty > 0
-                    ? `sürülmedi (plan ${c.duty}%)`
-                    : "sürülmedi"
+                    ? t("ai.pro.tablo.surulmediPlan", { duty: c.duty })
+                    : t("ai.pro.tablo.surulmedi")
                   : `${c.duty}%`}
             </Text>
             <Text style={[styles.td, { flex: 1 }]}>{c.phase}°</Text>

@@ -10,7 +10,7 @@ import { detailRows, INPUT_LABELS } from "@/utils/aiDetail";
 import { Brain, ChevronDown, ChevronRight, RefreshCcw, Trash2, Share2 } from "lucide-react-native";
 import {
   AiReviewControls,
-  REVIEW_LABEL,
+  reviewEtiketi,
   ReviewBadge,
   type DegerlendirmeTaslagi,
   type ReviewStatus,
@@ -532,7 +532,7 @@ export function AiHistoryScreen() {
                             (gecmisler[it.id] as OncekiDegerlendirme[]).map((g, i) => (
                               <View key={i} style={styles.oncekiSatir}>
                                 <Text style={styles.detailLine}>
-                                  {REVIEW_LABEL[g.status] || g.status} · {g.reviewed_by || "imzasız"}
+                                  {reviewEtiketi(g.status) || g.status} · {g.reviewed_by || "imzasız"}
                                   {g.reviewed_at ? ` · ${fmtDate(g.reviewed_at)}` : ""}
                                 </Text>
                                 {g.note ? <Text style={styles.oncekiMetin} selectable>{g.note}</Text> : null}

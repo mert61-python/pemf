@@ -44,6 +44,8 @@ export const MODUL_GEREKSINIMI: Record<HedefModeli, string[]> = {
 
 export const VARSAYILAN_MODEL: HedefModeli = "kedi";
 
+import i18n from "i18next";
+
 export interface ModelProfili {
   /** Kullanıcıya görünen ad (backend `title` ile aynı). */
   baslik: string;
@@ -55,36 +57,42 @@ export interface ModelProfili {
   ozne: string;
   /** Hedeflerin adı ("Tümör", "Kuyu") — kare üstü etiketler ve onay ekranı. */
   hedefEtiketi: string;
+  /** Hedef adının cümle içi (küçük harfli) biçimi — dile göre katalogdan (büyük/küçük harf dönüşümü çeviriye yapılmaz). */
+  hedefEtiketiKucuk: string;
   /** Hazırlık şeridinde özne aranırken gösterilen yönlendirme. */
   ozneIpucu: string;
 }
 
-export const MODEL_PROFILLERI: Record<HedefModeli, ModelProfili> = {
+/** Profil tablosu — metinler çağrı anında katalogdan okunur (dil değişince tazelenir). */
+export const modelProfilleri = (): Record<HedefModeli, ModelProfili> => ({
   kedi: {
-    baslik: "Kedi Organ",
-    aciklama: "Kameradaki hayvanın seçili organını bulur; organa doz önerir.",
+    baslik: i18n.t("ai.modul.kediOrgan.ad"),
+    aciklama: i18n.t("ai.pro.profil.kedi.aciklama"),
     simge: "🐾",
-    ozne: "hayvan",
-    hedefEtiketi: "Organ",
-    ozneIpucu: "Kamerayı hastaya doğrultun.",
+    ozne: i18n.t("ai.pro.profil.kedi.ozne"),
+    hedefEtiketi: i18n.t("ai.pro.profil.kedi.hedefEtiketi"),
+    hedefEtiketiKucuk: i18n.t("ai.pro.profil.kedi.hedefEtiketiKucuk"),
+    ozneIpucu: i18n.t("ai.pro.profil.kedi.ozneIpucu"),
   },
   fantom: {
-    baslik: "Fantom Tümör",
-    aciklama: "Silikon fantomdaki mavi tümör odaklarını bulur; odağa doz önerir.",
+    baslik: i18n.t("ai.modul.fantomTumor.ad"),
+    aciklama: i18n.t("ai.pro.profil.fantom.aciklama"),
     simge: "🎯",
-    ozne: "fantom",
-    hedefEtiketi: "Tümör",
-    ozneIpucu: "Fantomu tepsinin ortasına düz yerleştirin; kabin işareti de kadrajda kalsın.",
+    ozne: i18n.t("ai.pro.profil.fantom.ozne"),
+    hedefEtiketi: i18n.t("ai.pro.profil.fantom.hedefEtiketi"),
+    hedefEtiketiKucuk: i18n.t("ai.pro.profil.fantom.hedefEtiketiKucuk"),
+    ozneIpucu: i18n.t("ai.pro.profil.fantom.ozneIpucu"),
   },
   petri: {
-    baslik: "Petri Kuyu",
-    aciklama: "Petri plakasındaki kuyuları bulur; kanserli kuyuya doz önerir.",
+    baslik: i18n.t("ai.modul.petriKuyu.ad"),
+    aciklama: i18n.t("ai.pro.profil.petri.aciklama"),
     simge: "🧫",
-    ozne: "petri plakası",
-    hedefEtiketi: "Kuyu",
-    ozneIpucu: "Plakayı tepsiye düz yerleştirin; kamerayı tepeden tam kadraja alın.",
+    ozne: i18n.t("ai.pro.profil.petri.ozne"),
+    hedefEtiketi: i18n.t("ai.pro.profil.petri.hedefEtiketi"),
+    hedefEtiketiKucuk: i18n.t("ai.pro.profil.petri.hedefEtiketiKucuk"),
+    ozneIpucu: i18n.t("ai.pro.profil.petri.ozneIpucu"),
   },
-};
+});
 
 /** Profil için seçilebilir modeller (bilinmeyen/boş profil → kedi; eski davranış korunur). */
 export function modelleriAl(userMode?: string | null): HedefModeli[] {
@@ -96,5 +104,6 @@ export function modelleriAl(userMode?: string | null): HedefModeli[] {
 
 /** Model profili (bilinmeyen ad → kedi). */
 export function modelProfili(model?: string | null): ModelProfili {
-  return MODEL_PROFILLERI[(model as HedefModeli) ?? VARSAYILAN_MODEL] ?? MODEL_PROFILLERI[VARSAYILAN_MODEL];
+  const profiller = modelProfilleri();
+  return profiller[(model as HedefModeli) ?? VARSAYILAN_MODEL] ?? profiller[VARSAYILAN_MODEL];
 }

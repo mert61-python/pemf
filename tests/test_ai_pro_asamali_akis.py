@@ -295,9 +295,17 @@ def test_KRITIK_guven_operatore_GOSTERILIR(panel):
     parametreleri O OLCUMDEN hesaplaniyor. Operator ekranda bir sayi gormedigi surece sinirda
     gecen bir konumlandirma ile net olani AYIRT EDEMEZ. Esik degistirilmedi (yanlis-negatifleri
     artirirdi); yapilan sey karari BILGILENDIRMEK."""
-    # Guven METNE girmeli (sadece hesaplanip kullanilmamasi yetmez).
-    assert re.search(r"güven %\$\{guvenYuzde\}", panel), (
+    # Guven METNE girmeli (sadece hesaplanip kullanilmamasi yetmez). I18N: metin katalogda — anahtarin TR degeri guveni
+    # `güven %{{guvenYuzde}}` ile soyler, EN degeri de yer tutucuyu tasir ve panel sayiyi anahtara GECIRIR.
+    import i18n_yardimci as iy
+
+    anahtar = "ai.pro.asama.konumlandi"
+    assert "güven %{{guvenYuzde}}" in iy.katalog("arayuz", "tr").get(anahtar, ""), (
         "hazirlik seridinde GUVEN gosterilmiyor — %30 ile %95 ayni gorunur"
+    )
+    assert "{{guvenYuzde}}" in iy.katalog("arayuz", "en").get(anahtar, ""), "EN asama metni guveni gostermiyor"
+    assert re.search(r't\("ai\.pro\.asama\.konumlandi",\s*\{[^}]*guvenYuzde', panel), (
+        "panel guven yuzdesini asama metnine GECIRMIYOR — %30 ile %95 ayni gorunur"
     )
     assert "DUSUK_GUVEN" in panel or "dusukGuven" in panel, (
         "dusuk guven ayrica isaretlenmiyor — operator sinirda gecen olcumu fark etmez"
@@ -335,8 +343,16 @@ def test_KRITIK_hazirlik_SONSUZA_kadar_surmez(panel):
     assert "HAZIRLIK_UYARI_MS" in panel, "gecikmede somut yonlendirme yok"
     assert "HAZIRLIK_TAVAN_MS" in panel, "hazirlik icin ust sinir yok (sonsuz kare akisi)"
     # Yonlendirme EYLEM soylemeli ("tekrar deneyin" degil).
+    # I18N: yonlendirme metni katalogda — panel `ai.pro.gecikmeIpucu` anahtarini KULLANIR ve TR degeri somut eylem soyler (baska bir
+    # anahtarin ayni sozcugu tasimasi sayilmaz); EN degeri bos degil.
+    import i18n_yardimci as iy
+
+    anahtar = "ai.pro.gecikmeIpucu"
+    assert anahtar in iy.kullanilan_anahtarlar(panel), "panel gecikme yonlendirmesini katalogdan okumuyor"
+    deger = iy.katalog("arayuz", "tr")[anahtar]
     for ipucu in ("ışığı", "mesafe"):
-        assert ipucu in panel, f"yonlendirme somut degil: '{ipucu}' gecmiyor"
+        assert ipucu in deger, f"yonlendirme somut degil: '{ipucu}' gecmiyor"
+    assert str(iy.katalog("arayuz", "en").get(anahtar, "")).strip(), "EN yonlendirme metni bos"
 
 
 def test_KARSIT_KANIT_tavan_SEANSI_kesmez(panel):
@@ -369,12 +385,24 @@ def test_KRITIK_dogrulama_asamasi_KONUMLANDI_IDDIA_ETMEZ(panel):
     assert m, "asamaMetni bulunamadi"
     blok = m.group(1)
 
-    dallar = re.findall(r"`([^`]*)`", blok)
-    assert len(dallar) == 4, f"4 asama metni bekleniyordu, {len(dallar)} bulundu: {dallar}"
+    # I18N: asama metinleri katalogda — blokta TAM 4 asama anahtari cagrisi (`sinirda` yalniz bir ek, asama degil); degerler katalogdan.
+    import i18n_yardimci as iy
 
-    dogrulama = [d for d in dallar if "ARDISIK_ONAY}" in d and "guvenYuzde" not in d]
+    anahtarlar = [k for k in re.findall(r't\("(ai\.pro\.asama\.[A-Za-z]+)"', blok) if k != "ai.pro.asama.sinirda"]
+    assert len(anahtarlar) == 4, f"4 asama metni bekleniyordu, {len(anahtarlar)} bulundu: {anahtarlar}"
+    assert sorted(anahtarlar) == sorted(
+        f"ai.pro.asama.{s}" for s in ("dogrulaniyor", "konumlandi", "hayvanGorunuyor", "hayvanAraniyor")
+    ), f"asama anahtarlari beklenen dort asama degil: {anahtarlar}"
+    tr, en = iy.katalog("arayuz", "tr"), iy.katalog("arayuz", "en")
+    dallar = [tr[k] for k in anahtarlar]
+    dogrulama = [d for d in dallar if "{{onay}}" in d and "guvenYuzde" not in d]
     assert len(dogrulama) == 1, f"dogrulama dali tekil degil: {dogrulama}"
     metin = dogrulama[0]
+    # EN de ayni ayrimi korur: dogrulama dali tamamlandi demez, konumlandi dali der.
+    assert "verifying" in en["ai.pro.asama.dogrulaniyor"] and "located" not in en["ai.pro.asama.dogrulaniyor"], (
+        f"EN dogrulama asamasi tamamlanmis gorunuyor: {en['ai.pro.asama.dogrulaniyor']!r}"
+    )
+    assert "located" in en["ai.pro.asama.konumlandi"], "EN tamamlanma dali konumu bildirmiyor"
 
     # ⚠️ Asil kilit: dogrulama dali tamamlanmayi IDDIA EDEMEZ (aksansiz yazim dahil).
     for yasak in ("konumlandı", "konumlandi"):

@@ -380,7 +380,8 @@
       "karaciger": "Karaciğer",
       "mesane": "Mesane",
       "mide": "Mide",
-      "pankreas": "Pankreas"
+      "pankreas": "Pankreas",
+      "tumVucut": "Tüm Vücut"
     },
     "analiziBaslat": "Organ Analizini Başlat",
     "anatomik": "⚠ Anatomik tutarlılık uyarısı: organ dizilimi beklenen anatomiyle çelişiyor — lokalizasyona temkinli yaklaşın.",
@@ -578,6 +579,254 @@
     "varsayilan": "varsayılan {{vars}}",
     "varsayilanaDon": "Ayarları varsayılana döndür",
     "varsayilanlaraDon": "↺ Varsayılanlara dön"
+  },
+  "pro": {
+    "adim": {
+      "etiket": "Adım {{adim}} / {{toplam}}: {{ad}}",
+      "geri": "Geri",
+      "geriEtiket": "{{geriEtiketi}}: önceki adıma dön",
+      "hedef": "Hedef",
+      "kamera": "Kamera",
+      "metin": "Adım {{adim}}/{{toplam}} · {{ad}}",
+      "model": "Model",
+      "onay": "Onay",
+      "seans": "Seans"
+    },
+    "asama": {
+      "dogrulaniyor": "✓ {{organAdi}} görüldü — doğrulanıyor ({{ardisik}}/{{onay}}) · ikinci ölçüm bekleniyor…",
+      "hayvanAraniyor": "🐾 Hayvan aranıyor… kamerayı hastaya doğrultun{{gecikmeIpucu}}",
+      "hayvanGorunuyor": "🔎 Hayvan görünüyor, {{organAdi}} aranıyor… (kamerayı biraz çevirin){{gecikmeIpucu}}",
+      "konumlandi": "✓ {{organAdi}} konumlandı — güven %{{guvenYuzde}}{{sinirda}} · öneri hesaplanıyor…",
+      "sinirda": " ⚠️ sınırda"
+    },
+    "asamaArastirma": {
+      "hedefAraniyor": "🔎 {{ozne}} görünüyor, {{hedefEtiketiKucuk}} aranıyor…{{gecikmeIpucu}}",
+      "konumOlculemedi": "✓ {{hedefEtiketi}} bulundu, konum ölçülemedi — kabin işareti (arka duvardaki kare kod) kadrajda görünmüyor. Kamerayı işaret ve hedef aynı karede kalacak şekilde ayarlayın.",
+      "konumlandi": "✓ {{hedefEtiketi}} konumlandı — güven %{{guvenYuzde}} · öneri hesaplanıyor…",
+      "ozneAraniyor": "🔎 {{ozne}} aranıyor… {{ozneIpucu}}{{gecikmeIpucu}}"
+    },
+    "baslatKapali": {
+      "mobil": "Bu model masaüstü kabin kamerası ister — bilgisayardaki Kontrol → AI Pro ekranını kullanın.",
+      "modelYok": "Önce Adım 1'de bir hedef modeli seçin."
+    },
+    "bobinDiagnostigi": "📊 Bobin Diagnostiği",
+    "degerlendirme": {
+      "degerlendirilmedi": "Bu AI sonucu değerlendirilmedi. Klinik karar hekimindir.",
+      "dogruTeshis": "Doğru teşhis / düzeltme",
+      "duzelt": "Düzelt",
+      "duzeltEtiket": "AI sonucunu düzelt",
+      "duzeltmeAciklamasi": "Düzeltme açıklaması",
+      "duzeltmeOrnek": "Örn. gerçek teşhis: idiyopatik sistit",
+      "duzeltmeyiKaydet": "Düzeltmeyi kaydet",
+      "hekimDuzeltti": "Hekim düzeltti",
+      "hekimOnayladi": "Hekim onayladı",
+      "hekimReddetti": "Hekim reddetti",
+      "kaydedilemedi": "Değerlendirme kaydedilemedi — gerekçeniz korunuyor. Tekrar deneyin.",
+      "onayla": "Onayla",
+      "onaylaEtiket": "AI sonucunu onayla",
+      "redGerekcesi": "Red gerekçesi",
+      "redOrnek": "Örn. klinik bulgularla uyuşmuyor",
+      "reddet": "Reddet",
+      "reddetEtiket": "AI sonucunu reddet",
+      "rediKaydet": "Reddi kaydet"
+    },
+    "dugme": {
+      "analizOneri": "🔎 Analiz ve Öneri (sürüş kapalı)",
+      "analizOneriEtiket": "AI Pro analiz ve öneri — kedi sürüşü kapalı",
+      "analizOneriIpucu": "Organı konumlar ve doz önerisi hazırlar; bobin sürmez",
+      "baslat": "🚀 AI Pro Başlat (1Hz DDS)",
+      "baslatEtiket": "AI Pro otonom seansı başlat",
+      "baslatIpucu": "Kamera kapalı-döngüsüyle bobinleri otomatik sürer",
+      "durdur": "⏹ AI Pro'yu Durdur",
+      "durdurEtiket": "AI Pro otonom seansı durdur",
+      "durdurIpucu": "Bobinleri durdurur",
+      "hazirlaniyor": "🔎 Hazırlanıyor…",
+      "hazirligiBaslat": "🚀 Hazırlığı Başlat"
+    },
+    "gecikmeIpucu": " · Bulunamıyor: ortamın ışığını artırın, 1-2 metre mesafeye gelin, hayvanı kadraja tam alın.",
+    "guven": {
+      "anatomikGecti": " · anatomik kontrol geçti",
+      "anatomikTutarsiz": " · ⚠️ anatomik tutarsızlık — organ yerleşimi doğrulanamadı; açıyı değiştirip yeniden konumlayın",
+      "ayna": " · ⚠️ sağ-sol (ayna) belirsizliği — kamerayı biraz çevirip açıyı değiştirin",
+      "dokum": "Güven dökümü: poz %{{poz}} × derinlik {{derinlik}}{{maske}} × belirsizlik {{belirsizlik}}{{kalibrasyon}}",
+      "kalibrasyonsuz": " · ⚠️ kalibrasyonsuz — tavan %{{tavan}}",
+      "maskeDisi": " × maske-dışı ×0,6",
+      "pnpHata": " · PnP uyum hatası ≈ {{cm}} cm",
+      "pozTuru": " · poz türü {{tur}}"
+    },
+    "hata": {
+      "hazirlikKomutu": "Hazırlık komutu sunucuya ulaşmadı — bağlantıyı kontrol edip tekrar deneyin.",
+      "oneriDenenecek": "Öneri alınamadı — konumlandırma sürüyor, tekrar denenecek.",
+      "oneriDeneniyor": "Öneri alınamadı — konumlandırma sürüyor, tekrar deneniyor."
+    },
+    "hazirlikIptal": "Hazırlığı iptal et",
+    "hedef": {
+      "adsiz": "hedef",
+      "baslik": "🎯 Hedefler (kare üstünden ya da buradan seçin)",
+      "durumOtomatik": ", otomatik seçildi",
+      "durumSecili": ", seçili",
+      "etiket": "Hedef {{sira}} / {{toplam}}: {{ad}}, güven yüzde {{guven}}{{durum}}",
+      "numara": "Hedef {{sira}}",
+      "otomatik": "otomatik seçildi"
+    },
+    "hedefOrgan": "🧠 Hedef Organ",
+    "hedefOrganEtiket": "Hedef organ: {{name}}",
+    "kalan": "Kalan",
+    "kalibrasyon": {
+      "bekliyor": "3B konum: henüz ölçülmedi — kamera açılınca ölçülür.",
+      "dogrulandi": "3B konum: kabin işaretiyle doğrulandı ✓",
+      "olculemedi": "Konum ölçülemedi — kabin işareti (arka duvardaki kare kod) kadrajda görünmüyor. Kamerayı işaret ve hedef aynı karede kalacak şekilde ayarlayın."
+    },
+    "kamera": {
+      "cevirEtiketi": "Kamerayı çevir (ön/arka)",
+      "durdu": "AI Pro durdu.",
+      "durduBaslat": "AI Pro durdu. Başlat → kamera açılır.",
+      "goruntuBekleniyor": "Görüntü bekleniyor…",
+      "izinBekleniyor": "Kamera izni bekleniyor…",
+      "sunucuAciliyor": "Sunucu kamerası açılıyor… görüntü bekleniyor"
+    },
+    "kapi": {
+      "baglamFantom": "Canlı E göstergesi ve “dozu en çok belirleyen” açıklaması bu sonuçtan kurulmadı — sonuç sürülebilir değil (nedenler aşağıda).",
+      "baglamPetri": "“Dozu en çok belirleyen” açıklaması bu sonuçtan üretilmedi — sonuç sürülebilir değil (nedenler aşağıda).",
+      "esasAlinmaz": "Aşağıdaki D / P / E değerleri bobin sürüşüne ESAS ALINMAZ:",
+      "gecerli": "✔ PEMF girdisi geçerli",
+      "gecersiz": "⛔ PEMF girdisi GEÇERSİZ",
+      "kullanilamaz": "⛔ Sonuç bobin sürüşüne KULLANILAMAZ (kabin konumu geçerli — nedenler aşağıda)",
+      "tespitGuvenilir": "   ·   tespit güvenilir",
+      "tespitGuvenilirDegil": "   ·   ⛔ tespit güvenilir DEĞİL",
+      "tespitGuvenilirTik": "   ·   ✔ tespit güvenilir"
+    },
+    "kediSurusKapali": "Kedi AI Pro sürüşü, kabin konumu doğrulanana kadar kapalı. Analizi ve öneriyi inceleyebilirsiniz; seansı Kontrol ekranından elle başlatın.",
+    "konumEgitimDisi": "Konum, modelin eğitim aralığı dışında olabilir — sonuç araştırma amaçlıdır.",
+    "metrik": {
+      "bulundu": "✓ Bulundu",
+      "guven": "Güven",
+      "organ": "Organ"
+    },
+    "model": {
+      "baslik": "🔬 Hedef Modeli",
+      "deneysel": "Deneysel — şimdilik yalnız görüntüleme",
+      "dozOnaylanamaz": "Bu sürümde fantom/petri hedefine doz ONAYLANAMAZ: 3B konum dönüşümü tezgâhta doğrulanmadı. Kamerayı açıp hedefi ve konumu görebilir, yerleşimi ölçebilirsiniz.",
+      "kurulu": "Model kurulu ✓",
+      "kurulumBilinmiyor": "Kurulum durumu okunamadı",
+      "kurulumEksik": "Araştırma model paketi bu cihazda kurulu değil"
+    },
+    "modelKilitli": "Seans/hazırlık sürerken model değiştirilemez — önce durdurun.",
+    "not": {
+      "arastirmaGiris": "🔬 Bu ekran deney hedefini kabin kamerasıyla bulur, 7 bobin için doz önerir ve SİZ onaylamadan hiçbir bobini çalıştırmaz.",
+      "arastirmaMobil": "🔬 Bu modeller masaüstü KABİN kamerası ister: konum kabin işaretine göre ölçülür, telefon bunu yapamaz. Bilgisayardaki Kontrol → AI Pro ekranını kullanın; burada yalnız izleyebilirsiniz.",
+      "kediMobilOneri": "📷 Telefon kameranızı KEDİYE doğrultun — organ lokalizasyonu ve em_kedi doz ÖNERİSİ; sürüş kapalı, bobin sürülmez.",
+      "kediMobilSeans": "📷 Telefon kameranızı KEDİYE doğrultun — organ lokalizasyonu (em_kedi) ile 7 bobin per-coil sürülür.",
+      "kediWebOneri": "📷 Sunucu kamerasından kedi organ lokalizasyonu → em_kedi doz ÖNERİSİ — sürüş kapalı, bobin sürülmez.",
+      "kediWebSeans": "📷 Sunucu kamerasından canlı otonom seans: kedi organ lokalizasyonu → em_kedi → 7 bobin."
+    },
+    "onay": {
+      "alan": "Tahmini alan (göreli, birimsiz): hedefte {{hedef}}",
+      "alanCevre": " · çevrede {{cevre}} (oran {{oran}}×)",
+      "altBaslik": "Araştırma amaçlı model tahmini",
+      "baslatiliyor": "Başlatılıyor…",
+      "baslik": "AI Seans Önerisi",
+      "baslikArastirma": "AI Seans Önerisi — {{modelAdi}} · {{hedefAdi}}",
+      "eOngoru": "E (öngörü)",
+      "guven": "Lokalizasyon güveni: %{{guven}}",
+      "guvenDusuk": " — DÜŞÜK, konumu doğrulayın",
+      "hastaSecilmedi": "— seçilmedi (sahipsiz kaydedilir)",
+      "konum": "Konum (mm): x {{x}} · y {{y}} · z {{z}}",
+      "leadDeney": "Deney seansı <kalin>onaylanmadan başlamaz</kalin>. Aşağıdaki parametreleri inceleyip onaylayın veya gerekçesiyle reddedin.",
+      "leadOtonom": "Otonom seans <kalin>onaylanmadan başlamaz</kalin>. Aşağıdaki parametreleri inceleyip onaylayın veya gerekçesiyle reddedin.",
+      "onaylaBaslat": "Onayla ve Başlat",
+      "onaylaEtiket": "Öneriyi onayla ve seansı başlat",
+      "oneriyiReddet": "Öneriyi reddet",
+      "otomatikMuhur": "Otomatik seçim bu hedefe mühürlendi: seans boyunca yalnız «{{hedefAdi}}» sürülür; hedef kaybolursa sürüş durur.",
+      "pencereEtiketi": "AI seans önerisi onay penceresi",
+      "petriSinirli": "Kanserli/sağlıklı ayrımı bu modelde sınırlı doğrulanmıştır.",
+      "redGerekcesiKayit": "Red gerekçesi (kayda geçer)",
+      "redOrnek": "Örn. lokalizasyon hatalı, duty çok yüksek…",
+      "reddet": "Reddet",
+      "rediOnayla": "Reddi onayla",
+      "sureDk": "{{duration_minutes}} dk",
+      "surulenBobin": "Sürülen bobin",
+      "surusKapali": "Sürüş kapalı",
+      "surusKapaliEtiket": "Sürüş kapalı — onay seansı başlatmaz",
+      "surusKapaliLead": "Parametreleri inceleyebilir ya da gerekçesiyle reddedebilirsiniz; bu ekrandan <kalin>seans başlatılamaz</kalin>.",
+      "xaiBelirleyen": "Dozu en çok belirleyen: {{liste}}",
+      "xaiEgitimDisi": "⚠ Açıklamadaki değer eğitim aralığı dışında ({{liste}}) — açıklama tahmin dışı bölgeye uzanıyor; konumu ve parametreleri doğrulayın.",
+      "xaiOgrenilmemis": "Öğrenilmemiş girdi: {{liste}} — model eğitiminde sabitti, dozu etkilemez; açıklamaya katılmadı."
+    },
+    "planDisiBobin": "Bobin {{id}} AI Pro planından çıkarıldı",
+    "profil": {
+      "fantom": {
+        "aciklama": "Silikon fantomdaki mavi tümör odaklarını bulur; odağa doz önerir.",
+        "hedefEtiketi": "Tümör",
+        "hedefEtiketiKucuk": "tümör",
+        "ozne": "fantom",
+        "ozneIpucu": "Fantomu tepsinin ortasına düz yerleştirin; kabin işareti de kadrajda kalsın."
+      },
+      "kedi": {
+        "aciklama": "Kameradaki hayvanın seçili organını bulur; organa doz önerir.",
+        "hedefEtiketi": "Organ",
+        "hedefEtiketiKucuk": "organ",
+        "ozne": "hayvan",
+        "ozneIpucu": "Kamerayı hastaya doğrultun."
+      },
+      "petri": {
+        "aciklama": "Petri plakasındaki kuyuları bulur; kanserli kuyuya doz önerir.",
+        "hedefEtiketi": "Kuyu",
+        "hedefEtiketiKucuk": "kuyu",
+        "ozne": "petri plakası",
+        "ozneIpucu": "Plakayı tepsiye düz yerleştirin; kamerayı tepeden tam kadraja alın."
+      }
+    },
+    "sure": "⏱ Süre (dk)",
+    "tablo": {
+      "bobin": "Bobin",
+      "planDisi": "plandan çıkarıldı",
+      "surulmedi": "sürülmedi",
+      "surulmediPlan": "sürülmedi (plan {{duty}}%)"
+    },
+    "takip": {
+      "baslik": "📈 {{ad}} · {{baslik}} değişimi",
+      "disarida_one": "Yalnız aynı tür analizler karşılaştırılır — {{count}} farklı analiz grafiğe alınmadı.",
+      "disarida_other": "Yalnız aynı tür analizler karşılaştırılır — {{count}} farklı analiz grafiğe alınmadı."
+    },
+    "uyari": {
+      "durdurulamadi": "Durdurulamadı",
+      "durdurulamadiGovde": "Otonom seans durdurma komutu sunucuya ulaşmadı. Bağlantıyı kontrol edip tekrar deneyin; sorun sürerse ACİL DURDUR kullanın.",
+      "gerekceKaydedilemedi": "Gerekçe kaydedilemedi",
+      "gerekceKaydedilemediGovde": "Öneri reddedildi ve tedavi BAŞLAMADI; ancak red gerekçesi cihazın kayıtlarına yazılamadı. Gerekçeyi hasta notuna ekleyin; sorun sürerse teknik desteğe bildirin.",
+      "hastasizBaslik": "{{tekilKisa}} seçilmedi",
+      "hastasizGovdeDeney": "Deney seansı hiçbir {{belirtme}} bağlanmadan kaydedilecek; seans geçmişinde sahipsiz görünür.\n\nYine de başlatmak istiyor musunuz?",
+      "hastasizGovdeOtonom": "Otonom seansı hiçbir {{belirtme}} bağlanmadan kaydedilecek; seans geçmişinde sahipsiz görünür.\n\nYine de başlatmak istiyor musunuz?",
+      "hedefDegistirilemedi": "Hedef değiştirilemedi",
+      "kabinKamerasi": "Bu seans kabin kamerasıyla yapılır",
+      "kabinKamerasiGovde": "Fantom ve petri hedefi kabin işaretine göre ölçülür; telefon kamerası bu ölçümü yapamaz. Bilgisayardaki Kontrol → AI Pro ekranını kullanın.",
+      "komutUlasmadi": "Komut sunucuya ulaşmadı — tekrar deneyin.",
+      "konumlandirmaTamamlanamadi": "Konumlandırma tamamlanamadı",
+      "konumlandirmaTamamlanamadiGovde": "Hayvan iki dakikadır kadrajda bulunamadı; kamera durduruldu (pil koruması). Ortamın ışığını artırın, telefonu 1-2 metre mesafeye getirin ve hayvanı kadraja tam alın, sonra tekrar başlatın.",
+      "modelSecilmedi": "Model seçilmedi",
+      "modelSecilmediGovde": "Önce Adım 1'de Fantom ya da Petri kartını seçin.",
+      "organDegistirilemedi": "Organ değiştirilemedi",
+      "sunucuKamerasi": "Sunucu kamerası başlatılamadı",
+      "sunucuReddetti": "Sunucu isteği reddetti ({{durum}}).",
+      "surusKapali": "Sürüş kapalı",
+      "yenidenKonumlanamadi": "Yeniden konumlandırılamadı"
+    },
+    "xai": {
+      "dokuTipi": "doku tipi",
+      "egitimDisiEk": " (eğitim aralığı dışı)",
+      "gucButcesi": "güç bütçesi",
+      "hedefAlan": "hedef alan (B)",
+      "konumX": "konum X",
+      "konumY": "konum Y",
+      "konumZ": "konum Z",
+      "organSecimi": "organ seçimi"
+    },
+    "yenidenKonumla": {
+      "dugme": "🎯 Yeniden Konumla",
+      "etiket": "Hedef organı yeniden konumla",
+      "konumlandi": "✓ Konumlandı",
+      "konumlandiEtiket": "Hedef organ konumlandırıldı, yeniden konumla"
+    }
   },
   "retikulosit": {
     "agrege": "Agrege Retikülosit: {{sayi}}",

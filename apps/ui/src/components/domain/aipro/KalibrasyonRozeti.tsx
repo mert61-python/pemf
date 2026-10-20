@@ -11,15 +11,17 @@
  */
 import { View, Text, StyleSheet } from "react-native";
 import { colors, spacing, typography } from "@/theme/tokens";
+import { useTranslation } from "react-i18next";
 
 export function KalibrasyonRozeti({ yontem, gorunur = true }: { yontem?: string; gorunur?: boolean }) {
+  const { t } = useTranslation();
   if (!gorunur) return null;
   const y = String(yontem || "");
   const kalibre = y === "aruco_pnp";
   if (!y) {
     return (
       <View style={[styles.rozet, styles.bekliyor]}>
-        <Text style={styles.metin}>3B konum: henüz ölçülmedi — kamera açılınca ölçülür.</Text>
+        <Text style={styles.metin}>{t("ai.pro.kalibrasyon.bekliyor")}</Text>
       </View>
     );
   }
@@ -27,9 +29,8 @@ export function KalibrasyonRozeti({ yontem, gorunur = true }: { yontem?: string;
     <View style={[styles.rozet, kalibre ? styles.iyi : styles.kotu]}>
       <Text style={styles.metin}>
         {kalibre
-          ? "3B konum: kabin işaretiyle doğrulandı ✓"
-          : "Konum ölçülemedi — kabin işareti (arka duvardaki kare kod) kadrajda görünmüyor. " +
-            "Kamerayı işaret ve hedef aynı karede kalacak şekilde ayarlayın."}
+          ? t("ai.pro.kalibrasyon.dogrulandi")
+          : t("ai.pro.kalibrasyon.olculemedi")}
       </Text>
     </View>
   );

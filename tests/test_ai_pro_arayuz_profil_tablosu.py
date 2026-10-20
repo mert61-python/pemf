@@ -156,10 +156,20 @@ def _kullanici_metinleri(src: str) -> "list[str]":
     return parcalar
 
 
+def _katalog_metinleri(gorece: str) -> "list[str]":
+    """I18N: göç sonrası `<Text>` gövdesi `{t("anahtar")}` olur — kapı KÖR kalmasın diye dosyanın kullandığı her anahtarın TR ve EN değeri de taranır."""
+    import i18n_yardimci as iy
+
+    cikti: list[str] = []
+    for dil in ("tr", "en"):
+        cikti += [str(v) for v in iy._kullanilan_degerler(gorece, None, dil).values()]
+    return cikti
+
+
 def test_KRITIK_kullanici_metinlerinde_HAM_TEKNIK_terim_YOK():
     """Eylem söyleyen hata kuralı: ham teknik metin operatöre "yazılımda bug var" izlenimi verir."""
     for gorece in (_KARTLAR, _HEDEF, _ROZET):
-        for parca in _kullanici_metinleri(_oku(gorece)):
+        for parca in _kullanici_metinleri(_oku(gorece)) + _katalog_metinleri(gorece):
             for terim in _YASAK_TERIM:
                 assert not re.search(rf"\b{re.escape(terim)}\b", parca), (
                     f"{gorece} kullanıcı metninde ham teknik terim {terim!r}: {parca.strip()[:80]!r}"

@@ -12,18 +12,24 @@
  *    seferinde KİM ve NE ZAMAN yeniden yazılır.
  */
 import { useState } from "react";
+import i18n from "i18next";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { CheckCircle2, PencilLine, XCircle } from "lucide-react-native";
 
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
+import { useTranslation } from "react-i18next";
 
 export type ReviewStatus = "" | "approved" | "rejected" | "corrected";
 
-export const REVIEW_LABEL: Record<string, string> = {
-  approved: "Hekim onayladı",
-  rejected: "Hekim reddetti",
-  corrected: "Hekim düzeltti",
-};
+/** Karar etiketi — çağrı anında katalogdan (dil değişince tazelenir). Bilinmeyen durum → boş dize. */
+export const reviewEtiketi = (durum: string): string =>
+  durum === "approved"
+    ? i18n.t("ai.pro.degerlendirme.hekimOnayladi")
+    : durum === "rejected"
+      ? i18n.t("ai.pro.degerlendirme.hekimReddetti")
+      : durum === "corrected"
+        ? i18n.t("ai.pro.degerlendirme.hekimDuzeltti")
+        : "";
 
 const REVIEW_COLOR: Record<string, string> = {
   approved: colors.success,
@@ -34,10 +40,11 @@ const REVIEW_COLOR: Record<string, string> = {
 /** Kart başlığında gösterilen küçük durum rozeti. Değerlendirilmemişse HİÇBİR ŞEY göstermez —
  *  "değerlendirilmedi" rozeti her kartta gürültü yapar; asıl bilgi karar VERİLMİŞ olmasıdır. */
 export function ReviewBadge({ status }: { status?: ReviewStatus }) {
+  useTranslation(); // dile abone ol (rozet etiketi i18n.t ile çağrı anında okunur)
   if (!status) return null;
   return (
     <Text style={[s.badge, { color: REVIEW_COLOR[status], borderColor: REVIEW_COLOR[status] }]}>
-      {REVIEW_LABEL[status]}
+      {reviewEtiketi(status)}
     </Text>
   );
 }
@@ -49,7 +56,7 @@ export interface DegerlendirmeTaslagi {
 }
 
 /** D2.E12: sunucu değerlendirmeyi kaydedemeyince formda gösterilen metin (gerekçe silinmez). */
-export const KAYDEDILEMEDI_METNI = "Değerlendirme kaydedilemedi — gerekçeniz korunuyor. Tekrar deneyin.";
+export const kaydedilemediMetni = (): string => i18n.t("ai.pro.degerlendirme.kaydedilemedi");
 
 export function AiReviewControls({
   status, note, reviewedBy, reviewedAt, busy, onSubmit, taslak, onTaslakDegis,
@@ -65,10 +72,11 @@ export function AiReviewControls({
   taslak?: DegerlendirmeTaslagi;
   onTaslakDegis?: (t: DegerlendirmeTaslagi) => void;
 }) {
+  const { t } = useTranslation();
   const [yerel, setYerel] = useState<DegerlendirmeTaslagi>({ mode: null, text: "" });
-  const t = taslak ?? yerel;
+  const tas = taslak ?? yerel;
   const taslakYaz = (yeni: DegerlendirmeTaslagi) => (onTaslakDegis ? onTaslakDegis(yeni) : setYerel(yeni));
-  const { mode, text } = t;
+  const { mode, text } = tas;
   const setMode = (m: DegerlendirmeTaslagi["mode"]) => taslakYaz({ mode: m, text: m === null ? "" : text });
   const setText = (x: string) => taslakYaz({ mode, text: x });
   const [hata, setHata] = useState("");
@@ -79,7 +87,7 @@ export function AiReviewControls({
     setHata("");
     const sonuc = await Promise.resolve(onSubmit(st, nt));
     if (sonuc === false) {
-      setHata(KAYDEDILEMEDI_METNI);
+      setHata(kaydedilemediMetni());
       return;
     }
     taslakYaz({ mode: null, text: "" });
@@ -93,7 +101,7 @@ export function AiReviewControls({
       {status ? (
         <View style={s.existing}>
           <Text style={[s.existingTitle, { color: REVIEW_COLOR[status] }]}>
-            {REVIEW_LABEL[status]}
+            {reviewEtiketi(status)}
           </Text>
           {note ? <Text style={s.existingNote}>{note}</Text> : null}
           <Text style={s.existingMeta}>
@@ -102,14 +110,14 @@ export function AiReviewControls({
         </View>
       ) : (
         <Text style={s.prompt}>
-          Bu AI sonucu değerlendirilmedi. Klinik karar hekimindir.
+          {t("ai.pro.degerlendirme.degerlendirilmedi")}
         </Text>
       )}
 
       {mode ? (
         <View style={s.form}>
           <Text style={s.formLabel}>
-            {mode === "rejected" ? "Red gerekçesi" : "Doğru teşhis / düzeltme"}
+            {mode === "rejected" ? t("ai.pro.degerlendirme.redGerekcesi") : t("ai.pro.degerlendirme.dogruTeshis")}
           </Text>
           <TextInput
             style={s.input}
@@ -117,24 +125,24 @@ export function AiReviewControls({
             onChangeText={setText}
             multiline
             placeholder={mode === "rejected"
-              ? "Örn. klinik bulgularla uyuşmuyor"
-              : "Örn. gerçek teşhis: idiyopatik sistit"}
+              ? t("ai.pro.degerlendirme.redOrnek")
+              : t("ai.pro.degerlendirme.duzeltmeOrnek")}
             placeholderTextColor={colors.textSubtle}
-            accessibilityLabel={mode === "rejected" ? "Red gerekçesi" : "Düzeltme açıklaması"}
+            accessibilityLabel={mode === "rejected" ? t("ai.pro.degerlendirme.redGerekcesi") : t("ai.pro.degerlendirme.duzeltmeAciklamasi")}
           />
           {hata ? <Text style={s.hata} accessibilityRole="alert">{hata}</Text> : null}
           <View style={s.row}>
             <TouchableOpacity style={[s.btn, s.ghost]} onPress={() => { setHata(""); setMode(null); }}>
-              <Text style={s.ghostText}>Vazgeç</Text>
+              <Text style={s.ghostText}>{t("ortak.vazgec")}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.btn, mode === "rejected" ? s.danger : s.warn, !gonderilebilir && s.disabled]}
               disabled={!gonderilebilir}
               onPress={() => { void gonder(mode, text.trim()); }}
               accessibilityRole="button"
-              accessibilityLabel={mode === "rejected" ? "Reddi kaydet" : "Düzeltmeyi kaydet"}
+              accessibilityLabel={mode === "rejected" ? t("ai.pro.degerlendirme.rediKaydet") : t("ai.pro.degerlendirme.duzeltmeyiKaydet")}
             >
-              <Text style={s.solidText}>Kaydet</Text>
+              <Text style={s.solidText}>{t("ayarlar.kaydet")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -146,30 +154,30 @@ export function AiReviewControls({
             disabled={!!busy}
             onPress={() => { void gonder("approved", ""); }}
             accessibilityRole="button"
-            accessibilityLabel="AI sonucunu onayla"
+            accessibilityLabel={t("ai.pro.degerlendirme.onaylaEtiket")}
           >
             <CheckCircle2 size={rs(14)} color={colors.success} />
-            <Text style={[s.ghostText, { color: colors.success }]}>Onayla</Text>
+            <Text style={[s.ghostText, { color: colors.success }]}>{t("ai.pro.degerlendirme.onayla")}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.btn, s.ghost, busy && s.disabled]}
             disabled={!!busy}
             onPress={() => setMode("rejected")}
             accessibilityRole="button"
-            accessibilityLabel="AI sonucunu reddet"
+            accessibilityLabel={t("ai.pro.degerlendirme.reddetEtiket")}
           >
             <XCircle size={rs(14)} color={colors.danger} />
-            <Text style={[s.ghostText, { color: colors.danger }]}>Reddet</Text>
+            <Text style={[s.ghostText, { color: colors.danger }]}>{t("ai.pro.degerlendirme.reddet")}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.btn, s.ghost, busy && s.disabled]}
             disabled={!!busy}
             onPress={() => setMode("corrected")}
             accessibilityRole="button"
-            accessibilityLabel="AI sonucunu düzelt"
+            accessibilityLabel={t("ai.pro.degerlendirme.duzeltEtiket")}
           >
             <PencilLine size={rs(14)} color={colors.warning} />
-            <Text style={[s.ghostText, { color: colors.warning }]}>Düzelt</Text>
+            <Text style={[s.ghostText, { color: colors.warning }]}>{t("ai.pro.degerlendirme.duzelt")}</Text>
           </TouchableOpacity>
         </View>
       )}

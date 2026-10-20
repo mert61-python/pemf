@@ -15,12 +15,14 @@ import { StyleSheet, Text, View } from "react-native";
 import { Card } from "@/components/ui/Card";
 import { colors, radius, rs, spacing, typography } from "@/theme/tokens";
 import type { TakipSerisi } from "@/utils/takipSerisi";
+import { useTranslation } from "react-i18next";
 
 export function TakipGrafigi({ seri, hasta, testID = "takip-grafigi" }: {
   seri: TakipSerisi;
   hasta: string;
   testID?: string;
 }) {
+  const { t } = useTranslation();
   const degerler = seri.noktalar.map((n) => n.deger);
   const enBuyuk = Math.max(...degerler);
   const enKucuk = Math.min(...degerler);
@@ -37,7 +39,7 @@ export function TakipGrafigi({ seri, hasta, testID = "takip-grafigi" }: {
     <Card style={styles.kart}>
       <View style={styles.baslikSatiri} testID={testID}>
         <Text style={styles.baslik} numberOfLines={1}>
-          📈 {hasta} · {seri.baslik} değişimi
+          {t("ai.pro.takip.baslik", { ad: hasta, baslik: seri.baslik })}
         </Text>
         <Text style={[styles.fark, fark === 0 ? styles.farkNotr : fark > 0 ? styles.farkArti : styles.farkEksi]}>
           {fark > 0 ? "▲" : fark < 0 ? "▼" : "■"} {Math.abs(fark)}
@@ -66,7 +68,7 @@ export function TakipGrafigi({ seri, hasta, testID = "takip-grafigi" }: {
           "neden 3 analiz var ama grafikte 2 nokta?" diye sormamalı. */}
       {seri.disaridaKalan > 0 ? (
         <Text style={styles.not} testID={`${testID}-disarida`}>
-          {`Yalnız aynı tür analizler karşılaştırılır — ${seri.disaridaKalan} farklı analiz grafiğe alınmadı.`}
+          {t("ai.pro.takip.disarida", { count: seri.disaridaKalan })}
         </Text>
       ) : null}
     </Card>
