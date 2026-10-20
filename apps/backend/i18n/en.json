@@ -6,27 +6,164 @@
     }
   },
   "ai": {
+    "alan": {
+      "ayrac": " or ",
+      "boyali": "stained pathology slide (H&E)",
+      "denetimCalismadi": "The image type (modality) check could not be run; the analysis was NOT PERFORMED so that no misleading result is produced from an image of the wrong type. Upload the image again; if the problem persists, send the server log to technical support.",
+      "denetimKisa": "The image type (modality) check could not be run; the analysis was NOT PERFORMED.",
+      "gri": "grayscale medical image (CT / X-ray / ultrasound)",
+      "renkli": "color photograph",
+      "uyusmuyor": "This module expects {{bekl}}; the uploaded image looks like {{tespit}}. A result produced with the wrong image would be misleading — please upload an image of the right type."
+    },
     "hata": {
+      "aiProKare": "AI Pro frame error",
       "analizYok": "Analysis record not found.",
+      "bobrekCt": "Kidney CT analysis error",
+      "bobrekHastalik": "The kidney disease analysis could not be performed — the model file or a dependency may be missing; check the server log (kidney_disease inference error).",
       "durumGecersiz": "status must be 'approved', 'rejected' or 'corrected'.",
+      "fantomAnaliz": "Phantom analysis error",
+      "fantomAnalizi": "Phantom analysis: {{e}}",
+      "gecersizParametre": "Invalid parameter",
       "gecmiseYazilamadi": "The AI analysis could not be saved to the history (the record could not be written to the database — the disk may be full or the database locked). The result is still on screen; fix the problem and run the analysis again to evaluate it and create the report.",
+      "genSutunSayisi": "The number of gene columns does not match: expected {{beklenen}} (training/TCGA order), received {{gelen}}. The first column must be the patient ID.",
       "gerekceZorunlu": "A reason/explanation is required for rejection and correction.",
+      "hastalikAnalizi": "Disease analysis error",
+      "histopatoloji": "Histopathology analysis error",
       "kayitDbAcilamadi": "The record database could not be opened.",
       "kayitDbKullanilamiyor": "The record database is unavailable.",
+      "kediOrgan": "Cat organ analysis error",
+      "landmark": "Landmark model error",
       "logOkunamadi": "The log could not be read",
       "oneriHatasi": "AI recommendation error",
       "onericiYok": "The AI recommender was not found.",
-      "raporOlusmadi": "The report could not be created."
+      "petriAnaliz": "Petri analysis error",
+      "petriAnalizi": "Petri analysis: {{e}}",
+      "petriPlakaDegil": "This module expects a photo of a petri well plate; no petri well geometry was found in the uploaded image. Upload the phantom photo to the 'Phantom Tumor' module and the animal photo to the relevant cat module — a result produced in the wrong module is misleading.",
+      "pixelMm": "pixel_mm must be in the range 0.00001-0.01 (mm/px)",
+      "raporOlusmadi": "The report could not be created.",
+      "retikulosit": "Reticulocyte model error",
+      "rnaAnaliz": "RNA analysis error",
+      "scratchKurulum": "The wound closure model is not ready in this installation — a GPU AI service or the model package is required.",
+      "scratchMesgul": "Another wound closure analysis is running right now — try again in a moment.",
+      "scratchYonu": "scratch_yonu must be 'dikey' or 'yatay'",
+      "segmentasyon": "Segmentation error",
+      "sesAnaliz": "Audio analysis error",
+      "sesSessiz": "The recording is silent or too weak — the sound may not have been captured. Move the microphone closer and record again for ~5 seconds in a quiet place.",
+      "termal": "Thermal model error",
+      "xaiEnFazla25": "The explanation is produced for CSVs with at most 25 patients (IG cost).",
+      "xaiYontemi": "xai_method is invalid: {{xai_method}}",
+      "yaraKapanma": "Wound closure analysis error"
     },
     "kimlik": {
       "degerlendirme": "Select an operator — to review, first choose which veterinarian you are from the top bar.",
       "oncekiDegerlendirmeler": "Select an operator — to see earlier reviews, first choose which veterinarian you are from the top bar."
     },
+    "klinik": {
+      "alan": {
+        "al": "albumin",
+        "bu": "blood urea",
+        "hemo": "hemoglobin",
+        "sc": "serum creatinine",
+        "sg": "urine specific gravity"
+      },
+      "kilo": "weight (kg) must be entered in the 0-30 range",
+      "nabiz": "pulse (bpm) must be entered (reasonable: ~120-220)",
+      "sicaklik": "body temperature (°C) must be entered (reasonable: ~37-39.5)",
+      "vitalGerekli": "Valid vital signs are required for a reliable disease prediction: {{sorunlar}}",
+      "yas": "age cannot be negative",
+      "yetersiz": "There is not enough clinical data for a reliable prediction ({{dolu}}/{{toplam}} fields filled; at least {{asgari}} required). At least one value about kidney function must also be entered — missing: {{eksik}}. A result produced with an empty form reflects the model's general average, not the patient's data, and is misleading."
+    },
+    "model": {
+      "arastirma": "Research model",
+      "fantom": "Phantom Tumor",
+      "kedi": "Cat Organ",
+      "petri": "Petri Well"
+    },
+    "organ": {
+      "akcigerSag": "Lung (right)",
+      "akcigerSol": "Lung (left)",
+      "bagirsak": "Intestine",
+      "bobrek": "Kidney",
+      "dalak": "Spleen",
+      "kalp": "Heart",
+      "karaciger": "Liver",
+      "mesane": "Bladder",
+      "mide": "Stomach",
+      "pankreas": "Pancreas",
+      "tumVucut": "Whole Body"
+    },
     "pemf": {
       "gecerlilikHesaplanamadi": "PEMF validity could not be calculated — D/P/E values must not be used; repeat the analysis."
     },
+    "pro": {
+      "hata": {
+        "aktifModel": "The active model is '{{ad}}'; the target cannot be changed for '{{model}}'.",
+        "arastirmaDogrulama": "An autonomous session with '{{model}}' is awaiting bench validation: this model's 3D position measurement has not yet been compared with the cabin calibration. In this version analysis and preview are available, but the coils are not driven.",
+        "baslatilmadiNeden": "AI Pro was NOT STARTED — {{sebep}}",
+        "baslatmaSirasindaDurduruldu": "A stop / emergency stop arrived during startup; AI Pro was NOT STARTED.",
+        "dozUretmedi": "The model produced no drivable parameter for this position (all duty = 0). Repeat the localization.",
+        "guncellemeSuruyor": "An update is being applied; AI Pro cannot be started until it finishes.",
+        "hedefDesteklenmiyor": "Target {{oid}} is not supported for '{{model}}' (valid: {{gecerli}}).",
+        "kediSurusKapali": "Cat AI Pro driving is turned off until the cabin position is verified. You can review the analysis and the recommendation; start the session by hand from the Control screen.",
+        "konumlandirilmadi": "{{ad}} has not been positioned yet. {{ipucu}} While the camera image is streaming, positioning completes by itself and the recommendation is prepared automatically.",
+        "modelTanimsiz": "Model '{{model}}' is not recognized (valid: {{gecerli}})",
+        "onaysizHedef": "You cannot switch to an unapproved target while the session is running: the approved target of this session is «{{ad}}». For another target, stop AI Pro, get a new recommendation and start it with the veterinarian's new approval.",
+        "otomatikHedef": "No target to lock in was found in automatic selection: the ID of the selected target could not be read. Try again once a target is marked on the frame, or select the target by hand from the list.",
+        "otomatikHedefGecersiz": "{{mesaj}} (the selected target ID {{secili}} is not valid for this model).",
+        "otonomFgsOnay": "Autonomous Biofeedback only works in an approved AI Pro session: go to Control → AI Pro, get a recommendation and approve it. This analysis does not drive the device — turn off the autonomous switch and analyze again.",
+        "sahipDegil": "You are not the owner of this AI Pro session.",
+        "sahipDegilHedef": "You are not the owner of this AI Pro session; the target cannot be changed.",
+        "sahipDegilOrgan": "You are not the owner of this AI Pro session; the organ cannot be changed.",
+        "seansSurerkenHedef": "The target cannot be changed while a session is running — stop AI Pro first."
+      },
+      "hazirlik": {
+        "kamera": "The camera could not be opened. Check its cable and that no other app is using the camera, then restart the preparation.",
+        "modelPaketi": "The '{{ad}}' model package is not installed on this device. Add the relevant model package from the setup step of the desktop PEMF app, then come back to this screen.",
+        "modelYukleme": "'{{ad}}' could not be loaded. Restart the app and try again; if the problem persists, mention this screen in the support request."
+      },
+      "hedefOrgan": "target organ",
+      "ipucu": {
+        "fantomYok": "The phantom is not visible in frame — place it flat in the middle of the tray and bring it into frame together with the cabin marker.",
+        "hayvanGorunuyor": "The animal is visible but {{ad}} could not be selected — turn the camera a little and change the angle.",
+        "hayvanYok": "Point the camera at the patient; the animal is not in frame.",
+        "hedefSecilemedi": "{{hedef_adi}} could not be selected — move the target to the middle of the tray, increase the cabin light and make sure there is no glare on the marker.",
+        "kabinDisi": "The position of {{ad}} was measured OUTSIDE the cabin — changing the angle will not fix this: check that the cabin marker (the square code on the back wall) is in frame, flat and free of glare; if it persists, have the cabin configuration checked by technical support.",
+        "konumOlculemedi": "The position could not be measured: the cabin marker (the square code on the back wall) is not visible in frame. Adjust the camera so that the marker and the target stay in the SAME frame.",
+        "petriYok": "The petri plate is not visible in frame — place the plate flat on the tray, bring the camera directly overhead so the plate is fully in frame, and make sure the cabin marker stays visible."
+      },
+      "mesaj": {
+        "hazirlikBasladi": "Preparation started",
+        "hazirlikCalisiyor": "Preparation is already running"
+      },
+      "sonuc": {
+        "baslatilmadi": "AI Pro was NOT STARTED"
+      }
+    },
+    "scratch": {
+      "duz": "The image looks flat / empty; no cells were found. For wound closure analysis, upload an image of the cell culture captured with a microscope camera.",
+      "gurultu": "Noise dominates the image; the cell structure cannot be distinguished. Upload a clear (noise-free) phase-contrast / bright-field cell culture image captured with a microscope camera.",
+      "yapiYok": "This image does not look like a wound closure (scratch) microscopy image; no cell layer texture was found. Upload a cell culture image (phase-contrast / bright-field) captured with a microscope camera; photographs or screenshots are not analyzed."
+    },
     "sonuc": {
       "aciklamaUretilemedi": "Explanation could not be generated"
+    },
+    "termal": {
+      "akromatik": "The input could not be verified as thermal: the image is colorless (grayscale). It may be a white-hot / black-hot thermal image but it cannot be told apart from a gray photograph or a medical image — evaluate the result accordingly.",
+      "kapali": "The image type check is turned off on this device — the input was not verified as thermal; evaluate the result accordingly.",
+      "kararsiz": "The input could not be verified as thermal: its colors do not fully match a known thermal camera palette. Use an image captured by a thermal camera; evaluate this result accordingly.",
+      "uyumsuz": "This image does not look like a thermal camera image (no color palette / temperature mapping). Capture it with a thermal camera or upload a thermal image.",
+      "yon": {
+        "hot": "cold = black, hot = yellow / white",
+        "inferno": "cold = black / purple, hot = yellow",
+        "iron": "cold = black / purple, hot = yellow / white",
+        "jet": "cold = blue, hot = red",
+        "magma": "cold = black / purple, hot = light yellow / white",
+        "plasma": "cold = navy / purple, hot = yellow",
+        "rainbow": "cold = blue / purple, hot = red",
+        "turbo": "cold = blue / purple, hot = red",
+        "varsayilan": "cold = dark / purple, hot = yellow / white"
+      },
+      "yonNotu": "Make sure the palette is oriented as the camera shows it ({{ipucu}}) — with a reversed palette the result may be inverted."
     }
   },
   "ayarlar": {
@@ -37,6 +174,8 @@
   },
   "bildirim": {
     "acilDurdurUygulandi": "Emergency stop applied",
+    "aiProDozUretmedi": "⚠️ AI Pro: the dose model did not produce a valid dose — the coils were NOT driven in this frame (if they were, they are stopped). Stop AI Pro and start it again; if it repeats, contact technical support.",
+    "aiProKabinYapilandirma": "⚠️ AI Pro: the cabin configuration cannot be read — the coils will NOT be driven because the target cannot be verified. Repositioning the animal will not fix this: check the cabin configuration file (installation) or contact technical support.",
     "aiProPlandanCikti": "Coil {{coil}} was removed from the AI Pro plan — the operator stopped it; AI Pro will not drive this coil until the end of the session, the other coils are still running.",
     "akimGuvenilmez": "⚠️ Coil {{coil}}: the current measurement is not reliable on this coil — no current was written to the dose record.",
     "alanDogrulanamadi": "⚠️ The field sensor of coil {{coil}} could not be verified — the measured field (mT) is not shown and is not written to the record. Report it to technical support (code: FW-ALAN).",
@@ -61,6 +200,10 @@
     "estopEspReddetti": "⚠️ Coil {{coil}}: the emergency stop command was REJECTED by the ESP — check the coil by hand",
     "kapanisMandal": "🔒 The app was closed while a session / coil was running — the coils were stopped and the EMERGENCY STOP latch was set. Before restarting, check the coils and press \"Reset\".",
     "kaynak": {
+      "aiProBaslatilamadi": "AI Pro could not start — stop",
+      "aiProDurdurma": "AI Pro stop",
+      "aiProHedefKaybi": "AI Pro target-loss stop",
+      "aiProHedefKaybiMobil": "AI Pro target-loss stop (mobile frame)",
       "sahipsiz": "Orphan coil stop",
       "sifirHz": "0 Hz session request (A-05) — while latched",
       "sureDoldu": "Time is up — automatic stop",

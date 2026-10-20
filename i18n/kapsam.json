@@ -292,7 +292,7 @@
    "sira": 10,
    "kritik": false,
    "aciklama": "AI yönlendirici + AI Pro hedef + görüntü alanı iletileri",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 184,
    "dosyaSayisi": 6
   },
@@ -3848,10 +3848,19 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10c-ai",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 2,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "AI servisi {{_TIMEOUT}} sn toplam süre sınırını aştı, yanıt kesildi ({{url}})",
+     "gerekce": "iç istisna iletisi — AI servisi zaman aşımı: `_ai_fail` istemciye YALNIZ etiket döner, ayrıntı günlüğe gider"
+    },
+    {
+     "metin": "girdi yok (dosya/base64)",
+     "gerekce": "iç istisna iletisi — `_ai_fail` istemciye yalnız etiket döner (günlük)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -3859,10 +3868,63 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10c-ai",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 22,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Kedi Organ",
+     "gerekce": "model adı (DB'ye giden `mode` verisinin ve `modelName` alanının parçası) — gösterim adı `ai.model.*`"
+    },
+    {
+     "metin": "dict[str, object]",
+     "gerekce": "tür açıklaması (tip ipucu) — metin değil"
+    },
+    {
+     "metin": "str | None",
+     "gerekce": "tür açıklaması (tip ipucu) — metin değil"
+    },
+    {
+     "metin": "kabin denetimi: koordinat sayı değil",
+     "gerekce": "iç neden: günlük + kabin kararı (`startswith` ile makine dalı) — operatöre gitmez"
+    },
+    {
+     "metin": "kabin denetimi: sonlu olmayan koordinat {{v}}",
+     "gerekce": "iç neden: günlük + kabin kararı — operatöre gitmez"
+    },
+    {
+     "metin": "kabin boyutu okunamadı (kabin yapılandırması) — hedef doğrulanamadı",
+     "gerekce": "iç neden: günlük + kabin kararı (`startswith(\"kabin boyutu okunamadı\")` makine dalı) — operatöre gitmez"
+    },
+    {
+     "metin": "kabin DIŞI hedef {{deger1}} mm (kabin yarı boyutu {{yari}} mm, eksen {{deger3}})",
+     "gerekce": "iç neden: günlük + kabin kararı — operatöre gitmez"
+    },
+    {
+     "metin": "Hedef",
+     "gerekce": "etiket ön eki (DB'ye giden `mode` verisinin parçası) — [İNCELE] aday kuyu / hedef çiplerinin `label` alanı arayüzde Türkçe kalır"
+    },
+    {
+     "metin": "Fantom Tümör",
+     "gerekce": "model adı (`mode` verisinin parçası) — gösterim adı `ai.model.*`"
+    },
+    {
+     "metin": "Tümör",
+     "gerekce": "etiket ön eki (`mode` verisinin parçası) — [İNCELE] arayüz adaylarının `label` alanı"
+    },
+    {
+     "metin": "Petri Kuyu",
+     "gerekce": "model adı (`mode` verisinin parçası) — gösterim adı `ai.model.*`"
+    },
+    {
+     "metin": "petri plakası",
+     "gerekce": "`subjectLabel` tel alanı — arayüz bu alanı okumaz (yalnız tür bildirimi)"
+    },
+    {
+     "metin": "Kuyu",
+     "gerekce": "etiket ön eki (`mode` verisinin parçası) — [İNCELE] arayüz adaylarının `label` alanı"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -3870,10 +3932,175 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10c-ai",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 127,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Görüntü çok büyük (base64 girdi > {{deger1}} MB sınırı).",
+     "gerekce": "iç istisna iletisi — `_ai_fail` ham hatayı istemciye SIZDIRMAZ (yalnız günlük)"
+    },
+    {
+     "metin": "Görüntü çok büyük (> {{deger1}} MB sınırı).",
+     "gerekce": "iç istisna iletisi — `_ai_fail` ham hatayı istemciye SIZDIRMAZ (yalnız günlük)"
+    },
+    {
+     "metin": "Görüntü verisi bulunamadı.",
+     "gerekce": "iç istisna iletisi — `_ai_fail` ham hatayı istemciye SIZDIRMAZ (yalnız günlük)"
+    },
+    {
+     "metin": "Görüntü çözünürlüğü çok yüksek ({{_w}}x{{_h}}px > {{deger3}}MP sınırı).",
+     "gerekce": "iç istisna iletisi — `_ai_fail` ham hatayı istemciye SIZDIRMAZ (yalnız günlük)"
+    },
+    {
+     "metin": "Görüntü yerine HTML (index.html) alındı. React paketini kontrol edin.",
+     "gerekce": "iç istisna iletisi — `_ai_fail` ham hatayı istemciye SIZDIRMAZ (yalnız günlük)"
+    },
+    {
+     "metin": "Geçersiz görüntü verisi. Alınan boyut: {{deger1}} bytes.",
+     "gerekce": "iç istisna iletisi — `_ai_fail` ham hatayı istemciye SIZDIRMAZ (yalnız günlük)"
+    },
+    {
+     "metin": "JPEG kodlama basarisiz",
+     "gerekce": "iç istisna iletisi — `_ai_fail` ham hatayı istemciye SIZDIRMAZ (yalnız günlük)"
+    },
+    {
+     "metin": "Kedi yüzü tespit edilemedi",
+     "gerekce": "sonuç alanı değeri (`pain_level` — AI geçmişine / arayüze giden VERİ) — [İNCELE] arayüzde ham Türkçe görünür; `ai.deger` tablosuyla eşlenmeli (10d / 14)"
+    },
+    {
+     "metin": "kabin denetimi: eksik koordinat",
+     "gerekce": "iç neden: günlük + kabin kararı — operatöre gitmez"
+    },
+    {
+     "metin": "geçici görsel kodlanamadı ({{deger1}})",
+     "gerekce": "iç istisna iletisi — günlük"
+    },
+    {
+     "metin": "frame JPG encode başarısız",
+     "gerekce": "iç istisna iletisi — günlük"
+    },
+    {
+     "metin": "tuple[str, str]",
+     "gerekce": "tür açıklaması (tip ipucu) — metin değil"
+    },
+    {
+     "metin": "Hazırlık cat_organ lokalizasyon hatası: %s",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "Hazırlık önizleme WS yayın hatası: %s",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "model yüklenemedi",
+     "gerekce": "günlük nedeni (`_ai_seansi_pasife_al` neden — yalnız logger)"
+    },
+    {
+     "metin": "kamera açılamadı",
+     "gerekce": "günlük nedeni (`_ai_seansi_pasife_al` neden — yalnız logger)"
+    },
+    {
+     "metin": "AI Pro loop: seans durum kontrolü hatası (yok sayıldı)",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "AI Loop iteration error: %s",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "pemf/coil/{{_cid}}/control",
+     "gerekce": "MQTT konusu (topic) — protokol"
+    },
+    {
+     "metin": "Already running",
+     "gerekce": "İngilizce geliştirici yanıtı (iki dilde de İngilizce) — arayüz metni değil"
+    },
+    {
+     "metin": "AI Pro · {{title}}",
+     "gerekce": "DB'ye / canlı duruma yazılan seans kipi değeri (`mode`; VERİ) — gösterimde değer → anahtar"
+    },
+    {
+     "metin": "AI Pro Closed-Loop Started",
+     "gerekce": "İngilizce geliştirici yanıtı (iki dilde de İngilizce) — arayüz metni değil"
+    },
+    {
+     "metin": "AI Pro Closed-Loop Stopped",
+     "gerekce": "İngilizce geliştirici yanıtı (iki dilde de İngilizce) — arayüz metni değil"
+    },
+    {
+     "metin": "lokalizasyon hatası",
+     "gerekce": "günlük nedeni (`_frame_kayip_stopu` neden — yalnız logger)"
+    },
+    {
+     "metin": "hedef bulunamadı",
+     "gerekce": "günlük nedeni (`_frame_kayip_stopu` neden — yalnız logger)"
+    },
+    {
+     "metin": "doz modeli hatası",
+     "gerekce": "günlük nedeni (`_frame_kayip_stopu` neden — yalnız logger)"
+    },
+    {
+     "metin": "punctate reticulocyte",
+     "gerekce": "model sınıf adı (VERİ) — metin değil"
+    },
+    {
+     "metin": "aggregate reticulocyte",
+     "gerekce": "model sınıf adı (VERİ) — metin değil"
+    },
+    {
+     "metin": "CSV çok büyük (> 60 MB sınırı).",
+     "gerekce": "iç istisna iletisi — `_ai_fail` ham hatayı istemciye SIZDIRMAZ (yalnız günlük)"
+    },
+    {
+     "metin": "CSV verisi bulunamadı.",
+     "gerekce": "iç istisna iletisi — `_ai_fail` ham hatayı istemciye SIZDIRMAZ (yalnız günlük)"
+    },
+    {
+     "metin": "CSV okunamadı ({{pe}}). Beklenen: satır=hasta, sütun=gen, 1. sütun hasta ID.",
+     "gerekce": "iç istisna iletisi — `_ai_fail` ham hatayı istemciye SIZDIRMAZ (yalnız günlük)"
+    },
+    {
+     "metin": "CSV boş — hasta satırı yok.",
+     "gerekce": "iç istisna iletisi — `_ai_fail` ham hatayı istemciye SIZDIRMAZ (yalnız günlük)"
+    },
+    {
+     "metin": "Ses dosyası çok büyük (> 25 MB sınırı).",
+     "gerekce": "iç istisna iletisi — `_ai_fail` ham hatayı istemciye SIZDIRMAZ (yalnız günlük)"
+    },
+    {
+     "metin": "Ses verisi bulunamadı.",
+     "gerekce": "iç istisna iletisi — `_ai_fail` ham hatayı istemciye SIZDIRMAZ (yalnız günlük)"
+    },
+    {
+     "metin": "Ses verisi boş/çok küçük ({{deger1}} bytes).",
+     "gerekce": "iç istisna iletisi — `_ai_fail` ham hatayı istemciye SIZDIRMAZ (yalnız günlük)"
+    },
+    {
+     "metin": "Ses çözümlenemedi (desteklenmeyen format?).",
+     "gerekce": "iç istisna iletisi — `_ai_fail` ham hatayı istemciye SIZDIRMAZ (yalnız günlük)"
+    },
+    {
+     "metin": "modül bulunamadı",
+     "gerekce": "tanılama çıktısı (destek alanı `kod_yok` ayrıntısı) — kod + ayrıntı, kullanıcı iletisi değil"
+    },
+    {
+     "metin": "model yolu tanımsız — envantere gerçek yol yazılmalı (denetim #03)",
+     "gerekce": "tanılama çıktısı (destek alanı `envanter_eksik` ayrıntısı) — kod + ayrıntı, kullanıcı iletisi değil"
+    },
+    {
+     "metin": "{{rel_yol}} ne modülün yanında ne bir model kökünde bulundu (ya da bütünlük sağlaması başarısız)",
+     "gerekce": "tanılama çıktısı (destek alanı `model_yok` ayrıntısı) — kod + ayrıntı, kullanıcı iletisi değil"
+    },
+    {
+     "metin": "{{rel_yol}} bulundu ama bütünlük sağlaması başarısız (kesik/bozuk ağırlık): {{yol}}",
+     "gerekce": "tanılama çıktısı (destek alanı `model_yok` ayrıntısı) — kod + ayrıntı, kullanıcı iletisi değil"
+    },
+    {
+     "metin": "Fantom/petri 3B konum dönüşümü tezgâhta doğrulanmadı (plan kararı #6).",
+     "gerekce": "tanılama çıktısı (destek alanı `arastirmaAiPro.neden`) — saha destek sorusuna tek istekle yanıt"
+    }
+   ],
    "birlesikIstisna": [],
    "not": "I18N-0 pilotu KISMİ (dilim: PDF başlık/bilgi/altbilgi · AI sonuç metni) — dosyanın kalanı bekliyor"
   },
@@ -3881,10 +4108,95 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10c-ai",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 22,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "gri tonlamalı tıbbi görüntü (CT / röntgen / ultrason)",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "boyalı patoloji preparatı (H&E)",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "renkli fotoğraf",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "Bu modül {{bekl}} bekliyor; yüklenen görüntü {{deger2}} gibi görünüyor. Yanlış görüntüyle üretilen sonuç yanıltıcı olur — lütfen doğru türde bir görüntü yükleyin.",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "Görüntü türü (modalite) denetimi çalıştırılamadı; yanlış türde görüntüyle yanıltıcı sonuç üretmemek için analiz YAPILMADI. Görüntüyü yeniden yükleyin; sürerse sunucu günlüğünü teknik desteğe iletin.",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "Bu görüntü termal kamera görüntüsüne benzemiyor (renk paleti / sıcaklık eşlemesi yok). Termal kameradan çekin ya da termal görüntü yükleyin.",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "Girdi termal olarak doğrulanamadı: görüntü renksiz (gri tonlamalı). Beyaz-sıcak / siyah-sıcak termal görüntü olabilir ama gri bir fotoğraftan ya da tıbbi görüntüden ayırt edilemiyor — sonucu buna göre değerlendirin.",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "Girdi termal olarak doğrulanamadı: renkleri bilinen bir termal kamera paletine tam oturmuyor. Termal kameradan çekilmiş görüntü kullanın; bu sonucu buna göre değerlendirin.",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "Görüntü türü denetimi bu cihazda kapalı — girdi termal olarak doğrulanmadı; sonucu buna göre değerlendirin.",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "soğuk = koyu / mor, sıcak = sarı / beyaz",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "soğuk = siyah / mor, sıcak = sarı",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "soğuk = siyah / mor, sıcak = açık sarı / beyaz",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "soğuk = lacivert / mor, sıcak = sarı",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "soğuk = siyah / mor, sıcak = sarı / beyaz",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "soğuk = siyah, sıcak = sarı / beyaz",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "soğuk = mavi, sıcak = kırmızı",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "soğuk = mavi / mor, sıcak = kırmızı",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "Paletin kamera yönünde olduğundan emin olun ({{ipucu}}) — ters palette sonuç tersine dönebilir.",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "Görüntü düz / boş görünüyor; hücre bulunamadı. Yara kapanma analizi için hücre kültürünün mikroskop kamerasıyla çekilmiş görüntüsünü yükleyin.",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "Görüntüde gürültü baskın; hücre yapısı ayırt edilemiyor. Mikroskop kamerasıyla çekilmiş, net (gürültüsüz) bir faz-kontrast / parlak alan hücre kültürü görüntüsü yükleyin.",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "Bu görüntü yara kapanma (scratch) mikroskopi görüntüsüne benzemiyor; hücre tabakası dokusu bulunamadı. Mikroskop kamerasıyla çekilmiş hücre kültürü (faz-kontrast / parlak alan) görüntüsü yükleyin; fotoğraf ya da ekran görüntüsü analiz edilmez.",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -3892,10 +4204,51 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10c-ai",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 10,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "kilo (kg) 0-30 aralığında girilmeli",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "nabız (bpm) girilmeli (makul: ~120-220)",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "vücut sıcaklığı (°C) girilmeli (makul: ~37-39.5)",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "yaş negatif olamaz",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "Güvenilir hastalık tahmini için geçerli vital veriler gerekli:",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "serum kreatinin",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "kan üresi",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "idrar dansitesi",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "albümin",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    },
+    {
+     "metin": "Güvenilir bir tahmin için yeterli klinik veri yok ({{deger1}}/{{CKD_TOPLAM_ALAN}} alan dolu; en az {{CKD_MIN_ALAN}} gerekli). Ayrıca böbrek işlevine dair en az bir değer girilmeli — eksik olanlar: {{eksik}}. Boş formla üretilen sonuç, hastanın verisini değil modelin genel ortalamasını yansıtır ve yanıltıcıdır.",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -3903,10 +4256,15 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10c-ai",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "beklenen 16-bit PCM, gelen {{deger1}}-bit",
+     "gerekce": "iç istisna iletisi — RMS ölçümü `except Exception` ile günlüğe düşer; istemciye gitmez"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },

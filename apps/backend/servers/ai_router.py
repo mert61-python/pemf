@@ -73,6 +73,7 @@ ai_router = APIRouter(
 )
 
 
+from utils import ceviri
 from utils.image_domain import DomainMismatch as _ImgDomainMismatch
 
 # ⚠️ ASGARİ GİRDİ KAPILARI — TEK KAYNAK `utils/klinik_asgari.py` (denetim 2026-08-17).
@@ -86,8 +87,10 @@ from utils.panel_yayin import PETRI_PANEL_ADLARI as _PETRI_PANEL_ADLARI
 from utils.panel_yayin import kok_gorseli_sec as _kok_gorseli_sec
 from utils.panel_yayin import panelleri_yayina_hazirla as _panelleri_hazirla
 
+from servers import ai_kapi_metni
 
-def _ai_fail(label: str, e: Exception) -> HTTPException:
+
+def _ai_fail(label, e: Exception) -> HTTPException:
     """AI uç hatası (audit B-4.1): gerçek nedeni SUNUCU-TARAFI logla; istemciye ham str(e)/traceback
     SIZDIRMA (bilgi ifşası — bu uçlar auth-muaf/publik). İstemciye yalnız kısa etiket döner.
 
@@ -95,10 +98,11 @@ def _ai_fail(label: str, e: Exception) -> HTTPException:
     deseni kullanıyor; bu, `_decode_image`'in ürettiği ANLAMLI istemci hatalarını (alan uyuşmazlığı
     422, boyut/çözünürlük sınırı) yutup hepsini "500 <etiket>"e çeviriyordu → kullanıcı "Analiz
     hatası" görüp NEDENİNİ öğrenemiyordu. Tek noktada düzeltildi (10 uçta tekrar gerekmez)."""
+    # I18N-P1: `label` metin YA DA `dil → metin` (`lambda d: ceviri.t("…", dil=d)`): günlük HER ZAMAN Türkçe, yanıt istek dilinde.
     if isinstance(e, HTTPException):
         return e
-    logger.exception("%s", label)
-    return HTTPException(status_code=500, detail=label)
+    logger.exception("%s", label("tr") if callable(label) else label)
+    return HTTPException(status_code=500, detail=label(None) if callable(label) else label)
 
 
 def _kok_neden_zinciri(e: BaseException, sinir: int = 5) -> str:
@@ -128,11 +132,6 @@ def _kok_neden_zinciri(e: BaseException, sinir: int = 5) -> str:
 # gerekmez. Değer bir TEL SÖZLEŞMESİDİR (JSON `error` alanı); tests/test_petri_plausibility.py
 # iki tarafın eşitliğini kilitler → sessizce ayrışamaz.
 _PETRI_NOT_PLATE = "not_a_petri_plate"
-_PETRI_REJECT_FALLBACK = (
-    "Bu modül petri kuyucuğu plakası fotoğrafı bekliyor; yüklenen görüntüde petri kuyucuğu "
-    "geometrisi bulunamadı. Fantom fotoğrafını 'Fantom Tümör' modülüne, hayvan fotoğrafını "
-    "ilgili kedi modülüne yükleyin — yanlış modülde üretilen sonuç yanıltıcıdır."
-)
 
 
 def _petri_reject_message(plausibility) -> str:
@@ -142,7 +141,7 @@ def _petri_reject_message(plausibility) -> str:
         msg = plausibility.get("message")
         if isinstance(msg, str) and msg.strip():
             return msg
-    return _PETRI_REJECT_FALLBACK
+    return ceviri.t("ai.hata.petriPlakaDegil")
 
 
 from utils.path_utils import kaynak_kokunu_bul
@@ -249,7 +248,7 @@ async def _decode_image(file, image_base64, *, label: str) -> np.ndarray:
 
         _imgdom.check(img, label)
     except _ImgDomainMismatch as _dm:
-        raise HTTPException(status_code=422, detail=_dm.user_message()) from None
+        raise HTTPException(status_code=422, detail=ai_kapi_metni.alan_ret_metni(_dm)) from None
     except HTTPException:
         raise
     except Exception:
@@ -258,9 +257,9 @@ async def _decode_image(file, image_base64, *, label: str) -> np.ndarray:
         # olmayan etiket `check` içinde bilinçli olarak geçer (hata değil) → buraya düşmez.
         logger.warning("AI modalite kapısı çalıştırılamadı [%s] — analiz REDDEDİLDİ (A-24)", label, exc_info=True)
         try:
-            from utils.image_domain import DENETIM_CALISMADI_MESAJI as _mesaj
+            _mesaj = ai_kapi_metni.denetim_calismadi()
         except Exception:
-            _mesaj = "Görüntü türü (modalite) denetimi çalıştırılamadı; analiz YAPILMADI."
+            _mesaj = ceviri.t("ai.alan.denetimKisa")
         raise HTTPException(status_code=422, detail=_mesaj) from None
     return img
 
@@ -393,7 +392,7 @@ async def analyze_disease(data: DiseaseInput):
     try:
         _vital_kapisi(data.model_dump())
     except _AsgariGirdiYok as ag:
-        raise HTTPException(status_code=422, detail=ag.user_message()) from None
+        raise HTTPException(status_code=422, detail=ai_kapi_metni.asgari_metni(ag)) from None
 
     try:
         if ai_service_enabled():
@@ -443,14 +442,12 @@ async def analyze_disease(data: DiseaseInput):
         return yanit
     except Exception as e:
         logger.error(f"Disease inference error: {e}", exc_info=True)
-        raise _ai_fail("Hastalık analizi hatası", e)
+        raise _ai_fail(lambda d: ceviri.t("ai.hata.hastalikAnalizi", dil=d), e)
 
 
 #: D1.88 (B-6.30 · A-19): Otonom Biofeedback'in ONAY yolu — eylem söyleyen TEK metin (uç 428 detayı).
-OTONOM_FGS_ONAY_MESAJI = (
-    "Otonom Biofeedback yalnız onaylı AI Pro seansında çalışır: Kontrol → AI Pro'dan öneri alıp onaylayın. "
-    "Bu analiz cihazı sürmez — otonom anahtarını kapatıp yeniden analiz edin."
-)
+def otonom_fgs_onay_mesaji() -> str:
+    return ceviri.t("ai.pro.hata.otonomFgsOnay")
 
 
 @ai_router.post("/api/ai/vision/landmark")
@@ -467,7 +464,7 @@ async def analyze_landmark(
     # göndermeye devam edebilir → analiz yapılmadan 428 + eylem metni (çıkarım saniyelerini boşa harcamaz).
     # Mikroservis profilinde de AYNI (kapı devretmeden önce).
     if auto_adjust:
-        raise HTTPException(status_code=428, detail=OTONOM_FGS_ONAY_MESAJI)
+        raise HTTPException(status_code=428, detail=otonom_fgs_onay_mesaji())
     try:
         if ai_service_enabled():
             # NOT: auto_adjust (donanım biofeedback) mikroservis modunda çekirdekte kalır;
@@ -575,7 +572,7 @@ async def analyze_landmark(
         )
     except Exception as e:
         logger.error(f"Landmark inference error: {e}", exc_info=True)
-        raise _ai_fail("Landmark model hatası", e)
+        raise _ai_fail(lambda d: ceviri.t("ai.hata.landmark", dil=d), e)
 
 
 # ── AI Pro durumu (modül seviyesi) ──
@@ -637,8 +634,6 @@ def _ai_kare_yabanci(client_id) -> bool:
 
 import threading as _ai_threading
 
-from utils import ceviri
-
 # TOCTOU koruma: start/stop check-and-set atomik olsun → iki es-zamanli /ai/pro/start ikinci bir
 # kamera loop'u acip VideoCapture(0)'i cakistiramasin / bobinleri cift suremesin.
 _ai_loop_lock = _ai_threading.Lock()
@@ -674,19 +669,27 @@ _AI_PRO_FREQ_HZ = 1.0
 # em_kedi modelinin sabit ekstra girdileri (eski camera_ai_thread ile birebir).
 _AI_ACHIEVED_B = 0.001  # Tesla (1 mT)
 _AI_DUTY_SUM = 1.5
-_ORGAN_NAMES = {
-    0: "Tüm Vücut",
-    1: "Mide",
-    2: "Böbrek",
-    3: "Karaciğer",
-    4: "Mesane",
-    5: "Pankreas",
-    6: "Bağırsak",
-    7: "Kalp",
-    8: "Dalak",
-    9: "Akciğer (sağ)",
-    10: "Akciğer (sol)",
+#: Organ kimliği → ad işlevi (`ai.organ.*`; anahtarlar AÇIK yazılır — dinamik anahtar yok). Ad `mode` VERİSİNE de girer (`AI Pro · model · organ`) → veri için `dil="tr"`.
+_ORGAN_ADLARI = {
+    0: lambda dil: ceviri.t("ai.organ.tumVucut", dil=dil),
+    1: lambda dil: ceviri.t("ai.organ.mide", dil=dil),
+    2: lambda dil: ceviri.t("ai.organ.bobrek", dil=dil),
+    3: lambda dil: ceviri.t("ai.organ.karaciger", dil=dil),
+    4: lambda dil: ceviri.t("ai.organ.mesane", dil=dil),
+    5: lambda dil: ceviri.t("ai.organ.pankreas", dil=dil),
+    6: lambda dil: ceviri.t("ai.organ.bagirsak", dil=dil),
+    7: lambda dil: ceviri.t("ai.organ.kalp", dil=dil),
+    8: lambda dil: ceviri.t("ai.organ.dalak", dil=dil),
+    9: lambda dil: ceviri.t("ai.organ.akcigerSag", dil=dil),
+    10: lambda dil: ceviri.t("ai.organ.akcigerSol", dil=dil),
 }
+
+
+def _organ_adi(hedef_id, dil: str | None = "tr") -> str:
+    """Organ adı. Varsayılan Türkçe (VERİ: `mode` / kayıt); gösterim için `dil=None` (istek dili)."""
+    yap = _ORGAN_ADLARI.get(int(hedef_id))
+    return yap(dil) if yap else ""
+
 
 # ── cat_organ organ-lokalizasyon (el takibi YERİNE; kullanıcı kararı: MediaPipe Hands SÖKÜLDÜ) ──
 # cat_organ ~1-4sn/kare (ağır) → loop HER KAREDE çalıştırmaz; periyodik lokalize + cache.
@@ -698,6 +701,7 @@ _ai_hedef_modeli = ai_pro_hedef.VARSAYILAN_MODEL
 #: `_ai_hazirlik_hata`da kalır (panel string bekliyor); bu alan YALNIZ-EK → panel uyarı
 #: başlığını koda göre seçebilir.
 _ai_hazirlik_hata_kodu = ""
+_ai_hazirlik_hata_saglayici = None  # hata anındaki sağlayıcı (model adı istek dilinde gösterilsin)
 
 _ORGAN_LOCALIZE_INTERVAL_S = 10.0
 _AI_LOST_STOP_STREAK = 3  # DENETIM P2: bu kadar ARDISIK hedef-kaybindan sonra bobinleri durdur
@@ -881,11 +885,7 @@ def _kabin_okunamaz_bildir() -> None:
         if _kabin_okunamaz_bildirilen.get("anahtar") == _anahtar:
             return
         _kabin_okunamaz_bildirilen["anahtar"] = _anahtar
-        _apx._push_notification(
-            "⚠️ AI Pro: kabin yapılandırması okunamıyor — hedef doğrulanamadığı için bobinler SÜRÜLMEZ. Hayvanı yeniden "
-            "konumlamak çözmez: kabin yapılandırma dosyasını (kurulum) kontrol edin ya da teknik desteğe başvurun.",
-            "error",
-        )
+        _apx._bildir(lambda d: ceviri.t("bildirim.aiProKabinYapilandirma", dil=d), "error")
     except Exception:
         logger.debug("kabin okunamaz bildirimi gönderilemedi", exc_info=True)
 
@@ -906,11 +906,7 @@ def _doz_hatasi_bildir() -> None:
         if _doz_hatasi_bildirilen.get("anahtar") == _anahtar:
             return
         _doz_hatasi_bildirilen["anahtar"] = _anahtar
-        _apx._push_notification(
-            "⚠️ AI Pro: doz modeli geçerli doz üretmedi — bobinler bu karede SÜRÜLMEDİ (sürerse durdurulur). AI Pro'yu "
-            "durdurup yeniden başlatın; tekrarlarsa teknik desteğe başvurun.",
-            "error",
-        )
+        _apx._bildir(lambda d: ceviri.t("bildirim.aiProDozUretmedi", dil=d), "error")
     except Exception:
         logger.debug("doz hatası bildirimi gönderilemedi", exc_info=True)
 
@@ -1078,11 +1074,7 @@ def _arastirma_aipro_kapisi(saglayici) -> None:
         return
     raise HTTPException(
         status_code=409,
-        detail=(
-            f"'{getattr(saglayici, 'title', 'Araştırma modeli')}' ile otonom seans tezgâh "
-            "doğrulaması bekliyor: bu modelin 3B konum ölçümü kabin kalibrasyonuyla henüz "
-            "karşılaştırılmadı. Bu sürümde analiz ve önizleme yapılabilir, bobin sürülmez."
-        ),
+        detail=(ceviri.t("ai.pro.hata.arastirmaDogrulama", model=ai_pro_hedef.model_adi(saglayici))),
     )
 
 
@@ -1096,10 +1088,10 @@ def _arastirma_aipro_kapisi(saglayici) -> None:
 #: doğurduğu backend ortamı miras alır); `deploy/device.env` satırı + launcher geçişi açma kararıyla birlikte eklenir — o güne
 #: dek yokluğu = KAPALI (fail-closed yön). Kapı: tests/test_ai_pro_KEDI_surus_KAPALI_varsayilan_Y142.py
 KEDI_AIPRO_SURUS_BAYRAGI = "PEMF_KEDI_AIPRO_SURUS"
-KEDI_AIPRO_SURUS_KAPALI_MESAJI = (
-    "Kedi AI Pro sürüşü, kabin konumu doğrulanana kadar kapalı. Analizi ve öneriyi inceleyebilirsiniz; "
-    "seansı Kontrol ekranından elle başlatın."
-)
+
+
+def kedi_aipro_surus_kapali_mesaji() -> str:
+    return ceviri.t("ai.pro.hata.kediSurusKapali")
 
 
 def _kedi_aipro_surus_acik() -> bool:
@@ -1120,14 +1112,12 @@ def _kedi_modeli_mi(saglayici_ya_da_ad) -> bool:
 def _kedi_aipro_surus_kapisi(saglayici_ya_da_ad) -> None:
     """Y142: kedi modeliyle AI Pro BAŞLATMA / ONAY isteniyor ve bayrak kapalı → 409 (eylem söyleyen metin)."""
     if _kedi_modeli_mi(saglayici_ya_da_ad) and not _kedi_aipro_surus_acik():
-        raise HTTPException(status_code=409, detail=KEDI_AIPRO_SURUS_KAPALI_MESAJI)
+        raise HTTPException(status_code=409, detail=kedi_aipro_surus_kapali_mesaji())
 
 
 #: Y143: otomatik (0) araştırma önerisinde mühürlenecek SEÇİLİ hedef yok / kimliği okunamadı — eylem söyleyen metin.
-OTOMATIK_HEDEF_SECILEMEDI_MESAJI = (
-    "Otomatik seçimde mühürlenecek hedef bulunamadı: seçili hedefin kimliği okunamadı. Kare üstünde bir hedef işaretlenince "
-    "yeniden deneyin ya da hedefi listeden elle seçin."
-)
+def otomatik_hedef_secilemedi_mesaji() -> str:
+    return ceviri.t("ai.pro.hata.otomatikHedef")
 
 
 def _yukle_em_fantom_cv() -> dict:
@@ -1247,6 +1237,26 @@ def _saglayici_cache_alanlari() -> dict:
     }
 
 
+def _hazirlik_hata_metni(kod: str, ad: str, dil: str | None = "tr") -> str:
+    """Hazırlık hata kodunun metni (`dil="tr"` = depolanan Türkçe; durum yanıtı istek dilinde yeniden üretir)."""
+    if kod == "model_paketi":
+        return ceviri.t("ai.pro.hazirlik.modelPaketi", dil=dil, ad=ad)
+    if kod == "model_yukleme":
+        return ceviri.t("ai.pro.hazirlik.modelYukleme", dil=dil, ad=ad)
+    if kod == "kamera":
+        return ceviri.t("ai.pro.hazirlik.kamera", dil=dil)
+    return ""
+
+
+def _hazirlik_hata_goster() -> str:
+    """Durum yanıtındaki hazırlık hatası: depolanan metin Türkçe (hazırlık iş parçacığı istek bağlamında değil); yanıt İSTEK dilinde."""
+    if _ai_hazirlik_hata and _ai_hazirlik_hata_kodu in ("model_paketi", "model_yukleme", "kamera"):
+        sag = _ai_hazirlik_hata_saglayici
+        ad = ai_pro_hedef.model_adi(sag) if sag is not None else ""
+        return _hazirlik_hata_metni(_ai_hazirlik_hata_kodu, ad, None)
+    return _ai_hazirlik_hata
+
+
 def _hazirlik_hata_sinifi(exc: Exception, saglayici) -> "tuple[str, str]":
     """Model yükleme istisnasını (kod, KULLANICI METNİ) çiftine çevir — eylem söyleyen hata kuralı.
 
@@ -1257,16 +1267,8 @@ def _hazirlik_hata_sinifi(exc: Exception, saglayici) -> "tuple[str, str]":
     kullanıcıya görünen adı); karar gelince yalnız bu metin güncellenecek."""
     _ad = getattr(saglayici, "title", "AI modeli")
     if isinstance(exc, FileNotFoundError) or "bulunamad" in str(exc).lower():
-        return (
-            "model_paketi",
-            f"'{_ad}' model paketi bu cihazda kurulu değil. Masaüstü PEMF uygulamasının kurulum "
-            "adımından ilgili model paketini ekleyip bu ekrana dönün.",
-        )
-    return (
-        "model_yukleme",
-        f"'{_ad}' yüklenemedi. Uygulamayı yeniden başlatıp tekrar deneyin; sorun sürerse destek "
-        "kaydında bu ekranı belirtin.",
-    )
+        return ("model_paketi", _hazirlik_hata_metni("model_paketi", _ad))
+    return ("model_yukleme", _hazirlik_hata_metni("model_yukleme", _ad))
 
 
 def _ai_seansi_mi(seans: dict) -> bool:
@@ -1392,7 +1394,7 @@ def _ai_seansi_pasife_al(neden: str, dongu_muhru=None) -> None:
             try:
                 _api3._bildir_teyitsiz_stop(
                     _api3._stop_session_coils(_iptal.get("coil_ids") or list(range(1, 8)), yetkiyi_kes=True),
-                    "AI Pro başlatılamadı — durdurma",
+                    lambda d: ceviri.t("bildirim.kaynak.aiProBaslatilamadi", dil=d),
                 )
             except Exception:
                 logger.exception("AI Pro: başlatılamayan seansın bobinleri durdurulamadı")
@@ -1718,7 +1720,7 @@ def _ai_hazirlik_loop():
     loop'unu başlatır. `/ai/pro/hazirlik/baslat` da seans aktifken (`_ai_loop_active`) başlamaz.
     ⚠️ Lokalizasyon yolu `_ai_pro_loop` ile BİREBİR (relocalize-tüket + organ-snapshot, denetim P2);
     değişirse İKİSİ birlikte güncellenmeli."""
-    global _ai_hazirlik_active, _ai_relocalize, _ai_hazirlik_hata, _ai_hazirlik_hata_kodu
+    global _ai_hazirlik_active, _ai_relocalize, _ai_hazirlik_hata, _ai_hazirlik_hata_kodu, _ai_hazirlik_hata_saglayici
     _sag = _aktif_saglayici()
     logger.info("AI Pro HAZIRLIK önizlemesi BAŞLADI (model=%s, sunucu kamerası, sürüş YOK).", _sag.ad)
     # MODEL KAMERADAN ÖNCE (2026-09-09): eskiden kamera açılıp SONRA model yükleniyordu. Ağır
@@ -1730,6 +1732,7 @@ def _ai_hazirlik_loop():
     except Exception as e:
         logger.error("Hazırlık: %s yüklenemedi (kamera hiç açılmadı): %s", _sag.ad, e)
         _ai_hazirlik_hata_kodu, _ai_hazirlik_hata = _hazirlik_hata_sinifi(e, _sag)
+        _ai_hazirlik_hata_saglayici = _sag
         _ai_hazirlik_active = False
         return
     cap = cv2.VideoCapture(0)
@@ -1737,10 +1740,8 @@ def _ai_hazirlik_loop():
         logger.error("Hazırlık: kamera açılamadı (VideoCapture(0)).")  # ham ayrıntı YALNIZ log'a
         cap.release()
         _ai_hazirlik_hata_kodu = "kamera"
-        _ai_hazirlik_hata = (
-            "Kamera açılamadı. Kablosunu ve başka bir uygulamanın kamerayı kullanmadığını kontrol "
-            "edip hazırlığı yeniden başlatın."
-        )
+        _ai_hazirlik_hata = _hazirlik_hata_metni("kamera", "")
+        _ai_hazirlik_hata_saglayici = _sag
         _ai_hazirlik_active = False
         return
     # B3 (siyah ekran): önizleme kareleri istemciye HİÇ gitmiyordu (yalnız _ai_pro_loop `ai_vision`
@@ -2116,7 +2117,9 @@ def _ai_pro_loop(dongu_muhru=None):
                         # (broker oluyken hedef-kaybi durdurmasi sessizce dusuyordu).
                         _teyitsiz2 = _apx2._stop_session_coils(range(1, 8))
                         if _bildir:
-                            _apx2._bildir_teyitsiz_stop(_teyitsiz2, "AI Pro hedef-kaybı durdurması")
+                            _apx2._bildir_teyitsiz_stop(
+                                _teyitsiz2, lambda d: ceviri.t("bildirim.kaynak.aiProHedefKaybi", dil=d)
+                            )
                             logger.warning(
                                 "AI Pro: hedef %d ardisik iterasyondur bulunamadi → bobinler DURDURULDU "
                                 "(hedef yeniden bulunursa surus devam eder).",
@@ -2380,10 +2383,8 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
     _arastirma_aipro_kapisi(_saglayici)  # kedi DIŞI model + bayrak kapalı → 409
     if oid not in _saglayici.hedef_idleri():
         _gecerli = ", ".join(str(i) for i in sorted(_saglayici.hedef_idleri()))
-        raise HTTPException(
-            status_code=422,
-            detail=f"Hedef {oid} '{_saglayici.title}' için desteklenmiyor (geçerli: {_gecerli}).",
-        )
+        _ek = {"oid": oid, "model": ai_pro_hedef.model_adi(_saglayici), "gecerli": _gecerli}
+        raise HTTPException(status_code=422, detail=ceviri.t("ai.pro.hata.hedefDesteklenmiyor", **_ek))
     with _ai_cache_lock:
         c = dict(_ai_organ_cache)
     # ⚠️ TAZELİK MODELE DE BAKAR (Faz 1): kedi hazırlığından kalan taze cache, fantom önerisine
@@ -2402,12 +2403,11 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
         # akıtıyor); mesaj da ne olduğunu ve kimin ne yapacağını dürüstçe söylüyor.
         with _ai_cache_lock:
             _kedi = bool(_ai_organ_cache.get("kedi_var"))  # anahtar adı korunur: "özne kadrajda"
-        _ad = _saglayici.hedef_adi(oid) or "hedef organ"
+        _ad = ai_pro_hedef.hedef_gosterim_adi(_saglayici, oid) or ceviri.t("ai.pro.hedefOrgan")
         _ipucu = _saglayici.ipucu(_kedi, _ad)
         raise HTTPException(
             status_code=409,
-            detail=f"{_ad} henüz konumlandırılmadı. {_ipucu} Kamera görüntüsü akarken konumlandırma "
-            "kendiliğinden tamamlanır ve öneri otomatik hazırlanır.",
+            detail=ceviri.t("ai.pro.hata.konumlandirilmadi", ad=_ad, ipucu=_ipucu),
         )
     # ⚠️ Y143 (S-AII.4, sahip 2026-10-13): araştırma modelinde "otomatik" (0) hedef MÜHÜRE YAZILMAZ — o anki lokalizasyonun
     # SEÇTİĞİ hedefin kalıcı KİMLİĞİ yazılır (onay ekranında görülen = sürülen). Eskiden 0 mühürleniyordu: döngü / kare yolu
@@ -2419,12 +2419,10 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
     if oid == 0 and not _kedi_modeli_mi(_saglayici):
         _secili = c.get("secili_id")
         if isinstance(_secili, bool) or not isinstance(_secili, int) or _secili <= 0:
-            raise HTTPException(status_code=409, detail=OTOMATIK_HEDEF_SECILEMEDI_MESAJI)
+            raise HTTPException(status_code=409, detail=otomatik_hedef_secilemedi_mesaji())
         if _secili not in _saglayici.hedef_idleri():
-            raise HTTPException(
-                status_code=409,
-                detail=f"{OTOMATIK_HEDEF_SECILEMEDI_MESAJI} (seçili hedefin kimliği {_secili} bu modelde geçersiz).",
-            )
+            _ek = {"mesaj": otomatik_hedef_secilemedi_mesaji(), "secili": _secili}
+            raise HTTPException(status_code=409, detail=ceviri.t("ai.pro.hata.otomatikHedefGecersiz", **_ek))
         _muhur_hedefi, _otomatik_secim = _secili, True
     # Sağlayıcıyı bu isteğin thread'ine bağla → `_predict_and_drive` MÜHÜRLENEN modelin dozunu
     # üretir (imza değişmez: mevcut testlerin 4 argümanlı mock'ları çalışmaya devam eder).
@@ -2436,7 +2434,7 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
     if not any(float(d) > 0 for d in D):
         raise HTTPException(
             status_code=422,
-            detail="Model bu konum için sürülebilir bir parametre üretmedi (tüm duty=0). Lokalizasyonu tekrarlayın.",
+            detail=ceviri.t("ai.pro.hata.dozUretmedi"),
         )
     from servers import ai_approval
 
@@ -2509,7 +2507,7 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
         "meta": rec["meta"],
         "expiresAt": rec["expires_at"],
         "surusAcik": _surus_acik,
-        "surusKapaliNedeni": "" if _surus_acik else KEDI_AIPRO_SURUS_KAPALI_MESAJI,
+        "surusKapaliNedeni": "" if _surus_acik else kedi_aipro_surus_kapali_mesaji(),
     }
 
 
@@ -2633,9 +2631,7 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
         from servers import update_manager as _um
 
         if _um.is_update_in_progress():
-            raise HTTPException(
-                status_code=409, detail="Güncelleme uygulanıyor; işlem bitene kadar AI Pro başlatılamaz."
-            )
+            raise HTTPException(status_code=409, detail=ceviri.t("ai.pro.hata.guncellemeSuruyor"))
     except HTTPException:
         raise
     except Exception:
@@ -2677,10 +2673,8 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     _organ_req = int(_spec.get("organ_id", payload.organ_id))
     if _organ_req not in _saglayici.hedef_idleri():
         _gecerli = ", ".join(str(i) for i in sorted(_saglayici.hedef_idleri()))
-        raise HTTPException(
-            status_code=422,
-            detail=f"Hedef {_organ_req} '{_saglayici.title}' için desteklenmiyor (geçerli: {_gecerli}).",
-        )
+        _ek = {"oid": _organ_req, "model": ai_pro_hedef.model_adi(_saglayici), "gecerli": _gecerli}
+        raise HTTPException(status_code=422, detail=ceviri.t("ai.pro.hata.hedefDesteklenmiyor", **_ek))
     # Süreyi klinik üst sınıra kapla (Audit P1) — aksi halde {duration_minutes: 999999} uzaktan
     # kabul ediliyordu. Bu değer hem STM/watchdog'a hem ESP MQTT yüküne gider.
     # Süre de MÜHÜRDEN okunur (organ ile aynı gerekçe: "20 dk onayla, 180 dk başlat" olmasın).
@@ -2695,7 +2689,8 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
         if _ls_red.stm_komutlari_reddediyor():
             # Y74 / 1-G §8 #2: son red DUTY reddiyse eylem duty'dir (firmware uyuşmazlığı DEĞİL).
             raise HTTPException(
-                status_code=409, detail=_ls_red.stm_red_duty_metni("AI Pro BAŞLATILMADI") or _api_red.STM_RED_MESAJI
+                status_code=409,
+                detail=_ls_red.stm_red_duty_metni(ceviri.t("ai.pro.sonuc.baslatilmadi")) or _api_red.stm_red_mesaji(),
             )
     except HTTPException:
         raise
@@ -2708,7 +2703,7 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
 
     _kayit_ok, _kayit_sebep = _api_kayit._kayit_db_hazir()
     if not _kayit_ok:
-        raise HTTPException(status_code=503, detail=f"AI Pro BAŞLATILMADI — {_kayit_sebep}")
+        raise HTTPException(status_code=503, detail=ceviri.t("ai.pro.hata.baslatilmadiNeden", sebep=_kayit_sebep))
 
     # ── ATOMİK: döngü denetimi + mandal/nesil + onay TÜKETİMİ + globaller, AYNI kilit altında ──
     # İki eşzamanlı start ikinci loop'u AÇMAZ ve kaybedenin onayı tüketilmez (D1.E06 (c)).
@@ -2801,9 +2796,7 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
                     _api_geri._active_session["is_active"] = False
         except Exception:
             logger.exception("AI Pro: başlatma iptalinde seans pasife alınamadı")
-        raise HTTPException(
-            status_code=409, detail="Başlatma sırasında durdurma/acil durdurma geldi; AI Pro BAŞLATILMADI."
-        )
+        raise HTTPException(status_code=409, detail=ceviri.t("ai.pro.hata.baslatmaSirasindaDurduruldu"))
     import threading
 
     # WEB kapalı-döngü (2026-08-25): hazırlık önizlemesi kamerayı tutuyor olabilir → seans loop'u
@@ -2871,7 +2864,10 @@ def stop_ai_pro():
         # bu uc "success" donerken bobinlerin durmadigi sessiz kaliyordu.
         # D1.81 (İG-5.3 "/ai/pro/stop kolu"): yetki KESİLİR (nesil++) → tahmindeki uçuştaki `/frame`/döngü turu bu
         # STOP'tan sonra bobini yeniden enerjileyemez (ölçüldü: 20'de 2, zorlanmış zamanlamada 30'da 30).
-        _api._bildir_teyitsiz_stop(_api._stop_session_coils(range(1, 9), yetkiyi_kes=True), "AI Pro durdurma")
+        _api._bildir_teyitsiz_stop(
+            _api._stop_session_coils(range(1, 9), yetkiyi_kes=True),
+            lambda d: ceviri.t("bildirim.kaynak.aiProDurdurma", dil=d),
+        )
     except Exception:
         logger.exception("stop_ai_pro: _stop_session_coils hatası")
     # ⚠️ O-1.1 kapsamı (1-G): önizleme durdurma ve canlı E bağlamı STOP'tan SONRA. Eskiden STOP'tan ÖNCEydi: önizleme o an
@@ -2943,7 +2939,7 @@ def set_ai_pro_organ(payload: AiProStartPayload = AiProStartPayload()):
     # 3. tur denetimi [B1]: mid-seans organ değişimi ONAYLANMAMIŞ organa enerji verebilir; YABANCI
     # (sahip dışı) istemci onaylı seansın organını değiştiremez (deny-only, yeni yetki vermez).
     if _ai_kare_yabanci(payload.client_id):
-        raise HTTPException(status_code=403, detail="Bu AI Pro seansının sahibi değilsiniz; organ değiştirilemez.")
+        raise HTTPException(status_code=403, detail=ceviri.t("ai.pro.hata.sahipDegilOrgan"))
     _organ_req = int(payload.organ_id)
     # Hedef kümesi AKTİF sağlayıcıdan (Faz 1) — kedi için 0-6 (Audit P2: em_kedi yalnız 0-6
     # TEDAVİ eder; 7-10 lokalize olur ama _build_input ValueError → sessiz sıfır-tedavi).
@@ -2951,14 +2947,12 @@ def set_ai_pro_organ(payload: AiProStartPayload = AiProStartPayload()):
     if payload.model and payload.model.strip().lower() != _saglayici.ad:
         raise HTTPException(
             status_code=422,
-            detail=f"Aktif model '{_saglayici.ad}'; '{payload.model}' için hedef değiştirilemez.",
+            detail=ceviri.t("ai.pro.hata.aktifModel", ad=_saglayici.ad, model=payload.model),
         )
     if _organ_req not in _saglayici.hedef_idleri():
         _gecerli = ", ".join(str(i) for i in sorted(_saglayici.hedef_idleri()))
-        raise HTTPException(
-            status_code=422,
-            detail=f"Hedef {_organ_req} '{_saglayici.title}' için desteklenmiyor (geçerli: {_gecerli}).",
-        )
+        _ek = {"oid": _organ_req, "model": ai_pro_hedef.model_adi(_saglayici), "gecerli": _gecerli}
+        raise HTTPException(status_code=422, detail=ceviri.t("ai.pro.hata.hedefDesteklenmiyor", **_ek))
     # ⚠️ D1.60 (B-5.5 · İG-6.10) — SAHİP KARARI A-16: seans sürerken MÜHÜRDE OLMAYAN hedefe geçiş YENİ ONAY ister.
     # Onay mührü bir hedefe verilir; mühür dışı hedefe sürüş onaysız tedavidir. Ölçüldü (İG-6.10): sahip istemcinin
     # `/organ {2}`'si onaylı organ-0 seansında 200 dönüyor, teldeki duty/faz yeni organın desenine geçiyordu.
@@ -2974,10 +2968,7 @@ def set_ai_pro_organ(payload: AiProStartPayload = AiProStartPayload()):
         )
         raise HTTPException(
             status_code=409,
-            detail=(
-                f"Seans sürerken onaylanmamış hedefe geçilemez: bu seansın onaylı hedefi «{_onayli_ad}». "
-                "Başka hedef için AI Pro'yu durdurun, yeni öneri alın ve hekimin yeni onayıyla başlatın."
-            ),
+            detail=(ceviri.t("ai.pro.hata.onaysizHedef", ad=_onayli_ad)),
         )
     _ai_organ_id = _organ_req
     _ai_relocalize = True  # yeni hedef için lokalizasyonu hemen yeniden çalıştır
@@ -2996,7 +2987,7 @@ def calibrate_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     global _ai_relocalize
     # [B1]: YABANCI istemci sahibin lokalizasyonunu zorla tazeleyemez (deny-only).
     if _ai_kare_yabanci(payload.client_id):
-        raise HTTPException(status_code=403, detail="Bu AI Pro seansının sahibi değilsiniz.")
+        raise HTTPException(status_code=403, detail=ceviri.t("ai.pro.hata.sahipDegil"))
     _ai_relocalize = True
     return {"status": "success", "relocalize": True}
 
@@ -3015,7 +3006,7 @@ def ai_pro_hazirlik_baslat(payload: AiProStartPayload = AiProStartPayload()):
         _ai_relocalize, \
         _ai_hedef_modeli, \
         _ai_hazirlik_hata_kodu
-    global _ai_hazirlik_hata
+    global _ai_hazirlik_hata, _ai_hazirlik_hata_saglayici
     import threading
 
     _organ_req = int(payload.organ_id)
@@ -3031,7 +3022,7 @@ def ai_pro_hazirlik_baslat(payload: AiProStartPayload = AiProStartPayload()):
     if _ai_kare_yabanci(payload.client_id):
         raise HTTPException(
             status_code=403,
-            detail="Bu AI Pro seansının sahibi değilsiniz; hedef değiştirilemez.",
+            detail=ceviri.t("ai.pro.hata.sahipDegilHedef"),
         )
 
     # ⚠️ MUTASYON KİLİT İÇİNDE + AKTİFLİK KONTROLÜNDEN SONRA (2026-09-08 düzeltmesi):
@@ -3054,13 +3045,14 @@ def ai_pro_hazirlik_baslat(payload: AiProStartPayload = AiProStartPayload()):
         if _ai_loop_active or _muhurlu_seans:
             raise HTTPException(
                 status_code=409,
-                detail="Seans sürerken hedef değiştirilemez — önce AI Pro'yu durdurun.",
+                detail=ceviri.t("ai.pro.hata.seansSurerkenHedef"),
             )
         # Buradan sonrası: SEANS YOK → bobin sürülmüyor, hedef mutasyonu güvenli. Hazırlık zaten
         # çalışıyorsa da organ güncellenir: panelin "Yeniden Konumla" akışı (AiProPanel.tsx:575)
         # önizleme sürerken bu ucu yeni organla çağırır.
         _ai_hazirlik_hata = ""  # B3: her yeni hazırlık taze; eski hata metni bayat kalmasın
         _ai_hazirlik_hata_kodu = ""
+        _ai_hazirlik_hata_saglayici = None
         # Model seçimi (Faz 1): seans YOK → güvenli. Hazırlık sürerken model değişirse önizleme
         # yeni sağlayıcıyla devam eder (thread her turda `_aktif_saglayici()` okur).
         _ai_hedef_modeli = _saglayici.ad
@@ -3078,12 +3070,12 @@ def ai_pro_hazirlik_baslat(payload: AiProStartPayload = AiProStartPayload()):
         with _ai_cache_lock:
             _ai_organ_cache["localized"] = False
         if _ai_hazirlik_active:
-            return {"status": "success", "message": "Hazırlık zaten çalışıyor"}
+            return {"status": "success", "message": ceviri.t("ai.pro.mesaj.hazirlikCalisiyor")}
         _ai_hazirlik_active = True
         _ai_hazirlik_started_at = time.monotonic()
         _ai_hazirlik_thread = threading.Thread(target=_ai_hazirlik_loop, daemon=True)
         _ai_hazirlik_thread.start()
-    return {"status": "success", "message": "Hazırlık başladı"}
+    return {"status": "success", "message": ceviri.t("ai.pro.mesaj.hazirlikBasladi")}
 
 
 @ai_router.post("/api/ai/pro/hazirlik/durdur")
@@ -3130,7 +3122,7 @@ def ai_pro_status():
         # B3 (siyah ekran): web önizlemesi canlı mı + neden öldü (kamera/model). Panel `hazirlikHata`
         # doluysa hazırlığı sonlandırıp NEDENİ gösterir (120 sn kör bekleyiş yerine).
         "hazirlikActive": bool(_ai_hazirlik_active),
-        "hazirlikHata": _ai_hazirlik_hata,
+        "hazirlikHata": _hazirlik_hata_goster(),
         "hazirlikHataKodu": _ai_hazirlik_hata_kodu,  # YALNIZ-EK (2026-09-09)
         # YALNIZ-EK (2026-09-09): araştırma modelleriyle sürüş açık mı? Panel model kartlarını
         # buna göre "Deneysel — tezgâh doğrulaması bekleniyor" diye pasifleştirir.
@@ -3188,7 +3180,7 @@ async def _frame_kayip_stopu(neden: str, seri: int = _AI_LOST_STOP_STREAK) -> No
         # O-1.1 (Ö.4-Y8): KENDİ iş parçacığı — ortak havuz (`to_thread`) asılı G/Ç ile doluyken STOP sıra beklemez.
         _teyitsiz = await _apx._durdurma_is_parcaciginda(_apx._stop_session_coils, range(1, 8), ad="frame-kayip-stop")
         if _bildir:
-            _apx._bildir_teyitsiz_stop(_teyitsiz, "AI Pro hedef-kaybı durdurması (mobil kare)")
+            _apx._bildir_teyitsiz_stop(_teyitsiz, lambda d: ceviri.t("bildirim.kaynak.aiProHedefKaybiMobil", dil=d))
     except Exception:
         logger.exception("AI Pro /frame: hedef-kayıp STOP hatası")
     if _bildir:
@@ -3433,7 +3425,7 @@ async def ai_pro_frame(
         raise
     except Exception as e:
         logger.error(f"AI Pro frame error: {e}", exc_info=True)
-        raise _ai_fail("AI Pro kare hatası", e)
+        raise _ai_fail(lambda d: ceviri.t("ai.hata.aiProKare", dil=d), e)
 
 
 @ai_router.post("/api/ai/vision/segmentation")
@@ -3486,7 +3478,7 @@ async def analyze_segmentation(file: UploadFile = File(None), image_base64: str 
         return {"status": "success", "cat_count": cat_count, "image_base64": b64_image, **_kare_boyutu(img)}
     except Exception as e:
         logger.error(f"Segmentation inference error: {e}", exc_info=True)
-        raise _ai_fail("Segmentasyon hatası", e)
+        raise _ai_fail(lambda d: ceviri.t("ai.hata.segmentasyon", dil=d), e)
 
 
 _FGS_BANTLARI_CACHE: dict | None = None
@@ -3527,7 +3519,7 @@ async def analyze_thermal(
     CAM yöntemi dışa açıldı, allowlist'li). AI1.X1: harita TAHMİN EDİLEN sınıfı açıklar (varsayılan HiRes-CAM;
     Grad-CAM++ tek lojitte sınıf-duyarsız) ve açıklanan sınıf `xai_hedef` olarak döner."""
     if xai_method not in ("gradcam++", "gradcam", "eigencam", "hirescam"):
-        raise HTTPException(status_code=422, detail=f"xai_method geçersiz: {xai_method}")
+        raise HTTPException(status_code=422, detail=ceviri.t("ai.hata.xaiYontemi", xai_method=xai_method))
     try:
         if ai_service_enabled():
             return await _kapili_devret(
@@ -3541,7 +3533,7 @@ async def analyze_thermal(
         # (akromatik / kararsız) sonuç bunu SÖYLER — arayüz yalnız gösterir (`utils/image_domain.termal_girdi_dogrulamasi`).
         from utils import image_domain as _imgdom
 
-        girdi_dogrulama = _imgdom.termal_girdi_dogrulamasi(img)
+        girdi_dogrulama = ai_kapi_metni.termal_dogrulama_cevir(_imgdom.termal_girdi_dogrulamasi(img))
 
         def _load_thermal():
             from ai_hub.cat_thermal.inference_cat_thermal import CatThermalPredictor
@@ -3577,7 +3569,7 @@ async def analyze_thermal(
                     yanit["xai_hedef"] = _x.get("hedef")
                 except Exception as xe:
                     logger.warning("Termal XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
-                    yanit["xai_error"] = "Açıklama üretilemedi"
+                    yanit["xai_error"] = ceviri.t("ai.sonuc.aciklamaUretilemedi")
         finally:
             try:
                 os.unlink(tmp.name)
@@ -3596,7 +3588,7 @@ async def analyze_thermal(
         }
     except Exception as e:
         logger.error(f"Thermal inference error: {e}", exc_info=True)
-        raise _ai_fail("Termal model hatası", e)
+        raise _ai_fail(lambda d: ceviri.t("ai.hata.termal", dil=d), e)
 
 
 @ai_router.post("/api/ai/vision/reticulocytes")
@@ -3679,7 +3671,7 @@ async def analyze_reticulocytes(
                 _xai_alanlari["xai_method"] = _x.get("method")
             except Exception as xe:
                 logger.warning("Retikülosit XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
-                _xai_alanlari["xai_error"] = "Açıklama üretilemedi"
+                _xai_alanlari["xai_error"] = ceviri.t("ai.sonuc.aciklamaUretilemedi")
 
         return {
             "status": "success",
@@ -3690,7 +3682,7 @@ async def analyze_reticulocytes(
         }
     except Exception as e:
         logger.error(f"Reticulocytes inference error: {e}", exc_info=True)
-        raise _ai_fail("Retikülosit model hatası", e)
+        raise _ai_fail(lambda d: ceviri.t("ai.hata.retikulosit", dil=d), e)
     finally:
         # reticulocytes-finally fix: temp dosyayı hata olsa da MUTLAKA sil (diğer uçlarla tutarlı).
         # Eski kod os.unlink'i finally DIŞINDA çağırıyordu → predict/imwrite hata verirse temp sızardı.
@@ -3856,9 +3848,9 @@ async def analyze_em_fantom(
 
         if isinstance(e, _SonluDegil):
             logger.warning("em_fantom: geçersiz girdi reddedildi: %s", e)
-            raise HTTPException(status_code=422, detail=f"Fantom analizi: {e}") from None
+            raise HTTPException(status_code=422, detail=ceviri.t("ai.hata.fantomAnalizi", e=e)) from None
         logger.error(f"em_fantom inference error: {e}", exc_info=True)
-        raise _ai_fail("Fantom analiz hatası", e)
+        raise _ai_fail(lambda d: ceviri.t("ai.hata.fantomAnaliz", dil=d), e)
 
 
 @ai_router.post("/api/ai/vision/em_petri")
@@ -4086,9 +4078,9 @@ async def analyze_em_petri(
 
         if isinstance(e, _SonluDegil):
             logger.warning("em_petri: geçersiz girdi reddedildi: %s", e)
-            raise HTTPException(status_code=422, detail=f"Petri analizi: {e}") from None
+            raise HTTPException(status_code=422, detail=ceviri.t("ai.hata.petriAnalizi", e=e)) from None
         logger.error(f"em_petri inference error: {e}", exc_info=True)
-        raise _ai_fail("Petri analiz hatası", e)
+        raise _ai_fail(lambda d: ceviri.t("ai.hata.petriAnaliz", dil=d), e)
 
 
 @ai_router.post("/api/ai/rna/kidney")
@@ -4148,10 +4140,7 @@ async def analyze_kidney_rna(
         if predictor.expected_cols and df.shape[1] != predictor.expected_cols:
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    f"Gen sütun sayısı uyuşmuyor: beklenen {predictor.expected_cols} "
-                    f"(eğitim/TCGA sırası), gelen {df.shape[1]}. 1. sütun hasta ID olmalı."
-                ),
+                detail=(ceviri.t("ai.hata.genSutunSayisi", beklenen=predictor.expected_cols, gelen=df.shape[1])),
             )
 
         predictions = await asyncio.to_thread(lambda: predictor.predict(df))
@@ -4166,7 +4155,7 @@ async def analyze_kidney_rna(
         # yine döner. Açıklama İKİNCİL: hatası analizi düşürmez.
         if explain:
             if len(df) > 25:
-                yanit["xai_error"] = "Açıklama en fazla 25 hastalık CSV için üretilir (IG maliyeti)."
+                yanit["xai_error"] = ceviri.t("ai.hata.xaiEnFazla25")
             else:
                 try:
                     from ai_hub.inference_human_kidney_rna import inference_human_kidney_rna as _ihr
@@ -4174,13 +4163,13 @@ async def analyze_kidney_rna(
                     yanit["xai"] = await asyncio.to_thread(_ihr.xai_top_genler, df)
                 except Exception as xe:
                     logger.warning("RNA XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
-                    yanit["xai_error"] = "Açıklama üretilemedi"
+                    yanit["xai_error"] = ceviri.t("ai.sonuc.aciklamaUretilemedi")
         return yanit
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"kidney_rna inference error: {e}", exc_info=True)
-        raise _ai_fail("RNA analiz hatası", e)
+        raise _ai_fail(lambda d: ceviri.t("ai.hata.rnaAnaliz", dil=d), e)
 
 
 class KidneyDiseaseInput(BaseModel):
@@ -4239,7 +4228,7 @@ async def analyze_kidney_disease(data: KidneyDiseaseInput, _res=Depends(require_
     try:
         dolu = _ckd_kapisi(features)
     except _AsgariGirdiYok as ag:
-        raise HTTPException(status_code=422, detail=ag.user_message()) from None
+        raise HTTPException(status_code=422, detail=ai_kapi_metni.asgari_metni(ag)) from None
     try:
         if ai_service_enabled():
             return await delegate_json("kidney_disease", {**features, "explain": explain})
@@ -4269,17 +4258,13 @@ async def analyze_kidney_disease(data: KidneyDiseaseInput, _res=Depends(require_
                 yanit["xai"] = await asyncio.to_thread(_ihd.xai_top_features, features)
             except Exception as xe:
                 logger.warning("CKD XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
-                yanit["xai_error"] = "Açıklama üretilemedi"
+                yanit["xai_error"] = ceviri.t("ai.sonuc.aciklamaUretilemedi")
         return yanit
     except Exception as e:
         logger.error(f"kidney_disease inference error: {e}", exc_info=True)
         # B5 (2026-09-03): 500 yolu — mesaj EYLEME dönük olsun (ham "analiz hatası" operatörü
         # kör bırakıyordu). `_ai_fail` exc_info'yu zaten loglar; Türkçe olduğu için aiDetayCumlesi aynen gösterir.
-        raise _ai_fail(
-            "Böbrek hastalığı analizi yapılamadı — model dosyası veya bağımlılık eksik olabilir; "
-            "sunucu günlüğünü (kidney_disease inference error) kontrol edin.",
-            e,
-        )
+        raise _ai_fail(lambda d: ceviri.t("ai.hata.bobrekHastalik", dil=d), e)
 
 
 @ai_router.post("/api/ai/sound/cat")
@@ -4296,7 +4281,7 @@ async def analyze_cat_sound(
     DEĞİL — SES. `/api/ai/sound` prefix'iyle auth-muaf.
     """
     if xai_method not in ("gradcam++", "gradcam", "eigencam", "hirescam"):
-        raise HTTPException(status_code=422, detail=f"xai_method geçersiz: {xai_method}")
+        raise HTTPException(status_code=422, detail=ceviri.t("ai.hata.xaiYontemi", xai_method=xai_method))
     import tempfile
 
     tmp_in = None
@@ -4389,10 +4374,7 @@ async def analyze_cat_sound(
             # görüntü uçlarında zaten kurulmuş kalıp (bkz. `_decode_image` / petri reddi).
             raise HTTPException(
                 status_code=422,
-                detail=(
-                    "Kayıt sessiz ya da çok zayıf — ses alınamamış olabilir. "
-                    "Mikrofonu yaklaştırıp sessiz bir ortamda ~5 saniye tekrar kaydedin."
-                ),
+                detail=(ceviri.t("ai.hata.sesSessiz")),
             )
 
         # ⚠️ KAPI-SONRA-DEVRET — görüntü uçlarındaki `_kapili_devret` ile AYNI düzen.
@@ -4429,7 +4411,7 @@ async def analyze_cat_sound(
                 _xai_alanlari["xai_method"] = _x.get("method")
             except Exception as xe:
                 logger.warning("Ses XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
-                _xai_alanlari["xai_error"] = "Açıklama üretilemedi"
+                _xai_alanlari["xai_error"] = ceviri.t("ai.sonuc.aciklamaUretilemedi")
         # BELİRSİZLİK sonuçla BİRLİKTE taşınır: istemci düşük güvende sonucu kesin bir bulgu
         # gibi sunmaz. ⚠️ `guvenilir=False` "kedi sesi yok" DEMEK DEĞİLDİR — bu model bunu
         # söyleyemez; aralıklar örtüşüyor (gerçek ağrı kaydı 0,563 · oda gürültüsü 0,595).
@@ -4452,7 +4434,7 @@ async def analyze_cat_sound(
         }
     except Exception as e:
         logger.error(f"cat_sound inference error: {e}", exc_info=True)
-        raise _ai_fail("Ses analiz hatası", e)
+        raise _ai_fail(lambda d: ceviri.t("ai.hata.sesAnaliz", dil=d), e)
     finally:
         for _p in (tmp_in, tmp_wav):
             if _p and os.path.exists(_p):
@@ -4515,7 +4497,7 @@ async def analyze_kidney_ct(
                     _xai_alanlari["xai_method"] = _x.get("method")
                 except Exception as xe:
                     logger.warning("CT XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
-                    _xai_alanlari["xai_error"] = "Açıklama üretilemedi"
+                    _xai_alanlari["xai_error"] = ceviri.t("ai.sonuc.aciklamaUretilemedi")
         finally:
             try:
                 os.unlink(tmp.name)
@@ -4534,7 +4516,7 @@ async def analyze_kidney_ct(
         }
     except Exception as e:
         logger.error(f"kidney_ct inference error: {e}", exc_info=True)
-        raise _ai_fail("Böbrek CT analiz hatası", e)
+        raise _ai_fail(lambda d: ceviri.t("ai.hata.bobrekCt", dil=d), e)
 
 
 @ai_router.post("/api/ai/vision/histopath")
@@ -4594,7 +4576,7 @@ async def analyze_histopath(
                     _xai_alanlari["xai_method"] = _x.get("method")
                 except Exception as xe:
                     logger.warning("Histopat XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
-                    _xai_alanlari["xai_error"] = "Açıklama üretilemedi"
+                    _xai_alanlari["xai_error"] = ceviri.t("ai.sonuc.aciklamaUretilemedi")
         finally:
             try:
                 os.unlink(tmp.name)
@@ -4611,7 +4593,7 @@ async def analyze_histopath(
         }
     except Exception as e:
         logger.error(f"histopath inference error: {e}", exc_info=True)
-        raise _ai_fail("Histopatoloji analiz hatası", e)
+        raise _ai_fail(lambda d: ceviri.t("ai.hata.histopatoloji", dil=d), e)
 
 
 @ai_router.post("/api/ai/vision/scratch")
@@ -4640,13 +4622,11 @@ async def analyze_scratch(
     )
 
     if scratch_yonu not in GECERLI_SCRATCH_YONLERI:
-        raise HTTPException(status_code=422, detail="scratch_yonu 'dikey' ya da 'yatay' olmalı")
+        raise HTTPException(status_code=422, detail=ceviri.t("ai.hata.scratchYonu"))
     if xai_method not in GECERLI_XAI_YONTEMLERI:
-        raise HTTPException(status_code=422, detail=f"xai_method geçersiz: {xai_method}")
+        raise HTTPException(status_code=422, detail=ceviri.t("ai.hata.xaiYontemi", xai_method=xai_method))
     if not (0.00001 <= pixel_mm <= 0.01):
-        raise HTTPException(status_code=422, detail="pixel_mm 0.00001-0.01 aralığında olmalı (mm/px)")
-    _SCRATCH_KURULUM_MSG = "Yara kapanma modeli bu kurulumda hazır değil — GPU AI servisi ya da model paketi gerekli."
-    _SCRATCH_MESGUL_MSG = "Şu anda başka bir yara-kapanma analizi sürüyor — birazdan yeniden deneyin."
+        raise HTTPException(status_code=422, detail=ceviri.t("ai.hata.pixelMm"))
     try:
         if ai_service_enabled():
             # Delegate STRING'lerle gider (ai_client str() yapar; ai_service Form parse eder)
@@ -4665,14 +4645,16 @@ async def analyze_scratch(
                 if isinstance(devir_hatasi, httpx.HTTPStatusError):
                     kod = devir_hatasi.response.status_code
                     if kod == 503:
-                        raise HTTPException(status_code=503, detail=_SCRATCH_KURULUM_MSG) from devir_hatasi
+                        raise HTTPException(
+                            status_code=503, detail=ceviri.t("ai.hata.scratchKurulum")
+                        ) from devir_hatasi
                     if kod == 429:
-                        raise HTTPException(status_code=429, detail=_SCRATCH_MESGUL_MSG) from devir_hatasi
+                        raise HTTPException(status_code=429, detail=ceviri.t("ai.hata.scratchMesgul")) from devir_hatasi
                     if kod == 422:
                         try:
-                            detay = devir_hatasi.response.json().get("error") or "Geçersiz parametre"
+                            detay = devir_hatasi.response.json().get("error") or ceviri.t("ai.hata.gecersizParametre")
                         except Exception:
-                            detay = "Geçersiz parametre"
+                            detay = ceviri.t("ai.hata.gecersizParametre")
                         raise HTTPException(status_code=422, detail=detay) from devir_hatasi
                 raise
 
@@ -4701,7 +4683,7 @@ async def analyze_scratch(
             except _ipd.ScratchMesgul as mesgul:
                 # Kilit KISA timeout'la denenir (modül) — thread'ler dakikalarca
                 # executor işgal etmez; istemciye dürüst 429.
-                raise HTTPException(status_code=429, detail=_SCRATCH_MESGUL_MSG) from mesgul
+                raise HTTPException(status_code=429, detail=ceviri.t("ai.hata.scratchMesgul")) from mesgul
             except _ipd.ModelKurulumEksik as kurulum_hatasi:
                 # DAR eşleme (düşman-doğrulama: genel RuntimeError CUDA-OOM'u da
                 # 'model paketi gerekli' sanıyordu) — yalnız gerçek kurulum eksiği 503.
@@ -4714,7 +4696,7 @@ async def analyze_scratch(
                     _kok_neden_zinciri(kurulum_hatasi),
                     exc_info=True,
                 )
-                raise HTTPException(status_code=503, detail=_SCRATCH_KURULUM_MSG) from kurulum_hatasi
+                raise HTTPException(status_code=503, detail=ceviri.t("ai.hata.scratchKurulum")) from kurulum_hatasi
         finally:
             try:
                 os.unlink(tmp.name)
@@ -4722,7 +4704,7 @@ async def analyze_scratch(
                 pass
         return {"status": "success", **sonuc}
     except Exception as e:
-        raise _ai_fail("Yara kapanma analiz hatası", e)
+        raise _ai_fail(lambda d: ceviri.t("ai.hata.yaraKapanma", dil=d), e)
 
 
 #: SG.G5: GPU servisinin `/infer/cat_organ`ına AI Hub'ın gönderdiği İSTEK form alanı (yanıt alanı değil) — "bulunamadı"yı bilgi
@@ -4855,7 +4837,7 @@ async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = F
         }
     except Exception as e:
         logger.error(f"cat_organ inference error: {e}", exc_info=True)
-        raise _ai_fail("Kedi organ analiz hatası", e)
+        raise _ai_fail(lambda d: ceviri.t("ai.hata.kediOrgan", dil=d), e)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

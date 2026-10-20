@@ -6,27 +6,164 @@
     }
   },
   "ai": {
+    "alan": {
+      "ayrac": " veya ",
+      "boyali": "boyalı patoloji preparatı (H&E)",
+      "denetimCalismadi": "Görüntü türü (modalite) denetimi çalıştırılamadı; yanlış türde görüntüyle yanıltıcı sonuç üretmemek için analiz YAPILMADI. Görüntüyü yeniden yükleyin; sürerse sunucu günlüğünü teknik desteğe iletin.",
+      "denetimKisa": "Görüntü türü (modalite) denetimi çalıştırılamadı; analiz YAPILMADI.",
+      "gri": "gri tonlamalı tıbbi görüntü (CT / röntgen / ultrason)",
+      "renkli": "renkli fotoğraf",
+      "uyusmuyor": "Bu modül {{bekl}} bekliyor; yüklenen görüntü {{tespit}} gibi görünüyor. Yanlış görüntüyle üretilen sonuç yanıltıcı olur — lütfen doğru türde bir görüntü yükleyin."
+    },
     "hata": {
+      "aiProKare": "AI Pro kare hatası",
       "analizYok": "Analiz kaydı bulunamadı.",
+      "bobrekCt": "Böbrek CT analiz hatası",
+      "bobrekHastalik": "Böbrek hastalığı analizi yapılamadı — model dosyası veya bağımlılık eksik olabilir; sunucu günlüğünü (kidney_disease inference error) kontrol edin.",
       "durumGecersiz": "status 'approved', 'rejected' veya 'corrected' olmalı.",
+      "fantomAnaliz": "Fantom analiz hatası",
+      "fantomAnalizi": "Fantom analizi: {{e}}",
+      "gecersizParametre": "Geçersiz parametre",
       "gecmiseYazilamadi": "AI analizi geçmişe kaydedilemedi (kayıt veritabanına yazılamadı — disk dolu ya da veritabanı kilitli olabilir). Sonuç ekranda duruyor; değerlendirme ve rapor için sorunu giderip analizi yeniden çalıştırın.",
+      "genSutunSayisi": "Gen sütun sayısı uyuşmuyor: beklenen {{beklenen}} (eğitim/TCGA sırası), gelen {{gelen}}. 1. sütun hasta ID olmalı.",
       "gerekceZorunlu": "Red ve düzeltme için gerekçe/açıklama zorunludur.",
+      "hastalikAnalizi": "Hastalık analizi hatası",
+      "histopatoloji": "Histopatoloji analiz hatası",
       "kayitDbAcilamadi": "Kayıt veritabanı açılamadı.",
       "kayitDbKullanilamiyor": "Kayıt veritabanı kullanılamıyor.",
+      "kediOrgan": "Kedi organ analiz hatası",
+      "landmark": "Landmark model hatası",
       "logOkunamadi": "Log okunamadı",
       "oneriHatasi": "AI öneri hatası",
       "onericiYok": "AI recommender bulunamadı.",
-      "raporOlusmadi": "Rapor oluşturulamadı."
+      "petriAnaliz": "Petri analiz hatası",
+      "petriAnalizi": "Petri analizi: {{e}}",
+      "petriPlakaDegil": "Bu modül petri kuyucuğu plakası fotoğrafı bekliyor; yüklenen görüntüde petri kuyucuğu geometrisi bulunamadı. Fantom fotoğrafını 'Fantom Tümör' modülüne, hayvan fotoğrafını ilgili kedi modülüne yükleyin — yanlış modülde üretilen sonuç yanıltıcıdır.",
+      "pixelMm": "pixel_mm 0.00001-0.01 aralığında olmalı (mm/px)",
+      "raporOlusmadi": "Rapor oluşturulamadı.",
+      "retikulosit": "Retikülosit model hatası",
+      "rnaAnaliz": "RNA analiz hatası",
+      "scratchKurulum": "Yara kapanma modeli bu kurulumda hazır değil — GPU AI servisi ya da model paketi gerekli.",
+      "scratchMesgul": "Şu anda başka bir yara-kapanma analizi sürüyor — birazdan yeniden deneyin.",
+      "scratchYonu": "scratch_yonu 'dikey' ya da 'yatay' olmalı",
+      "segmentasyon": "Segmentasyon hatası",
+      "sesAnaliz": "Ses analiz hatası",
+      "sesSessiz": "Kayıt sessiz ya da çok zayıf — ses alınamamış olabilir. Mikrofonu yaklaştırıp sessiz bir ortamda ~5 saniye tekrar kaydedin.",
+      "termal": "Termal model hatası",
+      "xaiEnFazla25": "Açıklama en fazla 25 hastalık CSV için üretilir (IG maliyeti).",
+      "xaiYontemi": "xai_method geçersiz: {{xai_method}}",
+      "yaraKapanma": "Yara kapanma analiz hatası"
     },
     "kimlik": {
       "degerlendirme": "Operatör seçin — değerlendirme için önce üst bardan hangi hekim olduğunuzu seçin.",
       "oncekiDegerlendirmeler": "Operatör seçin — önceki değerlendirmeleri görmek için üst bardan hangi hekim olduğunuzu seçin."
     },
+    "klinik": {
+      "alan": {
+        "al": "albümin",
+        "bu": "kan üresi",
+        "hemo": "hemoglobin",
+        "sc": "serum kreatinin",
+        "sg": "idrar dansitesi"
+      },
+      "kilo": "kilo (kg) 0-30 aralığında girilmeli",
+      "nabiz": "nabız (bpm) girilmeli (makul: ~120-220)",
+      "sicaklik": "vücut sıcaklığı (°C) girilmeli (makul: ~37-39.5)",
+      "vitalGerekli": "Güvenilir hastalık tahmini için geçerli vital veriler gerekli: {{sorunlar}}",
+      "yas": "yaş negatif olamaz",
+      "yetersiz": "Güvenilir bir tahmin için yeterli klinik veri yok ({{dolu}}/{{toplam}} alan dolu; en az {{asgari}} gerekli). Ayrıca böbrek işlevine dair en az bir değer girilmeli — eksik olanlar: {{eksik}}. Boş formla üretilen sonuç, hastanın verisini değil modelin genel ortalamasını yansıtır ve yanıltıcıdır."
+    },
+    "model": {
+      "arastirma": "Araştırma modeli",
+      "fantom": "Fantom Tümör",
+      "kedi": "Kedi Organ",
+      "petri": "Petri Kuyu"
+    },
+    "organ": {
+      "akcigerSag": "Akciğer (sağ)",
+      "akcigerSol": "Akciğer (sol)",
+      "bagirsak": "Bağırsak",
+      "bobrek": "Böbrek",
+      "dalak": "Dalak",
+      "kalp": "Kalp",
+      "karaciger": "Karaciğer",
+      "mesane": "Mesane",
+      "mide": "Mide",
+      "pankreas": "Pankreas",
+      "tumVucut": "Tüm Vücut"
+    },
     "pemf": {
       "gecerlilikHesaplanamadi": "PEMF geçerliliği hesaplanamadı — D/P/E değerleri kullanılmamalı; analizi yineleyin."
     },
+    "pro": {
+      "hata": {
+        "aktifModel": "Aktif model '{{ad}}'; '{{model}}' için hedef değiştirilemez.",
+        "arastirmaDogrulama": "'{{model}}' ile otonom seans tezgâh doğrulaması bekliyor: bu modelin 3B konum ölçümü kabin kalibrasyonuyla henüz karşılaştırılmadı. Bu sürümde analiz ve önizleme yapılabilir, bobin sürülmez.",
+        "baslatilmadiNeden": "AI Pro BAŞLATILMADI — {{sebep}}",
+        "baslatmaSirasindaDurduruldu": "Başlatma sırasında durdurma/acil durdurma geldi; AI Pro BAŞLATILMADI.",
+        "dozUretmedi": "Model bu konum için sürülebilir bir parametre üretmedi (tüm duty=0). Lokalizasyonu tekrarlayın.",
+        "guncellemeSuruyor": "Güncelleme uygulanıyor; işlem bitene kadar AI Pro başlatılamaz.",
+        "hedefDesteklenmiyor": "Hedef {{oid}} '{{model}}' için desteklenmiyor (geçerli: {{gecerli}}).",
+        "kediSurusKapali": "Kedi AI Pro sürüşü, kabin konumu doğrulanana kadar kapalı. Analizi ve öneriyi inceleyebilirsiniz; seansı Kontrol ekranından elle başlatın.",
+        "konumlandirilmadi": "{{ad}} henüz konumlandırılmadı. {{ipucu}} Kamera görüntüsü akarken konumlandırma kendiliğinden tamamlanır ve öneri otomatik hazırlanır.",
+        "modelTanimsiz": "Model '{{model}}' tanınmıyor (geçerli: {{gecerli}})",
+        "onaysizHedef": "Seans sürerken onaylanmamış hedefe geçilemez: bu seansın onaylı hedefi «{{ad}}». Başka hedef için AI Pro'yu durdurun, yeni öneri alın ve hekimin yeni onayıyla başlatın.",
+        "otomatikHedef": "Otomatik seçimde mühürlenecek hedef bulunamadı: seçili hedefin kimliği okunamadı. Kare üstünde bir hedef işaretlenince yeniden deneyin ya da hedefi listeden elle seçin.",
+        "otomatikHedefGecersiz": "{{mesaj}} (seçili hedefin kimliği {{secili}} bu modelde geçersiz).",
+        "otonomFgsOnay": "Otonom Biofeedback yalnız onaylı AI Pro seansında çalışır: Kontrol → AI Pro'dan öneri alıp onaylayın. Bu analiz cihazı sürmez — otonom anahtarını kapatıp yeniden analiz edin.",
+        "sahipDegil": "Bu AI Pro seansının sahibi değilsiniz.",
+        "sahipDegilHedef": "Bu AI Pro seansının sahibi değilsiniz; hedef değiştirilemez.",
+        "sahipDegilOrgan": "Bu AI Pro seansının sahibi değilsiniz; organ değiştirilemez.",
+        "seansSurerkenHedef": "Seans sürerken hedef değiştirilemez — önce AI Pro'yu durdurun."
+      },
+      "hazirlik": {
+        "kamera": "Kamera açılamadı. Kablosunu ve başka bir uygulamanın kamerayı kullanmadığını kontrol edip hazırlığı yeniden başlatın.",
+        "modelPaketi": "'{{ad}}' model paketi bu cihazda kurulu değil. Masaüstü PEMF uygulamasının kurulum adımından ilgili model paketini ekleyip bu ekrana dönün.",
+        "modelYukleme": "'{{ad}}' yüklenemedi. Uygulamayı yeniden başlatıp tekrar deneyin; sorun sürerse destek kaydında bu ekranı belirtin."
+      },
+      "hedefOrgan": "hedef organ",
+      "ipucu": {
+        "fantomYok": "Kadrajda fantom görünmüyor — fantomu tepsinin ortasına düz yerleştirin ve kabin işaretiyle birlikte kadraja alın.",
+        "hayvanGorunuyor": "Hayvan görünüyor ama {{ad}} seçilemedi — kamerayı biraz çevirip açıyı değiştirin.",
+        "hayvanYok": "Kamerayı hastaya doğrultun; hayvan kadrajda görünmüyor.",
+        "hedefSecilemedi": "{{hedef_adi}} seçilemedi — hedefi tepsinin ortasına alın, kabin ışığını artırın ve işaret üzerinde parlama olmadığından emin olun.",
+        "kabinDisi": "{{ad}} konumu kabin DIŞINDA ölçüldü — açıyı değiştirmek çözmez: kabin işaretinin (arka duvardaki kare kod) kadrajda, düz ve parlamasız göründüğünü kontrol edin; sürerse kabin yapılandırmasını teknik desteğe doğrulatın.",
+        "konumOlculemedi": "Konum ölçülemedi: kabin işareti (arka duvardaki kare kod) kadrajda görünmüyor. Kamerayı işaret ve hedef AYNI karede kalacak şekilde ayarlayın.",
+        "petriYok": "Kadrajda petri plakası görünmüyor — plakayı tepsiye düz yerleştirin, kamerayı tepeden tam kadraja alın ve kabin işaretinin görünür kaldığından emin olun."
+      },
+      "mesaj": {
+        "hazirlikBasladi": "Hazırlık başladı",
+        "hazirlikCalisiyor": "Hazırlık zaten çalışıyor"
+      },
+      "sonuc": {
+        "baslatilmadi": "AI Pro BAŞLATILMADI"
+      }
+    },
+    "scratch": {
+      "duz": "Görüntü düz / boş görünüyor; hücre bulunamadı. Yara kapanma analizi için hücre kültürünün mikroskop kamerasıyla çekilmiş görüntüsünü yükleyin.",
+      "gurultu": "Görüntüde gürültü baskın; hücre yapısı ayırt edilemiyor. Mikroskop kamerasıyla çekilmiş, net (gürültüsüz) bir faz-kontrast / parlak alan hücre kültürü görüntüsü yükleyin.",
+      "yapiYok": "Bu görüntü yara kapanma (scratch) mikroskopi görüntüsüne benzemiyor; hücre tabakası dokusu bulunamadı. Mikroskop kamerasıyla çekilmiş hücre kültürü (faz-kontrast / parlak alan) görüntüsü yükleyin; fotoğraf ya da ekran görüntüsü analiz edilmez."
+    },
     "sonuc": {
       "aciklamaUretilemedi": "Açıklama üretilemedi"
+    },
+    "termal": {
+      "akromatik": "Girdi termal olarak doğrulanamadı: görüntü renksiz (gri tonlamalı). Beyaz-sıcak / siyah-sıcak termal görüntü olabilir ama gri bir fotoğraftan ya da tıbbi görüntüden ayırt edilemiyor — sonucu buna göre değerlendirin.",
+      "kapali": "Görüntü türü denetimi bu cihazda kapalı — girdi termal olarak doğrulanmadı; sonucu buna göre değerlendirin.",
+      "kararsiz": "Girdi termal olarak doğrulanamadı: renkleri bilinen bir termal kamera paletine tam oturmuyor. Termal kameradan çekilmiş görüntü kullanın; bu sonucu buna göre değerlendirin.",
+      "uyumsuz": "Bu görüntü termal kamera görüntüsüne benzemiyor (renk paleti / sıcaklık eşlemesi yok). Termal kameradan çekin ya da termal görüntü yükleyin.",
+      "yon": {
+        "hot": "soğuk = siyah, sıcak = sarı / beyaz",
+        "inferno": "soğuk = siyah / mor, sıcak = sarı",
+        "iron": "soğuk = siyah / mor, sıcak = sarı / beyaz",
+        "jet": "soğuk = mavi, sıcak = kırmızı",
+        "magma": "soğuk = siyah / mor, sıcak = açık sarı / beyaz",
+        "plasma": "soğuk = lacivert / mor, sıcak = sarı",
+        "rainbow": "soğuk = mavi / mor, sıcak = kırmızı",
+        "turbo": "soğuk = mavi / mor, sıcak = kırmızı",
+        "varsayilan": "soğuk = koyu / mor, sıcak = sarı / beyaz"
+      },
+      "yonNotu": "Paletin kamera yönünde olduğundan emin olun ({{ipucu}}) — ters palette sonuç tersine dönebilir."
     }
   },
   "ayarlar": {
@@ -37,6 +174,8 @@
   },
   "bildirim": {
     "acilDurdurUygulandi": "Acil durdurma uygulandı",
+    "aiProDozUretmedi": "⚠️ AI Pro: doz modeli geçerli doz üretmedi — bobinler bu karede SÜRÜLMEDİ (sürerse durdurulur). AI Pro'yu durdurup yeniden başlatın; tekrarlarsa teknik desteğe başvurun.",
+    "aiProKabinYapilandirma": "⚠️ AI Pro: kabin yapılandırması okunamıyor — hedef doğrulanamadığı için bobinler SÜRÜLMEZ. Hayvanı yeniden konumlamak çözmez: kabin yapılandırma dosyasını (kurulum) kontrol edin ya da teknik desteğe başvurun.",
     "aiProPlandanCikti": "Bobin {{coil}} AI Pro planından çıkarıldı — operatör durdurdu; seans sonuna kadar AI Pro bu bobini sürmez, diğer bobinler sürüyor.",
     "akimGuvenilmez": "⚠️ Bobin {{coil}}: Akım ölçümü bu bobinde güvenilir değil — doz kaydına akım yazılmadı.",
     "alanDogrulanamadi": "⚠️ Bobin {{coil}} alan sensörü doğrulanamadı — ölçülen alan (mT) gösterilmiyor ve kayda yazılmıyor. Teknik desteğe bildirin (kod: FW-ALAN).",
@@ -61,6 +200,10 @@
     "estopEspReddetti": "⚠️ Bobin {{coil}}: acil durdurma komutu ESP tarafından REDDEDİLDİ — bobini elle kontrol edin",
     "kapanisMandal": "🔒 Uygulama seans / bobin çalışırken kapatıldı — bobinler durduruldu, ACİL DURDUR mandalı kuruldu. Yeniden başlatmadan önce bobinleri kontrol edin ve \"Sıfırla\".",
     "kaynak": {
+      "aiProBaslatilamadi": "AI Pro başlatılamadı — durdurma",
+      "aiProDurdurma": "AI Pro durdurma",
+      "aiProHedefKaybi": "AI Pro hedef-kaybı durdurması",
+      "aiProHedefKaybiMobil": "AI Pro hedef-kaybı durdurması (mobil kare)",
       "sahipsiz": "Sahipsiz bobin durdurması",
       "sifirHz": "0 Hz seans isteği (A-05) — mandallıyken",
       "sureDoldu": "Süre doldu — otomatik durdurma",

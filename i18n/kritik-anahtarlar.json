@@ -2815,6 +2815,202 @@
    "tur": "donanim",
    "kaynak": "apps/backend/servers/api_server.py",
    "aciklama": "geçersiz tam sayı aralığı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hata.kediSurusKapali",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "kedi AI Pro sürüşü kapalı; seansı elle başlatın"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hata.otonomFgsOnay",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "otonom biofeedback yalnız onaylı AI Pro seansında; bu analiz cihazı sürmez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hata.otomatikHedef",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "otomatik seçimde mühürlenecek hedef yok"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hata.otomatikHedefGecersiz",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "seçili hedefin kimliği bu modelde geçersiz"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hata.arastirmaDogrulama",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "araştırma modeli tezgâh doğrulaması bekliyor; bobin sürülmez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hata.guncellemeSuruyor",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "güncelleme sürerken AI Pro başlatılamaz"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hata.dozUretmedi",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "model sürülebilir parametre üretmedi (tüm duty=0)"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hata.baslatilmadiNeden",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "AI Pro başlatılmadı: neden"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hata.baslatmaSirasindaDurduruldu",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "başlatma sırasında durdurma / acil durdurma geldi; AI Pro başlatılmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hata.sahipDegilOrgan",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "seansın sahibi değilsiniz; organ değiştirilemez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hata.sahipDegil",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "seansın sahibi değilsiniz"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hata.sahipDegilHedef",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "seansın sahibi değilsiniz; hedef değiştirilemez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hata.onaysizHedef",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "seans sürerken onaylanmamış hedefe geçilemez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hata.seansSurerkenHedef",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "seans sürerken hedef değiştirilemez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hata.aktifModel",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "aktif model dışında hedef değiştirilemez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hata.hedefDesteklenmiyor",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "hedef bu model için desteklenmiyor"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.sonuc.baslatilmadi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "sonuç eki: AI Pro başlatılmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hazirlik.kamera",
+   "tur": "donanim",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "kamera açılamadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hazirlik.modelPaketi",
+   "tur": "donanim",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "model paketi kurulu değil"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.hazirlik.modelYukleme",
+   "tur": "donanim",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "model yüklenemedi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.aiProKabinYapilandirma",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "kabin yapılandırması okunamıyor: bobinler SÜRÜLMEZ"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.aiProDozUretmedi",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "doz modeli geçerli doz üretmedi: bobinler sürülmedi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.kaynak.aiProBaslatilamadi",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "teyitsiz STOP kaynağı: AI Pro başlatılamadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.kaynak.aiProHedefKaybi",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "teyitsiz STOP kaynağı: AI Pro hedef kaybı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.kaynak.aiProDurdurma",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "teyitsiz STOP kaynağı: AI Pro durdurma"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.kaynak.aiProHedefKaybiMobil",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "teyitsiz STOP kaynağı: AI Pro hedef kaybı (mobil kare)"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.alan.denetimCalismadi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "modalite denetimi çalıştırılamadı; analiz yapılmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.alan.denetimKisa",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "modalite denetimi çalıştırılamadı; analiz yapılmadı (kısa)"
   }
  ],
  "bekleyen": [

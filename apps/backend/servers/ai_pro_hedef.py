@@ -31,6 +31,8 @@ from __future__ import annotations
 import functools
 from typing import Protocol, runtime_checkable
 
+from utils import ceviri
+
 # Kedi kapalı döngüsünün ekstra EM girdileri (ai_router'daki tarihsel sabitler; DEĞİŞMEDİ).
 KEDI_ACHIEVED_B = 0.001  # Tesla (1 mT)
 KEDI_DUTY_SUM = 1.5
@@ -160,20 +162,23 @@ class KediSaglayici:
     def hedef_adi(self, hedef_id: int) -> str:
         from servers import ai_router as air
 
-        return air._ORGAN_NAMES.get(int(hedef_id), "")
+        return air._organ_adi(hedef_id)
+
+    def hedef_adi_gosterim(self, hedef_id: int) -> str:
+        """Kullanıcıya gösterilen organ adı (istek dili) — `hedef_adi` VERİ (Türkçe) kalır."""
+        from servers import ai_router as air
+
+        return air._organ_adi(hedef_id, None)
 
     def ipucu(self, ozne_var: bool, hedef_adi: str) -> str:
         """2026-08-24 sahip isteği: "hayvan yok" ile "hayvan var, organ görünmüyor" AYRI eylem
         gerektirir; metinler o günkü hâliyle korunur (kaynak-regex kapısı bunları arar)."""
-        ad = hedef_adi or "hedef organ"
+        ad = hedef_adi or ceviri.t("ai.pro.hedefOrgan")
         if ozne_var and getattr(self, "_kabin_disi", False):
-            return (
-                f"{ad} konumu kabin DIŞINDA ölçüldü — açıyı değiştirmek çözmez: kabin işaretinin (arka duvardaki kare kod) "
-                "kadrajda, düz ve parlamasız göründüğünü kontrol edin; sürerse kabin yapılandırmasını teknik desteğe doğrulatın."
-            )
+            return ceviri.t("ai.pro.ipucu.kabinDisi", ad=ad)
         if ozne_var:
-            return f"Hayvan görünüyor ama {ad} seçilemedi — kamerayı biraz çevirip açıyı değiştirin."
-        return "Kamerayı hastaya doğrultun; hayvan kadrajda görünmüyor."
+            return ceviri.t("ai.pro.ipucu.hayvanGorunuyor", ad=ad)
+        return ceviri.t("ai.pro.ipucu.hayvanYok")
 
     def son_lokalizasyon_meta(self) -> dict:
         """Kedi hattı kare üstü HEDEF ADAYI üretmez (organ seçimi çiplerden yapılır) → targets/method/E YOK.
@@ -209,6 +214,24 @@ SAGLAYICILAR: "dict[str, object]" = {
 VARSAYILAN_MODEL = KediSaglayici.ad
 
 
+def model_adi(saglayici) -> str:
+    """Kullanıcıya gösterilen model adı (istek dili). `title` VERİ (`mode` / `modelName`; Türkçe) kalır."""
+    ad = str(getattr(saglayici, "ad", "") or "")
+    if ad == "kedi":
+        return ceviri.t("ai.model.kedi")
+    if ad == "fantom":
+        return ceviri.t("ai.model.fantom")
+    if ad == "petri":
+        return ceviri.t("ai.model.petri")
+    return str(getattr(saglayici, "title", "") or ceviri.t("ai.model.arastirma"))
+
+
+def hedef_gosterim_adi(saglayici, hedef_id: int) -> str:
+    """Kullanıcıya gösterilen hedef adı (istek dili); sağlayıcı ayrı gösterim adı vermiyorsa `hedef_adi`."""
+    yap = getattr(saglayici, "hedef_adi_gosterim", None) or saglayici.hedef_adi
+    return yap(hedef_id)
+
+
 def saglayici_al(model: "str | None"):
     """`model` adından sağlayıcı. Bilinmeyen ad → ValueError (çağıran 422'ye çevirir).
 
@@ -220,7 +243,7 @@ def saglayici_al(model: "str | None"):
         return SAGLAYICILAR[ad]
     except KeyError:
         gecerli = "|".join(sorted(SAGLAYICILAR))
-        raise ValueError(f"Model '{model}' tanınmıyor (geçerli: {gecerli})") from None
+        raise ValueError(ceviri.t("ai.pro.hata.modelTanimsiz", model=model, gecerli=gecerli)) from None
 
 
 # ══════════════════════════════════════════════════════════════════════════════════════════
@@ -462,18 +485,12 @@ class _EmCvSaglayici:
             yontem = str(self._meta.get("method") or "")
             kapi = dict(self._meta.get("pemf_kapisi") or {})
         if yontem and yontem != "aruco_pnp":
-            return (
-                "Konum ölçülemedi: kabin işareti (arka duvardaki kare kod) kadrajda görünmüyor. "
-                "Kamerayı işaret ve hedef AYNI karede kalacak şekilde ayarlayın."
-            )
+            return ceviri.t("ai.pro.ipucu.konumOlculemedi")
         # AI-2: hocanın tüketim kapısı kareyi kestiyse NEDENİ ve EYLEMİ (pemf geçersiz / güvenilmez / yerleşim uyuşmuyor /
         # kontrol kuyucuğu / yeniden çekim) — "hedef seçilemedi" demek operatörü yanlış yere yönlendirirdi.
         if kapi and not kapi.get("surulebilir", True) and kapi.get("eylem"):
             return str(kapi["eylem"])
-        return (
-            f"{hedef_adi} seçilemedi — hedefi tepsinin ortasına alın, kabin ışığını artırın ve "
-            "işaret üzerinde parlama olmadığından emin olun."
-        )
+        return ceviri.t("ai.pro.ipucu.hedefSecilemedi", hedef_adi=hedef_adi)
 
     def son_lokalizasyon_meta(self) -> dict:
         with self._kilit:
@@ -730,10 +747,7 @@ class FantomSaglayici(_EmCvSaglayici):
         return ("phantom_not_detected", "tumor_cluster_not_found")
 
     def _ipucu_ozne_yok(self) -> str:
-        return (
-            "Kadrajda fantom görünmüyor — fantomu tepsinin ortasına düz yerleştirin ve kabin "
-            "işaretiyle birlikte kadraja alın."
-        )
+        return ceviri.t("ai.pro.ipucu.fantomYok")
 
     def _egitim_araligi(self):
         from ai_hub.inference_em_fantom import inference_em_fantom as ief
@@ -827,10 +841,7 @@ class PetriSaglayici(_EmCvSaglayici):
     def _ipucu_ozne_yok(self) -> str:
         # ⚠️ AI Hub'ın YÜKLEME bağlamlı makullik metni kullanıcıya GİTMEZ ("yüklenen görüntü",
         # "modüle yükleyin", ortam değişkeni adı) — canlı kamera için ayrı, eylem söyleyen metin.
-        return (
-            "Kadrajda petri plakası görünmüyor — plakayı tepsiye düz yerleştirin, kamerayı tepeden "
-            "tam kadraja alın ve kabin işaretinin görünür kaldığından emin olun."
-        )
+        return ceviri.t("ai.pro.ipucu.petriYok")
 
     def _egitim_araligi(self):
         from ai_hub.inference_em_petri import inference_em_petri as iep

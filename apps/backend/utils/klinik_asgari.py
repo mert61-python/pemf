@@ -32,9 +32,13 @@ from __future__ import annotations
 class AsgariGirdiYok(Exception):
     """Girdi, güvenilir bir tahmin için yetersiz. `user_message()` kullanıcıya gösterilebilir."""
 
-    def __init__(self, mesaj: str):
+    def __init__(self, mesaj: str, kod: str | None = None, ayrinti=None):
         super().__init__(mesaj)
         self._mesaj = mesaj
+        #: I18N-P1: makine-okur neden ("vital" | "ckd") + ayrıntı — backend iletiyi istek dilinde KATALOGDAN kurar; `mesaj` (Türkçe) aynen kalır
+        #: (AI mikroservisi bu modülü katalogsuz kullanır).
+        self.kod = kod
+        self.ayrinti = ayrinti
 
     def user_message(self) -> str:
         return self._mesaj
@@ -65,16 +69,25 @@ def vital_kapisi(features: dict) -> None:
     age = _sayi(features.get("age"))
 
     problems = []
+    kodlar = []  # I18N-P1: makine-okur sorun kodları (`AsgariGirdiYok.ayrinti`)
     if not (0 < weight <= 30):
+        kodlar.append("kilo")
         problems.append("kilo (kg) 0-30 aralığında girilmeli")
     if not (0 < hr <= 400):
+        kodlar.append("nabiz")
         problems.append("nabız (bpm) girilmeli (makul: ~120-220)")
     if not (0 < temp <= 50):
+        kodlar.append("sicaklik")
         problems.append("vücut sıcaklığı (°C) girilmeli (makul: ~37-39.5)")
     if age < 0:
+        kodlar.append("yas")
         problems.append("yaş negatif olamaz")
     if problems:
-        raise AsgariGirdiYok("Güvenilir hastalık tahmini için geçerli vital veriler gerekli: " + "; ".join(problems))
+        raise AsgariGirdiYok(
+            "Güvenilir hastalık tahmini için geçerli vital veriler gerekli: " + "; ".join(problems),
+            kod="vital",
+            ayrinti=kodlar,
+        )
 
 
 # ── 2) İnsan CKD (UCI): asgari alan + çekirdek belirteç kapısı ───────────────
@@ -112,11 +125,14 @@ def ckd_kapisi(features: dict) -> list:
     cekirdek_dolu = [k for k in CKD_CEKIRDEK if k in dolu]
     if len(dolu) < CKD_MIN_ALAN or not cekirdek_dolu:
         eksik = ", ".join(CKD_ETIKET[k] for k in CKD_CEKIRDEK if k not in dolu)
+        eksik_kodlar = [k for k in CKD_CEKIRDEK if k not in dolu]
         raise AsgariGirdiYok(
             f"Güvenilir bir tahmin için yeterli klinik veri yok "
             f"({len(dolu)}/{CKD_TOPLAM_ALAN} alan dolu; en az {CKD_MIN_ALAN} gerekli). "
             f"Ayrıca böbrek işlevine dair en az bir değer girilmeli — eksik olanlar: {eksik}. "
             f"Boş formla üretilen sonuç, hastanın verisini değil modelin genel "
-            f"ortalamasını yansıtır ve yanıltıcıdır."
+            f"ortalamasını yansıtır ve yanıltıcıdır.",
+            kod="ckd",
+            ayrinti={"dolu": len(dolu), "toplam": CKD_TOPLAM_ALAN, "asgari": CKD_MIN_ALAN, "eksik": eksik_kodlar},
         )
     return dolu
