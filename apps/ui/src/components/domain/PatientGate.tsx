@@ -27,8 +27,9 @@ import { apiGet } from "@/services/apiClient";
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
 import { IconButton } from "@/components/ui/IconButton";
 import { aramaEslesir } from "@/utils/aramaNormalize";
-import { effectiveScope, inScope, KIMLIK_ISTEMI, kimlikIstemi } from "@/utils/patientScope";
+import { effectiveScope, inScope, kimlikIstemiMetni, kimlikIstemi } from "@/utils/patientScope";
 import { profilSozlugu } from "@/utils/profilSozlugu";
+import { useTranslation } from "react-i18next";
 
 interface Hasta { id: string; name: string; species?: string; operator_email?: string | null }
 
@@ -44,6 +45,7 @@ interface Hasta { id: string; name: string; species?: string; operator_email?: s
  *   `false` (varsayılan) → AI Hub gibi güvenlik-kritik kontrol İÇERMEYEN ekranlarda sert kapı.
  */
 export function PatientGate({ children, soft = false }: { children: React.ReactNode; soft?: boolean }) {
+  const { t } = useTranslation();
   const { selectedPatient, setSelectedPatient, navigateTo } = useAppNav();
   const { isExpert, isResearcher } = useUserMode();
   const S = profilSozlugu({ petOwner: !isExpert && !isResearcher, researcher: isResearcher });
@@ -87,7 +89,7 @@ export function PatientGate({ children, soft = false }: { children: React.ReactN
     <View style={{ gap: spacing.sm }}>
       <View style={styles.secHead}>
         <Text style={styles.secTitle}>{S.secKisa}</Text>
-        <IconButton label="Kapat" onPress={() => setAcik(false)}>
+        <IconButton label={t("ortak.kapat")} onPress={() => setAcik(false)}>
           <X color={colors.textMuted} size={rs(17)} />
         </IconButton>
       </View>
@@ -98,16 +100,16 @@ export function PatientGate({ children, soft = false }: { children: React.ReactN
         <>
           {(kapsamli.length > 0) && (
             <TextInput style={styles.input} value={ara} onChangeText={setAra}
-              placeholder="Ara…" placeholderTextColor={colors.textSubtle}
-              accessibilityLabel="Kayıtlarda ara" />
+              placeholder={t("hasta.kapi.araYer")} placeholderTextColor={colors.textSubtle}
+              accessibilityLabel={t("hasta.kapi.araEtiketi")} />
           )}
           {suzulmus.length === 0 ? (
-            <Text style={styles.not}>{!myEmail ? kimlikIstemi(KIMLIK_ISTEMI, op?.kimlikDbOkunamiyor) : ara.trim() ? "Eşleşme yok." : S.bos}</Text>
+            <Text style={styles.not}>{!myEmail ? kimlikIstemi(kimlikIstemiMetni(), op?.kimlikDbOkunamiyor) : ara.trim() ? t("hasta.kapi.eslesmeYok") : S.bos}</Text>
           ) : (
             <ScrollView style={styles.listeKutu} nestedScrollEnabled>
               {suzulmus.map((h) => (
                 <TouchableOpacity key={h.id} style={styles.satirOge} onPress={() => sec(h)}
-                  accessibilityRole="button" accessibilityLabel={`Seç: ${h.name}`}>
+                  accessibilityRole="button" accessibilityLabel={t("hasta.kapi.secEtiketi", { name: h.name })}>
                   <Text style={styles.ogeAd} numberOfLines={1}>{h.name}</Text>
                   {h.species ? <Text style={styles.ogeTur}>{h.species}</Text> : null}
                 </TouchableOpacity>
@@ -115,7 +117,7 @@ export function PatientGate({ children, soft = false }: { children: React.ReactN
             </ScrollView>
           )}
           <TouchableOpacity style={styles.ghostBtn} onPress={hastalaraGit}
-            accessibilityRole="button" accessibilityLabel={`${S.ekle} — Hastalar sekmesine git`}>
+            accessibilityRole="button" accessibilityLabel={t("hasta.kapi.sekmeyeGit", { ekle: S.ekle })}>
             <Plus color={colors.primary} size={rs(14)} />
             <Text style={[styles.ghostText, { color: colors.primary }]}>{S.ekle}</Text>
           </TouchableOpacity>
@@ -142,7 +144,7 @@ export function PatientGate({ children, soft = false }: { children: React.ReactN
                 <Text style={styles.primaryText}>{S.secKisa}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.ghostBtn} onPress={hastalaraGit}
-                accessibilityRole="button" accessibilityLabel={`${S.ekle} — Hastalar sekmesine git`}>
+                accessibilityRole="button" accessibilityLabel={t("hasta.kapi.sekmeyeGit", { ekle: S.ekle })}>
                 <Plus color={colors.primary} size={rs(14)} />
                 <Text style={[styles.ghostText, { color: colors.primary }]}>{S.ekle}</Text>
               </TouchableOpacity>
@@ -158,7 +160,7 @@ export function PatientGate({ children, soft = false }: { children: React.ReactN
   return (
     <>
       <TouchableOpacity style={styles.bar} onPress={() => setAcik((v) => !v)}
-        accessibilityRole="button" accessibilityLabel={`${S.tekil}: ${selectedPatient.name}. Değiştir.`}>
+        accessibilityRole="button" accessibilityLabel={t("hasta.kapi.degistirEtiketi", { tekil: S.tekil, name: selectedPatient.name })}>
         <PawPrint color={colors.primary} size={rs(15)} />
         <Text style={styles.barLabel}>{S.tekil}:</Text>
         <Text style={styles.barValue} numberOfLines={1}>{selectedPatient.name}</Text>

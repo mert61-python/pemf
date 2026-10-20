@@ -1,3 +1,4 @@
+import i18n from "i18next";
 /**
  * PROFİL SÖZLÜĞÜ — "hasta / örnek / evcil hayvanım" terimlerinin TEK KAYNAĞI.
  *
@@ -51,12 +52,13 @@ export interface ProfilSozlugu {
 }
 
 /** SGI-4.1: veteriner ve ev sahibi profillerinde bugünkü (değişmeyen) ekran içi metinler. */
-const KLINIK_EKRAN_METINLERI = {
-  veritabani: "Hasta Veritabanı",
-  yeniKayit: "Yeni Hasta Kayıt",
-  seansGecmisiGiris: "Hastalarınıza ait geçmiş seans kayıtları ve raporlamalar.",
-  tumListeCipi: "Tüm hastalar",
-} as const;
+const klinikEkranMetinleri = () =>
+  ({
+    veritabani: i18n.t("hasta.sozluk.klinikEkran.veritabani"),
+    yeniKayit: i18n.t("hasta.sozluk.klinikEkran.yeniKayit"),
+    seansGecmisiGiris: i18n.t("hasta.sozluk.klinikEkran.seansGecmisiGiris"),
+    tumListeCipi: i18n.t("hasta.sozluk.klinikEkran.tumListeCipi"),
+  }) as const;
 
 export function profilSozlugu({
   petOwner = false,
@@ -67,57 +69,57 @@ export function profilSozlugu({
 }): ProfilSozlugu {
   if (researcher) {
     return {
-      tekil: "Örnek / Denek",
-      tekilKisa: "Örnek",
-      belirtme: "örneğe",
-      sizBaslat: "Örneksiz başlat",
-      secKisa: "Örnek seçin",
-      bos: "Kayıtlı örnek yok.",
-      ekle: "Örnek Ekle",
-      uyari: "Analiz için önce bir örnek seçin — sonuç o kayda işlenecek.",
-      benimListe: "Benim Örneklerim",
-      tumKapsam: "Tüm Ekip",
-      tumKapsamKucuk: "ekip",
-      kayitlarAd: "örnekleri",
-      kpiBaslik: "📊 Araştırma Göstergeleri & Analitik",
-      veritabani: "Örnek / Denek Veritabanı",
-      yeniKayit: "Yeni Örnek Kaydı",
-      seansGecmisiGiris: "Örneklerinize ait geçmiş seans kayıtları ve raporlamalar.",
-      tumListeCipi: "Tüm örnekler",
+      tekil: i18n.t("hasta.sozluk.arastirma.tekil"),
+      tekilKisa: i18n.t("hasta.sozluk.arastirma.tekilKisa"),
+      belirtme: i18n.t("hasta.sozluk.arastirma.belirtme"),
+      sizBaslat: i18n.t("hasta.sozluk.arastirma.sizBaslat"),
+      secKisa: i18n.t("hasta.sozluk.arastirma.secKisa"),
+      bos: i18n.t("hasta.sozluk.arastirma.bos"),
+      ekle: i18n.t("hasta.sozluk.arastirma.ekle"),
+      uyari: i18n.t("hasta.sozluk.arastirma.uyari"),
+      benimListe: i18n.t("hasta.sozluk.arastirma.benimListe"),
+      tumKapsam: i18n.t("hasta.sozluk.arastirma.tumKapsam"),
+      tumKapsamKucuk: i18n.t("hasta.sozluk.arastirma.tumKapsamKucuk"),
+      kayitlarAd: i18n.t("hasta.sozluk.arastirma.kayitlarAd"),
+      kpiBaslik: i18n.t("hasta.sozluk.arastirma.kpiBaslik"),
+      veritabani: i18n.t("hasta.sozluk.arastirma.veritabani"),
+      yeniKayit: i18n.t("hasta.sozluk.arastirma.yeniKayit"),
+      seansGecmisiGiris: i18n.t("hasta.sozluk.arastirma.seansGecmisiGiris"),
+      tumListeCipi: i18n.t("hasta.sozluk.arastirma.tumListeCipi"),
     };
   }
   if (petOwner) {
     return {
-      tekil: "Evcil Hayvanım",
-      tekilKisa: "Hayvanınız",
-      belirtme: "hayvanınıza",
-      sizBaslat: "Hayvansız başlat",
-      secKisa: "Hayvanınızı seçin",
-      bos: "Henüz kayıtlı hayvanınız yok.",
-      ekle: "Hayvan Ekle",
-      uyari: "Analiz için önce hayvanınızı seçin — sonuç onun geçmişine işlenecek.",
-      benimListe: "Hayvanlarım",
-      tumKapsam: "Tüm Klinik",
-      tumKapsamKucuk: "klinik",
-      kayitlarAd: "hastaları",
-      kpiBaslik: "📊 Klinik Göstergeler & Analitik",
-      ...KLINIK_EKRAN_METINLERI,
+      tekil: i18n.t("hasta.sozluk.sahip.tekil"),
+      tekilKisa: i18n.t("hasta.sozluk.sahip.tekilKisa"),
+      belirtme: i18n.t("hasta.sozluk.sahip.belirtme"),
+      sizBaslat: i18n.t("hasta.sozluk.sahip.sizBaslat"),
+      secKisa: i18n.t("hasta.sozluk.sahip.secKisa"),
+      bos: i18n.t("hasta.sozluk.sahip.bos"),
+      ekle: i18n.t("hasta.sozluk.sahip.ekle"),
+      uyari: i18n.t("hasta.sozluk.sahip.uyari"),
+      benimListe: i18n.t("hasta.sozluk.sahip.benimListe"),
+      tumKapsam: i18n.t("hasta.sozluk.sahip.tumKapsam"),
+      tumKapsamKucuk: i18n.t("hasta.sozluk.sahip.tumKapsamKucuk"),
+      kayitlarAd: i18n.t("hasta.sozluk.sahip.kayitlarAd"),
+      kpiBaslik: i18n.t("hasta.sozluk.sahip.kpiBaslik"),
+      ...klinikEkranMetinleri(),
     };
   }
   return {
-    tekil: "Hasta",
-    tekilKisa: "Hasta",
-    belirtme: "hastaya",
-    sizBaslat: "Hastasız başlat",
-    secKisa: "Hasta seçin",
-    bos: "Kayıtlı hasta yok.",
-    ekle: "Hasta Ekle",
-    uyari: "İşlem için önce hasta seçin — sonuç hasta geçmişine işlenecek.",
-    benimListe: "Benim Hastalarım",
-    tumKapsam: "Tüm Klinik",
-    tumKapsamKucuk: "klinik",
-    kayitlarAd: "hastaları",
-    kpiBaslik: "📊 Klinik Göstergeler & Analitik",
-    ...KLINIK_EKRAN_METINLERI,
+    tekil: i18n.t("hasta.sozluk.klinik.tekil"),
+    tekilKisa: i18n.t("hasta.sozluk.klinik.tekilKisa"),
+    belirtme: i18n.t("hasta.sozluk.klinik.belirtme"),
+    sizBaslat: i18n.t("hasta.sozluk.klinik.sizBaslat"),
+    secKisa: i18n.t("hasta.sozluk.klinik.secKisa"),
+    bos: i18n.t("hasta.sozluk.klinik.bos"),
+    ekle: i18n.t("hasta.sozluk.klinik.ekle"),
+    uyari: i18n.t("hasta.sozluk.klinik.uyari"),
+    benimListe: i18n.t("hasta.sozluk.klinik.benimListe"),
+    tumKapsam: i18n.t("hasta.sozluk.klinik.tumKapsam"),
+    tumKapsamKucuk: i18n.t("hasta.sozluk.klinik.tumKapsamKucuk"),
+    kayitlarAd: i18n.t("hasta.sozluk.klinik.kayitlarAd"),
+    kpiBaslik: i18n.t("hasta.sozluk.klinik.kpiBaslik"),
+    ...klinikEkranMetinleri(),
   };
 }

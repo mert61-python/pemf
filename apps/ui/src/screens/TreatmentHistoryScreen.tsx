@@ -16,12 +16,12 @@ import { SessionDetailModal } from "@/components/domain/SessionDetailModal";
 import { aramaEslesir } from "@/utils/aramaNormalize";
 import {
   inScope,
-  KIMLIK_ISTEMI,
+  kimlikIstemiMetni,
   kimlikIstemi,
-  SILME_KIMLIK_ISTEMI,
+  silmeKimlikIstemiMetni,
   silinebilir,
   silinmeyecekNotu,
-  BASKA_HEKIM_SILME,
+  baskaHekimSilmeMetni,
 } from "@/utils/patientScope";
 import { useUserMode } from "@/context/UserModeContext";
 import { profilSozlugu } from "@/utils/profilSozlugu";
@@ -89,7 +89,7 @@ export function TreatmentHistoryScreen() {
     kayitliOperatorler: (op?.operators ?? []).map((o) => o.email), // Y104: sahipsiz = boş ya da kayıtlı olmayan sahip
   };
   const silmeEngeli = (kayit: { operator_email?: string | null }): string | null =>
-    !myEmail ? kimlikIstemi(SILME_KIMLIK_ISTEMI, kimlikDbOkunamiyor) : silinebilir(kayit, silmeBaglami) ? null : BASKA_HEKIM_SILME;
+    !myEmail ? kimlikIstemi(silmeKimlikIstemiMetni(), kimlikDbOkunamiyor) : silinebilir(kayit, silmeBaglami) ? null : baskaHekimSilmeMetni();
   const { showToast } = useToast();
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -248,12 +248,12 @@ export function TreatmentHistoryScreen() {
     if (secilenler.length === 0 || siliniyor) return;
     // ⚠️ D2.72 (B-6.26 · Y92): istek YALNIZ silinebilen (kendi) seanslarla gider; dışarıda kalanların SAYISI onayda
     // söylenir. Eskiden "Tüm Klinik → Tümünü Seç" başka hekimlerin seans kayıtlarını (tıbbi kayıt) isteğe koyuyordu.
-    if (!myEmail) { showToast(kimlikIstemi(SILME_KIMLIK_ISTEMI, kimlikDbOkunamiyor), "error"); return; }
+    if (!myEmail) { showToast(kimlikIstemi(silmeKimlikIstemiMetni(), kimlikDbOkunamiyor), "error"); return; }
     const kimlikler = secilenler.filter((k) => {
       const kayit = sessions.find((x) => x.id === k);
       return !!kayit && silinebilir(kayit, silmeBaglami);
     });
-    if (kimlikler.length === 0) { showToast(BASKA_HEKIM_SILME, "error"); return; }
+    if (kimlikler.length === 0) { showToast(baskaHekimSilmeMetni(), "error"); return; }
     const ok = await platformConfirm(
       "Seçili Kayıtları Sil",
       `${kimlikler.length} seans kaydı KALICI olarak silinecek. Bu işlem geri alınamaz.` +
@@ -346,7 +346,7 @@ export function TreatmentHistoryScreen() {
       ) : filteredSessions.length === 0 ? (
         <Text style={[styles.intro, { marginTop: spacing.md, flex: undefined, textAlign: "center" }]}>
           {!myEmail
-            ? kimlikIstemi(KIMLIK_ISTEMI, kimlikDbOkunamiyor)
+            ? kimlikIstemi(kimlikIstemiMetni(), kimlikDbOkunamiyor)
             : searchQuery
             ? (hasMore
                 ? "Yüklü sayfalarda eşleşme yok — daha eski kayıtlarda olabilir, aşağıdan “Daha Fazla Yükle”."

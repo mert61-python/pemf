@@ -18,15 +18,15 @@ import { useAuth } from "@/context/AuthContext";
 import { canAccess } from "@/config/access";
 import {
   canChooseScope,
-  EKLEME_KIMLIK_ISTEMI,
+  eklemeKimlikIstemiMetni,
   effectiveScope,
   inScope,
-  KIMLIK_ISTEMI,
+  kimlikIstemiMetni,
   kimlikIstemi,
-  SILME_KIMLIK_ISTEMI,
+  silmeKimlikIstemiMetni,
   silinebilir,
   silinmeyecekNotu,
-  BASKA_HEKIM_SILME,
+  baskaHekimSilmeMetni,
 } from "@/utils/patientScope";
 import { aramaEslesir } from "@/utils/aramaNormalize";
 import { useCokluSecim } from "@/hooks/useCokluSecim";
@@ -34,11 +34,14 @@ import { hastaninSonAnalizi, hastayaGoreSonAnaliz, kapsamda, sonAnalizOzeti, typ
 import { SecimCubugu } from "@/components/ui/SecimCubugu";
 import { TOPLU_SILME_ONAYI } from "@/services/topluSilme";
 import { profilSozlugu } from "@/utils/profilSozlugu";
+import { useTranslation } from "react-i18next";
+import i18n from "i18next";
 
 /** Y108: tekil silmede sunucu 404 (başka cihazda / sekmede zaten silinmiş) → bilgi; liste yenilenir. */
-export const ZATEN_SILINMIS_HASTA = "Bu hasta zaten silinmiş — liste yenilendi.";
+export const zatenSilinmisHasta = (): string => i18n.t("hasta.silme.zatenSilinmis");
 
 export function PatientScreen() {
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const { navigateTo, setSelectedPatient } = useAppNav();
   const { userMode, isExpert, isResearcher } = useUserMode();
@@ -91,7 +94,7 @@ export function PatientScreen() {
   const handleAddOrEditPatient = async () => {
     if (saving) return; // çift-tık koruması (mükerrer kayıt önleme)
     if (!form.name || !form.species) {
-      showToast("Lütfen Hasta Adı ve Türü alanlarını doldurun.", "error");
+      showToast(t("hasta.form.doldurun"), "error");
       return;
     }
 
@@ -99,16 +102,16 @@ export function PatientScreen() {
     const ageN = Number(String(form.age).replace(",", "."));
     const weightN = Number(String(form.weight).replace(",", "."));
     if (form.age && (isNaN(ageN) || ageN < 0 || ageN > 50)) {
-      showToast("Yaş 0–50 aralığında sayısal olmalıdır.", "error");
+      showToast(t("hasta.form.yasAraligi"), "error");
       return;
     }
     if (form.weight && (isNaN(weightN) || weightN < 0 || weightN > 200)) {
-      showToast("Kilo 0–200 kg aralığında sayısal olmalıdır.", "error");
+      showToast(t("hasta.form.kiloAraligi"), "error");
       return;
     }
     // E-posta opsiyonel; girildiyse basit format kontrolü (rapor gönderimi için).
     if (form.owner_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.owner_email.trim())) {
-      showToast("Geçerli bir sahip e-posta adresi girin (örn: ad@ornek.com).", "error");
+      showToast(t("hasta.form.gecersizEposta"), "error");
       return;
     }
 
@@ -116,7 +119,7 @@ export function PatientScreen() {
     // kimliksiz eklenen hasta sahipsiz yazılır ve kliniğin HER hekiminin "Benim" listesine düşerdi. Operatörsüz tek
     // hekimli klinikte kimlik oturum e-postasıdır (Kural 2 — engel yok).
     if (!editingId && !myEmail) {
-      showToast(kimlikIstemi(EKLEME_KIMLIK_ISTEMI, kimlikDbOkunamiyor), "error");
+      showToast(kimlikIstemi(eklemeKimlikIstemiMetni(), kimlikDbOkunamiyor), "error");
       return;
     }
 
@@ -139,9 +142,9 @@ export function PatientScreen() {
       setEditingId(null);
       setForm({ id: "", name: "", species: "", breed: "", age: "", weight: "", owner: "", vet_contact: "", owner_email: "" });
       loadPatients();
-      showToast(`Hasta başarıyla ${editingId ? "güncellendi" : "kaydedildi"}.`, "success");
+      showToast(editingId ? t("hasta.form.guncellendi") : t("hasta.form.kaydedildi"), "success");
     } else {
-      showToast("İşlem sırasında bir hata oluştu.", "error");
+      showToast(t("hasta.form.islemHatasi"), "error");
     }
   };
 
@@ -166,12 +169,12 @@ export function PatientScreen() {
   const handleDelete = async (id: string) => {
     // ⚠️ D2.72 (B-6.26 · Y92): tekil silme de YALNIZ kendi kaydına (kural `patientScope.silinebilir`, backend aynısını
     // jetondan uygular). Eskiden her görünen kartta "sil" başka hekimin kaydına istek gönderiyordu.
-    if (!myEmail) { showToast(kimlikIstemi(SILME_KIMLIK_ISTEMI, kimlikDbOkunamiyor), "error"); return; }
+    if (!myEmail) { showToast(kimlikIstemi(silmeKimlikIstemiMetni(), kimlikDbOkunamiyor), "error"); return; }
     const hedef = patients.find((p) => p.id === id);
-    if (!hedef || !silinebilir(hedef, silmeBaglami)) { showToast(BASKA_HEKIM_SILME, "error"); return; }
+    if (!hedef || !silinebilir(hedef, silmeBaglami)) { showToast(baskaHekimSilmeMetni(), "error"); return; }
     // platformConfirm = web-güvenli onay. (Alert.alert çoklu-buton WEB'de tetiklenmez → "Sil" onPress
     // hiç çalışmıyor, istek gitmiyordu → "hasta silme çalışmıyor". window.confirm'e düşer.)
-    if (!(await platformConfirm("Hasta Sil", "Bu hastayı silmek istediğinizden emin misiniz?", "Sil"))) return;
+    if (!(await platformConfirm(t("hasta.sil.baslik"), t("hasta.sil.govde"), t("ortak.sil")))) return;
     // Sunucu: POST /api/patients/{id}/delete (Expo-uyumlu) veya DELETE /api/patients/{id}.
     // ⚠️ Y108 (S-B.5): olmayan hasta 404 → "zaten silinmiş" (bilgi) + liste yenilenir (seans kartıyla aynı — D2.43); diğer
     // hatalarda sunucunun gerekçesi (428 kimlik, 403 başka hekim, 500 arıza). Kapı: __tests__/hastaTekilSilme.Y108.web.test.tsx
@@ -179,13 +182,13 @@ export function PatientScreen() {
     const res = await apiPost<{ status: string }>(`/patients/${id}/delete`, {}, { status: "error" },
       { silent: true, onHttpError: (durum, detay) => { hata.durum = durum; hata.detay = detay || ""; } });
     if (res.status === "success" || res.status === undefined) {
-      showToast("Hasta silindi.", "success");
+      showToast(t("hasta.sil.silindi"), "success");
       loadPatients();
     } else if (hata.durum === 404) {
-      showToast(ZATEN_SILINMIS_HASTA, "info");
+      showToast(zatenSilinmisHasta(), "info");
       loadPatients();
     } else {
-      showToast(hata.detay || "Hasta silinemedi.", "error");
+      showToast(hata.detay || t("hasta.sil.silinemedi"), "error");
     }
   };
 
@@ -193,27 +196,27 @@ export function PatientScreen() {
     // ⚠️ Y106 (S-B.3): kayıtlı operatörlü klinikte kliniğin TAMAMINI silmek SEÇİLİ operatör ister (backend 428 der; iz onun
     // adına). Kimliksizken (kimse seçili değil / kilit sonrası) istek GÖNDERİLMEZ, onay penceresi bile açılmaz. Operatörsüz
     // klinikte `myEmail` oturum e-postasıdır (Kural 2). Kapı: __tests__/tumunuSil.Y106.web.test.tsx
-    if (!myEmail) { showToast(kimlikIstemi(SILME_KIMLIK_ISTEMI, kimlikDbOkunamiyor), "error"); return; }
-    if (!(await platformConfirm("Tüm Hastaları Sil", "Veritabanındaki TÜM HASTALARI silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!", "Hepsini Sil"))) return;
+    if (!myEmail) { showToast(kimlikIstemi(silmeKimlikIstemiMetni(), kimlikDbOkunamiyor), "error"); return; }
+    if (!(await platformConfirm(t("hasta.sil.tumuBaslik"), t("hasta.sil.tumuGovde"), t("hasta.sil.hepsiniSil")))) return;
     // Backend (audit B-8.2) kazara toplu-silmeye karşı confirm ister.
     const res = await apiPost<{ status: string; vacuum_ok?: boolean }>(`/patients/delete_all`, { confirm: "DELETE_ALL" }, { status: "error" });
     if (res.status === "success") {
-      showToast("Tüm hastalar silindi.", "success");
+      showToast(t("hasta.sil.tumuSilindi"), "success");
       // ⚠️ D2.57 (B-3.109): silme GERÇEKLEŞTİ ama VACUUM düştüyse (disk dolu / G-Ç) bu AYRICA söylenir — silinen veri dosyanın boş
       // sayfalarında kalabilir. Eskiden backend bu durumda "error" dönüyor, ekran "başarısız" deyip listeyi yenilemiyordu.
       if (res.vacuum_ok === false) {
-        showToast("Ancak disk temizliği (VACUUM) tamamlanamadı — silinen veri dosyada kalabilir. Disk alanını kontrol edip yeniden deneyin.", "info");
+        showToast(t("hasta.sil.vacuumTamamlanamadi"), "info");
       }
       loadPatients();
     } else {
-      showToast("Toplu silme işlemi başarısız.", "error");
+      showToast(t("hasta.sil.topluBasarisiz"), "error");
     }
   };
 
   const handleStartSession = (p: Patient) => {
     // Seçili hastayı paylaş + Kontrol ekranına git (orada seans bu hastayla başlar).
     setSelectedPatient({ id: p.id, name: p.name, species: p.species });
-    showToast(`${p.name} için kontrol paneline gidiliyor.`, "success");
+    showToast(t("hasta.kontrolePaneli", { name: p.name }), "success");
     navigateTo("control");
   };
 
@@ -289,17 +292,16 @@ export function PatientScreen() {
     // ⚠️ D2.72 (B-6.26 · Y92): istek YALNIZ silinebilen (kendi) kayıtlarla gider; dışarıda kalanların SAYISI onayda
     // söylenir. Eskiden "Tüm Klinik → Tümünü Seç" başka hekimlerin hastalarını isteğe koyuyordu (araştırma profili
     // "Tümünü Sil" kısıtını böyle dolanıyordu). Backend aynı kuralı jetondan uygular (karışık seçim → 403, hiçbiri).
-    if (!myEmail) { showToast(kimlikIstemi(SILME_KIMLIK_ISTEMI, kimlikDbOkunamiyor), "error"); return; }
+    if (!myEmail) { showToast(kimlikIstemi(silmeKimlikIstemiMetni(), kimlikDbOkunamiyor), "error"); return; }
     const kimlikler = secilenler.filter((k) => {
       const p = patients.find((x) => (x.id || x.name || "") === k);
       return !!p && silinebilir(p, silmeBaglami);
     });
-    if (kimlikler.length === 0) { showToast(BASKA_HEKIM_SILME, "error"); return; }
+    if (kimlikler.length === 0) { showToast(baskaHekimSilmeMetni(), "error"); return; }
     const ok = await platformConfirm(
-      "Seçili Hastaları Sil",
-      `${kimlikler.length} hasta kaydı KALICI olarak silinecek. Bu işlem geri alınamaz.` +
-        silinmeyecekNotu(secilenler.length - kimlikler.length),
-      "Sil",
+      t("hasta.sil.seciliBaslik"),
+      t("hasta.sil.topluGovde", { count: kimlikler.length, not: silinmeyecekNotu(secilenler.length - kimlikler.length) }),
+      t("ortak.sil"),
     );
     if (!ok) return;
     setSiliniyor(true);
@@ -314,13 +316,13 @@ export function PatientScreen() {
     if (res.status === "success") {
       const n = res.silinen ?? kimlikler.length;
       showToast(
-        n === kimlikler.length ? `${n} hasta silindi.` : `${n}/${kimlikler.length} hasta silindi.`,
+        n === kimlikler.length ? t("hasta.sil.silindiSayi", { count: n }) : t("hasta.sil.kismenSilindi", { n, toplam: kimlikler.length }),
         "success",
       );
       secim.temizle();
       loadPatients();
     } else {
-      showToast("Toplu silme başarısız.", "error");
+      showToast(t("hasta.sil.topluBasarisizKisa"), "error");
     }
   };
 
@@ -336,20 +338,20 @@ export function PatientScreen() {
               eylemdi. Kapı: __tests__/tumunuSilGorunurluk.OB10.{lan,tunel,cihaz}.web.test.tsx */}
           {isExpert && isDesktopHost() && (
             <Button
-              label="Tümünü Sil"
+              label={t("hasta.sil.tumunuSil")}
               icon={<Trash2 color={colors.danger} size={16} />}
               variant="secondary"
               onPress={handleDeleteAll}
             />
           )}
           <Button
-            label={secim.secimModu ? "Seçimi Kapat" : "Seç"}
+            label={secim.secimModu ? t("hasta.liste.secimiKapat") : t("hasta.liste.sec")}
             icon={!secim.secimModu ? <CheckCircle color={colors.primary} size={16} /> : undefined}
             variant="secondary"
             onPress={secim.secimModunuDegistir}
           />
           <Button
-            label={isAdding ? "İptal" : SK.yeniKayit}
+            label={isAdding ? t("ayarlar.iptal") : SK.yeniKayit}
             icon={!isAdding ? <PlusCircle color={colors.white} size={16} /> : undefined}
             variant={isAdding ? "secondary" : "primary"}
             onPress={() => {
@@ -365,19 +367,19 @@ export function PatientScreen() {
 
       {isAdding && (
         <Card style={styles.formCard}>
-          <Text style={styles.formTitle}>{editingId ? "Hasta Bilgilerini Düzenle" : "Yeni Hasta Ekle"}</Text>
+          <Text style={styles.formTitle}>{editingId ? t("hasta.form.duzenleBaslik") : t("hasta.form.ekleBaslik")}</Text>
           <ResponsiveGrid minItemWidth={200}>
-            <TextInput style={styles.input} accessibilityLabel="Hasta adı" placeholder="Hasta Adı (örn: Mia)" placeholderTextColor={colors.textMuted} value={form.name} onChangeText={t => setForm({...form, name: t})} />
-            <TextInput style={styles.input} accessibilityLabel="Hayvan türü" placeholder="Türü (örn: Kedi)" placeholderTextColor={colors.textMuted} value={form.species} onChangeText={t => setForm({...form, species: t})} />
-            <TextInput style={styles.input} accessibilityLabel="Irk" placeholder="Irkı" placeholderTextColor={colors.textMuted} value={form.breed} onChangeText={t => setForm({...form, breed: t})} />
-            <TextInput style={styles.input} accessibilityLabel="Yaş" placeholder="Yaş (Sayı)" placeholderTextColor={colors.textMuted} value={form.age} onChangeText={t => setForm({...form, age: t})} keyboardType="numeric" />
-            <TextInput style={styles.input} accessibilityLabel="Kilo (kg)" placeholder="Kilo (kg)" placeholderTextColor={colors.textMuted} value={form.weight} onChangeText={t => setForm({...form, weight: t})} keyboardType="numeric" />
-            <TextInput style={styles.input} accessibilityLabel="Sahip adı" placeholder="Sahibi" placeholderTextColor={colors.textMuted} value={form.owner} onChangeText={t => setForm({...form, owner: t})} />
-            <TextInput style={styles.input} accessibilityLabel="Veteriner iletişim telefonu" placeholder="Veteriner / İletişim (Tel)" placeholderTextColor={colors.textMuted} value={form.vet_contact} onChangeText={t => setForm({...form, vet_contact: t})} keyboardType="phone-pad" />
-            <TextInput style={styles.input} accessibilityLabel="Sahip e-posta" placeholder="Sahip E-Posta (rapor için)" placeholderTextColor={colors.textMuted} value={form.owner_email} onChangeText={t => setForm({...form, owner_email: t})} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
+            <TextInput style={styles.input} accessibilityLabel={t("hasta.form.adEtiketi")} placeholder={t("hasta.form.adYer")} placeholderTextColor={colors.textMuted} value={form.name} onChangeText={t => setForm({...form, name: t})} />
+            <TextInput style={styles.input} accessibilityLabel={t("hasta.form.turEtiketi")} placeholder={t("hasta.form.turYer")} placeholderTextColor={colors.textMuted} value={form.species} onChangeText={t => setForm({...form, species: t})} />
+            <TextInput style={styles.input} accessibilityLabel={t("hasta.form.irkEtiketi")} placeholder={t("hasta.form.irkYer")} placeholderTextColor={colors.textMuted} value={form.breed} onChangeText={t => setForm({...form, breed: t})} />
+            <TextInput style={styles.input} accessibilityLabel={t("hasta.form.yasEtiketi")} placeholder={t("hasta.form.yasYer")} placeholderTextColor={colors.textMuted} value={form.age} onChangeText={t => setForm({...form, age: t})} keyboardType="numeric" />
+            <TextInput style={styles.input} accessibilityLabel={t("hasta.form.kiloEtiketi")} placeholder={t("hasta.form.kiloEtiketi")} placeholderTextColor={colors.textMuted} value={form.weight} onChangeText={t => setForm({...form, weight: t})} keyboardType="numeric" />
+            <TextInput style={styles.input} accessibilityLabel={t("hasta.form.sahipEtiketi")} placeholder={t("hasta.form.sahipYer")} placeholderTextColor={colors.textMuted} value={form.owner} onChangeText={t => setForm({...form, owner: t})} />
+            <TextInput style={styles.input} accessibilityLabel={t("hasta.form.vetTelEtiketi")} placeholder={t("hasta.form.vetTelYer")} placeholderTextColor={colors.textMuted} value={form.vet_contact} onChangeText={t => setForm({...form, vet_contact: t})} keyboardType="phone-pad" />
+            <TextInput style={styles.input} accessibilityLabel={t("hasta.form.sahipEpostaEtiketi")} placeholder={t("hasta.form.sahipEpostaYer")} placeholderTextColor={colors.textMuted} value={form.owner_email} onChangeText={t => setForm({...form, owner_email: t})} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
           </ResponsiveGrid>
           <View style={styles.saveBtn}>
-            <Button label={saving ? "Kaydediliyor…" : editingId ? "Güncelle" : "Kaydet"} icon={<CheckCircle color={colors.white} size={16} />} onPress={handleAddOrEditPatient} disabled={saving} />
+            <Button label={saving ? t("hesap.operator.kaydediliyor") : editingId ? t("guncelleme.guncelle") : t("ayarlar.kaydet")} icon={<CheckCircle color={colors.white} size={16} />} onPress={handleAddOrEditPatient} disabled={saving} />
           </View>
         </Card>
       )}
@@ -401,7 +403,7 @@ export function PatientScreen() {
           <TouchableOpacity
             style={[styles.segmentBtn, scope === "all" && styles.segmentBtnActive]}
             onPress={() => setScope("all")}
-            accessibilityLabel={`Tüm ${SK.tumKapsamKucuk} ${SK.kayitlarAd}`}
+            accessibilityLabel={t("hasta.liste.tumKapsamEtiketi", { tumKapsamKucuk: SK.tumKapsamKucuk, kayitlarAd: SK.kayitlarAd })}
           >
             <Text style={[styles.segmentText, scope === "all" && styles.segmentTextActive]} numberOfLines={1}>
               {SK.tumKapsam} ({patients.length})
@@ -414,8 +416,8 @@ export function PatientScreen() {
         <Search color={colors.textMuted} size={20} />
         <TextInput
           style={styles.searchInput}
-          accessibilityLabel="Hasta veya sahip ara"
-          placeholder="Hasta veya Sahip Ara..."
+          accessibilityLabel={t("hasta.liste.araEtiketi")}
+          placeholder={t("hasta.liste.araYer")}
           placeholderTextColor={colors.textMuted}
           value={search}
           onChangeText={setSearch}
@@ -430,16 +432,16 @@ export function PatientScreen() {
         {loading ? (
           <View style={styles.stateBox}>
             <ActivityIndicator color={colors.primary} />
-            <Text style={styles.emptyText}>Yükleniyor…</Text>
+            <Text style={styles.emptyText}>{t("ayarlar.veriTasima.yukleniyor")}</Text>
           </View>
         ) : loadError ? (
           <View style={styles.stateBox}>
-            <Text style={styles.emptyText}>Hastalar yüklenemedi. Bağlantıyı kontrol edin.</Text>
-            <Button label="Tekrar Dene" variant="secondary" onPress={loadPatients} />
+            <Text style={styles.emptyText}>{t("hasta.liste.yuklenemedi")}</Text>
+            <Button label={t("ortak.tekrarDene")} variant="secondary" onPress={loadPatients} />
           </View>
         ) : filteredPatients.length === 0 ? (
           <Text style={styles.emptyText}>
-            {!myEmail ? kimlikIstemi(KIMLIK_ISTEMI, kimlikDbOkunamiyor) : search ? "Aramayla eşleşen kayıt yok." : "Henüz hasta kaydı yok."}
+            {!myEmail ? kimlikIstemi(kimlikIstemiMetni(), kimlikDbOkunamiyor) : search ? t("hasta.liste.aramaBos") : t("hasta.liste.bos")}
           </Text>
         ) : (
           <>
@@ -453,7 +455,7 @@ export function PatientScreen() {
               onVazgec={secim.secimModunuDegistir}
               siliniyor={siliniyor}
               gizliSayi={hiddenCount}
-              silEtiketi="Seçili Hastaları Sil"
+              silEtiketi={t("hasta.sil.seciliBaslik")}
               testID="hasta-secim-cubugu"
             />
           ) : null}
@@ -469,7 +471,7 @@ export function PatientScreen() {
                         onPress={() => secim.degistir(p.id || p.name || "")}
                         accessibilityRole="checkbox"
                         accessibilityState={{ checked: secim.secilimi(p.id || p.name || "") }}
-                        accessibilityLabel={`${p.name} seçimi`}
+                        accessibilityLabel={t("hasta.liste.secimEtiketi", { name: p.name })}
                         testID={`hasta-secim-${p.id || p.name}`}
                       >
                         {secim.secilimi(p.id || p.name || "") ? <Check color={colors.white} size={16} /> : null}
@@ -490,34 +492,34 @@ export function PatientScreen() {
                         altındaydı (actionBtnIcon minWidth/minHeight ile büyütüldü). */}
                     {canAccess(userMode, "control") && (
                       <TouchableOpacity onPress={() => handleStartSession(p)} style={styles.actionBtnIcon}
-                        accessibilityRole="button" accessibilityLabel={`${p.name} için seans başlat`}>
+                        accessibilityRole="button" accessibilityLabel={t("hasta.liste.seansBaslatEtiketi", { name: p.name })}>
                         <Activity color={colors.success} size={20} />
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity onPress={() => handleEdit(p)} style={styles.actionBtnIcon}
-                      accessibilityRole="button" accessibilityLabel={`${p.name} kaydını düzenle`}>
+                      accessibilityRole="button" accessibilityLabel={t("hasta.liste.duzenleEtiketi", { name: p.name })}>
                       <Edit color={colors.primary} size={20} />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => handleDelete(p.id!)} style={styles.actionBtnIcon}
-                      accessibilityRole="button" accessibilityLabel={`${p.name} kaydını sil`}>
+                      accessibilityRole="button" accessibilityLabel={t("hasta.liste.silEtiketi", { name: p.name })}>
                       <Trash2 color={colors.danger} size={20} />
                     </TouchableOpacity>
                   </View>
                 </View>
                 <View style={styles.detailsRow}>
-                  <Text style={styles.detailText} numberOfLines={1}>Sahip: <Text style={{fontWeight: "bold"}}>{p.owner || "Belirtilmemiş"}</Text></Text>
-                  <Text style={styles.detailText}>Kilo: {p.weight || "-"} kg</Text>
-                  <Text style={styles.detailText}>Yaş: {p.age || "-"}</Text>
+                  <Text style={styles.detailText} numberOfLines={1}>{t("hasta.kart.sahip")}<Text style={{fontWeight: "bold"}}>{p.owner || t("hasta.kart.belirtilmemis")}</Text></Text>
+                  <Text style={styles.detailText}>{t("hasta.kart.kilo", { kilo: p.weight || "-" })}</Text>
+                  <Text style={styles.detailText}>{t("hasta.kart.yas", { yas: p.age || "-" })}</Text>
                   {/* Tüm Klinik görünümünde kaydı hangi hekimin oluşturduğunu göster. */}
                   {etkinScope === "all" && p.operator_email ? (
-                    <Text style={styles.detailText} numberOfLines={1}>Kaydeden: {p.operator_email}</Text>
+                    <Text style={styles.detailText} numberOfLines={1}>{t("hasta.kart.kaydeden", { eposta: p.operator_email })}</Text>
                   ) : null}
                   {/* ⚠️ Son analiz özeti — önce hasta KİMLİĞİ, bulunamazsa ADI ile eşlenir
                       (2026-09-12 taşıması). Kimlik aynı adlı iki hayvanı AYIRIR; ad yedeği,
                       taşımanın bilerek kimliksiz bıraktığı ESKİ kayıtlar için gereklidir. */}
                   {sonAnalizOzeti(hastaninSonAnalizi(sonAnalizler, p)) ? (
                     <Text style={styles.sonAnaliz} numberOfLines={2} testID={`hasta-son-analiz-${p.id || p.name}`}>
-                      🔬 Son analiz: {sonAnalizOzeti(hastaninSonAnalizi(sonAnalizler, p))}
+                      {t("hasta.kart.sonAnaliz", { ozet: sonAnalizOzeti(hastaninSonAnalizi(sonAnalizler, p)) })}
                     </Text>
                   ) : null}
                 </View>
@@ -532,9 +534,9 @@ export function PatientScreen() {
             style={styles.loadMoreBtn}
             onPress={() => setVisibleCount((n) => n + PAGE)}
             accessibilityRole="button"
-            accessibilityLabel={`${hiddenCount} hasta daha göster`}
+            accessibilityLabel={t("hasta.liste.dahaFazlaEtiketi", { count: hiddenCount })}
           >
-            <Text style={styles.loadMoreText}>Daha fazla göster ({hiddenCount} kayıt)</Text>
+            <Text style={styles.loadMoreText}>{t("hasta.dahaFazla.metin", { count: hiddenCount })}</Text>
           </TouchableOpacity>
         )}
       </View>

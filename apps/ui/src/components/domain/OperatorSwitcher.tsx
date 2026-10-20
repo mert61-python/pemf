@@ -29,7 +29,7 @@ import { Lock, LogIn, LogOut, UserCheck, UserPlus } from "lucide-react-native";
 import { Card } from "@/components/ui/Card";
 import { useAuth } from "@/context/AuthContext";
 import { AUTO_LOCK_MS, useOperatorOptional } from "@/context/OperatorContext";
-import { KIMLIK_DB_OKUNAMIYOR } from "@/utils/patientScope";
+import { kimlikDbOkunamiyorMetni } from "@/utils/patientScope";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -190,7 +190,7 @@ export function OperatorSwitcher({ onBaskaHesap, kip }: {
               <ScrollView style={styles.liste} nestedScrollEnabled>
                 {/* Y113: kimlik DB'si okunamıyorsa "kayıtlı operatör yok" DENMEZ — arıza + çare. */}
                 {kimlikDbOkunamiyor ? (
-                  <Text style={[styles.not, { color: colors.warning }]} accessibilityRole="alert">{KIMLIK_DB_OKUNAMIYOR}</Text>
+                  <Text style={[styles.not, { color: colors.warning }]} accessibilityRole="alert">{kimlikDbOkunamiyorMetni()}</Text>
                 ) : null}
                 {operators.length === 0 ? (
                   kimlikDbOkunamiyor ? null : <Text style={styles.not}>{t("hesap.operator.kayitliYok", { tekil: terim.tekil })}</Text>

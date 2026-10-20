@@ -48,7 +48,7 @@ import { AppNavProvider } from "@/context/AppNavContext";
 import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
 import { PatientScreen } from "@/screens/PatientScreen";
 import { TreatmentHistoryScreen } from "@/screens/TreatmentHistoryScreen";
-import { BASKA_HEKIM_SILME } from "@/utils/patientScope";
+import { baskaHekimSilmeMetni } from "@/utils/patientScope";
 import { ZATEN_SILINMIS_SEANS } from "@/screens/TreatmentHistoryScreen";
 import { aktifOperator, pinleSec, Sahne, sahteSunucu, type Istek, type SahteOperator } from "../../context/__tests__/operatorAparati";
 
@@ -195,7 +195,7 @@ describe.each(["hasta", "seans"] as EkranAdi[])("D2.72 · Y92 — %s silme yaln�
     await s.tikla(e.tumKlinik);
     await s.tikla(e.tekilEtiket("B"));
     expect(silmeler(ekran)).toEqual([]);
-    expect(toastlar().filter((t) => t === BASKA_HEKIM_SILME).length).toBe(1);
+    expect(toastlar().filter((t) => t === baskaHekimSilmeMetni()).length).toBe(1);
   });
 
   it("KRİTİK (Y104): SAHİPSİZ ve ORTAK GİRİŞ (kayıtlı olmayan e-posta) kaydında TEKİL 'sil' → istek gider, aktif hekimin jetonuyla", async () => {
@@ -210,7 +210,7 @@ describe.each(["hasta", "seans"] as EkranAdi[])("D2.72 · Y92 — %s silme yaln�
     const t = silmeler(ekran);
     expect(t.length).toBe(2);
     expect(t.every((k) => k.operator === `JETON-${A}`)).toBe(true);
-    expect(toastlar()).not.toContain(BASKA_HEKIM_SILME);
+    expect(toastlar()).not.toContain(baskaHekimSilmeMetni());
   });
 
   it("KARŞIT: kendi kaydında TEKİL 'sil' → istek gider, aktif operatörün jetonuyla", async () => {
@@ -238,7 +238,7 @@ describe.each(["hasta", "seans"] as EkranAdi[])("D2.72 · Y92 — %s silme yaln�
     await s.tikla(e.tumKlinik);
     await tumunuSecVeSil(ekran);
     expect(topluKimlikler(ekran)).toEqual([[e.kimlik(0), e.kimlik(1), e.kimlik(2)].sort()]);
-    expect(toastlar()).not.toContain(BASKA_HEKIM_SILME);
+    expect(toastlar()).not.toContain(baskaHekimSilmeMetni());
   });
 
   it("KRİTİK (İG-6.4 b): seçim yapılmışken hareketsizlik kilidi düşer → silme isteği GİTMEZ (önceki hekimin jetonuyla da)", async () => {

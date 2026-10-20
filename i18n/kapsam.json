@@ -184,7 +184,7 @@
    "sira": 4,
    "kritik": false,
    "aciklama": "hasta ekranı, hasta kapısı, gözlem notu, profil sözlüğü",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 155,
    "dosyaSayisi": 7
   },
@@ -1386,10 +1386,35 @@
    "yuzey": "arayuz",
    "grup": "arayuz-04-hasta",
    "sira": 4,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 20,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Sakinleşti",
+     "gerekce": "veriye giden değer: seçilen tepki metni gözlem notuna YAZILIR (POST /session/notes `notes`) — TR bayt bayt kalır; gösterimde değer → anahtar (hasta.gozlem.tepki.*)"
+    },
+    {
+     "metin": "Hareket etti",
+     "gerekce": "veriye giden değer: seçilen tepki metni gözlem notuna YAZILIR (POST /session/notes `notes`) — TR bayt bayt kalır; gösterimde değer → anahtar (hasta.gozlem.tepki.*)"
+    },
+    {
+     "metin": "Uyudu",
+     "gerekce": "veriye giden değer: seçilen tepki metni gözlem notuna YAZILIR (POST /session/notes `notes`) — TR bayt bayt kalır; gösterimde değer → anahtar (hasta.gozlem.tepki.*)"
+    },
+    {
+     "metin": "Endişeli",
+     "gerekce": "veriye giden değer: seçilen tepki metni gözlem notuna YAZILIR (POST /session/notes `notes`) — TR bayt bayt kalır; gösterimde değer → anahtar (hasta.gozlem.tepki.*)"
+    },
+    {
+     "metin": "Tepki yok",
+     "gerekce": "veriye giden değer: seçilen tepki metni gözlem notuna YAZILIR (POST /session/notes `notes`) — TR bayt bayt kalır; gösterimde değer → anahtar (hasta.gozlem.tepki.*)"
+    },
+    {
+     "metin": "Rahatsızlık",
+     "gerekce": "veriye giden değer: seçilen tepki metni gözlem notuna YAZILIR (POST /session/notes `notes`) — TR bayt bayt kalır; gösterimde değer → anahtar (hasta.gozlem.tepki.*)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -1397,7 +1422,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-04-hasta",
    "sira": 4,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 8,
    "kritik": false,
    "muaf": [],
@@ -1408,18 +1433,31 @@
    "yuzey": "arayuz",
    "grup": "arayuz-04-hasta",
    "sira": 4,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 76,
    "kritik": false,
-   "muaf": [],
-   "birlesikIstisna": [],
+   "muaf": [
+    {
+     "metin": "/patients/{{id}}/delete",
+     "gerekce": "API yolu (/patients/<id>/delete) — kullanıcı metni değil"
+    }
+   ],
+   "birlesikIstisna": [
+    {
+     "once": "Hasta başarıyla {{deger1}}.",
+     "sonra": [
+      "hasta.form.guncellendi",
+      "hasta.form.kaydedildi"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/ui/src/utils/aramaNormalize.ts": {
    "yuzey": "arayuz",
    "grup": "arayuz-04-hasta",
    "sira": 4,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -1430,7 +1468,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-04-hasta",
    "sira": 4,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -1441,10 +1479,15 @@
    "yuzey": "arayuz",
    "grup": "arayuz-04-hasta",
    "sira": 4,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 8,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Cihazın kimlik veritabanı okunamıyor",
+     "gerekce": "sunucu 503 / 428 iletisinin ÖN EKİyle KARŞILAŞTIRILIR (OperatorContext `detay.startsWith`, ObservationNotesModal) — TR bayt bayt kalır; GÖSTERİMDE tam cümle kataloğdan (hasta.kimlik.dbOkunamiyor)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -1452,7 +1495,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-04-hasta",
    "sira": 4,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 43,
    "kritik": false,
    "muaf": [],

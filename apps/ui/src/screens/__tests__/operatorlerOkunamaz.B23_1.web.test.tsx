@@ -52,7 +52,7 @@ import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
 import { PatientScreen } from "@/screens/PatientScreen";
 import { TreatmentHistoryScreen } from "@/screens/TreatmentHistoryScreen";
 import { AiHistoryScreen } from "@/screens/AiHistoryScreen";
-import { EKLEME_KIMLIK_ISTEMI, KIMLIK_ISTEMI } from "@/utils/patientScope";
+import { eklemeKimlikIstemiMetni, kimlikIstemiMetni } from "@/utils/patientScope";
 import { aktifOperator, cipEtiketi, pinleSec, Sahne, sahteSunucu, type Istek, type SahteOperator } from "../../context/__tests__/operatorAparati";
 
 const A = "dr.a@klinik.com";
@@ -153,7 +153,7 @@ function gorunen(): string[] {
   const m = s.metin();
   return ["HastaA", "HastaB", "HastaS", "SeansA", "SeansB", "SeansS", "OzetA", "OzetB", "OzetS"].filter((ad) => m.includes(ad));
 }
-const istemSayisi = () => s.metin().split(KIMLIK_ISTEMI).length - 1;
+const istemSayisi = () => s.metin().split(kimlikIstemiMetni()).length - 1;
 const istekler = (yontem: string, yol: string | RegExp) =>
   kayit.filter((k) => k.yontem === yontem && (typeof yol === "string" ? k.yol === yol : yol.test(k.yol)));
 
@@ -183,7 +183,7 @@ describe("B2-3.1 — /operators okunamazsa kayıtlı operatörlü klinikte kimli
     await s.yaz("Hayvan türü", "Kedi");
     await s.metneTikla("Kaydet");
     expect(istekler("POST", "/patients")).toEqual([]);
-    expect(mockToast.mock.calls.map((c) => c[0])).toContain(EKLEME_KIMLIK_ISTEMI);
+    expect(mockToast.mock.calls.map((c) => c[0])).toContain(eklemeKimlikIstemiMetni());
   });
 
   it("KRİTİK (İG-6.26 arayüz katmanı, /operators 503): kimliksiz değerlendirme isteği GİTMEZ", async () => {

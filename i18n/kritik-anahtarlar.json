@@ -218,6 +218,13 @@
    "tur": "firmware",
    "kaynak": "apps/ui/src/components/domain/SystemInfoPanel.tsx",
    "aciklama": "STM32 bağlantısı bekleniyor"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "hasta.kimlik.dbOkunamiyor",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/utils/patientScope.ts",
+   "aciklama": "kimlik veritabanı okunamıyor — kapılar kapalı; ACİL DURDUR ve STOP çalışır cümlesi"
   }
  ],
  "bekleyen": [

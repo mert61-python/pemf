@@ -22,10 +22,10 @@ import {
   deleteScope,
   effectiveScope,
   inScope,
-  KIMLIK_DB_OKUNAMIYOR,
-  KIMLIK_ISTEMI,
+  kimlikDbOkunamiyorMetni,
+  kimlikIstemiMetni,
   kimlikIstemi,
-  YALNIZ_KENDI_SILME,
+  yalnizKendiSilmeMetni,
 } from "@/utils/patientScope";
 import { downloadFileWithAuth } from "@/services/dosyaIndir";
 import { emitToast } from "@/services/toastBridge";
@@ -148,7 +148,7 @@ export function AiHistoryScreen() {
   // istemle geçer. Eskiden değerlendirme kendi `!myEmail` koşulunu taşıyordu (eşdeğerdi; biri değişince sessizce ayrışırdı).
   // Kapı: tests/test_kapsam_sahipligi.py::test_KRITIK_AI_gecmisi_KIMLIK_kapisi_TEK_kaynak_OB4 + __tests__/aiKimlikKapisi.OB4.web.test.tsx
   const kimlikIste = useCallback(async (eylem: string) => {
-    if (kimlikDbOkunamiyor) await platformConfirm("Kimlik veritabanı okunamıyor", KIMLIK_DB_OKUNAMIYOR);
+    if (kimlikDbOkunamiyor) await platformConfirm("Kimlik veritabanı okunamıyor", kimlikDbOkunamiyorMetni());
     else await platformConfirm("Operatör seçin", `${eylem} için önce üst bardan hangi hekim olduğunuzu seçin.`);
   }, [kimlikDbOkunamiyor]);
 
@@ -162,7 +162,7 @@ export function AiHistoryScreen() {
     // e-postayı "sahip filtresi yok" sayıp HER kaydı siliyordu. Backend aynı kuralı jetondan uygular (404 / 428).
     const hedef = items.find((x) => x.id === id);
     if (!hedef || (hedef.operator_email || "").trim().toLowerCase() !== myEmail) {
-      await platformConfirm("Silinemez", YALNIZ_KENDI_SILME);
+      await platformConfirm("Silinemez", yalnizKendiSilmeMetni());
       return;
     }
     const onay = await platformConfirm(
@@ -433,7 +433,7 @@ export function AiHistoryScreen() {
       ) : shown.length === 0 ? (
         <Text style={styles.empty}>
           {!myEmail
-            ? kimlikIstemi(KIMLIK_ISTEMI, kimlikDbOkunamiyor)
+            ? kimlikIstemi(kimlikIstemiMetni(), kimlikDbOkunamiyor)
             : filter !== "__all__"
             ? 'Bu filtre için kayıt yok. Farklı bir hasta/modül seçin ya da "Tümü"ye dönün.'
             : "Henüz AI analiz kaydı yok. Akıllı Teşhis'ten bir analiz çalıştırın — sonuç burada şifreli, detaylı saklanır."}

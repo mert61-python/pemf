@@ -14,8 +14,23 @@ import { apiPost, platformAlert } from "@/services/apiClient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
 import { KIMLIK_DB_ARIZA_ONEKI } from "@/utils/patientScope";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 
 const REACTIONS = ["Sakinleşti", "Hareket etti", "Uyudu", "Endişeli", "Tepki yok", "Rahatsızlık"];
+
+/** Tepki çipinin GÖRÜNEN adı. ⚠️ `REACTIONS` değeri (TR) gözlem notuna YAZILIR (veri) → DEĞİŞMEZ; yalnız gösterim çevrilir. */
+const tepkiEtiketi = (t: TFunction, r: string): string => {
+  switch (r) {
+    case "Sakinleşti": return t("hasta.gozlem.tepki.sakinlesti");
+    case "Hareket etti": return t("hasta.gozlem.tepki.hareketEtti");
+    case "Uyudu": return t("hasta.gozlem.tepki.uyudu");
+    case "Endişeli": return t("hasta.gozlem.tepki.endiseli");
+    case "Tepki yok": return t("hasta.gozlem.tepki.tepkiYok");
+    case "Rahatsızlık": return t("hasta.gozlem.tepki.rahatsizlik");
+    default: return r;
+  }
+};
 
 export interface ObsSession {
   patientName?: string;
@@ -39,6 +54,7 @@ export function ObservationNotesModal({
   session: ObsSession | null;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [notes, setNotes] = useState("");
@@ -129,21 +145,19 @@ export function ObservationNotesModal({
       if (sunucuDurumu === 428) {
         // Y116: kimlik gerekli → not DURUR, operatör pencerenin içinde seçilir (aşağıda). Kimlik DB'si okunamıyorsa (Y113)
         // seçici gösterilmez — iletinin kendisi arızayı ve çareyi söyler.
-        setKimlikIstemi(sunucuGerekce || "Operatör seçin — seans notunu kaydetmek için hangi hekim olduğunuzu seçin.");
+        setKimlikIstemi(sunucuGerekce || t("hasta.gozlem.kimlikIstemi"));
       } else if (sunucuDurumu !== null) {
         // Sunucu YANIT VERDİ ve reddetti → gerekçesini göster; not GİTMEDİ, modal açık kalır.
         platformAlert(
-          "Not kaydedilemedi",
-          `Sunucu isteği reddetti (${sunucuDurumu}). ${sunucuGerekce || "Gerekçe bildirilmedi."}\n\n` +
-            "Notunuz burada duruyor — tekrar deneyebilirsiniz.",
+          t("hasta.gozlem.kaydedilemedi"),
+          t("hasta.gozlem.reddedildi", { durum: sunucuDurumu, gerekce: sunucuGerekce || t("hasta.gozlem.gerekceYok") }),
         );
       } else {
         // Hiç yanıt yok (zaman aşımı / bağlantı). ⚠️ Not KAYDEDİLMİŞ DE OLABİLİR: uç aynı
         // seansı GÜNCELLER (idempotent), yani tekrar denemek çift kayıt ÜRETMEZ.
         platformAlert(
-          "Sunucudan yanıt alınamadı",
-          "Gözlem notu gönderildi ama yanıt gelmedi — kaydedilmiş olabilir.\n\n" +
-            "Tekrar denemek GÜVENLİDİR: aynı seans güncellenir, ikinci bir kayıt oluşmaz.",
+          t("hasta.gozlem.yanitYokBaslik"),
+          t("hasta.gozlem.yanitYok"),
         );
       }
       return;
@@ -170,17 +184,17 @@ export function ObservationNotesModal({
             showsVerticalScrollIndicator={false}
             style={styles.govde}
           >
-          <Text style={styles.title}>📝 Seans Gözlem Notu</Text>
+          <Text style={styles.title}>{t("hasta.gozlem.baslik")}</Text>
           {session?.patientName ? <Text style={styles.sub}>{session.patientName}</Text> : null}
 
-          <Text style={styles.label}>Hasta tepkisi</Text>
+          <Text style={styles.label}>{t("hasta.gozlem.hastaTepkisi")}</Text>
           {/* [S3 adım 5] Ortak çip: eski gövde paddingVertical spacing.xs ile 320 px'te 26 px
               yükseklikteydi ve aralık 4 px'ti — hekim komşu tepkiyi işaretliyordu. */}
           <ChipRow>
             {REACTIONS.map((r) => (
               <Chip
                 key={r}
-                label={r}
+                label={tepkiEtiketi(t, r)}
                 active={selected.has(r)}
                 onPress={() => toggle(r)}
                 style={styles.chip}
@@ -191,13 +205,13 @@ export function ObservationNotesModal({
             ))}
           </ChipRow>
 
-          <Text style={styles.label}>Notlar</Text>
+          <Text style={styles.label}>{t("hasta.gozlem.notlar")}</Text>
           <TextInput
             style={styles.input}
-            accessibilityLabel="Gözlem notları"
+            accessibilityLabel={t("hasta.gozlem.notlarEtiketi")}
             value={notes}
             onChangeText={setNotes}
-            placeholder="Ek gözlemler…"
+            placeholder={t("hasta.gozlem.ekGozlem")}
             placeholderTextColor={colors.textMuted}
             multiline
             numberOfLines={3}
@@ -220,14 +234,14 @@ export function ObservationNotesModal({
               şeridi; güvenli alan dolgusu da buraya taşındı. */}
           <View style={[styles.btnRow, { paddingBottom: insets.bottom + spacing.lg }]}>
             <TouchableOpacity style={[styles.btn, styles.btnSkip]} onPress={skip} disabled={saving}>
-              <Text style={styles.btnText} numberOfLines={1}>Atla</Text>
+              <Text style={styles.btnText} numberOfLines={1}>{t("guncelleme.atla")}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.btn, styles.btnSave, saving && { opacity: 0.5 }]}
               onPress={save}
               disabled={saving}
             >
-              <Text style={styles.btnText} numberOfLines={1} adjustsFontSizeToFit>{saving ? "Kaydediliyor…" : "💾 Kaydet"}</Text>
+              <Text style={styles.btnText} numberOfLines={1} adjustsFontSizeToFit>{saving ? t("hesap.operator.kaydediliyor") : t("hasta.gozlem.kaydet")}</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -1,3 +1,4 @@
+import i18n from "i18next";
 // Author: mertaygn, cglrgrkn
 /**
  * HASTA KAPSAMI (KVKK kapısı) — 2026-08-08
@@ -41,10 +42,10 @@ export function canChooseScope(
  * KİMLİK İSTEMİ (D2.70 · Y103) — kimliksizken (cihazda kayıtlı operatör var, kimse seçili değil ya da kilit sonrası)
  * Hastalar, Seans Geçmişi ve AI Geçmişi kayıt göstermez, bunu söyler. TEK KAYNAK: ekranlar metni buradan alır.
  */
-export const KIMLIK_ISTEMI = "Kayıtları görmek için operatörünüzü seçin";
+export const kimlikIstemiMetni = (): string => i18n.t("hasta.kimlik.istem");
 
 /** A-61: hasta eklemek KİMLİK ister — kimliksiz eklenen hasta sahipsiz yazılır ve herkesin "Benim" listesine düşerdi. */
-export const EKLEME_KIMLIK_ISTEMI = "Hasta eklemek için operatörünüzü seçin";
+export const eklemeKimlikIstemiMetni = (): string => i18n.t("hasta.kimlik.eklemeIstem");
 
 /**
  * Y113 — CİHAZIN KİMLİK VERİTABANI OKUNAMIYOR (auth DB: kilit, dosya yok, bozuk, erişim izni). Kapılar KAPALI kalır; ama
@@ -53,14 +54,12 @@ export const EKLEME_KIMLIK_ISTEMI = "Hasta eklemek için operatörünüzü seçi
  * (`/api/operators` 503 ve 428 iletileri bu ÖN EKLE başlar — `OperatorContext` onu tanır).
  */
 export const KIMLIK_DB_ARIZA_ONEKI = "Cihazın kimlik veritabanı okunamıyor";
-export const KIMLIK_DB_OKUNAMIYOR =
-  `${KIMLIK_DB_ARIZA_ONEKI} — kayıtların hangi hekime ait olduğu doğrulanamıyor; kayıt listesi, değerlendirme, silme ve ` +
-  "hasta ekleme şimdilik kapalı. Çare: uygulamayı kapatıp yeniden açın; sorun sürerse teknik desteğe başvurun. " +
-  "ACİL DURDUR ve STOP çalışır.";
+export const kimlikDbOkunamiyorMetni = (): string =>
+  i18n.t("hasta.kimlik.dbOkunamiyor");
 
 /** Kimliksizken gösterilecek istem — kimlik veritabanı okunamıyorsa arıza + çare (Y113), değilse verilen `istem`. */
 export function kimlikIstemi(istem: string, kimlikDbOkunamiyor?: boolean): string {
-  return kimlikDbOkunamiyor ? KIMLIK_DB_OKUNAMIYOR : istem;
+  return kimlikDbOkunamiyor ? kimlikDbOkunamiyorMetni() : istem;
 }
 
 /**
@@ -159,15 +158,15 @@ export function silinebilir(
 }
 
 /** AI geçmişi tekil silmesinde kayıt kimliğe ait değilse gösterilen metin (Y83: AI'da sahipsiz kayıt tekil SİLİNMEZ). */
-export const YALNIZ_KENDI_SILME = "Yalnız kendi kayıtlarınızı silebilirsiniz — bu kayıt başka bir hekime ait ya da sahipsiz.";
+export const yalnizKendiSilmeMetni = (): string => i18n.t("hasta.kimlik.yalnizKendiSilme");
 
 /** Y104: hasta/seans tekil silmede kayıt BAŞKA (kayıtlı) bir hekime aitse (ya da toplu seçimin hiçbiri silinemiyorsa). */
-export const BASKA_HEKIM_SILME = "Yalnız kendi ve sahipsiz kayıtları silebilirsiniz — bu kayıt başka bir hekime ait.";
+export const baskaHekimSilmeMetni = (): string => i18n.t("hasta.kimlik.baskaHekimSilme");
 
 /** Kimlik yokken silme denemesi (kayıtlı operatörlü cihaz, kimse seçili değil ya da kilit sonrası). */
-export const SILME_KIMLIK_ISTEMI = "Silmek için operatörünüzü seçin";
+export const silmeKimlikIstemiMetni = (): string => i18n.t("hasta.kimlik.silmeIstem");
 
 /** Toplu silme onayında, seçimden silinmeyecek kayıtların sayısı. */
 export function silinmeyecekNotu(n: number): string {
-  return n > 0 ? `\n\n${n} kayıt başka bir hekime ait — SİLİNMEYECEK.` : "";
+  return n > 0 ? i18n.t("hasta.kimlik.silinmeyecekNot", { count: n }) : "";
 }

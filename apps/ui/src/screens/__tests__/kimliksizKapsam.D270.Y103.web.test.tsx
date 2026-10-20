@@ -51,7 +51,7 @@ import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
 import { PatientScreen } from "@/screens/PatientScreen";
 import { TreatmentHistoryScreen } from "@/screens/TreatmentHistoryScreen";
 import { AiHistoryScreen } from "@/screens/AiHistoryScreen";
-import { EKLEME_KIMLIK_ISTEMI, KIMLIK_ISTEMI } from "@/utils/patientScope";
+import { eklemeKimlikIstemiMetni, kimlikIstemiMetni } from "@/utils/patientScope";
 import { aktifOperator, pinleSec, Sahne, sahteSunucu, type Istek, type SahteOperator } from "../../context/__tests__/operatorAparati";
 
 const A = "dr.a@klinik.com";
@@ -138,7 +138,7 @@ function gorunen(): string[] {
     m.includes(ad),
   );
 }
-const istemSayisi = () => s.metin().split(KIMLIK_ISTEMI).length - 1;
+const istemSayisi = () => s.metin().split(kimlikIstemiMetni()).length - 1;
 
 describe("D2.70 · Y103 — kimliksizken kayıt listeleri fail-closed", () => {
   it("KRİTİK (ev sahibi): kayıtlı operatörlü cihazda kimse seçili değilken üç listede de kayıt YOK ve istem görünür", async () => {
@@ -186,7 +186,7 @@ describe("D2.70 · A-61 — hasta eklemek KİMLİK ister", () => {
     const kayit = await kur("veterinarian", A, [{ email: A, display_name: "Dr. A" }, { email: B, display_name: "Dr. B" }], {});
     await ekle("YeniKedi");
     expect(eklemeler(kayit)).toEqual([]);
-    expect(mockToast.mock.calls.map((c) => c[0])).toContain(EKLEME_KIMLIK_ISTEMI);
+    expect(mockToast.mock.calls.map((c) => c[0])).toContain(eklemeKimlikIstemiMetni());
   });
 
   it("KARŞIT (Kural 2): operatörsüz tek hekimli klinikte hasta eklenir, sahibi oturum e-postası", async () => {
