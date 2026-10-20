@@ -35,6 +35,37 @@
       "topallik": "Topallık"
     }
   },
+  "hata": {
+    "analizSirasinda": "Analiz sırasında hata oluştu.",
+    "baglanti": "Bağlantı hatası.",
+    "hataIleti": "Hata: {{ileti}}",
+    "teshisSirasinda": "Teşhis sırasında hata oluştu."
+  },
+  "hayvanSahibi": {
+    "aciklama": "Dostunuzun fotoğrafını çekin, yapay zeka anında ağrı ve stres durumunu analiz etsin. Gerekirse veteriner hekiminize danışın.",
+    "agriSkoru": "Ağrı Skoru (FGS):",
+    "baslik": "Akıllı Teşhis Asistanı",
+    "ipucuIsik": "• İyi ışık olsun; gözler, kulaklar ve bıyıklar görünsün",
+    "ipucuTekKedi": "• Tek kedi kadraja girsin, bulanık olmasın",
+    "ipucuYuz": "• Dostunuzun yüzünü <kalin>tam karşıdan</kalin>, yakın ve net çekin",
+    "kamerayiAc": "Kamerayı Aç",
+    "klinigiAra": "Veteriner Kliniğini Ara",
+    "klinikTelefonuYokBaslik": "Klinik telefonu ayarlı değil",
+    "klinikTelefonuYokGovde": "Kayıt (hesap) bilgilerinde klinik acil telefonu girilmemiş.",
+    "modelHazirlaniyor": "Model hazırlanıyor, analiz sürüyor…",
+    "netSonucIcin": "📸 Net sonuç için",
+    "oneri": {
+      "agriYok": "Dostunuzun yüz hatlarında herhangi bir ağrı veya stres belirtisi görülmüyor. Oldukça rahat görünüyor!",
+      "hafif": "Dostunuzda hafif bir rahatsızlık veya yorgunluk belirtisi olabilir. Bu durum geçici olabilir ancak gözlemlemeye devam edin. Belirtiler sürerse veteriner hekiminize danışın.",
+      "orta": "Orta derecede ağrı veya stres belirtileri tespit edildi! Yüz hatlarında belirgin bir gerginlik var. Belirtiler 1-2 günden uzun sürerse veteriner hekiminize danışın.",
+      "siddetli": "ŞİDDETLİ AĞRI BELİRTİSİ! Dostumuz ciddi bir rahatsızlık yaşıyor olabilir. Lütfen vakit kaybetmeden VETERİNER HEKİMİNİZE BAŞVURUN.",
+      "tespitYok": "Kedinin yüzü net tespit edilemedi. Lütfen yüzü net, iyi aydınlatılmış ve tam karşıdan çekilmiş bir fotoğrafla tekrar deneyin."
+    },
+    "sonAnaliz": "🔬 {{ad}} · son analiz",
+    "sonucBaslik": "Yapay Zeka Analiz Sonucu",
+    "teshisEt": "Teşhis Et",
+    "yeniFotograf": "Yeni Fotoğraf"
+  },
   "hub": {
     "acmakIcin": "Açmak için dokunun",
     "baslik": "Tanı Modülleri",
@@ -105,8 +136,75 @@
     }
   },
   "ortak": {
+    "analizEdiliyor": "Analiz Ediliyor...",
+    "galeridenSec": "Galeriden Seç",
     "noktaGorunurluguUyarisi": "ℹ️ Bu model yüz noktalarının görünürlüğünü bildirmiyor: kulak, göz gibi bir bölge örtülüyse skor yanıltıcı olabilir — yüzün tamamen açık göründüğü bir fotoğraf kullanın.",
     "otonomOnayArastirma": "Otonom Biofeedback onay gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın.",
-    "otonomOnayHekim": "Otonom Biofeedback hekim onayı gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın."
+    "otonomOnayHekim": "Otonom Biofeedback hekim onayı gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın.",
+    "tibbiSorumlulukReddi": "⚠️ Bu yapay zeka sonucu yalnızca karar-destek amaçlıdır; veteriner hekim muayenesi ve teşhisinin yerine geçmez. Nihai karar hekime aittir."
+  },
+  "ses": {
+    "aciklama": "Dostunuzun miyavını kaydedin, yapay zeka ruh halini yorumlasın. Sessiz bir ortamda ~5 saniye kaydetmeniz yeterli.",
+    "analizEdildi": "Ses analiz edildi.",
+    "baslik": "Sesini Dinleyelim",
+    "durdur": "Durdur",
+    "guvenilirDegil": "⚠️ Bu sonuç güvenilir değil — kayıtta net bir kedi sesi ayırt edilemedi. Sessiz bir ortamda, mikrofonu yaklaştırıp tekrar kaydedin.",
+    "kaydediliyor": "Kaydediliyor…",
+    "kaydet": "Kaydet",
+    "kayitBaslatilamadi": "Kayıt başlatılamadı (mikrofon?).",
+    "kayitDurdurulamadi": "Kayıt durdurulamadı.",
+    "kayitYok": "Ses kaydedilmedi",
+    "mikrofonIzni": "Mikrofon izni gerekli.",
+    "oneri": {
+      "agri": {
+        "baslik": "Ağrı Belirtisi Olabilir",
+        "metin": "Bu ses bir ağrı ya da rahatsızlık işareti olabilir. Dostunuzu yakından gözlemleyin; belirti sürerse veteriner hekiminize danışın."
+      },
+      "anneCagrisi": {
+        "baslik": "Anne Çağrısı",
+        "metin": "Yavrusunu arıyor ya da anne içgüdüsüyle sesleniyor — doğal bir davranış."
+      },
+      "avOyun": {
+        "baslik": "Av / Oyun Modunda",
+        "metin": "Meraklı ve hareketli, avlanma içgüdüsü aktif. Oyunla enerjisini atmasına yardımcı olun."
+      },
+      "ciftlesme": {
+        "baslik": "Çiftleşme Dönemi",
+        "metin": "Çiftleşme dönemine ait bir ses. Doğaldır; huzursuzsa sakin bir ortam sağlayın."
+      },
+      "kavga": {
+        "baslik": "Kavga / Çatışma",
+        "metin": "Bir çatışma sesi. Diğer hayvanlardan uzaklaştırıp güvenli bir yere alın."
+      },
+      "kizgin": {
+        "baslik": "Kızgın / Gergin",
+        "metin": "Şu an gergin. Ona alan tanıyın, zorlamayın; kısa sürede sakinleşebilir."
+      },
+      "mutlu": {
+        "baslik": "Mutlu ve Keyifli",
+        "metin": "Dostunuz kendini iyi ve mutlu hissediyor. Her şey yolunda görünüyor!"
+      },
+      "sakin": {
+        "baslik": "Sakin ve Dinlenmede",
+        "metin": "Rahat ve huzurlu bir durumda, keyfini çıkarıyor."
+      },
+      "savunma": {
+        "baslik": "Savunmada",
+        "metin": "Kendini tehdit altında hissediyor olabilir. Zorlamadan ona güvenli bir alan tanıyın."
+      },
+      "uyari": {
+        "baslik": "Tedirgin / Uyarıyor",
+        "metin": "Bir şeyden rahatsız ya da tedirgin olabilir. Ortamı kontrol edip onu sakinleştirin."
+      }
+    },
+    "sesYukle": "Ses Yükle",
+    "sesiAnalizEt": "Sesi Analiz Et",
+    "yorumBaslik": "Yapay Zeka Yorumu"
+  },
+  "xai": {
+    "isiHaritasiGenel": "🔍 Isı haritası — modelin baktığı bölgeler (kırmızı = karara güçlü etki)",
+    "isiHaritasiHasta": "🔍 Isı haritası — modeli “Hasta (Riskli)” kararına götüren bölgeler (kırmızı = bu karara güçlü katkı)",
+    "isiHaritasiSaglikli": "🔍 Isı haritası — modeli “Sağlıklı” kararına götüren bölgeler (kırmızı = bu karara güçlü katkı)",
+    "tespitYokNotu": "Tespit yok — harita, güven eşiğinin altında kalan en güçlü 5 aday bölgeyi gösterir (tespit ya da tanı kanıtı değildir). Görüntünün doğru tür ve odakta olduğunu kontrol edip yeniden deneyin."
   }
 }

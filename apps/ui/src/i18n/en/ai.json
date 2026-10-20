@@ -35,6 +35,37 @@
       "topallik": "Lameness"
     }
   },
+  "hata": {
+    "analizSirasinda": "An error occurred during analysis.",
+    "baglanti": "Connection error.",
+    "hataIleti": "Error: {{ileti}}",
+    "teshisSirasinda": "An error occurred during the diagnosis."
+  },
+  "hayvanSahibi": {
+    "aciklama": "Take a photo of your furry friend and let the AI instantly analyze their pain and stress level. If needed, consult your veterinarian.",
+    "agriSkoru": "Pain Score (FGS):",
+    "baslik": "Smart Diagnosis Assistant",
+    "ipucuIsik": "• Use good lighting; eyes, ears and whiskers should be visible",
+    "ipucuTekKedi": "• Keep only one cat in the frame and avoid blur",
+    "ipucuYuz": "• Photograph your furry friend's face <kalin>straight on</kalin>, close up and in focus ",
+    "kamerayiAc": "Open Camera",
+    "klinigiAra": "Call Veterinary Clinic",
+    "klinikTelefonuYokBaslik": "Clinic phone not set",
+    "klinikTelefonuYokGovde": "No emergency clinic phone number has been entered in the registration (account) details.",
+    "modelHazirlaniyor": "Preparing the model, analysis in progress…",
+    "netSonucIcin": "📸 For a clear result",
+    "oneri": {
+      "agriYok": "No signs of pain or stress are visible in your furry friend's facial features. They look quite relaxed!",
+      "hafif": "Your furry friend may have a mild discomfort or tiredness. This may be temporary, but keep observing. If the signs continue, consult your veterinarian.",
+      "orta": "Moderate signs of pain or stress were detected! There is noticeable tension in the facial features. If the signs last longer than 1–2 days, consult your veterinarian.",
+      "siddetli": "SIGNS OF SEVERE PAIN! Your furry friend may be in serious distress. Please CONTACT YOUR VETERINARIAN WITHOUT DELAY.",
+      "tespitYok": "The cat's face could not be clearly detected. Please try again with a clear, well-lit photo taken straight on."
+    },
+    "sonAnaliz": "🔬 {{ad}} · last analysis",
+    "sonucBaslik": "AI Analysis Result",
+    "teshisEt": "Diagnose",
+    "yeniFotograf": "New Photo"
+  },
   "hub": {
     "acmakIcin": "Tap to open",
     "baslik": "Diagnosis Modules",
@@ -105,8 +136,75 @@
     }
   },
   "ortak": {
+    "analizEdiliyor": "Analyzing...",
+    "galeridenSec": "Choose from Gallery",
     "noktaGorunurluguUyarisi": "ℹ️ This model does not report whether facial landmarks are visible: if a region such as an ear or an eye is covered, the score may be misleading — use a photo where the whole face is clearly visible.",
     "otonomOnayArastirma": "Autonomous Biofeedback requires confirmation: get the recommendation from the Control → AI Pro tab and approve it.",
-    "otonomOnayHekim": "Autonomous Biofeedback requires veterinarian approval: get the recommendation from the Control → AI Pro tab and approve it."
+    "otonomOnayHekim": "Autonomous Biofeedback requires veterinarian approval: get the recommendation from the Control → AI Pro tab and approve it.",
+    "tibbiSorumlulukReddi": "⚠️ This AI result is for decision support only; it does not replace a veterinary examination and diagnosis. The final decision rests with the veterinarian."
+  },
+  "ses": {
+    "aciklama": "Record your furry friend's meow and let the AI interpret their mood. About 5 seconds in a quiet place is enough.",
+    "analizEdildi": "Sound analyzed.",
+    "baslik": "Let's Listen to Their Voice",
+    "durdur": "Stop",
+    "guvenilirDegil": "⚠️ This result is not reliable — no clear cat sound could be made out in the recording. In a quiet place, bring the microphone closer and record again.",
+    "kaydediliyor": "Recording…",
+    "kaydet": "Record",
+    "kayitBaslatilamadi": "Could not start recording (microphone?).",
+    "kayitDurdurulamadi": "Could not stop recording.",
+    "kayitYok": "No audio recorded",
+    "mikrofonIzni": "Microphone permission is required.",
+    "oneri": {
+      "agri": {
+        "baslik": "May Be a Sign of Pain",
+        "metin": "This sound may be a sign of pain or discomfort. Observe your furry friend closely; if the signs continue, consult your veterinarian."
+      },
+      "anneCagrisi": {
+        "baslik": "Mother's Call",
+        "metin": "Calling for their kittens or calling out with a mothering instinct — natural behavior."
+      },
+      "avOyun": {
+        "baslik": "In Hunt / Play Mode",
+        "metin": "Curious and lively, with an active hunting instinct. Help them burn off energy with play."
+      },
+      "ciftlesme": {
+        "baslik": "Mating Season",
+        "metin": "A sound from the mating season. It is natural; if they seem restless, provide a calm environment."
+      },
+      "kavga": {
+        "baslik": "Fighting / Conflict",
+        "metin": "The sound of a conflict. Move them away from other animals to a safe place."
+      },
+      "kizgin": {
+        "baslik": "Angry / Tense",
+        "metin": "Tense right now. Give them space and don't force them; they may calm down shortly."
+      },
+      "mutlu": {
+        "baslik": "Happy and Content",
+        "metin": "Your furry friend feels good and happy. Everything looks fine!"
+      },
+      "sakin": {
+        "baslik": "Calm and Resting",
+        "metin": "Relaxed and peaceful, enjoying themselves."
+      },
+      "savunma": {
+        "baslik": "On the Defensive",
+        "metin": "They may feel threatened. Give them a safe space without forcing anything."
+      },
+      "uyari": {
+        "baslik": "Uneasy / Warning",
+        "metin": "They may be bothered or uneasy about something. Check the surroundings and calm them down."
+      }
+    },
+    "sesYukle": "Upload Audio",
+    "sesiAnalizEt": "Analyze Audio",
+    "yorumBaslik": "AI Interpretation"
+  },
+  "xai": {
+    "isiHaritasiGenel": "🔍 Heat map — the regions the model looked at (red = strong influence on the decision)",
+    "isiHaritasiHasta": "🔍 Heat map — the regions that led the model to the “Sick (At Risk)” decision (red = strong contribution to this decision)",
+    "isiHaritasiSaglikli": "🔍 Heat map — the regions that led the model to the “Healthy” decision (red = strong contribution to this decision)",
+    "tespitYokNotu": "No detection — the map shows the 5 strongest candidate regions that fall below the confidence threshold (it is not evidence of a detection or a diagnosis). Check that the image is of the right type and in focus, then try again."
   }
 }

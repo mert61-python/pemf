@@ -2135,6 +2135,26 @@
     {
      "metin": "Analiz tamamlandı",
      "gerekce": "kalıcı AI geçmişi kaydına giden özet — veri"
+    },
+    {
+     "metin": "&patient_id={{deger1}}",
+     "gerekce": "sunucuya giden sorgu parametresi (&patient_id=…) — veri"
+    },
+    {
+     "metin": "Web ortamında geçerli bir dosya bulunamadı.",
+     "gerekce": "yakalanır; kullanıcıya aiHataMesaji varsayılanı (\"Bağlantı hatası.\") gösterilir, bu ileti gösterilmez"
+    },
+    {
+     "metin": "Ağrı Analizi (FGS)",
+     "gerekce": "AI geçmişi kaydına giden modül adı — veri"
+    },
+    {
+     "metin": "kayıt.m4a",
+     "gerekce": "ses dosyası adı: ekranda gösterilir VE yükleme dosya adı olarak sunucuya gider (veri)"
+    },
+    {
+     "metin": "Kedi Sesi",
+     "gerekce": "AI geçmişi kaydına giden modül adı — veri"
     }
    ],
    "birlesikIstisna": [],

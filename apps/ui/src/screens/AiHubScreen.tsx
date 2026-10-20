@@ -451,6 +451,7 @@ export function AiHubScreen() {
 }
 
 function PetOwnerAiScreen() {
+  const { t } = useTranslation();
   // Galeri ASIL okuma yuzeyi: daha yuksek tavan, AYNI responsive oran (bkz. useGaleriYuksekligi).
   const galeriH = useGaleriYuksekligi();
   const { showToast } = useToast();
@@ -634,13 +635,13 @@ function PetOwnerAiScreen() {
         // ⚠️ D2.69 (B-6.29): seçili hastanın ADIYLA — eskiden "" yazılıyordu, ev sahibi geçmişinde hayvan ayrımı oluşmuyordu.
         logAiResult(hasta, "Ağrı Analizi (FGS)", summarizeVision(data), { moduleId: "landmark", inputType: "image", detail: data });
       } else {
-        showToast(aiDetayCumlesi(data?.detail, "Teşhis sırasında hata oluştu."), "error");
+        showToast(aiDetayCumlesi(data?.detail, t("ai.hata.teshisSirasinda")), "error");
       }
     } catch (error) {
       // Satır-içi AbortError ayrımı `aiHataMesaji`ye devredildi (2026-08-12): mesaj tek
       // kaynaktan gelsin. Eski metin "bağlantıyı kontrol edin" diyordu — zaman aşımında
       // bağlantı SAĞLAMDIR, yanıltıcıydı.
-      showToast(aiHataMesaji(error, "Bağlantı hatası."), "error");
+      showToast(aiHataMesaji(error, t("ai.hata.baglanti")), "error");
     } finally {
       setLoading(false);
     }
@@ -658,16 +659,16 @@ function PetOwnerAiScreen() {
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <Sparkles color={colors.primary} size={28} />
-          <Text style={[styles.title, { fontSize: rf(24) }]}>Akıllı Teşhis Asistanı</Text>
+          <Text style={[styles.title, { fontSize: rf(24) }]}>{t("ai.hayvanSahibi.baslik")}</Text>
         </View>
-        <Text style={styles.subtitle}>Dostunuzun fotoğrafını çekin, yapay zeka anında ağrı ve stres durumunu analiz etsin. Gerekirse veteriner hekiminize danışın.</Text>
+        <Text style={styles.subtitle}>{t("ai.hayvanSahibi.aciklama")}</Text>
 
         {/* ⚠️ YALNIZ SONUÇ EKRANDA YOKKEN: analiz sonucu dururken "son analiz" şeridi
             göstermek, kullanıcının HANGİSİNE baktığını karıştırır. */}
         {!result && sonAnalizOzeti(sonKayit) ? (
           <View style={styles.kaldiginYerden} testID="pet-son-analiz">
             <Text style={styles.kaldiginYerdenBaslik} numberOfLines={1}>
-              🔬 {secili?.name} · son analiz
+              {t("ai.hayvanSahibi.sonAnaliz", { ad: secili?.name ?? "" })}
             </Text>
             <Text style={styles.kaldiginYerdenOzet} numberOfLines={3}>
               {sonAnalizOzeti(sonKayit)}
@@ -678,19 +679,19 @@ function PetOwnerAiScreen() {
         {!imageUri ? (
           <>
             <View style={styles.photoGuide}>
-              <Text style={styles.photoGuideTitle}>📸 Net sonuç için</Text>
-              <Text style={styles.photoGuideItem}>• Dostunuzun yüzünü <Text style={styles.photoGuideBold}>tam karşıdan</Text>, yakın ve net çekin</Text>
-              <Text style={styles.photoGuideItem}>• İyi ışık olsun; gözler, kulaklar ve bıyıklar görünsün</Text>
-              <Text style={styles.photoGuideItem}>• Tek kedi kadraja girsin, bulanık olmasın</Text>
+              <Text style={styles.photoGuideTitle}>{t("ai.hayvanSahibi.netSonucIcin")}</Text>
+              <Text style={styles.photoGuideItem}><Trans i18nKey="ai.hayvanSahibi.ipucuYuz" components={{ kalin: <Text style={styles.photoGuideBold} /> }} /></Text>
+              <Text style={styles.photoGuideItem}>{t("ai.hayvanSahibi.ipucuIsik")}</Text>
+              <Text style={styles.photoGuideItem}>{t("ai.hayvanSahibi.ipucuTekKedi")}</Text>
             </View>
             <View style={styles.actions}>
               <TouchableOpacity style={styles.bigActionBtn} onPress={takePhoto}>
                 <Camera color="#fff" size={32} />
-                <Text style={styles.bigActionText}>Kamerayı Aç</Text>
+                <Text style={styles.bigActionText}>{t("ai.hayvanSahibi.kamerayiAc")}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.secondaryActionBtn} onPress={pickImage}>
                 <ImageIcon color={colors.primary} size={24} />
-                <Text style={styles.secondaryActionText}>Galeriden Seç</Text>
+                <Text style={styles.secondaryActionText}>{t("ai.ortak.galeridenSec")}</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -711,16 +712,16 @@ function PetOwnerAiScreen() {
                 {/* ⚠️ `setResult(null)` EKLENDİ: sonuç temizlenmeyince "Yeni Fotoğraf"a basıldığında
                     girdi gidiyor ama ALTTAKİ ESKİ TEŞHİS ekranda kalıyordu — hayvan sahibi, henüz
                     yüklemediği bir fotoğrafın sonucuna bakıyor sanıyordu. */}
-                <Button variant="secondary" label="Yeni Fotoğraf" onPress={() => { setImageUri(null); setImageBase64(null); setImageFile(null); setResult(null); }} />
+                <Button variant="secondary" label={t("ai.hayvanSahibi.yeniFotograf")} onPress={() => { setImageUri(null); setImageBase64(null); setImageFile(null); setResult(null); }} />
               </View>
               <View style={{ flex: 1 }}>
-                <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Teşhis Et"} onPress={() => analyzeImage()} disabled={loading} icon={loading ? <ActivityIndicator color="#fff" /> : <Sparkles color="#fff" size={16} />} />
+                <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.hayvanSahibi.teshisEt")} onPress={() => analyzeImage()} disabled={loading} icon={loading ? <ActivityIndicator color="#fff" /> : <Sparkles color="#fff" size={16} />} />
               </View>
             </View>
           </View>
         )}
 
-        {longLoading && <Text style={styles.modelHint}>Model hazırlanıyor, analiz sürüyor…</Text>}
+        {longLoading && <Text style={styles.modelHint}>{t("ai.hayvanSahibi.modelHazirlaniyor")}</Text>}
 
         {result && (() => {
           let recommendation = "";
@@ -730,24 +731,24 @@ function PetOwnerAiScreen() {
           const notDetected = result.detected === false || score == null || score < 0;
 
           if (notDetected) {
-            recommendation = "Kedinin yüzü net tespit edilemedi. Lütfen yüzü net, iyi aydınlatılmış ve tam karşıdan çekilmiş bir fotoğrafla tekrar deneyin.";
+            recommendation = t("ai.hayvanSahibi.oneri.tespitYok");
           } else if (score === 0) {
-            recommendation = "Dostunuzun yüz hatlarında herhangi bir ağrı veya stres belirtisi görülmüyor. Oldukça rahat görünüyor!";
+            recommendation = t("ai.hayvanSahibi.oneri.agriYok");
           } else if (score > 0 && score <= 3) {
-            recommendation = "Dostunuzda hafif bir rahatsızlık veya yorgunluk belirtisi olabilir. Bu durum geçici olabilir ancak gözlemlemeye devam edin. Belirtiler sürerse veteriner hekiminize danışın.";
+            recommendation = t("ai.hayvanSahibi.oneri.hafif");
           } else if (score > 3 && score <= 5) {
-            recommendation = "Orta derecede ağrı veya stres belirtileri tespit edildi! Yüz hatlarında belirgin bir gerginlik var. Belirtiler 1-2 günden uzun sürerse veteriner hekiminize danışın.";
+            recommendation = t("ai.hayvanSahibi.oneri.orta");
           } else {
-            recommendation = "ŞİDDETLİ AĞRI BELİRTİSİ! Dostumuz ciddi bir rahatsızlık yaşıyor olabilir. Lütfen vakit kaybetmeden VETERİNER HEKİMİNİZE BAŞVURUN.";
+            recommendation = t("ai.hayvanSahibi.oneri.siddetli");
             requiresVet = true;
           }
 
           return (
             <View style={styles.petOwnerResult}>
-              <Text style={styles.petOwnerResultTitle}>Yapay Zeka Analiz Sonucu</Text>
+              <Text style={styles.petOwnerResultTitle}>{t("ai.hayvanSahibi.sonucBaslik")}</Text>
 
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
-                <Text style={styles.body}>Ağrı Skoru (FGS):</Text>
+                <Text style={styles.body}>{t("ai.hayvanSahibi.agriSkoru")}</Text>
                 <Text style={[styles.title, { color: notDetected ? colors.textMuted : score > 3 ? colors.danger : colors.success }]}>{notDetected ? "—" : `${score} / 10`}</Text>
               </View>
               {/* D1.E09 · 1-D inceleme i3-F-2: hekimsiz kullanıcıya örtülü yüzde uyarısız "ağrı yok" güvencesi verilmez. */}
@@ -771,11 +772,11 @@ function PetOwnerAiScreen() {
                       const legacy = fromProfile ? "" : ((await AsyncStorage.getItem("pemf_clinic_phone")) || "");
                       const phone = (fromProfile || legacy).replace(/\s/g, "");
                       if (phone) Linking.openURL(`tel:${phone}`).catch(() => {});
-                      else platformAlert("Klinik telefonu ayarlı değil", "Kayıt (hesap) bilgilerinde klinik acil telefonu girilmemiş.");
+                      else platformAlert(t("ai.hayvanSahibi.klinikTelefonuYokBaslik"), t("ai.hayvanSahibi.klinikTelefonuYokGovde"));
                     }}
                   >
                     <Stethoscope color="#fff" size={20} />
-                    <Text style={styles.startTherapyText}>Veteriner Kliniğini Ara</Text>
+                    <Text style={styles.startTherapyText}>{t("ai.hayvanSahibi.klinigiAra")}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -798,18 +799,18 @@ function PetOwnerAiScreen() {
 }
 
 /** Kedi sesi tek sınıf → evcil hayvan sahibi için dostça yorum + ton (renk/aksiyon). */
-const CAT_SOUND_ADVICE: Record<string, { emoji: string; title: string; text: string; tone: "positive" | "info" | "alert" | "pain" }> = {
-  Happy: { emoji: "😊", title: "Mutlu ve Keyifli", text: "Dostunuz kendini iyi ve mutlu hissediyor. Her şey yolunda görünüyor!", tone: "positive" },
-  Resting: { emoji: "😌", title: "Sakin ve Dinlenmede", text: "Rahat ve huzurlu bir durumda, keyfini çıkarıyor.", tone: "positive" },
-  MotherCall: { emoji: "🐱", title: "Anne Çağrısı", text: "Yavrusunu arıyor ya da anne içgüdüsüyle sesleniyor — doğal bir davranış.", tone: "info" },
-  Mating: { emoji: "💕", title: "Çiftleşme Dönemi", text: "Çiftleşme dönemine ait bir ses. Doğaldır; huzursuzsa sakin bir ortam sağlayın.", tone: "info" },
-  HuntingMind: { emoji: "🐾", title: "Av / Oyun Modunda", text: "Meraklı ve hareketli, avlanma içgüdüsü aktif. Oyunla enerjisini atmasına yardımcı olun.", tone: "info" },
-  Warning: { emoji: "⚠️", title: "Tedirgin / Uyarıyor", text: "Bir şeyden rahatsız ya da tedirgin olabilir. Ortamı kontrol edip onu sakinleştirin.", tone: "alert" },
-  Defence: { emoji: "🛡️", title: "Savunmada", text: "Kendini tehdit altında hissediyor olabilir. Zorlamadan ona güvenli bir alan tanıyın.", tone: "alert" },
-  Angry: { emoji: "😾", title: "Kızgın / Gergin", text: "Şu an gergin. Ona alan tanıyın, zorlamayın; kısa sürede sakinleşebilir.", tone: "alert" },
-  Fighting: { emoji: "🙀", title: "Kavga / Çatışma", text: "Bir çatışma sesi. Diğer hayvanlardan uzaklaştırıp güvenli bir yere alın.", tone: "alert" },
-  Paining: { emoji: "😿", title: "Ağrı Belirtisi Olabilir", text: "Bu ses bir ağrı ya da rahatsızlık işareti olabilir. Dostunuzu yakından gözlemleyin; belirti sürerse veteriner hekiminize danışın.", tone: "pain" },
-};
+const catSoundAdvice = (): Record<string, { emoji: string; title: string; text: string; tone: "positive" | "info" | "alert" | "pain" }> => ({
+  Happy: { emoji: "😊", title: i18n.t("ai.ses.oneri.mutlu.baslik"), text: i18n.t("ai.ses.oneri.mutlu.metin"), tone: "positive" },
+  Resting: { emoji: "😌", title: i18n.t("ai.ses.oneri.sakin.baslik"), text: i18n.t("ai.ses.oneri.sakin.metin"), tone: "positive" },
+  MotherCall: { emoji: "🐱", title: i18n.t("ai.ses.oneri.anneCagrisi.baslik"), text: i18n.t("ai.ses.oneri.anneCagrisi.metin"), tone: "info" },
+  Mating: { emoji: "💕", title: i18n.t("ai.ses.oneri.ciftlesme.baslik"), text: i18n.t("ai.ses.oneri.ciftlesme.metin"), tone: "info" },
+  HuntingMind: { emoji: "🐾", title: i18n.t("ai.ses.oneri.avOyun.baslik"), text: i18n.t("ai.ses.oneri.avOyun.metin"), tone: "info" },
+  Warning: { emoji: "⚠️", title: i18n.t("ai.ses.oneri.uyari.baslik"), text: i18n.t("ai.ses.oneri.uyari.metin"), tone: "alert" },
+  Defence: { emoji: "🛡️", title: i18n.t("ai.ses.oneri.savunma.baslik"), text: i18n.t("ai.ses.oneri.savunma.metin"), tone: "alert" },
+  Angry: { emoji: "😾", title: i18n.t("ai.ses.oneri.kizgin.baslik"), text: i18n.t("ai.ses.oneri.kizgin.metin"), tone: "alert" },
+  Fighting: { emoji: "🙀", title: i18n.t("ai.ses.oneri.kavga.baslik"), text: i18n.t("ai.ses.oneri.kavga.metin"), tone: "alert" },
+  Paining: { emoji: "😿", title: i18n.t("ai.ses.oneri.agri.baslik"), text: i18n.t("ai.ses.oneri.agri.metin"), tone: "pain" },
+});
 
 /**
  * PetOwnerSoundCard — evcil hayvan sahibi profili için "Sesini Dinleyelim" kartı.
@@ -817,6 +818,7 @@ const CAT_SOUND_ADVICE: Record<string, { emoji: string; title: string; text: str
  * Ağrı (Paining) durumunda otonom rahatlama terapisi önerilir (foto/FGS akışıyla tutarlı).
  */
 function PetOwnerSoundCard() {
+  const { t } = useTranslation();
   const { showToast } = useToast();
   // D2.69: ses analizi de seçili hastanın adıyla kaydedilir.
   const { selectedPatient: secili } = useAppNav();
@@ -834,13 +836,13 @@ function PetOwnerSoundCard() {
   const startRecording = async () => {
     try {
       const perm = await requestRecordingPermissionsAsync();
-      if (!perm.granted) { showToast("Mikrofon izni gerekli.", "error"); return; }
+      if (!perm.granted) { showToast(t("ai.ses.mikrofonIzni"), "error"); return; }
       await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
       await recorder.prepareToRecordAsync();
       recorder.record();
       setIsRecording(true); setResult(null); setAudioUri(null); setWebFile(null); setTreatmentStatus("");
     } catch (e) {
-      showToast("Kayıt başlatılamadı (mikrofon?).", "error");
+      showToast(t("ai.ses.kayitBaslatilamadi"), "error");
     }
   };
 
@@ -850,7 +852,7 @@ function PetOwnerSoundCard() {
       await recorder.stop();
       setAudioUri(recorder.uri || null); setFileName("kayıt.m4a");
     } catch (e) {
-      showToast("Kayıt durdurulamadı.", "error");
+      showToast(t("ai.ses.kayitDurdurulamadi"), "error");
     }
   };
 
@@ -895,10 +897,10 @@ function PetOwnerSoundCard() {
         setResult(data);
         logAiResult(hasta, "Kedi Sesi", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob || 0) * 100)}`, { moduleId: "cat_sound", inputType: "audio", detail: data, confidence: data.top_1_prob });
       } else {
-        showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
+        showToast(aiDetayCumlesi(data?.detail, t("ai.hata.analizSirasinda")), "error");
       }
     } catch (e) {
-      showToast(aiHataMesaji(e, "Hata: " + errorMessage(e).slice(0, 120)), "error");
+      showToast(aiHataMesaji(e, t("ai.hata.hataIleti", { ileti: errorMessage(e).slice(0, 120) })), "error");
     } finally {
       setLoading(false);
     }
@@ -907,43 +909,43 @@ function PetOwnerSoundCard() {
   // Evcil Hayvan Sahibi = YALNIZ ANALİZ: ses ağrı bulgusunda otonom terapi (auto_preset) KALDIRILDI;
   // ev kullanıcısı cihaz sürmez, veteriner hekime yönlendirilir.
 
-  const advice = result ? (CAT_SOUND_ADVICE[result.top_1_class ?? ""] || { emoji: "🐈", title: result.top_1_class ?? "", text: "Ses analiz edildi.", tone: "info" as const }) : null;
+  const advice = result ? (catSoundAdvice()[result.top_1_class ?? ""] || { emoji: "🐈", title: result.top_1_class ?? "", text: t("ai.ses.analizEdildi"), tone: "info" as const }) : null;
   const toneColor = advice ? (advice.tone === "positive" ? colors.success : advice.tone === "pain" ? colors.danger : advice.tone === "alert" ? colors.warning : colors.primary) : colors.primary;
 
   return (
     <Card style={styles.card}>
       <View style={styles.cardHeader}>
         <AudioLines color={colors.primary} size={28} />
-        <Text style={[styles.title, { fontSize: rf(24) }]}>Sesini Dinleyelim</Text>
+        <Text style={[styles.title, { fontSize: rf(24) }]}>{t("ai.ses.baslik")}</Text>
       </View>
-      <Text style={styles.subtitle}>Dostunuzun miyavını kaydedin, yapay zeka ruh halini yorumlasın. Sessiz bir ortamda ~5 saniye kaydetmeniz yeterli.</Text>
+      <Text style={styles.subtitle}>{t("ai.ses.aciklama")}</Text>
 
       <View style={styles.soundStatusBox}>
         {isRecording ? (
-          <View style={{ alignItems: "center" }}><View style={styles.recDot} /><Text style={styles.recText}>Kaydediliyor…</Text></View>
+          <View style={{ alignItems: "center" }}><View style={styles.recDot} /><Text style={styles.recText}>{t("ai.ses.kaydediliyor")}</Text></View>
         ) : audioUri ? (
           <View style={{ alignItems: "center" }}><AudioLines color={colors.primary} size={40} /><Text style={styles.soundFileName} numberOfLines={1}>🎵 {fileName}</Text></View>
         ) : (
-          <View style={{ alignItems: "center" }}><Mic color={colors.textMuted} size={40} /><Text style={styles.placeholderText}>Ses kaydedilmedi</Text></View>
+          <View style={{ alignItems: "center" }}><Mic color={colors.textMuted} size={40} /><Text style={styles.placeholderText}>{t("ai.ses.kayitYok")}</Text></View>
         )}
       </View>
 
       <View style={styles.btnRow}>
         <View style={{ flex: 1 }}>
-          <Button label={isRecording ? "Durdur" : "Kaydet"} variant={isRecording ? "danger" : "primary"} icon={isRecording ? <Square color={colors.white} size={16} /> : <Mic color={colors.white} size={16} />} onPress={isRecording ? stopRecording : startRecording} />
+          <Button label={isRecording ? t("ai.ses.durdur") : t("ai.ses.kaydet")} variant={isRecording ? "danger" : "primary"} icon={isRecording ? <Square color={colors.white} size={16} /> : <Mic color={colors.white} size={16} />} onPress={isRecording ? stopRecording : startRecording} />
         </View>
         <View style={{ flex: 1 }}>
-          <Button label="Ses Yükle" variant="secondary" icon={<FileText color={colors.primary} size={16} />} onPress={pickAudio} disabled={isRecording} />
+          <Button label={t("ai.ses.sesYukle")} variant="secondary" icon={<FileText color={colors.primary} size={16} />} onPress={pickAudio} disabled={isRecording} />
         </View>
       </View>
 
       <View style={{ marginTop: spacing.md }}>
-        <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Sesi Analiz Et"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!audioUri || loading || isRecording} onPress={analyze} />
+        <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.ses.sesiAnalizEt")} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!audioUri || loading || isRecording} onPress={analyze} />
       </View>
 
       {advice && (
         <View style={styles.petOwnerResult}>
-          <Text style={styles.petOwnerResultTitle}>Yapay Zeka Yorumu</Text>
+          <Text style={styles.petOwnerResultTitle}>{t("ai.ses.yorumBaslik")}</Text>
           {/* ⚠️ Model "kedi sesi yok" DİYEMEZ: 10 sınıfın hepsi kedi duygusu, softmax her
               girdiye mutlaka bir duygu atar. Sunucu belirsizliği ölçüp `guvenilir` alanıyla
               gönderiyor; emin olmadığında sonucu kesin bir bulgu gibi göstermiyoruz.
@@ -952,8 +954,7 @@ function PetOwnerSoundCard() {
           {result?.guvenilir === false && (
             <View style={styles.sesGuvenUyari}>
               <Text style={styles.sesGuvenUyariText}>
-                ⚠️ Bu sonuç güvenilir değil — kayıtta net bir kedi sesi ayırt edilemedi.
-                Sessiz bir ortamda, mikrofonu yaklaştırıp tekrar kaydedin.
+                {t("ai.ses.guvenilirDegil")}
               </Text>
             </View>
           )}
@@ -973,10 +974,10 @@ function PetOwnerSoundCard() {
 
 /** Medikal sorumluluk reddi — her AI sonucunun altında gösterilir (karar-destek / yasal). */
 function MedicalDisclaimer() {
+  const { t } = useTranslation();
   return (
     <Text style={styles.disclaimer}>
-      ⚠️ Bu yapay zeka sonucu yalnızca karar-destek amaçlıdır; veteriner hekim muayenesi ve
-      teşhisinin yerine geçmez. Nihai karar hekime aittir.
+      {t("ai.ortak.tibbiSorumlulukReddi")}
     </Text>
   );
 }
@@ -1000,12 +1001,12 @@ function MedicalDisclaimer() {
  */
 function isiHaritasiBasligi(r: { xai_hedef?: string }): string {
   if (r.xai_hedef === "Healthy") {
-    return "🔍 Isı haritası — modeli “Sağlıklı” kararına götüren bölgeler (kırmızı = bu karara güçlü katkı)";
+    return i18n.t("ai.xai.isiHaritasiSaglikli");
   }
   if (r.xai_hedef === "Sick") {
-    return "🔍 Isı haritası — modeli “Hasta (Riskli)” kararına götüren bölgeler (kırmızı = bu karara güçlü katkı)";
+    return i18n.t("ai.xai.isiHaritasiHasta");
   }
-  return "🔍 Isı haritası — modelin baktığı bölgeler (kırmızı = karara güçlü etki)";
+  return i18n.t("ai.xai.isiHaritasiGenel");
 }
 
 /**
@@ -1013,8 +1014,7 @@ function isiHaritasiBasligi(r: { xai_hedef?: string }): string {
  * maks'a ölçekler (harita boş dönmez) — bu harita tespitin ya da tanının kanıtı DEĞİLDİR. ONNX ↔ PT kutuları birebir ve iki eşik
  * de katı `> 0,25` olduğundan "ekranda 0 tespit" ⇔ "harita eşik altı adaylar".
  */
-const TESPIT_YOK_HARITA_NOTU =
-  "Tespit yok — harita, güven eşiğinin altında kalan en güçlü 5 aday bölgeyi gösterir (tespit ya da tanı kanıtı değildir). Görüntünün doğru tür ve odakta olduğunu kontrol edip yeniden deneyin.";
+const tespitYokHaritaNotu = (): string => i18n.t("ai.xai.tespitYokNotu");
 
 function XaiIsiHaritasi({ base64, etiket, not, testID }: { base64: string; etiket: string; not?: string; testID?: string }) {
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
@@ -2060,7 +2060,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
           {/* Sunum-katmanı XAI (Faz 2): CAM ısı haritası — istenip üretildiyse. AI1.X1: termalde başlık AÇIKLANAN kararı söyler. */}
           {result.xai_image_base64 && (
             <XaiIsiHaritasi base64={result.xai_image_base64} etiket={isiHaritasiBasligi(result)}
-              not={result.counts && Object.values(result.counts).every((v) => !Number(v)) ? TESPIT_YOK_HARITA_NOTU : undefined} />
+              not={result.counts && Object.values(result.counts).every((v) => !Number(v)) ? tespitYokHaritaNotu() : undefined} />
           )}
           {result.xai_error && <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text>}
           <MedicalDisclaimer />
@@ -3369,7 +3369,7 @@ function CatSoundModule({ patientName }: { patientName: string }) {
         <View style={styles.resultBox}>
           {(() => {
             const tc = result.top_1_class ?? "";
-            const a = CAT_SOUND_ADVICE[tc];
+            const a = catSoundAdvice()[tc];
             const tone: InterpTone = a ? (a.tone === "positive" ? "positive" : a.tone === "pain" ? "critical" : a.tone === "alert" ? "alert" : "info") : "info";
             const pct = Math.round((result.top_1_prob || 0) * 100);
             return <ResultInterpretation tone={tone} emoji={a?.emoji || "🐈"}
@@ -3617,7 +3617,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
             <XaiIsiHaritasi base64={result.xai_image_base64} etiket="🔍 Isı haritası (tespit hedefli HiRes-CAM)"
               not={dets.length > 0
                 ? "Kırmızı bölgeler modelin kutulardaki tespitlere karar verirken en çok dayandığı alanlardır (tanı kanıtı değildir; kutuyla birlikte okuyun)."
-                : TESPIT_YOK_HARITA_NOTU} />
+                : tespitYokHaritaNotu()} />
           ) : null}
           {result.xai_error ? <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text> : null}
           <MedicalDisclaimer />
