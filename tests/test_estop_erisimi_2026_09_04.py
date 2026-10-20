@@ -18,7 +18,6 @@ Davranışsal kanıt: apps/ui/src/components/ui/__tests__/GlobalEmergencyStop.be
 import pathlib
 
 import capraz
-import i18n_yardimci as iy
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
@@ -73,7 +72,13 @@ def test_belirsizlik_etiketi_nedenini_soyler():
     """Operatör düğmenin neden sayaçsız çıktığını görmeli.
 
     I18N-0: metin kataloğa taşındı — ölçüt GEVŞEMEDİ, yer değiştirdi (`tests/i18n_yardimci.py`): düğme belirsizlik anahtarını KULLANIYOR,
-    TR değeri nedeni BİREBİR söylüyor, EN değeri boş değil."""
+    TR değeri nedeni BİREBİR söylüyor, EN değeri boş değil.
+
+    Yardımcı İŞLEV İÇİNDE içe aktarılır: D404 meta kapısı bu dosyayı yalnız `capraz.py` + `c_soyucu.py` ile asgari bir ağaca kopyalar
+    (izlenen ağaç YOK → autouse fikstürü düşmeli); modül düzeyi içe aktarma orada TOPLAMA hatası verip kapıyı bozuyordu (ölçüldü,
+    I18N-0 kapanış tam süiti)."""
+    import i18n_yardimci as iy
+
     iy.metin_kapisi(
         "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
         "guvenlik.acilDurdur.dugmeBaglantiYok",
