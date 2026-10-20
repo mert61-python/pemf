@@ -13,6 +13,7 @@ import Svg, { Line, Polyline, Rect, Text as SvgText, G, Circle } from "react-nat
 import type { CoilSensorHistory, SensorDataPoint } from "@/types/domain";
 import { hesaplaPad, cizimAlani, canvasBoyutla, type TuvalGibi, type BaglamGibi } from "@/components/visual/chartLayout";
 import { alanGosterilebilir } from "@/utils/olculenAlan";
+import { useTranslation } from "react-i18next";
 
 /**
  * D1.90 · B-6.22 + İG-6.90 — nokta bu alanı ÖLÇTÜ mü? Ölçülmeyen alan WS'te 0.0 gelir (bobin 7 alan ölçmez); eskiden
@@ -47,6 +48,7 @@ export function RealtimeChart({
   width = 800,
   height = 300,
 }: Props) {
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
 
@@ -116,7 +118,7 @@ export function RealtimeChart({
       ctx.fillStyle = "#334155";
       ctx.font = "14px Inter, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("Sensör verisi bekleniyor…", W / 2, H / 2);
+      ctx.fillText(t("kabuk.grafik.veriBekleniyor"), W / 2, H / 2);
       return;
     }
 
@@ -235,7 +237,7 @@ export function RealtimeChart({
     ctx.strokeRect(PAD.left, PAD.top, plotW, plotH);
 
     // width/height artık draw() içinde kullanılıyor (tuval DPR kurulumu + PAD hesabı).
-  }, [history, visibleCoils, showMagnetic, showTemp, width, height]);
+  }, [history, visibleCoils, showMagnetic, showTemp, width, height, t]);
 
   // Sürekli 60fps yerine yalnızca veri/ayar/boyut değişince çiz (CPU/batarya tasarrufu).
   useEffect(() => {
@@ -271,6 +273,7 @@ export function RealtimeChart({
 function NativeRealtimeChart({
   history, visibleCoils, showMagnetic = true, showTemp = true, width = 800, height = 300,
 }: Props) {
+  const { t } = useTranslation();
   const PAD = hesaplaPad(width, showTemp);
   const { genislik: plotW, yukseklik: plotH } = cizimAlani(width, height, PAD);
 
@@ -298,7 +301,7 @@ function NativeRealtimeChart({
   if (maxPoints < 2) {
     return (
       <View style={[styles.fallback, { width, height }]}>
-        <Text style={{ color: "#334155", fontSize: rf(14) }}>Sensör verisi bekleniyor…</Text>
+        <Text style={{ color: "#334155", fontSize: rf(14) }}>{t("kabuk.grafik.veriBekleniyor")}</Text>
       </View>
     );
   }

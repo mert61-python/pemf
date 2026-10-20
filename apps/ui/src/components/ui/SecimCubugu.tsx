@@ -11,6 +11,7 @@
  */
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { colors, radius, rs, spacing, touch, typography } from "@/theme/tokens";
+import { useTranslation } from "react-i18next";
 
 export function SecimCubugu({
   seciliSayi,
@@ -20,7 +21,7 @@ export function SecimCubugu({
   onSil,
   onVazgec,
   siliniyor = false,
-  silEtiketi = "Seçilenleri Sil",
+  silEtiketi,
   gizliSayi = 0,
   testID = "secim-cubugu",
 }: {
@@ -43,16 +44,18 @@ export function SecimCubugu({
   gizliSayi?: number;
   testID?: string;
 }) {
+  const { t } = useTranslation();
   const bosSecim = seciliSayi === 0;
+  const silMetni = silEtiketi ?? t("kabuk.secim.seciliSil");
   return (
     <View style={styles.cubuk} testID={testID}>
       <View style={styles.sayacAlani}>
         <Text style={styles.sayac} numberOfLines={1} testID={`${testID}-sayac`}>
-          {bosSecim ? "Silmek için kayıt seçin" : `${seciliSayi} kayıt seçildi`}
+          {bosSecim ? t("kabuk.secim.silmekIcinSecin") : t("kabuk.secim.seciliSayisi", { count: seciliSayi })}
         </Text>
         {gizliSayi > 0 ? (
           <Text style={styles.gizliNot} testID={`${testID}-gizli`}>
-            {`${gizliSayi} kayıt ekranda değil — seçilmez`}
+            {t("kabuk.secim.gizliSayisi", { count: gizliSayi })}
           </Text>
         ) : null}
       </View>
@@ -63,7 +66,7 @@ export function SecimCubugu({
           accessibilityRole="button"
           testID={`${testID}-tumunu`}
         >
-          <Text style={styles.ikincilYazi}>{hepsiSecili ? "Seçimi Temizle" : "Tümünü Seç"}</Text>
+          <Text style={styles.ikincilYazi}>{hepsiSecili ? t("kabuk.secim.secimiTemizle") : t("kabuk.secim.tumunuSec")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.ikincil}
@@ -71,7 +74,7 @@ export function SecimCubugu({
           accessibilityRole="button"
           testID={`${testID}-vazgec`}
         >
-          <Text style={styles.ikincilYazi}>Vazgeç</Text>
+          <Text style={styles.ikincilYazi}>{t("ortak.vazgec")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.sil, (bosSecim || siliniyor) && styles.silPasif]}
@@ -85,7 +88,7 @@ export function SecimCubugu({
             <ActivityIndicator color={colors.white} />
           ) : (
             <Text style={styles.silYazi} numberOfLines={1}>
-              {bosSecim ? silEtiketi : `${silEtiketi} (${seciliSayi})`}
+              {bosSecim ? silMetni : `${silMetni} (${seciliSayi})`}
             </Text>
           )}
         </TouchableOpacity>

@@ -10,6 +10,7 @@ import { useLiveData } from "@/context/LiveDataContext";
 import { platformConfirm } from "@/services/apiClient";
 import type { AppNotification, NotificationLevel } from "@/types/domain";
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
+import { useTranslation } from "react-i18next";
 
 const LEVEL_CONFIG: Record<NotificationLevel, { color: string; bg: string; icon: string }> = {
   success: { color: "#22c55e", bg: "#052e16", icon: "✅" },
@@ -24,13 +25,14 @@ interface Props {
 }
 
 export function NotificationCenter({ maxVisible = 20, compact = false }: Props) {
+  const { t } = useTranslation();
   const { snapshot, unreadCount, markAllRead, clearNotifications } = useLiveData();
   const notifications = (snapshot.notifications ?? []).slice(0, maxVisible);
 
   // DÜŞÜK fix: "Temizle" tüm bildirim geçmişini geri-DÖNÜLEMEZ siler (yanlış-dokunuşla tıbbi uyarı geçmişi
   // kaybolur) → onay iste.
   const handleClear = async () => {
-    if (await platformConfirm("Bildirimleri temizle", "Tüm bildirim geçmişi silinsin mi? Bu işlem geri alınamaz.", "Temizle")) {
+    if (await platformConfirm(t("kabuk.bildirim.temizleBaslik"), t("kabuk.bildirim.temizleGovde"), t("ortak.temizle"))) {
       clearNotifications();
     }
   };
@@ -39,7 +41,7 @@ export function NotificationCenter({ maxVisible = 20, compact = false }: Props) 
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.title}>🔔 Bildirimler</Text>
+          <Text style={styles.title}>{t("kabuk.bildirim.merkezBaslik")}</Text>
           {unreadCount > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{unreadCount > 99 ? "99+" : unreadCount}</Text>
@@ -49,12 +51,12 @@ export function NotificationCenter({ maxVisible = 20, compact = false }: Props) 
         <View style={styles.headerActions}>
           {unreadCount > 0 && (
             <TouchableOpacity style={styles.actionBtn} onPress={markAllRead}>
-              <Text style={styles.actionBtnText}>Okundu işaretle</Text>
+              <Text style={styles.actionBtnText}>{t("kabuk.bildirim.okunduIsaretle")}</Text>
             </TouchableOpacity>
           )}
           {notifications.length > 0 && (
             <TouchableOpacity style={styles.actionBtn} onPress={handleClear}>
-              <Text style={[styles.actionBtnText, { color: "#ef4444" }]}>Temizle</Text>
+              <Text style={[styles.actionBtnText, { color: "#ef4444" }]}>{t("ortak.temizle")}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -63,7 +65,7 @@ export function NotificationCenter({ maxVisible = 20, compact = false }: Props) 
       {notifications.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>🔕</Text>
-          <Text style={styles.emptyText}>Henüz bildirim yok</Text>
+          <Text style={styles.emptyText}>{t("kabuk.bildirim.yok")}</Text>
         </View>
       ) : (
         // [S4 adım 3] KOMPAKT kipte ScrollView YOK. Dashboard kartındaki bu liste, kabuğun

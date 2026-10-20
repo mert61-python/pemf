@@ -40,6 +40,7 @@ import {
   zoomBasamaklari,
   zoomSinirla,
 } from "@/utils/zoomMerdiveni";
+import { useTranslation } from "react-i18next";
 
 /**
  * Kontrol satırının ölçülemediği ilk karedeki TAHMİNİ yüksekliği (px).
@@ -77,6 +78,7 @@ export interface GorselSahneProps {
 }
 
 export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman, testID = "gorsel-sahne" }: GorselSahneProps) {
+  const { t } = useTranslation();
   const [indeks, setIndeks] = useState(() => varsayilanSayfa(sayfalar));
   const [kapW, setKapW] = useState(0);
   const [kontrolY, setKontrolY] = useState(KONTROL_TAHMINI);
@@ -267,7 +269,7 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
             }
       }
       testID={`${testID}-gorsel-${anahtar}`}
-      accessibilityLabel={`${sayfa.ad} paneli`}
+      accessibilityLabel={t("kabuk.gorsel.panel", { ad: sayfa.ad })}
     />
   );
 
@@ -322,7 +324,7 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
               style={styles.olcumsuzGorsel}
               resizeMode="contain"
               testID={`${testID}-gorsel-sahne`}
-              accessibilityLabel={`${sayfa.ad} paneli`}
+              accessibilityLabel={t("kabuk.gorsel.panel", { ad: sayfa.ad })}
             />
           </View>
         )}
@@ -335,7 +337,7 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
       >
         <View style={styles.okSatiri}>
           <IconButton
-            label="Önceki panel"
+            label={t("kabuk.gorsel.oncekiPanel")}
             onPress={() => git(-1)}
             disabled={guvenliIndeks === 0}
             testID={`${testID}-onceki`}
@@ -351,7 +353,7 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
           </Text>
 
           <IconButton
-            label="Sonraki panel"
+            label={t("kabuk.gorsel.sonrakiPanel")}
             onPress={() => git(1)}
             disabled={guvenliIndeks === adet - 1}
             testID={`${testID}-sonraki`}
@@ -361,8 +363,8 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
           </IconButton>
 
           <IconButton
-            label="Tam ekran"
-            accessibilityHint="Paneli büyütüp yakınlaştırarak açar"
+            label={t("kabuk.gorsel.tamEkran")}
+            accessibilityHint={t("kabuk.gorsel.tamEkranIpucu")}
             onPress={() => {
               setTamEkran(true);
               setZoom(1);
@@ -404,7 +406,7 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
             </Text>
             <View style={styles.tamAraclar}>
               <IconButton
-                label="Uzaklaştır"
+                label={t("kabuk.gorsel.uzaklastir")}
                 onPress={() => zoomla(oncekiBasamak(basamaklar, zoomRef.current))}
                 disabled={basamaklar.length < 2}
                 testID={`${testID}-uzaklastir`}
@@ -416,7 +418,7 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
                 {basamakEtiketi(zoom, birebir)}
               </Text>
               <IconButton
-                label="Yakınlaştır"
+                label={t("kabuk.gorsel.yakinlastir")}
                 onPress={() => zoomla(sonrakiBasamak(basamaklar, zoomRef.current))}
                 disabled={basamaklar.length < 2}
                 testID={`${testID}-yakinlastir`}
@@ -426,7 +428,7 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
               </IconButton>
               {/* ⚠️ Kapanışta SAYFA İNDEKSİ KORUNUR — sıfırlamak, operatörün 7 panel içinde
                   bulduğu yeri her tam ekran kapanışında kaybetmesi demekti. */}
-              <IconButton label="Kapat" onPress={() => setTamEkran(false)} testID={`${testID}-tam-ekran-kapat`} style={styles.ok}>
+              <IconButton label={t("ortak.kapat")} onPress={() => setTamEkran(false)} testID={`${testID}-tam-ekran-kapat`} style={styles.ok}>
                 <X color={colors.text} size={20} />
               </IconButton>
             </View>
@@ -460,7 +462,7 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
                 }}
                 resizeMode="contain"
                 testID={`${testID}-gorsel-tam`}
-                accessibilityLabel={`${sayfa.ad} paneli`}
+                accessibilityLabel={t("kabuk.gorsel.panel", { ad: sayfa.ad })}
               />
             ) : (
               // Ölçüm gelmemişse yine de göster (satır içi yedek çizimin tam ekran ikizi).
@@ -469,11 +471,11 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
                 style={styles.olcumsuzGorsel}
                 resizeMode="contain"
                 testID={`${testID}-gorsel-tam`}
-                accessibilityLabel={`${sayfa.ad} paneli`}
+                accessibilityLabel={t("kabuk.gorsel.panel", { ad: sayfa.ad })}
               />
             )}
           </View>
-          <Text style={styles.tamIpucu}>Tekerlekle yakınlaştır · sürükleyerek gez</Text>
+          <Text style={styles.tamIpucu}>{t("kabuk.gorsel.tekerlekIpucu")}</Text>
         </View>
       </Modal>
     </View>

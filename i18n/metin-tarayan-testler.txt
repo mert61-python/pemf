@@ -124,7 +124,7 @@ tests/test_loglayan_ama_KOR_handler_YOK.py :: apps/backend/backend_service.py ap
 tests/test_make_base_zip_single_truth.py :: apps/backend/utils/path_utils.py
 tests/test_manifest_degismeyen_paket_url.py :: launcher/core/src/manifest.rs launcher/core/src/net.rs
 tests/test_mikroservis_zarf_paritesi.py :: apps/backend/servers/ai_router.py apps/ui/src/screens/AiHubScreen.tsx
-tests/test_modal_kaydirilabilir_kapisi.py :: apps/ui/src/components/UpgradeModal.tsx apps/ui/src/components/domain/AiSpecApprovalModal.tsx apps/ui/src/components/ui/GorselSahne.tsx apps/ui/src/components/ui/ScrollableModalCard.tsx
+tests/test_modal_kaydirilabilir_kapisi.py [ÇEVRİLDİ] :: apps/ui/src/components/UpgradeModal.tsx apps/ui/src/components/domain/AiSpecApprovalModal.tsx apps/ui/src/components/ui/GorselSahne.tsx apps/ui/src/components/ui/ScrollableModalCard.tsx
 tests/test_model_sha_gecersiz_kilma_sirasi.py :: launcher/core/src/flow.rs
 tests/test_mt_dose_honesty.py :: apps/backend/controllers/hardware_controller.py apps/backend/servers/api_server.py apps/backend/servers/history_router.py apps/backend/utils/pdf_report_generator.py apps/ui/src/screens/ControlScreen.tsx
 tests/test_multipart_alan_limiti.py :: apps/backend/servers/api_server.py

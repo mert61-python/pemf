@@ -35,6 +35,8 @@ import { useKendiDurdurmaKaydi } from "@/components/ui/KendiDurdurmaKontrolu";
 import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
 import { HesapMenusu } from "@/components/domain/HesapMenusu";
 import { JetonRozeti } from "@/components/ui/JetonRozeti";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 
 /** Uygulama ikonu — AuthScreen ile AYNI kaynak (assets/icon.png) → tek görsel kimlik. */
 const APP_ICON = require("../../../assets/icon.png");
@@ -63,26 +65,26 @@ interface NavItem {
 type NavEntry = { kind: "route"; item: NavItem } | { kind: "action"; id: "logout"; label: string; icon: LucideIcon };
 
 /** Ayarlar'dan SONRA gelen tek aksiyon ögesi (2026-08-06 sahip isteği: üç profilde de "Çıkış Yap"). */
-const LOGOUT_ITEM: Extract<NavEntry, { kind: "action" }> = {
+const logoutOgesi = (t: TFunction): Extract<NavEntry, { kind: "action" }> => ({
   kind: "action",
   id: "logout",
-  label: "Çıkış Yap",
+  label: t("kabuk.cikis.baslik"),
   icon: LogOut,
-};
+});
 
 // Görünürlük profile göre config/access (canAccess) ile filtrelenir. İlk 4 erişilebilir öğe
 // bottom-nav'da; gerisi "Daha Fazla" menüsünde (keşfedilebilirlik fix).
-const allNavItems: NavItem[] = [
-  { key: "ai", label: "Akıllı Teşhis", icon: BrainCircuit },
-  { key: "dashboard", label: "Ana Ekran", icon: LayoutDashboard },
-  { key: "control", label: "Kontrol", icon: SlidersHorizontal },
-  { key: "patients", label: "Hastalar", icon: Users },
-  { key: "sensors", label: "Sensörler", icon: Activity },
-  { key: "history", label: "Seans Geçmişi", icon: History },
-  { key: "kpi", label: "Raporlar", icon: BarChart3 },
-  { key: "simulator", label: "Simülasyon", icon: Waves },
-  { key: "ai_history", label: "AI Geçmişi", icon: ClipboardList },
-  { key: "settings", label: "Ayarlar", icon: Settings }
+const navOgeleri = (t: TFunction): NavItem[] => [
+  { key: "ai", label: t("kabuk.menu.akilliTeshis"), icon: BrainCircuit },
+  { key: "dashboard", label: t("kabuk.menu.anaEkran"), icon: LayoutDashboard },
+  { key: "control", label: t("kabuk.menu.kontrol"), icon: SlidersHorizontal },
+  { key: "patients", label: t("kabuk.menu.hastalar"), icon: Users },
+  { key: "sensors", label: t("kabuk.menu.sensorler"), icon: Activity },
+  { key: "history", label: t("kabuk.menu.seansGecmisi"), icon: History },
+  { key: "kpi", label: t("kabuk.menu.raporlar"), icon: BarChart3 },
+  { key: "simulator", label: t("kabuk.menu.simulasyon"), icon: Waves },
+  { key: "ai_history", label: t("kabuk.menu.aiGecmisi"), icon: ClipboardList },
+  { key: "settings", label: t("kabuk.menu.ayarlar"), icon: Settings }
 ];
 
 /**
@@ -91,21 +93,21 @@ const allNavItems: NavItem[] = [
  * ölçeği 1,3'te neredeyse tüm etiketler kırpılıyordu. ⚠️ Yalnız GÖRÜNEN metin kısalır:
  * `accessibilityLabel` ve kenar çubuğu TAM adı kullanmaya devam eder (ekran okuyucu + mevcut testler).
  */
-const KISA_ETIKET: Partial<Record<RouteKey, string>> = {
-  ai: "Teşhis",
-  ai_history: "Geçmiş",
-  history: "Seanslar",
-};
+const kisaEtiketler = (t: TFunction): Partial<Record<RouteKey, string>> => ({
+  ai: t("kabuk.menu.kisaTeshis"),
+  ai_history: t("kabuk.menu.kisaGecmis"),
+  history: t("kabuk.menu.kisaSeanslar"),
+});
 
 // Üst-bar profil-çipi/menüsü için profil meta.
 // NOT: buradaki eski `researchOnly` bayrağı ÖLÜ koddu (hiçbir yerde okunmuyordu) ve üstündeki
 // yorum ".edu şartı var" derken 30 satır aşağıdaki yorum "3 profil de açık" diyordu — gating'i
 // okuyan geliştiriciyi yanıltıyordu. Açık-erişim BİLİNÇLİ sahip kararıdır (ödeme öncesi);
 // gerçek kısıt `installedModes()`tir: masaüstü client yalnız KURULU profilleri sunar.
-const PROFILE_LIST = [
-  { mode: "pet_owner" as const, label: "Evcil Hayvan Sahibi", short: "Evcil", icon: Heart },
-  { mode: "veterinarian" as const, label: "Veteriner Hekim", short: "Veteriner", icon: Stethoscope },
-  { mode: "researcher" as const, label: "Araştırma Modu", short: "Araştırma", icon: FlaskConical },
+const profilListesi = (t: TFunction) => [
+  { mode: "pet_owner" as const, label: t("kabuk.mod.evcilSahibi"), short: t("kabuk.mod.evcilKisa"), icon: Heart },
+  { mode: "veterinarian" as const, label: t("kabuk.mod.veteriner"), short: t("kabuk.mod.veterinerKisa"), icon: Stethoscope },
+  { mode: "researcher" as const, label: t("kabuk.mod.arastirma"), short: t("kabuk.mod.arastirmaKisa"), icon: FlaskConical },
 ];
 
 interface AppShellProps {
@@ -117,6 +119,11 @@ interface AppShellProps {
 }
 
 export function AppShell({ activeRoute, title, subtitle, onRouteChange, children }: AppShellProps) {
+  const { t } = useTranslation();
+  const LOGOUT_ITEM = logoutOgesi(t);
+  const allNavItems = navOgeleri(t);
+  const KISA_ETIKET = kisaEtiketler(t);
+  const PROFILE_LIST = profilListesi(t);
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
   const { userMode, setUserMode } = useUserMode();
@@ -155,7 +162,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
       try {
         const paired = await AsyncStorage.getItem("@pemf_just_paired");
         if (!cancelled && paired) {
-          showToast("Cihaz otomatik eşleştirildi ✓", "success");
+          showToast(t("kabuk.baglanti.otomatikEslesti"), "success");
           await AsyncStorage.removeItem("@pemf_just_paired");
         }
       } catch {
@@ -163,7 +170,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
       }
     })();
     return () => { cancelled = true; };
-  }, [showToast]);
+  }, [showToast, t]);
 
   const navItems = allNavItems.filter(item => canAccess(userMode, item.key));
   const [showMore, setShowMore] = useState(false);
@@ -193,18 +200,18 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
    *  bileşende mevcut memoizasyonu koruyamadığı için hata veriyordu — sade fonksiyon yeterli.)
    */
   const handleLogout = async () => {
-    const ok = await guardTeardown("Çıkış yapmak", {
+    const ok = await guardTeardown(t("kabuk.cikis.eylemAdi"), {
       confirmWhenIdle: hesapSayisi > 1
         ? {
             // CH1 · Y151: etiket gerçeği söylesin — açık TÜM hesaplardan çıkılır.
-            title: "Tüm hesaplardan çık",
-            body: `Bu cihazda açık ${hesapSayisi} e-posta hesabının hepsinden çıkılacak; tekrar girmek için e-posta ve şifre gerekir.`,
-            confirmLabel: "Tümünden çık",
+            title: t("kabuk.cikis.tumHesaplar"),
+            body: t("kabuk.cikis.tumHesaplarGovde", { hesapSayisi }),
+            confirmLabel: t("kabuk.cikis.tumunden"),
           }
         : {
-            title: "Çıkış Yap",
-            body: "Oturum kapatılacak; tekrar girmek için e-posta ve şifre gerekir.",
-            confirmLabel: "Çıkış yap",
+            title: t("kabuk.cikis.baslik"),
+            body: t("kabuk.cikis.govde"),
+            confirmLabel: t("kabuk.cikis.etiket"),
           },
     });
     if (!ok) return;
@@ -329,7 +336,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                 (karar backend'den gelir — arayüz "0" tahmin ETMEZ). Dar telefonda yalnız sayı. */}
             <JetonRozeti kompakt={responsive.isCompact} />
             {userMode && (
-              <Pressable style={styles.profileChip} onPress={() => setProfileMenuOpen(true)} accessibilityRole="button" accessibilityLabel="Profil değiştir">
+              <Pressable style={styles.profileChip} onPress={() => setProfileMenuOpen(true)} accessibilityRole="button" accessibilityLabel={t("kabuk.profil.degistirEtiketi")}>
                 <ProfileIcon size={16} color={colors.primary} />
                 {desktop && <Text style={styles.profileChipText}>{profileMeta?.short}</Text>}
                 <ChevronDown size={14} color={colors.textMuted} />
@@ -337,18 +344,18 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
             )}
             {!desktop && (
               // a11y: ikon-only düğmede rol/etiket yoktu ve dokunma hedefi ~30pt idi (min 44pt).
-              <IconButton label="Ayarlar" onPress={() => onRouteChange("settings")}>
+              <IconButton label={t("kabuk.menu.ayarlar")} onPress={() => onRouteChange("settings")}>
                 <Settings size={22} color={colors.textMuted} />
               </IconButton>
             )}
             {/* [S3 adım 3] 10 px'lik nokta tek başına dokunma hedefiydi; artık 44 px kutuda ortalı.
                 Çevrimdışı metni yanında kalabilsin diye kutu YATAYDA esner (flexShrink korunur). */}
-            <IconButton label="Bağlantıyı yenile" onPress={reconnect} style={styles.wsContainer}>
+            <IconButton label={t("kabuk.baglanti.yenile")} onPress={reconnect} style={styles.wsContainer}>
               {/* [kabuk-3] Dar telefonda bu metin sağ bloğu ~65 px büyütüp sayfa BAŞLIĞINI
                   yutuyordu; kompaktta kırmızı gösterge tek başına yeterli (dokunulunca yeniden bağlanır). */}
               {connectionQuality === "offline" && !responsive.isCompact && (
                 <Text style={[styles.wsTextOff, styles.wsTextOffline]} numberOfLines={1}>
-                  Çevrimdışı
+                  {t("kabuk.baglanti.cevrimdisi")}
                 </Text>
               )}
               <View style={[
@@ -356,7 +363,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                 connectionQuality === "offline" && styles.wsIndicatorOff,
               ]} />
             </IconButton>
-            <IconButton label="Bildirimler" onPress={() => setShowNotifications(true)} style={styles.notifBadgeWrap}>
+            <IconButton label={t("kabuk.bildirim.baslik")} onPress={() => setShowNotifications(true)} style={styles.notifBadgeWrap}>
               <Bell size={16} color={colors.textMuted} />
               {unreadCount > 0 && (
                 <View style={styles.notifBadge}>
@@ -378,7 +385,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                 boşluğa (başlık, ayraç, satır aralıkları) dokunmak menüyü kapatıyordu. Bildirim
                 sayfasında doğru desen (`onPress={() => {}}` ile Pressable) zaten kullanılıyordu. */}
             <Pressable onPress={() => {}} style={[styles.profileMenuCard, { marginTop: insets.top + rs(52) }]}>
-              <Text style={styles.profileMenuTitle}>Profil Değiştir</Text>
+              <Text style={styles.profileMenuTitle}>{t("kabuk.profil.degistir")}</Text>
               {/* Açık-erişim (bilinçli): entitlement gating kapalı. ANCAK `installedModes()`
                   filtresi WelcomeScreen'de vardı, BURADA YOKTU → yalnız "Ev Sahibi" profili kurulu
                   bir masaüstü client'ta kullanıcı buradan "Veteriner"e geçip manuel bobin kontrolüne
@@ -406,12 +413,12 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                 onPress={() => { setProfileMenuOpen(false); setHesapMenusuAcik(true); }}
                 style={[styles.profileMenuRow, { minHeight: touch.min }]}
                 accessibilityRole="button"
-                accessibilityLabel="E-posta hesapları"
+                accessibilityLabel={t("kabuk.profil.epostaHesaplari")}
                 testID="profil-menu-hesaplar"
               >
                 <Mail size={18} color={colors.textMuted} />
                 <Text style={styles.profileMenuLabel} numberOfLines={1}>
-                  {`E-posta hesapları${session?.email ? ` · ${session.email}` : ""}${hesapSayisi > 1 ? ` (+${hesapSayisi - 1})` : ""}`}
+                  {`${t("kabuk.profil.epostaHesaplari")}${session?.email ? ` · ${session.email}` : ""}${hesapSayisi > 1 ? ` (+${hesapSayisi - 1})` : ""}`}
                 </Text>
               </Pressable>
               <View style={styles.profileMenuDivider} />
@@ -422,11 +429,11 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                 onPress={handleLogout}
                 style={[styles.profileMenuRow, styles.profileMenuDanger]}
                 accessibilityRole="button"
-                accessibilityLabel={hesapSayisi > 1 ? "Tüm hesaplardan çık" : "Çıkış yap"}
+                accessibilityLabel={hesapSayisi > 1 ? t("kabuk.cikis.tumHesaplar") : t("kabuk.cikis.etiket")}
               >
                 <LogOut size={18} color={colors.danger} />
                 <Text style={[styles.profileMenuLabel, { color: colors.danger }]}>
-                  {hesapSayisi > 1 ? "Tüm hesaplardan çık" : "Çıkış Yap"}
+                  {hesapSayisi > 1 ? t("kabuk.cikis.tumHesaplar") : t("kabuk.cikis.baslik")}
                 </Text>
               </Pressable>
             </Pressable>
@@ -451,10 +458,10 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
             style={[styles.connBanner, styles.connBannerOffline]}
             testID="conn-banner"
             accessibilityRole="button"
-            accessibilityLabel="Cihaza bağlanma seçeneklerini aç"
+            accessibilityLabel={t("kabuk.baglanti.secenekleriAc")}
           >
             <Text style={styles.connBannerText}>
-              ⚠ Cihaza bağlanılamıyor — gösterilen değerler GERÇEK DEĞİL. Bağlanmak için DOKUNUN.
+              {t("kabuk.baglanti.gercekDegil")}
             </Text>
           </Pressable>
         )}
@@ -536,13 +543,13 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
             />
           ))}
           <Pressable
-            accessibilityLabel="Daha Fazla"
+            accessibilityLabel={t("kabuk.menu.dahaFazlaEtiketi")}
             accessibilityRole="button"
             onPress={() => setShowMore(true)}
             style={[styles.bottomItem, moreActive && styles.navItemActive]}
           >
             <MoreHorizontal size={18} color={moreActive ? colors.primary : colors.textMuted} />
-            <Text style={[styles.bottomLabel, moreActive && styles.navLabelActive]} numberOfLines={1}>Daha Fazla</Text>
+            <Text style={[styles.bottomLabel, moreActive && styles.navLabelActive]} numberOfLines={1}>{t("kabuk.menu.dahaFazla")}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -561,7 +568,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                 { maxHeight: Math.round(responsive.height * 0.85), paddingBottom: insets.bottom + spacing.lg },
               ]}
             >
-              <Text style={styles.moreTitle}>Diğer Ekranlar</Text>
+              <Text style={styles.moreTitle}>{t("kabuk.menu.digerEkranlar")}</Text>
               <ScrollView contentContainerStyle={styles.moreList} showsVerticalScrollIndicator={false}>
               {moreEntries.map((entry) => {
                 if (entry.kind === "action") {
@@ -573,7 +580,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                       onPress={handleLogout}
                       style={[styles.moreRow, styles.profileMenuDanger]}
                       accessibilityRole="button"
-                      accessibilityLabel="Çıkış yap"
+                      accessibilityLabel={t("kabuk.cikis.etiket")}
                     >
                       <Icon size={20} color={colors.danger} />
                       <Text style={[styles.moreRowLabel, { color: colors.danger }]}>{entry.label}</Text>

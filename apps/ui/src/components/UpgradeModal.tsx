@@ -12,26 +12,28 @@ import { colors, spacing, typography, rf, rs, touch } from "@/theme/tokens";
 import { Sparkles, X, Zap, FlaskConical } from "lucide-react-native";
 import { useEntitlement } from "@/context/EntitlementContext";
 import { TIER_LABEL } from "@/config/entitlement";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 
 export type UpgradeFeature = "realtime" | "research" | "tier";
 
-const COPY: Record<UpgradeFeature, { title: string; desc: string; Icon: typeof Zap }> = {
+const kopya = (t: TFunction): Record<UpgradeFeature, { title: string; desc: string; Icon: typeof Zap }> => ({
   realtime: {
-    title: "Gerçek-zamanlı işlem",
-    desc: "Anlık, kuyruksuz AI Pro kapalı-döngü seans Pro+ planında sunulur. Pro planında istekler paylaşımlı kuyruğa girer.",
+    title: t("kabuk.planModal.gercekZamanli.baslik"),
+    desc: t("kabuk.planModal.gercekZamanli.aciklama"),
     Icon: Zap,
   },
   research: {
-    title: "Araştırma Modu",
-    desc: "Kanser-araştırma modelleri (fantom tümör, petri kuyu, böbrek RNA · CT · patoloji · hastalık, yara kapanma/scratch) Araştırma eklentisiyle açılır.",
+    title: t("kabuk.mod.arastirma"),
+    desc: t("kabuk.planModal.arastirma.aciklama"),
     Icon: FlaskConical,
   },
   tier: {
-    title: "Bu özellik üst plan gerektirir",
-    desc: "Aboneliğinizi yükselttiğinizde bu özellik otomatik açılır.",
+    title: t("kabuk.planModal.ustPlan"),
+    desc: t("kabuk.planModal.otomatikAcilir"),
     Icon: Sparkles,
   },
-};
+});
 
 export function UpgradeModal({
   visible,
@@ -42,8 +44,9 @@ export function UpgradeModal({
   onClose: () => void;
   feature?: UpgradeFeature;
 }) {
+  const { t } = useTranslation();
   const { tier } = useEntitlement();
-  const { title, desc, Icon } = COPY[feature];
+  const { title, desc, Icon } = kopya(t)[feature];
 
   return (
     // [S5 adım 9 / kapsam-4] Ortak kaydırılabilir kart: yatay telefonda ve %125 DPI'lı küçük
@@ -55,17 +58,17 @@ export function UpgradeModal({
       onBackdropPress={onClose}
       maxWidth={rs(420)}
       testID="upgrade-modal"
-      accessibilityLabel="Plan yükseltme bilgisi"
+      accessibilityLabel={t("kabuk.planModal.bilgiEtiketi")}
       cardStyle={styles.card}
       contentStyle={styles.icerik}
       header={
-        <IconButton label="Kapat" onPress={onClose} style={styles.close}>
+        <IconButton label={t("ortak.kapat")} onPress={onClose} style={styles.close}>
           <X size={20} color={colors.textMuted} />
         </IconButton>
       }
       footer={
         <TouchableOpacity style={styles.btn} onPress={onClose} accessibilityRole="button">
-          <Text style={styles.btnText}>Anladım</Text>
+          <Text style={styles.btnText}>{t("kabuk.planModal.anladim")}</Text>
         </TouchableOpacity>
       }
     >
@@ -76,12 +79,12 @@ export function UpgradeModal({
       <Text style={styles.desc}>{desc}</Text>
 
       <View style={styles.planRow}>
-        <Text style={styles.planLabel}>Mevcut plan</Text>
+        <Text style={styles.planLabel}>{t("kabuk.planModal.mevcutPlan")}</Text>
         <Text style={styles.planVal}>{TIER_LABEL[tier]}</Text>
       </View>
 
       {/* A1 / Apple 3.1.1 uyumu: satın-alma linki/CTA YOK. */}
-      <Text style={styles.note}>Aboneliğinizi hesabınızdan yönetebilirsiniz.</Text>
+      <Text style={styles.note}>{t("kabuk.planModal.abonelikYonet")}</Text>
     </ScrollableModalCard>
   );
 }

@@ -4,6 +4,9 @@
     "bilinmeyen": "Unknown error."
   },
   "iptal": "Cancel",
+  "kapat": "Close",
   "onayla": "Confirm",
-  "tekrarDene": "Try Again"
+  "tekrarDene": "Try Again",
+  "temizle": "Clear",
+  "vazgec": "Cancel"
 }

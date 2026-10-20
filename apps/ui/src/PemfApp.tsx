@@ -9,6 +9,7 @@ import { RouteKey } from "@/types/domain";
 import { UserModeProvider, useUserMode } from "@/context/UserModeContext";
 import { canAccess, varsayilanRota } from "@/config/access";
 import { sayfaBasligi } from "@/config/sayfaBasliklari";
+import { useTranslation } from "react-i18next";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { LiveDataProvider, useLiveData } from "@/context/LiveDataContext";
 import { AppNavProvider } from "@/context/AppNavContext";
@@ -30,6 +31,7 @@ const SettingsScreen = lazy(() => import("@/screens/SettingsScreen").then((m) =>
 const AiHistoryScreen = lazy(() => import("@/screens/AiHistoryScreen").then((m) => ({ default: m.AiHistoryScreen })));
 
 function MainRouter() {
+  useTranslation(); // sayfa başlıkları (`sayfaBasligi`) çağrı anında çevrilir → dil değişince yeniden çiz
   const { userMode } = useUserMode();
   // ⚠️ `null` = rota henüz seçilmedi → profilin AÇILIŞ rotası kullanılır (aşağıda).
   // Sabit "dashboard" ile başlamak, o rotanın kapalı olduğu pet_owner profilinde

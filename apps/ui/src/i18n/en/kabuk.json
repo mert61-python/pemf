@@ -1,0 +1,129 @@
+{
+  "baglanti": {
+    "cevrimdisi": "Offline",
+    "gercekDegil": "⚠ Cannot connect to the device — the values shown are NOT REAL. TAP to connect.",
+    "otomatikEslesti": "Device paired automatically ✓",
+    "secenekleriAc": "Open device connection options",
+    "yenile": "Refresh connection"
+  },
+  "bildirim": {
+    "baslik": "Notifications",
+    "merkezBaslik": "🔔 Notifications",
+    "okunduIsaretle": "Mark as read",
+    "temizleBaslik": "Clear notifications",
+    "temizleGovde": "Delete the entire notification history? This cannot be undone.",
+    "yok": "No notifications yet"
+  },
+  "cikis": {
+    "baslik": "Sign Out",
+    "etiket": "Sign out",
+    "eylemAdi": "Signing out",
+    "govde": "You will be signed out; you will need your email and password to sign in again.",
+    "tumHesaplar": "Sign out of all accounts",
+    "tumHesaplarGovde": "You will be signed out of all {{hesapSayisi}} email accounts open on this device; you will need your email and password to sign in again.",
+    "tumunden": "Sign out of all"
+  },
+  "genisletilebilir": {
+    "dahaAz": "Show less",
+    "kisaltIpucu": "Tap to collapse the text",
+    "tamamiIpucu": "Tap to see the full text",
+    "tumunuGor": "See all"
+  },
+  "gorsel": {
+    "oncekiPanel": "Previous panel",
+    "panel": "{{ad}} panel",
+    "sonrakiPanel": "Next panel",
+    "tamEkran": "Full screen",
+    "tamEkranIpucu": "Opens the panel enlarged and zoomed in",
+    "tekerlekIpucu": "Scroll to zoom · drag to pan",
+    "uzaklastir": "Zoom out",
+    "yakinlastir": "Zoom in"
+  },
+  "grafik": {
+    "veriBekleniyor": "Waiting for sensor data…"
+  },
+  "guncelleme": {
+    "var": "App update available (v{{surum}}) — Tap to Download"
+  },
+  "menu": {
+    "aiGecmisi": "AI History",
+    "akilliTeshis": "Smart Diagnosis",
+    "anaEkran": "Home",
+    "ayarlar": "Settings",
+    "dahaFazla": "More",
+    "dahaFazlaEtiketi": "More",
+    "digerEkranlar": "Other Screens",
+    "hastalar": "Patients",
+    "kisaGecmis": "History",
+    "kisaSeanslar": "Sessions",
+    "kisaTeshis": "Diagnosis",
+    "kontrol": "Control",
+    "raporlar": "Reports",
+    "seansGecmisi": "Session History",
+    "sensorler": "Sensors",
+    "simulasyon": "Simulation"
+  },
+  "mod": {
+    "arastirma": "Research Mode",
+    "arastirmaKisa": "Research",
+    "evcilKisa": "Pet",
+    "evcilSahibi": "Pet Owner",
+    "veteriner": "Veterinarian",
+    "veterinerKisa": "Vet"
+  },
+  "planModal": {
+    "abonelikYonet": "You can manage your subscription from your account.",
+    "anladim": "Got it",
+    "arastirma": {
+      "aciklama": "Cancer research models (phantom tumor, petri well, kidney RNA · CT · pathology · disease, wound closure/scratch) are unlocked with the Research add-on."
+    },
+    "bilgiEtiketi": "Plan upgrade information",
+    "gercekZamanli": {
+      "aciklama": "Instant, queue-free AI Pro closed-loop sessions are offered on the Pro+ plan. On the Pro plan, requests go into a shared queue.",
+      "baslik": "Real-time processing"
+    },
+    "mevcutPlan": "Current plan",
+    "otomatikAcilir": "This feature unlocks automatically when you upgrade your subscription.",
+    "ustPlan": "This feature requires a higher plan"
+  },
+  "profil": {
+    "degistir": "Switch Profile",
+    "degistirEtiketi": "Switch profile",
+    "epostaHesaplari": "Email accounts"
+  },
+  "sayfa": {
+    "aiGecmisi": "AI Analysis History",
+    "aiGecmisiAlt": "Analysis results from all models — encrypted, detailed records.",
+    "anaEkranAlt": "Which Furry Friend Gets a Session Today?",
+    "anaEkranAltArastirma": "Which sample are we working with today?",
+    "ayarlarAlt": "Device preferences and advanced mode.",
+    "hastalar": "Patient Records",
+    "hastalarAlt": "Our furry friends' details.",
+    "hosGeldiniz": "Welcome",
+    "kontrol": "Session Control Center",
+    "kontrolAlt": "Smart Prescriptions and Device Management",
+    "ornekler": "Sample / Subject Records",
+    "orneklerAlt": "Details of research samples.",
+    "raporlar": "Performance Report",
+    "raporlarAlt": "Device and clinic indicators.",
+    "raporlarAltArastirma": "Device and research indicators.",
+    "seansGecmisiAlt": "Review past sessions and get reports.",
+    "sensorler": "Device Status",
+    "sensorlerAlt": "Real-Time Sensor Monitoring",
+    "simulasyon": "Effect Simulation",
+    "simulasyonAlt": "Visualize the effect of the magnetic field on your furry friend.",
+    "simulasyonAltArastirma": "Visualize the effect of the magnetic field on the sample.",
+    "teshisAlt": "Autonomous pain analysis and session via camera.",
+    "teshisAltArastirma": "Research image analyses (phantom, petri dish, tissue, cell)."
+  },
+  "secim": {
+    "gizliSayisi_one": "{{count}} record is not on screen — it can't be selected",
+    "gizliSayisi_other": "{{count}} records are not on screen — they can't be selected",
+    "seciliSayisi_one": "{{count}} record selected",
+    "seciliSayisi_other": "{{count}} records selected",
+    "seciliSil": "Delete Selected",
+    "secimiTemizle": "Clear Selection",
+    "silmekIcinSecin": "Select records to delete",
+    "tumunuSec": "Select All"
+  }
+}

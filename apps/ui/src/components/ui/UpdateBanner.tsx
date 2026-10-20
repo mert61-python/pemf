@@ -17,8 +17,10 @@ import { View, Text, Pressable, StyleSheet, Linking } from "react-native";
 import { colors, spacing, rf, rs } from "@/theme/tokens";
 import { useDonanimCalisiyor } from "@/hooks/useDonanimCalisiyor";
 import { checkMobileUpdate, type MobileUpdate } from "@/services/updates";
+import { useTranslation } from "react-i18next";
 
 export function UpdateBanner() {
+  const { t } = useTranslation();
   const [mobile, setMobile] = useState<MobileUpdate>({ available: false });
   // ⚠️ HASTA GÜVENLİĞİ (denetim 2026-08-23, M5): bu bant hiçbir seans/bobin kapısı tanımıyordu.
   // Kardeş bantlarda kapı VARDI ve aynı gün ortak kancaya bağlandı; bu üçüncü yüzey geride
@@ -47,7 +49,7 @@ export function UpdateBanner() {
       <Pressable style={styles.row} onPress={downloadMobile} accessibilityRole="button">
         <Text style={styles.icon}>📲</Text>
         <Text style={styles.txt} numberOfLines={2}>
-          Uygulama güncellemesi var (v{mobile.latestVersion}) — Dokun ve İndir
+          {t("kabuk.guncelleme.var", { surum: mobile.latestVersion })}
         </Text>
       </Pressable>
     </View>

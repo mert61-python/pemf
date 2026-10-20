@@ -1,0 +1,129 @@
+{
+  "baglanti": {
+    "cevrimdisi": "Çevrimdışı",
+    "gercekDegil": "⚠ Cihaza bağlanılamıyor — gösterilen değerler GERÇEK DEĞİL. Bağlanmak için DOKUNUN.",
+    "otomatikEslesti": "Cihaz otomatik eşleştirildi ✓",
+    "secenekleriAc": "Cihaza bağlanma seçeneklerini aç",
+    "yenile": "Bağlantıyı yenile"
+  },
+  "bildirim": {
+    "baslik": "Bildirimler",
+    "merkezBaslik": "🔔 Bildirimler",
+    "okunduIsaretle": "Okundu işaretle",
+    "temizleBaslik": "Bildirimleri temizle",
+    "temizleGovde": "Tüm bildirim geçmişi silinsin mi? Bu işlem geri alınamaz.",
+    "yok": "Henüz bildirim yok"
+  },
+  "cikis": {
+    "baslik": "Çıkış Yap",
+    "etiket": "Çıkış yap",
+    "eylemAdi": "Çıkış yapmak",
+    "govde": "Oturum kapatılacak; tekrar girmek için e-posta ve şifre gerekir.",
+    "tumHesaplar": "Tüm hesaplardan çık",
+    "tumHesaplarGovde": "Bu cihazda açık {{hesapSayisi}} e-posta hesabının hepsinden çıkılacak; tekrar girmek için e-posta ve şifre gerekir.",
+    "tumunden": "Tümünden çık"
+  },
+  "genisletilebilir": {
+    "dahaAz": "Daha az",
+    "kisaltIpucu": "Metni kısaltmak için dokunun",
+    "tamamiIpucu": "Metnin tamamını görmek için dokunun",
+    "tumunuGor": "Tümünü gör"
+  },
+  "gorsel": {
+    "oncekiPanel": "Önceki panel",
+    "panel": "{{ad}} paneli",
+    "sonrakiPanel": "Sonraki panel",
+    "tamEkran": "Tam ekran",
+    "tamEkranIpucu": "Paneli büyütüp yakınlaştırarak açar",
+    "tekerlekIpucu": "Tekerlekle yakınlaştır · sürükleyerek gez",
+    "uzaklastir": "Uzaklaştır",
+    "yakinlastir": "Yakınlaştır"
+  },
+  "grafik": {
+    "veriBekleniyor": "Sensör verisi bekleniyor…"
+  },
+  "guncelleme": {
+    "var": "Uygulama güncellemesi var (v{{surum}}) — Dokun ve İndir"
+  },
+  "menu": {
+    "aiGecmisi": "AI Geçmişi",
+    "akilliTeshis": "Akıllı Teşhis",
+    "anaEkran": "Ana Ekran",
+    "ayarlar": "Ayarlar",
+    "dahaFazla": "Daha Fazla",
+    "dahaFazlaEtiketi": "Daha Fazla",
+    "digerEkranlar": "Diğer Ekranlar",
+    "hastalar": "Hastalar",
+    "kisaGecmis": "Geçmiş",
+    "kisaSeanslar": "Seanslar",
+    "kisaTeshis": "Teşhis",
+    "kontrol": "Kontrol",
+    "raporlar": "Raporlar",
+    "seansGecmisi": "Seans Geçmişi",
+    "sensorler": "Sensörler",
+    "simulasyon": "Simülasyon"
+  },
+  "mod": {
+    "arastirma": "Araştırma Modu",
+    "arastirmaKisa": "Araştırma",
+    "evcilKisa": "Evcil",
+    "evcilSahibi": "Evcil Hayvan Sahibi",
+    "veteriner": "Veteriner Hekim",
+    "veterinerKisa": "Veteriner"
+  },
+  "planModal": {
+    "abonelikYonet": "Aboneliğinizi hesabınızdan yönetebilirsiniz.",
+    "anladim": "Anladım",
+    "arastirma": {
+      "aciklama": "Kanser-araştırma modelleri (fantom tümör, petri kuyu, böbrek RNA · CT · patoloji · hastalık, yara kapanma/scratch) Araştırma eklentisiyle açılır."
+    },
+    "bilgiEtiketi": "Plan yükseltme bilgisi",
+    "gercekZamanli": {
+      "aciklama": "Anlık, kuyruksuz AI Pro kapalı-döngü seans Pro+ planında sunulur. Pro planında istekler paylaşımlı kuyruğa girer.",
+      "baslik": "Gerçek-zamanlı işlem"
+    },
+    "mevcutPlan": "Mevcut plan",
+    "otomatikAcilir": "Aboneliğinizi yükselttiğinizde bu özellik otomatik açılır.",
+    "ustPlan": "Bu özellik üst plan gerektirir"
+  },
+  "profil": {
+    "degistir": "Profil Değiştir",
+    "degistirEtiketi": "Profil değiştir",
+    "epostaHesaplari": "E-posta hesapları"
+  },
+  "sayfa": {
+    "aiGecmisi": "AI Analiz Geçmişi",
+    "aiGecmisiAlt": "Tüm modellerin analiz sonuçları — şifreli, detaylı kayıt.",
+    "anaEkranAlt": "Bugün Hangi Dostumuza Seans Yapıyoruz?",
+    "anaEkranAltArastirma": "Bugün hangi örnekle çalışıyoruz?",
+    "ayarlarAlt": "Cihaz tercihleri ve gelişmiş mod.",
+    "hastalar": "Hasta Kayıtları",
+    "hastalarAlt": "Dostlarımızın bilgileri.",
+    "hosGeldiniz": "Hoş Geldiniz",
+    "kontrol": "Seans Kontrol Merkezi",
+    "kontrolAlt": "Akıllı Reçeteler ve Cihaz Yönetimi",
+    "ornekler": "Örnek / Denek Kayıtları",
+    "orneklerAlt": "Araştırma örneklerinin bilgileri.",
+    "raporlar": "Performans Raporu",
+    "raporlarAlt": "Cihaz ve klinik göstergeleri.",
+    "raporlarAltArastirma": "Cihaz ve araştırma göstergeleri.",
+    "seansGecmisiAlt": "Geçmiş seansları incele ve rapor al.",
+    "sensorler": "Cihaz Durumu",
+    "sensorlerAlt": "Gerçek Zamanlı Sensör İzleme",
+    "simulasyon": "Etki Simülasyonu",
+    "simulasyonAlt": "Manyetik alanın dostumuza etkisini görselleştirin.",
+    "simulasyonAltArastirma": "Manyetik alanın örnek üzerindeki etkisini görselleştirin.",
+    "teshisAlt": "Kamera üzerinden otonom ağrı analizi ve seans.",
+    "teshisAltArastirma": "Araştırma görüntü analizleri (fantom, petri, doku, hücre)."
+  },
+  "secim": {
+    "gizliSayisi_one": "{{count}} kayıt ekranda değil — seçilmez",
+    "gizliSayisi_other": "{{count}} kayıt ekranda değil — seçilmez",
+    "seciliSayisi_one": "{{count}} kayıt seçildi",
+    "seciliSayisi_other": "{{count}} kayıt seçildi",
+    "seciliSil": "Seçilenleri Sil",
+    "secimiTemizle": "Seçimi Temizle",
+    "silmekIcinSecin": "Silmek için kayıt seçin",
+    "tumunuSec": "Tümünü Seç"
+  }
+}

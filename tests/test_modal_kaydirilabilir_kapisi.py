@@ -66,7 +66,8 @@ def _kapat_sabit_mi(src: str) -> bool:
     ⚠️ Sıra ÖNEMLİ: kapat düğmesi içerik alanının ARDINDAN çizilirse, içerik büyüdüğünde
     ekranın dışına itilir — kapının önlemek istediği durumun ta kendisi.
     """
-    i_kapat = src.find('label="Kapat"')
+    # I18N: metin kataloğa taşındı — ölçüt GEVŞEMEDİ, yer değiştirdi (aynı IconButton, etiketi `t("ortak.kapat")`).
+    i_kapat = src.find('label={t("ortak.kapat")}')
     i_icerik = src.find("panHandlers")
     return 0 <= i_kapat < i_icerik
 
@@ -122,7 +123,12 @@ def test_KRITIK_tam_ekran_goruntuleyicide_KAPAT_SABIT():
     """
     for bagil in sorted(_TAM_EKRAN_GORUNTULEYICILER):
         src = (_PF / bagil).read_text(encoding="utf-8")
-        assert 'label="Kapat"' in src, f"{bagil}: kapat denetimi YOK -> modal kapatilamaz"
+        # I18N: kapat etiketi kataloğa taşındı — kaynak anahtarı kullanıyor + TR birebir "Kapat" + EN dolu (ölçüt gevşemedi).
+        # İşlev içinde içe aktarım: meta kapılar (D404) asgari ağaca yalnız capraz.py + c_soyucu.py kopyalar.
+        import i18n_yardimci as iy
+
+        iy.metin_kapisi("apps/ui/src/" + bagil, "ortak.kapat", "Kapat")
+        assert 'label={t("ortak.kapat")}' in src, f"{bagil}: kapat denetimi YOK -> modal kapatilamaz"
         assert _kapat_sabit_mi(src), (
             f"{bagil}: kapat denetimi icerik alanindan SONRA ciziliyor -> icerik buyudugunde "
             "ekran disina itilir (kapinin onlemek istedigi durum)"

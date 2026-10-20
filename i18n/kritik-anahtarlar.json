@@ -106,6 +106,27 @@
    "tur": "estop",
    "kaynak": "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
    "aciklama": "ACİL DURDUR düğmesi / iletisi — çeviri sisteminden bağımsız (kritik.ts yedeği)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kabuk.baglanti.gercekDegil",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/ui/AppShell.tsx",
+   "aciklama": "cihaza bağlanılamıyor şeridi — gösterilen değerler GERÇEK DEĞİL"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kabuk.baglanti.otomatikEslesti",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/ui/AppShell.tsx",
+   "aciklama": "cihaz otomatik eşleştirildi onayı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kabuk.cikis.eylemAdi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/ui/AppShell.tsx",
+   "aciklama": "çıkış yapmak — durdurma kapısı (useTeardownGuard) cümlesinin eylem adı"
   }
  ],
  "bekleyen": [

@@ -24,14 +24,15 @@ import { useState } from "react";
 import { StyleProp, StyleSheet, Text, TextStyle, TouchableOpacity } from "react-native";
 import { colors, typography } from "@/theme/tokens";
 import { kirpikOlabilir } from "@/utils/metinKirpma";
+import { useTranslation } from "react-i18next";
 
 export function GenisletilebilirMetin({
   children,
   satir = 2,
   style,
   testID,
-  acEtiketi = "Tümünü gör",
-  kapatEtiketi = "Daha az",
+  acEtiketi,
+  kapatEtiketi,
 }: {
   children: string;
   /** Kapalıyken gösterilecek satır sayısı (eski `numberOfLines` değeri ne ise o). */
@@ -41,6 +42,7 @@ export function GenisletilebilirMetin({
   acEtiketi?: string;
   kapatEtiketi?: string;
 }) {
+  const { t } = useTranslation();
   const [acik, setAcik] = useState(false);
   const ipucuGoster = acik || kirpikOlabilir(children, satir);
 
@@ -49,7 +51,7 @@ export function GenisletilebilirMetin({
       onPress={() => setAcik((a) => !a)}
       accessibilityRole="button"
       accessibilityState={{ expanded: acik }}
-      accessibilityHint={acik ? "Metni kısaltmak için dokunun" : "Metnin tamamını görmek için dokunun"}
+      accessibilityHint={acik ? t("kabuk.genisletilebilir.kisaltIpucu") : t("kabuk.genisletilebilir.tamamiIpucu")}
       activeOpacity={0.7}
       testID={testID}
     >
@@ -61,7 +63,7 @@ export function GenisletilebilirMetin({
       </Text>
       {ipucuGoster ? (
         <Text style={styles.ipucu} testID={testID ? `${testID}-ipucu` : undefined}>
-          {acik ? `▴ ${kapatEtiketi}` : `▾ ${acEtiketi}`}
+          {acik ? `▴ ${kapatEtiketi ?? t("kabuk.genisletilebilir.dahaAz")}` : `▾ ${acEtiketi ?? t("kabuk.genisletilebilir.tumunuGor")}`}
         </Text>
       ) : null}
     </TouchableOpacity>
