@@ -62,3 +62,25 @@ def test_K4_KARSIT_kapi_terim_sapmasini_YAKALAR():
     assert "arayuz:b" in s, "Jeton → Token yakalanmadı"
     assert "arayuz:c" in s, "ACİL DURDUR → STOP (emergency stop değil) yakalanmadı"
     assert "arayuz:d" not in s, "hukuki 'tedavi' → 'treatment' istisnası tanınmadı"
+
+
+def test_K4_hastalik_cekimleri_hasta_terimi_DEGIL_ama_hasta_hala_zorunlu():
+    # "Hastalığı / hastalığın / hastalığa" (ğ yumuşaması) hastalık demektir, hasta (hayvan) DEĞİL; gerçek "hasta" hâlâ "patient" ister
+    tr = {
+        "a": "Böbrek Hastalığı",
+        "b": "Hastalığın şiddeti",
+        "c": "Hastalığa işaret",
+        "d": "Hasta seçin",
+        "e": "Hastalar",
+    }
+    en = {
+        "a": "Kidney Disease",
+        "b": "Severity of the disease",
+        "c": "Points to the disease",
+        "d": "Select a patient",
+        "e": "Patients",
+    }
+    assert not ihlaller(tr, en, "arayuz", SOZLUK)
+    kotu = {"d": "Select an animal", "e": "Animals"}
+    s = "\n".join(ihlaller({k: tr[k] for k in kotu}, kotu, "arayuz", SOZLUK))
+    assert "arayuz:d" in s and "arayuz:e" in s, "gerçek 'hasta' → patient zorunluluğu kaybolmuş"

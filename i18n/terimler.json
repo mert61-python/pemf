@@ -72,9 +72,9 @@
    "en": "home"
   },
   {
-   "tr": "\\bhasta(?!l[ıi]k|l[ıi]\\b|n[ıi]n hastal)",
+   "tr": "\\bhasta(?!l[ıi]k|l[ıi]ğ|l[ıi]\\b|n[ıi]n hastal)",
    "en": "patient",
-   "not": "Hasta (hayvan) → Patient. 'Hastalık' (disease) ve 'hasta (riskli)' (sick) bu terim DEĞİL — istisnalarda anahtarıyla."
+   "not": "Hasta (hayvan) → Patient. 'Hastalık' / 'hastalığı' (disease; ğ yumuşaması dahil) ve 'hasta (riskli)' (sick) bu terim DEĞİL — istisnalarda anahtarıyla."
   }
  ],
  "yasakEn": [
