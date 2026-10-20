@@ -1,20 +1,22 @@
 // Author: mertaygn, cglrgrkn
 import { useRef } from 'react'
 import { ArrowRight } from './Icons'
+import { useTranslation } from 'react-i18next'
 
 /** Uygulama ekran görüntüleri — telefon çerçeveli, yatay kaydırmalı galeri. */
 const SHOTS = [
-  { src: '/screenshots/01-profil.jpg',    title: 'Profil Seçimi',        desc: 'Evcil Hayvan Sahibi · Veteriner · Araştırma' },
-  { src: '/screenshots/02-teshis.jpg',    title: 'Akıllı Teşhis',        desc: 'Kameradan anlık ağrı analizi' },
-  { src: '/screenshots/03-modeller.jpg',  title: 'Yapay Zekâ Merkezi',    desc: 'Görüntü, ses ve sinyal modelleri' },
-  { src: '/screenshots/04-aipro.jpg',     title: 'AI Pro · Otomatik Seans', desc: 'Ölçümlere göre kendini ayarlayan seans' },
-  { src: '/screenshots/05-kontrol.jpg',   title: 'Cihaz Kontrolü',       desc: '8 bobin, frekans ve süre ayarı' },
-  { src: '/screenshots/06-dashboard.jpg', title: 'Canlı İzleme Paneli',      desc: 'Seans ve sensör ölçümleri' },
-  { src: '/screenshots/07-hastalar.jpg',  title: 'Hasta Veritabanı',     desc: 'Klinik içi hasta ve seans kaydı' },
-  { src: '/screenshots/08-gecmis.jpg',    title: 'Yapay zekâ analiz geçmişi',    desc: 'Şifreli, aranabilir analiz arşivi' },
+  { src: '/screenshots/01-profil.jpg',    baslik: 'ekranlar.ekran.profil.baslik',        aciklama: 'ekranlar.ekran.profil.aciklama' },
+  { src: '/screenshots/02-teshis.jpg',    baslik: 'ekranlar.ekran.teshis.baslik',        aciklama: 'ekranlar.ekran.teshis.aciklama' },
+  { src: '/screenshots/03-modeller.jpg',  baslik: 'ekranlar.ekran.modeller.baslik',    aciklama: 'ekranlar.ekran.modeller.aciklama' },
+  { src: '/screenshots/04-aipro.jpg',     baslik: 'ekranlar.ekran.aipro.baslik', aciklama: 'ekranlar.ekran.aipro.aciklama' },
+  { src: '/screenshots/05-kontrol.jpg',   baslik: 'ekranlar.ekran.kontrol.baslik',       aciklama: 'ekranlar.ekran.kontrol.aciklama' },
+  { src: '/screenshots/06-dashboard.jpg', baslik: 'ekranlar.ekran.panel.baslik',      aciklama: 'ekranlar.ekran.panel.aciklama' },
+  { src: '/screenshots/07-hastalar.jpg',  baslik: 'ekranlar.ekran.hastalar.baslik',     aciklama: 'ekranlar.ekran.hastalar.aciklama' },
+  { src: '/screenshots/08-gecmis.jpg',    baslik: 'ekranlar.ekran.gecmis.baslik',    aciklama: 'ekranlar.ekran.gecmis.aciklama' },
 ]
 
 export default function AppScreenshots() {
+  const { t } = useTranslation()
   const trackRef = useRef<HTMLDivElement>(null)
 
   const scroll = (dir: -1 | 1) => {
@@ -28,18 +30,17 @@ export default function AppScreenshots() {
       <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-20 sm:px-6">
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div className="max-w-xl">
-            <span className="chip">Uygulama</span>
-            <h2 className="mt-4 text-3xl font-bold sm:text-4xl">Ekranlarla tanıyın</h2>
+            <span className="chip">{t('ekranlar.rozet')}</span>
+            <h2 className="mt-4 text-3xl font-bold sm:text-4xl">{t('ekranlar.baslik')}</h2>
             <p className="mt-3 text-muted">
-              Profil seçiminden yapay zekâ teşhisine, otomatik seanstan hasta arşivine — telefon
-              uygulamasından ekran görüntüleri.
+              {t('ekranlar.aciklama')}
             </p>
           </div>
           <div className="hidden shrink-0 gap-2 md:flex">
             <button
               type="button"
               onClick={() => scroll(-1)}
-              aria-label="Önceki"
+              aria-label={t('ekranlar.onceki')}
               className="grid h-10 w-10 place-items-center rounded-full border border-border bg-bg/60 text-muted transition hover:border-border-strong hover:text-fg"
             >
               <ArrowRight className="h-4 w-4 rotate-180" />
@@ -47,7 +48,7 @@ export default function AppScreenshots() {
             <button
               type="button"
               onClick={() => scroll(1)}
-              aria-label="Sonraki"
+              aria-label={t('ekranlar.sonraki')}
               className="grid h-10 w-10 place-items-center rounded-full border border-border bg-bg/60 text-muted transition hover:border-border-strong hover:text-fg"
             >
               <ArrowRight className="h-4 w-4" />
@@ -64,7 +65,7 @@ export default function AppScreenshots() {
               <div className="relative rounded-[2rem] border border-border-strong bg-[#0b0f19] p-1.5 shadow-2xl ring-1 ring-white/5 transition-transform duration-300 hover:-translate-y-1">
                 <img
                   src={s.src}
-                  alt={`PEMF Vet — ${s.title}`}
+                  alt={t('ekranlar.altMetin', { title: t(s.baslik) })}
                   width={560}
                   height={1116}
                   loading="lazy"
@@ -72,14 +73,14 @@ export default function AppScreenshots() {
                 />
               </div>
               <figcaption className="mt-4 text-center">
-                <div className="text-sm font-semibold">{s.title}</div>
-                <div className="mt-0.5 text-xs text-muted">{s.desc}</div>
+                <div className="text-sm font-semibold">{t(s.baslik)}</div>
+                <div className="mt-0.5 text-xs text-muted">{t(s.aciklama)}</div>
               </figcaption>
             </figure>
           ))}
         </div>
 
-        <p className="mt-2 text-center text-xs text-muted/70 md:hidden">← kaydırın →</p>
+        <p className="mt-2 text-center text-xs text-muted/70 md:hidden">{t('ekranlar.kaydirin')}</p>
       </div>
     </section>
   )

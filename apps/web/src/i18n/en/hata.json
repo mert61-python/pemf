@@ -1,0 +1,6 @@
+{
+  "baslik": "Something went wrong",
+  "govde": "An unexpected error occurred while loading the page. Try reloading the page; if the problem continues, write to {{eposta}}.",
+  "konu": "Site error",
+  "yenile": "Reload the page"
+}

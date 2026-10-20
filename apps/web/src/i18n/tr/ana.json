@@ -1,4 +1,34 @@
 {
+  "dahil": "Dahil",
+  "ekAylik": "+₺{{addonMonthly}}/ay",
+  "hero": {
+    "devam": "— uygulama, cihaz yazılımı ve yapay zekâ modelleri sizin için kurulur, güncellemeler kendiliğinden gelir.",
+    "giris": "Veteriner kliniğiniz için elektromanyetik alan terapisini tek ekrandan yönetin.",
+    "vurgu": "PEMF Vet’i indirin"
+  },
+  "nasil": {
+    "aciklama": "Küçük bir kurulum dosyası indirirsiniz; uygulamayı, modelleri ve güncellemeleri o getirir.",
+    "baslik": "Tek indirme, gerisi otomatik",
+    "rozet": "Nasıl çalışır"
+  },
+  "ozellikler": {
+    "aciklama": "Cihaz bağlantısından yapay zekâ teşhisine kadar her şey tek uygulamada.",
+    "baslik": "Klinik için tasarlandı",
+    "tumunuGor": "Tümünü gör "
+  },
+  "platformYakinda": "macOS · Linux yakında",
+  "profiller": {
+    "aciklama": "Evcil Hayvan Sahibi, Veteriner ve Araştırma — kurulumda seçtiğiniz profile göre yalnız işinize yarayan yapay zekâ modelleri iner. Evcil hayvan sahibi, ağır araştırma modellerini indirmez.",
+    "baslik": "Herkes kendi ihtiyacını kurar",
+    "rozet": "Kurulum profilleri"
+  },
   "rozet": "Veteriner klinikleri için · Yayında",
-  "slogan": "Veteriner PEMF Terapisinde Yeni Kontrol Standardı"
+  "slogan": "Veteriner PEMF Terapisinde Yeni Kontrol Standardı",
+  "surumBilgisi": "Sürüm {{surum}} · {{boyut}} MB kurulum",
+  "uyelik": {
+    "aciklama": "Planınız, ayda kaç yapay zekâ analizi yapabileceğinizi belirler. Her analiz 1 jeton harcar.",
+    "baslik": "İhtiyacınıza göre plan",
+    "karsilastir": "Planları karşılaştır ",
+    "rozet": "Üyelik"
+  }
 }

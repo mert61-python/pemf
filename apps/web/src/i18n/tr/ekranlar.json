@@ -1,0 +1,43 @@
+{
+  "aciklama": "Profil seçiminden yapay zekâ teşhisine, otomatik seanstan hasta arşivine — telefon uygulamasından ekran görüntüleri.",
+  "altMetin": "PEMF Vet — {{title}}",
+  "baslik": "Ekranlarla tanıyın",
+  "ekran": {
+    "aipro": {
+      "aciklama": "Ölçümlere göre kendini ayarlayan seans",
+      "baslik": "AI Pro · Otomatik Seans"
+    },
+    "gecmis": {
+      "aciklama": "Şifreli, aranabilir analiz arşivi",
+      "baslik": "Yapay zekâ analiz geçmişi"
+    },
+    "hastalar": {
+      "aciklama": "Klinik içi hasta ve seans kaydı",
+      "baslik": "Hasta Veritabanı"
+    },
+    "kontrol": {
+      "aciklama": "8 bobin, frekans ve süre ayarı",
+      "baslik": "Cihaz Kontrolü"
+    },
+    "modeller": {
+      "aciklama": "Görüntü, ses ve sinyal modelleri",
+      "baslik": "Yapay Zekâ Merkezi"
+    },
+    "panel": {
+      "aciklama": "Seans ve sensör ölçümleri",
+      "baslik": "Canlı İzleme Paneli"
+    },
+    "profil": {
+      "aciklama": "Evcil Hayvan Sahibi · Veteriner · Araştırma",
+      "baslik": "Profil Seçimi"
+    },
+    "teshis": {
+      "aciklama": "Kameradan anlık ağrı analizi",
+      "baslik": "Akıllı Teşhis"
+    }
+  },
+  "kaydirin": "← kaydırın →",
+  "onceki": "Önceki",
+  "rozet": "Uygulama",
+  "sonraki": "Sonraki"
+}

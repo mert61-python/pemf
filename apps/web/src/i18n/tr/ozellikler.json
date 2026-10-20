@@ -1,0 +1,14 @@
+{
+  "aciklama": "Cihaz bağlantısından yapay zekâya, hasta yönetiminden güvenliğe — hepsi tek uygulamada.",
+  "baslik": "Uçtan uca terapi kontrolü",
+  "hazir": {
+    "aciklama": "PEMF Vet’i indirin; kurulum ve güncellemeler otomatik.",
+    "baslik": "Başlamaya hazır mısınız?"
+  },
+  "masaustu": {
+    "aciklama": "Cihaz durumu, anlık ölçümler, seans başlatma ve güncellemeler tek ekranda. Uygulama ve yapay zekâ modelleri kendiliğinden güncel kalır.",
+    "baslik": "Tek pencereden yönetim",
+    "rozet": "Masaüstü uygulaması",
+    "sonGuncelleme": "Son güncelleme · v{{surum}}"
+  }
+}

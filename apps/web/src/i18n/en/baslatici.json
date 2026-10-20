@@ -1,0 +1,14 @@
+{
+  "baslat": "Start",
+  "hazir": "Ready!",
+  "hazirGovde": "PEMF Vet is installed. Start the app or update your profiles.",
+  "kaldir": "Uninstall",
+  "onar": "Repair installation",
+  "profil": {
+    "arastirma": "Research Mode",
+    "ev": "Pet Owner",
+    "veteriner": "Veterinarian"
+  },
+  "profilleriDegistir": " Change profiles",
+  "slogan": "Veterinary PEMF session + AI diagnostics platform"
+}

@@ -1,4 +1,34 @@
 {
+  "dahil": "Included",
+  "ekAylik": "+₺{{addonMonthly}}/mo",
+  "hero": {
+    "devam": "— the app, device software and AI models are installed for you, and updates arrive on their own.",
+    "giris": "Manage electromagnetic field therapy for your veterinary clinic from a single screen.",
+    "vurgu": "Download PEMF Vet"
+  },
+  "nasil": {
+    "aciklama": "You download a small installer; it fetches the app, the models and the updates.",
+    "baslik": "One download, the rest is automatic",
+    "rozet": "How it works"
+  },
+  "ozellikler": {
+    "aciklama": "From device connection to AI diagnosis, everything in one app.",
+    "baslik": "Built for the clinic",
+    "tumunuGor": "See all "
+  },
+  "platformYakinda": "macOS · Linux coming soon",
+  "profiller": {
+    "aciklama": "Pet Owner, Veterinarian and Research — depending on the profile you choose during installation, only the AI models you need are downloaded. A pet owner does not download the heavy research models.",
+    "baslik": "Everyone installs what they need",
+    "rozet": "Installation profiles"
+  },
   "rozet": "For veterinary clinics · Live",
-  "slogan": "A New Control Standard in Veterinary PEMF Therapy"
+  "slogan": "A New Control Standard in Veterinary PEMF Therapy",
+  "surumBilgisi": "Version {{surum}} · {{boyut}} MB installer",
+  "uyelik": {
+    "aciklama": "Your plan sets how many AI analyses you can run each month. Each analysis uses 1 credit.",
+    "baslik": "A plan that fits your needs",
+    "karsilastir": "Compare plans ",
+    "rozet": "Membership"
+  }
 }

@@ -1,6 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import { BRAND, CLIENT } from '../config'
 import { Check, Logo, Refresh } from './Icons'
+import { useTranslation } from 'react-i18next'
 
 /* PEMF Vet Client önizlemesi — saf CSS pencere mockup'ı (ekran görüntüsü DEĞİL).
  *
@@ -35,6 +36,7 @@ function Profil({ ad }: { ad: string }) {
 }
 
 export default function LauncherMock() {
+  const { t } = useTranslation()
   return (
     <div className="glow-ring overflow-hidden rounded-xl border border-white/10" style={bg}>
       {/* Başlık çubuğu — logo + ürün adı solda, sürüm rozeti sağda (client ile aynı düzen) */}
@@ -48,7 +50,7 @@ export default function LauncherMock() {
         <span className="min-w-0">
           <span className="block truncate text-xs font-bold text-white/90">PEMF Vet</span>
           <span className="block truncate text-[10px] text-white/40">
-            Veteriner PEMF seans + yapay zekâ teşhis platformu
+            {t('baslatici.slogan')}
           </span>
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-2">
@@ -72,15 +74,15 @@ export default function LauncherMock() {
           <Check className="h-7 w-7 text-primary" />
         </span>
 
-        <div className="mt-4 text-xl font-bold text-white/95">Hazır!</div>
+        <div className="mt-4 text-xl font-bold text-white/95">{t('baslatici.hazir')}</div>
         <p className="mx-auto mt-1.5 max-w-xs text-[11px] leading-relaxed text-white/45">
-          PEMF Vet kuruldu. Uygulamayı başlatın veya profillerinizi güncelleyin.
+          {t('baslatici.hazirGovde')}
         </p>
 
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-          <Profil ad="Evcil Hayvan Sahibi" />
-          <Profil ad="Araştırma Modu" />
-          <Profil ad="Veteriner Hekim" />
+          <Profil ad={t('baslatici.profil.ev')} />
+          <Profil ad={t('baslatici.profil.arastirma')} />
+          <Profil ad={t('baslatici.profil.veteriner')} />
         </div>
 
         <button
@@ -93,16 +95,16 @@ export default function LauncherMock() {
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true">
             <path d="M8 5v14l11-7z" />
           </svg>
-          Başlat
+          {t('baslatici.baslat')}
         </button>
 
         <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] text-white/40">
           <span className="inline-flex items-center gap-1.5">
-            <Refresh className="h-3 w-3" /> Profilleri değiştir
+            <Refresh className="h-3 w-3" />{t('baslatici.profilleriDegistir')}
           </span>
           {/* Maket, uygulamanın GERÇEK düğme metnini göstermeli (launcher I18N `repair`). */}
-          <span>Kurulumu onar</span>
-          <span>Uygulamayı kaldır</span>
+          <span>{t('baslatici.onar')}</span>
+          <span>{t('baslatici.kaldir')}</span>
         </div>
       </div>
 

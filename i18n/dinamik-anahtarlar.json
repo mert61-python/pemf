@@ -228,6 +228,20 @@
    "onek": "ai.etiket.",
    "degerler": ["predicted_class"],
    "gerekce": "AI panel adı: 'Tahmin' paneli mevcut `ai.etiket.predicted_class` anahtarını kullanır (kapalı küme)"
+  },  {
+   "yuzey": "site",
+   "dosya": "apps/web/src/components/AppScreenshots.tsx",
+   "ifade": "t(s.baslik)",
+   "onek": "",
+   "degerler": ["ekranlar.ekran.profil.baslik", "ekranlar.ekran.teshis.baslik", "ekranlar.ekran.modeller.baslik", "ekranlar.ekran.aipro.baslik", "ekranlar.ekran.kontrol.baslik", "ekranlar.ekran.panel.baslik", "ekranlar.ekran.hastalar.baslik", "ekranlar.ekran.gecmis.baslik"],
+   "gerekce": "ekran görüntüsü başlığı SHOTS tablosunda (modül düzeyi sabit) ANAHTAR olarak saklanır — değer kümesi 8 satırlık kapalı tablo"
+  },  {
+   "yuzey": "site",
+   "dosya": "apps/web/src/components/AppScreenshots.tsx",
+   "ifade": "t(s.aciklama)",
+   "onek": "",
+   "degerler": ["ekranlar.ekran.profil.aciklama", "ekranlar.ekran.teshis.aciklama", "ekranlar.ekran.modeller.aciklama", "ekranlar.ekran.aipro.aciklama", "ekranlar.ekran.kontrol.aciklama", "ekranlar.ekran.panel.aciklama", "ekranlar.ekran.hastalar.aciklama", "ekranlar.ekran.gecmis.aciklama"],
+   "gerekce": "ekran görüntüsü açıklaması SHOTS tablosunda (modül düzeyi sabit) ANAHTAR olarak saklanır — değer kümesi 8 satırlık kapalı tablo"
   }
  ]
 }

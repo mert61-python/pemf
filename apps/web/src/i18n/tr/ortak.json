@@ -7,6 +7,7 @@
     "vkn": " · VKN/TCKN: ",
     "yasal": "Yasal"
   },
+  "anaSayfayaDon": "Ana sayfaya dön",
   "dil": {
     "dugme": "EN",
     "dugmeEtiketi": "Dili değiştir: English"
@@ -18,5 +19,9 @@
     "fiyatlandirma": "Fiyatlandırma",
     "indir": "İndir",
     "ozellikler": "Özellikler"
+  },
+  "sayfa": {
+    "aciklama": "PEMF Vet: veteriner klinikleri için elektromanyetik alan terapisini ve yapay zekâ destekli teşhisi tek ekrandan yöneten masaüstü yazılımı. İndirin; kurulum ve güncellemeler otomatik.",
+    "baslik": "PEMF Vet — Veteriner PEMF Terapi Yazılımı"
   }
 }

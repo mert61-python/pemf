@@ -7,6 +7,7 @@
     "vkn": " · Tax ID (VKN/TCKN): ",
     "yasal": "Legal"
   },
+  "anaSayfayaDon": "Back to the home page",
   "dil": {
     "dugme": "TR",
     "dugmeEtiketi": "Change language: Türkçe"
@@ -18,5 +19,9 @@
     "fiyatlandirma": "Pricing",
     "indir": "Download",
     "ozellikler": "Features"
+  },
+  "sayfa": {
+    "aciklama": "PEMF Vet: desktop software that manages electromagnetic field therapy and AI-assisted diagnosis for veterinary clinics from a single screen. Download it; installation and updates are automatic.",
+    "baslik": "PEMF Vet — Veterinary PEMF Therapy Software"
   }
 }

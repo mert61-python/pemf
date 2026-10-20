@@ -1,0 +1,43 @@
+{
+  "aciklama": "From profile selection to AI diagnosis, from automatic sessions to the patient archive — screenshots from the mobile app.",
+  "altMetin": "PEMF Vet — {{title}}",
+  "baslik": "See it in screens",
+  "ekran": {
+    "aipro": {
+      "aciklama": "A session that adjusts itself to the measurements",
+      "baslik": "AI Pro · Automatic Session"
+    },
+    "gecmis": {
+      "aciklama": "Encrypted, searchable analysis archive",
+      "baslik": "AI analysis history"
+    },
+    "hastalar": {
+      "aciklama": "In-clinic patient and session records",
+      "baslik": "Patient Database"
+    },
+    "kontrol": {
+      "aciklama": "8 coils, frequency and duration settings",
+      "baslik": "Device Control"
+    },
+    "modeller": {
+      "aciklama": "Image, audio and signal models",
+      "baslik": "AI Hub"
+    },
+    "panel": {
+      "aciklama": "Session and sensor measurements",
+      "baslik": "Live Monitoring Panel"
+    },
+    "profil": {
+      "aciklama": "Pet Owner · Veterinarian · Research",
+      "baslik": "Profile Selection"
+    },
+    "teshis": {
+      "aciklama": "Instant pain analysis from the camera",
+      "baslik": "Smart Diagnosis"
+    }
+  },
+  "kaydirin": "← swipe →",
+  "onceki": "Previous",
+  "rozet": "App",
+  "sonraki": "Next"
+}

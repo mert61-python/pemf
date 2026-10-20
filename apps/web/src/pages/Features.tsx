@@ -3,16 +3,18 @@ import { Link } from 'react-router-dom'
 import { FEATURES, PATCH } from '../config'
 import { ICONS, ArrowRight, Check } from '../components/Icons'
 import LauncherMock from '../components/LauncherMock'
+import { useTranslation } from 'react-i18next'
 
 export default function Features() {
+  const { t } = useTranslation()
   return (
     <>
       <section className="bg-hero border-b border-border/60">
         <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-16 text-center sm:px-6 sm:py-20">
-          <span className="chip">Özellikler</span>
-          <h1 className="mt-5 text-4xl font-extrabold sm:text-5xl">Uçtan uca terapi kontrolü</h1>
+          <span className="chip">{t('ortak.nav.ozellikler')}</span>
+          <h1 className="mt-5 text-4xl font-extrabold sm:text-5xl">{t('ozellikler.baslik')}</h1>
           <p className="mx-auto mt-4 max-w-2xl text-muted">
-            Cihaz bağlantısından yapay zekâya, hasta yönetiminden güvenliğe — hepsi tek uygulamada.
+            {t('ozellikler.aciklama')}
           </p>
         </div>
       </section>
@@ -40,14 +42,14 @@ export default function Features() {
       <section className="border-b border-border/60 bg-bg-soft/60">
         <div className="mx-auto grid max-w-6xl 2xl:max-w-7xl items-center gap-12 px-5 py-16 sm:px-6 lg:grid-cols-2">
           <div>
-            <span className="chip">Masaüstü uygulaması</span>
-            <h2 className="mt-4 text-3xl font-bold">Tek pencereden yönetim</h2>
+            <span className="chip">{t('ozellikler.masaustu.rozet')}</span>
+            <h2 className="mt-4 text-3xl font-bold">{t('ozellikler.masaustu.baslik')}</h2>
             <p className="mt-3 text-muted">
-              Cihaz durumu, anlık ölçümler, seans başlatma ve güncellemeler tek ekranda. Uygulama ve yapay zekâ modelleri kendiliğinden güncel kalır.
+              {t('ozellikler.masaustu.aciklama')}
             </p>
             <div className="mt-6 rounded-lg border border-border p-5">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-semibold">Son güncelleme · v{PATCH.version}</span>
+                <span className="text-sm font-semibold">{t('ozellikler.masaustu.sonGuncelleme', { surum: PATCH.version })}</span>
                 <span className="text-xs text-muted">{PATCH.date}</span>
               </div>
               <ul className="space-y-2">
@@ -70,10 +72,10 @@ export default function Features() {
 
       <section>
         <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-16 text-center sm:px-6">
-          <h2 className="text-2xl font-bold sm:text-3xl">Başlamaya hazır mısınız?</h2>
-          <p className="mt-3 text-muted">PEMF Vet’i indirin; kurulum ve güncellemeler otomatik.</p>
+          <h2 className="text-2xl font-bold sm:text-3xl">{t('ozellikler.hazir.baslik')}</h2>
+          <p className="mt-3 text-muted">{t('ozellikler.hazir.aciklama')}</p>
           <Link to="/download" className="btn-primary mt-6 !px-6 !py-3.5">
-            PEMF Vet’i İndir <ArrowRight className="h-4 w-4" />
+            {t('ortak.indirDugmesi')} <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       </section>

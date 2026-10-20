@@ -29,10 +29,10 @@ export default function Home() {
               <span className="text-gradient">{t(BRAND.sloganAnahtari)}</span>
             </h1>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-muted sm:text-lg">
-              Veteriner kliniğiniz için elektromanyetik alan terapisini tek ekrandan yönetin.
+              {t('ana.hero.giris')}
               {' '}
-              <span className="text-fg/90 font-medium">PEMF Vet’i indirin</span>{' '}
-              — uygulama, cihaz yazılımı ve yapay zekâ modelleri sizin için kurulur, güncellemeler kendiliğinden gelir.
+              <span className="text-fg/90 font-medium">{t('ana.hero.vurgu')}</span>{' '}
+              {t('ana.hero.devam')}
             </p>
 
             <div className="mt-8">
@@ -45,8 +45,8 @@ export default function Home() {
                   Rozetler artık gerçekten indirilebilen platformları söyler. */}
               <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> {CLIENT.downloads.windows.os}</span>
               <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> {CLIENT.downloads.android.os}</span>
-              <span className="inline-flex items-center gap-1.5 text-muted/70">macOS · Linux yakında</span>
-              <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> Sürüm {CLIENT.version} · {CLIENT.sizeMB} MB kurulum</span>
+              <span className="inline-flex items-center gap-1.5 text-muted/70">{t('ana.platformYakinda')}</span>
+              <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> {t('ana.surumBilgisi', { surum: CLIENT.version, boyut: CLIENT.sizeMB })}</span>
             </p>
           </div>
 
@@ -62,10 +62,10 @@ export default function Home() {
       <section className="border-b border-border/60">
         <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-20 sm:px-6">
           <div className="mx-auto max-w-2xl text-center">
-            <span className="chip">Nasıl çalışır</span>
-            <h2 className="mt-4 text-3xl font-bold sm:text-4xl">Tek indirme, gerisi otomatik</h2>
+            <span className="chip">{t('ana.nasil.rozet')}</span>
+            <h2 className="mt-4 text-3xl font-bold sm:text-4xl">{t('ana.nasil.baslik')}</h2>
             <p className="mt-3 text-muted">
-              Küçük bir kurulum dosyası indirirsiniz; uygulamayı, modelleri ve güncellemeleri o getirir.
+              {t('ana.nasil.aciklama')}
             </p>
           </div>
 
@@ -90,12 +90,12 @@ export default function Home() {
         <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-20 sm:px-6">
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div className="max-w-xl">
-              <span className="chip">Özellikler</span>
-              <h2 className="mt-4 text-3xl font-bold sm:text-4xl">Klinik için tasarlandı</h2>
-              <p className="mt-3 text-muted">Cihaz bağlantısından yapay zekâ teşhisine kadar her şey tek uygulamada.</p>
+              <span className="chip">{t('ortak.nav.ozellikler')}</span>
+              <h2 className="mt-4 text-3xl font-bold sm:text-4xl">{t('ana.ozellikler.baslik')}</h2>
+              <p className="mt-3 text-muted">{t('ana.ozellikler.aciklama')}</p>
             </div>
             <Link to="/features" className="btn-ghost self-start text-sm md:self-auto">
-              Tümünü gör <ArrowRight className="h-4 w-4" />
+              {t('ana.ozellikler.tumunuGor')}<ArrowRight className="h-4 w-4" />
             </Link>
           </div>
 
@@ -126,12 +126,10 @@ export default function Home() {
       <section className="border-b border-border/60 bg-bg-soft/60">
         <div className="mx-auto grid max-w-6xl 2xl:max-w-7xl gap-12 px-5 py-20 sm:px-6 lg:grid-cols-2 lg:items-center">
           <div>
-            <span className="chip">Kurulum profilleri</span>
-            <h2 className="mt-4 text-3xl font-bold sm:text-4xl">Herkes kendi ihtiyacını kurar</h2>
+            <span className="chip">{t('ana.profiller.rozet')}</span>
+            <h2 className="mt-4 text-3xl font-bold sm:text-4xl">{t('ana.profiller.baslik')}</h2>
             <p className="mt-3 text-muted">
-              Evcil Hayvan Sahibi, Veteriner ve Araştırma — kurulumda seçtiğiniz profile göre yalnız
-              işinize yarayan yapay zekâ modelleri iner. Evcil hayvan sahibi, ağır araştırma
-              modellerini indirmez.
+              {t('ana.profiller.aciklama')}
             </p>
             <div className="mt-6 space-y-3">
               {MODULES.map((m) => (
@@ -143,7 +141,7 @@ export default function Home() {
                   <div className="shrink-0 pl-3 text-right">
                     <div className="text-xs text-muted">≈ {m.sizeGB.toFixed(1)} GB</div>
                     <div className={`text-xs font-semibold ${m.included ? 'text-success' : 'text-primary'}`}>
-                      {m.included ? 'Dahil' : `+₺${m.addonMonthly}/ay`}
+                      {m.included ? t('ana.dahil') : t('ana.ekAylik', { addonMonthly: m.addonMonthly })}
                     </div>
                   </div>
                 </div>
@@ -152,9 +150,9 @@ export default function Home() {
           </div>
 
           <div className="card p-8">
-            <span className="chip">Üyelik</span>
-            <h3 className="mt-4 text-2xl font-bold">İhtiyacınıza göre plan</h3>
-            <p className="mt-2 text-sm text-muted">Planınız, ayda kaç yapay zekâ analizi yapabileceğinizi belirler. Her analiz 1 jeton harcar.</p>
+            <span className="chip">{t('ana.uyelik.rozet')}</span>
+            <h3 className="mt-4 text-2xl font-bold">{t('ana.uyelik.baslik')}</h3>
+            <p className="mt-2 text-sm text-muted">{t('ana.uyelik.aciklama')}</p>
             {/* FİYAT TEK KAYNAK + FREE_MODE (metin denetimi 2026-08-20): burada ₺990 / ₺1.990
                 KODA GÖMÜLÜYDÜ. Fiyat sayfası "test aşaması: tüm planlar şu an ücretsiz" derken bu
                 kutu fiyat gösteriyordu — iki sayfa birbirini yalanlıyordu. Sayılar artık
@@ -185,7 +183,7 @@ export default function Home() {
               ))}
             </div>
             <Link to="/pricing" className="btn-primary mt-6 w-full">
-              Planları karşılaştır <ArrowRight className="h-4 w-4" />
+              {t('ana.uyelik.karsilastir')}<ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </div>

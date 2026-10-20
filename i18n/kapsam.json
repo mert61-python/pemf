@@ -382,7 +382,7 @@
    "sira": 12,
    "kritik": false,
    "aciklama": "site üst menü / alt bilgi / ana sayfa / özellikler / destek / hata sayfaları",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 109,
    "dosyaSayisi": 18
   },
@@ -7928,10 +7928,19 @@
    "yuzey": "site",
    "grup": "site-12a-sayfa",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 2,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "PEMF Vet — Veteriner PEMF Terapi Yazılımı",
+     "gerekce": "statik `<title>` (SEO / JS'ten önce) — çalışma anında `ortak.sayfa.baslik` ile dile göre ÜZERİNE YAZILIR (index.ts); TR bayt bayt aynı"
+    },
+    {
+     "metin": "PEMF Vet: veteriner klinikleri için elektromanyetik alan terapisini ve yapay zekâ destekli teşhisi tek ekrandan yöneten masaüstü yazılımı. İndirin; kurulum ve güncellemeler otomatik.",
+     "gerekce": "statik `<meta name=description>` (SEO / JS'ten önce) — çalışma anında `ortak.sayfa.aciklama` ile dile göre ÜZERİNE YAZILIR (index.ts); TR bayt bayt aynı"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -7939,7 +7948,7 @@
    "yuzey": "site",
    "grup": "site-12a-sayfa",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -7950,7 +7959,7 @@
    "yuzey": "site",
    "grup": "site-12a-sayfa",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 23,
    "kritik": false,
    "muaf": [],
@@ -7972,7 +7981,7 @@
    "yuzey": "site",
    "grup": "site-12a-sayfa",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 6,
    "kritik": false,
    "muaf": [],
@@ -7997,7 +8006,32 @@
    "durum": "tamam",
    "metin": 9,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "rounded-md px-3 py-2.5 text-sm font-medium transition-colors {{deger1}}",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "text-fg",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "text-muted hover:text-fg",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "rounded-md px-3 py-2.5 text-sm font-medium {{deger1}}",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "bg-primary/10 text-fg",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "text-muted",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": "I18N-0 pilotu"
   },
@@ -8005,7 +8039,7 @@
    "yuzey": "site",
    "grup": "site-12a-sayfa",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -8016,10 +8050,27 @@
    "yuzey": "site",
    "grup": "site-12a-sayfa",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 15,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "TR",
+     "gerekce": "launcher maketindeki dil düğmesi kodu (TR) — iki dilde aynı, dilin kendi adı"
+    },
+    {
+     "metin": "EN",
+     "gerekce": "launcher maketindeki dil düğmesi kodu (EN) — iki dilde aynı, dilin kendi adı"
+    },
+    {
+     "metin": "v",
+     "gerekce": "sürüm öneki `v` — iki dilde aynı"
+    },
+    {
+     "metin": "linear-gradient(180deg, oklch(76% 0.15 178), oklch(68% 0.14 182))",
+     "gerekce": "CSS gradyan değeri — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -8052,7 +8103,12 @@
    "durum": "muaf",
    "metin": 0,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "[i18n] katalogda olmayan anahtar: \"{{anahtar}}\"",
+     "gerekce": "geliştirici hata iletisi (`[i18n] katalogda olmayan anahtar`, yalnız test kipinde fırlar) — ekran metni değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": "I18N altyapısı — kullanıcı metni katalogda; buradaki dizgiler geliştirici iletisi / dil kodu (KATI kipte test hatası)"
   },
@@ -8071,7 +8127,7 @@
    "yuzey": "site",
    "grup": "site-12a-sayfa",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -8082,7 +8138,7 @@
    "yuzey": "site",
    "grup": "site-12a-sayfa",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 10,
    "kritik": false,
    "muaf": [],
@@ -8093,10 +8149,23 @@
    "yuzey": "site",
    "grup": "site-12a-sayfa",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 26,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "GB",
+     "gerekce": "birim `GB` — iki dilde aynı"
+    },
+    {
+     "metin": "text-success",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "text-primary",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": "I18N-0 pilotu KISMİ (başlık / menü anahtarları) — kalanı bekliyor"
   },
@@ -8104,7 +8173,7 @@
    "yuzey": "site",
    "grup": "site-12a-sayfa",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 4,
    "kritik": false,
    "muaf": [],
@@ -8115,7 +8184,7 @@
    "yuzey": "site",
    "grup": "site-12a-sayfa",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 7,
    "kritik": false,
    "muaf": [],

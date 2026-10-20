@@ -1,0 +1,14 @@
+{
+  "aciklama": "From device connection to AI, from patient management to security — all in one app.",
+  "baslik": "End-to-end therapy control",
+  "hazir": {
+    "aciklama": "Download PEMF Vet; installation and updates are automatic.",
+    "baslik": "Ready to get started?"
+  },
+  "masaustu": {
+    "aciklama": "Device status, live measurements, starting sessions and updates on a single screen. The app and the AI models stay up to date on their own.",
+    "baslik": "Manage everything from a single window",
+    "rozet": "Desktop app",
+    "sonGuncelleme": "Latest update · v{{surum}}"
+  }
+}

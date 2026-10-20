@@ -14,6 +14,17 @@ export type { Dil } from './dil'
 const KATI = (globalThis as { __PEMF_I18N_KATI__?: boolean }).__PEMF_I18N_KATI__ === true
 
 const ilk: Dil = etkinDil(kayitliDil(), tarayiciYereli())
+
+/** index.html'deki statik `<title>` / `<meta name=description>` (SEO, JS'ten önce) çalışma anında etkin dile göre yeniden yazılır; TR değer index.html ile birebir aynı. */
+function sayfaMetniniAyarla(): void {
+  try {
+    if (typeof document === 'undefined') return
+    document.title = i18n.t('ortak.sayfa.baslik')
+    document.querySelector('meta[name="description"]')?.setAttribute('content', i18n.t('ortak.sayfa.aciklama'))
+  } catch {
+    /* yok say: sayfa metni statik kalır */
+  }
+}
 try {
   void i18n.use(initReactI18next).init({
     resources: kaynaklar,
@@ -35,11 +46,15 @@ try {
         }
       : false,
   })
-  i18n.on('languageChanged', (l: string) => htmlDiliAyarla(gecerliDil(l) ?? 'tr'))
+  i18n.on('languageChanged', (l: string) => {
+    htmlDiliAyarla(gecerliDil(l) ?? 'tr')
+    sayfaMetniniAyarla()
+  })
 } catch {
   /* başlatma bozuksa sayfa yine açılır; t() anahtar döner */
 }
 htmlDiliAyarla(ilk)
+sayfaMetniniAyarla()
 
 /** Kullanıcı dil seçti (üst menü düğmesi). Bayrak kapalıyken tr kalır. Kayıt düşerse dil yine değişir; dönüş: kaydedildi mi. */
 export async function dilSec(istenen: Dil): Promise<{ dil: Dil; kaydedildi: boolean }> {

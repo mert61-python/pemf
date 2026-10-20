@@ -1,0 +1,14 @@
+{
+  "baslat": "Başlat",
+  "hazir": "Hazır!",
+  "hazirGovde": "PEMF Vet kuruldu. Uygulamayı başlatın veya profillerinizi güncelleyin.",
+  "kaldir": "Uygulamayı kaldır",
+  "onar": "Kurulumu onar",
+  "profil": {
+    "arastirma": "Araştırma Modu",
+    "ev": "Evcil Hayvan Sahibi",
+    "veteriner": "Veteriner Hekim"
+  },
+  "profilleriDegistir": " Profilleri değiştir",
+  "slogan": "Veteriner PEMF seans + yapay zekâ teşhis platformu"
+}

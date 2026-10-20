@@ -11,6 +11,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { kaynakSoy as soy } from './_soyucu'
+import { gorunenMetinler } from './_kaynakMetni'
 
 import DOWNLOAD_SRC from '../pages/Download.tsx?raw'
 import PRICING_SRC from '../pages/Pricing.tsx?raw'
@@ -86,7 +87,8 @@ describe('2) iletişim', () => {
 
   it('KRİTİK: destek sayfasında TELEFON ve yanıt süresi görünür', () => {
     // config'te telefon vardı, destek sayfasında yalnız e-posta duruyordu.
-    const s = soy(SUPPORT_SRC)
+    // Yanıt süresi artık katalogdan gelir (I18N): görünen metin = kaynak + kullanılan anahtarların TR değeri (EN boşsa sayılmaz).
+    const s = gorunenMetinler(soy(SUPPORT_SRC))
     expect(s).toMatch(/COMPANY\.phone|tel:/)
     expect(s).toMatch(/iş günü|saat içinde/i)
   })

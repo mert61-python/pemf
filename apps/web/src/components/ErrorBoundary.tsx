@@ -1,6 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import { Component, type ReactNode } from 'react'
 import { COMPANY } from '../config'
+import i18n from 'i18next'
 
 /* Kök hata sınırı. Sitede hiç ErrorBoundary yoktu: herhangi bir sayfadaki tek bir render hatası
    (ör. config'te eksik alan, beklenmedik veri şekli) TÜM siteyi beyaz ekrana düşürüyordu — üstelik
@@ -22,24 +23,26 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
 
   render() {
     if (!this.state.hasError) return this.props.children
+    // Tek çeviri anahtarı, e-posta bağlantısı yerinde kalsın diye işaretçiyle (\u0001) ikiye bölünür.
+    const [govdeOnce, govdeSonra] = i18n.t('hata.govde', { eposta: '\u0001' }).split('\u0001')
     return (
       <section className="mx-auto flex min-h-svh max-w-xl flex-col items-center justify-center gap-4 px-5 text-center">
-        <h1 className="text-2xl font-bold">Bir şeyler ters gitti</h1>
+        <h1 className="text-2xl font-bold">{i18n.t('hata.baslik')}</h1>
         {/* Metin denetimi 2026-08-20: "bize yazın" tıklanabilir değildi ve adres yazmıyordu —
             hata anında kullanıcının iletişim yolu kapalıydı. */}
         <p className="text-muted">
-          Sayfa yüklenirken beklenmeyen bir hata oluştu. Sayfayı yenilemeyi deneyin; sorun sürerse{' '}
-          <a className="text-primary hover:underline" href={`mailto:${COMPANY.email}?subject=${encodeURIComponent('Site hatası')}`}>
+          {govdeOnce}
+          <a className="text-primary hover:underline" href={`mailto:${COMPANY.email}?subject=${encodeURIComponent(i18n.t('hata.konu'))}`}>
             {COMPANY.email}
-          </a>{' '}
-          adresine yazın.
+          </a>
+          {govdeSonra}
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3">
           <button className="btn-primary" onClick={() => window.location.reload()}>
-            Sayfayı yenile
+            {i18n.t('hata.yenile')}
           </button>
           <a className="btn-ghost" href="/">
-            Ana sayfaya dön
+            {i18n.t('ortak.anaSayfayaDon')}
           </a>
         </div>
       </section>
