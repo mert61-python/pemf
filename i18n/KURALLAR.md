@@ -258,6 +258,9 @@ bağımlılığı kuralı da orada) · K-3 kullanılan anahtar katalogda + dinam
 - i18next `init({resources})` nesnesini KOPYALAMADAN tutar: testte `removeResourceBundle` dışa aktarılan `kaynaklar`'ı da siler.
 - jest kurulumu i18n'i her test dosyasından ÖNCE yükler: i18n katmanına modül düzeyinde YENİ içe aktarma ekleme (tembel `require`).
 - node ≥ 21: `globalThis.navigator` salt-okur — testte `Object.defineProperty` (düz atama sessizce düşer, makinenin tr-TR yereli sızar).
+- `<html lang>` / `lang` özniteliğini DEĞİŞTİRME: CSS `text-transform: uppercase` dile göre büyütür — DEMA'da `lang="tr"` yapmak
+  "KARE SINYALI"yi "KARE SİNYALİ" yaptı (TR görünümü değişti; A12 ekran farkıyla ölçüldü, geri alındı). Göç öncesi değer korunur;
+  Türkçe büyük harf düzeltmesi ayrı bir SAHİP kararıdır. Metin aynı kalsa da görünüm değişebilir → TR ekranını göç öncesiyle KARŞILAŞTIR.
 - Kaynak tarayan kapı dizgiyi YORUMDA da bulur; `//.*`'ı `re.S` ile koşmak DOSYA SONUNA kadar yutar → blok / satır yorumunu ayrı soy, ya da AST.
 - gitleaks `generic-api-key`: tanımlayıcı / grup adında `api` parçası kullanma (`sunucu-10b-ana-sunucu`); muafiyet genişletme, `--no-verify` YOK.
 - Bash heredoc ters bölüyü bozar → JSON / betik / commit iletisi Write ile yazılır.

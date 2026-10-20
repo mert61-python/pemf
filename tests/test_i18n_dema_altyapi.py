@@ -4,7 +4,8 @@
 Kilitlenen davranış (GERÇEK `index.ts` / `main.tsx` TypeScript derleyicisiyle CommonJS'e çevrilip node'da KOŞTURULUR — metin pini değil):
   * sayfa dili `?dil=tr|en` > tarayıcı dili (`tr*` → tr, diğer → en); bayrak (`I18N_EN_ACIK`) KAPALIYKEN her durumda tr;
   * eksik İngilizce anahtar Türkçe değere düşer (boş metin yok); `{{ad}}` yer tutucuları doldurulur;
-  * `main.tsx` `<html lang>` ve sekme başlığını katalogdan kurar;
+  * `main.tsx` sekme başlığını katalogdan kurar, `<html lang>`a DOKUNMAZ (TR BAYT BAYT: CSS `uppercase` dile göre büyütür — A12'de
+    ölçüldü, `lang="tr"` "KARE SINYALI"yi "KARE SİNYALİ" yaptı; göç öncesi `index.html` `lang="en"` korunur, düzeltme sahip kararı);
   * iki katalogda aynı anahtarlar, İngilizce değerler boş değil.
 Uygulama tarafı (çerçeve `?dil=` ile yüklenir, dil değişince yeniden yüklenir): jest
 `apps/ui/src/screens/__tests__/DemaSimulatorScreen.I18N0.dilParametresi.test.tsx`.
@@ -73,7 +74,7 @@ for (const s of senaryolar) {
   if (s.en !== null) ozel["./en.json"] = s.en;
   if (s.tr !== null) ozel["./tr.json"] = s.tr;
   if (s.ana) {
-    const belge = { documentElement: { lang: "en" }, title: "", getElementById: () => ({}) };
+    const belge = { documentElement: { lang: "__ozgun__" }, title: "", getElementById: () => ({}) };
     globalThis.document = belge;
     Object.assign(ozel, {
       react: { StrictMode: "StrictMode" },
@@ -188,10 +189,18 @@ def test_eksik_ingilizce_TURKCEYE_duser_yer_tutucu_dolar(tmp_path):
 
 
 @ts_gerekli
-def test_main_html_lang_ve_sekme_basligi_katalogdan(tmp_path):
+def test_main_html_langa_dokunmaz_sekme_basligi_katalogdan(tmp_path):
     sonuc = _kos(
         tmp_path,
         [_senaryo(arama="?dil=en", tarayici="en-US", ana=True), _senaryo(arama="?dil=en", bayrak=True, ana=True)],
     )
-    assert sonuc[0] == {"lang": "tr", "title": _katalog("tr")["baslik"]["belge"]}
-    assert sonuc[1] == {"lang": "en", "title": _katalog("en")["baslik"]["belge"]}
+    # `lang` atanırsa (tr ya da en) gözcü değer değişir → kırmızı. Bayrak kapalı (tr) ve açık (en) iki yol da dokunmamalı.
+    assert sonuc[0] == {"lang": "__ozgun__", "title": _katalog("tr")["baslik"]["belge"]}
+    assert sonuc[1] == {"lang": "__ozgun__", "title": _katalog("en")["baslik"]["belge"]}
+
+
+def test_index_html_lang_gocten_once_oldugu_gibi():
+    """`lang` Türkçe büyük harf görünümünü değiştirir (SINYALI ↔ SİNYALİ) → göç öncesi değer korunur; değişiklik SAHİP kararıdır
+    (`DUZELTME-I18N.md` [SAHİBE]). Değiştirilecekse bu test sahibin onayıyla birlikte güncellenir."""
+    bas = (DEMA / "index.html").read_text(encoding="utf-8")
+    assert '<html lang="en">' in bas, "DEMA index.html <html lang> değişmiş — Türkçe görünüm (büyük İ) değişir"
