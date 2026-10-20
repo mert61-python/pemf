@@ -368,6 +368,48 @@
       "ad": "Facial Pain (FGS)"
     }
   },
+  "organ": {
+    "aciklama": "3D positions of 10 organs from a cat photo (segmentation + pose + canonical atlas + PnP).",
+    "ad": {
+      "akciger_sag": "Lung (right)",
+      "akciger_sol": "Lung (left)",
+      "bagirsak": "Intestine",
+      "bobrek": "Kidney",
+      "dalak": "Spleen",
+      "kalp": "Heart",
+      "karaciger": "Liver",
+      "mesane": "Bladder",
+      "mide": "Stomach",
+      "pankreas": "Pancreas"
+    },
+    "analiziBaslat": "Start Organ Analysis",
+    "anatomik": "⚠ Anatomical consistency warning: the organ arrangement contradicts the expected anatomy — treat the localization with caution.",
+    "ayna": "⚠ Mirror ambiguity: the left / right organ distinction may not be reliable in this frame — a second frame from a different angle is recommended.",
+    "baslik": "Cat Organ Localization",
+    "bulunamadiMetin": "The cat / organs could not be clearly made out in this image. Make sure the whole cat is in the frame, the light is good and the image is sharp; try a closer side / top frame.",
+    "bulundu_one": "{{count}} organ found · most reliable: {{bestName}} ({{bestPct}}%)",
+    "bulundu_other": "{{count}} organs found · most reliable: {{bestName}} ({{bestPct}}%)",
+    "canliIpucu": "🎥 Live mode is on — frame the cat and hold it steady. The organ map updates each time a frame analysis finishes (3-model pipeline — depends on the machine's speed); the large image is the last analyzed frame, the live preview is in the corner; the bar colors show the confidence level.",
+    "canliKameraIzni": "Camera permission is required for live mode.",
+    "dusukGuven": "The organs were located but the confidence is low. A sharper / closer image will improve the result. All organs and their confidence levels are listed below.",
+    "guvenilir": "The organs were located reliably. The list below gives each organ's 3D position (cm) and confidence level.",
+    "ipucuAruco": "• If the cabin has an ArUco marker, the 3D position is given in cabin coordinates",
+    "ipucuCanli": "• Frame the cat with <kalin>Live Camera</kalin>; the organ map updates every few seconds",
+    "ipucuTekKare": "• Analyze a single frame with <kalin>Choose from Gallery</kalin> or <kalin>Take Photo</kalin>",
+    "ipucuTum": "• Use a sharp side / top view in which the whole cat is visible",
+    "kediYok": "Cat not found",
+    "koordinatNotu": "3D coordinate: the organ center in the cat / cabin frame (cm). “Confidence” is the localization certainty of the model (green ≥60%, yellow ≥40%, red low). With the cabin's ArUco calibration the position is placed in cabin coordinates.",
+    "modelHazirlaniyor": "Preparing the model (3 models, the first use may take a while)…",
+    "nasil": "🐾 How to use",
+    "nokta1": "Colored bar = the model's confidence in that organ position (green ≥60%, yellow ≥40%, red low).",
+    "nokta2": "This is a preliminary localization, not a medical diagnosis.",
+    "organYok": "Organs not detected",
+    "organlar": "Organs (3D position · confidence)",
+    "rozetAraniyor": "SEARCHING FOR ORGANS…",
+    "rozet_one": "{{count}} ORGAN",
+    "rozet_other": "{{count}} ORGANS",
+    "teknik": "Technical: pose {{poz}} · PnP {{pnp}} "
+  },
   "ortak": {
     "analizEdiliyor": "Analyzing...",
     "analizSonucu": "Analysis Result",
@@ -572,6 +614,60 @@
       "kircYokMetin": "The samples were classified as 'other' (not KIRC). This is a screening result and does not replace a definitive diagnosis."
     },
     "surukleyenGenler": "🔍 Driver genes: {{genler}}"
+  },
+  "scratch": {
+    "aciklama": "CPN cell segmentation + TScratch closure metrics (research data — not a patient record).",
+    "analizEdiliyor": "Analyzing…",
+    "analizEt": "Analyze",
+    "delta": "Δ {{isaret}}{{fark}} pts ",
+    "dikey": "Vertical",
+    "dosyaSec": "Choose image (.tif / .png / .jpg)",
+    "galeri": {
+      "analiz": {
+        "ad": "Analysis",
+        "not": "Red lines = ROI band enclosing the wound (along the wound direction) · yellow = cells nearest to the band"
+      },
+      "input": {
+        "ad": "Original",
+        "not": "Original image (server JPEG preview — TIF cannot be shown in the browser)"
+      },
+      "kapanma": {
+        "ad": "Closure",
+        "not": "Yellow band = ROI (encloses the wound) · red = max gap line · blue = mean gap line"
+      },
+      "overlay": {
+        "ad": "Overlay",
+        "not": "Segmentation + original blend"
+      },
+      "panel": {
+        "ad": "3-panel",
+        "not": "Original | heat map | overlay"
+      },
+      "seg": {
+        "not": "Each cell in a different color (CPN instance)"
+      },
+      "xai": {
+        "ad": "XAI",
+        "not": "Detection-targeted HiRes-CAM — the regions driving the cell detections · numbered blue boxes: the 10 most influential cells (cells touching the border are excluded from the evaluation)"
+      }
+    },
+    "goruntuIciNot": "ℹ The counts inside the image belong to the ROI band; the total cell count is on the card above.",
+    "hucre": "Cells",
+    "isiHaritasiUret": " 🔍 Generate heat map (regional model attention — not cell-level)",
+    "karsilastir": "⇄ Compare (last two analyses)",
+    "karsilastirmaSatiri": " {{e1}} {{p1}}% → {{e2}} {{p2}}% · mean gap {{g1}}→{{g2}} µm ",
+    "maksGap": "Max gap",
+    "metrikler": "Gap area {{alan}} mm² · coverage {{coverage}} · score {{skor}} · device: {{cihaz}} ",
+    "modelHazirlaniyor": "Preparing the large model — the first run may take minutes…",
+    "objektif": "Objective (calibration)",
+    "objektifNotu": "pixel_mm = {{pmm}} mm/px — select the objective used for the capture (µm/mm² accuracy depends on it). ",
+    "onizlemeEtiketi": "Input image preview: {{ad}}",
+    "ortGap": "Mean gap",
+    "parametreDegisti": "⚠ A parameter changed — the results belong to the old settings. Analyze again.",
+    "tifNotu": "A TIF preview cannot be shown in the browser — after the analysis the input image appears here and in the [Original] tab.",
+    "xaiGelmedi": "🔍 A heat map was requested but did not come in this response — the server version may not produce XAI (the analysis result is valid).",
+    "yara": "Wound direction",
+    "yatay": "Horizontal"
   },
   "segmentasyon": {
     "basarili": "Body outlines were extracted successfully. Segmentation is a pre-processing step for measurements and other analyses.",

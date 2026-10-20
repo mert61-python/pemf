@@ -3869,9 +3869,22 @@ function HistopathModule({ patientName }: { patientName: string }) {
   );
 }
 
-const ORGAN_TR: Record<string, string> = {
-  mide: "Mide", bobrek: "Böbrek", karaciger: "Karaciğer", mesane: "Mesane", pankreas: "Pankreas",
-  bagirsak: "Bağırsak", kalp: "Kalp", dalak: "Dalak", akciger_sag: "Akciğer (sağ)", akciger_sol: "Akciğer (sol)",
+/** Organ kimliği → katalog ANAHTARI (gösterimde `organAdi` çevirir; bilinmeyen kimlik HAM). */
+const ORGAN_ANAHTARI: Record<string, string> = {
+  mide: "ai.organ.ad.mide",
+  bobrek: "ai.organ.ad.bobrek",
+  karaciger: "ai.organ.ad.karaciger",
+  mesane: "ai.organ.ad.mesane",
+  pankreas: "ai.organ.ad.pankreas",
+  bagirsak: "ai.organ.ad.bagirsak",
+  kalp: "ai.organ.ad.kalp",
+  dalak: "ai.organ.ad.dalak",
+  akciger_sag: "ai.organ.ad.akciger_sag",
+  akciger_sol: "ai.organ.ad.akciger_sol",
+};
+const organAdi = (organ: string): string => {
+  const k = ORGAN_ANAHTARI[organ];
+  return k ? i18n.t(k as never) : organ;
 };
 const relColor = (r: number) => (r >= 0.6 ? colors.success : r >= 0.4 ? colors.warning : colors.danger);
 
@@ -3893,19 +3906,20 @@ const SCRATCH_OBJEKTIFLER = [
   { ad: "20×", pmm: "0.00033" }, { ad: "40×", pmm: "0.00016" },
 ] as const;
 const SCRATCH_GALERI: { k: string; ad: string; alan: keyof AiResult; not: string }[] = [
-  { k: "closure", ad: "Kapanma", alan: "closure_image_base64", not: "Sarı bant = ROI (yarayı içine alır) · kırmızı = maks gap hattı · mavi = ort. gap hattı" },
-  { k: "analysis", ad: "Analiz", alan: "analysis_image_base64", // ⚠️ ESKİ METİN "yaraya dik" diyordu ve çizim de öyleydi: dikey yara seçilince YATAY
+  { k: "closure", ad: "ai.scratch.galeri.kapanma.ad", alan: "closure_image_base64", not: "ai.scratch.galeri.kapanma.not" },
+  { k: "analysis", ad: "ai.scratch.galeri.analiz.ad", alan: "analysis_image_base64", // ⚠️ ESKİ METİN "yaraya dik" diyordu ve çizim de öyleydi: dikey yara seçilince YATAY
     // kuşak çiziliyordu (2026-09-09 sahip bildirimi). Kuşak yarayı İÇİNE alır.
-    not: "Kırmızı çizgiler = yarayı içine alan ROI kuşağı (yara yönüne göre) · sarı = kuşağa en yakın hücreler" },
-  { k: "seg", ad: "Segmentasyon", alan: "seg_image_base64", not: "Her hücre ayrı renk (CPN instance)" },
-  { k: "overlay", ad: "Overlay", alan: "overlay_image_base64", not: "Segmentasyon + orijinal karışımı" },
-  { k: "input", ad: "Orijinal", alan: "input_image_base64", not: "Orijinal görüntü (sunucu JPEG önizlemesi — TIF tarayıcıda gösterilemez)" },
-  { k: "xai", ad: "XAI", alan: "xai_image_base64", not: "Tespit hedefli HiRes-CAM — hücre tespitlerini sürükleyen bölgeler · numaralı mavi kutular: en etkili 10 hücre (kenara değen hücreler değerlendirme dışı)" },
-  { k: "panel", ad: "3'lü panel", alan: "xai_side_by_side_base64", not: "Orijinal | ısı haritası | overlay" },
+    not: "ai.scratch.galeri.analiz.not" },
+  { k: "seg", ad: "ai.modul.segmentasyon.ad", alan: "seg_image_base64", not: "ai.scratch.galeri.seg.not" },
+  { k: "overlay", ad: "ai.scratch.galeri.overlay.ad", alan: "overlay_image_base64", not: "ai.scratch.galeri.overlay.not" },
+  { k: "input", ad: "ai.scratch.galeri.input.ad", alan: "input_image_base64", not: "ai.scratch.galeri.input.not" },
+  { k: "xai", ad: "ai.scratch.galeri.xai.ad", alan: "xai_image_base64", not: "ai.scratch.galeri.xai.not" },
+  { k: "panel", ad: "ai.scratch.galeri.panel.ad", alan: "xai_side_by_side_base64", not: "ai.scratch.galeri.panel.not" },
 ];
 type ScratchKayit = { etiket: string; closure_pct: number; mean_gap_um: number };
 
 function ScratchModule({ patientName }: { patientName: string }) {
+  const { t } = useTranslation();
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
   const CK = "cell_scratch";
@@ -4017,7 +4031,7 @@ function ScratchModule({ patientName }: { patientName: string }) {
             etiket, closure_pct: data.closure.closure_pct, mean_gap_um: data.closure.mean_gap_um,
           }]);
         }
-      } else showToast(aiDetayCumlesi(data?.detail || data?.error, "Analiz sırasında hata oluştu."), "error");
+      } else showToast(aiDetayCumlesi(data?.detail || data?.error, t("ai.hata.analizSirasinda")), "error");
     } catch (e) {
       if (mountedRef.current) showToast(aiHataMesaji(e), "error");
     } finally {
@@ -4032,13 +4046,13 @@ function ScratchModule({ patientName }: { patientName: string }) {
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.title}>Yara Kapanma (Scratch)</Text>
-      <Text style={styles.subtitle}>CPN hücre segmentasyonu + TScratch kapanma metrikleri (araştırma verisi — hasta kaydı değildir).</Text>
+      <Text style={styles.title}>{t("ai.modul.yaraKapanma.ad")}</Text>
+      <Text style={styles.subtitle}>{t("ai.scratch.aciklama")}</Text>
 
       <TouchableOpacity style={styles.scFileBtn} onPress={dosyaSec} accessibilityRole="button">
         <FileText size={16} color={colors.textMuted} />
         <Text style={styles.scFileText} numberOfLines={1}>
-          {dosya ? dosya.name : "Görüntü seç (.tif / .png / .jpg)"}
+          {dosya ? dosya.name : t("ai.scratch.dosyaSec")}
         </Text>
       </TouchableOpacity>
 
@@ -4050,28 +4064,27 @@ function ScratchModule({ patientName }: { patientName: string }) {
       {onizlemeKaynagi ? (
         <View style={styles.scOnizlemeKutu}>
           <Image source={{ uri: onizlemeKaynagi }} style={styles.imagePreview}
-            accessibilityLabel={`Girdi görüntüsü önizlemesi: ${dosya?.name ?? ""}`} />
+            accessibilityLabel={t("ai.scratch.onizlemeEtiketi", { ad: dosya?.name ?? "" })} />
         </View>
       ) : null}
       {dosya && /\.tiff?$/i.test(dosya.name) && !result?.input_image_base64 && (
         <Text style={styles.ctHint}>
-          TIF önizlemesi tarayıcıda gösterilemez — analizden sonra girdi görüntüsü burada ve
-          [Orijinal] sekmesinde görünür.
+          {t("ai.scratch.tifNotu")}
         </Text>
       )}
 
-      <Text style={styles.ctSubLabel}>Yara yönü</Text>
+      <Text style={styles.ctSubLabel}>{t("ai.scratch.yara")}</Text>
       <View style={styles.scChipRow} accessibilityRole="radiogroup">
         {(["dikey", "yatay"] as const).map((v) => (
           <TouchableOpacity key={v} accessibilityRole="radio" accessibilityState={{ selected: yon === v }}
             style={[styles.scChip, yon === v && styles.scChipOn]}
             onPress={() => { setYon(v); parametreDegisti(); }}>
-            <Text style={[styles.scChipText, yon === v && styles.scChipTextOn]}>{v === "dikey" ? "Dikey" : "Yatay"}</Text>
+            <Text style={[styles.scChipText, yon === v && styles.scChipTextOn]}>{v === "dikey" ? t("ai.scratch.dikey") : t("ai.scratch.yatay")}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={styles.ctSubLabel}>Objektif (kalibrasyon)</Text>
+      <Text style={styles.ctSubLabel}>{t("ai.scratch.objektif")}</Text>
       <View style={styles.scChipRow} accessibilityRole="radiogroup">
         {SCRATCH_OBJEKTIFLER.map((o) => (
           <TouchableOpacity key={o.ad} accessibilityRole="radio" accessibilityState={{ selected: pmm === o.pmm }}
@@ -4081,19 +4094,19 @@ function ScratchModule({ patientName }: { patientName: string }) {
           </TouchableOpacity>
         ))}
       </View>
-      <Text style={styles.ctHint}>pixel_mm = {pmm} mm/px — çekimde kullanılan objektifi seçin (µm/mm² doğruluğu buna bağlı).</Text>
+      <Text style={styles.ctHint}>{t("ai.scratch.objektifNotu", { pmm })}</Text>
 
       <TouchableOpacity style={styles.xaiToggle} accessibilityRole="switch" accessibilityState={{ checked: xaiAc }}
         onPress={() => { setXaiAc(!xaiAc); parametreDegisti(); }}>
-        <Text style={styles.xaiToggleText}>{xaiAc ? "☑" : "☐"} 🔍 Isı haritası üret (bölgesel model ilgisi — hücre-düzeyi değildir)</Text>
+        <Text style={styles.xaiToggleText}>{xaiAc ? "☑" : "☐"}{t("ai.scratch.isiHaritasiUret")}</Text>
       </TouchableOpacity>
 
-      <Button label={loading ? "Analiz ediliyor…" : "Analiz Et"} onPress={analiz} disabled={!dosya || loading} loading={loading} block />
+      <Button label={loading ? t("ai.scratch.analizEdiliyor") : t("ai.scratch.analizEt")} onPress={analiz} disabled={!dosya || loading} loading={loading} block />
       {loading && longLoading && (
-        <Text style={styles.modelHint}>Büyük model hazırlanıyor — ilk çalıştırma dakikalar sürebilir…</Text>
+        <Text style={styles.modelHint}>{t("ai.scratch.modelHazirlaniyor")}</Text>
       )}
       {yenidenGerek && !loading && (
-        <Text style={styles.modelHint}>⚠ Parametre değişti — sonuçlar eski ayarlara ait. Yeniden analiz edin.</Text>
+        <Text style={styles.modelHint}>{t("ai.scratch.parametreDegisti")}</Text>
       )}
 
       {result && (
@@ -4104,24 +4117,24 @@ function ScratchModule({ patientName }: { patientName: string }) {
             <>
               <View style={styles.scMetricRow}>
                 <View style={[styles.scMetricBox, styles.scMetricHero]}>
-                  <Text style={[styles.scMetricVal, { color: colors.primary }]}>%{result.closure?.closure_pct}</Text>
-                  <Text style={styles.scMetricLbl}>Kapanma</Text>
+                  <Text style={[styles.scMetricVal, { color: colors.primary }]}>{t("ai.ortak.yuzde", { deger: result.closure?.closure_pct ?? "" })}</Text>
+                  <Text style={styles.scMetricLbl}>{t("ai.scratch.galeri.kapanma.ad")}</Text>
                 </View>
                 <View style={styles.scMetricBox}>
                   <Text style={styles.scMetricVal}>{result.closure?.mean_gap_um} µm</Text>
-                  <Text style={styles.scMetricLbl}>Ort. gap</Text>
+                  <Text style={styles.scMetricLbl}>{t("ai.scratch.ortGap")}</Text>
                 </View>
                 <View style={styles.scMetricBox}>
                   <Text style={styles.scMetricVal}>{result.closure?.max_gap_um} µm</Text>
-                  <Text style={styles.scMetricLbl}>Maks gap</Text>
+                  <Text style={styles.scMetricLbl}>{t("ai.scratch.maksGap")}</Text>
                 </View>
                 <View style={styles.scMetricBox}>
                   <Text style={styles.scMetricVal}>{result.n_cells}</Text>
-                  <Text style={styles.scMetricLbl}>Hücre</Text>
+                  <Text style={styles.scMetricLbl}>{t("ai.scratch.hucre")}</Text>
                 </View>
               </View>
               <Text style={styles.ctHint}>
-                Gap alanı {result.closure?.gap_area_mm2} mm² · coverage {result.coverage_ratio} · skor {result.score_mean} · cihaz: {result.device}
+                {t("ai.scratch.metrikler", { alan: result.closure?.gap_area_mm2 ?? "", coverage: result.coverage_ratio ?? "", skor: result.score_mean ?? "", cihaz: result.device ?? "" })}
               </Text>
             </>
           )}
@@ -4132,7 +4145,7 @@ function ScratchModule({ patientName }: { patientName: string }) {
                 {aktifGaleri.map((g) => (
                   <TouchableOpacity key={g.k} accessibilityRole="tab" accessibilityState={{ selected: seciliGorsel?.k === g.k }}
                     style={[styles.scChip, seciliGorsel?.k === g.k && styles.scChipOn]} onPress={() => setGaleri(g.k)}>
-                    <Text style={[styles.scChipText, seciliGorsel?.k === g.k && styles.scChipTextOn]}>{g.ad}</Text>
+                    <Text style={[styles.scChipText, seciliGorsel?.k === g.k && styles.scChipTextOn]}>{t(g.ad as never)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -4141,11 +4154,11 @@ function ScratchModule({ patientName }: { patientName: string }) {
                   {/* AÇIK yükseklik (plan v2: styles.imagePreview %100-yükseklik tuzağı) */}
                   <Image testID="sc-stage" source={{ uri: `data:image/jpeg;base64,${(result as any)[seciliGorsel.alan]}` }}
                     style={[styles.scStage, { height: sahneH }]} resizeMode="contain" />
-                  <Text style={styles.ctHint}>{seciliGorsel.not}</Text>
+                  <Text style={styles.ctHint}>{t(seciliGorsel.not as never)}</Text>
                 </>
               )}
               {!result.uyari && (
-                <Text style={styles.ctHint}>ℹ Görsel içi sayımlar ROI bandına aittir; toplam hücre sayısı üstteki karttadır.</Text>
+                <Text style={styles.ctHint}>{t("ai.scratch.goruntuIciNot")}</Text>
               )}
             </>
           )}
@@ -4154,7 +4167,7 @@ function ScratchModule({ patientName }: { patientName: string }) {
               (eski backend / XAI üretmeyen sürüm). `!result.uyari` ŞART: hücre-yok `uyari` yolunda backend
               explain'e hiç girmez (tasarım) → orada bu uyarı YANLIŞ teşhis olur (doğrulayıcı mutasyonla kanıtladı). */}
           {(result as any)._xai_istendi && !result.uyari && !result.xai_image_base64 && !result.xai_error ? (
-            <Text style={styles.xaiSatiri}>🔍 Isı haritası istendi ama bu yanıtta gelmedi — sunucu sürümü XAI üretmiyor olabilir (analiz sonucu geçerlidir).</Text>
+            <Text style={styles.xaiSatiri}>{t("ai.scratch.xaiGelmedi")}</Text>
           ) : null}
           {result.closure_uyari ? <Text style={styles.scUyari}>⚠ {result.closure_uyari}</Text> : null}
 
@@ -4162,15 +4175,15 @@ function ScratchModule({ patientName }: { patientName: string }) {
             <>
               <TouchableOpacity style={[styles.scChip, karsiAcik && styles.scChipOn, { alignSelf: "stretch", alignItems: "center", marginTop: spacing.sm }]}
                 onPress={() => setKarsiAcik(!karsiAcik)} accessibilityRole="button">
-                <Text style={[styles.scChipText, karsiAcik && styles.scChipTextOn]}>⇄ Karşılaştır (son iki analiz)</Text>
+                <Text style={[styles.scChipText, karsiAcik && styles.scChipTextOn]}>{t("ai.scratch.karsilastir")}</Text>
               </TouchableOpacity>
               {karsiAcik && son2.length === 2 && (
                 <View style={styles.scDelta}>
                   <Text style={styles.scDeltaVal}>
-                    Δ {(son2[1].closure_pct - son2[0].closure_pct) >= 0 ? "+" : ""}{(son2[1].closure_pct - son2[0].closure_pct).toFixed(1)} puan
+                    {t("ai.scratch.delta", { isaret: (son2[1].closure_pct - son2[0].closure_pct) >= 0 ? "+" : "", fark: (son2[1].closure_pct - son2[0].closure_pct).toFixed(1) })}
                   </Text>
                   <Text style={styles.ctHint}>
-                    {son2[0].etiket} %{son2[0].closure_pct} → {son2[1].etiket} %{son2[1].closure_pct} · ort. gap {son2[0].mean_gap_um}→{son2[1].mean_gap_um} µm
+                    {t("ai.scratch.karsilastirmaSatiri", { e1: son2[0].etiket, p1: son2[0].closure_pct, e2: son2[1].etiket, p2: son2[1].closure_pct, g1: son2[0].mean_gap_um, g2: son2[1].mean_gap_um })}
                   </Text>
                 </View>
               )}
@@ -4184,6 +4197,7 @@ function ScratchModule({ patientName }: { patientName: string }) {
 }
 
 function CatOrganModule({ patientName }: { patientName: string }) {
+  const { t } = useTranslation();
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
   // Galeri ASIL okuma yuzeyi: daha yuksek tavan, AYNI responsive oran (bkz. useGaleriYuksekligi).
@@ -4282,7 +4296,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
             }
           }
         } catch (e) {
-          if (!bitti && isLiveRef.current) setCanliDurum({ tur: "hata", metin: `Son kare analiz edilemedi: ${aiHataMesaji(e)}` });
+          if (!bitti && isLiveRef.current) setCanliDurum({ tur: "hata", metin: t("ai.canli.sonKareHata", { hata: aiHataMesaji(e) }) });
         } finally {
           liveLoadingRef.current = false;
         }
@@ -4297,7 +4311,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
       try { liveAbortRef.current?.abort(); } catch { /* ignore */ }
       liveAbortRef.current = null;
     };
-  }, [isLive]);
+  }, [isLive, t]);
 
   // SG.G6: son analiz karesinin yaşı.
   useEffect(() => {
@@ -4310,7 +4324,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
     if (!isLive) {
       if (!permission?.granted) {
         const res = await requestPermission();
-        if (!res?.granted) { showToast("Canlı kamera için izin gerekli.", "error"); return; }
+        if (!res?.granted) { showToast(t("ai.organ.canliKameraIzni"), "error"); return; }
       }
     }
     const next = !isLive;
@@ -4382,7 +4396,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
         setResult(data);
         logAiResult(hasta, "Kedi Organ", data.bulunamadi ? (data.bulunamadi === "kedi_bulunamadi" ? "Kedi bulunamadı" : "Organ çıkarılamadı") : `${data.n_organs} organ lokalize`, { moduleId: "cat_organ", inputType: "image", detail: data });
       } else {
-        showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
+        showToast(aiDetayCumlesi(data?.detail, t("ai.hata.analizSirasinda")), "error");
       }
     } catch (e) {
       showToast(aiHataMesaji(e), "error");
@@ -4393,16 +4407,16 @@ function CatOrganModule({ patientName }: { patientName: string }) {
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.title}>Kedi Organ Lokalizasyonu</Text>
-      <Text style={styles.subtitle}>Kedi fotoğrafından 10 organın 3B konumu (segmentasyon + poz + canonical atlas + PnP).</Text>
+      <Text style={styles.title}>{t("ai.organ.baslik")}</Text>
+      <Text style={styles.subtitle}>{t("ai.organ.aciklama")}</Text>
 
       {!imageUri && !isLive && (
         <View style={styles.photoGuide}>
-          <Text style={styles.photoGuideTitle}>🐾 Nasıl kullanılır?</Text>
-          <Text style={styles.photoGuideItem}>• <Text style={styles.photoGuideBold}>Galeriden Seç</Text> veya <Text style={styles.photoGuideBold}>Fotoğraf Çek</Text> ile tek kare analiz edin</Text>
-          <Text style={styles.photoGuideItem}>• <Text style={styles.photoGuideBold}>Canlı Kamera</Text> ile kediyi kadraja alın; organ haritası her birkaç saniyede güncellenir</Text>
-          <Text style={styles.photoGuideItem}>• Kedinin tümü görünür, yandan/üstten net bir görüntü kullanın</Text>
-          <Text style={styles.photoGuideItem}>• Kabinde ArUco işaretçi varsa 3B konum kabin koordinatında verilir</Text>
+          <Text style={styles.photoGuideTitle}>{t("ai.organ.nasil")}</Text>
+          <Text style={styles.photoGuideItem}><Trans i18nKey="ai.organ.ipucuTekKare" components={{ kalin: <Text style={styles.photoGuideBold} /> }} /></Text>
+          <Text style={styles.photoGuideItem}><Trans i18nKey="ai.organ.ipucuCanli" components={{ kalin: <Text style={styles.photoGuideBold} /> }} /></Text>
+          <Text style={styles.photoGuideItem}>{t("ai.organ.ipucuTum")}</Text>
+          <Text style={styles.photoGuideItem}>{t("ai.organ.ipucuAruco")}</Text>
         </View>
       )}
 
@@ -4419,7 +4433,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
           testID="catorgan-sahne"
           bos={
             <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
-              <View style={styles.placeholderBox}><ImageIcon color={colors.textMuted} size={48} /><Text style={styles.placeholderText}>Görüntü seçilmedi</Text></View>
+              <View style={styles.placeholderBox}><ImageIcon color={colors.textMuted} size={48} /><Text style={styles.placeholderText}>{t("ai.ortak.goruntuSecilmedi")}</Text></View>
             </View>
           }
         />
@@ -4443,38 +4457,38 @@ function CatOrganModule({ patientName }: { patientName: string }) {
             onFlip={() => setFacing((f) => (f === "back" ? "front" : "back"))}
             sonKareB64={result?.image_base64 || null}
             sonKareYasMs={sonKareZamani != null ? simdi - sonKareZamani : null}
-            rozet={result ? `${result.n_organs ?? 0} ORGAN` : "ORGAN ARANIYOR…"}
+            rozet={result ? t("ai.organ.rozet", { count: result.n_organs ?? 0 }) : t("ai.organ.rozetAraniyor")}
           />
         </View>
       )}
 
       {isLive && canliDurum ? <CanliDurumSatiri durum={canliDurum} jeton={canliJetonEtkin ? canliJeton : null} /> : null}
       {isLive && (
-        <Text style={styles.liveHint}>🎥 Canlı mod açık — kediyi kadraja alıp sabit tutun. Organ haritası her kare analizi bitince güncellenir (3 modelli hat — makinenin hızına bağlı); büyük görüntü son analiz karesidir, canlı önizleme köşededir; barların rengi güven düzeyini gösterir.</Text>
+        <Text style={styles.liveHint}>{t("ai.organ.canliIpucu")}</Text>
       )}
 
       <View style={[styles.btnRow, isCompact && { flexDirection: "column" }]}>
-        <View style={isCompact ? { width: "100%" } : { flex: 1 }}><Button label="Galeriden Seç" icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} disabled={isLive} /></View>
-        <View style={isCompact ? { width: "100%" } : { flex: 1 }}><Button label="Fotoğraf Çek" icon={<Camera color={colors.white} size={16} />} onPress={takePhoto} disabled={isLive} /></View>
+        <View style={isCompact ? { width: "100%" } : { flex: 1 }}><Button label={t("ai.ortak.galeridenSec")} icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} disabled={isLive} /></View>
+        <View style={isCompact ? { width: "100%" } : { flex: 1 }}><Button label={t("ai.gorsel.fotografCek")} icon={<Camera color={colors.white} size={16} />} onPress={takePhoto} disabled={isLive} /></View>
         <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
-          <Button label={isLive ? "Canlıyı Durdur" : "Canlı Kamera"} variant={isLive ? "danger" : "secondary"} icon={<Video color={isLive ? colors.white : colors.primary} size={16} />} onPress={toggleLive} />
+          <Button label={isLive ? t("ai.gorsel.canliyiDurdur") : t("ai.gorsel.canliKamera")} variant={isLive ? "danger" : "secondary"} icon={<Video color={isLive ? colors.white : colors.primary} size={16} />} onPress={toggleLive} />
         </View>
       </View>
 
       {!isLive && (
         <View style={styles.analyzeBtn}>
-          <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Organ Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyze} />
+          <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.organ.analiziBaslat")} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyze} />
         </View>
       )}
-      {longLoading && <Text style={styles.modelHint}>Model hazırlanıyor (3 model, ilk kullanım uzun sürebilir)…</Text>}
+      {longLoading && <Text style={styles.modelHint}>{t("ai.organ.modelHazirlaniyor")}</Text>}
 
       {result && (
         <View style={styles.resultBox}>
           {(result as any).mirror_warning ? (
-            <Text style={styles.scUyari}>⚠ Ayna belirsizliği: bu karede sağ/sol organ ayrımı güvenilir olmayabilir — farklı açıdan ikinci kare önerilir.</Text>
+            <Text style={styles.scUyari}>{t("ai.organ.ayna")}</Text>
           ) : null}
           {(result as any).anatomic_consistency && (result as any).anatomic_consistency.passed === false ? (
-            <Text style={styles.scUyari}>⚠ Anatomik tutarlılık uyarısı: organ dizilimi beklenen anatomiyle çelişiyor — lokalizasyona temkinli yaklaşın.</Text>
+            <Text style={styles.scUyari}>{t("ai.organ.anatomik")}</Text>
           ) : null}
           {/* İNCELEME-2 i5-F-2 (D1.E08 · İG-5.27): kabin yapılandırması yüklenemediyse organ konumları KALİBRASYONSUZDUR —
               backend metni (tek kaynak `catorgan_predictor.KABIN_UYARISI`) operatöre GÖSTERİLİR (eskiden yalnız yanıtta). */}
@@ -4485,20 +4499,20 @@ function CatOrganModule({ patientName }: { patientName: string }) {
             const organs = result.organs || [];
             if (organs.length === 0) {
               // SG.G5: backend "bulunamadı" BİLGİSİNİ nedeniyle söylüyorsa (kedi yok / organ çıkarılamadı) o metin gösterilir.
-              return <ResultInterpretation tone="alert" emoji="🔍" title={result.bulunamadi === "kedi_bulunamadi" ? "Kedi bulunamadı" : "Organ tespit edilemedi"}
-                text={result.bulunamadi_mesaji || "Bu görüntüde kedi/organ net seçilemedi. Kedinin tümü kadraja girsin, ışık iyi ve görüntü net olsun; yandan/üstten daha yakın bir kare deneyin."} />;
+              return <ResultInterpretation tone="alert" emoji="🔍" title={result.bulunamadi === "kedi_bulunamadi" ? t("ai.organ.kediYok") : t("ai.organ.organYok")}
+                text={result.bulunamadi_mesaji || t("ai.organ.bulunamadiMetin")} />;
             }
             const best = organs.reduce((a: AiOrgan, b: AiOrgan) => ((b.reliability || 0) > (a.reliability || 0) ? b : a), organs[0]);
             const bestPct = Math.round(Math.max(0, Math.min(1, best.reliability || 0)) * 100);
-            const bestName = ORGAN_TR[best.name] || best.name;
+            const bestName = organAdi(best.name);
             const strong = bestPct >= 60;
             return <ResultInterpretation
               tone={strong ? "positive" : "info"} emoji="🐾"
-              title={`${organs.length} organ bulundu · en güvenilir: ${bestName} (%${bestPct})`}
+              title={t("ai.organ.bulundu", { count: organs.length, bestName, bestPct })}
               text={strong
-                ? "Organlar güvenilir şekilde konumlandı. Aşağıdaki listede her organın 3B konumu (cm) ve güven düzeyi var."
-                : "Organlar konumlandı ama güven düşük. Daha net/yakın bir görüntüyle sonuç iyileşir. Aşağıda tüm organlar ve güven düzeyleri var."}
-              points={["Renkli bar = modelin o organ konumuna güveni (yeşil ≥%60, sarı ≥%40, kırmızı düşük).", "Bu bir ön-lokalizasyondur, tıbbi tanı değildir."]} />;
+                ? t("ai.organ.guvenilir")
+                : t("ai.organ.dusukGuven")}
+              points={[t("ai.organ.nokta1"), t("ai.organ.nokta2")]} />;
           })()}
           {/* ⚠️ "PnP undefinedpx" (saha, 2026-09-11): alan koşulsuz basılıyordu ve GPU
               profilinde `pnp_residual_px` HİÇ gelmiyordu (`ai_service/app.py`de yoktu).
@@ -4506,27 +4520,26 @@ function CatOrganModule({ patientName }: { patientName: string }) {
               teknik satırda "—" çıkar. Bir sayı uydurmak (0px) daha kötü olurdu —
               operatör onu "mükemmel uyum" diye okur. */}
           <Text style={styles.ctSubLabel}>
-            Teknik: poz {result.pose_type ?? "?"} · PnP{" "}
-            {typeof result.pnp_residual_px === "number" ? `${result.pnp_residual_px}px` : "—"}
+            {t("ai.organ.teknik", { poz: result.pose_type ?? "?", pnp: typeof result.pnp_residual_px === "number" ? `${result.pnp_residual_px}px` : "—" })}
           </Text>
-          <Text style={styles.ctSubLabel}>Organlar (3B konum · güven)</Text>
+          <Text style={styles.ctSubLabel}>{t("ai.organ.organlar")}</Text>
           {(result.organs || []).map((o: AiOrgan, i: number) => {
             const c = o.coord_cabin_cm || o.coord_3d_cm || [0, 0, 0];
             const rel = Math.max(0, Math.min(1, o.reliability || 0));
             const pct = Math.round(rel * 100);
             return (
               <View key={i} style={{ marginTop: spacing.xs }}>
-                <Text style={styles.resultText}>{ORGAN_TR[o.name] || o.name} <Text style={{ color: colors.textMuted, fontSize: typography.small }}>({(+c[0]).toFixed(1)}, {(+c[1]).toFixed(1)}, {(+c[2]).toFixed(1)}) cm</Text></Text>
+                <Text style={styles.resultText}>{organAdi(o.name)} <Text style={{ color: colors.textMuted, fontSize: typography.small }}>({(+c[0]).toFixed(1)}, {(+c[1]).toFixed(1)}, {(+c[2]).toFixed(1)}) cm</Text></Text>
                 <View style={styles.soundBarRow}>
                   <View style={styles.soundBarTrack}>
                     <View style={[styles.soundBarFill, { width: (`${Math.max(2, pct)}%` as any), backgroundColor: relColor(rel) }]} />
                   </View>
-                  <Text style={styles.soundBarPct}>%{pct}</Text>
+                  <Text style={styles.soundBarPct}>{t("ai.ortak.yuzde", { deger: pct })}</Text>
                 </View>
               </View>
             );
           })}
-          <Text style={styles.ctHint}>3B koordinat: kedi/kabin çerçevesinde organ merkezi (cm). “Güven”, modelin lokalizasyon kesinliğidir (yeşil ≥%60, sarı ≥%40, kırmızı düşük). Kabin ArUco kalibrasyonuyla konum kabin koordinatına oturur.</Text>
+          <Text style={styles.ctHint}>{t("ai.organ.koordinatNotu")}</Text>
           <MedicalDisclaimer />
         </View>
       )}

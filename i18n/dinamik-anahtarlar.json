@@ -120,6 +120,30 @@
    "onek": "",
    "degerler": ["ai.patoloji.derece.g0", "ai.patoloji.derece.g1", "ai.patoloji.derece.g2", "ai.patoloji.derece.g3", "ai.patoloji.derece.g4"],
    "gerekce": "Histopatoloji derecesi HISTO_ANAHTARI'nda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (5 derece), kullanıcı girdisi değil"
+  },
+  {
+   "yuzey": "arayuz",
+   "dosya": "apps/ui/src/screens/AiHubScreen.tsx",
+   "ifade": "return k ? i18n.t(k as never) : organ;",
+   "onek": "",
+   "degerler": ["ai.organ.ad.akciger_sag", "ai.organ.ad.akciger_sol", "ai.organ.ad.bagirsak", "ai.organ.ad.bobrek", "ai.organ.ad.dalak", "ai.organ.ad.kalp", "ai.organ.ad.karaciger", "ai.organ.ad.mesane", "ai.organ.ad.mide", "ai.organ.ad.pankreas"],
+   "gerekce": "Organ adı ORGAN_ANAHTARI'nda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (10 organ), kullanıcı girdisi değil"
+  },
+  {
+   "yuzey": "arayuz",
+   "dosya": "apps/ui/src/screens/AiHubScreen.tsx",
+   "ifade": "t(g.ad as never)",
+   "onek": "",
+   "degerler": ["ai.modul.segmentasyon.ad", "ai.scratch.galeri.analiz.ad", "ai.scratch.galeri.input.ad", "ai.scratch.galeri.kapanma.ad", "ai.scratch.galeri.overlay.ad", "ai.scratch.galeri.panel.ad", "ai.scratch.galeri.xai.ad"],
+   "gerekce": "Scratch galeri sekme adı SCRATCH_GALERI'de ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (7 görsel), kullanıcı girdisi değil"
+  },
+  {
+   "yuzey": "arayuz",
+   "dosya": "apps/ui/src/screens/AiHubScreen.tsx",
+   "ifade": "t(seciliGorsel.not as never)",
+   "onek": "",
+   "degerler": ["ai.scratch.galeri.analiz.not", "ai.scratch.galeri.input.not", "ai.scratch.galeri.kapanma.not", "ai.scratch.galeri.overlay.not", "ai.scratch.galeri.panel.not", "ai.scratch.galeri.seg.not", "ai.scratch.galeri.xai.not"],
+   "gerekce": "Scratch galeri açıklaması SCRATCH_GALERI'de ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (7 görsel), kullanıcı girdisi değil"
   }
  ]
 }

@@ -211,7 +211,7 @@
    "sira": 6,
    "kritik": false,
    "aciklama": "AiHubScreen (TEK dosya ~770 metin — KURALLAR §Büyük dosya)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 766,
    "dosyaSayisi": 1
   },
@@ -2108,7 +2108,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-06a-ai-hub",
    "sira": 6,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 766,
    "kritik": false,
    "muaf": [
@@ -2239,6 +2239,66 @@
     {
      "metin": "Böbrek Patoloji",
      "gerekce": "AI geçmişi kaydına giden modül adı — veri"
+    },
+    {
+     "metin": "data:image/jpeg;base64,{{input_image_base64}}",
+     "gerekce": "veri: yüklenen görüntünün önizleme data URI'si (base64), ekranda metin değil"
+    },
+    {
+     "metin": "Dosya okunamadı.",
+     "gerekce": "yakalanır; kullanıcıya aiHataMesaji varsayılanı gösterilir, bu ileti gösterilmez"
+    },
+    {
+     "metin": "Yara Kapanma (Scratch)",
+     "gerekce": "AI geçmişi kaydına giden modül adı — veri"
+    },
+    {
+     "metin": "Hücre tespit edilemedi",
+     "gerekce": "AI geçmişi kaydına giden özet — veri"
+    },
+    {
+     "metin": "Kapanma %{{deger1}} · {{n_cells}} hücre",
+     "gerekce": "AI geçmişi kaydına giden özet — veri"
+    },
+    {
+     "metin": "µm",
+     "gerekce": "birim biçimi (\" µm\") — sayı + birim, dilden bağımsız"
+    },
+    {
+     "metin": "Kedi Organ",
+     "gerekce": "AI geçmişi kaydına giden modül adı — veri"
+    },
+    {
+     "metin": "Kedi bulunamadı",
+     "gerekce": "AI geçmişi kaydına giden özet — veri"
+    },
+    {
+     "metin": "Organ çıkarılamadı",
+     "gerekce": "AI geçmişi kaydına giden özet — veri"
+    },
+    {
+     "metin": "{{n_organs}} organ lokalize",
+     "gerekce": "AI geçmişi kaydına giden özet — veri"
+    },
+    {
+     "metin": ") cm",
+     "gerekce": "birim biçimi (\") cm\") — sayı + birim, dilden bağımsız"
+    },
+    {
+     "metin": "Yüz Ağrısı Skoru (FGS)",
+     "gerekce": "AI geçmişi modül adı SABİTİ (MODUL_KAYIT_ADI): kayda gider, dilden bağımsız TR — gösterim başlığı ayrı (ai.gorsel.*)"
+    },
+    {
+     "metin": "Kedi Segmentasyonu",
+     "gerekce": "AI geçmişi modül adı SABİTİ (MODUL_KAYIT_ADI): kayda gider, dilden bağımsız TR — gösterim başlığı ayrı (ai.gorsel.*)"
+    },
+    {
+     "metin": "Termal Görüntü Analizi",
+     "gerekce": "AI geçmişi modül adı SABİTİ (MODUL_KAYIT_ADI): kayda gider, dilden bağımsız TR — gösterim başlığı ayrı (ai.gorsel.*)"
+    },
+    {
+     "metin": "Retikülosit Sayımı",
+     "gerekce": "AI geçmişi modül adı SABİTİ (MODUL_KAYIT_ADI): kayda gider, dilden bağımsız TR — gösterim başlığı ayrı (ai.gorsel.*)"
     }
    ],
    "birlesikIstisna": [],

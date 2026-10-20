@@ -368,6 +368,48 @@
       "ad": "Yüz Ağrısı (FGS)"
     }
   },
+  "organ": {
+    "aciklama": "Kedi fotoğrafından 10 organın 3B konumu (segmentasyon + poz + canonical atlas + PnP).",
+    "ad": {
+      "akciger_sag": "Akciğer (sağ)",
+      "akciger_sol": "Akciğer (sol)",
+      "bagirsak": "Bağırsak",
+      "bobrek": "Böbrek",
+      "dalak": "Dalak",
+      "kalp": "Kalp",
+      "karaciger": "Karaciğer",
+      "mesane": "Mesane",
+      "mide": "Mide",
+      "pankreas": "Pankreas"
+    },
+    "analiziBaslat": "Organ Analizini Başlat",
+    "anatomik": "⚠ Anatomik tutarlılık uyarısı: organ dizilimi beklenen anatomiyle çelişiyor — lokalizasyona temkinli yaklaşın.",
+    "ayna": "⚠ Ayna belirsizliği: bu karede sağ/sol organ ayrımı güvenilir olmayabilir — farklı açıdan ikinci kare önerilir.",
+    "baslik": "Kedi Organ Lokalizasyonu",
+    "bulunamadiMetin": "Bu görüntüde kedi/organ net seçilemedi. Kedinin tümü kadraja girsin, ışık iyi ve görüntü net olsun; yandan/üstten daha yakın bir kare deneyin.",
+    "bulundu_one": "{{count}} organ bulundu · en güvenilir: {{bestName}} (%{{bestPct}})",
+    "bulundu_other": "{{count}} organ bulundu · en güvenilir: {{bestName}} (%{{bestPct}})",
+    "canliIpucu": "🎥 Canlı mod açık — kediyi kadraja alıp sabit tutun. Organ haritası her kare analizi bitince güncellenir (3 modelli hat — makinenin hızına bağlı); büyük görüntü son analiz karesidir, canlı önizleme köşededir; barların rengi güven düzeyini gösterir.",
+    "canliKameraIzni": "Canlı kamera için izin gerekli.",
+    "dusukGuven": "Organlar konumlandı ama güven düşük. Daha net/yakın bir görüntüyle sonuç iyileşir. Aşağıda tüm organlar ve güven düzeyleri var.",
+    "guvenilir": "Organlar güvenilir şekilde konumlandı. Aşağıdaki listede her organın 3B konumu (cm) ve güven düzeyi var.",
+    "ipucuAruco": "• Kabinde ArUco işaretçi varsa 3B konum kabin koordinatında verilir",
+    "ipucuCanli": "• <kalin>Canlı Kamera</kalin> ile kediyi kadraja alın; organ haritası her birkaç saniyede güncellenir",
+    "ipucuTekKare": "• <kalin>Galeriden Seç</kalin> veya <kalin>Fotoğraf Çek</kalin> ile tek kare analiz edin",
+    "ipucuTum": "• Kedinin tümü görünür, yandan/üstten net bir görüntü kullanın",
+    "kediYok": "Kedi bulunamadı",
+    "koordinatNotu": "3B koordinat: kedi/kabin çerçevesinde organ merkezi (cm). “Güven”, modelin lokalizasyon kesinliğidir (yeşil ≥%60, sarı ≥%40, kırmızı düşük). Kabin ArUco kalibrasyonuyla konum kabin koordinatına oturur.",
+    "modelHazirlaniyor": "Model hazırlanıyor (3 model, ilk kullanım uzun sürebilir)…",
+    "nasil": "🐾 Nasıl kullanılır?",
+    "nokta1": "Renkli bar = modelin o organ konumuna güveni (yeşil ≥%60, sarı ≥%40, kırmızı düşük).",
+    "nokta2": "Bu bir ön-lokalizasyondur, tıbbi tanı değildir.",
+    "organYok": "Organ tespit edilemedi",
+    "organlar": "Organlar (3B konum · güven)",
+    "rozetAraniyor": "ORGAN ARANIYOR…",
+    "rozet_one": "{{count}} ORGAN",
+    "rozet_other": "{{count}} ORGAN",
+    "teknik": "Teknik: poz {{poz}} · PnP {{pnp}}"
+  },
   "ortak": {
     "analizEdiliyor": "Analiz Ediliyor...",
     "analizSonucu": "Analiz Sonucu",
@@ -572,6 +614,60 @@
       "kircYokMetin": "Örnekler 'other' (KIRC değil) olarak sınıflandı. Bu bir tarama sonucudur, kesin tanının yerine geçmez."
     },
     "surukleyenGenler": "🔍 Sürükleyen genler: {{genler}}"
+  },
+  "scratch": {
+    "aciklama": "CPN hücre segmentasyonu + TScratch kapanma metrikleri (araştırma verisi — hasta kaydı değildir).",
+    "analizEdiliyor": "Analiz ediliyor…",
+    "analizEt": "Analiz Et",
+    "delta": "Δ {{isaret}}{{fark}} puan",
+    "dikey": "Dikey",
+    "dosyaSec": "Görüntü seç (.tif / .png / .jpg)",
+    "galeri": {
+      "analiz": {
+        "ad": "Analiz",
+        "not": "Kırmızı çizgiler = yarayı içine alan ROI kuşağı (yara yönüne göre) · sarı = kuşağa en yakın hücreler"
+      },
+      "input": {
+        "ad": "Orijinal",
+        "not": "Orijinal görüntü (sunucu JPEG önizlemesi — TIF tarayıcıda gösterilemez)"
+      },
+      "kapanma": {
+        "ad": "Kapanma",
+        "not": "Sarı bant = ROI (yarayı içine alır) · kırmızı = maks gap hattı · mavi = ort. gap hattı"
+      },
+      "overlay": {
+        "ad": "Overlay",
+        "not": "Segmentasyon + orijinal karışımı"
+      },
+      "panel": {
+        "ad": "3'lü panel",
+        "not": "Orijinal | ısı haritası | overlay"
+      },
+      "seg": {
+        "not": "Her hücre ayrı renk (CPN instance)"
+      },
+      "xai": {
+        "ad": "XAI",
+        "not": "Tespit hedefli HiRes-CAM — hücre tespitlerini sürükleyen bölgeler · numaralı mavi kutular: en etkili 10 hücre (kenara değen hücreler değerlendirme dışı)"
+      }
+    },
+    "goruntuIciNot": "ℹ Görsel içi sayımlar ROI bandına aittir; toplam hücre sayısı üstteki karttadır.",
+    "hucre": "Hücre",
+    "isiHaritasiUret": " 🔍 Isı haritası üret (bölgesel model ilgisi — hücre-düzeyi değildir)",
+    "karsilastir": "⇄ Karşılaştır (son iki analiz)",
+    "karsilastirmaSatiri": "{{e1}} %{{p1}} → {{e2}} %{{p2}} · ort. gap {{g1}}→{{g2}} µm",
+    "maksGap": "Maks gap",
+    "metrikler": "Gap alanı {{alan}} mm² · coverage {{coverage}} · skor {{skor}} · cihaz: {{cihaz}}",
+    "modelHazirlaniyor": "Büyük model hazırlanıyor — ilk çalıştırma dakikalar sürebilir…",
+    "objektif": "Objektif (kalibrasyon)",
+    "objektifNotu": "pixel_mm = {{pmm}} mm/px — çekimde kullanılan objektifi seçin (µm/mm² doğruluğu buna bağlı).",
+    "onizlemeEtiketi": "Girdi görüntüsü önizlemesi: {{ad}}",
+    "ortGap": "Ort. gap",
+    "parametreDegisti": "⚠ Parametre değişti — sonuçlar eski ayarlara ait. Yeniden analiz edin.",
+    "tifNotu": "TIF önizlemesi tarayıcıda gösterilemez — analizden sonra girdi görüntüsü burada ve [Orijinal] sekmesinde görünür.",
+    "xaiGelmedi": "🔍 Isı haritası istendi ama bu yanıtta gelmedi — sunucu sürümü XAI üretmiyor olabilir (analiz sonucu geçerlidir).",
+    "yara": "Yara yönü",
+    "yatay": "Yatay"
   },
   "segmentasyon": {
     "basarili": "Vücut sınırları başarıyla çıkarıldı. Segmentasyon; ölçüm ve diğer analizler için bir ön-işleme adımıdır.",

@@ -1197,3 +1197,210 @@ describe("bölüm 9 — Böbrek CT ve Böbrek Patoloji modülleri (araştırma)"
     expect(enKayit[0].summary).toBe(trKayit[0].summary);
   });
 });
+
+describe("bölüm 10 — Yara Kapanma (Scratch) ve Kedi Organ modülleri", () => {
+  const logKayitlari = () => mockApiPost.mock.calls.filter((c) => c[0] === "/ai/log").map((c) => c[1] as Record<string, unknown>);
+  const bos = async () => {
+    for (let i = 0; i < 12; i++)
+      await act(async () => {
+        await Promise.resolve();
+      });
+  };
+  const SCRATCH = (pct: number, gap: number) => ({
+    status: "success", closure: { closure_pct: pct, mean_gap_um: gap, max_gap_um: 200, gap_area_mm2: 1.5 }, n_cells: 30, coverage_ratio: 0.5, score_mean: 0.9, device: "cpu",
+    closure_image_base64: "QQ==", seg_image_base64: "Qg==", input_image_base64: "Qw==",
+  });
+  const picker = () => (jest.requireMock("expo-document-picker") as { getDocumentAsync: jest.Mock }).getDocumentAsync;
+  async function scratchAnaliz(u: ReturnType<typeof render>, dosyaAdi: string, cevap: unknown, sec: string, analiz: string) {
+    mockFetchCevap = cevap;
+    picker().mockResolvedValueOnce({ canceled: false, assets: [{ name: dosyaAdi, uri: "file:///" + dosyaAdi }] });
+    await act(async () => {
+      fireEvent.press(u.getByRole("button", { name: sec }));
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 450)); // Button çift-tık koruması (aynı etikete 400 ms)
+      fireEvent.press(u.getByText(analiz));
+    });
+    await bos();
+  }
+
+  it("Türkçe: scratch modülü başlık / yön / objektif / ısı haritası anahtarı göç öncesiyle aynı", () => {
+    mockMode = "researcher";
+    const u = render(<AiHubScreen />);
+    fireEvent.press(u.getByLabelText("Yara Kapanma (Scratch)"));
+    expect(u.getAllByText("Yara Kapanma (Scratch)").length).toBeGreaterThan(0);
+    expect(u.getByText("CPN hücre segmentasyonu + TScratch kapanma metrikleri (araştırma verisi — hasta kaydı değildir).")).toBeTruthy();
+    expect(u.getByText("Görüntü seç (.tif / .png / .jpg)")).toBeTruthy();
+    expect(u.getByText("Yara yönü")).toBeTruthy();
+    expect(u.getByText("Dikey")).toBeTruthy();
+    expect(u.getByText("Yatay")).toBeTruthy();
+    expect(u.getByText("Objektif (kalibrasyon)")).toBeTruthy();
+    expect(u.getByText("pixel_mm = 0.0016 mm/px — çekimde kullanılan objektifi seçin (µm/mm² doğruluğu buna bağlı).")).toBeTruthy();
+    expect(u.getByText("☐ 🔍 Isı haritası üret (bölgesel model ilgisi — hücre-düzeyi değildir)")).toBeTruthy();
+    expect(u.getByText("Analiz Et")).toBeTruthy();
+  });
+
+  it("İngilizce: scratch modülü başlık / yön / objektif / ısı haritası anahtarı", async () => {
+    mockMode = "researcher";
+    await enYap();
+    const u = render(<AiHubScreen />);
+    fireEvent.press(u.getByLabelText("Wound Closure (Scratch)"));
+    expect(u.getByText("CPN cell segmentation + TScratch closure metrics (research data — not a patient record).")).toBeTruthy();
+    expect(u.getByText("Choose image (.tif / .png / .jpg)")).toBeTruthy();
+    expect(u.getByText("Wound direction")).toBeTruthy();
+    expect(u.getByText("Vertical")).toBeTruthy();
+    expect(u.getByText("Horizontal")).toBeTruthy();
+    expect(u.getByText("Objective (calibration)")).toBeTruthy();
+    expect(u.getByText("pixel_mm = 0.0016 mm/px — select the objective used for the capture (µm/mm² accuracy depends on it).")).toBeTruthy();
+    expect(u.getByText("☐ 🔍 Generate heat map (regional model attention — not cell-level)")).toBeTruthy();
+    expect(u.getByText("Analyze")).toBeTruthy();
+  });
+
+  it("scratch sonucu iki dilde (metrikler / galeri sekmeleri / karşılaştırma / yüzde); AI geçmişi kaydı TR ile BAYT BAYT aynı", async () => {
+    mockMode = "researcher";
+    const tr = render(<AiHubScreen />);
+    fireEvent.press(tr.getByLabelText("Yara Kapanma (Scratch)"));
+    await scratchAnaliz(tr, "a.png", SCRATCH(40, 100), "Görüntü seç (.tif / .png / .jpg)", "Analiz Et");
+    expect(tr.getByText("%40")).toBeTruthy();
+    expect(tr.getByText("100 µm")).toBeTruthy();
+    expect(tr.getByText("Ort. gap")).toBeTruthy();
+    expect(tr.getByText("Maks gap")).toBeTruthy();
+    expect(tr.getByText("Hücre")).toBeTruthy();
+    expect(tr.getByText("Gap alanı 1.5 mm² · coverage 0.5 · skor 0.9 · cihaz: cpu")).toBeTruthy();
+    expect(tr.getAllByText("Kapanma").length).toBeGreaterThan(0);
+    expect(tr.getByText("Segmentasyon")).toBeTruthy();
+    expect(tr.getByText("Orijinal")).toBeTruthy();
+    expect(tr.getByText("Sarı bant = ROI (yarayı içine alır) · kırmızı = maks gap hattı · mavi = ort. gap hattı")).toBeTruthy();
+    expect(tr.getByText("ℹ Görsel içi sayımlar ROI bandına aittir; toplam hücre sayısı üstteki karttadır.")).toBeTruthy();
+    await scratchAnaliz(tr, "b.png", SCRATCH(50, 90), "a.png", "Analiz Et");
+    fireEvent.press(tr.getByText("⇄ Karşılaştır (son iki analiz)"));
+    expect(tr.getByText("Δ +10.0 puan")).toBeTruthy();
+    expect(tr.getByText("a %40 → b %50 · ort. gap 100→90 µm")).toBeTruthy();
+    const trKayit = logKayitlari();
+    expect(trKayit).toHaveLength(2);
+    expect(trKayit[0].module).toBe("Yara Kapanma (Scratch)");
+    expect(trKayit[0].summary).toBe("Kapanma %40 · 30 hücre");
+    tr.unmount();
+    mockApiPost.mockReset().mockResolvedValue(null);
+    mockHastaNo += 1;
+    await enYap();
+    const en = render(<AiHubScreen />);
+    fireEvent.press(en.getByLabelText("Wound Closure (Scratch)"));
+    await scratchAnaliz(en, "a.png", SCRATCH(40, 100), "Choose image (.tif / .png / .jpg)", "Analyze");
+    expect(en.getByText("40%")).toBeTruthy();
+    expect(en.getByText("100 µm")).toBeTruthy();
+    expect(en.getByText("Mean gap")).toBeTruthy();
+    expect(en.getByText("Max gap")).toBeTruthy();
+    expect(en.getByText("Cells")).toBeTruthy();
+    expect(en.getByText("Gap area 1.5 mm² · coverage 0.5 · score 0.9 · device: cpu")).toBeTruthy();
+    expect(en.getAllByText("Closure").length).toBeGreaterThan(0);
+    expect(en.getByText("Segmentation")).toBeTruthy();
+    expect(en.getByText("Original")).toBeTruthy();
+    expect(en.getByText("Yellow band = ROI (encloses the wound) · red = max gap line · blue = mean gap line")).toBeTruthy();
+    expect(en.getByText("ℹ The counts inside the image belong to the ROI band; the total cell count is on the card above.")).toBeTruthy();
+    await scratchAnaliz(en, "b.png", SCRATCH(50, 90), "a.png", "Analyze");
+    fireEvent.press(en.getByText("⇄ Compare (last two analyses)"));
+    expect(en.getByText("Δ +10.0 pts")).toBeTruthy();
+    expect(en.getByText("a 40% → b 50% · mean gap 100→90 µm")).toBeTruthy();
+    const enKayit = logKayitlari();
+    expect(enKayit).toHaveLength(2);
+    expect(enKayit[0].module).toBe(trKayit[0].module);
+    expect(enKayit[0].summary).toBe(trKayit[0].summary);
+  });
+
+  const ORGAN = {
+    status: "success", n_organs: 2, pose_type: "epnp", pnp_residual_px: 1.2, image_base64: "QUJD",
+    organs: [{ name: "kalp", reliability: 0.8, coord_cabin_cm: [1, 2, 3] }, { name: "akciger_sag", reliability: 0.3, coord_3d_cm: [4, 5, 6] }],
+  };
+  async function organAnaliz(u: ReturnType<typeof render>, modul: string, galeri: string, baslat: string, cevap: unknown) {
+    mockFetchCevap = cevap;
+    fireEvent.press(u.getByLabelText(modul));
+    await act(async () => {
+      fireEvent.press(u.getByRole("button", { name: galeri }));
+    });
+    await act(async () => {
+      fireEvent.press(u.getByRole("button", { name: baslat }));
+    });
+    await bos();
+  }
+
+  it("Kedi Organ TR + EN statik: başlık / nasıl kullanılır (iki kalın düğme adı) / düğmeler", async () => {
+    const tr = render(<AiHubScreen />);
+    fireEvent.press(tr.getByLabelText("Kedi Organ"));
+    expect(tr.getAllByText("Kedi Organ Lokalizasyonu").length).toBeGreaterThan(0);
+    expect(tr.getByText("🐾 Nasıl kullanılır?")).toBeTruthy();
+    expect(tr.getByText("• Galeriden Seç veya Fotoğraf Çek ile tek kare analiz edin")).toBeTruthy();
+    expect(tr.getByText("• Canlı Kamera ile kediyi kadraja alın; organ haritası her birkaç saniyede güncellenir")).toBeTruthy();
+    expect(tr.getByText("Organ Analizini Başlat")).toBeTruthy();
+    tr.unmount();
+    mockHastaNo += 1;
+    await enYap();
+    const en = render(<AiHubScreen />);
+    fireEvent.press(en.getByLabelText("Cat Organ"));
+    expect(en.getAllByText("Cat Organ Localization").length).toBeGreaterThan(0);
+    expect(en.getByText("🐾 How to use")).toBeTruthy();
+    expect(en.getByText("• Analyze a single frame with Choose from Gallery or Take Photo")).toBeTruthy();
+    expect(en.getByText("• Frame the cat with Live Camera; the organ map updates every few seconds")).toBeTruthy();
+    expect(en.getByText("Start Organ Analysis")).toBeTruthy();
+  });
+
+  it("Kedi Organ sonucu iki dilde (çoğul başlık / organ adları / teknik satır / yüzde); AI geçmişi kaydı TR ile BAYT BAYT aynı", async () => {
+    const tr = render(<AiHubScreen />);
+    await organAnaliz(tr, "Kedi Organ", "Galeriden Seç", "Organ Analizini Başlat", ORGAN);
+    expect(tr.getByText(/2 organ bulundu · en güvenilir: Kalp \(%80\)$/)).toBeTruthy();
+    expect(tr.getByText("Teknik: poz epnp · PnP 1.2px")).toBeTruthy();
+    expect(tr.getByText("Organlar (3B konum · güven)")).toBeTruthy();
+    expect(tr.getByText("Kalp (1.0, 2.0, 3.0) cm")).toBeTruthy();
+    expect(tr.getByText("Akciğer (sağ) (4.0, 5.0, 6.0) cm")).toBeTruthy();
+    expect(tr.getByText("%80")).toBeTruthy();
+    expect(tr.getByText("%30")).toBeTruthy();
+    const trKayit = logKayitlari();
+    expect(trKayit).toHaveLength(1);
+    expect(trKayit[0].module).toBe("Kedi Organ");
+    expect(trKayit[0].summary).toBe("2 organ lokalize");
+    tr.unmount();
+    mockApiPost.mockReset().mockResolvedValue(null);
+    mockHastaNo += 1;
+    await enYap();
+    const en = render(<AiHubScreen />);
+    await organAnaliz(en, "Cat Organ", "Choose from Gallery", "Start Organ Analysis", ORGAN);
+    expect(en.getByText(/2 organs found · most reliable: Heart \(80%\)$/)).toBeTruthy();
+    expect(en.getByText("Technical: pose epnp · PnP 1.2px")).toBeTruthy();
+    expect(en.getByText("Organs (3D position · confidence)")).toBeTruthy();
+    expect(en.getByText("Heart (1.0, 2.0, 3.0) cm")).toBeTruthy();
+    expect(en.getByText("Lung (right) (4.0, 5.0, 6.0) cm")).toBeTruthy();
+    expect(en.getByText("80%")).toBeTruthy();
+    expect(en.getByText("30%")).toBeTruthy();
+    const enKayit = logKayitlari();
+    expect(enKayit).toHaveLength(1);
+    expect(enKayit[0].module).toBe(trKayit[0].module);
+    expect(enKayit[0].summary).toBe(trKayit[0].summary);
+  });
+
+  it("Kedi Organ: tek organ çoğulu ve 'kedi bulunamadı' iki dilde; kayıt özeti TR kalır", async () => {
+    const bir = { ...ORGAN, n_organs: 1, organs: [ORGAN.organs[0]] };
+    const yok = { status: "success", n_organs: 0, organs: [], bulunamadi: "kedi_bulunamadi", image_base64: "QUJD" };
+    const tr = render(<AiHubScreen />);
+    await organAnaliz(tr, "Kedi Organ", "Galeriden Seç", "Organ Analizini Başlat", bir);
+    expect(tr.getByText(/1 organ bulundu · en güvenilir: Kalp \(%80\)$/)).toBeTruthy();
+    tr.unmount();
+    mockHastaNo += 1;
+    const tr2 = render(<AiHubScreen />);
+    await organAnaliz(tr2, "Kedi Organ", "Galeriden Seç", "Organ Analizini Başlat", yok);
+    expect(tr2.getByText(/Kedi bulunamadı$/)).toBeTruthy();
+    const trKayit = logKayitlari().slice(-1)[0];
+    expect(trKayit.summary).toBe("Kedi bulunamadı");
+    tr2.unmount();
+    mockHastaNo += 1;
+    await enYap();
+    const en = render(<AiHubScreen />);
+    await organAnaliz(en, "Cat Organ", "Choose from Gallery", "Start Organ Analysis", bir);
+    expect(en.getByText(/1 organ found · most reliable: Heart \(80%\)$/)).toBeTruthy();
+    en.unmount();
+    mockHastaNo += 1;
+    const en2 = render(<AiHubScreen />);
+    await organAnaliz(en2, "Cat Organ", "Choose from Gallery", "Start Organ Analysis", yok);
+    expect(en2.getByText(/Cat not found$/)).toBeTruthy();
+    expect(logKayitlari().slice(-1)[0].summary).toBe(trKayit.summary);
+  });
+});
