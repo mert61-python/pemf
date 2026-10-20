@@ -158,7 +158,8 @@ it("KRİTİK G6: canlı kipte son analiz karesi OPAK, canlı önizleme köşede 
     expect(st.opacity === undefined || st.opacity === 1).toBe(true);
   }
   expect(u.getByTestId("canli-onizleme-kose")).toBeTruthy();
-  expect(u.getByTestId("canli-son-kare-yasi").props.children.join("")).toMatch(/^Son analiz \d+,\d sn önce$/);
+  // I18N-P1: metin tek anahtar (`Son analiz {{sn}} sn önce`) → çocuk tek dize; eskiden üç parça dizisiydi — görünen metin AYNI
+  expect([u.getByTestId("canli-son-kare-yasi").props.children].flat().join("")).toMatch(/^Son analiz \d+,\d sn önce$/);
 });
 
 it("KRİTİK G4-3: termal sonuç 'Doğruluk' DEMEZ, 'Model güveni' der; girdi doğrulanamadıysa uyarı görünür", async () => {

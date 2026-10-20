@@ -5,16 +5,19 @@
  */
 let mockMode: "veterinarian" | "researcher" | "pet_owner" = "veterinarian";
 let mockResearch = true;
+let mockHastaNo = 0; // her testte YENİ hasta kimliği → modül önbelleği (resetAiCachesForOwner) temizlenir
+const mockApiPost = jest.fn(async (..._a: unknown[]): Promise<unknown> => null);
+const mockShowToast = jest.fn();
 jest.mock("@/services/apiClient", () => ({
   apiGet: jest.fn(async () => null),
-  apiPost: jest.fn(async () => null),
+  apiPost: (...a: unknown[]) => mockApiPost(...a),
   authHeaders: jest.fn(() => ({})),
   platformAlert: jest.fn(),
   platformConfirm: jest.fn(async () => true),
   AI_TIMEOUT_MS: 120000,
 }));
 jest.mock("@/services/config", () => ({ serviceConfig: { apiBaseUrl: "http://127.0.0.1:8000/api" } }));
-jest.mock("@/components/ui/ToastProvider", () => ({ useToast: () => ({ showToast: jest.fn() }) }));
+jest.mock("@/components/ui/ToastProvider", () => ({ useToast: () => ({ showToast: mockShowToast }) }));
 jest.mock("@/context/UserModeContext", () => ({ useUserMode: () => ({ userMode: mockMode, hasAiHub: mockMode !== "pet_owner" }) }));
 jest.mock("@/context/AuthContext", () => ({ useAuth: () => ({ session: { email: "v@x.com" } }) }));
 jest.mock("@/context/OperatorContext", () => ({
@@ -23,7 +26,7 @@ jest.mock("@/context/OperatorContext", () => ({
 }));
 jest.mock("@/context/EntitlementContext", () => ({ useEntitlement: () => ({ research: mockResearch }) }));
 jest.mock("@/context/AppNavContext", () => ({
-  useAppNav: () => ({ navigate: jest.fn(), selectedPatient: { id: 1, name: "Test Hasta" } }),
+  useAppNav: () => ({ navigate: jest.fn(), selectedPatient: { id: mockHastaNo, name: "Test Hasta" } }),
 }));
 jest.mock("@/context/LiveDataContext", () => ({
   useLiveData: () => ({ snapshot: null, wsConnected: true, aiVisionFresh: false }),
@@ -54,6 +57,9 @@ const T = (k: string, o?: object): string => (i18n.t as unknown as (k: string, o
 beforeEach(() => {
   mockMode = "veterinarian";
   mockResearch = true;
+  mockHastaNo += 1;
+  mockApiPost.mockReset().mockResolvedValue(null);
+  mockShowToast.mockReset();
 });
 afterEach(async () => {
   __bayrakTestiAyarla(null);
@@ -198,5 +204,119 @@ describe("bölüm 2 — evcil hayvan sahibi ekranı (FGS + ses) ve ortak metinle
     expect(T("ai.hata.hataIleti", { ileti: "boom" })).toBe("Error: boom");
     expect(T("ai.hayvanSahibi.oneri.siddetli")).toBe("SIGNS OF SEVERE PAIN! Your furry friend may be in serious distress. Please CONTACT YOUR VETERINARIAN WITHOUT DELAY.");
     expect(T("ai.xai.isiHaritasiHasta")).toContain("“Sick (At Risk)”");
+  });
+});
+
+describe("bölüm 3 — hastalık (XGBoost) modülü, AI Pro köprüsü metinleri", () => {
+  const SEMPTOM_TR = ["İştah Kaybı", "Kusma", "İshal", "Öksürük", "Solunum Güçlüğü", "Topallık", "Deri Lezyonları", "Burun Akıntısı", "Göz Akıntısı", "Halsizlik / Uyuşukluk", "Kilo Kaybı", "Hapşırma", "Dehidrasyon", "Ateş"];
+  const SEMPTOM_EN = ["Loss of appetite", "Vomiting", "Diarrhea", "Coughing", "Breathing difficulty", "Lameness", "Skin lesions", "Nasal discharge", "Eye discharge", "Weakness / Lethargy", "Weight loss", "Sneezing", "Dehydration", "Fever"];
+
+  it("Türkçe: form / ipucu / semptom listesi / düğme göç öncesiyle aynı", () => {
+    const u = render(<AiHubScreen />);
+    fireEvent.press(u.getByLabelText("Hastalık"));
+    expect(u.getByText("Kedi Hastalık Tahmini (XGBoost)")).toBeTruthy();
+    for (const p of ["Yaş", "Kilo", "Nabız", "Ateş", "Süre"]) expect(u.getByPlaceholderText(p)).toBeTruthy();
+    expect(u.getByLabelText("Kilo (kg)")).toBeTruthy();
+    expect(u.getByLabelText("Nabız (atım/dk)")).toBeTruthy();
+    expect(u.getByLabelText("Ateş (°C)")).toBeTruthy();
+    expect(u.getByLabelText("Süre (gün)")).toBeTruthy();
+    expect(
+      u.getByText("En az 2 semptom seçmeniz yeterli. Nabız, ateş ve kilo girmek zorunlu değildir — ama girerseniz tahmin belirginleşir (ör. ateş/nabız yüksekse model daha spesifik hastalığa yönelir)."),
+    ).toBeTruthy();
+    for (const s of SEMPTOM_TR) expect(u.getByText(s)).toBeTruthy();
+    expect(u.getByText("Teşhisi Başlat")).toBeTruthy();
+  });
+
+  it("İngilizce: form / ipucu / semptom listesi / düğme", async () => {
+    await enYap();
+    const u = render(<AiHubScreen />);
+    fireEvent.press(u.getByLabelText("Disease"));
+    expect(u.getByText("Cat Disease Prediction (XGBoost)")).toBeTruthy();
+    for (const p of ["Age", "Weight", "Heart rate", "Temperature", "Duration"]) expect(u.getByPlaceholderText(p)).toBeTruthy();
+    expect(u.getByLabelText("Weight (kg)")).toBeTruthy();
+    expect(u.getByLabelText("Heart rate (beats/min)")).toBeTruthy();
+    expect(u.getByLabelText("Temperature (°C)")).toBeTruthy();
+    expect(u.getByLabelText("Duration (days)")).toBeTruthy();
+    for (const s of SEMPTOM_EN) expect(u.getByText(s)).toBeTruthy();
+    expect(u.getByText("Start Diagnosis")).toBeTruthy();
+  });
+
+  it("doğrulama bildirimleri: en az 2 semptom + aralık dışı yaş — iki dilde", async () => {
+    // Button aynı etikete 400 ms içinde ikinci basışı yutar (çift-tık koruması) → basışlar arası bekle
+    const bas = async (u: ReturnType<typeof render>, etiket: string) => {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 450));
+        fireEvent.press(u.getByText(etiket));
+      });
+    };
+    const tr = render(<AiHubScreen />);
+    fireEvent.press(tr.getByLabelText("Hastalık"));
+    await bas(tr, "Teşhisi Başlat");
+    expect(mockShowToast).toHaveBeenLastCalledWith("Lütfen en az 2 semptom seçin.", "error");
+    fireEvent.press(tr.getByText("Kusma"));
+    fireEvent.press(tr.getByText("Öksürük"));
+    fireEvent.changeText(tr.getByPlaceholderText("Yaş"), "99");
+    await bas(tr, "Teşhisi Başlat");
+    expect(mockShowToast).toHaveBeenLastCalledWith("Yaş geçersiz (0–40 aralığında olmalı).", "error");
+    tr.unmount();
+    mockHastaNo += 1;
+    await enYap();
+    const en = render(<AiHubScreen />);
+    fireEvent.press(en.getByLabelText("Disease"));
+    await bas(en, "Start Diagnosis");
+    expect(mockShowToast).toHaveBeenLastCalledWith("Please select at least 2 symptoms.", "error");
+    fireEvent.press(en.getByText("Vomiting"));
+    fireEvent.press(en.getByText("Coughing"));
+    fireEvent.changeText(en.getByPlaceholderText("Age"), "99");
+    await bas(en, "Start Diagnosis");
+    expect(mockShowToast).toHaveBeenLastCalledWith("Age is invalid (must be between 0 and 40).", "error");
+  });
+
+  async function analizeGit(u: ReturnType<typeof render>, tani: string, semptomlar: string[], dugme: string) {
+    mockApiPost.mockImplementation(async (yol: unknown) =>
+      yol === "/ai/disease"
+        ? { status: "success", results: [{ disease: "Panleukopenia", probability: 0.8 }], xai: { top_features: [{ feature: "Coughing_bin", attribution: 0.3 }, { feature: "Age", attribution: -0.1 }] } }
+        : null,
+    );
+    fireEvent.press(u.getByLabelText(tani));
+    for (const s of semptomlar) fireEvent.press(u.getByText(s));
+    await act(async () => {
+      fireEvent.press(u.getByText(dugme));
+    });
+  }
+  const logCagrisi = () => mockApiPost.mock.calls.filter((c) => c[0] === "/ai/log").map((c) => c[1] as Record<string, unknown>);
+
+  it("Türkçe sonuç: başlık / yorum / XAI satırı; AI geçmişine giden kayıt TR", async () => {
+    const u = render(<AiHubScreen />);
+    await analizeGit(u, "Hastalık", ["Kusma", "Öksürük"], "Teşhisi Başlat");
+    // getByText boşlukları tek boşluğa indirger (RNTL normalizer): ham değerdeki çift boşluk burada tek görünür
+    expect(u.getByText(/En olası: Panleukopenia · %80$/)).toBeTruthy();
+    expect(u.getByText("🔍 Kararı sürükleyenler: Öksürük ↑ · Yaş ↓")).toBeTruthy();
+    expect(u.getByText("Tüm olasılıklar (güvene göre)")).toBeTruthy();
+    expect(u.getByText("ℹ️ Bu tahmin, girilmeyen vitaller için sağlıklı kedi ortalamaları (nabız ~140, ateş ~38.5°C, kilo ~4 kg) varsayılarak yapıldı. Gerçek ölçümleri girerseniz sonuç daha isabetli olur.")).toBeTruthy();
+    const kayit = logCagrisi();
+    expect(kayit).toHaveLength(1);
+    expect(kayit[0].module).toBe("Hastalık Analizi");
+    expect(String(kayit[0].summary)).toMatch(/\(%80\)$/);
+  });
+
+  it("İngilizce sonuç: yorum / XAI satırı İngilizce; AI geçmişine giden kayıt TR ile BAYT BAYT AYNI (veri dilden bağımsız)", async () => {
+    const tr = render(<AiHubScreen />);
+    await analizeGit(tr, "Hastalık", ["Kusma", "Öksürük"], "Teşhisi Başlat");
+    const trKayit = logCagrisi()[0];
+    tr.unmount();
+    mockApiPost.mockReset();
+    mockHastaNo += 1;
+    await enYap();
+    const en = render(<AiHubScreen />);
+    await analizeGit(en, "Disease", ["Vomiting", "Coughing"], "Start Diagnosis");
+    expect(en.getByText(/Most likely: Panleukopenia · 80%$/)).toBeTruthy();
+    expect(en.getByText("🔍 Decision drivers: Coughing ↑ · Age ↓")).toBeTruthy();
+    expect(en.getByText("All probabilities (by confidence)")).toBeTruthy();
+    const enKayit = logCagrisi();
+    expect(enKayit).toHaveLength(1);
+    expect(enKayit[0].module).toBe(trKayit.module);
+    expect(enKayit[0].summary).toBe(trKayit.summary);
+    expect(enKayit[0].module_id).toBe("disease");
   });
 });

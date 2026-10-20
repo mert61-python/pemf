@@ -1050,8 +1050,11 @@ const TONE_COLOR: Record<InterpTone, string> = {
  * denetiminde kaldırıldı (onay kapısı olmadan `/start` çağrılıyordu; eski bir backend'e karşı
  * ONAYSIZ seans başlatabilirdi). Kapı: src/screens/__tests__/aiHubOtonomOnayKapisi.test.tsx
  */
-function AiProKopruDugmesi({ model, hedefEtiketi }: { model: "fantom" | "petri"; hedefEtiketi: string }) {
+function AiProKopruDugmesi({ model }: { model: "fantom" | "petri"; hedefEtiketi?: string }) {
+  const { t } = useTranslation();
   const { navigateTo, setAiProModeli } = useAppNav();
+  // dal başına SABİT anahtar (K-3: iç içe dinamik t() yok)
+  const hedef = model === "fantom" ? t("ai.kopru.hedefFantom") : t("ai.kopru.hedefPetri");
   return (
     <TouchableOpacity
       style={styles.aiProKopru}
@@ -1060,10 +1063,10 @@ function AiProKopruDugmesi({ model, hedefEtiketi }: { model: "fantom" | "petri";
         navigateTo("control");
       }}
       accessibilityRole="button"
-      accessibilityLabel={`Bu ${hedefEtiketi.toLocaleLowerCase("tr")} için AI Pro seansı: Kontrol ekranına git`}
-      accessibilityHint="Seans onaydan sonra başlar; bu düğme yalnız Kontrol ekranını açar"
+      accessibilityLabel={t("ai.kopru.etiket", { hedef })}
+      accessibilityHint={t("ai.kopru.ipucu")}
     >
-      <Text style={styles.aiProKopruMetin}>{`⚡ Bu hedefe AI Pro seansı → Kontrol`}</Text>
+      <Text style={styles.aiProKopruMetin}>{t("ai.kopru.metin")}</Text>
     </TouchableOpacity>
   );
 }
@@ -1093,28 +1096,49 @@ function ResultInterpretation({ tone, title, text, emoji, points }: {
 }
 
 /** Sunum-katmanı XAI (2026-08-26): backend SHAP özellik adları → kullanıcı diline. */
+// Backend SHAP özellik kimliği → katalog ANAHTARI (K-7: aiDetail.ts ile aynı desen; gösterimde `diseaseFeatureAdi` çevirir).
 const DISEASE_FEATURE_TR: Record<string, string> = {
-  Age: "Yaş", Weight: "Kilo", Heart_Rate: "Nabız", Body_Temperature: "Ateş",
-  Duration_days: "Şikâyet süresi", Appetite_Loss_bin: "İştah kaybı", Vomiting_bin: "Kusma",
-  Diarrhea_bin: "İshal", Coughing_bin: "Öksürük", Labored_Breathing_bin: "Zor solunum",
-  Lameness_bin: "Topallama", Skin_Lesions_bin: "Deri lezyonu", Nasal_Discharge_bin: "Burun akıntısı",
-  Eye_Discharge_bin: "Göz akıntısı", has_Lethargy: "Halsizlik", has_Weight_Loss: "Kilo kaybı",
-  has_Sneezing: "Hapşırık", has_Dehydration: "Dehidrasyon", has_Fever: "Ateş (semptom)",
+  Age: "hasta.form.yasEtiketi",
+  Weight: "ai.hastalik.form.kilo",
+  Heart_Rate: "ai.hastalik.form.nabiz",
+  Body_Temperature: "ai.hastalik.form.ates",
+  Duration_days: "ai.hastalik.ozellik.sikayetSuresi",
+  Appetite_Loss_bin: "ai.hastalik.ozellik.istahKaybi",
+  Vomiting_bin: "ai.hastalik.semptom.kusma",
+  Diarrhea_bin: "ai.hastalik.semptom.ishal",
+  Coughing_bin: "ai.hastalik.semptom.oksuruk",
+  Labored_Breathing_bin: "ai.hastalik.ozellik.zorSolunum",
+  Lameness_bin: "ai.hastalik.ozellik.topallama",
+  Skin_Lesions_bin: "ai.hastalik.ozellik.deriLezyonu",
+  Nasal_Discharge_bin: "ai.hastalik.ozellik.burunAkintisi",
+  Eye_Discharge_bin: "ai.hastalik.ozellik.gozAkintisi",
+  has_Lethargy: "ai.hastalik.ozellik.halsizlik",
+  has_Weight_Loss: "ai.hastalik.ozellik.kiloKaybi",
+  has_Sneezing: "ai.hastalik.ozellik.hapsirik",
+  has_Dehydration: "ai.hastalik.semptom.dehidrasyon",
+  has_Fever: "ai.hastalik.ozellik.atesSemptom",
+};
+// Bilinmeyen özellik kimliği HAM gösterilir (eski davranış: `?? f`). Dinamik anahtar → i18n/dinamik-anahtarlar.json (kapalı küme).
+const diseaseFeatureAdi = (f: string): string => {
+  const k = DISEASE_FEATURE_TR[f];
+  return k ? i18n.t(k as never) : f;
 };
 
 type DiseaseXai = { disease?: string; top_features?: { feature: string; attribution: number }[] } | null;
 
 /** Ortak XAI satırı: "🔍 Kararı sürükleyenler: Öksürük ↑ · Süre ↑ · Nabız ↓" (↑ tahmin lehine). */
 function XaiSatiri({ xai, etiketle }: { xai: DiseaseXai; etiketle: (f: string) => string }) {
+  const { t } = useTranslation();
   if (!xai?.top_features?.length) return null;
   const metin = xai.top_features
     .slice(0, 5)
-    .map((t) => `${etiketle(t.feature)} ${t.attribution >= 0 ? "↑" : "↓"}`)
+    .map((oz) => `${etiketle(oz.feature)} ${oz.attribution >= 0 ? "↑" : "↓"}`)
     .join(" · ");
-  return <Text style={styles.xaiSatiri}>{`🔍 Kararı sürükleyenler: ${metin}`}</Text>;
+  return <Text style={styles.xaiSatiri}>{t("ai.xai.kararSurukleyenler", { metin })}</Text>;
 }
 
 function DiseaseModule({ patientName }: { patientName: string }) {
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DiseasePrediction[] | null>(moduleCache.disease?.result ?? null);
@@ -1132,13 +1156,13 @@ function DiseaseModule({ patientName }: { patientName: string }) {
   const analyze = async () => {
     const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
     if (selectedSymptoms.length < 2) {
-      showToast("Lütfen en az 2 semptom seçin.", "error");
+      showToast(t("ai.hastalik.enAz2Semptom"), "error");
       return;
     }
     // Girdi aralık validasyonu (boş alanlar serbest; doluysa makul aralıkta olmalı).
     const ranges: Record<string, [number, number, string]> = {
-      age: [0, 40, "Yaş"], weight: [0, 80, "Kilo"], hr: [0, 400, "Nabız"],
-      temp: [25, 46, "Ateş"], duration: [0, 3650, "Süre"],
+      age: [0, 40, t("hasta.form.yasEtiketi")], weight: [0, 80, t("ai.hastalik.form.kilo")], hr: [0, 400, t("ai.hastalik.form.nabiz")],
+      temp: [25, 46, t("ai.hastalik.form.ates")], duration: [0, 3650, t("kontrol.sinir.sure")],
     };
     for (const k of Object.keys(ranges)) {
       const raw = (form as any)[k];
@@ -1146,7 +1170,7 @@ function DiseaseModule({ patientName }: { patientName: string }) {
         const n = Number(raw);
         const [lo, hi, label] = ranges[k];
         if (isNaN(n) || n < lo || n > hi) {
-          showToast(`${label} geçersiz (${lo}–${hi} aralığında olmalı).`, "error");
+          showToast(t("ai.hastalik.gecersizAralik", { label, lo, hi }), "error");
           return;
         }
       }
@@ -1189,17 +1213,16 @@ function DiseaseModule({ patientName }: { patientName: string }) {
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.title}>Kedi Hastalık Tahmini (XGBoost)</Text>
+      <Text style={styles.title}>{t("ai.hastalik.baslik")}</Text>
       <ResponsiveGrid minItemWidth={150}>
-        <TextInput style={styles.input} placeholder="Yaş" accessibilityLabel="Yaş" keyboardType="numeric" value={form.age} onChangeText={t => setForm({...form, age: t})} />
-        <TextInput style={styles.input} placeholder="Kilo" accessibilityLabel="Kilo (kg)" keyboardType="numeric" value={form.weight} onChangeText={t => setForm({...form, weight: t})} />
-        <TextInput style={styles.input} placeholder="Nabız" accessibilityLabel="Nabız (atım/dk)" keyboardType="numeric" value={form.hr} onChangeText={t => setForm({...form, hr: t})} />
-        <TextInput style={styles.input} placeholder="Ateş" accessibilityLabel="Ateş (°C)" keyboardType="numeric" value={form.temp} onChangeText={t => setForm({...form, temp: t})} />
-        <TextInput style={styles.input} placeholder="Süre" accessibilityLabel="Süre (gün)" keyboardType="numeric" value={form.duration} onChangeText={t => setForm({...form, duration: t})} />
+        <TextInput style={styles.input} placeholder={t("hasta.form.yasEtiketi")} accessibilityLabel={t("hasta.form.yasEtiketi")} keyboardType="numeric" value={form.age} onChangeText={t => setForm({...form, age: t})} />
+        <TextInput style={styles.input} placeholder={t("ai.hastalik.form.kilo")} accessibilityLabel={t("hasta.form.kiloEtiketi")} keyboardType="numeric" value={form.weight} onChangeText={t => setForm({...form, weight: t})} />
+        <TextInput style={styles.input} placeholder={t("ai.hastalik.form.nabiz")} accessibilityLabel={t("ai.hastalik.form.nabizEtiketi")} keyboardType="numeric" value={form.hr} onChangeText={t => setForm({...form, hr: t})} />
+        <TextInput style={styles.input} placeholder={t("ai.hastalik.form.ates")} accessibilityLabel={t("ai.hastalik.form.atesEtiketi")} keyboardType="numeric" value={form.temp} onChangeText={t => setForm({...form, temp: t})} />
+        <TextInput style={styles.input} placeholder={t("kontrol.sinir.sure")} accessibilityLabel={t("ai.hastalik.form.sureEtiketi")} keyboardType="numeric" value={form.duration} onChangeText={t => setForm({...form, duration: t})} />
       </ResponsiveGrid>
       <Text style={styles.diseaseHint}>
-        En az 2 semptom seçmeniz yeterli. Nabız, ateş ve kilo girmek zorunlu değildir —
-        ama girerseniz tahmin belirginleşir (ör. ateş/nabız yüksekse model daha spesifik hastalığa yönelir).
+        {t("ai.hastalik.ipucu")}
       </Text>
       <View style={styles.symptomsGrid}>
         {semptomlar().map((s, idx) => (
@@ -1209,14 +1232,14 @@ function DiseaseModule({ patientName }: { patientName: string }) {
         ))}
       </View>
       <View style={{ marginTop: spacing.sm }}>
-        <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Teşhisi Başlat"} onPress={analyze} disabled={loading} />
+        <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.hastalik.teshisiBaslat")} onPress={analyze} disabled={loading} />
       </View>
 
       {result && (
         <View style={styles.resultBox}>
           {result.length === 0 ? (
-            <ResultInterpretation tone="info" emoji="🔍" title="Belirgin bir eşleşme bulunamadı"
-              text="Seçtiğiniz semptomlarla yüksek olasılıklı bir hastalık eşleşmedi. Farklı ya da daha fazla semptom ekleyerek tekrar deneyebilir; belirtiler sürüyorsa veteriner hekime danışabilirsiniz." />
+            <ResultInterpretation tone="info" emoji="🔍" title={t("ai.hastalik.sonuc.eslesmeYok")}
+              text={t("ai.hastalik.sonuc.eslesmeYokMetin")} />
           ) : (
             <>
               {(() => {
@@ -1226,15 +1249,15 @@ function DiseaseModule({ patientName }: { patientName: string }) {
                 return (
                   <ResultInterpretation
                     tone={strong ? "alert" : "info"} emoji="🩺"
-                    title={`En olası: ${top.disease}  ·  %${pct}`}
+                    title={t("ai.hastalik.sonuc.enOlasi", { disease: top.disease, pct })}
                     text={strong
-                      ? `Girilen semptomlar en çok "${top.disease}" tablosuyla uyumlu (%${pct}). Bu bir ön-değerlendirmedir, kesin teşhis değildir — belirtiler sürüyorsa veteriner hekim muayenesi önerilir.`
-                      : `Semptomlar birden çok olası duruma işaret ediyor; en yükseği "${top.disease}" (%${pct}). Güven düşük olduğundan hekim muayenesiyle netleştirmek gerekir.`}
-                    points={["Yüzde = modelin o hastalığa güveni; hastalığın şiddeti DEĞİL.", "Aşağıda tüm olasılıklar güvene göre sıralı."]}
+                      ? t("ai.hastalik.sonuc.uyumlu", { disease: top.disease, pct })
+                      : t("ai.hastalik.sonuc.birdenCok", { disease: top.disease, pct })}
+                    points={[t("ai.hastalik.sonuc.yuzdeNotu"), t("ai.hastalik.sonuc.siralamaNotu")]}
                   />
                 );
               })()}
-              <Text style={styles.ctSubLabel}>Tüm olasılıklar (güvene göre)</Text>
+              <Text style={styles.ctSubLabel}>{t("ai.hastalik.sonuc.tumOlasiliklar")}</Text>
               {result.map((r, i) => (
                 <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs }}>
                   <Text style={[styles.resultText, { flex: 1 }]}>{i + 1}. {r.disease}</Text>
@@ -1243,13 +1266,12 @@ function DiseaseModule({ patientName }: { patientName: string }) {
                   </Text>
                 </View>
               ))}
-              <XaiSatiri xai={xai} etiketle={(f) => DISEASE_FEATURE_TR[f] ?? f} />
+              <XaiSatiri xai={xai} etiketle={(f) => diseaseFeatureAdi(f)} />
             </>
           )}
           {resultUsedDefaults && result.length > 0 && (
             <Text style={styles.diseaseDefaultsNote}>
-              ℹ️ Bu tahmin, girilmeyen vitaller için sağlıklı kedi ortalamaları (nabız ~140, ateş ~38.5°C, kilo ~4 kg)
-              varsayılarak yapıldı. Gerçek ölçümleri girerseniz sonuç daha isabetli olur.
+              {t("ai.hastalik.varsayilanVital")}
             </Text>
           )}
           <MedicalDisclaimer />
@@ -1300,7 +1322,8 @@ function CanliKameraKutusu({ cameraRef, facing, onFlip, sonKareB64, sonKareYasMs
   cameraRef: MutableRefObject<any>; facing: "back" | "front"; onFlip: () => void;
   sonKareB64: string | null; sonKareYasMs: number | null; rozet: string;
 }) {
-  const yas = sonKareB64 && sonKareYasMs != null ? (Math.max(0, sonKareYasMs) / 1000).toFixed(1).replace(".", ",") : null;
+  const { t } = useTranslation();
+  const yas = sonKareB64 && sonKareYasMs != null ? (Math.max(0, sonKareYasMs) / 1000).toFixed(1).replace(".", i18n.language === "en" ? "." : ",") : null;
   return (
     <View style={styles.cameraContainer}>
       {sonKareB64 ? (
@@ -1309,13 +1332,13 @@ function CanliKameraKutusu({ cameraRef, facing, onFlip, sonKareB64, sonKareYasMs
           style={styles.canliSonKare}
           resizeMode="contain"
           testID="canli-son-kare"
-          accessibilityLabel="Son analiz edilen kare"
+          accessibilityLabel={t("ai.canli.sonKare")}
         />
       ) : null}
       <View style={sonKareB64 ? styles.canliOnizlemeKose : styles.canliOnizlemeTam} testID={sonKareB64 ? "canli-onizleme-kose" : "canli-onizleme-tam"}>
         <CameraView ref={cameraRef} style={styles.cameraView} facing={facing} />
       </View>
-      <TouchableOpacity style={styles.flipCameraBtn} onPress={onFlip} accessibilityRole="button" accessibilityLabel="Kamerayı çevir">
+      <TouchableOpacity style={styles.flipCameraBtn} onPress={onFlip} accessibilityRole="button" accessibilityLabel={t("ai.canli.kamerayiCevir")}>
         <SwitchCamera color={colors.white} size={20} />
       </TouchableOpacity>
       <View style={styles.liveIndicator}>
@@ -1324,7 +1347,7 @@ function CanliKameraKutusu({ cameraRef, facing, onFlip, sonKareB64, sonKareYasMs
       </View>
       {yas != null ? (
         <View style={styles.canliYasEtiketi}>
-          <Text style={styles.liveText} testID="canli-son-kare-yasi">Son analiz {yas} sn önce</Text>
+          <Text style={styles.liveText} testID="canli-son-kare-yasi">{t("ai.canli.sonAnaliz", { sn: yas })}</Text>
         </View>
       ) : null}
     </View>

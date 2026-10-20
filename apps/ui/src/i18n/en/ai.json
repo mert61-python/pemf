@@ -1,4 +1,9 @@
 {
+  "canli": {
+    "kamerayiCevir": "Flip camera",
+    "sonAnaliz": "Last analysis {{sn}} s ago",
+    "sonKare": "Last analyzed frame"
+  },
   "gorsel": {
     "retikulosit": {
       "altBaslik": "Automatically counts cells from a microscope image.",
@@ -18,6 +23,31 @@
     }
   },
   "hastalik": {
+    "baslik": "Cat Disease Prediction (XGBoost)",
+    "enAz2Semptom": "Please select at least 2 symptoms.",
+    "form": {
+      "ates": "Temperature",
+      "atesEtiketi": "Temperature (°C)",
+      "kilo": "Weight",
+      "nabiz": "Heart rate",
+      "nabizEtiketi": "Heart rate (beats/min)",
+      "sureEtiketi": "Duration (days)"
+    },
+    "gecersizAralik": "{{label}} is invalid (must be between {{lo}} and {{hi}}).",
+    "ipucu": "Selecting at least 2 symptoms is enough. Entering heart rate, temperature and weight is not required — but if you do, the prediction becomes more distinct (e.g. if the temperature or heart rate is high, the model leans toward a more specific disease).",
+    "ozellik": {
+      "atesSemptom": "Fever (symptom)",
+      "burunAkintisi": "Nasal discharge",
+      "deriLezyonu": "Skin lesion",
+      "gozAkintisi": "Eye discharge",
+      "halsizlik": "Lethargy",
+      "hapsirik": "Sneezing",
+      "istahKaybi": "Loss of appetite",
+      "kiloKaybi": "Weight loss",
+      "sikayetSuresi": "Complaint duration",
+      "topallama": "Lameness",
+      "zorSolunum": "Labored breathing"
+    },
     "semptom": {
       "ates": "Fever",
       "burunAkintisi": "Nasal discharge",
@@ -33,7 +63,19 @@
       "oksuruk": "Coughing",
       "solunumGuclugu": "Breathing difficulty",
       "topallik": "Lameness"
-    }
+    },
+    "sonuc": {
+      "birdenCok": "The symptoms point to more than one possible condition; the highest is \"{{disease}}\" ({{pct}}%). Since confidence is low, it should be clarified with a veterinarian's examination.",
+      "enOlasi": "Most likely: {{disease}}  ·  {{pct}}%",
+      "eslesmeYok": "No clear match found",
+      "eslesmeYokMetin": "No high-probability disease matched your selected symptoms. You can try again by adding different or more symptoms; if the signs continue, you can consult a veterinarian.",
+      "siralamaNotu": "All probabilities are listed below, sorted by confidence.",
+      "tumOlasiliklar": "All probabilities (by confidence)",
+      "uyumlu": "The entered symptoms best match the \"{{disease}}\" picture ({{pct}}%). This is a preliminary assessment, not a definitive diagnosis — if the signs continue, an examination by a veterinarian is recommended.",
+      "yuzdeNotu": "Percentage = the model's confidence in that disease; NOT the severity of the disease."
+    },
+    "teshisiBaslat": "Start Diagnosis",
+    "varsayilanVital": "ℹ️ This prediction assumed healthy cat averages (heart rate ~140, temperature ~38.5°C, weight ~4 kg) for the vitals that were not entered. If you enter the actual measurements, the result will be more accurate."
   },
   "hata": {
     "analizSirasinda": "An error occurred during analysis.",
@@ -76,6 +118,13 @@
     "modulEtiketiEklenti": "{{ad}} — research add-on required",
     "nasilCalisir": "👋 How it works",
     "nasilCalisirGovde": "<kalin>Tap</kalin> a module → it opens right below; <kalin>you can keep several open at the same time</kalin>. Depending on what you need, use a <kalin>photo or the live camera</kalin>, <kalin>audio</kalin> or <kalin>clinical values</kalin>, then start the analysis. Each module begins with a short usage tip. "
+  },
+  "kopru": {
+    "etiket": "AI Pro session for this {{hedef}}: go to the Control screen",
+    "hedefFantom": "tumor",
+    "hedefPetri": "well",
+    "ipucu": "The session starts only after approval; this button only opens the Control screen.",
+    "metin": "⚡ AI Pro session for this target → Control"
   },
   "modul": {
     "bobrekCt": {
@@ -205,6 +254,7 @@
     "isiHaritasiGenel": "🔍 Heat map — the regions the model looked at (red = strong influence on the decision)",
     "isiHaritasiHasta": "🔍 Heat map — the regions that led the model to the “Sick (At Risk)” decision (red = strong contribution to this decision)",
     "isiHaritasiSaglikli": "🔍 Heat map — the regions that led the model to the “Healthy” decision (red = strong contribution to this decision)",
+    "kararSurukleyenler": "🔍 Decision drivers: {{metin}}",
     "tespitYokNotu": "No detection — the map shows the 5 strongest candidate regions that fall below the confidence threshold (it is not evidence of a detection or a diagnosis). Check that the image is of the right type and in focus, then try again."
   }
 }

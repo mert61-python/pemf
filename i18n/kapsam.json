@@ -2155,6 +2155,14 @@
     {
      "metin": "Kedi Sesi",
      "gerekce": "AI geçmişi kaydına giden modül adı — veri"
+    },
+    {
+     "metin": "Hastalık Analizi",
+     "gerekce": "AI geçmişi kaydına giden modül adı — veri"
+    },
+    {
+     "metin": "Belirgin sonuç yok",
+     "gerekce": "AI geçmişi kaydına giden özet — veri"
     }
    ],
    "birlesikIstisna": [],

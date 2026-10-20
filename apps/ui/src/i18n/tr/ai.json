@@ -1,4 +1,9 @@
 {
+  "canli": {
+    "kamerayiCevir": "Kamerayı çevir",
+    "sonAnaliz": "Son analiz {{sn}} sn önce",
+    "sonKare": "Son analiz edilen kare"
+  },
   "gorsel": {
     "retikulosit": {
       "altBaslik": "Mikroskop görüntüsünden hücreleri otomatik sayar.",
@@ -18,6 +23,31 @@
     }
   },
   "hastalik": {
+    "baslik": "Kedi Hastalık Tahmini (XGBoost)",
+    "enAz2Semptom": "Lütfen en az 2 semptom seçin.",
+    "form": {
+      "ates": "Ateş",
+      "atesEtiketi": "Ateş (°C)",
+      "kilo": "Kilo",
+      "nabiz": "Nabız",
+      "nabizEtiketi": "Nabız (atım/dk)",
+      "sureEtiketi": "Süre (gün)"
+    },
+    "gecersizAralik": "{{label}} geçersiz ({{lo}}–{{hi}} aralığında olmalı).",
+    "ipucu": "En az 2 semptom seçmeniz yeterli. Nabız, ateş ve kilo girmek zorunlu değildir — ama girerseniz tahmin belirginleşir (ör. ateş/nabız yüksekse model daha spesifik hastalığa yönelir).",
+    "ozellik": {
+      "atesSemptom": "Ateş (semptom)",
+      "burunAkintisi": "Burun akıntısı",
+      "deriLezyonu": "Deri lezyonu",
+      "gozAkintisi": "Göz akıntısı",
+      "halsizlik": "Halsizlik",
+      "hapsirik": "Hapşırık",
+      "istahKaybi": "İştah kaybı",
+      "kiloKaybi": "Kilo kaybı",
+      "sikayetSuresi": "Şikâyet süresi",
+      "topallama": "Topallama",
+      "zorSolunum": "Zor solunum"
+    },
     "semptom": {
       "ates": "Ateş",
       "burunAkintisi": "Burun Akıntısı",
@@ -33,7 +63,19 @@
       "oksuruk": "Öksürük",
       "solunumGuclugu": "Solunum Güçlüğü",
       "topallik": "Topallık"
-    }
+    },
+    "sonuc": {
+      "birdenCok": "Semptomlar birden çok olası duruma işaret ediyor; en yükseği \"{{disease}}\" (%{{pct}}). Güven düşük olduğundan hekim muayenesiyle netleştirmek gerekir.",
+      "enOlasi": "En olası: {{disease}}  ·  %{{pct}}",
+      "eslesmeYok": "Belirgin bir eşleşme bulunamadı",
+      "eslesmeYokMetin": "Seçtiğiniz semptomlarla yüksek olasılıklı bir hastalık eşleşmedi. Farklı ya da daha fazla semptom ekleyerek tekrar deneyebilir; belirtiler sürüyorsa veteriner hekime danışabilirsiniz.",
+      "siralamaNotu": "Aşağıda tüm olasılıklar güvene göre sıralı.",
+      "tumOlasiliklar": "Tüm olasılıklar (güvene göre)",
+      "uyumlu": "Girilen semptomlar en çok \"{{disease}}\" tablosuyla uyumlu (%{{pct}}). Bu bir ön-değerlendirmedir, kesin teşhis değildir — belirtiler sürüyorsa veteriner hekim muayenesi önerilir.",
+      "yuzdeNotu": "Yüzde = modelin o hastalığa güveni; hastalığın şiddeti DEĞİL."
+    },
+    "teshisiBaslat": "Teşhisi Başlat",
+    "varsayilanVital": "ℹ️ Bu tahmin, girilmeyen vitaller için sağlıklı kedi ortalamaları (nabız ~140, ateş ~38.5°C, kilo ~4 kg) varsayılarak yapıldı. Gerçek ölçümleri girerseniz sonuç daha isabetli olur."
   },
   "hata": {
     "analizSirasinda": "Analiz sırasında hata oluştu.",
@@ -76,6 +118,13 @@
     "modulEtiketiEklenti": "{{ad}} — araştırma eklentisi gerekli",
     "nasilCalisir": "👋 Nasıl çalışır?",
     "nasilCalisirGovde": "Bir modüle <kalin>dokunun</kalin> → hemen altında açılır; <kalin>birden fazlasını aynı anda açık tutabilirsiniz</kalin>. İhtiyaca göre<kalin> fotoğraf/canlı kamera</kalin>, <kalin>ses</kalin> ya da<kalin> klinik değer</kalin> girip analizi başlatın. Her modülün başında kısa bir kullanım ipucu var."
+  },
+  "kopru": {
+    "etiket": "Bu {{hedef}} için AI Pro seansı: Kontrol ekranına git",
+    "hedefFantom": "tümör",
+    "hedefPetri": "kuyu",
+    "ipucu": "Seans onaydan sonra başlar; bu düğme yalnız Kontrol ekranını açar",
+    "metin": "⚡ Bu hedefe AI Pro seansı → Kontrol"
   },
   "modul": {
     "bobrekCt": {
@@ -205,6 +254,7 @@
     "isiHaritasiGenel": "🔍 Isı haritası — modelin baktığı bölgeler (kırmızı = karara güçlü etki)",
     "isiHaritasiHasta": "🔍 Isı haritası — modeli “Hasta (Riskli)” kararına götüren bölgeler (kırmızı = bu karara güçlü katkı)",
     "isiHaritasiSaglikli": "🔍 Isı haritası — modeli “Sağlıklı” kararına götüren bölgeler (kırmızı = bu karara güçlü katkı)",
+    "kararSurukleyenler": "🔍 Kararı sürükleyenler: {{metin}}",
     "tespitYokNotu": "Tespit yok — harita, güven eşiğinin altında kalan en güçlü 5 aday bölgeyi gösterir (tespit ya da tanı kanıtı değildir). Görüntünün doğru tür ve odakta olduğunu kontrol edip yeniden deneyin."
   }
 }
