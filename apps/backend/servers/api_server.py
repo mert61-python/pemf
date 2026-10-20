@@ -3198,6 +3198,13 @@ def _kayit_db_hazir():
         return False, str(e)[:200]
 
 
+def _disk_kritik_sebebi_mi(sebep) -> bool:
+    """`_kayit_db_hazir` nedeni disk-kritik mi (ön ek HER dilde; bkz. `treatment_history_db.disk_kritik_sebebi_mi`)."""
+    from database.treatment_history_db import disk_kritik_sebebi_mi
+
+    return disk_kritik_sebebi_mi(sebep)
+
+
 def _db_acilis_hatasi() -> str:
     """Backend açılışında açılamayan DB'lerin operatöre gösterilecek nedeni ('' = yok). D1.37.
 
@@ -4051,7 +4058,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
         _detay = ceviri.t("seans.hata.kayitDbAcilamadi")
         if _acilis_sebebi:
             _detay += ceviri.t("seans.hata.kayitDbNeden", sebep=_acilis_sebebi)
-        elif str(_db_sebep or "").startswith("Disk boş alanı kritik"):
+        elif _disk_kritik_sebebi_mi(_db_sebep):
             # D1.77 (B-3.9): disk doluyken "yeniden başlatın" YANLIŞ eylemdir — operatöre gerçek nedeni ve eylemi söyle.
             _detay = ceviri.t("seans.hata.baslatilamazNeden", sebep=_db_sebep)
         raise HTTPException(status_code=503, detail=_detay)

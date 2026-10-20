@@ -32,6 +32,8 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+from utils import ceviri
+
 # ⚠️ SQLCipher + sqlite3 istisna demetleri TEK KAYNAKTAN. Bu adlar MODUL DUZEYIDIR ve
 # tasinan `except` dallarinda kullanilir; goturulmezse `NameError` olur ve TAM SUIT bunu
 # GOREMEZ (o dallar yalnizca gercek bir DB hatasinda kosar). Bkz. database/db_hatalari.py.
@@ -899,7 +901,7 @@ class SeansKarisimi:
         if not kimlikler:
             return 0
         if len(kimlikler) > self.TOPLU_SILME_AZAMI:
-            raise ValueError(f"Tek istekte en fazla {self.TOPLU_SILME_AZAMI} seans silinebilir.")
+            raise ValueError(ceviri.t("seans.hata.topluSilmeAzami", azami=self.TOPLU_SILME_AZAMI))
         if yalniz is not None:
             # ⚠️ B2-1.3: yalnız sahipliği DENETLENMİŞ (denetim anında var olan) kimlikler — denetimle bu DELETE arasında
             # açılan başka hekimin seansı (AUTOINCREMENT, tahmin edilebilir kimlik) sorulmadan silinmesin. Üst sınır yukarıda

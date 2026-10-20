@@ -17,6 +17,8 @@ import threading
 import time
 from pathlib import Path
 
+from utils import ceviri
+
 logger = logging.getLogger(__name__)
 
 _PBKDF2_ITERS = 200_000
@@ -358,10 +360,10 @@ class AuthDB:
                 )
             return (True, "")
         except sqlite3.IntegrityError:
-            return (False, "Bu e-posta ile zaten bir hesap var. Giriş yapın.")
+            return (False, ceviri.t("kimlik.hata.hesapZatenVar"))
         except Exception:
             logger.exception("kullanıcı kaydı hatası")
-            return (False, "Kayıt başarısız (sunucu hatası).")
+            return (False, ceviri.t("kimlik.hata.kayitSunucuHatasi"))
 
     def reset_password(self, email: str, new_password: str):
         """Yönetici yetkisiyle şifre sıfırla (router yönetici-kodu + şifre-kuralını doğrular). (ok, error).
@@ -376,11 +378,11 @@ class AuthDB:
                     (pw_hash, salt.hex(), email),
                 )
                 if cur.rowcount == 0:
-                    return (False, "Bu e-posta ile kayıtlı bir hesap yok.")
+                    return (False, ceviri.t("kimlik.hata.hesapYokSifirlama"))
             return (True, "")
         except Exception:
             logger.exception("şifre sıfırlama hatası")
-            return (False, "Sıfırlama başarısız (sunucu hatası).")
+            return (False, ceviri.t("kimlik.hata.sifirlamaSunucuHatasi"))
 
     def verify(self, email: str, password: str) -> bool:
         email = self._norm(email)

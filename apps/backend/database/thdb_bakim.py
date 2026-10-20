@@ -25,9 +25,25 @@ kalir, disa aktarma OPERATORUN acik eylemidir).
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+
+from utils import ceviri
+
+_SAAT_SUPHESI_DESENI = re.compile(r"^(geride|ileri): cihaz saati (\S+ \S+), son gorulen (\S+ \S+)$")
+
+
+def saat_suphesi_metni(neden, dil=None):
+    """`saat_supheli` DEĞERİ (DB'ye yazılan Türkçe VERİ — değişmez) → ekranda gösterilen metin (istek dilinde). TR çıktı BAYT BAYT
+    kayıttaki değerdir; tanınmayan / eski biçimli değer aynen döner (kayıt kaybolmaz)."""
+    m = _SAAT_SUPHESI_DESENI.match(str(neden or ""))
+    if not m:
+        return neden
+    if m.group(1) == "geride":
+        return ceviri.t("sistem.saat.geride", dil=dil, simdi=m.group(2), tavan=m.group(3))
+    return ceviri.t("sistem.saat.ileri", dil=dil, simdi=m.group(2), tavan=m.group(3))
 
 
 class BakimKarisimi:

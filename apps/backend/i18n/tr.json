@@ -543,6 +543,8 @@
     },
     "hata": {
       "dbHazirDegil": "Geçmiş veritabanı hazır değil",
+      "diskKritik": "Disk boş alanı kritik ({{bos}} MB < {{esik}} MB) — tıbbi kayıt yazılamaz; yeni seans başlatılamaz. Disk alanı açın.",
+      "diskKritikOnek": "Disk boş alanı kritik",
       "gecersizSessionIds": "Geçersiz session_ids",
       "geriYukleme": "Seans geçmişi okunurken bu cihazda geri yükleme yapıldı ya da sürüyor — tutarsız dosya OLUŞTURULMADI. Geri yükleme bitince dışa aktarmayı yeniden başlatın.",
       "islemBasarisiz": "İşlem başarısız",
@@ -575,6 +577,7 @@
       "silinecekSecilmedi": "Silinecek hasta seçilmedi.",
       "silinemedi": "Hasta silinemedi — kayıt duruyor; birkaç saniye sonra yeniden deneyin.",
       "topluSilinemedi": "Hastalar silinemedi — kayıtlar duruyor.",
+      "topluSilmeAzami": "Tek istekte en fazla {{azami}} hasta silinebilir.",
       "topluSilmeOnaySecili": "Toplu silme için onay gerekli: gövdede {\"confirm\":\"DELETE_SELECTED\"} gönderin.",
       "topluSilmeOnayTumu": "Toplu silme için onay gerekli: gövdede {\"confirm\":\"DELETE_ALL\"} gönderin.",
       "tumunuSilOperatorSecin": "Operatör seçin — tüm hastaları silmek için önce üst bardan hangi hekim olduğunuzu seçin.",
@@ -604,11 +607,15 @@
       "epostaSifreHatali": "E-posta veya şifre hatalı.",
       "gecersizEposta": "Geçerli bir e-posta adresi girin.",
       "hesapYok": "Bu e-posta ile kayıtlı bir hesap yok. Yeni hesap için Kayıt Ol'u kullanın.",
+      "hesapYokSifirlama": "Bu e-posta ile kayıtlı bir hesap yok.",
+      "hesapZatenVar": "Bu e-posta ile zaten bir hesap var. Giriş yapın.",
+      "kayitSunucuHatasi": "Kayıt başarısız (sunucu hatası).",
       "operatorKaydedilemedi": "Operatör kaydedilemedi.",
       "operatorKilitli": "Çok fazla hatalı deneme — bu operatör geçici olarak kilitlendi.",
       "operatorYok": "Operatör bulunamadı.",
       "pinHane": "PIN 6 haneli bir sayı olmalı.",
       "pinHatali": "PIN hatalı.",
+      "sifirlamaSunucuHatasi": "Sıfırlama başarısız (sunucu hatası).",
       "sifreHatali": "Şifre hatalı. Lütfen tekrar deneyin.",
       "sifreKurali": "Şifre en az 8 karakter olmalı; en az bir büyük harf, bir küçük harf ve bir rakam içermeli.",
       "yeniSifreKurali": "Yeni şifre en az 8 karakter olmalı; bir büyük harf, bir küçük harf ve bir rakam içermeli.",
@@ -763,6 +770,7 @@
       "sureEnAz": "Kalan süre en az 1 dakika olmalı — süre değişikliği UYGULANMADI.",
       "surusEk": "sürülen bobinler durduruldu. Bağlantıyı kontrol edip yeniden deneyin.",
       "surusNeden": "Bobin sürüşü sırasında hata oluştu; seans BAŞLATILMADI",
+      "topluSilmeAzami": "Tek istekte en fazla {{azami}} seans silinebilir.",
       "zatenAktif": "Zaten aktif bir seans var."
     },
     "kimlik": {
@@ -816,6 +824,10 @@
       "saklamaDegisti": "Saklama süresi bu ekran açıldıktan sonra değişti ({{gun}} gün). Ekranı yenileyin, etkilenecek kayıt sayısını görüp yeniden onaylayın — onay kaydedilmedi.",
       "sifirlaJson": "Sıfırla yalnız JSON gövdeyle yapılabilir: {\"onay\": true}.",
       "sifirlaOnay": "Sıfırla bilinçli onay ister: {\"onay\": true}."
+    },
+    "saat": {
+      "geride": "geride: cihaz saati {{simdi}}, son gorulen {{tavan}}",
+      "ileri": "ileri: cihaz saati {{simdi}}, son gorulen {{tavan}}"
     }
   },
   "tarih": {

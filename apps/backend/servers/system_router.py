@@ -197,7 +197,7 @@ async def health_check(request: Request):
     db_sebep = None
     if not db_ready:
         try:
-            _disk = str(_hazir_sebep or "") if str(_hazir_sebep or "").startswith("Disk boş alanı kritik") else ""
+            _disk = str(_hazir_sebep or "") if _disk_kritik_sebebi_mi(_hazir_sebep) else ""
             _yanitsiz = str(_hazir_sebep or "") if str(_hazir_sebep or "").startswith(_db_yanitsiz()) else ""
             db_sebep = _api._db_acilis_hatasi() or _disk or _yanitsiz or ceviri.t("sistem.hata.dbHazirDegil")
         except Exception:
@@ -331,6 +331,19 @@ def _db_yanitsiz() -> str:
     return ceviri.t("sistem.hata.dbYanitsiz")
 
 
+def _disk_kritik_sebebi_mi(sebep) -> bool:
+    from database.treatment_history_db import disk_kritik_sebebi_mi
+
+    return disk_kritik_sebebi_mi(sebep)
+
+
+def _saat_suphesi_metni(neden):
+    """`clockSuspect`: DB'deki Türkçe VERİ → istek dilinde gösterim (TR bayt bayt aynı; tanınmayan değer aynen)."""
+    from database.thdb_bakim import saat_suphesi_metni
+
+    return saat_suphesi_metni(neden)
+
+
 _saglik_db_ucusta = None  # (anahtar, concurrent.futures.Future) — sürmekte olan TEK sağlık DB sorgusu
 _saglik_db_kilit = threading.Lock()
 
@@ -359,8 +372,11 @@ async def _saglik_db_durumu_dongu_disi(_api, sinir_sn: float = 2.5) -> tuple:
     (`launcher/app/src/main.rs` · `backend::db_hazir_mi`); yavaş ama sağlam ilk açılış "bozuk" sayılırdı. `null` = bilinmiyor → normal onay
     (eski backend kuralıyla aynı); arayüz bandı yalnız `=== false`'ta çıkar. Sınır launcher'ın 3 sn'sinin altında."""
     global _saglik_db_ucusta
+    # `is_ready` metni (disk kritik …) istek dilinde üretilsin: yeni iş parçacığı bağlamı MİRAS ALMAZ → dil taşınır; tek-uçuş anahtarı dili
+    # içerir (farklı dilde istekler birbirinin metnini almaz; aynı dilde N eşzamanlı yoklama hâlâ TEK sorgu).
+    dil = ceviri.etkin_dil()
     try:
-        anahtar = str(_api._app_data_dir())
+        anahtar = (str(_api._app_data_dir()), dil)
     except Exception:
         anahtar = None
     with _saglik_db_kilit:
@@ -369,7 +385,8 @@ async def _saglik_db_durumu_dongu_disi(_api, sinir_sn: float = 2.5) -> tuple:
         if f is None or f.done():
             f = concurrent.futures.Future()
 
-            def _is(gelecek=f):
+            def _is(gelecek=f, dil=dil):
+                ceviri.istek_dili_var.set(dil)
                 try:
                     gelecek.set_result(_saglik_db_durumu(_api))
                 except BaseException:
@@ -907,7 +924,7 @@ async def retention_durumu(request: Request):
             # D2.54 · A-06: 5 yıl inaktif hasta anonimleştirmesi — onay yoksa bekleyen sayı gösterilir ve arayüz sorar.
             "anonymization": anonim,
             # F2-1.2 · A-73: onaylanmamış saat şüphesi (neden) — varken anonimleştirme / maskeleme / saklama silmesi KOŞMAZ.
-            "clockSuspect": saat_supheli,
+            "clockSuspect": _saat_suphesi_metni(saat_supheli),
         }
     except Exception:
         logger.exception("retention durumu okunamadi")

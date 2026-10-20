@@ -22,6 +22,8 @@ except Exception:  # pragma: no cover - optional dependency fallback
 # `patient_database.py` icinde AYRI AYRI duruyordu; iki kopya ZATEN AYRISMISTI (bu dosya
 # yalniz `sqlcipher3` deniyordu, oteki `import_sqlcipher()` ile pysqlcipher3'u de).
 # Bkz. database/db_hatalari.py bas yorumu — A1b ile ayni sinif.
+from utils import ceviri  # noqa: E402
+
 from database.db_hatalari import _DB_ERROR, _DB_INTEGRITY, _DB_OPERATIONAL, _DB_VEYA_RUNTIME  # noqa: E402,F401
 
 # Anahtar-uyusmazliginda karantina (tuglalasma korumasi) — hasta DB'siyle TEK KAYNAK.
@@ -575,10 +577,8 @@ class TreatmentHistoryDB(
             self.logger.warning("Disk alani okunamadi (hazirlik engellenmedi)", exc_info=True)
             return True, ""
         if bool(disk.get("critical")):
-            return False, (
-                f"Disk boş alanı kritik ({disk.get('free_mb')} MB < {disk.get('threshold_mb')} MB) — tıbbi kayıt "
-                "yazılamaz; yeni seans başlatılamaz. Disk alanı açın."
-            )
+            bos, esik = str(disk.get("free_mb")), str(disk.get("threshold_mb"))
+            return False, ceviri.t("gecmis.hata.diskKritik", bos=bos, esik=esik)
         return True, ""
 
     def _init_database(self):
@@ -739,6 +739,14 @@ _treatment_db_lock = threading.Lock()
 #: döngüsü, dolayısıyla ACİL DURDUR bloklanır. Yalnız `HeadlessCore` açılışı başarısız olunca kurulur; Y43: yalnız
 #: arka plan yeniden açması (`acilista_acilamayani_yeniden_ac`) başarıyla KALDIRIR.
 _acilis_kilidi: dict[str, str] = {}
+
+
+def disk_kritik_sebebi_mi(sebep) -> bool:
+    """`is_ready()` nedeni DİSK KRİTİK metni mi? Ön ek HER dilde aranır: metin istek diliyle (ya da sağlık iş parçacığında cihaz
+    diliyle) üretilir, çağıran başka dilde olabilir — eşleşme dile bağlı OLMAMALI (ne seans başlatma 503'ü ne de `/api/health`
+    `dbSebep` disk nedenini kaçırır). Makine-okur kod yerine ön ek: `is_ready` imzası `(bool, str)` kalır (çağıranlar çok)."""
+    s = str(sebep or "")
+    return bool(s) and any(s.startswith(ceviri.t("gecmis.hata.diskKritikOnek", dil=d)) for d in ceviri.DILLER)
 
 
 def _kilit_anahtari(db_path) -> str:

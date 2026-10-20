@@ -328,7 +328,7 @@
    "sira": 10,
    "kritik": false,
    "aciklama": "veritabanı / şema / yedek / KVKK iletileri (çoğu muaf: iç / günlük / DB değeri)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 190,
    "dosyaSayisi": 18
   },
@@ -5308,10 +5308,19 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 6,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "kimlik veritabani dosyasi yok: {{yol}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "kimlik veritabani az once okunamadi - yeniden okuma bekletiliyor (fail-closed)",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -5319,10 +5328,115 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 30,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "[okunamayan kayıt]",
+     "gerekce": "veri yer tutucusu — DB'ye yazılır ve `sync_worker` aynı değerle KARŞILAŞTIRIR (`dec == \"[okunamayan kayıt]\"`); metin değil, işaret"
+    },
+    {
+     "metin": "PEMF_ENCRYPT_AT_REST=1 ama hasta DB'si icin SQLCipher saglanamadi (sqlcipher3 binding yok veya .sqlcipher_key/keyring anahtari acilamadi) → hasta PII'sini duz-metin yazmamak icin patients.db ACILMADI. sqlcipher3'u kurun ve anahtari dogrulayin.",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "Database initialization failed: {{e}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "Hasta veritabani acilamadi ve karantinaya ALINAMADI (dosya kilitli olabilir). Baska bir PEMF surecinin calismadigindan emin olup yeniden deneyin.",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "Database initialization failed (karantina sonrasi): {{e}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "sync_status INTEGER DEFAULT 0",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "owner_email TEXT",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "operator_email TEXT",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "last_treatment_at TEXT",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "anonymized INTEGER DEFAULT 0",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "profil TEXT DEFAULT ''",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "ertelenmis VACUUM",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "|norm{{_SEARCH_NORM_VERSION}}",
+     "gerekce": "arama indeksi sürüm anahtarı (DB'ye yazılan veri) — metin değil"
+    },
+    {
+     "metin": "True",
+     "gerekce": "mantıksal sabit (`True`) — metin değil"
+    },
+    {
+     "metin": "Failed to add patient: {{e}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "hasta okuma",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "(COALESCE(profil, '') = ? OR COALESCE(profil, '') = '')",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "COALESCE(profil, '') = ?",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "hasta sayimi",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "hasta listesi",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "hasta guncelleme",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "hasta silme",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "toplu hasta silme",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "toplu hasta silme VACUUM",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "hasta arama",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "Hasta DB'si acilista ACILAMADI ({{kilit}}); istek yolunda denenmez, arka planda yeniden deneniyor.",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -5330,10 +5444,63 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 13,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "SQLCipher anahtari SecretsManager'dan OKUNAMADI/YAZILAMADI (%s: %s) — eski yola DUSULMEDI, YENI ANAHTAR URETILMEDI; veritabani acilmayacak, dosyalara dokunulmadi (Karar 6). Sir dosyasina/veri kokune erisimi duzeltin; veritabani arka planda yeniden acilir.",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "SQLCipher anahtari okunamadi/yazilamadi ({{__name__}}) — yeni anahtar URETILMEDI, eski yola dusulmedi (Karar 6).",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "DB duz-metin, at-rest gocu bekliyor (karantina YAPILMADI): {{db}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "'{{d}}' dosyasini '{{s}}' adina geri tasiyin",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "kaynak kilitli — yalniz yeniden adlandirma yapilir, KOPYA YAZILMADI (A-08)",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "tasima basarisiz",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "sema bos",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "anahtarla okunamadi ({{__name__}}: {{e}})",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "ozgun ad YOK",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "ozgun ad DUZ-METIN",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "sifreli kopya dogrulanamadi (sema {{n}} != {{n_kaynak}})",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "onceki yarim islemden kalan farkli dosya var, dokunulmadi: {{eski}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "Y95: ikinci ad sifreli kopyayi gosteriyor, sifirlanmadi: {{eski}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -5341,10 +5508,71 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 15,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Geçersiz değerlendirme durumu: {{status}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "AI kaydi silme",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "{{ne}}: denetim noktasi tamamlanamadi",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "AND pemf_ai_profil(mode, module_id) = ?",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "pemf_sahip(operator_email) = ? OR pemf_sahip(operator_email) = ''",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "OR pemf_sahip(operator_email) NOT IN ({{yer}})",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "aktif seans — tedavi kaydını kilitlememek için",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "AI gecmisi VACUUM",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "VACUUM hatası",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "KVKK VACUUM ertelendi: {{neden}}",
+     "gerekce": "sistem ayarı açıklaması — DB'ye yazılan veri; ekranda gösterilmez"
+    },
+    {
+     "metin": "ertelenmis KVKK VACUUM",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "KVKK VACUUM tamamlandi",
+     "gerekce": "sistem ayarı açıklaması — DB'ye yazılan veri; ekranda gösterilmez"
+    },
+    {
+     "metin": "(COALESCE(patient_uuid,'') = '' AND pemf_arama_katla(patient_name) = ?)",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "pemf_arama_katla(patient_name) = ?",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "pemf_ai_profil(mode, module_id) = ?",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -5352,10 +5580,43 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 9,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "geride: cihaz saati {{simdi}}, son gorulen {{tavan}}",
+     "gerekce": "DB'ye yazılan VERİ (`system_settings.saat_supheli`); ekranda `saat_suphesi_metni` ile istek dilinde gösterilir (değer→anahtar)"
+    },
+    {
+     "metin": "ileri: cihaz saati {{simdi}}, son gorulen {{tavan}}",
+     "gerekce": "DB'ye yazılan VERİ (`system_settings.saat_supheli`); ekranda `saat_suphesi_metni` ile istek dilinde gösterilir (değer→anahtar)"
+    },
+    {
+     "metin": "A-73: saat suphesi (operator onayi bekleniyor)",
+     "gerekce": "sistem ayarı açıklaması — DB'ye yazılan veri; ekranda gösterilmez"
+    },
+    {
+     "metin": "A-73: son gorulen saat",
+     "gerekce": "sistem ayarı açıklaması — DB'ye yazılan veri; ekranda gösterilmez"
+    },
+    {
+     "metin": "A-73: saat suphesi (operator onayladi)",
+     "gerekce": "sistem ayarı açıklaması — DB'ye yazılan veri; ekranda gösterilmez"
+    },
+    {
+     "metin": "health snapshot error: {{e}}",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "at-rest sifreli kurulumda birincil anahtar BOS dondu — ek yedek yazilmaz (duz-metin kopya riski)",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "REPLACE_ALL ice aktarma",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -5363,7 +5624,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -5374,7 +5635,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -5385,10 +5646,71 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 16,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "({{sutun}} IS NOT NULL AND {{sutun2}} != '' AND {{sutun3}} NOT IN ({{siz}}))",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "Operator geri donussuz PII maskelemesini onayladi (sureye ve kapsama bagli; A-09)",
+     "gerekce": "sistem ayarı açıklaması — DB'ye yazılan veri; ekranda gösterilmez"
+    },
+    {
+     "metin": "PII maskeleme onayi gecersiz (A-09: sure degisti)",
+     "gerekce": "sistem ayarı açıklaması — DB'ye yazılan veri; ekranda gösterilmez"
+    },
+    {
+     "metin": "Seans PII maskeleme suresi (gun); 0 = kapali",
+     "gerekce": "sistem ayarı açıklaması — DB'ye yazılan veri; ekranda gösterilmez"
+    },
+    {
+     "metin": "{{s}} = CASE WHEN {{deger2}} THEN '[REDACTED]' ELSE {{s3}} END",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "PII maskeleme",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "name='[ANONIM]', owner_name='[ANONIM]', vet_contact='', owner_email='', age='', weight_kg=NULL, notes=CASE WHEN COALESCE(notes, '') = '' THEN notes ELSE '[ANONIM]' END, updated_at=CURRENT_TIMESTAMP",
+     "gerekce": "SQL — anonimleştirilmiş kaydın DB'ye yazılan işaret değeri (`[ANONIM]`) — veri, ekranda gösterilmez"
+    },
+    {
+     "metin": "[iİ]̇?",
+     "gerekce": "düzenli ifade parçası — metin değil (Türkçe büyük/küçük harf katlama)"
+    },
+    {
+     "metin": "[ıI]",
+     "gerekce": "düzenli ifade parçası — metin değil (Türkçe büyük/küçük harf katlama)"
+    },
+    {
+     "metin": "Operator 5 yil inaktif hasta anonimlestirmesini onayladi (A-06); esik degisirse gecersiz (A-09)",
+     "gerekce": "sistem ayarı açıklaması — DB'ye yazılan veri; ekranda gösterilmez"
+    },
+    {
+     "metin": "Operator anonimlestirme onayini GERI ALDI (S-F2-1.1)",
+     "gerekce": "sistem ayarı açıklaması — DB'ye yazılan veri; ekranda gösterilmez"
+    },
+    {
+     "metin": "KVKK: tedavi-DB anonimlestirmesi bekleyenler",
+     "gerekce": "sistem ayarı açıklaması — DB'ye yazılan veri; ekranda gösterilmez"
+    },
+    {
+     "metin": "KVKK bekleyen listesi",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "session_id IN ({{sph}})",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "correlation_id IN ({{sph}})",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -5396,10 +5718,43 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 9,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "olay saklama silmesi",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "Seans bulunamadı: {{session_id}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "AND pemf_seans_profil(ts.profil, ts.treatment_mode) = ?",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "AND ts.id IN ({{deger1}})",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "pemf_seans_profil(profil, treatment_mode) = ?",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "updated_at = CURRENT_TIMESTAMP",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "seans silme",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "toplu seans silme",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -5407,10 +5762,207 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 51,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Tedavi DB",
+     "gerekce": "günlük / karantina etiketi — geliştirici içindir"
+    },
+    {
+     "metin": "sync_status INTEGER DEFAULT 0",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "updated_at TEXT",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "profil TEXT DEFAULT ''",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "treatment_sessions.profil eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "operator_email TEXT",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "ai_analyses.operator_email eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "review_status TEXT DEFAULT ''",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "ai_analyses.review_status eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "review_note TEXT DEFAULT ''",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "ai_analyses.review_note eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "reviewed_by TEXT DEFAULT ''",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "ai_analyses.reviewed_by eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "reviewed_at TEXT DEFAULT ''",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "ai_analyses.reviewed_at eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "review_history TEXT DEFAULT ''",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "ai_analyses.review_history eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "patient_uuid TEXT DEFAULT ''",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "ai_analyses.patient_uuid eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "patient_name TEXT",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "patient_name sütunu eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "session_uuid TEXT",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "session_uuid sütunu eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "idempotency_key TEXT",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "idempotency_key sütunu eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "patient_id INTEGER",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "treatment_sessions.patient_id sütunu eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "started_epoch REAL",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "treatment_sessions.started_epoch sütunu eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "ended_epoch REAL",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "treatment_sessions.ended_epoch sütunu eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "treatment_sessions.operator_email sütunu eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "owner_email TEXT",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "patients.owner_email sütunu eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "coil_run_id INTEGER",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "sensor_samples.coil_run_id sütunu eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "ambient_temp_c REAL",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "sensor_samples.ambient_temp_c sütunu eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "phase REAL",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "sensor_samples.phase sütunu eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "sample_count INTEGER",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "sensor_samples.sample_count sütunu eklendi",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "alan_duzeltme TEXT DEFAULT ''",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "{{_tablo}}.alan_duzeltme sütunu eklendi (CH3)",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "{{_tablo}}.{{_orijinal}} sütunu eklendi (CH3)",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu)"
+    },
+    {
+     "metin": "pre_migration_v{{current_version}}_{{stamp}}.db",
+     "gerekce": "dosya adı kalıbı — metin değil (yedek rotasyon deseni)"
+    },
+    {
+     "metin": "PEMF DB schema version",
+     "gerekce": "sistem ayarı açıklaması — DB'ye yazılan veri; ekranda gösterilmez"
+    },
+    {
+     "metin": "bootstrap schema version",
+     "gerekce": "şema sürümü göç adı (DB'ye yazılan açıklama) — ekranda gösterilmez"
+    },
+    {
+     "metin": "upgrade schema to v{{version}}",
+     "gerekce": "şema sürümü göç adı (DB'ye yazılan açıklama) — ekranda gösterilmez"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -5418,10 +5970,23 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 3,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "seans {{session_id}} kaniti okunamadi: {{__name__}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "CH3 Y152: gecmis olculen mT /5 gocu",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "CH3 Y152: ice aktarma sonrasi bekliyor",
+     "gerekce": "sistem ayarı açıklaması — DB'ye yazılan veri; ekranda gösterilmez"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -5429,10 +5994,31 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 6,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "PEMF_ENCRYPT_AT_REST=1 ama SQLCipher sağlanamadı (sqlcipher3 binding yok veya anahtar açılamadı) → hasta PII'sini düz-metin yazmamak için tedavi DB'si AÇILMADI. sqlcipher3'ü kurun ve .sqlcipher_key/keyring anahtarını doğrulayın.",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "Tedavi DB'si: WAL ayarlanamadi ve SIFRELI baglanti yeniden ACILAMADI — duz-metin baglantiya DUSULMEDI (Karar 6).",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "Disk free space critical: {{deger1}}MB < {{deger2}}MB",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "Tedavi gecmisi veritabani acilamadi ve karantinaya ALINAMADI (dosya kilitli olabilir).",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "Tedavi kaydi DB'si acilista ACILAMADI ({{kilit}}); istek yolunda denenmez, arka planda yeniden deneniyor.",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -5440,10 +6026,31 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 5,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "yazilan yedek DOGRULANAMADI (acilmiyor / quick_check basarisiz): {{gecici}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "sifreli hesap yedegi DOGRULANAMADI: {{gecici}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "cikti zaten var, uzerine yazilmaz: {{cikti}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "cozulen hesap yedegi DOGRULANAMADI: {{gecici}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "ayar yedegi geri okunamadi / esit degil: {{gecici}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -5451,10 +6058,47 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 9,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "PEMF — YEDEK KURTARMA NOTU ============================================================= Bu dizindeki .db dosyalari SQLCipher ile SIFRELIDIR (sifreli kurulumda). DOSYALAR — her turden SON N kopya tutulur, eskilerini cihaz SILER pemf_treatment_history_<tarih>.db tedavi gecmisi pemf_patients_<tarih>.db hasta kartlari pemf_auth_users_<tarih>.db operator hesaplari pemf_config_<tarih>.json ayarlar (SIRSIZ: parola/anahtar YOK) pemf_system_settings_<tarih>.json sistem ayarlari (SIRSIZ) Cihaz YALNIZ bu adlardaki kendi dosyalarini siler; bu dizindeki baska dosyalara dokunmaz. Her cihaz AYRI dizin kullanmalidir: dizinde baska bir kurulumun .pemf_kurulum_* isareti varsa cihaz bu dizinde HIC silmez. Kaldirma / \"tam temizlik\" bu dizine HIC dokunmaz — gerekmiyorsa yedekleri elle silin. Sifre-cozme anahtari yedegi ALAN MAKINEYE baglidir (Windows DPAPI / CRYPTPROTECT_LOCAL_MACHINE). Bu yuzden .db dosyalari TEK BASINA yetmez. KURTARMA ZARFI Bu dizinde kurtarma-zarfi.enc varsa, veritabani anahtarlari onun icinde KURTARMA KODU ile sifreli olarak durur. Kod + zarf ile yedekler BASKA bir makinede acilabilir. Kurtarma kodu, kurulum makinesinde bir kez uretilip <veri-dizini>\\KURTARMA-KODU.txt dosyasina yazilir ve operator tarafindan makine disinda (kasa / parola yoneticisi) saklanmalidir. Kod BU DIZINDE SAKLANMAZ — zarf ve kod ayni yerde durursa koruma kalmaz. NASIL GERI YUKLENIR 1) Yeni makineye PEMF kurun (henuz baslatmadan). 2) Anahtarlari zarftan cikarip yerlestirin (Komut Istemi / cmd penceresinde): @@KURTARMA_ZARF@@ @@KURTARMA_EXE_NOTU@@ 3) Bu dizindeki pemf_treatment_history_*.db / pemf_patients_*.db dosyalarindan en yenisini veri dizinine pemf_treatment_history.db / patients.db adiyla kopyalayin. (⚠️ 2026-08-15: hedef ad `pemf_patients.db` yaziliyordu; uygulama O ADI HIC ACMAZ → yonergeyi izleyen klinik hasta kayitlarini geri yukledigini sanip bos liste gorurdu. YEDEK dosya on-eki `pemf_patients_<tarih>.db` DEGISMEDI — rotasyon onu kullanir.) 3b) Operator hesaplari: pemf_auth_users_<tarih>.db sifreliyse (2. adimdan SONRA): @@KURTARMA_HESAP@@ Sifresiz kurulumda dosyayi auth_users.db adiyla kopyalamak yeter. 3c) Ayarlar: pemf_config_<tarih>.json -> config.json, pemf_system_settings_<tarih>.json -> system_settings.json. MQTT kullanici/parola ve API anahtari bu kopyalarda YOKTUR — yeniden girin. 4) Servisi baslatin. ZARF YOKSA Kurtarma icin sunlardan biri gerekir: 1) Yedegi alan makinedeki pemf_secrets.json (yalniz AYNI makinede cozulur), VEYA 2) Disari alinmis sqlcipher_key ve patient_fernet_key degerleri. Ikisi de yoksa bu yedekler kurtarilamaz. =============================================================",
+     "gerekce": "KURTARMA MALZEMESİ (kod dosyası / zarf / makine dışı not / `--kurtarma` CLI iletisi) — GÜVENLİK: içerik `kod_dosyasi_guncel_mi` ve `.recovery_fp` mührüyle bayt-bayt karşılaştırılır; dile bağlamak anahtar emaneti mantığına dokunur → Türkçe KALIR (S-I18N-P1.3 [SAHİBE])"
+    },
+    {
+     "metin": "DB bakim turu hatasi",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "pemf_treatment_history_{{stamp}}.db",
+     "gerekce": "dosya adı kalıbı — metin değil (yedek rotasyon deseni)"
+    },
+    {
+     "metin": "pemf_patients_{{stamp}}.db",
+     "gerekce": "dosya adı kalıbı — metin değil (yedek rotasyon deseni)"
+    },
+    {
+     "metin": "pemf_auth_users_{{stamp}}.db",
+     "gerekce": "dosya adı kalıbı — metin değil (yedek rotasyon deseni)"
+    },
+    {
+     "metin": "pemf_{{tur}}_{{stamp}}.json",
+     "gerekce": "dosya adı kalıbı — metin değil (yedek rotasyon deseni)"
+    },
+    {
+     "metin": "kok nesne sozluk degil",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "kopya kaynakla ESIT DEGIL: {{gecici}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    },
+    {
+     "metin": "makine disi",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -5462,10 +6106,23 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 5,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "True",
+     "gerekce": "mantıksal sabit (`True`) — metin değil"
+    },
+    {
+     "metin": "KVKK anonimlestirme (tedavi DB)",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    },
+    {
+     "metin": "KVKK anonimlestirme (hasta DB)",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -5473,10 +6130,55 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 11,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "\"%LOCALAPPDATA%\\PEMF Vet Client\\runtime\\PEMF_Backend\\PEMF_Backend.exe\"",
+     "gerekce": "KURTARMA MALZEMESİ (kod dosyası / zarf / makine dışı not / `--kurtarma` CLI iletisi) — GÜVENLİK: içerik `kod_dosyasi_guncel_mi` ve `.recovery_fp` mührüyle bayt-bayt karşılaştırılır; dile bağlamak anahtar emaneti mantığına dokunur → Türkçe KALIR (S-I18N-P1.3 [SAHİBE])"
+    },
+    {
+     "metin": "(Launcher DISI servis kurulumunda ayni komutu kurulum dizinindeki EXE ile verin: \"C:\\Program Files\\PEMF Backend\\PEMF_Backend.exe\" ya da install_backend_service ile kuruldugu klasor.)",
+     "gerekce": "KURTARMA MALZEMESİ (kod dosyası / zarf / makine dışı not / `--kurtarma` CLI iletisi) — GÜVENLİK: içerik `kod_dosyasi_guncel_mi` ve `.recovery_fp` mührüyle bayt-bayt karşılaştırılır; dile bağlamak anahtar emaneti mantığına dokunur → Türkçe KALIR (S-I18N-P1.3 [SAHİBE])"
+    },
+    {
+     "metin": "Kurtarma kodu bos",
+     "gerekce": "KURTARMA MALZEMESİ (kod dosyası / zarf / makine dışı not / `--kurtarma` CLI iletisi) — GÜVENLİK: içerik `kod_dosyasi_guncel_mi` ve `.recovery_fp` mührüyle bayt-bayt karşılaştırılır; dile bağlamak anahtar emaneti mantığına dokunur → Türkçe KALIR (S-I18N-P1.3 [SAHİBE])"
+    },
+    {
+     "metin": "Zarfa konacak anahtar yok",
+     "gerekce": "KURTARMA MALZEMESİ (kod dosyası / zarf / makine dışı not / `--kurtarma` CLI iletisi) — GÜVENLİK: içerik `kod_dosyasi_guncel_mi` ve `.recovery_fp` mührüyle bayt-bayt karşılaştırılır; dile bağlamak anahtar emaneti mantığına dokunur → Türkçe KALIR (S-I18N-P1.3 [SAHİBE])"
+    },
+    {
+     "metin": "Bu dosya PEMF veritabani anahtarlarini KURTARMA KODU ile sifreli tutar. Kod olmadan acilamaz. Kodu bu dizinde SAKLAMAYIN.",
+     "gerekce": "KURTARMA MALZEMESİ (kod dosyası / zarf / makine dışı not / `--kurtarma` CLI iletisi) — GÜVENLİK: içerik `kod_dosyasi_guncel_mi` ve `.recovery_fp` mührüyle bayt-bayt karşılaştırılır; dile bağlamak anahtar emaneti mantığına dokunur → Türkçe KALIR (S-I18N-P1.3 [SAHİBE])"
+    },
+    {
+     "metin": "Zarf okunamadi (bozuk dosya?): {{e}}",
+     "gerekce": "KURTARMA MALZEMESİ (kod dosyası / zarf / makine dışı not / `--kurtarma` CLI iletisi) — GÜVENLİK: içerik `kod_dosyasi_guncel_mi` ve `.recovery_fp` mührüyle bayt-bayt karşılaştırılır; dile bağlamak anahtar emaneti mantığına dokunur → Türkçe KALIR (S-I18N-P1.3 [SAHİBE])"
+    },
+    {
+     "metin": "Bu bir PEMF kurtarma zarfi degil",
+     "gerekce": "KURTARMA MALZEMESİ (kod dosyası / zarf / makine dışı not / `--kurtarma` CLI iletisi) — GÜVENLİK: içerik `kod_dosyasi_guncel_mi` ve `.recovery_fp` mührüyle bayt-bayt karşılaştırılır; dile bağlamak anahtar emaneti mantığına dokunur → Türkçe KALIR (S-I18N-P1.3 [SAHİBE])"
+    },
+    {
+     "metin": "Desteklenmeyen zarf surumu: {{deger1}}",
+     "gerekce": "KURTARMA MALZEMESİ (kod dosyası / zarf / makine dışı not / `--kurtarma` CLI iletisi) — GÜVENLİK: içerik `kod_dosyasi_guncel_mi` ve `.recovery_fp` mührüyle bayt-bayt karşılaştırılır; dile bağlamak anahtar emaneti mantığına dokunur → Türkçe KALIR (S-I18N-P1.3 [SAHİBE])"
+    },
+    {
+     "metin": "Kurtarma kodu YANLIS (zarf acilamadi)",
+     "gerekce": "KURTARMA MALZEMESİ (kod dosyası / zarf / makine dışı not / `--kurtarma` CLI iletisi) — GÜVENLİK: içerik `kod_dosyasi_guncel_mi` ve `.recovery_fp` mührüyle bayt-bayt karşılaştırılır; dile bağlamak anahtar emaneti mantığına dokunur → Türkçe KALIR (S-I18N-P1.3 [SAHİBE])"
+    },
+    {
+     "metin": "PEMF — YEDEK KURTARMA KODU ============================================================= {{deger1}} BU KODU MAKINE DISINDA SAKLAYIN (kasa / parola yoneticisi / kagit). NE ISE YARAR Yedek dizinindeki",
+     "gerekce": "KURTARMA MALZEMESİ (kod dosyası / zarf / makine dışı not / `--kurtarma` CLI iletisi) — GÜVENLİK: içerik `kod_dosyasi_guncel_mi` ve `.recovery_fp` mührüyle bayt-bayt karşılaştırılır; dile bağlamak anahtar emaneti mantığına dokunur → Türkçe KALIR (S-I18N-P1.3 [SAHİBE])"
+    },
+    {
+     "metin": "dosyasini bu kod acar. Zarfin icinde veritabani sifre-cozme anahtarlari vardir. Boylece anakart/disk arizasindan sonra BASKA bir makinede yedekler geri yuklenebilir. UYARI * Bu dosyayi yedek dizinine KOPYALAMAYIN. Kod ve zarf ayni yerde durursa koruma ortadan kalkar. * Kod kaybolursa yedekler bu makine disinda ACILAMAZ. * Kodu disari aldiktan sonra bu dosyayi silebilirsiniz. KURTARMA (yeni makinede, PEMF kurulduktan sonra, Komut Istemi / cmd penceresinde)",
+     "gerekce": "KURTARMA MALZEMESİ (kod dosyası / zarf / makine dışı not / `--kurtarma` CLI iletisi) — GÜVENLİK: içerik `kod_dosyasi_guncel_mi` ve `.recovery_fp` mührüyle bayt-bayt karşılaştırılır; dile bağlamak anahtar emaneti mantığına dokunur → Türkçe KALIR (S-I18N-P1.3 [SAHİBE])"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -5484,10 +6186,15 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "%s: kayit veritabani mesgul — yazim arka planda SURUYOR (olay dongusu ve ACIL DURDUR beklemez)",
+     "gerekce": "günlük / iç etiket — geliştirici içindir (operatöre gitmez)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -5495,10 +6202,15 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10g-veritabani",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Şifreli modül çözülemedi: {{fullname}} ({{name}}). Parola yanlış ya da dosya bozuk olabilir. Ayrıntı: {{e}}",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },

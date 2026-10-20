@@ -543,6 +543,8 @@
     },
     "hata": {
       "dbHazirDegil": "The history database is not ready",
+      "diskKritik": "Free disk space is critical ({{bos}} MB < {{esik}} MB) — the medical record cannot be written; a new session cannot be started. Free up disk space.",
+      "diskKritikOnek": "Free disk space is critical",
       "gecersizSessionIds": "Invalid session_ids",
       "geriYukleme": "A restore was performed on this device while the session history was being read, or one is in progress — no inconsistent file was CREATED. Restart the export once the restore has finished.",
       "islemBasarisiz": "The operation failed",
@@ -575,6 +577,7 @@
       "silinecekSecilmedi": "No patients selected for deletion.",
       "silinemedi": "The patient could not be deleted — the record remains; try again in a few seconds.",
       "topluSilinemedi": "The patients could not be deleted — the records remain.",
+      "topluSilmeAzami": "At most {{azami}} patients can be deleted in one request.",
       "topluSilmeOnaySecili": "Confirmation required for bulk delete: send {\"confirm\":\"DELETE_SELECTED\"} in the body.",
       "topluSilmeOnayTumu": "Confirmation required for bulk delete: send {\"confirm\":\"DELETE_ALL\"} in the body.",
       "tumunuSilOperatorSecin": "Select an operator — to delete all patients, first select which veterinarian you are from the top bar.",
@@ -604,11 +607,15 @@
       "epostaSifreHatali": "Wrong email or password.",
       "gecersizEposta": "Enter a valid email address.",
       "hesapYok": "There is no account registered with this email. Use Sign Up to create a new account.",
+      "hesapYokSifirlama": "No account is registered with this email.",
+      "hesapZatenVar": "An account with this email already exists. Please sign in.",
+      "kayitSunucuHatasi": "Registration failed (server error).",
       "operatorKaydedilemedi": "The operator could not be saved.",
       "operatorKilitli": "Too many wrong attempts — this operator is temporarily locked.",
       "operatorYok": "Operator not found.",
       "pinHane": "The PIN must be a 6-digit number.",
       "pinHatali": "Wrong PIN.",
+      "sifirlamaSunucuHatasi": "Reset failed (server error).",
       "sifreHatali": "Wrong password. Please try again.",
       "sifreKurali": "The password must be at least 8 characters and contain at least one uppercase letter, one lowercase letter and one digit.",
       "yeniSifreKurali": "The new password must be at least 8 characters and contain one uppercase letter, one lowercase letter and one digit.",
@@ -763,6 +770,7 @@
       "sureEnAz": "The remaining time must be at least 1 minute — the duration change was NOT APPLIED.",
       "surusEk": "the coils that were driven were stopped. Check the connection and try again.",
       "surusNeden": "An error occurred while driving the coils; the session was NOT STARTED",
+      "topluSilmeAzami": "At most {{azami}} sessions can be deleted in one request.",
       "zatenAktif": "There is already an active session."
     },
     "kimlik": {
@@ -816,6 +824,10 @@
       "saklamaDegisti": "The retention period changed after this screen was opened ({{gun}} days). Refresh the screen, see the number of affected records and confirm again — the confirmation was not saved.",
       "sifirlaJson": "Reset can only be done with a JSON body: {\"onay\": true}.",
       "sifirlaOnay": "Reset requires deliberate confirmation: {\"onay\": true}."
+    },
+    "saat": {
+      "geride": "behind: device clock {{simdi}}, last seen {{tavan}}",
+      "ileri": "ahead: device clock {{simdi}}, last seen {{tavan}}"
     }
   },
   "tarih": {

@@ -21,6 +21,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
+from utils import ceviri
+
 try:
     from pemf_gui.config import get_config
 except ModuleNotFoundError:
@@ -1103,7 +1105,7 @@ class PatientDatabase:
         if not kimlikler:
             return 0
         if len(kimlikler) > self.TOPLU_SILME_AZAMI:
-            raise ValueError(f"Tek istekte en fazla {self.TOPLU_SILME_AZAMI} hasta silinebilir.")
+            raise ValueError(ceviri.t("hasta.hata.topluSilmeAzami", azami=self.TOPLU_SILME_AZAMI))
         if not self.lock.acquire(timeout=10.0):
             return 0
         try:
