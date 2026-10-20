@@ -1,3 +1,4 @@
+import i18n from "i18next";
 // Author: mertaygn, cglrgrkn
 /**
  * therapyLimits — PEMF tedavi parametreleri için arayüz sınırları (tek kaynak).
@@ -14,9 +15,9 @@
  * süre 0–120 dk (0 = süresiz). Stop komutlarında clamp UYGULANMAZ.
  */
 export const THERAPY_LIMITS = {
-  phase: { min: 0, max: 360, label: "Faz", unit: "°" },
-  intensity: { min: 0.1, max: 20, label: "Yoğunluk", unit: "mT" },
-  duration: { min: 0, max: 120, label: "Süre", unit: "dk" }, // 0 = süresiz
+  phase: { min: 0, max: 360, get label() { return i18n.t("kontrol.sinir.faz"); }, unit: "°" },
+  intensity: { min: 0.1, max: 20, get label() { return i18n.t("kontrol.sinir.yogunluk"); }, unit: "mT" },
+  duration: { min: 0, max: 120, get label() { return i18n.t("kontrol.sinir.sure"); }, get unit() { return i18n.t("kontrol.sinir.birimDk"); } }, // 0 = süresiz
 } as const;
 
 /** Arayüzde SINIRSIZ parametreler (sahip kararı 2026-09-08) — değer olduğu gibi cihaza gider. */
@@ -53,7 +54,7 @@ export function clampTherapyParams(
     values[k] = clamped;
     if (!sinirsizMi(k) && Math.abs(clamped - raw) > 1e-9) {
       const lim = THERAPY_LIMITS[k];
-      warnings.push(`${lim.label} ${lim.min}–${lim.max} ${lim.unit} aralığına çekildi.`);
+      warnings.push(i18n.t("kontrol.sinir.cekildi", { label: lim.label, min: lim.min, max: lim.max, unit: lim.unit }));
     }
   });
   return { values, warnings };

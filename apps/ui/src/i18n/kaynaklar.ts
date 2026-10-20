@@ -26,6 +26,8 @@ import trGuncelleme from "./tr/guncelleme.json";
 import enGuncelleme from "./en/guncelleme.json";
 import trHasta from "./tr/hasta.json";
 import enHasta from "./en/hasta.json";
+import trKontrol from "./tr/kontrol.json";
+import enKontrol from "./en/kontrol.json";
 
 export const trKaynak = {
   ayarlar: trAyarlar,
@@ -38,6 +40,7 @@ export const trKaynak = {
   bant: trBant,
   guncelleme: trGuncelleme,
   hasta: trHasta,
+  kontrol: trKontrol,
 };
 
 export const enKaynak: typeof trKaynak = {
@@ -51,6 +54,7 @@ export const enKaynak: typeof trKaynak = {
   bant: enBant,
   guncelleme: enGuncelleme,
   hasta: enHasta,
+  kontrol: enKontrol,
 };
 
 export const kaynaklar = {

@@ -225,6 +225,622 @@
    "tur": "estop",
    "kaynak": "apps/ui/src/utils/patientScope.ts",
    "aciklama": "kimlik veritabanı okunamıyor — kapılar kapalı; ACİL DURDUR ve STOP çalışır cümlesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.sureGirilmedi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "süre girilmedi — bobin gözetimsiz sınıra kadar çalışır uyarısı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.durdurmaOnaylanamadi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "DURDURMA ONAYLANAMADI — bobin hâlâ çalışıyor olabilir; ACİL DURDUR'a basın"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.komutOnaylanamadi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "komut onaylanamadı — bobin başlatılamamış olabilir"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.komutGonderilemedi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "komut gönderilemedi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.ackBekleniyor",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "cihaz onayı bekleniyor"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.ackOk",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "cihaz onayladı — PWM bobinde çalışıyor"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.ackRed",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "cihaz komutu REDDETTİ — bobin çalışmıyor"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.ackGelmedi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "cihaz onayı gelmedi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.sicaklikUyari",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "sıcaklık eşik üstü uyarısı (otomatik durdurma yok)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.sicaklikOlcumuYok",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "bobinde sıcaklık ölçümü yok"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.bobinBagliDegil",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "bobin bağlı değil"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.bobin.sensorDogrulanamadi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilCard.tsx",
+   "aciklama": "alan sensörü doğrulanamadı (kart)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.efield.egitimDisi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/EFieldBar.tsx",
+   "aciklama": "ölçülen B model eğitim aralığı dışında — E hesaplanmadı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.efield.bOlculmuyor",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/EFieldBar.tsx",
+   "aciklama": "alan (B) ölçülmüyor — E hesaplanmadı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.efield.egitimBilinmiyor",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/EFieldBar.tsx",
+   "aciklama": "model eğitim aralığı okunamadı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.efield.dutyDisi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/EFieldBar.tsx",
+   "aciklama": "Σduty eğitim aralığı dışı — güvenilmez"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.efield.dutyDisiAralikli",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/EFieldBar.tsx",
+   "aciklama": "Σduty eğitim aralığı dışı — güvenilmez (model aralığı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.tekYonluBaslik",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "tek yönlü sürüşe geçilsin mi? (onay başlığı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.tekYonluMetni",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "tek yönlü sürüş DC bileşen oluşturur — onay gövdesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.tekYonluParca",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "bobin tek yönlü sürüşe alındı (sonuç parçası)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.ciftYonluParca",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "bobin çift yönlü sürüşe alındı (sonuç parçası)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.sonuc",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "sürüş kipi sonuç cümlesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.kipDegismedi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "kip değişmedi — kaydedildi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.gonderilemedi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "gönderilemedi — kip DEĞİŞMEDİ"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.stmBagliDegil",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "STM32 bağlı değil — kip değiştirilemez"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.bobin67",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "bobin 6-7 sürücüleri tek yönlü"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.bobinSecin",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "en az bir bobin seçin"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.baglantiYok",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "seçili bobinler için bağlantı yok (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.baglantiYokGovde",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "seçili bobinler için aktif bağlantı yok"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.bazilariCevrimdisi",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "bazı bobinler çevrimdışı (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.cevrimdisiAtlandi",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "bağlı olmayan bobinler atlandı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.hastaSecilmedi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "hasta seçilmedi (seans başlatma kapısı, başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.hastaSecilmediGovde",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "seansı başlatmadan önce hasta seçin"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.gecersizDeger",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "geçersiz değer (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.gecersizDegerGovde",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "sayı olarak okunamadı — alanı kontrol edin"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.seansBaslatilamadi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "seans başlatılamadı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.manuelBaslatilamadi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "manuel seans başlatılamadı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.calisanYok",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "çalışan bobin yok (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.calisanYokGovde",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "parametre güncelleme yalnız çalışan bobinlere uygulanır"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.guncellenemedi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "parametre güncellenemedi (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.guncellenemediGovde",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "yeni parametre bobine ulaşmadı — eski parametrelerle sürülüyor olabilir"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.uygulandi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "parametreler uygulandı (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.uygulandiGovde",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "N bobin güncellendi (parametre özeti)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.kartTazelenemedi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "uygulandı — kart tazelenemedi (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.kartTazelenemediGovde",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "bobinler yeni frekansa geçti ama kart güncellenemedi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.durdurmaOnaylanamadi",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "durdurma onaylanamadı (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.durdurmaOnaylanamadiGovde",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "bobinlerin durduğu teyit edilemedi — ACİL DURDUR'a basın"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.donanimCalisiyor",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "DONANIM ÇALIŞIYOR — bobin enerjili, seans bağlamı dışında"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.sinir.cekildi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/services/therapyLimits.ts",
+   "aciklama": "parametre güvenlik aralığına çekildi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.alan.dogrulanamadi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/utils/olculenAlan.ts",
+   "aciklama": "alan sensörü doğrulanamadı — değer gösterilmiyor"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.alan.akimYok",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/utils/olculenAlan.ts",
+   "aciklama": "akım ölçümü yok"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.acilDurdur.tumBobinlerEtiketi",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "Kontrol ekranı: tüm bobinleri acil durdur (erişim etiketi) — KRITIK_YEDEK"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.acilDurdur.tumBobinlerDugme",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "Kontrol ekranı: TÜM BOBİNLERİ ACİL DURDUR düğmesi — KRITIK_YEDEK"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.bobin.kablolu",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/domain/CoilCard.tsx",
+   "aciklama": "K-5 bekleyen: Kablolu senkron"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.bobin.kablosuz",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/domain/CoilCard.tsx",
+   "aciklama": "K-5 bekleyen: Kablosuz senkron"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.bobin.alan",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilCard.tsx",
+   "aciklama": "K-5 bekleyen: Alan"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.durumAktifEtiketi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "K-5 bekleyen: Durum: Aktif, bobin çalışıyor"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.durumHazirEtiketi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "K-5 bekleyen: Durum: Hazır, bobin durdu"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.guncelleEtiketi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "K-5 bekleyen: Bobinin parametrelerini güncelle"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.baslatEtiketi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "K-5 bekleyen: Bobini başlat"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.baslat",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "K-5 bekleyen: ▶ Başlat"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.durdurEtiketi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "K-5 bekleyen: Bobini durdur"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.durdur",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "K-5 bekleyen: ⏹ Durdur"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.efield.etiket",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/EFieldBar.tsx",
+   "aciklama": "K-5 bekleyen: Canlı elektrik alanı göstergesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.efield.baslik",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/EFieldBar.tsx",
+   "aciklama": "K-5 bekleyen: Canlı E-Alanı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.efield.ozet",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/EFieldBar.tsx",
+   "aciklama": "K-5 bekleyen: bobin · B="
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.efield.bobinlerDurdu",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/EFieldBar.tsx",
+   "aciklama": "K-5 bekleyen: Bobinler durdu — alan üretilmiyor."
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.efield.satirEtiketi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/EFieldBar.tsx",
+   "aciklama": "K-5 bekleyen: {{label}} alan {{deger2}}"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.emDoz.satir",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/EmDozSatiri.tsx",
+   "aciklama": "K-5 bekleyen: · Alan:"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.aciklama",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "K-5 bekleyen: Bipolar = iki PWM dönüşümlü (alan ±B) · Unipolar = yalnız IN"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.hepsiBipolarEtiketi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "K-5 bekleyen: Yetenekli tüm bobinleri bipolar sür"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.hepsiUnipolarEtiketi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "K-5 bekleyen: Tüm bobinleri unipolar sür"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.kutuBildirmedi",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "K-5 bekleyen: , kart henüz bildirmedi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.kutuUyguladi",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "K-5 bekleyen: , kartın uyguladığı {{deger1}}"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.uygulananKip",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "K-5 bekleyen: Kartın uyguladığı kip sürüş başlayınca görünür."
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.uyguladigi",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "K-5 bekleyen: Kartın uyguladığı:"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.seansHedefi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "K-5 bekleyen: Seans Hedefi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.otomatikBaslat",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "K-5 bekleyen: 🤖 Otomatik Seansı Başlat"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.manuelBaslik",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "K-5 bekleyen: Manuel Mod — Bobin Bazlı Kontrol"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.durduruluyor",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "K-5 bekleyen: ⏳ Durduruluyor…"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.bobinler18",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "K-5 bekleyen: 🔌 Bobinler (1–8)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.bobinler17",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "K-5 bekleyen: 🔌 Bobinler (1–7)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.bobinSecimi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "K-5 bekleyen: Bobin Seçimi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.bobinSecimEtiketi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "K-5 bekleyen: Bobin {{id}}, {{deger2}}, {{deger3}}"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.yogunluk.duty",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/utils/yogunlukGosterimi.ts",
+   "aciklama": "K-5 bekleyen: Duty (AI planı, bobin 1)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.yogunluk.dutyBuyuk",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/utils/yogunlukGosterimi.ts",
+   "aciklama": "K-5 bekleyen: DUTY (AI planı, bobin 1)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.kutuEtiketi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "sürüş kipi kutusu erişim etiketi (bobin no + tip)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.surus.kutuKilitli",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/SurusKipiSecici.tsx",
+   "aciklama": "sürücüsü yalnız unipolar — değiştirilemez (etiket parçası)"
   }
  ],
  "bekleyen": [

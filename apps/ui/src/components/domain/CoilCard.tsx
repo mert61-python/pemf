@@ -7,6 +7,7 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { colors, spacing, typography, rs } from "@/theme/tokens";
 import { CoilStatus } from "@/types/domain";
 import { alanGosterilebilir } from "@/utils/olculenAlan";
+import { useTranslation } from "react-i18next";
 
 /** Güvenli sayı biçimlendirme: sayı değilse (undefined / "44.5" / NaN) çökmek yerine "—". */
 function num(v: unknown, digits = 0): string {
@@ -20,19 +21,20 @@ function uygulanan(v: unknown): string {
 }
 
 export function CoilCard({ coil }: { coil: CoilStatus }) {
+  const { t } = useTranslation();
   const isStmCoil = coil.stm32Driven || coil.id <= 7;
   const sourceText = coil.connected
-    ? isStmCoil ? "Kablolu senkron" : "Kablosuz senkron"
-    : "Veri bekleniyor";
+    ? isStmCoil ? t("kontrol.bobin.kablolu") : t("kontrol.bobin.kablosuz")
+    : t("kontrol.bobin.veriBekleniyor");
 
   return (
     <Card style={styles.card}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Bobin {coil.id}</Text>
+          <Text style={styles.title}>{t("kontrol.bobin.baslik", { id: coil.id })}</Text>
           <Text style={styles.sub}>{sourceText}</Text>
         </View>
-        <StatusPill label={coil.running ? "Aktif" : coil.connected ? "Hazır" : "Offline"} state={coil.running ? "online" : coil.connected ? "warning" : "offline"} />
+        <StatusPill label={coil.running ? t("ayarlar.sistemDurumu.aktif") : coil.connected ? t("kontrol.bobin.hazir") : t("kontrol.bobin.offline")} state={coil.running ? "online" : coil.connected ? "warning" : "offline"} />
       </View>
 
       <View style={styles.metrics}>
@@ -41,24 +43,24 @@ export function CoilCard({ coil }: { coil: CoilStatus }) {
             kart, ACİL DURDUR'un yaşadığı Ana Ekran'da render ediliyor. Tek bir normalize-edilmemiş
             çağrı yeri (ya da ileride eklenecek yeni bir kaynak) bu ekranı çökertirse operatör
             donanım çalışırken durdurma kontrolünü kaybeder. Bileşen kendi girdisini de doğrular. */}
-        <MiniMetric icon={<RadioTower color={colors.primary} size={16} />} label="Frekans" value={`${num(coil.frequencyHz)} Hz`} />
+        <MiniMetric icon={<RadioTower color={colors.primary} size={16} />} label={t("kontrol.bobin.frekans")} value={`${num(coil.frequencyHz)} Hz`} />
         {/* Y69 (sahip, S-G4): İSTENEN duty'nin yanında kartın UYGULADIĞI (ACK `E=`) — yüksek frekansta ölü-zaman
             tavanı uygulananı düşürür (1 kHz bipolar %50 → %46). Kart bildirmediyse "—". */}
         <MiniMetric
           icon={<Zap color={colors.warning} size={16} />}
-          label="Duty"
+          label={t("kontrol.bobin.duty")}
           value={`${num(coil.dutyCycle)}%`}
-          alt={`uygulanan ${uygulanan(coil.dutyEtkin)}`}
+          alt={t("kontrol.bobin.uygulanan", { uygulanan: uygulanan(coil.dutyEtkin) })}
         />
         {/* D1.67 · Y6 (1-D inceleme i2-F-3): bayat / hiç ölçülmemiş alan sayı olarak gösterilmez ('—'). */}
         {/* TD2: kazanç ayarı doğrulanmamış sensörün değeri gösterilmez (tezgâh ~5×); neden kısa ek satırda. */}
         <MiniMetric
           icon={<Activity color={colors.cyan} size={16} />}
-          label="Alan"
+          label={t("kontrol.bobin.alan")}
           value={!coil.alanDogrulanamadi && alanGosterilebilir(coil, "magneticMt") ? `${num(coil.magneticMt, 2)} mT` : "—"}
-          alt={coil.alanDogrulanamadi ? "sensör doğrulanamadı" : undefined}
+          alt={coil.alanDogrulanamadi ? t("kontrol.bobin.sensorDogrulanamadi") : undefined}
         />
-        <MiniMetric icon={<Thermometer color={colors.danger} size={16} />} label="Sıcaklık" value={alanGosterilebilir(coil, "objectTemp") ? `${num(coil.objectTemp, 1)} C` : "—"} />
+        <MiniMetric icon={<Thermometer color={colors.danger} size={16} />} label={t("kontrol.bobin.sicaklik")} value={alanGosterilebilir(coil, "objectTemp") ? `${num(coil.objectTemp, 1)} C` : "—"} />
       </View>
     </Card>
   );

@@ -18,7 +18,7 @@ import { RealtimeChart } from "@/components/visual/RealtimeChart";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { gorunurBobinler } from "@/services/bobinGorunurlugu";
 import { Chip } from "@/components/ui/Chip";
-import { AKIM_OLCUMU_YOK_METNI, ALAN_DOGRULANAMADI_METNI, akimOlcumuAcik } from "@/utils/olculenAlan";
+import { akimOlcumuYokMetni, alanDogrulanamadiMetni, akimOlcumuAcik } from "@/utils/olculenAlan";
 import { useResponsive } from "@/hooks/useResponsive";
 
 // Grafikteki çizgi renkleriyle BİREBİR aynı kategorik palet (legend/filtre butonu + stat kartı tutarlılığı).
@@ -232,8 +232,8 @@ const CoilStatCard = memo(function CoilStatCard({
             value={olcum("magneticMt") ? `${magneticMt.toFixed(2)} mT` : "—"}
             color="#22c55e"
           />
-          {alanDogrulanamadi ? <Text style={styles.offlineText}>{ALAN_DOGRULANAMADI_METNI}</Text> : null}
-          {akimOlcumu && akimGuvenilmez ? <Text style={styles.offlineText}>{AKIM_OLCUMU_YOK_METNI}</Text> : null}
+          {alanDogrulanamadi ? <Text style={styles.offlineText}>{alanDogrulanamadiMetni()}</Text> : null}
+          {akimOlcumu && akimGuvenilmez ? <Text style={styles.offlineText}>{akimOlcumuYokMetni()}</Text> : null}
           <Metric
             label="Sıcaklık"
             value={olcum("objectTemp") ? `${objectTemp.toFixed(1)} °C` : "—"}

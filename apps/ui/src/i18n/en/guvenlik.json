@@ -13,6 +13,8 @@
     "kartRedBaslik": "⛔ BOARD REJECTED THE STOP",
     "kartRedGovde": "The device board rejected the STOP command — the coils may not have stopped. Cut the device's power or unplug the USB cable.",
     "teyitsizBaslik": "⚠️ EMERGENCY STOP NOT CONFIRMED",
-    "teyitsizGovde": "Could not confirm that the hardware stopped. The coils may still be running — switch the device off with its physical power button."
+    "teyitsizGovde": "Could not confirm that the hardware stopped. The coils may still be running — switch the device off with its physical power button.",
+    "tumBobinlerDugme": "🚨 EMERGENCY STOP ALL COILS",
+    "tumBobinlerEtiketi": "Emergency stop all coils"
   }
 }

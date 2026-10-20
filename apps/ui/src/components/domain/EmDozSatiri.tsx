@@ -10,6 +10,8 @@ import React from "react";
 import { Text, type StyleProp, type TextStyle } from "react-native";
 
 import { colors } from "@/theme/tokens";
+import i18n from "i18next";
+import { Trans } from "react-i18next";
 
 export interface EmBolge {
   E_cancer?: number | null;
@@ -25,7 +27,7 @@ export function sayiMetni(v: unknown, basamak: number): string {
 export function alanMetni(r: EmBolge): string {
   if (typeof r.area_mm2 === "number" && Number.isFinite(r.area_mm2)) return `${r.area_mm2.toFixed(1)} mm²`;
   if (typeof r.area_px === "number" && Number.isFinite(r.area_px)) {
-    return `${Math.round(r.area_px)} px² (mm² hesaplanmadı)`;
+    return i18n.t("kontrol.emDoz.pikselAlan", { px: Math.round(r.area_px) });
   }
   return "—";
 }
@@ -33,7 +35,7 @@ export function alanMetni(r: EmBolge): string {
 /** D1.100 (B-5.16): konum çözülemediyse (ışın hedef düzlemini geçerli noktada kesmiyor) "(0, 0, 0)" değil açıkça söylenir. */
 export function konumMetni(c: number[] | null | undefined, birim: string): string {
   if (!Array.isArray(c) || c.length < 3 || !c.every((v) => typeof v === "number" && Number.isFinite(v))) {
-    return "konum çözülemedi (kabin dışı / geçersiz kesişim)";
+    return i18n.t("kontrol.emDoz.konumYok");
   }
   return `(${c[0].toFixed(1)}, ${c[1].toFixed(1)}, ${c[2].toFixed(1)}) ${birim}`;
 }
@@ -41,15 +43,18 @@ export function konumMetni(c: number[] | null | undefined, birim: string): strin
 /** Piksel kipinde sonuç kartının açıklaması; `olcekGirdisi` ölçeği hangi alanın verdiğini söyler. */
 export function pikselKipiNotu(olcekGirdisi: string): string {
   return (
-    "Ölçek yok (piksel kipi): koordinatlar piksel farkıdır; doz (D1–D7) ve E hesaplanmadı. " +
-    `Gerçek ölçek için ${olcekGirdisi} girip yeniden analiz edin.`
+    i18n.t("kontrol.emDoz.pikselNotu", { olcekGirdisi })
   );
 }
 
 export function EmDozSatiri({ r, style }: { r: EmBolge; style?: StyleProp<TextStyle> }) {
   return (
     <Text style={style}>
-      E_kanser: <Text style={{ fontWeight: "bold", color: colors.danger }}>{sayiMetni(r.E_cancer, 4)}</Text>   ·   E_sağlıklı: {sayiMetni(r.E_healthy, 4)}   ·   Alan: {alanMetni(r)}
+      <Trans
+        i18nKey="kontrol.emDoz.satir"
+        values={{ kanser: sayiMetni(r.E_cancer, 4), saglikli: sayiMetni(r.E_healthy, 4), alan: alanMetni(r) }}
+        components={{ kalin: <Text style={{ fontWeight: "bold", color: colors.danger }} /> }}
+      />
     </Text>
   );
 }

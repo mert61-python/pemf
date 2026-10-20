@@ -1,3 +1,4 @@
+import i18n from "i18next";
 // Author: mertaygn, cglrgrkn
 /**
  * D1.67 · A-47 madde 4 · Y6 — bir bobin alanının SAYISI gösterilebilir mi (1-D inceleme i2-F-3).
@@ -12,13 +13,13 @@
  * TD2 (tezgâh Oturum 13 · K6): MLX90393 kazanç ayarı geri okunarak doğrulanamadıysa backend alanı YAZMAZ ve bobine
  * `alanDogrulanamadi: true` koyar (eski firmware'in işaretsiz `B=`'si ~5× olabilir). Üç ekran AYNI metni gösterir.
  */
-export const ALAN_DOGRULANAMADI_METNI = "Alan sensörü doğrulanamadı — ölçülen değer gösterilmiyor";
+export const alanDogrulanamadiMetni = (): string => i18n.t("kontrol.alan.dogrulanamadi");
 
 /**
  * TD5 (tezgâh Oturum 13 · K4): ADC tavanına dayanmış ya da ACS712 aralığı dışı akım GÜVENİLMEZ — backend yazmaz, bobine
  * `akimGuvenilmez: true` koyar (takılı olmayan girişte 10–115 A "ölçülüyordu"). Ekranlar AYNI metni gösterir.
  */
-export const AKIM_OLCUMU_YOK_METNI = "Akım ölçümü yok";
+export const akimOlcumuYokMetni = (): string => i18n.t("kontrol.alan.akimYok");
 
 /**
  * CH4 · Y154 (sahip 2026-10-15): AKIM SENSÖRÜ (ACS712) TÜMDEN KAPALI — akım HİÇ GÖSTERİLMEZ (satır / sütun çizilmez). Tek bayrak

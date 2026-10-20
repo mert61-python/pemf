@@ -193,7 +193,7 @@
    "sira": 5,
    "kritik": true,
    "aciklama": "kontrol / bobin parametreleri / sürüş kipi / doz göstergeleri (KRİTİK)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 202,
    "dosyaSayisi": 11
   },
@@ -1506,73 +1506,260 @@
    "yuzey": "arayuz",
    "grup": "arayuz-05a-kontrol-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 15,
    "kritik": true,
-   "muaf": [],
-   "birlesikIstisna": [],
+   "muaf": [
+    {
+     "metin": "{{deger1}} Hz",
+     "gerekce": "birim biçimi (\"N Hz\") — sayı + birim, kullanıcı metni değil"
+    },
+    {
+     "metin": "{{deger1}} mT",
+     "gerekce": "birim biçimi (\"N mT\") — sayı + birim, kullanıcı metni değil"
+    }
+   ],
+   "birlesikIstisna": [
+    {
+     "once": "Bobin",
+     "sonra": [
+      "guncelleme.bilgi.seansSuruyor"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/ui/src/components/domain/CoilParameterPanel.tsx": {
    "yuzey": "arayuz",
    "grup": "arayuz-05a-kontrol-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 42,
    "kritik": true,
-   "muaf": [],
-   "birlesikIstisna": [],
+   "muaf": [
+    {
+     "metin": "/coil/{{coilId}}/control",
+     "gerekce": "API yolu (/coil/<id>/control) — kullanıcı metni değil"
+    },
+    {
+     "metin": "({{latencyMs}} ms)",
+     "gerekce": "birim biçimi (\" (N ms)\") — sayı + birim, kullanıcı metni değil"
+    },
+    {
+     "metin": "STM32",
+     "gerekce": "donanım / platform adı (STM32)"
+    },
+    {
+     "metin": "WiFi",
+     "gerekce": "donanım / platform adı (WiFi)"
+    },
+    {
+     "metin": "°C",
+     "gerekce": "birim (\"°C\")"
+    },
+    {
+     "metin": "mT",
+     "gerekce": "birim (mT)"
+    },
+    {
+     "metin": "A",
+     "gerekce": "birim (A)"
+    },
+    {
+     "metin": "Hz",
+     "gerekce": "birim (Hz)"
+    }
+   ],
+   "birlesikIstisna": [
+    {
+     "once": "Bobin",
+     "sonra": [
+      "guncelleme.bilgi.seansSuruyor"
+     ]
+    },
+    {
+     "once": "⚠ Sıcaklık {{SICAKLIK_UYARI_ESIGI_C}} °C üstünde ({{deger2}} °C) — otomatik durdurma yok; bobini kontrol edin, gerekirse ⏹ Durdur.",
+     "sonra": [
+      "kontrol.panel.sicaklikUyari"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/ui/src/components/domain/EFieldBar.tsx": {
    "yuzey": "arayuz",
    "grup": "arayuz-05a-kontrol-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 15,
    "kritik": true,
    "muaf": [],
-   "birlesikIstisna": [],
+   "birlesikIstisna": [
+    {
+     "once": "bobin · B=",
+     "sonra": [
+      "kontrol.efield.ozet"
+     ]
+    },
+    {
+     "once": "{{label}} alan {{deger2}}",
+     "sonra": [
+      "kontrol.efield.satirEtiketi"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/ui/src/components/domain/EmDozSatiri.tsx": {
    "yuzey": "arayuz",
    "grup": "arayuz-05a-kontrol-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 7,
    "kritik": true,
-   "muaf": [],
-   "birlesikIstisna": [],
+   "muaf": [
+    {
+     "metin": "{{deger1}} mm²",
+     "gerekce": "birim biçimi (\"N mm²\") — sayı + birim, kullanıcı metni değil"
+    }
+   ],
+   "birlesikIstisna": [
+    {
+     "once": "· Alan:",
+     "sonra": [
+      "kontrol.emDoz.satir"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/ui/src/components/domain/SurusKipiSecici.tsx": {
    "yuzey": "arayuz",
    "grup": "arayuz-05a-kontrol-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 31,
    "kritik": true,
    "muaf": [],
-   "birlesikIstisna": [],
+   "birlesikIstisna": [
+    {
+     "once": "Bobin {{deger1}} tek yönlü (Unipolar)",
+     "sonra": [
+      "kontrol.surus.tekYonluParca"
+     ]
+    },
+    {
+     "once": "Bobin {{deger1}} çift yönlü (Bipolar)",
+     "sonra": [
+      "kontrol.surus.ciftYonluParca"
+     ]
+    },
+    {
+     "once": "{{deger1}} sürüşe alındı — bir sonraki başlatmada uygulanır.",
+     "sonra": [
+      "kontrol.surus.sonuc"
+     ]
+    },
+    {
+     "once": ", kartın uyguladığı {{deger1}}",
+     "sonra": [
+      "kontrol.surus.kutuUyguladi"
+     ]
+    },
+    {
+     "once": "Bobin {{id}}, {{deger2}}{{deger1}}{{deger22}}",
+     "sonra": [
+      "kontrol.surus.kutuEtiketi",
+      "kontrol.surus.kutuKilitli",
+      "kontrol.surus.kutuBildirmedi",
+      "kontrol.surus.kutuUyguladi"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/ui/src/screens/ControlScreen.tsx": {
    "yuzey": "arayuz",
    "grup": "arayuz-05a-kontrol-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 74,
    "kritik": true,
-   "muaf": [],
-   "birlesikIstisna": [],
+   "muaf": [
+    {
+     "metin": "Doku İyileşmesi",
+     "gerekce": "veriye giden değer: seçilen hedef `targetCondition` olarak seansa / literatür aramasına (auto_preset) GİDER — TR bayt bayt kalır; gösterimde değer → anahtar (kontrol.hedef.*)"
+    },
+    {
+     "metin": "Eklem Ağrısı",
+     "gerekce": "veriye giden değer: seçilen hedef `targetCondition` olarak seansa / literatür aramasına (auto_preset) GİDER — TR bayt bayt kalır; gösterimde değer → anahtar (kontrol.hedef.*)"
+    },
+    {
+     "metin": "Kas Spazmı",
+     "gerekce": "veriye giden değer: seçilen hedef `targetCondition` olarak seansa / literatür aramasına (auto_preset) GİDER — TR bayt bayt kalır; gösterimde değer → anahtar (kontrol.hedef.*)"
+    },
+    {
+     "metin": "Kırık İyileşmesi",
+     "gerekce": "veriye giden değer: seçilen hedef `targetCondition` olarak seansa / literatür aramasına (auto_preset) GİDER — TR bayt bayt kalır; gösterimde değer → anahtar (kontrol.hedef.*)"
+    },
+    {
+     "metin": "Enflamasyon Azaltma",
+     "gerekce": "veriye giden değer: seçilen hedef `targetCondition` olarak seansa / literatür aramasına (auto_preset) GİDER — TR bayt bayt kalır; gösterimde değer → anahtar (kontrol.hedef.*)"
+    },
+    {
+     "metin": "Sinir Rejenerasyonu",
+     "gerekce": "veriye giden değer: seçilen hedef `targetCondition` olarak seansa / literatür aramasına (auto_preset) GİDER — TR bayt bayt kalır; gösterimde değer → anahtar (kontrol.hedef.*)"
+    },
+    {
+     "metin": "Bağ Dokusu Tamiri",
+     "gerekce": "veriye giden değer: seçilen hedef `targetCondition` olarak seansa / literatür aramasına (auto_preset) GİDER — TR bayt bayt kalır; gösterimde değer → anahtar (kontrol.hedef.*)"
+    },
+    {
+     "metin": "Ödem Azaltma",
+     "gerekce": "veriye giden değer: seçilen hedef `targetCondition` olarak seansa / literatür aramasına (auto_preset) GİDER — TR bayt bayt kalır; gösterimde değer → anahtar (kontrol.hedef.*)"
+    },
+    {
+     "metin": "/coil/{{id}}/control",
+     "gerekce": "API yolu (/coil/<id>/control) — kullanıcı metni değil"
+    },
+    {
+     "metin": "/coil/{{coilId}}/control",
+     "gerekce": "API yolu (/coil/<id>/control) — kullanıcı metni değil"
+    }
+   ],
+   "birlesikIstisna": [
+    {
+     "once": "{{length}} bobin güncellendi: {{freq}} Hz · %{{duty}} · {{phase}}° · {{duration}} dk",
+     "sonra": [
+      "kontrol.ekran.uygulandiGovde"
+     ]
+    },
+    {
+     "once": "⚠️ DONANIM ÇALIŞIYOR —",
+     "sonra": [
+      "kontrol.ekran.donanimCalisiyor"
+     ]
+    },
+    {
+     "once": "bobin enerjili, seans bağlamı dışında. Aşağıdaki ACİL DURDUR ile durdurabilirsiniz.",
+     "sonra": [
+      "kontrol.ekran.donanimCalisiyor"
+     ]
+    },
+    {
+     "once": "Bobin {{id}}, {{deger2}}, {{deger3}}",
+     "sonra": [
+      "kontrol.ekran.bobinSecimEtiketi"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/ui/src/services/bobinGorunurlugu.ts": {
    "yuzey": "arayuz",
    "grup": "arayuz-05a-kontrol-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": true,
    "muaf": [],
@@ -1583,7 +1770,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-05a-kontrol-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 4,
    "kritik": true,
    "muaf": [],
@@ -1594,7 +1781,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-05a-kontrol-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": true,
    "muaf": [],
@@ -1605,7 +1792,7 @@
    "yuzey": "arayuz",
    "grup": "arayuz-05a-kontrol-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 2,
    "kritik": true,
    "muaf": [],
@@ -1616,10 +1803,23 @@
    "yuzey": "arayuz",
    "grup": "arayuz-05a-kontrol-kritik",
    "sira": 5,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 12,
    "kritik": true,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "{{deger1}} mT",
+     "gerekce": "birim biçimi (\"N mT\") — sayı + birim, kullanıcı metni değil"
+    },
+    {
+     "metin": "{{recete}} mT",
+     "gerekce": "birim biçimi (\"N mT\") — sayı + birim, kullanıcı metni değil"
+    },
+    {
+     "metin": "{{mt}} mT",
+     "gerekce": "birim biçimi (\"N mT\") — sayı + birim, kullanıcı metni değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },

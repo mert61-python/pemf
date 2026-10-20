@@ -61,7 +61,7 @@ tests/test_dongu_hata_bildirimi_OLDURMEZ.py :: apps/backend/controllers/hardware
 tests/test_duz_metin_db_KARANTINAYA_ALINMAZ.py :: apps/backend/database/patient_database.py apps/backend/database/treatment_history_db.py
 tests/test_duz_metin_yedek_bayragi_tek_ad.py :: apps/backend/database/sqlcipher_util.py apps/backend/database/thdb_sema.py apps/backend/database/treatment_history_db.py launcher/core/src/backend.rs
 tests/test_elle_aynalar_ESIT.py :: apps/backend/utils/data_export.py apps/backend/utils/klinik_asgari.py apps/ui/src/components/domain/BackupPassphraseDialog.tsx apps/ui/src/config/firma.ts apps/ui/src/services/desktopSession.ts apps/ui/src/services/supabaseAuth.ts apps/ui/src/utils/ckdOnKontrol.ts apps/web/src/config.ts launcher/app/src/main.rs launcher/app/ui/index.html launcher/core/src/auth.rs
-tests/test_esp_ack_basari_gorunurlugu.py :: apps/ui/src/components/domain/CoilParameterPanel.tsx apps/ui/src/context/LiveDataContext.tsx apps/ui/src/services/wsClient.ts
+tests/test_esp_ack_basari_gorunurlugu.py [ÇEVRİLDİ] :: apps/ui/src/components/domain/CoilParameterPanel.tsx apps/ui/src/context/LiveDataContext.tsx apps/ui/src/services/wsClient.ts
 tests/test_esp_gozetimsiz_sure_kapagi.py :: apps/backend/controllers/hardware_controller.py apps/backend/servers/api_server.py
 tests/test_esp_komut_kimligi_FIRMWARE_modeli.py :: apps/backend/backend_service.py apps/backend/servers/api_server.py
 tests/test_estop_erisimi_2026_09_04.py [ÇEVRİLDİ] :: apps/ui/src/components/ui/GlobalEmergencyStop.tsx apps/ui/src/hooks/useStmBelirsiz.ts apps/ui/src/screens/ControlScreen.tsx
@@ -127,7 +127,7 @@ tests/test_manifest_degismeyen_paket_url.py :: launcher/core/src/manifest.rs lau
 tests/test_mikroservis_zarf_paritesi.py :: apps/backend/servers/ai_router.py apps/ui/src/screens/AiHubScreen.tsx
 tests/test_modal_kaydirilabilir_kapisi.py [ÇEVRİLDİ] :: apps/ui/src/components/UpgradeModal.tsx apps/ui/src/components/domain/AiSpecApprovalModal.tsx apps/ui/src/components/ui/GorselSahne.tsx apps/ui/src/components/ui/ScrollableModalCard.tsx
 tests/test_model_sha_gecersiz_kilma_sirasi.py :: launcher/core/src/flow.rs
-tests/test_mt_dose_honesty.py :: apps/backend/controllers/hardware_controller.py apps/backend/servers/api_server.py apps/backend/servers/history_router.py apps/backend/utils/pdf_report_generator.py apps/ui/src/screens/ControlScreen.tsx
+tests/test_mt_dose_honesty.py [ÇEVRİLDİ] :: apps/backend/controllers/hardware_controller.py apps/backend/servers/api_server.py apps/backend/servers/history_router.py apps/backend/utils/pdf_report_generator.py apps/ui/src/screens/ControlScreen.tsx
 tests/test_multipart_alan_limiti.py :: apps/backend/servers/api_server.py
 tests/test_ota_host_pini_PYTHON_RUST_aynasi_D1109.py :: apps/backend/servers/update_manager.py launcher/core/src/net.rs
 tests/test_oturum_rotasyonu_bagli.py :: apps/ui/src/services/desktopSession.ts launcher/app/src/main.rs launcher/core/src/backend.rs launcher/core/src/secret_store.rs

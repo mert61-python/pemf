@@ -35,6 +35,10 @@ import { SurusKipiSecici } from "@/components/domain/SurusKipiSecici";
 import { gorunurBobinler, espSlotuGorunur, STM_BOBIN_SAYISI } from "@/services/bobinGorunurlugu";
 import { KendiDurdurmaIsareti } from "@/components/ui/KendiDurdurmaKontrolu";
 import { akimOlcumuAcik } from "@/utils/olculenAlan";
+import { useTranslation } from "react-i18next";
+import i18n from "i18next";
+import type { TFunction } from "i18next";
+import { kritikMetin, useKritikDil } from "@/i18n/kritik";
 
 // ─── Tab types ────────────────────────────────────────────────────────────────
 type TabKey = "automatic" | "manual" | "aipro";
@@ -58,9 +62,9 @@ type TabKey = "automatic" | "manual" | "aipro";
  * KAPALI-DÖNGÜ sistemdir — `auto_preset` ile hiçbir ortak yolu yoktur.
  */
 const TABS: { key: TabKey; label: string; icon: string }[] = [
-  { key: "automatic", label: "Otomatik", icon: "🤖" },
-  { key: "manual",    label: "Manuel",   icon: "🎛" },
-  { key: "aipro",     label: "AI Pro",   icon: "🎯" },
+  { key: "automatic", get label() { return i18n.t("kontrol.sekme.otomatik"); }, icon: "🤖" },
+  { key: "manual",    get label() { return i18n.t("kontrol.sekme.manuel"); },   icon: "🎛" },
+  { key: "aipro",     get label() { return i18n.t("kontrol.sekme.aiPro"); },   icon: "🎯" },
 ];
 
 // ─── Target conditions ─────────────────────────────────────────────────────
@@ -70,8 +74,25 @@ const AUTO_TARGETS = [
   "Bağ Dokusu Tamiri", "Ödem Azaltma",
 ];
 
+/** Hedef çipinin GÖRÜNEN adı. ⚠️ `AUTO_TARGETS` değeri (TR) `targetCondition` olarak seansa / literatür aramasına (auto_preset) GİDER → DEĞİŞMEZ. */
+const hedefEtiketi = (t: TFunction, hedef: string): string => {
+  switch (hedef) {
+    case "Doku İyileşmesi": return t("kontrol.hedef.dokuIyilesmesi");
+    case "Eklem Ağrısı": return t("kontrol.hedef.eklemAgrisi");
+    case "Kas Spazmı": return t("kontrol.hedef.kasSpazmi");
+    case "Kırık İyileşmesi": return t("kontrol.hedef.kirikIyilesmesi");
+    case "Enflamasyon Azaltma": return t("kontrol.hedef.enflamasyonAzaltma");
+    case "Sinir Rejenerasyonu": return t("kontrol.hedef.sinirRejenerasyonu");
+    case "Bağ Dokusu Tamiri": return t("kontrol.hedef.bagDokusuTamiri");
+    case "Ödem Azaltma": return t("kontrol.hedef.odemAzaltma");
+    default: return hedef;
+  }
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export function ControlScreen() {
+  useKritikDil(); // ACİL DURDUR yazıları (kritikMetin) dil değişince yeniden çizilir; çeviri sisteminden BAĞIMSIZ
+  const { t } = useTranslation();
   const { snapshot, telemetryStale } = useLiveData();
   // D1.89: WS'teki AKTİF seans (ölçülen yoğunluk + AI Pro duty temsili bunun alanlarıdır). Etkin değilse null.
   const wsSeans = snapshot.activeTreatment?.isActive === true ? snapshot.activeTreatment : null;
@@ -95,8 +116,8 @@ export function ControlScreen() {
   const { userMode } = useUserMode();
   const aiProModelleri = modelleriAl(userMode);
   const aiProBaslik = aiProModelleri.includes("kedi")
-    ? "AI Pro — Kamera Kapalı-Döngü"
-    : "AI Pro — Fantom / Petri Kapalı-Döngü";
+    ? t("kontrol.ekran.aiProKamera")
+    : t("kontrol.ekran.aiProFantomPetri");
 
   // ── Otomatik Mod state ─────────────────────────────────────────────────
   const [autoTarget, setAutoTarget] = useState(AUTO_TARGETS[0]);
@@ -141,9 +162,9 @@ export function ControlScreen() {
   // Güvenlik: parametreleri aralığa çek, düzeltme olduysa kullanıcıyı uyar.
   const clampWithAlert = useCallback((input: Parameters<typeof clampTherapyParams>[0]) => {
     const { values, warnings } = clampTherapyParams(input);
-    if (warnings.length) platformAlert("Parametre güvenliği", warnings.join("\n"));
+    if (warnings.length) platformAlert(t("kontrol.ekran.parametreGuvenligi"), warnings.join("\n"));
     return values;
-  }, []);
+  }, [t]);
 
   // ORTA fix: süre girişini normalize et — NaN/boş/≤0 (ör. "-5" → parseInt=-5 TRUTHY, `||20`'yi ATLAR →
   // clampTherapyParams min=0'a çeker → süresiz-seans körlüğüne sızar) yerine 20dk varsayılan (backend ge=1).
@@ -190,7 +211,7 @@ export function ControlScreen() {
     ]);
     const requested = Array.from(selectedCoils).filter((id) => gorunurIdler.has(id));
     if (requested.length === 0) {
-      platformAlert("Uyarı", "En az bir bobin seçin.");
+      platformAlert(t("ayarlar.sistemDurumu.uyari"), t("kontrol.ekran.bobinSecin"));
       return null;
     }
     // `?? []` — aynı dosyanın render'ı zaten bunu kullanıyordu; başlatma yolu guard'sızdı ve
@@ -198,11 +219,11 @@ export function ControlScreen() {
     const coilsById = new Map((snapshot.coils ?? []).map((c) => [c.id, c]));
     const effective = requested.filter((id) => isCoilConnected(coilsById.get(id) ?? { id }));
     if (effective.length === 0) {
-      platformAlert("Bağlantı yok", "Seçili bobinler için aktif bağlantı yok (STM32/WiFi çevrimdışı).");
+      platformAlert(t("kontrol.ekran.baglantiYok"), t("kontrol.ekran.baglantiYokGovde"));
       return null;
     }
     if (effective.length < requested.length) {
-      platformAlert("Bazı bobinler çevrimdışı", "Bağlı olmayan bobinler atlandı; yalnızca aktif bobinlere komut gönderiliyor.");
+      platformAlert(t("kontrol.ekran.bazilariCevrimdisi"), t("kontrol.ekran.cevrimdisiAtlandi"));
     }
     return effective;
   };
@@ -219,8 +240,8 @@ export function ControlScreen() {
   const requirePatient = async (): Promise<boolean> => {
     if (selectedPatient?.id || (patientName ?? "").trim()) return true;
     platformAlert(
-      "Hasta seçilmedi",
-      "Seansı başlatmadan önce yukarıdan hasta seçin. Seans, geçmişe hasta bilgisiyle birlikte kaydedilir."
+      t("kontrol.ekran.hastaSecilmedi"),
+      t("kontrol.ekran.hastaSecilmediGovde")
     );
     return false;
   };
@@ -243,7 +264,7 @@ export function ControlScreen() {
     for (const [key, [raw, dflt]] of Object.entries(fields)) {
       const v = readNum(raw, dflt);
       if (v === null) {
-        platformAlert("Geçersiz değer", `"${raw}" sayı olarak okunamadı. Lütfen ${key} alanını kontrol edin.`);
+        platformAlert(t("kontrol.ekran.gecersizDeger"), t("kontrol.ekran.gecersizDegerGovde", { raw, key }));
         return null;
       }
       out[key] = v;
@@ -277,7 +298,7 @@ export function ControlScreen() {
       coilIds: effective,
       operatorEmail: operatorEmail,
     });
-    if (!ok) platformAlert("Hata", lastError() ?? "Seans başlatılamadı.");
+    if (!ok) platformAlert(t("ayarlar.sistemDurumu.hata"), lastError() ?? t("kontrol.ekran.seansBaslatilamadi"));
   };
 
   // Manuel "Toplu Uygulama" → SEANS olarak başlat (ilerleme/timer/gözlem-notu/history +
@@ -308,7 +329,7 @@ export function ControlScreen() {
       coilIds: effective,
       operatorEmail: operatorEmail,
     });
-    if (!ok) platformAlert("Hata", lastError() ?? "Manuel seans başlatılamadı (zaten aktif seans olabilir).");
+    if (!ok) platformAlert(t("ayarlar.sistemDurumu.hata"), lastError() ?? t("kontrol.ekran.manuelBaslatilamadi"));
   };
 
   /**
@@ -330,7 +351,7 @@ export function ControlScreen() {
   const handleParametreGuncelle = async () => {
     const calisanlar = (snapshot.coils ?? []).filter((c) => c?.running).map((c) => c.id);
     if (calisanlar.length === 0) {
-      platformAlert("Çalışan bobin yok", "Parametre güncelleme yalnız ÇALIŞAN bobinlere uygulanır.");
+      platformAlert(t("kontrol.ekran.calisanYok"), t("kontrol.ekran.calisanYokGovde"));
       return;
     }
     const raw = readParams({
@@ -366,8 +387,8 @@ export function ControlScreen() {
     });
     if (!hepsiOk) {
       platformAlert(
-        "Parametre güncellenemedi",
-        "Bir veya daha fazla bobine yeni parametre ULAŞMADI — bobinler ESKİ parametrelerle sürülmeye devam ediyor olabilir.",
+        t("kontrol.ekran.guncellenemedi"),
+        t("kontrol.ekran.guncellenemediGovde"),
       );
       return;
     }
@@ -378,16 +399,15 @@ export function ControlScreen() {
     }, null, { silent: true });
     if (kayit?.status === "success") {
       platformAlert(
-        "Parametreler uygulandı",
-        `${calisanlar.length} bobin güncellendi: ${p.freq} Hz · %${p.duty} · ${p.phase}° · ${p.duration} dk`,
+        t("kontrol.ekran.uygulandi"),
+        t("kontrol.ekran.uygulandiGovde", { count: calisanlar.length, freq: p.freq, duty: p.duty, phase: p.phase, duration: p.duration }),
       );
     } else {
       // ⚠️ DONANIM GÜNCELLENDİ ama kayıt tazelenemedi — bu SESSİZ GEÇİLMEZ: üstteki kart
       // eski frekansı gösterir ve operatör uygulanan dozu yanlış okur.
       platformAlert(
-        "Uygulandı — kart tazelenemedi",
-        `Bobinler ${p.freq} Hz'e geçti, ancak seans kartı/kaydı güncellenemedi. ` +
-          "Üstteki özet eski değeri gösteriyor olabilir; bobin kartlarındaki değerler doğrudur.",
+        t("kontrol.ekran.kartTazelenemedi"),
+        t("kontrol.ekran.kartTazelenemediGovde", { freq: p.freq }),
       );
     }
   };
@@ -465,8 +485,8 @@ export function ControlScreen() {
     });
     if (!allOk && istekler.length > 0) {
       platformAlert(
-        "Durdurma onaylanamadı",
-        "Bir veya daha fazla bobinin durduğu teyit edilemedi — bobinler HÂLÂ ÇALIŞIYOR olabilir. ACİL DURDUR'a basın.",
+        t("kontrol.ekran.durdurmaOnaylanamadi"),
+        t("kontrol.ekran.durdurmaOnaylanamadiGovde"),
       );
     }
     } finally {
@@ -539,8 +559,7 @@ export function ControlScreen() {
       {!isActive && hardwareRunningOutOfSession && (
         <View style={styles.hwWarnBanner}>
           <Text style={styles.hwWarnText}>
-            ⚠️ DONANIM ÇALIŞIYOR — {runningCount} bobin enerjili, seans bağlamı dışında.
-            Aşağıdaki ACİL DURDUR ile durdurabilirsiniz.
+            {t("kontrol.ekran.donanimCalisiyor", { count: runningCount })}
           </Text>
         </View>
       )}
@@ -577,9 +596,9 @@ export function ControlScreen() {
           açık olursa olsun, kaydırmadan erişilir. AŞAĞI TAŞIMA. */}
       <TouchableOpacity style={styles.emergencyBtn} onPress={emergencyStop}
         accessibilityRole="button"
-        accessibilityLabel="Tüm bobinleri acil durdur"
-        accessibilityHint="Tüm bobinleri anında durdurur ve aktif seansı sonlandırır">
-        <Text style={styles.emergencyBtnText} numberOfLines={2} adjustsFontSizeToFit>🚨 TÜM BOBİNLERİ ACİL DURDUR</Text>
+        accessibilityLabel={kritikMetin("guvenlik.acilDurdur.tumBobinlerEtiketi")}
+        accessibilityHint={kritikMetin("guvenlik.acilDurdur.erisimIpucu")}>
+        <Text style={styles.emergencyBtnText} numberOfLines={2} adjustsFontSizeToFit>{kritikMetin("guvenlik.acilDurdur.tumBobinlerDugme")}</Text>
       </TouchableOpacity>
       {/* D1.E02 · A-51: bu düğme ÇİZİLDİĞİ sürece kayan ACİL DURDUR gizlenir; ekran çökerse işaret de sökülür. */}
       <KendiDurdurmaIsareti />
@@ -606,55 +625,54 @@ export function ControlScreen() {
       {/* ── TAB: Otomatik ─────────────────────────────────────── */}
       {activeTab === "automatic" && (
         <View style={styles.section}>
-          <SectionTitle text="Otomatik Mod — Hedefe Göre Protokol" />
+          <SectionTitle text={t("kontrol.ekran.otomatikBaslik")} />
           <Text style={styles.hint}>
-            Hedef durumu seçin, sistem literatür tabanlı parametreleri otomatik ayarlar.
+            {t("kontrol.ekran.otomatikAciklama")}
           </Text>
 
-          <FormLabel text="Seans Hedefi" />
+          <FormLabel text={t("kontrol.ekran.seansHedefi")} />
           <View style={styles.targetGrid}>
-            {AUTO_TARGETS.map((t) => (
+            {AUTO_TARGETS.map((hedef) => (
               <TouchableOpacity
-                key={t}
-                style={[styles.targetChip, autoTarget === t && styles.targetChipActive]}
-                onPress={() => applyAutoPreset(t)}
+                key={hedef}
+                style={[styles.targetChip, autoTarget === hedef && styles.targetChipActive]}
+                onPress={() => applyAutoPreset(hedef)}
               >
-                <Text style={[styles.targetChipText, autoTarget === t && styles.targetChipTextActive]}>
-                  {t}
+                <Text style={[styles.targetChipText, autoTarget === hedef && styles.targetChipTextActive]}>
+                  {hedefEtiketi(t, hedef)}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
           <View style={styles.paramRow}>
-            <ParamField label="Frekans (Hz)" value={autoFreq} onChangeText={setAutoFreq} />
-            <ParamField label="Duty (%)" value={autoDuty} onChangeText={setAutoDuty} />
+            <ParamField label={t("kontrol.panel.frekansHz")} value={autoFreq} onChangeText={setAutoFreq} />
+            <ParamField label={t("kontrol.panel.dutyYuzde")} value={autoDuty} onChangeText={setAutoDuty} />
             {/* ⚠️ DENETİM 2026-08-09 (Tier 2): bu değer CİHAZA GÖNDERİLMEZ. STM binary paketi
                 (duty/phase/freq/duration) ve ESP MQTT komutu (freq/duty/phase/duration) mT alanı
                 TAŞIMAZ — girilen sayı yalnız kayda yazılır. Etiket bunu söylemezse operatör
                 yoğunluğu ayarladığını sanır ve gerçek doz beklediğinden farklı olur.
                 Gerçek çözüm firmware'dedir (paketi genişlet + osiloskopla doğrula). */}
-            <ParamField label="Yoğunluk (mT, yalnız kayıt)" value={autoIntensity}
+            <ParamField label={t("kontrol.ekran.yogunlukKayit")} value={autoIntensity}
               onChangeText={setAutoIntensity} />
-            <ParamField label="Süre (dk)" value={autoDuration} onChangeText={setAutoDuration} />
+            <ParamField label={t("kontrol.panel.sureDk")} value={autoDuration} onChangeText={setAutoDuration} />
           </View>
-          {autoLoading && <Text style={styles.hint}>Literatür önerisi alınıyor…</Text>}
+          {autoLoading && <Text style={styles.hint}>{t("kontrol.ekran.literaturAliniyor")}</Text>}
           {/* Denetim #01: doz kaynağı görünür olmalı. "default_wellness" = seçilen hedefin
               literatürde karşılığı yok, genel dozla devam ediliyor — operatör bunu bilmeli. */}
           {!autoLoading && autoKaynak === "default_wellness" && (
             <Text style={styles.kaynakUyari}>
-              ⚠️ Bu hedef için literatür protokolü yok — genel (wellness) dozu uygulanıyor.
-              Hedefe özel doz istiyorsanız parametreleri elle ayarlayın.
+              {t("kontrol.ekran.literaturYok")}
             </Text>
           )}
           {!autoLoading && autoKaynak === "literature_exact" && (
-            <Text style={styles.kaynakBilgi}>📖 Literatür protokolü uygulandı.</Text>
+            <Text style={styles.kaynakBilgi}>{t("kontrol.ekran.literaturUygulandi")}</Text>
           )}
 
           <CoilSelector coils={coils} selected={selectedCoils} onToggle={toggleCoil} stmConnected={isStmConnected} gorunur={gorunurBobinler} />
 
           <StartButton
-            label="🤖 Otomatik Seansı Başlat"
+            label={t("kontrol.ekran.otomatikBaslat")}
             onPress={handleStartAuto}
             disabled={isActive || loading}
           />
@@ -664,16 +682,16 @@ export function ControlScreen() {
       {/* ── TAB: Manuel ───────────────────────────────────────── */}
       {activeTab === "manual" && (
         <View style={styles.section}>
-          <SectionTitle text="Manuel Mod — Bobin Bazlı Kontrol" />
+          <SectionTitle text={t("kontrol.ekran.manuelBaslik")} />
 
           {/* Master controls */}
           <View style={styles.masterCard}>
-            <Text style={styles.masterTitle}>📡 Toplu Uygulama</Text>
+            <Text style={styles.masterTitle}>{t("kontrol.ekran.topluUygulama")}</Text>
             <View style={styles.paramRow}>
-              <ParamField label="Frekans (Hz)" value={masterFreq} onChangeText={setMasterFreq} />
-              <ParamField label="Duty (%)" value={masterDuty} onChangeText={setMasterDuty} />
-              <ParamField label="Faz (°)" value={masterPhase} onChangeText={setMasterPhase} />
-              <ParamField label="Süre (dk)" value={masterDuration} onChangeText={setMasterDuration} />
+              <ParamField label={t("kontrol.panel.frekansHz")} value={masterFreq} onChangeText={setMasterFreq} />
+              <ParamField label={t("kontrol.panel.dutyYuzde")} value={masterDuty} onChangeText={setMasterDuty} />
+              <ParamField label={t("kontrol.panel.fazDerece")} value={masterPhase} onChangeText={setMasterPhase} />
+              <ParamField label={t("kontrol.panel.sureDk")} value={masterDuration} onChangeText={setMasterDuration} />
             </View>
             <CoilSelector coils={coils} selected={selectedCoils} onToggle={toggleCoil} stmConnected={isStmConnected} gorunur={gorunurBobinler} />
             {/* Sürüş kipi TOPLU panelde: bobin başına kip seçilir ama tek bir pakette
@@ -684,7 +702,7 @@ export function ControlScreen() {
             <View style={styles.manualBtnRow}>
               <View style={{ flex: 1 }}>
                 <StartButton
-                  label="▶ Başlat"
+                  label={t("kontrol.panel.baslat")}
                   onPress={handleStartManual}
                   disabled={isActive || loading}
                 />
@@ -695,7 +713,7 @@ export function ControlScreen() {
               {hardwareRunningOutOfSession && (
                 <View style={{ flex: 1 }}>
                   <StartButton
-                    label="🔄 Parametreleri Uygula"
+                    label={t("kontrol.ekran.parametreleriUygula")}
                     onPress={handleParametreGuncelle}
                     disabled={loading}
                     color="#0ea5e9"
@@ -707,7 +725,7 @@ export function ControlScreen() {
                     `disabled={loading}` idi: `/session/start` askıdayken (≤ 8 sn) Durdur basılamıyordu (ölçüldü).
                     Etiket, sessizce yutulan dokunuş yerine geri bildirim verir. */}
                 <StartButton
-                  label={stopRound ? "⏳ Durduruluyor…" : "⏹ Durdur"}
+                  label={stopRound ? t("kontrol.ekran.durduruluyor") : t("kontrol.panel.durdur")}
                   onPress={handleStopManual}
                   disabled={false}
                   color="#ef4444"
@@ -731,7 +749,7 @@ export function ControlScreen() {
               48 °C üstünde YALNIZ görsel uyarı verir; ölçüm gelmeyen bobinde rozet
               "ölçüm yok" (—) gösterir. Bilinçli. */}
           <Text style={styles.subTitle}>
-            {espSlotuGorunur(coils) ? "🔌 Bobinler (1–8)" : "🔌 Bobinler (1–7)"}
+            {espSlotuGorunur(coils) ? t("kontrol.ekran.bobinler18") : t("kontrol.ekran.bobinler17")}
           </Text>
           <ResponsiveGrid minItemWidth={320}>
             {gorunurBobinler(coils).map((coil) => (
@@ -815,7 +833,7 @@ function ParamField({
       <TextInput
         style={styles.paramFieldInput}
         value={value}
-        onChangeText={(t) => onChangeText(t.replace(",", "."))}
+        onChangeText={(v) => onChangeText(v.replace(",", "."))}
         keyboardType="decimal-pad"
         selectTextOnFocus
         accessibilityLabel={label}
@@ -834,9 +852,10 @@ function CoilSelector({
   /** Ekranın geri kalanıyla AYNI görünürlük kuralı (tek kaynak) — bkz. `gorunurBobinler`. */
   gorunur: (liste: CoilStatus[]) => CoilStatus[];
 }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.coilSelector}>
-      <Text style={styles.formLabel}>Bobin Seçimi</Text>
+      <Text style={styles.formLabel}>{t("kontrol.ekran.bobinSecimi")}</Text>
       <View style={styles.coilSelectorGrid}>
         {/* Faz 4: 7 fiziksel STM bobini. Slot 8 (ESP) YALNIZ ortaya çıkınca listelenir —
             `gorunur` süzgeci ekranın geri kalanıyla AYNI kuralı uygular, yoksa seçilemeyen
@@ -862,7 +881,7 @@ function CoilSelector({
               hitSlop={touch.slopFor(spacing.sm)}
               accessibilityRole="button"
               accessibilityState={{ selected: selected.has(c.id) }}
-              accessibilityLabel={`Bobin ${c.id}, ${selected.has(c.id) ? "seçili" : "seçili değil"}, ${connected ? "çevrimiçi" : "çevrimdışı"}`}
+              accessibilityLabel={t("kontrol.ekran.bobinSecimEtiketi", { id: c.id, secim: selected.has(c.id) ? t("kontrol.ekran.secili") : t("kontrol.ekran.seciliDegil"), baglanti: connected ? t("kontrol.ekran.cevrimici") : t("kontrol.ekran.cevrimdisi") })}
             >
               <Text style={[styles.coilSelectorText, selected.has(c.id) && styles.coilSelectorTextActive]}>
                 {c.id}

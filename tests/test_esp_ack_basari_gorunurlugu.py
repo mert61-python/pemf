@@ -99,4 +99,10 @@ def test_KRITIK_frontend_coil_ack_sozlesmesi():
     panel = (KOK / "apps" / "ui" / "src" / "components" / "domain" / "CoilParameterPanel.tsx").read_text(
         encoding="utf-8"
     )
-    assert "deviceAck" in panel and "onayladı" in panel, "panel cihaz onayını göstermiyor"
+    # I18N: metin kataloğa taşındı — ölçüt GEVŞEMEDİ, yer değiştirdi: "onayladı" kaynakta düz metin YA DA kullandığı anahtarın TR değerinde.
+    # İşlev içinde içe aktarım: meta kapılar (D404) asgari ağaca yalnız capraz.py + c_soyucu.py kopyalar.
+    import i18n_yardimci as iy
+
+    assert "deviceAck" in panel and iy.gorunen_metin_var(
+        "apps/ui/src/components/domain/CoilParameterPanel.tsx", "onayladı"
+    ), "panel cihaz onayını göstermiyor"

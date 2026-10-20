@@ -11,7 +11,7 @@
  */
 import { render } from "@testing-library/react-native";
 import { CoilCard } from "@/components/domain/CoilCard";
-import { ALAN_DOGRULANAMADI_METNI } from "@/utils/olculenAlan";
+import { alanDogrulanamadiMetni } from "@/utils/olculenAlan";
 import { CoilStatus } from "@/types/domain";
 
 const temel: CoilStatus = {
@@ -43,6 +43,6 @@ describe("TD2 — CoilCard: doğrulanmamış alan gösterilmez", () => {
   });
 
   it("metin üç ekranda AYNI kaynaktan", () => {
-    expect(ALAN_DOGRULANAMADI_METNI).toBe("Alan sensörü doğrulanamadı — ölçülen değer gösterilmiyor");
+    expect(alanDogrulanamadiMetni()).toBe("Alan sensörü doğrulanamadı — ölçülen değer gösterilmiyor");
   });
 });

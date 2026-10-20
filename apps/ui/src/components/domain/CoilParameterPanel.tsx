@@ -11,6 +11,7 @@ import { colors, spacing, typography, rf, rs, touch } from "@/theme/tokens";
 import { apiPost } from "@/services/apiClient";
 import { clampTherapyParams } from "@/services/therapyLimits";
 import type { CoilDeviceAck } from "@/types/domain";
+import { useTranslation } from "react-i18next";
 
 const COIL_COLORS = [
   "#FF5252", "#FF4081", "#E040FB", "#7C4DFF",
@@ -72,6 +73,7 @@ export function CoilParameterPanel({
   deviceAck,
   akimOlcumu = false,
 }: Props) {
+  const { t } = useTranslation();
   const [freq, setFreq] = useState(String(defaultFreq));
   const [duty, setDuty] = useState(String(defaultDuty));
   const [duration, setDuration] = useState(String(defaultDuration));
@@ -157,7 +159,7 @@ export function CoilParameterPanel({
         // Gerçek kapağı SUNUCU uygular: `_esp_duration_seconds` (ESP) + `HardwareController` (STM).
         // Yanlış güvence, korumasızlıktan tehlikelidir → metin artık nereye dayandığını söylüyor.
         // Kilit: `__tests__/CoilDurationHonesty.test.tsx`.
-        if (durMin <= 0) warns.push("Süre girilmedi — bobin klinik gözetimsiz sınıra kadar çalışır (sunucu tarafında uygulanır); süre belirtmeniz önerilir.");
+        if (durMin <= 0) warns.push(t("kontrol.panel.sureGirilmedi"));
         if (warns.length) setError(warns.join(" "));
       }
       // YÜKSEK fix: apiPost ağ-hatası/non-2xx'te THROW ETMEZ (fallback=null döner) → dönüşü DOĞRULA.
@@ -180,7 +182,7 @@ export function CoilParameterPanel({
           }, null);
           setBekleyenKomut(null);
           if (!dur || dur.status !== "success") {
-            setError("DURDURMA ONAYLANAMADI — bobin HÂLÂ ÇALIŞIYOR olabilir. ACİL DURDUR'a basın.");
+            setError(t("kontrol.panel.durdurmaOnaylanamadi"));
           }
           return false;
         }
@@ -201,18 +203,18 @@ export function CoilParameterPanel({
         setError(start
           ? (typeof res?.mesaj === "string" && res.mesaj.trim()
             ? res.mesaj
-            : "Komut onaylanamadı — bobin başlatılamamış olabilir, tekrar deneyin.")
-          : "DURDURMA ONAYLANAMADI — bobin HÂLÂ ÇALIŞIYOR olabilir. ACİL DURDUR'a basın.");
+            : t("kontrol.panel.komutOnaylanamadi"))
+          : t("kontrol.panel.durdurmaOnaylanamadi"));
       }
       return ok;
     } catch {
-      setError("Komut gönderilemedi");
+      setError(t("kontrol.panel.komutGonderilemedi"));
       return false;
     } finally {
       if (start) startUcustaRef.current = false;
       setLoading(false);
     }
-  }, [coilId, freq, duty, phase, duration, defaultFreq, defaultDuty, defaultPhase, defaultDuration]);
+  }, [coilId, freq, duty, phase, duration, defaultFreq, defaultDuty, defaultPhase, defaultDuration, t]);
 
   /** Bu alan GERÇEKTEN ölçülüyor mu? (bkz. readings bloğundaki gerekçe) */
   const olcum = useCallback(
@@ -234,16 +236,16 @@ export function CoilParameterPanel({
   let ackMetni: string | null = null;
   let ackRenk = "#94a3b8";
   if (bekleyenKomut && !guncelAck) {
-    ackMetni = "⏳ Cihaz onayı bekleniyor…";
+    ackMetni = t("kontrol.panel.ackBekleniyor");
   } else if (guncelAck?.ok === true) {
     const ms = typeof guncelAck.latencyMs === "number" ? ` (${guncelAck.latencyMs} ms)` : "";
-    ackMetni = `✓ Cihaz onayladı — PWM bobinde çalışıyor${ms}`;
+    ackMetni = t("kontrol.panel.ackOk", { ms });
     ackRenk = "#22c55e";
   } else if (guncelAck?.ok === false) {
-    ackMetni = "✗ Cihaz komutu REDDETTİ — bobin ÇALIŞMIYOR (termal kilit / geçersiz parametre)";
+    ackMetni = t("kontrol.panel.ackRed");
     ackRenk = "#ef4444";
   } else if (guncelAck) {
-    ackMetni = "⚠ Cihaz onayı gelmedi — bobin komutu almamış olabilir; Aktif rozetini ve bobin bağlantısını kontrol edin";
+    ackMetni = t("kontrol.panel.ackGelmedi");
     ackRenk = "#f59e0b";
   }
 
@@ -253,7 +255,7 @@ export function CoilParameterPanel({
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={[styles.colorDot, { backgroundColor: connected ? color : "#475569" }]} />
-          <Text style={styles.coilTitle}>Bobin {coilId}</Text>
+          <Text style={styles.coilTitle}>{t("kontrol.bobin.baslik", { id: coilId })}</Text>
           {stm32Driven ? (
             <View style={styles.sourceBadgeStm}><Text style={styles.sourceBadgeText}>STM32</Text></View>
           ) : (
@@ -263,7 +265,7 @@ export function CoilParameterPanel({
         <View style={styles.headerRight}>
           {olcum("objectTemp") ? (
             <View style={[styles.tempBadge, objectTemp > 45 && styles.tempWarning]}
-              accessibilityLabel={`Sıcaklık ${objectTemp.toFixed(1)} derece${objectTemp > 45 ? ", yüksek" : ""}`}>
+              accessibilityLabel={objectTemp > 45 ? t("kontrol.panel.sicaklikYuksekEtiketi", { sicaklik: objectTemp.toFixed(1) }) : t("kontrol.panel.sicaklikEtiketi", { sicaklik: objectTemp.toFixed(1) })}>
               {/* #121: >45°C uyarısı yalnız-RENK değil — ⚠ ikonu + metin (renk-körü operatör görsün). */}
               <Text style={styles.tempText}>{objectTemp > 45 ? "⚠ " : ""}{objectTemp.toFixed(1)}°C</Text>
             </View>
@@ -284,7 +286,7 @@ export function CoilParameterPanel({
                otomatik termal durdurma uygulanmaz" bilgisi kaybolmamalı (görme engelli
                operatör için tek kaynak). */
             <View style={styles.tempBadge}
-              accessibilityLabel="Bu bobinde sıcaklık ölçümü yok — otomatik termal durdurma uygulanmaz">
+              accessibilityLabel={t("kontrol.panel.sicaklikOlcumuYok")}>
               <Text style={[styles.tempText, { color: colors.textMuted }]}>-</Text>
             </View>
           )}
@@ -298,9 +300,9 @@ export function CoilParameterPanel({
             />
             <Text
               style={[styles.statusLabel, { color: running ? "#22c55e" : connected ? "#f59e0b" : "#ef4444" }]}
-              accessibilityLabel={running ? "Durum: Aktif, bobin çalışıyor" : connected ? "Durum: Hazır, bobin durdu" : "Durum: Çevrimdışı"}
+              accessibilityLabel={running ? t("kontrol.panel.durumAktifEtiketi") : connected ? t("kontrol.panel.durumHazirEtiketi") : t("kontrol.panel.durumCevrimdisiEtiketi")}
             >
-              {running ? "Aktif" : connected ? "Hazır" : "Offline"}
+              {running ? t("ayarlar.sistemDurumu.aktif") : connected ? t("kontrol.bobin.hazir") : t("kontrol.bobin.offline")}
             </Text>
           </View>
         </View>
@@ -319,11 +321,11 @@ export function CoilParameterPanel({
           <Reading label="A" value={olcum("currentA") ? currentA.toFixed(3) : "-"} active={running} />
         ) : null}
         <Reading label="Hz" value={frequencyHz > 0 ? String(frequencyHz) : "-"} active={running} />
-        <Reading label="DC%" value={dutyCycle > 0 ? String(dutyCycle) : "-"} active={running} />
+        <Reading label={t("kontrol.panel.dcYuzde")} value={dutyCycle > 0 ? String(dutyCycle) : "-"} active={running} />
         {/* Y69 (sahip, S-G4): İSTENEN DC%'nin yanında kartın UYGULADIĞI (ACK `E=`; 1 kHz bipolar %50 → 46.0).
             Bildirilmediyse "-"; 0 gerçek değerdir (0 tick'e nicelenmiş bobin SÜRÜLMÜYOR). */}
         <Reading
-          label="Uyg.%"
+          label={t("kontrol.panel.uygYuzde")}
           value={typeof dutyEtkin === "number" && Number.isFinite(dutyEtkin) ? dutyEtkin.toFixed(1) : "-"}
           active={running}
         />
@@ -332,28 +334,28 @@ export function CoilParameterPanel({
       {/* Parameter inputs */}
       <View style={styles.paramGrid}>
         <ParamInput
-          label="Frekans (Hz)"
+          label={t("kontrol.panel.frekansHz")}
           value={freq}
           onChangeText={setFreq}
           disabled={isDisabled}
           keyboardType="numeric"
         />
         <ParamInput
-          label="Duty (%)"
+          label={t("kontrol.panel.dutyYuzde")}
           value={duty}
           onChangeText={setDuty}
           disabled={isDisabled}
           keyboardType="numeric"
         />
         <ParamInput
-          label="Faz (°)"
+          label={t("kontrol.panel.fazDerece")}
           value={phase}
           onChangeText={setPhase}
           disabled={isDisabled}
           keyboardType="numeric"
         />
         <ParamInput
-          label="Süre (dk)"
+          label={t("kontrol.panel.sureDk")}
           value={duration}
           onChangeText={setDuration}
           disabled={isDisabled}
@@ -371,7 +373,7 @@ export function CoilParameterPanel({
           accessibilityRole="alert"
           accessibilityLiveRegion="assertive"
         >
-          {`⚠ Sıcaklık ${SICAKLIK_UYARI_ESIGI_C} °C üstünde (${objectTemp.toFixed(1)} °C) — otomatik durdurma yok; bobini kontrol edin, gerekirse ⏹ Durdur.`}
+          {t("kontrol.panel.sicaklikUyari", { esik: SICAKLIK_UYARI_ESIGI_C, sicaklik: objectTemp.toFixed(1) })}
         </Text>
       ) : null}
 
@@ -409,9 +411,9 @@ export function CoilParameterPanel({
           onPress={() => sendCommand(true)}
           disabled={isDisabled || loading}
           accessibilityRole="button"
-          accessibilityLabel={running ? "Bobinin parametrelerini güncelle" : "Bobini başlat"}
+          accessibilityLabel={running ? t("kontrol.panel.guncelleEtiketi") : t("kontrol.panel.baslatEtiketi")}
         >
-          <Text style={styles.btnStartText}>{running ? "🔄 Uygula" : "▶ Başlat"}</Text>
+          <Text style={styles.btnStartText}>{running ? t("kontrol.panel.uygula") : t("kontrol.panel.baslat")}</Text>
         </TouchableOpacity>
         {/* DURDURMA ASLA KİLİTLENMEZ: buton `running`'e bağlıydı ve `running` telemetriden gelir.
             STM çevrimdışı raporlandığında LiveDataContext bu bobinleri `running:false`'a
@@ -424,15 +426,15 @@ export function CoilParameterPanel({
           style={[styles.btnStop, loading && styles.btnDisabled]}
           onPress={() => sendCommand(false)}
           accessibilityRole="button"
-          accessibilityLabel="Bobini durdur"
+          accessibilityLabel={t("kontrol.panel.durdurEtiketi")}
         >
-          <Text style={styles.btnStopText}>⏹ Durdur</Text>
+          <Text style={styles.btnStopText}>{t("kontrol.panel.durdur")}</Text>
         </TouchableOpacity>
       </View>
 
       {!connected && (
         <View style={styles.offlineBanner}>
-          <Text style={styles.offlineText}>⚡ Bobin bağlı değil</Text>
+          <Text style={styles.offlineText}>{t("kontrol.panel.bobinBagliDegil")}</Text>
         </View>
       )}
     </View>

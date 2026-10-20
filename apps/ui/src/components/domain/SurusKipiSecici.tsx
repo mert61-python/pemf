@@ -28,15 +28,16 @@ import { Text, View, StyleSheet, TouchableOpacity } from "react-native";
 import { colors, spacing, typography, touch } from "@/theme/tokens";
 import type { CoilStatus } from "@/types/domain";
 import { apiPost, platformConfirm } from "@/services/apiClient";
+import i18n from "i18next";
+import { useTranslation } from "react-i18next";
 
 /** STM sürücüsüne bağlı bobin sayısı (1..7). Backend `STM_COIL_IDS` ile AYNI olmalı. */
 const STM_BOBIN = 7;
 
 /** TD6 · K8 (tezgâh Oturum 13): tek dokunuş, tam köprülü bobini DC bileşenli tek yönlü sürüşe KALICI geçiriyordu — onay ister.
  *  Ters yön (tek yönlüden çift yönlüye) firmware varsayılanına dönüştür; onay istemez. */
-export const TEK_YONLU_ONAY_BASLIK = "Tek yönlü sürüşe geçilsin mi?";
-export const TEK_YONLU_ONAY_METNI =
-  "Tek yönlü sürüş bobinde DC bileşen oluşturur ve alan değerlerini değiştirir. Emin misiniz?";
+export const tekYonluOnayBaslik = (): string => i18n.t("kontrol.surus.tekYonluBaslik");
+export const tekYonluOnayMetni = (): string => i18n.t("kontrol.surus.tekYonluMetni");
 
 /** TD6 · K8: kaydedilen değişikliğin SONUÇ cümlesi — neyin değiştiğini söyler ("Kaydedildi" tek başına yetmiyordu). */
 export function surusKipiSonucu(onceki: boolean[], yeni: boolean[], yetenekli: boolean[]): string {
@@ -47,10 +48,10 @@ export function surusKipiSonucu(onceki: boolean[], yeni: boolean[], yetenekli: b
     (u ? tek : cift).push(i + 1);
   });
   const parca: string[] = [];
-  if (tek.length) parca.push(`Bobin ${tek.join(", ")} tek yönlü (Unipolar)`);
-  if (cift.length) parca.push(`Bobin ${cift.join(", ")} çift yönlü (Bipolar)`);
-  if (!parca.length) return "Kip değişmedi — kaydedildi.";
-  return `${parca.join("; ")} sürüşe alındı — bir sonraki başlatmada uygulanır.`;
+  if (tek.length) parca.push(i18n.t("kontrol.surus.tekYonluParca", { count: tek.length, liste: tek.join(", ") }));
+  if (cift.length) parca.push(i18n.t("kontrol.surus.ciftYonluParca", { count: cift.length, liste: cift.join(", ") }));
+  if (!parca.length) return i18n.t("kontrol.surus.kipDegismedi");
+  return i18n.t("kontrol.surus.sonuc", { kisim: parca.join("; ") });
 }
 
 export function SurusKipiSecici({
@@ -62,6 +63,7 @@ export function SurusKipiSecici({
   stmConnected: boolean;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation();
   const stmCoils = useMemo(
     () =>
       Array.from({ length: STM_BOBIN }, (_, i) => coils.find((c) => c.id === i + 1) ?? ({ id: i + 1 } as CoilStatus)),
@@ -90,7 +92,7 @@ export function SurusKipiSecici({
       const onceki = istek;
       // K8: yetenekli bir bobin çift yönlüden TEK YÖNLÜYE geçiyorsa onay; vazgeçilirse hiçbir şey değişmez/gönderilmez.
       if (yeni.some((u, i) => u && !onceki[i] && yetenekliDizi[i])) {
-        const onay = await platformConfirm(TEK_YONLU_ONAY_BASLIK, TEK_YONLU_ONAY_METNI, "Tek yönlü yap");
+        const onay = await platformConfirm(tekYonluOnayBaslik(), tekYonluOnayMetni(), t("kontrol.surus.tekYonluYap"));
         if (!onay) return;
       }
       setIstek(yeni);
@@ -107,15 +109,15 @@ export function SurusKipiSecici({
         } else {
           // ⚠️ Başarısızlık SESSİZ KALMAZ: istek geri alınmaz ama kullanıcı kipin
           // gitmediğini görür, yoksa arayüz "bipolar" gösterirken kart unipolar sürer.
-          setDurum("Gönderilemedi — kip DEĞİŞMEDİ.");
+          setDurum(t("kontrol.surus.gonderilemedi"));
         }
       } catch {
-        setDurum("Gönderilemedi — kip DEĞİŞMEDİ.");
+        setDurum(t("kontrol.surus.gonderilemedi"));
       } finally {
         setGonderiliyor(false);
       }
     },
-    [istek, yetenekliDizi],
+    [istek, yetenekliDizi, t],
   );
 
   const cevir = useCallback(
@@ -140,9 +142,9 @@ export function SurusKipiSecici({
 
   return (
     <View style={styles.kok}>
-      <Text style={styles.baslik}>⚡ Sürüş Kipi</Text>
+      <Text style={styles.baslik}>{t("kontrol.surus.baslik")}</Text>
       <Text style={styles.altBaslik}>
-        Bipolar = iki PWM dönüşümlü (alan ±B) · Unipolar = yalnız IN_A (alan 0…+B)
+        {t("kontrol.surus.aciklama")}
       </Text>
 
       <View style={styles.hepsiSatir}>
@@ -151,18 +153,18 @@ export function SurusKipiSecici({
           onPress={() => hepsi(false)}
           disabled={kilitli}
           accessibilityRole="button"
-          accessibilityLabel="Yetenekli tüm bobinleri bipolar sür"
+          accessibilityLabel={t("kontrol.surus.hepsiBipolarEtiketi")}
         >
-          <Text style={styles.hepsiMetin}>Hepsi Bipolar</Text>
+          <Text style={styles.hepsiMetin}>{t("kontrol.surus.hepsiBipolar")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.hepsiBtn, kilitli && styles.pasif]}
           onPress={() => hepsi(true)}
           disabled={kilitli}
           accessibilityRole="button"
-          accessibilityLabel="Tüm bobinleri unipolar sür"
+          accessibilityLabel={t("kontrol.surus.hepsiUnipolarEtiketi")}
         >
-          <Text style={styles.hepsiMetin}>Hepsi Unipolar</Text>
+          <Text style={styles.hepsiMetin}>{t("kontrol.surus.hepsiUnipolar")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -188,13 +190,13 @@ export function SurusKipiSecici({
               hitSlop={touch.slopFor(spacing.sm)}
               accessibilityRole="button"
               accessibilityLabel={
-                `Bobin ${c.id}, ${uni ? "unipolar" : "bipolar"}` +
-                (yetenekli ? "" : ", sürücüsü yalnız unipolar — değiştirilemez") +
-                (etkin === null ? ", kart henüz bildirmedi" : `, kartın uyguladığı ${etkin ? "unipolar" : "bipolar"}`)
+                t("kontrol.surus.kutuEtiketi", { id: c.id, tip: uni ? t("kontrol.surus.tipUnipolar") : t("kontrol.surus.tipBipolar") }) +
+                (yetenekli ? "" : t("kontrol.surus.kutuKilitli")) +
+                (etkin === null ? t("kontrol.surus.kutuBildirmedi") : t("kontrol.surus.kutuUyguladi", { tip: etkin ? t("kontrol.surus.tipUnipolar") : t("kontrol.surus.tipBipolar") }))
               }
             >
               <Text style={styles.kutuNo}>{c.id}</Text>
-              <Text style={styles.kutuKip}>{uni ? "UNİ" : "BİP"}</Text>
+              <Text style={styles.kutuKip}>{uni ? t("kontrol.surus.uni") : t("kontrol.surus.bip")}</Text>
               {!yetenekli && <Text style={styles.kutuKilit}>🔒</Text>}
             </TouchableOpacity>
           );
@@ -202,20 +204,20 @@ export function SurusKipiSecici({
       </View>
 
       <Text style={styles.not}>
-        🔒 Bobin 6-7 sürücüleri tek yönlü — bipolar sürülemez.
+        {t("kontrol.surus.bobin67")}
       </Text>
       {stmCoils.every((c) => typeof c.unipolar !== "boolean") ? (
-        <Text style={styles.not}>Kartın uyguladığı kip sürüş başlayınca görünür.</Text>
+        <Text style={styles.not}>{t("kontrol.surus.uygulananKip")}</Text>
       ) : (
         <Text style={styles.not}>
-          Kartın uyguladığı:{" "}
+          {t("kontrol.surus.uyguladigi")}{" "}
           {stmCoils
-            .map((c) => `${c.id}:${typeof c.unipolar === "boolean" ? (c.unipolar ? "UNİ" : "BİP") : "—"}`)
+            .map((c) => `${c.id}:${typeof c.unipolar === "boolean" ? (c.unipolar ? t("kontrol.surus.uni") : t("kontrol.surus.bip")) : "—"}`)
             .join("  ")}
         </Text>
       )}
       {durum && <Text style={[styles.not, styles.durum]}>{durum}</Text>}
-      {!stmConnected && <Text style={[styles.not, styles.durum]}>STM32 bağlı değil — kip değiştirilemez.</Text>}
+      {!stmConnected && <Text style={[styles.not, styles.durum]}>{t("kontrol.surus.stmBagliDegil")}</Text>}
     </View>
   );
 }

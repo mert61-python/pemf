@@ -133,7 +133,14 @@ def test_KRITIK_UI_alani_YALNIZ_KAYIT_oldugunu_soyler():
     history_router) depo içi kaynakları okur ve CI'da tam koşmaya devam eder.
     """
     cs = capraz.oku("apps/ui/src/screens/ControlScreen.tsx")
-    assert 'label="Yoğunluk (mT, yalnız kayıt)"' in cs, "UI etiketi hala cihaza gidiyormus gibi gosteriyor"
+    # I18N: etiket kataloğa taşındı — ölçüt GEVŞEMEDİ, yer değiştirdi (aynı alan etiketi `t(anahtar)`; kaynak anahtarı kullanıyor + TR birebir + EN dolu).
+    # İşlev içinde içe aktarım: meta kapılar (D404) asgari ağaca yalnız capraz.py + c_soyucu.py kopyalar (dosya yoksa yukarıda atlanır).
+    import i18n_yardimci as iy
+
+    iy.metin_kapisi(
+        "apps/ui/src/screens/ControlScreen.tsx", "kontrol.ekran.yogunlukKayit", "Yoğunluk (mT, yalnız kayıt)"
+    )
+    assert 'label={t("kontrol.ekran.yogunlukKayit")}' in cs, "UI etiketi hala cihaza gidiyormus gibi gosteriyor"
 
 
 # ── veri KAYBEDİLMEDİ ────────────────────────────────────────────────────────

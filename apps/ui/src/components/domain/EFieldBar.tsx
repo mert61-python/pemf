@@ -20,8 +20,10 @@ import { Zap } from "lucide-react-native";
 import { useLiveData } from "@/context/LiveDataContext";
 import { colors, rf, rs, spacing } from "@/theme/tokens";
 import type { EFieldLive } from "@/types/domain";
+import { useTranslation } from "react-i18next";
 
 export function EFieldBar() {
+  const { t } = useTranslation();
   const { snapshot } = useLiveData();
   const e = (snapshot as { eField?: EFieldLive | null } | null)?.eField ?? null;
 
@@ -44,8 +46,8 @@ export function EFieldBar() {
   // Tazelik: backend 2 Hz yazar; 5 sn susmuşsa hesap durmuştur.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    const zamanlayici = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(zamanlayici);
   }, []);
 
   if (!e) return null; // ← bağlam/seans yok: bar HİÇ çıkmaz
@@ -57,37 +59,36 @@ export function EFieldBar() {
   const bMetni = Number.isFinite(e.achievedB_T) ? ((e.achievedB_T as number) * 1000).toFixed(2) : "—";
   const dutyMetni = Number.isFinite(e.dutySum) ? e.dutySum.toFixed(2) : "—";
   const neden = e.egitimAraligiDisi
-    ? "Ölçülen B, modelin eğitim aralığı dışında — E hesaplanmadı (model orada güvenilir değil)."
+    ? t("kontrol.efield.egitimDisi")
     : e.bOlculmuyor
-      ? "Çalışan bobinlerde alan (B) ölçülmüyor — E hesaplanmadı."
+      ? t("kontrol.efield.bOlculmuyor")
       : e.egitimAraligiBilinmiyor
-        ? "Modelin eğitim aralığı okunamadı — E hesaplanmadı."
+        ? t("kontrol.efield.egitimBilinmiyor")
         : null;
 
   return (
-    <View style={styles.card} accessibilityLabel="Canlı elektrik alanı göstergesi">
+    <View style={styles.card} accessibilityLabel={t("kontrol.efield.etiket")}>
       <View style={styles.head}>
         <Zap size={rs(16)} color={colors.warning} />
-        <Text style={styles.title}>Canlı E-Alanı</Text>
-        <Text style={stale ? styles.stale : styles.live}>{stale ? "duraklandı" : "● canlı"}</Text>
+        <Text style={styles.title}>{t("kontrol.efield.baslik")}</Text>
+        <Text style={stale ? styles.stale : styles.live}>{stale ? t("kontrol.efield.duraklandi") : t("kontrol.efield.canli")}</Text>
       </View>
 
-      <Row label="Tümör" value={cancer} pct={pct(cancer)} tint={colors.danger} fmt={fmt} />
-      <Row label="Sağlıklı" value={healthy} pct={pct(healthy)} tint={colors.success} fmt={fmt} />
+      <Row label={t("kontrol.efield.tumor")} value={cancer} pct={pct(cancer)} tint={colors.danger} fmt={fmt} />
+      <Row label={t("kontrol.efield.saglikli")} value={healthy} pct={pct(healthy)} tint={colors.success} fmt={fmt} />
 
       <Text style={styles.foot}>
-        {e.activeCoils} bobin · B={bMetni} mT · Σduty={dutyMetni}
+        {t("kontrol.efield.ozet", { count: e.activeCoils, b: bMetni, duty: dutyMetni })}
       </Text>
       {/* Y51 (sahip): Σduty modelin eğitim aralığı dışında → değer GÖSTERİLİR, yanında güvenilmezlik etiketi. */}
       {e.dutyEgitimAraligiDisi ? (
         <Text style={styles.uyari} testID="efield-duty-araligi-disi" accessibilityRole="text">
-          ⚠️ Σduty eğitim aralığı dışı — güvenilmez
-          {e.dutyEgitimAraligi ? ` (model ${e.dutyEgitimAraligi[0].toFixed(2)}–${e.dutyEgitimAraligi[1].toFixed(2)} ile eğitildi)` : ""}
+          {e.dutyEgitimAraligi ? t("kontrol.efield.dutyDisiAralikli", { min: e.dutyEgitimAraligi[0].toFixed(2), max: e.dutyEgitimAraligi[1].toFixed(2) }) : t("kontrol.efield.dutyDisi")}
         </Text>
       ) : null}
       {neden ? <Text style={styles.foot}>{neden}</Text> : null}
       {e.activeCoils === 0 && (
-        <Text style={styles.foot}>Bobinler durdu — alan üretilmiyor.</Text>
+        <Text style={styles.foot}>{t("kontrol.efield.bobinlerDurdu")}</Text>
       )}
     </View>
   );
@@ -96,8 +97,9 @@ export function EFieldBar() {
 function Row({ label, value, pct, tint, fmt }: {
   label: string; value: number | null; pct: number; tint: string; fmt: (v: number | null) => string;
 }) {
+  const { t } = useTranslation();
   return (
-    <View style={styles.row} accessibilityLabel={`${label} alan ${fmt(value)}`}>
+    <View style={styles.row} accessibilityLabel={t("kontrol.efield.satirEtiketi", { label, deger: fmt(value) })}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.track}>
         <View style={[styles.fill, { width: `${pct}%`, backgroundColor: tint }]} />

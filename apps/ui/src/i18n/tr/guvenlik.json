@@ -13,6 +13,8 @@
     "kartRedBaslik": "⛔ KART STOP'U REDDETTİ",
     "kartRedGovde": "Cihaz kartı STOP komutunu reddetti — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın.",
     "teyitsizBaslik": "⚠️ ACİL DURDURMA DOĞRULANAMADI",
-    "teyitsizGovde": "Donanımın durduğu teyit edilemedi. Bobinler hâlâ çalışıyor olabilir — cihazı fiziksel güç düğmesinden kapatın."
+    "teyitsizGovde": "Donanımın durduğu teyit edilemedi. Bobinler hâlâ çalışıyor olabilir — cihazı fiziksel güç düğmesinden kapatın.",
+    "tumBobinlerDugme": "🚨 TÜM BOBİNLERİ ACİL DURDUR",
+    "tumBobinlerEtiketi": "Tüm bobinleri acil durdur"
   }
 }

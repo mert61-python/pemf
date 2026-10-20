@@ -1,3 +1,4 @@
+import i18n from "i18next";
 // Author: mertaygn, cglrgrkn
 /**
  * D1.89 · B-6.27 (+ İNCELEME-2 §10 #5 · İG-6.47 sınıfı) — yoğunluk gösteriminin TEK KAYNAĞI.
@@ -49,16 +50,16 @@ export function olculenAlanOrt(mt: number | null | undefined): string {
 }
 
 export const YOGUNLUK_ETIKETI: Record<YogunlukTuru, string> = {
-  olculen: "Yoğunluk (ölçülen)",
-  kayit: "Yoğunluk (kayıt)",
-  duty: "Duty (AI planı, bobin 1)",
-  yok: "Yoğunluk (kayıt)",
+  get olculen() { return i18n.t("kontrol.yogunluk.olculen"); },
+  get kayit() { return i18n.t("kontrol.yogunluk.kayit"); },
+  get duty() { return i18n.t("kontrol.yogunluk.duty"); },
+  get yok() { return i18n.t("kontrol.yogunluk.kayit"); },
 };
 
 /** Seans kartının BÜYÜK harfli etiketleri (mevcut "YOĞUNLUK (kayıt)/(ölçülen)" dizeleri korunur). */
 export const YOGUNLUK_ETIKETI_BUYUK: Record<YogunlukTuru, string> = {
-  olculen: "YOĞUNLUK (ölçülen)",
-  kayit: "YOĞUNLUK (kayıt)",
-  duty: "DUTY (AI planı, bobin 1)",
-  yok: "YOĞUNLUK (kayıt)",
+  get olculen() { return i18n.t("kontrol.yogunluk.olculenBuyuk"); },
+  get kayit() { return i18n.t("kontrol.yogunluk.kayitBuyuk"); },
+  get duty() { return i18n.t("kontrol.yogunluk.dutyBuyuk"); },
+  get yok() { return i18n.t("kontrol.yogunluk.kayitBuyuk"); },
 };

@@ -37,7 +37,7 @@ import { apiGet } from "@/services/apiClient";
 import { KpiDashboardScreen } from "@/screens/KpiDashboardScreen";
 import { SensorMonitorScreen } from "@/screens/SensorMonitorScreen";
 import { ANLIK_GUC_GORUNUR, BOBIN_DIRENCI_OHM, bobinGucuW } from "@/utils/bobinGucu";
-import { AKIM_OLCUMU_YOK_METNI } from "@/utils/olculenAlan";
+import { akimOlcumuYokMetni } from "@/utils/olculenAlan";
 
 // Bobin 1: güvenilmez akım (backend `currentA`'yı YAZMADI ama son sayı donmuş olabilir) · bobin 2: güvenilir 1,234 A.
 const guvenilmez1 = {
@@ -81,7 +81,7 @@ it("KRİTİK Sensörler: güvenilmez akım sayı DEĞİL, 'Akım ölçümü yok'
   mockSnap = snap([guvenilmez1, guvenilir2]);
   const metin = duz(render(<SensorMonitorScreen />).toJSON());
   expect(metin).not.toMatch(/74\.630/);
-  expect(metin).toContain(AKIM_OLCUMU_YOK_METNI);
+  expect(metin).toContain(akimOlcumuYokMetni());
   expect(metin).toMatch(/1\.234 A/);
 });
 
