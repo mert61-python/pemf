@@ -3206,7 +3206,19 @@ def _db_acilis_hatasi() -> str:
     hatalar = getattr(state.core, "db_acilis_hatalari", None)
     if not isinstance(hatalar, dict):  # çekirdek yok / sahte çekirdek (ör. MagicMock) → açılış hatası YOK
         return ""
-    return " ".join(hatalar[k] for k in ("hasta", "tedavi") if isinstance(hatalar.get(k), str) and hatalar.get(k))
+    ayrintilar = getattr(state.core, "db_acilis_ayrintilari", None)
+    parcalar = []
+    for k in ("hasta", "tedavi"):
+        s = hatalar.get(k)
+        if not (isinstance(s, str) and s):
+            continue
+        a = ayrintilar.get(k) if isinstance(ayrintilar, dict) else None
+        if a:  # yapılandırılmış ayrıntı varsa metin İSTEK dilinde (Türkçe: durum alanıyla bayt bayt aynı)
+            from headless_core import db_acilis_metni
+
+            s = db_acilis_metni(a[0], k, a[1])
+        parcalar.append(s)
+    return " ".join(parcalar)
 
 
 def _lookup_owner_email(patient_uuid: str) -> str:
@@ -7454,7 +7466,7 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma", kal
     if _stm_red:
         logging.getLogger(__name__).error("E-stop: kart STOP'u REDDETTI (STM_NACK, kabul yok) — teyit YOK")
         try:
-            _push_notification("⛔ " + _stm32_kimlik.ESTOP_KART_RED_METNI, "error")
+            _bildir(lambda d: "⛔ " + _stm32_kimlik.estop_kart_red_metni(d), "error")
         except Exception:
             logging.getLogger(__name__).exception("E-stop: kart reddi bildirilemedi (durdurma tamam)")
     return {
@@ -7474,7 +7486,7 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma", kal
         "firmwareYakiliyor": bool(_fw_yakiliyor),
         # TD3 (yalnız-ek): kartın bu STOP'a yanıtı — "kabul" | "red" | None (yanıt yok); red'de operatör eylem metni.
         "stmKartYaniti": _stm_kart_yaniti,
-        "stmRedMesaji": _stm32_kimlik.ESTOP_KART_RED_METNI if _stm_red else None,
+        "stmRedMesaji": _stm32_kimlik.estop_kart_red_metni() if _stm_red else None,
     }
 
 
@@ -7622,7 +7634,7 @@ async def estop_mandalini_sifirla(request: Request):
         logging.getLogger(__name__).warning("Sıfırla: mandal dosyası yazımı 2 sn'de bitmedi (arka planda sürüyor)")
         _md_bitmedi = estop_mandali.yazim_durumu(yol_dahil=True, bitmedi=True)
         if _md_bitmedi.get("mesaj"):
-            _push_notification("⚠️ " + _md_bitmedi["mesaj"], "error")
+            _bildir(lambda d: "⚠️ " + (_md_bitmedi.get("mesajlar") or {}).get(d, _md_bitmedi["mesaj"]), "error")
     _durum = estop_mandali.durum()
     if _kurulu:
         try:
@@ -7658,7 +7670,9 @@ async def estop_mandalini_sifirla(request: Request):
 
 # Y59: mandal dosyası yazılamazsa ekran bildirimi (her yazım yolu: E-stop arka plan yazımı, Sıfırla, Y45). Geç bağlama:
 # `_push_notification` çağrı anında çözülür.
-estop_mandali.yazim_hatasi_kancasi_bagla(lambda d: _push_notification("⚠️ " + d.get("mesaj", ""), "error"))
+estop_mandali.yazim_hatasi_kancasi_bagla(
+    lambda d: _bildir(lambda dil: "⚠️ " + (d.get("mesajlar") or {}).get(dil, d.get("mesaj", "")), "error")
+)
 
 
 # --- PATIENT DATABASE ENDPOINTS ---

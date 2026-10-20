@@ -273,6 +273,15 @@
       "pankreas": "Pancreas",
       "tumVucut": "Whole Body"
     },
+    "panel": {
+      "birlesik": "Combined",
+      "girdi": "Input",
+      "koordinat": "Coordinates",
+      "maske": "Mask",
+      "siniflama": "Classification",
+      "tespit": "Detection",
+      "tumorler": "Tumors"
+    },
     "pemf": {
       "gecerlilikHesaplanamadi": "PEMF validity could not be calculated — D/P/E values must not be used; repeat the analysis."
     },
@@ -465,21 +474,47 @@
       "cekirdekHazirDegil": "The core is not ready.",
       "hazirDegil": "The hardware is not ready.",
       "komutBasarisiz": "Hardware command failed",
+      "parametreGecersiz": "The drive parameter cannot be converted into a hardware packet ({{hata}}: not a number or overflows).",
       "sayiGecersiz": "Invalid '{{ad}}': must be a finite number.",
+      "stmBagliDegil": "The STM32 is not connected. Plug in the USB (ST-Link) cable; give the command again once it is connected.",
       "stmHazirDegil": "The STM32 hardware controller is not ready.",
       "stmYok": "There is no STM controller.",
       "tamSayiGecersiz": "Invalid '{{ad}}': must be a whole number from {{alt}} to {{ust}}.",
       "unipolarDizisi": "The unipolar array must have {{n}} elements (coils {{ilk}}-{{son}}); {{gelen}} received"
+    },
+    "sonuc": {
+      "bobinBaslatilmadi": "the coil was NOT STARTED"
     },
     "uyari": {
       "fazSenkron": "While STM coil 1 is running at {{hz}} Hz, {{esp_freq}} Hz was requested for coil {{coil}} (≥50× apart) — phase sync will not lock and the S3 DC-protection latch may engage. If you do not need phase lock this is fine; otherwise bring the frequencies closer together.",
       "fazSenkronKisa": "While STM coil 1 is running at {{hz}} Hz, {{esp_freq}} Hz was requested for coil {{coil}} (≥50× apart) — phase sync will not lock."
     }
   },
+  "estop": {
+    "kapanisMesaji": "The backend is SHUTTING DOWN — the new start was rejected (the coils are being stopped).",
+    "kayipMesaji": "The target observation belongs to BEFORE a target-loss stop (stale observation) — the coils were not driven.",
+    "mandalMesaji": "EMERGENCY STOP LATCHED — the new start was rejected. Check the coils, clear the latch with 'Reset' on the screen and give the start command again.",
+    "nesilMesaji": "The command belongs to BEFORE a stop or emergency stop (stale drive intent) — it was not applied. Start again if needed.",
+    "sonuc": {
+      "gelecek": "will come back",
+      "gelmeyecek": "will not come back (the file could not be updated)",
+      "korunmayacak": "will NOT be preserved",
+      "kuruluGelecek": "will come back set (the file could not be updated)"
+    },
+    "yazimBitmedi": " — the write did not finish in 2 s, the disk is not responding",
+    "yazimYazilamadi": "The latch file could not be written{{yer}} — after a restart the latch {{sonuc}}; fix the file permission."
+  },
   "firmware": {
-    "komutRed": "The device board is rejecting commands — the board's software is incompatible with this app version; the coils will not run. Contact technical support (code: FW-PAKET)."
+    "estopKartRed": "The device board rejected the STOP command — the coils may not have stopped. Cut the device's power or unplug the USB cable.",
+    "komutRed": "The device board is rejecting commands — the board's firmware is incompatible with this app version; the coils will not run. Call technical support (code: FW-PAKET).",
+    "operatorKimlik": "The device board could not be verified. Press the BLACK reset button on the board once (not the blue one).",
+    "operatorPaket": "The device board's firmware is incompatible with this app version — the coils will not run. Call technical support (code: FW-PAKET).",
+    "yakmaEngeli": "The STM32 firmware is being WRITTEN (hardware update) — coils cannot be started until it finishes; EMERGENCY STOP works."
   },
   "gecmis": {
+    "alanNotu": {
+      "duzeltildi": "corrected (÷5, approximate — measured as 4–5× on the bench)"
+    },
     "csv": {
       "alanNotu": "Field note",
       "ayarlanan": "Set(mT)",
@@ -753,6 +788,12 @@
     "yabanci_other": "You can only delete your own and ownerless records — {{count}} of the selected records belong to another veterinarian; no records were deleted."
   },
   "sistem": {
+    "db": {
+      "acilamadi": "{{ad}} could not be opened ({{hata}}). It is being retried in the background; if it persists, restart the device, and if it still persists, contact technical support.",
+      "goc": "{{ad}} is waiting for migration: the at-rest encryption migration was not completed (the file may be locked); the file is preserved and was not quarantined. The migration is being retried in the background; if it does not clear, restart the device.",
+      "hasta": "Patient database",
+      "tedavi": "Treatment record database"
+    },
     "hata": {
       "anonimGeriAlma": "Anonymization confirmation and its rollback cannot be in the same request.",
       "ayarKaydedilemedi": "The setting could not be saved.",

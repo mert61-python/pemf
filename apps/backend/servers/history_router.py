@@ -627,7 +627,7 @@ def get_session_full_details(session_id: int, db=Depends(get_db)):
         _duzeltildi = any(s["alan_duzeltildi"] for s in sensor_samples) or any(
             (k.get("summary") or {}).get("alan_notu") for k in coil_runs
         )
-        session["alan_notu"] = mt_duzeltme.NOT_METNI if _duzeltildi else ""
+        session["alan_notu"] = mt_duzeltme.alan_notu_metni() if _duzeltildi else ""
 
         return {
             "session": session,

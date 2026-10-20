@@ -7,7 +7,7 @@ import threading
 import time
 import zlib
 
-from utils import estop_mandali, firmware_yakma_penceresi
+from utils import ceviri, estop_mandali, firmware_yakma_penceresi
 from utils.dongu_guvenligi import dongu_hatasini_bildir
 from utils.stm32_protocol_limits import (
     DURATION_MAX_MINUTES,
@@ -85,9 +85,7 @@ def surus_parametrelerini_hazirla(freq, duty, phase, duration, duration_seconds=
         else:
             son_tarih_s = float((sure_dk if sure_dk > 0 else GOZETIMSIZ_VARSAYILAN_DAKIKA) * 60)
     except (TypeError, ValueError, OverflowError, struct.error) as exc:
-        raise ParametreGecersiz(
-            f"Sürüş parametresi donanım paketine çevrilemiyor ({type(exc).__name__}: sayı değil ya da taşıyor)."
-        ) from exc
+        raise ParametreGecersiz(ceviri.t("donanim.hata.parametreGecersiz", hata=type(exc).__name__)) from exc
     return {
         "freq": f,
         "duty": d,
@@ -306,7 +304,7 @@ class HardwareController:
             return ""
         try:
             if not stm_surus_hazir():
-                return "STM32 bağlı değil. USB (ST-Link) kablosunu takın; bağlantı gelince komutu yeniden verin."
+                return ceviri.t("donanim.hata.stmBagliDegil")
         except Exception:
             self.logger.debug("STM baglanti durumu okunamadi → baslatma ENGELLENMEDI", exc_info=True)
         core = getattr(self, "core", None)
@@ -322,9 +320,9 @@ class HardwareController:
             if stm_komutlari_reddediyor():
                 # Y74 / 1-G §8 #2: son red DUTY reddiyse (kart güncel, istek geçersiz) eylem duty'dir — firmware DEĞİL.
                 from servers.live_state import stm_red_duty_metni
-                from utils.stm32_kimlik import KOMUT_RED_METNI
+                from utils.stm32_kimlik import komut_red_metni
 
-                return stm_red_duty_metni("bobin BAŞLATILMADI") or KOMUT_RED_METNI
+                return stm_red_duty_metni(ceviri.t("donanim.sonuc.bobinBaslatilmadi")) or komut_red_metni()
         except Exception:
             self.logger.debug("STM red durumu okunamadi → baslatma ENGELLENMEDI", exc_info=True)
         return ""

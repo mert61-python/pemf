@@ -45,19 +45,21 @@ from __future__ import annotations
 import base64
 from typing import Any
 
+from utils import ceviri
+
 #: Yayına çıkan panel anahtarları ve gösterim adları — ARAYÜZ ÇİPLERİ BUNU OKUR.
 #: ⚠️ SIRA ANLAMLIDIR: analiz akışını izler (girdi → tespit → maske → tümör → koordinat →
 #: tahmin → birleşik). Arayüzdeki ok tuşları bu sırada gezer.
 #: ⚠️ Anahtarlar `render_all_panels` çıktısıyla BİREBİR aynı olmalı; ayrışırsa panel
 #: sessizce düşer. Kapı: `test_ai_panel_yayini.py`.
 PANEL_ADLARI: dict[str, str] = {
-    "01_input": "Girdi",
-    "02_phantom_detect": "Tespit",
-    "03_phantom_mask": "Maske",
-    "04_tumors": "Tümörler",
-    "05_local_coords": "Koordinat",
-    "06_predictions": "Tahmin",
-    "07_combined": "Birleşik",
+    "01_input": "ai.panel.girdi",
+    "02_phantom_detect": "ai.panel.tespit",
+    "03_phantom_mask": "ai.panel.maske",
+    "04_tumors": "ai.panel.tumorler",
+    "05_local_coords": "ai.panel.koordinat",
+    "06_predictions": "ai.etiket.predicted_class",
+    "07_combined": "ai.panel.birlesik",
 }
 
 #: Kök `image_base64` olarak dönen panel — istemcinin geriye-uyum yolu bunu okur.
@@ -68,13 +70,13 @@ KOK_PANEL = "07_combined"
 #: İlk yazımda `02_plate_detect`/`03_wells` varsayılmıştı; gerçek adlar farklı çıktı ve
 #: yanlış anahtar paneli sessizce "bilinmeyen"e düşürürdü.
 PETRI_PANEL_ADLARI: dict[str, str] = {
-    "01_input": "Girdi",
-    "02_yolo_dets": "Tespit",
-    "03_yolo_masks": "Maske",
-    "04_classify": "Sınıflama",
-    "05_local_coords": "Koordinat",
-    "06_predictions": "Tahmin",
-    "07_combined": "Birleşik",
+    "01_input": "ai.panel.girdi",
+    "02_yolo_dets": "ai.panel.tespit",
+    "03_yolo_masks": "ai.panel.maske",
+    "04_classify": "ai.panel.siniflama",
+    "05_local_coords": "ai.panel.koordinat",
+    "06_predictions": "ai.etiket.predicted_class",
+    "07_combined": "ai.panel.birlesik",
 }
 
 
@@ -119,7 +121,7 @@ def panelleri_yayina_hazirla(
         cikti.append(
             {
                 "k": k,
-                "ad": adlar.get(k, k),
+                "ad": ceviri.t(panel_anahtari) if (panel_anahtari := adlar.get(k)) else k,
                 "image_base64": base64.b64encode(bayt).decode("utf-8"),
                 **boyut,
             }

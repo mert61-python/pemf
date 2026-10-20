@@ -39,8 +39,10 @@ export function stmUyumBandiMetni(u: StmUyum | null | undefined): StmUyumBandiMe
   if (!u) return null;
   const mesaj = typeof u.mesaj === "string" ? u.mesaj.trim() : "";
   const ayrinti = typeof u.ayrinti === "string" ? u.ayrinti.trim() : "";
-  if (u.uyumlu === false) return { tur: "kirmizi", mesaj: mesaj || k1Yedek(), ayrinti };
-  if (u.uyumlu === null && u.kod) return { tur: "sari", mesaj: mesaj || k2Yedek(), ayrinti };
+  // I18N-P1: bilinen kod → arayüzün KENDİ kataloğundaki metin (seçili dil; sunucu metni Türkçe VERİ olarak gelir, metne göre dallanılmaz);
+  // bilinmeyen kod / eski sunucu → sunucu `mesaj`ı, o da yoksa yedek. Türkçe metin sunucununkiyle BAYT BAYT aynı (eşlik testi TD1).
+  if (u.uyumlu === false) return { tur: "kirmizi", mesaj: u.kod === "FW-PAKET" || !mesaj ? k1Yedek() : mesaj, ayrinti };
+  if (u.uyumlu === null && u.kod) return { tur: "sari", mesaj: u.kod === "FW-KIMLIK" || !mesaj ? k2Yedek() : mesaj, ayrinti };
   return null;
 }
 

@@ -319,7 +319,7 @@
    "sira": 10,
    "kritik": true,
    "aciklama": "bildirim / WS / STM / firmware / mandal iletileri (KRİTİK)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 198,
    "dosyaSayisi": 22
   },
@@ -4377,7 +4377,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": true,
    "muaf": [],
@@ -4388,29 +4388,139 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 8,
    "kritik": true,
-   "muaf": [],
-   "birlesikIstisna": [],
+   "muaf": [
+    {
+     "metin": "keep-alive tick hatasi",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "sure kapagi kancasi hata verdi (kosu kaydi acik kalabilir)",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "HWSender canlilik denetimi basarisiz → gonderici OLU sayildi",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "ACİL: HWSender ÖLÜ ve yeniden başlatılamadı — paketler porta YAZILMIYOR (firmware ölü-adam 1,5 sn'de keser).",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    }
+   ],
+   "birlesikIstisna": [
+    {
+     "once": "Sürüş parametresi donanım paketine çevrilemiyor ({{__name__}}: sayı değil ya da taşıyor).",
+     "sonra": [
+      "donanim.hata.parametreGecersiz"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/backend/headless_core.py": {
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 20,
    "kritik": true,
-   "muaf": [],
-   "birlesikIstisna": [],
+   "muaf": [
+    {
+     "metin": "[HWSender] ÖLÜ ve yeniden BAŞLATILAMADI — STM'e paket yazılamıyor (firmware ölü-adam 1,5 sn'de keser).",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "[HWSender] ÖLÜ bulundu → yeniden başlatıldı (seri bağlantı yeniden kurulacak).",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "kimlik sorgusu",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "paket yanıtı",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "el sıkışma doğrulaması",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "kimlik okunamadi",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "STM32 connection state updated: %s",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "STM_OK parse error: {{exc}}",
+     "gerekce": "İngilizce geliştirici olayı (STM_OK ayrıştırma hatası) — iki dilde İngilizce"
+    },
+    {
+     "metin": "[STM32 NACK] ayni RUN paketi %d kez yeniden oynatildi ve yine reddedildi → tekrar BIRAKILDI.",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "[STM32 READER] %s",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "[STM32] ilk baglanti denemesi basarisiz — dongu yeniden deneyecek",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "port kayboldu",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "[STM32] Seri port kayboldu (%s) → bağlantı düşürülüyor, bobinler çevrimdışı.",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "[STM32 SEND] %s",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "[UDP SEND] %s",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "[HWSender] tur hatasi — dongu SURUYOR (kuyruktaki STOP dahil paketler yazilmaya devam eder)",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "Hasta veritabanı",
+     "gerekce": "DB adı GÜNLÜK iletisi (`_DB_ADI`; yalnız logger) — operatöre giden metin `db_acilis_metni` katalogdan istek dilinde"
+    },
+    {
+     "metin": "Tedavi kaydı veritabanı",
+     "gerekce": "DB adı GÜNLÜK iletisi (`_DB_ADI`; yalnız logger) — operatöre giden metin `db_acilis_metni` katalogdan istek dilinde"
+    }
+   ],
+   "birlesikIstisna": [
+    {
+     "once": "{{ad_metni}} göç bekliyor: at-rest şifreleme göçü tamamlanmadı (dosya kilitli olabilir); dosya korunuyor, karantinaya alınmadı. Göç arka planda yeniden deneniyor; düzelmezse cihazı yeniden başlatın.",
+     "sonra": [
+      "sistem.db.goc"
+     ]
+    },
+    {
+     "once": "{{ad_metni}} açılamadı ({{__name__}}). Arka planda yeniden deneniyor; sürerse cihazı yeniden başlatın, yine sürerse teknik desteğe başvurun.",
+     "sonra": [
+      "sistem.db.acilamadi"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/backend/servers/coil_run_tracker.py": {
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": true,
    "muaf": [],
@@ -4421,10 +4531,15 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": true,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "E-alanı döngü hatası",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -4432,10 +4547,83 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 18,
    "kritik": true,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "henüz kontrol edilmedi",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "manifest boyut tavanını aştı — reddedildi",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "firmware uyum varlığı bir JSON nesnesi değil",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "manifest firmware url'i vermiyor",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "manifest SHA256 vermiyor — doğrulanmamış firmware YAKILMAZ",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "firmware url'i reddedildi: {{neden}}",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "indirme başarısız: {{__name__}}",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "SHA256 tutmadı (beklenen {{deger1}}, bulunan {{bulunan}})",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "AKTİF SEANS VAR (süreç içi) — yakma MCU'yu resetler, bobinler ANİDEN durur; yakılmaz",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "BOBİN SÜRÜLÜYOR (süreç içi, STM): {{deger1}} — yakılmaz",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "AKTİF TEDAVİ / SÜRÜLEN BOBİN VAR (süreç içi canlı durum) — yakılmaz",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "seans/bobin durumu süreç içinden OKUNAMADI ({{__name__}}) — yakılmaz",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "seans yok, bobin sürülmüyor (süreç içi)",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "manifest okunamadı (internet yok ya da sunucu erişilemez) — donanım güncellemesi kontrolü ERTELENDİ",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "— client geri alma LAUNCHER'ın işi (Y16): launcher `istemciGeriAlinmali`yı okuyup sağlık kapılı geri alır; backend client'ı geri ALMAZ (eski EXE kanalı açılmaz)",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "— otomatik yakma KAPALI (Y1: yalnız açık PEMF_FW_AUTO_UPDATE=1 yakar): yalnız ölçüldü, kart DEĞİŞTİRİLMEDİ",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "STM bağlı değil (kart sürümü okunamadı) — {{gerekce}}",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "yakıldı ama kart hedef sürümü bildirmedi: kart {{deger1}}, hedef {{hedef_surum}} — yayınlanan ikilinin banner sürümü uyum varlığındaki sürümle UYUŞMUYOR (yayın hatası); sonraki açılışta yeniden denenir",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -4443,21 +4631,82 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 11,
    "kritik": true,
-   "muaf": [],
-   "birlesikIstisna": [],
+   "muaf": [
+    {
+     "metin": "en eski periyodik anlik goruntu dusuruldu",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "kuyrukta yalniz tek-seferlik ileti var, yeni periyodik ileti dusuruldu",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "Sistem Hazır",
+     "gerekce": "DB'ye / canlı duruma yazılan seans kipi değeri (`mode`; VERİ) — gösterimde değer → anahtar"
+    },
+    {
+     "metin": "Acil Durdurma",
+     "gerekce": "DB'ye / canlı duruma yazılan seans kipi değeri (`mode`; VERİ) — gösterimde değer → anahtar"
+    }
+   ],
+   "birlesikIstisna": [
+    {
+     "once": "Bobin {{deger1}} {{kip}} kipte en fazla %{{tavan}} çalışabilir; %{{deger4}} kabul edilmedi{{deger5}}. {{eylem}}",
+     "sonra": [
+      "bildirim.dutyReddi.govde"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/backend/servers/seans_alan_kaydi.py": {
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 10,
    "kritik": true,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "servis hesabı (masaüstü yok)",
+     "gerekce": "seans alan kaydı CSV dosyası içeriği / dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil"
+    },
+    {
+     "metin": "Desktop",
+     "gerekce": "seans alan kaydı CSV dosyası içeriği / dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil"
+    },
+    {
+     "metin": "Masaüstü",
+     "gerekce": "seans alan kaydı CSV dosyası içeriği / dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil"
+    },
+    {
+     "metin": "masaüstü",
+     "gerekce": "seans alan kaydı CSV dosyası içeriği / dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil"
+    },
+    {
+     "metin": "masaüstü bulunamadı",
+     "gerekce": "seans alan kaydı CSV dosyası içeriği / dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil"
+    },
+    {
+     "metin": "yeni seans başladı",
+     "gerekce": "seans alan kaydı CSV dosyası içeriği / dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil"
+    },
+    {
+     "metin": "# PEMF seans alan kaydı",
+     "gerekce": "seans alan kaydı CSV dosyası içeriği / dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil"
+    },
+    {
+     "metin": "alan_mt = O SANIYENIN TEPE degeri (anlik degil)",
+     "gerekce": "seans alan kaydı CSV dosyası içeriği / dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil"
+    },
+    {
+     "metin": "en az bir olcum tam olcege dayandi — degerler GUVENILMEZ",
+     "gerekce": "seans alan kaydı CSV dosyası içeriği / dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -4465,10 +4714,23 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 3,
    "kritik": true,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "sensor_{{etiket}}.csv",
+     "gerekce": "dosya adı — metin değil"
+    },
+    {
+     "metin": "sensor_{{etiket}}_{{n}}.csv",
+     "gerekce": "dosya adı — metin değil"
+    },
+    {
+     "metin": "sensor kaydi (arka plan) basarisiz",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -4476,7 +4738,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": true,
    "muaf": [],
@@ -4487,7 +4749,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": true,
    "muaf": [],
@@ -4498,10 +4760,39 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 13,
    "kritik": true,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "ACİL DURDURMA MANDALLI — yeni başlatma reddedildi. Bobinleri kontrol edin, ekrandaki 'Sıfırla' ile mandalı kaldırın ve başlatmayı yeniden verin.",
+     "gerekce": "ACİL DURDUR / başlatma kapısı metin SABİTİ: Türkçe kaynakta KALIR (fail-safe yedek + mandal EYLEM metni donmuş); gösterim katalogdan istek dilinde üretilir (eşlik testi)"
+    },
+    {
+     "metin": "Komut bir durdurma ya da acil durdurmadan ÖNCEYE ait (bayat sürüş niyeti) — uygulanmadı. Gerekirse yeniden başlatın.",
+     "gerekce": "ACİL DURDUR / başlatma kapısı metin SABİTİ: Türkçe kaynakta KALIR (fail-safe yedek + mandal EYLEM metni donmuş); gösterim katalogdan istek dilinde üretilir (eşlik testi)"
+    },
+    {
+     "metin": "Hedef gözlemi bir hedef-kaybı durdurmasından ÖNCEYE ait (bayat gözlem) — sürülmedi.",
+     "gerekce": "ACİL DURDUR / başlatma kapısı metin SABİTİ: Türkçe kaynakta KALIR (fail-safe yedek + mandal EYLEM metni donmuş); gösterim katalogdan istek dilinde üretilir (eşlik testi)"
+    },
+    {
+     "metin": "Backend KAPANIYOR — yeni başlatma reddedildi (bobinler durduruluyor).",
+     "gerekce": "ACİL DURDUR / başlatma kapısı metin SABİTİ: Türkçe kaynakta KALIR (fail-safe yedek + mandal EYLEM metni donmuş); gösterim katalogdan istek dilinde üretilir (eşlik testi)"
+    },
+    {
+     "metin": "dosyanın yerinde dizin var",
+     "gerekce": "mandal dosyası yazım yoklaması nedeni — yalnız günlük"
+    },
+    {
+     "metin": "dosya salt-okunur",
+     "gerekce": "mandal dosyası yazım yoklaması nedeni — yalnız günlük"
+    },
+    {
+     "metin": "dosya denetlenemedi",
+     "gerekce": "mandal dosyası yazım yoklaması nedeni — yalnız günlük"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -4509,10 +4800,15 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": true,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "STM32 firmware'i YAZILIYOR (donanım güncellemesi) — bitene kadar bobin başlatılamaz; ACİL DURDUR çalışır.",
+     "gerekce": "ACİL DURDUR / başlatma kapısı metin SABİTİ: Türkçe kaynakta KALIR (fail-safe yedek + mandal EYLEM metni donmuş); gösterim katalogdan istek dilinde üretilir (eşlik testi)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -4520,10 +4816,83 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 18,
    "kritik": true,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "boş parola",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "# PEMF yerel broker yetkileri (A-04 / D1.104) - utils.mqtt_kimlik uretir; elle duzenlemeyin.",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "# Anonim istemcinin yetkisi YOK (allow_anonymous false). Backend ack YAZAMAZ; ESP control YAZAMAZ.",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "topic read pemf/#",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "topic write pemf/coil/+/control",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "topic write pemf/esp32_{{n}}/command",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "topic read pemf/coil/+/control",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "topic write pemf/coil/+/{{k}}",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "topic write pemf/coil/+/system/#",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "topic write {{k}}",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "topic read {{k}}",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "# PEMF yerel broker KIMLIGI (A-04 / D1.104) - utils.mqtt_kimlik uretir. Taban yapilandirma bu dizini SONDA # icerir; buradaki allow_anonymous false tabandaki true'yu EZER. allow_anonymous false password_file {{bd}}/{{PASSWD_ADI}} acl_file {{bd3}}/{{ACL_ADI}}",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "kimlik C dizesine guvenle yazilamaz",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "/* PEMF yerel MQTT broker kimligi (A-04 / D1.104) - `utils.mqtt_kimlik hazirla` URETTI. * ⚠️ SIR ICERIR: git'e GIRMEZ (.gitignore), derlemeden sonra build makinesinden silin. */ #pragma once #define PEMF_YEREL_MQTT_KULLANICI \"{{kullanici}}\" #define PEMF_YEREL_MQTT_PAROLA \"{{parola}}\"",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "kabin kimligi YAML'a guvenle yazilamaz",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "# PEMF kabin CV MQTT kimligi (A-04 / Y73) - `utils.mqtt_kimlik hazirla --kabin` URETTI. # ⚠️ SIR ICERIR: git'e GIRMEZ (.gitignore). Kabin MQTT'si YAML'da (output.mqtt.enabled) varsayilan KAPALI. username: \"{{kullanici}}\" password: \"{{parola}}\"",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "kimlik deposu VAR ama okunamiyor - yakilmis ESP parolalari bozulmasin diye DURDU (bilerek yenilemek: --yenile; ESP'ler yeniden yakilmali)",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    },
+    {
+     "metin": "PEMF_Backend.exe --mqtt-kimlik",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -4531,7 +4900,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": true,
    "muaf": [],
@@ -4542,7 +4911,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 14,
    "kritik": true,
    "muaf": [],
@@ -4553,10 +4922,75 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 16,
    "kritik": true,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "UNIPOLAR tek-bacak",
+     "gerekce": "firmware banner deseni (kart çıktısı eşleştirme dizgisi) — metin değil"
+    },
+    {
+     "metin": "Cihaz kartının yazılımı bu uygulama sürümüyle uyumsuz — bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET).",
+     "gerekce": "ACİL DURDUR / başlatma kapısı metin SABİTİ: Türkçe kaynakta KALIR (fail-safe yedek + mandal EYLEM metni donmuş); gösterim katalogdan istek dilinde üretilir (eşlik testi)"
+    },
+    {
+     "metin": "Cihaz kartı doğrulanamadı. Kartın üzerindeki SİYAH sıfırlama düğmesine bir kez basın (mavi değil).",
+     "gerekce": "ACİL DURDUR / başlatma kapısı metin SABİTİ: Türkçe kaynakta KALIR (fail-safe yedek + mandal EYLEM metni donmuş); gösterim katalogdan istek dilinde üretilir (eşlik testi)"
+    },
+    {
+     "metin": "Cihaz kartı komutları reddediyor — kartın yazılımı bu uygulama sürümüyle uyumsuz; bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET).",
+     "gerekce": "ACİL DURDUR / başlatma kapısı metin SABİTİ: Türkçe kaynakta KALIR (fail-safe yedek + mandal EYLEM metni donmuş); gösterim katalogdan istek dilinde üretilir (eşlik testi)"
+    },
+    {
+     "metin": "Cihaz kartı STOP komutunu reddetti — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın.",
+     "gerekce": "ACİL DURDUR / başlatma kapısı metin SABİTİ: Türkçe kaynakta KALIR (fail-safe yedek + mandal EYLEM metni donmuş); gösterim katalogdan istek dilinde üretilir (eşlik testi)"
+    },
+    {
+     "metin": "Kart uygulamanin {{STM_PAKET_BOYU}} baytlik paketini SISTEMATIK reddediyor (arada STM_OK olmadan ard arda {{crc}} STM_NACK: CRC)",
+     "gerekce": "firmware uyum SEBEBİ (destek metni: günlük + `/api/health` `stmUyumsuzlukSebebi`) — TD1 K1: operatöre `operator_metni` gider"
+    },
+    {
+     "metin": "; kartin kimligi: {{ham}}",
+     "gerekce": "firmware uyum SEBEBİ (destek metni: günlük + `/api/health` `stmUyumsuzlukSebebi`) — TD1 K1: operatöre `operator_metni` gider"
+    },
+    {
+     "metin": ". Karttaki firmware farkli paket boyu bekliyor (or. 120 baytlik eski saha imaji). HICBIR bobin calismaz. Yapilacak: kart bu surumun firmware'i ile yakilmali (docs/SAHA-ISLERI-REHBERI.md B-2; scripts/stm_yak.py — dogrulama: el sikismada STM_OK, CRC NACK yok).",
+     "gerekce": "firmware uyum SEBEBİ (destek metni: günlük + `/api/health` `stmUyumsuzlukSebebi`) — TD1 K1: operatöre `operator_metni` gider"
+    },
+    {
+     "metin": "El sikisma dogrulamasina (kimlik sorgusu + sifir-duty yoklamasi) yanit YOK.",
+     "gerekce": "firmware uyum SEBEBİ (destek metni: günlük + `/api/health` `stmUyumsuzlukSebebi`) — TD1 K1: operatöre `operator_metni` gider"
+    },
+    {
+     "metin": "Kartin firmware kimligi OKUNAMADI: kart resetlenmeden baglandi (STM_READY gorulmedi; el sikisma sifir-duty yoklamasina STM_OK ile tamamlandi). Uyum DOGRULANAMADI — seans engellenmez; kart paketleri reddederse sistematik red seansi durdurur. Kimligi okutmak icin kartin RESET dugmesine basin ya da backend kapaliyken python scripts/stm_firmware_kimligi.py calistirin.",
+     "gerekce": "firmware uyum SEBEBİ (destek metni: günlük + `/api/health` `stmUyumsuzlukSebebi`) — TD1 K1: operatöre `operator_metni` gider"
+    },
+    {
+     "metin": "Kart el sikisma dogrulamasina yanit vermedi (kimlik sorgusu yaniti, STM_OK ya da NACK yok) — uyum DOGRULANAMADI. Kartin RESET dugmesine basin ya da backend kapaliyken python scripts/stm_firmware_kimligi.py calistirin.",
+     "gerekce": "firmware uyum SEBEBİ (destek metni: günlük + `/api/health` `stmUyumsuzlukSebebi`) — TD1 K1: operatöre `operator_metni` gider"
+    },
+    {
+     "metin": "Kartin firmware kimligi OKUNAMADI (STM_READY satiri taninmadi). Eski ya da yabanci bir firmware olabilir. Dogrulama: python scripts/stm_firmware_kimligi.py",
+     "gerekce": "firmware uyum SEBEBİ (destek metni: günlük + `/api/health` `stmUyumsuzlukSebebi`) — TD1 K1: operatöre `operator_metni` gider"
+    },
+    {
+     "metin": "Kart {{kanal}} kanalli firmware kosuyor ({{surum}}), uygulama {{paket_kanal}} kanalli paket gonderiyor. Paket genisligi birebir olmak ZORUNDA — aksi halde firmware her paketi NACK'ler ve HICBIR bobin calismaz. Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin.",
+     "gerekce": "firmware uyum SEBEBİ (destek metni: günlük + `/api/health` `stmUyumsuzlukSebebi`) — TD1 K1: operatöre `operator_metni` gider"
+    },
+    {
+     "metin": "Kart {{fw_boyu}} baytlik paket bekledigini bildiriyor ({{surum}}, proto={{protokol}}), uygulama {{paket_boyu}} baytlik paket gonderiyor. Paket boyu birebir olmak ZORUNDA — aksi halde firmware her paketi NACK'ler ve HICBIR bobin calismaz. Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin.",
+     "gerekce": "firmware uyum SEBEBİ (destek metni: günlük + `/api/health` `stmUyumsuzlukSebebi`) — TD1 K1: operatöre `operator_metni` gider"
+    },
+    {
+     "metin": "Kart {{kanal}} kanalli ama {{fw_boyu}} baytlik paket bekleyen ESKI bir firmware kosuyor ({{surum}}; banner'da surus kipi alani 'uni=' YOK — 2026-09-10/11 surumu), uygulama {{paket_boyu}} baytlik paket gonderiyor. Paket boyu birebir olmak ZORUNDA — aksi halde firmware her paketi NACK'ler ve HICBIR bobin calismaz. Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin.",
+     "gerekce": "firmware uyum SEBEBİ (destek metni: günlük + `/api/health` `stmUyumsuzlukSebebi`) — TD1 K1: operatöre `operator_metni` gider"
+    },
+    {
+     "metin": "Banner paket boyunu soylemiyor (120 ve 121 B ayni banner'i basar); uyum kartin {{paket_boyu}} B pakete yanitiyla (STM_OK / CRC NACK) DOGRULANACAK.",
+     "gerekce": "firmware uyum SEBEBİ (destek metni: günlük + `/api/health` `stmUyumsuzlukSebebi`) — TD1 K1: operatöre `operator_metni` gider"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -4564,7 +4998,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": true,
    "muaf": [],
@@ -4575,10 +5009,19 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 2,
    "kritik": true,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "<BB {{n}}f {{n}}f {{n}}f {{n}}I H B",
+     "gerekce": "STM paket biçim dizgisi (struct) — metin değil"
+    },
+    {
+     "metin": "oto ST-Link: {{desc}}",
+     "gerekce": "ST-Link bulma günlük iletisi — geliştirici içindir"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -4586,7 +5029,7 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": true,
    "muaf": [],
@@ -4597,10 +5040,207 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 50,
    "kritik": true,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "SERİ PORT AÇILAMADI",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "backend kapalı (bağlantı reddedildi — portta kimse dinlemiyor, kimse bobin sürmüyor) — güvenli",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "Backend durumu DOĞRULANAMADI (`/api/health` 5xx / 4xx / zaman aşımı / JSON-dışı yanıt): o portta bir süreç VAR ama seans/bobin durumu okunamıyor. Doğrulanamayan durumda yakılmaz — backend'i kapatıp tekrar deneyin.",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "`/api/health` yanıtı seans bilgisini (`sessionActive`) vermiyor — o portta PEMF backend'i olmayan bir servis olabilir ya da istek loopback değil. Doğrulanamayan durumda yakılmaz.",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "AKTİF SEANS VAR. Yakma MCU'yu resetler ve bobinler ANİDEN durur; hasta üzerindeyken bu kabul edilemez. Seansı bitirip tekrar deneyin.",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "Bobin durumu DOĞRULANAMADI (`/api/dashboard-snapshot` okunamadı). Doğrulanamayan durumda yakılmaz — backend'i kapatıp tekrar deneyin.",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "BOBİN SÜRÜLÜYOR: {{calisan}}. Hepsini durdurmadan yakılmaz.",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "seans yok, bobin sürülmüyor",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "ZAMAN AŞIMI: yakıcı {{timeout}} sn içinde bitmedi ({{name}})",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "YAKICI ÇALIŞTIRILAMADI: {{cli}} — {{e}}",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "geri okuma YAPILAMADI:",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "geri okuma: {{boyut}} B bayt bayt AYNI (sha256 {{deger2}}…)",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "geri okuma FARKLI: ilk fark ofset {{ilk}} (okunan {{deger2}} B / yazılan {{boyut}} B)",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "seri port bulunamadı — banner okunamadı",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "kart kendini doğruladı (Y68 kimlik beyanı / paket kabulü — STM_OK)",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "kart uyumu doğrulanamadı (yalnız banner)",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "{{PORT_ACILAMADI_ONEKI}} — kart kimliği okunamadı, uyum DOĞRULANAMADI. Port başka bir süreçte açık (backend çalışıyorsa portu o tutar: kapatıp yeniden deneyin). Ayrıntı: {{deger2}}",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "STM_READY satırı hiç görülmedi (karta RESET atmayı deneyin)",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "yakma sonrası STM_READY satırı süresinde görülmedi (backend seri okuyucusu)",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "banner uyumlu",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": ".bin yok: {{ikili}}",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "ikili {{name}} ({{st_size}} bayt) sha256={{ozet}}",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "beklenen {{deger1}}, bulunan {{ozet}}",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "seans/bobin durumu DOĞRULANAMADI ({{__name__}}) — yakılmaz",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "donanım: {{aciklama}}",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "STM32_Programmer_CLI bulunamadı (CubeIDE kurulu mu?)",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "yakıcı: {{cli}}",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "KURU KOŞUM — kontroller geçti, yakma yapılmadı",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "pemf_yedek_{{deger1}}.bin",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "yedek alınamadı — geri dönüşü olmayan işlem YAPILMAZ:",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "yazıldı + doğrulandı (-v)",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "YAKICI HATA",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "geri_okuma_{{deger1}}.bin",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "yeniden başlatma:",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "tamam (-rst)",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "GERİ DÖNÜŞ: YAKICI HATA",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "{{neden}} VE eski firmware'e GERİ DÖNÜŞ YAKILAMADI — kart ne yeni ne eski firmware'le doğrulanmış. ST-Link ile ELLE kurtarın: yedek {{yedek}} → {{YAKMA_ADRESI}}. Yakıcı: {{deger4}}",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "GERİ DÖNÜŞ: eski firmware yakıldı",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "geri_donus_okuma_{{deger1}}.bin",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "geri dönüş",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "geri dönüş yeniden başlatma:",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "{{neden}} VE eski firmware'e GERİ DÖNÜŞ TUTMADI ({{gd_bilgi}}) — kart ne yeni ne eski firmware'le doğrulanmış. Kartı sahaya TAKMAYIN; ST-Link ile ELLE kurtarın: yedek {{yedek}} → {{YAKMA_ADRESI}}, ardından tam geri okuma.",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "geri dönüş banner: {{deger1}} → uyum={{g_uyumlu}} ({{g_sebep}})",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "{{neden}}; eski firmware yakıldı ama kart KİMLİĞİNİ söylemedi ({{g_sebep}}) — geri dönüş DOĞRULANAMADI. Kartı yeniden başlatıp açılış satırını kontrol edin; açılmıyorsa ST-Link ile yedek {{yedek}} → {{YAKMA_ADRESI}}.",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "{{neden}} — eski firmware'e geri dönüldü (kart açılışta: {{g_ham}})",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "yazılan ikili flash'ta DOĞRULANAMADI ({{g_bilgi}})",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "kart doğrulaması: {{deger1}} → uyum={{uyumlu}} ({{sebep}})",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "yeni firmware UYUMSUZ ({{sebep}})",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    },
+    {
+     "metin": "yakıldı; geri okuma bayt bayt AYNI; kart kendini doğruladı (Y68 kimlik beyanı / paket kabulü)",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -4608,10 +5248,59 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 12,
    "kritik": true,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "uyumluluk kuralı YOK (manifest eksik) — karar verilmiyor",
+     "gerekce": "firmware sürüm uyumu kararı (servis çıktısı: günlük + destek) — geliştirici / destek içindir"
+    },
+    {
+     "metin": "client sürümü ayrıştırılamadı: {{client}}",
+     "gerekce": "firmware sürüm uyumu kararı (servis çıktısı: günlük + destek) — geliştirici / destek içindir"
+    },
+    {
+     "metin": "firmware sürümü ayrıştırılamadı: {{firmware}}",
+     "gerekce": "firmware sürüm uyumu kararı (servis çıktısı: günlük + destek) — geliştirici / destek içindir"
+    },
+    {
+     "metin": "client {{client}} ↔ firmware {{firmware}} kuralla eşleşti",
+     "gerekce": "firmware sürüm uyumu kararı (servis çıktısı: günlük + destek) — geliştirici / destek içindir"
+    },
+    {
+     "metin": "kurallarda ayrıştırılamayan sınır var — karar verilmiyor",
+     "gerekce": "firmware sürüm uyumu kararı (servis çıktısı: günlük + destek) — geliştirici / destek içindir"
+    },
+    {
+     "metin": "client {{client}} ile firmware {{firmware}} birlikte çalışmıyor ({{deger3}} kuralın hiçbirine uymuyor)",
+     "gerekce": "firmware sürüm uyumu kararı (servis çıktısı: günlük + destek) — geliştirici / destek içindir"
+    },
+    {
+     "metin": "karar verilemedi → dokunulmuyor ({{gerekce}})",
+     "gerekce": "firmware sürüm uyumu kararı (servis çıktısı: günlük + destek) — geliştirici / destek içindir"
+    },
+    {
+     "metin": "STM bağlı değil — firmware güncellenemez, karar erteleniyor",
+     "gerekce": "firmware sürüm uyumu kararı (servis çıktısı: günlük + destek) — geliştirici / destek içindir"
+    },
+    {
+     "metin": "internet yok — firmware indirilemez, karar erteleniyor",
+     "gerekce": "firmware sürüm uyumu kararı (servis çıktısı: günlük + destek) — geliştirici / destek içindir"
+    },
+    {
+     "metin": "firmware {{firmware}} → {{yeni_firmware}} ile client {{client}} uyumlu olacak",
+     "gerekce": "firmware sürüm uyumu kararı (servis çıktısı: günlük + destek) — geliştirici / destek içindir"
+    },
+    {
+     "metin": "ileri gidilemedi; client {{client}} → {{onceki_client}} ile mevcut firmware {{firmware}} uyumlu olacak",
+     "gerekce": "firmware sürüm uyumu kararı (servis çıktısı: günlük + destek) — geliştirici / destek içindir"
+    },
+    {
+     "metin": "uyumsuz ({{gerekce}}) ama ne ileri ne geri uyumlu bir sürüm var — elle müdahale gerekir",
+     "gerekce": "firmware sürüm uyumu kararı (servis çıktısı: günlük + destek) — geliştirici / destek içindir"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },

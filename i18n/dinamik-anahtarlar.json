@@ -213,6 +213,21 @@
    "onek": "seans.durum.",
    "degerler": ["aborted_due_to_power", "aborted_recovered", "active", "canceled", "cancelled", "completed", "emergency_stopped", "error", "failed", "hardware_rejected", "in_progress", "interrupted", "pending", "running", "stopped", "success"],
    "gerekce": "Seans durumu etiketi DURUM_ETIKETLERI'nde ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (16 durum), DB'den gelen ham durum anahtara EŞLENİR, kendisi çevrilmez; bilinmeyen durum ham (baş harfi büyük) yazılır"
+  },
+  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/utils/panel_yayin.py",
+   "ifade": "ceviri.t(panel_anahtari)",
+   "onek": "ai.panel.",
+   "degerler": ["girdi", "tespit", "maske", "tumorler", "koordinat", "birlesik", "siniflama"],
+   "gerekce": "AI panel adı: PANEL_ADLARI / PETRI_PANEL_ADLARI panel anahtarını katalog ANAHTARINA eşler (kapalı küme); bilinmeyen panel anahtarın kendisiyle yayınlanır (T8)"
+  },  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/utils/panel_yayin.py",
+   "ifade": "ceviri.t(panel_anahtari)",
+   "onek": "ai.etiket.",
+   "degerler": ["predicted_class"],
+   "gerekce": "AI panel adı: 'Tahmin' paneli mevcut `ai.etiket.predicted_class` anahtarını kullanır (kapalı küme)"
   }
  ]
 }

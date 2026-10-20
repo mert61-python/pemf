@@ -203,15 +203,38 @@ ESTOP_KART_RED_METNI = (
 
 
 def komut_red_metni(dil: str | None = None) -> str:
-    """`KOMUT_RED_METNI`nin İSTEK dilindeki karşılığı (HTTP 409 / bildirim). Mandal EYLEMİ ve günlük için sabit (Türkçe) kalır."""
-    from utils import ceviri
+    """`KOMUT_RED_METNI`nin İSTEK dilindeki karşılığı (HTTP 409 / bildirim). Mandal EYLEMİ ve günlük için sabit (Türkçe) kalır; hata → sabit."""
+    try:
+        from utils import ceviri
 
-    return ceviri.t("firmware.komutRed", dil=dil)
+        return ceviri.t("firmware.komutRed", dil=dil) or KOMUT_RED_METNI
+    except Exception:
+        return KOMUT_RED_METNI
 
 
-def operator_metni(kod: str | None) -> str:
-    """Uyum kodunun operatör metni; kod yoksa ""."""
-    return OPERATOR_METNI.get(str(kod or ""), "")
+def estop_kart_red_metni(dil: str | None = None) -> str:
+    """`ESTOP_KART_RED_METNI`nin İSTEK dilindeki karşılığı (E-stop yanıtı / bildirim); hata → Türkçe sabit."""
+    try:
+        from utils import ceviri
+
+        return ceviri.t("firmware.estopKartRed", dil=dil) or ESTOP_KART_RED_METNI
+    except Exception:
+        return ESTOP_KART_RED_METNI
+
+
+def operator_metni(kod: str | None, dil: str | None = None) -> str:
+    """Uyum kodunun operatör metni (`dil`de; varsayılan istek / cihaz dili); kod yoksa "". Hata → Türkçe sabit (`OPERATOR_METNI`)."""
+    k = str(kod or "")
+    try:
+        from utils import ceviri
+
+        if k == UYUM_KODU_PAKET:
+            return ceviri.t("firmware.operatorPaket", dil=dil)
+        if k == UYUM_KODU_KIMLIK:
+            return ceviri.t("firmware.operatorKimlik", dil=dil)
+    except Exception:
+        pass
+    return OPERATOR_METNI.get(k, "")
 
 
 def uyum_karari(

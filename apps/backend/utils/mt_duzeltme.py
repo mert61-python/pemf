@@ -17,6 +17,8 @@ Göç: `database/thdb_telemetri.TelemetriKarisimi._mt_bolu5_gocu` (tek işlem; s
 
 from __future__ import annotations
 
+from utils import ceviri
+
 #: Tezgâhta ölçülen ölçek hatası 4–5×; firmware kökü (kazanç ayarı varsayılanda) TAM 5,00× verir → bölen 5 (Y152).
 BOLEN = 5.0
 
@@ -27,8 +29,10 @@ BOLUNDU = "bolu5"
 #: Sistem ayarı anahtarı — göç bir kez tamamlandı ("tamam").
 GOC_ANAHTARI = "mt_bolu5_goc"
 
-#: Ekranda / raporda / CSV'de düzeltilmiş kaydın yanında gösterilen not (Y152 metni — TEK kaynak; arayüz backend'in verdiğini gösterir).
-NOT_METNI = "düzeltildi (÷5, yaklaşık — tezgâhta 4–5× ölçüldü)"
+
+def alan_notu_metni(dil: str | None = None) -> str:
+    """Ekranda / raporda / CSV'de düzeltilmiş kaydın yanında gösterilen not (Y152 metni — TEK kaynak: katalog `gecmis.alanNotu.duzeltildi`; istek dilinde)."""
+    return ceviri.t("gecmis.alanNotu.duzeltildi", dil=dil)
 
 
 def duzeltildi_mi(isaret) -> bool:
@@ -37,4 +41,4 @@ def duzeltildi_mi(isaret) -> bool:
 
 def alan_notu(isaret) -> str:
     """Düzeltilmiş kaydın notu; değilse boş."""
-    return NOT_METNI if duzeltildi_mi(isaret) else ""
+    return alan_notu_metni() if duzeltildi_mi(isaret) else ""

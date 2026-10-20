@@ -273,6 +273,15 @@
       "pankreas": "Pankreas",
       "tumVucut": "Tüm Vücut"
     },
+    "panel": {
+      "birlesik": "Birleşik",
+      "girdi": "Girdi",
+      "koordinat": "Koordinat",
+      "maske": "Maske",
+      "siniflama": "Sınıflama",
+      "tespit": "Tespit",
+      "tumorler": "Tümörler"
+    },
     "pemf": {
       "gecerlilikHesaplanamadi": "PEMF geçerliliği hesaplanamadı — D/P/E değerleri kullanılmamalı; analizi yineleyin."
     },
@@ -465,21 +474,47 @@
       "cekirdekHazirDegil": "Çekirdek hazır değil.",
       "hazirDegil": "Donanım hazır değil.",
       "komutBasarisiz": "Donanım komutu başarısız",
+      "parametreGecersiz": "Sürüş parametresi donanım paketine çevrilemiyor ({{hata}}: sayı değil ya da taşıyor).",
       "sayiGecersiz": "Geçersiz '{{ad}}': sonlu bir sayı olmalı.",
+      "stmBagliDegil": "STM32 bağlı değil. USB (ST-Link) kablosunu takın; bağlantı gelince komutu yeniden verin.",
       "stmHazirDegil": "STM32 donanım kontrolcüsü hazır değil.",
       "stmYok": "STM kontrolcusu yok",
       "tamSayiGecersiz": "Geçersiz '{{ad}}': {{alt}}..{{ust}} arasında TAM sayı olmalı.",
       "unipolarDizisi": "unipolar dizisi {{n}} elemanli olmali (bobin {{ilk}}-{{son}}), {{gelen}} geldi"
+    },
+    "sonuc": {
+      "bobinBaslatilmadi": "bobin BAŞLATILMADI"
     },
     "uyari": {
       "fazSenkron": "STM bobin-1 {{hz}} Hz çalışırken bobin {{coil}} için {{esp_freq}} Hz istendi (≥50× ayrışma) — faz senkronu kilitlenmez, S3 DC-koruma latch'i devreye girebilir. Faz gerekmiyorsa sorun değil; gerekiyorsa frekansları yaklaştırın.",
       "fazSenkronKisa": "STM bobin-1 {{hz}} Hz çalışırken bobin {{coil}} için {{esp_freq}} Hz istendi (≥50× ayrışma) — faz senkronu kilitlenmez."
     }
   },
+  "estop": {
+    "kapanisMesaji": "Backend KAPANIYOR — yeni başlatma reddedildi (bobinler durduruluyor).",
+    "kayipMesaji": "Hedef gözlemi bir hedef-kaybı durdurmasından ÖNCEYE ait (bayat gözlem) — sürülmedi.",
+    "mandalMesaji": "ACİL DURDURMA MANDALLI — yeni başlatma reddedildi. Bobinleri kontrol edin, ekrandaki 'Sıfırla' ile mandalı kaldırın ve başlatmayı yeniden verin.",
+    "nesilMesaji": "Komut bir durdurma ya da acil durdurmadan ÖNCEYE ait (bayat sürüş niyeti) — uygulanmadı. Gerekirse yeniden başlatın.",
+    "sonuc": {
+      "gelecek": "geri gelecek",
+      "gelmeyecek": "gelmeyecek (dosya güncellenemedi)",
+      "korunmayacak": "KORUNMAYACAK",
+      "kuruluGelecek": "kurulu gelecek (dosya güncellenemedi)"
+    },
+    "yazimBitmedi": " — yazım 2 sn'de bitmedi, disk yanıt vermiyor",
+    "yazimYazilamadi": "Mandal dosyası yazılamadı{{yer}} — yeniden başlatmada mandal {{sonuc}}; dosya iznini düzeltin."
+  },
   "firmware": {
-    "komutRed": "Cihaz kartı komutları reddediyor — kartın yazılımı bu uygulama sürümüyle uyumsuz; bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET)."
+    "estopKartRed": "Cihaz kartı STOP komutunu reddetti — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın.",
+    "komutRed": "Cihaz kartı komutları reddediyor — kartın yazılımı bu uygulama sürümüyle uyumsuz; bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET).",
+    "operatorKimlik": "Cihaz kartı doğrulanamadı. Kartın üzerindeki SİYAH sıfırlama düğmesine bir kez basın (mavi değil).",
+    "operatorPaket": "Cihaz kartının yazılımı bu uygulama sürümüyle uyumsuz — bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET).",
+    "yakmaEngeli": "STM32 firmware'i YAZILIYOR (donanım güncellemesi) — bitene kadar bobin başlatılamaz; ACİL DURDUR çalışır."
   },
   "gecmis": {
+    "alanNotu": {
+      "duzeltildi": "düzeltildi (÷5, yaklaşık — tezgâhta 4–5× ölçüldü)"
+    },
     "csv": {
       "alanNotu": "Alan notu",
       "ayarlanan": "Ayarlanan(mT)",
@@ -753,6 +788,12 @@
     "yabanci_other": "Yalnız kendi ve sahipsiz kayıtları silebilirsiniz — seçimdeki {{count}} kayıt başka bir hekime ait; hiçbir kayıt silinmedi."
   },
   "sistem": {
+    "db": {
+      "acilamadi": "{{ad}} açılamadı ({{hata}}). Arka planda yeniden deneniyor; sürerse cihazı yeniden başlatın, yine sürerse teknik desteğe başvurun.",
+      "goc": "{{ad}} göç bekliyor: at-rest şifreleme göçü tamamlanmadı (dosya kilitli olabilir); dosya korunuyor, karantinaya alınmadı. Göç arka planda yeniden deneniyor; düzelmezse cihazı yeniden başlatın.",
+      "hasta": "Hasta veritabanı",
+      "tedavi": "Tedavi kaydı veritabanı"
+    },
     "hata": {
       "anonimGeriAlma": "Aynı istekte anonimleştirme onayı ve geri alması olmaz.",
       "ayarKaydedilemedi": "Ayar kaydedilemedi.",

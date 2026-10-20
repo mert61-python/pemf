@@ -3011,6 +3011,153 @@
    "tur": "seans",
    "kaynak": "apps/backend/servers/ai_router.py",
    "aciklama": "modalite denetimi çalıştırılamadı; analiz yapılmadı (kısa)"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "estop.mandalMesaji",
+   "tur": "estop",
+   "kaynak": "apps/backend/utils/estop_mandali.py",
+   "aciklama": "ACİL DURDURMA MANDALLI: yeni başlatma reddedildi (409)"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "estop.nesilMesaji",
+   "tur": "estop",
+   "kaynak": "apps/backend/utils/estop_mandali.py",
+   "aciklama": "bayat sürüş niyeti: uygulanmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "estop.kayipMesaji",
+   "tur": "estop",
+   "kaynak": "apps/backend/utils/estop_mandali.py",
+   "aciklama": "bayat hedef gözlemi: sürülmedi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "estop.kapanisMesaji",
+   "tur": "estop",
+   "kaynak": "apps/backend/utils/estop_mandali.py",
+   "aciklama": "backend kapanıyor: yeni başlatma reddedildi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "estop.yazimYazilamadi",
+   "tur": "estop",
+   "kaynak": "apps/backend/utils/estop_mandali.py",
+   "aciklama": "mandal dosyası yazılamadı: yeniden başlatmada mandal sonucu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "estop.yazimBitmedi",
+   "tur": "estop",
+   "kaynak": "apps/backend/utils/estop_mandali.py",
+   "aciklama": "mandal yazımı 2 sn'de bitmedi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "estop.sonuc.gelecek",
+   "tur": "estop",
+   "kaynak": "apps/backend/utils/estop_mandali.py",
+   "aciklama": "yeniden başlatmada mandal geri gelecek"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "estop.sonuc.korunmayacak",
+   "tur": "estop",
+   "kaynak": "apps/backend/utils/estop_mandali.py",
+   "aciklama": "yeniden başlatmada mandal KORUNMAYACAK"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "estop.sonuc.kuruluGelecek",
+   "tur": "estop",
+   "kaynak": "apps/backend/utils/estop_mandali.py",
+   "aciklama": "mandal kurulu gelecek (dosya güncellenemedi)"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "estop.sonuc.gelmeyecek",
+   "tur": "estop",
+   "kaynak": "apps/backend/utils/estop_mandali.py",
+   "aciklama": "mandal gelmeyecek (dosya güncellenemedi)"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "firmware.yakmaEngeli",
+   "tur": "firmware",
+   "kaynak": "apps/backend/utils/firmware_yakma_penceresi.py",
+   "aciklama": "firmware yazılıyor: bobin başlatılamaz; ACİL DURDUR çalışır"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "firmware.operatorPaket",
+   "tur": "firmware",
+   "kaynak": "apps/backend/utils/stm32_kimlik.py",
+   "aciklama": "kart yazılımı uyumsuz: bobinler çalışmaz (FW-PAKET)"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "firmware.operatorKimlik",
+   "tur": "firmware",
+   "kaynak": "apps/backend/utils/stm32_kimlik.py",
+   "aciklama": "kart doğrulanamadı: siyah sıfırlama düğmesi (FW-KIMLIK)"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "firmware.estopKartRed",
+   "tur": "estop",
+   "kaynak": "apps/backend/utils/stm32_kimlik.py",
+   "aciklama": "kart STOP komutunu reddetti: bobinler durmamış olabilir; gücü kesin"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "donanim.hata.parametreGecersiz",
+   "tur": "donanim",
+   "kaynak": "apps/backend/controllers/hardware_controller.py",
+   "aciklama": "sürüş parametresi donanım paketine çevrilemiyor"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "donanim.hata.stmBagliDegil",
+   "tur": "donanim",
+   "kaynak": "apps/backend/controllers/hardware_controller.py",
+   "aciklama": "STM32 bağlı değil: ST-Link kablosunu takın"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "donanim.sonuc.bobinBaslatilmadi",
+   "tur": "bobin",
+   "kaynak": "apps/backend/controllers/hardware_controller.py",
+   "aciklama": "sonuç eki: bobin başlatılmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "sistem.db.hasta",
+   "tur": "donanim",
+   "kaynak": "apps/backend/headless_core.py",
+   "aciklama": "hasta veritabanı adı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "sistem.db.tedavi",
+   "tur": "donanim",
+   "kaynak": "apps/backend/headless_core.py",
+   "aciklama": "tedavi kaydı veritabanı adı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "sistem.db.goc",
+   "tur": "donanim",
+   "kaynak": "apps/backend/headless_core.py",
+   "aciklama": "DB göç bekliyor: yeni seans 503"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "sistem.db.acilamadi",
+   "tur": "donanim",
+   "kaynak": "apps/backend/headless_core.py",
+   "aciklama": "DB açılamadı: yeni seans 503"
   }
  ],
  "bekleyen": [

@@ -65,6 +65,8 @@ import threading
 import time
 from pathlib import Path
 
+from utils import ceviri
+
 MANDAL_MESAJI = (
     "ACİL DURDURMA MANDALLI — yeni başlatma reddedildi. Bobinleri kontrol edin, ekrandaki 'Sıfırla' ile "
     "mandalı kaldırın ve başlatmayı yeniden verin."
@@ -74,6 +76,31 @@ NESIL_MESAJI = "Komut bir durdurma ya da acil durdurmadan ÖNCEYE ait (bayat sü
 KAYIP_MESAJI = "Hedef gözlemi bir hedef-kaybı durdurmasından ÖNCEYE ait (bayat gözlem) — sürülmedi."
 
 KAPANIS_MESAJI = "Backend KAPANIYOR — yeni başlatma reddedildi (bobinler durduruluyor)."
+
+
+def _metin(uret, yedek: str) -> str:
+    """Kapı metni (istek dili). ⚠️ ACİL DURDUR kapısı ASLA metin yüzünden düşmez / boş dönmez: katalog hatasında Türkçe sabit."""
+    try:
+        return uret() or yedek
+    except Exception:
+        return yedek
+
+
+def mandal_mesaji(dil: str | None = None) -> str:
+    return _metin(lambda: ceviri.t("estop.mandalMesaji", dil=dil), MANDAL_MESAJI)
+
+
+def nesil_mesaji(dil: str | None = None) -> str:
+    return _metin(lambda: ceviri.t("estop.nesilMesaji", dil=dil), NESIL_MESAJI)
+
+
+def kayip_mesaji(dil: str | None = None) -> str:
+    return _metin(lambda: ceviri.t("estop.kayipMesaji", dil=dil), KAYIP_MESAJI)
+
+
+def kapanis_mesaji(dil: str | None = None) -> str:
+    return _metin(lambda: ceviri.t("estop.kapanisMesaji", dil=dil), KAPANIS_MESAJI)
+
 
 _kilit = threading.Lock()
 _durum = {
@@ -240,22 +267,38 @@ def yazim_durumu(yol_dahil: bool = False, bitmedi: bool = False, acilis: bool = 
         hedef = bool(_durum["aktif"])
     disk = bool(_yazim["disk_kurulu"])
     if acilis:
-        sonuc = "geri gelecek" if disk else "KORUNMAYACAK"
+        sonuc_kodu = "gelecek" if disk else "korunmayacak"
     elif disk and not hedef:
-        sonuc = "geri gelecek"
+        sonuc_kodu = "gelecek"
     elif hedef and not disk:
-        sonuc = "KORUNMAYACAK"
+        sonuc_kodu = "korunmayacak"
     elif hedef:
-        sonuc = "kurulu gelecek (dosya güncellenemedi)"
+        sonuc_kodu = "kuruluGelecek"
     else:
-        sonuc = "gelmeyecek (dosya güncellenemedi)"
-    yer = f" ({yol})" if yol_dahil else ""
-    if bitmedi:
-        yer += " — yazım 2 sn'de bitmedi, disk yanıt vermiyor"
+        sonuc_kodu = "gelmeyecek"
+
+    def sonuc_metni(dil: str) -> str:
+        if sonuc_kodu == "gelecek":
+            return ceviri.t("estop.sonuc.gelecek", dil=dil)
+        if sonuc_kodu == "korunmayacak":
+            return ceviri.t("estop.sonuc.korunmayacak", dil=dil)
+        if sonuc_kodu == "kuruluGelecek":
+            return ceviri.t("estop.sonuc.kuruluGelecek", dil=dil)
+        return ceviri.t("estop.sonuc.gelmeyecek", dil=dil)
+
+    def mesaj_uret(dil: str) -> str:
+        yer = f" ({yol})" if yol_dahil else ""
+        if bitmedi:
+            yer += ceviri.t("estop.yazimBitmedi", dil=dil)
+        return ceviri.t("estop.yazimYazilamadi", dil=dil, yer=yer, sonuc=sonuc_metni(dil))
+
+    # `mesaj` + `yenidenBaslatmada` Türkçe KALIR (yanıt alanları / eski istemci); İngilizcesi YALNIZ-EK `mesajlar` ile (ekran bildirimi iki dilli).
+    mesajlar = {dil: mesaj_uret(dil) for dil in ceviri.DILLER}
     return {
         "yazilamadi": True,
-        "yenidenBaslatmada": sonuc,
-        "mesaj": f"Mandal dosyası yazılamadı{yer} — yeniden başlatmada mandal {sonuc}; dosya iznini düzeltin.",
+        "yenidenBaslatmada": sonuc_metni("tr"),
+        "mesaj": mesajlar["tr"],
+        "mesajlar": mesajlar,
     }
 
 
@@ -401,18 +444,25 @@ def diske_yaz_arka_planda() -> None:
         _diske_yaz()
 
 
-def baslatma_engeli(niyet_nesli=None) -> str:
+def baslatma_engeli(niyet_nesli=None, dil: str | None = None) -> str:
     """START'ı engelleyen durum; "" = engel yok. `niyet_nesli` verilmişse ve bayatsa reddedilir.
 
-    ⚠️ YALNIZ START için çağrılır. STOP yolları bunu ÇAĞIRMAZ (Ö.4-Y8)."""
+    ⚠️ YALNIZ START için çağrılır. STOP yolları bunu ÇAĞIRMAZ (Ö.4-Y8). Metin `dil`de (varsayılan istek / cihaz dili); kapı KARARI dilden
+    bağımsızdır ve kilit DIŞINDA metne çevrilir (kilit altında G/Ç yok)."""
     with _kilit:
         if _durum["kapanis"]:
-            return KAPANIS_MESAJI
-        if _durum["aktif"]:
-            return MANDAL_MESAJI
-        if niyet_nesli is not None and niyet_nesli != _nesil:
-            return NESIL_MESAJI
-    return ""
+            tur = "kapanis"
+        elif _durum["aktif"]:
+            tur = "mandal"
+        elif niyet_nesli is not None and niyet_nesli != _nesil:
+            tur = "nesil"
+        else:
+            return ""
+    if tur == "kapanis":
+        return kapanis_mesaji(dil)
+    if tur == "mandal":
+        return mandal_mesaji(dil)
+    return nesil_mesaji(dil)
 
 
 @contextlib.contextmanager
@@ -472,11 +522,12 @@ def gozlem_baglami(kayip_damgasi):
         _kayip_baglam.reset(jeton)
 
 
-def gozlem_engeli(kayip_damgasi=None) -> str:
+def gozlem_engeli(kayip_damgasi=None, dil: str | None = None) -> str:
     """Hedef gözlemi bir kayıp STOP'undan ESKİYSE engel; "" = engel yok. Damga verilmezse bağlamdaki; ikisi de yoksa
     denetim yok (AI Pro dışı sürüşler). ⚠️ YALNIZ START için çağrılır. STOP yolları bunu ÇAĞIRMAZ (Ö.4-Y8)."""
     d = _kayip_baglam.get() if kayip_damgasi is None else kayip_damgasi
     if d is None:
         return ""
     with _kilit:
-        return "" if d == _kayip_nesli else KAYIP_MESAJI
+        eski = d != _kayip_nesli
+    return kayip_mesaji(dil) if eski else ""

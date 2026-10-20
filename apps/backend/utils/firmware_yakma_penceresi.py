@@ -20,6 +20,8 @@ from __future__ import annotations
 import contextlib
 import threading
 
+from utils import ceviri
+
 _acik = threading.Event()
 
 #: Başlatma reddinin operatöre/günlüğe giden metni.
@@ -33,9 +35,14 @@ def acik_mi() -> bool:
     return _acik.is_set()
 
 
-def baslatma_engeli() -> str:
-    """Pencere açıksa başlatmayı reddeden metin, değilse ""."""
-    return BASLATMA_ENGELI if _acik.is_set() else ""
+def baslatma_engeli(dil: str | None = None) -> str:
+    """Pencere açıksa başlatmayı reddeden metin (`dil`de; varsayılan istek / cihaz dili), değilse "". ⚠️ Kapı KARARI dilden bağımsız; metin hatasında Türkçe sabit."""
+    if not _acik.is_set():
+        return ""
+    try:
+        return ceviri.t("firmware.yakmaEngeli", dil=dil) or BASLATMA_ENGELI
+    except Exception:
+        return BASLATMA_ENGELI
 
 
 @contextlib.contextmanager

@@ -16,6 +16,7 @@ from database.patient_database import get_patient_database
 from database.session_manager import get_session_manager
 from event_bus import EventPriority, get_event_bus
 from services.headless_services import MosquittoSupervisor, NetworkStatusService, UdpDiscoveryService
+from utils import ceviri
 from utils.akim_olcumu import akim_olcumu_acik
 from utils.dongu_guvenligi import dongu_hatasini_bildir
 from utils.simple_signal import SimpleSignal
@@ -185,6 +186,18 @@ def _tum_duty_sifir_mi(stm_msg: Any) -> bool:
     return all(d == 0.0 for d in struct.unpack_from(f"<{n}f", stm_msg, 2))
 
 
+def db_acilis_metni(tur: str, ad: str, hata: str = "", dil: str | None = None) -> str:
+    """DB açılamama nedeninin operatör metni (yol / istisna AYRINTISI içermez — `/api/health` auth-muaf): `tur` = "goc" | "acilamadi"."""
+    adi = (
+        ceviri.t("sistem.db.hasta", dil=dil)
+        if ad == "hasta"
+        else (ceviri.t("sistem.db.tedavi", dil=dil) if ad == "tedavi" else ad)
+    )
+    if tur == "goc":
+        return ceviri.t("sistem.db.goc", dil=dil, ad=adi)
+    return ceviri.t("sistem.db.acilamadi", dil=dil, ad=adi, hata=hata)
+
+
 class HeadlessCore:
     """Qt-free backend core for STM32 communication and shared services."""
 
@@ -235,6 +248,8 @@ class HeadlessCore:
         # ⚠️ Y43 (sahip — D1.37 devamı): bunun yerine ARKA PLANDA (ayrı iş parçacığı, olay döngüsü dışı) artan
         # aralıklarla yeniden açılır (`_db_yeniden_deneme_dongusu`); açılınca `dbReady` kendiliğinden true olur.
         self.db_acilis_hatalari: dict[str, str] = {}
+        #: I18N-P1: `db_acilis_hatalari` nedeninin yapılandırılmış ayrıntısı {ad: (tur, hata_sinifi)} — operatöre giden metin istek dilinde kurulur.
+        self.db_acilis_ayrintilari: dict[str, tuple[str, str]] = {}
         self.patient_db = self._db_ac("hasta", lambda: get_patient_database(self.app_data_dir))
         self.session_manager = self._db_ac("tedavi", lambda: get_session_manager(self.app_data_dir))
         self._db_yeniden_dur = threading.Event()
@@ -490,19 +505,12 @@ class HeadlessCore:
             from database import treatment_history_db as _thdb
             from database.sqlcipher_util import GocBekliyorHatasi
 
-            ad_metni = self._DB_ADI.get(ad, ad)
-            if isinstance(exc, GocBekliyorHatasi):
-                sebep = (
-                    f"{ad_metni} göç bekliyor: at-rest şifreleme göçü tamamlanmadı (dosya kilitli olabilir); "
-                    "dosya korunuyor, karantinaya alınmadı. Göç arka planda yeniden deneniyor; "
-                    "düzelmezse cihazı yeniden başlatın."
-                )
-            else:
-                sebep = (
-                    f"{ad_metni} açılamadı ({type(exc).__name__}). Arka planda yeniden deneniyor; "
-                    "sürerse cihazı yeniden başlatın, yine sürerse teknik desteğe başvurun."
-                )
+            tur = "goc" if isinstance(exc, GocBekliyorHatasi) else "acilamadi"
+            sebep = db_acilis_metni(
+                tur, ad, type(exc).__name__, "tr"
+            )  # durum / günlük Türkçe; operatöre istek dilinde (`api_server._db_acilis_hatasi`)
             self.db_acilis_hatalari[ad] = sebep
+            self.db_acilis_ayrintilari[ad] = (tur, type(exc).__name__)
             (_pdb if ad == "hasta" else _thdb).acilis_hatasini_kilitle(self.app_data_dir, exc)
             self.logger.error(
                 "%s — backend DB'SİZ (kısıtlı) açılıyor: ACİL DURDUR ve STOP çalışır, yeni seans 503.",
@@ -548,6 +556,9 @@ class HeadlessCore:
                     )
                     continue
                 self.db_acilis_hatalari = {k: v for k, v in self.db_acilis_hatalari.items() if k != ad}
+                _ayr = getattr(self, "db_acilis_ayrintilari", None)
+                if isinstance(_ayr, dict):
+                    self.db_acilis_ayrintilari = {k: v for k, v in _ayr.items() if k != ad}
                 self.logger.warning("%s ARKA PLANDA AÇILDI (deneme %d) — DB'siz kısıtlı kip kalktı.", ad_metni, deneme)
 
     def start_headless_services(self, *, ensure_mosquitto: bool = True) -> None:
@@ -785,7 +796,9 @@ class HeadlessCore:
             "uyumlu": uyumlu,
             "kod": kod,
             "sebep": sebep,
-            "mesaj": operator_metni(kod),
+            "mesaj": operator_metni(
+                kod, dil="tr"
+            ),  # durum alanı Türkçe VERİ; arayüz `kod`a göre kendi metnini gösterir
             "banner": ham,
             "neden": neden,
         }

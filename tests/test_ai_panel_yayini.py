@@ -428,7 +428,12 @@ def _panelleri_dogrula(yanit: dict, uretilen: dict, adlar: dict, uc: str):
             assert (p["image_w"], p["image_h"]) == (ham.shape[1], ham.shape[0]), (
                 f"{uc}/{p['k']}: panel boyutu KENDI shape'iyle uyusmuyor"
             )
-        assert p["ad"] == adlar[p["k"]], f"{uc}/{p['k']}: gosterim adi yanlis ({p['ad']})"
+        # I18N-P1: `PANEL_ADLARI` değeri katalog ANAHTARI (ölçüt yer değiştirdi, gevşemedi: yanıttaki `ad` = anahtarın TÜRKÇE metni; EN de dolu).
+        import i18n_yardimci as iy
+
+        _tr, _en = iy.katalog("sunucu", "tr"), iy.katalog("sunucu", "en")
+        assert p["ad"] == _tr[adlar[p["k"]]], f"{uc}/{p['k']}: gosterim adi yanlis ({p['ad']})"
+        assert str(_en.get(adlar[p["k"]], "")).strip(), f"{adlar[p['k']]} EN degeri BOS"
 
     # ⚠️ GERİYE UYUM: kök `image_base64` (07_combined) KALMALI ve panelle AYNI olmalı.
     birlesik = next(p for p in paneller if p["k"] == "07_combined")
