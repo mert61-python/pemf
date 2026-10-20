@@ -19,7 +19,7 @@ function duzlestir(o: Agac, onek = '', c: Record<string, string> = {}): Record<s
 
 export const TR = duzlestir(trKaynak as unknown as Agac)
 export const EN = duzlestir(enKaynak as unknown as Agac)
-const KULLANIM = /\bt\(\s*["']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)["']/g
+const KULLANIM = /(?:\bt\(\s*|\bi18nKey=\{?\s*)["']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)["']/g
 
 export function kullanilanAnahtarlar(src: string): Set<string> {
   const s = new Set<string>()

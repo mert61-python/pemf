@@ -170,11 +170,11 @@ def yer_tutucu_normal(metin: str) -> str:
 
 
 #: Kaynakta katalog anahtarı kullanımı: t("…") / t('…') / i18n.t("…") / ceviri.t("…") / kritikMetin("…") / dil::t("…") / t_ile("…" /
-#: tf("…") / data-i18n="…" / NSIS $(PEMF_…) — ilk argüman DEĞİŞMEZ dizgi (dinamik anahtar K-3 izin listesinde). TEK KAYNAK: araçlar
+#: tf("…") / data-i18n="…" / <Trans i18nKey="…"> (zengin metin, I18N-P1) / NSIS $(PEMF_…) — ilk argüman DEĞİŞMEZ dizgi (dinamik anahtar K-3 izin listesinde). TEK KAYNAK: araçlar
 #: (`katalog.py taban`) ve kapılar (`tests/i18n_yardimci.py`).
 ANAHTAR_KULLANIMI = re.compile(
     r"""(?:\b(?:t|tf|kritikMetin|t_ile)|\bi18n\.t|\bceviri\.t|\bdil::t|\bdil::t_ile)\(\s*["']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)["']"""
-    r"""|data-i18n(?:-[a-z]+)?=["']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)["']"""
+    r"""|(?:data-i18n(?:-[a-z]+)?|\bi18nKey)=\{?["']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)["']"""
     r"""|\$\(PEMF_([A-Za-z0-9_]+)\)"""
 )
 

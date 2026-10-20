@@ -88,6 +88,16 @@ değerin KENDİSİ (gösterimi değil), yalnız geliştiriciye giden istisna met
 Aynı satırdaki boşluk TR değerinde kalır (`"Zaten hesabın var mı? "`); satır sonlu boşluk kaynakta kalır (React kuralı — `cikar` `ham`ı
 doğru verir). JSX HTML varlıkları (`&quot;`) React gibi ÇÖZÜLMÜŞ olarak kataloğa girer.
 
+### 4.1b Zengin metin (iç içe kalın / bağlantı) → `<Trans>` (ELLE)
+Bir cümlenin içinde ayrı biçimli parça (kalın, bağlantı) varsa parçaları AYRI anahtarlara bölme — tek cümle anahtarı + `<Trans>`:
+```tsx
+<Text>Cihaz bulunamadı. Telefonunuz cihazla <Text style={styles.bold}>aynı Wi-Fi'de değilse</Text> (mobil veri …) bu normaldir.</Text>
+// →  TR değeri: "Cihaz bulunamadı. Telefonunuz cihazla <kalin>aynı Wi-Fi'de değilse</kalin> (mobil veri …) bu normaldir."
+<Text><Trans i18nKey="ayarlar.eslestirmeRehberi.bulunamadi" components={{ kalin: <Text style={styles.bold} /> }} /></Text>
+```
+İngilizce söz dizimine göre `<kalin>` konumu serbesttir. `i18nKey` K-3 / `taban` / `i18n_yardimci` için KULLANIM sayılır (`ortak.ANAHTAR_KULLANIMI`,
+jest / vitest `kaynakMetni`). RN'de iç içe `Text` düz metinle AYNI çıktıyı verir (jest'te ölçüldü: `getByText` hem parçayı hem bütün cümleyi bulur).
+
 ### 4.2 Şablon → yer tutucu (araç, `yerAdlari` ile)
 ```tsx
 showToast(`Yedek oluşturuldu ve doğrulandı: ${res.yol} (${sayim}).`)   →   showToast(t("ayarlar.yedek.olusturuldu", { yol: res.yol, sayim }))

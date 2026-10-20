@@ -20,6 +20,11 @@ it("t() kalkınca / TR değişince / EN boşken metin GÖRÜNMEZ (iki mutant + y
   expect(gorunenMetinler('t("x.y")', tr, { "x.y": "Session history" })).toContain("Seans geçmişi");
 });
 
+it("<Trans i18nKey> zengin metin anahtarı da KULLANIM sayılır (düz ve {\"…\"} biçimi)", () => {
+  expect(kullanilanAnahtarlar('<Trans i18nKey="a.b" components={{}} /><Trans i18nKey={"c.d"} />')).toEqual(new Set(["a.b", "c.d"]));
+  expect(gorunenMetinler('<Trans i18nKey="x.y" />', { "x.y": "Seans <b>geçmişi</b>" }, { "x.y": "Session" })).toContain("Seans <b>geçmişi</b>");
+});
+
 it("çoğul anahtar: _one / _other biçimleri eklenir", () => {
   const tr = { "s.adet_one": "{{count}} seans", "s.adet_other": "{{count}} seans" };
   const en = { "s.adet_one": "{{count}} session", "s.adet_other": "{{count}} sessions" };

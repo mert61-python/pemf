@@ -18,7 +18,8 @@ GES = "apps/ui/src/components/ui/GlobalEmergencyStop.tsx"
 def test_anahtar_kullanimi_her_yuzey_bicimi():
     kaynak = (
         't("ayarlar.dil.baslik") i18n.t(\'ortak.iptal\') ceviri.t("hasta.hata.yok", ad=x) kritikMetin("guvenlik.acilDurdur.dugme") '
-        'dil::t("ui.kurulum.basla") <b data-i18n="ui.baslik"></b> DetailPrint "$(PEMF_estopDogrulandi)" t(degisken) obj.t("a.b")'
+        'dil::t("ui.kurulum.basla") <b data-i18n="ui.baslik"></b> DetailPrint "$(PEMF_estopDogrulandi)" t(degisken) obj.t("a.b") '
+        '<Trans i18nKey="zengin.metin" components={{}} /> <Trans i18nKey={"zengin.suslu"} />'
     )
     assert iy.kullanilan_anahtarlar(kaynak) == {
         "ayarlar.dil.baslik",
@@ -28,6 +29,8 @@ def test_anahtar_kullanimi_her_yuzey_bicimi():
         "ui.kurulum.basla",
         "ui.baslik",
         "nsis.estopDogrulandi",
+        "zengin.metin",  # <Trans i18nKey> — zengin metin (iç içe kalın / bağlantı) anahtarı da KULLANIMDIR
+        "zengin.suslu",
         "a.b",  # obj.t("a.b") da bir çeviri çağrısı biçimidir (i18n örneği) — kaçırmaktansa saymak güvenli
     }
 
