@@ -1296,6 +1296,153 @@
    "tur": "bobin",
    "kaynak": "apps/ui/src/screens/SensorMonitorScreen.tsx",
    "aciklama": "K-5 bekleyen: Akım"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.ortak.otonomOnayArastirma",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "otonom biofeedback onay kapısı (araştırma): Kontrol → AI Pro onayı gerekir"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.ortak.otonomOnayHekim",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "otonom biofeedback onay kapısı (veteriner): hekim onayı gerekir"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.kopru.ipucu",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "AI Pro köprüsü: seans onaydan sonra başlar; düğme yalnız Kontrol'ü açar"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.etiket",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "otonom biofeedback anahtarı (erişim adı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.ipucu",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "otonom sürüş yalnız Kontrol → AI Pro onay akışıyla başlar; bu ekran cihazı sürmez"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.baslik",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "otonom biofeedback anahtarı (başlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.yayinDurdu",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "otonom yayın rozeti: YAYIN DURDU — GÜNCEL DEĞİL"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.onizlemeRozet",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "otonom yayın rozeti: ÖNİZLEME — BOBİN SÜRÜLMÜYOR"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.aktifRozet",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "otonom yayın rozeti: OTONOM BİOFEEDBACK AKTİF"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.sunucuKamerasiNotu",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "otonom seans: sunucu (klinik) kamerası seansı sürüyor"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.suruluyor",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "cihaz otonom olarak sürülüyor"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.frekansSiddet",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "otonom sürüş değerleri (frekans / şiddet)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.durdurmakIcin",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "durdurmak için Kontrol ekranındaki ACİL DURDUR yönlendirmesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.surulmedi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "cihaz SÜRÜLMEDİ uyarısı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.baskaSeans",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "başka seans aktif — otonom sürüş atlandı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.kimliksiz",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "uzaktan kimliksiz istekte otonom sürüş yapılmaz (güvenlik)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.atlandi",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "otonom sürüş atlandı ({{durum}})"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.onizleme",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "önizleme — cihaz SÜRÜLMÜYOR (AI Pro hazırlık)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.guncelleniyor",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "cihaz otonom olarak güncelleniyor (saniyede 1)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.yayinDurduUyari",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "canlı yayın durdu — gösterilen kare GÜNCEL DEĞİL"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.otonom.yayinDurduNot",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
+   "aciklama": "seansın sürdüğü doğrulanamıyor — Kontrol ekranından teyit"
   }
  ],
  "bekleyen": [

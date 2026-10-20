@@ -73,14 +73,22 @@ def test_KRITIK_GERCEK_atlama_uyarilari_HALA_GORUNUR():
 
     MUTASYON: `hw_status` bloğunu tamamen sil → KIRMIZI.
     """
+    # I18N-P1: görünen metin kataloğa taşındı — ölçüt GEVŞEMEDİ, yer değiştirdi (`gorunen_metin_var`: kaynakta düz metin YA DA kullanılan anahtarın TR
+    # değeri metni içeriyor + EN dolu; blok silinirse anahtar kullanımı da kalkar → kırmızı). Durum kodları kod olarak kaynakta kalır.
+    import i18n_yardimci as iy
+
     src = _kaynak()
-    for zorunlu in ("skipped_session_active", "skipped_unauthenticated", "Cihaz SÜRÜLMEDİ"):
+    for zorunlu in ("skipped_session_active", "skipped_unauthenticated"):
         assert zorunlu in src, (
             f"'{zorunlu}' AiHubScreen'den KALKMIS -> otonom surus atlandiginda kullanici "
             "sessizce seansin basladigini sanar"
         )
+    # `metin_kapisi`: kaynak anahtarı GERÇEKTEN kullanıyor + TR değeri birebir + EN dolu (kaynakta düz metin aramak YORUMA da takılırdı — AiHubScreen'in
+    # yorumları "Cihaz SÜRÜLMEDİ" der)
+    dosya = "apps/ui/src/screens/AiHubScreen.tsx"
+    iy.metin_kapisi(dosya, "ai.otonom.surulmedi", "⚠️ Cihaz SÜRÜLMEDİ")
     # Sürüş GERÇEKTEN olduğunda da görünür kalmalı (üçüncü durum).
-    assert "Cihaz otonom olarak sürülüyor" in src
+    iy.metin_kapisi(dosya, "ai.otonom.suruluyor", "⚡ Cihaz otonom olarak sürülüyor")
 
 
 def test_KRITIK_idle_backend_VARSAYILANI_OLMAYA_DEVAM_EDIYOR():

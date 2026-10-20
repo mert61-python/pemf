@@ -2163,6 +2163,18 @@
     {
      "metin": "Belirgin sonuç yok",
      "gerekce": "AI geçmişi kaydına giden özet — veri"
+    },
+    {
+     "metin": "Seçilen dosya görsel olarak okunamadı.",
+     "gerekce": "yakalanır; kullanıcıya aiHataMesaji varsayılanı gösterilir, bu ileti gösterilmez"
+    },
+    {
+     "metin": "Görüntü dosyası hazırlanamadı.",
+     "gerekce": "yakalanır; kullanıcıya aiHataMesaji varsayılanı gösterilir, bu ileti gösterilmez"
+    },
+    {
+     "metin": "data:image/jpeg;base64,{{image_base64}}",
+     "gerekce": "veri: önizleme data URI'si (base64), ekranda metin değil"
     }
    ],
    "birlesikIstisna": [],

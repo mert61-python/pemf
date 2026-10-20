@@ -5,6 +5,7 @@
  */
 let mockMode: "veterinarian" | "researcher" | "pet_owner" = "veterinarian";
 let mockResearch = true;
+let mockFetchCevap: unknown = null;
 let mockHastaNo = 0; // her testte YENİ hasta kimliği → modül önbelleği (resetAiCachesForOwner) temizlenir
 const mockApiPost = jest.fn(async (..._a: unknown[]): Promise<unknown> => null);
 const mockShowToast = jest.fn();
@@ -36,6 +37,15 @@ jest.mock("@/components/domain/PatientGate", () => {
   return { PatientGate: ({ children }: any) => React.createElement(React.Fragment, null, children) };
 });
 jest.mock("expo-camera", () => ({ CameraView: () => null, useCameraPermissions: () => [{ granted: true }, jest.fn()] }));
+jest.mock("expo-image-picker", () => ({
+  MediaTypeOptions: { Images: "Images" },
+  launchImageLibraryAsync: jest.fn(async () => ({ canceled: false, assets: [{ uri: "file:///kedi.jpg" }] })),
+  launchCameraAsync: jest.fn(async () => ({ canceled: true })),
+}));
+jest.mock("expo-image-manipulator", () => ({
+  SaveFormat: { JPEG: "jpeg" },
+  manipulateAsync: jest.fn(async (uri: string) => ({ uri, base64: "QUJD" })),
+}));
 jest.mock("expo-audio", () => ({
   useAudioRecorder: () => ({ record: jest.fn(), stop: jest.fn(), uri: null }),
   RecordingPresets: { HIGH_QUALITY: {} },
@@ -58,6 +68,8 @@ beforeEach(() => {
   mockMode = "veterinarian";
   mockResearch = true;
   mockHastaNo += 1;
+  mockFetchCevap = null;
+  (global as any).fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => mockFetchCevap }));
   mockApiPost.mockReset().mockResolvedValue(null);
   mockShowToast.mockReset();
 });
@@ -318,5 +330,165 @@ describe("bölüm 3 — hastalık (XGBoost) modülü, AI Pro köprüsü metinler
     expect(enKayit[0].module).toBe(trKayit.module);
     expect(enKayit[0].summary).toBe(trKayit.summary);
     expect(enKayit[0].module_id).toBe("disease");
+  });
+});
+
+describe("bölüm 4 — görsel modüller (FGS / termal / segmentasyon / retikülosit) ve otonom biofeedback", () => {
+  async function gorselAnaliz(u: ReturnType<typeof render>, modul: string, galeri: string, baslat: string, cevap: unknown) {
+    mockFetchCevap = cevap;
+    fireEvent.press(u.getByLabelText(modul));
+    await act(async () => {
+      fireEvent.press(u.getByRole("button", { name: galeri }));
+    });
+    await act(async () => {
+      fireEvent.press(u.getByRole("button", { name: baslat }));
+    });
+    for (let i = 0; i < 12; i++)
+      await act(async () => {
+        await Promise.resolve();
+      });
+  }
+  const FGS = {
+    status: "success", fgs_total: 4, detected: true, image_base64: "QUJD", hw_status: "updated", hw_params: { freq: 15, duty: 40 },
+    raw_fgs: { action_units: { AU1_Ear_Position: { score: 1 }, AU2_Orbital_Tightening: { score: 0.5 }, AU3_Muzzle_Tension: { score: 0 }, AU4_Whisker_Position: { score: 1 }, AU5_Head_Position: { score: 0 } } },
+  };
+  const logKayitlari = () => mockApiPost.mock.calls.filter((c) => c[0] === "/ai/log").map((c) => c[1] as Record<string, unknown>);
+
+  it("Türkçe: FGS modülü başlık / ipuçları / düğmeler / otonom anahtarı göç öncesiyle aynı", () => {
+    const u = render(<AiHubScreen />);
+    fireEvent.press(u.getByLabelText("Yüz Ağrısı (FGS)"));
+    expect(u.getByText("Yüz Ağrısı Skoru (FGS)")).toBeTruthy();
+    expect(u.getByText("YOLO-pose modeli ile yüzdeki kilit noktaları analiz eder.")).toBeTruthy();
+    expect(u.getByText("📸 Doğru FGS analizi için fotoğraf ipuçları")).toBeTruthy();
+    expect(u.getByText("• Kedinin yüzünü tam karşıdan, net ve yakın çekin")).toBeTruthy();
+    expect(u.getByText("⚠️ Yanlış/bulanık fotoğraf hatalı sonuç verir. Yüz net tespit edilemezse uyarı gösterilir.")).toBeTruthy();
+    expect(u.getByText("Görüntü seçilmedi")).toBeTruthy();
+    for (const b of ["Galeriden Seç", "Fotoğraf Çek", "Canlı Kamera", "AI Analizini Başlat"]) expect(u.getByText(b)).toBeTruthy();
+    expect(u.getByText("Otonom Biofeedback")).toBeTruthy();
+    const dugme = u.getByLabelText("Otonom biofeedback");
+    expect(dugme.props.accessibilityHint).toBe("Otonom sürüş yalnız Kontrol → AI Pro onay akışıyla başlar; bu ekran cihazı sürmez");
+    expect(u.getByText("Kuyruklu · Pro+ anlık")).toBeTruthy();
+    expect(u.getByLabelText("Kuyruklu işlem — Pro+ ile anlık")).toBeTruthy();
+  });
+
+  it("İngilizce: FGS modülü başlık / ipuçları / düğmeler / otonom anahtarı", async () => {
+    await enYap();
+    const u = render(<AiHubScreen />);
+    fireEvent.press(u.getByLabelText("Facial Pain (FGS)"));
+    expect(u.getByText("Facial Pain Score (FGS)")).toBeTruthy();
+    expect(u.getByText("Analyzes key facial landmarks with the YOLO-pose model.")).toBeTruthy();
+    expect(u.getByText("📸 Photo tips for an accurate FGS analysis")).toBeTruthy();
+    expect(u.getByText("• Photograph the cat's face straight on, close up and in focus")).toBeTruthy();
+    expect(u.getByText("No image selected")).toBeTruthy();
+    for (const b of ["Choose from Gallery", "Take Photo", "Live Camera", "Start AI Analysis"]) expect(u.getByText(b)).toBeTruthy();
+    expect(u.getByText("Autonomous Biofeedback")).toBeTruthy();
+    expect(u.getByLabelText("Autonomous biofeedback").props.accessibilityHint).toBe(
+      "Autonomous drive starts only through the Control → AI Pro approval flow; this screen does not drive the device",
+    );
+    expect(u.getByText("Queued · instant with Pro+")).toBeTruthy();
+  });
+
+  it("FGS sonucu + cihaz sürülüyor durumu iki dilde; AI geçmişine giden kayıt TR ile BAYT BAYT AYNI", async () => {
+    const tr = render(<AiHubScreen />);
+    await gorselAnaliz(tr, "Yüz Ağrısı (FGS)", "Galeriden Seç", "AI Analizini Başlat", FGS);
+    expect(tr.getByText(/Orta derece ağrı — FGS 4\/10$/)).toBeTruthy();
+    expect(tr.getByText("• Kulak Pozisyonu: 1")).toBeTruthy();
+    expect(tr.getByText("• Göz Kısma: 0.5")).toBeTruthy();
+    expect(tr.getByText("⚡ Cihaz otonom olarak sürülüyor")).toBeTruthy();
+    expect(tr.getByText("Frekans: 15.0 Hz · Şiddet: 40.0 %")).toBeTruthy();
+    expect(tr.getByText("Durdurmak için Kontrol ekranındaki ACİL DURDUR'u kullanın.")).toBeTruthy();
+    const trKayit = logKayitlari();
+    expect(trKayit).toHaveLength(1);
+    expect(trKayit[0].module).toBe("Yüz Ağrısı Skoru (FGS)");
+    tr.unmount();
+    mockApiPost.mockReset().mockResolvedValue(null);
+    mockHastaNo += 1;
+    await enYap();
+    const en = render(<AiHubScreen />);
+    await gorselAnaliz(en, "Facial Pain (FGS)", "Choose from Gallery", "Start AI Analysis", FGS);
+    expect(en.getByText(/Moderate pain — FGS 4\/10$/)).toBeTruthy();
+    expect(en.getByText("• Ear Position: 1")).toBeTruthy();
+    expect(en.getByText("• Orbital Tightening: 0.5")).toBeTruthy();
+    expect(en.getByText("⚡ The device is being driven autonomously")).toBeTruthy();
+    expect(en.getByText("Frequency: 15.0 Hz · Intensity: 40.0 %")).toBeTruthy();
+    expect(en.getByText("To stop, use EMERGENCY STOP on the Control screen.")).toBeTruthy();
+    const enKayit = logKayitlari();
+    expect(enKayit).toHaveLength(1);
+    expect(enKayit[0].module).toBe(trKayit[0].module);
+    expect(enKayit[0].summary).toBe(trKayit[0].summary);
+  });
+
+  it("cihaz SÜRÜLMEDİ nedenleri iki dilde (atlanan durumlar)", async () => {
+    const durumlar: Array<[string, string, string]> = [
+      ["skipped_session_active", "Başka bir seans zaten aktif — otonom sürüş atlandı.", "Another session is already active — autonomous drive skipped."],
+      ["skipped_unauthenticated", "Uzaktan kimliksiz istekte otonom sürüş yapılmaz (güvenlik).", "Autonomous drive is not performed on a remote request without identity (security)."],
+      ["skipped_no_detection", "Otonom sürüş atlandı (skipped_no_detection).", "Autonomous drive skipped (skipped_no_detection)."],
+    ];
+    for (const [hw, tr, en] of durumlar) {
+      mockHastaNo += 1;
+      const u = render(<AiHubScreen />);
+      await gorselAnaliz(u, "Yüz Ağrısı (FGS)", "Galeriden Seç", "AI Analizini Başlat", { ...FGS, hw_status: hw });
+      expect(u.getByText("⚠️ Cihaz SÜRÜLMEDİ")).toBeTruthy();
+      expect(u.getByText(tr)).toBeTruthy();
+      u.unmount();
+      mockHastaNo += 1;
+      await enYap();
+      const v = render(<AiHubScreen />);
+      await gorselAnaliz(v, "Facial Pain (FGS)", "Choose from Gallery", "Start AI Analysis", { ...FGS, hw_status: hw });
+      expect(v.getByText("⚠️ Device NOT DRIVEN")).toBeTruthy();
+      expect(v.getByText(en)).toBeTruthy();
+      v.unmount();
+      await act(async () => {
+        await dilSec("tr", depo);
+      });
+    }
+  });
+
+  it("termal / segmentasyon / retikülosit sonuçları iki dilde", async () => {
+    const termal = { status: "success", image_base64: "X", prediction: { label: "Sick", confidence: 0.953 }, girdi_dogrulama: { durum: "termal_paleti", dogrulandi: true, uyari: null } };
+    const seg = { status: "success", cat_count: 2, image_base64: "X" };
+    const ret = { status: "success", image_base64: "X", counts: { erythrocyte: 90, "punctate reticulocyte": 6, "aggregate reticulocyte": 4 } };
+    mockHastaNo += 1;
+    const tr = render(<AiHubScreen />);
+    await gorselAnaliz(tr, "Termal", "Galeriden Seç", "AI Analizini Başlat", termal);
+    expect(tr.getByText(/Termal anormallik · model güveni %95$/)).toBeTruthy();
+    expect(tr.getByText("Termal Tespit: Hasta (Riskli) (Model güveni: %95.3 — modelin kendi tahminine güveni; doğruluk değildir)")).toBeTruthy();
+    tr.unmount();
+    mockHastaNo += 1;
+    const tr2 = render(<AiHubScreen />);
+    await gorselAnaliz(tr2, "Segmentasyon", "Galeriden Seç", "AI Analizini Başlat", seg);
+    expect(tr2.getByText(/2 kedi tespit edildi$/)).toBeTruthy();
+    expect(tr2.getByText("Tespit Edilen Kedi: 2")).toBeTruthy();
+    tr2.unmount();
+    mockHastaNo += 1;
+    const tr3 = render(<AiHubScreen />);
+    await gorselAnaliz(tr3, "Retikülosit", "Galeriden Seç", "AI Analizini Başlat", ret);
+    expect(tr3.getByText(/Retikülosit oranı ~%10\.0$/)).toBeTruthy();
+    expect(tr3.getByText("Eritrosit: 90")).toBeTruthy();
+    expect(tr3.getByText("Noktalı Retikülosit: 6")).toBeTruthy();
+    expect(tr3.getByText("Agrege Retikülosit: 4")).toBeTruthy();
+    tr3.unmount();
+    await enYap();
+    mockHastaNo += 1;
+    const en = render(<AiHubScreen />);
+    await gorselAnaliz(en, "Thermal", "Choose from Gallery", "Start AI Analysis", termal);
+    expect(en.getByText(/Thermal anomaly · model confidence 95%$/)).toBeTruthy();
+    expect(en.getByText("Thermal Detection: Sick (At Risk) (Model confidence: 95.3% — the model's own confidence in its prediction; not accuracy)")).toBeTruthy();
+    en.unmount();
+    mockHastaNo += 1;
+    const en2 = render(<AiHubScreen />);
+    await gorselAnaliz(en2, "Segmentation", "Choose from Gallery", "Start AI Analysis", seg);
+    expect(en2.getByText(/2 cats detected$/)).toBeTruthy();
+    en2.unmount();
+    mockHastaNo += 1;
+    const en2b = render(<AiHubScreen />);
+    await gorselAnaliz(en2b, "Segmentation", "Choose from Gallery", "Start AI Analysis", { ...seg, cat_count: 1 });
+    expect(en2b.getByText(/1 cat detected$/)).toBeTruthy();
+    en2b.unmount();
+    mockHastaNo += 1;
+    const en3 = render(<AiHubScreen />);
+    await gorselAnaliz(en3, "Reticulocyte", "Choose from Gallery", "Start AI Analysis", ret);
+    expect(en3.getByText(/Reticulocyte ratio ~10\.0%$/)).toBeTruthy();
+    expect(en3.getByText("Erythrocytes: 90")).toBeTruthy();
   });
 });

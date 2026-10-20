@@ -101,6 +101,12 @@
    "anahtar": "ai.xai.isiHaritasiHasta",
    "terim": "\\bhasta(?!l[ıi]k|l[ıi]ğ|l[ıi]\\b|n[ıi]n hastal)",
    "gerekce": "Hasta (Riskli) = sick: model sınıfı 'Sick' (EN 'Sick (At Risk)'), hasta (hayvan = patient) DEĞİL"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ai.termal.hastaRiskli",
+   "terim": "\\bhasta(?!l[ıi]k|l[ıi]ğ|l[ıi]\\b|n[ıi]n hastal)",
+   "gerekce": "Hasta (Riskli) = sick: model sınıfı 'Sick' (EN 'Sick (At Risk)'), hasta (hayvan = patient) DEĞİL"
   }
  ]
 }

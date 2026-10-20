@@ -1,10 +1,75 @@
 {
   "canli": {
+    "kameraAktif": "CAMERA ACTIVE",
+    "kameraIzni": "Camera permission is required.",
     "kamerayiCevir": "Flip camera",
     "sonAnaliz": "Last analysis {{sn}} s ago",
-    "sonKare": "Last analyzed frame"
+    "sonKare": "Last analyzed frame",
+    "sonKareHata": "The last frame could not be analyzed: {{hata}}"
+  },
+  "fgs": {
+    "agriYok": {
+      "baslik": "No signs of pain (FGS 0/10)",
+      "metin": "No sign of pain or stress is seen in the facial features; the cat looks relaxed."
+    },
+    "analiziBaslat": "Start AI Analysis",
+    "au": {
+      "bas": "• Head Position: {{puan}}",
+      "biyik": "• Whisker Change: {{puan}}",
+      "burun": "• Muzzle Tension: {{puan}}",
+      "goz": "• Orbital Tightening: {{puan}}",
+      "kulak": "• Ear Position: {{puan}}"
+    },
+    "bantAraligi": "  [{{alt}} – {{ust}}]",
+    "bantAraligiDisinda": "  [{{alt}} – {{ust}}]  ← outside band",
+    "bantNotu": "The band is the p5–p95 range of the healthy calibration population; a value outside the band is not a diagnosis on its own.",
+    "hafif": {
+      "baslik": "Mild finding — FGS {{s}}/10",
+      "metin": "There may be a mild discomfort or tension. Keep observing; if you wish, you can ease it with PEMF.",
+      "nokta1": "Ear / eye / nose / whisker / head position scores are below.",
+      "nokta2": "FGS = Feline Grimace Scale (facial pain scale)."
+    },
+    "ipucuAydinlatma": "• Good lighting — avoid blur or darkness",
+    "ipucuBaslik": "📸 Photo tips for an accurate FGS analysis",
+    "ipucuTekKedi": "• One cat, with the face toward the camera",
+    "ipucuYuz": "• Photograph the cat's face <kalin>straight on</kalin>, close up and in focus",
+    "ipucuYuzOgeleri": "• Eyes, ears, nose and whiskers should be clearly visible",
+    "olcum": {
+      "agizOrani": "Mouth ratio",
+      "basKonumu": "Head position",
+      "biyikGerginligi": "Whisker tension",
+      "burunSikiligi": "Muzzle tightness",
+      "gozOrani": "Eye ratio",
+      "kulakAciklik": "Ear spread",
+      "kulakAcisi": "Ear angle",
+      "kulakYuksekligi": "Ear height"
+    },
+    "olcumBandi": "Measurements · population band (p5–p95)",
+    "orta": {
+      "baslik": "Moderate pain — FGS {{s}}/10",
+      "metin": "There is noticeable tension in the facial features. Autonomous PEMF therapy can be applied; if the signs last longer than 1–2 days, consult a veterinarian."
+    },
+    "siddetli": {
+      "baslik": "Severe pain — FGS {{s}}/10",
+      "metin": "A serious sign of pain was detected. Contacting a veterinarian without delay is recommended."
+    },
+    "skoru": "FGS Score: ",
+    "yuzYok": {
+      "baslik": "Face not clearly detected",
+      "metin": "The pain score could not be calculated because the cat's face could not be seen clearly. Try again with a clear, well-lit photo taken straight on."
+    }
   },
   "gorsel": {
+    "canliKamera": "Live Camera",
+    "canliyiDurdur": "Stop Live",
+    "fotografCek": "Take Photo",
+    "gercekZamanliEtiket": "Real-time processing",
+    "gercekZamanliIpucu": "Real-time processing is offered on the Pro+ plan; on Pro, requests go into a shared queue.",
+    "gercekZamanliRozet": "⚡ Real-time",
+    "ipucuBaslik": "📸 Photo tips",
+    "ipucuNet": "• Use a sharp, well-lit, close-up image (avoid blur)",
+    "kuyrukluEtiket": "Queued processing — instant with Pro+",
+    "kuyrukluRozet": "Queued · instant with Pro+",
     "retikulosit": {
       "altBaslik": "Automatically counts cells from a microscope image.",
       "baslik": "Reticulocyte Count"
@@ -17,6 +82,8 @@
       "altBaslik": "Detects thermal anomalies with GhostNetV2.",
       "baslik": "Thermal Image Analysis"
     },
+    "tespitEdilenKedi": "Cats Detected: ",
+    "yanlisFoto": "⚠️ A wrong or blurry photo gives wrong results. A warning is shown if the face cannot be detected clearly.",
     "yuzAgrisi": {
       "altBaslik": "Analyzes key facial landmarks with the YOLO-pose model.",
       "baslik": "Facial Pain Score (FGS)"
@@ -187,10 +254,55 @@
   "ortak": {
     "analizEdiliyor": "Analyzing...",
     "galeridenSec": "Choose from Gallery",
+    "goruntuSecilmedi": "No image selected",
+    "modelHazirlaniyor": "Preparing the model (the first use may take a while)…",
     "noktaGorunurluguUyarisi": "ℹ️ This model does not report whether facial landmarks are visible: if a region such as an ear or an eye is covered, the score may be misleading — use a photo where the whole face is clearly visible.",
     "otonomOnayArastirma": "Autonomous Biofeedback requires confirmation: get the recommendation from the Control → AI Pro tab and approve it.",
     "otonomOnayHekim": "Autonomous Biofeedback requires veterinarian approval: get the recommendation from the Control → AI Pro tab and approve it.",
     "tibbiSorumlulukReddi": "⚠️ This AI result is for decision support only; it does not replace a veterinary examination and diagnosis. The final decision rests with the veterinarian."
+  },
+  "otonom": {
+    "aktifRozet": "AUTONOMOUS BIOFEEDBACK ACTIVE",
+    "atlandi": "Autonomous drive skipped ({{durum}}).",
+    "baskaSeans": "Another session is already active — autonomous drive skipped.",
+    "baslik": "Autonomous Biofeedback",
+    "canliSonuc": "Autonomous Live Result:",
+    "durdurmakIcin": "To stop, use EMERGENCY STOP on the Control screen.",
+    "eAlan": "E-field: ",
+    "etiket": "Autonomous biofeedback",
+    "frekansSiddet": "Frequency: {{frekans}} Hz · Intensity: {{duty}} %",
+    "guncelleniyor": "The device is being updated autonomously (once per second)",
+    "hedefOrgan": "Target organ: ",
+    "ipucu": "Autonomous drive starts only through the Control → AI Pro approval flow; this screen does not drive the device",
+    "kalanDakika": "{{dk}} min",
+    "kalanSure": "Remaining time: ",
+    "kimliksiz": "Autonomous drive is not performed on a remote request without identity (security).",
+    "konumlandirilamadi": " (could not be located)",
+    "lokalizasyonGuveni": "Localization confidence: ",
+    "onizleme": "Preview — device NOT DRIVEN (AI Pro preparation)",
+    "onizlemeRozet": "PREVIEW — COILS NOT DRIVEN",
+    "sunucuKamerasiBekleniyor": "Waiting for the server camera…",
+    "sunucuKamerasiNotu": "🖥️ The server (clinic) camera is running the session — the phone camera is not used",
+    "surulmedi": "⚠️ Device NOT DRIVEN",
+    "suruluyor": "⚡ The device is being driven autonomously",
+    "yayinDurdu": "STREAM STOPPED — NOT CURRENT",
+    "yayinDurduNot": "It cannot be confirmed that the session is running. Confirm the status on the Control screen.",
+    "yayinDurduUyari": "⚠️ Live stream stopped — the frame shown is NOT CURRENT"
+  },
+  "retikulosit": {
+    "agrege": "Aggregate Reticulocytes: {{sayi}}",
+    "dusuk": "The reticulocyte ratio appears to be in the low-to-normal range. If anemia is present it may be non-regenerative; a definitive interpretation requires clinical context.",
+    "eritrosit": "Erythrocytes: {{sayi}}",
+    "nokta": "The numbers belong to a single microscope field and are not a diagnostic reference range.",
+    "noktali": "Punctate Reticulocytes: {{sayi}}",
+    "oran": "Reticulocyte ratio ~{{oran}}%",
+    "yuksek": "A relatively high reticulocyte ratio may suggest that the bone marrow is producing new red blood cells (regenerative response — e.g. a reaction to bleeding / anemia). Evaluate it together with the clinical context."
+  },
+  "segmentasyon": {
+    "basarili": "Body outlines were extracted successfully. Segmentation is a pre-processing step for measurements and other analyses.",
+    "kediTespit_one": "{{count}} cat detected",
+    "kediTespit_other": "{{count}} cats detected",
+    "kediYok": "No cat was detected in the image. Try again so that the whole cat fits in the frame."
   },
   "ses": {
     "aciklama": "Record your furry friend's meow and let the AI interpret their mood. About 5 seconds in a quiet place is enough.",
@@ -250,10 +362,22 @@
     "sesiAnalizEt": "Analyze Audio",
     "yorumBaslik": "AI Interpretation"
   },
+  "termal": {
+    "anormallik": "Thermal anomaly",
+    "anormallikGuven": "Thermal anomaly · model confidence {{prob}}%",
+    "anormallikMetin": "A possible temperature anomaly (may be a focus of inflammation / infection) was detected in the thermal image. Have the area evaluated by a veterinarian.",
+    "anormallikYok": "No significant thermal anomaly",
+    "anormallikYokGuven": "No significant thermal anomaly · model confidence {{prob}}%",
+    "anormallikYokMetin": "No notable anomaly was seen in the thermal distribution.",
+    "hastaRiskli": "Sick (At Risk)",
+    "tespitSatiri": "Thermal Detection: <kalin>{{etiket}}</kalin> (Model confidence: {{oran}}% — the model's own confidence in its prediction; not accuracy)"
+  },
   "xai": {
     "isiHaritasiGenel": "🔍 Heat map — the regions the model looked at (red = strong influence on the decision)",
     "isiHaritasiHasta": "🔍 Heat map — the regions that led the model to the “Sick (At Risk)” decision (red = strong contribution to this decision)",
     "isiHaritasiSaglikli": "🔍 Heat map — the regions that led the model to the “Healthy” decision (red = strong contribution to this decision)",
+    "isiHaritasiUret": " 🔍 Generate heat map (the regions the model looked at — the analysis takes a bit longer)",
+    "isiHaritasiUretEtiketi": "Generate heat map (Grad-CAM)",
     "kararSurukleyenler": "🔍 Decision drivers: {{metin}}",
     "tespitYokNotu": "No detection — the map shows the 5 strongest candidate regions that fall below the confidence threshold (it is not evidence of a detection or a diagnosis). Check that the image is of the right type and in focus, then try again."
   }

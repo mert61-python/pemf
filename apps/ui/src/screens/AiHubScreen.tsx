@@ -1394,7 +1394,17 @@ function useCanliJetonEtkin(canli: boolean): boolean {
   return etkin;
 }
 
+/** AI geçmişi kaydına (`ai_analyses.module`) giden modül adı — VERİ: dilden bağımsız TR kalır (EN ekranda da aynı kayıt). `title` ÇEVRİLMİŞ gösterim
+ *  metnidir, kayda GİTMEZ; geçmişte gösterimde değer → anahtar eşlemesi 06c / 07b'de. Kapı: `aiHubScreen.I18N.P1` (EN iken giden kayıt TR ile BAYT BAYT aynı). */
+const MODUL_KAYIT_ADI: Record<string, string> = {
+  "/vision/landmark": "Yüz Ağrısı Skoru (FGS)",
+  "/vision/segmentation": "Kedi Segmentasyonu",
+  "/vision/thermal": "Termal Görüntü Analizi",
+  "/vision/reticulocytes": "Retikülosit Sayımı",
+};
+
 function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, explainDestegi }: { endpoint: string, title: string, subtitle: string, patientName: string, galleryOnly?: boolean, explainDestegi?: boolean }) {
+  const { t } = useTranslation();
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
   // Galeri ASIL okuma yuzeyi: daha yuksek tavan, AYNI responsive oran (bkz. useGaleriYuksekligi).
@@ -1553,7 +1563,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
             }
           }
         } catch (e) {
-          if (mountedRef.current && !bitti) setCanliDurum({ tur: "hata", metin: `Son kare analiz edilemedi: ${aiHataMesaji(e)}` });
+          if (mountedRef.current && !bitti) setCanliDurum({ tur: "hata", metin: t("ai.canli.sonKareHata", { hata: aiHataMesaji(e) }) });
         } finally {
           loadingRef.current = false;
         }
@@ -1569,7 +1579,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
       try { liveAbortRef.current?.abort(); } catch { /* ignore */ }
       liveAbortRef.current = null;
     };
-  }, [isLive, autoAdjust, endpoint]);
+  }, [isLive, autoAdjust, endpoint, t]);
 
   // SG.G6: canlı kipte gösterilen son analiz karesinin yaşı ("1,8 sn önce") — kare eskidikçe operatör görür.
   useEffect(() => {
@@ -1595,7 +1605,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
       if (!permission?.granted) {
         const res = await requestPermission();
         if (!res?.granted) {
-          showToast("Kamera için izin gerekli.", "error");
+          showToast(t("ai.canli.kameraIzni"), "error");
           return;
         }
       }
@@ -1757,13 +1767,13 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
       const data = await response.json();
       const basarili = response.ok && data.status === "success";
       // D2.E09 (Y87): kayıt ekrandan BAĞIMSIZ — modül kapansa / hasta değişse de başlatılan hastaya (sadece manuel analizler).
-      if (basarili && !isLive) logAiResult(hasta, title, summarizeVision(data), { moduleId: endpoint.replace("/vision/", ""), inputType: "image", detail: data });
+      if (basarili && !isLive) logAiResult(hasta, MODUL_KAYIT_ADI[endpoint] ?? endpoint, summarizeVision(data), { moduleId: endpoint.replace("/vision/", ""), inputType: "image", detail: data });
       if (!mountedRef.current) return; // unmount olduysa stale setState yapma
       if (basarili) {
         setResult(data);
         if (isLive) setImageUri(`data:image/jpeg;base64,${data.image_base64}`); // overlay updated
       }
-      else if (!isLive) showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
+      else if (!isLive) showToast(aiDetayCumlesi(data?.detail, t("ai.hata.analizSirasinda")), "error");
     } catch (error) {
       if (mountedRef.current && !isLive) showToast(aiHataMesaji(error), "error");
     } finally {
@@ -1787,22 +1797,22 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
               onPress={() => setAutoAdjust(!autoAdjust)}
               accessibilityRole="switch"
               accessibilityState={{ checked: autoAdjust }}
-              accessibilityLabel="Otonom biofeedback"
-              accessibilityHint="Otonom sürüş yalnız Kontrol → AI Pro onay akışıyla başlar; bu ekran cihazı sürmez"
+              accessibilityLabel={t("ai.otonom.etiket")}
+              accessibilityHint={t("ai.otonom.ipucu")}
             >
               <Activity color={autoAdjust ? colors.white : colors.primary} size={16} />
               <Text style={[styles.autoAdjustText, autoAdjust ? {color: colors.white} : null]}>
-                Otonom Biofeedback
+                {t("ai.otonom.baslik")}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => { if (!realtime) showToast("Gerçek-zamanlı işlem Pro+ planında sunulur; Pro'da istekler paylaşımlı kuyruğa girer.", "info"); }}
+              onPress={() => { if (!realtime) showToast(t("ai.gorsel.gercekZamanliIpucu"), "info"); }}
               style={[styles.rtTag, realtime ? styles.rtTagOn : styles.rtTagOff]}
               accessibilityRole="button"
-              accessibilityLabel={realtime ? "Gerçek-zamanlı işlem" : "Kuyruklu işlem — Pro+ ile anlık"}
+              accessibilityLabel={realtime ? t("ai.gorsel.gercekZamanliEtiket") : t("ai.gorsel.kuyrukluEtiket")}
             >
               <Text style={realtime ? styles.rtTagOnText : styles.rtTagOffText}>
-                {realtime ? "⚡ Gerçek-zamanlı" : "Kuyruklu · Pro+ anlık"}
+                {realtime ? t("ai.gorsel.gercekZamanliRozet") : t("ai.gorsel.kuyrukluRozet")}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1813,19 +1823,19 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
         <View style={styles.photoGuide}>
           {endpoint === "/vision/landmark" ? (
             <>
-              <Text style={styles.photoGuideTitle}>📸 Doğru FGS analizi için fotoğraf ipuçları</Text>
-              <Text style={styles.photoGuideItem}>• Kedinin yüzünü <Text style={styles.photoGuideBold}>tam karşıdan</Text>, net ve yakın çekin</Text>
-              <Text style={styles.photoGuideItem}>• İyi aydınlatma — bulanık veya karanlık olmasın</Text>
-              <Text style={styles.photoGuideItem}>• Gözler, kulaklar, burun ve bıyıklar net görünsün</Text>
-              <Text style={styles.photoGuideItem}>• Tek kedi, yüz kameraya dönük olsun</Text>
+              <Text style={styles.photoGuideTitle}>{t("ai.fgs.ipucuBaslik")}</Text>
+              <Text style={styles.photoGuideItem}><Trans i18nKey="ai.fgs.ipucuYuz" components={{ kalin: <Text style={styles.photoGuideBold} /> }} /></Text>
+              <Text style={styles.photoGuideItem}>{t("ai.fgs.ipucuAydinlatma")}</Text>
+              <Text style={styles.photoGuideItem}>{t("ai.fgs.ipucuYuzOgeleri")}</Text>
+              <Text style={styles.photoGuideItem}>{t("ai.fgs.ipucuTekKedi")}</Text>
             </>
           ) : (
             <>
-              <Text style={styles.photoGuideTitle}>📸 Fotoğraf ipuçları</Text>
-              <Text style={styles.photoGuideItem}>• Net, iyi aydınlatılmış, yakın görüntü kullanın (bulanık olmasın)</Text>
+              <Text style={styles.photoGuideTitle}>{t("ai.gorsel.ipucuBaslik")}</Text>
+              <Text style={styles.photoGuideItem}>{t("ai.gorsel.ipucuNet")}</Text>
             </>
           )}
-          <Text style={styles.photoGuideWarn}>⚠️ Yanlış/bulanık fotoğraf hatalı sonuç verir. Yüz net tespit edilemezse uyarı gösterilir.</Text>
+          <Text style={styles.photoGuideWarn}>{t("ai.gorsel.yanlisFoto")}</Text>
         </View>
       )}
       {/* ⚠️ CANLI KAMERA ve SONUÇ GALERİSİ AYRI DALLAR (ADIM 4). Eskiden ikisi de sabit
@@ -1845,7 +1855,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
             <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
               <View style={styles.placeholderBox}>
                 <ImageIcon color={colors.textMuted} size={48} />
-                <Text style={styles.placeholderText}>Görüntü seçilmedi</Text>
+                <Text style={styles.placeholderText}>{t("ai.ortak.goruntuSecilmedi")}</Text>
               </View>
             </View>
           }
@@ -1879,17 +1889,17 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
                 <View style={[styles.liveIndicator, (!aiVisionFresh || aiVisionData.preview) && { backgroundColor: colors.warning }]}>
                   <View style={styles.liveDot} />
                   <Text style={styles.liveText}>
-                    {!aiVisionFresh ? "YAYIN DURDU — GÜNCEL DEĞİL" : aiVisionData.preview ? "ÖNİZLEME — BOBİN SÜRÜLMÜYOR" : "OTONOM BİOFEEDBACK AKTİF"}
+                    {!aiVisionFresh ? t("ai.otonom.yayinDurdu") : aiVisionData.preview ? t("ai.otonom.onizlemeRozet") : t("ai.otonom.aktifRozet")}
                   </Text>
                 </View>
               </>
             ) : (
               <View style={[styles.cameraView, { alignItems: "center", justifyContent: "center", gap: spacing.sm }]}>
                 <Activity color={colors.primary} size={32} />
-                <Text style={styles.placeholderText}>Sunucu kamerası bekleniyor…</Text>
+                <Text style={styles.placeholderText}>{t("ai.otonom.sunucuKamerasiBekleniyor")}</Text>
               </View>
             )}
-            <Text style={styles.serverCamNote}>🖥️ Sunucu (klinik) kamerası seansı sürüyor — telefon kamerası kullanılmıyor</Text>
+            <Text style={styles.serverCamNote}>{t("ai.otonom.sunucuKamerasiNotu")}</Text>
           </View>
         ) : (
           <CanliKameraKutusu
@@ -1898,7 +1908,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
             onFlip={() => setFacing((f) => (f === "back" ? "front" : "back"))}
             sonKareB64={result?.image_base64 || null}
             sonKareYasMs={sonKareZamani != null ? simdi - sonKareZamani : null}
-            rozet="KAMERA AKTİF"
+            rozet={t("ai.canli.kameraAktif")}
           />
         )}
       </View>
@@ -1909,18 +1919,18 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
 
       <View style={[styles.btnRow, isCompact && { flexDirection: "column" }]}>
         <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
-          <Button label="Galeriden Seç" icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} disabled={isLive} />
+          <Button label={t("ai.ortak.galeridenSec")} icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} disabled={isLive} />
         </View>
         {/* Foto çek + canlı kamera: mikroskop/CT gibi dosya-tabanlı modüllerde (galleryOnly) gizli */}
         {!galleryOnly && (
           <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
-            <Button label="Fotoğraf Çek" icon={<Camera color={colors.white} size={16} />} onPress={takePhoto} disabled={isLive} />
+            <Button label={t("ai.gorsel.fotografCek")} icon={<Camera color={colors.white} size={16} />} onPress={takePhoto} disabled={isLive} />
           </View>
         )}
         {!galleryOnly && (
           <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
             <Button
-              label={isLive ? "Canlıyı Durdur" : "Canlı Kamera"}
+              label={isLive ? t("ai.gorsel.canliyiDurdur") : t("ai.gorsel.canliKamera")}
               variant={isLive ? "danger" : "secondary"}
               icon={<Video color={isLive ? colors.white : colors.primary} size={16} />}
               onPress={toggleLive}
@@ -1936,16 +1946,16 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
             onPress={() => setIsiHaritasi((v) => !v)}
             accessibilityRole="switch"
             accessibilityState={{ checked: isiHaritasi }}
-            accessibilityLabel="Isı haritası üret (Grad-CAM)"
+            accessibilityLabel={t("ai.xai.isiHaritasiUretEtiketi")}
           >
             <Text style={styles.xaiToggleText}>
-              {isiHaritasi ? "☑" : "☐"} 🔍 Isı haritası üret (modelin baktığı bölgeler — analiz biraz uzar)
+              {isiHaritasi ? "☑" : "☐"}{t("ai.xai.isiHaritasiUret")}
             </Text>
           </TouchableOpacity>
         )}
-        <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "AI Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={() => analyzeImage()} />
+        <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.fgs.analiziBaslat")} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={() => analyzeImage()} />
       </View>
-      {longLoading && <Text style={styles.modelHint}>Model hazırlanıyor (ilk kullanım uzun sürebilir)…</Text>}
+      {longLoading && <Text style={styles.modelHint}>{t("ai.ortak.modelHazirlaniyor")}</Text>}
 
       {result && !autoAdjust && (
         <View style={styles.resultBox}>
@@ -1961,36 +1971,36 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
             const notDet = result.detected === false || result.fgs_total === null || (typeof result.fgs_total === "number" && result.fgs_total < 0);
             // ── FGS / yüz ağrısı ──
             if (result.fgs_total !== undefined) {
-              if (notDet) return <ResultInterpretation tone="alert" emoji="⚠️" title="Yüz net tespit edilemedi"
-                text="Kedinin yüzü net seçilemediği için ağrı skoru hesaplanamadı. Net, iyi aydınlatılmış ve tam karşıdan çekilmiş bir fotoğrafla tekrar deneyin." />;
+              if (notDet) return <ResultInterpretation tone="alert" emoji="⚠️" title={t("ai.fgs.yuzYok.baslik")}
+                text={t("ai.fgs.yuzYok.metin")} />;
               const s = result.fgs_total ?? 0;  // null/negatif yukarıda notDet ile döndü → burada geçerli sayı
-              if (s === 0) return <ResultInterpretation tone="positive" emoji="😌" title="Ağrı belirtisi yok (FGS 0/10)"
-                text="Yüz hatlarında ağrı ya da stres bulgusu görülmüyor; kedi rahat görünüyor." />;
-              if (s <= 3) return <ResultInterpretation tone="info" emoji="🙂" title={`Hafif bulgu — FGS ${s}/10`}
-                text="Hafif bir rahatsızlık ya da gerginlik olabilir. Gözlemlemeye devam edin; isterseniz PEMF ile rahatlatabilirsiniz."
-                points={["Kulak/göz/burun/bıyık/baş pozisyon skorları aşağıda.", "FGS = Feline Grimace Scale (yüz ağrı ölçeği)."]} />;
-              if (s <= 5) return <ResultInterpretation tone="alert" emoji="😾" title={`Orta derece ağrı — FGS ${s}/10`}
-                text="Yüz hatlarında belirgin gerginlik var. Otonom PEMF terapisi uygulanabilir; belirti 1-2 günden uzun sürerse veteriner hekime danışın." />;
-              return <ResultInterpretation tone="critical" emoji="🚨" title={`Şiddetli ağrı — FGS ${s}/10`}
-                text="Ciddi ağrı bulgusu tespit edildi. Vakit kaybetmeden veteriner hekime başvurulması önerilir." />;
+              if (s === 0) return <ResultInterpretation tone="positive" emoji="😌" title={t("ai.fgs.agriYok.baslik")}
+                text={t("ai.fgs.agriYok.metin")} />;
+              if (s <= 3) return <ResultInterpretation tone="info" emoji="🙂" title={t("ai.fgs.hafif.baslik", { s })}
+                text={t("ai.fgs.hafif.metin")}
+                points={[t("ai.fgs.hafif.nokta1"), t("ai.fgs.hafif.nokta2")]} />;
+              if (s <= 5) return <ResultInterpretation tone="alert" emoji="😾" title={t("ai.fgs.orta.baslik", { s })}
+                text={t("ai.fgs.orta.metin")} />;
+              return <ResultInterpretation tone="critical" emoji="🚨" title={t("ai.fgs.siddetli.baslik", { s })}
+                text={t("ai.fgs.siddetli.metin")} />;
             }
             // ── Termal ──
             if (result.prediction) {
               const sick = result.prediction.label === "Sick";
               const prob = result.prediction.confidence !== undefined ? Math.round(result.prediction.confidence * 100) : null;
               return sick
-                ? <ResultInterpretation tone="alert" emoji="🌡️" title={`Termal anormallik${prob != null ? ` · model güveni %${prob}` : ""}`}
-                    text="Termal görüntüde olası bir sıcaklık anormalliği (iltihap/enfeksiyon odağı olabilir) tespit edildi. İlgili bölgeyi hekimle değerlendirin." />
-                : <ResultInterpretation tone="positive" emoji="🌡️" title={`Belirgin termal anormallik yok${prob != null ? ` · model güveni %${prob}` : ""}`}
-                    text="Termal dağılımda dikkat çekici bir anormallik görülmedi." />;
+                ? <ResultInterpretation tone="alert" emoji="🌡️" title={prob != null ? t("ai.termal.anormallikGuven", { prob }) : t("ai.termal.anormallik")}
+                    text={t("ai.termal.anormallikMetin")} />
+                : <ResultInterpretation tone="positive" emoji="🌡️" title={prob != null ? t("ai.termal.anormallikYokGuven", { prob }) : t("ai.termal.anormallikYok")}
+                    text={t("ai.termal.anormallikYokMetin")} />;
             }
             // ── Segmentasyon ──
             if (result.cat_count !== undefined) {
               return <ResultInterpretation tone={result.cat_count > 0 ? "positive" : "alert"} emoji="🐾"
-                title={`${result.cat_count} kedi tespit edildi`}
+                title={t("ai.segmentasyon.kediTespit", { count: result.cat_count })}
                 text={result.cat_count > 0
-                  ? "Vücut sınırları başarıyla çıkarıldı. Segmentasyon; ölçüm ve diğer analizler için bir ön-işleme adımıdır."
-                  : "Görüntüde kedi tespit edilemedi. Kedinin tümü kadraja girecek şekilde tekrar deneyin."} />;
+                  ? t("ai.segmentasyon.basarili")
+                  : t("ai.segmentasyon.kediYok")} />;
             }
             // ── Retikülosit ──
             if (result.counts) {
@@ -1999,17 +2009,17 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
               const total = ery + ret;
               const pctR = total > 0 ? (ret / total) * 100 : 0;
               const high = pctR >= 4;
-              return <ResultInterpretation tone={high ? "alert" : "info"} emoji="🔬" title={`Retikülosit oranı ~%${pctR.toFixed(1)}`}
+              return <ResultInterpretation tone={high ? "alert" : "info"} emoji="🔬" title={t("ai.retikulosit.oran", { oran: pctR.toFixed(1) })}
                 text={high
-                  ? "Görece yüksek retikülosit oranı, kemik iliğinin yeni kırmızı küre ürettiğini (rejeneratif yanıt — ör. kanamaya/anemiye tepki) düşündürebilir. Klinik bağlamla birlikte değerlendirin."
-                  : "Retikülosit oranı düşük–normal aralıkta görünüyor. Anemi varsa non-rejeneratif olabilir; kesin yorum klinik bağlam gerektirir."}
-                points={["Sayılar tek bir mikroskop alanına aittir, tanısal referans aralığı değildir."]} />;
+                  ? t("ai.retikulosit.yuksek")
+                  : t("ai.retikulosit.dusuk")}
+                points={[t("ai.retikulosit.nokta")]} />;
             }
             return null;
           })()}
           {result.fgs_total != null && result.fgs_total >= 0 && (
             <View>
-              <Text style={styles.resultText}>FGS Skoru: <Text style={{fontWeight:'bold'}}>{result.fgs_total} / 10</Text></Text>
+              <Text style={styles.resultText}>{t("ai.fgs.skoru")}<Text style={{fontWeight:'bold'}}>{result.fgs_total} / 10</Text></Text>
               {/* D1.E09 (İG-5.31): model nokta görünürlüğünü bildirmiyor → örtülü yüzde skor yanıltıcı olabilir. */}
               {result.nokta_gorunurlugu_dogrulanmadi ? (
                 <Text style={[styles.resultText, { fontSize: typography.small, color: colors.textMuted }]}>
@@ -2018,18 +2028,18 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
               ) : null}
               {result.raw_fgs?.action_units && (
                 <View style={{ marginTop: spacing.sm, paddingLeft: spacing.md, borderLeftWidth: 2, borderLeftColor: colors.primarySoft }}>
-                  <Text style={[styles.resultText, {fontSize: typography.small}]}>• Kulak Pozisyonu: {result.raw_fgs.action_units["AU1_Ear_Position"]?.score ?? "-"}</Text>
-                  <Text style={[styles.resultText, {fontSize: typography.small}]}>• Göz Kısma: {result.raw_fgs.action_units["AU2_Orbital_Tightening"]?.score ?? "-"}</Text>
-                  <Text style={[styles.resultText, {fontSize: typography.small}]}>• Burun Kasılması: {result.raw_fgs.action_units["AU3_Muzzle_Tension"]?.score ?? "-"}</Text>
-                  <Text style={[styles.resultText, {fontSize: typography.small}]}>• Bıyık Değişimi: {result.raw_fgs.action_units["AU4_Whisker_Position"]?.score ?? "-"}</Text>
-                  <Text style={[styles.resultText, {fontSize: typography.small}]}>• Baş Pozisyonu: {result.raw_fgs.action_units["AU5_Head_Position"]?.score ?? "-"}</Text>
+                  <Text style={[styles.resultText, {fontSize: typography.small}]}>{t("ai.fgs.au.kulak", { puan: result.raw_fgs.action_units["AU1_Ear_Position"]?.score ?? "-" })}</Text>
+                  <Text style={[styles.resultText, {fontSize: typography.small}]}>{t("ai.fgs.au.goz", { puan: result.raw_fgs.action_units["AU2_Orbital_Tightening"]?.score ?? "-" })}</Text>
+                  <Text style={[styles.resultText, {fontSize: typography.small}]}>{t("ai.fgs.au.burun", { puan: result.raw_fgs.action_units["AU3_Muzzle_Tension"]?.score ?? "-" })}</Text>
+                  <Text style={[styles.resultText, {fontSize: typography.small}]}>{t("ai.fgs.au.biyik", { puan: result.raw_fgs.action_units["AU4_Whisker_Position"]?.score ?? "-" })}</Text>
+                  <Text style={[styles.resultText, {fontSize: typography.small}]}>{t("ai.fgs.au.bas", { puan: result.raw_fgs.action_units["AU5_Head_Position"]?.score ?? "-" })}</Text>
                 </View>
               )}
               {result.raw_fgs?.measurements && (result as any).fgs_bantlari ? (() => {
                 const OLCUM_TR: Record<string, string> = {
-                  ear_angle: "Kulak açısı", ear_elev: "Kulak yüksekliği", ear_spread: "Kulak açıklığı",
-                  eye_ratio_avg: "Göz oranı", mouth_aspect: "Ağız oranı", muzzle_compact: "Burun sıkılığı",
-                  whisker_tension: "Bıyık gerginliği", head_center_y: "Baş konumu",
+                  ear_angle: t("ai.fgs.olcum.kulakAcisi"), ear_elev: t("ai.fgs.olcum.kulakYuksekligi"), ear_spread: t("ai.fgs.olcum.kulakAciklik"),
+                  eye_ratio_avg: t("ai.fgs.olcum.gozOrani"), mouth_aspect: t("ai.fgs.olcum.agizOrani"), muzzle_compact: t("ai.fgs.olcum.burunSikiligi"),
+                  whisker_tension: t("ai.fgs.olcum.biyikGerginligi"), head_center_y: t("ai.fgs.olcum.basKonumu"),
                 };
                 // ⚠️ Bant anahtarları (thresholds_calibrated.json) ile measurements adları AYNI
                 // DEĞİL (ölçüldü: ear_angle↔ear_angle_avg vb.) — eşleme olmadan 8 satırın 4'ü
@@ -2049,35 +2059,35 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
                 if (!satirlar.length) return null;
                 return (
                   <View style={{ marginTop: spacing.sm }}>
-                    <Text style={styles.ctSubLabel}>Ölçümler · popülasyon bandı (p5–p95)</Text>
+                    <Text style={styles.ctSubLabel}>{t("ai.fgs.olcumBandi")}</Text>
                     {satirlar.map((k) => {
                       const v = Number(olc[OLCUM_KAYNAK[k]]); const b = bant[k];
                       const disari = v < b.p5 || v > b.p95;
                       return (
                         <Text key={k} style={[styles.resultText, { fontSize: typography.small }]}>
                           • {OLCUM_TR[k]}: <Text style={{ fontWeight: "bold", color: disari ? colors.warning : colors.text }}>{v.toFixed(3)}</Text>
-                          <Text style={{ color: colors.textMuted }}>{`  [${b.p5.toFixed(2)} – ${b.p95.toFixed(2)}]${disari ? "  ← bant dışı" : ""}`}</Text>
+                          <Text style={{ color: colors.textMuted }}>{disari ? t("ai.fgs.bantAraligiDisinda", { alt: b.p5.toFixed(2), ust: b.p95.toFixed(2) }) : t("ai.fgs.bantAraligi", { alt: b.p5.toFixed(2), ust: b.p95.toFixed(2) })}</Text>
                         </Text>
                       );
                     })}
-                    <Text style={styles.ctHint}>Bant, sağlıklı kalibrasyon popülasyonunun p5–p95 aralığıdır; bant dışı değer tek başına tanı değildir.</Text>
+                    <Text style={styles.ctHint}>{t("ai.fgs.bantNotu")}</Text>
                   </View>
                 );
               })() : null}
             </View>
           )}
-          {result.cat_count !== undefined && <Text style={styles.resultText}>Tespit Edilen Kedi: <Text style={{fontWeight:'bold'}}>{result.cat_count}</Text></Text>}
+          {result.cat_count !== undefined && <Text style={styles.resultText}>{t("ai.gorsel.tespitEdilenKedi")}<Text style={{fontWeight:'bold'}}>{result.cat_count}</Text></Text>}
           {result.prediction && (() => {
-             const lbl = result.prediction.label === "Sick" ? "Hasta (Riskli)" : "Sağlıklı";
+             const lbl = result.prediction.label === "Sick" ? t("ai.termal.hastaRiskli") : t("kontrol.efield.saglikli");
              const prob = result.prediction.confidence !== undefined ? (result.prediction.confidence * 100).toFixed(1) : "?";
              // SG.G4-3: model güveni DOĞRULUK DEĞİLDİR (softmax alakasız girdide de %95 verir) — eski etiket "Doğruluk" yanıltıyordu.
-             return <Text style={styles.resultText}>Termal Tespit: <Text style={{fontWeight:'bold', color: result.prediction.label === "Sick" ? colors.danger : colors.success}}>{lbl}</Text> (Model güveni: %{prob} — modelin kendi tahminine güveni; doğruluk değildir)</Text>;
+             return <Text style={styles.resultText}><Trans i18nKey="ai.termal.tespitSatiri" values={{ etiket: lbl, oran: prob }} components={{ kalin: <Text style={{fontWeight:'bold', color: result.prediction.label === "Sick" ? colors.danger : colors.success}} /> }} /></Text>;
           })()}
           {result.counts && (
             <>
-              <Text style={styles.resultText}>Eritrosit: {result.counts["erythrocyte"]}</Text>
-              <Text style={styles.resultText}>Noktalı Retikülosit: {result.counts["punctate reticulocyte"]}</Text>
-              <Text style={styles.resultText}>Agrege Retikülosit: {result.counts["aggregate reticulocyte"]}</Text>
+              <Text style={styles.resultText}>{t("ai.retikulosit.eritrosit", { sayi: result.counts["erythrocyte"] ?? "" })}</Text>
+              <Text style={styles.resultText}>{t("ai.retikulosit.noktali", { sayi: result.counts["punctate reticulocyte"] ?? "" })}</Text>
+              <Text style={styles.resultText}>{t("ai.retikulosit.agrege", { sayi: result.counts["aggregate reticulocyte"] ?? "" })}</Text>
             </>
           )}
           {/* Sunum-katmanı XAI (Faz 2): CAM ısı haritası — istenip üretildiyse. AI1.X1: termalde başlık AÇIKLANAN kararı söyler. */}
@@ -2108,19 +2118,19 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
       {result?.hw_status && result.hw_status !== "idle" ? (
         result.hw_status === "updated" ? (
           <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.success + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.success }}>
-            <Text style={[styles.resultText, { fontWeight: "bold", color: colors.success }]}>⚡ Cihaz otonom olarak sürülüyor</Text>
-            <Text style={styles.resultText}>Frekans: {Number(result.hw_params?.freq ?? 0).toFixed(1)} Hz · Şiddet: {Number(result.hw_params?.duty ?? 0).toFixed(1)} %</Text>
-            <Text style={styles.resultText}>Durdurmak için Kontrol ekranındaki ACİL DURDUR&apos;u kullanın.</Text>
+            <Text style={[styles.resultText, { fontWeight: "bold", color: colors.success }]}>{t("ai.otonom.suruluyor")}</Text>
+            <Text style={styles.resultText}>{t("ai.otonom.frekansSiddet", { frekans: Number(result.hw_params?.freq ?? 0).toFixed(1), duty: Number(result.hw_params?.duty ?? 0).toFixed(1) })}</Text>
+            <Text style={styles.resultText}>{t("ai.otonom.durdurmakIcin")}</Text>
           </View>
         ) : (
           <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.warning + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.warning }}>
-            <Text style={[styles.resultText, { fontWeight: "bold", color: colors.warning }]}>⚠️ Cihaz SÜRÜLMEDİ</Text>
+            <Text style={[styles.resultText, { fontWeight: "bold", color: colors.warning }]}>{t("ai.otonom.surulmedi")}</Text>
             <Text style={styles.resultText}>
               {result.hw_status === "skipped_session_active"
-                ? "Başka bir seans zaten aktif — otonom sürüş atlandı."
+                ? t("ai.otonom.baskaSeans")
                 : result.hw_status === "skipped_unauthenticated"
-                  ? "Uzaktan kimliksiz istekte otonom sürüş yapılmaz (güvenlik)."
-                  : `Otonom sürüş atlandı (${String(result.hw_status)}).`}
+                  ? t("ai.otonom.kimliksiz")
+                  : t("ai.otonom.atlandi", { durum: String(result.hw_status) })}
             </Text>
           </View>
         )
@@ -2128,23 +2138,23 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
 
       {isLive && autoAdjust && aiVisionData && (
         <View style={styles.resultBox}>
-          <Text style={styles.resultTitle}>Otonom Canlı Sonuç:</Text>
+          <Text style={styles.resultTitle}>{t("ai.otonom.canliSonuc")}</Text>
           {/* Eskiden burada `Anlık FGS Skoru: {aiVisionData.fgs_total} / 10` yazıyordu; backend'in
               ai_vision yayınında fgs_total alanı YOK (cat_organ pipeline'ına geçilince kaldırıldı) →
               satır her zaman "Anlık FGS Skoru:  / 10" olarak BOŞ basılıyordu. Yayının gerçekten
               içerdiği alanları göster. */}
           <Text style={styles.resultText}>
-            Hedef organ: <Text style={{ fontWeight: "bold" }}>{aiVisionData.organName || "—"}</Text>
-            {aiVisionData.detected === false ? " (konumlandırılamadı)" : ""}
+            {t("ai.otonom.hedefOrgan")}<Text style={{ fontWeight: "bold" }}>{aiVisionData.organName || "—"}</Text>
+            {aiVisionData.detected === false ? t("ai.otonom.konumlandirilamadi") : ""}
           </Text>
           {typeof aiVisionData.reliability === "number" && (
-            <Text style={styles.resultText}>Lokalizasyon güveni: <Text style={{ fontWeight: "bold" }}>%{(aiVisionData.reliability * 100).toFixed(0)}</Text></Text>
+            <Text style={styles.resultText}>{t("ai.otonom.lokalizasyonGuveni")}<Text style={{ fontWeight: "bold" }}>%{(aiVisionData.reliability * 100).toFixed(0)}</Text></Text>
           )}
           {typeof aiVisionData.eField === "number" && (
-            <Text style={styles.resultText}>E-alan: <Text style={{ fontWeight: "bold" }}>{aiVisionData.eField.toFixed(2)}</Text></Text>
+            <Text style={styles.resultText}>{t("ai.otonom.eAlan")}<Text style={{ fontWeight: "bold" }}>{aiVisionData.eField.toFixed(2)}</Text></Text>
           )}
           {typeof aiVisionData.remainingSec === "number" && (
-            <Text style={styles.resultText}>Kalan süre: <Text style={{ fontWeight: "bold" }}>{Math.max(0, Math.round(aiVisionData.remainingSec / 60))} dk</Text></Text>
+            <Text style={styles.resultText}>{t("ai.otonom.kalanSure")}<Text style={{ fontWeight: "bold" }}>{t("ai.otonom.kalanDakika", { dk: Math.max(0, Math.round(aiVisionData.remainingSec / 60)) })}</Text></Text>
           )}
           {/* Tazelik kapısı: yayın durduysa "güncelleniyor" DEME (donmuş kareyi canlı gösterme).
               Bu, kaldırılan GLOBAL 3-durumlu göstergeyi geri getirmez — yalnız aktif otonom
@@ -2152,16 +2162,16 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
           {aiVisionFresh && aiVisionData.preview ? (
             // B3: hazırlık önizlemesi — lokalizasyon var, SÜRÜŞ YOK. "güncelleniyor" DEME.
             <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.warning + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.warning }}>
-              <Text style={[styles.resultText, { fontWeight: "bold", color: colors.warning }]}>Önizleme — cihaz SÜRÜLMÜYOR (AI Pro hazırlık)</Text>
+              <Text style={[styles.resultText, { fontWeight: "bold", color: colors.warning }]}>{t("ai.otonom.onizleme")}</Text>
             </View>
           ) : aiVisionFresh ? (
             <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.success + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.success }}>
-              <Text style={[styles.resultText, { fontWeight: "bold", color: colors.success }]}>Cihaz otonom olarak güncelleniyor (saniyede 1)</Text>
+              <Text style={[styles.resultText, { fontWeight: "bold", color: colors.success }]}>{t("ai.otonom.guncelleniyor")}</Text>
             </View>
           ) : (
             <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.warning + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.warning }}>
-              <Text style={[styles.resultText, { fontWeight: "bold", color: colors.warning }]}>⚠️ Canlı yayın durdu — gösterilen kare GÜNCEL DEĞİL</Text>
-              <Text style={styles.resultText}>Seansın sürdüğü doğrulanamıyor. Kontrol ekranından durumu teyit edin.</Text>
+              <Text style={[styles.resultText, { fontWeight: "bold", color: colors.warning }]}>{t("ai.otonom.yayinDurduUyari")}</Text>
+              <Text style={styles.resultText}>{t("ai.otonom.yayinDurduNot")}</Text>
             </View>
           )}
         </View>

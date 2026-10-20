@@ -1,10 +1,75 @@
 {
   "canli": {
+    "kameraAktif": "KAMERA AKTİF",
+    "kameraIzni": "Kamera için izin gerekli.",
     "kamerayiCevir": "Kamerayı çevir",
     "sonAnaliz": "Son analiz {{sn}} sn önce",
-    "sonKare": "Son analiz edilen kare"
+    "sonKare": "Son analiz edilen kare",
+    "sonKareHata": "Son kare analiz edilemedi: {{hata}}"
+  },
+  "fgs": {
+    "agriYok": {
+      "baslik": "Ağrı belirtisi yok (FGS 0/10)",
+      "metin": "Yüz hatlarında ağrı ya da stres bulgusu görülmüyor; kedi rahat görünüyor."
+    },
+    "analiziBaslat": "AI Analizini Başlat",
+    "au": {
+      "bas": "• Baş Pozisyonu: {{puan}}",
+      "biyik": "• Bıyık Değişimi: {{puan}}",
+      "burun": "• Burun Kasılması: {{puan}}",
+      "goz": "• Göz Kısma: {{puan}}",
+      "kulak": "• Kulak Pozisyonu: {{puan}}"
+    },
+    "bantAraligi": "  [{{alt}} – {{ust}}]",
+    "bantAraligiDisinda": "  [{{alt}} – {{ust}}]  ← bant dışı",
+    "bantNotu": "Bant, sağlıklı kalibrasyon popülasyonunun p5–p95 aralığıdır; bant dışı değer tek başına tanı değildir.",
+    "hafif": {
+      "baslik": "Hafif bulgu — FGS {{s}}/10",
+      "metin": "Hafif bir rahatsızlık ya da gerginlik olabilir. Gözlemlemeye devam edin; isterseniz PEMF ile rahatlatabilirsiniz.",
+      "nokta1": "Kulak/göz/burun/bıyık/baş pozisyon skorları aşağıda.",
+      "nokta2": "FGS = Feline Grimace Scale (yüz ağrı ölçeği)."
+    },
+    "ipucuAydinlatma": "• İyi aydınlatma — bulanık veya karanlık olmasın",
+    "ipucuBaslik": "📸 Doğru FGS analizi için fotoğraf ipuçları",
+    "ipucuTekKedi": "• Tek kedi, yüz kameraya dönük olsun",
+    "ipucuYuz": "• Kedinin yüzünü <kalin>tam karşıdan</kalin>, net ve yakın çekin",
+    "ipucuYuzOgeleri": "• Gözler, kulaklar, burun ve bıyıklar net görünsün",
+    "olcum": {
+      "agizOrani": "Ağız oranı",
+      "basKonumu": "Baş konumu",
+      "biyikGerginligi": "Bıyık gerginliği",
+      "burunSikiligi": "Burun sıkılığı",
+      "gozOrani": "Göz oranı",
+      "kulakAciklik": "Kulak açıklığı",
+      "kulakAcisi": "Kulak açısı",
+      "kulakYuksekligi": "Kulak yüksekliği"
+    },
+    "olcumBandi": "Ölçümler · popülasyon bandı (p5–p95)",
+    "orta": {
+      "baslik": "Orta derece ağrı — FGS {{s}}/10",
+      "metin": "Yüz hatlarında belirgin gerginlik var. Otonom PEMF terapisi uygulanabilir; belirti 1-2 günden uzun sürerse veteriner hekime danışın."
+    },
+    "siddetli": {
+      "baslik": "Şiddetli ağrı — FGS {{s}}/10",
+      "metin": "Ciddi ağrı bulgusu tespit edildi. Vakit kaybetmeden veteriner hekime başvurulması önerilir."
+    },
+    "skoru": "FGS Skoru: ",
+    "yuzYok": {
+      "baslik": "Yüz net tespit edilemedi",
+      "metin": "Kedinin yüzü net seçilemediği için ağrı skoru hesaplanamadı. Net, iyi aydınlatılmış ve tam karşıdan çekilmiş bir fotoğrafla tekrar deneyin."
+    }
   },
   "gorsel": {
+    "canliKamera": "Canlı Kamera",
+    "canliyiDurdur": "Canlıyı Durdur",
+    "fotografCek": "Fotoğraf Çek",
+    "gercekZamanliEtiket": "Gerçek-zamanlı işlem",
+    "gercekZamanliIpucu": "Gerçek-zamanlı işlem Pro+ planında sunulur; Pro'da istekler paylaşımlı kuyruğa girer.",
+    "gercekZamanliRozet": "⚡ Gerçek-zamanlı",
+    "ipucuBaslik": "📸 Fotoğraf ipuçları",
+    "ipucuNet": "• Net, iyi aydınlatılmış, yakın görüntü kullanın (bulanık olmasın)",
+    "kuyrukluEtiket": "Kuyruklu işlem — Pro+ ile anlık",
+    "kuyrukluRozet": "Kuyruklu · Pro+ anlık",
     "retikulosit": {
       "altBaslik": "Mikroskop görüntüsünden hücreleri otomatik sayar.",
       "baslik": "Retikülosit Sayımı"
@@ -17,6 +82,8 @@
       "altBaslik": "GhostNetV2 ile termal anormallikleri tespit eder.",
       "baslik": "Termal Görüntü Analizi"
     },
+    "tespitEdilenKedi": "Tespit Edilen Kedi: ",
+    "yanlisFoto": "⚠️ Yanlış/bulanık fotoğraf hatalı sonuç verir. Yüz net tespit edilemezse uyarı gösterilir.",
     "yuzAgrisi": {
       "altBaslik": "YOLO-pose modeli ile yüzdeki kilit noktaları analiz eder.",
       "baslik": "Yüz Ağrısı Skoru (FGS)"
@@ -187,10 +254,55 @@
   "ortak": {
     "analizEdiliyor": "Analiz Ediliyor...",
     "galeridenSec": "Galeriden Seç",
+    "goruntuSecilmedi": "Görüntü seçilmedi",
+    "modelHazirlaniyor": "Model hazırlanıyor (ilk kullanım uzun sürebilir)…",
     "noktaGorunurluguUyarisi": "ℹ️ Bu model yüz noktalarının görünürlüğünü bildirmiyor: kulak, göz gibi bir bölge örtülüyse skor yanıltıcı olabilir — yüzün tamamen açık göründüğü bir fotoğraf kullanın.",
     "otonomOnayArastirma": "Otonom Biofeedback onay gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın.",
     "otonomOnayHekim": "Otonom Biofeedback hekim onayı gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın.",
     "tibbiSorumlulukReddi": "⚠️ Bu yapay zeka sonucu yalnızca karar-destek amaçlıdır; veteriner hekim muayenesi ve teşhisinin yerine geçmez. Nihai karar hekime aittir."
+  },
+  "otonom": {
+    "aktifRozet": "OTONOM BİOFEEDBACK AKTİF",
+    "atlandi": "Otonom sürüş atlandı ({{durum}}).",
+    "baskaSeans": "Başka bir seans zaten aktif — otonom sürüş atlandı.",
+    "baslik": "Otonom Biofeedback",
+    "canliSonuc": "Otonom Canlı Sonuç:",
+    "durdurmakIcin": "Durdurmak için Kontrol ekranındaki ACİL DURDUR'u kullanın.",
+    "eAlan": "E-alan: ",
+    "etiket": "Otonom biofeedback",
+    "frekansSiddet": "Frekans: {{frekans}} Hz · Şiddet: {{duty}} %",
+    "guncelleniyor": "Cihaz otonom olarak güncelleniyor (saniyede 1)",
+    "hedefOrgan": "Hedef organ: ",
+    "ipucu": "Otonom sürüş yalnız Kontrol → AI Pro onay akışıyla başlar; bu ekran cihazı sürmez",
+    "kalanDakika": "{{dk}} dk",
+    "kalanSure": "Kalan süre: ",
+    "kimliksiz": "Uzaktan kimliksiz istekte otonom sürüş yapılmaz (güvenlik).",
+    "konumlandirilamadi": " (konumlandırılamadı)",
+    "lokalizasyonGuveni": "Lokalizasyon güveni: ",
+    "onizleme": "Önizleme — cihaz SÜRÜLMÜYOR (AI Pro hazırlık)",
+    "onizlemeRozet": "ÖNİZLEME — BOBİN SÜRÜLMÜYOR",
+    "sunucuKamerasiBekleniyor": "Sunucu kamerası bekleniyor…",
+    "sunucuKamerasiNotu": "🖥️ Sunucu (klinik) kamerası seansı sürüyor — telefon kamerası kullanılmıyor",
+    "surulmedi": "⚠️ Cihaz SÜRÜLMEDİ",
+    "suruluyor": "⚡ Cihaz otonom olarak sürülüyor",
+    "yayinDurdu": "YAYIN DURDU — GÜNCEL DEĞİL",
+    "yayinDurduNot": "Seansın sürdüğü doğrulanamıyor. Kontrol ekranından durumu teyit edin.",
+    "yayinDurduUyari": "⚠️ Canlı yayın durdu — gösterilen kare GÜNCEL DEĞİL"
+  },
+  "retikulosit": {
+    "agrege": "Agrege Retikülosit: {{sayi}}",
+    "dusuk": "Retikülosit oranı düşük–normal aralıkta görünüyor. Anemi varsa non-rejeneratif olabilir; kesin yorum klinik bağlam gerektirir.",
+    "eritrosit": "Eritrosit: {{sayi}}",
+    "nokta": "Sayılar tek bir mikroskop alanına aittir, tanısal referans aralığı değildir.",
+    "noktali": "Noktalı Retikülosit: {{sayi}}",
+    "oran": "Retikülosit oranı ~%{{oran}}",
+    "yuksek": "Görece yüksek retikülosit oranı, kemik iliğinin yeni kırmızı küre ürettiğini (rejeneratif yanıt — ör. kanamaya/anemiye tepki) düşündürebilir. Klinik bağlamla birlikte değerlendirin."
+  },
+  "segmentasyon": {
+    "basarili": "Vücut sınırları başarıyla çıkarıldı. Segmentasyon; ölçüm ve diğer analizler için bir ön-işleme adımıdır.",
+    "kediTespit_one": "{{count}} kedi tespit edildi",
+    "kediTespit_other": "{{count}} kedi tespit edildi",
+    "kediYok": "Görüntüde kedi tespit edilemedi. Kedinin tümü kadraja girecek şekilde tekrar deneyin."
   },
   "ses": {
     "aciklama": "Dostunuzun miyavını kaydedin, yapay zeka ruh halini yorumlasın. Sessiz bir ortamda ~5 saniye kaydetmeniz yeterli.",
@@ -250,10 +362,22 @@
     "sesiAnalizEt": "Sesi Analiz Et",
     "yorumBaslik": "Yapay Zeka Yorumu"
   },
+  "termal": {
+    "anormallik": "Termal anormallik",
+    "anormallikGuven": "Termal anormallik · model güveni %{{prob}}",
+    "anormallikMetin": "Termal görüntüde olası bir sıcaklık anormalliği (iltihap/enfeksiyon odağı olabilir) tespit edildi. İlgili bölgeyi hekimle değerlendirin.",
+    "anormallikYok": "Belirgin termal anormallik yok",
+    "anormallikYokGuven": "Belirgin termal anormallik yok · model güveni %{{prob}}",
+    "anormallikYokMetin": "Termal dağılımda dikkat çekici bir anormallik görülmedi.",
+    "hastaRiskli": "Hasta (Riskli)",
+    "tespitSatiri": "Termal Tespit: <kalin>{{etiket}}</kalin> (Model güveni: %{{oran}} — modelin kendi tahminine güveni; doğruluk değildir)"
+  },
   "xai": {
     "isiHaritasiGenel": "🔍 Isı haritası — modelin baktığı bölgeler (kırmızı = karara güçlü etki)",
     "isiHaritasiHasta": "🔍 Isı haritası — modeli “Hasta (Riskli)” kararına götüren bölgeler (kırmızı = bu karara güçlü katkı)",
     "isiHaritasiSaglikli": "🔍 Isı haritası — modeli “Sağlıklı” kararına götüren bölgeler (kırmızı = bu karara güçlü katkı)",
+    "isiHaritasiUret": " 🔍 Isı haritası üret (modelin baktığı bölgeler — analiz biraz uzar)",
+    "isiHaritasiUretEtiketi": "Isı haritası üret (Grad-CAM)",
     "kararSurukleyenler": "🔍 Kararı sürükleyenler: {{metin}}",
     "tespitYokNotu": "Tespit yok — harita, güven eşiğinin altında kalan en güçlü 5 aday bölgeyi gösterir (tespit ya da tanı kanıtı değildir). Görüntünün doğru tür ve odakta olduğunu kontrol edip yeniden deneyin."
   }
