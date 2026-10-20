@@ -152,7 +152,10 @@ export type NotificationLevel = "success" | "warning" | "error" | "info";
 
 export interface AppNotification {
   id: number;
+  /** Türkçe metin — HER ZAMAN dolu (eski sunucu / günlük / denetim). Arayüz yalnız `mesajlar` yoksa bunu gösterir. */
   message: string;
+  /** I18N-P1 · sunucu `_bildir`: iki dilli metin. Arayüz KENDİ dilindekini gösterir; sunucu metnine göre dallanılmaz (KURALLAR §4.9). */
+  mesajlar?: { tr?: string; en?: string };
   level: NotificationLevel;
   timestamp: string;
   read?: boolean;

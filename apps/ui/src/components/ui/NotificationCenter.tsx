@@ -94,7 +94,10 @@ export function NotificationCenter({ maxVisible = 20, compact = false }: Props) 
 }
 
 function NotificationItem({ notification: n, compact }: { notification: AppNotification; compact: boolean }) {
+  const { i18n } = useTranslation();
   const cfg = LEVEL_CONFIG[n.level] ?? LEVEL_CONFIG.info;
+  // I18N-P1: sunucu bildirimi iki dilli gelir (`mesajlar`); seçili dilin metni, yoksa (eski sunucu) Türkçe `message`.
+  const metin = n.mesajlar?.[i18n.language === "en" ? "en" : "tr"] || n.message;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -121,7 +124,7 @@ function NotificationItem({ notification: n, compact }: { notification: AppNotif
           style={StyleSheet.flatten([styles.itemMsg, compact && styles.itemMsgCompact])}
           testID="bildirim-metni"
         >
-          {n.message}
+          {metin}
         </GenisletilebilirMetin>
         {!compact && (
           <Text style={styles.itemTime}>{formatTime(n.timestamp)}</Text>

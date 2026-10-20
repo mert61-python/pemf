@@ -202,6 +202,13 @@ ESTOP_KART_RED_METNI = (
 )
 
 
+def komut_red_metni(dil: str | None = None) -> str:
+    """`KOMUT_RED_METNI`nin İSTEK dilindeki karşılığı (HTTP 409 / bildirim). Mandal EYLEMİ ve günlük için sabit (Türkçe) kalır."""
+    from utils import ceviri
+
+    return ceviri.t("firmware.komutRed", dil=dil)
+
+
 def operator_metni(kod: str | None) -> str:
     """Uyum kodunun operatör metni; kod yoksa ""."""
     return OPERATOR_METNI.get(str(kod or ""), "")

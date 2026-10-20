@@ -10,6 +10,7 @@ DAVRANIŞ BİREBİR KORUNUR. api_server.py bu isimlere aynı-nesne alias'larıyl
 in-place mutasyon → çağrı yerleri değişmez). WS broadcast event-loop'a bağımlı: api_server lifespan
 `set_event_loop()` çağırır; `_event_loop` None iken broadcast erken-return no-op (thread güvenli)."""
 
+import contextvars
 import json
 import logging
 import re
@@ -19,7 +20,7 @@ from collections import deque
 from datetime import datetime
 
 from fastapi import WebSocket
-from utils import estop_mandali
+from utils import ceviri, estop_mandali
 from utils.akim_olcumu import akim_olcumu_acik
 from utils.path_utils import HARDWARE_VERSION, get_app_version
 
@@ -378,7 +379,7 @@ def stm_duty_reddi_coz(mesaj: str) -> dict | None:
     return {"bobin": int(m[1]), "istenen_milli": int(m[2]), "tavan_milli": int(m[3]), "kip": m[4]}
 
 
-def stm_duty_reddi_metni(mesaj: str, sonuc: str = "", sifirla: bool = False) -> str:
+def stm_duty_reddi_metni(mesaj: str, sonuc: str = "", sifirla: bool = False, dil: str | None = None) -> str:
     """D1.101: duty tavanı NACK'i → operatörün EYLEM metni ("" = duty tavanı reddi değil). `sonuc`: sistemin ne
     yaptığı (ör. "seans DURDURULDU") — reddin hemen ardına yazılır.
 
@@ -386,32 +387,36 @@ def stm_duty_reddi_metni(mesaj: str, sonuc: str = "", sifirla: bool = False) -> 
     reddedilen İSTEKTİR. Operatör duty'yi düşürür ya da (bipolar) bobini Sürüş Kipi'nden Unipolar yapar.
     ⚠️ Y74 (sahip): `sifirla` — red ACİL DURDUR mandalını KURDUYSA (seansta red acil durdurma yolundan durdurur; mandal
     güvence katmanı olarak KALIR) metin eylemin İKİNCİ adımını da söyler: "… sonra 'Sıfırla'ya basın." Eskiden yalnız
-    "duty'yi indirin" diyordu; operatör düzeltip başlatınca mandal 409'una çarpıyordu. Yalnız METİN — STOP yolu aynen."""
+    "duty'yi indirin" diyordu; operatör düzeltip başlatınca mandal 409'una çarpıyordu. Yalnız METİN — STOP yolu aynen.
+    I18N-P1: `dil` — metin o dilde (`sonuc` HAZIR metin olarak o dilde verilir). Varsayılan `None` = etkin dil (istek / cihaz). ⚠️ ACİL DURDUR
+    mandalının EYLEM metni ve günlük `dil="tr"` ile çağrılır (mandal yazısı değişmez)."""
     r = stm_duty_reddi_coz(mesaj)
     if r is None:
         return ""
 
+    d = ceviri.gecerli_dil(dil) or ceviri.etkin_dil()
+
     def _yuzde(milli: int) -> str:
-        return f"{milli / 10:g}".replace(".", ",")
+        return f"{milli / 10:g}".replace(".", ",") if d == "tr" else f"{milli / 10:g}"
 
     tavan = _yuzde(r["tavan_milli"])
     bipolar = r["kip"] == "bipolar"
     # TD6 · K3 (tezgâh Oturum 13): SADE metin — "çift / tek yönlü kip"; jargon ("bipolar", "UYGULANAMAZ", "REDDETTİ", milli)
     # YOK. Sayılar firmware satırından (tavan firmware'de değişirse metin kendiliğinden doğru kalır).
-    kip = "çift yönlü" if bipolar else "tek yönlü"
+    kip = ceviri.t("bildirim.dutyReddi.kipCift", dil=d) if bipolar else ceviri.t("bildirim.dutyReddi.kipTek", dil=d)
     # Y74 (sahip) seçeneği KORUNUR: bipolar bobin Sürüş Kipi'nden Unipolar yapılabilir (K8 onayı DC bileşenini söyler).
-    secenek = " (ya da ⚡ Sürüş Kipi'nden bu bobini Unipolar yapın)" if bipolar else ""
+    secenek = ceviri.t("bildirim.dutyReddi.secenek", dil=d) if bipolar else ""
     if sifirla:
-        eylem = f"Duty'yi %{tavan} veya altına indirin{secenek}, sonra 'Sıfırla'ya basın ve yeniden başlatın."
+        eylem = ceviri.t("bildirim.dutyReddi.eylemSifirla", dil=d, tavan=tavan, secenek=secenek)
     else:
-        eylem = f"Duty'yi %{tavan} veya altına indirip yeniden başlatın{secenek}."
-    return (
-        f"Bobin {r['bobin']} {kip} kipte en fazla %{tavan} çalışabilir; %{_yuzde(r['istenen_milli'])} kabul edilmedi"
-        f"{'; ' + sonuc if sonuc else ''}. {eylem}"
-    )
+        eylem = ceviri.t("bildirim.dutyReddi.eylem", dil=d, tavan=tavan, secenek=secenek)
+    sonuc_eki = ("; " + sonuc) if sonuc else ""
+    istenen = _yuzde(r["istenen_milli"])
+    ek = {"bobin": r["bobin"], "kip": kip, "tavan": tavan, "istenen": istenen, "sonuc": sonuc_eki, "eylem": eylem}
+    return ceviri.t("bildirim.dutyReddi.govde", dil=d, **ek)
 
 
-def stm_red_duty_metni(sonuc: str = "") -> str:
+def stm_red_duty_metni(sonuc: str = "", dil: str | None = None) -> str:
     """Y74 / 1-G §8 #2: kart ŞU AN sistematik reddediyorsa ve son red bir DUTY reddiyse (kart güncel, istek geçersiz)
     operatörün eylem metni — ACİL DURDUR mandalı kuruluysa "sonra 'Sıfırla'ya basın" ile; değilse "" (çağıran firmware
     uyuşmazlığı metnine düşer). Ret sonrası dar pencerede `/session/start`, AI Pro ve HC başlatma engeli "firmware sürümü
@@ -429,7 +434,7 @@ def stm_red_duty_metni(sonuc: str = "") -> str:
         mandal = bool(estop_mandali.mandalli_mi())
     except Exception:
         mandal = False
-    return stm_duty_reddi_metni(son, sonuc, sifirla=mandal)
+    return stm_duty_reddi_metni(son, sonuc, sifirla=mandal, dil=dil)
 
 
 def stm_komut_reddi_bildir(mesaj: str = "") -> bool:
@@ -573,18 +578,42 @@ def stm_surus_hazir() -> bool:
         return _live_state["stm"] == "online"
 
 
-def _push_notification(message: str, level: str = "info") -> None:
+#: `_bildir`in iki dilli metni — `_push_notification` imzası (message, level) DEĞİŞMEZ (çağıranlar / test yakalayıcıları 2 argümanlıdır).
+_BILDIRIM_MESAJLARI: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "pemf_bildirim_mesajlari", default=None
+)
+
+
+def _push_notification(message: str, level: str = "info", mesajlar: dict | None = None) -> None:
+    """Bildirimi canlı duruma ekler ve WS ile yayınlar. `message` HER ZAMAN Türkçedir (eski istemci / günlük / denetim). `mesajlar`
+    ({"tr": …, "en": …}) varsa arayüz KENDİ dilindekini gösterir (I18N-P1 · KURALLAR §4.9: sunucu metnine göre dallanılmaz, alan eklenir)."""
     global _notif_counter
+    if mesajlar is None:
+        mesajlar = _BILDIRIM_MESAJLARI.get()
     with _live_state_lock:
         # Audit P3: ID artışını KİLİT altına al — paho MQTT callback + STM seri-loop thread'leri
         # aynı anda okuyup yazarsa iki bildirim aynı id'yi paylaşır (ID'ye göre dedup eden React
         # istemci birini düşürür/yanlış render eder).
         _notif_counter += 1
         notif = {"id": _notif_counter, "message": message, "level": level, "timestamp": datetime.now().isoformat()}
+        if mesajlar:
+            notif["mesajlar"] = dict(mesajlar)
         _live_state["notifications"].insert(0, notif)
         if len(_live_state["notifications"]) > 50:
             _live_state["notifications"].pop()
     _ws_broadcast_sync({"type": "notification", "data": notif})
+
+
+def _bildir(uret, level: str = "info", gonder=None) -> None:
+    """İKİ DİLLİ bildirim (I18N-P1): `uret(dil) -> str` her dil için metni üretir (`ceviri.t("…", dil=dil, …)`). Bildirim bir istek
+    bağlamında DEĞİL, arka plan iş parçacığında (MQTT / STM seri / bekçi) doğar → dili o an bilinmez; İKİ dilde de üretilir, arayüz
+    seçili dilini gösterir. `message` = Türkçe (bayt bayt eskisi); `mesajlar` = {tr, en}."""
+    mesajlar = {dil: uret(dil) for dil in ceviri.DILLER}
+    jeton = _BILDIRIM_MESAJLARI.set(mesajlar)
+    try:
+        (gonder or _push_notification)(mesajlar[ceviri.YEDEK_DIL], level)
+    finally:
+        _BILDIRIM_MESAJLARI.reset(jeton)
 
 
 def _efield_snapshot():

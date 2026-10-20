@@ -2143,6 +2143,678 @@
    "tur": "donanim",
    "kaynak": "apps/backend/servers/system_router.py",
    "aciklama": "tıbbi kayıt veritabanı yanıt vermiyor"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.acilDurdurUygulandi",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "acil durdurma uygulandı bildirimi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.mandalStmKopma",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "bobin çalışırken STM bağlantısı koptu: ACİL DURDUR mandalı kuruldu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.mandalStmWatchdog",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "bobin çalışırken STM watchdog: ACİL DURDUR mandalı kuruldu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.kapanisMandal",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "uygulama bobin çalışırken kapandı: mandal kuruldu, bobinleri kontrol edin"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.mandalSifirlandi",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "mandal sıfırlandı; bobinler başlatılmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.teyitsizStop",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "donanım STOP'u doğrulanamadı: ACİL DURDUR'a basın"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.stopDogrulanamadiEk",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "bu bobinin STOP'u doğrulanamadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.kaynak.telafiStop",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "teyitsiz STOP kaynağı: telafi STOP'u"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.kaynak.sifirHz",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "teyitsiz STOP kaynağı: 0 Hz seans isteği"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.kaynak.sahipsiz",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "teyitsiz STOP kaynağı: sahipsiz bobin"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.kaynak.sureDoldu",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "teyitsiz STOP kaynağı: süre doldu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.estopEspReddetti",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "ACİL DURDUR komutu ESP tarafından reddedildi: elle kontrol"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.estopEspOnayYok",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "ACİL DURDUR ESP onayı gelmedi: elle kontrol"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.uyari.stopDogrulanamadi",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "seans durdurma yanıtı: STOP doğrulanamadı, ACİL DURDUR'a basın"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.stopDogrulanamadi",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "seans başlatma hatası: STOP doğrulanamadı, ACİL DURDUR'a basın"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "sistem.hata.kapanisYalnizYerel",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "kapanış durdurması yalnız yerel launcher"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "sistem.hata.kapanisJson",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "kapanış durdurması JSON gövde ister"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "sistem.hata.kapanisOnay",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "kapanış durdurması onay ister"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "sistem.hata.sifirlaJson",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "mandal sıfırlama JSON gövde ister"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "sistem.hata.sifirlaOnay",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "mandal sıfırlama bilinçli onay ister"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.sifirHz",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "0 Hz = durdurma; seans başlatılmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.kayitAcilamadi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "tedavi kaydı açılamadı; seans başlatılmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.kayitDbAcilamadi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "tıbbi kayıt veritabanı açılamadı; seans başlatılamaz"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.kayitDbNeden",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "kayıt veritabanı açılamama nedeni"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.baslatilamazNeden",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "seans başlatılamaz: neden (disk vb.)"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.guncellemeSuruyor",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "güncelleme sürerken yeni seans başlatılamaz"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.zatenAktif",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "zaten aktif seans var"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.baslatmaSurerkenDurduruldu",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "başlatma sürerken durduruldu; seans başlatılmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.hazirlikNeden",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "seans hazırlığında hata: seans başlatılmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.hazirlikEk",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "bobinlere STOP gönderildi; yeniden deneyin"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.surusNeden",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "bobin sürüşünde hata: seans başlatılmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.surusEk",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "sürülen bobinler durduruldu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.nedenVe",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "neden ve ek birleştirme"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.baslatilmadiNeden",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "firmware uyumsuz: seans başlatılmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.hata.komutKabulEdilmedi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "hiçbir bobin komutu kabul etmedi; seans başlatılmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.sonuc.baslatilmadi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "sonuç eki: seans başlatılmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.mesaj.baslatmaDurduruldu",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "başlatma sırasında durduruldu; bobinler açılmadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.mesaj.aktifYokStop",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "aktif seans yok; STOP gönderildi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.mesaj.durduruldu",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "seans durduruldu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.uyari.espErisilemez",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "ESP bobinleri aktif olmayabilir"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.alanKaydiYazildi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "seans alan kaydı masaüstüne yazıldı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.alanKaydiBasladi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "seans alan kaydı başladı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.alanKaydiAcilamadi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "seans alan kaydı açılamadı; tedavi etkilenmedi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.aiProPlandanCikti",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "AI Pro planından bobin çıkarıldı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "yedek.hata.geriYuklemeSurerkenSeans",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "geri yükleme sürerken seans başlatılamaz"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "yedek.hata.seansSurerkenGeriYukleme",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "seans sürerken geri yükleme yapılamaz"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.telemetriYanitYokStop",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "bobin telemetrisi yanıt vermiyor: STOP gönderildi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.telemetriYanitYokStopYok",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "bobin telemetrisi yanıt vermiyor: STOP gönderilemedi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.asiriSicaklik",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "kart aşırı sıcaklık: yalnız bu bobin durduruldu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.selfTestBasarisiz",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "self-test başarısız"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.selfTestGecti",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "self-test geçti"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.selfTestAtlandi",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "self-test atlandı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.termalKesme",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "yerel termal kesme"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.termalKilit",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "bobin sıcak: start reddedildi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.termalSogudu",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "bobin soğudu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.komutReddetti",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "bobin komutu reddetti"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.sebepYok",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "red sebebi bildirilmedi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.bobinKesildi",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "bobin bağlantısı kesildi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.bobinBaglandi",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "bobin bağlandı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.bobinAlarm",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "bobin alarmı: seans durduruldu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.akimGuvenilmez",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "akım ölçümü güvenilir değil"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.alanDogrulanamadi",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "alan sensörü doğrulanamadı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.alanDoygun",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "alan sensör aralığı aşıldı: mT güvenilmez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.startReddedildiSonraki",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "önceki start reddedildi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.startReddedildi",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "start cihaz tarafından reddedildi: bobin çalışmıyor"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.kosuKaydiDuzeltildi",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "koşu kaydı düzeltildi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.startOnayYok",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "start onayı gelmedi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.beklenmedikCalisiyordu",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "bobin beklenmedik çalışıyordu: güvenlik durdurması"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "donanim.uyari.fazSenkron",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "faz senkronu kilitlenmez; S3 DC-koruma latch'i"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "donanim.uyari.fazSenkronKisa",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "faz senkronu kilitlenmez"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "donanim.hata.bobinKimligi",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "geçersiz bobin kimliği"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "donanim.hata.unipolarDizisi",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "unipolar dizisi eleman sayısı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.dutyReddi.kipCift",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/live_state.py",
+   "aciklama": "duty reddi: çift yönlü kip"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.dutyReddi.kipTek",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/live_state.py",
+   "aciklama": "duty reddi: tek yönlü kip"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.dutyReddi.secenek",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/live_state.py",
+   "aciklama": "duty reddi: Unipolar seçeneği"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.dutyReddi.eylemSifirla",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/live_state.py",
+   "aciklama": "duty reddi eylemi: indir, Sıfırla'ya bas"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.dutyReddi.eylem",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/live_state.py",
+   "aciklama": "duty reddi eylemi: indir, yeniden başlat"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.dutyReddi.govde",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/live_state.py",
+   "aciklama": "duty reddi gövdesi: tavan / istenen"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.sonuc.seansDurduruldu",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "duty reddi sonucu: seans durduruldu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.sonuc.cikislarDurduruldu",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "duty reddi sonucu: STM çıkışları durduruldu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "firmware.komutRed",
+   "tur": "firmware",
+   "kaynak": "apps/backend/utils/stm32_kimlik.py",
+   "aciklama": "kart komutları reddediyor: yazılım uyumsuz (FW-PAKET)"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.stmRedSeansDurdu",
+   "tur": "firmware",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "kart reddi: seans durduruldu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.stmKoptuSeansDurdu",
+   "tur": "firmware",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "STM bağlantısı koptu: seans durduruldu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.stmWatchdogSeansDurdu",
+   "tur": "firmware",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "STM watchdog: seans durduruldu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.stmWatchdogSeanssiz",
+   "tur": "firmware",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "STM watchdog: bobin çıkışları durduruldu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.sistemBaglandi",
+   "tur": "donanim",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "sistem bağlantısı kuruldu"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.sistemKesildi",
+   "tur": "donanim",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "sistem bağlantısı kesildi"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "donanim.hata.cekirdekHazirDegil",
+   "tur": "donanim",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "çekirdek hazır değil"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "donanim.hata.cekirdekDonanimHazirDegil",
+   "tur": "donanim",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "çekirdek / donanım denetleyicisi hazır değil"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "donanim.hata.hazirDegil",
+   "tur": "donanim",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "donanım hazır değil"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "donanim.hata.stmHazirDegil",
+   "tur": "donanim",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "STM32 donanım denetleyicisi hazır değil"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "donanim.hata.stmYok",
+   "tur": "donanim",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "STM denetleyicisi yok"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "donanim.hata.komutBasarisiz",
+   "tur": "donanim",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "donanım komutu başarısız"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "donanim.hata.bilinmeyenKomut",
+   "tur": "donanim",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "bilinmeyen komut"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "donanim.hata.sayiGecersiz",
+   "tur": "donanim",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "geçersiz sayı"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "donanim.hata.tamSayiGecersiz",
+   "tur": "donanim",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "geçersiz tam sayı aralığı"
   }
  ],
  "bekleyen": [

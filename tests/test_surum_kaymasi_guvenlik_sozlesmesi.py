@@ -38,7 +38,7 @@ _API = (_KOK / "apps" / "backend" / "servers" / "api_server.py").read_text(encod
 
 def _stop_govdesi() -> str:
     """`/session/stop` yanit kurulumunun bulundugu kesit."""
-    i = _API.find('_yanit = {"status": "success", "message": "Seans durduruldu."')
+    i = _API.find('_yanit = {"status": "success", "message": ceviri.t("seans.mesaj.durduruldu")')
     assert i > -1, "stop yanit kurulumu bulunamadi — bicim degismis, kapiyi guncelleyin"
     return _API[i : i + 4000]
 
@@ -67,15 +67,21 @@ def test_KRITIK_uyari_detail_alaninda_TASINIR():
         "yanitta `detail` YOK — eski istemcinin gosterebilecegi TEK alan odur "
         "(apiClient: showError('Sunucu Hatasi', detail))"
     )
-    assert "ACİL DURDUR" in g or "ACIL DURDUR" in g, (
-        "uyari metni operatore NE YAPACAGINI soylemiyor (acil durdurma yonlendirmesi yok)"
-    )
+    # I18N-P1: uyarı cümlesi kataloğa taşındı — ölçüt GEVŞEMEDİ, yer değiştirdi: kaynak anahtarı KULLANIR + TR "ACİL DURDUR'a basın"
+    # (eylem söyler) + EN "Press EMERGENCY STOP".
+    import i18n_yardimci as iy
+
+    assert 'ceviri.t("seans.uyari.stopDogrulanamadi"' in _API, "uyari metni anahtari kullanilmiyor"
+    tr = iy.katalog("sunucu", "tr")["seans.uyari.stopDogrulanamadi"]
+    en = iy.katalog("sunucu", "en")["seans.uyari.stopDogrulanamadi"]
+    assert "ACİL DURDUR" in tr, "uyari metni operatore NE YAPACAGINI soylemiyor (acil durdurma yonlendirmesi yok)"
+    assert "EMERGENCY STOP" in en, "EN uyari metni acil durdurma yonlendirmesi vermiyor"
 
 
 def test_KRITIK_uyari_KAYBOLMAYACAK_bir_yere_de_duser():
     """3. madde: telefon eski surumdeyse ya da ekrani kimse gormuyorsa uyari yok olmasin."""
     g = _stop_govdesi()
-    assert "_push_notification" in g, "teyitsiz-durdurma bildirim akisina DUSMUYOR"
+    assert "_bildir(" in g, "teyitsiz-durdurma bildirim akisina DUSMUYOR (iki dilli `_bildir`)"
     assert re.search(r"logging\.(error|critical)", g), "teyitsiz-durdurma gunluge YAZILMIYOR"
 
 

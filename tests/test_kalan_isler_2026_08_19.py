@@ -79,7 +79,9 @@ def test_KRITIK_4_freq_ayrisma_uyarisi_REDDETMEZ_uyarir():
     i = src.index("50.0 * max(esp_freq, 1.0)")
     blok = src[max(0, i - 1200) : i + 1200]
     # uyarı YOLU: bildirim + yanıt alanı; RED (HTTPException/4xx) YOK
-    assert "_push_notification" in blok
+    assert "_bildir(" in blok, (
+        "uyarı bildirim akışına düşmüyor (iki dilli `_bildir`)"
+    )  # I18N-P1: ölçüt aynı, bildirim artık `_bildir`
     assert "HTTPException" not in blok, "uyarı reddetmeye dönüşmüş — operatör bilinçli olabilir (tasarım: uyar)"
     # yalnız coil1 GERÇEKTEN çalışırken (running) tetiklenir
     assert '_c1.get("running")' in blok, "koşul coil1 running'e bağlı değil (boşta yanlış uyarı)"

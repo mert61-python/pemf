@@ -18,7 +18,10 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.gzip import GZipMiddleware
-from utils import estop_mandali  # D1.81 · Y4: acil durdurma mandalı + sürüş nesli
+from utils import (
+    ceviri,
+    estop_mandali,  # D1.81 · Y4: acil durdurma mandalı + sürüş nesli
+)
 from utils import stm32_kimlik as _stm32_kimlik  # TD1: operatör metinleri (K1 / K2) tek kaynak
 from utils.path_utils import get_app_version, get_build_id  # audit B-8.1: tek versiyon kaynağı
 
@@ -48,6 +51,13 @@ ESP_COIL_IDS = live_state.ESP_COIL_IDS
 _ws_broadcast_sync = live_state._ws_broadcast_sync
 _sync_stm_coils_locked = live_state._sync_stm_coils_locked
 _push_notification = live_state._push_notification
+
+
+def _bildir(uret, level: str = "info") -> None:
+    """İKİ DİLLİ bildirim (`live_state._bildir`); gönderim bu modülün `_push_notification` takma adıyla (testler onu yakalar)."""
+    live_state._bildir(uret, level, _push_notification)
+
+
 _build_ws_snapshot = live_state._build_ws_snapshot
 update_live_stm_status = live_state.update_live_stm_status
 update_live_coil_from_stm = live_state.update_live_coil_from_stm
@@ -81,7 +91,7 @@ def update_live_session_state(*args, e_baglam_nesli: int | None = None, **kwargs
         try:
             _yol = _seans_alan.seans_bitti("seans kapandı")
             if _yol is not None:
-                _push_notification(f"📄 Seans alan kaydı masaüstüne yazıldı: {_yol.name}", "info")
+                _bildir(lambda d: ceviri.t("bildirim.alanKaydiYazildi", dil=d, name=_yol.name), "info")
         except Exception:
             logging.exception("seans alan kaydı kapatılamadı (seans akışı etkilenmez)")
         # D1.61 (B-5.7 · B-1.25): canlı E bağlamı seansa aittir — aynı tek noktada temizlenir (durdurma, süre bekçisi,
@@ -408,6 +418,11 @@ elif _ah_mod == "liste":
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(_ah_liste))
 
 
+def _json_detay(metin: str) -> str:
+    """Ara katman hata gövdesi (JSON) — TR (ASCII) gövde bayt bayt eskisiyle aynı."""
+    return json.dumps({"detail": metin}, separators=(",", ":"))
+
+
 # ── Global exception handler'ları (audit B-4.1) ────────────────────────────────
 # Eskiden yakalanmayan istisna → Starlette varsayılan 500 (korelasyon-id'siz, merkezî log'suz);
 # doğrulama hataları da tutarsız formattaydı. Artık TEK, tutarlı zarf: yakalanmayan istisnalar
@@ -420,7 +435,7 @@ async def _unhandled_exception_handler(request: Request, exc: Exception):
     )
     return JSONResponse(
         status_code=500,
-        content={"detail": "Sunucu hatası (beklenmeyen).", "error_id": err_id},
+        content={"detail": ceviri.t("hata.beklenmeyen", dil=ceviri.istekten_dil(request)), "error_id": err_id},
     )
 
 
@@ -428,7 +443,10 @@ async def _unhandled_exception_handler(request: Request, exc: Exception):
 async def _validation_exception_handler(request: Request, exc: RequestValidationError):
     # 'input' alanı PII taşıyabilir → istemciye YALNIZ loc/msg/type; ham girdi değeri sızmaz.
     errors = [{"loc": e.get("loc"), "msg": e.get("msg"), "type": e.get("type")} for e in exc.errors()]
-    return JSONResponse(status_code=422, content={"detail": "Geçersiz istek verisi.", "errors": errors})
+    return JSONResponse(
+        status_code=422,
+        content={"detail": ceviri.t("hata.gecersizIstek", dil=ceviri.istekten_dil(request)), "errors": errors},
+    )
 
 
 @app.middleware("http")
@@ -538,7 +556,9 @@ async def _auth_middleware(request: Request, call_next):
         if any(s in p for s in ("emergency_stop", "/health", "/discovery", "/simulator")):
             return await call_next(request)
         return Response(
-            status_code=503, content='{"detail":"Auth katmani kullanilamiyor"}', media_type="application/json"
+            status_code=503,
+            content=_json_detay(ceviri.t("hata.authKatmani", dil=ceviri.istekten_dil(request))),
+            media_type="application/json",
         )
     if required and not exempt:
         try:
@@ -549,7 +569,7 @@ async def _auth_middleware(request: Request, call_next):
         if not ok:
             return Response(
                 status_code=401,
-                content='{"detail":"Gecersiz veya eksik API anahtari (X-API-Key)"}',
+                content=_json_detay(ceviri.t("hata.apiAnahtari", dil=ceviri.istekten_dil(request))),
                 media_type="application/json",
             )
     return await call_next(request)
@@ -632,7 +652,7 @@ async def _rate_limit_middleware(request: Request, call_next):
             logging.getLogger(__name__).warning("Rate limit: uzak IP %s %s istek/dk aştı (%s)", ip, _RL_REMOTE_MAX, p)
             return Response(
                 status_code=429,
-                content='{"detail":"Cok fazla istek, biraz bekleyin"}',
+                content=_json_detay(ceviri.t("hata.cokIstek", dil=ceviri.istekten_dil(request))),
                 media_type="application/json",
                 headers={"Retry-After": str(retry)},
             )
@@ -759,7 +779,7 @@ def _on_mqtt_connect_api(client, userdata, flags, rc):
         client.subscribe("pemf/coil/+/ack")  # HG-4 (2026-08-19): ESP komut onayı — E-stop teslimi doğrulanabilsin
         client.subscribe("pemf/gateway/status")
         client.subscribe("pemf/bridge/status")
-        _push_notification("Sistem bağlantısı kuruldu", "success")
+        _bildir(lambda d: ceviri.t("bildirim.sistemBaglandi", dil=d), "success")
     else:
         with _live_state_lock:
             _live_state["mqtt"] = "error"
@@ -768,7 +788,7 @@ def _on_mqtt_connect_api(client, userdata, flags, rc):
 def _on_mqtt_disconnect_api(client, userdata, rc):
     with _live_state_lock:
         _live_state["mqtt"] = "error"
-    _push_notification("Sistem bağlantısı kesildi", "warning")
+    _bildir(lambda d: ceviri.t("bildirim.sistemKesildi", dil=d), "warning")
 
 
 # ── ESP telemetri STALENESS watchdog (reconnect-audit self-heal) ──────────────
@@ -899,11 +919,30 @@ def _stm_nack_bastir(mesaj: str) -> bool:
 #: `docs/SAHA-ISLERI-REHBERI.md` B-2). Kod (FW-PAKET) arayüz bandıyla AYNI (`utils.stm32_kimlik.OPERATOR_METNI`).
 STM_RED_MESAJI = _stm32_kimlik.KOMUT_RED_METNI
 
+
+def stm_red_mesaji(dil: str | None = None) -> str:
+    """`STM_RED_MESAJI`nin İSTEK dilindeki karşılığı (409 / bildirim). ⚠️ ACİL DURDUR mandal EYLEMİ sabit Türkçe `STM_RED_MESAJI`yi kullanır."""
+    return _stm32_kimlik.komut_red_metni(dil)
+
+
+def _duty_seans_durdu_metni(ham: str, dil: str) -> str:
+    sonuc = ceviri.t("bildirim.sonuc.seansDurduruldu", dil=dil)
+    return live_state.stm_duty_reddi_metni(ham, sonuc, sifirla=True, dil=dil)
+
+
+def _duty_cikislar_metni(ham: str, dil: str, durdu: bool) -> str:
+    sonuc = ceviri.t("bildirim.sonuc.cikislarDurduruldu", dil=dil) if durdu else ""
+    return live_state.stm_duty_reddi_metni(ham, sonuc, dil=dil)
+
+
 #: D1.53 (A-05): 0 Hz seans isteğinin nedeni — tek kaynak (mandallı ve mandalsız yol AYNI metni verir; 1-C i3-F-4).
-SIFIR_HZ_SEANS_MESAJI = "Frekans 0 Hz = DURDURMA (A-05): bobinler durduruldu, seans BAŞLATILMADI. Frekans girin."
+def sifir_hz_seans_mesaji() -> str:
+    return ceviri.t("seans.hata.sifirHz")
+
 
 #: Y65 (sahip, 1-F inceleme S-İF1): tedavi kaydının DB satırı açılamazsa seans BAŞLAMAZ — elle seans ve AI Pro AYNI metin.
-KAYIT_ACILAMADI_MESAJI = "Tedavi kaydı açılamadı — seans BAŞLATILMADI; birkaç saniye sonra yeniden deneyin"
+def kayit_acilamadi_mesaji() -> str:
+    return ceviri.t("seans.hata.kayitAcilamadi")
 
 
 class KayitAcilamadi(RuntimeError):
@@ -980,11 +1019,7 @@ def _ai_pro_plandan_cikar(bobinler) -> None:
         from servers import ai_router as _air
 
         for b in _air.ai_pro_bobinlerini_plandan_cikar(bobinler):
-            _push_notification(
-                f"Bobin {b} AI Pro planından çıkarıldı — operatör durdurdu; seans sonuna kadar AI Pro bu bobini sürmez, "
-                "diğer bobinler sürüyor.",
-                "warning",
-            )
+            _bildir(lambda d, b=b: ceviri.t("bildirim.aiProPlandanCikti", dil=d, coil=b), "warning")
     except Exception:
         logging.getLogger(__name__).exception("Y54: AI Pro plan disi kaydi yapilamadi (STOP suruyor)")
 
@@ -1059,11 +1094,11 @@ def _stm_red_aktif_seansi_durdur(ham: str) -> bool:
             str(ham)[:120],
         )
         # Y74 (sahip): seansta red ACİL DURDUR yolundan durdurur ve mandal KURULU KALIR → metin "sonra 'Sıfırla'ya basın" der.
-        _duty_metni = live_state.stm_duty_reddi_metni(ham, "seans DURDURULDU", sifirla=True)
+        _duty_var = live_state.stm_duty_reddi_coz(ham) is not None
         # TD6 · K12: mandal bandı nedene göre EYLEM söylesin — duty reddinde K3 metni, aksi kart uyumsuzluğu metni. Yalnız
         # METİN (mandal aşağıdaki E-stop yolunda kurulur; imza ve sıra DEĞİŞMEDİ).
         try:
-            _duty_eylem = live_state.stm_duty_reddi_metni(ham, sifirla=True)
+            _duty_eylem = live_state.stm_duty_reddi_metni(ham, sifirla=True, dil="tr")  # mandal EYLEMİ: yazı DEĞİŞMEZ
             # I18N-P1: duty reddi metni "Sıfırla"ya basın der (Y74) → makine-okur bayrak; kart uyumsuzluğu metni demez.
             estop_mandali.eylem_birak(
                 "stm_komut_reddi", _duty_eylem or STM_RED_MESAJI, sifirla_soyler=bool(_duty_eylem)
@@ -1072,13 +1107,15 @@ def _stm_red_aktif_seansi_durdur(ham: str) -> bool:
             logging.getLogger(__name__).warning(
                 "K12: mandal eylem metni bırakılamadı (durdurma SÜRÜYOR)", exc_info=True
             )
-        _push_notification(
-            "⛔ " + _duty_metni if _duty_metni else "⛔ Seans DURDURULDU: " + STM_RED_MESAJI,
+        _bildir(
+            lambda d: (
+                "⛔ " + _duty_seans_durdu_metni(ham, d)
+                if _duty_var
+                else ceviri.t("bildirim.stmRedSeansDurdu", dil=d, neden=stm_red_mesaji(d))
+            ),
             "error",
         )
-        _emergency_stop_async(
-            reason="stm_komut_reddi", mode="Duty Reddedildi" if _duty_metni else "Firmware Uyuşmazlığı"
-        )
+        _emergency_stop_async(reason="stm_komut_reddi", mode="Duty Reddedildi" if _duty_var else "Firmware Uyuşmazlığı")
         return True
     except Exception:
         logging.getLogger(__name__).exception("STM red sonrasi seans durdurma basarisiz")
@@ -1101,9 +1138,8 @@ def _stm_duty_reddini_isle(ham: str, ilk_kez: bool) -> None:
     try:
         if not ilk_kez:
             if not _stm_nack_bastir(ham):
-                _push_notification(
-                    "⛔ " + live_state.stm_duty_reddi_metni(ham, sifirla=estop_mandali.mandalli_mi()), "error"
-                )
+                _mandalli = estop_mandali.mandalli_mi()
+                _bildir(lambda d: "⛔ " + live_state.stm_duty_reddi_metni(ham, sifirla=_mandalli, dil=d), "error")
             return
         if not _stm_red_aktif_seansi_durdur(ham):
             _durdu = False
@@ -1112,10 +1148,7 @@ def _stm_duty_reddini_isle(ham: str, ilk_kez: bool) -> None:
                     _durdu = bool(state.hardware.stop_all_coils())
                 except Exception:
                     logging.getLogger(__name__).exception("D1.101: duty reddi sonrasi STM surus durumu sifirlanamadi")
-            _push_notification(
-                "⛔ " + live_state.stm_duty_reddi_metni(ham, "STM bobin çıkışları durduruldu" if _durdu else ""),
-                "error",
-            )
+            _bildir(lambda d: "⛔ " + _duty_cikislar_metni(ham, d, _durdu), "error")
         _stm_nack_bastir(ham)  # kenarın ardından gelen aynı sebepli NACK'ler bildirimi yinelemesin
     except Exception:
         logging.getLogger(__name__).exception("D1.101: duty reddi islenemedi")
@@ -1175,19 +1208,12 @@ def _esp_telemetry_watchdog():
                     )
                 _ws_broadcast_sync({"type": "coil_status", "coilId": cid, "data": snap})
                 if stop_gitti:
-                    _push_notification(
-                        f"⚠️ Bobin {cid} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı, STOP gönderildi",
-                        "warning",
-                    )
+                    _bildir(lambda d, cid=cid: ceviri.t("bildirim.telemetriYanitYokStop", dil=d, coil=cid), "warning")
                 else:
                     logging.getLogger(__name__).warning(
                         "esp watchdog: bobin %s STOP publish DOĞRULANAMADI (broker erişilemez olabilir)", cid
                     )
-                    _push_notification(
-                        f"⚠️ Bobin {cid} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı; "
-                        "STOP GÖNDERİLEMEDİ (broker erişilemiyor) — bobin HÂLÂ ENERJİLİ olabilir, elle kontrol edin",
-                        "error",
-                    )
+                    _bildir(lambda d, cid=cid: ceviri.t("bildirim.telemetriYanitYokStopYok", dil=d, coil=cid), "error")
         except Exception:
             _dongu_hatasini_bildir("esp telemetry watchdog error")
         time.sleep(ESP_WATCHDOG_INTERVAL_SEC)
@@ -1226,9 +1252,11 @@ def _y53_yalniz_kendi_bobinini_durdur(coil_id: int, atype: str) -> None:
             _live_state["coils"][idx]["running"] = False
             _snap = dict(_live_state["coils"][idx])
         _ws_broadcast_sync({"type": "coil_status", "coilId": coil_id, "data": _snap})
-    _push_notification(
-        f"🌡️ Bobin {coil_id} kartı AŞIRI SICAKLIK bildirdi ({atype}) — yalnız bobin {coil_id} durduruldu; "
-        "diğer bobinler sürüyor. Bobini kontrol edin." + (" ⚠️ Bu bobinin STOP'u DOĞRULANAMADI." if _teyitsiz else ""),
+    _bildir(
+        lambda d: (
+            ceviri.t("bildirim.asiriSicaklik", dil=d, coil=coil_id, atype=atype)
+            + (ceviri.t("bildirim.stopDogrulanamadiEk", dil=d) if _teyitsiz else "")
+        ),
         "warning",
     )
 
@@ -1426,12 +1454,18 @@ def _on_mqtt_message_api(client, userdata, msg):
                     _st_msg = str(payload.get("message") or payload.get("detail") or "")[:160]
                     if event_type == "selftest_fail":
                         logging.error("SELFTEST BAŞARISIZ bobin %s: %s", coil_id_str, _st_msg)
-                        _push_notification(f"🚨 Bobin {coil_id_str} self-test BAŞARISIZ — {_st_msg}", "error")
+                        _bildir(
+                            lambda d: ceviri.t("bildirim.selfTestBasarisiz", dil=d, coil=coil_id_str, ayrinti=_st_msg),
+                            "error",
+                        )
                     else:
                         logging.info("selftest bobin %s: %s (%s)", coil_id_str, event_type, _st_msg)
-                        _push_notification(
-                            f"Bobin {coil_id_str} self-test: "
-                            + ("geçti" if event_type == "selftest_ok" else "atlandı (PWM pasif)"),
+                        _bildir(
+                            lambda d: (
+                                ceviri.t("bildirim.selfTestGecti", dil=d, coil=coil_id_str)
+                                if event_type == "selftest_ok"
+                                else ceviri.t("bildirim.selfTestAtlandi", dil=d, coil=coil_id_str)
+                            ),
                             "success" if event_type == "selftest_ok" else "info",
                         )
                     _ws_broadcast_sync(
@@ -1451,22 +1485,18 @@ def _on_mqtt_message_api(client, userdata, msg):
                 # Ad paritesi firmware kaynagiyla kilitli: tests/test_termal_olay_gorunurlugu.py
                 if event_type in ("thermal_stop", "thermal_lock", "thermal_unlock"):
                     _termal_msg = str(payload.get("message") or payload.get("detail") or "")[:160]
+                    _ayr = f" ({_termal_msg})" if _termal_msg else ""
                     if event_type == "thermal_stop":
                         logging.error("YEREL TERMAL KESME bobin %s: %s", coil_id_str, _termal_msg)
-                        _push_notification(
-                            f"🔥 Bobin {coil_id_str} YEREL TERMAL KESME — PWM cihaz tarafından durduruldu"
-                            + (f" ({_termal_msg})" if _termal_msg else "")
-                            + "; 45°C altına soğuyunca start serbest",
-                            "error",
+                        _bildir(
+                            lambda d: ceviri.t("bildirim.termalKesme", dil=d, coil=coil_id_str, ayrinti=_ayr), "error"
                         )
                     elif event_type == "thermal_lock":
-                        _push_notification(
-                            f"⚠️ Bobin {coil_id_str} sıcak: start reddedildi — soğuması bekleniyor"
-                            + (f" ({_termal_msg})" if _termal_msg else ""),
-                            "warning",
+                        _bildir(
+                            lambda d: ceviri.t("bildirim.termalKilit", dil=d, coil=coil_id_str, ayrinti=_ayr), "warning"
                         )
                     else:
-                        _push_notification(f"✅ Bobin {coil_id_str} soğudu — start yeniden serbest", "success")
+                        _bildir(lambda d: ceviri.t("bildirim.termalSogudu", dil=d, coil=coil_id_str), "success")
                     _ws_broadcast_sync(
                         {
                             "type": "thermal_event",
@@ -1484,8 +1514,12 @@ def _on_mqtt_message_api(client, userdata, msg):
                 if event_type == "command_error":
                     _ce_msg = str(payload.get("message") or payload.get("detail") or "")[:160]
                     logging.error("Bobin %s KOMUTU REDDETTI (NACK): %s", coil_id_str, _ce_msg)
-                    _push_notification(
-                        f"⚠️ Bobin {coil_id_str} komutu REDDETTİ — {_ce_msg or 'sebep bildirilmedi'}",
+
+                    def _ce_sebep(d):
+                        return _ce_msg or ceviri.t("bildirim.sebepYok", dil=d)
+
+                    _bildir(
+                        lambda d: ceviri.t("bildirim.komutReddetti", dil=d, coil=coil_id_str, sebep=_ce_sebep(d)),
                         "error",
                     )
                     _ws_broadcast_sync(
@@ -1515,7 +1549,7 @@ def _on_mqtt_message_api(client, userdata, msg):
                         _live_state["coils"][coil_index]["running"] = False
                         _snap = dict(_live_state["coils"][coil_index])
                     _ws_broadcast_sync({"type": "coil_status", "coilId": int(coil_id_str), "data": _snap})
-                    _push_notification(f"⚠️ Bobin {coil_id_str} bağlantısı kesildi", "warning")
+                    _bildir(lambda d: ceviri.t("bildirim.bobinKesildi", dil=d, coil=coil_id_str), "warning")
                 elif event_type == "wifi_connected":
                     # AYNI ARIZANIN AYNASI: yayin olmadan istemci "Offline" da asili kalirdi
                     # (bobin geri geldiginde kart guncellenmiyordu).
@@ -1523,7 +1557,7 @@ def _on_mqtt_message_api(client, userdata, msg):
                         _live_state["coils"][coil_index]["connected"] = True
                         _snap = dict(_live_state["coils"][coil_index])
                     _ws_broadcast_sync({"type": "coil_status", "coilId": int(coil_id_str), "data": _snap})
-                    _push_notification(f"✅ Bobin {coil_id_str} bağlandı", "success")
+                    _bildir(lambda d: ceviri.t("bildirim.bobinBaglandi", dil=d, coil=coil_id_str), "success")
 
             elif msg_type == "alarm":
                 # ESP firmware'inin KENDİ güvenlik alarmı (overtemp / safety_violation / overcurrent).
@@ -1551,7 +1585,7 @@ def _on_mqtt_message_api(client, userdata, msg):
                     _y53_yalniz_kendi_bobinini_durdur(int(coil_id_str), str(atype))
                     return
                 logging.error("ESP ALARM bobin %s: %s -> tum bobinler durduruluyor", coil_id_str, atype)
-                _push_notification(f"🚨 Bobin {coil_id_str} ALARM ({atype}) — seans güvenlik için durduruldu", "error")
+                _bildir(lambda d: ceviri.t("bildirim.bobinAlarm", dil=d, coil=coil_id_str, atype=atype), "error")
                 try:
                     _emergency_stop_async(reason=f"esp_alarm_{coil_id_str}_{atype}", mode="ESP Güvenlik Alarmı")
                 except Exception:
@@ -1775,10 +1809,12 @@ def _y45_mandal_sonrasi(neden: str) -> None:
     try:
         estop_mandali.diske_yaz_arka_planda()
         _ws_broadcast_sync({"type": "estop_mandali", "data": estop_mandali.durum()})
-        _push_notification(
-            "🔒 Bobin çalışırken "
-            + ("STM32 bağlantısı koptu" if neden == "stm_disconnected" else "STM32 watchdog zaman aşımı")
-            + " — ACİL DURDUR mandalı kuruldu. Bobinleri kontrol edin; yeniden başlatmak için önce \"Sıfırla\".",
+        _bildir(
+            lambda d: (
+                ceviri.t("bildirim.mandalStmKopma", dil=d)
+                if neden == "stm_disconnected"
+                else ceviri.t("bildirim.mandalStmWatchdog", dil=d)
+            ),
             "error",
         )
     except Exception:
@@ -1810,7 +1846,7 @@ def _handle_backend_event(event) -> None:
             _sess_coils = _active_session.get("coil_ids") or list(range(1, 9))
         if _sess_active and any(c in STM_COIL_IDS for c in _sess_coils):
             logging.error("STM baglanti kaybi: STM kullanan aktif seans durduruluyor (guvenlik).")
-            _push_notification("⚠️ STM32 bağlantısı koptu — seans güvenlik için durduruldu", "error")
+            _bildir(lambda d: ceviri.t("bildirim.stmKoptuSeansDurdu", dil=d), "error")
             try:
                 _emergency_stop_async(reason="stm_disconnected", mode="STM Bağlantı Kaybı")
             except Exception:
@@ -1923,17 +1959,10 @@ def _handle_backend_event(event) -> None:
             _ws_broadcast_sync({"type": "coil_status", "coilId": _t_coil_id, "data": _t_snap})
         if data.get("akim_guvenilmez") and _t_idx not in _akim_guvenilmez_bildirildi:
             _akim_guvenilmez_bildirildi.add(_t_idx)
-            _push_notification(
-                f"⚠️ Bobin {_t_coil_id}: Akım ölçümü bu bobinde güvenilir değil — doz kaydına akım yazılmadı.",
-                "warning",
-            )
+            _bildir(lambda d: ceviri.t("bildirim.akimGuvenilmez", dil=d, coil=_t_coil_id), "warning")
         if _t_alan_degisti:
             if _t_snap.get("alanDogrulanamadi"):
-                _push_notification(
-                    f"⚠️ Bobin {_t_coil_id} alan sensörü doğrulanamadı — ölçülen alan (mT) gösterilmiyor ve kayda "
-                    "yazılmıyor. Teknik desteğe bildirin (kod: FW-ALAN).",
-                    "warning",
-                )
+                _bildir(lambda d: ceviri.t("bildirim.alanDogrulanamadi", dil=d, coil=_t_coil_id), "warning")
         if not _t_yazildi:
             return
         _coil_last_telemetry[_t_idx] = time.monotonic()
@@ -1957,11 +1986,7 @@ def _handle_backend_event(event) -> None:
         if _t_mag_doygun != bool(_mag_doygun_son.get(_t_idx)):
             _mag_doygun_son[_t_idx] = _t_mag_doygun
             if _t_mag_doygun:
-                _push_notification(
-                    f"⚠️ Bobin {_t_coil_id} manyetik alanı sensör aralığını AŞTI (±24,6 mT) — "
-                    "gösterilen mT GÜVENİLMEZ (taşma sarar, değer DÜŞÜK görünebilir)",
-                    "warning",
-                )
+                _bildir(lambda d: ceviri.t("bildirim.alanDoygun", dil=d, coil=_t_coil_id), "warning")
         # ── SEANS YOĞUNLUĞU: ölçüm CSV'ye ve aktif seans kartına ─────────────────────
         # Sahip kararı 2026-09-11: "ordaki yoğunluk değeri stm e bağlı olan SENSÖRDEN
         # GELSİN VE AYNI ZAMANDA CSV YE KAYDEDİP MASAÜSTÜNE KOYSUN".
@@ -2042,10 +2067,12 @@ def _handle_backend_event(event) -> None:
                 logging.exception("STM watchdog sonrasi HC sifirlama basarisiz")
         if _y45_mandal:
             _y45_mandal_sonrasi("stm_watchdog_timeout")
-        _push_notification(
-            "⚠️ STM32 watchdog zaman aşımı — seans güvenlik için durduruldu"
-            if _seans_durduruluyor
-            else "⚠️ STM32 watchdog zaman aşımı — bobin çıkışları durduruldu (aktif seans yoktu)",
+        _bildir(
+            lambda d: (
+                ceviri.t("bildirim.stmWatchdogSeansDurdu", dil=d)
+                if _seans_durduruluyor
+                else ceviri.t("bildirim.stmWatchdogSeanssiz", dil=d)
+            ),
             "error",
         )
         if _seans_durduruluyor:
@@ -2076,7 +2103,7 @@ def _handle_backend_event(event) -> None:
         if _stm_nack_bastir(_ham):
             return
         if "CRC" in _ham.upper():
-            _push_notification("⚠️ " + STM_RED_MESAJI, "error")  # TD1 · K1: sade metin + kod; teknik ayrıntı destekte
+            _bildir(lambda d: "⚠️ " + stm_red_mesaji(d), "error")  # TD1 · K1: sade metin + kod; teknik ayrıntı destekte
             return
         _push_notification(_ham, "error")
         return
@@ -2697,7 +2724,7 @@ def _esp_start_yayinla(coil_id: int, payload: dict, nesil: int | None = None) ->
             ):
                 break
         else:
-            _bildir_teyitsiz_stop([coil_id], "Telafi STOP'u (START yayını sürerken durdurma geldi)")
+            _bildir_teyitsiz_stop([coil_id], lambda d: ceviri.t("bildirim.kaynak.telafiStop", dil=d))
         return False
     return ok
 
@@ -2813,11 +2840,7 @@ def _start_ack_watch(coil_id: int, command_id: str, run_id=None) -> None:
                 command_id,
             )
             try:
-                _push_notification(
-                    f"⚠️ Bobin {coil_id}: önceki start komutu reddedildi — sonraki komut geçerli; durumu panelden "
-                    "doğrulayın",
-                    "warning",
-                )
+                _bildir(lambda d: ceviri.t("bildirim.startReddedildiSonraki", dil=d, coil=coil_id), "warning")
             except Exception:
                 pass
             return
@@ -2836,9 +2859,11 @@ def _start_ack_watch(coil_id: int, command_id: str, run_id=None) -> None:
         except Exception:
             logging.getLogger(__name__).debug("NACK sonrasi run kapatma hatasi", exc_info=True)
         try:
-            _push_notification(
-                f"⚠️ Bobin {coil_id}: start komutu cihaz tarafından REDDEDİLDİ — bobin ÇALIŞMIYOR"
-                + ("; koşu kaydı düzeltildi" if run_id is not None else ""),
+            _bildir(
+                lambda d: (
+                    ceviri.t("bildirim.startReddedildi", dil=d, coil=coil_id)
+                    + (ceviri.t("bildirim.kosuKaydiDuzeltildi", dil=d) if run_id is not None else "")
+                ),
                 "error",
             )
         except Exception:
@@ -2851,10 +2876,7 @@ def _start_ack_watch(coil_id: int, command_id: str, run_id=None) -> None:
     )
     _ack_yayinla(None, "timeout")
     try:
-        _push_notification(
-            f"⚠️ Bobin {coil_id}: start onayı gelmedi — bobinin gerçekten çalıştığını panelden kontrol edin",
-            "warning",
-        )
+        _bildir(lambda d: ceviri.t("bildirim.startOnayYok", dil=d, coil=coil_id), "warning")
     except Exception:
         pass
 
@@ -2913,10 +2935,7 @@ def _estop_ack_watch(coil_id: int, command_id: str) -> None:
             coil_id,
         )
         try:
-            _push_notification(
-                f"⚠️ Bobin {coil_id}: acil durdurma komutu ESP tarafından REDDEDİLDİ — bobini elle kontrol edin",
-                "error",
-            )
+            _bildir(lambda d: ceviri.t("bildirim.estopEspReddetti", dil=d, coil=coil_id), "error")
         except Exception:
             pass
         return
@@ -2925,10 +2944,7 @@ def _estop_ack_watch(coil_id: int, command_id: str) -> None:
         coil_id,
     )
     try:
-        _push_notification(
-            f"⚠️ Bobin {coil_id}: acil durdurma ESP onayı GELMEDİ — bobini elle kontrol edin",
-            "error",
-        )
+        _bildir(lambda d: ceviri.t("bildirim.estopEspOnayYok", dil=d, coil=coil_id), "error")
     except Exception:
         pass
 
@@ -3031,10 +3047,7 @@ def _reconcile_esp_calisiyor(coil_id: int, snapshot: dict) -> None:
                 _reconcile_last_notify[coil_id] = simdi_n
         if bildir:
             try:
-                _push_notification(
-                    f"⚠️ Bobin {coil_id} beklenmedik şekilde çalışıyordu — güvenlik durdurması gönderildi",
-                    "warning",
-                )
+                _bildir(lambda d: ceviri.t("bildirim.beklenmedikCalisiyordu", dil=d, coil=coil_id), "warning")
             except Exception:
                 pass
 
@@ -3263,7 +3276,7 @@ async def auto_preset(payload: AutoPresetPayload):
     donanım parametrelerini otomatik ayarlar.
     """
     if not state.core:
-        raise HTTPException(status_code=503, detail="Çekirdek hazır değil.")
+        raise HTTPException(status_code=503, detail=ceviri.t("donanim.hata.cekirdekHazirDegil"))
 
     try:
         from pathlib import Path
@@ -3285,11 +3298,11 @@ async def auto_preset(payload: AutoPresetPayload):
             "parameters": {"freq": freq, "duty": duty, "duration": duration, "source": rec.get("source", "unknown")},
         }
     except ImportError:
-        raise HTTPException(status_code=501, detail="AI recommender bulunamadı.")
+        raise HTTPException(status_code=501, detail=ceviri.t("ai.hata.onericiYok"))
     except Exception:
         # B3 güvenlik-fix: ham str(e) istemciye SIZMAZ (bilgi ifşası) — sunucuda logla, generic dön.
         logging.getLogger(__name__).exception("AI öneri hesaplanamadı")
-        raise HTTPException(status_code=500, detail="AI öneri hatası")
+        raise HTTPException(status_code=500, detail=ceviri.t("ai.hata.oneriHatasi"))
 
 
 def _eski_komut_baslatma_parametreleri(p: dict, varsayilan_sure_dk: int) -> dict:
@@ -3307,13 +3320,15 @@ def _eski_komut_baslatma_parametreleri(p: dict, varsayilan_sure_dk: int) -> dict
     def _sayi(ad, varsayilan):
         v = p.get(ad, varsayilan)
         if isinstance(v, bool) or not isinstance(v, (int, float)) or not _m.isfinite(float(v)):
-            raise HTTPException(status_code=422, detail=f"Geçersiz '{ad}': sonlu bir sayı olmalı.")
+            raise HTTPException(status_code=422, detail=ceviri.t("donanim.hata.sayiGecersiz", ad=ad))
         return float(v)
 
     def _tam(ad, varsayilan, alt, ust):
         f = _sayi(ad, varsayilan)
         if f != int(f) or not (alt <= f <= ust):
-            raise HTTPException(status_code=422, detail=f"Geçersiz '{ad}': {alt}..{ust} arasında TAM sayı olmalı.")
+            raise HTTPException(
+                status_code=422, detail=ceviri.t("donanim.hata.tamSayiGecersiz", ad=ad, alt=alt, ust=ust)
+            )
         return int(f)
 
     v = {
@@ -3334,7 +3349,7 @@ async def hardware_command(payload: CommandPayload):
     Örn: MainWindow.start_treatment() -> /api/hardware/command {command: 'start_treatment'}
     """
     if not state.core or not state.hardware:
-        raise HTTPException(status_code=503, detail="Headless Core veya HardwareController hazır değil.")
+        raise HTTPException(status_code=503, detail=ceviri.t("donanim.hata.cekirdekDonanimHazirDegil"))
     # D1.81 · Y4: START komutları mandallıyken 409 (try'ın DIŞINDA — aşağıdaki geniş except onu 500'e çevirirdi).
     # Asıl kapı `HardwareController`dadır; stop_coil / stop_all_coils buraya ASLA takılmaz (Ö.4-Y8).
     # 1-C inceleme i3-F-4 (A-05): 0 Hz BAŞLATMA = STOP — mandal 409'u ona UYGULANMAZ (HC onu STOP olarak işler; eskiden
@@ -3401,14 +3416,14 @@ async def hardware_command(payload: CommandPayload):
             return {"status": "success" if success else "error", "command": cmd}
 
         else:
-            return {"status": "error", "message": f"Bilinmeyen komut: {cmd}"}
+            return {"status": "error", "message": ceviri.t("donanim.hata.bilinmeyenKomut", cmd=cmd)}
 
     except HTTPException:
         raise  # D1.96: 422 geçersiz parametre — aşağıdaki genel 500'e çevrilmesin
     except Exception:
         # B3 güvenlik-fix: ham str(e) SIZMAZ — sunucuda logla, generic dön.
         logging.getLogger(__name__).exception("Donanım komutu başarısız")
-        raise HTTPException(status_code=500, detail="Donanım komutu başarısız")
+        raise HTTPException(status_code=500, detail=ceviri.t("donanim.hata.komutBasarisiz"))
 
 
 @app.post("/api/hardware/selftest")
@@ -3417,7 +3432,7 @@ async def trigger_hardware_selftest():
     import threading
 
     if not state.hardware:
-        raise HTTPException(status_code=503, detail="Donanım hazır değil.")
+        raise HTTPException(status_code=503, detail=ceviri.t("donanim.hata.hazirDegil"))
 
     # 8× _mqtt_publish (her biri connect-publish-disconnect) SANİYELER sürebilir → HTTP yanıtını
     # BEKLETME (eskiden await → istemci timeout'u "gönderilemedi" gösteriyordu, HTTP 000). Arka-plan
@@ -3437,7 +3452,7 @@ async def trigger_hardware_selftest():
 async def reset_all_pwms():
     """Tüm bobinleri durdurur ve duty 0 olarak reset atar (fire-and-forget)."""
     if not state.hardware:
-        raise HTTPException(status_code=503, detail="Donanım hazır değil.")
+        raise HTTPException(status_code=503, detail=ceviri.t("donanim.hata.hazirDegil"))
     import threading
 
     # stop_all_coils (STM seri I/O; STM yoksa retry→saniyeler) + 8× _mqtt_publish (connect-publish) →
@@ -3533,7 +3548,7 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     - STM32 firmware duration is minutes, converted only for HardwareController.
     """
     if coil_id < 1 or coil_id > 8:
-        raise HTTPException(status_code=400, detail="Geçersiz bobin ID (1-8)")
+        raise HTTPException(status_code=400, detail=ceviri.t("donanim.hata.bobinKimligi"))
 
     # ⚠️ D1.53 (B-1.10 · A-05): 0 Hz BAŞLATMA = bu bobin için STOP (arayüzün "parkla" isteği) — STM ve ESP
     # dallarının İKİSİNDE de, protokol sınırına (`normalize_*_frequency_hz`, Ö.4-Y9 — KALDIRILMAZ) ULAŞMADAN.
@@ -3567,7 +3582,7 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
 
     if coil_id in STM_COIL_IDS:
         if not state.hardware:
-            raise HTTPException(status_code=503, detail="STM32 donanım kontrolcüsü hazır değil.")
+            raise HTTPException(status_code=503, detail=ceviri.t("donanim.hata.stmHazirDegil"))
         stm_duration_min = _duration_seconds_to_stm_minutes(payload.duration)
         _yanit_tabani = _stm_yanit_tabani() if payload.start else None  # TD6 · K3: komuttan ÖNCE
         _stm_sonuc = state.hardware.update_coil(
@@ -3629,12 +3644,9 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
             with _live_state_lock:
                 _c1 = dict(_live_state["coils"][0])
             if _c1.get("running") and float(_c1.get("frequencyHz") or 0) >= 50.0 * max(esp_freq, 1.0):
-                _sync_uyari = (
-                    f"STM bobin-1 {_c1.get('frequencyHz')} Hz çalışırken bobin {coil_id} için "
-                    f"{esp_freq} Hz istendi (≥50× ayrışma) — faz senkronu kilitlenmez, S3 DC-koruma "
-                    f"latch'i devreye girebilir. Faz gerekmiyorsa sorun değil; gerekiyorsa frekansları yaklaştırın."
-                )
-                _push_notification(f"⚠️ {_sync_uyari}", "warning")
+                _sync_args = {"hz": _c1.get("frequencyHz"), "coil": coil_id, "esp_freq": esp_freq}
+                _sync_uyari = ceviri.t("donanim.uyari.fazSenkron", **_sync_args)
+                _bildir(lambda d: "⚠️ " + ceviri.t("donanim.uyari.fazSenkron", dil=d, **_sync_args), "warning")
         except Exception:
             _sync_uyari = None
         mqtt_payload = {
@@ -3697,13 +3709,13 @@ async def set_surus_kipi(payload: SurusKipiPayload):
     demektir, "karta ulaştı" değil; gerçekleşen kip ACK `K=` → canlı durum `unipolar`.
     """
     if not state.hardware:
-        raise HTTPException(status_code=503, detail="STM kontrolcusu yok")
+        raise HTTPException(status_code=503, detail=ceviri.t("donanim.hata.stmYok"))
     n = len(STM_COIL_IDS)
     if len(payload.unipolar) != n:
+        _uni = {"n": n, "ilk": min(STM_COIL_IDS), "son": max(STM_COIL_IDS), "gelen": len(payload.unipolar)}
         raise HTTPException(
             status_code=400,
-            detail=f"unipolar dizisi {n} elemanli olmali (bobin {min(STM_COIL_IDS)}-{max(STM_COIL_IDS)}), "
-            f"{len(payload.unipolar)} geldi",
+            detail=ceviri.t("donanim.hata.unipolarDizisi", **_uni),
         )
     maske = 0
     for i, u in enumerate(payload.unipolar):
@@ -3814,11 +3826,9 @@ async def control_batch_coils(payload: BatchCoilPayload):
                 with _live_state_lock:
                     _bc1 = dict(_live_state["coils"][0])
                 if _bc1.get("running") and float(_bc1.get("frequencyHz") or 0) >= 50.0 * max(_b_esp_freq, 1.0):
-                    _b_uyari = (
-                        f"STM bobin-1 {_bc1.get('frequencyHz')} Hz çalışırken bobin {coil_id} için "
-                        f"{_b_esp_freq} Hz istendi (≥50× ayrışma) — faz senkronu kilitlenmez."
-                    )
-                    _push_notification(f"⚠️ {_b_uyari}", "warning")
+                    _b_args = {"hz": _bc1.get("frequencyHz"), "coil": coil_id, "esp_freq": _b_esp_freq}
+                    _b_uyari = ceviri.t("donanim.uyari.fazSenkronKisa", **_b_args)
+                    _bildir(lambda d: "⚠️ " + ceviri.t("donanim.uyari.fazSenkronKisa", dil=d, **_b_args), "warning")
             except Exception:
                 _b_uyari = None
             mqtt_payload = {
@@ -3886,10 +3896,9 @@ async def _baslatma_hatasinda_kapat(benim_seans, neden: str, teyitli_ek: str) ->
     raise HTTPException(
         status_code=503,
         detail=(
-            f"{neden}. Sürülen bobinlerin STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da "
-            "cihazın fiziksel güç düğmesini kullanın."
+            ceviri.t("seans.hata.stopDogrulanamadi", neden=neden)
             if _teyitsiz
-            else f"{neden} ve {teyitli_ek}"
+            else ceviri.t("seans.hata.nedenVe", neden=neden, ek=teyitli_ek)
         ),
     )
 
@@ -3917,9 +3926,9 @@ async def start_session(payload: SessionStartPayload, request: Request):
                 _durdur = [c for c in _durdur if c not in ESP_COIL_IDS]
             _bildir_teyitsiz_stop(
                 await _durdurma_is_parcaciginda(_stop_session_coils, _durdur, ad="sifir-hz-durdur"),  # O-1.1
-                "0 Hz seans isteği (A-05) — mandallıyken",
+                lambda d: ceviri.t("bildirim.kaynak.sifirHz", dil=d),
             )
-            raise HTTPException(status_code=503, detail=SIFIR_HZ_SEANS_MESAJI)
+            raise HTTPException(status_code=503, detail=sifir_hz_seans_mesaji())
         raise HTTPException(status_code=409, detail=_giris_engeli)
 
     # ⚠️ 2026-08-09 (Tier 1): kaydın SAHİBİNE sunucu karar verir (bkz. auth.cozumlenmis_operator).
@@ -3968,7 +3977,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
         esp_coils = []
         coil_ids = [c for c in coil_ids if c not in ESP_COIL_IDS]
     if stm_coils and not state.hardware:
-        raise HTTPException(status_code=503, detail="STM32 donanım kontrolcüsü hazır değil.")
+        raise HTTPException(status_code=503, detail=ceviri.t("donanim.hata.stmHazirDegil"))
 
     # ⚠️ SAHTE "BAŞARILI" SEANS KAPISI (sahip bildirimi 2026-09-12) ────────────────────
     # "bobinler komut almicak bildirimi gelmesine ... rağmen seans başlatınca gerçekten
@@ -3991,7 +4000,8 @@ async def start_session(payload: SessionStartPayload, request: Request):
         )
         # Y74 / 1-G §8 #2: son red DUTY reddiyse eylem duty'dir (mandal kuruluysa + 'Sıfırla'), firmware uyuşmazlığı DEĞİL.
         raise HTTPException(
-            status_code=409, detail=live_state.stm_red_duty_metni("seans BAŞLATILMADI") or STM_RED_MESAJI
+            status_code=409,
+            detail=live_state.stm_red_duty_metni(ceviri.t("seans.sonuc.baslatilmadi")) or stm_red_mesaji(),
         )
 
     # ⚠️ FIRMWARE UYUM KAPISI (2026-09-18) — YUKARIDAKININ ONLEYICI IKIZI ────────────────
@@ -4011,7 +4021,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
         _sebep = getattr(state.core, "stm_uyumsuzluk_sebebi", "") or "Firmware kanal sayisi uyusmuyor."
         logging.getLogger(__name__).error("Seans REDDEDILDI — firmware kimligi uyumsuz: %s", _sebep)
         # TD1 · K1: operatöre SADE metin + kod (teknik sebep günlükte ve `/api/health` `stmUyumsuzlukSebebi`nde — destek).
-        raise HTTPException(status_code=409, detail="Seans BAŞLATILMADI: " + STM_RED_MESAJI)
+        raise HTTPException(status_code=409, detail=ceviri.t("seans.hata.baslatilmadiNeden", neden=stm_red_mesaji()))
 
     # ⚠️ DENETİM 2026-08-09 (ENGEL) — KAYITSIZ TEDAVİ ARTIK BAŞLAMAZ.
     # Aşağıdaki DB yazımları bilinçli olarak "best-effort"tur (DB hatası bobinleri durdurmasın).
@@ -4026,16 +4036,12 @@ async def start_session(payload: SessionStartPayload, request: Request):
     if not _db_ok:
         logging.getLogger(__name__).error("Seans REDDEDILDI — tibbi kayit DB'si hazir degil: %s", _db_sebep)
         _acilis_sebebi = _db_acilis_hatasi()  # D1.37: göç bekliyorsa operatör NEDENİ görür
-        _detay = (
-            "Tıbbi kayıt veritabanı açılamadı; seans başlatılamaz. Tedavi kaydı "
-            "tutulamayacağı için işlem güvenli değildir. Cihazı yeniden başlatın, "
-            "sorun sürerse teknik desteğe başvurun."
-        )
+        _detay = ceviri.t("seans.hata.kayitDbAcilamadi")
         if _acilis_sebebi:
-            _detay += f" Neden: {_acilis_sebebi}"
+            _detay += ceviri.t("seans.hata.kayitDbNeden", sebep=_acilis_sebebi)
         elif str(_db_sebep or "").startswith("Disk boş alanı kritik"):
             # D1.77 (B-3.9): disk doluyken "yeniden başlatın" YANLIŞ eylemdir — operatöre gerçek nedeni ve eylemi söyle.
-            _detay = f"Seans başlatılamaz: {_db_sebep}"
+            _detay = ceviri.t("seans.hata.baslatilamazNeden", sebep=_db_sebep)
         raise HTTPException(status_code=503, detail=_detay)
 
     # Güncelleme uygulanıyorken YENİ seans başlatma: installer servisi durdurup EXE'yi
@@ -4046,9 +4052,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
         from servers import update_manager as _um
 
         if _um.is_update_in_progress():
-            raise HTTPException(
-                status_code=409, detail="Güncelleme uygulanıyor; işlem bitene kadar yeni seans başlatılamaz."
-            )
+            raise HTTPException(status_code=409, detail=ceviri.t("seans.hata.guncellemeSuruyor"))
     except HTTPException:
         raise
     except Exception:
@@ -4057,9 +4061,9 @@ async def start_session(payload: SessionStartPayload, request: Request):
     with _session_lock:
         # D2-4.1: geri yükleme sürerken açılan seansın satırı içe aktarmanın silme adımında gider
         if _VERI_TASIMA_KILIDI.locked():
-            raise HTTPException(status_code=409, detail=GERI_YUKLEME_SURERKEN_SEANS)
+            raise HTTPException(status_code=409, detail=geri_yukleme_surerken_seans())
         if _active_session.get("is_active"):
-            raise HTTPException(status_code=409, detail="Zaten aktif bir seans var.")
+            raise HTTPException(status_code=409, detail=ceviri.t("seans.hata.zatenAktif"))
 
         # B-2.2: REBIND (`_active_session = {...}`) yerine IN-PLACE (clear+update) → dict kimliği
         # sabit kalır (session_state alias'lanabilir); davranış aynı (kilit altında atomik).
@@ -4264,7 +4268,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
                     _active_session["is_active"] = False
                     _active_session["baslatma_ucusta"] = False
             logging.getLogger(__name__).error("Seans REDDEDILDI — tedavi kaydi (DB satiri) acilamadi (Y65).")
-            raise HTTPException(status_code=503, detail=KAYIT_ACILAMADI_MESAJI)
+            raise HTTPException(status_code=503, detail=kayit_acilamadi_mesaji())
 
         # Audit P1 (TOCTOU): DB-persist await'i sırasında eşzamanlı /stop is_active=False yapmış olabilir.
         # Bobinleri ENERJİLEMEDEN ÖNCE yeniden doğrula — aksi halde bobinler fiziksel açılır ama
@@ -4286,7 +4290,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
                 "Seans başlatma İPTAL: enerjilemeden önce durdurma algılandı (bobinler açılmadı)."
             )
             await asyncio.to_thread(_iptal_seans_satirini_kapat, sid)
-            return {"status": "cancelled", "message": "Seans başlatma sırasında durduruldu (bobinler açılmadı)."}
+            return {"status": "cancelled", "message": ceviri.t("seans.mesaj.baslatmaDurduruldu")}
         if _erken_engel:
             logging.getLogger(__name__).warning(
                 "Seans başlatma İPTAL: DB yazımı sırasında bobin durdurması geldi (nesil) — bobinler açılmadı."
@@ -4382,8 +4386,8 @@ async def start_session(payload: SessionStartPayload, request: Request):
         logging.getLogger(__name__).exception("Seans baslatma: surus ONCESI bolgede HATA → seans iptal ediliyor.")
         await _baslatma_hatasinda_kapat(
             _benim_seans,
-            "Seans hazırlığı sırasında hata oluştu; seans BAŞLATILMADI",
-            "bobinlere STOP gönderildi. Yeniden deneyin; sürerse teknik desteğe başvurun.",
+            ceviri.t("seans.hata.hazirlikNeden"),
+            ceviri.t("seans.hata.hazirlikEk"),
         )
 
     # event-loop-blok fix: update_coil = STM32'ye SENKRON seri-port yazımı (bobin başına ~onlarca ms) →
@@ -4432,8 +4436,8 @@ async def start_session(payload: SessionStartPayload, request: Request):
             logging.getLogger(__name__).exception("Seans baslatma: bobin surusu HATA verdi → seans iptal ediliyor.")
             await _baslatma_hatasinda_kapat(
                 _benim_seans,
-                "Bobin sürüşü sırasında hata oluştu; seans BAŞLATILMADI",
-                "sürülen bobinler durduruldu. Bağlantıyı kontrol edip yeniden deneyin.",
+                ceviri.t("seans.hata.surusNeden"),
+                ceviri.t("seans.hata.surusEk"),
             )
 
     # ⚠️ HİÇBİR BOBİN SÜRÜLMEDİYSE SEANS YOKTUR — geri al ve DÜRÜSTÇE söyle.
@@ -4463,10 +4467,10 @@ async def start_session(payload: SessionStartPayload, request: Request):
             raise HTTPException(status_code=409, detail=_surus_engeli)
         if sifir_hz_durdurma_mi(payload.frequency):
             # D1.53 (A-05): 0 Hz = DURDURMA — bobinler durduruldu; neden firmware DEĞİL, girilen frekans.
-            raise HTTPException(status_code=503, detail=SIFIR_HZ_SEANS_MESAJI)
+            raise HTTPException(status_code=503, detail=sifir_hz_seans_mesaji())
         raise HTTPException(
             status_code=503,
-            detail=("Hiçbir bobin komutu kabul etmedi; seans BAŞLATILMADI. " + STM_RED_MESAJI),
+            detail=ceviri.t("seans.hata.komutKabulEdilmedi", neden=stm_red_mesaji()),
         )
 
     # ⚠️ 1-C inceleme i2-F3: STM sürüşü (to_thread) SIRASINDA durdurma gelmiş olabilir — bobin 1 kabul edildikten SONRA,
@@ -4482,9 +4486,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
             # kabul edilen bobinler o durdurmayla durdu → seans normal durdurma yoluyla kapatılır (STOP'lar yalnız artar).
             logging.getLogger(__name__).warning("Seans başlatma sürerken durdurma geldi → seans durduruluyor.")
             await stop_session()
-        raise HTTPException(
-            status_code=409, detail=engel or "Seans başlatma sürerken durduruldu; bu seans BAŞLATILMADI."
-        )
+        raise HTTPException(status_code=409, detail=engel or ceviri.t("seans.hata.baslatmaSurerkenDurduruldu"))
 
     with _session_lock:
         _hala_benim = bool(_active_session.get("is_active")) and _active_session.get("session_id") == _benim_seans
@@ -4542,9 +4544,9 @@ async def start_session(payload: SessionStartPayload, request: Request):
             },
         )
         if _csv_yolu is not None:
-            _push_notification(f"📄 Seans alan kaydı başladı: {_csv_yolu}", "info")
+            _bildir(lambda d: ceviri.t("bildirim.alanKaydiBasladi", dil=d, yol=_csv_yolu), "info")
         else:
-            _push_notification("⚠️ Seans alan kaydı (CSV) açılamadı — tedavi etkilenmedi", "warning")
+            _bildir(lambda d: ceviri.t("bildirim.alanKaydiAcilamadi", dil=d), "warning")
     except Exception:
         logging.exception("seans alan kaydı açılamadı (seans akışı etkilenmez)")
 
@@ -4583,8 +4585,10 @@ async def start_session(payload: SessionStartPayload, request: Request):
     resp = {"status": "success", "session": _sess_snapshot}
     # `_esp_broker_ok` yukarida bir kez olculdu (esp_coils VE broker canli); ayni degeri kullan.
     if esp_coils and not _esp_broker_ok:
-        msg = f"Sistem bağlantısı yok — ESP bobinleri {esp_coils} aktif OLMAYABİLİR (STM bobinleri çalışıyor)."
-        logging.getLogger(__name__).warning("Seans başladı ama %s", msg)
+        msg = ceviri.t("seans.uyari.espErisilemez", esp_coils=esp_coils)
+        logging.getLogger(__name__).warning(
+            "Seans başladı ama %s", ceviri.t("seans.uyari.espErisilemez", dil="tr", esp_coils=esp_coils)
+        )
         resp["warning"] = msg
         resp["esp_unreachable"] = True
     return resp
@@ -4720,7 +4724,7 @@ def _seans_disi_calisan_bobinler(seans_bobinleri) -> list:
     return sorted(c for c in calisan - seans if 1 <= c <= 8)
 
 
-def _bildir_teyitsiz_stop(teyitsiz, kaynak: str) -> None:
+def _bildir_teyitsiz_stop(teyitsiz, kaynak) -> None:
     """DENETIM 2. TUR [1.1] tamamlamasi (adversaryal review #2): /session/stop yaniti teyitsizligi
     tasirken sure-watchdog / AI durdurma / sahipsiz-bobin yollari onu YUTUYORDU — broker oluyken
     seans "sure doldu" ile bitince operatore hicbir uyari gitmiyordu (bobinler ESP'de kendi suresi
@@ -4728,14 +4732,20 @@ def _bildir_teyitsiz_stop(teyitsiz, kaynak: str) -> None:
     uyari kanali. Bos listede SESSIZ (alarm yorgunlugu uretme); bildirim hatasi durdurmayi bozmaz."""
     if not teyitsiz:
         return
+
+    def _kaynak_metni(d):
+        return kaynak(d) if callable(kaynak) else kaynak
+
+    _bobinler = sorted(teyitsiz)
     try:
-        _push_notification(
-            f"⚠️ {kaynak}: bobin(ler) {sorted(teyitsiz)} için donanım STOP'u DOĞRULANAMADI — "
-            "HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da bobinleri elle kontrol edin.",
+        _bildir(
+            lambda d: ceviri.t("bildirim.teyitsizStop", dil=d, kaynak=_kaynak_metni(d), bobinler=_bobinler),
             "error",
         )
     except Exception:
-        logging.getLogger(__name__).warning("teyitsiz-stop bildirimi gonderilemedi (%s)", kaynak, exc_info=True)
+        logging.getLogger(__name__).warning(
+            "teyitsiz-stop bildirimi gonderilemedi (%s)", kaynak("tr") if callable(kaynak) else kaynak, exc_info=True
+        )
 
 
 def start_ai_session(
@@ -4794,7 +4804,7 @@ def start_ai_session(
     _sahip_epostasi = ""
     if not _on_cont:
         if _VERI_TASIMA_KILIDI.locked():  # D2-4.1: Y65 yolu — bobin sürülmez, onay yanmaz (çağıran `geri_ver`)
-            raise KayitAcilamadi(GERI_YUKLEME_SURERKEN_SEANS)
+            raise KayitAcilamadi(geri_yukleme_surerken_seans())
         try:
             _db = _get_treatment_db()
             if _db is not None and _hasta_adi:
@@ -4828,14 +4838,14 @@ def start_ai_session(
             logging.getLogger(__name__).exception("AI seansi DB satiri acilamadi (Y65: seans BASLATILMAYACAK).")
             _ai_sid = None
         if _ai_sid is None:
-            raise KayitAcilamadi(KAYIT_ACILAMADI_MESAJI)
+            raise KayitAcilamadi(kayit_acilamadi_mesaji())
 
     with _session_lock:
         prev = dict(_active_session)  # devralma kararı için ESKİ seansın snapshot'ı (clear'dan ÖNCE)
         cont = _devam_mi(prev)
         if not cont and _ai_sid is None:
             # Yarış: anlık görüntüde AI (Auto) devamıydı, kilitte YENİ seans — satır yok → oturuma DOKUNMADAN reddet.
-            raise KayitAcilamadi(KAYIT_ACILAMADI_MESAJI)
+            raise KayitAcilamadi(kayit_acilamadi_mesaji())
         # B-2.2: REBIND yerine IN-PLACE (clear+update) → dict kimliği sabit; davranış aynı.
         _active_session.clear()
         # 1-C inceleme i1-F3: kimlik BENZERSİZ olmalı (eskiden `ai_<epoch SANİYE>`: aynı saniyedeki iki AI seansı aynı
@@ -4896,7 +4906,9 @@ def start_ai_session(
             logging.getLogger(__name__).exception("canlı E bağlamı temizlenemedi (seans akışı etkilenmez)")
     if _orphan_coils:
         try:
-            _bildir_teyitsiz_stop(_stop_session_coils(_orphan_coils), "Sahipsiz bobin durdurması")
+            _bildir_teyitsiz_stop(
+                _stop_session_coils(_orphan_coils), lambda d: ceviri.t("bildirim.kaynak.sahipsiz", dil=d)
+            )
             logging.getLogger(__name__).warning(
                 "AI seansi daha DAR bir bobin kumesi sahiplendi → sahipsiz kalan bobinler "
                 "durduruldu %s (aksi halde enerjili kalirlardi).",
@@ -5191,7 +5203,7 @@ def _session_duration_watchdog():
                         continue  # seans devralındı/durduruldu → bayat watchdog turu dokunmasın
                     _bildir_teyitsiz_stop(
                         _stop_session_coils(sess.get("coil_ids", list(range(1, 9))), yetkiyi_kes=True),  # D1.81
-                        "Süre doldu — otomatik durdurma",
+                        lambda d: ceviri.t("bildirim.kaynak.sureDoldu", dil=d),
                     )
                     with _session_lock:
                         if _active_session.get("session_id") == sess.get("session_id"):
@@ -5741,7 +5753,7 @@ async def stop_session():
         # CSV'si — `update_live_session_state` sarmalayıcısı "aktif değil" yazımında CSV'yi kapatır). Mandal kuruluyken
         # "Acil Durdurma" kalır (live_state kuralı).
         update_live_session_state(is_active=False, mode="Sistem Hazır")
-        _yanit_yok = {"status": "ok", "message": "Aktif seans yok. Çalışan bobin kalmasın diye STOP gönderildi."}
+        _yanit_yok = {"status": "ok", "message": ceviri.t("seans.mesaj.aktifYokStop")}
         if _teyitsiz:
             _yanit_yok["hardware_stop_unconfirmed"] = _teyitsiz
         return _yanit_yok
@@ -5855,7 +5867,7 @@ async def stop_session():
     # istemcinin "Durdurma onaylanamadi — ACIL DURDUR'a basin" uyarisi HIC tetiklenmiyordu
     # (STOP hicbir bobine ulasmamisken UI seansi "durdu" gosterir). Alan yalniz teyitsizlik
     # VARSA eklenir — mutlu yolda yanit sekli birebir ayni (alarm yorgunlugu uretme).
-    _yanit = {"status": "success", "message": "Seans durduruldu.", "sensor_samples": flushed}
+    _yanit = {"status": "success", "message": ceviri.t("seans.mesaj.durduruldu"), "sensor_samples": flushed}
     if not _stop_teyitsiz:
         return _yanit
 
@@ -5886,17 +5898,17 @@ async def stop_session():
     # ⚠️ SEANS KAYDI KAPANDI — bu bir "işlem başarısız" durumu DEĞİLDİR. `session_closed: true`
     # alanı bunu açıkça söyler ki yeni istemci UI'da seansı yeniden "açık" göstermesin.
     # ─────────────────────────────────────────────────────────────────────────────────────────
-    _uyari = (
-        f"Bobin {', '.join(str(c) for c in _stop_teyitsiz)} için donanım STOP'u DOĞRULANAMADI — "
-        "HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
-    )
+    _teyitsiz_bobinler = ", ".join(str(c) for c in _stop_teyitsiz)
+    _uyari = ceviri.t("seans.uyari.stopDogrulanamadi", bobinler=_teyitsiz_bobinler)
 
     # ⚠️ UYARI KAYBOLMAYACAK BİR YERE DE DÜŞER (sahip kararı 2026-08-22, 3. madde): telefon eski
     # sürümdeyse ya da ekranı kimse görmüyorsa uyarı yok olmasın. Bildirim akışı klinik
     # bilgisayarındaki arayüzde görünür (masaüstü arayüzü paketle birlikte GÜNCELDİR) ve günlüğe
     # yazılır — böylece uyarı en azından BİRİNE ulaşır ve destek sonradan izini sürebilir.
     try:
-        _push_notification(f"🚨 {_uyari}", "error")
+        _bildir(
+            lambda d: "🚨 " + ceviri.t("seans.uyari.stopDogrulanamadi", dil=d, bobinler=_teyitsiz_bobinler), "error"
+        )
     except Exception:  # noqa: BLE001 — bildirim yolu çökse bile yanıt DÖNMELİ
         logging.exception("stop: teyitsiz-durdurma bildirimi gonderilemedi")
     logging.error("stop: donanim STOP DOGRULANAMADI — bobinler=%s", _stop_teyitsiz)
@@ -6074,10 +6086,7 @@ async def log_ai_result(payload: AiLogPayload, request: Request):
     hekim analizin geçmişe yazıldığını sanıyordu (değerlendirme ve PDF üretilemez). İstemci (`apiPost`) `!ok` yanıtta
     gerekçeyi bildirim olarak gösterir; eski LAN istemcileri de (A-01) aynı genel yoldan görür.
     Kapı: tests/test_ai_log_YAZILAMAZSA_basari_DONMEZ_D256.py (+ arayüz aiKaydiYazilamadi.D256)."""
-    _yazilamadi = (
-        "AI analizi geçmişe kaydedilemedi (kayıt veritabanına yazılamadı — disk dolu ya da veritabanı kilitli olabilir). "
-        "Sonuç ekranda duruyor; değerlendirme ve rapor için sorunu giderip analizi yeniden çalıştırın."
-    )
+    _yazilamadi = ceviri.t("ai.hata.gecmiseYazilamadi")
     try:
         db = _get_treatment_db()
         if db is None:
@@ -6139,14 +6148,14 @@ async def review_ai_analysis(payload: AiReviewPayload, request: Request):
     sorusu cevaplanabilsin). Kayıt silinmez, AI sonucu değiştirilmez.
     """
     if payload.status not in ("approved", "rejected", "corrected"):
-        raise HTTPException(status_code=422, detail="status 'approved', 'rejected' veya 'corrected' olmalı.")
+        raise HTTPException(status_code=422, detail=ceviri.t("ai.hata.durumGecersiz"))
     # Red ve düzeltme GEREKÇESİZ olamaz: boş bir "reddedildi" denetim izinde işe yaramaz ve
     # modeli iyileştirmek için de veri taşımaz. Onay için not opsiyonel.
     if payload.status in ("rejected", "corrected") and not (payload.note or "").strip():
-        raise HTTPException(status_code=422, detail="Red ve düzeltme için gerekçe/açıklama zorunludur.")
+        raise HTTPException(status_code=422, detail=ceviri.t("ai.hata.gerekceZorunlu"))
     db = _get_treatment_db()
     if db is None:
-        raise HTTPException(status_code=503, detail="Kayıt veritabanı kullanılamıyor.")
+        raise HTTPException(status_code=503, detail=ceviri.t("ai.hata.kayitDbKullanilamiyor"))
     # ⚠️ D2.41 (B-2.3): "bu teşhisi kim onayladı" kaydı İSTEMCİ BEYANINDAN değil sunucu kuralından (jeton; kanıtsız
     # kayıtlı-hekim beyanı → sahipsiz; operatörsüz klinikte beyan — Kural 2). Eskiden LAN'dan jetonsuz başka bir hekimin adı
     # yazılabiliyordu. Kapı: tests/test_kayit_atfi_COZUMLENMIS_operator_D241.py.
@@ -6183,13 +6192,11 @@ async def review_ai_analysis(payload: AiReviewPayload, request: Request):
         # Y113: kimlik DB'si okunamıyorsa ileti arızayı ve çareyi söyler ("Operatör seçin" DEMEZ).
         raise HTTPException(
             status_code=428,
-            detail=kimliksiz_detayi(
-                "Operatör seçin — değerlendirme için önce üst bardan hangi hekim olduğunuzu seçin."
-            ),
+            detail=kimliksiz_detayi(ceviri.t("ai.kimlik.degerlendirme")),
         )
     ok = await asyncio.to_thread(db.set_ai_review, int(payload.analysis_id), payload.status, payload.note, _inceleyen)
     if not ok:
-        raise HTTPException(status_code=404, detail="Analiz kaydı bulunamadı.")
+        raise HTTPException(status_code=404, detail=ceviri.t("ai.hata.analizYok"))
     # ⚠️ B2-2.4: iz, KAYDA yazılan kimliği taşır — kimlik İSTEKTEN yeniden çözülmez (değerlendirme yazılırken başka sekmenin
     # "Kilitle"si jetonu düşürürse kayıt Ayşe'yi, iz sahipsizi gösteriyordu). Kapı: tests/test_degerlendirme_IZI_KAYITLA_AYNI_kimlik_kilit_yarisi_B224.py
     _iz.yaz(
@@ -6248,7 +6255,7 @@ async def get_ai_log(
         return {"status": "success", "data": data}
     except Exception:
         logging.exception("get_ai_log failed")
-        return {"status": "error", "detail": "Log okunamadı", "data": []}
+        return {"status": "error", "detail": ceviri.t("ai.hata.logOkunamadi"), "data": []}
 
 
 @app.get("/api/ai/log/{analiz_id}")
@@ -6266,17 +6273,15 @@ async def get_ai_log_kaydi(request: Request, analiz_id: int):
     if not await asyncio.to_thread(_kimlik_tamam):
         raise HTTPException(
             status_code=428,
-            detail=kimliksiz_detayi(
-                "Operatör seçin — önceki değerlendirmeleri görmek için üst bardan hangi hekim olduğunuzu seçin."
-            ),
+            detail=kimliksiz_detayi(ceviri.t("ai.kimlik.oncekiDegerlendirmeler")),
         )
     db = _get_treatment_db()
     if db is None:
-        raise HTTPException(status_code=503, detail="Kayıt veritabanı açılamadı.")
+        raise HTTPException(status_code=503, detail=ceviri.t("ai.hata.kayitDbAcilamadi"))
     kayitlar = await asyncio.to_thread(db.get_ai_analyses, 1, None, None, int(analiz_id) + 1)
     kayit = next((k for k in (kayitlar or []) if int(k.get("id", 0)) == int(analiz_id)), None)
     if not kayit:
-        raise HTTPException(status_code=404, detail="Analiz kaydı bulunamadı.")
+        raise HTTPException(status_code=404, detail=ceviri.t("ai.hata.analizYok"))
     kayit["review_history_count"] = len(kayit.get("review_history") or [])
     return {"status": "success", "data": kayit}
 
@@ -6343,13 +6348,13 @@ async def ai_analiz_pdf(request: Request, analiz_id: int, kaydet: int = 0):
     try:
         db = _get_treatment_db()
         if db is None:
-            raise HTTPException(status_code=503, detail="Kayıt veritabanı açılamadı.")
+            raise HTTPException(status_code=503, detail=ceviri.t("ai.hata.kayitDbAcilamadi"))
         # ⚠️ TEKİL OKUMA UCU YOK: liste ucundan süzüyoruz. `before_id = analiz_id + 1` ile
         # keyset o kaydın KENDİSİNDEN başlar (id DESC), yani ilk satır aranan kayıttır.
         kayitlar = await asyncio.to_thread(db.get_ai_analyses, 1, None, None, int(analiz_id) + 1)
         kayit = next((k for k in (kayitlar or []) if int(k.get("id", 0)) == int(analiz_id)), None)
         if not kayit:
-            raise HTTPException(status_code=404, detail="Analiz kaydı bulunamadı.")
+            raise HTTPException(status_code=404, detail=ceviri.t("ai.hata.analizYok"))
 
         # ⚠️ GECİKMELİ IMPORT: `FileResponse`/`Path` bu dosyada modül seviyesinde YOK
         # (backend açılış süresi için import grafiği dar tutuluyor). Uç nadir çağrılır.
@@ -6360,7 +6365,7 @@ async def ai_analiz_pdf(request: Request, analiz_id: int, kaydet: int = 0):
 
         ogeler = analiz_pdf_ogeleri(kayit)
         # 2026-10-18 (sahip: "tamamen türkçe ve anlaşılır olmalı" — okuyucu veteriner + hayvan sahibi)
-        baslik = f"Yapay Zekâ Analizi — {kayit.get('module_label') or 'Analiz'}"
+        baslik = ceviri.t("pdf.ai.baslik", modul=kayit.get("module_label") or ceviri.t("pdf.ai.modulYok"))
         tmp_dir = _app_data_dir() / "temp_reports"
         tmp_dir.mkdir(parents=True, exist_ok=True)
         cikti = str(tmp_dir / f"ai_{analiz_id}_{int(time.time() * 1000)}.pdf")
@@ -6373,9 +6378,9 @@ async def ai_analiz_pdf(request: Request, analiz_id: int, kaydet: int = 0):
             baslik,
             ogeler,
             cikti,
-            "YAPAY ZEKÂ ANALİZ RAPORU",
-            "Hayvan sahibi ve veteriner hekim için özet",
-            "Bu rapor PEMF Vet uygulamasında yapay zekâ ile oluşturuldu.",
+            ceviri.t("pdf.ai.rapor"),
+            ceviri.t("pdf.ai.ozet"),
+            ceviri.t("pdf.ai.dipnot"),
         )
 
         _ad = f"PEMF_AI_{_dosya_adi_guvenli(kayit.get('patient_name') or 'analiz')}_{analiz_id}.pdf"
@@ -6402,7 +6407,7 @@ async def ai_analiz_pdf(request: Request, analiz_id: int, kaydet: int = 0):
         raise
     except Exception:
         logging.exception("ai_analiz_pdf failed")
-        raise HTTPException(status_code=500, detail="Rapor oluşturulamadı.")
+        raise HTTPException(status_code=500, detail=ceviri.t("ai.hata.raporOlusmadi"))
 
 
 @app.post("/api/ai/log/delete")
@@ -6411,7 +6416,7 @@ async def delete_ai_log_entry(payload: AiLogDeletePayload, request: Request):
     _enforce_privileged(request)
     db = _get_treatment_db()
     if db is None:
-        raise HTTPException(status_code=500, detail="Geçmiş veritabanı hazır değil")
+        raise HTTPException(status_code=500, detail=ceviri.t("gecmis.hata.dbHazirDegil"))
     from servers import audit_log as _iz
     from servers.auth import cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
     from servers.silme_yetkisi import kimliksiz_detay
@@ -6439,9 +6444,7 @@ async def delete_ai_log_entry(payload: AiLogDeletePayload, request: Request):
         )
         if _kayitli:
             raise HTTPException(status_code=428, detail=kimliksiz_detayi(kimliksiz_detay()))  # Y113
-        raise HTTPException(
-            status_code=400, detail="Silme kapsamı belirsiz: kendi kaydınızı silmek için operatör seçin."
-        )
+        raise HTTPException(status_code=400, detail=ceviri.t("gecmis.hata.silmeKapsamiKendi"))
     ok = await asyncio.to_thread(db.delete_ai_analysis, int(payload.id), kimlik)
 
     if not ok:
@@ -6456,7 +6459,7 @@ async def delete_ai_log_entry(payload: AiLogDeletePayload, request: Request):
             item_count=0,
             outcome="reddedildi",
         )
-        raise HTTPException(status_code=404, detail="Kayıt bulunamadı veya silme yetkiniz yok.")
+        raise HTTPException(status_code=404, detail=ceviri.t("gecmis.hata.kayitYokYetkisiz"))
     logging.getLogger(__name__).warning("KVKK: AI analiz kaydı silindi (id=%s).", payload.id)
     _iz.kimlikli_yaz(request, "ai_log.delete", beyan=_beyan, scope=f"id={payload.id}", item_count=1)
     return {"status": "success", "deleted": 1}
@@ -6471,12 +6474,10 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
     """
     _enforce_privileged(request)
     if payload.confirm != "DELETE_ALL":
-        raise HTTPException(
-            status_code=400, detail="Toplu silme için onay gerekli: gövdede {\"confirm\":\"DELETE_ALL\"} gönderin."
-        )
+        raise HTTPException(status_code=400, detail=ceviri.t("hasta.hata.topluSilmeOnayTumu"))
     db = _get_treatment_db()
     if db is None:
-        raise HTTPException(status_code=500, detail="Geçmiş veritabanı hazır değil")
+        raise HTTPException(status_code=500, detail=ceviri.t("gecmis.hata.dbHazirDegil"))
     from servers import audit_log as _iz
     from servers.auth import cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
     from servers.silme_yetkisi import kimliksiz_detay
@@ -6532,8 +6533,7 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
     if op is None and not tum_klinik:
         raise HTTPException(
             status_code=400,
-            detail="Silme kapsamı belirsiz. Kendi kayıtlarınız için operatör seçin; kliniğin "
-            "tamamını silmek için isteğe {\"all_operators\": true} ekleyin.",
+            detail=ceviri.t("gecmis.hata.silmeKapsami"),
         )
     # ⚠️ D1.58 (B-3.88): AKTİF SEANS sürüyorsa tüm-DB VACUUM ERTELENİR (yazım kilidi tedavi kaydını düşürebilir);
     # silme hemen yapılır, VACUUM seans bitince / bakımda (`_bekleyen_vacuumu_arka_planda`).
@@ -6556,7 +6556,7 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
             item_count=0,
             outcome="hata",
         )
-        raise HTTPException(status_code=500, detail="Geçmiş temizlenemedi")
+        raise HTTPException(status_code=500, detail=ceviri.t("gecmis.hata.temizlenemedi"))
     # KVKK "sildim" kanıtı: kapsam + sayı loglanır (kayıt İÇERİĞİ loglanmaz).
     # SGI-1.6: kapsam profil süzgeciyle DARALDIYSA iz ve günlük bunu söyler (yoksa "TÜM KLİNİK silindi" yanlış kanıt olur).
     logging.getLogger(__name__).warning(
@@ -6596,21 +6596,27 @@ async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
 #: içe aktarılmış durum yedek diye verilmesin). Kilit, istek iptal edilse de iş BİTİNCE bırakılır (görev bitiş geri çağrısı).
 #: Kapı: tests/test_ice_aktarma_TEK_kritik_bolge_ikinci_istek_409_D2E02.py
 _VERI_TASIMA_KILIDI = threading.Lock()
-GERI_YUKLEME_SURUYOR = (
-    "Geri yükleme bu cihazda sürüyor — bitince kayıtlar görünür. İşlemi tekrarlamayın ve uygulamayı yeniden başlatmayın; "
-    "birkaç dakika sonra Seans Geçmişi'ni yenileyin."
-)
+
+
+def geri_yukleme_suruyor() -> str:
+    return ceviri.t("yedek.hata.geriYuklemeSuruyor")
+
+
 #: ⚠️ D2-4.2: aynı anda TEK dışa aktarma (bkz. `export_clinic_data`). Kapı: tests/test_disa_aktarma_TEK_SEFERDE_bir_D2_4_2.py
 _DISA_AKTARMA_KILIDI = threading.Lock()
-YEDEK_ALMA_SURUYOR = "Bu cihazda bir yedek alma işlemi sürüyor — bitmesini bekleyin (büyük klinikte birkaç dakika sürebilir); işlemi tekrarlamayın."
+
+
+def yedek_alma_suruyor() -> str:
+    return ceviri.t("yedek.hata.yedekAlmaSuruyor")
+
+
 #: ⚠️ D2-4.1: geri yükleme ↔ süren seans (iki yön). Kapı: tests/test_geri_yukleme_SUREN_SEANSI_SILMEZ_D2_4_1.py
-GERI_YUKLEME_SURERKEN_SEANS = (
-    "Geri yükleme bu cihazda sürüyor — seans BAŞLATILMADI; geri yükleme bitince yeniden başlatın."
-)
-SEANS_SURERKEN_GERI_YUKLEME = (
-    "Tedavi seansı sürüyor — geri yükleme cihazdaki tüm tedavi kayıtlarını değiştirir (süren seansın kaydı da silinirdi); "
-    "önce seansı durdurun. Hiçbir kayıt değişmedi."
-)
+def geri_yukleme_surerken_seans() -> str:
+    return ceviri.t("yedek.hata.geriYuklemeSurerkenSeans")
+
+
+def seans_surerken_geri_yukleme() -> str:
+    return ceviri.t("yedek.hata.seansSurerkenGeriYukleme")
 
 
 class DataExportPayload(BaseModel):
@@ -6689,9 +6695,9 @@ async def export_clinic_data(payload: DataExportPayload, request: Request):
     Kapı: tests/test_disa_aktarma_TEK_SEFERDE_bir_D2_4_2.py"""
     _enforce_privileged(request)
     if _VERI_TASIMA_KILIDI.locked():  # D2.E02: yarım içe aktarılmış durum yedek diye verilmez
-        raise HTTPException(status_code=409, detail=GERI_YUKLEME_SURUYOR)
+        raise HTTPException(status_code=409, detail=geri_yukleme_suruyor())
     if not _DISA_AKTARMA_KILIDI.acquire(blocking=False):
-        raise HTTPException(status_code=409, detail=YEDEK_ALMA_SURUYOR)
+        raise HTTPException(status_code=409, detail=yedek_alma_suruyor())
     try:
         gorev = asyncio.ensure_future(_disa_aktar(payload, request))
     except BaseException:
@@ -6711,7 +6717,7 @@ async def _disa_aktar(payload: DataExportPayload, request: Request):
     """`/api/data/export` gövdesi — YALNIZ `_DISA_AKTARMA_KILIDI` tutulurken çağrılır (D2-4.2)."""
     _enforce_privileged(request)
     if _VERI_TASIMA_KILIDI.locked():  # D2.E02: yarım içe aktarılmış durum yedek diye verilmez
-        raise HTTPException(status_code=409, detail=GERI_YUKLEME_SURUYOR)
+        raise HTTPException(status_code=409, detail=geri_yukleme_suruyor())
     # ⚠️ D2-2.5 (2-D incelemesi · S-D.1/Y103 ile tutarlılık) [KARAR — önerilen]: kayıtlı operatörlü klinikte kliniğin TAMAMINI çağıranın
     # seçtiği parolayla veren paket KİMLİK ister (jetonsuz 428). A-01 cihaz token'ı tek başına yetmez — LAN'daki herkese
     # `/api/auth/token`dan verilir. Operatörsüz klinik (Kural 2) ve kimlikli hekim (rol modeli yok, A-28) DEĞİŞMEZ.
@@ -6721,9 +6727,7 @@ async def _disa_aktar(payload: DataExportPayload, request: Request):
     if kayitli_operator_var() and not cozumlenmis_operator(request):
         raise HTTPException(
             status_code=428,
-            detail=kimliksiz_detayi(
-                "Operatör seçin — kliniğin tüm kayıtlarının yedeğini almak için önce üst bardan hangi hekim olduğunuzu seçin."
-            ),
+            detail=kimliksiz_detayi(ceviri.t("yedek.kimlik.disaAktar")),
         )
     if payload.kaydet:
         from servers.auth import cihazin_kendisinden_mi
@@ -6732,7 +6736,7 @@ async def _disa_aktar(payload: DataExportPayload, request: Request):
             # D2.E01: dosya CİHAZIN masaüstüne yazılır — telefon/LAN istemcisi onu göremez; o yol dosyayı yanıtta alır.
             raise HTTPException(
                 status_code=400,
-                detail="Yedeği cihaza kaydetme yalnız cihazın kendi ekranından yapılır; bu istemcide dosya indirilir.",
+                detail=ceviri.t("yedek.hata.cihazaKaydetEkran"),
             )
     import base64 as _base64
 
@@ -6742,7 +6746,7 @@ async def _disa_aktar(payload: DataExportPayload, request: Request):
         thdb = _get_treatment_db()
         pdb = get_patient_database()
         if thdb is None or pdb is None:
-            raise HTTPException(status_code=500, detail="Veritabanı hazır değil")
+            raise HTTPException(status_code=500, detail=ceviri.t("yedek.hata.dbHazirDegil"))
         rows = await asyncio.to_thread(thdb.export_rows)
         # ⚠️ İKİ AYRI HASTA DEPOSU VAR ve ikisi de taşınmalı:
         #   rows["patients"]  → tedavi DB'sindeki hasta satırları; `treatment_sessions.patient_id`
@@ -6757,8 +6761,7 @@ async def _disa_aktar(payload: DataExportPayload, request: Request):
             logging.getLogger(__name__).exception("VERİ TAŞIMA: hasta kayıtları okunamadı — yedek oluşturulmadı")
             raise HTTPException(
                 status_code=503,
-                detail="Hasta kayıtları okunamadı (hasta veritabanı açılamıyor) — yedek OLUŞTURULMADI. Uygulamayı yeniden "
-                "başlatın; sürerse teknik desteğe başvurun.",
+                detail=ceviri.t("yedek.hata.hastaOkunamadi"),
             )
         paket = {
             "bundle_version": BUNDLE_VERSION,
@@ -6784,8 +6787,7 @@ async def _disa_aktar(payload: DataExportPayload, request: Request):
                 )
                 raise HTTPException(
                     status_code=500,
-                    detail="Yedek dosyası doğrulanamadı; oluşturulan dosya açılamıyor. "
-                    "İşlem iptal edildi — lütfen tekrar deneyin.",
+                    detail=ceviri.t("yedek.hata.dogrulanamadi"),
                 )
     except ExportError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -6793,7 +6795,7 @@ async def _disa_aktar(payload: DataExportPayload, request: Request):
         raise
     except Exception:
         logging.exception("data export failed")
-        raise HTTPException(status_code=500, detail="Dışa aktarma başarısız — yedek OLUŞTURULMADI.")
+        raise HTTPException(status_code=500, detail=ceviri.t("yedek.hata.disaAktarBasarisiz"))
     logging.getLogger(__name__).warning(
         "VERİ TAŞIMA: dışa aktarıldı (%d hasta, %d seans, %d bobin-koşusu, %d sensör, %d analiz).",
         len(paket["patient_db"]),
@@ -6834,8 +6836,7 @@ async def _disa_aktar(payload: DataExportPayload, request: Request):
             logging.getLogger(__name__).exception("VERİ TAŞIMA: yedek dosyası diske yazılamadı/doğrulanamadı")
             raise HTTPException(
                 status_code=500,
-                detail="Yedek dosyası cihaza yazılamadı ya da doğrulanamadı — yedek OLUŞTURULMADI. Disk alanını ve masaüstü "
-                "klasörünün yazılabilir olduğunu denetleyin.",
+                detail=ceviri.t("yedek.hata.cihazaYazilamadi"),
             )
     return {
         "status": "success",
@@ -6888,7 +6889,7 @@ async def import_clinic_data(payload: DataImportPayload, request: Request):
     """
     _enforce_privileged(request)
     if not _VERI_TASIMA_KILIDI.acquire(blocking=False):
-        raise HTTPException(status_code=409, detail=GERI_YUKLEME_SURUYOR)
+        raise HTTPException(status_code=409, detail=geri_yukleme_suruyor())
     try:
         gorev = asyncio.ensure_future(_ice_aktar(payload, request))
     except BaseException:
@@ -6904,7 +6905,8 @@ async def import_clinic_data(payload: DataImportPayload, request: Request):
     return await asyncio.shield(gorev)
 
 
-_CIHAZ_DISI_GERI_YUKLEME = "Bu cihazda kayıt var: geri yükleme (cihazdaki tüm tedavi kayıtlarını değiştirir) yalnız cihazın kendi ekranından yapılabilir."
+def cihaz_disi_geri_yukleme() -> str:
+    return ceviri.t("yedek.hata.cihazDisiGeriYukleme")
 
 
 def _hedef_dolu_mu_hizli(thdb, pdb) -> bool:
@@ -6932,11 +6934,11 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
     thdb = _get_treatment_db()
     pdb = get_patient_database()
     if thdb is None or pdb is None:
-        raise HTTPException(status_code=500, detail="Veritabanı hazır değil")
+        raise HTTPException(status_code=500, detail=ceviri.t("yedek.hata.dbHazirDegil"))
     try:
         blob = _base64.b64decode(payload.blob_b64 or "", validate=True)
     except Exception:
-        raise HTTPException(status_code=400, detail="Dosya okunamadı (geçersiz kodlama).")
+        raise HTTPException(status_code=400, detail=ceviri.t("yedek.hata.kodlama"))
     try:
         paket = await asyncio.to_thread(decrypt_bundle, blob, payload.passphrase)
     except ExportError as e:
@@ -6963,7 +6965,7 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
                 outcome="reddedildi",
                 detail={"neden": "cihaz_disi"},
             )
-            raise HTTPException(status_code=403, detail=_CIHAZ_DISI_GERI_YUKLEME)
+            raise HTTPException(status_code=403, detail=cihaz_disi_geri_yukleme())
 
     mevcut = await asyncio.to_thread(thdb.export_rows)
     # ⚠️ D2.66: hasta okuması KATI — okunamayan hasta DB'si DOLU cihazı BOŞ gösterip onayı (REPLACE_ALL) ve Y111'i atlatmasın.
@@ -6973,8 +6975,7 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
         logging.getLogger(__name__).exception("VERİ TAŞIMA: hedefin hasta kayıtları okunamadı — geri yükleme yapılmadı")
         raise HTTPException(
             status_code=503,
-            detail="Bu cihazın hasta kayıtları okunamadı (hasta veritabanı açılamıyor) — geri yükleme YAPILMADI, cihazdaki "
-            "kayıtlar DEĞİŞMEDİ. Uygulamayı yeniden başlatın; sürerse teknik desteğe başvurun.",
+            detail=ceviri.t("yedek.hata.geriYuklemeHastaOkunamadi"),
         )
     dolu = bool(mevcut["treatment_sessions"] or mevcut["ai_analyses"] or _mevcut_hastalar)
     from servers import audit_log as _iz
@@ -6995,7 +6996,7 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
                 outcome="reddedildi",
                 detail={"neden": "cihaz_disi"},
             )
-            raise HTTPException(status_code=403, detail=_CIHAZ_DISI_GERI_YUKLEME)
+            raise HTTPException(status_code=403, detail=cihaz_disi_geri_yukleme())
         if kayitli_operator_var() and not cozumlenmis_operator(request):
             _iz.kimlikli_yaz(
                 request,
@@ -7007,19 +7008,14 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
             )
             raise HTTPException(
                 status_code=428,
-                detail=kimliksiz_detayi(
-                    "Operatör seçin — dolu cihazda geri yükleme için önce üst bardan hangi hekim olduğunuzu seçin."
-                ),
+                detail=kimliksiz_detayi(ceviri.t("yedek.kimlik.geriYukleme")),
             )
     if dolu and payload.confirm != "REPLACE_ALL":
         # ⚠️ Y12 (sahip · B-3.21): metin GERÇEĞİ söyler — hasta kartları (patients.db) SİLİNMEZ; yedekte olmayan hastanın kartı kalır
         # ama bu cihazdaki tedavi geçmişi (tedavi DB'sinin tamamı) yedektekiyle değişir. Eskiden "hasta kayıtları SİLER" diyordu.
         raise HTTPException(
             status_code=409,
-            detail="Bu cihazda zaten kayıt var. Geri yükleme bu cihazdaki TÜM tedavi kayıtlarını (seanslar, bobin koşuları, "
-            "sensör verisi, seans olayları, AI analizleri) SİLER ve yedektekilerle değiştirir. Hasta kartları SİLİNMEZ: yedekte "
-            "olmayan hastaların kartı kalır ama bu cihazdaki seans ve analiz geçmişleri silinir. Onaylamak için "
-            "{\"confirm\":\"REPLACE_ALL\"} gönderin.",
+            detail=ceviri.t("yedek.hata.geriYuklemeOnay"),
         )
 
     # ⚠️ D2-4.1 (2-D incelemesi · A-07 · B2-1.5 ilkesi): SÜREN seans (elle ya da AI Pro) varken geri yükleme YAPILMAZ. `import_rows` tüm
@@ -7036,7 +7032,7 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
             outcome="reddedildi",
             detail={"neden": "seans_suruyor"},
         )
-        raise HTTPException(status_code=409, detail=SEANS_SURERKEN_GERI_YUKLEME)
+        raise HTTPException(status_code=409, detail=seans_surerken_geri_yukleme())
 
     # ⚠️ D2-3.3 (2-D incelemesi): sayfalı okuyucular (D2.16 "Tümünü" CSV'si) geri yüklemenin ARAYA girdiğini görsün — nesil sayacı
     # (tek = sürüyor, çift = bitti; düşse de çifte döner). Eskiden sayfalar arasında commit edilen REPLACE_ALL CSV'yi eski geçmişin
@@ -7063,8 +7059,7 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
         )
         raise HTTPException(
             status_code=503,
-            detail="Geri yükleme YAPILAMADI — tedavi veritabanı yazılamadı (meşgul ya da disk hatası). Cihazdaki kayıtlar "
-            "DEĞİŞMEDİ. Veritabanını kullanan işlem (bakım, ikinci uygulama) bitince geri yüklemeyi yeniden başlatabilirsiniz.",
+            detail=ceviri.t("yedek.hata.geriYuklemeYazilamadi"),
         )
     eklenen_hasta = 0
     # v2'de ayrı hasta veritabanı `patient_db` anahtarındadır; v1 yedeklerinde `patients` idi
@@ -7148,17 +7143,9 @@ async def _ice_aktar(payload: DataImportPayload, request: Request):
     # gerçekten eklenen hasta sayısını taşır (export ile aynı anlam). Kapı: test_yedek_sayaclari.
     _n_disari = dict(n)
     _fk_kopya = _n_disari.pop("patients", 0)
-    _uyari = (
-        f"Yedekte olmayan {len(_yedekte_olmayan)} hastanın kartı korundu; bu hastaların bu cihazdaki seans ve analiz geçmişi "
-        "geri yüklemeyle silindi (yedekte yoktu)."
-        if _yedekte_olmayan
-        else ""
-    )
+    _uyari = ceviri.t("yedek.uyari.yedekteOlmayan", count=len(_yedekte_olmayan)) if _yedekte_olmayan else ""
     if _basarisiz:
-        _uyari = (
-            f"{_basarisiz} hastanın kartı içe aktarılamadı (hasta veritabanı yazılamadı) — tedavi geçmişi geri yüklendi ama bu "
-            "hastaların kartı yok; sorun giderilince aynı yedeği yeniden geri yükleyin. " + _uyari
-        ).strip()
+        _uyari = (ceviri.t("yedek.uyari.kartAktarilamadi", count=_basarisiz) + " " + _uyari).strip()
     return {
         "status": "success",
         "yedekte_olmayan_hasta": len(_yedekte_olmayan),
@@ -7548,7 +7535,7 @@ async def emergency_stop():
     # kalir; fonksiyon icindeki ESP publish'leri de paralel. ⚠️ O-1.1: KENDİ iş parçacığı — ortak havuz (`to_thread`)
     # asılı G/Ç ile doluyken ACİL DURDUR sıra beklemez.
     result = await _durdurma_is_parcaciginda(_emergency_stop_all, "manual", ad="estop-manual")
-    _push_notification("Acil durdurma uygulandı", "error")
+    _bildir(lambda d: ceviri.t("bildirim.acilDurdurUygulandi", dil=d), "error")
     return result
 
 
@@ -7573,17 +7560,15 @@ async def kapanis_durdur(request: Request):
     launcher ACİL DURDUR ucuna düşer (bobin durdurma yine olur)."""
     _istemci = (getattr(getattr(request, "client", None), "host", "") or "").strip()
     if _istemci not in ("127.0.0.1", "::1"):
-        raise HTTPException(
-            status_code=403, detail="Kapanış durdurması yalnız bu bilgisayardaki launcher'dan çağrılabilir."
-        )
+        raise HTTPException(status_code=403, detail=ceviri.t("sistem.hata.kapanisYalnizYerel"))
     if "application/json" not in (request.headers.get("content-type") or "").lower():
-        raise HTTPException(status_code=415, detail='Kapanış durdurması JSON gövde ister: {"onay": true}.')
+        raise HTTPException(status_code=415, detail=ceviri.t("sistem.hata.kapanisJson"))
     try:
         _govde = await request.json()
     except Exception:
         _govde = None
     if not isinstance(_govde, dict) or _govde.get("onay") is not True:
-        raise HTTPException(status_code=400, detail='Kapanış durdurması onay ister: {"onay": true}.')
+        raise HTTPException(status_code=400, detail=ceviri.t("sistem.hata.kapanisOnay"))
     with _session_lock:
         _seans = bool(_active_session.get("is_active"))
     _kalici = _seans or _herhangi_bobin_calisiyor()
@@ -7592,11 +7577,7 @@ async def kapanis_durdur(request: Request):
     )
     result["mandalKalici"] = _kalici
     if _kalici:
-        _push_notification(
-            "🔒 Uygulama seans / bobin çalışırken kapatıldı — bobinler durduruldu, ACİL DURDUR mandalı kuruldu. Yeniden "
-            'başlatmadan önce bobinleri kontrol edin ve "Sıfırla".',
-            "error",
-        )
+        _bildir(lambda d: ceviri.t("bildirim.kapanisMandal", dil=d), "error")
     return result
 
 
@@ -7619,13 +7600,13 @@ async def estop_mandalini_sifirla(request: Request):
     from servers.auth import cozumlenmis_operator
 
     if "application/json" not in (request.headers.get("content-type") or "").lower():
-        raise HTTPException(status_code=415, detail='Sıfırla yalnız JSON gövdeyle yapılabilir: {"onay": true}.')
+        raise HTTPException(status_code=415, detail=ceviri.t("sistem.hata.sifirlaJson"))
     try:
         _govde = await request.json()
     except Exception:
         _govde = None
     if not isinstance(_govde, dict) or _govde.get("onay") is not True:
-        raise HTTPException(status_code=400, detail='Sıfırla bilinçli onay ister: {"onay": true}.')
+        raise HTTPException(status_code=400, detail=ceviri.t("sistem.hata.sifirlaOnay"))
     _kim = cozumlenmis_operator(request, "") or ""
     _onceki = estop_mandali.durum()
     _kurulu = estop_mandali.sifirla(_kim or "operator")
@@ -7661,9 +7642,7 @@ async def estop_mandalini_sifirla(request: Request):
             )
         except Exception:
             logging.getLogger(__name__).warning("Mandal sıfırlama denetim izi yazılamadı.", exc_info=True)
-        _push_notification(
-            "Acil durdurma mandalı SIFIRLANDI — bobinler başlatılmadı; tedavi için başlatmayı ayrıca verin.", "warning"
-        )
+        _bildir(lambda d: ceviri.t("bildirim.mandalSifirlandi", dil=d), "warning")
         with _session_lock:
             _aktif = bool(_active_session.get("is_active"))
         if not _aktif:

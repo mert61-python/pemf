@@ -6,6 +6,22 @@
     }
   },
   "ai": {
+    "hata": {
+      "analizYok": "Analysis record not found.",
+      "durumGecersiz": "status must be 'approved', 'rejected' or 'corrected'.",
+      "gecmiseYazilamadi": "The AI analysis could not be saved to the history (the record could not be written to the database — the disk may be full or the database locked). The result is still on screen; fix the problem and run the analysis again to evaluate it and create the report.",
+      "gerekceZorunlu": "A reason/explanation is required for rejection and correction.",
+      "kayitDbAcilamadi": "The record database could not be opened.",
+      "kayitDbKullanilamiyor": "The record database is unavailable.",
+      "logOkunamadi": "The log could not be read",
+      "oneriHatasi": "AI recommendation error",
+      "onericiYok": "The AI recommender was not found.",
+      "raporOlusmadi": "The report could not be created."
+    },
+    "kimlik": {
+      "degerlendirme": "Select an operator — to review, first choose which veterinarian you are from the top bar.",
+      "oncekiDegerlendirmeler": "Select an operator — to see earlier reviews, first choose which veterinarian you are from the top bar."
+    },
     "pemf": {
       "gecerlilikHesaplanamadi": "PEMF validity could not be calculated — D/P/E values must not be used; repeat the analysis."
     },
@@ -18,6 +34,89 @@
       "gecersiz": "Invalid language: \"{{dilKodu}}\". Available languages: tr, en.",
       "yazilamadi": "The language setting could not be saved ({{neden}}). Check that the data folder is writable."
     }
+  },
+  "bildirim": {
+    "acilDurdurUygulandi": "Emergency stop applied",
+    "aiProPlandanCikti": "Coil {{coil}} was removed from the AI Pro plan — the operator stopped it; AI Pro will not drive this coil until the end of the session, the other coils are still running.",
+    "akimGuvenilmez": "⚠️ Coil {{coil}}: the current measurement is not reliable on this coil — no current was written to the dose record.",
+    "alanDogrulanamadi": "⚠️ The field sensor of coil {{coil}} could not be verified — the measured field (mT) is not shown and is not written to the record. Report it to technical support (code: FW-ALAN).",
+    "alanDoygun": "⚠️ The magnetic field of coil {{coil}} EXCEEDED the sensor range (±24.6 mT) — the displayed mT is UNRELIABLE (it wraps around, so the value may look LOW)",
+    "alanKaydiAcilamadi": "⚠️ The session field log (CSV) could not be opened — the treatment is not affected",
+    "alanKaydiBasladi": "📄 Session field log started: {{yol}}",
+    "alanKaydiYazildi": "📄 Session field log saved to the desktop: {{name}}",
+    "asiriSicaklik": "🌡️ The board of coil {{coil}} reported OVERTEMPERATURE ({{atype}}) — only coil {{coil}} was stopped; the other coils are still running. Check the coil.",
+    "beklenmedikCalisiyordu": "⚠️ Coil {{coil}} was running unexpectedly — a safety stop was sent",
+    "bobinAlarm": "🚨 Coil {{coil}} ALARM ({{atype}}) — the session was stopped for safety",
+    "bobinBaglandi": "✅ Coil {{coil}} connected",
+    "bobinKesildi": "⚠️ Coil {{coil}} disconnected",
+    "dutyReddi": {
+      "eylem": "Lower the duty to %{{tavan}} or below and start again{{secenek}}.",
+      "eylemSifirla": "Lower the duty to %{{tavan}} or below{{secenek}}, then press 'Reset' and start again.",
+      "govde": "Coil {{bobin}} can run at most %{{tavan}} in {{kip}} mode; %{{istenen}} was not accepted{{sonuc}}. {{eylem}}",
+      "kipCift": "two-way",
+      "kipTek": "one-way",
+      "secenek": " (or set this coil to Unipolar in ⚡ Drive Mode)"
+    },
+    "estopEspOnayYok": "⚠️ Coil {{coil}}: the ESP did NOT confirm the emergency stop — check the coil by hand",
+    "estopEspReddetti": "⚠️ Coil {{coil}}: the emergency stop command was REJECTED by the ESP — check the coil by hand",
+    "kapanisMandal": "🔒 The app was closed while a session / coil was running — the coils were stopped and the EMERGENCY STOP latch was set. Before restarting, check the coils and press \"Reset\".",
+    "kaynak": {
+      "sahipsiz": "Orphan coil stop",
+      "sifirHz": "0 Hz session request (A-05) — while latched",
+      "sureDoldu": "Time is up — automatic stop",
+      "telafiStop": "Compensating STOP (a stop arrived while the START was being published)"
+    },
+    "komutReddetti": "⚠️ Coil {{coil}} REJECTED the command — {{sebep}}",
+    "kosuKaydiDuzeltildi": "; the run record was corrected",
+    "mandalSifirlandi": "The emergency stop latch was RESET — the coils were not started; give the start command separately for treatment.",
+    "mandalStmKopma": "🔒 The STM32 connection was lost while a coil was running — the EMERGENCY STOP latch was set. Check the coils; to start again, first press \"Reset\".",
+    "mandalStmWatchdog": "🔒 The STM32 watchdog timed out while a coil was running — the EMERGENCY STOP latch was set. Check the coils; to start again, first press \"Reset\".",
+    "sebepYok": "no reason given",
+    "selfTestAtlandi": "Coil {{coil}} self-test: skipped (PWM inactive)",
+    "selfTestBasarisiz": "🚨 Coil {{coil}} self-test FAILED — {{ayrinti}}",
+    "selfTestGecti": "Coil {{coil}} self-test: passed",
+    "sistemBaglandi": "System connection established",
+    "sistemKesildi": "System connection lost",
+    "sonuc": {
+      "cikislarDurduruldu": "the STM coil outputs were stopped",
+      "seansDurduruldu": "the session was STOPPED"
+    },
+    "startOnayYok": "⚠️ Coil {{coil}}: no start confirmation was received — check on the panel that the coil is really running",
+    "startReddedildi": "⚠️ Coil {{coil}}: the start command was REJECTED by the device — the coil is NOT running",
+    "startReddedildiSonraki": "⚠️ Coil {{coil}}: the previous start command was rejected — the next command is valid; verify the state on the panel",
+    "stmKoptuSeansDurdu": "⚠️ The STM32 connection was lost — the session was stopped for safety",
+    "stmRedSeansDurdu": "⛔ The session was STOPPED: {{neden}}",
+    "stmWatchdogSeansDurdu": "⚠️ STM32 watchdog timeout — the session was stopped for safety",
+    "stmWatchdogSeanssiz": "⚠️ STM32 watchdog timeout — the coil outputs were stopped (there was no active session)",
+    "stopDogrulanamadiEk": " ⚠️ The STOP of this coil could NOT be VERIFIED.",
+    "telemetriYanitYokStop": "⚠️ Coil {{coil}} telemetry is not responding — treated as disconnected, STOP sent",
+    "telemetriYanitYokStopYok": "⚠️ Coil {{coil}} telemetry is not responding — treated as disconnected; STOP COULD NOT BE SENT (broker unreachable) — the coil may STILL BE ENERGIZED, check it by hand",
+    "termalKesme": "🔥 Coil {{coil}} LOCAL THERMAL CUT-OFF — PWM was stopped by the device{{ayrinti}}; start is allowed again once it cools below 45°C",
+    "termalKilit": "⚠️ Coil {{coil}} is hot: start rejected — waiting for it to cool down{{ayrinti}}",
+    "termalSogudu": "✅ Coil {{coil}} has cooled down — start is allowed again",
+    "teyitsizStop": "⚠️ {{kaynak}}: the hardware STOP could NOT be VERIFIED for coil(s) {{bobinler}} — they may STILL BE RUNNING. Press EMERGENCY STOP or check the coils by hand."
+  },
+  "donanim": {
+    "hata": {
+      "bilinmeyenKomut": "Unknown command: {{cmd}}",
+      "bobinKimligi": "Invalid coil ID (1-8)",
+      "cekirdekDonanimHazirDegil": "The headless core or the hardware controller is not ready.",
+      "cekirdekHazirDegil": "The core is not ready.",
+      "hazirDegil": "The hardware is not ready.",
+      "komutBasarisiz": "Hardware command failed",
+      "sayiGecersiz": "Invalid '{{ad}}': must be a finite number.",
+      "stmHazirDegil": "The STM32 hardware controller is not ready.",
+      "stmYok": "There is no STM controller.",
+      "tamSayiGecersiz": "Invalid '{{ad}}': must be a whole number from {{alt}} to {{ust}}.",
+      "unipolarDizisi": "The unipolar array must have {{n}} elements (coils {{ilk}}-{{son}}); {{gelen}} received"
+    },
+    "uyari": {
+      "fazSenkron": "While STM coil 1 is running at {{hz}} Hz, {{esp_freq}} Hz was requested for coil {{coil}} (≥50× apart) — phase sync will not lock and the S3 DC-protection latch may engage. If you do not need phase lock this is fine; otherwise bring the frequencies closer together.",
+      "fazSenkronKisa": "While STM coil 1 is running at {{hz}} Hz, {{esp_freq}} Hz was requested for coil {{coil}} (≥50× apart) — phase sync will not lock."
+    }
+  },
+  "firmware": {
+    "komutRed": "The device board is rejecting commands — the board's software is incompatible with this app version; the coils will not run. Contact technical support (code: FW-PAKET)."
   },
   "gecmis": {
     "csv": {
@@ -47,12 +146,17 @@
       "veriYok": "No data found"
     },
     "hata": {
+      "dbHazirDegil": "The history database is not ready",
       "gecersizSessionIds": "Invalid session_ids",
       "geriYukleme": "A restore was performed on this device while the session history was being read, or one is in progress — no inconsistent file was CREATED. Restart the export once the restore has finished.",
       "islemBasarisiz": "The operation failed",
+      "kayitYokYetkisiz": "Record not found or you are not allowed to delete it.",
       "seansSuruyor": "The session is running — the record of an ongoing session cannot be deleted; stop the session first.",
       "seansYok": "Session not found — it may already have been deleted; refresh the list.",
-      "silinecekSecilmedi": "No session was selected for deletion."
+      "silinecekSecilmedi": "No session was selected for deletion.",
+      "silmeKapsami": "Deletion scope is unclear. Select an operator to delete your own records; to delete the whole clinic, add {\"all_operators\": true} to the request.",
+      "silmeKapsamiKendi": "Deletion scope is unclear: select an operator to delete your own record.",
+      "temizlenemedi": "The history could not be cleared"
     },
     "kimlik": {
       "disaAktar": "Select an operator — to export the whole session history, first choose which veterinarian you are from the top bar.",
@@ -80,6 +184,13 @@
       "tumunuSilOperatorSecin": "Select an operator — to delete all patients, first select which veterinarian you are from the top bar.",
       "tumunuSilYalnizCihaz": "Deleting all patients can only be done from the device's own screen (not from a phone or another device on the network)."
     }
+  },
+  "hata": {
+    "apiAnahtari": "Invalid or missing API key (X-API-Key)",
+    "authKatmani": "The authentication layer is unavailable",
+    "beklenmeyen": "An unexpected server error occurred.",
+    "cokIstek": "Too many requests, please wait a moment",
+    "gecersizIstek": "The request data is invalid."
   },
   "jeton": {
     "mesaj": {
@@ -133,6 +244,13 @@
     }
   },
   "pdf": {
+    "ai": {
+      "baslik": "AI Analysis — {{modul}}",
+      "dipnot": "This report was created with artificial intelligence in the PEMF Vet app.",
+      "modulYok": "Analysis",
+      "ozet": "Summary for the owner and the veterinarian",
+      "rapor": "AI ANALYSIS REPORT"
+    },
     "altBilgi": {
       "tarihli": "{{metin}} Report date: {{tarih}}",
       "varsayilan": "This report was generated automatically by the PEMF (Pulsed Electromagnetic Field) device. Report date: {{tarih}} Veterinary PEMF Session System v1.0"
@@ -152,17 +270,45 @@
     "hata": {
       "aiSure": "The duration of an AI session is the seal of the veterinarian's approval — it was NOT CHANGED from here (a new recommendation/approval is required).",
       "aktifYok": "No active session — there are no parameters to update.",
+      "baslatilamazNeden": "Session cannot be started: {{sebep}}",
+      "baslatilmadiNeden": "The session was NOT STARTED: {{neden}}",
+      "baslatmaSurerkenDurduruldu": "The session was stopped while it was starting; this session was NOT STARTED.",
       "cokHasta": "More than one patient with this name has a recent session — the note was not saved because it cannot be determined which patient it belongs to. Your note is still on screen; update the app (the new version attaches the note to the session itself).",
       "dbHazirDegil": "The treatment record database is not ready — the note was not saved.",
+      "guncellemeSuruyor": "An update is being applied; a new session cannot be started until it finishes.",
+      "hazirlikEk": "STOP was sent to the coils. Try again; if the problem persists, contact technical support.",
+      "hazirlikNeden": "An error occurred while preparing the session; the session was NOT STARTED",
+      "kayitAcilamadi": "The treatment record could not be opened — the session was NOT STARTED; try again in a few seconds",
+      "kayitDbAcilamadi": "The medical record database could not be opened; the session cannot be started. Because the treatment record cannot be kept, it is not safe to proceed. Restart the device; if the problem persists, contact technical support.",
+      "kayitDbNeden": " Reason: {{sebep}}",
       "kayitYok": "Session record not found — the note was not saved.",
+      "komutKabulEdilmedi": "No coil accepted the command; the session was NOT STARTED. {{neden}}",
+      "nedenVe": "{{neden}} and {{ek}}",
       "notYazilamadi": "The note could not be saved — the record could not be written to the database (it may be locked or the disk may be full). Your note is still on screen; try again in a moment.",
       "seansBelirsiz": "The session the note belongs to could not be determined — the note was not saved (a new session record is NOT opened).",
       "seansDegisti": "The session changed in the meantime — the duration change was NOT APPLIED.",
-      "sureEnAz": "The remaining time must be at least 1 minute — the duration change was NOT APPLIED."
+      "sifirHz": "Frequency 0 Hz = STOP (A-05): the coils were stopped and the session was NOT STARTED. Enter a frequency.",
+      "stopDogrulanamadi": "{{neden}}. The STOP of the driven coils could NOT be VERIFIED — they may STILL BE RUNNING. Press EMERGENCY STOP or use the device's physical power button.",
+      "sureEnAz": "The remaining time must be at least 1 minute — the duration change was NOT APPLIED.",
+      "surusEk": "the coils that were driven were stopped. Check the connection and try again.",
+      "surusNeden": "An error occurred while driving the coils; the session was NOT STARTED",
+      "zatenAktif": "There is already an active session."
     },
     "kimlik": {
       "guncelleEki": " If your app does not offer veterinarian selection, update it.",
       "notKaydet": "Select an operator — to save the session note, choose which veterinarian you are; your note is still on screen."
+    },
+    "mesaj": {
+      "aktifYokStop": "There is no active session. STOP was sent so that no coil is left running.",
+      "baslatmaDurduruldu": "The session was stopped while starting (the coils were not energized).",
+      "durduruldu": "The session was stopped."
+    },
+    "sonuc": {
+      "baslatilmadi": "the session was NOT STARTED"
+    },
+    "uyari": {
+      "espErisilemez": "No system connection — the ESP coils {{esp_coils}} may NOT be active (the STM coils are running).",
+      "stopDogrulanamadi": "The hardware STOP could NOT be VERIFIED for coil {{bobinler}} — they may STILL BE RUNNING. Press EMERGENCY STOP or use the device's physical power button."
     }
   },
   "silme": {
@@ -180,6 +326,9 @@
       "dbYanitsizAyrinti": "{{onek}} (the disk or a network drive may be stuck); the status is unknown.",
       "denetimOkunamadi": "The audit trail could not be read.",
       "destekPaketi": "The support package could not be created.",
+      "kapanisJson": "The shutdown stop requires a JSON body: {\"onay\": true}.",
+      "kapanisOnay": "The shutdown stop requires confirmation: {\"onay\": true}.",
+      "kapanisYalnizYerel": "The shutdown stop can only be called from the launcher on this computer.",
       "kurtarmaDosyaYok": "The recovery code file is not on this device: either it has not been written yet (if there is a key to recover, it is written in the next backup round; if it cannot be written, look for the line 'kurtarma kodu dosyasi YAZILAMADI' in the log) or it was deleted after the code was taken out.",
       "kurtarmaEkran": "The recovery code can only be viewed from the device's own screen.",
       "kurtarmaOkunamadi": "The recovery code could not be read.",
@@ -187,7 +336,9 @@
       "onayKaydedilemedi": "The confirmation could not be saved.",
       "onaySaklamaSuresi": "The confirmation must be sent together with the retention period shown on the screen. Refresh the screen, see the number of affected records and confirm again — the confirmation was not saved.",
       "saklamaAraligi": "The retention period must be between 0 and 36500 days.",
-      "saklamaDegisti": "The retention period changed after this screen was opened ({{gun}} days). Refresh the screen, see the number of affected records and confirm again — the confirmation was not saved."
+      "saklamaDegisti": "The retention period changed after this screen was opened ({{gun}} days). Refresh the screen, see the number of affected records and confirm again — the confirmation was not saved.",
+      "sifirlaJson": "Reset can only be done with a JSON body: {\"onay\": true}.",
+      "sifirlaOnay": "Reset requires deliberate confirmation: {\"onay\": true}."
     }
   },
   "tarih": {
@@ -206,5 +357,34 @@
       "9": "Sep"
     },
     "tarihSaat": "{{tarih}}, {{saat}}"
+  },
+  "yedek": {
+    "hata": {
+      "cihazDisiGeriYukleme": "There are records on this device: a restore (it replaces all treatment records on the device) can only be done from the device's own screen.",
+      "cihazaKaydetEkran": "Saving the backup to the device can only be done from the device's own screen; on this client the file is downloaded.",
+      "cihazaYazilamadi": "The backup file could not be written to the device or could not be verified — the backup was NOT CREATED. Check the disk space and that the desktop folder is writable.",
+      "dbHazirDegil": "The database is not ready",
+      "disaAktarBasarisiz": "Export failed — the backup was NOT CREATED.",
+      "dogrulanamadi": "The backup file could not be verified; the created file cannot be opened. The operation was cancelled — please try again.",
+      "geriYuklemeHastaOkunamadi": "This device's patient records could not be read (the patient database cannot be opened) — the restore was NOT PERFORMED and the records on the device were NOT CHANGED. Restart the app; if the problem persists, contact technical support.",
+      "geriYuklemeOnay": "This device already has records. A restore DELETES ALL treatment records on this device (sessions, coil runs, sensor data, session events, AI analyses) and replaces them with those in the backup. Patient cards are NOT deleted: the cards of patients not in the backup stay, but their session and analysis history on this device is deleted. To confirm, send {\"confirm\":\"REPLACE_ALL\"}.",
+      "geriYuklemeSurerkenSeans": "A restore is in progress on this device — the session was NOT STARTED; start it again when the restore finishes.",
+      "geriYuklemeSuruyor": "A restore is in progress on this device — the records will appear when it finishes. Do not repeat the action and do not restart the app; refresh Session History in a few minutes.",
+      "geriYuklemeYazilamadi": "The restore COULD NOT BE PERFORMED — the treatment database could not be written (busy or disk error). The records on the device were NOT CHANGED. When the process using the database (maintenance, a second app) finishes, you can restart the restore.",
+      "hastaOkunamadi": "Patient records could not be read (the patient database cannot be opened) — the backup was NOT CREATED. Restart the app; if the problem persists, contact technical support.",
+      "kodlama": "The file could not be read (invalid encoding).",
+      "seansSurerkenGeriYukleme": "A treatment session is running — a restore replaces all treatment records on the device (the running session's record would be deleted too); stop the session first. No record was changed.",
+      "yedekAlmaSuruyor": "A backup is in progress on this device — wait for it to finish (it can take a few minutes for a large clinic); do not repeat the action."
+    },
+    "kimlik": {
+      "disaAktar": "Select an operator — to back up all the clinic's records, first choose which veterinarian you are from the top bar.",
+      "geriYukleme": "Select an operator — to restore on a device that already has records, first choose which veterinarian you are from the top bar."
+    },
+    "uyari": {
+      "kartAktarilamadi_one": "The card of {{count}} patient could not be imported (the patient database could not be written) — the treatment history was restored but this patient has no card; once the problem is fixed, restore the same backup again.",
+      "kartAktarilamadi_other": "The cards of {{count}} patients could not be imported (the patient database could not be written) — the treatment history was restored but these patients have no cards; once the problem is fixed, restore the same backup again.",
+      "yedekteOlmayan_one": "The card of {{count}} patient who is not in the backup was kept; this patient's session and analysis history on this device was deleted by the restore (it was not in the backup).",
+      "yedekteOlmayan_other": "The cards of {{count}} patients who are not in the backup were kept; these patients' session and analysis history on this device was deleted by the restore (they were not in the backup)."
+    }
   }
 }

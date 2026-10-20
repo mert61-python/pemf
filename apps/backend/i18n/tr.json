@@ -6,6 +6,22 @@
     }
   },
   "ai": {
+    "hata": {
+      "analizYok": "Analiz kaydı bulunamadı.",
+      "durumGecersiz": "status 'approved', 'rejected' veya 'corrected' olmalı.",
+      "gecmiseYazilamadi": "AI analizi geçmişe kaydedilemedi (kayıt veritabanına yazılamadı — disk dolu ya da veritabanı kilitli olabilir). Sonuç ekranda duruyor; değerlendirme ve rapor için sorunu giderip analizi yeniden çalıştırın.",
+      "gerekceZorunlu": "Red ve düzeltme için gerekçe/açıklama zorunludur.",
+      "kayitDbAcilamadi": "Kayıt veritabanı açılamadı.",
+      "kayitDbKullanilamiyor": "Kayıt veritabanı kullanılamıyor.",
+      "logOkunamadi": "Log okunamadı",
+      "oneriHatasi": "AI öneri hatası",
+      "onericiYok": "AI recommender bulunamadı.",
+      "raporOlusmadi": "Rapor oluşturulamadı."
+    },
+    "kimlik": {
+      "degerlendirme": "Operatör seçin — değerlendirme için önce üst bardan hangi hekim olduğunuzu seçin.",
+      "oncekiDegerlendirmeler": "Operatör seçin — önceki değerlendirmeleri görmek için üst bardan hangi hekim olduğunuzu seçin."
+    },
     "pemf": {
       "gecerlilikHesaplanamadi": "PEMF geçerliliği hesaplanamadı — D/P/E değerleri kullanılmamalı; analizi yineleyin."
     },
@@ -18,6 +34,89 @@
       "gecersiz": "Geçersiz dil: \"{{dilKodu}}\". Kullanılabilen diller: tr, en.",
       "yazilamadi": "Dil ayarı kaydedilemedi ({{neden}}). Veri klasörünün yazılabilir olduğunu kontrol edin."
     }
+  },
+  "bildirim": {
+    "acilDurdurUygulandi": "Acil durdurma uygulandı",
+    "aiProPlandanCikti": "Bobin {{coil}} AI Pro planından çıkarıldı — operatör durdurdu; seans sonuna kadar AI Pro bu bobini sürmez, diğer bobinler sürüyor.",
+    "akimGuvenilmez": "⚠️ Bobin {{coil}}: Akım ölçümü bu bobinde güvenilir değil — doz kaydına akım yazılmadı.",
+    "alanDogrulanamadi": "⚠️ Bobin {{coil}} alan sensörü doğrulanamadı — ölçülen alan (mT) gösterilmiyor ve kayda yazılmıyor. Teknik desteğe bildirin (kod: FW-ALAN).",
+    "alanDoygun": "⚠️ Bobin {{coil}} manyetik alanı sensör aralığını AŞTI (±24,6 mT) — gösterilen mT GÜVENİLMEZ (taşma sarar, değer DÜŞÜK görünebilir)",
+    "alanKaydiAcilamadi": "⚠️ Seans alan kaydı (CSV) açılamadı — tedavi etkilenmedi",
+    "alanKaydiBasladi": "📄 Seans alan kaydı başladı: {{yol}}",
+    "alanKaydiYazildi": "📄 Seans alan kaydı masaüstüne yazıldı: {{name}}",
+    "asiriSicaklik": "🌡️ Bobin {{coil}} kartı AŞIRI SICAKLIK bildirdi ({{atype}}) — yalnız bobin {{coil}} durduruldu; diğer bobinler sürüyor. Bobini kontrol edin.",
+    "beklenmedikCalisiyordu": "⚠️ Bobin {{coil}} beklenmedik şekilde çalışıyordu — güvenlik durdurması gönderildi",
+    "bobinAlarm": "🚨 Bobin {{coil}} ALARM ({{atype}}) — seans güvenlik için durduruldu",
+    "bobinBaglandi": "✅ Bobin {{coil}} bağlandı",
+    "bobinKesildi": "⚠️ Bobin {{coil}} bağlantısı kesildi",
+    "dutyReddi": {
+      "eylem": "Duty'yi %{{tavan}} veya altına indirip yeniden başlatın{{secenek}}.",
+      "eylemSifirla": "Duty'yi %{{tavan}} veya altına indirin{{secenek}}, sonra 'Sıfırla'ya basın ve yeniden başlatın.",
+      "govde": "Bobin {{bobin}} {{kip}} kipte en fazla %{{tavan}} çalışabilir; %{{istenen}} kabul edilmedi{{sonuc}}. {{eylem}}",
+      "kipCift": "çift yönlü",
+      "kipTek": "tek yönlü",
+      "secenek": " (ya da ⚡ Sürüş Kipi'nden bu bobini Unipolar yapın)"
+    },
+    "estopEspOnayYok": "⚠️ Bobin {{coil}}: acil durdurma ESP onayı GELMEDİ — bobini elle kontrol edin",
+    "estopEspReddetti": "⚠️ Bobin {{coil}}: acil durdurma komutu ESP tarafından REDDEDİLDİ — bobini elle kontrol edin",
+    "kapanisMandal": "🔒 Uygulama seans / bobin çalışırken kapatıldı — bobinler durduruldu, ACİL DURDUR mandalı kuruldu. Yeniden başlatmadan önce bobinleri kontrol edin ve \"Sıfırla\".",
+    "kaynak": {
+      "sahipsiz": "Sahipsiz bobin durdurması",
+      "sifirHz": "0 Hz seans isteği (A-05) — mandallıyken",
+      "sureDoldu": "Süre doldu — otomatik durdurma",
+      "telafiStop": "Telafi STOP'u (START yayını sürerken durdurma geldi)"
+    },
+    "komutReddetti": "⚠️ Bobin {{coil}} komutu REDDETTİ — {{sebep}}",
+    "kosuKaydiDuzeltildi": "; koşu kaydı düzeltildi",
+    "mandalSifirlandi": "Acil durdurma mandalı SIFIRLANDI — bobinler başlatılmadı; tedavi için başlatmayı ayrıca verin.",
+    "mandalStmKopma": "🔒 Bobin çalışırken STM32 bağlantısı koptu — ACİL DURDUR mandalı kuruldu. Bobinleri kontrol edin; yeniden başlatmak için önce \"Sıfırla\".",
+    "mandalStmWatchdog": "🔒 Bobin çalışırken STM32 watchdog zaman aşımı — ACİL DURDUR mandalı kuruldu. Bobinleri kontrol edin; yeniden başlatmak için önce \"Sıfırla\".",
+    "sebepYok": "sebep bildirilmedi",
+    "selfTestAtlandi": "Bobin {{coil}} self-test: atlandı (PWM pasif)",
+    "selfTestBasarisiz": "🚨 Bobin {{coil}} self-test BAŞARISIZ — {{ayrinti}}",
+    "selfTestGecti": "Bobin {{coil}} self-test: geçti",
+    "sistemBaglandi": "Sistem bağlantısı kuruldu",
+    "sistemKesildi": "Sistem bağlantısı kesildi",
+    "sonuc": {
+      "cikislarDurduruldu": "STM bobin çıkışları durduruldu",
+      "seansDurduruldu": "seans DURDURULDU"
+    },
+    "startOnayYok": "⚠️ Bobin {{coil}}: start onayı gelmedi — bobinin gerçekten çalıştığını panelden kontrol edin",
+    "startReddedildi": "⚠️ Bobin {{coil}}: start komutu cihaz tarafından REDDEDİLDİ — bobin ÇALIŞMIYOR",
+    "startReddedildiSonraki": "⚠️ Bobin {{coil}}: önceki start komutu reddedildi — sonraki komut geçerli; durumu panelden doğrulayın",
+    "stmKoptuSeansDurdu": "⚠️ STM32 bağlantısı koptu — seans güvenlik için durduruldu",
+    "stmRedSeansDurdu": "⛔ Seans DURDURULDU: {{neden}}",
+    "stmWatchdogSeansDurdu": "⚠️ STM32 watchdog zaman aşımı — seans güvenlik için durduruldu",
+    "stmWatchdogSeanssiz": "⚠️ STM32 watchdog zaman aşımı — bobin çıkışları durduruldu (aktif seans yoktu)",
+    "stopDogrulanamadiEk": " ⚠️ Bu bobinin STOP'u DOĞRULANAMADI.",
+    "telemetriYanitYokStop": "⚠️ Bobin {{coil}} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı, STOP gönderildi",
+    "telemetriYanitYokStopYok": "⚠️ Bobin {{coil}} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı; STOP GÖNDERİLEMEDİ (broker erişilemiyor) — bobin HÂLÂ ENERJİLİ olabilir, elle kontrol edin",
+    "termalKesme": "🔥 Bobin {{coil}} YEREL TERMAL KESME — PWM cihaz tarafından durduruldu{{ayrinti}}; 45°C altına soğuyunca start serbest",
+    "termalKilit": "⚠️ Bobin {{coil}} sıcak: start reddedildi — soğuması bekleniyor{{ayrinti}}",
+    "termalSogudu": "✅ Bobin {{coil}} soğudu — start yeniden serbest",
+    "teyitsizStop": "⚠️ {{kaynak}}: bobin(ler) {{bobinler}} için donanım STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da bobinleri elle kontrol edin."
+  },
+  "donanim": {
+    "hata": {
+      "bilinmeyenKomut": "Bilinmeyen komut: {{cmd}}",
+      "bobinKimligi": "Geçersiz bobin ID (1-8)",
+      "cekirdekDonanimHazirDegil": "Headless Core veya HardwareController hazır değil.",
+      "cekirdekHazirDegil": "Çekirdek hazır değil.",
+      "hazirDegil": "Donanım hazır değil.",
+      "komutBasarisiz": "Donanım komutu başarısız",
+      "sayiGecersiz": "Geçersiz '{{ad}}': sonlu bir sayı olmalı.",
+      "stmHazirDegil": "STM32 donanım kontrolcüsü hazır değil.",
+      "stmYok": "STM kontrolcusu yok",
+      "tamSayiGecersiz": "Geçersiz '{{ad}}': {{alt}}..{{ust}} arasında TAM sayı olmalı.",
+      "unipolarDizisi": "unipolar dizisi {{n}} elemanli olmali (bobin {{ilk}}-{{son}}), {{gelen}} geldi"
+    },
+    "uyari": {
+      "fazSenkron": "STM bobin-1 {{hz}} Hz çalışırken bobin {{coil}} için {{esp_freq}} Hz istendi (≥50× ayrışma) — faz senkronu kilitlenmez, S3 DC-koruma latch'i devreye girebilir. Faz gerekmiyorsa sorun değil; gerekiyorsa frekansları yaklaştırın.",
+      "fazSenkronKisa": "STM bobin-1 {{hz}} Hz çalışırken bobin {{coil}} için {{esp_freq}} Hz istendi (≥50× ayrışma) — faz senkronu kilitlenmez."
+    }
+  },
+  "firmware": {
+    "komutRed": "Cihaz kartı komutları reddediyor — kartın yazılımı bu uygulama sürümüyle uyumsuz; bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET)."
   },
   "gecmis": {
     "csv": {
@@ -47,12 +146,17 @@
       "veriYok": "Veri bulunamadi"
     },
     "hata": {
+      "dbHazirDegil": "Geçmiş veritabanı hazır değil",
       "gecersizSessionIds": "Geçersiz session_ids",
       "geriYukleme": "Seans geçmişi okunurken bu cihazda geri yükleme yapıldı ya da sürüyor — tutarsız dosya OLUŞTURULMADI. Geri yükleme bitince dışa aktarmayı yeniden başlatın.",
       "islemBasarisiz": "İşlem başarısız",
+      "kayitYokYetkisiz": "Kayıt bulunamadı veya silme yetkiniz yok.",
       "seansSuruyor": "Seans sürüyor — süren tedavinin kaydı silinemez; önce seansı durdurun.",
       "seansYok": "Seans bulunamadı — zaten silinmiş olabilir; listeyi yenileyin.",
-      "silinecekSecilmedi": "Silinecek seans seçilmedi."
+      "silinecekSecilmedi": "Silinecek seans seçilmedi.",
+      "silmeKapsami": "Silme kapsamı belirsiz. Kendi kayıtlarınız için operatör seçin; kliniğin tamamını silmek için isteğe {\"all_operators\": true} ekleyin.",
+      "silmeKapsamiKendi": "Silme kapsamı belirsiz: kendi kaydınızı silmek için operatör seçin.",
+      "temizlenemedi": "Geçmiş temizlenemedi"
     },
     "kimlik": {
       "disaAktar": "Operatör seçin — tüm seans geçmişini dışa aktarmak için önce üst bardan hangi hekim olduğunuzu seçin.",
@@ -80,6 +184,13 @@
       "tumunuSilOperatorSecin": "Operatör seçin — tüm hastaları silmek için önce üst bardan hangi hekim olduğunuzu seçin.",
       "tumunuSilYalnizCihaz": "Tüm hastaları silmek yalnız cihazın kendi ekranından yapılabilir (telefon ya da ağdaki başka bir cihazdan değil)."
     }
+  },
+  "hata": {
+    "apiAnahtari": "Gecersiz veya eksik API anahtari (X-API-Key)",
+    "authKatmani": "Auth katmani kullanilamiyor",
+    "beklenmeyen": "Sunucu hatası (beklenmeyen).",
+    "cokIstek": "Cok fazla istek, biraz bekleyin",
+    "gecersizIstek": "Geçersiz istek verisi."
   },
   "jeton": {
     "mesaj": {
@@ -133,6 +244,13 @@
     }
   },
   "pdf": {
+    "ai": {
+      "baslik": "Yapay Zekâ Analizi — {{modul}}",
+      "dipnot": "Bu rapor PEMF Vet uygulamasında yapay zekâ ile oluşturuldu.",
+      "modulYok": "Analiz",
+      "ozet": "Hayvan sahibi ve veteriner hekim için özet",
+      "rapor": "YAPAY ZEKÂ ANALİZ RAPORU"
+    },
     "altBilgi": {
       "tarihli": "{{metin}} Rapor tarihi: {{tarih}}",
       "varsayilan": "\n        Bu rapor PEMF (Pulsed Electromagnetic Field) tedavi cihazı tarafından otomatik olarak oluşturulmuştur.\n        Rapor tarihi: {{tarih}}\n\n        Veteriner PEMF Tedavi Sistemi v1.0\n        "
@@ -152,17 +270,45 @@
     "hata": {
       "aiSure": "AI seansının süresi hekim onayının mührüdür — buradan DEĞİŞTİRİLMEDİ (yeni öneri/onay gerekir).",
       "aktifYok": "Aktif seans yok — güncellenecek parametre yok.",
+      "baslatilamazNeden": "Seans başlatılamaz: {{sebep}}",
+      "baslatilmadiNeden": "Seans BAŞLATILMADI: {{neden}}",
+      "baslatmaSurerkenDurduruldu": "Seans başlatma sürerken durduruldu; bu seans BAŞLATILMADI.",
       "cokHasta": "Bu adla birden çok hastanın yakın tarihli seansı var — not hangi hastanın olduğu belirlenemediği için kaydedilmedi. Notunuz ekranda duruyor; uygulamayı güncelleyin (yeni sürüm notu seansın kendisine bağlar).",
       "dbHazirDegil": "Tedavi kaydı veritabanı hazır değil — not kaydedilmedi.",
+      "guncellemeSuruyor": "Güncelleme uygulanıyor; işlem bitene kadar yeni seans başlatılamaz.",
+      "hazirlikEk": "bobinlere STOP gönderildi. Yeniden deneyin; sürerse teknik desteğe başvurun.",
+      "hazirlikNeden": "Seans hazırlığı sırasında hata oluştu; seans BAŞLATILMADI",
+      "kayitAcilamadi": "Tedavi kaydı açılamadı — seans BAŞLATILMADI; birkaç saniye sonra yeniden deneyin",
+      "kayitDbAcilamadi": "Tıbbi kayıt veritabanı açılamadı; seans başlatılamaz. Tedavi kaydı tutulamayacağı için işlem güvenli değildir. Cihazı yeniden başlatın, sorun sürerse teknik desteğe başvurun.",
+      "kayitDbNeden": " Neden: {{sebep}}",
       "kayitYok": "Seans kaydı bulunamadı — not kaydedilmedi.",
+      "komutKabulEdilmedi": "Hiçbir bobin komutu kabul etmedi; seans BAŞLATILMADI. {{neden}}",
+      "nedenVe": "{{neden}} ve {{ek}}",
       "notYazilamadi": "Not kaydedilemedi — kayıt veritabanına yazılamadı (kilitli ya da disk dolu olabilir). Notunuz ekranda duruyor; birazdan tekrar deneyin.",
       "seansBelirsiz": "Notun ait olduğu seans belirlenemedi — not kaydedilmedi (yeni seans kaydı AÇILMAZ).",
       "seansDegisti": "Seans bu sırada değişti — süre değişikliği UYGULANMADI.",
-      "sureEnAz": "Kalan süre en az 1 dakika olmalı — süre değişikliği UYGULANMADI."
+      "sifirHz": "Frekans 0 Hz = DURDURMA (A-05): bobinler durduruldu, seans BAŞLATILMADI. Frekans girin.",
+      "stopDogrulanamadi": "{{neden}}. Sürülen bobinlerin STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın.",
+      "sureEnAz": "Kalan süre en az 1 dakika olmalı — süre değişikliği UYGULANMADI.",
+      "surusEk": "sürülen bobinler durduruldu. Bağlantıyı kontrol edip yeniden deneyin.",
+      "surusNeden": "Bobin sürüşü sırasında hata oluştu; seans BAŞLATILMADI",
+      "zatenAktif": "Zaten aktif bir seans var."
     },
     "kimlik": {
       "guncelleEki": " Uygulamanız hekim seçimi sunmuyorsa güncelleyin.",
       "notKaydet": "Operatör seçin — seans notunu kaydetmek için hangi hekim olduğunuzu seçin; notunuz ekranda duruyor."
+    },
+    "mesaj": {
+      "aktifYokStop": "Aktif seans yok. Çalışan bobin kalmasın diye STOP gönderildi.",
+      "baslatmaDurduruldu": "Seans başlatma sırasında durduruldu (bobinler açılmadı).",
+      "durduruldu": "Seans durduruldu."
+    },
+    "sonuc": {
+      "baslatilmadi": "seans BAŞLATILMADI"
+    },
+    "uyari": {
+      "espErisilemez": "Sistem bağlantısı yok — ESP bobinleri {{esp_coils}} aktif OLMAYABİLİR (STM bobinleri çalışıyor).",
+      "stopDogrulanamadi": "Bobin {{bobinler}} için donanım STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
     }
   },
   "silme": {
@@ -180,6 +326,9 @@
       "dbYanitsizAyrinti": "{{onek}} (disk ya da ağ sürücüsü takılmış olabilir); durum bilinmiyor.",
       "denetimOkunamadi": "Denetim izi okunamadı.",
       "destekPaketi": "Destek paketi oluşturulamadı.",
+      "kapanisJson": "Kapanış durdurması JSON gövde ister: {\"onay\": true}.",
+      "kapanisOnay": "Kapanış durdurması onay ister: {\"onay\": true}.",
+      "kapanisYalnizYerel": "Kapanış durdurması yalnız bu bilgisayardaki launcher'dan çağrılabilir.",
       "kurtarmaDosyaYok": "Kurtarma kodu dosyası bu cihazda yok: ya henüz yazılmadı (kurtarılacak anahtar varsa bir sonraki yedek turunda yazılır; yazılamıyorsa günlükte 'kurtarma kodu dosyasi YAZILAMADI' satırına bakın) ya da kod dışarı alındıktan sonra silindi.",
       "kurtarmaEkran": "Kurtarma kodu yalnızca cihazın kendi ekranından görüntülenebilir.",
       "kurtarmaOkunamadi": "Kurtarma kodu okunamadı.",
@@ -187,7 +336,9 @@
       "onayKaydedilemedi": "Onay kaydedilemedi.",
       "onaySaklamaSuresi": "Onay, ekranın gösterdiği saklama süresiyle birlikte gönderilmeli. Ekranı yenileyin, etkilenecek kayıt sayısını görüp yeniden onaylayın — onay kaydedilmedi.",
       "saklamaAraligi": "Saklama süresi 0–36500 gün aralığında olmalı.",
-      "saklamaDegisti": "Saklama süresi bu ekran açıldıktan sonra değişti ({{gun}} gün). Ekranı yenileyin, etkilenecek kayıt sayısını görüp yeniden onaylayın — onay kaydedilmedi."
+      "saklamaDegisti": "Saklama süresi bu ekran açıldıktan sonra değişti ({{gun}} gün). Ekranı yenileyin, etkilenecek kayıt sayısını görüp yeniden onaylayın — onay kaydedilmedi.",
+      "sifirlaJson": "Sıfırla yalnız JSON gövdeyle yapılabilir: {\"onay\": true}.",
+      "sifirlaOnay": "Sıfırla bilinçli onay ister: {\"onay\": true}."
     }
   },
   "tarih": {
@@ -206,5 +357,34 @@
       "9": "Eylül"
     },
     "tarihSaat": "{{tarih}}, {{saat}}"
+  },
+  "yedek": {
+    "hata": {
+      "cihazDisiGeriYukleme": "Bu cihazda kayıt var: geri yükleme (cihazdaki tüm tedavi kayıtlarını değiştirir) yalnız cihazın kendi ekranından yapılabilir.",
+      "cihazaKaydetEkran": "Yedeği cihaza kaydetme yalnız cihazın kendi ekranından yapılır; bu istemcide dosya indirilir.",
+      "cihazaYazilamadi": "Yedek dosyası cihaza yazılamadı ya da doğrulanamadı — yedek OLUŞTURULMADI. Disk alanını ve masaüstü klasörünün yazılabilir olduğunu denetleyin.",
+      "dbHazirDegil": "Veritabanı hazır değil",
+      "disaAktarBasarisiz": "Dışa aktarma başarısız — yedek OLUŞTURULMADI.",
+      "dogrulanamadi": "Yedek dosyası doğrulanamadı; oluşturulan dosya açılamıyor. İşlem iptal edildi — lütfen tekrar deneyin.",
+      "geriYuklemeHastaOkunamadi": "Bu cihazın hasta kayıtları okunamadı (hasta veritabanı açılamıyor) — geri yükleme YAPILMADI, cihazdaki kayıtlar DEĞİŞMEDİ. Uygulamayı yeniden başlatın; sürerse teknik desteğe başvurun.",
+      "geriYuklemeOnay": "Bu cihazda zaten kayıt var. Geri yükleme bu cihazdaki TÜM tedavi kayıtlarını (seanslar, bobin koşuları, sensör verisi, seans olayları, AI analizleri) SİLER ve yedektekilerle değiştirir. Hasta kartları SİLİNMEZ: yedekte olmayan hastaların kartı kalır ama bu cihazdaki seans ve analiz geçmişleri silinir. Onaylamak için {\"confirm\":\"REPLACE_ALL\"} gönderin.",
+      "geriYuklemeSurerkenSeans": "Geri yükleme bu cihazda sürüyor — seans BAŞLATILMADI; geri yükleme bitince yeniden başlatın.",
+      "geriYuklemeSuruyor": "Geri yükleme bu cihazda sürüyor — bitince kayıtlar görünür. İşlemi tekrarlamayın ve uygulamayı yeniden başlatmayın; birkaç dakika sonra Seans Geçmişi'ni yenileyin.",
+      "geriYuklemeYazilamadi": "Geri yükleme YAPILAMADI — tedavi veritabanı yazılamadı (meşgul ya da disk hatası). Cihazdaki kayıtlar DEĞİŞMEDİ. Veritabanını kullanan işlem (bakım, ikinci uygulama) bitince geri yüklemeyi yeniden başlatabilirsiniz.",
+      "hastaOkunamadi": "Hasta kayıtları okunamadı (hasta veritabanı açılamıyor) — yedek OLUŞTURULMADI. Uygulamayı yeniden başlatın; sürerse teknik desteğe başvurun.",
+      "kodlama": "Dosya okunamadı (geçersiz kodlama).",
+      "seansSurerkenGeriYukleme": "Tedavi seansı sürüyor — geri yükleme cihazdaki tüm tedavi kayıtlarını değiştirir (süren seansın kaydı da silinirdi); önce seansı durdurun. Hiçbir kayıt değişmedi.",
+      "yedekAlmaSuruyor": "Bu cihazda bir yedek alma işlemi sürüyor — bitmesini bekleyin (büyük klinikte birkaç dakika sürebilir); işlemi tekrarlamayın."
+    },
+    "kimlik": {
+      "disaAktar": "Operatör seçin — kliniğin tüm kayıtlarının yedeğini almak için önce üst bardan hangi hekim olduğunuzu seçin.",
+      "geriYukleme": "Operatör seçin — dolu cihazda geri yükleme için önce üst bardan hangi hekim olduğunuzu seçin."
+    },
+    "uyari": {
+      "kartAktarilamadi_one": "{{count}} hastanın kartı içe aktarılamadı (hasta veritabanı yazılamadı) — tedavi geçmişi geri yüklendi ama bu hastaların kartı yok; sorun giderilince aynı yedeği yeniden geri yükleyin.",
+      "kartAktarilamadi_other": "{{count}} hastanın kartı içe aktarılamadı (hasta veritabanı yazılamadı) — tedavi geçmişi geri yüklendi ama bu hastaların kartı yok; sorun giderilince aynı yedeği yeniden geri yükleyin.",
+      "yedekteOlmayan_one": "Yedekte olmayan {{count}} hastanın kartı korundu; bu hastaların bu cihazdaki seans ve analiz geçmişi geri yüklemeyle silindi (yedekte yoktu).",
+      "yedekteOlmayan_other": "Yedekte olmayan {{count}} hastanın kartı korundu; bu hastaların bu cihazdaki seans ve analiz geçmişi geri yüklemeyle silindi (yedekte yoktu)."
+    }
   }
 }

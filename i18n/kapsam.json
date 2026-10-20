@@ -283,7 +283,7 @@
    "sira": 10,
    "kritik": true,
    "aciklama": "api_server.py — donanım / seans / ACİL DURDUR iletileri (KRİTİK)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 201,
    "dosyaSayisi": 1
   },
@@ -3358,11 +3358,490 @@
    "yuzey": "sunucu",
    "grup": "sunucu-10b-ana-sunucu",
    "sira": 10,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 201,
    "kritik": true,
-   "muaf": [],
-   "birlesikIstisna": [],
+   "muaf": [
+    {
+     "metin": "seans kapandı",
+     "gerekce": "CSV bitiş satırına yazılan sebep — dosya içeriği (VERİ), çevrilmez"
+    },
+    {
+     "metin": "Roaming",
+     "gerekce": "dizin adı bileşeni (Windows Roaming) — metin değil"
+    },
+    {
+     "metin": "PEMF React Native API Bridge",
+     "gerekce": "API belge başlığı (FastAPI title) — geliştirici içindir"
+    },
+    {
+     "metin": "Gecersiz Host basligi.",
+     "gerekce": "DNS-rebind reddi: gövde ASCII düz metin, kullanıcı arayüzüne ulaşmaz (tarayıcı saldırı yanıtı)"
+    },
+    {
+     "metin": "max-age=63072000; includeSubDomains",
+     "gerekce": "HTTP üst bilgisi değeri (HSTS) — protokol"
+    },
+    {
+     "metin": "'self' blob: data: https://*.supabase.co",
+     "gerekce": "CSP kaynak listesi — protokol"
+    },
+    {
+     "metin": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src {{_connect}}; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'",
+     "gerekce": "CSP üst bilgisi değeri — protokol"
+    },
+    {
+     "metin": "pemf/coil/{{cid}}/control",
+     "gerekce": "MQTT konusu (topic) — protokol"
+    },
+    {
+     "metin": "esp telemetry watchdog error",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "akım",
+     "gerekce": "ESP alarm türü eşleştirme dizisi (sınıflandırma verisi) — metin değil"
+    },
+    {
+     "metin": "güvenlik",
+     "gerekce": "ESP alarm türü eşleştirme dizisi (sınıflandırma verisi) — metin değil"
+    },
+    {
+     "metin": "Bagli WebSocket istemci sayisi",
+     "gerekce": "Prometheus HELP satırı — izleme aracı çıktısı (ASCII), kullanıcı arayüzü değil"
+    },
+    {
+     "metin": "Aktif seans (1/0)",
+     "gerekce": "Prometheus HELP satırı — izleme aracı çıktısı (ASCII), kullanıcı arayüzü değil"
+    },
+    {
+     "metin": "Bagli bobin sayisi",
+     "gerekce": "Prometheus HELP satırı — izleme aracı çıktısı (ASCII), kullanıcı arayüzü değil"
+    },
+    {
+     "metin": "Calisan bobin sayisi",
+     "gerekce": "Prometheus HELP satırı — izleme aracı çıktısı (ASCII), kullanıcı arayüzü değil"
+    },
+    {
+     "metin": "MQTT broker baglantisi (1/0)",
+     "gerekce": "Prometheus HELP satırı — izleme aracı çıktısı (ASCII), kullanıcı arayüzü değil"
+    },
+    {
+     "metin": "STM32 baglantisi (1/0)",
+     "gerekce": "Prometheus HELP satırı — izleme aracı çıktısı (ASCII), kullanıcı arayüzü değil"
+    },
+    {
+     "metin": "Gateway/ag baglantisi (1/0)",
+     "gerekce": "Prometheus HELP satırı — izleme aracı çıktısı (ASCII), kullanıcı arayüzü değil"
+    },
+    {
+     "metin": "Bekleyen bildirim sayisi",
+     "gerekce": "Prometheus HELP satırı — izleme aracı çıktısı (ASCII), kullanıcı arayüzü değil"
+    },
+    {
+     "metin": "# TYPE {{name}} gauge",
+     "gerekce": "Prometheus TYPE satırı — protokol"
+    },
+    {
+     "metin": "Manuel",
+     "gerekce": "DB'ye / canlı duruma yazılan seans kipi değeri (VERİ) — gösterimde değer → anahtar"
+    },
+    {
+     "metin": "pemf/coil/{{coil_id}}/control",
+     "gerekce": "MQTT konusu (topic) — protokol"
+    },
+    {
+     "metin": "pemf/coil/{{i}}/control",
+     "gerekce": "MQTT konusu (topic) — protokol"
+    },
+    {
+     "metin": "pemf/esp32_{{cid}}/command",
+     "gerekce": "MQTT konusu (topic) — protokol"
+    },
+    {
+     "metin": "veritabani acilamadi",
+     "gerekce": "DB hazır-değil iç nedeni (ASCII, yalnız günlük; HTTP gövdesine girmez)"
+    },
+    {
+     "metin": "Self-test commands sent.",
+     "gerekce": "İngilizce geliştirici yanıtı (iki dilde de İngilizce) — metin kullanıcıya gösterilmez"
+    },
+    {
+     "metin": "All PWM signals reset.",
+     "gerekce": "İngilizce geliştirici yanıtı (iki dilde de İngilizce) — metin kullanıcıya gösterilmez"
+    },
+    {
+     "metin": "Stale ESP state cleaned.",
+     "gerekce": "İngilizce geliştirici yanıtı (iki dilde de İngilizce) — metin kullanıcıya gösterilmez"
+    },
+    {
+     "metin": "Firmware kanal sayisi uyusmuyor.",
+     "gerekce": "firmware uyumsuzluk iç nedeni — yalnız günlüğe girer (operatöre STM_RED_MESAJI gider)"
+    },
+    {
+     "metin": "İsimsiz",
+     "gerekce": "canlı hasta özeti yer tutucusu (VERİ — ad yoksa) — [İNCELE] EN'de \"İsimsiz\" görünür, 14'e not"
+    },
+    {
+     "metin": "session_duration_watchdog hata",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "hardware sim loop error",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "olculen alan tazelik denetimi hatasi",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "sensor persistence loop error",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "daily maintenance loop genel hatasi",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır"
+    },
+    {
+     "metin": "AI analiz ad->kimlik tasimasi yapildi (D2.22: tek seferlik, kalici)",
+     "gerekce": "DB ayar açıklaması (VERİ — sistem ayarı satırına yazılır)"
+    },
+    {
+     "metin": "ai_{{analiz_id}}_{{deger2}}.pdf",
+     "gerekce": "geçici PDF dosya adı — metin değil"
+    },
+    {
+     "metin": "PEMF_AI_{{deger1}}_{{analiz_id}}.pdf",
+     "gerekce": "indirilen dosya adı (Content-Disposition) — metin değil"
+    },
+    {
+     "metin": "Desktop",
+     "gerekce": "dizin adı bileşeni (Windows Desktop) — metin değil"
+    },
+    {
+     "metin": "masaüstü bulunamadı ({{gerekce}}) — yedek çalışma dizinine YAZILMAZ: {{dizin}}",
+     "gerekce": "iç istisna iletisi — çağıran genel \"OLUŞTURULMADI\" hatasına çevirir (günlük), operatöre gitmez"
+    },
+    {
+     "metin": "ortak masaüstü — {{gerekce}}",
+     "gerekce": "iç günlük gerekçesi (yedek hedefi) — operatöre gitmez"
+    },
+    {
+     "metin": "yedek dosyası diske yazıldı ama DOĞRULANAMADI ({{deger1}} / {{deger2}} bayt)",
+     "gerekce": "iç istisna iletisi — çağıran genel \"OLUŞTURULMADI\" hatasına çevirir (günlük), operatöre gitmez"
+    },
+    {
+     "metin": "pemf-vet-yedek-{{deger1}}.pemfbak",
+     "gerekce": "indirilen dosya adı — metin değil"
+    },
+    {
+     "metin": "Acil Durdurma",
+     "gerekce": "canlı duruma yazılan seans kipi değeri (VERİ) — gösterimde değer → anahtar"
+    },
+    {
+     "metin": "pemf/esp32_{{coil_id}}/command",
+     "gerekce": "MQTT konusu (topic) — protokol"
+    },
+    {
+     "metin": "Uygulama Kapanışı",
+     "gerekce": "canlı duruma yazılan seans kipi değeri (VERİ) — gösterimde değer → anahtar"
+    },
+    {
+     "metin": "no-store, must-revalidate",
+     "gerekce": "HTTP Cache-Control değeri — protokol"
+    },
+    {
+     "metin": "public, max-age=31536000, immutable",
+     "gerekce": "HTTP Cache-Control değeri — protokol"
+    },
+    {
+     "metin": "dema-terapi-simülatörü",
+     "gerekce": "paket kaynak dizin adı — metin değil"
+    }
+   ],
+   "birlesikIstisna": [
+    {
+     "once": "Bobin {{b}} AI Pro planından çıkarıldı — operatör durdurdu; seans sonuna kadar AI Pro bu bobini sürmez, diğer bobinler sürüyor.",
+     "sonra": [
+      "bildirim.aiProPlandanCikti"
+     ]
+    },
+    {
+     "once": "⛔ Seans DURDURULDU:",
+     "sonra": [
+      "bildirim.stmRedSeansDurdu"
+     ]
+    },
+    {
+     "once": "⚠️ Bobin {{cid}} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı, STOP gönderildi",
+     "sonra": [
+      "bildirim.telemetriYanitYokStop"
+     ]
+    },
+    {
+     "once": "⚠️ Bobin {{cid}} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı; STOP GÖNDERİLEMEDİ (broker erişilemiyor) — bobin HÂLÂ ENERJİLİ olabilir, elle kontrol edin",
+     "sonra": [
+      "bildirim.telemetriYanitYokStopYok"
+     ]
+    },
+    {
+     "once": "🌡️ Bobin {{coil_id}} kartı AŞIRI SICAKLIK bildirdi ({{atype}}) — yalnız bobin {{coil_id3}} durduruldu; diğer bobinler sürüyor. Bobini kontrol edin.",
+     "sonra": [
+      "bildirim.asiriSicaklik"
+     ]
+    },
+    {
+     "once": "🚨 Bobin {{coil_id_str}} self-test BAŞARISIZ — {{_st_msg}}",
+     "sonra": [
+      "bildirim.selfTestBasarisiz"
+     ]
+    },
+    {
+     "once": "Bobin {{coil_id_str}} self-test:",
+     "sonra": [
+      "bildirim.selfTestAtlandi",
+      "bildirim.selfTestBasarisiz",
+      "bildirim.selfTestGecti"
+     ]
+    },
+    {
+     "once": "🔥 Bobin {{coil_id_str}} YEREL TERMAL KESME — PWM cihaz tarafından durduruldu",
+     "sonra": [
+      "bildirim.termalKesme"
+     ]
+    },
+    {
+     "once": "⚠️ Bobin {{coil_id_str}} sıcak: start reddedildi — soğuması bekleniyor",
+     "sonra": [
+      "bildirim.termalKilit"
+     ]
+    },
+    {
+     "once": "✅ Bobin {{coil_id_str}} soğudu — start yeniden serbest",
+     "sonra": [
+      "bildirim.termalSogudu"
+     ]
+    },
+    {
+     "once": "⚠️ Bobin {{coil_id_str}} komutu REDDETTİ — {{deger2}}",
+     "sonra": [
+      "bildirim.komutReddetti"
+     ]
+    },
+    {
+     "once": "⚠️ Bobin {{coil_id_str}} bağlantısı kesildi",
+     "sonra": [
+      "bildirim.bobinKesildi"
+     ]
+    },
+    {
+     "once": "✅ Bobin {{coil_id_str}} bağlandı",
+     "sonra": [
+      "bildirim.bobinBaglandi"
+     ]
+    },
+    {
+     "once": "🚨 Bobin {{coil_id_str}} ALARM ({{atype}}) — seans güvenlik için durduruldu",
+     "sonra": [
+      "bildirim.bobinAlarm"
+     ]
+    },
+    {
+     "once": "🔒 Bobin çalışırken",
+     "sonra": [
+      "bildirim.mandalStmKopma",
+      "bildirim.mandalStmWatchdog"
+     ]
+    },
+    {
+     "once": "— ACİL DURDUR mandalı kuruldu. Bobinleri kontrol edin; yeniden başlatmak için önce \"Sıfırla\".",
+     "sonra": [
+      "bildirim.mandalStmKopma",
+      "bildirim.mandalStmWatchdog"
+     ]
+    },
+    {
+     "once": "⚠️ Bobin {{_t_coil_id}}: Akım ölçümü bu bobinde güvenilir değil — doz kaydına akım yazılmadı.",
+     "sonra": [
+      "bildirim.akimGuvenilmez"
+     ]
+    },
+    {
+     "once": "⚠️ Bobin {{_t_coil_id}} alan sensörü doğrulanamadı — ölçülen alan (mT) gösterilmiyor ve kayda yazılmıyor. Teknik desteğe bildirin (kod: FW-ALAN).",
+     "sonra": [
+      "bildirim.alanDogrulanamadi"
+     ]
+    },
+    {
+     "once": "⚠️ Bobin {{_t_coil_id}} manyetik alanı sensör aralığını AŞTI (±24,6 mT) — gösterilen mT GÜVENİLMEZ (taşma sarar, değer DÜŞÜK görünebilir)",
+     "sonra": [
+      "bildirim.alanDoygun"
+     ]
+    },
+    {
+     "once": "⚠️ Bobin {{coil_id}}: önceki start komutu reddedildi — sonraki komut geçerli; durumu panelden doğrulayın",
+     "sonra": [
+      "bildirim.startReddedildiSonraki"
+     ]
+    },
+    {
+     "once": "⚠️ Bobin {{coil_id}}: start komutu cihaz tarafından REDDEDİLDİ — bobin ÇALIŞMIYOR",
+     "sonra": [
+      "bildirim.startReddedildi"
+     ]
+    },
+    {
+     "once": "⚠️ Bobin {{coil_id}}: start onayı gelmedi — bobinin gerçekten çalıştığını panelden kontrol edin",
+     "sonra": [
+      "bildirim.startOnayYok"
+     ]
+    },
+    {
+     "once": "⚠️ Bobin {{coil_id}}: acil durdurma komutu ESP tarafından REDDEDİLDİ — bobini elle kontrol edin",
+     "sonra": [
+      "bildirim.estopEspReddetti"
+     ]
+    },
+    {
+     "once": "⚠️ Bobin {{coil_id}}: acil durdurma ESP onayı GELMEDİ — bobini elle kontrol edin",
+     "sonra": [
+      "bildirim.estopEspOnayYok"
+     ]
+    },
+    {
+     "once": "⚠️ Bobin {{coil_id}} beklenmedik şekilde çalışıyordu — güvenlik durdurması gönderildi",
+     "sonra": [
+      "bildirim.beklenmedikCalisiyordu"
+     ]
+    },
+    {
+     "once": "STM bobin-1 {{deger1}} Hz çalışırken bobin {{coil_id}} için {{esp_freq}} Hz istendi (≥50× ayrışma) — faz senkronu kilitlenmez, S3 DC-koruma latch'i devreye girebilir. Faz gerekmiyorsa sorun değil; gerekiyorsa frekansları yaklaştırın.",
+     "sonra": [
+      "donanim.uyari.fazSenkron"
+     ]
+    },
+    {
+     "once": "unipolar dizisi {{n}} elemanli olmali (bobin {{deger2}}-{{deger3}}), {{deger4}} geldi",
+     "sonra": [
+      "donanim.hata.unipolarDizisi"
+     ]
+    },
+    {
+     "once": "STM bobin-1 {{deger1}} Hz çalışırken bobin {{coil_id}} için {{_b_esp_freq}} Hz istendi (≥50× ayrışma) — faz senkronu kilitlenmez.",
+     "sonra": [
+      "donanim.uyari.fazSenkron",
+      "donanim.uyari.fazSenkronKisa"
+     ]
+    },
+    {
+     "once": "Seans BAŞLATILMADI:",
+     "sonra": [
+      "seans.hata.baslatilmadiNeden"
+     ]
+    },
+    {
+     "once": "Seans başlatılamaz: {{_db_sebep}}",
+     "sonra": [
+      "seans.hata.baslatilamazNeden"
+     ]
+    },
+    {
+     "once": "Hiçbir bobin komutu kabul etmedi; seans BAŞLATILMADI.",
+     "sonra": [
+      "seans.hata.komutKabulEdilmedi"
+     ]
+    },
+    {
+     "once": "📄 Seans alan kaydı başladı: {{_csv_yolu}}",
+     "sonra": [
+      "bildirim.alanKaydiBasladi"
+     ]
+    },
+    {
+     "once": "⚠️ {{kaynak}}: bobin(ler) {{deger2}} için donanım STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da bobinleri elle kontrol edin.",
+     "sonra": [
+      "bildirim.teyitsizStop"
+     ]
+    },
+    {
+     "once": "Bobin {{deger1}} için donanım STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın.",
+     "sonra": [
+      "seans.uyari.stopDogrulanamadi"
+     ]
+    },
+    {
+     "once": "Geri yükleme bu cihazda sürüyor — bitince kayıtlar görünür. İşlemi tekrarlamayın ve uygulamayı yeniden başlatmayın; birkaç dakika sonra Seans Geçmişi'ni yenileyin.",
+     "sonra": [
+      "yedek.hata.geriYuklemeSuruyor"
+     ]
+    },
+    {
+     "once": "Bu cihazda bir yedek alma işlemi sürüyor — bitmesini bekleyin (büyük klinikte birkaç dakika sürebilir); işlemi tekrarlamayın.",
+     "sonra": [
+      "yedek.hata.yedekAlmaSuruyor"
+     ]
+    },
+    {
+     "once": "Yedeği cihaza kaydetme yalnız cihazın kendi ekranından yapılır; bu istemcide dosya indirilir.",
+     "sonra": [
+      "yedek.hata.cihazaKaydetEkran"
+     ]
+    },
+    {
+     "once": "Hasta kayıtları okunamadı (hasta veritabanı açılamıyor) — yedek OLUŞTURULMADI. Uygulamayı yeniden başlatın; sürerse teknik desteğe başvurun.",
+     "sonra": [
+      "yedek.hata.hastaOkunamadi"
+     ]
+    },
+    {
+     "once": "Yedek dosyası cihaza yazılamadı ya da doğrulanamadı — yedek OLUŞTURULMADI. Disk alanını ve masaüstü klasörünün yazılabilir olduğunu denetleyin.",
+     "sonra": [
+      "yedek.hata.cihazaYazilamadi"
+     ]
+    },
+    {
+     "once": "Bu cihazda kayıt var: geri yükleme (cihazdaki tüm tedavi kayıtlarını değiştirir) yalnız cihazın kendi ekranından yapılabilir.",
+     "sonra": [
+      "yedek.hata.cihazDisiGeriYukleme"
+     ]
+    },
+    {
+     "once": "Bu cihazın hasta kayıtları okunamadı (hasta veritabanı açılamıyor) — geri yükleme YAPILMADI, cihazdaki kayıtlar DEĞİŞMEDİ. Uygulamayı yeniden başlatın; sürerse teknik desteğe başvurun.",
+     "sonra": [
+      "yedek.hata.geriYuklemeHastaOkunamadi"
+     ]
+    },
+    {
+     "once": "Operatör seçin — dolu cihazda geri yükleme için önce üst bardan hangi hekim olduğunuzu seçin.",
+     "sonra": [
+      "yedek.kimlik.geriYukleme"
+     ]
+    },
+    {
+     "once": "Bu cihazda zaten kayıt var. Geri yükleme bu cihazdaki TÜM tedavi kayıtlarını (seanslar, bobin koşuları, sensör verisi, seans olayları, AI analizleri) SİLER ve yedektekilerle değiştirir. Hasta kartları SİLİNMEZ: yedekte olmayan hastaların kartı kalır ama bu cihazdaki seans ve analiz geçmişleri silinir. Onaylamak için {\"confirm\":\"REPLACE_ALL\"} gönderin.",
+     "sonra": [
+      "yedek.hata.geriYuklemeOnay"
+     ]
+    },
+    {
+     "once": "Geri yükleme YAPILAMADI — tedavi veritabanı yazılamadı (meşgul ya da disk hatası). Cihazdaki kayıtlar DEĞİŞMEDİ. Veritabanını kullanan işlem (bakım, ikinci uygulama) bitince geri yüklemeyi yeniden başlatabilirsiniz.",
+     "sonra": [
+      "yedek.hata.geriYuklemeYazilamadi"
+     ]
+    },
+    {
+     "once": "Yedekte olmayan {{deger1}} hastanın kartı korundu; bu hastaların bu cihazdaki seans ve analiz geçmişi geri yüklemeyle silindi (yedekte yoktu).",
+     "sonra": [
+      "yedek.uyari.yedekteOlmayan"
+     ]
+    },
+    {
+     "once": "{{_basarisiz}} hastanın kartı içe aktarılamadı (hasta veritabanı yazılamadı) — tedavi geçmişi geri yüklendi ama bu hastaların kartı yok; sorun giderilince aynı yedeği yeniden geri yükleyin.",
+     "sonra": [
+      "yedek.uyari.kartAktarilamadi"
+     ]
+    }
+   ],
    "not": ""
   },
   "apps/backend/servers/ai_client.py": {
