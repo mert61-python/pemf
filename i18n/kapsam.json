@@ -2195,6 +2195,26 @@
     {
      "metin": "D",
      "gerekce": "bobin etiketi kodu (\"D1…D7\") — dilden bağımsız"
+    },
+    {
+     "metin": "kapalı",
+     "gerekce": "ayar tablosunun VARSAYILAN değer verisi (backend `petri_ayar` ile eşitlik kapısı bu alanı okur); gösterimde `ayarVarsayilani()` çevirir"
+    },
+    {
+     "metin": "Petri Kuyu Analizi",
+     "gerekce": "AI geçmişi kaydına giden modül adı — veri"
+    },
+    {
+     "metin": "{{n_wells}} kuyu ({{n_cancer}} kanser)",
+     "gerekce": "AI geçmişi kaydına giden özet — veri"
+    },
+    {
+     "metin": "conf {{deger1}}",
+     "gerekce": "teknik kısaltma (\"conf\") — iki dilde aynı, değer sayı"
+    },
+    {
+     "metin": "IoU {{deger1}}",
+     "gerekce": "teknik kısaltma (\"IoU\") — iki dilde aynı, değer sayı"
     }
    ],
    "birlesikIstisna": [],

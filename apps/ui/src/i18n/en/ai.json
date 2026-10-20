@@ -317,6 +317,110 @@
     "yayinDurduNot": "It cannot be confirmed that the session is running. Confirm the status on the Control screen.",
     "yayinDurduUyari": "⚠️ Live stream stopped — the frame shown is NOT CURRENT"
   },
+  "petri": {
+    "a1Kose": "A1 corner",
+    "a1KoseAdi": {
+      "otomatik": "automatic",
+      "sagAlt": "bottom-right",
+      "sagUst": "top-right",
+      "solAlt": "bottom-left",
+      "solUst": "top-left"
+    },
+    "a1KoseSecenek": "A1 corner {{secenek}}",
+    "a1Notu": "The A1 corner is not read from the image (laboratory item): automatic = top-left for a horizontal plate, top-right for a vertical one. If the plate was rotated 180°, choose the opposite corner.",
+    "aciklama": "Detects wells in a petri photo; produces a cancer classification for each well + a PEMF coil / E-field estimate.",
+    "advNotPlaka": "In plate mode the plate geometry determines where the wells are; detection confidence and the \"not a petri dish\" thresholds do not change the result in this mode (they are shown only in single-dish mode). A field you leave empty stays at its default.",
+    "advNotTekil": "If wells cannot be found, the first two levers to try: lowering detection confidence and turning on downscaling. A field you leave empty stays at its default.",
+    "analiziBaslat": "Start Petri Analysis",
+    "aralikDisi": "{{etiket}}: must be between {{alt}} and {{ust}} (entered: {{ham}}).",
+    "ayar": {
+      "plausAreaFrac": {
+        "etiket": "Check: largest detection ≤",
+        "ipucu": "If a single detection covers more than this fraction of the frame, the image is not considered a petri dish (VETO vote)."
+      },
+      "plausCircularity": {
+        "etiket": "Check: circularity ≥",
+        "ipucu": "The circularity vote of the \"not a petri dish\" check."
+      },
+      "plausConf": {
+        "etiket": "Check: confidence ≥",
+        "ipucu": "The confidence vote of the check. Most of the measured rejection cases fell short on this vote (0.44–0.80)."
+      },
+      "resizeMax": {
+        "etiket": "Downscaling (long side, px)",
+        "ipucu": "The model input is FIXED at 640 px; wells vanish in a very large photo. 0 = off. The scale is not affected (mm/px comes from the well diameter or the cabin marker)."
+      },
+      "yoloConf": {
+        "etiket": "Detection confidence (conf)",
+        "ipucu": "Lowering it finds more wells (measured: 0.25 → 0.05 ⇒ 3 wells instead of 1); the risk of false detections increases."
+      },
+      "yoloIou": {
+        "etiket": "Overlap threshold (IoU)",
+        "ipucu": "Raise it if adjacent wells merge into a single detection."
+      }
+    },
+    "ayarNotu": "From the advanced (research) settings, lower the detection confidence (0.25 → 0.05 ⇒ 3 wells instead of 1) or turn on downscaling (e.g. 960).",
+    "baslik": "Petri Well Analysis",
+    "boyaliKontrol": "Stained (cancer) control wells",
+    "boyaliKontrolEtiketi": "Stained control wells",
+    "cap": "Petri diameter (cm)",
+    "capYerTutucu": "e.g. 8 · empty = pixel",
+    "degistirildi": "  ·  changed",
+    "denetimAcik": " “Not a petri dish” check is on",
+    "denetimEtiketi": "\"Not a petri dish\" check",
+    "denetimKapaliUyari": "⚠️ The check is off: a photo uploaded to the wrong module also produces a result, and that result will be misleading.",
+    "etkin": {
+      "alanOrani": "area ratio",
+      "baslik": "⚙️ This result was produced with changed settings: {{ayarlar}}",
+      "dairesellik": "circularity",
+      "denetim": "check {{etiket}} {{deger}}",
+      "denetimKapali": "check OFF",
+      "guven": "confidence",
+      "kucultme": "downscaling {{a}}×{{b}} → {{c}}×{{d}}"
+    },
+    "gelismis": " ⚙️ Advanced (research) settings",
+    "gelismisAc": "Opens the detection and verification thresholds",
+    "gelismisEtiketi": "Advanced research settings",
+    "gelismisKapat": "Closes the settings",
+    "gerekce": "  — reason: {{neden}}",
+    "gerekceMavi": "  — reason: {{n}} blue pixels (threshold ≥30)",
+    "ipucuBaslik": "📸 Petri photo tips",
+    "ipucuKenar": "• Keep the plate edges in the frame; make sure light reflections do not fall in the middle of a well",
+    "ipucuKontrol": "• In every experiment, photograph one known stained and one healthy <kalin>control well</kalin> (Advanced settings) ",
+    "ipucuUst": "• Photograph the plate <kalin>from directly above, upright and close</kalin> — the plate should fill at least half of the frame ",
+    "kadrajNotu": "Framing test measured: moving closer to the plate raised the count from 1 well to 5 wells.",
+    "kanser": "Cancer",
+    "kapali": "off",
+    "kipEtiketi": "Petri analysis mode",
+    "kipPlaka": "24-well plate",
+    "kipTekil": "Single petri dishes",
+    "kontrolNotu": "Cancer thresholds were validated only with artificial dye (laboratory item): the control wells adjust the thresholds to this plate; if a control is misclassified, the result is not used.",
+    "kuyucukYok": "Wells not detected",
+    "nokta1": "Red = cancer, green = healthy classification.",
+    "olcek": "Scale: {{olcek}}",
+    "olcekGirdisi": "the petri diameter (cm)",
+    "ornekA1D6": "e.g. A1, D6",
+    "ornekB2": "e.g. B2",
+    "ozet": "Wells: <kalin>{{n}}</kalin>   ·   Cancer: <kanser>{{kanser}}</kanser>   ·   Healthy: <saglikli>{{saglikli}}</saglikli> ",
+    "plakaKipiNotu": "Plate mode looks for the plate from the pink medium / stained wells; keep the plate edges in the frame.",
+    "plakaNotu": "The scale comes from the well spacing of the plate (19.3 mm). If the cabin marker (ArUco) is not in the frame, well positions are in the PLATE frame and the PEMF values are considered invalid.",
+    "plakaYok": "Plate not found",
+    "qrNotu": "If a QR marker is in the photo, the position is extracted automatically (QR); otherwise it is scaled with the petri diameter.",
+    "saglikliKontrol": "Healthy control wells",
+    "sayiGirin": "{{etiket}}: enter a number (e.g. {{vars}}).",
+    "sonuc": {
+      "baslik_one": "{{count}} well · {{nc}} cancer, {{n_healthy}} healthy",
+      "baslik_other": "{{count}} wells · {{nc}} cancer, {{n_healthy}} healthy",
+      "kanserSiniflandi_one": "Cancer was classified in {{count}} well. A 3D position, electric field (E) and the duty settings (D1–D7) of the 7 coils are listed below for each well.",
+      "kanserSiniflandi_other": "Cancer was classified in {{count}} wells. A 3D position, electric field (E) and the duty settings (D1–D7) of the 7 coils are listed below for each well.",
+      "kanserYok": "No cancer finding was classified in the wells; the E-field and coil settings calculated for each well are still listed below."
+    },
+    "tekilKipNotu": "If the image shows single petri dishes rather than a 24-well plate, choose the \"Single petri dishes\" mode.",
+    "tespitYokMetin": "Try photographing the plate so that it fills the frame, from directly above and well lit.",
+    "varsayilan": "default {{vars}}",
+    "varsayilanaDon": "Reset settings to default",
+    "varsayilanlaraDon": "↺ Reset to defaults"
+  },
   "retikulosit": {
     "agrege": "Aggregate Reticulocytes: {{sayi}}",
     "dusuk": "The reticulocyte ratio appears to be in the low-to-normal range. If anemia is present it may be non-regenerative; a definitive interpretation requires clinical context.",

@@ -1050,7 +1050,7 @@ const TONE_COLOR: Record<InterpTone, string> = {
  * denetiminde kaldırıldı (onay kapısı olmadan `/start` çağrılıyordu; eski bir backend'e karşı
  * ONAYSIZ seans başlatabilirdi). Kapı: src/screens/__tests__/aiHubOtonomOnayKapisi.test.tsx
  */
-function AiProKopruDugmesi({ model }: { model: "fantom" | "petri"; hedefEtiketi?: string }) {
+function AiProKopruDugmesi({ model }: { model: "fantom" | "petri" }) {
   const { t } = useTranslation();
   const { navigateTo, setAiProModeli } = useAppNav();
   // dal başına SABİT anahtar (K-3: iç içe dinamik t() yok)
@@ -2433,41 +2433,51 @@ function PhantomModule({ patientName }: { patientName: string }) {
  * import edemediği için değerler burada KOPYA duruyor; `tests/test_petri_ayar_parametreleri.py`
  * eşitliği kilitler → sessizce ayrışamaz (`_PETRI_NOT_PLATE` ile aynı desen).
  */
+/** Alan etiketi / ipucu katalog ANAHTARIDIR (gösterimde `t(a.etiket as never)` çevirir — K-3 izni: kapalı 12 anahtar); `vars` / `alt` / `ust` / `ad` VERİDİR
+ *  (backend `petri_ayar` ile eşitlik kapısı bu alanları okur: tests/test_petri_ayar_parametreleri.py). */
 const PETRI_AYAR_ALANLARI: {
   ad: string; etiket: string; vars: string; alt: number; ust: number; ipucu: string;
 }[] = [
   {
-    ad: "yolo_conf", etiket: "Tespit güveni (conf)", vars: "0.25", alt: 0.01, ust: 0.95,
-    ipucu: "Düşürmek daha çok kuyucuk bulur (ölçüldü: 0,25 → 0,05 ⇒ 1 kuyu yerine 3), yanlış tespit riski artar.",
+    ad: "yolo_conf", etiket: "ai.petri.ayar.yoloConf.etiket", vars: "0.25", alt: 0.01, ust: 0.95,
+    ipucu: "ai.petri.ayar.yoloConf.ipucu",
   },
   {
-    ad: "yolo_iou", etiket: "Örtüşme eşiği (IoU)", vars: "0.7", alt: 0.1, ust: 0.95,
-    ipucu: "Bitişik kuyucuklar tek tespide birleşiyorsa yükseltin.",
+    ad: "yolo_iou", etiket: "ai.petri.ayar.yoloIou.etiket", vars: "0.7", alt: 0.1, ust: 0.95,
+    ipucu: "ai.petri.ayar.yoloIou.ipucu",
   },
   {
-    ad: "resize_max", etiket: "Küçültme (uzun kenar, px)", vars: "kapalı", alt: 320, ust: 8000,
-    ipucu: "Model girdisi 640 px'e SABİT; çok büyük fotoğrafta kuyucuklar kaybolur. 0 = kapalı. Ölçek etkilenmez (mm/px kuyu çapından ya da kabin işaretinden gelir).",
+    ad: "resize_max", etiket: "ai.petri.ayar.resizeMax.etiket", vars: "kapalı", alt: 320, ust: 8000,
+    ipucu: "ai.petri.ayar.resizeMax.ipucu",
   },
   {
-    ad: "plaus_circularity", etiket: "Denetim: dairesellik ≥", vars: "0.55", alt: 0, ust: 1,
-    ipucu: "\"Petri değil\" denetiminin dairesellik oyu.",
+    ad: "plaus_circularity", etiket: "ai.petri.ayar.plausCircularity.etiket", vars: "0.55", alt: 0, ust: 1,
+    ipucu: "ai.petri.ayar.plausCircularity.ipucu",
   },
   {
-    ad: "plaus_conf", etiket: "Denetim: güven ≥", vars: "0.85", alt: 0, ust: 1,
-    ipucu: "Denetimin güven oyu. Ölçülen ret vakalarının çoğu bu oydan düşüyordu (0,44–0,80).",
+    ad: "plaus_conf", etiket: "ai.petri.ayar.plausConf.etiket", vars: "0.85", alt: 0, ust: 1,
+    ipucu: "ai.petri.ayar.plausConf.ipucu",
   },
   {
-    ad: "plaus_area_frac", etiket: "Denetim: en büyük tespit ≤", vars: "0.25", alt: 0.01, ust: 1,
-    ipucu: "Tek tespit karenin bu oranından fazlasını kaplıyorsa görüntü petri sayılmaz (VETO oyu).",
+    ad: "plaus_area_frac", etiket: "ai.petri.ayar.plausAreaFrac.etiket", vars: "0.25", alt: 0.01, ust: 1,
+    ipucu: "ai.petri.ayar.plausAreaFrac.ipucu",
   },
 ];
+
+/** Ayar alanının "varsayılan" gösterimi: sayısal alanlar tablodaki değer, `resize_max` "kapalı" sözcüğü (gösterimde çevrilir). */
+const ayarVarsayilani = (a: { ad: string; vars: string }): string => (a.ad === "resize_max" ? i18n.t("ai.petri.kapali") : a.vars);
 
 /** AI-2 (hocanın petri v2'si) — PLAKA kipinde anlamlı olan tek eski ayar küçültmedir. ÖLÇÜLDÜ (6 plaka fotoğrafı):
  *  conf 0,05 / 0,9, IoU 0,3 ve gevşetilmiş "petri değil" eşikleri sonucu BİREBİR aynı bıraktı (YOLO plaka kipinde yalnız ipucu,
  *  makullik plaka kuralıyla); küçültme ölçeği ve doğrulanan aday sayısını değiştirdi (640'ta 2/6 düşük çözünürlüklü plaka RED). */
 const PLAKA_KIPI_AYARLARI = new Set(["resize_max"]);
 /** A1 köşesi seçenekleri (backend `petri_ayar.A1_KOSELERI`). */
-const A1_KOSE_ADI = { auto: "otomatik", tl: "sol-üst", tr: "sağ-üst", br: "sağ-alt", bl: "sol-alt" } as const;
+const a1KoseAdi = (k: "auto" | "tl" | "tr" | "br" | "bl"): string =>
+  k === "auto" ? i18n.t("ai.petri.a1KoseAdi.otomatik")
+    : k === "tl" ? i18n.t("ai.petri.a1KoseAdi.solUst")
+      : k === "tr" ? i18n.t("ai.petri.a1KoseAdi.sagUst")
+        : k === "br" ? i18n.t("ai.petri.a1KoseAdi.sagAlt")
+          : i18n.t("ai.petri.a1KoseAdi.solAlt");
 
 /**
  * Petri Kuyu Analizi — petri fotoğrafından YOLO11m-seg ile N kuyucuk tespit eder,
@@ -2476,6 +2486,7 @@ const A1_KOSE_ADI = { auto: "otomatik", tl: "sol-üst", tr: "sağ-üst", br: "sa
  * Backend: POST /api/ai/vision/em_petri (petri_cv_v2 — hocanın v2'si). Canlı kamera/otonom YOK — tek foto.
  */
 function PetriModule({ patientName }: { patientName: string }) {
+  const { t } = useTranslation();
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
   // Galeri ASIL okuma yuzeyi: daha yuksek tavan, AYNI responsive oran (bkz. useGaleriYuksekligi).
@@ -2603,11 +2614,11 @@ function PetriModule({ patientName }: { patientName: string }) {
         const ham = (adv[a.ad] || "").trim();
         if (!ham) continue;                       // boş = varsayılanda kal
         const d = parseFloat(ham.replace(",", "."));
-        if (isNaN(d)) { showToast(`${a.etiket}: sayı girin (ör. ${a.vars}).`, "error"); setLoading(false); return; }
+        if (isNaN(d)) { showToast(t("ai.petri.sayiGirin", { etiket: t(a.etiket as never), vars: ayarVarsayilani(a) }), "error"); setLoading(false); return; }
         // resize_max için 0 = "küçültme kapalı" (sınır ihlali değil).
         const kapali = a.ad === "resize_max" && d === 0;
         if (!kapali && (d < a.alt || d > a.ust)) {
-          showToast(`${a.etiket}: ${a.alt} – ${a.ust} aralığında olmalı (girilen ${ham}).`, "error");
+          showToast(t("ai.petri.aralikDisi", { etiket: t(a.etiket as never), alt: a.alt, ust: a.ust, ham }), "error");
           setLoading(false); return;
         }
         formData.append(a.ad, String(d));
@@ -2629,7 +2640,7 @@ function PetriModule({ patientName }: { patientName: string }) {
           logAiResult(hasta, "Petri Kuyu Analizi", `${data.n_wells} kuyu (${data.n_cancer} kanser)`, { moduleId: "em_petri", inputType: "image", detail: data });
         }
       } else {
-        showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
+        showToast(aiDetayCumlesi(data?.detail, t("ai.hata.analizSirasinda")), "error");
       }
     } catch (e) {
       showToast(aiHataMesaji(e), "error");
@@ -2643,15 +2654,15 @@ function PetriModule({ patientName }: { patientName: string }) {
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.title}>Petri Kuyu Analizi</Text>
-      <Text style={styles.subtitle}>Petri fotoğrafından kuyucukları tespit eder, her kuyuda kanser sınıflandırması + PEMF bobin/E-alan tahmini üretir.</Text>
+      <Text style={styles.title}>{t("ai.petri.baslik")}</Text>
+      <Text style={styles.subtitle}>{t("ai.petri.aciklama")}</Text>
 
       {!imageUri && (
         <View style={styles.photoGuide}>
-          <Text style={styles.photoGuideTitle}>📸 Petri fotoğraf ipuçları</Text>
-          <Text style={styles.photoGuideItem}>• Plakayı <Text style={styles.photoGuideBold}>tam tepeden, dik ve yakın</Text> çekin — plaka karenin en az yarısını kaplasın</Text>
-          <Text style={styles.photoGuideItem}>• Plaka kenarları kadrajda kalsın; ışık yansıması kuyucuk ortasına düşmesin</Text>
-          <Text style={styles.photoGuideItem}>• Her deneyde bilinen bir boyalı ve bir sağlıklı <Text style={styles.photoGuideBold}>kontrol kuyucuğu</Text> çekin (Gelişmiş ayarlar)</Text>
+          <Text style={styles.photoGuideTitle}>{t("ai.petri.ipucuBaslik")}</Text>
+          <Text style={styles.photoGuideItem}><Trans i18nKey="ai.petri.ipucuUst" components={{ kalin: <Text style={styles.photoGuideBold} /> }} /></Text>
+          <Text style={styles.photoGuideItem}>{t("ai.petri.ipucuKenar")}</Text>
+          <Text style={styles.photoGuideItem}><Trans i18nKey="ai.petri.ipucuKontrol" components={{ kalin: <Text style={styles.photoGuideBold} /> }} /></Text>
         </View>
       )}
 
@@ -2669,14 +2680,14 @@ function PetriModule({ patientName }: { patientName: string }) {
             <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
               <View style={styles.placeholderBox}>
                 <ImageIcon color={colors.textMuted} size={48} />
-                <Text style={styles.placeholderText}>Görüntü seçilmedi</Text>
+                <Text style={styles.placeholderText}>{t("ai.ortak.goruntuSecilmedi")}</Text>
               </View>
             </View>
           }
       />
 
-      <View style={styles.btnRow} accessibilityRole="radiogroup" accessibilityLabel="Petri analiz kipi">
-        {([["plaka", "24 kuyucuklu plaka"], ["tekil", "Tekil petri kapları"]] as const).map(([k, et]) => (
+      <View style={styles.btnRow} accessibilityRole="radiogroup" accessibilityLabel={t("ai.petri.kipEtiketi")}>
+        {([["plaka", t("ai.petri.kipPlaka")], ["tekil", t("ai.petri.kipTekil")]] as const).map(([k, et]) => (
           <TouchableOpacity
             key={k}
             style={[styles.advAnahtar, { flex: 1, opacity: kip === k ? 1 : 0.6 }]}
@@ -2691,21 +2702,21 @@ function PetriModule({ patientName }: { patientName: string }) {
       </View>
       {kip === "tekil" && (<>
       <View style={styles.fantomLenRow}>
-        <Text style={styles.fantomLenLabel}>Petri çapı (cm)</Text>
+        <Text style={styles.fantomLenLabel}>{t("ai.petri.cap")}</Text>
         <TextInput
           style={styles.fantomLenInput}
           keyboardType="numeric"
-          accessibilityLabel="Petri çapı (cm)"
-          placeholder="ör. 8 · boş = piksel"
+          accessibilityLabel={t("ai.petri.cap")}
+          placeholder={t("ai.petri.capYerTutucu")}
           placeholderTextColor={colors.textMuted}
           value={petriDia}
           onChangeText={setPetriDia}
         />
       </View>
-      <Text style={styles.petriHint}>QR marker fotoğrafta varsa konum otomatik çıkarılır (QR); yoksa petri çapı ile ölçeklenir.</Text>
+      <Text style={styles.petriHint}>{t("ai.petri.qrNotu")}</Text>
       </>)}
       {kip === "plaka" && (
-        <Text style={styles.petriHint}>Ölçek plakanın kuyucuk aralığından (19,3 mm) gelir. Kabin işareti (ArUco) kadrajda değilse kuyucuk konumu PLAKA çerçevesindedir ve PEMF değerleri geçersiz sayılır.</Text>
+        <Text style={styles.petriHint}>{t("ai.petri.plakaNotu")}</Text>
       )}
 
       {/* GELİŞMİŞ (ARAŞTIRMA) AYARLARI — kapalı başlar; hiçbir alana dokunulmazsa istek
@@ -2715,11 +2726,11 @@ function PetriModule({ patientName }: { patientName: string }) {
         onPress={() => setAdvAcik((v) => !v)}
         accessibilityRole="button"
         accessibilityState={{ expanded: advAcik }}
-        accessibilityLabel="Gelişmiş araştırma ayarları"
-        accessibilityHint={advAcik ? "Ayarları kapatır" : "Tespit ve denetim eşiklerini açar"}
+        accessibilityLabel={t("ai.petri.gelismisEtiketi")}
+        accessibilityHint={advAcik ? t("ai.petri.gelismisKapat") : t("ai.petri.gelismisAc")}
       >
         <Text style={styles.advBaslikMetin}>
-          {advAcik ? "▾" : "▸"} ⚙️ Gelişmiş (araştırma) ayarları{advDegisti ? "  ·  değiştirildi" : ""}
+          {advAcik ? "▾" : "▸"}{t("ai.petri.gelismis")}{advDegisti ? t("ai.petri.degistirildi") : ""}
         </Text>
       </TouchableOpacity>
 
@@ -2727,49 +2738,49 @@ function PetriModule({ patientName }: { patientName: string }) {
         <View style={styles.advGovde}>
           <Text style={styles.advNot}>
             {kip === "tekil"
-              ? "Kuyucuklar bulunamıyorsa ilk deneyeceğiniz iki kol: tespit güvenini düşürmek ve küçültmeyi açmak. Boş bıraktığınız alan varsayılanda kalır."
-              : "Plaka kipinde kuyucuk yerlerini plakanın geometrisi belirler; tespit güveni ve \"petri değil\" eşikleri bu kipte sonucu değiştirmez (yalnız tekil kipte görünür). Boş bıraktığınız alan varsayılanda kalır."}
+              ? t("ai.petri.advNotTekil")
+              : t("ai.petri.advNotPlaka")}
           </Text>
           {kip === "plaka" && (
             <View style={styles.advAlan}>
               <View style={styles.advSatir}>
-                <Text style={styles.advEtiket}>Sağlıklı kontrol kuyucukları</Text>
-                <TextInput style={styles.advGirdi} accessibilityLabel="Sağlıklı kontrol kuyucukları" placeholder="ör. A1, D6"
+                <Text style={styles.advEtiket}>{t("ai.petri.saglikliKontrol")}</Text>
+                <TextInput style={styles.advGirdi} accessibilityLabel={t("ai.petri.saglikliKontrol")} placeholder={t("ai.petri.ornekA1D6")}
                   placeholderTextColor={colors.textMuted} value={kontrolSaglikli} onChangeText={setKontrolSaglikli} autoCapitalize="characters" />
               </View>
               <View style={styles.advSatir}>
-                <Text style={styles.advEtiket}>Boyalı (kanser) kontrol kuyucukları</Text>
-                <TextInput style={styles.advGirdi} accessibilityLabel="Boyalı kontrol kuyucukları" placeholder="ör. B2"
+                <Text style={styles.advEtiket}>{t("ai.petri.boyaliKontrol")}</Text>
+                <TextInput style={styles.advGirdi} accessibilityLabel={t("ai.petri.boyaliKontrolEtiketi")} placeholder={t("ai.petri.ornekB2")}
                   placeholderTextColor={colors.textMuted} value={kontrolKanser} onChangeText={setKontrolKanser} autoCapitalize="characters" />
               </View>
-              <Text style={styles.advIpucu}>Kanser eşikleri yalnız yapay boyayla doğrulandı (laboratuvar maddesi): kontrol kuyucukları eşikleri bu plakaya göre ayarlar; kontrol yanlış sınıflanırsa sonuç kullanılmaz.</Text>
-              <View style={styles.advSatir} accessibilityRole="radiogroup" accessibilityLabel="A1 köşesi">
-                <Text style={styles.advEtiket}>A1 köşesi</Text>
+              <Text style={styles.advIpucu}>{t("ai.petri.kontrolNotu")}</Text>
+              <View style={styles.advSatir} accessibilityRole="radiogroup" accessibilityLabel={t("ai.petri.a1Kose")}>
+                <Text style={styles.advEtiket}>{t("ai.petri.a1Kose")}</Text>
                 {(["auto", "tl", "tr", "br", "bl"] as const).map((k) => (
                   <TouchableOpacity key={k} style={styles.advAnahtar} onPress={() => setA1Kose(k)} accessibilityRole="radio"
-                    accessibilityState={{ selected: a1Kose === k }} accessibilityLabel={`A1 köşesi ${A1_KOSE_ADI[k]}`}>
-                    <Text style={styles.advAnahtarMetin}>{a1Kose === k ? "◉" : "○"} {A1_KOSE_ADI[k]}  </Text>
+                    accessibilityState={{ selected: a1Kose === k }} accessibilityLabel={t("ai.petri.a1KoseSecenek", { secenek: a1KoseAdi(k) })}>
+                    <Text style={styles.advAnahtarMetin}>{a1Kose === k ? "◉" : "○"} {a1KoseAdi(k)}  </Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              <Text style={styles.advIpucu}>A1 köşesi görüntüden okunmaz (laboratuvar maddesi): otomatik = yatay plakada sol-üst, dikeyde sağ-üst. Plaka 180° çevrildiyse karşı köşeyi seçin.</Text>
+              <Text style={styles.advIpucu}>{t("ai.petri.a1Notu")}</Text>
             </View>
           )}
           {gorunenAyarlar.map((a) => (
             <View key={a.ad} style={styles.advAlan}>
               <View style={styles.advSatir}>
-                <Text style={styles.advEtiket}>{a.etiket}</Text>
+                <Text style={styles.advEtiket}>{t(a.etiket as never)}</Text>
                 <TextInput
                   style={styles.advGirdi}
                   keyboardType="numeric"
-                  accessibilityLabel={a.etiket}
-                  placeholder={`varsayılan ${a.vars}`}
+                  accessibilityLabel={t(a.etiket as never)}
+                  placeholder={t("ai.petri.varsayilan", { vars: ayarVarsayilani(a) })}
                   placeholderTextColor={colors.textMuted}
                   value={adv[a.ad] || ""}
                   onChangeText={(t) => setAdv((p) => ({ ...p, [a.ad]: t }))}
                 />
               </View>
-              <Text style={styles.advIpucu}>{a.ipucu}</Text>
+              <Text style={styles.advIpucu}>{t(a.ipucu as never)}</Text>
             </View>
           ))}
 
@@ -2778,15 +2789,15 @@ function PetriModule({ patientName }: { patientName: string }) {
             onPress={() => setDenetimAcik((v) => !v)}
             accessibilityRole="switch"
             accessibilityState={{ checked: denetimAcik }}
-            accessibilityLabel="Petri değil denetimi"
+            accessibilityLabel={t("ai.petri.denetimEtiketi")}
           >
             <Text style={styles.advAnahtarMetin}>
-              {denetimAcik ? "☑" : "☐"} “Petri değil” denetimi açık
+              {denetimAcik ? "☑" : "☐"}{t("ai.petri.denetimAcik")}
             </Text>
           </TouchableOpacity>
           {!denetimAcik && (
             <Text style={styles.advUyari}>
-              ⚠️ Denetim kapalı: yanlış modüle yüklenen bir fotoğrafa da sonuç üretilir ve o sonuç yanıltıcı olur.
+              {t("ai.petri.denetimKapaliUyari")}
             </Text>
           )}
 
@@ -2794,26 +2805,26 @@ function PetriModule({ patientName }: { patientName: string }) {
             style={styles.advSifirla}
             onPress={() => { setAdv({}); setDenetimAcik(true); setKontrolSaglikli(""); setKontrolKanser(""); setA1Kose("auto"); }}
             accessibilityRole="button"
-            accessibilityLabel="Ayarları varsayılana döndür"
+            accessibilityLabel={t("ai.petri.varsayilanaDon")}
           >
-            <Text style={styles.advSifirlaMetin}>↺ Varsayılanlara dön</Text>
+            <Text style={styles.advSifirlaMetin}>{t("ai.petri.varsayilanlaraDon")}</Text>
           </TouchableOpacity>
         </View>
       )}
 
       <View style={[styles.btnRow, isCompact && { flexDirection: "column" }]}>
         <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
-          <Button label="Galeriden Seç" icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} />
+          <Button label={t("ai.ortak.galeridenSec")} icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} />
         </View>
         <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
-          <Button label="Fotoğraf Çek" icon={<Camera color={colors.white} size={16} />} onPress={takePhoto} />
+          <Button label={t("ai.gorsel.fotografCek")} icon={<Camera color={colors.white} size={16} />} onPress={takePhoto} />
         </View>
       </View>
 
       <View style={styles.analyzeBtn}>
-        <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Petri Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyze} />
+        <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.petri.analiziBaslat")} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyze} />
       </View>
-      {longLoading && <Text style={styles.modelHint}>Model hazırlanıyor (ilk kullanım uzun sürebilir)…</Text>}
+      {longLoading && <Text style={styles.modelHint}>{t("ai.ortak.modelHazirlaniyor")}</Text>}
 
       {result && (
         <View style={styles.resultBox}>
@@ -2821,30 +2832,30 @@ function PetriModule({ patientName }: { patientName: string }) {
             /* Ölçülen saha nedeni (BULGULAR.md): tam kare telefon fotoğrafında kuyucuklar
                640 px'lik model girdisine inince kayboluyor. "Tekrar deneyin" tek başına
                kullanıcıyı aynı sonuca götürüyordu — çıkışı olan bir yönlendirme veriyoruz. */
-            <ResultInterpretation tone="alert" emoji="⚠️" title={kip === "plaka" ? "Plaka bulunamadı" : "Kuyucuk tespit edilemedi"}
-              text="Plaka kareyi dolduracak şekilde, tam tepeden ve iyi aydınlatılmış çekmeyi deneyin."
+            <ResultInterpretation tone="alert" emoji="⚠️" title={kip === "plaka" ? t("ai.petri.plakaYok") : t("ai.petri.kuyucukYok")}
+              text={t("ai.petri.tespitYokMetin")}
               points={kip === "plaka" ? [
-                "Plaka kipi pembe besiyeri / boyalı kuyucuklardan plakayı arar; plaka kenarları kadrajda kalsın.",
-                "Görüntüde 24 kuyucuklu plaka değil tekil petri kapları varsa \"Tekil petri kapları\" kipini seçin.",
+                t("ai.petri.plakaKipiNotu"),
+                t("ai.petri.tekilKipNotu"),
               ] : [
-                "Kadraj denemesi ölçüldü: plakaya yaklaşmak 1 kuyucuktan 5 kuyucuğa çıkardı.",
-                "Gelişmiş (araştırma) ayarlarından tespit güvenini düşürün (0,25 → 0,05 ⇒ 1 yerine 3 kuyucuk) ya da küçültmeyi açın (ör. 960).",
+                t("ai.petri.kadrajNotu"),
+                t("ai.petri.ayarNotu"),
               ]} />
           ) : (
             <>
               {(() => {
                 const nc = result.n_cancer || 0;
                 return <ResultInterpretation tone={nc > 0 ? "alert" : "positive"} emoji="🧫"
-                  title={`${result.n_wells} kuyu · ${nc} kanser, ${result.n_healthy} sağlıklı`}
-                  text={method === "pixel" ? pikselKipiNotu("petri çapını (cm)") : nc > 0
-                    ? `${nc} kuyuda kanser sınıflandırıldı. Her kuyu için 3B konum, elektrik alanı (E) ve 7 bobinin duty ayarı (D1–D7) aşağıda listelenir.`
-                    : "Kuyularda kanser bulgusu sınıflandırılmadı; yine de her kuyu için hesaplanan E-alanı ve bobin ayarı aşağıda."}
-                  points={["Kırmızı = kanser, yeşil = sağlıklı sınıflandırma.", "D1–D7 çubukları her bobinin sürüş oranını (duty %) gösterir."]} />;
+                  title={t("ai.petri.sonuc.baslik", { count: result.n_wells, nc, n_healthy: result.n_healthy })}
+                  text={method === "pixel" ? pikselKipiNotu(t("ai.petri.olcekGirdisi")) : nc > 0
+                    ? t("ai.petri.sonuc.kanserSiniflandi", { count: nc })
+                    : t("ai.petri.sonuc.kanserYok")}
+                  points={[t("ai.petri.nokta1"), t("ai.fantom.nokta2")]} />;
               })()}
               <Text style={styles.resultText}>
-                Kuyu: <Text style={{ fontWeight: "bold" }}>{result.n_wells}</Text>   ·   Kanser: <Text style={{ fontWeight: "bold", color: colors.danger }}>{result.n_cancer}</Text>   ·   Sağlıklı: <Text style={{ fontWeight: "bold", color: colors.success }}>{result.n_healthy}</Text>
+                <Trans i18nKey="ai.petri.ozet" values={{ n: result.n_wells ?? "", kanser: result.n_cancer ?? "", saglikli: result.n_healthy ?? "" }} components={{ kalin: <Text style={{ fontWeight: "bold" }} />, kanser: <Text style={{ fontWeight: "bold", color: colors.danger }} />, saglikli: <Text style={{ fontWeight: "bold", color: colors.success }} /> }} />
               </Text>
-              <Text style={[styles.resultText, { fontSize: typography.small }]}>Ölçek: {method === "pixel" ? "piksel" : `${result.mm_per_px} mm/px`}</Text>
+              <Text style={[styles.resultText, { fontSize: typography.small }]}>{t("ai.petri.olcek", { olcek: method === "pixel" ? t("ai.ortak.piksel") : `${result.mm_per_px} mm/px` })}</Text>
               {/* AI-2: hocanın tüketim kontrolleri — pemf_valid / kontrol QC / çekim uyarıları / VARSAYIMLAR (metin backend'den). */}
               <PemfKapisiKutusu kapi={result.pemf_kapisi} model="petri" />
               {(result.wells || []).map((w: AiWell, i: number) => {
@@ -2853,9 +2864,9 @@ function PetriModule({ patientName }: { patientName: string }) {
                 return (
                   <View key={i} style={styles.tumorRow}>
                     <Text style={styles.tumorHeader}>
-                      {w.well_id}   ·   <Text style={{ color: isCancer ? colors.danger : colors.success }}>{isCancer ? "Kanser" : "Sağlıklı"}</Text>   ·   {konumMetni(w.centroid_cabin_mm, unit)}
-                      {isCancer && Array.isArray(w.cancer_reasons) && w.cancer_reasons.length > 0 ? <Text style={{ color: colors.textMuted, fontSize: typography.small }}>{`  — gerekçe: ${w.cancer_reasons.join(", ")}`}</Text>
-                        : isCancer && (w as any).n_cancer_pixels != null ? <Text style={{ color: colors.textMuted, fontSize: typography.small }}>{`  — gerekçe: ${(w as any).n_cancer_pixels} mavi piksel (eşik ≥30)`}</Text> : null}
+                      {w.well_id}   ·   <Text style={{ color: isCancer ? colors.danger : colors.success }}>{isCancer ? t("ai.petri.kanser") : t("kontrol.efield.saglikli")}</Text>   ·   {konumMetni(w.centroid_cabin_mm, unit)}
+                      {isCancer && Array.isArray(w.cancer_reasons) && w.cancer_reasons.length > 0 ? <Text style={{ color: colors.textMuted, fontSize: typography.small }}>{t("ai.petri.gerekce", { neden: w.cancer_reasons.join(", ") })}</Text>
+                        : isCancer && (w as any).n_cancer_pixels != null ? <Text style={{ color: colors.textMuted, fontSize: typography.small }}>{t("ai.petri.gerekceMavi", { n: (w as any).n_cancer_pixels })}</Text> : null}
                     </Text>
                     <EmDozSatiri r={w} style={[styles.resultText, { fontSize: typography.small }]} />
                     {D.length > 0 && (
@@ -2886,17 +2897,17 @@ function PetriModule({ patientName }: { patientName: string }) {
             const parca: string[] = [];
             if (ya.conf != null && Number(ya.conf) !== 0.25) parca.push(`conf ${trValue(ya.conf)}`);
             if (ya.iou != null && Number(ya.iou) !== 0.7) parca.push(`IoU ${trValue(ya.iou)}`);
-            if (rz.max) parca.push(`küçültme ${rz.from?.[0]}×${rz.from?.[1]} → ${rz.to?.[0]}×${rz.to?.[1]}`);
-            for (const [k, etiket] of [["circularity_med", "dairesellik"], ["conf_med", "güven"], ["max_area_frac", "alan oranı"]] as const) {
-              if (th[k] != null && thVars[k] != null && Number(th[k]) !== Number(thVars[k])) parca.push(`denetim ${etiket} ${trValue(th[k])}`);
+            if (rz.max) parca.push(t("ai.petri.etkin.kucultme", { a: String(rz.from?.[0]), b: String(rz.from?.[1]), c: String(rz.to?.[0]), d: String(rz.to?.[1]) }));
+            for (const [k, etiket] of [["circularity_med", t("ai.petri.etkin.dairesellik")], ["conf_med", t("ai.petri.etkin.guven")], ["max_area_frac", t("ai.petri.etkin.alanOrani")]] as const) {
+              if (th[k] != null && thVars[k] != null && Number(th[k]) !== Number(thVars[k])) parca.push(t("ai.petri.etkin.denetim", { etiket, deger: trValue(th[k]) }));
             }
-            if (((result as any).plausibility || {}).guard === "off") parca.push("denetim KAPALI");
+            if (((result as any).plausibility || {}).guard === "off") parca.push(t("ai.petri.etkin.denetimKapali"));
             if (!parca.length) return null;
-            return <Text style={styles.advEtkin}>{`⚙️ Bu sonuç değiştirilmiş ayarlarla üretildi: ${parca.join(" · ")}`}</Text>;
+            return <Text style={styles.advEtkin}>{t("ai.petri.etkin.baslik", { ayarlar: parca.join(" · ") })}</Text>;
           })()}
           {/* Analizden seansa köprü (Faz 3): bu ekran otonom seans BAŞLATMAZ, yalnız
               Kontrol → AI Pro'ya geçer ve model kartını ön-seçer. */}
-          {result.success ? <AiProKopruDugmesi model="petri" hedefEtiketi="Kuyu" /> : null}
+          {result.success ? <AiProKopruDugmesi model="petri" /> : null}
           <MedicalDisclaimer />
         </View>
       )}

@@ -56,6 +56,22 @@
    "onek": "",
    "degerler": ["ai.hastalik.form.ates", "ai.hastalik.form.kilo", "ai.hastalik.form.nabiz", "ai.hastalik.ozellik.atesSemptom", "ai.hastalik.ozellik.burunAkintisi", "ai.hastalik.ozellik.deriLezyonu", "ai.hastalik.ozellik.gozAkintisi", "ai.hastalik.ozellik.halsizlik", "ai.hastalik.ozellik.hapsirik", "ai.hastalik.ozellik.istahKaybi", "ai.hastalik.ozellik.kiloKaybi", "ai.hastalik.ozellik.sikayetSuresi", "ai.hastalik.ozellik.topallama", "ai.hastalik.ozellik.zorSolunum", "ai.hastalik.semptom.dehidrasyon", "ai.hastalik.semptom.ishal", "ai.hastalik.semptom.kusma", "ai.hastalik.semptom.oksuruk", "hasta.form.yasEtiketi"],
    "gerekce": "SHAP özellik adı DISEASE_FEATURE_TR'de ANAHTAR olarak saklanır (K-7 / KURALLAR §4.7 deseni); değer kümesi KAPALI (19 özellik), kullanıcı girdisi değil"
+  },
+  {
+   "yuzey": "arayuz",
+   "dosya": "apps/ui/src/screens/AiHubScreen.tsx",
+   "ifade": "t(a.etiket as never)",
+   "onek": "",
+   "degerler": ["ai.petri.ayar.plausAreaFrac.etiket", "ai.petri.ayar.plausAreaFrac.ipucu", "ai.petri.ayar.plausCircularity.etiket", "ai.petri.ayar.plausCircularity.ipucu", "ai.petri.ayar.plausConf.etiket", "ai.petri.ayar.plausConf.ipucu", "ai.petri.ayar.resizeMax.etiket", "ai.petri.ayar.resizeMax.ipucu", "ai.petri.ayar.yoloConf.etiket", "ai.petri.ayar.yoloConf.ipucu", "ai.petri.ayar.yoloIou.etiket", "ai.petri.ayar.yoloIou.ipucu"],
+   "gerekce": "Petri gelişmiş ayar tablosu (alan etiketi) PETRI_AYAR_ALANLARI'nda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (6 alan × etiket / ipucu), kullanıcı girdisi değil"
+  },
+  {
+   "yuzey": "arayuz",
+   "dosya": "apps/ui/src/screens/AiHubScreen.tsx",
+   "ifade": "t(a.ipucu as never)",
+   "onek": "",
+   "degerler": ["ai.petri.ayar.plausAreaFrac.etiket", "ai.petri.ayar.plausAreaFrac.ipucu", "ai.petri.ayar.plausCircularity.etiket", "ai.petri.ayar.plausCircularity.ipucu", "ai.petri.ayar.plausConf.etiket", "ai.petri.ayar.plausConf.ipucu", "ai.petri.ayar.resizeMax.etiket", "ai.petri.ayar.resizeMax.ipucu", "ai.petri.ayar.yoloConf.etiket", "ai.petri.ayar.yoloConf.ipucu", "ai.petri.ayar.yoloIou.etiket", "ai.petri.ayar.yoloIou.ipucu"],
+   "gerekce": "Petri gelişmiş ayar tablosu (alan ipucu) PETRI_AYAR_ALANLARI'nda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (6 alan × etiket / ipucu), kullanıcı girdisi değil"
   }
  ]
 }

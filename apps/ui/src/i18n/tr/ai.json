@@ -317,6 +317,110 @@
     "yayinDurduNot": "Seansın sürdüğü doğrulanamıyor. Kontrol ekranından durumu teyit edin.",
     "yayinDurduUyari": "⚠️ Canlı yayın durdu — gösterilen kare GÜNCEL DEĞİL"
   },
+  "petri": {
+    "a1Kose": "A1 köşesi",
+    "a1KoseAdi": {
+      "otomatik": "otomatik",
+      "sagAlt": "sağ-alt",
+      "sagUst": "sağ-üst",
+      "solAlt": "sol-alt",
+      "solUst": "sol-üst"
+    },
+    "a1KoseSecenek": "A1 köşesi {{secenek}}",
+    "a1Notu": "A1 köşesi görüntüden okunmaz (laboratuvar maddesi): otomatik = yatay plakada sol-üst, dikeyde sağ-üst. Plaka 180° çevrildiyse karşı köşeyi seçin.",
+    "aciklama": "Petri fotoğrafından kuyucukları tespit eder, her kuyuda kanser sınıflandırması + PEMF bobin/E-alan tahmini üretir.",
+    "advNotPlaka": "Plaka kipinde kuyucuk yerlerini plakanın geometrisi belirler; tespit güveni ve \"petri değil\" eşikleri bu kipte sonucu değiştirmez (yalnız tekil kipte görünür). Boş bıraktığınız alan varsayılanda kalır.",
+    "advNotTekil": "Kuyucuklar bulunamıyorsa ilk deneyeceğiniz iki kol: tespit güvenini düşürmek ve küçültmeyi açmak. Boş bıraktığınız alan varsayılanda kalır.",
+    "analiziBaslat": "Petri Analizini Başlat",
+    "aralikDisi": "{{etiket}}: {{alt}} – {{ust}} aralığında olmalı (girilen {{ham}}).",
+    "ayar": {
+      "plausAreaFrac": {
+        "etiket": "Denetim: en büyük tespit ≤",
+        "ipucu": "Tek tespit karenin bu oranından fazlasını kaplıyorsa görüntü petri sayılmaz (VETO oyu)."
+      },
+      "plausCircularity": {
+        "etiket": "Denetim: dairesellik ≥",
+        "ipucu": "\"Petri değil\" denetiminin dairesellik oyu."
+      },
+      "plausConf": {
+        "etiket": "Denetim: güven ≥",
+        "ipucu": "Denetimin güven oyu. Ölçülen ret vakalarının çoğu bu oydan düşüyordu (0,44–0,80)."
+      },
+      "resizeMax": {
+        "etiket": "Küçültme (uzun kenar, px)",
+        "ipucu": "Model girdisi 640 px'e SABİT; çok büyük fotoğrafta kuyucuklar kaybolur. 0 = kapalı. Ölçek etkilenmez (mm/px kuyu çapından ya da kabin işaretinden gelir)."
+      },
+      "yoloConf": {
+        "etiket": "Tespit güveni (conf)",
+        "ipucu": "Düşürmek daha çok kuyucuk bulur (ölçüldü: 0,25 → 0,05 ⇒ 1 kuyu yerine 3), yanlış tespit riski artar."
+      },
+      "yoloIou": {
+        "etiket": "Örtüşme eşiği (IoU)",
+        "ipucu": "Bitişik kuyucuklar tek tespide birleşiyorsa yükseltin."
+      }
+    },
+    "ayarNotu": "Gelişmiş (araştırma) ayarlarından tespit güvenini düşürün (0,25 → 0,05 ⇒ 1 yerine 3 kuyucuk) ya da küçültmeyi açın (ör. 960).",
+    "baslik": "Petri Kuyu Analizi",
+    "boyaliKontrol": "Boyalı (kanser) kontrol kuyucukları",
+    "boyaliKontrolEtiketi": "Boyalı kontrol kuyucukları",
+    "cap": "Petri çapı (cm)",
+    "capYerTutucu": "ör. 8 · boş = piksel",
+    "degistirildi": "  ·  değiştirildi",
+    "denetimAcik": " “Petri değil” denetimi açık",
+    "denetimEtiketi": "Petri değil denetimi",
+    "denetimKapaliUyari": "⚠️ Denetim kapalı: yanlış modüle yüklenen bir fotoğrafa da sonuç üretilir ve o sonuç yanıltıcı olur.",
+    "etkin": {
+      "alanOrani": "alan oranı",
+      "baslik": "⚙️ Bu sonuç değiştirilmiş ayarlarla üretildi: {{ayarlar}}",
+      "dairesellik": "dairesellik",
+      "denetim": "denetim {{etiket}} {{deger}}",
+      "denetimKapali": "denetim KAPALI",
+      "guven": "güven",
+      "kucultme": "küçültme {{a}}×{{b}} → {{c}}×{{d}}"
+    },
+    "gelismis": " ⚙️ Gelişmiş (araştırma) ayarları",
+    "gelismisAc": "Tespit ve denetim eşiklerini açar",
+    "gelismisEtiketi": "Gelişmiş araştırma ayarları",
+    "gelismisKapat": "Ayarları kapatır",
+    "gerekce": "  — gerekçe: {{neden}}",
+    "gerekceMavi": "  — gerekçe: {{n}} mavi piksel (eşik ≥30)",
+    "ipucuBaslik": "📸 Petri fotoğraf ipuçları",
+    "ipucuKenar": "• Plaka kenarları kadrajda kalsın; ışık yansıması kuyucuk ortasına düşmesin",
+    "ipucuKontrol": "• Her deneyde bilinen bir boyalı ve bir sağlıklı <kalin>kontrol kuyucuğu</kalin> çekin (Gelişmiş ayarlar)",
+    "ipucuUst": "• Plakayı <kalin>tam tepeden, dik ve yakın</kalin> çekin — plaka karenin en az yarısını kaplasın",
+    "kadrajNotu": "Kadraj denemesi ölçüldü: plakaya yaklaşmak 1 kuyucuktan 5 kuyucuğa çıkardı.",
+    "kanser": "Kanser",
+    "kapali": "kapalı",
+    "kipEtiketi": "Petri analiz kipi",
+    "kipPlaka": "24 kuyucuklu plaka",
+    "kipTekil": "Tekil petri kapları",
+    "kontrolNotu": "Kanser eşikleri yalnız yapay boyayla doğrulandı (laboratuvar maddesi): kontrol kuyucukları eşikleri bu plakaya göre ayarlar; kontrol yanlış sınıflanırsa sonuç kullanılmaz.",
+    "kuyucukYok": "Kuyucuk tespit edilemedi",
+    "nokta1": "Kırmızı = kanser, yeşil = sağlıklı sınıflandırma.",
+    "olcek": "Ölçek: {{olcek}}",
+    "olcekGirdisi": "petri çapını (cm)",
+    "ornekA1D6": "ör. A1, D6",
+    "ornekB2": "ör. B2",
+    "ozet": "Kuyu: <kalin>{{n}}</kalin>   ·   Kanser: <kanser>{{kanser}}</kanser>   ·   Sağlıklı: <saglikli>{{saglikli}}</saglikli>",
+    "plakaKipiNotu": "Plaka kipi pembe besiyeri / boyalı kuyucuklardan plakayı arar; plaka kenarları kadrajda kalsın.",
+    "plakaNotu": "Ölçek plakanın kuyucuk aralığından (19,3 mm) gelir. Kabin işareti (ArUco) kadrajda değilse kuyucuk konumu PLAKA çerçevesindedir ve PEMF değerleri geçersiz sayılır.",
+    "plakaYok": "Plaka bulunamadı",
+    "qrNotu": "QR marker fotoğrafta varsa konum otomatik çıkarılır (QR); yoksa petri çapı ile ölçeklenir.",
+    "saglikliKontrol": "Sağlıklı kontrol kuyucukları",
+    "sayiGirin": "{{etiket}}: sayı girin (ör. {{vars}}).",
+    "sonuc": {
+      "baslik_one": "{{count}} kuyu · {{nc}} kanser, {{n_healthy}} sağlıklı",
+      "baslik_other": "{{count}} kuyu · {{nc}} kanser, {{n_healthy}} sağlıklı",
+      "kanserSiniflandi_one": "{{count}} kuyuda kanser sınıflandırıldı. Her kuyu için 3B konum, elektrik alanı (E) ve 7 bobinin duty ayarı (D1–D7) aşağıda listelenir.",
+      "kanserSiniflandi_other": "{{count}} kuyuda kanser sınıflandırıldı. Her kuyu için 3B konum, elektrik alanı (E) ve 7 bobinin duty ayarı (D1–D7) aşağıda listelenir.",
+      "kanserYok": "Kuyularda kanser bulgusu sınıflandırılmadı; yine de her kuyu için hesaplanan E-alanı ve bobin ayarı aşağıda."
+    },
+    "tekilKipNotu": "Görüntüde 24 kuyucuklu plaka değil tekil petri kapları varsa \"Tekil petri kapları\" kipini seçin.",
+    "tespitYokMetin": "Plaka kareyi dolduracak şekilde, tam tepeden ve iyi aydınlatılmış çekmeyi deneyin.",
+    "varsayilan": "varsayılan {{vars}}",
+    "varsayilanaDon": "Ayarları varsayılana döndür",
+    "varsayilanlaraDon": "↺ Varsayılanlara dön"
+  },
   "retikulosit": {
     "agrege": "Agrege Retikülosit: {{sayi}}",
     "dusuk": "Retikülosit oranı düşük–normal aralıkta görünüyor. Anemi varsa non-rejeneratif olabilir; kesin yorum klinik bağlam gerektirir.",
