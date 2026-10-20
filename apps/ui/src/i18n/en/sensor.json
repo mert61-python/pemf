@@ -12,5 +12,6 @@
   "grafikGosterGizle": "Show/hide chart for coil {{id}}",
   "manyetik": "● Magnetic (mT)",
   "manyetikEtiket": "Magnetic",
+  "rozetCanli": "LIVE",
   "sicaklik": "-- Temperature (°C)"
 }

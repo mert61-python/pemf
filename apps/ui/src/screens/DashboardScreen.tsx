@@ -72,7 +72,7 @@ export function DashboardScreen() {
         <View style={[styles.wsBadge, !wsConnected && styles.wsBadgeOff]}>
           <Wifi size={12} color={wsConnected ? "#22c55e" : "#f59e0b"} />
           <Text style={[styles.wsText, !wsConnected && styles.wsTextOff]}>
-            {wsConnected ? "CANLI" : "OFFLINE"}
+            {wsConnected ? t("ana.rozetCanli") : t("ana.rozetCevrimdisi")}
           </Text>
         </View>
       </View>

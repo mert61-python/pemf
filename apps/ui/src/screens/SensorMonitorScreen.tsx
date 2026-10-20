@@ -87,7 +87,7 @@ export function SensorMonitorScreen() {
         <View style={[styles.wsBadge, telemetryStale && styles.wsBadgeStale, connectionQuality === "offline" && styles.wsBadgeOff]}>
           <View style={[styles.wsDot, telemetryStale && styles.wsDotStale, connectionQuality === "offline" && styles.wsDotOff]} />
           <Text style={[styles.wsText, telemetryStale && { color: "#f59e0b" }, connectionQuality === "offline" && { color: "#ef4444" }]}>
-            {connectionQuality === "offline" ? t("sensor.baglantiYok") : telemetryStale ? t("sensor.gecikmeli") : "CANLI"}
+            {connectionQuality === "offline" ? t("sensor.baglantiYok") : telemetryStale ? t("sensor.gecikmeli") : t("sensor.rozetCanli")}
           </Text>
         </View>
       </View>
