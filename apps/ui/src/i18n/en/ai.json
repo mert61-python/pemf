@@ -7,6 +7,58 @@
     "sonKare": "Last analyzed frame",
     "sonKareHata": "The last frame could not be analyzed: {{hata}}"
   },
+  "ckd": {
+    "aciklama": "Prediction of chronic kidney disease (CKD) from clinical values. At least 6 fields and at least one of Creatinine / Urea / Urine sp. gravity / Albumin / Hemoglobin are required; the remaining fields can be left empty (they are filled in automatically — the more values, the more accurate). The finding buttons alone are not enough.",
+    "alan": {
+      "al": "Albumin (0-5)",
+      "ane": "Anemia",
+      "appet": "Appetite",
+      "ba": "Bacteria",
+      "bgr": "Blood glucose (mg/dL)",
+      "bp": "Blood pressure (mmHg)",
+      "bu": "Urea (mg/dL)",
+      "cad": "Coronary artery dis.",
+      "dm": "Diabetes",
+      "hemo": "Hemoglobin (g/dL)",
+      "htn": "Hypertension",
+      "pc": "Pus cells",
+      "pcc": "Pus cell clumps",
+      "pcv": "Hematocrit (%)",
+      "pe": "Edema (pedal)",
+      "pot": "Potassium (mEq/L)",
+      "rbc": "Red blood cells",
+      "rc": "Red blood cells (mil/µL)",
+      "sc": "Creatinine (mg/dL)",
+      "sg": "Urine sp. gravity",
+      "sod": "Sodium (mEq/L)",
+      "su": "Sugar (0-5)",
+      "wc": "White blood cells (/µL)"
+    },
+    "analiziBaslat": "Start CKD Analysis",
+    "baslik": "Kidney Disease Analysis (CKD)",
+    "bulgular": "Findings",
+    "laboratuvar": "Laboratory / Vitals",
+    "model": "Model: ",
+    "nokta1": "The result is based on the 24 clinical values entered; empty fields are estimated (imputed).",
+    "nokta2": "This is a screening prediction, not a definitive diagnosis.",
+    "secenek": {
+      "anormal": "Abnormal",
+      "evet": "Yes",
+      "hayir": "No",
+      "iyi": "Good",
+      "kotu": "Poor",
+      "normal": "Normal",
+      "var": "Present",
+      "yok": "Absent"
+    },
+    "sonuc": {
+      "ckdMetin": "According to the entered clinical values, the model indicates chronic kidney disease (CKD) with {{pct}}% probability. Early diagnosis is very important in CKD; confirm this result with blood / urine tests and a veterinarian's evaluation.",
+      "ckdOlasi": "Chronic kidney disease likely · {{pct}}%",
+      "dusukMetin": "According to the entered values, the probability of CKD is low ({{pct}}%). Even so, periodic checks and a veterinarian's evaluation are recommended if there is any suspicion.",
+      "saglikli": "Looks healthy · {{pct}}% probability of CKD"
+    },
+    "tamamlanamadi": "The kidney analysis could not be completed. Check the values and try again."
+  },
   "fantom": {
     "aciklama": "Detects blue tumor foci in a synthetic kidney phantom; produces a 3D position + PEMF coil / E-field estimate.",
     "analiziBaslat": "Start Phantom Analysis",
@@ -287,7 +339,8 @@
     "otonomOnayArastirma": "Autonomous Biofeedback requires confirmation: get the recommendation from the Control → AI Pro tab and approve it.",
     "otonomOnayHekim": "Autonomous Biofeedback requires veterinarian approval: get the recommendation from the Control → AI Pro tab and approve it.",
     "piksel": "pixel",
-    "tibbiSorumlulukReddi": "⚠️ This AI result is for decision support only; it does not replace a veterinary examination and diagnosis. The final decision rests with the veterinarian."
+    "tibbiSorumlulukReddi": "⚠️ This AI result is for decision support only; it does not replace a veterinary examination and diagnosis. The final decision rests with the veterinarian.",
+    "yuzde": "{{deger}}%"
   },
   "otonom": {
     "aktifRozet": "AUTONOMOUS BIOFEEDBACK ACTIVE",
@@ -429,6 +482,33 @@
     "noktali": "Punctate Reticulocytes: {{sayi}}",
     "oran": "Reticulocyte ratio ~{{oran}}%",
     "yuksek": "A relatively high reticulocyte ratio may suggest that the bone marrow is producing new red blood cells (regenerative response — e.g. a reaction to bleeding / anemia). Evaluate it together with the clinical context."
+  },
+  "rna": {
+    "aciklama": "Classification of kidney renal clear cell carcinoma (KIRC) from an RNA-seq gene-expression CSV.",
+    "analiziBaslat": "Start RNA Analysis",
+    "basarisiz": "Analysis failed. Check the file and the connection, then try again.",
+    "baskaCsv": "Choose Another CSV",
+    "baslik": "Kidney RNA Analysis (KIRC)",
+    "csvBaslik": "📄 CSV format",
+    "csvKimlik": "• Column 1 = patient ID (text)",
+    "csvLab": "• The output of a sequencing laboratory — not a photo",
+    "csvSatir": "• Row = patient, column = <kalin>20531 genes</kalin> (as in training / TCGA) ",
+    "csvSec": "Choose CSV",
+    "genleriGoster": " 🔍 Show driver genes (Integrated Gradients — up to 25 patients)",
+    "guven": "Confidence: ",
+    "hastaSayisi": "Number of patients: ",
+    "kircDegil": "Not KIRC",
+    "kircIsareti": "KIRC marker",
+    "kircOlasiligi": "   ·   KIRC probability: {{oran}}%",
+    "nokta1": "Confidence = the probability the model assigns to that class.",
+    "nokta2": "The result is based on the gene-expression profile; it is not diagnostic on its own.",
+    "sonuc": {
+      "kircVar": "KIRC marker in {{kirc}}/{{n_patients}} samples",
+      "kircVarMetin": "KIRC (kidney clear cell carcinoma) is the most common type of kidney cancer. The model classified by the gene-expression (RNA-seq) pattern — even a high confidence is NOT a definitive diagnosis; clinical and pathological confirmation is required.",
+      "kircYok": "No KIRC marker found",
+      "kircYokMetin": "The samples were classified as 'other' (not KIRC). This is a screening result and does not replace a definitive diagnosis."
+    },
+    "surukleyenGenler": "🔍 Driver genes: {{genler}}"
   },
   "segmentasyon": {
     "basarili": "Body outlines were extracted successfully. Segmentation is a pre-processing step for measurements and other analyses.",

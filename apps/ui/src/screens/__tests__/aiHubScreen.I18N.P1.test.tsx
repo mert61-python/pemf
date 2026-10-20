@@ -46,6 +46,10 @@ jest.mock("expo-image-manipulator", () => ({
   SaveFormat: { JPEG: "jpeg" },
   manipulateAsync: jest.fn(async (uri: string) => ({ uri, base64: "QUJD" })),
 }));
+jest.mock("expo-document-picker", () => ({
+  getDocumentAsync: jest.fn(async () => ({ canceled: false, assets: [{ name: "veri.csv", uri: "file:///veri.csv" }] })),
+}));
+jest.mock("expo-file-system/legacy", () => ({ readAsStringAsync: jest.fn(async () => "QUJD") }));
 jest.mock("expo-audio", () => ({
   useAudioRecorder: () => ({ record: jest.fn(), stop: jest.fn(), uri: null }),
   RecordingPresets: { HIGH_QUALITY: {} },
@@ -303,6 +307,7 @@ describe("bölüm 3 — hastalık (XGBoost) modülü, AI Pro köprüsü metinler
     await analizeGit(u, "Hastalık", ["Kusma", "Öksürük"], "Teşhisi Başlat");
     // getByText boşlukları tek boşluğa indirger (RNTL normalizer): ham değerdeki çift boşluk burada tek görünür
     expect(u.getByText(/En olası: Panleukopenia · %80$/)).toBeTruthy();
+    expect(u.getByText("%80.0")).toBeTruthy(); // olasılık listesi: TR önek biçimi
     expect(u.getByText("🔍 Kararı sürükleyenler: Öksürük ↑ · Yaş ↓")).toBeTruthy();
     expect(u.getByText("Tüm olasılıklar (güvene göre)")).toBeTruthy();
     expect(u.getByText("ℹ️ Bu tahmin, girilmeyen vitaller için sağlıklı kedi ortalamaları (nabız ~140, ateş ~38.5°C, kilo ~4 kg) varsayılarak yapıldı. Gerçek ölçümleri girerseniz sonuç daha isabetli olur.")).toBeTruthy();
@@ -323,6 +328,7 @@ describe("bölüm 3 — hastalık (XGBoost) modülü, AI Pro köprüsü metinler
     const en = render(<AiHubScreen />);
     await analizeGit(en, "Disease", ["Vomiting", "Coughing"], "Start Diagnosis");
     expect(en.getByText(/Most likely: Panleukopenia · 80%$/)).toBeTruthy();
+    expect(en.getByText("80.0%")).toBeTruthy(); // EN sonek biçimi
     expect(en.getByText("🔍 Decision drivers: Coughing ↑ · Age ↓")).toBeTruthy();
     expect(en.getByText("All probabilities (by confidence)")).toBeTruthy();
     const enKayit = logCagrisi();
@@ -768,6 +774,157 @@ describe("bölüm 6 — Petri Kuyu modülü (araştırma)", () => {
     expect(en.getByText(/B2 · Healthy · \(4\.0, 5\.0, 6\.0\) mm$/)).toBeTruthy();
     expect(en.getByText(/^⚙️ This result was produced with changed settings: conf .* · downscaling 4032×3024 → 960×720 · check circularity .* · check OFF$/)).toBeTruthy();
     expect(en.getByLabelText("AI Pro session for this well: go to the Control screen")).toBeTruthy();
+    const enKayit = logKayitlari();
+    expect(enKayit).toHaveLength(1);
+    expect(enKayit[0].module).toBe(trKayit[0].module);
+    expect(enKayit[0].summary).toBe(trKayit[0].summary);
+  });
+});
+
+describe("bölüm 7 — Böbrek RNA (KIRC) ve Böbrek Hastalığı (CKD) modülleri (araştırma)", () => {
+  const RNA = {
+    status: "success", n_patients: 2,
+    predictions: [
+      { patient_id: "P1", prediction: "KIRC", confidence: 0.93, prob_KIRC: 0.93 },
+      { patient_id: "P2", prediction: "other", confidence: 0.8, prob_KIRC: 0.2 },
+    ],
+    xai: [{ patient_id: "P1", top_genes: [{ gene: "VHL", attribution: 0.5 }, { gene: "EPAS1", attribution: -0.2 }] }],
+  };
+  const logKayitlari = () => mockApiPost.mock.calls.filter((c) => c[0] === "/ai/log").map((c) => c[1] as Record<string, unknown>);
+  async function bos() {
+    for (let i = 0; i < 12; i++)
+      await act(async () => {
+        await Promise.resolve();
+      });
+  }
+
+  it("Türkçe: RNA modülü başlık / CSV formatı / düğmeler göç öncesiyle aynı", () => {
+    mockMode = "researcher";
+    const u = render(<AiHubScreen />);
+    fireEvent.press(u.getByLabelText("Böbrek RNA"));
+    expect(u.getAllByText("Böbrek RNA Analizi (KIRC)").length).toBeGreaterThan(0);
+    expect(u.getByText("RNA-seq gen ekspresyon CSV'sinden böbrek renal clear cell karsinom (KIRC) sınıflandırması.")).toBeTruthy();
+    expect(u.getByText("📄 CSV formatı")).toBeTruthy();
+    expect(u.getByText("• Satır = hasta, sütun = 20531 gen (eğitim/TCGA sırasında)")).toBeTruthy();
+    expect(u.getByText("• 1. sütun = hasta ID (metin)")).toBeTruthy();
+    expect(u.getByText("CSV Seç")).toBeTruthy();
+    expect(u.getByText("☐ 🔍 Sürükleyen genleri göster (Integrated Gradients — en fazla 25 hasta)")).toBeTruthy();
+    expect(u.getByText("RNA Analizini Başlat")).toBeTruthy();
+  });
+
+  it("İngilizce: RNA modülü başlık / CSV formatı / düğmeler", async () => {
+    mockMode = "researcher";
+    await enYap();
+    const u = render(<AiHubScreen />);
+    fireEvent.press(u.getByLabelText("Kidney RNA"));
+    expect(u.getAllByText("Kidney RNA Analysis (KIRC)").length).toBeGreaterThan(0);
+    expect(u.getByText("📄 CSV format")).toBeTruthy();
+    expect(u.getByText("• Row = patient, column = 20531 genes (as in training / TCGA)")).toBeTruthy();
+    expect(u.getByText("• Column 1 = patient ID (text)")).toBeTruthy();
+    expect(u.getByText("Choose CSV")).toBeTruthy();
+    expect(u.getByText("☐ 🔍 Show driver genes (Integrated Gradients — up to 25 patients)")).toBeTruthy();
+    expect(u.getByText("Start RNA Analysis")).toBeTruthy();
+  });
+
+  it("RNA sonucu iki dilde (yüzde biçimi dile göre); AI geçmişi kaydı TR ile BAYT BAYT aynı", async () => {
+    mockMode = "researcher";
+    mockFetchCevap = RNA;
+    const tr = render(<AiHubScreen />);
+    fireEvent.press(tr.getByLabelText("Böbrek RNA"));
+    await act(async () => {
+      fireEvent.press(tr.getByRole("button", { name: "CSV Seç" }));
+    });
+    await act(async () => {
+      fireEvent.press(tr.getByRole("button", { name: "RNA Analizini Başlat" }));
+    });
+    await bos();
+    expect(tr.getByText(/1\/2 örnekte KIRC işareti$/)).toBeTruthy();
+    expect(tr.getByText("Hasta sayısı: 2")).toBeTruthy();
+    expect(tr.getByText("P1 · KIRC işareti")).toBeTruthy();
+    expect(tr.getByText("P2 · KIRC değil")).toBeTruthy();
+    expect(tr.getByText("Güven: %93.0 · KIRC olasılığı: %93.0")).toBeTruthy();
+    expect(tr.getByText("🔍 Sürükleyen genler: VHL ↑ · EPAS1 ↓")).toBeTruthy();
+    const trKayit = logKayitlari();
+    expect(trKayit).toHaveLength(1);
+    expect(trKayit[0].module).toBe("Böbrek RNA (KIRC)");
+    expect(trKayit[0].summary).toBe("2 hasta");
+    tr.unmount();
+    mockApiPost.mockReset().mockResolvedValue(null);
+    mockHastaNo += 1;
+    await enYap();
+    const en = render(<AiHubScreen />);
+    fireEvent.press(en.getByLabelText("Kidney RNA"));
+    await act(async () => {
+      fireEvent.press(en.getByRole("button", { name: "Choose CSV" }));
+    });
+    await act(async () => {
+      fireEvent.press(en.getByRole("button", { name: "Start RNA Analysis" }));
+    });
+    await bos();
+    expect(en.getByText(/KIRC marker in 1\/2 samples$/)).toBeTruthy();
+    expect(en.getByText("Number of patients: 2")).toBeTruthy();
+    expect(en.getByText("P1 · KIRC marker")).toBeTruthy();
+    expect(en.getByText("P2 · Not KIRC")).toBeTruthy();
+    expect(en.getByText("Confidence: 93.0% · KIRC probability: 93.0%")).toBeTruthy();
+    expect(en.getByText("🔍 Driver genes: VHL ↑ · EPAS1 ↓")).toBeTruthy();
+    const enKayit = logKayitlari();
+    expect(enKayit).toHaveLength(1);
+    expect(enKayit[0].module).toBe(trKayit[0].module);
+    expect(enKayit[0].summary).toBe(trKayit[0].summary);
+  });
+
+  it("Türkçe + İngilizce: CKD formu (alan etiketleri / seçenekler / düğme) tablodan çevrilir", async () => {
+    mockMode = "researcher";
+    const tr = render(<AiHubScreen />);
+    fireEvent.press(tr.getByLabelText("Böbrek Hastalığı"));
+    for (const e of ["Laboratuvar / Vital", "Bulgular", "Tansiyon (mmHg)", "İdrar öz.ağ.", "Kırmızı küre (mil/µL)", "Pus hücre kümesi", "Koroner arter hast.", "CKD Analizini Başlat"])
+      expect(tr.getByText(e)).toBeTruthy();
+    expect(tr.getAllByText("Hayır").length).toBe(5);
+    expect(tr.getAllByText("Anormal").length).toBe(2);
+    tr.unmount();
+    mockHastaNo += 1;
+    await enYap();
+    const en = render(<AiHubScreen />);
+    fireEvent.press(en.getByLabelText("Kidney Disease"));
+    for (const e of ["Laboratory / Vitals", "Findings", "Blood pressure (mmHg)", "Urine sp. gravity", "Red blood cells (mil/µL)", "Pus cell clumps", "Coronary artery dis.", "Start CKD Analysis"])
+      expect(en.getByText(e)).toBeTruthy();
+    expect(en.getAllByText("No").length).toBe(5);
+    expect(en.getAllByText("Abnormal").length).toBe(2);
+    expect(en.getAllByText("Absent").length).toBe(2);
+  });
+
+  it("CKD sonucu + SHAP satırı iki dilde; AI geçmişi kaydı TR ile BAYT BAYT aynı", async () => {
+    mockMode = "researcher";
+    const CKD = { status: "success", label: "ckd", prob_pct: 87, model: "ExtraTrees", xai: { top_features: [{ feature: "sc", attribution: 0.4 }] } };
+    const doldur = async (u: ReturnType<typeof render>, modul: string, baslat: string) => {
+      mockApiPost.mockImplementation(async (yol: unknown) => (yol === "/ai/disease/kidney" ? CKD : null));
+      fireEvent.press(u.getByLabelText(modul));
+      const girdiler = u.getAllByPlaceholderText("—");
+      for (let i = 0; i < 6; i++) fireEvent.changeText(girdiler[i], String(i + 1));
+      await act(async () => {
+        fireEvent.press(u.getByText(baslat));
+      });
+      await bos();
+    };
+    const tr = render(<AiHubScreen />);
+    await doldur(tr, "Böbrek Hastalığı", "CKD Analizini Başlat");
+    expect(tr.getByText(/Kronik Böbrek Hastalığı olası · %87$/)).toBeTruthy();
+    expect(tr.getByText(/Girilen klinik değerlere göre model %87 olasılıkla kronik böbrek hastalığına \(CKD\) işaret ediyor\./)).toBeTruthy();
+    expect(tr.getByText("Model: ExtraTrees")).toBeTruthy();
+    expect(tr.getByText("🔍 Kararı sürükleyenler: Kreatinin (mg/dL) ↑")).toBeTruthy();
+    const trKayit = logKayitlari();
+    expect(trKayit).toHaveLength(1);
+    expect(trKayit[0].module).toBe("Böbrek Hastalığı (CKD)");
+    tr.unmount();
+    mockApiPost.mockReset().mockResolvedValue(null);
+    mockHastaNo += 1;
+    await enYap();
+    const en = render(<AiHubScreen />);
+    await doldur(en, "Kidney Disease", "Start CKD Analysis");
+    expect(en.getByText(/Chronic kidney disease likely · 87%$/)).toBeTruthy();
+    expect(en.getByText(/According to the entered clinical values, the model indicates chronic kidney disease \(CKD\) with 87% probability\./)).toBeTruthy();
+    expect(en.getByText("Model: ExtraTrees")).toBeTruthy();
+    expect(en.getByText("🔍 Decision drivers: Creatinine (mg/dL) ↑")).toBeTruthy();
     const enKayit = logKayitlari();
     expect(enKayit).toHaveLength(1);
     expect(enKayit[0].module).toBe(trKayit[0].module);

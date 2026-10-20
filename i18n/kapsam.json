@@ -2215,6 +2215,18 @@
     {
      "metin": "IoU {{deger1}}",
      "gerekce": "teknik kısaltma (\"IoU\") — iki dilde aynı, değer sayı"
+    },
+    {
+     "metin": "Böbrek RNA (KIRC)",
+     "gerekce": "AI geçmişi kaydına giden modül adı — veri"
+    },
+    {
+     "metin": "{{n_patients}} hasta",
+     "gerekce": "AI geçmişi kaydına giden özet — veri"
+    },
+    {
+     "metin": "Böbrek Hastalığı (CKD)",
+     "gerekce": "AI geçmişi kaydına giden modül adı — veri"
     }
    ],
    "birlesikIstisna": [],

@@ -7,6 +7,58 @@
     "sonKare": "Son analiz edilen kare",
     "sonKareHata": "Son kare analiz edilemedi: {{hata}}"
   },
+  "ckd": {
+    "aciklama": "Klinik değerlerden kronik böbrek hastalığı (CKD) tahmini. En az 6 alan ve Kreatinin / Üre / İdrar öz.ağ. / Albümin / Hemoglobin'den en az biri gerekir; kalan alanlar boş bırakılabilir (otomatik tamamlanır — ne kadar çok değer, o kadar isabetli). Bulgu düğmeleri tek başına yeterli değildir.",
+    "alan": {
+      "al": "Albümin (0-5)",
+      "ane": "Anemi",
+      "appet": "İştah",
+      "ba": "Bakteri",
+      "bgr": "Kan şekeri (mg/dL)",
+      "bp": "Tansiyon (mmHg)",
+      "bu": "Üre (mg/dL)",
+      "cad": "Koroner arter hast.",
+      "dm": "Diyabet",
+      "hemo": "Hemoglobin (g/dL)",
+      "htn": "Hipertansiyon",
+      "pc": "Pus hücresi",
+      "pcc": "Pus hücre kümesi",
+      "pcv": "Hematokrit (%)",
+      "pe": "Ödem (pedal)",
+      "pot": "Potasyum (mEq/L)",
+      "rbc": "Kırmızı küre",
+      "rc": "Kırmızı küre (mil/µL)",
+      "sc": "Kreatinin (mg/dL)",
+      "sg": "İdrar öz.ağ.",
+      "sod": "Sodyum (mEq/L)",
+      "su": "Şeker (0-5)",
+      "wc": "Beyaz küre (/µL)"
+    },
+    "analiziBaslat": "CKD Analizini Başlat",
+    "baslik": "Böbrek Hastalığı Analizi (CKD)",
+    "bulgular": "Bulgular",
+    "laboratuvar": "Laboratuvar / Vital",
+    "model": "Model: ",
+    "nokta1": "Sonuç girilen 24 klinik değere dayanır; boş alanlar tahmin edilir (impute).",
+    "nokta2": "Bu bir tarama tahminidir, kesin tanı değildir.",
+    "secenek": {
+      "anormal": "Anormal",
+      "evet": "Evet",
+      "hayir": "Hayır",
+      "iyi": "İyi",
+      "kotu": "Kötü",
+      "normal": "Normal",
+      "var": "Var",
+      "yok": "Yok"
+    },
+    "sonuc": {
+      "ckdMetin": "Girilen klinik değerlere göre model %{{pct}} olasılıkla kronik böbrek hastalığına (CKD) işaret ediyor. CKD'de erken tanı çok önemlidir; bu sonucu kan/idrar tahlilleri ve veteriner hekim değerlendirmesiyle doğrulayın.",
+      "ckdOlasi": "Kronik Böbrek Hastalığı olası · %{{pct}}",
+      "dusukMetin": "Girilen değerlere göre CKD olasılığı düşük (%{{pct}}). Yine de şüphe varsa periyodik kontrol ve hekim değerlendirmesi önerilir.",
+      "saglikli": "Sağlıklı görünüyor · %{{pct}} CKD olasılığı"
+    },
+    "tamamlanamadi": "Böbrek analizi tamamlanamadı. Değerleri kontrol edip tekrar deneyin."
+  },
   "fantom": {
     "aciklama": "Sentetik böbrek fantomundan mavi tümör odaklarını tespit eder; 3B konum + PEMF bobin/E-alan tahmini üretir.",
     "analiziBaslat": "Fantom Analizini Başlat",
@@ -287,7 +339,8 @@
     "otonomOnayArastirma": "Otonom Biofeedback onay gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın.",
     "otonomOnayHekim": "Otonom Biofeedback hekim onayı gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın.",
     "piksel": "piksel",
-    "tibbiSorumlulukReddi": "⚠️ Bu yapay zeka sonucu yalnızca karar-destek amaçlıdır; veteriner hekim muayenesi ve teşhisinin yerine geçmez. Nihai karar hekime aittir."
+    "tibbiSorumlulukReddi": "⚠️ Bu yapay zeka sonucu yalnızca karar-destek amaçlıdır; veteriner hekim muayenesi ve teşhisinin yerine geçmez. Nihai karar hekime aittir.",
+    "yuzde": "%{{deger}}"
   },
   "otonom": {
     "aktifRozet": "OTONOM BİOFEEDBACK AKTİF",
@@ -429,6 +482,33 @@
     "noktali": "Noktalı Retikülosit: {{sayi}}",
     "oran": "Retikülosit oranı ~%{{oran}}",
     "yuksek": "Görece yüksek retikülosit oranı, kemik iliğinin yeni kırmızı küre ürettiğini (rejeneratif yanıt — ör. kanamaya/anemiye tepki) düşündürebilir. Klinik bağlamla birlikte değerlendirin."
+  },
+  "rna": {
+    "aciklama": "RNA-seq gen ekspresyon CSV'sinden böbrek renal clear cell karsinom (KIRC) sınıflandırması.",
+    "analiziBaslat": "RNA Analizini Başlat",
+    "basarisiz": "Analiz başarısız. Dosyayı ve bağlantıyı kontrol edip tekrar deneyin.",
+    "baskaCsv": "Başka CSV Seç",
+    "baslik": "Böbrek RNA Analizi (KIRC)",
+    "csvBaslik": "📄 CSV formatı",
+    "csvKimlik": "• 1. sütun = hasta ID (metin)",
+    "csvLab": "• Bir sekans laboratuvarı çıktısı — fotoğraf değil",
+    "csvSatir": "• Satır = hasta, sütun = <kalin>20531 gen</kalin> (eğitim/TCGA sırasında)",
+    "csvSec": "CSV Seç",
+    "genleriGoster": " 🔍 Sürükleyen genleri göster (Integrated Gradients — en fazla 25 hasta)",
+    "guven": "Güven: ",
+    "hastaSayisi": "Hasta sayısı: ",
+    "kircDegil": "KIRC değil",
+    "kircIsareti": "KIRC işareti",
+    "kircOlasiligi": "   ·   KIRC olasılığı: %{{oran}}",
+    "nokta1": "Güven = modelin o sınıfa olasılığı.",
+    "nokta2": "Sonuç gen-ekspresyon profiline dayanır; tek başına tanısal değildir.",
+    "sonuc": {
+      "kircVar": "{{kirc}}/{{n_patients}} örnekte KIRC işareti",
+      "kircVarMetin": "KIRC (böbrek berrak hücreli karsinom) en yaygın böbrek kanseri türüdür. Model, gen-ekspresyon (RNA-seq) desenine göre sınıflandırma yaptı — yüksek güven bile KESİN tanı değildir, klinik ve patolojik doğrulama gerekir.",
+      "kircYok": "KIRC işareti bulunamadı",
+      "kircYokMetin": "Örnekler 'other' (KIRC değil) olarak sınıflandı. Bu bir tarama sonucudur, kesin tanının yerine geçmez."
+    },
+    "surukleyenGenler": "🔍 Sürükleyen genler: {{genler}}"
   },
   "segmentasyon": {
     "basarili": "Vücut sınırları başarıyla çıkarıldı. Segmentasyon; ölçüm ve diğer analizler için bir ön-işleme adımıdır.",

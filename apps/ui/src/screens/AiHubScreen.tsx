@@ -1262,7 +1262,7 @@ function DiseaseModule({ patientName }: { patientName: string }) {
                 <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs }}>
                   <Text style={[styles.resultText, { flex: 1 }]}>{i + 1}. {r.disease}</Text>
                   <Text style={[styles.resultText, { fontWeight: 'bold', color: r.probability > 0.6 ? colors.danger : r.probability > 0.3 ? colors.warning : colors.textMuted }]}>
-                    %{(r.probability * 100).toFixed(1)}
+                    {t("ai.ortak.yuzde", { deger: (r.probability * 100).toFixed(1) })}
                   </Text>
                 </View>
               ))}
@@ -2148,7 +2148,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
             {aiVisionData.detected === false ? t("ai.otonom.konumlandirilamadi") : ""}
           </Text>
           {typeof aiVisionData.reliability === "number" && (
-            <Text style={styles.resultText}>{t("ai.otonom.lokalizasyonGuveni")}<Text style={{ fontWeight: "bold" }}>%{(aiVisionData.reliability * 100).toFixed(0)}</Text></Text>
+            <Text style={styles.resultText}>{t("ai.otonom.lokalizasyonGuveni")}<Text style={{ fontWeight: "bold" }}>{t("ai.ortak.yuzde", { deger: (aiVisionData.reliability * 100).toFixed(0) })}</Text></Text>
           )}
           {typeof aiVisionData.eField === "number" && (
             <Text style={styles.resultText}>{t("ai.otonom.eAlan")}<Text style={{ fontWeight: "bold" }}>{aiVisionData.eField.toFixed(2)}</Text></Text>
@@ -2921,6 +2921,7 @@ function PetriModule({ patientName }: { patientName: string }) {
  * Backend: POST /api/ai/rna/kidney (MLP-medium ONNX; log2→scaler→top-1000→softmax).
  */
 function RnaModule({ patientName }: { patientName: string }) {
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const [file, setFile] = useState<{ name: string; uri: string; webFile?: any } | null>(moduleCache.kidney_rna?.file ?? null);
   const [loading, setLoading] = useState(false);
@@ -2983,14 +2984,14 @@ function RnaModule({ patientName }: { patientName: string }) {
         setResult(data);
         logAiResult(hasta, "Böbrek RNA (KIRC)", `${data.n_patients} hasta`, { moduleId: "kidney_rna", inputType: "csv", detail: data });
       } else {
-        showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
+        showToast(aiDetayCumlesi(data?.detail, t("ai.hata.analizSirasinda")), "error");
       }
     } catch (e) {
       // Ham istisna metni kullanıcıya basılıyordu; dosya seçici yolunda bu metin DOSYA YOLU/ADI
       // (hasta adı içerebilir) taşıyabiliyor. Ayrıntı konsola, kullanıcıya sade mesaj.
       console.error("RNA analizi hatası:", e);
       // Satır-içi AbortError ayrımı `aiHataMesaji`ye devredildi (2026-08-12).
-      showToast(aiHataMesaji(e, "Analiz başarısız. Dosyayı ve bağlantıyı kontrol edip tekrar deneyin."), "error");
+      showToast(aiHataMesaji(e, t("ai.rna.basarisiz")), "error");
     } finally {
       setLoading(false);
     }
@@ -2998,29 +2999,29 @@ function RnaModule({ patientName }: { patientName: string }) {
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.title}>Böbrek RNA Analizi (KIRC)</Text>
-      <Text style={styles.subtitle}>RNA-seq gen ekspresyon CSV&apos;sinden böbrek renal clear cell karsinom (KIRC) sınıflandırması.</Text>
+      <Text style={styles.title}>{t("ai.rna.baslik")}</Text>
+      <Text style={styles.subtitle}>{t("ai.rna.aciklama")}</Text>
 
       <View style={styles.photoGuide}>
-        <Text style={styles.photoGuideTitle}>📄 CSV formatı</Text>
-        <Text style={styles.photoGuideItem}>• Satır = hasta, sütun = <Text style={styles.photoGuideBold}>20531 gen</Text> (eğitim/TCGA sırasında)</Text>
-        <Text style={styles.photoGuideItem}>• 1. sütun = hasta ID (metin)</Text>
-        <Text style={styles.photoGuideItem}>• Bir sekans laboratuvarı çıktısı — fotoğraf değil</Text>
+        <Text style={styles.photoGuideTitle}>{t("ai.rna.csvBaslik")}</Text>
+        <Text style={styles.photoGuideItem}><Trans i18nKey="ai.rna.csvSatir" components={{ kalin: <Text style={styles.photoGuideBold} /> }} /></Text>
+        <Text style={styles.photoGuideItem}>{t("ai.rna.csvKimlik")}</Text>
+        <Text style={styles.photoGuideItem}>{t("ai.rna.csvLab")}</Text>
       </View>
 
       <View style={styles.analyzeBtn}>
-        <Button label={file ? "Başka CSV Seç" : "CSV Seç"} icon={<FileText color={colors.white} size={16} />} onPress={pickCsv} />
+        <Button label={file ? t("ai.rna.baskaCsv") : t("ai.rna.csvSec")} icon={<FileText color={colors.white} size={16} />} onPress={pickCsv} />
       </View>
       {file && <Text style={styles.rnaFileName} numberOfLines={1}>📄 {file.name}</Text>}
 
       <TouchableOpacity style={styles.xaiToggle} accessibilityRole="switch" accessibilityState={{ checked: isiHaritasi }} onPress={() => setIsiHaritasi(!isiHaritasi)}>
-        <Text style={styles.xaiToggleText}>{isiHaritasi ? "☑" : "☐"} 🔍 Sürükleyen genleri göster (Integrated Gradients — en fazla 25 hasta)</Text>
+        <Text style={styles.xaiToggleText}>{isiHaritasi ? "☑" : "☐"}{t("ai.rna.genleriGoster")}</Text>
       </TouchableOpacity>
 
       <View style={styles.analyzeBtn}>
-        <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "RNA Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!file || loading} onPress={analyze} />
+        <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.rna.analiziBaslat")} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!file || loading} onPress={analyze} />
       </View>
-      {longLoading && <Text style={styles.modelHint}>Model hazırlanıyor (ilk kullanım uzun sürebilir)…</Text>}
+      {longLoading && <Text style={styles.modelHint}>{t("ai.ortak.modelHazirlaniyor")}</Text>}
 
       {result && (
         <View style={styles.resultBox}>
@@ -3028,13 +3029,13 @@ function RnaModule({ patientName }: { patientName: string }) {
             const preds = result.predictions || [];
             const kirc = preds.filter((p: AiPrediction) => p.prediction === "KIRC").length;
             return <ResultInterpretation tone={kirc > 0 ? "alert" : "positive"} emoji="🧬"
-              title={kirc > 0 ? `${kirc}/${result.n_patients} örnekte KIRC işareti` : "KIRC işareti bulunamadı"}
+              title={kirc > 0 ? t("ai.rna.sonuc.kircVar", { kirc, n_patients: result.n_patients }) : t("ai.rna.sonuc.kircYok")}
               text={kirc > 0
-                ? "KIRC (böbrek berrak hücreli karsinom) en yaygın böbrek kanseri türüdür. Model, gen-ekspresyon (RNA-seq) desenine göre sınıflandırma yaptı — yüksek güven bile KESİN tanı değildir, klinik ve patolojik doğrulama gerekir."
-                : "Örnekler 'other' (KIRC değil) olarak sınıflandı. Bu bir tarama sonucudur, kesin tanının yerine geçmez."}
-              points={["Güven = modelin o sınıfa olasılığı.", "Sonuç gen-ekspresyon profiline dayanır; tek başına tanısal değildir."]} />;
+                ? t("ai.rna.sonuc.kircVarMetin")
+                : t("ai.rna.sonuc.kircYokMetin")}
+              points={[t("ai.rna.nokta1"), t("ai.rna.nokta2")]} />;
           })()}
-          <Text style={styles.resultText}>Hasta sayısı: <Text style={{ fontWeight: "bold" }}>{result.n_patients}</Text></Text>
+          <Text style={styles.resultText}>{t("ai.rna.hastaSayisi")}<Text style={{ fontWeight: "bold" }}>{result.n_patients}</Text></Text>
           {(result.predictions || []).map((p: AiPrediction, i: number) => {
             const isKirc = p.prediction === "KIRC";
             return (
@@ -3043,12 +3044,12 @@ function RnaModule({ patientName }: { patientName: string }) {
                     geri kalanı Türkçe. KIRC klinik bir kısaltma olduğundan korunur, açıklaması eklenir. */}
                 <Text style={styles.tumorHeader}>
                   {p.patient_id}   ·   <Text style={{ color: isKirc ? colors.danger : colors.success }}>
-                    {isKirc ? "KIRC işareti" : "KIRC değil"}
+                    {isKirc ? t("ai.rna.kircIsareti") : t("ai.rna.kircDegil")}
                   </Text>
                 </Text>
                 <Text style={[styles.resultText, { fontSize: typography.small }]}>
-                  Güven: <Text style={{ fontWeight: "bold" }}>%{(Number(p.confidence) * 100).toFixed(1)}</Text>
-                  {p.prob_KIRC != null ? `   ·   KIRC olasılığı: %${(Number(p.prob_KIRC) * 100).toFixed(1)}` : ""}
+                  {t("ai.rna.guven")}<Text style={{ fontWeight: "bold" }}>{t("ai.ortak.yuzde", { deger: (Number(p.confidence) * 100).toFixed(1) })}</Text>
+                  {p.prob_KIRC != null ? t("ai.rna.kircOlasiligi", { oran: (Number(p.prob_KIRC) * 100).toFixed(1) }) : ""}
                 </Text>
                 {(() => {
                   const xl = (result as any).xai as { patient_id: string; top_genes: { gene: string; attribution: number }[] }[] | undefined;
@@ -3059,7 +3060,7 @@ function RnaModule({ patientName }: { patientName: string }) {
                     // devamını göremeyiş". Beş genlik gerekçe iki satıra sığmıyordu ve son
                     // genler (çoğu zaman ters yönlü olanlar) üç noktanın arkasında kalıyordu.
                     <GenisletilebilirMetin style={styles.xaiSatiri} satir={2} testID="xai-genler">
-                      {`🔍 Sürükleyen genler: ${h.top_genes.slice(0, 5).map((g) => `${g.gene} ${g.attribution >= 0 ? "↑" : "↓"}`).join("  ·  ")}`}
+                      {t("ai.rna.surukleyenGenler", { genler: h.top_genes.slice(0, 5).map((g) => `${g.gene} ${g.attribution >= 0 ? "↑" : "↓"}`).join("  ·  ") })}
                     </GenisletilebilirMetin>
                   );
                 })()}
@@ -3077,32 +3078,32 @@ function RnaModule({ patientName }: { patientName: string }) {
 // UCI-CKD 24 özellik. Sayısal (14) + kategorik (10). Kategorik değerler predictor'ın
 // beklediği stringlerle eşleşmeli (yes/no, normal/abnormal, present/notpresent, good/poor).
 const CKD_NUMERIC: { k: string; label: string }[] = [
-  { k: "age", label: "Yaş" }, { k: "bp", label: "Tansiyon (mmHg)" },
-  { k: "sg", label: "İdrar öz.ağ." }, { k: "al", label: "Albümin (0-5)" },
-  { k: "su", label: "Şeker (0-5)" }, { k: "bgr", label: "Kan şekeri (mg/dL)" },
-  { k: "bu", label: "Üre (mg/dL)" }, { k: "sc", label: "Kreatinin (mg/dL)" },
-  { k: "sod", label: "Sodyum (mEq/L)" }, { k: "pot", label: "Potasyum (mEq/L)" },
-  { k: "hemo", label: "Hemoglobin (g/dL)" }, { k: "pcv", label: "Hematokrit (%)" },
-  { k: "wc", label: "Beyaz küre (/µL)" }, { k: "rc", label: "Kırmızı küre (mil/µL)" },
+  { k: "age", label: "hasta.form.yasEtiketi" }, { k: "bp", label: "ai.ckd.alan.bp" },
+  { k: "sg", label: "ai.ckd.alan.sg" }, { k: "al", label: "ai.ckd.alan.al" },
+  { k: "su", label: "ai.ckd.alan.su" }, { k: "bgr", label: "ai.ckd.alan.bgr" },
+  { k: "bu", label: "ai.ckd.alan.bu" }, { k: "sc", label: "ai.ckd.alan.sc" },
+  { k: "sod", label: "ai.ckd.alan.sod" }, { k: "pot", label: "ai.ckd.alan.pot" },
+  { k: "hemo", label: "ai.ckd.alan.hemo" }, { k: "pcv", label: "ai.ckd.alan.pcv" },
+  { k: "wc", label: "ai.ckd.alan.wc" }, { k: "rc", label: "ai.ckd.alan.rc" },
 ];
-// Sunum-katmanı XAI (2026-08-26): SHAP özellik kodu → mevcut form etiketleri (tek kaynak).
-// Not: harita CKD_CATEGORICAL tanımından SONRA doldurulur (aşağıda).
-const CKD_XAI_ETIKET: Record<string, string> = {};
 
 const CKD_CATEGORICAL: { k: string; label: string; opts: [string, string][] }[] = [
-  { k: "rbc", label: "Kırmızı küre", opts: [["normal", "Normal"], ["abnormal", "Anormal"]] },
-  { k: "pc", label: "Pus hücresi", opts: [["normal", "Normal"], ["abnormal", "Anormal"]] },
-  { k: "pcc", label: "Pus hücre kümesi", opts: [["notpresent", "Yok"], ["present", "Var"]] },
-  { k: "ba", label: "Bakteri", opts: [["notpresent", "Yok"], ["present", "Var"]] },
-  { k: "htn", label: "Hipertansiyon", opts: [["no", "Hayır"], ["yes", "Evet"]] },
-  { k: "dm", label: "Diyabet", opts: [["no", "Hayır"], ["yes", "Evet"]] },
-  { k: "cad", label: "Koroner arter hast.", opts: [["no", "Hayır"], ["yes", "Evet"]] },
-  { k: "appet", label: "İştah", opts: [["good", "İyi"], ["poor", "Kötü"]] },
-  { k: "pe", label: "Ödem (pedal)", opts: [["no", "Hayır"], ["yes", "Evet"]] },
-  { k: "ane", label: "Anemi", opts: [["no", "Hayır"], ["yes", "Evet"]] },
+  { k: "rbc", label: "ai.ckd.alan.rbc", opts: [["normal", "ai.ckd.secenek.normal"], ["abnormal", "ai.ckd.secenek.anormal"]] },
+  { k: "pc", label: "ai.ckd.alan.pc", opts: [["normal", "ai.ckd.secenek.normal"], ["abnormal", "ai.ckd.secenek.anormal"]] },
+  { k: "pcc", label: "ai.ckd.alan.pcc", opts: [["notpresent", "ai.ckd.secenek.yok"], ["present", "ai.ckd.secenek.var"]] },
+  { k: "ba", label: "ai.ckd.alan.ba", opts: [["notpresent", "ai.ckd.secenek.yok"], ["present", "ai.ckd.secenek.var"]] },
+  { k: "htn", label: "ai.ckd.alan.htn", opts: [["no", "ai.ckd.secenek.hayir"], ["yes", "ai.ckd.secenek.evet"]] },
+  { k: "dm", label: "ai.ckd.alan.dm", opts: [["no", "ai.ckd.secenek.hayir"], ["yes", "ai.ckd.secenek.evet"]] },
+  { k: "cad", label: "ai.ckd.alan.cad", opts: [["no", "ai.ckd.secenek.hayir"], ["yes", "ai.ckd.secenek.evet"]] },
+  { k: "appet", label: "ai.ckd.alan.appet", opts: [["good", "ai.ckd.secenek.iyi"], ["poor", "ai.ckd.secenek.kotu"]] },
+  { k: "pe", label: "ai.ckd.alan.pe", opts: [["no", "ai.ckd.secenek.hayir"], ["yes", "ai.ckd.secenek.evet"]] },
+  { k: "ane", label: "ai.ckd.alan.ane", opts: [["no", "ai.ckd.secenek.hayir"], ["yes", "ai.ckd.secenek.evet"]] },
 ];
-// XAI etiket haritasını MEVCUT form etiketlerinden doldur (ikinci bir kopya tutma).
-for (const { k, label } of [...CKD_NUMERIC, ...CKD_CATEGORICAL]) CKD_XAI_ETIKET[k] = label;
+// Sunum-katmanı XAI + ön-kontrol bildirimi: alan kodu → görünen etiket (form etiketiyle TEK kaynak; tablo ANAHTAR saklar, çağrı anında çevrilir — K-3 izni).
+const ckdEtiket = (k: string): string => {
+  const e = [...CKD_NUMERIC, ...CKD_CATEGORICAL].find((x) => x.k === k);
+  return e ? i18n.t(e.label as never) : k;
+};
 
 /**
  * Böbrek Hastalığı Analizi (UCI-CKD) — 24 klinik değerden kronik böbrek hastalığı tahmini.
@@ -3110,6 +3111,7 @@ for (const { k, label } of [...CKD_NUMERIC, ...CKD_CATEGORICAL]) CKD_XAI_ETIKET[
  * edilir. Backend: POST /api/ai/disease/kidney (ExtraTrees ONNX, EXE'ye gömülü).
  */
 function KidneyDiseaseModule({ patientName }: { patientName: string }) {
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AiResult | null>(moduleCache.kidney_disease?.result ?? null);
@@ -3133,7 +3135,7 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
       // Eskiden yalnız bulgu düğmeleriyle basınca sunucu 422 dönüyor, UI bunu jenerik
       // "Analiz sırasında hata oluştu."a çeviriyordu → operatör "ne seçersem seçeyim çalışmıyor" görüyordu.
       // ⚠️ `payload.explain = true` bu sayımdan SONRA gelmeli (bayrak alan sayılmaz; fonksiyon yine de eler).
-      const onKontrol = ckdOnKontrol(payload, (k) => CKD_XAI_ETIKET[k] ?? k);
+      const onKontrol = ckdOnKontrol(payload, (k) => ckdEtiket(k));
       if (onKontrol) { showToast(onKontrol, "error"); return; } // finally → setLoading(false)
       // Sunum-katmanı XAI (2026-08-26): SHAP top-özellikler — hata/eski-backend'de alan
       // gelmez, satır gizlenir (backend zarif düşüşü).
@@ -3153,10 +3155,10 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
         logAiResult(hasta, "Böbrek Hastalığı (CKD)", `${trValue(res.label)} %${res.prob_pct}`, { moduleId: "kidney_disease", inputType: "clinical", detail: res, confidence: res.prob_pct != null ? res.prob_pct / 100 : undefined });
       } else if (!sunucuBildirdi) {
         // Ağ/JSON-boş yolu (HTTP hatası değil): sunucu bir gerekçe vermedi → anlaşılır varsayılan.
-        showToast("Böbrek analizi tamamlanamadı. Değerleri kontrol edip tekrar deneyin.", "error");
+        showToast(t("ai.ckd.tamamlanamadi"), "error");
       } else if (!sunucuDetay) {
         // HTTP hatası ama gerekçe metni yok (beklenmedik gövde) → teknik metin yerine eylem cümlesi.
-        showToast(aiDetayCumlesi(undefined, "Böbrek analizi tamamlanamadı. Değerleri kontrol edip tekrar deneyin."), "error");
+        showToast(aiDetayCumlesi(undefined, t("ai.ckd.tamamlanamadi")), "error");
       }
     } catch (e) {
       showToast(aiHataMesaji(e), "error");
@@ -3167,14 +3169,14 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.title}>Böbrek Hastalığı Analizi (CKD)</Text>
-      <Text style={styles.subtitle}>Klinik değerlerden kronik böbrek hastalığı (CKD) tahmini. En az 6 alan ve Kreatinin / Üre / İdrar öz.ağ. / Albümin / Hemoglobin&apos;den en az biri gerekir; kalan alanlar boş bırakılabilir (otomatik tamamlanır — ne kadar çok değer, o kadar isabetli). Bulgu düğmeleri tek başına yeterli değildir.</Text>
+      <Text style={styles.title}>{t("ai.ckd.baslik")}</Text>
+      <Text style={styles.subtitle}>{t("ai.ckd.aciklama")}</Text>
 
-      <Text style={styles.ckdSection}>Laboratuvar / Vital</Text>
+      <Text style={styles.ckdSection}>{t("ai.ckd.laboratuvar")}</Text>
       <View style={styles.ckdGrid}>
         {CKD_NUMERIC.map(({ k, label }) => (
           <View key={k} style={styles.ckdNumCell}>
-            <Text style={styles.ckdNumLabel} numberOfLines={1}>{label}</Text>
+            <Text style={styles.ckdNumLabel} numberOfLines={1}>{t(label as never)}</Text>
             <TextInput
               style={styles.ckdNumInput}
               keyboardType="numeric"
@@ -3187,10 +3189,10 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
         ))}
       </View>
 
-      <Text style={styles.ckdSection}>Bulgular</Text>
+      <Text style={styles.ckdSection}>{t("ai.ckd.bulgular")}</Text>
       {CKD_CATEGORICAL.map(({ k, label, opts }) => (
         <View key={k} style={styles.ckdCatRow}>
-          <Text style={styles.ckdCatLabel} numberOfLines={1}>{label}</Text>
+          <Text style={styles.ckdCatLabel} numberOfLines={1}>{t(label as never)}</Text>
           <View style={styles.ckdCatBtns}>
             {opts.map(([val, lbl]) => {
               const active = cat[k] === val;
@@ -3201,7 +3203,7 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
                   onPress={() => setCat((s) => ({ ...s, [k]: active ? undefined : val }))}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.ckdCatBtnText, active && { color: colors.white }]}>{lbl}</Text>
+                  <Text style={[styles.ckdCatBtnText, active && { color: colors.white }]}>{t(lbl as never)}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -3210,7 +3212,7 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
       ))}
 
       <View style={styles.analyzeBtn}>
-        <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "CKD Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={loading} onPress={analyze} />
+        <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.ckd.analiziBaslat")} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={loading} onPress={analyze} />
       </View>
 
       {result && (
@@ -3221,15 +3223,15 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
             return (
               <>
                 <ResultInterpretation tone={isCkd ? "critical" : "positive"} emoji={isCkd ? "🩺" : "✅"}
-                  title={isCkd ? `Kronik Böbrek Hastalığı olası · %${pct}` : `Sağlıklı görünüyor · %${pct} CKD olasılığı`}
+                  title={isCkd ? t("ai.ckd.sonuc.ckdOlasi", { pct }) : t("ai.ckd.sonuc.saglikli", { pct })}
                   text={isCkd
-                    ? `Girilen klinik değerlere göre model %${pct} olasılıkla kronik böbrek hastalığına (CKD) işaret ediyor. CKD'de erken tanı çok önemlidir; bu sonucu kan/idrar tahlilleri ve veteriner hekim değerlendirmesiyle doğrulayın.`
-                    : `Girilen değerlere göre CKD olasılığı düşük (%${pct}). Yine de şüphe varsa periyodik kontrol ve hekim değerlendirmesi önerilir.`}
-                  points={["Sonuç girilen 24 klinik değere dayanır; boş alanlar tahmin edilir (impute).", "Bu bir tarama tahminidir, kesin tanı değildir."]} />
-                <Text style={[styles.resultText, { fontSize: typography.small, color: colors.textMuted }]}>Model: {result.model}</Text>
+                    ? t("ai.ckd.sonuc.ckdMetin", { pct })
+                    : t("ai.ckd.sonuc.dusukMetin", { pct })}
+                  points={[t("ai.ckd.nokta1"), t("ai.ckd.nokta2")]} />
+                <Text style={[styles.resultText, { fontSize: typography.small, color: colors.textMuted }]}>{t("ai.ckd.model")}{result.model}</Text>
                 <XaiSatiri
                   xai={result.xai ?? null}
-                  etiketle={(f) => CKD_XAI_ETIKET[f] ?? f}
+                  etiketle={(f) => ckdEtiket(f)}
                 />
               </>
             );

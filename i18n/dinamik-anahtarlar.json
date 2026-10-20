@@ -72,6 +72,30 @@
    "onek": "",
    "degerler": ["ai.petri.ayar.plausAreaFrac.etiket", "ai.petri.ayar.plausAreaFrac.ipucu", "ai.petri.ayar.plausCircularity.etiket", "ai.petri.ayar.plausCircularity.ipucu", "ai.petri.ayar.plausConf.etiket", "ai.petri.ayar.plausConf.ipucu", "ai.petri.ayar.resizeMax.etiket", "ai.petri.ayar.resizeMax.ipucu", "ai.petri.ayar.yoloConf.etiket", "ai.petri.ayar.yoloConf.ipucu", "ai.petri.ayar.yoloIou.etiket", "ai.petri.ayar.yoloIou.ipucu"],
    "gerekce": "Petri gelişmiş ayar tablosu (alan ipucu) PETRI_AYAR_ALANLARI'nda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (6 alan × etiket / ipucu), kullanıcı girdisi değil"
+  },
+  {
+   "yuzey": "arayuz",
+   "dosya": "apps/ui/src/screens/AiHubScreen.tsx",
+   "ifade": "i18n.t(e.label as never)",
+   "onek": "",
+   "degerler": ["ai.ckd.alan.al", "ai.ckd.alan.ane", "ai.ckd.alan.appet", "ai.ckd.alan.ba", "ai.ckd.alan.bgr", "ai.ckd.alan.bp", "ai.ckd.alan.bu", "ai.ckd.alan.cad", "ai.ckd.alan.dm", "ai.ckd.alan.hemo", "ai.ckd.alan.htn", "ai.ckd.alan.pc", "ai.ckd.alan.pcc", "ai.ckd.alan.pcv", "ai.ckd.alan.pe", "ai.ckd.alan.pot", "ai.ckd.alan.rbc", "ai.ckd.alan.rc", "ai.ckd.alan.sc", "ai.ckd.alan.sg", "ai.ckd.alan.sod", "ai.ckd.alan.su", "ai.ckd.alan.wc", "hasta.form.yasEtiketi"],
+   "gerekce": "CKD alan etiketi (ön-kontrol bildirimi + SHAP satırı): CKD_NUMERIC / CKD_CATEGORICAL tablosunda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI, kullanıcı girdisi değil"
+  },
+  {
+   "yuzey": "arayuz",
+   "dosya": "apps/ui/src/screens/AiHubScreen.tsx",
+   "ifade": "t(label as never)",
+   "onek": "",
+   "degerler": ["ai.ckd.alan.al", "ai.ckd.alan.ane", "ai.ckd.alan.appet", "ai.ckd.alan.ba", "ai.ckd.alan.bgr", "ai.ckd.alan.bp", "ai.ckd.alan.bu", "ai.ckd.alan.cad", "ai.ckd.alan.dm", "ai.ckd.alan.hemo", "ai.ckd.alan.htn", "ai.ckd.alan.pc", "ai.ckd.alan.pcc", "ai.ckd.alan.pcv", "ai.ckd.alan.pe", "ai.ckd.alan.pot", "ai.ckd.alan.rbc", "ai.ckd.alan.rc", "ai.ckd.alan.sc", "ai.ckd.alan.sg", "ai.ckd.alan.sod", "ai.ckd.alan.su", "ai.ckd.alan.wc", "hasta.form.yasEtiketi"],
+   "gerekce": "CKD form alan etiketi: CKD_NUMERIC / CKD_CATEGORICAL tablosunda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI, kullanıcı girdisi değil"
+  },
+  {
+   "yuzey": "arayuz",
+   "dosya": "apps/ui/src/screens/AiHubScreen.tsx",
+   "ifade": "t(lbl as never)",
+   "onek": "",
+   "degerler": ["ai.ckd.secenek.anormal", "ai.ckd.secenek.evet", "ai.ckd.secenek.hayir", "ai.ckd.secenek.iyi", "ai.ckd.secenek.kotu", "ai.ckd.secenek.normal", "ai.ckd.secenek.var", "ai.ckd.secenek.yok"],
+   "gerekce": "CKD kategorik seçenek etiketi: CKD_NUMERIC / CKD_CATEGORICAL tablosunda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI, kullanıcı girdisi değil"
   }
  ]
 }
