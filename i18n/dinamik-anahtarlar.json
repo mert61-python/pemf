@@ -300,6 +300,22 @@
    "onek": "",
    "degerler": ["hesap.hata.epostaSifreHatali", "hesap.hata.epostaDogrulanmadi", "hesap.hata.hesapZatenVar", "hesap.hata.sifreZayif", "hesap.hata.cokSikDenendi", "hesap.hata.cokFazlaDeneme", "hesap.hata.epostaGecersiz", "hesap.hata.sunucuyaUlasilamadi", "hesap.hata.epostaKabulEdilmedi", "hesap.hata.sifreAyni"],
    "gerekce": "Supabase mesajı → karşılık tablosu ESLESMELER (modül düzeyi sabit) ANAHTAR saklar — değer kümesi 10 satırlık kapalı tablo"
+  },
+  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/servers/ai_router.py",
+   "ifade": "ceviri.t(panel_anahtari)",
+   "onek": "ai.panel.",
+   "degerler": ["girdi", "tespit", "maske", "tumorler", "koordinat", "birlesik", "siniflama"],
+   "gerekce": "I18NI-A3.2: GPU mikroservisinden DEVREDİLEN em_fantom / em_petri yanıtında panel adı backend'de istek dilinde yeniden kurulur (`_panel_adlarini_cevir`) — aynı PANEL_ADLARI / PETRI_PANEL_ADLARI kapalı kümesi; AI panel adı: PANEL_ADLARI / PETRI_PANEL_ADLARI panel anahtarını katalog ANAHTARINA eşler (kapalı küme); bilinmeyen panel anahtarın kendisiyle yayınlanır (T8)"
+  },
+  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/servers/ai_router.py",
+   "ifade": "ceviri.t(panel_anahtari)",
+   "onek": "ai.etiket.",
+   "degerler": ["predicted_class"],
+   "gerekce": "I18NI-A3.2: GPU mikroservisinden DEVREDİLEN em_fantom / em_petri yanıtında panel adı backend'de istek dilinde yeniden kurulur (`_panel_adlarini_cevir`) — aynı PANEL_ADLARI / PETRI_PANEL_ADLARI kapalı kümesi; AI panel adı: 'Tahmin' paneli mevcut `ai.etiket.predicted_class` anahtarını kullanır (kapalı küme)"
   }
  ]
 }

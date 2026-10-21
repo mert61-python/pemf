@@ -45,7 +45,17 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from utils import ceviri
+
+def _panel_adi(panel_anahtari: str, k: str) -> str:
+    """Panel gösterim adı (istek dilinde). ⚠️ I18NI-A3.2: bu modül GPU imajına YAPRAK olarak girer (`docker/Dockerfile.ai` yalnız
+    sayılı `utils` dosyalarını kopyalar; `ceviri` + katalog YOK) → `utils.ceviri` üst düzeyde İÇE AKTARILMAZ (KURALLAR §4.8). Gömülü
+    backend'de çeviri; GPU servisinde ham panel anahtarı `k` — backend (`ai_router._panel_adlarini_cevir`) istek dilinde yeniden kurar."""
+    try:
+        from utils import ceviri
+    except ImportError:
+        return k
+    return ceviri.t(panel_anahtari)
+
 
 #: Yayına çıkan panel anahtarları ve gösterim adları — ARAYÜZ ÇİPLERİ BUNU OKUR.
 #: ⚠️ SIRA ANLAMLIDIR: analiz akışını izler (girdi → tespit → maske → tümör → koordinat →
@@ -121,7 +131,7 @@ def panelleri_yayina_hazirla(
         cikti.append(
             {
                 "k": k,
-                "ad": ceviri.t(panel_anahtari) if (panel_anahtari := adlar.get(k)) else k,
+                "ad": _panel_adi(panel_anahtari, k) if (panel_anahtari := adlar.get(k)) else k,
                 "image_base64": base64.b64encode(bayt).decode("utf-8"),
                 **boyut,
             }

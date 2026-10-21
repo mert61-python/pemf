@@ -90,6 +90,16 @@ from utils.panel_yayin import panelleri_yayina_hazirla as _panelleri_hazirla
 from servers import ai_kapi_metni
 
 
+def _panel_adlarini_cevir(yanit, adlar: dict):
+    """I18NI-A3.2: GPU mikroservisinden gelen `paneller[].ad`ı İSTEK dilinde yeniden kur (servis katalog taşımaz — `k` döner).
+    Bilinmeyen anahtar / panelsiz yanıt aynen geçer (eski servis Türkçe `ad` gönderse de tablo anahtarı varsa çevrilir)."""
+    if isinstance(yanit, dict):
+        for p in yanit.get("paneller") or ():
+            if isinstance(p, dict) and (panel_anahtari := adlar.get(p.get("k"))):
+                p["ad"] = ceviri.t(panel_anahtari)
+    return yanit
+
+
 def _ai_fail(label, e: Exception) -> HTTPException:
     """AI uç hatası (audit B-4.1): gerçek nedeni SUNUCU-TARAFI logla; istemciye ham str(e)/traceback
     SIZDIRMA (bilgi ifşası — bu uçlar auth-muaf/publik). İstemciye yalnız kısa etiket döner.
@@ -3729,11 +3739,15 @@ async def analyze_em_fantom(
     """
     try:
         if ai_service_enabled():
-            return await _kapili_devret(
-                "em_fantom",
-                file=file,
-                image_base64=image_base64,
-                data={"phantom_length_cm": phantom_length_cm, "achieved_B": achieved_B, "duty_sum": duty_sum},
+            # I18NI-A3.2: GPU servisi katalog taşımaz (yaprak modül) → panel adları burada İSTEK dilinde kurulur.
+            return _panel_adlarini_cevir(
+                await _kapili_devret(
+                    "em_fantom",
+                    file=file,
+                    image_base64=image_base64,
+                    data={"phantom_length_cm": phantom_length_cm, "achieved_B": achieved_B, "duty_sum": duty_sum},
+                ),
+                _PANEL_ADLARI,
             )
         img = await _decode_image(file, image_base64, label="em_fantom")
 
@@ -3955,7 +3969,7 @@ async def analyze_em_petri(
             # aksi halde GPU dağıtımında kullanıcı yine sessiz bir "no_detection" görürdü.
             if isinstance(_remote, dict) and _remote.get("error") == _PETRI_NOT_PLATE:
                 raise HTTPException(status_code=422, detail=_petri_reject_message(_remote.get("plausibility")))
-            return _remote
+            return _panel_adlarini_cevir(_remote, _PETRI_PANEL_ADLARI)  # I18NI-A3.2
         img = await _decode_image(file, image_base64, label="em_petri")
 
         # Yükleyici MODÜL SEVİYESİNDE (`_yukle_em_petri_cv`): araştırma AI Pro petri sağlayıcısı
