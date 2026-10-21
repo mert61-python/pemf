@@ -42,7 +42,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Download } from "lucide-react-native";
 
 import { useApkGuncelleme } from "@/hooks/useApkGuncelleme";
-import { guncellemeVarMi, guncellemeyiAtla, kurulumunuErtele, type MobilSurum } from "@/services/mobileUpdate";
+import { guncellemeVarMi, guncellemeyiAtla, kurulumunuErtele, surumNotu, type MobilSurum } from "@/services/mobileUpdate";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 import { useTranslation } from "react-i18next";
 
@@ -72,7 +72,7 @@ function mb(bayt: number): string {
 }
 
 export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   // Android DIŞI (web + iOS): kapı hiç kurulmaz. Web'i masaüstü client güncelliyor, iOS'ta
   // doğrudan APK kurulumu yok → beklemenin karşılığı sıfır olurdu.
@@ -186,7 +186,7 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
                   // harcadığını da görmeli (mobil kota). MB'ler manifest boyutundan türetilir.
                   // Kalan süre anlık hızdan (launcher paritesi, 2026-08-27) — ölçülemediyse gizli.
                   t("guncelleme.indiriliyorKapi", { yuzde: Math.round((oran ?? 0) * 100), mb: mb((oran ?? 0) * (surum?.size ?? 0)), toplam: mb(surum?.size ?? 0), eta: eta ? ` · ${eta}` : "" })
-                : surum?.notes || t("guncelleme.kapiOneri"))}
+                : surumNotu(surum, i18n.language) || t("guncelleme.kapiOneri"))}
           </Text>
 
           {indiriliyor ? (

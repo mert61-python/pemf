@@ -15,13 +15,13 @@ import { Download, X } from "lucide-react-native";
 
 import { useApkGuncelleme } from "@/hooks/useApkGuncelleme";
 import { useDonanimCalisiyor } from "@/hooks/useDonanimCalisiyor";
-import { atlandiMi, guncellemeVarMi, type MobilSurum } from "@/services/mobileUpdate";
+import { atlandiMi, guncellemeVarMi, surumNotu, type MobilSurum } from "@/services/mobileUpdate";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 import { useResponsive } from "@/hooks/useResponsive";
 import { useTranslation } from "react-i18next";
 
 export function MobileUpdateBanner() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { width } = useResponsive();
   const dar = width < 360;
   // ⚠️ Ölçü `useDonanimCalisiyor`: seans kaydı açık olmasa da çalışan bobin bandı susturur
@@ -69,7 +69,7 @@ export function MobileUpdateBanner() {
               // Yüzdenin yanında MB: 128 MB'lık pakette kullanıcı kotasını görsün.
               // Kalan süre anlık hızdan (launcher paritesi, 2026-08-27) — ölçülemediyse gizli.
               ? t("guncelleme.indiriliyor", { yuzde: Math.round(oran * 100), mb: Math.round((oran * surum.size) / 1_000_000), toplam: Math.round(surum.size / 1_000_000), eta: eta ? ` · ${eta}` : "" })
-              : surum.notes || t("guncelleme.dokunun"))}
+              : surumNotu(surum, i18n.language) || t("guncelleme.dokunun"))}
         </Text>
       </View>
       {oran === null ? (

@@ -124,6 +124,14 @@ export interface MobilSurum {
   sha256: string;
   size: number;
   notes?: string;
+  /** I18NI-A3.5: İngilizce sürüm notu (manifest `mobile.android.notes_en`, isteğe bağlı; `notes` Türkçe kalır — eski APK onu okur). */
+  notes_en?: string;
+}
+
+/** I18NI-A3.5: etkin dildeki sürüm notu. İngilizce arayüzde Türkçe `notes` GÖSTERİLMEZ: `notes_en` yoksa "" → çağıran katalog metnine düşer. */
+export function surumNotu(s: MobilSurum | null | undefined, dil: string): string {
+  if (!s) return "";
+  return dil === "en" ? String(s.notes_en ?? "") : String(s.notes ?? "");
 }
 
 export interface GuncellemeDurumu {
