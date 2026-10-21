@@ -78,6 +78,9 @@ değerin KENDİSİ (gösterimi değil), yalnız geliştiriciye giden istisna met
   sınıf ekleyen `{{x}}` dahil). Tek kural yeri: `kapsam.muaf_mi` (K-2 ve `katalog.py taban` aynısını kullanır).
 - Dosyanın `muaf` listesine `{"metin", "gerekce"}` (eşlemede `"karar": "muaf"` → `uygula` yazar). Dosya düzeyi muaf
   (`kapsam.py dosya <yol> muaf --gerekce "…"`) yalnız bütün dosya kullanıcıya metin göstermiyorsa (ör. i18n altyapısı).
+- Muaf girdisi KONUMA kilitlidir (I18NI-A2.2): `turler` = metnin muaf sayıldığı çıkarıcı türleri (`dizi`, `nesne`, `jsx-metin` …). Aynı metin
+  dosyada BAŞKA bir türde (ör. "veri" diye muaf değer JSX metni / görünür öznitelik olarak) geçerse K-2 kırmızı. Yeni muaf ekleyen her parti
+  `kapsam.py muaf-turler`'i AYNI commit'te koşar (`turler`'siz girdi konumdan bağımsız kalır — eski davranış).
 
 ## 4. Örnek dönüşümler (I18N-0 pilotlarından)
 

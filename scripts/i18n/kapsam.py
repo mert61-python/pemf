@@ -262,13 +262,20 @@ def uret(kok: Path, taban_yolu: Path) -> dict:
     return d
 
 
-def muaf_mi(defter: dict, dosya: str, metin: str) -> bool:
+def muaf_mi(defter: dict, dosya: str, metin: str, tur: str | None = None) -> bool:
     """Metin bu dosyada muaf mı: dosyanın `muaf` listesi · `genelMuaf` (birebir; ürün adı, birim, kod belirteci) · `genelMuafDesen`
-    (tam eşleşen düzenli ifade; ör. CSS sınıfı). Muaf dosya (`durum: muaf`) bütünüyle muaftır. Tek kaynak: K-2 ve `katalog.py taban`."""
+    (tam eşleşen düzenli ifade; ör. CSS sınıfı). Muaf dosya (`durum: muaf`) bütünüyle muaftır. Tek kaynak: K-2 ve `katalog.py taban`.
+
+    I18NI-A2.2: dosya muaf girdisi `turler` taşıyorsa (`kapsam.py muaf-turler` muafın kaydedildiği andaki çıkarıcı türlerini yazar) ve çağıran
+    adayın `tur`unu verirse muaf YALNIZ o türlerde geçerlidir — "veriye giden değer" diye muaf sayılan metin aynı dosyada JSX metni / görünür
+    öznitelik olarak eklenirse K-2 kırmızı (eskiden (dosya, metin) eşleşmesi konumdan bağımsızdı)."""
     kayit = defter.get("dosyalar", {}).get(dosya, {})
     if kayit.get("durum") == "muaf":
         return True
-    if any(x.get("metin") == metin for x in kayit.get("muaf", [])):
+    if any(
+        x.get("metin") == metin and (tur is None or not x.get("turler") or tur in x["turler"])
+        for x in kayit.get("muaf", [])
+    ):
         return True
     if any(x.get("metin") == metin for x in defter.get("genelMuaf", [])):
         return True
@@ -322,6 +329,31 @@ def metin_tarayan_yaz(kok: Path) -> int:
     return len(liste)
 
 
+def muaf_turleri_uret(kok: Path) -> int:
+    """I18NI-A2.2: her dosya muaf girdisine muaf metnin BUGÜN çıkarıcıda göründüğü türleri (`turler`) yazar (muaf o konumlara kilitlenir)."""
+    from collections import defaultdict
+
+    from scripts.i18n import cikar
+
+    d = defter_oku(kok)
+    dosyalar = [f for f, k in d["dosyalar"].items() if k.get("muaf") and k.get("durum") != "muaf"]
+    r = cikar.cikar(dosyalar, kok)
+    if r["hatalar"]:
+        raise SystemExit(f"çıkarıcı hatası: {r['hatalar'][:3]}")
+    turler: dict = defaultdict(set)
+    for a in r["adaylar"]:
+        turler[(a["dosya"], a["metin"])].add(a["tur"])
+    n = 0
+    for f in dosyalar:
+        for m in d["dosyalar"][f]["muaf"]:
+            t = sorted(turler.get((f, m.get("metin")), set()))
+            if t:
+                m["turler"] = t
+                n += 1
+    defter_yaz(kok, d)
+    return n
+
+
 def durum_tablosu(d: dict) -> str:
     satir = [f"{'sıra':>4} {'grup':30} {'durum':9} {'metin':>6} {'dosya':>5} kritik"]
     sirada = None
@@ -351,8 +383,12 @@ def main(argv=None) -> int:
     f.add_argument("durum", choices=["tamam", "bekliyor", "muaf"])
     f.add_argument("--gerekce", default="")
     alt.add_parser("metin-tarayan")
+    alt.add_parser("muaf-turler")
     a = ap.parse_args(argv)
     kok = Path(a.kok).resolve() if a.kok else ortak.KOK
+    if a.komut == "muaf-turler":
+        print(f"[OK] {muaf_turleri_uret(kok)} muaf girdisine `turler` yazıldı")
+        return 0
     if a.komut == "uret":
         d = uret(kok, Path(a.taban))
         print(durum_tablosu(d))

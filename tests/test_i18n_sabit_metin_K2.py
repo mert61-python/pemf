@@ -37,7 +37,7 @@ def _ihlaller(dosyalar: list[str], defter: dict = DEFTER) -> list[str]:
     return [
         f"{a['dosya']}:{a['satir']} [{a['tur']}] {a['metin']!r}"
         for a in r["adaylar"]
-        if not kapsam.muaf_mi(defter, a["dosya"], a["metin"])
+        if not kapsam.muaf_mi(defter, a["dosya"], a["metin"], a["tur"])  # I18NI-A2.2: muaf yalnız kaydedildiği türlerde
     ]
 
 

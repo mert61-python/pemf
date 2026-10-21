@@ -16,7 +16,7 @@ const { cikarKaynak } = require("../../../../../scripts/i18n/cikar_ts.cjs");
 const ts = require("typescript");
 
 const KOK = join(__dirname, "..", "..", "..", "..", "..");
-type Kayit = { yuzey: string; durum: string; muaf?: { metin: string }[] };
+type Kayit = { yuzey: string; durum: string; muaf?: { metin: string; turler?: string[] }[] };
 type Defter = {
   genelMuaf: { metin: string }[];
   genelMuafDesen?: { desen: string }[];
@@ -26,9 +26,10 @@ const defter = JSON.parse(readFileSync(join(KOK, "i18n", "kapsam.json"), "utf8")
 const genelMuaf = new Set(defter.genelMuaf.map((m) => m.metin));
 const desenler = (defter.genelMuafDesen ?? []).map((d) => new RegExp(`^(?:${d.desen})$`));
 
-function muafMi(kayit: Kayit, metin: string): boolean {
+// I18NI-A2.2: muaf girdisi `turler` taşıyorsa YALNIZ o türlerde geçerli (pytest `kapsam.muaf_mi(..., tur)` ile aynı).
+function muafMi(kayit: Kayit, metin: string, tur?: string): boolean {
   if (kayit.durum === "muaf") return true;
-  if ((kayit.muaf ?? []).some((m) => m.metin === metin)) return true;
+  if ((kayit.muaf ?? []).some((m) => m.metin === metin && (!tur || !m.turler?.length || m.turler.includes(tur)))) return true;
   return genelMuaf.has(metin) || desenler.some((d) => d.test(metin));
 }
 
@@ -36,7 +37,7 @@ function ihlaller(dosya: string, kayit: Kayit): string[] {
   const metin = readFileSync(join(KOK, dosya), "utf8");
   const { adaylar } = cikarKaynak(metin, dosya, { ts });
   return (adaylar as { metin: string; satir: number; tur: string }[])
-    .filter((a) => !muafMi(kayit, a.metin))
+    .filter((a) => !muafMi(kayit, a.metin, a.tur))
     .map((a) => `${dosya}:${a.satir} [${a.tur}] ${JSON.stringify(a.metin)}`);
 }
 
