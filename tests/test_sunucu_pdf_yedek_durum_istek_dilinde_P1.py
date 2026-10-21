@@ -144,16 +144,16 @@ def _rapor(tmp_path, dil_kodu):
 def test_PDF_Turkce_eski_etiketlerle_ayni(tmp_path):
     seans, hasta = _rapor(tmp_path, "tr")
     for s in (
-        "PEMF TEDAVİ RAPORU",
+        "PEMF SEANS RAPORU",  # Y163 (YH A2): TEDAVİ → SEANS
         "İSTATİSTİKLER",
         "Toplam Seans Sayısı",
-        "Toplam Tedavi Süresi",
+        "Toplam Seans Süresi",
         "Ortalama Seans Süresi",
         "Manuel Modu",
-        "TEDAVİ SEANSLARI",
+        "SEANSLAR",
         "Başlangıç Saati",
         "Bitiş Saati",
-        "Tedavi Modu",
+        "Seans Modu",
         "Hedef Durum",
         "Hasta Adı",
         "Bobin Çalışmaları",
@@ -167,15 +167,18 @@ def test_PDF_Turkce_eski_etiketlerle_ayni(tmp_path):
         "Hasta Adı:",
         "Hasta Soyadı:",
         "Belirtilmemiş",
-        "İlk Tedavi:",
+        "İlk Seans:",
         "HASTA İSTATİSTİKLERİ",
-        "İlk Tedavi Tarihi",
-        "Son Tedavi Tarihi",
-        "TEDAVİ GEÇMİŞİ",
+        "İlk Seans Tarihi",
+        "Son Seans Tarihi",
+        "SEANS GEÇMİŞİ",
         "Süre (dk)",
         "Frekans (Hz)",
     ):
         assert s in hasta, (s, hasta[:300])
+    # Y163 (YH A2): seans / hasta PDF'inde "tedavi" sözcüğü KALMAZ (hukuki cümle bu raporlarda yok)
+    for metin in (seans, hasta):
+        assert not re.search(r"[Tt]edavi|TEDAV[İI]", metin), re.findall(r".{0,30}(?:[Tt]edavi|TEDAV[İI]).{0,30}", metin)
 
 
 def test_PDF_Ingilizce_etiketler_Ingilizce_veri_aynen(tmp_path):
@@ -184,13 +187,13 @@ def test_PDF_Ingilizce_etiketler_Ingilizce_veri_aynen(tmp_path):
         "PEMF SESSION REPORT",
         "STATISTICS",
         "Total Number of Sessions",
-        "Total Treatment Duration",
+        "Total Session Duration",  # Y163 (YH A2): Session (treatment / therapy YOK)
         "Average Session Duration",
         "Manual Mode",  # EN1: seans modu DB değeri `Manuel` gösterimde çevrilir (değer → anahtar; DB değeri değişmez)
-        "TREATMENT SESSIONS",
+        "SESSIONS",
         "Start Time",
         "End Time",
-        "Treatment Mode",
+        "Session Mode",
         "Target Condition",
         "Patient Name",
         "Coil Runs",
@@ -204,11 +207,11 @@ def test_PDF_Ingilizce_etiketler_Ingilizce_veri_aynen(tmp_path):
         "Patient Name:",
         "Patient Surname:",
         "Not specified",
-        "First Treatment:",
+        "First Session:",
         "PATIENT STATISTICS",
-        "First Treatment Date",
-        "Last Treatment Date",
-        "TREATMENT HISTORY",
+        "First Session Date",
+        "Last Session Date",
+        "SESSION HISTORY",
         "Duration (min)",
         "Frequency (Hz)",
     ):
@@ -220,3 +223,8 @@ def test_PDF_Ingilizce_etiketler_Ingilizce_veri_aynen(tmp_path):
         ]
         assert not kalan, kalan
         assert not TR_HARF.search(metin), TR_HARF.findall(metin)
+        # PEMF açılımı ("Pulsed Electromagnetic Field Therapy") terim sözlüğünün gerekçeli istisnası — ürün adı, tedavi iddiası değil
+        sade = metin.replace("Pulsed Electromagnetic Field Therapy", "")
+        assert not re.search(r"(?i)treatment|therapy", sade), re.findall(
+            r"(?i).{0,30}(?:treatment|therapy).{0,30}", sade
+        )

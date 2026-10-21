@@ -72,6 +72,7 @@ YASAK = (
     "AI Analiz",
     "Pulsed Electromagnetic",
     "TEDAVİ RAPORU",
+    "SEANS RAPORU",  # Y163: seans PDF'inin varsayılan başlığı AI raporuna sızmaz
     "2026-10-13T",
 )
 

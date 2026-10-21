@@ -42,7 +42,11 @@ fitz = pytest.importorskip("fitz", reason="PyMuPDF yok -> PDF metni cikarilamaz"
 
 #: Raporda GERÇEKTEN geçen, Türkçe-özel harf taşıyan başlıklar.
 #: ⚠️ Çıpa sahibin ekran görüntüsündeki başlığa pinli: arıza tam orada görüldü.
-TURKCE_BASLIKLAR = ("Bobin Çalışmaları", "PEMF TEDAVİ RAPORU")
+TURKCE_BASLIKLAR = (
+    "Bobin Çalışmaları",
+    "İSTATİSTİKLER",
+    "Toplam Seans Süresi",
+)  # Y163: başlık "PEMF SEANS RAPORU" Türkçe harf taşımaz
 
 #: Type1 notdef'in metin çıkarımında bıraktığı iz (ölçüldü: "Çalışmaları" -> "ÇalIImalarI").
 BOZUK_IZ = "ÇalIImalarI"

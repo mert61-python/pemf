@@ -699,17 +699,17 @@
     },
     "altBilgi": {
       "tarihli": "{{metin}} Rapor tarihi: {{tarih}}",
-      "varsayilan": "\n        Bu rapor PEMF (Pulsed Electromagnetic Field) tedavi cihazı tarafından otomatik olarak oluşturulmuştur.\n        Rapor tarihi: {{tarih}}\n\n        Veteriner PEMF Tedavi Sistemi v1.0\n        "
+      "varsayilan": "\n        Bu rapor PEMF (Pulsed Electromagnetic Field) seans cihazı tarafından otomatik olarak oluşturulmuştur.\n        Rapor tarihi: {{tarih}}\n\n        Veteriner PEMF Seans Sistemi v1.0\n        "
     },
     "baslik": {
       "altVarsayilan": "Pulsed Electromagnetic Field Therapy - Veteriner Uygulaması",
-      "varsayilan": "PEMF TEDAVİ RAPORU"
+      "varsayilan": "PEMF SEANS RAPORU"
     },
     "belirtilmemis": "Belirtilmemiş",
     "bilgi": {
       "raporTarihi": "Rapor Tarihi:",
       "raporTuru": "Rapor Türü:",
-      "seansGecmisiRaporu": "Tedavi Geçmişi Raporu",
+      "seansGecmisiRaporu": "Seans Geçmişi Raporu",
       "toplamSeans": "Toplam Seans:"
     },
     "hasta": {
@@ -717,15 +717,15 @@
       "agirlik": "Ağırlık:",
       "baslik": "HASTA RAPORU: {{ad}}",
       "frekansHz": "Frekans (Hz)",
-      "ilkTedavi": "İlk Tedavi:",
-      "ilkTedaviTarihi": "İlk Tedavi Tarihi",
+      "ilkTedavi": "İlk Seans:",
+      "ilkTedaviTarihi": "İlk Seans Tarihi",
       "irk": "Irk:",
       "istatistikler": "HASTA İSTATİSTİKLERİ",
       "sahip": "Sahip:",
-      "sonTedaviTarihi": "Son Tedavi Tarihi",
+      "sonTedaviTarihi": "Son Seans Tarihi",
       "soyadi": "Hasta Soyadı:",
       "sureDk": "Süre (dk)",
-      "tedaviGecmisi": "TEDAVİ GEÇMİŞİ",
+      "tedaviGecmisi": "SEANS GEÇMİŞİ",
       "tur": "Tür:",
       "veteriner": "Veteriner:",
       "yas": "Yaş:"
@@ -754,10 +754,10 @@
       "seansSayisi_other": "{{count}} seans",
       "sure": "Süre",
       "sureSn": "Süre (sn)",
-      "tedaviModu": "Tedavi Modu",
-      "tedaviSeanslari": "TEDAVİ SEANSLARI",
+      "tedaviModu": "Seans Modu",
+      "tedaviSeanslari": "SEANSLAR",
       "toplamSeansSayisi": "Toplam Seans Sayısı",
-      "toplamTedaviSuresi": "Toplam Tedavi Süresi",
+      "toplamTedaviSuresi": "Toplam Seans Süresi",
       "turIrk": "Tür/Irk",
       "uyariEksik": "UYARI: İstenen {{istenen}} seanstan {{eksik}} tanesi bulunamadı (silinmiş olabilir) ve bu rapora GİRMEDİ.",
       "veteriner": "Veteriner"

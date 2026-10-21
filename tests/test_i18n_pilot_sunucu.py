@@ -88,11 +88,11 @@ def test_pdf_baslik_bilgi_altbilgi_rapor_dilinde_iki_dil_KARISMAZ(pdf, dil):
     m = "\n".join(_metinler(story))
     if dil == "tr":
         for parca in (
-            "PEMF TEDAVİ RAPORU",
+            "PEMF SEANS RAPORU",  # Y163 (YH A2)
             "Rapor Tarihi:",
             "Toplam Seans:",
-            "Tedavi Geçmişi Raporu",
-            "Veteriner PEMF Tedavi Sistemi v1.0",
+            "Seans Geçmişi Raporu",
+            "Veteriner PEMF Seans Sistemi v1.0",
             "Hasta: Pamuk. Rapor tarihi:",
         ):
             assert parca in m, parca
