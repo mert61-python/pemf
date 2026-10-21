@@ -33,11 +33,9 @@ KOK = Path(__file__).resolve().parents[1]
 LEGAL = KOK / "apps/web" / "src" / "pages" / "Legal.tsx"
 
 
-@pytest.fixture(scope="module")
-def metin():
-    if not LEGAL.exists():
-        pytest.skip("apps/web kaynagi yok")
-    # I18N-P1 (12e): belge metni kataloğa taşındı — GÖRÜNEN kaynak = Legal.tsx + her <Trans i18nKey> yerine katalog TR değeri.
+def gorunen_legal() -> str:
+    """Legal.tsx'in GÖRÜNEN kaynağı (I18N-P1, 12e): belge metni kataloğa taşındı → kaynak + her <Trans i18nKey> yerine katalog TR değeri.
+    Bu dosyanın fikstürü VE Legal'i metin olarak okuyan başka kapılar (F234) AYNI işlevi kullanır."""
     kaynak = LEGAL.read_text(encoding="utf-8")
     import i18n_yardimci as iy
 
@@ -53,6 +51,13 @@ def metin():
         )
 
     return re.sub(r'<Trans\s+i18nKey="([^"]+)"[^>]*?/>', yerlestir, kaynak)
+
+
+@pytest.fixture(scope="module")
+def metin():
+    if not LEGAL.exists():
+        pytest.skip("apps/web kaynagi yok")
+    return gorunen_legal()
 
 
 # ── metin gerçekten aktarımı anlatıyor mu ───────────────────────────────────

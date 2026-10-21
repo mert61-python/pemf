@@ -24,7 +24,7 @@ GUN = 86400.0
 
 
 def _legal_gunleri() -> dict:
-    m = kt._saklama_maddeleri(kt.LEGAL.read_text(encoding="utf-8"))
+    m = kt._saklama_maddeleri(kt.gorunen_legal())
     out = {}
     for k in ("sensor", "doz", "olay", "anonim"):
         g = re.search(r"(\d+)\s*gün", m[k])
@@ -156,6 +156,6 @@ def test_KRITIK_buluta_GERCEKTEN_giden_cihaz_alanlari_Legalde(monkeypatch):
     )
     eslemesiz = sorted(giden - set(kt._CIHAZ_KARSILIK))
     assert not eslemesiz, f"buluta GERÇEKTEN giden ama aydınlatma eşlemesinde olmayan alan: {eslemesiz} (A-38)"
-    madde = kt._cihaz_maddesi(kt.LEGAL.read_text(encoding="utf-8")).lower()
+    madde = kt._cihaz_maddesi(kt.gorunen_legal()).lower()
     eksik = sorted(a for a in giden if kt._CIHAZ_KARSILIK[a].lower() not in madde)
     assert not eksik, f"giden ama Legal §5.1'de anlatılmayan: {eksik}"
