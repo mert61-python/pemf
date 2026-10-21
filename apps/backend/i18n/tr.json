@@ -311,7 +311,13 @@
         "modelPaketi": "'{{ad}}' model paketi bu cihazda kurulu değil. Masaüstü PEMF uygulamasının kurulum adımından ilgili model paketini ekleyip bu ekrana dönün.",
         "modelYukleme": "'{{ad}}' yüklenemedi. Uygulamayı yeniden başlatıp tekrar deneyin; sorun sürerse destek kaydında bu ekranı belirtin."
       },
+      "hedefOnek": {
+        "genel": "Hedef",
+        "kuyu": "Kuyu",
+        "tumor": "Tümör"
+      },
       "hedefOrgan": "hedef organ",
+      "hedefOtomatik": "{{onek}} (otomatik)",
       "ipucu": {
         "fantomYok": "Kadrajda fantom görünmüyor — fantomu tepsinin ortasına düz yerleştirin ve kabin işaretiyle birlikte kadraja alın.",
         "hayvanGorunuyor": "Hayvan görünüyor ama {{ad}} seçilemedi — kamerayı biraz çevirip açıyı değiştirin.",

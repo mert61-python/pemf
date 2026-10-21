@@ -1848,12 +1848,12 @@ def _ai_hazirlik_loop():
                                 },
                                 "eField": 0.0,
                                 "organId": _ai_organ_id,
-                                "organName": _aktif_saglayici().hedef_adi(_ai_organ_id),
+                                "organName": ai_pro_hedef.hedef_gosterim_adi(_aktif_saglayici(), _ai_organ_id),
                                 # YALNIZ-EK (Faz 1): mevcut anahtarlar aynen kalır (sürüm kayması deseni).
                                 "model": _aktif_saglayici().ad,
                                 "modelName": _aktif_saglayici().title,
                                 "subjectLabel": _aktif_saglayici().subject_label,
-                                "targetName": _aktif_saglayici().hedef_adi(_ai_organ_id),
+                                "targetName": ai_pro_hedef.hedef_gosterim_adi(_aktif_saglayici(), _ai_organ_id),
                                 "targets": _ai_organ_cache.get("targets") or [],
                                 "method": _ai_organ_cache.get("method") or "",
                                 "targetLabel": _ai_organ_cache.get("target_label") or "",
@@ -2190,12 +2190,12 @@ def _ai_pro_loop(dongu_muhru=None):
                 "target": {"x": round(x_mm, 1), "y": round(y_mm, 1), "z": round(z_mm, 1)},
                 "eField": round(e_field, 4),
                 "organId": _gosterim_oid,
-                "organName": _aktif_saglayici().hedef_adi(_gosterim_oid),
+                "organName": ai_pro_hedef.hedef_gosterim_adi(_aktif_saglayici(), _gosterim_oid),
                 # YALNIZ-EK (Faz 1): mevcut anahtarlar aynen kalır (sürüm kayması deseni).
                 "model": _aktif_saglayici().ad,
                 "modelName": _aktif_saglayici().title,
                 "subjectLabel": _aktif_saglayici().subject_label,
-                "targetName": _aktif_saglayici().hedef_adi(_gosterim_oid),
+                "targetName": ai_pro_hedef.hedef_gosterim_adi(_aktif_saglayici(), _gosterim_oid),
                 "targets": _ai_organ_cache.get("targets") or [],
                 "method": _ai_organ_cache.get("method") or "",
                 "targetLabel": _ai_organ_cache.get("target_label") or "",
@@ -2985,7 +2985,7 @@ def set_ai_pro_organ(payload: AiProStartPayload = AiProStartPayload()):
     return {
         "status": "success",
         "organId": _ai_organ_id,
-        "organName": _saglayici.hedef_adi(_ai_organ_id),
+        "organName": ai_pro_hedef.hedef_gosterim_adi(_saglayici, _ai_organ_id),
         "model": _saglayici.ad,
     }
 
@@ -3104,7 +3104,7 @@ def ai_pro_status():
     return {
         "active": _ai_loop_active,
         "organId": _ai_organ_id,
-        "organName": _aktif_saglayici().hedef_adi(_ai_organ_id),
+        "organName": ai_pro_hedef.hedef_gosterim_adi(_aktif_saglayici(), _ai_organ_id),
         "durationMin": _ai_duration_min,
         "remainingSec": remaining,
         "localized": bool(_ai_organ_cache.get("localized")),
@@ -3122,7 +3122,7 @@ def ai_pro_status():
         "ood": bool(_ai_organ_cache.get("ood")),
         "subjectLabel": _aktif_saglayici().subject_label,
         "subjectDetected": bool(_ai_organ_cache.get("kedi_var")),
-        "targetName": _aktif_saglayici().hedef_adi(_ai_organ_id),
+        "targetName": ai_pro_hedef.hedef_gosterim_adi(_aktif_saglayici(), _ai_organ_id),
         "reliability": round(float(_ai_organ_cache.get("reliability", 0.0)), 3),
         # Sunum-katmanı XAI (2026-08-26): güvenin bileşen dökümü (poz × derinlik × maske ×
         # belirsizlik + kalibrasyon tavanı) — panel "Güven %X"in NEDENİNİ gösterebilsin.
@@ -3420,12 +3420,12 @@ async def ai_pro_frame(
                 "target": {"x": round(x_mm, 1), "y": round(y_mm, 1), "z": round(z_mm, 1)},
                 "eField": round(e_field, 4),
                 "organId": _gosterim_oid,
-                "organName": _aktif_saglayici().hedef_adi(_gosterim_oid),
+                "organName": ai_pro_hedef.hedef_gosterim_adi(_aktif_saglayici(), _gosterim_oid),
                 # YALNIZ-EK (Faz 1): mevcut anahtarlar aynen kalır (sürüm kayması deseni).
                 "model": _aktif_saglayici().ad,
                 "modelName": _aktif_saglayici().title,
                 "subjectLabel": _aktif_saglayici().subject_label,
-                "targetName": _aktif_saglayici().hedef_adi(_gosterim_oid),
+                "targetName": ai_pro_hedef.hedef_gosterim_adi(_aktif_saglayici(), _gosterim_oid),
                 "targets": _ai_organ_cache.get("targets") or [],
                 "method": _ai_organ_cache.get("method") or "",
                 "targetLabel": _ai_organ_cache.get("target_label") or "",

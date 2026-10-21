@@ -360,7 +360,12 @@ def _hedef_tel(aday: dict, kare_w: int, kare_h: int) -> dict:
     genişlik ile yerleştirmek işaretleri hedeften kaydırır (aynı sınıf hata [S7 adım 6]'da
     overlay ölçeğinde yaşandı). 0..1 oranı hem /status hem WS hem /frame için ÖLÇEK-BAĞIMSIZ.
     """
-    d = {k: v for k, v in aday.items() if k in ("id", "label", "px", "x", "y", "z", "organ_id", "reliability")}
+    # I18NI-A2.8: `etiketGosterim` YALNIZ-EK (eski istemci `label`'ı okumaya devam eder)
+    d = {
+        k: v
+        for k, v in aday.items()
+        if k in ("id", "label", "etiketGosterim", "px", "x", "y", "z", "organ_id", "reliability")
+    }
     px = aday.get("px") or (0.0, 0.0)
     if kare_w > 0 and kare_h > 0:
         d["pxn"] = [
@@ -399,6 +404,8 @@ class _EmCvSaglayici:
     subject_label = ""
     onbellek_anahtari = ""
     hedef_etiketi = "Hedef"
+    #: I18NI-A2.8: `hedef_etiketi` VERİ ön ekidir (onay mührü etiketi / `mode` kaydı — Türkçe kalır); ARAYÜZ gösterimi bu anahtardan.
+    hedef_etiketi_anahtari = "ai.pro.hedefOnek.genel"
     join_timeout_s = 6.0
     varsayilan_hedef = 0
     #: Kabul edilen EN FAZLA hedef (0 = otomatik seçim, 1..N = kare üstünde elle seçim).
@@ -478,6 +485,19 @@ class _EmCvSaglayici:
                     return str(k.get("ad") or f"{self.hedef_etiketi} {hid}")
         return f"{self.hedef_etiketi} {hid}"
 
+    def etiket_gosterim(self, etiket: str) -> str:
+        """VERİ etiketinin (`"Tümör T1"`) kullanıcıya gösterilen hâli: Türkçe ön ek istek / cihaz dilinde (TR'de bayt bayt aynı)."""
+        on = f"{self.hedef_etiketi} "
+        if etiket.startswith(on):
+            return f"{ceviri.t(self.hedef_etiketi_anahtari)} {etiket[len(on) :]}"
+        return etiket
+
+    def hedef_adi_gosterim(self, hedef_id: int) -> str:
+        """Kullanıcıya gösterilen hedef adı (canlı `organName` / `targetName`) — `hedef_adi` VERİ (Türkçe; `mode` kaydı) kalır."""
+        if int(hedef_id) == 0:
+            return ceviri.t("ai.pro.hedefOtomatik", onek=ceviri.t(self.hedef_etiketi_anahtari))
+        return self.etiket_gosterim(self.hedef_adi(hedef_id))
+
     def ipucu(self, ozne_var: bool, hedef_adi: str) -> str:
         if not ozne_var:
             return self._ipucu_ozne_yok()
@@ -555,6 +575,8 @@ class _EmCvSaglayici:
             self._kimlikler = [
                 {"id": a["id"], "ad": a["label"], "px": a.get("px"), "organ_id": a.get("organ_id")} for a in yeni
             ]
+        for a in yeni:  # I18NI-A2.8: ARAYÜZ gösterimi (`HedefSecici`); `label` VERİ kalır (onay mührü)
+            a["etiketGosterim"] = self.etiket_gosterim(str(a.get("label") or ""))
         return yeni
 
     def _hedef_sec(self, adaylar: list, hedef_id: int):
@@ -727,6 +749,7 @@ class FantomSaglayici(_EmCvSaglayici):
     subject_label = "fantom"
     onbellek_anahtari = "em_fantom_cv"
     hedef_etiketi = "Tümör"
+    hedef_etiketi_anahtari = "ai.pro.hedefOnek.tumor"
     join_timeout_s = 8.0
 
     def _yukleyici(self):
@@ -808,6 +831,7 @@ class PetriSaglayici(_EmCvSaglayici):
     subject_label = "petri plakası"
     onbellek_anahtari = "em_petri_cv"
     hedef_etiketi = "Kuyu"
+    hedef_etiketi_anahtari = "ai.pro.hedefOnek.kuyu"
     #: AI-2: v2 plaka kipi TÜM kuyucukları verir (24'lük: 24, 96'lık: 96) — eski 8'lik tavan kuyu 9–24'ü seçilemez
     #: kılardı (`hedef_idleri` dört doğrulama noktasının TEK kaynağı). En büyük standart plaka 96.
     azami_hedef = 96

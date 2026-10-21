@@ -311,7 +311,13 @@
         "modelPaketi": "The '{{ad}}' model package is not installed on this device. Add the relevant model package from the setup step of the desktop PEMF app, then come back to this screen.",
         "modelYukleme": "'{{ad}}' could not be loaded. Restart the app and try again; if the problem persists, mention this screen in the support request."
       },
+      "hedefOnek": {
+        "genel": "Target",
+        "kuyu": "Well",
+        "tumor": "Tumor"
+      },
       "hedefOrgan": "target organ",
+      "hedefOtomatik": "{{onek}} (automatic)",
       "ipucu": {
         "fantomYok": "The phantom is not visible in frame — place it flat in the middle of the tray and bring it into frame together with the cabin marker.",
         "hayvanGorunuyor": "The animal is visible but {{ad}} could not be selected — turn the camera a little and change the angle.",

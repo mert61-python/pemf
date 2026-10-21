@@ -21,7 +21,10 @@ import { useTranslation } from "react-i18next";
 export interface HedefAdayi {
   /** KALICI kimlik — `/ai/pro/organ` gövdesindeki `organ_id` budur. */
   id?: number;
+  /** VERİ etiketi (onay mührü; Türkçe ön ekli "Tümör T1"). */
   label?: string;
+  /** I18NI-A2.8: gösterim etiketi (sunucu istek / cihaz dilinde kurar; eski sunucuda yok → `label`). */
+  etiketGosterim?: string;
   /** Kare oranına göre merkez [0..1, 0..1]. */
   pxn?: number[];
   x?: number;
@@ -77,7 +80,7 @@ export function HedefHalkalari({
             accessibilityLabel={t("ai.pro.hedef.etiket", {
               sira: i + 1,
               toplam: hedefler.length,
-              ad: h.label || t("ai.pro.hedef.adsiz"),
+              ad: (h.etiketGosterim || h.label) || t("ai.pro.hedef.adsiz"),
               guven,
               durum: secim ? t("ai.pro.hedef.durumSecili") : "",
             })}
@@ -128,14 +131,14 @@ export function HedefListesi({
             accessibilityLabel={t("ai.pro.hedef.etiket", {
               sira: i + 1,
               toplam: hedefler.length,
-              ad: h.label || t("ai.pro.hedef.adsiz"),
+              ad: (h.etiketGosterim || h.label) || t("ai.pro.hedef.adsiz"),
               guven,
               durum: oto ? t("ai.pro.hedef.durumOtomatik") : secim ? t("ai.pro.hedef.durumSecili") : "",
             })}
           >
             <Text style={[styles.satirAd, secim && styles.satirAdSecili]} numberOfLines={1}>
               {secim ? "● " : "○ "}
-              {h.label || t("ai.pro.hedef.numara", { sira: i + 1 })}
+              {(h.etiketGosterim || h.label) || t("ai.pro.hedef.numara", { sira: i + 1 })}
             </Text>
             <Text style={styles.satirGuven}>{t("ai.ortak.yuzde", { deger: guven })}</Text>
             {oto ? <Text style={styles.oto}>{t("ai.pro.hedef.otomatik")}</Text> : null}

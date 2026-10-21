@@ -340,6 +340,14 @@
    "onek": "seans.aiProMod.",
    "degerler": ["kuyu", "tumor"],
    "gerekce": "I18NI-A1.9: AI Pro seans modu VERİSİ (`AI Pro · <model> · <hedef>`, ai_router) parçası tabloda ANAHTARA eşlenir (kapalı küme); tanınmayan parça aynen"
+  },
+  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/servers/ai_pro_hedef.py",
+   "ifade": "ceviri.t(self.hedef_etiketi_anahtari)",
+   "onek": "ai.pro.hedefOnek.",
+   "degerler": ["genel", "tumor", "kuyu"],
+   "gerekce": "I18NI-A2.8: AI Pro hedef ön ekinin GÖSTERİMİ — sağlayıcı sınıf özniteliği `hedef_etiketi_anahtari` (kapalı küme: _EmCvSaglayici / Fantom / Petri); VERİ ön eki `hedef_etiketi` Türkçe kalır"
   }
  ]
 }
