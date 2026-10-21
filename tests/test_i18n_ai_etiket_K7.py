@@ -95,6 +95,20 @@ def test_K7_ingilizce_ortak_kimliklerde_ayni(tur):
     assert not sorun, "\n".join(sorun)
 
 
+@pytest.mark.parametrize("tur", list(UI_TABLO))
+def test_K7_farkli_listesindeki_TR_degerleri_DONDURULMUS(tur):
+    """I18NI-A2.6: `farkli` listesi iki tarafın TR değerini KAYDEDER (taban c1e098ef); listedeki kimliğin TR'si bir tarafta değişirse
+    kırmızı — "bilerek farklı" (Y165) TR birebir kuralından muaf DEĞİLDİR."""
+    ui, sv = ui_tablosu(tur, "tr"), sunucu_tablosu(tur, "tr")
+    sorun = []
+    for kimlik, kayit in FARK[tur]["farkli"].items():
+        if kimlik in ui and ui[kimlik] != kayit.get("arayuz"):
+            sorun.append(f"{tur}:{kimlik}: arayüz TR {ui[kimlik]!r} ≠ dondurulan {kayit.get('arayuz')!r}")
+        if kimlik in sv and sv[kimlik] != kayit.get("sunucu"):
+            sorun.append(f"{tur}:{kimlik}: sunucu TR {sv[kimlik]!r} ≠ dondurulan {kayit.get('sunucu')!r}")
+    assert not sorun, "AI etiket farkı listesindeki TR değeri DEĞİŞMİŞ (TR birebir):\n" + "\n".join(sorun)
+
+
 def test_K7_KARSIT_ayristirici_tablolari_OKUR():
     assert len(ui_tablosu("etiket", "tr")) >= 100 and len(sunucu_tablosu("etiket", "tr")) >= 60
     assert ui_tablosu("deger", "tr").get("no pain") and sunucu_tablosu("deger", "tr").get("no pain")
