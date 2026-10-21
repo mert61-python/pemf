@@ -50,8 +50,8 @@
   },
   "stmUyum": {
     "ayrintiGizle": "Hide technical details",
-    "ayrintiGoster": "Technical details (for support)",
-    "ayrintiGosterEtiketi": "Show technical details (for support)",
+    "ayrintiGoster": "Technical details (in Turkish, for support)",
+    "ayrintiGosterEtiketi": "Show technical details (in Turkish, for support)",
     "k1Yedek": "The device board's firmware is incompatible with this app version — the coils will not run. Call technical support (code: FW-PAKET).",
     "k2Yedek": "The device board could not be verified. Press the BLACK reset button on the board once (not the blue one)."
   },
