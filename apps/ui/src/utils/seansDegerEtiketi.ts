@@ -25,11 +25,59 @@ export const hedefEtiketi = (t: TFunction, hedef: string): string => {
   }
 };
 
-/** Seans modunun GÖRÜNEN adı. ⚠️ Değer (`Manuel` / `Otomatik` / `AI`) seansa / DB'ye GİDER → DEĞİŞMEZ; "AI" iki dilde aynıdır. */
+/**
+ * I18NI-A1.5: AI Pro seans modu VERİSİ `AI Pro · <model> [· <hedef>]` (sunucu `ai_router` — `ai_pro_hedef` title / hedef adı, organ `dil="tr"`;
+ * `profil.ARASTIRMA_SEANS_ONEKLERI` bu metne bakar → Türkçe SAKLANIR). Gösterimde parça parça katalogdan; tanınmayan parça AYNEN.
+ * TR'de çıktı ham değerle BAYT BAYT aynı (parçaların TR değeri = sunucunun TR metni; kapı: seansModu.I18NI.A1.aiProModuEN).
+ */
+const AI_PRO_ONEK = "AI Pro · ";
+const aiProModel = (t: TFunction, m: string): string => {
+  switch (m) {
+    case "Kedi Organ": return t("ai.modul.kediOrgan.ad");
+    case "Fantom Tümör": return t("ai.modul.fantomTumor.ad");
+    case "Petri Kuyu": return t("ai.modul.petriKuyu.ad");
+    default: return m;
+  }
+};
+const aiProHedefEtiketi = (t: TFunction, h: string): string => {
+  switch (h) {
+    case "Tümör": return t("ai.pro.profil.fantom.hedefEtiketi");
+    case "Kuyu": return t("ai.pro.profil.petri.hedefEtiketi");
+    default: return h;
+  }
+};
+const aiProHedef = (t: TFunction, h: string): string => {
+  switch (h) {
+    case "Tüm Vücut": return t("ai.organ.ad.tumVucut");
+    case "Mide": return t("ai.organ.ad.mide");
+    case "Böbrek": return t("ai.organ.ad.bobrek");
+    case "Karaciğer": return t("ai.organ.ad.karaciger");
+    case "Mesane": return t("ai.organ.ad.mesane");
+    case "Pankreas": return t("ai.organ.ad.pankreas");
+    case "Bağırsak": return t("ai.organ.ad.bagirsak");
+    case "Kalp": return t("ai.organ.ad.kalp");
+    case "Dalak": return t("ai.organ.ad.dalak");
+    case "Akciğer (sağ)": return t("ai.organ.ad.akciger_sag");
+    case "Akciğer (sol)": return t("ai.organ.ad.akciger_sol");
+    default: break;
+  }
+  const oto = /^(.+) \(otomatik\)$/.exec(h);
+  if (oto) return t("seans.aiProMod.otomatikHedef", { hedef: aiProHedefEtiketi(t, oto[1]) });
+  const no = /^(.+) (\d+)$/.exec(h);
+  if (no) return `${aiProHedefEtiketi(t, no[1])} ${no[2]}`;
+  return h;
+};
+
+/** Seans modunun GÖRÜNEN adı. ⚠️ Değer (`Manuel` / `Otomatik` / `AI` / `AI Pro · …`) seansa / DB'ye GİDER → DEĞİŞMEZ; "AI" iki dilde aynıdır. */
 export const modEtiketi = (t: TFunction, mod: string): string => {
   switch (mod) {
     case "Manuel": return t("kontrol.sekme.manuel");
     case "Otomatik": return t("kontrol.sekme.otomatik");
-    default: return mod;
+    default: break;
   }
+  if (typeof mod === "string" && mod.startsWith(AI_PRO_ONEK)) {
+    const [model, ...hedef] = mod.slice(AI_PRO_ONEK.length).split(" · ");
+    return [AI_PRO_ONEK + aiProModel(t, model), ...hedef.map((h) => aiProHedef(t, h))].join(" · ");
+  }
+  return mod;
 };

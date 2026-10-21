@@ -3533,7 +3533,15 @@
    "durum": "tamam",
    "metin": 0,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "AI Pro ·",
+     "gerekce": "treatment_mode VERİSİNİN öneki (ai_router `AI Pro · <model>`): karşılaştırma + ürün adı, çevrilmez",
+     "turler": [
+      "sabit"
+     ]
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },

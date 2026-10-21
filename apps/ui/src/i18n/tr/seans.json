@@ -1,4 +1,7 @@
 {
+  "aiProMod": {
+    "otomatikHedef": "{{hedef}} (otomatik)"
+  },
   "denetim": {
     "baslatmaGeriAlindi": "Başlatma, uçuştayken verilen DURDUR ile geri alındı.",
     "hataOlustu": "Hata oluştu.",

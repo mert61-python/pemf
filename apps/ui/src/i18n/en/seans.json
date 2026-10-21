@@ -1,4 +1,7 @@
 {
+  "aiProMod": {
+    "otomatikHedef": "{{hedef}} (automatic)"
+  },
   "denetim": {
     "baslatmaGeriAlindi": "The start was canceled by a STOP issued while it was in flight.",
     "hataOlustu": "An error occurred.",
