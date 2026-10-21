@@ -427,7 +427,7 @@
    "sira": 13,
    "kritik": false,
    "aciklama": "DEMA simülatörü",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 82,
    "dosyaSayisi": 5
   }
@@ -8960,10 +8960,15 @@
    "yuzey": "dema",
    "grup": "dema-13",
    "sira": 13,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "DEMA Simülatörü — tanıtım/eğitim amaçlıdır, cihaz davranışını temsil etmez",
+     "gerekce": "statik `<title>` (SEO / JS'ten önce) — çalışma anında `baslik.belge` ile ÜZERİNE YAZILIR (src/main.tsx); TR bayt bayt aynı"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -8971,10 +8976,115 @@
    "yuzey": "dema",
    "grup": "dema-13",
    "sira": 13,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 81,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Kare",
+     "gerekce": "dalga formu DEĞERİ (`Sinüs` | `Kare` | `Testere dişi`) — durum / karşılaştırma / `<option value>` VERİSİ; görünen ad `dalgaAdi()` ile katalogdan"
+    },
+    {
+     "metin": "bg-blue-600",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "bg-slate-200",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "1 Hz",
+     "gerekce": "eksen işareti (`<sayı> Hz` / `<sayı> mT`) — birim, iki dilde aynı"
+    },
+    {
+     "metin": "75 Hz",
+     "gerekce": "eksen işareti (`<sayı> Hz` / `<sayı> mT`) — birim, iki dilde aynı"
+    },
+    {
+     "metin": "150 Hz",
+     "gerekce": "eksen işareti (`<sayı> Hz` / `<sayı> mT`) — birim, iki dilde aynı"
+    },
+    {
+     "metin": "1 mT",
+     "gerekce": "eksen işareti (`<sayı> Hz` / `<sayı> mT`) — birim, iki dilde aynı"
+    },
+    {
+     "metin": "3 mT",
+     "gerekce": "eksen işareti (`<sayı> Hz` / `<sayı> mT`) — birim, iki dilde aynı"
+    },
+    {
+     "metin": "5 mT",
+     "gerekce": "eksen işareti (`<sayı> Hz` / `<sayı> mT`) — birim, iki dilde aynı"
+    },
+    {
+     "metin": "Sinüs",
+     "gerekce": "dalga formu DEĞERİ (`Sinüs` | `Kare` | `Testere dişi`) — durum / karşılaştırma / `<option value>` VERİSİ; görünen ad `dalgaAdi()` ile katalogdan"
+    },
+    {
+     "metin": "Testere dişi",
+     "gerekce": "dalga formu DEĞERİ (`Sinüs` | `Kare` | `Testere dişi`) — durum / karşılaştırma / `<option value>` VERİSİ; görünen ad `dalgaAdi()` ile katalogdan"
+    },
+    {
+     "metin": "inset({{tissueTop}}px 0 0 0)",
+     "gerekce": "SVG geometri / CSS dönüşüm değeri — metin değil"
+    },
+    {
+     "metin": "inset({{deger1}}px 0 0 0)",
+     "gerekce": "SVG geometri / CSS dönüşüm değeri — metin değil"
+    },
+    {
+     "metin": "translate({{deger1}}, {{deger2}})",
+     "gerekce": "SVG geometri / CSS dönüşüm değeri — metin değil"
+    },
+    {
+     "metin": "path(\"{{path}}\")",
+     "gerekce": "SVG geometri / CSS dönüşüm değeri — metin değil"
+    },
+    {
+     "metin": "bg-emerald-500 animate-pulse",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "bg-slate-300",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "0 10px 15px -3px rgba(59, 130, 246, 0.3)",
+     "gerekce": "CSS `box-shadow` değeri — metin değil"
+    },
+    {
+     "metin": "0 20px 25px -5px rgba(59, 130, 246, {{deger1}})",
+     "gerekce": "CSS `box-shadow` değeri — metin değil"
+    },
+    {
+     "metin": "0 4px 6px -1px rgba(59, 130, 246, 0.2)",
+     "gerekce": "CSS `box-shadow` değeri — metin değil"
+    },
+    {
+     "metin": "0 10px 15px -3px rgba(29, 78, 216, 0.3)",
+     "gerekce": "CSS `box-shadow` değeri — metin değil"
+    },
+    {
+     "metin": "bg-blue-500 ring-2 ring-blue-200",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "text-blue-600",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "text-slate-400",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "bg-blue-600 ring-2 ring-blue-200",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "text-blue-700",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -9004,7 +9114,7 @@
    "yuzey": "dema",
    "grup": "dema-13",
    "sira": 13,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],

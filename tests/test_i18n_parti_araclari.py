@@ -536,7 +536,8 @@ def test_kapsam_metin_tarayan_listesi_bilinen_kapilari_bulur():
     andigi, cevrildi = liste["tests/test_kaldirma_yetim_surec_temizligi.py"]
     assert "launcher/app/windows/hooks.nsi" in andigi and cevrildi
     andigi, cevrildi = liste["tests/test_D191_dema_simulator_A37_tanitim_etiketi_iddiasiz.py"]
-    assert "dema-terapi-simülatörü/src/App.tsx" in andigi and not cevrildi
+    # dema-13 göçünden SONRA kapı GÖRÜNEN metin yardımcısını kullanır → "çevrildi" (göç öncesi: not cevrildi)
+    assert "dema-terapi-simülatörü/src/App.tsx" in andigi and cevrildi
     assert len(liste) >= 150, len(liste)
 
 

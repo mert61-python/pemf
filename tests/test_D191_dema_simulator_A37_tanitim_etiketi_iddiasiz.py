@@ -51,7 +51,10 @@ def test_KRITIK_simulator_kaynagi_A37_ile_UYUMLU(tmp_path):
     assert _DEMA.is_dir(), "simulator dizini SILINMEMELI (A-37)"
     sorunlar = denetle(_kaynak_kopyasi(tmp_path))
     assert sorunlar == [], f"simulator kaynagi A-37 ile celisiyor: {sorunlar}"
-    assert ZORUNLU_ETIKET in (_DEMA / "src" / "App.tsx").read_text(encoding="utf-8")
+    # I18N-P1 (dema-13): etiket kataloğa taşındı → GÖRÜNEN metin = App.tsx + kullandığı anahtarların TR değeri
+    import i18n_yardimci as iy
+
+    assert ZORUNLU_ETIKET in iy.gorunen_metinler("dema-terapi-simülatörü/src/App.tsx", yuzey="dema")
 
 
 def test_KARSIT_olcut_bayat_iddialari_YAKALAR(tmp_path):

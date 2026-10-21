@@ -1,6 +1,82 @@
 {
+  "aciklama": {
+    "derin": "3-5 mT: Derin",
+    "yuzeysel": "1-2 mT: Yüzeysel"
+  },
+  "alan": {
+    "dielektrik": "Dielektrik Çıkış",
+    "indukleneKisa": "E-Alan",
+    "indukleneUzun": "İndüklenen E-Alan (Girdap Akımları)",
+    "yogunKisa": "Yoğun Alan",
+    "yogunUzun": "Yoğun Alan Dağılımı"
+  },
+  "alt": {
+    "gorsellestirme": "* Görselleştirme ve etkiler eğitim amaçlıdır.",
+    "uyari": "Bu simülatör tanıtım/eğitim amaçlıdır, cihaz davranışını temsil etmez. DEMA terapisi uygulamadan önce mutlaka bir sağlık profesyoneline danışın."
+  },
   "baslik": {
     "belge": "DEMA Simülatörü — tanıtım/eğitim amaçlıdır, cihaz davranışını temsil etmez",
     "uygulama": "DEMA Terapi Simülatörü"
+  },
+  "dalga": {
+    "kare": "Kare",
+    "modu": "{{dalga}} Modu",
+    "secili": "Seçili Mod: ",
+    "sinus": "Sinüs",
+    "sinyali": "{{dalga}} Sinyali",
+    "testere": "Testere dişi"
+  },
+  "doku": {
+    "deri": "Deri",
+    "kasDoku": "Kas/Doku",
+    "kesit": "DOKU KESİTİ",
+    "yag": "Yağ"
+  },
+  "etki": {
+    "agri": {
+      "aciklama": "Akut Ağrı, Sinir Modülasyonu",
+      "baslik": "Ağrı Yönetimi"
+    },
+    "baslik": "Potansiyel Biyolojik Etkiler",
+    "derin": {
+      "aciklama": "Kemik, Eklem ve Derin Kas",
+      "baslik": "Derin Etki"
+    },
+    "derinEtki": "Derin Etki",
+    "derinlik": "ETKİ DERİNLİĞİ: {{deger}} mT",
+    "dolasim": {
+      "aciklama": "Kan Akışı, Doku İyileşmesi",
+      "baslik": "Dolaşım"
+    },
+    "enerji": {
+      "aciklama": "Metabolizma, Hücre Aktivasyonu",
+      "baslik": "Enerji"
+    },
+    "gevseme": {
+      "aciklama": "Uyku Düzeni, Stres Azaltma",
+      "baslik": "Gevşeme"
+    },
+    "yuzeysel": {
+      "aciklama": "Deri ve Yüzey Dokular",
+      "baslik": "Yüzeysel"
+    },
+    "yuzeyselEtki": "Yüzeysel Etki"
+  },
+  "izleme": {
+    "baslik": "Sinyal İzleme"
+  },
+  "parametre": {
+    "animasyon": "Animasyon",
+    "baslik": "Terapi Parametreleri",
+    "dalgaFormu": "Dalga Formu",
+    "frekans": "Frekans",
+    "sure": "Süre",
+    "yogunluk": "Yoğunluk (mT)"
+  },
+  "sure": {
+    "dk": "{{deger}} dk"
+  },
+  "ust": {
+    "etiket": "Tanıtım/eğitim amaçlıdır, cihaz davranışını temsil etmez."
   }
 }

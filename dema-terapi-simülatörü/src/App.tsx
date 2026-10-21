@@ -21,6 +21,11 @@ import {
 // Types
 type Waveform = 'Sinüs' | 'Kare' | 'Testere dişi';
 
+// Dalga formu DEĞERLERİ (durum / karşılaştırma / <option value>) VERİ olarak Türkçe kalır; görünürde value → katalog.
+function dalgaAdi(w: Waveform): string {
+  return w === 'Sinüs' ? t('dalga.sinus') : w === 'Kare' ? t('dalga.kare') : t('dalga.testere');
+}
+
 interface SimulationParams {
   frequency: number;
   intensity: number;
@@ -43,8 +48,8 @@ export default function App() {
     // Frequency logic
     if (params.frequency >= 1 && params.frequency <= 10) {
       effects.push({
-        title: "Gevşeme",
-        description: "Uyku Düzeni, Stres Azaltma",
+        title: t('etki.gevseme.baslik'),
+        description: t('etki.gevseme.aciklama'),
         icon: <Moon className="w-8 h-8 text-indigo-500" />,
         color: "bg-indigo-50",
         textColor: "text-indigo-700",
@@ -52,8 +57,8 @@ export default function App() {
       });
     } else if (params.frequency > 10 && params.frequency <= 50) {
       effects.push({
-        title: "Dolaşım",
-        description: "Kan Akışı, Doku İyileşmesi",
+        title: t('etki.dolasim.baslik'),
+        description: t('etki.dolasim.aciklama'),
         icon: <HeartPulse className="w-8 h-8 text-red-500" />,
         color: "bg-red-50",
         textColor: "text-red-700",
@@ -61,8 +66,8 @@ export default function App() {
       });
     } else if (params.frequency > 50 && params.frequency <= 100) {
       effects.push({
-        title: "Enerji",
-        description: "Metabolizma, Hücre Aktivasyonu",
+        title: t('etki.enerji.baslik'),
+        description: t('etki.enerji.aciklama'),
         icon: <BatteryCharging className="w-8 h-8 text-emerald-500" />,
         color: "bg-emerald-50",
         textColor: "text-emerald-700",
@@ -70,8 +75,8 @@ export default function App() {
       });
     } else if (params.frequency > 100 && params.frequency <= 150) {
       effects.push({
-        title: "Ağrı Yönetimi",
-        description: "Akut Ağrı, Sinir Modülasyonu",
+        title: t('etki.agri.baslik'),
+        description: t('etki.agri.aciklama'),
         icon: <Zap className="w-8 h-8 text-orange-500" />,
         color: "bg-orange-50",
         textColor: "text-orange-700",
@@ -82,8 +87,8 @@ export default function App() {
     // Intensity logic
     if (params.intensity >= 1 && params.intensity <= 2) {
       effects.push({
-        title: "Yüzeysel",
-        description: "Deri ve Yüzey Dokular",
+        title: t('etki.yuzeysel.baslik'),
+        description: t('etki.yuzeysel.aciklama'),
         icon: <Layers className="w-8 h-8 text-blue-500" />,
         color: "bg-blue-50",
         textColor: "text-blue-700",
@@ -91,8 +96,8 @@ export default function App() {
       });
     } else if (params.intensity > 2 && params.intensity <= 5) {
       effects.push({
-        title: "Derin Etki",
-        description: "Kemik, Eklem ve Derin Kas",
+        title: t('etki.derin.baslik'),
+        description: t('etki.derin.aciklama'),
         icon: <Stethoscope className="w-8 h-8 text-purple-500" />,
         color: "bg-purple-50",
         textColor: "text-purple-700",
@@ -111,7 +116,7 @@ export default function App() {
           {/* D1.91 · A-37 (sahip): dayanaksız uyumluluk iddiası KALDIRILDI; açık tanıtım/eğitim etiketi. */}
           <h1 className="text-sm md:text-xl font-bold leading-tight">{t('baslik.uygulama')}</h1>
           <p className="mt-1 text-[11px] md:text-xs font-semibold text-amber-700">
-            Tanıtım/eğitim amaçlıdır, cihaz davranışını temsil etmez.
+            {t('ust.etiket')}
           </p>
         </header>
 
@@ -125,12 +130,12 @@ export default function App() {
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2 text-slate-400">
               <Settings2 className="w-4 h-4" />
-              <h2 className="text-sm font-bold uppercase tracking-wider">Terapi Parametreleri</h2>
+              <h2 className="text-sm font-bold uppercase tracking-wider">{t('parametre.baslik')}</h2>
             </div>
 
             {/* Animation Toggle */}
             <div className="flex items-center gap-3">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Animasyon</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('parametre.animasyon')}</span>
               <button
                 onClick={() => setIsAnimating(!isAnimating)}
                 className={`relative w-10 h-5 rounded-full transition-colors duration-200 focus:outline-none ${isAnimating ? 'bg-blue-600' : 'bg-slate-200'}`}
@@ -150,7 +155,7 @@ export default function App() {
               <div className="flex justify-between items-center">
                 <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
                   <Activity className="w-4 h-4 text-blue-500" />
-                  Frekans
+                  {t('parametre.frekans')}
                 </label>
                 <span className="font-mono text-lg font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">
                   {params.frequency} <span className="text-xs font-normal text-blue-400">Hz</span>
@@ -176,7 +181,7 @@ export default function App() {
               <div className="flex justify-between items-center">
                 <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
                   <Zap className="w-4 h-4 text-amber-500" />
-                  Yoğunluk (mT)
+                  {t('parametre.yogunluk')}
                 </label>
                 <span className="font-mono text-lg font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-lg">
                   {params.intensity} <span className="text-xs font-normal text-amber-400">mT</span>
@@ -204,7 +209,7 @@ export default function App() {
                 <div className="flex justify-between items-center">
                   <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
                     <Waves className="w-4 h-4 text-indigo-500" />
-                    Dalga Formu
+                    {t('parametre.dalgaFormu')}
                   </label>
                   <WaveformPreview type={params.waveform} />
                 </div>
@@ -214,12 +219,12 @@ export default function App() {
                     onChange={(e) => setParams({ ...params, waveform: e.target.value as Waveform })}
                     className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   >
-                    <option value="Sinüs">Sinüs</option>
-                    <option value="Kare">Kare</option>
-                    <option value="Testere dişi">Testere dişi</option>
+                    <option value="Sinüs">{t('dalga.sinus')}</option>
+                    <option value="Kare">{t('dalga.kare')}</option>
+                    <option value="Testere dişi">{t('dalga.testere')}</option>
                   </select>
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider ml-1">
-                    Seçili Mod: <span className="text-indigo-600">{params.waveform}</span>
+                    {t('dalga.secili')}<span className="text-indigo-600">{dalgaAdi(params.waveform)}</span>
                   </p>
                 </div>
               </div>
@@ -228,10 +233,10 @@ export default function App() {
                 <div className="flex justify-between items-center">
                   <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
                     <Clock className="w-4 h-4 text-emerald-500" />
-                    Süre
+                    {t('parametre.sure')}
                   </label>
                   <span className="font-mono text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
-                    {params.duration} dk
+                    {t('sure.dk', { deger: params.duration })}
                   </span>
                 </div>
                 <input
@@ -251,7 +256,7 @@ export default function App() {
         <div className="p-6 bg-slate-50 space-y-4">
           <div className="flex items-center gap-2 text-blue-600">
             <Info className="w-4 h-4" />
-            <h4 className="text-xs font-bold uppercase tracking-wider">Potansiyel Biyolojik Etkiler</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wider">{t('etki.baslik')}</h4>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-h-[160px]">
             <AnimatePresence mode="popLayout">
@@ -294,8 +299,7 @@ export default function App() {
         {/* Footer Info */}
         <footer className="p-4 bg-white border-t border-slate-100">
           <p className="text-[10px] text-slate-400 text-center leading-relaxed">
-            Bu simülatör tanıtım/eğitim amaçlıdır, cihaz davranışını temsil etmez. DEMA terapisi uygulamadan önce mutlaka
-            bir sağlık profesyoneline danışın.
+            {t('alt.uyari')}
           </p>
         </footer>
       </div>
@@ -804,7 +808,7 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
             />
           </g>
           <text x="50" y="35" textAnchor="middle" className="text-[6px] font-bold fill-slate-400 uppercase tracking-tighter">
-            {waveform} Sinyali
+            {t('dalga.sinyali', { dalga: dalgaAdi(waveform) })}
           </text>
         </g>
 
@@ -907,14 +911,14 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
       {/* Signal Monitor Overlay */}
       <div className="absolute top-2 md:top-4 left-2 md:left-4 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-xl p-2 md:p-3 shadow-sm w-24 md:w-32 scale-90 md:scale-100 origin-top-left">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Sinyal İzleme</span>
+          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{t('izleme.baslik')}</span>
           <div className={`w-1.5 h-1.5 rounded-full ${isAnimating ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
         </div>
         <div className="h-10 w-full bg-slate-50 rounded-lg border border-slate-100 overflow-hidden flex items-center justify-center">
           <AnimatedSignal waveform={waveform} frequency={frequency} isAnimating={isAnimating} />
         </div>
         <div className="mt-1 text-[7px] font-mono text-slate-400 text-center uppercase">
-          {waveform} Modu
+          {t('dalga.modu', { dalga: dalgaAdi(waveform) })}
         </div>
       </div>
 
@@ -949,41 +953,41 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
         className="absolute -translate-y-1/2 -translate-x-4 bg-white border-2 border-red-500 text-red-600 text-[7px] md:text-[10px] font-bold px-1 py-0 md:px-3 md:py-1 rounded-full shadow-sm whitespace-nowrap"
         style={{ left: `21.66%`, top: `57%` }}
       >
-        DOKU KESİTİ
+        {t('doku.kesit')}
       </div>
 
       {/* Tissue Layer Labels */}
       <div className="absolute flex flex-col justify-around h-[30%]" style={{ left: `22.5%`, top: `60.5%` }}>
-        <span className="text-[5px] font-bold text-orange-800/60 uppercase tracking-tighter">Deri</span>
-        <span className="text-[5px] font-bold text-yellow-800/60 uppercase tracking-tighter">Yağ</span>
-        <span className="text-[5px] font-bold text-red-800/60 uppercase tracking-tighter">Kas/Doku</span>
+        <span className="text-[5px] font-bold text-orange-800/60 uppercase tracking-tighter">{t('doku.deri')}</span>
+        <span className="text-[5px] font-bold text-yellow-800/60 uppercase tracking-tighter">{t('doku.yag')}</span>
+        <span className="text-[5px] font-bold text-red-800/60 uppercase tracking-tighter">{t('doku.kasDoku')}</span>
       </div>
 
       {/* Induced E-Field Legend */}
       <div className="absolute flex items-center gap-1 md:gap-1.5 bg-amber-50/80 backdrop-blur-sm px-1 py-0.5 md:px-2 md:py-1 rounded border border-amber-100" style={{ left: `26%`, top: `81%` }}>
         <div className="w-1 h-1 md:w-1.5 md:h-1.5 bg-amber-400 rounded-full animate-spin" style={{ animationDuration: `${Math.max(0.5, 3 / (frequency / 10 + 1))}s` }} />
-        <span className="text-[5px] md:text-[7px] font-bold text-amber-600 uppercase tracking-tighter hidden md:block">İndüklenen E-Alan (Girdap Akımları)</span>
-        <span className="text-[5px] font-bold text-amber-600 uppercase tracking-tighter md:hidden whitespace-nowrap">E-Alan</span>
+        <span className="text-[5px] md:text-[7px] font-bold text-amber-600 uppercase tracking-tighter hidden md:block">{t('alan.indukleneUzun')}</span>
+        <span className="text-[5px] font-bold text-amber-600 uppercase tracking-tighter md:hidden whitespace-nowrap">{t('alan.indukleneKisa')}</span>
       </div>
 
       {/* Dielectric Info Badge */}
       <div className="absolute flex items-center gap-1 md:gap-1.5 bg-red-50/80 backdrop-blur-sm px-1 py-0.5 md:px-2 md:py-1 rounded border border-red-100" style={{ left: `26%`, top: `70%` }}>
         <div className="w-1 h-1 md:w-1.5 md:h-1.5 bg-red-400 rounded-full animate-pulse" />
-        <span className="text-[5px] md:text-[7px] font-bold text-red-500 uppercase tracking-tighter hidden md:block">Yoğun Alan Dağılımı</span>
-        <span className="text-[5px] font-bold text-red-500 uppercase tracking-tighter md:hidden whitespace-nowrap">Yoğun Alan</span>
+        <span className="text-[5px] md:text-[7px] font-bold text-red-500 uppercase tracking-tighter hidden md:block">{t('alan.yogunUzun')}</span>
+        <span className="text-[5px] font-bold text-red-500 uppercase tracking-tighter md:hidden whitespace-nowrap">{t('alan.yogunKisa')}</span>
       </div>
 
       {/* Field Concentration Zone Label */}
       <div className="absolute -translate-x-1/2 flex items-center gap-1 md:gap-1.5 bg-blue-50/60 backdrop-blur-sm px-1 py-0 md:px-2 md:py-0.5 rounded border border-blue-100" style={{ left: `50%`, top: `90%` }}>
         <div className="w-1 h-1 bg-blue-400 rounded-full animate-ping" />
-        <span className="text-[5px] md:text-[6px] font-bold text-blue-500 uppercase tracking-widest whitespace-nowrap">Dielektrik Çıkış</span>
+        <span className="text-[5px] md:text-[6px] font-bold text-blue-500 uppercase tracking-widest whitespace-nowrap">{t('alan.dielektrik')}</span>
       </div>
 
       {/* Etki Derinliği Label */}
       <div
         className="absolute -translate-x-1/2 bg-white border-2 border-green-600 text-green-700 text-[7px] md:text-[10px] font-bold px-1 py-0 md:px-3 md:py-1 rounded-full shadow-sm whitespace-nowrap left-[64%] top-[53%] md:left-[75%] md:top-[90%]"
       >
-        ETKİ DERİNLİĞİ: {intensity} mT
+        {t('etki.derinlik', { deger: intensity })}
       </div>
 
       {/* Effect Type Indicator (Yüzeysel vs Derin) */}
@@ -1004,7 +1008,7 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
             <Stethoscope className="w-2.5 h-2.5 md:w-3 md:h-3 text-white" />
           )}
           <span className="text-[7px] md:text-[9px] font-black text-white uppercase tracking-wider md:tracking-widest whitespace-nowrap">
-            {intensity <= 2 ? 'Yüzeysel Etki' : 'Derin Etki'}
+            {intensity <= 2 ? t('etki.yuzeyselEtki') : t('etki.derinEtki')}
           </span>
         </motion.div>
 
@@ -1025,17 +1029,17 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
       <div className="absolute flex flex-col md:flex-row gap-0.5 md:gap-4 bg-white/60 backdrop-blur-sm p-1 md:p-2 rounded-lg border border-slate-100" style={{ left: `4%`, bottom: `3%` }}>
         <div className="flex items-center gap-1 md:gap-1.5">
           <div className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full transition-colors ${intensity <= 2 ? 'bg-blue-500 ring-2 ring-blue-200' : 'bg-slate-300'}`} />
-          <span className={`text-[6px] md:text-[8px] font-bold uppercase tracking-wider whitespace-nowrap ${intensity <= 2 ? 'text-blue-600' : 'text-slate-400'}`}>1-2 mT: Yüzeysel</span>
+          <span className={`text-[6px] md:text-[8px] font-bold uppercase tracking-wider whitespace-nowrap ${intensity <= 2 ? 'text-blue-600' : 'text-slate-400'}`}>{t('aciklama.yuzeysel')}</span>
         </div>
         <div className="flex items-center gap-1 md:gap-1.5">
           <div className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full transition-colors ${intensity > 2 ? 'bg-blue-600 ring-2 ring-blue-200' : 'bg-slate-300'}`} />
-          <span className={`text-[6px] md:text-[8px] font-bold uppercase tracking-wider whitespace-nowrap ${intensity > 2 ? 'text-blue-700' : 'text-slate-400'}`}>3-5 mT: Derin</span>
+          <span className={`text-[6px] md:text-[8px] font-bold uppercase tracking-wider whitespace-nowrap ${intensity > 2 ? 'text-blue-700' : 'text-slate-400'}`}>{t('aciklama.derin')}</span>
         </div>
       </div>
 
       {/* Disclaimer */}
       <div className="absolute bottom-4 right-4 text-[9px] text-slate-400 italic">
-        * Görselleştirme ve etkiler eğitim amaçlıdır.
+        {t('alt.gorsellestirme')}
       </div>
     </div>
   );

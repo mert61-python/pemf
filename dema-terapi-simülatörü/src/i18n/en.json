@@ -1,6 +1,82 @@
 {
+  "aciklama": {
+    "derin": "3-5 mT: Deep",
+    "yuzeysel": "1-2 mT: Superficial"
+  },
+  "alan": {
+    "dielektrik": "Dielectric Output",
+    "indukleneKisa": "E-Field",
+    "indukleneUzun": "Induced E-Field (Eddy Currents)",
+    "yogunKisa": "Dense Field",
+    "yogunUzun": "Dense Field Distribution"
+  },
+  "alt": {
+    "gorsellestirme": "* Visualization and effects are for educational purposes.",
+    "uyari": "This simulator is for promotional/educational purposes only and does not represent device behavior. Always consult a health professional before applying DEMA therapy."
+  },
   "baslik": {
     "belge": "DEMA Simulator — for demonstration/training only; does not represent device behavior",
     "uygulama": "DEMA Therapy Simulator"
+  },
+  "dalga": {
+    "kare": "Square",
+    "modu": "{{dalga}} Mode",
+    "secili": "Selected mode: ",
+    "sinus": "Sine",
+    "sinyali": "{{dalga}} Signal",
+    "testere": "Sawtooth"
+  },
+  "doku": {
+    "deri": "Skin",
+    "kasDoku": "Muscle/Tissue",
+    "kesit": "TISSUE SECTION",
+    "yag": "Fat"
+  },
+  "etki": {
+    "agri": {
+      "aciklama": "Acute Pain, Nerve Modulation",
+      "baslik": "Pain Management"
+    },
+    "baslik": "Potential Biological Effects",
+    "derin": {
+      "aciklama": "Bone, Joint and Deep Muscle",
+      "baslik": "Deep Effect"
+    },
+    "derinEtki": "Deep Effect",
+    "derinlik": "EFFECT DEPTH: {{deger}} mT",
+    "dolasim": {
+      "aciklama": "Blood Flow, Tissue Healing",
+      "baslik": "Circulation"
+    },
+    "enerji": {
+      "aciklama": "Metabolism, Cell Activation",
+      "baslik": "Energy"
+    },
+    "gevseme": {
+      "aciklama": "Sleep Pattern, Stress Reduction",
+      "baslik": "Relaxation"
+    },
+    "yuzeysel": {
+      "aciklama": "Skin and Surface Tissues",
+      "baslik": "Superficial"
+    },
+    "yuzeyselEtki": "Superficial Effect"
+  },
+  "izleme": {
+    "baslik": "Signal Monitor"
+  },
+  "parametre": {
+    "animasyon": "Animation",
+    "baslik": "Therapy Parameters",
+    "dalgaFormu": "Waveform",
+    "frekans": "Frequency",
+    "sure": "Duration",
+    "yogunluk": "Intensity (mT)"
+  },
+  "sure": {
+    "dk": "{{deger}} min"
+  },
+  "ust": {
+    "etiket": "For promotional/educational purposes only; does not represent device behavior."
   }
 }
