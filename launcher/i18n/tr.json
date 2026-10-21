@@ -10,8 +10,8 @@
     "portVeriKokunden": "PEMF: backend.port $INSTDIR'de yok — veri kökünden okundu.",
     "surecDurduruluyor": "PEMF: artık backend süreçleri durduruluyor…",
     "temizlikTamam": "PEMF Vet Client temizliği tamamlandı.",
-    "veriSilIsaretli": "PEMF: 'uygulama verisini sil' işaretli — indirilen çalışma-zamanı ve modeller kaldırılıyor…",
-    "veriSilIsaretsiz": "PEMF: 'uygulama verisini sil' işaretsiz — indirilen profiller/modeller KORUNUYOR (yeniden kurulumda tekrar inmez). Tamamen silmek için kaldırırken kutuyu işaretleyin.",
+    "veriSilIsaretli": "PEMF: 'Uygulama verilerini sil' işaretli — indirilen çalışma-zamanı ve modeller kaldırılıyor…",
+    "veriSilIsaretsiz": "PEMF: 'Uygulama verilerini sil' işaretsiz — indirilen profiller/modeller KORUNUYOR (yeniden kurulumda tekrar inmez). Tamamen silmek için kaldırırken kutuyu işaretleyin.",
     "yukseltmeKorunuyor": "PEMF: yükseltme — indirilen modeller ve önbellek korunuyor (tekrar inmez)."
   },
   "rust": {

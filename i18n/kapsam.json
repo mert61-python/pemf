@@ -10726,14 +10726,14 @@
      ]
     },
     {
-     "metin": "PEMF: 'uygulama verisini sil' işaretli — indirilen çalışma-zamanı ve modeller kaldırılıyor…",
+     "metin": "PEMF: 'Uygulama verilerini sil' işaretli — indirilen çalışma-zamanı ve modeller kaldırılıyor…",
      "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir",
      "turler": [
       "nsis"
      ]
     },
     {
-     "metin": "PEMF: 'uygulama verisini sil' işaretsiz — indirilen profiller/modeller KORUNUYOR (yeniden kurulumda tekrar inmez). Tamamen silmek için kaldırırken kutuyu işaretleyin.",
+     "metin": "PEMF: 'Uygulama verilerini sil' işaretsiz — indirilen profiller/modeller KORUNUYOR (yeniden kurulumda tekrar inmez). Tamamen silmek için kaldırırken kutuyu işaretleyin.",
      "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir",
      "turler": [
       "nsis"

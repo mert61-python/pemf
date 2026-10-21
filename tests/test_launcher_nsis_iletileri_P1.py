@@ -42,8 +42,9 @@ GOLDEN_TR = {
     "portVeriKokunden": "PEMF: backend.port $INSTDIR'de yok — veri kökünden okundu.",
     "surecDurduruluyor": "PEMF: artık backend süreçleri durduruluyor…",
     "temizlikTamam": "PEMF Vet Client temizliği tamamlandı.",
-    "veriSilIsaretli": "PEMF: 'uygulama verisini sil' işaretli — indirilen çalışma-zamanı ve modeller kaldırılıyor…",
-    "veriSilIsaretsiz": "PEMF: 'uygulama verisini sil' işaretsiz — indirilen profiller/modeller KORUNUYOR (yeniden kurulumda tekrar inmez). Tamamen silmek için kaldırırken kutuyu işaretleyin.",
+    # Y164 (S-I18N.8, sahip 2026-10-20; YH A3): ileti kutunun KENDİ yazısını aynen anar ("'uygulama verisini sil'" → "'Uygulama verilerini sil'")
+    "veriSilIsaretli": "PEMF: 'Uygulama verilerini sil' işaretli — indirilen çalışma-zamanı ve modeller kaldırılıyor…",
+    "veriSilIsaretsiz": "PEMF: 'Uygulama verilerini sil' işaretsiz — indirilen profiller/modeller KORUNUYOR (yeniden kurulumda tekrar inmez). Tamamen silmek için kaldırırken kutuyu işaretleyin.",
     "yukseltmeKorunuyor": "PEMF: yükseltme — indirilen modeller ve önbellek korunuyor (tekrar inmez).",
 }
 
@@ -102,6 +103,19 @@ def test_KRITIK_guvenlik_ifadeleri_iki_dilde_korunuyor():
     assert "E-stop atlandı" in tr["portGecersiz"] and "E-stop skipped" in en["portGecersiz"]
     assert "SİLİNMEDİ" in tr["kaldirildiKutu"] and "NOT DELETED" in en["kaldirildiKutu"]
     assert "KORUNDU" in tr["kayitlarKorundu"] and "KEPT" in en["kayitlarKorundu"]
+
+
+#: Tauri NSIS dil dosyalarındaki kaldırma kutusunun yazısı (`LangString deleteAppData`: Turkish.nsh / English.nsh — tauri-bundler; EN derlemede
+#: ölçüldü `launcher/target/release/nsis/x64/English.nsh:27`, TR I18N-0'da ölçüldü — S-I18N.8).
+KUTU = {"tr": "Uygulama verilerini sil", "en": "Delete the application data"}
+
+
+@pytest.mark.parametrize("dil", ["tr", "en"])
+@pytest.mark.parametrize("anahtar", ["veriSilIsaretli", "veriSilIsaretsiz"])
+def test_Y164_kaldirma_iletisi_KUTUNUN_KENDI_YAZISINI_aynen_anar(dil, anahtar):
+    """Y164: kullanıcı ilettiği kutuyu ekranda gördüğü yazıyla tanısın — "'uygulama verisini sil'" kutuda yazmıyordu."""
+    deger = _nsis(dil)[anahtar]
+    assert f"'{KUTU[dil]}'" in deger, (dil, anahtar, deger)
 
 
 def test_KRITIK_sekiz_kritik_anahtar_kritik_listesinde_launcher_yuzeyinde():
