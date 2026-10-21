@@ -1,20 +1,24 @@
 /**
- * SAYFA META (YH B2) — SPA: `index.html`'deki statik başlık / açıklama / Open Graph / Twitter etiketleri (Türkçe; JS'ten önce okunur,
+ * SAYFA META (YH B2 / B3) — SPA: `index.html`'deki statik başlık / açıklama / Open Graph / Twitter etiketleri (Türkçe; JS'ten önce okunur,
  * DEĞİŞMEZ) her yol ve dil değişiminde ETKİN DİLE göre yeniden yazılır; her sayfanın kendi başlığı iki dilde ("Özellikler — PEMF Vet").
- * canonical / `og:url` sayfanın kendi adresi; bilinmeyen yolda (404) ana sayfa.
+ * Dil bağlantıları (S-YH: `?lang=`): `<link rel="alternate" hreflang="tr|en|x-default">` + canonical / `og:url` o dildeki adres;
+ * x-default = parametresiz adres (dili tarayıcı seçer — Y161). Bilinmeyen yolda (404) dil bağlantısı YOK, canonical ana sayfa.
  * Saf hesap (`sayfaMetasiHesapla`) ile DOM uygulayıcı (`metaUygula`) ayrı: testte sahte belge. i18n / config İÇE AKTARILMAZ (döngü yok):
  * çevirmen ve yasal belge başlığı çağırandan gelir.
  */
 export const SITE_KOKU = 'https://pemf-vet-web.vercel.app'
+export const DIL_PARAMETRESI = 'lang'
 
 export type SayfaDili = 'tr' | 'en'
 export type Cevir = (anahtar: string, secenek?: Record<string, unknown>) => string
+export type DilBaglantisi = { hreflang: 'tr' | 'en' | 'x-default'; href: string }
 export type SayfaMetasi = {
   baslik: string
   aciklama: string
   ogLocale: string
   ogLocaleDiger: string
   adres: string
+  alternatifler: DilBaglantisi[]
 }
 
 /** Uygulamanın bilinen (yasal belge dışı) yolları — `App.tsx` rotalarıyla aynı küme (kapı: sayfaMeta.test.ts). */
@@ -39,6 +43,12 @@ const OG_LOCALE: Record<SayfaDili, string> = { tr: 'tr_TR', en: 'en_US' }
 export function yoluSadelestir(yol: string): string {
   const y = (yol || '/').split(/[?#]/)[0] || '/'
   return y.length > 1 ? y.replace(/\/+$/, '') || '/' : '/'
+}
+
+/** `dil` verilirse `?lang=<dil>`, verilmezse parametresiz (x-default) adres. */
+export function dilAdresi(yol: string, dil?: SayfaDili): string {
+  const y = yoluSadelestir(yol)
+  return `${SITE_KOKU}${y}${dil ? `?${DIL_PARAMETRESI}=${dil}` : ''}`
 }
 
 /** Yol → sayfa başlığı (etkin dilde). Ana sayfa genel başlık; alt sayfa "<ad> — PEMF Vet"; bilinmeyen yol "Sayfa bulunamadı — PEMF Vet". */
@@ -88,7 +98,14 @@ export function sayfaMetasiHesapla(
     aciklama: t('ortak.sayfa.aciklama'),
     ogLocale: OG_LOCALE[dil],
     ogLocaleDiger: OG_LOCALE[dil === 'tr' ? 'en' : 'tr'],
-    adres: bilinen ? `${SITE_KOKU}${y}` : `${SITE_KOKU}/`,
+    adres: bilinen ? dilAdresi(y, dil) : `${SITE_KOKU}/`,
+    alternatifler: bilinen
+      ? [
+          { hreflang: 'tr', href: dilAdresi(y, 'tr') },
+          { hreflang: 'en', href: dilAdresi(y, 'en') },
+          { hreflang: 'x-default', href: dilAdresi(y) },
+        ]
+      : [],
   }
 }
 
@@ -115,7 +132,7 @@ function etiket(belge: MetaBelgesi, ad: 'meta' | 'link', anahtar: [string, strin
   o.setAttribute(deger[0], deger[1])
 }
 
-/** Hesaplanan metayı belgeye yazar (eksik etiket oluşturulur). */
+/** Hesaplanan metayı belgeye yazar (eksik etiket oluşturulur; eski dil bağlantıları silinip yeniden yazılır). */
 export function metaUygula(belge: MetaBelgesi, m: SayfaMetasi): void {
   belge.title = m.baslik
   etiket(belge, 'meta', ['name', 'description'], ['content', m.aciklama])
@@ -127,4 +144,13 @@ export function metaUygula(belge: MetaBelgesi, m: SayfaMetasi): void {
   etiket(belge, 'meta', ['name', 'twitter:title'], ['content', m.baslik])
   etiket(belge, 'meta', ['name', 'twitter:description'], ['content', m.aciklama])
   etiket(belge, 'link', ['rel', 'canonical'], ['href', m.adres])
+  const eski = belge.head.querySelectorAll('link[rel="alternate"][hreflang]')
+  for (let i = eski.length - 1; i >= 0; i--) eski[i].remove()
+  for (const a of m.alternatifler) {
+    const l = belge.createElement('link')
+    l.setAttribute('rel', 'alternate')
+    l.setAttribute('hreflang', a.hreflang)
+    l.setAttribute('href', a.href)
+    belge.head.appendChild(l)
+  }
 }

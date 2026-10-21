@@ -4,11 +4,22 @@
  * İlk ziyaret tarayıcı dilidir (`tr*` → tr, diğer → en); üst menüdeki dil düğmesiyle değişir ve bu tarayıcıda hatırlanır
  * (`localStorage` `pemf.dil` — uygulamayla aynı anahtar adı). Bayrak (`I18N_EN_ACIK`) KAPALIYKEN etkin dil HER ZAMAN tr ve düğme gizli.
  * `<html lang>` etkin dile eşitlenir (ekran okuyucu + arama motoru doğru dili görsün).
+ * YH B3 (S-YH): adresteki `?lang=tr|en` (paylaşılabilir bağlantı) kayıtlı seçimden ÖNCE gelir ve seçim olarak hatırlanır.
  */
 import { I18N_EN_ACIK } from './bayrak'
+import { DIL_PARAMETRESI } from '../lib/sayfaMeta'
 
 export type Dil = 'tr' | 'en'
 export const DIL_DEPO_ANAHTARI = 'pemf.dil'
+
+/** Adresteki `?lang=` değeri (`tr` / `en`); yok ya da geçersizse null. */
+export function urlDili(arama: string | null | undefined): Dil | null {
+  try {
+    return gecerliDil(new URLSearchParams(arama ?? '').get(DIL_PARAMETRESI))
+  } catch {
+    return null
+  }
+}
 
 let _bayrakTesti: boolean | null = null
 

@@ -1,51 +1,88 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<!-- YH B3 (S-YH): her sayfa iki dilde — ?lang=tr / ?lang=en; parametresiz adres (x-default) dili tarayıcıdan seçer (Y161). -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://pemf-vet-web.vercel.app/</loc>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://pemf-vet-web.vercel.app/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://pemf-vet-web.vercel.app/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://pemf-vet-web.vercel.app/" />
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://pemf-vet-web.vercel.app/features</loc>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://pemf-vet-web.vercel.app/features?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://pemf-vet-web.vercel.app/features?lang=en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://pemf-vet-web.vercel.app/features" />
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://pemf-vet-web.vercel.app/pricing</loc>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://pemf-vet-web.vercel.app/pricing?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://pemf-vet-web.vercel.app/pricing?lang=en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://pemf-vet-web.vercel.app/pricing" />
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://pemf-vet-web.vercel.app/download</loc>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://pemf-vet-web.vercel.app/download?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://pemf-vet-web.vercel.app/download?lang=en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://pemf-vet-web.vercel.app/download" />
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://pemf-vet-web.vercel.app/support</loc>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://pemf-vet-web.vercel.app/support?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://pemf-vet-web.vercel.app/support?lang=en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://pemf-vet-web.vercel.app/support" />
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://pemf-vet-web.vercel.app/mesafeli-satis</loc>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://pemf-vet-web.vercel.app/mesafeli-satis?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://pemf-vet-web.vercel.app/mesafeli-satis?lang=en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://pemf-vet-web.vercel.app/mesafeli-satis" />
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://pemf-vet-web.vercel.app/on-bilgilendirme</loc>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://pemf-vet-web.vercel.app/on-bilgilendirme?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://pemf-vet-web.vercel.app/on-bilgilendirme?lang=en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://pemf-vet-web.vercel.app/on-bilgilendirme" />
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://pemf-vet-web.vercel.app/iptal-iade</loc>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://pemf-vet-web.vercel.app/iptal-iade?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://pemf-vet-web.vercel.app/iptal-iade?lang=en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://pemf-vet-web.vercel.app/iptal-iade" />
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://pemf-vet-web.vercel.app/kvkk</loc>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://pemf-vet-web.vercel.app/kvkk?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://pemf-vet-web.vercel.app/kvkk?lang=en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://pemf-vet-web.vercel.app/kvkk" />
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://pemf-vet-web.vercel.app/gizlilik</loc>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://pemf-vet-web.vercel.app/gizlilik?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://pemf-vet-web.vercel.app/gizlilik?lang=en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://pemf-vet-web.vercel.app/gizlilik" />
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://pemf-vet-web.vercel.app/cerez-politikasi</loc>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://pemf-vet-web.vercel.app/cerez-politikasi?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://pemf-vet-web.vercel.app/cerez-politikasi?lang=en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://pemf-vet-web.vercel.app/cerez-politikasi" />
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://pemf-vet-web.vercel.app/kullanim-sartlari</loc>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://pemf-vet-web.vercel.app/kullanim-sartlari?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://pemf-vet-web.vercel.app/kullanim-sartlari?lang=en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://pemf-vet-web.vercel.app/kullanim-sartlari" />
     <priority>0.7</priority>
   </url>
 </urlset>

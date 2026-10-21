@@ -1,12 +1,21 @@
 /**
- * YH B2 — sayfa başlığı + açıklama + Open Graph / Twitter etkin dilde; her sayfanın kendi başlığı iki dilde. Saf hesap gerçek kataloglarla;
- * DOM uygulayıcı sahte belgeyle.
+ * YH B2 / B3 — sayfa başlığı + açıklama + Open Graph / Twitter etkin dilde; her sayfanın kendi başlığı iki dilde; dil bağlantıları
+ * (`?lang=`, hreflang tr / en / x-default, canonical) ve sitemap alternatifleri. Saf hesap gerçek kataloglarla; DOM uygulayıcı sahte belgeyle.
  */
 import { describe, expect, it } from 'vitest'
 import { EN, TR } from '../../__tests__/_kaynakMetni'
 import APP_SRC from '../../App.tsx?raw'
 import INDEX_HTML from '../../../index.html?raw'
-import { BILINEN_YOLLAR, type MetaBelgesi, type MetaOgesi, SITE_KOKU, metaUygula, sayfaMetasiHesapla } from '../sayfaMeta'
+import SITEMAP from '../../../public/sitemap.xml?raw'
+import {
+  BILINEN_YOLLAR,
+  type MetaBelgesi,
+  type MetaOgesi,
+  SITE_KOKU,
+  dilAdresi,
+  metaUygula,
+  sayfaMetasiHesapla,
+} from '../sayfaMeta'
 
 const YASAL: Record<string, string> = {
   'mesafeli-satis': 'icerik.yasal.mesafeliSatis',
@@ -64,10 +73,9 @@ describe('B2 · sayfa başlığı iki dilde', () => {
     expect(hesap('/kvkk', 'en').baslik).toBe(`${EN['hesap.kayit.kvkk']} — PEMF Vet`)
   })
 
-  it('bilinmeyen yol: "Sayfa bulunamadı — PEMF Vet" / "Page not found — PEMF Vet"; adres ana sayfa', () => {
+  it('bilinmeyen yol: "Sayfa bulunamadı — PEMF Vet" / "Page not found — PEMF Vet"', () => {
     expect(hesap('/yok-boyle', 'tr').baslik).toBe(`${TR['bulunamadi.baslik']} — PEMF Vet`)
     expect(hesap('/yok-boyle', 'en').baslik).toBe(`${EN['bulunamadi.baslik']} — PEMF Vet`)
-    expect(hesap('/yok-boyle', 'en').adres).toBe(`${SITE_KOKU}/`)
   })
 
   it('açıklama ve Open Graph yereli etkin dilde', () => {
@@ -78,7 +86,25 @@ describe('B2 · sayfa başlığı iki dilde', () => {
   })
 })
 
-describe('B2 · yapı', () => {
+describe('B3 · dil bağlantıları', () => {
+  it('bilinen yol: hreflang tr / en / x-default + canonical = o dildeki adres', () => {
+    const m = hesap('/pricing/', 'en')
+    expect(m.alternatifler).toEqual([
+      { hreflang: 'tr', href: `${SITE_KOKU}/pricing?lang=tr` },
+      { hreflang: 'en', href: `${SITE_KOKU}/pricing?lang=en` },
+      { hreflang: 'x-default', href: `${SITE_KOKU}/pricing` },
+    ])
+    expect(m.adres).toBe(`${SITE_KOKU}/pricing?lang=en`)
+    expect(hesap('/', 'tr').adres).toBe(`${SITE_KOKU}/?lang=tr`)
+    expect(hesap('/kvkk', 'tr').alternatifler).toHaveLength(3)
+  })
+
+  it('bilinmeyen yol (404): dil bağlantısı YOK, canonical ana sayfa', () => {
+    const m = hesap('/yok-boyle', 'en')
+    expect(m.alternatifler).toEqual([])
+    expect(m.adres).toBe(`${SITE_KOKU}/`)
+  })
+
   it('App bileşeni meta yazıcıyı yönlendirici içinde ÇİZER (yol değişince çalışsın)', () => {
     expect(APP_SRC).toMatch(/import SayfaMetasi from '\.\/components\/SayfaMetasi'/)
     expect(APP_SRC).toMatch(/<SayfaMetasi \/>/)
@@ -87,6 +113,22 @@ describe('B2 · yapı', () => {
   it('BILINEN_YOLLAR = App.tsx rotaları (yasal belgeler ve * hariç) — yeni rota eklenince burası da', () => {
     const rotalar = [...APP_SRC.matchAll(/<Route path="([^"]+)"/g)].map((m) => m[1]).filter((p) => p !== '*')
     expect(new Set(rotalar)).toEqual(new Set(BILINEN_YOLLAR))
+  })
+
+  it('sitemap: her URL tr / en / x-default alternatifli; URL kümesi ana + yasal sayfalar', () => {
+    const urller = [...SITEMAP.matchAll(/<url>([\s\S]*?)<\/url>/g)].map((m) => m[1])
+    expect(urller.length).toBe(5 + Object.keys(YASAL).length)
+    const loclar = urller.map((u) => /<loc>([^<]+)<\/loc>/.exec(u)![1].replace(SITE_KOKU, ''))
+    expect(new Set(loclar)).toEqual(
+      new Set(['/', '/features', '/pricing', '/download', '/support', ...Object.keys(YASAL).map((s) => `/${s}`)]),
+    )
+    for (const u of urller) {
+      const yol = /<loc>([^<]+)<\/loc>/.exec(u)![1].replace(SITE_KOKU, '')
+      for (const [h, d] of [['tr', 'tr'], ['en', 'en'], ['x-default', undefined]] as const) {
+        expect(u).toContain(`<xhtml:link rel="alternate" hreflang="${h}" href="${dilAdresi(yol, d)}" />`)
+      }
+    }
+    expect(SITEMAP).toContain('xmlns:xhtml="http://www.w3.org/1999/xhtml"')
   })
 
   it('index.html (JS öncesi / betiksiz tarayıcı) Türkçe varsayılan kalır', () => {
@@ -137,8 +179,8 @@ function sahteBelge() {
 }
 const deger = (b: ReturnType<typeof sahteBelge>, s: string, a = 'content') => b.head.querySelector(s)?.nitelik.get(a)
 
-describe('B2 · metaUygula (sahte belge)', () => {
-  it('başlık + açıklama + og + twitter + canonical yazılır; ikinci yazım etiket ÇOĞALTMAZ', () => {
+describe('B2 / B3 · metaUygula (sahte belge)', () => {
+  it('başlık + açıklama + og + twitter + canonical + hreflang yazılır; dil değişince ESKİ hreflang kalmaz', () => {
     const b = sahteBelge()
     metaUygula(b, hesap('/features', 'tr'))
     metaUygula(b, hesap('/features', 'en'))
@@ -148,10 +190,14 @@ describe('B2 · metaUygula (sahte belge)', () => {
     expect(deger(b, 'meta[property="og:description"]')).toBe(EN['ortak.sayfa.aciklama'])
     expect(deger(b, 'meta[property="og:locale"]')).toBe('en_US')
     expect(deger(b, 'meta[property="og:locale:alternate"]')).toBe('tr_TR')
-    expect(deger(b, 'meta[property="og:url"]')).toBe(`${SITE_KOKU}/features`)
+    expect(deger(b, 'meta[property="og:url"]')).toBe(`${SITE_KOKU}/features?lang=en`)
     expect(deger(b, 'meta[name="twitter:title"]')).toBe('Features — PEMF Vet')
     expect(deger(b, 'meta[name="twitter:description"]')).toBe(EN['ortak.sayfa.aciklama'])
-    expect(deger(b, 'link[rel="canonical"]', 'href')).toBe(`${SITE_KOKU}/features`)
-    expect(b.head.ogeler.filter((o) => o.ad === 'meta')).toHaveLength(8)
+    expect(deger(b, 'link[rel="canonical"]', 'href')).toBe(`${SITE_KOKU}/features?lang=en`)
+    const alt = b.head.querySelectorAll('link[rel="alternate"][hreflang]')
+    expect(alt.map((o) => o.nitelik.get('hreflang'))).toEqual(['tr', 'en', 'x-default'])
+    expect(b.head.ogeler.filter((o) => o.ad === 'meta')).toHaveLength(8) // her etiket TEK (ikinci yazım yenisini eklemez)
+    metaUygula(b, hesap('/yok', 'en'))
+    expect(b.head.querySelectorAll('link[rel="alternate"][hreflang]')).toHaveLength(0)
   })
 })
