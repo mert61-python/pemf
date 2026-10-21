@@ -60,9 +60,14 @@ def test_K6_sunucu_donmus_dal_once():
 
 
 def test_K6_launcher_katalogu_ikiliye_gomulu_ve_arayuz_katalogu_esit():
-    rs = (KOK / "launcher/core/src/dil.rs").read_text(encoding="utf-8")
+    from scripts.i18n import cikar
+
+    # I18NI-A2.7: yorumdaki eski `include_str!` satırı sayılmaz; her dilin SABİTİ kendi dosyasını gömer (EN_JSON ← en.json)
+    rs, _ = cikar._rust_soy((KOK / "launcher/core/src/dil.rs").read_text(encoding="utf-8"))
     for dil in ortak.DILLER:
-        assert f'include_str!("../../i18n/{dil}.json")' in rs, f"launcher {dil} kataloğu ikiliye gömülmüyor"
+        assert re.search(
+            rf'const\s+{dil.upper()}_JSON\s*:\s*&str\s*=\s*include_str!\("\.\./\.\./i18n/{dil}\.json"\)\s*;', rs
+        ), f"launcher {dil} kataloğu ikiliye gömülmüyor (const {dil.upper()}_JSON ← i18n/{dil}.json)"
     assert launcher_uret.main(["--denetle"]) == 0
     html = (KOK / "launcher/app/ui/index.html").read_text(encoding="utf-8")
     i_js, i_mod = html.find('<script src="i18n_katalog.js"></script>'), html.find('<script type="module">')
