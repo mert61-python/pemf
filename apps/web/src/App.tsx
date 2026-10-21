@@ -17,6 +17,7 @@ import { AuthModalProvider } from './context/AuthModal'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import ResetPassword from './pages/ResetPassword'
 import AuthRoute from './pages/AuthRoute'
+import SayfaMetasi from './components/SayfaMetasi'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -33,6 +34,8 @@ export default function App() {
         <AuthModalProvider>
           <div className="flex min-h-svh flex-col">
             <ScrollToTop />
+            {/* YH B2 / B3: sayfa başlığı + açıklama + Open Graph / Twitter + canonical / hreflang etkin dilde */}
+            <SayfaMetasi />
             <Header />
             <main className="flex-1">
               <Routes>

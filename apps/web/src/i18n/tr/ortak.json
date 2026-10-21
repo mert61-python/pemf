@@ -24,6 +24,11 @@
   },
   "sayfa": {
     "aciklama": "PEMF Vet: veteriner klinikleri için elektromanyetik alan terapisini ve yapay zekâ destekli teşhisi tek ekrandan yöneten masaüstü yazılımı. İndirin; kurulum ve güncellemeler otomatik.",
-    "baslik": "PEMF Vet — Veteriner PEMF Terapi Yazılımı"
+    "alt": "{{sayfa}} — PEMF Vet",
+    "baslik": "PEMF Vet — Veteriner PEMF Terapi Yazılımı",
+    "giris": "Giriş",
+    "kayit": "Kayıt",
+    "odeme": "Ödeme",
+    "sifremiUnuttum": "Şifremi unuttum"
   }
 }

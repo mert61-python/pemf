@@ -24,6 +24,11 @@
   },
   "sayfa": {
     "aciklama": "PEMF Vet: desktop software that manages electromagnetic field therapy and AI-assisted diagnosis for veterinary clinics from a single screen. Download it; installation and updates are automatic.",
-    "baslik": "PEMF Vet — Veterinary PEMF Therapy Software"
+    "alt": "{{sayfa}} — PEMF Vet",
+    "baslik": "PEMF Vet — Veterinary PEMF Therapy Software",
+    "giris": "Sign in",
+    "kayit": "Sign up",
+    "odeme": "Payment",
+    "sifremiUnuttum": "Forgot password"
   }
 }
