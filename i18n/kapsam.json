@@ -411,14 +411,14 @@
    "aciklama": "fiyatlar, ödeme, site işlevleri (api — makine-okur kod → istemcide çeviri)",
    "durum": "tamam",
    "metin": 158,
-   "dosyaSayisi": 12
+   "dosyaSayisi": 14
   },
   {
    "ad": "site-12e-yasal",
    "sira": 12,
    "kritik": false,
    "aciklama": "YASAL metinler (EN SON; 'Türkçe metin bağlayıcıdır' notu, hukuki onay sahipte)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 249,
    "dosyaSayisi": 1
   },
@@ -8829,6 +8829,28 @@
    "birlesikIstisna": [],
    "not": ""
   },
+  "apps/web/src/lib/metin.tsx": {
+   "yuzey": "site",
+   "grup": "site-12d-ticari",
+   "sira": 12,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
+  "apps/web/src/lib/para.ts": {
+   "yuzey": "site",
+   "grup": "site-12d-ticari",
+   "sira": 12,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
   "apps/web/src/lib/planFiyat.ts": {
    "yuzey": "site",
    "grup": "site-12d-ticari",
@@ -8927,7 +8949,7 @@
    "yuzey": "site",
    "grup": "site-12e-yasal",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 249,
    "kritik": false,
    "muaf": [],

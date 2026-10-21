@@ -1,6 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import { useLocation, Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { COMPANY, LEGAL_DOCS } from '../config'
 import type { LegalSlug } from '../config'
 
@@ -12,6 +13,30 @@ import type { LegalSlug } from '../config'
    okunur (placeholder'lar doldurulunca tüm belgeler güncellenir).
    Yayına almadan önce bir hukuk danışmanınca gözden geçirilmelidir.
    ============================================================ */
+
+/* ---- Metin değerleri + zengin metin bileşenleri (I18N: her paragraf TEK anahtar + <Trans>, KURALLAR §4.1b) ---- */
+const BILESENLER = { kalin: <strong />, kod: <code /> }
+function degerler() {
+  return {
+    marka: COMPANY.brandName,
+    eposta: COMPANY.email,
+    kvkkEposta: COMPANY.kvkkEmail,
+    gun: COMPANY.withdrawalDays,
+    adres: COMPANY.address,
+    sehir: COMPANY.city,
+    ulke: COMPANY.country,
+    unvan: COMPANY.legalName,
+    tur: COMPANY.entityType,
+    tel: COMPANY.phone,
+    daire: COMPANY.taxOffice,
+    vergiNo: COMPANY.taxNo,
+    mersis: COMPANY.mersis,
+    sicil: COMPANY.tradeRegistry,
+    telefon: COMPANY.phone ? ` — ${COMPANY.phone}` : '',
+  }
+}
+type YP = { values: ReturnType<typeof degerler>; components: typeof BILESENLER }
+const ypKur = (): YP => ({ values: degerler(), components: BILESENLER })
 
 /* ---- Küçük, yeniden kullanılabilir metin bileşenleri ---- */
 function H2({ children }: { children: ReactNode }) {
@@ -30,21 +55,17 @@ function UL({ children }: { children: ReactNode }) {
 }
 
 /* Satıcı kimliği — 6563 sy. Kanun m.5 + Yönetmelik zorunlu bilgileri. */
-function SellerIdentity() {
+function SellerIdentity({ yp }: { yp: YP }) {
   return (
     <UL>
-      <li>Unvan: {COMPANY.legalName}</li>
-      <li>İşletme türü: {COMPANY.entityType}</li>
-      <li>
-        Adres: {COMPANY.address}, {COMPANY.city}, {COMPANY.country}
-      </li>
-      {COMPANY.phone ? <li>Telefon: {COMPANY.phone}</li> : null}
-      <li>E-posta: {COMPANY.email}</li>
-      <li>
-        Vergi Dairesi / Vergi No (veya TCKN): {COMPANY.taxOffice} / {COMPANY.taxNo}
-      </li>
-      <li>MERSIS No: {COMPANY.mersis}</li>
-      <li>Ticaret Sicil No: {COMPANY.tradeRegistry}</li>
+      <li><Trans i18nKey="yasal.satici.unvan" {...yp} /></li>
+      <li><Trans i18nKey="yasal.satici.tur" {...yp} /></li>
+      <li><Trans i18nKey="yasal.satici.adres" {...yp} /></li>
+      {COMPANY.phone ? <li><Trans i18nKey="yasal.satici.tel" {...yp} /></li> : null}
+      <li><Trans i18nKey="yasal.satici.eposta" {...yp} /></li>
+      <li><Trans i18nKey="yasal.satici.vergi" {...yp} /></li>
+      <li><Trans i18nKey="yasal.satici.mersis" {...yp} /></li>
+      <li><Trans i18nKey="yasal.satici.sicil" {...yp} /></li>
     </UL>
   )
 }
@@ -52,290 +73,225 @@ function SellerIdentity() {
 /* ------------------------------------------------------------------
    BELGE İÇERİKLERİ — her slug için bir taslak.
    ------------------------------------------------------------------ */
-const DOCS: Record<LegalSlug, ReactNode> = {
+const DOCS: Record<LegalSlug, (yp: YP) => ReactNode> = {
   /* =============== 1) MESAFELİ SATIŞ SÖZLEŞMESİ =============== */
-  'mesafeli-satis': (
+  'mesafeli-satis': (yp) => (
     <>
       <P>
-        İşbu Mesafeli Satış Sözleşmesi ("Sözleşme"), 6502 sayılı Tüketicinin Korunması Hakkında
-        Kanun ve Mesafeli Sözleşmeler Yönetmeliği hükümlerine uygun olarak, aşağıda kimlik ve iletişim
-        bilgileri yer alan Satıcı ile Alıcı arasında, elektronik ortamda kurulmuştur. Alıcı, siparişini
-        onayladığında işbu Sözleşme'nin tüm koşullarını okuduğunu, anladığını ve kabul ettiğini beyan eder.
+        <Trans i18nKey="yasal.mesafeli.01" {...yp} />
       </P>
 
-      <H2>MADDE 1 — TARAFLAR</H2>
-      <H3>1.1. Satıcı</H3>
-      <SellerIdentity />
-      <H3>1.2. Alıcı</H3>
+      <H2><Trans i18nKey="yasal.mesafeli.02" {...yp} /></H2>
+      <H3><Trans i18nKey="yasal.mesafeli.03" {...yp} /></H3>
+      <SellerIdentity yp={yp} />
+      <H3><Trans i18nKey="yasal.mesafeli.04" {...yp} /></H3>
       <P>
-        Sipariş sırasında üyelik/fatura formunda beyan ettiği ad-soyad, adres, e-posta ve iletişim
-        bilgileri esas alınan tüketici ("ALICI"). Bu bilgiler sipariş özetinde ve fatura bilgilerinde yer alır.
+        <Trans i18nKey="yasal.mesafeli.05" {...yp} />
       </P>
 
-      <H2>MADDE 2 — SÖZLEŞMENİN KONUSU</H2>
+      <H2><Trans i18nKey="yasal.mesafeli.06" {...yp} /></H2>
       <P>
-        İşbu Sözleşme'nin konusu; ALICI'nın Satıcı'ya ait {COMPANY.brandName} internet sitesi üzerinden
-        elektronik ortamda siparişini verdiği, aşağıda nitelikleri ve satış bedeli belirtilen dijital
-        yazılım hizmeti/aboneliğinin satışı ile ifasına ilişkin olarak tarafların hak ve yükümlülüklerinin
-        6502 sayılı Kanun ve Mesafeli Sözleşmeler Yönetmeliği hükümleri uyarınca belirlenmesidir.
+        <Trans i18nKey="yasal.mesafeli.07" {...yp} />
       </P>
 
-      <H2>MADDE 3 — SÖZLEŞME KONUSU ÜRÜN/HİZMET</H2>
+      <H2><Trans i18nKey="yasal.mesafeli.08" {...yp} /></H2>
       <P>
-        Sözleşme konusu, {COMPANY.brandName} veteriner klinik destek yazılımının internet üzerinden
-        sunulan, süreli (aylık/yıllık) aboneliğe dayalı dijital hizmetidir. Hizmet; seçilen abonelik
-        seviyesine göre yazılım kullanım lisansı, yapay zekâ analiz/teşhis modülleri, otomatik güncelleme
-        ve destek hizmetlerini kapsar. Hizmetin temel nitelikleri, seviye kapsamı ve güncel bedeli,
-        sipariş anında internet sitesinin fiyatlandırma ve sipariş özeti sayfalarında gösterilir.
+        <Trans i18nKey="yasal.mesafeli.09" {...yp} />
       </P>
       <P>
-        Hizmet fiziksel bir mal teslimi içermez; gayrimaddi (dijital) hizmet olarak elektronik ortamda ifa edilir.
+        <Trans i18nKey="yasal.mesafeli.10" {...yp} />
       </P>
 
-      <H2>MADDE 4 — SÖZLEŞME BEDELİ VE ÖDEME</H2>
+      <H2><Trans i18nKey="yasal.mesafeli.11" {...yp} /></H2>
       <UL>
         <li>
-          Hizmetin, tüm vergiler (KDV) dâhil toplam bedeli, sipariş özetinde ALICI'ya açıkça gösterilen tutardır.
+          <Trans i18nKey="yasal.mesafeli.12" {...yp} />
         </li>
         <li>
-          Ödeme, ödeme kuruluşu iyzico altyapısı üzerinden kredi/banka kartı ile güvenli olarak tahsil edilir.
-          Kart bilgileri Satıcı tarafından saklanmaz; ödeme sürecinde iyzico'nun güvenli ortamına aktarılır.
+          <Trans i18nKey="yasal.mesafeli.13" {...yp} />
         </li>
         <li>
-          Abonelik, seçilen döneme (aylık/yıllık) göre peşin tahsil edilir ve ALICI iptal etmediği sürece
-          aynı süre için otomatik olarak yenilenir (bkz. Madde 6 ve Ön Bilgilendirme Formu).
+          <Trans i18nKey="yasal.mesafeli.14" {...yp} />
         </li>
         <li>
-          Ödemenin herhangi bir nedenle yapılamaması veya iptal edilmesi hâlinde Satıcı, hizmeti askıya
-          alma veya Sözleşme'yi feshetme hakkını saklı tutar.
+          <Trans i18nKey="yasal.mesafeli.15" {...yp} />
         </li>
       </UL>
 
-      <H2>MADDE 5 — İFA VE ERİŞİM</H2>
+      <H2><Trans i18nKey="yasal.mesafeli.16" {...yp} /></H2>
       <P>
-        Ödemenin onaylanmasının ardından hizmet, ALICI'nın hesabına elektronik ortamda ve kural olarak
-        anında tanımlanır. İfa süresi, yasal azami otuz (30) günü aşamaz. ALICI, hizmete erişim için
-        gerekli internet bağlantısı ve uyumlu cihaz/işletim sistemi koşullarını sağlamakla yükümlüdür.
+        <Trans i18nKey="yasal.mesafeli.17" {...yp} />
       </P>
 
-      <H2>MADDE 6 — CAYMA HAKKI VE İSTİSNASI</H2>
+      <H2><Trans i18nKey="yasal.mesafeli.18" {...yp} /></H2>
       <P>
-        ALICI, kural olarak, hizmetin ifasına başlanmasından itibaren {COMPANY.withdrawalDays} (on dört) gün
-        içinde hiçbir gerekçe göstermeksizin ve cezai şart ödemeksizin Sözleşme'den cayma hakkına sahiptir.
+        <Trans i18nKey="yasal.mesafeli.19" {...yp} />
       </P>
       <P>
-        <strong>İstisna:</strong> Mesafeli Sözleşmeler Yönetmeliği'nin 15. maddesi uyarınca; elektronik
-        ortamda anında ifa edilen hizmetler ile tüketiciye anında teslim edilen gayrimaddi mallara ilişkin
-        sözleşmelerde ve tüketicinin onayı ile ifasına başlanan hizmetlerde cayma hakkı kullanılamaz. Buna
-        göre; ALICI'nın açık onayı ile cayma süresi dolmadan yazılım hizmeti/aboneliğinin ifasına
-        başlanması hâlinde ALICI cayma hakkını kaybeder. ALICI, siparişi onaylayarak, hizmetin cayma
-        süresi içinde ifasına başlanmasını açıkça talep ve kabul ettiğini beyan eder.
+        <Trans i18nKey="yasal.mesafeli.20" {...yp} />
       </P>
       <P>
-        Cayma hakkının geçerli olduğu hâllerde ALICI, {COMPANY.email} adresine yazılı bildirimde bulunarak
-        hakkını kullanabilir; bu durumda tahsil edilen bedel, cayma bildiriminin ulaşmasından itibaren
-        on dört (14) gün içinde aynı ödeme aracına iade edilir.
+        <Trans i18nKey="yasal.mesafeli.21" {...yp} />
       </P>
 
-      <H2>MADDE 7 — GENEL HÜKÜMLER</H2>
+      <H2><Trans i18nKey="yasal.mesafeli.22" {...yp} /></H2>
       <UL>
         <li>
-          ALICI, hizmeti hukuka ve Kullanım Şartları'na uygun biçimde kullanmayı kabul eder. Yazılım,
-          veteriner hekim gözetiminde kullanılan bir klinik destek aracıdır ve hekimin tıbbi karar,
-          teşhis ve tedavisinin yerine geçmez.
+          <Trans i18nKey="yasal.mesafeli.23" {...yp} />
         </li>
         <li>
-          Satıcı; mücbir sebep hâllerinde, hizmet sağlayıcılarından kaynaklanan aksaklıklarda veya ALICI'nın
-          koşulları sağlamamasından doğan durumlarda ifadan sorumlu tutulamaz.
+          <Trans i18nKey="yasal.mesafeli.24" {...yp} />
         </li>
         <li>
-          ALICI'nın kişisel verileri, KVKK Aydınlatma Metni ve Gizlilik Politikası çerçevesinde işlenir.
+          <Trans i18nKey="yasal.mesafeli.25" {...yp} />
         </li>
       </UL>
 
-      <H2>MADDE 8 — UYUŞMAZLIKLARIN ÇÖZÜMÜ</H2>
+      <H2><Trans i18nKey="yasal.mesafeli.26" {...yp} /></H2>
       <P>
-        İşbu Sözleşme'den doğabilecek uyuşmazlıklarda, Ticaret Bakanlığı'nca ilan edilen parasal sınırlar
-        dâhilinde ALICI'nın yerleşim yerindeki veya işlemin yapıldığı yerdeki Tüketici Hakem Heyetleri;
-        bu sınırların üzerindeki uyuşmazlıklarda ise Tüketici Mahkemeleri yetkilidir.
+        <Trans i18nKey="yasal.mesafeli.27" {...yp} />
       </P>
 
-      <H2>MADDE 9 — YÜRÜRLÜK</H2>
+      <H2><Trans i18nKey="yasal.mesafeli.28" {...yp} /></H2>
       <P>
-        İşbu Sözleşme, ALICI tarafından elektronik ortamda okunup kabul edilerek siparişin onaylanması ve
-        ödemenin tamamlanması ile yürürlüğe girer. Sözleşme'nin bir örneği ALICI'nın erişimine sunulur ve/veya
-        e-posta ile iletilir.
+        <Trans i18nKey="yasal.mesafeli.29" {...yp} />
       </P>
     </>
   ),
 
   /* =============== 2) ÖN BİLGİLENDİRME FORMU =============== */
-  'on-bilgilendirme': (
+  'on-bilgilendirme': (yp) => (
     <>
       <P>
-        İşbu Ön Bilgilendirme Formu, 6502 sayılı Tüketicinin Korunması Hakkında Kanun ve Mesafeli
-        Sözleşmeler Yönetmeliği uyarınca, siparişinizi onaylamadan önce sizi bilgilendirmek amacıyla
-        hazırlanmıştır. Siparişin onaylanması, işbu formda yer alan hususların okunup kabul edildiği
-        anlamına gelir.
+        <Trans i18nKey="yasal.onbilgi.01" {...yp} />
       </P>
 
-      <H2>1. Satıcı / Hizmet Sağlayıcı Kimliği</H2>
-      <SellerIdentity />
+      <H2><Trans i18nKey="yasal.onbilgi.02" {...yp} /></H2>
+      <SellerIdentity yp={yp} />
 
-      <H2>2. Hizmetin Temel Nitelikleri</H2>
+      <H2><Trans i18nKey="yasal.onbilgi.03" {...yp} /></H2>
       <P>
-        {COMPANY.brandName}, veteriner hekim gözetiminde kullanılmak üzere tasarlanmış bir klinik destek
-        yazılımıdır. Abonelik; yazılım kullanım lisansını, yapay zekâ analiz/teşhis modüllerini, otomatik
-        güncellemeleri ve seçilen seviyeye göre destek hizmetini kapsar. Hizmet dijital (gayrimaddi) olarak
-        internet üzerinden ifa edilir; fiziksel teslimat içermez. Hizmetin seviye kapsamı ve güncel
-        özellikleri sipariş anında fiyatlandırma sayfasında gösterilir.
+        <Trans i18nKey="yasal.onbilgi.04" {...yp} />
       </P>
 
-      <H2>3. Toplam Fiyat ve Ödeme</H2>
+      <H2><Trans i18nKey="yasal.onbilgi.05" {...yp} /></H2>
       <UL>
         <li>
-          Hizmetin, tüm vergiler (KDV) dâhil toplam satış bedeli, sipariş özetinde açıkça belirtilir. Fiyata
-          dâhil olan/olmayan tüm kalemler sipariş ekranında gösterilir.
+          <Trans i18nKey="yasal.onbilgi.06" {...yp} />
         </li>
-        <li>Ödeme, iyzico güvenli ödeme altyapısı üzerinden kredi/banka kartı ile yapılır.</li>
-        <li>Abonelik bedeli, seçilen döneme (aylık/yıllık) göre peşin tahsil edilir.</li>
+        <li><Trans i18nKey="yasal.onbilgi.07" {...yp} /></li>
+        <li><Trans i18nKey="yasal.onbilgi.08" {...yp} /></li>
       </UL>
 
-      <H2>4. İfa (Erişim) Şekli ve Süresi</H2>
+      <H2><Trans i18nKey="yasal.onbilgi.09" {...yp} /></H2>
       <P>
-        Hizmet, ödemenin onaylanmasının ardından elektronik ortamda ve kural olarak anında ALICI hesabına
-        tanımlanır. Yasal azami ifa süresi otuz (30) gündür.
+        <Trans i18nKey="yasal.onbilgi.10" {...yp} />
       </P>
 
-      <H2>5. Cayma Hakkı ve İstisnaları</H2>
+      <H2><Trans i18nKey="yasal.onbilgi.11" {...yp} /></H2>
       <P>
-        Tüketici, kural olarak {COMPANY.withdrawalDays} (on dört) gün içinde gerekçe göstermeksizin cayma
-        hakkına sahiptir. Ancak Mesafeli Sözleşmeler Yönetmeliği'nin 15. maddesi gereğince; elektronik
-        ortamda anında ifa edilen hizmetler ve tüketiciye anında teslim edilen gayrimaddi mallar ile
-        tüketicinin onayıyla ifasına başlanan hizmetlerde cayma hakkı kullanılamaz.
+        <Trans i18nKey="yasal.onbilgi.12" {...yp} />
       </P>
       <P>
-        Bu kapsamda; abonelik hizmetinin, tüketicinin açık onayı ile cayma süresi içinde ifasına başlanması
-        hâlinde cayma hakkı sona erer. Siparişi onaylayan tüketici, hizmetin derhâl ifasına başlanmasını açıkça
-        talep ettiğini ve bu hâlde cayma hakkını yitireceğini bildiğini kabul eder.
+        <Trans i18nKey="yasal.onbilgi.13" {...yp} />
       </P>
 
-      <H2>6. Otomatik Yenilenen Abonelik Beyanı</H2>
+      <H2><Trans i18nKey="yasal.onbilgi.14" {...yp} /></H2>
       <P>
-        Abonelik, seçilen dönemin (aylık/yıllık) sonunda, tüketici iptal etmediği sürece aynı süre için
-        otomatik olarak yenilenir ve kayıtlı ödeme yöntemi üzerinden ilgili dönem bedeli tahsil edilir.
-        Tüketici, aboneliğini dilediği zaman hesabı üzerinden veya {COMPANY.email} adresine bildirimle iptal
-        edebilir; iptal, içinde bulunulan dönemin sonunda geçerli olur ve sonraki yenileme durdurulur.
+        <Trans i18nKey="yasal.onbilgi.15" {...yp} />
       </P>
 
-      <H2>7. Şikâyet ve İtiraz Başvuru Mercii</H2>
+      <H2><Trans i18nKey="yasal.onbilgi.16" {...yp} /></H2>
       <P>
-        Tüketici, Ticaret Bakanlığı'nca belirlenen parasal sınırlar çerçevesinde, yerleşim yerindeki veya
-        işlemin yapıldığı yerdeki Tüketici Hakem Heyeti'ne ya da Tüketici Mahkemesi'ne başvurabilir. Talep ve
-        şikâyetler ayrıca {COMPANY.email} adresine iletilebilir.
+        <Trans i18nKey="yasal.onbilgi.17" {...yp} />
       </P>
     </>
   ),
 
   /* =============== 3) İPTAL, İADE VE CAYMA HAKKI =============== */
-  'iptal-iade': (
+  'iptal-iade': (yp) => (
     <>
       <P>
-        Bu belge; {COMPANY.brandName} aboneliğine ilişkin cayma hakkı, iptal ve iade koşullarını 6502 sayılı
-        Kanun ve Mesafeli Sözleşmeler Yönetmeliği çerçevesinde açıklar.
+        <Trans i18nKey="yasal.iptal.01" {...yp} />
       </P>
 
-      <H2>1. Cayma Hakkı ({COMPANY.withdrawalDays} Gün)</H2>
+      <H2><Trans i18nKey="yasal.iptal.02" {...yp} /></H2>
       <P>
-        Tüketici, kural olarak hizmetin ifasına başlandığı tarihten itibaren {COMPANY.withdrawalDays} (on dört)
-        gün içinde, gerekçe göstermeksizin ve cezai şart ödemeksizin sözleşmeden cayabilir. Cayma bildirimi
-        {' '}{COMPANY.email} adresine yazılı olarak yapılabilir.
+        <Trans i18nKey="yasal.iptal.03" {...yp} />
       </P>
 
-      <H2>2. Dijital Hizmet İstisnası</H2>
+      <H2><Trans i18nKey="yasal.iptal.04" {...yp} /></H2>
       <P>
-        {COMPANY.brandName} aboneliği, elektronik ortamda anında ifa edilen bir dijital (gayrimaddi) hizmettir.
-        Mesafeli Sözleşmeler Yönetmeliği m.15 uyarınca; tüketicinin açık onayı ile cayma süresi dolmadan
-        hizmetin ifasına başlanması hâlinde cayma hakkı kullanılamaz. Sipariş onayı sırasında tüketici,
-        hizmetin derhâl ifasına başlanmasını talep ettiğinde bu istisnayı kabul etmiş sayılır.
+        <Trans i18nKey="yasal.iptal.05" {...yp} />
       </P>
 
-      <H2>3. Aboneliğin İptali</H2>
+      <H2><Trans i18nKey="yasal.iptal.06" {...yp} /></H2>
       <UL>
-        <li>Abonelik, hesap ayarlarınızdan veya {COMPANY.email} adresine bildirimle her zaman iptal edilebilir.</li>
+        <li><Trans i18nKey="yasal.iptal.07" {...yp} /></li>
         <li>
-          İptal, içinde bulunulan (bedeli tahsil edilmiş) dönemin sonunda geçerli olur; bu dönem sonuna kadar
-          hizmete erişim devam eder ve sonraki otomatik yenileme durdurulur.
+          <Trans i18nKey="yasal.iptal.08" {...yp} />
         </li>
-        <li>İptal sonrası, kural olarak, içinde bulunulan dönem için ayrıca geri ödeme yapılmaz (bkz. Madde 4).</li>
+        <li><Trans i18nKey="yasal.iptal.09" {...yp} /></li>
       </UL>
 
-      <H2>4. İade Süreci</H2>
+      <H2><Trans i18nKey="yasal.iptal.10" {...yp} /></H2>
       <P>
-        Cayma hakkının geçerli biçimde kullanıldığı veya Satıcı'nın uygun bulduğu hâllerde iade, tahsilatın
-        yapıldığı ödeme aracına (kredi/banka kartına) yapılır. İade işlemleri iyzico ödeme altyapısı üzerinden
-        gerçekleştirilir. İade tutarı, cayma/iade talebinin kabulünden itibaren on dört (14) gün içinde
-        başlatılır; tutarın kart hesabına yansıma süresi, ilgili banka/ödeme kuruluşunun işleyişine bağlıdır.
+        <Trans i18nKey="yasal.iptal.11" {...yp} />
       </P>
 
-      <H2>5. İletişim</H2>
+      <H2><Trans i18nKey="yasal.iptal.12" {...yp} /></H2>
       <P>
-        İptal, iade ve cayma talepleriniz için: {COMPANY.email}{COMPANY.phone ? ` — ${COMPANY.phone}` : ""}.
+        <Trans i18nKey="yasal.iptal.13" {...yp} />
       </P>
     </>
   ),
 
   /* =============== 4) KVKK AYDINLATMA METNİ =============== */
-  kvkk: (
+  kvkk: (yp) => (
     <>
       <P>
-        İşbu Aydınlatma Metni, 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") m.10 kapsamında,
-        veri sorumlusu sıfatıyla kişisel verilerinizin işlenmesine ilişkin olarak sizi bilgilendirmek amacıyla
-        hazırlanmıştır.
+        <Trans i18nKey="yasal.kvkk.01" {...yp} />
       </P>
 
-      <H2>1. Veri Sorumlusu</H2>
-      <SellerIdentity />
+      <H2><Trans i18nKey="yasal.kvkk.02" {...yp} /></H2>
+      <SellerIdentity yp={yp} />
 
-      <H2>2. İşlenen Kişisel Veriler</H2>
+      <H2><Trans i18nKey="yasal.kvkk.03" {...yp} /></H2>
       <UL>
-        <li>Kimlik verileri: ad-soyad, T.C. kimlik numarası (fatura/ödeme için).</li>
-        <li>İletişim verileri: e-posta, telefon, adres.</li>
-        <li>Müşteri/işlem verileri: abonelik seviyesi, sipariş ve ödeme kayıtları, fatura bilgileri.</li>
-        <li>Hesap verileri: kullanıcı hesabı, oturum ve kimlik doğrulama bilgileri.</li>
-        <li>İşlem güvenliği verileri: IP adresi, log kayıtları, çerez verileri.</li>
+        <li><Trans i18nKey="yasal.kvkk.04" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.05" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.06" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.07" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.08" {...yp} /></li>
       </UL>
       <P>
-        Not: Klinik/hasta verileri kural olarak kullanıcı cihazında şifreli tutulur; bu tür veriler yalnızca
-        hizmetin gerektirdiği ölçüde ve ilgili sözleşme/aydınlatma çerçevesinde işlenir.
+        <Trans i18nKey="yasal.kvkk.09" {...yp} />
       </P>
 
-      <H2>3. İşleme Amaçları</H2>
+      <H2><Trans i18nKey="yasal.kvkk.10" {...yp} /></H2>
       <UL>
-        <li>Abonelik sözleşmesinin kurulması, ifası ve hizmetin sunulması.</li>
+        <li><Trans i18nKey="yasal.kvkk.11" {...yp} /></li>
         {/* İndirme artık hesap gerektirdiği için YENİ bir işleme amacı doğdu; yayımlanan metin
             fiili işlemeyi kapsamazsa aydınlatma yükümlülüğü eksik kalır. */}
-        <li>Yazılım indirme talebinin karşılanması ve sürüm/güncelleme bildirimlerinin iletilmesi.</li>
-        <li>Ödeme, faturalandırma ve muhasebe süreçlerinin yürütülmesi.</li>
-        <li>Müşteri destek, talep ve şikâyetlerin yönetimi.</li>
-        <li>Hesap güvenliği, dolandırıcılığın önlenmesi ve sistem güvenliği.</li>
-        <li>Yasal yükümlülüklerin yerine getirilmesi.</li>
+        <li><Trans i18nKey="yasal.kvkk.12" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.13" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.14" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.15" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.16" {...yp} /></li>
       </UL>
 
-      <H2>4. Hukuki Sebepler (KVKK m.5)</H2>
+      <H2><Trans i18nKey="yasal.kvkk.17" {...yp} /></H2>
       <UL>
-        <li>Sözleşmenin kurulması/ifası için veri işlemenin gerekli olması.</li>
-        <li>Veri sorumlusunun hukuki yükümlülüğünü yerine getirmesi.</li>
-        <li>Bir hakkın tesisi, kullanılması veya korunması için zorunlu olması.</li>
-        <li>Veri sorumlusunun meşru menfaatleri (temel hak ve özgürlüklere zarar vermemek kaydıyla).</li>
-        <li>Gerekli hâllerde açık rızanın alınması.</li>
+        <li><Trans i18nKey="yasal.kvkk.18" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.19" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.20" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.21" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.22" {...yp} /></li>
       </UL>
 
-      <H2>5. Aktarım</H2>
+      <H2><Trans i18nKey="yasal.kvkk.23" {...yp} /></H2>
       <P>
-        Kişisel verileriniz; hizmetin sunulması amacıyla ödeme kuruluşu (iyzico), altyapı/barındırma hizmet
-        sağlayıcısı (Supabase) ve gerektiğinde yetkili kamu kurum ve kuruluşları ile hukuken yetkili özel
-        kişilere, KVKK m.8 ve m.9'daki şartlara uygun olarak aktarılabilir.
+        <Trans i18nKey="yasal.kvkk.24" {...yp} />
       </P>
 
       {/* ⚠️ 2026-08-09 denetimi (Tier 3): metinde YURT DIŞINA AKTARIM başlığı hiç yoktu; oysa
@@ -352,52 +308,34 @@ const DOCS: Record<LegalSlug, ReactNode> = {
           aşağıdaki cümleye somut olarak yazılmalıdır; ayrıca m.9 kapsamında hangi mekanizmaya
           (taahhütname / standart sözleşme / açık rıza) dayanıldığı hukuk danışmanıyla
           KESİNLEŞTİRİLMELİDİR. Bu metin fiili durumu bildirir, hukuki nitelemeyi yapmaz. */}
-      <H2>5.1. Yurt Dışına Aktarım (KVKK m.9)</H2>
+      <H2><Trans i18nKey="yasal.kvkk.25" {...yp} /></H2>
       <P>
-        Aşağıdaki veriler, hizmetin teknik olarak sunulabilmesi için <strong>yurt dışında yerleşik</strong>{' '}
-        hizmet sağlayıcıların altyapısında işlenmektedir:
+        <Trans i18nKey="yasal.kvkk.26" {...yp} />
       </P>
       <UL>
         <li>
-          <strong>Hesap ve kimlik doğrulama verileri</strong> — e-posta adresi, şifrenin geri döndürülemez özeti, oturum
-          jetonları, kayıt sırasında verilen ad-soyad/klinik/kurum bilgileri. Alıcı:{' '}
-          <strong>Supabase</strong> (kimlik doğrulama ve veritabanı hizmeti).
+          <Trans i18nKey="yasal.kvkk.27" {...yp} />
         </li>
         <li>
-          <strong>Cihaz kayıt defteri verileri</strong> — cihaz kimliği ve adı, uzaktan erişim adresi,
-          yerel IP adresi ve port, eşleştirme kodu, son görülme zamanı, kurulu yazılım sürümleri, cihazdaki
-          veri şifrelemesinin açık olup olmadığı ve kaydı yalnız o cihazın güncelleyebilmesi için cihaza özgü
-          bir doğrulama anahtarı. Bu
-          kayıt, mobil uygulamanın kliniğin cihazına bağlanabilmesi ve bir güvenlik güncellemesinin
-          hangi cihazlara ulaştığının izlenebilmesi için <strong>yaklaşık 60 saniyede bir</strong>{' '}
-          güncellenir. Alıcı: <strong>Supabase</strong>.
+          <Trans i18nKey="yasal.kvkk.28" {...yp} />
         </li>
         <li>
-          <strong>Site kullanım ve bağlantı verileri</strong> — IP adresi ve istek kayıtları. Alıcı:{' '}
-          <strong>Vercel</strong> (web sitesi barındırma).
+          <Trans i18nKey="yasal.kvkk.29" {...yp} />
         </li>
       </UL>
       <P>
-        <strong>Hasta ve seans kayıtları (klinik verisi) yurt dışına aktarılmaz.</strong> Bu veriler
-        kliniğin kendi cihazında şifreli olarak tutulur. Yazılım, klinik verisinin buluta
-        eşitlenmesini <strong>varsayılan olarak kapalı</strong> tutar; bu ayar yalnızca klinik
-        tarafından açıkça etkinleştirilirse devreye girer ve o durumda da kişisel veri alanları
-        şifreli olarak gönderilir.
+        <Trans i18nKey="yasal.kvkk.30" {...yp} />
       </P>
       <P>
-        Ödeme işlemleri <strong>iyzico</strong> (Türkiye'de yerleşik ödeme kuruluşu) üzerinden yürütülür;
-        kart verileri tarafımızca saklanmaz.
+        <Trans i18nKey="yasal.kvkk.31" {...yp} />
       </P>
       <P>
-        Yurt dışına aktarım, KVKK m.9'da öngörülen şartlara dayanılarak yapılır. Aktarımın kapsamı,
-        alıcıları ve dayanağı hakkında bilgi talebinizi {COMPANY.kvkkEmail} adresine iletebilirsiniz.
+        <Trans i18nKey="yasal.kvkk.32" {...yp} />
       </P>
 
-      <H2>6. Saklama Süresi</H2>
+      <H2><Trans i18nKey="yasal.kvkk.33" {...yp} /></H2>
       <P>
-        Kişisel verileriniz, işleme amacının gerektirdiği süre ile ilgili mevzuatta öngörülen (ör. ticari ve
-        vergisel kayıtlar için yasal) süreler boyunca saklanır; sürelerin sonunda silinir, yok edilir veya
-        anonim hâle getirilir.
+        <Trans i18nKey="yasal.kvkk.34" {...yp} />
       </P>
       {/* ⚠️ 2026-08-09 denetimi: metin "öngörülen süreler" diyordu ama YAZILIM somut bir süre
           uyguluyordu (varsayılan 365 gün) ve bunu operatöre hiçbir yerde söylemiyordu. Klinik
@@ -409,256 +347,205 @@ const DOCS: Record<LegalSlug, ReactNode> = {
           değişirse metin de değişmeden kapı geçmez. Eski metin maskelemeyi "varsayılan olarak 365 gün sonra" anlatıyordu;
           gerçekte maskeleme klinik onaylamadan HİÇ başlamaz (opt-in). */}
       <P>
-        <strong>Klinik cihazındaki tedavi kayıtları için yazılımın uyguladığı somut süreler</strong> (yazılımın
-        varsayılanları):
+        <Trans i18nKey="yasal.kvkk.35" {...yp} />
       </P>
       <UL>
         <li data-saklama="sensor">
-          Seans sırasında kaydedilen sensör ölçümleri (bobin sıcaklığı, manyetik alan, akım):{' '}
-          <strong>90 gün</strong>.
+          <Trans i18nKey="yasal.kvkk.36" {...yp} />
         </li>
         <li data-saklama="doz">
-          Uygulanan doz kayıtları (hangi bobin, hangi frekans ve oranla, ne kadar süre çalıştı):{' '}
-          <strong>3650 gün (10 yıl)</strong>.
+          <Trans i18nKey="yasal.kvkk.37" {...yp} />
         </li>
         <li data-saklama="olay">
-          Seans olay kayıtları (başlatma, bitiş ve benzeri): <strong>365 gün</strong>. Acil durdurma kayıtları (nedeniyle
-          birlikte: aşırı akım, iletişim reddi, kart bağlantısının kopması ve benzeri), acil durdurma kilidinin sıfırlanması,
-          AI önerisinin hekim tarafından onaylanması ya da reddedilmesi ve seansı kesen servis kapanışı{' '}
-          <strong>SÜRESİZ</strong> saklanır. Süresi dolan olayların silinmesi, silinen kayıt sayısıyla denetim izine yazılır.
+          <Trans i18nKey="yasal.kvkk.38" {...yp} />
         </li>
         <li data-saklama="anonim">
-          Hasta kimlik bilgileri: <strong>1825 gün (5 yıl)</strong> boyunca tedavi kaydı olmayan hastanın adı,
-          sahibinin adı, iletişim bilgileri, yaşı ve kilosu — seans ve AI analiz kayıtlarındaki adı dahil —
-          anonimleştirilir; bu işlem geri alınamaz olduğu için klinik <strong>açıkça onaylamadan başlamaz</strong> (Ayarlar
-          → Veri Saklama Süresi, bekleyen hasta sayısı gösterilir). Tedavi verileri (uygulanan doz, süre, sensör ölçümleri),
-          tür/ırk bilgisi ve tedaviyi uygulayan hekimin adı kalır.
+          <Trans i18nKey="yasal.kvkk.39" {...yp} />
         </li>
         <li data-saklama="maskeleme">
-          Seans kayıtlarındaki adların maskelenmesi <strong>varsayılan olarak KAPALI</strong>dır ve klinik açıkça
-          onaylamadan başlamaz. Klinik onaylarsa, seçilen süreden (varsayılan <strong>365 gün</strong>) eski seans
-          kayıtlarındaki hasta ve operatör adları ile serbest metin notlar geri dönüşsüz biçimde maskelenir: kayıtta
-          adın yerinde <code>[REDACTED]</code> ibaresi görünür. Tedavi verileri maskelenmez. Onay yalnız verildiği süre
-          için geçerlidir: süre değiştirilirse onay düşer ve yeni süreyle etkilenecek kayıt sayısı gösterilerek
-          <strong> yeniden onay</strong> istenir.
+          <Trans i18nKey="yasal.kvkk.40" {...yp} />
         </li>
       </UL>
       <P>
-        Maskeleme süresi klinik tarafından uygulama içinden değiştirilebilir (Ayarlar → Veri Saklama Süresi) veya
-        tamamen kapatılabilir; tıbbi ve hukuki saklama yükümlülüğü ülkeye ve olaya göre değiştiğinden karar
-        veri sorumlusu kliniğe aittir.
+        <Trans i18nKey="yasal.kvkk.41" {...yp} />
       </P>
 
-      <H2>7. İlgili Kişinin Hakları (KVKK m.11)</H2>
+      <H2><Trans i18nKey="yasal.kvkk.42" {...yp} /></H2>
       <UL>
-        <li>Kişisel verinizin işlenip işlenmediğini öğrenme ve işlenmişse buna ilişkin bilgi talep etme.</li>
-        <li>İşleme amacını ve amacına uygun kullanılıp kullanılmadığını öğrenme.</li>
-        <li>Yurt içinde/yurt dışında aktarıldığı üçüncü kişileri bilme.</li>
-        <li>Eksik/yanlış işlenmişse düzeltilmesini isteme.</li>
-        <li>KVKK'da öngörülen şartlarla silinmesini/yok edilmesini isteme.</li>
-        <li>Düzeltme/silme işlemlerinin aktarıldığı üçüncü kişilere bildirilmesini isteme.</li>
-        <li>Otomatik sistemlerle analiz sonucu aleyhe bir sonucun ortaya çıkmasına itiraz etme.</li>
-        <li>Kanuna aykırı işleme nedeniyle zarara uğraması hâlinde zararın giderilmesini talep etme.</li>
+        <li><Trans i18nKey="yasal.kvkk.43" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.44" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.45" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.46" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.47" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.48" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.49" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kvkk.50" {...yp} /></li>
       </UL>
 
-      <H2>8. Başvuru</H2>
+      <H2><Trans i18nKey="yasal.kvkk.51" {...yp} /></H2>
       <P>
-        KVKK m.11 kapsamındaki taleplerinizi, kimliğinizi tevsik eden bilgilerle birlikte {COMPANY.kvkkEmail}
-        {' '}adresine iletebilir veya {COMPANY.address}, {COMPANY.city} adresine yazılı olarak başvurabilirsiniz.
-        Başvurularınız, KVKK'da öngörülen süreler içinde sonuçlandırılır.
+        <Trans i18nKey="yasal.kvkk.52" {...yp} />
       </P>
     </>
   ),
 
   /* =============== 5) GİZLİLİK POLİTİKASI =============== */
-  gizlilik: (
+  gizlilik: (yp) => (
     <>
       <P>
-        {COMPANY.brandName} olarak gizliliğinize önem veriyoruz. İşbu Gizlilik Politikası, internet sitemiz ve
-        hizmetlerimiz aracılığıyla toplanan bilgilerin nasıl işlendiğini ve korunduğunu açıklar. Kişisel
-        verilere ilişkin ayrıntılı bilgilendirme için KVKK Aydınlatma Metni'ni de inceleyiniz.
+        <Trans i18nKey="yasal.gizlilik.01" {...yp} />
       </P>
 
-      <H2>1. Toplanan Veriler</H2>
+      <H2><Trans i18nKey="yasal.gizlilik.02" {...yp} /></H2>
       <UL>
-        <li>Hesap ve iletişim bilgileri (ad-soyad, e-posta, telefon).</li>
-        <li>Sipariş, abonelik ve fatura/ödeme bilgileri.</li>
-        <li>Oturum ve kimlik doğrulama verileri.</li>
-        <li>Teknik veriler: IP adresi, cihaz/tarayıcı bilgisi, log ve çerez verileri.</li>
+        <li><Trans i18nKey="yasal.gizlilik.03" {...yp} /></li>
+        <li><Trans i18nKey="yasal.gizlilik.04" {...yp} /></li>
+        <li><Trans i18nKey="yasal.gizlilik.05" {...yp} /></li>
+        <li><Trans i18nKey="yasal.gizlilik.06" {...yp} /></li>
       </UL>
 
-      <H2>2. Verilerin Kullanımı</H2>
+      <H2><Trans i18nKey="yasal.gizlilik.07" {...yp} /></H2>
       <UL>
-        <li>Hizmetin sunulması, hesabınızın yönetimi ve aboneliğinizin işletilmesi.</li>
+        <li><Trans i18nKey="yasal.gizlilik.08" {...yp} /></li>
         {/* Kayıtsız indirme kaldırıldı → indirme amacı burada da açıkça yazılmalı (KVKK metniyle tutarlı). */}
-        <li>Yazılım indirme talebinizin karşılanması ve sürüm/güncelleme bildirimlerinin iletilmesi.</li>
-        <li>Ödeme ve faturalandırma işlemlerinin gerçekleştirilmesi.</li>
-        <li>Destek taleplerinin karşılanması ve sizinle iletişim kurulması.</li>
-        <li>Güvenlik, dolandırıcılığın önlenmesi ve hizmet kalitesinin iyileştirilmesi.</li>
+        <li><Trans i18nKey="yasal.gizlilik.09" {...yp} /></li>
+        <li><Trans i18nKey="yasal.gizlilik.10" {...yp} /></li>
+        <li><Trans i18nKey="yasal.gizlilik.11" {...yp} /></li>
+        <li><Trans i18nKey="yasal.gizlilik.12" {...yp} /></li>
       </UL>
 
-      <H2>3. Üçüncü Taraf Hizmet Sağlayıcılar</H2>
+      <H2><Trans i18nKey="yasal.gizlilik.13" {...yp} /></H2>
       <P>
-        Hizmetin sunulabilmesi için sınırlı veri, aşağıdaki güvenilir hizmet sağlayıcılarla paylaşılır:
+        <Trans i18nKey="yasal.gizlilik.14" {...yp} />
       </P>
       <UL>
         <li>
-          <strong>iyzico</strong> — ödeme işlemlerinin güvenli biçimde gerçekleştirilmesi. Kart bilgileri
-          tarafımızca saklanmaz; doğrudan ödeme kuruluşunun güvenli ortamında işlenir.
+          <Trans i18nKey="yasal.gizlilik.15" {...yp} />
         </li>
         <li>
-          <strong>Supabase</strong> — kimlik doğrulama, hesap ve uygulama verilerinin barındırılması/altyapı hizmeti.
+          <Trans i18nKey="yasal.gizlilik.16" {...yp} />
         </li>
       </UL>
       <P>
-        Bu sağlayıcılar, verileri yalnızca hizmetin gerektirdiği amaçla ve kendi gizlilik/güvenlik
-        yükümlülükleri çerçevesinde işler.
+        <Trans i18nKey="yasal.gizlilik.17" {...yp} />
       </P>
 
-      <H2>4. Veri Güvenliği</H2>
+      <H2><Trans i18nKey="yasal.gizlilik.18" {...yp} /></H2>
       <P>
-        Kişisel verilerinizi yetkisiz erişime, kayba ve ifşaya karşı korumak için idari ve teknik tedbirler
-        (şifreleme, erişim kontrolleri, güvenli iletişim vb.) uygulanır. Klinik/hasta verileri kural olarak
-        kullanıcı cihazında şifreli tutulur.
+        <Trans i18nKey="yasal.gizlilik.19" {...yp} />
       </P>
 
-      <H2>5. Çerezler</H2>
+      <H2><Trans i18nKey="yasal.gizlilik.20" {...yp} /></H2>
       <P>
-        İnternet sitemizde çerezler kullanılmaktadır. Ayrıntılar için Çerez Politikası'nı inceleyebilirsiniz.
+        <Trans i18nKey="yasal.gizlilik.21" {...yp} />
       </P>
 
-      <H2>6. Haklarınız ve İletişim</H2>
+      <H2><Trans i18nKey="yasal.gizlilik.22" {...yp} /></H2>
       <P>
-        KVKK kapsamındaki haklarınızı kullanmak veya gizlilikle ilgili taleplerinizi iletmek için
-        {' '}{COMPANY.kvkkEmail} ya da {COMPANY.email} adresine başvurabilirsiniz.
+        <Trans i18nKey="yasal.gizlilik.23" {...yp} />
       </P>
     </>
   ),
 
   /* =============== 6) ÇEREZ POLİTİKASI =============== */
-  'cerez-politikasi': (
+  'cerez-politikasi': (yp) => (
     <>
       <P>
-        Bu Çerez Politikası, {COMPANY.brandName} internet sitesinde kullanılan çerezleri (cookies) ve benzer
-        teknolojileri, bunların amaçlarını ve nasıl yönetebileceğinizi açıklar.
+        <Trans i18nKey="yasal.cerez.01" {...yp} />
       </P>
 
-      <H2>1. Çerez Nedir?</H2>
+      <H2><Trans i18nKey="yasal.cerez.02" {...yp} /></H2>
       <P>
-        Çerezler, ziyaret ettiğiniz internet siteleri tarafından tarayıcınıza kaydedilen küçük metin
-        dosyalarıdır. Sitenin çalışmasını sağlamak, tercihlerinizi hatırlamak ve deneyimi iyileştirmek için kullanılır.
+        <Trans i18nKey="yasal.cerez.03" {...yp} />
       </P>
 
-      <H2>2. Kullanılan Çerez Türleri</H2>
+      <H2><Trans i18nKey="yasal.cerez.04" {...yp} /></H2>
       <UL>
         <li>
-          <strong>Zorunlu çerezler:</strong> Sitenin temel işlevleri, güvenlik ve oturum yönetimi için gereklidir.
-          Bu çerezler olmadan site düzgün çalışmaz. Oturum ve kimlik doğrulama, Supabase altyapısı üzerinden yönetilir.
+          <Trans i18nKey="yasal.cerez.05" {...yp} />
         </li>
         <li>
-          <strong>İşlevsel çerezler:</strong> Dil, tema gibi tercihlerinizi hatırlayarak deneyiminizi kişiselleştirir.
+          <Trans i18nKey="yasal.cerez.06" {...yp} />
         </li>
         <li>
-          <strong>Analitik çerezler:</strong> Ziyaretçi etkileşimini anonim/istatistiksel olarak ölçerek sitenin
-          performansını ve içeriğini iyileştirmemize yardımcı olur. (Kullanıldığında.)
+          <Trans i18nKey="yasal.cerez.07" {...yp} />
         </li>
       </UL>
 
-      <H2>3. Oturum Yönetimi</H2>
+      <H2><Trans i18nKey="yasal.cerez.08" {...yp} /></H2>
       <P>
-        Hesabınıza giriş yaptığınızda, oturumunuzun güvenli biçimde sürdürülebilmesi için kimlik doğrulama
-        çerezleri/depolama kullanılır. Bu, her sayfada yeniden giriş yapmanızı önleyen zorunlu bir işlevdir.
+        <Trans i18nKey="yasal.cerez.09" {...yp} />
       </P>
 
-      <H2>4. Çerezleri Yönetme</H2>
+      <H2><Trans i18nKey="yasal.cerez.10" {...yp} /></H2>
       <P>
-        Tarayıcınızın ayarlarından çerezleri silebilir, engelleyebilir veya çerez yerleştirilmeden önce
-        uyarılmayı seçebilirsiniz. Zorunlu çerezlerin engellenmesi, sitenin bazı bölümlerinin (ör. giriş/oturum)
-        düzgün çalışmamasına neden olabilir. Çoğu tarayıcıda çerez yönetimi, "Ayarlar &gt; Gizlilik/Güvenlik"
-        bölümünden yapılabilir.
+        <Trans i18nKey="yasal.cerez.11" {...yp} />
       </P>
 
-      <H2>5. Güncellemeler ve İletişim</H2>
+      <H2><Trans i18nKey="yasal.cerez.12" {...yp} /></H2>
       <P>
-        Bu politika zaman zaman güncellenebilir. Sorularınız için: {COMPANY.email}.
+        <Trans i18nKey="yasal.cerez.13" {...yp} />
       </P>
     </>
   ),
 
   /* =============== 7) KULLANIM ŞARTLARI =============== */
-  'kullanim-sartlari': (
+  'kullanim-sartlari': (yp) => (
     <>
       <P>
-        İşbu Kullanım Şartları (Üyelik Sözleşmesi), {COMPANY.brandName} internet sitesi, masaüstü uygulaması ve
-        yazılım hizmetlerinin kullanımına ilişkin koşulları düzenler. Hizmeti kullanarak bu şartları kabul
-        etmiş sayılırsınız.
+        <Trans i18nKey="yasal.kullanim.01" {...yp} />
       </P>
 
-      <H2>1. Hesap ve Üyelik</H2>
+      <H2><Trans i18nKey="yasal.kullanim.02" {...yp} /></H2>
       <UL>
-        <li>Hizmetten yararlanmak için doğru ve güncel bilgilerle bir hesap oluşturmanız gerekir.</li>
-        <li>Hesap güvenliğinden (şifre gizliliği dâhil) ve hesabınız üzerinden yapılan işlemlerden siz sorumlusunuz.</li>
-        <li>Hesabınızın yetkisiz kullanıldığını fark ederseniz derhâl bize bildirmelisiniz.</li>
+        <li><Trans i18nKey="yasal.kullanim.03" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kullanim.04" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kullanim.05" {...yp} /></li>
       </UL>
 
-      <H2>2. Uygun Kullanım</H2>
+      <H2><Trans i18nKey="yasal.kullanim.06" {...yp} /></H2>
       <UL>
-        <li>Hizmeti yalnızca hukuka uygun amaçlarla ve bu şartlara uygun olarak kullanabilirsiniz.</li>
-        <li>Yazılıma tersine mühendislik uygulanması, izinsiz çoğaltılması, dağıtılması veya lisans kapsamı dışında kullanılması yasaktır.</li>
-        <li>Sistemin güvenliğini tehlikeye atacak, hizmeti aksatacak veya üçüncü kişilerin haklarını ihlal edecek davranışlardan kaçınmalısınız.</li>
+        <li><Trans i18nKey="yasal.kullanim.07" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kullanim.08" {...yp} /></li>
+        <li><Trans i18nKey="yasal.kullanim.09" {...yp} /></li>
       </UL>
 
-      <H2>3. Fikri Mülkiyet</H2>
+      <H2><Trans i18nKey="yasal.kullanim.10" {...yp} /></H2>
       <P>
-        {COMPANY.brandName} yazılımı, yapay zekâ modelleri, arayüz, marka, logo ve tüm içerik; Satıcı'ya veya
-        lisans verenlerine ait olup fikri mülkiyet mevzuatı ile korunmaktadır. Abonelik size, hizmeti kişisel/
-        kurumsal kullanımınız için sınırlı, münhasır olmayan ve devredilemez bir kullanım hakkı tanır; mülkiyet
-        veya başkaca bir hak devri anlamına gelmez.
+        <Trans i18nKey="yasal.kullanim.11" {...yp} />
       </P>
 
-      <H2>4. Sorumluluğun Sınırlandırılması ve Tıbbi Uyarı</H2>
+      <H2><Trans i18nKey="yasal.kullanim.12" {...yp} /></H2>
       <div className="mb-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm leading-relaxed text-amber-200">
-        <strong>Tıbbi/veteriner sorumluluk uyarısı:</strong> {COMPANY.brandName}, veteriner hekim gözetiminde
-        kullanılmak üzere tasarlanmış bir klinik destek yazılımıdır. Akıllı teşhis ve yapay zekâ analiz
-        çıktıları bilgilendirme amaçlıdır; veteriner hekimin tıbbi teşhis, karar ve tedavisinin yerine geçmez.
-        Otonom seans (AI Pro) özellikleri de dâhil olmak üzere tüm klinik kararlar ve uygulamalar, ilgili
-        veteriner hekimin gözetimi ve sorumluluğu altındadır.
+        <Trans i18nKey="yasal.kullanim.13" {...yp} />
       </div>
       <P>
-        Hizmet "olduğu gibi" ve "mevcut hâliyle" sunulur. Yürürlükteki mevzuatın izin verdiği azami ölçüde;
-        Satıcı, hizmetin kesintisiz veya hatasız olacağını garanti etmez ve hizmetin kullanımından doğan
-        dolaylı zararlardan sorumlu tutulamaz. Bu madde, tüketici mevzuatından doğan haklarınızı ortadan kaldırmaz.
+        <Trans i18nKey="yasal.kullanim.14" {...yp} />
       </P>
 
-      <H2>5. Ücretlendirme ve Abonelik</H2>
+      <H2><Trans i18nKey="yasal.kullanim.15" {...yp} /></H2>
       <P>
-        Ücretli seviyelere ilişkin bedel, ödeme, otomatik yenileme, iptal ve iade koşulları; Mesafeli Satış
-        Sözleşmesi, Ön Bilgilendirme Formu ve İptal/İade/Cayma belgelerinde düzenlenmiştir.
+        <Trans i18nKey="yasal.kullanim.16" {...yp} />
       </P>
 
-      <H2>6. Fesih ve Askıya Alma</H2>
+      <H2><Trans i18nKey="yasal.kullanim.17" {...yp} /></H2>
       <P>
-        İşbu şartların ihlali hâlinde Satıcı, hesabınızı önceden bildirimde bulunarak veya ihlalin niteliğine
-        göre derhâl askıya alma ya da hizmeti sonlandırma hakkını saklı tutar. Aboneliğinizi dilediğiniz zaman
-        iptal edebilirsiniz.
+        <Trans i18nKey="yasal.kullanim.18" {...yp} />
       </P>
 
-      <H2>7. Değişiklikler</H2>
+      <H2><Trans i18nKey="yasal.kullanim.19" {...yp} /></H2>
       <P>
-        Satıcı, bu şartları güncelleyebilir. Önemli değişiklikler uygun yollarla duyurulur; güncel sürüm bu
-        sayfada yayımlandığı andan itibaren geçerli olur.
+        <Trans i18nKey="yasal.kullanim.20" {...yp} />
       </P>
 
-      <H2>8. Uygulanacak Hukuk ve Yetki</H2>
+      <H2><Trans i18nKey="yasal.kullanim.21" {...yp} /></H2>
       <P>
-        İşbu şartlara Türkiye Cumhuriyeti hukuku uygulanır. Uyuşmazlıklarda; tüketici işlemleri bakımından
-        yetkili Tüketici Hakem Heyetleri ve Tüketici Mahkemeleri, diğer hâllerde {COMPANY.city} mahkemeleri ve
-        icra daireleri yetkilidir.
+        <Trans i18nKey="yasal.kullanim.22" {...yp} />
       </P>
 
-      <H2>9. İletişim</H2>
+      <H2><Trans i18nKey="yasal.kullanim.23" {...yp} /></H2>
       <P>
-        Sorularınız için: {COMPANY.legalName} — {COMPANY.email}{COMPANY.phone ? ` — ${COMPANY.phone}` : ""}.
+        <Trans i18nKey="yasal.kullanim.24" {...yp} />
       </P>
     </>
   ),
@@ -668,6 +555,7 @@ const DOCS: Record<LegalSlug, ReactNode> = {
    Ana bileşen — route'a göre ilgili belgeyi gösterir.
    ------------------------------------------------------------------ */
 export function LegalPage() {
+  const { t, i18n } = useTranslation()
   const location = useLocation()
   const slug = location.pathname.replace(/^\//, '')
   const doc = LEGAL_DOCS.find((d) => d.slug === slug)
@@ -676,11 +564,9 @@ export function LegalPage() {
   if (!doc) {
     return (
       <section className="mx-auto max-w-3xl px-5 py-20 sm:px-6">
-        <span className="chip">Yasal</span>
-        <h1 className="mt-5 text-3xl font-extrabold sm:text-4xl">Belge bulunamadı</h1>
-        <p className="mt-4 text-muted">
-          Aradığınız yasal belge mevcut değil. Aşağıdaki belgelerden birini seçebilirsiniz:
-        </p>
+        <span className="chip">{t('ortak.altBilgi.yasal')}</span>
+        <h1 className="mt-5 text-3xl font-extrabold sm:text-4xl">{t('yasal.kabuk.bulunamadi')}</h1>
+        <p className="mt-4 text-muted">{t('yasal.kabuk.bulunamadiAciklama')}</p>
         <ul className="mt-6 space-y-2">
           {LEGAL_DOCS.map((d) => (
             <li key={d.slug}>
@@ -691,7 +577,7 @@ export function LegalPage() {
           ))}
         </ul>
         <Link to="/" className="btn-ghost mt-8">
-          Ana sayfaya dön
+          {t('ortak.anaSayfayaDon')}
         </Link>
       </section>
     )
@@ -700,7 +586,7 @@ export function LegalPage() {
   return (
     <article className="mx-auto max-w-3xl px-5 py-14 sm:px-6 sm:py-16">
       <Link to="/" className="text-sm text-muted hover:text-fg">
-        ← Ana sayfa
+        {t('yasal.kabuk.anaSayfa')}
       </Link>
 
       <h1 className="mt-4 text-3xl font-extrabold sm:text-4xl">{doc.title}</h1>
@@ -710,13 +596,17 @@ export function LegalPage() {
           Satın alma öncesi sözleşme sayfasında belgeyi taslak ilan etmek güveni doğrudan zedeler;
           hazırlık notu yayına değil, geliştirme akışına aittir. Kilit: src/__tests__/metin-guveni.test.ts */}
 
-      <p className="mt-5 text-xs text-muted">Son güncelleme: {COMPANY.updated}</p>
+      {i18n.language === 'en' && (
+        <p className="mt-4 rounded-md border border-border/60 px-3 py-2 text-xs text-muted">{t('yasal.kabuk.baglayici')}</p>
+      )}
 
-      <div className="mt-6">{DOCS[doc.slug]}</div>
+      <p className="mt-5 text-xs text-muted">{t('yasal.kabuk.sonGuncelleme', { tarih: COMPANY.updated })}</p>
+
+      <div className="mt-6">{DOCS[doc.slug](ypKur())}</div>
 
       {/* İlgili belgeler */}
       <nav className="mt-12 border-t border-border/60 pt-6">
-        <h2 className="mb-3 text-sm font-semibold text-fg">İlgili yasal belgeler</h2>
+        <h2 className="mb-3 text-sm font-semibold text-fg">{t('yasal.kabuk.ilgili')}</h2>
         <ul className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted">
           {LEGAL_DOCS.filter((d) => d.slug !== doc.slug).map((d) => (
             <li key={d.slug}>

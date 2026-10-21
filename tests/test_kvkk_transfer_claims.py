@@ -37,7 +37,22 @@ LEGAL = KOK / "apps/web" / "src" / "pages" / "Legal.tsx"
 def metin():
     if not LEGAL.exists():
         pytest.skip("apps/web kaynagi yok")
-    return LEGAL.read_text(encoding="utf-8")
+    # I18N-P1 (12e): belge metni kataloğa taşındı — GÖRÜNEN kaynak = Legal.tsx + her <Trans i18nKey> yerine katalog TR değeri.
+    kaynak = LEGAL.read_text(encoding="utf-8")
+    import i18n_yardimci as iy
+
+    tr = iy.katalog("site", "tr")
+
+    def yerlestir(m):
+        return (
+            tr[m.group(1)]
+            .replace("<kalin>", "<strong>")
+            .replace("</kalin>", "</strong>")
+            .replace("<kod>", "<code>")
+            .replace("</kod>", "</code>")
+        )
+
+    return re.sub(r'<Trans\s+i18nKey="([^"]+)"[^>]*?/>', yerlestir, kaynak)
 
 
 # ── metin gerçekten aktarımı anlatıyor mu ───────────────────────────────────

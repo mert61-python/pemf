@@ -107,6 +107,18 @@
    "anahtar": "ai.termal.hastaRiskli",
    "terim": "\\bhasta(?!l[ıi]k|l[ıi]ğ|l[ıi]\\b|n[ıi]n hastal|ne)",
    "gerekce": "Hasta (Riskli) = sick: model sınıfı 'Sick' (EN 'Sick (At Risk)'), hasta (hayvan = patient) DEĞİL"
+  },
+  {
+   "yuzey": "site",
+   "anahtar": "yasal.kvkk.27",
+   "terim": "jeton",
+   "gerekce": "KVKK aktarım listesi: 'oturum jetonları' = kimlik doğrulama OTURUM BELİRTECİ (session token, Supabase Auth) — ticari jeton (credit) DEĞİL"
+  },
+  {
+   "yuzey": "site",
+   "anahtar": "yasal.kvkk.27",
+   "terim": "\\btoken",
+   "gerekce": "KVKK aktarım listesi: 'oturum jetonları' = kimlik doğrulama OTURUM BELİRTECİ (session token, Supabase Auth) — ticari jeton (credit) DEĞİL"
   }
  ]
 }

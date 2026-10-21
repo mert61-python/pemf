@@ -101,7 +101,7 @@ describe('2) kalan kalemler', () => {
   it('KARŞIT-KANIT: KVKK’daki [REDACTED] ibaresi KALIR (sistem gerçekten böyle yazıyor)', () => {
     // Yazılım kayda birebir `[REDACTED]` yazıyor (servers/api_server.py, database/patient_database.py).
     // Metinden silmek belgeyi YANLIŞ yapardı; yapılması gereken tek şey ne olduğunu açıklamaktı.
-    const s = soy(LEGAL_SRC)
+    const s = gorunenMetinler(soy(LEGAL_SRC))
     expect(s).toMatch(/REDACTED/)
     expect(s).toMatch(/REDACTED[\s\S]{0,240}(ibare|görün|yaz)/i)
   })

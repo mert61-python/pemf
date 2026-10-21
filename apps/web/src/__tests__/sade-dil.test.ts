@@ -77,7 +77,7 @@ describe('adlandırma: tek ürün, tek ad', () => {
     expect(nerede(/tek istemci/i)).toEqual([])
     expect(nerede(/>\s*Launcher\s*</)).toEqual([])
     // Yasal belgeler de aynı adı kullanır (sözleşmede "istemcisi" yazıyordu).
-    expect(soy(LEGAL_SRC)).not.toMatch(/sitesi, istemcisi/)
+    expect(gorunenMetinler(soy(LEGAL_SRC))).not.toMatch(/sitesi, istemcisi/)
   })
 
   it('KRİTİK: indirme çağrıları ÜRÜN adını kullanır ("PEMF Vet\'i İndir")', () => {

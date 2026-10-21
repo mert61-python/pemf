@@ -38,7 +38,7 @@ describe('1) yasal belgelerdeki İÇ NOT', () => {
   it('KRİTİK: "şablondur / hukuk danışmanınca gözden geçirilmeli" uyarısı YAYINDA GÖRÜNMEZ', () => {
     // Yedi yasal belgenin (Mesafeli Satış, KVKK, Gizlilik…) EN ÜSTÜNDE müşteriye gösteriliyordu.
     // Satın alma öncesi sözleşme sayfasında "bu metin taslak" demek güveni doğrudan bitirir.
-    const s = soy(LEGAL_SRC)
+    const s = gorunenMetinler(soy(LEGAL_SRC))
     expect(s).not.toMatch(/şablondur/i)
     expect(s).not.toMatch(/hukuk danışmanınca gözden geçirilmeli/i)
   })
@@ -56,7 +56,7 @@ describe('2) KDV beyanı', () => {
   })
 
   it('KARŞIT-KANIT: sözleşmedeki "KDV dâhil toplam bedel" ifadesi DURUYOR (çapa)', () => {
-    expect(soy(LEGAL_SRC)).toMatch(/vergiler\s*\(KDV\)\s*dâhil/i)
+    expect(gorunenMetinler(soy(LEGAL_SRC))).toMatch(/vergiler\s*\(KDV\)\s*dâhil/i)
   })
 })
 

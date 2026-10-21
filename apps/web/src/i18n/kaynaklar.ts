@@ -28,6 +28,8 @@ import trFiyat from './tr/fiyat.json'
 import enFiyat from './en/fiyat.json'
 import trOdeme from './tr/odeme.json'
 import enOdeme from './en/odeme.json'
+import trYasal from './tr/yasal.json'
+import enYasal from './en/yasal.json'
 
 export const trKaynak = {
   ortak: trOrtak,
@@ -43,6 +45,7 @@ export const trKaynak = {
   icerik: trIcerik,
   fiyat: trFiyat,
   odeme: trOdeme,
+  yasal: trYasal,
 }
 
 export const enKaynak: typeof trKaynak = {
@@ -59,6 +62,7 @@ export const enKaynak: typeof trKaynak = {
   icerik: enIcerik,
   fiyat: enFiyat,
   odeme: enOdeme,
+  yasal: enYasal,
 }
 
 export const kaynaklar = {
