@@ -400,6 +400,7 @@ def test_uygula_tsx_t_zaten_varsa_ikinci_hook_EKLENMEZ(tmp_path):
 _BAYRAK_DOSYALARI = (
     *bayrak.TS_SABITLERI,
     bayrak.RS_SABITI,
+    bayrak.PY_SABITI,  # I18NI-A3.4: sunucunun istek dışı dili
     bayrak.ANA,
     launcher_uret.TAURI_CONF,
     launcher_uret.HOOKS_YOLU,
@@ -428,7 +429,7 @@ def test_bayrak_ac_hepsini_acar_kapat_BAYT_BAYT_geri_getirir(tmp_path):
     once = {rel: (tmp_path / rel).read_bytes() for rel in _BAYRAK_DOSYALARI}
     assert bayrak.main(["--ac", "--kok", str(tmp_path)]) == 0
     degerler = bayrak.yuzey_degerleri(tmp_path)
-    assert all(degerler[y] is True for y in (*bayrak.TS_SABITLERI, bayrak.RS_SABITI)), degerler
+    assert all(degerler[y] is True for y in (*bayrak.TS_SABITLERI, bayrak.RS_SABITI, bayrak.PY_SABITI)), degerler
     assert degerler[launcher_uret.TAURI_CONF] == ["Turkish", "English"]
     hooks = (tmp_path / launcher_uret.HOOKS_YOLU).read_text(encoding="utf-8")
     assert ' 1033 "' in hooks and ' 1055 "' in hooks  # İngilizce + Türkçe LangString

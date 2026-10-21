@@ -40,6 +40,11 @@ DIL_BASLIGI = "X-PEMF-Dil"
 DIL_PARAMETRESI = "dil"
 CIHAZ_DILI_DOSYASI = "arayuz_dili.json"
 
+#: İNGİLİZCE BAYRAĞI (Y158) — TEK KAYNAK depo kökü `i18n/bayrak.json`; `scripts/i18n/bayrak.py` yazar, K-5 eşliği denetler. ⚠️ ELLE DEĞİŞTİRME.
+#: Kapalıyken İSTEK DIŞI dil (cihaz ayarı) her zaman tr — arayüz / launcher / site / DEMA ile aynı kural (I18NI-A3.4). İstek dili (başlık)
+#: etkilenmez: bayrak kapalı arayüz zaten `tr` gönderir.
+I18N_EN_ACIK: bool = False
+
 #: İsteğin dili (api_server ara katmanı kurar). None = istek dışı (arka plan) → cihaz ayarı.
 istek_dili_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("pemf_istek_dili", default=None)
 
@@ -112,7 +117,9 @@ def _veri_koku() -> Path:
 
 
 def cihaz_dili() -> str:
-    """Cihaz düzeyindeki arayüz dili (istek dışı üretimler için). Dosya yok / bozuk → tr."""
+    """Cihaz düzeyindeki arayüz dili (istek dışı üretimler için). Dosya yok / bozuk / bayrak kapalı → tr."""
+    if not I18N_EN_ACIK:
+        return YEDEK_DIL
     try:
         veri = json.loads((_veri_koku() / CIHAZ_DILI_DOSYASI).read_text(encoding="utf-8"))
         return gecerli_dil(veri.get("dil")) or YEDEK_DIL

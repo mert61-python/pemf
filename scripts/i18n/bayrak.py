@@ -34,6 +34,9 @@ TS_SABITLERI = (
 RS_SABITI = "launcher/core/src/dil.rs"
 TS_DESEN = re.compile(r"(export const I18N_EN_ACIK: boolean = )(true|false)")
 RS_DESEN = re.compile(r"(pub const I18N_EN_ACIK: bool = )(true|false)(;)")
+#: I18NI-A3.4: sunucunun istek DIŞI dili (cihaz ayarı) da bayrağa uyar.
+PY_SABITI = "apps/backend/utils/ceviri.py"
+PY_DESEN = re.compile(r"(?m)^(I18N_EN_ACIK: bool = )(True|False)(?=\r?$)")
 NSIS_DILLERI = {False: ["Turkish"], True: ["Turkish", "English"]}
 
 
@@ -48,6 +51,8 @@ def yuzey_degerleri(kok: Path) -> dict[str, object]:
         d[y] = (m[0][1] == "true") if len(m) == 1 else f"!!! {len(m)} eşleşme"
     m = RS_DESEN.findall((kok / RS_SABITI).read_text(encoding="utf-8"))
     d[RS_SABITI] = (m[0][1] == "true") if len(m) == 1 else f"!!! {len(m)} eşleşme"
+    m = PY_DESEN.findall((kok / PY_SABITI).read_bytes().decode("utf-8").replace("\r\n", "\n"))
+    d[PY_SABITI] = (m[0][1] == "True") if len(m) == 1 else f"!!! {len(m)} eşleşme"
     d[launcher_uret.TAURI_CONF] = launcher_uret.nsis_dilleri(kok)
     return d
 
@@ -91,6 +96,9 @@ def ayarla(kok: Path, acik: bool) -> None:
     p = kok / RS_SABITI
     ham = p.read_bytes().decode("utf-8")
     p.write_bytes(RS_DESEN.sub(lambda m: m.group(1) + deger + m.group(3), ham, count=1).encode("utf-8"))
+    p = kok / PY_SABITI
+    ham = p.read_bytes().decode("utf-8")
+    p.write_bytes(PY_DESEN.sub(lambda m: m.group(1) + ("True" if acik else "False"), ham, count=1).encode("utf-8"))
     p = kok / launcher_uret.TAURI_CONF
     ham = p.read_bytes().decode("utf-8")
     yeni_liste = json.dumps(NSIS_DILLERI[acik], ensure_ascii=False)

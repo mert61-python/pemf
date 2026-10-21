@@ -88,6 +88,7 @@ def test_tarih_metni_iki_dilde_24_saat():
 
 def test_istek_disi_cihaz_dili_ayari(tmp_path, monkeypatch):
     monkeypatch.setattr(ceviri, "_veri_koku", lambda: tmp_path)
+    monkeypatch.setattr(ceviri, "I18N_EN_ACIK", True)  # I18NI-A3.4: cihaz dili yalnız bayrak açıkken etkin
     assert ceviri.istek_dili_var.get() is None
     assert ceviri.etkin_dil() == "tr"  # ayar yok → tr
     assert ceviri.cihaz_dili_yaz("en") == "en"
