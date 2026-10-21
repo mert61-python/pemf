@@ -1,7 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { PLANS, ADDONS, COMPARE, RESEARCH_ADDON, FREE_MODE, COMPANY, type Plan } from '../config'
+import { PLANS, ADDONS, COMPARE, RESEARCH_ADDON, FREE_MODE, COMPANY, karsilastirmaYokMu, type Plan } from '../config'
 import { planFiyatGorunumu } from '../lib/planFiyat'
 import { Check, Sparkle, Bolt } from '../components/Icons'
 import PackageBuilder from '../components/PackageBuilder'
@@ -54,7 +54,7 @@ const ayirtEdici = (row: (typeof COMPARE)[number]) => degerGruplari(row).length 
  *  "Alınmıyor" = ücret alınmıyor (avantaj, normal). Etiketten valans TAHMİN EDİLMEZ. */
 function Deger({ v }: { v: string }) {
   if (!v.startsWith('✓')) {
-    return <span className={/^Yok/.test(v) ? 'text-muted' : 'font-medium text-fg'}>{v}</span>
+    return <span className={karsilastirmaYokMu(v) ? 'text-muted' : 'font-medium text-fg'}>{v}</span>
   }
   const ek = v.slice(1).trim()
   return (

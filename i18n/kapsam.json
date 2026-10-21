@@ -400,7 +400,7 @@
    "sira": 12,
    "kritik": false,
    "aciklama": "site içerik yapılandırması (config.ts: marka, planlar, özellikler, SSS, menü — modül düzeyi)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 181,
    "dosyaSayisi": 1
   },
@@ -8475,10 +8475,59 @@
    "yuzey": "site",
    "grup": "site-12c-icerik",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 181,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "İBİA Teknoloji Ltd. Şti.",
+     "gerekce": "tüzel kişi kimlik / sicil verisi (ünvan, adres, işletme türü, vergi dairesi) — yasal kayıtta Türkçe yazılır, çevrilmez; EN yasal sayfalar da aynen gösterir [SAHİBE: yasal onay]"
+    },
+    {
+     "metin": "İBİA Teknoloji Makina Arge Danışmanlık Sanayi ve Ticaret Limited Şirketi",
+     "gerekce": "tüzel kişi kimlik / sicil verisi (ünvan, adres, işletme türü, vergi dairesi) — yasal kayıtta Türkçe yazılır, çevrilmez; EN yasal sayfalar da aynen gösterir [SAHİBE: yasal onay]"
+    },
+    {
+     "metin": "Limited Şirket",
+     "gerekce": "tüzel kişi kimlik / sicil verisi (ünvan, adres, işletme türü, vergi dairesi) — yasal kayıtta Türkçe yazılır, çevrilmez; EN yasal sayfalar da aynen gösterir [SAHİBE: yasal onay]"
+    },
+    {
+     "metin": "Yeşiltepe Mah. İsmet İnönü 2 Cad. No: 2-57, Tepebaşı",
+     "gerekce": "tüzel kişi kimlik / sicil verisi (ünvan, adres, işletme türü, vergi dairesi) — yasal kayıtta Türkçe yazılır, çevrilmez; EN yasal sayfalar da aynen gösterir [SAHİBE: yasal onay]"
+    },
+    {
+     "metin": "Eskişehir",
+     "gerekce": "tüzel kişi kimlik / sicil verisi (ünvan, adres, işletme türü, vergi dairesi) — yasal kayıtta Türkçe yazılır, çevrilmez; EN yasal sayfalar da aynen gösterir [SAHİBE: yasal onay]"
+    },
+    {
+     "metin": "Türkiye",
+     "gerekce": "ülke adı `Türkiye` — İngilizce resmî adı da `Türkiye`; iki dilde aynı"
+    },
+    {
+     "metin": "Eskişehir Vergi Dairesi Başkanlığı",
+     "gerekce": "tüzel kişi kimlik / sicil verisi (ünvan, adres, işletme türü, vergi dairesi) — yasal kayıtta Türkçe yazılır, çevrilmez; EN yasal sayfalar da aynen gösterir [SAHİBE: yasal onay]"
+    },
+    {
+     "metin": "PEMFVetClient-Setup-{{deger1}}.exe",
+     "gerekce": "indirme dosya adı şablonu (`PEMFVetClient-Setup-<sürüm>.exe`) — dosya adı, metin değil"
+    },
+    {
+     "metin": "PEMF_Vet_Mobil-{{androidVersion}}.apk",
+     "gerekce": "indirme dosya adı şablonu (`PEMF_Vet_Mobil-<sürüm>.apk`) — dosya adı, metin değil"
+    },
+    {
+     "metin": "Windows 10 / 11 (64-bit)",
+     "gerekce": "işletim sistemi gereksinimi (`Windows 10 / 11 (64-bit)`) — teknik belirtim, iki dilde aynı"
+    },
+    {
+     "metin": "macOS 12 Monterey+",
+     "gerekce": "işletim sistemi gereksinimi (`macOS 12 Monterey+`) — teknik belirtim, iki dilde aynı"
+    },
+    {
+     "metin": "Ubuntu/Debian · Fedora/RHEL · universal (64-bit)",
+     "gerekce": "işletim sistemi gereksinimi (`Ubuntu/Debian · Fedora/RHEL · universal (64-bit)`) — teknik belirtim, iki dilde aynı"
+    }
+   ],
    "birlesikIstisna": [],
    "not": "I18N-0 pilotu KISMİ (başlık / menü anahtarları) — kalanı bekliyor"
   },

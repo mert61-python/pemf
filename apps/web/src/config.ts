@@ -6,6 +6,8 @@
    koymayın; büyük dosya harici host'ta durmalı).
    ============================================================ */
 
+import i18n from './i18n'
+
 export const BRAND = {
   name: 'PEMF Vet',
   // I18N-0: başlık metni katalogda (ana.slogan) — modül düzeyi sabit ANAHTAR saklar, gösterimde çevrilir.
@@ -43,26 +45,25 @@ export const COMPANY = {
   mersis: '0469084142300001',
   tradeRegistry: '45277',
   withdrawalDays: 14, // dijital hizmet/abonelikte cayma; istisnalar Ön Bilgilendirme'de
-  updated: '7 Ağustos 2026',
+  get updated() { return i18n.t('icerik.sirket.guncelleme') },
 } as const
 
 /** Yasal belge sayfaları — App.tsx route'ları, Footer menüsü ve LegalPage içeriği buradan üretilir. */
 export const LEGAL_DOCS = [
-  { slug: 'mesafeli-satis', title: 'Mesafeli Satış Sözleşmesi' },
-  { slug: 'on-bilgilendirme', title: 'Ön Bilgilendirme Formu' },
-  { slug: 'iptal-iade', title: 'İptal, İade ve Cayma Hakkı' },
-  { slug: 'kvkk', title: 'KVKK Aydınlatma Metni' },
-  { slug: 'gizlilik', title: 'Gizlilik Politikası' },
-  { slug: 'cerez-politikasi', title: 'Çerez Politikası' },
-  { slug: 'kullanim-sartlari', title: 'Kullanım Şartları' },
+  { slug: 'mesafeli-satis', get title() { return i18n.t('icerik.yasal.mesafeliSatis') } },
+  { slug: 'on-bilgilendirme', get title() { return i18n.t('icerik.yasal.onBilgilendirme') } },
+  { slug: 'iptal-iade', get title() { return i18n.t('icerik.yasal.iptalIade') } },
+  { slug: 'kvkk', get title() { return i18n.t('hesap.kayit.kvkk') } },
+  { slug: 'gizlilik', get title() { return i18n.t('hesap.kayit.gizlilik') } },
+  { slug: 'cerez-politikasi', get title() { return i18n.t('icerik.yasal.cerez') } },
+  { slug: 'kullanim-sartlari', get title() { return i18n.t('hesap.kayit.kullanimSartlari') } },
 ] as const
 export type LegalSlug = (typeof LEGAL_DOCS)[number]['slug']
 
-/** Tıbbi/veteriner sorumluluk uyarısı — footer + ürün sayfalarında gösterilir. */
-export const MEDICAL_DISCLAIMER =
-  'PEMF Vet, veteriner hekim gözetiminde kullanılmak üzere tasarlanmış klinik destek yazılımıdır. ' +
-  'Akıllı teşhis ve AI analiz çıktıları bilgilendirme amaçlıdır; veteriner hekimin tıbbi teşhis, karar ve ' +
-  'tedavisinin yerine geçmez. Otonom seans (AI Pro) özellikleri veteriner hekim sorumluluğunda kullanılır.'
+/** Tıbbi/veteriner sorumluluk uyarısı — footer + ürün sayfalarında gösterilir. Etkin dilde OKUNUR (işlev; modül düzeyi sabit DEĞİL). */
+export function tibbiUyari(): string {
+  return i18n.t('icerik.uyari.tibbi')
+}
 
 /** TEST AŞAMASI: true → TÜM profiller (Araştırma dahil) ücretsiz/indirilebilir; ücret etiketleri
  *  gizlenir. Abonelik satışı canlıya geçince false yapın (iyzico hazır olunca). */
@@ -165,9 +166,9 @@ export const DOWNLOAD_HOST = {
   androidVersion: '2.3.34', // 2026-09-11: bobin 6-7 kabloyla (STM32) suruluyor, tek liste 'Bobinler 1-7'; bobin 1-5 akim gostergesi; olculmeyen alan kisa cizgi
   /** İndir sayfasında telefon kartında gösterilir — uygulamanın ROLÜNÜ açıklar (tek başına
    *  terapi uygulamaz; masaüstündeki cihazın uzaktan kumandasıdır). */
-  androidRolNotu: 'Kliniğinizdeki cihaza bağlanır: seans başlatıp durdurabilir, bobin ayarlarını değiştirebilir, sensörleri izleyebilir ve hasta kayıtlarına bakabilirsiniz. Cihazın bağlı olduğu klinik bilgisayarı açık olmalıdır.',
+  get androidRolNotu() { return i18n.t('icerik.indir.androidRol') },
   /** İndir sayfasında telefon kartının altında gösterilir — iki farklı numarayı açıklar. */
-  androidVersionNote: 'Telefon uygulamasının sürüm numarası bilgisayar uygulamasından ayrıdır; ikisi bağımsız güncellenir.',
+  get androidVersionNote() { return i18n.t('icerik.indir.androidSurumNotu') },
   get androidAsset(): string {
     return `PEMF_Vet_Mobil-${this.androidVersion}.apk`
   },
@@ -185,9 +186,9 @@ export const CLIENT = {
   // indirmek kullanıcıyı yanıltır ve destek çağrısını çözümsüz bırakır. Etiket yükseltilirken
   // burası UNUTULDU (2026-08-10 → 1.9.19 yayınında); `downloadNames.test.ts` yakaladı.
   version: '1.9.51',
-  channel: 'Sürüm 2026.1',
+  get channel() { return i18n.t('icerik.indir.kanal') },
   sizeMB: 3, // NSIS launcher setup ~2.9 MB (asıl uygulama+modeller client içinden iner). ⚠️ Windows 1.9.43'ten beri ~252 MB (WebView2 offline installer gömülü); mac/linux hâlâ küçük. Kart tek sizeMB gösteriyor — Windows'a özel boyut ayrı iş.
-  releaseDate: '10 Eyl 2026',
+  get releaseDate() { return i18n.t('icerik.indir.surumTarihi') },
   ready: DOWNLOAD_HOST.ready,
   downloads: {
     windows: {
@@ -226,7 +227,7 @@ export const CLIENT = {
       key: 'android' as const,
       label: 'Android',
       url: `${AND_REL}/${DOWNLOAD_HOST.androidAsset}`,
-      os: 'Android 8.0 ve üzeri · telefona doğrudan kurulur',
+      get os() { return i18n.t('icerik.indir.androidOs') },
       ready: DOWNLOAD_HOST.androidReady,
       version: DOWNLOAD_HOST.androidVersion,
     },
@@ -270,56 +271,62 @@ export const CLIENT_BASE_MB = 1462
 export const MODULES: Module[] = [
   {
     id: 'home',
-    name: 'Evcil Hayvan Sahibi',
-    tagline: 'Hekiminizin belirlediği protokolü evde uygulayın; kamera destekli ön-değerlendirme.',
+    get name() { return i18n.t('baslatici.profil.ev') },
+    get tagline() { return i18n.t('icerik.profil.ev.tagline') },
     // manifest profiles.home = 0,30 GB (eskiden 0.6 yazıyordu; `cat_organ` modelleri
     // çekirdeğe taşınınca home.zip 528 → 318 MB'a düştü, site güncellenmemişti).
     sizeGB: 0.3,
     included: true,
     addonMonthly: 0,
-    includes: [
-      'Kedide yüz ifadesinden ağrı skoru (FGS)',
-      'Görüntüde bölge ayırma',
-      'Kedide organ konumu (üç boyutlu)',
-      'Kedi sesi analizi',
-      'Hastalık ön-değerlendirme (bilgilendirme amaçlı — teşhis değildir)',
-    ],
+    get includes() {
+      return [
+        i18n.t('icerik.profil.ev.ic1'),
+        i18n.t('icerik.profil.ev.ic2'),
+        i18n.t('icerik.profil.ev.ic3'),
+        i18n.t('icerik.profil.ev.ic4'),
+        i18n.t('icerik.profil.ev.ic5'),
+      ]
+    },
   },
   {
     id: 'vet',
-    name: 'Veteriner Hekim',
-    tagline: 'Tam klinik kontrol: frekansı elle ayarlama, canlı sensör, hasta kayıtları.',
+    get name() { return i18n.t('baslatici.profil.veteriner') },
+    get tagline() { return i18n.t('icerik.profil.vet.tagline') },
     // manifest profiles.vet = 0,12 GB (eskiden 0.9 yazıyordu — 7 kat fazla).
     sizeGB: 0.1,
     included: true,
     addonMonthly: 0,
-    includes: [
-      'Frekans ve bobinleri elle ayarlama',
-      'Canlı sensör ekranı (alan şiddeti mT · sıcaklık °C)',
-      'Şifreli hasta kayıtları + klinik istatistikleri',
-      'AI Pro: ölçümlere göre kendini ayarlayan otomatik seans',
-      'Tüm klinik AI modelleri',
-    ],
+    get includes() {
+      return [
+        i18n.t('icerik.profil.vet.ic1'),
+        i18n.t('icerik.profil.vet.ic2'),
+        i18n.t('icerik.profil.vet.ic3'),
+        i18n.t('icerik.profil.vet.ic4'),
+        i18n.t('icerik.profil.vet.ic5'),
+      ]
+    },
     recommended: true,
   },
   {
     id: 'research',
-    name: 'Araştırma Profili',
-    tagline: FREE_MODE
-      ? 'Kanser-araştırma modelleri — test aşamasında ücretsiz.'
-      : 'Kanser-araştırma modelleri — ağır indirme; ücretli eklenti.',
+    get name() { return i18n.t('icerik.profil.arastirma.ad') },
+    get tagline() {
+      return FREE_MODE ? i18n.t('icerik.profil.arastirma.taglineUcretsiz') : i18n.t('icerik.profil.arastirma.taglineEklenti')
+    },
     // manifest profiles.research = 1,46 GB.
     sizeGB: 1.5,
     included: FREE_MODE,
     addonMonthly: FREE_MODE ? 0 : 390,
-    includes: [
-      'Fantom tümör + elektromanyetik alan ölçümü',
-      'Petri kuyucuğu (kanser hücre analizi)',
-      'Böbrek RNA analizi (KIRC — berrak hücreli böbrek kanseri)',
-      'Böbrek bilgisayarlı tomografi (BT)',
-      'Böbrek patoloji (histopatoloji)',
-      'Kronik böbrek hastalığı (CKD) tahmini',
-    ],
+    get includes() {
+      return [
+        i18n.t('icerik.profil.arastirma.ic1'),
+        i18n.t('icerik.profil.arastirma.ic2'),
+        i18n.t('icerik.profil.arastirma.ic3'),
+        i18n.t('icerik.profil.arastirma.ic4'),
+        i18n.t('icerik.profil.arastirma.ic5'),
+        i18n.t('icerik.profil.arastirma.ic6'),
+      ]
+    },
   },
 ]
 
@@ -360,50 +367,54 @@ export type Plan = {
  *  iyzico ₺13.800 tahsil edecekti — ₺780 fark. Yön "fazla gösterme" olduğu için müşteri fazla
  *  ödemez, ama Ön Bilgilendirme "tahsil edilecek KESİN tutarı" göstermeyi şart koşuyor
  *  (sayfanın kendi yorumu da aynı sebeple daha önce düzeltilmişti). */
-export const RESEARCH_ADDON = { monthly: 390, yearly: 3900, label: 'Araştırma profili' } as const
+export const RESEARCH_ADDON = { monthly: 390, yearly: 3900, get label() { return i18n.t('icerik.profil.arastirmaKucuk') } } as const
 
 /** Üyelik katmanları — fiyat politikası JETON hakkına bağlı (bkz. JETON).
  *  Fiyatlar ₺ (KDV DÂHİL). yearly = 12 ayın toplamı (2 ay ücretsiz).
  *  'Kullandıkça Öde': önden ödeme/aylık ücret YOK; yalnız harcanan jeton faturalanır. */
 export const PLANS: Plan[] = [
   {
-    name: 'Başlangıç',
+    get name() { return i18n.t('icerik.plan.baslangic.ad') },
     tier: 'baslangic',
     paid: false,
     monthly: 0,
     yearly: 0,
-    priceLabel: 'Ücretsiz',
-    period: '14 gün deneme',
-    desc: 'Evcil Hayvan Sahibi profiliyle sistemi ücretsiz deneyin.',
-    jetonHakki: 'Ayda 50 jeton (≈50 yapay zekâ analizi)',
-    features: [
-      'Evcil Hayvan Sahibi profili · 1 cihaz',
-      'Yapay zekâ teşhis — jeton hakkınız kadar',
-      'Şifreli hasta kaydı',
-      '14 gün tam erişim',
-    ],
-    cta: 'Denemeyi Başlat',
+    get priceLabel() { return i18n.t('indirme.profil.ucretsiz') },
+    get period() { return i18n.t('icerik.plan.baslangic.donem') },
+    get desc() { return i18n.t('icerik.plan.baslangic.aciklama') },
+    get jetonHakki() { return i18n.t('icerik.plan.baslangic.jeton') },
+    get features() {
+      return [
+        i18n.t('icerik.plan.baslangic.o1'),
+        i18n.t('icerik.plan.baslangic.o2'),
+        i18n.t('icerik.plan.baslangic.o3'),
+        i18n.t('icerik.plan.baslangic.o4'),
+      ]
+    },
+    get cta() { return i18n.t('icerik.plan.baslangic.cta') },
     to: '/download',
     highlight: false,
   },
   {
-    name: 'Kullandıkça Öde',
+    get name() { return i18n.t('icerik.plan.kullandikca.ad') },
     tier: 'kullandikca',
     paid: true,
     monthly: null,
     yearly: null,
-    priceLabel: '₺2,90 / jeton',
-    period: 'aylık ücret yok',
-    desc: 'Önden ödeme yok: yalnız yaptığınız analizler kadar ödersiniz.',
-    jetonHakki: 'Aylık jeton hakkı yok — harcadığınız kadar faturalanır',
-    features: [
-      'Aylık ücret ve önden jeton alımı YOK',
-      'Kullanmadığınız ay ücret çıkmaz',
-      'Veteriner profili · 2 cihaza kadar',
-      'Harcanan jetonlar dönem sonunda faturalanır',
-      'E-posta ve uzak destek — 1 iş günü içinde yanıt',
-    ],
-    cta: 'Kullandıkça Öde ile Başla',
+    get priceLabel() { return i18n.t('icerik.plan.kullandikca.fiyat') },
+    get period() { return i18n.t('icerik.plan.kullandikca.donem') },
+    get desc() { return i18n.t('icerik.plan.kullandikca.aciklama') },
+    get jetonHakki() { return i18n.t('icerik.plan.kullandikca.jeton') },
+    get features() {
+      return [
+        i18n.t('icerik.plan.kullandikca.o1'),
+        i18n.t('icerik.plan.kullandikca.o2'),
+        i18n.t('icerik.plan.kullandikca.o3'),
+        i18n.t('icerik.plan.kullandikca.o4'),
+        i18n.t('icerik.plan.destekBirGun'),
+      ]
+    },
+    get cta() { return i18n.t('icerik.plan.kullandikca.cta') },
     to: '/download',
     highlight: false,
   },
@@ -413,17 +424,19 @@ export const PLANS: Plan[] = [
     paid: true,
     monthly: 990,
     yearly: 9900,
-    period: 'klinik / ay',
-    desc: 'Aktif klinikler için tam sürüm — ayda 500 jeton.',
-    jetonHakki: 'Ayda 500 jeton (≈500 yapay zekâ analizi)',
-    features: [
-      'Veteriner profili · 5 cihaza kadar',
-      'Yapay Zekâ Merkezi + AI Pro (sensöre göre otomatik seans)',
-      'Biten jetonu ek paketle tamamlarsınız',
-      'Şifreli hasta kayıtları + klinik istatistikleri',
-      'E-posta ve uzak destek — 1 iş günü içinde yanıt',
-    ],
-    cta: 'Pro’yu Seç',
+    get period() { return i18n.t('icerik.plan.klinikAy') },
+    get desc() { return i18n.t('icerik.plan.pro.aciklama') },
+    get jetonHakki() { return i18n.t('icerik.plan.pro.jeton') },
+    get features() {
+      return [
+        i18n.t('icerik.plan.pro.o1'),
+        i18n.t('icerik.plan.pro.o2'),
+        i18n.t('icerik.plan.pro.o3'),
+        i18n.t('icerik.profil.vet.ic3'),
+        i18n.t('icerik.plan.destekBirGun'),
+      ]
+    },
+    get cta() { return i18n.t('icerik.plan.pro.cta') },
     to: '/download',
     highlight: false,
   },
@@ -433,20 +446,22 @@ export const PLANS: Plan[] = [
     paid: true,
     monthly: 1990,
     yearly: 19900,
-    period: 'klinik / ay',
-    desc: 'Yoğun klinikler için — ayda 2.000 jeton ve 15 cihaz.',
-    jetonHakki: 'Ayda 2.000 jeton (≈2.000 yapay zekâ analizi)',
-    features: [
-      'Pro’daki her şey',
-      'AI Pro otomatik seans (seans başına 5 jeton)',
-      '15 cihaza kadar aynı anda bağlantı',
-      'Araştırma profili eklenebilir (+₺390/ay)',
-      'Öncelikli destek — aynı iş günü içinde yanıt',
-    ],
-    cta: 'Pro+’ya Yükselt',
+    get period() { return i18n.t('icerik.plan.klinikAy') },
+    get desc() { return i18n.t('icerik.plan.proPlus.aciklama') },
+    get jetonHakki() { return i18n.t('icerik.plan.proPlus.jeton') },
+    get features() {
+      return [
+        i18n.t('icerik.plan.proPlus.o1'),
+        i18n.t('icerik.plan.proPlus.o2'),
+        i18n.t('icerik.plan.proPlus.o3'),
+        i18n.t('icerik.plan.proPlus.o4'),
+        i18n.t('icerik.plan.proPlus.o5'),
+      ]
+    },
+    get cta() { return i18n.t('icerik.plan.proPlus.cta') },
     to: '/download',
     highlight: true,
-    badge: 'Anında analiz',
+    get badge() { return i18n.t('icerik.plan.proPlus.rozet') },
   },
 ]
 
@@ -472,9 +487,9 @@ export const PLANS: Plan[] = [
  * entitlement katmanı (henüz ENFORCED=false; ödeme başlayınca zorunlu kılınacak).
  */
 export const ADDONS = [
-  { name: 'Ek Jeton Paketi', desc: 'Jetonunuz bittiğinde tamamlayın — satın alınan jetonların süresi dolmaz.', price: '₺249’dan başlayan' },
-  { name: 'Ek Cihaz Hakkı', desc: 'Aynı anda bağlanabilecek cihaz sayısını bir artırır.', price: '₺149 / ay' },
-  { name: 'Uzaktan Erişim', desc: 'Klinik dışındayken cihazı şifreli bağlantıyla izleyip yönetin.', price: '₺249 / ay' },
+  { get name() { return i18n.t('icerik.eklenti.jeton.ad') }, get desc() { return i18n.t('icerik.eklenti.jeton.aciklama') }, get price() { return i18n.t('icerik.eklenti.jeton.fiyat') } },
+  { get name() { return i18n.t('icerik.eklenti.cihaz.ad') }, get desc() { return i18n.t('icerik.eklenti.cihaz.aciklama') }, get price() { return i18n.t('icerik.eklenti.cihaz.fiyat') } },
+  { get name() { return i18n.t('icerik.eklenti.uzak.ad') }, get desc() { return i18n.t('icerik.eklenti.uzak.aciklama') }, get price() { return i18n.t('icerik.eklenti.uzak.fiyat') } },
 ] as const
 
 /* Akış: siteden küçük "başlatıcı" iner → başlatıcı asıl uygulamayı kurar → Başlat.
@@ -482,18 +497,18 @@ export const ADDONS = [
 export const LAUNCHER_STEPS = [
   {
     step: '01',
-    title: 'PEMF Vet’i indirin',
-    desc: 'Sitemizden küçük kurulum dosyasını (yaklaşık 3 MB) indirip birkaç tıkla kurun. Masaüstünüze PEMF Vet kısayolu eklenir.',
+    get title() { return i18n.t('ana.hero.vurgu') },
+    get desc() { return i18n.t('icerik.adim.a1.aciklama') },
   },
   {
     step: '02',
-    title: 'Başlatıcı gerisini halleder',
-    desc: 'Kurduğunuz başlatıcı, asıl PEMF Vet uygulamasını — yapay zekâ modelleri ve cihaz yazılımı dahil — sizin için indirip kurar. Beklemeniz yeterli.',
+    get title() { return i18n.t('icerik.adim.a2.baslik') },
+    get desc() { return i18n.t('icerik.adim.a2.aciklama') },
   },
   {
     step: '03',
-    title: '“Başlat”a basın',
-    desc: 'İndirme bitince “Başlat” düğmesi çıkar; tek tıkla uygulama açılır. Yeni sürümler de kendiliğinden gelir — elle kurulum yapmanız gerekmez.',
+    get title() { return i18n.t('icerik.adim.a3.baslik') },
+    get desc() { return i18n.t('icerik.adim.a3.aciklama') },
   },
 ] as const
 
@@ -503,32 +518,32 @@ export const FEATURES = [
     // üzerinden (mDNS keşfi + HTTP/WebSocket), bobinler ise USB seri (STM32) ve MQTT (ESP32) ile
     // sürülüyor; uzaktan erişim güvenli tünelden. Yanlış yetenek beyanı satış vaadi doğurur.
     n: '01',
-    title: 'Otomatik Cihaz Bağlantısı',
-    desc: 'Cihazı aynı Wi-Fi ağında otomatik bulur; frekans ve şiddet değişiklikleri anında uygulanır, sensör verisi canlı akar.',
+    get title() { return i18n.t('icerik.ozellik.f1.baslik') },
+    get desc() { return i18n.t('icerik.ozellik.f1.aciklama') },
     icon: 'wifi',
   },
   {
     n: '02',
-    title: 'Hasta Veritabanı',
-    desc: 'Her hasta için özelleştirilmiş protokoller oluşturun; seans geçmişini şifreli olarak detaylı grafiklerle takip edin.',
+    get title() { return i18n.t('ekranlar.ekran.hastalar.baslik') },
+    get desc() { return i18n.t('icerik.ozellik.f2.aciklama') },
     icon: 'database',
   },
   {
     n: '03',
-    title: 'Otomatik Güncellemeler',
-    desc: 'Cihaz yazılımınız ve yapay zekâ modelleriniz tek tıkla güncellenir; her zaman en yeni sürümle çalışırsınız.',
+    get title() { return i18n.t('icerik.ozellik.f3.baslik') },
+    get desc() { return i18n.t('icerik.ozellik.f3.aciklama') },
     icon: 'refresh',
   },
   {
     n: '04',
-    title: 'Yapay Zekâ Merkezi',
-    desc: 'Kamerayla desteklenen teşhis: yüz ifadesinden ağrı skoru, organların üç boyutlu konumu ve AI Pro — sensörden gelen ölçümlere göre seansı kendi kendine ayarlayan otomatik mod.',
+    get title() { return i18n.t('ekranlar.ekran.modeller.baslik') },
+    get desc() { return i18n.t('icerik.ozellik.f4.aciklama') },
     icon: 'brain',
   },
   {
     n: '05',
-    title: 'Klinik Güvenlik',
-    desc: 'Acil durdurma düğmesi, otomatik süre sınırı ve hedef kontrolü: seans, uygulanacak bölge güvenle tespit edilmeden başlamaz.',
+    get title() { return i18n.t('icerik.ozellik.f5.baslik') },
+    get desc() { return i18n.t('icerik.ozellik.f5.aciklama') },
     icon: 'shield',
   },
   {
@@ -536,8 +551,8 @@ export const FEATURES = [
     // `DOWNLOAD_HOST.macosReady` ile "Yakında" gösteriyor). Özellik metni "üçünde de çalışır"
     // diyerek indirme bölümüyle çelişiyordu; mevcut duruma hizala.
     n: '06',
-    title: 'Çoklu Platform',
-    desc: 'Windows bilgisayarlarda ve Android telefonlarda tek uygulama (macOS ve Linux hazırlanıyor); klinik verileri cihazda şifreli tutulur, klinik dışından erişim şifreli bağlantıyla yapılır.',
+    get title() { return i18n.t('icerik.ozellik.f6.baslik') },
+    get desc() { return i18n.t('icerik.ozellik.f6.aciklama') },
     icon: 'monitor',
   },
 ] as const
@@ -546,11 +561,13 @@ export const FEATURES = [
 // üründe olmayan "Bluetooth"tan bahsediyordu — site 1.9.8 dağıtırken eski sürüm notu gösteriyordu.
 export const PATCH = {
   version: CLIENT.version,
-  date: CLIENT.releaseDate,
-  notes: [
-    'Güvenlik ve kayıt doğruluğu sürümü: bobin bir komutu reddederse artık ekranda sebebiyle görünür ve tedavi geçmişine hiç çalışmamış bobin yazılmaz.',
-    'Acil durdurmanın bulut yedeği ve kapanan seans kayıtları arka planda sağlamlaştırıldı; telefon ile bilgisayar sürümü farklıysa uygulama bunu artık açıkça söyler.',
-  ],
+  get date() { return CLIENT.releaseDate },
+  get notes() {
+    return [
+      i18n.t('icerik.surum.n1'),
+      i18n.t('icerik.surum.n2'),
+    ]
+  },
 } as const
 
 /**
@@ -574,77 +591,83 @@ export const PATCH = {
  * ⚠️ Yeni satır eklerken bu iki sözcükten birini seç; çıplak '—' KULLANMA.
  */
 export const COMPARE: { label: string; values: Record<Plan['tier'], string> }[] = [
-  { label: 'Aylık jeton hakkı', values: { baslangic: '50', kullandikca: 'Yok — kullandıkça', pro: '500', pro_plus: '2.000' } },
-  { label: 'Aylık ücret', values: { baslangic: 'Alınmıyor', kullandikca: 'Alınmıyor', pro: '₺990', pro_plus: '₺1.990' } },
-  { label: 'Jeton başına ücret', values: { baslangic: 'Alınmıyor', kullandikca: '₺2,90', pro: 'Alınmıyor', pro_plus: 'Alınmıyor' } },
-  { label: 'Ek jeton paketi', values: { baslangic: '✓', kullandikca: '✓', pro: '✓', pro_plus: '✓' } },
-  { label: 'AI Pro otomatik seans', values: { baslangic: 'Yok', kullandikca: '✓ (5 jeton/seans)', pro: '✓ (5 jeton/seans)', pro_plus: '✓ (5 jeton/seans)' } },
-  { label: 'Aynı anda bağlanan cihaz', values: { baslangic: '1', kullandikca: '2', pro: '5', pro_plus: '15' } },
-  { label: 'Kurulum profilleri', values: { baslangic: 'Evcil Hayvan Sahibi', kullandikca: 'Evcil Hayvan Sahibi + Veteriner', pro: 'Evcil Hayvan Sahibi + Veteriner', pro_plus: 'Evcil Hayvan Sahibi + Veteriner' } },
-  { label: 'Araştırma profili', values: { baslangic: 'Yok', kullandikca: '+₺390/ay', pro: '+₺390/ay', pro_plus: '+₺390/ay' } },
-  { label: 'Hasta kayıtları + istatistikler', values: { baslangic: 'Temel', kullandikca: '✓', pro: '✓', pro_plus: '✓' } },
-  { label: 'Otomatik güncelleme', values: { baslangic: '✓', kullandikca: '✓', pro: '✓', pro_plus: '✓' } },
-  { label: 'Destek yanıt süresi', values: { baslangic: '2 iş günü', kullandikca: '1 iş günü', pro: '1 iş günü', pro_plus: 'Aynı iş günü' } },
+  { get label() { return i18n.t('icerik.karsilastir.aylikJeton') }, get values() { return { baslangic: '50', kullandikca: i18n.t('icerik.karsilastir.yokKullandikca'), pro: '500', pro_plus: i18n.t('icerik.karsilastir.sayi2000') } } },
+  { get label() { return i18n.t('icerik.karsilastir.aylikUcret') }, get values() { return { baslangic: i18n.t('icerik.karsilastir.alinmiyor'), kullandikca: i18n.t('icerik.karsilastir.alinmiyor'), pro: '₺990', pro_plus: i18n.t('icerik.karsilastir.tl1990') } } },
+  { get label() { return i18n.t('icerik.karsilastir.jetonUcreti') }, get values() { return { baslangic: i18n.t('icerik.karsilastir.alinmiyor'), kullandikca: i18n.t('icerik.karsilastir.tl290'), pro: i18n.t('icerik.karsilastir.alinmiyor'), pro_plus: i18n.t('icerik.karsilastir.alinmiyor') } } },
+  { get label() { return i18n.t('icerik.karsilastir.ekPaket') }, values: { baslangic: '✓', kullandikca: '✓', pro: '✓', pro_plus: '✓' } },
+  { get label() { return i18n.t('icerik.karsilastir.aiPro') }, get values() { return { baslangic: i18n.t('icerik.karsilastir.yok'), kullandikca: i18n.t('icerik.karsilastir.aiProSeans'), pro: i18n.t('icerik.karsilastir.aiProSeans'), pro_plus: i18n.t('icerik.karsilastir.aiProSeans') } } },
+  { get label() { return i18n.t('icerik.karsilastir.cihaz') }, values: { baslangic: '1', kullandikca: '2', pro: '5', pro_plus: '15' } },
+  { get label() { return i18n.t('ana.profiller.rozet') }, get values() { return { baslangic: i18n.t('baslatici.profil.ev'), kullandikca: i18n.t('icerik.karsilastir.evVet'), pro: i18n.t('icerik.karsilastir.evVet'), pro_plus: i18n.t('icerik.karsilastir.evVet') } } },
+  { get label() { return i18n.t('icerik.profil.arastirmaKucuk') }, get values() { return { baslangic: i18n.t('icerik.karsilastir.yok'), kullandikca: i18n.t('icerik.karsilastir.arastirmaEk'), pro: i18n.t('icerik.karsilastir.arastirmaEk'), pro_plus: i18n.t('icerik.karsilastir.arastirmaEk') } } },
+  { get label() { return i18n.t('icerik.karsilastir.kayitlar') }, get values() { return { baslangic: i18n.t('icerik.karsilastir.temel'), kullandikca: '✓', pro: '✓', pro_plus: '✓' } } },
+  { get label() { return i18n.t('icerik.karsilastir.guncelleme') }, values: { baslangic: '✓', kullandikca: '✓', pro: '✓', pro_plus: '✓' } },
+  { get label() { return i18n.t('icerik.karsilastir.destek') }, get values() { return { baslangic: i18n.t('icerik.karsilastir.ikiGun'), kullandikca: i18n.t('icerik.karsilastir.birGun'), pro: i18n.t('icerik.karsilastir.birGun'), pro_plus: i18n.t('icerik.karsilastir.ayniGun') } } },
 ]
+
+/** Karşılaştırma değeri "bu planda yok" mu (eksiklik → soluk gösterim)? Sözlük etkin dilde katalogdan: 'Yok' (TR) / 'None' (EN) —
+ *  etiketten valans TAHMİN EDİLMEZ (yukarıdaki kural aynen). */
+export const karsilastirmaYokMu = (v: string): boolean => v.startsWith(i18n.t('icerik.karsilastir.yok'))
 
 export const FAQ = [
   {
-    q: 'İndirdiğim program tam olarak nedir?',
-    a: 'Siteden indirdiğiniz küçük kurulum dosyasına “başlatıcı” diyoruz (indirilen dosyanın adı PEMFVetClient-Setup-…exe’dir). Kurulumu birkaç tıkla tamamlarsınız; program açıldığında asıl PEMF Vet uygulamasını — yapay zekâ modelleri ve cihaz yazılımı dahil — sizin için indirip kurar, bitince “Başlat” ile açarsınız. Sonraki güncellemeleri de o getirir; siz bir daha dosya indirmezsiniz.',
+    get q() { return i18n.t('icerik.sss.program.q') },
+    get a() { return i18n.t('icerik.sss.program.a') },
   },
   {
-    q: 'Neden doğrudan uygulamayı indirmiyorum?',
-    a: 'Uygulama ve yapay zekâ modelleri birkaç gigabayt tutuyor ve sık güncelleniyor. Başlatıcı yalnız değişen parçaları indirir; böylece ilk kurulumdan sonraki güncellemeler küçük ve hızlı olur, siz de her seferinde büyük bir dosya indirmezsiniz.',
+    get q() { return i18n.t('icerik.sss.neden.q') },
+    get a() { return i18n.t('icerik.sss.neden.a') },
   },
   {
-    q: 'Hangi işletim sistemleri destekleniyor?',
-    a: 'Şu an Windows 10/11 (64-bit) bilgisayarlar ve Android 8.0+ telefonlar. macOS ile Linux sürümleri hazırlanıyor; hazır olduklarında İndir sayfasında görünecekler.',
+    get q() { return i18n.t('icerik.sss.isletim.q') },
+    get a() { return i18n.t('icerik.sss.isletim.a') },
   },
   {
-    q: 'İnternet olmadan çalışır mı?',
-    a: 'İlk kurulum ve güncellemeler için internet gerekir. Kurulumdan sonra yapay zekâ modelleri cihazınızda çalışır ve klinik verileriniz cihazda şifreli tutulur — seans, acil durdurma ve sensör izleme için internet şart değildir. Yapay zekâ analizi ise internet ister: her analizin jetonu hesabınızdan çevrimiçi düşülür, internet yokken yeni analiz başlatılmaz (süren seans etkilenmez). İnternet ayrıca güncelleme, hesap doğrulama ve (açtıysanız) klinik dışından erişim için kullanılır. Planınız ayda kaç yapay zekâ analizi yapabileceğinizi belirler (bkz. “Pro ile Pro+ arasındaki fark ne?”).',
+    get q() { return i18n.t('icerik.sss.internet.q') },
+    get a() { return i18n.t('icerik.sss.internet.a') },
   },
   {
-    q: 'Jeton nedir, neye harcanır?',
-    a: 'Jeton, yapay zekâ analizlerinin birimidir: bir görüntü, ses veya sensör analizi 1 jeton; ağır araştırma modelleri (patoloji, RNA, tomografi) 3 jeton; AI Pro’nun otomatik seansı seans başına 5 jeton harcar. Planınız her ay belirli bir jeton hakkıyla yenilenir; hakkınız biterse ek paket alabilirsiniz. ⚠️ Jeton yalnız YAPAY ZEKÂ ANALİZİ içindir: seans başlatma, süren seansı sürdürme, acil durdurma, sensör izleme ve cihaz kontrolü jetondan BAĞIMSIZDIR — jeton bitse bile seans ve acil durdurma engellenmez.',
+    get q() { return i18n.t('icerik.sss.jeton.q') },
+    get a() { return i18n.t('icerik.sss.jeton.a') },
   },
   {
-    q: 'Jetonum biterse ne olur? Kullanmadığım jetonlar ne oluyor?',
-    a: 'Jetonunuz bittiğinde yeni yapay zekâ analizi başlatamazsınız; tedavi tarafı etkilenmez (seans, acil durdurma ve sensör izleme çalışmaya devam eder). Ek paket alarak hemen devam edebilirsiniz. Planınızın aylık hakkı her dönem yenilenir ve bir sonraki aya devretmez; buna karşılık satın aldığınız jetonların süresi yoktur — kullanana kadar hesabınızda durur. İnternetiniz yokken de analiz yapabilirsiniz: tüketim cihazınızda tutulur ve bağlantı gelince hesabınıza işlenir.',
+    get q() { return i18n.t('icerik.sss.jetonBitince.q') },
+    get a() { return i18n.t('icerik.sss.jetonBitince.a') },
   },
   {
     // 8. parti (sahip isteği): "hiç önden satın almadan kullandıkça öde gibi bir üyelik olmalı."
     // Bu maddede ÜÇ soru birden cevaplanmalı — testle kilitli: (1) hiç kullanmazsam ne olur,
     // (2) ne zaman faturalanır, (3) sürpriz fatura sınırı ne (borç tavanı).
-    q: 'Kullandıkça Öde nasıl çalışıyor?',
-    a: 'Aylık ücret ödemez, önden jeton satın almazsınız. Kartınızı bir kez tanımlarsınız; yalnız yaptığınız analizler kadar, jeton başına ₺2,90 üzerinden ücretlendirilirsiniz. O ay hiç analiz yapmazsanız hiç ücret çıkmaz. Harcamanız ay sonunda toplu olarak faturalanır. Faturalanmamış kullanım 300 jetona ulaşırsa, ödeme alınana kadar yeni analiz başlatılamaz — böylece beklemediğiniz büyüklükte bir fatura oluşmaz. ⚠️ Bu sınır yalnız yapay zekâ analizleri içindir: seans başlatma, süren seansı sürdürme, acil durdurma ve sensör izleme her koşulda çalışır. Düzenli olarak ayda 340’tan fazla analiz yapıyorsanız Pro planı daha ucuza gelir.',
+    get q() { return i18n.t('icerik.sss.kullandikca.q') },
+    get a() { return i18n.t('icerik.sss.kullandikca.a') },
   },
   {
-    q: 'Pro ile Pro+ arasındaki fark ne?',
-    a: 'İkisinde de aynı uygulama ve aynı yapay zekâ modelleri vardır; fark aylık jeton hakkı, cihaz sayısı ve destek hızıdır. Pro: ayda 500 jeton, 5 cihaza kadar bağlantı, 1 iş günü içinde destek. Pro+: ayda 2.000 jeton, 15 cihaza kadar bağlantı, aynı iş günü içinde öncelikli destek. Kliniğinizde tek cihaz varsa ve ayda birkaç yüz analiz yetiyorsa Pro çoğu durumda yeterlidir; jeton biterse her iki planda da ek paket alabilirsiniz.',
+    get q() { return i18n.t('icerik.sss.proProPlus.q') },
+    get a() { return i18n.t('icerik.sss.proProPlus.a') },
   },
   {
-    q: 'AI Pro nedir? Hayvana kendi başına terapi mi uygular?',
-    a: 'AI Pro, seans sırasında sensörlerden gelen ölçümlere (sıcaklık, alan şiddeti, kamera görüntüsü) bakarak seans ayarlarını otomatik güncelleyen moddur. Seansı HER ZAMAN siz başlatır, siz durdurursunuz; acil durdurma, süre sınırı ve sıcaklık kesmesi her koşulda önceliklidir. Cihaz kendi kendine seans başlatmaz ve hekim denetimi olmadan tedavi uygulamaz — nihai karar ve sorumluluk hekimindir.',
+    get q() { return i18n.t('icerik.sss.aiPro.q') },
+    get a() { return i18n.t('icerik.sss.aiPro.a') },
   },
   {
-    q: '14 günlük deneme sonunda ne oluyor?',
-    a: 'Deneme süresi bittiğinde hiçbir ücret çekilmez; kart bilgisi zaten istemiyoruz. Hesabınız ücretsiz Başlangıç düzeyinde çalışmaya devam eder: ayda 50 jeton ve 1 cihaz. Uygulama, hasta kayıtlarınız ve cihaz kontrolü aynen kalır. Daha çok analiz gerekiyorsa hesabınızdan bir plan seçersiniz. (Test aşamasında tüm planlar ücretsiz olduğu için şu an bir kısıtlama uygulanmıyor.)',
+    get q() { return i18n.t('icerik.sss.deneme.q') },
+    get a() { return i18n.t('icerik.sss.deneme.a') },
   },
   {
-    q: 'Aboneliğimi nasıl iptal ederim? Param iade edilir mi?',
-    a: `“Hesabım” menüsündeki “Aboneliği iptal et” ile iptal edersiniz; kısa bir onay adımından sonra otomatik yenileme durur ve bir daha ücret alınmaz. İade koşulları Mesafeli Satış Sözleşmesi ve Ön Bilgilendirme Formu’nda yazılıdır; sorunuz olursa ${COMPANY.email} adresine yazın.`,
+    get q() { return i18n.t('icerik.sss.iptal.q') },
+    get a() {
+      return i18n.t('icerik.sss.iptal.a', { email: COMPANY.email })
+    },
   },
   {
-    q: 'Araştırma profili kime gerekli?',
-    a: 'Üniversite, laboratuvar ve Ar-Ge ekipleri için: fantom tümör ve elektromanyetik alan ölçümü, petri kuyucuğu analizi, böbrek RNA, bilgisayarlı tomografi ve patoloji modelleri gibi araştırma araçlarını içerir. Günlük klinik pratiği için gerekli değildir — Veteriner profili yeterlidir.',
+    get q() { return i18n.t('icerik.sss.arastirma.q') },
+    get a() { return i18n.t('icerik.sss.arastirma.a') },
   },
   {
-    q: 'Telefon uygulaması ne işe yarıyor?',
-    a: 'Telefon uygulaması kliniğinizdeki cihaza bağlanan tam bir kumandadır: seans başlatıp durdurabilir, bobin ayarlarını değiştirebilir, sensör ölçümlerini canlı izleyebilir, acil durdurma yapabilir ve hasta kayıtlarına bakabilirsiniz. Cihaz klinikteki bilgisayara bağlı olduğu için o bilgisayarın açık olması gerekir; aynı ağdayken doğrudan, dışarıdayken güvenli bağlantıyla erişirsiniz. Giriş için masaüstüyle aynı hesabı kullanırsınız.',
+    get q() { return i18n.t('icerik.sss.telefon.q') },
+    get a() { return i18n.t('icerik.sss.telefon.a') },
   },
   {
-    q: 'Güncellemeler ücretli mi?',
-    a: 'Hayır. Uygulama, cihaz yazılımı ve yapay zekâ modeli güncellemelerinin tamamı planınıza dahildir.',
+    get q() { return i18n.t('icerik.sss.guncelleme.q') },
+    get a() { return i18n.t('icerik.sss.guncelleme.a') },
   },
 ] as const

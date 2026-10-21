@@ -20,7 +20,7 @@ import RESET_SRC from '../pages/ResetPassword.tsx?raw'
 import ERRBOUND_SRC from '../components/ErrorBoundary.tsx?raw'
 import CONFIG_SRC from '../config.ts?raw'
 
-import { FAQ, CLIENT } from '../config'
+import { DOWNLOAD_HOST, FAQ, CLIENT } from '../config'
 
 // ─────────────────────────── 1) SSS: satın alma sorularının cevabı ───────────────────────────
 
@@ -130,7 +130,7 @@ describe('4) indirme sayfası kararı', () => {
 
   it('KRİTİK: telefon uygulamasının NE İŞE YARADIĞI kartta yazar', () => {
     // Android kartı, masaüstünün yanında mı yoksa tek başına mı çalıştığını söylemiyordu.
-    const not = soy(CONFIG_SRC).match(/androidRolNotu:\s*'([^']+)'/)?.[1] ?? ''
+    const not = DOWNLOAD_HOST.androidRolNotu // katalogdan değerlendirilmiş Türkçe metin
     expect(not.length).toBeGreaterThan(30)
     expect(soy(DOWNLOAD_SRC)).toMatch(/androidRolNotu/)
   })
@@ -156,7 +156,7 @@ describe('4) indirme sayfası kararı', () => {
 
 describe('5) deneme süresi', () => {
   it('KRİTİK: "14 gün deneme" SONUNDA ne olacağı yazılıdır', () => {
-    const hepsi = `${FAQ.map((f) => f.q + f.a).join(' ')} ${soy(CONFIG_SRC)}`
+    const hepsi = `${FAQ.map((f) => f.q + f.a).join(' ')} ${gorunenMetinler(soy(CONFIG_SRC))}`
     expect(hepsi).toMatch(/deneme (süresi|sonunda|biterse)[^.]{0,140}(ücret|kart|devam|kapan|geç)/i)
   })
 })

@@ -1,0 +1,237 @@
+{
+  "adim": {
+    "a1": {
+      "aciklama": "Sitemizden küçük kurulum dosyasını (yaklaşık 3 MB) indirip birkaç tıkla kurun. Masaüstünüze PEMF Vet kısayolu eklenir."
+    },
+    "a2": {
+      "aciklama": "Kurduğunuz başlatıcı, asıl PEMF Vet uygulamasını — yapay zekâ modelleri ve cihaz yazılımı dahil — sizin için indirip kurar. Beklemeniz yeterli.",
+      "baslik": "Başlatıcı gerisini halleder"
+    },
+    "a3": {
+      "aciklama": "İndirme bitince “Başlat” düğmesi çıkar; tek tıkla uygulama açılır. Yeni sürümler de kendiliğinden gelir — elle kurulum yapmanız gerekmez.",
+      "baslik": "“Başlat”a basın"
+    }
+  },
+  "eklenti": {
+    "cihaz": {
+      "aciklama": "Aynı anda bağlanabilecek cihaz sayısını bir artırır.",
+      "ad": "Ek Cihaz Hakkı",
+      "fiyat": "₺149 / ay"
+    },
+    "jeton": {
+      "aciklama": "Jetonunuz bittiğinde tamamlayın — satın alınan jetonların süresi dolmaz.",
+      "ad": "Ek Jeton Paketi",
+      "fiyat": "₺249’dan başlayan"
+    },
+    "uzak": {
+      "aciklama": "Klinik dışındayken cihazı şifreli bağlantıyla izleyip yönetin.",
+      "ad": "Uzaktan Erişim",
+      "fiyat": "₺249 / ay"
+    }
+  },
+  "indir": {
+    "androidOs": "Android 8.0 ve üzeri · telefona doğrudan kurulur",
+    "androidRol": "Kliniğinizdeki cihaza bağlanır: seans başlatıp durdurabilir, bobin ayarlarını değiştirebilir, sensörleri izleyebilir ve hasta kayıtlarına bakabilirsiniz. Cihazın bağlı olduğu klinik bilgisayarı açık olmalıdır.",
+    "androidSurumNotu": "Telefon uygulamasının sürüm numarası bilgisayar uygulamasından ayrıdır; ikisi bağımsız güncellenir.",
+    "kanal": "Sürüm 2026.1",
+    "surumTarihi": "10 Eyl 2026"
+  },
+  "karsilastir": {
+    "aiPro": "AI Pro otomatik seans",
+    "aiProSeans": "✓ (5 jeton/seans)",
+    "alinmiyor": "Alınmıyor",
+    "arastirmaEk": "+₺390/ay",
+    "aylikJeton": "Aylık jeton hakkı",
+    "aylikUcret": "Aylık ücret",
+    "ayniGun": "Aynı iş günü",
+    "birGun": "1 iş günü",
+    "cihaz": "Aynı anda bağlanan cihaz",
+    "destek": "Destek yanıt süresi",
+    "ekPaket": "Ek jeton paketi",
+    "evVet": "Evcil Hayvan Sahibi + Veteriner",
+    "guncelleme": "Otomatik güncelleme",
+    "ikiGun": "2 iş günü",
+    "jetonUcreti": "Jeton başına ücret",
+    "kayitlar": "Hasta kayıtları + istatistikler",
+    "sayi2000": "2.000",
+    "temel": "Temel",
+    "tl1990": "₺1.990",
+    "tl290": "₺2,90",
+    "yok": "Yok",
+    "yokKullandikca": "Yok — kullandıkça"
+  },
+  "ozellik": {
+    "f1": {
+      "aciklama": "Cihazı aynı Wi-Fi ağında otomatik bulur; frekans ve şiddet değişiklikleri anında uygulanır, sensör verisi canlı akar.",
+      "baslik": "Otomatik Cihaz Bağlantısı"
+    },
+    "f2": {
+      "aciklama": "Her hasta için özelleştirilmiş protokoller oluşturun; seans geçmişini şifreli olarak detaylı grafiklerle takip edin."
+    },
+    "f3": {
+      "aciklama": "Cihaz yazılımınız ve yapay zekâ modelleriniz tek tıkla güncellenir; her zaman en yeni sürümle çalışırsınız.",
+      "baslik": "Otomatik Güncellemeler"
+    },
+    "f4": {
+      "aciklama": "Kamerayla desteklenen teşhis: yüz ifadesinden ağrı skoru, organların üç boyutlu konumu ve AI Pro — sensörden gelen ölçümlere göre seansı kendi kendine ayarlayan otomatik mod."
+    },
+    "f5": {
+      "aciklama": "Acil durdurma düğmesi, otomatik süre sınırı ve hedef kontrolü: seans, uygulanacak bölge güvenle tespit edilmeden başlamaz.",
+      "baslik": "Klinik Güvenlik"
+    },
+    "f6": {
+      "aciklama": "Windows bilgisayarlarda ve Android telefonlarda tek uygulama (macOS ve Linux hazırlanıyor); klinik verileri cihazda şifreli tutulur, klinik dışından erişim şifreli bağlantıyla yapılır.",
+      "baslik": "Çoklu Platform"
+    }
+  },
+  "plan": {
+    "baslangic": {
+      "aciklama": "Evcil Hayvan Sahibi profiliyle sistemi ücretsiz deneyin.",
+      "ad": "Başlangıç",
+      "cta": "Denemeyi Başlat",
+      "donem": "14 gün deneme",
+      "jeton": "Ayda 50 jeton (≈50 yapay zekâ analizi)",
+      "o1": "Evcil Hayvan Sahibi profili · 1 cihaz",
+      "o2": "Yapay zekâ teşhis — jeton hakkınız kadar",
+      "o3": "Şifreli hasta kaydı",
+      "o4": "14 gün tam erişim"
+    },
+    "destekBirGun": "E-posta ve uzak destek — 1 iş günü içinde yanıt",
+    "klinikAy": "klinik / ay",
+    "kullandikca": {
+      "aciklama": "Önden ödeme yok: yalnız yaptığınız analizler kadar ödersiniz.",
+      "ad": "Kullandıkça Öde",
+      "cta": "Kullandıkça Öde ile Başla",
+      "donem": "aylık ücret yok",
+      "fiyat": "₺2,90 / jeton",
+      "jeton": "Aylık jeton hakkı yok — harcadığınız kadar faturalanır",
+      "o1": "Aylık ücret ve önden jeton alımı YOK",
+      "o2": "Kullanmadığınız ay ücret çıkmaz",
+      "o3": "Veteriner profili · 2 cihaza kadar",
+      "o4": "Harcanan jetonlar dönem sonunda faturalanır"
+    },
+    "pro": {
+      "aciklama": "Aktif klinikler için tam sürüm — ayda 500 jeton.",
+      "cta": "Pro’yu Seç",
+      "jeton": "Ayda 500 jeton (≈500 yapay zekâ analizi)",
+      "o1": "Veteriner profili · 5 cihaza kadar",
+      "o2": "Yapay Zekâ Merkezi + AI Pro (sensöre göre otomatik seans)",
+      "o3": "Biten jetonu ek paketle tamamlarsınız"
+    },
+    "proPlus": {
+      "aciklama": "Yoğun klinikler için — ayda 2.000 jeton ve 15 cihaz.",
+      "cta": "Pro+’ya Yükselt",
+      "jeton": "Ayda 2.000 jeton (≈2.000 yapay zekâ analizi)",
+      "o1": "Pro’daki her şey",
+      "o2": "AI Pro otomatik seans (seans başına 5 jeton)",
+      "o3": "15 cihaza kadar aynı anda bağlantı",
+      "o4": "Araştırma profili eklenebilir (+₺390/ay)",
+      "o5": "Öncelikli destek — aynı iş günü içinde yanıt",
+      "rozet": "Anında analiz"
+    }
+  },
+  "profil": {
+    "arastirma": {
+      "ad": "Araştırma Profili",
+      "ic1": "Fantom tümör + elektromanyetik alan ölçümü",
+      "ic2": "Petri kuyucuğu (kanser hücre analizi)",
+      "ic3": "Böbrek RNA analizi (KIRC — berrak hücreli böbrek kanseri)",
+      "ic4": "Böbrek bilgisayarlı tomografi (BT)",
+      "ic5": "Böbrek patoloji (histopatoloji)",
+      "ic6": "Kronik böbrek hastalığı (CKD) tahmini",
+      "taglineEklenti": "Kanser-araştırma modelleri — ağır indirme; ücretli eklenti.",
+      "taglineUcretsiz": "Kanser-araştırma modelleri — test aşamasında ücretsiz."
+    },
+    "arastirmaKucuk": "Araştırma profili",
+    "ev": {
+      "ic1": "Kedide yüz ifadesinden ağrı skoru (FGS)",
+      "ic2": "Görüntüde bölge ayırma",
+      "ic3": "Kedide organ konumu (üç boyutlu)",
+      "ic4": "Kedi sesi analizi",
+      "ic5": "Hastalık ön-değerlendirme (bilgilendirme amaçlı — teşhis değildir)",
+      "tagline": "Hekiminizin belirlediği protokolü evde uygulayın; kamera destekli ön-değerlendirme."
+    },
+    "vet": {
+      "ic1": "Frekans ve bobinleri elle ayarlama",
+      "ic2": "Canlı sensör ekranı (alan şiddeti mT · sıcaklık °C)",
+      "ic3": "Şifreli hasta kayıtları + klinik istatistikleri",
+      "ic4": "AI Pro: ölçümlere göre kendini ayarlayan otomatik seans",
+      "ic5": "Tüm klinik AI modelleri",
+      "tagline": "Tam klinik kontrol: frekansı elle ayarlama, canlı sensör, hasta kayıtları."
+    }
+  },
+  "sirket": {
+    "guncelleme": "7 Ağustos 2026"
+  },
+  "sss": {
+    "aiPro": {
+      "a": "AI Pro, seans sırasında sensörlerden gelen ölçümlere (sıcaklık, alan şiddeti, kamera görüntüsü) bakarak seans ayarlarını otomatik güncelleyen moddur. Seansı HER ZAMAN siz başlatır, siz durdurursunuz; acil durdurma, süre sınırı ve sıcaklık kesmesi her koşulda önceliklidir. Cihaz kendi kendine seans başlatmaz ve hekim denetimi olmadan tedavi uygulamaz — nihai karar ve sorumluluk hekimindir.",
+      "q": "AI Pro nedir? Hayvana kendi başına terapi mi uygular?"
+    },
+    "arastirma": {
+      "a": "Üniversite, laboratuvar ve Ar-Ge ekipleri için: fantom tümör ve elektromanyetik alan ölçümü, petri kuyucuğu analizi, böbrek RNA, bilgisayarlı tomografi ve patoloji modelleri gibi araştırma araçlarını içerir. Günlük klinik pratiği için gerekli değildir — Veteriner profili yeterlidir.",
+      "q": "Araştırma profili kime gerekli?"
+    },
+    "deneme": {
+      "a": "Deneme süresi bittiğinde hiçbir ücret çekilmez; kart bilgisi zaten istemiyoruz. Hesabınız ücretsiz Başlangıç düzeyinde çalışmaya devam eder: ayda 50 jeton ve 1 cihaz. Uygulama, hasta kayıtlarınız ve cihaz kontrolü aynen kalır. Daha çok analiz gerekiyorsa hesabınızdan bir plan seçersiniz. (Test aşamasında tüm planlar ücretsiz olduğu için şu an bir kısıtlama uygulanmıyor.)",
+      "q": "14 günlük deneme sonunda ne oluyor?"
+    },
+    "guncelleme": {
+      "a": "Hayır. Uygulama, cihaz yazılımı ve yapay zekâ modeli güncellemelerinin tamamı planınıza dahildir.",
+      "q": "Güncellemeler ücretli mi?"
+    },
+    "internet": {
+      "a": "İlk kurulum ve güncellemeler için internet gerekir. Kurulumdan sonra yapay zekâ modelleri cihazınızda çalışır ve klinik verileriniz cihazda şifreli tutulur — seans, acil durdurma ve sensör izleme için internet şart değildir. Yapay zekâ analizi ise internet ister: her analizin jetonu hesabınızdan çevrimiçi düşülür, internet yokken yeni analiz başlatılmaz (süren seans etkilenmez). İnternet ayrıca güncelleme, hesap doğrulama ve (açtıysanız) klinik dışından erişim için kullanılır. Planınız ayda kaç yapay zekâ analizi yapabileceğinizi belirler (bkz. “Pro ile Pro+ arasındaki fark ne?”).",
+      "q": "İnternet olmadan çalışır mı?"
+    },
+    "iptal": {
+      "a": "“Hesabım” menüsündeki “Aboneliği iptal et” ile iptal edersiniz; kısa bir onay adımından sonra otomatik yenileme durur ve bir daha ücret alınmaz. İade koşulları Mesafeli Satış Sözleşmesi ve Ön Bilgilendirme Formu’nda yazılıdır; sorunuz olursa {{email}} adresine yazın.",
+      "q": "Aboneliğimi nasıl iptal ederim? Param iade edilir mi?"
+    },
+    "isletim": {
+      "a": "Şu an Windows 10/11 (64-bit) bilgisayarlar ve Android 8.0+ telefonlar. macOS ile Linux sürümleri hazırlanıyor; hazır olduklarında İndir sayfasında görünecekler.",
+      "q": "Hangi işletim sistemleri destekleniyor?"
+    },
+    "jeton": {
+      "a": "Jeton, yapay zekâ analizlerinin birimidir: bir görüntü, ses veya sensör analizi 1 jeton; ağır araştırma modelleri (patoloji, RNA, tomografi) 3 jeton; AI Pro’nun otomatik seansı seans başına 5 jeton harcar. Planınız her ay belirli bir jeton hakkıyla yenilenir; hakkınız biterse ek paket alabilirsiniz. ⚠️ Jeton yalnız YAPAY ZEKÂ ANALİZİ içindir: seans başlatma, süren seansı sürdürme, acil durdurma, sensör izleme ve cihaz kontrolü jetondan BAĞIMSIZDIR — jeton bitse bile seans ve acil durdurma engellenmez.",
+      "q": "Jeton nedir, neye harcanır?"
+    },
+    "jetonBitince": {
+      "a": "Jetonunuz bittiğinde yeni yapay zekâ analizi başlatamazsınız; tedavi tarafı etkilenmez (seans, acil durdurma ve sensör izleme çalışmaya devam eder). Ek paket alarak hemen devam edebilirsiniz. Planınızın aylık hakkı her dönem yenilenir ve bir sonraki aya devretmez; buna karşılık satın aldığınız jetonların süresi yoktur — kullanana kadar hesabınızda durur. İnternetiniz yokken de analiz yapabilirsiniz: tüketim cihazınızda tutulur ve bağlantı gelince hesabınıza işlenir.",
+      "q": "Jetonum biterse ne olur? Kullanmadığım jetonlar ne oluyor?"
+    },
+    "kullandikca": {
+      "a": "Aylık ücret ödemez, önden jeton satın almazsınız. Kartınızı bir kez tanımlarsınız; yalnız yaptığınız analizler kadar, jeton başına ₺2,90 üzerinden ücretlendirilirsiniz. O ay hiç analiz yapmazsanız hiç ücret çıkmaz. Harcamanız ay sonunda toplu olarak faturalanır. Faturalanmamış kullanım 300 jetona ulaşırsa, ödeme alınana kadar yeni analiz başlatılamaz — böylece beklemediğiniz büyüklükte bir fatura oluşmaz. ⚠️ Bu sınır yalnız yapay zekâ analizleri içindir: seans başlatma, süren seansı sürdürme, acil durdurma ve sensör izleme her koşulda çalışır. Düzenli olarak ayda 340’tan fazla analiz yapıyorsanız Pro planı daha ucuza gelir.",
+      "q": "Kullandıkça Öde nasıl çalışıyor?"
+    },
+    "neden": {
+      "a": "Uygulama ve yapay zekâ modelleri birkaç gigabayt tutuyor ve sık güncelleniyor. Başlatıcı yalnız değişen parçaları indirir; böylece ilk kurulumdan sonraki güncellemeler küçük ve hızlı olur, siz de her seferinde büyük bir dosya indirmezsiniz.",
+      "q": "Neden doğrudan uygulamayı indirmiyorum?"
+    },
+    "proProPlus": {
+      "a": "İkisinde de aynı uygulama ve aynı yapay zekâ modelleri vardır; fark aylık jeton hakkı, cihaz sayısı ve destek hızıdır. Pro: ayda 500 jeton, 5 cihaza kadar bağlantı, 1 iş günü içinde destek. Pro+: ayda 2.000 jeton, 15 cihaza kadar bağlantı, aynı iş günü içinde öncelikli destek. Kliniğinizde tek cihaz varsa ve ayda birkaç yüz analiz yetiyorsa Pro çoğu durumda yeterlidir; jeton biterse her iki planda da ek paket alabilirsiniz.",
+      "q": "Pro ile Pro+ arasındaki fark ne?"
+    },
+    "program": {
+      "a": "Siteden indirdiğiniz küçük kurulum dosyasına “başlatıcı” diyoruz (indirilen dosyanın adı PEMFVetClient-Setup-…exe’dir). Kurulumu birkaç tıkla tamamlarsınız; program açıldığında asıl PEMF Vet uygulamasını — yapay zekâ modelleri ve cihaz yazılımı dahil — sizin için indirip kurar, bitince “Başlat” ile açarsınız. Sonraki güncellemeleri de o getirir; siz bir daha dosya indirmezsiniz.",
+      "q": "İndirdiğim program tam olarak nedir?"
+    },
+    "telefon": {
+      "a": "Telefon uygulaması kliniğinizdeki cihaza bağlanan tam bir kumandadır: seans başlatıp durdurabilir, bobin ayarlarını değiştirebilir, sensör ölçümlerini canlı izleyebilir, acil durdurma yapabilir ve hasta kayıtlarına bakabilirsiniz. Cihaz klinikteki bilgisayara bağlı olduğu için o bilgisayarın açık olması gerekir; aynı ağdayken doğrudan, dışarıdayken güvenli bağlantıyla erişirsiniz. Giriş için masaüstüyle aynı hesabı kullanırsınız.",
+      "q": "Telefon uygulaması ne işe yarıyor?"
+    }
+  },
+  "surum": {
+    "n1": "Güvenlik ve kayıt doğruluğu sürümü: bobin bir komutu reddederse artık ekranda sebebiyle görünür ve tedavi geçmişine hiç çalışmamış bobin yazılmaz.",
+    "n2": "Acil durdurmanın bulut yedeği ve kapanan seans kayıtları arka planda sağlamlaştırıldı; telefon ile bilgisayar sürümü farklıysa uygulama bunu artık açıkça söyler."
+  },
+  "uyari": {
+    "tibbi": "PEMF Vet, veteriner hekim gözetiminde kullanılmak üzere tasarlanmış klinik destek yazılımıdır. Akıllı teşhis ve AI analiz çıktıları bilgilendirme amaçlıdır; veteriner hekimin tıbbi teşhis, karar ve tedavisinin yerine geçmez. Otonom seans (AI Pro) özellikleri veteriner hekim sorumluluğunda kullanılır."
+  },
+  "yasal": {
+    "cerez": "Çerez Politikası",
+    "iptalIade": "İptal, İade ve Cayma Hakkı",
+    "mesafeliSatis": "Mesafeli Satış Sözleşmesi",
+    "onBilgilendirme": "Ön Bilgilendirme Formu"
+  }
+}

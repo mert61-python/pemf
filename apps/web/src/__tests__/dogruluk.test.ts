@@ -21,6 +21,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { kaynakSoy as soy } from './_soyucu'
+import { gorunenMetinler } from './_kaynakMetni'
 
 import CONFIG_SRC from '../config.ts?raw'
 import PRICING_SRC from '../pages/Pricing.tsx?raw'
@@ -32,7 +33,7 @@ import { planFiyatGorunumu, planKisaFiyat } from '../lib/planFiyat'
 
 describe('1) telefon uygulamasının rolü DOĞRU anlatılır', () => {
   it('KRİTİK: "telefon cihazı süremez" gibi YANLIŞ bir sınır iddia edilmez', () => {
-    const s = soy(CONFIG_SRC)
+    const s = gorunenMetinler(soy(CONFIG_SRC))
     expect(s).not.toMatch(/telefon tek başına terapi uygulamaz/i)
     expect(s).not.toMatch(/Cihazı sürmek için masaüstü uygulaması gerekir/i)
   })

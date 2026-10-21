@@ -25,6 +25,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { kaynakSoy as soy } from './_soyucu'
+import { gorunenMetinler } from './_kaynakMetni'
 
 import CONFIG_SRC from '../config.ts?raw'
 import PRICING_SRC from '../pages/Pricing.tsx?raw'
@@ -48,7 +49,7 @@ describe('1) jeton modeli tek kaynakta ve tutarlı', () => {
   it('KRİTİK: satın alınan jeton SÜRESİZ, aylık hak DEVRETMEZ (kural metinde de yazılı)', () => {
     expect(JETON.aylikHakDevreder).toBe(false)
     expect(JETON.satinAlinanSuresiz).toBe(true)
-    const metin = `${soy(CONFIG_SRC)}`
+    const metin = `${gorunenMetinler(soy(CONFIG_SRC))}`
     expect(metin).toMatch(/satın aldığınız jetonlar[^.]{0,80}(süresi[^.]{0,20}yok|süresiz)/i)
   })
 
@@ -113,7 +114,7 @@ describe('4) Başlangıç planı ve KDV', () => {
 
 describe('5) tıbbi güvenlik değişmezi metinde', () => {
   it('KRİTİK: jetonun seansı/acil durdurmayı ENGELLEMEDİĞİ açıkça yazılı', () => {
-    const hepsi = `${FAQ.map((f) => f.a).join(' ')} ${soy(CONFIG_SRC)}`
+    const hepsi = `${FAQ.map((f) => f.a).join(' ')} ${gorunenMetinler(soy(CONFIG_SRC))}`
     // ⚠️ Edilgen çatıyı da kabul et: doğru Türkçe "engellenmez" (ilk yazımda yalnız etken
     // "engellemez" aranıyordu ve doğru metin yanlış-KIRMIZI veriyordu).
     expect(hepsi).toMatch(/jeton[^.]{0,180}(seans|acil durdurma)[^.]{0,80}(engellen?mez|etkilen?mez|durdurul?mez)/i)

@@ -1,6 +1,6 @@
 // Author: mertaygn, cglrgrkn
 import { Link } from 'react-router-dom'
-import { BRAND, COMPANY, LEGAL_DOCS, MEDICAL_DISCLAIMER, NAV } from '../config'
+import { BRAND, COMPANY, LEGAL_DOCS, NAV, tibbiUyari } from '../config'
 import { Logo } from './Icons'
 import { useTranslation } from 'react-i18next'
 
@@ -51,7 +51,7 @@ export default function Footer() {
 
         {/* Tıbbi/veteriner sorumluluk uyarısı */}
         <p className="mt-8 rounded-lg border border-border/60 bg-bg-soft/40 px-4 py-3 text-xs leading-relaxed text-muted">
-          {MEDICAL_DISCLAIMER}
+          {tibbiUyari()}
         </p>
 
         <div className="mt-6 text-xs text-muted">

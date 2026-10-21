@@ -24,6 +24,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { kaynakSoy as soy } from './_soyucu'
+import { gorunenMetinler } from './_kaynakMetni'
 
 import CONFIG_SRC from '../config.ts?raw'
 import PRICING_SRC from '../pages/Pricing.tsx?raw'
@@ -116,7 +117,7 @@ describe('3) 7. partide kaldırılan HIZ/KUYRUK vaadinin sayfa kalıntıları', 
   })
 
   it('KRİTİK: plan açıklamaları "gerçek-zamanlı öncelik" satmaz', () => {
-    const s = soy(CONFIG_SRC)
+    const s = gorunenMetinler(soy(CONFIG_SRC))
     // Yorumlar soyulduğu için bu yalnız GERÇEK metinleri (desc/features) tarar.
     expect(s).not.toMatch(/Gerçek-zamanlı öncelik/i)
   })

@@ -23,10 +23,10 @@ import PRICING_SRC from '../pages/Pricing.tsx?raw'
 import AUTHMODAL_SRC from '../context/AuthModal.tsx?raw'
 import AUTHCTX_SRC from '../context/AuthContext.tsx?raw'
 import RESET_SRC from '../pages/ResetPassword.tsx?raw'
-import CONFIG_SRC from '../config.ts?raw'
 import DOWNLOAD_SRC from '../pages/Download.tsx?raw'
 
 import { authHatasiTurkce, SIFRE_KURALI, sifreGecerliMi } from '../lib/authHatalari'
+import { DOWNLOAD_HOST, PATCH } from '../config'
 
 /** Blok + satır yorumları soyulmuş kaynak (ortak, string-bilinçli soyucu — bkz. `_soyucu.ts`). */
 const soy = kaynakSoy
@@ -141,7 +141,8 @@ describe('6) yama notları', () => {
   it('KRİTİK: "Son güncelleme" notları TÜRKÇE KARAKTERLİ yazılır (ASCII bakımsızlığı)', () => {
     // Ekranda "Bakim surumu: guncelleme altyapisi uctan uca dogrulandi" görünüyordu.
     // ⚠️ İlk yazımda anahtar adı yanlıştı (`patchNotes`); gerçek kaynak `PATCH = { notes: [...] }`.
-    const notlar = soy(CONFIG_SRC).match(/export const PATCH[\s\S]{0,900}?as const/)?.[0] ?? ''
+    // Notlar kataloğa taşındı (I18N): değerlendirilmiş Türkçe metin (etkin dil tr).
+    const notlar = PATCH.notes.join(' ')
     expect(notlar.length).toBeGreaterThan(80)
     expect(notlar).not.toMatch(/guncelleme|surum[uü]?\b|degisiklik|dogrulan/i)
     expect(notlar).toMatch(/[çğıöşüÇĞİÖŞÜ]/)
@@ -161,7 +162,7 @@ describe('7) sürüm gösterimi', () => {
     // İki kart iki çok farklı sürüm gösteriyordu; sebebi hiçbir yerde yazmıyordu.
     // ⚠️ Yalnız config'te bir alan bulunması YETMEZ — sayfanın onu BASTIĞI da kilitlenir,
     // aksi halde açıklama tanımlanır ama kullanıcı yine göremezdi.
-    const not = soy(CONFIG_SRC).match(/androidVersionNote:\s*'([^']+)'/)?.[1] ?? ''
+    const not = DOWNLOAD_HOST.androidVersionNote // katalogdan değerlendirilmiş Türkçe metin
     expect(not.length).toBeGreaterThan(30)
     expect(not).toMatch(/ayrı|bağımsız/i)
     expect(soy(DOWNLOAD_SRC)).toMatch(/androidVersionNote/)

@@ -58,7 +58,8 @@ const EKRANLAR: ReadonlyArray<readonly [string, string]> = [
 
 /** Her ekranda deseni arar; eşleşen ekran adlarını döndürür (hata mesajı işe yarasın). */
 function nerede(desen: RegExp): string[] {
-  return EKRANLAR.filter(([, src]) => desen.test(soy(src))).map(([ad]) => ad)
+  // Metin kataloğa taşınan ekranlarda da aranır (görünen metin = kaynak + kullanılan anahtarların TR değeri).
+  return EKRANLAR.filter(([, src]) => desen.test(gorunenMetinler(soy(src)))).map(([ad]) => ad)
 }
 
 // ─────────────────────────────── Adlandırma ───────────────────────────────
@@ -91,7 +92,7 @@ describe('adlandırma: tek ürün, tek ad', () => {
   it('KARŞIT-KANIT: süreci anlatan yerlerde TEK ara-katman adı "başlatıcı" KULLANILIR', () => {
     // Aşırı-sadeleştirme koruması: adı tamamen silmek, "indirdiğim küçük program neydi?"
     // sorusunu cevapsız bırakırdı. Kurulum adımları + SSS bunu bir kez tanımlar.
-    const cfg = soy(CONFIG_SRC)
+    const cfg = gorunenMetinler(soy(CONFIG_SRC))
     expect(cfg).toMatch(/başlatıcı/i)
     expect(cfg).toMatch(/PEMFVetClient-Setup/) // indirilen dosyanın GERÇEK adı SSS'te durur
   })
@@ -109,7 +110,7 @@ describe('jargon: Türkçe karşılık', () => {
   })
 
   it('KRİTİK: kısaltmalar açıklamasız BIRAKILMAZ (DB · KPI · SLA · FGS · KIRC · CKD)', () => {
-    const cfg = soy(CONFIG_SRC)
+    const cfg = gorunenMetinler(soy(CONFIG_SRC))
     expect(cfg).not.toMatch(/Hasta DB/)
     expect(cfg).not.toMatch(/\bKPI\b/)
     expect(cfg).not.toMatch(/\+ SLA|· SLA/)
@@ -140,12 +141,12 @@ describe('jargon: Türkçe karşılık', () => {
     // 'Ev Sahibi profili · 1 cihaz' gibi altı kullanım kaçtı — düzeltmenin kendisi bunu
     // ortaya çıkardı. Artık "Evcil Hayvan " ile başlamayan HER geçiş yakalanır.
     expect(nerede(/(?<!Evcil Hayvan )Ev Sahibi/)).toEqual([])
-    expect(soy(CONFIG_SRC)).toMatch(/Evcil Hayvan Sahibi/)
+    expect(gorunenMetinler(soy(CONFIG_SRC))).toMatch(/Evcil Hayvan Sahibi/)
   })
 
   it('KRİTİK: "AI Pro"nun NE YAPTIĞI en az bir yerde tanımlanır (klinik risk algısı)', () => {
     // Yasal sorumluluk metninde bile geçen özelliğin ne olduğu hiçbir sayfada yazmıyordu.
-    const cfg = soy(CONFIG_SRC)
+    const cfg = gorunenMetinler(soy(CONFIG_SRC))
     expect(cfg).toMatch(/AI Pro/)
     expect(cfg).toMatch(/sensör(den| geri)[^.'"]{0,120}(otomat|kendi)/i)
   })

@@ -1,0 +1,237 @@
+{
+  "adim": {
+    "a1": {
+      "aciklama": "Download the small installer (about 3 MB) from our site and install it in a few clicks. A PEMF Vet shortcut is added to your desktop."
+    },
+    "a2": {
+      "aciklama": "The launcher you installed downloads and installs the actual PEMF Vet app — including the AI models and device software — for you. All you need to do is wait.",
+      "baslik": "The launcher takes care of the rest"
+    },
+    "a3": {
+      "aciklama": "When the download finishes, a “Start” button appears; one click opens the app. New versions arrive on their own — you do not need to install anything by hand.",
+      "baslik": "Press “Start”"
+    }
+  },
+  "eklenti": {
+    "cihaz": {
+      "aciklama": "Increases the number of devices that can connect at the same time by one.",
+      "ad": "Extra Device Slot",
+      "fiyat": "₺149 / month"
+    },
+    "jeton": {
+      "aciklama": "Top up when your credits run out — purchased credits never expire.",
+      "ad": "Extra Credit Pack",
+      "fiyat": "From ₺249"
+    },
+    "uzak": {
+      "aciklama": "Monitor and manage the device over an encrypted connection when you are away from the clinic.",
+      "ad": "Remote Access",
+      "fiyat": "₺249 / month"
+    }
+  },
+  "indir": {
+    "androidOs": "Android 8.0 and above · installs directly on the phone",
+    "androidRol": "Connects to the device in your clinic: you can start and stop sessions, change coil settings, monitor the sensors and look at patient records. The clinic computer the device is connected to must be on.",
+    "androidSurumNotu": "The phone app’s version number is separate from the computer app’s; the two are updated independently.",
+    "kanal": "Version 2026.1",
+    "surumTarihi": "10 Sep 2026"
+  },
+  "karsilastir": {
+    "aiPro": "AI Pro automatic session",
+    "aiProSeans": "✓ (5 credits/session)",
+    "alinmiyor": "Not charged",
+    "arastirmaEk": "+₺390/mo",
+    "aylikJeton": "Monthly credit allowance",
+    "aylikUcret": "Monthly fee",
+    "ayniGun": "Same business day",
+    "birGun": "1 business day",
+    "cihaz": "Devices connected at the same time",
+    "destek": "Support response time",
+    "ekPaket": "Extra credit pack",
+    "evVet": "Pet Owner + Veterinarian",
+    "guncelleme": "Automatic updates",
+    "ikiGun": "2 business days",
+    "jetonUcreti": "Fee per credit",
+    "kayitlar": "Patient records + statistics",
+    "sayi2000": "2,000",
+    "temel": "Basic",
+    "tl1990": "₺1,990",
+    "tl290": "₺2.90",
+    "yok": "None",
+    "yokKullandikca": "None — pay as you go"
+  },
+  "ozellik": {
+    "f1": {
+      "aciklama": "Finds the device automatically on the same Wi-Fi network; frequency and intensity changes are applied instantly and sensor data streams live.",
+      "baslik": "Automatic Device Connection"
+    },
+    "f2": {
+      "aciklama": "Create customized protocols for each patient; follow the session history, encrypted, with detailed charts."
+    },
+    "f3": {
+      "aciklama": "Your device software and AI models are updated with one click; you always work with the latest version.",
+      "baslik": "Automatic Updates"
+    },
+    "f4": {
+      "aciklama": "Camera-assisted diagnosis: pain score from facial expression, three-dimensional organ position and AI Pro — an automatic mode that adjusts the session on its own according to measurements from the sensor."
+    },
+    "f5": {
+      "aciklama": "Emergency stop button, automatic time limit and target check: a session does not start until the area to be treated has been safely detected.",
+      "baslik": "Clinical Safety"
+    },
+    "f6": {
+      "aciklama": "One app on Windows computers and Android phones (macOS and Linux are in preparation); clinic data is kept encrypted on the device, and access from outside the clinic is over an encrypted connection.",
+      "baslik": "Multi-Platform"
+    }
+  },
+  "plan": {
+    "baslangic": {
+      "aciklama": "Try the system for free with the Pet Owner profile.",
+      "ad": "Starter",
+      "cta": "Start the Trial",
+      "donem": "14-day trial",
+      "jeton": "50 credits per month (≈50 AI analyses)",
+      "o1": "Pet Owner profile · 1 device",
+      "o2": "AI diagnosis — as many as your credit allowance",
+      "o3": "Encrypted patient record",
+      "o4": "14 days of full access"
+    },
+    "destekBirGun": "Email and remote support — reply within 1 business day",
+    "klinikAy": "clinic / month",
+    "kullandikca": {
+      "aciklama": "No upfront payment: you pay only for the analyses you run.",
+      "ad": "Pay as You Go",
+      "cta": "Get Started with Pay as You Go",
+      "donem": "no monthly fee",
+      "fiyat": "₺2.90 / credit",
+      "jeton": "No monthly credit allowance — you are billed for what you use",
+      "o1": "NO monthly fee and NO upfront credit purchase",
+      "o2": "No charge in a month you do not use it",
+      "o3": "Veterinarian profile · up to 2 devices",
+      "o4": "Credits you spend are billed at the end of the period"
+    },
+    "pro": {
+      "aciklama": "The full version for active clinics — 500 credits per month.",
+      "cta": "Choose Pro",
+      "jeton": "500 credits per month (≈500 AI analyses)",
+      "o1": "Veterinarian profile · up to 5 devices",
+      "o2": "AI Hub + AI Pro (automatic session based on the sensor)",
+      "o3": "You top up used-up credits with an extra pack"
+    },
+    "proPlus": {
+      "aciklama": "For busy clinics — 2,000 credits per month and 15 devices.",
+      "cta": "Upgrade to Pro+",
+      "jeton": "2,000 credits per month (≈2,000 AI analyses)",
+      "o1": "Everything in Pro",
+      "o2": "AI Pro automatic session (5 credits per session)",
+      "o3": "Connect up to 15 devices at the same time",
+      "o4": "Research profile can be added (+₺390/mo)",
+      "o5": "Priority support — reply within the same business day",
+      "rozet": "Instant analysis"
+    }
+  },
+  "profil": {
+    "arastirma": {
+      "ad": "Research Profile",
+      "ic1": "Phantom tumor + electromagnetic field measurement",
+      "ic2": "Petri well (cancer cell analysis)",
+      "ic3": "Kidney RNA analysis (KIRC — clear cell renal carcinoma)",
+      "ic4": "Kidney computed tomography (CT)",
+      "ic5": "Kidney pathology (histopathology)",
+      "ic6": "Chronic kidney disease (CKD) prediction",
+      "taglineEklenti": "Cancer research models — heavy download; paid add-on.",
+      "taglineUcretsiz": "Cancer research models — free during the test phase."
+    },
+    "arastirmaKucuk": "Research profile",
+    "ev": {
+      "ic1": "Pain score from facial expression in cats (FGS)",
+      "ic2": "Region segmentation in images",
+      "ic3": "Organ position in cats (three-dimensional)",
+      "ic4": "Cat vocalization analysis",
+      "ic5": "Disease pre-assessment (for information only — not a diagnosis)",
+      "tagline": "Apply the protocol set by your veterinarian at home; camera-assisted pre-assessment."
+    },
+    "vet": {
+      "ic1": "Manual adjustment of frequency and coils",
+      "ic2": "Live sensor screen (field strength mT · temperature °C)",
+      "ic3": "Encrypted patient records + clinic statistics",
+      "ic4": "AI Pro: an automatic session that adjusts itself to the measurements",
+      "ic5": "All clinical AI models",
+      "tagline": "Full clinical control: manual frequency adjustment, live sensor, patient records."
+    }
+  },
+  "sirket": {
+    "guncelleme": "August 7, 2026"
+  },
+  "sss": {
+    "aiPro": {
+      "a": "AI Pro is the mode that automatically updates session settings by looking at the measurements coming from the sensors during the session (temperature, field strength, camera image). YOU always start the session and YOU stop it; emergency stop, the time limit and the temperature cutoff always take priority. The device does not start a session on its own and does not apply treatment without veterinarian supervision — the final decision and responsibility belong to the veterinarian.",
+      "q": "What is AI Pro? Does it apply therapy to the animal on its own?"
+    },
+    "arastirma": {
+      "a": "For university, laboratory and R&D teams: it includes research tools such as phantom tumor and electromagnetic field measurement, Petri well analysis, kidney RNA, computed tomography and pathology models. It is not needed for daily clinical practice — the Veterinarian profile is sufficient.",
+      "q": "Who needs the Research profile?"
+    },
+    "deneme": {
+      "a": "No charge is made when the trial period ends; we do not ask for card details in the first place. Your account keeps working at the free Starter level: 50 credits per month and 1 device. The app, your patient records and device control stay exactly as they are. If you need more analyses, you choose a plan from your account. (Because all plans are free during the test phase, no restriction is applied right now.)",
+      "q": "What happens at the end of the 14-day trial?"
+    },
+    "guncelleme": {
+      "a": "No. All updates of the app, the device software and the AI models are included in your plan.",
+      "q": "Are updates paid?"
+    },
+    "internet": {
+      "a": "An internet connection is needed for the first installation and for updates. After installation the AI models run on your device and your clinic data is kept encrypted on the device — the internet is not required for sessions, emergency stop and sensor monitoring. An AI analysis, however, does need the internet: the credit for each analysis is deducted online from your account, and a new analysis cannot be started while offline (a running session is not affected). The internet is also used for updates, account verification and (if you turned it on) access from outside the clinic. Your plan sets how many AI analyses you can run each month (see “What is the difference between Pro and Pro+?”).",
+      "q": "Does it work without internet?"
+    },
+    "iptal": {
+      "a": "You cancel with “Cancel subscription” in the “My account” menu; after a short confirmation step automatic renewal stops and you are not charged again. The refund conditions are written in the Distance Sales Agreement and the Pre-Contract Information Form; if you have questions, write to {{email}}.",
+      "q": "How do I cancel my subscription? Will I be refunded?"
+    },
+    "isletim": {
+      "a": "Currently Windows 10/11 (64-bit) computers and Android 8.0+ phones. macOS and Linux versions are in preparation; they will appear on the Download page when they are ready.",
+      "q": "Which operating systems are supported?"
+    },
+    "jeton": {
+      "a": "A credit is the unit of AI analyses: an image, audio or sensor analysis uses 1 credit; heavy research models (pathology, RNA, tomography) use 3 credits; AI Pro’s automatic session uses 5 credits per session. Your plan is renewed every month with a certain credit allowance; if your allowance runs out you can buy an extra pack. ⚠️ Credits are only for AI ANALYSIS: starting a session, continuing a running session, emergency stop, sensor monitoring and device control are INDEPENDENT of credits — even if your credits run out, sessions and emergency stop are not blocked.",
+      "q": "What is a credit, and what is it spent on?"
+    },
+    "jetonBitince": {
+      "a": "When your credits run out you cannot start a new AI analysis; the treatment side is not affected (sessions, emergency stop and sensor monitoring keep working). You can continue right away by buying an extra pack. Your plan’s monthly allowance renews each period and does not carry over to the next month; by contrast, the credits you buy have no expiry — they stay in your account until you use them. You can also run analyses while your internet is down: consumption is kept on your device and is posted to your account once the connection returns.",
+      "q": "What happens if I run out of credits? What happens to credits I do not use?"
+    },
+    "kullandikca": {
+      "a": "You do not pay a monthly fee and you do not buy credits upfront. You register your card once; you are charged only for the analyses you run, at ₺2.90 per credit. If you run no analysis in a month, no charge is made. Your spending is billed together at the end of the month. If unbilled usage reaches 300 credits, no new analysis can be started until payment is received — so you never get an unexpectedly large bill. ⚠️ This limit applies only to AI analyses: starting a session, continuing a running session, emergency stop and sensor monitoring work under all conditions. If you regularly run more than 340 analyses a month, the Pro plan costs less.",
+      "q": "How does Pay as You Go work?"
+    },
+    "neden": {
+      "a": "The app and the AI models take up several gigabytes and are updated often. The launcher downloads only the parts that changed; so updates after the first installation are small and fast, and you do not download a large file every time.",
+      "q": "Why don't I download the app directly?"
+    },
+    "proProPlus": {
+      "a": "Both have the same app and the same AI models; the difference is the monthly credit allowance, the number of devices and the support speed. Pro: 500 credits per month, connection of up to 5 devices, support within 1 business day. Pro+: 2,000 credits per month, connection of up to 15 devices, priority support within the same business day. If your clinic has a single device and a few hundred analyses a month are enough, Pro is sufficient in most cases; if your credits run out you can buy an extra pack on either plan.",
+      "q": "What is the difference between Pro and Pro+?"
+    },
+    "program": {
+      "a": "We call the small installer you download from the site the “launcher” (the downloaded file is named PEMFVetClient-Setup-….exe). You complete the installation in a few clicks; when the program opens, it downloads and installs the actual PEMF Vet app — including the AI models and device software — for you, and when it finishes you open it with “Start”. It also brings later updates; you never download a file again.",
+      "q": "What exactly is the program I downloaded?"
+    },
+    "telefon": {
+      "a": "The phone app is a full remote control that connects to the device in your clinic: you can start and stop sessions, change coil settings, watch sensor measurements live, trigger an emergency stop and look at patient records. Because the device is connected to the computer in the clinic, that computer must be on; you reach it directly when on the same network and over a secure connection when away. You sign in with the same account as on the desktop.",
+      "q": "What is the phone app for?"
+    }
+  },
+  "surum": {
+    "n1": "Safety and record accuracy release: if a coil rejects a command, it now appears on screen with the reason, and a coil that never ran is no longer written to the treatment history.",
+    "n2": "The emergency stop’s cloud backup and closed session records were hardened in the background; if the phone and computer versions differ, the app now says so explicitly."
+  },
+  "uyari": {
+    "tibbi": "PEMF Vet is clinical support software designed to be used under the supervision of a veterinarian. Smart diagnosis and AI analysis outputs are for information only; they do not replace the veterinarian’s medical diagnosis, decisions and treatment. Autonomous session (AI Pro) features are used under the veterinarian’s responsibility."
+  },
+  "yasal": {
+    "cerez": "Cookie Policy",
+    "iptalIade": "Cancellation, Refund and Right of Withdrawal",
+    "mesafeliSatis": "Distance Sales Agreement",
+    "onBilgilendirme": "Pre-Contract Information Form"
+  }
+}
