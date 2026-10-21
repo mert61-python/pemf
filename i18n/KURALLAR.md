@@ -266,7 +266,7 @@ bağımlılığı kuralı da orada) · K-3 kullanılan anahtar katalogda + dinam
 `i18n/dinamik-anahtarlar.json`) · K-4 terim (`test_i18n_terim_K4.py`) · K-5 kritik + bayrak + bekleyen (`test_i18n_kritik_K5.py`) · K-6 paket
 (`test_i18n_paket_K6.py`) · K-7 AI etiket eşliği (`test_i18n_ai_etiket_K7.py`) · araçlar (`test_i18n_araclar.py`,
 `test_i18n_parti_araclari.py`) · yardımcı (`test_i18n_yardimci.py`) · altyapı (`test_i18n_sunucu_altyapi.py`, `test_i18n_launcher_altyapi.py`,
-`test_i18n_dema_altyapi.py`, `test_i18n_auth_sayfa.py`) · mandal bandı makine-okur alanı (`test_i18n_estop_mandali_eylem_kodu.py`) · pilot (`test_i18n_pilot_sunucu.py`). Arayüz jest: `src/i18n/__tests__`, site vitest: `src/i18n/__tests__`.
+`test_i18n_dema_altyapi.py`, `test_i18n_auth_sayfa.py`) · mandal bandı makine-okur alanı (`test_i18n_estop_mandali_eylem_kodu.py`) · ACİL DURDUR yazıları HER bileşende `kritikMetin` + `useKritikDil` (`test_i18n_acil_durdur_kritik_desen_her_yerde.py`) · pilot (`test_i18n_pilot_sunucu.py`). Arayüz jest: `src/i18n/__tests__`, site vitest: `src/i18n/__tests__`.
 
 ## 10. Sık hatalar (ÖLÇÜLMÜŞ — I18N-0)
 
