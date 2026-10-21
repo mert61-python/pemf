@@ -372,7 +372,7 @@ const ALTIN: Record<string, unknown> = {
   },
   {
    "q": "Jetonum biterse ne olur? Kullanmadığım jetonlar ne oluyor?",
-   "a": "Jetonunuz bittiğinde yeni yapay zekâ analizi başlatamazsınız; tedavi tarafı etkilenmez (seans, acil durdurma ve sensör izleme çalışmaya devam eder). Ek paket alarak hemen devam edebilirsiniz. Planınızın aylık hakkı her dönem yenilenir ve bir sonraki aya devretmez; buna karşılık satın aldığınız jetonların süresi yoktur — kullanana kadar hesabınızda durur. İnternetiniz yokken de analiz yapabilirsiniz: tüketim cihazınızda tutulur ve bağlantı gelince hesabınıza işlenir."
+   "a": "Jetonunuz bittiğinde yeni yapay zekâ analizi başlatamazsınız; tedavi tarafı etkilenmez (seans, acil durdurma ve sensör izleme çalışmaya devam eder). Ek paket alarak hemen devam edebilirsiniz. Planınızın aylık hakkı her dönem yenilenir ve bir sonraki aya devretmez; buna karşılık satın aldığınız jetonların süresi yoktur — kullanana kadar hesabınızda durur. Yapay zekâ analizi internet ister: jeton analiz anında hesabınızdan çevrimiçi düşülür; internet yokken yeni analiz başlatılmaz (süren seans etkilenmez)."
   },
   {
    "q": "Kullandıkça Öde nasıl çalışıyor?",
@@ -384,7 +384,7 @@ const ALTIN: Record<string, unknown> = {
   },
   {
    "q": "AI Pro nedir? Hayvana kendi başına terapi mi uygular?",
-   "a": "AI Pro, seans sırasında sensörlerden gelen ölçümlere (sıcaklık, alan şiddeti, kamera görüntüsü) bakarak seans ayarlarını otomatik güncelleyen moddur. Seansı HER ZAMAN siz başlatır, siz durdurursunuz; acil durdurma, süre sınırı ve sıcaklık kesmesi her koşulda önceliklidir. Cihaz kendi kendine seans başlatmaz ve hekim denetimi olmadan tedavi uygulamaz — nihai karar ve sorumluluk hekimindir."
+   "a": "AI Pro, seans sırasında sensörlerden gelen ölçümlere (sıcaklık, alan şiddeti, kamera görüntüsü) bakarak seans ayarlarını otomatik güncelleyen moddur. Seansı HER ZAMAN siz başlatır, siz durdurursunuz; acil durdurma ve süre sınırı her koşulda önceliklidir. Cihaz kendi kendine seans başlatmaz ve hekim denetimi olmadan tedavi uygulamaz — nihai karar ve sorumluluk hekimindir."
   },
   {
    "q": "14 günlük deneme sonunda ne oluyor?",
@@ -521,6 +521,30 @@ describe('site-12c-icerik · İngilizce (bayrak AÇIK)', () => {
     expect(hucreler()).toEqual(tr)
     expect(tr.filter(Boolean).length).toBe(3) // Yok ×2 + Yok — kullandıkça
     expect(C.karsilastirmaYokMu(EN['icerik.karsilastir.alinmiyor'])).toBe(false) // "ücret alınmıyor" = avantaj, soluk DEĞİL
+  })
+})
+
+// Y166 (S-I18N-P1.11, sahip 2026-10-21; YH A4): SSS'te ürünle çelişen iki cümle ürüne göre düzeltildi (TR + EN; ALTIN'daki iki değer BİLEREK
+// değişti): (1) "İnternetiniz yokken de analiz yapabilirsiniz" — ücretlendirme açıkken AI internet ister (S-4B.5, 10-19 K8);
+// (2) "sıcaklık kesmesi" — termal kesme / 48 °C interlock YOK (sahip 2026-09-29).
+describe('site-12c-icerik · Y166 SSS ürünle çelişmez', () => {
+  const SSS_TR = Object.entries(TR).filter(([k]) => k.startsWith('icerik.sss.')).map(([, v]) => String(v))
+  const SSS_EN = Object.entries(EN).filter(([k]) => k.startsWith('icerik.sss.')).map(([, v]) => String(v))
+  it('SSS taranıyor (boş küme yeşil demez)', () => {
+    expect(SSS_TR.length).toBeGreaterThan(10)
+    expect(SSS_EN.length).toBe(SSS_TR.length)
+  })
+  it('internetsiz analiz iddiası YOK; jeton cevabı internet şartını söyler', () => {
+    for (const v of SSS_TR) expect(v).not.toMatch(/internet(iniz)? yokken de analiz|tüketim cihazınızda tutulur/i)
+    for (const v of SSS_EN) expect(v).not.toMatch(/analys[ie]s while your internet is down|consumption is kept on your device/i)
+    expect(TR['icerik.sss.jetonBitince.a']).toMatch(/Yapay zekâ analizi internet ister/)
+    expect(EN['icerik.sss.jetonBitince.a']).toMatch(/AI analysis needs the internet/)
+  })
+  it('termal (sıcaklık) kesme iddiası YOK', () => {
+    for (const v of SSS_TR) expect(v).not.toMatch(/sıcaklık kesme|termal kesme/i)
+    for (const v of SSS_EN) expect(v).not.toMatch(/temperature cut-?off|thermal cut-?off/i)
+    expect(TR['icerik.sss.aiPro.a']).toMatch(/acil durdurma ve süre sınırı her koşulda önceliklidir/)
+    expect(EN['icerik.sss.aiPro.a']).toMatch(/emergency stop and the time limit always take priority/)
   })
 })
 

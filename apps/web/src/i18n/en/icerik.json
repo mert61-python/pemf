@@ -165,7 +165,7 @@
   },
   "sss": {
     "aiPro": {
-      "a": "AI Pro is the mode that automatically updates session settings by looking at the measurements coming from the sensors during the session (temperature, field strength, camera image). YOU always start the session and YOU stop it; emergency stop, the time limit and the temperature cutoff always take priority. The device does not start a session on its own and does not apply treatment without veterinarian supervision — the final decision and responsibility belong to the veterinarian.",
+      "a": "AI Pro is the mode that automatically updates session settings by looking at the measurements coming from the sensors during the session (temperature, field strength, camera image). YOU always start the session and YOU stop it; emergency stop and the time limit always take priority. The device does not start a session on its own and does not apply treatment without veterinarian supervision — the final decision and responsibility belong to the veterinarian.",
       "q": "What is AI Pro? Does it apply therapy to the animal on its own?"
     },
     "arastirma": {
@@ -197,7 +197,7 @@
       "q": "What is a credit, and what is it spent on?"
     },
     "jetonBitince": {
-      "a": "When your credits run out you cannot start a new AI analysis; the treatment side is not affected (sessions, emergency stop and sensor monitoring keep working). You can continue right away by buying an extra pack. Your plan’s monthly allowance renews each period and does not carry over to the next month; by contrast, the credits you buy have no expiry — they stay in your account until you use them. You can also run analyses while your internet is down: consumption is kept on your device and is posted to your account once the connection returns.",
+      "a": "When your credits run out you cannot start a new AI analysis; the treatment side is not affected (sessions, emergency stop and sensor monitoring keep working). You can continue right away by buying an extra pack. Your plan’s monthly allowance renews each period and does not carry over to the next month; by contrast, the credits you buy have no expiry — they stay in your account until you use them. An AI analysis needs the internet: the credit is deducted online from your account when the analysis runs; a new analysis cannot be started while offline (a running session is not affected).",
       "q": "What happens if I run out of credits? What happens to credits I do not use?"
     },
     "kullandikca": {

@@ -165,7 +165,7 @@
   },
   "sss": {
     "aiPro": {
-      "a": "AI Pro, seans sırasında sensörlerden gelen ölçümlere (sıcaklık, alan şiddeti, kamera görüntüsü) bakarak seans ayarlarını otomatik güncelleyen moddur. Seansı HER ZAMAN siz başlatır, siz durdurursunuz; acil durdurma, süre sınırı ve sıcaklık kesmesi her koşulda önceliklidir. Cihaz kendi kendine seans başlatmaz ve hekim denetimi olmadan tedavi uygulamaz — nihai karar ve sorumluluk hekimindir.",
+      "a": "AI Pro, seans sırasında sensörlerden gelen ölçümlere (sıcaklık, alan şiddeti, kamera görüntüsü) bakarak seans ayarlarını otomatik güncelleyen moddur. Seansı HER ZAMAN siz başlatır, siz durdurursunuz; acil durdurma ve süre sınırı her koşulda önceliklidir. Cihaz kendi kendine seans başlatmaz ve hekim denetimi olmadan tedavi uygulamaz — nihai karar ve sorumluluk hekimindir.",
       "q": "AI Pro nedir? Hayvana kendi başına terapi mi uygular?"
     },
     "arastirma": {
@@ -197,7 +197,7 @@
       "q": "Jeton nedir, neye harcanır?"
     },
     "jetonBitince": {
-      "a": "Jetonunuz bittiğinde yeni yapay zekâ analizi başlatamazsınız; tedavi tarafı etkilenmez (seans, acil durdurma ve sensör izleme çalışmaya devam eder). Ek paket alarak hemen devam edebilirsiniz. Planınızın aylık hakkı her dönem yenilenir ve bir sonraki aya devretmez; buna karşılık satın aldığınız jetonların süresi yoktur — kullanana kadar hesabınızda durur. İnternetiniz yokken de analiz yapabilirsiniz: tüketim cihazınızda tutulur ve bağlantı gelince hesabınıza işlenir.",
+      "a": "Jetonunuz bittiğinde yeni yapay zekâ analizi başlatamazsınız; tedavi tarafı etkilenmez (seans, acil durdurma ve sensör izleme çalışmaya devam eder). Ek paket alarak hemen devam edebilirsiniz. Planınızın aylık hakkı her dönem yenilenir ve bir sonraki aya devretmez; buna karşılık satın aldığınız jetonların süresi yoktur — kullanana kadar hesabınızda durur. Yapay zekâ analizi internet ister: jeton analiz anında hesabınızdan çevrimiçi düşülür; internet yokken yeni analiz başlatılmaz (süren seans etkilenmez).",
       "q": "Jetonum biterse ne olur? Kullanmadığım jetonlar ne oluyor?"
     },
     "kullandikca": {
