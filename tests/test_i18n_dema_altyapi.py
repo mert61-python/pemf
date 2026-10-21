@@ -4,8 +4,8 @@
 Kilitlenen davranış (GERÇEK `index.ts` / `main.tsx` TypeScript derleyicisiyle CommonJS'e çevrilip node'da KOŞTURULUR — metin pini değil):
   * sayfa dili `?dil=tr|en` > tarayıcı dili (`tr*` → tr, diğer → en); bayrak (`I18N_EN_ACIK`) KAPALIYKEN her durumda tr;
   * eksik İngilizce anahtar Türkçe değere düşer (boş metin yok); `{{ad}}` yer tutucuları doldurulur;
-  * `main.tsx` sekme başlığını katalogdan kurar, `<html lang>`a DOKUNMAZ (TR BAYT BAYT: CSS `uppercase` dile göre büyütür — A12'de
-    ölçüldü, `lang="tr"` "KARE SINYALI"yi "KARE SİNYALİ" yaptı; göç öncesi `index.html` `lang="en"` korunur, düzeltme sahip kararı);
+  * `main.tsx` sekme başlığını katalogdan kurar ve `<html lang>`ı SAYFA DİLİNE eşitler (Y162, yayın hazırlığı: CSS `uppercase` dile göre
+    büyütür — göç öncesi `lang="en"` Türkçede "KARE SINYALI" / "DERI" yazıyordu; `tr` ile "KARE SİNYALİ" / "DERİ"); `index.html` varsayılanı `tr`;
   * iki katalogda aynı anahtarlar, İngilizce değerler boş değil.
 Uygulama tarafı (çerçeve `?dil=` ile yüklenir, dil değişince yeniden yüklenir): jest
 `apps/ui/src/screens/__tests__/DemaSimulatorScreen.I18N0.dilParametresi.test.tsx`.
@@ -194,21 +194,35 @@ def test_eksik_ingilizce_TURKCEYE_duser_yer_tutucu_dolar(tmp_path):
 
 
 @ts_gerekli
-def test_main_html_langa_dokunmaz_sekme_basligi_katalogdan(tmp_path):
+def test_main_html_langi_SAYFA_DILINE_esitler_sekme_basligi_katalogdan(tmp_path):
+    """Y162 (S-I18N.10, sahip 2026-10-20): `<html lang>` SAYFA DİLİNİ taşır — CSS `uppercase` dile göre büyütür; Türkçe sayfada `tr`
+    olmalı ki "Kare sinyali" → "KARE SİNYALİ", "Deri" → "DERİ" olsun (göç öncesi `lang="en"` "KARE SINYALI" / "DERI" yazıyordu).
+    Bu test I18N-0'daki "lang'a dokunmaz" kilidinin BİLEREK ters çevrilmiş hâlidir (yayın hazırlığı, YH A1)."""
     sonuc = _kos(
         tmp_path,
         [
             _senaryo(arama="?dil=en", tarayici="en-US", bayrak=False, ana=True),
-            _senaryo(arama="?dil=en", bayrak=True, ana=True),
+            _senaryo(arama="?dil=en", tarayici="tr-TR", bayrak=True, ana=True),
+            _senaryo(arama="?dil=tr", tarayici="en-US", bayrak=True, ana=True),
+            _senaryo(arama="", tarayici="de-DE", bayrak=True, ana=True),
+            _senaryo(arama="", tarayici="tr-TR", bayrak=True, ana=True),
         ],
     )
-    # `lang` atanırsa (tr ya da en) gözcü değer değişir → kırmızı. Bayrak kapalı (tr) ve açık (en) iki yol da dokunmamalı.
-    assert sonuc[0] == {"lang": "__ozgun__", "title": _katalog("tr")["baslik"]["belge"]}
-    assert sonuc[1] == {"lang": "__ozgun__", "title": _katalog("en")["baslik"]["belge"]}
+    tr, en = _katalog("tr")["baslik"]["belge"], _katalog("en")["baslik"]["belge"]
+    assert sonuc == [
+        {"lang": "tr", "title": tr},
+        {"lang": "en", "title": en},
+        {"lang": "tr", "title": tr},
+        {"lang": "en", "title": en},
+        {"lang": "tr", "title": tr},
+    ]
 
 
-def test_index_html_lang_gocten_once_oldugu_gibi():
-    """`lang` Türkçe büyük harf görünümünü değiştirir (SINYALI ↔ SİNYALİ) → göç öncesi değer korunur; değişiklik SAHİP kararıdır
-    (`DUZELTME-I18N.md` [SAHİBE]). Değiştirilecekse bu test sahibin onayıyla birlikte güncellenir."""
+def test_index_html_lang_VARSAYILAN_turkce():
+    """Y162: betik koşmadan önceki (ve betiksiz) varsayılan dil Türkçe — sayfanın kendi başlığı Türkçe, ürünün varsayılan dili Türkçe.
+    Betik yüklenince `main.tsx` sayfa diline (`?dil=` / tarayıcı dili; bayrak kapalıyken tr) eşitler."""
     bas = (DEMA / "index.html").read_text(encoding="utf-8")
-    assert '<html lang="en">' in bas, "DEMA index.html <html lang> değişmiş — Türkçe görünüm (büyük İ) değişir"
+    assert '<html lang="tr">' in bas, (
+        "DEMA index.html <html lang> Türkçe değil — Türkçe büyük İ (SİNYALİ / DERİ) bozulur"
+    )
+    assert '<html lang="en">' not in bas

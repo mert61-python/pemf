@@ -7,7 +7,7 @@
   * KAYNAK: her anahtar App.tsx'te `t('anahtar')` ile KULLANILIR; kodda görünür Türkçe dizgi KALMAZ (yalnız dalga formu enum VERİSİ:
     'Sinüs' | 'Kare' | 'Testere dişi' — durum / karşılaştırma / `<option value>`); dalga formu görünen adı `dalgaAdi()` ile değer → anahtar.
   * TR görünüm eskisiyle aynı: ["Kare" → "Kare", "Sinüs" → "Sinüs", "Testere dişi" → "Testere dişi"] (değer = TR görünen ad).
-Hukuki / sağlık uyarı metninin İngilizcesi için yayın onayı SAHİBE aittir. Sayfa dilinde `<html lang>` DEĞİŞMEZ (C15, S-I18N.10).
+Hukuki / sağlık uyarı metninin İngilizcesi için yayın onayı SAHİBE aittir. `<html lang>` sayfa dilini taşır (Y162, YH A1: Türkçe büyük İ — `test_i18n_dema_altyapi.py`).
 """
 
 from __future__ import annotations

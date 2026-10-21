@@ -212,7 +212,8 @@ Bayrak KAPALIYKEN sayfa tarayıcı dili ne olursa olsun Türkçedir. Dağıtım 
 kopyalamalıdır — yoksa sayfa metinsiz açılır. Kapı: `tests/test_i18n_auth_sayfa.py`.
 
 ### 4.14 DEMA
-`src/i18n/index.ts` (i18next YOK): sayfa dili `?dil=` > tarayıcı dili; uygulama çerçeveyi `dilParametresiEkle` ile açar. D1.91 kapısı
+`src/i18n/index.ts` (i18next YOK): sayfa dili `?dil=` > tarayıcı dili; uygulama çerçeveyi `dilParametresiEkle` ile açar. `<html lang>`
+= sayfa dili (Y162 — Türkçe büyük İ). D1.91 kapısı
 kataloğu da tarar (yasaklı iddia kataloğa kaçamaz); İngilizce katalog da "cihaz davranışını temsil etmez" etiketinin karşılığını taşır.
 
 ## 5. Metin tarayan kapıları dönüştürme (pytest + jest + vitest)
@@ -286,9 +287,10 @@ bağımlılığı kuralı da orada) · K-3 kullanılan anahtar katalogda + dinam
 - i18next `init({resources})` nesnesini KOPYALAMADAN tutar: testte `removeResourceBundle` dışa aktarılan `kaynaklar`'ı da siler.
 - jest kurulumu i18n'i her test dosyasından ÖNCE yükler: i18n katmanına modül düzeyinde YENİ içe aktarma ekleme (tembel `require`).
 - node ≥ 21: `globalThis.navigator` salt-okur — testte `Object.defineProperty` (düz atama sessizce düşer, makinenin tr-TR yereli sızar).
-- `<html lang>` / `lang` özniteliğini DEĞİŞTİRME: CSS `text-transform: uppercase` dile göre büyütür — DEMA'da `lang="tr"` yapmak
-  "KARE SINYALI"yi "KARE SİNYALİ" yaptı (TR görünümü değişti; A12 ekran farkıyla ölçüldü, geri alındı). Göç öncesi değer korunur;
-  Türkçe büyük harf düzeltmesi ayrı bir SAHİP kararıdır. Metin aynı kalsa da görünüm değişebilir → TR ekranını göç öncesiyle KARŞILAŞTIR.
+- `<html lang>` / `lang` özniteliği GÖRÜNÜMÜ değiştirir: CSS `text-transform: uppercase` dile göre büyütür (`tr` → "SİNYALİ", `en` → "SINYALI").
+  Göçte değer korundu; Y162 (sahip, yayın hazırlığı YH A1) ile DEMA `lang`ı SAYFA DİLİNE eşitlenir (`main.tsx`, `index.html` varsayılanı `tr`
+  — kapı `test_i18n_dema_altyapi.py`). Başka bir yüzeyin `lang`ını değiştirmek Türkçe ekranı değiştirir → yalnız SAHİP kararıyla. Metin aynı
+  kalsa da görünüm değişebilir → TR ekranını öncesiyle KARŞILAŞTIR.
 - Kaynak tarayan kapı dizgiyi YORUMDA da bulur; `//.*`'ı `re.S` ile koşmak DOSYA SONUNA kadar yutar → blok / satır yorumunu ayrı soy, ya da AST.
 - gitleaks `generic-api-key`: tanımlayıcı / grup adında `api` parçası kullanma (`sunucu-10b-ana-sunucu`); muafiyet genişletme, `--no-verify` YOK.
 - Bash heredoc ters bölüyü bozar → JSON / betik / commit iletisi Write ile yazılır.
