@@ -22,6 +22,8 @@ tersi). `tests/test_seans_durum_etiketi.py` iki haritayı ANAHTAR ANAHTAR karş�
 
 from __future__ import annotations
 
+import re
+
 from utils import ceviri
 
 #: Ham backend durumu (küçük harf) -> katalog ANAHTARI (`seans.durum.*`; metin istek dilinde — I18N-P1). Anahtar kümesi arayüz `STATUS_ANAHTARLARI` ile AYNI
@@ -71,13 +73,60 @@ HEDEF_ETIKETLERI: dict[str, str] = {
 }
 
 
+#: I18NI-A1.9: AI Pro seans modu VERİSİ `AI Pro · <model> [· <hedef>]` (ai_router; Türkçe saklanır — profil türetimi buna bakar) parçaları.
+AI_PRO_ONEK = "AI Pro · "
+AI_PRO_MODEL = {"Kedi Organ": "ai.model.kedi", "Fantom Tümör": "ai.model.fantom", "Petri Kuyu": "ai.model.petri"}
+AI_PRO_ORGAN = {
+    "Tüm Vücut": "ai.organ.tumVucut",
+    "Mide": "ai.organ.mide",
+    "Böbrek": "ai.organ.bobrek",
+    "Karaciğer": "ai.organ.karaciger",
+    "Mesane": "ai.organ.mesane",
+    "Pankreas": "ai.organ.pankreas",
+    "Bağırsak": "ai.organ.bagirsak",
+    "Kalp": "ai.organ.kalp",
+    "Dalak": "ai.organ.dalak",
+    "Akciğer (sağ)": "ai.organ.akcigerSag",
+    "Akciğer (sol)": "ai.organ.akcigerSol",
+}
+AI_PRO_HEDEF_ETIKETI = {"Tümör": "seans.aiProMod.tumor", "Kuyu": "seans.aiProMod.kuyu"}
+_OTOMATIK = re.compile(r"^(.+) \(otomatik\)$")
+_NUMARALI = re.compile(r"^(.+) (\d+)$")
+
+
+def _hedef_etiketi(e: str) -> str:
+    etiket_anahtari = AI_PRO_HEDEF_ETIKETI.get(e)
+    return ceviri.t(etiket_anahtari) if etiket_anahtari else e
+
+
+def _ai_pro_hedef(h: str) -> str:
+    organ_anahtari = AI_PRO_ORGAN.get(h)
+    if organ_anahtari:
+        return ceviri.t(organ_anahtari)
+    m = _OTOMATIK.match(h)
+    if m:
+        return ceviri.t("seans.aiProMod.otomatikHedef", hedef=_hedef_etiketi(m[1]))
+    m = _NUMARALI.match(h)
+    if m and m[1] in AI_PRO_HEDEF_ETIKETI:
+        return f"{_hedef_etiketi(m[1])} {m[2]}"
+    return h
+
+
 def mod_etiketi(mod):
-    """Seans modunu (`Manuel` / `Otomatik` / `AI`) istek dilindeki gösterim etiketine çevirir. ⚠️ YALNIZ GÖSTERİM: DB'deki ham değer DEĞİŞMEZ.
-    Bilinmeyen / metin olmayan değer (serbest metin, eski kayıt, `AI`, None) AYNEN döner — hücre boş kalmaz, değer yutulmaz."""
+    """Seans modunu (`Manuel` / `Otomatik` / `AI` / `AI Pro · …`) istek dilindeki gösterim etiketine çevirir. ⚠️ YALNIZ GÖSTERİM: DB'deki ham
+    değer DEĞİŞMEZ. Bilinmeyen / metin olmayan değer (serbest metin, eski kayıt, `AI`, None) AYNEN döner — hücre boş kalmaz, değer yutulmaz.
+    AI Pro modu parça parça (tanınmayan parça AYNEN); TR'de çıktı ham değerle bayt bayt aynı."""
     if not isinstance(mod, str):
         return mod
     mod_anahtari = MOD_ETIKETLERI.get(mod)
-    return ceviri.t(mod_anahtari) if mod_anahtari else mod
+    if mod_anahtari:
+        return ceviri.t(mod_anahtari)
+    if mod.startswith(AI_PRO_ONEK):
+        model, *hedef = mod[len(AI_PRO_ONEK) :].split(" · ")
+        model_anahtari = AI_PRO_MODEL.get(model)
+        model_g = ceviri.t(model_anahtari) if model_anahtari else model
+        return " · ".join([AI_PRO_ONEK + model_g, *(_ai_pro_hedef(h) for h in hedef)])
+    return mod
 
 
 def hedef_etiketi(hedef):

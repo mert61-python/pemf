@@ -316,6 +316,30 @@
    "onek": "ai.etiket.",
    "degerler": ["predicted_class"],
    "gerekce": "I18NI-A3.2: GPU mikroservisinden DEVREDİLEN em_fantom / em_petri yanıtında panel adı backend'de istek dilinde yeniden kurulur (`_panel_adlarini_cevir`) — aynı PANEL_ADLARI / PETRI_PANEL_ADLARI kapalı kümesi; AI panel adı: 'Tahmin' paneli mevcut `ai.etiket.predicted_class` anahtarını kullanır (kapalı küme)"
+  },
+  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/utils/seans_durum.py",
+   "ifade": "ceviri.t(model_anahtari)",
+   "onek": "ai.model.",
+   "degerler": ["fantom", "kedi", "petri"],
+   "gerekce": "I18NI-A1.9: AI Pro seans modu VERİSİ (`AI Pro · <model> · <hedef>`, ai_router) parçası tabloda ANAHTARA eşlenir (kapalı küme); tanınmayan parça aynen"
+  },
+  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/utils/seans_durum.py",
+   "ifade": "ceviri.t(organ_anahtari)",
+   "onek": "ai.organ.",
+   "degerler": ["akcigerSag", "akcigerSol", "bagirsak", "bobrek", "dalak", "kalp", "karaciger", "mesane", "mide", "pankreas", "tumVucut"],
+   "gerekce": "I18NI-A1.9: AI Pro seans modu VERİSİ (`AI Pro · <model> · <hedef>`, ai_router) parçası tabloda ANAHTARA eşlenir (kapalı küme); tanınmayan parça aynen"
+  },
+  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/utils/seans_durum.py",
+   "ifade": "ceviri.t(etiket_anahtari)",
+   "onek": "seans.aiProMod.",
+   "degerler": ["kuyu", "tumor"],
+   "gerekce": "I18NI-A1.9: AI Pro seans modu VERİSİ (`AI Pro · <model> · <hedef>`, ai_router) parçası tabloda ANAHTARA eşlenir (kapalı küme); tanınmayan parça aynen"
   }
  ]
 }

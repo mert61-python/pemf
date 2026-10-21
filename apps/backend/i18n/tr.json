@@ -760,6 +760,11 @@
     }
   },
   "seans": {
+    "aiProMod": {
+      "kuyu": "Kuyu",
+      "otomatikHedef": "{{hedef}} (otomatik)",
+      "tumor": "Tümör"
+    },
     "durum": {
       "aborted_due_to_power": "Elektrik Kesintisi",
       "aborted_recovered": "Kurtarıldı",

@@ -760,6 +760,11 @@
     }
   },
   "seans": {
+    "aiProMod": {
+      "kuyu": "Well",
+      "otomatikHedef": "{{hedef}} (automatic)",
+      "tumor": "Tumor"
+    },
     "durum": {
       "aborted_due_to_power": "Power Outage",
       "aborted_recovered": "Recovered",
