@@ -37,6 +37,7 @@
     },
     "onceSifirla": "To start again, press \"Reset\" first; resetting does not start the coils.",
     "oncekiOturum": "EMERGENCY STOP in a previous session — not reset ({{asil}})",
+    "sifirla": "Reset",
     "sifirlaBaslik": "Reset the emergency stop latch?",
     "sifirlaEtiketi": "Reset the emergency stop latch",
     "sifirlaGovde": "Resetting does NOT start the coils. Check that the coils have stopped and that the patient is safe; give the start command separately to continue the session.",

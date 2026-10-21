@@ -37,6 +37,7 @@
     },
     "onceSifirla": "Yeniden başlatmak için önce \"Sıfırla\"; sıfırlama bobinleri başlatmaz.",
     "oncekiOturum": "önceki oturumda ACİL DURDUR — sıfırlanmadı ({{asil}})",
+    "sifirla": "Sıfırla",
     "sifirlaBaslik": "Acil durdurma mandalı sıfırlansın mı?",
     "sifirlaEtiketi": "Acil durdurma mandalını sıfırla",
     "sifirlaGovde": "Sıfırlama bobinleri BAŞLATMAZ. Bobinlerin durduğunu ve hastanın güvende olduğunu kontrol edin; tedaviye devam etmek için başlatmayı ayrıca verin.",

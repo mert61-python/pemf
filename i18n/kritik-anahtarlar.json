@@ -3281,9 +3281,16 @@
   {
    "yuzey": "arayuz",
    "anahtar": "ayarlar.bakim.pwmSifirla",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/SettingsScreen.tsx",
+   "aciklama": "Ayarlar → Donanım Bakım: tüm PWM çıkışlarını sıfırla (bobinleri durdurur) onay düğmesi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.sifirla",
    "tur": "estop",
    "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
-   "aciklama": "ACİL DURDUR mandal bandının 'Sıfırla' düğmesi + onay düğmesi (Ayarlar PWM ile ORTAK anahtar)"
+   "aciklama": "ACİL DURDUR mandal bandının 'Sıfırla' düğmesi + onay düğmesi (S-I18NI.1: kendi anahtarı)"
   },
   {
    "yuzey": "arayuz",

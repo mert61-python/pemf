@@ -81,7 +81,7 @@ export function EstopMandalBandi() {
     const onay = await platformConfirm(
       t("guvenlik.mandal.sifirlaBaslik"),
       t("guvenlik.mandal.sifirlaGovde"),
-      t("ayarlar.bakim.pwmSifirla")
+      t("guvenlik.mandal.sifirla")
     );
     if (!onay) return;
     setMesgul(true);
@@ -117,7 +117,7 @@ export function EstopMandalBandi() {
         accessibilityLabel={t("guvenlik.mandal.sifirlaEtiketi")}
         accessibilityHint={t("guvenlik.mandal.sifirlaIpucu")}
       >
-        <Text style={styles.dugmeMetni}>{mesgul ? t("guvenlik.mandal.sifirlaniyor") : t("ayarlar.bakim.pwmSifirla")}</Text>
+        <Text style={styles.dugmeMetni}>{mesgul ? t("guvenlik.mandal.sifirlaniyor") : t("guvenlik.mandal.sifirla")}</Text>
       </Pressable>
     </View>
   );
