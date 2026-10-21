@@ -158,3 +158,39 @@ def test_K3_KARSIT_bozuk_tablo_anahtari_YAKALANIR(tmp_path):
             (hedef / p.name).write_bytes(p.read_bytes())
     sorun = tablo_anahtari_eksikleri("arayuz", tmp_path, [f])
     assert [s for s in sorun if "bobrekk" in s] and not [s for s in sorun if "mide" in s or "yorumda" in s], sorun
+
+
+# ── I18NI-A2.12: launcher arayüzü anahtarları `t().ad` / `x.ad` / `tf("ad")` ile okur — yukarıdaki `t("…")` deseni bunları GÖRMEZ ──
+LAUNCHER_UI = KOK / "launcher" / "app" / "ui" / "index.html"
+_JS_YONTEM = {"length", "map", "replace", "toString", "join", "forEach", "filter", "slice", "includes", "startsWith"}
+
+
+def launcher_ui_erisimleri(ham: str) -> set[str]:
+    """`t().ad` · `<takma>.ad` (`const <takma> = t();`) · `tf("ad"` — geri çağırma parametresi aynı adı gölgeliyorsa (`(x) =>`) o satır sayılmaz."""
+    ham = re.sub(r"<!--.*?-->", "", ham, flags=re.S)
+    ham = re.sub(r"(?m)^\s*//.*$", "", ham)  # satır başı yorum
+    ham = re.sub(r"(?m)(?<=[;{}),])\s+//.*$", "", ham)  # kod sonrası yorum (URL'deki :// değil)
+    adlar = set(re.findall(r"\b(?:const|let|var)\s+([A-Za-z_]\w*)\s*=\s*t\(\)\s*;", ham))
+    erisim = set(re.findall(r"\bt\(\)\.([A-Za-z_]\w*)", ham))
+    erisim |= set(re.findall(r"""\btf\(\s*["']([A-Za-z_]\w*)["']""", ham))
+    for satir in ham.split("\n"):
+        for a in adlar:
+            if re.search(rf"\(\s*{re.escape(a)}\s*[,)]\s*=>|\b{re.escape(a)}\s*=>", satir):
+                continue  # `(x) => …` gölgesi: katalog değil
+            erisim |= set(re.findall(rf"(?<![\w.]){re.escape(a)}\.([A-Za-z_]\w*)", satir))
+    return erisim - _JS_YONTEM
+
+
+@pytest.mark.parametrize("dil", ["tr", "en"])
+def test_launcher_arayuzunun_eristigi_HER_anahtar_katalogda(dil):
+    ui = json.loads((KOK / "launcher" / "i18n" / f"{dil}.json").read_text(encoding="utf-8"))["ui"]
+    erisim = launcher_ui_erisimleri(LAUNCHER_UI.read_text(encoding="utf-8"))
+    assert len(erisim) > 100, f"ayrıştırıcı kör (yalnız {len(erisim)} erişim)"
+    eksik = sorted(e for e in erisim if e not in ui)
+    assert not eksik, f"launcher arayüzü {dil} kataloğunda OLMAYAN anahtar okuyor (ekranda 'undefined'): {eksik}"
+
+
+def test_KARSIT_bozuk_erisim_YAKALANIR():
+    ornek = "const x = t();\n$('a').textContent = x.instVerifyy;\nadimlar.map((x) => [x.t, x.b]);\nconst y = tf('olmayanKalip', {});\n"
+    erisim = launcher_ui_erisimleri(ornek)
+    assert {"instVerifyy", "olmayanKalip"} <= erisim and not ({"t", "b"} & erisim), erisim
