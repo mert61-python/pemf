@@ -607,8 +607,23 @@ def _push_notification(message: str, level: str = "info", mesajlar: dict | None 
 def _bildir(uret, level: str = "info", gonder=None) -> None:
     """İKİ DİLLİ bildirim (I18N-P1): `uret(dil) -> str` her dil için metni üretir (`ceviri.t("…", dil=dil, …)`). Bildirim bir istek
     bağlamında DEĞİL, arka plan iş parçacığında (MQTT / STM seri / bekçi) doğar → dili o an bilinmez; İKİ dilde de üretilir, arayüz
-    seçili dilini gösterir. `message` = Türkçe (bayt bayt eskisi); `mesajlar` = {tr, en}."""
-    mesajlar = {dil: uret(dil) for dil in ceviri.DILLER}
+    seçili dilini gösterir. `message` = Türkçe (bayt bayt eskisi); `mesajlar` = {tr, en}.
+
+    ⚠️ I18NI-O.1 (Ö.4-Y8): HİÇBİR koşulda FIRLATMAZ. Güvenlik yollarında (STM kopması / watchdog'u, ESP alarmı, seansta komut reddi)
+    `_bildir` `_emergency_stop_async`'ten ÖNCE ve aynı try gövdesinde koşar — metin üretimi atsaydı STOP tetiklenmezdi. Bir dilin metni
+    üretilemezse öteki dilinki kullanılır; ikisi de üretilemezse bildirim yalnız günlüğe yazılır (STOP yine tetiklenir)."""
+    mesajlar = {}
+    for dil in ceviri.DILLER:
+        try:
+            mesajlar[dil] = str(uret(dil))
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "bildirim metni uretilemedi (dil=%s) — bildirim/STOP akisi SURER", dil
+            )
+    if not mesajlar:
+        return
+    for dil in ceviri.DILLER:
+        mesajlar.setdefault(dil, next(iter(mesajlar.values())))
     jeton = _BILDIRIM_MESAJLARI.set(mesajlar)
     try:
         (gonder or _push_notification)(mesajlar[ceviri.YEDEK_DIL], level)
