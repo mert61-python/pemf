@@ -177,7 +177,7 @@ def test_Ingilizce_cikti_Ingilizce_ve_bicimler_dile_gore():
     assert harita["Probability of disease"]["aciklama"] == "91%"
     assert harita["Position determined"]["aciklama"] == "Yes"
     assert harita["Number of cats in the image"]["aciklama"] == "1, 2, 3, 4, 5, 6, 7, 8 … (10 items)"
-    assert harita["Prediction"]["aciklama"] == "Sick patient (at risk)"
+    assert harita["Prediction"]["aciklama"] == "Sick (at risk)"  # S-I18NI.3
     assert harita["Finding counts"]["aciklama"].startswith(
         "Erythrocyte (red blood cell): 5; Punctate reticulocyte (young red blood cell): 2"
     )

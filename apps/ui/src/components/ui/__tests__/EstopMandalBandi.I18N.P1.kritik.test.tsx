@@ -104,6 +104,6 @@ it("neden kodları iki dilde (kod → metin eşlemesi; bilinmeyen kod ham göste
   expect(mandalNedeni("stm_disconnected")).toBe("STM32 connection lost");
   expect(mandalNedeni("esp_alarm_xyz")).toBe("ESP safety alarm");
   expect(mandalNedeni("bilinmeyen_kod")).toBe("emergency stop");
-  expect(mandalNedeni("onceki_oturum:dosya_okunamadi")).toBe("EMERGENCY STOP in a previous session — not reset (latch file could not be read)");
+  expect(mandalNedeni("onceki_oturum:dosya_okunamadi")).toBe("EMERGENCY STOP in the previous app run — not reset (latch file could not be read)");
   expect(mandalEylemi("stm_watchdog_timeout")).toBe("Check the USB cable.");
 });

@@ -51,7 +51,7 @@
     "cevrimdisiAtlandi": "Coils that are not connected were skipped; the command is only being sent to active coils.",
     "cevrimici": "online",
     "donanimCalisiyor_one": "⚠️ HARDWARE IS RUNNING — {{count}} coil is energized, outside a session context. You can stop it with the EMERGENCY STOP below.",
-    "donanimCalisiyor_other": "⚠️ HARDWARE IS RUNNING — {{count}} coils are energized, outside a session context. You can stop it with the EMERGENCY STOP below.",
+    "donanimCalisiyor_other": "⚠️ HARDWARE IS RUNNING — {{count}} coils are energized, outside a session context. You can stop them with the EMERGENCY STOP below.",
     "durdurmaOnaylanamadi": "Stop not confirmed",
     "durdurmaOnaylanamadiGovde": "It could not be confirmed that one or more coils stopped — the coils MAY STILL BE RUNNING. Press EMERGENCY STOP.",
     "durduruluyor": "⏳ Stopping…",
@@ -125,7 +125,7 @@
     "sicaklikUyari": "⚠ Temperature above {{esik}} °C ({{sicaklik}} °C) — there is no automatic stop; check the coil and press ⏹ Stop if needed.",
     "sicaklikYuksekEtiketi": "Temperature {{sicaklik}} degrees, high",
     "sureDk": "Duration (min)",
-    "sureGirilmedi": "No duration entered — the coil runs unattended up to the clinical limit (enforced on the server side); it is recommended to set a duration.",
+    "sureGirilmedi": "No duration entered — the coil runs up to the clinical limit for unattended operation (enforced on the server side); it is recommended to set a duration.",
     "uygYuzde": "Appl.%",
     "uygula": "🔄 Apply"
   },

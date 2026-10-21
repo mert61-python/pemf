@@ -110,7 +110,7 @@
       "ringworm": "Ringworm (skin fungus, dermatophytosis)",
       "severe": "Severe",
       "severe_pain": "Severe pain",
-      "sick": "Sick patient (at risk)",
+      "sick": "Sick (at risk)",
       "sphinx": "Seated (front view)",
       "standing": "Standing",
       "stone": "Stone",
@@ -177,7 +177,7 @@
       "probability_sick": "Probability of disease",
       "recommendation": "Recommendation",
       "reliability": "Reliability",
-      "reliable": "Detection is reliable",
+      "reliable": "Detection reliable?",
       "result": "Result",
       "risk": "Risk",
       "risk_level": "Risk level",
@@ -185,7 +185,7 @@
       "severity": "Severity",
       "stage": "Stage",
       "summary": "Summary",
-      "surulebilir": "Can be used as the basis for coil settings",
+      "surulebilir": "Usable for coil settings?",
       "top_1_class": "Prediction",
       "top_1_prob": "Probability",
       "top_2_class": "Second possible result",
@@ -849,7 +849,7 @@
     },
     "uyari": {
       "espErisilemez": "No system connection — the ESP coils {{esp_coils}} may NOT be active (the STM coils are running).",
-      "stopDogrulanamadi": "The hardware STOP could NOT be VERIFIED for coil {{bobinler}} — they may STILL BE RUNNING. Press EMERGENCY STOP or use the device's physical power button."
+      "stopDogrulanamadi": "The hardware STOP could NOT be VERIFIED for coil(s) {{bobinler}} — they may STILL BE RUNNING. Press EMERGENCY STOP or use the device's physical power button."
     }
   },
   "silme": {

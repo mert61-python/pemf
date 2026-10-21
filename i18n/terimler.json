@@ -109,6 +109,12 @@
    "gerekce": "Hasta (Riskli) = sick: model sınıfı 'Sick' (EN 'Sick (At Risk)'), hasta (hayvan = patient) DEĞİL"
   },
   {
+   "yuzey": "sunucu",
+   "anahtar": "ai.deger.sick",
+   "terim": "\\bhasta(?!l[ıi]k|l[ıi]ğ|l[ıi]\\b|n[ıi]n hastal|ne)",
+   "gerekce": "S-I18NI.3: AI PDF sonuç değeri 'Hasta (riskli)' = sick (model sınıfı), hasta (hayvan = patient) DEĞİL — arayüz eşleriyle aynı istisna"
+  },
+  {
    "yuzey": "site",
    "anahtar": "yasal.kvkk.27",
    "terim": "jeton",
