@@ -6,4 +6,4 @@
  * (`tests/test_i18n_kritik_K5.py`) bütün yüzeylerin aynı değeri taşıdığını denetler. ⚠️ ELLE DEĞİŞTİRME — yalnız inceleme oturumu açar.
  * Testler bayrağı `__bayrakTestiAyarla(true)` (`./dil`) ile açar, `afterEach`'te `null` ile geri alır; ürün kodu onu ÇAĞIRMAZ (K-5).
  */
-export const I18N_EN_ACIK: boolean = false;
+export const I18N_EN_ACIK: boolean = true;

@@ -53,7 +53,7 @@
       "authSayfa.verified.sayfaBasligi": "PEMF Vet — E-posta Onaylandı"
     }
   };
-  var EN_ACIK = false; // i18n/bayrak.json — scripts/i18n/bayrak.py (elle değiştirmeyin)
+  var EN_ACIK = true; // i18n/bayrak.json — scripts/i18n/bayrak.py (elle değiştirmeyin)
   var dil = "tr";
   if (EN_ACIK) {
     var q = "";

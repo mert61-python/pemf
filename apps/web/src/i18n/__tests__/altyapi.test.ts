@@ -50,6 +50,7 @@ describe('dil kuralı + bayrak', () => {
   })
 
   it('bayrak KAPALI: İngilizce tarayıcıda da tr; düğme gizli', () => {
+    dilMod.__bayrakTestiAyarla(false) // kapalı dal AÇIKÇA (depo bayrağı 14-I18N-INCELEME'de açıldı)
     expect(dilMod.dilSecimiGorunur()).toBe(false)
     expect(dilMod.etkinDil(null, 'en-US')).toBe('tr')
     expect(dilMod.etkinDil('en', 'en-US')).toBe('tr')
@@ -67,6 +68,7 @@ describe('dil kuralı + bayrak', () => {
   })
 
   it('üst menü dil düğmesi bayrak kapalıyken HİÇ çizilmez; açıkken geçilecek dili gösterir', async () => {
+    dilMod.__bayrakTestiAyarla(false)
     expect(renderToString(createElement(DilDugmesi))).toBe('')
     dilMod.__bayrakTestiAyarla(true)
     expect(renderToString(createElement(DilDugmesi))).toContain('>EN</button>')
@@ -75,8 +77,15 @@ describe('dil kuralı + bayrak', () => {
   })
 
   it('bayrak kapalıyken dilSec("en") tr kalır', async () => {
+    dilMod.__bayrakTestiAyarla(false)
     const r = await i18nMod.dilSec('en')
     expect(r.dil).toBe('tr')
     expect(i18n.language).toBe('tr')
+  })
+
+  it('varsayılan (gerçek) bayrak AÇIK (14-I18N-INCELEME, 2026-10-21): seçenek görünür, İngilizce tarayıcı İngilizce', () => {
+    expect(dilMod.dilSecimiGorunur()).toBe(true)
+    expect(dilMod.etkinDil(null, 'en-US')).toBe('en')
+    expect(dilMod.etkinDil(null, 'tr-TR')).toBe('tr')
   })
 })

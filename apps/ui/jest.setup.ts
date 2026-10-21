@@ -8,6 +8,10 @@ jest.mock("@react-native-async-storage/async-storage", () =>
 // `t()` içinde HATA atar (ekrana anahtarı basıp sorguyu sessizce geçirmez). EN'i deneyen test `__bayrakTestiAyarla(true)` +
 // `i18n.changeLanguage("en")` kullanır ve sonunda geri alır (bkz. `src/i18n/__tests__/altyapi.test.tsx`).
 (globalThis as { __PEMF_I18N_KATI__?: boolean }).__PEMF_I18N_KATI__ = true;
+// I18NI (14-I18N-INCELEME): İngilizce bayrağı AÇIK → başlangıç dili kayıtlı seçim, yoksa CİHAZ YERELİ (`Intl`). Testin dili koşum
+// makinesinin yereline bağlı OLMASIN (bu makine tr-TR, CI `ubuntu-latest` genelde en-US → tüm Türkçe sorgular kırmızı olurdu): cihaz yereli
+// testlerde tr-TR'ye sabitlenir; yerel → dil kuralı `etkinDil(…, yerel)` ile birim testlerinde ayrıca ölçülür.
+jest.mock("@/i18n/dil", () => ({ ...jest.requireActual("@/i18n/dil"), cihazYereli: () => "tr-TR" }));
 require("@/i18n");
 
 // audit B-10.2: expo-secure-store native modülü → test'te AsyncStorage-mock'una delege (in-memory;

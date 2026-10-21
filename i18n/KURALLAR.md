@@ -10,8 +10,11 @@ sonrası). Sahip kararları Y157–Y161. Kısa özet kökteki `CLAUDE.md`'de. Ö
    YAZMA: `uygula.py` aracın `ham` değerini kopyalar; elle dönüşümde TR, göç ÖNCESİ çıkarıcı parçalarından PROGRAMLA kurulur (I18N-0'da elle
    yazılan bir yedek metin kaynaktan bir ek farklı çıktı — ölçüldü). Düzeltmek istediğin metni `S-I18N-…` önerisi olarak yaz, DEĞİŞTİRME.
 3. **Davranış değişmez.** İş mantığı, güvenlik, veri, sayı ayrıştırma, sıralama sonucu, DB değerleri aynen kalır.
-4. **İngilizce bayrağı (`I18N_EN_ACIK`) KAPALI** kalır; yalnız `14-I18N-INCELEME` açar (`scripts/i18n/bayrak.py --ac`). Testte
-   `__bayrakTestiAyarla(true)` (arayüz / site) serbest; üretim kodu çağırmaz (K-5).
+4. **İngilizce bayrağı (`I18N_EN_ACIK`)** `14-I18N-INCELEME` sonunda AÇILDI (2026-10-21, `feat(i18n): ingilizce secenegi acildi`;
+   `scripts/i18n/bayrak.py --ac`). Geri almak TEK komut: `bayrak.py --kapat` (dosyalar bayt bayt geri döner; kapı
+   `test_bayrak_kapat_hepsini_kapatir_ac_BAYT_BAYT_geri_getirir`). Bayrak kuralını ölçen test DURUM VARSAYMAZ: kapalı dalı
+   `__bayrakTestiAyarla(false)` / `bayrak=False` ile, açık dalı `true` ile AÇIKÇA seçer (arayüz / site / DEMA); üretim kodu çağırmaz (K-5).
+   Arayüz jest'inde başlangıç dili koşum makinesinin yereline bağlı OLMASIN diye `jest.setup.ts` cihaz yerelini `tr-TR`ye sabitler.
 5. **Günlük iletileri (logger / console / eprintln / log_line) Türkçe KALIR** — geliştirici içindir, çevrilmez.
 6. **Kararsızsan ÇEVİR.** Görünen bir metnin kaçması fazladan bir anahtardan kötüdür.
 

@@ -14,7 +14,7 @@ use std::sync::{OnceLock, RwLock};
 
 /// İNGİLİZCE BAYRAĞI (Y158) — TEK KAYNAK depo kökü `i18n/bayrak.json`; bu sabit `scripts/i18n/bayrak.py` ile yazılır, K-5 eşliği
 /// denetler. ⚠️ ELLE DEĞİŞTİRME — yalnız inceleme oturumu açar.
-pub const I18N_EN_ACIK: bool = false;
+pub const I18N_EN_ACIK: bool = true;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Dil {

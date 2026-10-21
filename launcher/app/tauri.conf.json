@@ -45,7 +45,7 @@
       },
       "nsis": {
         "installerHooks": "./windows/hooks.nsi",
-        "languages": ["Turkish"],
+        "languages": ["Turkish", "English"],
         "installerIcon": "icons/icon.ico",
         "headerImage": "windows/header.bmp",
         "sidebarImage": "windows/sidebar.bmp"

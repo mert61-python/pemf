@@ -57,9 +57,16 @@ describe("dil kuralı (Y161) + bayrak (Y158)", () => {
     expect(etkinDil("en", "en-US", false)).toBe("tr");
     expect(etkinDil(null, "en-GB", false)).toBe("tr");
     expect(dilSecimiGorunur(false)).toBe(false);
-    // varsayılan (gerçek) bayrak bugün KAPALI
+    // test anahtarıyla KAPALI dal (depo bayrağından bağımsız — I18NI-A3.8)
+    __bayrakTestiAyarla(false);
     expect(dilSecimiGorunur()).toBe(false);
     expect(etkinDil(null, "en-US")).toBe("tr");
+  });
+
+  it("varsayılan (gerçek) bayrak AÇIK (14-I18N-INCELEME, 2026-10-21): seçenek görünür, İngilizce cihaz İngilizce başlar", () => {
+    expect(dilSecimiGorunur()).toBe(true);
+    expect(etkinDil(null, "en-US")).toBe("en");
+    expect(etkinDil(null, "tr-TR")).toBe("tr");
   });
 
   it("bayrak AÇIK: cihaz dili; kayıtlı seçim cihaz dilini ezer", () => {
@@ -90,6 +97,7 @@ describe("kalıcılık (AsyncStorage pemf.dil)", () => {
   });
 
   it("bayrak kapalıyken kayıtlı 'en' bile tr verir", async () => {
+    __bayrakTestiAyarla(false); // kapalı dal AÇIKÇA (depo bayrağı açık)
     await AsyncStorage.setItem(DIL_DEPO_ANAHTARI, "en");
     let d = "";
     await act(async () => {

@@ -415,8 +415,10 @@ _BAYRAK_DOSYALARI = (
 
 
 def test_bayrak_depoda_tutarli():
+    """Depo değeri BİLİNÇLİ pin: 14-I18N-INCELEME İngilizce seçeneğini AÇTI (2026-10-21). Kapatmak sahip / yayın kararıdır (`bayrak.py --kapat`
+    + bu satır); bayrağın yanlışlıkla kapanması ya da yüzeylerin ayrışması burada KIRMIZI."""
     assert bayrak.denetle(KOK) == []
-    assert bayrak.ana_deger(KOK) is False
+    assert bayrak.ana_deger(KOK) is True
 
 
 def test_bayrak_ac_hepsini_acar_kapat_BAYT_BAYT_geri_getirir(tmp_path):

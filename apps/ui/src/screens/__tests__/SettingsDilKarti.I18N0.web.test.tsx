@@ -48,11 +48,19 @@ async function ciz(): Promise<string> {
   return s.metin();
 }
 
-it("bayrak KAPALI (bugün): dil kartı YOK — Türkçe Ayarlar ekranı göçten önceki gibi", async () => {
+it("bayrak KAPALI: dil kartı YOK — Türkçe Ayarlar ekranı göçten önceki gibi", async () => {
+  __bayrakTestiAyarla(false); // kapalı dal AÇIKÇA (depo bayrağı 14-I18N-INCELEME'de açıldı)
   const metin = await ciz();
   expect(metin).toContain("Sistem Ayarları");
   expect(metin).not.toContain("Dil / Language");
   expect(metin).not.toContain("English");
+});
+
+it("varsayılan (gerçek) bayrak AÇIK: dil kartı test anahtarı OLMADAN görünür; ekran Türkçe başlar", async () => {
+  const metin = await ciz();
+  expect(metin).toContain("Sistem Ayarları");
+  expect(metin).toContain("Dil / Language");
+  expect(metin).toContain("English");
 });
 
 it("bayrak AÇIK (inceleme sonrası): dil kartı görünür, iki seçenek kendi dilinde yazılı", async () => {
