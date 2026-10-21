@@ -124,9 +124,12 @@ class ApkInstallerModule : Module() {
      * ON-PLANDAYKEN cagrilir (FGS baslatma kisiti bu yuzden sorun degil). Hata YUTULUR:
      * servis bir guvencedir, baslamamasi indirmeyi dusurmemeli.
      */
-    AsyncFunction("indirmeServisiniBaslat") { baslik: String? ->
+    AsyncFunction("indirmeServisiniBaslat") { baslik: String?, metin: String?, kanalAdi: String? ->
       try {
-        val niyet = Intent(context, IndirmeServisi::class.java).putExtra("baslik", baslik)
+        val niyet = Intent(context, IndirmeServisi::class.java)
+          .putExtra("baslik", baslik)
+          .putExtra("metin", metin)
+          .putExtra("kanalAdi", kanalAdi)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
           context.startForegroundService(niyet)
         } else {

@@ -16,7 +16,7 @@ interface ApkInstallerNative {
   apkKur(yol: string): Promise<boolean>;
   sha256(yol: string): Promise<string>;
   // Eski APK'larda bu ikisi YOKTUR (2026-08-27'de eklendi) — çağıran taraf yokluğu tolere eder.
-  indirmeServisiniBaslat?(baslik: string | null): Promise<boolean>;
+  indirmeServisiniBaslat?(baslik: string | null, metin: string | null, kanalAdi: string | null): Promise<boolean>;
   indirmeServisiniDurdur?(): Promise<boolean>;
 }
 
@@ -78,9 +78,13 @@ export async function dosyaSha256(dosyaUri: string): Promise<string> {
  * saha bildirimi 2026-08-27). Servis bir GÜVENCEDİR: yokluğu/başarısızlığı indirmeyi düşürmez,
  * yalnız arka plan dayanıklılığı eski (kırılgan) davranışa düşer.
  */
-export async function indirmeServisiniBaslat(baslik: string | null): Promise<boolean> {
+export async function indirmeServisiniBaslat(
+  baslik: string | null,
+  metin: string | null = null,
+  kanalAdi: string | null = null,
+): Promise<boolean> {
   try {
-    return yerli?.indirmeServisiniBaslat ? await yerli.indirmeServisiniBaslat(baslik) : false;
+    return yerli?.indirmeServisiniBaslat ? await yerli.indirmeServisiniBaslat(baslik, metin, kanalAdi) : false;
   } catch {
     return false;
   }

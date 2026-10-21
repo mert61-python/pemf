@@ -627,7 +627,11 @@ async function _apkIndirGercek(
   // Servis tarafı da ayrıca sağlamlaştırıldı (IndirmeServisi: startForeground her yolda ilk iş),
   // ama sırayı burada da korumak iki tarafı birbirine bağımlı olmaktan çıkarır.
   const servisSozu = Promise.resolve(
-    indirmeServisiniBaslat?.(i18n.t("guncelleme.indirmeBildirimi", { version: surum.version })),
+    indirmeServisiniBaslat?.(
+      i18n.t("guncelleme.indirmeBildirimi", { version: surum.version }),
+      i18n.t("guncelleme.indirmeBildirimiMetin"),
+      i18n.t("guncelleme.indirmeKanali"),
+    ),
   ).catch(() => {});
   try {
     for (let deneme = 0; ; deneme++) {

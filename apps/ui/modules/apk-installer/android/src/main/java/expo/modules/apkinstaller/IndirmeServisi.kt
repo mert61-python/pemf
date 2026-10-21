@@ -53,12 +53,13 @@ class IndirmeServisi : Service() {
       val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
       // IMPORTANCE_LOW: ses/titresim yok — indirme bildirimi sessiz bir durum gostergesidir.
       nm.createNotificationChannel(
-        NotificationChannel(kanalId, "Guncelleme indirme", NotificationManager.IMPORTANCE_LOW)
+        // I18NI-A2.13: kanal adı / içerik metni JS katalogundan (arayüz dili); eski JS göndermezse göç öncesi Türkçe yedek
+        NotificationChannel(kanalId, intent?.getStringExtra("kanalAdi") ?: "Guncelleme indirme", NotificationManager.IMPORTANCE_LOW)
       )
     }
     val bildirim = NotificationCompat.Builder(this, kanalId)
       .setContentTitle(intent?.getStringExtra("baslik") ?: "Guncelleme indiriliyor")
-      .setContentText("Paket arka planda indiriliyor; uygulamayi kapatabilirsiniz.")
+      .setContentText(intent?.getStringExtra("metin") ?: "Paket arka planda indiriliyor; uygulamayi kapatabilirsiniz.")
       .setSmallIcon(android.R.drawable.stat_sys_download)
       .setOngoing(true)
       .build()

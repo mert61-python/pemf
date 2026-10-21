@@ -29,6 +29,8 @@
   "indiriliyor": "Downloading… {{yuzde}}% · {{mb}} / {{toplam}} MB{{eta}}",
   "indiriliyorKapi": "Downloading… {{yuzde}}% · {{mb}} / {{toplam}}{{eta}}",
   "indirmeBildirimi": "Downloading PEMF Vet {{version}}",
+  "indirmeBildirimiMetin": "The package is downloading in the background; you can close the app.",
+  "indirmeKanali": "Update download",
   "kapiOneri": "We recommend updating before you use the app.",
   "kontrolEdiliyor": "Checking for updates…",
   "kur": "Install",

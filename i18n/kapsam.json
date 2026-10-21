@@ -267,7 +267,7 @@
    "aciklama": "kalan servis / yardımcı / tür dosyaları",
    "durum": "tamam",
    "metin": 27,
-   "dosyaSayisi": 18
+   "dosyaSayisi": 19
   },
   {
    "ad": "sunucu-10a-yonlendirici",
@@ -3322,6 +3322,17 @@
    "muaf": [],
    "birlesikIstisna": [],
    "not": ""
+  },
+  "apps/ui/modules/apk-installer/index.ts": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "I18NI-A2.13: `apps/ui/modules/` (APK kurucu yerli modülü) arayüz yüzeyine alındı; Kotlin metni Intent ile JS katalogundan gelir"
   },
   "apps/ui/src/hooks/useCokluSecim.ts": {
    "yuzey": "arayuz",

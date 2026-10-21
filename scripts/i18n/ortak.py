@@ -41,7 +41,9 @@ KATALOGLAR = {
 #: Yüzey → izlenen kaynak dosya desenleri (git ls-files yol önekleri + uzantılar) ve dışlananlar.
 YUZEYLER = {
     "arayuz": {
-        "onek": ("apps/ui/src/", "apps/ui/app/", "apps/ui/auth-pages/"),
+        # I18NI-A2.13: `apps/ui/modules/` (Expo yerli modülleri — APK kurucu köprüsü) de arayüz yüzeyidir; Kotlin çıkarıcı YOK → yerli
+        # metin JS katalogundan Intent ile gelir (kapı tests/test_I18NI_android_bildirim_metni_katalogdan.py).
+        "onek": ("apps/ui/src/", "apps/ui/app/", "apps/ui/auth-pages/", "apps/ui/modules/"),
         "uzanti": (".ts", ".tsx", ".html"),
     },
     "sunucu": {
