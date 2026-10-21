@@ -71,7 +71,11 @@ def test_KRITIK_uyari_detail_alaninda_TASINIR():
     # (eylem söyler) + EN "Press EMERGENCY STOP".
     import i18n_yardimci as iy
 
-    assert 'ceviri.t("seans.uyari.stopDogrulanamadi"' in _API, "uyari metni anahtari kullanilmiyor"
+    # I18NI-A2.11: anahtar STOP gövdesinde (`g`) aranır — dosyada ikinci kullanım (bildirim) var; `detail`'e giden `_uyari` ondan kurulmalı
+    assert re.search(r'_uyari\s*=\s*ceviri\.t\("seans\.uyari\.stopDogrulanamadi"', g), (
+        "uyari metni anahtari kullanilmiyor"
+    )
+    assert re.search(r'_yanit\["detail"\]\s*=\s*_uyari', g), "yanit detail'i uyariyi tasimiyor"
     tr = iy.katalog("sunucu", "tr")["seans.uyari.stopDogrulanamadi"]
     en = iy.katalog("sunucu", "en")["seans.uyari.stopDogrulanamadi"]
     assert "ACİL DURDUR" in tr, "uyari metni operatore NE YAPACAGINI soylemiyor (acil durdurma yonlendirmesi yok)"
