@@ -3,7 +3,8 @@ import { useRef } from 'react'
 import { ArrowRight } from './Icons'
 import { useTranslation } from 'react-i18next'
 
-/** Uygulama ekran görüntüleri — telefon çerçeveli, yatay kaydırmalı galeri. */
+/** Uygulama ekran görüntüleri — telefon çerçeveli, yatay kaydırmalı galeri. YH B7: İngilizce sayfada aynı ekranların İngilizce arayüzlü
+ *  çekimi (`/screenshots/en/` — aynı adlar, 560×1116 JPEG; yalıtılmış kum havuzunda, yalnız UYDURMA demo verisiyle); Türkçe set DEĞİŞMEDİ. */
 const SHOTS = [
   { src: '/screenshots/01-profil.jpg',    baslik: 'ekranlar.ekran.profil.baslik',        aciklama: 'ekranlar.ekran.profil.aciklama' },
   { src: '/screenshots/02-teshis.jpg',    baslik: 'ekranlar.ekran.teshis.baslik',        aciklama: 'ekranlar.ekran.teshis.aciklama' },
@@ -15,8 +16,13 @@ const SHOTS = [
   { src: '/screenshots/08-gecmis.jpg',    baslik: 'ekranlar.ekran.gecmis.baslik',    aciklama: 'ekranlar.ekran.gecmis.aciklama' },
 ] as const
 
+/** Etkin dile göre görsel adresi: İngilizcede `/screenshots/en/<ad>`, Türkçede değişmeden `/screenshots/<ad>`. */
+export function ekranGorseli(src: string, dil: string): string {
+  return dil === 'en' ? src.replace('/screenshots/', '/screenshots/en/') : src
+}
+
 export default function AppScreenshots() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const trackRef = useRef<HTMLDivElement>(null)
 
   const scroll = (dir: -1 | 1) => {
@@ -64,7 +70,7 @@ export default function AppScreenshots() {
             <figure key={s.src} className="w-[200px] shrink-0 snap-center sm:w-[224px]">
               <div className="relative rounded-[2rem] border border-border-strong bg-[#0b0f19] p-1.5 shadow-2xl ring-1 ring-white/5 transition-transform duration-300 hover:-translate-y-1">
                 <img
-                  src={s.src}
+                  src={ekranGorseli(s.src, i18n.language)}
                   alt={t('ekranlar.altMetin', { title: t(s.baslik) })}
                   width={560}
                   height={1116}
