@@ -1527,7 +1527,7 @@
     {
      "once": "Bobin",
      "sonra": [
-      "guncelleme.bilgi.seansSuruyor"
+      "kontrol.bobin.baslik"
      ]
     }
    ],
@@ -1578,7 +1578,7 @@
     {
      "once": "Bobin",
      "sonra": [
-      "guncelleme.bilgi.seansSuruyor"
+      "kontrol.bobin.baslik"
      ]
     },
     {
@@ -2086,7 +2086,7 @@
     {
      "once": "Bobin",
      "sonra": [
-      "ana.bagliBobin"
+      "kontrol.bobin.baslik"
      ]
     }
    ],
@@ -7069,6 +7069,10 @@
    "metin": 421,
    "kritik": false,
    "muaf": [
+    {
+     "metin": "In veterinarian mode the PEMF hardware must be on the SAME Wi-Fi network as your computer. The app finds it automatically; if not, enter the device IP manually in the app's Settings.",
+     "gerekce": "TR DEĞİL — göç öncesi yayındaki EN sözlük metni; 11a'da K-4 terimiyle 'veterinary mode' oldu (ui.kilavuz.connect EN; bilinçli EN değişikliği, TR aynı)"
+    },
     {
      "metin": "Veteriner PEMF seans + yapay zekâ teşhis platformu",
      "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.tagline` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)"

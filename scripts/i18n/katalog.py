@@ -252,6 +252,7 @@ def taban_karsilastir(kok: Path, dosyalar: list[str], taban_yolu: Path) -> list[
     defter = json.loads(defter_yolu.read_text(encoding="utf-8")) if defter_yolu.exists() else {"dosyalar": {}}
     duz: dict[str, dict[str, str]] = {}
     tum_normal: dict[str, set[str]] = {}
+    tum_en: dict[str, set[str]] = {}
     kullanilan: dict[str, list[str]] = {}
     sorun = []
     hedef = set(dosyalar)
@@ -262,6 +263,8 @@ def taban_karsilastir(kok: Path, dosyalar: list[str], taban_yolu: Path) -> list[
         if y not in duz:
             duz[y] = ortak.duzlestir(ortak.katalog_yukle(y, "tr", kok)) if y in ortak.KATALOGLAR else {}
             tum_normal[y] = {ortak.yer_tutucu_normal(v) for v in duz[y].values()}
+            en = ortak.duzlestir(ortak.katalog_yukle(y, "en", kok)) if y in ortak.KATALOGLAR else {}
+            tum_en[y] = {ortak.yer_tutucu_normal(v) for v in en.values()}
         if m["dosya"] not in kullanilan:
             p = kok / m["dosya"]
             anahtarlar = ortak.kullanilan_anahtarlar(p.read_text(encoding="utf-8")) if p.exists() else set()
@@ -273,10 +276,23 @@ def taban_karsilastir(kok: Path, dosyalar: list[str], taban_yolu: Path) -> list[
                 or (x.startswith(k + "_") and x[len(k) + 1 :] in {s.lstrip("_") for s in ortak.COGUL_SONEKLERI})
             ]
         kayit = defter["dosyalar"].get(m["dosya"], {})
-        birlesik = {x.get("once") for x in kayit.get("birlesikIstisna", [])}
+        # I18NI-A2.1: birlesikIstisna yalnız `sonra` anahtarlarının HEPSİ katalogda VAR ve dosyada KULLANILIYORSA karşılar
+        kaynak_metni = (kok / m["dosya"]).read_text(encoding="utf-8") if (kok / m["dosya"]).exists() else ""
+        birlesik = {
+            x.get("once")
+            for x in kayit.get("birlesikIstisna", [])
+            if x.get("sonra") and all(ortak.anahtar_kullanilabilir(a, duz[y]) and a in kaynak_metni for a in x["sonra"])
+        }
         ham = m.get("ham") or m["metin"]
+        # I18NI-A2.1: ara katman JSON gövdesi (`{"detail":"…"}` → `_json_detay(ceviri.t(…))`) — karşılaştırılan GÖRÜNEN metin içtekidir
+        jm = re.fullmatch(r'\{(?:"ok":false,)?"(?:detail|error|message)":"(.+)"\}', ham)
+        if jm:
+            ham = jm.group(1)
         n_ham, n_metin = ortak.yer_tutucu_normal(ham), ortak.yer_tutucu_normal(m["metin"])
         if n_ham in tum_normal[y] or n_metin in tum_normal[y] or m["metin"] in birlesik:
+            continue
+        # I18NI-A2.1: göç öncesi kaynakta ZATEN İngilizce olan sözlük metni (launcher `I18N.en`) EN kataloğunda birebir → karşılandı
+        if not ortak.TR_HARF.search(ham) and n_ham in tum_en[y]:
             continue
         parca = _kenar_yer_tutucusuz(n_ham)
         if re.search(r"[^\W\d_]", parca) and any(parca in v for v in kullanilan[m["dosya"]]):
@@ -361,6 +377,9 @@ def main(argv=None) -> int:
         if a_.grup:
             defter = json.loads((kok / "i18n" / "kapsam.json").read_text(encoding="utf-8"))
             dosyalar += [d for d, k_ in defter["dosyalar"].items() if k_.get("grup") == a_.grup]
+        if not dosyalar:  # I18NI-A2.1: boş çağrı "[OK] (0 dosya)" demez
+            print("[HATA] dosya yok — --grup <G> (bilinmeyen grup?) ya da --dosya <yol> verin")
+            return 2
         s = taban_karsilastir(kok, dosyalar, Path(a_.taban))
         for x in s:
             print("  ✗", x)
