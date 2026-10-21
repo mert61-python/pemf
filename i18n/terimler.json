@@ -16,8 +16,8 @@
    "not": "Seans → Session. İngilizcede de 'treatment / therapy' iddiası YOK (TR 'tedavi → seans' kararının karşılığı, 2026-08-08)."
   },
   {
-   "tr": "acil durdur",
-   "en": "emergency stop",
+   "tr": "acil[\\s-]*durdur",
+   "en": "emergency[\\s-]*stop",
    "not": "Düğme: EMERGENCY STOP (büyük harf) · metin içi: Emergency stop / emergency stop."
   },
   {
