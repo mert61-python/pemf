@@ -60,3 +60,27 @@ def test_yerli_modul_dizini_ARAYUZ_yuzeyinde_ve_defterde():
     defter = kapsam.defter_oku(KOK)["dosyalar"]
     eksik = [f for f in dosyalar if f.startswith("apps/ui/modules/") and f not in defter]
     assert not eksik, f"yerli modül dosyası kapsam defterinde yok: {eksik}"
+
+
+#: ASCII'leştirilmiş Türkçe (Türkçe harf yerine Latin harf) — Y167 öncesi "Guncelleme indirme" / "uygulamayi". Sözcük düzeyinde.
+_ASCII_TR = re.compile(r"\b(?:[Gg]uncelleme\w*|uygulamayi)\b")
+
+
+def _tr_katalog() -> dict:
+    import json
+
+    return json.loads((KOK / "apps/ui/src/i18n/tr/guncelleme.json").read_text(encoding="utf-8"))
+
+
+def test_Y167_kotlin_TR_yedekleri_TURKCE_KARAKTERLE_ve_katalogla_ayni():
+    """Y167 (I18NI-A2.13, sahip 2026-10-21; YH A5): bildirim TR yedek metinleri Türkçe karakterle ("Güncelleme indirme"); eski JS (metin
+    göndermeyen) için Kotlin yedeği = TR katalog değeri (kanal adı, içerik); başlık yedeği yer tutucusuz kısa Türkçe."""
+    s = KT.read_text(encoding="utf-8")
+    yedekler = dict(re.findall(r'getStringExtra\("(\w+)"\)\s*\?:\s*"([^"]*)"', s))
+    assert set(yedekler) == {"kanalAdi", "baslik", "metin"}, yedekler
+    tr = _tr_katalog()
+    assert yedekler["kanalAdi"] == tr["indirmeKanali"] == "Güncelleme indirme"
+    assert yedekler["metin"] == tr["indirmeBildirimiMetin"]
+    assert yedekler["baslik"] == "Güncelleme indiriliyor"
+    kalan = [v for v in [*yedekler.values(), tr["indirmeKanali"], tr["indirmeBildirimiMetin"]] if _ASCII_TR.search(v)]
+    assert not kalan, f"ASCII'leştirilmiş Türkçe kaldı: {kalan}"
