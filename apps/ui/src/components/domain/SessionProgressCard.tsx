@@ -8,6 +8,7 @@ import { StyleSheet, Text, View, TouchableOpacity, Animated as RNAnimated, Easin
 import { useEffect as useEff, useRef as useR } from "react";
 import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import { canliYogunluk, YOGUNLUK_ETIKETI_BUYUK } from "@/utils/yogunlukGosterimi";
+import { modEtiketi } from "@/utils/seansDegerEtiketi";
 import { useTranslation } from "react-i18next";
 import { kritikMetin, useKritikDil } from "@/i18n/kritik";
 
@@ -125,7 +126,7 @@ export function SessionProgressCard({
             {stale ? t("seans.kart.veriDogrulanmadi") : t("seans.kart.aktifSeans")}
           </Text>
         </View>
-        <Text style={styles.modeText}>{mode}</Text>
+        <Text style={styles.modeText}>{modEtiketi(t, mode)}</Text>
       </View>
 
       {stale && (

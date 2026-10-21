@@ -27,6 +27,7 @@ import { colors, spacing, typography, rs, layoutMax } from "@/theme/tokens";
 import { apiGet } from "@/services/apiClient";
 import { kayitYogunlugu, olculenAlanOrt } from "@/utils/yogunlukGosterimi";
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
+import { hedefEtiketi, modEtiketi } from "@/utils/seansDegerEtiketi";
 import i18n from "i18next";
 import { useTranslation } from "react-i18next";
 
@@ -282,8 +283,8 @@ function SummarySection({ session }: { session: SessionInfo | null }) {
           label={t("kontrol.sinir.sure")}
           value={session.duration_minutes ? t("ai.pro.onay.sureDk", { duration_minutes: session.duration_minutes }) : "—"}
         />
-        <SummaryItem label={t("seans.detay.mod")} value={session.treatment_mode || "—"} />
-        <SummaryItem label={t("ai.pro.adim.hedef")} value={session.target_condition || "—"} />
+        <SummaryItem label={t("seans.detay.mod")} value={modEtiketi(t, session.treatment_mode || "") || "—"} />
+        <SummaryItem label={t("ai.pro.adim.hedef")} value={hedefEtiketi(t, session.target_condition || "") || "—"} />
         <SummaryItem label={t("seans.detay.operator")} value={session.operator_name || "—"} />
         <SummaryItem label={t("seans.detay.durum")} value={statusEtiketi(session.session_status)} />
       </View>

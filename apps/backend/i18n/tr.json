@@ -806,6 +806,16 @@
       "topluSilmeAzami": "Tek istekte en fazla {{azami}} seans silinebilir.",
       "zatenAktif": "Zaten aktif bir seans var."
     },
+    "hedef": {
+      "bagDokusuTamiri": "Bağ Dokusu Tamiri",
+      "dokuIyilesmesi": "Doku İyileşmesi",
+      "eklemAgrisi": "Eklem Ağrısı",
+      "enflamasyonAzaltma": "Enflamasyon Azaltma",
+      "kasSpazmi": "Kas Spazmı",
+      "kirikIyilesmesi": "Kırık İyileşmesi",
+      "odemAzaltma": "Ödem Azaltma",
+      "sinirRejenerasyonu": "Sinir Rejenerasyonu"
+    },
     "kimlik": {
       "guncelleEki": " Uygulamanız hekim seçimi sunmuyorsa güncelleyin.",
       "notKaydet": "Operatör seçin — seans notunu kaydetmek için hangi hekim olduğunuzu seçin; notunuz ekranda duruyor."
@@ -814,6 +824,10 @@
       "aktifYokStop": "Aktif seans yok. Çalışan bobin kalmasın diye STOP gönderildi.",
       "baslatmaDurduruldu": "Seans başlatma sırasında durduruldu (bobinler açılmadı).",
       "durduruldu": "Seans durduruldu."
+    },
+    "mod": {
+      "manuel": "Manuel",
+      "otomatik": "Otomatik"
     },
     "sonuc": {
       "baslatilmadi": "seans BAŞLATILMADI"

@@ -14,6 +14,7 @@ import { useLiveData } from "@/context/LiveDataContext";
 import { useSessionControl } from "@/hooks/useSessionControl";
 import { gorunurBobinler } from "@/services/bobinGorunurlugu";
 import { canliYogunluk, YOGUNLUK_ETIKETI } from "@/utils/yogunlukGosterimi";
+import { modEtiketi } from "@/utils/seansDegerEtiketi";
 import { KendiDurdurmaIsareti } from "@/components/ui/KendiDurdurmaKontrolu";
 import { donanimRozetDurumu } from "@/components/domain/StmUyumBandi";
 import { useTranslation } from "react-i18next";
@@ -124,7 +125,7 @@ export function DashboardScreen() {
           </View>
           <Text style={styles.patientName}>
             {at.isActive
-              ? (at.mode || t("ana.aktifSeans"))
+              ? (modEtiketi(t, at.mode) || t("ana.aktifSeans"))
               : hardwareRunning
                 ? t("ana.donanimCalisiyor")
                 : t("ana.sistemHazir")}

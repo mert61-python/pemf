@@ -806,6 +806,16 @@
       "topluSilmeAzami": "At most {{azami}} sessions can be deleted in one request.",
       "zatenAktif": "There is already an active session."
     },
+    "hedef": {
+      "bagDokusuTamiri": "Connective Tissue Repair",
+      "dokuIyilesmesi": "Tissue Healing",
+      "eklemAgrisi": "Joint Pain",
+      "enflamasyonAzaltma": "Inflammation Reduction",
+      "kasSpazmi": "Muscle Spasm",
+      "kirikIyilesmesi": "Fracture Healing",
+      "odemAzaltma": "Edema Reduction",
+      "sinirRejenerasyonu": "Nerve Regeneration"
+    },
     "kimlik": {
       "guncelleEki": " If your app does not offer veterinarian selection, update it.",
       "notKaydet": "Select an operator — to save the session note, choose which veterinarian you are; your note is still on screen."
@@ -814,6 +824,10 @@
       "aktifYokStop": "There is no active session. STOP was sent so that no coil is left running.",
       "baslatmaDurduruldu": "The session was stopped while starting (the coils were not energized).",
       "durduruldu": "The session was stopped."
+    },
+    "mod": {
+      "manuel": "Manual",
+      "otomatik": "Automatic"
     },
     "sonuc": {
       "baslatilmadi": "the session was NOT STARTED"

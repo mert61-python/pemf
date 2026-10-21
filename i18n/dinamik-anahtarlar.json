@@ -216,6 +216,22 @@
   },
   {
    "yuzey": "sunucu",
+   "dosya": "apps/backend/utils/seans_durum.py",
+   "ifade": "ceviri.t(mod_anahtari)",
+   "onek": "seans.mod.",
+   "degerler": ["manuel", "otomatik"],
+   "gerekce": "Seans modu etiketi MOD_ETIKETLERI'nde ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (Manuel / Otomatik), DB'den gelen ham mod anahtara EŞLENİR, kendisi çevrilmez; bilinmeyen mod ('AI', serbest metin) çevrilmeden aynen döner"
+  },
+  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/utils/seans_durum.py",
+   "ifade": "ceviri.t(hedef_anahtari)",
+   "onek": "seans.hedef.",
+   "degerler": ["bagDokusuTamiri", "dokuIyilesmesi", "eklemAgrisi", "enflamasyonAzaltma", "kasSpazmi", "kirikIyilesmesi", "odemAzaltma", "sinirRejenerasyonu"],
+   "gerekce": "Hedef durumu etiketi HEDEF_ETIKETLERI'nde ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (arayüz AUTO_TARGETS, 8 hedef), DB'den gelen ham hedef anahtara EŞLENİR, kendisi çevrilmez; bilinmeyen hedef (serbest metin, eski kayıt) çevrilmeden aynen döner"
+  },
+  {
+   "yuzey": "sunucu",
    "dosya": "apps/backend/utils/panel_yayin.py",
    "ifade": "ceviri.t(panel_anahtari)",
    "onek": "ai.panel.",

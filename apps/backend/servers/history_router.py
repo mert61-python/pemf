@@ -16,7 +16,7 @@ from utils import ceviri, mt_duzeltme
 from utils.akim_olcumu import akim_olcumu_acik
 from utils.path_utils import get_app_data_directory
 from utils.pdf_report_generator import get_pdf_generator
-from utils.seans_durum import durum_etiketi
+from utils.seans_durum import durum_etiketi, hedef_etiketi, mod_etiketi
 
 router = APIRouter(prefix="/api/history", tags=["history"])
 logger = logging.getLogger("HistoryRouter")
@@ -327,8 +327,8 @@ def export_csv(
                 [
                     s.get("id", ""),
                     _csv_safe(s.get("patient_name", "")),
-                    _csv_safe(s.get("target_condition", "")),
-                    _csv_safe(s.get("treatment_mode", "")),
+                    _csv_safe(hedef_etiketi(s.get("target_condition", ""))),
+                    _csv_safe(mod_etiketi(s.get("treatment_mode", ""))),
                     s.get("duration_minutes", ""),
                     s.get("frequency_hz", ""),
                     s.get("intensity_mt", ""),

@@ -13,6 +13,7 @@ import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet } from "@/services/apiClient";
 import { BarChart, PieChart } from "react-native-chart-kit";
 import { barBolumSayisi } from "@/utils/kpiGrafik";
+import { modEtiketi } from "@/utils/seansDegerEtiketi";
 import { akimOlcumuAcik, alanGosterilebilir } from "@/utils/olculenAlan";
 import { ANLIK_GUC_GORUNUR, bobinGucuW } from "@/utils/bobinGucu";
 import { gorunurBobinler, STM_BOBIN_SAYISI, type GorunurlukGirdisi } from "@/services/bobinGorunurlugu";
@@ -208,7 +209,7 @@ export function KpiDashboardScreen() {
     const modeEntries = Object.entries(kpi.modeDistribution);
     const pieData = modeEntries.length > 0
       ? modeEntries.map(([name, count], i) => ({
-          name, population: Number(count) || 0,
+          name: modEtiketi(t, name), population: Number(count) || 0,
           color: PIE_COLORS[i % PIE_COLORS.length],
           legendFontColor: "#94a3b8", legendFontSize: rf(12)
         }))

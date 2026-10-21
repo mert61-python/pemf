@@ -35,9 +35,9 @@ import { SurusKipiSecici } from "@/components/domain/SurusKipiSecici";
 import { gorunurBobinler, espSlotuGorunur, STM_BOBIN_SAYISI } from "@/services/bobinGorunurlugu";
 import { KendiDurdurmaIsareti } from "@/components/ui/KendiDurdurmaKontrolu";
 import { akimOlcumuAcik } from "@/utils/olculenAlan";
+import { hedefEtiketi } from "@/utils/seansDegerEtiketi";
 import { useTranslation } from "react-i18next";
 import i18n from "i18next";
-import type { TFunction } from "i18next";
 import { kritikMetin, useKritikDil } from "@/i18n/kritik";
 
 // ─── Tab types ────────────────────────────────────────────────────────────────
@@ -74,20 +74,7 @@ const AUTO_TARGETS = [
   "Bağ Dokusu Tamiri", "Ödem Azaltma",
 ];
 
-/** Hedef çipinin GÖRÜNEN adı. ⚠️ `AUTO_TARGETS` değeri (TR) `targetCondition` olarak seansa / literatür aramasına (auto_preset) GİDER → DEĞİŞMEZ. */
-const hedefEtiketi = (t: TFunction, hedef: string): string => {
-  switch (hedef) {
-    case "Doku İyileşmesi": return t("kontrol.hedef.dokuIyilesmesi");
-    case "Eklem Ağrısı": return t("kontrol.hedef.eklemAgrisi");
-    case "Kas Spazmı": return t("kontrol.hedef.kasSpazmi");
-    case "Kırık İyileşmesi": return t("kontrol.hedef.kirikIyilesmesi");
-    case "Enflamasyon Azaltma": return t("kontrol.hedef.enflamasyonAzaltma");
-    case "Sinir Rejenerasyonu": return t("kontrol.hedef.sinirRejenerasyonu");
-    case "Bağ Dokusu Tamiri": return t("kontrol.hedef.bagDokusuTamiri");
-    case "Ödem Azaltma": return t("kontrol.hedef.odemAzaltma");
-    default: return hedef;
-  }
-};
+// Hedef çipinin GÖRÜNEN adı `hedefEtiketi` (utils/seansDegerEtiketi.ts): `AUTO_TARGETS` değeri (TR) seansa / literatür aramasına GİDER → DEĞİŞMEZ.
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export function ControlScreen() {

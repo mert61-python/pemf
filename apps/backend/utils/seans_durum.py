@@ -51,6 +51,44 @@ DURUM_ETIKETLERI: dict[str, str] = {
 }
 
 
+#: Seansa / DB'ye giden `mode` değeri -> katalog ANAHTARI (`seans.mod.*`). "AI" iki dilde aynıdır → tabloda YOK (aynen döner).
+#: Anahtar kümesi arayüz `utils/seansDegerEtiketi.ts::modEtiketi` ile AYNI (`tests/test_seans_mod_hedef_etiketi_P1.py` karşılaştırır).
+MOD_ETIKETLERI: dict[str, str] = {
+    "Manuel": "seans.mod.manuel",
+    "Otomatik": "seans.mod.otomatik",
+}
+
+#: Seansa / literatür aramasına giden `target_condition` değeri (arayüz `AUTO_TARGETS`) -> katalog ANAHTARI (`seans.hedef.*`).
+HEDEF_ETIKETLERI: dict[str, str] = {
+    "Doku İyileşmesi": "seans.hedef.dokuIyilesmesi",
+    "Eklem Ağrısı": "seans.hedef.eklemAgrisi",
+    "Kas Spazmı": "seans.hedef.kasSpazmi",
+    "Kırık İyileşmesi": "seans.hedef.kirikIyilesmesi",
+    "Enflamasyon Azaltma": "seans.hedef.enflamasyonAzaltma",
+    "Sinir Rejenerasyonu": "seans.hedef.sinirRejenerasyonu",
+    "Bağ Dokusu Tamiri": "seans.hedef.bagDokusuTamiri",
+    "Ödem Azaltma": "seans.hedef.odemAzaltma",
+}
+
+
+def mod_etiketi(mod):
+    """Seans modunu (`Manuel` / `Otomatik` / `AI`) istek dilindeki gösterim etiketine çevirir. ⚠️ YALNIZ GÖSTERİM: DB'deki ham değer DEĞİŞMEZ.
+    Bilinmeyen / metin olmayan değer (serbest metin, eski kayıt, `AI`, None) AYNEN döner — hücre boş kalmaz, değer yutulmaz."""
+    if not isinstance(mod, str):
+        return mod
+    mod_anahtari = MOD_ETIKETLERI.get(mod)
+    return ceviri.t(mod_anahtari) if mod_anahtari else mod
+
+
+def hedef_etiketi(hedef):
+    """Hedef durumunu (`AUTO_TARGETS` değeri) istek dilindeki gösterim etiketine çevirir. ⚠️ YALNIZ GÖSTERİM (değer seansa / aramaya
+    Türkçe GİDER). Bilinmeyen / metin olmayan değer (serbest metin, eski kayıt, None) AYNEN döner."""
+    if not isinstance(hedef, str):
+        return hedef
+    hedef_anahtari = HEDEF_ETIKETLERI.get(hedef)
+    return ceviri.t(hedef_anahtari) if hedef_anahtari else hedef
+
+
 def durum_etiketi(durum) -> str:
     """Ham seans durumunu Türkçe gösterim etiketine çevirir.
 

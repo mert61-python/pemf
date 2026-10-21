@@ -14,6 +14,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
 import { SessionDetailModal } from "@/components/domain/SessionDetailModal";
 import { aramaEslesir } from "@/utils/aramaNormalize";
+import { hedefEtiketi, modEtiketi } from "@/utils/seansDegerEtiketi";
 import {
   inScope,
   kimlikIstemiMetni,
@@ -538,8 +539,8 @@ function SessionCard({
         </View>
       </View>
       <View style={styles.detailGrid}>
-        <Detail label={t("seans.detay.mod")} value={session.treatment_mode || "-"} />
-        <Detail label={t("ai.pro.adim.hedef")} value={session.target_condition || "-"} />
+        <Detail label={t("seans.detay.mod")} value={modEtiketi(t, session.treatment_mode || "") || "-"} />
+        <Detail label={t("ai.pro.adim.hedef")} value={hedefEtiketi(t, session.target_condition || "") || "-"} />
         <Detail label={t("kontrol.sinir.sure")} value={t("seans.gecmis.sureDk", { sure: session.duration_minutes || 0 })} />
         <Detail label={t("kontrol.bobin.frekans")} value={`${session.frequency_hz || 0} Hz`} />
         {/* D1.89 · B-6.27: reçete CİHAZA GÖNDERİLMEZ → "(kayıt)"; reçetesiz seans "0 mT" değil "—". */}

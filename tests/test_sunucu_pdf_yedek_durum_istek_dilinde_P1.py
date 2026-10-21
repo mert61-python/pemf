@@ -186,7 +186,7 @@ def test_PDF_Ingilizce_etiketler_Ingilizce_veri_aynen(tmp_path):
         "Total Number of Sessions",
         "Total Treatment Duration",
         "Average Session Duration",
-        "Manuel Mode",
+        "Manual Mode",  # EN1: seans modu DB değeri `Manuel` gösterimde çevrilir (değer → anahtar; DB değeri değişmez)
         "TREATMENT SESSIONS",
         "Start Time",
         "End Time",
