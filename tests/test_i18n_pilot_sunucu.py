@@ -35,9 +35,11 @@ def lan(tmp_path, monkeypatch):
         ({}, TR_404),
         ({"X-PEMF-Dil": "tr"}, TR_404),
         ({"Accept-Language": "en-US,en;q=0.9"}, TR_404),
+        # I18NI-A3.1: tam "en" değeri — geçerli bir dil kodu; ara katman Accept-Language'ı X-PEMF-Dil gibi okursa EN döner (mutant).
+        ({"Accept-Language": "en"}, TR_404),
         ({"X-PEMF-Dil": "en"}, "Patient not found — it may already have been deleted; refresh the list."),
     ],
-    ids=["basliksiz", "tr", "accept-language-YOK-SAYILIR", "en"],
+    ids=["basliksiz", "tr", "accept-language-YOK-SAYILIR", "accept-language-tam-en-YOK-SAYILIR", "en"],
 )
 def test_yonlendirici_hata_iletisi_istek_dilinde(lan, baslik, beklenen):
     r = lan.delete(f"/api/patients/{OLMAYAN}", headers=baslik)
