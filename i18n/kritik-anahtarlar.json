@@ -3214,6 +3214,216 @@
    "tur": "seans",
    "kaynak": "launcher/app/windows/hooks.nsi",
    "aciklama": "kaldırma bitti: HASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ (kutu)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ayarlar.bakim.selfTestGovde",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/SettingsScreen.tsx",
+   "aciklama": "self-test bobinleri ENERJİLER — hayvan kabinde olmamalı (onay gövdesi)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ayarlar.bakim.selfTestBaslik",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/SettingsScreen.tsx",
+   "aciklama": "self-test onay başlığı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ayarlar.bakim.selfTestBaslat",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/SettingsScreen.tsx",
+   "aciklama": "self-test onay düğmesi (bobinleri enerjileyebilir)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ayarlar.bakim.selfTestGonderildi",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/screens/SettingsScreen.tsx",
+   "aciklama": "self-test komutu donanıma gönderildi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ayarlar.bakim.selfTestGonderilemedi",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/screens/SettingsScreen.tsx",
+   "aciklama": "self-test gönderilemedi"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ayarlar.bakim.pwmBaslik",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/SettingsScreen.tsx",
+   "aciklama": "tüm PWM çıkışlarını sıfırlama (durdurma) onay başlığı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ayarlar.bakim.pwmGovde",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/SettingsScreen.tsx",
+   "aciklama": "PWM sıfırlama süren seansı KESER (durdurma onayı)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ayarlar.bakim.pwmSifirlandi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/SettingsScreen.tsx",
+   "aciklama": "tüm bobin PWM sinyalleri sıfırlandı (durdurma sonucu)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ayarlar.bakim.pwmBasarisiz",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/screens/SettingsScreen.tsx",
+   "aciklama": "PWM sıfırlama (durdurma) başarısız"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "ayarlar.bakim.pwmSifirla",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "ACİL DURDUR mandal bandının 'Sıfırla' düğmesi + onay düğmesi (Ayarlar PWM ile ORTAK anahtar)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "guvenlik.mandal.sifirlaniyor",
+   "tur": "estop",
+   "kaynak": "apps/ui/src/components/ui/EstopMandalBandi.tsx",
+   "aciklama": "ACİL DURDUR mandal sıfırlanıyor (düğme)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.kart.bayatBaglanti",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "aciklama": "aktif seans kartı: bağlantı bayat — süre / değerler doğrulanamıyor"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "seans.kart.veriDogrulanmadi",
+   "tur": "donanim",
+   "kaynak": "apps/ui/src/components/domain/SessionProgressCard.tsx",
+   "aciklama": "aktif seans kartı: VERİ DOĞRULANMADI rozeti"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.literaturYok",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "hedefe özel protokol yok — genel doz uygulanıyor"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.emDoz.pikselNotu",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/EmDozSatiri.tsx",
+   "aciklama": "piksel kipi: doz (D1–D7) ve E hesaplanmadı"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "kontrol.panel.sicaklikYuksekEtiketi",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/CoilParameterPanel.tsx",
+   "aciklama": "bobin sıcaklığı yüksek (erişilebilirlik etiketi)"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.durum.emergency_stopped",
+   "tur": "estop",
+   "kaynak": "apps/backend/utils/seans_durum.py",
+   "aciklama": "seans durumu Acil Durduruldu (PDF / CSV / API)"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.durum.hardware_rejected",
+   "tur": "donanim",
+   "kaynak": "apps/backend/utils/seans_durum.py",
+   "aciklama": "seans durumu Donanım Reddetti (PDF / CSV / API)"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "seans.durum.aborted_due_to_power",
+   "tur": "bobin",
+   "kaynak": "apps/backend/utils/seans_durum.py",
+   "aciklama": "seans durumu Elektrik Kesintisi (PDF / CSV / API)"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "guncelleme.apply.tedaviSuruyor",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/update_manager.py",
+   "aciklama": "seans sürerken güncelleme yapılmaz"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "guncelleme.apply.indirmedeTedavi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/update_manager.py",
+   "aciklama": "indirme sırasında seans başladı — güncelleme iptal"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "guncelleme.rollback.tedaviSuruyor",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/update_manager.py",
+   "aciklama": "seans sürerken geri alma yapılmaz"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "guncelleme.rollback.indirmedeTedavi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/update_manager.py",
+   "aciklama": "indirme sırasında seans başladı — geri alma iptal"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "rust.hata.guncellemeSeansSuruyor",
+   "tur": "seans",
+   "kaynak": "launcher/app/src/main.rs",
+   "aciklama": "seans sürerken güncelleme ertelenir"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "rust.hata.guncellemeBackendYanitsiz",
+   "tur": "seans",
+   "kaynak": "launcher/app/src/main.rs",
+   "aciklama": "backend yanıtsız — seans sürüyor olabilir, güncelleme ertelendi"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "rust.hata.kurulumBackendYanitsiz",
+   "tur": "seans",
+   "kaynak": "launcher/app/src/main.rs",
+   "aciklama": "backend yanıtsız — seans sürüyor olabilir, kurulum ertelendi"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "rust.hata.onarimSeansSuruyor",
+   "tur": "seans",
+   "kaynak": "launcher/app/src/main.rs",
+   "aciklama": "seans sürerken onarım yapılmaz"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "rust.hata.profilKaldirmaSeansSuruyor",
+   "tur": "seans",
+   "kaynak": "launcher/app/src/main.rs",
+   "aciklama": "seans sürerken profil kaldırılmaz"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "rust.hata.seansBasladiGuncellemeErtelendi",
+   "tur": "seans",
+   "kaynak": "launcher/app/src/main.rs",
+   "aciklama": "seans başladı — güncelleme ertelendi"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "ui.rtBusy",
+   "tur": "seans",
+   "kaynak": "launcher/app/ui/index.html",
+   "aciklama": "seans sürerken güncelleme yapılmaz (launcher bandı)"
   }
  ],
  "bekleyen": [
