@@ -3,9 +3,9 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { MODULES, CLIENT_BASE_MB, FREE_MODE } from '../config'
 import { Check } from './Icons'
+import { tl } from '../lib/para'
 import { useTranslation } from 'react-i18next'
 
-const tl = (n: number) => `₺${n.toLocaleString('tr-TR')}`
 
 /** Kullanım profili tahmin aracı. Gerçek seçim CLIENT İÇİNDE yapılır; burada
  *  kullanıcı seçtikçe tahmini indirme boyutu + varsa eklenti ücretini gösterir.

@@ -409,7 +409,7 @@
    "sira": 12,
    "kritik": false,
    "aciklama": "fiyatlar, ödeme, site işlevleri (api — makine-okur kod → istemcide çeviri)",
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 158,
    "dosyaSayisi": 12
   },
@@ -8535,10 +8535,27 @@
    "yuzey": "site",
    "grup": "site-12d-ticari",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 4,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Eksik ortam değişkeni: IYZICO_URI (üretimde https://api.iyzipay.com). Test ortamı için IYZICO_ALLOW_SANDBOX=1 gerekir.",
+     "gerekce": "geliştirici / ortam hata iletisi (sunucu günlüğü) — kullanıcı arayüzü metni değil"
+    },
+    {
+     "metin": "yearly",
+     "gerekce": "ödeme planı anahtarı (`yearly` / `monthly`) — iyzico plan kodu parçası, metin değil"
+    },
+    {
+     "metin": "monthly",
+     "gerekce": "ödeme planı anahtarı (`yearly` / `monthly`) — iyzico plan kodu parçası, metin değil"
+    },
+    {
+     "metin": "Geçersiz plan kombinasyonu: {{key}}",
+     "gerekce": "geliştirici / ortam hata iletisi (sunucu günlüğü) — kullanıcı arayüzü metni değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -8546,10 +8563,47 @@
    "yuzey": "site",
    "grup": "site-12d-ticari",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 12,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Eksik ortam değişkeni: {{name}}",
+     "gerekce": "geliştirici / ortam hata iletisi (sunucu günlüğü) — kullanıcı arayüzü metni değil"
+    },
+    {
+     "metin": "Bearer {{token}}",
+     "gerekce": "HTTP başlığı / URL / sağlayıcı yükü (`Bearer …`, REST yolu, iyzico ülke kodu) — protokol verisi, metin değil"
+    },
+    {
+     "metin": "Bearer {{deger1}}",
+     "gerekce": "HTTP başlığı / URL / sağlayıcı yükü (`Bearer …`, REST yolu, iyzico ülke kodu) — protokol verisi, metin değil"
+    },
+    {
+     "metin": "subscriptions upsert {{status}}: {{deger2}}",
+     "gerekce": "geliştirici / ortam hata iletisi (sunucu günlüğü) — kullanıcı arayüzü metni değil"
+    },
+    {
+     "metin": "jeton_donem_yenile {{status}}: {{deger2}}",
+     "gerekce": "geliştirici / ortam hata iletisi (sunucu günlüğü) — kullanıcı arayüzü metni değil"
+    },
+    {
+     "metin": "in.({{deger1}})",
+     "gerekce": "HTTP başlığı / URL / sağlayıcı yükü (`Bearer …`, REST yolu, iyzico ülke kodu) — protokol verisi, metin değil"
+    },
+    {
+     "metin": "{{deger1}}/rest/v1/subscriptions?user_id=eq.{{deger2}}&status={{deger1}}&select=stripe_subscription_id",
+     "gerekce": "HTTP başlığı / URL / sağlayıcı yükü (`Bearer …`, REST yolu, iyzico ülke kodu) — protokol verisi, metin değil"
+    },
+    {
+     "metin": "subscriptions okunamadı {{status}}",
+     "gerekce": "geliştirici / ortam hata iletisi (sunucu günlüğü) — kullanıcı arayüzü metni değil"
+    },
+    {
+     "metin": "{{deger1}}/rest/v1/subscriptions?stripe_subscription_id=eq.{{deger2}}&select=user_id",
+     "gerekce": "HTTP başlığı / URL / sağlayıcı yükü (`Bearer …`, REST yolu, iyzico ülke kodu) — protokol verisi, metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -8557,7 +8611,7 @@
    "yuzey": "site",
    "grup": "site-12d-ticari",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -8568,10 +8622,31 @@
    "yuzey": "site",
    "grup": "site-12d-ticari",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 5,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Önce giriş yapın.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "Aktif abonelik bulunamadı.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "İptal edilemedi.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "Abonelik iptal edildi; hesap durumunuz birkaç dakika içinde güncellenecek.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "İşlem tamamlanamadı. Lütfen daha sonra tekrar deneyin.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -8579,10 +8654,71 @@
    "yuzey": "site",
    "grup": "site-12d-ticari",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 15,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Önce giriş yapın.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "Hesabınızda zaten aktif bir abonelik var. Plan değiştirmek için önce mevcut aboneliğinizi iptal edin.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "Soyad",
+     "gerekce": "API alan etiketi — `Lütfen \"<etiket>\" alanını doldurun.` API iletisinin parçası (veri); site bu iletiyi göstermez"
+    },
+    {
+     "metin": "TC Kimlik No",
+     "gerekce": "API alan etiketi — `Lütfen \"<etiket>\" alanını doldurun.` API iletisinin parçası (veri); site bu iletiyi göstermez"
+    },
+    {
+     "metin": "Telefon",
+     "gerekce": "API alan etiketi — `Lütfen \"<etiket>\" alanını doldurun.` API iletisinin parçası (veri); site bu iletiyi göstermez"
+    },
+    {
+     "metin": "Şehir",
+     "gerekce": "API alan etiketi — `Lütfen \"<etiket>\" alanını doldurun.` API iletisinin parçası (veri); site bu iletiyi göstermez"
+    },
+    {
+     "metin": "Adres",
+     "gerekce": "API alan etiketi — `Lütfen \"<etiket>\" alanını doldurun.` API iletisinin parçası (veri); site bu iletiyi göstermez"
+    },
+    {
+     "metin": "Lütfen \"{{etiket}}\" alanını doldurun.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "TC Kimlik No 11 haneli olmalıdır.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "Telefon numarası geçersiz (ör. +905xxxxxxxxx).",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "Adres veya şehir alanı çok uzun.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "Site adresi yapılandırılmamış.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "Turkey",
+     "gerekce": "HTTP başlığı / URL / sağlayıcı yükü (`Bearer …`, REST yolu, iyzico ülke kodu) — protokol verisi, metin değil"
+    },
+    {
+     "metin": "Ödeme formu oluşturulamadı.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "Ödeme başlatılamadı. Lütfen daha sonra tekrar deneyin.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -8590,10 +8726,43 @@
    "yuzey": "site",
    "grup": "site-12d-ticari",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 10,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Bearer {{token}}",
+     "gerekce": "HTTP başlığı / URL / sağlayıcı yükü (`Bearer …`, REST yolu, iyzico ülke kodu) — protokol verisi, metin değil"
+    },
+    {
+     "metin": "Önce giriş yapın.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "Geçersiz jeton miktarı.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "Geçersiz istek kimliği.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "Jeton işlemi tamamlanamadı.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "Jeton hakkınız bitti; yeni yapay zekâ analizi başlatılamadı. Seans, acil durdurma ve sensör izleme etkilenmez. Ek jeton paketiyle hemen devam edebilirsiniz.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "Hesabınızda jeton tanımlı değil.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    },
+    {
+     "metin": "Beklenmeyen bir hata oluştu.",
+     "gerekce": "API yanıt iletisi / HTTP başlığı / URL — uç nokta çıktısı = VERİ: site `odemeHatasiTurkce` ile SINIFLAR (regex) ve kullanıcıya yalnız sınıflama gösterilir, masaüstü / mobil istemci kendi kataloğundan gösterir; ham metin ekrana basılmaz"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -8601,7 +8770,7 @@
    "yuzey": "site",
    "grup": "site-12d-ticari",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 0,
    "kritik": false,
    "muaf": [],
@@ -8612,10 +8781,35 @@
    "yuzey": "site",
    "grup": "site-12d-ticari",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 7,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Ödeme başlatılamadı.",
+     "gerekce": "ödeme / iptal hata iletisi — `odemeHatasiTurkce` içinde SINIFLANDIRILIR (regex) ve kullanıcıya yalnız o sınıflamanın katalog metni gösterilir; ham metin ekrana basılmaz (kural: ham sağlayıcı / sunucu metni gösterilmez)"
+    },
+    {
+     "metin": "Ödeme sunucusu yanıt vermedi (zaman aşımı). Tekrar deneyin.",
+     "gerekce": "ödeme / iptal hata iletisi — `odemeHatasiTurkce` içinde SINIFLANDIRILIR (regex) ve kullanıcıya yalnız o sınıflamanın katalog metni gösterilir; ham metin ekrana basılmaz (kural: ham sağlayıcı / sunucu metni gösterilmez)"
+    },
+    {
+     "metin": "Ağ hatası — tekrar deneyin.",
+     "gerekce": "ödeme / iptal hata iletisi — `odemeHatasiTurkce` içinde SINIFLANDIRILIR (regex) ve kullanıcıya yalnız o sınıflamanın katalog metni gösterilir; ham metin ekrana basılmaz (kural: ham sağlayıcı / sunucu metni gösterilmez)"
+    },
+    {
+     "metin": "Önce giriş yapın.",
+     "gerekce": "ödeme / iptal hata iletisi — `odemeHatasiTurkce` içinde SINIFLANDIRILIR (regex) ve kullanıcıya yalnız o sınıflamanın katalog metni gösterilir; ham metin ekrana basılmaz (kural: ham sağlayıcı / sunucu metni gösterilmez)"
+    },
+    {
+     "metin": "İptal edilemedi.",
+     "gerekce": "ödeme / iptal hata iletisi — `odemeHatasiTurkce` içinde SINIFLANDIRILIR (regex) ve kullanıcıya yalnız o sınıflamanın katalog metni gösterilir; ham metin ekrana basılmaz (kural: ham sağlayıcı / sunucu metni gösterilmez)"
+    },
+    {
+     "metin": "Sunucu yanıt vermedi (zaman aşımı). Aboneliğinizin durumunu birazdan kontrol edin.",
+     "gerekce": "ödeme / iptal hata iletisi — `odemeHatasiTurkce` içinde SINIFLANDIRILIR (regex) ve kullanıcıya yalnız o sınıflamanın katalog metni gösterilir; ham metin ekrana basılmaz (kural: ham sağlayıcı / sunucu metni gösterilmez)"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -8623,10 +8817,15 @@
    "yuzey": "site",
    "grup": "site-12d-ticari",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 1,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Bearer {{token}}",
+     "gerekce": "HTTP başlığı / URL / sağlayıcı yükü (`Bearer …`, REST yolu, iyzico ülke kodu) — protokol verisi, metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -8634,7 +8833,7 @@
    "yuzey": "site",
    "grup": "site-12d-ticari",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 4,
    "kritik": false,
    "muaf": [],
@@ -8645,7 +8844,7 @@
    "yuzey": "site",
    "grup": "site-12d-ticari",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 42,
    "kritik": false,
    "muaf": [],
@@ -8656,10 +8855,71 @@
    "yuzey": "site",
    "grup": "site-12d-ticari",
    "sira": 12,
-   "durum": "bekliyor",
+   "durum": "tamam",
    "metin": 58,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "/odeme?tier={{tier}}&yearly={{deger2}}&research={{deger3}}",
+     "gerekce": "yönlendirme URL'si (`/odeme?tier=…`) — metin değil"
+    },
+    {
+     "metin": "border-emerald-500/40 bg-emerald-500/10 text-success",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "border-amber-500/40 bg-amber-500/10 text-warning",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "bg-primary text-primary-fg",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "text-muted",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "text-primary",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "ring-2 ring-primary/50 glow-ring",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "border-primary/40 bg-primary/10 text-primary",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "border-border text-muted",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "btn-primary",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "btn-ghost",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "border-primary/40 bg-primary/10",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "border-border bg-bg/40",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "text-fg",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    },
+    {
+     "metin": "sm:grid-cols-2 lg:max-w-3xl",
+     "gerekce": "Tailwind CSS sınıf dizgisi — metin değil"
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },

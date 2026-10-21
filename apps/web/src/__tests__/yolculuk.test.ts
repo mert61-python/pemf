@@ -78,8 +78,10 @@ describe('1) SSS kapsamı', () => {
 describe('2) iletişim', () => {
   it('KRİTİK: kurumsal "İletişime Geçin" SSS sayfasına DEĞİL iletişime götürür', () => {
     // Kurumsal teklif bekleyen ziyaretçi "Sık sorulan sorular" başlığına düşüyordu.
+    // Metin kataloğa taşındı (I18N): çapa = anahtar çağrısı, metin iddiası = katalog Türkçe değeri.
     const s = soy(PRICING_SRC)
-    const i = s.indexOf('İletişime Geçin')
+    expect(TR['fiyat.iletisim']).toBe('İletişime Geçin')
+    const i = s.indexOf("t('fiyat.iletisim')")
     expect(i).toBeGreaterThan(-1)
     const cevre = s.slice(Math.max(0, i - 260), i)
     expect(cevre).toMatch(/mailto:/)
@@ -100,7 +102,8 @@ describe('3) hata ekranlarında ÇIKIŞ YOLU', () => {
   it('KRİTİK: ödeme hata bandında tıklanabilir destek/tekrar-dene bağlantısı var', () => {
     // "Tekrar deneyin veya destek ile iletişime geçin" diyordu ama hiçbiri tıklanabilir değildi.
     const s = soy(PRICING_SRC)
-    const i = s.indexOf('Ödeme sırasında bir sorun')
+    expect(TR['fiyat.odemeSorunu']).toMatch(/^Ödeme sırasında bir sorun/)
+    const i = s.indexOf("t('fiyat.odemeSorunu'")
     expect(i).toBeGreaterThan(-1)
     expect(s.slice(i - 400, i + 400)).toMatch(/mailto:|<a |Link to=/)
   })

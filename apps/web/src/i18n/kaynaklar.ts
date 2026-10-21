@@ -24,6 +24,10 @@ import trIndirme from './tr/indirme.json'
 import enIndirme from './en/indirme.json'
 import trIcerik from './tr/icerik.json'
 import enIcerik from './en/icerik.json'
+import trFiyat from './tr/fiyat.json'
+import enFiyat from './en/fiyat.json'
+import trOdeme from './tr/odeme.json'
+import enOdeme from './en/odeme.json'
 
 export const trKaynak = {
   ortak: trOrtak,
@@ -37,6 +41,8 @@ export const trKaynak = {
   hesap: trHesap,
   indirme: trIndirme,
   icerik: trIcerik,
+  fiyat: trFiyat,
+  odeme: trOdeme,
 }
 
 export const enKaynak: typeof trKaynak = {
@@ -51,6 +57,8 @@ export const enKaynak: typeof trKaynak = {
   hesap: enHesap,
   indirme: enIndirme,
   icerik: enIcerik,
+  fiyat: enFiyat,
+  odeme: enOdeme,
 }
 
 export const kaynaklar = {

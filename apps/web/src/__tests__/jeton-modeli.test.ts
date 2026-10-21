@@ -108,7 +108,7 @@ describe('4) Başlangıç planı ve KDV', () => {
   })
 
   it('KRİTİK: fiyat sayfasında KDV beyanı var (ödeme sayfasıyla aynı)', () => {
-    expect(soy(PRICING_SRC)).toMatch(/KDV\s+dâhil/i)
+    expect(gorunenMetinler(soy(PRICING_SRC))).toMatch(/KDV\s+dâhil/i)
   })
 })
 

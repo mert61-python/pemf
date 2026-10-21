@@ -155,7 +155,7 @@ describe('jargon: Türkçe karşılık', () => {
     // Aşırı-sadeleştirme yönü: her İngilizce sözcüğü atmak marka ve zorunlu sağlayıcı adını da
     // silerdi. Bunlar KALIR.
     expect(soy(CONFIG_SRC)).toMatch(/PEMF/)
-    expect(soy(ODEME_SRC)).toMatch(/iyzico/)
+    expect(gorunenMetinler(soy(ODEME_SRC))).toMatch(/iyzico/)
   })
 })
 

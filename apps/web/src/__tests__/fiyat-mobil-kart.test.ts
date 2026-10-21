@@ -27,6 +27,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { kaynakSoy } from './_soyucu'
+import { TR, gorunenMetinler } from './_kaynakMetni'
 
 import { COMPARE, PLANS } from '../config'
 import PRICING_SRC from '../pages/Pricing.tsx?raw'
@@ -123,9 +124,10 @@ describe('değer sözlüğü — bağlam kaybı', () => {
     const aiPro = COMPARE.find((r) => /AI Pro/i.test(r.label))
     expect(aiPro).toBeTruthy()
     expect(Object.values(aiPro!.values).join(' ')).toMatch(/5 jeton/)
-    // Deger bileşeni '✓' sonrasını olduğu gibi basar, boşsa 'Var' yazar.
+    // Deger bileşeni '✓' sonrasını olduğu gibi basar, boşsa 'Var' yazar (metin kataloğa taşındı: çapa = anahtar çağrısı + katalog TR değeri).
     expect(src).toContain("v.slice(1).trim()")
-    expect(src).toMatch(/ek \|\| 'Var'/)
+    expect(src).toMatch(/ek \|\| t\('fiyat\.var'\)/)
+    expect(TR['fiyat.var']).toBe('Var')
   })
 })
 
@@ -154,7 +156,8 @@ describe('erişilebilirlik', () => {
 describe('sayı gömülmez', () => {
   it('KRİTİK: ortak satır kartı plan SAYISINI metne yazmaz ("dört planda da")', () => {
     // PLANS büyüyünce elle yazılmış sayı YALAN olurdu.
-    expect(src).not.toMatch(/[Dd]ört planda/)
-    expect(src).toContain('Tüm planlarda var')
+    expect(gorunenMetinler(src)).not.toMatch(/[Dd]ört planda/)
+    expect(src).toContain("t('fiyat.tumPlanlardaVar')")
+    expect(TR['fiyat.tumPlanlardaVar']).toBe('Tüm planlarda var')
   })
 })

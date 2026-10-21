@@ -5,8 +5,9 @@ import { PLANS, ADDONS, COMPARE, RESEARCH_ADDON, FREE_MODE, COMPANY, karsilastir
 import { planFiyatGorunumu } from '../lib/planFiyat'
 import { Check, Sparkle, Bolt } from '../components/Icons'
 import PackageBuilder from '../components/PackageBuilder'
-
-const tl = (n: number) => `₺${n.toLocaleString('tr-TR')}`
+import { tl } from '../lib/para'
+import { baglantiliMetin } from '../lib/metin'
+import { useTranslation } from 'react-i18next'
 
 // ⚠️ Fiyat gösterimi ARTIK BURADA DEĞİL. Aynı hesap ana sayfada da satır içi yazılıydı; aylık
 // ücreti olmayan "Kullandıkça Öde" planı eklenince ikisi ayrı ayrı "₺0/ay" üretti (ikisi de
@@ -53,6 +54,7 @@ const ayirtEdici = (row: (typeof COMPARE)[number]) => degerGruplari(row).length 
  *  ⚠️ `Yok` kontrolü CONFIG SÖZLÜĞÜNE bağlıdır: "Yok" = bu planda yok (eksiklik, soluk),
  *  "Alınmıyor" = ücret alınmıyor (avantaj, normal). Etiketten valans TAHMİN EDİLMEZ. */
 function Deger({ v }: { v: string }) {
+  const { t } = useTranslation()
   if (!v.startsWith('✓')) {
     return <span className={karsilastirmaYokMu(v) ? 'text-muted' : 'font-medium text-fg'}>{v}</span>
   }
@@ -60,12 +62,13 @@ function Deger({ v }: { v: string }) {
   return (
     <span className="inline-flex items-center justify-end gap-1.5">
       <Check className="h-4 w-4 shrink-0 text-primary" />
-      <span className="text-xs text-muted">{ek || 'Var'}</span>
+      <span className="text-xs text-muted">{ek || t('fiyat.var')}</span>
     </span>
   )
 }
 
 export default function Pricing() {
+  const { t } = useTranslation()
   const [yearly, setYearly] = useState(true)
   const [research, setResearch] = useState(false)
   const navigate = useNavigate()
@@ -92,19 +95,21 @@ export default function Pricing() {
             {/* Metin denetimi 2026-08-20: "tekrar deneyin veya destek ile iletişime geçin" diyordu
                 ama hiçbiri tıklanabilir değildi — kullanıcı hata bandında sıkışıp kalıyordu. */}
             {checkout === 'success' ? (
-              '✓ Ödemeniz alındı, aboneliğiniz başladı. PEMF Vet’i indirip aynı hesapla giriş yapın.'
+              t('fiyat.odemeAlindi')
             ) : checkout === 'incomplete' ? (
-              'Ödeme tamamlanmadı. Dilerseniz yukarıdan planınızı yeniden seçebilirsiniz.'
+              t('fiyat.odemeTamamlanmadi')
             ) : (
               <>
-                Ödeme sırasında bir sorun oluştu. Yukarıdan tekrar deneyebilir ya da{' '}
-                <a
-                  href={`mailto:${COMPANY.email}?subject=${encodeURIComponent('Ödeme sorunu')}`}
-                  className="font-medium underline"
-                >
-                  {COMPANY.email}
-                </a>{' '}
-                adresinden bize ulaşabilirsiniz.
+                {baglantiliMetin(t('fiyat.odemeSorunu', { skipInterpolation: true }), {
+                  baglanti: (
+                    <a
+                      href={`mailto:${COMPANY.email}?subject=${encodeURIComponent(t('fiyat.konuOdemeSorunu'))}`}
+                      className="font-medium underline"
+                    >
+                      {COMPANY.email}
+                    </a>
+                  ),
+                })}
               </>
             )}
           </div>
@@ -114,7 +119,7 @@ export default function Pricing() {
       {FREE_MODE && (
         <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 pt-6 sm:px-6">
           <div className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-3 text-sm text-primary">
-            Test aşaması: tüm planlar şu an <strong>ücretsiz</strong>. Aşağıdaki planlardan hangisini seçerseniz seçin doğrudan indirmeye gidersiniz; kart bilgisi istenmez, ödeme alınmaz.
+            {t('fiyat.testBandi1')}<strong>{t('fiyat.testBandi2')}</strong>{t('fiyat.testBandi3')}
           </div>
         </div>
       )}
@@ -122,35 +127,33 @@ export default function Pricing() {
       {/* Hero + billing toggle */}
       <section className="bg-hero border-b border-border/60">
         <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-16 text-center sm:px-6 sm:py-20">
-          <span className="chip"><Sparkle className="h-3.5 w-3.5" /> Fiyatlandırma</span>
-          <h1 className="mt-5 text-4xl font-extrabold sm:text-5xl">Kliniğinize göre plan</h1>
+          <span className="chip"><Sparkle className="h-3.5 w-3.5" /> {t('ortak.nav.fiyatlandirma')}</span>
+          <h1 className="mt-5 text-4xl font-extrabold sm:text-5xl">{t('fiyat.baslik')}</h1>
           <p className="mx-auto mt-4 max-w-2xl text-muted">
-            Planınız, ayda kaç yapay zekâ analizi yapabileceğinizi belirler:{' '}
-            <span className="text-fg/90 font-medium">her analiz 1 jeton harcar</span>; jetonunuz biterse ek paket
-            alabilir ya da hiç aylık ücret ödemeden <span className="text-fg/90 font-medium">kullandıkça ödeyebilirsiniz</span>.
-            Hangi yapay zekâ modellerinin ineceğini ise kurulumda seçtiğiniz profiller belirler.
+            {t('fiyat.giris1')}{' '}
+            <span className="text-fg/90 font-medium">{t('fiyat.giris2')}</span>{t('fiyat.giris3')}<span className="text-fg/90 font-medium">{t('fiyat.giris4')}</span>{t('fiyat.giris5')}
           </p>
 
           {/* [W adım 7 / site-11] Dönem düğmeleri 63×32 ve 135×32 px ölçüldü; taban 44.
               Kapı bunları aralık muafiyetiyle geçiriyordu ama parmakla ıskalanıyorlardı. */}
           <div className="mt-8 inline-flex items-center gap-1 rounded-full border border-border-strong bg-bg-soft p-1 text-sm">
-            <button onClick={() => setYearly(false)} className={`inline-flex min-h-11 items-center justify-center rounded-full px-4 font-medium transition-colors ${!yearly ? 'bg-primary text-primary-fg' : 'text-muted'}`}>Aylık</button>
+            <button onClick={() => setYearly(false)} className={`inline-flex min-h-11 items-center justify-center rounded-full px-4 font-medium transition-colors ${!yearly ? 'bg-primary text-primary-fg' : 'text-muted'}`}>{t('fiyat.aylik')}</button>
             <button onClick={() => setYearly(true)} className={`inline-flex min-h-11 items-center justify-center rounded-full px-4 font-medium transition-colors ${yearly ? 'bg-primary text-primary-fg' : 'text-muted'}`}>
-              Yıllık<span className={`ml-1.5 text-xs ${yearly ? 'text-primary-fg/80' : 'text-primary'}`}>2 ay ücretsiz</span>
+              {t('fiyat.yillik')}<span className={`ml-1.5 text-xs ${yearly ? 'text-primary-fg/80' : 'text-primary'}`}>{t('fiyat.ikiAyUcretsiz')}</span>
             </button>
           </div>
 
           {/* KDV BEYANI (7. parti kararı): ödeme sayfası "gösterilen tutar KDV dâhil toplam
               bedeldir" diyordu; fiyat sayfası suskundu — aynı rakam iki sayfada farklı anlaşılıyordu.
               Tahsilat tarafı vergi EKLEMEDİĞİ için doğru beyan "dâhil"dir. */}
-          <p className="mt-4 text-xs text-muted">Fiyatlara KDV dâhildir; ayrıca ücret eklenmez.</p>
+          <p className="mt-4 text-xs text-muted">{t('fiyat.kdv')}</p>
 
           {/* Araştırma eklentisi — Pro/Pro+ satın alımına eklenir */}
           <div className="mt-5">
             <label className="inline-flex cursor-pointer items-center gap-2.5 rounded-full border border-border bg-bg-soft px-4 py-2 text-sm">
               <input type="checkbox" checked={research} onChange={(e) => setResearch(e.target.checked)} className="h-4 w-4 accent-primary" />
               <span className="text-muted">
-                Araştırma profili ekle <span className="font-medium text-fg">+{tl(RESEARCH_ADDON.monthly)}/ay</span>
+                {t('fiyat.arastirmaEkle')}<span className="font-medium text-fg">{t('indirme.paket.ayArti', { tutar: tl(RESEARCH_ADDON.monthly) })}</span>
               </span>
             </label>
           </div>
@@ -210,16 +213,15 @@ export default function Pricing() {
       {/* Karşılaştırma — 1024 altı SATIR kartları, üstü mevcut tablo (bkz. degerGruplari yorumu) */}
       <section className="border-b border-border/60 bg-bg-soft/50">
         <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-16 sm:px-6">
-          <h2 id="plan-karsilastirmasi" className="text-2xl font-bold sm:text-3xl">Plan karşılaştırması</h2>
+          <h2 id="plan-karsilastirmasi" className="text-2xl font-bold sm:text-3xl">{t('fiyat.karsilastirmaBaslik')}</h2>
           <p className="mt-3 max-w-2xl text-sm text-muted lg:hidden">
-            Her kart tek bir özelliği tüm planlarda birlikte gösterir; aynı değeri veren planlar
-            tek satırda birleşir, böylece farklar öne çıkar.
+            {t('fiyat.karsilastirmaAciklama')}
           </p>
           {/* COMPARE tarifeyi FREE_MODE'dan bağımsız yazar; test aşamasında tutar tahsil edilmez.
               Sayfa başındaki band mobilde ekran dışında kaldığı için burada bir kez daha söylenir. */}
           {FREE_MODE && (
             <p className="mt-3 max-w-2xl text-sm text-primary">
-              Aşağıdaki tutarlar test sonrası tarifedir; şu an tahsil edilmez.
+              {t('fiyat.tarifeNotu')}
             </p>
           )}
 
@@ -260,7 +262,7 @@ export default function Pricing() {
             {COMPARE.filter((r) => !ayirtEdici(r)).length > 0 && (
               <div className="card min-w-0 p-5 sm:col-span-2">
                 {/* Sayı YAZILMAZ ("dört") — PLANS büyüyünce metin yalan olurdu. */}
-                <h3 className="text-sm font-semibold">Tüm planlarda var</h3>
+                <h3 className="text-sm font-semibold">{t('fiyat.tumPlanlardaVar')}</h3>
                 <ul className="mt-3 space-y-2.5">
                   {COMPARE.filter((r) => !ayirtEdici(r)).map((row) => (
                     <li key={row.label} className="flex min-w-0 gap-2.5 text-sm text-muted">
@@ -315,11 +317,10 @@ export default function Pricing() {
       <section className="border-b border-border/60">
         <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-16 sm:px-6">
           <div className="max-w-2xl">
-            <span className="chip">Kurulum profilleri</span>
-            <h2 className="mt-4 text-2xl font-bold sm:text-3xl">Ne kurulacağını siz seçin</h2>
+            <span className="chip">{t('ana.profiller.rozet')}</span>
+            <h2 className="mt-4 text-2xl font-bold sm:text-3xl">{t('fiyat.neKurulacak')}</h2>
             <p className="mt-3 text-muted">
-              Yalnız seçtiğiniz profillerin modelleri iner — evcil hayvan sahibi, ağır araştırma
-              modellerini boşuna indirmez. Evcil Hayvan Sahibi ve Veteriner profilleri planınıza dahildir.
+              {t('fiyat.profilAciklama')}
             </p>
           </div>
           <div className="mt-10">
@@ -332,9 +333,9 @@ export default function Pricing() {
       <section className="border-b border-border/60 bg-bg-soft/50">
         <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-16 sm:px-6">
           <div className="max-w-xl">
-            <span className="chip">Eklentiler</span>
-            <h2 className="mt-4 text-2xl font-bold sm:text-3xl">Ek özellikler</h2>
-            <p className="mt-3 text-muted">Uygulama içinden tek tıkla açarsınız; ücreti aboneliğinize eklenir.</p>
+            <span className="chip">{t('fiyat.eklentiler')}</span>
+            <h2 className="mt-4 text-2xl font-bold sm:text-3xl">{t('fiyat.ekOzellikler')}</h2>
+            <p className="mt-3 text-muted">{t('fiyat.eklentiAciklama')}</p>
           </div>
           {/* 2026-08-09: eklenti sayısı 3'ten 2'ye indi ("Genişletilmiş Yedekleme" kaldırıldı —
               arkasında ürün yoktu, bkz. config.ts). Sabit 3 sütun boş bir hücre bırakıyordu;
@@ -365,20 +366,20 @@ export default function Pricing() {
               engeller. */}
           <div className="card flex flex-col items-center gap-6 p-8 text-center md:flex-row md:justify-between md:p-10 md:text-left">
             <div className="min-w-0">
-              <h2 className="text-2xl font-bold">Zincir klinik veya kurum musunuz?</h2>
-              <p className="mt-2 max-w-lg text-muted">Sınırsız cihaz ve şube, kendi sistemlerinizle bütünleşme, yerinde kurulum ve garantili destek için özel fiyat.</p>
+              <h2 className="text-2xl font-bold">{t('fiyat.zincir')}</h2>
+              <p className="mt-2 max-w-lg text-muted">{t('fiyat.zincirAciklama')}</p>
             </div>
             {/* Metin denetimi 2026-08-20: "İletişime Geçin" /support'a (SSS başlığına) gidiyordu;
                 kurumsal teklif bekleyen ziyaretçi sık sorulan sorular sayfasına düşüyordu.
                 Artık doğrudan konu satırı hazır bir e-posta açar. */}
             <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
               <a
-                href={`mailto:${COMPANY.email}?subject=${encodeURIComponent('Kurumsal teklif talebi')}`}
+                href={`mailto:${COMPANY.email}?subject=${encodeURIComponent(t('fiyat.konuKurumsal'))}`}
                 className="btn-ghost"
               >
-                İletişime Geçin
+                {t('fiyat.iletisim')}
               </a>
-              <Link to="/download" className="btn-primary">14 gün ücretsiz dene</Link>
+              <Link to="/download" className="btn-primary">{t('fiyat.ucretsizDene')}</Link>
             </div>
           </div>
         </div>

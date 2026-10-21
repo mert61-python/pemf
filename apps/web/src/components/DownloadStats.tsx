@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { fetchUsageStats, type UsageStats } from '../lib/usageStats'
 import { useTranslation } from 'react-i18next'
+import { sayi } from '../lib/para'
 
 /**
  * KULLANIM SAYACI (2026-08-13) — eskiden İNDİRME sayacıydı.
@@ -33,7 +34,7 @@ export function DownloadStats() {
   return (
     <section className="mx-auto mt-10 max-w-3xl rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
       <h2 className="text-lg font-semibold text-white">{t('indirme.istatistik.kayitliKullanici')}</h2>
-      <p className="mt-1 text-4xl font-bold text-teal-300">{s.accounts.toLocaleString('tr-TR')}</p>
+      <p className="mt-1 text-4xl font-bold text-teal-300">{sayi(s.accounts)}</p>
       {/* ⚠️ "Kurulu cihaz TOPLAMI" BİLEREK GÖSTERİLMİYOR (2026-08-13, ölçümle):
           `get_unique_device_id()` kimliği veri kökündeki `device_id.txt`te saklar; kök silinince
           (kaldırma / yeniden kurulum) `uuid.getnode()` bu makinelerde kararsız olduğu için YENİ
@@ -56,7 +57,7 @@ export function DownloadStats() {
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div>
-      <div className="text-xl font-semibold text-white">{value.toLocaleString('tr-TR')}</div>
+      <div className="text-xl font-semibold text-white">{sayi(value)}</div>
       <div className="text-xs uppercase tracking-wide text-white/50">{label}</div>
     </div>
   )

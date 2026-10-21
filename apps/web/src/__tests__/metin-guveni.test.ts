@@ -15,6 +15,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { kaynakSoy } from './_soyucu'
+import { gorunenMetinler } from './_kaynakMetni'
 
 import LEGAL_SRC from '../pages/Legal.tsx?raw'
 import ODEME_SRC from '../pages/Odeme.tsx?raw'
@@ -51,7 +52,7 @@ describe('2) KDV beyanı', () => {
     // bedel sipariş özetinde gösterilen tutardır" diyor; api/checkout.ts ise listedeki tutarı
     // OLDUĞU GİBİ iyzico'ya geçiyor (hiçbir yerde vergi eklenmiyor) → "dâhil değildir" cümlesi
     // hem sözleşmeyle hem sistemin kendi davranışıyla çelişiyordu.
-    expect(soy(ODEME_SRC)).not.toMatch(/KDV\s+dâhil\s+değildir/i)
+    expect(gorunenMetinler(soy(ODEME_SRC))).not.toMatch(/KDV\s+dâhil\s+değildir/i)
   })
 
   it('KARŞIT-KANIT: sözleşmedeki "KDV dâhil toplam bedel" ifadesi DURUYOR (çapa)', () => {
@@ -74,7 +75,7 @@ describe('3) FREE_MODE tutarlılığı', () => {
   it('KRİTİK: test-aşaması bandı VAR OLMAYAN buton adına atıf yapmaz', () => {
     // Bant '"Seç" butonları' diyordu; sayfadaki etiketler "Denemeyi Başlat" / "Pro'yu Seç" /
     // "Pro+'ya Yükselt" — kullanıcı tarif edilen düğmeyi bulamıyordu.
-    expect(soy(PRICING_SRC)).not.toMatch(/"Seç" butonları/)
+    expect(gorunenMetinler(soy(PRICING_SRC))).not.toMatch(/"Seç" butonları/)
   })
 })
 

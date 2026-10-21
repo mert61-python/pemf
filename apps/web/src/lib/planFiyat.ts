@@ -18,6 +18,8 @@
  *   3. Kalan durumda aylık/yıllık tarife.
  */
 import { FREE_MODE, type Plan } from '../config'
+import i18n from '../i18n'
+import { tl } from './para'
 
 export type FiyatGorunumu = {
   /** Büyük punto: ya tutar ya durum ("Şu an ücretsiz"). */
@@ -26,22 +28,20 @@ export type FiyatGorunumu = {
   kucuk: string
 }
 
-const tl = (n: number) => `₺${n.toLocaleString('tr-TR')}`
-
 export function planFiyatGorunumu(p: Plan, yillik: boolean): FiyatGorunumu {
   // (1) Kendi etiketi olan plan — aylık ücret varsayımı UYGULANMAZ.
   if (p.priceLabel) return { buyuk: p.priceLabel, kucuk: p.period }
 
   // (2) Ücretsiz dönem: rakam yerine durum; asıl tarife küçük not olarak kalır (şeffaflık).
   if (FREE_MODE && p.paid) {
-    return { buyuk: 'Şu an ücretsiz', kucuk: `test sonrası ${tl(p.monthly ?? 0)}/ay` }
+    return { buyuk: i18n.t('fiyat.suAnUcretsiz'), kucuk: i18n.t('fiyat.testSonrasiAy', { tutar: tl(p.monthly ?? 0) }) }
   }
 
   // (3) Normal tarife.
   const aylikTutar = yillik ? Math.round((p.yearly ?? 0) / 12) : p.monthly ?? 0
   return {
     buyuk: tl(aylikTutar),
-    kucuk: yillik ? `${p.period} · yıllık ${tl(p.yearly ?? 0)}` : p.period,
+    kucuk: yillik ? i18n.t('fiyat.donemYillik', { donem: p.period, tutar: tl(p.yearly ?? 0) }) : p.period,
   }
 }
 
@@ -51,6 +51,6 @@ export function planFiyatGorunumu(p: Plan, yillik: boolean): FiyatGorunumu {
  */
 export function planKisaFiyat(p: Plan): string {
   if (p.priceLabel) return p.priceLabel
-  if (FREE_MODE) return 'Şu an ücretsiz'
-  return `${tl(p.monthly ?? 0)}/ay`
+  if (FREE_MODE) return i18n.t('fiyat.suAnUcretsiz')
+  return i18n.t('fiyat.tlAy', { tutar: tl(p.monthly ?? 0) })
 }

@@ -102,7 +102,7 @@ describe('2) aylık-ücret varsayan fiyat yolları yeni planı YANLIŞ gösterme
 
 describe('3) 7. partide kaldırılan HIZ/KUYRUK vaadinin sayfa kalıntıları', () => {
   it('KRİTİK: fiyat sayfası "yoğun saatte bekleme / anında sonuç" iddiasında bulunmaz', () => {
-    const s = soy(PRICING_SRC)
+    const s = gorunenMetinler(soy(PRICING_SRC))
     expect(s).not.toMatch(/yoğun saatlerde.{0,30}bekleme/i)
     expect(s).not.toMatch(/sonuç anında gelir/i)
     expect(s).not.toMatch(/ne kadar hızlı sonuç vereceğini belirler/i)
@@ -113,7 +113,7 @@ describe('3) 7. partide kaldırılan HIZ/KUYRUK vaadinin sayfa kalıntıları', 
   })
 
   it('KRİTİK: ödeme sayfası "Anında analiz" rozeti göstermez', () => {
-    expect(soy(ODEME_SRC)).not.toMatch(/Anında analiz/i)
+    expect(gorunenMetinler(soy(ODEME_SRC))).not.toMatch(/Anında analiz/i)
   })
 
   it('KRİTİK: plan açıklamaları "gerçek-zamanlı öncelik" satmaz', () => {
@@ -204,6 +204,6 @@ describe('6) ⚠️ SATIŞ HÂLÂ KAPALI (sahip: "henüz aktif etme")', () => {
   })
 
   it('KRİTİK: fiyat sayfası ücretsiz dönemde "ödeme alınmaz" der', () => {
-    expect(soy(PRICING_SRC)).toMatch(/kart bilgisi istenmez, ödeme alınmaz/i)
+    expect(gorunenMetinler(soy(PRICING_SRC))).toMatch(/kart bilgisi istenmez, ödeme alınmaz/i)
   })
 })

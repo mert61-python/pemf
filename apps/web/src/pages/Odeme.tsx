@@ -7,11 +7,14 @@ import { useAuth } from '../context/AuthContext'
 import { useAuthModal } from '../context/AuthModal'
 import { initCheckout, type CheckoutCustomer } from '../lib/checkout'
 import { Sparkle, Check } from '../components/Icons'
+import { tl } from '../lib/para'
+import { baglantiliMetin } from '../lib/metin'
+import { useTranslation } from 'react-i18next'
 
-const tl = (n: number) => `₺${n.toLocaleString('tr-TR')}`
 const EMPTY: CheckoutCustomer = { name: '', surname: '', identityNumber: '', gsmNumber: '', city: '', address: '', zipCode: '' }
 
 export default function Odeme() {
+  const { t } = useTranslation()
   const [sp] = useSearchParams()
   const tier = sp.get('tier') === 'pro_plus' ? 'pro_plus' : 'pro'
   const yearly = sp.get('yearly') === '1'
@@ -58,7 +61,6 @@ export default function Odeme() {
    *  `IYZICO_SETUP.md` plan tablosu eklentiyi de öyle katıyor. Sayı artık `RESEARCH_ADDON.yearly`
    *  tek kaynağından gelir; `download.test.ts` üçünü birden kilitliyor. */
   const chargeNow = yearly ? (plan?.yearly ?? 0) + (research ? RESEARCH_ADDON.yearly : 0) : total
-  const periodLabel = yearly ? 'yıllık' : 'aylık'
 
   function set<K extends keyof CheckoutCustomer>(k: K, v: string) {
     setForm((f) => ({ ...f, [k]: v }))
@@ -67,7 +69,7 @@ export default function Odeme() {
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!session) return requireAuth()
-    if (!consent) return setErr('Devam etmek için Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi’ni onaylayın.')
+    if (!consent) return setErr(t('odeme.onayGerekli'))
     setErr(null)
     setBusy(true)
     const { content, error, needAuth } = await initCheckout({ tier, yearly, research, customer: form })
@@ -82,7 +84,7 @@ export default function Odeme() {
       setCheckoutContent(content)
       setPaying(true)
     } else {
-      setErr('Ödeme başlatılamadı. Lütfen tekrar deneyin.')
+      setErr(t('odeme.baslatilamadi'))
     }
   }
 
@@ -92,11 +94,11 @@ export default function Odeme() {
   if (FREE_MODE) {
     return (
       <section className="mx-auto max-w-2xl px-5 py-24 text-center">
-        <h1 className="text-2xl font-bold">Şu anda tüm planlar ücretsiz</h1>
+        <h1 className="text-2xl font-bold">{t('odeme.ucretsizBaslik')}</h1>
         <p className="mt-2 text-muted">
-          Tüm kurulum profilleri şimdilik ücretsiz kullanılabiliyor; ödeme alınmıyor.
+          {t('odeme.ucretsizAciklama')}
         </p>
-        <Link to="/download" className="btn-primary mt-6">PEMF Vet&apos;i İndir</Link>
+        <Link to="/download" className="btn-primary mt-6">{t('odeme.indir')}</Link>
       </section>
     )
   }
@@ -104,19 +106,19 @@ export default function Odeme() {
   if (!plan) {
     return (
       <section className="mx-auto max-w-2xl px-5 py-24 text-center">
-        <p className="text-muted">Bu bağlantıdaki plan bulunamadı. Fiyatlandırma sayfasından bir plan seçebilirsiniz.</p>
-        <Link to="/pricing" className="btn-primary mt-6">Fiyatlandırmaya dön</Link>
+        <p className="text-muted">{t('odeme.planYok')}</p>
+        <Link to="/pricing" className="btn-primary mt-6">{t('odeme.fiyatlandirmayaDon')}</Link>
       </section>
     )
   }
 
   return (
     <section className="mx-auto max-w-3xl px-5 py-14 sm:px-6">
-      <Link to="/pricing" className="text-sm text-muted hover:text-fg">← Planlar</Link>
+      <Link to="/pricing" className="text-sm text-muted hover:text-fg">{t('odeme.planlar')}</Link>
 
       {/* Özet */}
       <div className="card mt-4 p-6">
-        <span className="chip"><Sparkle className="h-3.5 w-3.5" /> Abonelik</span>
+        <span className="chip"><Sparkle className="h-3.5 w-3.5" />{t('odeme.abonelik')}</span>
         <div className="mt-3 flex items-center gap-2">
           <h1 className="text-2xl font-bold">{plan.name}</h1>
           {/* ⚠️ "Anında analiz" rozeti KALDIRILDI (8. parti): 7. partide kaldırılan hız
@@ -124,21 +126,21 @@ export default function Odeme() {
         </div>
         <ul className="mt-3 space-y-1.5 text-sm text-muted">
           <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />{plan.jetonHakki}</li>
-          <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />{yearly ? 'Yıllık ödeme (2 ay bedava)' : 'Aylık ödeme'}</li>
-          {research && <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />Araştırma modülü eklendi</li>}
+          <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />{yearly ? t('odeme.yillikOdeme') : t('odeme.aylikOdeme')}</li>
+          {research && <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />{t('odeme.arastirmaEklendi')}</li>}
         </ul>
         {/* ÖNCE gerçekte çekilecek tutar; aylık-eşdeğer yalnızca ikincil bilgi olarak. */}
         <div className="mt-4 flex items-baseline justify-between border-t border-border pt-4">
-          <span className="text-sm text-muted">Bugün tahsil edilecek</span>
+          <span className="text-sm text-muted">{t('odeme.bugunTahsil')}</span>
           <span className="text-2xl font-extrabold">
             {tl(chargeNow)}
-            <span className="text-sm font-normal text-muted">/{periodLabel === 'yıllık' ? 'yıl' : 'ay'}</span>
+            <span className="text-sm font-normal text-muted">/{yearly ? t('odeme.yil') : t('odeme.ay')}</span>
           </span>
         </div>
         {yearly && (
           <div className="mt-1 flex items-baseline justify-between">
-            <span className="text-xs text-muted">Aylık eşdeğeri</span>
-            <span className="text-xs text-muted">{tl(total)}/ay</span>
+            <span className="text-xs text-muted">{t('odeme.aylikEsdeger')}</span>
+            <span className="text-xs text-muted">{t('fiyat.tlAy', { tutar: tl(total) })}</span>
           </div>
         )}
         {/* KDV BEYANI (metin denetimi 2026-08-20): burada "Fiyatlara KDV dâhil değildir" yazıyordu.
@@ -150,55 +152,54 @@ export default function Odeme() {
             isteniyorsa değişmesi gereken şey bu cümle değil, tahsilat tarafıdır (checkout'un KDV
             eklemesi ve özetin ayrı satırda göstermesi gerekir). */}
         <p className="mt-3 text-xs leading-relaxed text-muted">
-          <strong className="text-fg/80">Otomatik yenilenen abonelik:</strong> {tl(chargeNow)} tutarındaki {periodLabel} ödeme,
-          siz iptal edene kadar her dönem sonunda otomatik tahsil edilir. Gösterilen tutar KDV dâhil toplam bedeldir;
-          başka bir ücret eklenmez. Ayrıntılar için{' '}
-          <a href="/on-bilgilendirme" target="_blank" rel="noreferrer" className="text-primary hover:underline">Ön Bilgilendirme Formu</a>'na bakabilirsiniz.
+          <strong className="text-fg/80">{t('odeme.otoYenileme')}</strong>{' '}
+          {t('odeme.otoYenilemeGovde', { tutar: tl(chargeNow), donem: yearly ? t('odeme.yillik') : t('odeme.aylik') })}{' '}
+          <a href="/on-bilgilendirme" target="_blank" rel="noreferrer" className="text-primary hover:underline">{t('icerik.yasal.onBilgilendirme')}</a>{t('odeme.formunaBakin')}
         </p>
       </div>
 
       {!paying ? (
         <form onSubmit={submit} className="card mt-6 space-y-4 p-6">
-          <h2 className="text-lg font-bold">Fatura bilgileri</h2>
+          <h2 className="text-lg font-bold">{t('odeme.faturaBilgileri')}</h2>
           {/* Metin denetimi 2026-08-20: TC Kimlik No'nun neden istendiği "iyzico için gereklidir"
               diye geçiştiriliyordu; bir yazılım aboneliği için kimlik numarası vermek kullanıcıya
               tuhaf gelir ve sebebi söylenmezse form terk edilir. */}
           <p className="text-sm text-muted">
-            Bu bilgiler fatura düzenlemek ve ödemeyi güvenli şekilde almak için gerekiyor; TC Kimlik No,
-            vergi mevzuatı gereği fatura bilgisi olarak isteniyor. Kart bilgilerinizi biz görmeyiz —
-            bir sonraki adımda iyzico’nun güvenli formuna girersiniz.
+            {t('odeme.faturaAciklama')}
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <input required placeholder="Ad" value={form.name} onChange={(e) => set('name', e.target.value)} className="input" />
-            <input required placeholder="Soyad" value={form.surname} onChange={(e) => set('surname', e.target.value)} className="input" />
+            <input required placeholder={t('odeme.ad')} value={form.name} onChange={(e) => set('name', e.target.value)} className="input" />
+            <input required placeholder={t('odeme.soyad')} value={form.surname} onChange={(e) => set('surname', e.target.value)} className="input" />
           </div>
-          <input required placeholder="TC Kimlik No" inputMode="numeric" maxLength={11} value={form.identityNumber} onChange={(e) => set('identityNumber', e.target.value.replace(/\D/g, ''))} className="input" />
-          <input required placeholder="Telefon (+90...)" value={form.gsmNumber} onChange={(e) => set('gsmNumber', e.target.value)} className="input" />
-          <input required placeholder="Şehir" value={form.city} onChange={(e) => set('city', e.target.value)} className="input" />
-          <textarea required placeholder="Adres" value={form.address} onChange={(e) => set('address', e.target.value)} className="input min-h-20" />
-          <input placeholder="Posta kodu (isteğe bağlı)" value={form.zipCode} onChange={(e) => set('zipCode', e.target.value)} className="input" />
+          <input required placeholder={t('odeme.tc')} inputMode="numeric" maxLength={11} value={form.identityNumber} onChange={(e) => set('identityNumber', e.target.value.replace(/\D/g, ''))} className="input" />
+          <input required placeholder={t('odeme.telefon')} value={form.gsmNumber} onChange={(e) => set('gsmNumber', e.target.value)} className="input" />
+          <input required placeholder={t('hesap.alan.sehir')} value={form.city} onChange={(e) => set('city', e.target.value)} className="input" />
+          <textarea required placeholder={t('odeme.adres')} value={form.address} onChange={(e) => set('address', e.target.value)} className="input min-h-20" />
+          <input placeholder={t('odeme.posta')} value={form.zipCode} onChange={(e) => set('zipCode', e.target.value)} className="input" />
 
           {err && <p className="text-sm text-red-500">{err}</p>}
-          {!session && <p className="text-sm text-warning">Devam etmek için giriş yapın.</p>}
+          {!session && <p className="text-sm text-warning">{t('odeme.girisYapin')}</p>}
 
           <label className="flex items-start gap-2.5 text-xs leading-relaxed text-muted">
             <input type="checkbox" required checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
-              <a href="/on-bilgilendirme" target="_blank" rel="noreferrer" className="text-primary hover:underline">Ön Bilgilendirme Formu</a>'nu ve{' '}
-              <a href="/mesafeli-satis" target="_blank" rel="noreferrer" className="text-primary hover:underline">Mesafeli Satış Sözleşmesi</a>'ni okudum, onaylıyorum.
+              {baglantiliMetin(t('odeme.onay', { skipInterpolation: true }), {
+                onBilgi: <a href="/on-bilgilendirme" target="_blank" rel="noreferrer" className="text-primary hover:underline">{t('icerik.yasal.onBilgilendirme')}</a>,
+                satis: <a href="/mesafeli-satis" target="_blank" rel="noreferrer" className="text-primary hover:underline">{t('icerik.yasal.mesafeliSatis')}</a>,
+              })}
             </span>
           </label>
 
           <button type="submit" disabled={busy || !consent} className="btn-primary w-full disabled:opacity-60">
-            {busy ? 'Hazırlanıyor…' : 'Ödemeye geç'}
+            {busy ? t('odeme.hazirlaniyor') : t('odeme.odemeyeGec')}
           </button>
-          <p className="text-center text-xs text-muted">Aboneliğinizi istediğiniz zaman hesabınızdan iptal edebilirsiniz.</p>
+          <p className="text-center text-xs text-muted">{t('odeme.istediginizZaman')}</p>
         </form>
       ) : (
         <div className="card mt-6 p-6">
-          <h2 className="text-lg font-bold">Güvenli ödeme</h2>
-          <p className="mt-1 text-sm text-muted">Ödeme formu birkaç saniye içinde aşağıda açılır (iyzico güvenli ödeme).</p>
+          <h2 className="text-lg font-bold">{t('odeme.guvenliOdeme')}</h2>
+          <p className="mt-1 text-sm text-muted">{t('odeme.formAciliyor')}</p>
           {/* iyzico bu div'e render eder; script host ayrı (script'ler buraya eklenir + çalışır). */}
           <div id="iyzipay-checkout-form" className="responsive mt-4" />
           <div ref={scriptHost} />

@@ -71,7 +71,7 @@ describe('2) kalan kalemler', () => {
 
   it('KRİTİK: TC Kimlik No’nun NEDEN istendiği yazılıdır', () => {
     // "iyzico güvenli ödeme için gereklidir" geçiştirmesi kullanıcıyı ikna etmiyordu.
-    const s = soy(ODEME_SRC)
+    const s = gorunenMetinler(soy(ODEME_SRC))
     const i = s.indexOf('TC Kimlik No')
     expect(i).toBeGreaterThan(-1)
     expect(s).toMatch(/yasal (zorunluluk|gereklilik)|fatura(landırma)? için|vergi mevzuatı/i)

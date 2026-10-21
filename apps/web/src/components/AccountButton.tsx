@@ -6,6 +6,7 @@ import { cancelSubscription } from '../lib/checkout'
 import { FREE_MODE } from '../config'
 import { odemeHatasiTurkce } from '../lib/authHatalari'
 import { jetonBakiyesiniOku, type JetonBakiyesi } from '../lib/jeton'
+import { sayi } from '../lib/para'
 import { useTranslation } from 'react-i18next'
 
 /* Header hesap kontrolü: giriş yoksa "Giriş yap" (AuthModal); varsa hesap menüsü.
@@ -109,11 +110,11 @@ export default function AccountButton({ onNavigate, inline }: { onNavigate?: () 
             <div className="mt-3 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2">
               <div className="flex items-baseline justify-between">
                 <span className="text-xs text-muted">{t('hesap.kalanJeton')}</span>
-                <span className="text-lg font-bold text-primary">{jeton.kalan.toLocaleString('tr-TR')}</span>
+                <span className="text-lg font-bold text-primary">{sayi(jeton.kalan)}</span>
               </div>
               <div className="mt-1 text-[11px] leading-snug text-muted">
-                {t('hesap.jeton.aylikHak', { sayi: jeton.aylikHak.toLocaleString('tr-TR') })}{' '}
-                {t('hesap.jeton.satinAlinan', { sayi: jeton.satinAlinan.toLocaleString('tr-TR') })}
+                {t('hesap.jeton.aylikHak', { sayi: sayi(jeton.aylikHak) })}{' '}
+                {t('hesap.jeton.satinAlinan', { sayi: sayi(jeton.satinAlinan) })}
               </div>
             </div>
           )}
