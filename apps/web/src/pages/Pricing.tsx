@@ -8,6 +8,7 @@ import PackageBuilder from '../components/PackageBuilder'
 import { tl } from '../lib/para'
 import { baglantiliMetin } from '../lib/metin'
 import { useTranslation } from 'react-i18next'
+import TicariNot from '../components/TicariNot'
 
 // ⚠️ Fiyat gösterimi ARTIK BURADA DEĞİL. Aynı hesap ana sayfada da satır içi yazılıydı; aylık
 // ücreti olmayan "Kullandıkça Öde" planı eklenince ikisi ayrı ayrı "₺0/ay" üretti (ikisi de
@@ -133,6 +134,8 @@ export default function Pricing() {
             {t('fiyat.giris1')}{' '}
             <span className="text-fg/90 font-medium">{t('fiyat.giris2')}</span>{t('fiyat.giris3')}<span className="text-fg/90 font-medium">{t('fiyat.giris4')}</span>{t('fiyat.giris5')}
           </p>
+          {/* YH B6: İngilizce sayfada "bağlayıcı metin Türkçedir" notu (Türkçede çizilmez) */}
+          <TicariNot className="mx-auto mt-4 max-w-2xl" />
 
           {/* [W adım 7 / site-11] Dönem düğmeleri 63×32 ve 135×32 px ölçüldü; taban 44.
               Kapı bunları aralık muafiyetiyle geçiriyordu ama parmakla ıskalanıyorlardı. */}

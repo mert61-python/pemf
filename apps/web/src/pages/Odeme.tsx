@@ -10,6 +10,7 @@ import { Sparkle, Check } from '../components/Icons'
 import { tl } from '../lib/para'
 import { baglantiliMetin } from '../lib/metin'
 import { useTranslation } from 'react-i18next'
+import TicariNot from '../components/TicariNot'
 
 const EMPTY: CheckoutCustomer = { name: '', surname: '', identityNumber: '', gsmNumber: '', city: '', address: '', zipCode: '' }
 
@@ -99,6 +100,8 @@ export default function Odeme() {
           {t('odeme.ucretsizAciklama')}
         </p>
         <Link to="/download" className="btn-primary mt-6">{t('odeme.indir')}</Link>
+        {/* YH B6: İngilizce sayfada "bağlayıcı metin Türkçedir" notu (Türkçede çizilmez) */}
+        <TicariNot className="mx-auto mt-6 max-w-xl" />
       </section>
     )
   }
@@ -180,6 +183,9 @@ export default function Odeme() {
 
           {err && <p className="text-sm text-red-500">{err}</p>}
           {!session && <p className="text-sm text-warning">{t('odeme.girisYapin')}</p>}
+
+          {/* YH B6: İngilizce sayfada onaydan ÖNCE "bağlayıcı metin Türkçedir" notu (Türkçede çizilmez) */}
+          <TicariNot />
 
           <label className="flex items-start gap-2.5 text-xs leading-relaxed text-muted">
             <input type="checkbox" required checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0" />

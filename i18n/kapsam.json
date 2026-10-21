@@ -384,7 +384,7 @@
    "aciklama": "site üst menü / alt bilgi / ana sayfa / özellikler / destek / hata sayfaları",
    "durum": "tamam",
    "metin": 109,
-   "dosyaSayisi": 19
+   "dosyaSayisi": 20
   },
   {
    "ad": "site-12b-indirme-hesap",
@@ -11028,6 +11028,17 @@
    "not": ""
   },
   "apps/web/src/components/SayfaMetasi.tsx": {
+   "yuzey": "site",
+   "grup": "site-12a-sayfa",
+   "sira": 12,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
+  "apps/web/src/components/TicariNot.tsx": {
    "yuzey": "site",
    "grup": "site-12a-sayfa",
    "sira": 12,
