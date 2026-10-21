@@ -105,6 +105,8 @@ export const INPUT_LABELS: Record<string, string> = {
  */
 const VALUE_LABELS: Record<string, string> = {
   // FGS ağrı seviyeleri
+  // I18NI-A1.7: yüz bulunamayınca sunucunun `pain_level` VERİSİ (ai_router: Türkçe sabit) — gösterimde anahtar
+  "kedi yüzü tespit edilemedi": "ai.deger.kediYuzuYok",
   "no pain": "ai.deger.no_pain", "mild": "ai.deger.mild", "mild pain": "ai.deger.mild_pain",
   "moderate": "ai.deger.moderate", "moderate pain": "ai.deger.moderate_pain", "severe": "ai.deger.severe", "severe pain": "ai.deger.severe_pain",
   // genel durum

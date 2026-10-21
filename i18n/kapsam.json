@@ -4781,7 +4781,7 @@
     },
     {
      "metin": "Kedi yüzü tespit edilemedi",
-     "gerekce": "sonuç alanı değeri (`pain_level` — AI geçmişine / arayüze giden VERİ) — [İNCELE] arayüzde ham Türkçe görünür; `ai.deger` tablosuyla eşlenmeli (10d / 14)",
+     "gerekce": "sonuç alanı değeri (`pain_level` — AI geçmişine / arayüze giden VERİ) — gösterimde `ai.deger.kediYuzuYok` (arayüz `VALUE_LABELS` + AI PDF `DEGERLER`, K-7 eşliği; I18NI-A1.7)",
      "turler": [
       "sabit"
      ]

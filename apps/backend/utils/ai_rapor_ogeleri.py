@@ -243,6 +243,8 @@ ETIKETLER = {
 
 #: Bilinen İngilizce / iç değerler → okunur metin (küçük harf anahtar; katalog ANAHTARI `ai.deger.*`). Arayüz `VALUE_LABELS` + sade açıklamalar.
 DEGERLER = {
+    # I18NI-A1.7: yüz bulunamayınca `pain_level` VERİSİ (ai_router Türkçe sabit) — PDF'te istek dilinde
+    "kedi yüzü tespit edilemedi": "ai.deger.kediYuzuYok",
     "no pain": "ai.deger.no_pain",
     "mild": "ai.deger.mild",
     "mild pain": "ai.deger.mild_pain",
