@@ -699,7 +699,8 @@ class _EmCvSaglayici:
         from servers import ai_router as air
 
         try:
-            paneller = pl.render_panels(ctx, result, lang="tr")
+            # I18NI-A3.3: önizleme döngüsü istek DIŞI → cihaz dili (`arayuz_dili.json`; yoksa tr = bugünkü görünüm).
+            paneller = pl.render_panels(ctx, result, lang=ceviri.etkin_dil())
             return paneller.get("07_combined")
         except Exception:
             air.logger.debug("%s overlay üretilemedi", self.ad, exc_info=True)

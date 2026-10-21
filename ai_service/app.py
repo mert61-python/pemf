@@ -1151,6 +1151,12 @@ def _prov_dev(session):
         return "?"
 
 
+def _panel_dili(dil) -> str:
+    """I18NI-A3.3: panel görseline yazılan metnin dili — backend istek dilini form alanı `dil` ile devreder (servis katalog taşımaz;
+    yaprak modül). Alanı göndermeyen ESKİ backend / bilinmeyen değer → "tr" (bugünkü görünüm)."""
+    return dil if dil in ("tr", "en") else "tr"
+
+
 def _sonlu_degilse_422(e):
     """D1.E07 (İG-5.80, router paritesi): sonlu olmayan girdi / bozuk ölçekleyici → 422 (500 değil)."""
     from ai_hub.em_girdi import SonluOlmayanGirdi
@@ -1192,6 +1198,7 @@ def infer_em_fantom(
     phantom_length_cm: float = Form(None),
     achieved_B: float = Form(None),
     duty_sum: float = Form(None),
+    dil: str = Form(None),
 ):
     """Fantom tümör: klasik CV + BiLSTM (D/P/E). phantom_length_cm ile gerçek-mm ölçek."""
     try:
@@ -1209,7 +1216,7 @@ def infer_em_fantom(
         # ⚠️ ÇOKLU PANEL (ADIM 3): `render_panels` zaten 7 panel üretiyor ve 6'sı AYNI
         # SATIRDA çöpe atılıyordu. Artık hepsi yayına çıkıyor (ek CPU YOK — üretim zaten
         # yapılıyordu). Kök `image_base64` KALIYOR → eski istemci etkilenmez.
-        _panels = pl.render_panels(ctx, result, lang="tr") if result.success else None
+        _panels = pl.render_panels(ctx, result, lang=_panel_dili(dil)) if result.success else None
         _paneller = _panelleri_hazirla(_panels, _kapakli_kodla_servis, _PANEL_ADLARI) if _panels else []
         # ⚠️ KÖK GÖRSEL PANELDEN: `07_combined` zaten kodlandı. İkinci kez kodlamak ÖLÇÜLEN
         # 38 ms'i (6048×12256 dikey mozaik) boşuna yakar ve iki kodlamanın sessizce
@@ -1298,6 +1305,7 @@ def infer_em_petri(
     control_healthy: str = Form(None),
     control_cancer: str = Form(None),
     a1_corner: str = Form(None),
+    dil: str = Form(None),
 ):
     """Petri kuyu (hocanın v2'si): 24'lük plaka ızgarası / tekil kap YOLO-seg + klasik CV + BaggingRegressor.
 
@@ -1344,7 +1352,7 @@ def infer_em_petri(
         infer_ms = round((time.time() - t0) * 1000, 1)
         # ⚠️ PETRİ AYRI AD TABLOSU (`02_yolo_dets`/`03_yolo_masks`) — fantom tablosu
         # kullanılsaydı o paneller "bilinmeyen" dalına düşer ve SIRALARI bozulurdu.
-        _panels = pl.render_panels(ctx, result, lang="tr") if result.success else None
+        _panels = pl.render_panels(ctx, result, lang=_panel_dili(dil)) if result.success else None
         _paneller = _panelleri_hazirla(_panels, _kapakli_kodla_servis, _PETRI_PANEL_ADLARI) if _panels else []
         # ⚠️ KÖK GÖRSEL PANELDEN: `07_combined` zaten kodlandı. İkinci kez kodlamak ÖLÇÜLEN
         # 38 ms'i (6048×12256 dikey mozaik) boşuna yakar ve iki kodlamanın sessizce

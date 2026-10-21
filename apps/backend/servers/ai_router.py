@@ -3745,7 +3745,13 @@ async def analyze_em_fantom(
                     "em_fantom",
                     file=file,
                     image_base64=image_base64,
-                    data={"phantom_length_cm": phantom_length_cm, "achieved_B": achieved_B, "duty_sum": duty_sum},
+                    # I18NI-A3.3: panel GÖRSELİNE yazılan metnin dili (servis katalog taşımaz; alanı bilmeyen eski servis yok sayar → tr)
+                    data={
+                        "phantom_length_cm": phantom_length_cm,
+                        "achieved_B": achieved_B,
+                        "duty_sum": duty_sum,
+                        "dil": ceviri.etkin_dil(),
+                    },
                 ),
                 _PANEL_ADLARI,
             )
@@ -3762,7 +3768,9 @@ async def analyze_em_fantom(
         result, ctx = await asyncio.to_thread(lambda: pl.process_image(img, achieved_B=achieved_B, duty_sum=duty_sum))
 
         if result.success:
-            panels = await asyncio.to_thread(lambda: pl.render_panels(ctx, result, lang="tr"))
+            # I18NI-A3.3: görsele yazılan başlık / not İSTEK dilinde (çizici iki dili taşır; `lang="tr"` sabiti EN arayüzde Türkçe çiziyordu).
+            _dil = ceviri.etkin_dil()
+            panels = await asyncio.to_thread(lambda: pl.render_panels(ctx, result, lang=_dil))
             # ⚠️ KAPAK + KALİTE (ADIM 1): mozaik 2×3'tür ve dikey telefon fotoğrafında
             # 6048×12256'ya çıkıyordu; q95 ile megabayt üretiyordu. Kapak olmadan yalnız
             # kaliteyi düşürmek YETMEZ (bağlayıcı kısıt çözünürlük).
@@ -3962,6 +3970,7 @@ async def analyze_em_petri(
                     "control_healthy": control_healthy,
                     "control_cancer": control_cancer,
                     "a1_corner": a1_corner,
+                    "dil": ceviri.etkin_dil(),  # I18NI-A3.3: panel görselinin dili (fantom ucuyla aynı)
                 },
             )
             # MİKROSERVİS YOLU: makullik reddi ai_hub boru hattında verilir (ai_service o kodu
@@ -3997,7 +4006,9 @@ async def analyze_em_petri(
             raise HTTPException(status_code=422, detail=_petri_reject_message(result.plausibility))
 
         if result.success:
-            panels = await asyncio.to_thread(lambda: pl.render_panels(ctx, result, lang="tr"))
+            # I18NI-A3.3: görsel metni istek dilinde (fantom ucuyla aynı).
+            _dil = ceviri.etkin_dil()
+            panels = await asyncio.to_thread(lambda: pl.render_panels(ctx, result, lang=_dil))
             # ⚠️ KAPAK + KALİTE (ADIM 1): mozaik 2×3'tür ve dikey telefon fotoğrafında
             # 6048×12256'ya çıkıyordu; q95 ile megabayt üretiyordu. Kapak olmadan yalnız
             # kaliteyi düşürmek YETMEZ (bağlayıcı kısıt çözünürlük).
