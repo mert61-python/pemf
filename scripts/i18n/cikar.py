@@ -720,6 +720,8 @@ def html_adaylari(yol: str, metin: str) -> tuple[list[dict], list[dict]]:
 
 def nsis_adaylari(yol: str, metin: str) -> list[dict]:
     adaylar = []
+    # Türkçe (1055) karşılığı OLAN LangString adları — üretilmiş dil çiftlerinin işareti (aşağıdaki I18NI-A3.8 dalı yalnız bunları atlar)
+    tr_adlari = set(re.findall(r'(?m)^\s*LangString\s+(\w+)\s+1055\s+"', metin))
     for no, satir in enumerate(metin.splitlines(), 1):
         s = satir.strip()
         if not s or s.startswith(";") or s.startswith("#"):
@@ -728,6 +730,12 @@ def nsis_adaylari(yol: str, metin: str) -> list[dict]:
             r'(DetailPrint|MessageBox\s+[\w|]+|LangString\s+\w+\s+\S+|SetDetailsPrint\s+\w+|Abort)\s+"(.*)"', s
         )
         if not m:
+            continue
+        # I18NI-A3.8: üretilmiş TÜRKÇE DIŞI LangString (bayrak açıkken 1033 İngilizce) kaynak metin DEĞİL — katalogdan üretilir
+        # (`launcher_uret.py`; eşlik `--denetle` + K-1). Aday sayılırsa bayrak açılınca K-2 13 "sabit metin" ile KIRMIZI olur.
+        # Orkestratör: yalnız Türkçe (1055) eşi OLAN ad atlanır — elle yazılmış tek dilli LangString yine taranır.
+        lang = m.group(1).split() if m.group(1).startswith("LangString") else []
+        if lang and lang[-1] != "1055" and lang[1] in tr_adlari:
             continue
         deger = m.group(2)
         gorunen = deger.replace("$\\r$\\n", "\n").replace("$\\n", "\n")

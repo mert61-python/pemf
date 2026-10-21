@@ -426,6 +426,10 @@ def test_bayrak_ac_hepsini_acar_kapat_BAYT_BAYT_geri_getirir(tmp_path):
     # autocrlf'li çalışma kopyası taklidi: ana kaynak CRLF — geri dönüş satır sonunu da korumalı.
     ana = tmp_path / bayrak.ANA
     ana.write_bytes(ana.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+    # I18NI-A3.8: depo bayrağı AÇIKSA (bayrağı açan commit'ten sonra) geçici kopya önce KAPALI başlangıca indirilir — test depo durumunu
+    # VARSAYMAZ (ajan ölçümü: açıkken bu test kırmızıydı); açık başlangıçtan dönüş aşağıdaki karşıt testte.
+    if bayrak.ana_deger(tmp_path):
+        assert bayrak.main(["--kapat", "--kok", str(tmp_path)]) == 0
     once = {rel: (tmp_path / rel).read_bytes() for rel in _BAYRAK_DOSYALARI}
     assert bayrak.main(["--ac", "--kok", str(tmp_path)]) == 0
     degerler = bayrak.yuzey_degerleri(tmp_path)
@@ -441,12 +445,36 @@ def test_bayrak_ac_hepsini_acar_kapat_BAYT_BAYT_geri_getirir(tmp_path):
     assert farkli == [], f"--kapat dosyaları geri getirmedi: {farkli}"
 
 
+def test_bayrak_kapat_hepsini_kapatir_ac_BAYT_BAYT_geri_getirir(tmp_path):
+    """I18NI-A3.8 karşıt yön: AÇIK başlangıçtan `--kapat` her yüzeyi kapatır (NSIS yalnız Türkçe), `--ac` dosyaları bayt bayt geri getirir."""
+    for rel in _BAYRAK_DOSYALARI:
+        _yaz(tmp_path, rel, "")
+        shutil.copyfile(KOK / rel, tmp_path / rel)
+    ana = tmp_path / bayrak.ANA
+    ana.write_bytes(ana.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+    if not bayrak.ana_deger(tmp_path):
+        assert bayrak.main(["--ac", "--kok", str(tmp_path)]) == 0
+    once = {rel: (tmp_path / rel).read_bytes() for rel in _BAYRAK_DOSYALARI}
+    assert bayrak.main(["--kapat", "--kok", str(tmp_path)]) == 0
+    degerler = bayrak.yuzey_degerleri(tmp_path)
+    assert all(degerler[y] is False for y in (*bayrak.TS_SABITLERI, bayrak.RS_SABITI, bayrak.PY_SABITI)), degerler
+    assert degerler[launcher_uret.TAURI_CONF] == ["Turkish"]
+    hooks = (tmp_path / launcher_uret.HOOKS_YOLU).read_text(encoding="utf-8")
+    assert ' 1033 "' not in hooks and ' 1055 "' in hooks  # yalnız Türkçe LangString (yüklenmemiş dile tablo yazılmaz)
+    assert "var EN_ACIK = false;" in (tmp_path / auth_uret.JS_YOLU).read_text(encoding="utf-8")
+    assert bayrak.main(["--ac", "--kok", str(tmp_path)]) == 0
+    farkli = [rel for rel in _BAYRAK_DOSYALARI if (tmp_path / rel).read_bytes() != once[rel]]
+    assert farkli == [], f"--ac dosyaları geri getirmedi: {farkli}"
+
+
 def test_bayrak_ayrisan_yuzeyi_denetle_YAKALAR(tmp_path):
     for rel in _BAYRAK_DOSYALARI:
         _yaz(tmp_path, rel, "")
         shutil.copyfile(KOK / rel, tmp_path / rel)
     p = tmp_path / "apps/web/src/i18n/bayrak.ts"
-    p.write_text(p.read_text(encoding="utf-8").replace("= false", "= true"), encoding="utf-8")
+    # I18NI-A3.8: depo değerinin TERSİNE çevrilir (bayrak açık ya da kapalı — durum varsayılmaz)
+    simdi, ters = ("true", "false") if bayrak.ana_deger(KOK) else ("false", "true")
+    p.write_text(p.read_text(encoding="utf-8").replace(f"= {simdi}", f"= {ters}"), encoding="utf-8")
     sorun = bayrak.denetle(tmp_path)
     assert len(sorun) == 1 and "apps/web/src/i18n/bayrak.ts" in sorun[0]
 

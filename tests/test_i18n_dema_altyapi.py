@@ -139,19 +139,24 @@ def test_kataloglar_ayni_anahtarlar_ingilizce_dolu():
     assert all(str(v).strip() for v in en.values()), "boş İngilizce değer"
 
 
-def test_bayrak_kapali_kaynakta():
-    assert "export const I18N_EN_ACIK: boolean = false;" in (I18N / "bayrak.ts").read_text(encoding="utf-8")
+def test_bayrak_kaynakta_ANA_DEGERLE_ayni():
+    """I18NI-A3.8: eskiden "kaynakta false" pinliydi (bayrağı açan commit'te kırmızı) — DEMA sabiti tek kaynakla (`i18n/bayrak.json`) aynı."""
+    from scripts.i18n import bayrak
+
+    deger = "true" if bayrak.ana_deger(KOK) else "false"
+    assert f"export const I18N_EN_ACIK: boolean = {deger};" in (I18N / "bayrak.ts").read_text(encoding="utf-8")
 
 
 @ts_gerekli
 def test_bayrak_KAPALI_her_durumda_turkce(tmp_path):
     tr = _katalog("tr")["baslik"]["uygulama"]
+    # I18NI-A3.8: kapalı dal AÇIKÇA (`bayrak=False`) — depo bayrağı açıkken de bu kural sınanır
     sonuc = _kos(
         tmp_path,
         [
-            _senaryo(arama="?dil=en", tarayici="en-US"),
-            _senaryo(tarayici="de-DE"),
-            _senaryo(arama="?dil=tr", tarayici="en-GB"),
+            _senaryo(arama="?dil=en", tarayici="en-US", bayrak=False),
+            _senaryo(tarayici="de-DE", bayrak=False),
+            _senaryo(arama="?dil=tr", tarayici="en-GB", bayrak=False),
         ],
     )
     assert sonuc == [{"dil": "tr", "metin": tr}] * 3
@@ -192,7 +197,10 @@ def test_eksik_ingilizce_TURKCEYE_duser_yer_tutucu_dolar(tmp_path):
 def test_main_html_langa_dokunmaz_sekme_basligi_katalogdan(tmp_path):
     sonuc = _kos(
         tmp_path,
-        [_senaryo(arama="?dil=en", tarayici="en-US", ana=True), _senaryo(arama="?dil=en", bayrak=True, ana=True)],
+        [
+            _senaryo(arama="?dil=en", tarayici="en-US", bayrak=False, ana=True),
+            _senaryo(arama="?dil=en", bayrak=True, ana=True),
+        ],
     )
     # `lang` atanırsa (tr ya da en) gözcü değer değişir → kırmızı. Bayrak kapalı (tr) ve açık (en) iki yol da dokunmamalı.
     assert sonuc[0] == {"lang": "__ozgun__", "title": _katalog("tr")["baslik"]["belge"]}
