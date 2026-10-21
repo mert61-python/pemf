@@ -146,12 +146,9 @@ _PETRI_NOT_PLATE = "not_a_petri_plate"
 
 def _petri_reject_message(plausibility) -> str:
     """Boru hattının ürettiği ölçümlü mesajı kullan; yoksa (mikroservis yanıtı `plausibility`
-    alanını taşımıyor) ölçümsüz ama aynı yönlendirmeyi veren metne düş."""
-    if isinstance(plausibility, dict):
-        msg = plausibility.get("message")
-        if isinstance(msg, str) and msg.strip():
-            return msg
-    return ceviri.t("ai.hata.petriPlakaDegil")
+    alanını taşımıyor) ölçümsüz ama aynı yönlendirmeyi veren metne düş.
+    I18NI-O.2: ileti istek dilinde katalogdan kurulur (boru hattının metni Türkçedir); Türkçe görünüm aynı."""
+    return ai_kapi_metni.petri_ret_metni(plausibility)
 
 
 from utils.path_utils import kaynak_kokunu_bul

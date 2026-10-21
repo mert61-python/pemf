@@ -46,6 +46,50 @@ def alan_ret_metni(dm, dil: str | None = None) -> str:
     return ceviri.t("ai.alan.uyusmuyor", dil=dil, bekl=bekl, tespit=modalite_adi(dm.detected, dil))
 
 
+def _petri_olcum(m: dict, dil: str | None) -> str:
+    """`plausibility.user_message`ın ölçüm parçası — aynı biçim (`.2f` / `.0f`), aynı ETKİN eşikler; ölçülemezse "" (kaynaktaki gibi)."""
+    try:
+        from ai_hub.inference_petri_dish import (
+            plausibility as _pl,  # tembel: yalnız ret anında (ağır zincir yok — numpy / cv2)
+        )
+
+        esik = _pl.esikleri_coz(m.get("thresholds"))
+        p = {
+            "c": f"{float(m.get('circularity_med', 0.0)):.2f}",
+            "mc": f"{esik['circularity_med']:.2f}",
+            "k": f"{float(m.get('conf_med', 0.0)):.2f}",
+            "mk": f"{esik['conf_med']:.2f}",
+            "a": f"{100.0 * float(m.get('max_area_frac', 0.0)):.0f}",
+            "ma": f"{100.0 * esik['max_area_frac']:.0f}",
+        }
+        return ceviri.t("ai.hata.petriOlcum", dil=dil, **p)
+    except Exception:
+        return ""
+
+
+def petri_ret_katalog_metni(m: dict, dil: str | None = None) -> str:
+    """Petri makullik reddinin KATALOGDAN kurulan hâli (ölçüm sözlüğünden; `message` okunmaz). Eşlik testi bunun Türkçesini kaynağın
+    metniyle karşılaştırır — güvence dalı (aşağıda) bu karşılaştırmayı GİZLEMESİN diye ayrı işlev."""
+    if m.get("kip") == "plaka":
+        return ceviri.t("ai.hata.petriPlakaIzgara", dil=dil)
+    olculer = {k: v for k, v in m.items() if k != "message"}  # kaynak ölçüm parçasını ölçüm sözlüğü BOŞ değilse yazar
+    return ceviri.t("ai.hata.petriGeometriYok", dil=dil, olcum=_petri_olcum(olculer, dil) if olculer else "")
+
+
+def petri_ret_metni(m, dil: str | None = None) -> str:
+    """I18NI-O.2: petri MAKULLİK REDDİ iletisi istek dilinde. Denetim ve Türkçe metin `ai_hub/inference_petri_dish/plausibility.py`'dedir
+    (mikroservisle ortak; i18n yüzeyi değil): `plate_user_message` (plaka kipi) / `user_message` (ölçümlü). Burada AYNI ileti katalogdan kurulur.
+    Katalog Türkçesi kaynağın metniyle BAYT BAYT aynıdır (eşlik testi `tests/test_I18NI_petri_makullik_reddi_istek_dilinde.py`). GÜVENCE:
+    kaynak metin değişir de katalog geride kalırsa Türkçede kaynağın metni AYNEN döner (görünüm hiç değişmez) ve eşlik kapısı KIRMIZI olur."""
+    msg = m.get("message") if isinstance(m, dict) else None
+    if not (isinstance(msg, str) and msg.strip()):
+        return ceviri.t("ai.hata.petriPlakaDegil", dil=dil)
+    aday = petri_ret_katalog_metni(m, dil)
+    if (ceviri.gecerli_dil(dil) or ceviri.etkin_dil()) == "tr" and aday != msg:
+        return msg
+    return aday
+
+
 def termal_yon_ipucu(palet: str, dil: str | None = None) -> str:
     if palet == "inferno":
         return ceviri.t("ai.termal.yon.inferno", dil=dil)
