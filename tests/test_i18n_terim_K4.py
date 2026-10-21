@@ -74,6 +74,8 @@ def test_K4_hastalik_cekimleri_hasta_terimi_DEGIL_ama_hasta_hala_zorunlu():
         "e": "Hastalar",
         "f": "Klinik / hastane adı",
         "g": "Hastanede takip",
+        "h": "Araştırma modülü eklendi",
+        "i": "Araştırma modeli",
     }
     en = {
         "a": "Kidney Disease",
@@ -83,6 +85,8 @@ def test_K4_hastalik_cekimleri_hasta_terimi_DEGIL_ama_hasta_hala_zorunlu():
         "e": "Patients",
         "f": "Clinic / animal hospital name",
         "g": "Follow-up at the hospital",
+        "h": "Research module added",
+        "i": "Research model",
     }
     # "hastane" (hospital) hasta (patient) terimi DEĞİL; yine de "hasta" bulunduğu cümle "patient" ister (kotu aşağıda)
     assert not ihlaller(tr, en, "arayuz", SOZLUK)
