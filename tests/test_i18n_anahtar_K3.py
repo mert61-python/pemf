@@ -88,3 +88,73 @@ def test_K3_KARSIT_kapi_eksik_anahtari_ve_dinamik_cagriyi_YAKALAR():
     assert {"olmayan.anahtar", "ayni.yok"} <= iy.kullanilan_anahtarlar(kaynak)
     assert DINAMIK_CAGRI.search('const b = t(`ai.deger.${x}`);') and not DINAMIK_CAGRI.search('t("x.y")')
     assert not DINAMIK_CAGRI.search("setTimeout(f, 1)") and not DINAMIK_CAGRI.search("obj.t(x)")
+
+
+# ── I18NI-A2.3: TABLODA SAKLANAN anahtarlar (dinamik izinlerin `degerler`i elle kopya — koddaki tablo okunmalı) ──────────────────
+#: Ad alanı önekli ama katalog anahtarı OLMAYAN değişmezler (gerekçeli): denetim günlüğü olay adı.
+TABLO_ISTISNA = {("sunucu", "ai.review")}
+_ANAHTAR_LIT = re.compile(r"""(["'`])([a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_]+)+)\1""")
+
+
+def _py_dizgileri(metin: str) -> list[tuple[int, str]]:
+    import ast
+
+    agac = ast.parse(metin)
+    belge = {
+        id(n.body[0].value)
+        for n in ast.walk(agac)
+        if isinstance(n, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        and n.body
+        and isinstance(n.body[0], ast.Expr)
+        and isinstance(n.body[0].value, ast.Constant)
+    }
+    return [
+        (n.lineno, n.value)
+        for n in ast.walk(agac)
+        if isinstance(n, ast.Constant)
+        and isinstance(n.value, str)
+        and id(n) not in belge
+        and re.fullmatch(r"[a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_]+)+", n.value)
+    ]
+
+
+def tablo_anahtari_eksikleri(yuzey: str, kok: Path = KOK, dosyalar: list[str] | None = None) -> list[str]:
+    duz = ortak.duzlestir(ortak.katalog_yukle(yuzey, "tr", kok))
+    adalan = {k.split(".")[0] for k in duz}
+    onekler = {".".join(k.split(".")[:i]) for k in duz for i in range(1, k.count(".") + 1)}
+    sorun = []
+    for f in dosyalar if dosyalar is not None else ortak.yuzey_dosyalari(yuzey, kok):
+        metin = (kok / f).read_text(encoding="utf-8")
+        if f.endswith(".py"):
+            adaylar = _py_dizgileri(metin)
+        else:
+            kod = _yorumsuz(metin, f)
+            adaylar = [(no, m.group(2)) for no, ln in enumerate(kod.split("\n"), 1) for m in _ANAHTAR_LIT.finditer(ln)]
+        for no, a in adaylar:
+            if a.split(".")[0] not in adalan or (yuzey, a) in TABLO_ISTISNA or _var(a, duz) or a in onekler:
+                continue
+            sorun.append(f"{f}:{no}: katalogda olmayan anahtar biçimli değişmez {a!r} (tabloda saklanan anahtar?)")
+    return sorun
+
+
+@pytest.mark.parametrize("yuzey", list(ortak.YUZEYLER))
+def test_K3_tablodaki_anahtar_degismezleri_katalogda(yuzey):
+    sorun = tablo_anahtari_eksikleri(yuzey)
+    assert not sorun, "\n".join(sorun)
+
+
+def test_K3_KARSIT_bozuk_tablo_anahtari_YAKALANIR(tmp_path):
+    f = "apps/ui/src/screens/Ornek.tsx"
+    (tmp_path / f).parent.mkdir(parents=True)
+    (tmp_path / f).write_text(
+        'const ORGAN_ANAHTARI = {\n  mide: "ai.organ.ad.mide",\n  bobrek: "ai.organ.ad.bobrekk",\n};\n'
+        '// yorumda sayılmaz: "ai.organ.ad.yorumda"\n',
+        encoding="utf-8",
+    )
+    for d in ortak.DILLER:
+        hedef = tmp_path / "apps/ui/src/i18n" / d
+        hedef.mkdir(parents=True, exist_ok=True)
+        for p in (KOK / "apps/ui/src/i18n" / d).glob("*.json"):
+            (hedef / p.name).write_bytes(p.read_bytes())
+    sorun = tablo_anahtari_eksikleri("arayuz", tmp_path, [f])
+    assert [s for s in sorun if "bobrekk" in s] and not [s for s in sorun if "mide" in s or "yorumda" in s], sorun
