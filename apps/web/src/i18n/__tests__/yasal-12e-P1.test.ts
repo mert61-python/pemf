@@ -358,3 +358,19 @@ describe('site-12e-yasal · çizim', () => {
     expect(enKullanim).toContain('under the supervision and responsibility of the relevant veterinarian')
   })
 })
+
+// Y169 (sahip 2026-10-21; YH A7 — I18NI-A1.8): KVKK İngilizcesi paragraf 39 — "1825 days (5 years)" süresi cümle başına kaymıştı ("5 yıl boyunca
+// anonimleştirilir" gibi okunuyordu); Türkçede süre "o süre boyunca tedavi kaydı olmayan" hasta ÖLÇÜTÜDÜR. Süre "with no treatment record"ün arkasına
+// taşındı, cümlenin kalanı AYNI. Türkçe DEĞİŞMEDİ (ALTIN). Yasal metin: hukuki onay sahipte (P1.10) — site İngilizcesi onaydan önce yayınlanmaz.
+describe('site-12e-yasal · Y169 KVKK EN paragraf 39', () => {
+  const ONAYLI =
+    'Patient identity details: the name, owner’s name, contact details, age and weight of a patient with no treatment record for <kalin>1825 days (5 years)</kalin> — including their name in session and AI analysis records — are anonymised; because this action cannot be undone, it <kalin>does not start without the clinic’s explicit approval</kalin> (Settings → Data Retention Period, the number of waiting patients is shown). Treatment data (applied dose, duration, sensor measurements), species/breed information and the name of the veterinarian who applied the treatment remain.'
+  it('süre hasta ÖLÇÜTÜNE bağlı (cümle başında değil); metin onaylanan öneriyle birebir', () => {
+    expect(EN['yasal.kvkk.39']).not.toMatch(/^Patient identity details: for /)
+    expect(EN['yasal.kvkk.39']).toMatch(/with no treatment record for <kalin>1825 days \(5 years\)<\/kalin>/)
+    expect(EN['yasal.kvkk.39']).toBe(ONAYLI)
+  })
+  it('Türkçe DEĞİŞMEDİ', () => {
+    expect(TR['yasal.kvkk.39']).toBe(ALTIN['yasal.kvkk.39'])
+  })
+})
