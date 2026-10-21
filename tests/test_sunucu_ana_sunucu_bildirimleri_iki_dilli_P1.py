@@ -436,11 +436,11 @@ def test_duty_reddi_metni_TR_bayt_bayt_EN_ingilizce():
         "Bobin 6 tek yönlü kipte en fazla %100 çalışabilir; %125,5 kabul edilmedi. Duty'yi %100 veya altına indirip yeniden başlatın."
     )
     assert ls.stm_duty_reddi_metni(m, "the session was STOPPED", sifirla=True, dil="en") == (
-        "Coil 1 can run at most %50 in two-way mode; %80 was not accepted; the session was STOPPED. "
-        "Lower the duty to %50 or below (or set this coil to Unipolar in ⚡ Drive Mode), then press 'Reset' and start again."
+        "Coil 1 can run at most 50% in two-way mode; 80% was not accepted; the session was STOPPED. "
+        "Lower the duty to 50% or below (or set this coil to Unipolar in ⚡ Drive Mode), then press 'Reset' and start again."
     )
     # ondalık ayracı dile göre: TR virgül, EN nokta
-    assert "%125.5" in ls.stm_duty_reddi_metni(_nack(6, 1255, 1000, "unipolar"), dil="en")
+    assert "125.5%" in ls.stm_duty_reddi_metni(_nack(6, 1255, 1000, "unipolar"), dil="en")
     assert ls.stm_duty_reddi_metni("-> STM_NACK: CRC", dil="en") == ""
 
 
@@ -481,7 +481,7 @@ def test_duty_reddi_bildirimi_STM_seri_is_parcaciginda_iki_dilde(yayin, monkeypa
         "⛔ Bobin 1 çift yönlü kipte en fazla %50 çalışabilir; %80 kabul edilmedi. Duty'yi %50 veya altına indirip"
     )
     assert n["mesajlar"]["en"].startswith(
-        "⛔ Coil 1 can run at most %50 in two-way mode; %80 was not accepted. Lower the duty to %50"
+        "⛔ Coil 1 can run at most 50% in two-way mode; 80% was not accepted. Lower the duty to 50%"
     )
     assert n["level"] == "error"
 

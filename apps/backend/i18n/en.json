@@ -416,9 +416,9 @@
     "bobinBaglandi": "✅ Coil {{coil}} connected",
     "bobinKesildi": "⚠️ Coil {{coil}} disconnected",
     "dutyReddi": {
-      "eylem": "Lower the duty to %{{tavan}} or below and start again{{secenek}}.",
-      "eylemSifirla": "Lower the duty to %{{tavan}} or below{{secenek}}, then press 'Reset' and start again.",
-      "govde": "Coil {{bobin}} can run at most %{{tavan}} in {{kip}} mode; %{{istenen}} was not accepted{{sonuc}}. {{eylem}}",
+      "eylem": "Lower the duty to {{tavan}}% or below and start again{{secenek}}.",
+      "eylemSifirla": "Lower the duty to {{tavan}}% or below{{secenek}}, then press 'Reset' and start again.",
+      "govde": "Coil {{bobin}} can run at most {{tavan}}% in {{kip}} mode; {{istenen}}% was not accepted{{sonuc}}. {{eylem}}",
       "kipCift": "two-way",
       "kipTek": "one-way",
       "secenek": " (or set this coil to Unipolar in ⚡ Drive Mode)"
