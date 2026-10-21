@@ -76,7 +76,7 @@
       "aciklama": "Camera-assisted diagnosis: pain score from facial expression, three-dimensional organ position and AI Pro — an automatic mode that adjusts the session on its own according to measurements from the sensor."
     },
     "f5": {
-      "aciklama": "Emergency stop button, automatic time limit and target check: a session does not start until the area to be treated has been safely detected.",
+      "aciklama": "Emergency stop button, automatic time limit and target check: a session does not start until the target area has been safely detected.",
       "baslik": "Clinical Safety"
     },
     "f6": {

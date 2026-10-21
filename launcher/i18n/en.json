@@ -49,7 +49,7 @@
       "tasinamadi": "{{yol}} could not be moved: {{hata}}",
       "urlCozumlenemedi": "the URL could not be parsed: {{url}}",
       "urlHttpsDegil": "the URL is not HTTPS — not downloaded (security): {{url}}",
-      "yanitYok": "{{etiket}}: no response within {{sn}} s — treated as offline",
+      "yanitYok": "{{etiket}}: no response within {{sn}} s — considered offline",
       "yazilamadi": "could not write to disk: {{hata}}",
       "yazilamadiFlush": "could not write to disk (flush): {{hata}}",
       "yerelDosya": "local file error: {{hata}}",

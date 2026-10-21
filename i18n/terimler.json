@@ -79,7 +79,7 @@
  ],
  "yasakEn": [
   {
-   "en": "\\btreatment|\\btherap",
+   "en": "\\btreat(?:ment|ments|s|ed|ing)?\\b|\\btherap",
    "yasakIstisnaTr": "tedavi|terapi",
    "not": "Seans metinleri 'treatment / therapy' demez. İstisna: TR'de 'tedavi / terapi' geçen metin (hukuki sorumluluk cümlesi 'tıbbi teşhis ve tedavisinin yerine geçmez' → 'treatment'; ürün adı 'DEMA Terapi Simülatörü')."
   },
@@ -93,7 +93,7 @@
   {
    "yuzey": "sunucu",
    "anahtar": "pdf.baslik.altVarsayilan",
-   "terim": "\\btreatment|\\btherap",
+   "terim": "\\btreat(?:ment|ments|s|ed|ing)?\\b|\\btherap",
    "gerekce": "PEMF açılımı (Pulsed Electromagnetic Field Therapy — teknoloji adı); TR metinde de İngilizce aynen geçer"
   },
   {

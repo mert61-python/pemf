@@ -681,7 +681,7 @@
       "tumVucut": "Whole Body"
     },
     "analiziBaslat": "Start Organ Analysis",
-    "anatomik": "⚠ Anatomical consistency warning: the organ arrangement contradicts the expected anatomy — treat the localization with caution.",
+    "anatomik": "⚠ Anatomical consistency warning: the organ arrangement contradicts the expected anatomy — interpret the localization with caution.",
     "ayna": "⚠ Mirror ambiguity: the left / right organ distinction may not be reliable in this frame — a second frame from a different angle is recommended.",
     "baslik": "Cat Organ Localization",
     "bulunamadiMetin": "The cat / organs could not be clearly made out in this image. Make sure the whole cat is in the frame, the light is good and the image is sharp; try a closer side / top frame.",
