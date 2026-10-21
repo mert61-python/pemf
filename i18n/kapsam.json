@@ -1,7 +1,7 @@
 {
  "aciklama": "I18N KAPSAM DEFTERİ — göçün TEK GERÇEĞİ (T15). Araç: scripts/i18n/kapsam.py. Durum: bekliyor | tamam | muaf. Parti grubu bitirince grubun ve dosyalarının durumunu AYNI commit'te `tamam` yapar. K-2 tamam dosyada sabit metin bırakmaz.",
  "surum": 1,
- "k2Kapsam": "tamam-dosyalar",
+ "k2Kapsam": "hepsi",
  "genelMuaf": [
   {
    "metin": "PEMF Vet",
