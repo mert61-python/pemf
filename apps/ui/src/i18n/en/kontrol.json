@@ -35,7 +35,7 @@
     "tumor": "Tumor"
   },
   "ekran": {
-    "aiProFantomPetri": "AI Pro — Phantom / Petri Closed-Loop",
+    "aiProFantomPetri": "AI Pro — Tumor Phantom / Well Plate Closed-Loop",
     "aiProKamera": "AI Pro — Camera Closed-Loop",
     "baglantiYok": "No connection",
     "baglantiYokGovde": "There is no active connection for the selected coils (STM32/WiFi offline).",

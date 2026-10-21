@@ -213,17 +213,17 @@
       "histopatoloji": "Histopathology analysis error",
       "kayitDbAcilamadi": "The record database could not be opened.",
       "kayitDbKullanilamiyor": "The record database is unavailable.",
-      "kediOrgan": "Cat organ analysis error",
+      "kediOrgan": "Feline organ analysis error",
       "landmark": "Landmark model error",
       "logOkunamadi": "The log could not be read",
       "oneriHatasi": "AI recommendation error",
       "onericiYok": "The AI recommender was not found.",
-      "petriAnaliz": "Petri analysis error",
-      "petriAnalizi": "Petri analysis: {{e}}",
-      "petriGeometriYok": "This module expects a photo of a petri well plate; no petri well geometry was found in the uploaded image{{olcum}}. Upload the phantom photo to the 'Phantom Tumor' module and the animal photo to the relevant cat module — a result produced in the wrong module is misleading. If the image really is a petri plate, try a photo that shows the wells from directly above and fully in frame. For research, the thresholds can be relaxed in the 'Advanced (research) settings' section of the Petri module, or the check can be turned off entirely.",
+      "petriAnaliz": "Well plate analysis error",
+      "petriAnalizi": "Well plate analysis: {{e}}",
+      "petriGeometriYok": "This module expects a photo of a well plate; no well plate geometry was found in the uploaded image{{olcum}}. Upload the phantom photo to the 'Tumor Phantom' module and the animal photo to the relevant cat module — a result produced in the wrong module is misleading. If the image really is a well plate, try a photo that shows the wells from directly above and fully in frame. For research, the thresholds can be relaxed in the 'Advanced (research) settings' section of the Well Plate module, or the check can be turned off entirely.",
       "petriOlcum": " (measured: circularity {{c}} — expected ≥{{mc}}; detection confidence {{k}} — expected ≥{{mk}}; the largest detection covers {{a}}% of the frame — expected ≤{{ma}}%)",
-      "petriPlakaDegil": "This module expects a photo of a petri well plate; no petri well geometry was found in the uploaded image. Upload the phantom photo to the 'Phantom Tumor' module and the animal photo to the relevant cat module — a result produced in the wrong module is misleading.",
-      "petriPlakaIzgara": "The 24-well plate grid could not be fitted. Photograph the plate from directly above, straight on and close enough to fill the frame. For single petri dishes, choose the 'Single petri dishes' mode; upload phantom or animal photos to the relevant module. For research, the check can be turned off in the 'Advanced (research) settings' section of the Petri module.",
+      "petriPlakaDegil": "This module expects a photo of a well plate; no well plate geometry was found in the uploaded image. Upload the phantom photo to the 'Tumor Phantom' module and the animal photo to the relevant cat module — a result produced in the wrong module is misleading.",
+      "petriPlakaIzgara": "The 24-well plate grid could not be fitted. Photograph the plate from directly above, straight on and close enough to fill the frame. For single petri dishes, choose the 'Single petri dishes' mode; upload phantom or animal photos to the relevant module. For research, the check can be turned off in the 'Advanced (research) settings' section of the Well Plate module.",
       "pixelMm": "pixel_mm must be in the range 0.00001-0.01 (mm/px)",
       "raporOlusmadi": "The report could not be created.",
       "retikulosit": "Reticulocyte model error",
@@ -260,9 +260,9 @@
     },
     "model": {
       "arastirma": "Research model",
-      "fantom": "Phantom Tumor",
-      "kedi": "Cat Organ",
-      "petri": "Petri Well"
+      "fantom": "Tumor Phantom",
+      "kedi": "Feline Organ",
+      "petri": "Well Plate"
     },
     "organ": {
       "akcigerSag": "Lung (right)",
@@ -329,7 +329,7 @@
         "hedefSecilemedi": "{{hedef_adi}} could not be selected — move the target to the middle of the tray, increase the cabin light and make sure there is no glare on the marker.",
         "kabinDisi": "The position of {{ad}} was measured OUTSIDE the cabin — changing the angle will not fix this: check that the cabin marker (the square code on the back wall) is in frame, flat and free of glare; if it persists, have the cabin configuration checked by technical support.",
         "konumOlculemedi": "The position could not be measured: the cabin marker (the square code on the back wall) is not visible in frame. Adjust the camera so that the marker and the target stay in the SAME frame.",
-        "petriYok": "The petri plate is not visible in frame — place the plate flat on the tray, bring the camera directly overhead so the plate is fully in frame, and make sure the cabin marker stays visible."
+        "petriYok": "The well plate is not visible in frame — place the plate flat on the tray, bring the camera directly overhead so the plate is fully in frame, and make sure the cabin marker stays visible."
       },
       "mesaj": {
         "hazirlikBasladi": "Preparation started",

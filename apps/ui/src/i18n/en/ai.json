@@ -334,7 +334,7 @@
   "fantom": {
     "aciklama": "Detects blue tumor foci in a synthetic kidney phantom; produces a 3D position + PEMF coil / E-field estimate.",
     "analiziBaslat": "Start Phantom Analysis",
-    "baslik": "Phantom Tumor Analysis",
+    "baslik": "Tumor Phantom Analysis",
     "boy": "Phantom length (cm)",
     "boyYerTutucu": "if no ring / marker · e.g. 10",
     "hesaplandi": "An electric field (E) falling on cancerous and healthy tissue was calculated for each tumor; the duty settings (D1–D7) of the 7 PEMF coils were produced accordingly.",
@@ -626,7 +626,7 @@
     },
     "fantomTumor": {
       "aciklama": "Tumor + EM field estimate in a phantom",
-      "ad": "Phantom Tumor"
+      "ad": "Tumor Phantom"
     },
     "hastalik": {
       "aciklama": "Disease prediction with XGBoost",
@@ -634,7 +634,7 @@
     },
     "kediOrgan": {
       "aciklama": "3D organ localization (10 organs)",
-      "ad": "Cat Organ"
+      "ad": "Feline Organ"
     },
     "kediSesi": {
       "aciklama": "Emotion / state classification from meows",
@@ -642,7 +642,7 @@
     },
     "petriKuyu": {
       "aciklama": "Cancer + EM field estimate in wells",
-      "ad": "Petri Well"
+      "ad": "Well Plate"
     },
     "retikulosit": {
       "aciklama": "Microscopic cell count",
@@ -683,7 +683,7 @@
     "analiziBaslat": "Start Organ Analysis",
     "anatomik": "⚠ Anatomical consistency warning: the organ arrangement contradicts the expected anatomy — interpret the localization with caution.",
     "ayna": "⚠ Mirror ambiguity: the left / right organ distinction may not be reliable in this frame — a second frame from a different angle is recommended.",
-    "baslik": "Cat Organ Localization",
+    "baslik": "Feline Organ Localization",
     "bulunamadiMetin": "The cat / organs could not be clearly made out in this image. Make sure the whole cat is in the frame, the light is good and the image is sharp; try a closer side / top frame.",
     "bulundu_one": "{{count}} organ found · most reliable: {{bestName}} ({{bestPct}}%)",
     "bulundu_other": "{{count}} organs found · most reliable: {{bestName}} ({{bestPct}}%)",
@@ -784,10 +784,10 @@
     },
     "a1KoseSecenek": "A1 corner {{secenek}}",
     "a1Notu": "The A1 corner is not read from the image (laboratory item): automatic = top-left for a horizontal plate, top-right for a vertical one. If the plate was rotated 180°, choose the opposite corner.",
-    "aciklama": "Detects wells in a petri photo; produces a cancer classification for each well + a PEMF coil / E-field estimate.",
+    "aciklama": "Detects wells in a well plate photo; produces a cancer classification for each well + a PEMF coil / E-field estimate.",
     "advNotPlaka": "In plate mode the plate geometry determines where the wells are; detection confidence and the \"not a petri dish\" thresholds do not change the result in this mode (they are shown only in single-dish mode). A field you leave empty stays at its default.",
     "advNotTekil": "If wells cannot be found, the first two levers to try: lowering detection confidence and turning on downscaling. A field you leave empty stays at its default.",
-    "analiziBaslat": "Start Petri Analysis",
+    "analiziBaslat": "Start Well Plate Analysis",
     "aralikDisi": "{{etiket}}: must be between {{alt}} and {{ust}} (entered: {{ham}}).",
     "ayar": {
       "plausAreaFrac": {
@@ -816,7 +816,7 @@
       }
     },
     "ayarNotu": "From the advanced (research) settings, lower the detection confidence (0.25 → 0.05 ⇒ 3 wells instead of 1) or turn on downscaling (e.g. 960).",
-    "baslik": "Petri Well Analysis",
+    "baslik": "Well Plate Analysis",
     "boyaliKontrol": "Stained (cancer) control wells",
     "boyaliKontrolEtiketi": "Stained control wells",
     "cap": "Petri diameter (cm)",
@@ -840,14 +840,14 @@
     "gelismisKapat": "Closes the settings",
     "gerekce": "  — reason: {{neden}}",
     "gerekceMavi": "  — reason: {{n}} blue pixels (threshold ≥30)",
-    "ipucuBaslik": "📸 Petri photo tips",
+    "ipucuBaslik": "📸 Well plate photo tips",
     "ipucuKenar": "• Keep the plate edges in the frame; make sure light reflections do not fall in the middle of a well",
     "ipucuKontrol": "• In every experiment, photograph one known stained and one healthy <kalin>control well</kalin> (Advanced settings) ",
     "ipucuUst": "• Photograph the plate <kalin>from directly above, upright and close</kalin> — the plate should fill at least half of the frame ",
     "kadrajNotu": "Framing test measured: moving closer to the plate raised the count from 1 well to 5 wells.",
     "kanser": "Cancer",
     "kapali": "off",
-    "kipEtiketi": "Petri analysis mode",
+    "kipEtiketi": "Well plate analysis mode",
     "kipPlaka": "24-well plate",
     "kipTekil": "Single petri dishes",
     "kontrolNotu": "Cancer thresholds were validated only with artificial dye (laboratory item): the control wells adjust the thresholds to this plate; if a control is misclassified, the result is not used.",
@@ -1003,7 +1003,7 @@
     "model": {
       "baslik": "🔬 Target Model",
       "deneysel": "Experimental — view-only for now",
-      "dozOnaylanamaz": "In this version a dose for a phantom/petri target CANNOT be approved: the 3D position transform has not been verified on the bench. You can open the camera and see the target and its position, and measure the placement.",
+      "dozOnaylanamaz": "In this version a dose for a phantom/well plate target CANNOT be approved: the 3D position transform has not been verified on the bench. You can open the camera and see the target and its position, and measure the placement.",
       "kurulu": "Model installed ✓",
       "kurulumBilinmiyor": "Installation status could not be read",
       "kurulumEksik": "The research model package is not installed on this device"
@@ -1014,8 +1014,8 @@
       "arastirmaMobil": "🔬 These models need the desktop CABIN camera: the position is measured relative to the cabin marker, and a phone cannot do this. Use the Control → AI Pro screen on the computer; here you can only watch.",
       "kediMobilOneri": "📷 Point your phone camera at the CAT — organ localization and em_kedi dose RECOMMENDATION; driving is off, no coil is driven.",
       "kediMobilSeans": "📷 Point your phone camera at the CAT — the 7 coils are driven per coil using organ localization (em_kedi).",
-      "kediWebOneri": "📷 Cat organ localization from the server camera → em_kedi dose RECOMMENDATION — driving is off, no coil is driven.",
-      "kediWebSeans": "📷 Live autonomous session from the server camera: cat organ localization → em_kedi → 7 coils."
+      "kediWebOneri": "📷 Feline organ localization from the server camera → em_kedi dose RECOMMENDATION — driving is off, no coil is driven.",
+      "kediWebSeans": "📷 Live autonomous session from the server camera: feline organ localization → em_kedi → 7 coils."
     },
     "onay": {
       "alan": "Estimated field (relative, unitless): at the target {{hedef}}",
@@ -1067,10 +1067,10 @@
         "ozneIpucu": "Point the camera at the patient."
       },
       "petri": {
-        "aciklama": "Finds the wells in the Petri plate; recommends a dose for the cancerous well.",
+        "aciklama": "Finds the wells in the well plate; recommends a dose for the cancerous well.",
         "hedefEtiketi": "Well",
         "hedefEtiketiKucuk": "well",
-        "ozne": "petri plate",
+        "ozne": "well plate",
         "ozneIpucu": "Place the plate flat on the tray; frame it fully with the camera from above."
       }
     },
@@ -1096,12 +1096,12 @@
       "hastasizGovdeOtonom": "The autonomous session will be saved without being linked to any {{belirtme}}; it will appear without an owner in the session history.\n\nDo you still want to start it?",
       "hedefDegistirilemedi": "Could not change the target",
       "kabinKamerasi": "This session is done with the cabin camera",
-      "kabinKamerasiGovde": "A phantom or petri target is measured relative to the cabin marker; a phone camera cannot do this measurement. Use the Control → AI Pro screen on the computer.",
+      "kabinKamerasiGovde": "A phantom or well plate target is measured relative to the cabin marker; a phone camera cannot do this measurement. Use the Control → AI Pro screen on the computer.",
       "komutUlasmadi": "The command did not reach the server — try again.",
       "konumlandirmaTamamlanamadi": "Localization could not be completed",
       "konumlandirmaTamamlanamadiGovde": "The animal could not be found in the frame for two minutes; the camera was stopped (battery protection). Increase the light, bring the phone 1-2 meters away, get the animal fully in the frame, then start again.",
       "modelSecilmedi": "No model selected",
-      "modelSecilmediGovde": "First select the Phantom or Petri card in Step 1.",
+      "modelSecilmediGovde": "First select the Tumor Phantom or Well Plate card in Step 1.",
       "organDegistirilemedi": "Could not change the organ",
       "sunucuKamerasi": "The server camera could not be started",
       "sunucuReddetti": "The server rejected the request ({{durum}}).",

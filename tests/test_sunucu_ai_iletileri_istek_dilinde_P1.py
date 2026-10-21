@@ -384,7 +384,7 @@ def test_organ_ve_model_adlari_veri_Turkce_gosterim_istek_dilinde(dil):
     assert k.hedef_adi(2) == "Böbrek" and ai_router._organ_adi(0) == "Tüm Vücut"  # VERİ (`mode`): dil ne olursa Türkçe
     assert k.hedef_adi_gosterim(2) == _t("Böbrek", "Kidney", dil)
     assert ai_pro_hedef.hedef_gosterim_adi(k, 9) == _t("Akciğer (sağ)", "Lung (right)", dil)
-    assert ai_pro_hedef.model_adi(k) == _t("Kedi Organ", "Cat Organ", dil)
+    assert ai_pro_hedef.model_adi(k) == _t("Kedi Organ", "Feline Organ", dil)
     assert k.title == "Kedi Organ"  # VERİ (`mode` / `modelName`)
     assert ai_pro_hedef.model_adi(object()) == _t("Araştırma modeli", "Research model", dil)
     assert k.ipucu(True, k.hedef_adi_gosterim(2)).startswith(
@@ -411,7 +411,7 @@ def test_hazirlik_hatasi_depolanan_Turkce_durum_yaniti_istek_dilinde(dil):
         )
         assert ai_router._hazirlik_hata_goster() == _t(
             metin,
-            "The 'Cat Organ' model package is not installed on this device. Add the relevant model package from the setup step of the desktop PEMF app, then come back to this screen.",
+            "The 'Feline Organ' model package is not installed on this device. Add the relevant model package from the setup step of the desktop PEMF app, then come back to this screen.",
             dil,
         )
         ai_router._ai_hazirlik_hata, ai_router._ai_hazirlik_hata_kodu = "elle yazılmış", ""

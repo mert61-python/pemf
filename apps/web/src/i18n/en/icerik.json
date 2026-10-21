@@ -133,8 +133,8 @@
   "profil": {
     "arastirma": {
       "ad": "Research Profile",
-      "ic1": "Phantom tumor + electromagnetic field measurement",
-      "ic2": "Petri well (cancer cell analysis)",
+      "ic1": "Tumor phantom + electromagnetic field measurement",
+      "ic2": "Well plate (cancer cell analysis)",
       "ic3": "Kidney RNA analysis (KIRC — clear cell renal carcinoma)",
       "ic4": "Kidney computed tomography (CT)",
       "ic5": "Kidney pathology (histopathology)",
@@ -169,7 +169,7 @@
       "q": "What is AI Pro? Does it apply therapy to the animal on its own?"
     },
     "arastirma": {
-      "a": "For university, laboratory and R&D teams: it includes research tools such as phantom tumor and electromagnetic field measurement, Petri well analysis, kidney RNA, computed tomography and pathology models. It is not needed for daily clinical practice — the Veterinarian profile is sufficient.",
+      "a": "For university, laboratory and R&D teams: it includes research tools such as tumor phantom and electromagnetic field measurement, well plate analysis, kidney RNA, computed tomography and pathology models. It is not needed for daily clinical practice — the Veterinarian profile is sufficient.",
       "q": "Who needs the Research profile?"
     },
     "deneme": {

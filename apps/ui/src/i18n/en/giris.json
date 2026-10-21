@@ -46,9 +46,9 @@
   "hesapOlustur": "Create account",
   "hosGeldin": {
     "altBaslik": "Please select your usage profile",
-    "arastirmaAciklama": "Camera-assisted clinical cancer research analyses with phantom tumor, petri well, and kidney (RNA · CT · pathology · disease) models, with detailed result records.",
+    "arastirmaAciklama": "Camera-assisted clinical cancer research analyses with tumor phantom, well plate, and kidney (RNA · CT · pathology · disease) models, with detailed result records.",
     "arastirmaEklentisi": "Requires the Research add-on",
-    "arastirmaIpucu": "Camera-assisted clinical cancer research analyses: phantom tumor, petri well, and kidney models",
+    "arastirmaIpucu": "Camera-assisted clinical cancer research analyses: tumor phantom, well plate, and kidney models",
     "arastirmaProfilEtiketi": "Research Mode profile",
     "baslik": "Welcome to the PEMF System",
     "gercekZamanli": "Real-time",

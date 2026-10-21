@@ -179,7 +179,7 @@ describe("AiProPanel — kedi hattı", () => {
       "X (mm)",
       "🚀 Start AI Pro (1Hz DDS)",
       "AI Pro stopped.",
-      "📷 Live autonomous session from the server camera: cat organ localization → em_kedi → 7 coils.",
+      "📷 Live autonomous session from the server camera: feline organ localization → em_kedi → 7 coils.",
     ]) {
       expect(u.getAllByText(s).length).toBeGreaterThan(0);
     }
@@ -403,9 +403,9 @@ describe("AiProPanel — araştırma (fantom / petri)", () => {
     const u = await arastirmaPanel();
     const m = metin(u);
     expect(m).toContain("🔬 Target Model");
-    expect(m).toContain("Phantom Tumor");
+    expect(m).toContain("Tumor Phantom");
     expect(m).toContain("Finds the blue tumor foci in the silicone phantom; recommends a dose for the focus.");
-    expect(m).toContain("Finds the wells in the Petri plate; recommends a dose for the cancerous well.");
+    expect(m).toContain("Finds the wells in the well plate; recommends a dose for the cancerous well.");
     expect(m).toContain("Step 1/5 · Model");
     expect(m).toContain("First choose a target model in Step 1.");
     expect(m).toContain("🚀 Start Preparation");
@@ -414,7 +414,7 @@ describe("AiProPanel — araştırma (fantom / petri)", () => {
     );
     expect(u.getByLabelText("Step 1 / 5: Model")).toBeTruthy();
     await act(async () => {
-      fireEvent.press(u.getByLabelText(/Phantom Tumor/));
+      fireEvent.press(u.getByLabelText(/Tumor Phantom/));
     });
     await act(async () => {
       fireEvent.press(u.getByLabelText("Start the AI Pro autonomous session"));
@@ -438,7 +438,7 @@ describe("AiProPanel — araştırma (fantom / petri)", () => {
     await enYap();
     u = await arastirmaPanel();
     await act(async () => {
-      fireEvent.press(u.getByLabelText(/Phantom Tumor/));
+      fireEvent.press(u.getByLabelText(/Tumor Phantom/));
     });
     await act(async () => {
       fireEvent.press(u.getByLabelText("Start the AI Pro autonomous session"));
@@ -517,7 +517,7 @@ describe("AiSpecApprovalModal", () => {
     const u = ciz();
     const m = metin(u);
     for (const s of [
-      "AI Session Recommendation — Phantom Tumor · Tümör 1",
+      "AI Session Recommendation — Tumor Phantom · Tümör 1",
       "Model estimate for research purposes",
       "An experiment session does not start without approval. Review the parameters below and approve, or reject with a reason.",
       "Sample",
@@ -780,12 +780,12 @@ describe("aipro/* alt bileşenler ve profil tablosu", () => {
     );
     for (const s of ["Model installed ✓", "The research model package is not installed on this device", "Experimental — view-only for now"]) expect(k).toContain(s);
     expect(k).toContain(
-      "In this version a dose for a phantom/petri target CANNOT be approved: the 3D position transform has not been verified on the bench. You can open the camera and see the target and its position, and measure the placement.",
+      "In this version a dose for a phantom/well plate target CANNOT be approved: the 3D position transform has not been verified on the bench. You can open the camera and see the target and its position, and measure the placement.",
     );
     const p = modelProfili("petri");
     expect([p.baslik, p.ozne, p.hedefEtiketi, p.hedefEtiketiKucuk, p.ozneIpucu]).toEqual([
-      "Petri Well",
-      "petri plate",
+      "Well Plate",
+      "well plate",
       "Well",
       "well",
       "Place the plate flat on the tray; frame it fully with the camera from above.",

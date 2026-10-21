@@ -144,7 +144,7 @@ describe("bölüm 1 — modül ızgarası ve karşılama", () => {
     tr.unmount();
     await enYap();
     const en = render(<AiHubScreen />);
-    expect(en.getByLabelText("Phantom Tumor — research add-on required")).toBeTruthy();
+    expect(en.getByLabelText("Tumor Phantom — research add-on required")).toBeTruthy();
     expect(en.getAllByText("Add-on").length).toBeGreaterThan(0);
     expect(en.getAllByLabelText("Research add-on required").length).toBeGreaterThan(0);
   });
@@ -548,8 +548,8 @@ describe("bölüm 5 — Fantom Tümör modülü (araştırma)", () => {
     mockMode = "researcher";
     await enYap();
     const u = render(<AiHubScreen />);
-    fireEvent.press(u.getByLabelText("Phantom Tumor"));
-    expect(u.getAllByText("Phantom Tumor Analysis").length).toBeGreaterThan(0);
+    fireEvent.press(u.getByLabelText("Tumor Phantom"));
+    expect(u.getAllByText("Tumor Phantom Analysis").length).toBeGreaterThan(0);
     expect(u.getByText("Detects blue tumor foci in a synthetic kidney phantom; produces a 3D position + PEMF coil / E-field estimate.")).toBeTruthy();
     expect(u.getByText("📸 Phantom photo tips")).toBeTruthy();
     expect(u.getByText("• Photograph the phantom straight from above, sharp and well lit")).toBeTruthy();
@@ -578,7 +578,7 @@ describe("bölüm 5 — Fantom Tümör modülü (araştırma)", () => {
     mockHastaNo += 1;
     await enYap();
     const en = render(<AiHubScreen />);
-    await fantomAnaliz(en, "Phantom Tumor", "Choose from Gallery", "Start Phantom Analysis", FANTOM);
+    await fantomAnaliz(en, "Tumor Phantom", "Choose from Gallery", "Start Phantom Analysis", FANTOM);
     expect(en.getByText(/2 tumor foci found$/)).toBeTruthy();
     expect(en.getByText("Detected tumors: 2 · Scale: 0.5 mm/px")).toBeTruthy();
     expect(en.getByText("Tumor T1 · (1.0, 2.0, 3.0) mm")).toBeTruthy();
@@ -604,7 +604,7 @@ describe("bölüm 5 — Fantom Tümör modülü (araştırma)", () => {
     mockHastaNo += 1;
     await enYap();
     const en = render(<AiHubScreen />);
-    await fantomAnaliz(en, "Phantom Tumor", "Choose from Gallery", "Start Phantom Analysis", piksel);
+    await fantomAnaliz(en, "Tumor Phantom", "Choose from Gallery", "Start Phantom Analysis", piksel);
     expect(en.getByText(/1 tumor focus found$/)).toBeTruthy();
     expect(en.getByText("Detected tumors: 1 · Scale: pixel")).toBeTruthy();
     expect(
@@ -679,12 +679,12 @@ describe("bölüm 6 — Petri Kuyu modülü (araştırma)", () => {
     mockMode = "researcher";
     await enYap();
     const u = render(<AiHubScreen />);
-    fireEvent.press(u.getByLabelText("Petri Well"));
-    expect(u.getAllByText("Petri Well Analysis").length).toBeGreaterThan(0);
-    expect(u.getByText("📸 Petri photo tips")).toBeTruthy();
+    fireEvent.press(u.getByLabelText("Well Plate"));
+    expect(u.getAllByText("Well Plate Analysis").length).toBeGreaterThan(0);
+    expect(u.getByText("📸 Well plate photo tips")).toBeTruthy();
     expect(u.getByText("• Photograph the plate from directly above, upright and close — the plate should fill at least half of the frame")).toBeTruthy();
     expect(u.getByText("• In every experiment, photograph one known stained and one healthy control well (Advanced settings)")).toBeTruthy();
-    expect(u.getByLabelText("Petri analysis mode")).toBeTruthy();
+    expect(u.getByLabelText("Well plate analysis mode")).toBeTruthy();
     expect(u.getByLabelText("24-well plate")).toBeTruthy();
     expect(u.getByLabelText("Single petri dishes")).toBeTruthy();
     const ayar = u.getByLabelText("Advanced research settings");
@@ -731,7 +731,7 @@ describe("bölüm 6 — Petri Kuyu modülü (araştırma)", () => {
     mockHastaNo += 1;
     await enYap();
     const en = render(<AiHubScreen />);
-    fireEvent.press(en.getByLabelText("Petri Well"));
+    fireEvent.press(en.getByLabelText("Well Plate"));
     fireEvent.press(en.getByLabelText("Single petri dishes"));
     fireEvent.press(en.getByLabelText("Advanced research settings"));
     await act(async () => {
@@ -739,13 +739,13 @@ describe("bölüm 6 — Petri Kuyu modülü (araştırma)", () => {
     });
     fireEvent.changeText(en.getAllByPlaceholderText("default 0.25")[0], "abc");
     await act(async () => {
-      fireEvent.press(en.getByRole("button", { name: "Start Petri Analysis" }));
+      fireEvent.press(en.getByRole("button", { name: "Start Well Plate Analysis" }));
     });
     expect(mockShowToast).toHaveBeenLastCalledWith("Detection confidence (conf): enter a number (e.g. 0.25).", "error");
     fireEvent.changeText(en.getAllByPlaceholderText("default 0.25")[0], "5");
     await act(async () => {
       await new Promise((r) => setTimeout(r, 450));
-      fireEvent.press(en.getByRole("button", { name: "Start Petri Analysis" }));
+      fireEvent.press(en.getByRole("button", { name: "Start Well Plate Analysis" }));
     });
     expect(mockShowToast).toHaveBeenLastCalledWith("Detection confidence (conf): must be between 0.01 and 0.95 (entered: 5).", "error");
   });
@@ -771,7 +771,7 @@ describe("bölüm 6 — Petri Kuyu modülü (araştırma)", () => {
     mockHastaNo += 1;
     await enYap();
     const en = render(<AiHubScreen />);
-    await petriAnaliz(en, "Petri Well", "Choose from Gallery", "Start Petri Analysis", PETRI);
+    await petriAnaliz(en, "Well Plate", "Choose from Gallery", "Start Well Plate Analysis", PETRI);
     expect(en.getByText(/2 wells · 1 cancer, 1 healthy$/)).toBeTruthy();
     expect(en.getByText(/Cancer was classified in 1 well\. A 3D position/)).toBeTruthy();
     expect(en.getByText("Wells: 2 · Cancer: 1 · Healthy: 1")).toBeTruthy();
@@ -1336,8 +1336,8 @@ describe("bölüm 10 — Yara Kapanma (Scratch) ve Kedi Organ modülleri", () =>
     mockHastaNo += 1;
     await enYap();
     const en = render(<AiHubScreen />);
-    fireEvent.press(en.getByLabelText("Cat Organ"));
-    expect(en.getAllByText("Cat Organ Localization").length).toBeGreaterThan(0);
+    fireEvent.press(en.getByLabelText("Feline Organ"));
+    expect(en.getAllByText("Feline Organ Localization").length).toBeGreaterThan(0);
     expect(en.getByText("🐾 How to use")).toBeTruthy();
     expect(en.getByText("• Analyze a single frame with Choose from Gallery or Take Photo")).toBeTruthy();
     expect(en.getByText("• Frame the cat with Live Camera; the organ map updates every few seconds")).toBeTruthy();
@@ -1363,7 +1363,7 @@ describe("bölüm 10 — Yara Kapanma (Scratch) ve Kedi Organ modülleri", () =>
     mockHastaNo += 1;
     await enYap();
     const en = render(<AiHubScreen />);
-    await organAnaliz(en, "Cat Organ", "Choose from Gallery", "Start Organ Analysis", ORGAN);
+    await organAnaliz(en, "Feline Organ", "Choose from Gallery", "Start Organ Analysis", ORGAN);
     expect(en.getByText(/2 organs found · most reliable: Heart \(80%\)$/)).toBeTruthy();
     expect(en.getByText("Technical: pose epnp · PnP 1.2px")).toBeTruthy();
     expect(en.getByText("Organs (3D position · confidence)")).toBeTruthy();
@@ -1394,12 +1394,12 @@ describe("bölüm 10 — Yara Kapanma (Scratch) ve Kedi Organ modülleri", () =>
     mockHastaNo += 1;
     await enYap();
     const en = render(<AiHubScreen />);
-    await organAnaliz(en, "Cat Organ", "Choose from Gallery", "Start Organ Analysis", bir);
+    await organAnaliz(en, "Feline Organ", "Choose from Gallery", "Start Organ Analysis", bir);
     expect(en.getByText(/1 organ found · most reliable: Heart \(80%\)$/)).toBeTruthy();
     en.unmount();
     mockHastaNo += 1;
     const en2 = render(<AiHubScreen />);
-    await organAnaliz(en2, "Cat Organ", "Choose from Gallery", "Start Organ Analysis", yok);
+    await organAnaliz(en2, "Feline Organ", "Choose from Gallery", "Start Organ Analysis", yok);
     expect(en2.getByText(/Cat not found$/)).toBeTruthy();
     expect(logKayitlari().slice(-1)[0].summary).toBe(trKayit.summary);
   });
