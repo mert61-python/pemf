@@ -271,6 +271,8 @@ export interface EstopMandali {
   eylemSifirlaSoyler?: boolean;
   /** TD6 · K12: backend'in nedene özgü EYLEM metni (ör. kart reddinde duty / uyumsuzluk metni); boş → arayüz nedenden türetir. */
   eylem?: string;
+  /** I18NI-A1.1: `eylem`in dil karşılıkları {tr, en} (WS yükü dil bilmez). Eski sunucu: yok → `eylem`. */
+  eylemler?: Partial<Record<string, string>>;
 }
 
 // ─── WebSocket live data ──────────────────────────────────────────────────────

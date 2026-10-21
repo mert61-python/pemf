@@ -54,7 +54,10 @@ export function mandalNedeni(neden?: string): string {
  * TD6 · K12 (tezgâh Oturum 13): nedene göre NE YAPILACAĞI — eskiden her neden aynı cümleyi alıyordu. Backend `eylem` verdiyse
  * (kart reddi: duty metni ya da kart uyumsuzluğu) o; bağlantı kopması / watchdog → kablo; boş → yalnız genel cümle.
  */
-export function mandalEylemi(neden?: string, eylem?: string): string {
+export function mandalEylemi(neden?: string, eylem?: string, eylemler?: Partial<Record<string, string>>): string {
+  // I18NI-A1.1: sunucu dil karşılığı verdiyse etkin dildeki (EN bant Türkçe cümle basmasın); yoksa (eski sunucu) `eylem` aynen.
+  const yerel = eylemler ? String(eylemler[i18n.language] ?? "").trim() : "";
+  if (yerel) return yerel;
   const e = String(eylem || "").trim();
   if (e) return e;
   const n = String(neden || "");
@@ -72,7 +75,7 @@ export function EstopMandalBandi() {
   const [mesgul, setMesgul] = useState(false);
   const mandal = snapshot?.estopMandali;
   if (!mandal?.aktif) return null;
-  const eylem = mandalEylemi(mandal.neden, mandal.eylem);
+  const eylem = mandalEylemi(mandal.neden, mandal.eylem, mandal.eylemler);
   // Eylem metni "Sıfırla" adımını ZATEN söylüyorsa (duty reddi, Y74) bant onu ikinci kez yazmaz.
   // 13 §2-d: sunucu METNİNE göre dallanma YOK — makine-okur alan (`eylemSifirlaSoyler`) önce; alan yoksa (eski sunucu) eski metin eşleşmesi.
   const sifirlaSoylendi = typeof mandal.eylemSifirlaSoyler === "boolean" ? mandal.eylemSifirlaSoyler : /Sıfırla/.test(eylem);

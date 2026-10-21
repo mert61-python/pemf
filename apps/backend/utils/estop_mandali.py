@@ -116,6 +116,8 @@ _durum = {
     "eylem": "",
     # I18N-P1: `eylem` metni ZATEN "Sıfırla" adımını söylüyor mu — MAKİNE-OKUR (arayüz metne bakıp dallanmasın; metin dile göre değişir).
     "eylem_sifirla": False,
+    # I18NI-A1.1: `eylem`in dil karşılıkları {tr, en} (WS yükü dil bilmez; `eylem` TR bayt bayt kalır, EN arayüz `en`i seçer). Diske YAZILMAZ.
+    "eylemler": {},
 }
 #: TD6 · K12: neden → (metin, monotonik an, sifirla_soyler) — bir SONRAKİ `mandalla(neden)` çağrısı alır (`eylem_birak`).
 _bekleyen_eylem: dict = {}
@@ -140,13 +142,14 @@ def mandalli_mi() -> bool:
         return bool(_durum["aktif"] or _durum["kapanis"])
 
 
-def eylem_birak(neden: str, metin: str, sifirla_soyler: bool = False) -> None:
+def eylem_birak(neden: str, metin: str, sifirla_soyler: bool = False, metinler: dict | None = None) -> None:
     """TD6 · K12 (tezgâh Oturum 13): bir SONRAKİ `mandalla(neden)`ın bantta göstereceği EYLEM metni — mandalı kuran yol
     (ör. STM reddinde `_emergency_stop_async`) imzası değişmeden nedenini söyleyebilsin. Yalnız METİN: mandal kurmaz, beklemez,
     STOP'u kapılamaz (Ö.4-Y8); başka nedenli mandal onu almaz, 5 sn içinde alınmazsa düşer.
     `sifirla_soyler` (I18N-P1): metin "Sıfırla" adımını zaten söylüyorsa True — `durum()["eylemSifirlaSoyler"]` olarak makine-okur taşınır."""
+    _dil = {str(k): str(v)[:500] for k, v in (metinler or {}).items() if isinstance(v, str) and v}
     with _kilit:
-        _bekleyen_eylem[str(neden or "")[:80]] = (str(metin or "")[:500], time.monotonic(), bool(sifirla_soyler))
+        _bekleyen_eylem[str(neden or "")[:80]] = (str(metin or "")[:500], time.monotonic(), bool(sifirla_soyler), _dil)
 
 
 def mandalla(neden: str = "") -> int:
@@ -159,6 +162,7 @@ def mandalla(neden: str = "") -> int:
         _taze = bool(_bek) and time.monotonic() - _bek[1] <= _BEKLEYEN_EYLEM_OMRU_S
         _durum["eylem"] = _bek[0] if _taze else ""
         _durum["eylem_sifirla"] = bool(_bek[2]) if _taze else False
+        _durum["eylemler"] = dict(_bek[3]) if _taze and len(_bek) > 3 else {}
         _durum["zaman"] = time.time()
         _durum["onceki_oturum"] = False
         _nesil += 1
@@ -188,6 +192,7 @@ def sifirla(kaynak: str = "") -> bool:
         _durum["onceki_oturum"] = False
         _durum["eylem"] = ""
         _durum["eylem_sifirla"] = False
+        _durum["eylemler"] = {}
         if onceki:
             _durum["sifirlama_zamani"] = time.time()
             _durum["sifirlayan"] = str(kaynak or "")[:80]
@@ -233,6 +238,8 @@ def durum() -> dict:
             "eylem": str(_durum.get("eylem") or ""),
             # I18N-P1: `eylem` metni "Sıfırla" adımını söylüyor mu (makine-okur; eski istemci alanı yok sayar).
             "eylemSifirlaSoyler": bool(_durum.get("eylem_sifirla")),
+            # I18NI-A1.1: `eylem`in dil karşılıkları (eski istemci yok sayar; boş = karşılık yok → arayüz `eylem`e düşer).
+            "eylemler": dict(_durum.get("eylemler") or {}),
         }
 
 
@@ -351,6 +358,7 @@ def kalicilik_kur(yol) -> dict:
             _durum["onceki_oturum"] = True
             _durum["eylem"] = ""
             _durum["eylem_sifirla"] = False
+            _durum["eylemler"] = {}
             _nesil += 1
         _log.warning("ACIL DURDUR mandali onceki oturumdan KURULU (sifirlanmadi): %s", onceki_neden)
     if _engel:

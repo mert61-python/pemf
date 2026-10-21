@@ -1100,8 +1100,14 @@ def _stm_red_aktif_seansi_durdur(ham: str) -> bool:
         try:
             _duty_eylem = live_state.stm_duty_reddi_metni(ham, sifirla=True, dil="tr")  # mandal EYLEMİ: yazı DEĞİŞMEZ
             # I18N-P1: duty reddi metni "Sıfırla"ya basın der (Y74) → makine-okur bayrak; kart uyumsuzluğu metni demez.
+            # I18NI-A1.1: EN arayüz için dil karşılıkları (WS yükü tek; `eylem` TR bayt bayt aynı kalır).
+            _eylemler = {
+                d: (live_state.stm_duty_reddi_metni(ham, sifirla=True, dil=d) if _duty_eylem else stm_red_mesaji(d))
+                for d in ceviri.DILLER
+            }
+            _eylemler["tr"] = _duty_eylem or STM_RED_MESAJI
             estop_mandali.eylem_birak(
-                "stm_komut_reddi", _duty_eylem or STM_RED_MESAJI, sifirla_soyler=bool(_duty_eylem)
+                "stm_komut_reddi", _duty_eylem or STM_RED_MESAJI, sifirla_soyler=bool(_duty_eylem), metinler=_eylemler
             )
         except Exception:
             logging.getLogger(__name__).warning(
