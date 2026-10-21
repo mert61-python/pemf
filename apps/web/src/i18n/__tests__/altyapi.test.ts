@@ -32,7 +32,7 @@ describe('başlatma', () => {
   it('TR + senkron: içe aktarma biter bitmez çeviri hazır; <html lang="tr">', () => {
     expect(i18n.isInitialized).toBe(true)
     expect(i18n.language).toBe('tr')
-    expect(i18n.t('ortak.dil.dugme')).toBe('EN')
+    expect(i18n.t('ortak.dil.dugme')).toBe('English') // YH B4: geçilecek dil kendi adıyla
     expect(belge.documentElement.lang).toBe('tr')
   })
 
@@ -62,7 +62,7 @@ describe('dil kuralı + bayrak', () => {
     const r = await i18nMod.dilSec('en')
     expect(r).toEqual({ dil: 'en', kaydedildi: true })
     expect(depo.get('pemf.dil')).toBe('en')
-    expect(i18n.t('ortak.dil.dugme')).toBe('TR')
+    expect(i18n.t('ortak.dil.dugme')).toBe('Türkçe')
     expect(belge.documentElement.lang).toBe('en')
     expect(dilMod.etkinDil(dilMod.kayitliDil(), 'tr-TR')).toBe('en')
   })
@@ -71,9 +71,9 @@ describe('dil kuralı + bayrak', () => {
     dilMod.__bayrakTestiAyarla(false)
     expect(renderToString(createElement(DilDugmesi))).toBe('')
     dilMod.__bayrakTestiAyarla(true)
-    expect(renderToString(createElement(DilDugmesi))).toContain('>EN</button>')
+    expect(renderToString(createElement(DilDugmesi))).toContain('<span lang="en">English</span></button>')
     await i18nMod.dilSec('en')
-    expect(renderToString(createElement(DilDugmesi))).toContain('>TR</button>')
+    expect(renderToString(createElement(DilDugmesi))).toContain('<span lang="tr">Türkçe</span></button>')
   })
 
   it('bayrak kapalıyken dilSec("en") tr kalır', async () => {

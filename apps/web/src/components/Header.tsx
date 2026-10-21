@@ -80,7 +80,7 @@ export default function Header() {
               <AccountButton onNavigate={() => setOpen(false)} inline />
             </div>
             <div className="mt-2 px-3">
-              <DilDugmesi />
+              <DilDugmesi testId="dil-dugmesi-mobil" />
             </div>
             <Link to="/download" onClick={() => setOpen(false)} className="btn-primary mt-2 text-sm">
               <Download className="h-4 w-4" />

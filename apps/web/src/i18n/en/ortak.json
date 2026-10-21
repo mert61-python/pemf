@@ -10,7 +10,8 @@
   "anaSayfa": "Home page",
   "anaSayfayaDon": "Back to the home page",
   "dil": {
-    "dugme": "TR",
+    "altBilgi": "Language",
+    "dugme": "Türkçe",
     "dugmeEtiketi": "Change language: Türkçe"
   },
   "indirDugmesi": "Download PEMF Vet",

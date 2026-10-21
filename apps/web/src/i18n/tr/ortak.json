@@ -10,7 +10,8 @@
   "anaSayfa": "Ana sayfa",
   "anaSayfayaDon": "Ana sayfaya dön",
   "dil": {
-    "dugme": "EN",
+    "altBilgi": "Dil",
+    "dugme": "English",
     "dugmeEtiketi": "Dili değiştir: English"
   },
   "indirDugmesi": "PEMF Vet’i İndir",

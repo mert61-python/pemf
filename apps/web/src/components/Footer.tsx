@@ -2,7 +2,9 @@
 import { Link } from 'react-router-dom'
 import { BRAND, COMPANY, LEGAL_DOCS, NAV, tibbiUyari } from '../config'
 import { Logo } from './Icons'
+import DilDugmesi from './DilDugmesi'
 import { useTranslation } from 'react-i18next'
+import { dilSecimiGorunur } from '../i18n'
 
 export default function Footer() {
   const { t } = useTranslation()
@@ -54,8 +56,17 @@ export default function Footer() {
           {tibbiUyari()}
         </p>
 
-        <div className="mt-6 text-xs text-muted">
-          © {BRAND.year} {COMPANY.legalName}{t('ortak.altBilgi.haklar')}
+        <div className="mt-6 flex flex-col gap-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            © {BRAND.year} {COMPANY.legalName}{t('ortak.altBilgi.haklar')}
+          </div>
+          {/* YH B4: dil seçici her sayfada ve her genişlikte görünür (mobilde üst menü kapalıyken de) */}
+          {dilSecimiGorunur() && (
+            <div className="flex items-center gap-2">
+              <span>{t('ortak.dil.altBilgi')}</span>
+              <DilDugmesi testId="dil-dugmesi-altbilgi" />
+            </div>
+          )}
         </div>
       </div>
     </footer>
