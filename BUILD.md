@@ -394,6 +394,9 @@ gh release upload launcher-v1.9.13 -R mert61-python/pemf-update release_assets\P
 #    Alanlar: mobile.android.version / versionCode / url / sha256 / size  (versionCode apps/ui/app.json
 #    ile AYNI olmali; kucuk/esit birakmak guncellemeyi sessizce kapatir).
 gh release upload client-app-v1.8.0 -R mert61-python/pemf-update --clobber pemf-app-packages\manifest.json
+# 4b) HESAP SAYFALARI (sifre sifirlama / e-posta onayi) — GitHub Pages, SAHIBIN ELLE kopyasi (betik / is akisi YOK):
+#    apps/ui/auth-pages'teki ÜÇ DOSYA BİRLİKTE kopyalanir: reset.html · verified.html · i18n_katalog.js
+#    (HTML'de metin YOK — katalog eksikse sayfa metinsiz acilir). Kapi: tests/test_YH_B5_auth_sayfa_dagitim.py
 # 4) web sitesi (indirme sayfasi)
 #    ⚠️ SIRA: site EN SON. config.ts surumleri (windowsTag/androidVersion) yayindaki dosya
 #    adlarini belirler; varliklar yuklenmeden deploy edilirse butonlar 404 verir.

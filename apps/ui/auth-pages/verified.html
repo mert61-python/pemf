@@ -33,6 +33,10 @@
     <a class="btn" href="pemfvet://" data-i18n="authSayfa.ortak.uygulamayaDon"></a>
     <div class="foot" data-i18n="authSayfa.verified.kapatabilirsin"></div>
   </div>
-<script>uygulaDil();</script>
+<script>
+  // YH B5 (S-I18NI-A3.a): katalog eksik kopyalandıysa düşme (dağıtım: BUILD.md §6, üç dosya BİRLİKTE); eksik katalog konsola yazılır.
+  if (typeof window.uygulaDil === "function") uygulaDil();
+  else console.error("PEMF: i18n_katalog.js yuklenemedi (auth-pages: uc dosya birlikte kopyalanmali)");
+</script>
 </body>
 </html>

@@ -208,8 +208,9 @@ gösterir, `message` Türkçe yedek kalır (S-I18N.5). Yasal metinler en SON gru
 Uygulamanın dışında (GitHub Pages) barınan statik sayfalar i18next'e erişemez: metin `authSayfa.*` kataloğundan `scripts/i18n/auth_uret.py` ile
 `i18n_katalog.js`'e ÜRETİLİR (elle düzenlenmez; `bayrak.py --ac|--kapat` birlikte üretir, `--denetle` ayrışmayı yakalar). HTML'de metin YOK:
 `<h1 data-i18n="authSayfa.reset.baslik"></h1>`, `data-i18n-html` (yalnız `<b>` gibi yazı biçimi), `data-i18n-placeholder`; betikte `tf("…")`.
-Bayrak KAPALIYKEN sayfa tarayıcı dili ne olursa olsun Türkçedir. Dağıtım (sahibin elle yaptığı GitHub Pages kopyası) `i18n_katalog.js`'i de
-kopyalamalıdır — yoksa sayfa metinsiz açılır. Kapı: `tests/test_i18n_auth_sayfa.py`.
+Bayrak KAPALIYKEN sayfa tarayıcı dili ne olursa olsun Türkçedir. Dağıtım (sahibin elle yaptığı GitHub Pages kopyası): üç dosya BİRLİKTE
+kopyalanır — `reset.html`, `verified.html`, `i18n_katalog.js` (yönerge `BUILD.md` §6 adım 4b); katalog eksikse sayfa metinsiz açılır (satır içi
+betik düşmez, konsola yazar — YH B5). Kapılar: `tests/test_i18n_auth_sayfa.py`, `tests/test_YH_B5_auth_sayfa_dagitim.py`.
 
 ### 4.14 DEMA
 `src/i18n/index.ts` (i18next YOK): sayfa dili `?dil=` > tarayıcı dili; uygulama çerçeveyi `dilParametresiEkle` ile açar. `<html lang>`

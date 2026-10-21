@@ -52,6 +52,13 @@
           integrity="sha384-UQ9Ztz63gzT2JZCuDRkNXV8RP/gXxdPUuM9LKlz2BzqGx9xFYNAK8yAEgbfZHs7P"
           crossorigin="anonymous"></script>
   <script>
+    // YH B5 (S-I18NI-A3.a): i18n_katalog.js eksik kopyalandıysa betik DÜŞMESİN — şifre sıfırlama yine bağlansın (dağıtım: BUILD.md §6,
+    // üç dosya BİRLİKTE). Eksik katalog konsola yazılır (teşhis izi).
+    if (typeof window.uygulaDil !== "function") {
+      console.error("PEMF: i18n_katalog.js yuklenemedi (auth-pages: uc dosya birlikte kopyalanmali)");
+      window.uygulaDil = function () {};
+      window.tf = function (anahtar) { return anahtar; };
+    }
     uygulaDil(); // i18n_katalog.js (ÜRETİLMİŞ): metinler data-i18n özniteliklerinden dolar
 
     // Supabase (publishable/anon — istemci-güvenli). Kendi projene göre değiştir.
