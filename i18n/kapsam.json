@@ -1486,6 +1486,10 @@
     {
      "metin": "Cihazın kimlik veritabanı okunamıyor",
      "gerekce": "sunucu 503 / 428 iletisinin ÖN EKİyle KARŞILAŞTIRILIR (OperatorContext `detay.startsWith`, ObservationNotesModal) — TR bayt bayt kalır; GÖSTERİMDE tam cümle kataloğdan (hasta.kimlik.dbOkunamiyor)"
+    },
+    {
+     "metin": "The device's identity database cannot be read",
+     "gerekce": "sunucu 503 / 428 iletisinin İNGİLİZCE ön eki (istek dili `en`) — OperatorContext / ObservationNotesModal `kimlikDbArizaMi` ile KARŞILAŞTIRILIR, ekranda görünmez; GÖSTERİMDE tam cümle kataloğdan"
     }
    ],
    "birlesikIstisna": [],
@@ -2464,6 +2468,10 @@
     {
      "metin": "termal kamera görüntüsüne benzemiyor",
      "gerekce": "sunucu iletisinin değişmez parçası (eşleştirme sabiti) — ekranda görünmez; sunucu iletisi 10x'te makine-okur alanla yönetilir"
+    },
+    {
+     "metin": "does not look like a thermal camera image",
+     "gerekce": "sunucu termal makullik iletisinin İNGİLİZCE değişmez parçası (eşleştirme sabiti, istek dili `en`) — ekranda görünmez; GÖSTERİMDE `ai.canli.durum.termalYok` kataloğdan"
     }
    ],
    "birlesikIstisna": [],

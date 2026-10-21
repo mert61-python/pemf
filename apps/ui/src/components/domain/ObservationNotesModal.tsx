@@ -13,7 +13,7 @@ import { colors, spacing, typography, rs } from "@/theme/tokens";
 import { apiPost, platformAlert } from "@/services/apiClient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
-import { KIMLIK_DB_ARIZA_ONEKI } from "@/utils/patientScope";
+import { kimlikDbArizaMi } from "@/utils/patientScope";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 
@@ -223,7 +223,7 @@ export function ObservationNotesModal({
               {/* ⚠️ C2-2.2 (Ö.4-Y8): seçicinin PIN penceresi AYRI portaldır; pencere ACİL DURDUR için gizlenince (bobin
                   çalışıyor) RN-web dış pencerenin çocuklarını ancak kayma animasyonu bitince söker — o arada PIN penceresi
                   ACİL DURDUR'u örtüyordu. Seçici yalnız pencere GÖRÜNÜRKEN çizilir; istem ve not durur. */}
-              {kimlikIstemi.startsWith(KIMLIK_DB_ARIZA_ONEKI) || !visible ? null : <OperatorSwitcher />}
+              {kimlikDbArizaMi(kimlikIstemi) || !visible ? null : <OperatorSwitcher />}
             </View>
           ) : null}
 

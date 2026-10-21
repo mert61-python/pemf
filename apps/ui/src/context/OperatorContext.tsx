@@ -23,7 +23,7 @@ import { StyleSheet, View } from "react-native";
 
 import { apiGet, apiPost, setOperatorToken } from "@/services/apiClient";
 import { useAuth } from "@/context/AuthContext";
-import { KIMLIK_DB_ARIZA_ONEKI } from "@/utils/patientScope";
+import { kimlikDbArizaMi } from "@/utils/patientScope";
 
 export interface Operator {
   email: string;
@@ -109,7 +109,7 @@ export function OperatorProvider({
     const r = await apiGet<{ ok?: boolean; data?: Operator[] } | null>("/operators", null, {
       silent: true, onHttpError: (s, d) => { durum = s; detay = d || ""; } });
     if (!Array.isArray(r?.data)) {
-      if (durum === 503 && detay.startsWith(KIMLIK_DB_ARIZA_ONEKI)) setKimlikDbOkunamiyor(true);
+      if (durum === 503 && kimlikDbArizaMi(detay)) setKimlikDbOkunamiyor(true);
       return;
     }
     setKimlikDbOkunamiyor(false);

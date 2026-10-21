@@ -54,6 +54,8 @@ export type CanliDurum = { tur: "sonuc" | "bulunamadi" | "red" | "hata"; metin: 
 
 /** Termal makullik kapısının (`utils/image_domain.TERMAL_UYUMSUZ_MESAJI`) iletisinin değişmez parçası. */
 const TERMAL_UYUMSUZ_IZI = "termal kamera görüntüsüne benzemiyor";
+/** EN ikizi (S-I18N-P1.1): sunucu iletisi İSTEK DİLİNDE gelir → `ai.kapi.termal.uyumsuz` İngilizce değeri bu parçayı içerir (`tests/test_kimlik_db_oneki_iki_dilde_P1.py` kilitler). */
+const TERMAL_UYUMSUZ_IZI_EN = "does not look like a thermal camera image";
 
 /** Bir sonraki karenin ne kadar sonra alınacağı (ms): başlangıçlar arası en az `CANLI_ASGARI_ARALIK_MS`. */
 export function canliSonrakiBekleme(gecenMs: number): number {
@@ -80,7 +82,7 @@ export function canliKareDurumu(endpoint: string, ok: boolean, httpDurum: number
     return { tur: "sonuc", metin: i18n.t("ai.canli.durum.analizEdildi") };
   }
   const detay = aiDetayCumlesi(data?.detail, i18n.t("ai.canli.sunucuYaniti", { httpDurum }));
-  if (endpoint === "/vision/thermal" && httpDurum === 422 && detay.includes(TERMAL_UYUMSUZ_IZI)) {
+  if (endpoint === "/vision/thermal" && httpDurum === 422 && (detay.includes(TERMAL_UYUMSUZ_IZI) || detay.includes(TERMAL_UYUMSUZ_IZI_EN))) {
     return { tur: "red", metin: i18n.t("ai.canli.durum.termalYok", { detay }) };
   }
   return { tur: "red", metin: i18n.t("ai.canli.durum.analizEdilemedi", { detay }) };

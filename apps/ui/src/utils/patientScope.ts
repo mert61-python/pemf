@@ -54,6 +54,15 @@ export const eklemeKimlikIstemiMetni = (): string => i18n.t("hasta.kimlik.ekleme
  * (`/api/operators` 503 ve 428 iletileri bu ÖN EKLE başlar — `OperatorContext` onu tanır).
  */
 export const KIMLIK_DB_ARIZA_ONEKI = "Cihazın kimlik veritabanı okunamıyor";
+/**
+ * I18N-P1 (S-I18N-P1.1): sunucu 503 / 428 gövdesi İSTEK DİLİNDE gelir (`X-PEMF-Dil`) → İngilizce arayüzde ön ek İngilizcedir. İkisi de makine-okur
+ * İŞARETÇİDİR (arıza sınıflaması; kapı kararı sunucuda, FAIL-CLOSED): `tests/test_kimlik_db_oneki_iki_dilde_P1.py` + jest kapısı sunucu / arayüz
+ * kataloglarının TR / EN değerlerinin bu ön eklerle BAŞLADIĞINI doğrular — katalog metni değişirse kapı kırmızı olur.
+ */
+export const KIMLIK_DB_ARIZA_ONEKI_EN = "The device's identity database cannot be read";
+/** Metin (sunucu `detail` ya da arayüz istemi) "kimlik veritabanı okunamıyor" arızasını mı anlatıyor? (iki dilde). */
+export const kimlikDbArizaMi = (metin: string): boolean =>
+  metin.startsWith(KIMLIK_DB_ARIZA_ONEKI) || metin.startsWith(KIMLIK_DB_ARIZA_ONEKI_EN);
 export const kimlikDbOkunamiyorMetni = (): string =>
   i18n.t("hasta.kimlik.dbOkunamiyor");
 

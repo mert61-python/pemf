@@ -32,8 +32,15 @@ export function aiDetayCumlesi(detail: unknown, varsayilan = i18n.t("ai.hata.ana
   if (alt.includes("cannot identify image") || alt.includes("unsupported image") || alt.includes("cannot decode")) {
     return i18n.t("ai.hata.goruntuOkunamadi");
   }
+  // İNGİLİZCE arayüz (I18N-P1 kapanış): backend'in KENDİ iletileri istek dilinde (İngilizce) gelir → "saf-ASCII = teknik" sezgisi onları GİZLERDİ.
+  // Burada sezgi TERS yönden: bilinen çerçeve / Python teknik metni gizlenir, geri kalan (sunucunun dostu iletisi) AYNEN gösterilir.
+  if (i18n.language === "en") return EN_TEKNIK.test(s) ? varsayilan : s;
   // Backend Türkçe/anlaşılır mesaj verdiyse AYNEN göster; saf-ASCII (İngilizce) teknik metinse gizle.
   const turkceİpucu =
     /[çğıİöşüÇĞÖŞÜ]/.test(s) || /büyük|görüntü|hasta|hücre|dosya|geçersiz|bulunamadı|yetersiz/i.test(s);
   return turkceİpucu ? s : varsayilan;
 }
+
+/** İngilizce arayüzde GİZLENECEK teknik metin: HTTP neden cümlesi (çerçeve / vekil) ve Python istisna sızıntıları. */
+const EN_TEKNIK =
+  /^(internal server error|bad gateway|service unavailable|gateway timeout|not found|method not allowed|bad request|unauthorized|forbidden|request timeout)\.?$|traceback|\bexception\b|errno|nonetype|object has no attribute|\b(key|value|type|attribute|index|runtime|name)error\b|stack ?trace/i;
