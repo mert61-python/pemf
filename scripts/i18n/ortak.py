@@ -296,3 +296,79 @@ def anahtar_parcasi(metin: str) -> str:
 
 def tek_satir(s: str) -> str:
     return re.sub(r"\s+", " ", str(s)).strip()
+
+
+#: Düzenli ifade değişmezi bu karakterlerden SONRA başlar (bölme işareti değil). `<` / `>` YOK: TSX kapanış etiketi `</Text>`.
+_REGEX_ONCESI = set("(,=:[!&|?{};+-*%~^\n")
+
+
+def ts_yorumsuz(s: str) -> str:
+    """TS / TSX / JS yorumlarını soyar — DİZGİYİ YORUM SAYMAZ (I18NI-A2.5). Konum korunur: yorum karakterleri boşluk, satır sonları kalır.
+
+    `re.sub(r"/\\*.*?\\*/", …, re.S)` dizgideki `/*`'ı (`input.accept = 'image/*'`) yorum başlangıcı sayıp bir SONRAKİ `*/`'a kadar KODU
+    yutuyordu (ölçüldü: AiHubScreen 1024 kod satırı / 100 çeviri çağrısı K-3 ve K-5'e görünmüyordu). Kurallar: `'…'` / `"…"` aynı satırda
+    kapanmazsa dizgi değildir (JSX metnindeki kesme işareti: `Wi-Fi'de`); şablon `` `…` `` içindeki `${…}` atlanır; `/` önceki anlamlı
+    karakter bir işleç / ayraçsa düzenli ifade değişmezidir (aynı satırda kapanır)."""
+    out = list(s)
+    n = len(s)
+    i = 0
+    while i < n:
+        c = s[i]
+        nx = s[i + 1] if i + 1 < n else ""
+        if c == "/" and nx == "/":
+            j = s.find("\n", i)
+            j = n if j < 0 else j
+            for k in range(i, j):
+                out[k] = " "
+            i = j
+            continue
+        if c == "/" and nx == "*":
+            j = s.find("*/", i + 2)
+            j = n if j < 0 else j + 2
+            for k in range(i, j):
+                if out[k] != "\n":
+                    out[k] = " "
+            i = j
+            continue
+        if c in "\"'":
+            j = i + 1
+            while j < n and s[j] not in (c, "\n"):
+                j += 2 if s[j] == "\\" else 1
+            i = j + 1 if j < n and s[j] == c else i + 1
+            continue
+        if c == "`":
+            j = i + 1
+            while j < n and s[j] != "`":
+                if s[j] == "\\":
+                    j += 2
+                elif s[j] == "$" and j + 1 < n and s[j + 1] == "{":
+                    derinlik, j = 1, j + 2
+                    while j < n and derinlik:
+                        derinlik += {"{": 1, "}": -1}.get(s[j], 0)
+                        j += 1
+                else:
+                    j += 1
+            i = j + 1
+            continue
+        if c == "/":
+            k = i - 1
+            while k >= 0 and s[k] in " \t":
+                k -= 1
+            if k < 0 or s[k] in _REGEX_ONCESI or s[max(0, k - 5) : k + 1] == "return":
+                j, sinif = i + 1, False
+                while j < n and s[j] != "\n":
+                    if s[j] == "\\":
+                        j += 2
+                        continue
+                    if s[j] == "[":
+                        sinif = True
+                    elif s[j] == "]":
+                        sinif = False
+                    elif s[j] == "/" and not sinif:
+                        break
+                    j += 1
+                if j < n and s[j] == "/":
+                    i = j + 1
+                    continue
+        i += 1
+    return "".join(out)

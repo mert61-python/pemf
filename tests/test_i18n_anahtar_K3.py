@@ -46,8 +46,8 @@ def _yorumsuz(metin: str, dosya: str) -> str:
                 if out[i] != "\n":
                     out[i] = " "
         return "".join(out)
-    metin = re.sub(r"/\*.*?\*/", lambda m: re.sub(r"[^\n]", " ", m.group(0)), metin, flags=re.S)
-    return re.sub(r"(?m)(^|[^:\"'])//.*$", r"\1", metin)
+    # I18NI-A2.5: dizgi farkında soyucu (eski düzenli ifade `'image/*'` dizgisinden sonraki KODU bir sonraki `*/`'a dek yutuyordu)
+    return ortak.ts_yorumsuz(metin)
 
 
 def _var(anahtar: str, duz: dict) -> bool:

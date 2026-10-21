@@ -36,8 +36,8 @@ KRITIK_TS = KOK / "apps" / "ui" / "src" / "i18n" / "kritik.ts"
 def yorumsuz_ts(src: str) -> str:
     """Blok yorumlar (çok satırlı) ve satır yorumları soyulur. ⚠️ `//.*` re.S ile koşarsa DOSYA SONUNA kadar yutar (ölçüldü: kapı boş
     metinle karşılaştırıyordu) — iki ayrı geçiş. Dizgi içindeki `//` (URL) için satır yorumu yalnız tırnak / iki nokta sonrası değilse."""
-    src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
-    return re.sub(r"(?m)(^|[^:\"'])//.*$", r"\1", src)
+    # I18NI-A2.5: dizgi farkında (dizgideki `/*` — ör. `'image/*'` — yorum başlangıcı SAYILMAZ; eskisi sonraki kodu yutuyordu)
+    return ortak.ts_yorumsuz(src)
 
 
 def bekleyen_ihlalleri(liste: dict, defter: dict) -> list[str]:

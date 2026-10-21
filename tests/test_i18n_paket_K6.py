@@ -25,7 +25,7 @@ from scripts.i18n import launcher_uret, ortak  # noqa: E402
 
 
 def _yorumsuz_ts(s: str) -> str:
-    return re.sub(r"(?m)//.*$", "", re.sub(r"/\*.*?\*/", "", s, flags=re.S))
+    return ortak.ts_yorumsuz(s)  # I18NI-A2.5: dizgi farkında soyucu
 
 
 def test_K6_sunucu_spec_datas_ve_app_katmani():
