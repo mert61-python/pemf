@@ -48,6 +48,20 @@ fn KARSIT_KANIT_alan_YOKSA_bilinmiyor_doner() {
     );
 }
 
+/// LN L8 (2-F incelemesi A2 açık #4): backend DB durumu süre sınırında okunamazsa (asılı disk — `system_router`
+/// `_saglik_db_durumu_dongu_disi` → `(None, None, "dbYanitsiz…")`) sağlık `"dbReady": null` döner. Bu BİLİNMİYOR'dur, "bozuk"
+/// DEĞİL: launcher güncellemeyi normal onaylar (alan-yok kuralının aynısı) — `false` sayılsaydı geçici disk takılması iyi bir
+/// sürümü geri aldırırdı. Literal `null` kolu bu teste kadar Rust'ta sınanmıyordu.
+#[test]
+fn KARSIT_KANIT_dbReady_NULL_bilinmiyor_doner() {
+    let govde = r#"{"status":"ok","dbReady":null,"dbSebep":"Hasta veritabanı yanıt vermiyor","launcherNonce":"abc"}"#;
+    assert_eq!(
+        backend::db_hazir_govdeden(govde),
+        None,
+        "dbReady=null (DB yanıtsız / bilinmiyor) 'bozuk' sayıldı — geçici disk takılması iyi sürümü geri aldırır"
+    );
+}
+
 #[test]
 fn KARSIT_KANIT_bozuk_govde_bilinmiyor_doner() {
     assert_eq!(backend::db_hazir_govdeden("bu json degil"), None);
