@@ -430,6 +430,35 @@ def test_DIGER_ai_models_HALA_HARIC(ortam):
     assert not sizan, f"ai_models istisnasi GENISLEMIS: {sizan[:5]}"
 
 
+def _sha(yol: Path) -> str:
+    import hashlib
+
+    return hashlib.sha256(yol.read_bytes()).hexdigest()
+
+
+def test_KRITIK_L10_katman_seti_kimligi_IKI_katmanin_shasini_tasir_ve_basarisiz_kosu_DEGISTIRMEZ(ortam):
+    """LN L10 (ortak build kimliği · D4B-İNCELEME §9 #7): başarılı koşu iki katman yerleşip doğrulandıktan SONRA `base-katman-seti.json`'a
+    İKİSİNİN sha'sını yazar — `make_manifest` karma seti (yeni app + eski deps) bununla tanır. Kimlik katmanların İÇİNDE DEĞİL (deps sha'sı
+    belirlenimci kalır). Başarısız koşu (bozuk iç-zip) kimliği DEĞİŞTİRMEZ: eski zip'lerle tutarlı kalır."""
+    import json
+
+    dist, cikti = ortam
+    assert _calistir(dist, cikti=cikti).returncode == 0
+    seti = json.loads((cikti / "base-katman-seti.json").read_text(encoding="utf-8"))
+    assert seti["app"]["sha256"] == _sha(cikti / "base-app.zip"), "kimlik app sha'sini tasimiyor"
+    assert seti["deps"]["sha256"] == _sha(cikti / "base-deps.zip"), "kimlik deps sha'sini tasimiyor"
+    for ad in ("base-app.zip", "base-deps.zip"):
+        with zipfile.ZipFile(cikti / ad) as z:
+            assert not any("katman-seti" in n or "build_id" in n.lower() for n in z.namelist()), (
+                f"kimlik {ad} ICINE yazilmis"
+            )
+    once = (cikti / "base-katman-seti.json").read_bytes()
+    (dist / "_internal" / "base_library.zip").write_bytes(b"NOT-A-ZIP")  # determinist patlama (yandaki testin aparati)
+    assert _calistir(dist, cikti=cikti).returncode != 0
+    assert (cikti / "base-katman-seti.json").read_bytes() == once, "basarisiz kosu kimligi degistirdi"
+    assert not (cikti / "base-katman-seti.json.tmp").exists()
+
+
 def test_KRITIK_yarim_kalan_yazim_ONCEKI_zipi_BOZMAZ(ortam):
     """DENETİM 2026-08-17 (bulgu 15'in yan bulgusu): yarım kalan yazım ÖNCEKİ geçerli zip'i bozmamalı.
 
@@ -474,9 +503,12 @@ def test_KRITIK_yarim_kalan_yazim_ONCEKI_zipi_BOZMAZ(ortam):
             assert z.testzip() is None, f"{ad} bozuk"
 
     # Başarısız koşudan HİÇBİR artık kalmamalı (`finally` temizliği).
+    # LN L10: `base-katman-seti.json` İLK (başarılı) koşunun meşru çıktısıdır (iki katmanın ortak kimliği) — artık değil; başarısız
+    # koşu onu da DEĞİŞTİRMEDİ (eski zip'lerle tutarlı) — `test_KRITIK_L10_katman_seti_…` ayrıca ölçer.
     assert sorted(x.name for x in cikti.iterdir()) == [
         "base-app.zip",
         "base-deps.zip",
+        "base-katman-seti.json",
         "base.zip",
     ], f"cikti dizininde artik dosya kaldi: {sorted(x.name for x in cikti.iterdir())}"
 

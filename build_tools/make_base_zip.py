@@ -60,6 +60,9 @@ OUTDIR = os.environ.get('PEMF_PKG_OUT') or os.path.join(GUII, 'pemf-app-packages
 os.makedirs(OUTDIR, exist_ok=True)
 OUT_APP = os.path.join(OUTDIR, 'base-app.zip')
 OUT_DEPS = os.path.join(OUTDIR, 'base-deps.zip')
+# LN L10 (ortak build kimligi): bu kosunun IKI katmaninin sha'lari — make_manifest muhurlerken ikisinin AYNI kosudan geldigini
+# bununla olcer. Katmanlarin ICINE yazilmaz: deps sha'si (paket belirlenimciligi) her yayinda degisir, kliniklere 1,4 GB indirtirdi.
+OUT_SET = os.path.join(OUTDIR, 'base-katman-seti.json')
 OUT_MONO = os.path.join(OUTDIR, 'base.zip')
 SCRIPTS = os.path.join(GUII, 'scripts')
 EXCLUDE = 'pemf_backend/_internal/ai_models/'  # kucuk-harf karsilastirma
@@ -369,6 +372,29 @@ def _monolith_esit(mono_yol, app_yol, deps_yol):
     return False
 
 
+def _katman_seti_yaz(app_sha, deps_sha):
+    """LN L10: iki katman yayin dizinine YERLESIP sha'lari dogrulandiktan sonra set kimligini yazar (atomik). Basarisizsa False →
+    VALIDATION FAIL; diskteki eski kimlik yeni zip'lerle tutmayacagi icin make_manifest bu dizini MUHURLEMEZ (fail-closed)."""
+    kayit = {
+        'aciklama': 'make_base_zip ayni kosuda uretti — make_manifest iki katmanin AYNI build oldugunu bununla olcer',
+        'app': {'dosya': os.path.basename(OUT_APP), 'sha256': app_sha},
+        'deps': {'dosya': os.path.basename(OUT_DEPS), 'sha256': deps_sha},
+    }
+    gecici = OUT_SET + '.tmp'
+    try:
+        with open(gecici, 'w', encoding='utf-8') as f:
+            json.dump(kayit, f, indent=2)
+        os.replace(gecici, OUT_SET)
+        return True
+    except OSError as e:
+        print(f'  !! katman seti kimligi yazilamadi: {e}', flush=True)
+        try:
+            os.remove(gecici)
+        except OSError:
+            pass
+        return False
+
+
 def _yerlestir(ciftler):
     """D4.31: DOGRULANMIS .tmp'leri yayin dizinine koyar (ayni dizin → atomik `os.replace`) — HEPSI YA DA HICBIRI.
 
@@ -534,6 +560,12 @@ try:
             checks[f'yayin dizinine yerlesti: {os.path.basename(o)} (sha == dogrulanan)'] = (
                 os.path.isfile(o) and _sha256(o) == s
             )
+        # LN L10: set kimligi YALNIZ iki katman da yerlesip dogrulandiysa (geri almada eski kimlik eski zip'lerle tutarli kalir).
+        checks['katman seti kimligi yazildi (base-katman-seti.json)'] = (
+            yerlesti
+            and all(os.path.isfile(o) and _sha256(o) == s for _g, o, s in ciftler)
+            and _katman_seti_yaz(app_sha, deps_sha)
+        )
         checks['base.zip == app+deps (icerik birebir)'] = _monolith_esit(
             OUT_MONO if os.path.exists(OUT_MONO) else None, OUT_APP, OUT_DEPS
         )

@@ -218,6 +218,8 @@ offline dağıtım/
 pemf-app-packages/*.zip
 pemf-app-packages/*.bin
 pemf-app-packages/*.exe
+# LN L10: iki katmanin ortak kimligi (make_base_zip yazar, make_manifest okur) — zip'lerle birlikte YEREL artefakt, yayina / depoya girmez.
+pemf-app-packages/base-katman-seti.json
 
 # Android release imzalama sirlari (2026-08-06) — ASLA depoya girmemeli
 keystore.properties

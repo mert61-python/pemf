@@ -129,6 +129,42 @@ def deps_katmani_eksikleri(path: Path) -> list[str]:
     return [] if n else ["BOS zip (girdi yok)"]
 
 
+# ── LN L10 (ortak build kimliği · D4B-İNCELEME §9 #7): İKİ KATMAN AYNI KOŞUDAN MI ─────────────────────────────────────────
+# `make_base_zip` iki katmanı yerleştirip doğruladıktan sonra `base-katman-seti.json`'a ikisinin sha'sını yazar (katmanların İÇİNE
+# değil — deps sha'sı sabit kalmalı). Bu betik iki katmanın AYNI build'den geldiğini ölçemiyordu: elle kurulmuş karma dizin
+# (yeni app + eski deps) çıkış 0 ile mühürlenirdi — app yeni koda, deps eski kütüphanelere bakar. Yalnız win-x64 (kaydı üreten
+# `make_base_zip` Windows'ta koşar); yerelde tek katman varsa taşıma kuralı geçerlidir (karma taşıma zaten engelli).
+KATMAN_SETI = "base-katman-seti.json"
+
+
+def katman_seti_tutarsizligi(dizin: Path) -> str | None:
+    """Yereldeki win-x64 app + deps AYNI make_base_zip koşusundan mı? `None` = tutarlı / denetlenecek çift yok / kimlik YOK
+    (karar S-LN.6: bu değişiklikten önceki çıktı dizini — yüksek sesli UYARI, RED değil; `make_base_zip` artık her başarılı
+    koşuda yazar, karışık bir kopyada kimlik tutmaz → RED). Aksi: nedeni."""
+    app, deps = dizin / "base-app.zip", dizin / "base-deps.zip"
+    if not (app.exists() and deps.exists()):
+        return None
+    try:
+        kayit = json.loads((dizin / KATMAN_SETI).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        print(
+            f"[UYARI] {KATMAN_SETI} YOK — iki katmanin ayni `make_base_zip` kosusundan geldigi DENETLENEMEDI "
+            "(eski cikti dizini?). Emin degilseniz `python build_tools/make_base_zip.py` ile yeniden uretin.",
+            file=sys.stderr,
+        )
+        return None
+    except (OSError, ValueError) as e:
+        return f"{KATMAN_SETI} okunamadi ({e.__class__.__name__})"
+    if not isinstance(kayit, dict):
+        return f"{KATMAN_SETI} bicimi bozuk"
+    beklenen = {k: (kayit.get(k) or {}).get("sha256") for k in ("app", "deps")}
+    gercek = {"app": sha256(app), "deps": sha256(deps)}
+    farkli = [k for k in ("app", "deps") if beklenen[k] != gercek[k]]
+    if farkli:
+        return f"KARMA set: {', '.join(farkli)} katmani bu dizindeki kimlikle (son make_base_zip kosusu) TUTMUYOR"
+    return None
+
+
 def sha256(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
@@ -226,6 +262,17 @@ def main() -> int:
             "  Cozum: `python build_tools/make_base_zip.py` ile paketleri YENIDEN uretin (VALIDATION: PASS gorun).\n"
             "  Acil geri cekme (--rollout 0 / --launcher-rollout 0) icin yeni paket GEREKMEZ: base-app.zip ve\n"
             "  base-deps.zip'i bu klasorden kaldirin, katmanlar ONCEKI manifestten aynen tasinir.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # LN L10: iki katman AYNI koşudan değilse HİÇBİR ŞEY yazılmaz (sha mühürlenmeden ÖNCE).
+    _karma = katman_seti_tutarsizligi(args.dir)
+    if _karma:
+        print(f"[HATA] {_karma} — manifest YAZILMADI.", file=sys.stderr)
+        print(
+            "  Cozum: `python build_tools/make_base_zip.py` ile IKI katmani birlikte yeniden uretin (VALIDATION: PASS).\n"
+            "  Acil geri cekme icin paket GEREKMEZ: base-app.zip ve base-deps.zip'i bu klasorden kaldirin.",
             file=sys.stderr,
         )
         return 1
