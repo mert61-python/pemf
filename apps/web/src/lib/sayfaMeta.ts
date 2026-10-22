@@ -15,6 +15,8 @@ export type DilBaglantisi = { hreflang: 'tr' | 'en' | 'x-default'; href: string 
 export type SayfaMetasi = {
   baslik: string
   aciklama: string
+  /** Paylaşım önizlemesi (og / twitter) açıklaması — TR = `index.html`'deki statik metin (JS öncesi = sonrası; YLI-A1.2). */
+  ogAciklama: string
   ogLocale: string
   ogLocaleDiger: string
   adres: string
@@ -96,6 +98,7 @@ export function sayfaMetasiHesapla(
   return {
     baslik: sayfaBasligi(y, t, yasalBaslik),
     aciklama: t('ortak.sayfa.aciklama'),
+    ogAciklama: t('ortak.sayfa.ogAciklama'),
     ogLocale: OG_LOCALE[dil],
     ogLocaleDiger: OG_LOCALE[dil === 'tr' ? 'en' : 'tr'],
     adres: bilinen ? dilAdresi(y, dil) : `${SITE_KOKU}/`,
@@ -137,12 +140,12 @@ export function metaUygula(belge: MetaBelgesi, m: SayfaMetasi): void {
   belge.title = m.baslik
   etiket(belge, 'meta', ['name', 'description'], ['content', m.aciklama])
   etiket(belge, 'meta', ['property', 'og:title'], ['content', m.baslik])
-  etiket(belge, 'meta', ['property', 'og:description'], ['content', m.aciklama])
+  etiket(belge, 'meta', ['property', 'og:description'], ['content', m.ogAciklama])
   etiket(belge, 'meta', ['property', 'og:locale'], ['content', m.ogLocale])
   etiket(belge, 'meta', ['property', 'og:locale:alternate'], ['content', m.ogLocaleDiger])
   etiket(belge, 'meta', ['property', 'og:url'], ['content', m.adres])
   etiket(belge, 'meta', ['name', 'twitter:title'], ['content', m.baslik])
-  etiket(belge, 'meta', ['name', 'twitter:description'], ['content', m.aciklama])
+  etiket(belge, 'meta', ['name', 'twitter:description'], ['content', m.ogAciklama])
   etiket(belge, 'link', ['rel', 'canonical'], ['href', m.adres])
   const eski = belge.head.querySelectorAll('link[rel="alternate"][hreflang]')
   for (let i = eski.length - 1; i >= 0; i--) eski[i].remove()
