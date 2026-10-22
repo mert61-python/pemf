@@ -16,16 +16,40 @@
 #       -Notes 'Faz X duzeltmeleri'
 #   # Mobil (APK) yeni surum:
 #   .\scripts\publish_release.ps1 -Branch mobil -Version 1.0.4 -AssetPath 'C:\Users\merta\Desktop\PEMF-Vet.apk' -Notes '...'
+#   # Iki dilli not (YH D1): -Notes Turkce (eski istemciler bunu okur), -NotesEn Ingilizce. Metinler docs/surum_notlari.json'da:
+#   #   -Notes (python scripts\surum_notlari.py goster mobile 2.3.35 tr) -NotesEn (python scripts\surum_notlari.py goster mobile 2.3.35 en)
 # =============================================================================
 param(
   [Parameter(Mandatory = $true)][ValidateSet('exe', 'mobil')][string]$Branch,
   [Parameter(Mandatory = $true)][string]$Version,       # or. 1.5.0
   [Parameter(Mandatory = $true)][string]$AssetPath,     # installer .exe / .apk yolu
   [string]$Notes = "",
+  [string]$NotesEn = "",                                # YH D1: Ingilizce surum notu (manifest `notes_en`)
   [switch]$Mandatory,
   [string]$Repo = "mert61-python/pemf-update"
 )
 $ErrorActionPreference = 'Stop'
+
+# --- YH D1: manifest ve release govdesi SAF fonksiyonlar (ag / dosya YOK). Birim testi bunlari AST'den cikarip sahte girdiyle
+#     cagirir (tests/test_YH_D1_surum_notlari_iki_dil.py) - betigin kendisi testte KOSULMAZ. `notes` Turkce kalir (eski APK /
+#     backend onu okur); `notes_en` YALNIZ doluysa eklenir (eski okuyucular icin bicim aynen korunur).
+function New-YayinManifesti {
+  param([string]$Branch, [string]$Version, [string]$Notes, [string]$NotesEn, [string]$Url, [string]$Sha, [bool]$Mandatory, $PrevStable)
+  $m = [ordered]@{ version = $Version; notes = $Notes }
+  if ($NotesEn) { $m['notes_en'] = $NotesEn }
+  if ($Branch -eq 'exe') { $m['installerUrl'] = $Url } else { $m['apkUrl'] = $Url }
+  $m['sha256'] = $Sha
+  $m['mandatory'] = $Mandatory
+  if ($PrevStable) { $m['previousStable'] = $PrevStable }
+  return $m
+}
+function New-YayinGovdesi {
+  param([string]$Notes, [string]$NotesEn)
+  if ($NotesEn) { return "$Notes`n`n---`nEnglish:`n$NotesEn" }
+  return $Notes
+}
+
+if ($NotesEn -and -not $Notes) { throw "-NotesEn tek basina verilemez: once Turkce not (-Notes) gerekli (eski istemciler yalniz notes'u okur)." }
 if (-not (Test-Path $AssetPath)) { throw "Asset bulunamadi: $AssetPath" }
 
 # --- 0) Y30 / D4.10: YAYIN ONCESI ZORUNLU TAM SUIT (sahip karari) ---
@@ -50,7 +74,7 @@ $rel = $null
 try { $rel = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/tags/$tag" -Headers $h } catch {}
 if ($rel) { Write-Host "Release zaten var ($tag) - asset guncellenecek." }
 else {
-  $body = @{ tag_name = $tag; target_commitish = $Branch; name = "$Branch $Version"; body = $Notes } | ConvertTo-Json
+  $body = @{ tag_name = $tag; target_commitish = $Branch; name = "$Branch $Version"; body = (New-YayinGovdesi -Notes $Notes -NotesEn $NotesEn) } | ConvertTo-Json
   $rel = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases" -Headers $h -Method Post -Body $body -ContentType 'application/json'
   Write-Host "Release olusturuldu: $tag (id $($rel.id))"
 }
@@ -86,9 +110,8 @@ if ($existing -and $existing.content) {
     }
   } catch { Write-Host "Onceki manifest okunamadi (previousStable atlandi): $_" }
 }
-if ($Branch -eq 'exe') { $manifest = @{ version = $Version; notes = $Notes; installerUrl = $dl; sha256 = $sha; mandatory = [bool]$Mandatory } }
-else { $manifest = @{ version = $Version; notes = $Notes; apkUrl = $dl; sha256 = $sha; mandatory = [bool]$Mandatory } }
-if ($prevStable) { $manifest['previousStable'] = $prevStable; Write-Host "Rollback hedefi (previousStable): $($old.version)" }
+$manifest = New-YayinManifesti -Branch $Branch -Version $Version -Notes $Notes -NotesEn $NotesEn -Url $dl -Sha $sha -Mandatory ([bool]$Mandatory) -PrevStable $prevStable
+if ($prevStable) { Write-Host "Rollback hedefi (previousStable): $($old.version)" }
 $content = ($manifest | ConvertTo-Json -Compress)
 $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($content))
 $pb = @{ message = "release $tag"; content = $b64; branch = $Branch }

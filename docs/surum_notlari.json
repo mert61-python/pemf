@@ -1,0 +1,33 @@
+{
+  "_aciklama": "Kullanıcıya görünen sürüm notları — TEK KAYNAK, iki dil (YH D1). `notes` Türkçe (eski istemciler yalnız bunu okur), `notes_en` İngilizce. Telefon: `python scripts/surum_notlari.py mobil <manifest.json>` manifest'in `mobile.android` bloğuna (APK yüklendikten ve blok elle güncellendikten SONRA) iki notu yazar. EXE / mobil yayın betiği: `publish_release.ps1 -Notes (… goster <kanal> <sürüm> tr) -NotesEn (… goster <kanal> <sürüm> en)`. Kapı: tests/test_YH_D1_surum_notlari_iki_dil.py (versions.json'daki her sürümün iki dilde notu olmalı; tıbbi iddia yok). Yayındaki sürümlerin (app 1.9.50 · launcher 1.9.51 · mobile 2.3.34) notları da durur: yayındaki manifest'in 2.3.34 notu ASCII yazılmıştı, buradaki Türkçe karakterli eşidir (yayındaki manifest DEĞİŞMEDİ).",
+  "app": {
+    "1.9.51": {
+      "notes": "İngilizce dil seçeneği (Ayarlar › Dil / Language); seans raporunda \"Tedavi\" yerine \"Seans\"; sürüş biçimi (iki yönlü / tek yönlü) Manuel sekmesinden seçilir. Kontrolcü yazılımı da güncellenmelidir — ayrıntı değişiklik kaydında.",
+      "notes_en": "English language option (Settings › Language / Dil); session report headings now consistently say \"Session\"; drive mode (bipolar / unipolar) is selected from the Manual tab. The controller firmware must be updated as well — see the change log for details."
+    },
+    "1.9.50": {
+      "notes": "Cihaz bağlı değilken bobin başlatma reddediliyor; kablo çıkınca bobinler hemen çevrimdışı görünüyor, geri takınca kendiliğinden hazıra dönüyor; tekrarlanan uyarı seli tek ve ne yapılacağını söyleyen bir mesaja indi. Kontrolcü yazılımı güncel olmalı.",
+      "notes_en": "Starting a coil is refused while no device is connected; coils go offline as soon as the cable is pulled and come back by themselves when it is plugged in again; the flood of repeated warnings is replaced by a single message that says what to do. The controller firmware must be up to date."
+    }
+  },
+  "launcher": {
+    "1.9.52": {
+      "notes": "Açılışta pencere donması giderildi; boşta kapanış \"önceki oturumda ACİL DURDUR\" uyarısı bırakmıyor; \"Beni hatırla\" kaydı geçici bir hatada silinmiyor; kurulum ve kaldırma pencereleri Türkçe / İngilizce.",
+      "notes_en": "Fixes the window freezing at start-up; closing while idle no longer leaves a \"previous session emergency stop\" warning; \"Remember me\" is no longer lost after a temporary error; setup and uninstall windows in Turkish or English."
+    },
+    "1.9.51": {
+      "notes": "Uygulama paketi yayındayken çıkan \"Bu platform için uygulama paketi henüz yayınlanmadı\" hatası giderildi.",
+      "notes_en": "Fixes the \"no app package has been published for this platform yet\" error that appeared although a package was available."
+    }
+  },
+  "mobile": {
+    "2.3.35": {
+      "notes": "İngilizce dil seçeneği eklendi (Ayarlar › Dil / Language). Android güncelleme bildirimi Türkçe karakterlerle doğru yazılıyor.",
+      "notes_en": "Adds an English language option (Settings › Language / Dil). The Android update notification text is corrected."
+    },
+    "2.3.34": {
+      "notes": "Bobin 6-7 artık kabloyla (STM32) sürülüyor; kontrol ekranında tek liste: Bobinler 1-7. Bobin 1-5'te akım ölçümü görüntüleniyor. Sensörü olmayan ölçüm artık kısa çizgi (-) gösteriyor, 0.00 değil. Cihazdaki kontrolcü yazılımı da güncellenmiş olmalı.",
+      "notes_en": "Coils 6-7 are now driven over the cable (STM32); the control screen shows a single list: Coils 1-7. Current is measured and shown for coils 1-5. A reading without a sensor now shows a short dash (-) instead of 0.00. The controller firmware on the device must be updated as well."
+    }
+  }
+}
