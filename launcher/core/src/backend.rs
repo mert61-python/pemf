@@ -725,12 +725,13 @@ const HIZLI_HATA_ESIGI: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DurdurDenemesi {
-    /// Sözleşme yanıtı, `confirmed: true`.
+    /// Sözleşme yanıtı (PEMF imzası — `durdur_yanitini_yorumla`), `confirmed: true` + `status: success`.
     Dogrulandi,
-    /// Sözleşme yanıtı, `confirmed: false` ("STM durdu ama MQTT yayınlanamadı") — bir kez daha denenir.
+    /// Sözleşme yanıtı ama teyitsiz: `confirmed: false` ("STM durdu ama MQTT yayınlanamadı"), çelişkili ya da eski imza
+    /// (`confirmed` yok) — bir kez daha denenir.
     Dogrulanmadi,
-    /// HTTP hata durumu (eski backend: 404 / 405; reddedilen istek: 403 / 415 / 400) ya da 200 ama sözleşme yanıtı değil
-    /// (ör. statik sayfa) — uç bu backend'de YOK sayılır.
+    /// HTTP hata durumu (eski backend: 404 / 405; reddedilen istek: 403 / 415 / 400) ya da 200 ama PEMF imzası yok
+    /// (ör. statik sayfa, yabancı servis) — uç bu backend'de YOK sayılır.
     UcYok,
     /// Yanıt gelmedi (bağlantı reddi / zaman aşımı).
     Yanitsiz,
@@ -744,18 +745,34 @@ fn durdur_iste(url: &str, onay_govdesi: bool) -> DurdurDenemesi {
         istek.call()
     };
     match sonuc {
-        Ok(r) => match r
-            .into_string()
-            .ok()
-            .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
-            .and_then(|v| v.get("confirmed").and_then(|c| c.as_bool()))
-        {
-            Some(true) => DurdurDenemesi::Dogrulandi,
-            Some(false) => DurdurDenemesi::Dogrulanmadi,
-            None => DurdurDenemesi::UcYok,
-        },
+        Ok(r) => r.into_string().map(|b| durdur_yanitini_yorumla(&b)).unwrap_or(DurdurDenemesi::UcYok),
         Err(ureq::Error::Status(..)) => DurdurDenemesi::UcYok,
         Err(_) => DurdurDenemesi::Yanitsiz,
+    }
+}
+
+/// LN L4 · O-13.1 ikizi (DALGA-1-KAPANIS §5 #3): durdurma yanıtının PEMF imzası — `scripts/pemf_teardown.ps1` ile AYNI: `status` ∈
+/// {success, partial, error} + `stmStopped` + `mqttResults` (`_emergency_stop_all` her yanıtta basar; kapanış ucu da aynı sözlüğü döner).
+/// Eskiden yalnız `confirmed` okunuyordu → aynı porttaki yabancı bir servis `{"confirmed":true}` dönerse "doğrulandı" sayılır, ACİL DURDUR
+/// yedeği ATLANIRDI. İmza tutmazsa `UcYok` → çağıran ACİL DURDUR ucuna düşer (gönderim yalnız ARTAR — Ö.4-Y8).
+/// Doğrulandı YALNIZ `confirmed == true` VE `status == "success"`; çelişki (ör. `confirmed:true` + `partial`) doğrulanmadı → bir kez daha.
+/// ESKİ İMZA (geriye uyum — 2026-06-27 öncesi backend): `confirmed` alanı YOK, `status` koşulsuz "success" idi → imza tutar (PEMF yanıtı)
+/// ama teyit SAYILMAZ (`Dogrulanmadi` — bir kez daha denenir; eskiden `UcYok` sayılıp ACİL DURDUR'da ikinci deneme yapılmıyordu).
+fn durdur_yanitini_yorumla(govde: &str) -> DurdurDenemesi {
+    let Ok(serde_json::Value::Object(v)) = serde_json::from_str::<serde_json::Value>(govde) else {
+        return DurdurDenemesi::UcYok;
+    };
+    let status = v.get("status").and_then(|s| s.as_str());
+    let imza = matches!(status, Some("success" | "partial" | "error"))
+        && matches!(v.get("stmStopped"), Some(serde_json::Value::Bool(_)))
+        && matches!(v.get("mqttResults"), Some(serde_json::Value::Array(_)));
+    if !imza {
+        return DurdurDenemesi::UcYok;
+    }
+    if v.get("confirmed") == Some(&serde_json::Value::Bool(true)) && status == Some("success") {
+        DurdurDenemesi::Dogrulandi
+    } else {
+        DurdurDenemesi::Dogrulanmadi
     }
 }
 
@@ -1657,12 +1674,64 @@ mod tests {
         v
     }
 
+    /// GERÇEK teyitli durdurma yanıtının şekli (`apps/backend/servers/api_server.py::_emergency_stop_all`; kapanış ucu aynı sözlüğü döner).
+    const GERCEK_TEYITLI: &str =
+        r#"{"status":"success","confirmed":true,"stmStopped":true,"mqttResults":[{"coilId":6,"mqtt":"success"}],"reason":"manual"}"#;
+
+    /// LN L4 · O-13.1 ikizi: durdurma yanıtı PEMF imzasıyla (status ∈ success/partial/error + stmStopped + mqttResults) tanınır — yeni
+    /// imza (`confirmed` var) ve eski imza (2026-06-27 öncesi: `confirmed` yok, status koşulsuz success) DOĞRU yorumlanır.
+    #[test]
+    fn KRITIK_L4_durdurma_yaniti_PEMF_IMZASI_yeni_ve_eski() {
+        use DurdurDenemesi::*;
+        for (govde, beklenen) in [
+            (GERCEK_TEYITLI, Dogrulandi),
+            (r#"{"status":"partial","confirmed":false,"stmStopped":true,"mqttResults":[{"mqtt":"error"}]}"#, Dogrulanmadi),
+            (r#"{"status":"error","confirmed":false,"stmStopped":false,"mqttResults":[]}"#, Dogrulanmadi),
+            // Çelişki: teyit var ama durum başarı değil → teyit SAYILMAZ (bir kez daha denenir).
+            (r#"{"status":"partial","confirmed":true,"stmStopped":true,"mqttResults":[]}"#, Dogrulanmadi),
+            // ESKİ İMZA: `confirmed` yok → PEMF yanıtı ama teyitsiz.
+            (r#"{"status":"success","stmStopped":true,"mqttResults":[{"mqtt":"success"}],"reason":"manual"}"#, Dogrulanmadi),
+            // Yabancı servis / taklit: imza tutmaz → uç YOK (ACİL DURDUR yedeğine düşülür).
+            (r#"{"confirmed":true}"#, UcYok),
+            (r#"{"status":"success","confirmed":true}"#, UcYok),
+            (r#"{"status":"ok","confirmed":true,"stmStopped":true,"mqttResults":[]}"#, UcYok),
+            (r#"{"status":"success","confirmed":true,"stmStopped":"evet","mqttResults":[]}"#, UcYok),
+            (r#"{"status":"success","confirmed":true,"stmStopped":true,"mqttResults":{}}"#, UcYok),
+            (r#"[{"status":"success"}]"#, UcYok),
+            ("<!doctype html>", UcYok),
+        ] {
+            assert_eq!(durdur_yanitini_yorumla(govde), beklenen, "{govde}");
+        }
+    }
+
+    /// LN L4 · TIBBİ GÜVENLİK: aynı portta yabancı bir servis kapanış ucuna `{"confirmed":true}` dönerse ACİL DURDUR yedeği ATLANMAZ.
+    #[test]
+    fn KRITIK_L4_yabanci_confirmed_true_yaniti_ACIL_DURDUR_yedegini_ATLATMAZ() {
+        let (port, rx) = sahte_backend(vec![Some((200, r#"{"confirmed":true}"#)), Some((200, GERCEK_TEYITLI))]);
+        safe_stop_coils(port);
+        let v = istekler(&rx);
+        assert_eq!(v.len(), 2, "istekler {v:?}");
+        assert!(v[1].starts_with("POST /api/hardware/emergency_stop "), "ACİL DURDUR'a DÜŞMEDİ: {}", v[1]);
+    }
+
+    /// LN L4 · geriye uyum: eski imzalı backend (kapanış ucu yok → 405; ACİL DURDUR yanıtında `confirmed` yok) — ACİL DURDUR teyitsiz
+    /// sayılır ve BİR KEZ daha denenir (ESP STOP'u ikinci denemede geçebilir); fazlası yok (donma katlanmaz).
+    #[test]
+    fn KRITIK_L4_eski_imzali_backend_ACIL_DURDUR_bir_kez_daha_denenir() {
+        let eski = r#"{"status":"success","stmStopped":true,"mqttResults":[{"coilId":6,"mqtt":"success"}],"reason":"manual"}"#;
+        let (port, rx) = sahte_backend(vec![Some((405, r#"{"detail":"Method Not Allowed"}"#)), Some((200, eski)), Some((200, eski))]);
+        safe_stop_coils(port);
+        let v = istekler(&rx);
+        assert_eq!(v.len(), 3, "istekler {v:?}");
+        assert!(v[1].starts_with("POST /api/hardware/emergency_stop ") && v[2].starts_with("POST /api/hardware/emergency_stop "), "{v:?}");
+    }
+
     /// 2026-10-18 (sahip: "uygulama ilk açılışta niye bu uyarıyı veriyor … sürekli çıkmasın"): kapanış durdurması operatörün
     /// ACİL DURDUR ucunu DEĞİL kapanış ucunu, bilinçli JSON onayıyla çağırır; uç doğruladıysa ACİL DURDUR ucu ÇAĞRILMAZ (mandal
     /// diske yazılmaz → sonraki açılışta "önceki oturumda ACİL DURDUR" bandı çıkmaz).
     #[test]
     fn KRITIK_kapanis_durdurmasi_KAPANIS_ucunu_onayla_cagirir_ACIL_DURDUR_ucunu_cagirmaz() {
-        let (port, rx) = sahte_backend(vec![Some((200, r#"{"status":"success","confirmed":true,"mandalKalici":false}"#))]);
+        let (port, rx) = sahte_backend(vec![Some((200, r#"{"status":"success","confirmed":true,"stmStopped":true,"mqttResults":[],"mandalKalici":false}"#))]);
         safe_stop_coils(port);
         let v = istekler(&rx);
         assert_eq!(v.len(), 1, "fazladan istek: {v:?}");
@@ -1677,7 +1746,7 @@ mod tests {
     #[test]
     fn KRITIK_eski_backend_ya_da_sozlesme_disi_yanitta_ACIL_DURDUR_ucuna_duser() {
         for ilk in [(405u16, r#"{"detail":"Method Not Allowed"}"#), (200u16, "<!doctype html><html></html>")] {
-            let (port, rx) = sahte_backend(vec![Some(ilk), Some((200, r#"{"status":"success","confirmed":true}"#))]);
+            let (port, rx) = sahte_backend(vec![Some(ilk), Some((200, GERCEK_TEYITLI))]);
             safe_stop_coils(port);
             let v = istekler(&rx);
             assert_eq!(v.len(), 2, "{ilk:?}: istekler {v:?}");
@@ -1689,7 +1758,7 @@ mod tests {
     /// TIBBİ GÜVENLİK: bağlantı HIZLA koparsa (yanıtsız) ACİL DURDUR ucu yine denenir.
     #[test]
     fn KRITIK_kapanis_ucunda_hizli_baglanti_hatasi_ACIL_DURDUR_ucuna_duser() {
-        let (port, rx) = sahte_backend(vec![None, Some((200, r#"{"status":"success","confirmed":true}"#))]);
+        let (port, rx) = sahte_backend(vec![None, Some((200, GERCEK_TEYITLI))]);
         safe_stop_coils(port);
         let v = istekler(&rx);
         assert_eq!(v.len(), 2, "istekler {v:?}");
@@ -1716,7 +1785,7 @@ mod tests {
                 // GERÇEK yanıt şekli (apps/backend/servers/api_server.py `emergency_stop`): `confirmed` alanı
                 // "her iki transport da doğrulandı" demektir. safe_stop_coils bunu OKUR ve
                 // doğrulanmadıysa bir kez daha dener → burada true dönerek tek denemede biter.
-                let body = br#"{"status":"success","confirmed":true,"stmStopped":true}"#;
+                let body = GERCEK_TEYITLI.as_bytes();
                 let _ = write!(
                     s,
                     "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -1765,9 +1834,9 @@ mod tests {
                 let n = hits2.fetch_add(1, Ordering::SeqCst);
                 // 1. istek: partial/confirmed=false → yeniden denenmeli. 2. istek: confirmed=true.
                 let body: &[u8] = if n == 0 {
-                    br#"{"status":"partial","confirmed":false}"#
+                    br#"{"status":"partial","confirmed":false,"stmStopped":true,"mqttResults":[{"coilId":6,"mqtt":"error"}]}"#
                 } else {
-                    br#"{"status":"success","confirmed":true}"#
+                    GERCEK_TEYITLI.as_bytes()
                 };
                 let _ = write!(
                     s,
