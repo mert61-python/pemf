@@ -272,6 +272,21 @@ def npm_envanteri() -> list[tuple[str, str, str]]:
 
 #: SPDX ifadesi belirteçleri: parantez ya da boşluksuz kelime (`AND` / `OR` / `WITH` / lisans kimliği).
 _SPDX_BELIRTEC = re.compile(r"\(|\)|[^\s()]+")
+#: YLI-A2.1: bağlaçlar SPDX'teki gibi BÜYÜK harfle eşlenir — küçük `or` / `and` serbest metindir (`GPL-3.0 or later` bir seçim DEĞİL,
+#: "ya da sonraki sürüm"dür) → ifade ayrıştırılamaz → metnin tamamı (güvenli taraf).
+_SPDX_BAGLACLARI = ("AND", "OR", "WITH")
+#: YLI-A2.1: lisans KİMLİĞİ olmayan sözcükler — `OR` seçeneği olarak "izin veren seçenek" SAYILMAZ (`GPL-3.0 OR later`;
+#: `AGPL-3.0 OR Commercial`: ticari lisans satın alınmadıkça seçilebilen tek lisans AGPL'dir) → ifade ayrıştırılamaz → güvenli taraf.
+_KIMLIK_DISI = re.compile(
+    r"LATER|ONLY|COMMERCIAL|PROPRIETARY|UNLICENSED|SEE|CUSTOM|OTHER|NONE|(?:LICENSE|DOCUMENT)REF-\S*", re.I
+)
+
+
+def lisans_belirsiz_mu(lisans: str) -> bool:
+    """YLI-A2.1: kilitteki lisans dizesinden kopyleft kararı VERİLEMEZ mi — boş / "doğrulanmadı" / `UNLICENSED` (npm: kullanım izni
+    verilmemiş) / `SEE LICENSE IN <dosya>` (lisans ifadede değil dosyada). Kapı bunları [SAHİBE] el ile bakılacak liste olarak ister."""
+    u = (lisans or "").strip()
+    return not u or "doğrulanmadı" in u or u.upper() == "UNLICENSED" or u.upper().startswith("SEE LICENSE IN")
 
 
 def spdx_kopyleft_mu(ifade: str) -> bool:
@@ -282,7 +297,7 @@ def spdx_kopyleft_mu(ifade: str) -> bool:
     konum = 0
 
     def bak() -> str | None:
-        return belirtecler[konum].upper() if konum < len(belirtecler) else None
+        return belirtecler[konum] if konum < len(belirtecler) else None
 
     def al() -> str:
         nonlocal konum
@@ -297,9 +312,12 @@ def spdx_kopyleft_mu(ifade: str) -> bool:
                 raise ValueError("kapanmayan parantez")
             al()
             return sonuc
-        if bak() in (None, ")", "AND", "OR", "WITH"):
+        if bak() in (None, ")", *_SPDX_BAGLACLARI):
             raise ValueError("lisans kimliği bekleniyordu")
-        sonuc = kopyleft_mu(al())
+        kimlik = al()
+        if _KIMLIK_DISI.fullmatch(kimlik) or kimlik.upper() in _SPDX_BAGLACLARI:
+            raise ValueError("lisans kimliği değil")
+        sonuc = kopyleft_mu(kimlik)
         if bak() == "WITH":
             al()
             al()

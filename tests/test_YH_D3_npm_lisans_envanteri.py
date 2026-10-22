@@ -83,8 +83,9 @@ def test_KRITIK_npm_envanterinde_KOPYLEFT_yok_ve_lisanssiz_girdi_yok():
     assert l.npm_kopyleft() == [], (
         f"npm'de kopyleft bileşen (kaynak açma yükümlülüğü) — bilinçli karar gerekir [SAHİBE]: {l.npm_kopyleft()}"
     )
-    bos = [(a, s) for a, s, li in l.npm_envanteri() if "doğrulanmadı" in li]
-    assert not bos, f"kilitte lisansı BOŞ npm girdileri: {bos}"
+    # YLI-A2.1: yalnız "doğrulanmadı" değil — UNLICENSED / SEE LICENSE IN … de kopyleft kararı verilemeyen (belirsiz) girdidir.
+    bos = [(a, s, li) for a, s, li in l.npm_envanteri() if l.lisans_belirsiz_mu(li)]
+    assert not bos, f"kilitte lisansı BOŞ ya da BELİRSİZ npm girdileri (el ile bakılır) [SAHİBE]: {bos}"
 
 
 @pytest.mark.parametrize(
@@ -101,6 +102,11 @@ def test_KRITIK_npm_envanterinde_KOPYLEFT_yok_ve_lisanssiz_girdi_yok():
         ("AGPL-3.0 OR GPL-3.0", True),
         ("MPL-2.0", False),
         ("MIT OR (GPL-2.0", True),  # ayrıştırılamaz → metnin tamamı → güvenli taraf
+        # YLI-A2.1: kimlik olmayan seçenek "izin veren" sayılmaz; küçük harf bağlaç serbest metindir
+        ("GPL-3.0 OR later", True),
+        ("GPL-3.0 or later", True),
+        ("AGPL-3.0 OR Commercial", True),
+        ("MIT OR Commercial", False),
     ],
 )
 def test_spdx_ifadesi_ONCELIK_ve_secim_hakki(ifade, beklenen):
