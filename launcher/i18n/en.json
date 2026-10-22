@@ -187,6 +187,7 @@
     },
     "yedek": {
       "ayniSurucu": "The backup destination is on the SAME drive as the patient data. If the disk fails, both are lost — choose an external drive or a network share.",
+      "pemfKokuAltinda": "The backup target is inside a PEMF folder. Uninstalling or a full cleanup removes these folders — the backup would go too. Choose a non-PEMF folder on an external disk or a network share.",
       "yazilamiyor": "This folder cannot be written to. The drive must be connected and writable."
     }
   },

@@ -926,7 +926,7 @@ pub const YALNIZ_KOKTEN_OLDURULEN: [&str; 1] = ["mosquitto.exe"];
 pub fn kok_altinda_mi(yol: &str, kok: &Path) -> bool {
     fn duz(s: &str) -> String {
         let s = s.replace('/', "\\");
-        let s = s.strip_prefix(r"\\?\").unwrap_or(&s);
+        let s = s.strip_prefix("\\\\?\\").unwrap_or(&s);
         s.trim_end_matches('\\').to_lowercase()
     }
     let (y, k) = (duz(yol), duz(&kok.to_string_lossy()));
@@ -1812,7 +1812,7 @@ mod tests {
         let src = include_str!("backend.rs").replace("\r\n", "\n");
         let g = &src[src.find("fn read_tail(").unwrap()..];
         assert!(
-            g[..g.find("\n}\n").unwrap()].contains("read_log_tail(&gunluk_sec(&log, &yedek_gunluk_yolu(getenv)), 20)"),
+            g[..g.find("\n/// Y99: backend").unwrap()].contains("read_log_tail(&gunluk_sec(&log, &yedek_gunluk_yolu(getenv)), 20)"),
             "read_tail yedek yolu okumuyor"
         );
     }

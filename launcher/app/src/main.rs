@@ -2400,7 +2400,11 @@ fn yedek_hedefi_sec_blocking() -> Result<serde_json::Value, String> {
         let root = install::default_install_root(&home_dir());
         // Veri kökü makine-geneli olabilir; kıyaslamayı GERÇEK hedefle yap.
         let veri = install::cozulmus_veri_dizini(|k| std::env::var(k).ok()).unwrap_or(root.clone());
-        install::yedek_hedefi_gecerli_mi(std::path::Path::new(&yol), &veri)?;
+        // LN L8 · S-E2I.4: hedef bir PEMF kökünün içinde olamaz (kaldırma / tam temizlik siler); `\\?\` / `\\localhost\C$`
+        // biçimleri yerel yola çevrilerek denetlenir.
+        let kokler = install::pemf_kokleri(|k| std::env::var(k).ok(), &home_dir(), &root);
+        let bilgisayar = std::env::var("COMPUTERNAME").unwrap_or_default();
+        install::yedek_hedefi_gecerli_mi(std::path::Path::new(&yol), &veri, &kokler, &bilgisayar)?;
         install::backup_dir_yaz(&root, &yol).map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.kaydedilemedi", &[("e", &e.to_string())]))?;
         Ok(serde_json::json!({ "status": "ok", "yol": yol }))
     }

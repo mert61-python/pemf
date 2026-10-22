@@ -437,12 +437,67 @@ pub fn ayni_birim(a: &Path, b: &Path) -> Option<bool> {
     Some(harf(a)? == harf(b)?)
 }
 
-/// Seçilen hedef off-site yedek için uygun mu? `Ok(())` ya da kullanıcıya gösterilecek sebep.
-pub fn yedek_hedefi_gecerli_mi(hedef: &Path, veri_dizini: &Path) -> Result<(), String> {
+/// LN L8 · S-E2I.4: yolun YEREL karşılığı (saf). `\\?\C:\x` / `\\.\C:\x` → `C:\x`; `\\?\UNC\<h>\C$\x` ve `\\<h>\C$\x` (h = localhost ·
+/// 127.0.0.1 · ::1 · bu bilgisayarın adı) → `C:\x`; başka biçim (gerçek ağ paylaşımı) aynen. Eskiden `ayni_birim` yalnız İLK
+/// karaktere baktığı için `\\?\C:\…` ve `\\localhost\C$\…` "başka sürücü" sayılıyor, hasta verisiyle AYNI diske yedek kabul ediliyordu.
+pub fn yerel_yol(yol: &str, bilgisayar: &str) -> String {
+    let s = yol.replace('/', "\\");
+    let unc = |r: &str| -> Option<String> {
+        let mut p = r.splitn(3, '\\');
+        let (host, pay, kalan) = (p.next()?, p.next()?, p.next().unwrap_or(""));
+        let yerel = ["localhost", "127.0.0.1", "::1", "[::1]"].iter().any(|h| host.eq_ignore_ascii_case(h))
+            || (!bilgisayar.is_empty() && host.eq_ignore_ascii_case(bilgisayar));
+        let harf = pay.strip_suffix('$').filter(|h| h.len() == 1 && h.chars().all(|c| c.is_ascii_alphabetic()))?;
+        yerel.then(|| format!("{}:\\{kalan}", harf.to_ascii_uppercase()))
+    };
+    if let Some(r) = s.strip_prefix("\\\\?\\UNC\\") {
+        return unc(r).unwrap_or(s);
+    }
+    if let Some(r) = s.strip_prefix("\\\\?\\").or_else(|| s.strip_prefix("\\\\.\\")) {
+        return r.to_string();
+    }
+    if let Some(r) = s.strip_prefix("\\\\") {
+        return unc(r).unwrap_or(s);
+    }
+    s
+}
+
+/// LN L8 · S-E2I.4: kaldırma / KVKK tam temizliğinin sildiği PEMF kökleri — yedek hedefi bunların İÇİNDE olamaz (yedek de silinirdi;
+/// silme kapsamı DEĞİŞMEDİ, kural hedef seçiminde). Kurulum kökü · makine kökü `%PROGRAMDATA%\PEMF_System` · kullanıcı veri kökü
+/// `%APPDATA%\PEMF_GUI` · `%LOCALAPPDATA%\PEMF_System` · eski paylaşılan `%PROGRAMDATA%\PEMF_GUI` (`scripts/pemf_footprint.ps1`).
+pub fn pemf_kokleri<F>(getenv: F, home: &Path, install_root: &Path) -> Vec<PathBuf>
+where
+    F: Fn(&str) -> Option<String>,
+{
+    let mut v = vec![install_root.to_path_buf(), app_data_dir_with(&getenv, home)];
+    if let Some(pd) = getenv("PROGRAMDATA").filter(|s| !s.is_empty()) {
+        v.push(PathBuf::from(&pd).join("PEMF_System"));
+        v.push(PathBuf::from(&pd).join("PEMF_GUI"));
+    }
+    if let Some(la) = getenv("LOCALAPPDATA").filter(|s| !s.is_empty()) {
+        v.push(PathBuf::from(la).join("PEMF_System"));
+    }
+    v
+}
+
+/// Seçilen hedef off-site yedek için uygun mu? `Ok(())` ya da kullanıcıya gösterilecek sebep. Yollar önce YEREL karşılığına
+/// çevrilir (`yerel_yol` — `\\?\` / `\\localhost\C$` atlatması); hedef bir PEMF kökünün içinde ya da kökün kendisiyse RED
+/// (S-E2I.4; yazılabilirlik sondası o klasöre dosya yazmadan ÖNCE).
+pub fn yedek_hedefi_gecerli_mi(hedef: &Path, veri_dizini: &Path, pemf_kokleri: &[PathBuf], bilgisayar: &str) -> Result<(), String> {
+    let h = yerel_yol(&hedef.to_string_lossy(), bilgisayar);
+    let ic_mi = |k: &Path| {
+        let k = yerel_yol(&k.to_string_lossy(), bilgisayar);
+        let k = k.trim_end_matches('\\');
+        h.trim_end_matches('\\').eq_ignore_ascii_case(k) || crate::backend::kok_altinda_mi(&h, Path::new(k))
+    };
+    if pemf_kokleri.iter().chain(std::iter::once(&veri_dizini.to_path_buf())).any(|k| ic_mi(k)) {
+        return Err(crate::dil::t("rust.yedek.pemfKokuAltinda"));
+    }
     if !dizin_yazilabilir_mi(hedef) {
         return Err(crate::dil::t("rust.yedek.yazilamiyor"));
     }
-    if ayni_birim(hedef, veri_dizini) == Some(true) {
+    let v = yerel_yol(&veri_dizini.to_string_lossy(), bilgisayar);
+    if ayni_birim(Path::new(&h), Path::new(&v)) == Some(true) {
         return Err(crate::dil::t("rust.yedek.ayniSurucu"));
     }
     Ok(())
@@ -1742,17 +1797,92 @@ mod tests {
     #[test]
     fn KRITIK_ayni_surucu_REDDEDILIR() {
         if !cfg!(target_os = "windows") { return; }
-        let d = tempfile::tempdir().unwrap();
+        let (d, h) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         let veri = d.path();
-        let r = yedek_hedefi_gecerli_mi(veri, veri);
+        let r = yedek_hedefi_gecerli_mi(h.path(), veri, &[], "");
         assert!(r.is_err(), "ayni surucudeki hedef kabul edildi");
         assert!(r.unwrap_err().contains("AYNI"), "sebep kullaniciya anlasilir degil");
+    }
+
+    /// LN L8 · S-E2I.4: yolun yerel karşılığı — `\\?\` / `\\.\` önekleri ve bu makinenin yönetici paylaşımı (`\\localhost\C$`,
+    /// `\\127.0.0.1\c$`, `\\<bilgisayar>\C$`, `\\?\UNC\…`) sürücü yoluna; gerçek başka makine / normal paylaşım AYNEN.
+    #[test]
+    fn KRITIK_L8_SE2I4_yerel_yol_ATLATMA_bicimlerini_cozer() {
+        for (girdi, beklenen) in [
+            (r"\\?\C:\Yedek", r"C:\Yedek"),
+            (r"\\.\D:\Yedek", r"D:\Yedek"),
+            (r"\\localhost\C$\ProgramData\PEMF_System\y", r"C:\ProgramData\PEMF_System\y"),
+            (r"\\127.0.0.1\c$\y", r"C:\y"),
+            (r"\\KLINIK-PC\C$\y", r"C:\y"),
+            (r"\\?\UNC\localhost\C$\y", r"C:\y"),
+            (r"//localhost/C$/y", r"C:\y"),
+            (r"\\NAS\yedek\pemf", r"\\NAS\yedek\pemf"),
+            (r"\\localhost\paylasim\y", r"\\localhost\paylasim\y"),
+            (r"\\BASKA-PC\C$\y", r"\\BASKA-PC\C$\y"),
+            (r"E:\Yedek", r"E:\Yedek"),
+        ] {
+            assert_eq!(yerel_yol(girdi, "klinik-pc"), beklenen, "{girdi}");
+        }
+    }
+
+    /// LN L8 · S-E2I.4: yedek hedefi bir PEMF kökünün İÇİNDEYSE (kaldırma / tam temizlik onu da siler) RED — `\\?\` ve
+    /// `\\localhost\C$` biçimleri de; ve `\\?\` önekli AYNI sürücü hedefi artık "başka sürücü" sayılmaz. Red, hedefe yazmadan ÖNCE.
+    #[test]
+    fn KRITIK_L8_SE2I4_yedek_hedefi_PEMF_KOKU_altinda_olamaz() {
+        if !cfg!(target_os = "windows") {
+            return;
+        }
+        // SAHTE kökler (geçici dizin): mutantlı kod red'i atlasa bile yazılabilirlik sondası GERÇEK ProgramData'ya gitmez
+        // (ölçülen tuzak — ilk sürüm literal C:\ProgramData yolları kullanıyordu, iki mutant orada boş dizin yarattı; geri alındı).
+        let d = tempfile::tempdir().unwrap();
+        let pemf = d.path().join("ProgramData").join("PEMF_System");
+        let kur = d.path().join("Local").join("PEMF Vet Client");
+        let veri = d.path().join("veri").join("PEMF_GUI");
+        let kokler = [pemf.clone(), kur.clone()];
+        let mesaj = crate::dil::t("rust.yedek.pemfKokuAltinda");
+        let ps = pemf.to_string_lossy().into_owned();
+        let mut hedefler = vec![
+            pemf.join("yedek_hic_yok"),
+            pemf.clone(),
+            PathBuf::from(format!(r"\\?\{}", pemf.join("yedek_hic_yok").display())),
+            PathBuf::from(ps.to_uppercase()).join("y"),
+            kur.join("backups"),
+            veri.join("backups"),
+        ];
+        if let Some(r) = ps.strip_prefix("C:\\") {
+            hedefler.push(PathBuf::from(format!(r"\\localhost\C$\{r}\y")));
+        }
+        for hedef in &hedefler {
+            assert_eq!(yedek_hedefi_gecerli_mi(hedef, &veri, &kokler, "KLINIK-PC"), Err(mesaj.clone()), "{hedef:?}");
+        }
+        assert!(!pemf.exists() && !kur.exists() && !veri.exists(), "reddedilen hedefe dizin yaratıldı — red yazmadan ÖNCE değil");
+        // `\\?\` önekli AYNI sürücü: eskiden ilk karakter '\' → "başka sürücü" sayılıp kabul ediliyordu.
+        let (v, h) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let onekli = PathBuf::from(format!(r"\\?\{}", h.path().display()));
+        assert_eq!(
+            yedek_hedefi_gecerli_mi(&onekli, v.path(), &[], ""),
+            Err(crate::dil::t("rust.yedek.ayniSurucu")),
+            "önekli aynı sürücü hedefi kabul edildi"
+        );
+        let kok_disi = pemf_kokleri(
+            |k| match k {
+                "PROGRAMDATA" => Some(r"C:\ProgramData".to_string()),
+                "APPDATA" => Some(r"C:\Users\vet\AppData\Roaming".to_string()),
+                "LOCALAPPDATA" => Some(r"C:\Users\vet\AppData\Local".to_string()),
+                _ => None,
+            },
+            Path::new(r"C:\Users\vet"),
+            Path::new(r"C:\Users\vet\AppData\Local\PEMF Vet Client"),
+        );
+        for k in [r"C:\ProgramData\PEMF_System", r"C:\ProgramData\PEMF_GUI", r"C:\Users\vet\AppData\Roaming\PEMF_GUI", r"C:\Users\vet\AppData\Local\PEMF_System"] {
+            assert!(kok_disi.contains(&PathBuf::from(k)), "PEMF kökü listede yok: {k} / {kok_disi:?}");
+        }
     }
 
     #[test]
     fn yazilamayan_hedef_REDDEDILIR() {
         let gecersiz = if cfg!(target_os = "windows") { r"\?\Q:\yok" } else { "/proc/olmaz" };
-        assert!(yedek_hedefi_gecerli_mi(Path::new(gecersiz), Path::new("/tmp")).is_err());
+        assert!(yedek_hedefi_gecerli_mi(Path::new(gecersiz), Path::new("/tmp"), &[], "").is_err());
     }
 
     #[test]
@@ -1994,7 +2124,7 @@ mod tests {
         assert!(!a.iter().any(|x| x.contains("S-1-5-32-545")), "Users ACL'de: {a:?}");
         let src = include_str!("install.rs").replace("\r\n", "\n");
         let acl = &src[src.find("fn acl_ver(dir: &Path, grup: Option<&str>)").expect("acl_ver yok")..];
-        let acl = &acl[..acl.find("\n}\n").unwrap()];
+        let acl = &acl[..acl.find("\n#[cfg(not(windows))]").unwrap()];
         assert!(acl.contains("veri_koku_acl_argumanlari(grup)") && !acl.contains("S-1-5-32-545"), "acl_ver kararı saf fonksiyondan almıyor");
     }
 

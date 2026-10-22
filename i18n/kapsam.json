@@ -10603,10 +10603,10 @@
    "kritik": false,
    "muaf": [
     {
-     "metin": "*S-1-5-32-545:(OI)(CI)M",
+     "metin": "*{{g}}:(OI)(CI)M",
      "gerekce": "icacls komut argümanı — komut",
      "turler": [
-      "rust"
+      "rust-sablon"
      ]
     },
     {

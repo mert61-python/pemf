@@ -187,6 +187,7 @@
     },
     "yedek": {
       "ayniSurucu": "Yedek hedefi hasta verisiyle AYNI sürücüde. Disk arızasında ikisi de kaybolur — harici bir disk ya da ağ paylaşımı seçin.",
+      "pemfKokuAltinda": "Yedek hedefi PEMF klasörlerinin içinde. Kaldırma ya da tam temizlik bu klasörleri siler — yedek de gider. Harici bir disk ya da ağ paylaşımında PEMF dışı bir klasör seçin.",
       "yazilamiyor": "Bu klasöre yazılamıyor. Sürücü takılı ve yazılabilir olmalı."
     }
   },
