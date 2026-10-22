@@ -2085,6 +2085,11 @@ mod tests {
         }
         // Ağ/aktarım → geçici.
         assert!(is_retriable(&net::NetError::Transport("baglanti koptu".into())));
+        // YLI-A2.5 (D4.15 tek kaynak): DNS indirmede de GEÇİCİ — flow'da ayrı (DNS'siz) bir kopya geri gelirse burada düşer.
+        assert!(is_retriable(&net::NetError::Dns("resolve dns name".into())), "DNS indirmede KALICI sayildi (08-29 sinifi)");
+        for e in [net::NetError::Dns("x".into()), st(503), st(404), net::NetError::LocalIo("x".into()), net::NetError::Paused] {
+            assert_eq!(is_retriable(&e), net::gecici_hata_mi(&e), "flow ile net kurali ayristi: {e:?}");
+        }
         assert!(is_retriable(&net::NetError::Io(std::io::Error::new(
             std::io::ErrorKind::TimedOut,
             "timeout"

@@ -88,9 +88,11 @@ def test_KRITIK_DNS_hatasi_YENIDEN_DENENIR():
     kaynak = _FLOW_RS.read_text(encoding="utf-8")
     i = kaynak.find("fn is_retriable")
     assert i != -1
-    govde = kaynak[i : kaynak.find("\n}", i)]
-    assert "net::gecici_hata_mi(e)" in govde, (
-        "is_retriable tek kaynağa (net::gecici_hata_mi) delege etmiyor — iki kopya ayrışır"
+    govde = kaynak[kaynak.index("{", i) + 1 : kaynak.find("\n}", i)]
+    # YLI-A2.5: gövde YORUMSUZ okunur — yorumdaki `net::gecici_hata_mi(e)` ayrı bir kopyayı gizlemesin (m11a / m11c).
+    kod = "\n".join(s.split("//")[0] for s in govde.splitlines()).strip()
+    assert re.fullmatch(r"net::gecici_hata_mi\(e\)", kod), (
+        f"is_retriable tek kaynağa (net::gecici_hata_mi) delege etmiyor — iki kopya ayrışır: {kod!r}"
     )
     net = (_FLOW_RS.parent / "net.rs").read_text(encoding="utf-8")
     j = net.find("pub fn gecici_hata_mi")
