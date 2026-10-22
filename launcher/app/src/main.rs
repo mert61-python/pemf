@@ -685,26 +685,25 @@ fn fetch_profiles_blocking() -> Result<serde_json::Value, String> {
             install::clear_selfupdate_attempt(&su_root);
         }
     }
-    let update = manifest.launcher.as_ref().and_then(|l| {
-        pemf_launcher_core::is_newer(&l.version, current_launcher).then(|| {
-            serde_json::json!({
-                "version": l.version,
-                "url": l.url,
-                "installer_url": l.installer_url,
-                "sha256": l.sha256,
-                "size": l.size,
-                // `false` ise UI SESSİZ kurulumu ATLAR (döngü kırıcı) ama bildirimi gösterir.
-                //
-                // ⚠️ 2026-08-09 (Tier 1): `rollout` KAPISI EKLENDİ. Runtime katmanlarında bu fren
-                // vardı ama güncellemeyi YÖNETEN bileşenin kendisinde yoktu: bozuk bir launcher
-                // yayını bir sonraki açılışta sahadaki HER cihaza gidiyordu ve — runtime'ın
-                // aksine — geri çekmenin yolu kalmıyordu (yeni launcher artık eskisini
-                // çalıştırmıyor). Manifest'te `launcher.rollout: 0` yazmak yayını ANINDA durdurur.
-                // Bildirim yine görünür; yalnız SESSİZ kurulum beklemeye alınır.
-                "auto": install::selfupdate_auto_allowed(&su_root, &l.version)
-                    && install::rollout_dilimi(&su_root) < l.rollout,
-                "rollout_bekliyor": install::rollout_dilimi(&su_root) >= l.rollout,
-            })
+    // LN L12: karar çekirdekte TEK yerde (`Manifest::launcher_guncellemesi` — yalnız yayındaki sürüm YENİYSE; eşit / eski → yok).
+    let update = manifest.launcher_guncellemesi(current_launcher).map(|l| {
+        serde_json::json!({
+            "version": l.version,
+            "url": l.url,
+            "installer_url": l.installer_url,
+            "sha256": l.sha256,
+            "size": l.size,
+            // `false` ise UI SESSİZ kurulumu ATLAR (döngü kırıcı) ama bildirimi gösterir.
+            //
+            // ⚠️ 2026-08-09 (Tier 1): `rollout` KAPISI EKLENDİ. Runtime katmanlarında bu fren
+            // vardı ama güncellemeyi YÖNETEN bileşenin kendisinde yoktu: bozuk bir launcher
+            // yayını bir sonraki açılışta sahadaki HER cihaza gidiyordu ve — runtime'ın
+            // aksine — geri çekmenin yolu kalmıyordu (yeni launcher artık eskisini
+            // çalıştırmıyor). Manifest'te `launcher.rollout: 0` yazmak yayını ANINDA durdurur.
+            // Bildirim yine görünür; yalnız SESSİZ kurulum beklemeye alınır.
+            "auto": install::selfupdate_auto_allowed(&su_root, &l.version)
+                && install::rollout_dilimi(&su_root) < l.rollout,
+            "rollout_bekliyor": install::rollout_dilimi(&su_root) >= l.rollout,
         })
     });
 
@@ -2759,6 +2758,18 @@ fn guncelleme_ekranini_calistir(ctx: tauri::Context<tauri::Wry>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LN L12: açılış bildirimi (ve onun beslediği sessiz kurulum) launcher güncelleme kararını çekirdeğin TEK fonksiyonundan
+    /// alır (`Manifest::launcher_guncellemesi` — adlı birim testi orada: yayında 1.9.51 iken 1.9.52 kendini GERİ indirmez).
+    /// Satır içi bir sürüm kıyası geri gelirse (ters argüman sırası dahil) çekirdek testi onu görmez — bu kapı görür.
+    #[test]
+    fn KRITIK_L12_acilis_bildirimi_cekirdegin_TEK_kararini_kullanir() {
+        let src = include_str!("main.rs");
+        let g = &src[src.find(concat!("fn fetch_profiles_", "blocking(")).expect("fetch_profiles_blocking yok")..];
+        let g = &g[..g.find("\n\u{7d}").expect("gövde sonu yok")];
+        assert!(g.contains("manifest.launcher_guncellemesi(current_launcher)"), "açılış bildirimi çekirdeğin kararını kullanmıyor");
+        assert!(!g.contains(concat!("is_", "newer(")), "açılış bildiriminde satır içi sürüm kıyası var");
+    }
 
     /// SAHİP BİLDİRİMİ 2026-10-18: "güncelleme kontrol ediliyor yazarken pencere bloklanıyor hareket ettiremiyorum".
     /// Tauri SENKRON komutları pencere (olay döngüsü) iş parçacığında koşar; PowerShell / ağ / yavaş disk bekleyen bir senkron

@@ -10,9 +10,10 @@
 ## Neden yeniden yazıldı (tarihçe — v1.8.0)
 
 > ✅ **UYGULANDI — yeniden yazım BİTTİ ve sahada.** `launcher/` bir Tauri/Rust workspace:
-> `launcher/Cargo.toml` → `members = ["core", "app"]`, `version = "1.9.51"`;
+> `launcher/Cargo.toml` → `members = ["core", "app"]`, sürüm `[workspace.package] version`;
 > `launcher/core/src/` (auth.rs · backend.rs · install.rs · manifest.rs · verify.rs · …);
-> `launcher/app/tauri.conf.json`; `versions.json` → `"launcher": "1.9.51"`. CI
+> `launcher/app/tauri.conf.json`; tek kaynak `versions.json` `"launcher"` → `build_tools/sync_versions.ps1` (belgeye sürüm
+> numarası YAZILMAZ — bayatlar; eşlik kapısı `manifest.rs::KRITIK_L12_surum_TEK_KAYNAKLA_tutarli`). CI
 > `.github/workflows/launcher.yml` `.exe` / `.dmg` / `.deb` / `.AppImage` / `.rpm` üretiyor.
 > Aşağısı kararın GEREKÇESİDİR — yapılacak iş değil.
 

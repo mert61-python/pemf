@@ -172,6 +172,13 @@ struct RawV1 {
 }
 
 impl Manifest {
+    /// LN L12: launcher kendini YALNIZ yayındaki sürüm kendisininkinden YENİYSE günceller — eşit ya da ESKİ → `None` (bildirim de,
+    /// sessiz kurulum da yok). Karar TEK yerde: açılış bildirimi (`main.rs`) bunu çağırır, `apply_self_update` yalnız onun dolu
+    /// döndürdüğü hedefle çağrılır. Yayında 1.9.51 dururken 1.9.52 adayı kendini 1.9.51'e GERİ İNDİRMEZ.
+    pub fn launcher_guncellemesi(&self, kendi: &str) -> Option<&LauncherInfo> {
+        self.launcher.as_ref().filter(|l| is_newer(&l.version, kendi))
+    }
+
     pub fn parse(raw: &str) -> Result<Self, ManifestError> {
         let probe: serde_json::Value = serde_json::from_str(raw)?;
         let schema = probe.get("schema").and_then(|v| v.as_u64()).unwrap_or(1);
@@ -803,5 +810,64 @@ mod tests {
         assert_eq!(m.schema, 1);
         // v1 normalizasyonu parca tasimaz — eski davranis birebir:
         assert_eq!(m.model_packages("vet").unwrap().len(), 1);
+    }
+
+    // ── LN L12 · sürüm adayı 1.9.52 (yayında launcher 1.9.51 · app 1.9.50) ─────────────────────────────────────────────────
+
+    fn launcherli_manifest(surum: &str) -> Manifest {
+        Manifest::parse(&format!(
+            r#"{{ "schema":2, "version":"1.9.50",
+                 "runtimes": {{ "win-x64": {{"url":"https://x/b.zip","sha256":"{D1}","size":1}} }},
+                 "models": {{}},
+                 "launcher": {{ "version":"{surum}", "url":"https://x/l", "installer_url":"https://x/s.exe",
+                                "sha256":"{D2}", "size":5, "rollout":100 }} }}"#
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn KRITIK_L12_yayinda_1_9_51_iken_1_9_52_kendini_GERI_INDIRMEZ() {
+        let m = launcherli_manifest("1.9.51");
+        assert!(m.launcher_guncellemesi("1.9.52").is_none(), "1.9.52 yayındaki 1.9.51'i 'yeni' saydı → kendini GERİ indirir");
+        assert!(m.launcher_guncellemesi("1.9.51").is_none(), "eşit sürümde güncelleme önerildi");
+        // Karşıt: gerçekten eski kurulum (1.9.50) yayındakini ALIR — ölçü kör değil.
+        assert_eq!(m.launcher_guncellemesi("1.9.50").map(|l| l.version.as_str()), Some("1.9.51"));
+        assert!(launcherli_manifest("1.9.53").launcher_guncellemesi("1.9.52").is_some());
+    }
+
+    /// Yayındaki manifestin depodaki kopyası (`pemf-app-packages/manifest.json`, YH D1'in ölçtüğü) ile BU derlemenin kendi sürümü:
+    /// launcher açılışta kendini geri indirmez. Kopya yoksa SESSİZ geçmez.
+    #[test]
+    fn KRITIK_L12_bu_derleme_YAYINDAKI_manifest_kopyasiyla_kendini_GERI_INDIRMEZ() {
+        let yol = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../pemf-app-packages/manifest.json");
+        let raw = std::fs::read_to_string(&yol).unwrap_or_else(|e| panic!("yayındaki manifest kopyası okunamadı {}: {e}", yol.display()));
+        let m = Manifest::parse(&raw).unwrap();
+        let yayindaki = m.launcher.as_ref().map(|l| l.version.clone()).unwrap_or_default();
+        assert!(
+            m.launcher_guncellemesi(env!("CARGO_PKG_VERSION")).is_none(),
+            "yayındaki launcher {yayindaki} bu derlemeden ({}) YENİ sayıldı → açılışta kendini indirip ezer",
+            env!("CARGO_PKG_VERSION")
+        );
+    }
+
+    /// Sürüm TEK kaynaktan (`versions.json` → `sync_versions.ps1`): çalışma alanı (`CARGO_PKG_VERSION`) · `tauri.conf.json` (kurucu adı
+    /// ve "Uygulamalar"da görünen) · `Cargo.lock` (iki paket) AYNI. Biri kayarsa kurulan sürüm ile kendini bildiren sürüm ayrışır.
+    #[test]
+    fn KRITIK_L12_surum_TEK_KAYNAKLA_tutarli() {
+        let oku = |r: &str| {
+            let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(r);
+            std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{} okunamadı: {e}", p.display()))
+        };
+        let kendi = env!("CARGO_PKG_VERSION");
+        let v: serde_json::Value = serde_json::from_str(&oku("../../versions.json")).unwrap();
+        assert_eq!(v["launcher"].as_str(), Some(kendi), "versions.json launcher ≠ Cargo.toml");
+        let c: serde_json::Value = serde_json::from_str(&oku("../app/tauri.conf.json")).unwrap();
+        assert_eq!(c["version"].as_str(), Some(kendi), "tauri.conf.json version ≠ Cargo.toml");
+        let kilit = oku("../Cargo.lock").replace('\r', "");
+        for paket in ["pemf-launcher-core", "pemf-vet-client"] {
+            let bas = format!("name = \"{paket}\"\nversion = \"");
+            let i = kilit.find(&bas).unwrap_or_else(|| panic!("Cargo.lock'ta {paket} yok")) + bas.len();
+            assert_eq!(&kilit[i..i + kilit[i..].find('"').unwrap()], kendi, "Cargo.lock {paket} sürümü ≠ Cargo.toml");
+        }
     }
 }

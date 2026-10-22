@@ -2763,6 +2763,36 @@ mod tests {
         assert_eq!(plan.bytes, 970, "app boyutu toplama eklenmemis");
     }
 
+    /// LN L12 (17'nin yerleştirmesi buna dayanır): yayındaki manifest kopyası (app 1.9.50 · deps 1.9.41 · `min_supported_version`
+    /// YOK) ile kurulu kayıt (`installed_packages.json`) AYNI sha'ları taşırken APP katmanı yeniden İNMEZ — ağaçtaki `VERSION` yeni
+    /// bir derlemeyi (1.9.51) gösterse bile: karar yalnız kayıt ↔ manifest SHA'sı, ağaç yalnız yapısal denetlenir
+    /// (`kurulum_saglam_mi`), `VERSION` yalnız geri çağırma (`min_supported_version`) içindir. KARŞIT: kayıttaki app sha'sı yayındakinden
+    /// farklıysa (yerleştiren kaydı yeni derlemenin sha'sıyla yazarsa) launcher yayındaki app'i indirip yerleştirileni EZER.
+    #[test]
+    fn KRITIK_L12_kurulu_kayit_1_9_50_iken_APP_katmani_YENIDEN_INMEZ() {
+        let yol = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../pemf-app-packages/manifest.json");
+        let raw = fs::read_to_string(&yol).unwrap_or_else(|e| panic!("yayındaki manifest kopyası okunamadı {}: {e}", yol.display()));
+        let m = Manifest::parse(&raw).unwrap();
+        let Some(l) = m.layers_for_current_platform() else {
+            assert!(!cfg!(windows), "yayındaki kopyada bu platformun (win-x64) katmanı yok");
+            return;
+        };
+        assert!(m.min_supported_version.is_none(), "yayında geri çağırma VAR — bu test ve 17'nin varsayımı yeniden ölçülmeli");
+        let dir = tempfile::tempdir().unwrap();
+        sahte_kurulum(dir.path());
+        let surum = install::runtime_dir(dir.path()).join("PEMF_Backend").join("_internal").join("VERSION");
+        fs::create_dir_all(surum.parent().unwrap()).unwrap();
+        fs::write(&surum, "1.9.51\n").unwrap();
+        install::record_layer_sha(dir.path(), "deps", &l.deps.sha256);
+        install::record_layer_sha(dir.path(), "app", &l.app.sha256);
+        let plan = pending_updates(&raw, dir.path()).unwrap();
+        assert!(!plan.needed() && !plan.app && !plan.deps && !plan.zorunlu, "yayındaki app yeniden indirilecekti: {plan:?}");
+        // KARŞIT: kayıt yeni derlemenin sha'sını taşırsa yayındaki app katmanı iner (yerleştirilen ezilir).
+        install::record_layer_sha(dir.path(), "app", SHA_B);
+        let plan = pending_updates(&raw, dir.path()).unwrap();
+        assert!(plan.app && !plan.deps, "kayıt farkı görülmedi: {plan:?}");
+    }
+
     #[test]
     fn kayitsiz_kurulumda_iki_katman_da_bayat() {
         // Tek parca kurulu (eski) makine: katman kaydi yok → ikisi de inmeli.
