@@ -239,7 +239,13 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
   ; değişkeniyle geçer (tırnaksız — NSIS `'` / -Command `"` sınırlayıcılarıyla çakışmaz; kökte kesme işareti olsa da bozulmaz).
   System::Call 'kernel32::SetEnvironmentVariable(t "PEMF_KALDIRMA_KOKU", t "$INSTDIR") i .r0'
   System::Call 'kernel32::SetEnvironmentVariable(t "PEMF_KALDIRMA_AD", t "mosquitto.exe") i .r0'
-  nsExec::Exec /TIMEOUT=30000 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$k = $$env:PEMF_KALDIRMA_KOKU.TrimEnd([char]92) + [char]92; Get-CimInstance -ClassName Win32_Process -ErrorAction SilentlyContinue | Where-Object { $$_.Name -eq $$env:PEMF_KALDIRMA_AD -and $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith($$k, [StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"'
+  ; YLI-A3.4: launcher çalışma kökünü HER ZAMAN `default_install_root` = %LOCALAPPDATA%\PEMF Vet Client'tan alır (exe başka dizine
+  ; kurulsa da; bkz. yukarıdaki backend.port yedek yolu) → kullanıcı kurulum dizinini değiştirdiyse broker'ımız $INSTDIR altında
+  ; DEĞİLDİR. İkinci kök kullanıcı bağlamında çözülür ve hemen Tauri bağlamına dönülür.
+  SetShellVarContext current
+  System::Call 'kernel32::SetEnvironmentVariable(t "PEMF_KALDIRMA_KOKU2", t "$LOCALAPPDATA\PEMF Vet Client") i .r0'
+  !insertmacro PEMF_BAGLAMI_GERI_YUKLE
+  nsExec::Exec /TIMEOUT=30000 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "foreach ($$k in @($$env:PEMF_KALDIRMA_KOKU, $$env:PEMF_KALDIRMA_KOKU2) | Where-Object { $$_ } | ForEach-Object { $$_.TrimEnd([char]92) + [char]92 }) { Get-CimInstance -ClassName Win32_Process -ErrorAction SilentlyContinue | Where-Object { $$_.Name -eq $$env:PEMF_KALDIRMA_AD -and $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith($$k, [StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue } }"'
   Pop $0
   nsExec::Exec /TIMEOUT=30000 'taskkill /F /IM cloudflared.exe /T'
   Pop $0
