@@ -165,7 +165,7 @@
   },
   "sss": {
     "aiPro": {
-      "a": "AI Pro is the mode that automatically updates session settings by looking at the measurements coming from the sensors during the session (temperature, field strength, camera image). YOU always start the session and YOU stop it; emergency stop and the time limit always take priority. The device does not start a session on its own and does not apply treatment without veterinarian supervision — the final decision and responsibility belong to the veterinarian.",
+      "a": "AI Pro is the mode that automatically updates session settings by looking at the measurements coming from the sensors during the session (temperature, field strength, camera image). YOU always start the session and YOU stop it; emergency stop and the time limit always take priority. The device does not start a session on its own or without veterinarian supervision — the final decision and responsibility belong to the veterinarian.",
       "q": "What is AI Pro? Does it apply therapy to the animal on its own?"
     },
     "arastirma": {

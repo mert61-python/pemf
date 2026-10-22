@@ -384,7 +384,7 @@ const ALTIN: Record<string, unknown> = {
   },
   {
    "q": "AI Pro nedir? Hayvana kendi başına terapi mi uygular?",
-   "a": "AI Pro, seans sırasında sensörlerden gelen ölçümlere (sıcaklık, alan şiddeti, kamera görüntüsü) bakarak seans ayarlarını otomatik güncelleyen moddur. Seansı HER ZAMAN siz başlatır, siz durdurursunuz; acil durdurma ve süre sınırı her koşulda önceliklidir. Cihaz kendi kendine seans başlatmaz ve hekim denetimi olmadan tedavi uygulamaz — nihai karar ve sorumluluk hekimindir."
+   "a": "AI Pro, seans sırasında sensörlerden gelen ölçümlere (sıcaklık, alan şiddeti, kamera görüntüsü) bakarak seans ayarlarını otomatik güncelleyen moddur. Seansı HER ZAMAN siz başlatır, siz durdurursunuz; acil durdurma ve süre sınırı her koşulda önceliklidir. Cihaz kendi kendine ve hekim denetimi olmadan seans başlatmaz — nihai karar ve sorumluluk hekimindir."
   },
   {
    "q": "14 günlük deneme sonunda ne oluyor?",
@@ -545,6 +545,12 @@ describe('site-12c-icerik · Y166 SSS ürünle çelişmez', () => {
     for (const v of SSS_EN) expect(v).not.toMatch(/temperature cut-?off|thermal cut-?off/i)
     expect(TR['icerik.sss.aiPro.a']).toMatch(/acil durdurma ve süre sınırı her koşulda önceliklidir/)
     expect(EN['icerik.sss.aiPro.a']).toMatch(/emergency stop and the time limit always take priority/)
+  })
+  it('Y175: AI Pro cevabı "tedavi uygulamaz" demez — seans başlatmaz (Tedavi → Seans kararı); hukuki / sorumluluk cümlesi aynı', () => {
+    expect(TR['icerik.sss.aiPro.a']).not.toMatch(/tedavi uygula/i)
+    expect(EN['icerik.sss.aiPro.a']).not.toMatch(/apply treatment|treatment/i)
+    expect(TR['icerik.sss.aiPro.a']).toMatch(/Cihaz kendi kendine ve hekim denetimi olmadan seans başlatmaz — nihai karar ve sorumluluk hekimindir\./)
+    expect(EN['icerik.sss.aiPro.a']).toMatch(/does not start a session on its own or without veterinarian supervision — the final decision and responsibility belong to the veterinarian\./)
   })
 })
 
