@@ -497,10 +497,68 @@ fn open_app_window(app: &tauri::AppHandle, port: u16) {
         .inner_size(uw, uh)
         .min_inner_size(umw, umh)
         .maximized(true)
+        // LN L9 · D2.E01 (WebView2 kolu) · İG-6.20: indirmeler AÇIK kararla (bkz. `indirme_karari`).
+        .on_download(move |_webview, olay| indirme_olayi(olay, port))
         .build();
     if built.is_err() {
         // Pencere açılamazsa (nadir) → uygulamayı tarayıcıda göster; client yine açık kalır (fail-safe).
         let _ = backend::open_browser(url);
+    }
+}
+
+/// LN L9 · D2.E01 (WebView2 kolu) · İG-6.20: uygulama penceresindeki indirmenin kararı (saf — testli). Eskiden `on_download`
+/// kayıtlı DEĞİLDİ → indirme WebView2'nin varsayılanına kalıyordu (saha notu 09-11 `dosyaIndir.ts`: "sessizce ölüyordu"; wry kaynağı:
+/// işleyici yoksa `DownloadStarting`'e abone olunmaz). Artık açık karar:
+///   * uygulamanın KENDİ kökeni (`http://127.0.0.1:<port>` / `localhost` / `[::1]`), o kökenin `blob:` adresi ve `data:` → İZİN
+///     (WebView2'nin önerdiği hedef: kullanıcının İndirilenler klasörü);
+///   * başka bir http(s) adresi → uygulama penceresinde İNDİRİLMEZ, varsayılan tarayıcıda açılır (kullanıcı indirmeyi orada görür);
+///   * başka köken `blob:`'u ve diğer şemalar (`file:` …) → RED.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IndirmeKarari {
+    Izin,
+    TarayicidaAc,
+    Reddet,
+}
+
+fn yerel_koken_mi(u: &tauri::Url, port: u16) -> bool {
+    u.scheme() == "http" && matches!(u.host_str(), Some("127.0.0.1" | "localhost" | "[::1]")) && u.port_or_known_default() == Some(port)
+}
+
+fn indirme_karari(url: &str, port: u16) -> IndirmeKarari {
+    let Ok(u) = url.parse::<tauri::Url>() else { return IndirmeKarari::Reddet };
+    match u.scheme() {
+        "data" => IndirmeKarari::Izin,
+        // `blob:http://127.0.0.1:8000/<uuid>` — iç adres yolda; yalnız uygulamanın kendi kökeni.
+        "blob" => match u.path().parse::<tauri::Url>() {
+            Ok(ic) if yerel_koken_mi(&ic, port) => IndirmeKarari::Izin,
+            _ => IndirmeKarari::Reddet,
+        },
+        "http" | "https" if yerel_koken_mi(&u, port) => IndirmeKarari::Izin,
+        "http" | "https" => IndirmeKarari::TarayicidaAc,
+        _ => IndirmeKarari::Reddet,
+    }
+}
+
+/// `on_download` işleyicisi (`true` = WebView2 indirsin). `Finished` yalnız başarıyı günlüğe yazar — dosya ADI / yolu yazılmaz
+/// (rapor / yedek adları hasta adı taşıyabilir).
+fn indirme_olayi(olay: tauri::webview::DownloadEvent<'_>, port: u16) -> bool {
+    match olay {
+        tauri::webview::DownloadEvent::Requested { url, destination: _ } => match indirme_karari(url.as_str(), port) {
+            IndirmeKarari::Izin => true,
+            IndirmeKarari::TarayicidaAc => {
+                let _ = backend::open_browser(url.as_str());
+                false
+            }
+            IndirmeKarari::Reddet => {
+                eprintln!("[indirme] reddedildi (sema {})", url.scheme());
+                false
+            }
+        },
+        tauri::webview::DownloadEvent::Finished { success, .. } => {
+            eprintln!("[indirme] bitti: basari={success}");
+            true
+        }
+        _ => true,
     }
 }
 
@@ -2897,6 +2955,48 @@ mod tests {
         let dy = jg.find("son_oturumu_yakala(").expect("job son-yakalama YOK (F5)");
         let dk = jg.find(".kill()").expect("job kill yok");
         assert!(de < dy && dy < dk, "Destroyed job sırası bozuk (E-stop→yakala→kill)");
+    }
+
+    /// LN L9 · D2.E01 (WebView2 kolu) · İG-6.20: uygulama penceresinin indirme kararı — kendi kökeni / onun `blob:`'u / `data:` İZİN,
+    /// başka http(s) tarayıcıda, başka köken `blob:`'u ve diğer şemalar RED.
+    #[test]
+    fn KRITIK_L9_indirme_karari_KENDI_KOKEN_izin_DIS_tarayici_DIGER_red() {
+        use IndirmeKarari::*;
+        for (u, k) in [
+            ("blob:http://127.0.0.1:8123/5f1c-aa", Izin),
+            ("blob:http://localhost:8123/x", Izin),
+            ("data:application/octet-stream;base64,QUJD", Izin),
+            ("http://127.0.0.1:8123/api/data/export", Izin),
+            ("blob:http://127.0.0.1:9999/x", Reddet),
+            ("blob:https://kotu.example/x", Reddet),
+            ("https://pemf-vet-web.vercel.app/belge.pdf", TarayicidaAc),
+            ("http://127.0.0.1:9999/x", TarayicidaAc),
+            ("https://127.0.0.1:8123/x", TarayicidaAc),
+            ("file:///C:/Windows/win.ini", Reddet),
+            ("bozuk adres", Reddet),
+        ] {
+            assert_eq!(indirme_karari(u, 8123), k, "{u}");
+        }
+    }
+
+    /// LN L9: olay işleyicisi — izinli istek `true` (WebView2 indirir), reddedilen `false`, bitiş `true`; dış adres kolu tarayıcı
+    /// AÇTIĞI için burada çağrılmaz (yapısal ölçülür); uygulama penceresi kurucusu işleyiciyi KAYDEDER (eskiden `on_download` yoktu).
+    #[test]
+    fn KRITIK_L9_indirme_olayi_ve_PENCERE_kaydi() {
+        let mut hedef = std::path::PathBuf::from(r"C:\Users\x\Downloads\a.pemfbak");
+        let izinli = tauri::webview::DownloadEvent::Requested { url: "blob:http://127.0.0.1:8123/u".parse().unwrap(), destination: &mut hedef };
+        assert!(indirme_olayi(izinli, 8123), "uygulamanın kendi blob indirmesi reddedildi");
+        let red = tauri::webview::DownloadEvent::Requested { url: "file:///C:/x".parse().unwrap(), destination: &mut hedef };
+        assert!(!indirme_olayi(red, 8123), "file: indirmesine izin verildi");
+        let bitti = tauri::webview::DownloadEvent::Finished { url: "blob:http://127.0.0.1:8123/u".parse().unwrap(), path: None, success: false };
+        assert!(indirme_olayi(bitti, 8123));
+        let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n");
+        let ow = &soy[soy.find("fn open_app_window(").expect("open_app_window yok")..];
+        let ow = &ow[..ow.find("\nfn ").expect("sonraki fn yok")];
+        assert!(ow.contains(".on_download(move |_webview, olay| indirme_olayi(olay, port))"), "pencere indirme işleyicisini kaydetmiyor");
+        let io = &soy[soy.find("fn indirme_olayi(").expect("indirme_olayi yok")..];
+        let tc = &io[io.find("IndirmeKarari::TarayicidaAc =>").expect("dış kol yok")..];
+        assert!(tc[..160].contains("backend::open_browser(url.as_str());") && tc[..160].contains("false"), "dış adres tarayıcıda açılmıyor");
     }
 
     /// LN L6 · İG-8.27: orphan söküm dalı STOP hedeflerini `orphan_durdurma_hedefleri`'nden (port dosyası + varsayılan porttaki

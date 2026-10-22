@@ -233,6 +233,8 @@ mosquitto'yu yeniden başlatır) yardımcı süreçler kapatılır. Sebep: backe
 
 ## Güvenlik gereksinimleri
 
+**Uygulama penceresinde indirme (D2.E01 WebView2 kolu · İG-6.20 · LN L9):** `on_download` işleyicisi kayıtlı (`indirme_karari`): uygulamanın kendi kökeni (`http://127.0.0.1:<port>` / `localhost`), o kökenin `blob:` adresi ve `data:` → İZİN (WebView2'nin önerdiği hedef — İndirilenler); başka http(s) adresi pencerede indirilmez, varsayılan tarayıcıda açılır; başka köken `blob:`'u ve diğer şemalar RED. Bitiş yalnız başarıyı günlüğe yazar (dosya adı yazılmaz). Gerçek WebView2'de indirme yeri / görünürlüğü TEZGÂH-2'de ölçülür.
+
 1. **SHA256 zorunlu.** Doğrulama başarısızsa kur**ma** ve dosyayı sil.
 2. **HTTPS + host pinleme.** `apps/backend/servers/update_manager.py::_ALLOWED_UPDATE_HOSTS` aynı
    listeyi kullanıyor; launcher da aynısını uygulamalı (manifest ele geçse bile keyfi
