@@ -228,7 +228,9 @@ pub enum NetError {
     /// Bu cümle kullanıcıya NE YAPACAĞINI söylemez; üstelik "aktarım başarısız" ifadesi sorunu
     /// sunucuda sanmasına yol açar — oysa sebep neredeyse her zaman YEREL ağdadır (Wi-Fi düştü,
     /// DNS sunucusu yanıtsız, captive portal). Ayrı varyant, arayüzün doğru cümleyi kurmasını
-    /// sağlar. Sınıf GEÇİCİ sayılır (`is_retriable`): DNS anlık olarak düşüp geri gelebilir.
+    /// sağlar. Sınıf GEÇİCİ sayılır (`gecici_hata_mi` — TEK kaynak; `flow::is_retriable` de onu kullanır): DNS anlık olarak
+    /// düşüp geri gelebilir. (LN L10 · D4.15: bu not eskiden YANLIŞTI — manifest / profil çekimi `denemeli_cek` DNS'i
+    /// KALICI sayıp tek denemede bırakıyordu; açılışta tek DNS kaçırması güncelleme denetimini 6 saat erteliyordu.)
     #[error("{}", crate::dil::t_ile("rust.ag.dns", &[("hata", &(.0).to_string())]))]
     Dns(String),
     /// Kullanıcı DURAKLATTI — `.part` KORUNUR, sonra Range ile kaldığı yerden sürer.
@@ -274,7 +276,7 @@ pub enum Control {
 /// `Transport` içinde `kind = Dns` ve mesajda "Dns Failed" ile geliyor. En dar eşleşme seçildi
 /// ve İKİ dilde de tutuyor (mesajın ilk kısmı ureq'ten, İngilizce sabit); yanlış eşleşme olsa
 /// bile sonuç yalnız kullanıcıya gösterilen CÜMLEYİ değiştirir, akışı değiştirmez (ikisi de
-/// `is_retriable`).
+/// `gecici_hata_mi` — indirme ve manifest çekimi aynı kural; LN L10 · D4.15).
 fn ureq_hatasi(e: ureq::Error, url: &str) -> NetError {
     match e {
         ureq::Error::Status(status, _) => NetError::HttpStatus { status, url: url.to_string() },
@@ -574,13 +576,36 @@ const MANIFEST_DENEME: u32 = 3;
 /// Denemeler arası kısa bekleme (ms). Toplam ek yük ≤ 1 sn — duvar bütçesine rahat sığar.
 const MANIFEST_BEKLEME_MS: [u64; 2] = [250, 750];
 
-/// Hata YENİDEN DENEMEYE değer mi? Yalnız GEÇİCİ aktarım hataları.
+/// Hata YENİDEN DENEMEYE değer mi? Yalnız GEÇİCİ hatalar. TEK KAYNAK (LN L10 · D4.15): manifest / profil çekimi
+/// (`denemeli_cek`) ve paket indirmesi (`flow::is_retriable` buna delege eder) AYNI kuralı kullanır — eskiden iki kopya
+/// ayrışmıştı (08-29 `6b93cbc`: DNS yalnız indirmede geçiciydi, manifestte tek denemede bırakılıyordu).
 ///
 /// ⚠️ Deterministik olanlar (HTTP 404, host pini reddi, HTTPS değil, politika sınırı) tekrarda
 /// AYNI sonucu verir; denemek yalnız kullanıcıyı bekletir ve hatayı gizler. `PolicyLimit`
 /// ayrımının neden var olduğu için bkz. `NetError::PolicyLimit` notu (2026-08-04 P2).
-fn gecici_hata_mi(e: &NetError) -> bool {
-    matches!(e, NetError::Transport(_) | NetError::Io(_))
+pub fn gecici_hata_mi(e: &NetError) -> bool {
+    match e {
+        // Ağ kopması / timeout / aktarım hatası → geçici.
+        NetError::Io(_) | NetError::Transport(_) => true,
+        // DNS çözümlemesi → GEÇİCİ (saha bildirimi 2026-08-29). Wi-Fi anlık düşer, DNS sunucusu
+        // bir sorguyu kaçırır, uyanma sonrası çözümleyici geç toparlanır. Kalıcı "internet yok"
+        // hâlinde de yeniden denemek zararsızdır: bağlantı kurulamadığı için hızlı düşer.
+        NetError::Dns(_) => true,
+        // 5xx sunucu tarafı geçicidir; 408 (Request Timeout) ve 429 (Too Many Requests) da öyle.
+        // Diğer 4xx'ler KALICI: yeniden denemek yalnız kullanıcıyı bekletir.
+        NetError::HttpStatus { status, .. } => *status >= 500 || *status == 408 || *status == 429,
+        // ⚠️ DENETİM 2026-08-04 (P2): boyut tavanı / küresel süre aşımı ESKİDEN `Transport`
+        // olarak dönüyordu ve GEÇİCİ sayılıyordu → aynı deterministik hata 6 kez TAM YENİDEN İNDİRME
+        // tetikliyordu. Artık ayrı varyant ve AÇIKÇA kalıcı (varyant eklendiğinde sessizce yanlış
+        // tarafa düşmesin diye kol yazılı).
+        NetError::PolicyLimit(_) => false,
+        // ⚠️ DENETİM 2026-08-23 (C8): YEREL dosya hatası — ağ sorunu DEĞİL, yeniden denemeyle
+        // DÜZELMEZ (disk dolu dolu kalır, kilitli dosya kilitli kalır, izin yoksa yok).
+        NetError::LocalIo(_) => false,
+        // Malformed / NotHttps / HostNotAllowed → GÜVENLİK reddi, ASLA yeniden deneme.
+        // Paused / Cancelled → kullanıcı kararı, yeniden deneme YANLIŞ olur.
+        _ => false,
+    }
 }
 
 /// Yeniden deneme DÖNGÜSÜ — çekim işi ENJEKTE edilir (ağsız birim-testlenebilir).
@@ -694,6 +719,36 @@ mod tests {
         assert!(matches!(r, Err(NetError::Transport(_))), "gerçek kopmada yine de hata dönmeli");
         assert_eq!(sayac, MANIFEST_DENEME, "deneme sayısı sözleşmesi değişti");
         assert_eq!(uykular.len(), 2, "SON denemeden sonra boşuna beklenmiş");
+    }
+
+    /// LN L10 · D4.15: manifest / profil çekiminde DNS kaçırması GEÇİCİ → 3 kez denenir (eskiden 1: açılışta tek kaçırma
+    /// güncelleme denetimini 6 saat erteliyordu); 503 de geçici, 404 kalıcı (tek kaynak `gecici_hata_mi`).
+    #[test]
+    fn KRITIK_L10_D415_DNS_kacirmasinda_manifest_3_KEZ_denenir() {
+        for (hata, beklenen) in [
+            (NetError::Dns("resolve dns name 'github.com:443'".into()), MANIFEST_DENEME),
+            (NetError::HttpStatus { status: 503, url: "https://x/y".into() }, MANIFEST_DENEME),
+            (NetError::HttpStatus { status: 404, url: "https://x/y".into() }, 1),
+            (NetError::LocalIo("disk dolu".into()), 1),
+        ] {
+            let mut sayac = 0;
+            let ad = format!("{hata:?}");
+            let r = denemeli_cek(
+                || {
+                    sayac += 1;
+                    Err(match &hata {
+                        NetError::Dns(m) => NetError::Dns(m.clone()),
+                        NetError::HttpStatus { status, url } => NetError::HttpStatus { status: *status, url: url.clone() },
+                        NetError::LocalIo(m) => NetError::LocalIo(m.clone()),
+                        _ => unreachable!(),
+                    })
+                },
+                |_| {},
+            );
+            assert!(r.is_err());
+            assert_eq!(sayac, beklenen, "{ad}: deneme sayısı");
+        }
+        assert_eq!(MANIFEST_DENEME, 3);
     }
 
     #[test]

@@ -84,11 +84,19 @@ def test_KRITIK_DNS_siniflandirmasi_TEK_YERDE():
 
 def test_KRITIK_DNS_hatasi_YENIDEN_DENENIR():
     """DNS anlık düşüp toparlanabilir; tek denemede pes etmek kullanıcıyı boşuna düşürür."""
+    # LN L10 · D4.15: kural TEK kaynakta (`net::gecici_hata_mi` — manifest çekimi de onu kullanır); `flow::is_retriable` delege eder.
     kaynak = _FLOW_RS.read_text(encoding="utf-8")
     i = kaynak.find("fn is_retriable")
     assert i != -1
     govde = kaynak[i : kaynak.find("\n}", i)]
-    assert re.search(r"NetError::Dns\(_\)\s*=>\s*true", govde), (
+    assert "net::gecici_hata_mi(e)" in govde, (
+        "is_retriable tek kaynağa (net::gecici_hata_mi) delege etmiyor — iki kopya ayrışır"
+    )
+    net = (_FLOW_RS.parent / "net.rs").read_text(encoding="utf-8")
+    j = net.find("pub fn gecici_hata_mi")
+    assert j != -1, "net::gecici_hata_mi yok"
+    kural = "\n".join(s.split("//")[0] for s in net[j : net.find("\n}", j)].splitlines())
+    assert re.search(r"NetError::Dns\(_\)\s*=>\s*true", kural), (
         "DNS hatası geçici sayılmıyor → anlık bir çözümleme hatası kurulumu tamamen düşürür"
     )
 

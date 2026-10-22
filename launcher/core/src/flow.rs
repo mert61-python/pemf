@@ -69,31 +69,9 @@ fn is_safe_filename(name: &str) -> bool {
 /// görüp sonunda yine aynı hatayı alıyordu. Karar saf bir fonksiyona alındı → doğrudan test
 /// edilebilir (host-pinlemesi yüzünden yerel HTTP sunucusuyla uçtan uca test edilemiyor).
 fn is_retriable(e: &net::NetError) -> bool {
-    match e {
-        // Ağ kopması / timeout / aktarım hatası → geçici.
-        net::NetError::Io(_) | net::NetError::Transport(_) => true,
-        // DNS çözümlemesi → GEÇİCİ (saha bildirimi 2026-08-29). Wi-Fi anlık düşer, DNS sunucusu
-        // bir sorguyu kaçırır, uyanma sonrası çözümleyici geç toparlanır. Kalıcı "internet yok"
-        // hâlinde de yeniden denemek zararsızdır: bağlantı kurulamadığı için hızlı düşer.
-        net::NetError::Dns(_) => true,
-        // 5xx sunucu tarafı geçicidir; 408 (Request Timeout) ve 429 (Too Many Requests) da öyle.
-        // Diğer 4xx'ler KALICI: yeniden denemek yalnız kullanıcıyı bekletir.
-        net::NetError::HttpStatus { status, .. } => *status >= 500 || *status == 408 || *status == 429,
-        // ⚠️ DENETİM 2026-08-04 (P2): boyut tavanı / küresel süre aşımı ESKİDEN `Transport`
-        // olarak dönüyordu ve yukarıdaki kol onları GEÇİCİ sayıyordu → aynı deterministik hata
-        // 6 kez TAM YENİDEN İNDİRME tetikliyordu (gigabaytlarca boşuna trafik). Artık ayrı
-        // varyant ve AÇIKÇA kalıcı. (Alttaki `_` zaten false döndürüyor; bu kol niyeti
-        // belgeliyor ve varyant eklendiğinde sessizce yanlış tarafa düşmesini engelliyor.)
-        net::NetError::PolicyLimit(_) => false,
-        // ⚠️ DENETİM 2026-08-23 (C8): YEREL dosya hatası — ağ sorunu DEĞİL, yeniden denemeyle
-        // DÜZELMEZ (disk dolu dolu kalır, kilitli dosya kilitli kalır, izin yoksa yok). En kötü
-        // hâli tamamlanmış indirmenin `rename`inde düşmesiydi: 6 deneme × 1,19 GB = ~7 GB boşuna
-        // trafik, sonunda yine aynı hata. `PolicyLimit` ile aynı sınıf, bir katman aşağıda.
-        net::NetError::LocalIo(_) => false,
-        // Malformed / NotHttps / HostNotAllowed → GÜVENLİK reddi, ASLA yeniden deneme.
-        // Paused / Cancelled → kullanıcı kararı, yeniden deneme YANLIŞ olur.
-        _ => false,
-    }
+    // LN L10 · D4.15: TEK KAYNAK — kural (Io / Transport / Dns / 5xx · 408 · 429 geçici; PolicyLimit / LocalIo / güvenlik reddi /
+    // kullanıcı kararı kalıcı) `net::gecici_hata_mi`'de; manifest çekimi (`denemeli_cek`) aynı kuralı kullanır.
+    net::gecici_hata_mi(e)
 }
 
 /// C2 (denetim 2026-08-24): `update_installed` hatası DENEME sayacına (geri-alma döngü kırıcısı)
