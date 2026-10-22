@@ -413,7 +413,7 @@
     "starting": "başlatılıyor",
     "tagline": "Veteriner PEMF seans + yapay zekâ teşhis platformu",
     "uninAyrica": "\nAyrıca bu bilgisayarda başka kayıtlar da var (eski sürüm ya da başka Windows hesabı) — onlar da korunur:\n{{yollar}}",
-    "uninBody": "İndirilen uygulama ve AI modelleri silinecek.\n\nKORUNAN VERİLER (tıbbi kayıt — kaldırma ile SİLİNMEZ):\n• Hasta kayıtları\n• Seans geçmişi\n• AI analiz geçmişi\nKonum: {{konum}}{{ayrica}}\n\nBunları da silmek istiyorsanız KALDIRMADAN ÖNCE uygulama içinden silin (Hastalar → \"Tümünü Sil\", AI Geçmişi → \"Geçmişi Sil\").\n\nDevam edilsin mi?",
+    "uninBody": "İndirilen uygulama ve AI modelleri yalnız kaldırma penceresinde 'Uygulama verilerini sil' kutusunu işaretlerseniz silinir; işaretlemezseniz korunur (yeniden kurulumda tekrar inmez).\n\nKORUNAN VERİLER (tıbbi kayıt — kaldırma ile SİLİNMEZ):\n• Hasta kayıtları\n• Seans geçmişi\n• AI analiz geçmişi\nKonum: {{konum}}{{ayrica}}\n\nBunları da silmek istiyorsanız KALDIRMADAN ÖNCE uygulama içinden silin (Hastalar → \"Tümünü Sil\", AI Geçmişi → \"Geçmişi Sil\").\n\nDevam edilsin mi?",
     "uninKonumBilinmiyor": "%PROGRAMDATA%\\PEMF_System\\PEMF_GUI (yazılamıyorsa %APPDATA%\\PEMF_GUI)",
     "uninTitle": "Uygulamayı kaldır",
     "uninstall": "Uygulamayı kaldır",
