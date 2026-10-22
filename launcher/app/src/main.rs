@@ -2781,10 +2781,15 @@ mod tests {
         let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n"); // çalışma kopyası CRLF olabilir
         // 2026-10-18 genişletme (sahip: "aynı sorunlu başka işlem de olabilir detaylı incele"): disk işleri de (ağaç silme / takas
         // kurtarma / kayıt yazma / yarım indirme silme) — `detect_environment`, `check_runtime_update`, `discard_pending` senkrondu.
-        const BEKLEYEN: [&str; 15] = [
+        // YLI-A3.6: backend'e HTTP isteği atan / bekleyen yardımcılar ve uyku da (LN L3 / L6 / L2 yeni bekleyen çağrıları) — ANLIK
+        // listedeki bir komuta eklenirlerse de pencere donar. `open_browser` (beklemeden süreç başlatır) bilinçli olarak YOK.
+        const BEKLEYEN: [&str; 29] = [
             "gizli_komut(", "durum_icin(", "ps_yukselterek_kos(", "dizin_yazilabilir_mi", "ureq::", "fetch_string",
             "yarim_takasi_kurtar(", "adopt_unknown_models(", "pending_updates(", "clear_partials(", "clear_pending(",
             "remove_dir_all", "fs::remove_file", "fs::rename", "fs::write",
+            "safe_stop_coils(", "yakma_suruyor_mu(", "yakmanin_bitmesini_bekle(", "yakma_bitene_kadar_bekle(", "firmware_kararini_bekle(",
+            "session_active(", "probe_pemf_backend(", "detect_running_backend(", "guncelleme_kapisi_backendi(", "db_hazir_mi(",
+            "stop_tracked_backend(", "stop_backend_for_teardown(", "thread::sleep", "fs::read",
         ];
         // Senkron kalmasına İZİN verilen komutlar: yalnız ANLIK iş (atomik bayrak, kısa kilitli kopya, pencere yoklaması,
         // beklemeden süreç başlatma). Listede olmayan YENİ senkron komut → kırmızı: pencere iş parçacığında koşar, gözden geçir.
