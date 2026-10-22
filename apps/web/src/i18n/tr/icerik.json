@@ -166,7 +166,7 @@
   "sss": {
     "aiPro": {
       "a": "AI Pro, seans sırasında sensörlerden gelen ölçümlere (sıcaklık, alan şiddeti, kamera görüntüsü) bakarak seans ayarlarını otomatik güncelleyen moddur. Seansı HER ZAMAN siz başlatır, siz durdurursunuz; acil durdurma ve süre sınırı her koşulda önceliklidir. Cihaz kendi kendine ve hekim denetimi olmadan seans başlatmaz — nihai karar ve sorumluluk hekimindir.",
-      "q": "AI Pro nedir? Hayvana kendi başına terapi mi uygular?"
+      "q": "AI Pro nedir? Hayvana kendi başına seans mı başlatır?"
     },
     "arastirma": {
       "a": "Üniversite, laboratuvar ve Ar-Ge ekipleri için: fantom tümör ve elektromanyetik alan ölçümü, petri kuyucuğu analizi, böbrek RNA, bilgisayarlı tomografi ve patoloji modelleri gibi araştırma araçlarını içerir. Günlük klinik pratiği için gerekli değildir — Veteriner profili yeterlidir.",

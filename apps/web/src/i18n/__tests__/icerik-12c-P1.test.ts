@@ -383,7 +383,7 @@ const ALTIN: Record<string, unknown> = {
    "a": "İkisinde de aynı uygulama ve aynı yapay zekâ modelleri vardır; fark aylık jeton hakkı, cihaz sayısı ve destek hızıdır. Pro: ayda 500 jeton, 5 cihaza kadar bağlantı, 1 iş günü içinde destek. Pro+: ayda 2.000 jeton, 15 cihaza kadar bağlantı, aynı iş günü içinde öncelikli destek. Kliniğinizde tek cihaz varsa ve ayda birkaç yüz analiz yetiyorsa Pro çoğu durumda yeterlidir; jeton biterse her iki planda da ek paket alabilirsiniz."
   },
   {
-   "q": "AI Pro nedir? Hayvana kendi başına terapi mi uygular?",
+   "q": "AI Pro nedir? Hayvana kendi başına seans mı başlatır?",
    "a": "AI Pro, seans sırasında sensörlerden gelen ölçümlere (sıcaklık, alan şiddeti, kamera görüntüsü) bakarak seans ayarlarını otomatik güncelleyen moddur. Seansı HER ZAMAN siz başlatır, siz durdurursunuz; acil durdurma ve süre sınırı her koşulda önceliklidir. Cihaz kendi kendine ve hekim denetimi olmadan seans başlatmaz — nihai karar ve sorumluluk hekimindir."
   },
   {
@@ -551,6 +551,12 @@ describe('site-12c-icerik · Y166 SSS ürünle çelişmez', () => {
     expect(EN['icerik.sss.aiPro.a']).not.toMatch(/apply treatment|treatment/i)
     expect(TR['icerik.sss.aiPro.a']).toMatch(/Cihaz kendi kendine ve hekim denetimi olmadan seans başlatmaz — nihai karar ve sorumluluk hekimindir\./)
     expect(EN['icerik.sss.aiPro.a']).toMatch(/does not start a session on its own or without veterinarian supervision — the final decision and responsibility belong to the veterinarian\./)
+  })
+  it('Y181 (S-YLI.2): AI Pro SSS SORUSU da "terapi uygular" demez — "seans mı başlatır" (Tedavi → Seans; Y175 cevabıyla tutarlı)', () => {
+    expect(TR['icerik.sss.aiPro.q']).toBe('AI Pro nedir? Hayvana kendi başına seans mı başlatır?')
+    expect(EN['icerik.sss.aiPro.q']).toBe('What is AI Pro? Does it start a session on the animal on its own?')
+    expect(TR['icerik.sss.aiPro.q']).not.toMatch(/terapi|tedavi/i)
+    expect(EN['icerik.sss.aiPro.q']).not.toMatch(/therapy|treatment/i)
   })
 })
 

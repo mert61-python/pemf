@@ -166,7 +166,7 @@
   "sss": {
     "aiPro": {
       "a": "AI Pro is the mode that automatically updates session settings by looking at the measurements coming from the sensors during the session (temperature, field strength, camera image). YOU always start the session and YOU stop it; emergency stop and the time limit always take priority. The device does not start a session on its own or without veterinarian supervision — the final decision and responsibility belong to the veterinarian.",
-      "q": "What is AI Pro? Does it apply therapy to the animal on its own?"
+      "q": "What is AI Pro? Does it start a session on the animal on its own?"
     },
     "arastirma": {
       "a": "For university, laboratory and R&D teams: it includes research tools such as tumor phantom and electromagnetic field measurement, well plate analysis, kidney RNA, computed tomography and pathology models. It is not needed for daily clinical practice — the Veterinarian profile is sufficient.",
