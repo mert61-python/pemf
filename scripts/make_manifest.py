@@ -111,6 +111,10 @@ APP_ASGARI_YAPI = {
 # dizine yazar → etkilenmez. Kapı: tests/test_Y176_yesil_suit_damgasi.py
 KOK_DIZINI = Path(__file__).resolve().parents[1]
 YAYIN_DIZINI = KOK_DIZINI / "pemf-app-packages"
+# 18K K4 · D3.43 · Y38: paket sır taraması tek kaynaktan (make_base_zip / Inno ile AYNI kural); gömülü Python (._pth) yolu kendisi eklemez.
+sys.path.insert(0, str(KOK_DIZINI / "build_tools"))
+import paket_sir_taramasi  # noqa: E402
+
 DAMGA_ADI = "pemf-y30-damga.json"
 DAMGA_AZAMI_SN = 24 * 3600
 #: Paket kimliği: bu adlı yaprakların (yol + değer) kümesi değişmiyorsa yayın YENİ bir yazılım taşımıyordur. Açıklama alanları
@@ -301,6 +305,15 @@ def katman_seti_tutarsizligi(dizin: Path) -> str | None:
     return None
 
 
+def yerel_paket_sir_bulgulari(dizin: Path) -> list[str]:
+    """18K K4 · D3.43 · Y38: mühürlenecek YEREL paketlerin (katmanlar, profil ve parça zip'leri) sır bulguları (boş = temiz).
+
+    Yayın dosyaları herkese açık depoya çıkar; yayımlanan sır geri alınamaz. Kural `build_tools/paket_sir_taramasi.py`'de (make_base_zip
+    ve Inno ile AYNI). Bulgu değer TAŞIMAZ (konum + tür). Yerelde paket yoksa (acil fren / taşıma) tarama da yoktur."""
+    yerel = [dizin / ad for ad in sorted({*ASSETS, *PARCA_ASSETS, *LAYER_ASSETS}) if (dizin / ad).exists()]
+    return paket_sir_taramasi.tara(yerel)[0] if yerel else []
+
+
 def sha256(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
@@ -409,6 +422,21 @@ def main() -> int:
         print(
             "  Cozum: `python build_tools/make_base_zip.py` ile IKI katmani birlikte yeniden uretin (VALIDATION: PASS).\n"
             "  Acil geri cekme icin paket GEREKMEZ: base-app.zip ve base-deps.zip'i bu klasorden kaldirin.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # 18K K4 · D3.43 · Y38: mühürlenecek HER yerel paket sır taramasından geçer; isabet → HİÇBİR ŞEY yazılmaz (sha mühürlenmeden ÖNCE).
+    _sir = yerel_paket_sir_bulgulari(args.dir)
+    if _sir:
+        print(
+            "[HATA] pakette SIR bulundu — manifest YAZILMADI (deger yazdirilmaz; yalniz konum ve tur):", file=sys.stderr
+        )
+        for _b in _sir:
+            print(f"  - {_b}", file=sys.stderr)
+        print(
+            "  Cozum: dosyayi derleme agacindan cikarin (spec / `build_tools/paket_sir_taramasi.py` kurallari) ve\n"
+            "  `python build_tools/make_base_zip.py` ile paketleri yeniden uretin (VALIDATION: PASS).",
             file=sys.stderr,
         )
         return 1

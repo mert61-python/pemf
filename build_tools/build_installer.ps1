@@ -436,53 +436,16 @@ Write-OK "Klasor boyutu: $DirSizeMB MB ($FileCount dosya)"
 # --- Adim 6.5: Release Artifact Config/Secret Kontrolu ---
 Write-Step "Release Artifact Config/Secret Kontrolu"
 
-# Bu installer plug-and-play dagitim icin config ve credential dosyalarini
-# bilerek tasir. HF token gibi gelistirme/hesap tokenlari yine release icinde
-# olmamali; onlar ayri taranir.
-$BundledConfigFiles = @(
-    "config.json",
-    "credentials.json",
-    "pemf_secrets.json",           # GUNCEL: TUM sirlar burada (SecretsManager) - release'e ASLA gomulmemeli
-    "hivemq_users.json",           # legacy: credential_manager.export_hivemq_config hala uretebilir
-    "mosquitto_passwords.txt",
-    "mosquitto_acl.conf",
-    "bridge_hivemq.conf",
-    "mosquitto.conf"
-)
-
-$BundledConfigHits = @()
-foreach ($name in $BundledConfigFiles) {
-    $BundledConfigHits += Get-ChildItem $OutputDir -Recurse -File -Force -Filter $name -ErrorAction SilentlyContinue
-}
-
-$ForbiddenPatterns = @(
-    "hf_[A-Za-z0-9]{20,}"
-)
-
-$TextFiles = Get-ChildItem $OutputDir -Recurse -File -Force -ErrorAction SilentlyContinue |
-    Where-Object { $_.Length -lt 5MB -and $_.Extension -match "^\.(py|json|txt|ini|conf|cfg|template|md|html|js|css|qss)$" }
-
-$PatternHits = @()
-foreach ($pattern in $ForbiddenPatterns) {
-    $PatternHits += $TextFiles | Select-String -Pattern $pattern -ErrorAction SilentlyContinue
-}
-
-if ($BundledConfigHits.Count -gt 0) {
-    Write-Host ""
-    Write-Host "Bundle edilen config/credential dosyalari:" -ForegroundColor Yellow
-    foreach ($hit in $BundledConfigHits) {
-        Write-Host "  FILE: $($hit.FullName)" -ForegroundColor Yellow
-    }
-    Write-Warn "Config ve sifre dosyalari kullanici onayi ile setup'a gomuluyor."
-}
-
-if ($PatternHits.Count -gt 0) {
-    Write-Host ""
-    Write-Host "Release icinde yasakli token paterni bulundu:" -ForegroundColor Red
-    foreach ($hit in $PatternHits) {
-        Write-Host "  TEXT: $($hit.Path):$($hit.LineNumber): $($hit.Line.Trim())" -ForegroundColor Red
-    }
-    Write-Fail "Release artifact icinde Hugging Face veya benzeri token paterni bulundu."
+# 18K K4 · D3.26 + D3.43 · Y38: sir taramasi TEK KAYNAK `build_tools\paket_sir_taramasi.py` (make_base_zip / make_manifest ile AYNI
+# kural): yasak dosya adi (pemf_secrets*.json, credentials*.json, .env*, Secrets.h, cloud_mqtt_provision*, hivemq_users*,
+# mosquitto_passwords*, bridge_hivemq*), config\credentials\ dizini, _internal\config\config.json / _internal\data\config.json ya da
+# metin dosyasinda HF / GitHub belirteci -> Write-Fail (cikis 1). Eskiden ad isabeti yalniz UYARIYDI ve uyari her derlemede iki
+# mosquitto.conf yuzunden yandigi icin gercek isabet gurultude kayboluyordu; mosquitto.conf / mosquitto_acl.conf artik gerekceli izin
+# listesinde (kimlik / parola yok). Deger YAZDIRILMAZ (yalniz konum + tur). Cikis kodu $LASTEXITCODE ile okunur.
+$SirTaramasi = Join-Path $ProjectRoot "build_tools\paket_sir_taramasi.py"
+& $PythonExe $SirTaramasi $OutputDir
+if ($LASTEXITCODE -ne 0) {
+    Write-Fail "Release artifact icinde SIR bulundu (yukaridaki [SIR] satirlari) - paket YAYINLANAMAZ; dosyayi derleme agacindan cikarin."
 }
 
 # GUNCEL YAPI (spec:117 guvenlik): gercek config.json bundle EDILMEZ (Gmail App Password icerir);
@@ -497,7 +460,7 @@ $LeakedConfig = Join-Path $OutputDir "_internal\config\config.json"
 if (Test-Path $LeakedConfig) {
     Write-Fail "SIZINTI: gercek config.json release'e gomulmus (_internal\config\config.json) - spec bunu skip etmeli!"
 }
-Write-OK "Yasakli HF token paterni bulunmadi."
+Write-OK "Sir taramasi temiz (yasak ad / yol + HF / GitHub belirteci yok)."
 
 $AiAssetsDir = Join-Path $ProjectRoot "release_assets\ai_models"
 # GUNCEL YAPI: model aileleri release_assets\ai_models\ai_hub\<aile>\ altinda (inference_* dahil, ~17 aile).

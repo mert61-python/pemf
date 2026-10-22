@@ -27,6 +27,7 @@ import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 MANIFEST_BETIK = KOK / "scripts" / "make_manifest.py"
+SIR_TARAYICI = KOK / "build_tools" / "paket_sir_taramasi.py"  # 18K K4: make_manifest'in içe aktardığı tek kaynak
 SUIT_BETIK = KOK / "scripts" / "yayin_oncesi_suit.ps1"
 YAYINDAKI = KOK / "pemf-app-packages" / "manifest.json"
 PWSH = shutil.which("pwsh")
@@ -71,8 +72,10 @@ def _git(depo: Path, *a: str) -> str:
 def depo(tmp_path: Path) -> Path:
     d = tmp_path / "depo"
     (d / "scripts").mkdir(parents=True)
+    (d / "build_tools").mkdir()
     (d / "pemf-app-packages").mkdir()
     shutil.copy2(MANIFEST_BETIK, d / "scripts" / "make_manifest.py")
+    shutil.copy2(SIR_TARAYICI, d / "build_tools" / "paket_sir_taramasi.py")
     shutil.copy2(SUIT_BETIK, d / "scripts" / "yayin_oncesi_suit.ps1")
     _git(d, "init", "-q")
     _git(d, "add", "-A")

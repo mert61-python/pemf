@@ -1,15 +1,16 @@
 # Author: mertaygn, cglrgrkn
-"""E-STOP BULUT AYNASI PROVİZYONU — sahip kararı (2026-08-19 gece): "indir-kur yeterli olsun".
+"""E-STOP BULUT AYNASI PROVİZYONU — sahip kararı (2026-08-19 gece): "indir-kur yeterli olsun" → 18K K4 · Y38: kimlik pakete GÖMÜLMEZ.
 
 Zincir: build-time `make_cloud_provision.py` (yerel Secrets.h → data/cloud_mqtt_provision.json,
-GİT'E GİRMEZ) → PyInstaller datas → SecretsManager `_bundled_cloud` (env → gömülü dosya) →
-ilk get_secret'te pemf_secrets.json'a taşınır (parola DPAPI). Bu kapılar: zincirin her halkası
-+ sır-hijyeni (değer asla stdout'a yazılmaz) + git-sızıntı-yok.
+GİT'E GİRMEZ) → (Y38'den beri PyInstaller datas'a GİRMEZ; ESP dönerse kurulumda ayrı sağlanır, A-04) → SecretsManager
+`_bundled_cloud` (env → gömülü dosya) → ilk get_secret'te pemf_secrets.json'a taşınır (parola DPAPI). Bu kapılar: zincirin her
+halkası + sır-hijyeni (değer asla stdout'a yazılmaz) + git-sızıntı-yok + spec gömmez.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -103,10 +104,14 @@ def test_KRITIK_provizyon_dosyasi_GITE_GIREMEZ():
     assert not r2.stdout.strip(), "provizyon dosyası git'te İZLENİYOR — derhal kaldırılmalı"
 
 
-def test_spec_kosullu_gomme_ICERIR():
+def test_Y38_spec_provizyonu_GOMMEZ():
+    """18K K4 · Y38 (sahip): bulut E-stop aynasının kimliği pakete GÖMÜLMEZ (2026-08-19 gece kararı kalktı; eski ad
+    `test_spec_kosullu_gomme_ICERIR`). Davranış kapısı `test_18K_K4_…Y38_spec_provizyon_dosyasi_VARKEN_bile_GOMMEZ` (spec sahte
+    PyInstaller'la, dosya varken); burası metin bekçisi. Üretici + SecretsManager zinciri (yukarıdaki testler) A-04 kurulumu için durur."""
     spec = (KOK / "build_tools" / "PEMF_Backend_onedir.spec").read_text(encoding="utf-8", errors="replace")
-    assert "cloud_mqtt_provision.json" in spec
-    i = spec.index("_cloud_prov")
-    assert "os.path.exists" in spec[i : i + 300], "gömme koşulsuz — temiz klonda build kırılır"
-    # config.json P0 kararı YERİNDE duruyor (istisna yalnız 4 bulut alanı)
+    assert "Y38" in spec and "PAKETE GOMULMEZ" in spec
+    assert not re.search(r"datas\.append\(\([^)]*(cloud_prov|cloud_mqtt_provision)", spec), (
+        "provizyon yine datas'a ekleniyor"
+    )
+    # config.json P0 kararı YERİNDE duruyor
     assert "if f == 'config.json':" in spec, "config.json GÖMME koruması düşmüş (P0 regresyonu)"

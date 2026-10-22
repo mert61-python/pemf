@@ -211,9 +211,9 @@ if ($SkipWeb) {
     Info "Web export tamamlandı ve doğrulandı → frontend\dist (sürüm $AppVersion)."
 }
 
-# --- 4.5 E-stop bulut aynasi provizyonu (sahip karari 2026-08-19; git'e girmez, pakete gomulur)
-# Yerel ESP Secrets.h'tan uretir; kaynak placeholder ise UYARIR ama build'i DURDURMAZ
-# (CI/temiz-klon ortaminda paket sirsiz cikar, ayna sessizce devre disi kalir — guvenli).
+# --- 4.5 E-stop bulut aynasi provizyonu (git'e girmez). 18K K4 · Y38 (sahip): artik PAKETE GOMULMEZ — spec eklemez,
+# paket sir taramasi gorurse FAIL. Dosya yalniz sir yedegi ve ESP donusunde kurulumda ayri saglama (A-04) icin uretilir.
+# Yerel ESP Secrets.h'tan uretir; kaynak placeholder ise UYARIR ama build'i DURDURMAZ.
 & $PY "build_tools\make_cloud_provision.py"
 if ($LASTEXITCODE -ne 0) {
     # ⚠️ BAYAT-DOSYA KAPISI (denetim kalemi C7, 2026-09-13).

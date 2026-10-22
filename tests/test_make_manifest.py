@@ -15,6 +15,7 @@ SEBEPSİZ kaybolamaz.
 """
 
 import json
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -61,6 +62,18 @@ def _app_zip(yol: Path, isaret: bytes, ikili: str = "PEMF_Backend/PEMF_Backend.e
     with zipfile.ZipFile(yol, "w", zipfile.ZIP_STORED) as z:
         for ad, veri in ((ikili, isaret), ("PEMF_Backend/_app_roots.json", b'{"roots": []}')):
             z.writestr(zipfile.ZipInfo(ad, date_time=(1980, 1, 1, 0, 0, 0)), veri)
+
+
+def _bozuk_kopya(tmp_path: Path, metin: str) -> Path:
+    """Değiştirilmiş make_manifest kopyası depo düzeninde (`<kök>/scripts/`) — 18K K4: betik `<kök>/build_tools/paket_sir_taramasi.py`'yi
+    içe aktarır; kopyanın yanına o da konur (tarayıcısız kopya ModuleNotFoundError ile düşerdi)."""
+    kok = tmp_path / "kopya_kok"
+    (kok / "scripts").mkdir(parents=True)
+    (kok / "build_tools").mkdir()
+    shutil.copy2(Path(__file__).resolve().parents[1] / "build_tools" / "paket_sir_taramasi.py", kok / "build_tools")
+    bozuk = kok / "scripts" / "make_manifest_bozuk.py"
+    bozuk.write_text(metin, encoding="utf-8")
+    return bozuk
 
 
 def _calistir(dizin: Path, *ek, betik: Path | None = None):
@@ -285,10 +298,7 @@ def test_KRITIK_mobile_TASINAMAZSA_kapi_HATA_verir(tmp_path, monkeypatch):
     (tmp_path / "manifest.json").write_text(json.dumps(ONCEKI), encoding="utf-8")
     betik = (Path(__file__).resolve().parents[1] / "scripts" / "make_manifest.py").read_text(encoding="utf-8")
     assert 'CARRY_ONLY = ("launcher", "mobile")' in betik, "CARRY_ONLY biçimi değişti — test güncellensin"
-    bozuk = tmp_path / "make_manifest_bozuk.py"
-    bozuk.write_text(
-        betik.replace('CARRY_ONLY = ("launcher", "mobile")', 'CARRY_ONLY = ("launcher",)'), encoding="utf-8"
-    )
+    bozuk = _bozuk_kopya(tmp_path, betik.replace('CARRY_ONLY = ("launcher", "mobile")', 'CARRY_ONLY = ("launcher",)'))
 
     r = _calistir(tmp_path, betik=bozuk)
     assert r.returncode != 0, (
@@ -302,10 +312,7 @@ def test_KARSIT_KANIT_allow_missing_mobile_kapiyi_ACAR(tmp_path):
     """Bayrak artık gerçek bir işe yarıyor: bilerek düşürmeye izin verir (çıkış 0)."""
     (tmp_path / "manifest.json").write_text(json.dumps(ONCEKI), encoding="utf-8")
     betik = (Path(__file__).resolve().parents[1] / "scripts" / "make_manifest.py").read_text(encoding="utf-8")
-    bozuk = tmp_path / "make_manifest_bozuk.py"
-    bozuk.write_text(
-        betik.replace('CARRY_ONLY = ("launcher", "mobile")', 'CARRY_ONLY = ("launcher",)'), encoding="utf-8"
-    )
+    bozuk = _bozuk_kopya(tmp_path, betik.replace('CARRY_ONLY = ("launcher", "mobile")', 'CARRY_ONLY = ("launcher",)'))
 
     r = _calistir(tmp_path, "--allow-missing-mobile", betik=bozuk)
     assert r.returncode == 0, f"bayrak kapıyı açmadı: {r.stderr[-800:]}"

@@ -45,6 +45,16 @@ import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GUII = os.path.dirname(HERE)
+# 18K K4: sır taraması tek kaynaktan; gömülü Python (._pth) betik dizinini sys.path'e KENDİLİĞİNDEN eklemez.
+sys.path.insert(0, HERE)
+import paket_sir_taramasi  # noqa: E402
+
+# Bulgu satırları Türkçe / "—" taşır: OEM 857 / cp1252 konsolda `print` UnicodeEncodeError ile düşmesin (make_manifest ile aynı).
+for _akis in (sys.stdout, sys.stderr):
+    try:
+        _akis.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:  # noqa: BLE001
+        pass
 _args = [a for a in sys.argv[1:] if not a.startswith('--')]
 # D4.32: tek-parca monolit YALNIZ acik `--monolith` ile (1.9.48'den beri YAYINLANMAZ); `--no-monolith` = varsayilan.
 MONOLITH = '--monolith' in sys.argv
@@ -108,10 +118,10 @@ APP_ROOTS = [
     # bir cihaz "destek disi" sanilip zorla guncellenir ya da tersi. Surum, tanimi geregi APP'e
     # aittir. Bkz. launcher/core/tests/upgrade_drill.rs::surum_dosyasi_APP_katmaninda.
     'PEMF_Backend/_internal/VERSION',
-    # E-stop bulut-aynasi provizyonu (sahip karari 2026-08-19): bizim yayin icerigimizdir ve
-    # surumle degisebilir -> VERSION emsaliyle APP katmanina aittir. DEPS'e duserse (ilk
-    # paketlemede tam bu oldu, +530 bayt) her provizyon degisikligi kliniklere 1,4 GB indirtir
-    # ve deps-sha sabitligi (paket-belirlenimciligi) bozulur.
+    # E-stop bulut-aynasi provizyonu: 18K K4 · Y38 (sahip) ile ARTIK PAKETE GOMULMEZ (spec eklemez; sir taramasi
+    # `paket_sir_taramasi` gorurse FAIL). Kok listede KALIR: launcher app guncellemesinde kokleri silip yeniden acar →
+    # onceki surumlerin gomdugu dosya sahadan da kalkar. (Eski not, 2026-08-19: APP katmanina aitti; DEPS'e duserse
+    # her degisiklik 1,4 GB indirtirdi.)
     'PEMF_Backend/_internal/data/cloud_mqtt_provision.json',
     # Dagitim profilleri (2026-08-22, olculerek bulundu): PEMF_ALLOWED_HOSTS eklenince deps
     # sha'si degisti — Range-merkezi-dizin kiyasi 6154 dosyadan yalniz 3 deploy/*.env'in
@@ -497,8 +507,14 @@ try:
         with zipfile.ZipFile(out) as z:
             z.extractall(tmp)
     names = app_names | deps_names
+    # 18K K4 · D3.43 · Y38: yayın zip'leri herkese açık depoya çıkar — sır (ad / belirteç deseni) TÜM katmanlarda aranır; isabet
+    # FAIL → yayın dizinine DOKUNULMAZ. Değer yazdırılmaz (yalnız konum + tür).
+    sir_bulgulari, _sir_sayi = paket_sir_taramasi.tara([p for p in (app_tmp, deps_tmp, mono_tmp) if p])
+    for b in sir_bulgulari:
+        print(f'  !! SIR: {b}', flush=True)
     checks = {
         'zip butunlugu (testzip)': not zip_bozuk,
+        f'paket SIR icermiyor (ad + belirtec deseni; {_sir_sayi} dosya, tum katmanlar)': not sir_bulgulari,
         'PEMF_Backend/PEMF_Backend.exe (backend_path)': os.path.isfile(
             os.path.join(tmp, 'PEMF_Backend', 'PEMF_Backend.exe')
         ),

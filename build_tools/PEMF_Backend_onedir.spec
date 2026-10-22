@@ -194,19 +194,13 @@ if os.path.exists(config_dir):
 # GÖMME. (Eskiden datas.append ile her klinik PC'sine _internal/data/config.json olarak
 # düz-metin kopyalanıyordu — P0 disk sızıntısı.)
 
-# ⚠️ İSTİSNA — SAHİP KARARI (2026-08-19 gece): E-stop BULUT AYNASI provizyonu
-# (data/cloud_mqtt_provision.json; YALNIZ mqtt_cloud_host/port/user/pass — wifi_pass DEĞİL)
-# pakete GÖMÜLÜR ki klinik "web sitesinden indir-kur" ile bulut E-stop'una otomatik kavuşsun.
-# Yukarıdaki P0 kararının bu 4 alan için bilinçli tersine çevrilmesidir; maruziyet sınıfı yeni
-# değil (aynı HiveMQ kimliği sahadaki her ESP flash'ında + public repo `esp` dalında; rotasyon
-# sahiplikçe reddedildi, kayıtta). Dosya git'e GİRMEZ (build-time üretilir:
-# build_tools/make_cloud_provision.py); ilk çalışmada pemf_secrets.json'a taşınır (parola DPAPI).
-_cloud_prov = os.path.join(project_path, 'data', 'cloud_mqtt_provision.json')
-if os.path.exists(_cloud_prov):
-    datas.append((_cloud_prov, 'data'))
-    print('[spec] cloud_mqtt_provision.json PAKETE GOMULDU (sahip karari 2026-08-19)')
-else:
-    print('[spec] UYARI: cloud_mqtt_provision.json YOK -> bulut E-stop aynasi paketde devre disi')
+# ⛔ E-stop BULUT AYNASI provizyonu (data/cloud_mqtt_provision.json) PAKETE GÖMÜLMEZ — 18K K4 · Y38 (sahip): "kimlik pakete
+# gömülmez; ESP dönerse kurulumda ayrı sağlanır (A-04 ile)". Yayın paketi herkese açık depoya çıkar; 2026-08-19 gece kararı
+# (HiveMQ kimliğini "indir-kur" için gömmek) böylece kalktı. ESP kapalı (Ö.4-Y7) → bulut aynasının alıcısı yok; yerel STM / ACİL
+# DURDUR yolu bu dosyaya bağlı DEĞİL. Dosyayı daha önce pemf_secrets.json'a taşımış kurulumlar etkilenmez; SecretsManager'ın ortam
+# değişkeni yolu (PEMF_MQTT_CLOUD_*) A-04 kurulumu için durur. Dosya derleme makinesinde varsa bile EKLENMEZ;
+# `build_tools/paket_sir_taramasi.py` pakette görürse make_base_zip / make_manifest / Inno FAIL.
+print('[spec] Y38: cloud_mqtt_provision.json PAKETE GOMULMEZ (bulut E-stop aynasi kimligi kurulumda ayri saglanir)')
 
 # ⚠️ D2.36 (B-10.201) · Y26: DB şablonları GÖMÜLMEZ — `database/*_template.db` F4'ten beri yoktu (girdi sessizce düşüyordu);
 # yeniden yönlendirmek 09-13 veri kaybının 3. yolunu (şablon kopyalayıcı, D2.34'te kaldırıldı) uyandırırdı. Şemayı DB
