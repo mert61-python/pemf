@@ -668,11 +668,44 @@ fn read_tail(_child: &mut Child, backend_env: &BTreeMap<String, String>) -> Stri
     // gösteriliyordu. Sahada bir kurulum bu yüzden teşhis edilemedi: gerçek sebep (at-rest
     // anahtarı DB'yi açmıyor) doğru dosyaya YAZILMIŞTI ama kimse o dosyaya bakmıyordu.
     // Çözüm: çocuğa verilen ortamı ÖNCE sor, sonra sürecin kendi ortamına düş.
-    let log = install::backend_log_path_with(
-        |k| backend_env.get(k).cloned().or_else(|| std::env::var(k).ok()),
-        &home,
-    );
-    read_log_tail(&log, 20)
+    let getenv = |k: &str| backend_env.get(k).cloned().or_else(|| std::env::var(k).ok());
+    let log = install::backend_log_path_with(getenv, &home);
+    // LN L8 · Y99 (sahip): veri kökü yazılamazsa (ikinci hesap / bozuk ACL) backend günlüğü geçici dizine düşer; launcher yalnız
+    // veri kökünü okuduğu için operatör nedeni GÖRMÜYORDU. Hangisi daha yeni yazıldıysa o gösterilir.
+    read_log_tail(&gunluk_sec(&log, &yedek_gunluk_yolu(getenv)), 20)
+}
+
+/// Y99: backend günlük dizinini açamazsa `tempfile.gettempdir()/PEMF_GUI/logs/backend_service.log`'a düşer (`backend_service.py`
+/// D2.45). Python `gettempdir` sırası: `TMPDIR` · `TEMP` · `TMP` (çocuk ortamı önce); hiçbiri yoksa sistem geçici dizini.
+fn yedek_gunluk_yolu<F>(getenv: F) -> std::path::PathBuf
+where
+    F: Fn(&str) -> Option<String>,
+{
+    ["TMPDIR", "TEMP", "TMP"]
+        .iter()
+        .find_map(|k| getenv(k).filter(|v| !v.trim().is_empty()))
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+        .join("PEMF_GUI")
+        .join("logs")
+        .join("backend_service.log")
+}
+
+/// Y99: birincil (veri kökü) ile yedek (geçici dizin) günlükten hangisi DAHA YENİ yazıldıysa; yalnız biri varsa o; ikisi de yoksa
+/// birincil (ipucu beklenen yolu söylesin).
+fn gunluk_sec(birincil: &Path, yedek: &Path) -> std::path::PathBuf {
+    let zaman = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    match (zaman(birincil), zaman(yedek)) {
+        (_, None) => birincil.to_path_buf(),
+        (None, Some(_)) => yedek.to_path_buf(),
+        (Some(a), Some(b)) => {
+            if b > a {
+                yedek.to_path_buf()
+            } else {
+                birincil.to_path_buf()
+            }
+        }
+    }
 }
 
 /// Kullanıcının ev dizini (Windows'ta `USERPROFILE` önce — `HOME` Git-Bash vb. araçların değişkenidir).
@@ -1744,6 +1777,44 @@ mod tests {
         );
         assert_eq!(taskkill_argumanlari("PEMF_Backend.exe", false), ["/F", "/IM", "PEMF_Backend.exe"]);
         assert_eq!(taskkill_argumanlari("cloudflared.exe", true), ["/F", "/IM", "cloudflared.exe", "/T"]);
+    }
+
+    /// LN L8 · Y99 (sahip): veri kökü yazılamayınca backend günlüğü `<geçici>\PEMF_GUI\logs`'a düşer (Python `gettempdir` sırası
+    /// TMPDIR · TEMP · TMP); günlük kuyruğu hangisi DAHA YENİ yazıldıysa onu gösterir — eski birincil yeni yedeği GÖLGELEMEZ.
+    #[test]
+    fn KRITIK_L8_Y99_gunluk_kuyrugu_GECICI_dizindeki_yedegi_de_okur() {
+        use std::time::SystemTime;
+        let d = tempfile::tempdir().unwrap();
+        let birincil = d.path().join("veri").join("logs").join("backend_service.log");
+        let gecici = d.path().join("tmp");
+        let gs = gecici.to_string_lossy().into_owned();
+        let yedek = yedek_gunluk_yolu(|k| (k == "TEMP").then(|| gs.clone()));
+        assert_eq!(yedek, gecici.join("PEMF_GUI").join("logs").join("backend_service.log"));
+        let sira = |k: &str| match k {
+            "TMPDIR" => Some("X".to_string()),
+            "TEMP" => Some("Y".to_string()),
+            "TMP" => Some("Z".to_string()),
+            _ => None,
+        };
+        assert!(yedek_gunluk_yolu(sira).starts_with("X"), "Python gettempdir sırası (TMPDIR önce) değil");
+        assert_eq!(gunluk_sec(&birincil, &yedek), birincil, "ikisi de yokken beklenen yol söylenmeli");
+        std::fs::create_dir_all(yedek.parent().unwrap()).unwrap();
+        std::fs::write(&yedek, "ERROR veri koku yazilamadi\n").unwrap();
+        assert_eq!(gunluk_sec(&birincil, &yedek), yedek, "yalnız yedek varken okunmadı");
+        std::fs::create_dir_all(birincil.parent().unwrap()).unwrap();
+        std::fs::write(&birincil, "eski\n").unwrap();
+        let f = std::fs::File::options().write(true).open(&birincil).unwrap();
+        f.set_modified(SystemTime::now() - Duration::from_secs(3600)).unwrap();
+        assert_eq!(gunluk_sec(&birincil, &yedek), yedek, "eski birincil yeni yedeği gölgeledi");
+        f.set_modified(SystemTime::now() + Duration::from_secs(3600)).unwrap();
+        assert_eq!(gunluk_sec(&birincil, &yedek), birincil);
+        assert!(read_log_tail(&yedek, 5).contains("veri koku yazilamadi"));
+        let src = include_str!("backend.rs").replace("\r\n", "\n");
+        let g = &src[src.find("fn read_tail(").unwrap()..];
+        assert!(
+            g[..g.find("\n}\n").unwrap()].contains("read_log_tail(&gunluk_sec(&log, &yedek_gunluk_yolu(getenv)), 20)"),
+            "read_tail yedek yolu okumuyor"
+        );
     }
 
     /// LN L7 · D2.76: çocuğun GERÇEK veri kökü — `PEMF_DATA_DIR` verildiyse `<…>\PEMF_GUI` (backend `path_utils` kuralı), yoksa
