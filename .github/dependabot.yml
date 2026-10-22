@@ -1,25 +1,28 @@
 # Bağımlılık CVE taraması + otomatik güncelleme PR'ları (audit B-9.3).
 # GitHub Dependabot: requirements*.txt (pip) + workflow action'ları haftalık taranır;
 # açık/eski bağımlılıklar için otomatik PR açılır (maintainer test edip birleştirir).
-# NOT: torch/ultralytics/onnx AI-uyumluluğa bağlı → 'ignore' ile major-bump PR'ları kısılabilir.
+# NOT: torch / torchvision / onnx Y3 gereği TAMAMEN dışlı (her pip ekosisteminde); ultralytics / numpy yalnız major'da.
+# PR SINIRLARI (YH D6, 2026-10-22 — sahip kararı 2026-10-13: dışlama + PR sınırları YAYIN PUSH'UNDAN önce dosyada): Dependabot bu depoda
+# HİÇ koşmadı; açılınca bir kerede PR dalgası (her biri CI + Vercel önizlemesi) açmasın diye toplam sınır ~50 → 15. Kapı:
+# tests/test_YH_D6_dependabot_Y3_ve_PR_siniri.py
 version: 2
 updates:
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 3
     groups:
       # Güvenlik yamaları tek PR'da toplansın (gürültü azalt).
       security-patches:
         applies-to: security-updates
         patterns: ["*"]
     ignore:
-      # AI çekirdeği: major/minor bump'lar model-uyumluluğunu kırabilir → yalnız güvenlik-yaması.
+      # Y3 (sahip kararı): onnx 1.15.0 / torch 2.1.2+cpu pinleri AYNEN korunur — yükseltme YASAK. update-types YOK = bu paket
+      # için HİÇBİR sürüm / güvenlik PR'ı açılmaz (eski hâl torch'u yalnız major/minor'da dışlıyor, onnx'i hiç dışlamıyordu).
       - dependency-name: "torch"
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]
       - dependency-name: "torchvision"
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "onnx"
       - dependency-name: "ultralytics"
         update-types: ["version-update:semver-major"]
       - dependency-name: "numpy"   # KRİTİK: torch 2.1.2 numpy<2 ister
@@ -36,7 +39,7 @@ updates:
     directory: "/launcher"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
     groups:
       security-patches:
         applies-to: security-updates
@@ -47,14 +50,26 @@ updates:
     directory: "/docker"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
+    ignore:
+      # Y3 (sahip kararı): onnx 1.15.0 / torch 2.1.2+cpu pinleri AYNEN korunur — yükseltme YASAK. update-types YOK = bu paket
+      # için HİÇBİR sürüm / güvenlik PR'ı açılmaz (eski hâl torch'u yalnız major/minor'da dışlıyor, onnx'i hiç dışlamıyordu).
+      - dependency-name: "torch"
+      - dependency-name: "torchvision"
+      - dependency-name: "onnx"
 
   # GPU inference mikroservisi (:8100) — kendi web yığını var.
   - package-ecosystem: "pip"
     directory: "/ai_service"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
+    ignore:
+      # Y3 (sahip kararı): onnx 1.15.0 / torch 2.1.2+cpu pinleri AYNEN korunur — yükseltme YASAK. update-types YOK = bu paket
+      # için HİÇBİR sürüm / güvenlik PR'ı açılmaz (eski hâl torch'u yalnız major/minor'da dışlıyor, onnx'i hiç dışlamıyordu).
+      - dependency-name: "torch"
+      - dependency-name: "torchvision"
+      - dependency-name: "onnx"
 
   # ── MONOREPO (2026-08-18): yukarıdaki blokta yazılı ÖN KOŞUL SAĞLANDI ─────────────────
   # O not şöyle diyordu: "npm ağaçları EKLENEMEDİ — çünkü sürüm kontrolünde DEĞİLLER …
@@ -69,7 +84,7 @@ updates:
     directory: "/apps/ui"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 3
     groups:
       security-patches:
         applies-to: security-updates
@@ -90,7 +105,7 @@ updates:
     directory: "/apps/web"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 3
     groups:
       security-patches:
         applies-to: security-updates
@@ -100,3 +115,4 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 2
