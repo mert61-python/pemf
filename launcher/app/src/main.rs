@@ -1020,7 +1020,13 @@ async fn remove_profiles(
 /// kapısı işletim sistemine göre değişemez. (Launcher'ın KENDİ NSIS güncellemesi Windows'a özgü
 /// kalır; o akışın tamamı zaten `#[cfg(windows)]` bloğunun içindedir.)
 fn aktif_seans_kapisi(root: &std::path::Path) -> Result<(), String> {
-    let Some(p) = backend::detect_running_backend(root) else { return Ok(()) };
+    aktif_seans_kapisi_portla(root, install::DEFAULT_PORT)
+}
+
+/// `aktif_seans_kapisi`'nın gövdesi; varsayılan port testte enjekte edilir (8000'e istek YOK). LN L6 · İG-8.21: yük altında 2 sn'lik
+/// kimlik yoklamasına yanıt vermeyen ama TCP kabul eden backend "yok" SAYILMAZ (`guncelleme_kapisi_backendi`) → seans sorulur.
+fn aktif_seans_kapisi_portla(root: &std::path::Path, varsayilan_port: u16) -> Result<(), String> {
+    let Some(p) = backend::guncelleme_kapisi_backendi(root, varsayilan_port) else { return Ok(()) };
     match backend::session_active(p) {
         Some(false) => {}
         Some(true) => return Err(
@@ -3590,6 +3596,74 @@ Connection: close
         (port, h)
     }
 
+    /// Dinleyeni OLMAYAN loopback port — kapı testlerinde VARSAYILAN port yerine enjekte edilir (8000'e istek YOK).
+    fn kapali_port() -> u16 {
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let p = ln.local_addr().unwrap().port();
+        drop(ln);
+        p
+    }
+
+    /// `sahte_backend`'in YÜK ALTINDAKİ backend'i: her isteği okur, `gecikme` bekler, sonra yanıtlar (sırayla). Yoklama (2 sn)
+    /// düşer, cömert bütçeli istek (`session_active`, 10 sn) yanıtı alır. ⚠️ `join()` YAPMAYIN (bkz. `sahte_backend`).
+    fn sahte_yavas_backend(govde: &'static str, gecikme: std::time::Duration, istek_sayisi: usize) -> (u16, std::thread::JoinHandle<()>) {
+        use std::io::{Read, Write};
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = ln.local_addr().unwrap().port();
+        let h = std::thread::spawn(move || {
+            for _ in 0..istek_sayisi {
+                let Ok((mut c, _)) = ln.accept() else { break };
+                let mut buf = [0u8; 2048];
+                let _ = c.read(&mut buf);
+                std::thread::sleep(gecikme);
+                let _ = c.write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        govde.len()
+                    )
+                    .as_bytes(),
+                );
+                let _ = c.write_all(govde.as_bytes());
+                let _ = c.flush();
+            }
+        });
+        (port, h)
+    }
+
+    /// LN L6 · İG-8.21 (ÖLÇÜLDÜ — ayrı süreç GERÇEK backend, süreç içi Python yükünde sağlık > 2 sn): 2 sn'lik kimlik yoklamasına
+    /// yanıt vermeyen ama TCP kabul eden backend "yok" SAYILMAZ — seans cömert bütçeyle sorulur, seans sürüyorsa güncelleme
+    /// ERTELENİR. Önce: yoklama düşer → kapı "backend yok" der → sessiz güncelleme süren tedaviyi keserdi.
+    #[test]
+    fn KRITIK_L6_yuk_altinda_YANITSIZ_backend_YOK_sayilmaz_seans_sorulur() {
+        let (port, h) = sahte_yavas_backend(
+            r#"{"service":"PEMF-Vet","status":"ok","sessionActive":true}"#,
+            std::time::Duration::from_millis(2600),
+            3,
+        );
+        let d = gecici_kok("yavas", port);
+        let r = aktif_seans_kapisi_portla(&d, kapali_port());
+        assert_eq!(
+            r,
+            Err(pemf_launcher_core::dil::t("rust.hata.guncellemeSeansSuruyor")),
+            "yük altındaki backend 'yok' sayıldı — güncelleme süren seansı keser"
+        );
+        drop(h);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// LN L6 KARŞIT: `backend.port` KESİN ölü porta işaret ediyor ve varsayılan port da boş → kapı GEÇER (ilk kurulum / kapalı
+    /// backend güncellemeyi kilitlemez) ve hızlıdır (10 sn'lik seans bütçesi beklenmez).
+    #[test]
+    fn KRITIK_L6_kesin_olu_backend_GECER_hizli() {
+        let d = gecici_kok("olu", kapali_port());
+        let t0 = std::time::Instant::now();
+        assert!(aktif_seans_kapisi_portla(&d, kapali_port()).is_ok(), "kesin ölü backend güncellemeyi engelledi");
+        // Windows'ta kapalı loopback porta bağlanma ~2 sn'de düşer (RST sonrası SYN yeniden denemesi; ÖLÇÜLDÜ ~4,5 sn = iki yoklama,
+        // HEAD'le aynı). Sınır: 10 sn'lik seans bütçesi BEKLENMEZ.
+        assert!(t0.elapsed() < std::time::Duration::from_secs(8), "ölü backend'de kapı seans bütçesini bekledi: {:?}", t0.elapsed());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     fn gecici_kok(ad: &str, port: u16) -> std::path::PathBuf {
         let d = std::env::temp_dir().join(format!("pemf_kapi_{}_{}_{}", ad, std::process::id(), port));
         std::fs::create_dir_all(&d).unwrap();
@@ -3605,7 +3679,7 @@ Connection: close
             r#"{"service":"PEMF-Vet","status":"ok","sessionActive":true}"#, 4);
         let d = gecici_kok("aktif", port);
 
-        let r = aktif_seans_kapisi(&d);
+        let r = aktif_seans_kapisi_portla(&d, kapali_port());
         assert!(r.is_err(), "seans surerken guncelleme gecti — tedavi yarida kesilir");
         assert!(r.unwrap_err().contains("seans"), "mesaj sebebi soylemiyor");
 
@@ -3619,7 +3693,7 @@ Connection: close
             r#"{"service":"PEMF-Vet","status":"ok","sessionActive":false}"#, 4);
         let d = gecici_kok("bos", port);
 
-        assert!(aktif_seans_kapisi(&d).is_ok(), "seans yokken guncelleme engellendi");
+        assert!(aktif_seans_kapisi_portla(&d, kapali_port()).is_ok(), "seans yokken guncelleme engellendi");
 
         drop(h);
         let _ = std::fs::remove_dir_all(&d);
@@ -3628,10 +3702,10 @@ Connection: close
     /// BİLİNMİYOR ≠ "seans yok". Otomatik güncelleme kullanıcı istemeden çalışır; ertelemek bedava,
     /// süren bir tedaviyi kesmek değil.
     ///
-    /// ⚠️ Bu testin kurulumu bilinçlidir. Backend'in TAMAMEN yanıtsız olduğu durum bu kapıya HİÇ
-    /// ULAŞMAZ: `detect_running_backend` böyle bir portu zaten tanımaz (probe düşer) ve kapı
-    /// "backend yok" diyerek geçer. Gerçek "BİLİNMİYOR" yolu şudur: backend probe'a sağlıklı
-    /// cevap verir (yani AYAKTADIR), ama seans durumu okunabilir bir değer olarak gelmez.
+    /// ⚠️ Bu testin kurulumu bilinçlidir: backend probe'a sağlıklı cevap verir (yani AYAKTADIR), ama
+    /// seans durumu okunabilir bir değer olarak gelmez. (Eskiden TAMAMEN yanıtsız backend bu kapıya
+    /// hiç ulaşmıyordu — probe düşer, kapı "backend yok" der geçerdi; LN L6 · İG-8.21 ile kapandı,
+    /// bkz. `KRITIK_L6_…`.)
     /// Sağlıklı-ama-okunamaz durumu deterministik modellemek için `sessionActive` alanını bool
     /// DIŞI bir tiple döndürüyoruz (zaman aşımı beklemek testi 12 sn yavaşlatırdı).
     #[test]
@@ -3666,7 +3740,7 @@ Connection: close
         });
         let d = gecici_kok("okunamaz", port);
 
-        let r = aktif_seans_kapisi(&d);
+        let r = aktif_seans_kapisi_portla(&d, kapali_port());
         assert!(
             r.is_err(),
             "BILINMIYOR 'seans yok' sayildi — sessiz guncelleme suren tedaviyi keser"
@@ -3746,13 +3820,13 @@ Connection: close
     fn KRITIK_L3_yakma_surerken_guncelleme_ERTELENIR() {
         let (port, h) = sahte_backend(r#"{"service":"PEMF-Vet","sessionActive":false,"firmwareGuncelleme":{"yakiliyor":true}}"#, 4);
         let d = gecici_kok("yakma", port);
-        let r = aktif_seans_kapisi(&d);
+        let r = aktif_seans_kapisi_portla(&d, kapali_port());
         assert_eq!(r, Err(pemf_launcher_core::dil::t("rust.hata.guncellemeYakmaSuruyor")), "yakma sürerken güncelleme ertelenmedi");
         drop(h);
         let _ = std::fs::remove_dir_all(&d);
         let (port2, h2) = sahte_backend(r#"{"service":"PEMF-Vet","sessionActive":false,"firmwareGuncelleme":{"yakiliyor":false}}"#, 4);
         let d2 = gecici_kok("yakmayok", port2);
-        assert!(aktif_seans_kapisi(&d2).is_ok(), "yakma yokken güncelleme engellendi");
+        assert!(aktif_seans_kapisi_portla(&d2, kapali_port()).is_ok(), "yakma yokken güncelleme engellendi");
         drop(h2);
         let _ = std::fs::remove_dir_all(&d2);
     }
@@ -3765,7 +3839,7 @@ Connection: close
         drop(ln);
         let d = gecici_kok("yok", port);
 
-        assert!(aktif_seans_kapisi(&d).is_ok(), "backend yokken guncelleme engellendi");
+        assert!(aktif_seans_kapisi_portla(&d, kapali_port()).is_ok(), "backend yokken guncelleme engellendi");
 
         let _ = std::fs::remove_dir_all(&d);
     }

@@ -153,6 +153,13 @@ sonra tarayıcıyı aç. Zaman aşımında backend log'unu göster — sessizce 
 Windows `%APPDATA%\PEMF_GUI`, macOS `~/Library/Application Support/PEMF_GUI`,
 Linux `~/.local/share/PEMF_GUI`. **Launcher bunu taklit etmeli, yeniden icat etmemeli.**
 
+**Otomatik güncelleme kapısı (`aktif_seans_kapisi`):** sessiz self-update / runtime güncellemesi backend'i öldürür; önce
+`/api/health` → `sessionActive` (10 sn bütçe) ve `firmwareGuncelleme.yakiliyor` sorulur — `true` ya da bilinmiyor → ERTELE.
+LN L6 · İG-8.21: `backend.port`'taki dinleyici TCP kabul ediyor ama 2 sn'lik kimlik yoklamasına yanıt vermiyorsa (yük altında —
+ÖLÇÜLDÜ: süreç içi Python yükünde sağlık 2 sn'yi aşıyor) backend "yok" SAYILMAZ (`backend::guncelleme_kapisi_backendi`); yalnız
+port KESİN ölüyse (bağlantı reddi) ve varsayılan portta kimliği doğrulanan backend yoksa kapı serbesttir. Varsayılan port katı kalır
+(yanıtsız yabancı bir servis güncellemeyi kilitlemesin).
+
 ## Firmware ↔ client uyumsuzluğunda client geri alma (Y16) — backend'in bildirdiği durum
 
 Sahip kararı **Y16**: "client güncellenip STM güncellenmezse client geri döner" kuralını **launcher** (sağlık kapılı

@@ -350,6 +350,21 @@ pub fn detect_running_backend(install_root: &Path) -> Option<u16> {
     None
 }
 
+/// Otomatik güncelleme kapısı için çalışan backend (LN L6 · İG-8.21). `detect_running_backend` "backend yok"u 2 sn'lik kimlik
+/// yoklamasının düşmesinden çıkarıyordu. ÖLÇÜLDÜ (ayrı süreçte GERÇEK HEAD backend, süreç içi Python yükü — `DUZELTME-LN.md` L6):
+/// sağlık 2 sn'yi aşıyor → yoklama düşüyor → kapı "backend yok" deyip seans SORMADAN geçiyor, sessiz güncelleme süren tedaviyi
+/// keserdi. Artık `backend.port`'taki dinleyici TCP kabul ediyorsa (kesin ölü değil) yanıtsız olsa da "var" sayılır → kapı seansı
+/// cömert bütçeyle (`session_active`, 10 sn) sorar, bilinmiyorsa ERTELER. Varsayılan port KATI kalır (yalnız kimliği doğrulanırsa):
+/// orada yanıtsız bir YABANCI servis güncellemeyi sonsuza dek kilitlemesin. `varsayilan_port` testte enjekte edilir (8000'e istek YOK).
+pub fn guncelleme_kapisi_backendi(install_root: &Path, varsayilan_port: u16) -> Option<u16> {
+    if let Some(port) = read_backend_port(install_root) {
+        if probe_pemf_backend(port) || !backend_is_definitely_gone(port) {
+            return Some(port);
+        }
+    }
+    probe_pemf_backend(varsayilan_port).then_some(varsayilan_port)
+}
+
 pub fn app_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}/")
 }
@@ -1704,6 +1719,27 @@ mod tests {
         );
         assert_eq!(taskkill_argumanlari("PEMF_Backend.exe", false), ["/F", "/IM", "PEMF_Backend.exe"]);
         assert_eq!(taskkill_argumanlari("cloudflared.exe", true), ["/F", "/IM", "cloudflared.exe", "/T"]);
+    }
+
+    /// LN L6 · İG-8.21: `backend.port`'taki dinleyici TCP kabul ediyor ama yoklamaya HİÇ yanıt vermiyorsa (yük altındaki backend)
+    /// kapı için "var"; aynı sessiz dinleyici yalnız VARSAYILAN porttaysa (port dosyası yok) yabancı servis olabilir → "yok" (katı);
+    /// port dosyası kesin ölü porta işaret ediyorsa → "yok".
+    #[test]
+    fn KRITIK_L6_guncelleme_kapisi_TCP_kabul_eden_yanitsizi_YOK_saymaz() {
+        let sessiz = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap(); // accept YOK: el sıkışma işletim sisteminde
+        let sp = sessiz.local_addr().unwrap().port();
+        let kapali = {
+            let l = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+            l.local_addr().unwrap().port()
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("backend.port"), sp.to_string()).unwrap();
+        assert_eq!(guncelleme_kapisi_backendi(tmp.path(), kapali), Some(sp), "yanıtsız ama canlı backend 'yok' sayıldı");
+        let bos = tempfile::tempdir().unwrap();
+        assert_eq!(guncelleme_kapisi_backendi(bos.path(), sp), None, "varsayılan portta yanıtsız yabancı servis güncellemeyi kilitler");
+        std::fs::write(tmp.path().join("backend.port"), kapali.to_string()).unwrap();
+        assert_eq!(guncelleme_kapisi_backendi(tmp.path(), kapali), None, "kesin ölü backend 'var' sayıldı");
+        drop(sessiz);
     }
 
     /// LN L5 · Y71: kapanışta yalnız KENDİ kökümüzdeki mosquitto seçilir — sahadaki eski kurulumun servisi (`C:\Program Files\mosquitto`),
