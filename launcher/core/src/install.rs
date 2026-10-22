@@ -1723,13 +1723,25 @@ mod tests {
     fn KRITIK_L11_testler_gercek_ortami_OKUMAZ() {
         let src = include_str!("install.rs");
         let modul = &src[src.find(concat!("mod ", "tests {")).expect("test modülü yok")..];
-        let desenler = [concat!("backend_env", "("), concat!("std::env::", "var("), concat!("std::env::", "var_os("), concat!("std::env::", "vars(")];
+        // YLI-A3.5: önek BAĞIMSIZ (`use std::env; env::var(…)` da gerçek ortamı okur).
+        let desenler = [concat!("backend_env", "("), concat!("env::", "var("), concat!("env::", "var_os("), concat!("env::", "vars(")];
         let ihlal: Vec<&str> = modul
             .lines()
             .filter(|s| !s.trim_start().starts_with("//"))
             .filter(|s| desenler.iter().any(|d| s.contains(d)))
             .collect();
         assert!(ihlal.is_empty(), "test gerçek ortamı okuyor (gerçek ProgramData'ya yazar): {ihlal:#?}");
+        // YLI-A3.5: kök yaratan install çağrısını GERÇEK ortamla yapan bir backend.rs testi de aynı sonuca varır (bu kapı yalnız
+        // install.rs'yi tarıyordu; `PD_TUZAK=1` ölçümünde mutant tuzakta `PEMF_System` açtı).
+        let bsrc = include_str!("backend.rs");
+        let bmod = &bsrc[bsrc.find(concat!("mod ", "tests {")).expect("backend test modülü yok")..];
+        let kok_yaratan = [concat!("cozulmus_veri_", "dizini("), concat!("backend_env", "("), concat!("backend_env", "_with(")];
+        let bihlal: Vec<&str> = bmod
+            .lines()
+            .filter(|s| !s.trim_start().starts_with("//"))
+            .filter(|s| kok_yaratan.iter().any(|d| s.contains(d)) && s.contains(concat!("env::", "var")))
+            .collect();
+        assert!(bihlal.is_empty(), "backend.rs testi kök yaratan çağrıyı GERÇEK ortamla yapıyor: {bihlal:#?}");
     }
 
     fn env_from<'a>(pairs: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<String> + 'a {
