@@ -177,8 +177,16 @@ Sözleşme (yalnız yerel/LAN istek — tünele `null`): `GET /api/health` → `
 budanmaz (**Y80**).
 
 Launcher `istemciGeriAlinmali=true` görürse — ve yalnız o zaman — önceki çalışan sürüme sağlık kapılı geri döner.
-⚠️ **Uygulanmadı (Rust):** launcher bu alanı henüz OKUMUYOR — launcher oturumunun açık maddesi (1-H raporu).
 `uyum=null` geri alma sebebi DEĞİLDİR (üç durumlu karar; bilinmeyene dayanarak hiçbir şey yapılmaz).
+
+**Uygulandı (LN L2, Rust):** runtime güncellemesinin sağlık kapısında (`apply_runtime_update`, yeni sürüm açıldıktan SONRA,
+`dbReady` denetiminden sonra, onaydan — `runtime.old` / `_app_yedek` silinmeden — ÖNCE) `backend::firmware_kararini_bekle`:
+backend açılış kararını STM el sıkışmasından sonra verdiği için (`kontrol_edildi=false` iken) en çok 45 sn (`FIRMWARE_KARAR_BUTCESI`)
+1 sn aralıkla yoklanır. Yalnız JSON `true` → E-stop'lu söküm → deneme sayacı (aynı hedef 2 kez geri alınınca otomatik kurulum durur) →
+eski sürüme dönüş; yanıt `{"status":"rolled_back","kod":"firmware_uyumsuz"}`, arayüz "kart yazılımıyla uyumlu değil — teknik destek"
+notunu gösterir. Geri alma YOK: alan yok (eski backend) · `null` (tünel) · dizge / sayı değer · bozuk gövde · bütçe içinde karar gelmedi.
+⚠️ Sınır: onaylanmış (önceki açılışta kurulmuş) bir sürümde `runtime.old` yoktur — sonradan gelen `istemciGeriAlinmali=true` geri
+alamaz; oturum yine `stmUyumlu` kapısıyla korunur (kanal / paket uyumsuzsa seans reddedilir).
 
 ## Güvenlik gereksinimleri
 

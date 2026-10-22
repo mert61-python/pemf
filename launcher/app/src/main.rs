@@ -1236,7 +1236,18 @@ async fn apply_runtime_update(
                                 cihaz hiçbir seans başlatamazdı; eski sürüme dönüldü"
                             .to_string(),
                         geri_alma_hatasi: geri_hata,
+                        kod: None,
                     });
+                }
+                // ⚠️ LN L2 · Y16 + Y81 (D1.119, docs/LAUNCHER_SPEC.md): backend `firmwareGuncelleme.istemciGeriAlinmali` JSON `true`
+                // (kesin uyumsuz + STM bağlı + ileri gidilemiyor) → client ÖNCEKİ çalışan sürüme sağlık kapılı GERİ ALINIR. Yalnız o
+                // zaman: `uyum == null`, "hedef sürümü bildirmedi", alanın yokluğu (eski backend) ve bütçe içinde kararın gelmemesi
+                // geri alma sebebi DEĞİL. Karar BURADA beklenir: `runtime.old` / `_app_yedek` yalnız onaydan ÖNCE durur ve backend
+                // açılış kararını STM el sıkışmasından SONRA verir (D1.121).
+                if backend::firmware_kararini_bekle(port, backend::FIRMWARE_KARAR_BUTCESI, FIRMWARE_KARAR_YOKLAMA)
+                    == backend::FirmwareKarari::GeriAl
+                {
+                    return Ok(firmware_uyumsuz_geri_al(child, port, &root2, &manifest_raw, &geri, bellek2.clone()));
                 }
                 flow::guncellemeyi_onayla(&root2, &geri);
                 // C2: gerçekten çalıştı → döngü-kırıcı sayacı sıfırla (bir sonraki gerçek
@@ -1255,6 +1266,7 @@ async fn apply_runtime_update(
                 Ok(GuncellemeSonucu::GeriAlindi {
                     sebep: e.to_string(),
                     geri_alma_hatasi: geri_hata,
+                    kod: None,
                 })
             }
         }
@@ -1271,11 +1283,40 @@ async fn apply_runtime_update(
         GuncellemeSonucu::DegisiklikYok => Ok(serde_json::json!({ "status": "noop" })),
         GuncellemeSonucu::Duraklatildi => Ok(serde_json::json!({ "status": "paused" })),
         GuncellemeSonucu::Iptal => Ok(serde_json::json!({ "status": "cancelled" })),
-        GuncellemeSonucu::GeriAlindi { sebep, geri_alma_hatasi } => Ok(serde_json::json!({
+        GuncellemeSonucu::GeriAlindi { sebep, geri_alma_hatasi, kod } => Ok(serde_json::json!({
             "status": "rolled_back",
             "reason": sebep,
             "rollback_error": geri_alma_hatasi,
+            // LN L2: arayüz nedene göre doğru notu seçer (`firmware_uyumsuz` → "açılamadı" DEMEZ).
+            "kod": kod,
         })),
+    }
+}
+
+/// LN L2: firmware kararı yoklama aralığı (bütçe `backend::FIRMWARE_KARAR_BUTCESI`).
+const FIRMWARE_KARAR_YOKLAMA: std::time::Duration = std::time::Duration::from_secs(1);
+/// LN L2: `rolled_back` yanıtındaki neden kodu — arayüz `rtRollbackFirmware` notunu gösterir.
+const KOD_FIRMWARE_UYUMSUZ: &str = "firmware_uyumsuz";
+
+/// LN L2 · Y16 + Y81: yeni sürüm açıldı ama backend "client geri alınmalı" dedi (kart yazılımı uyumsuz, ileri gidilemiyor).
+/// Sıra dbReady dalıyla AYNI: ⚠️ E-stop → kill (`stop_backend_for_teardown`) → deneme sayacı (döngü kırıcı: aynı hedef 2 kez geri
+/// alınınca otomatik kurulum durur) → eski sürüme dön. Kendi fonksiyonunda: o dalın satırları Python kapılarının TEK geçmesi gereken
+/// çapalarıdır (`tests/launcher_onay_karari.py`).
+fn firmware_uyumsuz_geri_al(
+    child: std::process::Child,
+    port: u16,
+    root: &std::path::Path,
+    manifest_raw: &str,
+    geri: &flow::GeriAlmaBilgisi,
+    bellek: Arc<Mutex<Option<auth::Session>>>,
+) -> GuncellemeSonucu {
+    stop_backend_for_teardown(Some((child, port)), root, bellek);
+    flow::geri_almayi_kaydet(root, manifest_raw);
+    let geri_alma_hatasi = flow::guncellemeyi_geri_al(root, geri).err().map(|x| x.to_string());
+    GuncellemeSonucu::GeriAlindi {
+        sebep: pemf_launcher_core::dil::t("rust.hata.guncellemeFirmwareUyumsuz"),
+        geri_alma_hatasi,
+        kod: Some(KOD_FIRMWARE_UYUMSUZ),
     }
 }
 
@@ -1285,10 +1326,12 @@ enum GuncellemeSonucu {
     DegisiklikYok,
     Duraklatildi,
     Iptal,
-    /// Yeni sürüm AÇILAMADI → eskiye dönüldü. `geri_alma_hatasi` doluysa disk elle onarım ister.
+    /// Yeni sürüm AÇILAMADI ya da kullanılamaz (dbReady false · kart yazılımı uyumsuz) → eskiye dönüldü. `geri_alma_hatasi` doluysa
+    /// disk elle onarım ister. `kod`: arayüzün notu seçtiği neden (yalnız `firmware_uyumsuz`; diğerleri `None` = genel not).
     GeriAlindi {
         sebep: String,
         geri_alma_hatasi: Option<String>,
+        kod: Option<&'static str>,
     },
 }
 

@@ -385,7 +385,8 @@ def acilis_denetimi(
     # kanal kapalıyken (varsayılan) ölüydü; `PEMF_LEGACY_EXE_UPDATE=1` ile açıkken launcher'ın yönettiği kurulumun YANINA
     # ikinci bir kurulum yapardı (split-brain hasta DB'si). Artık `onceki_client` VERİLMEZ (plan geri almayı önermez);
     # durum `uyum` + `istemciGeriAlinmali` ile launcher'a bildirilir (`/api/health` → `firmwareGuncelleme`, D1.116).
-    # Launcher (Rust) tarafı bu sinyali henüz OKUMUYOR — launcher oturumunun açık maddesi (docs/LAUNCHER_SPEC.md).
+    # LN L2: launcher (Rust) bu sinyali runtime güncellemesinin sağlık kapısında okur ve YALNIZ `true`'da geri alır
+    # (`launcher/core/src/backend.rs::firmware_kararini_bekle`, docs/LAUNCHER_SPEC.md).
     plan = su.plan_yap(
         client,
         firmware_surum,

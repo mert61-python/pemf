@@ -1863,7 +1863,9 @@
           // kırmızı arıza değil, ne olduğunu anlatan bir not göster.
           if (status === "rolled_back") {
             await refreshEnv(); renderChips(); show("s-ready");
-            if (r.rollback_error) fail(t().rtRollbackFail); else notice(t().rtRollback);
+            // LN L2 · Y16: yeni sürüm AÇILDI ama kart yazılımıyla uyumsuz (`kod: firmware_uyumsuz`) — "açılamadı" demek yanlış olur.
+            if (r.rollback_error) fail(t().rtRollbackFail);
+            else notice(r.kod === "firmware_uyumsuz" ? t().rtRollbackFirmware : t().rtRollback);
             return true;
           }
           await refreshEnv(); renderChips(); show("s-ready"); notice(t().rtDone);

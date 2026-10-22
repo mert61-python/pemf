@@ -165,14 +165,76 @@ pub fn db_hazir_govdeden(govde: &str) -> Option<bool> {
 
 /// Çalışan backend'e TEK istek atıp `dbReady` durumunu okur. Ulaşılamazsa `None` (bilinmiyor).
 pub fn db_hazir_mi(port: u16) -> Option<bool> {
+    saglik_govdesi(port).and_then(|b| db_hazir_govdeden(&b))
+}
+
+/// `/api/health` gövdesi (200 dışı / ulaşılamaz → `None`). Tek istek, 3 sn.
+fn saglik_govdesi(port: u16) -> Option<String> {
     ureq::get(&health_url(port))
         .timeout(Duration::from_secs(3))
         .call()
         .ok()
         .filter(|r| r.status() == 200)
         .and_then(|r| r.into_string().ok())
-        .and_then(|b| db_hazir_govdeden(&b))
 }
+
+/// Y16 + Y81 (D1.119, `docs/LAUNCHER_SPEC.md`): backend'in firmware ↔ client uyum kararı (`/api/health` → `firmwareGuncelleme`).
+///
+/// "Client güncellenip STM güncellenmezse client geri döner" kararını LAUNCHER uygular — yalnız backend AÇIKÇA
+/// `istemciGeriAlinmali: true` dediğinde. `uyum: null` (kural yok / sürüm okunamadı), "hedef sürümü bildirmedi", alanın hiç
+/// olmaması (eski backend) ve `null` (tünel / uzak istemci) geri alma sebebi DEĞİLDİR: bilinmeyene dayanarak geri alınmaz.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FirmwareKarari {
+    /// `istemciGeriAlinmali` JSON `true` — kesin uyumsuz + STM bağlı + ileri gidilemiyor: client geri alınmalı.
+    GeriAl,
+    /// Açılış kararı verildi (`kontrol_edildi: true`), geri alma gerekmiyor.
+    Devam,
+    /// Alan var ama açılış kararı henüz verilmedi (STM el sıkışması / uyum varlığı bekleniyor — backend D1.121).
+    Bekliyor,
+    /// Alan yok / `null` / nesne değil / gövde bozuk → geri alma sebebi DEĞİL.
+    Bilinmiyor,
+}
+
+/// `/api/health` gövdesinden firmware kararı (saf → birim-testlenebilir).
+pub fn firmware_karari_govdeden(govde: &str) -> FirmwareKarari {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(govde) else {
+        return FirmwareKarari::Bilinmiyor;
+    };
+    let Some(fw) = v.get("firmwareGuncelleme").and_then(|x| x.as_object()) else {
+        return FirmwareKarari::Bilinmiyor;
+    };
+    // ⚠️ YALNIZ JSON `true`: "true" dizgesi, 1, null ya da alanın yokluğu geri ALDIRMAZ.
+    if fw.get("istemciGeriAlinmali") == Some(&serde_json::Value::Bool(true)) {
+        return FirmwareKarari::GeriAl;
+    }
+    if fw.get("kontrol_edildi") == Some(&serde_json::Value::Bool(true)) {
+        FirmwareKarari::Devam
+    } else {
+        FirmwareKarari::Bekliyor
+    }
+}
+
+/// Güncelleme sağlık kapısında firmware kararını BEKLE (bütçeli). Backend açılış kararını STM el sıkışmasından SONRA verir
+/// (D1.121; STM 20 sn'de bağlanmazsa yalnız ölçüm) → sağlık 200 olduğu anda karar çoğu zaman henüz yoktur. `Bekliyor` sürdükçe
+/// (ya da yoklama yanıtsızken) `aralik` ile yeniden yoklanır; alan yoksa / `null` ise HEMEN, bütçe dolarsa `Bilinmiyor` (geri alma YOK —
+/// fail-safe yön: bilinmeyene dayanarak çalışan bir güncelleme geri alınmaz; eski backend'ler alanı hiç yayınlamaz).
+pub fn firmware_kararini_bekle(port: u16, azami: Duration, aralik: Duration) -> FirmwareKarari {
+    let son = Instant::now() + azami;
+    loop {
+        match saglik_govdesi(port).map(|b| firmware_karari_govdeden(&b)) {
+            // Karar henüz yok ya da bu yoklama yanıtsız (yük altındaki backend) → bütçe içinde yeniden yokla.
+            Some(FirmwareKarari::Bekliyor) | None => {}
+            Some(k) => return k,
+        }
+        if Instant::now() + aralik > son {
+            return FirmwareKarari::Bilinmiyor;
+        }
+        std::thread::sleep(aralik);
+    }
+}
+
+/// Firmware kararı bekleme bütçesi: backend yedek ölçümü 20 sn (`DONANIM_KARAR_YEDEK_S`) + uyum varlığı çekimi (≤15 sn) + pay.
+pub const FIRMWARE_KARAR_BUTCESI: Duration = Duration::from_secs(45);
 
 /// `<install_root>/backend.port` içeriğini GÜVENLE oku. Rakam-dışı / aralık-dışı → `None`.
 pub fn read_backend_port(install_root: &Path) -> Option<u16> {
@@ -1391,6 +1453,64 @@ mod tests {
             }
         });
         (port, rx)
+    }
+
+    /// LN L2 · Y16 + Y81 (D1.119): geri alma YALNIZ `istemciGeriAlinmali` JSON `true` iken; `uyum: null`, "hedef sürümü bildirmedi",
+    /// alanın yokluğu (eski backend), `null` (tünel / uzak istemci), dizge / sayı değerler ve bozuk gövde geri ALDIRMAZ.
+    #[test]
+    fn KRITIK_L2_firmware_karari_yalniz_istemciGeriAlinmali_TRUE_ise_GERI_AL() {
+        use FirmwareKarari::*;
+        let k = |g: &str| firmware_karari_govdeden(g);
+        assert_eq!(k(r#"{"firmwareGuncelleme":{"kontrol_edildi":true,"uyum":false,"istemciGeriAlinmali":true}}"#), GeriAl);
+        assert_eq!(k(r#"{"firmwareGuncelleme":{"kontrol_edildi":true,"uyum":false,"istemciGeriAlinmali":false}}"#), Devam);
+        // uyum null (kural yok / sürüm okunamadı) → karar verildi ama geri alma YOK.
+        assert_eq!(k(r#"{"firmwareGuncelleme":{"kontrol_edildi":true,"uyum":null,"istemciGeriAlinmali":false}}"#), Devam);
+        // "yakıldı ama kart hedef sürümü bildirmedi" (uygulandi false + hata) geri alma sebebi DEĞİL.
+        assert_eq!(
+            k(r#"{"firmwareGuncelleme":{"kontrol_edildi":true,"uyum":false,"uygulandi":false,"hata":"yakıldı ama kart hedef sürümü bildirmedi","istemciGeriAlinmali":false}}"#),
+            Devam
+        );
+        assert_eq!(k(r#"{"firmwareGuncelleme":{"kontrol_edildi":false,"istemciGeriAlinmali":false}}"#), Bekliyor);
+        for (ad, g) in [
+            ("alan yok (eski backend)", r#"{"service":"PEMF-Vet","status":"online"}"#),
+            ("null (tünel / uzak)", r#"{"firmwareGuncelleme":null}"#),
+            ("dizge true", r#"{"firmwareGuncelleme":{"kontrol_edildi":true,"istemciGeriAlinmali":"true"}}"#),
+            ("sayı 1", r#"{"firmwareGuncelleme":{"kontrol_edildi":true,"istemciGeriAlinmali":1}}"#),
+            ("nesne değil", r#"{"firmwareGuncelleme":true}"#),
+            ("bozuk gövde", "bu json degil"),
+        ] {
+            assert_ne!(k(g), GeriAl, "{ad}: geri alma sebebi sayıldı — bilinmeyene dayanarak çalışan güncelleme geri alınır");
+        }
+        assert_eq!(k(r#"{"service":"PEMF-Vet"}"#), Bilinmiyor);
+        assert_eq!(k(r#"{"firmwareGuncelleme":null}"#), Bilinmiyor);
+        assert_eq!(k(r#"{"firmwareGuncelleme":{"kontrol_edildi":true,"istemciGeriAlinmali":"true"}}"#), Devam);
+    }
+
+    /// LN L2: backend açılış kararını STM el sıkışmasından SONRA verir (D1.121) → sağlık 200 olduğu anda karar YOKTUR. Bekleyici
+    /// `Bekliyor` sürdükçe yoklar ve kararı alır; eski backend'de (alan yok) HEMEN döner; bütçe dolarsa `Bilinmiyor` (geri alma yok).
+    #[test]
+    fn KRITIK_L2_firmware_kararini_bekle_karar_GELENE_kadar_yoklar() {
+        let bek = r#"{"firmwareGuncelleme":{"kontrol_edildi":false,"istemciGeriAlinmali":false}}"#;
+        let geri = r#"{"firmwareGuncelleme":{"kontrol_edildi":true,"uyum":false,"istemciGeriAlinmali":true}}"#;
+        let (port, rx) = sahte_backend(vec![Some((200, bek)), Some((200, bek)), Some((200, geri))]);
+        let k = firmware_kararini_bekle(port, Duration::from_secs(10), Duration::from_millis(50));
+        assert_eq!(k, FirmwareKarari::GeriAl, "karar gelmeden bekleme bitti — geri alma sinyali kaçırılır");
+        assert_eq!(istekler(&rx).len(), 3);
+
+        let (eski, rx2) = sahte_backend(vec![Some((200, r#"{"service":"PEMF-Vet"}"#))]);
+        let t0 = Instant::now();
+        assert_eq!(firmware_kararini_bekle(eski, Duration::from_secs(10), Duration::from_millis(50)), FirmwareKarari::Bilinmiyor);
+        assert!(t0.elapsed() < Duration::from_secs(3), "alanı yayınlamayan ESKİ backend'de bütçe boyunca beklendi: {:?}", t0.elapsed());
+        assert_eq!(istekler(&rx2).len(), 1);
+
+        let (asili, _rx3) = sahte_backend(vec![Some((200, bek)); 50]);
+        let t1 = Instant::now();
+        assert_eq!(
+            firmware_kararini_bekle(asili, Duration::from_millis(400), Duration::from_millis(50)),
+            FirmwareKarari::Bilinmiyor,
+            "karar hiç gelmezse geri alma YOK (bilinmiyor)"
+        );
+        assert!(t1.elapsed() < Duration::from_secs(4), "bütçe aşıldı: {:?}", t1.elapsed());
     }
 
     fn istekler(rx: &std::sync::mpsc::Receiver<String>) -> Vec<String> {
