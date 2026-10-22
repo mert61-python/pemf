@@ -113,6 +113,27 @@ def _urun_predict_sakla():
 # ── /start: başlatma REDDEDİLİR, onay YANMAZ ────────────────────────────────────────────────────────────────────────────
 
 
+def test_YAPISAL_S_AIK6_bayrak_device_env_ve_launcher_ile_TASINIR_varsayilan_KAPALI():
+    """S-AIK.6 açık #1 (LN L8): bayrağın taşıyıcısı yazılı — `deploy/device.env` satırı `=0` (servis kurulumu NSSM'e yazar) ve
+    launcher backend ortamına KOŞULSUZ `"0"` varsayılanla geçirir (ortamdaki değer korunur). Y142 bayrağı KAPALI kalır.
+    MUTASYON: satırı silin / `=1` yapın ya da launcher varsayılanını `"1"` yapın → KIRMIZI."""
+    from pathlib import Path
+
+    kok = Path(__file__).resolve().parents[1]
+    satir = [
+        s
+        for s in (kok / "deploy" / "device.env").read_text(encoding="utf-8").splitlines()
+        if s.startswith(f"{BAYRAK}=")
+    ]
+    assert satir == [f"{BAYRAK}=0"], f"device.env taşıyıcısı yok ya da KAPALI değil: {satir}"
+    rs = (kok / "launcher" / "core" / "src" / "install.rs").read_text(encoding="utf-8").replace("\r\n", "\n")
+    assert f'pub const ENV_KEDI_AIPRO_SURUS: &str = "{BAYRAK}";' in rs, "launcher sabiti yok"
+    assert (
+        "        ENV_KEDI_AIPRO_SURUS.to_string(),\n        getenv(ENV_KEDI_AIPRO_SURUS)\n"
+        "            .filter(|v| !v.trim().is_empty())\n            .unwrap_or_else(|| \"0\".to_string()),"
+    ) in rs, "launcher bayrağı geçirmiyor ya da varsayılanı KAPALI değil"
+
+
 @pytest.mark.parametrize("deger", KAPALI, ids=lambda d: "YOK" if d is None else repr(d))
 def test_KRITIK_Y142_bayrak_KAPALIYKEN_kedi_AI_Pro_BASLATILMAZ_onay_YANMAZ(o, monkeypatch, deger):
     from servers import ai_approval

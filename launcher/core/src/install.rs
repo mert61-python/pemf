@@ -133,6 +133,26 @@ pub const ENV_STM_PORT: &str = "PEMF_STM_PORT";
 /// Kilit: `device_env_anahtarlari_launcherda_KARSILIGINI_BULUR`.
 pub const ENV_ARASTIRMA_AIPRO: &str = "PEMF_ARASTIRMA_AIPRO";
 
+/// KEDİ AI PRO KAPALI DÖNGÜ SÜRÜŞÜ (LN L8 · S-AIK.6 açık #1 · Y142) — yalnız TAŞIYICI: `deploy/device.env` → launcher → backend.
+/// Backend semantiği (`apps/backend/servers/ai_router.py::_kedi_aipro_surus_acik`): yok / boş = KAPALI; yalnız `1|true|yes|on`
+/// açar. Varsayılanımız `"0"` — davranış DEĞİŞMEZ (Y142: tezgâhta F6 doğrulanıp sahip onaylayana dek KAPALI); taşıyıcı yokken
+/// operatör açsa bile launcher'ın başlattığı backend'e ULAŞMAZDI (ARAŞTIRMA bayrağının aynı kaçış sınıfı). Varsayılanı `"1"`
+/// YAPMAYIN. Ortamda tanımlıysa DOKUNULMAZ. Kilit: `device_env_anahtarlari_launcherda_KARSILIGINI_BULUR`.
+pub const ENV_KEDI_AIPRO_SURUS: &str = "PEMF_KEDI_AIPRO_SURUS";
+
+/// SAKLAMA SÜRELERİ (LN L8 · S-F2-3.2 (a) · A-33 · D2.44): backend'in tek silicisi (`services/headless_db_maintenance`) bu adları
+/// okur. Launcher ORTAMDA TANIMLI olanları backend'e AYNEN geçirir; VARSAYILAN YAZMAZ (backend varsayılanları tek kaynak: sensör 90 ·
+/// doz 3650 · seans olayı 365 · giden kutusu 30 · PII 365 gün). Boş / geçersiz değer backend'de o adımı KAPATIR ve uyarı yazar
+/// (S-F2-1.5) — launcher bu anlamı DEĞİŞTİRMEZ. Eski ad `PEMF_SENSOR_RETAIN_DAYS` da geçer (backend yalnız yeni ad yokken uygular).
+pub const ENV_SAKLAMA: [&str; 6] = [
+    "PEMF_RETAIN_SENSOR_DAYS",
+    "PEMF_RETAIN_DOSE_DAYS",
+    "PEMF_RETAIN_EVENT_DAYS",
+    "PEMF_RETAIN_OUTBOX_DAYS",
+    "PEMF_RETAIN_PII_DAYS",
+    "PEMF_SENSOR_RETAIN_DAYS",
+];
+
 /// DNS-REBINDING KORUMASI (eksik-taramasi P2, 2026-08-22) — bu sinifin BESINCI ornegi olmasin:
 /// `PEMF_ALLOWED_HOSTS` altyapisi backend'de 2026-08-04'ten beri vardi ama launcher gecirmedigi
 /// icin siteden kurulan HICBIR klinikte aktif degildi (ENABLE_TUNNEL/STM_PORT/DATA_DIR ile
@@ -682,6 +702,19 @@ where
             .filter(|v| !v.trim().is_empty())
             .unwrap_or_else(|| "0".to_string()),
     );
+    // KEDİ AI PRO SÜRÜŞÜ (bkz. ENV_KEDI_AIPRO_SURUS · Y142): yalnız taşıyıcı; varsayılan "0" = KAPALI. Ortamda tanımlıysa DOKUNMA.
+    env.insert(
+        ENV_KEDI_AIPRO_SURUS.to_string(),
+        getenv(ENV_KEDI_AIPRO_SURUS)
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| "0".to_string()),
+    );
+    // SAKLAMA SÜRELERİ (bkz. ENV_SAKLAMA · S-F2-3.2 a): yalnız TANIMLI olanlar, değer AYNEN (boş da — backend'in kapatma anlamı).
+    for ad in ENV_SAKLAMA {
+        if let Some(v) = getenv(ad) {
+            env.insert(ad.to_string(), v);
+        }
+    }
     // DNS-REBINDING KORUMASI (bkz. ENV_ALLOWED_HOSTS): bu satir olmadan launcher ile kuran
     // hicbir klinikte Host korumasi calismiyordu. Ortamda tanimliysa DOKUNMA.
     env.insert(
@@ -1828,7 +1861,11 @@ mod tests {
             // geçirmiyor" sınıfının SEKİZİNCİ örneğiydi. KOŞULSUZ eklenir; varsayılan "0" =
             // güvenli-sil (bugünkü canlı davranış), ortamdaki değer korunur.
             ENV_KEEP_PLAIN_BACKUP,
+            // KEDİ AI PRO SÜRÜŞÜ TAŞIYICISI (LN L8 · S-AIK.6 · Y142): KOŞULSUZ; varsayılan "0" = KAPALI, ortamdaki değer korunur.
+            ENV_KEDI_AIPRO_SURUS,
         ];
+        // SAKLAMA SÜRELERİ (LN L8 · S-F2-3.2 a): yalnız ortamda TANIMLIYSA geçer (varsayılan yazılmaz) — koşullu.
+        beklenen.extend(ENV_SAKLAMA.iter().copied().filter(|a| std::env::var(a).is_ok()));
         // `ENV_BASE_SHA` yalnız KURULU bir paket varsa eklenir (ilk açılışta kurulum yok).
         if !read_installed_packages(Path::new("/opt/pemf")).app.is_empty()
             || !read_installed_packages(Path::new("/opt/pemf")).base.is_empty()
@@ -1847,6 +1884,34 @@ mod tests {
             .collect::<Vec<_>>(),
             "backend'e giden ortam değişkeni kümesi değişti — bilinçli mi?"
         );
+    }
+
+    /// LN L8 · S-AIK.6 (Y142 taşıyıcısı) + S-F2-3.2 (a): kedi sürüş bayrağı KOŞULSUZ geçer, varsayılan "0" (KAPALI), ortamdaki
+    /// değer korunur; saklama adları YALNIZ tanımlıysa ve değeri AYNEN (boş da — backend'in "adım kapalı" anlamı) geçer, tanımsızken
+    /// launcher varsayılan YAZMAZ (backend varsayılanları tek kaynak).
+    #[test]
+    fn KRITIK_L8_kedi_bayragi_TASINIR_saklama_adlari_YALNIZ_tanimliysa_aynen_gecer() {
+        let bos = backend_env_with(|_| None, Path::new("/opt/pemf"), 8123, "");
+        assert_eq!(bos[ENV_KEDI_AIPRO_SURUS], "0", "kedi sürüşü varsayılanı KAPALI değil (Y142)");
+        assert!(ENV_SAKLAMA.iter().all(|a| !bos.contains_key(*a)), "tanımsız saklama adına launcher varsayılan yazdı");
+        let ortam = [
+            ("PEMF_KEDI_AIPRO_SURUS", "1"),
+            ("PEMF_RETAIN_SENSOR_DAYS", "30"),
+            ("PEMF_RETAIN_PII_DAYS", ""),
+            ("PEMF_SENSOR_RETAIN_DAYS", "45"),
+        ];
+        let dolu = backend_env_with(
+            |k| ortam.iter().find(|(a, _)| *a == k).map(|(_, v)| v.to_string()),
+            Path::new("/opt/pemf"),
+            8123,
+            "",
+        );
+        assert_eq!(dolu[ENV_KEDI_AIPRO_SURUS], "1", "operatörün açtığı bayrak backend'e ulaşmıyor");
+        assert_eq!(dolu["PEMF_RETAIN_SENSOR_DAYS"], "30");
+        assert_eq!(dolu["PEMF_RETAIN_PII_DAYS"], "", "boş değer (backend: adım kapalı) değiştirildi");
+        assert_eq!(dolu["PEMF_SENSOR_RETAIN_DAYS"], "45", "eski ad geçmiyor");
+        assert!(!dolu.contains_key("PEMF_RETAIN_DOSE_DAYS"));
+        assert_eq!(ENV_SAKLAMA.len(), 6);
     }
 
     /// ⚠️ EKSİKLİK KAPISI (denetim 2026-08-17) — yukarıdaki testin YAPAMADIĞI şey.

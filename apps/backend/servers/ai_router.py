@@ -1091,9 +1091,9 @@ def _arastirma_aipro_kapisi(saglayici) -> None:
 #: Kapalıyken analiz, hazırlık, öneri ve onay ekranı GÖRÜNÜR kalır; AI Pro'dan BAŞLATMA, onay mührü ve BOBİN SÜRÜŞÜ eylem
 #: söyleyen iletiyle reddedilir. Elle seans (Kontrol), araştırma sağlayıcıları (kendi bayrakları) ve ACİL DURDUR ETKİLENMEZ
 #: (Ö.4-Y8). Anlam araştırma bayrağıyla AYNI: yok / boş / bozuk = KAPALI; yalnız `1|true|yes|on` açar. Tezgâhta kabin → EM
-#: çerçevesi doğrulanınca SAHİP onayıyla açılır (TEZGAH-LISTESI §F6). ⚠️ Taşıyıcı bugün yalnız SÜREÇ ORTAMI (launcher'ın
-#: doğurduğu backend ortamı miras alır); `deploy/device.env` satırı + launcher geçişi açma kararıyla birlikte eklenir — o güne
-#: dek yokluğu = KAPALI (fail-closed yön). Kapı: tests/test_ai_pro_KEDI_surus_KAPALI_varsayilan_Y142.py
+#: çerçevesi doğrulanınca SAHİP onayıyla açılır (TEZGAH-LISTESI §F6). Taşıyıcı (S-AIK.6 açık #1, LN L8): `deploy/device.env`
+#: satırı `=0` (servis kurulumu) + launcher geçişi (`install.rs::ENV_KEDI_AIPRO_SURUS`, varsayılan "0", ortam korunur) — bayrak
+#: yine KAPALI; yokluğu da KAPALI (fail-closed yön). Kapı: tests/test_ai_pro_KEDI_surus_KAPALI_varsayilan_Y142.py
 KEDI_AIPRO_SURUS_BAYRAGI = "PEMF_KEDI_AIPRO_SURUS"
 
 
