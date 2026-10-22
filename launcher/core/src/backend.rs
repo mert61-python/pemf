@@ -248,15 +248,22 @@ pub fn read_backend_port(install_root: &Path) -> Option<u16> {
 /// Ama BAŞKASININ başlattığı bir backend'i sahiplenmeden önce kimliğini doğrulamak gerekir —
 /// aynı porta bağlanmış ilgisiz bir yerel servis de 200 dönebilir.
 pub fn probe_pemf_backend(port: u16) -> bool {
-    ureq::get(&health_url(port))
-        .timeout(Duration::from_secs(2))
-        .call()
-        .ok()
-        .filter(|r| r.status() == 200)
-        .and_then(|r| r.into_string().ok())
-        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
-        .and_then(|v| v.get("service").and_then(|s| s.as_str().map(str::to_owned)))
-        .is_some_and(|s| s == "PEMF-Vet")
+    pemf_kimligi(port) == Some(true)
+}
+
+/// Kimlik yoklamasının ÜÇ durumu (18K · S-YLI.3): `Some(true)` = PEMF backend'i (`/api/health` 200 + `"service":"PEMF-Vet"`) ·
+/// `Some(false)` = YANIT VEREN başka bir servis (2xx–4xx, PEMF kimliği yok) · `None` = BİLİNMİYOR (2 sn'de yanıt yok, bağlantı koptu,
+/// gövde okunamadı, 5xx — sunucu hatası kimlik söylemez). `probe_pemf_backend` yalnız `Some(true)`'yu "var" sayar.
+fn pemf_kimligi(port: u16) -> Option<bool> {
+    match ureq::get(&health_url(port)).timeout(Duration::from_secs(2)).call() {
+        Ok(r) if r.status() == 200 => {
+            let v = serde_json::from_str::<serde_json::Value>(&r.into_string().ok()?).ok();
+            Some(v.and_then(|v| v.get("service").and_then(|s| s.as_str().map(str::to_owned))).is_some_and(|s| s == "PEMF-Vet"))
+        }
+        Ok(_) => Some(false),
+        Err(ureq::Error::Status(kod, _)) if kod < 500 => Some(false),
+        Err(_) => None,
+    }
 }
 
 /// Bu portta AKTİF BİR TEDAVİ SEANSI sürüyor mu? (`/api/health` → `sessionActive`)
@@ -369,10 +376,12 @@ pub fn guncelleme_kapisi_backendi(install_root: &Path, varsayilan_port: u16) -> 
 /// dosya YOK / bayatken varsayılan portta çalışan backend `kill_stray_backends` ile ADLA öldürülüyor ama STOP almıyordu. Artık
 /// `backend.port` (bugünkü gibi, yoklamasız) + varsayılan porttaki KİMLİĞİ DOĞRULANMIŞ PEMF backend'i. Gönderim yalnız ARTAR
 /// (Ö.4-Y8). Varsayılan portta dinleyen yoksa kimlik yoklaması yapılmaz (kesin-ölü denetimi ≤ 400 ms — söküm gecikmez).
-/// `varsayilan_port` testte enjekte edilir (8000'e istek YOK).
+/// 18K · S-YLI.3: yük altındaki backend kimlik yoklamasına 2 sn'de yanıt veremez → eskiden "PEMF değil" sayılıp STOP'suz ADLA
+/// öldürülüyordu. Artık yalnız kimliği AÇIKÇA başka olan (yanıt veren yabancı servis) hedef dışı; yanıtsız / bilinmiyor hedeftir
+/// (NSIS `hooks.nsi` `pemf_estop_varsayilan` ile AYNI kural). `varsayilan_port` testte enjekte edilir (8000'e istek YOK).
 pub fn orphan_durdurma_hedefleri(install_root: &Path, varsayilan_port: u16) -> Vec<u16> {
     let mut v: Vec<u16> = read_backend_port(install_root).into_iter().collect();
-    if !v.contains(&varsayilan_port) && !backend_is_definitely_gone(varsayilan_port) && probe_pemf_backend(varsayilan_port) {
+    if !v.contains(&varsayilan_port) && !backend_is_definitely_gone(varsayilan_port) && pemf_kimligi(varsayilan_port) != Some(false) {
         v.push(varsayilan_port);
     }
     v
@@ -1882,6 +1891,24 @@ mod tests {
         let ayni = tempfile::tempdir().unwrap();
         std::fs::write(ayni.path().join("backend.port"), kapali.to_string()).unwrap();
         assert_eq!(orphan_durdurma_hedefleri(ayni.path(), kapali), vec![kapali]);
+    }
+
+    /// 18K · S-YLI.3: varsayılan portta YANITSIZ dinleyici (yük altındaki backend kimliğe 2 sn'de yanıt veremez), bağlantıyı yanıtsız
+    /// kapatan ya da 5xx dönen backend STOP hedefidir (eskiden "PEMF değil" sayılıp STOP'suz adla öldürülüyordu); YANIT VEREN yabancı
+    /// servis (404 / 200 PEMF dışı — L6 testi) hedef dışı kalır.
+    #[test]
+    fn KRITIK_18K_SYLI3_orphan_STOP_hedefi_YANITSIZ_varsayilan_backend() {
+        let bos = tempfile::tempdir().unwrap();
+        let sessiz = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap(); // accept YOK: el sıkışma işletim sisteminde
+        let sp = sessiz.local_addr().unwrap().port();
+        assert_eq!(orphan_durdurma_hedefleri(bos.path(), sp), vec![sp], "yanıtsız varsayılan backend STOP almadan öldürülür");
+        let (kopan, _r1) = sahte_backend(vec![None]);
+        assert_eq!(orphan_durdurma_hedefleri(bos.path(), kopan), vec![kopan], "yanıtsız kapanan bağlantı 'yabancı' sayıldı");
+        let (hata, _r2) = sahte_backend(vec![Some((500, r#"{"detail":"x"}"#))]);
+        assert_eq!(orphan_durdurma_hedefleri(bos.path(), hata), vec![hata], "5xx kimlik söylemez — hedef olmalı");
+        let (yok, _r3) = sahte_backend(vec![Some((404, r#"{"detail":"Not Found"}"#))]);
+        assert!(orphan_durdurma_hedefleri(bos.path(), yok).is_empty(), "yanıt veren yabancı servise STOP hedefi");
+        drop(sessiz);
     }
 
     /// LN L5 · Y71: kapanışta yalnız KENDİ kökümüzdeki mosquitto seçilir — sahadaki eski kurulumun servisi (`C:\Program Files\mosquitto`),

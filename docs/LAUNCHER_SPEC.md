@@ -215,6 +215,14 @@ Otomatik güncelleme (self-update / runtime) yakma sürerken ertelenir (`rust.ha
 yalnız kendi kökümüzden (aşağıda), `cloudflared.exe` adıyla; NSIS PREUNINSTALL kancası aynı. Azami süre dolarsa backend yine öldürülür
 ama yakıcı yaşar.
 
+**STOP hedefleri — launcher orphan söküm ve NSIS kaldırma AYNI küme (İG-8.27 · LN L6 · 18K K1 / S-YLI.3):** `PEMF_Backend.exe` ADLA
+öldürüldüğü için STOP, port dosyasındaki backend'le sınırlı kalmaz: `backend.port` (yoklamasız) + varsayılan port `install::DEFAULT_PORT`
+(NSIS `PEMF_VARSAYILAN_PORT`, kapı eşitliği denetler; dosyadaki portla aynıysa yinelenmez). Varsayılan portta dinleyen yoksa (≤ 400 ms)
+ya da YANIT VEREN yabancı servis varsa (`/api/health` 2xx–4xx, PEMF kimliği yok) STOP gitmez; PEMF kimliği, 2 sn'de yanıt yok, kopan
+bağlantı ya da 5xx → STOP (yük altındaki backend kimliğe yanıt veremeyebilir — S-YLI.3). Kapanış ucunun HTTP HATA yanıtı (eski backend 405,
+5xx) süresinden bağımsız olarak operatörün ACİL DURDUR ucuna düşürür; yalnız YANITSIZ (zaman aşımı) ilk istekten sonra ikinci istek yok
+(launcher `durdur_iste` · NSIS 18K K2). NSIS kancası `backend.port` yok / bozuk / bayatken eskiden STOP'u atlıyordu.
+
 ## Kapanışta / kaldırmada artakalan süreçler — yalnız KENDİ mosquitto'muz (Y71 · LN L5)
 
 Backend öldürüldükten sonra (sıra: STOP → yakma beklemesi → backend → yardımcılar; backend ÖNCE ölür, yoksa broker gözetmeni
