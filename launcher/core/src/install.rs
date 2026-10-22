@@ -1621,6 +1621,35 @@ pub fn remove_install(install_root: &Path) -> std::io::Result<()> {
 mod tests {
     use super::*;
 
+    /// LN L11 · S-I18N.13: testler GERÇEK ortamı OKUMAZ — eskiden `backend_env(...)` / `cozulmus_veri_dizini(std::env)` gerçek
+    /// `PROGRAMDATA`'yı okuyup `C:\ProgramData\PEMF_System`'de dizin açıyor, sonda dosyası yazıyor, ilk seferde `icacls` koşuyordu
+    /// (araç setinin sahte `PROGRAMDATA`'sı olmadan koşulamıyordu). Artık her test kendi geçici `PROGRAMDATA`'sıyla; başka değişken YOK.
+    fn sahte_pd() -> (tempfile::TempDir, String) {
+        let d = tempfile::tempdir().unwrap();
+        let s = d.path().to_string_lossy().into_owned();
+        (d, s)
+    }
+
+    fn yalniz_pd(pd: &str) -> impl Fn(&str) -> Option<String> + Copy + '_ {
+        move |k| (k == "PROGRAMDATA").then(|| pd.to_string())
+    }
+
+    /// LN L11 · S-I18N.13 kapısı: bu test modülü GERÇEK süreç ortamını okuyan çağrı İÇERMEZ — ne ortamı kendisi okuyan
+    /// `backend_env(…)` ne de `std::env::var…` (ortam HEP enjekte: `env_from` / `yalniz_pd`). Desenler `concat!` ile bölünür ki
+    /// kapı kendi metnini yakalamasın; yorum satırları sayılmaz.
+    #[test]
+    fn KRITIK_L11_testler_gercek_ortami_OKUMAZ() {
+        let src = include_str!("install.rs");
+        let modul = &src[src.find(concat!("mod ", "tests {")).expect("test modülü yok")..];
+        let desenler = [concat!("backend_env", "("), concat!("std::env::", "var("), concat!("std::env::", "var_os("), concat!("std::env::", "vars(")];
+        let ihlal: Vec<&str> = modul
+            .lines()
+            .filter(|s| !s.trim_start().starts_with("//"))
+            .filter(|s| desenler.iter().any(|d| s.contains(d)))
+            .collect();
+        assert!(ihlal.is_empty(), "test gerçek ortamı okuyor (gerçek ProgramData'ya yazar): {ihlal:#?}");
+    }
+
     fn env_from<'a>(pairs: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<String> + 'a {
         move |k| {
             pairs
@@ -1764,12 +1793,13 @@ mod tests {
 
     #[test]
     fn backend_env_veri_kokunu_TASIR() {
-        let env = backend_env(Path::new("/opt/pemf"), 8000, "");
-        if cfg!(target_os = "windows") && std::env::var("PROGRAMDATA").is_ok() {
-            // Gerçek makinede ProgramData yazılabilir → değişken verilmiş OLMALI.
+        let (_pd, pds) = sahte_pd();
+        let env = backend_env_with(yalniz_pd(&pds), Path::new("/opt/pemf"), 8000, "");
+        if cfg!(target_os = "windows") {
+            // (Sahte) ProgramData yazılabilir → değişken verilmiş OLMALI ve TAM o kök olmalı.
             assert!(env.contains_key(ENV_DATA_DIR),
                 "PEMF_DATA_DIR verilmedi — ikinci Windows hesabi BOS KLINIK gorur");
-            assert!(env[ENV_DATA_DIR].contains("PEMF_System"));
+            assert_eq!(Path::new(&env[ENV_DATA_DIR]), Path::new(&pds).join("PEMF_System"));
         }
     }
 
@@ -1901,7 +1931,8 @@ mod tests {
         let hedef = d.path().join("yedek");
         std::fs::create_dir_all(&hedef).unwrap();
         backup_dir_yaz(d.path(), &hedef.to_string_lossy()).unwrap();
-        let env = backend_env(d.path(), 8000, "");
+        let (_pd, pds) = sahte_pd();
+        let env = backend_env_with(yalniz_pd(&pds), d.path(), 8000, "");
         assert_eq!(Path::new(&env[ENV_BACKUP_DIR]), hedef,
             "yedek hedefi backend'e gecirilmedi — off-site kopya HIC alinmaz");
     }
@@ -1911,13 +1942,15 @@ mod tests {
     fn erisilemez_hedef_backend_enve_GIRMEZ() {
         let d = tempfile::tempdir().unwrap();
         backup_dir_yaz(d.path(), r"\?\Q:\cikarilmis-usb").unwrap();
-        let env = backend_env(d.path(), 8000, "");
+        let (_pd, pds) = sahte_pd();
+        let env = backend_env_with(yalniz_pd(&pds), d.path(), 8000, "");
         assert!(!env.contains_key(ENV_BACKUP_DIR), "erisilemez hedef env'e girdi");
     }
 
     #[test]
     fn backend_env_model_kokunu_ve_portu_verir() {
-        let env = backend_env(Path::new("/opt/pemf"), 8123, "");
+        let (_pd, pds) = sahte_pd();
+        let env = backend_env_with(yalniz_pd(&pds), Path::new("/opt/pemf"), 8123, "");
         // Platform-agnostik: Windows '\' vs POSIX '/' — Path karşılaştır (string değil).
         assert_eq!(Path::new(&env[ENV_MODELS_DIR]), Path::new("/opt/pemf").join("ai_models"));
         assert_eq!(env[ENV_API_PORT], "8123");
@@ -1929,7 +1962,8 @@ mod tests {
     /// için bu bayrak yerel arayüzü bozmaz.
     #[test]
     fn backend_env_auth_zorunlulugunu_acik_verir() {
-        let env = backend_env(Path::new("/opt/pemf"), 8123, "");
+        let (_pd, pds) = sahte_pd();
+        let env = backend_env_with(yalniz_pd(&pds), Path::new("/opt/pemf"), 8123, "");
         assert_eq!(env[ENV_REQUIRE_AUTH], "1");
     }
 
@@ -1943,7 +1977,8 @@ mod tests {
     /// Bu ayar bir daha SESSİZCE kaybolmasın: eksikliği testi düşürür.
     #[test]
     fn backend_env_at_rest_sifrelemeyi_ZORUNLU_kilar() {
-        let env = backend_env(Path::new("/opt/pemf"), 8123, "");
+        let (_pd, pds) = sahte_pd();
+        let env = backend_env_with(yalniz_pd(&pds), Path::new("/opt/pemf"), 8123, "");
         assert_eq!(
             env.get(ENV_ENCRYPT_AT_REST).map(String::as_str),
             Some("1"),
@@ -2041,7 +2076,8 @@ mod tests {
     /// (ya da biri düşerse) bu test düşer ve karar gözden geçirilir.
     #[test]
     fn backend_env_kumesi_bilincli_kalir() {
-        let env = backend_env(Path::new("/opt/pemf"), 8123, "nonce123");
+        let (_pd, pds) = sahte_pd();
+        let env = backend_env_with(yalniz_pd(&pds), Path::new("/opt/pemf"), 8123, "nonce123");
         let mut anahtarlar: Vec<&str> = env.keys().map(String::as_str).collect();
         anahtarlar.sort();
         // ⚠️ `ENV_DATA_DIR` KOŞULLUDUR: yalnız makine-geneli kök YAZILABİLİRSE eklenir (Windows'ta
@@ -2088,20 +2124,17 @@ mod tests {
             ENV_KEDI_AIPRO_SURUS,
         ];
         // SAKLAMA SÜRELERİ (LN L8 · S-F2-3.2 a): yalnız ortamda TANIMLIYSA geçer (varsayılan yazılmaz) — koşullu.
-        beklenen.extend(ENV_SAKLAMA.iter().copied().filter(|a| std::env::var(a).is_ok()));
+        // (LN L11: ortam sahte — saklama adları tanımsız, eklenmez.)
         // `ENV_BASE_SHA` yalnız KURULU bir paket varsa eklenir (ilk açılışta kurulum yok).
         if !read_installed_packages(Path::new("/opt/pemf")).app.is_empty()
             || !read_installed_packages(Path::new("/opt/pemf")).base.is_empty()
         {
             beklenen.push(ENV_BASE_SHA);
         }
-        if cozulmus_veri_dizini(|k| std::env::var(k).ok()).is_some() {
+        if cozulmus_veri_dizini(yalniz_pd(&pds)).is_some() {
             beklenen.push(ENV_DATA_DIR);
         }
-        // Y96 (LN L8): paylaşılan yerel grup yalnız geçerliyse — koşullu.
-        if paylasilan_grup_sid(|k| std::env::var(k).ok()).is_some() {
-            beklenen.push(ENV_DATA_GROUP_SID);
-        }
+        // Y96 (LN L8): paylaşılan yerel grup — sahte ortamda tanımsız (L11), eklenmez.
         assert_eq!(
             anahtarlar,
             beklenen
@@ -2237,7 +2270,8 @@ mod tests {
             anahtarlar.len()
         );
 
-        let env = backend_env(Path::new("/opt/pemf"), 8123, "nonce123");
+        let (_pd, pds) = sahte_pd();
+        let env = backend_env_with(yalniz_pd(&pds), Path::new("/opt/pemf"), 8123, "nonce123");
 
         // ── MUAF: backend VARSAYILANI device.env ile AYNI sonucu veriyor ya da launcher yolunda
         //    kavram olarak karşılığı yok. Her satırın gerekçesi ZORUNLU.
