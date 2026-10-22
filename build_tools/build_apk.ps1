@@ -97,42 +97,18 @@ try {
 } finally { Pop-Location }
 if ($code -ne 0) { Die "gradle assembleRelease başarısız (exit $code)" }
 
-# --- 3. APK'yı guii\release_assets'e geri getir ---
 $apk = Join-Path $android "app\build\outputs\apk\release\app-release.apk"
 if (-not (Test-Path $apk)) { Die "APK üretilemedi: $apk" }
-$destDir = Join-Path $GuiRoot "release_assets"
-if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir | Out-Null }
-$dest = Join-Path $destDir "PEMF_Vet_Mobil.apk"
-Copy-Item $apk $dest -Force
 
-# --- 3b. SÜRÜMLÜ KOPYA (site bu adı bekler) ---------------------------------
-# ⚠️ DENETİM 2026-08-23 (Y1): betik YALNIZ sürümsüz adı üretiyordu. Sürümsüz ad OTA/manifest
-# içindir; SİTE adı sürümden TÜRETİR (`config.ts::androidAsset` → PEMF_Vet_Mobil-<sürüm>.apk).
-# Sürümlü kopyayı "yayınlarken elle yap" adımına bırakmak iki kez 404'e yol açtı (2026-08-22'de
-# APK, aynı gün EXE). Kopya artık DERLEMENİN parçası: elle atlanacak bir adım kalmıyor.
-# Sürüm versions.json'dan okunur (tek kaynak; APK'nın kendi manifestiyle aynı olduğu
-# `tests/test_site_indirme_varligi_URETILDI.py` tarafından ayrıca doğrulanır).
-$surumler = Get-Content (Join-Path $GuiRoot "versions.json") -Raw | ConvertFrom-Json
-$mobilSurum = $surumler.mobile.name
-if (-not $mobilSurum) { Die "versions.json icinde mobile.name yok — surumlu kopya uretilemez" }
-$destSurumlu = Join-Path $destDir "PEMF_Vet_Mobil-$mobilSurum.apk"
-Copy-Item $apk $destSurumlu -Force
-
-$mb = [math]::Round((Get-Item $dest).Length/1MB,1)
-Write-Host ""
-Write-Host "============================================" -ForegroundColor Green
-Write-Host "  APK HAZIR ($mb MB)" -ForegroundColor Green
-Write-Host "  $dest" -ForegroundColor White
-Write-Host "  $destSurumlu  (site bu adi indirir)" -ForegroundColor White
-Write-Host "============================================" -ForegroundColor Green
-
-# --- 4. İMZA DENETİMİ (tedarik zinciri) -------------------------------------
+# --- 3. İMZA DENETİMİ (tedarik zinciri) — release_assets'e KOPYALAMADAN ÖNCE ---------------------------------
 # build.gradle, release keystore yapılandırılmamışsa DEBUG anahtara düşer ve uyarı basar; ancak
 # o uyari 2+ MB'lik gradle ciktisinin icinde kayboluyor. Debug keystore repoda commit'li ve
 # parolasi Android'in EVRENSEL varsayilani ('android'/'androiddebugkey') oldugundan, bu anahtarla
 # imzalanan bir APK'nin UZERINE ayni anahtarla imzalanmis SAHTE bir APK in-place kurulabilir ve
 # uygulama verisini (SecureStore'daki cihaz X-API-Key'i + Supabase oturumu) DEVRALIR.
-# Bu yuzden imzayi build SONRASI dogrula ve sonucu en son, en gorunur yerde soyle.
+# 18K K5 · D3.25: denetim eskiden KOPYADAN SONRA koşuyordu ve yalnız 'hata'da duruyordu — debug imzalı APK (yalnız uyarı kutusu)
+# ya da apksigner yokken (yalnız uyarı) APK yayın adlarıyla (site + OTA'nın indirdiği) release_assets'te çıkış 0 ile KALIYORDU.
+# Artık gradle çıktısında doğrulanır; 'release' DIŞINDAKİ her sonuç (hata / debug / apksigner yok) → Die (çıkış 1), kopya YOK.
 #
 # YH D4 (D4B-INC §9 #10): `apksigner verify` HATASI (cikis kodu != 0: imzasiz / bozuk / sema uyusmaz APK) eskiden GORULMUYORDU —
 # ciktida "CN=Android Debug" gecmeyince akis "release" dalina dusup bos DN uzerinde `.Trim()` cagiriyordu (anlamsiz hata ya da
@@ -152,31 +128,55 @@ function Test-ApkImzasi {
 
 $apksigner = Get-ChildItem "$env:LOCALAPPDATA\Android\Sdk\build-tools\*\apksigner.bat" -ErrorAction SilentlyContinue |
              Sort-Object FullName | Select-Object -Last 1
-if ($apksigner) {
-    $imza = Test-ApkImzasi -Apksigner $apksigner.FullName -Apk $dest
-    if ($imza.durum -eq 'hata') {
-        # Dogrulanamayan APK yayin adiyla KALMAZ (site / OTA bu adlari indirir; kapi test_site_indirme_varligi_URETILDI kirmiziya doner).
-        foreach ($f in @($dest, $destSurumlu)) { if (Test-Path $f) { Move-Item -Force $f "$f.IMZA-DOGRULANAMADI" } }
-        Write-Host $imza.cikti
-        Die "APK imza dogrulamasi BASARISIZ (apksigner cikis=$($imza.cikis)). Ciktilar '.IMZA-DOGRULANAMADI' ekiyle yeniden adlandirildi - YAYINLAMAYIN."
-    }
-    if ($imza.durum -eq 'debug') {
-        Write-Host ""
-        Write-Host "############################################################" -ForegroundColor Red
-        Write-Host "#  DIKKAT: APK **DEBUG KEYSTORE** ILE IMZALANDI            #" -ForegroundColor Red
-        Write-Host "#  Bu anahtar repoda commit'li ve parolasi herkeste ayni.  #" -ForegroundColor Red
-        Write-Host "#  YAYINA CIKARMAYIN / SIDELOAD DAGITMAYIN.                #" -ForegroundColor Red
-        Write-Host "#                                                          #" -ForegroundColor Red
-        Write-Host "#  Cozum: apps/ui\android\keystore.properties olusturun:        #" -ForegroundColor Yellow
-        Write-Host "#    storeFile=C:\\yol\\pemf-release.p12                     #" -ForegroundColor Yellow
-        Write-Host "#    storePassword=...  keyAlias=pemf  keyPassword=...     #" -ForegroundColor Yellow
-        Write-Host "############################################################" -ForegroundColor Red
-    } else {
-        Write-Host "[apk] Imza OK (release keystore): $($imza.dn)" -ForegroundColor Green
-    }
-} else {
-    Write-Host "[apk] UYARI: apksigner bulunamadi; imza dogrulanamadi." -ForegroundColor Yellow
+if (-not $apksigner) {
+    Die "apksigner bulunamadi (Android SDK build-tools) - imza DOGRULANAMADI; APK release_assets'e KOPYALANMADI. Android SDK build-tools'u kurun ve yeniden derleyin."
 }
+$imza = Test-ApkImzasi -Apksigner $apksigner.FullName -Apk $apk
+if ($imza.durum -eq 'hata') {
+    Write-Host $imza.cikti
+    Die "APK imza dogrulamasi BASARISIZ (apksigner cikis=$($imza.cikis)) - APK release_assets'e KOPYALANMADI; YAYINLAMAYIN."
+}
+if ($imza.durum -eq 'debug') {
+    Write-Host ""
+    Write-Host "############################################################" -ForegroundColor Red
+    Write-Host "#  DIKKAT: APK **DEBUG KEYSTORE** ILE IMZALANDI            #" -ForegroundColor Red
+    Write-Host "#  Bu anahtar repoda commit'li ve parolasi herkeste ayni.  #" -ForegroundColor Red
+    Write-Host "#  YAYINA CIKARMAYIN / SIDELOAD DAGITMAYIN.                #" -ForegroundColor Red
+    Write-Host "#                                                          #" -ForegroundColor Red
+    Write-Host "#  Cozum: apps/ui\android\keystore.properties olusturun:        #" -ForegroundColor Yellow
+    Write-Host "#    storeFile=C:\\yol\\pemf-release.p12                     #" -ForegroundColor Yellow
+    Write-Host "#    storePassword=...  keyAlias=pemf  keyPassword=...     #" -ForegroundColor Yellow
+    Write-Host "############################################################" -ForegroundColor Red
+    Die "APK DEBUG keystore ile imzali - release_assets'e KOPYALANMADI. keystore.properties (ya da PEMF_KEYSTORE_FILE) ile yeniden derleyin."
+}
+Write-Host "[apk] Imza OK (release keystore): $($imza.dn)" -ForegroundColor Green
+
+# --- 4. APK'yı guii\release_assets'e geri getir (YALNIZ release imzası doğrulandıktan SONRA) ---
+$destDir = Join-Path $GuiRoot "release_assets"
+if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir | Out-Null }
+$dest = Join-Path $destDir "PEMF_Vet_Mobil.apk"
+Copy-Item $apk $dest -Force
+
+# --- 4b. SÜRÜMLÜ KOPYA (site bu adı bekler) ---------------------------------
+# ⚠️ DENETİM 2026-08-23 (Y1): betik YALNIZ sürümsüz adı üretiyordu. Sürümsüz ad OTA/manifest
+# içindir; SİTE adı sürümden TÜRETİR (`config.ts::androidAsset` → PEMF_Vet_Mobil-<sürüm>.apk).
+# Sürümlü kopyayı "yayınlarken elle yap" adımına bırakmak iki kez 404'e yol açtı (2026-08-22'de
+# APK, aynı gün EXE). Kopya artık DERLEMENİN parçası: elle atlanacak bir adım kalmıyor.
+# Sürüm versions.json'dan okunur (tek kaynak; APK'nın kendi manifestiyle aynı olduğu
+# `tests/test_site_indirme_varligi_URETILDI.py` tarafından ayrıca doğrulanır).
+$surumler = Get-Content (Join-Path $GuiRoot "versions.json") -Raw | ConvertFrom-Json
+$mobilSurum = $surumler.mobile.name
+if (-not $mobilSurum) { Die "versions.json icinde mobile.name yok — surumlu kopya uretilemez" }
+$destSurumlu = Join-Path $destDir "PEMF_Vet_Mobil-$mobilSurum.apk"
+Copy-Item $apk $destSurumlu -Force
+
+$mb = [math]::Round((Get-Item $dest).Length/1MB,1)
+Write-Host ""
+Write-Host "============================================" -ForegroundColor Green
+Write-Host "  APK HAZIR ($mb MB)" -ForegroundColor Green
+Write-Host "  $dest" -ForegroundColor White
+Write-Host "  $destSurumlu  (site bu adi indirir)" -ForegroundColor White
+Write-Host "============================================" -ForegroundColor Green
 
 if ($RemoveScratch) { Info "Scratch siliniyor (C: temiz): $ShortDir"; cmd /c rmdir /s /q "$ShortDir" 2>$null }
 else { Info "Scratch korundu ($ShortDir) — sonraki build hızlı (incremental). Silmek için -RemoveScratch." }

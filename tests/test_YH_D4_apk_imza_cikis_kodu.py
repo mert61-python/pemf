@@ -104,13 +104,16 @@ def test_KRITIK_basarili_ama_SERTIFIKASIZ_cikti_HATA_sayilir(tmp_path):
     assert _imza(tmp_path, ["Verifies"], 0)["durum"] == "hata"
 
 
-def test_KRITIK_ana_akis_HATA_dalinda_yayin_adlarini_kaldirir_ve_DURUR():
+def test_KRITIK_ana_akis_HATA_dalinda_KOPYADAN_ONCE_DURUR():
+    """18K K5 · D3.25 (eski ad `…_HATA_dalinda_yayin_adlarini_kaldirir_ve_DURUR`): doğrulama artık gradle çıktısında, release_assets'e
+    KOPYADAN ÖNCE — 'hata' dalı yayın adlarını yeniden adlandırmak yerine hiç oluşturmadan Die ile durur. Davranış kapısı:
+    tests/test_18K_K5_apk_imzasi_KOPYADAN_ONCE.py (gerçek sıra, sahte apksigner + Copy-Item kaydı)."""
     metin = BETIK.read_text(encoding="utf-8-sig")
-    m = re.search(r"if \(\$imza\.durum -eq 'hata'\) \{(.*?)\n    \}", metin, re.S)
+    m = re.search(r"if \(\$imza\.durum -eq 'hata'\) \{(.*?)\n\}", metin, re.S)
     assert m, "ana akışta 'hata' dalı yok — Test-ApkImzasi sonucu karar vermiyor"
     dal = m.group(1)
-    assert "$dest, $destSurumlu" in dal and "IMZA-DOGRULANAMADI" in dal, (
-        f"doğrulanamayan APK yayın adıyla kalıyor: {dal}"
-    )
     assert re.search(r"^\s*Die ", dal, re.M), "hata dalı Die (çıkış 1) ile durmuyor"
+    assert metin.index("-Apk $apk") < metin.index("Copy-Item $apk"), (
+        "imza release_assets kopyasından SONRA doğrulanıyor"
+    )
     assert "$certs" not in metin, "eski çıktı-yalnız karar (`$certs`) hâlâ betikte"
