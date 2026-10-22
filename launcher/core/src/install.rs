@@ -258,23 +258,111 @@ pub fn dizin_yazilabilir_mi(dir: &Path) -> bool {
     ok
 }
 
-/// Yeni yaratılan makine-geneli klasöre "Kullanıcılar: Değiştir" ACL'i ver.
-///
-/// Klasörü YARATAN kullanıcı sahibidir ve sahip, yönetici olmasa da DACL'i değiştirebilir →
-/// UAC gerekmez. Bu olmadan ikinci Windows hesabı klasörü okuyabilir ama YAZAMAZ.
-/// Başarısız olursa sessizce geçilir: `dizin_yazilabilir_mi` kapısı zaten koruyor.
+/// Y96 (sahip, LN L8): çok hesaplı kurulumda veri kökünü kullanan hesapların üye olduğu PAYLAŞILAN YEREL grubun SID'i. Kurulum /
+/// yönetici ortama yazar; launcher veri kökünü bu grubun ACL'iyle kurar ve backend'e geçirir (`apps/backend/utils/file_acl.py`
+/// kilitleri `/inheritance:r` ile kalıtımı kaldırdığı için grubu orada da açıkça verir — o yarı 2-E'de yapıldı).
+pub const ENV_DATA_GROUP_SID: &str = "PEMF_DATA_GROUP_SID";
+
+/// `S-1-5-21-<a>-<b>-<c>-<RID>` (bilgisayar / etki alanı tarafından OLUŞTURULMUŞ hesap biçimi) — backend `_OZEL_GRUP_SID_RE` ile AYNI.
+/// Users (S-1-5-32-545), Authenticated Users (S-1-5-11), Everyone (S-1-1-0), Interactive (S-1-5-4) bu biçimde DEĞİL → reddedilir.
+pub fn ozel_grup_sid_bicimi_mi(sid: &str) -> bool {
+    let p: Vec<&str> = sid.split('-').collect();
+    p.len() == 8
+        && p[..4] == ["S", "1", "5", "21"]
+        && p[4..].iter().all(|x| !x.is_empty() && x.len() <= 10 && x.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// LookupAccountSid sonucu YEREL GRUP mu: tür `SidTypeAlias` (4) VE etki alanı = bu bilgisayarın adı (saf — testli).
+pub fn yerel_grup_karari(tur: i32, alan: &str, bilgisayar: &str) -> bool {
+    tur == 4 && !alan.is_empty() && alan.eq_ignore_ascii_case(bilgisayar)
+}
+
+/// `sid` bu makinede çözülen bir YEREL GRUP mu? (backend `_bu_makinenin_yerel_grubu_mu` ikizi) Hata / çözülemez → `false`.
 #[cfg(windows)]
-fn acl_ver(dir: &Path) {
-    // Konsol penceresi AÇMADAN (bkz. platform::gizli_komut): kurulum/güncelleme akışında koşar;
-    // çıplak `Command` kullanıcıya siyah pencere gösteriyordu.
-    let _ = crate::platform::gizli_komut("icacls")
-        .arg(dir)
-        .args(["/grant", "*S-1-5-32-545:(OI)(CI)M", "/T", "/C", "/Q"])
-        .output();
+fn bu_makinenin_yerel_grubu_mu(sid: &str) -> bool {
+    hesap_turu_alani_bilgisayar(sid).is_some_and(|(tur, alan, bilgisayar)| yerel_grup_karari(tur, &alan, &bilgisayar))
+}
+
+/// LookupAccountSidW: `(SID_NAME_USE, etki alanı, bu bilgisayarın adı)`; çözülemez → `None`.
+#[cfg(windows)]
+fn hesap_turu_alani_bilgisayar(sid: &str) -> Option<(i32, String, String)> {
+    use windows_sys::Win32::Foundation::LocalFree;
+    use windows_sys::Win32::Security::Authorization::ConvertStringSidToSidW;
+    use windows_sys::Win32::Security::LookupAccountSidW;
+    use windows_sys::Win32::System::WindowsProgramming::GetComputerNameW;
+    let genis: Vec<u16> = sid.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: tamponlar boyutlarıyla verilir; ConvertStringSidToSidW'nin ayırdığı SID LocalFree ile bırakılır.
+    unsafe {
+        let mut bilgisayar = [0u16; 64];
+        let mut bboy = bilgisayar.len() as u32;
+        if GetComputerNameW(bilgisayar.as_mut_ptr(), &mut bboy) == 0 {
+            return None;
+        }
+        let mut psid: windows_sys::Win32::Security::PSID = std::ptr::null_mut();
+        if ConvertStringSidToSidW(genis.as_ptr(), &mut psid) == 0 || psid.is_null() {
+            return None;
+        }
+        let (mut ad, mut alan) = ([0u16; 256], [0u16; 256]);
+        let (mut aboy, mut alboy) = (ad.len() as u32, alan.len() as u32);
+        let mut tur: i32 = 0;
+        let ok = LookupAccountSidW(
+            std::ptr::null(),
+            psid,
+            ad.as_mut_ptr(),
+            &mut aboy,
+            alan.as_mut_ptr(),
+            &mut alboy,
+            &mut tur,
+        ) != 0;
+        LocalFree(psid as _);
+        ok.then(|| {
+            (
+                tur,
+                String::from_utf16_lossy(&alan[..alboy as usize]),
+                String::from_utf16_lossy(&bilgisayar[..bboy as usize]),
+            )
+        })
+    }
 }
 
 #[cfg(not(windows))]
-fn acl_ver(_dir: &Path) {}
+fn bu_makinenin_yerel_grubu_mu(_sid: &str) -> bool {
+    false
+}
+
+/// Y96: geçerli paylaşılan grup — `PEMF_DATA_GROUP_SID` biçimi tutar VE bu makinenin yerel grubu. Değilse `None` (Users / etki alanı
+/// grubu / kullanıcı hesabı / silinmiş grup REDDEDİLİR — backend ile aynı kural; çözülemeyen SID icacls'ı da düşürürdü).
+pub fn paylasilan_grup_sid<F>(getenv: F) -> Option<String>
+where
+    F: Fn(&str) -> Option<String>,
+{
+    let s = getenv(ENV_DATA_GROUP_SID)?.trim().to_string();
+    (ozel_grup_sid_bicimi_mi(&s) && bu_makinenin_yerel_grubu_mu(&s)).then_some(s)
+}
+
+/// Yeni yaratılan makine-geneli veri köküne verilecek ACL (saf — testli). Y96 (sahip): yalnız PAYLAŞILAN YEREL grup `Değiştir`
+/// alır; yerel `Users` (S-1-5-32-545) DIŞARIDA — eskiden bu makinedeki HER hesap hasta veri köküne yazabiliyordu. Grup yoksa
+/// (tek hesaplı kurulum) ek hak VERİLMEZ: klasörü yaratan hesap sahip olarak (CREATOR OWNER) tam denetimdedir.
+pub fn veri_koku_acl_argumanlari(grup: Option<&str>) -> Option<Vec<String>> {
+    grup.map(|g| ["/grant".to_string(), format!("*{g}:(OI)(CI)M"), "/T".into(), "/C".into(), "/Q".into()].to_vec())
+}
+
+/// Yeni yaratılan makine-geneli klasöre ACL ver (`veri_koku_acl_argumanlari`).
+///
+/// Klasörü YARATAN kullanıcı sahibidir ve sahip, yönetici olmasa da DACL'i değiştirebilir →
+/// UAC gerekmez. Grup verilmezse ikinci Windows hesabı klasöre YAZAMAZ → o hesap kendi kökünde kalır
+/// (`dizin_yazilabilir_mi` kapısı; çok hesaplı kurulum grubu tanımlar — Y96).
+/// Başarısız olursa sessizce geçilir: `dizin_yazilabilir_mi` kapısı zaten koruyor.
+#[cfg(windows)]
+fn acl_ver(dir: &Path, grup: Option<&str>) {
+    let Some(arg) = veri_koku_acl_argumanlari(grup) else { return };
+    // Konsol penceresi AÇMADAN (bkz. platform::gizli_komut): kurulum/güncelleme akışında koşar;
+    // çıplak `Command` kullanıcıya siyah pencere gösteriyordu.
+    let _ = crate::platform::gizli_komut("icacls").arg(dir).args(arg).output();
+}
+
+#[cfg(not(windows))]
+fn acl_ver(_dir: &Path, _grup: Option<&str>) {}
 
 /// Backend'e verilecek veri kökü: makine-geneli YAZILABİLİRSE onu, değilse `None`
 /// (kullanıcı-başına eski davranışa düş — kurulumu kırmaktansa bugünkü hâlde kal).
@@ -282,13 +370,13 @@ pub fn cozulmus_veri_dizini<F>(getenv: F) -> Option<PathBuf>
 where
     F: Fn(&str) -> Option<String>,
 {
-    let dir = machine_data_dir(getenv)?;
+    let dir = machine_data_dir(&getenv)?;
     let yeni = !dir.exists();
     if !dizin_yazilabilir_mi(&dir) {
         return None;
     }
     if yeni {
-        acl_ver(&dir);
+        acl_ver(&dir, paylasilan_grup_sid(&getenv).as_deref());
         // ACL sonrası tekrar doğrula — icacls başarısızsa yol yine de kullanılabilir olmalı.
         if !dizin_yazilabilir_mi(&dir) {
             return None;
@@ -747,6 +835,11 @@ where
     // backend %APPDATA%'ya düşüyor ve ikinci Windows hesabı "boş klinik" görüyordu.
     if let Some(d) = cozulmus_veri_dizini(getenv) {
         env.insert(ENV_DATA_DIR.to_string(), d.to_string_lossy().into_owned());
+    }
+    // PAYLAŞILAN YEREL GRUP (bkz. ENV_DATA_GROUP_SID · Y96): yalnız GEÇERLİYSE (biçim + bu makinenin yerel grubu) — backend'in
+    // `file_acl` kilitleri grubu açıkça verir; geçersiz değer geçirilmez (backend de reddeder).
+    if let Some(g) = paylasilan_grup_sid(getenv) {
+        env.insert(ENV_DATA_GROUP_SID.to_string(), g);
     }
     // OFF-SITE YEDEK (bkz. ENV_BACKUP_DIR): operatör bir hedef seçtiyse geçir. Hedef o an
     // erişilemiyorsa (USB çıkarılmış) DEĞİŞKEN VERİLMEZ — backend'in her turda hataya düşüp
@@ -1875,6 +1968,10 @@ mod tests {
         if cozulmus_veri_dizini(|k| std::env::var(k).ok()).is_some() {
             beklenen.push(ENV_DATA_DIR);
         }
+        // Y96 (LN L8): paylaşılan yerel grup yalnız geçerliyse — koşullu.
+        if paylasilan_grup_sid(|k| std::env::var(k).ok()).is_some() {
+            beklenen.push(ENV_DATA_GROUP_SID);
+        }
         assert_eq!(
             anahtarlar,
             beklenen
@@ -1884,6 +1981,62 @@ mod tests {
             .collect::<Vec<_>>(),
             "backend'e giden ortam değişkeni kümesi değişti — bilinçli mi?"
         );
+    }
+
+    /// LN L8 · Y96 (sahip): veri kökünün ACL'i yalnız PAYLAŞILAN YEREL gruba `Değiştir` verir; yerel `Users` (S-1-5-32-545) HİÇBİR
+    /// yolda verilmez (eskiden bu makinedeki her hesap hasta veri köküne yazabiliyordu); grup yoksa ek hak YOK (yaratan hesap sahip).
+    #[test]
+    fn KRITIK_L8_Y96_veri_koku_ACL_yalniz_PAYLASILAN_GRUBA_Users_DISARIDA() {
+        assert_eq!(veri_koku_acl_argumanlari(None), None, "grup yokken ek hak verildi");
+        let g = "S-1-5-21-111-222-333-1005";
+        let a = veri_koku_acl_argumanlari(Some(g)).expect("grup ACL'i yok");
+        assert!(a.iter().any(|x| x == "*S-1-5-21-111-222-333-1005:(OI)(CI)M"), "{a:?}");
+        assert!(!a.iter().any(|x| x.contains("S-1-5-32-545")), "Users ACL'de: {a:?}");
+        let src = include_str!("install.rs").replace("\r\n", "\n");
+        let acl = &src[src.find("fn acl_ver(dir: &Path, grup: Option<&str>)").expect("acl_ver yok")..];
+        let acl = &acl[..acl.find("\n}\n").unwrap()];
+        assert!(acl.contains("veri_koku_acl_argumanlari(grup)") && !acl.contains("S-1-5-32-545"), "acl_ver kararı saf fonksiyondan almıyor");
+    }
+
+    /// LN L8 · Y96: grup SID'i biçim + bu makinenin YEREL grubu olmalı (backend `file_acl` ile aynı kural): Users / Authenticated Users
+    /// / Everyone / Interactive biçim dışı; LookupAccountSid türü SidTypeAlias (4) ve etki alanı = bu bilgisayar değilse (kullanıcı
+    /// hesabı, etki alanı grubu, makine "None" grubu) reddedilir; çözülemeyen (silinmiş) SID reddedilir; geçersiz grup backend'e GİTMEZ.
+    #[test]
+    fn KRITIK_L8_Y96_grup_SID_bicim_ve_YEREL_grup_kurali() {
+        for (sid, ok) in [
+            ("S-1-5-21-111-222-333-1005", true),
+            ("S-1-5-32-545", false),
+            ("S-1-5-11", false),
+            ("S-1-1-0", false),
+            ("S-1-5-4", false),
+            ("S-1-5-21-111-222-333", false),
+            ("S-1-5-21-111-222-333-1005-7", false),
+            ("S-1-5-21-111-22x-333-1005", false),
+            (" S-1-5-21-1-2-3-4", false),
+        ] {
+            assert_eq!(ozel_grup_sid_bicimi_mi(sid), ok, "{sid}");
+        }
+        assert!(yerel_grup_karari(4, "KLINIK-PC", "klinik-pc"));
+        assert!(!yerel_grup_karari(1, "KLINIK-PC", "KLINIK-PC"), "kullanıcı hesabı grup sayıldı");
+        assert!(!yerel_grup_karari(2, "KLINIK-PC", "KLINIK-PC"), "SidTypeGroup (makine 'None') yerel grup sayıldı");
+        assert!(!yerel_grup_karari(4, "SIRKET", "KLINIK-PC"), "etki alanı grubu yerel sayıldı");
+        assert!(!yerel_grup_karari(4, "", ""));
+        assert_eq!(paylasilan_grup_sid(|_| None), None);
+        assert_eq!(paylasilan_grup_sid(|k| (k == ENV_DATA_GROUP_SID).then(|| "S-1-5-32-545".to_string())), None);
+        // Biçim tutar ama bu makinede YOK (RID 4294967295 kullanılmaz) → çözülemez → reddedilir (gerçek LookupAccountSid yolu).
+        let yok = |k: &str| (k == ENV_DATA_GROUP_SID).then(|| "S-1-5-21-1-2-3-4294967295".to_string());
+        assert_eq!(paylasilan_grup_sid(yok), None);
+        assert!(!backend_env_with(yok, Path::new("/opt/pemf"), 8123, "").contains_key(ENV_DATA_GROUP_SID), "geçersiz grup backend'e geçti");
+        // GERÇEK LookupAccountSid yolu çalışıyor: yerleşik Users (BUILTIN) bir YEREL GRUP türüdür ama etki alanı bu bilgisayar
+        // DEĞİL → reddedilir ("false" bir başarısızlık değil, kararın kendisi).
+        #[cfg(windows)]
+        {
+            let (tur, alan, bilgisayar) = hesap_turu_alani_bilgisayar("S-1-5-32-545").expect("Users SID çözülemedi — Lookup yolu bozuk");
+            assert_eq!(tur, 4, "Users SidTypeAlias değil: {tur}");
+            assert!(!alan.is_empty() && !alan.eq_ignore_ascii_case(&bilgisayar), "{alan} / {bilgisayar}");
+            assert!(!bu_makinenin_yerel_grubu_mu("S-1-5-32-545"));
+            assert_eq!(hesap_turu_alani_bilgisayar("S-1-5-21-1-2-3-4294967295"), None);
+        }
     }
 
     /// LN L8 · S-AIK.6 (Y142 taşıyıcısı) + S-F2-3.2 (a): kedi sürüş bayrağı KOŞULSUZ geçer, varsayılan "0" (KAPALI), ortamdaki

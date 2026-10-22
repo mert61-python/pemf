@@ -155,6 +155,11 @@ Windows `%APPDATA%\PEMF_GUI` (launcher `PEMF_DATA_DIR` verirse `<PEMF_DATA_DIR>\
 NSIS KVKK iletisi onu gösterir — LN L7), macOS `~/Library/Application Support/PEMF_GUI`,
 Linux `~/.local/share/PEMF_GUI`. **Launcher bunu taklit etmeli, yeniden icat etmemeli.**
 
+**Makine-geneli veri kökünün ACL'i (Y96 · LN L8):** kök İLK kez yaratılırken yalnız paylaşılan YEREL grup (`PEMF_DATA_GROUP_SID`,
+biçim `S-1-5-21-…` + bu makinenin yerel grubu — backend `file_acl` ile aynı kural) `Değiştir` alır ve SID backend'e de geçer; yerel
+`Users` VERİLMEZ. Grup tanımlı değilse ek hak verilmez (tek hesap: yaratan hesap sahip) — ikinci Windows hesabı köke yazamaz ve kendi
+kullanıcı köküne düşer; çok hesaplı klinik kurulumda grup tanımlanmalı.
+
 **Otomatik güncelleme kapısı (`aktif_seans_kapisi`):** sessiz self-update / runtime güncellemesi backend'i öldürür; önce
 `/api/health` → `sessionActive` (10 sn bütçe) ve `firmwareGuncelleme.yakiliyor` sorulur — `true` ya da bilinmiyor → ERTELE.
 LN L6 · İG-8.21: `backend.port`'taki dinleyici TCP kabul ediyor ama 2 sn'lik kimlik yoklamasına yanıt vermiyorsa (yük altında —
