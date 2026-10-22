@@ -55,6 +55,7 @@ window.PEMF_I18N_KATALOG = {
   "instStart": "Starting…",
   "instVerify": "Verifying…",
   "install": "Install & Start",
+  "kapanisYakmaBekleniyor": "The board firmware (STM32) is being updated right now. If it is interrupted the board may not start — please do not turn off the computer. The app will close by itself when the update finishes.",
   "keepOne": "Keep at least one profile",
   "kilavuz": {
    "connect": "In veterinary mode the PEMF hardware must be on the SAME Wi-Fi network as your computer. The app finds it automatically; if not, enter the device IP manually in the app's Settings.",
@@ -286,6 +287,7 @@ window.PEMF_I18N_KATALOG = {
   "instStart": "Başlatılıyor…",
   "instVerify": "Doğrulanıyor…",
   "install": "Kur ve Başlat",
+  "kapanisYakmaBekleniyor": "Kart yazılımı (STM32) şu anda güncelleniyor. Yarıda kesilirse kart açılmayabilir — lütfen bilgisayarı kapatmayın. Güncelleme bitince uygulama kendiliğinden kapanacak.",
   "keepOne": "En az bir profil seçili kalmalı",
   "kilavuz": {
    "connect": "Veteriner modunda PEMF donanımı, bilgisayarınızla AYNI Wi-Fi ağında olmalıdır. Uygulama cihazı otomatik bulur. Bulamazsa uygulama içindeki Ayarlar’dan cihazın IP adresini elle girebilirsiniz.",

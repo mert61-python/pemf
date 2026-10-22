@@ -172,7 +172,10 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
   ; (Servis modunda NSSM yeniden başlatır; o senaryo Inno-backend uninstaller'ının alanı.)
   ; taskkill'i kayıt-geri-yüklemeden ÖNCE yap; her iki yolda (atla/ilerle) yığın burada [$3o,$2o,$1o,$0o].
   DetailPrint "$(PEMF_surecDurduruluyor)"
-  nsExec::Exec /TIMEOUT=30000 'taskkill /F /IM PEMF_Backend.exe /T'
+  ; LN L3 · Y82 (sahip): backend AĞAÇSIZ öldürülür (`/T` YOK) — oto-firmware yakıcısı `STM32_Programmer_CLI` backend'in çocuğudur;
+  ; ağaçla öldürülürse kart yarım yazılmış uygulama alanıyla kalırdı. Bilinen çocuklar (mosquitto / cloudflared) aşağıda kendi adlarıyla
+  ; kapatılır — launcher'daki `backend::ARTAKALAN_SURECLER` ile AYNI liste.
+  nsExec::Exec /TIMEOUT=30000 'taskkill /F /IM PEMF_Backend.exe'
   Pop $0  ; taskkill nsExec dönüş-kodunu da AT
   ; ⚠️ DENETİM 2026-08-15 (kur→kaldır→yeniden-kur BOZULMASI): burada YALNIZ PEMF_Backend.exe
   ; öldürülüyordu. `/T` süreç-AĞACINI öldürür, yani backend HÂLÂ AYAKTAYSA çocukları olan

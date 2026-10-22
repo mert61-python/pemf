@@ -112,17 +112,27 @@ def _taskkill_hedefleri(satirlar: list[str]) -> list[str]:
     return hedefler
 
 
+def _rust_artakalan_listesi(metin: str) -> list[tuple[str, bool]]:
+    """`kill_stray_backends()`'in Windows kolundaki liste — TEK KAYNAK `backend::ARTAKALAN_SURECLER` [(imaj, ağaçla mı)].
+
+    LN L3 · Y82: liste adlandırılmış sabite taşındı (backend AĞAÇSIZ — yakıcı `STM32_Programmer_CLI` çocuğu ölmesin); eskiden
+    `kill_stray_backends` gövdesindeki `for image in [...]` dizisiydi ve hepsi `/T` ile öldürülüyordu."""
+    govde = re.search(r"pub fn kill_stray_backends\(\)(.*?)\n\}", metin, re.DOTALL)
+    assert govde, "kill_stray_backends() bulunamadı (backend.rs yeniden mi adlandırıldı?)"
+    assert re.search(r"for \(image, agac\) in ARTAKALAN_SURECLER\b", govde.group(1)), (
+        "kill_stray_backends() listeyi `ARTAKALAN_SURECLER`den okumuyor — iki kaldırma yolunun tek kaynağı kayboldu"
+    )
+    dizi = re.search(r"pub const ARTAKALAN_SURECLER: \[\(&str, bool\); \d+\] =\s*\[(.*?)\];", metin, re.DOTALL)
+    assert dizi, "ARTAKALAN_SURECLER sabiti ayrıştırılamadı"
+    cift = re.findall(r'\(\s*"([^"]+\.exe)"\s*,\s*(true|false)\s*\)', dizi.group(1))
+    assert cift, "ARTAKALAN_SURECLER boş çıktı"
+    return [(a.lower(), b == "true") for a, b in cift]
+
+
 @pytest.fixture(scope="module")
 def rust_surec_adlari() -> list[str]:
     """`kill_stray_backends()` Windows kolundaki imaj listesi — TEK KAYNAK."""
-    metin = _BACKEND_RS.read_text(encoding="utf-8")
-    govde = re.search(r"pub fn kill_stray_backends\(\)(.*?)\n\}", metin, re.DOTALL)
-    assert govde, "kill_stray_backends() bulunamadı (backend.rs yeniden mi adlandırıldı?)"
-    dizi = re.search(r'for image in \[(.*?)\]', govde.group(1), re.DOTALL)
-    assert dizi, "kill_stray_backends() içindeki imaj dizisi ayrıştırılamadı"
-    adlar = re.findall(r'"([^"]+\.exe)"', dizi.group(1))
-    assert adlar, "imaj dizisi boş çıktı"
-    return [a.lower() for a in adlar]
+    return [a for a, _ in _rust_artakalan_listesi(_BACKEND_RS.read_text(encoding="utf-8"))]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -177,6 +187,59 @@ def test_iki_kaldirma_yolu_ayni_surecleri_temizler(preuninstall_satirlari, rust_
         "Kullanıcı Ayarlar ▸ Uygulamalar'dan kaldırdığında launcher hiç çalışmaz → bu süreçler "
         "hayatta kalır. İki liste birebir aynı tutulmalı."
     )
+
+
+def _yakici_korunur_ihlalleri(backend_rs: str, hooks_metni: str) -> list[str]:
+    """LN L3 · Y82 (sahip): oto-firmware yakıcısı (`STM32_Programmer_CLI`, backend'in ÇOCUĞU) hiçbir kapanış yolunda öldürülmez —
+    backend AĞAÇSIZ (`/T` yok), yakıcı hiçbir öldürme listesinde yok. İki yol: launcher `ARTAKALAN_SURECLER` + NSIS PREUNINSTALL."""
+    sorun = []
+    rust = dict(_rust_artakalan_listesi(backend_rs))
+    if rust.get("pemf_backend.exe") is not False:
+        sorun.append(f"launcher: PEMF_Backend.exe AĞAÇLA öldürülüyor ({rust}) — yakıcı çocuk süreç ölür")
+    if any("stm32_programmer" in a for a in rust):
+        sorun.append("launcher: STM32_Programmer_CLI öldürme listesinde")
+    for s in _pre(hooks_metni):
+        if re.search(r"/IM\s+PEMF_Backend\.exe", s, re.I) and re.search(r"(?<![\w/])/T\b", s):
+            sorun.append(f"NSIS: backend AĞAÇLA öldürülüyor: {s.strip()}")
+        if re.search(r"stm32_programmer", s, re.I) and "taskkill" in s.lower():
+            sorun.append(f"NSIS: yakıcı öldürülüyor: {s.strip()}")
+    return sorun
+
+
+def _pre(hooks_metni: str) -> list[str]:
+    m = re.search(r"!macro\s+NSIS_HOOK_PREUNINSTALL\b(.*?)!macroend", hooks_metni, re.DOTALL)
+    assert m, "NSIS_HOOK_PREUNINSTALL makrosu bulunamadı"
+    return [_yorumsuz(s) for s in m.group(1).splitlines()]
+
+
+def test_KRITIK_L3_yakici_hicbir_kapanis_yolunda_OLDURULMEZ_backend_AGACSIZ():
+    sorun = _yakici_korunur_ihlalleri(_BACKEND_RS.read_text(encoding="utf-8"), _HOOKS.read_text(encoding="utf-8"))
+    assert not sorun, "\n".join(sorun)
+
+
+@pytest.mark.parametrize(
+    "ad,hedef,eski,yeni",
+    [
+        ("rust_agacla", "rs", '[("PEMF_Backend.exe", false),', '[("PEMF_Backend.exe", true),'),
+        (
+            "rust_yakici_listede",
+            "rs",
+            '("cloudflared.exe", true)]',
+            '("cloudflared.exe", true), ("STM32_Programmer_CLI.exe", true)]',
+        ),
+        ("nsis_agacla", "nsi", "'taskkill /F /IM PEMF_Backend.exe'", "'taskkill /F /IM PEMF_Backend.exe /T'"),
+    ],
+)
+def test_KRITIK_L3_yakici_kapisi_mutantta_KIRMIZI(ad, hedef, eski, yeni):
+    rs = _BACKEND_RS.read_text(encoding="utf-8").replace("\r\n", "\n")
+    nsi = _HOOKS.read_text(encoding="utf-8").replace("\r\n", "\n")
+    kaynak = rs if hedef == "rs" else nsi
+    assert kaynak.count(eski) == 1, f"{ad}: mutant çapası {kaynak.count(eski)} kez"
+    if hedef == "rs":
+        rs = rs.replace(eski, yeni)
+    else:
+        nsi = nsi.replace(eski, yeni)
+    assert _yakici_korunur_ihlalleri(rs, nsi), f"{ad}: kapı mutantı GÖRMEDİ"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

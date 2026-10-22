@@ -1636,6 +1636,9 @@
       // Emit'i de dinle (bazı ortamlarda çalışır, zararsız); ASIL mekanizma polling — Tauri emit
       // spawn_blocking thread'inden webview'e güvenilir ulaşmıyor, invoke ise kesin çalışıyor.
       try { listen("install://progress", (e) => applyProgress(e.payload)); } catch (_) {}
+      // LN L3 · Y82: kapanış, kart yazılımı (STM32) yakılırken ERTELENDİ — kullanıcıya söyle; pencere yakma bitince kendisi kapanır
+      // (olay pencere iş parçacığından gönderilir — `install://progress`in spawn_blocking sorunu burada yok).
+      try { listen("pemf://kapanis-yakma-bekleniyor", () => notice(t().kapanisYakmaBekleniyor)); } catch (_) {}
       let pollTimer = null;
       function startPolling() {
         stopPolling();

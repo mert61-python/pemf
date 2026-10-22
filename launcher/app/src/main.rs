@@ -58,7 +58,16 @@ struct AppState {
     /// backend için tek thread; sahiplenme dalı her Başlat'ta koşabildiğinden guard olmadan thread
     /// biriktirirdi. Thread bittiğinde (backend öldü / 5 ardışık başarısız yoklama) serbest bırakılır.
     rotasyon_senkronu_aktif: Arc<AtomicBool>,
+    /// LN L3 · Y82: ana pencere kapanışının yakma aşaması — `KAPANIS_NORMAL` · `KAPANIS_YAKMA_BEKLENIYOR` (kapanış ertelendi,
+    /// bekleyici çalışıyor) · `KAPANIS_YAKMA_BITTI` (bekleme bitti → sonraki kapanış isteği ertelenmeden geçer).
+    kapanis_yakma_beklendi: Arc<AtomicU8>,
 }
+
+const KAPANIS_NORMAL: u8 = 0;
+const KAPANIS_YAKMA_BEKLENIYOR: u8 = 1;
+const KAPANIS_YAKMA_BITTI: u8 = 2;
+/// LN L3: ana pencere arayüzüne "yakma bitince kapanacak" uyarısı (`index.html` dinler → `kapanisYakmaBekleniyor`).
+const OLAY_KAPANIS_YAKMA_BEKLENIYOR: &str = "pemf://kapanis-yakma-bekleniyor";
 
 impl Default for AppState {
     fn default() -> Self {
@@ -70,6 +79,7 @@ impl Default for AppState {
             teardown: Mutex::new(None),
             session: Arc::new(Mutex::new(None)),
             rotasyon_senkronu_aktif: Arc::new(AtomicBool::new(false)),
+            kapanis_yakma_beklendi: Arc::new(AtomicU8::new(KAPANIS_NORMAL)),
         }
     }
 }
@@ -110,6 +120,7 @@ fn stop_backend_for_teardown(
     // 1) Bu oturumun tracked backend'i: E-stop (TIBBİ GÜVENLİK) + [F5] son-yakalama + kill.
     let had_tracked = if let Some((mut child, port)) = tracked {
         backend::safe_stop_coils(port);
+        yakma_bitene_kadar_bekle(port); // LN L3 · Y82: STOP SONRASI / kill ÖNCESİ — yakıcı yarıda kesilmesin
         son_oturumu_yakala(port, root, &bellek); // [F5] E-stop SONRASI / kill ÖNCESİ: son jetonu diske işle
         let _ = child.kill();
         let _ = child.wait();
@@ -124,6 +135,7 @@ fn stop_backend_for_teardown(
         if let Ok(txt) = std::fs::read_to_string(root.join("backend.port")) {
             if let Ok(port) = txt.trim().parse::<u16>() {
                 backend::safe_stop_coils(port);
+                yakma_bitene_kadar_bekle(port); // LN L3 · Y82
             }
         }
     }
@@ -131,6 +143,19 @@ fn stop_backend_for_teardown(
     // taskkill sonrası OS'un dosya kilitlerini bırakması için kısa bekle (extract'tan ÖNCE).
     std::thread::sleep(std::time::Duration::from_millis(800));
     clear_port_if_stopped(root, None);
+}
+
+/// LN L3 · Y82 (sahip): STOP gönderildikten SONRA, süreç öldürülmeden ÖNCE — backend STM32 firmware'i YAKIYORSA bitmesini bekle
+/// (`STM32_Programmer_CLI` yarıda kesilirse kart yarım yazılmış uygulama alanıyla kalır). STOP bu beklemeye BAĞLI DEĞİL (önce gider —
+/// Ö.4-Y8); azami süre dolarsa yine öldürülür ama yakıcı backend'in AĞACINDA öldürülmez (`backend::ARTAKALAN_SURECLER`).
+fn yakma_bitene_kadar_bekle(port: u16) {
+    match backend::yakmanin_bitmesini_bekle(port, backend::YAKMA_BEKLEME_AZAMI, std::time::Duration::from_secs(1)) {
+        backend::YakmaBeklemesi::Yoktu | backend::YakmaBeklemesi::Bilinmiyor => {}
+        backend::YakmaBeklemesi::Bitti => eprintln!("[kapanis] STM32 firmware yakmasi bitti — backend simdi durduruluyor"),
+        backend::YakmaBeklemesi::ZamanAsimi => {
+            eprintln!("[kapanis] STM32 firmware yakmasi azami surede bitmedi — backend durduruluyor (yakici agacta degil, olmez)")
+        }
+    }
 }
 
 /// [F5] (denetim 2026-08-24): kapanış-ÖNCESİ SON oturum yakalama. Teardown yolunda E-stop
@@ -997,13 +1022,20 @@ async fn remove_profiles(
 fn aktif_seans_kapisi(root: &std::path::Path) -> Result<(), String> {
     let Some(p) = backend::detect_running_backend(root) else { return Ok(()) };
     match backend::session_active(p) {
-        Some(false) => Ok(()),
-        Some(true) => Err(
+        Some(false) => {}
+        Some(true) => return Err(
             pemf_launcher_core::dil::t("rust.hata.guncellemeSeansSuruyor"),
         ),
-        None => Err(
+        None => return Err(
             pemf_launcher_core::dil::t("rust.hata.guncellemeBackendYanitsiz"),
         ),
+    }
+    // LN L3 · Y82: backend STM32 firmware'i YAKIYORSA güncelleme ERTELENİR — self-update'in NSIS kancası backend'i öldürür, runtime
+    // güncellemesi de söker; yakma yarıda kalırdı. Bilinmiyorsa (yanıt yok) seans kuralıyla aynı: ertele.
+    match backend::yakma_suruyor_mu(p, std::time::Duration::from_secs(3)) {
+        Some(false) => Ok(()),
+        Some(true) => Err(pemf_launcher_core::dil::t("rust.hata.guncellemeYakmaSuruyor")),
+        None => Err(pemf_launcher_core::dil::t("rust.hata.guncellemeBackendYanitsiz")),
     }
 }
 
@@ -2470,6 +2502,41 @@ fn main() {
             // "port meşgul" hatası verir. AMA öldürmeden ÖNCE bobinleri GÜVENE AL (TIBBİ GÜVENLİK):
             // child.kill() sinyal göndermez → backend'in bobin-STOP graceful'ı çalışmaz, seans
             // sürerken pencere kapatılırsa bobinler hastanın üzerinde açık kalır. E-stop ile durdur.
+            //
+            // LN L3 · Y82 (sahip): ANA pencere kapanırken (süreç çıkacak) bu oturumun backend'i STM32 firmware'i YAKIYORSA kapanış
+            // ERTELENİR: ana pencerede uyarı (TR / EN), yakma bitince pencere KENDİLİĞİNDEN kapanır (azami `YAKMA_BEKLEME_AZAMI`).
+            // STOP / ACİL DURDUR bu kapıya BAĞLI DEĞİL — kapanışın STOP'u Destroyed'da her zaman kill'den ÖNCE gider (Ö.4-Y8); yakma
+            // penceresinde backend bobin başlatmayı zaten reddeder. Yoklama yalnız TRACKED backend'de ve en çok 0,8 sn.
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    if let Some(state) = window.app_handle().try_state::<AppState>() {
+                        let port = state.proc.lock().unwrap().as_ref().map(|(_, p)| *p);
+                        let asama = state.kapanis_yakma_beklendi.load(Ordering::Acquire);
+                        if let Some(port) = port {
+                            if asama == KAPANIS_YAKMA_BEKLENIYOR {
+                                api.prevent_close(); // bekleyici zaten çalışıyor — uyarı ekranda
+                            } else if asama == KAPANIS_NORMAL
+                                && backend::yakma_suruyor_mu(port, std::time::Duration::from_millis(800)) == Some(true)
+                            {
+                                api.prevent_close();
+                                state.kapanis_yakma_beklendi.store(KAPANIS_YAKMA_BEKLENIYOR, Ordering::Release);
+                                let _ = window.emit(OLAY_KAPANIS_YAKMA_BEKLENIYOR, ());
+                                let asama_c = state.kapanis_yakma_beklendi.clone();
+                                let w = window.clone();
+                                std::thread::spawn(move || {
+                                    let _ = backend::yakmanin_bitmesini_bekle(
+                                        port,
+                                        backend::YAKMA_BEKLEME_AZAMI,
+                                        std::time::Duration::from_secs(1),
+                                    );
+                                    asama_c.store(KAPANIS_YAKMA_BITTI, Ordering::Release);
+                                    let _ = w.close();
+                                });
+                            }
+                        }
+                    }
+                }
+            }
             if let tauri::WindowEvent::Destroyed = event {
                 if let Some(state) = window.app_handle().try_state::<AppState>() {
                     // ⚠️ SAHİPLİK KURALI (denetim 2026-08-04): yalnız BU instance'ın BAŞLATTIĞI
@@ -2509,6 +2576,7 @@ fn main() {
                         // FnOnce; ama gövde &mut child istediği için binding mutable olmalı).
                         let mut job = move || {
                             backend::safe_stop_coils(port);
+                            yakma_bitene_kadar_bekle(port); // LN L3 · Y82: STOP SONRASI / kill ÖNCESİ
                             son_oturumu_yakala(port, &root, &bellek); // [F5] E-stop SONRASI / kill ÖNCESİ
                             let _ = child.kill();
                             let _ = child.wait();
@@ -2799,6 +2867,63 @@ mod tests {
         let dy = jg.find("son_oturumu_yakala(").expect("job son-yakalama YOK (F5)");
         let dk = jg.find(".kill()").expect("job kill yok");
         assert!(de < dy && dy < dk, "Destroyed job sırası bozuk (E-stop→yakala→kill)");
+    }
+
+    /// LN L3 · Y82 (sahip): kapanışta sıra STOP → yakmanın bitmesini BEKLE → son oturum yakalama → kill (tracked teardown, orphan dalı
+    /// ve pencere Destroyed işi). STOP beklemeye BAĞLI değil: bekleme her yerde `safe_stop_coils`'tan SONRA. Yorum-soyulmuş ölçülür.
+    #[test]
+    fn KRITIK_L3_kapanis_STOP_sonra_YAKMA_BEKLENIR_sonra_kill() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n");
+        let i = soy.find("fn stop_backend_for_teardown").expect("teardown fn yok");
+        let son = soy[i..].find("\nfn ").map(|j| i + j).unwrap_or(soy.len());
+        let g = &soy[i..son];
+        let estop = g.find("safe_stop_coils(").expect("teardown E-stop yok");
+        let bekle = g.find("yakma_bitene_kadar_bekle(").expect("teardown yakma beklemesi YOK (Y82)");
+        let yakala = g.find("son_oturumu_yakala(").expect("son yakalama yok");
+        let kill = g.find(".kill()").expect("kill yok");
+        assert!(estop < bekle && bekle < yakala && yakala < kill, "teardown sırası STOP → bekle → yakala → kill değil");
+        let o = g.find("if !had_tracked").expect("orphan dalı yok");
+        let ob = &g[o..g.find("backend::kill_stray_backends()").expect("kill_stray yok")];
+        let (oe, obk) = (ob.find("safe_stop_coils(").expect("orphan STOP yok"), ob.find("yakma_bitene_kadar_bekle(").expect("orphan bekleme yok"));
+        assert!(oe < obk, "orphan dalında bekleme STOP'tan ÖNCE");
+        let d = soy.find("let mut job = move ||").expect("Destroyed job yok");
+        let jg = &soy[d..(d + 700).min(soy.len())];
+        let (je, jb, jy, jk) = (
+            jg.find("safe_stop_coils(").expect("job STOP yok"),
+            jg.find("yakma_bitene_kadar_bekle(").expect("job yakma beklemesi YOK (Y82)"),
+            jg.find("son_oturumu_yakala(").expect("job yakalama yok"),
+            jg.find(".kill()").expect("job kill yok"),
+        );
+        assert!(je < jb && jb < jy && jy < jk, "Destroyed job sırası STOP → bekle → yakala → kill değil");
+    }
+
+    /// LN L3 · Y82: ANA pencere kapanırken (süreç çıkacak) tracked backend yakıyorsa kapanış ertelenir, kullanıcı uyarılır, bekleme
+    /// bitince pencere kendisi kapanır. Arayüz olayı dinler ve iki dilli notu gösterir.
+    #[test]
+    fn KRITIK_L3_ana_pencere_kapanisi_yakmada_ERTELENIR_ve_UYARIR() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n");
+        let bas = soy.find(".on_window_event(").expect("pencere olay işleyicisi yok");
+        let blok = &soy[bas..bas + soy[bas..].find("if let tauri::WindowEvent::Destroyed = event").expect("Destroyed kolu yok")];
+        let kr = blok.find("tauri::WindowEvent::CloseRequested { api, .. }").expect("kapanış isteği işlenmiyor (Y82 uyarısı yok)");
+        // Sıralı arama: her parça bir öncekinden SONRA aranır (ilk `prevent_close` "bekleyici zaten çalışıyor" kolundadır).
+        let mut i = kr;
+        for (parca, neden) in [
+            ("window.label() == \"main\"", "yalnız ana pencere değil"),
+            ("backend::yakma_suruyor_mu(port", "yakma yoklaması yok"),
+            ("api.prevent_close()", "yakma görülünce kapanış ertelenmiyor"),
+            ("window.emit(OLAY_KAPANIS_YAKMA_BEKLENIYOR", "arayüz uyarılmıyor"),
+            ("std::thread::spawn(", "bekleme pencere iş parçacığında (donma)"),
+            ("backend::yakmanin_bitmesini_bekle(", "bekleyici yok"),
+            ("w.close()", "bekleme sonrası kapanmıyor"),
+        ] {
+            i += blok[i..].find(parca).unwrap_or_else(|| panic!("kapanış ertelemesi: {neden} ({parca})"));
+        }
+        let html = include_str!("../ui/index.html");
+        assert!(
+            html.contains(r#"listen("pemf://kapanis-yakma-bekleniyor", () => notice(t().kapanisYakmaBekleniyor))"#),
+            "arayüz yakma uyarısını dinlemiyor / göstermiyor"
+        );
+        assert_eq!(OLAY_KAPANIS_YAKMA_BEKLENIYOR, "pemf://kapanis-yakma-bekleniyor");
     }
 
     /// [F5-SELFUPDATE] (saha bildirimi 2026-09-03): self-update yolu `app.exit(0)` ile çıkar; F5
@@ -3613,6 +3738,23 @@ Connection: close
         assert_eq!(okunan(&store), Some((0, 0)));
         yaz(ilerleme(4096, 0));
         assert_eq!(okunan(&store), Some((4096, 0)));
+    }
+
+    /// LN L3 · Y82: backend STM32 firmware'i YAKARKEN otomatik güncelleme (self-update / runtime) ERTELENİR — self-update'in NSIS
+    /// kancası ve runtime güncellemesi backend'i öldürür, yakma yarıda kalırdı. KARŞIT: yakma yoksa geçer.
+    #[test]
+    fn KRITIK_L3_yakma_surerken_guncelleme_ERTELENIR() {
+        let (port, h) = sahte_backend(r#"{"service":"PEMF-Vet","sessionActive":false,"firmwareGuncelleme":{"yakiliyor":true}}"#, 4);
+        let d = gecici_kok("yakma", port);
+        let r = aktif_seans_kapisi(&d);
+        assert_eq!(r, Err(pemf_launcher_core::dil::t("rust.hata.guncellemeYakmaSuruyor")), "yakma sürerken güncelleme ertelenmedi");
+        drop(h);
+        let _ = std::fs::remove_dir_all(&d);
+        let (port2, h2) = sahte_backend(r#"{"service":"PEMF-Vet","sessionActive":false,"firmwareGuncelleme":{"yakiliyor":false}}"#, 4);
+        let d2 = gecici_kok("yakmayok", port2);
+        assert!(aktif_seans_kapisi(&d2).is_ok(), "yakma yokken güncelleme engellendi");
+        drop(h2);
+        let _ = std::fs::remove_dir_all(&d2);
     }
 
     /// Backend hiç çalışmıyorsa kapı engel OLMAMALI (ilk kurulum / temiz makine).

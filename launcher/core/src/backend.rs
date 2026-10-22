@@ -811,6 +811,79 @@ fn estop_ucuyla_durdur(port: u16) {
     }
 }
 
+/// Kapanışta / yeniden kurulumda zorla kapatılan bundled süreçler: (imaj, süreç AĞACIYLA mı). LN L3 · Y82: backend AĞAÇSIZ —
+/// çocuğu olan yakıcı (`STM32_Programmer_CLI`) ölmesin; NSIS kancası (`hooks.nsi` PREUNINSTALL) AYNI listeyi kullanır.
+pub const ARTAKALAN_SURECLER: [(&str, bool); 3] =
+    [("PEMF_Backend.exe", false), ("mosquitto.exe", true), ("cloudflared.exe", true)];
+
+/// `taskkill` argümanları (saf → test edilebilir). `agac` yalnız çocuğu olmayan yardımcılar için.
+pub fn taskkill_argumanlari(image: &str, agac: bool) -> Vec<&str> {
+    let mut a = vec!["/F", "/IM", image];
+    if agac {
+        a.push("/T"); // süreç + çocuk-ağacı
+    }
+    a
+}
+
+/// LN L3 · Y82 (sahip): `/api/health` → `firmwareGuncelleme.yakiliyor` (yalnız-ek alan; backend yakma penceresinden türetir).
+/// `Some(true)` yalnız JSON `true`; alan / nesne YOKSA `Some(false)` (o backend oto-firmware yakamaz); `firmwareGuncelleme: null`
+/// (tünel / uzak) ya da bozuk gövde → `None` (bilinmiyor).
+pub fn yakiliyor_govdeden(govde: &str) -> Option<bool> {
+    let v = serde_json::from_str::<serde_json::Value>(govde).ok()?;
+    match v.get("firmwareGuncelleme") {
+        None => Some(false),
+        Some(serde_json::Value::Object(fw)) => Some(fw.get("yakiliyor") == Some(&serde_json::Value::Bool(true))),
+        Some(_) => None,
+    }
+}
+
+/// Bu backend şu an STM32 firmware'i YAKIYOR mu? Tek istek (`zaman_asimi`); ulaşılamazsa `None`.
+pub fn yakma_suruyor_mu(port: u16, zaman_asimi: Duration) -> Option<bool> {
+    ureq::get(&health_url(port))
+        .timeout(zaman_asimi)
+        .call()
+        .ok()
+        .filter(|r| r.status() == 200)
+        .and_then(|r| r.into_string().ok())
+        .and_then(|b| yakiliyor_govdeden(&b))
+}
+
+/// Yakma beklemesinin sonucu (günlük / test için).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum YakmaBeklemesi {
+    /// Yakma yoktu — beklenmedi.
+    Yoktu,
+    /// Yakma sürüyordu ve BİTTİ.
+    Bitti,
+    /// Azami süre doldu, yakma hâlâ sürüyor (çağıran yine öldürür — ama yakıcı AĞAÇTA değil, ölmez).
+    ZamanAsimi,
+    /// Backend ulaşılamadı / alan okunamadı — beklemenin anlamı yok.
+    Bilinmiyor,
+}
+
+/// Kapanışta yakmanın bitmesini bekle (bobin STOP'tan SONRA, süreç öldürmeden ÖNCE çağrılır). Y82: "launcher kapanışta yakılıyor
+/// görürse uyarır ve yakmanın bitmesini bekler". ACİL DURDUR / STOP bu beklemeye BAĞLI DEĞİLDİR — STOP önce gider (Ö.4-Y8).
+pub fn yakmanin_bitmesini_bekle(port: u16, azami: Duration, aralik: Duration) -> YakmaBeklemesi {
+    let son = Instant::now() + azami;
+    let mut bekledi = false;
+    loop {
+        match yakma_suruyor_mu(port, Duration::from_secs(2)) {
+            Some(false) => return if bekledi { YakmaBeklemesi::Bitti } else { YakmaBeklemesi::Yoktu },
+            None => return YakmaBeklemesi::Bilinmiyor,
+            Some(true) => {
+                if Instant::now() + aralik > son {
+                    return YakmaBeklemesi::ZamanAsimi;
+                }
+                bekledi = true;
+                std::thread::sleep(aralik);
+            }
+        }
+    }
+}
+
+/// Kapanışta yakma için azami bekleme: 2 MB yedek okuma + yazma + bağımsız geri okuma + yeniden başlatma (SWD) bol payla.
+pub const YAKMA_BEKLEME_AZAMI: Duration = Duration::from_secs(600);
+
 /// ARTAKALAN (orphan) backend süreçlerini sistem-genelinde durdur.
 ///
 /// SORUN: backend `child.kill()` (Windows TerminateProcess) SİNYALSİZDİR ve ÇOCUK-AĞACINI
@@ -819,14 +892,19 @@ fn estop_ucuyla_durdur(port: u16) {
 /// dosyaya çarpar → "os error 32" (sharing violation). Bu yüzden yeniden-kurulumdan/onarımdan
 /// ÖNCE bu üç bundled süreci (+ çocuk-ağaçları) zorla kapatırız. Klinik makinesinde bu isimli
 /// süreçler bize aittir. TIBBİ GÜVENLİK: çağırandan ÖNCE safe_stop_coils POST edilmeli.
+///
+/// ⚠️ LN L3 · Y82 (sahip): `STM32_Programmer_CLI` (oto-firmware yakıcısı) backend'in ÇOCUK sürecidir. `PEMF_Backend.exe`
+/// eskiden `/T` (süreç AĞACI) ile öldürülüyordu → yakma sürerken kapanış yakıcıyı da öldürür, kart yarım yazılmış uygulama alanıyla
+/// kalırdı. Artık backend AĞACIYLA öldürülmez; bilinen çocukları (mosquitto / cloudflared) kendi adlarıyla ayrıca kapatılır, yakıcı
+/// HİÇBİR listede yoktur (`ARTAKALAN_SURECLER`). Çağıranlar ayrıca yakma bitene kadar bekler (`yakmanin_bitmesini_bekle`).
 pub fn kill_stray_backends() {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        for image in ["PEMF_Backend.exe", "mosquitto.exe", "cloudflared.exe"] {
+        for (image, agac) in ARTAKALAN_SURECLER {
             let mut c = Command::new("taskkill");
-            c.args(["/F", "/IM", image, "/T"]); // /T = süreç + çocuk-ağacı
+            c.args(taskkill_argumanlari(image, agac));
             c.creation_flags(CREATE_NO_WINDOW); // siyah konsol açma
             let _ = c.stdout(Stdio::null()).stderr(Stdio::null()).status();
         }
@@ -1511,6 +1589,64 @@ mod tests {
             "karar hiç gelmezse geri alma YOK (bilinmiyor)"
         );
         assert!(t1.elapsed() < Duration::from_secs(4), "bütçe aşıldı: {:?}", t1.elapsed());
+    }
+
+    /// LN L3 · Y82: yakıcı (`STM32_Programmer_CLI`, backend'in çocuğu) kapanışta ÖLDÜRÜLMEZ — backend AĞAÇSIZ (`/T` yok), yakıcı
+    /// hiçbir listede yok; yalnız çocuğu olmayan yardımcılar ağaçla.
+    #[test]
+    fn KRITIK_L3_backend_AGACSIZ_yakici_listede_YOK() {
+        let backend_ = ARTAKALAN_SURECLER.iter().find(|(i, _)| *i == "PEMF_Backend.exe").expect("backend listede yok");
+        assert!(!backend_.1, "PEMF_Backend.exe AĞAÇLA öldürülüyor — yakma sürerken yakıcı çocuk süreç de ölür");
+        assert!(
+            !ARTAKALAN_SURECLER.iter().any(|(i, _)| i.to_ascii_lowercase().contains("stm32_programmer")),
+            "yakıcı öldürme listesinde"
+        );
+        assert_eq!(taskkill_argumanlari("PEMF_Backend.exe", false), ["/F", "/IM", "PEMF_Backend.exe"]);
+        assert_eq!(taskkill_argumanlari("cloudflared.exe", true), ["/F", "/IM", "cloudflared.exe", "/T"]);
+    }
+
+    /// LN L3 · Y82: `yakiliyor` yalnız JSON `true`; alan / nesne yoksa (oto-firmware'siz eski backend) `false`; `null` / bozuk → bilinmiyor.
+    #[test]
+    fn KRITIK_L3_yakiliyor_alani_ayristirilir() {
+        assert_eq!(yakiliyor_govdeden(r#"{"firmwareGuncelleme":{"yakiliyor":true}}"#), Some(true));
+        assert_eq!(yakiliyor_govdeden(r#"{"firmwareGuncelleme":{"yakiliyor":false}}"#), Some(false));
+        assert_eq!(yakiliyor_govdeden(r#"{"firmwareGuncelleme":{"eylem":"yok"}}"#), Some(false));
+        assert_eq!(yakiliyor_govdeden(r#"{"firmwareGuncelleme":{"yakiliyor":"true"}}"#), Some(false));
+        assert_eq!(yakiliyor_govdeden(r#"{"service":"PEMF-Vet"}"#), Some(false), "eski backend (alan yok) yakamaz");
+        assert_eq!(yakiliyor_govdeden(r#"{"firmwareGuncelleme":null}"#), None);
+        assert_eq!(yakiliyor_govdeden("bozuk"), None);
+    }
+
+    /// LN L3 · Y82: kapanış yakma sürdükçe BEKLER, bitince döner; yakma yoksa HİÇ beklemez; azami süre dolarsa `ZamanAsimi`;
+    /// backend ulaşılamazsa beklemenin anlamı yok (`Bilinmiyor`).
+    #[test]
+    fn KRITIK_L3_kapanis_yakma_BITENE_kadar_bekler() {
+        let suruyor = r#"{"firmwareGuncelleme":{"yakiliyor":true}}"#;
+        let bitti = r#"{"firmwareGuncelleme":{"yakiliyor":false}}"#;
+        let (port, rx) = sahte_backend(vec![Some((200, suruyor)), Some((200, suruyor)), Some((200, bitti))]);
+        let s = yakmanin_bitmesini_bekle(port, Duration::from_secs(10), Duration::from_millis(50));
+        assert_eq!(s, YakmaBeklemesi::Bitti, "yakma bitmeden bekleme bitti — kill yakıcıyı yarıda keser");
+        assert_eq!(istekler(&rx).len(), 3);
+
+        let (yok, rx2) = sahte_backend(vec![Some((200, bitti))]);
+        let t0 = Instant::now();
+        assert_eq!(yakmanin_bitmesini_bekle(yok, Duration::from_secs(10), Duration::from_millis(50)), YakmaBeklemesi::Yoktu);
+        assert!(t0.elapsed() < Duration::from_secs(3), "yakma yokken kapanış bekletildi: {:?}", t0.elapsed());
+        assert_eq!(istekler(&rx2).len(), 1);
+
+        let (asili, _r3) = sahte_backend(vec![Some((200, suruyor)); 50]);
+        assert_eq!(
+            yakmanin_bitmesini_bekle(asili, Duration::from_millis(300), Duration::from_millis(50)),
+            YakmaBeklemesi::ZamanAsimi
+        );
+
+        let ln = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let kapali = ln.local_addr().unwrap().port();
+        drop(ln);
+        assert_eq!(
+            yakmanin_bitmesini_bekle(kapali, Duration::from_secs(5), Duration::from_millis(50)),
+            YakmaBeklemesi::Bilinmiyor
+        );
     }
 
     fn istekler(rx: &std::sync::mpsc::Receiver<String>) -> Vec<String> {

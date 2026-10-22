@@ -188,6 +188,15 @@ notunu gösterir. Geri alma YOK: alan yok (eski backend) · `null` (tünel) · d
 ⚠️ Sınır: onaylanmış (önceki açılışta kurulmuş) bir sürümde `runtime.old` yoktur — sonradan gelen `istemciGeriAlinmali=true` geri
 alamaz; oturum yine `stmUyumlu` kapısıyla korunur (kanal / paket uyumsuzsa seans reddedilir).
 
+**Uygulandı (LN L3, Rust · Y82):** `yakiliyor=true` iken (yalnız JSON `true`; alan yok = eski backend = yakmıyor) launcher backend'i
+öldürmez: teardown (tracked + orphan) ve pencere kapanışı sırası **STOP → yakmanın bitmesini bekle → son oturum yakalama → kill**
+(`yakmanin_bitmesini_bekle`, en çok 600 sn `YAKMA_BEKLEME_AZAMI`, 1 sn aralık; backend yanıtsızsa beklenmez). STOP beklemeye BAĞLI
+değil (her yolda önce gider). Ana pencere kapanırken yakma sürüyorsa kapanış ertelenir, pencerede "Kart yazılımı (STM32) şu anda
+güncelleniyor … bilgisayarı kapatmayın" notu çıkar (TR + EN, `ui.kapanisYakmaBekleniyor`) ve yakma bitince pencere kendiliğinden kapanır.
+Otomatik güncelleme (self-update / runtime) yakma sürerken ertelenir (`rust.hata.guncellemeYakmaSuruyor`). Süreç öldürme listesi
+`backend::ARTAKALAN_SURECLER`: `PEMF_Backend.exe` AĞAÇSIZ (`/T` yok — çocuk süreç `STM32_Programmer_CLI` ölmez), `mosquitto.exe` /
+`cloudflared.exe` kendi adlarıyla; NSIS PREUNINSTALL kancası aynı. Azami süre dolarsa backend yine öldürülür ama yakıcı yaşar.
+
 ## Güvenlik gereksinimleri
 
 1. **SHA256 zorunlu.** Doğrulama başarısızsa kur**ma** ve dosyayı sil.

@@ -99,6 +99,7 @@
       "guncellemeGorevCoktu": "The update task crashed: {{e}}",
       "guncellemeSeansSuruyor": "A session is in progress — the update will be done after the session ends.",
       "guncellemeSha256Yok": "The update has no SHA256 — skipped for security",
+      "guncellemeYakmaSuruyor": "The board firmware (STM32 firmware) is being updated right now — the update was postponed; it will be retried after flashing finishes.",
       "guncellemeYoluGuvensiz": "The update path contains unsafe characters",
       "guvenlikDuvariGorevCoktu": "The firewall task crashed: {{e}}",
       "guvenlikDuvariIzinYok": "Administrator permission was not granted — the firewall rule could not be added.",
@@ -243,6 +244,7 @@
     "instStart": "Starting…",
     "instVerify": "Verifying…",
     "install": "Install & Start",
+    "kapanisYakmaBekleniyor": "The board firmware (STM32) is being updated right now. If it is interrupted the board may not start — please do not turn off the computer. The app will close by itself when the update finishes.",
     "keepOne": "Keep at least one profile",
     "kilavuz": {
       "connect": "In veterinary mode the PEMF hardware must be on the SAME Wi-Fi network as your computer. The app finds it automatically; if not, enter the device IP manually in the app's Settings.",
