@@ -133,11 +133,34 @@ Write-Host "============================================" -ForegroundColor Green
 # imzalanan bir APK'nin UZERINE ayni anahtarla imzalanmis SAHTE bir APK in-place kurulabilir ve
 # uygulama verisini (SecureStore'daki cihaz X-API-Key'i + Supabase oturumu) DEVRALIR.
 # Bu yuzden imzayi build SONRASI dogrula ve sonucu en son, en gorunur yerde soyle.
+#
+# YH D4 (D4B-INC §9 #10): `apksigner verify` HATASI (cikis kodu != 0: imzasiz / bozuk / sema uyusmaz APK) eskiden GORULMUYORDU —
+# ciktida "CN=Android Debug" gecmeyince akis "release" dalina dusup bos DN uzerinde `.Trim()` cagiriyordu (anlamsiz hata ya da
+# "Imza OK"). Karar artik saf fonksiyonda; birim testi onu AST'den cikarip sahte apksigner ile cagirir
+# (tests/test_YH_D4_apk_imza_cikis_kodu.py). Cikis kodu ONCELIKLI: basarisiz dogrulama, ciktida ne yazarsa yazsin 'hata'dir.
+function Test-ApkImzasi {
+    param([string]$Apksigner, [string]$Apk)
+    $cikti = & $Apksigner verify --print-certs $Apk 2>&1 | Out-String
+    $kod = $LASTEXITCODE
+    if ($kod -ne 0) { return @{ durum = 'hata'; cikis = $kod; cikti = $cikti } }
+    if ($cikti -match "CN=Android Debug") { return @{ durum = 'debug'; cikis = 0; cikti = $cikti } }
+    $dn = $cikti -split "`n" | Where-Object { $_ -match "certificate DN" } | Select-Object -First 1
+    # "basarili" dedi ama sertifika satiri yok → dogrulanmis SAYILMAZ
+    if (-not $dn) { return @{ durum = 'hata'; cikis = 0; cikti = $cikti } }
+    return @{ durum = 'release'; cikis = 0; dn = $dn.Trim(); cikti = $cikti }
+}
+
 $apksigner = Get-ChildItem "$env:LOCALAPPDATA\Android\Sdk\build-tools\*\apksigner.bat" -ErrorAction SilentlyContinue |
              Sort-Object FullName | Select-Object -Last 1
 if ($apksigner) {
-    $certs = & $apksigner.FullName verify --print-certs $dest 2>&1 | Out-String
-    if ($certs -match "CN=Android Debug") {
+    $imza = Test-ApkImzasi -Apksigner $apksigner.FullName -Apk $dest
+    if ($imza.durum -eq 'hata') {
+        # Dogrulanamayan APK yayin adiyla KALMAZ (site / OTA bu adlari indirir; kapi test_site_indirme_varligi_URETILDI kirmiziya doner).
+        foreach ($f in @($dest, $destSurumlu)) { if (Test-Path $f) { Move-Item -Force $f "$f.IMZA-DOGRULANAMADI" } }
+        Write-Host $imza.cikti
+        Die "APK imza dogrulamasi BASARISIZ (apksigner cikis=$($imza.cikis)). Ciktilar '.IMZA-DOGRULANAMADI' ekiyle yeniden adlandirildi - YAYINLAMAYIN."
+    }
+    if ($imza.durum -eq 'debug') {
         Write-Host ""
         Write-Host "############################################################" -ForegroundColor Red
         Write-Host "#  DIKKAT: APK **DEBUG KEYSTORE** ILE IMZALANDI            #" -ForegroundColor Red
@@ -149,8 +172,7 @@ if ($apksigner) {
         Write-Host "#    storePassword=...  keyAlias=pemf  keyPassword=...     #" -ForegroundColor Yellow
         Write-Host "############################################################" -ForegroundColor Red
     } else {
-        $dn = ($certs -split "`n" | Where-Object { $_ -match "certificate DN" } | Select-Object -First 1).Trim()
-        Write-Host "[apk] Imza OK (release keystore): $dn" -ForegroundColor Green
+        Write-Host "[apk] Imza OK (release keystore): $($imza.dn)" -ForegroundColor Green
     }
 } else {
     Write-Host "[apk] UYARI: apksigner bulunamadi; imza dogrulanamadi." -ForegroundColor Yellow
