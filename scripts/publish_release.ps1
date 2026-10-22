@@ -16,8 +16,11 @@
 #       -Notes 'Faz X duzeltmeleri'
 #   # Mobil (APK) yeni surum:
 #   .\scripts\publish_release.ps1 -Branch mobil -Version 1.0.4 -AssetPath 'C:\Users\merta\Desktop\PEMF-Vet.apk' -Notes '...'
-#   # Iki dilli not (YH D1): -Notes Turkce (eski istemciler bunu okur), -NotesEn Ingilizce. Metinler docs/surum_notlari.json'da:
+#   # Iki dilli not (YH D1): -Notes Turkce (eski istemciler bunu okur), -NotesEn Ingilizce. Metinler docs/surum_notlari.json'da.
+#   # YLI-A2.2: PowerShell yerel komut ciktisini [Console]::OutputEncoding ile cozer (varsayilan OEM 857/437) -> ONCE UTF-8 yap:
+#   #   [Console]::OutputEncoding = [Text.Encoding]::UTF8
 #   #   -Notes (python scripts\surum_notlari.py goster mobile 2.3.35 tr) -NotesEn (python scripts\surum_notlari.py goster mobile 2.3.35 en)
+#   # Bozuk kodlamali not (UTF-8'in OEM / ANSI ile okunmus izi) suit / kimlik / agdan ONCE reddedilir (Test-BozukKodlama).
 # =============================================================================
 param(
   [Parameter(Mandatory = $true)][ValidateSet('exe', 'mobil')][string]$Branch,
@@ -48,8 +51,17 @@ function New-YayinGovdesi {
   if ($NotesEn) { return "$Notes`n`n---`nEnglish:`n$NotesEn" }
   return $Notes
 }
+# YLI-A2.2: UTF-8 baytlarinin OEM (cp857 / cp437: lider bayt C3 / C4 / C5 / E2 -> kutu cizgisi U+2500-257F) ya da ANSI (cp1254 / cp1252:
+# A-tilde / A-diaeresis / A-ring) kod sayfasiyla okunmus izi. Turkce ve Ingilizce notlarda bu karakterler MESRU olarak gecmez.
+function Test-BozukKodlama {
+  param([string]$Metin)
+  return [bool]($Metin -match '[\u2500-\u257F\u00C3\u00C4\u00C5]')
+}
 
 if ($NotesEn -and -not $Notes) { throw "-NotesEn tek basina verilemez: once Turkce not (-Notes) gerekli (eski istemciler yalniz notes'u okur)." }
+foreach ($n in @($Notes, $NotesEn)) {
+  if (Test-BozukKodlama $n) { throw "Surum notu bozuk kodlamali (UTF-8 metin OEM/ANSI kod sayfasiyla okunmus): once [Console]::OutputEncoding = [Text.Encoding]::UTF8 yapip notu yeniden alin. Yayin DURDU." }
+}
 if (-not (Test-Path $AssetPath)) { throw "Asset bulunamadi: $AssetPath" }
 
 # --- 0) Y30 / D4.10: YAYIN ONCESI ZORUNLU TAM SUIT (sahip karari) ---
