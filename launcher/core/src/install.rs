@@ -439,6 +439,20 @@ pub fn ayni_birim(a: &Path, b: &Path) -> Option<bool> {
     Some(harf(a)? == harf(b)?)
 }
 
+/// YLI-A3 (S-E2I.4): UNC ana bilgisayar adı BU makine mi — `localhost` / bilgisayar adı (sondaki nokta yok sayılır), 127.0.0.0/8
+/// (`127.0.0.2` dahil) ve Windows çözümleyicisinin kabul ettiği `127.1` / `127.0.1` kısaltmaları, `::1` / `[::1]` (saf).
+fn yerel_host_mu(host: &str, bilgisayar: &str) -> bool {
+    let h = host.trim_end_matches('.').trim_start_matches('[').trim_end_matches(']');
+    if h.eq_ignore_ascii_case("localhost") || (!bilgisayar.is_empty() && h.eq_ignore_ascii_case(bilgisayar)) {
+        return true;
+    }
+    if let Ok(ip) = h.parse::<std::net::IpAddr>() {
+        return ip.is_loopback();
+    }
+    let p: Vec<&str> = h.split('.').collect();
+    (2..=3).contains(&p.len()) && p[0] == "127" && p.iter().all(|x| !x.is_empty() && x.bytes().all(|b| b.is_ascii_digit()))
+}
+
 /// LN L8 · S-E2I.4: yolun YEREL karşılığı (saf). `\\?\C:\x` / `\\.\C:\x` → `C:\x`; `\\?\UNC\<h>\C$\x` ve `\\<h>\C$\x` (h = localhost ·
 /// 127.0.0.1 · ::1 · bu bilgisayarın adı) → `C:\x`; başka biçim (gerçek ağ paylaşımı) aynen. Eskiden `ayni_birim` yalnız İLK
 /// karaktere baktığı için `\\?\C:\…` ve `\\localhost\C$\…` "başka sürücü" sayılıyor, hasta verisiyle AYNI diske yedek kabul ediliyordu.
@@ -447,8 +461,7 @@ pub fn yerel_yol(yol: &str, bilgisayar: &str) -> String {
     let unc = |r: &str| -> Option<String> {
         let mut p = r.splitn(3, '\\');
         let (host, pay, kalan) = (p.next()?, p.next()?, p.next().unwrap_or(""));
-        let yerel = ["localhost", "127.0.0.1", "::1", "[::1]"].iter().any(|h| host.eq_ignore_ascii_case(h))
-            || (!bilgisayar.is_empty() && host.eq_ignore_ascii_case(bilgisayar));
+        let yerel = yerel_host_mu(host, bilgisayar);
         let harf = pay.strip_suffix('$').filter(|h| h.len() == 1 && h.chars().all(|c| c.is_ascii_alphabetic()))?;
         yerel.then(|| format!("{}:\\{kalan}", harf.to_ascii_uppercase()))
     };
@@ -482,13 +495,41 @@ where
     v
 }
 
+/// YLI-A3 (S-E2I.4): VAR OLAN yolun gerçek biçimi (junction / sembolik bağ / 8.3 kısa ad / `subst` çözülmüş — `canonicalize`); yoksa
+/// olduğu gibi. Kök kuralı metinle karşılaştırdığı için PEMF köküne bağlanan bir junction'ı göremiyordu.
+fn gercek_yol(p: &Path) -> String {
+    std::fs::canonicalize(p).map(|c| c.to_string_lossy().into_owned()).unwrap_or_else(|_| p.to_string_lossy().into_owned())
+}
+
+/// YLI-A3 (S-E2I.4): iki VAR OLAN dizin aynı birimde mi — birim seri numarasıyla (bu makinenin normal ağ paylaşımı `\\<pc>\Yedek`,
+/// eşlenmiş sürücü, `subst` dahil; ağ paylaşımında sunucunun birimi okunur). Biri açılamazsa `None` (karar sürücü harfinde kalır).
+#[cfg(windows)]
+pub fn ayni_birim_seri(a: &Path, b: &Path) -> Option<bool> {
+    fn seri(p: &Path) -> Option<u32> {
+        use std::os::windows::fs::OpenOptionsExt;
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::Storage::FileSystem::{GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, FILE_FLAG_BACKUP_SEMANTICS};
+        // FILE_READ_ATTRIBUTES yeter; dizin tutamacı için BACKUP_SEMANTICS.
+        let f = std::fs::OpenOptions::new().access_mode(0x80).custom_flags(FILE_FLAG_BACKUP_SEMANTICS).open(p).ok()?;
+        // SAFETY: tutamaç `f` yaşadıkça geçerli; yapı tam boyutuyla verilir.
+        let mut bi: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+        (unsafe { GetFileInformationByHandle(f.as_raw_handle() as _, &mut bi) } != 0).then_some(bi.dwVolumeSerialNumber)
+    }
+    Some(seri(a)? == seri(b)?)
+}
+
+#[cfg(not(windows))]
+pub fn ayni_birim_seri(_a: &Path, _b: &Path) -> Option<bool> {
+    None
+}
+
 /// Seçilen hedef off-site yedek için uygun mu? `Ok(())` ya da kullanıcıya gösterilecek sebep. Yollar önce YEREL karşılığına
 /// çevrilir (`yerel_yol` — `\\?\` / `\\localhost\C$` atlatması); hedef bir PEMF kökünün içinde ya da kökün kendisiyse RED
 /// (S-E2I.4; yazılabilirlik sondası o klasöre dosya yazmadan ÖNCE).
 pub fn yedek_hedefi_gecerli_mi(hedef: &Path, veri_dizini: &Path, pemf_kokleri: &[PathBuf], bilgisayar: &str) -> Result<(), String> {
-    let h = yerel_yol(&hedef.to_string_lossy(), bilgisayar);
+    let h = yerel_yol(&gercek_yol(hedef), bilgisayar);
     let ic_mi = |k: &Path| {
-        let k = yerel_yol(&k.to_string_lossy(), bilgisayar);
+        let k = yerel_yol(&gercek_yol(k), bilgisayar);
         let k = k.trim_end_matches('\\');
         h.trim_end_matches('\\').eq_ignore_ascii_case(k) || crate::backend::kok_altinda_mi(&h, Path::new(k))
     };
@@ -498,8 +539,8 @@ pub fn yedek_hedefi_gecerli_mi(hedef: &Path, veri_dizini: &Path, pemf_kokleri: &
     if !dizin_yazilabilir_mi(hedef) {
         return Err(crate::dil::t("rust.yedek.yazilamiyor"));
     }
-    let v = yerel_yol(&veri_dizini.to_string_lossy(), bilgisayar);
-    if ayni_birim(Path::new(&h), Path::new(&v)) == Some(true) {
+    let v = yerel_yol(&gercek_yol(veri_dizini), bilgisayar);
+    if ayni_birim(Path::new(&h), Path::new(&v)) == Some(true) || ayni_birim_seri(hedef, veri_dizini) == Some(true) {
         return Err(crate::dil::t("rust.yedek.ayniSurucu"));
     }
     Ok(())
@@ -1622,6 +1663,45 @@ pub fn remove_install(install_root: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// YLI-A3.k (L8d · S-E2I.4) ÖNCE-KIRMIZI: PEMF köküne bağlanan bir JUNCTION yedek hedefi olarak seçilirse yedek PEMF kökünün
+    /// İÇİNE yazılır (kaldırma / tam temizlik onu da siler). Kural metin karşılaştırması yaptığı için junction'ı görmez. Veri dizini
+    /// başka bir "sürücü" (Q:) verilir ki yalnız PEMF-kök kuralı ölçülsün. Her şey geçici dizinde.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_A3_yedek_hedefi_PEMF_kokune_BAGLANTI_ile_atlatilamaz() {
+        let d = tempfile::tempdir().unwrap();
+        let kok = d.path().join("PEMF_System");
+        std::fs::create_dir_all(&kok).unwrap();
+        let bag = d.path().join("baglanti");
+        let c = std::process::Command::new("cmd").args(["/d", "/c", "mklink", "/J"]).arg(&bag).arg(&kok).output().unwrap();
+        assert!(c.status.success() && bag.is_dir(), "junction kurulamadı: {c:?}");
+        let r = yedek_hedefi_gecerli_mi(&bag, Path::new(r"Q:\veri\PEMF_GUI"), &[kok.clone()], "");
+        let ic: Vec<_> = std::fs::read_dir(&kok).unwrap().flatten().map(|e| e.file_name()).collect();
+        let _ = std::fs::remove_dir(&bag);
+        eprintln!("A3OLC|L8d|junction|{r:?}|kok_icerigi={ic:?}");
+        assert!(r.is_err(), "PEMF köküne bağlanan junction yedek hedefi KABUL edildi — yedek PEMF kökünün içine yazılır");
+    }
+
+    /// YLI-A3.k (L8d · S-E2I.4) ÖNCE-KIRMIZI (saf, ağa çıkmaz): bu makinenin yönetici paylaşımına giden başka yazımlar (127.0.0.0/8'in
+    /// başka adresi, `127.1` kısaltması, sondaki noktalı `localhost.`) hasta verisiyle AYNI diski "başka sürücü" gösterir.
+    #[test]
+    fn KRITIK_A3_yedek_hedefi_YEREL_takma_adlarla_ayni_diski_atlatamaz() {
+        if !cfg!(target_os = "windows") {
+            return;
+        }
+        let veri = Path::new(r"C:\ProgramData\PEMF_System\PEMF_GUI");
+        let mut kacan = Vec::new();
+        for h in [r"\\127.0.0.2\C$\yedek", r"\\127.1\C$\yedek", r"\\localhost.\C$\yedek", r"\\KLINIK-PC.\C$\yedek"] {
+            let y = yerel_yol(h, "KLINIK-PC");
+            let ayni = ayni_birim(Path::new(&y), veri);
+            eprintln!("A3OLC|L8d|takma|{h}|{y}|{ayni:?}");
+            if ayni != Some(true) {
+                kacan.push(h);
+            }
+        }
+        assert!(kacan.is_empty(), "aynı diskteki yönetici paylaşımı 'başka sürücü' sayıldı: {kacan:?}");
+    }
 
     /// LN L11 · S-I18N.13: testler GERÇEK ortamı OKUMAZ — eskiden `backend_env(...)` / `cozulmus_veri_dizini(std::env)` gerçek
     /// `PROGRAMDATA`'yı okuyup `C:\ProgramData\PEMF_System`'de dizin açıyor, sonda dosyası yazıyor, ilk seferde `icacls` koşuyordu
