@@ -350,8 +350,10 @@ pub fn veri_koku_acl_argumanlari(grup: Option<&str>) -> Option<Vec<String>> {
 /// Yeni yaratılan makine-geneli klasöre ACL ver (`veri_koku_acl_argumanlari`).
 ///
 /// Klasörü YARATAN kullanıcı sahibidir ve sahip, yönetici olmasa da DACL'i değiştirebilir →
-/// UAC gerekmez. Grup verilmezse ikinci Windows hesabı klasöre YAZAMAZ → o hesap kendi kökünde kalır
-/// (`dizin_yazilabilir_mi` kapısı; çok hesaplı kurulum grubu tanımlar — Y96).
+/// UAC gerekmez. ⚠️ YLI-A3.1 (ÖLÇÜLDÜ, 2026-10-22): grup verilmese de `C:\ProgramData` mirası (`Users: Write (CI)`) ikinci Windows
+/// hesabına köke dosya yazdırır → `dizin_yazilabilir_mi(kök)` onu AYIRT ETMEZ; o hesap makine kökünü alır ama backend asıl veri dizinini
+/// (`<kök>\PEMF_GUI`) `file_acl.lock_down_dir` ile ilk hesaba kilitlediği için hasta verisine ERİŞEMEZ (DB açılmaz — görünür arıza,
+/// sessiz "boş klinik" değil). Çok hesaplı klinikte paylaşılan grup ZORUNLU (Y96); ikinci hesabın davranışı sahip kararı (S-YLI.1).
 /// Başarısız olursa sessizce geçilir: `dizin_yazilabilir_mi` kapısı zaten koruyor.
 #[cfg(windows)]
 fn acl_ver(dir: &Path, grup: Option<&str>) {

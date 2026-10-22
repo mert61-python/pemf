@@ -158,8 +158,10 @@ Linux `~/.local/share/PEMF_GUI`. **Launcher bunu taklit etmeli, yeniden icat etm
 
 **Makine-geneli veri kökünün ACL'i (Y96 · LN L8):** kök İLK kez yaratılırken yalnız paylaşılan YEREL grup (`PEMF_DATA_GROUP_SID`,
 biçim `S-1-5-21-…` + bu makinenin yerel grubu — backend `file_acl` ile aynı kural) `Değiştir` alır ve SID backend'e de geçer; yerel
-`Users` VERİLMEZ. Grup tanımlı değilse ek hak verilmez (tek hesap: yaratan hesap sahip) — ikinci Windows hesabı köke yazamaz ve kendi
-kullanıcı köküne düşer; çok hesaplı klinik kurulumda grup tanımlanmalı.
+`Users` VERİLMEZ. Grup tanımlı değilse ek hak verilmez (tek hesap: yaratan hesap sahip). ⚠️ YLI-A3.1 (ölçüldü): bu, ikinci Windows
+hesabını kendi kullanıcı köküne DÜŞÜRMEZ — `C:\ProgramData` mirası (`Users: Write (CI)`) köke yazdırır, yoklama geçer; ama backend
+`<kök>\PEMF_GUI`'yi ilk hesaba kilitlediği için ikinci hesap hasta verisine erişemez (DB açılmaz — görünür arıza). Çok hesaplı klinik
+kurulumda paylaşılan grup ZORUNLU (Y96); grupsuz ikinci hesabın ne yapacağı sahip kararıdır (S-YLI.1).
 
 **Otomatik güncelleme kapısı (`aktif_seans_kapisi`):** sessiz self-update / runtime güncellemesi backend'i öldürür; önce
 `/api/health` → `sessionActive` (10 sn bütçe) ve `firmwareGuncelleme.yakiliyor` sorulur — `true` ya da bilinmiyor → ERTELE.
