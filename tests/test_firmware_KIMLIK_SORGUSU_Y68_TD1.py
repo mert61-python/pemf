@@ -62,7 +62,9 @@ def test_KRITIK_banner_PROTOKOL_ve_PAKET_BOYU_basar_backend_ayni_okur(kosum):
     assert ready, "banner basılmadı"
     k = banner_ayristir(ready[0][1])
     assert k is not None and (k.protokol, k.paket_boyu) == (STM_PROTOKOL_REV, STM_PAKET_BOYU), ready[0][1]
-    assert firmware_surumu(k.surum) == "2.3", f"sürüm ilk sırada değil (O-1.3): {ready[0][1]!r}"
+    from test_firmware_SURUM_banner_ve_UYUM_VARLIGI_D1120 import KAYNAK_SURUM
+
+    assert firmware_surumu(k.surum) == KAYNAK_SURUM, f"sürüm ilk sırada değil (O-1.3): {ready[0][1]!r}"
     assert uyum_denetle(k, STM_PAKET_BOBIN_SAYISI)[0] is True
 
 

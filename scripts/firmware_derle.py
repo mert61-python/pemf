@@ -121,10 +121,12 @@ def derle_stm(zorunlu: bool = False) -> int:
     if not kaynaklar:
         return _atla("STM32", "kaynak bulunamadi", zorunlu)
     hata = 0
+    uyarilar: list[str] = []
     with tempfile.TemporaryDirectory() as td:
         nesneler = []
-        for k in kaynaklar:
-            hedef = Path(td) / (k.stem + "_" + str(abs(hash(str(k))) % 10**6) + ".o")
+        # YH D7: nesne adı SIRA numarasından (eskiden `hash(str(k))` — PYTHONHASHSEED'e göre her koşuda başka ad; belirlenimcilik).
+        for sira, k in enumerate(kaynaklar):
+            hedef = Path(td) / f"{sira:03d}_{k.stem}.o"
             r = subprocess.run(
                 [str(gcc), *STM_BAYRAKLAR, *inc, "-c", str(k), "-o", str(hedef)],
                 capture_output=True,
@@ -138,6 +140,15 @@ def derle_stm(zorunlu: bool = False) -> int:
                 hata += 1
             else:
                 nesneler.append(str(hedef))
+                # YH D7: başarılı derlemenin UYARILARI da ölçülür — eskiden stderr yalnız hatada basılıyor, sonuç yine
+                # "temiz derlendi (-Wall -Wextra)" diyordu (uyarıya hiç bakılmadan; sahte yeşil).
+                uyarilar += [
+                    f"{k.relative_to(STM_PROJE)}: {s.strip()}" for s in (r.stderr or "").splitlines() if "warning:" in s
+                ]
+        if uyarilar:
+            print(f"[STM32] ### {len(uyarilar)} DERLEYICI UYARISI (-Wall -Wextra) -> TEMIZ DEGIL:")
+            print("\n".join(uyarilar[:40]))
+            return 1
         if hata:
             print(f"[STM32] BASARISIZ — {hata} dosya derlenmedi.")
             return 1

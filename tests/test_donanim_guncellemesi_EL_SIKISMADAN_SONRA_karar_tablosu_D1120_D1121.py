@@ -10,8 +10,8 @@
 KAPI: GERÇEK `backend_service.main()` ÇOCUK süreçte (launcher argv'si + `--no-headless-services`): çocukta
 `alt_surec_ag_bekcisi` ürün importundan ÖNCE (yalnız süreç içinde açılan portlar); gerçek seri port açma (serialwin32)
 ENGELLİ ve sayılı; "STM var" kolunda çocuk İÇİNDE sahte STM (loopback rastgele port, `PEMF_STM_PORT=socket://…`) firmware
-biçim dizesindeki saha banner'ını basar; "STM yok" kolunda port KAPALI; uyum varlığı YAMALI (kural var = firmwareMin 2.4 +
-`firmware.stm32` 2.4 · kural yok = `{}`, varlık yayınlanmamış); indirme geçici dosya, yakıcı SAHTE (`yakma_akisi` kayıtçı,
+biçim dizesindeki saha banner'ını basar; "STM yok" kolunda port KAPALI; uyum varlığı YAMALI (kural var = firmwareMin <bir sonraki sürüm> +
+`firmware.stm32` <bir sonraki sürüm> (YH D7: main.c'den türer) · kural yok = `{}`, varlık yayınlanmamış); indirme geçici dosya, yakıcı SAHTE (`yakma_akisi` kayıtçı,
 `programmer_cli`→None, `_kos`→AssertionError); `acilis_denetimi` kayıtçıyla sarılır; yedek ölçüm süresi kısaltılır.
 TABLO: bayrak (yok / 0 / 1) × STM (yok / var) × kural (yok / var) — 12 koşu; yalnız `1+var+var` yakar. ⚠️ Gerçek kart, seri
 port, ST-Link YOK; ağ YOK.
@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pytest
 from betik_alt_sureci import kostur, yalitik_ortam
-from test_firmware_SURUM_banner_ve_UYUM_VARLIGI_D1120 import KURALLI, saha_banneri
+from test_firmware_SURUM_banner_ve_UYUM_VARLIGI_D1120 import KAYNAK_SURUM, KURALLI, saha_banneri
 
 KOK = Path(__file__).resolve().parents[1]
 TESTLER = Path(__file__).resolve().parent
@@ -239,7 +239,7 @@ def test_KRITIK_karar_tablosu_YALNIZ_1_var_var_YAKAR_karar_EL_SIKISMADAN_SONRA(t
         )
         k = gercek[0]
         assert k["t"] >= (s.get("el_sikisma_t") or 0) - 0.06, f"karar el sıkışmadan ÖNCE: {k} / {s.get('el_sikisma_t')}"
-        assert k["firmware_surum"] == "2.3", f"banner sürümü ayrıştırılmadı: {k}"
+        assert k["firmware_surum"] == KAYNAK_SURUM, f"banner sürümü ayrıştırılmadı: {k}"
         assert k["eylem"] == (su.FIRMWARE_GUNCELLE if kural_var else su.EYLEM_YOK), k
         assert k["uygula"] is (bayrak == "1"), k
     else:
@@ -378,4 +378,4 @@ def test_KRITIK_sessiz_el_sikismada_banner_BEKLENIR_surum_okunur(monkeypatch):
     gorulen: list = []
     monkeypatch.setattr(fm, "acilis_denetimi", lambda **k: gorulen.append(k) or {"eylem": "yok", "gerekce": "kayitci"})
     bs._donanim_guncellemesi_safe(_Sessiz(bagli=True), logging.getLogger("d1121"))
-    assert gorulen and gorulen[0]["firmware_surum"] == "2.3", f"sessiz el sıkışmada banner beklenmedi: {gorulen}"
+    assert gorulen and gorulen[0]["firmware_surum"] == KAYNAK_SURUM, f"sessiz el sıkışmada banner beklenmedi: {gorulen}"

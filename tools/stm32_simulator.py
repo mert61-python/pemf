@@ -37,7 +37,7 @@ kilitleri tests/test_stm_dalga_sozlesmesi.py'dedir. READY dizesi firmware ile
 hizali tutulur (backend 'STM_READY' alt-dizesini esler; surum eki serbesttir).
 
 YANIT FORMATI (ASCII, \r\n ile biten) — firmware ile HİZALI (D0Ö.13):
-  -> STM_READY: DDS v2.3 (7-ch KARMA uni=0x60 SIM) Waiting for commands...\r\n   (kip/maske pemf_surus.h'den)
+  -> STM_READY: DDS v2.4 (7-ch KARMA uni=0x60 SIM) Waiting for commands...\r\n   (kip/maske pemf_surus.h'den)
   -> STM_OK: D=<NUM_COILS alan> P=<...> F=<...> T=<...> K=<etkin maske = yetenek | istek> E=<etkin duty, binde>\r\n
   -> STM_NACK: <sebep>\r\n
   -> STM_ERR: Watchdog Timeout! Baglanti koptu, bobinler 0'landi.\r\n
@@ -338,7 +338,7 @@ class Stm32SimClient:
     def _kimlik_govdesi() -> str:
         """Banner ve kimlik yanıtının ORTAK gövdesi (firmware'de STM_ID banner gövdesinden türer — main.c kimlik_govde)."""
         return (
-            f"DDS v2.3 ({NUM_COILS}-ch {_banner_kipi(UNIPOLAR_YETENEK_MASKESI)} "
+            f"DDS v2.4 ({NUM_COILS}-ch {_banner_kipi(UNIPOLAR_YETENEK_MASKESI)} "
             f"uni=0x{UNIPOLAR_YETENEK_MASKESI:02X} SIM) proto={PROTOKOL_REV} pkt={PKT_SIZE}"
         )
 

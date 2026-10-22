@@ -31,15 +31,28 @@ KOK = Path(__file__).resolve().parents[1]
 MAIN_C = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
 #: Y17 varlığı — beklenen adres BURADA yazılı (mutasyon hedefinden okunmaz).
 VARLIK_YOLU = "/mert61-python/pemf-update/releases/download/firmware-uyum/firmware_uyum.json"
+
+
+def _kaynak_surumu() -> str:
+    """main.c (yorumsuz) banner biçim dizesindeki firmware sürümü — YH D7 (Y80): sürüm yayında artar (v2.3 → v2.4 …); kapılar
+    "saha kartı ESKİ, kural bir SONRAKİ sürümü ister" senaryosunu sabit sayıyla değil kaynaktan kurar."""
+    m = re.search(r'"-> STM_READY: DDS v(\d+(?:\.\d+)+) ', c_soy(MAIN_C.read_text(encoding="utf-8")))
+    assert m, "main.c'de (yorum dışı) STM_READY sürüm dizesi yok"
+    return m.group(1)
+
+
+#: Kartın bugünkü kaynaktan bastığı sürüm ve uyum varlığının isteyeceği BİR SONRAKİ sürüm.
+KAYNAK_SURUM = _kaynak_surumu()
+SONRAKI_SURUM = f"{KAYNAK_SURUM.split('.')[0]}.{int(KAYNAK_SURUM.split('.')[1]) + 1}"
 KURALLI = {
     "firmware": {
         "stm32": {
-            "version": "2.4",
-            "url": "https://github.com/mert61-python/pemf-update/releases/download/fw-2.4/pemf_fw.bin",
+            "version": SONRAKI_SURUM,
+            "url": f"https://github.com/mert61-python/pemf-update/releases/download/fw-{SONRAKI_SURUM}/pemf_fw.bin",
             "sha256": "ab" * 32,
         }
     },
-    "uyumluluk": [{"clientMin": "", "clientMax": "", "firmwareMin": "2.4", "firmwareMax": ""}],
+    "uyumluluk": [{"clientMin": "", "clientMax": "", "firmwareMin": SONRAKI_SURUM, "firmwareMax": ""}],
 }
 
 
@@ -78,7 +91,7 @@ def zincir(monkeypatch, tmp_path):
         return sy.Sonuc(
             sy.TAMAM,
             "sahte yakıcı",
-            banner="-> STM_READY: DDS v2.4 (7-ch KARMA uni=0x60 + HW_SYNC@PB1) Waiting for commands...",
+            banner=f"-> STM_READY: DDS v{SONRAKI_SURUM} (7-ch KARMA uni=0x60 + HW_SYNC@PB1) Waiting for commands...",
             adimlar=["sahte"],
         )
 
@@ -95,7 +108,7 @@ def _kos(monkeypatch, bayrak):
     from utils import stm32_kimlik
 
     kimlik = stm32_kimlik.banner_ayristir(saha_banneri())
-    assert kimlik is not None and kimlik.surum == "DDS v2.3", f"aparat: banner ayrıştırılamadı: {kimlik}"
+    assert kimlik is not None and kimlik.surum == f"DDS v{KAYNAK_SURUM}", f"aparat: banner ayrıştırılamadı: {kimlik}"
     if bayrak is None:
         monkeypatch.delenv("PEMF_FW_AUTO_UPDATE", raising=False)
     else:
@@ -110,10 +123,12 @@ def test_KRITIK_banner_surumu_AYRISTIRILIR_karar_FIRMWARE_GUNCELLE_ve_bayrak_1de
 
     d = _kos(monkeypatch, "1")
     assert d["eylem"] == su.FIRMWARE_GUNCELLE, (
-        f"saha banner'ı (DDS v2.3) + firmwareMin 2.4 kuralı → eylem {d['eylem']!r}: {d['gerekce']} — sürüm "
+        f"saha banner'ı (DDS v{KAYNAK_SURUM}) + firmwareMin {SONRAKI_SURUM} kuralı → eylem {d['eylem']!r}: {d['gerekce']} — sürüm "
         "ayrıştırılamıyor (karar hep 'yok')"
     )
-    assert d.get("firmwareSurum") in ("2.3", "2.4") and kayit["yak"], f"bayrak '1' + kural + STM → yakma YOK: {d}"
+    assert d.get("firmwareSurum") in (KAYNAK_SURUM, SONRAKI_SURUM) and kayit["yak"], (
+        f"bayrak '1' + kural + STM → yakma YOK: {d}"
+    )
 
 
 @pytest.mark.parametrize("bayrak", [None, "0", "false"])
