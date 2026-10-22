@@ -42,20 +42,19 @@ _PAKET = KOK / "pemf-app-packages" / "base-deps.zip"
 _HEDEF = KOK / "THIRD_PARTY_LICENSES.md"
 
 _BASLIK_SONU = "## Dağıtılan pakette tespit edilen bileşenler"
-_NPM_BASLIGI = "### Arayüz ve site (npm) — çok dillilik (I18N)"
+_NPM_BASLIGI = "### Arayüz, site, DEMA ve launcher (npm)"
 
-#: I18N-0 (Y157, 2026-10-19): arayüze (`apps/ui`) ve siteye (`apps/web`) eklenen çok dillilik kütüphaneleri ve DOLAYLI bağımlılıkları.
+#: YH D3 (2026-10-22): npm envanteri TAMAM — her kilit dosyasındaki BÜTÜN çalışma-zamanı (geliştirme bağımlılığı OLMAYAN) girdiler.
+#: Eskiden (I18N-0, Y157) yalnız çok dillilik kütüphaneleri listeleniyordu; react, expo … HİÇ yoktu (S-I18N kaydı) → atıf eksikti.
 #: Sürüm ve lisans KİLİT DOSYASINDAN okunur (`package-lock.json` → `packages["node_modules/<ad>"]`); tahmin YAZILMAZ.
-#: ⚠️ Diğer npm bağımlılıkları (react, expo …) bu envanterde HİÇ YOK — I18N-0'dan önce de yoktu (S-I18N kaydı, sahibe).
-_NPM_KILITLERI = (KOK / "apps" / "ui" / "package-lock.json", KOK / "apps" / "web" / "package-lock.json")
-_NPM_PAKETLERI = (
-    "i18next",
-    "react-i18next",
-    "html-parse-stringify",
-    "void-elements",
-    "use-sync-external-store",
-    "@babel/runtime",
-)
+#: ⚠️ Kilitteki "çalışma-zamanı" kümesi derleme araçlarının bir kısmını da (metro, babel …) kapsar — fazla atıf güvenli taraftır.
+#: Anahtar = tabloda "Kullanan" sütununa yazılan yüzey adı.
+_NPM_KILITLERI = {
+    "arayüz": KOK / "apps" / "ui" / "package-lock.json",
+    "site": KOK / "apps" / "web" / "package-lock.json",
+    "DEMA": KOK / "dema-terapi-simülatörü" / "package-lock.json",
+    "launcher": KOK / "launcher" / "app" / "package-lock.json",
+}
 
 #: Paket adi -> lisans. `dist-info/METADATA` okunamayan paketler icin elle dogrulanmis
 #: degerler. ⚠️ Her satir PyPI sayfasindan dogrulanmistir; tahmin YAZILMAZ.
@@ -240,18 +239,98 @@ def envanter() -> list[tuple[str, str, str]]:
     return sorted(satirlar, key=lambda t: t[0])
 
 
-def npm_envanteri() -> list[tuple[str, str, str]]:
-    """(paket, sürüm, lisans) — `_NPM_PAKETLERI`, kilit dosyalarından (geliştirme bağımlılığı olanlar HARİÇ). Ad + sürüm tekil."""
-    gorulen: dict[tuple[str, str], str] = {}
-    for kilit in _NPM_KILITLERI:
+def _npm_lisansi(p: dict) -> str:
+    """Kilit girdisinin lisansı: SPDX dizesi; eski biçimler (`{"type": …}` / liste) dizeye indirgenir."""
+    li = p.get("license")
+    if isinstance(li, dict):
+        li = li.get("type")
+    elif isinstance(li, list):
+        li = " OR ".join(str(x.get("type") if isinstance(x, dict) else x) for x in li)
+    return str(li or "").strip()
+
+
+def _npm_girdileri() -> dict[tuple[str, str], tuple[str, set[str]]]:
+    """(ad, sürüm) → (lisans, {kullanan yüzeyler}) — geliştirme bağımlılıkları (`dev` / `devOptional`) ve çalışma alanı bağları HARİÇ."""
+    gorulen: dict[tuple[str, str], tuple[str, set[str]]] = {}
+    for yuzey, kilit in _NPM_KILITLERI.items():
         if not kilit.exists():
             continue
         paketler = json.loads(kilit.read_text(encoding="utf-8")).get("packages") or {}
         for yol, p in paketler.items():
-            ad = yol.rsplit("node_modules/", 1)[-1] if yol else ""
-            if ad in _NPM_PAKETLERI and not p.get("dev"):
-                gorulen.setdefault((ad, str(p.get("version") or "—")), str(p.get("license") or "⚠️ doğrulanmadı"))
-    return sorted((a, s, li) for (a, s), li in gorulen.items())
+            if not yol or p.get("dev") or p.get("devOptional") or p.get("link"):
+                continue
+            anahtar = (yol.rsplit("node_modules/", 1)[-1], str(p.get("version") or "—"))
+            _lisans, yuzeyler = gorulen.setdefault(anahtar, (_npm_lisansi(p) or "⚠️ doğrulanmadı", set()))
+            yuzeyler.add(yuzey)
+    return gorulen
+
+
+def npm_envanteri() -> list[tuple[str, str, str]]:
+    """(paket, sürüm, lisans) — bütün kilit dosyalarının çalışma-zamanı girdileri. Ad + sürüm tekil, ad sıralı."""
+    return sorted((a, s, li) for (a, s), (li, _) in _npm_girdileri().items())
+
+
+#: SPDX ifadesi belirteçleri: parantez ya da boşluksuz kelime (`AND` / `OR` / `WITH` / lisans kimliği).
+_SPDX_BELIRTEC = re.compile(r"\(|\)|[^\s()]+")
+
+
+def spdx_kopyleft_mu(ifade: str) -> bool:
+    """SPDX lisans İFADESİ kaynak açma yükümlülüğü doğuruyor mu (YH D3). Yaprak kararı `kopyleft_mu` (TEK KAYNAK); bağlaçlar SPDX
+    önceliğiyle: `WITH` > `AND` > `OR`. `A OR B` → seçim hakkı: YALNIZ hepsi kopyleftse kopyleft (`BSD-3-Clause OR GPL-2.0` DEĞİL);
+    `A AND B` → biri kopyleftse kopyleft; `X WITH istisna` → X. Ayrıştırılamayan ifade → metnin tamamına `kopyleft_mu` (güvenli taraf)."""
+    belirtecler = _SPDX_BELIRTEC.findall(ifade or "")
+    konum = 0
+
+    def bak() -> str | None:
+        return belirtecler[konum].upper() if konum < len(belirtecler) else None
+
+    def al() -> str:
+        nonlocal konum
+        konum += 1
+        return belirtecler[konum - 1]
+
+    def birim() -> bool:
+        if bak() == "(":
+            al()
+            sonuc = veya()
+            if bak() != ")":
+                raise ValueError("kapanmayan parantez")
+            al()
+            return sonuc
+        if bak() in (None, ")", "AND", "OR", "WITH"):
+            raise ValueError("lisans kimliği bekleniyordu")
+        sonuc = kopyleft_mu(al())
+        if bak() == "WITH":
+            al()
+            al()
+        return sonuc
+
+    def ve() -> bool:
+        sonuc = birim()
+        while bak() == "AND":
+            al()
+            sonuc = birim() or sonuc
+        return sonuc
+
+    def veya() -> bool:
+        sonuc = ve()
+        while bak() == "OR":
+            al()
+            sonuc = ve() and sonuc
+        return sonuc
+
+    try:
+        sonuc = veya()
+        if konum != len(belirtecler):
+            raise ValueError("artık belirteç")
+        return sonuc
+    except (ValueError, IndexError):
+        return kopyleft_mu(ifade)
+
+
+def npm_kopyleft() -> list[tuple[str, str, str]]:
+    """npm envanterinde kopyleft (SPDX ifadesiyle karar verilmiş) girdiler — kapı: `tests/test_YH_D3_npm_lisans_envanteri.py`."""
+    return [(a, s, li) for a, s, li in npm_envanteri() if spdx_kopyleft_mu(li)]
 
 
 def _tablo(satirlar) -> str:
@@ -260,13 +339,21 @@ def _tablo(satirlar) -> str:
 
 
 def _npm_bolumu() -> str:
-    satirlar = npm_envanteri()
-    if not satirlar:
+    girdiler = _npm_girdileri()
+    if not girdiler:
         return ""
+    sira = list(_NPM_KILITLERI)
+    satirlar = "\n".join(
+        f"| `{a}` | {s} | {li} | {', '.join(sorted(yz, key=sira.index))} |"
+        for (a, s), (li, yz) in sorted(girdiler.items())
+    )
+    kaynaklar = " + ".join(f"`{k.relative_to(KOK).as_posix()}`" for k in _NPM_KILITLERI.values() if k.exists())
     return (
         f"\n{_NPM_BASLIGI}\n\n"
-        "Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` (çalışma-zamanı girdileri; sürüm ve lisans kilit\n"
-        "dosyasından). ⚠️ Yalnız çok dillilik kütüphaneleri ve dolaylı bağımlılıkları listelenir.\n\n" + _tablo(satirlar)
+        f"Kaynak: {kaynaklar} — her kilit dosyasındaki BÜTÜN çalışma-zamanı girdileri\n"
+        "(geliştirme bağımlılıkları hariç; sürüm ve lisans kilit dosyasından). Küme derleme araçlarının bir kısmını da kapsar\n"
+        "(fazla atıf güvenli taraftır). Çift lisanslı girdilerde (`A OR B`) izin veren seçenek kullanılır.\n\n"
+        "| Paket | Sürüm | Lisans | Kullanan |\n|---|---|---|---|\n" + satirlar + "\n"
     )
 
 
