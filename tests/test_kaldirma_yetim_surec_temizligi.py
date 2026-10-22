@@ -47,11 +47,14 @@ _BACKEND_RS = _KOK / "launcher" / "core" / "src" / "backend.rs"
 
 
 def _makensis() -> str | None:
-    """NSIS derleyicisini bul (Tauri kendi kopyasını `%LOCALAPPDATA%\\tauri\\NSIS`'e indirir)."""
+    """NSIS derleyicisini bul (Tauri kendi kopyasını `%LOCALAPPDATA%\\tauri\\NSIS`'e indirir).
+
+    ⚠️ LN L5 (KÖR KAPI): yalıtılmış koşucular sahte LOCALAPPDATA kullanır → bu derleme testi orada sessizce ATLANIYORDU (makro
+    gövdelerini derleyen TEK kapı budur). Komşu `test_i18n_launcher_altyapi.py` gibi `PEMF_MAKENSIS` önce okunur."""
     if sys.platform != "win32":
         return None
     yerel = os.environ.get("LOCALAPPDATA")
-    adaylar = []
+    adaylar = [Path(os.environ["PEMF_MAKENSIS"])] if os.environ.get("PEMF_MAKENSIS") else []
     if yerel:
         adaylar += [
             Path(yerel) / "tauri" / "NSIS" / "makensis.exe",
@@ -103,12 +106,34 @@ def preuninstall_satirlari(hooks_metni: str) -> list[str]:
     return [_yorumsuz(s) for s in m.group(1).splitlines()]
 
 
+_KOKTEN_AD = re.compile(r'SetEnvironmentVariable\(t\s+"PEMF_KALDIRMA_AD",\s*t\s+"([^"]+\.exe)"\)', re.IGNORECASE)
+
+
+def _kokten_oldurme_satiri_mi(s: str) -> bool:
+    """LN L5 · Y71: kökten öldürme satırı — Win32_Process (32-bit kaldırıcıda yol okunabilen tek yol) + ad + KÖK süzgeci + Stop-Process."""
+    return (
+        "Win32_Process" in s
+        and "$$_.Name -eq $$env:PEMF_KALDIRMA_AD" in s
+        and "$$_.ExecutablePath.StartsWith($$k" in s
+        and "$$env:PEMF_KALDIRMA_KOKU" in s
+        and "Stop-Process" in s
+    )
+
+
 def _taskkill_hedefleri(satirlar: list[str]) -> list[str]:
-    """Sırayla `taskkill /IM <ad>` hedefleri (küçük harf)."""
+    """Sırayla öldürme hedefleri (küçük harf): `taskkill /IM <ad>` ve LN L5'in KÖKTEN öldürmesi (ad ortam değişkeniyle verilir, ardından
+    gelen PowerShell satırı yalnız `$INSTDIR` altındaki o adlı süreci durdurur — ad ancak o satır VARSA hedef sayılır)."""
     hedefler = []
+    bekleyen = None
     for s in satirlar:
         for m in re.finditer(r"/IM\s+(\S+?\.exe)", s, re.IGNORECASE):
             hedefler.append(m.group(1).lower())
+        m = _KOKTEN_AD.search(s)
+        if m:
+            bekleyen = m.group(1).lower()
+        elif bekleyen and _kokten_oldurme_satiri_mi(s):
+            hedefler.append(bekleyen)
+            bekleyen = None
     return hedefler
 
 
@@ -117,7 +142,7 @@ def _rust_artakalan_listesi(metin: str) -> list[tuple[str, bool]]:
 
     LN L3 · Y82: liste adlandırılmış sabite taşındı (backend AĞAÇSIZ — yakıcı `STM32_Programmer_CLI` çocuğu ölmesin); eskiden
     `kill_stray_backends` gövdesindeki `for image in [...]` dizisiydi ve hepsi `/T` ile öldürülüyordu."""
-    govde = re.search(r"pub fn kill_stray_backends\(\)(.*?)\n\}", metin, re.DOTALL)
+    govde = re.search(r"pub fn kill_stray_backends\([^)]*\)(.*?)\n\}", metin, re.DOTALL)
     assert govde, "kill_stray_backends() bulunamadı (backend.rs yeniden mi adlandırıldı?)"
     assert re.search(r"for \(image, agac\) in ARTAKALAN_SURECLER\b", govde.group(1)), (
         "kill_stray_backends() listeyi `ARTAKALAN_SURECLER`den okumuyor — iki kaldırma yolunun tek kaynağı kayboldu"
@@ -240,6 +265,153 @@ def test_KRITIK_L3_yakici_kapisi_mutantta_KIRMIZI(ad, hedef, eski, yeni):
     else:
         nsi = nsi.replace(eski, yeni)
     assert _yakici_korunur_ihlalleri(rs, nsi), f"{ad}: kapı mutantı GÖRMEDİ"
+
+
+def _kendi_broker_ihlalleri(backend_rs: str, hooks_metni: str) -> list[str]:
+    """LN L5 · Y71 (sahip): kapanışta / kaldırmada yalnız KENDİ mosquitto'muz (ikilisi kurulum kökü altında) öldürülür — sahadaki eski
+    kurulumun mosquitto SERVİSİ ve yabancı broker'lar ADLA öldürülmez. İki yol: launcher `kill_stray_backends(kok)` + NSIS PREUNINSTALL."""
+    sorun = []
+    rs = backend_rs.replace("\r\n", "\n")
+    sabit = re.search(r"pub const YALNIZ_KOKTEN_OLDURULEN: \[&str; \d+\] = \[(.*?)\];", rs)
+    if not sabit or '"mosquitto.exe"' not in sabit.group(1):
+        sorun.append("launcher: mosquitto.exe `YALNIZ_KOKTEN_OLDURULEN`de değil (adla öldürülür)")
+    govde = re.search(r"pub fn kill_stray_backends\(kok: &Path\)(.*?)\n\}", rs, re.DOTALL)
+    if not govde:
+        sorun.append("launcher: `kill_stray_backends(kok: &Path)` yok — kök bilinmeden 'kendi' süreç ayırt edilemez")
+    else:
+        g = govde.group(1)
+        if not re.search(
+            r"if YALNIZ_KOKTEN_OLDURULEN\.contains\(&image\) \{\s*for pid in kok_altindaki_pidler\(&surec_yollari\(image\), kok\)",
+            g,
+        ):
+            sorun.append("launcher: kökten öldürme dalı yok / süzgeçsiz")
+        if not re.search(r"kok_altindaki_pidler\(&surec_yollari\(image\), kok\)[^}]*?\"/PID\"", g, re.DOTALL):
+            sorun.append("launcher: kökten seçilen süreç PID ile öldürülmüyor")
+    pre = _pre(hooks_metni)
+    for s in pre:
+        if re.search(r"/IM\s+mosquitto\.exe", s, re.I):
+            sorun.append(f"NSIS: mosquitto ADLA öldürülüyor: {s.strip()}")
+    if "mosquitto.exe" not in _taskkill_hedefleri(pre):
+        sorun.append(
+            "NSIS: kendi mosquitto'muz hiç öldürülmüyor (kökten öldürme satırı yok / süzgeçsiz) — dosya kilidi kalır"
+        )
+    if not any(re.search(r'SetEnvironmentVariable\(t\s+"PEMF_KALDIRMA_KOKU",\s*t\s+"\$INSTDIR"\)', s) for s in pre):
+        sorun.append("NSIS: kök ($INSTDIR) PowerShell'e verilmiyor")
+    return sorun
+
+
+def test_KRITIK_L5_yalniz_KENDI_mosquitto_oldurulur_eski_SERVIS_e_dokunulmaz():
+    sorun = _kendi_broker_ihlalleri(_BACKEND_RS.read_text(encoding="utf-8"), _HOOKS.read_text(encoding="utf-8"))
+    assert not sorun, "\n".join(sorun)
+
+
+@pytest.mark.parametrize(
+    "ad,hedef,eski,yeni",
+    [
+        (
+            "rust_adla",
+            "rs",
+            'pub const YALNIZ_KOKTEN_OLDURULEN: [&str; 1] = ["mosquitto.exe"];',
+            'pub const YALNIZ_KOKTEN_OLDURULEN: [&str; 1] = ["yok.exe"];',
+        ),
+        (
+            "rust_suzgecsiz",
+            "rs",
+            "for pid in kok_altindaki_pidler(&surec_yollari(image), kok) {",
+            "for pid in surec_yollari(image).iter().map(|(p, _)| *p) {",
+        ),
+        (
+            "nsis_adla",
+            "nsi",
+            "  Pop $0\n  nsExec::Exec /TIMEOUT=30000 'taskkill /F /IM cloudflared.exe /T'",
+            "  Pop $0\n  nsExec::Exec /TIMEOUT=30000 'taskkill /F /IM mosquitto.exe /T'\n  Pop $0\n  nsExec::Exec /TIMEOUT=30000 'taskkill /F /IM cloudflared.exe /T'",
+        ),
+        (
+            "nsis_suzgecsiz",
+            "nsi",
+            " -and $$_.ExecutablePath.StartsWith($$k, [StringComparison]::OrdinalIgnoreCase)",
+            "",
+        ),
+        ("nsis_koksuz", "nsi", 't "PEMF_KALDIRMA_KOKU", t "$INSTDIR"', 't "PEMF_KALDIRMA_KOKU", t "C:\\"'),
+    ],
+)
+def test_KRITIK_L5_kendi_broker_kapisi_mutantta_KIRMIZI(ad, hedef, eski, yeni):
+    rs = _BACKEND_RS.read_text(encoding="utf-8").replace("\r\n", "\n")
+    nsi = _HOOKS.read_text(encoding="utf-8").replace("\r\n", "\n")
+    kaynak = rs if hedef == "rs" else nsi
+    assert kaynak.count(eski) == 1, f"{ad}: mutant çapası {kaynak.count(eski)} kez"
+    if hedef == "rs":
+        rs = rs.replace(eski, yeni)
+    else:
+        nsi = nsi.replace(eski, yeni)
+    assert _kendi_broker_ihlalleri(rs, nsi), f"{ad}: kapı mutantı GÖRMEDİ"
+
+
+def _ps_kok_oldurme_komutu(hooks_metni: str) -> str:
+    """hooks.nsi'deki kökten öldürme satırının PowerShell `-Command` metni (NSIS `$$` → `$` çözülmüş) — üretim satırının KENDİSİ."""
+    for s in _pre(hooks_metni):
+        if _kokten_oldurme_satiri_mi(s):
+            m = re.search(r"-Command \"(.*)\"'\s*$", s.rstrip())
+            assert m, f"-Command metni ayrıştırılamadı: {s.strip()[:120]}"
+            assert "$INSTDIR" not in m.group(1) and "$(" not in m.group(1), "komutta NSIS değişkeni / LangString kaldı"
+            return m.group(1).replace("$$", "$")
+    raise AssertionError("kökten öldürme satırı yok")
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows süreç / WMI sondası")
+def test_KRITIK_L5_nsis_satiri_GERCEKTE_yalniz_KOKTEKI_sureci_durdurur(tmp_path):
+    """Sonda: aynı adlı iki süreç (kopya cmd.exe, `pause` ile bekler) — biri `$INSTDIR` benzeri kökte, biri kardeş dizinde (sahadaki
+    servisin yerini tutar). hooks.nsi'deki satır kaldırıcının bağlamı gibi 32-bit PowerShell'le (SysWOW64 varsa) koşturulur: yalnız
+    kökteki ölür. Yalnız bu testin başlattığı sondalar hedeflenir (ad sürece özgü); gerçek mosquitto / backend'e dokunulmaz."""
+    komut = _ps_kok_oldurme_komutu(_HOOKS.read_text(encoding="utf-8"))
+    sistem = Path(os.environ.get("SystemRoot", r"C:\Windows"))
+    ps = sistem / "SysWOW64" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+    if not ps.is_file():
+        ps = sistem / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+    ad = f"pemf_l5_ps_sonda_{os.getpid()}.exe"
+    taban = tmp_path.resolve()  # uzun yol — WMI ExecutablePath uzun yol döner (8.3 kısa adlı TEMP'te de tutsun)
+    kok = taban / "PEMF Vet Client"
+    kardes = taban / "PEMF Vet Client2"
+    sondalar = []
+    try:
+        # [0] kökte hedef ad · [1] kardeş dizinde aynı ad · [2] kökte BAŞKA ad (kökteki her süreç değil, yalnız o ad)
+        for d, a in (
+            (kok / "runtime" / "bin", ad),
+            (kardes / "bin", ad),
+            (kok / "runtime" / "baska", f"pemf_l5_ps_baska_{os.getpid()}.exe"),
+        ):
+            d.mkdir(parents=True)
+            shutil.copy(sistem / "System32" / "cmd.exe", d / a)
+            sondalar.append(
+                subprocess.Popen(
+                    [str(d / a), "/d", "/c", "pause"],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            )
+        time.sleep(0.5)
+        ortam = {**os.environ, "PEMF_KALDIRMA_KOKU": str(kok), "PEMF_KALDIRMA_AD": ad}
+        r = subprocess.run(
+            [str(ps), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", komut],
+            env=ortam,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        time.sleep(0.5)
+        assert sondalar[0].poll() is not None, (
+            f"kökteki süreç DURDURULMADI (rc={r.returncode} {r.stderr[-400:]!r}) — dosya kilidi kalır"
+        )
+        assert sondalar[1].poll() is None, (
+            "kök DIŞINDAKİ aynı adlı süreç durduruldu — sahadaki eski mosquitto servisi de ölürdü"
+        )
+        assert sondalar[2].poll() is None, "kökteki BAŞKA adlı süreç durduruldu — ad süzgeci yok"
+    finally:
+        for p in sondalar:
+            if p.poll() is None:
+                p.kill()
+            p.wait(timeout=10)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

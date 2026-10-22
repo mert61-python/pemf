@@ -194,8 +194,28 @@ alamaz; oturum yine `stmUyumlu` kapısıyla korunur (kanal / paket uyumsuzsa sea
 değil (her yolda önce gider). Ana pencere kapanırken yakma sürüyorsa kapanış ertelenir, pencerede "Kart yazılımı (STM32) şu anda
 güncelleniyor … bilgisayarı kapatmayın" notu çıkar (TR + EN, `ui.kapanisYakmaBekleniyor`) ve yakma bitince pencere kendiliğinden kapanır.
 Otomatik güncelleme (self-update / runtime) yakma sürerken ertelenir (`rust.hata.guncellemeYakmaSuruyor`). Süreç öldürme listesi
-`backend::ARTAKALAN_SURECLER`: `PEMF_Backend.exe` AĞAÇSIZ (`/T` yok — çocuk süreç `STM32_Programmer_CLI` ölmez), `mosquitto.exe` /
-`cloudflared.exe` kendi adlarıyla; NSIS PREUNINSTALL kancası aynı. Azami süre dolarsa backend yine öldürülür ama yakıcı yaşar.
+`backend::ARTAKALAN_SURECLER`: `PEMF_Backend.exe` AĞAÇSIZ (`/T` yok — çocuk süreç `STM32_Programmer_CLI` ölmez), `mosquitto.exe`
+yalnız kendi kökümüzden (aşağıda), `cloudflared.exe` adıyla; NSIS PREUNINSTALL kancası aynı. Azami süre dolarsa backend yine öldürülür
+ama yakıcı yaşar.
+
+## Kapanışta / kaldırmada artakalan süreçler — yalnız KENDİ mosquitto'muz (Y71 · LN L5)
+
+Backend öldürüldükten sonra (sıra: STOP → yakma beklemesi → backend → yardımcılar; backend ÖNCE ölür, yoksa broker gözetmeni
+mosquitto'yu yeniden başlatır) yardımcı süreçler kapatılır. Sebep: backend'in başlattığı `mosquitto.exe` yetim kalırsa
+`runtime\…\mosquitto.exe`'yi kilitler (yeniden kurulumda "os error 32") ve 1883'ü tutar.
+
+- **Yalnız kendi broker'ımız:** `mosquitto.exe` ADLA öldürülmez; yalnız ikilisinin yolu kurulum kökünün (`%LOCALAPPDATA%\PEMF Vet Client`
+  = NSIS `$INSTDIR`) ALTINDAYSA (`backend::YALNIZ_KOKTEN_OLDURULEN`, `kok_altinda_mi`: büyük / küçük harf duyarsız, `\\?\` öneki yok
+  sayılır, kardeş dizin `…\PEMF Vet Client2` sayılmaz, yolu okunamayan süreç sayılmaz). Sahadaki ESKİ kurulumun `mosquitto` Windows
+  SERVİSİ (`C:\Program Files\mosquitto`, Y36) ve başka uygulamaların broker'ları DOKUNULMADAN kalır. Dosya kilidi derdi de yalnız
+  kendi ikilimizden doğduğu için temizlik eksilmez. Backend'in kendi kuralıyla aynı (`headless_services._kimlik_parcasini_onar`, Y71).
+- **Launcher yolu** (`kill_stray_backends(kok)`): Toolhelp32 süreç listesi + `QueryFullProcessImageNameW` → seçilen PID'ler
+  `taskkill /F /PID … /T`.
+- **Kaldırma yolu (Ayarlar ▸ Uygulamalar — launcher çalışmaz):** NSIS PREUNINSTALL kökü ve adı ortam değişkeniyle
+  (`PEMF_KALDIRMA_KOKU` / `PEMF_KALDIRMA_AD`) PowerShell'e verir; `Win32_Process.ExecutablePath` kökle başlayan o adlı süreç durdurulur.
+  ⚠️ Kaldırıcı 32-bit'tir → çocuk PowerShell de 32-bit: `Get-Process .Path` 64-bit sürecin yolunu okuyamaz (ÖLÇÜLDÜ: NULL), bu yüzden WMI.
+- `PEMF_Backend.exe` ve `cloudflared.exe` bugünkü gibi adla (backend AĞAÇSIZ — L3). Unix kolu (`pkill -x`) kökü henüz süzmez
+  (mac / Linux backend'i sistem mosquitto'sunu kullanabilir) — Linux dalı SONRAKİ.
 
 ## Güvenlik gereksinimleri
 

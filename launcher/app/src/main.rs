@@ -139,7 +139,7 @@ fn stop_backend_for_teardown(
             }
         }
     }
-    backend::kill_stray_backends();
+    backend::kill_stray_backends(root); // LN L5: mosquitto yalnız bu kökten (Y71)
     // taskkill sonrası OS'un dosya kilitlerini bırakması için kısa bekle (extract'tan ÖNCE).
     std::thread::sleep(std::time::Duration::from_millis(800));
     clear_port_if_stopped(root, None);
@@ -2583,7 +2583,7 @@ fn main() {
                             // child.kill() ÇOCUK-AĞACINI öldürmez → BİZİM spawn ettiğimiz
                             // mosquitto/cloudflared YETİM kalır ve runtime/ dosyalarını kilitler
                             // (sonraki kurulum "os error 32"). Yalnız SAHİBİYSEK ağacı temizle.
-                            backend::kill_stray_backends();
+                            backend::kill_stray_backends(&root); // LN L5: mosquitto yalnız bu kökten (Y71)
                             // Temiz kapanış: bobinler durduruldu + backend öldürüldü → port dosyasını
                             // sil ki sonraki bir uninstall ölü bir porta E-stop POST'lamasın. (Çökme
                             // yolunda bu handler ÇALIŞMAZ → dosya kalır ve uninstaller E-stop'lar.)
@@ -2883,7 +2883,7 @@ mod tests {
         let kill = g.find(".kill()").expect("kill yok");
         assert!(estop < bekle && bekle < yakala && yakala < kill, "teardown sırası STOP → bekle → yakala → kill değil");
         let o = g.find("if !had_tracked").expect("orphan dalı yok");
-        let ob = &g[o..g.find("backend::kill_stray_backends()").expect("kill_stray yok")];
+        let ob = &g[o..g.find("backend::kill_stray_backends(root)").expect("kill_stray yok")];
         let (oe, obk) = (ob.find("safe_stop_coils(").expect("orphan STOP yok"), ob.find("yakma_bitene_kadar_bekle(").expect("orphan bekleme yok"));
         assert!(oe < obk, "orphan dalında bekleme STOP'tan ÖNCE");
         let d = soy.find("let mut job = move ||").expect("Destroyed job yok");

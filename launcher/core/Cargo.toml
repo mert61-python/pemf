@@ -20,7 +20,9 @@ ureq.workspace = true
 # `Win32_Storage_FileSystem`: GetDiskFreeSpaceExW — kurulum ÖNCESİ boş alan kontrolü
 # (bkz. disk.rs; LattePanda eMMC'de kurulum 1,2 GB indirdikten sonra os error 112 ile ölüyordu).
 # `Win32_Globalization`: GetUserDefaultUILanguage — I18N (Y161) Windows görüntüleme dili (bkz. dil.rs; yeni crate DEĞİL, aynı paketin özelliği).
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_Globalization"] }
+# `Win32_System_Diagnostics_ToolHelp` + `Win32_System_Threading`: süreç listesi + ikili yolu — LN L5 · Y71 kapanışta YALNIZ kendi
+# kökümüzdeki mosquitto öldürülür (bkz. backend.rs `surec_yollari`; yeni crate DEĞİL, aynı paketin özelliği).
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_Globalization", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading"] }
 
 # statvfs — Windows dışında boş alan okuma (bkz. disk.rs). `libc` bagimlilik agacinda ZATEN var.
 [target.'cfg(not(windows))'.dependencies]

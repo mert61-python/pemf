@@ -842,6 +842,72 @@ pub fn taskkill_argumanlari(image: &str, agac: bool) -> Vec<&str> {
     a
 }
 
+/// LN L5 · Y71 (sahip): bu imajlar ADLA DEĞİL yalnız ikilisi KURULUM KÖKÜMÜZÜN altındaysa öldürülür. `mosquitto.exe` sahada ESKİ
+/// kurulumun Windows SERVİSİ olarak da kayıtlı (`C:\Program Files\mosquitto`, Y36) ya da başka bir uygulamanın broker'ı olabilir —
+/// adla öldürmek ona da dokunurdu. Bizim broker'ımız `<kök>\runtime\…\mosquitto.exe`; öldürmenin sebebi olan dosya kilidi (yeniden
+/// kurulumda "os error 32") de YALNIZ o ikiliden doğar. Backend'in kendi kuralıyla aynı (`headless_services._kimlik_parcasini_onar`).
+pub const YALNIZ_KOKTEN_OLDURULEN: [&str; 1] = ["mosquitto.exe"];
+
+/// Süreç ikilisinin yolu `kok` altında mı (saf). NTFS gibi büyük / küçük harf duyarsız, `/` ≡ `\`, `\\?\` öneki yok sayılır; sınır
+/// ayırıcıyla (`…\PEMF Vet Client2\x.exe`, `…\PEMF Vet Client` altında DEĞİL). Okunamayan (boş) yol hiçbir kökün altında değildir.
+pub fn kok_altinda_mi(yol: &str, kok: &Path) -> bool {
+    fn duz(s: &str) -> String {
+        let s = s.replace('/', "\\");
+        let s = s.strip_prefix(r"\\?\").unwrap_or(&s);
+        s.trim_end_matches('\\').to_lowercase()
+    }
+    let (y, k) = (duz(yol), duz(&kok.to_string_lossy()));
+    !k.is_empty() && y.len() > k.len() + 1 && y.starts_with(&k) && y[k.len()..].starts_with('\\')
+}
+
+/// `(pid, ikili yolu)` listesinden yalnız `kok` altındakilerin PID'leri (saf karar — testli).
+pub fn kok_altindaki_pidler(surecler: &[(u32, String)], kok: &Path) -> Vec<u32> {
+    surecler.iter().filter(|(_, yol)| kok_altinda_mi(yol, kok)).map(|(pid, _)| *pid).collect()
+}
+
+/// Windows'ta adı `ad` olan süreçlerin `(pid, TAM ikili yolu)` listesi (Toolhelp32 + `QueryFullProcessImageNameW`; yeni crate yok —
+/// `windows-sys` özelliği). Yolu okunamayan süreç `""` yolla döner (hiçbir kökün altında sayılmaz → öldürülmez).
+#[cfg(windows)]
+pub fn surec_yollari(ad: &str) -> Vec<(u32, String)> {
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+    };
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    let mut v = Vec::new();
+    // SAFETY: anlık görüntü / süreç tutamaçları yalnız bu blokta kullanılır ve kapatılır; tamponlar boyutlarıyla verilir.
+    unsafe {
+        let anlik = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if anlik == INVALID_HANDLE_VALUE || anlik.is_null() {
+            return v;
+        }
+        let mut e: PROCESSENTRY32W = std::mem::zeroed();
+        e.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+        let mut var = Process32FirstW(anlik, &mut e) != 0;
+        while var {
+            let n = e.szExeFile.iter().position(|&c| c == 0).unwrap_or(e.szExeFile.len());
+            if String::from_utf16_lossy(&e.szExeFile[..n]).eq_ignore_ascii_case(ad) {
+                let mut yol = String::new();
+                let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, e.th32ProcessID);
+                if !h.is_null() {
+                    let mut tampon = [0u16; 1024];
+                    let mut boy = tampon.len() as u32;
+                    if QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, tampon.as_mut_ptr(), &mut boy) != 0 {
+                        yol = String::from_utf16_lossy(&tampon[..boy as usize]);
+                    }
+                    CloseHandle(h);
+                }
+                v.push((e.th32ProcessID, yol));
+            }
+            var = Process32NextW(anlik, &mut e) != 0;
+        }
+        CloseHandle(anlik);
+    }
+    v
+}
+
 /// LN L3 · Y82 (sahip): `/api/health` → `firmwareGuncelleme.yakiliyor` (yalnız-ek alan; backend yakma penceresinden türetir).
 /// `Some(true)` yalnız JSON `true`; alan / nesne YOKSA `Some(false)` (o backend oto-firmware yakamaz); `firmwareGuncelleme: null`
 /// (tünel / uzak) ya da bozuk gövde → `None` (bilinmiyor).
@@ -914,12 +980,28 @@ pub const YAKMA_BEKLEME_AZAMI: Duration = Duration::from_secs(600);
 /// eskiden `/T` (süreç AĞACI) ile öldürülüyordu → yakma sürerken kapanış yakıcıyı da öldürür, kart yarım yazılmış uygulama alanıyla
 /// kalırdı. Artık backend AĞACIYLA öldürülmez; bilinen çocukları (mosquitto / cloudflared) kendi adlarıyla ayrıca kapatılır, yakıcı
 /// HİÇBİR listede yoktur (`ARTAKALAN_SURECLER`). Çağıranlar ayrıca yakma bitene kadar bekler (`yakmanin_bitmesini_bekle`).
-pub fn kill_stray_backends() {
+///
+/// ⚠️ LN L5 · Y71 (sahip): `mosquitto.exe` ADLA değil yalnız `kok` (kurulum kökü) altındaki ikiliyse öldürülür
+/// (`YALNIZ_KOKTEN_OLDURULEN`) — sahadaki eski mosquitto SERVİSİNE ve yabancı broker'lara dokunulmaz.
+pub fn kill_stray_backends(kok: &Path) {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         for (image, agac) in ARTAKALAN_SURECLER {
+            if YALNIZ_KOKTEN_OLDURULEN.contains(&image) {
+                for pid in kok_altindaki_pidler(&surec_yollari(image), kok) {
+                    let pid = pid.to_string();
+                    let mut c = Command::new("taskkill");
+                    c.args(["/F", "/PID", pid.as_str()]);
+                    if agac {
+                        c.arg("/T");
+                    }
+                    c.creation_flags(CREATE_NO_WINDOW);
+                    let _ = c.stdout(Stdio::null()).stderr(Stdio::null()).status();
+                }
+                continue;
+            }
             let mut c = Command::new("taskkill");
             c.args(taskkill_argumanlari(image, agac));
             c.creation_flags(CREATE_NO_WINDOW); // siyah konsol açma
@@ -928,6 +1010,8 @@ pub fn kill_stray_backends() {
     }
     #[cfg(not(windows))]
     {
+        // LN L5: Unix kolu kökü henüz süzmez (mac / Linux backend'i SİSTEM mosquitto'sunu da kullanabilir) — Linux dalı SONRAKİ (Y71).
+        let _ = kok;
         // DENETİM 2026-08-04: burada `pkill -f <ad>` vardı. `-f` TÜM KOMUT SATIRINDA arar →
         // `tail -f /var/log/mosquitto.log`, `less cloudflared.log`, hatta argümanında bu kelime
         // geçen editör/grep gibi TAMAMEN İLGİSİZ süreçler de öldürülüyordu. Windows kolu zaten
@@ -1620,6 +1704,62 @@ mod tests {
         );
         assert_eq!(taskkill_argumanlari("PEMF_Backend.exe", false), ["/F", "/IM", "PEMF_Backend.exe"]);
         assert_eq!(taskkill_argumanlari("cloudflared.exe", true), ["/F", "/IM", "cloudflared.exe", "/T"]);
+    }
+
+    /// LN L5 · Y71: kapanışta yalnız KENDİ kökümüzdeki mosquitto seçilir — sahadaki eski kurulumun servisi (`C:\Program Files\mosquitto`),
+    /// kardeş dizin (`…\PEMF Vet Client2`) ve yolu okunamayan süreç SEÇİLMEZ; büyük / küçük harf, `/` ve `\\?\` öneki fark etmez.
+    #[test]
+    fn KRITIK_L5_yalniz_KOK_ALTINDAKI_mosquitto_secilir() {
+        let kok = Path::new(r"C:\Users\vet\AppData\Local\PEMF Vet Client");
+        let surecler: Vec<(u32, String)> = [
+            (10, r"C:\Program Files\mosquitto\mosquitto.exe"),
+            (11, r"C:\Users\vet\AppData\Local\PEMF Vet Client\runtime\PEMF_Backend\_internal\bin\mosquitto\mosquitto.exe"),
+            (12, r"\\?\C:\Users\vet\AppData\Local\PEMF Vet Client\runtime\mosquitto.exe"),
+            (13, r"c:/users/VET/appdata/local/pemf vet client/runtime/mosquitto.exe"),
+            (14, r"C:\Users\vet\AppData\Local\PEMF Vet Client2\runtime\mosquitto.exe"),
+            (15, ""),
+            (16, r"C:\Users\vet\AppData\Local\PEMF Vet Client"),
+            (17, r"D:\baska\mosquitto.exe"),
+        ]
+        .iter()
+        .map(|(p, y)| (*p, y.to_string()))
+        .collect();
+        assert_eq!(kok_altindaki_pidler(&surecler, kok), vec![11, 12, 13]);
+        assert!(YALNIZ_KOKTEN_OLDURULEN.contains(&"mosquitto.exe"));
+        assert!(ARTAKALAN_SURECLER.iter().any(|(i, _)| *i == "mosquitto.exe"), "mosquitto kapanış listesinden düştü (dosya kilidi)");
+        assert!(!kok_altinda_mi(r"C:\x\y.exe", Path::new("")), "boş kök her şeyi kapsamaz");
+    }
+
+    /// LN L5 · Y71: süreç listesi + ikili yolu GERÇEK Windows API'siyle okunur (sonda: geçici kökteki kopya `cmd.exe` adlı süreç). Yalnız
+    /// kendi başlattığı sondayı sonlandırır — `kill_stray_backends` ÇAĞRILMAZ (gerçek backend / broker ölürdü).
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_L5_surec_yollari_GERCEK_ikili_yolunu_okur() {
+        let tmp = tempfile::tempdir().unwrap();
+        let kok = tmp.path().join("PEMF Vet Client");
+        std::fs::create_dir_all(kok.join("runtime").join("bin")).unwrap();
+        // Uzun yol (8.3 kısa adlı TEMP'te de karşılaştırma tutsun) — `\\?\` önekini `kok_altinda_mi` yok sayar.
+        let kok = std::fs::canonicalize(&kok).unwrap();
+        let dizin = kok.join("runtime").join("bin");
+        let sistem = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+        let ad = format!("pemf_l5_sonda_{}.exe", std::process::id());
+        let exe = dizin.join(&ad);
+        std::fs::copy(Path::new(&sistem).join("System32").join("cmd.exe"), &exe).unwrap();
+        let mut cocuk = Command::new(&exe)
+            .args(["/d", "/c", "pause"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let bulunan = surec_yollari(&ad);
+        let _ = cocuk.kill();
+        let _ = cocuk.wait();
+        let kendi: Vec<_> = bulunan.iter().filter(|(p, _)| *p == cocuk.id()).collect();
+        assert_eq!(kendi.len(), 1, "sonda süreci bulunamadı: {bulunan:?}");
+        assert!(kok_altinda_mi(&kendi[0].1, &kok), "okunan yol kökün altında değil: {:?} / {:?}", kendi[0].1, kok);
+        assert_eq!(kok_altindaki_pidler(&bulunan, &kok), vec![cocuk.id()]);
+        assert!(kok_altindaki_pidler(&bulunan, &tmp.path().join("PEMF Vet Client2")).is_empty());
     }
 
     /// LN L3 · Y82: `yakiliyor` yalnız JSON `true`; alan / nesne yoksa (oto-firmware'siz eski backend) `false`; `null` / bozuk → bilinmiyor.

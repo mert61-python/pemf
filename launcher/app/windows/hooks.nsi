@@ -173,8 +173,8 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
   ; taskkill'i kayıt-geri-yüklemeden ÖNCE yap; her iki yolda (atla/ilerle) yığın burada [$3o,$2o,$1o,$0o].
   DetailPrint "$(PEMF_surecDurduruluyor)"
   ; LN L3 · Y82 (sahip): backend AĞAÇSIZ öldürülür (`/T` YOK) — oto-firmware yakıcısı `STM32_Programmer_CLI` backend'in çocuğudur;
-  ; ağaçla öldürülürse kart yarım yazılmış uygulama alanıyla kalırdı. Bilinen çocuklar (mosquitto / cloudflared) aşağıda kendi adlarıyla
-  ; kapatılır — launcher'daki `backend::ARTAKALAN_SURECLER` ile AYNI liste.
+  ; ağaçla öldürülürse kart yarım yazılmış uygulama alanıyla kalırdı. Bilinen çocuklar aşağıda ayrıca kapatılır (cloudflared adıyla,
+  ; mosquitto YALNIZ bu kökten — LN L5) — launcher'daki `backend::ARTAKALAN_SURECLER` ile AYNI liste.
   nsExec::Exec /TIMEOUT=30000 'taskkill /F /IM PEMF_Backend.exe'
   Pop $0  ; taskkill nsExec dönüş-kodunu da AT
   ; ⚠️ DENETİM 2026-08-15 (kur→kaldır→yeniden-kur BOZULMASI): burada YALNIZ PEMF_Backend.exe
@@ -194,7 +194,14 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
   ; SIRA ÖNEMLİ: backend ÖNCE ölmeli — MosquittoSupervisor._monitor_loop (services/
   ; headless_services.py) broker'ı ölü görürse YENİDEN BAŞLATIR; önce mosquitto'yu öldürmek
   ; supervisor'ın onu geri getirmesine yarar. Backend zaten yukarıda öldürüldü.
-  nsExec::Exec /TIMEOUT=30000 'taskkill /F /IM mosquitto.exe /T'
+  ; ⚠️ LN L5 · Y71 (sahip): mosquitto ADLA DEĞİL yalnız ikilisi BU kurulumun kökü ($INSTDIR) altındaysa öldürülür — sahadaki ESKİ
+  ; kurulumun mosquitto SERVİSİNE (C:\Program Files\mosquitto) ve yabancı broker'lara dokunulmaz (launcher `YALNIZ_KOKTEN_OLDURULEN`
+  ; ile AYNI kural; dosya kilidi derdi de yalnız kendi ikilimizden doğar). Kaldırıcı 32-bit → çocuk powershell de 32-bit: Get-Process
+  ; .Path 64-bit sürecin yolunu OKUYAMAZ (null → hiçbir şey öldürülmezdi); Win32_Process.ExecutablePath (WMI) okur. Kök ve ad ortam
+  ; değişkeniyle geçer (tırnaksız — NSIS `'` / -Command `"` sınırlayıcılarıyla çakışmaz; kökte kesme işareti olsa da bozulmaz).
+  System::Call 'kernel32::SetEnvironmentVariable(t "PEMF_KALDIRMA_KOKU", t "$INSTDIR") i .r0'
+  System::Call 'kernel32::SetEnvironmentVariable(t "PEMF_KALDIRMA_AD", t "mosquitto.exe") i .r0'
+  nsExec::Exec /TIMEOUT=30000 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$k = $$env:PEMF_KALDIRMA_KOKU.TrimEnd([char]92) + [char]92; Get-CimInstance -ClassName Win32_Process -ErrorAction SilentlyContinue | Where-Object { $$_.Name -eq $$env:PEMF_KALDIRMA_AD -and $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith($$k, [StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"'
   Pop $0
   nsExec::Exec /TIMEOUT=30000 'taskkill /F /IM cloudflared.exe /T'
   Pop $0
