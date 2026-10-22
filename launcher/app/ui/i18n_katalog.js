@@ -86,7 +86,7 @@ window.PEMF_I18N_KATALOG = {
      "who": "For veterinarians and clinics"
     },
     "p03": {
-     "does": "Petri, histopathology, kidney and phantom AI models; sample/data records and history. Does NOT include a device.",
+     "does": "Well plate, histopathology, kidney and tumor phantom AI models; sample/data records and history. Does NOT include a device.",
      "key": "research",
      "use": {
       "u01": "Choose ‘Research Mode’ and sign in.",
@@ -169,7 +169,7 @@ window.PEMF_I18N_KATALOG = {
     "ad": "Pet Owner"
    },
    "research": {
-    "aciklama": "Research models — petri, histopathology, kidney, phantom",
+    "aciklama": "Research models — well plate, histopathology, kidney, tumor phantom",
     "ad": "Research Mode"
    },
    "vet": {
