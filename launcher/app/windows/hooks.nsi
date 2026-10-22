@@ -6,21 +6,38 @@
 ;   NSIS_HOOK_POSTUNINSTALL — SİLİNDİKTEN SONRA
 ; Bu client KULLANICI-BAŞINA (currentUser) kurulum → yalnız KENDİ indirdiği payload'u
 ; ve client-verisini temizler. Servisler / ProgramData / hotspot / firewall, ayrı ADMIN
-; kurulumu olan "PEMF Backend" (Inno) uninstaller'ının işidir. HASTA DB'si (%APPDATA%\
-; PEMF_GUI) KVKK gereği client-kaldırmada KASITLI SİLİNMEZ.
+; kurulumu olan "PEMF Backend" (Inno) uninstaller'ının işidir. HASTA DB'si (launcher'ın backend'e
+; verdiği kök: %PROGRAMDATA%\PEMF_System\PEMF_GUI, yazılamazsa %APPDATA%\PEMF_GUI — $INSTDIR\veri_koku.txt)
+; KVKK gereği client-kaldırmada KASITLI SİLİNMEZ.
 ; =============================================================================
+
+; LN L7 · D2.67 / D2.77: hasta verisinin GERÇEK kökü — PREUNINSTALL başında çözülür; KVKK iletileri (LangString) ve E-stop izi
+; onu kullanır. LangString'ler değişkeni tanımlanırken çözdüğü için bildirim üretilmiş bloğun ÖNÜNDE.
+Var PEMF_VeriKoku
+
+; LN L7 · D2.67 / D2.77: kanca bağlamı Tauri'nin KENDİ bağlamına döner (`SetContext`, utils.nsh — currentUser → current, perMachine →
+; all; un.onInit de bunu çağırır). Eskiden kanca sabit `SetShellVarContext all` ile bitiyordu → ardından şablonun kısayol silmesi
+; ($SMPROGRAMS / $DESKTOP) tüm-kullanıcılar dizinine bakıyor, kullanıcının kısayolları KALIYORDU; `$APPDATA` ProgramData'ya çözülüyordu.
+; Makro tanımı yoksa (kancanın tek başına derleme sınaması) currentUser'ın karşılığı.
+!macro PEMF_BAGLAMI_GERI_YUKLE
+  !ifmacrodef SetContext
+    !insertmacro SetContext
+  !else
+    SetShellVarContext current
+  !endif
+!macroend
 
 ; I18N (Y157): kullanıcı iletileri launcher/i18n/{tr,en}.json → nsis.* içinde; aşağıdaki blok ÜRETİLİR (scripts/i18n/launcher_uret.py).
 ; Hooks dosyası MUI_LANGUAGE'dan ÖNCE !include edilir → dil kimliği sayısal (1055 Türkçe, 1033 İngilizce); yalnız tauri.conf.json
 ; bundle.windows.nsis.languages dilleri yazılır (yüklenmemiş dile LangString = yarım tablo; ölçüldü, -WX kırmızı).
 ; >>> I18N-DIL — ÜRETİLMİŞ (scripts/i18n/launcher_uret.py): ELLE DÜZENLEMEYİN. Kaynak launcher/i18n/{tr,en}.json → nsis.*
 ; Yalnız tauri.conf.json bundle.windows.nsis.languages dilleri yazılır (yüklenmemiş dil = yarım tablo, -WX kırmızı).
-LangString PEMF_estopDogrulanamadi 1055 "PEMF: bobin E-stop DOĞRULANAMADI (nsExec=$0 $1) — bobinleri ELLE kontrol edin; iz: %APPDATA%\PEMF_GUI\logs\uninstall_estop.log"
-LangString PEMF_estopDogrulanamadiKutu 1055 "PEMF: bobin acil-durdurma DOĞRULANAMADI ($0).$\r$\n$\r$\nBobinleri ELLE kontrol edin (cihaz üzerindeki göstergeler / fiziksel kapatma).$\r$\n$\r$\nAyrıntı: $1$\r$\nKayıt: %APPDATA%\PEMF_GUI\logs\uninstall_estop.log"
+LangString PEMF_estopDogrulanamadi 1055 "PEMF: bobin E-stop DOĞRULANAMADI (nsExec=$0 $1) — bobinleri ELLE kontrol edin; iz: $PEMF_VeriKoku\logs\uninstall_estop.log"
+LangString PEMF_estopDogrulanamadiKutu 1055 "PEMF: bobin acil-durdurma DOĞRULANAMADI ($0).$\r$\n$\r$\nBobinleri ELLE kontrol edin (cihaz üzerindeki göstergeler / fiziksel kapatma).$\r$\n$\r$\nAyrıntı: $1$\r$\nKayıt: $PEMF_VeriKoku\logs\uninstall_estop.log"
 LangString PEMF_estopDogrulandi 1055 "PEMF: bobin E-stop DOĞRULANDI — $1"
 LangString PEMF_estopGonderiliyor 1055 "PEMF: aktif seans güvenliği — bobinlere E-stop gönderiliyor (port $2)…"
-LangString PEMF_kaldirildiKutu 1055 "PEMF Vet kaldırıldı.$\r$\n$\r$\nHASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ.$\r$\nTıbbi kayıt oldukları için kaldırma sırasında korunurlar.$\r$\n$\r$\nKonum:$\r$\n$APPDATA\PEMF_GUI$\r$\n$\r$\nKalıcı silmek isterseniz bu klasörü elle silin ya da yeniden kurup uygulama içinden silin (Hastalar → 'Tümünü Sil', AI Geçmişi → 'Geçmişi Sil')."
-LangString PEMF_kayitlarKorundu 1055 "PEMF: Hasta kayıtları, seans geçmişi ve AI analiz geçmişi KORUNDU (tıbbi kayıt) — %APPDATA%\PEMF_GUI"
+LangString PEMF_kaldirildiKutu 1055 "PEMF Vet kaldırıldı.$\r$\n$\r$\nHASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ.$\r$\nTıbbi kayıt oldukları için kaldırma sırasında korunurlar.$\r$\n$\r$\nKonum:$\r$\n$PEMF_VeriKoku$\r$\n$\r$\nKalıcı silmek isterseniz bu klasörü elle silin ya da yeniden kurup uygulama içinden silin (Hastalar → 'Tümünü Sil', AI Geçmişi → 'Geçmişi Sil')."
+LangString PEMF_kayitlarKorundu 1055 "PEMF: Hasta kayıtları, seans geçmişi ve AI analiz geçmişi KORUNDU (tıbbi kayıt) — $PEMF_VeriKoku"
 LangString PEMF_portGecersiz 1055 "PEMF: backend.port geçersiz ('$1') — E-stop atlandı."
 LangString PEMF_portVeriKokunden 1055 "PEMF: backend.port $INSTDIR'de yok — veri kökünden okundu."
 LangString PEMF_surecDurduruluyor 1055 "PEMF: artık backend süreçleri durduruluyor…"
@@ -28,12 +45,12 @@ LangString PEMF_temizlikTamam 1055 "PEMF Vet Client temizliği tamamlandı."
 LangString PEMF_veriSilIsaretli 1055 "PEMF: 'Uygulama verilerini sil' işaretli — indirilen çalışma-zamanı ve modeller kaldırılıyor…"
 LangString PEMF_veriSilIsaretsiz 1055 "PEMF: 'Uygulama verilerini sil' işaretsiz — indirilen profiller/modeller KORUNUYOR (yeniden kurulumda tekrar inmez). Tamamen silmek için kaldırırken kutuyu işaretleyin."
 LangString PEMF_yukseltmeKorunuyor 1055 "PEMF: yükseltme — indirilen modeller ve önbellek korunuyor (tekrar inmez)."
-LangString PEMF_estopDogrulanamadi 1033 "PEMF: coil E-stop could NOT be confirmed (nsExec=$0 $1) — check the coils MANUALLY; log: %APPDATA%\PEMF_GUI\logs\uninstall_estop.log"
-LangString PEMF_estopDogrulanamadiKutu 1033 "PEMF: coil emergency stop could NOT be confirmed ($0).$\r$\n$\r$\nCheck the coils MANUALLY (indicators on the device / switch the device off).$\r$\n$\r$\nDetails: $1$\r$\nLog: %APPDATA%\PEMF_GUI\logs\uninstall_estop.log"
+LangString PEMF_estopDogrulanamadi 1033 "PEMF: coil E-stop could NOT be confirmed (nsExec=$0 $1) — check the coils MANUALLY; log: $PEMF_VeriKoku\logs\uninstall_estop.log"
+LangString PEMF_estopDogrulanamadiKutu 1033 "PEMF: coil emergency stop could NOT be confirmed ($0).$\r$\n$\r$\nCheck the coils MANUALLY (indicators on the device / switch the device off).$\r$\n$\r$\nDetails: $1$\r$\nLog: $PEMF_VeriKoku\logs\uninstall_estop.log"
 LangString PEMF_estopDogrulandi 1033 "PEMF: coil E-stop CONFIRMED — $1"
 LangString PEMF_estopGonderiliyor 1033 "PEMF: active session safety — sending E-stop to the coils (port $2)…"
-LangString PEMF_kaldirildiKutu 1033 "PEMF Vet was uninstalled.$\r$\n$\r$\nPATIENT RECORDS, SESSION HISTORY and AI ANALYSIS HISTORY WERE NOT DELETED.$\r$\nThey are medical records, so they are kept when uninstalling.$\r$\n$\r$\nLocation:$\r$\n$APPDATA\PEMF_GUI$\r$\n$\r$\nTo delete them permanently, delete this folder manually, or reinstall and delete them from within the app (Patients → 'Delete All', AI History → 'Delete History')."
-LangString PEMF_kayitlarKorundu 1033 "PEMF: Patient records, session history and AI analysis history were KEPT (medical records) — %APPDATA%\PEMF_GUI"
+LangString PEMF_kaldirildiKutu 1033 "PEMF Vet was uninstalled.$\r$\n$\r$\nPATIENT RECORDS, SESSION HISTORY and AI ANALYSIS HISTORY WERE NOT DELETED.$\r$\nThey are medical records, so they are kept when uninstalling.$\r$\n$\r$\nLocation:$\r$\n$PEMF_VeriKoku$\r$\n$\r$\nTo delete them permanently, delete this folder manually, or reinstall and delete them from within the app (Patients → 'Delete All', AI History → 'Delete History')."
+LangString PEMF_kayitlarKorundu 1033 "PEMF: Patient records, session history and AI analysis history were KEPT (medical records) — $PEMF_VeriKoku"
 LangString PEMF_portGecersiz 1033 "PEMF: backend.port is invalid ('$1') — E-stop skipped."
 LangString PEMF_portVeriKokunden 1033 "PEMF: backend.port not found in $INSTDIR — read from the data folder."
 LangString PEMF_surecDurduruluyor 1033 "PEMF: stopping the remaining backend processes…"
@@ -55,6 +72,29 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
   Push $1
   Push $2
   Push $3  ; DENETİM 2026-09-06: E-stop sonuç-günlüğü için dosya tutamacı (aşağıda)
+  ; --- LN L7 · D2.67 / D2.77: hasta verisinin GERÇEK kökü (KVKK iletisi + E-stop izi) — E-stop yolundan ÖNCE çözülür ki her dalda
+  ;     dolu olsun. (1) launcher'ın backend'e verdiği kök ($INSTDIR\veri_koku.txt, UTF-16LE: Türkçe kullanıcı adlı yol bozulmaz);
+  ;     (2) yoksa makine-geneli kök %PROGRAMDATA%\PEMF_System\PEMF_GUI VARSA o; (3) yoksa kullanıcının kökü $APPDATA\PEMF_GUI
+  ;     (`current` bağlamında). Eskiden ileti sabit `$APPDATA\PEMF_GUI` diyordu ve `all` bağlamında C:\ProgramData\PEMF_GUI'ye
+  ;     çözülüyordu — iki gerçek kökten hiçbiri değil.
+  StrCpy $PEMF_VeriKoku ""
+  ClearErrors
+  FileOpen $0 "$INSTDIR\veri_koku.txt" r
+  ${IfNot} ${Errors}
+    FileReadUTF16LE $0 $PEMF_VeriKoku
+    FileClose $0
+  ${EndIf}
+  ${If} $PEMF_VeriKoku == ""
+    ReadEnvStr $0 PROGRAMDATA
+    ${If} $0 != ""
+    ${AndIf} ${FileExists} "$0\PEMF_System\PEMF_GUI\*.*"
+      StrCpy $PEMF_VeriKoku "$0\PEMF_System\PEMF_GUI"
+    ${Else}
+      SetShellVarContext current
+      StrCpy $PEMF_VeriKoku "$APPDATA\PEMF_GUI"
+      !insertmacro PEMF_BAGLAMI_GERI_YUKLE
+    ${EndIf}
+  ${EndIf}
   ClearErrors
   FileOpen $0 "$INSTDIR\backend.port" r
   IfErrors pemf_estop_fallback
@@ -71,16 +111,15 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
   ; ENERJİLİ kalır (ESP bobinleri 6-8'in firmware watchdog'u YOK). Kaldırıcı sessizce "başarılı"
   ; görünür. Bu yüzden kanonik veri köküne AÇIK bir yedek yol: hasta güvenliği tek bir
   ; yapılandırma varsayımına bağlı kalmasın.
-  ; ⚠️ DENETİM 2026-08-04 (P2 — BU YEDEK YOLUN KENDİ HATASI): Tauri'nin uninstaller'ı
-  ; `un.onInit` içinde `SetShellVarContext all` çağırır; O BAĞLAMDA `$LOCALAPPDATA`
-  ; `C:\ProgramData`ya çözümlenir. Yani yedek yol, TAM DA yazıldığı senaryoda
-  ; (installMode=perMachine) YANLIŞ dizine bakar ve E-stop yine atlanırdı —
-  ; bobinler enerjili öldürülürdü. Okuma süresince bağlamı KULLANICIYA çevir, hemen
-  ; sonra geri al (kaldırıcının geri kalanı makine bağlamına güvenir).
+  ; ⚠️ DENETİM 2026-08-04 (P2 — BU YEDEK YOLUN KENDİ HATASI): perMachine kaldırıcısında bağlam `all`'dır; O BAĞLAMDA
+  ; `$LOCALAPPDATA` `C:\ProgramData`ya çözümlenir. Yani yedek yol, TAM DA yazıldığı senaryoda (installMode=perMachine) YANLIŞ
+  ; dizine bakar ve E-stop yine atlanırdı — bobinler enerjili öldürülürdü. Okuma süresince bağlamı KULLANICIYA çevir, hemen
+  ; sonra Tauri'nin kendi bağlamına geri dön. (LN L7: eskiden burada sabit `SetShellVarContext all` vardı — Tauri un.onInit
+  ; currentUser'da `current` kurar [ÖLÇTÜM üretilmiş şablon `SetContext`]; `all`'a dönmek kısayol silmesini ve KVKK iletisini bozuyordu.)
   SetShellVarContext current
   ClearErrors
   FileOpen $0 "$LOCALAPPDATA\PEMF Vet Client\backend.port" r
-  SetShellVarContext all
+  !insertmacro PEMF_BAGLAMI_GERI_YUKLE
   IfErrors pemf_estop_done
   FileRead $0 $1
   FileClose $0
@@ -138,27 +177,23 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
     DetailPrint "$(PEMF_estopDogrulanamadi)"
   ${EndIf}
   ; Kaldırıcının kendi günlüğü yoktur; kaldırmadan SONRA da okunabilen tek satırlık iz bırak.
-  ; %APPDATA%\PEMF_GUI = KVKK gereği client-kaldırmanın ASLA silmediği veri kökü (bkz. dosya başlığı +
-  ; POSTUNINSTALL), logs\ = backend'in de yazdığı günlük dizini (install.rs::backend_log_path_with).
-  ; $APPDATA burada `all` bağlamında ProgramData'ya çözümlenir → yukarıdaki port-okumasıyla AYNI
-  ; bağlam dansı: okuma/yazma süresince `current`, hemen ardından `all` (kaldırıcının geri kalanı
-  ; makine bağlamına güvenir). Dizin yok / yazma izni yok → IfErrors ile ATLANIR, kaldırma sürer.
-  SetShellVarContext current
+  ; $PEMF_VeriKoku = KVKK gereği client-kaldırmanın ASLA silmediği GERÇEK veri kökü (yukarıda çözüldü; bkz. dosya başlığı +
+  ; POSTUNINSTALL), logs\ = backend'in de yazdığı günlük dizini (install.rs::backend_log_path_with). Mutlak yol → bağlam
+  ; dansı gerekmez (LN L7: eskiden `$APPDATA` için current ↔ all geçişi vardı). Dizin yok / yazma izni yok → IfErrors ile
+  ; ATLANIR, kaldırma sürer.
   ClearErrors
-  CreateDirectory "$APPDATA\PEMF_GUI\logs"
+  CreateDirectory "$PEMF_VeriKoku\logs"
   ClearErrors
-  FileOpen $3 "$APPDATA\PEMF_GUI\logs\uninstall_estop.log" a
+  FileOpen $3 "$PEMF_VeriKoku\logs\uninstall_estop.log" a
   IfErrors pemf_estop_log_atla
   FileSeek $3 0 END
   FileWrite $3 "port=$2 nsExec=$0 $1$\r$\n"
   FileClose $3
   pemf_estop_log_atla:
-  SetShellVarContext all
   ; Etkileşimli kaldırmada kullanıcıya SÖYLE (yalnız DetailPrint sessizce kayar gider). ${Silent}
   ; (self-update /S) ve $UpdateMode (Tauri yükseltmesi eski kaldırıcıyı /UPDATE ile koşturur) dışarıda:
   ; oralarda MessageBox akışı KİLİTLER. Bu bir uyarıdır, kaldırma yine devam eder (Abort YOK).
-  ; Kayıt yolu LİTERAL %APPDATA%: bu noktada bağlam yine `all` → $APPDATA ProgramData'ya çözümlenir,
-  ; kullanıcıya YANLIŞ yol gösterirdi (gözden geçirme 2026-09-06).
+  ; Kayıt yolu iletide $PEMF_VeriKoku (gerçek kök; LN L7 — eskiden LİTERAL %APPDATA%, makine-geneli kökte yanlış klasör).
   ${If} $0 != "0"
     ${IfNot} ${Silent}
     ${AndIf} $UpdateMode <> 1
@@ -277,6 +312,8 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
     Delete "$INSTDIR\installed_packages.json"
     Delete "$INSTDIR\install_id.txt"
     Delete "$INSTDIR\backup_dir.txt"
+    ; LN L7 · D2.76: launcher'ın backend'e verdiği veri kökü kaydı (aynı küme: extract.rs::PROFILE_FORBIDDEN_TOP).
+    Delete "$INSTDIR\veri_koku.txt"
     Delete "$INSTDIR\runtime_attempt.json"
     ; ⚠️ SAHNELEME DİZİNLERİ: yalnız `runtime` siliniyordu. Kesintiye uğramış bir güncellemeden
     ; kalan bu kardeşler (her biri ≤1,19 GB) HİÇBİR yolla silinmiyordu → kaldırma "başarılı"
@@ -306,7 +343,7 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
     DetailPrint "$(PEMF_veriSilIsaretsiz)"
   ${EndIf}
   ; ── KVKK AÇIKLIĞI (2026-08-08) ────────────────────────────────────────────────────────────
-  ; "Uygulama verisini sil" kutusu tıbbi veriyi SİLMEZ (yalnız indirilen runtime/model/önbellek).
+  ; "Uygulama verilerini sil" kutusu tıbbi veriyi SİLMEZ (yalnız indirilen runtime/model/önbellek).
   ; Kutuyu işaretleyen kullanıcı makul olarak "verilerim gitti" diye anlar → YANLIŞ GÜVENCE.
   ; Denetim Masası'ndan kaldıranlar client'ın açıklayıcı diyaloğunu GÖRMEZ; burada söylemek
   ; tek şansımız. Log'a her zaman yazılır; etkileşimli kaldırmada ayrıca gösterilir.
@@ -316,7 +353,8 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
   ${AndIf} $UpdateMode <> 1
     MessageBox MB_OK|MB_ICONINFORMATION "$(PEMF_kaldirildiKutu)"
   ${EndIf}
-  ; NOT: %APPDATA%\PEMF_GUI (hasta DB + SQLCipher/Fernet anahtarları) HER YOLDA KORUNUR (KVKK).
+  ; NOT: hasta veri kökü ($PEMF_VeriKoku — %PROGRAMDATA%\PEMF_System\PEMF_GUI ya da %APPDATA%\PEMF_GUI; hasta DB +
+  ; SQLCipher/Fernet anahtarları) HER YOLDA KORUNUR (KVKK). İletideki konum PREUNINSTALL'da çözülen GERÇEK kök (LN L7).
   ; Servisler (PemfBackend/mosquitto), C:\Program Files\PEMF Backend, C:\ProgramData\*,
   ; PEMF-Hotspot görevi, firewall kuralları → ADMIN "PEMF Backend" uninstaller'ının işi.
 !macroend

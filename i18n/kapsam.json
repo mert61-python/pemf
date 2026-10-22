@@ -10789,20 +10789,6 @@
    "kritik": true,
    "muaf": [
     {
-     "metin": "PEMF: bobin E-stop DOĞRULANAMADI (nsExec=$0 $1) — bobinleri ELLE kontrol edin; iz: %APPDATA%\\PEMF_GUI\\logs\\uninstall_estop.log",
-     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir",
-     "turler": [
-      "nsis"
-     ]
-    },
-    {
-     "metin": "PEMF: bobin acil-durdurma DOĞRULANAMADI ($0). Bobinleri ELLE kontrol edin (cihaz üzerindeki göstergeler / fiziksel kapatma). Ayrıntı: $1 Kayıt: %APPDATA%\\PEMF_GUI\\logs\\uninstall_estop.log",
-     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir",
-     "turler": [
-      "nsis"
-     ]
-    },
-    {
      "metin": "PEMF: bobin E-stop DOĞRULANDI — $1",
      "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir",
      "turler": [
@@ -10811,20 +10797,6 @@
     },
     {
      "metin": "PEMF: aktif seans güvenliği — bobinlere E-stop gönderiliyor (port $2)…",
-     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir",
-     "turler": [
-      "nsis"
-     ]
-    },
-    {
-     "metin": "PEMF Vet kaldırıldı. HASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ. Tıbbi kayıt oldukları için kaldırma sırasında korunurlar. Konum: $APPDATA\\PEMF_GUI Kalıcı silmek isterseniz bu klasörü elle silin ya da yeniden kurup uygulama içinden silin (Hastalar → 'Tümünü Sil', AI Geçmişi → 'Geçmişi Sil').",
-     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir",
-     "turler": [
-      "nsis"
-     ]
-    },
-    {
-     "metin": "PEMF: Hasta kayıtları, seans geçmişi ve AI analiz geçmişi KORUNDU (tıbbi kayıt) — %APPDATA%\\PEMF_GUI",
      "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir",
      "turler": [
       "nsis"
@@ -10965,6 +10937,34 @@
     },
     {
      "metin": "$(PEMF_kaldirildiKutu)",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir",
+     "turler": [
+      "nsis"
+     ]
+    },
+    {
+     "metin": "PEMF: bobin E-stop DOĞRULANAMADI (nsExec=$0 $1) — bobinleri ELLE kontrol edin; iz: $PEMF_VeriKoku\\logs\\uninstall_estop.log",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir",
+     "turler": [
+      "nsis"
+     ]
+    },
+    {
+     "metin": "PEMF: bobin acil-durdurma DOĞRULANAMADI ($0). Bobinleri ELLE kontrol edin (cihaz üzerindeki göstergeler / fiziksel kapatma). Ayrıntı: $1 Kayıt: $PEMF_VeriKoku\\logs\\uninstall_estop.log",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir",
+     "turler": [
+      "nsis"
+     ]
+    },
+    {
+     "metin": "PEMF Vet kaldırıldı. HASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ. Tıbbi kayıt oldukları için kaldırma sırasında korunurlar. Konum: $PEMF_VeriKoku Kalıcı silmek isterseniz bu klasörü elle silin ya da yeniden kurup uygulama içinden silin (Hastalar → 'Tümünü Sil', AI Geçmişi → 'Geçmişi Sil').",
+     "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir",
+     "turler": [
+      "nsis"
+     ]
+    },
+    {
+     "metin": "PEMF: Hasta kayıtları, seans geçmişi ve AI analiz geçmişi KORUNDU (tıbbi kayıt) — $PEMF_VeriKoku",
      "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir",
      "turler": [
       "nsis"

@@ -5,8 +5,11 @@ D1.46 (NSIS bağlamı): `launcher/app/windows/hooks.nsi` POSTUNINSTALL'daki `RMD
 yalnız `SetShellVarContext current` bağlamında kullanıcı dizinine çözülür; `all` bağlamında
 `C:\\ProgramData\\PEMF_System`'e (device_identity.json; PEMF_DATA_DIR=ProgramData kurulumunda hasta/tedavi DB'si)
 çözülür ve ÖZYİNELEMELİ silinir. Ölçülen bağlam akışı:
-  * PREUNINSTALL kancası her yolda `SetShellVarContext all` ile biter (port/günlük okuması için
-    `current`'a geçip hemen geri döner) → POSTUNINSTALL'a `all` bağlamı taşınır;
+  * PREUNINSTALL kancası her yolda `SetShellVarContext all` ile biterdi (port/günlük okuması için
+    `current`'a geçip hemen geri dönerdi) → POSTUNINSTALL'a `all` bağlamı taşınırdı. LN L7 · D2.67 / D2.77: kanca artık
+    Tauri'nin KENDİ bağlamına döner (`SetContext`, currentUser → current — bağlam kapısı
+    `test_kaldirma_KVKK_konumu_ve_BAGLAM_L7.py`); aşağıdaki dal-dışı / sızıntı mutantları `all` GERİLEMESİNİ de benzetir
+    (biri `all`'ı geri getirirse kutu dalındaki silme koruması yine tek savunmadır);
   * Tauri'nin `Section Uninstall`ı (üretilen `installer.nsi`, izlenmeyen derleme çıktısı; 2026-09-10 sürümünde
     okundu) YALNIZ `$DeleteAppDataCheckboxState = 1 ${AndIf} $UpdateMode <> 1` dalında, kancayı çağırmadan hemen
     önce `SetShellVarContext current` yapar.
@@ -139,11 +142,22 @@ _SATIR = '    RMDir /r "$LOCALAPPDATA\\PEMF_System"\n'
 # POSTUNINSTALL'ın ${Else}'i. I18N-0: ileti LangString'e taşındı ("'uygulama verisini sil' işaretsiz …" → $(PEMF_veriSilIsaretsiz));
 # çapa aynı YAPISAL konumu işaretler (mutant uygulanmazsa test "iki denetleyici de YEŞİL" diye kırmızı — ölçüldü).
 _ISARETSIZ = "  ${Else}\n    DetailPrint \"$(PEMF_veriSilIsaretsiz)"
+# LN L7: PREUNINSTALL artık Tauri bağlamıyla (current) biter — dal-dışı silme o bağlamda ZARARSIZ. Bu mutantlar L7 gerilemesini
+# (PREUNINSTALL sonunda `all`) de uygular: tehlikeli bileşim = `all` + kutu dalı dışındaki silme.
+_PRE_ALL = lambda m: m.replace(  # noqa: E731
+    "  Pop $0  ; orijinal $0 geri yüklenir\n!macroend",
+    "  Pop $0  ; orijinal $0 geri yüklenir\n  SetShellVarContext all\n!macroend",
+    1,
+)
 _MUTANTLAR = {
-    "M1_satir_dalin_DISINA": lambda m: m.replace(_SATIR, "", 1).replace(
-        "  ${EndIf}\n  ; ── KVKK AÇIKLIĞI",
-        "  ${EndIf}\n" + _SATIR.strip().join(["  ", "\n"]) + "  ; ── KVKK AÇIKLIĞI",
-        1,
+    "M1_satir_dalin_DISINA": lambda m: (
+        _PRE_ALL(m)
+        .replace(_SATIR, "", 1)
+        .replace(
+            "  ${EndIf}\n  ; ── KVKK AÇIKLIĞI",
+            "  ${EndIf}\n" + _SATIR.strip().join(["  ", "\n"]) + "  ; ── KVKK AÇIKLIĞI",
+            1,
+        )
     ),
     "M3_all_ve_APPDATA": lambda m: m.replace(
         _SATIR, _SATIR + '    SetShellVarContext all\n    RMDir /r "$APPDATA\\PEMF_System"\n', 1
@@ -151,18 +165,26 @@ _MUTANTLAR = {
     "silme_YORUMA_alindi_noktali_virgul": lambda m: m.replace(_SATIR, "    ; " + _SATIR.lstrip(), 1),
     "silme_YORUMA_alindi_diyez": lambda m: m.replace(_SATIR, "    # " + _SATIR.lstrip(), 1),
     # i5 nsis_sizan_baglam_son: dal içindeki `current` ${EndIf} SONRASINA sızmamalı.
-    "SIZAN_baglam_EndIf_sonrasi": lambda m: m.replace(_SATIR, "", 1).replace(
-        "uninstaller'ının işi.\n!macroend",
-        "uninstaller'ının işi.\n  ${If} $UpdateMode = 1\n    SetShellVarContext current\n  ${EndIf}\n"
-        + _SATIR
-        + "!macroend",
-        1,
+    "SIZAN_baglam_EndIf_sonrasi": lambda m: (
+        _PRE_ALL(m)
+        .replace(_SATIR, "", 1)
+        .replace(
+            "uninstaller'ının işi.\n!macroend",
+            "uninstaller'ının işi.\n  ${If} $UpdateMode = 1\n    SetShellVarContext current\n  ${EndIf}\n"
+            + _SATIR
+            + "!macroend",
+            1,
+        )
     ),
-    "SIZAN_baglam_ElseIf_dalina": lambda m: m.replace(
-        "  ${If} ${Silent}\n  ${OrIf} $UpdateMode = 1\n",
-        "  ${If} ${Silent}\n  ${OrIf} $UpdateMode = 1\n    SetShellVarContext current\n",
-        1,
-    ).replace(_ISARETSIZ, "  ${Else}\n" + _SATIR + _ISARETSIZ.split("\n", 1)[1], 1),
+    "SIZAN_baglam_ElseIf_dalina": lambda m: (
+        _PRE_ALL(m)
+        .replace(
+            "  ${If} ${Silent}\n  ${OrIf} $UpdateMode = 1\n",
+            "  ${If} ${Silent}\n  ${OrIf} $UpdateMode = 1\n    SetShellVarContext current\n",
+            1,
+        )
+        .replace(_ISARETSIZ, "  ${Else}\n" + _SATIR + _ISARETSIZ.split("\n", 1)[1], 1)
+    ),
 }
 
 

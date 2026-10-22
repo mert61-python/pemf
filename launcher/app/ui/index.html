@@ -1930,14 +1930,26 @@
 
       $("btn-repair").onclick = () => askConfirm(t().repairTitle, t().repairBody, doRepair);
 
-      $("btn-uninstall").onclick = () => askConfirm(t().uninTitle, t().uninBody, async () => {
-        clearErr(); busy = true;
-        try {
-          await invoke("uninstall");
-          installed = []; selected.clear(); $("sel-back-wrap").hidden = true;
-          renderCards(); show("s-select");
-        } catch (e) { show("s-ready"); fail(e); } finally { busy = false; }
-      }, { danger: true });
+      // LN L7 · D2.33 / D2.76: KORUNAN hasta verisinin GERÇEK konumu launcher'dan (backend'e verdiği kök) — eskiden sabit
+      // "%APPDATA%\PEMF_GUI" yazıyordu; makine-geneli kökte (%PROGRAMDATA%\PEMF_System\PEMF_GUI) yanlış klasör. Komut düşerse iki
+      // standart konum birlikte söylenir; öteki aday da diskteyse (eski sürüm / başka hesap) ayrıca listelenir.
+      const uninMetni = (k) =>
+        tf("uninBody", {
+          konum: (k && k.konum) || t().uninKonumBilinmiyor,
+          ayrica: k && Array.isArray(k.diger) && k.diger.length ? tf("uninAyrica", { yollar: k.diger.join("\n") }) : "",
+        });
+      $("btn-uninstall").onclick = async () => {
+        let k = null;
+        try { k = await invoke("kaldirma_veri_konumu"); } catch (_) {}
+        askConfirm(t().uninTitle, uninMetni(k), async () => {
+          clearErr(); busy = true;
+          try {
+            await invoke("uninstall");
+            installed = []; selected.clear(); $("sel-back-wrap").hidden = true;
+            renderCards(); show("s-select");
+          } catch (e) { show("s-ready"); fail(e); } finally { busy = false; }
+        }, { danger: true });
+      };
 
       // ---------- web + about ----------
       const WEB = "https://pemf-vet-web.vercel.app/";

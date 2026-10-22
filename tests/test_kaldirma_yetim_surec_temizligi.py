@@ -588,10 +588,14 @@ def test_estop_sonucu_yigindan_okunur_ve_gunluklenir(preuninstall_satirlari):
     """Yapısal kapı: E-stop çağrısı ExecToStack + iki Pop + kill'den ÖNCE kalıcı günlük satırı.
 
     `nsExec::Exec` dönüş kodunu atmak = her başarısızlığı başarı gibi göstermek. Çıktı da
-    alınmalı (`confirmed=false` yalnız gövdede görünür). Günlük `%APPDATA%\\PEMF_GUI\\logs`
-    altına: KVKK gereği client-kaldırmanın ASLA silmediği veri kökü → iz kaldırmadan sonra da
-    okunabilir. Yazma, port-okumasıyla aynı `SetShellVarContext current … all` dansını izlemeli
-    (`all` bağlamında $APPDATA ProgramData'ya çözümlenir → dosya yanlış yere/yazılamaz).
+    alınmalı (`confirmed=false` yalnız gövdede görünür). Günlük GERÇEK veri kökünün (`$PEMF_VeriKoku`
+    — PREUNINSTALL başında çözülür) `logs` dizinine: KVKK gereği client-kaldırmanın ASLA silmediği
+    kök → iz kaldırmadan sonra da okunabilir.
+
+    ⚠️ LN L7 · D2.67 / D2.77: burası eskiden `%APPDATA%\\PEMF_GUI` + `SetShellVarContext current … all`
+    dansını ŞART koşuyordu — yanlış öncül: Tauri `un.onInit` currentUser'da `current` kurar, `all`'a
+    dönmek şablonun kısayol silmesini tüm-kullanıcılar dizinine yönlendiriyor ve makine-geneli kökteki
+    kurulumda iz yanlış klasöre gidiyordu. Artık mutlak gerçek kök + PREUNINSTALL'da `all` YOK.
     """
     kod = [s.strip() for s in preuninstall_satirlari]
     estop, satir = _estop_satiri(kod)
@@ -619,16 +623,14 @@ def test_estop_sonucu_yigindan_okunur_ve_gunluklenir(preuninstall_satirlari):
         "Kaldırıcı log yazmaz; E-stop sonucu kaldırmadan sonra hiçbir yerden okunamaz."
     )
     acilis = next(i for i, s in enumerate(ara) if s.startswith("FileOpen") and _ESTOP_GUNLUK in s)
-    assert any("PEMF_GUI" in s for s in ara[acilis : acilis + 1]), (
-        "Günlük %APPDATA%\\PEMF_GUI altında değil → client-kaldırma silebilir ya da dizin yok."
+    assert "$PEMF_VeriKoku\\logs\\" in ara[acilis], (
+        f"Günlük GERÇEK veri kökü ($PEMF_VeriKoku) altında değil: {ara[acilis]!r} — makine-geneli kökte iz yanlış klasöre gider."
     )
-    oncesi = ara[:acilis]
+    assert not any(re.match(r"SetShellVarContext\s+all\b", s, re.I) for s in kod), (
+        "PREUNINSTALL `SetShellVarContext all` kullanıyor — Tauri'nin bağlamı (currentUser → current) bozulur: kısayollar "
+        "silinmez, `$APPDATA` ProgramData'ya çözülür (LN L7 · D2.67 / D2.77)."
+    )
     sonrasi = ara[acilis:]
-    assert "SetShellVarContext current" in oncesi and "SetShellVarContext all" in sonrasi, (
-        "Günlük yazımı `SetShellVarContext current` … `all` dansı olmadan yapılıyor: `all` bağlamında "
-        "$APPDATA = C:\\ProgramData → yanlış dizin/izin yok; ve geri çevrilmezse kaldırıcının geri "
-        "kalanı yanlış bağlamda koşar."
-    )
     yazim = next(s for s in sonrasi if s.startswith("FileWrite"))
     assert "$0" in yazim and "$1" in yazim and "$2" in yazim, (
         f"Günlük satırı eksik ({yazim!r}): port ($2), nsExec dönüşü ($0) ve çıktı ($1) hepsi yazılmalı."

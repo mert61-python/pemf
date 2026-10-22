@@ -32,12 +32,14 @@ KRITIK = (
 
 #: Altın TR değerler (taşıma ÖNCESİ / I18N-0 hooks.nsi metinleri; NSIS kaçışları `$\r$\n` değerin İÇİNDE).
 GOLDEN_TR = {
-    "estopDogrulanamadi": "PEMF: bobin E-stop DOĞRULANAMADI (nsExec=$0 $1) — bobinleri ELLE kontrol edin; iz: %APPDATA%\\PEMF_GUI\\logs\\uninstall_estop.log",
-    "estopDogrulanamadiKutu": "PEMF: bobin acil-durdurma DOĞRULANAMADI ($0).$\\r$\\n$\\r$\\nBobinleri ELLE kontrol edin (cihaz üzerindeki göstergeler / fiziksel kapatma).$\\r$\\n$\\r$\\nAyrıntı: $1$\\r$\\nKayıt: %APPDATA%\\PEMF_GUI\\logs\\uninstall_estop.log",
+    # LN L7 · D2.67 / D2.77 (DALGA-2): konum / iz yolu sabit `%APPDATA%\\PEMF_GUI` (all bağlamında `$APPDATA` → C:\\ProgramData) yerine
+    # PREUNINSTALL'da çözülen GERÇEK kök `$PEMF_VeriKoku` (launcher'ın backend'e verdiği kök; yoksa ProgramData / APPDATA)
+    "estopDogrulanamadi": "PEMF: bobin E-stop DOĞRULANAMADI (nsExec=$0 $1) — bobinleri ELLE kontrol edin; iz: $PEMF_VeriKoku\\logs\\uninstall_estop.log",
+    "estopDogrulanamadiKutu": "PEMF: bobin acil-durdurma DOĞRULANAMADI ($0).$\\r$\\n$\\r$\\nBobinleri ELLE kontrol edin (cihaz üzerindeki göstergeler / fiziksel kapatma).$\\r$\\n$\\r$\\nAyrıntı: $1$\\r$\\nKayıt: $PEMF_VeriKoku\\logs\\uninstall_estop.log",
     "estopDogrulandi": "PEMF: bobin E-stop DOĞRULANDI — $1",
     "estopGonderiliyor": "PEMF: aktif seans güvenliği — bobinlere E-stop gönderiliyor (port $2)…",
-    "kaldirildiKutu": "PEMF Vet kaldırıldı.$\\r$\\n$\\r$\\nHASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ.$\\r$\\nTıbbi kayıt oldukları için kaldırma sırasında korunurlar.$\\r$\\n$\\r$\\nKonum:$\\r$\\n$APPDATA\\PEMF_GUI$\\r$\\n$\\r$\\nKalıcı silmek isterseniz bu klasörü elle silin ya da yeniden kurup uygulama içinden silin (Hastalar → 'Tümünü Sil', AI Geçmişi → 'Geçmişi Sil').",
-    "kayitlarKorundu": "PEMF: Hasta kayıtları, seans geçmişi ve AI analiz geçmişi KORUNDU (tıbbi kayıt) — %APPDATA%\\PEMF_GUI",
+    "kaldirildiKutu": "PEMF Vet kaldırıldı.$\\r$\\n$\\r$\\nHASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ.$\\r$\\nTıbbi kayıt oldukları için kaldırma sırasında korunurlar.$\\r$\\n$\\r$\\nKonum:$\\r$\\n$PEMF_VeriKoku$\\r$\\n$\\r$\\nKalıcı silmek isterseniz bu klasörü elle silin ya da yeniden kurup uygulama içinden silin (Hastalar → 'Tümünü Sil', AI Geçmişi → 'Geçmişi Sil').",
+    "kayitlarKorundu": "PEMF: Hasta kayıtları, seans geçmişi ve AI analiz geçmişi KORUNDU (tıbbi kayıt) — $PEMF_VeriKoku",
     "portGecersiz": "PEMF: backend.port geçersiz ('$1') — E-stop atlandı.",
     "portVeriKokunden": "PEMF: backend.port $INSTDIR'de yok — veri kökünden okundu.",
     "surecDurduruluyor": "PEMF: artık backend süreçleri durduruluyor…",

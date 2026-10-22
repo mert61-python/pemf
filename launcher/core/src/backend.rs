@@ -609,6 +609,9 @@ pub fn start_and_wait(
     for (k, v) in &cocuk_env {
         cmd.env(k, v);
     }
+    // LN L7 · D2.76: çocuğun GERÇEK veri kökü kurulum köküne yazılır — kaldırma diyaloğu ve NSIS KVKK iletisi onu gösterir.
+    // Yazılamazsa (salt-okur kök) başlatma sürer: okuyucular yan etkisiz tahmine düşer.
+    let _ = install::veri_kokunu_kaydet(install_root, &cocugun_veri_koku(&cocuk_env));
     // ⚠️ DEADLOCK FIX: backend'in stdout/stderr'ini pipe'layıp DRENAJLAMAMAK (eski hal) tüm servisi
     // kilitliyordu. Backend logging'i HER satırı `sys.stdout`'a da yazar (StreamHandler); pipe okunmadığı
     // için ~saatlerce log sonrası buffer dolunca `stdout.flush()` SÜRESİZ BLOKE olur, Python logging
@@ -657,12 +660,7 @@ pub fn start_and_wait(
 /// backend'in GERÇEK günlüğünün son satırları hataya konur (port çakışması, eksik model, bozuk
 /// yapılandırma doğrudan görünür).
 fn read_tail(_child: &mut Child, backend_env: &BTreeMap<String, String>) -> String {
-    let home = std::env::var_os(if cfg!(target_os = "windows") { "USERPROFILE" } else { "HOME" })
-        .or_else(|| {
-            std::env::var_os(if cfg!(target_os = "windows") { "HOME" } else { "USERPROFILE" })
-        })
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
+    let home = ev_dizini();
     // ⚠️ ARIZA (2026-08-11): günlük yolu launcher'ın KENDİ ortamından çözülüyordu. Ama
     // `PEMF_DATA_DIR` yalnız ÇOCUK sürece verilir (backend_env) — launcher'ın kendi ortamında
     // YOKTUR. Sonuç: backend `C:\ProgramData\PEMF_System\...\logs`a yazarken launcher
@@ -675,6 +673,20 @@ fn read_tail(_child: &mut Child, backend_env: &BTreeMap<String, String>) -> Stri
         &home,
     );
     read_log_tail(&log, 20)
+}
+
+/// Kullanıcının ev dizini (Windows'ta `USERPROFILE` önce — `HOME` Git-Bash vb. araçların değişkenidir).
+fn ev_dizini() -> std::path::PathBuf {
+    std::env::var_os(if cfg!(target_os = "windows") { "USERPROFILE" } else { "HOME" })
+        .or_else(|| std::env::var_os(if cfg!(target_os = "windows") { "HOME" } else { "USERPROFILE" }))
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+}
+
+/// Çocuğa verilen ortamla backend'in GERÇEK veri kökü (`PEMF_DATA_DIR` → `<…>\PEMF_GUI`, yoksa `%APPDATA%\PEMF_GUI`) — günlük
+/// yolu (`read_tail`) ile aynı kural: önce çocuğun ortamı, sonra sürecin kendi ortamı (çocuk onu da miras alır).
+fn cocugun_veri_koku(cocuk_env: &BTreeMap<String, String>) -> std::path::PathBuf {
+    install::app_data_dir_with(|k| cocuk_env.get(k).cloned().or_else(|| std::env::var(k).ok()), &ev_dizini())
 }
 
 /// Günlük dosyasının SON `n` satırı + yol ipucu. Dosya yoksa/boşsa yalnız ipucu döner.
@@ -1732,6 +1744,25 @@ mod tests {
         );
         assert_eq!(taskkill_argumanlari("PEMF_Backend.exe", false), ["/F", "/IM", "PEMF_Backend.exe"]);
         assert_eq!(taskkill_argumanlari("cloudflared.exe", true), ["/F", "/IM", "cloudflared.exe", "/T"]);
+    }
+
+    /// LN L7 · D2.76: çocuğun GERÇEK veri kökü — `PEMF_DATA_DIR` verildiyse `<…>\PEMF_GUI` (backend `path_utils` kuralı), yoksa
+    /// kullanıcı kökü; ve `spawn` onu çocuk ortamı kurulduktan SONRA, süreç başlatılmadan ÖNCE kurulum köküne yazar.
+    #[test]
+    fn KRITIK_L7_cocugun_veri_koku_cozulur_ve_spawn_KAYDEDER() {
+        let mut env = BTreeMap::new();
+        env.insert(install::ENV_DATA_DIR.to_string(), r"C:\ProgramData\PEMF_System".to_string());
+        assert_eq!(cocugun_veri_koku(&env), Path::new(r"C:\ProgramData\PEMF_System").join("PEMF_GUI"));
+        let bos = BTreeMap::new();
+        assert!(cocugun_veri_koku(&bos).ends_with("PEMF_GUI"));
+        let src = include_str!("backend.rs").replace("\r\n", "\n");
+        let g = &src[src.find("pub fn start_and_wait(").expect("start_and_wait yok")..];
+        let (e, k, s) = (
+            g.find("let cocuk_env = install::backend_env(").expect("çocuk ortamı yok"),
+            g.find("install::veri_kokunu_kaydet(install_root, &cocugun_veri_koku(&cocuk_env));").expect("veri kökü KAYDEDİLMİYOR"),
+            g.find("cmd.spawn()").expect("spawn çağrısı yok"),
+        );
+        assert!(e < k && k < s, "kayıt çocuk ortamından önce ya da süreç başladıktan sonra");
     }
 
     /// LN L6 · İG-8.21: `backend.port`'taki dinleyici TCP kabul ediyor ama yoklamaya HİÇ yanıt vermiyorsa (yük altındaki backend)

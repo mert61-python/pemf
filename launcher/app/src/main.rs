@@ -1381,7 +1381,8 @@ enum GuncellemeSonucu {
 /// AYNI kayıtlı uninstaller'ı ayrı süreç başlat + launcher'dan çık. NSIS uninstaller kendini $TEMP'e
 /// kopyalar (böylece $INSTDIR'ı silebilir), launcher+runtime+ai_models'i kaldırır, 'uygulama verisini
 /// sil' checkbox'ını sunar (işaretsiz = indirilenleri koru → yeniden kurulum hızlı) ve PREUNINSTALL
-/// hook'unda bobinlere E-stop atar (windows/hooks.nsi). Hasta DB'si (%APPDATA%\PEMF_GUI) KVKK: KORUNUR.
+/// hook'unda bobinlere E-stop atar (windows/hooks.nsi). Hasta DB'si (launcher'ın verdiği kök — `veri_koku.txt`; %PROGRAMDATA%\PEMF_System\PEMF_GUI ya da
+/// %APPDATA%\PEMF_GUI) KVKK: KORUNUR.
 ///
 /// TIBBİ GÜVENLİK: uninstaller'ı başlatmadan önce burada da E-stop + backend/child (mosquitto/
 /// cloudflared) kill yapılır — hook zaten yapar, bu ekstra kemer + runtime dosya-kilidini bırakır.
@@ -2309,6 +2310,24 @@ async fn yedek_hedefi_durumu() -> serde_json::Value {
     tauri::async_runtime::spawn_blocking(yedek_hedefi_durumu_blocking).await.unwrap_or(serde_json::Value::Null)
 }
 
+/// LN L7 · D2.33 / D2.76: kaldırma diyaloğunun gösterdiği KORUNAN hasta verisi konumu — launcher'ın backend'e verdiği kök
+/// (`veri_koku.txt`); kayıt yoksa makine-geneli kök VARSA o, yoksa `%APPDATA%\PEMF_GUI`. Öteki aday da diskteyse `diger`
+/// (eski sürümün / başka Windows hesabının kayıtları). Eskiden arayüz sabit `%APPDATA%\PEMF_GUI` diyordu — makine-geneli kökte
+/// yanlış klasör. Dosya sistemi okur → ayrı iş parçacığı; görev çökerse `null` (arayüz yedek metni gösterir).
+#[tauri::command]
+async fn kaldirma_veri_konumu() -> serde_json::Value {
+    tauri::async_runtime::spawn_blocking(kaldirma_veri_konumu_blocking).await.unwrap_or(serde_json::Value::Null)
+}
+
+fn kaldirma_veri_konumu_blocking() -> serde_json::Value {
+    let ev = home_dir();
+    let (konum, diger) = install::kaldirma_veri_konumu_with(&install::default_install_root(&ev), |k| std::env::var(k).ok(), &ev);
+    serde_json::json!({
+        "konum": konum.to_string_lossy(),
+        "diger": diger.iter().map(|d| d.to_string_lossy().into_owned()).collect::<Vec<_>>(),
+    })
+}
+
 fn yedek_hedefi_durumu_blocking() -> serde_json::Value {
     let root = install::default_install_root(&home_dir());
     let secili = install::backup_dir_oku(&root);
@@ -2477,6 +2496,7 @@ fn main() {
             firewall_durumu,
             yedek_hedefi_durumu,
             yedek_hedefi_sec,
+            kaldirma_veri_konumu,
             firewall_kurali_ekle,
             fetch_profiles,
             install_and_launch,
@@ -2715,7 +2735,7 @@ mod tests {
         assert!(ihlal.is_empty(), "pencere iş parçacığında bekleyen senkron komut(lar): {ihlal:?}");
         for ad in [
             "fetch_profiles", "firewall_durumu", "firewall_kurali_ekle", "yedek_hedefi_durumu", "yedek_hedefi_sec",
-            "detect_environment", "check_runtime_update", "discard_pending",
+            "detect_environment", "check_runtime_update", "discard_pending", "kaldirma_veri_konumu",
         ] {
             let bas = soy.find(&format!("async fn {ad}(")).unwrap_or_else(|| panic!("{ad} async DEĞİL"));
             let govde = &soy[bas..bas + soy[bas..].find("\n}\n").expect("gövde sonu")];

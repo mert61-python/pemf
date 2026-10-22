@@ -150,7 +150,9 @@ Hazırlık kontrolü: `GET /api/health` (`apps/backend/servers/system_router.py`
 sonra tarayıcıyı aç. Zaman aşımında backend log'unu göster — sessizce başarısız olma.
 
 `get_app_data_directory()` (`apps/backend/utils/path_utils.py`) zaten üç platformu doğru çözüyor:
-Windows `%APPDATA%\PEMF_GUI`, macOS `~/Library/Application Support/PEMF_GUI`,
+Windows `%APPDATA%\PEMF_GUI` (launcher `PEMF_DATA_DIR` verirse `<PEMF_DATA_DIR>\PEMF_GUI` — makine-geneli
+`%PROGRAMDATA%\PEMF_System\PEMF_GUI`, yazılabilirse; seçilen kök `<kurulum>\veri_koku.txt`'e yazılır, kaldırma diyaloğu ve
+NSIS KVKK iletisi onu gösterir — LN L7), macOS `~/Library/Application Support/PEMF_GUI`,
 Linux `~/.local/share/PEMF_GUI`. **Launcher bunu taklit etmeli, yeniden icat etmemeli.**
 
 **Otomatik güncelleme kapısı (`aktif_seans_kapisi`):** sessiz self-update / runtime güncellemesi backend'i öldürür; önce
@@ -254,7 +256,8 @@ mosquitto'yu yeniden başlatır) yardımcı süreçler kapatılır. Sebep: backe
       ⚠️ **Yükseltmede DOKUNULMAYACAKLAR:** `installed_packages.json` (dokunulursa paketler
       yeniden indirilir — bellek `pemf-yerel-test-kurulumu-yayinsiz`), `install_id.txt`,
       `auth_session.bin` (oturum düşer).
-      ⚠️ **Hasta verisi burada DEĞİL:** `%APPDATA%\PEMF_GUI` altında (`patients.db`,
+      ⚠️ **Hasta verisi burada DEĞİL:** launcher'ın backend'e verdiği kökte — `%PROGRAMDATA%\PEMF_System\PEMF_GUI` (yazılabilirse)
+      ya da `%APPDATA%\PEMF_GUI` (`veri_koku.txt`, LN L7) (`patients.db`,
       `pemf_treatment_history.db`). Kaldırma tıbbi veriye dokunmaz — bu bilinçli karardır.
 - [x] **Servis mi, süreç mi?** — ÖLÇÜLDÜ (2026-09-13): **SÜREÇ.** Kurulu makinede
       `Get-Service *PEMF*` ve `Win32_Service` sorgusu **hiçbir kayıt döndürmedi**; mosquitto da

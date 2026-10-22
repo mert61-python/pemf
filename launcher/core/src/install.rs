@@ -553,6 +553,61 @@ where
     }
 }
 
+/// LN L7 · D2.33 / D2.67 / D2.76 / D2.77: launcher'ın backend'e verdiği GERÇEK hasta veri kökü kurulum köküne yazılır → kaldırma
+/// diyaloğu (launcher) ve NSIS KVKK iletisi tahmin değil, çalışma anındaki seçimi gösterir (makine-geneli kök yazılabilirse
+/// `%PROGRAMDATA%\PEMF_System\PEMF_GUI`, değilse düşüş `%APPDATA%\PEMF_GUI`). Eskiden ikisi de sabit `%APPDATA%\PEMF_GUI` diyordu
+/// (NSIS'te `all` bağlamında `C:\ProgramData\PEMF_GUI` — hiçbiri doğru değil). Kaldırmada silinir (hooks POSTUNINSTALL); profil
+/// paketi ezemez (`extract.rs::PROFILE_FORBIDDEN_TOP`).
+pub fn veri_koku_yolu(install_root: &Path) -> PathBuf {
+    install_root.join("veri_koku.txt")
+}
+
+/// Veri kökünü kaydet: UTF-16LE, BOM'suz, satır sonu YOK (NSIS `FileReadUTF16LE` Türkçe kullanıcı adlı yolu da bozmadan okur;
+/// ANSI `FileRead` cp1254 dışı karakteri bozardı). Atomik (geçici dosya + yeniden adlandırma).
+pub fn veri_kokunu_kaydet(install_root: &Path, kok: &Path) -> std::io::Result<()> {
+    let baytlar: Vec<u8> = kok.to_string_lossy().encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
+    let hedef = veri_koku_yolu(install_root);
+    let gecici = hedef.with_extension("txt.yeni");
+    std::fs::write(&gecici, baytlar)?;
+    std::fs::rename(&gecici, &hedef).inspect_err(|_| {
+        let _ = std::fs::remove_file(&gecici); // artık kalmasın: özyinelemesiz `RMDir "$INSTDIR"` dolu dizinde başarısız olur
+    })
+}
+
+/// `veri_kokunu_kaydet`'in okuyucusu; dosya yok / bozuk / boş → `None`.
+pub fn veri_kokunu_oku(install_root: &Path) -> Option<PathBuf> {
+    let ham = std::fs::read(veri_koku_yolu(install_root)).ok()?;
+    if ham.len() % 2 != 0 {
+        return None;
+    }
+    let birim: Vec<u16> = ham.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+    let s = String::from_utf16(&birim).ok()?;
+    let s = s.trim().trim_start_matches('\u{feff}');
+    (!s.is_empty()).then(|| PathBuf::from(s))
+}
+
+/// Kaldırma diyaloğunun göstereceği hasta veri konumu: `(birincil, diğer adaylar)`. Birincil = launcher'ın backend'e verdiği kök
+/// (`veri_koku.txt`); dosya yoksa (backend bu sürümle hiç başlatılmadı) makine-geneli kök VARSA o, yoksa `%APPDATA%\PEMF_GUI`.
+/// Diğer = öteki aday diskte VARSA (eski sürümün / başka Windows hesabının kayıtları — iki konumda da DB bulunan makine ölçüldü).
+/// YAN ETKİSİZ: dizin yaratmaz, sonda yazmaz (yalnız `exists`). `getenv` / `home` enjekte edilir.
+pub fn kaldirma_veri_konumu_with<F>(install_root: &Path, getenv: F, home: &Path) -> (PathBuf, Vec<PathBuf>)
+where
+    F: Fn(&str) -> Option<String>,
+{
+    let makine = machine_data_dir(&getenv).map(|d| d.join("PEMF_GUI"));
+    let kullanici = app_data_dir_with(&getenv, home);
+    let birincil = veri_kokunu_oku(install_root)
+        .or_else(|| makine.clone().filter(|d| d.is_dir()))
+        .unwrap_or_else(|| kullanici.clone());
+    let ayni = |a: &Path, b: &Path| a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase();
+    let diger = [makine, Some(kullanici)]
+        .into_iter()
+        .flatten()
+        .filter(|d| d.is_dir() && !ayni(d, &birincil))
+        .collect();
+    (birincil, diger)
+}
+
 /// Backend'in günlük dosyası — `backend_service.py:80` ile AYNI kural:
 /// `PEMF_LOG_DIR` varsa o, yoksa `<app_data>/logs`.
 ///
@@ -1391,6 +1446,51 @@ mod tests {
                 .iter()
                 .find(|(kk, _)| *kk == k)
                 .map(|(_, v)| (*v).to_string())
+        }
+    }
+
+    /// LN L7 · D2.76: launcher'ın backend'e verdiği veri kökü kaydedilir ve geri okunur (Türkçe kullanıcı adlı yol bozulmadan —
+    /// UTF-16LE); dosya yoksa / bozuksa `None`; geçici dosya artık bırakmaz.
+    #[test]
+    fn KRITIK_L7_veri_koku_KAYDEDILIR_ve_TURKCE_yol_bozulmadan_okunur() {
+        let d = tempfile::tempdir().unwrap();
+        assert_eq!(veri_kokunu_oku(d.path()), None);
+        let kok = PathBuf::from(r"C:\Users\Çağlar Gürkan\AppData\Roaming\PEMF_GUI");
+        veri_kokunu_kaydet(d.path(), &kok).unwrap();
+        assert_eq!(veri_kokunu_oku(d.path()), Some(kok.clone()));
+        let ham = std::fs::read(veri_koku_yolu(d.path())).unwrap();
+        assert_eq!(&ham[..4], &[b'C', 0, b':', 0], "UTF-16LE BOM'suz değil (NSIS FileReadUTF16LE)");
+        let girdiler: Vec<_> = std::fs::read_dir(d.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(girdiler.len(), 1, "geçici dosya kaldı: {girdiler:?}");
+        std::fs::write(veri_koku_yolu(d.path()), [0x41u8]).unwrap();
+        assert_eq!(veri_kokunu_oku(d.path()), None, "tek baytlı bozuk dosya kök sayıldı");
+    }
+
+    /// LN L7 · D2.33 / D2.76: kaldırma diyaloğunun konumu — kayıtlı kök önce; kayıt yoksa makine-geneli kök VARSA o, yoksa
+    /// `%APPDATA%\PEMF_GUI`; öteki aday diskte VARSA "diğer". Yan etkisiz (dizin yaratmaz). Sahte PROGRAMDATA / APPDATA.
+    #[test]
+    fn KRITIK_L7_kaldirma_veri_konumu_GERCEK_koku_ve_DIGER_adayi_soyler() {
+        let ev = tempfile::tempdir().unwrap();
+        let pd = ev.path().join("ProgramData");
+        let ad = ev.path().join("AppData").join("Roaming");
+        let kur = ev.path().join("kurulum");
+        std::fs::create_dir_all(&kur).unwrap();
+        let (pd_s, ad_s) = (pd.to_string_lossy().into_owned(), ad.to_string_lossy().into_owned());
+        let env = [("PROGRAMDATA", pd_s.as_str()), ("APPDATA", ad_s.as_str())];
+        let makine = pd.join("PEMF_System").join("PEMF_GUI");
+        let kullanici = ad.join("PEMF_GUI");
+        if cfg!(target_os = "windows") {
+            // hiçbiri yok, kayıt yok → %APPDATA% (düşüş konumu); YAN ETKİSİZ
+            assert_eq!(kaldirma_veri_konumu_with(&kur, env_from(&env), ev.path()), (kullanici.clone(), vec![]));
+            assert!(!pd.exists(), "konum sorgusu ProgramData'da dizin yarattı");
+            // makine kökü var → o; kullanıcı kökü de varsa "diğer"
+            std::fs::create_dir_all(&makine).unwrap();
+            assert_eq!(kaldirma_veri_konumu_with(&kur, env_from(&env), ev.path()), (makine.clone(), vec![]));
+            std::fs::create_dir_all(&kullanici).unwrap();
+            assert_eq!(kaldirma_veri_konumu_with(&kur, env_from(&env), ev.path()), (makine.clone(), vec![kullanici.clone()]));
+            // kayıt (launcher makine köküne YAZAMADI → düşüş) birincildir
+            veri_kokunu_kaydet(&kur, &kullanici).unwrap();
+            assert_eq!(kaldirma_veri_konumu_with(&kur, env_from(&env), ev.path()), (kullanici.clone(), vec![makine.clone()]));
         }
     }
 
