@@ -163,7 +163,8 @@ export const DOWNLOAD_HOST = {
   // ⚠️ SÜRÜM FARKI KULLANICIYA AÇIKLANIR (metin denetimi 2026-08-20): İndir sayfasında bilgisayar
   // kartı "1.9.32", telefon kartı "2.3.18" gösteriyor ve sebebi hiçbir yerde yazmıyordu. Telefon
   // uygulaması AYRI sürüm döngüsüne sahiptir (ayrı yayın etiketi); numaraların eşleşmesi beklenmez.
-  androidVersion: '2.3.34', // 2026-09-11: bobin 6-7 kabloyla (STM32) suruluyor, tek liste 'Bobinler 1-7'; bobin 1-5 akim gostergesi; olculmeyen alan kisa cizgi
+  androidVersion: '2.3.35', // YH D1 (2026-10-22) YAYIN ADAYI — HENUZ YAYINLANMADI: site bu degerle ancak PEMF_Vet_Mobil-2.3.35.apk
+  // `androidTag` surumune YUKLENDIKTEN SONRA yayina cikar (yayin akisi: scripts/site_indirme_dogrula.py). Sahadaki/yayindaki son APK: 2.3.34.
   /** İndir sayfasında telefon kartında gösterilir — uygulamanın ROLÜNÜ açıklar (tek başına
    *  terapi uygulamaz; masaüstündeki cihazın uzaktan kumandasıdır). */
   get androidRolNotu() { return i18n.t('icerik.indir.androidRol') },

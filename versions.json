@@ -6,12 +6,12 @@
     "mobile": "Android/iOS uygulamasi. Hedef: apps/ui/app.json. androidVersionCode HER YAYINDA ARTMALI (Play Store sarti), geri alinamaz.",
     "frontendOta": "Frontend OTA paketi (frontend_dist.zip). Hedef: frontend_version.json. apps/backend/servers/update_manager.py bunu karsilastirir."
   },
-  "backend": "1.9.50",
-  "launcher": "1.9.51",
+  "backend": "1.9.51",
+  "launcher": "1.9.52",
   "mobile": {
-    "name": "2.3.34",
-    "androidVersionCode": 41,
-    "iosBuildNumber": "7"
+    "name": "2.3.35",
+    "androidVersionCode": 42,
+    "iosBuildNumber": "8"
   },
-  "frontendOta": "1.4.2"
+  "frontendOta": "1.4.3"
 }

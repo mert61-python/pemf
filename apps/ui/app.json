@@ -2,7 +2,7 @@
   "expo": {
     "name": "PEMF Vet Mobil",
     "slug": "pemf-vet-responsive",
-    "version": "2.3.34",
+    "version": "2.3.35",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "pemfvet",
@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.pemf.vet",
-      "buildNumber": "7",
+      "buildNumber": "8",
       "infoPlist": {
         "NSCameraUsageDescription": "QR kod tarama ve AI fotoğraf analizi için kamera gereklidir.",
         "NSPhotoLibraryUsageDescription": "AI analizi için fotoğraf seçmek amacıyla galeri erişimi gereklidir.",
@@ -32,7 +32,7 @@
       },
       "package": "com.pemf.vet",
       "softwareKeyboardLayoutMode": "resize",
-      "versionCode": 41,
+      "versionCode": 42,
       "allowBackup": false,
       "usesCleartextTraffic": true,
       "blockedPermissions": [

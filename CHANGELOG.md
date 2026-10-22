@@ -6,6 +6,45 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## launcher 1.9.52 · mobile 2.3.35 — YAYIN ADAYI (YAYINLANMADI; app 1.9.51 ile birlikte — 🌐 İngilizce seçeneği)
+
+> ⚠️ **BU SÜRÜMLER HENÜZ YAYINLANMADI** (hazırlık: 2026-10-22). Sahada ve yayında olan:
+> uygulama **1.9.50** · PEMF Vet Client **1.9.51** · telefon uygulaması **2.3.34**. Yayın
+> adayı numaraları: uygulama **1.9.51** (değişiklikleri hemen aşağıdaki "app 1.9.51" girdisinde
+> ve bu girdide) · PEMF Vet Client **1.9.52** · telefon **2.3.35** (Android sürüm kodu 42, iOS
+> derleme 8). Yayınlandığında başlığa tarih ve paket kimliği (`buildId`) satırı eklenecektir;
+> kimlik yayındaki manifest'ten okunur, elle yazılmaz. Aşağıdaki "app 1.9.51" girdisindeki
+> **kontrolcü yazılımı uyarısı** bu yayın adayı için de geçerlidir.
+
+**🌐 Uygulamalar artık İngilizce de kullanılabiliyor.** Bilgisayar uygulaması, telefon
+uygulaması, PEMF Vet Client (kurulum ve kaldırma pencereleri dahil), DEMA simülatörü ile seans
+ve yapay zekâ raporları Türkçe ya da İngilizce gösterilebiliyor. Bilgisayar ve telefon
+uygulamasında dil, Ayarlar'daki **"Dil / Language"** seçeneğinden değiştirilir ve hatırlanır. ⚠️ Kayıtlı bir seçim yoksa ilk
+açılışta dil **cihazın dilinden** belirlenir: cihaz (Windows / telefon) dili Türkçe ise Türkçe,
+başka bir dil ise İngilizce açılır. Türkçe metinler — aşağıda sayılan sahip kararları dışında —
+**aynı kaldı**. Yasal metinlerin bağlayıcı sürümü Türkçedir.
+
+**Seans raporu (PDF) "Tedavi" yerine "Seans" diyor.** Başlık "PEMF SEANS RAPORU"; "İlk Seans",
+"Son Seans Tarihi", "SEANS GEÇMİŞİ", "Seans Modu", "SEANSLAR", "Toplam Seans Süresi". Raporun
+sonundaki yasal uyarı cümlesi **değişmedi**.
+
+**DEMA simülatöründe büyük harfle yazılan Türkçe etiketler doğru** ("KARE SİNYALİ", "DERİ" —
+noktasız "I" ile değil). İngilizce gösterimde değişiklik yok.
+
+**PEMF Vet Client 1.9.52:**
+- Açılışta pencerenin donması giderildi: güvenlik duvarı ve yedek denetimi, güncelleme
+  denetimi ve temizlik artık pencereyi bekletmeden arka planda çalışıyor.
+- PEMF Vet Client boştayken (hiçbir bobin çalışmıyorken) kapatıldığında "önceki oturumda
+  ACİL DURDUR" uyarısı yanlışlıkla bir sonraki açılışa kalmıyor (ACİL DURDUR'a gerçekten
+  basıldıysa uyarı aynen korunur).
+- "Beni hatırla" kaydı, oturum yenilemesindeki geçici bir hatada artık silinmiyor; yalnız
+  sunucu oturumu açıkça iptal ettiğinde silinir ve nedeni günlüğe yazılır.
+- Kaldırma sırasındaki uyarı, kutunun kendi yazısını aynen anıyor
+  ("Uygulama verilerini sil").
+
+**Telefon uygulaması 2.3.35:** İngilizce seçeneği; Android'deki güncelleme indirme
+bildirimi Türkçe karakterlerle yazılıyor ("Güncelleme indirme", "uygulamayı").
+
 ## app 1.9.51 — YAYINLANMADI (hazırlanan sürüm; sahada 1.9.50 var — 🔀 sürüş biçimi artık ekrandan seçiliyor)
 
 > ⚠️ **BU SÜRÜM HENÜZ YAYINLANMADI.** Aşağıdaki kontrolcü-yazılımı yeniden yükleme talimatını
