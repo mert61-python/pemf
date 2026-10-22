@@ -5541,8 +5541,8 @@
   {
    "dosya": "launcher/app/windows/hooks.nsi",
    "satir": 66,
-   "metin": "PEMF: backend.port geçersiz ('$1') — E-stop atlandı.",
-   "ham": "PEMF: backend.port geçersiz ('$1') — E-stop atlandı."
+   "metin": "PEMF: backend.port geçersiz ('$1') — varsayılan port deneniyor.",
+   "ham": "PEMF: backend.port geçersiz ('$1') — varsayılan port deneniyor."
   },
   {
    "dosya": "launcher/app/windows/hooks.nsi",

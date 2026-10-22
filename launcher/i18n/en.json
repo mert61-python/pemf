@@ -6,7 +6,7 @@
     "estopGonderiliyor": "PEMF: active session safety — sending E-stop to the coils (port $2)…",
     "kaldirildiKutu": "PEMF Vet was uninstalled.$\\r$\\n$\\r$\\nPATIENT RECORDS, SESSION HISTORY and AI ANALYSIS HISTORY WERE NOT DELETED.$\\r$\\nThey are medical records, so they are kept when uninstalling.$\\r$\\n$\\r$\\nLocation:$\\r$\\n$PEMF_VeriKoku$\\r$\\n$\\r$\\nTo delete them permanently, delete this folder manually, or reinstall and delete them from within the app (Patients → 'Delete All', AI History → 'Delete History').",
     "kayitlarKorundu": "PEMF: Patient records, session history and AI analysis history were KEPT (medical records) — $PEMF_VeriKoku",
-    "portGecersiz": "PEMF: backend.port is invalid ('$1') — E-stop skipped.",
+    "portGecersiz": "PEMF: backend.port is invalid ('$1') — trying the default port.",
     "portVeriKokunden": "PEMF: backend.port not found in $INSTDIR — read from the data folder.",
     "surecDurduruluyor": "PEMF: stopping the remaining backend processes…",
     "temizlikTamam": "PEMF Vet Client cleanup completed.",

@@ -10803,7 +10803,7 @@
      ]
     },
     {
-     "metin": "PEMF: backend.port geçersiz ('$1') — E-stop atlandı.",
+     "metin": "PEMF: backend.port geçersiz ('$1') — varsayılan port deneniyor.",
      "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir",
      "turler": [
       "nsis"

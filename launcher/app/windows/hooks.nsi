@@ -15,6 +15,13 @@
 ; onu kullanır. LangString'ler değişkeni tanımlanırken çözdüğü için bildirim üretilmiş bloğun ÖNÜNDE.
 Var PEMF_VeriKoku
 
+; 18K K1 · İG-8.27 NSIS ikizi (launcher LN L6 `orphan_durdurma_hedefleri`): `backend.port` YOK / bozuk / bayatken varsayılan portta
+; çalışan backend de STOP alır — aşağıdaki `taskkill /F /IM PEMF_Backend.exe` onu ADLA öldürür. Değer launcher `install::DEFAULT_PORT`
+; ile AYNI (kapı: test_18K_K1_nsis_estop_VARSAYILAN_port.py). Port dosyasındaki port bu geçişte yinelenmez.
+!define PEMF_VARSAYILAN_PORT 8000
+Var PEMF_EstopDosyaPortu
+Var PEMF_EstopVarsayilanDenendi
+
 ; LN L7 · D2.67 / D2.77: kanca bağlamı Tauri'nin KENDİ bağlamına döner (`SetContext`, utils.nsh — currentUser → current, perMachine →
 ; all; un.onInit de bunu çağırır). Eskiden kanca sabit `SetShellVarContext all` ile bitiyordu → ardından şablonun kısayol silmesi
 ; ($SMPROGRAMS / $DESKTOP) tüm-kullanıcılar dizinine bakıyor, kullanıcının kısayolları KALIYORDU; `$APPDATA` ProgramData'ya çözülüyordu.
@@ -38,7 +45,7 @@ LangString PEMF_estopDogrulandi 1055 "PEMF: bobin E-stop DOĞRULANDI — $1"
 LangString PEMF_estopGonderiliyor 1055 "PEMF: aktif seans güvenliği — bobinlere E-stop gönderiliyor (port $2)…"
 LangString PEMF_kaldirildiKutu 1055 "PEMF Vet kaldırıldı.$\r$\n$\r$\nHASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ.$\r$\nTıbbi kayıt oldukları için kaldırma sırasında korunurlar.$\r$\n$\r$\nKonum:$\r$\n$PEMF_VeriKoku$\r$\n$\r$\nKalıcı silmek isterseniz bu klasörü elle silin ya da yeniden kurup uygulama içinden silin (Hastalar → 'Tümünü Sil', AI Geçmişi → 'Geçmişi Sil')."
 LangString PEMF_kayitlarKorundu 1055 "PEMF: Hasta kayıtları, seans geçmişi ve AI analiz geçmişi KORUNDU (tıbbi kayıt) — $PEMF_VeriKoku"
-LangString PEMF_portGecersiz 1055 "PEMF: backend.port geçersiz ('$1') — E-stop atlandı."
+LangString PEMF_portGecersiz 1055 "PEMF: backend.port geçersiz ('$1') — varsayılan port deneniyor."
 LangString PEMF_portVeriKokunden 1055 "PEMF: backend.port $INSTDIR'de yok — veri kökünden okundu."
 LangString PEMF_surecDurduruluyor 1055 "PEMF: artık backend süreçleri durduruluyor…"
 LangString PEMF_temizlikTamam 1055 "PEMF Vet Client temizliği tamamlandı."
@@ -51,7 +58,7 @@ LangString PEMF_estopDogrulandi 1033 "PEMF: coil E-stop CONFIRMED — $1"
 LangString PEMF_estopGonderiliyor 1033 "PEMF: active session safety — sending E-stop to the coils (port $2)…"
 LangString PEMF_kaldirildiKutu 1033 "PEMF Vet was uninstalled.$\r$\n$\r$\nPATIENT RECORDS, SESSION HISTORY and AI ANALYSIS HISTORY WERE NOT DELETED.$\r$\nThey are medical records, so they are kept when uninstalling.$\r$\n$\r$\nLocation:$\r$\n$PEMF_VeriKoku$\r$\n$\r$\nTo delete them permanently, delete this folder manually, or reinstall and delete them from within the app (Patients → 'Delete All', AI History → 'Delete History')."
 LangString PEMF_kayitlarKorundu 1033 "PEMF: Patient records, session history and AI analysis history were KEPT (medical records) — $PEMF_VeriKoku"
-LangString PEMF_portGecersiz 1033 "PEMF: backend.port is invalid ('$1') — E-stop skipped."
+LangString PEMF_portGecersiz 1033 "PEMF: backend.port is invalid ('$1') — trying the default port."
 LangString PEMF_portVeriKokunden 1033 "PEMF: backend.port not found in $INSTDIR — read from the data folder."
 LangString PEMF_surecDurduruluyor 1033 "PEMF: stopping the remaining backend processes…"
 LangString PEMF_temizlikTamam 1033 "PEMF Vet Client cleanup completed."
@@ -67,7 +74,8 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
   ; PEMF_Backend.exe orphan + bobinler HÂLÂ HASTANIN ÜZERİNDE ENERJİLİ olabilir. `taskkill /F`
   ; sinyalsizdir → backend'in graceful bobin-STOP'u ÇALIŞMAZ, bobinler firmware watchdog'una
   ; kalır. Bu yüzden önce donanım E-stop'unu POST'la. Portu launcher $INSTDIR\backend.port'a
-  ; yazar (install_and_launch); uninstaller ayrı süreç olduğundan portu ANCAK bu dosyadan bilir.
+  ; yazar (install_and_launch); uninstaller ayrı süreç olduğundan portu bu dosyadan bilir — 18K K1: dosya yok / bozuk / bayatsa
+  ; (ya da dosyadaki backend'den sonra) varsayılan port da STOP hedefidir (aşağıda `pemf_estop_varsayilan`).
   Push $0
   Push $1
   Push $2
@@ -120,12 +128,16 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
   ClearErrors
   FileOpen $0 "$LOCALAPPDATA\PEMF Vet Client\backend.port" r
   !insertmacro PEMF_BAGLAMI_GERI_YUKLE
-  IfErrors pemf_estop_done
+  ; 18K K1: dosya yoksa STOP ATLANMAZ (eskiden `pemf_estop_done`'a atlıyordu → varsayılan porttaki backend STOP'suz ölüyordu).
+  StrCpy $1 ""
+  IfErrors pemf_estop_haveport
   FileRead $0 $1
   FileClose $0
   DetailPrint "$(PEMF_portVeriKokunden)"
   pemf_estop_haveport:
-  StrCmp $1 "" pemf_estop_done
+  StrCpy $PEMF_EstopDosyaPortu 0
+  StrCpy $PEMF_EstopVarsayilanDenendi 0
+  StrCmp $1 "" pemf_estop_varsayilan
   ; DENETİM 2026-08-04: $1 HAM satırdı ve doğrudan PowerShell -Command dizesine gömülüyordu.
   ; İki ayrı sorun: (a) backend.port kullanıcı-yazılabilir bir dizindedir (%LOCALAPPDATA%),
   ; içine `"` + `;` sokan biri keyfi komut çalıştırabilirdi; (b) FileRead satır-sonunu (CR/LF)
@@ -136,8 +148,10 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
   ${If} $2 < 1
   ${OrIf} $2 > 65535
     DetailPrint "$(PEMF_portGecersiz)"
-    Goto pemf_estop_done
+    Goto pemf_estop_varsayilan
   ${EndIf}
+  StrCpy $PEMF_EstopDosyaPortu $2
+  pemf_estop_gonder:
   DetailPrint "$(PEMF_estopGonderiliyor)"
   ; -TimeoutSec 10: backend bu ucu "senkron MQTT publish ~7sn worst-case" diye belgeliyor;
   ; 3 sn ESP bobinleri (6-8) yayınlanmadan dolabiliyordu. /TIMEOUT: powershell.exe'nin kendisi
@@ -170,7 +184,10 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
   ; boşta kapanış mandalı DİSKE yazmaz, seans / bobin çalışırken yazar — launcher `safe_stop_coils` ile AYNI kural). Uç YOKSA
   ; (eski backend 405) ya da 2 sn içinde hata dönerse operatörün ACİL DURDUR ucu (`uc=2`) — bobin durdurma AZALMAZ; zaman
   ; aşımında ikinci istek YOK (kaldırma uzamasın). Gövde `{"onay":true}` tırnaksız üretilir (`@{onay=$true} | ConvertTo-Json`).
-  nsExec::ExecToStack /OEM /TIMEOUT=20000 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $$u = 1; $$t0 = Get-Date; $$ok = @(Write-Output success partial error); try { $$r = Invoke-RestMethod -Uri http://127.0.0.1:$2/api/hardware/kapanis_durdur -Method POST -ContentType application/json -Body (@{onay=$$true} | ConvertTo-Json -Compress) -TimeoutSec 10 } catch { if (((Get-Date) - $$t0).TotalSeconds -ge 2) { throw }; $$r = $$null }; if (-not ($$r.status -in $$ok -and $$r.stmStopped -is [bool] -and $$r.mqttResults -is [array])) { $$u = 2; $$r = Invoke-RestMethod -Uri http://127.0.0.1:$2/api/hardware/emergency_stop -Method POST -TimeoutSec 10 }; Write-Host -NoNewline OK uc=$$u status=$$($$r.status) confirmed=$$($$r.confirmed) t=$$(Get-Date -Format s); if ($$r.confirmed -ne $$true -or $$r.status -ne $$ok[0] -or $$r.mqttResults -isnot [array]) { exit 2 }; exit 0 } catch { Write-Host -NoNewline FAIL=$$($$_.Exception.Message) t=$$(Get-Date -Format s); exit 1 }"'
+  ; 18K K2 (launcher L4 `durdur_iste` ile AYNI): HTTP HATA yanıtı (`Exception.Response` dolu — eski backend 405, reddedilen istek) süresi ne
+  ; olursa olsun "uç yok" → ACİL DURDUR; 2 sn eşiği yalnız YANITSIZ hatalara (bağlantı / zaman aşımı) uygulanır. Eskiden yük altındaki eski
+  ; backend'in 2 sn'yi aşan 405'i zaman aşımı sayılıp ACİL DURDUR denenmeden kill'e geçiliyordu (ölçüldü — 18K K2).
+  nsExec::ExecToStack /OEM /TIMEOUT=20000 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $$u = 1; $$t0 = Get-Date; $$ok = @(Write-Output success partial error); try { $$r = Invoke-RestMethod -Uri http://127.0.0.1:$2/api/hardware/kapanis_durdur -Method POST -ContentType application/json -Body (@{onay=$$true} | ConvertTo-Json -Compress) -TimeoutSec 10 } catch { if (-not $$_.Exception.Response -and ((Get-Date) - $$t0).TotalSeconds -ge 2) { throw }; $$r = $$null }; if (-not ($$r.status -in $$ok -and $$r.stmStopped -is [bool] -and $$r.mqttResults -is [array])) { $$u = 2; $$r = Invoke-RestMethod -Uri http://127.0.0.1:$2/api/hardware/emergency_stop -Method POST -TimeoutSec 10 }; Write-Host -NoNewline OK uc=$$u status=$$($$r.status) confirmed=$$($$r.confirmed) t=$$(Get-Date -Format s); if ($$r.confirmed -ne $$true -or $$r.status -ne $$ok[0] -or $$r.mqttResults -isnot [array]) { exit 2 }; exit 0 } catch { Write-Host -NoNewline FAIL=$$($$_.Exception.Message) t=$$(Get-Date -Format s); exit 1 }"'
   Pop $0  ; nsExec dönüş: süreç çıkış kodu YA DA "error" (başlatılamadı) / "timeout" (20 sn aşıldı)
   Pop $1  ; yakalanan çıktı (OK …/FAIL=…); $1'in ham port satırı $2'ye sanitize edildi, artık gerekmez.
           ; İki Pop ŞART: ExecToStack yığına İKİ öğe iter; biri kalsa aşağıdaki kayıt geri-yüklemesi kayar.
@@ -205,6 +222,21 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
   ${EndIf}
   ; STM STOP'un async seri-kuyruktan porta yazılması için bekle (backend flush deadline'ı 1.5s).
   Sleep 1800
+  pemf_estop_varsayilan:
+  ; --- 18K K1 · İG-8.27 NSIS ikizi: varsayılan port (launcher `orphan_durdurma_hedefleri` ile AYNI hedef kümesi) — BİR KEZ, port
+  ; dosyasındaki portla aynıysa yinelenmez. Yoklama (çıkış): 3 = dinleyen yok (400 ms) · 4 = yanıt veren YABANCI servis (`/api/health`
+  ; PEMF kimliği taşımıyor; 2xx–4xx) → STOP yok · 0 = PEMF ya da YANITSIZ (S-YLI.3: yük altındaki backend kimliğe 2 sn'de yanıt
+  ; veremeyebilir; 5xx de kimlik söylemez) → aynı STOP satırı. PowerShell başlatılamadı / zaman aşımı → yine STOP (gönderim yalnız ARTAR).
+  StrCmp $PEMF_EstopVarsayilanDenendi "1" pemf_estop_done
+  StrCpy $PEMF_EstopVarsayilanDenendi "1"
+  IntCmp $PEMF_EstopDosyaPortu ${PEMF_VARSAYILAN_PORT} pemf_estop_done
+  StrCpy $2 ${PEMF_VARSAYILAN_PORT}
+  nsExec::ExecToStack /OEM /TIMEOUT=15000 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $$c = New-Object Net.Sockets.TcpClient; if (-not $$c.ConnectAsync([Net.IPAddress]::Loopback, $2).Wait(400)) { exit 3 } } catch { exit 3 }; try { $$h = Invoke-RestMethod -Uri http://127.0.0.1:$2/api/health -TimeoutSec 2 } catch { $$s = [int]$$_.Exception.Response.StatusCode; if ($$s -ge 200 -and $$s -lt 500) { exit 4 }; exit 0 }; if ($$h.service -eq (Write-Output PEMF-Vet)) { exit 0 }; exit 4"'
+  Pop $0  ; yoklama çıkış kodu
+  Pop $1  ; çıktı (boş)
+  StrCmp $0 "3" pemf_estop_done
+  StrCmp $0 "4" pemf_estop_done
+  Goto pemf_estop_gonder
   pemf_estop_done:
   ; --- Ardından backend sürecini durdur (orphan runtime/ dosya kilidini bırak) ---
   ; (Servis modunda NSSM yeniden başlatır; o senaryo Inno-backend uninstaller'ının alanı.)

@@ -816,15 +816,17 @@ def test_estop_tek_satiri_ESKI_backendde_kapanis_ucu_YOKSA_ACIL_DURDUR_ucuna_dus
 
 
 @pytest.mark.skipif(_powershell() is None, reason="pwsh/powershell yok")
-def test_estop_tek_satiri_kapanis_ucu_YAVAS_hata_verirse_ikinci_istek_YOK(preuninstall_satirlari):
-    """KARŞIT (2026-10-18): kapanış ucu ≥ 2 sn sonra hata verdiyse backend asılı/meşgul — ikinci istek (ACİL DURDUR) kaldırmayı
-    nsExec'in 20 sn sınırına kadar uzatırdı. Çıkış FAIL (1); sonraki taskkill yine koşar (launcher `HIZLI_HATA_ESIGI` ikizi)."""
+def test_estop_tek_satiri_kapanis_ucu_YAVAS_HTTP_hatasinda_ACIL_DURDUR_ucuna_duser(preuninstall_satirlari):
+    """🔴 TIBBİ GÜVENLİK (18K K2 — launcher L4 `durdur_iste` ikizi): kapanış ucu ≥ 2 sn sonra HTTP HATASI döndüyse (500) backend
+    YANIT VERDİ — uç "yok" sayılır, operatörün ACİL DURDUR ucu denenir (launcher `ureq::Error::Status` → `UcYok`). Eskiden (2026-10-18)
+    burada "ikinci istek YOK" pinleniyordu ve "launcher ikizi" deniyordu — launcher'da öyle DEĞİLDİ (ölçüldü 18K). 2 sn eşiği yalnız
+    YANITSIZ hatalarda (zaman aşımı) geçerli: o karşıt `test_18K_K1_nsis_estop_VARSAYILAN_port.py` sessiz dinleyici vakasında."""
     stub = _EstopStub(confirmed=True, kapanis_yavas=True)
     try:
         rc, cikti = _komutu_kos(_estop_komutu(preuninstall_satirlari, stub.port))
     finally:
         stub.kapat()
-    assert stub.istekler == [("POST", "/api/hardware/kapanis_durdur")], (
-        f"yavaş hatadan sonra ikinci istek atıldı: {stub.istekler}"
+    assert stub.istekler == [("POST", "/api/hardware/kapanis_durdur"), ("POST", "/api/hardware/emergency_stop")], (
+        f"yavaş HTTP hatasından sonra ACİL DURDUR ucu denenmedi: {stub.istekler}"
     )
-    assert rc == 1 and cikti.startswith("FAIL"), f"rc={rc} çıktı={cikti!r}"
+    assert rc == 0 and cikti.startswith("OK uc=2"), f"rc={rc} çıktı={cikti!r}"

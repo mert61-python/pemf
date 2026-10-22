@@ -40,7 +40,8 @@ GOLDEN_TR = {
     "estopGonderiliyor": "PEMF: aktif seans güvenliği — bobinlere E-stop gönderiliyor (port $2)…",
     "kaldirildiKutu": "PEMF Vet kaldırıldı.$\\r$\\n$\\r$\\nHASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ.$\\r$\\nTıbbi kayıt oldukları için kaldırma sırasında korunurlar.$\\r$\\n$\\r$\\nKonum:$\\r$\\n$PEMF_VeriKoku$\\r$\\n$\\r$\\nKalıcı silmek isterseniz bu klasörü elle silin ya da yeniden kurup uygulama içinden silin (Hastalar → 'Tümünü Sil', AI Geçmişi → 'Geçmişi Sil').",
     "kayitlarKorundu": "PEMF: Hasta kayıtları, seans geçmişi ve AI analiz geçmişi KORUNDU (tıbbi kayıt) — $PEMF_VeriKoku",
-    "portGecersiz": "PEMF: backend.port geçersiz ('$1') — E-stop atlandı.",
+    # 18K K1 (İG-8.27 NSIS ikizi): port dosyası geçersizken STOP artık ATLANMAZ — varsayılan port denenir; ileti gerçeği söyler.
+    "portGecersiz": "PEMF: backend.port geçersiz ('$1') — varsayılan port deneniyor.",
     "portVeriKokunden": "PEMF: backend.port $INSTDIR'de yok — veri kökünden okundu.",
     "surecDurduruluyor": "PEMF: artık backend süreçleri durduruluyor…",
     "temizlikTamam": "PEMF Vet Client temizliği tamamlandı.",
@@ -102,7 +103,8 @@ def test_KRITIK_guvenlik_ifadeleri_iki_dilde_korunuyor():
     assert "ELLE kontrol" in tr["estopDogrulanamadi"] and "MANUALLY" in en["estopDogrulanamadi"].upper()
     assert "DOĞRULANAMADI" in tr["estopDogrulanamadi"] and "NOT be confirmed" in en["estopDogrulanamadi"]
     assert "DOĞRULANDI" in tr["estopDogrulandi"] and "CONFIRMED" in en["estopDogrulandi"]
-    assert "E-stop atlandı" in tr["portGecersiz"] and "E-stop skipped" in en["portGecersiz"]
+    assert "varsayılan port deneniyor" in tr["portGecersiz"] and "trying the default port" in en["portGecersiz"]
+    assert "atlandı" not in tr["portGecersiz"] and "skipped" not in en["portGecersiz"]  # 18K K1: STOP atlanmıyor
     assert "SİLİNMEDİ" in tr["kaldirildiKutu"] and "NOT DELETED" in en["kaldirildiKutu"]
     assert "KORUNDU" in tr["kayitlarKorundu"] and "KEPT" in en["kayitlarKorundu"]
 
