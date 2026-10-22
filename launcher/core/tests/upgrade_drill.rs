@@ -52,12 +52,24 @@ fn zip_uret(girdiler: &BTreeMap<String, Vec<u8>>) -> Vec<u8> {
 /// ⚠️ ÜRETİMDEKİ app-katmanı SINIRI — `build_tools/make_base_zip.py::APP_ROOTS` ile AYNI olmalı.
 /// Tatbikat uydurma bir sınırla koşarsa gerçeği değil kendi kurgusunu doğrular (ilk yazımda tam
 /// bu oldu: exe sınırın dışında bırakılmıştı ve testler yanlış sonuç verdi).
+/// LN L10 · D4.29: liste üretimle BİREBİR (iki yönlü kapı `tatbikat_sinirlari_URETIMLE_ayni`) — eskiden yalnız 5 kök vardı ve kapı
+/// tek yönlüydü: provizyon / deploy / i18n / frontend_version / betikler üretimde app'teyken tatbikat onları DEPS sanıyordu.
 const APP_ROOTS: &[&str] = &[
     "PEMF_Backend/PEMF_Backend.exe",
     "PEMF_Backend/_internal/ai_hub",
     "PEMF_Backend/_internal/frontend",
     "PEMF_Backend/_internal/VERSION",
+    "PEMF_Backend/_internal/data/cloud_mqtt_provision.json",
+    "PEMF_Backend/_internal/deploy",
+    "PEMF_Backend/_internal/frontend_version.json",
+    "PEMF_Backend/_internal/i18n",
     "PEMF_Backend/_app_roots.json",
+    "PEMF_Backend/setup_services.ps1",
+    "PEMF_Backend/start_hotspot.ps1",
+    "PEMF_Backend/install_hotspot_task.ps1",
+    "PEMF_Backend/pemf_footprint.ps1",
+    "PEMF_Backend/pemf_teardown.ps1",
+    "PEMF_Backend/pemf_uninstall_all.ps1",
 ];
 
 fn app_roots_json() -> Vec<u8> {
@@ -408,37 +420,64 @@ fn tatbikat_GERCEKCI_olcekte_kosuyor() {
     assert!(deps.keys().filter(|k| k.contains("/_internal/")).count() > 250, "agac duz kalmis");
 }
 
+/// Python satırından `#` yorumunu at (tırnak içi korunur).
+fn py_yorumsuz(src: &str) -> String {
+    src.lines()
+        .map(|s| {
+            let mut tirnak: Option<char> = None;
+            for (i, c) in s.char_indices() {
+                match (tirnak, c) {
+                    (None, '\'' | '"') => tirnak = Some(c),
+                    (Some(q), _) if c == q => tirnak = None,
+                    (None, '#') => return &s[..i],
+                    _ => {}
+                }
+            }
+            s
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// `ad = [ … ]` listesinin dize öğeleri ve kapanıştan sonraki metin (yorum-soyulmuş kaynaktan).
+fn py_liste<'a>(src: &'a str, ad: &str) -> (Vec<String>, &'a str, &'a str) {
+    let (_, kalan) = src.split_once(&format!("\n{ad} = [")).unwrap_or_else(|| panic!("make_base_zip.py icinde `{ad} = [` yok"));
+    let (blok, sonrasi) = kalan.split_once(']').unwrap_or_else(|| panic!("`{ad}` listesi kapanmamis"));
+    let ogeler = blok
+        .split(['\'', '"'])
+        .enumerate()
+        .filter(|(i, _)| i % 2 == 1)
+        .map(|(_, s)| s.to_string())
+        .collect();
+    (ogeler, blok, sonrasi)
+}
+
 /// ⚠️ TATBİKATIN GERÇEKLE BAĞI. Sınır listesi ürünle ayrışırsa tatbikat kendi kurgusunu doğrular.
 /// (İlk yazımda tam bu oldu: exe sınırın dışında bırakılmıştı ve iki test yanlış sonuç verdi.)
+///
+/// LN L10 · D4.29: İKİ YÖNLÜ küme eşitliği (eskiden yalnız tatbikat ⊆ üretim — üretime eklenen kökü tatbikat bilmiyordu),
+/// YORUM-SOYULMUŞ (yoruma alınmış bir kök "var" sayılıyordu), `APP_ROOTS_FILE` sabiti ve `ADD_SCRIPTS` genişletmesi dahil; dosya
+/// YOKSA PANİK (eskiden "atlaniyor" deyip yeşil dönüyordu — kör kapı).
 #[test]
 fn tatbikat_sinirlari_URETIMLE_ayni() {
-    let py = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../build_tools/make_base_zip.py");
-    let Ok(src) = fs::read_to_string(&py) else {
-        eprintln!("make_base_zip.py yok — atlaniyor");
-        return;
-    };
-    // ⚠️ Yalnız APP_ROOTS BLOĞUNA bak: dosyanın herhangi bir yerinde geçen bir dize (yorum,
-    // doğrulama listesi) kapıyı geçirirdi. İlk yazımda `|| src.contains("APP_ROOTS_FILE")`
-    // koşulu vardı ve o koşul HER ZAMAN doğruydu → kapı boş güvence veriyordu (mutasyon
-    // turunda yakalandı: VERSION listeden çıkarıldığında test yine yeşil kaldı).
-    let blok = src
-        .split_once("APP_ROOTS = [")
-        .expect("make_base_zip.py icinde APP_ROOTS bulunamadi")
-        .1
-        .split_once(']')
-        .expect("APP_ROOTS listesi kapanmamis")
-        .0;
-    for r in APP_ROOTS {
-        let bulundu = if *r == "PEMF_Backend/_app_roots.json" {
-            // Bu girdi sabit ADIYLA listelenir; sabitin tanımını ayrıca doğrula.
-            blok.contains("APP_ROOTS_FILE")
-                && src.contains(&format!("APP_ROOTS_FILE = '{r}'"))
-        } else {
-            blok.contains(&format!("'{r}'"))
-        };
-        assert!(bulundu, "uretim APP_ROOTS'unda yok: {r} (blok: {blok})");
+    let py = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build_tools/make_base_zip.py");
+    let src = py_yorumsuz(&fs::read_to_string(&py).unwrap_or_else(|e| panic!("make_base_zip.py okunamadi ({py:?}): {e}")));
+    let (mut uretim, blok, sonrasi) = py_liste(&src, "APP_ROOTS");
+    if blok.contains("APP_ROOTS_FILE") {
+        let (_, k) = src.split_once("\nAPP_ROOTS_FILE = '").expect("APP_ROOTS_FILE tanimi yok");
+        uretim.push(k.split_once('\'').expect("APP_ROOTS_FILE kapanmamis").0.to_string());
     }
+    let ek = sonrasi.lines().next().unwrap_or("").trim();
+    if !ek.is_empty() {
+        assert_eq!(ek, "+ ['PEMF_Backend/' + s for s in ADD_SCRIPTS]", "APP_ROOTS ifadesi degisti — tatbikat siniri guncellenmeli");
+        uretim.extend(py_liste(&src, "ADD_SCRIPTS").0.into_iter().map(|s| format!("PEMF_Backend/{s}")));
+    }
+    let uretim: std::collections::BTreeSet<String> = uretim.into_iter().collect();
+    let tatbikat: std::collections::BTreeSet<String> = APP_ROOTS.iter().map(|s| s.to_string()).collect();
+    let eksik: Vec<_> = uretim.difference(&tatbikat).collect();
+    let fazla: Vec<_> = tatbikat.difference(&uretim).collect();
+    assert!(eksik.is_empty() && fazla.is_empty(), "tatbikat APP_ROOTS uretimle AYNI degil — uretimde olup tatbikatta yok: {eksik:?} · tatbikatta olup uretimde yok: {fazla:?}");
+    assert!(uretim.len() >= 9, "uretim listesi ayristirilamadi: {uretim:?}");
 }
 
 /// SÜRÜM DOSYASI APP KATMANINDA OLMALI — bu tatbikatın bulduğu gerçek kusur.

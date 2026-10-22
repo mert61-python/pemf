@@ -31,25 +31,11 @@ MAKE_BASE_ZIP = KOK / "build_tools" / "make_base_zip.py"
 UPGRADE_DRILL = KOK / "launcher" / "core" / "tests" / "upgrade_drill.rs"
 MAKE_MANIFEST = KOK / "scripts" / "make_manifest.py"
 
-#: Python'da OLUP Rust tatbikatında HENÜZ olmayan kökler — BİLİNÇLİ ve SÜRELİ fark. Rust const'u ancak cargo ile doğrulanabilir
-#: (bu oturumda derleme yasak); launcher oturumu tatbikatı genişlettikçe bu küme DARALIR ve sonunda boş kalır. Kapı iki yönlü:
-#: Python'dan bir kök düşerse ya da Python'a yeni kök eklenirse bu küme tutmaz → KIRMIZI (sessiz kayma yok).
-RUST_TATBIKATINDA_HENUZ_YOK = frozenset(
-    {
-        "PEMF_Backend/_internal/data/cloud_mqtt_provision.json",
-        "PEMF_Backend/_internal/deploy",
-        "PEMF_Backend/_internal/frontend_version.json",
-        "PEMF_Backend/setup_services.ps1",
-        "PEMF_Backend/start_hotspot.ps1",
-        "PEMF_Backend/install_hotspot_task.ps1",
-        "PEMF_Backend/pemf_footprint.ps1",
-        "PEMF_Backend/pemf_teardown.ps1",
-        "PEMF_Backend/pemf_uninstall_all.ps1",
-        # I18N-0 (2026-10-19): sunucu çeviri katalogları app katmanında (gerekçe make_base_zip.APP_ROOTS); tatbikat bu kökü henüz
-        # kurmuyor — eklenince bu satırı silin.
-        "PEMF_Backend/_internal/i18n",
-    }
-)
+#: Python'da OLUP Rust tatbikatında HENÜZ olmayan kökler — BİLİNÇLİ ve SÜRELİ fark. LN L10 · D4.29 (launcher oturumu): tatbikat üretimle
+#: BİREBİR yapıldı (provizyon · deploy · frontend_version · i18n · 6 betik eklendi; Rust tarafı da artık iki yönlü, yorum-soyulmuş,
+#: dosya yoksa panik — `upgrade_drill.rs::tatbikat_sinirlari_URETIMLE_ayni`) → küme BOŞ. Kapı iki yönlü kalır: Python'dan bir kök
+#: düşerse ya da Python'a yeni kök eklenip tatbikata eklenmezse KIRMIZI (sessiz kayma yok).
+RUST_TATBIKATINDA_HENUZ_YOK: frozenset = frozenset()
 
 
 def _python_app_roots(kaynak: str) -> set[str]:
