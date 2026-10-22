@@ -82,10 +82,13 @@ fn KRITIK_dolu_kokte_kayit_YAZILIR() {
     // boyut hiç güncellenmez — asıl şikâyet ("hep 11 MB") devam ederdi.
     let d = tempfile::tempdir().unwrap();
     dosya(&d.path().join("runtime").join("x.bin"), 5_000_000);
-    assert!(
-        install::boyut_kaydini_guncelle(d.path()),
-        "dolu kokte kayit yazilmadi → boyut '11 MB'da takili kalir"
+    assert_eq!(
+        install::boyut_kaydi_degeri(d.path()),
+        Some(5_000_000 / 1024),
+        "dolu kokte kayit degeri uretilmedi → boyut '11 MB'da takili kalir"
     );
+    // D5.41 (YLI-A3.7): geçici kök GERÇEK kurulum kökü değil → gerçek HKCU kaydına DOKUNULMAZ (reg.exe çağrılmaz).
+    assert!(!install::boyut_kaydini_guncelle(d.path()), "test kökünün boyutu gerçek kaldırma kaydına yazıldı");
 }
 
 #[test]

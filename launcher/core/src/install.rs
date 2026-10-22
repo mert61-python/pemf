@@ -681,11 +681,24 @@ pub fn kurulum_boyutu(install_root: &Path) -> u64 {
 /// Döner: kayıt yazmaya GİRİŞİLDİ mi. (Yazmanın kendisi best-effort'tur; dönüş değeri
 /// "boş kökte dokunulmadı" değişmezini TEST EDİLEBİLİR kılmak için var — dönüş olmadan
 /// test yalnız çökmediğini görebiliyordu, bu da yanlış güvenceydi.)
+/// D5.41 (YLI-A3.7): kayda yazılacak değer (KB, u32 sınırında); boş / okunamayan kök → `None` (saf — testli).
+pub fn boyut_kaydi_degeri(install_root: &Path) -> Option<u64> {
+    let kb = kurulum_boyutu(install_root) / 1024;
+    (kb > 0).then(|| kb.min(u64::from(u32::MAX)))
+}
+
 #[cfg(windows)]
 pub fn boyut_kaydini_guncelle(install_root: &Path) -> bool {
-    let kb = kurulum_boyutu(install_root) / 1024;
-    if kb == 0 {
+    let Some(kb) = boyut_kaydi_degeri(install_root) else {
         return false; // kök boş/okunamadı → yanlış "0 MB" yazmaktansa dokunma
+    };
+    // D5.41 (YLI-A3.7): HKCU `…\Uninstall\PEMF Vet Client` GERÇEK kurulum kökünü anlatır (`InstallLocation`). Başka bir kökün
+    // (test / geçici dizin) boyutu oraya yazılmaz — `cargo test` sahte `reg.exe`siz koşunca geliştiricinin / kliniğin GERÇEK kaydını
+    // eziyordu (13 çağrı / koşu). Ev dizini launcher'ın `home_dir()` kuralıyla (Windows: USERPROFILE önce; BOŞ değer atlanır).
+    let al = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty());
+    let ev = al("USERPROFILE").or_else(|| al("HOME")).map(PathBuf::from);
+    if ev.map(|h| default_install_root(&h)).as_deref() != Some(install_root) {
+        return false;
     }
     // `reg.exe` kullanılır: yeni bağımlılık yok. Kayıt per-user kurulumda HKCU'dadır; makine
     // geneli kurulum (HKLM) yönetici ister ve sessizce başarısız olur — kabul.
@@ -698,7 +711,7 @@ pub fn boyut_kaydini_guncelle(install_root: &Path) -> bool {
             "/t",
             "REG_DWORD",
             "/d",
-            &kb.min(u64::from(u32::MAX)).to_string(),
+            &kb.to_string(),
             "/f",
         ])
         .stdout(std::process::Stdio::null())
