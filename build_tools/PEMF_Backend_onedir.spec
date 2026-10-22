@@ -595,6 +595,24 @@ def _torch_kaynagi_mi(hedef: str) -> bool:
 
 a.datas = [x for x in a.datas if not _torch_kaynagi_mi(x[0])]
 
+# ── Y177 (S-YH.11): Windows "API set" saplamaları (`api-ms-win-*.dll`) PAKETE GİRMEZ ──────────────────────────────────────────────
+# YH D5 ölçtü (1.9.51 adayı, 2026-10-22): PyInstaller'ın ikili bağımlılık çözümü 40 `api-ms-win-*.dll`'i derleme makinesinin Windows
+# Kits (UCRT redist) kurulumundan topluyordu → paket derleme makinesinin SDK kurulumuna bağlıydı. Windows 10 / 11'de UCRT ve API set
+# şeması işletim sisteminde; yükleyici bu adları diske değil şemaya çözer. Sahip kararı Y177: 1.9.51'de dışlanır (deps katmanı bu
+# yayında zaten değişiyor — ek indirme maliyeti yok). Analysis'ten SONRA, COLLECT'ten ÖNCE ve YERİNDE (aynı liste nesnesi COLLECT'e
+# gider). Kapı: tests/test_Y177_spec_api_set_dll_disarida.py · gerçek derlemede pakette 0 ölçülür (AI hazırlık 16/16 + duman).
+def _api_set_saplamasi_mi(hedef: str) -> bool:
+    """Hedef adı `api-ms-win-*.dll` mi (büyük / küçük harf ve dizin ayırıcısından bağımsız)."""
+    ad = os.path.basename(str(hedef).replace('\\', '/')).lower()
+    return ad.startswith('api-ms-win-') and ad.endswith('.dll')
+
+
+_api_set_atilan = [x for x in a.binaries if _api_set_saplamasi_mi(x[0])]
+a.binaries[:] = [x for x in a.binaries if not _api_set_saplamasi_mi(x[0])]
+assert not [x for x in a.binaries if _api_set_saplamasi_mi(x[0])], "api-ms-win-*.dll HALA a.binaries'te (Y177)"
+print(f"[Y177] api-ms-win-*.dll pakete ALINMADI: {len(_api_set_atilan)} dosya "
+      f"(kaynak dizinleri: {sorted({os.path.dirname(str(x[1])) for x in _api_set_atilan})[:3]})")
+
 # ⚠️ DENETİM 2026-08-28 #07(b) — KOD KORUMASININ ASIL KAPISI.
 # `collect_submodules('ai_hub')` ai_hub'ın tüm modüllerini `a.pure`'a, oradan da PYZ arşivine
 # BYTECODE olarak gömüyordu; `compile_pyd.py` ise yalnız DİSKTEKİ .py'leri .pyd'ye çevirip
