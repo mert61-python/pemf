@@ -39,17 +39,6 @@ _url_callbacks: list = []  # URL hazır olunca çağrılacak fonksiyonlar
 _BIN_DIR = Path(os.environ.get("APPDATA", Path.home())) / "PEMF_GUI" / "cloudflared"
 
 
-def _get_binary_path() -> Path:
-    """OS'a göre cloudflared binary yolunu döndürür."""
-    system = platform.system()
-    if system == "Windows":
-        return _BIN_DIR / "cloudflared.exe"
-    elif system == "Darwin":
-        return _BIN_DIR / "cloudflared-darwin"
-    else:
-        return _BIN_DIR / "cloudflared-linux"
-
-
 def _bundled_cloudflared() -> Path | None:
     """Uygulamayla PAKETLENMİŞ cloudflared binary'sini ara (offline kurulum). PyInstaller
     _MEIPASS, EXE yanı ve kaynak bin/ dizinleri. Audit #18: eskiden yalnız runtime'da
@@ -233,14 +222,13 @@ def start_tunnel(port: int = 8000) -> bool:
             logger.info("Tünel zaten çalışıyor: %s", _tunnel_url)
             return True
 
-    # Binary'yi bul veya indir
-    bin_path = _get_binary_path()
-    if not bin_path.exists():
-        logger.info("cloudflared binary bulunamadı, indiriliyor...")
-        bin_path = _download_cloudflared()
-        if not bin_path:
-            logger.error("cloudflared binary hazırlanamadı, tünel başlatılamıyor.")
-            return False
+    # 18K K6 · D3.35 (B-4.12): PAKETTEKİ ikili ÖNCE — `_download_cloudflared` sırası: paket → boyutu doğrulanmış önbellek →
+    # indirme. Eskiden önbellek dosyası (%APPDATA%\PEMF_GUI\cloudflared) VARSA — 0 bayt / bozuk / eski sürümlerin sürüm-pinsiz,
+    # özetsiz indirdiği ikili dahil — doğrulanmadan çalıştırılıyor, paketli ikili hiç denenmiyordu (uzaktan erişim kalıcı ölü).
+    bin_path = _download_cloudflared()
+    if not bin_path:
+        logger.error("cloudflared binary hazırlanamadı, tünel başlatılamıyor.")
+        return False
 
     # ÜRETİM (P1): PEMF_CLOUDFLARE_TUNNEL_TOKEN ayarlıysa NAMED tunnel — KALICI hostname +
     # SLA + (istenirse) Cloudflare Access. Yoksa QUICK tunnel (trycloudflare, URL her restart
