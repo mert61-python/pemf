@@ -19,6 +19,13 @@
 #   -PytestOnek  pytest'i çağıran önek (varsayılan: <Python> -m pytest), ör. bekçili koşucu
 #   -Hedef       test hedefi (varsayılan: tests)
 # Çıkış: pytest'in çıkış kodu (0 = geçti; ≠0 = YAYIN DURUR).
+#
+# Y176 (S-YH.7 = S-4BI.9) YEŞİL-SÜİT DAMGASI — yalnız TAM kipte (kancasız: -PytestOnek YOK, -Hedef 'tests'):
+#   koşu BAŞINDA eski damga silinir (kırmızı / yarıda kesilen koşu eski damgayı bırakmaz), süit GEÇİNCE
+#   `<git-dizini>\pemf-y30-damga.json` yazılır (koşu başındaki HEAD · UTC zaman · kip TAM). `make_manifest.py` yayın
+#   dizinine (`pemf-app-packages`) yazarken HEAD'i tutan, ≤ 24 sa, TAM damga ister; tek istisna paket / sha değiştirmeyen
+#   ve rollout'u DÜŞÜREN "acil fren" çağrısıdır. Kancalı (denetim / sandbox) koşu damgaya DOKUNMAZ.
+#   Kapı: tests/test_Y176_yesil_suit_damgasi.py
 # =============================================================================
 param(
   [string]$Python = "",
@@ -27,6 +34,18 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $kok = Split-Path -Parent $PSScriptRoot
+# Y176: TAM kip = kanca yok. `katmanli_yayin_hazirla.ps1` -Hedef'i HER ZAMAN geçirir → Hedef değerine bakılır, bağlı olup olmadığına değil.
+$tamKip = (-not $PSBoundParameters.ContainsKey('PytestOnek')) -and ($Hedef -eq 'tests')
+function Get-Y30DamgaYolu([string]$Kok) {
+  try { $gd = (& git -C $Kok rev-parse --absolute-git-dir 2>$null) } catch { return $null }
+  if ($LASTEXITCODE -ne 0 -or -not $gd) { return $null }
+  return (Join-Path ([string]$gd).Trim() 'pemf-y30-damga.json')
+}
+function Get-Y30Head([string]$Kok) {
+  try { $h = (& git -C $Kok rev-parse HEAD 2>$null) } catch { return $null }
+  if ($LASTEXITCODE -ne 0 -or -not $h) { return $null }
+  return ([string]$h).Trim()
+}
 # `pwsh -File … -PytestOnek "a,-m,pytest"` dizi sözdizimini çözmez, TEK dize verir → virgülden böl.
 if ($PytestOnek.Count -eq 1 -and $PytestOnek[0] -like '*,*') { $PytestOnek = @($PytestOnek[0] -split ',') }
 if (-not $PytestOnek -or $PytestOnek.Count -eq 0) {
@@ -39,6 +58,21 @@ if (-not $PytestOnek -or $PytestOnek.Count -eq 0) {
 
 $env:PEMF_CAPRAZ_KAYNAK_ZORUNLU = '1'
 $env:PEMF_GOLDEN_REQUIRED = '1'
+
+# Y176: TAM kipte eski damga koşu BAŞINDA silinir; silinemezse süit KOŞMAZ (bayat damga bir kırmızı koşudan sağ çıkmasın).
+$damgaYolu = $null
+$basHead = $null
+if ($tamKip) {
+  $damgaYolu = Get-Y30DamgaYolu $kok
+  $basHead = Get-Y30Head $kok
+  if ($damgaYolu -and (Test-Path -LiteralPath $damgaYolu)) {
+    Remove-Item -LiteralPath $damgaYolu -Force
+    if (Test-Path -LiteralPath $damgaYolu) {
+      Write-Host "[YAYIN-ONCESI] eski Y30 damgasi SILINEMEDI: $damgaYolu - DURDU (Y176)."
+      exit 1
+    }
+  }
+}
 
 $komut = $PytestOnek[0]
 $argumanlar = @()
@@ -72,6 +106,21 @@ if ($null -eq $rc) { $rc = 1 }
 if ($rc -ne 0) {
   Write-Host "[YAYIN-ONCESI] TAM SUIT GECMEDI (cikis=$rc) - YAYIN DURDU (Y30). Kirmizilari (FAILED/ERROR) ve atlama nedenlerini (SKIPPED) kisa ozette okuyun."
   exit $rc
+}
+# Y176: yalnız TAM kipte ve süit GEÇTİYSE damga yazılır — koşu başındaki HEAD için (süit sırasında HEAD değiştiyse YAZILMAZ).
+if ($tamKip) {
+  $sonHead = Get-Y30Head $kok
+  if (-not $damgaYolu -or -not $basHead) {
+    Write-Host "[YAYIN-ONCESI] UYARI: git dizini / HEAD okunamadi - Y30 damgasi YAZILMADI; make_manifest yayin dizinine YAZMAZ (Y176)."
+  } elseif ($sonHead -ne $basHead) {
+    Write-Host "[YAYIN-ONCESI] UYARI: suit sirasinda HEAD degisti ($basHead -> $sonHead) - Y30 damgasi YAZILMADI (Y176)."
+  } else {
+    $damga = [ordered]@{ head = $basHead; zaman = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); kip = 'TAM'; betik = 'scripts/yayin_oncesi_suit.ps1' }
+    $gecici = "$damgaYolu.tmp"
+    [IO.File]::WriteAllText($gecici, ($damga | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+    Move-Item -LiteralPath $gecici -Destination $damgaYolu -Force
+    Write-Host "[YAYIN-ONCESI] Y30 damgasi yazildi: HEAD=$basHead (24 sa gecerli; make_manifest yayin dizinine yazarken ister - Y176)."
+  }
 }
 Write-Host "[YAYIN-ONCESI] tam suit GECTI (ZORUNLU kip)."
 exit 0

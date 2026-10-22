@@ -23,7 +23,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import subprocess
 import sys
+import time
 import zipfile
 from pathlib import Path
 
@@ -97,6 +100,139 @@ APP_ASGARI_YAPI = {
     "linux-x64": ("PEMF_Backend/PEMF_Backend", "PEMF_Backend/_app_roots.json"),
     "mac-arm64": ("PEMF_Backend/PEMF_Backend", "PEMF_Backend/_app_roots.json"),
 }
+
+
+# ── Y176 (S-YH.7 = S-4BI.9): YAYIN DİZİNİNE YAZIM YEŞİL-SÜİT DAMGASI İSTER ─────────────────────────────────────────
+# Bu betik yayın dizinine (`pemf-app-packages`) doğrudan çağrıyla da yazabiliyordu → Y30 (yayın öncesi ZORUNLU tam süit) atlanırdı
+# (BUILD.md §6 uyarısı yalnız sözdü). Artık yayın dizinine yazmak `scripts/yayin_oncesi_suit.ps1`'in TAM kipte (kancasız) geçince
+# git dizinine yazdığı damgayı ister: AYNI HEAD · ≤ 24 sa · kip TAM. TEK İSTİSNA — ACİL FREN: paket kimliği (url / sha256 / size /
+# sürüm / etiket …) ÖNCEKİ manifestle AYNI ve yalnız `--rollout` / `--launcher-rollout` DÜŞÜRÜLÜYORSA damgasız yazılır ve bu yüksek
+# sesle günlüğe yazılır (bozuk bir yayını durdurmak ~1,5 sa süit beklemez — BUILD.md "Bozuk bir yayını geri çekmek"). Testler geçici
+# dizine yazar → etkilenmez. Kapı: tests/test_Y176_yesil_suit_damgasi.py
+KOK_DIZINI = Path(__file__).resolve().parents[1]
+YAYIN_DIZINI = KOK_DIZINI / "pemf-app-packages"
+DAMGA_ADI = "pemf-y30-damga.json"
+DAMGA_AZAMI_SN = 24 * 3600
+#: Paket kimliği: bu adlı yaprakların (yol + değer) kümesi değişmiyorsa yayın YENİ bir yazılım taşımıyordur. Açıklama alanları
+#: (`_…`, `notes`) ve `rollout` kimliğe GİRMEZ.
+_KIMLIK_ANAHTARLARI = frozenset(
+    {
+        "url",
+        "sha256",
+        "size",
+        "kind",
+        "installer_url",
+        "version",
+        "versionCode",
+        "tag",
+        "schema",
+        "min_supported_version",
+    }
+)
+
+
+def yayin_dizinine_mi(yol: Path, yayin: Path | None = None) -> bool:
+    """`yol` yayın dizininin (bağlantılar çözülerek, büyük / küçük harf duyarsız) içinde mi."""
+    hedef = os.path.normcase(os.path.realpath(str(yol)))
+    kok = os.path.normcase(os.path.realpath(str(yayin if yayin is not None else YAYIN_DIZINI)))
+    try:
+        return os.path.commonpath([hedef, kok]) == kok
+    except ValueError:  # farklı sürücü
+        return False
+
+
+def _git_bilgisi(kok: Path) -> tuple[Path, str] | None:
+    """(git dizini, HEAD) — okunamazsa None (fail-closed: damga doğrulanamaz)."""
+    try:
+        gd = subprocess.run(
+            ["git", "-C", str(kok), "rev-parse", "--absolute-git-dir"], capture_output=True, text=True, timeout=30
+        )
+        hd = subprocess.run(["git", "-C", str(kok), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if gd.returncode or hd.returncode or not gd.stdout.strip() or not hd.stdout.strip():
+        return None
+    return Path(gd.stdout.strip()), hd.stdout.strip()
+
+
+def damga_hatasi(kok: Path, simdi: float, git_bilgisi=None) -> str | None:
+    """Y30 yeşil-süit damgası geçerli mi — geçerliyse None, değilse NEDEN (eylem söyleyen ileti çağıranda)."""
+    bilgi = (git_bilgisi or _git_bilgisi)(kok)
+    if bilgi is None:
+        return "git dizini / HEAD okunamadi"
+    gitdir, head = bilgi
+    yol = Path(gitdir) / DAMGA_ADI
+    try:
+        d = json.loads(yol.read_text(encoding="utf-8-sig"))
+    except FileNotFoundError:
+        return f"damga YOK ({yol})"
+    except (OSError, ValueError):
+        return f"damga okunamadi / bozuk ({yol})"
+    if not isinstance(d, dict):
+        return "damga bicimi bozuk"
+    if d.get("kip") != "TAM":
+        return f"damga kipi TAM degil ({d.get('kip')!r})"
+    if d.get("head") != head:
+        return f"damga baska bir HEAD icin ({str(d.get('head'))[:12]} != {head[:12]})"
+    z = d.get("zaman")
+    if isinstance(z, bool) or not isinstance(z, (int, float)):
+        return "damga zamani yok / bozuk"
+    yas = simdi - z
+    if yas < -300:
+        return "damga zamani GELECEKTE (saat?)"
+    if yas > DAMGA_AZAMI_SN:
+        return f"damga BAYAT ({int(yas // 3600)} sa > {DAMGA_AZAMI_SN // 3600} sa)"
+    return None
+
+
+def _yapraklar(o, yol=()):
+    if isinstance(o, dict):
+        for k, v in o.items():
+            yield from _yapraklar(v, yol + (str(k),))
+    elif isinstance(o, list):
+        for i, v in enumerate(o):
+            yield from _yapraklar(v, yol + (str(i),))
+    else:
+        yield yol, o
+
+
+def paket_kimligi(m: dict) -> list:
+    """Paketi tanımlayan yaprakların sıralı listesi (yol, değer) — açıklamalar (`_…`) ve `rollout` HARİÇ."""
+    return sorted(
+        ("/".join(y), json.dumps(v, sort_keys=True))
+        for y, v in _yapraklar(m)
+        if y and y[-1] in _KIMLIK_ANAHTARLARI and not any(p.startswith("_") for p in y)
+    )
+
+
+def _rolloutlar(m: dict) -> dict:
+    return {"/".join(y): v for y, v in _yapraklar(m) if y and y[-1] == "rollout"}
+
+
+def acil_fren_mi(manifest: dict, onceki: dict, rollout_verildi: bool) -> bool:
+    """Y176 istisnası: paket kimliği AYNI + her rollout ≤ önceki (yoksa 100) + en az biri DÜŞTÜ + rollout açıkça verildi."""
+    if not rollout_verildi or not onceki:
+        return False
+    if paket_kimligi(manifest) != paket_kimligi(onceki):
+        return False
+    yeni, eski = _rolloutlar(manifest), _rolloutlar(onceki)
+    if any(y not in yeni for y in eski):  # önceki rollout alanı kayboldu = %100'e dönüş → fren DEĞİL
+        return False
+    dustu = False
+    for y, r in yeni.items():
+        o = eski.get(y, 100)
+        if (
+            isinstance(r, bool)
+            or isinstance(o, bool)
+            or not isinstance(r, (int, float))
+            or not isinstance(o, (int, float))
+        ):
+            return False
+        if r > o:
+            return False
+        if r < o:
+            dustu = True
+    return dustu
 
 
 def app_katmani_eksikleri(path: Path, plat: str) -> list[str]:
@@ -731,6 +867,29 @@ def main() -> int:
 
     # (D4.32: buradaki "base.zip == base-app + base-deps" İÇERİK SAĞLAMASI kaldırıldı — Windows tek-parçası 1.9.48'den beri
     # yayınlanmaz ve manifeste girmez; eşitlik yalnız `make_base_zip.py --monolith` koşusunda doğrulanır.)
+
+    # Y176: yayın dizinine yazım Y30 yeşil-süit damgası ister (acil fren HARİÇ) — damga denetimi YAZMADAN ÖNCE.
+    if yayin_dizinine_mi(out_path):
+        if acil_fren_mi(manifest, prev, args.rollout is not None or args.launcher_rollout is not None):
+            print(
+                "[ACIL FREN] Y176 istisnasi: paket kimligi ONCEKI manifestle AYNI ve yalniz rollout DUSURULUYOR -> Y30 "
+                "yesil-suit damgasi ARANMADAN yaziliyor. Bu bir GERI CEKMEDIR; yeni paket yayinlamak icin tam suit sart.",
+                file=sys.stderr,
+            )
+        else:
+            _damga = damga_hatasi(KOK_DIZINI, time.time())
+            if _damga:
+                print(
+                    f"[HATA] Y30 yesil-suit damgasi gecersiz: {_damga} - yayin dizinine manifest YAZILMADI (Y176).",
+                    file=sys.stderr,
+                )
+                print(
+                    "  Cozum: `pwsh -File scripts\\yayin_oncesi_suit.ps1` (TAM kip, kancasiz) bu HEAD'de gecsin ya da\n"
+                    "  `pwsh -File scripts\\katmanli_yayin_hazirla.ps1 ...` kullanin (suiti kendisi kosar). Acil geri cekme icin\n"
+                    "  yalniz --rollout / --launcher-rollout DUSURUN (paketler ayni kalsin) - damga istenmez.",
+                    file=sys.stderr,
+                )
+                return 1
 
     out_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
