@@ -365,6 +365,19 @@ pub fn guncelleme_kapisi_backendi(install_root: &Path, varsayilan_port: u16) -> 
     probe_pemf_backend(varsayilan_port).then_some(varsayilan_port)
 }
 
+/// Tracked backend YOKKEN (orphan söküm) ACİL DURDUR hedefleri (LN L6 · İG-8.27). Eskiden yalnız `backend.port` okunuyordu;
+/// dosya YOK / bayatken varsayılan portta çalışan backend `kill_stray_backends` ile ADLA öldürülüyor ama STOP almıyordu. Artık
+/// `backend.port` (bugünkü gibi, yoklamasız) + varsayılan porttaki KİMLİĞİ DOĞRULANMIŞ PEMF backend'i. Gönderim yalnız ARTAR
+/// (Ö.4-Y8). Varsayılan portta dinleyen yoksa kimlik yoklaması yapılmaz (kesin-ölü denetimi ≤ 400 ms — söküm gecikmez).
+/// `varsayilan_port` testte enjekte edilir (8000'e istek YOK).
+pub fn orphan_durdurma_hedefleri(install_root: &Path, varsayilan_port: u16) -> Vec<u16> {
+    let mut v: Vec<u16> = read_backend_port(install_root).into_iter().collect();
+    if !v.contains(&varsayilan_port) && !backend_is_definitely_gone(varsayilan_port) && probe_pemf_backend(varsayilan_port) {
+        v.push(varsayilan_port);
+    }
+    v
+}
+
 pub fn app_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}/")
 }
@@ -1740,6 +1753,33 @@ mod tests {
         std::fs::write(tmp.path().join("backend.port"), kapali.to_string()).unwrap();
         assert_eq!(guncelleme_kapisi_backendi(tmp.path(), kapali), None, "kesin ölü backend 'var' sayıldı");
         drop(sessiz);
+    }
+
+    /// LN L6 · İG-8.27: tracked backend yokken port dosyası YOK / bayatsa varsayılan portta çalışan PEMF backend'i de STOP hedefidir
+    /// (`kill_stray_backends` onu ADLA öldürür); varsayılanda PEMF olmayan servis ya da dinleyen yoksa hedef değil (dinleyen yokken
+    /// söküm gecikmez); port dosyası bugünkü gibi yoklamasız hedeftir; aynı port iki kez sayılmaz.
+    #[test]
+    fn KRITIK_L6_IG827_orphan_STOP_hedefi_port_dosyasi_YOKKEN_varsayilan_backend() {
+        let pemf_govde = r#"{"service":"PEMF-Vet","status":"ok"}"#;
+        let kapali = {
+            let l = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+            l.local_addr().unwrap().port()
+        };
+        let bos = tempfile::tempdir().unwrap();
+        let (pemf, _r1) = sahte_backend(vec![Some((200, pemf_govde))]);
+        assert_eq!(orphan_durdurma_hedefleri(bos.path(), pemf), vec![pemf], "port dosyası yokken varsayılan backend STOP almıyor");
+        let bayat = tempfile::tempdir().unwrap();
+        std::fs::write(bayat.path().join("backend.port"), kapali.to_string()).unwrap();
+        let (pemf2, _r2) = sahte_backend(vec![Some((200, pemf_govde))]);
+        assert_eq!(orphan_durdurma_hedefleri(bayat.path(), pemf2), vec![kapali, pemf2], "bayat port dosyasında varsayılan atlandı");
+        let (yabanci, _r3) = sahte_backend(vec![Some((200, r#"{"status":"ok"}"#))]);
+        assert!(orphan_durdurma_hedefleri(bos.path(), yabanci).is_empty(), "PEMF olmayan servise STOP hedefi");
+        let t0 = Instant::now();
+        assert!(orphan_durdurma_hedefleri(bos.path(), kapali).is_empty());
+        assert!(t0.elapsed() < Duration::from_millis(1500), "dinleyen yokken söküm gecikti: {:?}", t0.elapsed());
+        let ayni = tempfile::tempdir().unwrap();
+        std::fs::write(ayni.path().join("backend.port"), kapali.to_string()).unwrap();
+        assert_eq!(orphan_durdurma_hedefleri(ayni.path(), kapali), vec![kapali]);
     }
 
     /// LN L5 · Y71: kapanışta yalnız KENDİ kökümüzdeki mosquitto seçilir — sahadaki eski kurulumun servisi (`C:\Program Files\mosquitto`),

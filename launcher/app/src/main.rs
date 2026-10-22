@@ -131,12 +131,12 @@ fn stop_backend_for_teardown(
     // 2) ORPHAN süreçler (önceki kurulum/instance): yeniden-kurulumda `mosquitto.exe`/backend
     //    runtime/ dosyalarını KİLİTLER → extract "os error 32". Bu yüzden sistem-genelinde durdur.
     //    Tracked yoksa önce backend.port'tan E-stop (bobinleri güvene al), sonra zorla kapat.
+    //    LN L6 · İG-8.27: port dosyası YOK / bayatken varsayılan portta çalışan (kimliği doğrulanmış) backend de STOP alır —
+    //    `kill_stray_backends` onu ADLA öldürür; eskiden STOP'suzdu.
     if !had_tracked {
-        if let Ok(txt) = std::fs::read_to_string(root.join("backend.port")) {
-            if let Ok(port) = txt.trim().parse::<u16>() {
-                backend::safe_stop_coils(port);
-                yakma_bitene_kadar_bekle(port); // LN L3 · Y82
-            }
+        for port in backend::orphan_durdurma_hedefleri(root, install::DEFAULT_PORT) {
+            backend::safe_stop_coils(port);
+            yakma_bitene_kadar_bekle(port); // LN L3 · Y82
         }
     }
     backend::kill_stray_backends(root); // LN L5: mosquitto yalnız bu kökten (Y71)
@@ -2873,6 +2873,22 @@ mod tests {
         let dy = jg.find("son_oturumu_yakala(").expect("job son-yakalama YOK (F5)");
         let dk = jg.find(".kill()").expect("job kill yok");
         assert!(de < dy && dy < dk, "Destroyed job sırası bozuk (E-stop→yakala→kill)");
+    }
+
+    /// LN L6 · İG-8.27: orphan söküm dalı STOP hedeflerini `orphan_durdurma_hedefleri`'nden (port dosyası + varsayılan porttaki
+    /// kimlikli backend) alır, her hedefe STOP kill'den ÖNCE; eski tek-dosya okuması (dosya yokken STOP'suz kill) kalmadı.
+    #[test]
+    fn KRITIK_L6_IG827_orphan_dali_varsayilan_porttaki_backendi_de_DURDURUR() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n");
+        let i = soy.find("fn stop_backend_for_teardown").expect("teardown fn yok");
+        let g = &soy[i..];
+        let o = g.find("if !had_tracked").expect("orphan dalı yok");
+        let ob = &g[o..g.find("backend::kill_stray_backends(root)").expect("kill_stray yok")];
+        let dongu = ob
+            .find("for port in backend::orphan_durdurma_hedefleri(root, install::DEFAULT_PORT) {")
+            .expect("orphan dalı varsayılan porttaki backend'i hedeflemiyor (İG-8.27)");
+        assert!(ob[dongu..].find("backend::safe_stop_coils(port);").is_some(), "hedeflere STOP yok");
+        assert!(!ob.contains("read_to_string(root.join(\"backend.port\"))"), "eski tek-dosya okuması duruyor");
     }
 
     /// LN L3 · Y82 (sahip): kapanışta sıra STOP → yakmanın bitmesini BEKLE → son oturum yakalama → kill (tracked teardown, orphan dalı
