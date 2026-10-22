@@ -57,6 +57,11 @@ updates:
       - dependency-name: "torch"
       - dependency-name: "torchvision"
       - dependency-name: "onnx"
+      # YLI-A2.4: pip:"/" ile AYNI koordinasyon — imaj torch 2.1.2+cpu + numpy 1.26.4 taşır (torch 2.1.2 numpy<2 ister).
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "ultralytics"
+        update-types: ["version-update:semver-major"]
 
   # GPU inference mikroservisi (:8100) — kendi web yığını var.
   - package-ecosystem: "pip"
@@ -70,6 +75,11 @@ updates:
       - dependency-name: "torch"
       - dependency-name: "torchvision"
       - dependency-name: "onnx"
+      # YLI-A2.4: onnx 1.15.0 + numpy 1.26.4 (numpy 2 ABI'si onnx 1.15 tekerleğini kırar) — pip:"/" ile aynı koordinasyon.
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "ultralytics"
+        update-types: ["version-update:semver-major"]
 
   # ── MONOREPO (2026-08-18): yukarıdaki blokta yazılı ÖN KOŞUL SAĞLANDI ─────────────────
   # O not şöyle diyordu: "npm ağaçları EKLENEMEDİ — çünkü sürüm kontrolünde DEĞİLLER …
