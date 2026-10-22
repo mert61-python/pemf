@@ -5818,7 +5818,56 @@
      ]
     },
     {
-     "metin": "yakıldı ama kart hedef sürümü bildirmedi: kart {{deger1}}, hedef {{hedef_surum}} — yayınlanan ikilinin banner sürümü uyum varlığındaki sürümle UYUŞMUYOR (yayın hatası); sonraki açılışta yeniden denenir",
+     "metin": "firmware_yedek dizini çözülemedi",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz",
+     "turler": [
+      "istisna"
+     ]
+    },
+    {
+     "metin": "sürüm tutmadı — elle bakın: bu ikili (SHA {{deger1}}…) bu cihazda {{deger2}} tarihinde bir kez otomatik yakıldı; kart hedef {{deger3}} yerine {{deger4}} bildirdi (Y80) — aynı ikili bir daha OTOMATİK yakılmaz; yeni bir yayın (başka SHA) ya da tezgâhta elle yakma gerekir",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz",
+     "turler": [
+      "sabit"
+     ]
+    },
+    {
+     "metin": "önceki yakma yarıda kalmış görünüyordu; kart hedef sürümü ({{hedef}}) bildiriyor",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz",
+     "turler": [
+      "sozluk?"
+     ]
+    },
+    {
+     "metin": "STM bağlı değil (Y76: bu kipte asla yakılmaz)",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz",
+     "turler": [
+      "sabit"
+     ]
+    },
+    {
+     "metin": "otomatik yakma KAPALI (Y1)",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz",
+     "turler": [
+      "sabit"
+     ]
+    },
+    {
+     "metin": "önceki firmware yakması YARIDA KALDI (hedef {{deger1}}, kayıt {{deger2}}); otomatik geri dönüş YAPILMADI — {{neden}}. ST-Link ile ELLE kurtarın: yedek {{deger4}} → 0x08000000",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz",
+     "turler": [
+      "sabit"
+     ]
+    },
+    {
+     "metin": "(zaman bilinmiyor)",
+     "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "yakıldı ama kart hedef sürümü bildirmedi: kart {{deger1}}, hedef {{hedef_surum}} — yayınlanan ikilinin banner sürümü uyum varlığındaki sürümle UYUŞMUYOR (yayın hatası); aynı ikili bu cihazda bir daha OTOMATİK yakılmaz (Y80)",
      "gerekce": "firmware güncelleme / uyum SERVİSİ çıktısı: günlük + destek alanı (`/api/health` · destek paketi); oto-firmware KAPALI (sahip kararı), operatör arayüzüne ulaşmaz",
      "turler": [
       "sabit"
@@ -6764,6 +6813,90 @@
     },
     {
      "metin": "yakıldı; geri okuma bayt bayt AYNI; kart kendini doğruladı (Y68 kimlik beyanı / paket kabulü)",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "yarım yakma kaydı: YAZILAMADI ({{__name__}})",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "'yarım yakma' kaydı yazılamadı ({{__name__}}: {{e}}) — yarıda kalan yakma açılışta tanınamazdı; YAKILMADI",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "yarım yakma kaydı: yazıldı",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "geri dönülecek yedek yok: {{yedek}}",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "yedek geri yazma:",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "yazıldı (-v)",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "yedek karta GERİ YAZILAMADI — ST-Link ile ELLE kurtarın: yedek {{yedek}} → {{YAKMA_ADRESI}}. Yakıcı: {{deger3}}",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "kurtarma_okuma_{{deger1}}.bin",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "yedek yazıldı ama geri okuma TUTMADI ({{g_bilgi}}) — kartı sahaya TAKMAYIN; ST-Link ile ELLE kurtarın: yedek {{yedek}} → {{YAKMA_ADRESI}}",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "kurtarma banner: {{deger1}} → uyum={{uyumlu}} ({{sebep}})",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "yedek geri yazıldı (geri okuma AYNI) ama kart KİMLİĞİNİ söylemedi ({{sebep}}) — kartı yeniden başlatıp açılış satırını kontrol edin; açılmıyorsa ST-Link ile yedek {{yedek}} → {{YAKMA_ADRESI}}",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "yarım kalan yakmadan sonra önceki firmware geri yazıldı ve doğrulandı (kart açılışta: {{ham}})",
      "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
      "turler": [
       "cagri"

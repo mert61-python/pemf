@@ -4157,8 +4157,8 @@
   {
    "dosya": "apps/backend/servers/firmware_manager.py",
    "satir": 377,
-   "metin": "yakıldı ama kart hedef sürümü bildirmedi: kart {{deger1}}, hedef {{hedef_surum}} — yayınlanan ikilinin banner sürümü uyum varlığındaki sürümle UYUŞMUYOR (yayın hatası); sonraki açılışta yeniden denenir",
-   "ham": "yakıldı ama kart hedef sürümü bildirmedi: kart {{deger1}}, hedef {{hedef_surum}} — yayınlanan ikilinin banner sürümü uyum varlığındaki sürümle UYUŞMUYOR (yayın hatası); sonraki açılışta yeniden denenir"
+   "metin": "yakıldı ama kart hedef sürümü bildirmedi: kart {{deger1}}, hedef {{hedef_surum}} — yayınlanan ikilinin banner sürümü uyum varlığındaki sürümle UYUŞMUYOR (yayın hatası); aynı ikili bu cihazda bir daha OTOMATİK yakılmaz (Y80)",
+   "ham": "yakıldı ama kart hedef sürümü bildirmedi: kart {{deger1}}, hedef {{hedef_surum}} — yayınlanan ikilinin banner sürümü uyum varlığındaki sürümle UYUŞMUYOR (yayın hatası); aynı ikili bu cihazda bir daha OTOMATİK yakılmaz (Y80)"
   },
   {
    "dosya": "apps/backend/servers/live_state.py",

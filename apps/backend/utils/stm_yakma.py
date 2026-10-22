@@ -86,6 +86,13 @@ GERI_DONUS_DOGRULANAMADI = 12
 #: TD1-e (tezgâh 2026-10-14): yakmadan sonra BAĞIMSIZ flash geri okuması yazılan ikiliyle bayt bayt AYNI DEĞİL → yazma tutmadı;
 #: otomatik geri dönüş yapıldı (geri dönüş de başarısızsa GERI_DONUS_BASARISIZ / GERI_DONUS_DOGRULANAMADI döner).
 GERI_OKUMA_TUTMADI = 13
+#: LN L1 · Y82 (sahip): yakmadan ÖNCE "yarım yakma" kaydı yazılamadı → YAKILMADI (yarıda kalan bir yakma açılışta tanınamaz ve
+#: yedekten geri dönülemezdi; geri dönüşü olmayan işlem kayıtsız başlatılmaz — 4 numaralı değişmezin aynısı).
+YARIM_KAYIT_YAZILAMADI = 14
+#: LN L1 · Y80: bu kodlar KARTA YAZMADAN önce dönülen sonuçlardır (ön kontrol / yakıcı yok / yedek yok / kayıt yok) — "deneme" sayılmaz.
+YAZMADAN_ONCE_KODLARI = frozenset(
+    {BIN_YOK, BUTUNLUK, DONANIM_MESGUL, YAKICI_YOK, YEDEK_ALINAMADI, YARIM_KAYIT_YAZILAMADI}
+)
 
 
 @dataclass(frozen=True)
@@ -344,13 +351,16 @@ def yakma_akisi(
     banner_kaynagi: BannerKaynagi | None = None,
     yedek_dizin: Path | None = None,
     kuru: bool = False,
+    yakma_oncesi: Callable[[Path], None] | None = None,
 ) -> Sonuc:
     """Tam akış. Yan etkiler YALNIZ burada; karar mantığı yukarıdaki parçalarda.
 
     `guvenlik_kontrolu`: verilirse seans/bobin ön kontrolü BUNUNLA yapılır (backend'in kendi yakması — süreç içi durum,
     D1.108 + D1.111); verilmezse `backend` adresine HTTP ön kontrolü (CLI). İstisna fırlatırsa yakılmaz (fail-closed).
     `banner_kaynagi`: verilirse yakma sonrası kimlik portu BIRAKMADAN o kaynaktan okunur (backend — D1.114); verilmezse
-    port açılıp dinlenir (CLI; port açılamazsa PORT_MESGUL)."""
+    port açılıp dinlenir (CLI; port açılamazsa PORT_MESGUL).
+    `yakma_oncesi` (LN L1 · Y82): verilirse yedek alındıktan SONRA, karta ilk yazımdan hemen ÖNCE yedeğin yoluyla çağrılır (backend'in
+    "yarım yakma" kaydı); istisna fırlatırsa YAKILMAZ (`YARIM_KAYIT_YAZILAMADI`)."""
     adimlar: list[str] = []
     ikili = Path(ikili).resolve()
     if not ikili.is_file():
@@ -391,6 +401,20 @@ def yakma_akisi(
             sha256=ozet,
             adimlar=adimlar,
         )
+
+    if yakma_oncesi is not None:
+        try:
+            yakma_oncesi(yedek)
+        except Exception as e:  # noqa: BLE001 — kayıtsız yakma YOK (Y82)
+            adimlar.append(f"yarım yakma kaydı: YAZILAMADI ({type(e).__name__})")
+            return Sonuc(
+                YARIM_KAYIT_YAZILAMADI,
+                f"'yarım yakma' kaydı yazılamadı ({type(e).__name__}: {e}) — yarıda kalan yakma açılışta tanınamazdı; YAKILMADI",
+                sha256=ozet,
+                yedek=str(yedek),
+                adimlar=adimlar,
+            )
+        adimlar.append("yarım yakma kaydı: yazıldı")
 
     # D1.114: işaret yakmadan ÖNCE — `-rst` sonrası banner `yak` dönmeden gelebilir.
     isaret = banner_kaynagi.isaret() if banner_kaynagi is not None else 0
@@ -493,6 +517,82 @@ def yakma_akisi(
         "yakıldı; geri okuma bayt bayt AYNI; kart kendini doğruladı (Y68 kimlik beyanı / paket kabulü)",
         banner=ham,
         sha256=ozet,
+        yedek=str(yedek),
+        adimlar=adimlar,
+    )
+
+
+def yedekten_geri_don(
+    yedek: Path,
+    *,
+    guvenlik_kontrolu: Callable[[], tuple[bool, str]],
+    banner_kaynagi: BannerKaynagi | None = None,
+    kok: Path | None = None,
+    port: str | None = None,
+) -> Sonuc:
+    """LN L1 · Y82 (sahip) — YARIDA KALAN yakmanın açılış kurtarması: önceki firmware'in YEDEĞİNİ karta geri yazar.
+
+    Sıra `yakma_akisi`nın geri dönüşüyle AYNI (D1.112 · SGI-3.4): ön kontrol (seans / bobin — fail-closed) → yakıcı → yaz → BAĞIMSIZ geri
+    okuma (yedekle bayt bayt AYNI olmadan "geri dönüldü" denmez) → yeniden başlat → kartın kimliği. Sonuç: `TAMAM` (geri dönüldü ve
+    doğrulandı) · `GERI_DONUS_BASARISIZ` (yazılamadı / geri okuma tutmadı) · `GERI_DONUS_DOGRULANAMADI` (kart kimliğini söylemedi) ·
+    `DONANIM_MESGUL` / `YAKICI_YOK` / `BIN_YOK` (karta dokunulmadı)."""
+    adimlar: list[str] = []
+    yedek = Path(yedek)
+    if not yedek.is_file() or yedek.stat().st_size == 0:
+        return Sonuc(BIN_YOK, f"geri dönülecek yedek yok: {yedek}", adimlar=adimlar)
+    try:
+        guvenli, aciklama = guvenlik_kontrolu()
+    except Exception as e:  # noqa: BLE001 — doğrulanamayan durumda yakılmaz
+        guvenli, aciklama = False, f"seans/bobin durumu DOĞRULANAMADI ({type(e).__name__}) — yakılmaz"
+    adimlar.append(f"donanım: {aciklama}")
+    if not guvenli:
+        return Sonuc(DONANIM_MESGUL, aciklama, yedek=str(yedek), adimlar=adimlar)
+    cli = programmer_cli()
+    if cli is None:
+        return Sonuc(
+            YAKICI_YOK, "STM32_Programmer_CLI bulunamadı (CubeIDE kurulu mu?)", yedek=str(yedek), adimlar=adimlar
+        )
+    kok = Path(kok or yedek.parent)
+    isaret = banner_kaynagi.isaret() if banner_kaynagi is not None else 0
+    tamam, cikti = yak(cli, yedek)
+    adimlar.append("yedek geri yazma: " + ("yazıldı (-v)" if tamam else "YAKICI HATA"))
+    if not tamam:
+        return Sonuc(
+            GERI_DONUS_BASARISIZ,
+            f"yedek karta GERİ YAZILAMADI — ST-Link ile ELLE kurtarın: yedek {yedek} → {YAKMA_ADRESI}. Yakıcı: {cikti[-300:]}",
+            yedek=str(yedek),
+            adimlar=adimlar,
+        )
+    g_ok, g_bilgi = geri_oku(cli, yedek, kok / f"kurtarma_okuma_{time.strftime('%Y%m%d_%H%M%S')}.bin")
+    adimlar.append("kurtarma " + g_bilgi)
+    r_ok, r_bilgi = baslat(cli)
+    adimlar.append("yeniden başlatma: " + ("tamam (-rst)" if r_ok else f"YAPILAMADI ({r_bilgi})"))
+    if not g_ok:
+        return Sonuc(
+            GERI_DONUS_BASARISIZ,
+            f"yedek yazıldı ama geri okuma TUTMADI ({g_bilgi}) — kartı sahaya TAKMAYIN; ST-Link ile ELLE kurtarın: yedek {yedek} → "
+            f"{YAKMA_ADRESI}",
+            yedek=str(yedek),
+            adimlar=adimlar,
+        )
+    if banner_kaynagi is not None:
+        uyumlu, sebep, ham = _banner_kaynaktan(banner_kaynagi, isaret)
+    else:
+        time.sleep(2.0)
+        uyumlu, sebep, ham = banner_dogrula(port)
+    adimlar.append(f"kurtarma banner: {ham or '(okunamadı)'} → uyum={uyumlu} ({sebep})")
+    if not ham:
+        return Sonuc(
+            GERI_DONUS_DOGRULANAMADI,
+            f"yedek geri yazıldı (geri okuma AYNI) ama kart KİMLİĞİNİ söylemedi ({sebep}) — kartı yeniden başlatıp açılış satırını kontrol "
+            f"edin; açılmıyorsa ST-Link ile yedek {yedek} → {YAKMA_ADRESI}",
+            yedek=str(yedek),
+            adimlar=adimlar,
+        )
+    return Sonuc(
+        TAMAM,
+        f"yarım kalan yakmadan sonra önceki firmware geri yazıldı ve doğrulandı (kart açılışta: {ham})",
+        banner=ham,
         yedek=str(yedek),
         adimlar=adimlar,
     )

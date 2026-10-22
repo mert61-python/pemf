@@ -39,7 +39,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
+import time
 import urllib.error
 from pathlib import Path
 
@@ -68,19 +70,86 @@ _durum: dict = {
     # "client geri alınmalı" sinyali (KESİN uyumsuz + STM bağlı + ileri gidilemiyor). Geri almayı LAUNCHER yapar.
     "uyum": None,
     "istemciGeriAlinmali": False,
+    # LN L1 · Y82 (yalnız-ek): açılışta bulunan "yarım yakma" kaydının akıbeti — None (kayıt yok) ya da
+    # {"sonuc": "tamamlanmis" | "geri_donuldu" | "elle" | "basarisiz", "ayrinti": "…"}.
+    "yarimYakma": None,
 }
 
 
+def _yakiliyor_mu() -> bool:
+    """LN L1 · Y82: oto-firmware YAKMA PENCERESİ şu an açık mı (MCU yeniden programlanıyor)? Launcher kapanışta bunu görürse uyarır ve
+    yakmanın bitmesini bekler; yakıcıyı (`STM32_Programmer_CLI`) öldürmez."""
+    try:
+        from utils import firmware_yakma_penceresi as pencere
+
+        return pencere.acik_mi()
+    except Exception:  # noqa: BLE001 — sağlık ucu ASLA düşmez
+        return False
+
+
 def durum() -> dict:
-    """`/api/health` ve destek paketi için anlık görüntü. ⚠️ Sır/DEĞER taşımaz."""
+    """`/api/health` ve destek paketi için anlık görüntü. ⚠️ Sır/DEĞER taşımaz.
+
+    LN L1 · Y82: `yakiliyor` (yalnız-ek) OKUMA ANINDA pencereden türetilir — saklanan durum yakma bittiğinde bayatlamasın."""
     with _durum_kilidi:
-        return dict(_durum)
+        d = dict(_durum)
+    d["yakiliyor"] = _yakiliyor_mu()
+    return d
 
 
 def _durum_yaz(**alanlar) -> dict:
     with _durum_kilidi:
         _durum.update(alanlar)
-        return dict(_durum)
+    return durum()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# KALICI KAYITLAR (veri kökü `firmware_yedek/`) — LN L1 · Y80 / Y82
+# ══════════════════════════════════════════════════════════════════════════════
+#: Y80: bu cihazda otomatik denenmiş SON ikilinin kaydı (SHA, hedef, kartın bildirdiği, zaman, sonuç kodu) — aynı SHA bir daha OTOMATİK
+#: yakılmaz.
+SON_YAKMA_DOSYASI = "son_yakma.json"
+#: Y82: yakmadan ÖNCE yazılır, doğrulama bittikten SONRA silinir — açılışta görülürse yakma YARIDA kalmıştır.
+YARIM_YAKMA_DOSYASI = "yarim_yakma.json"
+#: Y80: ilk yakmanın yedeğinin ADI (asıl saha firmware'i) — tutma sınırıyla budanmaz.
+ILK_YEDEK_DOSYASI = "ilk_yedek.txt"
+
+
+def _kayit_oku(kok: Path | None, ad: str) -> dict | None:
+    if kok is None:
+        return None
+    try:
+        veri = json.loads((Path(kok) / ad).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except Exception as e:  # noqa: BLE001 — bozuk kayıt "kayıt var" sayılır (aşağıda); içeriği okunamaz
+        logger.warning("firmware kaydı okunamadı (%s: %s) — bozuk kayıt", ad, type(e).__name__)
+        return {"bozuk": True}
+    return veri if isinstance(veri, dict) else {"bozuk": True}
+
+
+def _kayit_yaz(kok: Path | None, ad: str, veri: dict) -> None:
+    """Atomik yazım (geçici dosya + `os.replace`). Hata FIRLATIR — çağıran karar verir (Y82: yarım kayıt yazılamazsa yakılmaz)."""
+    if kok is None:
+        raise OSError("firmware_yedek dizini çözülemedi")
+    hedef = Path(kok) / ad
+    hedef.parent.mkdir(parents=True, exist_ok=True)
+    gecici = hedef.with_name(hedef.name + f".{os.getpid()}.tmp")
+    gecici.write_text(json.dumps(veri, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(gecici, hedef)
+
+
+def _kayit_sil(kok: Path | None, ad: str) -> None:
+    if kok is None:
+        return
+    try:
+        (Path(kok) / ad).unlink(missing_ok=True)
+    except OSError as e:
+        logger.warning("firmware kaydı silinemedi (%s): %s", ad, e)
+
+
+def _zaman() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S%z")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -208,11 +277,35 @@ def _yedek_dizini() -> Path | None:
         return None
 
 
+def _ilk_yedek_adi(kok: Path, yedekler: list[Path]) -> str:
+    """Y80 (sahip): İLK otomatik yakmanın yedeği = cihazın asıl saha firmware'i. Adı `ilk_yedek.txt`'te tutulur (saat geri alınsa da
+    sıralamaya bağlı kalmaz); kayıt yoksa o an var olan EN ESKİ yedek ilktir ve kaydedilir."""
+    try:
+        ad = (kok / ILK_YEDEK_DOSYASI).read_text(encoding="utf-8").strip()
+        if ad:
+            return ad
+    except OSError:
+        pass
+    if not yedekler:
+        return ""
+    ad = yedekler[0].name
+    try:
+        (kok / ILK_YEDEK_DOSYASI).write_text(ad, encoding="utf-8")
+    except OSError as e:
+        logger.warning("ilk firmware yedeğinin adı kaydedilemedi: %s", e)
+    return ad
+
+
 def _yedekleri_buda(kok: Path | None, tut: int = FIRMWARE_YEDEK_TUT) -> None:
-    """En yeni `tut` yedek kalır (ad = zaman damgası → kronolojik). Silinemeyen yedek yalnız günlüğe yazılır."""
+    """En yeni `tut` yedek kalır (ad = zaman damgası → kronolojik) + Y80: İLK yakmanın yedeği HİÇ budanmaz (5 açılışta asıl saha
+    firmware'inin yedeği kayboluyordu — S-İH1). Silinemeyen yedek yalnız günlüğe yazılır."""
     if kok is None or tut < 1 or not kok.is_dir():
         return
-    for eski in sorted(kok.glob("pemf_yedek_*.bin"))[:-tut]:
+    yedekler = sorted(kok.glob("pemf_yedek_*.bin"))
+    ilk = _ilk_yedek_adi(kok, yedekler)
+    for eski in yedekler[:-tut]:
+        if eski.name == ilk:
+            continue
         try:
             eski.unlink()
         except OSError as e:
@@ -258,6 +351,8 @@ def acilis_denetimi(
     ⚠️ HİÇBİR DALI SESSİZ DEĞİL: internet yok / STM bağlı değil / kural yok / uyumlu —
     hepsi gerekçesiyle kaydedilir. "Atlandı" ile "yapıldı" ayırt edilebilmeli.
     """
+    # LN L1 · Y82: önceki süreçte YARIDA KALAN yakma (kayıt duruyor) — ağdan ÖNCE, planlamadan ÖNCE ele alınır.
+    _durum_yaz(yarimYakma=_yarim_yakmayi_ele_al(firmware_surum, stm_bagli, uygula, banner_kaynagi))
     client = um.get_current_version()
     manifest = manifest_oku()
     if manifest is None:
@@ -300,7 +395,14 @@ def acilis_denetimi(
         internet=True,
         stm_bagli=stm_bagli,
     )
-    istemci_geri = bool(uyum is False and stm_bagli and plan.eylem == su.BEKLE)
+    # Y80 (sahip): bu SHA bu cihazda bir kez OTOMATİK denendiyse (kayıt `son_yakma.json`) bir daha yakılmaz — "ileri" yol kapalı.
+    y80_kaydi = _ayni_sha_denendi_mi(girdi) if (plan.eylem == su.FIRMWARE_GUNCELLE and uygula) else None
+    # Y81 (S-İH2): ileri gidilemeyen her durumda (plan BEKLE · otomatik yakma KAPALI · Y80 engeli) kesin uyumsuz + STM bağlı çift için
+    # launcher'a geri alma sinyali; bayrak açık ve yakılabiliyorsa önce ileri gidilir (H-10.1).
+    ileri_kapali = plan.eylem == su.BEKLE or (
+        plan.eylem == su.FIRMWARE_GUNCELLE and (not uygula or y80_kaydi is not None)
+    )
+    istemci_geri = bool(uyum is False and stm_bagli and ileri_kapali)
     gerekce = plan.gerekce
     if istemci_geri:
         gerekce += (
@@ -330,8 +432,96 @@ def acilis_denetimi(
     if not uygula or plan.eylem != su.FIRMWARE_GUNCELLE:
         logger.info("donanım güncellemesi: %s — %s", plan.eylem, gerekce)
         return durum()
+    if y80_kaydi is not None:
+        hata = (
+            f"sürüm tutmadı — elle bakın: bu ikili (SHA {str(y80_kaydi.get('sha256', ''))[:16]}…) bu cihazda "
+            f"{y80_kaydi.get('zaman') or '(zaman bilinmiyor)'} tarihinde bir kez otomatik yakıldı; kart hedef "
+            f"{y80_kaydi.get('hedef') or plan.hedef_surum} yerine {y80_kaydi.get('kartin_bildirdigi') or '(okunamadı)'} bildirdi "
+            "(Y80) — aynı ikili bir daha OTOMATİK yakılmaz; yeni bir yayın (başka SHA) ya da tezgâhta elle yakma gerekir"
+        )
+        logger.error("donanım güncellemesi ATLANDI (Y80): %s", hata)
+        return _durum_yaz(uygulandi=False, hata=hata)
 
     return _firmware_uygula(girdi, plan, banner_kaynagi)
+
+
+def _ayni_sha_denendi_mi(girdi: dict) -> dict | None:
+    """Y80: `son_yakma.json` bu manifest ikilisinin SHA'sını taşıyorsa kaydı döndür (bozuk kayıt da "denendi" sayılır — fail-closed:
+    neyin denendiği okunamıyorsa aynı ikiliyi kör yeniden yakmak yerine elle bakılır)."""
+    kayit = _kayit_oku(_yedek_dizini(), SON_YAKMA_DOSYASI)
+    if not kayit:
+        return None
+    if kayit.get("bozuk"):
+        return kayit
+    sha = str(girdi.get("sha256", "")).strip().lower()
+    return kayit if sha and str(kayit.get("sha256", "")).strip().lower() == sha else None
+
+
+def _yarim_yakmayi_ele_al(firmware_surum: str, stm_bagli: bool, uygula: bool, banner_kaynagi) -> dict | None:
+    """LN L1 · Y82 (sahip): `yarim_yakma.json` duruyorsa önceki süreç yakma sırasında öldü (launcher kill / elektrik).
+
+    * Kart bağlı ve HEDEF sürümü bildiriyor → yakma tamamlanmış; kayıt silinir (`tamamlanmis`).
+    * Kart bağlı, hedefi bildirmiyor ve otomatik yakma AÇIK → yedekten eski firmware'e GERİ DÖNÜLÜR (`geri_donuldu` / `basarisiz`);
+      deneme Y80 kaydına da işlenir (aynı SHA bir daha otomatik yakılmaz).
+    * Otomatik yakma KAPALI (Y1 — kill-switch) ya da STM bağlı değil (Y76 — "asla yakmaz") → karta DOKUNULMAZ, kayıt KALIR (`elle`);
+      ayrıntı yedeğin yolunu söyler (ST-Link ile elle kurtarma)."""
+    kok = _yedek_dizini()
+    kayit = _kayit_oku(kok, YARIM_YAKMA_DOSYASI)
+    if not kayit:
+        return None
+    hedef = str(kayit.get("hedef", ""))
+    yedek = str(kayit.get("yedek", ""))
+    if stm_bagli and hedef and _ayni_surum(firmware_surum, hedef):
+        _kayit_sil(kok, YARIM_YAKMA_DOSYASI)
+        logger.warning(
+            "yarım yakma kaydı bulundu ama kart hedef sürümü (%s) bildiriyor — yakma tamamlanmış, kayıt silindi", hedef
+        )
+        return {
+            "sonuc": "tamamlanmis",
+            "ayrinti": f"önceki yakma yarıda kalmış görünüyordu; kart hedef sürümü ({hedef}) bildiriyor",
+        }
+    if not stm_bagli or not uygula:
+        neden = "STM bağlı değil (Y76: bu kipte asla yakılmaz)" if not stm_bagli else "otomatik yakma KAPALI (Y1)"
+        ayrinti = (
+            f"önceki firmware yakması YARIDA KALDI (hedef {hedef or '?'}, kayıt {_zaman_kaydi(kayit)}); otomatik geri dönüş YAPILMADI — "
+            f"{neden}. ST-Link ile ELLE kurtarın: yedek {yedek or '(yok)'} → 0x08000000"
+        )
+        logger.error("yarım yakma kaydı: %s", ayrinti)
+        return {"sonuc": "elle", "ayrinti": ayrinti}
+
+    from utils import firmware_yakma_penceresi as pencere
+    from utils import stm_yakma as sy
+
+    with pencere.ac():
+        sonuc = sy.yedekten_geri_don(
+            Path(yedek), guvenlik_kontrolu=_surec_ici_guvenlik_kontrolu, banner_kaynagi=banner_kaynagi, kok=kok
+        )
+    for adim in sonuc.adimlar:
+        logger.info("firmware kurtarma: %s", adim)
+    if sonuc.kod == sy.TAMAM:
+        _kayit_sil(kok, YARIM_YAKMA_DOSYASI)
+        try:
+            _kayit_yaz(
+                kok,
+                SON_YAKMA_DOSYASI,
+                {
+                    "sha256": kayit.get("sha256", ""),
+                    "hedef": hedef,
+                    "kartin_bildirdigi": firmware_surum,
+                    "zaman": kayit.get("zaman") or _zaman(),
+                    "kod": "yarim_kaldi_geri_donuldu",
+                },
+            )
+        except OSError as e:
+            logger.warning("Y80 kaydı yazılamadı (kurtarma sonrası): %s", e)
+        logger.warning("yarım kalan yakma: önceki firmware geri yazıldı ve doğrulandı (%s)", sonuc.ozet)
+        return {"sonuc": "geri_donuldu", "ayrinti": sonuc.ozet}
+    logger.error("yarım kalan yakma kurtarılamadı [%s]: %s", sonuc.kod, sonuc.ozet)
+    return {"sonuc": "basarisiz", "ayrinti": f"[{sonuc.kod}] {sonuc.ozet}"}
+
+
+def _zaman_kaydi(kayit: dict) -> str:
+    return str(kayit.get("zaman") or "(zaman bilinmiyor)")
 
 
 def _firmware_uygula(girdi: dict, plan: su.Plan, banner_kaynagi=None) -> dict:
@@ -341,7 +531,7 @@ def _firmware_uygula(girdi: dict, plan: su.Plan, banner_kaynagi=None) -> dict:
         return _durum_yaz(uygulandi=False, hata=hata)
 
     from utils import firmware_yakma_penceresi as pencere
-    from utils.stm_yakma import TAMAM, yakma_akisi
+    from utils.stm_yakma import TAMAM, YAZMADAN_ONCE_KODLARI, yakma_akisi
 
     # D1.108 + D1.111: ön kontrol SÜREÇ İÇİ — HTTP değil (bkz. `_surec_ici_guvenlik_kontrolu`).
     # D1.114 (B-4.6): port BIRAKILMAZ — yakma sonrası kimlik çekirdeğin KENDİ okuyucusundan (`banner_kaynagi`). Pencere ön
@@ -349,6 +539,16 @@ def _firmware_uygula(girdi: dict, plan: su.Plan, banner_kaynagi=None) -> dict:
     # kapanır), seans/AI Pro 409, ACİL DURDUR kapılanmaz ama teyidi dürüst (`utils.firmware_yakma_penceresi`).
     # D1.115 (B-4.10): yedek veri kökündeki KALICI `firmware_yedek`e (tutma sınırıyla); indirme dizini HER yolda silinir.
     yedek_kok = _yedek_dizini()
+    sha = str(girdi.get("sha256", "")).strip().lower()
+
+    def _yarim_kaydi_yaz(yedek: Path) -> None:
+        # Y82: karta ilk yazımdan hemen ÖNCE; yazılamazsa `yakma_akisi` YAKMAZ (YARIM_KAYIT_YAZILAMADI).
+        _kayit_yaz(
+            yedek_kok,
+            YARIM_YAKMA_DOSYASI,
+            {"sha256": sha, "hedef": plan.hedef_surum, "yedek": str(yedek), "zaman": _zaman(), "ikili": Path(yol).name},
+        )
+
     try:
         with pencere.ac():
             sonuc = yakma_akisi(
@@ -357,26 +557,51 @@ def _firmware_uygula(girdi: dict, plan: su.Plan, banner_kaynagi=None) -> dict:
                 guvenlik_kontrolu=_surec_ici_guvenlik_kontrolu,
                 banner_kaynagi=banner_kaynagi,
                 yedek_dizin=yedek_kok,
+                yakma_oncesi=_yarim_kaydi_yaz,
             )
     finally:
         _gecici_sil(yol)
+    # Y82: akış DÖNDÜ (yakma + doğrulama / geri dönüş bitti, sonuç ne olursa olsun) → "yarım yakma" kaydı silinir. Süreç akış
+    # ortasında öldüyse buraya gelinmez ve kayıt KALIR — sonraki açılış `_yarim_yakmayi_ele_al` ile kurtarır.
+    _kayit_sil(yedek_kok, YARIM_YAKMA_DOSYASI)
     _yedekleri_buda(yedek_kok)
     for adim in sonuc.adimlar:
         logger.info("firmware: %s", adim)
+
+    kart = _banner_surumu(sonuc.banner) if sonuc.kod == TAMAM else ""
+    hedefe_ulasti = sonuc.kod == TAMAM and _ayni_surum(kart, plan.hedef_surum)
+    if sonuc.kod not in YAZMADAN_ONCE_KODLARI and not hedefe_ulasti:
+        # Y80: karta YAZILDI ama hedef sürüme ulaşılmadı (hedef bildirilmedi / uyumsuz → geri dönüldü / yazma hatası …) → bu SHA
+        # bu cihazda bir daha OTOMATİK yakılmaz (her açılış yeniden yakıp 5 açılışta asıl yedeği budamasın — S-İH1).
+        try:
+            _kayit_yaz(
+                yedek_kok,
+                SON_YAKMA_DOSYASI,
+                {
+                    "sha256": sha,
+                    "hedef": plan.hedef_surum,
+                    "kartin_bildirdigi": kart,
+                    "zaman": _zaman(),
+                    "kod": sonuc.kod,
+                },
+            )
+        except OSError as e:
+            logger.error(
+                "Y80 kaydı (son_yakma.json) YAZILAMADI — aynı ikili sonraki açılışta yeniden denenebilir: %s", e
+            )
 
     if sonuc.kod == TAMAM:
         # ⚠️ H-1.1 (1-H incelemesi): "uygulandı" ve `firmwareSurum` ÖLÇÜLENİ söyler — kartın yakmadan SONRA kendi bastığı
         # banner'ın sürümü. Eskiden planın HEDEF sürümü yazılıyordu: yakılan ikilinin banner'ı hedefi söylemese de (main.c'deki
         # sürüm dizesi artırılmadan yayınlanan ikili) durum "uygulandı, 2.4" diyordu ve sonraki her açılış AYNI ikiliyi
         # YENİDEN yakıyordu (ölçüldü — inceleme raporu, Kapsam 1).
-        kart = _banner_surumu(sonuc.banner)
-        if _ayni_surum(kart, plan.hedef_surum):
+        if hedefe_ulasti:
             logger.info("donanım güncellemesi TAMAM → %s (kart yakmadan sonra %s bildirdi)", plan.hedef_surum, kart)
             return _durum_yaz(uygulandi=True, hata="", firmwareSurum=kart)
         hata = (
             f"yakıldı ama kart hedef sürümü bildirmedi: kart {kart or '(sürüm ayrıştırılamadı)'}, hedef "
             f"{plan.hedef_surum} — yayınlanan ikilinin banner sürümü uyum varlığındaki sürümle UYUŞMUYOR (yayın hatası); "
-            "sonraki açılışta yeniden denenir"
+            "aynı ikili bu cihazda bir daha OTOMATİK yakılmaz (Y80)"
         )
         logger.error("donanım güncellemesi DOĞRULANAMADI: %s", hata)
         return _durum_yaz(uygulandi=False, hata=hata, firmwareSurum=kart)

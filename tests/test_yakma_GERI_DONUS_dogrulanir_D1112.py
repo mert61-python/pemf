@@ -136,6 +136,10 @@ def test_KRITIK_geri_donus_YAKILAMAZSA_ayri_kod_ve_hata_FARKLI(zincir):
     d_ok = dict(_calistir(z, kaynak_ok))
     assert kos_ok == ["yedek", "yak:yeni", "yak:yedek"], kos_ok
 
+    # LN L1 · Y80 (sahip): aynı SHA'lı ikili bir cihazda YALNIZ BİR KEZ otomatik denenir — iki kol AYRI cihaz benzetimidir, bu yüzden
+    # ilk kolun bıraktığı deneme kaydı (`son_yakma.json`) ikinci koldan önce kaldırılır (yoksa ikinci kol hiç yakmaz — Y80'in kapısı:
+    # `test_firmware_otomatik_ONKOSULLAR_Y80_Y81_Y82_LN.py`).
+    (z["fm"]._yedek_dizini() / z["fm"].SON_YAKMA_DOSYASI).unlink()
     kaynak_kotu = _Kaynak([YENI_UYUMSUZ])  # `acilis_denetimi` durumu her çağrıda yeniden yazar
     kos_kotu = _yakici(z, kaynak_kotu, geri_rc=1)
     d_kotu = dict(_calistir(z, kaynak_kotu))

@@ -15,7 +15,8 @@ KAPI (GERÇEK `firmware_indir` / `acilis_denetimi` → `_firmware_uygula` → `y
 yakıcı SAHTE `_kos`; gerçek ağ/yakıcı YOK):
   (a) SHA uyuşmazlığı ve (b) indirme hatası sonrası açılan `pemf_upd_*` dizini YOK;
   (c) başarılı akışta indirme dizini YOK, yedek `<veri kökü>/firmware_yedek/` altında (geçici dizinde DEĞİL);
-  (d) tutma sınırı: önceden 7 yedek varken akıştan sonra `FIRMWARE_YEDEK_TUT` kadar kalır, en yenisi (bu akışınki) dahil.
+  (d) tutma sınırı: önceden 7 yedek varken akıştan sonra en yeni `FIRMWARE_YEDEK_TUT` kadarı kalır, en yenisi (bu akışınki) dahil —
+      LN L1 · Y80 (sahip): ARTI ilk yakmanın yedeği (asıl saha firmware'i; burada en eski önceden var olan) hiç budanmaz.
 """
 
 from __future__ import annotations
@@ -164,7 +165,9 @@ def test_KRITIK_yedek_TUTMA_siniri_en_yenisi_dahil(akis):
     tut = getattr(a["fm"], "FIRMWARE_YEDEK_TUT", None)
     assert isinstance(tut, int) and 1 <= tut <= 10, f"tutma sınırı tanımsız/anlamsız: {tut!r}"
     kalan = sorted(p.name for p in kok.glob("pemf_yedek_*.bin"))
-    assert len(kalan) == tut, f"tutma sınırı uygulanmadı: {len(kalan)} yedek ({kalan})"
+    # Y80: en yeni `tut` + İLK yedek (en eski önceden var olan `…_20260100_…`) — tutma sınırıyla budanmaz.
+    assert len(kalan) == tut + 1, f"tutma sınırı (en yeni {tut} + ilk yedek) uygulanmadı: {len(kalan)} yedek ({kalan})"
+    assert "pemf_yedek_20260100_000000.bin" in kalan, f"Y80: İLK yakmanın yedeği budandı: {kalan}"
     assert a["yedekler"][0].name in kalan, "en YENİ yedek (bu akışınki) silindi — geri dönüş/elle kurtarma onu ister"
 
 

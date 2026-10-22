@@ -168,8 +168,13 @@ Sözleşme (yalnız yerel/LAN istek — tünele `null`): `GET /api/health` → `
 | `eylem` | `yok` · `bekle` · `firmware_guncelle` (açılış denetiminin kararı) |
 | `gerekce` | insan-okur neden (destek için) |
 | `uyum` | `true` uyumlu · `false` KESİN uyumsuz · `null` karar verilemedi (kural yok / sürüm okunamadı / manifest yok) |
-| `istemciGeriAlinmali` | `true` ⇔ `uyum=false` **ve** STM bağlı **ve** ileriye (firmware güncellemesiyle) gidilemiyor |
-| `uygulandi` / `hata` | son yakma denemesi (`hata` = `"[kod] …"`, kodlar `utils/stm_yakma.py`) |
+| `istemciGeriAlinmali` | `true` ⇔ `uyum=false` **ve** STM bağlı **ve** ileriye (firmware güncellemesiyle) gidilemiyor — plan `bekle`, ya da plan `firmware_guncelle` ama otomatik yakma KAPALI (**Y81**, `PEMF_FW_AUTO_UPDATE` ≠ `1`) ya da bu SHA bir kez denenmiş (**Y80**) |
+| `uygulandi` / `hata` | son yakma denemesi (`hata` = `"[kod] …"`, kodlar `utils/stm_yakma.py`); **Y80**: aynı SHA'lı ikili bir kez denenip kart hedef sürümü bildirmediyse `hata` "sürüm tutmadı — elle bakın: …" der ve o ikili bir daha OTOMATİK yakılmaz (kayıt `<veri kökü>\firmware_yedek\son_yakma.json`) |
+| `yakiliyor` | **Y82** (yalnız-ek): `true` ⇔ oto-firmware yakma penceresi AÇIK (MCU şu an yeniden programlanıyor). Okuma anında türetilir. Launcher kapanışta bunu görürse uyarır ve yakmanın bitmesini bekler; yakıcıyı (`STM32_Programmer_CLI`) öldürmez |
+| `yarimYakma` | **Y82** (yalnız-ek): `null` ya da önceki süreçte YARIDA KALAN yakmanın açılıştaki akıbeti `{sonuc, ayrinti}` — `tamamlanmis` (kart hedefi bildiriyor) · `geri_donuldu` (yedekten eski firmware geri yazıldı ve doğrulandı) · `elle` (otomatik yakma kapalı / STM bağlı değil — karta dokunulmadı; ayrıntı yedeğin yolunu söyler) · `basarisiz`. Kayıt `firmware_yedek\yarim_yakma.json`: yakmadan ÖNCE yazılır, doğrulamadan SONRA silinir |
+
+İlk otomatik yakmanın yedeği (asıl saha firmware'i, adı `firmware_yedek\ilk_yedek.txt`'te) tutma sınırıyla (`FIRMWARE_YEDEK_TUT`)
+budanmaz (**Y80**).
 
 Launcher `istemciGeriAlinmali=true` görürse — ve yalnız o zaman — önceki çalışan sürüme sağlık kapılı geri döner.
 ⚠️ **Uygulanmadı (Rust):** launcher bu alanı henüz OKUMUYOR — launcher oturumunun açık maddesi (1-H raporu).
