@@ -3392,6 +3392,34 @@
   },
   {
    "yuzey": "launcher",
+   "anahtar": "rust.hata.guncellemeYakmaSuruyor",
+   "tur": "firmware",
+   "kaynak": "launcher/app/src/main.rs",
+   "aciklama": "kart yazılımı yakılırken güncelleme ertelenir (LN L3 · Y82)"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "rust.hata.guncellemeFirmwareUyumsuz",
+   "tur": "firmware",
+   "kaynak": "launcher/app/src/main.rs",
+   "aciklama": "kart yazılımı uyumsuz — önceki sürüme geri dönüldü (LN L2 · Y16 / Y81)"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "ui.kapanisYakmaBekleniyor",
+   "tur": "firmware",
+   "kaynak": "launcher/app/ui/index.html",
+   "aciklama": "kapanışta yakma sürüyor — bilgisayarı kapatmayın (LN L3 · Y82)"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "ui.rtRollbackFirmware",
+   "tur": "firmware",
+   "kaynak": "launcher/app/ui/index.html",
+   "aciklama": "kart yazılımı uyumsuzluğunda geri dönüş notu (LN L2 · Y16 / Y81)"
+  },
+  {
+   "yuzey": "launcher",
    "anahtar": "rust.hata.guncellemeBackendYanitsiz",
    "tur": "seans",
    "kaynak": "launcher/app/src/main.rs",
