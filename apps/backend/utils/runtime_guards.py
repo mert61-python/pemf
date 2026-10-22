@@ -53,3 +53,18 @@ def kurulum_yasagi_etkin_mi() -> bool:
     if _frozen_mu() and os.environ.get("ULTRALYTICS_SKIP_REQUIREMENTS_CHECKS") != "1":
         return False
     return True
+
+
+def dis_ag_cagrilarini_kapat() -> None:
+    """Üçüncü taraf kitaplıkların DIŞARIYA kullanım verisi / güncelleme sorgusu göndermesini kapat (18K K3 · D3.13; idempotent).
+
+    Ölçüldü (ultralytics 8.4.47, albumentations 2.0.8):
+    - ultralytics İÇE AKTARILIRKEN `is_online()` → `one.one.one.one` / `dns.google` DNS sorgusu; `ONLINE` doğruysa açılışta kendi
+      Sentry'sini kurar (`set_sentry`) ve her `predict` başında Google Analytics'e olay gönderir (`Events`: MAC türevli kimlik + CPU /
+      işletim sistemi). `YOLO_OFFLINE=true` (yalnız `"true"` tanınır) `ONLINE`'ı yanlış yapar → üçü de kapanır. `sync` ayarı yalnız
+      `settings.json`'dan okunur (ortam değişkeni yok) ve iki kapı da aynı ifadede `ONLINE` ister.
+    - albumentations içe aktarılırken pypi.org'a sürüm sorgusu (`check_for_updates`) — `NO_ALBUMENTATIONS_UPDATE=1`.
+    Değerler zorla yazılır (kullanıcı ortamı açamaz); ultralytics / albumentations içe aktarılmadan ÖNCE çağrılmalı. AI çıktısını değiştirmez.
+    """
+    os.environ["YOLO_OFFLINE"] = "true"
+    os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"

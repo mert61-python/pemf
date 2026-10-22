@@ -30,6 +30,14 @@ try:
     _pip_yasakla()
 except Exception:
     os.environ.setdefault("YOLO_AUTOINSTALL", "false")  # yardımcı yoksa asgari kilit
+# DIŞARIYA KULLANIM VERİSİ YOK (18K K3 · D3.13) — ultralytics DNS / Analytics / Sentry, albumentations pypi sorgusu; yine ÖNCE.
+try:
+    from utils.runtime_guards import dis_ag_cagrilarini_kapat as _dis_ag_kapat
+
+    _dis_ag_kapat()
+except Exception:
+    os.environ["YOLO_OFFLINE"] = "true"
+    os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 
 import numpy as np
 import onnxruntime as ort

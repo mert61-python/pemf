@@ -45,6 +45,17 @@ try:
 except Exception:  # kapı kurulamazsa uygulama açılmaya devam eder (davranış eskisi gibi)
     pass
 
+# DIŞARIYA KULLANIM VERİSİ YOK (18K K3 · D3.13) — yine ultralytics / albumentations'tan ÖNCE: ultralytics içe aktarılırken DNS sorgular,
+# açılışta Sentry kurar, her analizde Google Analytics'e olay yollar; albumentations pypi.org'a sürüm sorar. Yardımcı yoksa değerler
+# doğrudan yazılır (gizlilik kilidi sessizce düşmesin).
+try:
+    from utils.runtime_guards import dis_ag_cagrilarini_kapat as _dis_ag_kapat
+
+    _dis_ag_kapat()
+except Exception:
+    os.environ["YOLO_OFFLINE"] = "true"
+    os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
+
 import uvicorn
 from controllers.hardware_controller import HardwareController
 from event_bus import get_event_bus

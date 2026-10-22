@@ -35,3 +35,13 @@ except Exception:  # utils yolu yoksa (izole kullanım) asgari kilit
     import os as _os
 
     _os.environ.setdefault("YOLO_AUTOINSTALL", "false")
+# DIŞARIYA KULLANIM VERİSİ YOK (18K K3 · D3.13) — ultralytics DNS / Analytics / Sentry, albumentations pypi sorgusu; aynı üç kilit yeri.
+try:
+    from utils.runtime_guards import dis_ag_cagrilarini_kapat as _dis_ag_kapat
+
+    _dis_ag_kapat()
+except Exception:
+    import os as _os
+
+    _os.environ["YOLO_OFFLINE"] = "true"
+    _os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
