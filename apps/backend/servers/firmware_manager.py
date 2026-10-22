@@ -532,7 +532,7 @@ def _firmware_uygula(girdi: dict, plan: su.Plan, banner_kaynagi=None) -> dict:
         return _durum_yaz(uygulandi=False, hata=hata)
 
     from utils import firmware_yakma_penceresi as pencere
-    from utils.stm_yakma import TAMAM, YAZMADAN_ONCE_KODLARI, yakma_akisi
+    from utils.stm_yakma import GERI_OKUMA_TUTMADI, TAMAM, UYUMSUZ_GERI_DONULDU, YAZMADAN_ONCE_KODLARI, yakma_akisi
 
     # D1.108 + D1.111: ön kontrol SÜREÇ İÇİ — HTTP değil (bkz. `_surec_ici_guvenlik_kontrolu`).
     # D1.114 (B-4.6): port BIRAKILMAZ — yakma sonrası kimlik çekirdeğin KENDİ okuyucusundan (`banner_kaynagi`). Pencere ön
@@ -562,9 +562,18 @@ def _firmware_uygula(girdi: dict, plan: su.Plan, banner_kaynagi=None) -> dict:
             )
     finally:
         _gecici_sil(yol)
-    # Y82: akış DÖNDÜ (yakma + doğrulama / geri dönüş bitti, sonuç ne olursa olsun) → "yarım yakma" kaydı silinir. Süreç akış
-    # ortasında öldüyse buraya gelinmez ve kayıt KALIR — sonraki açılış `_yarim_yakmayi_ele_al` ile kurtarır.
-    _kayit_sil(yedek_kok, YARIM_YAKMA_DOSYASI)
+    # Y82: "yarım yakma" kaydı YALNIZ kart DOĞRULANMIŞ bir hâlde bırakıldıysa silinir ("doğrulamadan SONRA"): yeni firmware doğrulandı
+    # (TAMAM) · eskiye geri dönülüp doğrulandı (UYUMSUZ_GERI_DONULDU / GERI_OKUMA_TUTMADI) · karta hiç yazılmadı. Süreç akış ortasında
+    # öldüyse buraya gelinmez ve kayıt KALIR. YLI-A3.8: yakıcı hatası (kart yarım yazılmış olabilir), geri dönüş başarısız /
+    # doğrulanamadı, kart kimliği okunamadı (BANNER_TANINMADI / PORT_MESGUL) → kayıt KALIR: sonraki açılış kartı doğrular, gerekirse
+    # yedekten döner; STM bağlanmıyorsa `yarimYakma.sonuc = elle` yedeğin yolunu söyler.
+    if sonuc.kod in YAZMADAN_ONCE_KODLARI or sonuc.kod in (TAMAM, UYUMSUZ_GERI_DONULDU, GERI_OKUMA_TUTMADI):
+        _kayit_sil(yedek_kok, YARIM_YAKMA_DOSYASI)
+    else:
+        logger.error(
+            "yakma doğrulanmış bir hâlde bitmedi (kod %s) — yarım yakma kaydı KORUNUYOR (sonraki açılış kurtarır)",
+            sonuc.kod,
+        )
     _yedekleri_buda(yedek_kok)
     for adim in sonuc.adimlar:
         logger.info("firmware: %s", adim)
