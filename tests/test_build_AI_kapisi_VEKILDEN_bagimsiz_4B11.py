@@ -7,10 +7,10 @@ HTTP_PROXY'yi loopback için de kullanır (`HttpClient.DefaultProxy.IsBypassed(1
 ulaştı). Vekil isteği kendi EXE'mize iletmez (uzak vekil) ya da `X-Forwarded-For` ekler → backend `launcherNonce`'u
 YALNIZ proxysiz loopback'e verir (gerçek `/api/health` aşağıda ölçülür) → kapı "PEMF_HEALTH_NONCE yansımadı" der.
 
-Kapı (gerçek EXE / 8177 / ağ YOK):
+Kapı (gerçek EXE / sabit port / ağ YOK):
   * AI bloğu ve son blok build betiğinden AST ile GERÇEK metinleriyle; betiğin GERÇEK Info/Warn/Die'ı (Die = exit 1).
-  * `Invoke-RestMethod` GERÇEK cmdlet'tir; gölge yalnız URI'deki 8177'yi testin loopback sahte EXE portuna çevirip
-    bütün parametreleri (ör. -NoProxy) AYNEN gerçek cmdlet'e geçirir.
+  * `Invoke-RestMethod` GERÇEK cmdlet'tir; kapının portu (YH D5 · S-YH.9: `Get-BosLoopbackPortu`) gölgede testin loopback
+    sahte EXE portunu döndürür; bütün parametreler (ör. -NoProxy) AYNEN gerçek cmdlet'e geçer.
   * Sahte EXE (127.0.0.1:rastgele) nonce'u yalnız `X-Forwarded-For` / `Via` YOKKEN yansıtır (gerçek backend'in kuralı);
     sahte vekil (127.0.0.1:rastgele) her isteğe hemen 502 döner ve isabetleri sayar.
 """
@@ -48,6 +48,8 @@ foreach ($fn in $ast.FindAll({ param($n) $n -is [System.Management.Automation.La
 }
 $global:IZ = $Iz
 $global:SAHTE_PORT = $SahtePort
+# YH D5 · S-YH.9: kapı portu boş loopback portundan gelir — gölge sahte EXE'nin portunu verir.
+function Get-BosLoopbackPortu { $global:SAHTE_PORT }
 New-Item -ItemType Directory -Force -Path $Iz | Out-Null
 function Start-Sleep { }
 function Stop-Process { }
@@ -59,11 +61,11 @@ function Start-Process {
     [IO.File]::WriteAllText((Join-Path $global:IZ 'nonce.txt'), [string]$n)
     [pscustomobject]@{ Id = 0; HasExited = $false; ExitCode = $null }
 }
-# GERÇEK cmdlet: yalnız kapının portu (8177 — bu makinede YASAK) sahte EXE'nin rastgele portuna çevrilir.
+# GERÇEK cmdlet; istenen port sahte EXE'ninki değilse (ör. eski sabit 8177) iz bırakır ve DÜŞER.
 function Invoke-RestMethod {
     [CmdletBinding()]
     param([Parameter(Position = 0)][uri]$Uri, [int]$TimeoutSec, [switch]$NoProxy)
-    $PSBoundParameters['Uri'] = [uri]($Uri.AbsoluteUri -replace '://127\.0\.0\.1:8177/', "://127.0.0.1:$($global:SAHTE_PORT)/")
+    if ($Uri.Port -ne $global:SAHTE_PORT) { [IO.File]::WriteAllText((Join-Path $global:IZ 'yanlis_port.txt'), [string]$Uri.Port); throw "yanlis port $($Uri.Port)" }
     Microsoft.PowerShell.Utility\Invoke-RestMethod @PSBoundParameters
 }
 $BuildRoot = $Kok

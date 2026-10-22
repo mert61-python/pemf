@@ -32,6 +32,18 @@ $ErrorActionPreference = "Stop"
 function Info($m) { Write-Host "[build] $m" -ForegroundColor Cyan }
 function Warn($m) { Write-Host "[build] UYARI: $m" -ForegroundColor Yellow }
 function Die($m)  { Write-Host "[build] HATA: $m" -ForegroundColor Red; exit 1 }
+# YH D5 · S-YH.9: AI kapısının portu — işletim sisteminin verdiği BOŞ loopback portu. Sahip / kurulu uygulama portları
+# (8000 / 8100 / 1883 / 5173 / 8177 / 8200) asla seçilmez. Kapı: tests/test_YH_D5_build_AI_kapisi_LOOPBACK_bos_port.py
+function Get-BosLoopbackPortu {
+    $yasak = @(8000, 8100, 1883, 5173, 8177, 8200)
+    foreach ($deneme in 1..20) {
+        $dinleyici = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+        $dinleyici.Start()
+        try { $port = $dinleyici.LocalEndpoint.Port } finally { $dinleyici.Stop() }
+        if ($yasak -notcontains $port) { return $port }
+    }
+    Die "AI kapısı için boş loopback portu bulunamadı (20 deneme)."
+}
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $GuiRoot   = Split-Path -Parent $ScriptDir
@@ -311,7 +323,11 @@ if (-not $SkipProtect -and (Test-Path $exe)) {
 # build KIRMIZI olur ve o EXE yayına çıkmaz. -SkipAiGate ile atlanabilir (acil durum).
 if ((Test-Path $exe) -and -not $SkipAiGate) {
     Info "AI hazırlık kapısı: üretilen EXE'de tüm AI modülleri gerçekten import ediliyor mu?"
-    $gatePort = 8177
+    # ⚠️ YH D5 · S-YH.9: eskiden SABİT 8177 ve EXE varsayılan host'la (0.0.0.0) açılıyordu: (1) 8177 bu makinede sahibin
+    # portu — doluysa kapı "yabancı süreç" diye YANLIŞ düşer ya da isteği başka bir backend'e gönderirdi; (2) 0.0.0.0 build
+    # makinesinde LAN'a açık port + her yeni EXE yolu için güvenlik duvarı uyarısı (GÖRÜNÜR pencere) demekti. Artık boş
+    # loopback portu ve yalnız 127.0.0.1 (PEMF_API_HOST, aşağıda).
+    $gatePort = Get-BosLoopbackPortu
     $gateLog = Join-Path $BuildRoot "ai_hazirlik_kapisi.log"
     # ⚠️ D0Ö.03 (D-9.3) — GATE EXE FİRMWARE YAKAMAZ, GERÇEK STM'E BAĞLANAMAZ. Eskiden yalnız
     # PEMF_SIMULATE=1 veriliyordu; o bayrak `stm_bagli`yı ETKİLEMEZ: build makinesinde STM takılıysa
@@ -334,6 +350,7 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
     $gateNonce = [guid]::NewGuid().ToString('N')
     $gateOrtam = [ordered]@{
         PEMF_HEALTH_NONCE         = $gateNonce
+        PEMF_API_HOST             = "127.0.0.1"   # S-YH.9: yalnız loopback (LAN'a açık port / güvenlik duvarı uyarısı YOK)
         PEMF_SIMULATE             = "1"
         PEMF_FW_AUTO_UPDATE       = "0"
         PEMF_STM_PORT             = "SIM"
