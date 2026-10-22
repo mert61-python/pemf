@@ -158,6 +158,9 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
   ; -NoNewline: tek satır, satır-sonu yok → günlük satırı bozulmaz. /OEM: powershell boruya OEM
   ; (cp857) yazar, Türkçe istisna mesajı DetailPrint'te okunur kalsın.
   ; Kaldırma HİÇBİR koşulda engellenmez/durdurulmaz — amaç görünürlük + kalıcı iz + elle kontrol uyarısı.
+  ; YLI-A3.3 (O-13.1 · launcher L4 ikizi): yanıt PEMF İMZASIYLA okunur — `status` ∈ success/partial/error + `stmStopped` (bool) +
+  ; `mqttResults` (dizi). Kapanış ucunun imzasız 2xx'i (yabancı servis / statik sayfa) "uç yok" sayılır → ACİL DURDUR ucu; DOĞRULANDI
+  ; yalnız imza + `confirmed:true` + `status:success` (dizgeler tırnaksız: `Write-Output` komut kipinde çıplak sözcüğü dizge verir).
   ; ⚠️ GÖZDEN GEÇİRME 2026-09-06: PowerShell'in HER `$`'ı `$$` ile KAÇIRILIR (yalnız NSIS port kaydı `$2`
   ; çıplak kalır). makensis `'...'` içindeki `$(...)`'ı LangString sanıp (uyarı 6040) çalışma zamanında
   ; BOŞ dizgeye çözüyordu → derlenmiş kaldırıcı fiilen "OK status= confirmed= t=" / "FAIL=" gönderiyordu
@@ -167,7 +170,7 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
   ; boşta kapanış mandalı DİSKE yazmaz, seans / bobin çalışırken yazar — launcher `safe_stop_coils` ile AYNI kural). Uç YOKSA
   ; (eski backend 405) ya da 2 sn içinde hata dönerse operatörün ACİL DURDUR ucu (`uc=2`) — bobin durdurma AZALMAZ; zaman
   ; aşımında ikinci istek YOK (kaldırma uzamasın). Gövde `{"onay":true}` tırnaksız üretilir (`@{onay=$true} | ConvertTo-Json`).
-  nsExec::ExecToStack /OEM /TIMEOUT=20000 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $$u = 1; $$t0 = Get-Date; try { $$r = Invoke-RestMethod -Uri http://127.0.0.1:$2/api/hardware/kapanis_durdur -Method POST -ContentType application/json -Body (@{onay=$$true} | ConvertTo-Json -Compress) -TimeoutSec 10 } catch { if (((Get-Date) - $$t0).TotalSeconds -ge 2) { throw }; $$u = 2; $$r = Invoke-RestMethod -Uri http://127.0.0.1:$2/api/hardware/emergency_stop -Method POST -TimeoutSec 10 }; Write-Host -NoNewline OK uc=$$u status=$$($$r.status) confirmed=$$($$r.confirmed) t=$$(Get-Date -Format s); if ($$r.confirmed -ne $$true) { exit 2 }; exit 0 } catch { Write-Host -NoNewline FAIL=$$($$_.Exception.Message) t=$$(Get-Date -Format s); exit 1 }"'
+  nsExec::ExecToStack /OEM /TIMEOUT=20000 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $$u = 1; $$t0 = Get-Date; $$ok = @(Write-Output success partial error); try { $$r = Invoke-RestMethod -Uri http://127.0.0.1:$2/api/hardware/kapanis_durdur -Method POST -ContentType application/json -Body (@{onay=$$true} | ConvertTo-Json -Compress) -TimeoutSec 10 } catch { if (((Get-Date) - $$t0).TotalSeconds -ge 2) { throw }; $$r = $$null }; if (-not ($$r.status -in $$ok -and $$r.stmStopped -is [bool] -and $$r.mqttResults -is [array])) { $$u = 2; $$r = Invoke-RestMethod -Uri http://127.0.0.1:$2/api/hardware/emergency_stop -Method POST -TimeoutSec 10 }; Write-Host -NoNewline OK uc=$$u status=$$($$r.status) confirmed=$$($$r.confirmed) t=$$(Get-Date -Format s); if ($$r.confirmed -ne $$true -or $$r.status -ne $$ok[0] -or $$r.mqttResults -isnot [array]) { exit 2 }; exit 0 } catch { Write-Host -NoNewline FAIL=$$($$_.Exception.Message) t=$$(Get-Date -Format s); exit 1 }"'
   Pop $0  ; nsExec dönüş: süreç çıkış kodu YA DA "error" (başlatılamadı) / "timeout" (20 sn aşıldı)
   Pop $1  ; yakalanan çıktı (OK …/FAIL=…); $1'in ham port satırı $2'ye sanitize edildi, artık gerekmez.
           ; İki Pop ŞART: ExecToStack yığına İKİ öğe iter; biri kalsa aşağıdaki kayıt geri-yüklemesi kayar.
