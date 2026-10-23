@@ -267,7 +267,7 @@
    "aciklama": "kalan servis / yardımcı / tür dosyaları",
    "durum": "tamam",
    "metin": 27,
-   "dosyaSayisi": 19
+   "dosyaSayisi": 20
   },
   {
    "ad": "sunucu-10a-yonlendirici",
@@ -339,7 +339,7 @@
    "aciklama": "servisler, güncelleme, sırlar, kalan yardımcılar (çoğu muaf: iç / günlük)",
    "durum": "tamam",
    "metin": 136,
-   "dosyaSayisi": 36
+   "dosyaSayisi": 37
   },
   {
    "ad": "launcher-11a-ui",
@@ -3333,6 +3333,17 @@
    "muaf": [],
    "birlesikIstisna": [],
    "not": "I18NI-A2.13: `apps/ui/modules/` (APK kurucu yerli modülü) arayüz yüzeyine alındı; Kotlin metni Intent ile JS katalogundan gelir"
+  },
+  "apps/ui/src/components/domain/KabinKamerasiKarti.tsx": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
   },
   "apps/ui/src/hooks/useCokluSecim.ts": {
    "yuzey": "arayuz",
@@ -9182,6 +9193,17 @@
    "not": ""
   },
   "apps/backend/utils/gizli_surec.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10h-servis",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
+  "apps/backend/utils/kabin_kamerasi.py": {
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
    "sira": 10,
