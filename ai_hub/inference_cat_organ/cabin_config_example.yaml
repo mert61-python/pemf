@@ -70,7 +70,7 @@ camera:
 
   # Chessboard kalibrasyon ciktisi. Yoksa to_marker_cm'den approx turetilir.
   # Uretim: python calibrate_camera.py --images chess/ --pattern 9x6 --square-cm 2.5
-  intrinsics_npz: null
+  intrinsics_npz: cv_ortak/kalibrasyon/pusat_fhd_1920x1080_M2.npz   # T2D-2: Pusat FHD 1920×1080 (Tezgâh-2 M2, f=1279,8); göreli → YAML dizini, yoksa ai_hub kökü; kenar oranı farklı karede yaklaşık K
 
 
 # =============================================================================

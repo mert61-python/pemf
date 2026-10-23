@@ -340,15 +340,25 @@ def _axis_vec(axis_str: str) -> list[float]:
     return axis_to_vector(axis_str)
 
 
-def olcekli_intrinsics(intrinsics: CameraIntrinsics, w: int, h: int) -> CameraIntrinsics:
+#: T2D-2: kalibrasyon ↔ kare kenar oranı göreli toleransı. Aynı oranın yuvarlaması (1920×1080 ↔ 1280×720 ↔ 854×480: %0,1) geçer;
+#: 16:9 ↔ 4:3 (%33) reddedilir.
+KENAR_ORANI_TOLERANSI = 0.01
+
+
+def olcekli_intrinsics(intrinsics: CameraIntrinsics, w: int, h: int) -> CameraIntrinsics | None:
     """K'yı (fx, fy, cx, cy — piksel) kalibrasyon çözünürlüğünden kare çözünürlüğüne ÖLÇEKLE (petri v2 kuralı, 2026-09-09).
 
     ⚠️ TD4: `intrinsics_npz` başka çözünürlükte üretildiyse ölçeklenmemiş K ile solvePnP mesafeyi çözünürlük oranı kadar
     yanlış verir (ölçüldü: fantom v3 2560×1440 kalibrasyonu 1280×720 karede f = 1000 kullanıyordu). Aynı çözünürlükte ya da
-    boyut bilinmiyorsa (0) değişmeden döner."""
+    boyut bilinmiyorsa (0) değişmeden döner.
+    ⚠️ T2D-2 (Tezgâh-2): kenar oranı FARKLIYSA (1080p kalibrasyonu ↔ 640×480 kare) kare, kalibrasyon karesinin orantılı küçültmesi
+    DEĞİLDİR — kamera başka bir görüş alanını kırpar (ölçüldü: Pusat 640×480 yatay 61,4°, 1080p ≈ 74°); fx / fy'yi ayrı ölçeklemek
+    yanlış ve anizotrop K üretir. → None (ölçekleme REDDİ): çağıran yaklaşık K'ya düşer (sonuçta `approx: true`)."""
     kw, kh = (int(v) for v in intrinsics.image_size)
     if (kw, kh) == (int(w), int(h)) or kw <= 0 or kh <= 0:
         return intrinsics
+    if int(w) <= 0 or int(h) <= 0 or abs((float(w) / float(h)) / (float(kw) / float(kh)) - 1.0) > KENAR_ORANI_TOLERANSI:
+        return None
     sx, sy = float(w) / float(kw), float(h) / float(kh)
     Kx = np.array(intrinsics.K, dtype=np.float64).copy()
     Kx[0, 0] *= sx

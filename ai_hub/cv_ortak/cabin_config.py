@@ -254,14 +254,22 @@ class CabinConfig:
         """fixed_position_cm dolu mu? (kedi paterninden)"""
         return self.camera.fixed_position_cm is not None
 
+    def _intrinsics_adayi(self) -> Path:
+        """Göreli yol önce YAML dizinine, orada yoksa `ai_hub` köküne göre (T2D-2: petri / fantom / kedi YAML'ı derinlikleri farklı
+        olsa da AYNI dizgeyi taşır — `cv_ortak/kalibrasyon/…`; kedi hattı `intrinsics_yolu` ile aynı kural)."""
+        p = Path(self.camera.intrinsics_npz)
+        if p.is_absolute():
+            return p
+        yaml_yani = Path(self.source_path).parent / p
+        if yaml_yani.exists():
+            return yaml_yani
+        kok = Path(__file__).resolve().parents[1] / p
+        return kok if kok.exists() else yaml_yani
+
     def has_intrinsics(self) -> bool:
         if not self.camera.intrinsics_npz:
             return False
-        p = Path(self.camera.intrinsics_npz)
-        if not p.is_absolute():
-            yaml_dir = Path(self.source_path).parent
-            p = yaml_dir / p
-        return p.exists()
+        return self._intrinsics_adayi().exists()
 
     def intrinsics_path(self) -> Path:
         """Mutlak yol olarak intrinsics .npz dondur (yoksa exception)."""
@@ -269,10 +277,7 @@ class CabinConfig:
             raise FileNotFoundError(
                 "camera.intrinsics_npz yapilandirilmamis. "
                 "Once calibrate_camera.py calistir.")
-        p = Path(self.camera.intrinsics_npz)
-        if not p.is_absolute():
-            yaml_dir = Path(self.source_path).parent
-            p = yaml_dir / p
+        p = self._intrinsics_adayi()
         if not p.exists():
             raise FileNotFoundError(f"Kalibrasyon .npz yok: {p}")
         return p

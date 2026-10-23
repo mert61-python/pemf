@@ -1,0 +1,155 @@
+/**
+ * "Kabin kamerası" kartı (Ayarlar · T2D-2 · Tezgâh-2 #3) — YALNIZ backend bu makinedeyken çizilir (kamera backend'in makinesine bağlı).
+ *
+ * AI Pro önizlemesi / seansı kamerayı artık sabit "0 numara" ile değil buradaki seçimle açar (dizüstünde 0 = dahili kamera).
+ * Seçim cihazda saklanır (`/settings/kabin-kamerasi`, hesaptan / profilden bağımsız); seçim yoksa AI Pro kamerası açılmaz ve kart
+ * bunu eylem söyleyerek gösterir. OpenCV kamera adı vermediği için tarama her kameradan küçük bir önizleme getirir — kullanıcı kabin
+ * kamerasını görüntüden tanır. Tarama yalnız düğmeyle (kamera ışığı kısa yanar); hata iletisi sunucudan (eylem söyler).
+ */
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import { Camera } from "lucide-react-native";
+import { Card } from "@/components/ui/Card";
+import { colors, radius, spacing, touch, typography } from "@/theme/tokens";
+import { apiGet, apiPost } from "@/services/apiClient";
+import { useToast } from "@/components/ui/ToastProvider";
+
+interface Secim {
+  indeks: number;
+  kaynak?: "ayar" | "ortam";
+}
+interface Aday {
+  indeks: number;
+  genislik: number;
+  yukseklik: number;
+  onizleme: string | null;
+}
+
+export function KabinKamerasiKarti() {
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  const [secili, setSecili] = useState<Secim | null>(null);
+  const [yuklendi, setYuklendi] = useState(false);
+  const [adaylar, setAdaylar] = useState<Aday[] | null>(null);
+  const [taraniyor, setTaraniyor] = useState(false);
+
+  const yukle = useCallback(async () => {
+    const r = await apiGet<{ secili: Secim | null } | null>("/settings/kabin-kamerasi", null, { silent: true });
+    setSecili(r?.secili ?? null);
+    setYuklendi(r !== null);
+  }, []);
+
+  useEffect(() => {
+    void yukle();
+  }, [yukle]);
+
+  const tara = async () => {
+    setTaraniyor(true);
+    try {
+      const r = await apiPost<{ kameralar: Aday[]; secili: Secim | null } | null>("/settings/kabin-kamerasi/tara", {}, null);
+      if (r) {
+        setAdaylar(r.kameralar);
+        setSecili(r.secili);
+      }
+    } finally {
+      setTaraniyor(false);
+    }
+  };
+
+  const sec = async (indeks: number) => {
+    const r = await apiPost<{ secili: Secim } | null>("/settings/kabin-kamerasi", { indeks }, null);
+    if (r?.secili) {
+      setSecili(r.secili);
+      showToast(t("ayarlar.kabinKamerasi.secildi", { indeks }), "success");
+    }
+  };
+
+  return (
+    <Card style={styles.card}>
+      <View style={styles.baslikSatiri}>
+        <Camera color={colors.primary} size={20} />
+        <Text style={styles.baslik}>{t("ayarlar.kabinKamerasi.baslik")}</Text>
+      </View>
+      <Text style={styles.aciklama}>{t("ayarlar.kabinKamerasi.aciklama")}</Text>
+      {yuklendi ? (
+        secili ? (
+          <Text style={styles.durum} testID="kabin-kamerasi-secili">
+            {t("ayarlar.kabinKamerasi.seciliKamera", { indeks: secili.indeks })}
+          </Text>
+        ) : (
+          <Text style={[styles.durum, styles.uyari]} testID="kabin-kamerasi-secilmedi">
+            {t("ayarlar.kabinKamerasi.secilmedi")}
+          </Text>
+        )
+      ) : null}
+      <TouchableOpacity
+        style={styles.dugme}
+        onPress={() => void tara()}
+        disabled={taraniyor}
+        accessibilityRole="button"
+        testID="kabin-kamerasi-tara"
+      >
+        {taraniyor ? <ActivityIndicator color="#fff" /> : <Text style={styles.dugmeMetni}>{t("ayarlar.kabinKamerasi.tara")}</Text>}
+      </TouchableOpacity>
+      {adaylar && adaylar.length === 0 ? <Text style={styles.aciklama}>{t("ayarlar.kabinKamerasi.bulunamadi")}</Text> : null}
+      {adaylar?.map((a) => (
+        <View key={a.indeks} style={styles.aday} testID={`kabin-kamerasi-aday-${a.indeks}`}>
+          {a.onizleme ? (
+            <Image source={{ uri: `data:image/jpeg;base64,${a.onizleme}` }} style={styles.onizleme} resizeMode="contain" />
+          ) : null}
+          <View style={styles.adayMetin}>
+            <Text style={styles.adayBaslik}>{t("ayarlar.kabinKamerasi.kameraAdi", { indeks: a.indeks })}</Text>
+            <Text style={styles.aciklama}>{t("ayarlar.kabinKamerasi.cozunurluk", { genislik: a.genislik, yukseklik: a.yukseklik })}</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.secenek, secili?.indeks === a.indeks && styles.secenekSecili]}
+            onPress={() => void sec(a.indeks)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: secili?.indeks === a.indeks }}
+            testID={`kabin-kamerasi-sec-${a.indeks}`}
+          >
+            <Text style={[styles.secenekMetni, secili?.indeks === a.indeks && styles.secenekMetniSecili]}>
+              {secili?.indeks === a.indeks ? t("ayarlar.kabinKamerasi.seciliEtiket") : t("ayarlar.kabinKamerasi.bunuSec")}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ))}
+    </Card>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: { marginBottom: spacing.md, gap: spacing.sm },
+  baslikSatiri: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  baslik: { fontSize: typography.subtitle, fontWeight: "700", color: colors.text },
+  aciklama: { fontSize: typography.caption, color: colors.textMuted },
+  durum: { fontSize: typography.body, color: colors.text, fontWeight: "600" },
+  uyari: { color: colors.danger },
+  dugme: {
+    minHeight: touch.min,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.lg,
+    alignSelf: "flex-start",
+  },
+  dugmeMetni: { color: "#fff", fontWeight: "700" },
+  aday: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" },
+  onizleme: { width: 120, height: 68, borderRadius: radius.sm, backgroundColor: colors.border },
+  adayMetin: { flex: 1, minWidth: 120 },
+  adayBaslik: { fontSize: typography.body, fontWeight: "700", color: colors.text },
+  secenek: {
+    minHeight: touch.min,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secenekSecili: { backgroundColor: colors.primary },
+  secenekMetni: { color: colors.primary, fontWeight: "700" },
+  secenekMetniSecili: { color: "#fff" },
+});

@@ -78,7 +78,7 @@ camera:
   up_cabin: [0.0, 1.0, 0.0]
   to_marker_cm: 34.8
   to_origin_cm: 26.6
-  intrinsics_npz: null            # null -> approx intrinsics (mavi peak'ten)
+  intrinsics_npz: cv_ortak/kalibrasyon/pusat_fhd_1920x1080_M2.npz   # T2D-2: Pusat FHD 1920×1080 (Tezgâh-2 M2, f=1279,8); göreli → YAML dizini, yoksa ai_hub kökü; kenar oranı farklı karede yaklaşık K
 
 
 # =============================================================================

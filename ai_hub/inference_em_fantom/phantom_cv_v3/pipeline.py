@@ -189,7 +189,9 @@ class PhantomCvPipeline:
             # (petri v2 kuralı; ölçüldü: ölçeksiz K ile işaret mesafesi çözünürlük oranı kadar yanlış).
             h, w = image_bgr.shape[:2]
             self.intrinsics = olcekli_intrinsics(self.intrinsics, w, h)
-            return
+            if self.intrinsics is not None:
+                return
+            # T2D-2: kenar oranı farklı → ölçekleme REDDİ; aşağıda yaklaşık K (sonuçta `approx: true`).
         approx = approx_intrinsics_from_marker(image_bgr, self.cfg)
         if approx is None:
             h, w = image_bgr.shape[:2]

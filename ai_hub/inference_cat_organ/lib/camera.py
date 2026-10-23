@@ -12,6 +12,47 @@ from pathlib import Path
 import numpy as np
 
 
+#: T2D-2: `ai_hub` kökü — göreli `intrinsics_npz` YAML dizininde yoksa buraya göre çözülür (petri / fantom / kedi YAML'ı AYNI dizgeyi
+#: taşır: `cv_ortak/kalibrasyon/…`; eşitlik kapısı tests/test_kabin_IKI_YAML_TEK_kabin_AII_1_5.py).
+_AI_HUB_KOKU = Path(__file__).resolve().parents[2]
+
+
+def intrinsics_yolu(npz_path: str | None, yaml_dir: str | None = None) -> Path | None:
+    """Göreli kalibrasyon yolunu çöz: (1) YAML dizini (dosya yolu verilirse ÜST dizini — T2D-2: eskiden `_yaml_path` DOSYA yolu
+    dizin sanılıyor, `…\\cabin_config_example.yaml\\x.npz` hiç bulunmuyordu), (2) `ai_hub` kökü. Bulunamazsa None."""
+    if not npz_path:
+        return None
+    p = Path(npz_path)
+    if p.is_absolute():
+        return p if p.exists() else None
+    adaylar = []
+    if yaml_dir is not None:
+        d = Path(yaml_dir)
+        adaylar.append((d.parent if d.suffix.lower() in (".yaml", ".yml") or d.is_file() else d) / p)
+    adaylar.append(_AI_HUB_KOKU / p)
+    return next((a for a in adaylar if a.exists()), None)
+
+
+def olcekli_ic_parametre(intr: dict | None, image_shape) -> dict | None:
+    """T2D-2: kalibrasyon K'sını kare boyutuna ölçekle (`cv_ortak.coord_transform.olcekli_intrinsics` kuralı). Kedi hattı K'yı
+    eskiden HİÇ ölçeklemiyordu. Aynı boyut / kalibrasyon boyutu bilinmiyor → aynen; aynı kenar oranı → ölçekli; kenar oranı
+    FARKLI (1080p kalibrasyonu ↔ 640×480 kare: başka görüş alanı) → None (çağıran yaklaşık K'ya düşer)."""
+    if intr is None or not intr.get("image_size"):
+        return intr
+    kw, kh = (int(v) for v in intr["image_size"])
+    h, w = (int(v) for v in image_shape[:2])
+    if (kw, kh) == (w, h) or kw <= 0 or kh <= 0:
+        return intr
+    if w <= 0 or h <= 0 or abs((w / h) / (kw / kh) - 1.0) > 0.01:
+        return None
+    K = np.array(intr["K"], dtype=np.float64).copy()
+    K[0, 0] *= w / kw
+    K[0, 2] *= w / kw
+    K[1, 1] *= h / kh
+    K[1, 2] *= h / kh
+    return {"K": K, "D": intr["D"], "image_size": (w, h)}
+
+
 def load_intrinsics(npz_path: str, yaml_dir: str | None = None) -> dict | None:
     """Calibrate camera ile uretilmis .npz dosyasini yukle.
 
@@ -23,12 +64,8 @@ def load_intrinsics(npz_path: str, yaml_dir: str | None = None) -> dict | None:
     Returns: {"K": np.ndarray, "D": np.ndarray, "image_size": tuple or None}
              None if path yok / okunamiyor.
     """
-    if npz_path is None:
-        return None
-    p = Path(npz_path)
-    if not p.is_absolute() and yaml_dir is not None:
-        p = Path(yaml_dir) / p
-    if not p.exists():
+    p = intrinsics_yolu(npz_path, yaml_dir)
+    if p is None:
         return None
     data = np.load(str(p), allow_pickle=False)
     K = np.asarray(data["K"], dtype=np.float64).reshape(3, 3)

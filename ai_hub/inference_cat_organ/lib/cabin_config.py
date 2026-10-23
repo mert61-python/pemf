@@ -159,11 +159,9 @@ def has_perspective_data(cfg: dict) -> bool:
     """
     cam = cfg.get("camera", {}) or {}
     if cam.get("intrinsics_npz"):
-        p = Path(cam["intrinsics_npz"])
-        if not p.is_absolute():
-            yaml_dir = Path(cfg.get("_yaml_path", "."))
-            p = (yaml_dir.parent / p) if yaml_dir.is_file() else p
-        if p.exists():
+        from .camera import intrinsics_yolu  # T2D-2: pipeline ile AYNI çözümleme (YAML dizini → ai_hub kökü)
+
+        if intrinsics_yolu(cam["intrinsics_npz"], cfg.get("_yaml_path")) is not None:
             return True
     if cam.get("to_marker_cm") is not None:
         return True

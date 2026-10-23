@@ -14,7 +14,7 @@ from .qr import (estimate_organs_qr, beta_to_morphology, detect_aruco_marker)
 from .mask_features import (mask_pca_axis, validate_kp_in_mask,
                                        organ_in_mask_flags)
 from .priors import (impute_lr_symmetric_kps, bootstrap_organ_uncertainty)
-from .camera import (load_intrinsics, approximate_intrinsics,
+from .camera import (load_intrinsics, approximate_intrinsics, olcekli_ic_parametre,
                               solve_marker_pose, solve_cat_pose_pnp,
                               project_points, transform_points,
                               cat_to_cabin_transform,
@@ -436,6 +436,8 @@ def _run_perspective_pipeline(image_path: str, cabin_config: dict,
     if intrinsics_npz:
         intr = load_intrinsics(intrinsics_npz,
                                        yaml_dir=str(yaml_dir) if yaml_dir else None)
+        # T2D-2: K kare boyutuna ölçeklenir; kenar oranı farklıysa None → aşağıda yaklaşık K.
+        intr = olcekli_ic_parametre(intr, img_shape)
     if intr is None and cam_to_marker is not None:
         intr = approximate_intrinsics(img_shape, mk["edge_px"],
                                                   marker_real_cm,

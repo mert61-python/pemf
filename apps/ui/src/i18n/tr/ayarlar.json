@@ -146,6 +146,19 @@
     "unvanOrnek": "Örn. Vet. Hekim"
   },
   "iptal": "İptal",
+  "kabinKamerasi": {
+    "aciklama": "AI Pro'nun kabini gördüğü kamera. Seçiminiz bu cihazda hatırlanır; kamera 1920×1080 açılır.",
+    "baslik": "Kabin kamerası",
+    "bulunamadi": "Bu bilgisayarda kamera bulunamadı. Kamera kablosunu kontrol edip yeniden tarayın.",
+    "bunuSec": "Bunu seç",
+    "cozunurluk": "{{genislik}}×{{yukseklik}}",
+    "kameraAdi": "Kamera {{indeks}}",
+    "secildi": "Kabin kamerası: Kamera {{indeks}} seçildi.",
+    "seciliEtiket": "Seçili",
+    "seciliKamera": "Seçili kamera: Kamera {{indeks}}",
+    "secilmedi": "Kabin kamerası seçilmedi — AI Pro kamerası açılmaz. Kameraları tarayıp kabini gösteren kamerayı seçin.",
+    "tara": "Kameraları tara"
+  },
   "kaydedildi": "Ayarlar başarıyla kaydedildi.",
   "kaydediliyor": "Kaydediliyor...",
   "kaydet": "Kaydet",

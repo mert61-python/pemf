@@ -245,14 +245,15 @@ class PetriCvPipeline:
         """
         if self.intrinsics is None:
             return
-        # TD4: kural ortak işlevde (fantom v3 de kullanır — orada eksikti).
+        # TD4: kural ortak işlevde (fantom v3 de kullanır — orada eksikti). T2D-2: kenar oranı farklıysa None → yaklaşık K.
         self.intrinsics = olcekli_intrinsics(self.intrinsics, w, h)
 
     def _ensure_intrinsics(self, image_bgr: np.ndarray) -> bool:
         if self.intrinsics is not None:
             h, w = image_bgr.shape[:2]
             self._olcekli_intrinsics(w, h)
-            return True
+            if self.intrinsics is not None:
+                return True
         approx = approx_intrinsics_from_marker(image_bgr, self.cfg)
         if approx is None:
             h, w = image_bgr.shape[:2]

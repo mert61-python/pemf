@@ -4854,6 +4854,13 @@
      ]
     },
     {
+     "metin": "kabin kamerası seçilmedi",
+     "gerekce": "günlük nedeni (`_ai_seansi_pasife_al` neden — yalnız logger; T2D-2, kullanıcıya giden metin ai.pro.hazirlik.kameraSecilmedi)",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
      "metin": "AI Pro loop: seans durum kontrolü hatası (yok sayıldı)",
      "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır",
      "turler": [

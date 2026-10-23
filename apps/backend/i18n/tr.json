@@ -312,6 +312,7 @@
       },
       "hazirlik": {
         "kamera": "Kamera açılamadı. Kablosunu ve başka bir uygulamanın kamerayı kullanmadığını kontrol edip hazırlığı yeniden başlatın.",
+        "kameraSecilmedi": "Kabin kamerası seçilmedi. Ayarlar ▸ Kabin kamerası bölümünden kabin kamerasını seçip yeniden deneyin.",
         "modelPaketi": "'{{ad}}' model paketi bu cihazda kurulu değil. Masaüstü PEMF uygulamasının kurulum adımından ilgili model paketini ekleyip bu ekrana dönün.",
         "modelYukleme": "'{{ad}}' yüklenemedi. Uygulamayı yeniden başlatıp tekrar deneyin; sorun sürerse destek kaydında bu ekranı belirtin."
       },
@@ -407,6 +408,11 @@
     "arayuzDili": {
       "gecersiz": "Geçersiz dil: \"{{dilKodu}}\". Kullanılabilen diller: tr, en.",
       "yazilamadi": "Dil ayarı kaydedilemedi ({{neden}}). Veri klasörünün yazılabilir olduğunu kontrol edin."
+    },
+    "kabinKamerasi": {
+      "gecersiz": "Geçersiz kamera numarası: {{indeks}}. Kameraları tarayıp listeden seçin.",
+      "taramaMesgul": "AI Pro kamerayı şu anda kullanıyor. Hazırlığı ya da seansı durdurup kameraları yeniden tarayın.",
+      "yazilamadi": "Kamera seçimi kaydedilemedi ({{neden}}). Veri klasörünün yazılabilir olduğunu kontrol edin."
     }
   },
   "bildirim": {

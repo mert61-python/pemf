@@ -73,7 +73,7 @@ ai_router = APIRouter(
 )
 
 
-from utils import ceviri
+from utils import ceviri, kabin_kamerasi
 from utils.image_domain import DomainMismatch as _ImgDomainMismatch
 
 # ⚠️ ASGARİ GİRDİ KAPILARI — TEK KAYNAK `utils/klinik_asgari.py` (denetim 2026-08-17).
@@ -1252,12 +1252,14 @@ def _hazirlik_hata_metni(kod: str, ad: str, dil: str | None = "tr") -> str:
         return ceviri.t("ai.pro.hazirlik.modelYukleme", dil=dil, ad=ad)
     if kod == "kamera":
         return ceviri.t("ai.pro.hazirlik.kamera", dil=dil)
+    if kod == "kamera_secilmedi":
+        return ceviri.t("ai.pro.hazirlik.kameraSecilmedi", dil=dil)
     return ""
 
 
 def _hazirlik_hata_goster() -> str:
     """Durum yanıtındaki hazırlık hatası: depolanan metin Türkçe (hazırlık iş parçacığı istek bağlamında değil); yanıt İSTEK dilinde."""
-    if _ai_hazirlik_hata and _ai_hazirlik_hata_kodu in ("model_paketi", "model_yukleme", "kamera"):
+    if _ai_hazirlik_hata and _ai_hazirlik_hata_kodu in ("model_paketi", "model_yukleme", "kamera", "kamera_secilmedi"):
         sag = _ai_hazirlik_hata_saglayici
         ad = ai_pro_hedef.model_adi(sag) if sag is not None else ""
         return _hazirlik_hata_metni(_ai_hazirlik_hata_kodu, ad, None)
@@ -1722,7 +1724,7 @@ def _ai_hazirlik_loop():
     (cache'i günceller) ama BOBİN SÜRMEZ ve SEANS BAŞLATMAZ (`_active_session`e / `_ai_loop_active`e
     dokunmaz). Panel /ai/pro/status'tan `localized` görünce öneriyi (propose) OTOMATİK ister.
 
-    ⚠️ TEK KAMERA: gerçek seans loop'u (`_ai_pro_loop`) da VideoCapture(0) açar; ikisi AYNI ANDA
+    ⚠️ TEK KAMERA: gerçek seans loop'u (`_ai_pro_loop`) da AYNI kabin kamerasını açar (T2D-2); ikisi AYNI ANDA
     açamaz. `/ai/pro/start` bu önizlemeyi ÖNCE durdurup kamerayı bıraktırır (join), sonra seans
     loop'unu başlatır. `/ai/pro/hazirlik/baslat` da seans aktifken (`_ai_loop_active`) başlamaz.
     ⚠️ Lokalizasyon yolu `_ai_pro_loop` ile BİREBİR (relocalize-tüket + organ-snapshot, denetim P2);
@@ -1742,9 +1744,18 @@ def _ai_hazirlik_loop():
         _ai_hazirlik_hata_saglayici = _sag
         _ai_hazirlik_active = False
         return
-    cap = cv2.VideoCapture(0)
+    # T2D-2 (Tezgâh-2 #3): sabit `VideoCapture(0)` dahili kamerayı açıyordu → seçili KABİN kamerası, ilk okumadan önce 1920×1080.
+    try:
+        cap, _kamera_no = kabin_kamerasi.kamera_ac(cv2)
+    except kabin_kamerasi.KameraSecilmedi:
+        logger.error("Hazırlık: kabin kamerası SEÇİLMEDİ — kamera açılmadı (dahili kameraya düşülmez).")
+        _ai_hazirlik_hata_kodu = "kamera_secilmedi"
+        _ai_hazirlik_hata = _hazirlik_hata_metni("kamera_secilmedi", "")
+        _ai_hazirlik_hata_saglayici = _sag
+        _ai_hazirlik_active = False
+        return
     if not cap.isOpened():
-        logger.error("Hazırlık: kamera açılamadı (VideoCapture(0)).")  # ham ayrıntı YALNIZ log'a
+        logger.error("Hazırlık: kabin kamerası açılamadı (indeks %s).", _kamera_no)  # ham ayrıntı YALNIZ log'a
         cap.release()
         _ai_hazirlik_hata_kodu = "kamera"
         _ai_hazirlik_hata = _hazirlik_hata_metni("kamera", "")
@@ -1916,15 +1927,24 @@ def _ai_pro_loop(dongu_muhru=None):
         _ai_seansi_pasife_al("model yüklenemedi", dongu_muhru)
         return
 
-    cap = cv2.VideoCapture(0)
-    for _ in range(5):
-        if cap.isOpened():
-            break
-        cap.release()
-        time.sleep(0.5)
-        cap = cv2.VideoCapture(0)
+    # T2D-2 (Tezgâh-2 #3): seçili KABİN kamerası (sabit 0 değil), ilk okumadan önce 1920×1080; seçim yoksa açılmaz.
+    try:
+        cap, _kamera_no = kabin_kamerasi.kamera_ac(cv2)
+        for _ in range(5):
+            if cap.isOpened():
+                break
+            cap.release()
+            time.sleep(0.5)
+            cap, _kamera_no = kabin_kamerasi.kamera_ac(cv2)
+    except kabin_kamerasi.KameraSecilmedi:
+        logger.error(
+            "Kabin kamerası SEÇİLMEDİ — AI Pro kamerası açılmadı (dahili kameraya düşülmez). AI Pro durduruluyor."
+        )
+        _dongu_bayragini_indir(dongu_muhru)
+        _ai_seansi_pasife_al("kabin kamerası seçilmedi", dongu_muhru)
+        return
     if not cap.isOpened():
-        logger.error("Kamera açılamadı (VideoCapture(0), tekrarlı denemeye rağmen). AI Pro durduruluyor.")
+        logger.error("Kabin kamerası açılamadı (indeks %s, tekrarlı denemeye rağmen). AI Pro durduruluyor.", _kamera_no)
         cap.release()
         _dongu_bayragini_indir(dongu_muhru)
         # `start_ai_session` bu thread spawn edilmeden ÖNCE çağrıldı → oturum AI modunda AKTİF.
@@ -2643,6 +2663,9 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
         raise
     except Exception:
         pass
+    # T2D-2: sunucu kamerası döngüsü kabin kamerası seçilmeden başlamaz — onay TÜKETİLMEDEN, eylem söyleyen 409.
+    if kabin_kamerasi.secili_kamera() is None:
+        raise HTTPException(status_code=409, detail=ceviri.t("ai.pro.hazirlik.kameraSecilmedi"))
     # ── SERT KAPI (2026-08-06 sahip kararı): ONAYSIZ OTONOM TEDAVİ BAŞLAMAZ ────────────
     # Uygulanacak parametreler onaylananın MÜHÜRLÜ kopyasından okunur → "onayı al, başka parametreyle sür"
     # yapısal olarak imkânsız.
@@ -3031,6 +3054,9 @@ def ai_pro_hazirlik_baslat(payload: AiProStartPayload = AiProStartPayload()):
             status_code=403,
             detail=ceviri.t("ai.pro.hata.sahipDegilHedef"),
         )
+    # T2D-2: kabin kamerası seçilmediyse önizleme hiç başlamaz — eylem söyleyen 409 (panel 120 sn boş önizleme beklemesin).
+    if kabin_kamerasi.secili_kamera() is None:
+        raise HTTPException(status_code=409, detail=ceviri.t("ai.pro.hazirlik.kameraSecilmedi"))
 
     # ⚠️ MUTASYON KİLİT İÇİNDE + AKTİFLİK KONTROLÜNDEN SONRA (2026-09-08 düzeltmesi):
     # organ/relocalize/cache yazımları eskiden BU BLOKTAN ÖNCE, kilit dışında yapılıyor; sonra

@@ -147,3 +147,59 @@ def arayuz_dili_yaz(payload: ArayuzDiliModel):
         logger.warning("arayuz dili yazilamadi: %r", e)
         raise HTTPException(status_code=503, detail=ceviri.t("ayarlar.arayuzDili.yazilamadi", neden=type(e).__name__))
     return {"status": "success", "dil": dil}
+
+
+# ── Kabin kamerası (T2D-2 · Tezgâh-2 #3) ─────────────────────────────────────────────────────────────────────────────────
+# AI Pro'nun sunucu kamerası CİHAZ düzeyinde seçilir (`utils.kabin_kamerasi`); seçim yoksa kamera açılmaz (dahili kameraya
+# sessiz düşüş yok). Tarama yalnız kullanıcı eylemiyle ve AI Pro kamerayı tutmuyorken.
+
+
+class KabinKamerasiModel(BaseModel):
+    indeks: int
+
+
+def _ai_kamerasi_mesgul() -> bool:
+    try:
+        from servers import ai_router as _ai
+
+        return bool(getattr(_ai, "_ai_hazirlik_active", False) or getattr(_ai, "_ai_loop_active", False))
+    except Exception:
+        return False
+
+
+@router.get("/kabin-kamerasi")
+def kabin_kamerasi_al():
+    """Seçili kabin kamerası (`null` = seçilmedi → AI Pro kamerası açılmaz) ve istenen çözünürlük."""
+    from utils import kabin_kamerasi as kk
+
+    return {"secili": kk.secili_kamera(), "istenenCozunurluk": list(kk.ISTENEN_COZUNURLUK)}
+
+
+@router.post("/kabin-kamerasi")
+def kabin_kamerasi_yaz(payload: KabinKamerasiModel):
+    from utils import ceviri
+    from utils import kabin_kamerasi as kk
+
+    try:
+        secim = kk.kamera_sec(payload.indeks)
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail=ceviri.t("ayarlar.kabinKamerasi.gecersiz", indeks=str(payload.indeks)[:12])
+        )
+    except OSError as e:
+        logger.warning("kabin kamerasi secimi yazilamadi: %r", e)
+        raise HTTPException(
+            status_code=503, detail=ceviri.t("ayarlar.kabinKamerasi.yazilamadi", neden=type(e).__name__)
+        )
+    return {"status": "success", "secili": secim}
+
+
+@router.post("/kabin-kamerasi/tara")
+def kabin_kamerasi_tara():
+    """Bu makinedeki kameraları kısa açıp küçük önizlemeyle listeler (kullanıcı kabin kamerasını görüntüden tanır)."""
+    from utils import ceviri
+    from utils import kabin_kamerasi as kk
+
+    if _ai_kamerasi_mesgul():
+        raise HTTPException(status_code=409, detail=ceviri.t("ayarlar.kabinKamerasi.taramaMesgul"))
+    return {"kameralar": kk.kameralari_tara(), "secili": kk.secili_kamera()}

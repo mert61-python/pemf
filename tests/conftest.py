@@ -266,6 +266,23 @@ def _kedi_aipro_surus_bugunku():
 
 
 @pytest.fixture(autouse=True)
+def _kabin_kamerasi_bugunku():
+    """T2D-2: ürün kabin kamerası SEÇİLMEDEN AI Pro kamerasını açmaz (`utils.kabin_kamerasi`). Süitin AI Pro kapıları (başlatma,
+    hazırlık, döngü — sahte `cv2.VideoCapture(0)`) seçili kamerayla (indeks 0 = eski sabit) bugünkü davranışı ölçer. Seçim yok
+    kolunu ölçen kapılar değişkeni KENDİLERİ siler (testin `monkeypatch`i): tests/test_T2D2_kabin_kamerasi_SECIMI_ve_1080p.py.
+    `_kedi_aipro_surus_bugunku` deseni (`monkeypatch` İSTENMEZ)."""
+    once = os.environ.get("PEMF_KABIN_KAMERASI")
+    os.environ["PEMF_KABIN_KAMERASI"] = "0"
+    try:
+        yield
+    finally:
+        if once is None:
+            os.environ.pop("PEMF_KABIN_KAMERASI", None)
+        else:
+            os.environ["PEMF_KABIN_KAMERASI"] = once
+
+
+@pytest.fixture(autouse=True)
 def _kosu_kaydi_sizmaz():
     """1-G inceleme G-14.2 (1G-YB3 sınıfı): bobin koşu kaydı haritaları (`coil_run_tracker._active_coil_runs` /
     `_coil_run_stats`) modül-geneldir. Testlerin AÇIK bıraktığı kayıt sonraki testlere sızıyordu — Y63'ten beri "Seansı
