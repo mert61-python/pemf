@@ -21,7 +21,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { authHeaders } from "@/services/apiClient";
 import { backendBuMakinede } from "@/services/backendKonumu";
 import { serviceConfig } from "@/services/config";
-import { colors, typography } from "@/theme/tokens";
+import { colors, touch, typography } from "@/theme/tokens";
 import { aiDetayCumlesi } from "@/utils/aiHataDetayi";
 
 export function KosulSecici({
@@ -56,6 +56,8 @@ export function KosulSecici({
               accessibilityLabel={etiket}
               style={{
                 flex: 1,
+                minHeight: touch.sm,
+                justifyContent: "center",
                 padding: 8,
                 borderWidth: 1,
                 borderRadius: 8,
