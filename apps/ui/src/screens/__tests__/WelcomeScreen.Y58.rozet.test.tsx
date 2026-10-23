@@ -18,6 +18,8 @@ jest.mock("@/services/emergencyStop", () => ({
 jest.mock("@/components/ui/AuroraBackground", () => ({ AuroraBackground: () => null }));
 jest.mock("@/components/ui/GlobalEmergencyStop", () => ({ GlobalEmergencyStop: () => null }));
 jest.mock("@/components/ui/EstopMandalBandi", () => ({ EstopMandalBandi: () => null }));
+// Y184: Karşılama'daki dil seçici `useToast` kullanır (uygulamada `app/_layout.tsx` ToastProvider her rotayı sarar).
+jest.mock("@/components/ui/ToastProvider", () => ({ useToast: () => ({ showToast: jest.fn() }) }));
 jest.mock("expo-blur", () => ({ BlurView: () => null }));
 jest.mock("expo-linear-gradient", () => ({ LinearGradient: () => null }));
 jest.mock("react-native-safe-area-context", () => ({

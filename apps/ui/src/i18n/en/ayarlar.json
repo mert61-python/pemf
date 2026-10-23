@@ -97,7 +97,7 @@
     "baslik": "Connect to the device",
     "birKezEslesme": "Once paired, this screen won't appear again — the app connects automatically on later launches.",
     "bulunamadi": "Device not found. This is normal if your phone is <kalin>not on the same Wi-Fi as the device</kalin> (mobile data or another network).",
-    "ekranAciklama": "In the PEMF Vet app, the <kalin>6-digit pairing code</kalin> appears under <kalin>More → Remote Access Connection</kalin>.",
+    "ekranAciklama": "In the PEMF Vet app, the <kalin>6-character pairing code</kalin> appears under <kalin>Settings → Remote Access Connection</kalin>.",
     "ekranaBakin": "Check the device screen",
     "farkliAg": "if you're on a different network",
     "gecici": "If the connection dropped briefly, searching again is enough — no code needed.",

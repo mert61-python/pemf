@@ -97,7 +97,7 @@
     "baslik": "Cihaza bağlanın",
     "birKezEslesme": "Bir kez eşleştikten sonra bu ekran bir daha çıkmaz — sonraki açılışlarda otomatik bağlanır.",
     "bulunamadi": "Cihaz bulunamadı. Telefonunuz cihazla <kalin>aynı Wi-Fi'de değilse</kalin> (mobil veri ya da başka bir ağ) bu normaldir.",
-    "ekranAciklama": "PEMF Vet uygulamasında <kalin>Daha Fazla → Uzaktan Erişim Bağlantısı</kalin> bölümünde <kalin>6 haneli eşleştirme kodu</kalin> yazar.",
+    "ekranAciklama": "PEMF Vet uygulamasında <kalin>Ayarlar → Uzaktan Erişim Bağlantısı</kalin> bölümünde <kalin>6 karakterlik eşleştirme kodu</kalin> yazar.",
     "ekranaBakin": "Cihazın ekranına bakın",
     "farkliAg": "farklı ağdaysanız",
     "gecici": "Bağlantı geçici koptuysa yeniden aramak yeterlidir — kod gerekmez.",

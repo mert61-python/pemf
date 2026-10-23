@@ -18,7 +18,8 @@ import { apiPost } from "@/services/apiClient";
 import { backendBuMakinede } from "@/services/backendKonumu";
 import { useToast } from "@/components/ui/ToastProvider";
 
-export function DilSecimKarti() {
+/** Dil seçiminin TEK yolu (Y184: Ayarlar kartı + giriş / karşılama ekranlarının `DilSecici`'si AYNI kaydı kullanır). */
+export function useDilSecimi(): { etkin: Dil; sec: (d: Dil) => Promise<void> } {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
   const etkin: Dil = i18n.language === "en" ? "en" : "tr";
@@ -30,6 +31,12 @@ export function DilSecimKarti() {
       await apiPost("/settings/arayuz-dili", { dil }, null, { silent: true });
     }
   };
+  return { etkin, sec };
+}
+
+export function DilSecimKarti() {
+  const { t } = useTranslation();
+  const { etkin, sec } = useDilSecimi();
 
   const secenek = (d: Dil, etiket: string) => (
     <TouchableOpacity

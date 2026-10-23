@@ -16,6 +16,7 @@ import { installedModes } from "@/services/installedProfiles";
 import { useTeardownGuard } from "@/hooks/useTeardownGuard";
 import { EstopMandalBandi } from "@/components/ui/EstopMandalBandi";
 import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
+import { DilSecici } from "@/components/domain/DilSecici";
 import { useTranslation } from "react-i18next";
 
 export function WelcomeScreen() {
@@ -57,6 +58,8 @@ export function WelcomeScreen() {
         <EstopMandalBandi />
         <View style={styles.topBar}>
           <Text style={styles.topEmail} numberOfLines={1}>{session?.email ?? ""}</Text>
+          {/* Y184: dil seçici Çıkış'ın yanında (Ayarlar'la AYNI kayıt; bayrak kapalıyken çizilmez). */}
+          <DilSecici />
           {/* HASTA GÜVENLİĞİ: bu ekrana seans sürerken de gelinebilir (Ayarlar → "Farklı Bir
               Profile Geçiş Yap"). Çıkış, geriye kalan tek yolu (yeniden profil seçip Kontrol'e
               dönmek) da kapatır → önce onay + durdurma. */}

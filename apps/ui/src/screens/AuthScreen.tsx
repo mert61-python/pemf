@@ -19,6 +19,7 @@ import { passwordChecks, isPasswordValid, isEmailValid, isResearchEmail } from "
 import { signUpUser, signInUser, sendPasswordReset } from "@/services/supabaseAuth";
 import { EstopMandalBandi } from "@/components/ui/EstopMandalBandi";
 import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
+import { DilSecici } from "@/components/domain/DilSecici";
 import { useTranslation } from "react-i18next";
 
 const LOGO = require("../../assets/icon.png");
@@ -207,6 +208,10 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
           {/* D1.81 · Y4 (Y23 ile tutarlı): oturum açılmamışken de mandal durumu ve "Sıfırla" görünür
               (masaüstü yerel istemcidir: sıfırlama ucu oturum istemez). */}
           <EstopMandalBandi />
+          {/* Y184: oturum açmadan da dil seçilebilsin (Ayarlar'la AYNI kayıt; bayrak kapalıyken çizilmez). */}
+          <View style={styles.dilSatiri}>
+            <DilSecici />
+          </View>
           {hesapEkleme ? (
             <View style={styles.eklemeBandi} testID="hesap-ekleme-bandi">
               <Text style={styles.eklemeMetni}>
@@ -498,6 +503,7 @@ function Rule({ ok, label }: { ok: boolean; label: string }) {
 }
 
 const styles = StyleSheet.create({
+  dilSatiri: { flexDirection: "row", justifyContent: "flex-end", marginBottom: spacing.sm },
   root: { flex: 1, backgroundColor: colors.bg },
   // CH1 · Y151: "Hesap ekle" kipinin bandı (etkin hesap açık kalır + vazgeç).
   eklemeBandi: {
