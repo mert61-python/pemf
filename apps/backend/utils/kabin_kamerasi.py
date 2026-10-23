@@ -121,6 +121,41 @@ def kamera_ac(cv2=None):
     return cap, secim["indeks"]
 
 
+#: T3 · Y189: tek karede otomatik pozlama / beyaz dengesi oturana dek atılan ilk kare sayısı.
+KARE_ISINMA = 5
+
+
+def kare_al(cv2=None) -> dict | None:
+    """T3 · Y189 (petri / fantom analizi "Kabin kamerasından çek"): SEÇİLİ kabin kamerasından TAM çözünürlüklü tek kare (JPEG,
+    base64). `kamera_ac` ile açılır (1920×1080 ilk okumadan ÖNCE), ilk `KARE_ISINMA` kare atılır, son kare kodlanır, kamera
+    HER durumda bırakılır. Seçim yok → `KameraSecilmedi`; açılamaz / okunamaz → None."""
+    if cv2 is None:
+        import cv2
+    cap, indeks = kamera_ac(cv2)
+    try:
+        if not cap.isOpened():
+            return None
+        kare = None
+        for _ in range(KARE_ISINMA + 1):
+            ok, k = cap.read()
+            if ok and k is not None:
+                kare = k
+        if kare is None:
+            return None
+        basarili, tampon = cv2.imencode(".jpg", kare, [cv2.IMWRITE_JPEG_QUALITY, 92])
+        if not basarili:
+            return None
+        kh, kw = kare.shape[:2]
+        return {
+            "indeks": indeks,
+            "genislik": int(kw),
+            "yukseklik": int(kh),
+            "image_base64": base64.b64encode(tampon).decode("ascii"),
+        }
+    finally:
+        cap.release()
+
+
 def kameralari_tara(cv2=None, sayi: int = TARAMA_INDEKS_SAYISI) -> list[dict]:
     """Ayarlar ▸ "Kameraları tara": 0..sayi-1 indekslerini KISA açar, 1920×1080 ister, bir kare okur, bırakır.
     @return açılanların listesi `[{"indeks", "genislik", "yukseklik", "onizleme"}]` (önizleme: küçük JPEG, base64; kare

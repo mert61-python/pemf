@@ -300,6 +300,7 @@
         "hedefDesteklenmiyor": "Target {{oid}} is not supported for '{{model}}' (valid: {{gecerli}}).",
         "kediSurusKapali": "Cat AI Pro driving is turned off until the cabin position is verified. You can review the analysis and the recommendation; start the session by hand from the Control screen.",
         "konumlandirilmadi": "{{ad}} has not been positioned yet. {{ipucu}} While the camera image is streaming, positioning completes by itself and the recommendation is prepared automatically.",
+        "kosulsuzUyusmuyor": "The position was found in the mode that is not selected now (Conditional / Unconditional). If you switched the mode, restart the preview and request the proposal again.",
         "modelTanimsiz": "Model '{{model}}' is not recognized (valid: {{gecerli}})",
         "onaysizHedef": "You cannot switch to an unapproved target while the session is running: the approved target of this session is «{{ad}}». For another target, stop AI Pro, get a new recommendation and start it with the veterinarian's new approval.",
         "otomatikHedef": "No target to lock in was found in automatic selection: the ID of the selected target could not be read. Try again once a target is marked on the frame, or select the target by hand from the list.",
@@ -411,6 +412,8 @@
     },
     "kabinKamerasi": {
       "gecersiz": "Invalid camera number: {{indeks}}. Scan for cameras and choose one from the list.",
+      "kareAlinamadi": "Could not capture an image from the cabin camera (camera {{indeks}}). Check its cable and try again, or rescan the cameras under Settings ▸ Cabin camera.",
+      "kareMesgul": "AI Pro is using the camera right now. Stop the preparation or session, then capture again.",
       "taramaMesgul": "AI Pro is using the camera right now. Stop the preparation or session, then scan for cameras again.",
       "yazilamadi": "The camera selection could not be saved ({{neden}}). Check that the data folder is writable."
     }

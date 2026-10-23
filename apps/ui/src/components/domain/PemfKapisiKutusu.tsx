@@ -24,6 +24,9 @@ export interface PemfKapisi {
   eylem?: string;
   mesajlar?: { kod: string; metin: string }[];
   varsayimlar?: { kod: string; metin: string }[];
+  /** T3 · Y189: KOŞULSUZ kip — `atlanan` nedenler sürüşü KESMEDİ (uyarı olarak gösterilir). Alan yoksa (eski backend) koşullu. */
+  kosulsuz?: boolean;
+  atlanan?: string[];
 }
 
 export function PemfKapisiKutusu({
@@ -41,13 +44,15 @@ export function PemfKapisiKutusu({
   const varsayimlar = Array.isArray(kapi.varsayimlar) ? kapi.varsayimlar : [];
   const gecerli = kapi.pemf_gecerli === true;
   const surulebilir = kapi.surulebilir === true;
+  const kosulsuz = kapi.kosulsuz === true;
+  const atlanan = new Set(Array.isArray(kapi.atlanan) ? kapi.atlanan : []);
   return (
     <View
       testID="pemf-kapisi"
       accessibilityRole="summary"
       style={{
         borderWidth: 1,
-        borderColor: surulebilir ? colors.border : colors.danger,
+        borderColor: kosulsuz ? colors.warning : surulebilir ? colors.border : colors.danger,
         borderRadius: 8,
         padding: 8,
         marginVertical: 6,
@@ -68,6 +73,12 @@ export function PemfKapisiKutusu({
           </Text>
         ) : null}
       </Text>
+      {/* T3 · Y189: koşulsuz sonuç "geçerli" ile karışmasın — kutu bunu AYRICA söyler. */}
+      {kosulsuz ? (
+        <Text testID="pemf-kapisi-kosulsuz" style={{ fontSize: typography.small, fontWeight: "bold", color: colors.warning, marginTop: 4 }}>
+          {t("ai.pro.kapi.kosulsuzBaslik")}
+        </Text>
+      ) : null}
       {!surulebilir ? (
         <Text style={{ fontSize: typography.small, color: colors.text, marginTop: 4 }}>
           {t("ai.pro.kapi.esasAlinmaz")}
@@ -81,8 +92,12 @@ export function PemfKapisiKutusu({
         </Text>
       ) : null}
       {mesajlar.map((m) => (
-        <Text key={m.kod} testID={`pemf-kapisi-${m.kod}`} style={{ fontSize: typography.small, color: colors.danger, marginTop: 2 }}>
-          • {m.metin}
+        <Text
+          key={m.kod}
+          testID={`pemf-kapisi-${m.kod}`}
+          style={{ fontSize: typography.small, color: atlanan.has(m.kod) ? colors.warning : colors.danger, marginTop: 2 }}
+        >
+          • {m.metin}{atlanan.has(m.kod) ? t("ai.pro.kapi.atlandi") : ""}
         </Text>
       ))}
       {varsayimlar.map((v) => (

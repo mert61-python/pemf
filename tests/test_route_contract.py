@@ -142,6 +142,7 @@ GOLDEN_ROUTES = {
     ("/api/settings/kabin-kamerasi", "GET"),
     ("/api/settings/kabin-kamerasi", "POST"),
     ("/api/settings/kabin-kamerasi/tara", "POST"),
+    ("/api/settings/kabin-kamerasi/kare", "POST"),  # T3 · Y189: petri / fantom analizine kabin kamerasından tek kare
     # 2026-08-09 DENETIM IZI (Tier 3): geri donussuz islemlerin (toplu silme, disa/ice aktarma,
     # operator ekleme-cikarma, PII redaksiyonu) tek izi 60 MB'lik DONEN bir metin log'unda
     # KIMLIKSIZ tek bir satirdi. Artik sifreli DB icinde EKLEME-ONLY `audit_events` tablosu var;
@@ -234,4 +235,5 @@ def test_route_contract_unchanged():
     # → 108 (+1 launcher kapanış durdurması: hardware/kapanis_durdur POST — "önceki oturumda ACİL DURDUR" bandı), 2026-10-18
     # → 110 (+2 cihaz arayüz dili: settings/arayuz-dili GET+POST — I18N-0 · Y161), 2026-10-19
     # → 113 (+3 kabin kamerası: settings/kabin-kamerasi GET+POST, /tara POST — T2D-2), 2026-10-23
-    assert len(current) == len(beklenen) == 113 - (0 if _simulator_mountlu() else 1)
+    # → 114 (+1 kabin kamerası tek kare: settings/kabin-kamerasi/kare POST — T3 · Y189), 2026-10-23
+    assert len(current) == len(beklenen) == 114 - (0 if _simulator_mountlu() else 1)

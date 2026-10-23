@@ -232,6 +232,15 @@ def hedef_gosterim_adi(saglayici, hedef_id: int) -> str:
     return yap(hedef_id)
 
 
+def kosulsuz_ayarla(saglayici, deger) -> bool:
+    """T3 · Y189: araştırma sağlayıcısının (fantom / petri) KOŞULSUZ kipini ayarla; kedi sağlayıcısında yok sayılır (False).
+    @return etkin değer. Hazırlık bunu istekten, seans ÖNERİ MÜHRÜNDEN (`specs.kosulsuz`) verir; durdurma False'a döndürür."""
+    if not hasattr(saglayici, "kosulsuz"):
+        return False
+    saglayici.kosulsuz = deger is True
+    return saglayici.kosulsuz
+
+
 def saglayici_al(model: "str | None"):
     """`model` adından sağlayıcı. Bilinmeyen ad → ValueError (çağıran 422'ye çevirir).
 
@@ -420,6 +429,10 @@ class _EmCvSaglayici:
         # AII-2.1: kaybolan kimlikler (son konumlarıyla) ve verilmiş EN BÜYÜK kimlik — kimlik BAŞKA hedefe yeniden verilmez.
         self._kayip_kimlikler: dict = {}
         self._son_kimlik = 0
+        #: T3 · Y189 KOŞULSUZ kip (`kosulsuz_ayarla`): PEMF kapısının engelleyici / yeniden-çekim / güvenilmez nedenleri ve
+        #: yöntem tavanı + `MIN_GUVEN` eşiği sürüşü KESMEZ. Kalanlar: sonuç var, konum KABİN çerçevesinde (`pemf_valid`), kabin
+        #: içi + sonlu hedef (D1.85), Y145 bayrağı, hekim onayı, ACİL DURDUR. Varsayılan False = davranış AYNI.
+        self.kosulsuz = False
 
     # ── alt sınıf sözleşmesi ────────────────────────────────────────────────────────────
     def _yukleyici(self):
@@ -653,7 +666,7 @@ class _EmCvSaglayici:
         if basarili:
             from ai_hub.cv_ortak import pemf_kapisi
 
-            kapi = pemf_kapisi.degerlendir(result, model=self.kapi_modeli)
+            kapi = pemf_kapisi.degerlendir(result, model=self.kapi_modeli, kosulsuz=self.kosulsuz)
             meta["pemf_kapisi"] = kapi
             if not kapi["surulebilir"]:
                 air.logger.warning("%s karesi tüketim kapısında REDDEDİLDİ: %s", self.ad, kapi["nedenler"])
@@ -693,6 +706,11 @@ class _EmCvSaglayici:
             return (False, 0.0, 0.0, 0.0, guven, overlay, ozne_var, dokum)
         # ⚠️ ArUco ZORUNLU (karar #4): tavan 0.25 < MIN_GUVEN 0.3 olduğundan ölçek/piksel modunda
         # bu koşul YAPISAL olarak sağlanamaz — eşik + tavan çift emniyet.
+        # T3 · Y189 KOŞULSUZ: eşik + tavan KESMEZ (güven yine raporlanır). Buraya yalnız kapının geçirdiği (konumu KABİN çerçevesinde)
+        # ve kabin içi / sonlu hedef gelir — koordinatı olmayan sonuç koşulsuzda da sürülmez.
+        if self.kosulsuz:
+            dokum["kosulsuz"] = True
+            return (True, x_mm, y_mm, z_mm, guven, overlay, ozne_var, dokum)
         return (guven >= MIN_GUVEN, x_mm, y_mm, z_mm, guven, overlay, ozne_var, dokum)
 
     def _overlay(self, pl, ctx, result):
@@ -849,8 +867,8 @@ class PetriSaglayici(_EmCvSaglayici):
         return air._yukle_em_petri_cv
 
     def _pipeline_kur(self, cache):
-        # yolo_device="cpu" ŞART (headless, CUDA yok). YOLO + predictor ENJEKTE edilir.
-        pl = cache["cls"](cache["cfg"], yolo_model_path=cache["yolo_path"], yolo_device="cpu")
+        # yolo_device="cpu" ŞART (headless, CUDA yok). YOLO + predictor ENJEKTE edilir. T3 · Y189: koşulsuz kip hatta da geçer.
+        pl = cache["cls"](cache["cfg"], yolo_model_path=cache["yolo_path"], yolo_device="cpu", kosulsuz=self.kosulsuz)
         pl.yolo = cache["yolo"]
         pl._predictor = cache["predictor"]
         return pl

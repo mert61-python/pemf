@@ -18,6 +18,7 @@ import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
 import { colors, radius, spacing, typography, rf, rs, layoutMax, touch } from "@/theme/tokens";
 import { EmDozSatiri, konumMetni, pikselKipiNotu } from "@/components/domain/EmDozSatiri";
 import { PemfKapisiKutusu, type PemfKapisi } from "@/components/domain/PemfKapisiKutusu";
+import { KabinKaresiDugmesi, KosulSecici } from "@/components/domain/AnalizKosulu";
 import { useToast } from "@/components/ui/ToastProvider";
 import { webIcinKucult } from "@/services/gorselKucult";
 import { apiGet, apiPost, authHeaders, platformAlert, AI_TIMEOUT_MS, aiHataMesaji } from "@/services/apiClient";
@@ -2202,6 +2203,12 @@ function PhantomModule({ patientName }: { patientName: string }) {
   const [phantomLen, setPhantomLen] = useState<string>("");   // cm — boş = piksel modu
   const [longLoading, setLongLoading] = useState(false);
   const { isCompact } = useResponsive();
+  // T3 · Y189: Koşullu | Koşulsuz (varsayılan koşullu, hatırlanmaz) — kural backend'de (`pemf_kapisi`).
+  const [kosulsuz, setKosulsuz] = useState(false);
+  const kabinKaresiGeldi = (image_base64: string) => {
+    if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri);
+    setImageFile(null); setImageBase64(image_base64); setImageUri(`data:image/jpeg;base64,${image_base64}`); setResult(null);
+  };
 
   useEffect(() => {
     visionCache[CK] = { imageUri, imageBase64, result };
@@ -2281,6 +2288,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
       }
       const plen = parseFloat(phantomLen.replace(",", "."));
       if (!isNaN(plen) && plen > 0) formData.append("phantom_length_cm", String(plen));
+      if (kosulsuz) formData.append("kosulsuz", "true");  // T3 · Y189 (koşulluda HİÇ gönderilmez = eski istek)
 
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS); // ilk-kullanım model indirme için geniş
@@ -2355,6 +2363,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
           onChangeText={setPhantomLen}
         />
       </View>
+      <KosulSecici kosulsuz={kosulsuz} onDegis={setKosulsuz} kilitli={loading} testID="fantom-kosul" />
 
       <View style={[styles.btnRow, isCompact && { flexDirection: "column" }]}>
         <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
@@ -2364,6 +2373,8 @@ function PhantomModule({ patientName }: { patientName: string }) {
           <Button label={t("ai.gorsel.fotografCek")} icon={<Camera color={colors.white} size={16} />} onPress={takePhoto} />
         </View>
       </View>
+      {/* T3 · Y189: görüntü VARSAYILAN kameradan değil, Ayarlar ▸ Kabin kamerası'nda seçilen kameradan (1920×1080). */}
+      <KabinKaresiDugmesi onKare={kabinKaresiGeldi} />
 
       <View style={styles.analyzeBtn}>
         <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.fantom.analiziBaslat")} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyze} />
@@ -2516,6 +2527,13 @@ function PetriModule({ patientName }: { patientName: string }) {
   const [kontrolSaglikli, setKontrolSaglikli] = useState("");
   const [kontrolKanser, setKontrolKanser] = useState("");
   const [a1Kose, setA1Kose] = useState<"auto" | "tl" | "tr" | "br" | "bl">("auto");
+  // T3 · Y189: Koşullu | Koşulsuz (varsayılan koşullu, hatırlanmaz). Koşulsuzda plaka bulunamazsa ham YOLO tespiti, makullik reddi
+  // ve kalite / yeniden-çekim nedenleri analizi KESMEZ (uyarı) — kural backend'de.
+  const [kosulsuz, setKosulsuz] = useState(false);
+  const kabinKaresiGeldi = (image_base64: string) => {
+    if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri);
+    setImageFile(null); setImageBase64(image_base64); setImageUri(`data:image/jpeg;base64,${image_base64}`); setResult(null);
+  };
   const gorunenAyarlar = PETRI_AYAR_ALANLARI.filter((a) => kip === "tekil" || PLAKA_KIPI_AYARLARI.has(a.ad));
   const advDegisti = !denetimAcik || gorunenAyarlar.some((a) => (adv[a.ad] || "").trim() !== "")
     || (kip === "plaka" && (kontrolSaglikli.trim() !== "" || kontrolKanser.trim() !== "" || a1Kose !== "auto"));
@@ -2626,6 +2644,7 @@ function PetriModule({ patientName }: { patientName: string }) {
       // Denetim KAPATILDIYSA açıkça bildir; açıkken göndermeyiz ki sunucudaki
       // PEMF_AI_PLAUSIBILITY_GUARD kaçış kapağı arayüz tarafından EZİLMESİN.
       if (!denetimAcik) formData.append("plaus_guard", "false");
+      if (kosulsuz) formData.append("kosulsuz", "true");  // T3 · Y189 (koşulluda HİÇ gönderilmez = eski istek)
 
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS); // ilk-kullanım model indirme için geniş
@@ -2718,6 +2737,7 @@ function PetriModule({ patientName }: { patientName: string }) {
       {kip === "plaka" && (
         <Text style={styles.petriHint}>{t("ai.petri.plakaNotu")}</Text>
       )}
+      <KosulSecici kosulsuz={kosulsuz} onDegis={setKosulsuz} kilitli={loading} testID="petri-kosul" />
 
       {/* GELİŞMİŞ (ARAŞTIRMA) AYARLARI — kapalı başlar; hiçbir alana dokunulmazsa istek
           bugünküyle AYNI gider (boş alan gönderilmez). */}
@@ -2820,6 +2840,8 @@ function PetriModule({ patientName }: { patientName: string }) {
           <Button label={t("ai.gorsel.fotografCek")} icon={<Camera color={colors.white} size={16} />} onPress={takePhoto} />
         </View>
       </View>
+      {/* T3 · Y189: görüntü VARSAYILAN kameradan değil, Ayarlar ▸ Kabin kamerası'nda seçilen kameradan (1920×1080). */}
+      <KabinKaresiDugmesi onKare={kabinKaresiGeldi} />
 
       <View style={styles.analyzeBtn}>
         <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.petri.analiziBaslat")} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyze} />

@@ -300,6 +300,7 @@
         "hedefDesteklenmiyor": "Hedef {{oid}} '{{model}}' için desteklenmiyor (geçerli: {{gecerli}}).",
         "kediSurusKapali": "Kedi AI Pro sürüşü, kabin konumu doğrulanana kadar kapalı. Analizi ve öneriyi inceleyebilirsiniz; seansı Kontrol ekranından elle başlatın.",
         "konumlandirilmadi": "{{ad}} henüz konumlandırılmadı. {{ipucu}} Kamera görüntüsü akarken konumlandırma kendiliğinden tamamlanır ve öneri otomatik hazırlanır.",
+        "kosulsuzUyusmuyor": "Konum, şu an seçili olmayan kipte (Koşullu / Koşulsuz) bulundu. Kipi değiştirdiyseniz önizlemeyi yeniden başlatıp öneriyi yeniden isteyin.",
         "modelTanimsiz": "Model '{{model}}' tanınmıyor (geçerli: {{gecerli}})",
         "onaysizHedef": "Seans sürerken onaylanmamış hedefe geçilemez: bu seansın onaylı hedefi «{{ad}}». Başka hedef için AI Pro'yu durdurun, yeni öneri alın ve hekimin yeni onayıyla başlatın.",
         "otomatikHedef": "Otomatik seçimde mühürlenecek hedef bulunamadı: seçili hedefin kimliği okunamadı. Kare üstünde bir hedef işaretlenince yeniden deneyin ya da hedefi listeden elle seçin.",
@@ -411,6 +412,8 @@
     },
     "kabinKamerasi": {
       "gecersiz": "Geçersiz kamera numarası: {{indeks}}. Kameraları tarayıp listeden seçin.",
+      "kareAlinamadi": "Kabin kamerasından görüntü alınamadı (kamera {{indeks}}). Kablosunu denetleyip yeniden deneyin ya da Ayarlar ▸ Kabin kamerası bölümünden kameraları yeniden tarayın.",
+      "kareMesgul": "AI Pro kamerayı şu anda kullanıyor. Hazırlığı ya da seansı durdurup yeniden çekin.",
       "taramaMesgul": "AI Pro kamerayı şu anda kullanıyor. Hazırlığı ya da seansı durdurup kameraları yeniden tarayın.",
       "yazilamadi": "Kamera seçimi kaydedilemedi ({{neden}}). Veri klasörünün yazılabilir olduğunu kontrol edin."
     }

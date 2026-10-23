@@ -147,6 +147,8 @@ class PipelineResult:
     resize: dict[str, Any] = field(default_factory=dict)
     #: Bu sonucu ureten ETKIN YOLO ayarlari (arayuzden ayarlanabilir) — denetim izi.
     yolo_ayar: dict[str, Any] = field(default_factory=dict)
+    #: T3 · Y189: KOSULSUZ kip (analizi kesen engeller uyariya dondu; `kosulsuz_*` uyarilari ne atlandigini soyler).
+    kosulsuz: bool = False
 
     def to_dict(self) -> dict:
         d = {k: v for k, v in self.__dict__.items() if k != "wells"}
@@ -177,9 +179,14 @@ class PetriCvPipeline:
                  a1_corner: str | None = None,
                  control_healthy: list[str] | None = None,
                  control_cancer: list[str] | None = None,
-                 a1_cabin_mm: list[float] | None = None):
+                 a1_cabin_mm: list[float] | None = None,
+                 kosulsuz: bool = False):
         """Plaka parametreleri None ise YAML `multiwell:` bolumunden alinir
-        (CLI > YAML > varsayilan). plate_type=0 -> plaka modu kapali (tekil petri / YOLO)."""
+        (CLI > YAML > varsayilan). plate_type=0 -> plaka modu kapali (tekil petri / YOLO).
+        kosulsuz (T3 · Y189, sahip + Cağlar Hoca): analizi KESEN iki engel uyariya doner — plaka izgarasi kurulamazsa
+        (`plate_not_found`) modelin HAM YOLO kuyucuk tespiti gosterilir, makullik reddi (`not_a_petri_plate`) analizi
+        bitirmez. Varsayilan False = davranis AYNI. YALNIZ gercek True acar (dogruluk degeri tasiyan baska nesne acmaz)."""
+        self.kosulsuz = kosulsuz is True
         if isinstance(cfg, CabinConfig):
             self.cfg = cfg
         else:
@@ -322,7 +329,7 @@ class PetriCvPipeline:
         t0 = time.perf_counter()
         result = PipelineResult(success=False, timestamp=time.time(),
                                 cabin_id=self.cfg.cabin_id,
-                                image_name=image_name)
+                                image_name=image_name, kosulsuz=self.kosulsuz)
         timings: dict[str, float] = {}
         ctx: dict = {"img_und": None, "detections": None,
                      "cabin_pose": None, "marker": None}
@@ -408,6 +415,12 @@ class PetriCvPipeline:
             # es-zamanli ikinci analizin esigini degistirirdi.
             dets = self.yolo.detect(img_und, conf=self._yolo_conf, iou=self._yolo_iou)
             timings["yolo_detect"] = (time.perf_counter() - t1) * 1000
+        if not dets and grid is not None and self.kosulsuz:
+            # T3 · Y189 KOSULSUZ: plaka izgarasi kurulamadi (pembe bolge yok vb.) → modelin HAM kuyucuk tespiti (tekil kip yolu).
+            result.warnings.append(f"kosulsuz_plaka_yok: {grid.error} - plaka izgarasi kurulamadi, ham YOLO kuyucuk tespiti")
+            grid = None
+            dets = self.yolo.detect(img_und, conf=self._yolo_conf, iou=self._yolo_iou)
+            timings["yolo_detect"] = (time.perf_counter() - t1) * 1000
         if not dets:
             result.error = (grid.error if grid is not None
                             else "yolo_no_well_detected")
@@ -442,7 +455,10 @@ class PetriCvPipeline:
 
             result.yolo_ayar["aday_imgsz"] = _aday_imgsz(self.yolo)
             result.yolo_ayar["n_yolo_candidates"] = result.plate.get("n_yolo_candidates")
-        if not ok_plaus:
+        if not ok_plaus and self.kosulsuz:
+            # T3 · Y189 KOSULSUZ: makullik reddi analizi BITIRMEZ — uyari olarak tasinir (olcumler `plausibility`de).
+            result.warnings.append(f"kosulsuz_makullik: {_plaus.PETRI_REJECT} - makullik denetimi reddetti, analiz surduruldu")
+        elif not ok_plaus:
             # Mevcut erken-cikis deseni (yolo_no_well_detected gibi); ai_router bu hatayi
             # 200/"no_detection" YERINE 422 + anlasilir Turkce mesaja cevirir.
             result.error = _plaus.PETRI_REJECT

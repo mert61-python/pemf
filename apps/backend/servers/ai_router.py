@@ -1188,14 +1188,14 @@ def _yukle_em_petri_cv() -> dict:
     }
 
 
-def _pemf_alanlari(payload: dict, model: str) -> dict:
+def _pemf_alanlari(payload: dict, model: str, kosulsuz: bool = False) -> dict:
     """AI-2: hocanın v2/v3 yanıt alanları + tüketim kapısı (TEK KAYNAK `ai_hub.cv_ortak.pemf_kapisi`; ai_service aynısını
     kullanır). `payload` = `result.to_dict()` (NaN-güvenli). Kapı hesaplanamazsa alanlar BOŞ dönmez, FAIL-CLOSED işaret
     döner: `pemf_valid` False ve `pemf_kapisi.surulebilir` False — arayüz D/P/E'yi "geçersiz" etiketiyle gösterir."""
     try:
         from ai_hub.cv_ortak import pemf_kapisi as _pk
 
-        return _pk.yanit_alanlari(payload, model=model)
+        return _pk.yanit_alanlari(payload, model=model, kosulsuz=kosulsuz)  # T3 · Y189: koşulsuz kip (tek kaynak)
     except Exception:
         logger.warning("%s PEMF kapısı alanları üretilemedi → geçersiz işaretlendi", model, exc_info=True)
         _m = ceviri.t("ai.pemf.gecerlilikHesaplanamadi")
@@ -1241,6 +1241,8 @@ def _saglayici_cache_alanlari() -> dict:
         "ood": bool(m.get("ood")),
         # Y143: lokalizasyonun SEÇTİĞİ hedefin kalıcı kimliği (araştırma; kedide yok → None). Otomatik (0) öneri bunu mühürler.
         "secili_id": m.get("secili_id"),
+        # T3 · Y189: bu konum KOŞULSUZ kipte mi bulundu (öneri tazelik denetimi ve mühür buna bakar; kedide hep False).
+        "kosulsuz": bool(getattr(_aktif_saglayici(), "kosulsuz", False)),
     }
 
 
@@ -2346,6 +2348,9 @@ class AiProStartPayload(BaseModel):
     #: Bu isteği yapan istemcinin kalıcı kimliği (bkz. `_ai_owner_client`). Boş bırakılabilir:
     #: eski istemcilerde davranış DEĞİŞMEZ (sahiplik bilinmez → panel eski kuralı uygular).
     client_id: str = ""
+    #: T3 · Y189: KOŞULSUZ kip (yalnız araştırma modelleri — fantom / petri). HAZIRLIK bunu sağlayıcıya verir; `/start` YOK
+    #: SAYAR ve mühürden okur (organ / model ile aynı ilke). Varsayılan False = davranış AYNI.
+    kosulsuz: bool = False
 
 
 class AiProProposePayload(BaseModel):
@@ -2364,6 +2369,9 @@ class AiProProposePayload(BaseModel):
     #: (seans bugünkü gibi sahipsiz kaydedilir; arayüz bunu ayrıca onaylatır).
     patient_id: str = ""
     patient_name: str = ""
+    #: T3 · Y189: panelin seçili kipi. Önizleme konumu FARKLI kipte bulunduysa öneri 409 (kip değişti → önizleme yeniden);
+    #: eşleşirse MÜHÜRE yazılır (`specs.kosulsuz`), `/start` seansı o kipte açar.
+    kosulsuz: bool = False
 
 
 def _uzaktan_kimliksiz_mi(request) -> bool:
@@ -2441,6 +2449,10 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
     # her karede yeniden "en yüksek öncelikli" hedefi seçiyor, öncelik değişince ya da onaylanan hedef kaybolunca ONAYLANMAYAN
     # komşu sürülüyordu (ölçüldü). Kimlik bu lokalizasyonla AYNI önbellek anlık görüntüsünden (x/y/z, etiket); mühür onaydan
     # SONRA güncellenmez (`/start` mühürden okur). Seçili kimlik okunamazsa öneri REDDEDİLİR. Kedi (0 = Tüm Vücut) DEĞİŞMEZ.
+    # T3 · Y189: konum hangi kipte bulunduysa öneri o kipte olur — panelin kipi farklıysa (kip değiştirildi) 409, mühür karışmaz.
+    _kosulsuz = bool(c.get("kosulsuz")) and not _kedi_modeli_mi(_saglayici)
+    if _kosulsuz != (bool(payload.kosulsuz) and not _kedi_modeli_mi(_saglayici)):
+        raise HTTPException(status_code=409, detail=ceviri.t("ai.pro.hata.kosulsuzUyusmuyor"))
     _muhur_hedefi = oid
     _otomatik_secim = False
     if oid == 0 and not _kedi_modeli_mi(_saglayici):
@@ -2503,6 +2515,8 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
             # D2.E15: hasta MÜHÜRDE (onay penceresi gösterir; `/start` buradan okur, gövdedeki hasta YOK SAYILIR).
             "patient_id": _hasta_id,
             "patient_name": _hasta_adi,
+            # T3 · Y189: KOŞULSUZ öneri mühürde (onay penceresi söyler; `/start` seansı bu kipte açar). Koşulluda alan YOK (eski mühür).
+            **({"kosulsuz": True} if _kosulsuz else {}),
         },
         meta={
             "x_mm": c["x_mm"],
@@ -2762,6 +2776,8 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
         _ai_owner_client = str(payload.client_id or "")[:64]
         _ai_organ_id = _organ_req
         _ai_hedef_modeli = _saglayici.ad  # döngü ve /frame bu modeli kullanır (mühürle aynı)
+        # T3 · Y189: kip MÜHÜRDEN (gövde yok sayılır)
+        ai_pro_hedef.kosulsuz_ayarla(_saglayici, _spec.get("kosulsuz") is True)
         _ai_duration_min = _sure_dk
         # DENETIM P2: DUVAR SAATI idi. AI Pro sure siniri gecen-sure farkiyla hesaplandigindan
         # NTP duzeltmesi/DST/elle saat degisimi GERI giderse maruziyet UZAR (donanim deadline'i
@@ -2875,6 +2891,8 @@ def stop_ai_pro():
         # göndermeyen bir istemcinin (eski APK, mobil kare yolu) kareleri hâlâ fantom
         # sağlayıcısına gider ve "hedef yok" döngüsüne girerdi.
         _ai_hedef_modeli = ai_pro_hedef.VARSAYILAN_MODEL
+        for _s in ai_pro_hedef.SAGLAYICILAR.values():  # T3 · Y189: koşulsuz kip seansla biter
+            ai_pro_hedef.kosulsuz_ayarla(_s, False)
         # [B1] Sahiplik kilidin İÇİNDE temizlenir: stop'tan sonra başka bir modern istemci AI
         # Pro'yu devralabilsin (stale owner kimseyi kilitlemesin).
         _ai_owner_client = ""
@@ -3089,6 +3107,7 @@ def ai_pro_hazirlik_baslat(payload: AiProStartPayload = AiProStartPayload()):
         # Model seçimi (Faz 1): seans YOK → güvenli. Hazırlık sürerken model değişirse önizleme
         # yeni sağlayıcıyla devam eder (thread her turda `_aktif_saglayici()` okur).
         _ai_hedef_modeli = _saglayici.ad
+        ai_pro_hedef.kosulsuz_ayarla(_saglayici, payload.kosulsuz is True)  # T3 · Y189 (kedide yok sayılır)
         if _organ_req in _saglayici.hedef_idleri():
             _ai_organ_id = _organ_req  # panelde seçili hedef için lokalize et
         elif _organ_req != _saglayici.varsayilan_hedef:
@@ -3116,6 +3135,10 @@ def ai_pro_hazirlik_durdur():
     """Önizlemeyi durdur (kamera bırakılır). Panel Vazgeç / süre-tavanı / seans başlangıcında çağırır.
     Gövdesiz + açık: önizleme bir tedavi DEĞİL (bobin sürmez), durdurmak herkese açık kalabilir."""
     _ai_hazirlik_durdur_ic()
+    # T3 · Y189: seans yokken koşulsuz kip önizlemeyle biter (seans sürüyorsa kip MÜHÜRDENDİR — dokunulmaz).
+    if not _ai_loop_active and _ai_pro_surus_muhru() is None:
+        for _s in ai_pro_hedef.SAGLAYICILAR.values():
+            ai_pro_hedef.kosulsuz_ayarla(_s, False)
     return {"status": "success"}
 
 
@@ -3136,6 +3159,8 @@ def ai_pro_status():
         # catDetected/guvenDokumu/ownerClientId/hazirlik*) AYNEN kalır → eski istemciler kırılmaz.
         "model": _aktif_saglayici().ad,
         "modelName": _aktif_saglayici().title,
+        # T3 · Y189 yalnız-ek: etkin sağlayıcı KOŞULSUZ kipte mi (panel rozeti).
+        "kosulsuz": bool(getattr(_aktif_saglayici(), "kosulsuz", False)),
         # Faz 2 yalnız-ek: kare üstünde hedef seçimi (targets), kalibrasyon rozeti (method/mmPerPx)
         # ve onay ekranı uyarıları (ood) BU alanlardan beslenir. Kedi hattında boş/varsayılan.
         "targets": _ai_organ_cache.get("targets") or [],
@@ -3752,6 +3777,9 @@ async def analyze_em_fantom(
     phantom_length_cm: float = Form(None),
     achieved_B: float = Form(None),
     duty_sum: float = Form(None),
+    # T3 · Y189 (sahip + Çağlar Hoca): KOŞULSUZ kip — PEMF kapısının engelleyici / yeniden-çekim / güvenilmez nedenleri
+    # sonucu "kullanılamaz" yapmaz, uyarı olarak gösterilir (`pemf_kapisi.atlanan`). Varsayılan KOŞULLU.
+    kosulsuz: bool = Form(False),
 ):
     """Fantom Tümör Analizi (phantom_cv_v3 — hocanın v3'ü, AI-2 — + BiLSTM_XXL_Raw ONNX).
 
@@ -3760,6 +3788,8 @@ async def analyze_em_fantom(
     yoksa piksel) → PhantomPredictor ile her tümör için D1-7/P1-7 + E_cancer.
     Klasik CV (headless-güvenli), 6-panel annotated görsel döner.
     """
+    # T3 · Y189: YALNIZ gerçek True açar — doğrudan çağrıda (test / iç çağıran) Form varsayılanı FieldInfo'dur (truthy).
+    kosulsuz = kosulsuz is True
     try:
         if ai_service_enabled():
             # I18NI-A3.2: GPU servisi katalog taşımaz (yaprak modül) → panel adları burada İSTEK dilinde kurulur.
@@ -3774,6 +3804,8 @@ async def analyze_em_fantom(
                         "achieved_B": achieved_B,
                         "duty_sum": duty_sum,
                         "dil": ceviri.etkin_dil(),
+                        # T3 · Y189 (None = gönderilmez; eski servis etkilenmez)
+                        "kosulsuz": True if kosulsuz else None,
                     },
                 ),
                 _PANEL_ADLARI,
@@ -3814,7 +3846,7 @@ async def analyze_em_fantom(
 
         payload = result.to_dict()
         # Y144: tüketim kapısı BİR KEZ hesaplanır — hem yanıta eklenir hem bağlam / açıklama kararını verir (tek kaynak).
-        _pemf = _pemf_alanlari(payload, "fantom")
+        _pemf = _pemf_alanlari(payload, "fantom", kosulsuz)
         # CANLI E-ALANI bağlamı (2026-08-06): tümör konumu + organ seans boyunca DEĞİŞMEZ.
         # Bunu saklarsak tedavi sürerken E'yi AYNI vekil modelle canlı B/duty'den türetebiliriz
         # → bar'daki değer bu paneldeki E ile aynı kaynaktan gelir (bkz. servers/efield_live.py).
@@ -3922,6 +3954,9 @@ async def analyze_em_petri(
     control_healthy: str = Form(None),
     control_cancer: str = Form(None),
     a1_corner: str = Form(None),
+    # T3 · Y189 (sahip + Çağlar Hoca): KOŞULSUZ kip — hattı kesen engeller (plaka bulunamadı → ham YOLO, makullik reddi) ve
+    # PEMF kapısının nedenleri uyarıya döner. Varsayılan KOŞULLU = davranış AYNI.
+    kosulsuz: bool = Form(False),
 ):
     """Petri Kuyu Analizi (petri_cv_v2 — hocanın v2'si: 24'lük plaka ızgarası / tekil kap YOLO11m-seg + BaggingRegressor ONNX).
 
@@ -3944,6 +3979,8 @@ async def analyze_em_petri(
         eşikle çıkan sonuç yanıltıcı olabilir. Bu yüzden yanıt ETKİN ayarları taşır
         (plausibility.thresholds + yolo_ayar + resize) — denetim izi.
     """
+    # T3 · Y189: YALNIZ gerçek True açar — doğrudan çağrıda (test / iç çağıran) Form varsayılanı FieldInfo'dur (truthy).
+    kosulsuz = kosulsuz is True
     try:
         # Sınır doğrulaması İKİ DALIN DA ÖNÜNDE: uç auth-muaf ve curl ile doğrudan çağrılabilir,
         # yani arayüz doğrulaması atlanabilir (resize_max=1 görüntüyü tek piksele indirir,
@@ -3994,6 +4031,8 @@ async def analyze_em_petri(
                     "control_cancer": control_cancer,
                     "a1_corner": a1_corner,
                     "dil": ceviri.etkin_dil(),  # I18NI-A3.3: panel görselinin dili (fantom ucuyla aynı)
+                    # T3 · Y189 (None = gönderilmez; eski servis etkilenmez)
+                    "kosulsuz": True if kosulsuz else None,
                 },
             )
             # MİKROSERVİS YOLU: makullik reddi ai_hub boru hattında verilir (ai_service o kodu
@@ -4014,6 +4053,7 @@ async def analyze_em_petri(
             petri_diameter_cm=petri_diameter_cm,
             yolo_model_path=cache["yolo_path"],
             yolo_device="cpu",
+            kosulsuz=kosulsuz,
             **_ayar,
         )
         pl.yolo = cache["yolo"]
@@ -4058,7 +4098,7 @@ async def analyze_em_petri(
         _payload = result.to_dict()
         wells = _payload["wells"]
         # Y144: tüketim kapısı BİR KEZ hesaplanır (yanıt + açıklama kararı — tek kaynak).
-        _pemf = _pemf_alanlari(_payload, "petri")
+        _pemf = _pemf_alanlari(_payload, "petri", kosulsuz)
         # §KALAN A5: em_kedi paritesi — ilk kuyu icin hafif duyarlilik meta'si (zarif).
         _xai_meta = {}
         # ⚠️ D1.E07 (İG-5.76): PİKSEL kipinde koordinat piksel farkıdır → XAI duyarlılığı üretilmez (fantomla aynı).

@@ -600,12 +600,24 @@
     "nasilCalisir": "👋 Nasıl çalışır?",
     "nasilCalisirGovde": "Bir modüle <kalin>dokunun</kalin> → hemen altında açılır; <kalin>birden fazlasını aynı anda açık tutabilirsiniz</kalin>. İhtiyaca göre<kalin> fotoğraf/canlı kamera</kalin>, <kalin>ses</kalin> ya da<kalin> klinik değer</kalin> girip analizi başlatın. Her modülün başında kısa bir kullanım ipucu var."
   },
+  "kabinKamerasi": {
+    "cek": "Kabin kamerasından çek",
+    "cekiliyor": "Kabin kamerasından alınıyor…",
+    "hata": "Kabin kamerasından görüntü alınamadı. Ayarlar ▸ Kabin kamerası bölümünden kamerayı seçip yeniden deneyin."
+  },
   "kopru": {
     "etiket": "Bu {{hedef}} için AI Pro seansı: Kontrol ekranına git",
     "hedefFantom": "tümör",
     "hedefPetri": "kuyu",
     "ipucu": "Seans onaydan sonra başlar; bu düğme yalnız Kontrol ekranını açar",
     "metin": "⚡ Bu hedefe AI Pro seansı → Kontrol"
+  },
+  "kosul": {
+    "etiket": "Analiz koşulları",
+    "kosullu": "Koşullu",
+    "kosulluAciklama": "Koşullu (önerilen): plaka, makullik ve görüntü kalitesi engelleri analizi ve bobin sürüşünü durdurur.",
+    "kosulsuz": "Koşulsuz",
+    "kosulsuzUyari": "Koşulsuz: engeller analizi kesmez, uyarı olarak gösterilir; sonuç doğrulanmamıştır. AI Pro'da koşulsuz öneri bobin sürebilir — kabinde konum yoksa yine sürülmez."
   },
   "modul": {
     "bobrekCt": {
@@ -983,11 +995,13 @@
       "sunucuAciliyor": "Sunucu kamerası açılıyor… görüntü bekleniyor"
     },
     "kapi": {
+      "atlandi": " (koşulsuz: atlandı)",
       "baglamFantom": "Canlı E göstergesi ve “dozu en çok belirleyen” açıklaması bu sonuçtan kurulmadı — sonuç sürülebilir değil (nedenler aşağıda).",
       "baglamPetri": "“Dozu en çok belirleyen” açıklaması bu sonuçtan üretilmedi — sonuç sürülebilir değil (nedenler aşağıda).",
       "esasAlinmaz": "Aşağıdaki D / P / E değerleri bobin sürüşüne ESAS ALINMAZ:",
       "gecerli": "✔ PEMF girdisi geçerli",
       "gecersiz": "⛔ PEMF girdisi GEÇERSİZ",
+      "kosulsuzBaslik": "KOŞULSUZ — doğrulanmamış sonuç; atlanan engeller aşağıda uyarı olarak yazılıdır.",
       "kullanilamaz": "⛔ Sonuç bobin sürüşüne KULLANILAMAZ (kabin konumu geçerli — nedenler aşağıda)",
       "tespitGuvenilir": "   ·   tespit güvenilir",
       "tespitGuvenilirDegil": "   ·   ⛔ tespit güvenilir DEĞİL",
@@ -995,6 +1009,7 @@
     },
     "kediSurusKapali": "Kedi AI Pro sürüşü, kabin konumu doğrulanana kadar kapalı. Analizi ve öneriyi inceleyebilirsiniz; seansı Kontrol ekranından elle başlatın.",
     "konumEgitimDisi": "Konum, modelin eğitim aralığı dışında olabilir — sonuç araştırma amaçlıdır.",
+    "kosulsuzEtkin": "KOŞULSUZ kip etkin: engeller atlanıyor, konum doğrulanmamış olabilir.",
     "metrik": {
       "bulundu": "✓ Bulundu",
       "guven": "Güven",
@@ -1029,6 +1044,7 @@
       "guvenDusuk": " — DÜŞÜK, konumu doğrulayın",
       "hastaSecilmedi": "— seçilmedi (sahipsiz kaydedilir)",
       "konum": "Konum (mm): x {{x}} · y {{y}} · z {{z}}",
+      "kosulsuz": "⚠ KOŞULSUZ öneri: plaka, kalite ve güven engelleri atlandı; konum doğrulanmamış olabilir. Onaylarsanız seans bu kipte sürer.",
       "leadDeney": "Deney seansı <kalin>onaylanmadan başlamaz</kalin>. Aşağıdaki parametreleri inceleyip onaylayın veya gerekçesiyle reddedin.",
       "leadOtonom": "Otonom seans <kalin>onaylanmadan başlamaz</kalin>. Aşağıdaki parametreleri inceleyip onaylayın veya gerekçesiyle reddedin.",
       "onaylaBaslat": "Onayla ve Başlat",

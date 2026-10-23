@@ -47,6 +47,8 @@ export interface AiProposalSpecs {
   /** D2.E15: MÜHÜRLENEN hasta (opak kimlik + ad) — `/start` seansı buna bağlar. Boş = hasta seçilmedi (sahipsiz). */
   patient_id?: string;
   patient_name?: string;
+  /** T3 · Y189: KOŞULSUZ öneri (engeller atlandı) — mühürde; `/start` seansı bu kipte açar. Alan yoksa koşullu. */
+  kosulsuz?: boolean;
 }
 
 export interface AiProposalMeta {
@@ -309,6 +311,13 @@ export function AiSpecApprovalModal({
 
           {model === "petri" ? (
             <Text style={s.uyari}>{t("ai.pro.onay.petriSinirli")}</Text>
+          ) : null}
+
+          {/* T3 · Y189: koşulsuz öneri onaylanmadan ÖNCE açıkça söylenir (doğrulanmamış konumla sürüş). */}
+          {specs.kosulsuz === true ? (
+            <Text style={s.uyari} testID="ai-onay-kosulsuz">
+              {t("ai.pro.onay.kosulsuz")}
+            </Text>
           ) : null}
 
           {guven !== null && (

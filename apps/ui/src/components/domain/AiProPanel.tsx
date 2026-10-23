@@ -20,6 +20,7 @@ import { useAppNav } from "@/context/AppNavContext";
 import { profilSozlugu } from "@/utils/profilSozlugu";
 import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Platform } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import { KosulSecici } from "@/components/domain/AnalizKosulu";
 import { colors, spacing, typography, rf, rs, touch } from "@/theme/tokens";
 import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
 import { type HedefModeli, MODUL_GEREKSINIMI, modelProfili } from "@/components/domain/aiProProfilleri";
@@ -242,6 +243,8 @@ interface AiProStatus {
   hazirlikHataKodu?: string;
   /** Y142: kedi AI Pro kapalı döngü sürüşü açık mı (`PEMF_KEDI_AIPRO_SURUS`). Alan yoksa bilinmiyor → eski davranış. */
   kediAiProSurusAcik?: boolean;
+  /** T3 · Y189: etkin sağlayıcı KOŞULSUZ kipte mi. Alan yoksa (eski backend) koşullu. */
+  kosulsuz?: boolean;
 }
 interface AiProAction {
   status?: string;
@@ -304,6 +307,14 @@ export function AiProPanel({
   useEffect(() => {
     hedefModeliRef.current = hedefModeli;
   }, [hedefModeli]);
+  /** T3 · Y189: Koşullu | Koşulsuz (yalnız araştırma modelleri — petri / fantom). Varsayılan koşullu, hatırlanmaz. Ref:
+   *  `hedefModeliRef` ile AYNI gerekçe (öneri efektinin bağımlılık dizisi kaynak-regex kapısıdır). Backend kipi hazırlıkta alır,
+   *  öneri MÜHRÜNE yazar; `/start` mühürden okur. */
+  const [kosulsuz, setKosulsuz] = useState(false);
+  const kosulsuzRef = useRef(false);
+  useEffect(() => {
+    kosulsuzRef.current = kosulsuz;
+  }, [kosulsuz]);
   /** Denetim izi için taşınan profil — `hedefModeliRef` ile AYNI gerekçe (öneri efektinin
    *  bağımlılık dizisi kaynak-regex kapısıdır, prop'u diziye sokmak onu kırardı). */
   const kullaniciKipiRef = useRef(kullaniciKipi);
@@ -333,6 +344,8 @@ export function AiProPanel({
   const [yontem, setYontem] = useState("");
   const [hedefEtiket, setHedefEtiket] = useState("");
   const [ood, setOod] = useState(false);
+  /** T3 · Y189: backend'in ETKİN kipi (rozet bunu gösterir — panelin seçimi değil, sürülen kip). */
+  const [sunucuKosulsuz, setSunucuKosulsuz] = useState(false);
   const [ozneVar, setOzneVar] = useState(false);
   /** `PEMF_ARASTIRMA_AIPRO`: null = bilinmiyor (alan yok / durum okunamadı). */
   const [arastirmaAcik, setArastirmaAcik] = useState<boolean | null>(null);
@@ -502,6 +515,7 @@ export function AiProPanel({
       setYontem(typeof st.method === "string" ? st.method : "");
       setHedefEtiket(typeof st.targetLabel === "string" ? st.targetLabel : "");
       setOod(Boolean(st.ood));
+      setSunucuKosulsuz(st.kosulsuz === true);  // T3 · Y189
       setOzneVar(Boolean(st.subjectDetected ?? st.catDetected));
       setArastirmaAcik(typeof st.arastirmaAiProAcik === "boolean" ? st.arastirmaAiProAcik : null);
       setKediSurusAcik(typeof st.kediAiProSurusAcik === "boolean" ? st.kediAiProSurusAcik : null);
@@ -601,7 +615,7 @@ export function AiProPanel({
     oneriBeklemeRef.current = 0;
     const hz = await apiPost<AiProAction | null>(
       "/ai/pro/hazirlik/baslat",
-      { organ_id: organId, client_id: clientIdRef.current, model: hedefModeliRef.current },
+      { organ_id: organId, client_id: clientIdRef.current, model: hedefModeliRef.current, kosulsuz: kosulsuzRef.current },
       null
     );
     // B3: komut sunucuya ULAŞMADIYSA hazırlığa girme — aksi hâlde düğme 120 sn "Hazırlanıyor…"da
@@ -660,6 +674,8 @@ export function AiProPanel({
           // D2.E15: hasta mühre yazılır (onay penceresi gösterir, `/start` buradan okur).
           patient_id: hastaRef.current.id,
           patient_name: hastaRef.current.name,
+          // T3 · Y189: panelin kipi — önizleme konumu farklı kipte bulunduysa backend 409 (mühür karışmaz).
+          kosulsuz: kosulsuzRef.current,
         },
         null,
         { silent: true }
@@ -712,6 +728,8 @@ export function AiProPanel({
           // D2.E15: hasta mühre yazılır (onay penceresi gösterir, `/start` buradan okur).
           patient_id: hastaRef.current.id,
           patient_name: hastaRef.current.name,
+          // T3 · Y189: panelin kipi — önizleme konumu farklı kipte bulunduysa backend 409 (mühür karışmaz).
+          kosulsuz: kosulsuzRef.current,
         },
         null,
         { silent: true }
@@ -884,7 +902,7 @@ export function AiProPanel({
         setHazirlikHata("");   // B3: yeni deneme taze — bayat "⚠️ …" metni kutuda kalmasın
         const hz = await apiPost<AiProAction | null>(
           "/ai/pro/hazirlik/baslat",
-          { organ_id: organId, client_id: clientIdRef.current, model: hedefModeliRef.current },
+          { organ_id: organId, client_id: clientIdRef.current, model: hedefModeliRef.current, kosulsuz: kosulsuzRef.current },
           null
         );
         // B3: start() ile AYNI kapı — komut sunucuya ULAŞMADIYSA hazırlığa girme; aksi hâlde bu
@@ -1150,6 +1168,16 @@ export function AiProPanel({
           kurulum={kurulum}
           arastirmaAcik={arastirmaAcik}
         />
+      ) : null}
+
+      {/* T3 · Y189: araştırma modelinde Koşullu | Koşulsuz (hazırlık / seans sürerken kilitli — kip mühürdedir). */}
+      {arastirmaKipi && (hedefModeli === "petri" || hedefModeli === "fantom") ? (
+        <KosulSecici kosulsuz={kosulsuz} onDegis={setKosulsuz} kilitli={modelKilitli} testID="ai-pro-kosul" />
+      ) : null}
+      {arastirmaKipi && sunucuKosulsuz && (hazirlik || running) ? (
+        <Text testID="ai-pro-kosulsuz-rozeti" style={[styles.note, { color: colors.warning, fontWeight: "bold" }]}>
+          {t("ai.pro.kosulsuzEtkin")}
+        </Text>
       ) : null}
 
       {/* Kamera görüntüsü: web = sunucudan (Image), mobil = telefon kamerası (CameraView) */}

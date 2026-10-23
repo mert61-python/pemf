@@ -1174,12 +1174,13 @@ def _sonlu_degilse_422(e):
     return None
 
 
-def _pemf_alanlari(payload: dict, model: str) -> dict:
-    """AI-2 router paritesi (`ai_router._pemf_alanlari`): hocanın v2/v3 alanları + tüketim kapısı; üretilemezse FAIL-CLOSED."""
+def _pemf_alanlari(payload: dict, model: str, kosulsuz: bool = False) -> dict:
+    """AI-2 router paritesi (`ai_router._pemf_alanlari`): hocanın v2/v3 alanları + tüketim kapısı; üretilemezse FAIL-CLOSED.
+    T3 · Y189: `kosulsuz` router paritesi (GPU dağıtımında arayüzün düğmesi sessizce ÖLÜ kalmasın)."""
     try:
         from ai_hub.cv_ortak import pemf_kapisi as _pk
 
-        return _pk.yanit_alanlari(payload, model=model)
+        return _pk.yanit_alanlari(payload, model=model, kosulsuz=kosulsuz)
     except Exception:
         import logging as _lg
 
@@ -1207,8 +1208,12 @@ def infer_em_fantom(
     achieved_B: float = Form(None),
     duty_sum: float = Form(None),
     dil: str = Form(None),
+    kosulsuz: bool = Form(False),
 ):
     """Fantom tümör: klasik CV + BiLSTM (D/P/E). phantom_length_cm ile gerçek-mm ölçek."""
+    kosulsuz = (
+        kosulsuz is True
+    )  # T3 · Y189: doğrudan çağrıda Form varsayılanı FieldInfo'dur (truthy) — yalnız gerçek True
     try:
         data = file.file.read()
         _red = _kapi(data, "em_fantom")
@@ -1231,7 +1236,8 @@ def infer_em_fantom(
         # ayrışmasına kapı açardı. Tespit yoksa orijinal kare kodlanır (yedek yol).
         _b64, _boyut = _kok_gorseli_sec(_paneller, _kapakli_kodla_servis, img)
         payload = result.to_dict()
-        _pemf = _pemf_alanlari(payload, "fantom")  # Y144: tek hesap — yanıt + açıklama kararı (router paritesi)
+        # Y144: tek hesap — yanıt + açıklama kararı (router paritesi)
+        _pemf = _pemf_alanlari(payload, "fantom", kosulsuz)
         # §KALAN A5 (router paritesi): ilk tumor bolgesi icin hafif duyarlilik meta'si.
         # Aciklama IKINCIL — hatasi analizi ASLA dusurmez (zarif). Sync uc (threadpool)
         # oldugundan dogrudan cagri yeterli; 7+1 ONNX forward ~ms mertebesi.
@@ -1314,6 +1320,7 @@ def infer_em_petri(
     control_cancer: str = Form(None),
     a1_corner: str = Form(None),
     dil: str = Form(None),
+    kosulsuz: bool = Form(False),
 ):
     """Petri kuyu (hocanın v2'si): 24'lük plaka ızgarası / tekil kap YOLO-seg + klasik CV + BaggingRegressor.
 
@@ -1323,6 +1330,9 @@ def infer_em_petri(
     """
     from ai_hub.inference_petri_dish import petri_ayar as _pa
 
+    kosulsuz = (
+        kosulsuz is True
+    )  # T3 · Y189: doğrudan çağrıda Form varsayılanı FieldInfo'dur (truthy) — yalnız gerçek True
     try:
         try:
             _ayar = _pa.coz(
@@ -1351,6 +1361,7 @@ def infer_em_petri(
             petri_diameter_cm=petri_diameter_cm,
             yolo_model_path=c["yolo_path"],
             yolo_device=_yolo_device(),
+            kosulsuz=kosulsuz,
             **_ayar,
         )
         pl.yolo = c["yolo"]
@@ -1369,7 +1380,8 @@ def infer_em_petri(
         # AI-2 router paritesi: kuyucuklar `to_dict()`ten (NaN → None; v2 alanları NaN taşıyabilir).
         _payload = result.to_dict()
         wells = _payload["wells"]
-        _pemf = _pemf_alanlari(_payload, "petri")  # Y144: tek hesap — yanıt + açıklama kararı (router paritesi)
+        # Y144: tek hesap — yanıt + açıklama kararı (router paritesi)
+        _pemf = _pemf_alanlari(_payload, "petri", kosulsuz)
         # §KALAN A5 (router paritesi): ilk kuyu icin hafif duyarlilik meta'si (zarif).
         _xai_meta = {}
         # D1.E07 (İG-5.76, router paritesi): piksel kipinde XAI üretilmez.

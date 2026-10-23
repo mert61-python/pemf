@@ -18,6 +18,11 @@ modülün ürettiği eylem metinleri). Kopyalanırsa sürüklenir. Saf fonksiyon
 ⚠️ FAIL-CLOSED: alan YOKSA (eski v1 sonucu, bozuk yanıt) "geçerli" SAYILMAZ — `pemf_valid` / `reliable` eksikse sürülemez.
 ⚠️ Bu kapı `PEMF_ARASTIRMA_AIPRO` bayrağından BAĞIMSIZDIR: bayrak araştırma sürüşünü AÇAR, bu kapı geçersiz sonucu yine KESER.
 ⚠️ Bu bir HEDEF GEÇERLİLİK denetimidir (lokalizasyon) — tedavi doz kıskacı değil (Ö.4-Y9 temiz); ACİL DURDUR'a dokunmaz (Ö.4-Y8).
+
+KOŞULSUZ KİP (T3 · Y189, sahip + Çağlar Hoca 2026-10-23: "engelleri tamamen kaldırdığın bir sürüm, düğmeyle; AI tek başına ne
+bulacak"): `degerlendir(..., kosulsuz=True)` engelleyici / yeniden-çekim / güvenilmez nedenlerini SÜRÜŞÜ KESMEYEN uyarıya çevirir
+(`atlanan`; `nedenler` ve `mesajlar` TAM kalır — operatör ne atlandığını görür). Kalan iki koşul fiziksel: sonuç var (`success`) ve
+konum KABİN çerçevesinde (`pemf_valid`) — koordinat yoksa bobine gidecek hedef de yoktur. Varsayılan KOŞULLU (davranış aynı).
 """
 
 from __future__ import annotations
@@ -145,7 +150,11 @@ def varsayimlar(sonuc, *, model: str) -> list[dict]:
     return out
 
 
-def yanit_alanlari(sonuc, *, model: str) -> dict:
+#: KOŞULSUZ kipte de sürüşü KESEN nedenler (fiziksel: sonuç yok / kabin çerçevesinde konum yok).
+KOSULSUZDA_KALAN = ("basarisiz", "pemf_gecersiz")
+
+
+def yanit_alanlari(sonuc, *, model: str, kosulsuz: bool = False) -> dict:
     """AI Hub analiz yanıtına EKLENEN v2/v3 alanları — gömülü uç (`ai_router`) ve GPU servisi (`ai_service`) AYNI kümeyi
     döndürsün diye tek yerde. Mevcut alanlar (`n_tumor`, `tumor_regions`, `n_wells`, `wells`, `centroid_cabin_mm`, `D`,
     `E_cancer`, `mm_per_px` …) çağıranın kendi sözlüğünde KALIR; bunlar yalnız EKTİR (eski istemci yok sayar).
@@ -154,7 +163,8 @@ def yanit_alanlari(sonuc, *, model: str) -> dict:
         "pemf_valid": _al(sonuc, "pemf_valid") is True,
         "warnings": _uyari_listesi(_al(sonuc, "warnings")),
         "coord_frame": str(_al(sonuc, "coord_frame") or ""),
-        "pemf_kapisi": degerlendir(sonuc, model=model),
+        "pemf_kapisi": degerlendir(sonuc, model=model, kosulsuz=kosulsuz),
+        "kosulsuz": kosulsuz is True,
     }
     if model == "fantom":
         d["reliable"] = _al(sonuc, "reliable") is True
@@ -169,14 +179,18 @@ def yanit_alanlari(sonuc, *, model: str) -> dict:
     return d
 
 
-def degerlendir(sonuc, *, model: str) -> dict:
+def degerlendir(sonuc, *, model: str, kosulsuz: bool = False) -> dict:
     """Hocanın §3 sırasıyla değerlendir → `{"surulebilir", "pemf_gecerli", "nedenler", "engelleyici", "yeniden_cekim",
     "uyari_kodlari", "eylem", "mesajlar", "varsayimlar"}`. `model`: "petri" | "fantom".
 
     `surulebilir` False ise sonuç bobine / `_predict_and_drive`'a GİTMEZ. AI Hub tek-foto analizi D/P/E'yi yine gösterir
-    ama `mesajlar`daki eylem metniyle (D/P/E "geçersiz" etiketlidir)."""
+    ama `mesajlar`daki eylem metniyle (D/P/E "geçersiz" etiketlidir).
+    `kosulsuz` (Y189): yalnız `KOSULSUZDA_KALAN` nedenleri sürüşü keser; diğerleri `atlanan`da (uyarı) — modül docstring'i."""
     if model not in ("petri", "fantom"):
         raise ValueError(f"pemf kapısı: bilinmeyen model {model!r}")
+    # Y189: YALNIZ gerçek True açar — doğruluk değeri taşıyan başka nesne (ör. doğrudan çağrıda FastAPI `Form(False)` FieldInfo'su)
+    # koşullu kalır (fail-closed).
+    kosulsuz = kosulsuz is True
     nesne = "plakanın" if model == "petri" else "fantomun"
     nesne_yalin = "plakaya" if model == "petri" else "fantoma"
     kodlar = uyari_kodlari(_al(sonuc, "warnings") or [])
@@ -195,8 +209,13 @@ def degerlendir(sonuc, *, model: str) -> dict:
     mesajlar = [
         {"kod": n, "metin": _EYLEM[n].format(nesne=nesne, nesne_yalin=nesne_yalin, hata=hata)} for n in nedenler
     ]
+    # Y189: koşulsuz kipte yalnız fiziksel nedenler keser; geri kalanı ATLANIR ama listede kalır (uyarı olarak gösterilir).
+    kesen = [n for n in nedenler if n in KOSULSUZDA_KALAN] if kosulsuz else list(nedenler)
+    atlanan = [n for n in nedenler if n not in kesen]
     return {
-        "surulebilir": not nedenler,
+        "surulebilir": not kesen,
+        "kosulsuz": kosulsuz,
+        "atlanan": atlanan,
         "pemf_gecerli": pemf,
         "nedenler": nedenler,
         "engelleyici": engel,

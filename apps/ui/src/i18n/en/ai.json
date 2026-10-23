@@ -600,12 +600,24 @@
     "nasilCalisir": "👋 How it works",
     "nasilCalisirGovde": "<kalin>Tap</kalin> a module → it opens right below; <kalin>you can keep several open at the same time</kalin>. Depending on what you need, use a <kalin>photo or the live camera</kalin>, <kalin>audio</kalin> or <kalin>clinical values</kalin>, then start the analysis. Each module begins with a short usage tip. "
   },
+  "kabinKamerasi": {
+    "cek": "Capture from cabin camera",
+    "cekiliyor": "Capturing from the cabin camera…",
+    "hata": "Could not capture from the cabin camera. Choose the camera under Settings ▸ Cabin camera and try again."
+  },
   "kopru": {
     "etiket": "AI Pro session for this {{hedef}}: go to the Control screen",
     "hedefFantom": "tumor",
     "hedefPetri": "well",
     "ipucu": "The session starts only after approval; this button only opens the Control screen.",
     "metin": "⚡ AI Pro session for this target → Control"
+  },
+  "kosul": {
+    "etiket": "Analysis conditions",
+    "kosullu": "Conditional",
+    "kosulluAciklama": "Conditional (recommended): plate, plausibility and image quality checks stop the analysis and the coil drive.",
+    "kosulsuz": "Unconditional",
+    "kosulsuzUyari": "Unconditional: the checks do not stop the analysis and are shown as warnings; the result is unverified. In AI Pro an unconditional proposal can drive the coils — still not without a position in the cabin."
   },
   "modul": {
     "bobrekCt": {
@@ -983,11 +995,13 @@
       "sunucuAciliyor": "Opening the server camera… waiting for image"
     },
     "kapi": {
+      "atlandi": " (unconditional: skipped)",
       "baglamFantom": "The live E indicator and the “main dose determinant” explanation were not built from this result — the result is not drivable (reasons below).",
       "baglamPetri": "The “main dose determinant” explanation was not produced from this result — the result is not drivable (reasons below).",
       "esasAlinmaz": "The D / P / E values below are NOT used as the basis for coil driving:",
       "gecerli": "✔ PEMF input is valid",
       "gecersiz": "⛔ PEMF input is INVALID",
+      "kosulsuzBaslik": "UNCONDITIONAL — unverified result; the skipped checks are listed below as warnings.",
       "kullanilamaz": "⛔ The result CANNOT BE USED for coil driving (cabin position is valid — reasons below)",
       "tespitGuvenilir": "   ·   detection is reliable",
       "tespitGuvenilirDegil": "   ·   ⛔ detection is NOT reliable",
@@ -995,6 +1009,7 @@
     },
     "kediSurusKapali": "Cat AI Pro driving is off until the cabin position is verified. You can review the analysis and the recommendation; start the session manually from the Control screen.",
     "konumEgitimDisi": "The position may be outside the model's training range — the result is for research purposes.",
+    "kosulsuzEtkin": "UNCONDITIONAL mode active: checks are skipped, the position may be unverified.",
     "metrik": {
       "bulundu": "✓ Found",
       "guven": "Confidence",
@@ -1029,6 +1044,7 @@
       "guvenDusuk": " — LOW, verify the position",
       "hastaSecilmedi": "— not selected (saved without an owner)",
       "konum": "Position (mm): x {{x}} · y {{y}} · z {{z}}",
+      "kosulsuz": "⚠ UNCONDITIONAL proposal: plate, quality and confidence checks were skipped; the position may be unverified. If you approve, the session runs in this mode.",
       "leadDeney": "An experiment session <kalin>does not start without approval</kalin>. Review the parameters below and approve, or reject with a reason.",
       "leadOtonom": "An autonomous session <kalin>does not start without approval</kalin>. Review the parameters below and approve, or reject with a reason.",
       "onaylaBaslat": "Approve and Start",

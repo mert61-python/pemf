@@ -203,3 +203,25 @@ def kabin_kamerasi_tara():
     if _ai_kamerasi_mesgul():
         raise HTTPException(status_code=409, detail=ceviri.t("ayarlar.kabinKamerasi.taramaMesgul"))
     return {"kameralar": kk.kameralari_tara(), "secili": kk.secili_kamera()}
+
+
+@router.post("/kabin-kamerasi/kare")
+def kabin_kamerasi_kare():
+    """T3 · Y189 (sahip): petri / fantom analizine SEÇİLİ kabin kamerasından tam çözünürlüklü TEK kare (1920×1080 isteği —
+    kalibrasyonla aynı). AI Pro kamerayı tutuyorsa 409; seçim yoksa 409 (dahili kameraya düşüş YOK); kare alınamazsa 503."""
+    from utils import ceviri
+    from utils import kabin_kamerasi as kk
+
+    if _ai_kamerasi_mesgul():
+        raise HTTPException(status_code=409, detail=ceviri.t("ayarlar.kabinKamerasi.kareMesgul"))
+    try:
+        kare = kk.kare_al()
+    except kk.KameraSecilmedi:
+        raise HTTPException(status_code=409, detail=ceviri.t("ai.pro.hazirlik.kameraSecilmedi")) from None
+    if kare is None:
+        secim = kk.secili_kamera() or {}
+        raise HTTPException(
+            status_code=503,
+            detail=ceviri.t("ayarlar.kabinKamerasi.kareAlinamadi", indeks=str(secim.get("indeks", "?"))),
+        )
+    return {"status": "success", **kare}
