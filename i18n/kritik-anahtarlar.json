@@ -3112,6 +3112,13 @@
   },
   {
    "yuzey": "sunucu",
+   "anahtar": "firmware.estopKartYanitsiz",
+   "tur": "estop",
+   "kaynak": "apps/backend/utils/stm32_kimlik.py",
+   "aciklama": "kart STOP komutuna yanıt vermedi (T2D-1): bobinler durmamış olabilir; gücü kesin"
+  },
+  {
+   "yuzey": "sunucu",
    "anahtar": "donanim.hata.parametreGecersiz",
    "tur": "donanim",
    "kaynak": "apps/backend/controllers/hardware_controller.py",

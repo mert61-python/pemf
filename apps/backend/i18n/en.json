@@ -516,6 +516,7 @@
   },
   "firmware": {
     "estopKartRed": "The device board rejected the STOP command — the coils may not have stopped. Cut the device's power or unplug the USB cable.",
+    "estopKartYanitsiz": "The device board did not respond to the STOP command — the coils may not have stopped. Cut the device's power or unplug the USB cable.",
     "komutRed": "The device board is rejecting commands — the board's firmware is incompatible with this app version; the coils will not run. Call technical support (code: FW-PAKET).",
     "operatorKimlik": "The device board could not be verified. Press the BLACK reset button on the board once (not the blue one).",
     "operatorPaket": "The device board's firmware is incompatible with this app version — the coils will not run. Call technical support (code: FW-PAKET).",

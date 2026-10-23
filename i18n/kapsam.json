@@ -6339,6 +6339,13 @@
      ]
     },
     {
+     "metin": "Cihaz kartı STOP komutuna yanıt vermedi — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın.",
+     "gerekce": "ACİL DURDUR / başlatma kapısı metin SABİTİ: Türkçe kaynakta KALIR (fail-safe yedek + mandal EYLEM metni donmuş); gösterim katalogdan istek dilinde üretilir (eşlik testi)",
+     "turler": [
+      "sabit"
+     ]
+    },
+    {
      "metin": "Kart uygulamanin {{STM_PAKET_BOYU}} baytlik paketini SISTEMATIK reddediyor (arada STM_OK olmadan ard arda {{crc}} STM_NACK: CRC)",
      "gerekce": "firmware uyum SEBEBİ (destek metni: günlük + `/api/health` `stmUyumsuzlukSebebi`) — TD1 K1: operatöre `operator_metni` gider",
      "turler": [

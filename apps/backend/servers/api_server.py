@@ -7262,7 +7262,7 @@ def _stm_stop_yazildi_mi(kuyruga_verildi: bool, isaret, stop_sirasi=None) -> boo
 
 
 def _stm_stop_kart_yaniti(stop_sirasi):
-    """TD3: bu E-stop'un STOP'una kartın yanıtı — "kabul" | "red" | None (yanıt yok / izi bildirmeyen çekirdek). Yalnız RAPOR."""
+    """TD3: bu E-stop'un STOP'una kartın yanıtı — "kabul" | "red" | "yanitsiz" (T2D-1) | None (izi bildirmeyen çekirdek). Yalnız RAPOR."""
     _bekle = getattr(getattr(state.hardware, "core", None), "hw_stop_yaniti_bekle", None)
     if not stop_sirasi or not callable(_bekle):
         return None
@@ -7271,7 +7271,7 @@ def _stm_stop_kart_yaniti(stop_sirasi):
     except Exception:
         logging.getLogger(__name__).warning("E-stop: kartin STOP yaniti okunamadi", exc_info=True)
         return None
-    return yanit if yanit in ("kabul", "red") else None
+    return yanit if yanit in ("kabul", "red", "yanitsiz") else None
 
 
 def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma", kalici: bool = True):
@@ -7467,13 +7467,20 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma", kal
     # ⚠️ TD3 (tezgâh Oturum 13): "porta yazıldı" kartın KABULÜ değildir — uyumsuz kart STOP dahil her pakete CRC NACK dönerken
     # E-stop "teyitli" diyordu. Yazılan STOP'a kartın yanıtı kısa süre beklenir: yalnız NACK → teyit DÜŞER (eylem metni); kabul
     # ya da yanıt yok → bugünkü anlam. STOP'lar yukarıda GİTTİ, NACK yeniden yazımı ve keep-alive telafisi SÜRER (Ö.4-Y8).
+    # ⚠️ T2D-1 (Tezgâh-2, 120 B kart + 1.9.51): kart STOP'a çoğunlukla HİÇ yanıt vermedi (NACK ~1 sn sonra) → "teyitli" sahte
+    # yeşildi. Yanıtsızlık da teyit DÜŞÜRÜR (eylem metni); sonradan gelen tüm-sıfır ACK teyidi yine verir (D1.E04).
     _stm_kart_yaniti = _stm_stop_kart_yaniti(_stm_stop_sirasi) if stm_stopped else None
     _stm_red = _stm_kart_yaniti == "red"
-    _stm_ok = (stm_stopped and not _stm_red) or state.hardware is None  # STM yoksa STM-basarisizligi sayma
+    _stm_yanitsiz = _stm_kart_yaniti == "yanitsiz"
+    _stm_ok = (
+        stm_stopped and not (_stm_red or _stm_yanitsiz)
+    ) or state.hardware is None  # STM yoksa STM-basarisizligi sayma
     _status = "success" if (_stm_ok and _esp_ok) else ("error" if (not _stm_ok and not _esp_ok) else "partial")
     # D1.E04 · İG-6.7: teyit durumu `running:false` sıfırlamasından AYRI yayınlanır (istemci teyitsizken durdurmayı tutar).
     try:
-        live_state.estop_teyidi_yaz(bool(_stm_ok and _esp_ok), "stm_red" if _stm_red else "estop")
+        live_state.estop_teyidi_yaz(
+            bool(_stm_ok and _esp_ok), "stm_red" if _stm_red else ("stm_yanitsiz" if _stm_yanitsiz else "estop")
+        )
     except Exception:
         logging.getLogger(__name__).exception("E-stop: teyit durumu yayinlanamadi (durdurma tamam)")
     if _stm_red:
@@ -7482,6 +7489,12 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma", kal
             _bildir(lambda d: "⛔ " + _stm32_kimlik.estop_kart_red_metni(d), "error")
         except Exception:
             logging.getLogger(__name__).exception("E-stop: kart reddi bildirilemedi (durdurma tamam)")
+    elif _stm_yanitsiz:
+        logging.getLogger(__name__).error("E-stop: kart STOP'a YANIT VERMEDI (tum-sifir STM_OK / NACK yok) — teyit YOK")
+        try:
+            _bildir(lambda d: "⛔ " + _stm32_kimlik.estop_kart_yanitsiz_metni(d), "error")
+        except Exception:
+            logging.getLogger(__name__).exception("E-stop: kart yanitsizligi bildirilemedi (durdurma tamam)")
     return {
         "status": _status,
         "confirmed": bool(_stm_ok and _esp_ok),
@@ -7497,9 +7510,13 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma", kal
         "mandalDosyasi": estop_mandali.yazim_durumu(),
         # D1.114 (yalnız-ek): E-stop anında STM'e firmware yakılıyordu — STM teyidi neden yok, operatör/destek görsün.
         "firmwareYakiliyor": bool(_fw_yakiliyor),
-        # TD3 (yalnız-ek): kartın bu STOP'a yanıtı — "kabul" | "red" | None (yanıt yok); red'de operatör eylem metni.
+        # TD3 (yalnız-ek): kartın bu STOP'a yanıtı — "kabul" | "red" | "yanitsiz" (T2D-1) | None; red / yanıtsızda eylem metni.
         "stmKartYaniti": _stm_kart_yaniti,
-        "stmRedMesaji": _stm32_kimlik.estop_kart_red_metni() if _stm_red else None,
+        "stmRedMesaji": (
+            _stm32_kimlik.estop_kart_red_metni()
+            if _stm_red
+            else (_stm32_kimlik.estop_kart_yanitsiz_metni() if _stm_yanitsiz else None)
+        ),
     }
 
 

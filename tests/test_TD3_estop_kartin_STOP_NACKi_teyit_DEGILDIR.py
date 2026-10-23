@@ -8,7 +8,9 @@ SÖZLEŞME: E-stop'un KENDİ STOP'u porta yazıldıktan sonra kartın yanıtı k
   * tüm-sıfır `STM_OK` → kabul (teyit eskisi gibi);
   * yalnız `STM_NACK` (kabul yok) → `confirmed:false`, `stmKartYaniti:"red"`, eylem metni (gücü kes / USB'yi çıkar), canlı teyit
     `stm_red`, bildirim;
-  * yanıt yok → bugünkü anlam (porta yazıldı) DEĞİŞMEZ.
+  * yanıt yok → T2D-1 (Tezgâh-2, 120 B kart + 1.9.51): `confirmed:true` sahte yeşildi — gerçek kart STOP'a çoğunlukla HİÇ yanıt
+    vermiyor, NACK'i ~1 sn sonra geliyor. Artık `confirmed:false`, `stmKartYaniti:"yanitsiz"`, eylem metni (TR + EN), canlı teyit
+    `stm_yanitsiz`; sonradan gelen tüm-sıfır ACK teyidi yine verir (D1.E04).
 ⚠️ Ö.4-Y8 / D1.55 / A-63: STOP gönderimi AZALMAZ — NACK'te STOP yeniden yazılır, keep-alive STOP telafisi sürer, mandal kurulur; yanıt
 beklemesi yalnız RAPORU etkiler. Aparat: GERÇEK `HeadlessCore._hw_sender_worker` + GERÇEK `Stm32SerialTransport` el sıkışması +
 GERÇEK `HardwareController`; yalnız seri port bayt düzeyinde sahte (kart öykünmesi, en alt kat).
@@ -33,7 +35,11 @@ CRC_NACK = "-> STM_NACK: CRC"
 
 
 class _Kart:
-    """`red`: her pakete CRC NACK (tezgâhtaki 120 B kart); `kabul`: pakete duty'leriyle GERÇEK biçimli `STM_OK`; `sessiz`: yanıt yok."""
+    """`red`: her pakete CRC NACK (tezgâhtaki 120 B kart); `kabul`: pakete duty'leriyle GERÇEK biçimli `STM_OK`; `sessiz`: yanıt yok.
+    T2D-1 (Tezgâh-2'de ölçülen 120 B saha kartı): `saha_sessiz` — saha banner'ı, kimlik sorgusuna ve paketlere HİÇ yanıt yok;
+    `saha_gec_nack` — aynı, yalnız her pakete ~1 sn SONRA CRC NACK (yanıt penceresinden geç)."""
+
+    SAHA = ("red", "saha_sessiz", "saha_gec_nack")
 
     def __init__(self, tur: str):
         from utils.stm32_transport import STM_KIMLIK_SORGUSU, STM_PAKET_BOBIN_SAYISI, STM_PAKET_BOYU
@@ -42,7 +48,7 @@ class _Kart:
         self.port = "COM_TD3"
         self.is_open = True
         self._q: queue.Queue = queue.Queue()
-        self._q.put(((SAHA_BANNER if tur == "red" else YENI_BANNER) + "\r\n").encode())
+        self._q.put(((SAHA_BANNER if tur in self.SAHA else YENI_BANNER) + "\r\n").encode())
         self._sorgu, self._boy, self._n = STM_KIMLIK_SORGUSU, STM_PAKET_BOYU, STM_PAKET_BOBIN_SAYISI
         self.paketler: list[tuple[float, tuple]] = []  # (an, duty'ler)
         self.sessiz = threading.Event()
@@ -70,19 +76,23 @@ class _Kart:
     def write(self, b):
         b = bytes(b)
         if b == self._sorgu:
-            if self.tur != "red":
+            if self.tur not in self.SAHA:
                 self._q.put((YENI_KIMLIK + "\r\n").encode())
         elif len(b) == self._boy and b[:2] == b"\xaa\x55":
             d = struct.unpack_from(f"<{self._n}f", b, 2)
             self.paketler.append((time.monotonic(), d))
             if self.tur == "red":
                 self._gec((CRC_NACK + "\r\n").encode())
+            elif self.tur == "saha_gec_nack":
+                self._gec((CRC_NACK + "\r\n").encode(), 1.0)
+            elif self.tur == "saha_sessiz":
+                pass
             elif self.tur == "kabul" or not self.sessiz.is_set():
                 self._gec((self._ack(d) + "\r\n").encode())
         return len(b)
 
-    def _gec(self, satir: bytes) -> None:
-        t = threading.Timer(self.gecikme, self._q.put, args=(satir,))
+    def _gec(self, satir: bytes, gecikme: float | None = None) -> None:
+        t = threading.Timer(self.gecikme if gecikme is None else gecikme, self._q.put, args=(satir,))
         t.daemon = True
         t.start()
 
@@ -229,11 +239,79 @@ def test_KARSIT_kart_STOPu_KABUL_ederse_teyitli(ortam):
     assert sure < 1.0, f"kabulde yanıt {sure:.2f} sn sürdü"
 
 
-def test_KARSIT_kart_YANITSIZsa_bugunku_anlam_DEGISMEZ(ortam):
+def _yanitsiz_metni(dil: str) -> str:
+    import i18n_yardimci as iy
+
+    return iy.katalog("sunucu", dil)["firmware.estopKartYanitsiz"]
+
+
+@pytest.mark.parametrize("tur", ["sessiz", "saha_sessiz", "saha_gec_nack"])
+def test_KRITIK_T2D1_kart_STOPa_YANIT_VERMEZSE_confirmed_FALSE_ve_EYLEM_metni(ortam, tur):
+    """Tezgâh-2: 120 B kart + 1.9.51 → `confirmed:true`, `stmKartYaniti` yok (kart STOP'u ~1 sn sonra NACK'ledi / hiç yanıtlamadı)."""
+    o = ortam(tur)
+    o.kart.sessiz.set()
+    sonuc, sure, t0 = _estop(o)
+    assert o.kart.stoplar(t0) >= 1, "aparat: E-stop'un STOP'u porta yazılmadı"
+    assert sonuc["stmStopped"] is True, sonuc  # STOP porta YAZILDI — teyit yalnız kartın yanıtıyla
+    assert sonuc["confirmed"] is False, f"kart STOP'a yanıt vermedi ama E-stop teyitli döndü: {sonuc.get('status')}"
+    assert sonuc["status"] != "success", sonuc
+    assert sonuc.get("stmKartYaniti") == "yanitsiz", sonuc
+    metin = sonuc.get("stmRedMesaji") or ""
+    assert metin == _yanitsiz_metni("tr") and "gücünü kesin" in metin and "USB" in metin, metin
+    assert (
+        o.ls._live_state["estopTeyit"]["teyitli"] is False
+        and o.ls._live_state["estopTeyit"]["kaynak"] == "stm_yanitsiz"
+    )
+    assert any(_yanitsiz_metni("tr") in m for m, _s in o.bildirimler), o.bildirimler
+    assert sure < 1.5, f"E-stop yanıtı {sure:.2f} sn sürdü"
+
+
+def test_KRITIK_T2D1_yanitsiz_metni_ISTEK_DILINDE_EN(ortam):
+    from utils import ceviri
+
+    o = ortam("saha_sessiz")
+    belirtec = ceviri.istek_dili_var.set("en")
+    try:
+        sonuc, _sure, _t0 = _estop(o)
+    finally:
+        ceviri.istek_dili_var.reset(belirtec)
+    metin = sonuc.get("stmRedMesaji") or ""
+    assert sonuc["confirmed"] is False and metin == _yanitsiz_metni("en"), sonuc
+    assert "power" in metin and "USB" in metin and metin != _yanitsiz_metni("tr"), metin
+
+
+def test_KRITIK_T2D1_yanitsiz_kartta_STOP_gonderimi_AZALMAZ(ortam):
+    """Ö.4-Y8: teyit yorumu değişti, gönderim DEĞİŞMEDİ — keep-alive STOP telafisi yanıtsız kartta da sürer, mandal kurulur."""
+    o = ortam("saha_sessiz")
+    _sonuc, _sure, t0 = _estop(o)
+    time.sleep(1.2)
+    assert o.kart.stoplar(t0) >= 2, f"yanıtsız kartta STOP telafisi yazılmadı: {o.kart.stoplar(t0)}"
+    from utils import estop_mandali
+
+    assert estop_mandali.durum()["aktif"] is True, "mandal kurulmadı"
+
+
+def test_KARSIT_T2D1_gec_gelen_tum_sifir_ACK_teyidi_VERIR(ortam):
+    """D1.E04: yanıt penceresinden sonra gelen tüm-sıfır ACK bekleyen teyidi verir (yavaş ama uyumlu kart kalıcı kırmızı kalmaz)."""
     o = ortam("sessiz")
     o.kart.sessiz.set()
     sonuc, _sure, _t0 = _estop(o)
-    assert sonuc["confirmed"] is True and sonuc.get("stmKartYaniti") is None, sonuc
+    assert sonuc["confirmed"] is False, sonuc
+
+    def _yonlendir(
+        tur_, veri=None, **_k
+    ):  # aparat: çekirdek olayı GERÇEK backend olay işleyicisine (üretimdeki EventBus yolu)
+        o.core.olaylar.append((tur_, veri))
+        if tur_ == "hardware.stm.stop_onayi":
+            o.api._handle_backend_event(SimpleNamespace(event_type=tur_, data=veri))
+
+    o.core._publish_event = _yonlendir
+    o.kart.sessiz.clear()
+    bitis = time.monotonic() + 3.0
+    while time.monotonic() < bitis and not o.ls._live_state["estopTeyit"]["teyitli"]:
+        time.sleep(0.05)
+    assert o.ls._live_state["estopTeyit"]["teyitli"] is True, o.ls._live_state["estopTeyit"]
+    assert o.ls._live_state["estopTeyit"]["kaynak"] == "stm_ack"
 
 
 def test_ESP_ACIK_kolu_STM_reddi_teyidi_yine_DUSURUR(ortam, monkeypatch):
@@ -257,3 +335,18 @@ def test_red_metni_backend_ve_arayuzde_AYNI():
     # metin ekrana GERÇEKTEN bu anahtardan ulaşıyor (çağıranlar kritikMetin ile; EN dolu)
     for dosya in ("apps/ui/src/hooks/useSessionControl.ts", "apps/ui/src/hooks/useTeardownGuard.ts"):
         iy.metin_kapisi(dosya, anahtar, ESTOP_KART_RED_METNI)
+
+
+def test_T2D1_yanitsiz_metni_KRITIK_listede_ve_iki_dilde():
+    import json
+    from pathlib import Path
+
+    from utils.stm32_kimlik import ESTOP_KART_YANITSIZ_METNI
+
+    assert _yanitsiz_metni("tr") == ESTOP_KART_YANITSIZ_METNI
+    assert _yanitsiz_metni("en") and _yanitsiz_metni("en") != ESTOP_KART_YANITSIZ_METNI
+    kok = Path(__file__).resolve().parents[1]
+    kritik = json.loads((kok / "i18n" / "kritik-anahtarlar.json").read_text(encoding="utf-8"))
+    assert any(
+        g.get("yuzey") == "sunucu" and g.get("anahtar") == "firmware.estopKartYanitsiz" for g in kritik["anahtarlar"]
+    ), "firmware.estopKartYanitsiz kritik listede değil"

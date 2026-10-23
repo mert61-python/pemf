@@ -516,6 +516,7 @@
   },
   "firmware": {
     "estopKartRed": "Cihaz kartı STOP komutunu reddetti — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın.",
+    "estopKartYanitsiz": "Cihaz kartı STOP komutuna yanıt vermedi — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın.",
     "komutRed": "Cihaz kartı komutları reddediyor — kartın yazılımı bu uygulama sürümüyle uyumsuz; bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET).",
     "operatorKimlik": "Cihaz kartı doğrulanamadı. Kartın üzerindeki SİYAH sıfırlama düğmesine bir kez basın (mavi değil).",
     "operatorPaket": "Cihaz kartının yazılımı bu uygulama sürümüyle uyumsuz — bobinler çalışmaz. Teknik desteği arayın (kod: FW-PAKET).",

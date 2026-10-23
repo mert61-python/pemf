@@ -48,6 +48,15 @@ it("KARŞIT: yalnız teyitsiz (kart yanıtı yok) → kartReddetti false", async
   expect(await performEmergencyStop()).toEqual({ confirmed: false, kartReddetti: false });
 });
 
+it("T2D-1: kart STOP'a yanıtsız (stmKartYaniti:\"yanitsiz\") → teyitsiz, kartReddetti false (genel fiziksel güç uyarısı), yedekler YİNE", async () => {
+  const YANITSIZ = { status: "partial", confirmed: false, stmStopped: true, stmKartYaniti: "yanitsiz", mqttResults: [{ mqtt: "devre_disi" }] };
+  bridge(YANITSIZ);
+  mockApiPost.mockImplementation(async (p: string) => (p === "/hardware/emergency_stop" ? YANITSIZ : null));
+  expect(await performEmergencyStop()).toEqual({ confirmed: false, kartReddetti: false });
+  expect(mockApiPost.mock.calls.map((c) => c[0])).toEqual(["/hardware/emergency_stop", "/hardware/command", "/session/stop"]);
+  expect(kritikMetin("guvenlik.acilDurdur.teyitsizGovde")).toMatch(/fiziksel güç düğmesinden kapatın/);
+});
+
 it("metin EYLEM söyler (gücü kes / USB)", () => {
   // I18N: metin artık katalogda (kritikMetin, çeviri sisteminden BAĞIMSIZ) — ölçüt aynı.
   expect(kritikMetin("guvenlik.acilDurdur.kartRedBaslik")).toContain("REDDETTİ");

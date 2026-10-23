@@ -29,8 +29,9 @@ interface EmergencyStopResponse {
   status?: string;
   stmStopped?: boolean;
   mqttResults?: { mqtt?: string }[];
-  /** TD3: kartın bu STOP'a yanıtı — "red" = STM_NACK (kabul yok) → teyit YOK, eylem: gücü kes / USB'yi çıkar. */
-  stmKartYaniti?: "kabul" | "red" | null;
+  /** TD3: kartın bu STOP'a yanıtı — "red" = STM_NACK (kabul yok) → teyit YOK, eylem: gücü kes / USB'yi çıkar.
+   *  T2D-1: "yanitsiz" = STOP'a hiç yanıt yok → `confirmed:false`; ekranda genel "teyit edilemedi" uyarısı (fiziksel güç). */
+  stmKartYaniti?: "kabul" | "red" | "yanitsiz" | null;
   stmRedMesaji?: string | null;
 }
 interface CommandResponse {

@@ -53,9 +53,21 @@ def test_KRITIK_STOP_yaziminda_ucustaki_RUN_ACKi_kabul_SAYILMAZ_STOP_NACKi_RED(c
 
 
 def test_KRITIK_yalniz_RUN_ACKi_gelirse_kabul_DEGIL(cekirdek):
+    # T2D-1: STOP'un kendisine yanıt yok (yalnız uçuştaki RUN'ın ACK'i) → "yanitsiz" (teyit YOK); eskiden None = "porta yazıldı" teyidi.
     _stop_yazildi(cekirdek, 3)
     cekirdek._handle_stm_line(RUN_ACK, retry_last_payload=lambda: None)
-    assert cekirdek.hw_stop_yaniti_bekle(3, 0.05) is None
+    assert cekirdek.hw_stop_yaniti_bekle(3, 0.05) == "yanitsiz"
+
+
+def test_KRITIK_T2D1_STOPa_hic_yanit_yoksa_YANITSIZ(cekirdek):
+    _stop_yazildi(cekirdek, 5)
+    assert cekirdek.hw_stop_yaniti_bekle(5, 0.05) == "yanitsiz"
+
+
+def test_KARSIT_T2D1_STOP_yazim_izi_YOKSA_None(cekirdek):
+    """İz yok (bu sırada STOP hiç yazılmadı) → None: karar `stmStopped`a (porta yazım beklemesi) kalır."""
+    _stop_yazildi(cekirdek, 2)
+    assert cekirdek.hw_stop_yaniti_bekle(9, 0.05) is None
 
 
 def test_KARSIT_tum_sifir_ACK_kabul(cekirdek):

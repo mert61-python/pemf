@@ -456,10 +456,12 @@ class HeadlessCore:
 
     def hw_stop_yaniti_bekle(self, sira: int, zaman_asimi: float) -> str | None:
         """TD3: kuyruk sırası ≥ `sira` olan İLK STOP yazımından SONRA kartın yanıtı: "kabul" (tüm-sıfır `STM_OK` — gelir gelmez
-        döner), "red" (süre doldu, yalnız `STM_NACK`), None (yanıt yok ya da o STOP'un yazım izi yok — bugünkü anlam).
+        döner), "red" (süre doldu, yalnız `STM_NACK`), "yanitsiz" (süre doldu, STOP yazıldı ama tüm-sıfır ACK da NACK da yok),
+        None (o STOP'un yazım izi yok).
 
         ⚠️ Tezgâh (Oturum 13): 120 B saha kartı STOP dahil her pakete CRC NACK dönerken E-stop "teyitli" diyordu; teyit yalnız
-        "porta yazıldı"ydı. Yalnız RAPOR: STOP'un kendisi ve NACK yeniden yazımı bundan BAĞIMSIZ sürer (Ö.4-Y8 · D1.55)."""
+        "porta yazıldı"ydı. ⚠️ T2D-1 (Tezgâh-2): aynı kart STOP'a çoğunlukla HİÇ yanıt vermiyor (NACK ~1 sn sonra) → yanıtsızlık
+        da teyit DEĞİLDİR. Yalnız RAPOR: STOP'un kendisi ve NACK yeniden yazımı bundan BAĞIMSIZ sürer (Ö.4-Y8 · D1.55)."""
         self._hw_izlemeyi_kur()
         bitis = time.monotonic() + max(0.0, float(zaman_asimi))
         with self._hw_yazim_kosulu:
@@ -470,7 +472,9 @@ class HeadlessCore:
                     return "kabul"
                 kalan = bitis - time.monotonic()
                 if kalan <= 0:
-                    return "red" if "nack" in turler else None
+                    if taban is None:
+                        return None
+                    return "red" if "nack" in turler else "yanitsiz"
                 self._hw_yazim_kosulu.wait(min(kalan, 0.05))
 
     def stm_yanit_sayaci(self) -> int:

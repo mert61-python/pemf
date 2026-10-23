@@ -49,7 +49,9 @@ def _esp_stop_denendi(yayinlar) -> bool:
 
 
 def test_KRITIK_D1105_esp_kapali_STM_STOP_porta_yazildiysa_estop_TEYITLI_ve_ESP_STOP_yine_denenir(api_ortami):
+    # T2D-1: teyit "porta yazıldı" + kartın tüm-sıfır ACK'i (uyumlu kart). Sessiz kart kolu: TD3 dosyası (`saha_sessiz` → teyitsiz).
     api, core, hc, d, yayinlar = api_ortami
+    d.ack_ver = True
     _surulen_bobin(hc, d)
     once = len(d.yazilan)
     r = TestClient(api.app).post("/api/hardware/emergency_stop").json()

@@ -203,6 +203,10 @@ ESTOP_KART_RED_METNI = (
     "Cihaz kartı STOP komutunu reddetti — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın."
 )
 
+#: T2D-1: kart ACİL DURDUR'un STOP'una yanıt penceresinde HİÇ yanıt vermedi (tüm-sıfır `STM_OK` da NACK da yok — Tezgâh-2'deki 120 B
+#: kart). `ESTOP_KART_RED_METNI` ile aynı eylem; yalnız sebep farklı.
+ESTOP_KART_YANITSIZ_METNI = "Cihaz kartı STOP komutuna yanıt vermedi — bobinler durmamış olabilir. Cihazın gücünü kesin ya da USB kablosunu çıkarın."
+
 
 def komut_red_metni(dil: str | None = None) -> str:
     """`KOMUT_RED_METNI`nin İSTEK dilindeki karşılığı (HTTP 409 / bildirim). Mandal EYLEMİ ve günlük için sabit (Türkçe) kalır; hata → sabit."""
@@ -222,6 +226,16 @@ def estop_kart_red_metni(dil: str | None = None) -> str:
         return ceviri.t("firmware.estopKartRed", dil=dil) or ESTOP_KART_RED_METNI
     except Exception:
         return ESTOP_KART_RED_METNI
+
+
+def estop_kart_yanitsiz_metni(dil: str | None = None) -> str:
+    """`ESTOP_KART_YANITSIZ_METNI`nin İSTEK dilindeki karşılığı (E-stop yanıtı / bildirim); hata → Türkçe sabit."""
+    try:
+        from utils import ceviri
+
+        return ceviri.t("firmware.estopKartYanitsiz", dil=dil) or ESTOP_KART_YANITSIZ_METNI
+    except Exception:
+        return ESTOP_KART_YANITSIZ_METNI
 
 
 def operator_metni(kod: str | None, dil: str | None = None) -> str:

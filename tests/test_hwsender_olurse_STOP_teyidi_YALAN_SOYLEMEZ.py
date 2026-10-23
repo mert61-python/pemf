@@ -19,6 +19,7 @@ kuyrukta KALIR; yalnız RAPORLANAN teyit dürüstleşir.
 
 from __future__ import annotations
 
+import queue
 import socket as _gercek_socket
 import threading
 import time
@@ -34,6 +35,15 @@ def _bekle(kosul, sure=5.0):
     return kosul()
 
 
+def _ack_satiri(paket: bytes) -> str:
+    """Uyumlu kartın pakete yanıtı (firmware biçimi): `STM_OK: D=<duty'ler> P=… F=… T=… K=96 E=<etkin binde>`."""
+    from kayitci_donanim import paket_coz
+
+    d = [int(round(x)) for x in paket_coz(paket)[0]]
+    z = ",".join("0" for _ in d)
+    return f"-> STM_OK: D={','.join(map(str, d))} P={z} F={','.join('100' for _ in d)} T={z} K=96 E={','.join(map(str, d))}"
+
+
 def _stop_mu(paket: bytes) -> bool:
     """Firmware aynasıyla çözülen paketin TÜM bobin duty'leri 0 mı (NACK'lenecek paket → AssertionError)."""
     from kayitci_donanim import paket_coz
@@ -47,8 +57,17 @@ def aparat(monkeypatch, tmp_path, request):
     from controllers.hardware_controller import HardwareController
     from servers import live_state as _ls
 
+    # T2D-1: `ack_ver` → kart her pakete duty'leriyle GERÇEK biçimli `STM_OK` döner (uyumlu kart). Varsayılan sessiz kart: E-stop teyidi
+    # "porta yazıldı"dan değil kartın tüm-sıfır ACK'inden gelir — sessiz kartta teyit YOK (tests/test_TD3_estop_kartin_STOP_NACKi_…).
     d = types.SimpleNamespace(
-        acilan=[], yazilan=[], port_var=True, port_patlat=0, acilis_mumkun=True, yazim_patlat=False
+        acilan=[],
+        yazilan=[],
+        port_var=True,
+        port_patlat=0,
+        acilis_mumkun=True,
+        yazim_patlat=False,
+        ack_ver=False,
+        yanitlar=queue.Queue(),
     )
 
     class _Conn:
@@ -58,13 +77,17 @@ def aparat(monkeypatch, tmp_path, request):
             self.is_open = True
 
         def readline(self):
-            time.sleep(0.02)
-            return b""
+            try:
+                return d.yanitlar.get(timeout=0.02)
+            except queue.Empty:
+                return b""
 
         def write(self, b):
             if d.yazim_patlat:
                 raise OSError(22, "test: WriteFile basarisiz (USB yari kopuk)")
             d.yazilan.append((time.perf_counter(), self.ad, bytes(b)))
+            if d.ack_ver and bytes(b[:2]) == b"\xaa\x55":
+                d.yanitlar.put((_ack_satiri(bytes(b)) + "\r\n").encode())
 
         def close(self):
             self.is_open = False
