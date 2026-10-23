@@ -24,7 +24,7 @@ donanım = kabin + kamera + basılı QR; yazılım = `cabin_config_example.yaml`
 | **Marker** | DICT_5X5_50 · ID 0 · **10×10 cm** (cetvel) · siyah yüz **yukarı** (tavandaki kameraya, `normal_axis "+Y"`) · "▲ ÜST" **arka duvara** (`up_cabin [0, 0, 1]`) |
 | **Şerit-metre** | kamera→origin = **23.2 cm** · kamera→marker merkezi = **40.3 cm** |
 | **Hedef düzlemi** | `hedef_duzlem_cm: -17.2` — 24'lük plaka taban camının üstünde, kuyu tabanı camdan ~0,3 cm |
-| **Plaka deney yeri** | `multiwell.placement.a1_cabin_mm: [161.7, -172.0, -14.1]` — yalnız işaret GÖRÜNMEZKEN kullanılır; plaka camda bantla işaretli yerde durmalı |
+| **Plaka deney yeri** | T2B ölçüsü `a1 [161.7, -172.0, -14.1]` mm — YAML'a **yazılmadı** (`a1_cabin_mm: null`): dolu iken işaretsiz her plaka fotoğrafı bu kabinin deney yerinde sayılıyordu (T2B B7, T3 ölçtü). Konum yalnız kabin işaretinden (ArUco) |
 
 > ⚠️ **Ters işaret:** 2026-10-14'te kâğıt 180° TERS bulundu ve çevrildi. Kod artık bunu `rvec`'ten görür: analiz sonucunda
 > `marker_upside_down` — "Kabin işareti ters takılmış görünüyor — üst kenar tavana bakacak şekilde çevirin" — ve sonuç

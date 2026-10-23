@@ -278,14 +278,15 @@ multiwell:
   # auto: yatay plaka = sol-ust, dikey plaka = sag-ust. Plaka 180 derece cevrildiyse "br" (yatay) / "bl" (dikey).
   a1_corner: auto
 
-  # ⚠️ LABORATUVAR MADDESI (hoca §4 #1): plakanin KABIN konumu — T2B 2026-10-23 DENEY YERI icin olculdu (ArUco, 3 kare ort.;
-  # serit [157.5, -172.0, -2.5], fark <= 1,2 cm). YALNIZ kabin isareti GORUNMEZKEN kullanilir (isaret gorunurse konum ArUco'dan);
-  # plaka camda bantla isaretli bu yerde degilse konum SESSIZCE yanlis olur (T2B B7) -> plaka yalniz isaretli yere konur.
+  # ⚠️ LABORATUVAR MADDESI (hoca §4 #1): plakanin KABIN konumu — T2B 2026-10-23 DENEY YERI olculdu (ArUco, 3 kare ort.):
+  # a1 [161.7, -172.0, -14.1] mm, col [-1, 0, 0], row [0, 0, -1] (serit [157.5, -172.0, -2.5], fark <= 1,2 cm). BILEREK YAZILMADI (T3):
+  # dolu iken ISARETSIZ HER plaka fotografi (telefon, baska kabin, hocanin WhatsApp kareleri) bu kabinin deney yerinde sayilip
+  # `pemf_valid: true` + AI Pro'da surulebilir oluyordu (T2B B7; T3 olctu). Konum yalniz kabin isaretinden (ArUco) — deneyde isaret gorunur.
   # null -> koordinatlar PLAKA cercevesinde, `pemf_valid: false`. Formul: kabin_xyz = a1_cabin_mm + sutun_mm * col_axis_cabin + satir_mm * row_axis_cabin
   placement:
-    a1_cabin_mm: [161.7, -172.0, -14.1]   # DENEY YERI: plaka isaretin solunda; A1 onden bakinca arka-sol (goruntude sol-ust)
-    col_axis_cabin: [-1.0, 0.0, 0.0]      # A1 -> A2 (onden bakinca saga = -X)
-    row_axis_cabin: [0.0, 0.0, -1.0]      # A1 -> B1 (one = -Z)
+    a1_cabin_mm: null             # T2B deney yeri olcusu yukarida — sabit tutucu / camda isaretli yer olmadan YAZILMAZ (B7)
+    col_axis_cabin: [-1.0, 0.0, 0.0]      # A1 -> A2 (onden bakinca saga = -X) — T2B olcusu
+    row_axis_cabin: [0.0, 0.0, -1.0]      # A1 -> B1 (one = -Z) — T2B olcusu
 
   # ⚠️ LABORATUVAR VARSAYIMI (hoca §4 #4): kanser esikleri YALNIZ YAPAY BOYAYLA dogrulandi.
   # Her deneyde kontrol kuyucuklari verin (orn. control_healthy [A1, D6], control_cancer [B2]) -> esikler o plakaya

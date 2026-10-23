@@ -69,6 +69,14 @@ def test_KRITIK_yaml_geometri_65x50x50_ve_mesafeler_tutarli(ad):
     assert [float(x) for x in c["up_cabin"]] == [0.0, 0.0, 1.0], f"{ad}: işaretin üst kenarı arka duvara (+Z)"
 
 
+def test_KRITIK_petri_deney_yeri_YAZILMAZ_isaretsiz_foto_kabinde_SAYILMAZ_B7():
+    """T3 (2026-10-23) ölçtü: `multiwell.placement.a1_cabin_mm` dolu iken İŞARETSİZ her plaka fotoğrafı (telefon, başka kabin, hocanın
+    WhatsApp kareleri) bu kabinin deney yerinde sayılıp `pemf_valid: true` ve AI Pro'da sürülebilir oluyordu (T2B B7). Konum yalnız
+    kabin işaretinden (ArUco); T2B deney yeri ölçüsü YAML yorumunda kalır."""
+    d = _yukle(YAMLLAR["petri"])
+    assert d["multiwell"]["placement"]["a1_cabin_mm"] is None, d["multiwell"]["placement"]
+
+
 def test_uc_pipeline_AYNI_kabini_tanimlar():
     ds = {ad: _yukle(p) for ad, p in YAMLLAR.items()}
     ref = ds["cat_organ"]
