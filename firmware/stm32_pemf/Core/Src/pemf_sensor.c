@@ -439,6 +439,9 @@ static void i2c_gecikme_kisa(void) {
 }
 
 static void i2c_hat_kurtar(SensorHat_t *h) {
+  /* T2D-3: çıkış mandalı ÖNCE HIGH (open-drain = serbest) — yoksa GPIO kipine geçişte ODR=0 iki hattı AYNI ANDA düşürür,
+   * SDA SCL'den önce düşerse sahte START olur. */
+  h->port->BSRR = (uint32_t)(h->scl_pin | h->sda_pin);
   i2c_pin_gpio(h, true);
   h->port->BSRR = (uint32_t)h->sda_pin; /* SDA serbest (open-drain → HIGH) */
   for (uint32_t i = 0U; i < 9U; i++) {
@@ -710,6 +713,13 @@ void PEMF_Sensor_Init(void) {
   /* AFR kaydırmaları: PB8/PB9 → AFR[1] bit 0/4 · PB10/PB11 → AFR[1] bit 8/12 */
   hat_donanim_kur(&g_hat[0], 0U, 4U);
   hat_donanim_kur(&g_hat[1], 8U, 12U);
+  /* ⚠️ T2D-3 (Tezgâh-2, 3/3): yazılım reset'i (SWD `-rst`, watchdog, NVIC) yalnız MCU'yu sıfırlar — MLX90393 güç almaya devam eder
+   * ve reset bir I2C işleminin ortasına denk gelirse SDA'yı LOW tutar. Açılış yoklaması o zaman sensörü bulamıyordu
+   * (`I2C2 … (SENSOR YOK)`, ancak güç döngüsü kurtarıyordu). Yoklamadan ÖNCE her hatta bir kez bus temizliği: 9 SCL darbesi
+   * + elle STOP + SWRST (I2C bus clear). Boşta olan köle için zararsız (adres çerçevesi yok, STOP durum makinesini sıfırlar). */
+  for (uint32_t i = 0U; i < PEMF_SENSOR_BOBIN_SAYISI; i++) {
+    i2c_hat_kurtar(&g_hat[i]);
+  }
 
   /* ⚠️ İKİ CİHAZ AYRI AYRI YOKLANIR: bir bus'ta yalnız biri olabilir (sahip kablolaması
    * 2026-09-10: PB10/PB11'de YALNIZ manyetik sensör). Bulunamayan cihazın yokluğu hata

@@ -94,6 +94,7 @@ def firmware_paket_boyu(kimlik: Stm32Kimlik) -> int:
       * f367f85 (09-11 17:38) → HEAD: kip bayti (`unipolar_maskesi`) VAR → 16·7 + 9 = 121
       * Y68 (TD1) sonrasi banner `proto=<rev> pkt=<boy>` BEYAN eder → tahmin yok; Y80 (YH D7, 2026-10-22): surum dizesi
         `DDS v2.3` → `DDS v2.4` (v2.3 basan her kart ESKI imajdir; 120 / 121 ayrimi yine `pkt=` beyanindan).
+      * T2D-3 (2026-10-23): `DDS v2.4` → `DDS v2.5` — acilista I2C hat kurtarmasi; protokol / paket AYNI (proto=3 pkt=121).
     Kural: duty/faz/frekans float + sure uint32 (bobin basina 16) + baslik 2 + ref_ms 2 + CRC 4; `uni=` alani
     (maske) VARSA sürüş kipi bayti var sayilir.
 

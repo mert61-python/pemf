@@ -1234,10 +1234,12 @@ int main(void) {
    * GÖVDESİNİ yankılar (aşağıda, ana döngü) → sürüm dizesi tek yerde. */
   /* Y80 (YH D7, 2026-10-22): sürüm dizesi 2026-09'dan beri `DDS v2.3`tü ve HİÇ artırılmadı — 120 ve 121 baytlık imajlar aynı
    * sürümü bastı (tezgâh 2026-10-14). Yayın adayı → `DDS v2.4`. Simülatör (tools/stm32_simulator.py) ve firmware README'si
-   * AYNI sürümü yazar (kapı: tests/test_YH_D7_firmware_surum_dizesi_Y80.py). Bir sonraki firmware yayınında YİNE artırın. */
+   * AYNI sürümü yazar (kapı: tests/test_YH_D7_firmware_surum_dizesi_Y80.py). Bir sonraki firmware yayınında YİNE artırın.
+   * T2D-3 (Tezgâh-2, 2026-10-23): `DDS v2.5` — açılışta I2C hat kurtarması (yazılım reset'inden sonra MLX90393 kaybolmasın);
+   * protokol / paket AYNI (proto=3 pkt=121). */
   static char init_msg[160];
   (void)snprintf(init_msg, sizeof(init_msg),
-                 "-> STM_READY: DDS v2.4 (%u-ch %s uni=0x%02X + HW_SYNC@PB1) proto=%u pkt=%u Waiting for commands...\r\n",
+                 "-> STM_READY: DDS v2.5 (%u-ch %s uni=0x%02X + HW_SYNC@PB1) proto=%u pkt=%u Waiting for commands...\r\n",
                  (unsigned)NUM_COILS,
                  /* ⚠️ KIP DIZESI DE MASKEDEN TURER: elle yazilan etiket 2026-09-11 karma
                   * yapilandirmasinda YALAN soylerdi. Banner, flash sonrasi TEK dogrulama
