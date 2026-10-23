@@ -8,21 +8,23 @@ donanım = kabin + kamera + basılı QR; yazılım = `cabin_config_example.yaml`
 
 ---
 
-## ✅ SAHA KABİNİ (2026-10-14 — tezgâh Oturum 13, sahip şerit metreyle ölçtü)
+## ✅ KABİN (2026-10-23 — TEZGÂH-2B, sahip şerit metre + ArUco; Oturum 13'ün 57 × 34 × 32 / arka duvar düzeni ESKİ)
 
-> ⚠️ Sahip: "kamera ve işaret konum değişikliğine gideceğiz" — `qr_to_origin_cm`, `fixed_position_cm`, `to_marker_cm`,
-> `to_origin_cm` YENİ yerleşimde yeniden ölçülecek. Kalıcı olanlar: `cabin_extent_cm` ve `real_cm`.
+> Kamera (Pusat "FHD Camera", 1920×1080) tavan camının 2 cm üstünde, tepeden bakar; işaret TABAN camının üstünde.
+> Kamera ya da işaret kaydırılırsa `qr_to_origin_cm`, `fixed_position_cm`, `to_marker_cm`, `to_origin_cm` yeniden ölçülür.
 
 | Öğe | Değer (origin = kabin merkezi = coil merkezi = 0,0,0) |
 |---|---|
 | **Eksen kuralı** | **+X = ÖNDEN BAKANIN SOLU** (kedinin kafa yönü) · **+Y = yukarı** · **+Z = arkaya** — kodla ölçüldü (TEZGAH-OTURUM-13 §F2). 2026-10-14'e kadar bu kılavuz ve YAML açıklamaları "sağ-alt-ÖN = +X" diyordu: **AYNAYDI** |
-| **Kabin iç boyut** | `cabin_extent_cm: [57, 34, 32]` — [X genişlik, Y yükseklik, Z derinlik (ön −/arka +)] |
-| **Duvarlar** | X = ±28.5 (**sol +28.5, sağ −28.5**) · Y = ±17 (taban −17, tavan +17) · Z = ±16 (ön −16, arka +16) |
-| **Kamera lensi** | `fixed_position_cm: [-20.5, -15, -8]` = **sağdan 8 · tabandan 2 · önden 8 cm**, **origin'e bakar** |
-| **QR marker merkezi** | **ARKA duvar (arka cam, Z=+16)**: soldan ~30 · sağdan ~28,5 · tabandan 18,5 cm → `[-1.5, +1.5, +16]` |
-| **qr_to_origin_cm** | origin − marker = `[1.5, -1.5, -16]` |
-| **Marker** | DICT_5X5_50 · ID 0 · **10×10 cm** (cetvel) · siyah yüz kameraya (öne, `normal_axis "-Z"`) · "▲ ÜST" **tavana** |
-| **Şerit-metre** | kamera→origin = **26.6 cm** · kamera→marker merkezi = **34.8 cm** |
+| **Kabin iç boyut** | `cabin_extent_cm: [55.5, 35, 40.5]` — [X sol↔sağ cam, Y alt↔üst cam, Z ön↔arka cam] |
+| **Duvarlar** | X = ±27.75 (**sol +27.75, sağ −27.75**) · Y = ±17.5 (taban camı −17.5, tavan camı +17.5) · Z = ±20.25 (ön −20.25, arka +20.25) |
+| **Kamera lensi** | `fixed_position_cm: [2.75, 19.5, -12.25]` = **sol camdan 25 · ön camdan 8 · taban camından 37 cm** (tavan camının 2 cm üstü), tepeden bakar |
+| **QR marker merkezi** | **TABAN camının üstü (Y=−17.5)**: siyah kare sol kenarı sol camdan 31 · ön kenarı ön camdan 14,5 cm → `[-8.25, -17.5, -0.75]` |
+| **qr_to_origin_cm** | origin − marker = `[8.25, 17.5, 0.75]` |
+| **Marker** | DICT_5X5_50 · ID 0 · **10×10 cm** (cetvel) · siyah yüz **yukarı** (tavandaki kameraya, `normal_axis "+Y"`) · "▲ ÜST" **arka duvara** (`up_cabin [0, 0, 1]`) |
+| **Şerit-metre** | kamera→origin = **23.2 cm** · kamera→marker merkezi = **40.3 cm** |
+| **Hedef düzlemi** | `hedef_duzlem_cm: -17.2` — 24'lük plaka taban camının üstünde, kuyu tabanı camdan ~0,3 cm |
+| **Plaka deney yeri** | `multiwell.placement.a1_cabin_mm: [161.7, -172.0, -14.1]` — yalnız işaret GÖRÜNMEZKEN kullanılır; plaka camda bantla işaretli yerde durmalı |
 
 > ⚠️ **Ters işaret:** 2026-10-14'te kâğıt 180° TERS bulundu ve çevrildi. Kod artık bunu `rvec`'ten görür: analiz sonucunda
 > `marker_upside_down` — "Kabin işareti ters takılmış görünüyor — üst kenar tavana bakacak şekilde çevirin" — ve sonuç
@@ -151,21 +153,21 @@ tam rotasyonun `rvec`ten türetilmesi gerekir (ayrı iş). Yapıştırdıktan so
 | **Origin (0,0,0)** | Kabin merkezi = **coil array merkezi** |
 | **Eksenler** | **+X = önden bakanın SOLU** (genişlik/kafa yönü) · **+Y = yukarı (dorsal)** · **+Z = arka (derinlik)** |
 | **QR marker** | **TEK ortak marker**: `ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf`. `DICT_5X5_50`, ID `0`, **kenar = 10.0 cm** (saha ölçüsü 2026-10-14, cetvel) |
-| **QR yeri** | **ARKA duvar** (2026-10-14: ortaya yakın, merkez `[-1.5, +1.5, +16]`; sessiz bölge duvara sığmalı: merkez duvardan ≥ 5 + 2 cm); **siyah yüz kameraya (öne) bakar**, "▲ ÜST" tavana. Tavan / taban işaretinde `camera.up_cabin` ZORUNLU |
-| **Kamera** | **origin'e (0,0,0) bakar**, "up" yönü = **+Y**; konum duvarlardan: X = −28.5 + (sağdan), Y = −17 + (tabandan), Z = −16 + (önden) |
+| **QR yeri** | **TABAN camının üstü** (2026-10-23: merkez `[-8.25, -17.5, -0.75]`; sessiz bölge camlara sığmalı: merkez camdan ≥ 5 + 2 cm); **siyah yüz yukarı (kameraya) bakar**, "▲ ÜST" arka duvara. Tavan / taban işaretinde `camera.up_cabin` ZORUNLU. ⚠️ Taban işaretinde ters / döndürülmüş kâğıdı kod ANLAMAZ — yeri ve yönü camda bantla işaretli kalır |
+| **Kamera** | tavan camının üstünde, tepeden bakar; konum camlardan: X = 27.75 − (sol camdan), Y = −17.5 + (taban camından), Z = −20.25 + (ön camdan) |
 
 > ⚠️ Marker'ı **tam 10×10 cm** bas (sayfadaki 10 cm cetvel çubuğunu cetvelle doğrula). Farklı basarsan
 > 3 config'te `real_cm`'i o değere çek — yoksa ölçek (mm/px) ve 3B konum yanlış olur.
 
 ---
 
-## 2) ÖLÇÜLER (saha — 2026-10-14)
+## 2) ÖLÇÜLER (TEZGÂH-2B — 2026-10-23)
 
 | | cabin_extent [X,Y,Z] | kamera lens [x,y,z] | marker merkezi | qr→origin [x,y,z] |
 |---|---|---|---|---|
-| **cat_organ** | `[57, 34, 32]` | `[-20.5, -15, -8]` | `[-1.5, +1.5, +16]` | `[1.5, -1.5, -16]` |
-| **em_fantom** | `[57, 34, 32]` | `[-20.5, -15, -8]` | `[-1.5, +1.5, +16]` | `[1.5, -1.5, -16]` |
-| **petri** | `[57, 34, 32]` | `[-20.5, -15, -8]` | `[-1.5, +1.5, +16]` | `[1.5, -1.5, -16]` |
+| **cat_organ** | `[55.5, 35, 40.5]` | `[2.75, 19.5, -12.25]` | `[-8.25, -17.5, -0.75]` | `[8.25, 17.5, 0.75]` |
+| **em_fantom** | `[55.5, 35, 40.5]` | `[2.75, 19.5, -12.25]` | `[-8.25, -17.5, -0.75]` | `[8.25, 17.5, 0.75]` |
+| **petri** | `[55.5, 35, 40.5]` | `[2.75, 19.5, -12.25]` | `[-8.25, -17.5, -0.75]` | `[8.25, 17.5, 0.75]` |
 
 Kamera lensi köşeye tam oturmuyorsa (gövde/tripod payı) **gerçek lens konumunu** ölç ve `fixed_position_cm`'e
 yaz; `to_origin_cm` / `to_marker_cm`'i §3'teki formülle yeniden hesapla. Kamera-sabitli modda tek kritik sayı budur.
@@ -174,11 +176,11 @@ yaz; `to_origin_cm` / `to_marker_cm`'i §3'teki formülle yeniden hesapla. Kamer
 
 ## 3) DOĞRULAMA (kabin kurulunca — ±2 cm tolerans)
 
-- `marker_pos = -qr_to_origin_cm` → `[-1.5, +1.5, +16]` ✓
-- `to_origin_cm  == |camera.fixed_position_cm|` → `|(-20.5, -15, -8)| = √(420.25+225+64) = 26.6` ✓
-- `to_marker_cm  == |camera.fixed_position_cm - marker_pos|` → `|(-19, -16.5, -24)| = √(361+272.25+576) = 34.8` ✓
+- `marker_pos = -qr_to_origin_cm` → `[-8.25, -17.5, -0.75]` ✓
+- `to_origin_cm  == |camera.fixed_position_cm|` → `|(2.75, 19.5, -12.25)| = √(7.5625+380.25+150.0625) = 23.2` ✓
+- `to_marker_cm  == |camera.fixed_position_cm - marker_pos|` → `|(11, 37, -11.5)| = √(121+1369+132.25) = 40.3` ✓
 
-Şerit metreyle: lens→kabin merkezi **26,6 cm**, lens→marker merkezi **34,8 cm** okunmalı.
+Şerit metreyle: lens→kabin merkezi **23,2 cm**, lens→marker merkezi **40,3 cm** okunmalı.
 
 ---
 
@@ -187,10 +189,10 @@ yaz; `to_origin_cm` / `to_marker_cm`'i §3'teki formülle yeniden hesapla. Kamer
 1. `PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf`'i **%100 / "gerçek boyut"** bas ("sayfaya sığdır" ve
    "ölçekle" KAPALI, mat kâğıt). Sayfadaki **10 cm cetvel çubuğu** cetvelde tam 10,0 cm ise marker doğru.
 2. Kesik çizgiden kes (**14×14 cm**). Etrafındaki **beyaz kenar (sessiz bölge) kalsın** — ArUco için ZORUNLU.
-3. **Arka duvar**: **düz** yapıştır (kırışık/eğri değil), **siyah yüz kameraya**, "▲ ÜST" **tavana** (ters takılırsa
-   analiz `marker_upside_down` der ve sürmez).
-   ⚠️ **YAPIŞTIRDIKTAN SONRA CETVELLE ÖLÇ** (merkezin sol duvara `a`, tabana `b` uzaklığı, cm) ve yaml'ı yaz:
-   `qr_to_origin_cm = [a - 28.5, 17 - b, -16]` (+X = önden bakanın SOLU; 2026-10-14: a ≈ 30, b = 18,5 → `[1.5, -1.5, -16]`)
+3. **Taban camının üstü**: **düz**, köşelerinden bantlı (kırışık/eğri değil), **siyah yüz yukarı**, "▲ ÜST" **arka duvara**;
+   yeri ve yönü camda bantla işaretlensin (taban işaretinde ters / döndürülmüş kâğıdı kod anlamaz, konumlar yanlış çıkar).
+   ⚠️ **YAPIŞTIRDIKTAN SONRA CETVELLE ÖLÇ** (merkezin sol cama `a`, ön cama `c` uzaklığı, cm) ve yaml'ı yaz:
+   `qr_to_origin_cm = [a - 27.75, 17.5, 20.25 - c]` (+X = önden bakanın SOLU; 2026-10-23: a = 36, c = 19,5 → `[8.25, 17.5, 0.75]`)
    ve `to_marker_cm`i yeniden hesapla. 1 cm'lik sapma 3B konumda ~1 cm hata demektir.
 4. Işık: homojen, **parlama/yansıma yok** (marker üstünde ışık lekesi tespiti bozar).
 5. Yeniden üretmek için: `python scripts/kabin_marker_a4.py --masaustu` (300 DPI, kendi kendini doğrular).

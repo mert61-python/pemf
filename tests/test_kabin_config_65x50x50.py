@@ -1,8 +1,9 @@
 # Author: mertaygn, cglrgrkn
 """Kabin geometrisi + basılı ArUco marker + cat_organ yaml'ı GERÇEKTEN okur (2026-09-08; ölçüler TD4 2026-10-14).
 
-⚠️ Dosya adı TARİHÇEDİR (65×50×50). Güncel SAHA kabini (tezgâh Oturum 13, sahip şerit metreyle): iç 57 × 34 × 32 cm;
-işaret arka duvar merkez (-1.5, +1.5, +16), 10 cm; kamera lensi sağdan 8 / tabandan 2 / önden 8 → (-20.5, -15, -8).
+⚠️ Dosya adı TARİHÇEDİR (65×50×50). Güncel kabin (TEZGÂH-2B 2026-10-23, sahip şerit metre + ArUco): iç 55,5 × 35 × 40,5 cm;
+işaret TABAN camının üstünde, merkez (-8.25, -17.5, -0.75), 10 cm, siyah yüz yukarı, üst kenarı arka duvara; kamera (Pusat FHD)
+tavan camının üstünde tepeden → lens (2.75, 19.5, -12.25). (Oturum 13 2026-10-14: 57 × 34 × 32, arka duvar işareti — eski.)
 Eksen kuralı: +X = ÖNDEN BAKANIN SOLU (eski açıklamalar "sağ = +X" diyordu — aynaydı). Bu dosya ÖLÇER:
   (a) üç yaml parse edilir, aynı geometriyi taşır, mesafeler vektörlerden hesaplananla ±0.2 cm uyuşur,
       marker sözlüğü/kenarı basılı sayfa üreticisinin sabitleriyle aynıdır;
@@ -29,10 +30,10 @@ YAMLLAR = {
     "em_fantom": KOK / "ai_hub" / "inference_em_fantom" / "phantom_cv_v3" / "cabin_config_v3.yaml",
     "petri": KOK / "ai_hub" / "inference_petri_dish" / "petri_cv_v2" / "cabin_config_v2.yaml",
 }
-# TD4 (2026-10-14 saha olcusu, tezgah Oturum 13 yamasi). Sessiz bolge kurali kenardan TURETILIR (asagida).
-EXTENT = [57.0, 34.0, 32.0]
-KAMERA = [-20.5, -15.0, -8.0]
-MARKER = [-1.5, 1.5, 16.0]
+# T2B (2026-10-23 olcusu; TEZGAH-2B.md §7). Sessiz bolge kurali kenardan TURETILIR (asagida).
+EXTENT = [55.5, 35.0, 40.5]
+KAMERA = [2.75, 19.5, -12.25]
+MARKER = [-8.25, -17.5, -0.75]
 ISARET_KENAR_CM = 10.0
 SESSIZ_CM = 2.0
 
@@ -52,20 +53,20 @@ def test_KRITIK_yaml_geometri_65x50x50_ve_mesafeler_tutarli(ad):
     assert marker == MARKER, f"{ad}: marker merkezi {marker} (qr_to_origin={g['qr_to_origin_cm']})"
     # ⚠️ Isaret + sessiz bolge duvar/tavana SIGMALI: merkez >= kenar/2 + sessiz kadar iceride.
     # Sabit "7" idi ve 10 cm isarete gore hesaplanmisti; 15 cm'de 9,5 cm gerekir -> kenardan TURET.
+    # Taban işareti: sessiz bölge X (sol / sağ cam) ve Z (ön / arka cam) yönünde sığmalı.
     ic = float(a["real_cm"]) / 2 + SESSIZ_CM
-    assert -EXTENT[0] / 2 + ic <= marker[0], (
-        f"{ad}: marker sol duvara {marker[0] + EXTENT[0] / 2:.1f} cm — sessiz bölge taşar (asgari {ic})"
-    )
-    assert marker[1] <= EXTENT[1] / 2 - ic, (
-        f"{ad}: marker tavana {EXTENT[1] / 2 - marker[1]:.1f} cm — sessiz bölge taşar (asgari {ic})"
-    )
-    assert marker[2] == EXTENT[2] / 2, f"{ad}: marker arka duvarda değil"
+    for i, eksen in ((0, "sol / sağ cam"), (2, "ön / arka cam")):
+        assert -EXTENT[i] / 2 + ic <= marker[i] <= EXTENT[i] / 2 - ic, (
+            f"{ad}: marker {eksen} yönünde kenara {EXTENT[i] / 2 - abs(marker[i]):.1f} cm — sessiz bölge taşar (asgari {ic})"
+        )
+    assert marker[1] == -EXTENT[1] / 2, f"{ad}: marker taban camının üstünde değil (Y={marker[1]})"
     to_o = math.dist(KAMERA, [0, 0, 0])
     to_m = math.dist(KAMERA, marker)
     assert abs(to_o - float(c["to_origin_cm"])) <= 0.2, f"{ad}: to_origin {c['to_origin_cm']} ≠ {to_o:.2f}"
     assert abs(to_m - float(c["to_marker_cm"])) <= 0.2, f"{ad}: to_marker {c['to_marker_cm']} ≠ {to_m:.2f}"
     assert a["dict"] == "DICT_5X5_50" and float(a["real_cm"]) == ISARET_KENAR_CM
-    assert str(a["normal_axis_in_cabin"]).upper() == "-Z", "marker arka duvarda öne (kameraya) bakar"
+    assert str(a["normal_axis_in_cabin"]).upper() == "+Y", "marker tabanda yukarı (tavandaki kameraya) bakar"
+    assert [float(x) for x in c["up_cabin"]] == [0.0, 0.0, 1.0], f"{ad}: işaretin üst kenarı arka duvara (+Z)"
 
 
 def test_uc_pipeline_AYNI_kabini_tanimlar():
@@ -110,7 +111,7 @@ def test_marker_sayfasi_uretici_sabitleri_yaml_ile_AYNI():
     assert re.search(r'^DICT_ADI = "DICT_5X5_50"$', src, re.M) and re.search(r"^MARKER_ID = 0$", src, re.M)
     assert re.search(rf"^KENAR_CM = {ISARET_KENAR_CM:g}\.0", src, re.M)
     # sayfadaki talimat kabin sayılarını yaml ile aynı söyler
-    assert "[-1.5, +1.5, +16.0]" in src and "[-20.5, -15.0, -8.0]" in src and "[1.5, -1.5, -16.0]" in src
+    assert "[-8.25, -17.5, -0.75]" in src and "[2.75, 19.5, -12.25]" in src and "[8.25, 17.5, 0.75]" in src
 
 
 def test_marker_sayfasi_cv2_ile_ID0_ve_KENAR_bulunur():
@@ -129,7 +130,14 @@ def test_marker_sayfasi_cv2_ile_ID0_ve_KENAR_bulunur():
 
 def test_kilavuz_ayni_sayilari_soyler_ve_marker_png_depoda():
     k = (KOK / "ai_hub" / "KABIN_KURULUM_KILAVUZU.md").read_text(encoding="utf-8")
-    for s in ("[57, 34, 32]", "[-20.5, -15, -8]", "[-1.5, +1.5, +16]", "[1.5, -1.5, -16]", "26.6", "34.8"):
+    for s in (
+        "[55.5, 35, 40.5]",
+        "[2.75, 19.5, -12.25]",
+        "[-8.25, -17.5, -0.75]",
+        "[8.25, 17.5, 0.75]",
+        "23.2",
+        "40.3",
+    ):
         assert s in k, f"kılavuzda {s} yok"
     sayfa = f"PEMF_ArUco_Marker_5X5_50_ID0_{ISARET_KENAR_CM:g}cm_A4"
     assert f"{sayfa}.pdf" in k and "kabin_marker_a4.py" in k

@@ -51,7 +51,7 @@ aruco:
   dict: DICT_5X5_50              # OpenCV ArUco sozluk
   real_cm: 10.0                    # isaret kenar uzunlugu (saha olcusu 2026-10-14, cetvel; basili sayfa ile AYNI)
   plane_offset_cm: 0.0
-  normal_axis_in_cabin: "-Z"     # marker ARKA duvarda, siyah yuzu one (kameraya) bakar
+  normal_axis_in_cabin: "+Y"     # T2B 2026-10-23: isaret TABAN CAMININ USTUNDE, siyah yuz yukari (tavandaki kameraya)
   refine_corners: true
   use_apriltag_corners: false
 
@@ -60,12 +60,12 @@ aruco:
 # 2) GEOMETRY — ArUco modunda kullanilir (kedi paterni)
 # -----------------------------------------------------------------------------
 geometry:
-  # SAHA OLCUSU 2026-10-14 (tezgah Oturum 13; ayrinti + eksen kurali: cat_organ yaml). ⚠️ +X = ONDEN BAKANIN SOLU
-  # (eski "kamera sag-alt-ON = +X" AYNAYDI). Kabin ic 57x34x32; isaret ARKA duvar, merkez (-1.5,+1.5,+16), 10 cm;
-  # kamera lensi SAGDAN 8 / tabandan 2 / onden 8 -> (-20.5,-15,-8). Kamera ve isaret YENIDEN yerlesecek (sahip):
-  # qr_to_origin / fixed_position / to_* o zaman yeniden olculur.
-  qr_to_origin_cm: [1.5, -1.5, -16.0]
-  cabin_extent_cm: [57.0, 34.0, 32.0]
+  # TEZGAH-2B OLCUSU 2026-10-23 (sahip serit metre + ArUco; DENETIM TEZGAH-2B.md §2 / §7; eksen kurali: cat_organ yaml).
+  # ⚠️ +X = ONDEN BAKANIN SOLU, +Y yukari, +Z arkaya. Kabin ic 55,5 x 35 x 40,5 cm (sol-sag cam x alt-ust cam x on-arka cam).
+  # Isaret TABAN CAMININ USTUNDE: siyah kare sol kenari sol camdan 31, on kenari on camdan 14,5 cm -> merkez (-8.25,-17.5,-0.75).
+  # Kamera (Pusat FHD) tavan caminin 2 cm ustunde, tepeden bakar. Kamera / isaret kaydirilirsa bu degerler yeniden olculur.
+  qr_to_origin_cm: [8.25, 17.5, 0.75]
+  cabin_extent_cm: [55.5, 35.0, 40.5]
   axes: "x=lateral,y=dorsal,z=camera"
 
 
@@ -73,11 +73,11 @@ geometry:
 # 3) CAMERA — ArUco modunda kullanilir (kedi paterni)
 # -----------------------------------------------------------------------------
 camera:
-  fixed_position_cm: [-20.5, -15.0, -8.0]
+  fixed_position_cm: [2.75, 19.5, -12.25]   # lens: sol cam 25 (±1), on cam 8, taban camindan 37 (serit); ArUco'dan (0.65, 21.45, -11.69)
   look_at_cm: [0.0, 0.0, 0.0]
-  up_cabin: [0.0, 1.0, 0.0]
-  to_marker_cm: 34.8
-  to_origin_cm: 26.6
+  up_cabin: [0.0, 0.0, 1.0]                 # isaretin UST kenari ARKA duvara (+Z); kameranin goruntu ustu de arka duvar
+  to_marker_cm: 40.3
+  to_origin_cm: 23.2
   intrinsics_npz: cv_ortak/kalibrasyon/pusat_fhd_1920x1080_M2.npz   # T2D-2: Pusat FHD 1920×1080 (Tezgâh-2 M2, f=1279,8); göreli → YAML dizini, yoksa ai_hub kökü; kenar oranı farklı karede yaklaşık K
 
 
@@ -115,8 +115,10 @@ phantom_plate:
   #    reddedilir (fail-closed, olculdu). DEGISTIRILMEDI: tezgah "tepsi yok, plaka yerlesimi kamera kararina bagli"
   #    dedi; yeni lens tabandan yalniz 2 cm (Y=-15) -> taban duzlemi isinla neredeyse PARALEL (sig aci, yukaridaki
   #    2026-09-09 olcumunun aynisi). Kamera yeniden yerlesince plaka duzlemi olculup yazilir (sahibe / Tezgah-2).
+  # T2B 2026-10-23: plaka taban caminin ustunde; kuyu tabani camdan ~0,3 cm (hucreler) -> -17.5 + 0.3 = -17.2.
+  #    Fantom ayni degeri tasir ("iki YAML bir kabin" kapisi); fantom kalinligi OLCULMEDI — fantom AI Pro KAPALI (Y145).
   hedef_duzlem_eksen: "Y"
-  hedef_duzlem_cm: -20.0
+  hedef_duzlem_cm: -17.2
   plate_z_cm: 0.0
   width_cm: 8.5                   # sanity check (fantom yaklasik boyut)
   height_cm: 13.0

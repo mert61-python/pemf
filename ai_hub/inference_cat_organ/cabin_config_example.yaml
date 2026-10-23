@@ -10,21 +10,22 @@
 #      (+X SOLDUR). Elle olcum yazarken: SAG duvara yakin nokta = NEGATIF X.
 #
 # OLCULER (2026-10-14):
-#   (1) cabin_extent_cm:    [57.0, 34.0, 32.0]   <- ic olcu [X genislik, Y yukseklik, Z derinlik]
-#                           duvarlar: X = ±28.5 (sol +28.5, sag -28.5) · Y = ±17 (taban -17, tavan +17)
-#                           · Z = ±16 (on -16, arka +16)
-#   (2) isaret (ArUco) merkezi: ARKA duvar (arka cam), soldan ~30 · sagdan ~28,5 · tabandan 18,5 cm
-#                           => (-1.5, +1.5, +16.0); siyah kare kenari 10,0 cm (cetvel)
-#   (3) qr_to_origin_cm:    origin - isaret = (+1.5, -1.5, -16.0)
-#   (4) fixed_position_cm:  kamera LENSI: SAGDAN 8 · tabandan 2 · onden 8 cm => (-20.5, -15.0, -8.0), origin'e bakar
-#       to_origin_cm:       |lens|           = sqrt(20.5² + 15² + 8²)  = 26.6 cm
-#       to_marker_cm:       |lens - isaret|  = |(-19, -16.5, -24)|     = 34.8 cm
-#   (5) isaret yuzu (siyah taraf) kameraya = ONE (-Z) bakar => normal_axis_in_cabin: "-Z";
-#       kagidin "▲ UST" kenari TAVANA (2026-10-14'te 180° TERS bulundu ve cevrildi — ters takilirsa hat
-#       "marker_upside_down" uyarir ve sonuc surulmez).
+#   OLCULER 2026-10-23 (TEZGAH-2B: sahip serit metre + ArUco; 2026-10-14 Oturum 13'teki 57 x 34 x 32 ESKI / yanlis):
+#   (1) cabin_extent_cm:    [55.5, 35.0, 40.5]   <- ic olcu [X sol-sag cam, Y alt-ust cam, Z on-arka cam]
+#                           duvarlar: X = ±27.75 (sol +27.75, sag -27.75) · Y = ±17.5 (taban cami -17.5, tavan cami +17.5)
+#                           · Z = ±20.25 (on -20.25, arka +20.25)
+#   (2) isaret (ArUco) merkezi: TABAN CAMININ USTUNDE; siyah kare sol kenari sol camdan 31, on kenari on camdan 14,5 cm
+#                           => (-8.25, -17.5, -0.75); siyah kare kenari 10,0 cm (cetvel)
+#   (3) qr_to_origin_cm:    origin - isaret = (+8.25, +17.5, +0.75)
+#   (4) fixed_position_cm:  kamera LENSI (Pusat FHD, tavan caminin 2 cm ustu, tepeden): sol cam 25 · on cam 8 ·
+#                           taban camindan 37 cm => (2.75, 19.5, -12.25)
+#       to_origin_cm:       |lens|           = sqrt(2.75² + 19.5² + 12.25²) = 23.2 cm
+#       to_marker_cm:       |lens - isaret|  = |(11, 37, -11.5)|           = 40.3 cm
+#   (5) isaret yuzu (siyah taraf) YUKARI (tavandaki kameraya) => normal_axis_in_cabin: "+Y";
+#       kagidin "▲ UST" kenari ARKA DUVARA => camera.up_cabin [0, 0, 1] (taban isaretinde ZORUNLU).
+#       ⚠️ Taban isaretinde ters / dondurulmus kagidi kod ANLAMAZ (T2B B3) — yeri ve yonu camda bantla isaretli kalir.
 #
-# ⚠️ YENIDEN OLCULECEK (sahip: "kamera ve isaret konum degisikligine gidecegiz"): qr_to_origin / fixed_position /
-#    to_marker / to_origin YENI yerlesimde yeniden olculmeli. Kalici olanlar: cabin_extent_cm ve real_cm.
+# ⚠️ Kamera ya da isaret kaydirilirsa qr_to_origin / fixed_position / to_marker / to_origin yeniden olculur.
 #    Kapi: tests/test_kabin_config_65x50x50.py (dosya adi tarihce; olculer guncel).
 #
 # BASILI ISARET: ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf (%100 olcekte bas, cetvelle dogrula)
@@ -43,30 +44,30 @@ aruco:
   # Kose/yan setup'inda 0 (marker ve kedi paralel duzlemde degil)
   plane_offset_cm: 0.0
 
-  # Isaret yuzunun (siyah taraf) baktigi kabin ekseni ((5)): arka duvar -> one bakar
-  normal_axis_in_cabin: "-Z"
+  # Isaret yuzunun (siyah taraf) baktigi kabin ekseni ((5)): taban cami -> yukari bakar
+  normal_axis_in_cabin: "+Y"
 
 
 geometry:
   # (3): isaret merkezi -> origin vektoru
-  qr_to_origin_cm: [1.5, -1.5, -16.0]
+  qr_to_origin_cm: [8.25, 17.5, 0.75]
 
   # (1): kabin ic boyutlari [X genislik, Y yukseklik, Z derinlik]
-  cabin_extent_cm: [57.0, 34.0, 32.0]
+  cabin_extent_cm: [55.5, 35.0, 40.5]
 
   axes: "x=cranial,y=dorsal,z=right"
 
 
 camera:
-  # (4): kamera lensinin kabin cercevesindeki konumu (cm) — SAGDAN 8 / tabandan 2 / onden 8 (+X = SOL)
-  fixed_position_cm: [-20.5, -15.0, -8.0]
+  # (4): kamera lensinin kabin cercevesindeki konumu (cm) — sol cam 25 / on cam 8 / taban camindan 37 (+X = SOL)
+  fixed_position_cm: [2.75, 19.5, -12.25]
 
   look_at_cm: [0.0, 0.0, 0.0]    # kameranin baktigi nokta (default: origin)
-  up_cabin: [0.0, 1.0, 0.0]       # cabin "up" yonu (default: +Y dorsal)
+  up_cabin: [0.0, 0.0, 1.0]       # isaretin UST kenarinin baktigi kabin ekseni ((5)): arka duvar (+Z)
 
   # Serit metre validation (sanity check, ±2 cm)
-  to_marker_cm: 34.8
-  to_origin_cm: 26.6
+  to_marker_cm: 40.3
+  to_origin_cm: 23.2
 
   # Chessboard kalibrasyon ciktisi. Yoksa to_marker_cm'den approx turetilir.
   # Uretim: python calibrate_camera.py --images chess/ --pattern 9x6 --square-cm 2.5
@@ -78,21 +79,23 @@ camera:
 # =============================================================================
 #
 # 1) DUVAR SINIRI HESABI (+X = ONDEN BAKANIN SOLU)
-#    cabin_extent_cm = [57, 34, 32]  ->  duvarlar X ±28.5 · Y ±17 · Z ±16 (origin merkez)
-#    Isaret ARKA duvarda (Z=+16): merkez X = +28.5 - (soldan) = -28.5 + (sagdan); Y = -17 + (tabandan)
-#    2026-10-14: soldan ~30 / sagdan ~28,5 / tabandan 18,5 -> (-1.5, +1.5, +16); qr_to_origin_cm = (+1.5, -1.5, -16)
+#    cabin_extent_cm = [55.5, 35, 40.5]  ->  duvarlar X ±27.75 · Y ±17.5 · Z ±20.25 (origin merkez)
+#    Isaret TABAN camida (Y=-17.5): merkez X = +27.75 - (sol camdan), Z = -20.25 + (on camdan)
+#    2026-10-23: merkez sol camdan 36 (kare sol kenari 31 + 5) / on camdan 19,5 (on kenar 14,5 + 5)
+#    -> (-8.25, -17.5, -0.75); qr_to_origin_cm = (+8.25, +17.5, +0.75)
 #
-# 2) KAMERA: lens konumunu duvarlardan olc: X = -28.5 + (sagdan), Y = -17 + (tabandan), Z = -16 + (onden).
+# 2) KAMERA: lens konumunu camlardan olc: X = 27.75 - (sol camdan), Y = -17.5 + (taban camindan), Z = -20.25 + (on camdan).
 #    Lens koseden iceride kaliyorsa GERCEK lens konumunu olcup fixed_position_cm'e yaz
 #    (kamera-sabitli modda en kritik deger budur), to_origin/to_marker'i yeniden hesapla.
 #
 # 3) MESAFE TUTARLILIK KONTROLU (±2 cm tolerans)
-#    to_origin_cm  ==  |fixed_position_cm|              -> |(-20.5,-15,-8)|   = 26.6  ✓
-#    to_marker_cm  ==  |fixed_position_cm - marker_pos|  -> |(-19,-16.5,-24)| = 34.8  ✓
+#    to_origin_cm  ==  |fixed_position_cm|              -> |(2.75,19.5,-12.25)| = 23.2  ✓
+#    to_marker_cm  ==  |fixed_position_cm - marker_pos|  -> |(11,37,-11.5)|      = 40.3  ✓
 #
 # 4) MARKER YONU SAGLAMASI
-#    Siyah yuz KAMERAYA (one) bakmali -> normal_axis "-Z". Basili sayfadaki "▲ ÜST" tavana (ters takilirsa
-#    hat "marker_upside_down" der). Tavan / taban isaretinde (normal "±Y") camera.up_cabin ZORUNLU: isaretin
+#    Siyah yuz KAMERAYA (taban isaretinde yukari) bakmali -> normal_axis "+Y". Basili sayfadaki "▲ ÜST" arka duvara
+#    (duvar isaretinde tavana; ters takilirsa duvar isaretinde hat "marker_upside_down" der, taban isaretinde DEMEZ).
+#    Tavan / taban isaretinde (normal "±Y") camera.up_cabin ZORUNLU: isaretin
 #    UST kenarinin baktigi kabin ekseni (or. [0, 0, -1]); verilmezse yukleme REDDEDER (donusum tekil olurdu).
 #
 # 5) PLANE_OFFSET NE ZAMAN KULLANILIR

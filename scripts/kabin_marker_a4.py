@@ -119,11 +119,11 @@ def sayfa_uret() -> Image.Image:
     satirlar = [
         "BASKI: %100 / 'gerçek boyut' — 'sayfaya sığdır' ve 'ölçekle' KAPALI. Mat kâğıt (parlama yok).",
         "KESME: kesik çizgiden kes (14 × 14 cm). Beyaz kenar (sessiz bölge) KALSIN — ArUco için zorunlu.",
-        "YER: ARKA duvar (kameranın karşısı) — 2026-10-14 saha: MERKEZ soldan ~30, sağdan ~28,5, tabandan 18,5 cm.",
-        "     Kabin frame: merkez = [-1.5, +1.5, +16.0] cm  (57 × 34 × 32 kabin; +X = ÖNDEN BAKANIN SOLU).",
-        "YÖN: siyah yüz kameraya (öne) baksın, '▲ ÜST' tavana. Düz yapıştır (kırışık/eğri değil).",
-        "KAMERA: lens sağdan 8 / tabandan 2 / önden 8 cm → [-20.5, -15.0, -8.0] cm, kabin merkezine (origin) bakar.",
-        "CONFIG: qr_to_origin_cm [1.5, -1.5, -16.0] · to_marker_cm 34.8 · to_origin_cm 26.6",
+        "YER: TABAN camının üstü (2026-10-23): siyah kare sol kenarı sol camdan 31, ön kenarı ön camdan 14,5 cm.",
+        "     Kabin frame: merkez = [-8.25, -17.5, -0.75] cm  (55,5 × 35 × 40,5 kabin; +X = ÖNDEN BAKANIN SOLU).",
+        "YÖN: siyah yüz yukarı (tavandaki kameraya), '▲ ÜST' ARKA duvara. Düz, köşelerden bantlı; yeri camda işaretli.",
+        "KAMERA: Pusat FHD tavan camının 2 cm üstünde, tepeden bakar → lens [2.75, 19.5, -12.25] cm.",
+        "CONFIG: qr_to_origin_cm [8.25, 17.5, 0.75] · to_marker_cm 40.3 · to_origin_cm 23.2",
         "Farklı boyutta basarsan 3 cabin_config'te aruco.real_cm'i ölçtüğün kenara çek.",
     ]
     ty = cy + _cm(2.6)

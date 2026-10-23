@@ -9,8 +9,11 @@
     yükleme sessizce kabul ediyordu.
   * `intrinsics_npz` kalibrasyonu farklı çözünürlükteyse fantom v3 hattı K'yı ÖLÇEKLEMİYOR (petri v2 ölçekliyor —
     2026-09-09 kuralı) → solvePnP mesafeyi çözünürlük oranı kadar yanlış verir.
-DÜZENEK: ÜRÜN YAML'ından fiziksel tutarlı poz (tests/kabin_fiziksel_poz.py) + GERÇEK ArUco görüntüsü sentezlenir (cv2.aruco
-işareti + sessiz bölge, homografiyle kameranın gördüğü yere) → GERÇEK `detect_aruco_marker` + `solve_cabin_pose` + hat.
+DÜZENEK: TD4 DUVAR DÜZENİ (Oturum 13 ölçüsü, `kabin_test_geometrisi.td4_duvar_kabini`) ile ürün YAML'ından fiziksel tutarlı poz
+(tests/kabin_fiziksel_poz.py) + GERÇEK ArUco görüntüsü sentezlenir (cv2.aruco işareti + sessiz bölge, homografiyle kameranın gördüğü
+yere) → GERÇEK `detect_aruco_marker` + `solve_cabin_pose` + hat. T3 (2026-10-23): ürün kabini T2B'den beri TABAN işareti; ters
+işaret kararı yalnız duvar işaretinde verilir (`isaret_ters_mi` taban / tavanda False — T2B B3, yayından sonra) → mekanizma kapısı
+duvar düzeninde ölçülür.
 """
 
 from __future__ import annotations
@@ -35,9 +38,11 @@ def _ct():
 
 
 def _cfg(p=FANTOM_YAML):
+    from kabin_test_geometrisi import td4_duvar_kabini
+
     from ai_hub.cv_ortak.cabin_config import load_cabin_config
 
-    return load_cabin_config(p)
+    return td4_duvar_kabini(load_cabin_config(p))
 
 
 def _sentetik(cfg, *, ters: bool, boyut=(1280, 720)):
@@ -186,7 +191,11 @@ from test_koordinat_donusumu_FIZIKSEL_poz_DOGRULUK_ve_RED import _aruco_yamala  
 @pytest.mark.parametrize("ters", [False, True])
 def test_KRITIK_petri_hatti_ters_isarette_UYARIR(petri_hatti, monkeypatch, ters):
     """Petri v2 hattı da (GERÇEK `process_image`, sahte YOLO + ArUco aparatı) ters işareti söyler; düz işarette söylemez."""
+    from kabin_test_geometrisi import td4_duvar_kabini
+
     pp, kos, _Yolo = petri_hatti
+    _gercek_yukle = pp.load_cabin_config
+    monkeypatch.setattr(pp, "load_cabin_config", lambda *a, **k: td4_duvar_kabini(_gercek_yukle(*a, **k)))
     _aruco_yamala(pp, monkeypatch, [])
     if ters:  # kâğıt 180°: işaretin +Y'si kamerada AŞAĞI
         asil = pp.solve_cabin_pose
