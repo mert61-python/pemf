@@ -43,7 +43,8 @@ def istemci():
     from fastapi.testclient import TestClient
     from servers import api_server
 
-    with TestClient(api_server.app) as c:
+    # D3.05 (B-2.13): `kaydet=1` YALNIZ cihazın kendi ekranından (127.0.0.1) masaüstüne yazar — bu dosya o yolu sınar.
+    with TestClient(api_server.app, client=("127.0.0.1", 51305)) as c:
         yield c
 
 

@@ -57,6 +57,18 @@ _app_data_dir = get_app_data_directory()
 _REPORTS_DIR = _app_data_dir / "temp_reports"
 
 
+def _masaustune_yazilir_mi(kaydet, request) -> bool:
+    """D3.05 (B-2.13): `kaydet=1` YALNIZ cihazın kendi ekranından (SIKI loopback — tünel / ters-proxy / LAN SAYILMAZ:
+    `servers.auth.cihazin_kendisinden_mi`) dosyayı sunucunun masaüstüne yazar. LAN ya da uzak istek bayrağı gönderse de dosyayı
+    YANITTA (akış) alır: eskiden kliniğin Wi-Fi'ındaki herhangi bir cihaz sunucunun masaüstüne kliniğin düz-metin PII içeren
+    CSV / PDF'ini (at-rest şifrelemenin DIŞINDA) yazdırabiliyordu. İstek nesnesi yoksa (doğrudan çağrı) YAZILMAZ (fail-closed)."""
+    if not kaydet or request is None:
+        return False
+    from servers.auth import cihazin_kendisinden_mi
+
+    return cihazin_kendisinden_mi(request)
+
+
 def _diske_kaydet(icerik: bytes, ad: str) -> dict:
     """Dosyayı KULLANICININ MASAÜSTÜNE yazar ve yolunu döndürür.
 
@@ -171,9 +183,10 @@ def export_pdf(
         0,
         description="1 = dosyayı SUNUCUNUN çalıştığı makinenin masaüstüne yaz ve JSON yol döndür "
         "(masaüstü uygulaması için; tarayıcı indirmesi WebView2'de çalışmıyor). "
-        "0 = normal akış indirmesi (web/mobil).",
+        "0 = normal akış indirmesi (web/mobil). D3.05: yalnız cihazın kendi ekranından; LAN / uzak isteğe akış döner.",
     ),
     pdf_gen=Depends(get_pdf_gen),
+    request: Request = None,
 ):
     """Seçili seanslar için PDF raporu oluşturup indir.
 
@@ -189,7 +202,7 @@ def export_pdf(
 
         pdf_path = pdf_gen.generate_session_report(session_ids=id_list, output_path=out_path)
 
-        if kaydet:
+        if _masaustune_yazilir_mi(kaydet, request):
             try:
                 veri = Path(pdf_path).read_bytes()
             finally:
@@ -290,7 +303,7 @@ def export_csv(
             # ⚠️ ESKIDEN BU DA "indirilen dosya" oluyordu: istemci 200'ü başarı sayıp içinde
             # "Veri bulunamadi" yazan bir `PEMF_Gecmis.csv` kaydediyordu. Operatör dosyayı
             # açana kadar kayıt olmadığını anlamıyordu.
-            if kaydet:
+            if _masaustune_yazilir_mi(kaydet, request):
                 return {"status": "bos", "mesaj": ceviri.t("gecmis.csv.kayitYok")}
             return Response(content=ceviri.t("gecmis.csv.veriYok"), media_type="text/plain")
 
@@ -353,7 +366,7 @@ def export_csv(
         # sanıp Türkçe karakterleri bozuyor. utf-8-sig ile BOM ekleyip charset belirtiyoruz.
         csv_bytes = csv_data.encode("utf-8-sig")
 
-        if kaydet:
+        if _masaustune_yazilir_mi(kaydet, request):
             return _diske_kaydet(csv_bytes, "PEMF_Gecmis.csv")
 
         return Response(

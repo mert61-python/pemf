@@ -6403,7 +6403,9 @@ async def ai_analiz_pdf(request: Request, analiz_id: int, kaydet: int = 0):
         )
 
         _ad = f"PEMF_AI_{_dosya_adi_guvenli(kayit.get('patient_name') or 'analiz')}_{analiz_id}.pdf"
-        if kaydet:
+        from servers.history_router import _masaustune_yazilir_mi
+
+        if _masaustune_yazilir_mi(kaydet, request):  # D3.05: yalnız cihazın kendi ekranı; LAN / uzak → akış
             from servers.history_router import _diske_kaydet, _safe_unlink
 
             try:
