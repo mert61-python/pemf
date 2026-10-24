@@ -1035,6 +1035,8 @@
       "baslik": "🔬 Hedef Modeli",
       "deneysel": "Deneysel — şimdilik yalnız görüntüleme",
       "dozOnaylanamaz": "Bu sürümde fantom/petri hedefine doz ONAYLANAMAZ: 3B konum dönüşümü tezgâhta doğrulanmadı. Kamerayı açıp hedefi ve konumu görebilir, yerleşimi ölçebilirsiniz.",
+      "fantomDozOnaylanamaz": "Fantom hedefine doz ONAYLANAMAZ: fantom hattı tezgâhta doğrulanmadı (boş kabinde de tümör bulabiliyor). Analiz ve önizleme çalışır; petri AI Pro bundan etkilenmez.",
+      "fantomKapali": "AI Pro sürüşü KAPALI — fantom hattı doğrulanmadı",
       "kurulu": "Model kurulu ✓",
       "kurulumBilinmiyor": "Kurulum durumu okunamadı",
       "kurulumEksik": "Araştırma model paketi bu cihazda kurulu değil"

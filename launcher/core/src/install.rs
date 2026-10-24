@@ -140,6 +140,13 @@ pub const ENV_ARASTIRMA_AIPRO: &str = "PEMF_ARASTIRMA_AIPRO";
 /// YAPMAYIN. Ortamda tanımlıysa DOKUNULMAZ. Kilit: `device_env_anahtarlari_launcherda_KARSILIGINI_BULUR`.
 pub const ENV_KEDI_AIPRO_SURUS: &str = "PEMF_KEDI_AIPRO_SURUS";
 
+/// FANTOM AI PRO KAPALI DÖNGÜ SÜRÜŞÜ (D3 T-f · Y195, GÜVENLİK) — yalnız TAŞIYICI: `deploy/device.env` → launcher → backend. Eskiden fantom
+/// sürüşü petri ile ORTAK `PEMF_ARASTIRMA_AIPRO` bayrağına bağlıydı; fantom hattı boş kabinde de tümör bulup "sürülebilir" dediği için
+/// AYRI bayrak. Backend semantiği (`ai_router.py::_arastirma_aipro_fantom_acik`): yok / boş = KAPALI; yalnız `1|true|yes|on` açar.
+/// Varsayılanımız `"0"` — davranış DEĞİŞMEZ (kapalı); taşıyıcı olmadan operatör açsa bile backend'e ULAŞMAZDI. Varsayılanı `"1"` YAPMAYIN.
+/// Ortamda tanımlıysa DOKUNULMAZ. Kilit: `device_env_anahtarlari_launcherda_KARSILIGINI_BULUR`.
+pub const ENV_ARASTIRMA_AIPRO_FANTOM: &str = "PEMF_ARASTIRMA_AIPRO_FANTOM";
+
 /// SAKLAMA SÜRELERİ (LN L8 · S-F2-3.2 (a) · A-33 · D2.44): backend'in tek silicisi (`services/headless_db_maintenance`) bu adları
 /// okur. Launcher ORTAMDA TANIMLI olanları backend'e AYNEN geçirir; VARSAYILAN YAZMAZ (backend varsayılanları tek kaynak: sensör 90 ·
 /// doz 3650 · seans olayı 365 · giden kutusu 30 · PII 365 gün). Boş / geçersiz değer backend'de o adımı KAPATIR ve uyarı yazar
@@ -905,6 +912,13 @@ where
     env.insert(
         ENV_KEDI_AIPRO_SURUS.to_string(),
         getenv(ENV_KEDI_AIPRO_SURUS)
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| "0".to_string()),
+    );
+    // FANTOM AI PRO SÜRÜŞÜ (bkz. ENV_ARASTIRMA_AIPRO_FANTOM · D3 T-f): yalnız taşıyıcı; varsayılan "0" = KAPALI. Ortamda tanımlıysa DOKUNMA.
+    env.insert(
+        ENV_ARASTIRMA_AIPRO_FANTOM.to_string(),
+        getenv(ENV_ARASTIRMA_AIPRO_FANTOM)
             .filter(|v| !v.trim().is_empty())
             .unwrap_or_else(|| "0".to_string()),
     );
@@ -2229,6 +2243,8 @@ mod tests {
             ENV_KEEP_PLAIN_BACKUP,
             // KEDİ AI PRO SÜRÜŞÜ TAŞIYICISI (LN L8 · S-AIK.6 · Y142): KOŞULSUZ; varsayılan "0" = KAPALI, ortamdaki değer korunur.
             ENV_KEDI_AIPRO_SURUS,
+            // FANTOM AI PRO SÜRÜŞÜ TAŞIYICISI (D3 T-f · Y195): KOŞULSUZ; varsayılan "0" = KAPALI, ortamdaki değer korunur.
+            ENV_ARASTIRMA_AIPRO_FANTOM,
         ];
         // SAKLAMA SÜRELERİ (LN L8 · S-F2-3.2 a): yalnız ortamda TANIMLIYSA geçer (varsayılan yazılmaz) — koşullu.
         // (LN L11: ortam sahte — saklama adları tanımsız, eklenmez.)

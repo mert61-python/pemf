@@ -1035,6 +1035,8 @@
       "baslik": "🔬 Target Model",
       "deneysel": "Experimental — view-only for now",
       "dozOnaylanamaz": "In this version a dose for a phantom/well plate target CANNOT be approved: the 3D position transform has not been verified on the bench. You can open the camera and see the target and its position, and measure the placement.",
+      "fantomDozOnaylanamaz": "A dose CANNOT be approved for the Tumor Phantom target: the phantom pipeline has not been validated on the bench (it can report a tumour even in an empty cabin). Analysis and preview still work; Well Plate AI Pro is not affected.",
+      "fantomKapali": "AI Pro drive OFF — phantom pipeline not validated",
       "kurulu": "Model installed ✓",
       "kurulumBilinmiyor": "Installation status could not be read",
       "kurulumEksik": "The research model package is not installed on this device"

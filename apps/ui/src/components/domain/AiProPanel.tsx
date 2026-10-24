@@ -240,6 +240,8 @@ interface AiProStatus {
   subjectDetected?: boolean;
   /** Araştırma modelleriyle SÜRÜŞ açık mı (`PEMF_ARASTIRMA_AIPRO`). Alan yoksa bilinmiyor. */
   arastirmaAiProAcik?: boolean;
+  /** T-f (Y195): FANTOM AI Pro sürüşü açık mı (`PEMF_ARASTIRMA_AIPRO_FANTOM`, ayrı bayrak). Alan yoksa (eski backend) `arastirmaAiProAcik`. */
+  arastirmaAiProFantomAcik?: boolean;
   /** Hazırlık hatasının SINIFI (kamera / model_paketi / model_yukleme / zaman_asimi). */
   hazirlikHataKodu?: string;
   /** Y142: kedi AI Pro kapalı döngü sürüşü açık mı (`PEMF_KEDI_AIPRO_SURUS`). Alan yoksa bilinmiyor → eski davranış. */
@@ -350,6 +352,8 @@ export function AiProPanel({
   const [ozneVar, setOzneVar] = useState(false);
   /** `PEMF_ARASTIRMA_AIPRO`: null = bilinmiyor (alan yok / durum okunamadı). */
   const [arastirmaAcik, setArastirmaAcik] = useState<boolean | null>(null);
+  /** T-f `PEMF_ARASTIRMA_AIPRO_FANTOM`: null = bilinmiyor (eski backend) → kart `arastirmaAcik`e düşer. */
+  const [fantomAcik, setFantomAcik] = useState<boolean | null>(null);
   /** Y142 `PEMF_KEDI_AIPRO_SURUS`: null = bilinmiyor (alan yok / durum okunamadı) → eski davranış. */
   const [kediSurusAcik, setKediSurusAcik] = useState<boolean | null>(null);
   /** Model kurulum durumu — `GET /api/ai/hazirlik` envanterinden BİR KEZ okunur (poll YOK). */
@@ -519,6 +523,7 @@ export function AiProPanel({
       setSunucuKosulsuz(st.kosulsuz === true);  // T3 · Y189
       setOzneVar(Boolean(st.subjectDetected ?? st.catDetected));
       setArastirmaAcik(typeof st.arastirmaAiProAcik === "boolean" ? st.arastirmaAiProAcik : null);
+      setFantomAcik(typeof st.arastirmaAiProFantomAcik === "boolean" ? st.arastirmaAiProFantomAcik : null);
       setKediSurusAcik(typeof st.kediAiProSurusAcik === "boolean" ? st.kediAiProSurusAcik : null);
       // B3 (siyah ekran): sunucu önizlemesi kamera/model hatasıyla öldüyse panel bunu ÖĞRENSİN.
       // Eskiden /baslat "success" diyor, thread anında ölüyor ve panel 120 sn "Hazırlanıyor…"da
@@ -1168,6 +1173,7 @@ export function AiProPanel({
           kilitNedeni={t("ai.pro.modelKilitli")}
           kurulum={kurulum}
           arastirmaAcik={arastirmaAcik}
+          fantomAcik={fantomAcik}
         />
       ) : null}
 

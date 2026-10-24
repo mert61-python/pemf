@@ -297,6 +297,7 @@
         "baslatilmadiNeden": "AI Pro was NOT STARTED — {{sebep}}",
         "baslatmaSirasindaDurduruldu": "A stop / emergency stop arrived during startup; AI Pro was NOT STARTED.",
         "dozUretmedi": "The model produced no drivable parameter for this position (all duty = 0). Repeat the localization.",
+        "fantomSurusKapali": "Tumor Phantom AI Pro drive is OFF: the phantom pipeline has not been validated on the bench (it can report a tumour even in an empty cabin). Analysis and preview still work; start the session manually from the Control screen.",
         "guncellemeSuruyor": "An update is being applied; AI Pro cannot be started until it finishes.",
         "hedefDesteklenmiyor": "Target {{oid}} is not supported for '{{model}}' (valid: {{gecerli}}).",
         "kediSurusKapali": "Cat AI Pro driving is turned off until the cabin position is verified. You can review the analysis and the recommendation; start the session by hand from the Control screen.",

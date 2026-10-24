@@ -11,6 +11,9 @@
  * önizlemesi (kamera + hedef + 3B konum rozeti) bayraktan bağımsız çalışır ve sahibin tezgâh
  * ölçümü (plan kararı #6: hedef düzlemini ölçüp yazmak) tam bu önizlemeyi gerektirir. Öneri/sürüş
  * yolunu backend 409 ile kapatır ve kart bunu peşinen söyler.
+ *
+ * ⚠️ T-f (Y195, GÜVENLİK): FANTOM sürüşü AYRI bayrakta (`PEMF_ARASTIRMA_AIPRO_FANTOM`, varsayılan KAPALI) — petri için açılan bayrak
+ * fantomu açmaz. Fantom kartı kendi bayrağına göre "AI Pro sürüşü KAPALI" der (eski backend alanı göndermezse genel bayrağa düşer).
  */
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { colors, spacing, typography, touch } from "@/theme/tokens";
@@ -28,6 +31,7 @@ export function ModelSecimKartlari({
   kilitNedeni = "",
   kurulum = {},
   arastirmaAcik = null,
+  fantomAcik = null,
 }: {
   modeller: HedefModeli[];
   secili: HedefModeli | "";
@@ -38,8 +42,13 @@ export function ModelSecimKartlari({
   kurulum?: Partial<Record<HedefModeli, KurulumDurumu>>;
   /** `arastirmaAiProAcik`: null = bilinmiyor (eski sunucu / durum okunamadı). */
   arastirmaAcik?: boolean | null;
+  /** T-f `arastirmaAiProFantomAcik`: null = bilinmiyor (eski sunucu) → `arastirmaAcik`. */
+  fantomAcik?: boolean | null;
 }) {
   const { t } = useTranslation();
+  // T-f: modelin SÜRÜŞ bayrağı — fantom kendi bayrağına, öteki araştırma modelleri genel bayrağa bağlı.
+  const surusAcik = (m: HedefModeli): boolean | null => (m === "fantom" && fantomAcik !== null ? fantomAcik : arastirmaAcik);
+  const fantomKapali = modeller.includes("fantom") && surusAcik("fantom") === false;
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>{t("ai.pro.model.baslik")}</Text>
@@ -75,7 +84,9 @@ export function ModelSecimKartlari({
               ) : (
                 <Text style={styles.rozet}>{t("ai.pro.model.kurulumBilinmiyor")}</Text>
               )}
-              {arastirmaAcik === false ? (
+              {m === "fantom" && fantomKapali && arastirmaAcik !== false ? (
+                <Text style={[styles.rozet, styles.rozetKotu]}>{t("ai.pro.model.fantomKapali")}</Text>
+              ) : surusAcik(m) === false ? (
                 <Text style={[styles.rozet, styles.rozetUyari]}>{t("ai.pro.model.deneysel")}</Text>
               ) : null}
             </View>
@@ -87,6 +98,8 @@ export function ModelSecimKartlari({
         <Text style={styles.note}>
           {t("ai.pro.model.dozOnaylanamaz")}
         </Text>
+      ) : fantomKapali ? (
+        <Text style={styles.note}>{t("ai.pro.model.fantomDozOnaylanamaz")}</Text>
       ) : null}
     </View>
   );

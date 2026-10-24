@@ -105,6 +105,8 @@ def o(monkeypatch, tmp_path):
     monkeypatch.setattr(hedef.FantomSaglayici, "xai_sensitivity", lambda self, *a, **k: None)
     monkeypatch.setattr(ns.air, "_ORGAN_LOCALIZE_INTERVAL_S", 0.0)  # her kare yeniden lokalize (kare yolu)
     monkeypatch.setenv("PEMF_ARASTIRMA_AIPRO", "1")  # Y145: ürün varsayılanı KAPALI — kapı açık kolla sınar
+    # T-f (Y195): FANTOM sürüşü AYRI bayrakta (varsayılan KAPALI) — bu kapı fantomla sınar, açık kol.
+    monkeypatch.setenv("PEMF_ARASTIRMA_AIPRO_FANTOM", "1")
     tekil = hedef.SAGLAYICILAR["fantom"]
     snap = {
         a: (list(v) if isinstance(v, list) else dict(v) if isinstance(v, dict) else v) for a, v in vars(tekil).items()

@@ -1063,20 +1063,42 @@ _ai_hedef_yerel = _ai_threading.local()
 #: profilini bilmez → yalnız düğmeyi gizlemek yeterli değildi (eski/yanlış istemci ya da curl
 #: doğrudan propose+approve+start yapabilirdi).
 #: Taşıyıcı: deploy/device.env satırı (kurulum NSSM ortamına yazar; backend .env'i KENDİ okumaz).
+#: ⚠️ T-f (Y195, GÜVENLİK): bu bayrak artık YALNIZ PETRİ'yi (ve fantom DIŞI araştırma modellerini) açar — FANTOM kendi bayrağına
+#: bağlı (`ARASTIRMA_AIPRO_FANTOM_BAYRAGI`). Bu makinede ve LattePanda'da bayrak petri için AÇIK (Y145 / T3).
 ARASTIRMA_AIPRO_BAYRAGI = "PEMF_ARASTIRMA_AIPRO"
+#: T-f (Y195, GÜVENLİK — T2B B1, T3 açık #4): FANTOM AI Pro kapalı döngü SÜRÜŞÜ AYRI bayrak, VARSAYILAN KAPALI. Neden: fantom hattı
+#: boş kabinde de "tümör" bulup sonucu "sürülebilir" diyor (tezgâhta petri karelerinde 1–61 sahte tümör); eskiden petri için açılan
+#: `PEMF_ARASTIRMA_AIPRO` fantomu da AÇIYORDU. Analiz / önizleme bayraktan BAĞIMSIZ. Anlam aynı: yok / boş / bozuk = KAPALI; yalnız
+#: `1|true|yes|on` açar. Taşıyıcı: `deploy/device.env` `=0` + launcher geçişi (`install.rs::ENV_ARASTIRMA_AIPRO_FANTOM`, varsayılan
+#: "0", ortam korunur — LN L8 / Y142 deseni). Kapı: tests/test_Tf_FANTOM_aipro_AYRI_bayrak_varsayilan_KAPALI.py
+ARASTIRMA_AIPRO_FANTOM_BAYRAGI = "PEMF_ARASTIRMA_AIPRO_FANTOM"
 
 
 def _arastirma_aipro_acik() -> bool:
-    """Araştırma modelleriyle kapalı-döngü sürüşe izin var mı (env bayrağı; varsayılan HAYIR)."""
+    """Araştırma modelleriyle (fantom HARİÇ — T-f) kapalı-döngü sürüşe izin var mı (env bayrağı; varsayılan HAYIR)."""
     return str(os.environ.get(ARASTIRMA_AIPRO_BAYRAGI, "")).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _arastirma_aipro_fantom_acik() -> bool:
+    """T-f: FANTOM AI Pro kapalı-döngü sürüşüne izin var mı (kendi env bayrağı; varsayılan HAYIR)."""
+    return str(os.environ.get(ARASTIRMA_AIPRO_FANTOM_BAYRAGI, "")).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _fantom_modeli_mi(saglayici) -> bool:
+    return str(getattr(saglayici, "ad", "") or "").strip().lower() == ai_pro_hedef.FantomSaglayici.ad
 
 
 def _arastirma_aipro_kapisi(saglayici) -> None:
     """Kedi DIŞI bir model için sürüş/öneri isteniyorsa bayrağı denetle → 409.
 
-    Metin operatöre durumu ve nedenini söyler; "hata" değil "henüz doğrulanmadı" durumudur."""
+    Metin operatöre durumu ve nedenini söyler; "hata" değil "henüz doğrulanmadı" durumudur.
+    T-f: FANTOM yalnız kendi bayrağıyla (`PEMF_ARASTIRMA_AIPRO_FANTOM`) geçer — genel araştırma bayrağı fantomu AÇMAZ."""
     if getattr(saglayici, "ad", "kedi") == ai_pro_hedef.VARSAYILAN_MODEL:
         return
+    if _fantom_modeli_mi(saglayici):
+        if _arastirma_aipro_fantom_acik():
+            return
+        raise HTTPException(status_code=409, detail=ceviri.t("ai.pro.hata.fantomSurusKapali"))
     if _arastirma_aipro_acik():
         return
     raise HTTPException(
@@ -3185,6 +3207,9 @@ def ai_pro_status():
         # YALNIZ-EK (2026-09-09): araştırma modelleriyle sürüş açık mı? Panel model kartlarını
         # buna göre "Deneysel — tezgâh doğrulaması bekleniyor" diye pasifleştirir.
         "arastirmaAiProAcik": _arastirma_aipro_acik(),
+        # YALNIZ-EK (T-f, Y195): FANTOM AI Pro sürüşü açık mı (ayrı bayrak). Panel fantom kartını "AI Pro sürüşü KAPALI" diye işaretler
+        # (alan yoksa — eski backend — `arastirmaAiProAcik`e düşer).
+        "arastirmaAiProFantomAcik": _arastirma_aipro_fantom_acik(),
         # YALNIZ-EK (Y142): kedi AI Pro kapalı döngü sürüşü açık mı. Panel kapalıyken başlatma düğmesini ve onay ekranını
         # gerçeğe göre etiketler (alan yoksa — eski backend — eski davranış).
         "kediAiProSurusAcik": _kedi_aipro_surus_acik(),
@@ -5150,6 +5175,9 @@ async def ai_hazirlik(derin: int = 0):
     yanit["arastirmaAiPro"] = {
         "acik": _arastirma_aipro_acik(),
         "bayrak": ARASTIRMA_AIPRO_BAYRAGI,
+        # T-f (yalnız-ek): fantomun AYRI bayrağı (varsayılan KAPALI).
+        "fantomAcik": _arastirma_aipro_fantom_acik(),
+        "fantomBayrak": ARASTIRMA_AIPRO_FANTOM_BAYRAGI,
         "neden": (
             "" if _arastirma_aipro_acik() else "Fantom/petri 3B konum dönüşümü tezgâhta doğrulanmadı (plan kararı #6)."
         ),
