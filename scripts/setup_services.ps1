@@ -163,6 +163,19 @@ function Get-PemfProfilEnvDosyasi([string]$AppDir, [string]$Mode, [string]$Betik
     ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 }
 
+# D3.08 + D3.29 (B-3.46 · B-10.69): NSSM ortamı günlüğe yazılırken SIR adlı anahtarların (PASS / TOKEN / SECRET / KEY /
+# CREDENTIAL / PRIVATE / _PAT) DEĞERİ maskelenir, ad görünür kalır. Eskiden `$AppEnv -join` ham yazılıyordu: device.env'e girilen
+# tünel belirteci ya da MQTT parolası ProgramData\PEMF_System\logs\setup_services.log'a (Users okuyabilir) düz düşerdi.
+# Boş değer "(boş)" — operatör tanımsızı görsün. Fonksiyon: testler parser'la çekip ölçer.
+function Format-PemfEnvGunluk([System.Collections.IDictionary]$EnvMap) {
+    @($EnvMap.Keys | ForEach-Object {
+        $v = [string]$EnvMap[$_]
+        if ($_ -match '(?i)(PASS|TOKEN|SECRET|KEY|CREDENTIAL|PRIVATE|_PAT$)') {
+            if ($v) { "$_=***" } else { "$_=(boş)" }
+        } else { "$_=$v" }
+    }) -join '  '
+}
+
 function Read-PemfProfilEnv([string]$Dosya) {
     $d = [ordered]@{}
     foreach ($ln in (Get-Content $Dosya)) {
@@ -481,7 +494,7 @@ if ($EnvFile) {
 }
 $AppEnv = @($EnvMap.Keys | ForEach-Object { "$_=$($EnvMap[$_])" })
 & $NssmExe set $ServiceBackend AppEnvironmentExtra @AppEnv
-Log ("Env (" + $Mode + "): " + ($AppEnv -join '  ')) "Gray"
+Log ("Env (" + $Mode + "): " + (Format-PemfEnvGunluk $EnvMap)) "Gray"
 
 # NOT: SCM 'depend= mosquitto' KULLANILMAZ. NSSM-managed mosquitto'da SCM bağımlılık çözümü
 # güvenilmez (mosquitto Running olsa BİLE "Bağımlılık başlayamadı"/1068 → backend HİÇ başlamaz).
