@@ -18,6 +18,10 @@ interface GatewayInfo {
   networkOnline: boolean;
   hotspotActive: boolean;
   gatewayState?: ConnectionState;
+  /** T-e (yalnız-ek): ağ izleme servisi yok / henüz ölçmedi → İnternet satırı "Bilinmiyor". Eski backend göndermez. */
+  internetBilinmiyor?: boolean;
+  /** T-e (yalnız-ek): ESP alt sistemi bilinçli kapalı mı (`PEMF_ESP_ENABLED`). Eski backend göndermez. */
+  espEtkin?: boolean;
 }
 
 /** Satır durumu: bağlantı yokken bayat değeri yeşil göstermemek için "unknown" eklendi. */
@@ -33,12 +37,17 @@ export function GatewayStatusPanel() {
     networkOnline: false,
     hotspotActive: false,
   });
+  // T-e (Tezgâh-2 #8): hiç başarılı yoklama yoksa (uç yok / servis yok) değerler BAŞLANGIÇ varsayılanıdır, ölçüm değil.
+  const [gwAlindi, setGwAlindi] = useState(false);
 
   const refresh = useCallback(async () => {
     // exhaustive-deps + hata-dayanıklılık: fallback null → başarısız poll SON İYİ değeri korur
     // (eskiden yakalanan ilk gwInfo'ya set ediyordu = hatada başlangıca sıfırlama). refresh stable kalır.
     const data = await apiGet<GatewayInfo | null>("/gateway/status", null, { silent: true });
-    if (data) setGwInfo(data);
+    if (data) {
+      setGwInfo(data);
+      setGwAlindi(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -54,6 +63,14 @@ export function GatewayStatusPanel() {
   const stale = !wsConnected;
   const gated = (s: ConnectionState | undefined, dflt: ConnectionState): RowState =>
     stale ? "unknown" : (s ?? dflt);
+  // T-e (Tezgâh-2 #8): ESP BİLİNÇLİ kapalıyken (Ö.4-Y7) cihaz köprüsünün çalışmaması arıza değildir → "Devre dışı" (gri), kırmızı DEĞİL.
+  // Kaynak: backend'in `espEtkin` alanı; eski backend'de canlı durumun `mqtt: devre_disi`si (yalnız ESP kapalıyken).
+  const espKapali = gwInfo.espEtkin === false || snapshot.mqtt === "devre_disi";
+  const kopru = gated(snapshot.gateway, "offline");
+  const kopruDurumu: RowState = espKapali && kopru !== "online" && kopru !== "unknown" ? "devre_disi" : kopru;
+  // İnternet: bağlantı yok / hiç yoklama alınmadı / servis ölçmedi → "Bilinmiyor" (eskiden "Kapalı" kırmızı — ölçülmemiş).
+  const internetDurumu: RowState =
+    stale || !gwAlindi || gwInfo.internetBilinmiyor ? "unknown" : gwInfo.networkOnline ? "online" : "offline";
 
   return (
     <View style={styles.card}>
@@ -71,11 +88,16 @@ export function GatewayStatusPanel() {
 
       <GatewayRow label={t("ayarlar.sistemDurumu.uygulamaBaglantisi")} state={wsConnected ? "online" : "offline"} />
       <GatewayRow label={t("ayarlar.sistemDurumu.sistemBaglantisi")} state={gated(snapshot.mqtt, "offline")} />
-      <GatewayRow label={t("ayarlar.sistemDurumu.cihazKoprusu")} state={gated(snapshot.gateway, "offline")} />
+      <GatewayRow
+        label={t("ayarlar.sistemDurumu.cihazKoprusu")}
+        state={kopruDurumu}
+        devreDisiMetni={t("ayarlar.sistemDurumu.devreDisi")}
+        testID="sistem-durumu-kopru"
+      />
       <GatewayRow label={t("ayarlar.sistemDurumu.donanimSurucusu")} state={gated(snapshot.stm, "warning")} />
       {/* gwInfo ayrı bir poll'den gelir; başarısız poll SON İYİ değeri korur (bilinçli) → bağlantı
           yokken o değeri de "Bilinmiyor" olarak göster, yeşil "Aktif" bırakma. */}
-      <GatewayRow label={t("ayarlar.sistemDurumu.internetBaglantisi")} state={stale ? "unknown" : gwInfo.networkOnline ? "online" : "offline"} />
+      <GatewayRow label={t("ayarlar.sistemDurumu.internetBaglantisi")} state={internetDurumu} testID="sistem-durumu-internet" />
       {/* ⚠️ KABLOSUZ BAĞLANTI (2026-08-10). `hotspotActive` zaten çekiliyordu ama HİÇ
           GÖSTERİLMİYORDU — yani PEMF-Gateway kapalıyken 6-8 numaralı bobinler sessizce
           bağlanamıyor, operatör sebebini hiçbir yerden göremiyordu. Backend hotspot'u açılışta
@@ -88,7 +110,18 @@ export function GatewayStatusPanel() {
   );
 }
 
-function GatewayRow({ label, state }: { label: string; state: RowState | boolean }) {
+function GatewayRow({
+  label,
+  state,
+  devreDisiMetni,
+  testID,
+}: {
+  label: string;
+  state: RowState | boolean;
+  /** T-e: bu satırda `devre_disi` için metin (varsayılan "Kurulu değil"); ESP bilinçli kapalıyken "Devre dışı". */
+  devreDisiMetni?: string;
+  testID?: string;
+}) {
   const { t } = useTranslation();
   let resolvedState: RowState;
   if (typeof state === "boolean") {
@@ -104,7 +137,7 @@ function GatewayRow({ label, state }: { label: string; state: RowState | boolean
     error:   { color: "#ef4444", text: t("ayarlar.sistemDurumu.hata"),       dot: "#ef4444" },
     unknown: { color: "#94a3b8", text: t("ayarlar.sistemDurumu.bilinmiyor"), dot: "#94a3b8" },
     // KURULU DEĞİL ≠ ARIZALI (ESP söküldü, 2026-09-11). Nötr gri + açık metin.
-    devre_disi: { color: "#94a3b8", text: t("ayarlar.sistemDurumu.kuruluDegil"), dot: "#475569" },
+    devre_disi: { color: "#94a3b8", text: devreDisiMetni ?? t("ayarlar.sistemDurumu.kuruluDegil"), dot: "#475569" },
   }[resolvedState] ?? { color: "#475569", text: t("ayarlar.sistemDurumu.bilinmiyor"), dot: "#475569" };
 
   return (
@@ -112,7 +145,9 @@ function GatewayRow({ label, state }: { label: string; state: RowState | boolean
       <Text style={styles.rowLabel}>{label}</Text>
       <View style={styles.rowRight}>
         <View style={[styles.dot, { backgroundColor: cfg.dot }]} />
-        <Text style={[styles.rowValue, { color: cfg.color }]}>{cfg.text}</Text>
+        <Text style={[styles.rowValue, { color: cfg.color }]} testID={testID}>
+          {cfg.text}
+        </Text>
       </View>
     </View>
   );

@@ -102,8 +102,12 @@ GOLDEN_SHAPES = {
     "/api/gateway/status": {
         "bridgeConnected",
         "brokerRunning",
+        # ⚠️ BILINCLI SEKIL DEGISIKLIGI 2026-10-24 (D3 T-e, Tezgâh-2 #8; yalnız-ek): ESP alt sistemi bilinçli kapalı mı
+        # (Cihaz Köprüsü "Devre dışı") ve internet ÖLÇÜLMEDİ mi (servis yok / ilk ölçüm öncesi → "Bilinmiyor", "Kapalı" DEĞİL).
+        "espEtkin",
         "gatewayState",
         "hotspotActive",
+        "internetBilinmiyor",
         "mosquitto",
         "mqttConnected",
         "network",

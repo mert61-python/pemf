@@ -114,6 +114,13 @@ async def gateway_status():
         # Yalan-yeşil, yalan-kırmızıdan daha tehlikelidir: operatörün bakacağı satır odur.
         # Cihaz ağı bilgisi kaybolmadı — `bridgeConnected` / `hotspotActive` alanlarında duruyor.
         "networkOnline": bool(network_status.get("internet_connected")),
+        # T-e (Tezgâh-2 #8, yalnız-ek alanlar): ağ izleme servisi YOK ya da henüz ÖLÇMEDİ (`gateway_mode` "unknown" = ilk ölçüm
+        # öncesi varsayılan) → arayüz "Bilinmiyor" der; eskiden `networkOnline: false` → "Kapalı" (kırmızı) — ölçülmemiş şey
+        # ölçülmüş gibi. `networkOnline` eski istemciler (APK 2.3.34) için bool KALIR.
+        "internetBilinmiyor": ("internet_connected" not in network_status)
+        or network_status.get("gateway_mode") == "unknown",
+        # ESP alt sistemi BİLİNÇLİ kapalı mı (`PEMF_ESP_ENABLED`, Ö.4-Y7: kod silinmez) — "Cihaz Köprüsü" arıza değil "Devre dışı".
+        "espEtkin": _api.live_state.esp_etkin(),
         "hotspotActive": bool(network_status.get("hotspot_active")),
         "mosquitto": mosquitto_status,
         "network": network_status,

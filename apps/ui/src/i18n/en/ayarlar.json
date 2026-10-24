@@ -229,6 +229,7 @@
     "baslik": "🌐 System Status",
     "bilinmiyor": "Unknown",
     "cihazKoprusu": "Device Bridge",
+    "devreDisi": "Disabled",
     "donanimSurucusu": "Hardware Driver",
     "hata": "Error",
     "internetBaglantisi": "Internet Connection",
