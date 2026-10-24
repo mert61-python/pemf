@@ -12,7 +12,7 @@ cihaz/dış-kaynak gerektirir — aşağıdaki komutları **cihazda/panelde** ç
 | 3 | Supabase RLS canlı | ✅ **DOĞRULANDI (yeniden: 2026-09-13)** | 6 tablonun altısı da anon'a **401/42501**; RPC kapısı çalışıyor |
 | 4 | Cloudflare NAMED tünel | ⏳ **HÂLÂ ÖLÇÜLMEDİ** | ⚠️ 2026-09-13'te elle başlatılan backend'de `tunnelUrl` boştu ama o **launcher koşulu DEĞİL**. Doğru ölçüm: uygulamayı launcher'dan aç → `GET /api/health` → `tunnelUrl`. NAMED için Cloudflare token'ı gerekir (sahipte) |
 | 5 | Bağımlılık CVE | ✅ **düşük-riskli 3'ü YAPILDI** / ⏳ onnx+torch | ölçüldü: cryptography 50.0.0 · multipart 0.0.31 · zeroconf 0.149.0 |
-| 6 | AI model bütünlüğü | ✅ **DOĞRULANDI (2026-09-13)** | `scripts/model_butunluk.py` — gömülü paket **56/56 bayt-birebir** |
+| 6 | AI model bütünlüğü | ✅ **DOĞRULANDI (2026-09-13)** · **otomatik kapı (D3.45, 2026-10-25)** | `scripts/model_butunluk.py` — gömülü paket **56/56 bayt-birebir**. Manifest `release_assets/ai_models_sha256.json` artık SÜRÜMLÜ (Y33); git'te izlenen 10 ağırlık HER test koşusunda ürünün doğrulayıcısıyla denetlenir (`tests/test_D3_45_AI_agirliklari_SURUMLU_SHA_manifesti_KAPISI.py`); takipsiz 46'sı ortamda varsa aynı çağrıda |
 | 6b | AI model **lisansı** | ⛔ YAPILMAYACAK | ⛔ **SAHİP KARARI 2026-09-21: YAPILMAYACAK.** Envanter işi kapatıldı; AGPL kalemi `docs/AGPL-KARARI.md`'de duruyor |
 | 7 | Yük/soak | ⚠️ **kısa koşu: RSS/DB temiz · HTTP kaydı yok · WS ÖLÇÜLMEDİ** / ⏳ uzun koşu | 25 dk: RSS +%0,9 (sızıntı YOK), DB sabit. ⚠️ **O koşu WS AÇMIYORDU** (B-9.26; `/ws` istemcisi 2026-09-30'da eklendi): WS kararlılığı o koşuda ÖLÇÜLMEDİ — yeniden koşulmalı. ⚠️ eski betik **MQTT** üzerinden → ESP kapalıyken hiçbir canlı yolu zorlamıyor; yerine `scripts/soak_http_ws.py`. 72 saatlik klinik koşusu sahipte |
 | 8 | KVKK anonimleştirme | ✅ **DOĞRULANDI** | `tests/test_kvkk_anonymization.py` — 3/3 + `.plain.bak` ACL fix |
@@ -101,6 +101,10 @@ py -3.10 -m pytest guii/tests   # yeşil olmalı (bu ortamda doğrulandı)
 
 ## ✅ 6 — AI model **bütünlüğü** (DOĞRULANDI) · ⛔ 6b **lisans** envanteri (YAPILMAYACAK)
 
+> **Otomatik kapı (D3.45 · B-10.95, 2026-10-25):** eskiden bu "✅" yalnız elle yapılmış koşumların kaydıydı (manifest `release_assets/*`
+> kuralıyla sürüm DIŞIYDI, hiçbir test / CI adımı doğrulayıcıyı koşmuyordu). Manifest izlenir (Y33); izlenen ağırlıklar her koşuda
+> doğrulanır; doğrulayıcının tek baytlık (aynı boyut) bozulmayı yakaladığı da kapıda ölçülür. Manifest gerçek kaynakla 56/56 (2026-10-25).
+>
 > **Bütünlük ✅ — yeniden ölçüldü 2026-09-17:** `scripts/model_butunluk.py --dogrula` hem
 > kaynakta (`release_assets/ai_models`) hem **sevk edilen kopyada**
 > (`PEMF_BUILD/dist/PEMF_Backend/_internal/ai_models`) **56/56 bayt-birebir**, çıkış kodu 0.

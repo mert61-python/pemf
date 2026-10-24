@@ -111,6 +111,8 @@ mobile_builds/
 # Buyuk agirliklar (857 MB'lik v22_kmc dahil) git'e ALINMAZ; Releases'te dururlar.
 # ⚠️ Git kurali: ust dizin dislanmissa icindeki dosya geri ALINAMAZ -> her seviye tek tek acilir.
 release_assets/*
+# D3.45 · Y33 (sahip): AI ağırlıklarının SHA-256 manifesti SÜRÜMLÜ (izlenen) — bütünlük kapısı buna dayanır.
+!release_assets/ai_models_sha256.json
 !release_assets/ai_models/
 release_assets/ai_models/*
 !release_assets/ai_models/ai_hub/
