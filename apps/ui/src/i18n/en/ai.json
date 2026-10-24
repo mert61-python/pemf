@@ -11,6 +11,11 @@
       "yuzYok": "Last frame: cat face not found — hold the cat's face close to the camera, facing it."
     },
     "emKayitNotu": "Live frames are not saved to the AI history. When you stop, the last frame and its result stay on screen; start the analysis to save it.",
+    "hiz1": "1 frame/s",
+    "hiz2": "1 frame / 2 s",
+    "hiz5": "1 frame / 5 s",
+    "hizEtiket": "Analysis rate",
+    "hizGerceklesen": "Actual: {{hiz}} frames/s (analysis time limits the rate)",
     "jetonMetni_one": "In this live session: {{count}} credit (1 per minute; frames with no result are free)",
     "jetonMetni_other": "In this live session: {{count}} credits (1 per minute; frames with no result are free)",
     "kabinAciliyor": "Opening the cabin camera…",

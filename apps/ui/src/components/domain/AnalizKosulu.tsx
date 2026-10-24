@@ -126,9 +126,12 @@ export async function kabinCanliBaslat(): Promise<void> {
   await kabinIstegi("/canli/baslat", "POST");
 }
 
-/** Canlı oturumun son karesi: `tam` = kalibrasyon boyutunda (analiz), değilse küçük önizleme. Oturum kapalıysa 409. */
-export async function kabinCanliKare(tam: boolean): Promise<string> {
+/** Canlı oturumun son karesi: `tam` = kalibrasyon boyutunda (analiz), değilse küçük önizleme. Oturum kapalıysa 409.
+ *  T3 · Y192: oturum açık ama ilk kare henüz yoksa sunucu `hazir: false` ("bekliyor") döner → null (kapalı DEĞİL; sonraki turda yeniden
+ *  istenir). Ölçülen HP kamerası: başlatma 0,3–0,5 sn, ilk kare ~0,5–1,8 sn sonra — eskiden bu arada canlı duruyordu. */
+export async function kabinCanliKare(tam: boolean): Promise<string | null> {
   const j = await kabinIstegi(tam ? "/canli/kare?tam=true" : "/canli/kare", "GET");
+  if (j?.hazir === false) return null;
   if (!j?.image_base64) throw new KabinKamerasiHatasi(i18n.t("ai.kabinKamerasi.hata"), 0);
   return String(j.image_base64);
 }

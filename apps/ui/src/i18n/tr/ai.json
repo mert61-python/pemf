@@ -11,6 +11,11 @@
       "yuzYok": "Son kare: kedi yüzü bulunamadı — kedinin yüzünü kameraya karşıdan ve yakın tutun."
     },
     "emKayitNotu": "Canlı kareler AI geçmişine kaydedilmez. Durdurunca son kare ve sonucu ekranda kalır; kaydetmek için analizi başlatın.",
+    "hiz1": "1 kare/sn",
+    "hiz2": "1 kare / 2 sn",
+    "hiz5": "1 kare / 5 sn",
+    "hizEtiket": "Analiz hızı",
+    "hizGerceklesen": "Gerçekleşen: {{hiz}} kare/sn (analiz süresi hızı sınırlar)",
     "jetonMetni_one": "Bu canlı oturumda {{count}} jeton (dakika başına 1; sonuçsuz kareler ücretsiz)",
     "jetonMetni_other": "Bu canlı oturumda {{count}} jeton (dakika başına 1; sonuçsuz kareler ücretsiz)",
     "kabinAciliyor": "Kabin kamerası açılıyor…",

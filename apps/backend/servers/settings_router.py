@@ -258,13 +258,17 @@ def kabin_kamerasi_canli_baslat():
 
 @router.get("/kabin-kamerasi/canli/kare")
 def kabin_kamerasi_canli_kare(tam: bool = False):
-    """Canlı oturumun son karesi (`tam=true`: kalibrasyon boyutunda, analiz için; değilse küçük önizleme). Oturum yoksa 409."""
+    """Canlı oturumun son karesi (`tam=true`: kalibrasyon boyutunda, analiz için; değilse küçük önizleme). Oturum yoksa 409.
+    T3 · Y192: oturum açık ama ilk kare henüz yoksa kısa süre beklenir, gelmezse 200 `status: "bekliyor"` (`hazir: false`) —
+    "kapalı" (409) DEĞİL; arayüz bekleyip yeniden ister."""
     from utils import ceviri
     from utils import kabin_kamerasi as kk
 
-    k = kk.canli_kare(tam=tam is True)
+    k = kk.canli_kare(tam=tam is True, bekle_sn=kk.CANLI_ILK_KARE_BEKLE_SN)
     if k is None:
         raise HTTPException(status_code=409, detail=ceviri.t("ayarlar.kabinKamerasi.canliKapali"))
+    if not k.get("hazir"):
+        return {"status": "bekliyor", **k}
     return {"status": "success", **k}
 
 

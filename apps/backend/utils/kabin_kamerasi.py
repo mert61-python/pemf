@@ -142,10 +142,11 @@ def kare_al(cv2=None) -> dict | None:
     if cv2 is None:
         import cv2
     if canli_acik():
-        # Y190: canlı oturum kamerayı tutuyor → son tam kare oradan (ikinci `VideoCapture` açılmaz).
-        k = canli_kare(tam=True, cv2=cv2)
+        # Y190: canlı oturum kamerayı tutuyor → son tam kare oradan (ikinci `VideoCapture` açılmaz). Y192: kare henüz yoksa
+        # canlıyı KAPATMADAN None (kare alınamadı); oturum bu arada kapandıysa normal yoldan açılır.
+        k = canli_kare(tam=True, cv2=cv2, bekle_sn=CANLI_ILK_KARE_BEKLE_SN)
         if k is not None:
-            return k
+            return k if k.get("hazir") else None
     cap, indeks = kamera_ac(cv2)
     try:
         if not cap.isOpened():
@@ -176,6 +177,9 @@ def kare_al(cv2=None) -> dict | None:
 CANLI_ZAMAN_ASIMI_SN = 10.0
 #: Önizleme karesinin genişliği (tam kare analizde; önizleme yalnız göstermek için küçük ve hızlı).
 CANLI_ONIZLEME_GENISLIK = 960
+#: T3 · Y192: oturum açık ama okuyucunun İLK karesi henüz yoksa uç / tek kare bu kadar saniye bekler (ölçülen HP kamerası: başlatma
+#: 0,28 sn, ilk kare ~0,5 sn sonra). Beklemeden "kapalı" demek arayüzün canlıyı durdurmasına yol açıyordu.
+CANLI_ILK_KARE_BEKLE_SN = 2.0
 _canli_kilit = threading.Lock()
 _canli_baslat_kilit = threading.Lock()
 _canli: dict | None = None
@@ -237,18 +241,24 @@ def canli_baslat(cv2=None) -> dict | None:
         return {"indeks": indeks, "acik": True}
 
 
-def canli_kare(tam: bool = False, cv2=None) -> dict | None:
-    """Canlı oturumun SON karesi (JPEG, base64): `tam` = kalibrasyon boyutunda (analiz), değilse küçük önizleme. Oturum yoksa ya da
-    henüz kare gelmediyse None. Her çağrı oturumu canlı tutar (zaman aşımı sayacı sıfırlanır)."""
+def canli_kare(tam: bool = False, cv2=None, bekle_sn: float = 0.0) -> dict | None:
+    """Canlı oturumun SON karesi (JPEG, base64): `tam` = kalibrasyon boyutunda (analiz), değilse küçük önizleme. Oturum YOKSA None;
+    oturum açık ama ilk kare henüz gelmediyse (`bekle_sn` kadar beklendikten sonra) `{"indeks", "hazir": False}` — T3 · Y192: bu
+    durum "kapalı" DEĞİLDİR. Her çağrı oturumu canlı tutar (zaman aşımı sayacı sıfırlanır)."""
     d = _canli
     if d is None or not canli_acik():
         return None
     d["son_erisim"] = time.monotonic()
-    with _canli_kilit:
-        kare = d["kare"]
-        zaman = d["zaman"]
+    son = time.monotonic() + max(0.0, float(bekle_sn))
+    while True:
+        with _canli_kilit:
+            kare = d["kare"]
+            zaman = d["zaman"]
+        if kare is not None or time.monotonic() >= son or not canli_acik():
+            break
+        time.sleep(0.02)
     if kare is None:
-        return None
+        return {"indeks": d["indeks"], "hazir": False} if canli_acik() else None
     if cv2 is None:
         cv2 = d.get("cv2")
         if cv2 is None:
@@ -259,10 +269,11 @@ def canli_kare(tam: bool = False, cv2=None) -> dict | None:
         kare = cv2.resize(kare, (CANLI_ONIZLEME_GENISLIK, max(1, int(kh * olcek))))
     basarili, tampon = cv2.imencode(".jpg", kare, [cv2.IMWRITE_JPEG_QUALITY, 92 if tam else 70])
     if not basarili:
-        return None
+        return {"indeks": d["indeks"], "hazir": False}
     oh, ow = kare.shape[:2]
     return {
         "indeks": d["indeks"],
+        "hazir": True,
         "genislik": int(ow),
         "yukseklik": int(oh),
         "yas_ms": int(max(0.0, time.monotonic() - zaman) * 1000),

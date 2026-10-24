@@ -33,6 +33,7 @@ import { webIcinKucult } from "@/services/gorselKucult";
 import { apiGet, apiPost, authHeaders, platformAlert, AI_TIMEOUT_MS, aiHataMesaji } from "@/services/apiClient";
 import { aiDetayCumlesi } from "@/utils/aiHataDetayi";
 import {
+  CANLI_ASGARI_ARALIK_MS,
   CANLI_OTURUM_BASLIGI,
   canliJetonMetni,
   canliKareDurumu,
@@ -2250,6 +2251,11 @@ function useEmCanli({ endpoint, dosyaAdi, formuDoldur, onKare }: {
   const [durum, setDurum] = useState<CanliDurum | null>(null);
   const [jeton, setJeton] = useState(0);
   const jetonEtkin = useCanliJetonEtkin(isLive);
+  // T3 · Y192 (sahip: "canlı kamerada belli bir fps değerinde anlık görüntü alıp analiz yapmalı"): hedef analiz aralığı (ms) + gerçekleşen
+  // hız (son 5 analiz başlangıcından; analiz hedeften uzun sürerse görünür).
+  const [aralikMs, setAralikMs] = useState(1000);
+  const aralikRef = useRef(aralikMs);
+  const [gercekHiz, setGercekHiz] = useState<number | null>(null);
   const [sonKareZamani, setSonKareZamani] = useState<number | null>(null);
   const [simdi, setSimdi] = useState(() => Date.now());
   const formRef = useRef(formuDoldur);
@@ -2257,6 +2263,7 @@ function useEmCanli({ endpoint, dosyaAdi, formuDoldur, onKare }: {
   useEffect(() => {
     formRef.current = formuDoldur;
     onKareRef.current = onKare;
+    aralikRef.current = aralikMs;
   });
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
@@ -2285,7 +2292,7 @@ function useEmCanli({ endpoint, dosyaAdi, formuDoldur, onKare }: {
     const tur = async () => {
       try {
         const k = await kabinCanliKare(false);
-        if (!bitti && mountedRef.current) setOnizleme(k);
+        if (!bitti && mountedRef.current && k) setOnizleme(k);  // Y192: null = ilk kare henüz yok (bekliyor) → önceki kalır
       } catch (e) {
         if (!bitti && mountedRef.current && e instanceof KabinKamerasiHatasi && e.durum === 409) {
           bitti = true;
@@ -2310,12 +2317,22 @@ function useEmCanli({ endpoint, dosyaAdi, formuDoldur, onKare }: {
     let ucustaki: AbortController | null = null;
     const oturum = canliOturumBaslat(); // dakika başı jeton — oturum kimliği her kare isteğinde
     setJeton(0);
+    setGercekHiz(null);
+    const baslangiclar: number[] = [];
+    let sonBas = 0;
     const tur = async () => {
       if (bitti) return;
+      // Y192: hız DÜŞÜRÜLDÜYSE eski aralıkla kurulmuş tur yeni aralığa ertelenir (seçim HEMEN uygulanır).
+      const aralik = Math.max(CANLI_ASGARI_ARALIK_MS, aralikRef.current);
+      if (sonBas && Date.now() - sonBas < aralik - 50) {
+        zamanlayici = setTimeout(tur, sonBas + aralik - Date.now());
+        return;
+      }
       const bas = Date.now();
+      sonBas = bas;
       try {
         let kare: string | null = null;
-        if (kabin) kare = await kabinCanliKare(true);
+        if (kabin) kare = await kabinCanliKare(true);  // Y192: null = ilk kare henüz yok → bu tur atlanır (hata DEĞİL)
         else if (cameraRef.current) {
           // shutterSound: false — canlı döngü sık kare alır (VisionModule ile aynı, saha bildirimi 2026-08-27).
           const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, skipProcessing: true, shutterSound: false });
@@ -2347,6 +2364,11 @@ function useEmCanli({ endpoint, dosyaAdi, formuDoldur, onKare }: {
             setJeton(oturum.jetonSayisi());
             onKareRef.current(kare, r.ok && (data?.status === "success" || data?.status === "no_detection") ? data : null);
             setSonKareZamani(Date.now());
+            baslangiclar.push(bas);
+            if (baslangiclar.length > 5) baslangiclar.shift();
+            if (baslangiclar.length >= 2) {
+              setGercekHiz(((baslangiclar.length - 1) * 1000) / Math.max(1, bas - baslangiclar[0]));
+            }
           } finally {
             clearTimeout(to);
           }
@@ -2361,7 +2383,7 @@ function useEmCanli({ endpoint, dosyaAdi, formuDoldur, onKare }: {
         setDurum({ tur: "hata", metin: t("ai.canli.sonKareHata", { hata: e instanceof KabinKamerasiHatasi ? e.message : aiHataMesaji(e) }) });
       }
       if (bitti) return;
-      zamanlayici = setTimeout(tur, canliSonrakiBekleme(Date.now() - bas));
+      zamanlayici = setTimeout(tur, canliSonrakiBekleme(Date.now() - bas, aralikRef.current));
     };
     zamanlayici = setTimeout(tur, canliSonrakiBekleme(0));
     return () => {
@@ -2411,6 +2433,7 @@ function useEmCanli({ endpoint, dosyaAdi, formuDoldur, onKare }: {
     cevir: () => setFacing((f) => (f === "back" ? "front" : "back")),
     onizleme, durum, jeton: jetonEtkin ? jeton : null,
     sonKareYasMs: sonKareZamani != null ? simdi - sonKareZamani : null,
+    aralikMs, setAralikMs, gercekHiz,
   };
 }
 
@@ -2459,6 +2482,26 @@ function EmCanliKutusu({ c, yukseklik }: { c: ReturnType<typeof useEmCanli>; yuk
         </View>
       </View>
       {c.durum ? <CanliDurumSatiri durum={c.durum} jeton={c.jeton} /> : null}
+      {/* T3 · Y192: analiz hızı (hedef) — en çok 1 kare/sn (jeton kare tavanı); gerçekleşen hız analiz süresiyle sınırlıdır. */}
+      <View style={styles.btnRow} accessibilityRole="radiogroup" accessibilityLabel={t("ai.canli.hizEtiket")}>
+        {([[1000, t("ai.canli.hiz1")], [2000, t("ai.canli.hiz2")], [5000, t("ai.canli.hiz5")]] as const).map(([ms, etiket]) => (
+          <TouchableOpacity
+            key={ms}
+            style={[styles.advAnahtar, { flex: 1, opacity: c.aralikMs === ms ? 1 : 0.6 }]}
+            onPress={() => c.setAralikMs(ms)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: c.aralikMs === ms }}
+            accessibilityLabel={etiket}
+          >
+            <Text style={styles.advAnahtarMetin}>{c.aralikMs === ms ? "◉" : "○"} {etiket}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {c.gercekHiz != null ? (
+        <Text style={styles.petriHint} testID="em-canli-hiz">
+          {t("ai.canli.hizGerceklesen", { hiz: c.gercekHiz.toFixed(1).replace(".", i18n.language === "en" ? "." : ",") })}
+        </Text>
+      ) : null}
       <Text style={styles.petriHint}>{t("ai.canli.emKayitNotu")}</Text>
     </>
   );

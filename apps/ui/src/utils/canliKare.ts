@@ -57,9 +57,12 @@ const TERMAL_UYUMSUZ_IZI = "termal kamera görüntüsüne benzemiyor";
 /** EN ikizi (S-I18N-P1.1): sunucu iletisi İSTEK DİLİNDE gelir → `ai.kapi.termal.uyumsuz` İngilizce değeri bu parçayı içerir (`tests/test_kimlik_db_oneki_iki_dilde_P1.py` kilitler). */
 const TERMAL_UYUMSUZ_IZI_EN = "does not look like a thermal camera image";
 
-/** Bir sonraki karenin ne kadar sonra alınacağı (ms): başlangıçlar arası en az `CANLI_ASGARI_ARALIK_MS`. */
-export function canliSonrakiBekleme(gecenMs: number): number {
-  return Math.max(CANLI_ASGARI_BEKLEME_MS, CANLI_ASGARI_ARALIK_MS - Math.max(0, gecenMs));
+/** Bir sonraki karenin ne kadar sonra alınacağı (ms): başlangıçlar arası en az `aralikMs` (T3 · Y192: petri / fantom canlı analiz hızı
+ *  seçimi; verilmezse `CANLI_ASGARI_ARALIK_MS`). Aralık 1 sn'nin ALTINA inmez: jeton kare tavanı (S-SGI.2) dakikada 60 kareyi dakika
+ *  fiyatında sayar. Analiz aralıktan uzun sürerse bir sonraki kare en az `CANLI_ASGARI_BEKLEME_MS` sonra. */
+export function canliSonrakiBekleme(gecenMs: number, aralikMs: number = CANLI_ASGARI_ARALIK_MS): number {
+  const aralik = Math.max(CANLI_ASGARI_ARALIK_MS, aralikMs);
+  return Math.max(CANLI_ASGARI_BEKLEME_MS, aralik - Math.max(0, gecenMs));
 }
 
 /** Son canlı karenin durumu (ekranda sürekli gösterilir). `endpoint`: "/vision/landmark" | "/vision/segmentation" | … */

@@ -70,7 +70,7 @@ def test_KRITIK_canli_kare_ONIZLEME_kucuk_TAM_kalibrasyon_boyutu_ve_kamera_KAPAN
     cv = _SahteCv2()
     kk.kamera_sec(1)
     kk.canli_baslat(cv)
-    assert _bekle(lambda: kk.canli_kare(cv2=cv) is not None), "canlı oturumdan kare gelmedi"
+    assert _bekle(lambda: (kk.canli_kare(cv2=cv) or {}).get("hazir") is True), "canlı oturumdan kare gelmedi"
     o = kk.canli_kare(cv2=cv)
     t = kk.canli_kare(tam=True, cv2=cv)
     assert (o["genislik"], o["yukseklik"]) == (kk.CANLI_ONIZLEME_GENISLIK, 540), o
@@ -81,7 +81,7 @@ def test_KRITIK_canli_kare_ONIZLEME_kucuk_TAM_kalibrasyon_boyutu_ve_kamera_KAPAN
     cap = cv.capler[0]
     kk.canli_durdur()
     assert not kk.canli_acik() and cap.sira[-1] == ("release",), "durdurunca kamera BIRAKILMADI"
-    assert kk.canli_kare(cv2=cv) is None
+    assert kk.canli_kare(cv2=cv) is None  # durdurulmuş oturum: None (Y192: hazır-değil ile karışmaz)
 
 
 def test_KRITIK_canli_kare_ISTENMEZSE_kendiliginden_kapanir_ve_kamerayi_birakir(canli, monkeypatch):
@@ -120,7 +120,7 @@ def test_KRITIK_kare_al_CANLI_aciksa_ikinci_kamera_ACMAZ_son_tam_kareyi_verir(ca
     cv = _SahteCv2()
     kk.kamera_sec(1)
     kk.canli_baslat(cv)
-    assert _bekle(lambda: kk.canli_kare(cv2=cv) is not None)
+    assert _bekle(lambda: (kk.canli_kare(cv2=cv) or {}).get("hazir") is True)
     k = kk.kare_al(cv)
     assert (k["genislik"], k["yukseklik"]) == (1920, 1080)
     assert cv.acilan == [1] and kk.canli_acik(), "canlı açıkken tek kare İKİNCİ VideoCapture açtı / canlıyı kapattı"
@@ -176,14 +176,21 @@ def test_KRITIK_canli_baslat_ucu_MESGULDE_409_SECIMSIZDE_409_ACILAMAZSA_503_basa
 def test_KRITIK_canli_kare_ucu_KAPALIYSA_409_eylem_soyler_TAM_parametresi_gecer(istemci, monkeypatch):
     from utils import kabin_kamerasi as kk
 
-    monkeypatch.setattr(kk, "canli_kare", lambda tam=False, cv2=None: None)
+    monkeypatch.setattr(kk, "canli_kare", lambda tam=False, cv2=None, bekle_sn=0.0: None)
     r = istemci.get("/api/settings/kabin-kamerasi/canli/kare")
     assert r.status_code == 409 and "Canlı Kamera" in r.json()["detail"], r.text[:200]
     gelen = []
 
-    def _kare(tam=False, cv2=None):
+    def _kare(tam=False, cv2=None, bekle_sn=0.0):
         gelen.append(tam)
-        return {"indeks": 1, "genislik": 1920 if tam else 960, "yukseklik": 1080, "yas_ms": 5, "image_base64": "QQ=="}
+        return {
+            "indeks": 1,
+            "hazir": True,
+            "genislik": 1920 if tam else 960,
+            "yukseklik": 1080,
+            "yas_ms": 5,
+            "image_base64": "QQ==",
+        }
 
     monkeypatch.setattr(kk, "canli_kare", _kare)
     assert istemci.get("/api/settings/kabin-kamerasi/canli/kare").json()["genislik"] == 960
