@@ -14,6 +14,11 @@ KULLANIM
     python scripts/stm_yak.py --bin pemf.bin --sha256 <beklenen>   # bütünlük kapısı
     python scripts/stm_yak.py --bin pemf.bin --kuru                # hiçbir şey yakmaz
     python scripts/stm_yak.py --bin pemf.bin --port COM10 --backend http://127.0.0.1:8000
+    python scripts/stm_yak.py --kurtarma --bin saha_yedek_1.bin --sha256 <tam sha> --port COM10   # ELLE KURTARMA
+
+⚠️ T-a: kart yeni firmware'le kendini DOĞRULAMAZSA (uyumsuz ya da doğrulanamadı) akış önceki firmware'e OTOMATİK döner.
+   Bilerek eski bir imaj yazılacaksa (prosedür "Elle kurtarma") `--kurtarma` kullanılır: uyum hükmüyle GERİ ALINMAZ,
+   ölçüt SHA-256 (zorunlu) + bağımsız geri okuma + kartın konuşması.
 
 ⚠️ **BACKEND'İ KAPATIN** (ya da seri portu bıraktığından emin olun): port tek
    kullanıcılıdır, banner okuması "erişim reddedildi" alır.
@@ -42,7 +47,7 @@ for _yol in (Path(__file__).resolve().parent, _KOK, _KOK / "apps" / "backend"):
     if str(_yol) not in sys.path:
         sys.path.insert(0, str(_yol))
 
-from utils.stm_yakma import TAMAM, yakma_akisi  # noqa: E402
+from utils.stm_yakma import TAMAM, elle_kurtarma, yakma_akisi  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -53,20 +58,36 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--backend", default="http://127.0.0.1:8000", help="ön kontrol için backend")
     ap.add_argument("--yedek-dizin", default="firmware_yedek", help="geri dönüş .bin dizini")
     ap.add_argument("--kuru", action="store_true", help="hiçbir şey yakma, yalnız kontroller")
-    a = ap.parse_args(argv)
-
-    print("=" * 70)
-    print("STM32 GÜVENLİ REFLASH" + ("  [KURU KOŞUM]" if a.kuru else ""))
-    print("=" * 70)
-
-    s = yakma_akisi(
-        Path(a.bin),
-        beklenen_sha256=a.sha256,
-        port=a.port,
-        backend=a.backend,
-        yedek_dizin=Path(a.yedek_dizin),
-        kuru=a.kuru,
+    ap.add_argument(
+        "--kurtarma",
+        action="store_true",
+        help="ELLE KURTARMA: bilinen imajı (ör. tam yedek) yaz; uyum hükmüyle geri ALMA (--sha256 zorunlu)",
     )
+    a = ap.parse_args(argv)
+    if a.kurtarma and a.kuru:
+        ap.error("--kurtarma ile --kuru birlikte kullanılmaz")
+
+    print("=" * 70)
+    print("STM32 GÜVENLİ REFLASH" + ("  [KURU KOŞUM]" if a.kuru else "") + ("  [ELLE KURTARMA]" if a.kurtarma else ""))
+    print("=" * 70)
+
+    if a.kurtarma:
+        s = elle_kurtarma(
+            Path(a.bin),
+            beklenen_sha256=a.sha256,
+            port=a.port,
+            backend=a.backend,
+            yedek_dizin=Path(a.yedek_dizin),
+        )
+    else:
+        s = yakma_akisi(
+            Path(a.bin),
+            beklenen_sha256=a.sha256,
+            port=a.port,
+            backend=a.backend,
+            yedek_dizin=Path(a.yedek_dizin),
+            kuru=a.kuru,
+        )
     for i, adim in enumerate(s.adimlar, 1):
         print(f"{i}) {adim}")
     print()

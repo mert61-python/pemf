@@ -94,6 +94,12 @@ STM_KIMLIK_SORGUSU = bytes((0xA5, 0x5A, 0x49, 0x44))
 #: STM_OK 0). Yoklama = kimlik sorgusu + en çok `DOGRULAMA_YOKLAMA_SAYISI` sıfır-duty paketi (STOP — çıkışlara güvenli;
 #: el sıkışmanın kendi yoklamasıyla aynı paket). Doğrudan porta yazılır (HWSender kuyruğu DEĞİL → NACK'te yeniden oynatma
 #: yok). Sonuç `Stm32OpenResult.dogrulama`'da; karar `HeadlessCore` (çekirdek satırları `on_line`'dan ayrıca görür).
+#: ⚠️ T-a (Tezgâh-2 #1): backend el sıkışmasının değerleri BİLEREK değişmedi (yoklama 3, pencere 1,5 sn). (a) El sıkışma bu pencere
+#: bitmeden dönmez → yeniden bağlanmada ACİL DURDUR'un porta İLK yazımı en çok bu kadar gecikir (pencere 4,2 sn'ye çıkarılınca TD3 /
+#: T2D-1 kapısında yanıtsız kartta E-stop STOP'u porta YAZILAMADI). (b) Fazladan yoklamanın GEÇ gelen NACK'i el sıkışmadan SONRA canlı
+#: hatta düşüp yeniden gönderim zinciri başlatır (geç NACK'li saha kartında E-stop raporu "yanıtsız" yerine "red"). Kayıplı NACK'li eski
+#: kartta backend'in kesin kararı canlı trafiğin NACK'lerinden gelir (`live_state` sistematik red). Servis araçları (kimlik betiği,
+#: `stm_yak` doğrulaması — portu ARAÇ tutar, backend kapalı) daha çok yoklamayla ölçer: `utils.stm32_uart.ARAC_*`.
 DOGRULAMA_YOKLAMA_SAYISI = 3
 DOGRULAMA_ARALIK_SN = 0.1
 DOGRULAMA_SURESI_SN = 1.5
@@ -423,6 +429,9 @@ class Stm32SerialTransport:
         stop_event: Any,
         on_line: Optional[Callable[[str], None]],
         ready_line: str,
+        *,
+        yoklama_sayisi: int | None = None,
+        sure_sn: float | None = None,
     ) -> dict:
         """TD1 · TD7 (Y68): el sıkışmadan SONRA kimlik sorgusu + en çok `DOGRULAMA_YOKLAMA_SAYISI` sıfır-duty paketi.
 
@@ -430,7 +439,8 @@ class Stm32SerialTransport:
         olmadan `PAKET_RED_CRC_ESIGI` CRC NACK · `DOGRULAMA_SURESI_SN` doldu. Okunan her satır `on_line`'a verilir (karar
         çekirdekte: `HeadlessCore` aynı satırları sınıflar). ⚠️ Sıfır-duty paketi STOP'tur (çıkışlara güvenli; el sıkışma
         yoklamasının aynısı) ve DOĞRUDAN porta yazılır — HWSender kuyruğuna girmez, NACK'te yeniden oynatılmaz.
-        ⚠️ ESKİ kart kimlik sorgusunu (0xAA'sız çerçeve) yok sayar: NACK'i ve PWM etkisi YOK."""
+        ⚠️ ESKİ kart kimlik sorgusunu (0xAA'sız çerçeve) yok sayar: NACK'i ve PWM etkisi YOK.
+        `yoklama_sayisi` / `sure_sn` (T-a): yalnız servis araçları verir (`stm32_uart.kart_dogrula`); backend el sıkışması varsayılanla."""
         from utils.stm32_kimlik import KANIT_KABUL, KIMLIK_YANIT_ONEKI, PAKET_RED_CRC_ESIGI, paket_yaniti_siniflandir
 
         ozet: dict = {
@@ -444,9 +454,11 @@ class Stm32SerialTransport:
         except Exception as exc:
             self._log_warning("[STM32] Kimlik sorgusu yazılamadı %s: %s", candidate.device, exc)
             return ozet
+        azami_yoklama = DOGRULAMA_YOKLAMA_SAYISI if yoklama_sayisi is None else int(yoklama_sayisi)
+        pencere = DOGRULAMA_SURESI_SN if sure_sn is None else float(sure_sn)
         bas = time.monotonic()
         sonraki_yoklama = bas
-        while time.monotonic() - bas < DOGRULAMA_SURESI_SN:
+        while time.monotonic() - bas < pencere:
             if stop_event is not None and getattr(stop_event, "is_set", lambda: False)():
                 break
             if ozet["crc_nack"] >= PAKET_RED_CRC_ESIGI and not ozet["kabul"]:
@@ -454,7 +466,7 @@ class Stm32SerialTransport:
             if ozet["kabul"] and (ozet["kimlik"] or time.monotonic() - bas >= DOGRULAMA_KIMLIK_BEKLEME_SN):
                 break
             simdi = time.monotonic()
-            if not ozet["kabul"] and ozet["yoklama"] < DOGRULAMA_YOKLAMA_SAYISI and simdi >= sonraki_yoklama:
+            if not ozet["kabul"] and ozet["yoklama"] < azami_yoklama and simdi >= sonraki_yoklama:
                 try:
                     serial_obj.write(build_stm32_zero_duty_packet())
                 except Exception as exc:

@@ -6948,6 +6948,27 @@
      "turler": [
       "cagri"
      ]
+    },
+    {
+     "metin": "yeni firmware kartta kendini DOĞRULAMADI ({{sebep}})",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "elle kurtarmada --sha256 ZORUNLU ve tutmalı: beklenen {{deger1}}, bulunan {{ozet}}",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "elle kurtarma: {{name}} yazıldı, geri okuma bayt bayt AYNI, kart konuştu ({{banner}})",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "sabit"
+     ]
     }
    ],
    "birlesikIstisna": [],

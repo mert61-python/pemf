@@ -532,7 +532,14 @@ def _firmware_uygula(girdi: dict, plan: su.Plan, banner_kaynagi=None) -> dict:
         return _durum_yaz(uygulandi=False, hata=hata)
 
     from utils import firmware_yakma_penceresi as pencere
-    from utils.stm_yakma import GERI_OKUMA_TUTMADI, TAMAM, UYUMSUZ_GERI_DONULDU, YAZMADAN_ONCE_KODLARI, yakma_akisi
+    from utils.stm_yakma import (
+        DOGRULANAMADI_GERI_DONULDU,
+        GERI_OKUMA_TUTMADI,
+        TAMAM,
+        UYUMSUZ_GERI_DONULDU,
+        YAZMADAN_ONCE_KODLARI,
+        yakma_akisi,
+    )
 
     # D1.108 + D1.111: ön kontrol SÜREÇ İÇİ — HTTP değil (bkz. `_surec_ici_guvenlik_kontrolu`).
     # D1.114 (B-4.6): port BIRAKILMAZ — yakma sonrası kimlik çekirdeğin KENDİ okuyucusundan (`banner_kaynagi`). Pencere ön
@@ -563,11 +570,16 @@ def _firmware_uygula(girdi: dict, plan: su.Plan, banner_kaynagi=None) -> dict:
     finally:
         _gecici_sil(yol)
     # Y82: "yarım yakma" kaydı YALNIZ kart DOĞRULANMIŞ bir hâlde bırakıldıysa silinir ("doğrulamadan SONRA"): yeni firmware doğrulandı
-    # (TAMAM) · eskiye geri dönülüp doğrulandı (UYUMSUZ_GERI_DONULDU / GERI_OKUMA_TUTMADI) · karta hiç yazılmadı. Süreç akış ortasında
-    # öldüyse buraya gelinmez ve kayıt KALIR. YLI-A3.8: yakıcı hatası (kart yarım yazılmış olabilir), geri dönüş başarısız /
-    # doğrulanamadı, kart kimliği okunamadı (BANNER_TANINMADI / PORT_MESGUL) → kayıt KALIR: sonraki açılış kartı doğrular, gerekirse
+    # (TAMAM) · eskiye geri dönülüp doğrulandı (UYUMSUZ_GERI_DONULDU / GERI_OKUMA_TUTMADI / T-a DOGRULANAMADI_GERI_DONULDU) · karta
+    # hiç yazılmadı. Süreç akış ortasında öldüyse buraya gelinmez ve kayıt KALIR. YLI-A3.8: yakıcı hatası (kart yarım yazılmış olabilir),
+    # geri dönüş başarısız / doğrulanamadı, kart kimliği okunamadı (PORT_MESGUL) → kayıt KALIR: sonraki açılış kartı doğrular, gerekirse
     # yedekten döner; STM bağlanmıyorsa `yarimYakma.sonuc = elle` yedeğin yolunu söyler.
-    if sonuc.kod in YAZMADAN_ONCE_KODLARI or sonuc.kod in (TAMAM, UYUMSUZ_GERI_DONULDU, GERI_OKUMA_TUTMADI):
+    if sonuc.kod in YAZMADAN_ONCE_KODLARI or sonuc.kod in (
+        TAMAM,
+        UYUMSUZ_GERI_DONULDU,
+        GERI_OKUMA_TUTMADI,
+        DOGRULANAMADI_GERI_DONULDU,
+    ):
         _kayit_sil(yedek_kok, YARIM_YAKMA_DOSYASI)
     else:
         logger.error(

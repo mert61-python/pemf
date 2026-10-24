@@ -21,9 +21,14 @@ GÜVENLİK DEĞİŞMEZLERİ — pazarlığa kapalı
      ayrımı yalnız AYRI süreçteki CLI içindir. Backend'in KENDİ yakması süreç içi durumu okur
      (`yakma_akisi(guvenlik_kontrolu=…)` — açılış denetimi `server.run()`'dan önce koşar, kendine soramaz).
   4. YEDEK yakmadan ÖNCE alınır; alınamazsa HİÇ yakılmaz (geri dönüşü olmayan işlem YOK).
-  5. Banner UYUMSUZ → OTOMATİK GERİ DÖN.
-  6. Banner TANINMADI (`None`) → geri DÖNÜLMEZ. Üç-durumlu karar `utils/stm32_kimlik`
-     ile aynı: banner biçimi ileride değişip UYUMLU bir firmware de tanınmayabilir.
+  5. Kart yeni firmware'le kendini DOĞRULAMADI → OTOMATİK GERİ DÖN: uyumsuz (`False`) ya da
+     doğrulanamadı (`None` — yalnız banner / hiç yanıt yok). ⚠️ T-a (Tezgâh-2 #1, sahip Y195): eskiden
+     `None` geri dönüş sebebi değildi; tezgâhta 120 B imaj yakıldı, eski kart NACK'i düşürdüğü için karar
+     `None` oldu ve uyumsuz ikili kartta KALDI. Kanıtsız yeni firmware kartta bırakılmaz; önceki (yedek)
+     firmware'e dönülür. İstisna: seri port başka süreçte açık (`PORT_MESGUL`, D1.114) — doğrulama
+     kanalı yok, geri dönüş de doğrulanamazdı; operatör backend'i kapatıp kimliği okur.
+  6. ELLE KURTARMA (`elle_kurtarma`, CLI `--kurtarma`): bilinçli olarak yazılan (eski) imaj uyum
+     hükmüyle GERİ ALINMAZ — ölçüt yazma + bağımsız geri okuma + kartın konuşması; uyum yalnız raporlanır.
 
 ⚠️ "exit 0 döndü" KANIT DEĞİLDİR — bu depoda build betiği başarısızken bile 0 döndü.
    Tek kabul ölçütü kartın KENDİ bastığı `STM_READY` banner'ıdır.
@@ -72,6 +77,8 @@ YAKICI_YOK = 5
 YEDEK_ALINAMADI = 6
 YAKMA_HATASI = 7
 UYUMSUZ_GERI_DONULDU = 8
+#: ⚠️ T-a'dan beri `yakma_akisi` bu kodu DÖNMEZ (kanıtsız firmware'de geri dönülür → DOGRULANAMADI_GERI_DONULDU); numara eski
+#: kayıtlarda / çıktılarda anlamını korusun diye saklı (yeniden KULLANILMAZ).
 BANNER_TANINMADI = 9
 #: D1.114 (B-4.6): yakma sonrası banner için seri port AÇILAMADI (başka süreç — çoğunlukla backend — tutuyor). "Hiç
 #: görülmedi"den (BANNER_TANINMADI) AYRI: destek "karta RESET atın" diye yanlış yöne gitmesin; uyum DOĞRULANAMADI.
@@ -90,6 +97,10 @@ GERI_OKUMA_TUTMADI = 13
 #: yedekten geri dönülemezdi; geri dönüşü olmayan işlem kayıtsız başlatılmaz — 4 numaralı değişmezin aynısı).
 YARIM_KAYIT_YAZILAMADI = 14
 #: LN L1 · Y80: bu kodlar KARTA YAZMADAN önce dönülen sonuçlardır (ön kontrol / yakıcı yok / yedek yok / kayıt yok) — "deneme" sayılmaz.
+#: T-a (Tezgâh-2 #1, sahip Y195): yeni firmware kartta kendini DOĞRULAMADI (yalnız banner / yanıt yok — kanıt yok) → önceki firmware'e
+#: OTOMATİK geri dönüldü ve kart geri dönülen firmware'le konuştu. Eskiden bu durum `BANNER_TANINMADI` dönüp kartı doğrulanmamış
+#: yeni imajda bırakıyordu (tezgâhta uyumsuz 120 B imaj kartta kaldı). Geri dönüş başarısızsa GERI_DONUS_BASARISIZ / _DOGRULANAMADI.
+DOGRULANAMADI_GERI_DONULDU = 15
 YAZMADAN_ONCE_KODLARI = frozenset(
     {BIN_YOK, BUTUNLUK, DONANIM_MESGUL, YAKICI_YOK, YEDEK_ALINAMADI, YARIM_KAYIT_YAZILAMADI}
 )
@@ -509,8 +520,8 @@ def yakma_akisi(
         return _geri_don(f"yeni firmware UYUMSUZ ({sebep})", UYUMSUZ_GERI_DONULDU, ham)
 
     if uyumlu is None:
-        # ⚠️ Geri dönüş sebebi DEĞİL — üç-durumlu karar (bkz. modül başlığı, 6). TD1-e: yakma DOĞRULANAMADI (TAMAM değil).
-        return Sonuc(BANNER_TANINMADI, sebep, banner=ham, sha256=ozet, yedek=str(yedek), adimlar=adimlar)
+        # T-a (sahip Y195; bkz. modül başlığı, 5): kart yeni firmware'le kendini doğrulamadı → kanıtsız imaj kartta BIRAKILMAZ.
+        return _geri_don(f"yeni firmware kartta kendini DOĞRULAMADI ({sebep})", DOGRULANAMADI_GERI_DONULDU, ham)
 
     return Sonuc(
         TAMAM,
@@ -596,3 +607,40 @@ def yedekten_geri_don(
         yedek=str(yedek),
         adimlar=adimlar,
     )
+
+
+def elle_kurtarma(
+    ikili: Path,
+    *,
+    beklenen_sha256: str,
+    port: str | None = None,
+    backend: str = "http://127.0.0.1:8000",
+    yedek_dizin: Path | None = None,
+) -> Sonuc:
+    """T-a — ELLE KURTARMA (prosedür "Geri dönüş · Elle kurtarma"; CLI `scripts/stm_yak.py --kurtarma`): bilinen bir imajı (çoğunlukla
+    Adım 2'nin tam yedeği — eski 120 B saha imajı olabilir) karta yazar ve uyum hükmüyle GERİ ALMAZ.
+
+    ⚠️ NEDEN AYRI YOL: `yakma_akisi` artık kendini doğrulamayan firmware'den önceki imaja OTOMATİK döner (T-a). Elle kurtarmada yazılan
+    eski imaj bu ürünün paketini bilerek reddeder → akış onu "uyumsuz" sayıp kurtarmayı GERİ ALIRDI. Ölçüt: SHA-256 (ZORUNLU) + ön kontrol
+    (seans / bobin — fail-closed) + yaz + bağımsız geri okuma (bayt bayt) + kartın konuşması; uyum yalnız adımlarda raporlanır.
+    Yazma `yedekten_geri_don` ile AYNI sıradır (D1.112 · SGI-3.4)."""
+    ikili = Path(ikili).resolve()
+    if not ikili.is_file():
+        return Sonuc(BIN_YOK, f".bin yok: {ikili}")
+    ozet = sha256(ikili)
+    if not beklenen_sha256 or beklenen_sha256.lower() != ozet:
+        return Sonuc(
+            BUTUNLUK,
+            f"elle kurtarmada --sha256 ZORUNLU ve tutmalı: beklenen {beklenen_sha256.lower() or '(verilmedi)'}, bulunan {ozet}",
+            sha256=ozet,
+        )
+    s = yedekten_geri_don(
+        ikili,
+        guvenlik_kontrolu=lambda: seans_ve_bobin_kontrolu(backend.rstrip("/")),
+        kok=Path(yedek_dizin) if yedek_dizin else None,
+        port=port,
+    )
+    s.sha256 = ozet
+    if s.kod == TAMAM:
+        s.ozet = f"elle kurtarma: {ikili.name} yazıldı, geri okuma bayt bayt AYNI, kart konuştu ({s.banner})"
+    return s

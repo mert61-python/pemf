@@ -186,17 +186,18 @@ def test_KRITIK_banner_UYUMSUZSA_geri_doner(monkeypatch, yak_modulu, yeni_bin, t
     assert sira == ["yedek", "yak:yeni", "yak:yedek"], f"OTOMATİK GERİ DÖNÜŞ olmalıydı, sıra: {sira}"
 
 
-def test_KRITIK_banner_TANINMAZSA_geri_DONMEZ(monkeypatch, yak_modulu, yeni_bin, tmp_path):
-    """⚠️ Üç-durumlu karar: `None` geri dönüş sebebi DEĞİLDİR.
-
-    Banner biçimi ileride değişip UYUMLU bir firmware de tanınmayabilir; onu geri almak
-    çalışan bir kliniği bozardı. Backend'in uyum kapısı da aynı kararı verir
-    (`utils/stm32_kimlik.uyum_denetle`: None → seans ENGELLENMEZ).
-    """
-    sira = _sahte_kur(monkeypatch, yak_modulu, (None, "banner tanınmadı", ""))
+def test_KRITIK_T_a_kart_DOGRULANAMADIYSA_GERI_DONER(monkeypatch, yak_modulu, yeni_bin, tmp_path):
+    """⚠️ T-a (Tezgâh-2 #1, sahip Y195) — eski kural ("`None` geri dönüş sebebi DEĞİLDİR", banner biçimi değişen uyumlu firmware'i
+    korumak için) TERSİNE çevrildi: tezgâhta uyumsuz 120 B imaj yakıldı, eski kart NACK'i düşürdüğü için karar `None` oldu ve imaj
+    kartta KALDI (rc 9). Kanıtsız yeni firmware kartta bırakılmaz → önceki firmware'e dönülür (kod 15). Seans kapısı (`uyum_denetle`)
+    DEĞİŞMEDİ: "bilinmiyor" orada seansı engellemez. Port meşgulken (PORT_MESGUL, D1.114) dönülmez — o kol ayrı kapıda.
+    (Eski ad: test_KRITIK_banner_TANINMAZSA_geri_DONMEZ.)"""
+    sonuclar = iter([(None, "banner tanınmadı", "-> STM_READY: ?"), (None, "banner tanınmadı", "-> STM_READY: ESKI")])
+    sira = _sahte_kur(monkeypatch, yak_modulu, None)
+    monkeypatch.setattr(yak_modulu, "banner_dogrula", lambda _p: next(sonuclar))
     rc = yak_modulu.yakma_akisi(yeni_bin, yedek_dizin=tmp_path / "y").kod
-    assert rc == 9, f"tanınmayan banner → 9 beklenirdi, {rc} döndü"
-    assert sira == ["yedek", "yak:yeni"], f"GERİ DÖNMEMELİYDİ, sıra: {sira}"
+    assert rc == yak_modulu.DOGRULANAMADI_GERI_DONULDU == 15, f"doğrulanamayan firmware → 15 beklenirdi, {rc} döndü"
+    assert sira == ["yedek", "yak:yeni", "yak:yedek"], f"OTOMATİK GERİ DÖNÜŞ olmalıydı, sıra: {sira}"
 
 
 # ──────────────────────────────────────────────────────────────────────────
