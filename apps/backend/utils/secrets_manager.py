@@ -831,6 +831,18 @@ def get_secret(key: str, default: str = "", generate: bool = True) -> str:
         if raw:
             try:
                 _cozulen = _dec(raw)
+                # ⚠️ D3.09 (B-3.43): emanetten / elle geri yüklenen KRİTİK anahtar dosyaya DÜZ yazılır (VAULT-ANAHTAR-EMANETI.md
+                # Adım 4: "DPAPI: öneki OLMADAN — backend ilk açılışta kendi sarar"); ama `_dec` öneksiz değeri sarmadan döndürüyordu
+                # → hasta DB anahtarı süresiz düz-metin kalıyordu. İlk okumada makineye bağlı sarılır (ÖNCE disk, sonra önbellek).
+                # Sarma düşerse (DPAPI yok / disk kilitli) eskisi gibi düz değerle sürülür — açılış KIRILMAZ, uyarı günlüğe.
+                if dpapi and _cozulen and not raw.startswith((_DPAPI_PREFIX, _MKEY_PREFIX)):
+                    try:
+                        _diske_yaz_sonra_onbellege(doc, section, key, _enc(_cozulen, critical=True))
+                        logger.info("Kritik sır düz-metin bulundu, makineye bağlı yeniden sarıldı: %s", key)
+                    except Exception:
+                        logger.warning(
+                            "Kritik sır '%s' düz-metin — yeniden sarılamadı (düz değerle sürülüyor)", key, exc_info=True
+                        )
                 # ⚠️ DENETİM 2026-08-28 #02 — GERİYE DÖNÜK KURTARMA. Kalıcı çözüm yalnız YENİ
                 # kurulumları korusaydı sahadaki cihazlar açıkta kalırdı: onlarda sır zaten veri
                 # kökünde DOLU olduğu için aşağıdaki migrate/üret yoluna hiç girilmez ve makine

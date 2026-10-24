@@ -71,6 +71,11 @@ python scripts/vault_emanet.py --geri-al --token "hvs.…"
 #    ("DPAPI:" oneki OLMADAN — backend ilk aciliste kendi sarar)
 ```
 
+> **D3.09 (B-3.43, 2026-10-25):** "backend ilk açılışta kendi sarar" artık GERÇEK ve kapılı — eskiden `get_secret` öneksiz kritik
+> anahtarı sarmadan döndürüyor, değer süresiz düz-metin kalıyordu. İlk okumada aynı değer makineye bağlı (`DPAPI:` / `MKEY:`) yeniden
+> yazılır; sarma düşerse düz değerle sürülür (açılış kırılmaz, günlükte uyarı). Kapı:
+> `tests/test_D3_09_geri_yuklenen_KRITIK_anahtar_ilk_okumada_SARILIR.py`.
+
 Sonra şifreli `patients.db` / `pemf_treatment_history.db` dosyalarını yerine koyup uygulamayı
 açın.
 
