@@ -530,6 +530,8 @@ async def _auth_middleware(request: Request, call_next):
     # middleware auth'tan SONRA kosuyordu → auth, yeniden-YAZILMAMIS yolu goruyordu ve
     # is_exempt("/api/v1/hardware/emergency_stop") tutmuyordu: fail-safe ACIL DURDURMA ucu
     # /api/v1 alias'inda 401 veriyordu. Yeniden-yazim artik auth'tan ONCE.
+    # D3.06 (B-2.8): yeniden yazım artık EN DIŞ katmanlardan birinde (`_ApiV1TakmaAdi`, rate-limit'ten de ÖNCE) — burada
+    # yalnız savunma: bir katman sırası değişikliği onu atlatırsa auth yine yeniden-yazılmış yolu görsün (idempotent).
     _p = request.scope.get("path", "")
     if _p.startswith("/api/v1/"):
         request.scope["path"] = "/api/" + _p[len("/api/v1/") :]
@@ -713,6 +715,26 @@ class _IstekDiliBaglami:
             ceviri.istek_dili_var.reset(jeton)
 
 
+class _ApiV1TakmaAdi:
+    """D3.06 (B-2.8): `/api/v1/*` → `/api/*` yeniden yazımı EN DIŞ katmanlarda — `@app.middleware("http")` katmanlarının HEPSİNDEN
+    (rate-limit dahil) ÖNCE. Eskiden yalnız auth katmanının içindeydi; rate-limit auth'tan SONRA eklendiği için (Starlette'te son
+    eklenen en dışta koşar) yeniden-yazılMAMIŞ yolu görüyor, sağlık / keşif muafiyeti takma adda tutmuyordu: uzak `/api/v1/health`
+    sınır aşımında 429 (ölçüldü: [200, 200, 200, 429, 429]). ACİL DURDUR muafiyeti etkilenmez (alt dize denetimi; Ö.4-Y8).
+    Saf ASGI, yalnız HTTP; WebSocket'e dokunmaz. Sıra: sürüş damgası > dil bağlamı > bu > http katmanları."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http":
+            yol = scope.get("path", "")
+            if yol.startswith("/api/v1/"):
+                scope = dict(scope)
+                scope["path"] = "/api/" + yol[len("/api/v1/") :]
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(_ApiV1TakmaAdi)
 app.add_middleware(_IstekDiliBaglami)
 app.add_middleware(_SurusNiyetiVarisDamgasi)
 
