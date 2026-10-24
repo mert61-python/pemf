@@ -347,6 +347,28 @@ class TelemetriKarisimi:
         except Exception as e:
             self.logger.error(f"Sensor run summary kaydetme hatası: {e}")
 
+    def get_session_duty_ozeti(self, session_ids: List[int]) -> Dict[int, str]:
+        """T-d (Tezgâh-2 #9): seans başına KOMUT edilen duty (%) — bobin koşularından (`session_coil_runs.duty_percent`); farklı değerler
+        ilk görünüş sırasıyla "/" ile ("25.0/50.0"); koşusu olmayan seans sözlükte YOK. Toplu (500'lük `IN` parçaları): tam dışa aktarma
+        seans başına sorgu atmaz. ⚠️ DB hatası YUTULMAZ (çağıran dışa aktarmayı 500'le keser) — boş hücre "duty yok" diye okunurdu."""
+        ozet: Dict[int, list] = {}
+        kimlikler = [int(x) for x in session_ids if x is not None]
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            for i in range(0, len(kimlikler), 500):
+                parca = kimlikler[i : i + 500]
+                cursor.execute(
+                    "SELECT session_id, duty_percent FROM session_coil_runs WHERE duty_percent IS NOT NULL AND session_id IN ("
+                    + ",".join("?" * len(parca))
+                    + ") ORDER BY session_id, started_epoch ASC, id ASC",
+                    parca,
+                )
+                for sid, duty in cursor.fetchall():
+                    degerler = ozet.setdefault(int(sid), [])
+                    if duty not in degerler:
+                        degerler.append(duty)
+        return {sid: "/".join(str(d) for d in degerler) for sid, degerler in ozet.items()}
+
     def get_session_coil_runs(self, session_id: int) -> List[Dict]:
         """Bir seansa ait bobin calismalarini rapor icin getir
         (coil_id, started/ended_epoch, duration, parametreler)."""

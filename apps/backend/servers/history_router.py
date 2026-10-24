@@ -281,6 +281,8 @@ def export_csv(
             if len(_sayfa) < _CSV_SAYFA:
                 break
             _once = _sayfa[-1]["id"]
+        # T-d (Tezgâh-2 #9): seansın KOMUT edilen duty'si (bobin koşularından, toplu) — nesil denetiminden ÖNCE okunur (aynı anlık görüntü).
+        _dutyler = db.get_session_duty_ozeti([s.get("id") for s in sessions]) if sessions else {}
         if _geri_yukleme_nesli(db) != _nesil:
             logger.warning("CSV disa aktarma: okuma sirasinda geri yukleme oldu — tutarsiz dosya VERILMEDI (409).")
             return JSONResponse(status_code=409, content={"detail": _csv_geri_yukleme_suruyor()})
@@ -314,6 +316,10 @@ def export_csv(
             ceviri.t("gecmis.csv.baslangic"),
             ceviri.t("gecmis.csv.durum"),
             ceviri.t("gecmis.csv.notlar"),
+            # ⚠️ T-d (Tezgâh-2 #9): SONA eklendi (ilk 11 sütunun sırası ve başlığı DEĞİŞMEZ — eski okuyucu kırılmaz). "Ayarlanan(mT)"
+            # operatörün yazdığı REÇETEDİR (cihaza gitmez; elle seansta boş); bobinleri süren parametre duty'dir ve dosyada YOKTU →
+            # tezgâhta seansın %50'si "Ayarlanan(mT) = 50" sanıldı. Değer bobin koşularından (komut edilen; birden çoksa "25.0/50.0").
+            ceviri.t("gecmis.csv.duty"),
         ]
         writer.writerow(headers)
 
@@ -336,6 +342,7 @@ def export_csv(
                     s.get("start_time", ""),
                     _csv_safe(durum_etiketi(s.get("session_status", ""))),
                     _csv_safe(s.get("patient_notes", "")),
+                    _dutyler.get(s.get("id"), ""),
                 ]
             )
 

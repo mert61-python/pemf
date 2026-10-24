@@ -2360,7 +2360,10 @@ class SessionStartPayload(BaseModel):
     target_condition: str = ""
     frequency: float = 50.0
     duty: float = 25.0
-    intensity: float = 25.0
+    # ⚠️ T-d (Tezgâh-2 #9): REÇETE yoğunluğu (mT; cihaza GÖNDERİLMEZ, yalnız kayda yazılır). Varsayılan 25.0 idi → yoğunluk
+    # göndermeyen istemcinin seansı "Ayarlanan 25 mT" diye kaydediliyordu (kimsenin girmediği değer; Y6: girilmeyen NULL).
+    # 0 → `intensity_mt` NULL (`payload.intensity or None`); arayüz elle seansta zaten 0 gönderir.
+    intensity: float = 0.0
     phase: float = 0.0
     # ge=1: süre 0/negatif olursa auto-end mantığı (total>0) hiç tetiklenmez → seans SONSUZ sürerdi.
     # Bu bir SÜRE (seans-uzunluğu) doğrulaması; frekans/duty/intensity TEDAVİ parametrelerine DOKUNULMADI.

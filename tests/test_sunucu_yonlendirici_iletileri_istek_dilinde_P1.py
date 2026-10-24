@@ -155,6 +155,7 @@ def test_CSV_basliklari_istek_dilinde_TR_bayt_bayt_ayni(istemci, dolu_db):
         "Baslangic",
         "Durum",
         "Notlar",
+        "Duty(%)",  # T-d (Tezgâh-2 #9): SONA eklendi — ilk 11 sütun bayt bayt aynı
     ]
     en = istemci.get("/api/history/export_csv", headers={"X-PEMF-Dil": "en"})
     assert en.status_code == 200, en.text
@@ -171,6 +172,7 @@ def test_CSV_basliklari_istek_dilinde_TR_bayt_bayt_ayni(istemci, dolu_db):
         "Start",
         "Status",
         "Notes",
+        "Duty(%)",  # T-d
     ]
     # VERİ: satır sayısı ve kimlik / hasta adı değerleri dilden bağımsız
     assert len(satirlar_en) == len(satirlar)
