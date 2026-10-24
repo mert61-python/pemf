@@ -37,6 +37,9 @@ def _yeni(tmp_path, **env):
     import servers.jeton as j
 
     importlib.reload(j)
+    # T3 · Y194: jeton KOD düzeyinde kapalı (`JETON_SAHIP_ACIK = False`, ortam yok sayılır) → ücretlendirme mantığı burada sahip
+    # anahtarı açılmış gibi sınanır (satış açılınca geçerli olacak davranış).
+    j.JETON_ENFORCED = os.environ.get("PEMF_JETON_ENFORCED") == "1"
     return j
 
 

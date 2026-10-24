@@ -837,10 +837,24 @@ def grup_b() -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def jeton_kodda_acik() -> bool:
+    """T3 · Y194: jeton KOD düzeyinde kapalıysa (`servers/jeton.py::JETON_SAHIP_ACIK = False`) EXE'de ortamla AÇILAMAZ → C grubu
+    (jeton açıkken güvenlik değişmezleri) ölçülemez."""
+    kaynak = (GUII / "apps" / "backend" / "servers" / "jeton.py").read_text(encoding="utf-8")
+    m = re.search(r"^JETON_SAHIP_ACIK: bool = (True|False)$", kaynak, re.M)
+    return bool(m) and m.group(1) == "True"
+
+
 def grup_c() -> None:
     print("═" * 78)
     print("C GRUBU — GUVENLIK DEGISMEZLERI (jeton zorlamasi ACIK)")
     print("═" * 78)
+    if not jeton_kodda_acik():
+        print(
+            "  ⏭ C GRUBU ATLANDI — jeton KOD düzeyinde KAPALI (sahip, T3 · Y194): EXE'de ortamla açılamaz; 'jeton açıkken E-stop / seans"
+            " / sensör kapılanmaz' değişmezi jeton yeniden açılınca ölçülür (birim kapısı: test_jeton_kapisi_TUM_ROTALARDA_…_D411)."
+        )
+        return
     veri = CALISMA / "c"
     sil(veri)
     veri.mkdir(parents=True, exist_ok=True)

@@ -31,6 +31,8 @@ harcayamaz (sunucuda `token_ledger` UNIQUE, burada yerel defterde anahtar kontro
 
 ⚠️ BAYRAKLI: `PEMF_JETON_ENFORCED` KAPALIYKEN her şey no-op — satış açılana kadar canlı
 davranış değişmez (entitlement.py deseniyle birebir).
+⚠️ T3 · Y194 (sahip 2026-10-24): jeton KOD DÜZEYİNDE kapalı (`JETON_SAHIP_ACIK = False`) — ortamdaki `PEMF_JETON_ENFORCED=1` bu sürümde
+YOK SAYILIR; her hesapta AI sınırsız. Ücretlendirme mantığı SİLİNMEDİ: satış açılınca sabit `True` yapılıp derlenir, ortam yine gerekir.
 """
 
 from __future__ import annotations
@@ -76,7 +78,11 @@ def _sayi(name: str, default, tip=int):
 
 
 # ── Yapılandırma ────────────────────────────────────────────────────────────
-JETON_ENFORCED: bool = _flag("PEMF_JETON_ENFORCED", False)
+#: T3 · Y194 (sahip 2026-10-24: "jetonu kapatalım şimdilik, hangi maille girilirse girilsin ai sınırsız çalışabilsin … genel kodda
+#: kapat"): SAHİP ANAHTARI. False iken ortam (`PEMF_JETON_ENFORCED`, launcher geçirir) jetonu AÇAMAZ — ölçüldü: bir makinede kullanıcı
+#: ortamındaki `1` her AI analizini bakiyeden düşürüyordu. Satış açılınca True yapılır (ortam yine gerekir).
+JETON_SAHIP_ACIK: bool = False
+JETON_ENFORCED: bool = JETON_SAHIP_ACIK and _flag("PEMF_JETON_ENFORCED", False)
 
 # KULLANDIKÇA ÖDE (sahip isteği 2026-08-20): önden ödeme/jeton alımı OLMAYAN üyelik. Aylık ücret
 # yok; harcanan jeton birikir ve dönem sonunda (ya da eşik aşılınca) faturalanır. Hiç kullanılmazsa
