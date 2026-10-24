@@ -6351,19 +6351,17 @@ async def ai_analiz_pdf(request: Request, analiz_id: int, kaydet: int = 0):
     GÖNDEREMİYORDU — PDF üretimi yalnız SEANS kayıtları için vardı. Analizi ekran
     görüntüsüyle paylaşmak hem eksik (sayısal detay kayboluyor) hem de kayıtsızdı.
 
-    ⚠️ AYRICALIKLI UÇ — LAN MUAFİYETİ YOK (denetim 2026-09-12, kendi eklememde bulundu):
-    Bu uç hasta ADINI ve analizin TÜM sayısal detayını tek dosyada dışarı verir; yani
-    niteliksel olarak `/api/data/export` ile aynı sınıftadır (bkz. auth.py "AYRICALIKLI
-    UÇLAR" başlığı). Kapısız bırakıldığında klinik WiFi'sindeki HERHANGİ bir cihaz,
-    kimlik göstermeden `?analiz_id=1,2,3…` diyerek tüm AI geçmişini PDF olarak toplayabilirdi.
-    Klinik hotspot parolası her makinede aynı ve pakette dağıtıldığı için "güvenli yerel ağ"
-    varsayımı bu uç için GEÇERLİ DEĞİLDİR.
+    ⚠️ ERİŞİM SINIFI — D3.04 · A-02 (SAHİBİN KENDİ SEÇENEĞİ, 2026-10-01): AI geçmişi listesi (`GET /api/ai/log`) VE tek kaydın
+    PDF'i LAN'dan TOKEN'SIZ. Tutarlılık A-01 yönünde kuruldu: liste ucu zaten LAN'a açıktı (hasta adı + `result_detail`, sayfa başına
+    500, keyset ile tamamı) — tek kaydın PDF'ini ondan sıkı tutmak koruma sağlamıyordu. Tünel / uzak istek kuralı DEĞİŞMEZ: uzaktan
+    gelen istek kimlik ara katmanında jeton ister (uç auth-muaf DEĞİL). Eskiden (2026-09-12) `_enforce_privileged` LAN'ı da
+    reddediyordu. Risk kaydı (A-01): klinik Wi-Fi'ına giren cihaz AI geçmişini okuyabilir. Toplu silme (`/api/ai/log/delete_all`)
+    AYRICALIKLI kalır. Kapı: tests/test_D3_04_ai_gecmisi_liste_ve_PDF_AYNI_erisim_sinifi_A02.py
 
     ⚠️ `kaydet=1`: masaüstü uygulaması WebView2'de dosya indiremiyor → backend AYNI
     makinede olduğunda dosyayı O yazar ve yolunu döndürür (seans raporlarıyla AYNI desen,
-    bkz. history_router._diske_kaydet).
+    bkz. history_router._diske_kaydet). D3.05: yalnız cihazın kendi ekranından; LAN / uzak isteğe akış.
     """
-    _enforce_privileged(request)
     try:
         db = _get_treatment_db()
         if db is None:

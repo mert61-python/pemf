@@ -38,10 +38,8 @@ fitz = pytest.importorskip("fitz", reason="PyMuPDF yok -> PDF metni cikarilamaz"
 
 @pytest.fixture
 def istemci():
-    """⚠️ `client=("127.0.0.1", …)`: bu uç AYRICALIKLIDIR (PII dışa aktarımı) ve LAN
-    muafiyeti YOKTUR — loopback ya da geçerli token ister. TestClient varsayılanı
-    "testclient" host'udur ve kapıdan GEÇMEZ. Aynı desen
-    `test_operator_identity_server_side.py`de de kullanılıyor.
+    """`client=("127.0.0.1", …)`: cihazın kendi ekranı (`kaydet=1` yalnız orada masaüstüne yazar — D3.05). TestClient varsayılanı
+    "testclient" host'u IP değildir (yerel sayılmaz). Erişim sınıfı A-02: LAN token'sız, uzak kimlik ister (bölüm 4).
     """
     from fastapi.testclient import TestClient
     from servers import api_server
@@ -232,73 +230,46 @@ def test_KRITIK_gecici_PII_pdf_SILINIR(istemci, analiz, tmp_path):
 
 
 # ============================================================================
-# 4. ⚠️ AYRICALIKLI UÇ — PII DIŞA AKTARIMI LAN'A AÇIK OLAMAZ
+# 4. ERİŞİM SINIFI — D3.04 · A-02 (sahibin kendi seçeneği, 2026-10-01): LAN TOKEN'SIZ, uzak kural DEĞİŞMEZ
 # ============================================================================
 #
-# ⚠️ BU KAPI DENETİMDE DOĞDU (2026-09-12): uç ilk yazımda KORUMASIZDI. Oysa hasta ADINI ve
-# analizin TÜM sayısal detayını tek dosyada dışarı verir — niteliksel olarak
-# `/api/data/export` ile aynı sınıf (bkz. apps/backend/servers/auth.py "AYRICALIKLI UÇLAR" başlığı).
-# Kapısız hâlde klinik WiFi'sindeki HERHANGİ bir cihaz, kimlik göstermeden id'leri gezip
-# tüm AI geçmişini PDF olarak toplayabilirdi. Klinik hotspot parolası her makinede aynı ve
-# pakette dağıtıldığı için "güvenli yerel ağ" varsayımı bu uç için GEÇERLİ DEĞİLDİR.
+# ⚠️ BİLİNÇLİ SÖZLEŞME DEĞİŞİKLİĞİ: bu bölüm 2026-09-12'de "PDF ucu LAN'a açık olamaz" diye kurulmuştu (`_enforce_privileged`).
+# Sahip A-02 ile AI geçmişi listesi VE tek kaydın PDF'ini LAN'dan token'sız yaptı (A-01 yönünde tutarlılık: liste ucu zaten LAN'a
+# açıktı, tek kaydın PDF'i ondan sıkı olamazdı). Tünel / uzak istek kimlik ister. Ayrıntılı kapı:
+# tests/test_D3_04_ai_gecmisi_liste_ve_PDF_AYNI_erisim_sinifi_A02.py
 
 
-def test_KRITIK_PDF_ucu_AYRICALIKLI_kapidan_geciyor():
-    """MUTASYON: `_enforce_privileged(request)` satırını sil → KIRMIZI.
-
-    ⚠️ Çıpa AST'ye pinli: uç gövdesinin İLK ifadesi bu çağrı olmalı. Yorumda anılması
-    ya da başka bir uçta bulunması yetmez (bu deponun "yorum kapıyı kandırdı" sınıfı).
-    """
+def test_A02_PDF_ucu_LAN_icin_AYRICALIKLI_kapiya_BAGLANMAZ():
+    """A-02 pini: uç `_enforce_privileged` çağırmaz (LAN'ı da reddederdi). Geri eklenirse sahip kararına aykırı → KIRMIZI."""
     import ast
 
     agac = ast.parse((KOK / "apps" / "backend" / "servers" / "api_server.py").read_text(encoding="utf-8"))
-    hedef = None
-    for d in ast.walk(agac):
-        if isinstance(d, (ast.FunctionDef, ast.AsyncFunctionDef)) and d.name == "ai_analiz_pdf":
-            hedef = d
-            break
+    hedef = next(
+        (
+            d
+            for d in ast.walk(agac)
+            if isinstance(d, (ast.FunctionDef, ast.AsyncFunctionDef)) and d.name == "ai_analiz_pdf"
+        ),
+        None,
+    )
     assert hedef is not None, "ai_analiz_pdf ucu bulunamadi -> capa bayatladi"
-
     cagrilar = [n.func.id for n in ast.walk(hedef) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
-    assert "_enforce_privileged" in cagrilar, (
-        "AI analiz PDF ucu AYRICALIKLI kapidan GECMIYOR -> LAN'daki kimliksiz bir cihaz "
-        "tum AI gecmisini PDF olarak toplayabilir (hasta adi + tum sayisal detay)"
-    )
-    # ⚠️ Kapı GÖVDENİN BAŞINDA olmalı: sonra çağrılırsa, ondan önceki DB okuması zaten
-    # yapılmış olur ve zamanlama/hata mesajı üzerinden kayıt varlığı sızabilir.
-    # ⚠️ Gövdenin ilk ÖĞESİ docstring'dir; kapı ondan SONRAKİ ilk ifade olmalı.
-    govde = [d for d in hedef.body if not (isinstance(d, ast.Expr) and isinstance(d.value, ast.Constant))]
-    assert govde, "uc govdesi bos"
-    ilk = govde[0]
-    ilk_ifade = ilk.value if isinstance(ilk, ast.Expr) else None
-    assert (
-        isinstance(ilk_ifade, ast.Call)
-        and isinstance(ilk_ifade.func, ast.Name)
-        and ilk_ifade.func.id == "_enforce_privileged"
-    ), (
-        "ayricalikli kapi govdenin BASINDA degil. Sonra cagrilirsa ondan onceki DB okumasi "
-        "zaten yapilmis olur ve zamanlama/hata uzerinden kayit varligi sizabilir."
+    assert "_enforce_privileged" not in cagrilar, (
+        "A-02: tek kaydın PDF'i LAN'dan token'sız olmalı (liste ucuyla aynı sınıf)"
     )
 
 
-def test_KRITIK_LAN_istemcisi_kimliksiz_PDF_ALAMAZ(analiz):
-    """⚠️ KARŞIT KANIT — kapı GERÇEKTEN çalışıyor mu (kaynakta var olması yetmez).
-
-    Klinik WiFi'sindeki kimliksiz bir cihaz (LAN adresi, token yok) bu ucu ÇAĞIRAMAMALI.
-    LAN muafiyeti burada geçerli değildir: hotspot parolası her makinede aynı ve pakette
-    dağıtılıyor, yani "güvenli yerel ağ" varsayımı bu uç için yanlıştır.
-
-    MUTASYON: `_enforce_privileged(request)` satırını sil → KIRMIZI (200 + PDF döner).
-    """
+def test_KRITIK_A02_LAN_kimliksiz_PDF_ALIR_tunel_kimliksiz_ALAMAZ(analiz, monkeypatch):
+    import servers.auth as auth
     from fastapi.testclient import TestClient
     from servers import api_server
 
+    monkeypatch.setattr(auth, "_require", True)  # üretim profili: device.env / launcher PEMF_REQUIRE_AUTH=1
+
     _, sid = analiz
-    # 192.168/16 = tipik klinik LAN; loopback DEĞİL, token DA yok.
     with TestClient(api_server.app, client=("192.168.1.77", 50000)) as lan:
         y = lan.get(f"/api/ai/log/{sid}/pdf")
-    assert y.status_code in (401, 403), (
-        f"LAN'daki KIMLIKSIZ istemci hasta PII'si iceren PDF'i ALDI (HTTP {y.status_code}) "
-        "-> tum AI gecmisi id gezilerek toplanabilir"
-    )
-    assert y.content[:4] != b"%PDF", "reddedildi ama PDF govdesi yine de dondu"
+    assert y.status_code == 200 and y.content[:4] == b"%PDF", f"A-02: LAN PDF'i alamadı (HTTP {y.status_code})"
+    with TestClient(api_server.app, client=("127.0.0.1", 50001)) as tunel:
+        u = tunel.get(f"/api/ai/log/{sid}/pdf", headers={"cf-connecting-ip": "203.0.113.4", "cf-ray": "9a-IST"})
+    assert u.status_code == 401 and u.content[:4] != b"%PDF", f"tünelden KİMLİKSİZ PDF verildi (HTTP {u.status_code})"
