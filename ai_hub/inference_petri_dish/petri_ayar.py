@@ -60,7 +60,14 @@ def varsayilanlar() -> dict[str, float]:
     ⚠️ Makullik varsayılanları BURADA TEKRAR YAZILMAZ, `plausibility.ESIK_VARSAYILAN`dan
     okunur: eşik orada değişirse arayüz de birlikte öğrenir.
     """
-    d: dict[str, float] = {"yolo_conf": 0.25, "yolo_iou": 0.7, "resize_max": 0.0}
+    # T3 · Y191: YOLO güven varsayılanı boru hattının KENDİSİNDEN okunur (sahip kararı 0,6 orada; kopya sürüklenirdi). Geç içe
+    # aktarım: petri_cv_v2 cv2 / numpy çeker, bu modül uçta ondan önce kullanılır.
+    import inspect
+
+    from ai_hub.inference_petri_dish.petri_cv_v2.pipeline import PetriCvPipeline
+
+    yolo_conf = float(inspect.signature(PetriCvPipeline.__init__).parameters["yolo_conf"].default)
+    d: dict[str, float] = {"yolo_conf": yolo_conf, "yolo_iou": 0.7, "resize_max": 0.0}
     for form_adi, esik_adi in _ESIK_ADI.items():
         d[form_adi] = float(ESIK_VARSAYILAN[esik_adi])
     return d

@@ -80,7 +80,7 @@ const kuyu = (id: string, label = "healthy", reasons: string[] = []) => ({
 
 const PETRI_V2 = {
   status: "success", success: true, method: "plate_grid", mm_per_px: 0.118, n_wells: 2, n_cancer: 1, n_healthy: 1,
-  wells: [kuyu("A1"), kuyu("B2", "cancer", ["delta_b"])], image_base64: "OUT64", yolo_ayar: { conf: 0.25, iou: 0.7, imgsz: 640, plate_type: 24 },
+  wells: [kuyu("A1"), kuyu("B2", "cancer", ["delta_b"])], image_base64: "OUT64", yolo_ayar: { conf: 0.6, iou: 0.7, imgsz: 640, plate_type: 24 },
   resize: {}, plausibility: { kip: "plaka" }, pemf_valid: false, coord_frame: "plate", warnings: ["pemf_frame_unknown: x"],
   pemf_kapisi: {
     surulebilir: false, pemf_gecerli: false, nedenler: ["pemf_gecersiz"], eylem: EYLEM,

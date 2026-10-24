@@ -165,7 +165,7 @@ class PetriCvPipeline:
     def __init__(self, cfg: CabinConfig | str | os.PathLike | None = None,
                  *, petri_diameter_cm: float | None = None,
                  yolo_model_path: str | os.PathLike | None = None,
-                 yolo_conf: float = 0.25,
+                 yolo_conf: float = 0.6,  # T3 · Y191 (sahip 2026-10-24): 0.25 → 0.6 — TEK KAYNAK (petri_ayar okur)
                  yolo_iou: float = 0.7,
                  yolo_imgsz: int = 640,
                  yolo_device: str = "auto",

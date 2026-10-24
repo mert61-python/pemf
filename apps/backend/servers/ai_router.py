@@ -3968,8 +3968,8 @@ async def analyze_em_petri(
     7-panel annotated görsel döner.
 
     AYARLANABİLİR PARAMETRELER (hepsi opsiyonel; hiçbiri verilmezse davranış BİT-BİT eskisi):
-      · yolo_conf (0.25) / yolo_iou (0.7) — tespit eşikleri. ÖLÇÜLDÜ (2026-09-09): aynı
-        fotoğrafta conf 0.25 → 0.05 bir kuyucuktan üç kuyucuğa çıkardı.
+      · yolo_conf (0.6 — T3 · Y191 sahip 2026-10-24; önce 0.25) / yolo_iou (0.7) — tespit eşikleri. ÖLÇÜLDÜ (2026-09-09):
+        aynı fotoğrafta conf 0.25 → 0.05 bir kuyucuktan üç kuyucuğa çıkardı.
       · resize_max — uzun kenar bunu aşarsa görüntü küçültülür (0/boş = kapalı). YOLO ONNX'i
         640x640'a SABİT export edilmiştir; imgsz bu yüzden YÜKSELTİLEMEZ (960/1280 denemesi
         "INVALID_ARGUMENT ... Expected: 640" verir) — küçültme o sabitin altında kalan tek

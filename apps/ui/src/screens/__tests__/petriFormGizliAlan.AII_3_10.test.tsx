@@ -88,7 +88,7 @@ const FANTOM_ENGELLI = {
 };
 const PETRI_ENGELLI = {
   status: "success", success: true, method: "plate_grid", mm_per_px: 0.118, n_wells: 2, n_cancer: 0, n_healthy: 2,
-  wells: [kuyu("A1"), kuyu("B2")], image_base64: "OUT64", yolo_ayar: { conf: 0.25, iou: 0.7 }, resize: {}, plausibility: { kip: "plaka" },
+  wells: [kuyu("A1"), kuyu("B2")], image_base64: "OUT64", yolo_ayar: { conf: 0.6, iou: 0.7 }, resize: {}, plausibility: { kip: "plaka" },
   pemf_valid: true, warnings: ["control_cancer_missed: B2"],
   pemf_kapisi: { surulebilir: false, pemf_gecerli: true, nedenler: ["control_cancer_missed"], eylem: KONTROL,
     mesajlar: [{ kod: "control_cancer_missed", metin: KONTROL }], varsayimlar: [] },

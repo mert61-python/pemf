@@ -2756,7 +2756,8 @@ const PETRI_AYAR_ALANLARI: {
   ad: string; etiket: string; vars: string; alt: number; ust: number; ipucu: string;
 }[] = [
   {
-    ad: "yolo_conf", etiket: "ai.petri.ayar.yoloConf.etiket", vars: "0.25", alt: 0.01, ust: 0.95,
+    // T3 · Y191 (sahip 2026-10-24): varsayılan 0.25 → 0.6 (backend boru hattı; eşitlik kapısı tests/test_petri_ayar_parametreleri.py).
+    ad: "yolo_conf", etiket: "ai.petri.ayar.yoloConf.etiket", vars: "0.6", alt: 0.01, ust: 0.95,
     ipucu: "ai.petri.ayar.yoloConf.ipucu",
   },
   {
@@ -3248,8 +3249,10 @@ function PetriModule({ patientName }: { patientName: string }) {
             const th = ((result as any).plausibility || {}).thresholds || {};
             const thVars = ((result as any).plausibility || {}).thresholds_default || {};
             const parca: string[] = [];
-            if (ya.conf != null && Number(ya.conf) !== 0.25) parca.push(`conf ${trValue(ya.conf)}`);
-            if (ya.iou != null && Number(ya.iou) !== 0.7) parca.push(`IoU ${trValue(ya.iou)}`);
+            // T3 · Y191: karşılaştırma TABLODAKİ varsayılanla (eskiden 0.25 sabit → yeni varsayılanla her sonuç "değiştirilmiş" görünürdü).
+            const tabloVars = (ad: string) => Number(PETRI_AYAR_ALANLARI.find((a) => a.ad === ad)?.vars);
+            if (ya.conf != null && Number(ya.conf) !== tabloVars("yolo_conf")) parca.push(`conf ${trValue(ya.conf)}`);
+            if (ya.iou != null && Number(ya.iou) !== tabloVars("yolo_iou")) parca.push(`IoU ${trValue(ya.iou)}`);
             if (rz.max) parca.push(t("ai.petri.etkin.kucultme", { a: String(rz.from?.[0]), b: String(rz.from?.[1]), c: String(rz.to?.[0]), d: String(rz.to?.[1]) }));
             for (const [k, etiket] of [["circularity_med", t("ai.petri.etkin.dairesellik")], ["conf_med", t("ai.petri.etkin.guven")], ["max_area_frac", t("ai.petri.etkin.alanOrani")]] as const) {
               if (th[k] != null && thVars[k] != null && Number(th[k]) !== Number(thVars[k])) parca.push(t("ai.petri.etkin.denetim", { etiket, deger: trValue(th[k]) }));
