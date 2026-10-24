@@ -69,6 +69,11 @@ jobs:
       - name: Tip kontrolu (tsc -b)
         run: npx tsc -b
 
+      # D3.20 (B-7.10): odeme uclari (api/ — Vercel islevleri: checkout / callback / webhook / cancel / tokens) `tsc -b`nin
+      # DISINDA (tsconfig.app include=src); para yolundaki tip hatasi push'ta hicbir kirmizi uretmiyordu. YUTULMAZ (|| true yok).
+      - name: Tip kontrolu — odeme uclari (tsc -p api)
+        run: npx tsc -p api --noEmit
+
       - name: Testler (vitest)
         run: npm test
 

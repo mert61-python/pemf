@@ -14,5 +14,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts"],
+  "///": "D3.20 (B-7.10): testler (_lib/__tests__) vitest'te koşar ve src/config üzerinden TARAYICI kodunu (DOM, src/i18n) çeker → burada denetlenirse sunucusuz işlevlerin tip denetimi kendi kendine kırmızı olurdu; kapsam işlevlerdir.",
+  "exclude": ["_lib/__tests__/**"]
 }

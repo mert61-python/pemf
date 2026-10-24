@@ -128,7 +128,7 @@ def test_KRITIK_launcher_ENTEGRASYON_testlerini_de_kosar():
 #: filtresizdir (capraz-katman kapilari her degisiklikte kosmali).
 CI_KAPSAMI = {
     "apps/ui": ("frontend.yml", ("tsc --noEmit", "npm test")),
-    "apps/web": ("site.yml", ("tsc -b", "npm test", "check:legal")),
+    "apps/web": ("site.yml", ("tsc -b", "tsc -p api --noEmit", "npm test", "check:legal")),
 }
 
 
