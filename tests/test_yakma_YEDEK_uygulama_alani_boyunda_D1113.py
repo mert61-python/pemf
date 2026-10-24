@@ -19,6 +19,8 @@ import importlib
 import re
 from pathlib import Path
 
+from stlink_sahte import listeli  # T-b: sahte yakıcı `-l st-link` prob listesini de verir
+
 KOK = Path(__file__).resolve().parents[1]
 LINKER = KOK / "firmware" / "stm32_pemf" / "STM32F429ZITX_FLASH.ld"
 
@@ -45,7 +47,7 @@ def test_KRITIK_yedek_UYGULAMA_ALANI_boyunda_okunur_yeni_ikili_boyunda_DEGIL(mon
         return 0, ""
 
     monkeypatch.setattr(sy, "programmer_cli", lambda: Path("sahte_cli.exe"))
-    monkeypatch.setattr(sy, "_kos", _sahte_kos)
+    monkeypatch.setattr(sy, "_kos", listeli(_sahte_kos))
     # TD1-e: yakma sonrası geri okuma + yeniden başlatma BU kapının konusu değil (başarılı — gerçek çıktı uzayından); gerçek akış EN ALT katta: test_TD1_yakma_ve_kimlik_betigi_KANITLA (flash öykünmesi).
     monkeypatch.setattr(sy, "geri_oku", lambda _c, _i, _h: (True, "geri okuma: (aparat) bayt bayt AYNI"))
     monkeypatch.setattr(sy, "baslat", lambda _c: (True, ""))

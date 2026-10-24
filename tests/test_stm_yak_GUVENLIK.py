@@ -30,6 +30,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
+from stlink_sahte import listeli  # T-b: sahte yakıcı `-l st-link` prob listesini de verir
 from utils.path_utils import kaynak_kokunu_bul
 
 KOK = kaynak_kokunu_bul(__file__)
@@ -129,6 +130,10 @@ def _sahte_kur(monkeypatch, m, banner_sonucu, yedek_olsun=True, yak_olsun=True):
 
     monkeypatch.setattr(m, "programmer_cli", lambda: Path("sahte_cli.exe"))
     monkeypatch.setattr(m, "seans_ve_bobin_kontrolu", lambda _b: (True, "test"))
+    # T-b: ST-Link seçimi yakıcının listesinden (`-l st-link`); adımlar aşağıda sahte — başka komut yakıcıya GİTMEZ.
+    monkeypatch.setattr(
+        m, "_kos", listeli(lambda *a, **k: (_ for _ in ()).throw(AssertionError(f"yakıcı adımı sahte değil: {a}")))
+    )
 
     def _yedek(_cli, hedef: Path, _boyut):
         sira.append("yedek")

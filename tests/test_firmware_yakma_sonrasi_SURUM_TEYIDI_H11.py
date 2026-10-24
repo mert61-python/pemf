@@ -24,6 +24,7 @@ import importlib
 from pathlib import Path
 
 import pytest
+from stlink_sahte import listeli  # T-b: sahte yakıcı `-l st-link` prob listesini de verir
 
 #: TD1 · Y68: yakılan (yeni) firmware paket boyunu BEYAN eder; beyansız `uni=` banner'ı 120 / 121'i ayırt edemez (None).
 BANNER_FMT = "-> STM_READY: DDS v{} (7-ch KARMA uni=0x60 + HW_SYNC@PB1) proto=3 pkt=121 Waiting for commands..."
@@ -108,7 +109,7 @@ def _kos(z, kaynak):
         kaynak.ver()
         return 0, ""
 
-    z["mp"].setattr(z["sy"], "_kos", _sahte_kos)
+    z["mp"].setattr(z["sy"], "_kos", listeli(_sahte_kos))
     # TD1-e: yakma sonrası geri okuma + yeniden başlatma BU kapının konusu değil (başarılı — gerçek çıktı uzayından); gerçek akış EN ALT katta: test_TD1_yakma_ve_kimlik_betigi_KANITLA (flash öykünmesi).
     z["mp"].setattr(z["sy"], "geri_oku", lambda _c, _i, _h: (True, "geri okuma: (aparat) bayt bayt AYNI"))
     z["mp"].setattr(z["sy"], "baslat", lambda _c: (True, ""))

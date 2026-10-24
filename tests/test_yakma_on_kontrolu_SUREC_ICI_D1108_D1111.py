@@ -35,6 +35,7 @@ import urllib.request
 from pathlib import Path
 
 import pytest
+from stlink_sahte import listeli  # T-b: sahte yakıcı `-l st-link` prob listesini de verir
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -211,7 +212,7 @@ def zincir(monkeypatch, tmp_path):
         return 0, "sahte yakici"
 
     monkeypatch.setattr(sy, "programmer_cli", lambda: Path("sahte_cli.exe"))
-    monkeypatch.setattr(sy, "_kos", _sahte_kos)
+    monkeypatch.setattr(sy, "_kos", listeli(_sahte_kos))
     # TD1-e: yakma sonrası geri okuma + yeniden başlatma BU kapının konusu değil (başarılı — gerçek çıktı uzayından); gerçek akış EN ALT katta: test_TD1_yakma_ve_kimlik_betigi_KANITLA (flash öykünmesi).
     monkeypatch.setattr(sy, "geri_oku", lambda _c, _i, _h: (True, "geri okuma: (aparat) bayt bayt AYNI"))
     monkeypatch.setattr(sy, "baslat", lambda _c: (True, ""))

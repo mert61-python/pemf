@@ -6969,6 +6969,48 @@
      "turler": [
       "sabit"
      ]
+    },
+    {
+     "metin": "ST-Link listesi alınamadı (yakıcı çıkış {{rc}}): {{deger2}}",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "dizi"
+     ]
+    },
+    {
+     "metin": "takılı ST-Link bulunamadı (yakıcının listesi boş) — ST-Link'in USB'ye takılı olduğunu denetleyin",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "dizi"
+     ]
+    },
+    {
+     "metin": "ST-Link sn={{istenen}} seçildi ({{deger2}} prob takılı)",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "dizi"
+     ]
+    },
+    {
+     "metin": "istenen ST-Link (sn={{istenen}}) takılı DEĞİL — takılı olanlar: {{deger2}}",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "dizi"
+     ]
+    },
+    {
+     "metin": "tek ST-Link takılı — sn={{deger1}} ile sabitlendi",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "dizi"
+     ]
+    },
+    {
+     "metin": "{{deger1}} ST-Link takılı ({{deger2}}) — yanlış karta yazmamak için yakılacak kartın ST-Link'ini --stlink-sn <SN> ile seçin",
+     "gerekce": "STM32 yakıcı (CLI / servis) adımı ve sonucu — günlük + destek; operatör arayüzüne ulaşmaz",
+     "turler": [
+      "dizi"
+     ]
     }
    ],
    "birlesikIstisna": [],

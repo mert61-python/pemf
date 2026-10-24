@@ -22,6 +22,7 @@ import importlib
 from pathlib import Path
 
 import pytest
+from stlink_sahte import listeli  # T-b: sahte yakıcı `-l st-link` prob listesini de verir
 
 
 @pytest.fixture()
@@ -38,7 +39,9 @@ def zincir(monkeypatch, tmp_path):
     monkeypatch.setattr(fm, "firmware_indir", lambda url, sha: (ikili, ""))
     monkeypatch.setattr(fm, "_yedek_dizini", lambda: tmp_path / "firmware_yedek")
     monkeypatch.setattr(sy, "programmer_cli", lambda: Path("sahte_yakici.exe"))
-    monkeypatch.setattr(sy, "_kos", lambda *a, **k: (_ for _ in ()).throw(AssertionError("yakıcı çağrılmamalı")))
+    monkeypatch.setattr(
+        sy, "_kos", listeli(lambda *a, **k: (_ for _ in ()).throw(AssertionError("yakıcı çağrılmamalı")))
+    )
     monkeypatch.setitem(api._active_session, "is_active", False)
     monkeypatch.setattr(api.state, "hardware", None)
     with ls._live_state_lock:

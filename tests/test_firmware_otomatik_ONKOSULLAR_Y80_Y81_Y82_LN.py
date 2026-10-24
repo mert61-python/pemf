@@ -25,6 +25,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from stlink_sahte import liste as stlink_liste  # T-b: sahte yakıcı `-l st-link` prob listesi
 from utils import surum_uyumu as su
 
 # client 1.9.51 ≥ 1.9.50 → firmware ≥ 2.4 ister; kartta 2.3 → KESİN uyumsuz, manifestteki 2.4 → ileri gidilebilir.
@@ -48,6 +49,8 @@ class SahteKart:
 
     def kos(self, cli, argumanlar, timeout=300.0):
         a = list(argumanlar)
+        if a[:1] == ["-l"]:  # T-b: yakma akışı ST-Link'i seri numarasıyla seçer (tek prob)
+            return 0, stlink_liste()
         if "-w" in a:
             ikili = Path(a[a.index("-w") + 1])
             if self.yazmada is not None:

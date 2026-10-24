@@ -34,12 +34,17 @@ GÜVENLİK DEĞİŞMEZLERİ — pazarlığa kapalı
    Tek kabul ölçütü kartın KENDİ bastığı `STM_READY` banner'ıdır.
 ⚠️ Bootloader'a DOKUNULMAZ (yalnız `0x08000000` uygulama alanı) → yarıda kesilen yakma
    ST-Link ile kurtarılabilir.
+⚠️ T-b (T3 bulgusu, sahip Y195): yakıcı ST-Link'i SERİ NUMARASIYLA seçer (`-c port=SWD sn=<SN>`) — eskiden `-c port=SWD`
+   ilk bulduğu proba bağlanıyordu, iki kart takılıyken YANLIŞ karta yazabilirdi. Seçim TEK yerde (`stlink_sec`, yakıcının
+   kendi listesi `-l st-link`): tek prob → onun SN'i; birden çok prob ve seçim yok → karta dokunmadan DURUR
+   (`STLINK_SECILEMEDI`); istenen SN takılı değil → DURUR. Bütün bağlantı argümanları `_baglan` ile kurulur.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import time
@@ -101,8 +106,11 @@ YARIM_KAYIT_YAZILAMADI = 14
 #: OTOMATİK geri dönüldü ve kart geri dönülen firmware'le konuştu. Eskiden bu durum `BANNER_TANINMADI` dönüp kartı doğrulanmamış
 #: yeni imajda bırakıyordu (tezgâhta uyumsuz 120 B imaj kartta kaldı). Geri dönüş başarısızsa GERI_DONUS_BASARISIZ / _DOGRULANAMADI.
 DOGRULANAMADI_GERI_DONULDU = 15
+#: T-b (T3 bulgusu, sahip Y195): ST-Link SEÇİLEMEDİ — takılı prob yok / listelenemedi, birden çok prob takılı ve seçim (`--stlink-sn`)
+#: verilmedi ya da istenen SN takılı değil. KARTA DOKUNULMADAN dönülür (yanlış karta yazma yok).
+STLINK_SECILEMEDI = 16
 YAZMADAN_ONCE_KODLARI = frozenset(
-    {BIN_YOK, BUTUNLUK, DONANIM_MESGUL, YAKICI_YOK, YEDEK_ALINAMADI, YARIM_KAYIT_YAZILAMADI}
+    {BIN_YOK, BUTUNLUK, DONANIM_MESGUL, YAKICI_YOK, YEDEK_ALINAMADI, YARIM_KAYIT_YAZILAMADI, STLINK_SECILEMEDI}
 )
 
 
@@ -142,6 +150,60 @@ def programmer_cli() -> Path | None:
         for aday in kok.rglob("STM32_Programmer_CLI.exe"):
             return aday
     return None
+
+
+@dataclass(frozen=True)
+class Yakici:
+    """T-b: yakıcı ikilisi + SEÇİLEN ST-Link'in seri numarası. `str()` ikilinin yolu (`_kos` onu çalıştırır); bağlantı argümanları
+    `_baglan` ile kurulur — `sn=` her `-c port=SWD` komutunda."""
+
+    yol: Path
+    sn: str
+
+    @property
+    def name(self) -> str:
+        return self.yol.name
+
+    def __str__(self) -> str:
+        return str(self.yol)
+
+
+#: Yakıcının prob listesindeki seri numarası satırı (tezgâh çıktısı `DENETIM/t2/kanit/C1_rst_once.txt`: "ST-LINK SN  : 066DFF…").
+_STLINK_SN = re.compile(r"ST-?LINK\s+SN\s*:\s*([0-9A-Za-z]+)", re.IGNORECASE)
+
+
+def _baglan(cli: Path | Yakici) -> list[str]:
+    """T-b: `-c port=SWD [sn=<SN>]` — TEK yer. `Yakici` seçimli akışta sn= HER ZAMAN gider; düz `Path` yalnız seçimsiz eski çağıran
+    (birim testi) içindir — akışlar (`yakma_akisi`, `yedekten_geri_don`) her zaman `stlink_sec`ten geçer."""
+    sn = getattr(cli, "sn", "")
+    return ["-c", "port=SWD", f"sn={sn}"] if sn else ["-c", "port=SWD"]
+
+
+def stlink_sec(cli: Path, istenen_sn: str | None = None) -> tuple[str | None, str]:
+    """T-b: (sn | None, açıklama) — yakıcının KENDİ listesinden (`-l st-link`; karta yazmaz, hedefe bağlanmaz).
+
+    Tek prob → onun SN'i · birden çok prob + seçim yok → None (DUR: yanlış karta yazılabilirdi) · `istenen_sn` takılı değil → None ·
+    liste alınamadı / prob yok → None. Karar SN üzerinden; COM portu ile prob eşleşmesi tezgâhta ölçülür (TEZGÂH-2)."""
+    rc, cikti = _kos(cli, ["-l", "st-link"])
+    if rc != 0:
+        return None, f"ST-Link listesi alınamadı (yakıcı çıkış {rc}): {cikti[-300:]}"
+    sn_ler: list[str] = []
+    for m in _STLINK_SN.finditer(cikti):
+        if m.group(1).upper() not in sn_ler:
+            sn_ler.append(m.group(1).upper())
+    if not sn_ler:
+        return None, "takılı ST-Link bulunamadı (yakıcının listesi boş) — ST-Link'in USB'ye takılı olduğunu denetleyin"
+    if istenen_sn:
+        istenen = istenen_sn.strip().upper()
+        if istenen in sn_ler:
+            return istenen, f"ST-Link sn={istenen} seçildi ({len(sn_ler)} prob takılı)"
+        return None, f"istenen ST-Link (sn={istenen}) takılı DEĞİL — takılı olanlar: {', '.join(sn_ler)}"
+    if len(sn_ler) == 1:
+        return sn_ler[0], f"tek ST-Link takılı — sn={sn_ler[0]} ile sabitlendi"
+    return None, (
+        f"{len(sn_ler)} ST-Link takılı ({', '.join(sn_ler)}) — yanlış karta yazmamak için yakılacak kartın ST-Link'ini "
+        "--stlink-sn <SN> ile seçin"
+    )
 
 
 def sha256(p: Path) -> str:
@@ -268,14 +330,14 @@ def _kos(cli: Path, argumanlar: list[str], timeout: float = 300.0) -> tuple[int,
 def yedek_al(cli: Path, hedef: Path, boyut: int) -> tuple[bool, str]:
     """Karttaki MEVCUT firmware'i oku. ⚠️ Alınamazsa YAKILMAZ."""
     hedef.parent.mkdir(parents=True, exist_ok=True)
-    rc, cikti = _kos(cli, ["-c", "port=SWD", "-r", YAKMA_ADRESI, str(boyut), str(hedef)])
+    rc, cikti = _kos(cli, [*_baglan(cli), "-r", YAKMA_ADRESI, str(boyut), str(hedef)])
     if rc != 0 or not hedef.is_file() or hedef.stat().st_size == 0:
         return False, cikti[-600:]
     return True, str(hedef)
 
 
 def yak(cli: Path, ikili: Path) -> tuple[bool, str]:
-    rc, cikti = _kos(cli, ["-c", "port=SWD", "-w", str(ikili), YAKMA_ADRESI, "-v", "-rst"], timeout=600.0)
+    rc, cikti = _kos(cli, [*_baglan(cli), "-w", str(ikili), YAKMA_ADRESI, "-v", "-rst"], timeout=600.0)
     return rc == 0, cikti[-1200:]
 
 
@@ -285,7 +347,7 @@ def geri_oku(cli: Path, ikili: Path, hedef: Path) -> tuple[bool, str]:
     aynıydı). Okuma `yedek_al` ile AYNI komut biçimi (`-c port=SWD -r <adr> <boy> <dosya>`, tezgâhta doğrulandı)."""
     hedef.parent.mkdir(parents=True, exist_ok=True)
     boyut = ikili.stat().st_size
-    rc, cikti = _kos(cli, ["-c", "port=SWD", "-r", YAKMA_ADRESI, str(boyut), str(hedef)])
+    rc, cikti = _kos(cli, [*_baglan(cli), "-r", YAKMA_ADRESI, str(boyut), str(hedef)])
     if rc != 0 or not hedef.is_file():
         return False, "geri okuma YAPILAMADI: " + cikti[-300:]
     okunan = hedef.read_bytes()[:boyut]
@@ -299,7 +361,7 @@ def geri_oku(cli: Path, ikili: Path, hedef: Path) -> tuple[bool, str]:
 def baslat(cli: Path) -> tuple[bool, str]:
     """TD1-e: geri okumadan SONRA kartı yeniden başlat (`-c port=SWD -rst` — tezgâhta kullanılan komut): SWD bağlantısı çekirdeği
     durdurmuş olabilir; kart açılış satırlarını basar, doğrulama o satırlarla yapılır."""
-    rc, cikti = _kos(cli, ["-c", "port=SWD", "-rst"])
+    rc, cikti = _kos(cli, [*_baglan(cli), "-rst"])
     return rc == 0, cikti[-300:]
 
 
@@ -363,6 +425,7 @@ def yakma_akisi(
     yedek_dizin: Path | None = None,
     kuru: bool = False,
     yakma_oncesi: Callable[[Path], None] | None = None,
+    stlink_sn: str | None = None,
 ) -> Sonuc:
     """Tam akış. Yan etkiler YALNIZ burada; karar mantığı yukarıdaki parçalarda.
 
@@ -371,7 +434,9 @@ def yakma_akisi(
     `banner_kaynagi`: verilirse yakma sonrası kimlik portu BIRAKMADAN o kaynaktan okunur (backend — D1.114); verilmezse
     port açılıp dinlenir (CLI; port açılamazsa PORT_MESGUL).
     `yakma_oncesi` (LN L1 · Y82): verilirse yedek alındıktan SONRA, karta ilk yazımdan hemen ÖNCE yedeğin yoluyla çağrılır (backend'in
-    "yarım yakma" kaydı); istisna fırlatırsa YAKILMAZ (`YARIM_KAYIT_YAZILAMADI`)."""
+    "yarım yakma" kaydı); istisna fırlatırsa YAKILMAZ (`YARIM_KAYIT_YAZILAMADI`).
+    `stlink_sn` (T-b): yakılacak kartın ST-Link'i; verilmezse yalnız TEK prob takılıyken onun SN'i (`stlink_sec`) — aksi hâlde
+    karta dokunmadan `STLINK_SECILEMEDI`."""
     adimlar: list[str] = []
     ikili = Path(ikili).resolve()
     if not ikili.is_file():
@@ -397,6 +462,11 @@ def yakma_akisi(
     if cli is None:
         return Sonuc(YAKICI_YOK, "STM32_Programmer_CLI bulunamadı (CubeIDE kurulu mu?)", sha256=ozet, adimlar=adimlar)
     adimlar.append(f"yakıcı: {cli}")
+    sn, sn_bilgi = stlink_sec(cli, stlink_sn)
+    adimlar.append(f"ST-Link: {sn_bilgi}")
+    if sn is None:
+        return Sonuc(STLINK_SECILEMEDI, sn_bilgi, sha256=ozet, adimlar=adimlar)
+    cli = Yakici(cli, sn)
 
     if kuru:
         return Sonuc(TAMAM, "KURU KOŞUM — kontroller geçti, yakma yapılmadı", sha256=ozet, adimlar=adimlar)
@@ -540,13 +610,14 @@ def yedekten_geri_don(
     banner_kaynagi: BannerKaynagi | None = None,
     kok: Path | None = None,
     port: str | None = None,
+    stlink_sn: str | None = None,
 ) -> Sonuc:
     """LN L1 · Y82 (sahip) — YARIDA KALAN yakmanın açılış kurtarması: önceki firmware'in YEDEĞİNİ karta geri yazar.
 
     Sıra `yakma_akisi`nın geri dönüşüyle AYNI (D1.112 · SGI-3.4): ön kontrol (seans / bobin — fail-closed) → yakıcı → yaz → BAĞIMSIZ geri
     okuma (yedekle bayt bayt AYNI olmadan "geri dönüldü" denmez) → yeniden başlat → kartın kimliği. Sonuç: `TAMAM` (geri dönüldü ve
     doğrulandı) · `GERI_DONUS_BASARISIZ` (yazılamadı / geri okuma tutmadı) · `GERI_DONUS_DOGRULANAMADI` (kart kimliğini söylemedi) ·
-    `DONANIM_MESGUL` / `YAKICI_YOK` / `BIN_YOK` (karta dokunulmadı)."""
+    `DONANIM_MESGUL` / `YAKICI_YOK` / `BIN_YOK` / `STLINK_SECILEMEDI` (karta dokunulmadı; T-b: ST-Link SN ile seçilir)."""
     adimlar: list[str] = []
     yedek = Path(yedek)
     if not yedek.is_file() or yedek.stat().st_size == 0:
@@ -563,6 +634,11 @@ def yedekten_geri_don(
         return Sonuc(
             YAKICI_YOK, "STM32_Programmer_CLI bulunamadı (CubeIDE kurulu mu?)", yedek=str(yedek), adimlar=adimlar
         )
+    sn, sn_bilgi = stlink_sec(cli, stlink_sn)
+    adimlar.append(f"ST-Link: {sn_bilgi}")
+    if sn is None:
+        return Sonuc(STLINK_SECILEMEDI, sn_bilgi, yedek=str(yedek), adimlar=adimlar)
+    cli = Yakici(cli, sn)
     kok = Path(kok or yedek.parent)
     isaret = banner_kaynagi.isaret() if banner_kaynagi is not None else 0
     tamam, cikti = yak(cli, yedek)
@@ -616,6 +692,7 @@ def elle_kurtarma(
     port: str | None = None,
     backend: str = "http://127.0.0.1:8000",
     yedek_dizin: Path | None = None,
+    stlink_sn: str | None = None,
 ) -> Sonuc:
     """T-a — ELLE KURTARMA (prosedür "Geri dönüş · Elle kurtarma"; CLI `scripts/stm_yak.py --kurtarma`): bilinen bir imajı (çoğunlukla
     Adım 2'nin tam yedeği — eski 120 B saha imajı olabilir) karta yazar ve uyum hükmüyle GERİ ALMAZ.
@@ -639,6 +716,7 @@ def elle_kurtarma(
         guvenlik_kontrolu=lambda: seans_ve_bobin_kontrolu(backend.rstrip("/")),
         kok=Path(yedek_dizin) if yedek_dizin else None,
         port=port,
+        stlink_sn=stlink_sn,
     )
     s.sha256 = ozet
     if s.kod == TAMAM:

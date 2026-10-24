@@ -23,6 +23,7 @@ import importlib
 from pathlib import Path
 
 import pytest
+from stlink_sahte import listeli  # T-b: sahte yakıcı `-l st-link` prob listesini de verir
 
 YENI_UYUMSUZ = "-> STM_READY: 2.4.0 (5-ch + HW_SYNC@PB1) Waiting for commands..."
 ESKI = "-> STM_READY: 2.3.0 (7-ch KARMA uni=0x60 + HW_SYNC@PB1) Waiting for commands..."
@@ -118,7 +119,7 @@ def _yakici(z, kaynak, geri_rc: int):
             kaynak.ver()
         return 0, ""
 
-    z["mp"].setattr(z["sy"], "_kos", _sahte_kos)
+    z["mp"].setattr(z["sy"], "_kos", listeli(_sahte_kos))
     # TD1-e: yakma sonrası geri okuma + yeniden başlatma BU kapının konusu değil (başarılı — gerçek çıktı uzayından); gerçek akış EN ALT katta: test_TD1_yakma_ve_kimlik_betigi_KANITLA (flash öykünmesi).
     z["mp"].setattr(z["sy"], "geri_oku", lambda _c, _i, _h: (True, "geri okuma: (aparat) bayt bayt AYNI"))
     z["mp"].setattr(z["sy"], "baslat", lambda _c: (True, ""))

@@ -24,6 +24,7 @@ import importlib
 from pathlib import Path
 
 import pytest
+from stlink_sahte import listeli  # T-b: sahte yakıcı `-l st-link` prob listesini de verir
 
 BANNER = "-> STM_READY: DDS v2.4 (7-ch KARMA uni=0x60 + HW_SYNC@PB1) Waiting for commands..."
 
@@ -94,7 +95,7 @@ def test_KRITIK_H22_on_kontrolden_HEMEN_SONRA_gelen_START_yakmayla_CAKISAMAZ(zin
         return 0, ""
 
     z["mp"].setattr(z["fm"], "_surec_ici_guvenlik_kontrolu", _kontrol_sonra_start)
-    z["mp"].setattr(z["sy"], "_kos", _sahte_kos)
+    z["mp"].setattr(z["sy"], "_kos", listeli(_sahte_kos))
     z["fm"]._firmware_uygula(z["girdi"], su.Plan(su.FIRMWARE_GUNCELLE, "2.4", "test"))
     assert gorulen.get("kontrol", (None,))[0] is True, f"aparat: ön kontrol güvenli demedi {gorulen}"
     assert gorulen["start"] is False, (

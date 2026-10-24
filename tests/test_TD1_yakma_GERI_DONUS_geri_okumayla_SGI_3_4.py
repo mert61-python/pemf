@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from stlink_sahte import listeli  # T-b: sahte yakıcı `-l st-link` prob listesini de verir
 
 SAHA_BANNER = "-> STM_READY: DDS v2.3 (7-ch KARMA uni=0x60 + HW_SYNC@PB1) Waiting for commands..."
 YENI_BANNER = "-> STM_READY: DDS v2.3 (7-ch KARMA uni=0x60 + HW_SYNC@PB1) proto=3 pkt=121 Waiting for commands..."
@@ -60,7 +61,7 @@ def yakma(monkeypatch, tmp_path):
 
 
 def _kos(sy, ikili, tmp_path, monkeypatch, flash: _Flash, kart_satirlari: list[str]):
-    monkeypatch.setattr(sy, "_kos", flash)
+    monkeypatch.setattr(sy, "_kos", listeli(flash))
     monkeypatch.setattr(sy, "kart_dogrula", lambda port, sure: (list(kart_satirlari), {}))
     monkeypatch.setattr(sy, "port_adaylari", lambda _p=None: ["COM_SGI34"])
     return sy.yakma_akisi(ikili, guvenlik_kontrolu=lambda: (True, "test"), yedek_dizin=tmp_path / "y")
@@ -120,7 +121,11 @@ def _okumadan_sonra_rst_var_mi(flash: _Flash, kacinci_okuma: int) -> bool:
     (SWD okuması çekirdeği durdurmuş olabilir — kart doğrulaması ancak yeniden başlatmadan sonra anlamlı; TD1-e.)"""
     okumalar = [i for i, c in enumerate(flash.cagri) if "-r" in c]
     i = okumalar[kacinci_okuma if kacinci_okuma < 0 else kacinci_okuma - 1]
-    return any(c == ["-c", "port=SWD", "-rst"] for c in flash.cagri[i + 1 :])
+    # T-b: bağlantı argümanı ST-Link seri numarasını da taşır (`-c port=SWD sn=<SN> -rst`) — yalnız-yeniden-başlatma = -r / -w YOK.
+    return any(
+        c[:2] == ["-c", "port=SWD"] and c[-1] == "-rst" and "-r" not in c and "-w" not in c
+        for c in flash.cagri[i + 1 :]
+    )
 
 
 def test_KRITIK_GERI_DONUS_geri_okumasindan_SONRA_kart_YENIDEN_baslatilir(yakma, tmp_path, monkeypatch):

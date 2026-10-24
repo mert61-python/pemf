@@ -36,6 +36,7 @@ import urllib.request
 from pathlib import Path
 
 import pytest
+from stlink_sahte import listeli  # T-b: sahte yakıcı `-l st-link` prob listesini de verir
 
 ILK_BANNER = "-> STM_READY: 2.3.0 (7-ch KARMA uni=0x60 + HW_SYNC@PB1) Waiting for commands..."
 YENI_UYUMSUZ = "-> STM_READY: 2.4.0 (5-ch + HW_SYNC@PB1) Waiting for commands..."
@@ -66,7 +67,7 @@ def test_KRITIK_CLI_port_ACILAMAZSA_PORT_MESGUL_hic_gorulmedi_DEGIL(monkeypatch,
         )
 
     monkeypatch.setattr(sy, "programmer_cli", lambda: Path("sahte_cli.exe"))
-    monkeypatch.setattr(sy, "_kos", _sahte_kos)
+    monkeypatch.setattr(sy, "_kos", listeli(_sahte_kos))
     # TD1-e: yakma sonrası geri okuma + yeniden başlatma BU kapının konusu değil (başarılı — gerçek çıktı uzayından); gerçek akış EN ALT katta: test_TD1_yakma_ve_kimlik_betigi_KANITLA (flash öykünmesi).
     monkeypatch.setattr(sy, "geri_oku", lambda _c, _i, _h: (True, "geri okuma: (aparat) bayt bayt AYNI"))
     monkeypatch.setattr(sy, "baslat", lambda _c: (True, ""))
@@ -173,7 +174,7 @@ def zincir(monkeypatch, tmp_path):
         raise serial.SerialException(f"could not open port '{port}': PermissionError(13, 'Erişim engellendi.')")
 
     monkeypatch.setattr(sy, "programmer_cli", lambda: Path("sahte_cli.exe"))
-    monkeypatch.setattr(sy, "_kos", _sahte_kos)
+    monkeypatch.setattr(sy, "_kos", listeli(_sahte_kos))
     # TD1-e: yakma sonrası geri okuma + yeniden başlatma BU kapının konusu değil (başarılı — gerçek çıktı uzayından); gerçek akış EN ALT katta: test_TD1_yakma_ve_kimlik_betigi_KANITLA (flash öykünmesi).
     monkeypatch.setattr(sy, "geri_oku", lambda _c, _i, _h: (True, "geri okuma: (aparat) bayt bayt AYNI"))
     monkeypatch.setattr(sy, "baslat", lambda _c: (True, ""))

@@ -15,6 +15,10 @@ KULLANIM
     python scripts/stm_yak.py --bin pemf.bin --kuru                # hiçbir şey yakmaz
     python scripts/stm_yak.py --bin pemf.bin --port COM10 --backend http://127.0.0.1:8000
     python scripts/stm_yak.py --kurtarma --bin saha_yedek_1.bin --sha256 <tam sha> --port COM10   # ELLE KURTARMA
+    python scripts/stm_yak.py --bin pemf.bin --sha256 <tam sha> --port COM10 --stlink-sn <SN>    # iki ST-Link takılıysa
+
+⚠️ T-b: ST-Link SERİ NUMARASIYLA seçilir (her yakıcı komutunda `sn=<SN>`). Tek ST-Link takılıysa onun SN'i kendiliğinden kullanılır;
+   birden çok takılıysa `--stlink-sn` verilmeden HİÇBİR ŞEY YAZILMAZ (kod 16). SN listesi: `STM32_Programmer_CLI -l st-link`.
 
 ⚠️ T-a: kart yeni firmware'le kendini DOĞRULAMAZSA (uyumsuz ya da doğrulanamadı) akış önceki firmware'e OTOMATİK döner.
    Bilerek eski bir imaj yazılacaksa (prosedür "Elle kurtarma") `--kurtarma` kullanılır: uyum hükmüyle GERİ ALINMAZ,
@@ -59,6 +63,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--yedek-dizin", default="firmware_yedek", help="geri dönüş .bin dizini")
     ap.add_argument("--kuru", action="store_true", help="hiçbir şey yakma, yalnız kontroller")
     ap.add_argument(
+        "--stlink-sn",
+        default=None,
+        help="yakılacak kartın ST-Link seri numarası (birden çok ST-Link takılıysa ZORUNLU; liste: STM32_Programmer_CLI -l st-link)",
+    )
+    ap.add_argument(
         "--kurtarma",
         action="store_true",
         help="ELLE KURTARMA: bilinen imajı (ör. tam yedek) yaz; uyum hükmüyle geri ALMA (--sha256 zorunlu)",
@@ -78,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
             port=a.port,
             backend=a.backend,
             yedek_dizin=Path(a.yedek_dizin),
+            stlink_sn=a.stlink_sn,
         )
     else:
         s = yakma_akisi(
@@ -87,6 +97,7 @@ def main(argv: list[str] | None = None) -> int:
             backend=a.backend,
             yedek_dizin=Path(a.yedek_dizin),
             kuru=a.kuru,
+            stlink_sn=a.stlink_sn,
         )
     for i, adim in enumerate(s.adimlar, 1):
         print(f"{i}) {adim}")

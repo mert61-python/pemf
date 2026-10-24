@@ -34,6 +34,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from stlink_sahte import liste as stlink_liste  # T-b: sahte yakıcı `-l st-link` prob listesi
 
 KOK = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(KOK / "apps" / "backend"))
@@ -89,13 +90,24 @@ def test_KRITIK_yakma_akisi_ACILIS_yoluna_istisna_KACIRMAZ(monkeypatch, sahte_cl
     ikili.write_bytes(b"\x00" * 64)
     monkeypatch.setattr(sy, "programmer_cli", lambda: sahte_cli)
     monkeypatch.setattr(sy, "seans_ve_bobin_kontrolu", lambda backend: (True, "temiz"))
-    monkeypatch.setattr(subprocess, "run", _asilan)
+
+    def _asilan_listeli(cmd, *a, **k):  # T-b: ST-Link listesi gelir, karta giden komutlar ASILIR
+        if "-l" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout=stlink_liste(), stderr="")
+        return _asilan(cmd, *a, **k)
+
+    monkeypatch.setattr(subprocess, "run", _asilan_listeli)
 
     sonuc = sy.yakma_akisi(ikili, beklenen_sha256=sy.sha256(ikili), yedek_dizin=tmp_path)
 
     assert isinstance(sonuc, sy.Sonuc), "akış Sonuc döndürmeli, istisna fırlatmamalı"
     assert sonuc.kod != sy.TAMAM, "asılan yakıcı BAŞARILI sayılamaz"
     assert sonuc.kod in (sy.YEDEK_ALINAMADI, sy.YAKMA_HATASI), f"beklenen başarısızlık kodu değil: {sonuc.kod}"
+
+    # T-b: listeleme (yakıcının İLK çağrısı) asılırsa da istisna YOK — karta dokunulmadan ST-Link seçilemedi.
+    monkeypatch.setattr(subprocess, "run", _asilan)
+    sonuc = sy.yakma_akisi(ikili, beklenen_sha256=sy.sha256(ikili), yedek_dizin=tmp_path)
+    assert isinstance(sonuc, sy.Sonuc) and sonuc.kod == sy.STLINK_SECILEMEDI, sonuc.kod
 
 
 # ── KARŞIT KANIT: normal yol BOZULMADI ──────────────────────────────────────────
