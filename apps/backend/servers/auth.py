@@ -320,6 +320,38 @@ def is_loopback_request(client_host, via_proxy: bool = False) -> bool:
         return False
 
 
+def istemci_adresi(request) -> str:
+    """D3.34 (B-2.4 · B-2.5 · B-2.12 · B-2.20): isteğin İSTEMCİ adresi — TEK yardımcı (eşleştirme takası ve şifre sıfırlama
+    kovaları, denetim izinin `via`'sı, rate-limit anahtarı). Esas SOKET adresidir; başlıklar istemcinin uydurabileceği metindir:
+
+    * `cf-connecting-ip` yalnız TÜNEL AÇIKKEN (`PEMF_ENABLE_TUNNEL=1`) ve soket LOOPBACK ise kabul edilir: cloudflared cihazın
+      KENDİSİNDE koşar, tünel trafiğini 127.0.0.1'den iletir (tünel istemcilerini ayırmanın tek yolu) ve istemcinin gönderdiği
+      değeri ezer. Beyanlı ters-proxy (nginx / IIS, sunucu profili) istemcinin uydurduğu `cf-connecting-ip`'i AYNEN iletir
+      (İG-9.51, ölçüldü: 20 istek 0×429) → orada güvenilmez;
+    * `x-forwarded-for` yalnız BEYANLI ters-proxy'den (`PEMF_TRUSTED_PROXIES`) ve SON atlaması alınır (proxy kendi gördüğü adresi
+      SONA ekler; baştaki atlamalar istemcinin gönderdiği başlıktır). Beyansız XFF'e güvenilmez (bilinçli karar).
+
+    Eskiden dört yer dört ayrı kural uyguluyordu: sıfırlama kovası soket (tüm tünel istemcileri tek 127.0.0.1 kovasında → internetten
+    10 deneme cihaz ekranındaki doğru sıfırlamayı kilitliyordu), takas kovası `cf-connecting-ip`'e KOŞULSUZ (LAN'dan her istekte
+    yeni başlık = yeni kova → 8 deneme kilidi atlanıyordu), denetim izi her başlığa (sahte uzak kaynak), rate-limit XFF'i hiç
+    okumuyordu (sunucu profilinde tek kova). Yerel / uzak KARARI (`is_local_request`) bundan bağımsızdır ve DEĞİŞMEDİ.
+    """
+    soket = ((request.client.host if request.client else "") or "").strip()
+    try:
+        ip = ipaddress.ip_address(soket)
+    except Exception:
+        return soket or "?"
+    if ip.is_loopback and os.environ.get("PEMF_ENABLE_TUNNEL") == "1":
+        cf = (request.headers.get("cf-connecting-ip") or "").split(",")[0].strip()
+        if cf:
+            return cf
+    if any(ip in net for net in _trusted_proxies()):
+        xff = [x.strip() for x in (request.headers.get("x-forwarded-for") or "").split(",") if x.strip()]
+        if xff:
+            return xff[-1]
+    return soket
+
+
 # ════════════════════════════════════════════════════════════════════════════════════════
 # AYRICALIKLI UÇLAR — LAN MUAFİYETİ YOK (2026-08-09 üretim-hazırlık denetimi, ENGEL)
 #

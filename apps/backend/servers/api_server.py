@@ -602,25 +602,13 @@ def _rl_client_ip(request: Request) -> str:
     # saldirgan her istekte farkli bir cf-connecting-ip uydurup rate-limit anahtarini degistirerek
     # siniri TAMAMEN atlayabiliyordu. Baslik artik YALNIZCA istek beyan edilmis bir ters-proxy'den
     # geliyorsa kullanilir (PEMF_TRUSTED_PROXIES); aksi halde SOKET IP'si esas alinir.
-    cf = (request.headers.get("cf-connecting-ip") or "").strip()
-    _sock = request.client.host if request.client else "?"
-    # Baslik SU IKI durumda guvenilir: (a) istek LOOPBACK'ten geliyor — cloudflared cihazin
-    # KENDISINDE kosar ve tunel trafigini 127.0.0.1'den iletir, dolayisiyla gercek tunel
-    # istemcilerini birbirinden ayirmak icin baslik ZORUNLUDUR; (b) soket-IP acikca beyan
-    # edilmis bir ters-proxy (PEMF_TRUSTED_PROXIES). Diger her durumda (dogrudan LAN/port-forward)
-    # baslik saldirgan tarafindan uydurulabilir → SOKET IP'si esas alinir.
-    if cf:
-        try:
-            import ipaddress as _ip
+    # D3.34: kural TEK yerde (`servers.auth.istemci_adresi`) — takas / sifirlama kovalari ve denetim izi de onu kullanir.
+    # cf-connecting-ip yalniz tunel acikken LOOPBACK'ten (cihazdaki cloudflared); B-2.20: beyanli proxy arkasinda XFF'in
+    # SON atlamasi (sunucu profilinde tek kova kalmasin); IG-9.51: beyanli proxy'nin (nginx) aynen ilettigi uydurma
+    # cf-connecting-ip artik anahtar DEGIL. Diger her durumda (dogrudan LAN/port-forward) SOKET IP'si esas alinir.
+    from servers.auth import istemci_adresi
 
-            from servers.auth import _trusted_proxies
-
-            _a = _ip.ip_address(_sock)
-            if _a.is_loopback or any(_a in n for n in _trusted_proxies()):
-                return cf.split(",")[0].strip()
-        except Exception:
-            pass
-    return _sock
+    return istemci_adresi(request)
 
 
 @app.middleware("http")

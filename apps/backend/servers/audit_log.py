@@ -24,13 +24,15 @@ logger = logging.getLogger(__name__)
 
 
 def istemci_ip(request) -> str:
-    """İsteğin geldiği adres. Ters-proxy/tünel arkasındaysa ilk XFF atlaması da kaydedilir —
-    "127.0.0.1" yazıp gerçek kaynağı kaybetmek denetim izini işe yaramaz kılar."""
+    """İsteğin geldiği adres. Tünel / beyanlı ters-proxy arkasındaysa istemci adresi de kaydedilir (`<soket> (via <istemci>)`) —
+    "127.0.0.1" yazıp gerçek kaynağı kaybetmek denetim izini işe yaramaz kılar.
+    D3.34 (B-2.12): `via` yalnız GÜVENİLİR eşten gelen başlıktan (`servers.auth.istemci_adresi`); eskiden her başlık yazılıyordu →
+    LAN'daki bir cihaz `X-Forwarded-For: 8.8.8.8` ile ize SAHTE uzak kaynak yazdırıyordu."""
     try:
+        from servers.auth import istemci_adresi
+
         ham = (request.client.host if request.client else "") or ""
-        xff = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
-        cf = (request.headers.get("cf-connecting-ip") or "").strip()
-        uzak = cf or xff
+        uzak = istemci_adresi(request)
         return f"{ham} (via {uzak})" if uzak and uzak != ham else ham
     except Exception:
         return ""

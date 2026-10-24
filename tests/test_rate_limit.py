@@ -21,7 +21,14 @@ def client(api):
     # Gercek dagitimda cloudflared cihazin KENDISINDE kosar ve 127.0.0.1'den iletir; testin de
     # o yolu temsil etmesi icin istemci loopback'ten baglanir (TestClient varsayilani
     # "testclient"tir, gecerli bir IP degildir).
+    # D3.34 (IG-9.51): loopback'teki cf-connecting-ip yalniz TUNEL ACIKKEN (cihaz profili device.env PEMF_ENABLE_TUNNEL=1)
+    # cloudflared'indir; tunel kapaliyken (sunucu profili, nginx) istemcinin uydurdugu baslik anahtar degildir.
     return TestClient(api.app, client=("127.0.0.1", 45678))
+
+
+@pytest.fixture(autouse=True)
+def _tunel_acik(monkeypatch):
+    monkeypatch.setenv("PEMF_ENABLE_TUNNEL", "1")
 
 
 def test_remote_rate_limited_after_threshold(client, api, monkeypatch):

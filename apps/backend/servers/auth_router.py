@@ -284,8 +284,12 @@ async def _exchange_code_for_token(request: Request):
 
     now = _t.time()
     # Audit P3: throttle per-IP (eskiden GLOBAL kova → 8 yanlış kodla saldırgan TÜM kullanıcıları 429'da
-    # tutup uzaktan-pairing'i DoS ediyordu). Güvenilir kaynak IP (tünelde cf-connecting-ip Cloudflare-set).
-    _cip = request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "unknown")
+    # tutup uzaktan-pairing'i DoS ediyordu). D3.34 (B-2.5): kova anahtarı GÜVENİLİR istemci adresi — `cf-connecting-ip`
+    # yalnız loopback (cihazdaki cloudflared) / beyanlı proxy'den; eskiden başlığa KOŞULSUZ güveniliyordu → LAN'dan her
+    # istekte yeni başlık = yeni kova, 8 deneme kilidi atlanıyordu.
+    from servers.auth import istemci_adresi
+
+    _cip = istemci_adresi(request)
     _bkt = _exchange_bucket(_cip)
     if _bkt["until"] > now:
         return Response(
@@ -619,7 +623,11 @@ async def _reset_password(payload: _ResetPayload, request: Request):
 
     # SEC-2 + DENETIM P3: birincil kilit IP-BASINA (bir saldirgan tum operatorleri kilitlemesin);
     # global kova cok genis esikle dagitik kaba-kuvvete karsi arka-durak olarak korunur.
-    _ip = request.client.host if request.client else "?"
+    # D3.34 (B-2.4): kova anahtarı GÜVENİLİR istemci adresi — tünel istemcileri (hepsi soket 127.0.0.1) kendi `cf-connecting-ip`
+    # kovalarında; eskiden internetten 10 yanlış deneme cihaz ekranındaki (başlıksız loopback) DOĞRU sıfırlamayı da kilitliyordu.
+    from servers.auth import istemci_adresi
+
+    _ip = istemci_adresi(request)
     _rbkt = _reset_bucket(_ip)
     if _throttle_locked(_rbkt) or _throttle_locked(_reset_throttle):
         return _throttle_429()
