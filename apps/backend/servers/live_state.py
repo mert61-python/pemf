@@ -247,6 +247,11 @@ _live_state = {
             # ⚠️ İSTENEN değil ETKİN: bobin 6-7 sürücüsü tek yönlü, istek ne olursa olsun
             # True kalır. Düğmenin gerçekte ne yaptığını gösteren TEK alan budur.
             "unipolar": None,
+            # T-c (Tezgâh-2 #6, yalnız-ek alan): backend'in KAYITLI sürüş kipi isteği (`/api/coil/surus_kipi`; yetenekle
+            # OR'lanmış — bir sonraki sürüşte karta GİDEN kip). Arayüz kutularını BUNDAN başlatır (yoksa kartın bildirdiği
+            # `unipolar`dan); eskiden her açılışta sabit varsayılandan (1-5 BİP) başlıyordu → kart UNİ sürerken kutu BİP
+            # yazıyordu. None = bu süreçte henüz istek yapılmadı (backend varsayılanı: yetenekli bobin bipolar).
+            "unipolarIstek": None,
             # Bu bobin bipolar sürülebilir mi (donanım yeteneği). Arayüz düğmeyi buna göre
             # kilitler; yeteneksiz bobinde düğme gösterilmez.
             "bipolarYetenek": i < 5,
@@ -542,6 +547,21 @@ def update_live_coil_kip(coil_id: int, unipolar: bool) -> None:
         _live_state["coils"][idx]["unipolar"] = bool(unipolar)
         snapshot = dict(_live_state["coils"][idx])
     _ws_broadcast_sync({"type": "coil_status", "coilId": coil_id, "data": snapshot})
+
+
+def update_live_coil_kip_istegi(etkin_maske: int, bobin_sayisi: int) -> None:
+    """T-c: backend'in KAYITLI sürüş kipi isteğini (bit i = bobin i+1 unipolar; yetenekle OR'lanmış) canlı duruma yazar ve değişen
+    bobini yayınlar — başka istemci / yeniden açılan ekran kutularını bundan başlatır. Kartın bildirdiği `unipolar`a DOKUNMAZ."""
+    degisen = []
+    with _live_state_lock:
+        for idx in range(min(int(bobin_sayisi), 8)):
+            yeni = bool((int(etkin_maske) >> idx) & 1)
+            coil = _live_state["coils"][idx]
+            if coil.get("unipolarIstek") is not yeni:
+                coil["unipolarIstek"] = yeni
+                degisen.append((idx + 1, dict(coil)))
+    for coil_id, snapshot in degisen:
+        _ws_broadcast_sync({"type": "coil_status", "coilId": coil_id, "data": snapshot})
 
 
 def update_live_coil_etkin_duty(coil_id: int, yuzde: float) -> None:

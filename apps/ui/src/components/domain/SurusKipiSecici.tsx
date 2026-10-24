@@ -22,8 +22,14 @@
  * ── ⚠️ KİP SÜRÜŞ ANINDA GİDER ───────────────────────────────────────────────
  * Hiçbir bobin çalışmıyorken keep-alive paket GÖNDERMEZ (boşta UART sessiz).
  * Seçim kaydedilir, bir sonraki başlatmada uygulanır. Bileşen bunu açıkça yazar.
+ *
+ * ── ⚠️ T-c (Tezgâh-2 #6): KUTULAR GERÇEKTEN BAŞLAR ─────────────────────────
+ * Eskiden her açılışta sabit varsayılandan (1-5 BİP) başlıyordu: "Hepsi Unipolar"dan sonra sayfa / dil değişince kart UNİ
+ * sürerken kutular BİP yazıyordu, fark yalnız kırmızı çerçeveydi. Artık kutular backend'in KAYITLI isteğinden
+ * (`unipolarIstek` — bir sonraki sürüşte karta giden), o yoksa kartın bildirdiği kipten (`unipolar`) başlar ve kayıtlı
+ * istek değişince (başka istemci) eşitlenir; kartın uyguladığı kip seçimden farklıysa bu METİNLE söylenir.
  */
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { Text, View, StyleSheet, TouchableOpacity } from "react-native";
 import { colors, spacing, typography, touch } from "@/theme/tokens";
 import type { CoilStatus } from "@/types/domain";
@@ -78,14 +84,30 @@ export function SurusKipiSecici({
     [],
   );
 
-  // Kullanıcı isteği. Başlangıç: yeteneksiz bobinler unipolar, yetenekli olanlar bipolar
-  // (firmware varsayılanı da budur — `istenen maske = 0`).
+  // Kullanıcı isteği. T-c: başlangıç backend'in KAYITLI isteği → yoksa kartın bildirdiği kip → yoksa varsayılan (yeteneksiz
+  // bobin unipolar, yetenekli bipolar — firmware / backend varsayılanı `istenen maske = 0`).
   const [istek, setIstek] = useState<boolean[]>(() =>
-    Array.from({ length: STM_BOBIN }, (_, i) => (coils.find((c) => c.id === i + 1)?.bipolarYetenek ?? i < 5) === false),
+    Array.from({ length: STM_BOBIN }, (_, i) => {
+      const c = coils.find((k) => k.id === i + 1);
+      if (typeof c?.unipolarIstek === "boolean") return c.unipolarIstek;
+      if (typeof c?.unipolar === "boolean") return c.unipolar;
+      return (c?.bipolarYetenek ?? i < 5) === false;
+    }),
   );
   const [gonderiliyor, setGonderiliyor] = useState(false);
   const [durum, setDurum] = useState<string | null>(null);
   const yetenekliDizi = useMemo(() => stmCoils.map((c) => bipolarYetenek(c)), [stmCoils, bipolarYetenek]);
+
+  // T-c: kayıtlı istek değişince (başka istemci / gönderimden sonra yayın) kutular backend'in gerçeğine eşitlenir. Gönderim
+  // sürerken eşitlenmez (yanıt beklenir); gönderim düşerse kutular yine backend'deki (değişmemiş) isteğe döner.
+  const sunucuIstegi = stmCoils.map((c) => (typeof c.unipolarIstek === "boolean" ? (c.unipolarIstek ? "1" : "0") : "-")).join("");
+  useEffect(() => {
+    if (gonderiliyor || sunucuIstegi.includes("-")) return;
+    setIstek((eski) => {
+      const yeni = sunucuIstegi.split("").map((x) => x === "1");
+      return eski.length === yeni.length && eski.every((u, i) => u === yeni[i]) ? eski : yeni;
+    });
+  }, [sunucuIstegi, gonderiliyor]);
 
   const gonder = useCallback(
     async (yeni: boolean[]) => {
@@ -139,6 +161,11 @@ export function SurusKipiSecici({
   );
 
   const kilitli = disabled || gonderiliyor || !stmConnected;
+
+  // T-c: kartın UYGULADIĞI kip seçimden farklı olan bobinler (kart bildirmediyse karşılaştırılmaz) — metinle söylenir.
+  const farkli = stmCoils
+    .filter((c, i) => typeof c.unipolar === "boolean" && c.unipolar !== (bipolarYetenek(c) ? istek[i] : true))
+    .map((c) => c.id);
 
   return (
     <View style={styles.kok}>
@@ -216,6 +243,11 @@ export function SurusKipiSecici({
             .join("  ")}
         </Text>
       )}
+      {farkli.length > 0 && (
+        <Text style={[styles.not, styles.uyusmazlik]}>
+          {t("kontrol.surus.uyusmazlik", { count: farkli.length, liste: farkli.join(", ") })}
+        </Text>
+      )}
       {durum && <Text style={[styles.not, styles.durum]}>{durum}</Text>}
       {!stmConnected && <Text style={[styles.not, styles.durum]}>{t("kontrol.surus.stmBagliDegil")}</Text>}
     </View>
@@ -259,4 +291,5 @@ const styles = StyleSheet.create({
   pasif: { opacity: 0.4 },
   not: { color: colors.textSubtle, fontSize: typography.caption },
   durum: { color: colors.textMuted },
+  uyusmazlik: { color: colors.danger, fontWeight: "700" },
 });

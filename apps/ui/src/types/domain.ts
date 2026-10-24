@@ -75,6 +75,11 @@ export interface CoilStatus {
    * onlara bipolar istense de `true` döner.
    */
   unipolar?: boolean | null;
+  /**
+   * T-c (Tezgâh-2 #6): backend'in KAYITLI sürüş kipi isteği (yetenekle OR'lanmış — bir sonraki sürüşte karta GİDEN kip).
+   * Sürüş Kipi kutuları bundan başlar; yoksa kartın bildirdiği `unipolar`dan. `null`/yok = bu backend sürecinde istek yapılmadı.
+   */
+  unipolarIstek?: boolean | null;
   /** Bu bobin bipolar sürülebilir mi (donanım yeteneği). Yoksa düğme KİLİTLİ çizilir. */
   bipolarYetenek?: boolean;
   /**

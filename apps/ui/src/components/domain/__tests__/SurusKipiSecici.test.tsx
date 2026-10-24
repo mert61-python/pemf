@@ -127,8 +127,9 @@ test("KRITIK: bildirmeyen bobinin erisilebilirlik etiketi de UYDURMAZ", () => {
 });
 
 test("KRITIK: kart ISTEKTEN FARKLI kip uygularsa etiket bunu SOYLER", () => {
-  // Karşıt kanıt: "her zaman bildirmedi de" diyerek geçilemesin.
-  const { getByLabelText } = ciz(bobinler([{ unipolar: true }]));
+  // Karşıt kanıt: "her zaman bildirmedi de" diyerek geçilemesin. T-c: kutular artık kayıtlı istekten (`unipolarIstek`) / kartın
+  // kipinden başlar → farkı kurmak için kayıtlı istek BİP, kartın uyguladığı UNİ (değişiklik bekliyor).
+  const { getByLabelText } = ciz(bobinler([{ unipolarIstek: false, unipolar: true }]));
   expect(getByLabelText(/^Bobin 1, bipolar, kartın uyguladığı unipolar$/)).toBeTruthy();
 });
 

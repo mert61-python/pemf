@@ -62,6 +62,7 @@ _build_ws_snapshot = live_state._build_ws_snapshot
 update_live_stm_status = live_state.update_live_stm_status
 update_live_coil_from_stm = live_state.update_live_coil_from_stm
 update_live_coil_kip = live_state.update_live_coil_kip
+update_live_coil_kip_istegi = live_state.update_live_coil_kip_istegi
 update_measured_intensity = live_state.update_measured_intensity
 set_live_patient = live_state.set_live_patient
 
@@ -3756,6 +3757,8 @@ async def set_surus_kipi(payload: SurusKipiPayload):
             if not _live_state["coils"][idx].get("bipolarYetenek", True):
                 yetenek |= 1 << idx
     etkin = uygulanan | yetenek
+    # T-c (Tezgâh-2 #6): kayıtlı istek canlı duruma — yeniden açılan / başka istemcideki Sürüş Kipi kutuları bundan başlar.
+    update_live_coil_kip_istegi(etkin, n)
     return {
         "status": "success",
         "istek": [bool((uygulanan >> i) & 1) for i in range(n)],

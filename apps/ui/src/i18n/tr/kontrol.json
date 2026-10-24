@@ -169,7 +169,9 @@
     "tipUnipolar": "unipolar",
     "uni": "UNİ",
     "uyguladigi": "Kartın uyguladığı:",
-    "uygulananKip": "Kartın uyguladığı kip sürüş başlayınca görünür."
+    "uygulananKip": "Kartın uyguladığı kip sürüş başlayınca görünür.",
+    "uyusmazlik_one": "⚠️ Kartın şu an uyguladığı kip seçiminizden farklı: bobin {{liste}}. Seçim kayıtlı; karta bir sonraki sürüşte (bobin başlatılınca) gider.",
+    "uyusmazlik_other": "⚠️ Kartın şu an uyguladığı kip seçiminizden farklı: bobin {{liste}}. Seçim kayıtlı; karta bir sonraki sürüşte (bobin başlatılınca) gider."
   },
   "yogunluk": {
     "duty": "Duty (AI planı, bobin 1)",

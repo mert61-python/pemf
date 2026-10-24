@@ -169,7 +169,9 @@
     "tipUnipolar": "unipolar",
     "uni": "UNI",
     "uyguladigi": "The board applied:",
-    "uygulananKip": "The mode applied by the board is shown once driving starts."
+    "uygulananKip": "The mode applied by the board is shown once driving starts.",
+    "uyusmazlik_one": "⚠️ The board is currently applying a different mode than your selection: coil {{liste}}. Your selection is saved and reaches the board on the next drive (when a coil starts).",
+    "uyusmazlik_other": "⚠️ The board is currently applying a different mode than your selection: coils {{liste}}. Your selection is saved and reaches the board on the next drive (when a coil starts)."
   },
   "yogunluk": {
     "duty": "Duty (AI plan, coil 1)",
