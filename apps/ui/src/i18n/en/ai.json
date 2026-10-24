@@ -806,6 +806,10 @@
     "analiziBaslat": "Start Well Plate Analysis",
     "aralikDisi": "{{etiket}}: must be between {{alt}} and {{ust}} (entered: {{ham}}).",
     "ayar": {
+      "kuyuSkorEsigi": {
+        "etiket": "Well score threshold",
+        "ipucu": "If a grid cell's score (the number on the \"02 – YOLO Well Detection\" panel: the share of the cell covered by medium or dye) is below this value, the cell is not counted as a well. 0 = off. Raising it drops cells that fall off the plate or are empty; raising it too far also drops real, partly filled wells."
+      },
       "plausAreaFrac": {
         "etiket": "Check: largest detection ≤",
         "ipucu": "If a single detection covers more than this fraction of the frame, the image is not considered a petri dish (VETO vote)."
@@ -841,6 +845,7 @@
     "denetimAcik": " “Not a petri dish” check is on",
     "denetimEtiketi": "\"Not a petri dish\" check",
     "denetimKapaliUyari": "⚠️ The check is off: a photo uploaded to the wrong module also produces a result, and that result will be misleading.",
+    "elenenKuyular": "{{n}} grid cells were not counted as wells (score below {{esik}}): {{kuyular}}",
     "etkin": {
       "alanOrani": "area ratio",
       "baslik": "⚙️ This result was produced with changed settings: {{ayarlar}}",
@@ -848,7 +853,8 @@
       "denetim": "check {{etiket}} {{deger}}",
       "denetimKapali": "check OFF",
       "guven": "confidence",
-      "kucultme": "downscaling {{a}}×{{b}} → {{c}}×{{d}}"
+      "kucultme": "downscaling {{a}}×{{b}} → {{c}}×{{d}}",
+      "kuyuSkor": "well score threshold {{deger}}"
     },
     "gelismis": " ⚙️ Advanced (research) settings",
     "gelismisAc": "Opens the detection and verification thresholds",

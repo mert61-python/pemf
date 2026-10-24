@@ -180,13 +180,15 @@ class PetriCvPipeline:
                  control_healthy: list[str] | None = None,
                  control_cancer: list[str] | None = None,
                  a1_cabin_mm: list[float] | None = None,
-                 kosulsuz: bool = False):
+                 kosulsuz: bool = False,
+                 kuyu_skor_esigi: float = 0.6):  # T3 · Y191b — TEK KAYNAK (petri_ayar okur); 0 = kapali
         """Plaka parametreleri None ise YAML `multiwell:` bolumunden alinir
         (CLI > YAML > varsayilan). plate_type=0 -> plaka modu kapali (tekil petri / YOLO).
         kosulsuz (T3 · Y189, sahip + Cağlar Hoca): analizi KESEN iki engel uyariya doner — plaka izgarasi kurulamazsa
         (`plate_not_found`) modelin HAM YOLO kuyucuk tespiti gosterilir, makullik reddi (`not_a_petri_plate`) analizi
         bitirmez. Varsayilan False = davranis AYNI. YALNIZ gercek True acar (dogruluk degeri tasiyan baska nesne acmaz)."""
         self.kosulsuz = kosulsuz is True
+        self.kuyu_skor_esigi = float(kuyu_skor_esigi)
         if isinstance(cfg, CabinConfig):
             self.cfg = cfg
         else:
@@ -465,6 +467,14 @@ class PetriCvPipeline:
             result.timing_ms = timings
             result.timing_ms["total"] = (time.perf_counter() - t0) * 1000
             return result, ctx
+        if grid is not None:
+            # T3 · Y191b: esik alti izgara hucresi kuyu SAYILMAZ (makullik karari izgara duzeyinde, bundan ONCE verildi).
+            dets = self._kuyu_skoru_suz(grid, result)
+            if not dets:
+                result.error = "plate_wells_below_score"
+                result.timing_ms = timings
+                result.timing_ms["total"] = (time.perf_counter() - t0) * 1000
+                return result, ctx
         # Sirali kopyayi ctx'e ekle (render sirasinda wells ile esle)
         # Not: sirali alti _sorted, asagida atanir
 
@@ -658,6 +668,31 @@ class PetriCvPipeline:
         timings["total"] = (time.perf_counter() - t0) * 1000
         result.timing_ms = timings
         return result, ctx
+
+    def _kuyu_skoru_suz(self, grid, result: PipelineResult) -> list:
+        """T3 · Y191b (sahip + Caglar Hoca 2026-10-24): PLAKA kipinde izgara hucresinin SKORU — `plate_grid` destek skoru (hucre
+        maskesinde besiyeri / boya kaplayan alan orani; 02 panelinde "A1 0.70" diye yazilan sayi, YOLO guveni DEGIL) —
+        `kuyu_skor_esigi`nin ALTINDAYSA hucre kuyu SAYILMAZ: izgara plakadan tasinca kagida / masaya dusen ya da bos kalan
+        hucreler (olculdu: deneme.png D1 0.00 · D2 0.00 · D3 0.195 · D5 0.051 · D6 0.247; iyi kabin karelerinde en dusuk >= 0.785).
+        Izgaranin paralel listeleri (tespit / kuyu adi / plaka mm / kaynak) BIRLIKTE suzulur; elenenler `plate.elenen_kuyular`
+        ve `kuyu_skor_esigi:` uyarisinda (PEMF kapisi: kosulluda yeniden cekim, kosulsuzda uyari). Esik 0 = kapali."""
+        esik = self.kuyu_skor_esigi
+        tut = [i for i, d in enumerate(grid.detections) if float(d.conf) >= esik]
+        tutulan = set(tut)
+        elenen = [
+            {"well_id": grid.well_ids[i], "skor": round(float(grid.detections[i].conf), 3)}
+            for i in range(len(grid.detections)) if i not in tutulan
+        ]
+        result.plate["kuyu_skor_esigi"] = esik
+        result.plate["elenen_kuyular"] = elenen
+        if elenen:
+            result.warnings.append(
+                f"kuyu_skor_esigi: {len(elenen)} hucrenin skoru {esik:g} altinda - kuyu sayilmadi: "
+                + ", ".join(e["well_id"] for e in elenen))
+            for ad in ("detections", "well_ids", "wells_plate_mm", "sources"):
+                liste = getattr(grid, ad)
+                setattr(grid, ad, [liste[i] for i in tut])
+        return grid.detections
 
     def render_panels(self, ctx: dict, result: PipelineResult,
                       *, lang: str = "tr") -> dict[str, np.ndarray]:

@@ -670,7 +670,7 @@ describe("bölüm 6 — Petri Kuyu modülü (araştırma)", () => {
     expect(u.getByText("Petri çapı (cm)")).toBeTruthy();
     expect(u.getByPlaceholderText("ör. 8 · boş = piksel")).toBeTruthy();
     expect(u.getByText("Tespit güveni (conf)")).toBeTruthy();
-    expect(u.getAllByPlaceholderText("varsayılan 0.25")[0]).toBeTruthy();
+    expect(u.getByLabelText("Tespit güveni (conf)").props.placeholder).toBe("varsayılan 0.6"); // T3 · Y191: varsayılan 0.25 → 0.6
     expect(u.getByText("Düşürmek daha çok kuyucuk bulur (ölçüldü: 0,25 → 0,05 ⇒ 1 kuyu yerine 3), yanlış tespit riski artar.")).toBeTruthy();
     expect(u.getByText("\"Petri değil\" denetiminin dairesellik oyu.")).toBeTruthy();
   });
@@ -702,7 +702,7 @@ describe("bölüm 6 — Petri Kuyu modülü (araştırma)", () => {
     fireEvent.press(u.getByLabelText("Single petri dishes"));
     expect(u.getByText("Petri diameter (cm)")).toBeTruthy();
     expect(u.getByText("Detection confidence (conf)")).toBeTruthy();
-    expect(u.getAllByPlaceholderText("default 0.25")[0]).toBeTruthy();
+    expect(u.getByLabelText("Detection confidence (conf)").props.placeholder).toBe("default 0.6"); // T3 · Y191: varsayılan 0.25 → 0.6
     expect(u.getByText("Lowering it finds more wells (measured: 0.25 → 0.05 ⇒ 3 wells instead of 1); the risk of false detections increases.")).toBeTruthy();
   });
 
@@ -716,12 +716,12 @@ describe("bölüm 6 — Petri Kuyu modülü (araştırma)", () => {
     await act(async () => {
       fireEvent.press(tr.getByRole("button", { name: "Galeriden Seç" }));
     });
-    fireEvent.changeText(tr.getAllByPlaceholderText("varsayılan 0.25")[0], "abc");
+    fireEvent.changeText(tr.getByLabelText("Tespit güveni (conf)"), "abc");
     await act(async () => {
       fireEvent.press(tr.getByRole("button", { name: "Petri Analizini Başlat" }));
     });
-    expect(mockShowToast).toHaveBeenLastCalledWith("Tespit güveni (conf): sayı girin (ör. 0.25).", "error");
-    fireEvent.changeText(tr.getAllByPlaceholderText("varsayılan 0.25")[0], "5");
+    expect(mockShowToast).toHaveBeenLastCalledWith("Tespit güveni (conf): sayı girin (ör. 0.6).", "error");
+    fireEvent.changeText(tr.getByLabelText("Tespit güveni (conf)"), "5");
     await act(async () => {
       await new Promise((r) => setTimeout(r, 450));
       fireEvent.press(tr.getByRole("button", { name: "Petri Analizini Başlat" }));
@@ -737,12 +737,12 @@ describe("bölüm 6 — Petri Kuyu modülü (araştırma)", () => {
     await act(async () => {
       fireEvent.press(en.getByRole("button", { name: "Choose from Gallery" }));
     });
-    fireEvent.changeText(en.getAllByPlaceholderText("default 0.25")[0], "abc");
+    fireEvent.changeText(en.getByLabelText("Detection confidence (conf)"), "abc");
     await act(async () => {
       fireEvent.press(en.getByRole("button", { name: "Start Well Plate Analysis" }));
     });
-    expect(mockShowToast).toHaveBeenLastCalledWith("Detection confidence (conf): enter a number (e.g. 0.25).", "error");
-    fireEvent.changeText(en.getAllByPlaceholderText("default 0.25")[0], "5");
+    expect(mockShowToast).toHaveBeenLastCalledWith("Detection confidence (conf): enter a number (e.g. 0.6).", "error");
+    fireEvent.changeText(en.getByLabelText("Detection confidence (conf)"), "5");
     await act(async () => {
       await new Promise((r) => setTimeout(r, 450));
       fireEvent.press(en.getByRole("button", { name: "Start Well Plate Analysis" }));

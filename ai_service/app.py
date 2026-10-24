@@ -1319,6 +1319,8 @@ def infer_em_petri(
     control_healthy: str = Form(None),
     control_cancer: str = Form(None),
     a1_corner: str = Form(None),
+    # T3 · Y191b (sahip + Çağlar Hoca): plaka kipinde ızgara hücresi skoru eşiği (verilmezse boru hattı varsayılanı 0,6; 0 = kapalı).
+    kuyu_skor_esigi: float = Form(None),
     dil: str = Form(None),
     kosulsuz: bool = Form(False),
 ):
@@ -1347,6 +1349,7 @@ def infer_em_petri(
                 control_healthy=control_healthy,
                 control_cancer=control_cancer,
                 a1_corner=a1_corner,
+                kuyu_skor_esigi=kuyu_skor_esigi,
             )
         except _pa.AyarHatasi as _ae:
             return JSONResponse({"error": str(_ae)}, status_code=422)

@@ -806,6 +806,10 @@
     "analiziBaslat": "Petri Analizini Başlat",
     "aralikDisi": "{{etiket}}: {{alt}} – {{ust}} aralığında olmalı (girilen {{ham}}).",
     "ayar": {
+      "kuyuSkorEsigi": {
+        "etiket": "Kuyu skoru eşiği",
+        "ipucu": "Izgara hücresinin skoru (\"02 – YOLO Kuyucuk Tespiti\" panelindeki sayı: hücrede besiyeri ya da boya kaplayan alanın oranı) bu değerin altındaysa hücre kuyu sayılmaz. 0 = kapalı. Yükseltmek plakadan taşan ya da boş hücreleri eler; çok yükseltmek az dolu gerçek kuyuları da eler."
+      },
       "plausAreaFrac": {
         "etiket": "Denetim: en büyük tespit ≤",
         "ipucu": "Tek tespit karenin bu oranından fazlasını kaplıyorsa görüntü petri sayılmaz (VETO oyu)."
@@ -841,6 +845,7 @@
     "denetimAcik": " “Petri değil” denetimi açık",
     "denetimEtiketi": "Petri değil denetimi",
     "denetimKapaliUyari": "⚠️ Denetim kapalı: yanlış modüle yüklenen bir fotoğrafa da sonuç üretilir ve o sonuç yanıltıcı olur.",
+    "elenenKuyular": "{{n}} hücre kuyu sayılmadı (skor {{esik}} altında): {{kuyular}}",
     "etkin": {
       "alanOrani": "alan oranı",
       "baslik": "⚙️ Bu sonuç değiştirilmiş ayarlarla üretildi: {{ayarlar}}",
@@ -848,7 +853,8 @@
       "denetim": "denetim {{etiket}} {{deger}}",
       "denetimKapali": "denetim KAPALI",
       "guven": "güven",
-      "kucultme": "küçültme {{a}}×{{b}} → {{c}}×{{d}}"
+      "kucultme": "küçültme {{a}}×{{b}} → {{c}}×{{d}}",
+      "kuyuSkor": "kuyu skoru eşiği {{deger}}"
     },
     "gelismis": " ⚙️ Gelişmiş (araştırma) ayarları",
     "gelismisAc": "Tespit ve denetim eşiklerini açar",

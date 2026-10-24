@@ -2780,6 +2780,11 @@ const PETRI_AYAR_ALANLARI: {
     ad: "plaus_area_frac", etiket: "ai.petri.ayar.plausAreaFrac.etiket", vars: "0.25", alt: 0.01, ust: 1,
     ipucu: "ai.petri.ayar.plausAreaFrac.ipucu",
   },
+  {
+    // T3 · Y191b (sahip + Çağlar Hoca 2026-10-24): plaka ızgarası hücre skoru eşiği (yalnız plaka kipinde anlamlı).
+    ad: "kuyu_skor_esigi", etiket: "ai.petri.ayar.kuyuSkorEsigi.etiket", vars: "0.6", alt: 0, ust: 1,
+    ipucu: "ai.petri.ayar.kuyuSkorEsigi.ipucu",
+  },
 ];
 
 /** Ayar alanının "varsayılan" gösterimi: sayısal alanlar tablodaki değer, `resize_max` "kapalı" sözcüğü (gösterimde çevrilir). */
@@ -2788,7 +2793,9 @@ const ayarVarsayilani = (a: { ad: string; vars: string }): string => (a.ad === "
 /** AI-2 (hocanın petri v2'si) — PLAKA kipinde anlamlı olan tek eski ayar küçültmedir. ÖLÇÜLDÜ (6 plaka fotoğrafı):
  *  conf 0,05 / 0,9, IoU 0,3 ve gevşetilmiş "petri değil" eşikleri sonucu BİREBİR aynı bıraktı (YOLO plaka kipinde yalnız ipucu,
  *  makullik plaka kuralıyla); küçültme ölçeği ve doğrulanan aday sayısını değiştirdi (640'ta 2/6 düşük çözünürlüklü plaka RED). */
-const PLAKA_KIPI_AYARLARI = new Set(["resize_max"]);
+const PLAKA_KIPI_AYARLARI = new Set(["resize_max", "kuyu_skor_esigi"]);
+/** T3 · Y191b: YALNIZ plaka kipinde anlamlı (hücre skoru ızgarada var; tekil kapta tespit güveni YOLO'nunkidir). */
+const YALNIZ_PLAKA_AYARLARI = new Set(["kuyu_skor_esigi"]);
 /** A1 köşesi seçenekleri (backend `petri_ayar.A1_KOSELERI`). */
 const a1KoseAdi = (k: "auto" | "tl" | "tr" | "br" | "bl"): string =>
   k === "auto" ? i18n.t("ai.petri.a1KoseAdi.otomatik")
@@ -2843,7 +2850,8 @@ function PetriModule({ patientName }: { patientName: string }) {
     setImageFile(null); setImageBase64(image_base64); setImageUri(`data:image/jpeg;base64,${image_base64}`); setResult(sonuc);
   };
   const kabinKaresi = useKabinKaresi(kareGeldi);
-  const gorunenAyarlar = PETRI_AYAR_ALANLARI.filter((a) => kip === "tekil" || PLAKA_KIPI_AYARLARI.has(a.ad));
+  const gorunenAyarlar = PETRI_AYAR_ALANLARI.filter((a) =>
+    kip === "tekil" ? !YALNIZ_PLAKA_AYARLARI.has(a.ad) : PLAKA_KIPI_AYARLARI.has(a.ad));
   const advDegisti = !denetimAcik || gorunenAyarlar.some((a) => (adv[a.ad] || "").trim() !== "")
     || (kip === "plaka" && (kontrolSaglikli.trim() !== "" || kontrolKanser.trim() !== "" || a1Kose !== "auto"));
 
@@ -3210,6 +3218,22 @@ function PetriModule({ patientName }: { patientName: string }) {
                 <Trans i18nKey="ai.petri.ozet" values={{ n: result.n_wells ?? "", kanser: result.n_cancer ?? "", saglikli: result.n_healthy ?? "" }} components={{ kalin: <Text style={{ fontWeight: "bold" }} />, kanser: <Text style={{ fontWeight: "bold", color: colors.danger }} />, saglikli: <Text style={{ fontWeight: "bold", color: colors.success }} /> }} />
               </Text>
               <Text style={[styles.resultText, { fontSize: typography.small }]}>{t("ai.petri.olcek", { olcek: method === "pixel" ? t("ai.ortak.piksel") : `${result.mm_per_px} mm/px` })}</Text>
+              {/* T3 · Y191b: ızgara hücresi skoru eşiğin altında kalan hücreler — kuyu SAYILMADI (adı + skoru). */}
+              {(() => {
+                const pl = (result as any).plate || {};
+                const elenen: { well_id: string; skor: number }[] = Array.isArray(pl.elenen_kuyular) ? pl.elenen_kuyular : [];
+                if (!elenen.length) return null;
+                const sayi = (v: unknown) => Number(v).toFixed(2).replace(".", i18n.language === "en" ? "." : ",");
+                return (
+                  <Text style={[styles.resultText, { fontSize: typography.small, color: colors.warning }]} testID="petri-elenen-kuyular">
+                    {t("ai.petri.elenenKuyular", {
+                      n: elenen.length,
+                      esik: sayi(pl.kuyu_skor_esigi),
+                      kuyular: elenen.map((e) => `${e.well_id} (${sayi(e.skor)})`).join(", "),
+                    })}
+                  </Text>
+                );
+              })()}
               {/* AI-2: hocanın tüketim kontrolleri — pemf_valid / kontrol QC / çekim uyarıları / VARSAYIMLAR (metin backend'den). */}
               <PemfKapisiKutusu kapi={result.pemf_kapisi} model="petri" />
               {(result.wells || []).map((w: AiWell, i: number) => {
@@ -3258,6 +3282,8 @@ function PetriModule({ patientName }: { patientName: string }) {
               if (th[k] != null && thVars[k] != null && Number(th[k]) !== Number(thVars[k])) parca.push(t("ai.petri.etkin.denetim", { etiket, deger: trValue(th[k]) }));
             }
             if (((result as any).plausibility || {}).guard === "off") parca.push(t("ai.petri.etkin.denetimKapali"));
+            const ks = ((result as any).plate || {}).kuyu_skor_esigi;  // T3 · Y191b
+            if (ks != null && Number(ks) !== tabloVars("kuyu_skor_esigi")) parca.push(t("ai.petri.etkin.kuyuSkor", { deger: trValue(ks) }));
             if (!parca.length) return null;
             return <Text style={styles.advEtkin}>{t("ai.petri.etkin.baslik", { ayarlar: parca.join(" · ") })}</Text>;
           })()}

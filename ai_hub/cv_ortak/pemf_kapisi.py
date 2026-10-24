@@ -39,7 +39,11 @@ ENGELLEYICI = ("layout_mismatch", "control_cancer_missed", "control_healthy_flag
 #: AII-1.1 (AI incelemesi): + hocanın petri README'sindeki çekim protokolü uyarıları — `plate_cropped` ("kadrajı genişlet"),
 #: `few_candidates` ("sonucu gözle kontrol et": kapalı döngüde göz yok), `ecc_failed` ("ışık / odak kontrol"). ÖLÇÜLDÜ: kırpık
 #: gerçek plakada uydurulan 24 kuyucuk (0/12 doğru, ~3 aralık kayık) yalnız bu ikisini taşıyıp "sürülebilir" geçiyordu.
-YENIDEN_CEKIM = ("oblique_view", "low_resolution", "ring_partial", "plate_cropped", "few_candidates", "ecc_failed")
+#: T3 · Y191b: + `kuyu_skor_esigi` — ızgara hücresi skoru eşiğin altında kaldı (hücre kuyu sayılmadı): ızgara plakadan taştı ya da
+#: kuyu boş → kalan kuyuların konumu da şüpheli; koşulluda bobine esas alınmaz, koşulsuzda uyarı.
+YENIDEN_CEKIM = (
+    "oblique_view", "low_resolution", "ring_partial", "plate_cropped", "few_candidates", "ecc_failed", "kuyu_skor_esigi",
+)
 
 _KOD = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -74,6 +78,10 @@ _EYLEM = {
         "Kuyucuk ızgarası görüntüden yeterince doğrulanamadı — plakaya dik ve yakından, iyi ışıkta yeniden çekin."
     ),
     "ecc_failed": "Plaka ızgarası ince hizalanamadı — ışığı ve odağı denetleyip yeniden çekin.",
+    "kuyu_skor_esigi": (
+        "Bazı ızgara hücrelerinde besiyeri yok ya da ızgara plakadan taştı (hücre skoru eşiğin altında, kuyu sayılmadı) — "
+        "kuyuların hepsinin dolu ve plakanın kadrajın ortasında olduğunu kontrol edip yeniden çekin."
+    ),
 }
 
 #: VARSAYIM (laboratuvar maddesi) kodu → kullanıcıya gösterilen açıklama. Sürüşü kendi başına ENGELLEMEZ (pemf_valid

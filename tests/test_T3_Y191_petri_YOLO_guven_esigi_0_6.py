@@ -36,7 +36,7 @@ def test_KRITIK_arayuz_varsayilani_BORU_HATTINI_izler_kopya_degil(monkeypatch):
     # TAKİP sınaması: boru hattının varsayılanı değişirse arayüzün gösterdiği de değişmeli (sabit kopya bunu yakalar)
     gercek = pp.PetriCvPipeline.__init__
 
-    def _sahte(self, cfg=None, *, yolo_conf: float = 0.42, **k):  # noqa: ARG001
+    def _sahte(self, cfg=None, *, yolo_conf: float = 0.42, kuyu_skor_esigi: float = 0.6, **k):  # noqa: ARG001
         return None
 
     monkeypatch.setattr(pp.PetriCvPipeline, "__init__", _sahte)

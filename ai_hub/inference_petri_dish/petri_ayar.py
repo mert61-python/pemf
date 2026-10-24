@@ -32,6 +32,8 @@ SINIRLAR: dict[str, tuple[float, float]] = {
     "plaus_circularity": (0.0, 1.0),
     "plaus_conf": (0.0, 1.0),
     "plaus_area_frac": (0.01, 1.0),
+    # T3 · Y191b: plaka kipinde ızgara hücresi skoru eşiği (0 = kapalı); varsayılan boru hattında (0,6).
+    "kuyu_skor_esigi": (0.0, 1.0),
 }
 
 #: `plaus_*` form adı → `plausibility.ESIK_VARSAYILAN` anahtarı. İki isim ayrı bilinçli: telde
@@ -66,8 +68,13 @@ def varsayilanlar() -> dict[str, float]:
 
     from ai_hub.inference_petri_dish.petri_cv_v2.pipeline import PetriCvPipeline
 
-    yolo_conf = float(inspect.signature(PetriCvPipeline.__init__).parameters["yolo_conf"].default)
-    d: dict[str, float] = {"yolo_conf": yolo_conf, "yolo_iou": 0.7, "resize_max": 0.0}
+    imza = inspect.signature(PetriCvPipeline.__init__).parameters
+    d: dict[str, float] = {
+        "yolo_conf": float(imza["yolo_conf"].default),
+        "yolo_iou": 0.7,
+        "resize_max": 0.0,
+        "kuyu_skor_esigi": float(imza["kuyu_skor_esigi"].default),  # T3 · Y191b
+    }
     for form_adi, esik_adi in _ESIK_ADI.items():
         d[form_adi] = float(ESIK_VARSAYILAN[esik_adi])
     return d
@@ -127,6 +134,7 @@ def coz(
     control_healthy=None,
     control_cancer=None,
     a1_corner=None,
+    kuyu_skor_esigi=None,
 ) -> dict:
     """Ham form değerlerini `PetriCvPipeline(**kwargs)` sözlüğüne çevirir.
 
@@ -143,6 +151,10 @@ def coz(
         d = _sinirla(ad, ham)
         if d is not None:
             kw[ad] = d
+
+    ks = _sinirla("kuyu_skor_esigi", kuyu_skor_esigi)  # T3 · Y191b (0 = kapalı geçerli değer)
+    if ks is not None:
+        kw["kuyu_skor_esigi"] = ks
 
     rs = _sinirla("resize_max", resize_max)
     if rs is not None:

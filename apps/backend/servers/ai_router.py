@@ -3956,6 +3956,8 @@ async def analyze_em_petri(
     control_healthy: str = Form(None),
     control_cancer: str = Form(None),
     a1_corner: str = Form(None),
+    # T3 · Y191b (sahip + Çağlar Hoca): plaka kipinde ızgara hücresi skoru eşiği (verilmezse boru hattı varsayılanı 0,6; 0 = kapalı).
+    kuyu_skor_esigi: float = Form(None),
     # T3 · Y189 (sahip + Çağlar Hoca): KOŞULSUZ kip — hattı kesen engeller (plaka bulunamadı → ham YOLO, makullik reddi) ve
     # PEMF kapısının nedenleri uyarıya döner. Varsayılan KOŞULLU = davranış AYNI.
     kosulsuz: bool = Form(False),
@@ -4005,6 +4007,7 @@ async def analyze_em_petri(
                 control_healthy=control_healthy,
                 control_cancer=control_cancer,
                 a1_corner=a1_corner,
+                kuyu_skor_esigi=kuyu_skor_esigi,
             )
         except _pa.AyarHatasi as _ae:
             raise HTTPException(status_code=422, detail=str(_ae)) from None
@@ -4032,6 +4035,7 @@ async def analyze_em_petri(
                     "control_healthy": control_healthy,
                     "control_cancer": control_cancer,
                     "a1_corner": a1_corner,
+                    "kuyu_skor_esigi": kuyu_skor_esigi,  # T3 · Y191b (None = gönderilmez)
                     "dil": ceviri.etkin_dil(),  # I18NI-A3.3: panel görselinin dili (fantom ucuyla aynı)
                     # T3 · Y189 (None = gönderilmez; eski servis etkilenmez)
                     "kosulsuz": True if kosulsuz else None,
