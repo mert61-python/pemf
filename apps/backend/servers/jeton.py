@@ -115,10 +115,18 @@ _CANLI_KIMLIK = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 _CANLI_KOVA_SN = 60.0
 _CANLI_UNUTMA_SN = 4 * 3600.0
 #: SGI-2.1: dakika başı ücret YALNIZ arayüzün canlı kamera kipi olan uçlarda (AI Hub VisionModule canlı: FGS / segmentasyon /
-#: termal — retikülosit `galleryOnly` — ve Kedi Organ). Başka bir "goruntu" ucuna (araştırma em_fantom / em_petri, retikülosit,
-#: hastalık) başlık eklemek elle analizin kare başı ücretini dakika başına ÇEVİRMEZ (Y148: elle analiz maliyeti DEĞİŞMEZ).
+#: termal — retikülosit `galleryOnly` — ve Kedi Organ; T3 · Y190e sahip 2026-10-24: petri / fantom canlı kamerası da "dakika başı
+#: 1 jeton", Y148 ile aynı kural). Başka bir "goruntu" ucuna (retikülosit, hastalık) başlık eklemek elle analizin kare başı
+#: ücretini dakika başına ÇEVİRMEZ (Y148: elle analiz maliyeti DEĞİŞMEZ — petri / fantomda da başlıksız elle analiz kare başı).
 _CANLI_UCLAR: frozenset = frozenset(
-    {"/api/ai/vision/landmark", "/api/ai/vision/segmentation", "/api/ai/vision/thermal", "/api/ai/vision/cat_organ"}
+    {
+        "/api/ai/vision/landmark",
+        "/api/ai/vision/segmentation",
+        "/api/ai/vision/thermal",
+        "/api/ai/vision/cat_organ",
+        "/api/ai/vision/em_petri",
+        "/api/ai/vision/em_fantom",
+    }
 )
 #: S-SGI.2 (sahip kararı 2026-10-18 "Kare tavanını şimdi ekle"): canlı dakika kovası başına kare TAVANI. Ölçüldü (SGI-2.1): canlı
 #: başlığını ekleyen DEĞİŞTİRİLMİŞ istemci dakikada sınırsız elle analizi 1 jetona yaptırabiliyordu. Arayüzün canlı döngüsü kare
@@ -194,7 +202,10 @@ def _canli_kovayi_al(sahip: str, oturum: str, kova: int) -> bool:
 
 
 def sonucsuz_mu(veri) -> bool:
-    """TD9: canlı kare sonucu SONUÇSUZ mu (kedi / yüz / organ bulunamadı)? Arayüzün `canliKareDurumu` "bulunamadi" kuralıyla AYNI."""
+    """TD9: canlı kare sonucu SONUÇSUZ mu (kedi / yüz / organ bulunamadı; T3 · Y190e: petri / fantom `no_detection` — plaka / kuyucuk
+    / tümör yok)? Arayüzün `canliKareDurumu` "bulunamadi" kuralıyla AYNI."""
+    if isinstance(veri, dict) and veri.get("status") == "no_detection":
+        return True
     if not isinstance(veri, dict) or veri.get("status") != "success":
         return False
     if veri.get("detected") is False or veri.get("bulunamadi_mesaji"):

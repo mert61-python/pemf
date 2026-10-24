@@ -1,13 +1,13 @@
 // Author: mertaygn, cglrgrkn
 /**
- * T3 · Y189 (sahip + Çağlar Hoca, 2026-10-23) — petri / fantom analizinde "Koşullu | Koşulsuz" ve "Kabin kamerasından çek".
+ * T3 · Y189 (sahip + Çağlar Hoca, 2026-10-23) — petri / fantom analizinde "Koşullu | Koşulsuz". (Y189'un "Kabin kamerasından çek"
+ * düğmesi T3 · Y190'da KALKTI — "Fotoğraf Çek" bu makinede doğrudan kabin kamerası: `petriFantomCanli.T3_Y190.web.test.tsx`.)
  *
  * Ölçülen (78d6a0ad): petri ve fantom formunda koşul seçimi YOK (engeller her istekte uygulanır; petri "Gelişmiş ▸ denetim" yalnız
  * makullik reddini kapatıyordu, AI Pro'ya etkisi yoktu); "Fotoğraf Çek" tarayıcının / WebView'in VARSAYILAN kamerasını açıyor —
  * sahip: "otomatik laptop kamerasına attı, harici kameraya geçemedim".
  * Kapı: varsayılan KOŞULLU (istekte `kosulsuz` alanı HİÇ yok = eski istek), "Koşulsuz" seçilince `kosulsuz=true` gider ve uyarı
- * görünür; "Kabin kamerasından çek" `/settings/kabin-kamerasi/kare` karesini analiz girdisi yapar; backend başka makinedeyse
- * düğme YOK (kamera backend'in makinesinde).
+ * görünür.
  */
 let mockMode = "researcher";
 const mockToast = jest.fn();
@@ -138,37 +138,5 @@ describe.each([
     const f1 = await analizEt(u, dugme);
     expect(f1.kosulsuz).toBe("true");
     await waitFor(() => u.getByTestId("pemf-kapisi-kosulsuz"));
-  });
-
-  it("KRİTİK: 'Kabin kamerasından çek' karesi analiz girdisi olur (backend bu makinede)", async () => {
-    mockYanit = yanit;
-    const u = await modulAc(etiket, baslik, dugme, false);
-    (global.fetch as jest.Mock).mockImplementationOnce(async () => ({
-      ok: true, json: async () => ({ status: "success", indeks: 1, genislik: 1920, yukseklik: 1080, image_base64: "KABIN64" }),
-    }));
-    await act(async () => { fireEvent.press(u.getByText("Kabin kamerasından çek")); });
-    const cagri = (global.fetch as jest.Mock).mock.calls[0];
-    expect(String(cagri[0])).toBe("http://127.0.0.1:8000/api/settings/kabin-kamerasi/kare");
-    expect(cagri[1].method).toBe("POST");
-    const f = await analizEt(u, dugme);
-    expect(f.image_base64).toBe("KABIN64");
-  });
-
-  it("KRİTİK: kare alınamazsa backend'in EYLEM metni gösterilir, analiz girdisi değişmez", async () => {
-    mockYanit = yanit;
-    const u = await modulAc(etiket, baslik, dugme, false);
-    const DETAY = "Kabin kamerası seçilmedi. Ayarlar ▸ Kabin kamerası bölümünden kabin kamerasını seçip yeniden deneyin.";
-    (global.fetch as jest.Mock).mockImplementationOnce(async () => ({ ok: false, json: async () => ({ detail: DETAY }) }));
-    await act(async () => { fireEvent.press(u.getByText("Kabin kamerasından çek")); });
-    await waitFor(() => expect(mockToast).toHaveBeenCalled());
-    expect(String(mockToast.mock.calls[0][0])).toContain("Ayarlar ▸ Kabin kamerası");
-    expect(u.getByText(dugme).props).toBeTruthy();
-  });
-
-  it("KARŞIT: backend başka makinedeyse (LAN) 'Kabin kamerasından çek' YOK", async () => {
-    (serviceConfig as any).apiBaseUrl = "http://192.168.1.50:8000/api";
-    const u = await modulAc(etiket, baslik, dugme, false);
-    expect(u.queryByText("Kabin kamerasından çek")).toBeNull();
-    expect(u.getByTestId(testID)).toBeTruthy();
   });
 });

@@ -191,6 +191,9 @@ def kabin_kamerasi_yaz(payload: KabinKamerasiModel):
         raise HTTPException(
             status_code=503, detail=ceviri.t("ayarlar.kabinKamerasi.yazilamadi", neden=type(e).__name__)
         )
+    if kk.canli_acik():
+        # Y190: canlı oturum ESKİ kamerayı tutuyor — seçim değişince bırakılır (sonraki canlı / tek kare YENİ kameradan).
+        kk.canli_durdur()
     return {"status": "success", "secili": secim}
 
 
@@ -202,6 +205,9 @@ def kabin_kamerasi_tara():
 
     if _ai_kamerasi_mesgul():
         raise HTTPException(status_code=409, detail=ceviri.t("ayarlar.kabinKamerasi.taramaMesgul"))
+    if kk.canli_acik():
+        # Y190: canlı oturum seçili kamerayı tutuyor — tarama o indeksi açamaz ve yanlış "kamera yok" derdi.
+        raise HTTPException(status_code=409, detail=ceviri.t("ayarlar.kabinKamerasi.taramaCanliAcik"))
     return {"kameralar": kk.kameralari_tara(), "secili": kk.secili_kamera()}
 
 
@@ -225,3 +231,47 @@ def kabin_kamerasi_kare():
             detail=ceviri.t("ayarlar.kabinKamerasi.kareAlinamadi", indeks=str(secim.get("indeks", "?"))),
         )
     return {"status": "success", **kare}
+
+
+# ── CANLI kabin kamerası (T3 · Y190): petri / fantom canlı önizleme + otomatik analiz ────────────────────────────────────────
+@router.post("/kabin-kamerasi/canli/baslat")
+def kabin_kamerasi_canli_baslat():
+    """Seçili kabin kamerasını AÇIK tutan canlı oturumu başlatır (açıksa aynısı). AI Pro kamerayı tutuyorsa 409; seçim yoksa 409;
+    açılamazsa 503. Kare istenmedikçe oturum kendiliğinden kapanır (`kabin_kamerasi.CANLI_ZAMAN_ASIMI_SN`)."""
+    from utils import ceviri
+    from utils import kabin_kamerasi as kk
+
+    if _ai_kamerasi_mesgul():
+        raise HTTPException(status_code=409, detail=ceviri.t("ayarlar.kabinKamerasi.canliMesgul"))
+    try:
+        d = kk.canli_baslat()
+    except kk.KameraSecilmedi:
+        raise HTTPException(status_code=409, detail=ceviri.t("ai.pro.hazirlik.kameraSecilmedi")) from None
+    if d is None:
+        secim = kk.secili_kamera() or {}
+        raise HTTPException(
+            status_code=503,
+            detail=ceviri.t("ayarlar.kabinKamerasi.kareAlinamadi", indeks=str(secim.get("indeks", "?"))),
+        )
+    return {"status": "success", **d}
+
+
+@router.get("/kabin-kamerasi/canli/kare")
+def kabin_kamerasi_canli_kare(tam: bool = False):
+    """Canlı oturumun son karesi (`tam=true`: kalibrasyon boyutunda, analiz için; değilse küçük önizleme). Oturum yoksa 409."""
+    from utils import ceviri
+    from utils import kabin_kamerasi as kk
+
+    k = kk.canli_kare(tam=tam is True)
+    if k is None:
+        raise HTTPException(status_code=409, detail=ceviri.t("ayarlar.kabinKamerasi.canliKapali"))
+    return {"status": "success", **k}
+
+
+@router.post("/kabin-kamerasi/canli/durdur")
+def kabin_kamerasi_canli_durdur():
+    """Canlı oturumu kapatır, kamera bırakılır (açık değilse de başarı)."""
+    from utils import kabin_kamerasi as kk
+
+    kk.canli_durdur()
+    return {"status": "success"}

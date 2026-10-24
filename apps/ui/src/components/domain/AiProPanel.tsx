@@ -20,7 +20,8 @@ import { useAppNav } from "@/context/AppNavContext";
 import { profilSozlugu } from "@/utils/profilSozlugu";
 import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Platform } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { KosulSecici } from "@/components/domain/AnalizKosulu";
+import { kabinKamerasiKullanilir, KosulSecici } from "@/components/domain/AnalizKosulu";
+import { KabinKamerasiKarti } from "@/components/domain/KabinKamerasiKarti";
 import { colors, spacing, typography, rf, rs, touch } from "@/theme/tokens";
 import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
 import { type HedefModeli, MODUL_GEREKSINIMI, modelProfili } from "@/components/domain/aiProProfilleri";
@@ -1179,6 +1180,9 @@ export function AiProPanel({
           {t("ai.pro.kosulsuzEtkin")}
         </Text>
       ) : null}
+
+      {/* T3 · Y190: kabin kamerası seçimi burada (Ayarlar'dan kalktı) — bu makinede; hazırlık / seans kamerayı tutarken kilitli. */}
+      {kabinKamerasiKullanilir() ? <KabinKamerasiKarti kilitli={modelKilitli} /> : null}
 
       {/* Kamera görüntüsü: web = sunucudan (Image), mobil = telefon kamerası (CameraView) */}
       <View

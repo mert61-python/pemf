@@ -18,7 +18,16 @@ import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
 import { colors, radius, spacing, typography, rf, rs, layoutMax, touch } from "@/theme/tokens";
 import { EmDozSatiri, konumMetni, pikselKipiNotu } from "@/components/domain/EmDozSatiri";
 import { PemfKapisiKutusu, type PemfKapisi } from "@/components/domain/PemfKapisiKutusu";
-import { KabinKaresiDugmesi, KosulSecici } from "@/components/domain/AnalizKosulu";
+import {
+  KabinKamerasiHatasi,
+  kabinCanliBaslat,
+  kabinCanliDurdur,
+  kabinCanliKare,
+  kabinKamerasiKullanilir,
+  kabinKaresiAl,
+  KosulSecici,
+} from "@/components/domain/AnalizKosulu";
+import { KabinKamerasiKarti } from "@/components/domain/KabinKamerasiKarti";
 import { useToast } from "@/components/ui/ToastProvider";
 import { webIcinKucult } from "@/services/gorselKucult";
 import { apiGet, apiPost, authHeaders, platformAlert, AI_TIMEOUT_MS, aiHataMesaji } from "@/services/apiClient";
@@ -2181,11 +2190,285 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
   );
 }
 
+/** T3 · Y190: base64 JPEG → Blob (web'de analiz girdisi ikili `file` gider — base64 metin alanı ~%33 büyük ve 1 MB sınırlı). */
+function base64Blob(image_base64: string): Blob {
+  const bstr = atob(image_base64);
+  let n = bstr.length;
+  const u8 = new Uint8Array(n);
+  while (n--) u8[n] = bstr.charCodeAt(n);
+  return new Blob([u8], { type: "image/jpeg" });
+}
+
+/** T3 · Y190: "Fotoğraf Çek" bu makinede (`kabinKamerasiKullanilir`) seçili kabin kamerasından tek kare; hata metni sunucudan (eylem). */
+function useKabinKaresi(onKare: (image_base64: string) => void) {
+  const { showToast } = useToast();
+  const [cekiyor, setCekiyor] = useState(false);
+  const cek = async () => {
+    setCekiyor(true);
+    try {
+      onKare(await kabinKaresiAl());
+    } catch (e) {
+      showToast(e instanceof KabinKamerasiHatasi ? e.message : aiHataMesaji(e), "error");
+    } finally {
+      setCekiyor(false);
+    }
+  };
+  return { cekiyor, cek };
+}
+
+/** Canlı kabin önizlemesinin yenileme aralığı (ms) — yalnız göstermek için küçük kare (~4/sn); analiz kendi döngüsünde TAM kare. */
+const KABIN_ONIZLEME_MS = 250;
+
+/**
+ * PETRİ / FANTOM CANLI KAMERA — T3 · Y190 (sahip 2026-10-24: "canlı kamera eklenmeli hem fantoma hem petriye"; kararlar: önizleme +
+ * otomatik analiz · telefonda telefonun kamerası · jeton dakika başı 1).
+ * KAMERA: bu makinede (`kabinKamerasiKullanilir`) SEÇİLİ KABİN KAMERASI — backend canlı oturumu kamerayı açık tutar
+ * (`/settings/kabin-kamerasi/canli/*`); önizleme küçük kare, analiz TAM kare (1920×1080, kalibrasyonla aynı). Telefonda / uzak
+ * tarayıcıda cihazın kendi kamerası (`CameraView`). DÖNGÜ VisionModule kuralıyla (`utils/canliKare`): önceki analiz bitince,
+ * başlangıçlar arası ≥ 1 sn; son karenin durumu sürekli görünür; her kare `X-PEMF-Canli-Oturum` taşır (dakika başı jeton, sonuçsuz
+ * kare ücretsiz — `servers/jeton.py`). Kamera AI Pro'ya geçerse (409) canlı DURUR ve sunucunun eylem metni gösterilir.
+ * Canlı kareler AI geçmişine YAZILMAZ (VisionModule ile aynı); durdurunca son analiz edilen kare ve sonucu ekranda kalır →
+ * "Analizi Başlat" o kareyi elle (kayıtlı, kare başı) analiz eder.
+ */
+function useEmCanli({ endpoint, dosyaAdi, formuDoldur, onKare }: {
+  endpoint: "/vision/em_petri" | "/vision/em_fantom";
+  dosyaAdi: string;
+  /** Görüntü DIŞI alanlar (kip / koşul / ayarlar) — elle analizle AYNI kaynak; geçersizse false (uyarıyı kendisi gösterir) → canlı durur. */
+  formuDoldur: (fd: FormData) => boolean;
+  /** Analiz edilen kare + sonucu (ret / hata → null: o kare için geçerli sonuç YOK). */
+  onKare: (image_base64: string, sonuc: AiResult | null) => void;
+}) {
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  const kabin = kabinKamerasiKullanilir();
+  const [isLive, setIsLive] = useState(false);
+  const [aciliyor, setAciliyor] = useState(false);
+  const [facing, setFacing] = useState<"back" | "front">("back");
+  const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<any>(null);
+  const [onizleme, setOnizleme] = useState<string | null>(null);
+  const [durum, setDurum] = useState<CanliDurum | null>(null);
+  const [jeton, setJeton] = useState(0);
+  const jetonEtkin = useCanliJetonEtkin(isLive);
+  const [sonKareZamani, setSonKareZamani] = useState<number | null>(null);
+  const [simdi, setSimdi] = useState(() => Date.now());
+  const formRef = useRef(formuDoldur);
+  const onKareRef = useRef(onKare);
+  useEffect(() => {
+    formRef.current = formuDoldur;
+    onKareRef.current = onKare;
+  });
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
+
+  // Canlı mı (eşzamanlı iki döngü 409 alırsa durdurma / uyarı TEK kez — önizleme ve analiz aynı anda düşebilir).
+  const canliRef = useRef(false);
+  const durdur = useCallback((neden?: string) => {
+    if (!canliRef.current) return;
+    canliRef.current = false;
+    setIsLive(false);
+    setOnizleme(null);
+    if (neden) showToast(neden, "error");
+  }, [showToast]);
+
+  // Kabin canlı oturumu: canlı kapanınca / ekran kapanınca oturum kapatılır (kamera bırakılır).
+  useEffect(() => {
+    if (!isLive || !kabin) return;
+    return () => { void kabinCanliDurdur(); };
+  }, [isLive, kabin]);
+
+  // Önizleme (yalnız kabin): küçük kare ~4/sn. 409 = oturum kapandı (kamera AI Pro'ya geçti / zaman aşımı) → canlı DURUR.
+  useEffect(() => {
+    if (!isLive || !kabin) return;
+    let bitti = false;
+    let zamanlayici: ReturnType<typeof setTimeout> | null = null;
+    const tur = async () => {
+      try {
+        const k = await kabinCanliKare(false);
+        if (!bitti && mountedRef.current) setOnizleme(k);
+      } catch (e) {
+        if (!bitti && mountedRef.current && e instanceof KabinKamerasiHatasi && e.durum === 409) {
+          bitti = true;
+          durdur(e.message);
+          return;
+        }
+      }
+      if (!bitti) zamanlayici = setTimeout(tur, KABIN_ONIZLEME_MS);
+    };
+    void tur();
+    return () => {
+      bitti = true;
+      if (zamanlayici) clearTimeout(zamanlayici);
+    };
+  }, [isLive, kabin, durdur]);
+
+  // Otomatik analiz döngüsü.
+  useEffect(() => {
+    if (!isLive) return;
+    let bitti = false;
+    let zamanlayici: ReturnType<typeof setTimeout> | null = null;
+    let ucustaki: AbortController | null = null;
+    const oturum = canliOturumBaslat(); // dakika başı jeton — oturum kimliği her kare isteğinde
+    setJeton(0);
+    const tur = async () => {
+      if (bitti) return;
+      const bas = Date.now();
+      try {
+        let kare: string | null = null;
+        if (kabin) kare = await kabinCanliKare(true);
+        else if (cameraRef.current) {
+          // shutterSound: false — canlı döngü sık kare alır (VisionModule ile aynı, saha bildirimi 2026-08-27).
+          const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, skipProcessing: true, shutterSound: false });
+          kare = photo?.uri ? (await shrinkForUpload(photo.uri)).base64 : null;
+        }
+        if (kare && !bitti) {
+          const fd = new FormData();
+          if (Platform.OS === "web") fd.append("file", base64Blob(kare), dosyaAdi);
+          else fd.append("image_base64", kare);
+          if (!formRef.current(fd)) {
+            bitti = true;
+            durdur();
+            return;
+          }
+          const ctrl = new AbortController();
+          ucustaki = ctrl;
+          // CANLI-DONGU: kisa sinir ZORUNLU (uzun timeout kamera akisini kilitler); petri / fantom hatti FGS'den agir → 30 sn
+          const to = setTimeout(() => ctrl.abort(), 30000);
+          try {
+            const r = await fetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
+              method: "POST", body: fd, signal: ctrl.signal,
+              headers: { Accept: "application/json", ...authHeaders(), [CANLI_OTURUM_BASLIGI]: oturum.kimlik },
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!mountedRef.current || bitti) return;
+            const d = canliKareDurumu(endpoint, r.ok, r.status, data);
+            setDurum(d);
+            oturum.kareBildir(d, bas);
+            setJeton(oturum.jetonSayisi());
+            onKareRef.current(kare, r.ok && (data?.status === "success" || data?.status === "no_detection") ? data : null);
+            setSonKareZamani(Date.now());
+          } finally {
+            clearTimeout(to);
+          }
+        }
+      } catch (e) {
+        if (!mountedRef.current || bitti) return;
+        if (e instanceof KabinKamerasiHatasi && e.durum === 409) {
+          bitti = true;
+          durdur(e.message);
+          return;
+        }
+        setDurum({ tur: "hata", metin: t("ai.canli.sonKareHata", { hata: e instanceof KabinKamerasiHatasi ? e.message : aiHataMesaji(e) }) });
+      }
+      if (bitti) return;
+      zamanlayici = setTimeout(tur, canliSonrakiBekleme(Date.now() - bas));
+    };
+    zamanlayici = setTimeout(tur, canliSonrakiBekleme(0));
+    return () => {
+      bitti = true;
+      if (zamanlayici) clearTimeout(zamanlayici);
+      try { ucustaki?.abort(); } catch { /* ignore */ }
+    };
+  }, [isLive, kabin, endpoint, dosyaAdi, durdur, t]);
+
+  // Son analiz karesinin yaşı ("1,8 sn önce").
+  useEffect(() => {
+    if (!isLive) return;
+    const id = setInterval(() => setSimdi(Date.now()), 500);
+    return () => clearInterval(id);
+  }, [isLive]);
+
+  const toggle = async () => {
+    if (isLive) { durdur(); return; }
+    setDurum(null);
+    setSonKareZamani(null);
+    setOnizleme(null);
+    if (kabin) {
+      setAciliyor(true);
+      try {
+        await kabinCanliBaslat();
+      } catch (e) {
+        showToast(e instanceof KabinKamerasiHatasi ? e.message : aiHataMesaji(e), "error");
+        return;
+      } finally {
+        if (mountedRef.current) setAciliyor(false);
+      }
+    } else if (!permission?.granted) {
+      const res = await requestPermission();
+      if (!res?.granted) {
+        showToast(t("ai.canli.kameraIzni"), "error");
+        return;
+      }
+    }
+    if (mountedRef.current) {
+      canliRef.current = true;
+      setIsLive(true);
+    }
+  };
+
+  return {
+    kabin, isLive, aciliyor, toggle, cameraRef, facing,
+    cevir: () => setFacing((f) => (f === "back" ? "front" : "back")),
+    onizleme, durum, jeton: jetonEtkin ? jeton : null,
+    sonKareYasMs: sonKareZamani != null ? simdi - sonKareZamani : null,
+  };
+}
+
+/** Petri / fantom canlı kutusu: kabin önizlemesi (bu makinede) ya da cihaz kamerası + rozet + son analizin yaşı + durum satırı. */
+function EmCanliKutusu({ c, yukseklik }: { c: ReturnType<typeof useEmCanli>; yukseklik: number }) {
+  const { t } = useTranslation();
+  if (!c.isLive) return null;
+  const image_base64 = c.onizleme;
+  const yas = c.sonKareYasMs != null ? (Math.max(0, c.sonKareYasMs) / 1000).toFixed(1).replace(".", i18n.language === "en" ? "." : ",") : null;
+  return (
+    <>
+      <View style={[styles.imagePreviewContainer, { height: yukseklik }]} testID="em-canli-kutusu">
+        <View style={styles.cameraContainer}>
+          {c.kabin ? (
+            image_base64 ? (
+              <Image
+                source={{ uri: `data:image/jpeg;base64,${image_base64}` }}
+                style={styles.cameraView}
+                resizeMode="contain"
+                testID="em-canli-onizleme"
+                accessibilityLabel={t("ai.canli.kabinOnizleme")}
+              />
+            ) : (
+              <View style={[styles.cameraView, { alignItems: "center", justifyContent: "center", gap: spacing.sm }]}>
+                <ActivityIndicator color={colors.primary} />
+                <Text style={styles.placeholderText}>{t("ai.canli.kabinAciliyor")}</Text>
+              </View>
+            )
+          ) : (
+            <>
+              <CameraView ref={c.cameraRef} style={styles.cameraView} facing={c.facing} />
+              <TouchableOpacity style={styles.flipCameraBtn} onPress={c.cevir} accessibilityRole="button" accessibilityLabel={t("ai.canli.kamerayiCevir")}>
+                <SwitchCamera color={colors.white} size={20} />
+              </TouchableOpacity>
+            </>
+          )}
+          <View style={styles.liveIndicator}>
+            <View style={styles.liveDot} />
+            <Text style={styles.liveText}>{c.kabin ? t("ai.canli.kabinRozet") : t("ai.canli.kameraAktif")}</Text>
+          </View>
+          {yas != null ? (
+            <View style={styles.canliYasEtiketi}>
+              <Text style={styles.liveText} testID="canli-son-kare-yasi">{t("ai.canli.sonAnaliz", { sn: yas })}</Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+      {c.durum ? <CanliDurumSatiri durum={c.durum} jeton={c.jeton} /> : null}
+      <Text style={styles.petriHint}>{t("ai.canli.emKayitNotu")}</Text>
+    </>
+  );
+}
+
 /**
  * Fantom Tümör Analizi — sentetik böbrek fantomu fotoğrafından mavi tümör odaklarını
  * tespit eder (klasik CV), 3B konum + PhantomPredictor (BiLSTM ONNX) ile her tümör için
  * PEMF bobin duty (D1-7) + E-alan (E_cancer/E_healthy) tahmini üretir.
- * Backend: POST /api/ai/vision/em_fantom (phantom_cv_v3 — hocanın v3'ü). Canlı kamera/otonom YOK — tek foto.
+ * Backend: POST /api/ai/vision/em_fantom (phantom_cv_v3 — hocanın v3'ü). Otonom YOK; tek foto ya da canlı kamera (T3 · Y190).
  */
 function PhantomModule({ patientName }: { patientName: string }) {
   const { t } = useTranslation();
@@ -2205,10 +2488,20 @@ function PhantomModule({ patientName }: { patientName: string }) {
   const { isCompact } = useResponsive();
   // T3 · Y189: Koşullu | Koşulsuz (varsayılan koşullu, hatırlanmaz) — kural backend'de (`pemf_kapisi`).
   const [kosulsuz, setKosulsuz] = useState(false);
-  const kabinKaresiGeldi = (image_base64: string) => {
+  // T3 · Y190: kabin karesi (Fotoğraf Çek, bu makinede) ve canlı kare girdi olur; canlıda sonucu da birlikte gelir.
+  const kareGeldi = (image_base64: string, sonuc: AiResult | null = null) => {
     if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri);
-    setImageFile(null); setImageBase64(image_base64); setImageUri(`data:image/jpeg;base64,${image_base64}`); setResult(null);
+    setImageFile(null); setImageBase64(image_base64); setImageUri(`data:image/jpeg;base64,${image_base64}`); setResult(sonuc);
   };
+  const kabinKaresi = useKabinKaresi(kareGeldi);
+  /** Görüntü DIŞI alanlar — elle ve canlı analizde AYNI kaynak. */
+  const formAlanlari = (formData: FormData): boolean => {
+    const plen = parseFloat(phantomLen.replace(",", "."));
+    if (!isNaN(plen) && plen > 0) formData.append("phantom_length_cm", String(plen));
+    if (kosulsuz) formData.append("kosulsuz", "true");  // T3 · Y189 (koşulluda HİÇ gönderilmez = eski istek)
+    return true;
+  };
+  const canli = useEmCanli({ endpoint: "/vision/em_fantom", dosyaAdi: "phantom.jpg", formuDoldur: formAlanlari, onKare: kareGeldi });
 
   useEffect(() => {
     visionCache[CK] = { imageUri, imageBase64, result };
@@ -2221,6 +2514,9 @@ function PhantomModule({ patientName }: { patientName: string }) {
   }, [loading]);
 
   const takePhoto = async () => {
+    // T3 · Y190 (sahip): bu makinede "Fotoğraf Çek" DOĞRUDAN seçili kabin kamerasından (1920×1080 — kalibrasyonla aynı);
+    // dizüstünün kendi kamerası / tarayıcının varsayılanı AÇILMAZ. Telefonda / uzak tarayıcıda cihazın kamerası (aşağıda, aynı).
+    if (canli.kabin) { await kabinKaresi.cek(); return; }
     if (Platform.OS === 'web') {
       const input = document.createElement('input');
       input.type = 'file'; input.accept = 'image/*'; (input as any).capture = 'environment';
@@ -2286,9 +2582,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
         if (imageBase64) formData.append("image_base64", imageBase64);
         else formData.append("file", { uri: imageUri, name: "phantom.jpg", type: "image/jpeg" } as any);
       }
-      const plen = parseFloat(phantomLen.replace(",", "."));
-      if (!isNaN(plen) && plen > 0) formData.append("phantom_length_cm", String(plen));
-      if (kosulsuz) formData.append("kosulsuz", "true");  // T3 · Y189 (koşulluda HİÇ gönderilmez = eski istek)
+      formAlanlari(formData);
 
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS); // ilk-kullanım model indirme için geniş
@@ -2336,10 +2630,13 @@ function PhantomModule({ patientName }: { patientName: string }) {
           → sonuç gelir gelmez kullanıcının GİRDİSİ ekrandan siliniyordu; üstelik gösterilen tek
           şey okunmaz `07_combined` mozaiğiydi (panel başına ~81 px). Artık backend'in ürettiği
           7 panel de gezilebilir ve girdi bir çip uzaklıkta. */}
+      {/* T3 · Y190: canlı kamera (önizleme + otomatik analiz) — son analiz edilen kare ve sonucu aşağıdaki galeride. */}
+      <EmCanliKutusu c={canli} yukseklik={sahneH} />
+
       <GorselSahne
         sayfalar={sahneSayfalari(result, imageUri)}
         tavanY={galeriH}
-        sifirlaAnahtari={imageUri}
+        sifirlaAnahtari={canli.isLive ? "canli" : imageUri}
         testID="fantom-sahne"
           bos={
             <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
@@ -2364,20 +2661,29 @@ function PhantomModule({ patientName }: { patientName: string }) {
         />
       </View>
       <KosulSecici kosulsuz={kosulsuz} onDegis={setKosulsuz} kilitli={loading} testID="fantom-kosul" />
+      {/* T3 · Y190: kabin kamerası seçimi burada (Ayarlar'dan kalktı) — bu makinede; canlı / çekim sürerken kilitli. */}
+      {canli.kabin ? <KabinKamerasiKarti kilitli={canli.isLive || canli.aciliyor || kabinKaresi.cekiyor} /> : null}
 
       <View style={[styles.btnRow, isCompact && { flexDirection: "column" }]}>
         <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
-          <Button label={t("ai.ortak.galeridenSec")} icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} />
+          <Button label={t("ai.ortak.galeridenSec")} icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} disabled={canli.isLive || kabinKaresi.cekiyor} />
         </View>
         <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
-          <Button label={t("ai.gorsel.fotografCek")} icon={<Camera color={colors.white} size={16} />} onPress={takePhoto} />
+          <Button label={kabinKaresi.cekiyor ? t("ai.kabinKamerasi.cekiliyor") : t("ai.gorsel.fotografCek")} icon={kabinKaresi.cekiyor ? <ActivityIndicator color={colors.white} /> : <Camera color={colors.white} size={16} />} onPress={takePhoto} disabled={canli.isLive || kabinKaresi.cekiyor} />
+        </View>
+        <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
+          <Button
+            label={canli.isLive ? t("ai.gorsel.canliyiDurdur") : canli.aciliyor ? t("ai.canli.kabinAciliyor") : t("ai.gorsel.canliKamera")}
+            variant={canli.isLive ? "danger" : "secondary"}
+            icon={canli.aciliyor ? <ActivityIndicator color={colors.primary} /> : <Video color={canli.isLive ? colors.white : colors.primary} size={16} />}
+            disabled={canli.aciliyor || loading || kabinKaresi.cekiyor}
+            onPress={canli.toggle}
+          />
         </View>
       </View>
-      {/* T3 · Y189: görüntü VARSAYILAN kameradan değil, Ayarlar ▸ Kabin kamerası'nda seçilen kameradan (1920×1080). */}
-      <KabinKaresiDugmesi onKare={kabinKaresiGeldi} />
 
       <View style={styles.analyzeBtn}>
-        <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.fantom.analiziBaslat")} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyze} />
+        <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.fantom.analiziBaslat")} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading || canli.isLive} onPress={analyze} />
       </View>
       {longLoading && <Text style={styles.modelHint}>{t("ai.ortak.modelHazirlaniyor")}</Text>}
 
@@ -2494,7 +2800,7 @@ const a1KoseAdi = (k: "auto" | "tl" | "tr" | "br" | "bl"): string =>
  * Petri Kuyu Analizi — petri fotoğrafından YOLO11m-seg ile N kuyucuk tespit eder,
  * her kuyuda HSV kanser sınıflandırması yapar, 3B konum + PetriPredictor (BaggingRegressor
  * ONNX) ile kuyu başına PEMF bobin duty (D1-7) + E-alan (E_cancer/E_healthy) tahmini üretir.
- * Backend: POST /api/ai/vision/em_petri (petri_cv_v2 — hocanın v2'si). Canlı kamera/otonom YOK — tek foto.
+ * Backend: POST /api/ai/vision/em_petri (petri_cv_v2 — hocanın v2'si). Otonom YOK; tek foto ya da canlı kamera (T3 · Y190).
  */
 function PetriModule({ patientName }: { patientName: string }) {
   const { t } = useTranslation();
@@ -2530,10 +2836,12 @@ function PetriModule({ patientName }: { patientName: string }) {
   // T3 · Y189: Koşullu | Koşulsuz (varsayılan koşullu, hatırlanmaz). Koşulsuzda plaka bulunamazsa ham YOLO tespiti, makullik reddi
   // ve kalite / yeniden-çekim nedenleri analizi KESMEZ (uyarı) — kural backend'de.
   const [kosulsuz, setKosulsuz] = useState(false);
-  const kabinKaresiGeldi = (image_base64: string) => {
+  // T3 · Y190: kabin karesi (Fotoğraf Çek, bu makinede) ve canlı kare girdi olur; canlıda sonucu da birlikte gelir.
+  const kareGeldi = (image_base64: string, sonuc: AiResult | null = null) => {
     if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri);
-    setImageFile(null); setImageBase64(image_base64); setImageUri(`data:image/jpeg;base64,${image_base64}`); setResult(null);
+    setImageFile(null); setImageBase64(image_base64); setImageUri(`data:image/jpeg;base64,${image_base64}`); setResult(sonuc);
   };
+  const kabinKaresi = useKabinKaresi(kareGeldi);
   const gorunenAyarlar = PETRI_AYAR_ALANLARI.filter((a) => kip === "tekil" || PLAKA_KIPI_AYARLARI.has(a.ad));
   const advDegisti = !denetimAcik || gorunenAyarlar.some((a) => (adv[a.ad] || "").trim() !== "")
     || (kip === "plaka" && (kontrolSaglikli.trim() !== "" || kontrolKanser.trim() !== "" || a1Kose !== "auto"));
@@ -2549,6 +2857,9 @@ function PetriModule({ patientName }: { patientName: string }) {
   }, [loading]);
 
   const takePhoto = async () => {
+    // T3 · Y190 (sahip): bu makinede "Fotoğraf Çek" DOĞRUDAN seçili kabin kamerasından (1920×1080 — kalibrasyonla aynı);
+    // dizüstünün kendi kamerası / tarayıcının varsayılanı AÇILMAZ. Telefonda / uzak tarayıcıda cihazın kamerası (aşağıda, aynı).
+    if (canli.kabin) { await kabinKaresi.cek(); return; }
     if (Platform.OS === 'web') {
       const input = document.createElement('input');
       input.type = 'file'; input.accept = 'image/*'; (input as any).capture = 'environment';
@@ -2592,6 +2903,43 @@ function PetriModule({ patientName }: { patientName: string }) {
     }
   };
 
+  /** Görüntü DIŞI alanlar — elle ve canlı analizde AYNI kaynak. Geçersiz ayarda uyarır ve false döner (istek gitmez). */
+  const formAlanlari = (formData: FormData): boolean => {
+      // AI-2: kip + laboratuvar protokolü. Plaka kipi varsayılandır (YAML) → hiçbir şey gönderilmez; tekil kipte plate_type=0.
+      if (kip === "tekil") {
+        formData.append("plate_type", "0");
+        const dia = parseFloat(petriDia.replace(",", "."));
+        if (!isNaN(dia) && dia > 0) formData.append("petri_diameter_cm", String(dia));
+      } else {
+        if (kontrolSaglikli.trim()) formData.append("control_healthy", kontrolSaglikli.trim());
+        if (kontrolKanser.trim()) formData.append("control_cancer", kontrolKanser.trim());
+        if (a1Kose !== "auto") formData.append("a1_corner", a1Kose);
+      }
+
+      // ── Gelişmiş (araştırma) ayarları ────────────────────────────────────────────────
+      // ⚠️ `sayiya_cevir` dersi: Türkçe klavyede "0,05" yazılır. `parseFloat("0,05")` = 0
+      // döner (SESSİZ yanlış değer) — virgül noktaya çevrilmeden okunmaz.
+      for (const a of gorunenAyarlar) {  // AI-2: gizli (kipe göre anlamsız) alanın eski değeri GÖNDERİLMEZ
+        const ham = (adv[a.ad] || "").trim();
+        if (!ham) continue;                       // boş = varsayılanda kal
+        const d = parseFloat(ham.replace(",", "."));
+        if (isNaN(d)) { showToast(t("ai.petri.sayiGirin", { etiket: t(a.etiket as never), vars: ayarVarsayilani(a) }), "error"); return false; }
+        // resize_max için 0 = "küçültme kapalı" (sınır ihlali değil).
+        const kapali = a.ad === "resize_max" && d === 0;
+        if (!kapali && (d < a.alt || d > a.ust)) {
+          showToast(t("ai.petri.aralikDisi", { etiket: t(a.etiket as never), alt: a.alt, ust: a.ust, ham }), "error");
+          return false;
+        }
+        formData.append(a.ad, String(d));
+      }
+      // Denetim KAPATILDIYSA açıkça bildir; açıkken göndermeyiz ki sunucudaki
+      // PEMF_AI_PLAUSIBILITY_GUARD kaçış kapağı arayüz tarafından EZİLMESİN.
+      if (!denetimAcik) formData.append("plaus_guard", "false");
+      if (kosulsuz) formData.append("kosulsuz", "true");  // T3 · Y189 (koşulluda HİÇ gönderilmez = eski istek)
+      return true;
+  };
+  const canli = useEmCanli({ endpoint: "/vision/em_petri", dosyaAdi: "petri.jpg", formuDoldur: formAlanlari, onKare: kareGeldi });
+
   const analyze = async () => {
     const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
     if (!imageUri) return;
@@ -2614,37 +2962,7 @@ function PetriModule({ patientName }: { patientName: string }) {
         if (imageBase64) formData.append("image_base64", imageBase64);
         else formData.append("file", { uri: imageUri, name: "petri.jpg", type: "image/jpeg" } as any);
       }
-      // AI-2: kip + laboratuvar protokolü. Plaka kipi varsayılandır (YAML) → hiçbir şey gönderilmez; tekil kipte plate_type=0.
-      if (kip === "tekil") {
-        formData.append("plate_type", "0");
-        const dia = parseFloat(petriDia.replace(",", "."));
-        if (!isNaN(dia) && dia > 0) formData.append("petri_diameter_cm", String(dia));
-      } else {
-        if (kontrolSaglikli.trim()) formData.append("control_healthy", kontrolSaglikli.trim());
-        if (kontrolKanser.trim()) formData.append("control_cancer", kontrolKanser.trim());
-        if (a1Kose !== "auto") formData.append("a1_corner", a1Kose);
-      }
-
-      // ── Gelişmiş (araştırma) ayarları ────────────────────────────────────────────────
-      // ⚠️ `sayiya_cevir` dersi: Türkçe klavyede "0,05" yazılır. `parseFloat("0,05")` = 0
-      // döner (SESSİZ yanlış değer) — virgül noktaya çevrilmeden okunmaz.
-      for (const a of gorunenAyarlar) {  // AI-2: gizli (kipe göre anlamsız) alanın eski değeri GÖNDERİLMEZ
-        const ham = (adv[a.ad] || "").trim();
-        if (!ham) continue;                       // boş = varsayılanda kal
-        const d = parseFloat(ham.replace(",", "."));
-        if (isNaN(d)) { showToast(t("ai.petri.sayiGirin", { etiket: t(a.etiket as never), vars: ayarVarsayilani(a) }), "error"); setLoading(false); return; }
-        // resize_max için 0 = "küçültme kapalı" (sınır ihlali değil).
-        const kapali = a.ad === "resize_max" && d === 0;
-        if (!kapali && (d < a.alt || d > a.ust)) {
-          showToast(t("ai.petri.aralikDisi", { etiket: t(a.etiket as never), alt: a.alt, ust: a.ust, ham }), "error");
-          setLoading(false); return;
-        }
-        formData.append(a.ad, String(d));
-      }
-      // Denetim KAPATILDIYSA açıkça bildir; açıkken göndermeyiz ki sunucudaki
-      // PEMF_AI_PLAUSIBILITY_GUARD kaçış kapağı arayüz tarafından EZİLMESİN.
-      if (!denetimAcik) formData.append("plaus_guard", "false");
-      if (kosulsuz) formData.append("kosulsuz", "true");  // T3 · Y189 (koşulluda HİÇ gönderilmez = eski istek)
+      if (!formAlanlari(formData)) return;  // geçersiz ayar: uyarı gösterildi, istek GİTMEZ (finally yüklemeyi kapatır)
 
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS); // ilk-kullanım model indirme için geniş
@@ -2690,10 +3008,13 @@ function PetriModule({ patientName }: { patientName: string }) {
           → sonuç gelir gelmez kullanıcının GİRDİSİ ekrandan siliniyordu; üstelik gösterilen tek
           şey okunmaz `07_combined` mozaiğiydi (panel başına ~81 px). Artık backend'in ürettiği
           7 panel de gezilebilir ve girdi bir çip uzaklıkta. */}
+      {/* T3 · Y190: canlı kamera (önizleme + otomatik analiz) — son analiz edilen kare ve sonucu aşağıdaki galeride. */}
+      <EmCanliKutusu c={canli} yukseklik={sahneH} />
+
       <GorselSahne
         sayfalar={sahneSayfalari(result, imageUri)}
         tavanY={galeriH}
-        sifirlaAnahtari={imageUri}
+        sifirlaAnahtari={canli.isLive ? "canli" : imageUri}
         testID="petri-sahne"
           bos={
             <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
@@ -2832,19 +3153,29 @@ function PetriModule({ patientName }: { patientName: string }) {
         </View>
       )}
 
+      {/* T3 · Y190: kabin kamerası seçimi burada (Ayarlar'dan kalktı) — bu makinede; canlı / çekim sürerken kilitli. */}
+      {canli.kabin ? <KabinKamerasiKarti kilitli={canli.isLive || canli.aciliyor || kabinKaresi.cekiyor} /> : null}
+
       <View style={[styles.btnRow, isCompact && { flexDirection: "column" }]}>
         <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
-          <Button label={t("ai.ortak.galeridenSec")} icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} />
+          <Button label={t("ai.ortak.galeridenSec")} icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} disabled={canli.isLive || kabinKaresi.cekiyor} />
         </View>
         <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
-          <Button label={t("ai.gorsel.fotografCek")} icon={<Camera color={colors.white} size={16} />} onPress={takePhoto} />
+          <Button label={kabinKaresi.cekiyor ? t("ai.kabinKamerasi.cekiliyor") : t("ai.gorsel.fotografCek")} icon={kabinKaresi.cekiyor ? <ActivityIndicator color={colors.white} /> : <Camera color={colors.white} size={16} />} onPress={takePhoto} disabled={canli.isLive || kabinKaresi.cekiyor} />
+        </View>
+        <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
+          <Button
+            label={canli.isLive ? t("ai.gorsel.canliyiDurdur") : canli.aciliyor ? t("ai.canli.kabinAciliyor") : t("ai.gorsel.canliKamera")}
+            variant={canli.isLive ? "danger" : "secondary"}
+            icon={canli.aciliyor ? <ActivityIndicator color={colors.primary} /> : <Video color={canli.isLive ? colors.white : colors.primary} size={16} />}
+            disabled={canli.aciliyor || loading || kabinKaresi.cekiyor}
+            onPress={canli.toggle}
+          />
         </View>
       </View>
-      {/* T3 · Y189: görüntü VARSAYILAN kameradan değil, Ayarlar ▸ Kabin kamerası'nda seçilen kameradan (1920×1080). */}
-      <KabinKaresiDugmesi onKare={kabinKaresiGeldi} />
 
       <View style={styles.analyzeBtn}>
-        <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.petri.analiziBaslat")} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyze} />
+        <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.petri.analiziBaslat")} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading || canli.isLive} onPress={analyze} />
       </View>
       {longLoading && <Text style={styles.modelHint}>{t("ai.ortak.modelHazirlaniyor")}</Text>}
 

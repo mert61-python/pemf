@@ -3770,6 +3770,7 @@ def _y51_duty_etiketi(model: str, duty_sum, cfg) -> dict:
 
 
 @ai_router.post("/api/ai/vision/em_fantom")
+@sonuc_izle  # T3 · Y190e: canlı kipte "tümör / fantom bulunamadı" (no_detection) karesi dakikayı ücretlendirmez
 async def analyze_em_fantom(
     _res=Depends(require_research),
     file: UploadFile = File(None),
@@ -3931,6 +3932,7 @@ async def analyze_em_fantom(
 
 
 @ai_router.post("/api/ai/vision/em_petri")
+@sonuc_izle  # T3 · Y190e: canlı kipte "plaka / kuyucuk bulunamadı" (no_detection) karesi dakikayı ücretlendirmez
 async def analyze_em_petri(
     _res=Depends(require_research),
     file: UploadFile = File(None),

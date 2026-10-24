@@ -7,10 +7,15 @@
       "bulunamadi": "Son kare: {{bulunamadi_mesaji}}",
       "kediYok": "Son kare: kedi bulunamadı — kedinin tümü kadraja girsin.",
       "termalYok": "Seçili kamera termal görüntü vermiyor — termal kamerayı seçin. ({{detay}})",
+      "tespitYok": "Son kare: tespit yok — hedefi kabinde kadraja tam alın (sonuçsuz kare ücretsiz).",
       "yuzYok": "Son kare: kedi yüzü bulunamadı — kedinin yüzünü kameraya karşıdan ve yakın tutun."
     },
+    "emKayitNotu": "Canlı kareler AI geçmişine kaydedilmez. Durdurunca son kare ve sonucu ekranda kalır; kaydetmek için analizi başlatın.",
     "jetonMetni_one": "Bu canlı oturumda {{count}} jeton (dakika başına 1; sonuçsuz kareler ücretsiz)",
     "jetonMetni_other": "Bu canlı oturumda {{count}} jeton (dakika başına 1; sonuçsuz kareler ücretsiz)",
+    "kabinAciliyor": "Kabin kamerası açılıyor…",
+    "kabinOnizleme": "Kabin kamerası canlı görüntüsü",
+    "kabinRozet": "KABİN KAMERASI · CANLI",
     "kameraAktif": "KAMERA AKTİF",
     "kameraIzni": "Kamera için izin gerekli.",
     "kamerayiCevir": "Kamerayı çevir",
@@ -601,9 +606,8 @@
     "nasilCalisirGovde": "Bir modüle <kalin>dokunun</kalin> → hemen altında açılır; <kalin>birden fazlasını aynı anda açık tutabilirsiniz</kalin>. İhtiyaca göre<kalin> fotoğraf/canlı kamera</kalin>, <kalin>ses</kalin> ya da<kalin> klinik değer</kalin> girip analizi başlatın. Her modülün başında kısa bir kullanım ipucu var."
   },
   "kabinKamerasi": {
-    "cek": "Kabin kamerasından çek",
     "cekiliyor": "Kabin kamerasından alınıyor…",
-    "hata": "Kabin kamerasından görüntü alınamadı. Ayarlar ▸ Kabin kamerası bölümünden kamerayı seçip yeniden deneyin."
+    "hata": "Kabin kamerasından görüntü alınamadı. Bu ekrandaki \"Kabin kamerası\" bölümünden kamerayı seçip yeniden deneyin."
   },
   "kopru": {
     "etiket": "Bu {{hedef}} için AI Pro seansı: Kontrol ekranına git",

@@ -147,7 +147,7 @@
   },
   "iptal": "Cancel",
   "kabinKamerasi": {
-    "aciklama": "The camera AI Pro uses to see the cabin. Your choice is remembered on this device; the camera opens at 1920×1080.",
+    "aciklama": "The camera that sees the cabin for analysis (Take Photo, Live Camera) and AI Pro. Your choice is remembered on this device; the camera opens at 1920×1080.",
     "baslik": "Cabin camera",
     "bulunamadi": "No camera was found on this computer. Check the camera cable and scan again.",
     "bunuSec": "Choose this",
@@ -156,7 +156,7 @@
     "secildi": "Cabin camera: Camera {{indeks}} selected.",
     "seciliEtiket": "Selected",
     "seciliKamera": "Selected camera: Camera {{indeks}}",
-    "secilmedi": "No cabin camera selected — AI Pro will not open a camera. Scan for cameras and choose the one that shows the cabin.",
+    "secilmedi": "No cabin camera selected — photos, the live camera and AI Pro cannot open the cabin camera. Scan the cameras and choose the one that shows the cabin.",
     "tara": "Scan for cameras"
   },
   "kaydedildi": "Settings saved successfully.",

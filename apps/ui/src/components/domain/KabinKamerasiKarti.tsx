@@ -1,7 +1,10 @@
 /**
- * "Kabin kamerası" kartı (Ayarlar · T2D-2 · Tezgâh-2 #3) — YALNIZ backend bu makinedeyken çizilir (kamera backend'in makinesine bağlı).
+ * "Kabin kamerası" bölümü (T2D-2 · Tezgâh-2 #3; T3 · Y190 sahip 2026-10-24: "kamera seçimi de burada olmalı, ayarlar içinde değil")
+ * — petri / fantom analiz panelinde ve AI Pro panelinde, YALNIZ backend bu makinedeyken (`kabinKamerasiKullanilir`; kamera backend'in
+ * makinesine bağlı). Ayarlar'dan KALKTI. `kilitli` (canlı kamera / hazırlık / seans kamerayı tutarken): tarama ve seçim yapılmaz.
  *
- * AI Pro önizlemesi / seansı kamerayı artık sabit "0 numara" ile değil buradaki seçimle açar (dizüstünde 0 = dahili kamera).
+ * AI Pro önizlemesi / seansı, petri / fantom "Fotoğraf Çek" ve "Canlı Kamera" kamerayı sabit "0 numara" ile değil buradaki seçimle
+ * açar (dizüstünde 0 = dahili kamera).
  * Seçim cihazda saklanır (`/settings/kabin-kamerasi`, hesaptan / profilden bağımsız); seçim yoksa AI Pro kamerası açılmaz ve kart
  * bunu eylem söyleyerek gösterir. OpenCV kamera adı vermediği için tarama her kameradan küçük bir önizleme getirir — kullanıcı kabin
  * kamerasını görüntüden tanır. Tarama yalnız düğmeyle (kamera ışığı kısa yanar); hata iletisi sunucudan (eylem söyler).
@@ -10,10 +13,11 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Camera } from "lucide-react-native";
-import { Card } from "@/components/ui/Card";
 import { colors, radius, spacing, touch, typography } from "@/theme/tokens";
 import { apiGet, apiPost } from "@/services/apiClient";
-import { useToast } from "@/components/ui/ToastProvider";
+// T3 · Y190: bölüm AI Pro panelinde de çizilir; panel ToastProvider gerektirmez → bildirim köprüden (sağlayıcı yoksa sessiz;
+// seçimin kendisi bölümdeki "Seçili kamera" satırında zaten görünür).
+import { emitToast } from "@/services/toastBridge";
 
 interface Secim {
   indeks: number;
@@ -26,9 +30,8 @@ interface Aday {
   onizleme: string | null;
 }
 
-export function KabinKamerasiKarti() {
+export function KabinKamerasiKarti({ kilitli = false }: { kilitli?: boolean }) {
   const { t } = useTranslation();
-  const { showToast } = useToast();
   const [secili, setSecili] = useState<Secim | null>(null);
   const [yuklendi, setYuklendi] = useState(false);
   const [adaylar, setAdaylar] = useState<Aday[] | null>(null);
@@ -45,6 +48,7 @@ export function KabinKamerasiKarti() {
   }, [yukle]);
 
   const tara = async () => {
+    if (kilitli) return;
     setTaraniyor(true);
     try {
       const r = await apiPost<{ kameralar: Aday[]; secili: Secim | null } | null>("/settings/kabin-kamerasi/tara", {}, null);
@@ -58,15 +62,16 @@ export function KabinKamerasiKarti() {
   };
 
   const sec = async (indeks: number) => {
+    if (kilitli) return;
     const r = await apiPost<{ secili: Secim } | null>("/settings/kabin-kamerasi", { indeks }, null);
     if (r?.secili) {
       setSecili(r.secili);
-      showToast(t("ayarlar.kabinKamerasi.secildi", { indeks }), "success");
+      emitToast(t("ayarlar.kabinKamerasi.secildi", { indeks }), "success");
     }
   };
 
   return (
-    <Card style={styles.card}>
+    <View style={styles.kutu} testID="kabin-kamerasi-bolumu">
       <View style={styles.baslikSatiri}>
         <Camera color={colors.primary} size={20} />
         <Text style={styles.baslik}>{t("ayarlar.kabinKamerasi.baslik")}</Text>
@@ -84,10 +89,11 @@ export function KabinKamerasiKarti() {
         )
       ) : null}
       <TouchableOpacity
-        style={styles.dugme}
+        style={[styles.dugme, kilitli && styles.kilitli]}
         onPress={() => void tara()}
-        disabled={taraniyor}
+        disabled={taraniyor || kilitli}
         accessibilityRole="button"
+        accessibilityState={{ disabled: taraniyor || kilitli }}
         testID="kabin-kamerasi-tara"
       >
         {taraniyor ? <ActivityIndicator color="#fff" /> : <Text style={styles.dugmeMetni}>{t("ayarlar.kabinKamerasi.tara")}</Text>}
@@ -103,10 +109,11 @@ export function KabinKamerasiKarti() {
             <Text style={styles.aciklama}>{t("ayarlar.kabinKamerasi.cozunurluk", { genislik: a.genislik, yukseklik: a.yukseklik })}</Text>
           </View>
           <TouchableOpacity
-            style={[styles.secenek, secili?.indeks === a.indeks && styles.secenekSecili]}
+            style={[styles.secenek, secili?.indeks === a.indeks && styles.secenekSecili, kilitli && styles.kilitli]}
             onPress={() => void sec(a.indeks)}
+            disabled={kilitli}
             accessibilityRole="button"
-            accessibilityState={{ selected: secili?.indeks === a.indeks }}
+            accessibilityState={{ selected: secili?.indeks === a.indeks, disabled: kilitli }}
             testID={`kabin-kamerasi-sec-${a.indeks}`}
           >
             <Text style={[styles.secenekMetni, secili?.indeks === a.indeks && styles.secenekMetniSecili]}>
@@ -115,14 +122,22 @@ export function KabinKamerasiKarti() {
           </TouchableOpacity>
         </View>
       ))}
-    </Card>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { marginBottom: spacing.md, gap: spacing.sm },
+  kutu: {
+    marginVertical: spacing.sm,
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+  },
+  kilitli: { opacity: 0.5 },
   baslikSatiri: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  baslik: { fontSize: typography.subtitle, fontWeight: "700", color: colors.text },
+  baslik: { fontSize: typography.body, fontWeight: "700", color: colors.text },
   aciklama: { fontSize: typography.caption, color: colors.textMuted },
   durum: { fontSize: typography.body, color: colors.text, fontWeight: "600" },
   uyari: { color: colors.danger },

@@ -7,10 +7,15 @@
       "bulunamadi": "Last frame: {{bulunamadi_mesaji}}",
       "kediYok": "Last frame: cat not found — make sure the whole cat is in the frame.",
       "termalYok": "The selected camera is not giving a thermal image — select the thermal camera. ({{detay}})",
+      "tespitYok": "Last frame: nothing detected — bring the whole target into the frame in the cabin (frames with no result are free).",
       "yuzYok": "Last frame: cat face not found — hold the cat's face close to the camera, facing it."
     },
+    "emKayitNotu": "Live frames are not saved to the AI history. When you stop, the last frame and its result stay on screen; start the analysis to save it.",
     "jetonMetni_one": "In this live session: {{count}} credit (1 per minute; frames with no result are free)",
     "jetonMetni_other": "In this live session: {{count}} credits (1 per minute; frames with no result are free)",
+    "kabinAciliyor": "Opening the cabin camera…",
+    "kabinOnizleme": "Cabin camera live view",
+    "kabinRozet": "CABIN CAMERA · LIVE",
     "kameraAktif": "CAMERA ACTIVE",
     "kameraIzni": "Camera permission is required.",
     "kamerayiCevir": "Flip camera",
@@ -601,9 +606,8 @@
     "nasilCalisirGovde": "<kalin>Tap</kalin> a module → it opens right below; <kalin>you can keep several open at the same time</kalin>. Depending on what you need, use a <kalin>photo or the live camera</kalin>, <kalin>audio</kalin> or <kalin>clinical values</kalin>, then start the analysis. Each module begins with a short usage tip. "
   },
   "kabinKamerasi": {
-    "cek": "Capture from cabin camera",
     "cekiliyor": "Capturing from the cabin camera…",
-    "hata": "Could not capture from the cabin camera. Choose the camera under Settings ▸ Cabin camera and try again."
+    "hata": "Could not capture from the cabin camera. Choose the camera in the \"Cabin camera\" section on this screen and try again."
   },
   "kopru": {
     "etiket": "AI Pro session for this {{hedef}}: go to the Control screen",

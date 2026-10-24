@@ -5,7 +5,8 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import i18n from "i18next";
 
-jest.mock("@/components/ui/ToastProvider", () => ({ useToast: () => ({ showToast: (...a: unknown[]) => mockToast(...a) }) }));
+// T3 · Y190: bölüm bildirimi `toastBridge` ile verir (AI Pro panelinde ToastProvider yok) — aynı sözleşme, köprü sahtesi.
+jest.mock("@/services/toastBridge", () => ({ emitToast: (...a: unknown[]) => mockToast(...a) }));
 jest.mock("@/services/apiClient", () => ({
   apiGet: (...a: unknown[]) => mockGet(...a),
   apiPost: (...a: unknown[]) => mockPost(...a),

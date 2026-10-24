@@ -1,8 +1,9 @@
 # Author: mertaygn, cglrgrkn
 """SGI-2.1 / 2.2 / 2.3 (bağımsız inceleme) — TD9 (Y148) canlı kip jetonu: yol sınıfı, kova kimliği, ödenmiş dakika.
 
-· 2.1 dakika başı ücret YALNIZ arayüzün canlı kamera kipi olan uçlarda (FGS / segmentasyon / termal / kedi organ); başka "goruntu"
-  ucuna başlık eklemek elle analizin kare başı ücretini dakikaya ÇEVİRMEZ (Y148: elle analiz maliyeti değişmez).
+· 2.1 dakika başı ücret YALNIZ arayüzün canlı kamera kipi olan uçlarda (FGS / segmentasyon / termal / kedi organ; T3 · Y190e sahip
+  2026-10-24: petri / fantom canlı kamerası da); başka "goruntu" ucuna başlık eklemek elle analizin kare başı ücretini dakikaya
+  ÇEVİRMEZ (Y148: elle analiz maliyeti değişmez).
 · 2.2 kova `istek_id`si süreç yeniden başlayınca / 4 sa sonra TEKRAR kullanılmaz (sunucu RPC'si `istek_id`de idempotent: tekrar = ücretsiz).
 · 2.3 ödenmiş canlı dakikanın sonraki kareleri bakiye 0'da 402 almaz (Y148: kareler ücretsiz) ve o dakika canlı olmayan uca taşınmaz.
 GERÇEK uygulama + GERÇEK `jeton_gate` / `jeton_tuketimi` + GERÇEK uçlar; sahte yalnız EN ALT katta: Supabase taşıması (bakiye satırı +
@@ -144,16 +145,15 @@ def test_KARSIT_canli_10_dakika_10_jeton_ve_elle_basliksiz_kare_basina(ortam):
 @pytest.mark.parametrize(
     "yol",
     [
-        "/api/ai/vision/em_fantom",
-        "/api/ai/vision/em_petri",
         "/api/ai/vision/reticulocytes",
         "/api/ai/disease",
         "/api/ai/disease/kidney",
     ],
 )
 def test_SGI_2_1b_canli_kipi_OLMAYAN_ucta_baslik_dakika_fiyatina_cevirmez(ortam, yol):
-    """Arayüzün canlı kamera kipi yalnız FGS / segmentasyon / termal (VisionModule, retikülosit `galleryOnly`) ve kedi organda.
-    Başka bir "goruntu" ucuna başlık eklemek (ör. araştırma em_fantom / em_petri, hastalık) kare başı fiyatı dakikaya ÇEVİRMEMELİ.
+    """Arayüzün canlı kamera kipi yalnız FGS / segmentasyon / termal (VisionModule, retikülosit `galleryOnly`), kedi organ ve
+    (T3 · Y190e) petri / fantom araştırma analizinde. Başka bir "goruntu" ucuna başlık eklemek (ör. retikülosit, hastalık) kare başı
+    fiyatı dakikaya ÇEVİRMEMELİ.
     Gerçek KARAR gövdesi (`_jeton_on_karari`); istek nesnesi yalnız yol + başlık taşır."""
     o = ortam
     istek = SimpleNamespace(
@@ -166,24 +166,32 @@ def test_SGI_2_1b_canli_kipi_OLMAYAN_ucta_baslik_dakika_fiyatina_cevirmez(ortam,
 
 
 def test_SGI_2_3b_odenmis_canli_dakika_CANLI_OLMAYAN_uca_TASINMAZ(ortam):
-    """Birleşik yama sınaması: termal canlı karesiyle ödenen dakika, AYNI başlıkla gelen araştırma (em_fantom) analizini ücretsiz
-    yapmamalı (SGI-2.3 kısa devresi yol beyaz listesine de bakmalı)."""
+    """Birleşik yama sınaması: termal canlı karesiyle ödenen dakika, AYNI başlıkla gelen canlı kipi OLMAYAN bir uç (retikülosit;
+    T3 · Y190e'den önce araştırma em_fantom'du — artık canlı kipli) analizini ücretsiz yapmamalı (SGI-2.3 kısa devresi yol beyaz
+    listesine de bakmalı)."""
     o = ortam
     assert _analiz(o, oturum=OTURUM).status_code == 200  # dakika 0 ödendi (termal canlı)
     assert sum(int(k["miktar"]) for k in o.sunucu["dusulen"]) == 1
     istek = SimpleNamespace(
-        url=SimpleNamespace(path="/api/ai/vision/em_fantom"),
+        url=SimpleNamespace(path="/api/ai/vision/reticulocytes"),
         headers={"authorization": f"Bearer {_jwt('hekim-a')}", "x-pemf-canli-oturum": OTURUM},
     )
     tuketici = o.j._jeton_on_karari(istek)
-    assert tuketici is not None, "em_fantom: ödenmiş canlı dakika araştırma analizini ÜCRETSİZ yaptı"
+    assert tuketici is not None, "reticulocytes: ödenmiş canlı dakika canlı kipi olmayan analizi ÜCRETSİZ yaptı"
     tuketici()
     assert sum(int(k["miktar"]) for k in o.sunucu["dusulen"]) == 2, o.sunucu["dusulen"]
 
 
 @pytest.mark.parametrize(
     "yol",
-    ["/api/ai/vision/landmark", "/api/ai/vision/segmentation", "/api/ai/vision/thermal", "/api/ai/vision/cat_organ"],
+    [
+        "/api/ai/vision/landmark",
+        "/api/ai/vision/segmentation",
+        "/api/ai/vision/thermal",
+        "/api/ai/vision/cat_organ",
+        "/api/ai/vision/em_petri",
+        "/api/ai/vision/em_fantom",
+    ],
 )
 def test_KARSIT_SGI_2_1_canli_kipli_uclarda_baslik_DAKIKA_yoluna_girer(ortam, yol):
     o = ortam

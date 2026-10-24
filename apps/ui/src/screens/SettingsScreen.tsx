@@ -23,7 +23,6 @@ import { bulutKayitRozeti, eslestirmeKoduUzaktanGecerliMi } from "@/services/bul
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 import { backendBuMakinede } from "@/services/backendKonumu";
 import { DilSecimKarti } from "@/components/domain/DilSecimKarti";
-import { KabinKamerasiKarti } from "@/components/domain/KabinKamerasiKarti";
 import { dilSecimiGorunur } from "@/i18n";
 import {
   disaAktarmaAgHatasiMesaji,
@@ -533,8 +532,7 @@ export function SettingsScreen() {
       {/* I18N (Y161): "Dil / Language" — İngilizce bayrağı kapalıyken HİÇ çizilmez (Türkçe görünüm aynen kalır). */}
       {dilSecimiGorunur() ? <DilSecimKarti /> : null}
 
-      {/* T2D-2 (Tezgâh-2 #3): AI Pro'nun kabin kamerası — kamera backend'in makinesine bağlı, kart yalnız orada. */}
-      {backendBuMakinede() ? <KabinKamerasiKarti /> : null}
+      {/* T3 · Y190 (sahip 2026-10-24): "Kabin kamerası" seçimi Ayarlar'dan KALKTI → petri / fantom analiz panelinde ve AI Pro'da. */}
 
       {/* Hesap/Klinik bilgileri — kayıt (login) formunda girildi; buradan düzenlenebilir (Supabase user_metadata). */}
       <Card style={styles.card}>

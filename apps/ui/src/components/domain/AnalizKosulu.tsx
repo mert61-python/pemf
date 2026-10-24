@@ -7,17 +7,18 @@
  * (her açılışta koşullu). Kural backend'dedir (`ai_hub/cv_ortak/pemf_kapisi.py` + petri v2 hattı): koşulsuzda engeller analizi /
  * sürüşü KESMEZ, uyarı olarak gösterilir; kabin çerçevesinde konum yoksa yine sürülmez. Bileşen yalnız seçimi taşır.
  *
- * `KabinKaresiDugmesi` — "Kabin kamerasından çek": analizin görüntüsünü tarayıcının / WebView'in VARSAYILAN kamerasından (dizüstünün
- * kendi kamerası) DEĞİL, Ayarlar ▸ Kabin kamerası'nda seçilen kameradan 1920×1080 alır (`POST /api/settings/kabin-kamerasi/kare`;
- * kalibrasyonla aynı çözünürlük). Kamera backend'in makinesindedir → düğme yalnız backend bu makinedeyken görünür.
+ * KABİN KAMERASI (T3 · Y190, sahip 2026-10-24: "fotoğraf çek direkt kabin kamerasından çekmeliydi … kabin kamerasından çek gereksiz
+ * buton"): Y189'un ayrı "Kabin kamerasından çek" düğmesi KALKTI. Bu makinede (`kabinKamerasiKullanilir`: web + yerel backend —
+ * masaüstü / LattePanda) petri / fantom "Fotoğraf Çek" DOĞRUDAN seçili kabin kamerasından 1920×1080 alır (`kabinKaresiAl` →
+ * `POST /api/settings/kabin-kamerasi/kare`; kalibrasyonla aynı çözünürlük), "Canlı Kamera" backend canlı oturumunu kullanır
+ * (`kabinCanli*`). Telefonda / uzak tarayıcıda cihazın kendi kamerası (kamera backend'in makinesine bağlıdır). Hata metni sunucudan
+ * gelir ve EYLEM söyler (`KabinKamerasiHatasi`).
  */
-import React, { useState } from "react";
-import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
-import { Video } from "lucide-react-native";
+import React from "react";
+import { Platform, Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
+import i18n from "i18next";
 
-import { Button } from "@/components/ui/Button";
-import { useToast } from "@/components/ui/ToastProvider";
 import { authHeaders } from "@/services/apiClient";
 import { backendBuMakinede } from "@/services/backendKonumu";
 import { serviceConfig } from "@/services/config";
@@ -82,35 +83,61 @@ export function KosulSecici({
   );
 }
 
-export function KabinKaresiDugmesi({ onKare }: { onKare: (base64: string) => void }) {
-  const { t } = useTranslation();
-  const { showToast } = useToast();
-  const [cekiyor, setCekiyor] = useState(false);
-  if (!backendBuMakinede()) return null;
-  const cek = async () => {
-    setCekiyor(true);
-    try {
-      const r = await fetch(serviceConfig.apiBaseUrl + "/settings/kabin-kamerasi/kare", {
-        method: "POST",
-        headers: { Accept: "application/json", ...authHeaders() },
-      });
-      const j = await r.json().catch(() => null);
-      if (r.ok && j?.image_base64) onKare(String(j.image_base64));
-      else showToast(aiDetayCumlesi(j?.detail, t("ai.kabinKamerasi.hata")), "error");
-    } catch {
-      showToast(t("ai.kabinKamerasi.hata"), "error");
-    } finally {
-      setCekiyor(false);
-    }
-  };
-  return (
-    <View testID="kabin-karesi-dugmesi" style={{ width: "100%", marginTop: 6 }}>
-      <Button
-        label={cekiyor ? t("ai.kabinKamerasi.cekiliyor") : t("ai.kabinKamerasi.cek")}
-        icon={cekiyor ? <ActivityIndicator color={colors.white} /> : <Video color={colors.white} size={16} />}
-        disabled={cekiyor}
-        onPress={cek}
-      />
-    </View>
-  );
+/** Analiz kamerası bu makinenin SEÇİLİ KABİN KAMERASI mı? Yalnız web + yerel backend (yerel uygulamada / uzak tarayıcıda kabin
+ *  kamerası kullanıcının cihazına bağlı değildir → cihazın kendi kamerası). */
+export function kabinKamerasiKullanilir(): boolean {
+  return Platform.OS === "web" && backendBuMakinede();
+}
+
+/** Kabin kamerası ucunun hatası: `message` sunucunun EYLEM metni (yoksa genel metin), `durum` HTTP kodu (ağ hatasında 0). */
+export class KabinKamerasiHatasi extends Error {
+  durum: number;
+  constructor(mesaj: string, durum: number) {
+    super(mesaj);
+    this.durum = durum;
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function kabinIstegi(yol: string, yontem: "GET" | "POST"): Promise<any> {
+  let r: Response;
+  try {
+    r = await fetch(serviceConfig.apiBaseUrl + "/settings/kabin-kamerasi" + yol, {
+      method: yontem,
+      headers: { Accept: "application/json", ...authHeaders() },
+    });
+  } catch {
+    throw new KabinKamerasiHatasi(i18n.t("ai.kabinKamerasi.hata"), 0);
+  }
+  const j = await r.json().catch(() => null);
+  if (!r.ok) throw new KabinKamerasiHatasi(aiDetayCumlesi(j?.detail, i18n.t("ai.kabinKamerasi.hata")), r.status);
+  return j;
+}
+
+/** "Fotoğraf Çek" (bu makinede): seçili kabin kamerasından 1920×1080 tek kare (base64 JPEG). */
+export async function kabinKaresiAl(): Promise<string> {
+  const j = await kabinIstegi("/kare", "POST");
+  if (!j?.image_base64) throw new KabinKamerasiHatasi(i18n.t("ai.kabinKamerasi.hata"), 0);
+  return String(j.image_base64);
+}
+
+/** Canlı oturum: kamera backend'de AÇIK tutulur (kare istenmezse kendiliğinden kapanır — `kabin_kamerasi.CANLI_ZAMAN_ASIMI_SN`). */
+export async function kabinCanliBaslat(): Promise<void> {
+  await kabinIstegi("/canli/baslat", "POST");
+}
+
+/** Canlı oturumun son karesi: `tam` = kalibrasyon boyutunda (analiz), değilse küçük önizleme. Oturum kapalıysa 409. */
+export async function kabinCanliKare(tam: boolean): Promise<string> {
+  const j = await kabinIstegi(tam ? "/canli/kare?tam=true" : "/canli/kare", "GET");
+  if (!j?.image_base64) throw new KabinKamerasiHatasi(i18n.t("ai.kabinKamerasi.hata"), 0);
+  return String(j.image_base64);
+}
+
+/** Canlı oturumu kapatır (kamera bırakılır); hata yutulur — oturum zaten zaman aşımıyla da kapanır. */
+export async function kabinCanliDurdur(): Promise<void> {
+  try {
+    await kabinIstegi("/canli/durdur", "POST");
+  } catch {
+    /* zaman aşımı yine kapatır */
+  }
 }

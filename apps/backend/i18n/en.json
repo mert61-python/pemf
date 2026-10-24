@@ -313,7 +313,7 @@
       },
       "hazirlik": {
         "kamera": "The camera could not be opened. Check its cable and that no other app is using the camera, then restart the preparation.",
-        "kameraSecilmedi": "No cabin camera is selected. Choose the cabin camera under Settings ▸ Cabin camera, then try again.",
+        "kameraSecilmedi": "No cabin camera is selected. Choose the cabin camera in the \"Cabin camera\" section of the analysis or AI Pro screen, then try again.",
         "modelPaketi": "The '{{ad}}' model package is not installed on this device. Add the relevant model package from the setup step of the desktop PEMF app, then come back to this screen.",
         "modelYukleme": "'{{ad}}' could not be loaded. Restart the app and try again; if the problem persists, mention this screen in the support request."
       },
@@ -411,9 +411,12 @@
       "yazilamadi": "The language setting could not be saved ({{neden}}). Check that the data folder is writable."
     },
     "kabinKamerasi": {
+      "canliKapali": "The live camera is not on. Start it again with the \"Live Camera\" button.",
+      "canliMesgul": "AI Pro is using the camera right now. Stop the preparation or session, then open the live camera again.",
       "gecersiz": "Invalid camera number: {{indeks}}. Scan for cameras and choose one from the list.",
-      "kareAlinamadi": "Could not capture an image from the cabin camera (camera {{indeks}}). Check its cable and try again, or rescan the cameras under Settings ▸ Cabin camera.",
+      "kareAlinamadi": "Could not capture an image from the cabin camera (camera {{indeks}}). Check its cable and try again, or rescan the cameras in the \"Cabin camera\" section.",
       "kareMesgul": "AI Pro is using the camera right now. Stop the preparation or session, then capture again.",
+      "taramaCanliAcik": "Cameras cannot be scanned while the live camera is on. Stop the live camera, then scan again.",
       "taramaMesgul": "AI Pro is using the camera right now. Stop the preparation or session, then scan for cameras again.",
       "yazilamadi": "The camera selection could not be saved ({{neden}}). Check that the data folder is writable."
     }

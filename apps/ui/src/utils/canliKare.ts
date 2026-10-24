@@ -65,6 +65,10 @@ export function canliSonrakiBekleme(gecenMs: number): number {
 /** Son canlı karenin durumu (ekranda sürekli gösterilir). `endpoint`: "/vision/landmark" | "/vision/segmentation" | … */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function canliKareDurumu(endpoint: string, ok: boolean, httpDurum: number, data: any): CanliDurum {
+  // T3 · Y190e: petri / fantom "tespit yok" (200 + `no_detection`) istek başarılı, hedef yok → sonuçsuz (dakika sayılmaz).
+  if (ok && data?.status === "no_detection") {
+    return { tur: "bulunamadi", metin: i18n.t("ai.canli.durum.tespitYok") };
+  }
   if (ok && data?.status === "success") {
     if (endpoint === "/vision/landmark" && data.detected === false) {
       return { tur: "bulunamadi", metin: i18n.t("ai.canli.durum.yuzYok") };

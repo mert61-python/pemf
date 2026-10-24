@@ -313,7 +313,7 @@
       },
       "hazirlik": {
         "kamera": "Kamera açılamadı. Kablosunu ve başka bir uygulamanın kamerayı kullanmadığını kontrol edip hazırlığı yeniden başlatın.",
-        "kameraSecilmedi": "Kabin kamerası seçilmedi. Ayarlar ▸ Kabin kamerası bölümünden kabin kamerasını seçip yeniden deneyin.",
+        "kameraSecilmedi": "Kabin kamerası seçilmedi. Analiz ya da AI Pro ekranındaki \"Kabin kamerası\" bölümünden kabin kamerasını seçip yeniden deneyin.",
         "modelPaketi": "'{{ad}}' model paketi bu cihazda kurulu değil. Masaüstü PEMF uygulamasının kurulum adımından ilgili model paketini ekleyip bu ekrana dönün.",
         "modelYukleme": "'{{ad}}' yüklenemedi. Uygulamayı yeniden başlatıp tekrar deneyin; sorun sürerse destek kaydında bu ekranı belirtin."
       },
@@ -411,9 +411,12 @@
       "yazilamadi": "Dil ayarı kaydedilemedi ({{neden}}). Veri klasörünün yazılabilir olduğunu kontrol edin."
     },
     "kabinKamerasi": {
+      "canliKapali": "Canlı kamera açık değil. \"Canlı Kamera\" düğmesiyle yeniden başlatın.",
+      "canliMesgul": "AI Pro kamerayı şu anda kullanıyor. Hazırlığı ya da seansı durdurup canlı kamerayı yeniden açın.",
       "gecersiz": "Geçersiz kamera numarası: {{indeks}}. Kameraları tarayıp listeden seçin.",
-      "kareAlinamadi": "Kabin kamerasından görüntü alınamadı (kamera {{indeks}}). Kablosunu denetleyip yeniden deneyin ya da Ayarlar ▸ Kabin kamerası bölümünden kameraları yeniden tarayın.",
+      "kareAlinamadi": "Kabin kamerasından görüntü alınamadı (kamera {{indeks}}). Kablosunu denetleyip yeniden deneyin ya da \"Kabin kamerası\" bölümünden kameraları yeniden tarayın.",
       "kareMesgul": "AI Pro kamerayı şu anda kullanıyor. Hazırlığı ya da seansı durdurup yeniden çekin.",
+      "taramaCanliAcik": "Canlı kamera açıkken kameralar taranamaz. Canlı kamerayı durdurup yeniden tarayın.",
       "taramaMesgul": "AI Pro kamerayı şu anda kullanıyor. Hazırlığı ya da seansı durdurup kameraları yeniden tarayın.",
       "yazilamadi": "Kamera seçimi kaydedilemedi ({{neden}}). Veri klasörünün yazılabilir olduğunu kontrol edin."
     }
