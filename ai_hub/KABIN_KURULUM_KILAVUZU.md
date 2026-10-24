@@ -138,6 +138,10 @@ netleşmeli.**
 5. **⚠️ TELEFON KAMERASI KULLANILMAZ** (karar #15): konum kabin çerçevesinde ölçülür, telefon o
    çerçevenin dışındadır. Araştırma AI Pro yalnız kabin bilgisayarındaki Kontrol → AI Pro
    ekranında çalışır; telefonda kartlar "masaüstü kabin kamerası ister" der.
+6. **Kabin kamerası seçimi** (T3 · Y190, 2026-10-24): petri / fantom analiz ekranında ve Kontrol → AI Pro'da **"Kabin kamerası"**
+   bölümü ("Kameraları tara" → kabini gösteren önizlemede "Bunu seç"; Ayarlar'da artık YOK). Kabin bilgisayarında "Fotoğraf Çek" ve
+   "Canlı Kamera" bu seçili kameradan 1920×1080 alır. Telefondaki "Fotoğraf Çek" / "Canlı Kamera" telefonun kendi kamerasıdır:
+   analiz sonuç verir ama konum kabin çerçevesinde ölçülmez (madde 5) → bobine esas alınmaz.
 
 **Marker yapıştırma kontrolü:** sayfayı arka duvara **düz** yapıştır, kenarları kabin kenarlarına **paralel**
 olsun, "▲ ÜST" oku tavana baksın. Kod bu varsayımla marker→kabin dönüşümünü diag(−1, +1, −1) olarak kurar.

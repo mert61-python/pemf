@@ -1,5 +1,6 @@
 /**
- * T2D-2 (Tezgâh-2 #3) — Ayarlar ▸ Kabin kamerası: seçim yoksa EYLEM söyleyen uyarı (AI Pro kamerası açılmaz); tarama küçük önizlemeli
+ * T2D-2 (Tezgâh-2 #3) — Kabin kamerası bölümü (T2D-2'de Ayarlar'daydı; T3 · Y190'dan beri petri / fantom analiz ve AI Pro
+ * panelinde): seçim yoksa EYLEM söyleyen uyarı (AI Pro kamerası açılmaz); tarama küçük önizlemeli
  * aday listesi getirir; "Bunu seç" seçimi cihaza yazar (`POST /settings/kabin-kamerasi {indeks}`) ve seçili gösterilir. TR + EN.
  */
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
