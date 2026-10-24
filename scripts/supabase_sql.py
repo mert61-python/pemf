@@ -37,6 +37,12 @@ KULLANIM
 
 ⚠️ YAZMA KAPISI: `--yaz` verilmeden SQL icinde DDL/DML gorulurse arac CALISTIRMAZ. Amac,
 "okuyacagim" diye acilan bir oturumun yanlislikla semayi degistirmesini onlemektir.
+D3.12 · D3.24 · D3.28 (B-3.18 · B-9.12 · B-10.26): kapi DEYIM DUZEYINDE ve VARSAYILAN RET — yorumlar / dize / dolar-tirnak
+ayiklanir, `;` ile deyimlere bolunur; her deyim okuma ile BASLAMALI (select / with / explain / show / table / values), icinde yazma
+anahtar kelimesi (CTE-DML, `select ... into`, `merge`, `lock`, `for update` ...) ve kullanici semasi / bilinmeyen fonksiyon
+cagrisi (yan etkili RPC: `select public.jeton_tuket()`) OLMAMALI. Eskiden satir basi regex'i `select 1; drop table x`,
+`explain analyze delete`, `with d as (delete ...) select`, `/* */ drop`, `select into`, `merge` ve RPC'yi geciriyordu (40 girdiden 21).
+Ikinci kat: `--yaz` olmadan HER istek Management API'ye `read_only: true` ile gider (sunucu salt-okur islemde kosar).
 """
 
 from __future__ import annotations
@@ -52,12 +58,111 @@ from pathlib import Path
 
 API = "https://api.supabase.com/v1"
 
-# Yazma sayilan ilk anahtar kelimeler. `--yaz` yoksa bunlardan biri gorulurse durulur.
-_YAZMA = re.compile(
-    r"^\s*(insert|update|delete|drop|alter|create|truncate|grant|revoke|comment|"
-    r"refresh|reindex|vacuum|call|do|copy|security\s+label)\b",
-    re.I | re.M,
+# D3.12 / D3.24 / D3.28: okuma deyimi bu sozcuklerden biriyle BASLAR; geri kalan her deyim (insert, drop, analyze, lock, set,
+# begin, do, call, copy ...) `--yaz` ister (varsayilan ret).
+_OKUMA_BASI = {"select", "with", "explain", "show", "table", "values"}
+# Okuma gibi baslayan deyimin ICINDE yazma: CTE-DML, `explain analyze delete`, `select ... into`, `merge`, `for update`, kilit.
+_YAZMA_KELIME = re.compile(
+    r"\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|comment|refresh|reindex|vacuum|call|do|copy|"
+    r"security\s+label|merge|lock|cluster|discard|reset|set|listen|notify|unlisten|prepare|execute|deallocate|import|load|"
+    r"into|reassign|checkpoint|begin|commit|rollback|savepoint|release|abort|start|nextval|setval)\b",
+    re.I,
 )
+# Fonksiyon cagrisi sanilmamasi gereken SQL sozcukleri ve tip adlari (`x as (`, `in (`, `numeric(10,2)` ...).
+_CAGRI_DEGIL = set(
+    "in exists any some all values as from join on and or not over filter within case when then else cast using lateral "
+    "select where having group order partition rows range array row interval nulls distinct union intersect except limit "
+    "offset returning table with recursive by is like ilike similar between numeric decimal varchar char character "
+    "timestamp timestamptz time bit float double precision".split()
+)
+# Salt-okur yerlesik fonksiyonlar (yan etkisiz). Listede olmayan cagri — ozellikle `public.` / kullanici semasi — varsayilan RET.
+_OKUR_FONKSIYON = set(
+    "count sum avg min max now coalesce nullif greatest least length char_length octet_length lower upper trim btrim ltrim "
+    "rtrim substring substr replace position strpos concat concat_ws format left right split_part regexp_replace "
+    "regexp_match regexp_matches to_char to_date to_timestamp to_number date_trunc date_part extract age round floor ceil "
+    "ceiling abs mod power sqrt array_agg string_agg json_agg jsonb_agg json_build_object jsonb_build_object "
+    "json_object_agg jsonb_object_agg row_number rank dense_rank lag lead first_value last_value ntile bool_and bool_or "
+    "every array_length unnest cardinality generate_series current_setting has_table_privilege has_function_privilege "
+    "has_schema_privilege has_column_privilege has_database_privilege obj_description col_description format_type "
+    "quote_ident quote_literal md5 encode decode version current_database current_schema jsonb_array_length "
+    "json_array_length jsonb_typeof jsonb_extract_path_text jsonb_pretty to_jsonb to_json row_to_json array_to_string "
+    "string_to_array lpad rpad initcap reverse starts_with translate clock_timestamp statement_timestamp "
+    "transaction_timestamp timezone".split()
+)
+_SISTEM_SEMA = {"pg_catalog", "information_schema"}
+
+
+def _deyimler(sql: str) -> list[str]:
+    """SQL'i `;` ile deyimlere bol; yorumlar (`--`, ic ice `/* */`) atilir, dize / tanimlayici / dolar-tirnak icerigi bos
+    yer tutucuya iner (icindeki `drop` ya da `;` deyim degildir)."""
+    out, cur, i, n = [], [], 0, len(sql)
+    while i < n:
+        c = sql[i]
+        if sql.startswith("--", i):
+            j = sql.find("\n", i)
+            i = n if j < 0 else j
+            continue
+        if sql.startswith("/*", i):
+            derinlik, i = 1, i + 2
+            while i < n and derinlik:
+                if sql.startswith("/*", i):
+                    derinlik, i = derinlik + 1, i + 2
+                elif sql.startswith("*/", i):
+                    derinlik, i = derinlik - 1, i + 2
+                else:
+                    i += 1
+            cur.append(" ")
+            continue
+        if c in "'\"":
+            j = i + 1
+            while j < n:
+                if sql[j] == c and j + 1 < n and sql[j + 1] == c:
+                    j += 2
+                    continue
+                if sql[j] == c:
+                    break
+                j += 1
+            cur.append(c + c)
+            i = j + 1
+            continue
+        m = re.match(r"\$([A-Za-z_][A-Za-z0-9_]*)?\$", sql[i:]) if c == "$" else None
+        if m:
+            etiket = m.group(0)
+            j = sql.find(etiket, i + len(etiket))
+            cur.append("''")
+            i = n if j < 0 else j + len(etiket)
+            continue
+        if c == ";":
+            out.append("".join(cur))
+            cur = []
+            i += 1
+            continue
+        cur.append(c)
+        i += 1
+    out.append("".join(cur))
+    return [d.strip() for d in out if d.strip()]
+
+
+def _yazma_nedeni(sql: str) -> str | None:
+    """`--yaz` olmadan CALISTIRILAMAZ ise neden (deyimin / sozcugun kendisi); salt-okursa None."""
+    for d in _deyimler(sql):
+        ilk = re.match(r"[A-Za-z_]+", d)
+        bas = (ilk.group(0) if ilk else d[:20]).lower()
+        if bas not in _OKUMA_BASI:
+            return bas or d[:20]
+        y = _YAZMA_KELIME.search(d)
+        if y:
+            return y.group(1).lower()
+        for m in re.finditer(r'(?<![\w.])(?:"?([A-Za-z_][\w]*)"?\s*\.\s*)?"?([A-Za-z_][\w]*)"?\s*\(', d):
+            sema, ad = (m.group(1) or "").lower(), m.group(2).lower()
+            if sema:
+                if sema not in _SISTEM_SEMA and not sema.startswith("pg_"):
+                    return f"{sema}.{ad}()"
+                continue
+            if ad in _CAGRI_DEGIL or ad in _OKUR_FONKSIYON or ad.startswith("pg_"):
+                continue
+            return f"{ad}()"
+    return None
 
 
 def _pat() -> str:
@@ -109,10 +214,11 @@ def _ref(elle: str | None) -> str:
     sys.exit("HATA: proje ref'i bulunamadi. `--ref <proje-ref>` ile verin.")
 
 
-def calistir(ref: str, sql: str) -> list:
+def calistir(ref: str, sql: str, *, yaz: bool = False) -> list:
+    # D3.24 (B-9.12): `--yaz` yoksa sunucu da salt-okur islemde kossun (istemci kapisinin ikinci kati).
     istek = urllib.request.Request(
         f"{API}/projects/{ref}/database/query",
-        data=json.dumps({"query": sql}).encode("utf-8"),
+        data=json.dumps({"query": sql, "read_only": not yaz}).encode("utf-8"),
         headers={
             "Authorization": f"Bearer {_pat()}",
             "Content-Type": "application/json",
@@ -319,11 +425,11 @@ def main() -> int:
         a.print_help()
         return 2
 
-    if _YAZMA.search(sql) and not n.yaz:
-        yasak = _YAZMA.search(sql)
-        return _durdur(yasak.group(1) if yasak else "?")
+    yasak = _yazma_nedeni(sql)
+    if yasak and not n.yaz:
+        return _durdur(yasak)
 
-    sonuc = calistir(ref, sql)
+    sonuc = calistir(ref, sql, yaz=n.yaz)
     yazdir(sonuc)
     return 0
 
