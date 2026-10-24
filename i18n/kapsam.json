@@ -366,7 +366,7 @@
    "aciklama": "launcher Rust iletileri — çekirdek (launcher/core)",
    "durum": "tamam",
    "metin": 139,
-   "dosyaSayisi": 14
+   "dosyaSayisi": 15
   },
   {
    "ad": "launcher-11d-nsis",
@@ -10482,6 +10482,13 @@
      "turler": [
       "rust-sablon"
      ]
+    },
+    {
+     "metin": "try {{ $p = Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ErrorAction Stop -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','{{b64}}' }} catch {{ exit {{red}} }}; exit $p.ExitCode",
+     "gerekce": "PowerShell komutu / argümanı — metin değil",
+     "turler": [
+      "rust-sablon"
+     ]
     }
    ],
    "birlesikIstisna": [],
@@ -10839,6 +10846,32 @@
      "gerekce": "HTTP başlık adı — protokol",
      "turler": [
       "rust"
+     ]
+    }
+   ],
+   "birlesikIstisna": [],
+   "not": ""
+  },
+  "launcher/core/src/paylasim.rs": {
+   "yuzey": "launcher",
+   "grup": "launcher-11c-rust-cekirdek",
+   "sira": 11,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [
+    {
+     "metin": "PEMF Data Users",
+     "gerekce": "Windows yerel grup ADI — kimlik (launcher grubu bu adla bulur; güvenlik duvarı kural adları gibi); ekranda görünen açıklama katalogdan",
+     "turler": [
+      "rust"
+     ]
+    },
+    {
+     "metin": "$ErrorActionPreference='Stop'; $kok = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'PEMF_System'; $gui = Join-Path $kok 'PEMF_GUI'; if (-not (Test-Path -LiteralPath $gui -PathType Container)) {{ exit {{veri_yok}} }}; $yigin = New-Object System.Collections.Stack; $yigin.Push((Get-Item -LiteralPath $kok -Force)); while ($yigin.Count -gt 0) {{ $o = $yigin.Pop(); if (($o.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $o.LinkType) {{ exit {{bag}} }}; if ($o -is [IO.DirectoryInfo]) {{ foreach ($c in $o.GetFileSystemInfos()) {{ $yigin.Push($c) }} }} }}; $g = Get-LocalGroup -Name '{{ad}}' -ErrorAction SilentlyContinue; if (-not $g) {{ $g = New-LocalGroup -Name '{{ad}}' -Description '{{aciklama}}' }}; $uyeler = @('{{kullanici_sid}}'); $sahip = [IO.Directory]::GetAccessControl($gui).GetOwner([Security.Principal.SecurityIdentifier]).Value; if ($sahip -match '^S-1-5-21-\\d+-\\d+-\\d+-\\d+$') {{ $uyeler += $sahip }}; foreach ($s in ($uyeler | Select-Object -Unique)) {{ try {{ Add-LocalGroupMember -SID $g.SID -Member $s -ErrorAction Stop }} catch {{ if ($_.FullyQualifiedErrorId -notlike 'MemberExists*') {{ throw }} }} }}; & icacls.exe $kok /grant ('*' + $g.SID.Value + ':(OI)(CI)M') /T /C /Q | Out-Null; if ($LASTEXITCODE -ne 0) {{ exit {{izin}} }}; exit {{tamam}}",
+     "gerekce": "PowerShell komutu / argümanı — metin değil",
+     "turler": [
+      "rust-sablon"
      ]
     }
    ],

@@ -61,8 +61,18 @@ pub enum Durum {
 ///
 /// ⚠️ Yol KULLANICI-ETKİLİ olabilir (kurulum dizini). Kaçış yapılmazsa tek tırnak kapatılıp
 /// komut enjekte edilebilirdi ve bu komut YÜKSELTİLMİŞ çalışıyor.
-fn ps_kacis(s: &str) -> String {
-    s.replace('\'', "''")
+/// ⚠️ D3 T-g (ÖLÇÜLDÜ, 2026-10-25 — PowerShell 5.1 `PSParser::Tokenize`): PowerShell `‘ ’ ‚ ‛` (U+2018–U+201B) karakterlerini
+/// de TEK TIRNAK sayar; yalnız ASCII `'` ikilenince `C:\Users\a’; Write-Output X; ’` ayrı bir KOMUT oluyordu. Kurulum kökü
+/// `USERPROFILE`'dan (kullanıcı etkili) gelir → beşi de ikilenir (aynı karakterin ikilisi, dizede o karakterin kendisidir).
+pub(crate) fn ps_kacis(s: &str) -> String {
+    let mut o = String::with_capacity(s.len() + 2);
+    for c in s.chars() {
+        if matches!(c, '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}') {
+            o.push(c);
+        }
+        o.push(c);
+    }
+    o
 }
 
 /// Kuralları ekleyen PowerShell betiği (YÜKSELTİLMİŞ çalıştırılmalı).
@@ -288,6 +298,20 @@ mod tests {
         let kacirilmis = kotu.to_string_lossy().replace('\'', "''");
         assert!(kacirilmis.split("''").all(|parca| !parca.contains('\'')),
             "kacirilmis yolda tek tirnak kalmis — dize kapanabilir");
+    }
+
+    /// D3 T-g ÖNCE-KIRMIZI (ölçüldü: PowerShell 5.1 tokenizer'ı U+2018–U+201B'yi tek tırnak sayar): AKILLI tırnaklı yol da
+    /// yükseltilmiş betikte dizeyi kapatamaz — her biri ikilenir.
+    #[test]
+    fn KRITIK_T_g_AKILLI_tirnakli_yol_enjeksiyonu_KACIRILIR() {
+        for t in ['\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}'] {
+            let kotu = PathBuf::from(format!(r"C:\Users\a{t}; Remove-Item C:\Windows -Recurse; {t}"));
+            let s = ekleme_betigi(&kotu);
+            let ham = kotu.to_string_lossy().into_owned();
+            assert!(s.contains(&format!("$p='{}'", ham.replace(t, &format!("{t}{t}")))), "U+{:04X} kaçırılmadı", t as u32);
+            assert!(!s.contains(&format!("$p='{ham}'")), "ham yol betiğe girdi (U+{:04X})", t as u32);
+        }
+        assert_eq!(ps_kacis("a'b\u{2019}c"), "a''b\u{2019}\u{2019}c");
     }
 
     #[test]

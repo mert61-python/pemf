@@ -844,6 +844,7 @@
       let resumeOp = null;     // "Devam Et" hangi işlemi sürdürecek (kurulum mu onarım mı)
       let pausedOp = false;    // [5.6] duraklatılmış ekranda mıyız? (İptal'in görevsiz yolu için)
       let yedekNotuDurum = null; // ekrandaki yedek hedefi notunun backend durumu (dil değişiminde yeniden çizim; 2026-09-06)
+      let paylasimNotu = false;  // D3 T-g: kutuda paylaşım kartı (hasta verisine erişim yok) var mı — güvenlik duvarı onu ezmez
 
       const mb = (n) => (n / 1048576).toFixed(0);
       const gb = (n) => (n / 1073741824).toFixed(n >= 1073741824 ? 1 : 2);
@@ -923,6 +924,7 @@
       /** Çevrimdışı bilgi kutusu — HATA DEĞİL. İsteğe bağlı "Tekrar dene" düğmesi taşır. */
       function notice(msg, onRetry) {
         yedekNotuDurum = null; // kutu başka bir nota geçti → dil değişiminde yedek notu geri gelmesin
+        paylasimNotu = false;
         const box = $("notice"); box.textContent = "";
         const p = document.createElement("div"); p.textContent = msg; box.appendChild(p);
         if (onRetry) {
@@ -933,7 +935,7 @@
         }
         box.hidden = false;
       }
-      function clearNotice() { yedekNotuDurum = null; $("notice").hidden = true; $("notice").textContent = ""; stopPrefetchPoll(); }
+      function clearNotice() { yedekNotuDurum = null; paylasimNotu = false; $("notice").hidden = true; $("notice").textContent = ""; stopPrefetchPoll(); }
 
       // ── ARKA PLAN İNDİRME GÖSTERGESİ (2026-08-16, sahip isteği: "yüzdelik real-time bar") ──
       // Ön-indirme SESSİZ tasarlanmıştı (kullanıcıyı bekletmemek için ekran ele geçirilmiyor),
@@ -1247,6 +1249,8 @@
        * @param {boolean} backendCalisti Backend bu oturumda başlatıldı mı?
        */
       async function firewallKontrol(backendCalisti) {
+        // D3 T-g: paylaşım kartı (hasta verisine erişim yok) daha acil — güvenlik duvarı uyarısı onu EZMEZ.
+        if (paylasimNotu && !$("notice").hidden) return;
         let d;
         try { d = await invoke("firewall_durumu"); } catch (_) { return; }
         if (!d || d.gereksiz) return;
@@ -1266,6 +1270,36 @@
         };
         box.appendChild(b);
         box.hidden = false;
+      }
+
+      /**
+       * İKİNCİ WINDOWS HESABI — paylaşılan grup (D3 T-g · Y182, sahip kararı: hasta verisi bu bilgisayardaki hesaplar arasında
+       * PAYLAŞILIR). Bu hesap makinedeki hasta verisine erişemiyorsa (başka hesabın) neden + KVKK sonucu yazılır; düğme TEK
+       * SEFERLİK yönetici adımını (UAC) yalnız tıklanınca başlatır. Grup üyeliği Windows oturumu yeniden açılınca geçerli olur.
+       * @returns {Promise<boolean>} kart gösterildi mi
+       */
+      async function paylasimKontrol() {
+        let d;
+        try { d = await invoke("paylasim_durumu"); } catch (_) { return false; }
+        if (!d || !d.gerekli) return false;
+        paylasimNotu = true;
+        const box = $("notice"); box.textContent = "";
+        const p1 = document.createElement("div");
+        p1.textContent = t().paylasimGerekli;
+        box.appendChild(p1);
+        const p2 = document.createElement("div");
+        p2.textContent = d.grup_var ? t().paylasimKvkk + " " + t().paylasimOturumYenile : t().paylasimKvkk;
+        box.appendChild(p2);
+        const b = document.createElement("button");
+        b.className = "nbtn"; b.textContent = t().paylasimKur;
+        b.onclick = async () => {
+          b.disabled = true;
+          try { await invoke("paylasim_kur"); p1.textContent = t().paylasimKuruldu; p2.textContent = ""; b.remove(); }
+          catch (e) { p1.textContent = String(e); b.disabled = false; }
+        };
+        box.appendChild(b);
+        box.hidden = false;
+        return true;
       }
 
 
@@ -1657,15 +1691,15 @@
         // Sürüm YEREL bilgidir: internetsizken de görünsün (eskiden yalnız manifest'ten geliyordu
         // → çevrimdışı açılışta başlıkta "v—" yazıyordu).
         if (env.launcher_version) { ver = "v" + env.launcher_version; $("ver").textContent = ver; }
-        // Kurulu bir cihazda mobil erişimin gerçekten mümkün olup olmadığını kontrol et.
-        if (env.already_installed) {
-          // Sıra ÖNEMLİ: ikisi de aynı bildirim kutusunu kullanır. Firewall (mobil erişim
-          // tamamen kopuk) daha acil; yedek hatırlatması o çıkmadıysa gösterilir.
-          // Açılışta YALNIZ açıkça engellenmiş hâli bildir (backendCalisti=false).
-          firewallKontrol(false)
-            .then(() => { if ($("notice").hidden) return yedekHedefiKontrol(); })
-            .catch(() => {});
-        }
+        // Sıra ÖNEMLİ: hepsi aynı bildirim kutusunu kullanır. D3 T-g: önce PAYLAŞIM (bu hesap hasta verisine erişemiyor —
+        // kurulumdan bağımsız: veri makine geneli, kurulum hesap başına); sonra kurulu cihazda güvenlik duvarı (mobil erişim
+        // tamamen kopuk), yedek hatırlatması o çıkmadıysa. Açılışta YALNIZ açıkça engellenmiş hâli bildir (backendCalisti=false).
+        paylasimKontrol()
+          .then((gosterildi) => {
+            if (gosterildi || !env.already_installed) return;
+            return firewallKontrol(false).then(() => { if ($("notice").hidden) return yedekHedefiKontrol(); });
+          })
+          .catch(() => {});
         return env;
       }
 

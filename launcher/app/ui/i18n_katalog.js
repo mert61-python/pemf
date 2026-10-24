@@ -163,6 +163,11 @@ window.PEMF_I18N_KATALOG = {
   "pause": "Pause",
   "pausedLead": "Download paused — the downloaded part is kept on your computer. You can resume where you left off.",
   "pausedTitle": "Paused",
+  "paylasimGerekli": "The patient data on this computer belongs to another Windows account; this account cannot access it (the app cannot open patient records).",
+  "paylasimKur": "Set up sharing (administrator)",
+  "paylasimKuruldu": "Sharing is set up. For it to take effect, sign out of Windows and back in once on this account AND on the account that set up the data, then start the app.",
+  "paylasimKvkk": "“Set up sharing” uses a one-time administrator permission (UAC) to create the “PEMF Data Users” group on this computer and add this account and the account that set up the data to it: patient data is SHARED between the Windows accounts in that group on this computer.",
+  "paylasimOturumYenile": "The group already exists: if you set up sharing before, sign out of Windows on this account and sign back in; if that does not help, set it up again.",
   "profilMeta": {
    "home": {
     "aciklama": "Feline diagnostic models — disease, organ, imaging, sound",
@@ -397,6 +402,11 @@ window.PEMF_I18N_KATALOG = {
   "pause": "Duraklat",
   "pausedLead": "İndirme duraklatıldı — inen kısım bilgisayarınızda korundu. Kaldığınız yerden devam edebilirsiniz.",
   "pausedTitle": "Duraklatıldı",
+  "paylasimGerekli": "Bu bilgisayardaki hasta verisi başka bir Windows hesabına ait; bu hesap ona erişemiyor (uygulama hasta kayıtlarını açamaz).",
+  "paylasimKur": "Paylaşımı kur (yönetici)",
+  "paylasimKuruldu": "Paylaşım kuruldu. Geçerli olması için bu hesapta VE veriyi kuran hesapta Windows oturumunu bir kez kapatıp yeniden açın, sonra uygulamayı başlatın.",
+  "paylasimKvkk": "“Paylaşımı kur” tek seferlik yönetici izniyle (UAC) bu bilgisayarda “PEMF Data Users” grubunu kurar, bu hesabı ve veriyi kuran hesabı gruba ekler: hasta verisi bu bilgisayarda gruptaki Windows hesapları arasında PAYLAŞILIR.",
+  "paylasimOturumYenile": "Grup zaten kurulu: paylaşımı daha önce kurduysanız bu hesapta Windows oturumunu kapatıp yeniden açın; yetmezse yeniden kurun.",
   "profilMeta": {
    "home": {
     "aciklama": "Kedi teşhis modelleri — hastalık, organ, görüntü, ses",

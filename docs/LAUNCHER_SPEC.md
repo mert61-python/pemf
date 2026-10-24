@@ -163,6 +163,16 @@ hesabını kendi kullanıcı köküne DÜŞÜRMEZ — `C:\ProgramData` mirası (
 `<kök>\PEMF_GUI`'yi ilk hesaba kilitlediği için ikinci hesap hasta verisine erişemez (DB açılmaz — görünür arıza). Çok hesaplı klinik
 kurulumda paylaşılan grup ZORUNLU (Y96); grupsuz ikinci hesabın ne yapacağı sahip kararıdır (S-YLI.1).
 
+**İkinci Windows hesabı — otomatik paylaşılan grup (Y182 · D3 T-g, `launcher/core/src/paylasim.rs`):** launcher açılışta bu hesabın
+`<kök>\PEMF_GUI`'yi listeleyip içine yazamadığını görürse (başka hesabın verisi) bildirim kutusunda nedeni ve KVKK sonucunu yazar
+("hasta verisi gruptaki hesaplar arasında PAYLAŞILIR"); "Paylaşımı kur (yönetici)" TEK SEFERLİK yükseltilmiş PowerShell (UAC) koşar:
+`PEMF Data Users` yerel grubunu kurar (yoksa), bu hesabı (SID'i YÜKSELTİLMEMİŞ süreçten) ve `PEMF_GUI`'nin sahibini (`S-1-5-21-…` ise)
+gruba ekler, köke grubun `(OI)(CI)M` hakkını ağaçta verir. Kökü betik kendisi çözer (`CommonApplicationData`; kullanıcı etkili yol
+betiğe girmez); ağaçta bağlantı noktası / sembolik / sabit bağ varsa hak yazmadan durur (kod 4). Çıkış kodları: 0 tamam · 3 izin
+verilemedi · 4 bağ · 5 veri yok · 1223 UAC reddi. `PEMF_DATA_GROUP_SID` yoksa launcher grubu ADIYLA bulur (`paylasilan_grup_sid`) ve
+backend'e verir; değişken varsa yalnız o geçerlidir. Grup üyeliği iki hesapta da Windows oturumu yeniden açılınca geçerli olur.
+Gerçek grup / ACL / UAC denemesi TEZGÂH-GÜNÜ.
+
 **Otomatik güncelleme kapısı (`aktif_seans_kapisi`):** sessiz self-update / runtime güncellemesi backend'i öldürür; önce
 `/api/health` → `sessionActive` (10 sn bütçe) ve `firmwareGuncelleme.yakiliyor` sorulur — `true` ya da bilinmiyor → ERTELE.
 LN L6 · İG-8.21: `backend.port`'taki dinleyici TCP kabul ediyor ama 2 sn'lik kimlik yoklamasına yanıt vermiyorsa (yük altında —

@@ -125,6 +125,13 @@
       "otoGuncellemeDesteklenmiyor": "Auto-update is not supported on this platform",
       "oturumOkumaGorevCoktu": "The sign-in state read task crashed: {{e}}",
       "oturumYenilemeGorevCoktu": "The sign-in refresh task crashed: {{e}}",
+      "paylasimBagBulundu": "A link (junction, symbolic or hard link) was found in the data folder; for safety, sharing was NOT set up — contact your IT administrator.",
+      "paylasimBasarisiz": "Sharing could not be set up (code {{kod}}) — contact your IT administrator.",
+      "paylasimGorevCoktu": "The sharing task crashed: {{e}}",
+      "paylasimHesapOkunamadi": "This Windows account's identity could not be read — sharing was not set up.",
+      "paylasimHesapTuru": "This account type (e.g. a work or school account) cannot be added to the shared group automatically — contact your IT administrator.",
+      "paylasimIzinVerilemedi": "The group was created but permission could not be granted on the data folder — contact your IT administrator.",
+      "paylasimVeriYok": "The patient data folder to share was not found — sharing was not set up.",
       "pencereYoluUtf8": "The window path is not UTF-8",
       "platformDesteklenmiyor": "Not supported on this platform",
       "profilKaldirmaGorevCoktu": "The profile removal task crashed: {{e}}",
@@ -181,6 +188,9 @@
       "platformPaketiYok": "The manifest has NO package for this platform ({{platform}}). Available keys: [{{available}}]. A package for the wrong platform is NOT installed — this platform's base package is missing from the release process.",
       "profilYok": "The profile '{{profile}}' is not in the manifest. Available profiles: [{{available}}]",
       "sha256Gecersiz": "The sha256 value of record '{{key}}' is invalid (64 hex expected, got: {{got}})"
+    },
+    "paylasim": {
+      "grupAciklamasi": "PEMF Vet: Windows accounts that share patient data on this computer"
     },
     "pencere": {
       "guncelleniyor": "PEMF Vet — updating"
@@ -353,6 +363,11 @@
     "pause": "Pause",
     "pausedLead": "Download paused — the downloaded part is kept on your computer. You can resume where you left off.",
     "pausedTitle": "Paused",
+    "paylasimGerekli": "The patient data on this computer belongs to another Windows account; this account cannot access it (the app cannot open patient records).",
+    "paylasimKur": "Set up sharing (administrator)",
+    "paylasimKuruldu": "Sharing is set up. For it to take effect, sign out of Windows and back in once on this account AND on the account that set up the data, then start the app.",
+    "paylasimKvkk": "“Set up sharing” uses a one-time administrator permission (UAC) to create the “PEMF Data Users” group on this computer and add this account and the account that set up the data to it: patient data is SHARED between the Windows accounts in that group on this computer.",
+    "paylasimOturumYenile": "The group already exists: if you set up sharing before, sign out of Windows on this account and sign back in; if that does not help, set it up again.",
     "profilMeta": {
       "home": {
         "aciklama": "Feline diagnostic models — disease, organ, imaging, sound",

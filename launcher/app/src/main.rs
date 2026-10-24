@@ -2302,21 +2302,7 @@ fn firewall_durumu_blocking() -> serde_json::Value {
 /// arasında bozulmasın (bkz. firewall.rs enjeksiyon notu). Konsol penceresi açılmaz.
 #[cfg(windows)]
 fn ps_yukselterek_kos(betik: &str) -> Result<(), String> {
-    let b64 = {
-        const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        let g: Vec<u8> = betik.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
-        let mut o = String::new();
-        for c in g.chunks(3) {
-            let b = [c[0], *c.get(1).unwrap_or(&0), *c.get(2).unwrap_or(&0)];
-            let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | b[2] as u32;
-            for i in 0..4 {
-                if i <= c.len() {
-                    o.push(T[((n >> (18 - 6 * i)) & 63) as usize] as char);
-                } else { o.push('='); }
-            }
-        }
-        o
-    };
+    let b64 = ps_b64(betik);
     let arg = format!(
         "Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden              -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','{b64}'");
     let cikti = pemf_launcher_core::platform::gizli_komut("powershell")
@@ -2327,6 +2313,81 @@ fn ps_yukselterek_kos(betik: &str) -> Result<(), String> {
         return Err(pemf_launcher_core::dil::t("rust.hata.yoneticiIzniVerilmedi"));
     }
     Ok(())
+}
+
+/// `-EncodedCommand` taşıması: UTF-16LE + base64 (ortak; kaçış katmanlarında bozulmaz).
+#[cfg(windows)]
+fn ps_b64(betik: &str) -> String {
+    const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let g: Vec<u8> = betik.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
+    let mut o = String::new();
+    for c in g.chunks(3) {
+        let b = [c[0], *c.get(1).unwrap_or(&0), *c.get(2).unwrap_or(&0)];
+        let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | b[2] as u32;
+        for i in 0..4 {
+            if i <= c.len() {
+                o.push(T[((n >> (18 - 6 * i)) & 63) as usize] as char);
+            } else { o.push('='); }
+        }
+    }
+    o
+}
+
+/// D3 T-g: `ps_yukselterek_kos` gibi, ama yükseltilmiş betiğin ÇIKIŞ KODUNU döndürür (`-PassThru`); UAC reddi / yükseltme
+/// başlatılamadı → `paylasim::KOD_UAC_REDDEDILDI` (1223 = ERROR_CANCELLED). Güvenlik duvarı yolu DEĞİŞMEDİ.
+#[cfg(windows)]
+fn ps_yukselterek_kos_kodlu(betik: &str) -> Result<i32, String> {
+    let b64 = ps_b64(betik);
+    let arg = format!(
+        "try {{ $p = Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ErrorAction Stop \
+         -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','{b64}' }} catch {{ exit {red} }}; exit $p.ExitCode",
+        red = pemf_launcher_core::paylasim::KOD_UAC_REDDEDILDI,
+    );
+    let cikti = pemf_launcher_core::platform::gizli_komut("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &arg])
+        .output()
+        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.yukseltmeBaslatilamadi", &[("e", &e.to_string())]))?;
+    Ok(cikti.status.code().unwrap_or(pemf_launcher_core::paylasim::KOD_UAC_REDDEDILDI))
+}
+
+/// D3 T-g · Y182 (S-YLI.1): bu hesap makinedeki hasta verisine erişemiyor mu (başka hesabın) — arayüz paylaşım kartını gösterir.
+/// Dosya sistemi + hesap araması → ayrı iş parçacığı; görev çökerse boş nesne (kart gösterilmez — mevcut görünür arıza sürer).
+#[tauri::command]
+async fn paylasim_durumu() -> serde_json::Value {
+    tauri::async_runtime::spawn_blocking(paylasim_durumu_blocking).await.unwrap_or_else(|_| serde_json::json!({}))
+}
+
+fn paylasim_durumu_blocking() -> serde_json::Value {
+    use pemf_launcher_core::paylasim::{durum_icin, Durum};
+    match durum_icin(|k| std::env::var(k).ok()) {
+        Durum::Gereksiz => serde_json::json!({ "gerekli": false }),
+        Durum::Gerekli { grup_var } => serde_json::json!({ "gerekli": true, "grup_var": grup_var }),
+    }
+}
+
+/// D3 T-g · Y182: paylaşılan grubu TEK SEFERLİK yönetici adımıyla (UAC) kur — yalnız kullanıcının düğmeye basmasıyla.
+/// Hesap kimliği YÜKSELTİLMEMİŞ bu süreçten okunur (yükseltilmiş süreç başka bir yönetici hesabıyla açılabilir).
+#[tauri::command]
+async fn paylasim_kur() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(paylasim_kur_blocking)
+        .await
+        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.paylasimGorevCoktu", &[("e", &e.to_string())]))?
+}
+
+fn paylasim_kur_blocking() -> Result<serde_json::Value, String> {
+    #[cfg(not(windows))]
+    { return Ok(serde_json::json!({ "status": "gereksiz" })); }
+    #[cfg(windows)]
+    {
+        use pemf_launcher_core::dil::{t, t_ile};
+        use pemf_launcher_core::paylasim::{hata_anahtari, kurma_betigi, surec_hesabi_sid, KOD_TAMAM};
+        let sid = surec_hesabi_sid().ok_or_else(|| t("rust.hata.paylasimHesapOkunamadi"))?;
+        let betik = kurma_betigi(&sid, &t("rust.paylasim.grupAciklamasi")).ok_or_else(|| t("rust.hata.paylasimHesapTuru"))?;
+        match ps_yukselterek_kos_kodlu(&betik)? {
+            KOD_TAMAM => Ok(serde_json::json!({ "status": "ok" })),
+            kod => Err(t_ile(hata_anahtari(kod), &[("kod", &kod.to_string())])),
+        }
+    }
 }
 
 /// 2026-10-18: UAC istemi + yükseltilmiş PowerShell BEKLENİR — pencere iş parçacığında koşmasın (bkz. `firewall_durumu`).
@@ -2559,6 +2620,8 @@ fn main() {
             yedek_hedefi_sec,
             kaldirma_veri_konumu,
             firewall_kurali_ekle,
+            paylasim_durumu,
+            paylasim_kur,
             fetch_profiles,
             install_and_launch,
             start_installed,
@@ -2814,11 +2877,44 @@ mod tests {
         for ad in [
             "fetch_profiles", "firewall_durumu", "firewall_kurali_ekle", "yedek_hedefi_durumu", "yedek_hedefi_sec",
             "detect_environment", "check_runtime_update", "discard_pending", "kaldirma_veri_konumu",
+            "paylasim_durumu", "paylasim_kur",
         ] {
             let bas = soy.find(&format!("async fn {ad}(")).unwrap_or_else(|| panic!("{ad} async DEĞİL"));
             let govde = &soy[bas..bas + soy[bas..].find("\n}\n").expect("gövde sonu")];
             assert!(govde.contains("spawn_blocking"), "{ad}: bekleyen gövde ayrı iş parçacığına alınmıyor");
         }
+    }
+
+    /// D3 T-g · Y182 ÖNCE-KIRMIZI: ikinci Windows hesabı için paylaşım komutları KAYITLI; kurma adımı yükseltilmiş betiğin ÇIKIŞ
+    /// KODUNU okur (yutulan hata "kuruldu" sayılmaz), hesap kimliğini YÜKSELTİLMEMİŞ süreçten alır ve betiği çekirdekten üretir
+    /// (yol / kaçış kararı tek yerde). Arayüz paylaşım kartını güvenlik duvarı uyarısından ÖNCE gösterir ve onu ezdirmez.
+    #[test]
+    fn KRITIK_T_g_ikinci_hesap_PAYLASIM_komutlari_ve_arayuz_karti() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n");
+        // Aranan iki dize BÖLÜNÜR: düz yazılsalar ayna kapısı (`generate_handler` bloğu) ve K-2'nin test bölgesi ayraç sayacı yanılır.
+        const SON: &str = "\n\u{7d}\n"; // satır başında kapanan gövde
+        let el = &soy[soy.find(concat!("tauri::generate_handler", "![")).expect("generate_handler yok")..];
+        let el = &el[..el.find("])").expect("liste sonu")];
+        assert!(el.contains("paylasim_durumu,") && el.contains("paylasim_kur,"), "paylaşım komutları kayıtlı değil");
+        let kur = &soy[soy.find("fn paylasim_kur_blocking(").expect("kurma gövdesi yok")..];
+        let kur = &kur[..kur.find(SON).expect("gövde sonu")];
+        for parca in ["surec_hesabi_sid()", "kurma_betigi(&sid,", "ps_yukselterek_kos_kodlu(&betik)", "KOD_TAMAM =>", "hata_anahtari(kod)"] {
+            assert!(kur.contains(parca), "kurma adımında {parca} yok");
+        }
+        let kodlu = &soy[soy.find("fn ps_yukselterek_kos_kodlu(").expect("kodlu yükseltme yok")..];
+        let kodlu = &kodlu[..kodlu.find(SON).expect("gövde sonu")];
+        assert!(kodlu.contains("-PassThru") && kodlu.contains("exit $p.ExitCode") && kodlu.contains("KOD_UAC_REDDEDILDI"), "{kodlu}");
+        let html = include_str!("../ui/index.html").replace("\r\n", "\n");
+        assert!(html.contains("invoke(\"paylasim_durumu\")") && html.contains("invoke(\"paylasim_kur\")"));
+        for k in ["paylasimGerekli", "paylasimKvkk", "paylasimOturumYenile", "paylasimKur", "paylasimKuruldu"] {
+            assert!(html.contains(&format!("t().{k}")), "arayüz {k} metnini göstermiyor");
+        }
+        let env = &html[html.find("async function refreshEnv()").expect("refreshEnv yok")..];
+        let env = &env[..env.find("return env;").expect("refreshEnv sonu")];
+        let p = env.find("paylasimKontrol()").expect("açılışta paylaşım denetlenmiyor");
+        assert!(p < env.find("firewallKontrol(false)").expect("güvenlik duvarı denetimi yok"), "paylaşım kartı güvenlik duvarından SONRA");
+        let fw = &html[html.find("async function firewallKontrol(").expect("firewallKontrol yok")..];
+        assert!(fw[..fw.find("invoke(\"firewall_durumu\")").unwrap()].contains("paylasimNotu"), "güvenlik duvarı paylaşım kartını ezer");
     }
 
     /// 2026-10-18: ana pencere kapanınca bobin durdurma BİLEREK beklenir (süreç çıkıyor) — ama açık uygulama penceresi o 2–4 sn

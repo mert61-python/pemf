@@ -22,6 +22,7 @@ pub mod flow;
 pub mod install;
 pub mod manifest;
 pub mod net;
+pub mod paylasim;
 pub mod platform;
 pub mod secret_store;
 pub mod verify;

@@ -348,6 +348,14 @@
    "onek": "ai.pro.hedefOnek.",
    "degerler": ["genel", "tumor", "kuyu"],
    "gerekce": "I18NI-A2.8: AI Pro hedef ön ekinin GÖSTERİMİ — sağlayıcı sınıf özniteliği `hedef_etiketi_anahtari` (kapalı küme: _EmCvSaglayici / Fantom / Petri); VERİ ön eki `hedef_etiketi` Türkçe kalır"
+  },
+  {
+   "yuzey": "launcher",
+   "dosya": "launcher/app/src/main.rs",
+   "ifade": "t_ile(hata_anahtari(kod)",
+   "onek": "rust.hata.",
+   "degerler": ["yoneticiIzniVerilmedi", "paylasimIzinVerilemedi", "paylasimBagBulundu", "paylasimVeriYok", "paylasimBasarisiz"],
+   "gerekce": "D3 T-g: yükseltilmiş paylaşım betiğinin çıkış kodu → ileti (`launcher/core/src/paylasim.rs::hata_anahtari` kapalı tablosu; değerler orada, kod `{{kod}}` yer tutucusu)"
   }
  ]
 }

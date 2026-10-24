@@ -125,6 +125,13 @@
       "otoGuncellemeDesteklenmiyor": "Bu platformda oto-güncelleme desteklenmiyor",
       "oturumOkumaGorevCoktu": "oturum okuma görevi çöktü: {{e}}",
       "oturumYenilemeGorevCoktu": "oturum yenileme görevi çöktü: {{e}}",
+      "paylasimBagBulundu": "Veri klasöründe bir bağ (bağlantı noktası / sembolik ya da sabit bağ) bulundu; güvenlik için paylaşım KURULMADI — BT yöneticinize başvurun.",
+      "paylasimBasarisiz": "Paylaşım kurulamadı (kod {{kod}}) — BT yöneticinize başvurun.",
+      "paylasimGorevCoktu": "Paylaşım görevi çöktü: {{e}}",
+      "paylasimHesapOkunamadi": "Bu Windows hesabının kimliği okunamadı — paylaşım kurulmadı.",
+      "paylasimHesapTuru": "Bu hesap türü (ör. iş / okul hesabı) paylaşılan gruba otomatik eklenemez — BT yöneticinize başvurun.",
+      "paylasimIzinVerilemedi": "Grup kuruldu ama veri klasörüne izin verilemedi — BT yöneticinize başvurun.",
+      "paylasimVeriYok": "Paylaşılacak hasta veri klasörü bulunamadı — paylaşım kurulmadı.",
       "pencereYoluUtf8": "pencere yolu UTF-8 değil",
       "platformDesteklenmiyor": "Bu platformda desteklenmiyor",
       "profilKaldirmaGorevCoktu": "profil kaldırma görevi çöktü: {{e}}",
@@ -181,6 +188,9 @@
       "platformPaketiYok": "Bu platform ({{platform}}) için manifest'te paket YOK. Mevcut anahtarlar: [{{available}}]. Yanlış platformun paketi KURULMAZ — yayın sürecinde bu platformun base paketi eksik.",
       "profilYok": "'{{profile}}' profili manifest'te yok. Mevcut profiller: [{{available}}]",
       "sha256Gecersiz": "'{{key}}' kaydının sha256 değeri geçersiz (64 hex bekleniyor, gelen: {{got}})"
+    },
+    "paylasim": {
+      "grupAciklamasi": "PEMF Vet: bu bilgisayarda hasta verisini paylaşan Windows hesapları"
     },
     "pencere": {
       "guncelleniyor": "PEMF Vet — güncelleniyor"
@@ -353,6 +363,11 @@
     "pause": "Duraklat",
     "pausedLead": "İndirme duraklatıldı — inen kısım bilgisayarınızda korundu. Kaldığınız yerden devam edebilirsiniz.",
     "pausedTitle": "Duraklatıldı",
+    "paylasimGerekli": "Bu bilgisayardaki hasta verisi başka bir Windows hesabına ait; bu hesap ona erişemiyor (uygulama hasta kayıtlarını açamaz).",
+    "paylasimKur": "Paylaşımı kur (yönetici)",
+    "paylasimKuruldu": "Paylaşım kuruldu. Geçerli olması için bu hesapta VE veriyi kuran hesapta Windows oturumunu bir kez kapatıp yeniden açın, sonra uygulamayı başlatın.",
+    "paylasimKvkk": "“Paylaşımı kur” tek seferlik yönetici izniyle (UAC) bu bilgisayarda “PEMF Data Users” grubunu kurar, bu hesabı ve veriyi kuran hesabı gruba ekler: hasta verisi bu bilgisayarda gruptaki Windows hesapları arasında PAYLAŞILIR.",
+    "paylasimOturumYenile": "Grup zaten kurulu: paylaşımı daha önce kurduysanız bu hesapta Windows oturumunu kapatıp yeniden açın; yetmezse yeniden kurun.",
     "profilMeta": {
       "home": {
         "aciklama": "Kedi teşhis modelleri — hastalık, organ, görüntü, ses",

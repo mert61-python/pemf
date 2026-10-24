@@ -337,14 +337,74 @@ fn bu_makinenin_yerel_grubu_mu(_sid: &str) -> bool {
     false
 }
 
+/// Y182 (D3 T-g): yerel hesap / grup ADINDAN SID (LookupAccountNameW — salt-okur). Bulunamaz → `None`.
+#[cfg(windows)]
+pub fn grup_adindan_sid(ad: &str) -> Option<String> {
+    use windows_sys::Win32::Foundation::LocalFree;
+    use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+    use windows_sys::Win32::Security::LookupAccountNameW;
+    let genis: Vec<u16> = ad.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: tamponlar boyutlarıyla verilir (SID en çok 68 bayt); ConvertSidToStringSidW'nin ayırdığı dize LocalFree ile bırakılır.
+    unsafe {
+        let mut sid = [0u64; 16];
+        let mut sboy = std::mem::size_of_val(&sid) as u32;
+        let mut alan = [0u16; 256];
+        let mut alboy = alan.len() as u32;
+        let mut tur: i32 = 0;
+        if LookupAccountNameW(
+            std::ptr::null(),
+            genis.as_ptr(),
+            sid.as_mut_ptr().cast(),
+            &mut sboy,
+            alan.as_mut_ptr(),
+            &mut alboy,
+            &mut tur,
+        ) == 0
+        {
+            return None;
+        }
+        let mut dize: windows_sys::core::PWSTR = std::ptr::null_mut();
+        if ConvertSidToStringSidW(sid.as_mut_ptr().cast(), &mut dize) == 0 || dize.is_null() {
+            return None;
+        }
+        let mut n = 0usize;
+        while *dize.add(n) != 0 {
+            n += 1;
+        }
+        let s = String::from_utf16_lossy(std::slice::from_raw_parts(dize, n));
+        LocalFree(dize as _);
+        Some(s)
+    }
+}
+
+#[cfg(not(windows))]
+pub fn grup_adindan_sid(_ad: &str) -> Option<String> {
+    None
+}
+
 /// Y96: geçerli paylaşılan grup — `PEMF_DATA_GROUP_SID` biçimi tutar VE bu makinenin yerel grubu. Değilse `None` (Users / etki alanı
 /// grubu / kullanıcı hesabı / silinmiş grup REDDEDİLİR — backend ile aynı kural; çözülemeyen SID icacls'ı da düşürürdü).
+/// Y182 (D3 T-g): değişken YOKSA launcher'ın tek seferlik yönetici adımıyla kurduğu grup ADIYLA bulunur (`paylasim::GRUP_ADI`;
+/// yerel grubu yalnız yönetici kurabilir). Değişken VARSA yalnız o geçerlidir — geçersizse sessiz yedek YOK.
 pub fn paylasilan_grup_sid<F>(getenv: F) -> Option<String>
 where
     F: Fn(&str) -> Option<String>,
 {
-    let s = getenv(ENV_DATA_GROUP_SID)?.trim().to_string();
-    (ozel_grup_sid_bicimi_mi(&s) && bu_makinenin_yerel_grubu_mu(&s)).then_some(s)
+    paylasilan_grup_sid_karari(getenv, || grup_adindan_sid(crate::paylasim::GRUP_ADI), bu_makinenin_yerel_grubu_mu)
+}
+
+/// `paylasilan_grup_sid`'in saf kararı (testli): ad araması ve yerel-grup denetimi dışarıdan verilir.
+pub fn paylasilan_grup_sid_karari<F, A, Y>(getenv: F, adindan: A, yerel_grup_mu: Y) -> Option<String>
+where
+    F: Fn(&str) -> Option<String>,
+    A: FnOnce() -> Option<String>,
+    Y: Fn(&str) -> bool,
+{
+    let s = match getenv(ENV_DATA_GROUP_SID).map(|v| v.trim().to_string()).filter(|v| !v.is_empty()) {
+        Some(s) => s,
+        None => adindan()?,
+    };
+    (ozel_grup_sid_bicimi_mi(&s) && yerel_grup_mu(&s)).then_some(s)
 }
 
 /// Yeni yaratılan makine-geneli veri köküne verilecek ACL (saf — testli). Y96 (sahip): yalnız PAYLAŞILAN YEREL grup `Değiştir`
@@ -360,7 +420,8 @@ pub fn veri_koku_acl_argumanlari(grup: Option<&str>) -> Option<Vec<String>> {
 /// UAC gerekmez. ⚠️ YLI-A3.1 (ÖLÇÜLDÜ, 2026-10-22): grup verilmese de `C:\ProgramData` mirası (`Users: Write (CI)`) ikinci Windows
 /// hesabına köke dosya yazdırır → `dizin_yazilabilir_mi(kök)` onu AYIRT ETMEZ; o hesap makine kökünü alır ama backend asıl veri dizinini
 /// (`<kök>\PEMF_GUI`) `file_acl.lock_down_dir` ile ilk hesaba kilitlediği için hasta verisine ERİŞEMEZ (DB açılmaz — görünür arıza,
-/// sessiz "boş klinik" değil). Çok hesaplı klinikte paylaşılan grup ZORUNLU (Y96); ikinci hesabın davranışı sahip kararı (S-YLI.1).
+/// sessiz "boş klinik" değil). Çok hesaplı klinikte paylaşılan grup ZORUNLU (Y96); ikinci hesap için sahip kararı Y182 (S-YLI.1):
+/// launcher erişimsizliği görür ve tek seferlik yönetici adımıyla grubu kurar (`paylasim.rs`).
 /// Başarısız olursa sessizce geçilir: `dizin_yazilabilir_mi` kapısı zaten koruyor.
 #[cfg(windows)]
 fn acl_ver(dir: &Path, grup: Option<&str>) {
@@ -2323,6 +2384,30 @@ mod tests {
             assert!(!bu_makinenin_yerel_grubu_mu("S-1-5-32-545"));
             assert_eq!(hesap_turu_alani_bilgisayar("S-1-5-21-1-2-3-4294967295"), None);
         }
+    }
+
+    /// D3 T-g (Y182) ÖNCE-KIRMIZI: `PEMF_DATA_GROUP_SID` YOKKEN launcher'ın kurduğu grup ADIYLA bulunur (aynı biçim + yerel grup
+    /// kuralıyla); değişken VARSA yalnız o geçerlidir — geçersiz değerde ad aramasına SESSİZCE düşülmez.
+    #[test]
+    fn KRITIK_T_g_paylasilan_grup_ortam_YOKKEN_ADIYLA_bulunur() {
+        let gecerli = "S-1-5-21-10-20-30-1009";
+        let yok = |_: &str| None::<String>;
+        assert_eq!(paylasilan_grup_sid_karari(yok, || Some(gecerli.to_string()), |_| true), Some(gecerli.to_string()));
+        assert_eq!(paylasilan_grup_sid_karari(yok, || Some(gecerli.to_string()), |_| false), None, "yerel grup değil");
+        assert_eq!(paylasilan_grup_sid_karari(yok, || Some("S-1-5-32-545".into()), |_| true), None, "Users ad aramasıyla geçti");
+        assert_eq!(paylasilan_grup_sid_karari(yok, || None, |_| true), None);
+        let bos = |k: &str| (k == ENV_DATA_GROUP_SID).then(|| "  ".to_string());
+        assert_eq!(paylasilan_grup_sid_karari(bos, || Some(gecerli.to_string()), |_| true), Some(gecerli.to_string()));
+        let aranan = std::cell::Cell::new(false);
+        let kotu = |k: &str| (k == ENV_DATA_GROUP_SID).then(|| "S-1-5-32-545".to_string());
+        let ara = || {
+            aranan.set(true);
+            Some(gecerli.to_string())
+        };
+        assert_eq!(paylasilan_grup_sid_karari(kotu, ara, |_| true), None);
+        assert!(!aranan.get(), "geçersiz değişkende ad aramasına sessizce düşüldü");
+        let acik = |k: &str| (k == ENV_DATA_GROUP_SID).then(|| " S-1-5-21-1-2-3-1100 ".to_string());
+        assert_eq!(paylasilan_grup_sid_karari(acik, || Some(gecerli.to_string()), |_| true), Some("S-1-5-21-1-2-3-1100".to_string()));
     }
 
     /// LN L8 · S-AIK.6 (Y142 taşıyıcısı) + S-F2-3.2 (a): kedi sürüş bayrağı KOŞULSUZ geçer, varsayılan "0" (KAPALI), ortamdaki
