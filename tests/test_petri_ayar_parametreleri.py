@@ -373,7 +373,10 @@ def test_KRITIK_ARAYUZ_sinir_tablosu_BACKEND_ILE_AYNI():
     arayüzde kabul edilen bir sayı girer, sunucu 422 ile reddeder — sebebi görünmez bir hata.
     """
     tsx = _tsx_tablosu()
-    assert set(tsx) == set(pa.SINIRLAR), f"alan kumesi AYRISMIS: arayuz={sorted(tsx)} backend={sorted(pa.SINIRLAR)}"
+    # T3 · Y193 (sahip 2026-10-24: "sadece 24 kalsın"): tekil kap kipi arayüzden kalktı → arayüz YALNIZ plaka kipinde anlamlı alanları
+    # gösterir (küçültme + kuyu skoru eşiği); diğer sınırlar backend'de (API) durur. Arayüzdeki her alan backend'de VAR olmalı.
+    assert set(tsx) == {"resize_max", "kuyu_skor_esigi"}, f"arayuz alan kumesi: {sorted(tsx)}"
+    assert set(tsx) <= set(pa.SINIRLAR), f"arayuzde backend'in TANIMADIGI alan: {sorted(set(tsx) - set(pa.SINIRLAR))}"
     for ad, (_v, alt, ust) in tsx.items():
         assert (alt, ust) == pytest.approx(pa.SINIRLAR[ad]), f"{ad}: arayuz ({alt},{ust}) != backend {pa.SINIRLAR[ad]}"
 

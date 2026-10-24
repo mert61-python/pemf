@@ -199,8 +199,8 @@ def test_bekleme_suresi_SAHTE_saat_disinda_gercek_time_kullanilmaz():
 
 
 def test_KRITIK_arayuzun_IKI_canli_dongusu_oturum_basligini_GONDERIR():
-    """Başlık adı backend ile AYNI ve AI Hub'daki iki canlı kare döngüsü (görüntü modülleri, kedi organ) onu gönderir —
-    gönderilmezse canlı kareler "elle analiz" sayılıp kare başına ücretlenir (Y148 ihlali)."""
+    """Başlık adı backend ile AYNI ve AI Hub'daki canlı kare döngüleri (görüntü modülleri, kedi organ; T3 · Y190e: + petri / fantom
+    `useEmCanli`) onu gönderir — gönderilmezse canlı kareler "elle analiz" sayılıp kare başına ücretlenir (Y148 ihlali)."""
     import re
 
     j = importlib.import_module("servers.jeton")
@@ -208,6 +208,6 @@ def test_KRITIK_arayuzun_IKI_canli_dongusu_oturum_basligini_GONDERIR():
     m = re.search(r'CANLI_OTURUM_BASLIGI = "([^"]+)"', ts)
     assert m and m.group(1).lower() == j.CANLI_OTURUM_BASLIGI, (m and m.group(1), j.CANLI_OTURUM_BASLIGI)
     ekran = (KOK / "apps" / "ui" / "src" / "screens" / "AiHubScreen.tsx").read_text(encoding="utf-8")
-    assert ekran.count("[CANLI_OTURUM_BASLIGI]: oturum.kimlik") == 2, (
+    assert ekran.count("[CANLI_OTURUM_BASLIGI]: oturum.kimlik") == 3, (
         "canlı döngülerden biri oturum başlığını göndermiyor"
     )

@@ -305,10 +305,11 @@ def plate_user_message(metrics: dict | None = None) -> str:
     başarısız"): jargon ve çelişkili görünen sayı (3 ≥ 2 ama ret — ret ince hizalamadan). Sayılar artık YALNIZ ölçümde
     (`evaluate_plate` günlüğü + yanıtın `plausibility` alanı = destek ayrıntısı). `metrics` imza uyumu için kalır."""
     del metrics
+    # T3 · Y193 (sahip 2026-10-24): tekil petri kabı kipi arayüzden kalktı → metin artık o kipe YÖNLENDİRMEZ (eylem yapılabilir olsun).
     return (
-        "24 kuyucuklu plaka ızgarası oturmadı. Plakayı kareyi dolduracak kadar yakından, tepeden ve dik çekin. Tekil petri kapları için "
-        "'Tekil petri kapları' kipini seçin; fantom ya da hayvan fotoğrafını ilgili modüle yükleyin. Araştırma için denetim "
-        "Petri modülündeki 'Gelişmiş (araştırma) ayarları' bölümünden kapatılabilir."
+        "24 kuyucuklu plaka ızgarası oturmadı. Plakayı kareyi dolduracak kadar yakından, tepeden ve dik çekin. Plakanın kenarları "
+        "kadrajda kalsın; fantom ya da hayvan fotoğrafını ilgili modüle yükleyin. Araştırma için denetim Petri modülündeki "
+        "'Gelişmiş (araştırma) ayarları' bölümünden kapatılabilir."
         # AIK K4: ortam değişkeni adı kullanıcı metnine yazılmaz (bkz. `user_message`).
     )
 

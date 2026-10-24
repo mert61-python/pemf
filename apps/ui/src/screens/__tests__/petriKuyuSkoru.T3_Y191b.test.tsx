@@ -110,15 +110,12 @@ it("KRİTİK: plaka kipinde 'Kuyu skoru eşiği' alanı VAR (varsayılan 0.6); g
   expect(sonForm().kuyu_skor_esigi).toBe("0.4");
 });
 
-it("KARŞIT: alan boşsa istekte `kuyu_skor_esigi` YOK (sunucu varsayılanı 0,6); tekil kipte alan GÖRÜNMEZ", async () => {
+it("KARŞIT: alan boşsa istekte `kuyu_skor_esigi` YOK (sunucu varsayılanı 0,6); kip seçici YOK (T3 · Y193: yalnız plaka)", async () => {
   const u = await ac();
   await analiz(u);
   expect(sonForm().kuyu_skor_esigi).toBeUndefined();
-  const t = await ac();
-  fireEvent.press(t.getByLabelText("Tekil petri kapları"));
-  fireEvent.press(t.getByLabelText("Gelişmiş araştırma ayarları"));
-  await waitFor(() => t.getByLabelText("Tespit güveni (conf)"));
-  expect(t.queryByLabelText("Kuyu skoru eşiği")).toBeNull();
+  expect(sonForm().plate_type).toBeUndefined();
+  expect(u.queryByLabelText("Tekil petri kapları")).toBeNull();
 });
 
 it("KRİTİK: elenen hücreler sonuçta ADIYLA ve skoruyla söylenir", async () => {

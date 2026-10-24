@@ -104,7 +104,10 @@ def test_karsit_uyarisiz_gecerli_plaka_SURULEBILIR_kalir():
 def test_KRITIK_kirpik_plaka_UYDURULAN_izgara_SURULEMEZ(tmp_path, ad):
     from ai_hub.cv_ortak import pemf_kapisi
 
-    pl = _hough_boru_hatti(tmp_path, a1_cabin_mm=[0.0, 0.0, 0.0])  # laboratuvar maddesi #1'in hedef yapılandırması
+    # T3 · Y191b hücre skoru eşiği KAPALI (0): hocanın ızgarasının karakterizasyonu — kapı eşikten BAĞIMSIZ da sürmemeli
+    pl = _hough_boru_hatti(
+        tmp_path, a1_cabin_mm=[0.0, 0.0, 0.0], kuyu_skor_esigi=0.0
+    )  # laboratuvar maddesi #1'in hedef yapılandırması
     r, _ = pl.process_image(_sag_yarim(ad))
     # Karakterizasyon (hocanın ızgarası): yarım plakaya 24 kuyucuk + kabin konumu + doz üretiliyor
     assert r.success and r.n_wells == 24 and r.pemf_valid is True, (r.error, r.n_wells, r.pemf_valid)
@@ -113,6 +116,13 @@ def test_KRITIK_kirpik_plaka_UYDURULAN_izgara_SURULEMEZ(tmp_path, ad):
     k = pemf_kapisi.degerlendir(r, model="petri")
     assert k["surulebilir"] is False, (
         f"{ad}: kırpık plakadaki uydurulmuş ızgara sürülebilir sayıldı — {k['nedenler']} / {r.warnings}"
+    )
+    # Varsayılan eşik (0,6): kadraj dışına düşen uydurma hücreler kuyu SAYILMAZ ve yeniden çekim nedeni eklenir
+    r2, _ = _hough_boru_hatti(tmp_path, a1_cabin_mm=[0.0, 0.0, 0.0]).process_image(_sag_yarim(ad))
+    k2 = pemf_kapisi.degerlendir(r2, model="petri")
+    assert r2.n_wells < 24 and "kuyu_skor_esigi" in k2["nedenler"] and k2["surulebilir"] is False, (
+        r2.n_wells,
+        k2["nedenler"],
     )
 
 
@@ -139,14 +149,23 @@ def test_KRITIK_kirpik_plaka_GERCEK_ONNX_SURULEMEZ(ad):
     from ai_hub.cv_ortak import pemf_kapisi
     from ai_hub.inference_petri_dish.petri_cv_v2 import PetriCvPipeline, load_cabin_config
 
+    yolo = download_model_sync(_YOLO)
     pl = PetriCvPipeline(
         load_cabin_config(None),
-        yolo_model_path=download_model_sync(_YOLO),
+        yolo_model_path=yolo,
         yolo_device="cpu",
         a1_cabin_mm=[0.0, 0.0, 0.0],
+        kuyu_skor_esigi=0.0,  # T3 · Y191b eşiği KAPALI: hocanın 24'lük ızgarasının karakterizasyonu
     )
     r, _ = pl.process_image(_sag_yarim(ad))
     assert r.success and r.n_wells == 24 and r.pemf_valid is True, (r.error, r.n_wells)
     assert all(w.E_cancer is not None for w in r.wells), "doz hesaplanmadı — karakterizasyon değişti"
     k = pemf_kapisi.degerlendir(r, model="petri")
     assert k["surulebilir"] is False, f"{ad}: {k['nedenler']} / {r.warnings}"
+    pl2 = PetriCvPipeline(load_cabin_config(None), yolo_model_path=yolo, yolo_device="cpu", a1_cabin_mm=[0.0, 0.0, 0.0])
+    r2, _ = pl2.process_image(_sag_yarim(ad))
+    k2 = pemf_kapisi.degerlendir(r2, model="petri")
+    assert r2.n_wells < 24 and "kuyu_skor_esigi" in k2["nedenler"] and k2["surulebilir"] is False, (
+        r2.n_wells,
+        k2["nedenler"],
+    )

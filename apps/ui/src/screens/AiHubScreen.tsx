@@ -2793,35 +2793,17 @@ function PhantomModule({ patientName }: { patientName: string }) {
  * import edemediği için değerler burada KOPYA duruyor; `tests/test_petri_ayar_parametreleri.py`
  * eşitliği kilitler → sessizce ayrışamaz (`_PETRI_NOT_PLATE` ile aynı desen).
  */
-/** Alan etiketi / ipucu katalog ANAHTARIDIR (gösterimde `t(a.etiket as never)` çevirir — K-3 izni: kapalı 12 anahtar); `vars` / `alt` / `ust` / `ad` VERİDİR
- *  (backend `petri_ayar` ile eşitlik kapısı bu alanları okur: tests/test_petri_ayar_parametreleri.py). */
+/** Alan etiketi / ipucu katalog ANAHTARIDIR (gösterimde `t(a.etiket as never)` çevirir — K-3 izni: kapalı 4 anahtar); `vars` / `alt` / `ust` / `ad` VERİDİR
+ *  (backend `petri_ayar` ile eşitlik kapısı bu alanları okur: tests/test_petri_ayar_parametreleri.py).
+ *  T3 · Y193 (sahip 2026-10-24: "sadece 24 kalsın"): tekil petri kabı kipi arayüzden KALKTI → yalnız 24'lük plaka kipinde anlamlı alanlar
+ *  kaldı. Tespit güveni / örtüşme / üç "petri değil" eşiği plaka kipinde sonucu DEĞİŞTİRMEDİĞİ için (ölçüldü, 6/6 + 12/12 kare) burada
+ *  yok; sınırları `petri_ayar.SINIRLAR`da durur (API ile hâlâ ayarlanabilir). */
 const PETRI_AYAR_ALANLARI: {
   ad: string; etiket: string; vars: string; alt: number; ust: number; ipucu: string;
 }[] = [
   {
-    // T3 · Y191 (sahip 2026-10-24): varsayılan 0.25 → 0.6 (backend boru hattı; eşitlik kapısı tests/test_petri_ayar_parametreleri.py).
-    ad: "yolo_conf", etiket: "ai.petri.ayar.yoloConf.etiket", vars: "0.6", alt: 0.01, ust: 0.95,
-    ipucu: "ai.petri.ayar.yoloConf.ipucu",
-  },
-  {
-    ad: "yolo_iou", etiket: "ai.petri.ayar.yoloIou.etiket", vars: "0.7", alt: 0.1, ust: 0.95,
-    ipucu: "ai.petri.ayar.yoloIou.ipucu",
-  },
-  {
     ad: "resize_max", etiket: "ai.petri.ayar.resizeMax.etiket", vars: "kapalı", alt: 320, ust: 8000,
     ipucu: "ai.petri.ayar.resizeMax.ipucu",
-  },
-  {
-    ad: "plaus_circularity", etiket: "ai.petri.ayar.plausCircularity.etiket", vars: "0.55", alt: 0, ust: 1,
-    ipucu: "ai.petri.ayar.plausCircularity.ipucu",
-  },
-  {
-    ad: "plaus_conf", etiket: "ai.petri.ayar.plausConf.etiket", vars: "0.85", alt: 0, ust: 1,
-    ipucu: "ai.petri.ayar.plausConf.ipucu",
-  },
-  {
-    ad: "plaus_area_frac", etiket: "ai.petri.ayar.plausAreaFrac.etiket", vars: "0.25", alt: 0.01, ust: 1,
-    ipucu: "ai.petri.ayar.plausAreaFrac.ipucu",
   },
   {
     // T3 · Y191b (sahip + Çağlar Hoca 2026-10-24): plaka ızgarası hücre skoru eşiği (yalnız plaka kipinde anlamlı).
@@ -2833,12 +2815,6 @@ const PETRI_AYAR_ALANLARI: {
 /** Ayar alanının "varsayılan" gösterimi: sayısal alanlar tablodaki değer, `resize_max` "kapalı" sözcüğü (gösterimde çevrilir). */
 const ayarVarsayilani = (a: { ad: string; vars: string }): string => (a.ad === "resize_max" ? i18n.t("ai.petri.kapali") : a.vars);
 
-/** AI-2 (hocanın petri v2'si) — PLAKA kipinde anlamlı olan tek eski ayar küçültmedir. ÖLÇÜLDÜ (6 plaka fotoğrafı):
- *  conf 0,05 / 0,9, IoU 0,3 ve gevşetilmiş "petri değil" eşikleri sonucu BİREBİR aynı bıraktı (YOLO plaka kipinde yalnız ipucu,
- *  makullik plaka kuralıyla); küçültme ölçeği ve doğrulanan aday sayısını değiştirdi (640'ta 2/6 düşük çözünürlüklü plaka RED). */
-const PLAKA_KIPI_AYARLARI = new Set(["resize_max", "kuyu_skor_esigi"]);
-/** T3 · Y191b: YALNIZ plaka kipinde anlamlı (hücre skoru ızgarada var; tekil kapta tespit güveni YOLO'nunkidir). */
-const YALNIZ_PLAKA_AYARLARI = new Set(["kuyu_skor_esigi"]);
 /** A1 köşesi seçenekleri (backend `petri_ayar.A1_KOSELERI`). */
 const a1KoseAdi = (k: "auto" | "tl" | "tr" | "br" | "bl"): string =>
   k === "auto" ? i18n.t("ai.petri.a1KoseAdi.otomatik")
@@ -2866,7 +2842,6 @@ function PetriModule({ patientName }: { patientName: string }) {
   const [imageFile, setImageFile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AiResult | null>(visionCache[CK]?.result ?? null);
-  const [petriDia, setPetriDia] = useState<string>("");   // cm — boş = piksel modu
   const [longLoading, setLongLoading] = useState(false);
   const { isCompact } = useResponsive();
   // Gelişmiş (araştırma) ayarları — VARSAYILAN olarak KAPALI ve BOŞ. Boş alan gönderilmez;
@@ -2877,10 +2852,8 @@ function PetriModule({ patientName }: { patientName: string }) {
   // "Petri değil" denetimi: AÇIK durumda HİÇBİR ŞEY gönderilmez (ortam değişkeni
   // PEMF_AI_PLAUSIBILITY_GUARD kararını korur); yalnız kullanıcı KAPATIRSA `false` gider.
   const [denetimAcik, setDenetimAcik] = useState(true);
-  // AI-2 (hocanın petri v2'si): KİP — "plaka" (24 kuyucuklu plaka ızgarası, A1–D6; varsayılan) | "tekil" (tekil petri
-  // kapları, eski YOLO kipi). ÖLÇÜLDÜ: plaka kipinde tespit güveni / örtüşme / "petri değil" eşikleri sonucu DEĞİŞTİRMEZ
-  // (6/6 plaka fotoğrafında birebir aynı) → o alanlar yalnız tekil kipte gösterilir ve GÖNDERİLİR.
-  const [kip, setKip] = useState<"plaka" | "tekil">("plaka");
+  // T3 · Y193 (sahip 2026-10-24: "sadece 24 kalsın, ai saf çalışsın"): YALNIZ 24 kuyucuklu plaka kipi (A1–D6 ızgarası; YAML
+  // varsayılanı — istekte kip alanı GİTMEZ). Tekil petri kabı kipi (plate_type=0) arayüzden kalktı; API'de durur.
   const [kontrolSaglikli, setKontrolSaglikli] = useState("");
   const [kontrolKanser, setKontrolKanser] = useState("");
   const [a1Kose, setA1Kose] = useState<"auto" | "tl" | "tr" | "br" | "bl">("auto");
@@ -2893,10 +2866,8 @@ function PetriModule({ patientName }: { patientName: string }) {
     setImageFile(null); setImageBase64(image_base64); setImageUri(`data:image/jpeg;base64,${image_base64}`); setResult(sonuc);
   };
   const kabinKaresi = useKabinKaresi(kareGeldi);
-  const gorunenAyarlar = PETRI_AYAR_ALANLARI.filter((a) =>
-    kip === "tekil" ? !YALNIZ_PLAKA_AYARLARI.has(a.ad) : PLAKA_KIPI_AYARLARI.has(a.ad));
-  const advDegisti = !denetimAcik || gorunenAyarlar.some((a) => (adv[a.ad] || "").trim() !== "")
-    || (kip === "plaka" && (kontrolSaglikli.trim() !== "" || kontrolKanser.trim() !== "" || a1Kose !== "auto"));
+  const advDegisti = !denetimAcik || PETRI_AYAR_ALANLARI.some((a) => (adv[a.ad] || "").trim() !== "")
+    || kontrolSaglikli.trim() !== "" || kontrolKanser.trim() !== "" || a1Kose !== "auto";
 
   useEffect(() => {
     visionCache[CK] = { imageUri, imageBase64, result };
@@ -2957,21 +2928,15 @@ function PetriModule({ patientName }: { patientName: string }) {
 
   /** Görüntü DIŞI alanlar — elle ve canlı analizde AYNI kaynak. Geçersiz ayarda uyarır ve false döner (istek gitmez). */
   const formAlanlari = (formData: FormData): boolean => {
-      // AI-2: kip + laboratuvar protokolü. Plaka kipi varsayılandır (YAML) → hiçbir şey gönderilmez; tekil kipte plate_type=0.
-      if (kip === "tekil") {
-        formData.append("plate_type", "0");
-        const dia = parseFloat(petriDia.replace(",", "."));
-        if (!isNaN(dia) && dia > 0) formData.append("petri_diameter_cm", String(dia));
-      } else {
-        if (kontrolSaglikli.trim()) formData.append("control_healthy", kontrolSaglikli.trim());
-        if (kontrolKanser.trim()) formData.append("control_cancer", kontrolKanser.trim());
-        if (a1Kose !== "auto") formData.append("a1_corner", a1Kose);
-      }
+      // AI-2: laboratuvar protokolü. Plaka kipi varsayılandır (YAML) → kip alanı gönderilmez (Y193: tekil kip arayüzde YOK).
+      if (kontrolSaglikli.trim()) formData.append("control_healthy", kontrolSaglikli.trim());
+      if (kontrolKanser.trim()) formData.append("control_cancer", kontrolKanser.trim());
+      if (a1Kose !== "auto") formData.append("a1_corner", a1Kose);
 
       // ── Gelişmiş (araştırma) ayarları ────────────────────────────────────────────────
       // ⚠️ `sayiya_cevir` dersi: Türkçe klavyede "0,05" yazılır. `parseFloat("0,05")` = 0
       // döner (SESSİZ yanlış değer) — virgül noktaya çevrilmeden okunmaz.
-      for (const a of gorunenAyarlar) {  // AI-2: gizli (kipe göre anlamsız) alanın eski değeri GÖNDERİLMEZ
+      for (const a of PETRI_AYAR_ALANLARI) {
         const ham = (adv[a.ad] || "").trim();
         if (!ham) continue;                       // boş = varsayılanda kal
         const d = parseFloat(ham.replace(",", "."));
@@ -3078,38 +3043,7 @@ function PetriModule({ patientName }: { patientName: string }) {
           }
       />
 
-      <View style={styles.btnRow} accessibilityRole="radiogroup" accessibilityLabel={t("ai.petri.kipEtiketi")}>
-        {([["plaka", t("ai.petri.kipPlaka")], ["tekil", t("ai.petri.kipTekil")]] as const).map(([k, et]) => (
-          <TouchableOpacity
-            key={k}
-            style={[styles.advAnahtar, { flex: 1, opacity: kip === k ? 1 : 0.6 }]}
-            onPress={() => setKip(k)}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: kip === k }}
-            accessibilityLabel={et}
-          >
-            <Text style={styles.advAnahtarMetin}>{kip === k ? "◉" : "○"} {et}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      {kip === "tekil" && (<>
-      <View style={styles.fantomLenRow}>
-        <Text style={styles.fantomLenLabel}>{t("ai.petri.cap")}</Text>
-        <TextInput
-          style={styles.fantomLenInput}
-          keyboardType="numeric"
-          accessibilityLabel={t("ai.petri.cap")}
-          placeholder={t("ai.petri.capYerTutucu")}
-          placeholderTextColor={colors.textMuted}
-          value={petriDia}
-          onChangeText={setPetriDia}
-        />
-      </View>
-      <Text style={styles.petriHint}>{t("ai.petri.qrNotu")}</Text>
-      </>)}
-      {kip === "plaka" && (
-        <Text style={styles.petriHint}>{t("ai.petri.plakaNotu")}</Text>
-      )}
+      <Text style={styles.petriHint}>{t("ai.petri.plakaNotu")}</Text>
       <KosulSecici kosulsuz={kosulsuz} onDegis={setKosulsuz} kilitli={loading} testID="petri-kosul" />
 
       {/* GELİŞMİŞ (ARAŞTIRMA) AYARLARI — kapalı başlar; hiçbir alana dokunulmazsa istek
@@ -3129,13 +3063,8 @@ function PetriModule({ patientName }: { patientName: string }) {
 
       {advAcik && (
         <View style={styles.advGovde}>
-          <Text style={styles.advNot}>
-            {kip === "tekil"
-              ? t("ai.petri.advNotTekil")
-              : t("ai.petri.advNotPlaka")}
-          </Text>
-          {kip === "plaka" && (
-            <View style={styles.advAlan}>
+          <Text style={styles.advNot}>{t("ai.petri.advNotYalnizPlaka")}</Text>
+          <View style={styles.advAlan}>
               <View style={styles.advSatir}>
                 <Text style={styles.advEtiket}>{t("ai.petri.saglikliKontrol")}</Text>
                 <TextInput style={styles.advGirdi} accessibilityLabel={t("ai.petri.saglikliKontrol")} placeholder={t("ai.petri.ornekA1D6")}
@@ -3157,9 +3086,8 @@ function PetriModule({ patientName }: { patientName: string }) {
                 ))}
               </View>
               <Text style={styles.advIpucu}>{t("ai.petri.a1Notu")}</Text>
-            </View>
-          )}
-          {gorunenAyarlar.map((a) => (
+          </View>
+          {PETRI_AYAR_ALANLARI.map((a) => (
             <View key={a.ad} style={styles.advAlan}>
               <View style={styles.advSatir}>
                 <Text style={styles.advEtiket}>{t(a.etiket as never)}</Text>
@@ -3237,15 +3165,9 @@ function PetriModule({ patientName }: { patientName: string }) {
             /* Ölçülen saha nedeni (BULGULAR.md): tam kare telefon fotoğrafında kuyucuklar
                640 px'lik model girdisine inince kayboluyor. "Tekrar deneyin" tek başına
                kullanıcıyı aynı sonuca götürüyordu — çıkışı olan bir yönlendirme veriyoruz. */
-            <ResultInterpretation tone="alert" emoji="⚠️" title={kip === "plaka" ? t("ai.petri.plakaYok") : t("ai.petri.kuyucukYok")}
+            <ResultInterpretation tone="alert" emoji="⚠️" title={t("ai.petri.plakaYok")}
               text={t("ai.petri.tespitYokMetin")}
-              points={kip === "plaka" ? [
-                t("ai.petri.plakaKipiNotu"),
-                t("ai.petri.tekilKipNotu"),
-              ] : [
-                t("ai.petri.kadrajNotu"),
-                t("ai.petri.ayarNotu"),
-              ]} />
+              points={[t("ai.petri.plakaKipiNotu")]} />
           ) : (
             <>
               {(() => {
@@ -3311,15 +3233,13 @@ function PetriModule({ patientName }: { patientName: string }) {
               Gevşetilmiş bir eşikle çıkan sonucun "normal" görünmesini engeller (denetim izi);
               varsayılanla koşulduysa hiçbir şey yazılmaz, arayüz kalabalıklaşmaz. */}
           {(() => {
-            const ya = (result as any).yolo_ayar || {};
             const rz = (result as any).resize || {};
             const th = ((result as any).plausibility || {}).thresholds || {};
             const thVars = ((result as any).plausibility || {}).thresholds_default || {};
             const parca: string[] = [];
-            // T3 · Y191: karşılaştırma TABLODAKİ varsayılanla (eskiden 0.25 sabit → yeni varsayılanla her sonuç "değiştirilmiş" görünürdü).
+            // T3 · Y191: karşılaştırma TABLODAKİ varsayılanla. Y193: tespit güveni / IoU arayüzden ayarlanmıyor (plaka kipinde YOLO
+            // yalnız ipucu) → bu satırda yer almaz.
             const tabloVars = (ad: string) => Number(PETRI_AYAR_ALANLARI.find((a) => a.ad === ad)?.vars);
-            if (ya.conf != null && Number(ya.conf) !== tabloVars("yolo_conf")) parca.push(`conf ${trValue(ya.conf)}`);
-            if (ya.iou != null && Number(ya.iou) !== tabloVars("yolo_iou")) parca.push(`IoU ${trValue(ya.iou)}`);
             if (rz.max) parca.push(t("ai.petri.etkin.kucultme", { a: String(rz.from?.[0]), b: String(rz.from?.[1]), c: String(rz.to?.[0]), d: String(rz.to?.[1]) }));
             for (const [k, etiket] of [["circularity_med", t("ai.petri.etkin.dairesellik")], ["conf_med", t("ai.petri.etkin.guven")], ["max_area_frac", t("ai.petri.etkin.alanOrani")]] as const) {
               if (th[k] != null && thVars[k] != null && Number(th[k]) !== Number(thVars[k])) parca.push(t("ai.petri.etkin.denetim", { etiket, deger: trValue(th[k]) }));

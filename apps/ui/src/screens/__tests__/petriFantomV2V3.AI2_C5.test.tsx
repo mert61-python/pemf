@@ -7,9 +7,9 @@
  *     kabindeki konumu bilinmiyor — kabine ArUco koyun ya da konumu ayarlayın.") ve "⛔ PEMF girdisi GEÇERSİZ" rozetini;
  *     laboratuvar VARSAYIMLARI ayrıca listelenir. Eski backend (alan yok) → kutu ÇİZİLMEZ, kart çökmez.
  *  2) Kuyucuk kimliği A1–D6, tümör kimliği T1–T5 başlıkta; kanser gerekçesi v2 nedenleri (blue_frac / delta_b / lab_b).
- *  3) KİP: varsayılan "24 kuyucuklu plaka" HİÇBİR kip alanı göndermez; "Tekil petri kapları" `plate_type=0` gönderir.
- *     Plaka kipinde ÖLÇÜLEN anlamsız alanlar (conf / IoU / "petri değil" eşikleri) GÖRÜNMEZ ve GİTMEZ; kontrol kuyucukları
- *     ve A1 köşesi gider.
+ *  3) KİP: yalnız "24 kuyucuklu plaka" (T3 · Y193: tekil kap kipi arayüzden kalktı) — HİÇBİR kip alanı gitmez. Plaka kipinde
+ *     ÖLÇÜLEN anlamsız alanlar (conf / IoU / "petri değil" eşikleri / petri çapı) GÖRÜNMEZ ve GİTMEZ; kontrol kuyucukları ve A1
+ *     köşesi gider.
  */
 let mockMode = "researcher";
 const mockToast = jest.fn();
@@ -173,34 +173,18 @@ describe("AI-2 C5 · petri v2 kartı", () => {
     expect(alanlar.plate_type).toBeUndefined();
   });
 
-  it("KRİTİK: TEKİL kip plate_type=0 gönderir; eski altı ayar ve petri çapı görünür ve gider", async () => {
+  it("KRİTİK (T3 · Y193): kip seçici YOK — tekil kap kipi seçilemez, plate_type hiçbir yolda GİTMEZ; küçültme gider", async () => {
     mockYanit = PETRI_V2;
     const u = await modulAc("Petri Kuyu", "Petri Kuyu Analizi", "Petri Analizini Başlat");
-    fireEvent.press(u.getByLabelText("Tekil petri kapları"));
-    fireEvent.changeText(u.getByLabelText("Petri çapı (cm)"), "9");
+    expect(u.queryByLabelText("Tekil petri kapları")).toBeNull();
+    expect(u.queryByLabelText("24 kuyucuklu plaka")).toBeNull();
+    expect(u.queryByLabelText("Petri çapı (cm)")).toBeNull();
     fireEvent.press(u.getByLabelText("Gelişmiş araştırma ayarları"));
-    fireEvent.changeText(u.getByLabelText("Tespit güveni (conf)"), "0,05");
-    const alanlar = await analizEt(u, "Petri Analizini Başlat");
-    expect(alanlar.plate_type).toBe("0");
-    expect(alanlar.petri_diameter_cm).toBe("9");
-    expect(alanlar.yolo_conf).toBe("0.05");
-    expect(alanlar.control_healthy).toBeUndefined();
-  });
-
-  it("KRİTİK: tekil kipte girilen eşik plaka kipine DÖNÜNCE GÖNDERİLMEZ (gizli alanın eski değeri sızmaz)", async () => {
-    mockYanit = PETRI_V2;
-    const u = await modulAc("Petri Kuyu", "Petri Kuyu Analizi", "Petri Analizini Başlat");
-    fireEvent.press(u.getByLabelText("Tekil petri kapları"));
-    fireEvent.press(u.getByLabelText("Gelişmiş araştırma ayarları"));
-    fireEvent.changeText(u.getByLabelText("Tespit güveni (conf)"), "0,05");
-    fireEvent.changeText(u.getByLabelText("Denetim: güven ≥"), "0,4");
     fireEvent.changeText(u.getByLabelText("Küçültme (uzun kenar, px)"), "960");
-    fireEvent.press(u.getByLabelText("24 kuyucuklu plaka"));
     const alanlar = await analizEt(u, "Petri Analizini Başlat");
-    expect(alanlar.yolo_conf).toBeUndefined();
-    expect(alanlar.plaus_conf).toBeUndefined();
     expect(alanlar.plate_type).toBeUndefined();
-    expect(alanlar.resize_max).toBe("960"); // plaka kipinde anlamlı tek eski ayar gider
+    expect(alanlar.petri_diameter_cm).toBeUndefined();
+    expect(alanlar.resize_max).toBe("960");
   });
 
   it("KARŞIT: eski backend (pemf_kapisi YOK) → kutu çizilmez, kart çökmez", async () => {

@@ -163,7 +163,9 @@ def test_plaka_makullik_kurali_SAF():
         ok, m = pl.evaluate_plate(kotu, guard=True)
         assert ok is False, kotu
         # TD6 · K9: sade metin ("Plaka ızgarası oturmadı. …"); ölçüm sayıları yalnız `m` içinde (destek ayrıntısı).
-        assert "ızgarası oturmadı" in m["message"] and "Tekil petri kapları" in m["message"]
+        assert (
+            "ızgarası oturmadı" in m["message"] and "Tekil petri kapları" not in m["message"]
+        )  # T3 · Y193: tekil kip arayüzde YOK
     ok, m = pl.evaluate_plate({"n_inliers": 0, "ecc_ok": False}, guard=False)
     assert ok is True and m["guard"] == "off"
 

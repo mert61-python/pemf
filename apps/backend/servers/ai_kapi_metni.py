@@ -71,7 +71,8 @@ def petri_ret_katalog_metni(m: dict, dil: str | None = None) -> str:
     """Petri makullik reddinin KATALOGDAN kurulan hâli (ölçüm sözlüğünden; `message` okunmaz). Eşlik testi bunun Türkçesini kaynağın
     metniyle karşılaştırır — güvence dalı (aşağıda) bu karşılaştırmayı GİZLEMESİN diye ayrı işlev."""
     if m.get("kip") == "plaka":
-        return ceviri.t("ai.hata.petriPlakaIzgara", dil=dil)
+        # T3 · Y193: tekil kipe yönlendirmeyen metin (eski `petriPlakaIzgara` yalnız TR taban kapısı için katalogda durur).
+        return ceviri.t("ai.hata.petriPlakaIzgaraYalnizPlaka", dil=dil)
     olculer = {k: v for k, v in m.items() if k != "message"}  # kaynak ölçüm parçasını ölçüm sözlüğü BOŞ değilse yazar
     return ceviri.t("ai.hata.petriGeometriYok", dil=dil, olcum=_petri_olcum(olculer, dil) if olculer else "")
 

@@ -224,6 +224,7 @@
       "petriOlcum": " (measured: circularity {{c}} — expected ≥{{mc}}; detection confidence {{k}} — expected ≥{{mk}}; the largest detection covers {{a}}% of the frame — expected ≤{{ma}}%)",
       "petriPlakaDegil": "This module expects a photo of a well plate; no well plate geometry was found in the uploaded image. Upload the phantom photo to the 'Tumor Phantom' module and the animal photo to the relevant cat module — a result produced in the wrong module is misleading.",
       "petriPlakaIzgara": "The 24-well plate grid could not be fitted. Photograph the plate from directly above, straight on and close enough to fill the frame. For single petri dishes, choose the 'Single petri dishes' mode; upload phantom or animal photos to the relevant module. For research, the check can be turned off in the 'Advanced (research) settings' section of the Well Plate module.",
+      "petriPlakaIzgaraYalnizPlaka": "The 24-well plate grid could not be fitted. Photograph the plate from directly above, straight on and close enough to fill the frame. Keep the plate edges in the frame; upload phantom or animal photos to the relevant module. For research, the check can be turned off in the 'Advanced (research) settings' section of the Well Plate module.",
       "pixelMm": "pixel_mm must be in the range 0.00001-0.01 (mm/px)",
       "raporOlusmadi": "The report could not be created.",
       "retikulosit": "Reticulocyte model error",

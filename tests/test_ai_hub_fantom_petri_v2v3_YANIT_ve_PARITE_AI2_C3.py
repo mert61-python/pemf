@@ -132,7 +132,7 @@ def test_KRITIK_petri_GECERSIZ_kip_parametresi_422_eylem(gomulu, alan, deger):
 def test_KRITIK_petri_fantom_fotografi_422_PLAKA_degil(gomulu):
     r = gomulu.post("/api/ai/vision/em_petri", data={"image_base64": _b64(FANTOM)})
     assert r.status_code == 422, r.text[:200]
-    assert "24 kuyucuklu" in r.json()["detail"] and "Tekil petri kapları" in r.json()["detail"]
+    assert "24 kuyucuklu" in r.json()["detail"] and "Tekil petri kapları" not in r.json()["detail"]  # T3 · Y193
 
 
 @pytest.mark.parametrize(

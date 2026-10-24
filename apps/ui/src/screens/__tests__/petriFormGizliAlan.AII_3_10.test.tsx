@@ -6,8 +6,9 @@
  * (fantom `layout_mismatch`, petri `control_cancer_missed`) varken kutu kırmızı çerçeveli ve "D / P / E değerleri bobin sürüşüne
  * ESAS ALINMAZ" + "sonuç kullanılamaz" diyor; başlık ise YEŞİL "✔ PEMF girdisi geçerli" (fantomda ayrıca "✔ tespit güvenilir").
  * Göz ilk satırı okur → çelişkili hüküm. Kapı: sürülemez sonuçta başlık "✔ … geçerli" demez ve hükmü söyler.
- * K4 sondaları (uçta YEŞİL beklenir): kısmi alanlı (eski GPU imajı) yanıtta "geçerli" uydurulmaz; plaka kipinde 422 yönlendirmesi
- * görünür ve kip değişince `plate_type=0` gider; gizli alanın eski değeri kip değişimi / "Varsayılanlara dön" / yeniden açılışta SIZMAZ.
+ * K4 sondaları (uçta YEŞİL beklenir): kısmi alanlı (eski GPU imajı) yanıtta "geçerli" uydurulmaz; plaka kipinde 422 iletisi görünür
+ * (T3 · Y193: tekil kap kipi arayüzden kalktı — ileti o kipe yönlendirmez, kip seçici YOK); eski değer "Varsayılanlara dön" / yeniden
+ * açılışta SIZMAZ.
  */
 let mockMode = "researcher";
 const mockToast = jest.fn();
@@ -133,35 +134,16 @@ describe("K4 sondaları (uçta yeşil beklenir)", () => {
     expect(u.queryByText(/girdisi geçerli/)).toBeNull();
   });
 
-  it("SONDA plaka kipinde 422 'Tekil petri kapları' yönlendirmesi görünür; kip değişince plate_type=0 gider", async () => {
+  it("SONDA plaka kipinde 422 iletisi görünür; ileti tekil kipe YÖNLENDİRMEZ ve kip seçici YOK (T3 · Y193)", async () => {
     const u = await modulAc("Petri Kuyu", "Petri Kuyu Analizi", "Petri Analizini Başlat");
-    const RED = "Bu modül 24 kuyucuklu petri plakası fotoğrafı bekliyor; yüklenen görüntüde plaka ızgarası doğrulanamadı (ölçülen: ızgarayı doğrulayan kuyucuk adayı 0 — beklenen ≥2; ince hizalama başarısız). … tekil petri kapları için 'Tekil petri kapları' kipini seçin.";
+    const RED = "24 kuyucuklu plaka ızgarası oturmadı. Plakayı kareyi dolduracak kadar yakından, tepeden ve dik çekin. Plakanın kenarları kadrajda kalsın; fantom ya da hayvan fotoğrafını ilgili modüle yükleyin. Araştırma için denetim Petri modülündeki 'Gelişmiş (araştırma) ayarları' bölümünden kapatılabilir.";
     (global.fetch as jest.Mock).mockImplementationOnce(async () => ({ ok: false, json: async () => ({ detail: RED }) }));
     const f1 = await analizEt(u, "Petri Analizini Başlat");
     expect(f1.plate_type).toBeUndefined();
     await waitFor(() => expect(mockToast).toHaveBeenCalled());
-    expect(String(mockToast.mock.calls[mockToast.mock.calls.length - 1][0])).toContain("'Tekil petri kapları' kipini seçin");
-    // yönlendirmenin söylediği seçici AYNI ekranda erişilebilir ve seçilebilir (tekil kipte plate_type=0 gittiği SONDA (b)'de ölçülür)
-    const radyo = u.getByLabelText("Tekil petri kapları");
-    expect(radyo.props.accessibilityRole).toBe("radio");
-    expect(radyo.props.accessibilityState?.selected).toBe(false);
-    fireEvent.press(radyo);
-    await waitFor(() => expect(u.getByLabelText("Tekil petri kapları").props.accessibilityState?.selected).toBe(true));
-    expect(u.getByLabelText("Petri çapı (cm)")).toBeTruthy();
-  });
-
-  it("SONDA gizli alan SIZMAZ (a): tekil kipte conf + çap girilip plakaya dönülünce GİTMEZ", async () => {
-    mockYanit = PETRI_SURULEBILIR;
-    const u = await modulAc("Petri Kuyu", "Petri Kuyu Analizi", "Petri Analizini Başlat");
-    fireEvent.press(u.getByLabelText("Tekil petri kapları"));
-    fireEvent.press(u.getByLabelText("Gelişmiş araştırma ayarları"));
-    fireEvent.changeText(u.getByLabelText("Tespit güveni (conf)"), "0,05");
-    fireEvent.changeText(u.getByLabelText("Petri çapı (cm)"), "8");
-    fireEvent.press(u.getByLabelText("24 kuyucuklu plaka"));
-    const f1 = await analizEt(u, "Petri Analizini Başlat");
-    expect(f1.yolo_conf).toBeUndefined();
-    expect(f1.petri_diameter_cm).toBeUndefined();
-    expect(f1.plate_type).toBeUndefined();
+    expect(String(mockToast.mock.calls[mockToast.mock.calls.length - 1][0])).toBe(RED);
+    expect(u.queryByLabelText("Tekil petri kapları")).toBeNull();
+    expect(u.queryByLabelText("Petri çapı (cm)")).toBeNull();
   });
 
   it("SONDA gizli alan SIZMAZ (b): plaka kipinde kontroller + A1 köşesi 'Varsayılanlara dön' sonrası (AYNI kipte) GİTMEZ", async () => {
@@ -178,29 +160,17 @@ describe("K4 sondaları (uçta yeşil beklenir)", () => {
     expect(f.a1_corner).toBeUndefined();
   });
 
-  it("SONDA gizli alan SIZMAZ (b2): tekil kipe geçince plaka kontrolleri GİTMEZ, plate_type=0 gider", async () => {
+  it("SONDA gizli alan SIZMAZ (c): ekran kapatılıp açılınca eski kontrol / eşik GİTMEZ", async () => {
     mockYanit = PETRI_SURULEBILIR;
     const u = await modulAc("Petri Kuyu", "Petri Kuyu Analizi", "Petri Analizini Başlat");
     fireEvent.press(u.getByLabelText("Gelişmiş araştırma ayarları"));
     fireEvent.changeText(u.getByLabelText("Boyalı kontrol kuyucukları"), "B2");
-    fireEvent.press(u.getByLabelText("Tekil petri kapları"));
-    const f = await analizEt(u, "Petri Analizini Başlat");
-    expect(f.control_cancer).toBeUndefined();
-    expect(f.plate_type).toBe("0");
-  });
-
-  it("SONDA gizli alan SIZMAZ (c): ekran kapatılıp açılınca eski kontrol / eşik GİTMEZ, kip varsayılana döner", async () => {
-    mockYanit = PETRI_SURULEBILIR;
-    const u = await modulAc("Petri Kuyu", "Petri Kuyu Analizi", "Petri Analizini Başlat");
-    fireEvent.press(u.getByLabelText("Gelişmiş araştırma ayarları"));
-    fireEvent.changeText(u.getByLabelText("Boyalı kontrol kuyucukları"), "B2");
-    fireEvent.press(u.getByLabelText("Tekil petri kapları"));
-    fireEvent.changeText(u.getByLabelText("Tespit güveni (conf)"), "0,05");
+    fireEvent.changeText(u.getByLabelText("Kuyu skoru eşiği"), "0,4");
     u.unmount();
     const u2 = await modulAc("Petri Kuyu", "Petri Kuyu Analizi", "Petri Analizini Başlat");
     const f = await analizEt(u2, "Petri Analizini Başlat");
     expect(f.control_cancer).toBeUndefined();
-    expect(f.yolo_conf).toBeUndefined();
+    expect(f.kuyu_skor_esigi).toBeUndefined();
     expect(f.plate_type).toBeUndefined();
   });
 });

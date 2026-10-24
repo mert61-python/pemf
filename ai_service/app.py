@@ -1335,6 +1335,9 @@ def infer_em_petri(
     kosulsuz = (
         kosulsuz is True
     )  # T3 · Y189: doğrudan çağrıda Form varsayılanı FieldInfo'dur (truthy) — yalnız gerçek True
+    # T3 · Y191b: doğrudan çağrıda (test / iç çağıran) Form varsayılanı FieldInfo'dur → yalnız gerçek sayı / dize "verildi" sayılır
+    # (ölçüldü: GPU servisi doğrudan çağrıda 422 "kuyu_skor_esigi bir sayı olmalı (gelen: Form(None))" dönüyordu).
+    kuyu_skor_esigi = kuyu_skor_esigi if isinstance(kuyu_skor_esigi, (int, float, str)) else None
     try:
         try:
             _ayar = _pa.coz(

@@ -62,16 +62,16 @@
    "dosya": "apps/ui/src/screens/AiHubScreen.tsx",
    "ifade": "t(a.etiket as never)",
    "onek": "",
-   "degerler": ["ai.petri.ayar.plausAreaFrac.etiket", "ai.petri.ayar.plausAreaFrac.ipucu", "ai.petri.ayar.plausCircularity.etiket", "ai.petri.ayar.plausCircularity.ipucu", "ai.petri.ayar.plausConf.etiket", "ai.petri.ayar.plausConf.ipucu", "ai.petri.ayar.resizeMax.etiket", "ai.petri.ayar.resizeMax.ipucu", "ai.petri.ayar.yoloConf.etiket", "ai.petri.ayar.yoloConf.ipucu", "ai.petri.ayar.yoloIou.etiket", "ai.petri.ayar.yoloIou.ipucu"],
-   "gerekce": "Petri gelişmiş ayar tablosu (alan etiketi) PETRI_AYAR_ALANLARI'nda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (6 alan × etiket / ipucu), kullanıcı girdisi değil"
+   "degerler": ["ai.petri.ayar.kuyuSkorEsigi.etiket", "ai.petri.ayar.kuyuSkorEsigi.ipucu", "ai.petri.ayar.resizeMax.etiket", "ai.petri.ayar.resizeMax.ipucu"],
+   "gerekce": "Petri gelişmiş ayar tablosu (alan etiketi) PETRI_AYAR_ALANLARI'nda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (2 alan × etiket / ipucu; T3 · Y193), kullanıcı girdisi değil"
   },
   {
    "yuzey": "arayuz",
    "dosya": "apps/ui/src/screens/AiHubScreen.tsx",
    "ifade": "t(a.ipucu as never)",
    "onek": "",
-   "degerler": ["ai.petri.ayar.plausAreaFrac.etiket", "ai.petri.ayar.plausAreaFrac.ipucu", "ai.petri.ayar.plausCircularity.etiket", "ai.petri.ayar.plausCircularity.ipucu", "ai.petri.ayar.plausConf.etiket", "ai.petri.ayar.plausConf.ipucu", "ai.petri.ayar.resizeMax.etiket", "ai.petri.ayar.resizeMax.ipucu", "ai.petri.ayar.yoloConf.etiket", "ai.petri.ayar.yoloConf.ipucu", "ai.petri.ayar.yoloIou.etiket", "ai.petri.ayar.yoloIou.ipucu"],
-   "gerekce": "Petri gelişmiş ayar tablosu (alan ipucu) PETRI_AYAR_ALANLARI'nda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (6 alan × etiket / ipucu), kullanıcı girdisi değil"
+   "degerler": ["ai.petri.ayar.kuyuSkorEsigi.etiket", "ai.petri.ayar.kuyuSkorEsigi.ipucu", "ai.petri.ayar.resizeMax.etiket", "ai.petri.ayar.resizeMax.ipucu"],
+   "gerekce": "Petri gelişmiş ayar tablosu (alan ipucu) PETRI_AYAR_ALANLARI'nda ANAHTAR olarak saklanır (KURALLAR §4.5); değer kümesi KAPALI (2 alan × etiket / ipucu; T3 · Y193), kullanıcı girdisi değil"
   },
   {
    "yuzey": "arayuz",

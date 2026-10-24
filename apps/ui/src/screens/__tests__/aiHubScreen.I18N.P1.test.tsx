@@ -648,9 +648,9 @@ describe("bölüm 6 — Petri Kuyu modülü (araştırma)", () => {
     expect(u.getByText("📸 Petri fotoğraf ipuçları")).toBeTruthy();
     expect(u.getByText("• Plakayı tam tepeden, dik ve yakın çekin — plaka karenin en az yarısını kaplasın")).toBeTruthy();
     expect(u.getByText("• Her deneyde bilinen bir boyalı ve bir sağlıklı kontrol kuyucuğu çekin (Gelişmiş ayarlar)")).toBeTruthy();
-    expect(u.getByLabelText("Petri analiz kipi")).toBeTruthy();
-    expect(u.getByLabelText("24 kuyucuklu plaka")).toBeTruthy();
-    expect(u.getByLabelText("Tekil petri kapları")).toBeTruthy();
+    // T3 · Y193 (sahip 2026-10-24: "sadece 24 kalsın"): kip seçici YOK
+    expect(u.queryByLabelText("Petri analiz kipi")).toBeNull();
+    expect(u.queryByLabelText("Tekil petri kapları")).toBeNull();
     expect(u.getByText("Ölçek plakanın kuyucuk aralığından (19,3 mm) gelir. Kabin işareti (ArUco) kadrajda değilse kuyucuk konumu PLAKA çerçevesindedir ve PEMF değerleri geçersiz sayılır.")).toBeTruthy();
     const ayar = u.getByLabelText("Gelişmiş araştırma ayarları");
     expect(ayar.props.accessibilityHint).toBe("Tespit ve denetim eşiklerini açar");
@@ -666,13 +666,11 @@ describe("bölüm 6 — Petri Kuyu modülü (araştırma)", () => {
     expect(u.getByPlaceholderText("varsayılan kapalı")).toBeTruthy();
     expect(u.getByLabelText("Petri değil denetimi")).toBeTruthy();
     expect(u.getByText("↺ Varsayılanlara dön")).toBeTruthy();
-    fireEvent.press(u.getByLabelText("Tekil petri kapları"));
-    expect(u.getByText("Petri çapı (cm)")).toBeTruthy();
-    expect(u.getByPlaceholderText("ör. 8 · boş = piksel")).toBeTruthy();
-    expect(u.getByText("Tespit güveni (conf)")).toBeTruthy();
-    expect(u.getByLabelText("Tespit güveni (conf)").props.placeholder).toBe("varsayılan 0.6"); // T3 · Y191: varsayılan 0.25 → 0.6
-    expect(u.getByText("Düşürmek daha çok kuyucuk bulur (ölçüldü: 0,25 → 0,05 ⇒ 1 kuyu yerine 3), yanlış tespit riski artar.")).toBeTruthy();
-    expect(u.getByText("\"Petri değil\" denetiminin dairesellik oyu.")).toBeTruthy();
+    expect(u.getByText("Kuyucuk yerlerini plakanın geometrisi belirler. Boş bıraktığınız alan varsayılanda kalır.")).toBeTruthy();
+    expect(u.getByText("Kuyu skoru eşiği")).toBeTruthy();
+    expect(u.getByLabelText("Kuyu skoru eşiği").props.placeholder).toBe("varsayılan 0.6");
+    expect(u.queryByText("Tespit güveni (conf)")).toBeNull(); // T3 · Y193: plaka kipinde etkisiz alan arayüzde YOK
+    expect(u.queryByText("Petri çapı (cm)")).toBeNull();
   });
 
   it("İngilizce: petri modülü başlık / ipuçları / kip / gelişmiş ayarlar", async () => {
@@ -684,9 +682,8 @@ describe("bölüm 6 — Petri Kuyu modülü (araştırma)", () => {
     expect(u.getByText("📸 Well plate photo tips")).toBeTruthy();
     expect(u.getByText("• Photograph the plate from directly above, upright and close — the plate should fill at least half of the frame")).toBeTruthy();
     expect(u.getByText("• In every experiment, photograph one known stained and one healthy control well (Advanced settings)")).toBeTruthy();
-    expect(u.getByLabelText("Well plate analysis mode")).toBeTruthy();
-    expect(u.getByLabelText("24-well plate")).toBeTruthy();
-    expect(u.getByLabelText("Single petri dishes")).toBeTruthy();
+    expect(u.queryByLabelText("Well plate analysis mode")).toBeNull(); // T3 · Y193
+    expect(u.queryByLabelText("Single petri dishes")).toBeNull();
     const ayar = u.getByLabelText("Advanced research settings");
     expect(ayar.props.accessibilityHint).toBe("Opens the detection and verification thresholds");
     expect(u.getByText("▸ ⚙️ Advanced (research) settings")).toBeTruthy();
@@ -699,55 +696,52 @@ describe("bölüm 6 — Petri Kuyu modülü (araştırma)", () => {
     expect(u.getByPlaceholderText("default off")).toBeTruthy();
     expect(u.getByLabelText("\"Not a petri dish\" check")).toBeTruthy();
     expect(u.getByText("↺ Reset to defaults")).toBeTruthy();
-    fireEvent.press(u.getByLabelText("Single petri dishes"));
-    expect(u.getByText("Petri diameter (cm)")).toBeTruthy();
-    expect(u.getByText("Detection confidence (conf)")).toBeTruthy();
-    expect(u.getByLabelText("Detection confidence (conf)").props.placeholder).toBe("default 0.6"); // T3 · Y191: varsayılan 0.25 → 0.6
-    expect(u.getByText("Lowering it finds more wells (measured: 0.25 → 0.05 ⇒ 3 wells instead of 1); the risk of false detections increases.")).toBeTruthy();
+    expect(u.getByText("The plate geometry determines where the wells are. A field you leave empty stays at its default.")).toBeTruthy();
+    expect(u.getByText("Well score threshold")).toBeTruthy();
+    expect(u.getByLabelText("Well score threshold").props.placeholder).toBe("default 0.6");
+    expect(u.queryByText("Detection confidence (conf)")).toBeNull();
   });
 
   it("ayar doğrulama bildirimleri iki dilde (sayı değil / aralık dışı); alan etiketi tablodan çevrilir", async () => {
     mockMode = "researcher";
     const tr = render(<AiHubScreen />);
     fireEvent.press(tr.getByLabelText("Petri Kuyu"));
-    fireEvent.press(tr.getByLabelText("Tekil petri kapları"));
     fireEvent.press(tr.getByLabelText("Gelişmiş araştırma ayarları"));
     mockFetchCevap = null;
     await act(async () => {
       fireEvent.press(tr.getByRole("button", { name: "Galeriden Seç" }));
     });
-    fireEvent.changeText(tr.getByLabelText("Tespit güveni (conf)"), "abc");
+    fireEvent.changeText(tr.getByLabelText("Kuyu skoru eşiği"), "abc");
     await act(async () => {
       fireEvent.press(tr.getByRole("button", { name: "Petri Analizini Başlat" }));
     });
-    expect(mockShowToast).toHaveBeenLastCalledWith("Tespit güveni (conf): sayı girin (ör. 0.6).", "error");
-    fireEvent.changeText(tr.getByLabelText("Tespit güveni (conf)"), "5");
+    expect(mockShowToast).toHaveBeenLastCalledWith("Kuyu skoru eşiği: sayı girin (ör. 0.6).", "error");
+    fireEvent.changeText(tr.getByLabelText("Kuyu skoru eşiği"), "5");
     await act(async () => {
       await new Promise((r) => setTimeout(r, 450));
       fireEvent.press(tr.getByRole("button", { name: "Petri Analizini Başlat" }));
     });
-    expect(mockShowToast).toHaveBeenLastCalledWith("Tespit güveni (conf): 0.01 – 0.95 aralığında olmalı (girilen 5).", "error");
+    expect(mockShowToast).toHaveBeenLastCalledWith("Kuyu skoru eşiği: 0 – 1 aralığında olmalı (girilen 5).", "error");
     tr.unmount();
     mockHastaNo += 1;
     await enYap();
     const en = render(<AiHubScreen />);
     fireEvent.press(en.getByLabelText("Well Plate"));
-    fireEvent.press(en.getByLabelText("Single petri dishes"));
     fireEvent.press(en.getByLabelText("Advanced research settings"));
     await act(async () => {
       fireEvent.press(en.getByRole("button", { name: "Choose from Gallery" }));
     });
-    fireEvent.changeText(en.getByLabelText("Detection confidence (conf)"), "abc");
+    fireEvent.changeText(en.getByLabelText("Well score threshold"), "abc");
     await act(async () => {
       fireEvent.press(en.getByRole("button", { name: "Start Well Plate Analysis" }));
     });
-    expect(mockShowToast).toHaveBeenLastCalledWith("Detection confidence (conf): enter a number (e.g. 0.6).", "error");
-    fireEvent.changeText(en.getByLabelText("Detection confidence (conf)"), "5");
+    expect(mockShowToast).toHaveBeenLastCalledWith("Well score threshold: enter a number (e.g. 0.6).", "error");
+    fireEvent.changeText(en.getByLabelText("Well score threshold"), "5");
     await act(async () => {
       await new Promise((r) => setTimeout(r, 450));
       fireEvent.press(en.getByRole("button", { name: "Start Well Plate Analysis" }));
     });
-    expect(mockShowToast).toHaveBeenLastCalledWith("Detection confidence (conf): must be between 0.01 and 0.95 (entered: 5).", "error");
+    expect(mockShowToast).toHaveBeenLastCalledWith("Well score threshold: must be between 0 and 1 (entered: 5).", "error");
   });
 
   it("sonuç: özet / kuyu satırları / gerekçe / etkin ayarlar / köprü iki dilde; AI geçmişi kaydı TR ile BAYT BAYT aynı", async () => {
@@ -760,7 +754,8 @@ describe("bölüm 6 — Petri Kuyu modülü (araştırma)", () => {
     expect(tr.getByText("Ölçek: 0.2 mm/px")).toBeTruthy();
     expect(tr.getByText(/A1 · Kanser · \(1\.0, 2\.0, 3\.0\) mm — gerekçe: mavi alan$/)).toBeTruthy();
     expect(tr.getByText(/B2 · Sağlıklı · \(4\.0, 5\.0, 6\.0\) mm$/)).toBeTruthy();
-    expect(tr.getByText(/^⚙️ Bu sonuç değiştirilmiş ayarlarla üretildi: conf .* · küçültme 4032×3024 → 960×720 · denetim dairesellik .* · denetim KAPALI$/)).toBeTruthy();
+    // T3 · Y193: tespit güveni arayüzden ayarlanmıyor → "conf" satırda YOK
+    expect(tr.getByText(/^⚙️ Bu sonuç değiştirilmiş ayarlarla üretildi: küçültme 4032×3024 → 960×720 · denetim dairesellik .* · denetim KAPALI$/)).toBeTruthy();
     expect(tr.getByLabelText("Bu kuyu için AI Pro seansı: Kontrol ekranına git")).toBeTruthy();
     const trKayit = logKayitlari();
     expect(trKayit).toHaveLength(1);
@@ -778,7 +773,7 @@ describe("bölüm 6 — Petri Kuyu modülü (araştırma)", () => {
     expect(en.getByText("Scale: 0.2 mm/px")).toBeTruthy();
     expect(en.getByText(/A1 · Cancer · \(1\.0, 2\.0, 3\.0\) mm — reason: mavi alan$/)).toBeTruthy();
     expect(en.getByText(/B2 · Healthy · \(4\.0, 5\.0, 6\.0\) mm$/)).toBeTruthy();
-    expect(en.getByText(/^⚙️ This result was produced with changed settings: conf .* · downscaling 4032×3024 → 960×720 · check circularity .* · check OFF$/)).toBeTruthy();
+    expect(en.getByText(/^⚙️ This result was produced with changed settings: downscaling 4032×3024 → 960×720 · check circularity .* · check OFF$/)).toBeTruthy();
     expect(en.getByLabelText("AI Pro session for this well: go to the Control screen")).toBeTruthy();
     const enKayit = logKayitlari();
     expect(enKayit).toHaveLength(1);

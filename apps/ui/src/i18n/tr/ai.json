@@ -808,6 +808,7 @@
     "aciklama": "Petri fotoğrafından kuyucukları tespit eder, her kuyuda kanser sınıflandırması + PEMF bobin/E-alan tahmini üretir.",
     "advNotPlaka": "Plaka kipinde kuyucuk yerlerini plakanın geometrisi belirler; tespit güveni ve \"petri değil\" eşikleri bu kipte sonucu değiştirmez (yalnız tekil kipte görünür). Boş bıraktığınız alan varsayılanda kalır.",
     "advNotTekil": "Kuyucuklar bulunamıyorsa ilk deneyeceğiniz iki kol: tespit güvenini düşürmek ve küçültmeyi açmak. Boş bıraktığınız alan varsayılanda kalır.",
+    "advNotYalnizPlaka": "Kuyucuk yerlerini plakanın geometrisi belirler. Boş bıraktığınız alan varsayılanda kalır.",
     "analiziBaslat": "Petri Analizini Başlat",
     "aralikDisi": "{{etiket}}: {{alt}} – {{ust}} aralığında olmalı (girilen {{ham}}).",
     "ayar": {

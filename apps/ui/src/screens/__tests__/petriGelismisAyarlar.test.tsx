@@ -116,14 +116,14 @@ beforeEach(() => {
 });
 
 /** Petri modülünü aç, görüntü seç (analiz düğmesi görüntü olmadan çalışmaz).
- *  AI-2 (hocanın petri v2'si): bu altı ayar TEKİL petri kabı kipinin ayarlarıdır — plaka kipinde (varsayılan) conf / IoU /
- *  "petri değil" eşikleri sonucu DEĞİŞTİRMEDİĞİ ölçüldü ve gizlenir (kilit: petriFantomV2V3.AI2_C5.test.tsx). Davranış
- *  kilitleri burada AYNEN sınanır; kip seçimi `plate_type=0` ekler, aşağıdaki iddialar onu sormaz. */
+ *  T3 · Y193 (sahip 2026-10-24: "sadece 24 kalsın"): tekil kap kipi arayüzden kalktı — eskiden burada sınanan tespit güveni / IoU /
+ *  "petri değil" eşikleri plaka kipinde sonucu DEĞİŞTİRMEDİĞİ için arayüzde YOK. Davranış kilitleri (dokunulmamış panel hiçbir şey
+ *  göndermez · doğru alan adı · Türkçe ondalık · aralık dışı reddi · denetim anahtarı · varsayılanlara dön) plaka kipindeki alanlarla
+ *  (küçültme, kuyu skoru eşiği) AYNEN sınanır. */
 async function petriAc() {
   const u = render(<Ekran />);
   fireEvent.press(u.getAllByLabelText("Petri Kuyu")[0]);
   await waitFor(() => u.getByText("Petri Kuyu Analizi"));
-  fireEvent.press(u.getByLabelText("Tekil petri kapları"));
   fireEvent.press(u.getByText("Galeriden Seç"));
   await waitFor(() => expect(u.getByText("Petri Analizini Başlat")).toBeTruthy());
   return u;
@@ -145,38 +145,34 @@ describe("Petri gelişmiş (araştırma) ayarları", () => {
     paneliAc(u); // panel açıldı ama hiçbir alana dokunulmadı
     const alanlar = await analizEt(u);
     for (const ad of [
-      "yolo_conf", "yolo_iou", "resize_max",
-      "plaus_circularity", "plaus_conf", "plaus_area_frac", "plaus_guard",
+      "yolo_conf", "yolo_iou", "resize_max", "kuyu_skor_esigi",
+      "plaus_circularity", "plaus_conf", "plaus_area_frac", "plaus_guard", "plate_type",
     ]) {
       expect(alanlar[ad]).toBeUndefined();
     }
   });
 
-  it("KRİTİK: girilen altı değer DOĞRU alan adlarıyla gönderilir", async () => {
+  it("KRİTİK: girilen değerler DOĞRU alan adlarıyla gönderilir; plaka kipinde etkisiz eski alanlar YOK", async () => {
     const u = await petriAc();
     paneliAc(u);
-    fireEvent.changeText(u.getByLabelText("Tespit güveni (conf)"), "0.05");
-    fireEvent.changeText(u.getByLabelText("Örtüşme eşiği (IoU)"), "0.5");
+    expect(u.queryByLabelText("Tespit güveni (conf)")).toBeNull();
+    expect(u.queryByLabelText("Örtüşme eşiği (IoU)")).toBeNull();
+    expect(u.queryByLabelText("Denetim: güven ≥")).toBeNull();
     fireEvent.changeText(u.getByLabelText("Küçültme (uzun kenar, px)"), "960");
-    fireEvent.changeText(u.getByLabelText("Denetim: dairesellik ≥"), "0.3");
-    fireEvent.changeText(u.getByLabelText("Denetim: güven ≥"), "0.4");
-    fireEvent.changeText(u.getByLabelText("Denetim: en büyük tespit ≤"), "0.9");
+    fireEvent.changeText(u.getByLabelText("Kuyu skoru eşiği"), "0.4");
 
     const alanlar = await analizEt(u);
-    expect(alanlar.yolo_conf).toBe("0.05");
-    expect(alanlar.yolo_iou).toBe("0.5");
     expect(alanlar.resize_max).toBe("960");
-    expect(alanlar.plaus_circularity).toBe("0.3");
-    expect(alanlar.plaus_conf).toBe("0.4");
-    expect(alanlar.plaus_area_frac).toBe("0.9");
+    expect(alanlar.kuyu_skor_esigi).toBe("0.4");
+    expect(alanlar.yolo_conf).toBeUndefined();
   });
 
-  it("KRİTİK: Türkçe ondalık '0,05' NOKTAYA çevrilir (yoksa sessizce 0 giderdi)", async () => {
+  it("KRİTİK: Türkçe ondalık '0,45' NOKTAYA çevrilir (yoksa sessizce 0 giderdi)", async () => {
     const u = await petriAc();
     paneliAc(u);
-    fireEvent.changeText(u.getByLabelText("Tespit güveni (conf)"), "0,05");
+    fireEvent.changeText(u.getByLabelText("Kuyu skoru eşiği"), "0,45");
     const alanlar = await analizEt(u);
-    expect(alanlar.yolo_conf).toBe("0.05");
+    expect(alanlar.kuyu_skor_esigi).toBe("0.45");
   });
 
   it("KRİTİK: aralık dışı değer İSTEK ATILMADAN reddedilir", async () => {
@@ -223,12 +219,12 @@ describe("Petri gelişmiş (araştırma) ayarları", () => {
   it("'Varsayılanlara dön' alanları boşaltır ve denetimi geri açar", async () => {
     const u = await petriAc();
     paneliAc(u);
-    fireEvent.changeText(u.getByLabelText("Tespit güveni (conf)"), "0.05");
+    fireEvent.changeText(u.getByLabelText("Kuyu skoru eşiği"), "0.4");
     fireEvent.press(u.getByLabelText("Petri değil denetimi"));
     fireEvent.press(u.getByLabelText("Ayarları varsayılana döndür"));
 
     const alanlar = await analizEt(u);
-    expect(alanlar.yolo_conf).toBeUndefined();
+    expect(alanlar.kuyu_skor_esigi).toBeUndefined();
     expect(alanlar.plaus_guard).toBeUndefined();
   });
 });

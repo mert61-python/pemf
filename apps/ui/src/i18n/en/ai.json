@@ -808,6 +808,7 @@
     "aciklama": "Detects wells in a well plate photo; produces a cancer classification for each well + a PEMF coil / E-field estimate.",
     "advNotPlaka": "In plate mode the plate geometry determines where the wells are; detection confidence and the \"not a petri dish\" thresholds do not change the result in this mode (they are shown only in single-dish mode). A field you leave empty stays at its default.",
     "advNotTekil": "If wells cannot be found, the first two levers to try: lowering detection confidence and turning on downscaling. A field you leave empty stays at its default.",
+    "advNotYalnizPlaka": "The plate geometry determines where the wells are. A field you leave empty stays at its default.",
     "analiziBaslat": "Start Well Plate Analysis",
     "aralikDisi": "{{etiket}}: must be between {{alt}} and {{ust}} (entered: {{ham}}).",
     "ayar": {

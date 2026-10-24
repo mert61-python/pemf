@@ -308,7 +308,7 @@ def test_uc_gercek_petriyi_KABUL_eder():
 @entegrasyon
 def test_uc_PLAKA_kipinde_fantom_KUYUCUK_URETMEZ_ve_tekil_kap_YONLENDIRILIR():
     """AI-2 (ürün varsayılanı plaka kipi): fantom → plaka yok (200 no_detection, kuyucuk 0); tekil kap fotoğrafı (06) →
-    422 + 'Tekil petri kapları' kipine yönlendiren metin (24'lük ızgara doğrulanamadı). Uydurulmuş kuyucuk YOK."""
+    422 + ızgaranın oturmadığını ve çekimi anlatan metin (T3 · Y193: tekil kip arayüzden kalktı → o kipe YÖNLENDİRMEZ). Uydurulmuş kuyucuk YOK."""
     from fastapi.testclient import TestClient
     from servers import api_server
 
@@ -322,4 +322,5 @@ def test_uc_PLAKA_kipinde_fantom_KUYUCUK_URETMEZ_ve_tekil_kap_YONLENDIRILIR():
     with open(PETRI, "rb") as f:
         r = c.post("/api/ai/vision/em_petri", files={"file": ("petri.jpg", f, "image/jpeg")})
     assert r.status_code == 422, f"HTTP {r.status_code}: {r.text[:300]}"
-    assert "Tekil petri kapları" in r.json().get("detail", ""), r.json().get("detail")
+    d = r.json().get("detail", "")
+    assert "ızgarası oturmadı" in d and "Tekil petri kapları" not in d, d

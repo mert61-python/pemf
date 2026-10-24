@@ -387,4 +387,7 @@ def test_KRITIK_K9_plaka_reddi_SADE_sayilar_OLCUMDE():
     ), metin
     for j in ("kuyucuk adayı", "ince hizalama", "beklenen", "≥", "3"):
         assert j not in metin, f"K9: kullanıcı metninde {j!r}: {metin}"
-    assert "Tekil petri kapları" in metin and "Gelişmiş (araştırma) ayarları" in metin, metin
+    # T3 · Y193: tekil kap kipi arayüzden kalktı → metin o kipe YÖNLENDİRMEZ (yapılamayan eylem söylenmez)
+    assert (
+        "Tekil petri kapları" not in metin and "ilgili modüle" in metin and "Gelişmiş (araştırma) ayarları" in metin
+    ), metin

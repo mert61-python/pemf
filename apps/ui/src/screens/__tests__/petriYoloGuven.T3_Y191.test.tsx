@@ -103,18 +103,17 @@ it("KRİTİK: varsayılan 0,6 ile üretilen sonuçta 'değiştirilmiş ayarlarla
   expect(u.queryByText(/değiştirilmiş ayarlarla üretildi/)).toBeNull();
 });
 
-it("KARŞIT: açıkça 0,25 ile üretilen sonuç 'conf 0,25' olarak işaretlenir", async () => {
+it("KARŞIT (T3 · Y193): tespit güveni arayüzden ayarlanmadığı için sonuçtaki conf 'değiştirilmiş' satırına GİRMEZ", async () => {
   const u = await analiz(0.25);
-  await waitFor(() => expect(u.getByText(/değiştirilmiş ayarlarla üretildi/)).toBeTruthy());
-  expect(String(u.getByText(/değiştirilmiş ayarlarla üretildi/).props.children)).toMatch(/conf 0[,.]25/);
+  expect(u.queryByText(/değiştirilmiş ayarlarla üretildi/)).toBeNull();
 });
 
-it("KRİTİK: tekil kipte 'Tespit güveni' alanı varsayılanı 0.6 gösterir", async () => {
+it("KRİTİK (T3 · Y193): 'Tespit güveni' alanı arayüzde YOK (plaka kipinde YOLO yalnız ipucu; sunucu varsayılanı 0,6)", async () => {
   const u = render(<Ekran />);
   fireEvent.press(u.getAllByLabelText("Petri Kuyu")[0]);
   await waitFor(() => u.getByText("Petri Kuyu Analizi"));
-  fireEvent.press(u.getByLabelText("Tekil petri kapları"));
   fireEvent.press(u.getByLabelText("Gelişmiş araştırma ayarları"));
-  await waitFor(() => u.getByLabelText("Tespit güveni (conf)"));
-  expect(String(u.getByLabelText("Tespit güveni (conf)").props.placeholder)).toContain("0.6");
+  await waitFor(() => u.getByLabelText("Kuyu skoru eşiği"));
+  expect(u.queryByLabelText("Tespit güveni (conf)")).toBeNull();
+  expect(u.queryByLabelText("Tekil petri kapları")).toBeNull();
 });

@@ -3985,6 +3985,9 @@ async def analyze_em_petri(
     """
     # T3 · Y189: YALNIZ gerçek True açar — doğrudan çağrıda (test / iç çağıran) Form varsayılanı FieldInfo'dur (truthy).
     kosulsuz = kosulsuz is True
+    # T3 · Y191b: doğrudan çağrıda (test / iç çağıran) Form varsayılanı FieldInfo'dur → yalnız gerçek sayı / dize "verildi" sayılır
+    # (ölçüldü: GPU servisi doğrudan çağrıda 422 "kuyu_skor_esigi bir sayı olmalı (gelen: Form(None))" dönüyordu).
+    kuyu_skor_esigi = kuyu_skor_esigi if isinstance(kuyu_skor_esigi, (int, float, str)) else None
     try:
         # Sınır doğrulaması İKİ DALIN DA ÖNÜNDE: uç auth-muaf ve curl ile doğrudan çağrılabilir,
         # yani arayüz doğrulaması atlanabilir (resize_max=1 görüntüyü tek piksele indirir,
