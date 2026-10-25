@@ -118,3 +118,9 @@ def test_D3_41_istisna_kilitte_GEREKCELI_yorum():
         "bayat ikiz kilitte SABİTLİ"
     )
     assert "İSTİSNA (D3.41): opencv-contrib-python" in metin
+
+
+def test_D3_41_B_9_15_security_ci_KURTARMA_KILIDINI_tarar_bloklamaz():
+    """Plan B-9.15: CVE taraması sevk edilen kilidi de görsün (bilgi amaçlı — sahip kararı; aynı izinli adım)."""
+    src = (KOK / ".github" / "workflows" / "security.yml").read_text(encoding="utf-8")
+    assert "pip-audit -r build_tools/myenv-requirements.txt --no-deps --disable-pip" in src

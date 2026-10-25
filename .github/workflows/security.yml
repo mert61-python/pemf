@@ -55,3 +55,6 @@ jobs:
           pip-audit --desc || true
           echo "== SHIPPED ağaç (requirements.txt — AI yığını DAHİL) =="
           pip-audit -r requirements.txt --desc || true
+          # D3.41 (B-9.15): kurtarma kilidi sevk edilen paketin TAMAMINI pinler (geçişliler dahil) — çözümleme / kurulum YOK.
+          echo "== KURTARMA KİLİDİ (build_tools/myenv-requirements.txt — sevk edilen paketin tamamı) =="
+          pip-audit -r build_tools/myenv-requirements.txt --no-deps --disable-pip --desc || true
