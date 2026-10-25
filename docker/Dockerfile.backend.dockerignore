@@ -112,3 +112,29 @@ KURTARMA-KODU.txt
 kurtarma-zarfi.enc
 .recovery_fp
 *.plain.bak
+
+# ═══ D3.23 (B-9.19) + İG-9.10 + İG-9.12 — `COPY . .` build makinesinin GERÇEK sırlarını imaja almasın; desenler HER DERİNLİKTE ═══
+# Ölçüldü (moby anlamı, tests/test_D3_23_…): kök-çapalı desenler (`.env.*`, `*.zip`, `data/config.json`) alt dizinleri görmüyordu →
+# firmware Secrets.h / data/config.json (Wi-Fi + MQTT), bulut E-stop aynası kimliği, `apps/web/.vercel/.env.production.local`,
+# `apps/web/.git.arsiv-…/config`, kaynak şifreleme parolası (`build_tools/_static_password.py`) imaj bağlamına giriyordu; bağlam
+# ~12,7 GB (alt dizinlerdeki APK / ZIP / EXE / günlük + node_modules). Backend imajı bunların HİÇBİRİNİ çalışma zamanında okumaz.
+# Liste `build_tools/secrets_backup.py::_KALEMLER` ile kapıda karşılaştırılır (yeni sır kalemi eklenirse kapı kırmızı).
+firmware/**/Secrets.h
+firmware/**/data/config.json
+data/cloud_mqtt_provision.json
+**/keystore.properties
+**/*.jks
+build_tools/_static_password.py
+**/.env
+**/.env.*
+**/.git.arsiv*
+**/.vercel/
+apps/web/
+release_assets/
+pemf-app-packages/
+**/node_modules/
+**/*.zip
+**/*.apk
+**/*.exe
+**/*.log
+**/*.rar
