@@ -309,7 +309,7 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
                   // yapıştırma ve şifre yöneticileri şifrenin SONUNA sıklıkla boşluk ekler; Supabase
                   // bunu farklı bir şifre sayıp reddeder ve kullanıcı "E-posta veya şifre hatalı"
                   // görür — alanda hiçbir görünür fark olmadığı için sebebi anlaşılamaz.
-                  // (Canlı doğrulandı: "Mert190361" 200, "Mert190361 " 400.)
+                  // (Canlı doğrulandı: kırpılmış parola 200, sonunda boşluklu aynısı 400 — D3.16: değer burada YAZILMAZ.)
                   // Baştaki/sondaki boşluğu GİRİŞTE at → kullanıcının GÖRDÜĞÜ ile GÖNDERİLEN aynı olur.
                   // İç boşluklara dokunulmaz (gerçek bir parola karakteri olabilir).
                   onChangeText={(t) => { setPassword(t.replace(/^\s+|\s+$/g, "")); setError(""); }}

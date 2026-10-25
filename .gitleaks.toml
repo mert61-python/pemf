@@ -81,6 +81,16 @@ regexes = [
 # kırmızı; mutasyonla doğrulandı).
 # ═══════════════════════════════════════════════════════════════════════════════════════════
 
+# D3.16 (B-6.24 · A-18): kaynak YORUMUNA yazılmış "canlı doğrulanmış" kimlik bilgisi — `Canlı doğrulandı: "<değer>" 200` biçimi.
+# Varsayılan kurallar düşük entropili düz parolayı GÖRMEZ (AuthScreen.tsx yorumu PUBLIC depoda 0 bulguyla duruyordu). Değer
+# raporlanmaz (--redact). Kilit: tests/test_D3_16_canli_dogrulanmis_PAROLA_yorumu_YAKALANIR.py
+[[rules]]
+id = "pemf-canli-dogrulanmis-parola-yorumu"
+description = "kaynak yorumunda canli dogrulanmis duz kimlik bilgisi (Canli dogrulandi: \"<deger>\" 2xx)"
+# Yer tutucu (`"<değer>"`, `"{sahte}"`) değer DEĞİLDİR: `<` / `{` ile başlayan dışarıda (belgeler ve testin kendisi).
+regex = '''(?i)canl[ıi]\s+do[ğg]rulan?d[ıi]\s*:\s*"[^"\s<{][^"]{3,}"\s*2\d\d'''
+keywords = ["doğrulandı", "dogrulandi", "doğrulandi", "dogrulandı"]
+
 [[rules]]
 id = "pemf-firmware-secrets-h-gercek-deger"
 description = "firmware Secrets.h icinde placeholder olmayan WiFi/bulut-MQTT degeri (dusuk-entropili sinif)"
