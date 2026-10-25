@@ -8836,6 +8836,41 @@
      "turler": [
       "cagri"
      ]
+    },
+    {
+     "metin": "cloudflared indirmesi çok küçük ({{toplam}} bytes) — bozuk/kesik.",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti",
+     "turler": [
+      "istisna"
+     ]
+    },
+    {
+     "metin": "cloudflared indirmesi boyut tavanını aştı (> {{_AZAMI_INDIRME}} bayt).",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti",
+     "turler": [
+      "istisna"
+     ]
+    },
+    {
+     "metin": "cloudflared {{_CLOUDFLARED_SURUM}} indirmesinin SHA-256 özeti pinli özetle UYUŞMUYOR — kullanılmaz.",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti",
+     "turler": [
+      "istisna"
+     ]
+    },
+    {
+     "metin": "cloudflared .tgz içindeki ikili boyut tavanını aştı.",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti",
+     "turler": [
+      "istisna"
+     ]
+    },
+    {
+     "metin": "cloudflared-darwin-{{arch}}.tgz",
+     "gerekce": "GitHub sürüm varlığının dosya adı (indirme URL'si parçası) — metin değil",
+     "turler": [
+      "dizi"
+     ]
     }
    ],
    "birlesikIstisna": [],
@@ -9187,6 +9222,13 @@
     },
     {
      "metin": "UDP kesif soket hatasi: %s → soket yeniden kuruluyor.",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "UDP kesif yaniti gonderilemedi (%s): %s",
      "gerekce": "günlük / döngü hata etiketi — geliştirici içindir (operatöre gitmez)",
      "turler": [
       "cagri"
