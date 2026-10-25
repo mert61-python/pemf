@@ -164,6 +164,14 @@ jobs:
       - name: cargo test
         working-directory: launcher
         run: cargo test --workspace --all-targets --locked
+      # D3.15 (B-8.18): bağımlılık güvenlik denetimi HER PUSH'ta (eskiden yalnız `launcher-v*` etiketinde — yani yayından SONRA).
+      # `launcher/.cargo/audit.toml`'daki gerekçeli yoksayma listesi okunur (çalışma dizini launcher) — onsuz 7 bakımsız uyarı
+      # hattı hep kırmızı yapardı; listede olmayan her yeni açık / uyarı kırar. Yoksayma listesine gerçek açık EKLENMEZ.
+      - name: cargo audit (bağımlılık güvenlik denetimi)
+        working-directory: launcher
+        run: |
+          cargo install cargo-audit --locked --version ^0.22
+          cargo audit --deny warnings
 
   # ⚠️ KALDIRILDI (2026-08-12): `arayüz (tsc + jest)` ve `site (build)` işleri.
   #
