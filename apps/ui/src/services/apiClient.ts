@@ -217,13 +217,25 @@ export function hesapKusagiArtir(): number {
  * Supabase JWT'sini teslim etmemek için Authorization yalnız buraya eklenir. */
 /** Host, RFC1918 özel aralıkta bir IPv4 mü (ya da localhost)? Yalnız GERÇEK IP kabul edilir.
  *  Eskiden `/^10\./` gibi ön-ek testleri HOSTNAME'lere de uyuyordu: `10.evil.com` "LAN" sayılıyordu. */
+/**
+ * Nokta-dörtlü IPv4'ün BAĞLANILACAK oktetleri; değilse null.
+ * ⚠️ D3.17 (B-6.2): baştaki sıfırlı oktet `inet_aton` / Android ağ yığınında SEKİZLİKTİR — `010.0.0.1` = 8.0.0.1 (genel IP),
+ * `172.016.0.1` = 172.14.0.1. Eskiden `Number("010")` = 10 → "özel ağ" sayılıp jeton GENEL bir adrese gidiyordu. Geçersiz sekizlik
+ * (`08`) ya da > 255 → null.
+ */
+export function ipv4Oktetleri(host: string): number[] | null {
+  const m = String(host || "").trim().match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return null;
+  const o = m.slice(1, 5).map((p) => (p.length > 1 && p.startsWith("0") ? (/^[0-7]+$/.test(p) ? parseInt(p, 8) : NaN) : Number(p)));
+  return o.some((n) => Number.isNaN(n) || n > 255) ? null : o;
+}
+
 export function isPrivateHost(host: string): boolean {
   const h = (host || "").toLowerCase();
   if (h === "localhost") return true;
-  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (!m) return false; // nokta-dörtlü DEĞİLSE hostname'dir → özel ağ sayma
-  const [a, b] = [Number(m[1]), Number(m[2])];
-  if ([a, b, Number(m[3]), Number(m[4])].some((n) => n > 255)) return false;
+  const o = ipv4Oktetleri(h);
+  if (!o) return false; // nokta-dörtlü DEĞİLSE hostname'dir → özel ağ sayma
+  const [a, b] = o;
   if (a === 127 || a === 10) return true;
   if (a === 192 && b === 168) return true;
   if (a === 172 && b >= 16 && b <= 31) return true;

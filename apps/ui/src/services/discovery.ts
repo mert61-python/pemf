@@ -15,7 +15,7 @@ import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { updateServiceConfig, serviceConfig, setStoredDeviceId, getStoredDeviceId, setStoredApiToken } from "@/services/config";
 import { getRemoteUrlForDevice } from "@/services/deviceRegistry";
-import { isPrivateHost } from "@/services/apiClient";
+import { ipv4Oktetleri, isPrivateHost } from "@/services/apiClient";
 
 const ADDR_KEY = "@pemf_server_address";
 const HEALTH_TIMEOUT_MS = 2500;
@@ -287,6 +287,12 @@ async function discoverRemote(): Promise<string | null> {
  *  Tünel auth-ister (reinstall api_token'ı değişince app'in bayat token'ı → 401); LAN ise auth-MUAF.
  *  localIp-yükseltmesi hem "aynı-WiFi'de otomatik bağlanmıyor" hem "uzaktan bağlanıyor ama 401" kökünü
  *  çözer + checkHealth(lan) provisionToken ile GÜNCEL token'ı çeker (bayat-token'ı tazeler). */
+/** D3.17: tünelden gelen `localIp` LAN'a yükseltilebilir mi — nokta-dörtlü özel ağ (tek kaynak `isPrivateHost`), döngü DEĞİL. */
+export function lanYukseltmesiUygunMu(ip: string): boolean {
+  const o = ipv4Oktetleri(ip);
+  return !!o && o[0] !== 127 && isPrivateHost(String(ip).trim());
+}
+
 async function preferLanIfReachable(result: DiscoveryResult | null): Promise<DiscoveryResult | null> {
   if (!result) return result;
   if (Platform.OS === "web") return result; // web origin zaten doğru
@@ -299,7 +305,9 @@ async function preferLanIfReachable(result: DiscoveryResult | null): Promise<Dis
     if (!res.ok) return result;
     const d = await res.json();
     const lan: string | undefined = d?.localIp;
-    if (lan && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(lan)) {
+    // ⚠️ D3.17 (B-6.3): LAN yükseltmesi TEK kaynaktan (`isPrivateHost`) — eskiden kendi ön-ek regex'i `10.evil.com`'u LAN sayıp
+    // adresi + jetonu kalıcı değiştirebiliyordu.
+    if (lan && lanYukseltmesiUygunMu(lan)) {
       const lanAddr = `http://${lan}:8000`;
       // Telefon aynı-WiFi'de mi? checkHealth GERÇEK LAN erişimini dener + (yerelse) güncel token'ı saklar.
       if (await checkHealth(lanAddr)) {
