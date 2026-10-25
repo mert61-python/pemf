@@ -516,6 +516,14 @@ def _bundled_cloud(key: str) -> str:
         return ""
 
 
+# ⚠️ D3.38 (B-3.103) · A-14 (sahip, önerilen): bu anahtarların kaynağı PAKETİN / ORTAMIN kendisidir (bulut-MQTT provizyonu, gömülü
+# Supabase adresi / yayınlanabilir anahtarı). Eskiden değer yalnız dosyada YOKKEN taşınıyordu → yeni sürüm (rotasyon dahil) sahaya
+# hiç ulaşmıyor, jeton / hak denetimi ve E-stop bulut aynası eski değerde kalıyordu. Artık her okumada kaynak (env → paket) DOLUYSA
+# o döner ve dosyadakinden farklıysa dosya güncellenir; kaynak BOŞSA (provizyon yok) dosyadaki değer korunur.
+_GOMULU_USTUN = frozenset(
+    {"mqtt_cloud_host", "mqtt_cloud_port", "mqtt_cloud_user", "mqtt_cloud_pass", "supabase_url", "supabase_anon_key"}
+)
+
 # key -> (section, dpapi?, generator|None, legacy_reader|None)
 _REGISTRY: dict[str, tuple] = {
     # AUTO (sistem üretir)
@@ -828,6 +836,20 @@ def get_secret(key: str, default: str = "", generate: bool = True) -> str:
         # SAYIDIR; eskiden `.strip()` AttributeError atıyor, E-stop bulut aynası her seferinde düşüyordu.
         # `or ""` önce: eksik/boş değer ('None'/'0' METNİ değil) eskisi gibi boş sayılır (`_bundled_cloud` deseni).
         raw = str(doc.get(section, {}).get(key) or "").strip()
+        if key in _GOMULU_USTUN and legacy:
+            try:
+                _kaynak = (legacy() or "").strip()
+            except Exception:
+                _kaynak = ""
+            if _kaynak:
+                try:
+                    _dosyadaki = _dec(raw) if raw else ""
+                except Exception:
+                    _dosyadaki = None  # çözülemeyen eski değer — kaynak otoritedir
+                if _dosyadaki != _kaynak:
+                    _diske_yaz_sonra_onbellege(doc, section, key, _enc(_kaynak, critical=True) if dpapi else _kaynak)
+                    logger.info("A-14: paket / ortam değeri dosyadakinin yerine yazıldı: %s", key)
+                return _kaynak
         if raw:
             try:
                 _cozulen = _dec(raw)
