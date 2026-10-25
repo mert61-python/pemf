@@ -14,8 +14,9 @@ const SB_ANON = () => env('SUPABASE_ANON_KEY')
 const SB_SERVICE = () => env('SUPABASE_SERVICE_ROLE_KEY')
 
 /** İstemciden gelen `origin` yalnız İZİN LİSTESİNDEYSE kabul edilir (ödeme geri-dönüş adresi
- *  keyfi bir host'a yönlendirilemesin). Liste: PUBLIC_SITE_URL + EXTRA_ALLOWED_ORIGINS (virgüllü)
- *  + Vercel önizleme dağıtımları (*.vercel.app). */
+ *  keyfi bir host'a yönlendirilemesin). Liste: PUBLIC_SITE_URL + EXTRA_ALLOWED_ORIGINS (virgüllü, AÇIKÇA yapılandırılan).
+ *  D3.22 (B-7.8) · A-20 (sahip): YALNIZ üretim alan adı — eskiden HERHANGİ bir `*.vercel.app` (başkasının projesi dahil) kabul
+ *  ediliyordu (oltalama zinciri). Önizleme gerekiyorsa adı EXTRA_ALLOWED_ORIGINS'e tek tek yazılır. */
 export function isAllowedOrigin(origin: unknown): boolean {
   if (typeof origin !== 'string' || !origin) return false
   let u: URL
@@ -35,7 +36,7 @@ export function isAllowedOrigin(origin: unknown): boolean {
       /* bozuk yapılandırma girdisi — atla */
     }
   }
-  return u.host.endsWith('.vercel.app')
+  return false
 }
 
 /** Supabase JWT doğrula → kullanıcı (id, email). Geçersiz/eksikse null. */

@@ -1,7 +1,7 @@
 // Author: mertaygn, cglrgrkn
 /* GET/POST /api/callback — iyzico ödeme sonrası buraya yönlendirir (token). Aboneliği retrieve ile
    AUTHORITATIVE çeker → Supabase subscriptions'a yazar → kullanıcıyı sonuç sayfasına redirect eder.
-   user_id: retrieve.conversationId (initialize'da set edildi) veya ?uid fallback. */
+   user_id: YALNIZ retrieve.conversationId (initialize'da set edildi) — D3.21: `?uid` tek başına KABUL EDİLMEZ. */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { upsertSubscription, mapIyzicoStatus, jetonDonemYenile, JETON_HAKLARI } from './_lib/util.js'
 import { subRetrieveByToken, planMeta } from './_lib/iyzico.js'
@@ -25,7 +25,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('callback: uid/conversationId uyuşmuyor — istek reddedildi', { conversationId })
       return res.redirect(302, '/pricing?checkout=error')
     }
-    const userId = conversationId || uidQuery
+    // D3.21 (B-7.7): fail-closed — iyzico yanıtında conversationId YOKSA `?uid` (kimliksiz sorgu parametresi) tek başına KABUL
+    // EDİLMEZ; eskiden `conversationId || uidQuery` yedeği aboneliği istenen kullanıcının satırına yazdırıyordu (FREE_MODE'da uykuda).
+    if (!conversationId) {
+      console.error('callback: iyzico yanıtında conversationId yok — kullanıcı belirlenemedi, yazılmadı')
+      return res.redirect(302, '/pricing?checkout=error')
+    }
+    const userId = conversationId
     const meta = planMeta(String(r.pricingPlanReferenceCode ?? ''))
     const subRef = String(r.referenceCode ?? '')
     const custRef = String(r.customerReferenceCode ?? '')

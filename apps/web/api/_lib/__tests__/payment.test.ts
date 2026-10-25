@@ -37,8 +37,9 @@ describe('isAllowedOrigin — ödeme geri-dönüş adresi istemciye bırakılama
     expect(isAllowedOrigin('http://pemf-vet-web.vercel.app')).toBe(false)
   })
 
-  it('Vercel önizleme dağıtımlarına izin verir (PR deploy akışı kırılmasın)', () => {
-    expect(isAllowedOrigin('https://pemf-vet-web-git-abc.vercel.app')).toBe(true)
+  it('D3.22 · A-20: Vercel önizleme alanı AÇIKÇA eklenmeden kabul EDİLMEZ (yalnız üretim alanı — bilinçli sözleşme değişikliği)', () => {
+    expect(isAllowedOrigin('https://pemf-vet-web-git-abc.vercel.app')).toBe(false)
+    expect(isAllowedOrigin('https://baska-birinin-projesi.vercel.app')).toBe(false)
   })
 
   it('EXTRA_ALLOWED_ORIGINS ile özel alan adı eklenebilir', () => {
