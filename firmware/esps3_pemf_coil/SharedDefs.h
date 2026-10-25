@@ -222,6 +222,16 @@ enum CommandType {
     CMD_CALIBRATE = 6
 };
 
+/* D3.14 (B-8.9 · Y21 · Ö.4-Y7): MQTT `UPDATE_FIRMWARE` (HTTPS OTA) dalı DERLEME BAYRAĞIYLA VARSAYILAN KAPALI. Anonim yerel broker'a
+ * (A-04) yazabilen herkes kartın firmware'ini değiştirebiliyordu (üretici yok, imza yok). Kod SİLİNMEZ. Açmak için bayrak + PİNLİ ana
+ * bilgisayar öneki gerekir; imaj imzası (Y21) sahibin anahtar düzeniyle gelir — o güne dek bayrak KAPALI kalır. */
+#ifndef PEMF_S3_OTA_ETKIN
+#define PEMF_S3_OTA_ETKIN 0
+#endif
+#ifndef PEMF_S3_OTA_HOST
+#define PEMF_S3_OTA_HOST ""  /* örn. "https://github.com/<hesap>/<depo>/releases/download/" — BOŞSA bayrak açık olsa da her URL reddedilir */
+#endif
+
 // Queue Mesajı: Network -> Control
 struct ControlCommand {
     CommandType type;

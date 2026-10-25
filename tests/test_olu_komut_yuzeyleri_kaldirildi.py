@@ -15,6 +15,7 @@ abonelikleri (S3 `pemf/coil/all/control`, 8266 `pemf/control/all`); enum ölü g
 
 KALANLAR (karşıt-kanıt — bunlar CANLI ya da sahip listesinde YOK):
   · S3 `UPDATE` dalı — sahip listesinde yok; bugün üreticisiz ama [5.3] korumalı gelecek yüzeyi.
+  · S3 `UPDATE_FIRMWARE` dalı — üreticisiz; D3.14 (Y21) derleme bayrağıyla VARSAYILAN KAPALI (kod silinmez — Ö.4-Y7).
   · STM32 PB1 donanım sync darbesi — AYRI ve CANLI mekanizma (ad benzerliği tuzağı).
   · Backend `sync_warning` (≳50× freq-ayrışma uyarısı) — 2026-08-19 sahip kararı, ilgisiz.
   · mosquitto ACL'lerindeki broadcast izinleri — provizyon regresyon riski yüzünden BİLEREK

@@ -930,6 +930,7 @@ void PemfNetworkManager::_processIncomingCommand(char *topic, byte *payload,
    * ayarlamayi "start"/"update" ile yapar. SYNC_ALL'un start_at yolu [4.6] latent kusurlarini
    * tasiyordu; broadcast konusu da (tek yuku buydu) kaldirildi. */
   else if (cmdStr == "UPDATE_FIRMWARE") {
+#if PEMF_S3_OTA_ETKIN
     String url = doc["url"];
     LOG_PRINTF("[OTA] Firmware update requested from: %s\n", url.c_str());
 
@@ -939,9 +940,16 @@ void PemfNetworkManager::_processIncomingCommand(char *topic, byte *payload,
         publishEvent("ota_rejected", "Yalniz HTTPS OTA desteklenir");
         return;
       }
+      // D3.14 (Y21): HOST PİNİ — yalnız derlemede sabitlenen önekten indirilir; pin boşsa hiçbir URL kabul edilmez.
+      if (strlen(PEMF_S3_OTA_HOST) == 0 || !url.startsWith(PEMF_S3_OTA_HOST)) {
+        LOG_PRINTLN("[OTA] Rejected: URL is not under the pinned host");
+        publishEvent("ota_rejected", "OTA adresi pinli kaynakta degil");
+        return;
+      }
 
       // Stop PWM before update for safety
-      ControlCommand stopCmd;
+      // D3.14: SIFIRLA ilklenir — eskiden command_id[36] + sayılar yığın çöpüyle kuyruğa gidiyordu.
+      ControlCommand stopCmd = {};
       stopCmd.type = CMD_STOP;
       xQueueSend(commandQueue, &stopCmd, 0);
       delay(500); // Wait for stop
@@ -964,6 +972,11 @@ void PemfNetworkManager::_processIncomingCommand(char *topic, byte *payload,
         break;
       }
     }
+#else
+    // D3.14: OTA bu derlemede KAPALI (PEMF_S3_OTA_ETKIN=0) — komut yok sayılmaz, reddedildiği bildirilir.
+    LOG_PRINTLN("[OTA] Rejected: OTA disabled at build time (PEMF_S3_OTA_ETKIN=0)");
+    publishEvent("ota_rejected", "OTA bu derlemede kapali");
+#endif
     return; // Don't queue this command
   } else {
     LOG_PRINTF("[MQTT] Bilinmeyen Komut: %s\n", cmdStr.c_str());
