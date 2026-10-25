@@ -41,14 +41,32 @@ def _run_command(args: list[str], timeout: int = 5) -> subprocess.CompletedProce
     return subprocess.run(args, **kwargs)
 
 
+def _lan_ip_yedegi() -> Optional[str]:
+    """D3.36 (B-4.26): rota yokken (internetsiz klinik / yalnız hotspot) yerel arayüz adreslerinden özel ağ IPv4'ü — hotspot
+    (192.168.137.x) önce. Bulunamazsa None."""
+    try:
+        import ipaddress as _ipa
+
+        adresler = {ai[4][0] for ai in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)}
+        ozel = sorted(a for a in adresler if not a.startswith("127.") and _ipa.ip_address(a).is_private)
+    except Exception:
+        return None
+    for a in ozel:
+        if a.startswith("192.168.137."):
+            return a
+    return ozel[0] if ozel else None
+
+
 def get_local_ip() -> str:
+    """Bu makinenin LAN adresi. İki aşama (D3.36 · B-4.26): (1) varsayılan rotanın kaynak adresi (`connect` paket göndermez);
+    (2) rota yoksa yerel arayüz adresleri — eskiden doğrudan "127.0.0.1" dönüyor, keşif yanıtı telefona DÖNGÜ adresini ilan ediyordu."""
     sock = None
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.connect(("8.8.8.8", 80))
         return sock.getsockname()[0]
     except Exception:
-        return "127.0.0.1"
+        return _lan_ip_yedegi() or "127.0.0.1"
     finally:
         if sock:
             try:
@@ -961,20 +979,40 @@ class UdpDiscoveryService:
                     continue
                 # Audit P3: yalnız YEREL/private kaynağa yanıt ver — spoofed PUBLIC kaynak reflection/
                 # amplifikasyon (~15-20x) + topoloji-ifşasını engelle. + per-IP hız-sınırı (0.5s).
+                # D3.36 (B-4.16): yanıtlanamayacak kaynaklar (0.0.0.0 / sınırlı yayın / çoğa gönderim) süzülür — sendto hatası verirdi.
                 try:
-                    if not _ipa.ip_address(client_ip).is_private:
+                    _ip = _ipa.ip_address(client_ip)
+                    if not _ip.is_private or _ip.is_unspecified or _ip.is_multicast or client_ip == "255.255.255.255":
                         continue
                 except Exception:
                     continue
                 _now = _tm.time()
                 if _now - _disc_rl.get(client_ip, 0.0) < 0.5:
                     continue
+                # D3.36 (B-4.19): eskiden 256 girdide `clear()` — 300 dolgu kaynağı kurbanın kaydını da siliyor, kurbana ~24 kat
+                # yansıtma yapılabiliyordu. Artık yalnız ESKİYEN (≥ 0,5 sn) girdiler atılır; hâlâ doluysa YENİ kaynağa yanıt yok.
+                if len(_disc_rl) >= 256:
+                    for _k in [k for k, t in _disc_rl.items() if _now - t >= 0.5]:
+                        del _disc_rl[_k]
+                    if len(_disc_rl) >= 256:
+                        continue
                 _disc_rl[client_ip] = _now
-                if len(_disc_rl) > 256:
-                    _disc_rl.clear()
 
                 response = self._create_response()
-                self._socket.sendto(json.dumps(response, ensure_ascii=True).encode("utf-8"), addr)
+                # D3.36 (B-4.16): tek bir sendto hatası (ör. WinError 10065 "ana bilgisayara ulaşılamıyor") döngüyü dış `except`e
+                # düşürüp keşfi SÜREÇ ÖMRÜ BOYUNCA kapatıyordu — artık o istek atlanır, döngü sürer.
+                try:
+                    self._socket.sendto(json.dumps(response, ensure_ascii=True).encode("utf-8"), addr)
+                except OSError as _se:
+                    dongu_hatasini_bildir(
+                        "UDP kesif yaniti gonderilemedi (%s): %s",
+                        client_ip,
+                        _se,
+                        logger=self.logger,
+                        seviye=logging.DEBUG,
+                        exc_info=False,
+                    )
+                    continue
                 with self._status_lock:
                     self._requests_handled += 1
                     self._last_client_ip = client_ip
