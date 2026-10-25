@@ -111,22 +111,73 @@ $MosqDataRoot   = "C:\ProgramData\PEMF_System\mosquitto"
 # yazılır → ESP bobin 6-8 broker'a ULAŞAMAZ ama yerel her gösterge YEŞİL, sıfır kanıt. Şimdi:
 # try/catch + her yolda kuralı YENİDEN SORGULA + eylem söyleyen UYARI + [bool] dönüş (özet+bayrağa).
 # Fonksiyon olarak ayrıldı ki testler installer'ı çalıştırmadan dot-source edip mock'la ölçebilsin.
-function Ensure-PemfMosquittoFirewallRule {
+#
+# D3.42 (B-9.22): aynı adlı kural VARSA yalnız ADI yetmez — eski (06-27 öncesi) kurulumdan kalan `-RemoteAddress Any` kuralı "var"
+# sayılıp 1883 her kaynağa açık kalıyordu; `install_mosquitto.ps1`'in RFC1918 'Mosquitto MQTT' kuralı ve native 'mosquitto' servisi
+# (anonim broker) hiç görülmüyordu. İÇERİK okunur (uzak adres). ESP KAPALI (HEAD varsayılanı): geniş kural hotspot alt ağına
+# daraltılır, RFC1918 kuralı kaldırılır. ESP ETKİN: hotspot dışındaki ESP'nin (bobin 8) STOP yolu kesilmesin diye DOKUNULMAZ, uyarılır
+# (Y3 / A-04 — ESP dönüşüyle). Uzak adres OKUNAMAZSA değiştirilmez (bilinmeyen kurala yazılmaz), uyarılır, sonuç $false.
+function Ensure-PemfMosquittoFirewallRule([bool]$EspEtkin = $false) {
     $MosqFirewallOk = $false
-    if (-not (Get-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -ErrorAction SilentlyContinue)) {
+    $Hotspot = "192.168.137.0/24"
+    $Genis = $false
+    $Mevcut = @(Get-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -ErrorAction SilentlyContinue | Where-Object { $_ })
+    if ($Mevcut.Count -eq 0) {
         try {
             New-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -Direction Inbound -Protocol TCP -LocalPort 1883 -RemoteAddress 192.168.137.0/24 -Action Allow -Profile Any -ErrorAction Stop | Out-Null
         } catch {
             Log "UYARI: Firewall kuralı oluşturulamadı (PEMF Mosquitto MQTT): $_" "Yellow"
         }
     }
+    foreach ($Kural in $Mevcut) {
+        $Adres = @(($Kural | Get-NetFirewallAddressFilter -ErrorAction SilentlyContinue).RemoteAddress | Where-Object { $_ })
+        if ($Adres.Count -eq 1 -and $Adres[0] -eq $Hotspot) { continue }
+        if ($Adres.Count -eq 0) {
+            Log "UYARI: 'PEMF Mosquitto MQTT' kuralının uzak adresi OKUNAMADI — değiştirilmedi; 1883 geniş kaynağa açık olabilir. Elle bakın: Get-NetFirewallRule -DisplayName 'PEMF Mosquitto MQTT' | Get-NetFirewallAddressFilter" "Yellow"
+            $Genis = $true
+        } elseif ($EspEtkin) {
+            Log "UYARI: 'PEMF Mosquitto MQTT' kuralı GENİŞ (uzak adres: $($Adres -join ',')) — ESP ETKİN: hotspot dışındaki ESP'nin STOP yolu kesilmesin diye DARALTILMADI (Y3 / A-04). ESP'ler 192.168.137.x'teyse elle: Set-NetFirewallRule -DisplayName 'PEMF Mosquitto MQTT' -RemoteAddress $Hotspot" "Yellow"
+        } else {
+            try {
+                $Kural | Set-NetFirewallRule -RemoteAddress $Hotspot -ErrorAction Stop
+                Log "'PEMF Mosquitto MQTT' kuralı daraltıldı: uzak adres $($Adres -join ',') -> $Hotspot (ESP kapalı)." "Yellow"
+            } catch {
+                Log "UYARI: 'PEMF Mosquitto MQTT' kuralı daraltılamadı ($_) — 1883 $($Adres -join ',') kaynağına AÇIK kaldı. Elle: Set-NetFirewallRule -DisplayName 'PEMF Mosquitto MQTT' -RemoteAddress $Hotspot" "Yellow"
+                $Genis = $true
+            }
+        }
+    }
+    $Eski = @(Get-NetFirewallRule -DisplayName "Mosquitto MQTT" -ErrorAction SilentlyContinue | Where-Object { $_ })
+    if ($Eski.Count -gt 0) {
+        if ($EspEtkin) {
+            Log "UYARI: install_mosquitto.ps1'in 'Mosquitto MQTT' kuralı (1883 <- RFC1918, klinik LAN) VAR — ESP ETKİN: kaldırılmadı (Y3 / A-04). ESP'ler hotspot alt ağındaysa elle: Remove-NetFirewallRule -DisplayName 'Mosquitto MQTT'" "Yellow"
+        } else {
+            try {
+                $Eski | Remove-NetFirewallRule -ErrorAction Stop
+                Log "install_mosquitto.ps1'in 'Mosquitto MQTT' kuralı (1883 <- RFC1918) kaldırıldı (ESP kapalı; broker yalnız hotspot alt ağından)." "Yellow"
+            } catch {
+                Log "UYARI: 'Mosquitto MQTT' kuralı (1883 <- RFC1918) kaldırılamadı ($_) — anonim broker klinik LAN'ına AÇIK. Elle: Remove-NetFirewallRule -DisplayName 'Mosquitto MQTT'" "Yellow"
+                $Genis = $true
+            }
+        }
+    }
+    if (Get-Service -Name "mosquitto" -ErrorAction SilentlyContinue) {
+        Log "UYARI: native 'mosquitto' Windows servisi kurulu (install_mosquitto*.ps1) — PEMF broker'ı NSSM ile '$ServiceMosq'; native servis anonim ikinci bir broker olabilir. Gerekmiyorsa: Stop-Service mosquitto; sc.exe delete mosquitto" "Yellow"
+    }
     # HER YOLDA yeniden sorgula: cmdlet sessizce geçse de kural GERÇEKTEN var mı?
-    $MosqFirewallOk = [bool](Get-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -ErrorAction SilentlyContinue)
-    if (-not $MosqFirewallOk) {
+    $MosqFirewallOk = [bool](Get-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -ErrorAction SilentlyContinue) -and -not $Genis
+    if (-not $MosqFirewallOk -and -not $Genis) {
         Log "UYARI: 'PEMF Mosquitto MQTT' (TCP 1883 <- 192.168.137.0/24) kuralı YOK -> ESP bobin 6-8 broker'a ULAŞAMAZ. MpsSvc (Windows Defender Firewall) servisi çalışıyor mu? (Get-Service MpsSvc) GPO firewall'u kilitliyor mu? Kural elle: New-NetFirewallRule -DisplayName 'PEMF Mosquitto MQTT' -Direction Inbound -Protocol TCP -LocalPort 1883 -RemoteAddress 192.168.137.0/24 -Action Allow -Profile Any" "Yellow"
     }
-    return $MosqFirewallOk
+    return [bool]$MosqFirewallOk
 }
+# D3.42: ESP alt sistemi (MQTT + ESP bobinleri) bu kurulumda ETKİN mi — backend `live_state.esp_etkin()` ile AYNI anlam ("1" = açık,
+# varsayılan KAPALI). Servis ortamı profilden (NSSM AppEnvironmentExtra) gelir; profilde yoksa makine ortamı.
+function Test-PemfEspEtkin($Profil, [AllowNull()][string]$MakineDegeri) {
+    $v = if ($Profil -and $Profil.Contains('PEMF_ESP_ENABLED')) { [string]$Profil['PEMF_ESP_ENABLED'] } else { $MakineDegeri }
+    return ("$v".Trim() -eq '1')
+}
+
 # ⚠️ Y44 (sahip — 1-B açık madde 5, i1-B3): `PEMF_API_PORT` backend'le AYNI kuralla doğrulanır
 # (`backend_service.ortam_portu`: Python `int()` — baş/son boşluk, isteğe bağlı +/-, rakamlar arasında tek `_`,
 # Unicode ondalık rakamlar — ve 1..65535). Eskiden hiç doğrulanmıyordu: servis bozuk değerle kuruluyor (backend uyarıyla
@@ -369,8 +420,9 @@ include_dir $($MosqDataRoot -replace '\\','/')/conf.d
     # "C:\Program Files\..." mosquitto'ya "C:\Program" olarak geçip "Unable to open config" verirdi.
     Set-Content -Path "$MosqDataRoot\mosquitto.conf" -Value $conf -Encoding ASCII
 
-    # Firewall (TCP 1883 — yalnız hotspot subnet, ESP bobin 6-8)
-    $MosqFirewallOk = Ensure-PemfMosquittoFirewallRule
+    # Firewall (TCP 1883 — yalnız hotspot subnet, ESP bobin 6-8). D3.42: ESP ETKİN mi — backend'in göreceği değer (profil > makine ortamı).
+    $EspEtkin = Test-PemfEspEtkin $OnProfil ([Environment]::GetEnvironmentVariable('PEMF_ESP_ENABLED', 'Machine'))
+    $MosqFirewallOk = Ensure-PemfMosquittoFirewallRule -EspEtkin $EspEtkin
 
     # KRİTİK FIX: mosquitto NATIVE servis ('mosquitto install' = 'mosquitto.exe run') YERİNE NSSM ile
     # FOREGROUND yönetilir. Native mod Windows'ta SERVICE_RUNNING sinyali VERMEYİP StartPending'de
