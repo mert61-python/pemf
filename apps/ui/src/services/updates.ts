@@ -12,6 +12,7 @@
  * bırakmak "dokun ve güncelle" diyen ama hata veren bir buton demekti.
  */
 import { Platform } from "react-native";
+import { kaynakGuvenli } from "@/services/indirmeKaynagi";
 
 const MOBILE_MANIFEST = "https://raw.githubusercontent.com/mert61-python/pemf-update/mobil/latest.json";
 
@@ -51,13 +52,13 @@ export interface MobileUpdate {
    *  yüzeye çıkarılır ki güncelleme banner'ı operatöre gösterip bilinçli onay isteyebilsin. */
   sha256?: string;
 }
-// GÜVENLİK (DÜŞÜK — backend K2 simetrisi): apkUrl'yi HTTPS + bilinen GitHub-release host'una pinle.
-// apkUrl sonra Linking.openURL ile açılıyor → manifest ele geçse bile sideload'ı keyfi/zararlı APK'ya
-// yönlendirme engellenir. Geçersiz/beklenmeyen host → undefined (banner "İndir" göstermez).
+// GÜVENLİK: apkUrl sonra Linking.openURL ile açılıyor → manifest ele geçse bile sideload'ı keyfi/zararlı APK'ya yönlendirme
+// engellenir. Geçersiz/beklenmeyen kaynak → undefined (banner "İndir" göstermez).
+// ⚠️ D3.19 (B-6.6): eskiden kendi host düzeyi regex'i vardı (`github.com` HERHANGİ bir hesap + `*.githubusercontent.com` JOKERİ —
+// ücretsiz bir hesap oraya keyfi bayt koyabilir); OTA yolunun (`mobileUpdate`) depo yolu pinli tek kaynağı kullanılır.
 function _safeApkUrl(url: unknown): string | undefined {
   if (typeof url !== "string" || !url) return undefined;
-  if (/^https:\/\/(github\.com|[a-z0-9.-]*\.githubusercontent\.com)\//i.test(url)) return url;
-  return undefined;
+  return kaynakGuvenli(url) ? url : undefined;
 }
 
 export async function checkMobileUpdate(): Promise<MobileUpdate> {
