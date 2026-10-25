@@ -93,7 +93,9 @@ $izinli = [System.Collections.Generic.List[string]]@('K', 'Log', 'Write-Host', '
     'Get-NetFirewallPortFilter', 'Get-NetFirewallApplicationFilter',
     'Send-PemfAcilDurdur', 'Invoke-PemfTeardown', 'Teardown-Yukle', 'sc.exe', 'Join-Path', 'Split-Path', 'Test-Path', 'Where-Object',
     'Select-Object', 'ForEach-Object', 'Get-Content', 'Get-Date', 'Test-PemfApiPortDegeri', 'Get-PemfProfilEnvDosyasi', 'Read-PemfProfilEnv',
-    'Stop-PemfKurulumBackendi', 'Stop-AppProcs', 'Get-ItemProperty')
+    'Stop-PemfKurulumBackendi', 'Stop-AppProcs', 'Get-ItemProperty',
+    # D3.07: at-rest doğrulaması işleve alındı (çağrı yeri koşulsuz) — gövdesi saf değilse (Invoke-RestMethod gölgesi yok) düşer.
+    'Test-PemfAtRestDurumu')
 # `exit N` → çıkış kodunu kaydet + betik bloğundan dön (iç içe if/for içindekiler dahil); döngü kayıt görünce DURUR.
 function CikisiYakala($s) {
     $metin = $s.Extent.Text; $bas = $s.Extent.StartOffset

@@ -171,6 +171,19 @@ function Ensure-PemfMosquittoFirewallRule([bool]$EspEtkin = $false) {
     }
     return [bool]$MosqFirewallOk
 }
+# D3.07 (B-3.44): kurulan servisin at-rest durumu — `dogrulandi` (atRestEncrypted=true) · `kapali` (false) · `dogrulanamadi` (alan gelmedi).
+# Fonksiyon olarak ayrıldı: testler gerçek porta bağlanmadan Invoke-RestMethod'u gölgeleyip ölçer.
+function Test-PemfAtRestDurumu([int]$Port, [int]$Deneme = 6, [int]$BeklemeSn = 2) {
+    for ($i = 0; $i -lt $Deneme; $i++) {
+        try {
+            $h = Invoke-RestMethod -Uri "http://localhost:$Port/api/health" -TimeoutSec 4
+            if ($null -ne $h.atRestEncrypted) { if ([bool]$h.atRestEncrypted) { return 'dogrulandi' } else { return 'kapali' } }
+        } catch { }
+        if ($BeklemeSn -gt 0) { Start-Sleep $BeklemeSn }
+    }
+    return 'dogrulanamadi'
+}
+
 # D3.42: ESP alt sistemi (MQTT + ESP bobinleri) bu kurulumda ETKİN mi — backend `live_state.esp_etkin()` ile AYNI anlam ("1" = açık,
 # varsayılan KAPALI). Servis ortamı profilden (NSSM AppEnvironmentExtra) gelir; profilde yoksa makine ortamı.
 function Test-PemfEspEtkin($Profil, [AllowNull()][string]$MakineDegeri) {
@@ -610,17 +623,19 @@ if (-not $healthOk) {
     Log "Son stderr ($LogDir\backend_service_stderr.log):`n$tail" "Red"
     exit 1
 }
-# At-rest şifreleme istendiyse GERÇEKTEN aktif mi? (KVKK: sqlcipher eksikse düz-metne sessiz fallback)
-if ($EnvMap['PEMF_ENCRYPT_AT_REST'] -eq '1') {
-    $enc = $null
-    for ($i = 0; $i -lt 6; $i++) {
-        try { $h = Invoke-RestMethod -Uri "http://localhost:$probePort/api/health" -TimeoutSec 4; if ($null -ne $h.atRestEncrypted) { $enc = [bool]$h.atRestEncrypted; break } } catch { }
-        Start-Sleep 2
-    }
-    if ($enc -eq $false) { Log "HATA: PEMF_ENCRYPT_AT_REST=1 ama at-rest şifreleme AKTİF DEĞİL (sqlcipher binding eksik) → hasta PII düz-metne yazılıyor (KVKK riski). Build'i düzeltin." "Red"; exit 1 }
-    elseif ($null -eq $enc) { Log "UYARI: atRestEncrypted doğrulanamadı (health geç yanıt). Manuel kontrol: /api/health." "Yellow" }
-    else { Log "At-rest şifreleme DOĞRULANDI (atRestEncrypted=true)." "Green" }
+# At-rest şifreleme GERÇEKTEN aktif mi? (KVKK: sqlcipher eksikse / profil satırı yoksa düz metne sessiz yazım)
+# ⚠️ D3.07 (B-3.44): PROFİLDEN BAĞIMSIZ — eskiden yalnız profil `PEMF_ENCRYPT_AT_REST=1` taşırsa sorgulanıyordu; profil yoksa / satır
+# düşmüşse klinik servisi PII'yi düz metne yazarken kurulum "DOĞRULANDI" bitiyordu. Yanıt alınamazsa da DOĞRULANMIŞ SAYILMAZ (eskiden uyarı).
+$AtRest = Test-PemfAtRestDurumu $probePort
+if ($AtRest -eq 'kapali') {
+    Log "HATA: at-rest şifreleme AKTİF DEĞİL (/api/health atRestEncrypted=false) → hasta PII düz metne yazılıyor (KVKK riski). Profilde PEMF_ENCRYPT_AT_REST=1 var mı ($EnvFile)? Yoksa ekleyip kurulumu yeniden koşun; varsa build'i (sqlcipher binding) düzeltin. Kurulum DOĞRULANMADI." "Red"
+    exit 1
 }
+if ($AtRest -ne 'dogrulandi') {
+    Log "HATA: at-rest şifreleme DOĞRULANAMADI (/api/health atRestEncrypted alanı gelmedi). Kurulum DOĞRULANMADI — http://localhost:$probePort/api/health yanıtını elle denetleyin." "Red"
+    exit 1
+}
+Log "At-rest şifreleme DOĞRULANDI (atRestEncrypted=true)." "Green"
 if ($MosqFailed) { Log "UYARI: Backend çalışıyor AMA Mosquitto broker başlamadı → ESP bobinleri (6-8) bağlanamaz. Yukarıdaki mosquitto hatasını giderin." "Yellow" }
 # DENETİM 2026-09-06: firewall kuralı yoksa broker yerelde çalışsa bile ESP 6-8 (hotspot subnet) erişemez → özette görünsün.
 if ($Mode -eq "device" -and -not $MosqFirewallOk) { Log "UYARI: Mosquitto firewall kuralı (PEMF Mosquitto MQTT) DOĞRULANAMADI → ESP bobinleri (6-8) broker'a ulaşamaz. Yukarıdaki firewall uyarısındaki komutu elle çalıştırın." "Yellow" }

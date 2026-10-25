@@ -62,8 +62,8 @@ _APARAT_E224 = _degistir(
 )
 _APARAT_E224 = _degistir(
     _APARAT_E224,
-    "'Stop-PemfKurulumBackendi', 'Stop-AppProcs', 'Get-ItemProperty')",
-    "'Stop-PemfKurulumBackendi', 'Stop-AppProcs', 'Get-ItemProperty', 'Get-NetTCPConnection', 'Invoke-WebRequest', 'Invoke-RestMethod')",
+    "'Test-PemfAtRestDurumu')",
+    "'Test-PemfAtRestDurumu', 'Get-NetTCPConnection', 'Invoke-WebRequest', 'Invoke-RestMethod')",
 )
 _APARAT_E224 = _degistir(
     _APARAT_E224,
