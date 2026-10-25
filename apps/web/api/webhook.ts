@@ -100,6 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'unmatched_subscription' })
   } catch (e) {
     console.error('iyzico webhook işleme hatası', e)
-    return res.status(500).json({ error: e instanceof Error ? e.message : 'hata' }) // iyzico retry etsin
+    // D3.40 (B-7.3): iç hata metni (eksik env adı, PostgREST gövdesi, iç ağ hedefi) KİMLİKSİZ çağırana DÖNMEZ — yalnız günlüğe.
+    return res.status(500).json({ error: 'internal' }) // iyzico retry etsin
   }
 }

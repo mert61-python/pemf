@@ -192,6 +192,16 @@ security definer
 set search_path = public
 as $$
 begin
+  -- ⚠️ D3.40 (B-7.4): İDEMPOTANS — aynı dönem için yinelenen teslim (iyzico yeniden denemesi; callback + webhook'un ilk ACTIVE'i)
+  -- abonenin O DÖNEMDE harcadığı hakkı SIFIRLAMAMALI. Eskiden her çağrı dönemi baştan kuruyordu. Satır aynı hakla TAZE bir
+  -- dönemdeyse (bitişine 20 günden fazla var) çağrı etkisizdir; aylık yenileme (dönem sonu yaklaşmış) ve plan değişikliği (hak farklı)
+  -- eskisi gibi yeni dönem açar.
+  if exists (
+    select 1 from public.token_balances b
+    where b.user_id = p_user and b.aylik_hak = p_aylik_hak and b.donem_sonu > now() + interval '20 days'
+  ) then
+    return;
+  end if;
   insert into public.token_balances (user_id, aylik_hak, donem_basi, donem_sonu)
   values (p_user, p_aylik_hak, now(), now() + interval '1 month')
   on conflict (user_id) do update
