@@ -55,6 +55,13 @@ jobs:
           . .venv/bin/activate
           python -m PyInstaller build_tools/PEMF_Backend_onedir.spec --noconfirm --distpath dist --workpath build
 
+      # D3.46 (B-10.200 · Y34, sahip): Linux hedefi compile_pyd'yi KOŞMAZ → ai_hub diskte DÜZ .py (koruma sıfır). Korumasız çıktı
+      # ÜRETİLMEZ — kapı kırmızı (bilinçli: Cython zinciri gelene kadar Linux "Yakında"). Paketlemeden ÖNCE.
+      - name: Kod koruması kapısı (korumasız ai_hub → artefakt YOK)
+        run: |
+          . .venv/bin/activate
+          python scripts/pyz_koruma_kapisi.py --yalniz-duz-py dist/PEMF_Backend
+
       - name: Doğrula + paketle (base-linux.zip)
         run: |
           test -f "dist/PEMF_Backend/PEMF_Backend" || { echo "!!! ELF yok"; ls -la dist/PEMF_Backend || true; exit 1; }

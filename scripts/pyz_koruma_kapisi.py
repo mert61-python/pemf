@@ -22,6 +22,7 @@ sorunsuz, koruma sifir). Bu yuzden --duz-py-de-kontrol bayragi ile ikisi birlikt
 Kullanim:
     python scripts/pyz_koruma_kapisi.py PEMF_BUILD/dist/PEMF_Backend/PEMF_Backend.exe
     python scripts/pyz_koruma_kapisi.py <exe> --paket ai_hub --duz-py-de-kontrol <dist_dizini>
+    python scripts/pyz_koruma_kapisi.py --yalniz-duz-py <dist_dizini>   # D3.46: Linux / macOS (PYZ okuyucu gerekmez)
 Cikis: 0 temiz, 1 koruma delik.
 """
 
@@ -65,7 +66,7 @@ def duz_py_var_mi(dist_dizini: Path, paket: str) -> list[str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("exe", type=Path, help="uretilen PEMF_Backend.exe")
+    ap.add_argument("exe", type=Path, nargs="?", default=None, help="uretilen PEMF_Backend.exe")
     ap.add_argument("--paket", default="ai_hub", help="PYZ'de bulunmamasi gereken paket koku")
     ap.add_argument(
         "--duz-py-de-kontrol",
@@ -74,8 +75,31 @@ def main() -> int:
         metavar="DIST",
         help="ayrica sevk agacinda duz .py kalmadigini dogrula (koruma kaniti icin ikisi birlikte gerekir)",
     )
+    # D3.46 (B-10.200 · Y34, sahip): Linux / macOS hedefleri compile_pyd'yi KOSMAZ -> ai_hub diskte DUZ .py kalir (koruma SIFIR).
+    # Korumasiz cikti URETILMEZ: CI / build_mac.sh bu kipi paketlemeden ONCE kosar, kirmizida durur ("Yakinda" — Cython zinciri gelene dek).
+    ap.add_argument(
+        "--yalniz-duz-py",
+        type=Path,
+        default=None,
+        metavar="DIST",
+        help="yalniz sevk agacinda korumasiz duz .py var mi (Linux / macOS — EXE / PYZ okuyucu gerekmez)",
+    )
     a = ap.parse_args()
 
+    if a.yalniz_duz_py is not None:
+        if not a.yalniz_duz_py.is_dir():
+            print(f"[pyz-kapi] HATA: sevk agaci yok: {a.yalniz_duz_py}")
+            return 1
+        kalan = duz_py_var_mi(a.yalniz_duz_py, a.paket)
+        if kalan:
+            print(f"[pyz-kapi] KIRMIZI: sevk agacinda {len(kalan)} korumasiz duz '{a.paket}' .py var: {kalan[:5]}")
+            print("[pyz-kapi] Y34: korumasiz Mac / Linux ciktisi URETILMEZ (Cython zinciri gelene kadar 'Yakinda').")
+            return 1
+        print(f"[pyz-kapi] Sevk agaci temiz: '{a.paket}' altinda duz .py yok.")
+        return 0
+
+    if a.exe is None:
+        ap.error("exe ya da --yalniz-duz-py gerekli")
     if not a.exe.is_file():
         print(f"[pyz-kapi] HATA: EXE yok: {a.exe}")
         return 1

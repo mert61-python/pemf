@@ -152,6 +152,8 @@ python -m PyInstaller build_tools/PEMF_Backend_onedir.spec \
 APP_BIN="$DIST_DIR/PEMF_Backend/PEMF_Backend"
 [[ -f "$APP_BIN" ]] || die "Mach-O binary üretilmedi: $APP_BIN"
 file "$APP_BIN" | grep -q "Mach-O" || die "Üretilen dosya Mach-O değil: $(file "$APP_BIN")"
+# D3.46 (B-10.200 · Y34, sahip): macOS hedefi compile_pyd'yi KOŞMAZ → ai_hub diskte DÜZ .py (koruma sıfır). Korumasız çıktı ÜRETİLMEZ.
+python scripts/pyz_koruma_kapisi.py --yalniz-duz-py "$DIST_DIR/PEMF_Backend"   || die "Kod koruması kapısı KIRMIZI: ai_hub korumasız düz .py — Mac çıktısı ÜRETİLMEDİ (Y34; Cython zinciri gelene kadar 'Yakında')."
 
 # --- 6) İmzalama + smoke ------------------------------------------------------
 say "6/7  İmzalama + smoke test"
