@@ -99,6 +99,11 @@ if (-not $SkipGuard) {
     Info "Guard YEŞİL — backend Qt-free."
 }
 
+# --- 3b. D3.44 (B-10.64): derleme yorumlayıcısı ↔ sabitler (requirements.txt + kurtarma kilidi build_tools\myenv-requirements.txt).
+#     Paket BU yorumlayıcının kurulu sürümleriyle toplanır; sabitten sapma (ör. zeroconf 0.148 / cryptography 46) sessizce sahaya giderdi. ---
+& $PY "scripts\kilit_denetimi.py" --ortam
+if ($LASTEXITCODE -ne 0) { Die "Derleme ortamı sabitlerden sapmış (scripts\kilit_denetimi.py --ortam) — kurulu sürümleri requirements.txt / build_tools\myenv-requirements.txt ile hizalayın (onnx / torch pinleri SABİT)." }
+
 # --- 4. PyInstaller var mı? ---
 & $PY -c "import PyInstaller" 2>$null
 if ($LASTEXITCODE -ne 0) {
@@ -253,6 +258,9 @@ Info "PyInstaller build → $dist"
 $t0 = Get-Date
 & $PY -m PyInstaller "build_tools\PEMF_Backend_onedir.spec" --noconfirm --distpath $dist --workpath $work
 if ($LASTEXITCODE -ne 0) { Die "PyInstaller build başarısız (log'a bakın)." }
+# D3.41 (B-9.11): sevk edilen her dağıtım kurtarma kilidinde ve AYNI sürümde mi (kilitten kurtarma aynı paketi üretsin); zeroconf ≥ pin.
+& $PY "scripts\kilit_denetimi.py" --sevk "$dist\PEMF_Backend"
+if ($LASTEXITCODE -ne 0) { Die "Sevk ağacı kurtarma kilidiyle ayrışmış (scripts\kilit_denetimi.py --sevk) — build_tools\myenv-requirements.txt'i sevk edilen sürümlerle güncelleyin." }
 $dt = (Get-Date) - $t0
 
 $exe = Join-Path $dist "PEMF_Backend\PEMF_Backend.exe"
