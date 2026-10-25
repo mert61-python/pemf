@@ -475,6 +475,22 @@ export function SettingsScreen() {
       // yok sayılıyordu → boş/bozuk bir server_ip kalıcı hâle gelip sonraki açılışta keşfi
       // bozabiliyordu. Yalnız GEÇERLİ bir adres kalıcılaştırılır; geçersizse mevcut ayar korunur.
       const addr = (settings.server_ip || "").trim();
+      if (addr && Platform.OS !== "web") {
+        // ⚠️ D3.18 (B-6.28): "Test Et" ile AYNI PEMF kimlik kapısı (`service === "PEMF-Vet"` + kimlik). Eskiden Kaydet bunu
+        // atlıyordu → doğrulanmamış bir LAN host'u taban + kalıcı adres oluyor, `/settings/` POST'u ve sonraki her istek (cihaz
+        // anahtarı, Supabase JWT, operatör jetonu) oraya gidiyordu. Reddedilen adres KAYDEDİLMEZ, ayarlar oraya GÖNDERİLMEZ.
+        let dogrulandi = false;
+        try {
+          dogrulandi = await checkHealth(addr, null);
+        } catch {
+          dogrulandi = false;
+        }
+        if (!dogrulandi) {
+          setLoading(false);
+          setSaveStatus(t("ayarlar.baglanti.cihazYok"));
+          return;
+        }
+      }
       if (addr) {
         // KRİTİK: web'de app KENDİ origin'ine bağlıdır → base'i repoint ETME. Aksi halde bir sonraki
         // apiPost("/settings/") yanlış/boş adrese gider → "Kaydetme hatası" + tüm bağlantı kopar (yeşil kalır).
