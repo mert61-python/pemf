@@ -84,6 +84,46 @@ export async function exchangeCodeForToken(base: string, code: string): Promise<
   }
 }
 
+/** D3.47 · A-60 (sahip): CİHAZ KİMLİĞİYLE eşleşmede de erişim anahtarı ŞART. Eskiden kimlik yolu anahtarsız "bağlanıldı ✓"
+ *  diyordu; uzaktan (tünel) sonraki her istek 401, WS 1008 alıyordu (İG-6.50). (1) Cihazla aynı ağdaysa anahtar cihazdan alınır
+ *  (A-01: LAN güvenilir ağ). (2) Değilse saklı anahtar BU cihaza karşı sınanır: kimlik isteyen bir uçta (`/api/system/info`)
+ *  yalnız 401 "anahtar yok / yanlış" demektir — başka her yanıt anahtarın geçerli ya da cihazda kimlik zorunluluğunun kapalı
+ *  olduğunu gösterir. */
+export async function kimlikYoluErisimi(base: string): Promise<boolean> {
+  const b = toBase(base);
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), HEALTH_TIMEOUT_MS);
+    try {
+      const res = await korunanFetch(`${b}/api/auth/token`, { signal: ctrl.signal });
+      if (res.ok) {
+        const d = await res.json().catch(() => null);
+        if (d?.token) { await setStoredApiToken(String(d.token)); return true; }
+      }
+    } finally {
+      clearTimeout(t);
+    }
+  } catch {
+    /* uzak (403) / eski backend (404) / ağ — saklı anahtarı sına */
+  }
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), HEALTH_TIMEOUT_MS);
+    try {
+      const anahtar = serviceConfig.apiToken;
+      const res = await korunanFetch(`${b}/api/system/info`, {
+        headers: anahtar ? { "X-API-Key": anahtar } : {},
+        signal: ctrl.signal,
+      });
+      return res.status !== 401;
+    } finally {
+      clearTimeout(t);
+    }
+  } catch {
+    return false;
+  }
+}
+
 /** /api/health doğrular; başarılıysa deviceId + (yerelse) api_token'ı saklar (uzaktan erişim için).
  *  requireDeviceId verilirse SADECE o cihaza bağlan (yanlış-cihaz koruması; oto-keşifte kullanılır).
  *  [5.9] kimligiKaydet:false → deviceId DİSKE YAZILMAZ: eşleştirme ön-probu token takasından

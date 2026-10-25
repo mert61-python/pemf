@@ -80,6 +80,8 @@
       "bulunamadi": "No online device matches this code/ID. You also get this message if the device has been off/offline for a long time: first make sure the device is on and connected to the internet, then check the code.",
       "bulutaUlasilamadi": "Could not reach the cloud (connection/timeout). Check your internet and try again.",
       "gecersizAdres": "Invalid device address format.",
+      "jetonYok": "The device was found but no access key could be obtained — not connected. Try again while on the same Wi-Fi network as the device, or enter the pairing code shown on the device screen.",
+      "jetonYokOnceki": "The device was found but no access key could be obtained — the connection stayed on the previous device. Try again while on the same Wi-Fi network as the device, or enter the pairing code shown on the device screen.",
       "kodReddi": "The pairing code was not accepted. The connection setting was not changed; check the code and try again.",
       "kodReddiOnceki": "The device was found but the pairing code was not accepted — the connection stayed on the previous device. Check the code and try again.",
       "ulasilamiyor": "The device was found but is offline right now, or its identity could not be verified."

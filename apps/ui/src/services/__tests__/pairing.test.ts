@@ -18,6 +18,7 @@ const mockCozKod = jest.fn();
 const mockCozKimlik = jest.fn();
 const mockHealth = jest.fn();
 const mockExchange = jest.fn();
+const mockKimlikErisim = jest.fn();
 const mockUpdateCfg = jest.fn();
 const mockTabanCoz = jest.fn();
 const mockSetDeviceId = jest.fn();
@@ -29,6 +30,7 @@ jest.mock("@/services/deviceRegistry", () => ({
 jest.mock("@/services/discovery", () => ({
   checkHealth: (...a: unknown[]) => mockHealth(...a),
   exchangeCodeForToken: (...a: unknown[]) => mockExchange(...a),
+  kimlikYoluErisimi: (...a: unknown[]) => mockKimlikErisim(...a),
 }));
 jest.mock("@/services/config", () => ({
   updateServiceConfig: (...a: unknown[]) => mockUpdateCfg(...a),
@@ -45,7 +47,7 @@ const ID_ = "140936350360443";
 const bulundu = { durum: "bulundu", url: URL_, device: { device_id: ID_ } };
 
 beforeEach(() => {
-  for (const m of [mockCozKod, mockCozKimlik, mockHealth, mockExchange, mockUpdateCfg, mockTabanCoz, mockSetDeviceId]) {
+  for (const m of [mockCozKod, mockCozKimlik, mockHealth, mockExchange, mockKimlikErisim, mockUpdateCfg, mockTabanCoz, mockSetDeviceId]) {
     m.mockReset();
   }
   // ⚠️ ZORUNLU: `AsyncStorage.setItem` çağrıları dosya boyunca BİRİKİYOR. Sıfırlanmazsa aşağıdaki
@@ -53,6 +55,7 @@ beforeEach(() => {
   (AsyncStorage.setItem as jest.Mock).mockClear();
   mockHealth.mockResolvedValue(true);
   mockExchange.mockResolvedValue(true);
+  mockKimlikErisim.mockResolvedValue(true);
   mockUpdateCfg.mockReturnValue(true);
   mockTabanCoz.mockReturnValue({ apiBaseUrl: `${URL_}/api`, websocketUrl: "wss://x/ws", bridgeBaseUrl: `${URL_}/api` });
   mockSetDeviceId.mockResolvedValue(undefined);
@@ -112,13 +115,25 @@ describe("cihazaBaglan", () => {
     }
   })
 
-  it("uzun girdi CİHAZ KİMLİĞİ sayılır ve token takası YAPILMAZ", async () => {
+  // ⚠️ BİLİNÇLİ SÖZLEŞME DEĞİŞİKLİĞİ (D3.47 · A-60, sahip): eskiden "kimlik yolunda token takası YAPILMAZ → ok" pinleniyordu —
+  // anahtarsız "bağlanıldı ✓", uzakta her istek 401 (İG-6.50). Artık kimlik yolunda da erişim anahtarı ŞART (kod takası yine YOK).
+  it("uzun girdi CİHAZ KİMLİĞİ sayılır; kod takası YAPILMAZ ama erişim anahtarı ŞART (A-60)", async () => {
     mockCozKimlik.mockResolvedValue(bulundu);
+    mockKimlikErisim.mockResolvedValue(true);
     const s = await cihazaBaglan(ID_);
     expect(s.durum).toBe("ok");
     expect(mockCozKimlik).toHaveBeenCalledWith(ID_);
     expect(mockCozKod).not.toHaveBeenCalled();
     expect(mockExchange).not.toHaveBeenCalled(); // kod yok → takas yok
+    expect(mockKimlikErisim).toHaveBeenCalledWith(URL_);
+  });
+
+  it("KRİTİK (A-60): kimlik yolunda anahtar alınamazsa jeton_yok — bağlantı DEĞİŞMEZ, kimlik YAZILMAZ", async () => {
+    mockCozKimlik.mockResolvedValue(bulundu);
+    mockKimlikErisim.mockResolvedValue(false);
+    expect(await cihazaBaglan(ID_)).toEqual({ durum: "jeton_yok" });
+    expect(mockUpdateCfg).not.toHaveBeenCalled();
+    expect(mockSetDeviceId).not.toHaveBeenCalled();
   });
 
   it("boş girdide ağa hiç çıkmaz", async () => {
@@ -127,7 +142,7 @@ describe("cihazaBaglan", () => {
   });
 
   it("her sebebin kullanıcıya dönük bir mesajı vardır", () => {
-    for (const d of ["ok", "yok", "adres_yok", "bayat", "hata", "ulasilamiyor", "gecersiz_adres", "kod_reddedildi"]) {
+    for (const d of ["ok", "yok", "adres_yok", "bayat", "hata", "ulasilamiyor", "gecersiz_adres", "kod_reddedildi", "jeton_yok"]) {
       const m = eslesmeMesaji({ durum: d, url: URL_, deviceId: ID_ } as never)
       expect(typeof m).toBe("string")
       expect(m.length).toBeGreaterThan(10)

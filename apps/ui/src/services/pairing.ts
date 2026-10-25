@@ -15,7 +15,8 @@
  *      tünel URL'i başka bir kliniğe yeniden atanmış ya da Supabase satırı zehirlenmişse,
  *      kimlik uyuşmazlığında BAĞLANILMAZ — yanlış hastaya komut gönderme riski.
  *   3. Kod yolunda token TAKASI yapılır ve SONUCU denetlenir. Eskiden sonuç yok sayılıyordu →
- *      "bağlandı ✓" deniyor ama sonraki her istek 401 alıyordu (audit P0/#25).
+ *      "bağlandı ✓" deniyor ama sonraki her istek 401 alıyordu (audit P0/#25). Kimlik yolunda da
+ *      erişim anahtarı ŞART (D3.47 · A-60): cihazdan alınır ya da saklı anahtar bu cihazda sınanır.
  *   4. Oturum içi bağlantı (`updateServiceConfig`) YALNIZ takas başarılıysa değişir. Kod
  *      reddedilirse ya da takas sürerken bağlantı ÖNCEKİ cihazda kalır — ACİL DURDUR dahil her
  *      istek oraya gider (A-52 / İG-6.3).
@@ -24,7 +25,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { servisTabanlariniCoz, setStoredDeviceId, updateServiceConfig } from "@/services/config";
 import { uzakCihaziKimlikleCoz, uzakCihaziKodlaCoz } from "@/services/deviceRegistry";
-import { checkHealth, exchangeCodeForToken } from "@/services/discovery";
+import { checkHealth, exchangeCodeForToken, kimlikYoluErisimi } from "@/services/discovery";
 import i18n from "i18next";
 
 /** Girdi 8 karakteri aşmıyorsa EŞLEŞTİRME KODU, aşıyorsa CİHAZ KİMLİĞİ kabul edilir. */
@@ -45,7 +46,9 @@ export type EslesmeSonuc =
   /** Dönen adres biçimsel olarak geçersiz — mevcut ayarı BOZMA. */
   | { durum: "gecersiz_adres" }
   /** Bağlandı ama kod token'a çevrilemedi → istekler 401 olurdu; dürüstçe bildir. */
-  | { durum: "kod_reddedildi" };
+  | { durum: "kod_reddedildi" }
+  /** D3.47 · A-60: kimlikle bulundu ama erişim anahtarı alınamadı / saklı anahtar bu cihazda geçmiyor → BAĞLANILMADI. */
+  | { durum: "jeton_yok" };
 
 /** Mesajın söylendiği an uygulamanın bağlantı durumu (Y42). */
 export type EslesmeBaglami = {
@@ -89,6 +92,12 @@ export function eslesmeMesaji(s: EslesmeSonuc, baglam: EslesmeBaglami = {}): str
         return i18n.t("ayarlar.eslestirme.sonuc.kodReddiOnceki");
       }
       return i18n.t("ayarlar.eslestirme.sonuc.kodReddi");
+    case "jeton_yok":
+      // A-60: "bağlanıldı" DENMEZ; eksik olan (erişim anahtarı) ve çaresi söylenir. Y42 bağlam kuralı aynı.
+      if (baglam.oncekiCihazaBagli === true) {
+        return i18n.t("ayarlar.eslestirme.sonuc.jetonYokOnceki");
+      }
+      return i18n.t("ayarlar.eslestirme.sonuc.jetonYok");
     default:
       // ⚠️ DÜRÜST MESAJ (denetim 2026-08-17): bu dal YALNIZ "kod yanlış" demek DEĞİL. Sunucudaki
       // `resolve_device` tazelik penceresi dışında kalan (uzun süredir kapalı) cihaz da buraya
@@ -140,7 +149,8 @@ export async function cihazaBaglan(girdi: string): Promise<EslesmeSonuc> {
 
     // (3) Kod yolunda token takası — sonucu DENETLE. Takas açık `url` ile yapılır; oturum içi
     // bağlantı bu sırada DEĞİŞMEZ.
-    const tokenOk = kodMu ? await exchangeCodeForToken(url, input) : true;
+    // D3.47 · A-60: kimlik yolunda da anahtar ŞART (eskiden `true` — anahtarsız "bağlanıldı ✓", uzakta her istek 401).
+    const tokenOk = kodMu ? await exchangeCodeForToken(url, input) : await kimlikYoluErisimi(url);
 
     // ⚠️ TOKEN YOKSA KALICI YAZIM YOK (denetim 2026-08-17). Eskiden takas düşse de adres+device_id
     // diske yazılıyor, fonksiyon yalnızca `kod_reddedildi` dönüyordu. İKİ CİHAZLI klinikte sonuç:
@@ -152,7 +162,7 @@ export async function cihazaBaglan(girdi: string): Promise<EslesmeSonuc> {
     // DURDUR'u B'ye gidiyordu (ölçüldü: 7/7 istek B'ye, uç auth-muaf olduğu için B'de YÜRÜTÜLDÜ;
     // A'nın bobinleri sürdü). Takas sürerken basılan ACİL DURDUR da A'ya gider: eşleştirme
     // doğrulanmadan operatörün durdurmak istediği cihaz hâlâ A'dır.
-    if (!tokenOk) return { durum: "kod_reddedildi" };
+    if (!tokenOk) return { durum: kodMu ? "kod_reddedildi" : "jeton_yok" };
 
     // Takas başarılı (ya da kimlik yolu) → bağlantı ŞİMDİ yeni cihaza geçer.
     if (!updateServiceConfig(url)) return { durum: "gecersiz_adres" };

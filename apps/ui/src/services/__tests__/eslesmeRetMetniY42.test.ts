@@ -35,7 +35,9 @@ describe("Y42 — kod reddi metni", () => {
   it("KARŞIT: bağlam yalnız ret metnini değiştirir, diğer TÜM sebepler aynı kalır", () => {
     // 1-B inceleme i5: yalnız yok/bayat/hata taranıyordu. Record anahtarı `EslesmeSonuc`'un TÜM dallarını ister
     // (yeni bir sebep eklenince tür denetimi bu listeyi de güncelletir).
-    const tumu: Record<Exclude<EslesmeSonuc["durum"], "kod_reddedildi">, EslesmeSonuc[]> = {
+    // D3.47 · A-60: `jeton_yok` da bir RET'tir (bağlantı önceki cihazda kalır) — bağlam kuralı onda da geçerli
+    // (`pairing.A60.kimlikYoluJeton.D3_47.test.ts`); bu "diğer sebepler" listesinin dışında.
+    const tumu: Record<Exclude<EslesmeSonuc["durum"], "kod_reddedildi" | "jeton_yok">, EslesmeSonuc[]> = {
       ok: [{ durum: "ok", url: "https://ornek.invalid", deviceId: "PEMF-SAHTE" }],
       yok: [{ durum: "yok" }],
       adres_yok: [{ durum: "adres_yok" }, { durum: "adres_yok", sonGorulme: "2026-01-01T00:00:00Z" }],

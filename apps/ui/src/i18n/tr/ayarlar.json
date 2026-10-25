@@ -80,6 +80,8 @@
       "bulunamadi": "Bu kod/kimlikle eşleşen çevrimiçi cihaz bulunamadı. Cihaz uzun süredir kapalı/çevrimdışıysa da bu mesajı alırsınız: önce cihazın açık ve internete bağlı olduğundan emin olun, sonra kodu kontrol edin.",
       "bulutaUlasilamadi": "Buluta ulaşılamadı (bağlantı/zaman aşımı). İnternetinizi kontrol edip tekrar deneyin.",
       "gecersizAdres": "Geçersiz cihaz adresi biçimi.",
+      "jetonYok": "Cihaz bulundu ama erişim anahtarı alınamadı — bağlanılmadı. Cihazla aynı Wi-Fi ağındayken yeniden deneyin ya da cihaz ekranındaki eşleştirme kodunu girin.",
+      "jetonYokOnceki": "Cihaz bulundu ama erişim anahtarı alınamadı — bağlantı önceki cihazda kaldı. Cihazla aynı Wi-Fi ağındayken yeniden deneyin ya da cihaz ekranındaki eşleştirme kodunu girin.",
       "kodReddi": "Eşleştirme kodu kabul edilmedi. Bağlantı ayarı değiştirilmedi; kodu kontrol edip yeniden deneyin.",
       "kodReddiOnceki": "Cihaz bulundu ama eşleştirme kodu kabul edilmedi — bağlantı önceki cihazda kaldı. Kodu kontrol edip tekrar deneyin.",
       "ulasilamiyor": "Cihaz bulundu ama şu an çevrimdışı ya da kimlik doğrulanamadı."
