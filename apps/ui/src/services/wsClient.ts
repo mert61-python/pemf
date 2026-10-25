@@ -1,5 +1,6 @@
 // Author: mertaygn, cglrgrkn
 import { serviceConfig } from "@/services/config";
+import { guvensizBaglantiBildir, soketAdresiGuvenliMi } from "@/services/duzHttpKapisi";
 
 // ─── Message types from the bridge ───────────────────────────────────────────
 export type WsMessageType =
@@ -138,9 +139,17 @@ export function connectPemfWebSocket(
 
   const openSocket = () => {
     if (closedByCaller) return;
+    // serviceConfig.websocketUrl her seferinde taze okunur — keşif sonrası yeni URL'yi alır.
+    const wsBase = serviceConfig.websocketUrl;
+    // D3.39 (B-6.1): düz-HTTP kapısı canlı veri soketini de kapsar — genel `ws://` adrese cihaz jetonu `?token=` ile ŞİFRESİZ
+    // gidiyordu. Soket AÇILMAZ, kullanıcıya bir kez söylenir; yeniden deneme / keşif sürer (adres yerel ağa ya da TLS'ye dönebilir).
+    if (!soketAdresiGuvenliMi(wsBase)) {
+      guvensizBaglantiBildir(wsBase);
+      onState?.(false);
+      scheduleReconnect();
+      return;
+    }
     try {
-      // serviceConfig.websocketUrl her seferinde taze okunur — keşif sonrası yeni URL'yi alır.
-      const wsBase = serviceConfig.websocketUrl;
       const wsUrl = serviceConfig.apiToken
         ? wsBase + (wsBase.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(serviceConfig.apiToken)
         : wsBase;

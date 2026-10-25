@@ -16,6 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { updateServiceConfig, serviceConfig, setStoredDeviceId, getStoredDeviceId, setStoredApiToken } from "@/services/config";
 import { getRemoteUrlForDevice } from "@/services/deviceRegistry";
 import { ipv4Oktetleri, isPrivateHost } from "@/services/apiClient";
+import { korunanFetch } from "@/services/duzHttpKapisi";
 
 const ADDR_KEY = "@pemf_server_address";
 const HEALTH_TIMEOUT_MS = 2500;
@@ -48,7 +49,8 @@ async function provisionToken(base: string): Promise<void> {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), HEALTH_TIMEOUT_MS);
-    const res = await fetch(`${base}/api/auth/token`, { signal: ctrl.signal });
+    // D3.39 (B-6.1): cihaz jetonu düz-HTTP kapısından — genel http adresinden jeton ALINMAZ (kapı fırlatır → yut).
+    const res = await korunanFetch(`${base}/api/auth/token`, { signal: ctrl.signal });
     clearTimeout(t);
     if (!res.ok) return; // uzak=403 / eski-backend=404 → mevcut saklı token korunur
     const d = await res.json();
@@ -65,7 +67,8 @@ export async function exchangeCodeForToken(base: string, code: string): Promise<
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), HEALTH_TIMEOUT_MS);
-    const res = await fetch(`${toBase(base)}/api/auth/exchange`, {
+    // D3.39 (B-6.1): eşleştirme kodu + dönen jeton düz-HTTP kapısından (genel http adrese ŞİFRESİZ gitmez).
+    const res = await korunanFetch(`${toBase(base)}/api/auth/exchange`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code }),

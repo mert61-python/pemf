@@ -433,15 +433,16 @@ describe("dosyaIndir iletileri (gerçek modül)", () => {
     const toast = jest.fn();
     const eskiFetch = (global as any).fetch;
     (global as any).fetch = jest.fn(async () => ({ ok: false, status: 503, headers: { get: () => "" } }));
-    await gercek.downloadFileWithAuth("http://x/y", "PEMF_Gecmis.csv", toast);
+    // D3.39: düz-HTTP kapısı genel http adrese indirme GÖNDERMEZ — fikstür yerel adres (eskiden "http://x/y", ad = genel host).
+    await gercek.downloadFileWithAuth("http://127.0.0.1/y", "PEMF_Gecmis.csv", toast);
     expect(toast).toHaveBeenLastCalledWith("İndirilemedi (503).", "error");
     await enYap();
-    await gercek.downloadFileWithAuth("http://x/y", "PEMF_Gecmis.csv", toast);
+    await gercek.downloadFileWithAuth("http://127.0.0.1/y", "PEMF_Gecmis.csv", toast);
     expect(toast).toHaveBeenLastCalledWith("Could not be downloaded (503).", "error");
     (global as any).fetch = jest.fn(async () => {
       throw new Error("ag");
     });
-    await gercek.downloadFileWithAuth("http://x/y", "PEMF_Gecmis.csv", toast);
+    await gercek.downloadFileWithAuth("http://127.0.0.1/y", "PEMF_Gecmis.csv", toast);
     expect(toast).toHaveBeenLastCalledWith("An error occurred during the download.", "error");
     (global as any).fetch = eskiFetch;
     expect(i18n.language).toBe("en");

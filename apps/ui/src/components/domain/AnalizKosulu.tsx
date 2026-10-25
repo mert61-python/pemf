@@ -20,6 +20,7 @@ import { useTranslation } from "react-i18next";
 import i18n from "i18next";
 
 import { authHeaders } from "@/services/apiClient";
+import { korunanFetch } from "@/services/duzHttpKapisi";
 import { backendBuMakinede } from "@/services/backendKonumu";
 import { serviceConfig } from "@/services/config";
 import { colors, touch, typography } from "@/theme/tokens";
@@ -102,7 +103,7 @@ export class KabinKamerasiHatasi extends Error {
 async function kabinIstegi(yol: string, yontem: "GET" | "POST"): Promise<any> {
   let r: Response;
   try {
-    r = await fetch(serviceConfig.apiBaseUrl + "/settings/kabin-kamerasi" + yol, {
+    r = await korunanFetch(serviceConfig.apiBaseUrl + "/settings/kabin-kamerasi" + yol, {
       method: yontem,
       headers: { Accept: "application/json", ...authHeaders() },
     });

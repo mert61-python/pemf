@@ -17,6 +17,7 @@ import * as Sharing from "expo-sharing";
 // Web → fetch+blob+<a> indir; Native → FileSystem.downloadAsync+header → paylaş menüsü. Token hep header'da.
 import { backendBuMakinede } from "@/services/backendKonumu";
 import { authHeaders } from "@/services/apiClient";
+import { guvensizBaglantiBildir, isCleartextAllowed } from "@/services/duzHttpKapisi";
 import i18n from "i18next";
 
 export { backendBuMakinede };
@@ -26,6 +27,12 @@ export async function downloadFileWithAuth(
   filename: string,
   toast?: (m: string, t?: "success" | "error" | "info") => void,
 ): Promise<void> {
+  // D3.39 (B-6.1): rapor indirmesi de düz-HTTP kapısından — üç dal da (masaüstü / tarayıcı / native) X-API-Key + hasta raporu taşır.
+  // Genel bir http adresine istek GÖNDERİLMEZ; kullanıcıya bir kez söylenir.
+  if (!isCleartextAllowed(url)) {
+    guvensizBaglantiBildir(url);
+    return;
+  }
   // ⚠️ D2-3.2 (2-D incelemesi): başlıklar apiClient'in TEK kaynağından — X-API-Key + (güvenli tabanda) operatör jetonu. Eskiden
   // yalnız X-API-Key gidiyordu; S-D.1 (O-A3.7) sonrası kayıtlı operatörlü klinikte PIN'le seçilmiş hekimin "Tümünü Excel/CSV İndir"i
   // jetonsuz sayılıp 428 alıyordu ("İndirilemedi (428)."). Kapı: screens/__tests__/TumuCsvOperatorJetonu.D2_3_2.web.test.tsx

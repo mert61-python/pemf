@@ -4,6 +4,17 @@ import { Alert, Platform } from "react-native";
 import { emitToast } from "@/services/toastBridge";
 import { etkinDilDegeri } from "@/i18n/durum";
 import i18n from "i18next";
+import { isCleartextAllowed, isPrivateHost } from "@/services/duzHttpKapisi";
+// D3.39: düz-HTTP kapısı tek kaynak `duzHttpKapisi` — eski içe aktaranlar için buradan da dışa aktarılır.
+export {
+  GuvensizBaglantiHatasi,
+  guvensizBaglantiBildir,
+  ipv4Oktetleri,
+  isCleartextAllowed,
+  isPrivateHost,
+  korunanFetch,
+  soketAdresiGuvenliMi,
+} from "@/services/duzHttpKapisi";
 
 /** Web-güvenli uyarı — Alert.alert web'de no-op olduğundan window.alert'e düşer. */
 export function platformAlert(title: string, message: string) {
@@ -215,33 +226,6 @@ export function hesapKusagiArtir(): number {
 /** Backend tabanı GÜVENLİ mi: https (tünel, TLS) VEYA RFC1918-LAN/localhost (yerel cihaz TLS'siz).
  * Keşfedilen/elle-girilen KEYFİ bir host'a (zehirli Supabase devices kaydı / sahte tünel) kurbanın
  * Supabase JWT'sini teslim etmemek için Authorization yalnız buraya eklenir. */
-/** Host, RFC1918 özel aralıkta bir IPv4 mü (ya da localhost)? Yalnız GERÇEK IP kabul edilir.
- *  Eskiden `/^10\./` gibi ön-ek testleri HOSTNAME'lere de uyuyordu: `10.evil.com` "LAN" sayılıyordu. */
-/**
- * Nokta-dörtlü IPv4'ün BAĞLANILACAK oktetleri; değilse null.
- * ⚠️ D3.17 (B-6.2): baştaki sıfırlı oktet `inet_aton` / Android ağ yığınında SEKİZLİKTİR — `010.0.0.1` = 8.0.0.1 (genel IP),
- * `172.016.0.1` = 172.14.0.1. Eskiden `Number("010")` = 10 → "özel ağ" sayılıp jeton GENEL bir adrese gidiyordu. Geçersiz sekizlik
- * (`08`) ya da > 255 → null.
- */
-export function ipv4Oktetleri(host: string): number[] | null {
-  const m = String(host || "").trim().match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (!m) return null;
-  const o = m.slice(1, 5).map((p) => (p.length > 1 && p.startsWith("0") ? (/^[0-7]+$/.test(p) ? parseInt(p, 8) : NaN) : Number(p)));
-  return o.some((n) => Number.isNaN(n) || n > 255) ? null : o;
-}
-
-export function isPrivateHost(host: string): boolean {
-  const h = (host || "").toLowerCase();
-  if (h === "localhost") return true;
-  const o = ipv4Oktetleri(h);
-  if (!o) return false; // nokta-dörtlü DEĞİLSE hostname'dir → özel ağ sayma
-  const [a, b] = o;
-  if (a === 127 || a === 10) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  return false;
-}
-
 export function isSafeBackendBase(baseUrl: string): boolean {
   if (!baseUrl) return false;
   const m = baseUrl.match(/^(https?):\/\/([^/:]+)/i);
@@ -260,23 +244,6 @@ export function isSafeBackendBase(baseUrl: string): boolean {
     .split(",").map((s: string) => s.trim().toLowerCase()).filter(Boolean);
   if (extra.includes(host)) return true;
   return TRUSTED_TUNNEL_SUFFIXES.some((sfx) => host.endsWith(sfx));
-}
-
-/** Bu tabana DÜZ HTTP ile istek atmak güvenli mi?
- *
- *  Android manifest'inde uygulama GENELİNDE `usesCleartextTraffic="true"`. Bunu manifest'ten
- *  daraltmak MÜMKÜN DEĞİL: `networkSecurityConfig` DNS ADLARIYLA çalışır, IP aralığı/CIDR
- *  ifade edemez — cihaz ise DHCP ile değişen bir LAN IP'sinde (ör. 192.168.1.147) durur, dolayısıyla
- *  "yalnız RFC1918'e cleartext izin ver" kuralı manifest'te yazılamaz ve denenirse keşif tümüyle
- *  kırılır. Kısıtlamayı bu yüzden UYGULAMA KATMANINDA uyguluyoruz: düz HTTP yalnız özel ağa
- *  (klinik cihazı, TLS'siz kabul edilen güven sınırı) izinlidir; internete çıkan her adres TLS
- *  zorunludur. Böylece bozuk/zehirli bir keşif kaydı cihaz token'ını ve hasta telemetrisini
- *  şifresiz olarak public bir host'a taşıyamaz. */
-export function isCleartextAllowed(baseUrl: string): boolean {
-  const m = String(baseUrl || "").match(/^(https?):\/\/([^/:]+)/i);
-  if (!m) return false;
-  if (m[1].toLowerCase() === "https") return true;
-  return isPrivateHost(m[2]);
 }
 
 /** Backend auth (PEMF_REQUIRE_AUTH=1) açıksa X-API-Key + entitlement + Supabase-Bearer gönder. Token boşsa geriye uyumlu. */

@@ -267,7 +267,7 @@
    "aciklama": "kalan servis / yardımcı / tür dosyaları",
    "durum": "tamam",
    "metin": 27,
-   "dosyaSayisi": 23
+   "dosyaSayisi": 24
   },
   {
    "ad": "sunucu-10a-yonlendirici",
@@ -3475,6 +3475,17 @@
    "not": ""
   },
   "apps/ui/src/services/config.ts": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
+  "apps/ui/src/services/duzHttpKapisi.ts": {
    "yuzey": "arayuz",
    "grup": "arayuz-09-yardimci",
    "sira": 9,

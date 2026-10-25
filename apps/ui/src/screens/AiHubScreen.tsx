@@ -31,6 +31,7 @@ import { KabinKamerasiKarti } from "@/components/domain/KabinKamerasiKarti";
 import { useToast } from "@/components/ui/ToastProvider";
 import { webIcinKucult } from "@/services/gorselKucult";
 import { apiGet, apiPost, authHeaders, platformAlert, AI_TIMEOUT_MS, aiHataMesaji } from "@/services/apiClient";
+import { korunanFetch } from "@/services/duzHttpKapisi";
 import { aiDetayCumlesi } from "@/utils/aiHataDetayi";
 import {
   CANLI_ASGARI_ARALIK_MS,
@@ -630,7 +631,7 @@ function PetOwnerAiScreen() {
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS); // ilk kullanımda model yüklemesi uzun sürebilir
       let response: Response;
       try {
-        response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/landmark", {
+        response = await korunanFetch(serviceConfig.apiBaseUrl + "/ai/vision/landmark", {
           method: "POST",
           body: formData,
           headers: { "Accept": "application/json", ...authHeaders() },
@@ -899,7 +900,7 @@ function PetOwnerSoundCard() {
       );
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
-      const response = await fetch(serviceConfig.apiBaseUrl + "/ai/sound/cat", {
+      const response = await korunanFetch(serviceConfig.apiBaseUrl + "/ai/sound/cat", {
         method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
       clearTimeout(to);
@@ -1551,7 +1552,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
             const t = setTimeout(() => ctrl.abort(), 15000);
             liveAbortRef.current = ctrl;
             try {
-              const r = await fetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
+              const r = await korunanFetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
                 method: "POST", body: fd,
                 headers: { Accept: "application/json", ...authHeaders(), [CANLI_OTURUM_BASLIGI]: oturum.kimlik },
                 signal: ctrl.signal,
@@ -1731,7 +1732,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
           }
           blob = new Blob([u8arr], { type: 'image/jpeg' });
         } else {
-          const res = await fetch(uriToAnalyze);
+          const res = await korunanFetch(uriToAnalyze);
           blob = await res.blob();
           if (blob.type && !blob.type.startsWith("image/")) {
             throw new Error("Seçilen dosya görsel olarak okunamadı.");
@@ -1768,7 +1769,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
       if (explainDestegi && isiHaritasi) formData.append("explain", "true");
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS); // ilk-kullanım model indirme için geniş timeout
-      const response = await fetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
+      const response = await korunanFetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
         method: "POST",
         body: formData,
         headers: { "Accept": "application/json", ...authHeaders() },
@@ -2352,7 +2353,7 @@ function useEmCanli({ endpoint, dosyaAdi, formuDoldur, onKare }: {
           // CANLI-DONGU: kisa sinir ZORUNLU (uzun timeout kamera akisini kilitler); petri / fantom hatti FGS'den agir → 30 sn
           const to = setTimeout(() => ctrl.abort(), 30000);
           try {
-            const r = await fetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
+            const r = await korunanFetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
               method: "POST", body: fd, signal: ctrl.signal,
               headers: { Accept: "application/json", ...authHeaders(), [CANLI_OTURUM_BASLIGI]: oturum.kimlik },
             });
@@ -2617,7 +2618,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
           while (n--) u8[n] = bstr.charCodeAt(n);
           blob = new Blob([u8], { type: 'image/jpeg' });
         } else {
-          const r = await fetch(imageUri); blob = await r.blob();
+          const r = await korunanFetch(imageUri); blob = await r.blob();
         }
         if (!blob) throw new Error("Görüntü hazırlanamadı.");
         formData.append("file", blob, "phantom.jpg");
@@ -2629,7 +2630,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
 
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS); // ilk-kullanım model indirme için geniş
-      const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/em_fantom", {
+      const response = await korunanFetch(serviceConfig.apiBaseUrl + "/ai/vision/em_fantom", {
         method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
       clearTimeout(to);
@@ -2971,7 +2972,7 @@ function PetriModule({ patientName }: { patientName: string }) {
           while (n--) u8[n] = bstr.charCodeAt(n);
           blob = new Blob([u8], { type: 'image/jpeg' });
         } else {
-          const r = await fetch(imageUri); blob = await r.blob();
+          const r = await korunanFetch(imageUri); blob = await r.blob();
         }
         if (!blob) throw new Error("Görüntü hazırlanamadı.");
         formData.append("file", blob, "petri.jpg");
@@ -2983,7 +2984,7 @@ function PetriModule({ patientName }: { patientName: string }) {
 
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS); // ilk-kullanım model indirme için geniş
-      const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/em_petri", {
+      const response = await korunanFetch(serviceConfig.apiBaseUrl + "/ai/vision/em_petri", {
         method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
       clearTimeout(to);
@@ -3320,7 +3321,7 @@ function RnaModule({ patientName }: { patientName: string }) {
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
       if (isiHaritasi) formData.append("explain", "true");
-      const response = await fetch(serviceConfig.apiBaseUrl + "/ai/rna/kidney", {
+      const response = await korunanFetch(serviceConfig.apiBaseUrl + "/ai/rna/kidney", {
         method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
       clearTimeout(to);
@@ -3691,7 +3692,7 @@ function CatSoundModule({ patientName }: { patientName: string }) {
       if (isiHaritasi) formData.append("explain", "true");
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
-      const response = await fetch(serviceConfig.apiBaseUrl + "/ai/sound/cat", {
+      const response = await korunanFetch(serviceConfig.apiBaseUrl + "/ai/sound/cat", {
         method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
       clearTimeout(to);
@@ -3890,7 +3891,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
         let blob: Blob | null = null;
         if (imageFile) blob = imageFile;
         else if (imageBase64) { const bstr = atob(imageBase64); let n = bstr.length; const u8 = new Uint8Array(n); while (n--) u8[n] = bstr.charCodeAt(n); blob = new Blob([u8], { type: 'image/jpeg' }); }
-        else { const r = await fetch(imageUri); blob = await r.blob(); }
+        else { const r = await korunanFetch(imageUri); blob = await r.blob(); }
         if (!blob) throw new Error("Görüntü hazırlanamadı.");
         formData.append("file", blob, "ct.jpg");
       } else {
@@ -3900,7 +3901,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
       if (isiHaritasi) formData.append("explain", "true");
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
-      const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/kidney_ct", { method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
+      const response = await korunanFetch(serviceConfig.apiBaseUrl + "/ai/vision/kidney_ct", { method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
       clearTimeout(to);
       const data = await response.json();
       if (response.ok && data.status === "success") {
@@ -4114,7 +4115,7 @@ function HistopathModule({ patientName }: { patientName: string }) {
         let blob: Blob | null = null;
         if (imageFile) blob = imageFile;
         else if (imageBase64) { const bstr = atob(imageBase64); let n = bstr.length; const u8 = new Uint8Array(n); while (n--) u8[n] = bstr.charCodeAt(n); blob = new Blob([u8], { type: 'image/jpeg' }); }
-        else { const r = await fetch(imageUri); blob = await r.blob(); }
+        else { const r = await korunanFetch(imageUri); blob = await r.blob(); }
         if (!blob) throw new Error("Görüntü hazırlanamadı.");
         formData.append("file", blob, "histo.jpg");
       } else {
@@ -4124,7 +4125,7 @@ function HistopathModule({ patientName }: { patientName: string }) {
       if (isiHaritasi) formData.append("explain", "true");
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
-      const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/histopath", { method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
+      const response = await korunanFetch(serviceConfig.apiBaseUrl + "/ai/vision/histopath", { method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
       clearTimeout(to);
       const data = await response.json();
       if (response.ok && data.status === "success") {
@@ -4329,7 +4330,7 @@ function ScratchModule({ patientName }: { patientName: string }) {
       const fd = new FormData();
       if (Platform.OS === "web") {
         let blob: Blob | null = dosya.file;
-        if (!blob && dosya.uri) blob = await (await fetch(dosya.uri)).blob();
+        if (!blob && dosya.uri) blob = await (await korunanFetch(dosya.uri)).blob();
         if (!blob) throw new Error("Dosya okunamadı.");
         fd.append("file", blob, dosya.name);
       } else {
@@ -4347,7 +4348,7 @@ function ScratchModule({ patientName }: { patientName: string }) {
       if (xaiAc) fd.append("explain", "true");
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), SCRATCH_TIMEOUT_MS);
-      const r = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/scratch", {
+      const r = await korunanFetch(serviceConfig.apiBaseUrl + "/ai/vision/scratch", {
         method: "POST", body: fd,
         headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
@@ -4617,7 +4618,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
             // CANLI-DONGU: kisa sinir ZORUNLU (uzun timeout kamera akisini kilitler); 3 modelli hat → 25 sn.
             const t = setTimeout(() => ctrl.abort(), 25000);
             try {
-              const r = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/cat_organ", {
+              const r = await korunanFetch(serviceConfig.apiBaseUrl + "/ai/vision/cat_organ", {
                 method: "POST", body: fd,
                 headers: { Accept: "application/json", ...authHeaders(), [CANLI_OTURUM_BASLIGI]: oturum.kimlik },
                 signal: ctrl.signal,
@@ -4723,7 +4724,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
         let blob: Blob | null = null;
         if (imageFile) blob = imageFile;
         else if (imageBase64) { const bstr = atob(imageBase64); let n = bstr.length; const u8 = new Uint8Array(n); while (n--) u8[n] = bstr.charCodeAt(n); blob = new Blob([u8], { type: 'image/jpeg' }); }
-        else { const r = await fetch(imageUri); blob = await r.blob(); }
+        else { const r = await korunanFetch(imageUri); blob = await r.blob(); }
         if (!blob) throw new Error("Görüntü hazırlanamadı.");
         formData.append("file", blob, "cat.jpg");
       } else {
@@ -4732,7 +4733,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
       }
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
-      const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/cat_organ", { method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
+      const response = await korunanFetch(serviceConfig.apiBaseUrl + "/ai/vision/cat_organ", { method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
       clearTimeout(to);
       const data = await response.json();
       // B1: analiz sürerken "Canlı Kamera"ya geçildiyse statik sonuç canlı kadrajın üstüne düşmesin.

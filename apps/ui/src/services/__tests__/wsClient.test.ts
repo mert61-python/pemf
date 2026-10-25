@@ -40,7 +40,8 @@ describe("connectPemfWebSocket", () => {
     MockWS.instances = [];
     origWS = (global as unknown as { WebSocket: unknown }).WebSocket;
     (global as unknown as { WebSocket: unknown }).WebSocket = MockWS;
-    serviceConfig.websocketUrl = "ws://test:8000/ws";
+    // D3.39: düz-HTTP kapısı genel `ws://` adresi açmaz — fikstür yerel ağ adresi (eskiden `ws://test:8000`, ad = genel host).
+    serviceConfig.websocketUrl = "ws://192.168.1.5:8000/ws";
     serviceConfig.apiToken = "";
   });
   afterEach(() => {

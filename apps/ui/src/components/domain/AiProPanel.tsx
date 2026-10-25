@@ -32,6 +32,7 @@ import { KalibrasyonRozeti } from "@/components/domain/aipro/KalibrasyonRozeti";
 import { useResponsive } from "@/hooks/useResponsive";
 import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet, apiPost, platformAlert, platformConfirm } from "@/services/apiClient";
+import { korunanFetch } from "@/services/duzHttpKapisi";
 import { getClientInstanceId, serviceConfig } from "@/services/config";
 import { useAuth } from "@/context/AuthContext";
 import { AiSpecApprovalModal, type AiProposalMeta, type AiProposalSpecs } from "@/components/domain/AiSpecApprovalModal";
@@ -950,7 +951,7 @@ export function AiProPanel({
           const zamanAsimi = setTimeout(() => ctrl.abort(), 15000);
           const headers: Record<string, string> = { Accept: "application/json" };
           if (serviceConfig.apiToken) headers["X-API-Key"] = serviceConfig.apiToken;
-          const r = await fetch(serviceConfig.apiBaseUrl + "/ai/ai_pro/frame", {
+          const r = await korunanFetch(serviceConfig.apiBaseUrl + "/ai/ai_pro/frame", {
             method: "POST", body: fd, headers, signal: ctrl.signal,
           });
           clearTimeout(zamanAsimi);
