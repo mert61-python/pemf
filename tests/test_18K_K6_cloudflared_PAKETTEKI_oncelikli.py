@@ -4,7 +4,8 @@
 ÖLÇÜLDÜ (18K, 2026-10-22): yayın derlemesinde `cloudflared.exe` PAKETTE (`_internal/bin/cloudflared/`; son derleme çıktısı ve bu makinenin
 kurulu runtime'ı — boyut / SHA-256 raporda). Ama `start_tunnel` önce `%APPDATA%\\PEMF_GUI\\cloudflared\\` önbelleğine bakıyor ve dosya
 VARSA (0 bayt / bozuk / eski sürümlerin sürüm-pinsiz, özetsiz indirdiği ikili) doğrulamadan çalıştırıyordu; paketli ikili yalnız önbellek
-yokken deneniyordu. Artık tek yol `_download_cloudflared`: paket → boyutu doğrulanmış önbellek → indirme (paketli yayında ULAŞILMAZ).
+yokken deneniyordu. Artık tek yol `_download_cloudflared`: paket → boyutu ve SHA-256'sı doğrulanmış önbellek (D3.35) → indirme
+(paketli yayında ULAŞILMAZ).
 
 Sahte EN ALT katta: `subprocess.Popen` komutu kaydedip hata fırlatır (süreç başlamaz), `urllib.request.urlopen` çağrılırsa kapı düşer
 (ağ YOK). Paket kökü `sys._MEIPASS` (frozen) ile geçici dizinde kurulur.
@@ -82,6 +83,14 @@ def test_18K_K6_KARSIT_paket_YOKSA_gecerli_onbellek_indirmeden_kullanilir(tm, mo
     monkeypatch.setattr(sys, "frozen", False, raising=False)
     monkeypatch.setattr(tm, "_bundled_cloudflared", lambda: None)
     onbellek = _onbellek(tmp_path, 5_000_001)
+    # D3.35 (B-4.13): geçerli önbellek = boyut eşiğini geçen VE pinli özeti tutan dosya (arşiv varlığında doğrulanmış kurulumun eki).
+    import hashlib
+
+    varlik, _ = tm._varlik_adi()
+    ozet = hashlib.sha256(onbellek.read_bytes()).hexdigest()
+    monkeypatch.setattr(tm, "_CLOUDFLARED_OZET", {varlik: ozet})
+    if varlik.endswith(".tgz"):
+        tm._ozet_eki(onbellek).write_text(ozet, encoding="ascii")
     assert tm.start_tunnel(port=48999) is False
     assert tm._cagrilar and tm._cagrilar[0][0] == str(onbellek), tm._cagrilar
 

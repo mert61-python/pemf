@@ -13,13 +13,17 @@ Kullanım:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import platform
 import re
+import shutil
 import socket
 import subprocess
 import sys
+import tarfile
+import tempfile
 import threading
 import urllib.request
 from pathlib import Path
@@ -68,101 +72,138 @@ def _bundled_cloudflared() -> Path | None:
     return None
 
 
+# D3.35 (B-4.13): indirme SÜRÜM-PİNLİ ve ÖZETLİ. Eskiden `releases/latest` (sürümü belirsiz) gövdesi özet denetimi olmadan
+# yerleşip Popen ediliyordu; `response.read()` boyut sınırsızdı. Sürüm = paketlenen ikilinin gömülü `main.Version`ı; Windows özeti
+# paketlenen ikilinin SHA-256'sı (18K K6 ölçümü: 54 166 424 B, Authenticode "Cloudflare, Inc."). Özeti BİLİNMEYEN varlık İNDİRİLMEZ
+# (fail-closed) — macOS / Linux özetleri resmi sürümden doldurulana kadar o platformlarda tünel yalnız paketli ikiliyle çalışır.
+_CLOUDFLARED_SURUM = "2026.6.1"
+_CLOUDFLARED_OZET: dict[str, str] = {
+    "cloudflared-windows-amd64.exe": "5253e66f1f493c4e13539749f1aa86fd0c61e3072900fec29a44ba046a6d97e2",
+}
+_ASGARI_BOYUT = 5_000_000  # bundan küçük önbellek / indirme bozuk-kesik sayılır (Audit P3)
+_AZAMI_INDIRME = 150 * 1024 * 1024  # gövde (ve arşivden çıkan ikili) boyut tavanı — Windows ikilisi ~52 MB
+_PARCA = 1024 * 1024
+
+
+def _varlik_adi() -> tuple[str, str]:
+    """(GitHub sürüm varlığının adı, önbellekteki dosya adı)."""
+    system = platform.system()
+    arch = "arm64" if "arm" in platform.machine().lower() else "amd64"
+    if system == "Windows":
+        return "cloudflared-windows-amd64.exe", "cloudflared.exe"
+    if system == "Darwin":
+        return f"cloudflared-darwin-{arch}.tgz", "cloudflared-darwin"
+    return f"cloudflared-linux-{arch}", "cloudflared-linux"
+
+
+def _sha256(yol: Path) -> str:
+    h = hashlib.sha256()
+    with open(yol, "rb") as f:
+        for parca in iter(lambda: f.read(_PARCA), b""):
+            h.update(parca)
+    return h.hexdigest()
+
+
+def _ozet_eki(bin_path: Path) -> Path:
+    """Arşivden (macOS .tgz) çıkan ikilinin özeti: pinli özet ARŞİVİNdir, ikilinin değil — doğrulanmış kurulum bu dosyayı yazar."""
+    return bin_path.with_name(bin_path.name + ".sha256")
+
+
+def _onbellek_dogrulandi(bin_path: Path, varlik: str) -> bool:
+    """D3.35: önbellek yalnız BOYUTU ve SHA-256'sı tutuyorsa kullanılır (eskiden ≥ 5 MB her dosya — eski sürümlerin pinsiz,
+    özetsiz indirdiği ikili dahil — doğrudan çalıştırılıyordu). Ham ikili varlıkta beklenen özet pinli özettir; arşivde ek dosya."""
+    try:
+        if not bin_path.is_file() or bin_path.stat().st_size < _ASGARI_BOYUT:
+            return False
+        if varlik.endswith(".tgz"):
+            beklenen = _ozet_eki(bin_path).read_text(encoding="ascii").strip().lower()
+        else:
+            beklenen = _CLOUDFLARED_OZET.get(varlik, "")
+        return bool(beklenen) and _sha256(bin_path) == beklenen
+    except Exception:
+        return False
+
+
 def _download_cloudflared() -> Path | None:
-    """cloudflared binary'yi (varsa) PAKETTEN kullanır, yoksa resmi GitHub release'den indirir."""
+    """cloudflared ikilisi — sıra: (1) PAKET → (2) boyutu ve SHA-256'sı doğrulanmış önbellek → (3) sürüm-pinli, boyut tavanlı,
+    özetli indirme. Doğrulanamayan gövde önbelleğe YERLEŞMEZ ve çalıştırılmaz."""
     bundled = _bundled_cloudflared()
     if bundled is not None:
         logger.info("cloudflared paketlenmiş binary kullanılıyor (offline): %s", bundled)
         return bundled
 
-    system = platform.system()
-    machine = platform.machine().lower()
-
-    if system == "Windows":
-        url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
-        filename = "cloudflared.exe"
-    elif system == "Darwin":
-        arch = "arm64" if "arm" in machine else "amd64"
-        url = f"https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-{arch}.tgz"
-        filename = "cloudflared-darwin"
-    else:
-        arch = "arm64" if "arm" in machine else "amd64"
-        url = f"https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-{arch}"
-        filename = "cloudflared-linux"
-
+    varlik, filename = _varlik_adi()
     bin_path = _BIN_DIR / filename
-    # Audit P3: bozuk/0-byte cache ASLA yeniden inmiyordu (bin_path.exists()→skip → Popen bozuk binary
-    # → watchdog sonsuz relaunch). Cache'i BOYUTLA doğrula; şüpheli-küçükse yeniden indir (self-heal).
-    if bin_path.exists() and bin_path.stat().st_size >= 5_000_000:
-        logger.info("cloudflared zaten mevcut: %s", bin_path)
+    if _onbellek_dogrulandi(bin_path, varlik):
+        logger.info("cloudflared önbellekte (özet doğrulandı): %s", bin_path)
         return bin_path
 
-    _BIN_DIR.mkdir(parents=True, exist_ok=True)
-    logger.info("cloudflared indiriliyor: %s", url)
-
+    beklenen = _CLOUDFLARED_OZET.get(varlik)
+    if not beklenen:
+        logger.error(
+            "cloudflared %s için pinli özet yok — doğrulanamayan ikili İNDİRİLMEZ (paketli ikili gerekir).", varlik
+        )
+        return None
+    url = f"https://github.com/cloudflare/cloudflared/releases/download/{_CLOUDFLARED_SURUM}/{varlik}"
     try:
-        # Audit P3: ATOMİK indir — temp'e yaz + boyut doğrula + os.replace. Eskiden doğrudan bin_path'e
-        # yazılıyordu; indirme kesilirse 0-byte/kesik dosya kalıp bir daha inmiyordu.
-        import os as _os
-        import tempfile as _tf
-
-        _fd, _tmp = _tf.mkstemp(dir=str(_BIN_DIR), suffix=".part")
-        try:
-            with urllib.request.urlopen(url, timeout=60) as response, _os.fdopen(_fd, "wb") as f:
-                f.write(response.read())
-            _sz = _os.path.getsize(_tmp)
-            if _sz < 5_000_000:
-                raise ValueError(f"cloudflared indirmesi çok küçük ({_sz} bytes) — bozuk/kesik.")
-            # DENETIM P3 (macOS): Darwin varliği .tgz ARSIVIDIR. Eskiden arsiv dogrudan
-            # "cloudflared-darwin" adiyla kaydedilip CALISTIRILIYORDU → exec basarisiz olur,
-            # ustelik dosya 5 MB esigini gectigi icin cache "gecerli" sayilip BIR DAHA
-            # INDIRILMEZ; watchdog sonsuz yeniden-baslatma dongusune girer. Arsivi ac ve
-            # ICINDEKI gercek ikiliyi yaz.
-            if system == "Darwin":
-                import tarfile as _tar
-
-                _member_path = None
-                with _tar.open(_tmp, "r:gz") as _tf_arch:
-                    for _m in _tf_arch.getmembers():
-                        if _m.isfile() and _os.path.basename(_m.name) == "cloudflared":
-                            _member_path = _m
-                            break
-                    if _member_path is None:
-                        raise ValueError("cloudflared .tgz icinde 'cloudflared' ikilisi bulunamadi.")
-                    _extracted = _tf_arch.extractfile(_member_path)
-                    with _os.fdopen(
-                        _os.open(_tmp + ".bin", _os.O_WRONLY | _os.O_CREAT | _os.O_TRUNC, 0o755), "wb"
-                    ) as _bf:
-                        _bf.write(_extracted.read())
-                _os.replace(_tmp + ".bin", bin_path)
-                try:
-                    _os.unlink(_tmp)  # arsivi birakma
-                except Exception:
-                    pass
-            else:
-                _os.replace(_tmp, bin_path)
-        except Exception:
-            try:
-                _os.unlink(_tmp)
-            except Exception:
-                pass
-            raise
-
-        # Linux/macOS: çalıştırma izni ver
-        if system != "Windows":
+        _BIN_DIR.mkdir(parents=True, exist_ok=True)
+        # Audit P3: ATOMİK — geçici dosyaya yaz, doğrula, os.replace (kesik indirme önbellekte kalmaz).
+        fd, tmp = tempfile.mkstemp(dir=str(_BIN_DIR), suffix=".part")
+    except Exception as e:
+        logger.error("cloudflared indirilemedi: %s", e)
+        return None
+    gecici = [tmp, tmp + ".bin"]
+    logger.info("cloudflared indiriliyor: %s", url)
+    try:
+        h = hashlib.sha256()
+        toplam = 0
+        with os.fdopen(fd, "wb") as f, urllib.request.urlopen(url, timeout=60) as response:
+            while True:
+                parca = response.read(_PARCA)
+                if not parca:
+                    break
+                toplam += len(parca)
+                if toplam > _AZAMI_INDIRME:
+                    raise ValueError(f"cloudflared indirmesi boyut tavanını aştı (> {_AZAMI_INDIRME} bayt).")
+                h.update(parca)
+                f.write(parca)
+        if toplam < _ASGARI_BOYUT:
+            raise ValueError(f"cloudflared indirmesi çok küçük ({toplam} bytes) — bozuk/kesik.")
+        if h.hexdigest() != beklenen:
+            raise ValueError(
+                f"cloudflared {_CLOUDFLARED_SURUM} indirmesinin SHA-256 özeti pinli özetle UYUŞMUYOR — kullanılmaz."
+            )
+        if varlik.endswith(".tgz"):
+            # B-4.14: macOS varlığı .tgz ARŞİVİDİR — BİR KEZ açılır, içindeki ikili yerleşir. Eskiden çıkarılmış ikili ikinci kez
+            # `tarfile.open` ile açılmaya çalışılıyor, hata → None dönüyordu (geçerli arşivle bile tünel yok).
+            with tarfile.open(tmp, "r:gz") as arsiv:
+                uye = next(
+                    (m for m in arsiv.getmembers() if m.isfile() and os.path.basename(m.name) == "cloudflared"), None
+                )
+                if uye is None:
+                    raise ValueError("cloudflared .tgz icinde 'cloudflared' ikilisi bulunamadi.")
+                if uye.size > _AZAMI_INDIRME:
+                    raise ValueError("cloudflared .tgz içindeki ikili boyut tavanını aştı.")
+                kaynak = arsiv.extractfile(uye)
+                with os.fdopen(os.open(tmp + ".bin", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o755), "wb") as bf:
+                    shutil.copyfileobj(kaynak, bf, _PARCA)
+            os.replace(tmp + ".bin", bin_path)
+            _ozet_eki(bin_path).write_text(_sha256(bin_path), encoding="ascii")
+        else:
+            os.replace(tmp, bin_path)
+        if platform.system() != "Windows":
             bin_path.chmod(0o755)
-            # Eğer tgz ise çıkart
-            if str(url).endswith(".tgz"):
-                import tarfile
-
-                with tarfile.open(bin_path, "r:gz") as tar:
-                    tar.extractall(_BIN_DIR)
-
-        logger.info("cloudflared indirildi: %s", bin_path)
+        logger.info("cloudflared %s indirildi ve özeti doğrulandı: %s", _CLOUDFLARED_SURUM, bin_path)
         return bin_path
     except Exception as e:
         logger.error("cloudflared indirilemedi: %s", e)
         return None
+    finally:
+        for g in gecici:
+            try:
+                os.unlink(g)  # yerleştiyse zaten yok
+            except OSError:
+                pass
 
 
 def _read_url_from_output(process: subprocess.Popen, port: int) -> None:
