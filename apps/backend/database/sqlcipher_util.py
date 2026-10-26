@@ -1174,6 +1174,49 @@ def duz_metin_yedekleri_sifrele(app_data_dir, keyq, sqlcipher, logger=None, etik
                         e,
                         yol,
                     )
+    # D3I-A2.2 (Y93 · A-08): at-rest göçü `.enc.tmp → db` ile `.plain.bak`ın güvenli silinmesi ARASINDA kesildiyse veri kökünde DÜZ
+    # `<db>.plain.bak` (tüm PII) süresiz kalıyordu — tarama yalnız yukarıdaki dizinlere bakıyordu. Aynı yolla şifrelenir (SİLİNMEZ, aynı ad,
+    # mtime korunur, Y95); YALNIZ canlı `<db>` yerinde VE at-rest anahtarıyla açılıyorsa (yarım göçün `.plain.bak`ına — `db` YOK —
+    # `_yarim_goc_toparla` dokunur) ve emanet istenmiyorsa (emanet ACL'le korunur). `.plain.bak.<zaman>` kardeşleri A-08 kolunda kalır.
+    if not duz_metin_yedegi_emanete_al_mi(logger):
+        kok = str(app_data_dir)
+        try:
+            kok_adlari = sorted(os.listdir(kok))
+        except Exception as e:
+            kok_adlari = []
+            sonuc["sifrelenemedi"].append(kok)
+            if logger:
+                logger.error(
+                    "VERI KOKU OKUNAMADI (%s: %s): %s — kokteki .plain.bak SIFRELENMEDI.", type(e).__name__, e, kok
+                )
+        for ad in kok_adlari:
+            yol = os.path.join(kok, ad)
+            if ad.endswith(".plain.bak" + _DUZ_SIL_EK) and os.path.isfile(yol):
+                _yarim_kalan_duz_icerigi_toparla(yol, keyq, sqlcipher, logger)  # Y95: kesilmiş önceki işlem
+                continue
+            if not ad.endswith(".plain.bak") or not os.path.isfile(yol):
+                continue
+            canli = yol[: -len(".plain.bak")]
+            try:
+                if not duz_metin_sqlite_mi(yol) or not os.path.isfile(canli):
+                    continue
+                if _anahtarla_dogrulama_hatasi(canli, keyq, sqlcipher) is not None:
+                    continue  # canlı DB doğrulanmış şifreli DEĞİL → göç bitmemiş olabilir; dokunma
+            except Exception:
+                continue
+            try:
+                if not _duz_kopyayi_sifrele(yol, keyq, sqlcipher, logger):
+                    sonuc.setdefault("duz_icerik_sifirlanamadi", []).append(yol)
+                sonuc["sifrelendi"].append(yol)
+            except Exception as e:
+                sonuc["sifrelenemedi"].append(yol)
+                if logger:
+                    logger.error(
+                        "DUZ-METIN GOC YEDEGI (.plain.bak) SIFRELENEMEDI (%s: %s): %s — DUZ-METIN ama SAGLAM birakildi (SILINMEDI).",
+                        type(e).__name__,
+                        e,
+                        yol,
+                    )
     if logger and sonuc["sifrelendi"]:
         logger.warning(
             "%s goc sonrasi duz donem yedekleri at-rest anahtariyla SIFRELENDI (silinmedi, ayni ad): %s",
