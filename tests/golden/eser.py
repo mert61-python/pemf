@@ -41,11 +41,14 @@ def eser_var_mi(*rel_yollar: str) -> bool:
     ⚠️ 4A-3.8 (A3 incelemesi): eskiden yalnız `find_installed_model` soruluyordu; o, bütünlük süzgecinden (asgari boyut /
     sha yan dosyası) geçmeyen dosyayı GÖRMEZ → diskte DURAN kesik/yarım eser "yok" sayılıp ATLANIYORDU. Bozuk eser "yok"
     değil "VAR ama yüklenemiyor"dur → FAIL. Kökler ürünün KENDİ listesi (`_candidate_model_roots`; aynı ad/kök kuralı)."""
-    from utils.model_downloader import _candidate_model_roots, find_installed_model
+    from utils.model_downloader import ModelButunlukHatasi, _candidate_model_roots, find_installed_model
 
     def _diskte(r: str) -> bool:
-        if (KOK / r).exists() or find_installed_model(r):
-            return True
+        try:
+            if (KOK / r).exists() or find_installed_model(r):
+                return True
+        except ModelButunlukHatasi:
+            return True  # D3.48: bütünlük reddi = eser VAR ama bozuk → yükleme FAIL (atlanmaz — 4A-3.8 ile aynı ilke)
         return any((k / r).is_file() or (k / Path(r).name).is_file() for k in _candidate_model_roots())
 
     return bool(rel_yollar) and all(_diskte(r) for r in rel_yollar)

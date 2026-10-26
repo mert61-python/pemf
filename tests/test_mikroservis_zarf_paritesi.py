@@ -138,12 +138,15 @@ def test_KRITIK_yan_dosya_cozucusu_OLMAYAN_dosyayi_models_agacinda_arar(tmp_path
 
 
 def test_yan_dosya_cozucusu_VAR_OLANI_oldugu_gibi_dondurur(tmp_path):
-    """Klinik (frozen EXE) yolu ETKİLENMEMELİ: dosya yanındaysa kısa devre."""
+    """Klinik (frozen EXE) yolu ETKİLENMEMELİ: dosya yanındaysa kısa devre.
+
+    ⚠️ BİLİNÇLİ SÖZLEŞME DEĞİŞİKLİĞİ (D3.48 · Y18): takipli manifestte özeti olan dosya artık yanında da DENETLENİR (sahte içerikli
+    `ai_hub/cat_disease/scaler_X.pkl` reddedilir — `test_D3_48_…`); kısa devre manifest DIŞI yan dosya için aynen."""
     from utils.model_downloader import yan_dosya_coz
 
-    var = tmp_path / "scaler_X.pkl"
+    var = tmp_path / "yerel_yan.pkl"
     var.write_bytes(b"x" * 500)
-    assert yan_dosya_coz(var, "ai_hub/cat_disease/scaler_X.pkl") == str(var)
+    assert yan_dosya_coz(var, "ai_hub/cat_disease/yerel_yan.pkl") == str(var)
 
 
 def test_yan_dosya_cozucusu_HICBIR_KOSULDA_patlamaz():

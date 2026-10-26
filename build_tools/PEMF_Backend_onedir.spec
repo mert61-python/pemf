@@ -259,6 +259,13 @@ if not (os.path.isfile(os.path.join(_i18n_dir, 'tr.json')) and os.path.isfile(os
     raise SystemExit(f"apps/backend/i18n/{{tr,en}}.json yok ({_i18n_dir}) — sunucu çevirileri paketlenemez (I18N K-6)")
 datas.append((_i18n_dir, 'i18n'))
 
+# D3.48 (B-5.14 · Y18): model bütünlük manifesti (D3.45 takipli, `release_assets/ai_models_sha256.json`) → `_internal/ai_hub/` (APP katmanı —
+# her uygulama sürümüyle tazelenir; make_base_zip.APP_ROOTS). Yoksa derleme DURUR: manifestsiz paket yükleme-anı özet denetimini sessizce kapatırdı.
+_model_manifest = os.path.join(project_path, 'release_assets', 'ai_models_sha256.json')
+if not os.path.isfile(_model_manifest):
+    raise SystemExit(f"release_assets/ai_models_sha256.json yok ({_model_manifest}) — model bütünlük manifesti paketlenemez (D3.48)")
+datas.append((_model_manifest, 'ai_hub'))
+
 # DEMA simülatör (FastAPI '/simulator')
 sim_dir = os.path.join(project_path, 'dema-terapi-simülatörü', 'dist')
 if os.path.exists(sim_dir):

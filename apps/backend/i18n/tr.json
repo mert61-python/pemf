@@ -216,6 +216,7 @@
       "kediOrgan": "Kedi organ analiz hatası",
       "landmark": "Landmark model hatası",
       "logOkunamadi": "Log okunamadı",
+      "modelButunluk": "AI modeli bütünlük denetimini GEÇMEDİ ({{dosya}}: dosya beklenen sürümle aynı değil) — bu analiz kapatıldı. Manuel seans ve ACİL DURDUR etkilenmez; model paketini yeniden kurun.",
       "oneriHatasi": "AI öneri hatası",
       "onericiYok": "AI recommender bulunamadı.",
       "petriAnaliz": "Petri analiz hatası",

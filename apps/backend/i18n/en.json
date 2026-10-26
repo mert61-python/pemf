@@ -216,6 +216,7 @@
       "kediOrgan": "Feline organ analysis error",
       "landmark": "Landmark model error",
       "logOkunamadi": "The log could not be read",
+      "modelButunluk": "The AI model failed its integrity check ({{dosya}}: the file does not match the expected version) — this analysis is disabled. Manual sessions and EMERGENCY STOP are not affected; reinstall the model package.",
       "oneriHatasi": "AI recommendation error",
       "onericiYok": "The AI recommender was not found.",
       "petriAnaliz": "Well plate analysis error",

@@ -111,8 +111,35 @@ def _ai_fail(label, e: Exception) -> HTTPException:
     # I18N-P1: `label` metin YA DA `dil → metin` (`lambda d: ceviri.t("…", dil=d)`): günlük HER ZAMAN Türkçe, yanıt istek dilinde.
     if isinstance(e, HTTPException):
         return e
+    # D3.48 · Y18 (sahip): model bütünlük reddi → 503 + AÇIK uyarı (hangi dosya); manuel seans ve ACİL DURDUR etkilenmez. Modüller
+    # indirme / yükleme hatasını sarabildiği için zincire ve iletiye bakılır (ör. em_kedi `MODEL_DOWNLOAD_ERROR` metni).
+    _b = _butunluk_hatasi(e)
+    if _b is not None or _BUTUNLUK_ILETISI in str(e):
+        logger.error("%s — MODEL BÜTÜNLÜK REDDİ (analiz kapatıldı): %s", label("tr") if callable(label) else label, e)
+        _dosya = os.path.basename(_b.dosya) if _b is not None else "?"
+        return HTTPException(status_code=503, detail=ceviri.t("ai.hata.modelButunluk", dosya=_dosya))
     logger.exception("%s", label("tr") if callable(label) else label)
     return HTTPException(status_code=500, detail=label(None) if callable(label) else label)
+
+
+#: `utils.model_downloader.ModelButunlukHatasi` iletisinin değişmez başı (sarılmış hata metinlerinde aranır).
+_BUTUNLUK_ILETISI = "model butunluk denetimi gecmedi"
+
+
+def _butunluk_hatasi(e: BaseException):
+    """D3.48: istisna zincirindeki model bütünlük reddi (yoksa None)."""
+    from utils.model_downloader import ModelButunlukHatasi
+
+    gorulen: set = set()
+    x = e
+    for _ in range(8):
+        if x is None or id(x) in gorulen:
+            break
+        gorulen.add(id(x))
+        if isinstance(x, ModelButunlukHatasi):
+            return x
+        x = x.__cause__ or x.__context__
+    return None
 
 
 def _kok_neden_zinciri(e: BaseException, sinir: int = 5) -> str:
@@ -5113,7 +5140,7 @@ def _model_hazir_mi(rel_yol: str | None) -> tuple[str, str]:
             )
         # 4B-3.6: `yan_dosya_coz` modül-yanı dosyayı bütünlük sağlamasız döndürür (kökten gelen `find_installed_model`'de
         # süzülür) → kesik modül-yanı ONNX "ok" görünüp çıkarımda (modül-yanı ÖNCE) düşüyordu. Seçilen dosya aynı süzgeçten geçer.
-        if not _model_integrity_ok(_P(yol)):
+        if not _model_integrity_ok(_P(yol), rel_yol):  # D3.48: beklenen özet (yan dosya / takipli manifest) dahil
             return "model_yok", f"{rel_yol} bulundu ama bütünlük sağlaması başarısız (kesik/bozuk ağırlık): {yol}"
         return "ok", ""
     except Exception as e:

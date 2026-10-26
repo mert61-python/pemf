@@ -9,11 +9,121 @@ find_installed_model) korunur.
 """
 
 import hashlib
+import json
+import logging
 import os
 import sys
 from pathlib import Path
 
 from utils.path_utils import get_app_data_directory, kaynak_kokunu_bul, resource_path
+
+logger = logging.getLogger(__name__)
+
+#: D3.48 (B-5.14 · Y18): takipli ağırlık özetleri — D3.45 `release_assets/ai_models_sha256.json` (göreli yol → SHA-256);
+#: donmuş pakette `_internal/ai_hub/` altında (APP katmanı — her uygulama sürümüyle tazelenir; spec ekler, yoksa derleme DURUR).
+_MANIFEST_ADI = "ai_models_sha256.json"
+#: Aday manifest yolları → özetler (kök yeri değişirse — ör. testte `__file__` yönlendirilirse — yeniden okunur).
+_manifest_onbellegi: dict[tuple[str, ...], dict[str, str]] = {}
+_ozet_onbellegi: dict[tuple[str, int, int], str] = {}
+
+
+class ModelButunlukHatasi(RuntimeError):
+    """D3.48 · Y18 (sahip): model / yan dosya beklenen SHA-256 ile AYNI DEĞİL (ya da özet okunamadı) — YÜKLENMEZ, başka model
+    köküne DÜŞÜLMEZ; AI ucu 503 + açık uyarı (`ai_router._ai_fail`). Manuel seans ve ACİL DURDUR etkilenmez."""
+
+    def __init__(self, dosya, sebep: str):
+        super().__init__(f"model butunluk denetimi gecmedi: {dosya} ({sebep})")
+        self.dosya = str(dosya)
+        self.sebep = sebep
+
+
+def _goreli_anahtar(goreli) -> str:
+    return str(goreli).replace(chr(92), "/")
+
+
+def _manifest_ozetleri() -> dict[str, str]:
+    """Göreli yol → beklenen SHA-256 (takipli manifest; donmuşta paketteki kopya). Bulunamazsa {} — denetim yalnız `.sha256`
+    yan dosyasıyla yapılır (manifestsiz eski paket: davranış ESKİSİ GİBİ, ama günlükte görünür)."""
+    adaylar = []
+    try:
+        adaylar.append(Path(resource_path(os.path.join("ai_hub", _MANIFEST_ADI))))
+    except Exception:
+        logger.debug("model manifesti: paket yolu çözülemedi", exc_info=True)
+    try:
+        adaylar.append(kaynak_kokunu_bul(__file__) / "release_assets" / _MANIFEST_ADI)
+    except Exception:
+        logger.debug("model manifesti: kaynak kökü çözülemedi", exc_info=True)
+    anahtar = tuple(str(a) for a in adaylar)
+    if anahtar not in _manifest_onbellegi:
+        ozetler: dict[str, str] = {}
+        for aday in adaylar:
+            try:
+                if aday.is_file():
+                    veri = json.loads(aday.read_text(encoding="utf-8"))
+                    ozetler = {_goreli_anahtar(k): str(v["sha256"]).lower() for k, v in veri["dosyalar"].items()}
+                    break
+            except Exception:
+                logger.error(
+                    "Model bütünlük manifesti OKUNAMADI: %s — denetim yalnız yan dosyalarla yapılır",
+                    aday,
+                    exc_info=True,
+                )
+        if not ozetler:
+            logger.warning(
+                "Model bütünlük manifesti YOK (%s) — ağırlıklar yalnız asgari boyut / yan dosya ile denetlenir", adaylar
+            )
+        _manifest_onbellegi[anahtar] = ozetler
+    return _manifest_onbellegi[anahtar]
+
+
+def _dosya_ozeti(yol: Path) -> str:
+    """SHA-256 (yol + boyut + değişiklik zamanı ile önbellekli — her yüklemede büyük ağırlık yeniden özetlenmez)."""
+    st = yol.stat()
+    anahtar = (os.path.normcase(os.path.abspath(str(yol))), st.st_size, st.st_mtime_ns)
+    ozet = _ozet_onbellegi.get(anahtar)
+    if ozet is None:
+        h = hashlib.sha256()
+        with open(yol, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+        ozet = _ozet_onbellegi[anahtar] = h.hexdigest()
+    return ozet
+
+
+def butunluk_sebebi(path, goreli=None) -> str | None:
+    """D3.48: ağırlığın bütünlük kararı — None (geçer) · `kucuk` (asgari boyutun altında: kesik / yarım) · `ozet` (beklenen SHA-256
+    tutmuyor) · `dogrulanamadi` (beklenen özet VAR ama dosya / özet okunamadı). Beklenen özet: `<dosya>.sha256` yan dosyası, yoksa
+    takipli manifestte `goreli` (`ai_hub/<modül>/<dosya>`). Hiçbiri yoksa yalnız asgari boyut."""
+    path = Path(path)
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return "dogrulanamadi"
+    min_bytes = _MODEL_MIN_BYTES.get(path.suffix.lower(), 1)
+    if size < min_bytes:
+        logger.error(
+            "Model bütünlük UYARISI: %s beklenenden küçük (%d B < %d B) — kesik / yarım.", path, size, min_bytes
+        )
+        return "kucuk"
+    sha_file = path.with_name(path.name + ".sha256")
+    try:
+        if sha_file.exists():
+            beklenen = sha_file.read_text(encoding="utf-8").split()[0].strip().lower()
+        else:
+            beklenen = _manifest_ozetleri().get(_goreli_anahtar(goreli)) if goreli else None
+        if not beklenen:
+            return None
+        if _dosya_ozeti(path).lower() != beklenen:
+            logger.error(
+                "Model bütünlük REDDİ: %s SHA-256 beklenenle AYNI DEĞİL (%s) — yüklenmez.",
+                path,
+                goreli or sha_file.name,
+            )
+            return "ozet"
+        return None
+    except Exception:
+        logger.error("Model bütünlük DOĞRULANAMADI: %s — reddedildi (fail-closed).", path, exc_info=True)
+        return "dogrulanamadi"
 
 
 def get_persistent_model_dir() -> Path:
@@ -77,35 +187,10 @@ def _candidate_model_roots():
 _MODEL_MIN_BYTES = {".onnx": 100_000, ".pt": 100_000, ".pth": 100_000, ".pkl": 200, ".bin": 1000}
 
 
-def _model_integrity_ok(path: Path) -> bool:
-    """Yarım/bozuk modeli 'kurulu' saymamak için bütünlük sağlaması (audit P2).
-    (1) Asgari-boyut → truncated/0-byte ONNX tespiti. (2) Yanında <model>.sha256 varsa SHA256."""
-    try:
-        size = path.stat().st_size
-        min_bytes = _MODEL_MIN_BYTES.get(path.suffix.lower(), 1)
-        if size < min_bytes:
-            print(f"Model butunluk UYARISI: {path.name} beklenenden kucuk ({size}B < {min_bytes}B).")
-            return False
-        sha_file = path.with_name(path.name + ".sha256")
-        if sha_file.exists():
-            # Audit P2: sidecar VAR → doğrulama ZORUNLU + fail-CLOSED. Hash-ortası I/O hatasında dış
-            # except True dönüyordu (fail-open) → doğrulanamayan medikal-AI ağırlığı onnxruntime'a gidiyordu.
-            try:
-                expected = sha_file.read_text(encoding="utf-8").split()[0].strip().lower()
-                if expected:
-                    h = hashlib.sha256()
-                    with open(path, "rb") as fh:
-                        for chunk in iter(lambda: fh.read(1 << 20), b""):
-                            h.update(chunk)
-                    if h.hexdigest().lower() != expected:
-                        print(f"Model butunluk UYARISI: {path.name} SHA256 uyusmuyor.")
-                        return False
-            except Exception:
-                print(f"Model butunluk DOGRULANAMADI (sidecar var): {path.name} → reddedildi (fail-closed).")
-                return False
-        return True
-    except Exception:
-        return True  # sidecar-YOK / altyapı hatası → mevcut davranış (min-byte + onnxruntime korur; sidecar shiplenince tam-kapalı)
+def _model_integrity_ok(path: Path, goreli: str | None = None) -> bool:
+    """Yarım/bozuk modeli 'kurulu' saymamak için bütünlük sağlaması (audit P2): asgari boyut + beklenen SHA-256 (yan dosya ya da
+    D3.48 takipli manifest). ⚠️ İG-5.40: ret eskiden yalnız `print` ile yazılıyordu (donmuş EXE'de stdout NUL) → artık günlükte."""
+    return butunluk_sebebi(path, goreli) is None
 
 
 def find_installed_model(repo_path: str):
@@ -116,6 +201,7 @@ def find_installed_model(repo_path: str):
     """
     normalized = Path(os.path.normpath(repo_path))
     basename = normalized.name
+    goreli = normalized.as_posix()
 
     for root in _candidate_model_roots():
         candidates = [
@@ -123,8 +209,15 @@ def find_installed_model(repo_path: str):
             root / basename,
         ]
         for candidate in candidates:
-            if candidate.exists() and candidate.is_file() and _model_integrity_ok(candidate):
+            if not (candidate.exists() and candidate.is_file()):
+                continue
+            sebep = butunluk_sebebi(candidate, goreli)
+            if sebep is None:
                 return str(candidate)
+            # ⚠️ D3.48 · İG-5.40: özeti TUTMAYAN (kurcalanmış / başka sürüm) ağırlık sonraki köke SESSİZCE ikame edilmez — HATA.
+            # Kesik (asgari boyut altı) kopyada eski davranış: sonraki köke bakılır (yarım kurulum), ret günlükte.
+            if sebep != "kucuk":
+                raise ModelButunlukHatasi(candidate, sebep)
     return None
 
 
@@ -173,8 +266,15 @@ def yan_dosya_coz(yerel_yol, repo_yolu: str) -> str:
     """
     try:
         if os.path.exists(str(yerel_yol)):
+            # D3.48 (B-5.14): modül YANINDAKİ dosya (donmuşta `_internal/ai_hub/…`, <5 MB) da yüklemeden ÖNCE özetle denetlenir —
+            # eskiden doğrudan dönüyordu: ×1,10 kurcalanmış doz ölçekleyicisi uyarısız yükleniyordu (plan B-5.14).
+            sebep = butunluk_sebebi(Path(yerel_yol), repo_yolu)
+            if sebep in ("ozet", "dogrulanamadi"):
+                raise ModelButunlukHatasi(yerel_yol, sebep)
             return str(yerel_yol)
         bulunan = find_installed_model(repo_yolu)
         return bulunan or str(yerel_yol)
+    except ModelButunlukHatasi:
+        raise
     except Exception:
         return str(yerel_yol)

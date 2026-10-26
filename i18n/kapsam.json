@@ -5089,6 +5089,13 @@
      "turler": [
       "sozluk"
      ]
+    },
+    {
+     "metin": "model butunluk denetimi gecmedi",
+     "gerekce": "iç istisna iletisinin değişmez başı — sarılmış hata metninde ARANIR, kullanıcıya gitmez (D3.48)",
+     "turler": [
+      "sabit"
+     ]
     }
    ],
    "birlesikIstisna": [],
@@ -9376,6 +9383,13 @@
      "gerekce": "iç istisna iletisi — `ai_router` yakalar (10c: `_ai_hazirlik_hata_goster`); operatöre `ai.hata.*` gider",
      "turler": [
       "istisna"
+     ]
+    },
+    {
+     "metin": "model butunluk denetimi gecmedi: {{dosya}} ({{sebep}})",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti — AI ucunda operatöre `ai.hata.modelButunluk` katalog metni gider (D3.48)",
+     "turler": [
+      "cagri"
      ]
     }
    ],

@@ -197,6 +197,11 @@ def test_KRITIK_RNA_aciklamasi_LAUNCHER_duzeninde_URETILIR(spec_datas, tmp_path,
         if (RA / rel).is_file():
             shutil.copy2(RA / rel, profil / rel)
         elif rel == RNA_PT:
+            # D3.48: SENTETİK ağırlık takipli özeti taşımaz → yalnız bu anahtar manifest dışı (yoksa bütünlük reddi — doğru davranış).
+            from utils import model_downloader as _md
+
+            _gercek = dict(_md._manifest_ozetleri())
+            monkeypatch.setattr(_md, "_manifest_ozetleri", lambda: {k: v for k, v in _gercek.items() if k != RNA_PT})
             nn = torch.nn
             torch.manual_seed(0)
             sentetik = nn.Sequential(
