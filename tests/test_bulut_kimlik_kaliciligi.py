@@ -17,7 +17,9 @@ yazamadı, uzaktan bağlanan "cihaz bulunamadı" gördü (cihaz açık ve intern
   2. Makine deposu da silinince (KVKK) sır DEĞİŞİR — bulut yazma yetkisi geride KALMAZ.
      Bu, seçilen yolun KVKK ödünleşiminin karşılığıdır; `pemf_footprint.ps1`teki
      `device_identity.json` kalemi olmadan (1) tek başına yetki sızıntısıdır.
-  3. Ortam değişkeni (`PEMF_DEVICE_REGISTRY_SECRET`) her ikisini de EZER (operatör kontrolü).
+  3. Ortam değişkeni (`PEMF_DEVICE_REGISTRY_SECRET`) YALNIZ İLK taşımada kaynak olur — sırrı olan (veri kökü DOLU)
+     kurulumun bulut kimliğini sessizce EZMEZ (sahip kararı Y14 · D5.03; eski iddia "her ikisini de EZER" ürünle
+     çelişiyordu: ikinci tur BOŞ kökle koştuğu için hep "ilk taşıma"yı ölçüyordu).
 
 ⚠️ HER TUR AYRI SÜREÇTE koşar: modül-içi önbellek ilk ölçümü YANILTMIŞTI (aynı süreçte
 "3. tur"da da eski sır dönüyordu, düzeltme çalışıyor sanılmıştı).
@@ -134,15 +136,33 @@ def test_KRITIK_MEVCUT_kurulumdaki_sir_depoya_TASINIR(tmp_path, ortam):
     assert _tur(yeni_kok, ortam) == ilk, "taşımadan sonra bile sır korunmadı"
 
 
-def test_ortam_degiskeni_HER_IKISINI_de_ezer(tmp_path, ortam):
-    """Operatör kontrolü korunur: `PEMF_DEVICE_REGISTRY_SECRET` en üstte."""
+def test_KRITIK_Y14_ortam_degiskeni_DOLU_kokte_kurulu_kimligi_EZMEZ(tmp_path, ortam):
+    """Y14 (D5.03): sırrı veri kökünde DOLU kurulumda env verilse de AYNI sır döner — bulut TOFU mührü sessizce bozulmaz.
+
+    ⚠️ İKİNCİ TUR AYNI (DOLU) KÖKLE koşar. Eski test (`…HER_IKISINI_de_ezer`) ikinci turu BOŞ kökle koştuğu için yalnız
+    "ilk taşıma"yı ölçüyor, adı ve iddiası ("env her ikisini de ezer") ürünle çelişiyordu (DENETİM-03 B-3.102).
+    MUTASYON: `device_registry_secret`i `_GOMULU_USTUN` kümesine eklemek (env her okumada üstün) → KIRMIZI."""
     kok = tmp_path / "k"
     kok.mkdir()
-    _tur(kok, ortam)  # depoyu doldur
+    kurulu = _tur(kok, ortam)  # kurulum: veri kökü + makine deposu dolu
     zorlanan = "operatorun-verdigi-sir-1234567890"
-    kok2 = tmp_path / "k2"
-    kok2.mkdir()
-    assert _tur(kok2, ortam, zorlanan) == hashlib.sha256(zorlanan.encode()).hexdigest()[:16]
+    assert _tur(kok, ortam, zorlanan) == kurulu, (
+        "DOLU kökte PEMF_DEVICE_REGISTRY_SECRET kurulu cihazın bulut sırrını EZDİ → TOFU mührü bozulur, cihaz kalıcı "
+        "'secret_mismatch' alır (Y14: env yalnız ilk taşımada kaynaktır)"
+    )
+    assert _tur(kok, ortam) == kurulu, "env kaldırıldıktan sonra sır değişti (env değeri kalıcı yazılmış)"
+
+
+def test_KRITIK_Y14_ortam_degiskeni_ILK_tasimada_KAYNAK_olur(tmp_path, ortam):
+    """Y14 (D5.03) karşıtı: hiç sırrı olmayan (veri kökü VE makine deposu boş) kurulumda env değeri kaynak olur ve kalıcılaşır.
+
+    MUTASYON: `_bulut_sirri_oku`dan env kolunu kaldırmak (yalnız makine deposu) → KIRMIZI."""
+    kok = tmp_path / "ilk"
+    kok.mkdir()
+    zorlanan = "operatorun-verdigi-sir-1234567890"
+    beklenen = hashlib.sha256(zorlanan.encode()).hexdigest()[:16]
+    assert _tur(kok, ortam, zorlanan) == beklenen, "ilk taşımada env değeri kaynak OLMADI"
+    assert _tur(kok, ortam) == beklenen, "ilk taşımada gelen env değeri kalıcılaşmadı (env kalkınca sır değişti)"
 
 
 def test_ayni_kok_ikinci_kez_AYNI_sirri_verir(tmp_path, ortam):
