@@ -113,6 +113,22 @@ _GOC_ANAHTARLARI = ("sqlcipher_key", "patient_fernet_key")
 #: D3I-O.1: alanları `patient_fernet_key` ile şifreli DB'ler (bkz. `_tasinabilir_mi`).
 _GOC_ALAN_SIFRELI = frozenset({"patients.db"})
 
+#: D3I-A2.6: hedefte `<ad>`ın bir an YOK olduğu pencerelerin artık adları — at-rest göçü (`sqlcipher_util.migrate_to_encrypted_if_needed`:
+#: `db → .plain.bak`, `.enc.tmp → db`; önceki yedek `.plain.bak.<zaman>`) ve karantina (`karantinaya_al`: `db → .acilamadi-<zaman>`).
+#: Biri varsa hedef KULLANILMIŞ bir köktür → eski kökün BAYAT kopyası getirilmez. `-wal` / `-shm` BİLEREK yok: D3.37'nin yarım kalan
+#: kendi WAL kopyası sonraki açılışta DB'yle eşlenir.
+_HEDEF_GOC_ARTIKLARI = (".plain.bak", ".plain.bak.*", ".enc.tmp", ".acilamadi-*")
+
+
+def _hedefte_goc_artigi(hedef: Path, ad: str) -> str | None:
+    """Hedefte `ad` için göç / karantina artığının adı (yoksa None) — saf dizin listesi, sır / kripto katmanına dokunmaz."""
+    import glob
+
+    for ek in _HEDEF_GOC_ARTIKLARI:
+        for p in sorted(hedef.glob(glob.escape(ad) + ek)):
+            return p.name
+    return None
+
 
 def _sqlcipher_anahtarini_gocur(eski: Path, hedef: Path, ad: str = "sqlcipher_key") -> bool:
     """Eski kökteki at-rest anahtarını YENİ köke taşı — YALNIZ `ad` (`_GOC_ANAHTARLARI`: `sqlcipher_key`, `patient_fernet_key`).
@@ -367,6 +383,18 @@ def _kullanicidan_makineye_gocur(hedef: Path) -> None:
         for ad in _GOC_DOSYALARI:
             kaynak, varis = eski / ad, hedef / ad
             if not kaynak.is_file() or varis.exists():
+                continue
+            # D3I-A2.6: hedefte bu DB'nin yarım göç / karantina artığı varsa eski kökün BAYAT kopyası GETİRİLMEZ — `initialize_database`
+            # → `_yarim_goc_toparla` güncel veriyi geri koyar (eskiden kopya önce yerleşiyor, toparlama `db` VAR görüp duruyordu).
+            artik = _hedefte_goc_artigi(hedef, ad)
+            if artik:
+                logging.getLogger(__name__).warning(
+                    "VERİ GÖÇÜ ATLANDI: %s hedefte YOK ama hedef kullanılmış (artık: %s) — eski kökün bayat kopyası getirilmedi "
+                    "(yarım göç toparlanır). Eski kök DEĞİŞMEDİ: %s",
+                    ad,
+                    artik,
+                    kaynak,
+                )
                 continue
             # ⚠️ Ham anahtarlar UYUŞMUYORSA KOPYALAMA (bkz. `_tasinabilir_mi`). Kopyalanan DB
             # hedefte okunamaz olur; DB açılışındaki karantina zarfı onu kenara alır ve cihaz
