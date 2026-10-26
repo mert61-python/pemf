@@ -8333,6 +8333,13 @@
      "turler": [
       "istisna"
      ]
+    },
+    {
+     "metin": "yedek kaynagi {{YEDEK_KILIT_SURESI_SN}} sn kilitli kaldi, yedek iptal edildi: {{yol}}",
+     "gerekce": "iç istisna iletisi (D5 kilit sınırı) — `create_backup` yalnız bool döndürür, bakım döngüsü günlüğe yazar; operatöre gitmez",
+     "turler": [
+      "istisna"
+     ]
     }
    ],
    "birlesikIstisna": [],
