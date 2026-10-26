@@ -34,6 +34,9 @@ def _hash_password(password: str, salt: bytes) -> str:
 class AuthDB:
     def __init__(self, app_data_dir):
         self.db_path = Path(app_data_dir) / "auth_users.db"
+        from utils.path_utils import goc_engelini_denetle
+
+        goc_engelini_denetle(self.db_path)  # D3.37 · Y10: göçü doğrulanamayan dosyada BOŞ DB kurulmaz
         self._lock = threading.Lock()
         self._init()
         self._harden_permissions()

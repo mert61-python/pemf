@@ -80,6 +80,9 @@ class PatientDatabase:
 
     def __init__(self, db_file: str = "patients.db"):
         self.db_file = Path(db_file)
+        from utils.path_utils import goc_engelini_denetle
+
+        goc_engelini_denetle(self.db_file)  # D3.37 · Y10: göçü doğrulanamayan dosyada BOŞ DB kurulmaz
         self.lock = threading.Lock()
         self.logger = logging.getLogger("PatientDatabase")
         self.config_manager = get_config()

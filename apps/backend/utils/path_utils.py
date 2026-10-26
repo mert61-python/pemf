@@ -255,6 +255,60 @@ def _ham_sqlcipher_anahtari(kok: Path) -> str:
 _GOC_YAPILDI: set = set()
 
 
+#: D3.37 · Y10 (sahip): bu süreçte DOĞRULANAMAYAN veri göçü (hedef DB yolu → neden). DB kurucuları bu dosyayı AÇMAZ — boş DB kurup
+#: "boş klinik" göstermek yerine backend kısıtlı kipte (Y9) açılır, neden `/api/health`e gider ("göç bekliyor"); kaynak eski kökte
+#: DEĞİŞMEDEN durur, sonraki açılışta göç yeniden denenir.
+_GOC_ENGELI: dict[str, str] = {}
+
+
+def _goc_anahtari(yol) -> str:
+    return os.path.normcase(os.path.abspath(str(yol)))
+
+
+def goc_engeli(db_yolu) -> str | None:
+    """Bu DB dosyasının göçü bu süreçte doğrulanamadıysa nedeni (DB kurucuları açmadan önce sorar); yoksa None."""
+    return _GOC_ENGELI.get(_goc_anahtari(db_yolu))
+
+
+def goc_engelini_denetle(db_yolu) -> None:
+    """D3.37 · Y10: göçü bu süreçte doğrulanamayan DB AÇILMAZ — `GocBekliyorHatasi` (açılış: DB'siz kısıtlı kip + "göç bekliyor")."""
+    sebep = goc_engeli(db_yolu)
+    if sebep:
+        from database.sqlcipher_util import GocBekliyorHatasi
+
+        raise GocBekliyorHatasi(
+            f"Veri gocu dogrulanamadi ({sebep}); eski kok DEGISTIRILMEDI, sonraki acilista yeniden denenir."
+        )
+
+
+def _sha256_dosya(yol: Path) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    with open(yol, "rb") as f:
+        for parca in iter(lambda: f.read(1 << 20), b""):
+            h.update(parca)
+    return h.hexdigest()
+
+
+def _kopyala_dogrula(kaynak: Path, varis: Path) -> str | None:
+    """D3.37 · Y10: KOPYALA (geçici ad) → SHA-256 ile DOĞRULA → yerleştir. Uyuşmazlık / hata: hedefte İZ KALMAZ, neden döner.
+    Kaynak SİLİNMEZ ve DEĞİŞTİRİLMEZ (yalnız okunur)."""
+    gecici = varis.with_name(varis.name + ".goc.part")
+    try:
+        shutil.copy2(kaynak, gecici)
+        if _sha256_dosya(gecici) != _sha256_dosya(kaynak):
+            raise OSError("kopya kaynakla ayni degil (SHA-256)")
+        os.replace(gecici, varis)
+        return None
+    except Exception as e:  # noqa: BLE001 — her hata göçü durdurur, açılışı DEĞİL
+        try:
+            gecici.unlink()
+        except OSError:
+            pass
+        return f"{type(e).__name__}: {e}"
+
+
 def _kullanicidan_makineye_gocur(hedef: Path) -> None:
     """Tıbbi kaydı `%APPDATA%\\PEMF_GUI`den makine-geneli köke TAŞI (bir kez).
 
@@ -311,14 +365,38 @@ def _kullanicidan_makineye_gocur(hedef: Path) -> None:
                     kaynak,
                 )
                 continue
-            try:
-                shutil.copy2(kaynak, varis)
+            # D3.37 · Y10: KOPYALA → SHA-256 ile DOĞRULA → kaynak SİLİNMEZ. WAL ÖNCE taşınır (kaynakta henüz DB'ye işlenmemiş
+            # kayıtlar oradadır; eskiden yalnız .db kopyalanıyor, son işlemler kayboluyordu); DB yerleşmezse kopyalanan WAL da
+            # geri alınır (tek başına kalırsa yeni / boş DB'ye uygulanırdı). `-shm` taşınmaz — SQLite onu WAL'dan yeniden kurar.
+            wal_k, wal_v = eski / (ad + "-wal"), hedef / (ad + "-wal")
+            wal_tasindi = False
+            sebep = None
+            if wal_k.is_file() and not wal_v.exists():
+                sebep = _kopyala_dogrula(wal_k, wal_v)
+                wal_tasindi = sebep is None
+            if sebep is None:
+                sebep = _kopyala_dogrula(kaynak, varis)
+                if sebep is not None and wal_tasindi:
+                    try:
+                        wal_v.unlink()
+                    except OSError:
+                        logging.getLogger(__name__).warning(
+                            "VERİ GÖÇÜ: DB yerleşmedi, kopyalanan WAL geri alınamadı: %s (DB açılmaz — göç engeli)",
+                            wal_v,
+                            exc_info=True,
+                        )
+            if sebep is None:
                 logging.getLogger(__name__).warning(
-                    "VERİ GÖÇÜ: %s kullanıcı klasöründen makine geneline kopyalandı (kaynak SİLİNMEDİ: %s).", ad, kaynak
+                    "VERİ GÖÇÜ: %s eski kökten kopyalandı ve SHA-256 ile doğrulandı (kaynak SİLİNMEDİ: %s).", ad, kaynak
                 )
-            except Exception:
-                logging.getLogger(__name__).warning(
-                    "VERİ GÖÇÜ: %s kopyalanamadı, eski konumda kaldı.", ad, exc_info=True
+            else:
+                _GOC_ENGELI[_goc_anahtari(varis)] = sebep
+                logging.getLogger(__name__).error(
+                    "VERİ GÖÇÜ DOĞRULANAMADI: %s (%s) — hedefe YERLEŞTİRİLMEDİ, eski kök DEĞİŞMEDİ (%s). Bu açılışta bu DB "
+                    "AÇILMAZ (kısıtlı kip: ACİL DURDUR ve STOP çalışır); sonraki açılışta yeniden denenir.",
+                    ad,
+                    sebep,
+                    kaynak,
                 )
     except Exception:
         # Göç bir KOLAYLIKtır; başarısız olması backend'i başlatmamalı.

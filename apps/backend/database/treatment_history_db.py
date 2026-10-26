@@ -117,6 +117,9 @@ class TreatmentHistoryDB(
         app_data_dir.mkdir(parents=True, exist_ok=True)
         self.app_data_dir = app_data_dir
         self.db_path = app_data_dir / "pemf_treatment_history.db"
+        from utils.path_utils import goc_engelini_denetle
+
+        goc_engelini_denetle(self.db_path)  # D3.37 · Y10: göçü doğrulanamayan dosyada BOŞ DB kurulmaz
         self.logger = logging.getLogger(__name__)
         self._disk_usage_provider = shutil.disk_usage
 

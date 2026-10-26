@@ -9414,6 +9414,20 @@
      "turler": [
       "sabit"
      ]
+    },
+    {
+     "metin": "Veri gocu dogrulanamadi ({{sebep}}); eski kok DEGISTIRILMEDI, sonraki acilista yeniden denenir.",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "kopya kaynakla ayni degil (SHA-256)",
+     "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel hata döner; operatöre YALNIZ istisna sınıf adı gider (DB açılışı) ya da genel ileti",
+     "turler": [
+      "istisna"
+     ]
     }
    ],
    "birlesikIstisna": [],
