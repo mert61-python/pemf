@@ -235,6 +235,7 @@ export function useSessionControl(): SessionControlResult {
       let teyitsizHttp: number[] | null = null;
       const res = await apiPost<SessionActionResponse | null>("/session/stop", {}, null, {
         silent: true,
+        durdurma: true, // D3I-A1.3 · Ö.4-Y8: STOP düz-HTTP kapısına bağlanmaz
         onHttpError: (kod, _detail, govde) => {
           if (kod === 409) {
             const g = govde as { hardware_stop_unconfirmed?: unknown } | undefined;

@@ -442,14 +442,14 @@ export function ControlScreen() {
       istekler.push(
         apiPost<{ status?: string } | null>("/coil/batch", {
           coil_ids: stmCoils, freq: 0, duty: 0, phase: 0, duration: 0, start: false,
-        }, null),
+        }, null, { durdurma: true }), // D3I-A1.3 · Ö.4-Y8: STOP düz-HTTP kapısına bağlanmaz
       );
     }
     for (const coilId of espCoils) {
       istekler.push(
         apiPost<{ status?: string } | null>(`/coil/${coilId}/control`, {
           freq: 0, duty: 0, phase: 0, duration: 0, start: false,
-        }, null),
+        }, null, { durdurma: true }),
       );
     }
     const sonuclar = await Promise.all(istekler);

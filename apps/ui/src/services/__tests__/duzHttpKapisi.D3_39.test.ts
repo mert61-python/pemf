@@ -124,14 +124,19 @@ describe("korunanFetch", () => {
 });
 
 describe("ACİL DURDUR — Y8 KARŞIT", () => {
-  it("genel http tabanında da ACİL DURDUR GÖNDERİLİR (kapıya bağlanmaz)", async () => {
+  it("genel http tabanında da ACİL DURDUR'un DÖRT isteği GÖNDERİLİR (kapıya bağlanmaz; yedekler azaltılamaz)", async () => {
     updateServiceConfig("http://1.2.3.4:8000");
     fetchMock().mockResolvedValue({ ok: true, status: 200, json: async () => ({ confirmed: true }) });
     const p = performEmergencyStop();
     await jest.runAllTimersAsync();
     await p;
     const urller = fetchMock().mock.calls.map((c) => String(c[0]));
-    expect(urller.some((u) => u.startsWith("http://1.2.3.4:8000") && u.endsWith("/hardware/emergency_stop"))).toBe(true);
+    // ⚠️ D3I-A1.3: eskiden "en az bir E-stop isteği" ölçülüyordu — yedekler (2. E-stop, stop_all_coils, seans durdurma) apiPost'un
+    // düz-HTTP kapısında düşerken (4 yerine 1 istek) bu kapı YEŞİLDİ. Artık dördü de sayılır.
+    expect(urller.every((u) => u.startsWith("http://1.2.3.4:8000/api/"))).toBe(true);
+    expect(urller.map((u) => u.replace("http://1.2.3.4:8000", "")).sort()).toEqual(
+      ["/api/hardware/command", "/api/hardware/emergency_stop", "/api/hardware/emergency_stop", "/api/session/stop"],
+    );
   });
 });
 

@@ -102,6 +102,11 @@ export interface ApiOpts {
    *  ⚠️ D2-3.5 (2-D incelemesi): uzun yedek alma / geri yüklemede bağlantı koparsa işlem cihazda sürüyor olabilir; ekran HİÇBİR şey
    *  söylemiyordu (Y84 zaman aşımı metninin ikizi yoktu). EKLEMELİ: mevcut çağıranlar etkilenmez. */
   agHatasiMesaji?: string;
+  /** ⚠️ D3I-A1.3 · Ö.4-Y8: YALNIZ durdurma çağrıları (ACİL DURDUR yedekleri, `stop_all_coils`, seans / bobin Durdur) — düz-HTTP
+   *  kapısına BAĞLANMAZ (yalnız `apiPost`). Eskiden genel `http://` tabanında ACİL DURDUR 4 yerine 1 istek, Durdur 0 istek
+   *  gönderiyordu. Başlıklar AYNI (`authHeaders`: Bearer / operatör jetonu güvenli taban kapısında kalır). Kullanım yerleri
+   *  kapıda sabit: `acilDurdur.Y8.duzHttp.D3I.test.tsx`. */
+  durdurma?: boolean;
 }
 
 /** AI çıkarım uçları için zaman aşımı — ilk çağrıdaki model yükleme + JIT derlemesini kapsar. */
@@ -396,7 +401,7 @@ export async function apiDelete<T>(path: string, fallback: T, opts?: ApiOpts): P
 }
 
 export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?: ApiOpts): Promise<T> {
-  if (!isCleartextAllowed(serviceConfig.apiBaseUrl)) {
+  if (opts?.durdurma !== true && !isCleartextAllowed(serviceConfig.apiBaseUrl)) {
     console.error("Şifresiz istek engellendi (public host, http):", serviceConfig.apiBaseUrl);
     if (!opts?.silent) showError(i18n.t("ortak.hata.guvensizBaglanti"), i18n.t("ortak.hata.sifresizAdres"));
     return fallback;

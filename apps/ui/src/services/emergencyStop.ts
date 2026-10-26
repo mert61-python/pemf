@@ -58,7 +58,7 @@ export async function performEmergencyStop(): Promise<{ confirmed: boolean; kart
   const adim2 = (async () => {
     try {
       const r = await apiPost<EmergencyStopResponse | null>(
-        "/hardware/emergency_stop", {}, null, { silent: true });
+        "/hardware/emergency_stop", {}, null, { silent: true, durdurma: true }); // D3I-A1.3 · Y8: düz-HTTP kapısına bağlanmaz
       if (r?.confirmed === true) teyitli = true;
       if (r?.stmKartYaniti === "red") kartRed = true;
     } catch {
@@ -71,7 +71,7 @@ export async function performEmergencyStop(): Promise<{ confirmed: boolean; kart
         "/hardware/command",
         { command: "stop_all_coils", params: {} },
         null,
-        { silent: true }
+        { silent: true, durdurma: true }
       );
     } catch {
       /* yut — teyit 1./2. adımdan gelir */
@@ -91,7 +91,7 @@ export async function performEmergencyStop(): Promise<{ confirmed: boolean; kart
   // `status === "success"` teyit sayılıyordu — STM'in durması, ESP bobinleri hastanın üzerinde çalışırken "hepsi kesildi" diye
   // raporlanıyordu.
   try {
-    await apiPost<CommandResponse | null>("/session/stop", {}, null, { silent: true });
+    await apiPost<CommandResponse | null>("/session/stop", {}, null, { silent: true, durdurma: true });
   } catch {
     /* yut — teyit 1./2. adımdan gelir */
   }
