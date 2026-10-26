@@ -329,6 +329,30 @@ def duz_metin_sqlite_mi(db_path) -> bool:
                 pass
 
 
+def sifreli_gorunur_mu(db_path) -> bool:
+    """Dosya VAR, en az başlık boyunda ve `SQLite format 3` başlığı TAŞIMIYOR → şifreli (ya da başlığı bozuk). Okuma hatası → False.
+    O-A2-2.a: anahtar YOKKEN açılamayan dosyanın iletisini seçmek için (davranışı DEĞİŞTİRMEZ)."""
+    try:
+        with open(str(db_path), "rb") as fh:
+            bas = fh.read(len(_SQLITE_BASLIK))
+    except OSError:
+        return False
+    return len(bas) == len(_SQLITE_BASLIK) and bas != _SQLITE_BASLIK
+
+
+def anahtarsiz_sifreli_iletisi(logger, db_path) -> None:
+    """O-A2-2.a (2-A incelemesi): at-rest anahtarı YOKKEN şifreli görünen dosya — eskiden yalnız "file is not a database" yazılıyordu,
+    operatör dosyayı bozuk sanıp silebilirdi (hafıza "Hata mesajı EYLEM söylesin"). Dosyaya DOKUNULMAZ; ileti yalnız EYLEMİ söyler.
+    Günlük satırıdır (kullanıcı metni değil); hangi DB olduğu dosya adından okunur."""
+    logger.error(
+        "Veritabani %s SIFRELI gorunuyor (SQLite basligi yok) ama at-rest anahtari YOK — sir dosyasi kayip ya da yenilenmis olabilir. "
+        "Dosya KARANTINAYA ALINMADI, DOKUNULMADI: %s . YAPILACAK: sir dosyasini kurtarma zarfi + kurtarma koduyla geri yukleyin "
+        "(PEMF_Backend.exe --kurtarma --zarf <zarf> --kod <kod>) ve yeniden baslatin; dosyayi SILMEYIN.",
+        os.path.basename(str(db_path)),
+        db_path,
+    )
+
+
 def karantinaya_al(db_path, logger=None, zaman_damgasi=None):
     """Acilamayan DB'yi (ve -wal/-shm yoldaslarini) KENARA AL. Silme YOK.
 

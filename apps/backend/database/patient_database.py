@@ -49,11 +49,13 @@ except ModuleNotFoundError:
 from database.db_hatalari import _DB_ERROR, _DB_INTEGRITY, _DB_OPERATIONAL  # noqa: E402,F401
 from database.sqlcipher_util import (
     anahtar_uyusmazligi_mi,
+    anahtarsiz_sifreli_iletisi,
     get_sqlcipher_key,
     import_sqlcipher,
     karantinaya_al,
     migrate_to_encrypted_if_needed,
     open_encrypted_conn,
+    sifreli_gorunur_mu,
 )
 
 # DENETIM P3: cozulemeyen (farkli anahtar / eski surum / template) sifreli alan icin UI'ya
@@ -297,6 +299,10 @@ class PatientDatabase:
                         "Hasta veritabani ACILAMADI: at-rest anahtari VAR ama sqlcipher3 binding YOK — dosya sifreli "
                         "olabilir; KARANTINAYA ALINMADI, dokunulmadi. sqlcipher3'u kurun."
                     )
+                elif not self._cipher_key and anahtar_uyusmazligi_mi(e) and sifreli_gorunur_mu(self.db_file):
+                    # O-A2-2.a: anahtar YOKKEN şifreli dosya — eylem söyleyen ileti (davranış aynı: karantina YOK, yükselir).
+                    # Kapı: tests/test_sifreli_DB_anahtar_YOKKEN_eylem_soyler_OA22a.py
+                    anahtarsiz_sifreli_iletisi(self.logger, self.db_file)
                 raise RuntimeError(f"Database initialization failed: {e}") from e
             self.logger.error("Hasta veritabani mevcut at-rest anahtariyla ACILAMADI (%s) → karantina denenecek.", e)
 

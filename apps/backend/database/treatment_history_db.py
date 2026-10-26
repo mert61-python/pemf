@@ -27,7 +27,12 @@ from utils import ceviri  # noqa: E402
 from database.db_hatalari import _DB_ERROR, _DB_INTEGRITY, _DB_OPERATIONAL, _DB_VEYA_RUNTIME  # noqa: E402,F401
 
 # Anahtar-uyusmazliginda karantina (tuglalasma korumasi) — hasta DB'siyle TEK KAYNAK.
-from database.sqlcipher_util import anahtar_uyusmazligi_mi, karantinaya_al  # noqa: E402
+from database.sqlcipher_util import (  # noqa: E402
+    anahtar_uyusmazligi_mi,
+    anahtarsiz_sifreli_iletisi,
+    karantinaya_al,
+    sifreli_gorunur_mu,
+)
 
 # ── B4 BOLME (2026-09-18) ────────────────────────────────────────────────────────────────
 # Denetim B4: bu sinif TEK BASINA 93 metot tasiyordu (seans + bobin kosusu + sensor + AI
@@ -608,6 +613,14 @@ class TreatmentHistoryDB(
             )
             if not uyusmazlik:
                 self.logger.error(f"Veritabanı başlatma hatası: {e}")
+                if (
+                    not getattr(self, "_cipher_key_cache", None)
+                    and anahtar_uyusmazligi_mi(e)
+                    and sifreli_gorunur_mu(self.db_path)
+                ):
+                    # O-A2-2.a: anahtar YOKKEN şifreli dosya — eylem söyleyen ileti (davranış aynı: karantina YOK, yükselir).
+                    # Kapı: tests/test_sifreli_DB_anahtar_YOKKEN_eylem_soyler_OA22a.py
+                    anahtarsiz_sifreli_iletisi(self.logger, self.db_path)
                 raise
             self.logger.error("Tedavi gecmisi DB'si at-rest anahtariyla ACILAMADI (%s) → karantina.", e)
 
