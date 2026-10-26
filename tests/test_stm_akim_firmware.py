@@ -96,7 +96,7 @@ def yorumsuz(kod: str) -> str:
 def while_kosullari(kod: str) -> list[str]:
     """Her `while (...)` için DENGELİ parantezle koşulu çıkarır.
 
-    ⚠️ NEDEN ELLE: `re.search(r"while\s*\(([^)]*)\)")` iç içe parantezde İLK `)`de durur —
+    ⚠️ NEDEN ELLE: `re.search(r"while\\s*\\(([^)]*)\\)")` iç içe parantezde İLK `)`de durur —
     `while (((SR & EOC) == 0U) && (butce > 0U))` koşulunu `((SR & EOC` diye kırpar ve
     "bütçe yok" der. Bu kapının ilk yazımı tam bu yüzden SAHTE-KIRMIZI verdi; karşıt-kanıt
     testi yakaladı. Yapısal çıpa kırılganlığının ders kitabı örneği.

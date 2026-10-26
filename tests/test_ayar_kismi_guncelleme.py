@@ -29,7 +29,7 @@ class _SahteConfig:
     """Bellek-içi üretim yapılandırması.
 
     ⚠️ ZORUNLU — ACI DERS (2026-08-17): ilk yazımda bu mock YOKTU ve test GERÇEK
-    `%APPDATA%\PEMF_GUI\config.json`i EZDİ. Mekanizma sinsi: dosya ACL ile SYSTEM+Admin'e
+    `%APPDATA%\\PEMF_GUI\\config.json`i EZDİ. Mekanizma sinsi: dosya ACL ile SYSTEM+Admin'e
     kilitli olduğu için `load` "Permission denied" ile DÜŞÜYOR ve yönetici sessizce
     VARSAYILANLARA dönüyor; ama `save` `tmp + os.replace` kullandığı ve DİZİN yazılabilir olduğu
     için BAŞARILI oluyor → kullanıcının override'ları (MQTT broker/port) siliniyor.

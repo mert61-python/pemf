@@ -5,7 +5,7 @@ sayılır). Dinamik: ilk argümanı DEĞİŞMEZ dizgi olmayan çeviri çağrıs�
 listedeki önek + değerlerin HEPSİ katalogda bulunur.
 
 Neden kapı: arayüzde tür denetimi yanlış anahtarı yakalar, ama sunucu (Python), launcher (Rust / HTML / NSIS) ve DEMA'da yakalayan YOK —
-eksik anahtar üründe ekrana anahtar adını basar (ya da Türkçeye düşer). Dinamik anahtar (`t(\`ai.deger.${x}\`)`) hiçbir statik denetime
+eksik anahtar üründe ekrana anahtar adını basar (ya da Türkçeye düşer). Dinamik anahtar (`t(\\`ai.deger.${x}\\`)`) hiçbir statik denetime
 görünmez; izin listesi onu görünür ve sınanabilir yapar.
 """
 

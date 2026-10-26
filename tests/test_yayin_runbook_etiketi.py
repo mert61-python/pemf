@@ -82,7 +82,7 @@ def test_GERCEKLIK_CIPASI_manifest_layers_app_surum_etiketinde():
 
 def test_KRITIK_C7_runbook_surumsuz_EXE_release_assets_ten_alinir():
     """🔴 C7 (denetim 2026-08-24): §6 launcher `gh release create` satırı sürümsüz
-    PEMFVetClient-Setup.exe'yi DEPO KÖKÜNDEN alıyordu (APK ise `release_assets\` önekli — asimetri).
+    PEMFVetClient-Setup.exe'yi DEPO KÖKÜNDEN alıyordu (APK ise `release_assets\\` önekli — asimetri).
     Kökte 2026-08-08 tarihli BAYAT bir kopya duruyor (gitignore'lu, hiçbir build tazelemiyor) →
     harfiyen izlenirse aynı etikete BAYAT launcher yüklenir; manifest sha taze kopyadan alınırsa
     saha self-update'i fail-closed düşer. Y1 (Setup dosyası iki adla yüklenir) EXE'nin SÜRÜMSÜZ
