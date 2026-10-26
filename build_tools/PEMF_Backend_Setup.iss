@@ -268,10 +268,12 @@ begin
   // bosta kapanis mandali DISKE yazmaz, seans / bobin calisirken yazar - launcher safe_stop_coils ve NSIS ikiziyle AYNI kural).
   // Uc YOKSA (eski backend 405) ya da 2 sn icinde hata donerse operatorun ACIL DURDUR ucu (uc=2) - bobin durdurma AZALMAZ;
   // zaman asiminda ikinci istek YOK. Govde {"onay":true} tirnaksiz uretilir (@{onay=$true} | ConvertTo-Json).
+  // D3I-A1.4 (18K K2 ikizi - launcher durdur_iste / NSIS / pemf_teardown.ps1 ile AYNI): YANITLI HTTP hatasi (405 / 5xx; PS 5.1
+  // WebException.Response dolu) sureden BAGIMSIZ "uc yok" -> ACIL DURDUR; 2 sn esigi yalniz YANITSIZ hataya (asili backend).
   Komut := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $u = 1; $t0 = Get-Date; try { $r = Invoke-RestMethod' +
            ' -Uri http://127.0.0.1:' + IntToStr(Port) + '/api/hardware/kapanis_durdur -Method POST -ContentType application/json' +
            ' -Body (@{onay=$true} | ConvertTo-Json -Compress) -TimeoutSec 10 }' +
-           ' catch { if (((Get-Date) - $t0).TotalSeconds -ge 2) { throw }; $u = 2; $r = Invoke-RestMethod' +
+           ' catch { if (-not $_.Exception.Response -and ((Get-Date) - $t0).TotalSeconds -ge 2) { throw }; $u = 2; $r = Invoke-RestMethod' +
            ' -Uri http://127.0.0.1:' + IntToStr(Port) + '/api/hardware/emergency_stop -Method POST -TimeoutSec 10 };' +
            ' Write-Host -NoNewline OK uc=$u status=$($r.status) confirmed=$($r.confirmed)' +
            ' t=$(Get-Date -Format s); if ($r.confirmed -ne $true) { exit 2 }; exit 0 }' +

@@ -103,7 +103,9 @@ function Invoke-PemfAcilDurdurIstegi([int]$Port) {
         $govde = @{ onay = $true } | ConvertTo-Json -Compress
         return Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/hardware/kapanis_durdur" -Method Post -ContentType 'application/json' -Body $govde -TimeoutSec 10
     } catch {
-        if (((Get-Date) - $t0).TotalSeconds -ge 2) { throw }
+        # D3I-A1.4 (18K K2 ikizi — launcher `durdur_iste` / NSIS ile AYNI): YANITLI HTTP hatası (405 / 5xx; PS 5.1 WebException,
+        # pwsh 7 HttpResponseException `.Response` dolu) süreden bağımsız "uç yok" → ACİL DURDUR; 2 sn eşiği yalnız YANITSIZ hataya.
+        if (-not $_.Exception.Response -and ((Get-Date) - $t0).TotalSeconds -ge 2) { throw }
         return Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/hardware/emergency_stop" -Method Post -TimeoutSec 10
     }
 }
