@@ -50,7 +50,10 @@ def test_publish_bind_port_env_i_YAZAR(monkeypatch):
     sınanabilir olduğu için AYRI fonksiyon (kardeşinde de aynı gerekçe yazılı)."""
     import backend_service as bs
 
-    monkeypatch.delenv("PEMF_API_PORT", raising=False)
+    # D5: değişken YOKKEN `delenv(raising=False)` geri yüklenecek bir şey KAYDETMEZ → ürünün yazdığı 8123 sonraki dosyalara
+    # sızıyordu [ÖLÇTÜM ortam sızıntısı envanteri]. Önce setenv: eski hâl (yok) kaydedilir, test sonunda değişken kaldırılır.
+    monkeypatch.setenv("PEMF_API_PORT", "0")
+    monkeypatch.delenv("PEMF_API_PORT")
     assert bs.publish_bind_port(8123) == 8123
     assert os.environ["PEMF_API_PORT"] == "8123"
     assert get_api_port() == 8123, "yayinlanan port kesif tarafindan OKUNMUYOR"

@@ -432,6 +432,35 @@ def _operator_kaydi_dosyadan_sizmaz(request):
     _operator_sizintisini_geri_al(once, request, "dosya")
 
 
+# ⚠️ D5 (ortam sızıntısı envanteri · D1B gözcü eklentisi): `PEMF_*` ortam değişkenleri süreç-tekildir; bir test dosyası `os.environ`a
+# DOĞRUDAN yazıp bırakırsa sonraki dosyalar o kipte koşar — ölçüldü: `test_jeton_kullandikca_ode` → `PEMF_JETON_ENFORCED=1` +
+# `PEMF_JETON_BORC_TAVANI`; `test_jeton_yoneticisi` → `PEMF_JETON_ENFORCED`; `test_kesif_gercek_port` → `PEMF_API_PORT=8123`
+# (değişken yokken `monkeypatch.delenv(raising=False)` geri yüklenecek bir şey kaydetmez). Dosya sonunda `PEMF_*` kümesi başlangıçtakiyle
+# aynı değilse eski hâline döndürülür ve dosya KIRMIZI olur (son testin söküm hatası). Değerler yazılmaz (sır olabilir), yalnız adlar.
+# Kapı: tests/test_PEMF_ortami_dosyadan_SIZMAZ_gozcusu_D5.py
+def _pemf_ortami() -> dict:
+    return {k: v for k, v in os.environ.items() if k.upper().startswith("PEMF_")}
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _pemf_ortami_dosyadan_sizmaz():
+    once = _pemf_ortami()
+    yield
+    sonra = _pemf_ortami()
+    if sonra == once:
+        return
+    farkli = sorted(k for k in set(once) | set(sonra) if once.get(k) != sonra.get(k))
+    for k in farkli:
+        if k in once:
+            os.environ[k] = once[k]
+        else:
+            os.environ.pop(k, None)
+    pytest.fail(
+        f"bu dosya PEMF_ ortamını değiştirip BIRAKTI: {farkli} (geri alındı) — sonraki dosyalar bu kipte koşardı. "
+        "`monkeypatch.setenv` ya da yield sonrası geri yükleme kullanın (değişken yokken önce setenv, sonra delenv)."
+    )
+
+
 # ⚠️ D0Ö.07 (B-10.9) — SÜİT AĞA ÇIKMAZ (TCP connect, UDP sendto, DNS). ÖLÇÜLDÜ:
 # `data/cloud_mqtt_provision.json` (git'e girmez) bu makinede VAR; aynayı stub'lamayan E-stop testleri
 # `_estop_cloud_mirror` üzerinden GERÇEK (üretim) bulut broker'ına gerçek kimlikle TLS + STOP yayını

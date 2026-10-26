@@ -27,6 +27,25 @@ import os
 
 import pytest
 
+_ORTAM_ANAHTARLARI = ("PEMF_JETON_ENFORCED", "PEMF_DATA_DIR")
+
+
+@pytest.fixture(autouse=True)
+def _ortam_ve_modul_geri_yukle():
+    """D5 (ortam sızıntısı envanteri): `_yeni` `os.environ`a DOĞRUDAN yazar ve `servers.jeton`u yeniden yükleyip `JETON_ENFORCED`i elle
+    kurar — test bitince bunlar KALIYORDU (`PEMF_JETON_ENFORCED` sonraki dosyalara sızıyordu [ÖLÇTÜM]). Ortam eski hâline döner,
+    modül o ortamla yeniden yüklenir. Gözcü: tests/ortam_sizinti_gozcusu.py"""
+    once = {k: os.environ.get(k) for k in _ORTAM_ANAHTARLARI}
+    yield
+    for k, v in once.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+    import servers.jeton as j
+
+    importlib.reload(j)
+
 
 def _yeni(tmp_path, **env):
     """Modülü TEMİZ ortamla yeniden yükle (bayraklar import zamanında okunuyor)."""
