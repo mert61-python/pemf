@@ -5057,6 +5057,20 @@ def _kayit_suresi_dk(start_mono, started_epoch):
     return None
 
 
+#: D5 (D3 devri, sağlamlık · 2-C inc. §9 #5): kapanış yazımı (`end_session` + bitiş damgası) başka bir yazıcının UZUN işleminde
+#: `busy_timeout` (5 sn) sonunda `database is locked` ile düşüyordu; kimse yeniden denemiyordu → operatörün durdurduğu seans `active`
+#: kalıyor, sonraki açılışta "Elektrik Kesintisi" mühürleniyordu [ÖLÇTÜM]. Kilit hatasında bu süre boyunca yeniden denenir.
+#: `_finalize_session_db` YALNIZ iş parçacıklarından çağrılır (olay döngüsü / ACİL DURDUR beklemez; STOP kapanıştan ÖNCE gider).
+#: Kapı: tests/test_seans_KAPANISI_uzun_kilitte_DUSMEZ_D5.py
+KAPANIS_KILIT_SURESI_SN = 20.0
+_KAPANIS_DENEME_ARASI_SN = 0.5
+
+
+def _kilit_hatasi_mi(e: BaseException) -> bool:
+    m = str(e).lower()
+    return "locked" in m or "busy" in m
+
+
 def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: str = "auto", start_mono=None) -> int:
     """Seansi DB'de KAPAT: kismi dakika-ortalamasi + sensor buffer flush + end_session/ended_epoch.
 
@@ -5135,8 +5149,20 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
                     _durum = "interrupted"
                 else:
                     _durum = "completed"
-                db.end_session(db_session_id, duration_minutes=dur_min, session_status=_durum)
-                db.set_session_meta(db_session_id, ended_epoch=_now)
+                _son = time.monotonic() + KAPANIS_KILIT_SURESI_SN  # D5: kilitte sınırlı yeniden deneme (yukarıdaki not)
+                while True:
+                    try:
+                        db.end_session(db_session_id, duration_minutes=dur_min, session_status=_durum)
+                        db.set_session_meta(db_session_id, ended_epoch=_now)
+                        break
+                    except Exception as _e:
+                        if not _kilit_hatasi_mi(_e) or time.monotonic() >= _son:
+                            raise
+                        logging.warning(
+                            "finalize: tedavi DB'si kilitli — seans kapanisi yeniden deneniyor (db_id=%s)",
+                            db_session_id,
+                        )
+                        time.sleep(_KAPANIS_DENEME_ARASI_SN)
             except Exception:
                 logging.exception("finalize: end_session hatasi")
         # notes ucu cift-kayit yapmasin (bkz. session_router db_finalized kontrolu).
