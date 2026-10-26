@@ -118,15 +118,26 @@ def test_KRITIK_ses_isi_haritasi_URETIR(tmp_path):
 def test_KRITIK_pt_coz_ONCE_models_mount_sonra_downloader(tmp_path, monkeypatch):
     """ÖLÇÜLDÜ (cu128 smoke): imajda utils.model_downloader YOK (Dockerfile minimal) →
     'No module named utils.model_downloader' ile XAI zarif düşüşe takılıyordu. pt_coz
-    ÖNCE PEMF_AI_MODELS_DIR mount'una bakar (ai_service yolu), yoksa downloader'a düşer."""
+    imajda (çözücü YOK) PEMF_AI_MODELS_DIR mount'una bakar (ai_service yolu); çözücü VARSA onu kullanır.
+    ⚠️ D3I-E.1 (D3.48 · Y18): çözücü varken mount adayı ÖNCE ve DENETİMSİZ dönüyordu (launcher bu değişkeni hep verir) — artık mount
+    çözücünün 1. köküdür ve bütünlük süzgecinden geçer (kapı: tests/test_D3I_pt_coz_PT_ikizi_butunluk_denetimli.py). Bu test imaj kolunu
+    (çözücü içe aktarılamaz) ölçer."""
+    import sys
+
     from ai_hub.xai_utils.pt_yolu import pt_coz
 
     hedef = tmp_path / "ai_hub" / "cat_thermal"
     hedef.mkdir(parents=True)
     (hedef / "GhostNetV2.pt").write_bytes(b"x")
     monkeypatch.setenv("PEMF_AI_MODELS_DIR", str(tmp_path))
+    _gercek_md = sys.modules.get("utils.model_downloader")
+    monkeypatch.setitem(sys.modules, "utils.model_downloader", None)  # imaj profili: `import` → ImportError
     p = pt_coz("ai_hub/cat_thermal/GhostNetV2.pt")
     assert str(p) == str(hedef / "GhostNetV2.pt"), f"mount önceliklenmedi: {p}"
+    if _gercek_md is not None:
+        monkeypatch.setitem(sys.modules, "utils.model_downloader", _gercek_md)
+    else:
+        monkeypatch.delitem(sys.modules, "utils.model_downloader")
 
     # KARŞIT: env yok → downloader yolu. Gerçek dosyaya DAYANMAZ: PT ikizleri git dışı,
     # CI checkout'unda yoklar (ilk sürüm CI'da bu yüzden düştü) → downloader mock'lanır.

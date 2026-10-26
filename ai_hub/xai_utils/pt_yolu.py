@@ -19,18 +19,22 @@ from pathlib import Path
 
 
 def pt_coz(rel_yol: str) -> str:
-    """'ai_hub/<modul>/<dosya>.pt' göreli yolunu ortama göre mutlak yola çöz."""
+    """'ai_hub/<modul>/<dosya>.pt' göreli yolunu ortama göre mutlak yola çöz.
+
+    ⚠️ D3I-E.1 (D3.48 · Y18): çözücü VARSA önce o — `PEMF_AI_MODELS_DIR` onun 1. köküdür ve aday bütünlük süzgecinden geçer (özet
+    tutmazsa `ModelButunlukHatasi`, başka köke DÜŞÜLMEZ; kesik kopyada sonraki kök). Eskiden aday VARSA özetlenmeden dönüyordu: launcher
+    bu değişkeni her zaman verdiği için XAI ikizleri ve CPN (`weights_only=False`) başka sürüm / kurcalanmış dosyayla yükleniyordu."""
+    try:
+        from utils.model_downloader import download_model_sync
+    except ImportError:
+        download_model_sync = None  # imaj profili: utils yok — yalnız mount (eski davranış)
+    if download_model_sync is not None:
+        return str(download_model_sync(rel_yol))
     kok = os.environ.get("PEMF_AI_MODELS_DIR")
     if kok:
         aday = Path(kok) / rel_yol
         if aday.exists():
             return str(aday)
-    try:
-        from utils.model_downloader import download_model_sync
-
-        return str(download_model_sync(rel_yol))
-    except ImportError:
-        pass  # imaj profili: utils yok — mount'ta da bulunamadıysa aşağıda açık hata
     raise FileNotFoundError(
         f"XAI PT ikizi bulunamadı: {rel_yol} — PEMF_AI_MODELS_DIR mount'unda yok ve "
         "model_downloader bu profilde mevcut değil."
