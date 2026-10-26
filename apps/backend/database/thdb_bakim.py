@@ -450,6 +450,9 @@ class BakimKarisimi:
         tablolar boş geçilir, ilişki eşlemesi yine kurulur (o yedeklerde bağlı satır yoktur).
         """
         sonuc = {t: 0 for t in self._TASINAN_TABLOLAR}
+        # Y131 (S-F2-1.4): REPLACE_ALL'ın korunan / silinen olay sayıları — EKLEMELİ alanlar; uç bunları `data.import` izinin
+        # `detail`ine (`**n`) ve yanıtın `counts`una taşır.
+        sonuc.update({"kritik_olay_korunan": 0, "kritik_olay_yedekte_vardi": 0, "olay_silinen": 0})
         # tablo -> {eski_id: yeni_id}
         eslem: Dict[str, Dict[Any, int]] = {t: {} for t in self._TASINAN_TABLOLAR}
         from database.db_hatalari import _DB_INTEGRITY
@@ -464,7 +467,16 @@ class BakimKarisimi:
             var_olan_tablolar = {
                 r[0] for r in cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
             }
+            korunacak: List[Dict[str, Any]] = []
+            eski_seans_uuid: Dict[Any, Any] = {}
             if replace:
+                # ⚠️ Y131 (S-F2-1.4, sahip · A-07): yedekten SONRA kaydedilmiş KRİTİK olaylar (ACİL DURDUR, mandal sıfırlama, hekim
+                # onay / ret izi …) SİLİNMEZ — silmeden ÖNCE okunur, yedek yüklendikten sonra yedekte olmayanları aynı işlemde geri yazılır.
+                # Eskiden REPLACE_ALL `session_events`in tamamını siliyordu (ölçüldü). Kapı: tests/test_geri_yukleme_KRITIK_olaylari_KORUR_Y131.py
+                if "session_events" in var_olan_tablolar:
+                    korunacak, eski_seans_uuid = self._kritik_olaylari_oku(cursor)
+                    toplam = int(cursor.execute("SELECT COUNT(*) FROM session_events").fetchone()[0])
+                    sonuc["olay_silinen"] = toplam - len(korunacak)
                 # Çocuktan ebeveyne doğru sil (FK ihlali olmasın). Hata YUTULMAZ (yukarıdaki not); yalnız bu sürümde
                 # olmayan tablo atlanır.
                 for tablo in reversed(self._TASINAN_TABLOLAR):
@@ -539,6 +551,8 @@ class BakimKarisimi:
                     if s.get("id") is not None:
                         eslem[tablo][s["id"]] = cursor.lastrowid
                     sonuc[tablo] += 1
+            if korunacak:
+                self._kritik_olaylari_geri_yaz(cursor, korunacak, eski_seans_uuid, sonuc)
             conn.commit()
             if replace:
                 # F2-2.3 (Y13 · D2.29 ilkesi): REPLACE_ALL'ın sildiği eski kayıtların sayfaları denetim noktasına kadar ana dosyada kalıyordu.
@@ -550,3 +564,42 @@ class BakimKarisimi:
         if callable(_goc):
             _goc(zorla=True)
         return sonuc
+
+    def _kritik_olaylari_oku(self, cursor) -> tuple:
+        """Y131: REPLACE_ALL silmeden ÖNCE mevcut kritik olaylar (`KRITIK_OLAY_ONEMLERI` / `KRITIK_OLAY_TURLERI` — D2.50 saklama
+        kuralıyla AYNI tek kaynak) + bağlı oldukları seansların `session_uuid`'i (yedekte aynı seans varsa yeniden bağlamak için)."""
+        on_yer = ",".join("?" for _ in self.KRITIK_OLAY_ONEMLERI)
+        tur_yer = ",".join("?" for _ in self.KRITIK_OLAY_TURLERI)
+        cursor.execute(
+            f"SELECT * FROM session_events WHERE severity IN ({on_yer}) OR event_type IN ({tur_yer})",
+            (*self.KRITIK_OLAY_ONEMLERI, *self.KRITIK_OLAY_TURLERI),
+        )
+        kolonlar = [d[0] for d in cursor.description]
+        olaylar = [dict(zip(kolonlar, tuple(r))) for r in cursor.fetchall()]
+        seans_uuid: Dict[Any, Any] = {}
+        for sid in {o.get("session_id") for o in olaylar if o.get("session_id") is not None}:
+            r = cursor.execute("SELECT session_uuid FROM treatment_sessions WHERE id = ?", (sid,)).fetchone()
+            if r and r[0]:
+                seans_uuid[sid] = r[0]
+        return olaylar, seans_uuid
+
+    def _kritik_olaylari_geri_yaz(self, cursor, olaylar, eski_seans_uuid, sonuc) -> None:
+        """Y131: yedekte OLMAYAN (event_uuid) korunan kritik olaylar geri yazılır — aynı işlem, hata YUTULMAZ (D2.52). Seansı yedekte aynı
+        `session_uuid` ile varsa yeni kimliğine bağlanır; yoksa olay seanssız (NULL) korunur — seans satırı yedeğe göre değişti."""
+        gecerli = {r[1] for r in cursor.execute("PRAGMA table_info(session_events)").fetchall()} - {"id"}
+        for olay in olaylar:
+            if cursor.execute(
+                "SELECT 1 FROM session_events WHERE event_uuid = ?", (olay.get("event_uuid"),)
+            ).fetchone():
+                sonuc["kritik_olay_yedekte_vardi"] += 1
+                continue
+            alan = {k: v for k, v in olay.items() if k in gecerli}
+            yeni_seans = None
+            uuid_ = eski_seans_uuid.get(olay.get("session_id"))
+            if uuid_:
+                r = cursor.execute("SELECT id FROM treatment_sessions WHERE session_uuid = ?", (uuid_,)).fetchone()
+                yeni_seans = r[0] if r else None
+            alan["session_id"] = yeni_seans
+            ph = ", ".join("?" for _ in alan)
+            cursor.execute(f"INSERT INTO session_events ({', '.join(alan)}) VALUES ({ph})", list(alan.values()))
+            sonuc["kritik_olay_korunan"] += 1
