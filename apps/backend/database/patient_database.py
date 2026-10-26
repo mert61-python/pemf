@@ -1287,6 +1287,11 @@ def acilista_acilamayani_yeniden_ac(app_data_dir) -> PatientDatabase:
         if _patient_db is not None:
             _acilis_kilidi.pop(_kilit_anahtari(db_file), None)
             return _patient_db
+    # D3I-A2.3 · Y61: geçici göç engeli (AV kilidi / anlık disk dolu) kalktıysa önce o dosyanın göçü yeniden denenir (olay döngüsü DIŞI);
+    # başarılıysa engel düşer ve kurucu göç edilen DB'yi açar — eskiden yalnız yeniden başlatma kurtarıyordu.
+    from utils.path_utils import goc_engelini_yeniden_dene
+
+    goc_engelini_yeniden_dene(db_file)
     yeni = PatientDatabase(str(db_file))
     with _patient_db_lock:
         if _patient_db is None:

@@ -819,6 +819,10 @@ def acilista_acilamayani_yeniden_ac(app_data_dir):
         if mevcut is not None and _ayni_db_yolu(getattr(mevcut, "db_path", None), istenen):
             _acilis_kilidi.pop(_kilit_anahtari(istenen), None)
             return mevcut
+    # D3I-A2.3 · Y61: geçici göç engeli kalktıysa önce o dosyanın göçü yeniden denenir (bkz. `patient_database`).
+    from utils.path_utils import goc_engelini_yeniden_dene
+
+    goc_engelini_yeniden_dene(istenen)
     yeni = TreatmentHistoryDB(Path(app_data_dir))
     with _treatment_db_lock:
         eski = _treatment_db_instance

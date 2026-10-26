@@ -313,6 +313,32 @@ def goc_engelini_denetle(db_yolu) -> None:
         )
 
 
+def goc_engelini_yeniden_dene(db_yolu) -> bool:
+    """D3I-A2.3 · Y61: engelli DB'nin göçünü (YALNIZ o dosya, D3.37 · Y10 kurallarıyla) yeniden dener — Y43 / Y61 arka plan yeniden
+    açması (`acilista_acilamayani_yeniden_ac`, olay döngüsü DIŞI) kurucudan ÖNCE çağırır. Eskiden engel süreç ömrü boyunca kalıyordu:
+    geçici neden (AV kilidi / anlık disk dolu / salt-okur) kalksa da DB yalnız yeniden başlatmayla açılıyordu.
+
+    `_GOC_YAPILDI` ("süreç başına bir kez") sözleşmesi bozulmaz: anahtar göçü ve tüm liste YENİDEN koşmaz; yalnız hedefte İZİ OLMAYAN
+    (engel = kopya yerleşmedi, DB hiç açılmadı → karantina olamaz) dosya denenir; sır / kripto katmanına dokunulmaz. Döner: engel YOK mu."""
+    anahtar = _goc_anahtari(db_yolu)
+    onceki = _GOC_ENGELI.get(anahtar)
+    if not onceki:
+        return True
+    varis = Path(db_yolu)
+    eski_kok = os.getenv("APPDATA")
+    if not eski_kok or varis.exists() or not (Path(eski_kok) / "PEMF_GUI" / varis.name).is_file():
+        return False  # kaynak yok / hedefte bir şey belirdi → engel KALIR (boş DB kurulmaz)
+    _GOC_ENGELI.pop(anahtar, None)
+    try:
+        _dosyalari_gocur(Path(eski_kok) / "PEMF_GUI", varis.parent, (varis.name,))
+    except Exception as e:  # noqa: BLE001 — yeniden deneme hatası engeli GERİ KOYAR (DB açılmaz), açılışı düşürmez
+        _GOC_ENGELI.setdefault(anahtar, f"{type(e).__name__}: {e}")
+        import logging
+
+        logging.getLogger(__name__).warning("VERİ GÖÇÜ yeniden denenemedi: %s", varis, exc_info=True)
+    return anahtar not in _GOC_ENGELI
+
+
 def _sha256_dosya(yol: Path) -> str:
     import hashlib
 
@@ -339,6 +365,76 @@ def _kopyala_dogrula(kaynak: Path, varis: Path) -> str | None:
         except OSError:
             pass
         return f"{type(e).__name__}: {e}"
+
+
+def _dosyalari_gocur(eski: Path, hedef: Path, adlar) -> None:
+    """`adlar`daki DB dosyalarını eski kökten hedefe göç ettir (D3.37 · Y10 kuralları). `_kullanicidan_makineye_gocur` (açılışta bir
+    kez, tüm liste) ve D3I-A2.3 `goc_engelini_yeniden_dene` (Y43 / Y61 arka plan yeniden açması — YALNIZ engelli dosya) çağırır."""
+    import logging
+
+    for ad in adlar:
+        kaynak, varis = eski / ad, hedef / ad
+        if not kaynak.is_file() or varis.exists():
+            continue
+        # D3I-A2.6: hedefte bu DB'nin yarım göç / karantina artığı varsa eski kökün BAYAT kopyası GETİRİLMEZ — `initialize_database`
+        # → `_yarim_goc_toparla` güncel veriyi geri koyar (eskiden kopya önce yerleşiyor, toparlama `db` VAR görüp duruyordu).
+        artik = _hedefte_goc_artigi(hedef, ad)
+        if artik:
+            logging.getLogger(__name__).warning(
+                "VERİ GÖÇÜ ATLANDI: %s hedefte YOK ama hedef kullanılmış (artık: %s) — eski kökün bayat kopyası getirilmedi "
+                "(yarım göç toparlanır). Eski kök DEĞİŞMEDİ: %s",
+                ad,
+                artik,
+                kaynak,
+            )
+            continue
+        # ⚠️ Ham anahtarlar UYUŞMUYORSA KOPYALAMA (bkz. `_tasinabilir_mi`). Kopyalanan DB
+        # hedefte okunamaz olur; DB açılışındaki karantina zarfı onu kenara alır ve cihaz
+        # temiz bir DB ile çalışmaya devam eder — ama ESKİ KAYIT ERİŞİLEMEZ kalır.
+        # (Eski yorum "kenara alma bile kurtarmaz" diyordu; 2026-08-14'te kurtarma zarfı
+        # düzeltildikten sonra bu artık DOĞRU DEĞİL.)
+        if ad in _GOC_SIFRELI and not _tasinabilir_mi(kaynak, eski, hedef):
+            logging.getLogger(__name__).error(
+                "VERİ GÖÇÜ ATLANDI: %s ŞİFRELİ ve hedefin at-rest / alan anahtarı FARKLI "
+                "(hedefin kendi anahtarı var, ezilmedi). Kopyalansaydı hedefte okunamaz "
+                "olur ve cihaz her açılışta kırılırdı. Kaynak eski konumda DURUYOR: %s",
+                ad,
+                kaynak,
+            )
+            continue
+        # D3.37 · Y10: KOPYALA → SHA-256 ile DOĞRULA → kaynak SİLİNMEZ. WAL ÖNCE taşınır (kaynakta henüz DB'ye işlenmemiş
+        # kayıtlar oradadır; eskiden yalnız .db kopyalanıyor, son işlemler kayboluyordu); DB yerleşmezse kopyalanan WAL da
+        # geri alınır (tek başına kalırsa yeni / boş DB'ye uygulanırdı). `-shm` taşınmaz — SQLite onu WAL'dan yeniden kurar.
+        wal_k, wal_v = eski / (ad + "-wal"), hedef / (ad + "-wal")
+        wal_tasindi = False
+        sebep = None
+        if wal_k.is_file() and not wal_v.exists():
+            sebep = _kopyala_dogrula(wal_k, wal_v)
+            wal_tasindi = sebep is None
+        if sebep is None:
+            sebep = _kopyala_dogrula(kaynak, varis)
+            if sebep is not None and wal_tasindi:
+                try:
+                    wal_v.unlink()
+                except OSError:
+                    logging.getLogger(__name__).warning(
+                        "VERİ GÖÇÜ: DB yerleşmedi, kopyalanan WAL geri alınamadı: %s (DB açılmaz — göç engeli)",
+                        wal_v,
+                        exc_info=True,
+                    )
+        if sebep is None:
+            logging.getLogger(__name__).warning(
+                "VERİ GÖÇÜ: %s eski kökten kopyalandı ve SHA-256 ile doğrulandı (kaynak SİLİNMEDİ: %s).", ad, kaynak
+            )
+        else:
+            _GOC_ENGELI[_goc_anahtari(varis)] = sebep
+            logging.getLogger(__name__).error(
+                "VERİ GÖÇÜ DOĞRULANAMADI: %s (%s) — hedefe YERLEŞTİRİLMEDİ, eski kök DEĞİŞMEDİ (%s). Bu açılışta bu DB "
+                "AÇILMAZ (kısıtlı kip: ACİL DURDUR ve STOP çalışır); sonraki açılışta yeniden denenir.",
+                ad,
+                sebep,
+                kaynak,
+            )
 
 
 def _kullanicidan_makineye_gocur(hedef: Path) -> None:
@@ -371,8 +467,6 @@ def _kullanicidan_makineye_gocur(hedef: Path) -> None:
         eski = Path(eski_kok) / "PEMF_GUI"
         if not eski.is_dir() or eski.resolve() == hedef.resolve():
             return
-        import logging
-
         # ⚠️ SIRA: anahtar ÖNCE taşınır. Aksi hâlde aşağıdaki `_tasinabilir_mi`
         # kontrolü şifreli DB'leri reddeder ve şifreli kurulumlarda göç HİÇ çalışmaz
         # (vardiyalı klinikte "boş klinik" devam ederdi). Anahtar yalnız hedefte HİÇ yoksa
@@ -380,69 +474,7 @@ def _kullanicidan_makineye_gocur(hedef: Path) -> None:
         for _ad in _GOC_ANAHTARLARI:
             _sqlcipher_anahtarini_gocur(eski, hedef, _ad)
 
-        for ad in _GOC_DOSYALARI:
-            kaynak, varis = eski / ad, hedef / ad
-            if not kaynak.is_file() or varis.exists():
-                continue
-            # D3I-A2.6: hedefte bu DB'nin yarım göç / karantina artığı varsa eski kökün BAYAT kopyası GETİRİLMEZ — `initialize_database`
-            # → `_yarim_goc_toparla` güncel veriyi geri koyar (eskiden kopya önce yerleşiyor, toparlama `db` VAR görüp duruyordu).
-            artik = _hedefte_goc_artigi(hedef, ad)
-            if artik:
-                logging.getLogger(__name__).warning(
-                    "VERİ GÖÇÜ ATLANDI: %s hedefte YOK ama hedef kullanılmış (artık: %s) — eski kökün bayat kopyası getirilmedi "
-                    "(yarım göç toparlanır). Eski kök DEĞİŞMEDİ: %s",
-                    ad,
-                    artik,
-                    kaynak,
-                )
-                continue
-            # ⚠️ Ham anahtarlar UYUŞMUYORSA KOPYALAMA (bkz. `_tasinabilir_mi`). Kopyalanan DB
-            # hedefte okunamaz olur; DB açılışındaki karantina zarfı onu kenara alır ve cihaz
-            # temiz bir DB ile çalışmaya devam eder — ama ESKİ KAYIT ERİŞİLEMEZ kalır.
-            # (Eski yorum "kenara alma bile kurtarmaz" diyordu; 2026-08-14'te kurtarma zarfı
-            # düzeltildikten sonra bu artık DOĞRU DEĞİL.)
-            if ad in _GOC_SIFRELI and not _tasinabilir_mi(kaynak, eski, hedef):
-                logging.getLogger(__name__).error(
-                    "VERİ GÖÇÜ ATLANDI: %s ŞİFRELİ ve hedefin at-rest / alan anahtarı FARKLI "
-                    "(hedefin kendi anahtarı var, ezilmedi). Kopyalansaydı hedefte okunamaz "
-                    "olur ve cihaz her açılışta kırılırdı. Kaynak eski konumda DURUYOR: %s",
-                    ad,
-                    kaynak,
-                )
-                continue
-            # D3.37 · Y10: KOPYALA → SHA-256 ile DOĞRULA → kaynak SİLİNMEZ. WAL ÖNCE taşınır (kaynakta henüz DB'ye işlenmemiş
-            # kayıtlar oradadır; eskiden yalnız .db kopyalanıyor, son işlemler kayboluyordu); DB yerleşmezse kopyalanan WAL da
-            # geri alınır (tek başına kalırsa yeni / boş DB'ye uygulanırdı). `-shm` taşınmaz — SQLite onu WAL'dan yeniden kurar.
-            wal_k, wal_v = eski / (ad + "-wal"), hedef / (ad + "-wal")
-            wal_tasindi = False
-            sebep = None
-            if wal_k.is_file() and not wal_v.exists():
-                sebep = _kopyala_dogrula(wal_k, wal_v)
-                wal_tasindi = sebep is None
-            if sebep is None:
-                sebep = _kopyala_dogrula(kaynak, varis)
-                if sebep is not None and wal_tasindi:
-                    try:
-                        wal_v.unlink()
-                    except OSError:
-                        logging.getLogger(__name__).warning(
-                            "VERİ GÖÇÜ: DB yerleşmedi, kopyalanan WAL geri alınamadı: %s (DB açılmaz — göç engeli)",
-                            wal_v,
-                            exc_info=True,
-                        )
-            if sebep is None:
-                logging.getLogger(__name__).warning(
-                    "VERİ GÖÇÜ: %s eski kökten kopyalandı ve SHA-256 ile doğrulandı (kaynak SİLİNMEDİ: %s).", ad, kaynak
-                )
-            else:
-                _GOC_ENGELI[_goc_anahtari(varis)] = sebep
-                logging.getLogger(__name__).error(
-                    "VERİ GÖÇÜ DOĞRULANAMADI: %s (%s) — hedefe YERLEŞTİRİLMEDİ, eski kök DEĞİŞMEDİ (%s). Bu açılışta bu DB "
-                    "AÇILMAZ (kısıtlı kip: ACİL DURDUR ve STOP çalışır); sonraki açılışta yeniden denenir.",
-                    ad,
-                    sebep,
-                    kaynak,
-                )
+        _dosyalari_gocur(eski, hedef, _GOC_DOSYALARI)
     except Exception:
         # Göç bir KOLAYLIKtır; başarısız olması backend'i başlatmamalı.
         pass
