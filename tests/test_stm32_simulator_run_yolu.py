@@ -157,3 +157,57 @@ def test_KRITIK_bekci_suskunlukta_ERR_basar_ve_isciler_baglantiyla_BITER(hw, mon
         time.sleep(0.05)
     yasayan = [x.name for x in isciler if x.is_alive()]
     assert not yasayan, f"bağlantı bittiği hâlde simülatör işçileri YAŞIYOR (thread sızıntısı): {yasayan}"
+
+
+class _SahteBaglanti:
+    """`recv` parçaları SIRAYLA verir (sonra b'' = karşı taraf kapattı), `sendall` yakalanır — soket YOK, zamanlama YOK."""
+
+    def __init__(self, parcalar: list[bytes]):
+        self._parcalar = list(parcalar)
+        self.giden: list[bytes] = []
+
+    def recv(self, _n: int) -> bytes:
+        return self._parcalar.pop(0) if self._parcalar else b""
+
+    def sendall(self, veri: bytes) -> None:
+        self.giden.append(bytes(veri))
+
+    def close(self) -> None:
+        pass
+
+
+def test_KRITIK_bitisik_ve_parcali_URUN_paketlerinin_HER_BIRINE_STM_OK(hw, monkeypatch, caplog):
+    """D5.15 / İG-5.39 (D5 ek kol): TCP akışı paket sınırını KORUMAZ — ürünün iki paketi TEK `recv`te (bitişik), üçüncüsü
+    üç parçaya bölünmüş ve önünde Y68 kimlik sorgusu gelir. Her GEÇERLİ paket kendi `STM_OK`'unu almalı (3 adet), kimlik
+    yanıtı (`STM_ID`) basılmalı ve `run()` hata kaydı olmadan bitmeli. Socketpair kapısı paketleri tek tek yolladığı için
+    tamponu bir paketten sonra SIFIRLAYAN mutant (`buf = buf[PKT_SIZE:]` → `buf = b""`) orada YEŞİL kalıyordu (ölçüldü)."""
+    import logging
+
+    monkeypatch.setattr(sim, "READY_DELAY_S", 0.0)
+    monkeypatch.setattr(sim.Stm32SimClient, "_send_ready", lambda self: None)
+    monkeypatch.setattr(sim.Stm32SimClient, "_watchdog_worker", lambda self: None)
+    monkeypatch.setattr(sim.Stm32SimClient, "_duration_worker", lambda self: None)
+
+    assert hw._send_stm_manual_update() is True
+    p1 = _kuyruktan_paket(hw)
+    assert hw.update_coil(1, 100.0, 25.0, 0.0, 5)
+    p2 = _kuyruktan_paket(hw)
+    assert hw.update_coil(2, 50.0, 10.0, 0.0, 3)
+    p3 = _kuyruktan_paket(hw)
+    assert len(p1) == len(p2) == len(p3) == sim.PKT_SIZE
+
+    baglanti = _SahteBaglanti([p1 + p2, sim.KIMLIK_SORGUSU + p3[:10], p3[10:70], p3[70:]])
+    with caplog.at_level(logging.WARNING, logger=sim.log.name):
+        sim.Stm32SimClient(baglanti, ("sahte", 0)).run()  # son recv b'' → normal çıkış (thread YOK)
+    satirlar = b"".join(baglanti.giden).decode("utf-8", "replace").splitlines()
+    ok = [s for s in satirlar if s.startswith("-> STM_OK:")]
+    assert len(ok) == 3, (
+        f"3 geçerli paket için 3 STM_OK beklenirdi, {len(ok)} geldi (bitişik/parçalı paket kayboldu): {satirlar}"
+    )
+    assert ok[1].startswith("-> STM_OK: D=25,0,"), f"bitişik İKİNCİ paket (bobin 1 %25) yanlış çözüldü: {ok[1]!r}"
+    assert ok[2].startswith("-> STM_OK: D=25,10,"), f"parçalı ÜÇÜNCÜ paket (bobin 2 %10) yanlış çözüldü: {ok[2]!r}"
+    assert any(s.startswith("-> STM_ID:") for s in satirlar), (
+        f"paketler arasındaki kimlik sorgusu yanıtlanmadı: {satirlar}"
+    )
+    hatalar = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+    assert not hatalar, f"run() geçerli akışta uyarı/hata kaydetti: {hatalar}"
