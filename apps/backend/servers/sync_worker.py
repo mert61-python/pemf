@@ -144,7 +144,8 @@ class CloudSyncWorker:
             logger.info("Supabase istemcisi olusturuldu.")
             return True
         except ImportError:
-            logger.error("Supabase paketi kurulu degil (pip install supabase).")
+            # D5.05 · İG-5.63: kurulu ama BOZUK paket de ImportError verir ("kurulu değil" derken kök neden başka — A9 sınıfı).
+            logger.error("Supabase paketi kurulu degil (pip install supabase).", exc_info=True)
             return False
         except Exception as e:
             # ⚠️ Eskiden `debug` idi: normal log seviyesinde HİÇ görünmüyordu, yani bulut

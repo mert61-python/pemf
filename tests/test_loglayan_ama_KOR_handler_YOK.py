@@ -20,7 +20,8 @@ Aynı gün `_scratch_isit_baslat`ın aynı biçimdeki satırı da YANILTICI teş
   1. `try` gövdesi ALT SİSTEM AÇAN bir iş yapıyor (import / connect / Thread / start /
      load / init) → düşmesi tek bir işlemi değil BİR YETENEĞİ kaybettirir
   2. handler logluyor ama `exc_info`/`stack_info`/`logging.exception` YOK
-  3. seviye DÜŞÜK (info/debug) → operatör/destek bunu "normal" okur
+  3. (D5.05 · İG-5.63: artık HER seviye — eskiden yalnız info/debug sayılıyordu ve WARNING/ERROR'daki zincirsiz
+     handler'lar ile `ai_service/` görülmüyordu; yüksek seviyeli bugünkü borç `BILINEN_YUKSEK_SEVIYE_KOR` cırcırında)
   4. handler yeniden FIRLATMIYOR
 
 ⚠️ Sessiz (`pass`) handler'lar BU KAPININ KONUSU DEĞİL — onların kapısı
@@ -38,7 +39,56 @@ from utils.path_utils import kaynak_kokunu_bul
 
 KOK = kaynak_kokunu_bul(__file__)
 
+#: ⚠️ D5.05 · İG-5.63: kapı eskiden YALNIZ bu iki seviyeyi KÖR sayıyordu ve YALNIZ `apps/backend`i tarıyordu — WARNING/ERROR
+#: seviyesinde zinciri basmayan handler'lar (ölçüldü HEAD 5bc99be1: apps/backend 41, ai_service 12; em_fantom/em_petri XAI
+#: dahil) ve `ai_service/` HİÇ görülmüyordu. Artık HER seviyede zincirsiz log KÖR'dür; seviye yalnız CIRCIR sınıfını belirler:
+#: düşük (info/debug) kör handler hiçbir listeye ALINMAZ, yüksek seviyeli bugünkü borç `BILINEN_YUKSEK_SEVIYE_KOR`da BİREBİR.
 DUSUK_SEVIYE = {"info", "debug"}
+
+#: D5.05 · İG-5.63 CIRCIR — HEAD 5bc99be1'de ÖLÇÜLEN, WARNING/ERROR seviyeli, zinciri basmayan handler'lar: (dosya, fonksiyon) →
+#: o fonksiyondaki kör `try` SAYISI. İzin listesi DEĞİL: sayı BİREBİR tutmalı — artarsa yeni kör handler (KIRMIZI), azalırsa
+#: düzeltilmiş demektir, satır listeden düşülür/azaltılır (KIRMIZI "listeden çıkar"). Yeni dosya/fonksiyon buraya EKLENMEZ —
+#: düzeltilir (`exc_info=True`). ⚠️ E-stop yolundaki üç kayıt (`_estop_one`, `_emergency_stop_all`, `_durdurma_is_parcaciginda`)
+#: yalnız GÜNLÜK zinciri eksiği — ACİL DURDUR davranışına bu kapıyla DOKUNULMAZ (Ö.4-Y8).
+BILINEN_YUKSEK_SEVIYE_KOR = {
+    ("apps/backend/backend_service.py", "_resolve_supabase_credentials"): 1,
+    ("apps/backend/database/session_manager.py", "_apply_performance_config"): 1,
+    ("apps/backend/database/sqlcipher_util.py", "get_sqlcipher_key"): 1,
+    ("apps/backend/database/thdb_ai_gecmisi.py", "ai_analiz_kimliklerini_doldur"): 1,
+    ("apps/backend/database/thdb_ai_gecmisi.py", "get_ai_analyses"): 1,
+    ("apps/backend/database/thdb_denetim.py", "denetim_oku"): 1,
+    ("apps/backend/headless_core.py", "start_headless_services"): 3,
+    ("apps/backend/servers/api_server.py", "_bekleyen_vacuumu_arka_planda"): 1,
+    ("apps/backend/servers/api_server.py", "_bobin_suresi_doldu"): 1,
+    ("apps/backend/servers/api_server.py", "_durdurma_is_parcaciginda"): 1,
+    ("apps/backend/servers/api_server.py", "_emergency_stop_all"): 1,
+    ("apps/backend/servers/api_server.py", "_estop_cloud_mirror"): 1,
+    ("apps/backend/servers/api_server.py", "_estop_one"): 1,
+    ("apps/backend/servers/api_server.py", "_on_mqtt_message_api"): 1,
+    ("apps/backend/servers/api_server.py", "_register_event_bus_handlers"): 1,
+    ("apps/backend/servers/api_server.py", "_start_mdns_service"): 1,
+    ("apps/backend/servers/api_server.py", "_start_mqtt_for_api"): 1,
+    ("apps/backend/servers/auth.py", "get_api_token"): 1,
+    ("apps/backend/servers/auto_discovery.py", "_reregister"): 1,
+    ("apps/backend/servers/auto_discovery.py", "start_mdns"): 1,
+    ("apps/backend/servers/firmware_manager.py", "_yedek_dizini"): 1,
+    ("apps/backend/servers/sync_worker.py", "_publish_device_registry"): 1,
+    ("apps/backend/servers/tunnel_manager.py", "start_tunnel"): 1,
+    ("apps/backend/services/headless_services.py", "_ensure_linux_broker_config"): 1,
+    ("apps/backend/services/headless_services.py", "_kimlik_dahil_conf"): 1,
+    ("apps/backend/services/headless_services.py", "_kimlik_parcasini_onar"): 1,
+    ("apps/backend/services/headless_services.py", "_run"): 1,
+    ("apps/backend/services/headless_services.py", "_start_mdns"): 1,
+    ("apps/backend/services/mdns_service.py", "_reregister_mqtt"): 1,
+    ("apps/backend/services/mdns_service.py", "start"): 1,
+    ("apps/backend/utils/mqtt_kimlik.py", "kimlikleri_oku"): 1,
+    ("apps/backend/utils/pdf_report_generator.py", "__init__"): 1,
+    ("apps/backend/utils/pdf_report_generator.py", "generate_xai_report"): 1,
+    ("apps/backend/utils/production_config_manager.py", "_merge_json_config"): 1,
+    ("apps/backend/utils/support_bundle.py", "_pii_degerleri"): 1,
+    ("apps/backend/utils/telemetry.py", "init_telemetry"): 1,
+}
+
 ALT_SISTEM_ISARETLERI = {
     "import_module",
     "find_spec",
@@ -182,29 +232,38 @@ def _alt_sistem_isi(try_govdesi) -> set[str]:
     return bulunan
 
 
-def kor_mu(dugum: ast.Try) -> bool:
-    """Tek `try` düğümü KÖR mü? (kapının tek karar noktası — testler bunu sınar)"""
+def kor_seviyesi(dugum: ast.Try) -> str | None:
+    """Tek `try` düğümünün körlük sınıfı: None (kör değil) · "dusuk" (info/debug ile kör — hiçbir listeye alınmaz) ·
+    "yuksek" (yalnız warning/error/critical/bilinmeyen seviyeyle kör — bugünkü borç `BILINEN_YUKSEK_SEVIYE_KOR`).
+    ⚠️ D5.05 · İG-5.63: eskiden `not any(s in DUSUK_SEVIYE)` → `continue` vardı: WARNING/ERROR'da zincirsiz handler KÖR SAYILMIYORDU."""
     if not _alt_sistem_isi(dugum.body):
-        return False
+        return None
+    sinif = None
     for h in dugum.handlers:
         if _yeniden_firlatir(h.body):
             continue
         loglar = _log_cagrilari(h.body)
         if not loglar:
             continue  # sessiz handler → ÖTEKİ kapının konusu
-        if not any(s in DUSUK_SEVIYE for s, _ in loglar):
-            continue
         if any(s == "exception" for s, _ in loglar):
             continue
         if any(_zincir_basar(c) for _, c in loglar):
             continue
-        return True
-    return False
+        if any(s in DUSUK_SEVIYE for s, _ in loglar):
+            return "dusuk"
+        sinif = "yuksek"
+    return sinif
+
+
+def kor_mu(dugum: ast.Try) -> bool:
+    """Tek `try` düğümü KÖR mü? (kapının tek karar noktası — testler bunu sınar). HER seviye (D5.05 · İG-5.63)."""
+    return kor_seviyesi(dugum) is not None
 
 
 def _kapsanan_dosyalar() -> list[Path]:
     ciktilar = subprocess.run(
-        ["git", "ls-files", "apps/backend/*.py", "apps/backend/**/*.py"],
+        # D5.05 · İG-5.63: GPU mikroservisi (`ai_service/`, :8100) da taranır — 10 XAI handler'ı orada zincirsiz kalmıştı.
+        ["git", "ls-files", "apps/backend/*.py", "apps/backend/**/*.py", "ai_service/*.py", "ai_service/**/*.py"],
         cwd=KOK,
         capture_output=True,
         text=True,
@@ -289,10 +348,32 @@ def _muaf_mi(rel: str, fonksiyon: str) -> tuple[bool, str]:
             True,
             "D2.37: ölü `if False: raise` yeniden FIRLATMAZ",
         ),
+        # ⚠️ D5.05 · İG-5.63: bu satır eskiden `False` ("D2.37 karşıtı: .log(logging.WARNING, …) düşük değil") idi — seviye
+        # yüksek diye zincirsiz handler kör SAYILMIYORDU. Artık her seviye; aşağıdaki üç satır da aynı sınıfın kanıtı.
         (
             "try:\n    import torch\nexcept Exception as e:\n    logger.log(logging.WARNING, 'x: %s', e)",
+            True,
+            "İG-5.63: .log(logging.WARNING, …) zincirsiz da KÖR",
+        ),
+        (
+            "try:\n    import torch\nexcept Exception as e:\n    logger.warning('atlandi: %s', e)",
+            True,
+            "İG-5.63: warning + zincir yok = KÖR (em_fantom/em_petri XAI'nin biçimi)",
+        ),
+        (
+            "try:\n    conn = connect(h)\nexcept Exception as e:\n    logger.error('baglanamadi: %s', e)",
+            True,
+            "İG-5.63: error + zincir yok = KÖR",
+        ),
+        (
+            "try:\n    import torch\nexcept Exception as e:\n    logger.warning('x: %s', e, exc_info=False)",
+            True,
+            "İG-5.63: warning + exc_info=False zincir BASMAZ",
+        ),
+        (
+            "try:\n    import torch\nexcept Exception as e:\n    logger.error('x: %s', e, exc_info=True)",
             False,
-            "D2.37 karşıtı: .log(logging.WARNING, …) düşük değil",
+            "İG-5.63 karşıtı: error + tam zincir",
         ),
         (
             "try:\n    import torch\nexcept Exception as e:\n    logger.info('x: %s', e, exc_info=e)",
@@ -360,9 +441,14 @@ def test_KRITIK_alt_sistem_acan_yolda_KOR_handler_YOK():
     """Alt sistem açan hiçbir `try`, kök nedeni gizleyen düşük-seviye logla kapatılmasın."""
     dosyalar = _kapsanan_dosyalar()
     assert len(dosyalar) > 40, f"VAKUM: yalnız {len(dosyalar)} dosya tarandı — tarama bozuk"
+    # D5.05 · İG-5.63: ai_service kapsamı sessizce düşmesin (glob/kök değişirse kapı yine yalnız apps/backend'i tarardı).
+    assert any(str(p).replace("\\", "/").endswith("ai_service/app.py") for p in dosyalar), (
+        "VAKUM: ai_service/app.py taranmıyor"
+    )
 
     toplam_try = 0
     bulgular = []
+    bilinen_sayac: dict = {}
     for p in dosyalar:
         rel = str(p.relative_to(KOK)).replace("\\", "/")
         try:
@@ -373,13 +459,17 @@ def test_KRITIK_alt_sistem_acan_yolda_KOR_handler_YOK():
             if not isinstance(d, ast.Try):
                 continue
             toplam_try += 1
-            if not kor_mu(d):
+            sinif = kor_seviyesi(d)
+            if sinif is None:
                 continue
             fn = _fonksiyon_adi(agac, d.lineno)
             muaf, _kanit = _muaf_mi(rel, fn)
             if muaf:
                 continue
-            bulgular.append(f"{rel}:{d.lineno}  ({fn})")
+            if sinif == "yuksek" and (rel, fn) in BILINEN_YUKSEK_SEVIYE_KOR:
+                bilinen_sayac[(rel, fn)] = bilinen_sayac.get((rel, fn), 0) + 1
+                continue
+            bulgular.append(f"{rel}:{d.lineno}  ({fn}) [{sinif}]")
 
     assert toplam_try > 300, f"VAKUM: yalnız {toplam_try} try düğümü görüldü — tarayıcı bozuk"
     assert not bulgular, (
@@ -387,6 +477,15 @@ def test_KRITIK_alt_sistem_acan_yolda_KOR_handler_YOK():
         + "\n  ".join(bulgular)
         + "\n\nDüzeltme: seviyeyi `warning`e çıkar + `exc_info=True` ekle + mesaj KAYBEDİLEN "
         "YETENEĞİ söylesin. (A9'da bu sınıf kök nedeni saatlerce gizledi.)"
+    )
+    sapma = {
+        f"{r}:{f}": {"liste": n, "bulunan": bilinen_sayac.get((r, f), 0)}
+        for (r, f), n in BILINEN_YUKSEK_SEVIYE_KOR.items()
+        if bilinen_sayac.get((r, f), 0) != n
+    }
+    assert not sapma, (
+        f"BILINEN_YUKSEK_SEVIYE_KOR cırcırı SAPTI: {sapma} — bulunan > liste: o fonksiyonda YENİ kör handler (düzelt); "
+        "bulunan < liste: düzeltilmiş, sayıyı düşür / satırı SİL (eski kayıt gelecekteki körlüğü örter)"
     )
 
 

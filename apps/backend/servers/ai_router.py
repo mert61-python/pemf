@@ -2538,7 +2538,10 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
         if _duyarlilik:
             xai_meta["xaiSensitivity"] = _duyarlilik
     except Exception as xe:
-        logger.warning("AI Pro öneri XAI üretilemedi (öneri etkilenmedi): %s", xe)
+        # D5.05 (B-5.15): kök neden tam zincirle loglanır VE yanıtta söylenir — eskiden exc_info'suz uyarı + alan yok: hekim onay
+        # ekranında "dozu ne belirledi" satırının NEDEN olmadığı bilinmiyordu (XAI sessizce kayıp).
+        logger.warning("AI Pro öneri XAI üretilemedi (öneri etkilenmedi): %s", xe, exc_info=True)
+        xai_meta["xai_error"] = ceviri.t("ai.sonuc.aciklamaUretilemedi")
 
     sure = max(1, min(_AI_PRO_MAX_DURATION_MIN, int(payload.duration_minutes)))
     _hasta_id = str(payload.patient_id or "").strip()[:64]
@@ -3949,7 +3952,8 @@ async def analyze_em_fantom(
                     duty_sum if duty_sum is not None else float(cache["cfg"].phantom.duty_sum),
                 )
             except Exception as xe:
-                logger.warning("em_fantom XAI meta üretilemedi (analiz etkilenmedi): %s", xe)
+                logger.warning("em_fantom XAI meta üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
+                _xai_meta["xai_error"] = ceviri.t("ai.sonuc.aciklamaUretilemedi")  # D5.05 (B-5.15)
         return {
             "status": status,
             "image_base64": b64_image,
@@ -4194,7 +4198,8 @@ async def analyze_em_petri(
                     duty_sum if duty_sum is not None else float(cache["cfg"].phantom.duty_sum),
                 )
             except Exception as xe:
-                logger.warning("em_petri XAI meta üretilemedi (analiz etkilenmedi): %s", xe)
+                logger.warning("em_petri XAI meta üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
+                _xai_meta["xai_error"] = ceviri.t("ai.sonuc.aciklamaUretilemedi")  # D5.05 (B-5.15)
         return {
             "status": status,
             "image_base64": b64_image,

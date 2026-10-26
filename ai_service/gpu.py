@@ -30,7 +30,8 @@ def gpu_ok() -> bool:
             # torch KURULU DEĞİL → saf-ONNX/CPU dağıtımı için NORMAL senaryo. Yanıltıcı "RTX 5090
             # cu128 gerekir" uyarısı BASMA (eskiden ImportError da o dala düşüyordu, #12).
             _GPU_OK = False
-            _lg.info("torch kurulu degil → CPU modunda calisiliyor (saf-ONNX dagitimi icin normaldir).")
+            # D5.05 / İG-5.63: kurulu ama BOZUK torch da ImportError verir (A9 sınıfı: "kurulu değil" derken kök neden başka) → tam zincir.
+            _lg.info("torch kurulu degil → CPU modunda calisiliyor (saf-ONNX dagitimi icin normaldir).", exc_info=True)
             return _GPU_OK
         try:
             if hasattr(torch, "cuda") and torch.cuda.is_available():
@@ -49,6 +50,7 @@ def gpu_ok() -> bool:
                 "Yeni kartlar (RTX 5090/Blackwell) için CUDA 12.8 + PyTorch cu128 gerekir.",
                 type(e).__name__,
                 e,
+                exc_info=True,
             )
     return _GPU_OK
 
@@ -93,6 +95,7 @@ def ort_gpu_ok() -> bool:
                 "onnxruntime-gpu RTX 5090/Blackwell (sm_120) kernel'i içermeyebilir.",
                 type(e).__name__,
                 e,
+                exc_info=True,
             )
     return _ORT_GPU_OK
 

@@ -396,7 +396,7 @@ def infer_histopath(file: UploadFile = File(...), explain: str = Form(None)):
             except Exception as xe:
                 import logging as _lg
 
-                _lg.getLogger("ai_service").warning("Histopat XAI üretilemedi: %s", xe)
+                _lg.getLogger("ai_service").warning("Histopat XAI üretilemedi: %s", xe, exc_info=True)
                 yanit["xai_error"] = "Açıklama üretilemedi"
         return yanit
     except Exception as e:
@@ -560,7 +560,7 @@ def infer_sound(file: UploadFile = File(...), explain: str = Form(None), xai_met
             except Exception as xe:
                 import logging as _lg
 
-                _lg.getLogger("ai_service").warning("Ses XAI üretilemedi (analiz etkilenmedi): %s", xe)
+                _lg.getLogger("ai_service").warning("Ses XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
                 _ek["xai_error"] = "Açıklama üretilemedi"
         return {
             "status": "success",
@@ -621,7 +621,7 @@ def infer_kidney_ct(file: UploadFile = File(...), explain: str = Form(None)):
             except Exception as xe:
                 import logging as _lg
 
-                _lg.getLogger("ai_service").warning("CT XAI üretilemedi: %s", xe)
+                _lg.getLogger("ai_service").warning("CT XAI üretilemedi: %s", xe, exc_info=True)
                 yanit["xai_error"] = "Açıklama üretilemedi"
         return yanit
     except Exception as e:
@@ -810,7 +810,9 @@ def infer_thermal(file: UploadFile = File(...), explain: str = Form(None), xai_m
             except Exception as xe:
                 import logging as _lg
 
-                _lg.getLogger("ai_service").warning("Termal XAI üretilemedi (analiz etkilenmedi): %s", xe)
+                _lg.getLogger("ai_service").warning(
+                    "Termal XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True
+                )
                 yanit["xai_error"] = "Açıklama üretilemedi"
         return yanit
     except Exception as e:
@@ -978,7 +980,9 @@ def infer_disease(payload: dict = Body(...)):
             except Exception as xe:
                 import logging as _lg
 
-                _lg.getLogger("ai_service").warning("cat_disease XAI üretilemedi (analiz etkilenmedi): %s", xe)
+                _lg.getLogger("ai_service").warning(
+                    "cat_disease XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True
+                )
                 yanit["xai_error"] = "Açıklama üretilemedi"
         return yanit
     # ⚠️ SIRA KRİTİK: bu kol `except Exception`dan ÖNCE gelmeli, yoksa `_err500` onu yutup 500
@@ -1021,7 +1025,7 @@ def infer_kidney_disease(payload: dict = Body(...)):
             except Exception as xe:
                 import logging as _lg
 
-                _lg.getLogger("ai_service").warning("CKD XAI üretilemedi (analiz etkilenmedi): %s", xe)
+                _lg.getLogger("ai_service").warning("CKD XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
                 yanit["xai_error"] = "Açıklama üretilemedi"
         return yanit
     except _AsgariGirdiYok as ag:  # ⚠️ `except Exception`dan ÖNCE (yukarıdaki gerekçe)
@@ -1075,7 +1079,7 @@ def infer_rna(file: UploadFile = File(...), explain: str = Form(None)):
                 except Exception as xe:
                     import logging as _lg
 
-                    _lg.getLogger("ai_service").warning("RNA XAI üretilemedi: %s", xe)
+                    _lg.getLogger("ai_service").warning("RNA XAI üretilemedi: %s", xe, exc_info=True)
                     yanit["xai_error"] = "Açıklama üretilemedi"
         return yanit
     except Exception as e:
@@ -1142,7 +1146,7 @@ def infer_reticulocytes(file: UploadFile = File(...), explain: str = Form(None))
             except Exception as xe:
                 import logging as _lg
 
-                _lg.getLogger("ai_service").warning("Retikülosit XAI üretilemedi: %s", xe)
+                _lg.getLogger("ai_service").warning("Retikülosit XAI üretilemedi: %s", xe, exc_info=True)
                 yanit["xai_error"] = "Açıklama üretilemedi"
         return yanit
     except Exception as e:
@@ -1268,7 +1272,10 @@ def infer_em_fantom(
             except Exception as xe:
                 import logging as _lg
 
-                _lg.getLogger("ai_service").warning("em_fantom XAI meta uretilemedi (analiz etkilenmedi): %s", xe)
+                _lg.getLogger("ai_service").warning(
+                    "em_fantom XAI meta uretilemedi (analiz etkilenmedi): %s", xe, exc_info=True
+                )
+                _xai_meta["xai_error"] = "Açıklama üretilemedi"  # D5.05 (B-5.15): gömülü yolla parite
         return {
             "status": "success" if result.success else "no_detection",
             "device": _prov_dev(c["predictor"].session),
@@ -1412,7 +1419,10 @@ def infer_em_petri(
             except Exception as xe:
                 import logging as _lg
 
-                _lg.getLogger("ai_service").warning("em_petri XAI meta uretilemedi (analiz etkilenmedi): %s", xe)
+                _lg.getLogger("ai_service").warning(
+                    "em_petri XAI meta uretilemedi (analiz etkilenmedi): %s", xe, exc_info=True
+                )
+                _xai_meta["xai_error"] = "Açıklama üretilemedi"  # D5.05 (B-5.15): gömülü yolla parite
         return {
             "status": "success" if result.success else "no_detection",
             "device": _prov_dev(c["predictor"].session),
