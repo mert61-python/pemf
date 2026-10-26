@@ -234,7 +234,7 @@ function Get-PemfProfilEnvDosyasi([string]$AppDir, [string]$Mode, [string]$Betik
 function Format-PemfEnvGunluk([System.Collections.IDictionary]$EnvMap) {
     @($EnvMap.Keys | ForEach-Object {
         $v = [string]$EnvMap[$_]
-        if ($_ -match '(?i)(PASS|TOKEN|SECRET|KEY|CREDENTIAL|PRIVATE|_PAT$)') {
+        if ($_ -match '(?i)(PASS|TOKEN|SECRET|KEY|CREDENTIAL|PRIVATE|_PAT$|_CODE$|_DSN$)') {
             if ($v) { "$_=***" } else { "$_=(boş)" }
         } else { "$_=$v" }
     }) -join '  '
