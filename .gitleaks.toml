@@ -110,3 +110,21 @@ description = "firmware data/config.json icinde bos olmayan wifi/mqtt degeri"
 path = '''firmware[/\\].*[/\\]data[/\\]config\.json'''
 regex = '''"(wifi_ssid|wifi_pass|mqtt_server|mqtt_user|mqtt_pass)"\s*:\s*"[^"]+"'''
 keywords = ["wifi_pass", "mqtt_pass", "wifi_ssid", "mqtt_user", "mqtt_server"]
+
+# D5 devri (DUZELTME-D4A §6 #6 · A-69 kalanı): kimlik bilgisi DOSYASI sınıfı — `credentials.json`, `hivemq_users.json`, mosquitto
+# parola dosyası. Varsayılan kurallar düşük entropili düz parolayı ve mosquitto `$7$` özet satırını GÖRMEZ (A-69 ölçümü: bu üç
+# dosyada 0 bulgu). Yer tutucu (`"<…>"`, `"{…}"`, boş) değer DEĞİLDİR. `path` ile DAR kapsam; mosquitto parola dosyasının uzantılı
+# kopyaları (`.bak`, `.old`, `.txt`) DAHİL — yedek de aynı sızıntıdır (gitleaks ikili uzantıları zaten taramaz).
+# Kilit: tests/test_gitleaks_KIMLIK_DOSYASI_sinifi_A69_D5.py (gerçek gitleaks ikilisiyle; karşıt: yer tutucu + başka dosya adı).
+[[rules]]
+id = "pemf-kimlik-dosyasi-json-deger"
+description = "credentials.json / hivemq_users.json icinde yer tutucu olmayan parola / sir / jeton degeri"
+path = '''(^|[/\\])(credentials|hivemq_users)\.json$'''
+regex = '''(?i)"(password|passwd|pass|secret|client_secret|token|access_token|refresh_token|private_key|api_key|apikey)"\s*:\s*"[^"<{\s][^"]*"'''
+keywords = ["password", "passwd", "pass", "secret", "token", "private_key", "api_key", "apikey"]
+
+[[rules]]
+id = "pemf-mosquitto-parola-dosyasi"
+description = "mosquitto parola dosyasinda kullanici:ozet satiri ($6$ / $7$)"
+path = '''(^|[/\\])mosquitto_passw(or)?ds?([.][^/\\]*)?$'''
+regex = '''(?m)^[^:\s#]+:\$[67]\$'''
