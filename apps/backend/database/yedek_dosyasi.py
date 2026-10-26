@@ -23,12 +23,35 @@ import logging
 import os
 import re
 import sqlite3
+import time
 
 _log = logging.getLogger(__name__)
 
 #: Yazım sırasındaki geçici ad eki — `pemf_*_*.db` rotasyon desenine UYMAZ (yarım dosya hiçbir zaman "yedek" sayılmaz).
 GECICI_EK = ".yazim.tmp"
 _SQLITE_BASLIK = b"SQLite format 3\x00"
+
+#: ⚠️ D5 (D3 devri, sağlamlık listesi): `Connection.backup` kaynak kilitliyken (SQLITE_BUSY / SQLITE_LOCKED) adımı 250 ms uyuyup
+#: SONSUZA DEK yeniler — bağlantının `timeout`u yalnız TEK adımın bekleyişini sınırlar. Kaynak DELETE kipindeyken (WAL kurulamayınca
+#: tedavi DB'sinin düştüğü kip) ya da başka bir süreç `locking_mode=EXCLUSIVE` ile tutarken yedek çağrısı kilit bırakılana dek
+#: DÖNMÜYORDU [ÖLÇTÜM]. Toplam bekleyiş bu süreyle sınırlı; dolunca yedek istisnayla iptal edilir (son ad oluşmaz, geçici kaldırılır).
+#: Kapı: tests/test_yedek_KAYNAK_KILITLIYKEN_suresiz_BEKLEMEZ_D5.py
+YEDEK_KILIT_SURESI_SN = 30.0
+#: Hesap DB'si kaynağının tek adım bekleyişi (bağlantı `timeout`u).
+KAYNAK_BUSY_SN = 10.0
+_SQLITE_BUSY, _SQLITE_LOCKED = 5, 6
+
+
+def _kilit_sinirli_ilerleme(yol):
+    """`backup(progress=…)` için: kaynak `YEDEK_KILIT_SURESI_SN`den uzun kilitli kalırsa istisna atar → yedek iptal edilir."""
+    son = time.monotonic() + YEDEK_KILIT_SURESI_SN
+
+    def ilerleme(durum, kalan, toplam):
+        if durum in (_SQLITE_BUSY, _SQLITE_LOCKED) and time.monotonic() >= son:
+            raise TimeoutError(f"yedek kaynagi {YEDEK_KILIT_SURESI_SN:.0f} sn kilitli kaldi, yedek iptal edildi: {yol}")
+
+    return ilerleme
+
 
 #: ⚠️ D2.51: yedek ailesi → uzantı. Bu kurulumun ürettiği (ve rotasyonun SİLEBİLECEĞİ) tek ad biçimi
 #: `pemf_<aile>_<YYYYMMDD_HHMMSS><uzantı>`; başka her dosya (kullanıcı dosyası, elle alınmış kopya, zarf, not) yok sayılır.
@@ -127,7 +150,7 @@ def yedek_yaz(src_conn, yol: str, baglayici, anahtar: str, logger) -> None:
         dst = baglayici.connect(gecici)
         if anahtar:
             dst.execute("PRAGMA key='{}'".format(anahtar.replace("'", "''")))
-        src_conn.backup(dst)
+        src_conn.backup(dst, progress=_kilit_sinirli_ilerleme(yol))
         # ⚠️ D2.51: yedek API'si kaynağın WAL başlığını (18-19 = 2) da kopyalıyordu → yedeği her açan (rotasyon doğrulaması, makine
         # dışı hedef, geri yükleme) yanına `-wal`/`-shm` açıyordu [ÖLÇTÜM 2-D sondası]. Yedek tek dosyalık DELETE kipine alınır;
         # geri yüklenen DB'yi uygulama açılışta yine WAL'a geçirir (üç DB de bağlantıda `journal_mode=WAL` yapar).
@@ -170,7 +193,7 @@ def duz_dbyi_yedekle(kaynak: str, yol: str, sqlcipher_mod, anahtar: str, logger)
     6 haneli PIN özeti çevrimdışı kaba kuvvete açıktır). Anahtar boşsa (düz kurulum) `yedek_yaz` ile düz yedek. Geçici ad → doğrulama
     → `os.replace`; başarısızlıkta istisna YÜKSELİR, son ad oluşmaz. Geri yükleme: `sifreli_yedegi_duze_coz`."""
     if not anahtar:
-        src = sqlite3.connect(str(kaynak), timeout=10.0)
+        src = sqlite3.connect(str(kaynak), timeout=KAYNAK_BUSY_SN)
         try:
             yedek_yaz(src, yol, sqlite3, "", logger)
         finally:
@@ -181,9 +204,9 @@ def duz_dbyi_yedekle(kaynak: str, yol: str, sqlcipher_mod, anahtar: str, logger)
     src = bellek = None
     tamam = False
     try:
-        src = sqlcipher_mod.connect(str(kaynak), timeout=10.0)  # düz kaynak: anahtar UYGULANMAZ
+        src = sqlcipher_mod.connect(str(kaynak), timeout=KAYNAK_BUSY_SN)  # düz kaynak: anahtar UYGULANMAZ
         bellek = sqlcipher_mod.connect(":memory:")
-        src.backup(bellek)
+        src.backup(bellek, progress=_kilit_sinirli_ilerleme(yol))
         _kapat(src)
         src = None
         bellek.execute("ATTACH DATABASE ? AS yedek KEY ?", (gecici, anahtar))
