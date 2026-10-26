@@ -464,6 +464,8 @@ export function AiProPanel({
   // bobinleri BAŞSIZ sürmeye devam ediyordu") — bastırma YALNIZ seansı biz başlatmadıysak.
   const ownedRef = useRef(false);
   const clientIdRef = useRef("");
+  /** Onay / red isteği uçuşta mı (eşzamanlı bekçi — `approveAndStart` notu). */
+  const onayAkisiRef = useRef(false);
   useEffect(() => {
     getClientInstanceId().then((id) => { clientIdRef.current = id; }).catch(() => {});
   }, []);
@@ -796,44 +798,59 @@ export function AiProPanel({
       platformAlert(i18n.t("ai.pro.uyari.surusKapali"), kapali);
       return;
     }
-    setApprovalBusy(true);
-    const ok = await apiPost<{ status?: string } | null>(
-      "/ai/pro/approve",
-      { proposal_id: proposal.proposalId, operator_email: operatorEmail || "" },
-      null
-    );
-    if (!ok) { setApprovalBusy(false); return; }   // onay geçmediyse BAŞLATMA
-    const res = await apiPost<AiProAction | null>(
-      "/ai/pro/start",
-      { proposal_id: proposal.proposalId, patient_name: patientName || "", client_id: clientIdRef.current },
-      null
-    );
-    setApprovalBusy(false);
-    if (res?.status === "success") {
-      // [B1]: ownedRef'i YALNIZ backend BİZİ sahip gösteriyorsa true yap. "Already running" yanıtı
-      // MEVCUT sahibi (A) döndürür → B ownedRef=false kalır ve panelini kapatınca A'nın onaylı
-      // seansına /stop GÖNDERMEZ (ownedRef <3sn drift kapanır). Alan yoksa (eski backend) eski
-      // davranış: başarı=sahip (sürüm-kayması geriye-uyumu).
-      // ⚠️ `!!res.ownerClientId`: status-poll (satır ~199) ile AYNI formül — boş ownerClientId'yi
-      // İKİSİ de "sahip değil" sayar. Aksi halde boş-owner'da start=true / poll=false ıraksar ve
-      // sahibin unmount /stop'u atlanabilirdi (adversaryal kod-inceleme minor tutarlılık).
-      ownedRef.current =
-        res.ownerClientId === undefined
-          ? true
-          : !!res.ownerClientId && res.ownerClientId === clientIdRef.current;
-      setRunning(true);
-      setProposal(null);
+    // D5 (D3 devri · 2-C inc. §9 #10): `approvalBusy` düğmeyi ancak yeniden çizimde pasifler — aynı karede ikinci dokunuş
+    // ikinci `/approve`u gönderiyordu (409 → gereksiz hata bildirimi + düğme ilk istek sürerken yeniden açılıyordu).
+    if (onayAkisiRef.current) return;
+    onayAkisiRef.current = true;
+    try {
+      setApprovalBusy(true);
+      const ok = await apiPost<{ status?: string } | null>(
+        "/ai/pro/approve",
+        { proposal_id: proposal.proposalId, operator_email: operatorEmail || "" },
+        null
+      );
+      if (!ok) { setApprovalBusy(false); return; }   // onay geçmediyse BAŞLATMA
+      const res = await apiPost<AiProAction | null>(
+        "/ai/pro/start",
+        { proposal_id: proposal.proposalId, patient_name: patientName || "", client_id: clientIdRef.current },
+        null
+      );
+      setApprovalBusy(false);
+      if (res?.status === "success") {
+        // [B1]: ownedRef'i YALNIZ backend BİZİ sahip gösteriyorsa true yap. "Already running" yanıtı
+        // MEVCUT sahibi (A) döndürür → B ownedRef=false kalır ve panelini kapatınca A'nın onaylı
+        // seansına /stop GÖNDERMEZ (ownedRef <3sn drift kapanır). Alan yoksa (eski backend) eski
+        // davranış: başarı=sahip (sürüm-kayması geriye-uyumu).
+        // ⚠️ `!!res.ownerClientId`: status-poll (satır ~199) ile AYNI formül — boş ownerClientId'yi
+        // İKİSİ de "sahip değil" sayar. Aksi halde boş-owner'da start=true / poll=false ıraksar ve
+        // sahibin unmount /stop'u atlanabilirdi (adversaryal kod-inceleme minor tutarlılık).
+        ownedRef.current =
+          res.ownerClientId === undefined
+            ? true
+            : !!res.ownerClientId && res.ownerClientId === clientIdRef.current;
+        setRunning(true);
+        setProposal(null);
+      }
+      // Başlatma başarısızsa modal AÇIK kalır: onay tüketilmiş olabilir, hekim yeni öneri alır.
+    } finally {
+      onayAkisiRef.current = false;
     }
-    // Başlatma başarısızsa modal AÇIK kalır: onay tüketilmiş olabilir, hekim yeni öneri alır.
   }, [proposal, operatorEmail, patientName, kediSurusAcik]);
 
   /** Hekim REDDETTİ → gerekçeyle kaydet; tedavi BAŞLAMAZ. */
   const rejectProposal = useCallback(async (reason: string) => {
     if (!proposal?.proposalId) return;
-    setApprovalBusy(true);
-    const r = await apiPost<{ status?: string; gerekceKaydedildi?: boolean } | null>("/ai/pro/reject",
-      { proposal_id: proposal.proposalId, operator_email: operatorEmail || "", reason },
-      null);
+    if (onayAkisiRef.current) return;   // D5: çift dokunma — gerekçe iki kez gönderilmez (yukarıdaki not)
+    onayAkisiRef.current = true;
+    let r: { status?: string; gerekceKaydedildi?: boolean } | null;
+    try {
+      setApprovalBusy(true);
+      r = await apiPost<{ status?: string; gerekceKaydedildi?: boolean } | null>("/ai/pro/reject",
+        { proposal_id: proposal.proposalId, operator_email: operatorEmail || "", reason },
+        null);
+    } finally {
+      onayAkisiRef.current = false;
+    }
     setApprovalBusy(false);
     setProposal(null);
     // S-F2-1.2 (2-F incelemesi · Y123 · C2-1.14): pencere "Red gerekçesi (kayda geçer)" diyor — sunucu yazamadıysa hekim bilmeli.
