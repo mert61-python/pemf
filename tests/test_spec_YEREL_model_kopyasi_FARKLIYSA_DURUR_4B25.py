@@ -43,6 +43,8 @@ def _ayna(tmp: Path, yerel: bytes | None) -> Path:
         (md / "scaler.pkl").write_bytes(yerel)
     # I18N-0: spec sunucu çeviri kataloğu (apps/backend/i18n) YOKSA derlemeyi DURDURUR (katalog sessizce paketlenmesin) → ayna da taşır.
     shutil.copytree(KOK / "apps" / "backend" / "i18n", kok / "apps" / "backend" / "i18n")
+    # D3.48: spec model bütünlük manifesti (release_assets/ai_models_sha256.json) YOKSA derlemeyi DURDURUR → ayna da taşır.
+    shutil.copy2(KOK / "release_assets" / "ai_models_sha256.json", kok / "release_assets" / "ai_models_sha256.json")
     return kok
 
 
