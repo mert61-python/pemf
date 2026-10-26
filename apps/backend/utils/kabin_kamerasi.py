@@ -48,6 +48,10 @@ class KameraSecilmedi(RuntimeError):
     """Kabin kamerası seçilmemiş — kamera açılmadı (dahili kameraya sessiz düşüş yok)."""
 
 
+class KameraMesgul(RuntimeError):
+    """D3I-A3.2: canlı oturum başlatılırken kamerayı AI Pro (hazırlık / seans) devraldı — canlı AÇILMADI (AI Pro önceliği)."""
+
+
 def _veri_koku() -> Path:
     from utils.path_utils import get_app_data_directory
 
@@ -120,9 +124,23 @@ def kamera_ac(cv2=None, *, canliyi_kapat: bool = True):
     secim = secili_kamera()
     if secim is None:
         raise KameraSecilmedi()
-    if canliyi_kapat and canli_acik():
-        logging.getLogger(__name__).info("kabin kamerasi: canli oturum kapatiliyor (kamera devralindi)")
-        canli_durdur()
+    if canliyi_kapat:
+        # D3I-A3.2: açılışı SÜREN canlı başlatma önce kaydolsun (kilit), sonra kapatılsın — yoksa ikisi de kamerayı tutar.
+        # Bekleme SINIRLI (`KAMERA_DEVIR_BEKLE_SN`): canlının açılışı asılırsa (sürücü) AI Pro hazırlık / seans döngüsü süresiz
+        # beklemez — süre dolunca eski davranışla (kilitsiz denetim) sürer.
+        alindi = _canli_baslat_kilit.acquire(timeout=KAMERA_DEVIR_BEKLE_SN)
+        if not alindi:
+            logging.getLogger(__name__).warning(
+                "kabin kamerasi: canli baslatma %.1f sn'de bitmedi — kamera kilitsiz devraliniyor",
+                KAMERA_DEVIR_BEKLE_SN,
+            )
+        try:
+            if canli_acik():
+                logging.getLogger(__name__).info("kabin kamerasi: canli oturum kapatiliyor (kamera devralindi)")
+                canli_durdur()
+        finally:
+            if alindi:
+                _canli_baslat_kilit.release()
     if cv2 is None:
         import cv2
     cap = cv2.VideoCapture(secim["indeks"])
@@ -138,7 +156,13 @@ KARE_ISINMA = 5
 def kare_al(cv2=None) -> dict | None:
     """T3 · Y189 / Y190 (petri / fantom analizi "Fotoğraf Çek", bu makinede): SEÇİLİ kabin kamerasından TAM çözünürlüklü tek kare (JPEG,
     base64). `kamera_ac` ile açılır (1920×1080 ilk okumadan ÖNCE), ilk `KARE_ISINMA` kare atılır, son kare kodlanır, kamera
-    HER durumda bırakılır. Seçim yok → `KameraSecilmedi`; açılamaz / okunamaz → None."""
+    HER durumda bırakılır. Seçim yok → `KameraSecilmedi`; açılamaz / okunamaz → None.
+    D3I-A3.2: eşzamanlı çağrılar (çift dokunuş, iki istemci) SIRAYLA — aynı kameraya iki `VideoCapture` açılmaz."""
+    with _kisa_acilis_kilit:
+        return _kare_al(cv2)
+
+
+def _kare_al(cv2=None) -> dict | None:
     if cv2 is None:
         import cv2
     if canli_acik():
@@ -182,6 +206,10 @@ CANLI_ONIZLEME_GENISLIK = 960
 CANLI_ILK_KARE_BEKLE_SN = 2.0
 _canli_kilit = threading.Lock()
 _canli_baslat_kilit = threading.Lock()
+#: D3I-A3.2: `kamera_ac` (AI Pro / tek kare) açılışı süren bir canlı başlatmayı en çok bu kadar bekler (sonra kilitsiz devralır).
+KAMERA_DEVIR_BEKLE_SN = 3.0
+#: D3I-A3.2: kısa açılışlar (tek kare, tarama) sırayla — aynı kameraya eşzamanlı ikinci `VideoCapture` yok.
+_kisa_acilis_kilit = threading.Lock()
 _canli: dict | None = None
 
 
@@ -211,13 +239,17 @@ def _canli_okuyucu(d: dict, cap) -> None:
             pass
 
 
-def canli_baslat(cv2=None) -> dict | None:
+def canli_baslat(cv2=None, mesgul=None) -> dict | None:
     """Seçili kamerayı AÇIK tutan okuyucuyu başlatır (açıksa aynısı). Seçim yok → `KameraSecilmedi`; açılamaz → None.
-    Eşzamanlı iki başlatma (çift dokunuş, iki sekme) İKİ `VideoCapture` açmaz (`_canli_baslat_kilit`)."""
+    Eşzamanlı iki başlatma (çift dokunuş, iki sekme) İKİ `VideoCapture` açmaz (`_canli_baslat_kilit`).
+    D3I-A3.2: `mesgul` (çağıranın AI Pro denetimi) KİLİT ALTINDA yeniden sorulur — istek girişte geçip AI Pro kamerayı bu arada
+    devraldıysa canlı AÇILMAZ (`KameraMesgul`)."""
     global _canli
     if cv2 is None:
         import cv2
     with _canli_baslat_kilit:
+        if mesgul is not None and mesgul():
+            raise KameraMesgul()
         with _canli_kilit:
             if canli_acik():
                 _canli["son_erisim"] = time.monotonic()
@@ -296,7 +328,12 @@ def canli_durdur(bekle_sn: float = 3.0) -> None:
 def kameralari_tara(cv2=None, sayi: int = TARAMA_INDEKS_SAYISI) -> list[dict]:
     """Analiz / AI Pro paneli ▸ Kabin kamerası ▸ "Kameraları tara": 0..sayi-1 indekslerini KISA açar, 1920×1080 ister, bir kare okur, bırakır.
     @return açılanların listesi `[{"indeks", "genislik", "yukseklik", "onizleme"}]` (önizleme: küçük JPEG, base64; kare
-    okunamazsa None). Yalnız kullanıcı eylemiyle çağrılır (açılış / arka plan taraması YOK)."""
+    okunamazsa None). Yalnız kullanıcı eylemiyle çağrılır (açılış / arka plan taraması YOK). D3I-A3.2: tek kare ile sırayla."""
+    with _kisa_acilis_kilit:
+        return _kameralari_tara(cv2, sayi)
+
+
+def _kameralari_tara(cv2=None, sayi: int = TARAMA_INDEKS_SAYISI) -> list[dict]:
     if cv2 is None:
         import cv2
     sonuc: list[dict] = []

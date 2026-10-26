@@ -244,9 +244,11 @@ def kabin_kamerasi_canli_baslat():
     if _ai_kamerasi_mesgul():
         raise HTTPException(status_code=409, detail=ceviri.t("ayarlar.kabinKamerasi.canliMesgul"))
     try:
-        d = kk.canli_baslat()
+        d = kk.canli_baslat(mesgul=_ai_kamerasi_mesgul)
     except kk.KameraSecilmedi:
         raise HTTPException(status_code=409, detail=ceviri.t("ai.pro.hazirlik.kameraSecilmedi")) from None
+    except kk.KameraMesgul:
+        raise HTTPException(status_code=409, detail=ceviri.t("ayarlar.kabinKamerasi.canliMesgul")) from None
     if d is None:
         secim = kk.secili_kamera() or {}
         raise HTTPException(
