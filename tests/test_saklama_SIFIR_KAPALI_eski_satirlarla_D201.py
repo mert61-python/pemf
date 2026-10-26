@@ -82,7 +82,13 @@ _YERINDE = {"sensor": 1, "olay": 1, "kosu": 1, "kutu": 1, "ad": "Pamuk Eski"}
 
 
 def test_KRITIK_tum_sureler_SIFIR_eski_satirlar_YERINDE_sayaclar_SIFIR(db):
-    """MUTASYON: `apply_data_retention_policy`deki beş `if <süre> > 0:` koşulundan herhangi biri `if True:` → KIRMIZI."""
+    """UÇTAN UCA kapı: süre 0 iken iki katmanın İKİSİ de korumayı kaybederse KIRMIZI (ölçüldü D5: üst `if event_retain_days > 0`
+    → `if True` + alt `purge_old_session_events` `<= 0` koruması → `if False` ⇒ 2 failed).
+
+    ⚠️ D5 (2-F inc. §10 #14 — eski docstring "beş koşuldan herhangi biri `if True:` → KIRMIZI" diyordu, YANLIŞTI): `apply_data_retention_policy`
+    deki beş `if <süre> > 0:` koşulunun her biri TEK BAŞINA eşdeğer mutanttır (ölçüldü: beşi de bu dosyada 4 passed) — alt katmanın
+    `<= 0 → 0` korumaları davranışı korur. Alt katman kapıları: `test_silme_fonksiyonlari_SIFIRDA_hicbir_sey_silmez_D249.py` (sensör /
+    doz / olay / kutu) ve `test_SIFIR_sure_anonimlestirme_ve_maskeleme_YAPMAZ_F2_1_8.py` (PII) — alt koruma mutantları orada KIRMIZI."""
     k = _eski_satirlar(db)
     rapor = db.apply_data_retention_policy(
         sensor_retain_days=0, event_retain_days=0, dead_outbox_retain_days=0, pii_retain_days=0, dose_retain_days=0
