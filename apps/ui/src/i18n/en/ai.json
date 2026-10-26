@@ -572,6 +572,7 @@
     "dosyaBuyuk": "The image/file is too large. Please choose an image with a lower resolution and try again.",
     "goruntuOkunamadi": "The image could not be read. Please choose a valid file (.png, .jpg or .tif).",
     "hataIleti": "Error: {{ileti}}",
+    "kayitSuruyor": "The analysis result may still be being saved to history — the device did not respond in time. Do not run the analysis again (the record would be duplicated); refresh AI History in a few minutes.",
     "teshisSirasinda": "An error occurred during the diagnosis."
   },
   "hayvanSahibi": {

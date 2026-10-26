@@ -572,6 +572,7 @@
     "dosyaBuyuk": "Görüntü/dosya çok büyük. Lütfen daha küçük çözünürlüklü bir görüntü seçip tekrar deneyin.",
     "goruntuOkunamadi": "Görüntü okunamadı. Lütfen geçerli bir dosya seçin (.png, .jpg veya .tif).",
     "hataIleti": "Hata: {{ileti}}",
+    "kayitSuruyor": "Analiz sonucu geçmişe hâlâ yazılıyor olabilir — cihaz zamanında yanıt vermedi. Analizi yeniden çalıştırmayın (kayıt çift olur); birkaç dakika sonra AI Geçmişi'ni yenileyin.",
     "teshisSirasinda": "Teşhis sırasında hata oluştu."
   },
   "hayvanSahibi": {

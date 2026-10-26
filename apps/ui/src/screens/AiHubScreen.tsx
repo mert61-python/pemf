@@ -155,6 +155,12 @@ function hastaAnligi(): HastaAnligi {
 // Aynı desen: giriş yapan hekim e-postası (klinik-içi "Benim/Tüm Klinik" AI-analiz filtresi).
 let currentOperatorEmail: string = "";
 
+// D5 (D3 devri · 2-C inc. §9 #8): kilitli DB'de tek `/ai/log` ~40 sn sürebilir. Varsayılan 8 sn sınırında istek iptal edilip ekran
+// "Tekrar deneyin" diyordu; sunucu kaydı SONRA yazıyor, analizi yeniden koşan hekim aynı analizi İKİ kez kaydediyordu. Emsal Y84
+// (`services/veriTasima`): ayrı uzun sınır + "sürüyor olabilir, tekrarlamayın" metni. Çağıranlar kaydı BEKLEMEZ (ekran bloklanmaz).
+// Kapı: screens/__tests__/aiKaydiZamanAsimi.D5.web.test.tsx
+const AI_KAYIT_ZAMAN_ASIMI_MS = 60_000;
+
 // Tüm AI modelleri sonuçlarını buradan ŞİFRELİ ai_analyses geçmişine yazar (profesyonel + detaylı).
 // result_detail utils/aiDetail.cleanDetail ile temizlenir (görsel/binary/devasa alanlar atılır).
 // extra: modül-id + girdi-tipi + sonuç detayı (cleanDetail ile temizlenir) + opsiyonel güven. mode oto.
@@ -179,7 +185,11 @@ async function logAiResult(
       // ⚠️ Hasta KİMLİĞİ (opak) — ad bazlı eşlemenin üç kırılganlığını kapatır (bkz. currentPatient). Ad ile AYNI görüntüden
       // (D2.E09). Boş geçerse backend eskisi gibi ada bağlı çalışır (geriye uyumlu).
       patient_id: hasta.id || "",
-    }, null, { operatorJetonu: hasta.operatorJetonu });
+    }, null, {
+      operatorJetonu: hasta.operatorJetonu,
+      timeoutMs: AI_KAYIT_ZAMAN_ASIMI_MS,
+      zamanAsimiMesaji: i18n.t("ai.hata.kayitSuruyor"),
+    });
   } catch {
     /* audit başarısız — kullanıcı akışını bozma */
   }
