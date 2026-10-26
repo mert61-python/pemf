@@ -159,6 +159,10 @@ def test_KRITIK_korumasiz_duz_metin_ARTIK_diskte_KALMAZ(temp_app_data, monkeypat
     _duz_metin_klinik_kur(temp_app_data, monkeypatch, "YedekHasta")
     _yukselt(monkeypatch)
     _db(temp_app_data)
+    # Y94: düz dönem yedek şifrelemesi açılıştan SONRA arka planda — disk taranmadan önce bitmesi beklenir (yoksa geçici dosya yarışı).
+    from database import sqlcipher_util as su
+
+    assert su.yedek_sifrelemesini_bekle(), "arka plan yedek şifrelemesi bitmedi"
 
     for p in temp_app_data.rglob("*"):
         if p.is_file() and p.name != "pemf_treatment_history.db":

@@ -83,6 +83,7 @@ def test_KRITIK_goc_sonrasi_DUZ_yedekler_SIFRELENIR_silinmez(baglayici, tmp_path
 
     with caplog.at_level(logging.WARNING):
         su.migrate_to_encrypted_if_needed(db, app, logging.getLogger("d248"))
+        assert su.yedek_sifrelemesini_bekle(), "arka plan yedek şifrelemesi bitmedi (Y94)"
     assert db.read_bytes()[:16] != _SQLITE_BASLIK, "ön koşul: canlı DB göçmeli"
     # Sahte bağlayıcı içeriği gerçekten şifrelemez (yalnız başlık — anahtar denetimini taklit eder, gizliliği değil):
     # hasta adı baytı ölçütü yalnız GERÇEK kolda anlamlı.
@@ -124,6 +125,7 @@ def test_KRITIK_bir_yedek_SIFRELENEMEZSE_dokunulmaz_neden_LOGLANIR(baglayici, tm
     monkeypatch.setattr(os, "replace", _replace)
     with caplog.at_level(logging.WARNING):
         su.migrate_to_encrypted_if_needed(db, app, logging.getLogger("d248"))
+        assert su.yedek_sifrelemesini_bekle(), "arka plan yedek şifrelemesi bitmedi (Y94)"
     assert kilitli.read_bytes() == once, "şifrelenemeyen yedek BOZULDU"
     assert kilitli.name in caplog.text and "SIFRELENEMEDI" in caplog.text, (
         f"şifrelenemeyen yedek adıyla loglanmadı:\n{caplog.text[-1000:]}"
@@ -158,6 +160,7 @@ def test_KRITIK_A291_yedek_DIZINI_listelenemezse_digeri_SIFRELENIR_gunluk_YALAN_
     monkeypatch.setattr(os, "listdir", _listdir)
     with caplog.at_level(logging.WARNING):
         su.migrate_to_encrypted_if_needed(db, app, logging.getLogger("d248"))
+        assert su.yedek_sifrelemesini_bekle(), "arka plan yedek şifrelemesi bitmedi (Y94)"
     assert db.read_bytes()[:16] != _SQLITE_BASLIK, "ön koşul: canlı DB göçmeli"
     assert gunluk.read_bytes()[:16] != _SQLITE_BASLIK, (
         f"migration_backups/ listelenemeyince backups/ HİÇ ŞİFRELENMEDİ (hasta PII'si düz):\n{caplog.text[-1500:]}"
@@ -187,6 +190,7 @@ def test_KARSIT_goc_IPTAL_olursa_yedeklere_DOKUNULMAZ(baglayici, tmp_path, monke
     okuyucu.execute("SELECT * FROM kayit").fetchall()
     try:
         su.migrate_to_encrypted_if_needed(db, app, logging.getLogger("d248"))
+        assert su.yedek_sifrelemesini_bekle(), "arka plan yedek şifrelemesi bitmedi (Y94)"
     finally:
         okuyucu.close()
     assert db.read_bytes()[:16] == _SQLITE_BASLIK, "ön koşul: göç iptal olmalı"
@@ -227,6 +231,7 @@ def test_KRITIK_dogrulanamayan_sifreli_kopya_YERINE_KONMAZ_yedek_KAYBOLMAZ(tmp_p
     monkeypatch.setattr(sahte_sqlcipher.Baglanti, "_disa_aktar", _bos_aktar)
     with caplog.at_level(logging.WARNING):
         su.migrate_to_encrypted_if_needed(db, app, logging.getLogger("d248"))
+        assert su.yedek_sifrelemesini_bekle(), "arka plan yedek şifrelemesi bitmedi (Y94)"
     assert db.read_bytes()[:16] != _SQLITE_BASLIK, "ön koşul: canlı DB göçmeli"
     assert y.read_bytes() == once, "doğrulanamayan (boş) şifreli kopya yedeğin YERİNE KONDU — veri kaybı"
     assert "SIFRELENEMEDI" in caplog.text and y.name in caplog.text
@@ -267,6 +272,9 @@ def test_KRITIK_plan_kapisi_duz_donem_on_yedegi_gocten_sonra_HASTA_ADI_tasimaz(t
         assert [s.get("patient_name") for s in db.get_session_history(limit=5)] == ["DuzDonemHasta-D248"]
     finally:
         db.close_connections()
+    from database import sqlcipher_util as su
+
+    assert su.yedek_sifrelemesini_bekle(), "arka plan yedek şifrelemesi bitmedi (Y94)"
     dosyalar = [p for alt in ("migration_backups", "backups") for p in sorted((app / alt).glob("*.db"))]
     duz_pii = [f"{p.parent.name}/{p.name}" for p in dosyalar if b"DuzDonemHasta-D248" in p.read_bytes()]
     assert duz_pii == [], f"göçten sonra hasta adı diskte DÜZ: {duz_pii}"

@@ -18,6 +18,7 @@ import logging
 import os
 import shutil
 import sqlite3
+import threading
 import time
 
 
@@ -764,6 +765,9 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None, etiket="D
             c = sqlcipher.connect(db)
             c.execute(f"PRAGMA key={keyq}")
             c.execute("SELECT count(*) FROM sqlite_master")
+            # Y93 (sahip): zaten şifreli → düz dönemden kalan yedekler HER açılışta, açılıştan SONRA arka planda taranır (göç anı
+            # dışında kalmış / önceki tarama yarıda kesilmiş kopyalar da şifrelenir; silme yok — A-08).
+            duz_yedekleri_arka_planda_sifrele(app_data_dir, keyq, sqlcipher, logger, etiket=etiket)
             return  # acildi -> zaten sifreli
         except Exception:
             pass
@@ -890,10 +894,51 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None, etiket="D
         goc_sonrasi_yedek_politikasi(backup, logger, etiket=etiket)
         # ⚠️ D2.48 (B-3.29 · A-08): göç DOĞRULANMIŞ başarıyla bitti (şifreli DB yerinde) → düz dönemden kalan
         # `migration_backups/*.db` ve `backups/*.db` kopyaları AYNI anahtarla ŞİFRELENİR (silinmez).
-        duz_metin_yedekleri_sifrele(app_data_dir, keyq, sqlcipher, logger, etiket=etiket)
+        # ⚠️ Y94 (sahip): eskiden EŞZAMANLIYDI — açılış yedek boyutu kadar (~107 MB/sn) bekliyordu; artık açılıştan sonra arka planda.
+        duz_yedekleri_arka_planda_sifrele(app_data_dir, keyq, sqlcipher, logger, etiket=etiket)
     except Exception:
         if logger:
             logger.exception("SQLCipher migrate hatasi (duz-metin korunur)")
+
+
+#: Y93 / Y94 (sahip): düz dönem yedek şifrelemesi ARKA PLANDA — veri kökü başına TEK iş (iki DB aynı kökü paylaşır).
+_yedek_isleri: dict = {}
+_yedek_isleri_kilidi = threading.Lock()
+
+
+def duz_yedekleri_arka_planda_sifrele(app_data_dir, keyq, sqlcipher, logger=None, etiket="DB"):
+    """Y93 / Y94: `duz_metin_yedekleri_sifrele`yi açılışı BEKLETMEDEN arka planda koştur. Veri kökü başına tek iş (sürüyorsa yenisi
+    başlatılmaz, süreni döner). Dosya tarihleri korunur, silme yok (işlevin kendisi — A-08); yarıda kesilirse Y95 artığı sonraki
+    açılışın taramasında toparlanır. ACİL DURDUR / olay döngüsü etkilenmez (ayrı iş parçacığı)."""
+    anahtar = os.path.normcase(os.path.abspath(str(app_data_dir)))
+    with _yedek_isleri_kilidi:
+        suren = _yedek_isleri.get(anahtar)
+        if suren is not None and suren.is_alive():
+            return suren
+
+        def _calis():
+            try:
+                duz_metin_yedekleri_sifrele(app_data_dir, keyq, sqlcipher, logger, etiket=etiket)
+            except Exception:
+                if logger:
+                    logger.error(
+                        "DUZ-METIN YEDEK SIFRELEMESI (arka plan) DUSTU — yedekler SILINMEDI, sonraki acilista yeniden taranir.",
+                        exc_info=True,
+                    )
+
+        t = threading.Thread(target=_calis, name=f"duz-yedek-sifreleme ({etiket})", daemon=True)
+        _yedek_isleri[anahtar] = t
+        t.start()
+        return t
+
+
+def yedek_sifrelemesini_bekle(sure: float = 60.0) -> bool:
+    """Testler / kapanış için: süren arka plan yedek şifrelemelerini bekle. True = hepsi bitti."""
+    with _yedek_isleri_kilidi:
+        isler = list(_yedek_isleri.values())
+    for t in isler:
+        t.join(sure)
+    return not any(t.is_alive() for t in isler)
 
 
 #: D2.48 (B-3.29): göç sonrası şifrelenen düz dönem yedek dizinleri (veri kökü altında).
