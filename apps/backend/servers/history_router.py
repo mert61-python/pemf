@@ -2,6 +2,7 @@
 import csv
 import io
 import logging
+import math
 import os
 import time
 from datetime import datetime
@@ -137,6 +138,19 @@ _purge_old_reports()  # import-zamani orphan temizligi
 
 def get_db():
     return get_treatment_db(_app_data_dir)
+
+
+def _json_sonlu(x):
+    """DALGA-1 §7 (1-C §9 #11 — D5): sonlu OLMAYAN sayı (1.9.50'nin tekil bobin ucundan koşu kaydına yazabildiği inf / nan) yanıtta
+    None olur — JSON serileştirmesi (`allow_nan=False`) patlayıp seansın kaydını 500'de TUTMASIN. Yapı ve sonlu değerler AYNEN kalır.
+    Kapı: tests/test_gecmis_detay_INF_kosu_satiri_500_vermez_D1S7.py"""
+    if isinstance(x, float):
+        return x if math.isfinite(x) else None
+    if isinstance(x, dict):
+        return {k: _json_sonlu(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [_json_sonlu(v) for v in x]
+    return x
 
 
 def get_pdf_gen():
@@ -649,11 +663,13 @@ def get_session_full_details(session_id: int, db=Depends(get_db)):
         )
         session["alan_notu"] = mt_duzeltme.alan_notu_metni() if _duzeltildi else ""
 
-        return {
-            "session": session,
-            "coil_runs": coil_runs,
-            "sensor_samples": sensor_samples,
-        }
+        return _json_sonlu(
+            {
+                "session": session,
+                "coil_runs": coil_runs,
+                "sensor_samples": sensor_samples,
+            }
+        )
     except HTTPException:
         raise
     except Exception as e:
