@@ -12,9 +12,11 @@ Tetik: sır deposu (`get_secret`) istisna atar — yedek yolun tek giriş koşul
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 
 import pytest
+from acl_sddl import GENIS_GRUPLAR, dacl_sidleri
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="NTFS ACL davranışı")
 
@@ -35,7 +37,12 @@ def ortam(tmp_path, monkeypatch):
 
     if _yukseltilmis_mi():
         pytest.skip("süreç YÜKSELTİLMİŞ — Administrators ACE okumaya izin verir, kendini kilitleme ölçülemez")
-    dosya = tmp_path / "api_token.txt"
+    # D5 (2-F inc. §10 #12): üst dizin `Users`a KALITSAL okuma verir — ürünün kilidi kalkarsa dosya Users'ı miras alır ve karşıt kol
+    # KIRMIZI olur (Temp dizini Users'ı zaten vermediğinden eski aparatta kilit kaldırılsa da kol yeşil kalıyordu).
+    kok = tmp_path / "kok"
+    kok.mkdir()
+    subprocess.run(["icacls", str(kok), "/grant", "*S-1-5-32-545:(OI)(CI)(R)"], capture_output=True, check=True)
+    dosya = kok / "api_token.txt"
     monkeypatch.delenv("PEMF_API_TOKEN", raising=False)
     monkeypatch.setattr(auth, "_token", None)
     monkeypatch.setattr(auth, "_token_file", lambda: dosya)
@@ -45,7 +52,7 @@ def ortam(tmp_path, monkeypatch):
 
     monkeypatch.setattr(secrets_manager, "get_secret", _depo_yok)
     try:
-        yield type("O", (), {"auth": auth, "dosya": dosya})
+        yield type("O", (), {"auth": auth, "dosya": dosya, "kok": kok})
     finally:
         # üst dizin alt öğe silme hakkı verir (kilitli dosya da silinir — acl_artik_temizligi notu)
         try:
@@ -64,9 +71,16 @@ def test_KRITIK_A10_yeniden_baslatmada_AYNI_token_okunur(ortam, monkeypatch):
 
 
 def test_KARSIT_Users_grubu_token_dosyasina_ERISEMEZ(ortam):
-    """Koruma gevşemedi: dosyanın ACL'sinde yerel `Users` (S-1-5-32-545) YOK."""
-    import subprocess
+    """Koruma gevşemedi: dosyanın DACL'sinde yerel `Users` / `Authenticated Users` YOK.
 
+    ⚠️ D5 (2-F inc. §10 #12): SID'ler SDDL'den okunur (`acl_sddl`) — `icacls` METNİ görüntü diline bağlıydı (TR'de kör). Ön koşul:
+    aynı dizinde ürünün kilitlemediği kardeş dosya Users'ı GÖRÜR (aparat kör değil)."""
+    kardes = ortam.kok / "kardes.txt"
+    kardes.write_text("aparat", encoding="utf-8")
+    assert GENIS_GRUPLAR & dacl_sidleri(kardes), "aparat: kalıtsal Users ACE'si kardeş dosyada görünmedi (ölçüm kör)"
     ortam.auth.get_api_token()
-    cikti = subprocess.run(["icacls", str(ortam.dosya)], capture_output=True, text=True, encoding="mbcs").stdout
-    assert ortam.dosya.exists() and "S-1-5-32-545" not in cikti and "BUILTIN\\Users" not in cikti, cikti
+    assert ortam.dosya.exists(), "aparat: yedek yol token dosyası yazmadı"
+    sidler = dacl_sidleri(ortam.dosya)
+    assert not (GENIS_GRUPLAR & sidler), (
+        f"token dosyası geniş gruba AÇIK: {sorted(GENIS_GRUPLAR & sidler)} (DACL SID'leri {sorted(sidler)})"
+    )
