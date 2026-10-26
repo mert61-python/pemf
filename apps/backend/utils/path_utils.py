@@ -105,9 +105,17 @@ _GOC_SIFRELI = frozenset({"pemf_treatment_history.db", "patients.db"})
 #: Sır dosyasının adı (utils.secrets_manager ile AYNI).
 _SIR_DOSYASI = "pemf_secrets.json"
 
+#: D3I-O.1: eski kökten taşınan at-rest anahtarları (`pemf_secrets.json` → `auto`). `patient_fernet_key` hasta ALANLARINI (ad / sahip /
+#: tür …) şifreler — DB SQLCipher olsun olmasın. Eskiden yalnız `sqlcipher_key` taşınıyor, hedef alan anahtarını YENİDEN üretiyor ve
+#: göçen her hasta "[okunamayan kayıt]" görünüyordu (ölçüldü). Cihaz kimliği / eşleştirme / operatör sırları TAŞINMAZ.
+_GOC_ANAHTARLARI = ("sqlcipher_key", "patient_fernet_key")
 
-def _sqlcipher_anahtarini_gocur(eski: Path, hedef: Path) -> bool:
-    """Eski kökteki at-rest anahtarını YENİ köke taşı — YALNIZ `sqlcipher_key`.
+#: D3I-O.1: alanları `patient_fernet_key` ile şifreli DB'ler (bkz. `_tasinabilir_mi`).
+_GOC_ALAN_SIFRELI = frozenset({"patients.db"})
+
+
+def _sqlcipher_anahtarini_gocur(eski: Path, hedef: Path, ad: str = "sqlcipher_key") -> bool:
+    """Eski kökteki at-rest anahtarını YENİ köke taşı — YALNIZ `ad` (`_GOC_ANAHTARLARI`: `sqlcipher_key`, `patient_fernet_key`).
 
     NEDEN GEREKLİ. Tıbbi kayıt göçü şifreli DB'leri taşıyamıyordu: anahtar
     `pemf_secrets.json`dadır ve o dosya BÜTÜN olarak göçemez (içinde `device_id`,
@@ -115,7 +123,7 @@ def _sqlcipher_anahtarini_gocur(eski: Path, hedef: Path) -> bool:
     kimliğini paylaşır). Sonuç: şifreli kurulumlarda eski veri eski konumda kalıyor ve
     vardiyalı klinikte ikinci hesapla açan veteriner hâlâ "BOŞ KLİNİK" görüyordu.
 
-    Bu fonksiyon SADECE `auto.sqlcipher_key` alanını taşır; cihaz kimliği DOKUNULMAZ.
+    Bu fonksiyon SADECE `auto.<ad>` alanını taşır; cihaz kimliği DOKUNULMAZ.
 
     ⚠️ Değer DPAPI ile `CRYPTPROTECT_LOCAL_MACHINE` kapsamında sarılıdır — yani MAKİNEYE
     bağlıdır, kullanıcıya değil. Bu yüzden şifreli değeri OLDUĞU GİBİ kopyalamak aynı
@@ -136,14 +144,14 @@ def _sqlcipher_anahtarini_gocur(eski: Path, hedef: Path) -> bool:
         if not kaynak_j.is_file():
             return False
         src = json.loads(kaynak_j.read_text(encoding="utf-8"))
-        anahtar = (src.get("auto") or {}).get("sqlcipher_key")
+        anahtar = (src.get("auto") or {}).get(ad)
         if not anahtar:
             return False
 
         dst = {}
         if hedef_j.is_file():
             dst = json.loads(hedef_j.read_text(encoding="utf-8"))
-        if (dst.get("auto") or {}).get("sqlcipher_key"):
+        if (dst.get("auto") or {}).get(ad):
             return False  # ⚠️ EZME: hedefin kendi verisi bu anahtarla şifreli olabilir
 
         # ⚠️ ÇÖZÜLEBİLİRLİK KAPISI (2026-08-15). Ham değer BU makinede çözülemiyorsa (blob başka
@@ -163,15 +171,16 @@ def _sqlcipher_anahtarini_gocur(eski: Path, hedef: Path) -> bool:
 
         if not bu_makinede_cozulebilir_mi(anahtar):
             logging.getLogger(__name__).error(
-                "VERİ GÖÇÜ ATLANDI: eski kökteki at-rest anahtarı BU MAKİNEDE ÇÖZÜLEMİYOR "
+                "VERİ GÖÇÜ ATLANDI: eski kökteki at-rest anahtarı (%s) BU MAKİNEDE ÇÖZÜLEMİYOR "
                 "(başka makine/kullanıcı bağlamında sarılmış olabilir). Kopyalansaydı hedefte "
                 "'saklanmış ama çözülemeyen' bir sır kalır ve backend BİR DAHA HİÇ AÇILMAZDI. "
                 "Eski veri kaynağında DURUYOR: %s",
+                ad,
                 kaynak_j,
             )
             return False
 
-        dst.setdefault("auto", {})["sqlcipher_key"] = anahtar
+        dst.setdefault("auto", {})[ad] = anahtar
         dst.setdefault("_comment", src.get("_comment", ""))
         dst.setdefault("_version", src.get("_version", 1))
         # Atomik yaz: yarım kalan bir sır dosyası TÜM kurulumu açılamaz hâle getirir.
@@ -179,12 +188,13 @@ def _sqlcipher_anahtarini_gocur(eski: Path, hedef: Path) -> bool:
         gecici.write_text(json.dumps(dst, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(gecici, hedef_j)
         logging.getLogger(__name__).warning(
-            "VERİ GÖÇÜ: at-rest anahtarı yeni köke taşındı (YALNIZ sqlcipher_key; cihaz "
-            "kimliği taşınmadı) → eski şifreli tıbbi kayıt yeni kökte okunabilir."
+            "VERİ GÖÇÜ: at-rest anahtarı yeni köke taşındı (YALNIZ %s; cihaz "
+            "kimliği taşınmadı) → eski şifreli tıbbi kayıt yeni kökte okunabilir.",
+            ad,
         )
         return True
     except Exception:
-        logging.getLogger(__name__).warning("VERİ GÖÇÜ: at-rest anahtarı taşınamadı.", exc_info=True)
+        logging.getLogger(__name__).warning("VERİ GÖÇÜ: at-rest anahtarı taşınamadı (%s).", ad, exc_info=True)
         return False
 
 
@@ -217,7 +227,13 @@ def _tasinabilir_mi(dosya: Path, eski: Path, hedef: Path) -> bool:
       * şifreli → ancak kaynak ile hedefin at-rest anahtarı AYNIYSA taşınır. Anahtarı
         `_sqlcipher_anahtarini_gocur` zaten taşımış olur; ham (DPAPI-sarılı) değerler
         JSON'dan okunup KARŞILAŞTIRILIR — çözülmez, türetilmez.
+      * D3I-O.1: hasta DB'si (`_GOC_ALAN_SIFRELI`) — SQLCipher olsun olmasın — kaynakta `patient_fernet_key` VARSA ancak hedefteki
+        ham değer AYNIYSA taşınır; değilse kopya hedefte "[okunamayan kayıt]" gösterir (eski kayıt eski kökte okunur kalır).
     """
+    if dosya.name in _GOC_ALAN_SIFRELI:
+        f_eski = _ham_sqlcipher_anahtari(eski, "patient_fernet_key")
+        if f_eski and f_eski != _ham_sqlcipher_anahtari(hedef, "patient_fernet_key"):
+            return False
     if not _sifreli_mi(dosya):
         return True
     k_eski = _ham_sqlcipher_anahtari(eski)
@@ -225,8 +241,8 @@ def _tasinabilir_mi(dosya: Path, eski: Path, hedef: Path) -> bool:
     return bool(k_eski) and k_eski == k_hedef
 
 
-def _ham_sqlcipher_anahtari(kok: Path) -> str:
-    """`pemf_secrets.json` içindeki HAM (DPAPI-sarılı) `sqlcipher_key` — çözmeden.
+def _ham_sqlcipher_anahtari(kok: Path, ad: str = "sqlcipher_key") -> str:
+    """`pemf_secrets.json` içindeki HAM (DPAPI-sarılı) `ad` (varsayılan `sqlcipher_key`) — çözmeden.
 
     SecretsManager KULLANILMAZ: o `get_app_data_directory`ye geri döner ve özyineleme kurar
     (bkz. `_tasinabilir_mi`). Karşılaştırma için ham değer zaten yeterli."""
@@ -236,7 +252,7 @@ def _ham_sqlcipher_anahtari(kok: Path) -> str:
         p = kok / _SIR_DOSYASI
         if not p.is_file():
             return ""
-        return str((json.loads(p.read_text(encoding="utf-8")).get("auto") or {}).get("sqlcipher_key") or "")
+        return str((json.loads(p.read_text(encoding="utf-8")).get("auto") or {}).get(ad) or "")
     except Exception:
         return ""
 
@@ -344,8 +360,9 @@ def _kullanicidan_makineye_gocur(hedef: Path) -> None:
         # ⚠️ SIRA: anahtar ÖNCE taşınır. Aksi hâlde aşağıdaki `_tasinabilir_mi`
         # kontrolü şifreli DB'leri reddeder ve şifreli kurulumlarda göç HİÇ çalışmaz
         # (vardiyalı klinikte "boş klinik" devam ederdi). Anahtar yalnız hedefte HİÇ yoksa
-        # taşınır; varsa dokunulmaz.
-        _sqlcipher_anahtarini_gocur(eski, hedef)
+        # taşınır; varsa dokunulmaz. D3I-O.1: hasta alanlarının anahtarı (`patient_fernet_key`) da.
+        for _ad in _GOC_ANAHTARLARI:
+            _sqlcipher_anahtarini_gocur(eski, hedef, _ad)
 
         for ad in _GOC_DOSYALARI:
             kaynak, varis = eski / ad, hedef / ad
@@ -358,7 +375,7 @@ def _kullanicidan_makineye_gocur(hedef: Path) -> None:
             # düzeltildikten sonra bu artık DOĞRU DEĞİL.)
             if ad in _GOC_SIFRELI and not _tasinabilir_mi(kaynak, eski, hedef):
                 logging.getLogger(__name__).error(
-                    "VERİ GÖÇÜ ATLANDI: %s ŞİFRELİ ve hedefin at-rest anahtarı FARKLI "
+                    "VERİ GÖÇÜ ATLANDI: %s ŞİFRELİ ve hedefin at-rest / alan anahtarı FARKLI "
                     "(hedefin kendi anahtarı var, ezilmedi). Kopyalansaydı hedefte okunamaz "
                     "olur ve cihaz her açılışta kırılırdı. Kaynak eski konumda DURUYOR: %s",
                     ad,
