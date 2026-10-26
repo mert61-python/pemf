@@ -327,3 +327,30 @@ def test_KARSIT_D3I_A2_3_hedefte_dosya_BELIRDIYSE_engel_KALIR_uzerine_yazilmaz(k
     assert pu.goc_engelini_yeniden_dene(yeni / "patients.db") is False
     assert pu.goc_engeli(yeni / "patients.db"), "hedefte dosya belirince engel düştü → kurucu onu (boş) DB diye açar"
     assert (yeni / "patients.db").read_bytes() == b""
+
+
+def test_KARSIT_D3I_A2_3_yeniden_denemede_kaynak_KILITLI_dosya_ATLANIRSA_engel_KALIR(kokler, monkeypatch):
+    """D3I çapraz (C1, doğrulayıcı D ölçtü): yeniden deneme anında kaynak okunamıyorsa (AV / paylaşım kilidi) `_sifreli_mi` onu ŞİFRELİ
+    sayar, anahtarsız kurulumda `_tasinabilir_mi` False → göç dosyayı ATLAR. Engel GERİ konmalı (hedefte DB yok) — eskiden True dönüp
+    kurucunun BOŞ DB kurmasına izin veriyordu (sonraki açılışlarda göç bir daha hiç denenmezdi). Sahte EN ALT katta: yalnız kaynak
+    dosyanın `open`'ı PermissionError. Kilit kalkınca sonraki deneme taşır. MUTASYON: atlamada engel geri konmaz → KIRMIZI."""
+    import builtins
+
+    pu, eski, yeni = kokler
+    kaynak = eski / "patients.db"
+    gercek_open = builtins.open
+
+    def _kilitli(dosya, *a, **k):
+        if str(dosya) == str(kaynak):
+            raise PermissionError(13, "sahte: dosya baska bir islem tarafindan kullaniliyor", str(dosya))
+        return gercek_open(dosya, *a, **k)
+
+    monkeypatch.setattr(builtins, "open", _kilitli)
+    sonuc = pu.goc_engelini_yeniden_dene(yeni / "patients.db")
+    monkeypatch.setattr(builtins, "open", gercek_open)
+    assert sonuc is False and pu.goc_engeli(yeni / "patients.db"), (
+        "kopya yerleşmedi ama engel düştü → kurucu BOŞ DB kurar"
+    )
+    assert not (yeni / "patients.db").exists()
+    assert pu.goc_engelini_yeniden_dene(yeni / "patients.db") is True, "kilit kalktı ama göç yeniden denenmedi"
+    assert (yeni / "patients.db").read_bytes() == DUZ_DB

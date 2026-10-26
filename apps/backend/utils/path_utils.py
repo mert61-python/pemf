@@ -336,6 +336,10 @@ def goc_engelini_yeniden_dene(db_yolu) -> bool:
         import logging
 
         logging.getLogger(__name__).warning("VERİ GÖÇÜ yeniden denenemedi: %s", varis, exc_info=True)
+    if not varis.exists():
+        # D3I çapraz (C1): göç dosyayı ATLADIYSA (kaynak o an okunamaz → "şifreli" sayılır → anahtarsız kurulumda taşınamaz; artık)
+        # kopya yerleşmedi → engel GERİ konur. Eskiden True dönüyordu → kurucu BOŞ DB kuruyor, göç bir daha hiç denenmiyordu.
+        _GOC_ENGELI.setdefault(anahtar, onceki)
     return anahtar not in _GOC_ENGELI
 
 
