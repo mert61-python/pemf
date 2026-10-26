@@ -90,6 +90,19 @@ _OKUR_FONKSIYON = set(
     "transaction_timestamp timezone".split()
 )
 _SISTEM_SEMA = {"pg_catalog", "information_schema"}
+# D3I-A3.4: `pg_` oneki ya da sistem semasi TEK BASINA izin VERMEZ — oturum oldurme, yapilandirma, kilit, bildirim, WAL / yineleme
+# yuvasi, sunucu dosyasi okuma / yazma `pg_` onekliydi ve `read_only` islem bunlarin cogunu DURDURMAZ. Kara liste eksik kalir
+# (pg_stat_statements_reset, pg_copy_*_replication_slot, pg_read_file ...) → yalniz bilinen SALT-OKUR `pg_` yerlesikleri (beyaz liste);
+# gerisi varsayilan RET (`--yaz` ister).
+_OKUR_PG = re.compile(
+    r"^pg_(?:get_\w+|stat_get_\w+|\w+_size|size_pretty|size_bytes|\w+_is_visible|is_in_recovery|is_wal_replay_paused|has_role|"
+    r"typeof|backend_pid|blocking_pids|safe_snapshot_blocking_pids|postmaster_start_time|conf_load_time|"
+    r"current_wal_(?:lsn|insert_lsn|flush_lsn)|wal_lsn_diff|last_wal_(?:receive|replay)_lsn|last_xact_replay_timestamp|"
+    r"encoding_to_char|char_to_encoding|client_encoding|jit_available|my_temp_schema|trigger_depth|listening_channels|"
+    r"notification_queue_usage|describe_object|identify_object(?:_as_address)?|options_to_table|tablespace_location|"
+    r"relation_filenode|relation_filepath|filenode_relation|index_column_has_property|index_has_property|"
+    r"indexam_has_property|partition_(?:root|tree|ancestors)|sequence_last_value|column_compression)$"
+)
 
 
 def _deyimler(sql: str) -> list[str]:
@@ -114,18 +127,26 @@ def _deyimler(sql: str) -> list[str]:
             cur.append(" ")
             continue
         if c in "'\"":
+            # D3I-A3.4: E'…' dizesinde ters bölü bir sonraki karakteri KAÇIRIR (`E'\''` tek tırnaktır) — PostgreSQL ile aynı ayrıştırma.
+            kacis = c == "'" and i > 0 and sql[i - 1] in "eE" and (i < 2 or not re.match(r"[\w$]", sql[i - 2]))
             j = i + 1
             while j < n:
+                if kacis and sql[j] == "\\":
+                    j += 2
+                    continue
                 if sql[j] == c and j + 1 < n and sql[j + 1] == c:
                     j += 2
                     continue
                 if sql[j] == c:
                     break
                 j += 1
-            cur.append(c + c)
+            # D3I-A3.4: tırnaklı TANIMLAYICI (`"jeton_tuket"`, `U&"…"`) adı bilinmeyen bir ad olarak kalır — boş yer tutucu çağrıyı gizliyordu.
+            cur.append("''" if c == "'" else " qid ")
             i = j + 1
             continue
-        m = re.match(r"\$([A-Za-z_][A-Za-z0-9_]*)?\$", sql[i:]) if c == "$" else None
+        # D3I-A3.4: `$` tanımlayıcının İÇİNDEyse (`a$b$`) dolar-tırnak DEĞİLDİR (PostgreSQL sözcük kuralı).
+        onceki_tanim = i > 0 and re.match(r"[\w$]", sql[i - 1]) is not None
+        m = re.match(r"\$([A-Za-z_][A-Za-z0-9_]*)?\$", sql[i:]) if c == "$" and not onceki_tanim else None
         if m:
             etiket = m.group(0)
             j = sql.find(etiket, i + len(etiket))
@@ -155,13 +176,12 @@ def _yazma_nedeni(sql: str) -> str | None:
             return y.group(1).lower()
         for m in re.finditer(r'(?<![\w.])(?:"?([A-Za-z_][\w]*)"?\s*\.\s*)?"?([A-Za-z_][\w]*)"?\s*\(', d):
             sema, ad = (m.group(1) or "").lower(), m.group(2).lower()
-            if sema:
-                if sema not in _SISTEM_SEMA and not sema.startswith("pg_"):
-                    return f"{sema}.{ad}()"
+            # D3I-A3.4: sema yalniz sistem semasi olabilir ve o zaman da ad beyaz listede olmali (`pg_catalog."x"()` → ad `qid` → RET)
+            if sema and sema not in _SISTEM_SEMA:
+                return f"{sema}.{ad}()"
+            if ad in _CAGRI_DEGIL or ad in _OKUR_FONKSIYON or _OKUR_PG.match(ad):
                 continue
-            if ad in _CAGRI_DEGIL or ad in _OKUR_FONKSIYON or ad.startswith("pg_"):
-                continue
-            return f"{ad}()"
+            return f"{sema + '.' if sema else ''}{ad}()"
     return None
 
 
