@@ -60,7 +60,17 @@ def get_all_patients(request: Request, limit: int = 0, offset: int = 0):
     """Hastaları döndürür. Pagination (audit B-8.2): limit>0 ile sayfalanır (offset kaydırır);
     limit=0 → HEPSİ (geriye uyumlu — eski istemci parametre göndermez). Yanıt: {status,data,total}."""
     _enforce_patient_auth(request)
-    db = get_patient_database()
+    # ⚠️ DALGA-1 §7 (1-B §9 #3 — D5): DB'siz kipte (açılışta açılamadı, D1.37 / Y43) `get_patient_database` HEMEN `RuntimeError` verir;
+    # try DIŞINDA çağrıldığı için yanıt 500 "beklenmeyen sunucu hatası" oluyordu. 503 + "hasta yok demek değil, yeni kart açmayın" iletisi
+    # (okuma hatasıyla AYNI eylem). Kapı: tests/test_hasta_listesi_DB_siz_kipte_503_D1S7.py
+    try:
+        db = get_patient_database()
+    except Exception:
+        logger.warning(
+            "Hasta listesi: hasta DB'si acilista ACILAMADI (DB'siz kip) — 503; bu 'hasta yok' DEMEK DEGIL.",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=503, detail=ceviri.t("hasta.hata.listeOkunamadi"))
     if not db:
         raise HTTPException(status_code=500, detail="Patient DB not initialized")
     # DENETIM P2: eskiden TUM hastalar cekilip (hepsinin alan-basi Fernet desifresi yapilarak,
