@@ -70,7 +70,7 @@ class SahteKart:
 
 @pytest.fixture()
 def ortam(monkeypatch, tmp_path):
-    """Taze `firmware_manager` + sahte ağ (EN ALT: `_pinli_ac`) + sahte kart (EN ALT: `_kos`)."""
+    """Taze `firmware_manager` (giriş VE çıkışta) + sahte ağ (EN ALT: `_pinli_ac`) + sahte kart (EN ALT: `_kos`)."""
     import servers.update_manager as um
     import utils.stm_yakma as sy
 
@@ -119,9 +119,12 @@ def ortam(monkeypatch, tmp_path):
         return sy.BannerKaynagi(isaret=lambda: 1, bekle=lambda isaret, sure: BANNER.format(durum.kart_bildirir))
 
     veri_koku = Path(__import__("utils.path_utils", fromlist=["x"]).get_app_data_directory())
-    return SimpleNamespace(
+    yield SimpleNamespace(
         fm=fm, sy=sy, um=um, kart=kart, d=durum, banner=banner_kaynagi, kok=veri_koku / "firmware_yedek"
     )
+    # D3I: modül-global `_durum` (son testin gerekçesi — veri kökündeki uzun yedek yolu) süreçte KALMASIN: aynı süreçte sonra koşan
+    # `/api/health` ölçen testler (`test_gzip_sikistirma` küçük yanıt) sıraya bağlı kırmızıya dönüyordu (değişen küme koşusunda ölçüldü).
+    importlib.reload(importlib.import_module("servers.firmware_manager"))
 
 
 def _ac(o, *, surum="2.3", bagli=True, uygula=True):
