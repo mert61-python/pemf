@@ -507,7 +507,12 @@ class MosquittoSupervisor:
             ):
                 logger.warning("Broker tabani kendi kimlik yonergelerini tasiyor - kimlik parcasi EKLENMEDI: %s", taban)
                 return taban
-            hedef = bd / "pemf_calisma.conf"
+            # D3I-A2.9: çalışma kopyası HESABA ÖZEL dizinde (`%LOCALAPPDATA%\PEMF_System\mosquitto`). Paylaşılan broker dizinindeki
+            # (`%ProgramData%\PEMF_System\mosquitto`) ilk hesabın kopyasını ikinci Windows hesabı DEĞİŞTİREMEZ (Y182 grubu yalnız
+            # `PEMF_GUI`de) → yazım hatası yutulup broker ANONİM tabanla açılıyordu (A-04 kaybı). LOCALAPPDATA yoksa eski yer.
+            yerel = (os.environ.get("LOCALAPPDATA") or "").strip()
+            hedef = (Path(yerel) / "PEMF_System" / "mosquitto" if yerel else bd) / "pemf_calisma.conf"
+            hedef.parent.mkdir(parents=True, exist_ok=True)
             hedef.write_text(
                 metin.rstrip("\n")
                 + "\n# A-04 / D1.104 - yerel broker kimlik parcasi (SONDA: anonim izni ezer)\n"

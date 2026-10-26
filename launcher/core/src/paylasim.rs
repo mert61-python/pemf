@@ -122,7 +122,7 @@ pub fn kurma_betigi(kullanici_sid: &str, aciklama: &str) -> Option<String> {
          foreach ($s in ($uyeler | Select-Object -Unique)) {{ \
            try {{ Add-LocalGroupMember -SID $g.SID -Member $s -ErrorAction Stop }} \
            catch {{ if ($_.FullyQualifiedErrorId -notlike 'MemberExists*') {{ throw }} }} }}; \
-         & icacls.exe $kok /grant ('*' + $g.SID.Value + ':(OI)(CI)M') /T /C /Q | Out-Null; \
+         & icacls.exe $gui /grant ('*' + $g.SID.Value + ':(OI)(CI)M') /T /C /Q | Out-Null; \
          if ($LASTEXITCODE -ne 0) {{ exit {izin} }}; \
          exit {tamam}",
         veri_yok = KOD_VERI_YOK,
@@ -219,7 +219,8 @@ mod tests {
         assert!(!s.contains(":\\"), "betiğe mutlak yol girdi");
     }
 
-    /// T-g: grup yoksa kurulur; bu hesap + veriyi kuran hesap (dizin SAHİBİ) üye olur; köke grubun `Değiştir` hakkı ağaçta verilir.
+    /// T-g: grup yoksa kurulur; bu hesap + veriyi kuran hesap (dizin SAHİBİ) üye olur; veri dizinine (`PEMF_GUI`) grubun `Değiştir` hakkı
+    /// ağaçta verilir — D3I-A2.9 · Y182: kök (`PEMF_System`: broker yapılandırması, görev dosyaları) DEĞİL.
     #[test]
     fn KRITIK_T_g_betik_grubu_kurar_hesabi_ve_SAHIBI_ekler_DEGISTIR_verir() {
         let s = betik();
@@ -229,7 +230,9 @@ mod tests {
         assert!(s.contains("GetOwner([Security.Principal.SecurityIdentifier])") && s.contains("$uyeler += $sahip"), "sahip eklenmiyor");
         assert!(s.contains("Add-LocalGroupMember -SID $g.SID -Member $s"));
         assert!(s.contains("'MemberExists*'"), "zaten üye olan hesap adımı düşürür");
-        assert!(s.contains("icacls.exe $kok /grant ('*' + $g.SID.Value + ':(OI)(CI)M') /T"), "köke grup Değiştir hakkı yok");
+        assert!(s.contains("icacls.exe $gui /grant ('*' + $g.SID.Value + ':(OI)(CI)M') /T"), "veri dizinine grup Değiştir hakkı yok");
+        assert!(!s.contains("icacls.exe $kok"), "D3I-A2.9: kök (broker / görev dosyaları) gruba açılmaz — Y182: yalnız PEMF_GUI");
+        assert!(s.contains("$gui = Join-Path $kok 'PEMF_GUI';"), "D3I-A2.9: hak hedefi `$gui` veri dizini (PEMF_GUI) değil — kök yeniden açılır");
         assert!(s.contains(&format!("exit {KOD_IZIN_VERILEMEDI}")), "icacls hatası yutuluyor");
     }
 

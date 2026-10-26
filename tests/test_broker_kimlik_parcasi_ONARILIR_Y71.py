@@ -47,6 +47,7 @@ def ortam(monkeypatch, tmp_path):
     from utils import mqtt_kimlik
 
     monkeypatch.setenv("PEMF_DEVICE_IDENTITY_DIR", str(tmp_path / "makine"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "yerel"))  # D3I-A2.9: broker çalışma kopyası hesaba özel kökte
     mqtt_kimlik._onbellek.clear()
     kur = tmp_path / "kurulum"
     kur.mkdir()
