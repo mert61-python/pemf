@@ -847,7 +847,8 @@ export function AiProPanel({
     // apiPost hata/zaman-aşımı/non-2xx'te fallback (null) döndürür, THROW ETMEZ. Bu yüzden
     // durdurma DOĞRULANMADAN running'i false yapmak, bobinler sürerken UI'nin "durdu" göstermesine
     // yol açar. Yanıt gelmediyse durumu değiştirme (3sn status-poll gerçeği yansıtsın) + uyar.
-    const res = await apiPost<AiProAction | null>("/ai/pro/stop", {}, null);
+    // D3I çapraz (C2) · Ö.4-Y8: durdurma düz-HTTP kapısına bağlanmaz.
+    const res = await apiPost<AiProAction | null>("/ai/pro/stop", {}, null, { durdurma: true });
     if (res) {
       setRunning(false);
       setMobileResult(null);
@@ -1000,7 +1001,7 @@ export function AiProPanel({
     // Operatörün AÇIK "Durdur" dokunuşu (`stop()`) bu koşuldan ETKİLENMEZ — her istemcinin
     // operatörü tedaviyi durdurabilmeli.
     if (runningRef.current && ownedRef.current) {
-      apiPost<AiProAction | null>("/ai/pro/stop", {}, null).catch(() => {});
+      apiPost<AiProAction | null>("/ai/pro/stop", {}, null, { durdurma: true }).catch(() => {});
     }
     // WEB hazırlık önizlemesi açıkken panel kapanırsa sunucu kamerasını bırak (backend 120 sn'de
     // kendisi de durur; bu yalnız kamerayı erken serbest bırakır).

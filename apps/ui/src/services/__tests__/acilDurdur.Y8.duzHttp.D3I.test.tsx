@@ -135,6 +135,9 @@ const IZINLI_DURDURMA: Record<string, string[]> = {
   "services/emergencyStop.ts": ["/hardware/command", "/hardware/emergency_stop", "/session/stop"],
   "hooks/useSessionControl.ts": ["/session/stop"],
   "screens/ControlScreen.tsx": ["/coil/${coilId}/control", "/coil/batch"],
+  // D3I çapraz (C2): bobin paneli Durdur + D1.82 STOP yinelemesi · AI Pro açık Durdur + panel kapanış durdurması
+  "components/domain/CoilParameterPanel.tsx": ["/coil/${coilId}/control", "/coil/${coilId}/control"],
+  "components/domain/AiProPanel.tsx": ["/ai/pro/stop", "/ai/pro/stop"],
 };
 function durdurmaCagrilari(): Record<string, string[]> {
   const sonuc: Record<string, string[]> = {};

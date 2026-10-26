@@ -165,13 +165,13 @@ export function CoilParameterPanel({
       // YÜKSEK fix: apiPost ağ-hatası/non-2xx'te THROW ETMEZ (fallback=null döner) → dönüşü DOĞRULA.
       // Eskiden yanıt kontrol edilmeden "başarılı" sayılıyordu → STOP sessizce düşse bile kullanıcı
       // bobinin durduğunu sanıyordu (bobin ÇALIŞMAYA DEVAM). null/status:error → açık uyarı ver.
-      const res = await apiPost<{ status?: string; command_id?: string; mesaj?: string } | null>(`/coil/${coilId}/control`, {
-        freq: f,
-        duty: d,
-        phase: ph,
-        duration: durMin * 60,
-        start,
-      }, null);
+      // ⚠️ D3I çapraz (C2) · Ö.4-Y8: DURDUR düz-HTTP kapısına BAĞLANMAZ (`durdurma: true`, yalnız start:false gövdeyle — AST kapısı
+      // `acilDurdur.Y8.duzHttp.D3I.test.tsx`); BAŞLAT kapıda KALIR. Eskiden ikisi tek çağrıydı → genel http'de Durdur HİÇ gitmiyordu.
+      const govde = { freq: f, duty: d, phase: ph, duration: durMin * 60 };
+      type KomutYaniti = { status?: string; command_id?: string; mesaj?: string } | null;
+      const res = start
+        ? await apiPost<KomutYaniti>(`/coil/${coilId}/control`, { ...govde, start: true }, null)
+        : await apiPost<KomutYaniti>(`/coil/${coilId}/control`, { ...govde, start: false }, null, { durdurma: true });
       if (start) {
         startUcustaRef.current = false;
         if (startSonrasiDurdurRef.current) {
@@ -179,7 +179,7 @@ export function CoilParameterPanel({
           startSonrasiDurdurRef.current = false;
           const dur = await apiPost<{ status?: string } | null>(`/coil/${coilId}/control`, {
             freq: 0, duty: 0, phase: 0, duration: 0, start: false,
-          }, null);
+          }, null, { durdurma: true });
           setBekleyenKomut(null);
           if (!dur || dur.status !== "success") {
             setError(t("kontrol.panel.durdurmaOnaylanamadi"));
