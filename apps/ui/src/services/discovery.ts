@@ -87,8 +87,9 @@ export async function exchangeCodeForToken(base: string, code: string): Promise<
 /** D3.47 · A-60 (sahip): CİHAZ KİMLİĞİYLE eşleşmede de erişim anahtarı ŞART. Eskiden kimlik yolu anahtarsız "bağlanıldı ✓"
  *  diyordu; uzaktan (tünel) sonraki her istek 401, WS 1008 alıyordu (İG-6.50). (1) Cihazla aynı ağdaysa anahtar cihazdan alınır
  *  (A-01: LAN güvenilir ağ). (2) Değilse saklı anahtar BU cihaza karşı sınanır: kimlik isteyen bir uçta (`/api/system/info`)
- *  yalnız 401 "anahtar yok / yanlış" demektir — başka her yanıt anahtarın geçerli ya da cihazda kimlik zorunluluğunun kapalı
- *  olduğunu gösterir. */
+ *  YALNIZ 2xx anahtarın geçerli ya da cihazda kimlik zorunluluğunun kapalı olduğunu gösterir.
+ *  ⚠️ D3I-A1.2: eskiden "401 değilse geçerli" sayılıyordu — hız sınırı (429; auth'tan ÖNCE koşar), auth katmanı arızası
+ *  (503 / 500), 404 / 400 anahtar HİÇ denetlenmeden "bağlanıldı ✓" diyordu (backend'de ölçüldü). */
 export async function kimlikYoluErisimi(base: string): Promise<boolean> {
   const b = toBase(base);
   try {
@@ -115,7 +116,7 @@ export async function kimlikYoluErisimi(base: string): Promise<boolean> {
         headers: anahtar ? { "X-API-Key": anahtar } : {},
         signal: ctrl.signal,
       });
-      return res.status !== 401;
+      return res.ok;
     } finally {
       clearTimeout(t);
     }
