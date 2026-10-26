@@ -80,13 +80,18 @@ def _dosya_ozeti(yol: Path) -> str:
     """SHA-256 (yol + boyut + değişiklik zamanı ile önbellekli — her yüklemede büyük ağırlık yeniden özetlenmez)."""
     st = yol.stat()
     anahtar = (os.path.normcase(os.path.abspath(str(yol))), st.st_size, st.st_mtime_ns)
-    ozet = _ozet_onbellegi.get(anahtar)
+    # D3I-A2.5: küçük dosya (ölçekleyici / kodlayıcı — doz yolu) ÖNBELLEKSİZ: yerinde aynı boyutla değiştirilip mtime geri konursa
+    # önbellek eski (geçerli) özeti döndürürdü; < 5 MB'ı yeniden özetlemek ucuz. Büyük ağırlıklarda önbellek sürer.
+    onbellekli = st.st_size >= 5 * 1024 * 1024
+    ozet = _ozet_onbellegi.get(anahtar) if onbellekli else None
     if ozet is None:
         h = hashlib.sha256()
         with open(yol, "rb") as fh:
             for chunk in iter(lambda: fh.read(1 << 20), b""):
                 h.update(chunk)
-        ozet = _ozet_onbellegi[anahtar] = h.hexdigest()
+        ozet = h.hexdigest()
+        if onbellekli:
+            _ozet_onbellegi[anahtar] = ozet
     return ozet
 
 
