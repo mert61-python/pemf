@@ -38,7 +38,10 @@ def test_emergency_stop_reports_transport_status(client):
     assert r.status_code == 200
     body = r.json()
     assert body.get("status") in ("success", "partial", "error")
-    assert "confirmed" in body
+    assert isinstance(body.get("confirmed"), bool)
+    # D5 devri (DALGA-1 §7 · 1-H inc. O-11.1): küme iddiası tek başına TOTOLOJİKTİ — durumu sabit "success" yapan mutant bu
+    # dosyada 5/5 YEŞİL kalıyordu (k5 ölçümü). Dürüst durum, teyitle TUTARLI olmalı: "success" YALNIZ iki taşıma da teyitliyse.
+    assert (body["status"] == "success") is body["confirmed"], body
 
 
 def test_double_session_start_conflicts(client):
