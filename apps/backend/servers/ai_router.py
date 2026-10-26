@@ -29,7 +29,7 @@ import time
 
 from utils import estop_mandali  # D1.81 · Y4: acil durdurma mandalı + sürüş nesli
 from utils.dongu_guvenligi import dongu_hatasini_bildir
-from utils.model_downloader import download_model_sync
+from utils.model_downloader import ModelButunlukHatasi, download_model_sync
 from utils.ses_kalitesi import guvenilir_mi as ses_guvenilir_mi
 from utils.ses_kalitesi import normalize_entropi as ses_normalize_entropi
 from utils.ses_kalitesi import sessiz_mi as ses_sessiz_mi
@@ -1217,6 +1217,8 @@ def _yukle_em_petri_cv() -> dict:
     # YOLO ONNX yolu (ProgramData/HF'den indir; yoksa yerel dev).
     try:
         yolo_path = download_model_sync("ai_hub/inference_petri_dish/yolo11m-seg.onnx")
+    except ModelButunlukHatasi:  # D3I-A2.4 · Y18: bütünlük reddi YUTULMAZ → 503 + açık uyarı
+        raise
     except Exception as _de:
         logger.warning("em_petri YOLO ONNX indirme/çözümleme uyarısı: %s", _de)
         yolo_path = os.path.join(project_root, "ai_hub", "inference_petri_dish", "yolo11m-seg.onnx")
@@ -4452,6 +4454,8 @@ async def analyze_cat_sound(
         def _load_cat_sound():
             try:
                 onnx = download_model_sync("ai_hub/inference_cat_sound/EfficientNet_Lite0.onnx")
+            except ModelButunlukHatasi:  # D3I-A2.4 · Y18: bütünlük reddi YUTULMAZ → 503 + açık uyarı
+                raise
             except Exception as _de:
                 logger.warning("cat_sound ONNX indirme/çözümleme uyarısı: %s", _de)
                 onnx = os.path.join(project_root, "ai_hub", "inference_cat_sound", "EfficientNet_Lite0.onnx")
@@ -4617,6 +4621,8 @@ async def analyze_kidney_ct(
         def _load_kidney_ct():
             try:
                 onnx = download_model_sync("ai_hub/inference_human_kidney_ct/yolov8s.onnx")
+            except ModelButunlukHatasi:  # D3I-A2.4 · Y18: bütünlük reddi YUTULMAZ → 503 + açık uyarı
+                raise
             except Exception as _de:
                 logger.warning("kidney_ct ONNX indirme/çözümleme uyarısı: %s", _de)
                 onnx = os.path.join(project_root, "ai_hub", "inference_human_kidney_ct", "yolov8s.onnx")
@@ -4693,6 +4699,8 @@ async def analyze_histopath(
         def _load_histopath():
             try:
                 onnx = download_model_sync("ai_hub/inference_renal_histopath_kmc/v22_kmc_classictrio_kmc.onnx")
+            except ModelButunlukHatasi:  # D3I-A2.4 · Y18: bütünlük reddi YUTULMAZ → 503 + açık uyarı
+                raise
             except Exception as _de:
                 logger.warning("histopath ONNX indirme/çözümleme uyarısı: %s", _de)
                 onnx = os.path.join(

@@ -52,6 +52,14 @@ def parse_args():
     return p.parse_args()
 
 
+try:  # D3I-A2.4 · D3.48: modül-yanı dosyalar YÜKLEMEDEN ÖNCE bütünlük denetiminden geçer (kidney_disease ile aynı çözücü)
+    from utils.model_downloader import yan_dosya_coz as _yan
+except Exception:  # utils yolu yoksa eski davranış
+
+    def _yan(yerel, _repo):
+        return str(yerel)
+
+
 def _require(path: Path, label: str):
     if not path.exists():
         sys.exit(f"⚠  {label} not found at {path}\n"
@@ -65,7 +73,7 @@ def _load_meta_and_aux():
     _require(CLASSES_PATH, "classes.json")
     import joblib
     meta = json.loads(META_PATH.read_text(encoding="utf-8"))
-    scaler = joblib.load(SCALER_PATH)
+    scaler = joblib.load(_yan(SCALER_PATH, "ai_hub/inference_human_kidney_rna/scaler.pkl"))
     fs_idx = np.load(FEATURE_IDX_PATH)
     classes = json.loads(CLASSES_PATH.read_text(encoding="utf-8"))
     return meta, scaler, fs_idx, classes
@@ -130,7 +138,8 @@ class KidneyRnaPredictor:
 
     def __init__(self):
         self.meta, self.scaler, self.fs_idx, self.classes = _load_meta_and_aux()
-        onnx_path = HERE / self.meta.get("onnx_file", "")
+        _onnx = self.meta.get("onnx_file", "")
+        onnx_path = Path(_yan(HERE / _onnx, f"ai_hub/inference_human_kidney_rna/{_onnx}"))
         if not onnx_path.exists():
             raise FileNotFoundError(f"{onnx_path.name} bulunamadı: {onnx_path}")
         import onnxruntime as ort

@@ -136,7 +136,9 @@ class CatOrganPredictor:
             try:
                 from utils.model_downloader import download_model_sync
                 return Path(download_model_sync(f"ai_hub/inference_cat_organ/models/{fname}"))
-            except Exception:
+            except Exception as e:
+                if type(e).__name__ == "ModelButunlukHatasi":  # D3I-A2.4 · Y18: bütünlük reddi yutulmaz (503 + açık uyarı)
+                    raise
                 return base_local / fname
 
         # runners.py modül-sabitlerini staged yollara yönlendir (frozen-safe)
