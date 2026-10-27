@@ -40,6 +40,7 @@ import os
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -151,7 +152,9 @@ def test_KRITIK_PDF_ciktisi_da_yonlendirilmis():
     ⚠️ Bugün süitte sızıntı ÜRETMİYOR (masaüstünde test PDF'i yok) ama yol AÇIK.
     Sınıfı kapatmak, örneği kapatmaktan ucuzdur — CSV'de bunu geç öğrendik.
     """
-    pdfmod = pytest.importorskip("utils.pdf_report_generator", reason="reportlab yok — PDF yolu bu ortamda kurulamaz")
+    pdfmod = capraz.paket_yoksa_atla(
+        "utils.pdf_report_generator", sebep="reportlab yok — PDF yolu bu ortamda kurulamaz"
+    )
     uretici = pdfmod.PDFReportGenerator.__new__(pdfmod.PDFReportGenerator)
     yol = Path(pdfmod.PDFReportGenerator._default_output_path(uretici, "PEMF_Rapor", "Test"))
     for aday in _gercek_masaustu_adaylari():

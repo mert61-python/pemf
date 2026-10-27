@@ -19,6 +19,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
+import capraz
 import numpy as np
 import pytest
 
@@ -139,7 +140,7 @@ def test_karsit_tam_kadraj_kahin_plakasi_SURULEBILIR(tmp_path):
 # ── 3. Gerçek ONNX kolu (ürün çözücüsü) — golden.eser düzeni ─────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("ad", _KIRPIK)
 def test_KRITIK_kirpik_plaka_GERCEK_ONNX_SURULEMEZ(ad):
-    pytest.importorskip("ultralytics")
+    capraz.paket_yoksa_atla("ultralytics")
     from golden.eser import atla, eser_var_mi
 
     if not eser_var_mi(_YOLO, _EM):

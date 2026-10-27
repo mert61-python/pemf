@@ -20,10 +20,11 @@ import sys
 import types
 from pathlib import Path
 
+import capraz
 import numpy as np
 import pytest
 
-cv2 = pytest.importorskip("cv2")
+cv2 = capraz.paket_yoksa_atla("cv2")
 
 KOK = Path(__file__).resolve().parents[1]
 MODUL_YOLU = KOK / "ai_hub" / "inference_paper_dilek_hoca" / "inference_paper_dilek_hoca.py"

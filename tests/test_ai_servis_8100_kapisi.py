@@ -54,7 +54,7 @@ def app_modulu():
     # Bu dosyadaki eski testler yalnız fixture dosyaları yoksa atladıkları için hatayı görmüyordu.
     # `importorskip` DAR tutulur: yalnız eksik ÇALIŞMA ZAMANI paketinde atlanır; `ai_service`in
     # kendi kodundaki bir bozulma yine HATA verir (aksi halde kapı sessizce atlanırdı).
-    pytest.importorskip("onnxruntime", reason="ai_service :8100 calisma zamani paketi yok (CI)")
+    capraz.paket_yoksa_atla("onnxruntime", sebep="ai_service :8100 calisma zamani paketi yok (CI)")
     from ai_service import app as _app
 
     return _app
@@ -257,7 +257,7 @@ def test_KAPI_TEK_KAYNAK_nesne_kimligi():
     try/except'e alıp except'te no-op bir kapı tanımlarsa bu test KIRILIR. Bu bulgunun kök nedeni
     tam olarak iki transportun ayrışmasıydı; ikinci bir kopya aynı hatayı yeniden üretir."""
     # ⚠️ Fixture'siz DOGRUDAN import: CI agir AI paketlerini kurmuyor (bkz. app_modulu).
-    pytest.importorskip("onnxruntime", reason="ai_service :8100 calisma zamani paketi yok (CI)")
+    capraz.paket_yoksa_atla("onnxruntime", sebep="ai_service :8100 calisma zamani paketi yok (CI)")
     import servers.ai_router as R
 
     import ai_service.app as A
@@ -559,7 +559,7 @@ def test_ASGARI_GIRDI_TEK_KAYNAK_nesne_kimligi():
     kopya olarak gömerse ya da import'u try/except'e alıp fail-open bir taklit tanımlarsa KIRILIR.
     Bu bulgunun kök nedeni tam olarak iki transportun ayrışmasıydı."""
     # ⚠️ Fixture'siz DOGRUDAN import: CI agir AI paketlerini kurmuyor (bkz. app_modulu).
-    pytest.importorskip("onnxruntime", reason="ai_service :8100 calisma zamani paketi yok (CI)")
+    capraz.paket_yoksa_atla("onnxruntime", sebep="ai_service :8100 calisma zamani paketi yok (CI)")
     import servers.ai_router as R
 
     import ai_service.app as A

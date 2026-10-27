@@ -18,6 +18,7 @@ from __future__ import annotations
 import base64
 from pathlib import Path
 
+import capraz
 import pytest
 
 KAHIN = Path(__file__).resolve().parent / "kahin" / "hoca_cv_2026_10"
@@ -48,7 +49,7 @@ def onbellek():
     )
     if not eser_var_mi(*yollar):
         atla(f"fantom / petri ağırlıkları ürün çözücüsünde yok {list(yollar)}")
-    pytest.importorskip("ultralytics")
+    capraz.paket_yoksa_atla("ultralytics")
     import servers.ai_router as air
 
     return {"em_fantom_cv": air._yukle_em_fantom_cv(), "em_petri_cv": air._yukle_em_petri_cv()}

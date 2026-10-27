@@ -21,10 +21,11 @@ from __future__ import annotations
 import base64
 import os
 
+import capraz
 import numpy as np
 import pytest
 
-cv2 = pytest.importorskip("cv2")
+cv2 = capraz.paket_yoksa_atla("cv2")
 
 KOK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 IMG = os.path.join(KOK, "ai_hub", "inference_cat_organ", "test_img", "synthetic_aruco_test.jpg")

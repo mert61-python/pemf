@@ -16,10 +16,11 @@ from __future__ import annotations
 
 import importlib
 
+import capraz
 import numpy as np
 import pytest
 
-cv2 = pytest.importorskip("cv2")
+cv2 = capraz.paket_yoksa_atla("cv2")
 
 # AI-2 C6: v1 `phantom_cv` / `petri_cv` emekli → hocanın v3 / v2'si (ürün yükleyicilerinin profili).
 PROFILLER = ["inference_em_fantom.phantom_cv_v3", "inference_petri_dish.petri_cv_v2"]

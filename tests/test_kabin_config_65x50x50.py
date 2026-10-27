@@ -21,6 +21,7 @@ import math
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -39,7 +40,7 @@ SESSIZ_CM = 2.0
 
 
 def _yukle(p: Path) -> dict:
-    yaml = pytest.importorskip("yaml")
+    yaml = capraz.paket_yoksa_atla("yaml")
     return yaml.safe_load(p.read_text(encoding="utf-8"))
 
 
@@ -89,7 +90,7 @@ def test_uc_pipeline_AYNI_kabini_tanimlar():
 
 def test_KRITIK_cat_organ_predictor_paketli_yamli_YUKLER(monkeypatch):
     """2026-09-08 öncesi: DEFAULT config → has_perspective_data False → ArUco yolu hiç çalışmıyordu."""
-    pytest.importorskip("cv2")
+    capraz.paket_yoksa_atla("cv2")
     from ai_hub.inference_cat_organ import catorgan_predictor as cp
     from ai_hub.inference_cat_organ.lib import qr as _qr
     from ai_hub.inference_cat_organ.lib.cabin_config import has_perspective_data, is_camera_anchored
@@ -105,7 +106,7 @@ def test_KRITIK_cat_organ_predictor_paketli_yamli_YUKLER(monkeypatch):
 
 def test_cat_organ_yaml_yoksa_DEFAULT_a_duser(monkeypatch, tmp_path):
     """Bozuk/eksik yaml analizi düşürmez (kalibrasyonsuz eski davranış)."""
-    pytest.importorskip("cv2")
+    capraz.paket_yoksa_atla("cv2")
     from ai_hub.inference_cat_organ import catorgan_predictor as cp
 
     monkeypatch.setattr(cp.CatOrganPredictor, "_resolve_models", lambda self, models_dir: None)
@@ -123,8 +124,8 @@ def test_marker_sayfasi_uretici_sabitleri_yaml_ile_AYNI():
 
 
 def test_marker_sayfasi_cv2_ile_ID0_ve_KENAR_bulunur():
-    cv2 = pytest.importorskip("cv2")
-    pytest.importorskip("PIL")
+    cv2 = capraz.paket_yoksa_atla("cv2")
+    capraz.paket_yoksa_atla("PIL")
     if not hasattr(cv2, "aruco"):
         pytest.skip("cv2.aruco yok")
     import sys
@@ -155,8 +156,8 @@ def test_kilavuz_ayni_sayilari_soyler_ve_marker_png_depoda():
 def test_marker_pdf_A4_sayfa_boyutunda_uretilir(tmp_path):
     """*.pdf depoda izlenmez (gitignore) → sayfa üretilip A4 MediaBox (595×842 pt) ölçülür;
     yanlış DPI/sayfa boyutu basılı marker'ı 10 cm'den saptırır."""
-    cv2 = pytest.importorskip("cv2")
-    pytest.importorskip("PIL")
+    cv2 = capraz.paket_yoksa_atla("cv2")
+    capraz.paket_yoksa_atla("PIL")
     if not hasattr(cv2, "aruco"):
         pytest.skip("cv2.aruco yok")
     import sys

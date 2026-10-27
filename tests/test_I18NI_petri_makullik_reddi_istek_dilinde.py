@@ -16,10 +16,11 @@ from __future__ import annotations
 
 import re
 
+import capraz
 import pytest
 
-np = pytest.importorskip("numpy")
-cv2 = pytest.importorskip("cv2")
+np = capraz.paket_yoksa_atla("numpy")
+cv2 = capraz.paket_yoksa_atla("cv2")
 
 import test_ai_panel_yayini as tp  # noqa: E402
 

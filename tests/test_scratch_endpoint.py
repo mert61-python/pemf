@@ -12,11 +12,12 @@ from __future__ import annotations
 import base64
 from pathlib import Path
 
+import capraz
 import numpy as np
 import pytest
 
-cv2 = pytest.importorskip("cv2")
-pytest.importorskip("fastapi")
+cv2 = capraz.paket_yoksa_atla("cv2")
+capraz.paket_yoksa_atla("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
 KOK = Path(__file__).resolve().parents[1]

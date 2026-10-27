@@ -128,7 +128,8 @@ def test_KRITIK_modul_duzeyi_importlar_CI_da_kurulabilir():
 
 def test_KRITIK_agir_muaf_modulleri_import_eden_testler_KORUMALI():
     """AGIR_MUAF paketi modül düzeyinde çeken üretim modülünü import eden her test dosyası
-    `pytest.importorskip("<paket>")` içermeli — yoksa CI'da ModuleNotFoundError seli."""
+    `pytest.importorskip("<paket>")` ya da `capraz.paket_yoksa_atla("<paket>")` (D5-F) içermeli — yoksa CI'da ModuleNotFoundError
+    seli."""
     # Hangi üretim modülü hangi ağır paketi çekiyor?
     agir_ceken: dict[str, set[str]] = {}  # "ai_service" -> {"onnxruntime"}
     for f in _uretim_dosyalari():
@@ -159,7 +160,9 @@ def test_KRITIK_agir_muaf_modulleri_import_eden_testler_KORUMALI():
         for modul, paketler in agir_ceken.items():
             if modul in importlar:
                 for paket in paketler:
-                    if f'importorskip("{paket}"' not in metin and f"importorskip('{paket}'" not in metin:
+                    # D5-F: `capraz.paket_yoksa_atla("<paket>")` = importorskip'in ZORUNLU'ya bağlı ikizi (varsayılanda aynı atlama)
+                    koruma = (f'importorskip("{paket}"', f"importorskip('{paket}'", f'paket_yoksa_atla("{paket}"')
+                    if not any(k in metin for k in koruma):
                         ihlaller.append(f"{test_dosyasi.name} -> {modul} ({paket} korumasız)")
     assert not ihlaller, (
         f"Şu test dosyaları AGIR_MUAF paketi çeken üretim modülünü importorskip KORUMASI OLMADAN "

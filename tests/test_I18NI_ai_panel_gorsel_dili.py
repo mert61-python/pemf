@@ -15,10 +15,11 @@ Orkestratör (14): ajan sondası yalnız gömülü uçları ölçüyordu; GPU de
 
 from __future__ import annotations
 
+import capraz
 import pytest
 
-np = pytest.importorskip("numpy")
-cv2 = pytest.importorskip("cv2")
+np = capraz.paket_yoksa_atla("numpy")
+cv2 = capraz.paket_yoksa_atla("cv2")
 
 import test_ai_panel_yayini as tp  # noqa: E402  (aynı dizin: tests/ — yardımcılar tek kaynaktan)
 from utils.panel_yayin import PANEL_ADLARI, PETRI_PANEL_ADLARI  # noqa: E402
@@ -123,7 +124,7 @@ def test_GPU_profili_istek_dilini_servise_DEVREDER(client, monkeypatch, uc, adla
 
 @pytest.fixture(scope="module")
 def servis():
-    pytest.importorskip("onnxruntime", reason="ai_service :8100 calisma zamani paketi yok (CI)")
+    capraz.paket_yoksa_atla("onnxruntime", sebep="ai_service :8100 calisma zamani paketi yok (CI)")
     from ai_service import app as _app
 
     return _app

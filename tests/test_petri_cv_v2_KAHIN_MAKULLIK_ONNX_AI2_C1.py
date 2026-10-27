@@ -22,6 +22,7 @@ import math
 import re
 from pathlib import Path
 
+import capraz
 import numpy as np
 import pytest
 
@@ -56,7 +57,7 @@ def _kod(uyari: str) -> str:
 @pytest.fixture(scope="module")
 def petri_v2():
     """GERÇEK v2 boru hattı: ürün yapılandırması (`load_cabin_config(None)` = cabin_config_v2.yaml) + ürünün ONNX'i."""
-    pytest.importorskip("ultralytics")
+    capraz.paket_yoksa_atla("ultralytics")
     from golden.eser import atla, eser_var_mi
 
     if not eser_var_mi(_YOLO, _EM):

@@ -34,14 +34,15 @@ import json
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
 
-np = pytest.importorskip("numpy")
-cv2 = pytest.importorskip("cv2")
+np = capraz.paket_yoksa_atla("numpy")
+cv2 = capraz.paket_yoksa_atla("cv2")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
