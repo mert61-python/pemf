@@ -21,12 +21,24 @@ saran bir `if` gövdesinde o yapıdadır ya da `if <zorunlu>:` dalının `else`i
 `if <zorunlu>: pytest.fail(...)` (koşul ZORUNLU'da yapısal doğru, gövde koşulsuz düşürür) vardır; ya da atlama nedeni `sqlcipher`
 taşır (A-46 yerel kapısı o atlamayı HER koşuda kırmızı yapar). KARŞIT: `skipif((X is None) and capraz.ZORUNLU)` (ters yön) ve
 `if not ZORUNLU: pytest.fail` (ters dal) HAM.
+TUR 3 (çürütücü 2 bulguları c2 · c2b · c4b · c8 · c9 · c11 · c12, 2026-10-27): `<zorunlu>` adın DESENİYLE değil TANIMIYLA bağlıdır —
+dosyada bağlanan ad (atama / `def` / parametre / döngü hedefi …) yalnız HER tanımı ZORUNLU'da yapısal doğruysa, `tests/` yardımcısından
+içe aktarılan ad oradaki tanımıyla; satır içi ortam denetimi yalnız `os.environ.get` / `os.getenv` + TAM ad listesi
+(`PEMF_CAPRAZ_KAYNAK_ZORUNLU`, `PEMF_GOLDEN_REQUIRED`) ile. Geniş `except`te `try` gövdesindeki işlev çağrısı (aynı modül / `self.` /
+`tests/` yardımcısı) 3 düzeye kadar açılır ve gövdesinde içe aktarma varsa içe aktarmadır; `except FileNotFoundError` (ikili / dosya yok)
+ImportError gibi HAM. Atlama eşdeğerleri de atlamadır: `pytest.skip.Exception` / `pytest.xfail` / `unittest.SkipTest` / `Skipped` /
+`self.skipTest` / `pytest.exit` (çağrı ya da çağrısız `raise`), koşullu `pytest.mark.skip`, `pytest.mark.xfail(<koşul>)`,
+`skipif(condition=…)` ve ikinci konumsal koşul. Saran koşul varken de erken dönüş koşulları eklenir; saran koşul `if` dışında
+`A and skip()` / `A or skip()` kısa devresi, koşullu ifade, `while` ve `for … else` (break koşulları) da sayılır. Atlama istisnası
+yükselten `raise` (ve atlamayı yakalayan bloktaki çıplak `raise`) `if <zorunlu>:` dalını düşüren SAYMAZ.
 Ham atlama yalnız GEREKÇELİ izin listesindeki dosyada ve listedeki SAYIDA olabilir (cırcır: sayı düşerse liste de düşürülmeli —
 bayat liste de KIRMIZI). Doğru yol: `capraz.atla_yoksa(yol, izlenen=…)`, `capraz.atla(sebep)`, `capraz.paket_yoksa_atla(ad)`.
 
 Bilinen sınır (bilinçli): adlar en çok 3 düzey açılır ve başka modülden gelen adlar yalnız `tests/` içindeki modüllerden çözülür;
 atlamayı SARMAYAN `continue` (döngüde sessiz geçiş, atlama yok) bu kapının değil dosyanın KARŞIT kolunun işidir
-(`test_stm_bobin_sayisi_tek_kaynak.py`). Fikstür `params=` / `request.param` dolaylaması çözülmez.
+(`test_stm_bobin_sayisi_tek_kaynak.py`). Fikstür `params=` / `request.param` dolaylaması çözülmez. Yardımcı modülün DIŞINDAN
+gelen (3. taraf / ürün) `zorunlu` adı desenle kabul edilir; `except OSError` / `PermissionError` (izin / platform yeteneği) eser
+yokluğu SAYILMAZ (tek canlı örnek symlink izni — platform).
 """
 
 from __future__ import annotations
@@ -52,6 +64,27 @@ _ITHAL_HATASI = frozenset({"ImportError", "ModuleNotFoundError"})
 _GENIS_HATA = frozenset({"Exception", "BaseException"})
 #: `try` gövdesinde bu çağrılar da içe aktarmadır (`import` / `from … import` deyimleri ayrıca).
 _ITHAL_ISLEVI = frozenset({"import_module", "__import__", "exec_module", "run_path", "run_module", "load_module"})
+#: TUR 3 (c2b): satır içi ortam denetimi YALNIZ yayın süitinin kurduğu bu bayraklarla bağlıdır (desen DEĞİL — `…_YEREL` HAM).
+_ZORUNLU_ORTAM = frozenset({"PEMF_CAPRAZ_KAYNAK_ZORUNLU", "PEMF_GOLDEN_REQUIRED"})
+#: TUR 3: ortamı GERÇEKTEN okuyan çağrılar (sahte sözlüğün `.get`i DEĞİL).
+_ORTAM_OKUYUCU = frozenset({"os.environ.get", "environ.get", "os.getenv", "getenv"})
+#: TUR 3 (c8 / c9): ZORUNLU kipte de SESSİZ geçen atlama eşdeğerleri — çağrı / `raise` adı nokta sınırında bunlardan biriyle biter
+#: (`pytest.skip`, `pytest.mark.skip`, `pytest.skip.Exception`, `pytest.xfail`, `unittest.SkipTest`, `Skipped`, `self.skipTest` …).
+_ATLAMA_SONEKI = (
+    "skip",
+    "skip.Exception",
+    "xfail",
+    "xfail.Exception",
+    "SkipTest",
+    "Skipped",
+    "XFailed",
+    "skipTest",
+    "pytest.exit",
+)
+#: Bunlar istisna SINIFI — yalnız `raise` edildiğinde atlar (`hata = pytest.skip.Exception(...)` tek başına atlamaz).
+_ISTISNA_SONEKI = ("skip.Exception", "xfail.Exception", "SkipTest", "Skipped", "XFailed")
+#: TUR 3: eser yokluğunu istisnayla bildiren hata — `except FileNotFoundError: pytest.skip` (ikili / dosya yok) ImportError gibi HAM.
+_ESER_HATASI = frozenset({"FileNotFoundError"})
 
 
 @dataclass(frozen=True)
@@ -84,52 +117,135 @@ def _eser_sorgusu_var(dugumler) -> bool:
     return False
 
 
-def _zorunlu_dugumu(n: ast.AST) -> bool:
-    """`ZORUNLU`, `capraz.ZORUNLU`, `zorunlu_mu()`, `golden.eser.zorunlu_mu()` (ad / öznitelik / argümansız çağrı) ya da satır içi
-    ortam denetimi `os.environ.get("PEMF_GOLDEN_REQUIRED") == "1"` / `os.getenv(...) == "1"` (yayın süiti iki bayrağı da kurar)."""
-    if isinstance(n, ast.Compare) and len(n.ops) == 1 and isinstance(n.ops[0], ast.Eq):
-        sol, sag = n.left, n.comparators[0]
-        if isinstance(sol, ast.Constant) and sol.value == "1":
-            sol, sag = sag, sol
-        return (
-            isinstance(sag, ast.Constant)
-            and sag.value == "1"
-            and isinstance(sol, ast.Call)
-            and _cagri_adi(sol.func).rsplit(".", 1)[-1] in ("get", "getenv")
-            and bool(sol.args)
-            and isinstance(sol.args[0], ast.Constant)
-            and isinstance(sol.args[0].value, str)
-            and bool(_BAGLI_AD.search(sol.args[0].value))
-        )
-    if isinstance(n, ast.Call) and not n.args and not n.keywords:
-        n = n.func
-    if isinstance(n, ast.Name):
-        return bool(_BAGLI_AD.search(n.id))
-    if isinstance(n, ast.Attribute):
-        return bool(_BAGLI_AD.search(n.attr))
+def _atlama_adi_mi(ad: str) -> bool:
+    """TUR 3 (c8 / c9): çağrı / `raise` adı bir atlama eşdeğeri mi (`_ATLAMA_SONEKI`, nokta sınırında)."""
+    return any(ad == s or ad.endswith("." + s) for s in _ATLAMA_SONEKI)
+
+
+def _atlama_istisnasi_mi(hedef: ast.AST | None, m: _Modul | None) -> bool:
+    """`raise <hedef>` bir atlama mı: ad atlama eşdeğeri ya da dosyada atlama istisnasına bağlanmış ad (`hata = pytest.skip.Exception(…)`)."""
+    if hedef is None:
+        return False
+    h = hedef.func if isinstance(hedef, ast.Call) else hedef
+    if _atlama_adi_mi(_cagri_adi(h)):
+        return True
+    if isinstance(h, ast.Name) and m is not None:
+        for b in m.baglama.get(h.id, []):
+            if b[0] == "deger":
+                v = b[1].func if isinstance(b[1], ast.Call) else b[1]
+                if _atlama_adi_mi(_cagri_adi(v)):
+                    return True
     return False
 
 
-def _zorunluda_yanlis(k: ast.AST) -> bool:
+def _sabit_dizge(n: ast.AST, m: _Modul | None) -> str | None:
+    """Dizge sabiti ya da dosyada TEK kez dizge sabitine bağlanan ad (`_BAYRAK = "PEMF_…"`; `os.environ.get(_BAYRAK)`)."""
+    if isinstance(n, ast.Constant) and isinstance(n.value, str):
+        return n.value
+    if isinstance(n, ast.Name) and m is not None:
+        bag = m.baglama.get(n.id, [])
+        if len(bag) == 1 and bag[0][0] == "deger":
+            return _sabit_dizge(bag[0][1], None)
+    return None
+
+
+def _ortam_zorunlu_mu(n: ast.AST, m: _Modul | None) -> bool:
+    """Satır içi ortam denetimi `os.environ.get("PEMF_GOLDEN_REQUIRED") == "1"` / `os.getenv(...) == "1"` (yayın süiti iki bayrağı da
+    kurar). TUR 3 (c2b): ad TAM listede (`_ZORUNLU_ORTAM`, desen DEĞİL) ve okuyucu gerçek ortam (`_ORTAM_OKUYUCU`)."""
+    if not (isinstance(n, ast.Compare) and len(n.ops) == 1 and isinstance(n.ops[0], ast.Eq)):
+        return False
+    sol, sag = n.left, n.comparators[0]
+    if isinstance(sol, ast.Constant) and sol.value == "1":
+        sol, sag = sag, sol
+    return (
+        isinstance(sag, ast.Constant)
+        and sag.value == "1"
+        and isinstance(sol, ast.Call)
+        and _cagri_adi(sol.func) in _ORTAM_OKUYUCU
+        and bool(sol.args)
+        and _sabit_dizge(sol.args[0], m) in _ZORUNLU_ORTAM
+    )
+
+
+def _islev_zorunlu_mu(isl: ast.AST, m: _Modul, gorulen: frozenset) -> bool:
+    """TUR 3: yerel / yardımcı `def zorunlu_mu(): return <…>` — son deyimi `return` ve HER `return` değeri ZORUNLU'da yapısal doğru."""
+    if not isinstance(isl, (ast.FunctionDef, ast.AsyncFunctionDef)) or not isl.body:
+        return False
+    if not isinstance(isl.body[-1], ast.Return):
+        return False  # düşerek biten yol None (yanlış) döndürür
+    donusler = [r for st in isl.body for r in _islev_disi_dolas(st) if isinstance(r, ast.Return)]
+    return all(r.value is not None and _zorunluda_dogru(r.value, m, gorulen) for r in donusler)
+
+
+def _ad_zorunlu_mu(m: _Modul | None, ad: str, gorulen: frozenset) -> bool:
+    """TUR 3 (c2): `zorunlu|required` adı yalnız TANIMI ZORUNLU'da yapısal doğruysa bağlıdır. Dosyada bağlanan adın HER bağlaması
+    (atama değeri / `def` dönüşü) doğru olmalı; değeri bilinmeyen bağlama (parametre, döngü hedefi, `with … as`, demet açma …)
+    BAĞLI DEĞİL. `tests/` yardımcısından içe aktarılan ad oradaki tanımıyla; dosyada hiç bağlanmamış / dışarıdan gelen ad desenle."""
+    if not _BAGLI_AD.search(ad):
+        return False
+    if m is None:
+        return True
+    anahtar = (id(m), ad)
+    if anahtar in gorulen:
+        return False  # döngüsel tanım — bağlı SAYILMAZ (fail-closed)
+    gorulen = gorulen | {anahtar}
+    for b in m.baglama.get(ad, []):
+        if b[0] == "deger":
+            tamam = _zorunluda_dogru(b[1], m, gorulen)
+        elif b[0] == "islev":
+            tamam = _islev_zorunlu_mu(b[1], m, gorulen)
+        elif b[0] == "ithal":
+            ym = _yardimci_modul(b[1]) if b[2] is not None else None
+            tamam = True if ym is None else _ad_zorunlu_mu(ym, b[2], gorulen)
+        else:
+            tamam = False
+        if not tamam:
+            return False
+    return True
+
+
+def _zorunlu_dugumu(n: ast.AST, m: _Modul | None = None, gorulen: frozenset = frozenset()) -> bool:
+    """`ZORUNLU`, `capraz.ZORUNLU`, `zorunlu_mu()`, `golden.eser.zorunlu_mu()` (ad / öznitelik / argümansız çağrı) ya da satır içi
+    ortam denetimi (`_ortam_zorunlu_mu`). TUR 3: ad TANIMIYLA çözülür (`_ad_zorunlu_mu`); `tests/` yardımcı modülünün özniteliği
+    (`capraz.ZORUNLU`) o modüldeki tanımıyla."""
+    if _ortam_zorunlu_mu(n, m):
+        return True
+    if isinstance(n, ast.Call) and not n.args and not n.keywords:
+        n = n.func
+    if isinstance(n, ast.Name):
+        return _ad_zorunlu_mu(m, n.id, gorulen)
+    if isinstance(n, ast.Attribute):
+        if not _BAGLI_AD.search(n.attr):
+            return False
+        if m is not None and isinstance(n.value, ast.Name) and n.value.id in m.ithal:
+            modad, oz = m.ithal[n.value.id]
+            ym = _yardimci_modul(modad if oz is None else f"{modad}.{oz}")
+            if ym is not None:
+                return _ad_zorunlu_mu(ym, n.attr, gorulen)
+        return True
+    return False
+
+
+def _zorunluda_yanlis(k: ast.AST, m: _Modul | None = None, gorulen: frozenset = frozenset()) -> bool:
     """TUR 2 (lc1 / lc13): ZORUNLU doğruyken koşul YAPISAL olarak YANLIŞ mı — `(…) and not <zorunlu>`, `not (<zorunlu> or …)`.
 
     Adın koşulda GEÇMESİ yetmez: `(X is None) and capraz.ZORUNLU` ZORUNLU'da atlar (ters yön), `X is None or ZORUNLU` de."""
     if isinstance(k, ast.UnaryOp) and isinstance(k.op, ast.Not):
-        return _zorunluda_dogru(k.operand)
+        return _zorunluda_dogru(k.operand, m, gorulen)
     if isinstance(k, ast.BoolOp):
-        alt = [_zorunluda_yanlis(v) for v in k.values]
+        alt = [_zorunluda_yanlis(v, m, gorulen) for v in k.values]
         return any(alt) if isinstance(k.op, ast.And) else all(alt)
     return False
 
 
-def _zorunluda_dogru(k: ast.AST) -> bool:
+def _zorunluda_dogru(k: ast.AST, m: _Modul | None = None, gorulen: frozenset = frozenset()) -> bool:
     """ZORUNLU doğruyken koşul YAPISAL olarak DOĞRU mu — `<zorunlu>`, `<zorunlu> or …`, `not (… and not <zorunlu>)`."""
-    if _zorunlu_dugumu(k):
+    if _zorunlu_dugumu(k, m, gorulen):
         return True
     if isinstance(k, ast.UnaryOp) and isinstance(k.op, ast.Not):
-        return _zorunluda_yanlis(k.operand)
+        return _zorunluda_yanlis(k.operand, m, gorulen)
     if isinstance(k, ast.BoolOp):
-        alt = [_zorunluda_dogru(v) for v in k.values]
+        alt = [_zorunluda_dogru(v, m, gorulen) for v in k.values]
         return any(alt) if isinstance(k.op, ast.Or) else all(alt)
     return False
 
@@ -147,21 +263,77 @@ def _islev_disi_dolas(d: ast.AST):
         )
 
 
-def _ithal_var(govde) -> bool:
-    """`try` gövdesinde içe aktarma var mı (deyim ya da `importlib.import_module` / `__import__` / `exec_module` …)."""
+def _cagri_tanimlari(m: _Modul, fn: ast.AST) -> list[tuple[_Modul, ast.AST]]:
+    """TUR 3 (c4b): çağrılan işlevin tanım(lar)ı — aynı modülde `f()` (iç içe tanımlar dahil), `self.f()` / `cls.f()`, ya da `tests/`
+    yardımcısından içe aktarılan `f()` / `yardimci.f()`."""
+    sonuc = []
+    if isinstance(fn, ast.Name):
+        for b in m.baglama.get(fn.id, []):
+            if b[0] == "islev":
+                sonuc.append((m, b[1]))
+            elif b[0] == "ithal" and b[2] is not None:
+                ym = _yardimci_modul(b[1])
+                if ym is not None:
+                    sonuc += [(ym, x[1]) for x in ym.baglama.get(b[2], []) if x[0] == "islev"]
+    elif isinstance(fn, ast.Attribute) and isinstance(fn.value, ast.Name):
+        if fn.value.id in ("self", "cls"):
+            sonuc += [(m, x[1]) for x in m.baglama.get(fn.attr, []) if x[0] == "islev"]
+        elif fn.value.id in m.ithal:
+            modad, oz = m.ithal[fn.value.id]
+            ym = _yardimci_modul(modad if oz is None else f"{modad}.{oz}")
+            if ym is not None:
+                sonuc += [(ym, x[1]) for x in ym.baglama.get(fn.attr, []) if x[0] == "islev"]
+    return sonuc
+
+
+def _ithal_var(govde, m: _Modul | None = None, derinlik: int = 3, _gorulen: set | None = None) -> bool:
+    """`try` gövdesinde içe aktarma var mı (deyim ya da `importlib.import_module` / `__import__` / `exec_module` …).
+
+    TUR 3 (c4b): gövdedeki işlev çağrıları (`_cagri_tanimlari`) `derinlik` düzey açılır — `try: yaml = _yaml_al()` (içinde
+    `import yaml`) + `except Exception: pytest.skip` da içe aktarma korumasıdır."""
+    gorulen = set() if _gorulen is None else _gorulen
     for st in govde:
         for n in _islev_disi_dolas(st):
             if isinstance(n, (ast.Import, ast.ImportFrom)):
                 return True
-            if isinstance(n, ast.Call) and _cagri_adi(n.func).rsplit(".", 1)[-1] in _ITHAL_ISLEVI:
+            if not isinstance(n, ast.Call):
+                continue
+            if _cagri_adi(n.func).rsplit(".", 1)[-1] in _ITHAL_ISLEVI:
                 return True
+            if m is None or derinlik <= 0:
+                continue
+            for hm, isl in _cagri_tanimlari(m, n.func):
+                if id(isl) not in gorulen:
+                    gorulen.add(id(isl))
+                    if _ithal_var(isl.body, hm, derinlik - 1, gorulen):
+                        return True
     return False
 
 
-def _dusurur(govde) -> bool:
-    """Blok KOŞULSUZ düşürür mü: üst düzey deyimlerinden biri `pytest.fail(...)` / `fail(...)` ya da `raise`."""
+def _raise_dusurur(st: ast.Raise, m: _Modul | None) -> bool:
+    """TUR 3 (c12): `raise` testi DÜŞÜRÜR mü — atlama / xfail istisnası (`raise pytest.skip.Exception(...)`, `raise unittest.SkipTest`,
+    atlama istisnasına bağlanmış ad) DÜŞÜRMEZ; çıplak `raise` yalnız atlama istisnasını da yakalayabilen bloktaysa (`except
+    pytest.skip.Exception` / `BaseException` / çıplak `except`) DÜŞÜRMEZ."""
+    if st.exc is None:
+        p = m.ebeveyn.get(st) if m is not None else None
+        while p is not None and not isinstance(
+            p, (ast.ExceptHandler, ast.FunctionDef, ast.AsyncFunctionDef, ast.Module)
+        ):
+            p = m.ebeveyn.get(p)
+        if not isinstance(p, ast.ExceptHandler):
+            return True  # yakalanan istisna yok → RuntimeError (düşer)
+        if p.type is None:
+            return False
+        adlar = {_cagri_adi(x) for x in (p.type.elts if isinstance(p.type, ast.Tuple) else [p.type])}
+        return not any(a == "BaseException" or _atlama_adi_mi(a) or a.endswith("OutcomeException") for a in adlar)
+    return not _atlama_istisnasi_mi(st.exc, m)
+
+
+def _dusurur(govde, m: _Modul | None = None) -> bool:
+    """Blok KOŞULSUZ düşürür mü: üst düzey deyimlerinden biri `pytest.fail(...)` / `fail(...)` ya da düşüren `raise` (TUR 3:
+    `_raise_dusurur` — atlama istisnası yükselten `raise` SAYILMAZ)."""
     for st in govde:
-        if isinstance(st, ast.Raise):
+        if isinstance(st, ast.Raise) and _raise_dusurur(st, m):
             return True
         if isinstance(st, ast.Expr) and isinstance(st.value, ast.Call):
             if _cagri_adi(st.value.func).rsplit(".", 1)[-1] == "fail":
@@ -214,6 +386,43 @@ class _Modul:
         for n in ast.walk(self.agac):
             for c in ast.iter_child_nodes(n):
                 self.ebeveyn[c] = n
+        #: TUR 3: dosyanın HER düzeyindeki ad bağlamaları — ("deger", <değer>) · ("islev", <def>) · ("ithal", <modül>, <ad|None>) ·
+        #: ("bilinmez",) (parametre, döngü / `with` hedefi, demet açma, artırımlı atama, sınıf, `except … as`).
+        self.baglama: dict[str, list[tuple]] = {}
+
+        def bag(ad: str, *v) -> None:
+            self.baglama.setdefault(ad, []).append(v)
+
+        for n in ast.walk(self.agac):
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                if not isinstance(n, ast.Lambda):
+                    bag(n.name, "islev", n)
+                a = n.args
+                for x in (*a.posonlyargs, *a.args, *a.kwonlyargs, a.vararg, a.kwarg):
+                    if x is not None:
+                        bag(x.arg, "bilinmez")
+            elif isinstance(n, ast.ClassDef):
+                bag(n.name, "bilinmez")
+            elif isinstance(n, ast.Import):
+                for a in n.names:
+                    bag(a.asname or a.name.split(".")[0], "ithal", a.name if a.asname else a.name.split(".")[0], None)
+            elif isinstance(n, ast.ImportFrom):
+                for a in n.names:
+                    if n.module and not n.level:
+                        bag(a.asname or a.name, "ithal", n.module, a.name)
+                    else:
+                        bag(a.asname or a.name, "bilinmez")
+            elif isinstance(n, ast.ExceptHandler) and n.name:
+                bag(n.name, "bilinmez")
+            elif isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store):
+                p = self.ebeveyn.get(n)
+                if isinstance(p, ast.Assign) and any(t is n for t in p.targets):
+                    bag(n.id, "deger", p.value)
+                elif isinstance(p, (ast.AnnAssign, ast.NamedExpr)) and p.target is n:
+                    if p.value is not None:
+                        bag(n.id, "deger", p.value)
+                else:
+                    bag(n.id, "bilinmez")
         self.atama: dict[str, list[ast.AST]] = {}
         self.islev: dict[str, ast.AST] = {}
         self.ithal: dict[str, tuple[str, str | None]] = {}
@@ -316,25 +525,50 @@ def tara(kaynak: str, dosya: str) -> list[Atlama]:
             p = m.ebeveyn.get(p)
         return p
 
+    def hata_adlari(tur) -> set[str]:
+        """`except` türünün adları; dosyada demete / ada bağlanmış ad bir düzey açılır (`_HATALAR = (ImportError, OSError)`)."""
+        if tur is None:
+            return set()
+        adlar = set()
+        for x in tur.elts if isinstance(tur, ast.Tuple) else [tur]:
+            adlar.add(_cagri_adi(x))
+            if isinstance(x, ast.Name):
+                for b in m.baglama.get(x.id, []):
+                    if b[0] == "deger":
+                        v = b[1]
+                        adlar.update(_cagri_adi(y) for y in (v.elts if isinstance(v, (ast.Tuple, ast.List)) else [v]))
+        return adlar
+
     def saran_kosullar(n):
-        """Saran `if` testleri + dal yönü (True = gövde, False = `else`) + içe aktarma hatasını yakalayan `except` içinde mi."""
+        """Saran `if` testleri + dal yönü (True = gövde, False = `else`) + içe aktarma hatasını yakalayan `except` içinde mi.
+
+        TUR 3: `A and skip()` / `A or skip()` kısa devresi (önceki değerler; `or`da yön False), koşullu ifade, `while` ve
+        `for` / `while` … `else` (gövdedeki `if X: break` koşulları, yön False) de saran koşuldur."""
         kosul, yon, ithal = [], [], False
         cur, p = n, m.ebeveyn.get(n)
         while p is not None and not isinstance(p, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Module, ast.ClassDef)):
-            if isinstance(p, ast.If) and cur is not p.test:
+            if isinstance(p, (ast.If, ast.IfExp, ast.While)) and cur is not p.test:
+                ic_govde = cur is p.body if isinstance(p, ast.IfExp) else any(x is cur for x in p.body)
                 kosul.append(p.test)
-                yon.append(not any(x is cur for x in p.orelse))
+                yon.append(ic_govde)
+            if isinstance(p, (ast.For, ast.AsyncFor, ast.While)) and any(x is cur for x in p.orelse):
+                for st in p.body:
+                    for x in _islev_disi_dolas(st):
+                        if isinstance(x, ast.If) and any(isinstance(r, ast.Break) for r in _islev_disi_dolas(x)):
+                            kosul.append(x.test)
+                            yon.append(False)
+            elif isinstance(p, ast.BoolOp):
+                i = next((i for i, v in enumerate(p.values) if v is cur), 0)
+                for v in p.values[:i]:
+                    kosul.append(v)
+                    yon.append(isinstance(p.op, ast.And))
             elif isinstance(p, ast.ExceptHandler):
                 tur = p.type
-                adlar = (
-                    set()
-                    if tur is None
-                    else {_cagri_adi(x) for x in (tur.elts if isinstance(tur, ast.Tuple) else [tur])}
-                )
-                if adlar & _ITHAL_HATASI:
+                adlar = hata_adlari(tur)
+                if adlar & (_ITHAL_HATASI | _ESER_HATASI):
                     ithal = True
-                elif (tur is None or adlar & _GENIS_HATA) and _ithal_var(m.ebeveyn[p].body):
-                    ithal = True  # TUR 2 (lc5 / lc6): `try: import …` + `except Exception` / çıplak `except` = ImportError gibi
+                elif (tur is None or adlar & _GENIS_HATA) and _ithal_var(m.ebeveyn[p].body, m):
+                    ithal = True  # TUR 2 (lc5 / lc6) + TUR 3 (c4b): `try: import …` / `try: _yaml_al()` + geniş `except` = ImportError gibi
             cur, p = p, m.ebeveyn.get(p)
         return kosul, yon, ithal
 
@@ -354,10 +588,11 @@ def tara(kaynak: str, dosya: str) -> list[Atlama]:
 
     def skip_bagli(n, kosul, yon) -> bool:
         """`pytest.skip` ZORUNLU kipte YAPISAL olarak ulaşılamaz mı (saran dal ya da önceki `if <zorunlu>: fail`)."""
-        if any(_zorunluda_yanlis(k) if govde else _zorunluda_dogru(k) for k, govde in zip(kosul, yon)):
+        if any(_zorunluda_yanlis(k, m) if govde else _zorunluda_dogru(k, m) for k, govde in zip(kosul, yon)):
             return True
         return any(
-            isinstance(st, ast.If) and _zorunluda_dogru(st.test) and _dusurur(st.body) for st in onceki_kardesler(n)
+            isinstance(st, ast.If) and _zorunluda_dogru(st.test, m) and _dusurur(st.body, m)
+            for st in onceki_kardesler(n)
         )
 
     def erken_donus_kosullari(n) -> list[ast.AST]:
@@ -371,28 +606,52 @@ def tara(kaynak: str, dosya: str) -> list[Atlama]:
 
     sonuc = []
     for n in ast.walk(m.agac):
-        if not isinstance(n, ast.Call):
-            continue
-        ad = _cagri_adi(n.func)
-        son = ad.rsplit(".", 1)[-1]
-        neden_d = next((k.value for k in n.keywords if k.arg == "reason"), None)
-        isl = islevi(n)
-        if son in ("skipif", "skipIf", "skipUnless"):
-            if not n.args:
+        if isinstance(n, ast.Call):
+            ad, argl, anahtar = _cagri_adi(n.func), n.args, n.keywords
+            if any(ad == s or ad.endswith("." + s) for s in _ISTISNA_SONEKI) and not isinstance(
+                m.ebeveyn.get(n), ast.Raise
+            ):
+                continue  # istisna nesnesi kuruldu ama yükseltilmedi — atlama değil (yükselten `raise` aşağıda)
+        elif isinstance(n, ast.Raise) and n.exc is not None and not isinstance(n.exc, ast.Call):
+            # TUR 3: çağrısız `raise unittest.SkipTest` ya da atlama istisnasına bağlanmış ad (`raise hata`)
+            if not _atlama_istisnasi_mi(n.exc, m):
                 continue
-            kosul, ithal = [n.args[0]], False
-            if neden_d is None and len(n.args) > 1:
-                neden_d = n.args[1]
-            bagli = _zorunluda_dogru(n.args[0]) if son == "skipUnless" else _zorunluda_yanlis(n.args[0])
-        elif ad in ("pytest.skip", "skip") and son == "skip":
+            ad, argl, anahtar = _cagri_adi(n.exc), [], []
+            if not _atlama_adi_mi(ad):
+                ad = "skip.Exception"  # ada bağlı atlama istisnası — tür adı için
+        else:
+            continue
+        son = ad.rsplit(".", 1)[-1]
+        neden_d = next((k.value for k in anahtar if k.arg == "reason"), None)
+        isl = islevi(n)
+        isaret_xfail = ad == "mark.xfail" or ad.endswith(".mark.xfail")
+        kosullar = []
+        if son in ("skipif", "skipIf", "skipUnless") or isaret_xfail:
+            # TUR 3: pytest işaretinde HER konumsal argüman ve `condition=` bir koşuldur (biri doğruysa atlar); unittest biçiminde
+            # yalnız ilki (ikincisi neden). Koşulsuz işaret (`skipif(reason=…)`, `mark.xfail(reason=…)`) koşulsuz atlama gibi.
+            unittest_bicimi = son in ("skipIf", "skipUnless")
+            kosullar = list(argl[:1] if unittest_bicimi else argl) + [k.value for k in anahtar if k.arg == "condition"]
+            if unittest_bicimi and neden_d is None and len(argl) > 1:
+                neden_d = argl[1]
+        if kosullar:
+            ithal = False
+            if son == "skipUnless":
+                kosul = [k for k in kosullar if not _zorunluda_dogru(k, m)]
+            else:
+                kosul = [k for k in kosullar if not _zorunluda_yanlis(k, m)]
+            bagli = not kosul
+            tur = "mark.xfail" if isaret_xfail else son
+        elif _atlama_adi_mi(ad) or son in ("skipif", "skipIf", "skipUnless") or isaret_xfail:
             kosul, yon, ithal = saran_kosullar(n)
-            if neden_d is None and n.args:
-                neden_d = n.args[0]
+            if neden_d is None and argl:
+                neden_d = argl[0]
             bagli = skip_bagli(n, kosul, yon)
-            if not bagli and not kosul and not ithal:
-                kosul = erken_donus_kosullari(n)
+            if not bagli and not ithal:
+                # TUR 3 (c11): saran (eser DIŞI) koşul varken de erken dönüş koşulları eklenir
+                kosul = kosul + erken_donus_kosullari(n)
+            tur = next((s for s in _ATLAMA_SONEKI if ad == s or ad.endswith("." + s)), son)
         elif son == "importorskip":
-            paket = _metin(n.args[0]) if n.args else ""
+            paket = _metin(argl[0]) if argl else ""
             neden = _metin(neden_d)
             if not ("sqlcipher" in paket.lower() or "sqlcipher" in neden.lower()):
                 sonuc.append(Atlama(dosya, n.lineno, "importorskip", f"{paket} {neden}".strip()))
@@ -405,7 +664,7 @@ def tara(kaynak: str, dosya: str) -> list[Atlama]:
         if bagli:
             continue
         if _eser_sorgusu_var(_ac(m, kosul, isl)) or ithal:
-            sonuc.append(Atlama(dosya, n.lineno, son, neden))
+            sonuc.append(Atlama(dosya, n.lineno, tur, neden))
     return sonuc
 
 
@@ -828,4 +1087,239 @@ def test_KARSIT_KANIT_TUR2_yapisal_BAGLI_ve_eser_DISI_bicimleri_saymaz():
     bulunan = tara(_BAGLI_TUR2, "sentetik_bagli_tur2.py")
     assert bulunan == [], (
         f"ZORUNLU kipte DÜŞEN (yapısal bağlı) / eser dışı atlama ham sayıldı (sahte kırmızı): {bulunan}"
+    )
+
+
+# ═══ TUR 3 — çürütücü 2'nin yaşayan mutantları (c2 · c2b · c4b · c8 · c9 · c11 · c12) + aynı sınıfın komşu biçimleri ═════════════
+_HAM_TUR3 = """
+import os
+import shutil
+import sys
+import unittest
+from pathlib import Path
+import pytest
+KOK = Path(__file__).resolve().parents[1]
+PWSH = shutil.which("pwsh")
+ZORUNLU = os.environ.get("PEMF_ZORUNLU") == "1"
+def zorunlu_mu():
+    return False
+@pytest.mark.skipif((PWSH is None) and not ZORUNLU, reason="c2 yerel ZORUNLU yanlis ortam adi")  # HAM
+def test_c2_yerel_ad():
+    pass
+@pytest.mark.skipif((PWSH is None) and not zorunlu_mu(), reason="yerel tanimli zorunlu_mu hep False")  # HAM
+def test_yerel_islev():
+    pass
+def test_parametre_golgesi(required=False):
+    if not (KOK / "y").exists():
+        if required:
+            pytest.fail("parametre degeri bilinmez")
+        pytest.skip("y yok")  # HAM
+def _c2b_ortam_adi():
+    if (KOK / "c.onnx").exists():
+        return
+    if os.environ.get("PEMF_GOLDEN_REQUIRED_YEREL") == "1":
+        pytest.fail("yanlis ortam adi")
+    pytest.skip("onnx yok")  # HAM
+def _sahte_okuyucu():
+    if (KOK / "c.onnx").exists():
+        return
+    if {}.get("PEMF_GOLDEN_REQUIRED") == "1":
+        pytest.fail("sahte sozluk")
+    pytest.skip("onnx yok")  # HAM
+def _yaml_al():
+    import yaml
+    return yaml
+def _yaml_al_2():
+    return _yaml_al()
+def test_c4b_dolayli():
+    try:
+        _yaml_al()
+    except Exception:
+        pytest.skip("yaml yok")  # HAM
+def test_c4b_iki_duzey():
+    try:
+        _yaml_al_2()
+    except BaseException:
+        pytest.skip("yaml yok")  # HAM
+def test_ikili_yok():
+    try:
+        open(KOK / "a.bin")
+    except FileNotFoundError:
+        pytest.skip("ikili yok")  # HAM
+def _c8_ps():
+    for p in (KOK / "a.exe",):
+        if p.is_file():
+            return str(p)
+    raise pytest.skip.Exception("powershell yok")  # HAM
+def test_c9_xfail():
+    if PWSH is None:
+        pytest.xfail("kabuk yok")  # HAM
+def test_skiptest_cagrisiz():
+    if not (KOK / "y").exists():
+        raise unittest.SkipTest  # HAM
+class T(unittest.TestCase):
+    def test_skip_test(self):
+        if shutil.which("node") is None:
+            self.skipTest("node yok")  # HAM
+@pytest.mark.xfail(PWSH is None, reason="isaret xfail", run=False)  # HAM
+def test_isaret_xfail():
+    pass
+@pytest.mark.skipif(condition=PWSH is None, reason="anahtar sozcuklu kosul")  # HAM
+def test_kosul_anahtar():
+    pass
+@pytest.mark.skipif(os.name != "nt", PWSH is None, reason="ikinci konumsal kosul")  # HAM
+def test_ikinci_kosul():
+    pass
+if not (KOK / "z").exists():
+    pytestmark = pytest.mark.skip(reason="modul duzeyi kosullu isaret")  # HAM
+def _c11_platform():
+    for p in (KOK / "a.exe",):
+        if p.is_file():
+            return str(p)
+    if sys.platform == "win32":
+        pytest.skip("powershell yok")  # HAM
+def test_kisa_devre():
+    (KOK / "y").exists() or pytest.skip("y yok")  # HAM
+def test_kosullu_ifade():
+    _ = pytest.skip("y yok") if not (KOK / "y").exists() else None  # HAM
+def _for_else():
+    for p in (KOK / "a.exe",):
+        if p.is_file():
+            break
+    else:
+        pytest.skip("aday yok")  # HAM
+def _c12_raise_skip():
+    if (KOK / "c.onnx").exists():
+        return
+    if os.environ.get("PEMF_GOLDEN_REQUIRED") == "1":
+        raise pytest.skip.Exception("zorunlu ama yine atlar")  # HAM
+    pytest.skip("onnx yok")  # HAM
+def _c12_degisken():
+    if (KOK / "c.onnx").exists():
+        return
+    hata = pytest.skip.Exception("zorunlu ama atlar")
+    if os.environ.get("PEMF_GOLDEN_REQUIRED") == "1":
+        raise hata  # HAM
+    pytest.skip("onnx yok")  # HAM
+def test_c12_ciplak_raise_atlamayi_yakalar():
+    try:
+        int("0")
+    except pytest.skip.Exception:
+        if not (KOK / "y").exists():
+            if os.environ.get("PEMF_CAPRAZ_KAYNAK_ZORUNLU") == "1":
+                raise
+            pytest.skip("y yok")  # HAM
+"""
+
+_BAGLI_TUR3 = """
+import os
+import shutil
+import unittest
+from pathlib import Path
+import capraz
+import pytest
+from capraz import ZORUNLU as ZORUNLU_KIP
+from golden.eser import zorunlu_mu
+KOK = Path(__file__).resolve().parents[1]
+PWSH = shutil.which("pwsh")
+ZORUNLU = os.environ.get("PEMF_CAPRAZ_KAYNAK_ZORUNLU") == "1"
+GOLDEN_REQUIRED = os.getenv("PEMF_GOLDEN_REQUIRED") == "1" or capraz.ZORUNLU
+_BAYRAK = "PEMF_CAPRAZ_KAYNAK_ZORUNLU"
+def kip_zorunlu():
+    return capraz.ZORUNLU or zorunlu_mu()
+@pytest.mark.skipif((PWSH is None) and not ZORUNLU, reason="yerel ZORUNLU dogru ortam adiyla")
+def test_yerel_dogru():
+    pass
+@pytest.mark.skipif((PWSH is None) and not ZORUNLU_KIP, reason="capraz'dan ice aktarilan ad")
+def test_ice_aktarilan():
+    pass
+@pytest.mark.skipif((PWSH is None) and not kip_zorunlu(), reason="yerel islev zorunlu doner")
+def test_yerel_islev():
+    pass
+@pytest.mark.skipif((PWSH is None) and not GOLDEN_REQUIRED, reason="getenv okuyucu")
+def test_getenv():
+    pass
+@pytest.mark.skipif(not (os.environ.get(_BAYRAK) == "1" or PWSH is not None), reason="sabite bagli ortam adi")
+def test_sabit_ad():
+    pass
+@pytest.mark.skipif(os.name != "nt", (PWSH is None) and not capraz.ZORUNLU, reason="eserli kosul bagli")
+def test_iki_kosul_bagli():
+    pass
+@pytest.mark.xfail(PWSH is None and not capraz.ZORUNLU, reason="isaret xfail bagli")
+def test_isaret_xfail_bagli():
+    pass
+@pytest.mark.xfail(reason="bilinen urun hatasi - eser degil")
+def test_isaret_xfail_kosulsuz():
+    pass
+@pytest.mark.skip(reason="tasarim")
+def test_kosulsuz_isaret():
+    pass
+if os.name != "nt":
+    pytestmark = pytest.mark.skip(reason="yalniz Windows")
+def test_skip_exception_zorunlu_dalli():
+    if not (KOK / "y").exists():
+        if ZORUNLU:
+            raise AssertionError("zorunlu kipte eser yok")
+        raise pytest.skip.Exception("y yok")
+def test_xfail_bagli():
+    if PWSH is None and not capraz.ZORUNLU:
+        pytest.xfail("pwsh yok")
+def test_cagrisiz_raise_bagli():
+    if not (KOK / "y").exists():
+        if capraz.ZORUNLU:
+            pytest.fail("zorunlu")
+        raise unittest.SkipTest
+def test_ciplak_raise_dusurur():
+    try:
+        import yaml  # noqa: F401
+    except ImportError:
+        if capraz.ZORUNLU:
+            raise
+        pytest.skip("yaml yok")
+def test_kisa_devre_bagli():
+    capraz.ZORUNLU or (KOK / "y").exists() or pytest.skip("y yok")
+def test_for_else_bagli():
+    for p in (KOK / "a.exe",):
+        if p.is_file():
+            break
+    else:
+        if capraz.ZORUNLU:
+            pytest.fail("aday yok")
+        pytest.skip("aday yok")
+def _hesapla():
+    return int("x")
+def test_genis_except_dolayli_ithalsiz():
+    try:
+        _hesapla()
+    except Exception:
+        pytest.skip("ice aktarma degil, eser degil")
+def test_izin_hatasi_platform():
+    try:
+        (KOK / "l").symlink_to(KOK)
+    except OSError:
+        pytest.skip("symlink izni yok - platform")
+"""
+
+
+def test_KARSIT_KANIT_TUR3_tanim_dolayli_ithal_atlama_esdegeri_ve_saran_bicimler_HAM_sayilir():
+    """c2 / c2b (ad ya da ortam adı TANIMIYLA yanlış), c4b (yardımcıda içe aktarma, 2 düzey), c8 / c9 (`skip.Exception` / `xfail` /
+    `SkipTest` / `skipTest` / işaret xfail / `condition=` / ikinci koşul / koşullu `mark.skip`), c11 (saran eser dışı koşul + erken
+    dönüş; kısa devre, koşullu ifade, `for … else`), c12 (atlama istisnası yükselten `raise` düşürme sayılmaz) — HER biri HAM."""
+    beklenen = _isaretli(_HAM_TUR3)
+    bulunan = {a.satir for a in tara(_HAM_TUR3, "sentetik_ham_tur3.py")}
+    kacan = {s: beklenen[s] for s in sorted(set(beklenen) - bulunan)}
+    fazla = sorted(bulunan - set(beklenen))
+    assert not kacan and not fazla, (
+        f"tarayıcı ZORUNLU kipte ATLAYAN biçimi BAĞLI / eser dışı sanıyor (kaçırılan): {kacan} · fazladan ham sayılan satır: {fazla}"
+    )
+
+
+def test_KARSIT_KANIT_TUR3_dogru_tanimli_BAGLI_ve_eser_DISI_bicimleri_saymaz():
+    """Doğru ortam adlı yerel `ZORUNLU`, `capraz`tan içe aktarılan ad, `zorunlu` döndüren yerel işlev, `getenv` + `or capraz.ZORUNLU`,
+    sabite bağlı ortam adı, eserli koşulu bağlı iki koşullu işaret, bağlı / koşulsuz xfail, `if ZORUNLU: raise AssertionError` +
+    `raise skip.Exception`, ImportError'ı yeniden yükselten çıplak `raise`, bağlı kısa devre / `for … else`, içe aktarmasız dolaylı
+    `try`, `OSError` (izin / platform) → HAM DEĞİL."""
+    bulunan = tara(_BAGLI_TUR3, "sentetik_bagli_tur3.py")
+    assert bulunan == [], (
+        f"ZORUNLU kipte DÜŞEN (tanımıyla bağlı) / eser dışı atlama ham sayıldı (sahte kırmızı): {bulunan}"
     )

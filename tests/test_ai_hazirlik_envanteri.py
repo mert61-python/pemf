@@ -255,7 +255,7 @@ def test_envanter_yollari_model_paketi_listeleriyle_TUTARLI():
     sys.path.insert(0, str(_KOK / "build_tools"))
     try:
         mmz = importlib.import_module("make_model_zip")
-    except Exception as e:
+    except BaseException as e:  # D5-L TUR 3 (c7): içe aktarmada `sys.exit` (SystemExit) da teşhisli düşer, çöküş değil
         pytest.fail(
             f"İZLENEN build_tools/make_model_zip.py içe aktarılamadı ({type(e).__name__}: {e}) — "
             "paket listeleri okunamıyor; atlamak envanter ↔ paket tutarlılık kapısını kör ederdi"

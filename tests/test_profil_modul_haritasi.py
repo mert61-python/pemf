@@ -42,7 +42,7 @@ def _paket_haritasi() -> dict[str, str]:
     sys.path.insert(0, str(_KOK / "build_tools"))
     try:
         mmz = __import__("make_model_zip")
-    except Exception as e:
+    except BaseException as e:  # D5-L TUR 3 (c7): içe aktarmada `sys.exit` (SystemExit) da teşhisli düşer, çöküş değil
         pytest.fail(
             f"İZLENEN build_tools/make_model_zip.py içe aktarılamadı ({type(e).__name__}: {e}) — "
             "profil paket listesi okunamıyor; atlamak profil ↔ Rust tablosu kapısını kör ederdi"
