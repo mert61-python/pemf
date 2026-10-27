@@ -393,6 +393,110 @@ def test_KARSIT_KANIT_revoke_pinleri_SILINEN_revoke_u_YAKALAR(sql_bodies):
         test_KRITIK_anona_ACILMAYAN_SECURITY_DEFINER_fonksiyonun_anon_yetkisi_REVOKE_edilir(bozuk)
 
 
+def _beklenen_anon_rpc() -> set[str]:
+    """Anon'a BİLEREK açık RPC adları — TEK KAYNAK `scripts/supabase_sql._BEKLENEN_ANON_RPC` (canlı `--denetim` ile AYNI liste;
+    kopya değil, İÇE AKTARILIR)."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("supabase_sql_d510", _KOK / "scripts" / "supabase_sql.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    liste = set(mod._BEKLENEN_ANON_RPC)
+    assert len(liste) >= 5, f"VAKUM: beklenen anon RPC listesi {sorted(liste)}"
+    return liste
+
+
+def _sd_yetki_ihlalleri(sql_bodies: dict[str, str], beklenen_anon: set[str]) -> list[str]:
+    """D5.10 (B-9.14): her SECURITY DEFINER fonksiyon (ad + arite) için, TÜM dosyaların birleşiminde:
+    · anon: beklenen listede DEĞİLSE anon/PUBLIC'e grant YOK ve `revoke … from anon` (şema geneli dahil) VAR;
+    · authenticated (yine beklenen liste DIŞI): o imzaya `grant … to authenticated` (bilerek açılmış kullanıcı RPC'si) YOKSA
+      `revoke … from authenticated` VAR. Beklenen (anon'a bilerek açık) RPC'ler anon anahtarıyla zaten çağrılabilir.
+    `revoke … from public` tek başına YETMEZ (Supabase yeni fonksiyona anon + authenticated'a AYRICA execute verir)."""
+    sd = _security_definer_fonksiyonlar(sql_bodies)
+    yetkiler = [y for govde in sql_bodies.values() for y in _fonksiyon_yetki_imzalari(govde)]
+
+    def _var(tur: str, roller: set[str], ad: str, arite: int, *, joker: bool) -> bool:
+        return any(t == tur and r & roller and _imza_eslesir(i, ad, arite, joker=joker) for t, i, r in yetkiler)
+
+    ihlal = []
+    for ad, n in sorted(sd):
+        if ad not in beklenen_anon:
+            if _var("grant", {"anon", "public"}, ad, n, joker=False):
+                ihlal.append(f"{ad}({n} arg): beklenen listede DEĞİL ama anon/PUBLIC'e EXECUTE grant'ı var")
+            if not _var("revoke", {"anon"}, ad, n, joker=True):
+                ihlal.append(f"{ad}({n} arg): anon EXECUTE geri ALINMIYOR")
+            if not _var("grant", {"authenticated"}, ad, n, joker=False) and not _var(
+                "revoke", {"authenticated"}, ad, n, joker=True
+            ):
+                ihlal.append(f"{ad}({n} arg): authenticated EXECUTE ne bilerek verilmiş ne geri alınmış")
+    return ihlal
+
+
+def test_KRITIK_D5_10_SECURITY_DEFINER_anon_ve_authenticated_EXECUTE_yalniz_BILEREK(sql_bodies):
+    """D5.10 · B-9.14: anon-beklenen liste `scripts/supabase_sql`'den İÇE AKTARILIR; kalan her SECURITY DEFINER için anon VE
+    authenticated EXECUTE geri alınmış olmalı (authenticated'a bilerek grant edilen kullanıcı RPC'leri hariç). ÖLÇÜLEN KÖRLÜK:
+    `jeton_donem_yenile` revoke'undan `authenticated` silinince (oturumlu her kullanıcı kendine SINIRSIZ jeton yazar) eski kapı YEŞİLDİ."""
+    ihlal = _sd_yetki_ihlalleri(sql_bodies, _beklenen_anon_rpc())
+    assert not ihlal, f"SECURITY DEFINER yetki ihlali: {ihlal}"
+
+
+def test_KRITIK_D5_10_beklenen_anon_listesi_depoda_ANONA_ACILANLARLA_ESIT(sql_bodies):
+    """Liste politikadır: içine bir ad eklemek (ör. `jeton_donem_yenile`) o fonksiyonun anon revoke şartını SESSİZCE kaldırırdı.
+    Listedeki her ad depoda anon'a gerçekten grant edilen bir SECURITY DEFINER olmalı (ve tersi) — boş / bayat beklenti yok."""
+    sd_adlari = {a for a, _ in _security_definer_fonksiyonlar(sql_bodies)}
+    yetkiler = [y for govde in sql_bodies.values() for y in _fonksiyon_yetki_imzalari(govde)]
+    anona_grant = {
+        a
+        for t, imzalar, r in yetkiler
+        if t == "grant" and r & {"anon", "public"}
+        for a, _n in imzalar
+        if a in sd_adlari
+    }
+    beklenen = _beklenen_anon_rpc()
+    assert beklenen == anona_grant, (
+        f"beklenen anon listesi ile depodaki anon grant'ları AYRIŞTI — yalnız listede: {sorted(beklenen - anona_grant)}, "
+        f"yalnız depoda: {sorted(anona_grant - beklenen)}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("ek_sql", "beklenen"),
+    [
+        (
+            "create or replace function public.yeni_rpc(p uuid) returns void language sql security definer set search_path = public "
+            "as $$ select 1 $$; revoke all on function public.yeni_rpc(uuid) from public;",
+            "yeni_rpc(1 arg): anon EXECUTE geri ALINMIYOR",
+        ),
+        (
+            "create or replace function public.yeni_rpc(p uuid) returns void language sql security definer set search_path = public "
+            "as $$ select 1 $$; revoke all on function public.yeni_rpc(uuid) from public, anon;",
+            "yeni_rpc(1 arg): authenticated EXECUTE ne bilerek verilmiş ne geri alınmış",
+        ),
+        (
+            "create or replace function public.yeni_rpc(p uuid) returns void language sql security definer set search_path = public "
+            "as $$ select 1 $$; revoke all on function public.yeni_rpc(uuid) from public, anon, authenticated; "
+            "grant execute on function public.yeni_rpc(uuid) to anon;",
+            "yeni_rpc(1 arg): beklenen listede DEĞİL ama anon/PUBLIC'e EXECUTE grant'ı var",
+        ),
+    ],
+    ids=["yalniz_from_public", "authenticated_acik", "listesiz_anon_grant"],
+)
+def test_KARSIT_KANIT_D5_10_kapi_yeni_SECURITY_DEFINER_dosyasini_YAKALAR(sql_bodies, ek_sql, beklenen):
+    bozuk = {**sql_bodies, "zz_d510_sonda.sql": ek_sql}
+    assert beklenen in _sd_yetki_ihlalleri(bozuk, _beklenen_anon_rpc())
+
+
+def test_KARSIT_KANIT_D5_10_bilerek_acik_kullanici_RPC_si_IHLAL_sayilmaz(sql_bodies):
+    """Aşırı genişleme koruması: `revoke … from public, anon` + `grant … to authenticated` (abonelik_getir deseni) temizdir."""
+    ek = (
+        "create or replace function public.yeni_okuma() returns void language sql security definer set search_path = public "
+        "as $$ select 1 $$; revoke all on function public.yeni_okuma() from public, anon; "
+        "grant execute on function public.yeni_okuma() to authenticated;"
+    )
+    ihlal = _sd_yetki_ihlalleri({**sql_bodies, "zz_d510_temiz.sql": ek}, _beklenen_anon_rpc())
+    assert not [i for i in ihlal if i.startswith("yeni_okuma")]
+
+
 def test_security_definer_fonksiyonlari_sabit_search_path_kullanir(sql_bodies):
     """search_path sabitlenmezse arayan, fonksiyonun cozdugu adlari kacirabilir (yetki yukseltme)."""
     bulunan = 0
