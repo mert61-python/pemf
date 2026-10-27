@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 // tarayıcı hedefli ve `npm run build` içindeki `tsc -b` test dosyalarını da derliyor,
 // node tipleri olmadığı için build TS2591 ile DÜŞER (2026-08-06'da bu şekilde patladı).
 import SRC from '../AuthModal.tsx?raw'
+import { kaynakSoy } from '../../__tests__/_soyucu'
 
 /* ============================================================
    AuthModal — ODAK KAYBI REGRESYONU (2026-08-06, sahip bildirimi)
@@ -56,8 +57,10 @@ describe('AuthModal odak hapsi', () => {
     expect(SRC).toMatch(/requestCloseRef\.current\s*=\s*requestClose/)
   })
 
-  it('requestClose hâlâ kirli-form onayı yapar (kazara kapanma koruması kaybolmadı)', () => {
-    expect(SRC).toContain('window.confirm')
-    expect(SRC).toMatch(/const dirty = \[/)
+  // D5.09 (B-7.18): eskiden `toContain('window.confirm')` + `/const dirty = \[/` — ilki YALNIZ bir YORUMDAKİ kelimeyi buluyordu
+  // (`if (void dirty)` yeşil kalıyor, yorum düzenlemesi kırmızıya düşüyordu). Onay DAVRANIŞI artık gerçek bileşenle ölçülür:
+  // `auth-modal-kirli-form.davranis.test.ts`. Burada yalnız yorumsuz KODDA tarayıcının yerleşik onay kutusu olmadığı denetlenir.
+  it('kirli-form onayı MODAL İÇİNDE — yorumsuz kodda tarayıcı `confirm(` çağrısı YOK (davranış: auth-modal-kirli-form.davranis)', () => {
+    expect(kaynakSoy(SRC)).not.toMatch(/\bconfirm\s*\(/)
   })
 })
