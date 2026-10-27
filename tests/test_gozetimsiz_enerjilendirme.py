@@ -62,6 +62,23 @@ def test_KRITIK_NEGATIF_sure_REDDEDILIR():
         CoilControlPayload(start=True, freq=20, duty=30, duration=-60)
 
 
+def test_KRITIK_D551_BATCH_ucu_NEGATIF_sureyi_422_ile_REDDEDER(monkeypatch):
+    """D5.51 (B-10.125): yukarıdaki kapı yalnız `CoilControlPayload` MODELİNİ ölçüyordu — `BatchCoilPayload.duration`dan `ge=0`
+    silinince batch ucu `duration=-60`ı kabul ediyor ve kapı YEŞİL kalıyordu. GERÇEK uç: 422, hiçbir bobine komut GİTMEZ.
+    MUTASYON: `BatchCoilPayload.duration = Field(default=0, ge=0)` → `duration: int = 0` → KIRMIZI."""
+    import servers.api_server as api
+    from fastapi.testclient import TestClient
+
+    yayinlar: list = []
+    monkeypatch.setattr(api, "_mqtt_publish", lambda *a, **k: yayinlar.append(a) or True)
+    monkeypatch.setattr(api, "_ws_broadcast_sync", lambda *a, **k: None)
+    r = TestClient(api.app).post(
+        "/api/coil/batch", json={"coil_ids": [1, 2], "start": True, "freq": 20, "duty": 30, "duration": -60}
+    )
+    assert r.status_code == 422, f"batch uç NEGATİF süreyi kabul etti: {r.status_code} {r.text[:200]}"
+    assert yayinlar == [], f"reddedilen istekte bobin komutu yayınlandı: {yayinlar!r}"
+
+
 def test_sifir_sure_hala_KABUL_edilir_karsit_kanit():
     """Karşı-kanıt: `duration=0` ("süre belirtme") GEÇERLİ bir girdidir ve reddedilmemeli —
     yalnızca sonsuz sürmemeli. Bunu da reddetmek Kontrol Paneli'ni bozardı."""

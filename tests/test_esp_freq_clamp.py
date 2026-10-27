@@ -144,14 +144,61 @@ def test_KARSIT_KANIT_seans_yolu_tipik_frekansa_DOKUNMAZ(monkeypatch):
     assert payload.get("freq") == 100.0, f"tipik 100 Hz değişti: {payload!r}"
 
 
-def test_KARSIT_KANIT_manuel_esp_yolu_normalize_KULLANIR():
-    """Regresyon: manuel /api/coil control ESP dalı normalize_esp_frequency_hz çağırıyor mu."""
-    import inspect
+# ── D5.51 (B-10.178): TEKİL ve BATCH uçlar DAVRANIŞLA ──────────────────────────────────────────────────────────────────────
+# Eskiden burada `test_KARSIT_KANIT_manuel_esp_yolu_normalize_KULLANIR` vardı: `inspect.getsource(api)` içinde
+# "normalize_esp_frequency_hz" DİZGESİNİ arıyordu — seans yolu (ya da herhangi bir yorum) bu adı taşıdığı sürece tekil
+# (`esp_freq = payload.freq`) ve batch (`_b_esp_freq = payload.freq`) normalizasyonu silinse de YEŞİLDİ (ölçüldü). Yerine
+# GERÇEK uçlar koşar (PEMF_ESP_ENABLED=1, `_mqtt_publish` KAYDEDİCİ — gerçek MQTT YOK) ve ESP'ye GİDEN yük ölçülür.
 
+
+def _esp_ucu_yukunu_yakala(monkeypatch, yol: str, govde: dict) -> dict:
     import servers.api_server as api
+    from fastapi.testclient import TestClient
 
-    src = inspect.getsource(api)
-    assert "normalize_esp_frequency_hz" in src, (
-        "manuel ESP yolu ESP freq normalize kullanmıyor → >1000 komut 8266'da reddedilir / S3'te kırpılır"
+    yayinlar: list = []
+    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
+    monkeypatch.setattr(api, "_mqtt_publish", lambda t, p=None, *a, **k: yayinlar.append((t, dict(p or {}))) or True)
+    monkeypatch.setattr(
+        api, "_register_ack", lambda *a, **k: None
+    )  # onay bekçisi bu kapının konusu değil (thread sızmasın)
+    monkeypatch.setattr(api, "_ws_broadcast_sync", lambda *a, **k: None)
+    monkeypatch.setattr(api, "_push_notification", lambda *a, **k: None)
+    try:
+        r = TestClient(api.app).post(yol, json=govde)
+        assert r.status_code == 200, f"aparat: {yol} {r.status_code} {r.text[:200]}"
+        esp = [p for t, p in yayinlar if t == f"pemf/coil/{ESP_BOBIN}/control" and p.get("command") == "start"]
+        assert esp, f"aparat: ESP bobini {ESP_BOBIN} START yayını görülmedi: {yayinlar!r}"
+        return esp[-1]
+    finally:
+        try:
+            api._finish_coil_run(ESP_BOBIN)
+        except Exception:
+            pass
+
+
+@pytest.mark.parametrize("istenen,beklenen", [(5000, 1000.0), (1001, 1000.0), (100, 100.0)])
+def test_KRITIK_D551_TEKIL_uc_esp_freqini_1000e_clampler(monkeypatch, istenen, beklenen):
+    """MUTASYON: tekil uçta `esp_freq = normalize_esp_frequency_hz(payload.freq)` → `esp_freq = payload.freq` → KIRMIZI."""
+    yuk = _esp_ucu_yukunu_yakala(
+        monkeypatch, f"/api/coil/{ESP_BOBIN}/control", {"start": True, "freq": istenen, "duty": 25, "duration": 60}
     )
+    assert yuk.get("freq") == beklenen, (
+        f"tekil uç ESP'ye {yuk.get('freq')!r} Hz gönderdi (beklenen {beklenen}): {yuk!r}"
+    )
+
+
+@pytest.mark.parametrize("istenen,beklenen", [(5000, 1000.0), (1001, 1000.0), (100, 100.0)])
+def test_KRITIK_D551_BATCH_uc_esp_freqini_1000e_clampler(monkeypatch, istenen, beklenen):
+    """MUTASYON: batch uçta `_b_esp_freq = _nesp(payload.freq)` → `_b_esp_freq = payload.freq` → KIRMIZI."""
+    yuk = _esp_ucu_yukunu_yakala(
+        monkeypatch,
+        "/api/coil/batch",
+        {"coil_ids": [ESP_BOBIN], "start": True, "freq": istenen, "duty": 25, "duration": 60},
+    )
+    assert yuk.get("freq") == beklenen, (
+        f"batch uç ESP'ye {yuk.get('freq')!r} Hz gönderdi (beklenen {beklenen}): {yuk!r}"
+    )
+
+
+def test_esp_alt_siniri_1_hz():
     assert FREQ_MIN_HZ == 1.0
