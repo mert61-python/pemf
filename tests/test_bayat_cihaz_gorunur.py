@@ -97,8 +97,10 @@ def _istemci_pencere_sn() -> int:
     hasta-görünür bir değişmezi kilitler: sunucu tazelik penceresi istemcinin `STALE_MS`inden
     GENİŞ olmalı, aksi halde uzun süredir kapalı cihaz `bayat` yerine `yok` döner ve
     kullanıcıya "kodu kontrol edin" denir."""
-    if not _ISTEMCI_TS.is_file():
-        pytest.skip(f"istemci kaynağı bu çalışma kopyasında yok (ayrı depo): {_ISTEMCI_TS}")
+    import capraz
+
+    # D5-F (K5-F P1): eskiden düz `pytest.skip` — İZLENEN ağaç; zorunlu kipte DÜŞER.
+    capraz.atla_yoksa("apps/ui/src/services/deviceRegistry.ts", izlenen=True)
     ts = _ISTEMCI_TS.read_text(encoding="utf-8")
     m = re.search(r"const\s+STALE_MS\s*=\s*([0-9*\s]+);", ts)
     assert m, "istemcide STALE_MS bulunamadi (isim degistiyse bu kapi guncellenmeli)"

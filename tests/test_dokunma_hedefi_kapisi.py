@@ -29,6 +29,7 @@ sayan ilk sürümde bobin seçicinin `rs(40)`'a geri dönmesi kapıyı KIRMIZI Y
 import pathlib
 import re
 
+import capraz
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
@@ -47,10 +48,15 @@ KALAN_IHLAL = 116
 # Gerekçeli muafiyetler (perde/kart gibi dokunuş yutucular).
 MUAF_SAYISI = 2
 
-pytestmark = pytest.mark.skipif(
-    not (_PF / "components" / "ui" / "IconButton.tsx").exists(),
-    reason="apps/ui/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
-)
+
+def _arayuz_kaynagi():
+    """D5-F (K5-F P1): `apps/ui/` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden modül düzeyi düz `skipif(not ….exists())` idi: zorunlu kipte de sessizce ATLIYORDU ve ağaca muhtaç
+    OLMAYAN öz-testi (`test_kapi_gercekten_olcuyor`) de atlatıyordu. Artık yalnız ağacı OKUYAN yolda çağrılır.
+    """
+    capraz.atla_yoksa("apps/ui/src/components/ui/IconButton.tsx", izlenen=True)
+
 
 _DOKUNULABILIR = re.compile(r"<(Pressable|TouchableOpacity)\b(.*?)(?<!=)>", re.DOTALL)
 _STIL_REF = re.compile(r"styles\.(\w+)")
@@ -109,6 +115,7 @@ def _yeterli_stil(govde: str) -> bool:
 
 def _tara():
     """(ihlal listesi, muaf sayısı) döndürür."""
+    _arayuz_kaynagi()
     ihlal, muaf = [], 0
     for p in sorted(_PF.rglob("*.tsx")):
         if "__tests__" in p.parts:
@@ -152,6 +159,7 @@ def test_muafiyetler_gerekceli_ve_sayili():
 
 def test_ortak_ilkeller_tabani_kaynakta_tasiyor():
     """Cırcırın dayanağı: ilkellerin tabanı ölçekle AŞAĞI inmez."""
+    _arayuz_kaynagi()
     for ad, beklenen in (("IconButton.tsx", "touch.min"), ("Chip.tsx", "touch.sm")):
         src = (_PF / "components" / "ui" / ad).read_text(encoding="utf-8")
         assert beklenen in src, f"{ad} dokunma tabanını bırakmış"

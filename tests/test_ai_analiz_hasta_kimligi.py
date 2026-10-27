@@ -30,6 +30,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -231,7 +232,6 @@ def test_KRITIK_patient_id_GONDERMEYEN_eski_istemci_BOZULMAZ(tmp_path, monkeypat
 # ============================================================================
 
 
-@pytest.mark.skipif(not (_PF / "screens").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_arayuz_patient_id_GONDERIYOR():
     """Saf hesap doğru olsa bile arayüz kimliği göndermiyorsa taşıma ileriye dönük çalışmaz.
 
@@ -241,6 +241,8 @@ def test_KRITIK_arayuz_patient_id_GONDERIYOR():
     eskiden kimlik tamamlanma anındaki modül değişkeninden okunuyordu (uçuştaki analiz ad başka, kimlik başka hastaya). Bu
     metin pini yeni sözleşmeyi izler; davranış kapısı `apps/ui/src/screens/__tests__/aiHubUcustakiAnaliz.E09.Y87.web.test.tsx`.
     """
+    # D5-F: eski düz skipif — İZLENEN ağaç, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("apps/ui/src/screens", izlenen=True)
     from c_soyucu import c_soy
 
     src = c_soy((_PF / "screens" / "AiHubScreen.tsx").read_text(encoding="utf-8"))
@@ -248,7 +250,6 @@ def test_KRITIK_arayuz_patient_id_GONDERIYOR():
     assert "currentPatient = { id: selectedPatient?.id" in src, "secili hasta kimligi HIC yazilmiyor"
 
 
-@pytest.mark.skipif(not (_PF / "utils").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_A62_kimlikli_hastada_AD_YEDEGI_YOK():
     """⚠️ D2.E11 · SAHİP KARARI A-62 (2-C) bu pinin ESKİ iddiasını ("ad yedeği KALDIRILAMAZ") BİLİNÇLİ olarak tersine çevirdi:
     kimliği olan hasta yalnız kimliğiyle aranır — ad yedeği aynı adlı ikinci hayvana birincinin analizini gösteriyordu
@@ -257,6 +258,8 @@ def test_KRITIK_A62_kimlikli_hastada_AD_YEDEGI_YOK():
 
     MUTASYON: `hastaAnahtarlari`na ad yedeğini geri koy (`[kimlik, ad]`) → KIRMIZI.
     """
+    # D5-F: eski düz skipif — İZLENEN ağaç, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("apps/ui/src/utils", izlenen=True)
     from c_soyucu import c_soy
 
     src = c_soy((_PF / "utils" / "sonAnaliz.ts").read_text(encoding="utf-8"))

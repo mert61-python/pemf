@@ -21,15 +21,21 @@ SÖZLEŞME:
 import pathlib
 import re
 
+import capraz
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
 _PF = _KOK / "apps" / "ui" / "src"
 
-pytestmark = pytest.mark.skipif(
-    not (_PF / "theme" / "fonts.ts").exists(),
-    reason="apps/ui/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
-)
+
+@pytest.fixture(autouse=True)
+def _arayuz_kaynagi():
+    """D5-F (K5-F P1): `apps/ui/` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden modül düzeyi düz `skipif(not ….exists())` idi: zorunlu kipte de sessizce ATLIYORDU (D4.04 sınıfı; klasör
+    taşıması yayın makinesinde bu kapıyı susturuyordu). Dosyadaki HER test bu ağacı okur.
+    """
+    capraz.atla_yoksa("apps/ui/src/theme/fonts.ts", izlenen=True)
 
 
 def _oku(bagil: str) -> str:

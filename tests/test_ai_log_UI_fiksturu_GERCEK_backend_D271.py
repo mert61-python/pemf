@@ -17,6 +17,7 @@ import json
 import os
 from pathlib import Path
 
+import capraz
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
@@ -99,9 +100,10 @@ def test_KRITIK_arayuz_fiksturu_GERCEK_ai_log_yanitiyla_AYNI(tmp_path, monkeypat
     )
 
 
-@pytest.mark.skipif(not _FIKSTUR.is_file(), reason="fikstur henuz uretilmedi")
 def test_KARSIT_fikstur_kusuru_TASIR_ayni_adli_iki_kimlik_ve_baska_hekimin_hastasi():
     """Fikstürün kendisi kusuru taşımalı (yoksa arayüz kapısı kör): aynı adlı iki kimlik + kimliksiz eski kayıt + başka hekim."""
+    # D5-F: eski düz skipif — İZLENEN ağaç, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("apps/ui/src/screens/__tests__/__fixtures__/aiLog.D271.json", izlenen=True)
     veri = json.loads(_FIKSTUR.read_text(encoding="utf-8"))["data"]
     mia = {it["patient_uuid"] for it in veri if it["patient_name"] == "Mia"}
     assert mia == {M1, M2, ""}

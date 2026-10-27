@@ -357,7 +357,17 @@ _TSX_ALAN = re.compile(
     re.DOTALL,
 )
 
-tsx_yok = pytest.mark.skipif(not _TSX.exists(), reason="apps/ui/ kaynak agaci yok (yalniz backend paketi)")
+
+@pytest.fixture
+def _tsx_kaynagi():
+    """D5-F (K5-F P1): `AiHubScreen.tsx` İZLENEN ağaçtadır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ (eskiden düz
+    `skipif(not _TSX.exists())`: zorunlu kipte de sessizce atlıyordu)."""
+    import capraz
+
+    capraz.atla_yoksa("apps/ui/src/screens/AiHubScreen.tsx", izlenen=True)
+
+
+tsx_yok = pytest.mark.usefixtures("_tsx_kaynagi")
 
 
 def _tsx_tablosu() -> dict:

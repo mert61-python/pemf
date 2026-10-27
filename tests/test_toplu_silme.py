@@ -33,6 +33,7 @@ import re
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -323,13 +324,14 @@ def _tsx(bagil: str) -> str:
     return c_soy((_PF / bagil).read_text(encoding="utf-8"))
 
 
-@pytest.mark.skipif(not (_PF / "screens").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_her_iki_ekran_da_ORTAK_kancayi_kullaniyor():
     """MUTASYON: bir ekrandan `useCokluSecim(` çağrısını kaldır → KIRMIZI.
 
     ⚠️ İki ekrana iki ayrı seçim mantığı yazılırsa biri "hayalet seçim" korumasını taşır,
     öbürü taşımaz ve operatör GÖRMEDİĞİ kayıtları silebilir — yalnız tek ekranda.
     """
+    # D5-F: eski düz skipif — İZLENEN ağaç, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("apps/ui/src/screens", izlenen=True)
     for ekran in TOPLU_SILME_EKRANLARI:
         src = _tsx(ekran)
         # ⚠️ Çıpa "= useCokluSecim"e pinli: çağrı tip parametresi alabiliyor
@@ -338,7 +340,6 @@ def test_KRITIK_her_iki_ekran_da_ORTAK_kancayi_kullaniyor():
         assert "<SecimCubugu" in src, f"{ekran} secim seridini gostermiyor -> dugme erisilemez"
 
 
-@pytest.mark.skipif(not (_PF / "screens").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_arayuz_TOPLU_uca_gidiyor_N_istek_DEGIL():
     """⚠️ İstemci N ayrı silme isteği atarsa atomiklik KAYBOLUR: dizi yarısında koparsa
     operatör hangi kayıtların gittiğini bilemez. Kapı, toplu ucun çağrıldığını kanıtlar.
@@ -346,19 +347,22 @@ def test_KRITIK_arayuz_TOPLU_uca_gidiyor_N_istek_DEGIL():
     MUTASYON: `delete_bulk` çağrısını `kimlikler.map(id => apiPost("/history/delete", ...))`
     döngüsüne çevir → KIRMIZI.
     """
+    # D5-F: eski düz skipif — İZLENEN ağaç, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("apps/ui/src/screens", izlenen=True)
     gecmis = _tsx("screens/TreatmentHistoryScreen.tsx")
     assert '"/history/delete_bulk"' in gecmis, "gecmis ekrani TOPLU uca gitmiyor"
     hasta = _tsx("screens/PatientScreen.tsx")
     assert '"/patients/delete_bulk"' in hasta, "hasta ekrani TOPLU uca gitmiyor"
 
 
-@pytest.mark.skipif(not (_PF / "services").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_onay_dizgisi_backend_ile_AYNI():
     """⚠️ Arayüz ile backend farklı dizgi taşırsa "Sil" düğmesi SESSİZCE 400 alır: kullanıcıya
     "başarısız" der, sebebini söylemez ve hata bir sürüm boyunca fark edilmez.
 
     MUTASYON: `topluSilme.ts`teki dizgiyi değiştir → KIRMIZI.
     """
+    # D5-F: eski düz skipif — İZLENEN ağaç, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("apps/ui/src/services", izlenen=True)
     src = (_PF / "services" / "topluSilme.ts").read_text(encoding="utf-8")
     m = re.search(r'TOPLU_SILME_ONAYI\s*=\s*"([^"]+)"', src)
     assert m, "TOPLU_SILME_ONAYI sabiti bulunamadi -> capa bayatladi"

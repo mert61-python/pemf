@@ -19,6 +19,7 @@ SÖZLEŞME: `<Modal` çizen her kaynak dosya ya
 import pathlib
 import re
 
+import capraz
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
@@ -30,10 +31,15 @@ _ILKEL = "components/ui/ScrollableModalCard.tsx"
 # Kabuk (AppShell) modalları: "Daha Fazla" alt sayfası ve bildirim paneli. Kendi maxHeight'leri
 # pencere yüksekliğinden hesaplanır ve içlerinde ScrollView vardır → (b) dalından geçerler.
 
-pytestmark = pytest.mark.skipif(
-    not (_PF / "components" / "ui" / "ScrollableModalCard.tsx").exists(),
-    reason="apps/ui/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
-)
+
+@pytest.fixture(autouse=True)
+def _arayuz_kaynagi():
+    """D5-F (K5-F P1): `apps/ui/` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden modül düzeyi düz `skipif(not ….exists())` idi: zorunlu kipte de sessizce ATLIYORDU (D4.04 sınıfı; klasör
+    taşıması yayın makinesinde bu kapıyı susturuyordu). Dosyadaki HER test bu ağacı okur.
+    """
+    capraz.atla_yoksa("apps/ui/src/components/ui/ScrollableModalCard.tsx", izlenen=True)
 
 
 def _modal_dosyalari():

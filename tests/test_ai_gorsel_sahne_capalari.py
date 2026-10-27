@@ -20,6 +20,7 @@ from __future__ import annotations
 import pathlib
 import sys
 
+import capraz
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
@@ -27,10 +28,16 @@ _PF = _KOK / "apps" / "ui" / "src"
 if str(pathlib.Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-pytestmark = pytest.mark.skipif(
-    not (_PF / "components" / "ui" / "GorselSahne.tsx").exists(),
-    reason="apps/ui/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
-)
+
+@pytest.fixture(autouse=True)
+def _arayuz_kaynagi():
+    """D5-F (K5-F P1): `apps/ui/` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden modül düzeyi düz `skipif(not ….exists())` idi: zorunlu kipte de sessizce ATLIYORDU (D4.04 sınıfı; klasör
+    taşıması yayın makinesinde bu kapıyı susturuyordu). Dosyadaki HER test bu ağacı okur.
+    """
+    capraz.atla_yoksa("apps/ui/src/components/ui/GorselSahne.tsx", izlenen=True)
+
 
 #: `<GorselSahne` beklenen sayısı — 5 AI Hub modülü + PetOwner ekranı (aynı dosyada).
 #: ⚠️ SABİT SAYAÇ, ">= 1" DEĞİL: bir modül sessizce eski `<Image>`a geri dönerse yalnız O modülde

@@ -36,6 +36,7 @@ import ast
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -193,11 +194,12 @@ def test_KRITIK_AI_PRO_sahibi_ONAY_MUHRUNDEN_gelir():
 # ============================================================================
 
 
-@pytest.mark.skipif(not (_PF / "screens").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_kapsam_filtresi_kucuk_harf_KIYASI_yapiyor():
     """⚠️ DB'de sahip küçük harfe normalize ediliyor; arayüz de öyle kıyaslamalı. Biri
     değişirse hekim kendi kayıtlarını GÖREMEZ (sessiz kayıp, hata mesajı yok).
     """
+    # D5-F: eski düz skipif — İZLENEN ağaç, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("apps/ui/src/screens", izlenen=True)
     from c_soyucu import c_soy
 
     # ⚠️ ÇIPA GERÇEK KIYASA PİNLİ. İlk yazımda yalnız "toLowerCase()" aranıyordu ve mutasyonla
@@ -239,7 +241,6 @@ AI_LOG_CAGIRAN_EKRANLAR = (
 )
 
 
-@pytest.mark.skipif(not (_PF / "screens").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_ai_log_cagiran_HER_ekran_KAPSAM_suzuyor():
     """⚠️ `/api/ai/log` OPERATÖR SÜZGECİ DESTEKLEMEZ — tüm kliniğin analizlerini döndürür.
     Süzmeyen her çağrı, kapsam ayrımını O EKRANDA delen bir sızıntıdır.
@@ -249,6 +250,8 @@ def test_KRITIK_ai_log_cagiran_HER_ekran_KAPSAM_suzuyor():
 
     MUTASYON: herhangi bir ekrandan `inScope(` süzgecini kaldır → KIRMIZI.
     """
+    # D5-F: eski düz skipif — İZLENEN ağaç, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("apps/ui/src/screens", izlenen=True)
     from c_soyucu import c_soy
 
     eksik = []
@@ -266,7 +269,6 @@ def test_KRITIK_ai_log_cagiran_HER_ekran_KAPSAM_suzuyor():
     assert not eksik, "AI analiz gecmisi kapsam sizintisi: " + " | ".join(eksik)
 
 
-@pytest.mark.skipif(not (_PF / "screens").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_patients_OKUYAN_HER_dosya_KAPSAM_suzuyor_D268():
     """D2.68 (B-6.12): `GET /patients` sahip süzgeci DESTEKLEMEZ — tüm kliniğin hastalarını döndürür. Onu okuyan HER
     arayüz dosyası `inScope(` uygulamalı; `PatientGate` uygulamıyordu → ev sahibi başka sahibin hayvanını seçip ona AI
@@ -274,6 +276,8 @@ def test_KRITIK_patients_OKUYAN_HER_dosya_KAPSAM_suzuyor_D268():
 
     Liste ELLE TUTULMAZ: `/patients` okuyan dosyalar kaynaktan türetilir (yeni bir seçici süzmeyi unutursa KIRMIZI).
     MUTASYON: PatientGate'ten `inScope(` süzgecini kaldır → KIRMIZI."""
+    # D5-F: eski düz skipif — İZLENEN ağaç, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("apps/ui/src/screens", izlenen=True)
     import re
 
     from c_soyucu import c_soy
@@ -291,7 +295,6 @@ def test_KRITIK_patients_OKUYAN_HER_dosya_KAPSAM_suzuyor_D268():
     assert not eksik, f"/patients okuyup KAPSAM SUZMEYEN dosya (KVKK + yanlis hastaya yazma): {eksik}"
 
 
-@pytest.mark.skipif(not (_PF / "utils").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_EV_SAHIBI_tum_klinige_CIKAMAZ():
     """⚠️ KVKK kapısı (2026-08-08): ev sahibi profili "Tüm Klinik" kapsamına asla çıkamaz —
     sekme gizli olsa bile mantık `patientScope.effectiveScope`te kilitli.
@@ -301,6 +304,8 @@ def test_KRITIK_EV_SAHIBI_tum_klinige_CIKAMAZ():
     ⚠️ Y115 (2-C): ev sahibinin kapsamı kayıtlı operatörlü cihazda "sahibi" (sahipsiz HARİÇ), operatörsüz cihazda "mine" —
     ikisi de "all" DEĞİL; pin iki satırı birlikte ister. Davranış: apps/ui/src/screens/__tests__/evSahibiKapsami.Y115.web.test.tsx.
     """
+    # D5-F: eski düz skipif — İZLENEN ağaç, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("apps/ui/src/utils", izlenen=True)
     from c_soyucu import c_soy
 
     src = c_soy((_PF / "utils" / "patientScope.ts").read_text(encoding="utf-8"))
@@ -318,7 +323,6 @@ def _usecallback_govdesi(src: str, ad: str) -> str:
     return src[bas:son]
 
 
-@pytest.mark.skipif(not (_PF / "screens").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_AI_gecmisi_KIMLIK_kapisi_TEK_kaynak_OB4():
     """O-B.4 (2-B §6): AI Geçmişi'nde değerlendirme (`submitReview`), tekil silme (`kaydiSil`) ve toplu silme (`tumunuSil`)
     AYNI kimlik kapısından geçer — `patientScope.deleteScope(...).izinli` → `kimlikYok`. Eskiden değerlendirme kendi
@@ -326,6 +330,8 @@ def test_KRITIK_AI_gecmisi_KIMLIK_kapisi_TEK_kaynak_OB4():
     Davranış kolu: screens/__tests__/aiKimlikKapisi.OB4.web.test.tsx.
 
     MUTASYON: `submitReview`e kendi `!myEmail` kapısını geri koymak → KIRMIZI."""
+    # D5-F: eski düz skipif — İZLENEN ağaç, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("apps/ui/src/screens", izlenen=True)
     from c_soyucu import c_soy
 
     src = c_soy((_PF / "screens" / "AiHistoryScreen.tsx").read_text(encoding="utf-8"))
