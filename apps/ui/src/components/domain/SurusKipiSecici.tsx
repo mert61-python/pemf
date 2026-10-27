@@ -34,11 +34,9 @@ import { Text, View, StyleSheet, TouchableOpacity } from "react-native";
 import { colors, spacing, typography, touch } from "@/theme/tokens";
 import type { CoilStatus } from "@/types/domain";
 import { apiPost, platformConfirm } from "@/services/apiClient";
+import { STM_BOBIN_SAYISI as STM_BOBIN } from "@/services/bobinGorunurlugu";
 import i18n from "i18next";
 import { useTranslation } from "react-i18next";
-
-/** STM sürücüsüne bağlı bobin sayısı (1..7). Backend `STM_COIL_IDS` ile AYNI olmalı. */
-const STM_BOBIN = 7;
 
 /** TD6 · K8 (tezgâh Oturum 13): tek dokunuş, tam köprülü bobini DC bileşenli tek yönlü sürüşe KALICI geçiriyordu — onay ister.
  *  Ters yön (tek yönlüden çift yönlüye) firmware varsayılanına dönüştür; onay istemez. */
@@ -76,13 +74,9 @@ export function SurusKipiSecici({
     [coils],
   );
 
-  // Yetenek: bipolar sürülebilen bobinler. Backend `bipolarYetenek` gönderir; gelmediyse
-  // (eski backend) yedek kural bobin 1-5 → yanlış tarafa düşmemek için KISITLAYICI değil
-  // üretim gerçeğiyle aynı varsayılan.
-  const bipolarYetenek = useCallback(
-    (c: CoilStatus) => (typeof c.bipolarYetenek === "boolean" ? c.bipolarYetenek : c.id <= 5),
-    [],
-  );
+  // Yetenek: bipolar sürülebilen bobinler. A-65 (sahip): YALNIZ backend'in bildirdiği `bipolarYetenek` alanından — eski `id <= 5`
+  // yedeği kalktı. Alan yoksa bipolar İSTENMEZ (kilitli): bildirilmeyen yetenek varsayılmaz.
+  const bipolarYetenek = useCallback((c: CoilStatus) => c.bipolarYetenek === true, []);
 
   // Kullanıcı isteği. T-c: başlangıç backend'in KAYITLI isteği → yoksa kartın bildirdiği kip → yoksa varsayılan (yeteneksiz
   // bobin unipolar, yetenekli bipolar — firmware / backend varsayılanı `istenen maske = 0`).
@@ -91,7 +85,7 @@ export function SurusKipiSecici({
       const c = coils.find((k) => k.id === i + 1);
       if (typeof c?.unipolarIstek === "boolean") return c.unipolarIstek;
       if (typeof c?.unipolar === "boolean") return c.unipolar;
-      return (c?.bipolarYetenek ?? i < 5) === false;
+      return c?.bipolarYetenek !== true;
     }),
   );
   const [gonderiliyor, setGonderiliyor] = useState(false);

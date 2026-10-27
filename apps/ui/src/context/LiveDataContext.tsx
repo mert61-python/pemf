@@ -23,6 +23,7 @@ import { mockSnapshot } from "@/services/mockData";
 import { useNetworkReachability } from "@/hooks/useNetworkReachability";
 import { useForegroundReconnect } from "@/hooks/useForegroundReconnect";
 import { useStmBelirsiz } from "@/hooks/useStmBelirsiz";
+import { stmBobiniMi } from "@/services/bobinGorunurlugu";
 import type {
   ActiveTreatment,
   AppNotification,
@@ -38,7 +39,6 @@ import type {
 
 // ─── History max length ────────────────────────────────────────────────────
 const MAX_HISTORY = 2000;
-const STM_COIL_MAX_ID = 5;
 
 // AI Pro kapalı-döngü canlı telemetrisi (backend ai_router._ai_pro_loop yayını).
 export interface AiVisionData {
@@ -91,8 +91,10 @@ export interface AiVisionData {
   }[];
 }
 
+// D5.42 · İG-6.66: STM bobin aralığı TEK KAYNAKTAN (1..7). Eskiden yerel `STM_COIL_MAX_ID = 5` bobin 6-7'yi ESP sayıyordu:
+// STM koptuğunda 6-7 eski `running`/`connected` değeriyle kalıyordu (yanlış "bağlı"). Kopuşta durdurma görünürlüğü `useStmBelirsiz`'de.
 function isStmCoil(coilId: number): boolean {
-  return coilId >= 1 && coilId <= STM_COIL_MAX_ID;
+  return stmBobiniMi(coilId);
 }
 
 // #73: WS'ten gelen `any` sayısal alanlar string/undefined/NaN olabilir → .toFixed() RUNTIME CRASH

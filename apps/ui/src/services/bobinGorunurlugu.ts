@@ -31,6 +31,16 @@ export interface GorunurlukGirdisi {
 /** STM sürücüsüne bağlı, FİZİKSEL olarak var olan bobinler — daima çizilir. */
 export const STM_BOBIN_SAYISI = 7;
 
+/** Bobin STM sürücüsünde mi (1..{@link STM_BOBIN_SAYISI})? D5.42: bobin sınırı sabitleri (`id <= 7`, `STM_COIL_MAX_ID = 5`) yerine BU. */
+export function stmBobiniMi(id: number): boolean {
+  return id >= 1 && id <= STM_BOBIN_SAYISI;
+}
+
+/** Tüm slot kimlikleri: STM 1..{@link STM_BOBIN_SAYISI} + ESP slotu (ESP kodu silinmez; dönerse aynı slot — Y7 / A-04). */
+export function tumSlotIdleri(): number[] {
+  return Array.from({ length: STM_BOBIN_SAYISI + 1 }, (_, i) => i + 1);
+}
+
 /**
  * Çizilecek bobinleri süzer.
  *

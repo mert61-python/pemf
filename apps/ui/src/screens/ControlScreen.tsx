@@ -32,7 +32,7 @@ import { PatientGate } from "@/components/domain/PatientGate";
 import { ObservationNotesModal } from "@/components/domain/ObservationNotesModal";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { SurusKipiSecici } from "@/components/domain/SurusKipiSecici";
-import { gorunurBobinler, espSlotuGorunur, STM_BOBIN_SAYISI } from "@/services/bobinGorunurlugu";
+import { gorunurBobinler, espSlotuGorunur, STM_BOBIN_SAYISI, stmBobiniMi, tumSlotIdleri } from "@/services/bobinGorunurlugu";
 import { KendiDurdurmaIsareti } from "@/components/ui/KendiDurdurmaKontrolu";
 import { akimOlcumuAcik } from "@/utils/olculenAlan";
 import { hedefEtiketi } from "@/utils/seansDegerEtiketi";
@@ -122,7 +122,7 @@ export function ControlScreen() {
   const [masterPhase, setMasterPhase] = useState("0");
   const [masterDuration, setMasterDuration] = useState("20");
   const [selectedCoils, setSelectedCoils] = useState<Set<number>>(
-    new Set([1, 2, 3, 4, 5, 6, 7, 8])
+    new Set(tumSlotIdleri())
   );
 
   // ── AI Mod state ───────────────────────────────────────────────────────
@@ -142,7 +142,7 @@ export function ControlScreen() {
     (coil: { id: number; connected?: boolean }) =>
       // Faz 4 (2026-09-10): bobin 1-7 STM → bağlılık STM'in kendi durumundan gelir.
       // Slot 8 ESP (cihaz yok) → kendi `connected` alanına bakar.
-      coil.id <= 7 ? isStmConnected : Boolean(coil.connected),
+      stmBobiniMi(coil.id) ? isStmConnected : Boolean(coil.connected),
     [isStmConnected]
   );
 
@@ -349,8 +349,8 @@ export function ControlScreen() {
       freq: raw.freq, duty: raw.duty, phase: raw.phase, duration: parseDurationMin(masterDuration),
     });
 
-    const stm = calisanlar.filter((id) => id <= 7);
-    const esp = calisanlar.filter((id) => id > 7);
+    const stm = calisanlar.filter((id) => id <= STM_BOBIN_SAYISI);
+    const esp = calisanlar.filter((id) => id > STM_BOBIN_SAYISI);
     const istekler: Promise<{ status?: string; results?: ({ status?: string } | null)[] } | null>[] = [];
     if (stm.length > 0) {
       istekler.push(apiPost("/coil/batch", {
@@ -425,8 +425,8 @@ export function ControlScreen() {
     // başlatma seçimi görünür bobinlerle sınırlandı ama durdurma gönderimi azaltılmaz.
     const espSlotlari = (snapshot.coils ?? []).map((c) => c.id).filter((id) => id > STM_BOBIN_SAYISI);
     const targets = Array.from(new Set<number>([...Array.from(selectedCoils), ...runningIds, ...espSlotlari]));
-    const stmCoils = targets.filter((id) => id <= 7);
-    const espCoils = targets.filter((id) => id > 7);
+    const stmCoils = targets.filter((id) => id <= STM_BOBIN_SAYISI);
+    const espCoils = targets.filter((id) => id > STM_BOBIN_SAYISI);
     // #74: durdurma yanıtlarını DOĞRULA — apiPost hata/timeout'ta null döner (throw etmez); eskiden
     // yanıt yutuluyordu → STOP düşse bile kullanıcı bobinin durduğunu sanıyordu (per-coil panelle tutarsız).
     // ⚠️ PARALEL (denetim 2026-08-17): batch + ESP istekleri ESKİDEN seri `await` idi, yani
@@ -761,7 +761,7 @@ export function ControlScreen() {
                 // o bobini `stmConnected`e kapatır ve ESP ACK'ini (`command_id`) hiç
                 // beklemezdi → STM kopukken ESP bobini başlatılamaz, başlatılınca da
                 // onayı doğrulanmazdı.
-                stm32Driven={coil.stm32Driven ?? coil.id <= 7}
+                stm32Driven={coil.stm32Driven ?? stmBobiniMi(coil.id)}
                 stmConnected={isStmConnected}
                 disabled={isActive}
               />
@@ -850,9 +850,9 @@ function CoilSelector({
             Yedek liste 7 üretir: hiç snapshot yokken ESP'nin varlığı BİLİNMEZ. */}
         {(coils.length > 0
           ? gorunur(coils)
-          : Array.from({ length: 7 }, (_, i) => ({ id: i + 1, connected: false, running: false }))
+          : Array.from({ length: STM_BOBIN_SAYISI }, (_, i) => ({ id: i + 1, connected: false, running: false }))
          ).map((c) => {
-          const connected = c.id <= 7 ? stmConnected : Boolean(c.connected);
+          const connected = stmBobiniMi(c.id) ? stmConnected : Boolean(c.connected);
           return (
             <TouchableOpacity
               key={c.id}

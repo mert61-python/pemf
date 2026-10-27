@@ -16,7 +16,7 @@ import { colors, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { RealtimeChart } from "@/components/visual/RealtimeChart";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
-import { gorunurBobinler } from "@/services/bobinGorunurlugu";
+import { gorunurBobinler, STM_BOBIN_SAYISI, tumSlotIdleri } from "@/services/bobinGorunurlugu";
 import { Chip } from "@/components/ui/Chip";
 import { akimOlcumuYokMetni, alanDogrulanamadiMetni, akimOlcumuAcik } from "@/utils/olculenAlan";
 import { useResponsive } from "@/hooks/useResponsive";
@@ -54,11 +54,11 @@ export function SensorMonitorScreen() {
    * kalabalığın içinde kayboluyordu.
    */
   const cizilecek = gorunurBobinler<{ id: number; connected?: boolean; running?: boolean }>(
-    coils.length > 0 ? coils : Array.from({ length: 7 }, (_, i) => ({ id: i + 1 })),
+    coils.length > 0 ? coils : Array.from({ length: STM_BOBIN_SAYISI }, (_, i) => ({ id: i + 1 })),
   ).map((c) => c.id);
 
   // Initially show all connected coils
-  const [visibleCoils, setVisibleCoils] = useState<Set<number>>(new Set([1, 2, 3, 4, 5, 6, 7, 8]));
+  const [visibleCoils, setVisibleCoils] = useState<Set<number>>(new Set(tumSlotIdleri()));
   const [showMagnetic, setShowMagnetic] = useState(true);
   const [showTemp, setShowTemp] = useState(true);
 

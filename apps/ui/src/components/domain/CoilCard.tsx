@@ -7,6 +7,7 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { colors, spacing, typography, rs } from "@/theme/tokens";
 import { CoilStatus } from "@/types/domain";
 import { alanGosterilebilir } from "@/utils/olculenAlan";
+import { stmBobiniMi } from "@/services/bobinGorunurlugu";
 import { useTranslation } from "react-i18next";
 
 /** Güvenli sayı biçimlendirme: sayı değilse (undefined / "44.5" / NaN) çökmek yerine "—". */
@@ -22,7 +23,7 @@ function uygulanan(v: unknown): string {
 
 export function CoilCard({ coil }: { coil: CoilStatus }) {
   const { t } = useTranslation();
-  const isStmCoil = coil.stm32Driven || coil.id <= 7;
+  const isStmCoil = coil.stm32Driven || stmBobiniMi(coil.id);
   const sourceText = coil.connected
     ? isStmCoil ? t("kontrol.bobin.kablolu") : t("kontrol.bobin.kablosuz")
     : t("kontrol.bobin.veriBekleniyor");

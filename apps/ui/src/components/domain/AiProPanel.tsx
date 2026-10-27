@@ -23,6 +23,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { kabinKamerasiKullanilir, KosulSecici } from "@/components/domain/AnalizKosulu";
 import { KabinKamerasiKarti } from "@/components/domain/KabinKamerasiKarti";
 import { colors, spacing, typography, rf, rs, touch } from "@/theme/tokens";
+import { STM_BOBIN_SAYISI } from "@/services/bobinGorunurlugu";
 import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
 import { type HedefModeli, MODUL_GEREKSINIMI, modelProfili } from "@/components/domain/aiProProfilleri";
 import { AdimGostergesi, type Adim } from "@/components/domain/aipro/AdimGostergesi";
@@ -1436,7 +1437,7 @@ export function AiProPanel({
           <Text style={[styles.th, { flex: 1 }]}>{t("kontrol.bobin.duty")}</Text>
           <Text style={[styles.th, { flex: 1 }]}>{t("kontrol.sinir.faz")}</Text>
         </View>
-        {(perCoil.length ? perCoil : Array.from({ length: 7 }, (_, i): Coil => ({ id: i + 1, freq: 0, duty: 0, phase: 0 }))).map((c) => (
+        {(perCoil.length ? perCoil : Array.from({ length: STM_BOBIN_SAYISI }, (_, i): Coil => ({ id: i + 1, freq: 0, duty: 0, phase: 0 }))).map((c) => (
           <View key={c.id} style={styles.tr}>
             <Text style={[styles.td, { flex: 1 }]}>{c.id}</Text>
             <Text style={[styles.td, { flex: 1 }]}>{c.freq} Hz</Text>
