@@ -16,6 +16,7 @@ dersi). Jeton: aynı uç → yeni yol yok (Faz 0 karar #6: analizin parçası).
 
 from types import MethodType, SimpleNamespace
 
+import capraz
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
@@ -157,7 +158,7 @@ _KEDI_ESERLERI = (
 def test_KRITIK_GERCEK_XGBoost_modeliyle_XAI_URETILIR():
     import pytest as _pt
 
-    _pt.importorskip("xgboost")
+    capraz.paket_yoksa_atla("xgboost")
     # D3.03: eser (XGBoost.pkl + scaler) VARKEN yükleme hatası FAIL — yalnız eser yoksa atla (golden/eser.py).
     from golden import eser as _eser
 
@@ -182,7 +183,7 @@ def test_KRITIK_XGBoost_yolu_shap_TreeExplainer_KULLANMAZ(monkeypatch):
     geri dönerse üretimdeki arıza sessizce geri gelir → shap'ı patlatıp yolu kilitliyoruz."""
     import pytest as _pt
 
-    _pt.importorskip("xgboost")
+    capraz.paket_yoksa_atla("xgboost")
     import shap
 
     # D3.03: eser (XGBoost.pkl + scaler) VARKEN yükleme hatası FAIL — yalnız eser yoksa atla (golden/eser.py).

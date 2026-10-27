@@ -33,6 +33,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -178,7 +179,7 @@ def test_KRITIK_RNA_aciklamasi_LAUNCHER_duzeninde_URETILIR(spec_datas, tmp_path,
     `.pt` depoda İZLENMEZ (yalnız derleme makinesinde ve — yayınlanınca — research.zip'te): klonda / CI'da yoksa profile, ürünün
     TEK mimari kaynağıyla (`_load_mlp_medium_pt`'nin katmanları) sabit tohumlu SENTETİK bir state_dict konur. Ölçülen şey ağırlığın
     değeri değil, paket düzeninde BULUNUP yüklenmesidir (gerçek ağırlık hiçbir yere kopyalanmaz/yazılmaz)."""
-    torch = pytest.importorskip("torch")
+    torch = capraz.paket_yoksa_atla("torch")
     app_dir = tmp_path / "runtime" / "PEMF_Backend" / "_internal" / "ai_hub" / "inference_human_kidney_rna"
     app_dir.mkdir(parents=True)
     for hedef, kaynak in _app_katmani(spec_datas).items():

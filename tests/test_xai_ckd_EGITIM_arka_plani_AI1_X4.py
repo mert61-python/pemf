@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import capraz
 import numpy as np
 import pytest
 
@@ -73,8 +74,8 @@ _HASTA_SAGLIKLI = {
 
 @pytest.fixture(scope="module")
 def ckd():
-    pytest.importorskip("shap")
-    pytest.importorskip("onnxruntime")
+    capraz.paket_yoksa_atla("shap")
+    capraz.paket_yoksa_atla("onnxruntime")
     from golden.eser import atla, ckd_eserleri, eser_var_mi
 
     if not eser_var_mi(*ckd_eserleri()):

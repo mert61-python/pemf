@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import capraz
 import numpy as np
 import pytest
 
@@ -101,9 +102,9 @@ _REF_STATS = {
 
 
 def test_KRITIK_EM_toplu_yol_ALAN_ogrenilmemis_ve_YIGINDAN_bagimsiz(tmp_path):
-    pd = pytest.importorskip("pandas")
-    pytest.importorskip("shap")
-    pytest.importorskip("matplotlib")
+    pd = capraz.paket_yoksa_atla("pandas")
+    capraz.paket_yoksa_atla("shap")
+    capraz.paket_yoksa_atla("matplotlib")
     from ai_hub.xai_tabular.em_runtime import batch_xai
 
     p = _sahte_tahminci()
@@ -156,9 +157,9 @@ def test_KRITIK_EM_toplu_SHAP_ALTI_ozellik_degisirken_YIGINDAN_bagimsiz(tmp_path
     """6 özelliğin HEPSİ arka plana göre değişirken (organ_id öğrenilmiş) KernelExplainer 2^6-2 = 62 koalisyon ister: 60 örnekte rastgele
     örnekleme → aynı noktanın SHAP'ı yığındaki konumuna bağlı (gerçek em_kedi'de ölçüldü); 200'de tam sayım → birebir aynı.
     (Önceki senaryoda organ_id arka planda sabit → 5 değişken → 30 koalisyon: 60 bile tam sayımdı, kapı bu kusuru görmüyordu.)"""
-    pd = pytest.importorskip("pandas")
-    pytest.importorskip("shap")
-    pytest.importorskip("matplotlib")
+    pd = capraz.paket_yoksa_atla("pandas")
+    capraz.paket_yoksa_atla("shap")
+    capraz.paket_yoksa_atla("matplotlib")
     from ai_hub.xai_tabular.em_runtime import batch_xai
 
     ref = {

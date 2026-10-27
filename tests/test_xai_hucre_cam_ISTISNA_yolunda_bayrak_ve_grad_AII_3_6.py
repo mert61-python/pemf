@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import capraz
 import numpy as np
 import pytest
 
@@ -39,9 +40,9 @@ def _sahte(torch):
 
 @pytest.fixture()
 def ortam():
-    torch = pytest.importorskip("torch")
-    pytest.importorskip("pytorch_grad_cam")
-    pytest.importorskip("celldetection")
+    torch = capraz.paket_yoksa_atla("torch")
+    capraz.paket_yoksa_atla("pytorch_grad_cam")
+    capraz.paket_yoksa_atla("celldetection")
     import ai_hub.xai_utils.grad_cam as gcm
     from ai_hub.inference_paper_dilek_hoca import inference_paper_dilek_hoca as m
 

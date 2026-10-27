@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 from pathlib import Path
 
+import capraz
 import numpy as np
 import pytest
 
@@ -29,9 +30,9 @@ _BT_PT = "ai_hub/inference_human_kidney_ct/yolov8s.pt"
 
 @pytest.fixture(scope="module")
 def yolo_agirliklari():
-    pytest.importorskip("torch")
-    pytest.importorskip("pytorch_grad_cam")
-    pytest.importorskip("ultralytics")
+    capraz.paket_yoksa_atla("torch")
+    capraz.paket_yoksa_atla("pytorch_grad_cam")
+    capraz.paket_yoksa_atla("ultralytics")
     from golden.eser import atla, eser_var_mi
 
     if not eser_var_mi(_RETIK_PT, _BT_PT):
@@ -124,8 +125,8 @@ def test_KRITIK_urun_isi_haritasi_YONTEMI_ve_gorseli(yolo_agirliklari):
 def test_KRITIK_letterbox_PREDICT_ile_ayni_ve_GERI_ALINIR():
     """Hatalar #1 ve #2: harita predict'in gördüğü girdiyle (scaleup=True) hesaplanmalı ve dolgu KIRPILARAK orijinale
     dönmeli. Kare olmayan sentetik görüntüde beyaz dikdörtgen, ön işleme → geri alma sonrası AYNI yerde çıkmalı."""
-    pytest.importorskip("torch")
-    pytest.importorskip("ultralytics")
+    capraz.paket_yoksa_atla("torch")
+    capraz.paket_yoksa_atla("ultralytics")
     from ai_hub.xai_utils.yolo_cam import YoloDetCAM
 
     cam = object.__new__(YoloDetCAM)  # model yüklemeden yalnız geometri
@@ -150,7 +151,7 @@ def test_KRITIK_letterbox_PREDICT_ile_ayni_ve_GERI_ALINIR():
 
 
 def test_KRITIK_tespit_skoru_hedefi_ESIK_sinif_ve_BOS_harita_yok():
-    torch = pytest.importorskip("torch")
+    torch = capraz.paket_yoksa_atla("torch")
     from ai_hub.xai_utils.yolo_cam import TespitSkoruHedefi
 
     out = torch.full((4 + 3, 6), 0.01)

@@ -9,12 +9,13 @@ diyor → hazırlık ekranı yeşil, özellik ölü (AI-1'in "spec'te yok → ü
 
 from __future__ import annotations
 
+import capraz
 import pytest
 
 
 @pytest.fixture()
 def durum_fn():
-    pytest.importorskip("shap")
+    capraz.paket_yoksa_atla("shap")
     import servers.ai_router as air
 
     return air._xai_zinciri_durumu

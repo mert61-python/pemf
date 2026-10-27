@@ -16,6 +16,7 @@ import base64
 from pathlib import Path
 from types import SimpleNamespace
 
+import capraz
 import numpy as np
 import pytest
 
@@ -36,9 +37,9 @@ def _kenar_bandi(shape, oran=0.02):
 
 @pytest.fixture(scope="module")
 def cpn():
-    pytest.importorskip("torch")
-    pytest.importorskip("pytorch_grad_cam")
-    pytest.importorskip("celldetection")
+    capraz.paket_yoksa_atla("torch")
+    capraz.paket_yoksa_atla("pytorch_grad_cam")
+    capraz.paket_yoksa_atla("celldetection")
     from golden.eser import atla, eser_var_mi
 
     if not eser_var_mi(_PT):
@@ -113,9 +114,9 @@ def test_KRITIK_hucre_katkilari_KENAR_hucresini_siralamaya_ALMAZ():
 def test_KRITIK_BOS_harita_basarili_DONMEZ_ve_bayraklar_geri_alinir(monkeypatch):
     """Eski hedefte Grad-CAM boş harita üretip 'başarılı' dönüyordu (ölçüldü). Boş harita → RuntimeError (scratch_analiz bunu
     'Açıklama üretilemedi'ye çevirir) ve cache'li modelin requires_grad bayrakları hata yolunda da geri alınır."""
-    torch = pytest.importorskip("torch")
-    pytest.importorskip("pytorch_grad_cam")
-    pytest.importorskip("celldetection")
+    torch = capraz.paket_yoksa_atla("torch")
+    capraz.paket_yoksa_atla("pytorch_grad_cam")
+    capraz.paket_yoksa_atla("celldetection")
     import ai_hub.xai_utils.grad_cam as gcm
     from ai_hub.inference_paper_dilek_hoca import inference_paper_dilek_hoca as m
 

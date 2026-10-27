@@ -14,6 +14,7 @@ import ast
 import base64
 from pathlib import Path
 
+import capraz
 import numpy as np
 import pytest
 
@@ -24,9 +25,9 @@ _PT = "ai_hub/inference_cat_sound/EfficientNet_Lite0.pt"
 
 @pytest.fixture(scope="module")
 def ses():
-    pytest.importorskip("torch")
-    pytest.importorskip("pytorch_grad_cam")
-    pytest.importorskip("librosa")
+    capraz.paket_yoksa_atla("torch")
+    capraz.paket_yoksa_atla("pytorch_grad_cam")
+    capraz.paket_yoksa_atla("librosa")
     from golden.eser import atla, eser_var_mi
 
     if not eser_var_mi(_PT):

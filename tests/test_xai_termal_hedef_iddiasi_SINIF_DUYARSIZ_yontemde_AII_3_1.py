@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import capraz
 import numpy as np
 import pytest
 
@@ -36,8 +37,8 @@ def _spearman(a: np.ndarray, b: np.ndarray) -> float:
 
 @pytest.fixture()
 def ict():
-    pytest.importorskip("torch")
-    pytest.importorskip("pytorch_grad_cam")
+    capraz.paket_yoksa_atla("torch")
+    capraz.paket_yoksa_atla("pytorch_grad_cam")
     from golden.eser import atla, eser_var_mi
 
     if not eser_var_mi(_PT, _ONNX):

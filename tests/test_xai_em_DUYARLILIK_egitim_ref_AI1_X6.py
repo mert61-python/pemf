@@ -17,6 +17,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+import capraz
 import numpy as np
 import pytest
 
@@ -32,7 +33,7 @@ MODULLER = {
 # ── 1) eğitim referansı: depodaki eğitim CSV'siyle BİREBİR (kaynak kanıtı; hocanın dosyasıyla dizi-aynı) ─────────────
 @pytest.mark.parametrize("ad", sorted(MODULLER))
 def test_KRITIK_egitim_referansi_DEPODAKI_egitim_CSVsiyle_birebir(ad):
-    pd = pytest.importorskip("pandas")
+    pd = capraz.paket_yoksa_atla("pandas")
     from ai_hub.xai_tabular.em_runtime import load_egitim_ref
 
     dizin, csv = MODULLER[ad]
@@ -129,8 +130,8 @@ _NOKTALAR = {  # hocanın test_data/points_in_domain.csv'lerinden
 
 @pytest.fixture(scope="module")
 def em_modelleri():
-    pytest.importorskip("onnxruntime")
-    pytest.importorskip("sklearn")
+    capraz.paket_yoksa_atla("onnxruntime")
+    capraz.paket_yoksa_atla("sklearn")
     from golden.eser import atla, eser_var_mi
     from golden.yukleyici import em_tahminci
 

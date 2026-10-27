@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 from pathlib import Path
 
+import capraz
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
@@ -39,8 +40,8 @@ def _spearman(a: np.ndarray, b: np.ndarray) -> float:
 @pytest.fixture()
 def gercek_model():
     """Gerçek ağırlık (ONNX tahminci + PT ikizi). Eser yoksa atla — `PEMF_GOLDEN_REQUIRED=1`'de DÜŞ (4-A kuralı)."""
-    pytest.importorskip("torch")
-    pytest.importorskip("pytorch_grad_cam")
+    capraz.paket_yoksa_atla("torch")
+    capraz.paket_yoksa_atla("pytorch_grad_cam")
     from golden.eser import atla, eser_var_mi
 
     if not eser_var_mi(_PT, _ONNX):
@@ -167,7 +168,7 @@ def test_KRITIK_router_tahmini_XAI_ye_gecirir_ve_hedefi_dondurur(istemci, monkey
 
 @pytest.mark.parametrize("etiket", ["Healthy", "Sick"])
 def test_KRITIK_ai_service_tahmini_XAI_ye_gecirir_PARITE(monkeypatch, etiket):
-    pytest.importorskip("onnxruntime")
+    capraz.paket_yoksa_atla("onnxruntime")
     import ai_hub.cat_thermal.inference_cat_thermal as ict
     import ai_service.app as sapp
 

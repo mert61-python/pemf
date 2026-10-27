@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -230,7 +231,7 @@ def test_KRITIK_tek_dosya_hatasi_akisi_DUSURMEZ(cli, tmp_path, monkeypatch):
 
 # ── 4) PDF: görselli rapor + bozuk görüntüde zarif düşüş ─────────────────────
 def test_KRITIK_pdf_xai_raporu_uretir_ve_bozuk_gorsel_DUSURMEZ(tmp_path):
-    pytest.importorskip("reportlab")
+    capraz.paket_yoksa_atla("reportlab")
     # 1x1 gerçek PNG (reportlab gerçekten çizebilsin)
     import base64 as _b64
 

@@ -14,6 +14,7 @@ import base64
 import inspect
 from pathlib import Path
 
+import capraz
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
@@ -24,8 +25,8 @@ RETIK = KOK / "tests" / "xai_veri" / "retikulosit_04a.jpg"
 
 @pytest.fixture()
 def yolo_agirliklari():
-    pytest.importorskip("torch")
-    pytest.importorskip("ultralytics")
+    capraz.paket_yoksa_atla("torch")
+    capraz.paket_yoksa_atla("ultralytics")
     from golden.eser import atla, eser_var_mi
 
     pt, onnx = "ai_hub/feline_reticulocytes/yolov8s.pt", "ai_hub/feline_reticulocytes/yolov8s.onnx"
