@@ -23,12 +23,30 @@ paketten okumak ZORUNDA (lisans metinleri orada), ama bu envanter kapisinin kayn
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
 KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
+
+
+def _ad(paket: str) -> str:
+    """PEP 503 ad normalizasyonu (`opencv_python` / `OpenCV-Python` → `opencv-python`)."""
+    return re.sub(r"[-_.]+", "-", paket.strip()).lower()
+
+
+def _envanter_adlari() -> set[str]:
+    """⚠️ D5.26 (B-10.250): envanterdeki paket adları TABLO SATIRININ İLK HÜCRESİNDEN (biçim: | ad | sürüm | lisans |, ad ters tırnaklı).
+
+    Eskiden kapı adı dosyanın TÜM METNİNDE alt-dize olarak arıyordu: `| torch |` satırı silinse de `torchvision` /
+    `pytorch-lightning` satırları "torch" içerdiği için YEŞİLDİ (ölçüldü; `onnx` → `onnxruntime`, `matplotlib` → `cycler`
+    satırının telif metni). Artık eşitlik ilk hücreyle."""
+    metin = (KOK / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
+    adlar = {_ad(m.group(1)) for m in re.finditer(r"(?m)^\|\s*`([^`]+)`\s*\|", metin)}
+    assert len(adlar) >= 40, f"envanter tablosundan yalnız {len(adlar)} ad okundu — tablo biçimi değişmiş olabilir"
+    return adlar
 
 
 def _req_calisma_zamani() -> set[str]:
@@ -43,8 +61,8 @@ def test_KRITIK_NOTICE_her_SEVK_EDILEN_bagimliligi_LISTELER():
     Atıf (NOTICE) yükümlülüğü dağıtılan HER bileşeni kapsar. Eksik envanter, ticari
     satışta doğrudan risktir.
     """
-    metin = (KOK / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8").lower()
-    eksik = sorted(a for a in _req_calisma_zamani() if a not in metin)
+    adlar = _envanter_adlari()
+    eksik = sorted(a for a in _req_calisma_zamani() if _ad(a) not in adlar)
     assert not eksik, (
         f"NOTICE'ta {len(eksik)} sevk edilen bağımlılık YOK: {eksik}\n"
         "Çözüm: `python scripts/lisans_envanteri_uret.py` (envanter ÜRETİLİR, elle yazılmaz)."
@@ -65,8 +83,8 @@ def test_KARSIT_KANIT_NOTICE_ureteci_KENDI_ciktisiyla_UYUMLU():
 
     satirlar = envanter()
     assert len(satirlar) >= 40, f"üreteç yalnız {len(satirlar)} bileşen buldu — kaynaklar okunamıyor"
-    metin = (KOK / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8").lower()
-    ornek = [a for a, _, _ in satirlar[:25] if a not in metin]
+    adlar = _envanter_adlari()
+    ornek = [a for a, _, _ in satirlar if _ad(a) not in adlar]  # D5.26: ilk 25 değil HEPSİ; alt-dize değil ilk hücre
     assert not ornek, f"üretecin bulduğu ama dosyada olmayan bileşenler: {ornek}"
 
 

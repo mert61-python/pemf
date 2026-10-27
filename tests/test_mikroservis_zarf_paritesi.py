@@ -77,11 +77,50 @@ def test_KRITIK_termal_zarfi_prediction_TASIYOR():
 
 @pytest.mark.parametrize("alan", ["label", "probability_sick"])
 def test_termal_duz_anahtarlar_KORUNDU(alan):
-    """Geriye uyum: :8100'e doğrudan bağlanan istemciler kırılmamalı."""
-    metin = _SERVIS.read_text(encoding="utf-8")
-    i = metin.find('clf = predictors.get("thermal")')
-    # Düz anahtarlar `**result` ile geliyor; sözleşmeyi kaynak üzerinden doğrula.
-    assert "**result" in metin[i : i + 1800], f"`**result` düz açılımı kaldırılmış — '{alan}' kaybolur"
+    """Geriye uyum: :8100'e doğrudan bağlanan istemciler kırılmamalı.
+
+    ⚠️ D5.26 (B-10.249): eskiden `"**result" in metin[i : i + 1800]` — aynı pencerede AÇIKLAMA YORUMU da ("Burada `**result` düz
+    açıldığı için…") bu dizgeyi taşıdığından yanıt sözlüğündeki `**result,` satırı SİLİNSE de YEŞİLDİ (ölçüldü). Artık AST zinciri:
+    `infer_thermal`ın `yanit` sözlüğünde `**result` YAYILIMI var → `result` = öngörücünün `.predict(...)` dönüşü → öngörücünün
+    (`CatThermalPredictor.predict`) başarı dönüşü bu alanı taşır. Yorumlar AST'de yoktur.
+    MUTASYON: `yanit`tan `**result,` satırını silmek (yorum kalır) ya da öngörücü dönüşünden alanı silmek → KIRMIZI."""
+    fn = next(
+        f
+        for f in ast.parse(_SERVIS.read_text(encoding="utf-8")).body
+        if isinstance(f, ast.FunctionDef) and f.name == "infer_thermal"
+    )
+    yanitlar = [
+        d.value
+        for d in ast.walk(fn)
+        if isinstance(d, ast.Assign)
+        and [getattr(h, "id", None) for h in d.targets] == ["yanit"]
+        and isinstance(d.value, ast.Dict)
+    ]
+    assert len(yanitlar) == 1, (
+        f"infer_thermal'da tek `yanit = {{...}}` sözlüğü bekleniyordu ({len(yanitlar)}) — çıpa kaymış"
+    )
+    yayilan = {v.id for k, v in zip(yanitlar[0].keys, yanitlar[0].values) if k is None and isinstance(v, ast.Name)}
+    assert "result" in yayilan, f"`yanit` sözlüğünde `**result` düz açılımı YOK — '{alan}' :8100 yanıtından kaybolur"
+    tahmin_atamasi = [
+        d
+        for d in ast.walk(fn)
+        if isinstance(d, ast.Assign)
+        and [getattr(h, "id", None) for h in d.targets] == ["result"]
+        and isinstance(d.value, ast.Call)
+        and getattr(d.value.func, "attr", "") == "predict"
+    ]
+    assert tahmin_atamasi, "`result` öngörücünün `.predict(...)` dönüşü değil — yayılan alanlar bilinmiyor"
+    ongorucu = ast.parse((_KOK / "ai_hub" / "cat_thermal" / "inference_cat_thermal.py").read_text(encoding="utf-8"))
+    sinif = next(c for c in ongorucu.body if isinstance(c, ast.ClassDef) and c.name == "CatThermalPredictor")
+    predict = next(f for f in sinif.body if isinstance(f, ast.FunctionDef) and f.name == "predict")
+    donen = {
+        k.value
+        for r in ast.walk(predict)
+        if isinstance(r, ast.Return) and isinstance(r.value, ast.Dict)
+        for k in r.value.keys
+        if isinstance(k, ast.Constant)
+    }
+    assert alan in donen, f"CatThermalPredictor.predict dönüşü '{alan}' taşımıyor (dönen: {sorted(donen)})"
 
 
 def test_KRITIK_retikulosit_zarfi_counts_TASIYOR():
