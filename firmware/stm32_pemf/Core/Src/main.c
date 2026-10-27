@@ -1074,7 +1074,8 @@ static uint8_t Coil_DecodeAndValidatePacket(const BinaryCmdPacket_t *pkt,
  * Registre-seviyesi ADC (HAL_ADC_MODULE kapalı kalır → kapalıyken ikili birebir).
  * ============================================================================
  */
-#define PEMF_NTC_TERMAL_ENABLED 0 /* ⚠️ NTC'ler fiziksel bağlanmadan 1 YAPMAYIN */
+/* PEMF_NTC_TERMAL_ENABLED (varsayılan 0) `pemf_akim.h`'te TANIMLI — D5.06: pemf_akim.c'nin NTC↔ACS712 ADC çakışma korkuluğu
+ * (#error) aynı tanımı görsün diye ortak başlıkta. ⚠️ NTC'ler fiziksel bağlanmadan 1 YAPMAYIN. */
 
 #if PEMF_NTC_TERMAL_ENABLED
 #define NTC_KESME_C 48.0f  /* kesme eşiği — ESP firmware'iyle aynı (TERMAL_KESME_C) */

@@ -63,6 +63,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/** NTC termal bloğu (main.c) DERLEME bayrağı — NTC ile bu modül AYNI ADC1 kanallarını kullanır (PA0 PA3 PA4 PC0 PC3).
+ *  ⚠️ D5.06 (B-8.14): tanım eskiden YALNIZ main.c'deydi → pemf_akim.c'deki çakışma korkuluğu (#error) makroyu HİÇ görmüyordu;
+ *  bayrak 1 yapılsa da derleme TEMİZ bitiyordu. Artık iki çeviri biriminin de içerdiği bu ortak başlıkta (global -D ile de
+ *  verilebilir). ⚠️ NTC'ler fiziksel bağlanmadan 1 YAPMAYIN. A-47: bu yalnız DERLEME korkuluğudur — termal kesme EKLENMEZ.
+ *  Kapı: tests/test_ntc_acs712_korkulugu_ONISLEMDE_D5_06.py */
+#ifndef PEMF_NTC_TERMAL_ENABLED
+#define PEMF_NTC_TERMAL_ENABLED 0
+#endif
+
 /** Akım ölçülen bobin sayısı (bobin 1..5). Bobin 6-7'de ACS712 YOK (sahip kararı). */
 #define PEMF_AKIM_BOBIN_SAYISI 5U
 

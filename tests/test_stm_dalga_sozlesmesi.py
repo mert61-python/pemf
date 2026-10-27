@@ -125,8 +125,11 @@ def test_KARSIT_KANIT_C_kaynagi_yeni_sozlesmeyi_ICERIR():
 def test_KARSIT_KANIT_NTC_termal_blok_HAZIR_ve_KAPALI():
     """HG-1: NTC kesme kodu TAM ve derleme-kapılı (donanım yokken davranış birebir eski)."""
     src = MAIN.read_text(encoding="utf-8", errors="replace")
-    assert "#define PEMF_NTC_TERMAL_ENABLED 0" in src, (
-        "NTC ya silinmiş ya da donanımsız AÇIK bırakılmış (0 olmalı — NTC bağlanınca 1)"
+    # D5.06: varsayılan tanım iki çeviri biriminin ORTAK başlığına (`pemf_akim.h`) taşındı — NTC↔ACS712 korkuluğu onu görsün diye.
+    akim_h = (MAIN.parents[1] / "Inc" / "pemf_akim.h").read_text(encoding="utf-8", errors="replace")
+    assert "#define PEMF_NTC_TERMAL_ENABLED 0" in akim_h and "#define PEMF_NTC_TERMAL_ENABLED" not in src, (
+        "NTC ya silinmiş ya da donanımsız AÇIK bırakılmış (0 olmalı — NTC bağlanınca 1) ya da tanım yeniden main.c'ye (tek çeviri "
+        "birimine) kaçmış — pemf_akim.c'nin ADC çakışma korkuluğu onu görmez (D5.06)"
     )
     for parca in ("NTC_KESME_C 48.0f", "NTC_DONUS_C 45.0f", "Coil_NtcTermalPoll", "Coil_NtcAdcInit", "g_ntc_kilit"):
         assert parca in src, f"NTC bloğu eksik: {parca}"
