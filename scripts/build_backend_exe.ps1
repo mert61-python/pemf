@@ -247,7 +247,11 @@ if (-not (Test-Path $BuildRoot)) { New-Item -ItemType Directory -Path $BuildRoot
 # SONRAKİ build eski `dist`i silemiyor → PyInstaller PermissionError → build başarısız, üstelik
 # çıkış kodu 0 dönüyor ve `dist` SİLİNMİŞ kalıyor. Yani her başarılı build bir sonrakini
 # zehirliyordu. Yalnız YAPI AĞACINDAN çalışanlar öldürülür; kurulu runtime'a DOKUNULMAZ.
-$yetim = @(Get-Process -EA 0 | Where-Object { $_.Path -and $_.Path.StartsWith($BuildRoot, [StringComparison]::OrdinalIgnoreCase) })
+# ⚠️ D5.46: önek DİZİN SINIRIYLA karşılaştırılır (`<BuildRoot>\`). Çıplak `StartsWith($BuildRoot)` kardeş dizini de
+# (`PEMF_BUILD_eski\…`, `PEMF_BUILD2\…`) "yapı ağacı" sayıp oradan çalışan ilgisiz süreci öldürüyordu (ölçüldü, gölge koşum).
+# Kapı: tests/test_build_koruma_bloklari_DAVRANIS_D5_46.py
+$yapiOneki = $BuildRoot.TrimEnd('\', '/') + '\'
+$yetim = @(Get-Process -EA 0 | Where-Object { $_.Path -and $_.Path.StartsWith($yapiOneki, [StringComparison]::OrdinalIgnoreCase) })
 foreach ($y in $yetim) {
     Warn "Yapı ağacından çalışan yetim süreç durduruluyor: $($y.ProcessName) (PID $($y.Id))"
     try { Stop-Process -Id $y.Id -Force -EA Stop } catch { Warn "  durdurulamadı: $($_.Exception.Message)" }
@@ -508,7 +512,9 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
         }
         # ⚠️ ÇOCUKLARI DA TOPLA: backend'i öldürmek onun başlattığı yardımcıları öldürmez.
         # Yetim broker DLL kilidi tutup SONRAKİ build'i düşürüyordu.
-        foreach ($c in @(Get-Process -EA 0 | Where-Object { $_.Path -and $_.Path.StartsWith($dist, [StringComparison]::OrdinalIgnoreCase) })) {
+        # D5.46: önek DİZİN SINIRIYLA (`<dist>\`) — kardeş `dist_eski\…` altındaki ilgisiz süreç öldürülmez.
+        $distOneki = $dist.TrimEnd('\', '/') + '\'
+        foreach ($c in @(Get-Process -EA 0 | Where-Object { $_.Path -and $_.Path.StartsWith($distOneki, [StringComparison]::OrdinalIgnoreCase) })) {
             Warn "Kapı sonrası yetim süreç durduruluyor: $($c.ProcessName) (PID $($c.Id))"
             try { Stop-Process -Id $c.Id -Force -EA 0 } catch { }
         }
