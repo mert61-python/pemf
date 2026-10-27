@@ -22,11 +22,14 @@ işleve, lambdaya ya da "manyetik" etiketli bir kontrole saklansa da). Yalnız g
   · Her araçta en az bir kontrol STM (ölçen OLMAYAN) bobinde VAKUMSUZ `objectTemp is None` bekler: kontrol işlev gövdesinde
     KOŞULSUZ (`if` / `for` / `while` / `try` altında değil), alıcı döngü / parametre hedefi değil, beklenti koşulun `and` zincirinde
     DOĞRUDAN (`or` altında / değişken üzerinden / `any(...)` ile sayılmaz); `all(<…> is None for c in L)` ise aynı zincirde
-    `bool(L)` / `L` / `len(L) > 0` / `len(L) >= 1` / `len(L) != 0` koruması ŞART (boş kümede `all` koşulsuz GEÇER).
+    `bool(L)` / `L` / `len(L) > 0` / `len(L) >= 1` / `len(L) != 0` koruması ŞART (boş kümede `all` koşulsuz GEÇER). Alıcı (tek bobin
+    ya da `L`) SICAKLIĞA GÖRE seçilmemeli: bağlaması (geçişli, adların her bağlaması) `objectTemp` okursa ya da ad yerinde değiştirilirse
+    (`append` / `remove` / `L[…] =` …) beklenti VAKUMLU sayılır (uydurulan bobin kümeden düşer, `all` yine GEÇER).
 MUTASYON: e2e_full sıcaklık kontrolünü bobin 1'e (`c1.get("objectTemp") > 0`) geri almak → KIRMIZI; ölçen bobinin KİMLİĞİNİ
 sabite çevirmek (`coil_of(sn, 1) if esp_slotlari(sn) …`) → KIRMIZI; beklentiyi "manyetik" etiketli kontrole saklamak → KIRMIZI;
 D5.58 TUR 2 (çürütme c1 / c2 / c3): `!= 0` işleci → KIRMIZI; beklentiyi yerel değişkene taşımak → KIRMIZI; e2e_smoke'ta
-`bool(_stm_calisan)` korumasını silmek → KIRMIZI.
+`bool(_stm_calisan)` korumasını silmek → KIRMIZI; TUR 3 (çürütme 2 c5): `_stm_calisan` üretecine `and c.get("objectTemp") is None`
+süzgeci eklemek → KIRMIZI.
 """
 
 from __future__ import annotations
@@ -311,6 +314,72 @@ def _bos_degil_korumasi_mi(u, kume) -> bool:
     return False
 
 
+#: Listeyi / kümeyi YERİNDE değiştiren yöntemler — alıcı kümesi bunlarla kurulursa / budanırsa seçim koşulu bağlamada görünmez.
+_YERINDE_DEGISTIRICILER = frozenset(
+    {
+        "append",
+        "extend",
+        "insert",
+        "remove",
+        "pop",
+        "clear",
+        "sort",
+        "reverse",
+        "add",
+        "discard",
+        "update",
+        "__setitem__",
+        "__delitem__",
+        "__iadd__",
+        "intersection_update",
+        "difference_update",
+        "symmetric_difference_update",
+    }
+)
+
+
+def _yerinde_degisir_mi(ad: str, fonk: ast.AST) -> bool:
+    """`ad` işlevde yerinde değiştiriliyor mu: `ad.<değiştirici>(…)`, `ad[…] = …`, `del ad[…]`."""
+    for d in ast.walk(fonk):
+        if (
+            isinstance(d, ast.Call)
+            and isinstance(d.func, ast.Attribute)
+            and d.func.attr in _YERINDE_DEGISTIRICILER
+            and isinstance(d.func.value, ast.Name)
+            and d.func.value.id == ad
+        ):
+            return True
+        if isinstance(d, (ast.Assign, ast.AugAssign, ast.AnnAssign, ast.Delete)):
+            hedefler = d.targets if isinstance(d, (ast.Assign, ast.Delete)) else [d.target]
+            for h in hedefler:
+                if isinstance(h, ast.Subscript) and isinstance(h.value, ast.Name) and h.value.id == ad:
+                    return True
+    return False
+
+
+def _sicakliktan_secilir_mi(ifade, topo: _Topoloji, fonk: ast.AST, ziyaret: set | None = None) -> bool:
+    """`is None` beklentisinin alıcısı (tek bobin ya da `all`'un dolaştığı liste) SICAKLIĞA GÖRE seçiliyor / süzülüyor mu: ifade
+    ya da içindeki adların HER bağlaması (geçişli) `objectTemp` OKUYOR ya da bu adlar yerinde değiştiriliyor (`append` / `remove`
+    …) → beklenti VAKUMLU (fail-closed): `[c for c in calisan if … and c.get("objectTemp") is None]` üzerinde `all(... is None)`
+    sim bir STM bobinine sıcaklık uydursa da GEÇER (o bobin kümeden düşer)."""
+    ziyaret = set() if ziyaret is None else ziyaret
+    if _sicaklik_okur_mu(ifade):
+        return True
+    yerel: set[str] = set()
+    for d in ast.walk(ifade):
+        if isinstance(d, ast.comprehension):
+            yerel |= {e.id for e in ast.walk(d.target) if isinstance(e, ast.Name)}
+        elif isinstance(d, ast.Lambda):
+            yerel |= {a.arg for a in d.args.posonlyargs + d.args.args + d.args.kwonlyargs}
+    for ad in sorted({d.id for d in ast.walk(ifade) if isinstance(d, ast.Name)} - yerel - ziyaret):
+        ziyaret.add(ad)
+        if _yerinde_degisir_mi(ad, fonk):
+            return True
+        if any(v is not None and _sicakliktan_secilir_mi(v, topo, fonk, ziyaret) for v in topo.bag.get(ad, [])):
+            return True
+    return False
+
+
 def _vakumsuz_none_beklentileri(agac: ast.Module, ebeveyn: dict) -> list[str]:
     """STM (ölçen OLMAYAN) bobinde `objectTemp is None` bekleyen VAKUMSUZ kontroller (bkz. modül belgesi)."""
 
@@ -353,7 +422,11 @@ def _vakumsuz_none_beklentileri(agac: ast.Module, ebeveyn: dict) -> list[str]:
             okuma = _none_okumasi(t)
             if okuma is not None:
                 alici = _sicaklik_alicisi(okuma)
-                if _izlenen_alici_mi(alici, topo) and not _olcen_mi(alici, topo, frozenset()):
+                if (
+                    _izlenen_alici_mi(alici, topo)
+                    and not _olcen_mi(alici, topo, frozenset())
+                    and not _sicakliktan_secilir_mi(alici, topo, fonk)
+                ):
                     out.append(f"satır {t.lineno}: {ast.unparse(t)}")
                 continue
             if not (
@@ -368,6 +441,9 @@ def _vakumsuz_none_beklentileri(agac: ast.Module, ebeveyn: dict) -> list[str]:
             g = uretec.generators[0]
             okuma = _none_okumasi(uretec.elt)
             if okuma is None or _olcen_mi(_sicaklik_alicisi(okuma), topo, frozenset(topo.uretec_olcenleri(g))):
+                continue
+            # TUR 3 (çürütme 2 c5): liste izlenebilir bağlamalı olmalı ve sıcaklığa göre SEÇİLMEMELİ (süzgeç / yerinde budama).
+            if not _izlenen_alici_mi(g.iter, topo) or _sicakliktan_secilir_mi(g.iter, topo, fonk):
                 continue
             if any(u is not t and _bos_degil_korumasi_mi(u, g.iter) for u in terimler):
                 out.append(f"satır {t.lineno}: {ast.unparse(c.args[1])}")
@@ -405,7 +481,8 @@ def test_KRITIK_D558_e2e_sicaklik_YALNIZ_olcen_bobinde_beklenir(yol):
     )
     assert none_bekleyen, (
         f"{yol}: hiçbir kontrol STM bobininde VAKUMSUZ `objectTemp is None` beklemiyor (uydurma sıcaklık yakalanmaz; "
-        "`all(...)` boş kümede de GEÇER — aynı `and` zincirinde `bool(<liste>)` koruması gerekir)"
+        "`all(...)` boş kümede de GEÇER — aynı `and` zincirinde `bool(<liste>)` koruması gerekir; alıcı / liste SICAKLIĞA GÖRE "
+        "seçilirse (süzgeç, yerinde budama, geçişli bağlama) uydurulan bobin kümeden düşer → VAKUMLU)"
     )
 
 
@@ -526,6 +603,48 @@ def test_KARSIT_KANIT_yardimci_islev_PARAMETRESI_olcen_sayilmaz():
         (
             'ol = [c for c in running if int(c["id"]) in _esp_bobinleri()]\ncheck("x", bool(ol) and all(c.get("objectTemp") is None for c in ol))',
             False,
+        ),
+        # TUR 3 (çürütme 2 c5): alıcı kümesi SICAKLIĞA GÖRE seçilir / süzülür → beklenti VAKUMLU (uydurulan bobin kümeden düşer)
+        (
+            'st = [c for c in running if int(c["id"]) not in _esp_bobinleri() and c.get("objectTemp") is None]\n'
+            'check("x", bool(st) and all(c.get("objectTemp") is None for c in st))',
+            False,
+        ),
+        (
+            'on = [c for c in running if c.get("objectTemp") is None]\n'
+            'st = [c for c in on if int(c["id"]) not in _esp_bobinleri()]\n'
+            'check("x", bool(st) and all(c.get("objectTemp") is None for c in st))',
+            False,
+        ),
+        (
+            'st = list(filter(lambda c: c["objectTemp"] is None, running))\n'
+            'check("x", bool(st) and all(c.get("objectTemp") is None for c in st))',
+            False,
+        ),
+        (
+            'st = []\nfor c in running:\n    if c.get("objectTemp") is None:\n        st.append(c)\n'
+            'check("x", bool(st) and all(c.get("objectTemp") is None for c in st))',
+            False,
+        ),
+        (
+            _STM_LISTESI + 'for c in list(st):\n    if c.get("objectTemp"):\n        st.remove(c)\n'
+            'check("x", bool(st) and all(c.get("objectTemp") is None for c in st))',
+            False,
+        ),
+        (
+            'c1 = next(c for c in running if c.get("objectTemp") is None)\ncheck("x", c1.get("objectTemp") is None)',
+            False,
+        ),
+        # sıcaklıksız seçim ve İLGİSİZ bir listenin değişmesi beklentiyi düşürmez
+        (
+            _STM_LISTESI
+            + 'diger = []\ndiger.append(1)\ncheck("x", bool(st) and all(c.get("objectTemp") is None for c in st))',
+            True,
+        ),
+        (
+            'on = [c for c in running if c.get("running")]\nst = [c for c in on if int(c["id"]) not in _esp_bobinleri()]\n'
+            'check("x", bool(st) and all(c.get("objectTemp") is None for c in st))',
+            True,
         ),
     ],
 )

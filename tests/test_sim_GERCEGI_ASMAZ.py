@@ -318,11 +318,12 @@ def test_DAVRANIS_sim_STM_bobinine_sicaklik_VERMEZ(izole_sim, monkeypatch):
             )
 
 
-def _cok_tur(api, monkeypatch, saat_adimlari=(0.0, 1800.0, 36000.0)) -> list[list[dict]]:
+def _cok_tur(api, monkeypatch, saat_adimlari=(0.0, 1800.0, 36000.0), tur_sonu=None) -> list[list[dict]]:
     """Sim döngüsünü `len(saat_adimlari)` TUR koştur; tur k, döngü başlangıcından `saat_adimlari[k]` sn SONRA koşar.
 
     Sahte saat ve tur sonu YALNIZ bu iş parçacığında (`_tek_tur` / D1.41 ilkesi): öteki iş parçacıkları gerçek `time.time`
-    ve gerçek uykuyu görür. Uyku gerçekten beklenmez — saat ileri atlar (ikinci / sonraki turlar "zaman geçmiş" dalı)."""
+    ve gerçek uykuyu görür. Uyku gerçekten beklenmez — saat ileri atlar (ikinci / sonraki turlar "zaman geçmiş" dalı).
+    `tur_sonu` verilirse HER turun sonunda (döngü uykuya girerken, kilit dışında, bu iş parçacığında) çağrılır."""
     import threading
     import time as _gercek_time
 
@@ -339,6 +340,8 @@ def _cok_tur(api, monkeypatch, saat_adimlari=(0.0, 1800.0, 36000.0)) -> list[lis
     def _uyku(sn):
         if threading.current_thread() is not ana:
             return gercek_uyku(sn)
+        if tur_sonu is not None:
+            tur_sonu()
         if len(turlar) >= len(adimlar):
             raise KeyboardInterrupt
         kayma["sn"] = adimlar[len(turlar)]
@@ -355,6 +358,38 @@ def _cok_tur(api, monkeypatch, saat_adimlari=(0.0, 1800.0, 36000.0)) -> list[lis
         monkeypatch.setattr(_gercek_time, "sleep", gercek_uyku)
         monkeypatch.setattr(_gercek_time, "time", gercek_saat)
     return turlar
+
+
+def _stm_sicakliklari(m, stm: set, sahip=None, yol: str = "") -> list[str]:
+    """Yayının / anlık görüntünün İÇ İÇE her sözlüğünde sıcaklık anahtarı (adında `temp` geçen: objectTemp / ambientTemp /
+    object_temp / temperature …) → sahibi: sözlüğün kendi `coilId` / `coil_id` / `id`'si, yoksa en yakın atanınki. STM bobininde
+    None OLMAYAN değer ya da sahibi BELİRSİZ (kimliksiz) None olmayan sıcaklık → ihlal (fail-closed; tip adına bakılmaz)."""
+    out: list[str] = []
+    if isinstance(m, dict):
+        for k in ("coilId", "coil_id", "id"):
+            v = m.get(k)
+            if isinstance(v, int) and not isinstance(v, bool):
+                sahip = v
+                break
+        for k, v in m.items():
+            if isinstance(v, (dict, list, tuple)):
+                out += _stm_sicakliklari(v, stm, sahip, f"{yol}{k}.")
+            elif isinstance(k, str) and "temp" in k.lower() and v is not None and (sahip is None or sahip in stm):
+                out.append(f"{yol}{k}={v!r} (bobin {sahip})")
+    elif isinstance(m, (list, tuple)):
+        for i, v in enumerate(m):
+            out += _stm_sicakliklari(v, stm, sahip, f"{yol}[{i}].")
+    return out
+
+
+def _korutin_kos(korutin):
+    """`await` etmeyen bir FastAPI işleyicisini olay döngüsü KURMADAN koştur (asyncio.run süreç döngü durumunu değiştirir)."""
+    try:
+        korutin.send(None)
+    except StopIteration as bitti:
+        return bitti.value
+    korutin.close()
+    raise AssertionError("aparat: işleyici await etti — olay döngüsüz koşturulamaz")
 
 
 @pytest.mark.parametrize("esp_acik", [False, True], ids=["esp_kapali", "esp_acik"])
@@ -376,11 +411,54 @@ def test_KRITIK_DAVRANIS_sim_STM_sicaklik_VERMEZ_seans_x_ESP_x_TUR_D5_58(izole_s
     # Paylaşılan seans sözlüğüne DOKUNULMAZ (D1.41 nöbeti): yalnız modül bağlaması bu tur için değişir, finally'de geri gelir.
     gercek_oturum = api._active_session
     api._active_session = oturum
+    from servers import system_router
+
+    anliklar: list[dict] = []
+
+    def _tur_sonu():
+        # D5.58 TUR 3 (çürütme 2 b7b): yayınlar temizken CANLI DURUM uydurma taşıyabilir — e2e araçlarının ve arayüzün okuduğu
+        # yüzeyler (WS ilk `snapshot` = `_build_ws_snapshot`, `/api/dashboard-snapshot` işleyicisi) her tur sonunda ölçülür.
+        anliklar.append(
+            {
+                "ws snapshot": api._build_ws_snapshot(),
+                "dashboard-snapshot": _korutin_kos(system_router.get_dashboard_snapshot()),
+            }
+        )
+
     try:
-        turlar = _cok_tur(api, monkeypatch)
+        turlar = _cok_tur(api, monkeypatch, tur_sonu=_tur_sonu)
     finally:
         api._active_session = gercek_oturum
     assert len(turlar) == 3, f"aparat: sim {len(turlar)} tur koştu (3 bekleniyordu)"
+    assert len(anliklar) == 3, f"aparat: tur sonu {len(anliklar)} kez ölçüldü (3 bekleniyordu)"
+    kosul = f"{'seans' if seans else 'boşta'}, ESP {'açık' if esp_acik else 'kapalı'}"
+    for no, (yayinlar, yuzeyler) in enumerate(zip(turlar, anliklar), start=1):
+        # D5.58 TUR 3 (çürütme 2 b6): tip süzgeci YOK — sim `stm_coil_update` (arayüz TELEMETRİ sayar, `mergeCoilIntoSnapshot` ile
+        # bobine yazar) ya da YENİ bir tipte STM'e sıcaklık uydursa da yakalanır; kimliksiz sıcaklık da ihlal.
+        for m in yayinlar:
+            ihlal = _stm_sicakliklari(m, stm)
+            assert not ihlal, (
+                f"tur {no} ({kosul}): sim {m.get('type')!r} yayınında STM bobinine sıcaklık uydurdu: {ihlal} — STM protokolünde "
+                "sıcaklık alanı YOK"
+            )
+        for ad, anlik in yuzeyler.items():
+            bobinler = anlik.get("coils") or []
+            assert {b.get("id") for b in bobinler} >= (stm | esp), (
+                f"tur {no} ({kosul}): {ad} bobin listesi topolojiyi kapsamıyor (VAKUM): {[b.get('id') for b in bobinler]}"
+            )
+            ihlal = _stm_sicakliklari(bobinler, stm)
+            assert not ihlal, (
+                f"tur {no} ({kosul}): {ad} CANLI DURUMDA STM bobinine sıcaklık uydurdu: {ihlal} — sim yayın temiz olsa da "
+                "dashboard / WS anlık görüntüsü uydurma sıcaklık gösterir"
+            )
+            for b in bobinler:
+                if b.get("id") in stm and seans:
+                    assert b.get("running") is True, f"öncül: {ad} seansta STM bobini {b.get('id')} çalışmıyor"
+                if b.get("id") in esp and esp_acik:
+                    assert b.get("objectTemp") is not None, (
+                        f"öncül: {ad} ESP açıkken ESP bobini {b.get('id')} sıcaklık göstermiyor — anlık görüntü canlı durumu "
+                        "yansıtmıyor (VAKUM)"
+                    )
     for no, yayinlar in enumerate(turlar, start=1):
         for tur in ("coil_status", "sensor_data"):
             kume = {m.get("coilId") for m in yayinlar if m.get("type") == tur}

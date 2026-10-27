@@ -124,9 +124,12 @@ def test_snapshot_internet_alanini_TASIR(durum):
     """Arayüz alanı okuyamıyorsa ayrım işe yaramaz."""
     from servers import live_state
 
-    anlik = live_state._build_ws_snapshot() if hasattr(live_state, "_build_ws_snapshot") else None
-    if anlik is None:
-        pytest.skip("snapshot yardimcisi bu surumde yok")
+    # D5.58 TUR 3: eski gövde atlaması ("snapshot yardimcisi bu surumde yok") kaldırıldı — `_build_ws_snapshot`
+    # ürünün WS / dashboard anlık görüntü kaynağıdır; yokluğu ATLAMA değil KIRMIZI (sessiz atlama bu kapıyı kör ederdi).
+    assert hasattr(live_state, "_build_ws_snapshot"), (
+        "live_state._build_ws_snapshot YOK — WS / dashboard anlık görüntü kaynağı kayboldu"
+    )
+    anlik = live_state._build_ws_snapshot()
     assert "internet" in anlik, "snapshot `internet` alanini TASIMIYOR -> arayuz notr gosterge cizemez"
 
 
@@ -375,6 +378,172 @@ def test_KRITIK_DAVRANIS_baglanti_KOPUKKEN_sim_BASLAMAZ(durum, monkeypatch, dege
             f"PEMF_SIMULATE={deger!r} iken bağlantı kopuk diye sanal donanım BAŞLADI ({sim}) -> gerçek donanım "
             "yokken/kopukken UYDURMA veri (sahte telemetri) gösterilir"
         )
+
+
+#: Ortam yazıcıları (`test_pemf_simulate_tek_kaynak._YAZICILAR` + `update`): ürün kodunda HİÇBİR kapsamda (işlev gövdesi dahil)
+#: `PEMF_SIMULATE` anahtarıyla çağrılamaz.
+_SIM_ANAHTARI = "PEMF_SIMULATE"
+_ORTAM_YAZICILARI = frozenset(
+    {"setdefault", "pop", "update", "__setitem__", "__delitem__", "putenv", "unsetenv", "setenv", "delenv"}
+)
+
+
+def _sim_anahtari_yazimlari(agac) -> list[str]:
+    """Modülde (her kapsamda) `PEMF_SIMULATE` ortam YAZIMI: yazıcı çağrısı (konumsal / anahtar sözcük değeri / sözlük anahtarı /
+    `PEMF_SIMULATE=` anahtar sözcüğü), `[...] =` / `del [...]` / `|=` hedefi. Karar yalnız OKUR (`os.environ.get`)."""
+    import ast
+
+    def _anahtar(d) -> bool:
+        return isinstance(d, ast.Constant) and d.value == _SIM_ANAHTARI
+
+    def _anahtar_tasir(d) -> bool:
+        if _anahtar(d):
+            return True
+        if isinstance(d, ast.Dict):
+            return any(k is not None and _anahtar(k) for k in d.keys)
+        if isinstance(d, ast.Call):
+            return any(kw.arg == _SIM_ANAHTARI for kw in d.keywords) or any(_anahtar_tasir(a) for a in d.args)
+        if isinstance(d, (ast.List, ast.Tuple, ast.Set)):
+            return any(_anahtar_tasir(e) for e in d.elts)
+        if isinstance(d, ast.Starred):
+            return _anahtar_tasir(d.value)
+        return False
+
+    out = []
+    for d in ast.walk(agac):
+        if isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr in _ORTAM_YAZICILARI:
+            if any(_anahtar_tasir(a) for a in d.args) or any(
+                kw.arg == _SIM_ANAHTARI or _anahtar_tasir(kw.value) for kw in d.keywords
+            ):
+                out.append(f"satır {d.lineno}: {ast.unparse(d)}")
+        elif isinstance(d, (ast.Assign, ast.AugAssign, ast.AnnAssign, ast.Delete)):
+            hedefler = d.targets if isinstance(d, (ast.Assign, ast.Delete)) else [d.target]
+            if any(isinstance(h, ast.Subscript) and _anahtar(h.slice) for h in hedefler) or (
+                isinstance(d, ast.AugAssign) and _anahtar_tasir(d.value)
+            ):
+                out.append(f"satır {d.lineno}: {ast.unparse(d)}")
+    return out
+
+
+def test_KRITIK_PEMF_SIMULATE_urun_kodunda_YAZILMAZ_D5_58():
+    """D5.58 TUR 3 (çürütme 2 a4): TUR 2 kolları sim kararının METNİNİ ve döngünün TEK başvurusunu pinliyordu, karar GİRDİSİNİ
+    değil — lifespan'de `if _live_state.get("stm") != "online": os.environ.setdefault("PEMF_SIMULATE", "1")` (STM kopuk diye
+    üretim backend'i sanal donanıma geçer; B-10.131'in tam sınıfı) D5.58 kapılarında YEŞİLDİ, yalnız conftest'in hijyen bekçisi
+    ERROR verdi (ölçüldü). Artık `apps/backend/**/*.py` ürün kodunda:
+      (1) hiçbir kapsamda `PEMF_SIMULATE` ortam YAZIMI yok (`os.environ[...] =`, `setdefault`, `update` (sözlük / anahtar sözcük),
+          `putenv`, `pop`, `del`, `|=` …; `pop` / `del` de sayılır — fail-closed);
+      (2) KAPALI DÜNYA: `"PEMF_SIMULATE"` dizge sabiti TEK yerde — sim karar `if`'inin `os.environ.get(...)` argümanı (takma ad
+          `_AD = "PEMF_SIMULATE"` ile dolaylı yazım da ikinci sabit olur); anahtarın ≥5 karakterlik PARÇASI olan sabit yok
+          (`"PEMF_" + "SIMULATE"` birleştirmesi); `PEMF_SIMULATE=` anahtar sözcüğü yok.
+    Sim kararı yalnız sunucu / staging / Docker ortam dosyasından gelir (`deploy/*.env`, `docker/*`); ürün onu YAZMAZ.
+    Davranış kolu: `test_KRITIK_DAVRANIS_lifespan_PEMF_SIMULATE_YAZMAZ_sim_BASLATMAZ_D5_58`.
+
+    MUTASYON: lifespan'e STM-kopuk koşullu `setdefault` (a4) → KIRMIZI; takma adla `os.environ[_AD] = "1"` → KIRMIZI."""
+    import ast
+
+    dosyalar = sorted((KOK / "apps" / "backend").rglob("*.py"))
+    assert len(dosyalar) >= 50, f"VAKUM: apps/backend altında yalnız {len(dosyalar)} .py dosyası tarandı"
+    yazimlar: list[str] = []
+    sabitler: list[tuple[str, int, object]] = []
+    parcalar: list[str] = []
+    ana = "apps/backend/servers/api_server.py"
+    ana_agac = None
+    for p in dosyalar:
+        yol = p.relative_to(KOK).as_posix()
+        agac = ast.parse(p.read_text(encoding="utf-8", errors="replace"))
+        if yol == ana:
+            ana_agac = agac
+        yazimlar += [f"{yol} {y}" for y in _sim_anahtari_yazimlari(agac)]
+        for d in ast.walk(agac):
+            if isinstance(d, ast.Constant) and isinstance(d.value, str):
+                if d.value == _SIM_ANAHTARI:
+                    sabitler.append((yol, d.lineno, d))
+                elif len(d.value) >= 5 and d.value in _SIM_ANAHTARI:
+                    parcalar.append(f"{yol}:{d.lineno} {d.value!r}")
+            elif isinstance(d, ast.keyword) and d.arg == _SIM_ANAHTARI:
+                yazimlar.append(f"{yol} satır {d.value.lineno}: `{_SIM_ANAHTARI}=` anahtar sözcüğü")
+    assert not yazimlar, (
+        f"ürün kodu PEMF_SIMULATE YAZIYOR: {yazimlar} -> sim kararı bağlantıdan / çalışma anından türetilebilir (STM kopukken "
+        "sanal donanım = SAHTE telemetri). Sim yalnız dağıtım ortam dosyasından istenir."
+    )
+    assert not parcalar, (
+        f"PEMF_SIMULATE anahtarının PARÇASI dizge sabiti: {parcalar} -> birleştirilmiş anahtarla dolaylı yazım taranamaz"
+    )
+    assert ana_agac is not None, f"aparat: {ana} bulunamadı"
+    assert len(sabitler) == 1, (
+        f"'PEMF_SIMULATE' sabiti TEK yerde (sim karar okuması) bekleniyordu: {[(y, s) for y, s, _ in sabitler]} -> takma ad / "
+        "ikinci okuma-yazma yolu"
+    )
+    yol, satir, sabit = sabitler[0]
+    ebeveyn = {alt: d for d in ast.walk(ana_agac) for alt in ast.iter_child_nodes(d)}
+    cagri = ebeveyn.get(sabit)
+    karsilastirma = ebeveyn.get(cagri)
+    karar = ebeveyn.get(karsilastirma)
+    assert (
+        yol == ana
+        and isinstance(cagri, ast.Call)
+        and ast.unparse(cagri.func) == "os.environ.get"
+        and cagri.args
+        and cagri.args[0] is sabit
+        and isinstance(karar, ast.If)
+        and karar.test is karsilastirma
+        and "_hardware_simulation_loop" in ast.unparse(ast.Module(body=karar.body, type_ignores=[]))
+    ), f"tek 'PEMF_SIMULATE' sabiti sim karar if'inin `os.environ.get(...)` okuması değil ({yol}:{satir})"
+
+
+def test_KRITIK_DAVRANIS_lifespan_PEMF_SIMULATE_YAZMAZ_sim_BASLATMAZ_D5_58(monkeypatch):
+    """D5.58 TUR 3 (çürütme 2 a4) davranış kolu: GERÇEK lifespan (TestClient), bütün bağlantılar KOPUKKEN ve `PEMF_SIMULATE`
+    TANIMSIZKEN girilir. Arka plan başlatıcısı GERÇEĞİYLE (conftest'in kaydettiği) Thread KAYDEDİCİSİ altında koşar (daemon
+    açılmaz). Beklenen: başlatıcı çağrıldığı AN env hâlâ tanımsız, lifespan sonunda da tanımsız ve kayıtçıda
+    `_hardware_simulation_loop` hedefli iş parçacığı YOK. AST kolunun göremediği yazılışları (hesaplanan anahtar, yardımcı modül)
+    lifespan yolunda yakalar. ESP alt sistemi kapalı tutulur → MQTT bağlantı denemesi YOK (1883'e gidilmez); mDNS conftest'te engelli.
+
+    MUTASYON: lifespan'e `if _live_state.get("stm") != "online": os.environ.setdefault("PEMF_SIMULATE", "1")` (a4) → KIRMIZI."""
+    import os
+    import threading
+    from types import SimpleNamespace
+
+    from fastapi.testclient import TestClient
+    from servers import api_server, efield_live, live_state
+
+    c = sys.modules.get("conftest")
+    assert c is not None and Path(c.__file__).resolve() == (Path(__file__).parent / "conftest.py").resolve()
+    gercek = c._GERCEK_ARKA_PLAN_BASLATICI
+    assert callable(gercek), "aparat: conftest gerçek arka plan başlatıcısını kaydetmedi"
+    baslatilan: list = []
+    anlik: list = []
+
+    class _KayitThread(threading.Thread):
+        def start(self):  # daemon AÇILMAZ — yalnız kayıt
+            baslatilan.append((self.name, self._target))
+
+    def _sarici():
+        anlik.append(os.environ.get(_SIM_ANAHTARI))
+        gercek()
+
+    monkeypatch.setattr(api_server, "_threading", SimpleNamespace(Thread=_KayitThread))
+    monkeypatch.setattr(api_server, "_bg_threads_started", False)
+    monkeypatch.setattr(api_server, "_start_background_threads", _sarici)
+    monkeypatch.setattr(efield_live, "start_loop", lambda **k: None)
+    monkeypatch.setattr(live_state, "esp_etkin", lambda: False)
+    monkeypatch.setattr(api_server.live_state, "esp_etkin", lambda: False, raising=False)
+    for alan in ("internet", "gateway", "mqtt", "stm"):
+        monkeypatch.setitem(api_server._live_state, alan, "offline")
+    monkeypatch.delenv(_SIM_ANAHTARI, raising=False)
+    try:
+        with TestClient(api_server.app):
+            pass
+        sonra = os.environ.get(_SIM_ANAHTARI)
+    finally:
+        os.environ.pop(_SIM_ANAHTARI, None)  # karar aşağıda; conftest hijyen bekçisi ikinci kez kırmızı yazmasın
+    assert anlik, "aparat: lifespan arka plan başlatıcısına ULAŞMADI (VAKUM)"
+    assert baslatilan, "aparat: gerçek başlatıcı hiçbir iş parçacığı kaydetmedi (VAKUM)"
+    assert anlik == [None] and sonra is None, (
+        f"lifespan bağlantılar kopukken PEMF_SIMULATE YAZDI (başlatıcı anında {anlik}, sonunda {sonra!r}) -> STM kopuk diye "
+        "üretim backend'i sanal donanıma geçer (SAHTE telemetri)"
+    )
+    sim = [ad for ad, hedef in baslatilan if hedef is api_server._hardware_simulation_loop]
+    assert not sim, f"lifespan bağlantılar kopukken sanal donanım BAŞLATTI: {sim}"
 
 
 def test_KRITIK_ESP_kapaliyken_MQTT_PUBLISH_hic_denenmez(monkeypatch):
