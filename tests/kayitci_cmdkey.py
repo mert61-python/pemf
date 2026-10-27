@@ -14,11 +14,15 @@ eder (ölçülen gerçek davranış, bkz. `scripts/pemf_teardown.ps1`):
 Her çağrı satır olarak kaydedilir (`cagrilar`): betiğin çağrılarının KAYITÇIYA geldiği iddia edilir (gelmeseydi gerçek
 kasaya gitmiş olurdu). Python tarafı kayıtçıyı TAM YOLLA çağırır (`cmdkey`) — Windows CreateProcess System32'yi PATH'ten
 ÖNCE arar, yalın "cmdkey" GERÇEK aracı bulurdu; Python'dan yalın `cmdkey` süreci başlatılırsa test KIRMIZI (bekçi).
+DEV-C3 (D1B §8 #10 · D1C §7 #16): bekçi tüm süreç başlatma yollarında (Popen tabanı + os.system/spawnv/startfile), `kur`
+PATH çözümünü kanıtlar; kapı `tests/test_kayitci_cmdkey_GERCEK_kasaya_gitmez_DEV_C3.py`.
 """
 
 from __future__ import annotations
 
 import os
+import re
+import shutil
 import subprocess
 import types
 from pathlib import Path
@@ -81,16 +85,75 @@ def kur(tmp_path: Path, monkeypatch) -> types.SimpleNamespace:
     monkeypatch.setenv("PEMF_SAHTE_KASA", str(kasa))
     monkeypatch.setenv("PEMF_CMDKEY_KAYIT", str(cagri))
     monkeypatch.setenv("PEMF_KAYITCI_CMDKEY", str(kok / "cmdkey.cmd"))
-    gercek_run = subprocess.run
+    # PowerShell yalın `cmdkey`i PATH SIRASIYLA çözer; kayıtçı başta değilse torun süreçler GERÇEK kasaya gider → KIRMIZI.
+    cozulen = shutil.which("cmdkey")
+    assert cozulen and os.path.normcase(cozulen) == os.path.normcase(str(kok / "cmdkey.cmd")), (
+        f"PATH'te yalın `cmdkey` kayıtçıya değil {cozulen!r}'e çözülüyor — gerçek kasaya düşülür"
+    )
+    # DEV-C3: bekçi süreç başlatmanın ORTAK noktasında (Popen._execute_child: run/call/check_output/Popen/asyncio) ve
+    # os.system / os.spawnv / os.startfile'da; süreç BAŞLATILMADAN kırmızı. Eski bekçi yalnız subprocess.run'ı sarıyordu.
+    gercek_yurut = subprocess.Popen._execute_child
 
-    def _bekci_run(args, *a, **k):
-        ilk = args[0] if isinstance(args, (list, tuple)) else str(args).split()[0]
-        if os.path.basename(str(ilk)).lower() in ("cmdkey", "cmdkey.exe"):
-            raise AssertionError(f"bu test GERÇEK cmdkey'i (kimlik kasası) çağırdı: {args!r} — kayıtçı kullanılmalı")
-        return gercek_run(args, *a, **k)
+    def _bekci_yurut(self, args, executable, *a, **k):
+        _bekle(executable, args)
+        return gercek_yurut(self, args, executable, *a, **k)
 
-    monkeypatch.setattr(subprocess, "run", _bekci_run)
+    monkeypatch.setattr(subprocess.Popen, "_execute_child", _bekci_yurut)
+
+    def _sar(gercek, program_ve_argv):
+        def _sarili(*a, **k):
+            _bekle(*program_ve_argv(*a, **k))
+            return gercek(*a, **k)
+
+        return _sarili
+
+    monkeypatch.setattr(os, "system", _sar(os.system, lambda komut: (None, komut)))
+    for ad in ("spawnv", "spawnve"):
+        if hasattr(os, ad):
+            monkeypatch.setattr(os, ad, _sar(getattr(os, ad), lambda kip, yol, argv, *a: (yol, argv)))
+    if hasattr(os, "startfile"):
+        monkeypatch.setattr(os, "startfile", _sar(os.startfile, lambda yol, *a, **k: (None, [yol])))
     return types.SimpleNamespace(kok=kok, kasa=kasa, cagri=cagri)
+
+
+_CMD_BAYRAKLARI = ("/c", "/k", "/s", "/q", "/d", "/r")
+
+
+def _parcala(komut) -> list[str]:
+    if isinstance(komut, (list, tuple)):
+        return [os.fsdecode(p) if isinstance(p, (bytes, os.PathLike)) else str(p) for p in komut]
+    metin = os.fsdecode(komut) if isinstance(komut, (bytes, os.PathLike)) else str(komut)
+    return [a or b for a, b in re.findall(r'"([^"]*)"|(\S+)', metin)]
+
+
+def _govde(parca: str) -> str:
+    ad = re.split(r"[\\/]", parca.strip().strip('"'))[-1].lower()
+    return ad.rsplit(".", 1)[0] if "." in ad else ad
+
+
+def kasa_araci_mi(executable, args) -> bool:
+    """Başlatılacak program (ya da `cmd /c`nin iç programı) adı `cmdkey` olan bir şey mi (yol / uzantı / büyük-küçük farksız)."""
+    parca = _parcala(args)
+    if executable:
+        parca = [os.fsdecode(executable)] + parca[1:]
+    if not parca:
+        return False
+    prog = _govde(parca[0])
+    if prog == "cmdkey":
+        return True
+    if prog == "cmd":
+        kalan = [p for p in parca[1:] if p.lower() not in _CMD_BAYRAKLARI]
+        if kalan:
+            return kasa_araci_mi(None, " ".join(kalan).strip().strip('"'))
+    return False
+
+
+def _bekle(executable, args) -> None:
+    if kasa_araci_mi(executable, args):
+        raise AssertionError(
+            f"bu test GERÇEK cmdkey'i (kimlik kasası) başlatmak üzereydi: {args!r} — süreç BAŞLATILMADI; Python'dan adı "
+            "cmdkey olan HİÇBİR program başlatılmaz, kayıtçı `kayitci_cmdkey.cmdkey()` kullanılmalı"
+        )
 
 
 def cagrilar(kayitci) -> list[str]:
@@ -98,7 +161,16 @@ def cagrilar(kayitci) -> list[str]:
 
 
 def cmdkey(*args: str) -> subprocess.CompletedProcess:
-    """KAYITÇI cmdkey (TAM YOL) — gerçek kasaya ASLA gitmez; kayıtçı kurulmamışsa KIRMIZI (sessiz geri düşüş yok)."""
+    """KAYITÇI cmdkey (TAM YOL) — gerçek kasaya ASLA gitmez; kayıtçı kurulmamışsa KIRMIZI (sessiz geri düşüş yok).
+
+    DEV-C3: kayıtçının PowerShell gövdesi DOĞRUDAN koşulur (`cmd /c ...\\cmdkey.cmd` DEĞİL): Python'dan adı cmdkey olan
+    hiçbir program başlatılmaz → bekçi ve test kafesi (adı cmdkey olan programı reddeder) kayıtçıyı gerçek araçla
+    karıştırmaz; eskiden bu yüzden kafeste 5 test kırmızıydı."""
     kayitci = os.environ.get("PEMF_KAYITCI_CMDKEY", "")
     assert kayitci and Path(kayitci).exists(), "kayıtçı cmdkey kurulmamış — gerçek kasaya düşülmez"
-    return subprocess.run(["cmd.exe", "/c", kayitci, *args], capture_output=True, timeout=30)
+    betik = Path(kayitci).with_name("kayitci_cmdkey.ps1")
+    return subprocess.run(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(betik), *args],
+        capture_output=True,
+        timeout=30,
+    )
