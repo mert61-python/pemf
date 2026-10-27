@@ -136,6 +136,62 @@ def test_ENTEGRASYON_fantom_gercek_kareden_hedef_ve_doz(kedi_izi):
     assert e > 0, "e_field 0 — E anahtarı eşlemesi gerçek çıktıda tutmuyor"
 
 
+def _sentetik_aruco_yapistir(kare, kenar_px: int = 300, konum: tuple = (700, 250), isaret_id: int = 0):
+    """⚠️ SENTETİK İŞARET (A-21 · D5.22): kabin işareti (DICT_5X5_50, kenar 10 cm — `cabin_config_v3.yaml` `aruco`) TESTİN İÇİNDE
+    `cv2.aruco.generateImageMarker` ile üretilir ve hocanın GERÇEK fantom fotoğrafına (izli kâhin fikstürü) beyaz kenarlıkla, düz
+    (kameraya bakan) yapıştırılır. Fiziksel bir ArUco yerleşimi / kabin ölçümü DEĞİLDİR — gerçek yerleşimin doğruluğu TEZGÂH-2'dir
+    (A-17). Konum, tümörlerin kabin içine düştüğü bölge (ölçüldü: 300 px @ (700, 250) → 5 hedef, güven 0,95)."""
+    import cv2
+    import numpy as np
+
+    sozluk = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_50)
+    isaret = cv2.aruco.generateImageMarker(sozluk, isaret_id, kenar_px)
+    pay = kenar_px // 5
+    blok = np.full((kenar_px + 2 * pay, kenar_px + 2 * pay), 255, np.uint8)
+    blok[pay : pay + kenar_px, pay : pay + kenar_px] = isaret
+    x, y = konum
+    out = kare.copy()
+    out[y : y + blok.shape[0], x : x + blok.shape[1]] = cv2.cvtColor(blok, cv2.COLOR_GRAY2BGR)
+    return out
+
+
+def test_ENTEGRASYON_fantom_SENTETIK_ArUco_karede_LOKALIZE_ve_doz_A21(kedi_izi):
+    """D5.22 (B-10.5 · A-21): doz adımı LOKALİZASYONDAN gelen hedefle koşar (yukarıdaki test kabin işaretsiz fotoğrafta dozu CST
+    kutusu merkezinde DOĞRUDAN ölçer — ArUco zorunluluğu kareyi kabul etmez). Sentetik işaretli kare → `aruco_pnp`, sürülebilir,
+    hedef KABİN İÇİNDE lokalize, güven ≥ eşik, gerçek ağırlıkla D > 0 ve E > 0.
+    MUTASYON: fantom sağlayıcısının duty'lerini 0 döndürmek ya da ArUco dedektörünü boş döndürmek → KIRMIZI."""
+    _agirlik_gerekli("fantom")
+    from pathlib import Path
+
+    import cv2
+    import numpy as np
+    import servers.ai_pro_hedef as hedef
+
+    yol = (
+        Path(__file__).resolve().parent
+        / "kahin"
+        / "hoca_cv_2026_10"
+        / "fantom"
+        / "WhatsApp Image 2026-10-02 at 19.40.11.jpeg"
+    )
+    kare = _sentetik_aruco_yapistir(cv2.imdecode(np.fromfile(str(yol), dtype=np.uint8), cv2.IMREAD_COLOR))
+    sag = hedef.saglayici_al("fantom")
+    sag.yukle()
+    lz, x, y, z, guven, _overlay, ozne, _dokum = sag.localize(kare, 0)
+    meta = sag.son_lokalizasyon_meta()
+    print(f"\n[OLCUM] fantom (SENTETİK ArUco): yontem={meta.get('method')!r} lz={lz} xyz=({x}, {y}, {z}) guven={guven}")
+    assert meta.get("method") == "aruco_pnp", f"sentetik kabin işareti çözülmedi: yöntem {meta.get('method')!r}"
+    assert meta["pemf_kapisi"]["surulebilir"] is True, meta.get("pemf_kapisi")
+    assert ozne is True and meta.get("targets"), "işaretli karede tümör hedefi üretilmedi"
+    assert lz is True and guven >= hedef.MIN_GUVEN, f"ArUco'lu karede hedef lokalize SAYILMADI (lz={lz}, güven={guven})"
+    D, P, e = sag.predict(x, y, z, 0)  # LOKALİZE hedefin kabin koordinatında (sabit nokta DEĞİL)
+    print(f"[OLCUM] fantom doz (lokalize hedef): max(D)={max(D):.3f} · e_field={e:.4f}")
+    assert len(D) == 7 and any(d > 0 for d in D), (
+        "lokalize hedefte gerçek ağırlıkla tüm duty 0 — sürülebilir parametre yok"
+    )
+    assert e > 0, "lokalize hedefte e_field 0"
+
+
 def test_ENTEGRASYON_petri_gercek_kareden_hedef_ve_SURE_olcumu(kedi_izi):
     """Hocanın GERÇEK 24'lük plaka fotoğrafı (kâhin, tests/kahin) ile: 24 kuyu adayı (A1–D6 etiketli) + doz; kare süresi
     ÖLÇÜLÜR ve raporlanır (plan Faz 2 bitiş kriteri: `join_timeout_s` bu ölçüme göre sabitlenir).
