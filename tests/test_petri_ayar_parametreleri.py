@@ -31,7 +31,11 @@ from ai_hub.inference_petri_dish import plausibility as plaus
 KOK = Path(__file__).resolve().parents[1]
 PETRI = KOK / "ai_hub" / "PEMF_AI_Test_Girdileri" / "06_PetriKuyu.jpg"
 
-pytestmark = pytest.mark.skipif(not PETRI.exists(), reason="petri test girdisi yok")
+# ⚠️ D5.48 (B-10.85): burada modül düzeyi `pytestmark = skipif(not PETRI.exists())` vardı — görsel İZLENMEZ (kardeş kaynak), yani
+# CI'da GÖRSELE HİÇ İHTİYACI OLMAYAN saf çözüm / sınır / tek-kaynak testleri de (dosyanın çoğu) ATLANIYORDU: `petri_ayar.coz` None
+# değerleri kwarg'a koysa da CI YEŞİLDİ. Atlama artık yalnız görseli GERÇEKTEN okuyan yolda (`_gonder`) ve `capraz` üzerinden
+# (`PEMF_CAPRAZ_KAYNAK_ZORUNLU=1` → DÜŞER).
+_PETRI_GORECE = "ai_hub/PEMF_AI_Test_Girdileri/06_PetriKuyu.jpg"
 
 
 # == 1) SAF ÇÖZÜM KATMANI ===================================================================
@@ -178,6 +182,9 @@ def yakala(monkeypatch):
 
 
 def _gonder(client, **form):
+    import capraz
+
+    capraz.atla_yoksa(_PETRI_GORECE)  # D5.48: yalnız görsele muhtaç testler atlar (zorunlu kipte düşer)
     with open(PETRI, "rb") as f:
         return client.post(
             "/api/ai/vision/em_petri",
