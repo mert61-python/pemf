@@ -90,9 +90,31 @@ def test_KRITIK_modal_arka_plani_etkisizlestiriyor_ve_geri_aciyor():
     """`inert` kaldırılmazsa Başlat/E-stop'a giden TÜM yol klavyeden kilitlenir."""
     ui = _ui()
     assert "inert = true" in ui and "inert = false" in ui, "modal odak yönetimi yok"
-    kapat = re.search(r"function closeModal\([^)]*\)\s*\{[^}]*\}", ui, re.DOTALL)
-    assert kapat and "inert = false" in kapat.group(0), (
-        "closeModal inert'i KOŞULSUZ kaldırmıyor — arka plan klavyeden kalıcı kilitlenir."
+    # ⚠️ D5.28 (B-10.240): eskiden `\{[^}]*\}` ile gövdenin İLK `}`'sine kadar bakılıyordu → `inert = false`'u `if (m) { … }` içine
+    # alan (koşullu) mutant YEŞİL kalıyordu. Artık gövde süslü / normal parantez dengesiyle ÜST DÜZEY deyimlere bölünür: `inert = false`
+    # içeren her deyim ÜST DÜZEYDE ve tam olarak `$("app-root").inert = false` olmalı (if / && / ?: ile koşula BAĞLANAMAZ).
+    m = re.search(r"function closeModal\([^)]*\)\s*\{", ui)
+    assert m, "closeModal bulunamadı"
+    deyimler, derinlik, bas, j = [], 0, m.end(), m.end()
+    while derinlik >= 0 and j < len(ui):
+        c = ui[j]
+        if c in "{(":
+            derinlik += 1
+        elif c in "})":
+            derinlik -= 1
+            if derinlik < 0:  # gövdenin kapanışı
+                deyimler.append(("ust", ui[bas:j]))
+                break
+            if c == "}" and derinlik == 0:
+                deyimler.append(("ust", ui[bas : j + 1]))
+                bas = j + 1
+        elif c == ";" and derinlik == 0:
+            deyimler.append(("ust", ui[bas:j]))
+            bas = j + 1
+        j += 1
+    inert = [d.strip() for _t, d in deyimler if "inert = false" in d]
+    assert inert and all(re.fullmatch(r'\$\("app-root"\)\.inert\s*=\s*false', d) for d in inert), (
+        f"closeModal inert'i KOŞULSUZ kaldırmıyor (koşula bağlı deyim: {inert}) — arka plan klavyeden kalıcı kilitlenir."
     )
     assert 'e.key === "Escape"' in ui, "Escape ile kapatma yok"
 

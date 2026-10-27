@@ -60,7 +60,7 @@ window.PEMF_I18N_KATALOG = {
   "kilavuz": {
    "connect": "In veterinary mode the PEMF hardware must be on the SAME Wi-Fi network as your computer. The app finds it automatically; if not, enter the device IP manually in the app's Settings.",
    "connectTitle": "Connecting to the device (Vet)",
-   "intro": "PEMF Vet is a platform for AI-assisted diagnosis and PEMF (pulsed magnetic field) sessions in cats. This client downloads, installs and starts the app on your computer. The steps below are written for someone with no prior experience — just follow them in order.",
+   "intro": "PEMF Vet is a platform for AI-assisted diagnosis and PEMF (pulsed magnetic field) sessions in cats. This launcher downloads, installs and starts the app on your computer. The steps below are written for someone with no prior experience — just follow them in order.",
    "profTitle": "3 Profiles — which one is for you?",
    "profiles": {
     "p01": {
@@ -150,7 +150,7 @@ window.PEMF_I18N_KATALOG = {
   "logout": "Sign out",
   "logoutBody": "Your session on this computer will be removed and the app will be signed out. Continue?",
   "logoutTitle": "Sign out",
-  "luReady": "PEMF Vet Client {{surum}} is available — it will be installed when you close and reopen the app.",
+  "luReady": "PEMF Vet launcher {{surum}} is available — it will be installed when you close and reopen the app.",
   "noChange": "No changes",
   "notInstalled": "App is not installed.",
   "notSupported": "The package for this platform ({{platform}}) is not published yet.",
@@ -299,7 +299,7 @@ window.PEMF_I18N_KATALOG = {
   "kilavuz": {
    "connect": "Veteriner modunda PEMF donanımı, bilgisayarınızla AYNI Wi-Fi ağında olmalıdır. Uygulama cihazı otomatik bulur. Bulamazsa uygulama içindeki Ayarlar’dan cihazın IP adresini elle girebilirsiniz.",
    "connectTitle": "Cihaza bağlanma (Veteriner)",
-   "intro": "PEMF Vet; kedilerde yapay zekâ ile teşhis ve PEMF (darbeli manyetik alan) ile seans uygulayan bir platformdur. Bu client, uygulamayı bilgisayarınıza indirir, kurar ve başlatır. Aşağıdaki adımlar hiç deneyimi olmayan biri için hazırlanmıştır — sırayla takip etmeniz yeterli.",
+   "intro": "PEMF Vet; kedilerde yapay zekâ ile teşhis ve PEMF (darbeli manyetik alan) ile seans uygulayan bir platformdur. Bu başlatıcı, uygulamayı bilgisayarınıza indirir, kurar ve başlatır. Aşağıdaki adımlar hiç deneyimi olmayan biri için hazırlanmıştır — sırayla takip etmeniz yeterli.",
    "profTitle": "3 Profil — hangisi sizin için?",
    "profiles": {
     "p01": {
@@ -389,7 +389,7 @@ window.PEMF_I18N_KATALOG = {
   "logout": "Çıkış",
   "logoutBody": "Bu bilgisayardaki oturumunuz silinecek ve uygulamadaki giriş kapatılacak. Devam edilsin mi?",
   "logoutTitle": "Çıkış yap",
-  "luReady": "PEMF Vet Client {{surum}} yayınlandı — uygulamayı kapatıp açtığınızda kurulacak.",
+  "luReady": "PEMF Vet başlatıcısının {{surum}} sürümü yayınlandı — uygulamayı kapatıp açtığınızda kurulacak.",
   "noChange": "Değişiklik yok",
   "notInstalled": "Uygulama kurulu değil.",
   "notSupported": "Bu platform ({{platform}}) için uygulama paketi henüz yayınlanmadı.",

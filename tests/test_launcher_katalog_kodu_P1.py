@@ -106,13 +106,14 @@ def test_KRITIK_profil_adlari_katalogdan_bilinmeyen_anahtar_kendini_gosterir(son
 
 def test_KRITIK_tf_yer_tutucuyu_doldurur_eksik_parametre_bos_bilinmeyen_anahtar_kendini_gosterir(sonuc):
     tr = sonuc["tr"]["tf"]
-    assert tr[0] == "PEMF Vet Client 9.9.9 yayınlandı — uygulamayı kapatıp açtığınızda kurulacak."
+    # D5.28 (B-10.228): ekranda "Client" yok — süreç adı "başlatıcı" (TR DEĞİŞTİ ui.luReady).
+    assert tr[0] == "PEMF Vet başlatıcısının 9.9.9 sürümü yayınlandı — uygulamayı kapatıp açtığınızda kurulacak."
     assert tr[1] == "Profil kaldırılamadı: x"
     assert tr[2].startswith("“A” seçildi ama “B” yok.") and "B paketindeki" in tr[2]
     assert tr[3] == "yokAnahtar", "katalogda olmayan anahtar kendini göstermeli (boş metin YOK)"
     assert tr[4].startswith("Yedek hedefi şu an erişilemiyor:  —"), "eksik parametre boş dize olmalı (`undefined` YOK)"
     en = sonuc["en"]["tf"]
-    assert en[0] == "PEMF Vet Client 9.9.9 is available — it will be installed when you close and reopen the app."
+    assert en[0] == "PEMF Vet launcher 9.9.9 is available — it will be installed when you close and reopen the app."
     assert en[1] == "Profile could not be removed: x"
     assert en[2].startswith("“A” is selected without “B”.") and "from the B package" in en[2]
 

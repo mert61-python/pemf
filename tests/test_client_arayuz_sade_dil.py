@@ -99,7 +99,15 @@ def _ui_degerleri(dil: str) -> list[str]:
 
 
 def test_KRITIK_urun_adi_ekranda_client_DEGIL():
-    """Ekran metninde "client" geçmez — site ile aynı karar (ürün adı PEMF Vet)."""
+    """Ekran metninde "client" geçmez — site ile aynı karar (ürün adı PEMF Vet).
+
+    ⚠️ D5.28 (B-10.228): kapı eskiden yalnız ÜÇ kalıbı arıyordu ("Hafif client" …) — `ui.luReady` "PEMF Vet Client {{surum}} yayınlandı"
+    ve `ui.kilavuz.intro` "Bu client, …" ekranda duruyordu ve kapı YEŞİLDİ (önceki sürümde de backtick'li değerler hiç taranmıyordu).
+    Kural artık KELİMENİN KENDİSİ: ekrandaki hiçbir TR / EN değerinde "client" yok (süreç adı TR "başlatıcı", EN "launcher"). Windows
+    kurulum adı (`PEMF Vet Client` — kaldırma kaydı, klasör, productName) EKRAN metni değildir, değişmez."""
+    for dil in ("tr", "en"):
+        kotu = [v for v in _ui_degerleri(dil) if re.search(r"(?i)\bclient\b", v)]
+        assert not kotu, f"masaüstü arayüzünde ({dil}) hâlâ 'client' adlandırması var: {kotu}"
     tr = _i18n_tr()
     for olu in ("Hafif client", "client sürümü", "Client güncelleniyor"):
         assert olu not in tr, f"masaüstü arayüzünde hâlâ 'client' adlandırması var: {olu!r}"
