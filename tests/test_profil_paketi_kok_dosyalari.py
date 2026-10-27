@@ -52,12 +52,77 @@ def _yasak_liste() -> set[str]:
     return {x.lower() for x in re.findall(r'"([^"]+)"', m.group(1))}
 
 
+#: D5.07 (B-8.16): kurulum kökü değişkenleri — çekirdekte `install_root`, uygulamada (main.rs) `root` / `kurulum_koku`.
+_KOK_ADLARI = r"\b(?:install_root|kurulum_koku|root)"
+#: Taranan ÜRETİM kaynağı: launcher çekirdeği + uygulaması (testler `#[cfg(test)] mod … {}` blokları ATILIR).
+_LAUNCHER_KAYNAK = sorted(
+    list((_KOK / "launcher" / "core" / "src").glob("*.rs")) + list((_KOK / "launcher" / "app" / "src").glob("*.rs"))
+)
+
+
+def _test_bloklari_disinda(kod: str) -> str:
+    """`#[cfg(test)]` ile işaretli `mod … { … }` bloklarını (süslü parantez dengesiyle) siler."""
+    while True:
+        m = re.search(r"#\[cfg\(test\)\]\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*\{", kod)
+        if not m:
+            return kod
+        derinlik, j = 0, m.end() - 1
+        while j < len(kod):
+            if kod[j] == "{":
+                derinlik += 1
+            elif kod[j] == "}":
+                derinlik -= 1
+                if derinlik == 0:
+                    break
+            j += 1
+        kod = kod[: m.start()] + kod[j + 1 :]
+
+
 def _kok_girdileri() -> set[str]:
-    """Kurulum kokunde GERCEKTEN yasayan girdiler — kodun kendisinden turetilir."""
+    """Kurulum kokunde GERCEKTEN yasayan girdiler — kodun kendisinden turetilir.
+
+    ⚠️ D5.07 (B-8.16): eskiden YALNIZ install.rs + flow.rs'te TEK SATIRLIK `install_root.join("…")` aranıyordu → başka bir kaynak
+    dosyadaki (ör. secret_store.rs), SABİTLE (`join(GUNCELLEME_ISARETI_DOSYASI)`), rustfmt'in ürettiği ÇOK SATIRLI `.join(\\n "…" \\n)`,
+    `join(format!("…"))` ya da `p.push("…")` biçimindeki yeni bir kök durum dosyası kapıyı YEŞİL bırakıyordu (ölçüldü). Artık: tüm launcher
+    üretim kaynağı, YORUM-SOYULMUŞ (dizge-farkında), test modülleri hariç; sabitlerin DEĞERİ çözülür; yer tutuculu `format!` (ör.
+    `auth_session.bin.{pid}.tmp` geçici adı) öngörülemez ad olduğundan sayılmaz."""
+    from kaynak_soyucu import rust_soy
+
+    kaynaklar = [
+        _test_bloklari_disinda(rust_soy(p.read_text(encoding="utf-8", errors="replace"))) for p in _LAUNCHER_KAYNAK
+    ]
+    sabitler: dict[str, str] = {}
+    for kod in kaynaklar:
+        for ad, deger in re.findall(r'\bconst\s+(\w+)\s*:\s*&(?:\'static\s+)?str\s*=\s*"([^"]+)"\s*;', kod):
+            sabitler[ad] = deger
+
+    def _coz(arg: str) -> str | None:
+        arg = arg.strip().rstrip(",").strip()
+        m = re.fullmatch(r'"([^"]+)"', arg)
+        if m:
+            return m.group(1)
+        m = re.fullmatch(r'format!\(\s*"([^"{}]+)"\s*\)', arg)  # yer tutucusuz format! = sabit ad
+        if m:
+            return m.group(1)
+        m = re.fullmatch(r"(?:\w+::)*([A-Z][A-Z0-9_]+)", arg)
+        if m:
+            return sabitler.get(m.group(1))
+        return None
+
+    arguman = r"\(\s*([^()]*(?:\([^()]*\))?[^()]*)\)"
     girdiler: set[str] = set()
-    for dosya in (_INSTALL, _FLOW):
-        src = dosya.read_text(encoding="utf-8", errors="replace")
-        girdiler |= set(re.findall(r'install_root\.join\("([^"]+)"\)', src))
+    for kod in kaynaklar:
+        for m in re.finditer(_KOK_ADLARI + r"\s*\.\s*join\s*" + arguman, kod):
+            ad = _coz(m.group(1))
+            if ad:
+                girdiler.add(ad)
+        for m in re.finditer(
+            r"\blet\s+mut\s+(\w+)\s*=\s*" + _KOK_ADLARI + r"\s*\.\s*(?:to_path_buf|to_owned)\s*\(\s*\)", kod
+        ):
+            for p in re.finditer(rf"\b{m.group(1)}\s*\.\s*push\s*" + arguman, kod[m.end() :]):
+                ad = _coz(p.group(1))
+                if ad:
+                    girdiler.add(ad)
     assert len(girdiler) > 8, f"kok girdileri cikarilamadi ({girdiler}) — desen degismis olabilir"
     return girdiler
 
