@@ -461,6 +461,8 @@
     "modEvcil": "Evcil Sahibi",
     "oncekiDegerlendirmeler": "Önceki değerlendirmeler ({{adet}})",
     "oncekiYuklenemedi": "Önceki değerlendirmeler yüklenemedi — kayıtlı hekimli cihazda üst bardan hangi hekim olduğunuzu seçin.",
+    "oncekiYuklenemediAg": "Önceki değerlendirmeler yüklenemedi — cihaza bağlanılamadı; bağlantı gelince kaydı kapatıp yeniden açın.",
+    "oncekiYuklenemediSunucu": "Önceki değerlendirmeler şu an okunamıyor — cihaz kaydı veremedi; biraz sonra kaydı kapatıp yeniden açın.",
     "paylas": "Sonucu paylaş (PDF)",
     "paylasEtiketi": "{{ad}} sonucunu paylaş",
     "silinemez": "Silinemez",

@@ -461,6 +461,8 @@
     "modEvcil": "Pet Owner",
     "oncekiDegerlendirmeler": "Previous reviews ({{adet}})",
     "oncekiYuklenemedi": "Previous reviews could not be loaded — on a device with registered veterinarians, choose which veterinarian you are from the top bar.",
+    "oncekiYuklenemediAg": "Previous reviews could not be loaded — the device could not be reached; once the connection is back, close and reopen the record.",
+    "oncekiYuklenemediSunucu": "Previous reviews cannot be read right now — the device could not provide the record; close and reopen the record in a moment.",
     "paylas": "Share result (PDF)",
     "paylasEtiketi": "Share the result of {{ad}}",
     "silinemez": "Cannot delete",

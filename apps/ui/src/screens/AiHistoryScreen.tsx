@@ -22,6 +22,7 @@ import {
   deleteScope,
   effectiveScope,
   inScope,
+  kimlikDbArizaMi,
   kimlikDbOkunamiyorMetni,
   kimlikIstemiMetni,
   kimlikIstemi,
@@ -64,6 +65,13 @@ interface AiAnalysis {
 
 /** Y122: önceki bir değerlendirme (karar, metin, hekim, zaman) — `GET /api/ai/log/{id}` ayrıntısından. */
 interface OncekiDegerlendirme { status: ReviewStatus; note?: string; reviewed_by?: string; reviewed_at?: string }
+
+/** 2-F incelemesi §10 #11 (D5): önceki değerlendirmeler NEDEN yüklenemedi — eskiden hepsi "hekim seçin" diyordu (503 / ağ hatasında
+ *  yanlış eylem). 428 = kimlik gerekli (Y113 gövdesiyle: kimlik veritabanı okunamıyor) · başka HTTP hatası = sunucu (503 kayıt DB'si vb.)
+ *  · yanıt yok = ağ. Kapı: screens/__tests__/aiGecmisiOncekiDegerlendirmeler.Y122.web.test.tsx */
+type OncekiHata = "hataKimlik" | "hataKimlikDb" | "hataSunucu" | "hataAg";
+const oncekiHatasi = (durum: number, detay: string, yanitVar: boolean): OncekiHata =>
+  durum === 428 ? (kimlikDbArizaMi(detay) ? "hataKimlikDb" : "hataKimlik") : durum || yanitVar ? "hataSunucu" : "hataAg";
 
 /** Profil rozeti — çağrı anında katalogdan (dil değişince tazelenir); bilinmeyen profil → boş dize (çağıran ham değeri gösterir). */
 const modeEtiketi = (mode: string): string =>
@@ -121,7 +129,7 @@ export function AiHistoryScreen() {
   useEffect(() => { setTaslaklar({}); }, [myEmail]);
   // ⚠️ Y122 / Y126: önceki değerlendirmelerin METİNLERİ liste ucunda yok — kayıt açılınca ayrıntı ucundan (kimlikli) çekilir.
   // Önbellek YALNIZ BELLEKTE ve KİMLİĞE aittir: kimlik değişince düşer (A'nın jetonuyla çekilen metin B'ye gösterilmez).
-  const [gecmisler, setGecmisler] = useState<Record<number, OncekiDegerlendirme[] | "yukleniyor" | "hata">>({});
+  const [gecmisler, setGecmisler] = useState<Record<number, OncekiDegerlendirme[] | "yukleniyor" | OncekiHata>>({});
   useEffect(() => { setGecmisler({}); }, [myEmail]);
   // Klinik-içi: "mine" = benim yaptığım analizler (+ sahipsiz eski), "all" = tüm klinik.
   const [scope, setScope] = useState<"mine" | "all">("mine");
@@ -278,9 +286,25 @@ export function AiHistoryScreen() {
     if (!it || !((it.review_history_count ?? 0) > 0) || gecmisler[expanded] !== undefined) return;
     const id = expanded;
     setGecmisler((g) => ({ ...g, [id]: "yukleniyor" }));
-    void apiGet<{ data?: { review_history?: OncekiDegerlendirme[] } } | null>(`/ai/log/${id}`, null, { silent: true })
-      .then((r) => setGecmisler((g) => ({ ...g, [id]: Array.isArray(r?.data?.review_history) ? r!.data!.review_history! : "hata" })));
+    // 2-F §10 #11 (D5): durum kodu ve gerekçe hatanın NEDENİNİ ayırır (428 / Y113 / sunucu / ağ) — bkz. `oncekiHatasi`.
+    let durum = 0;
+    let detay = "";
+    void apiGet<{ data?: { review_history?: OncekiDegerlendirme[] } } | null>(`/ai/log/${id}`, null, {
+      silent: true,
+      onHttpError: (s, d) => { durum = s; detay = d || ""; },
+    }).then((r) => setGecmisler((g) => ({
+      ...g,
+      [id]: Array.isArray(r?.data?.review_history) ? r!.data!.review_history! : oncekiHatasi(durum, detay, r != null),
+    })));
   }, [expanded, items, gecmisler]);
+  // 2-F §10 #11 (D5): hata önbellekte KALICI değil — kart kapanıp açılınca yeniden denenir (503 / ağ hatası geçicidir; eylem metni
+  // "kaydı kapatıp yeniden açın" der). Başarılı liste ve uçuştaki istek kalır.
+  useEffect(() => {
+    setGecmisler((g) => {
+      const kalan = Object.fromEntries(Object.entries(g).filter(([, v]) => Array.isArray(v) || v === "yukleniyor"));
+      return Object.keys(kalan).length === Object.keys(g).length ? g : kalan;
+    });
+  }, [expanded]);
 
 
   // ORTA fix: before_id keyset ile "Daha Fazla Yükle" → 300'den fazla AI analizi olan (araştırma) kullanıcının
@@ -525,9 +549,14 @@ export function AiHistoryScreen() {
                           <Text style={styles.detailKey}>{t("ai.gecmis.oncekiDegerlendirmeler", { adet: it.review_history_count })}</Text>
                           {gecmisler[it.id] === undefined || gecmisler[it.id] === "yukleniyor" ? (
                             <ActivityIndicator color={colors.primary} />
-                          ) : gecmisler[it.id] === "hata" ? (
+                          ) : !Array.isArray(gecmisler[it.id]) ? (
                             <Text style={styles.detailLine}>
-                              {t("ai.gecmis.oncekiYuklenemedi")}
+                              {/* 2-F §10 #11: neden ayrı — 428 bugünkü metin, Y113 arıza + çare, sunucu / ağ kendi eylemi. */}
+                              {gecmisler[it.id] === "hataSunucu"
+                                ? t("ai.gecmis.oncekiYuklenemediSunucu")
+                                : gecmisler[it.id] === "hataAg"
+                                  ? t("ai.gecmis.oncekiYuklenemediAg")
+                                  : kimlikIstemi(t("ai.gecmis.oncekiYuklenemedi"), gecmisler[it.id] === "hataKimlikDb")}
                             </Text>
                           ) : (
                             (gecmisler[it.id] as OncekiDegerlendirme[]).map((g, i) => (
