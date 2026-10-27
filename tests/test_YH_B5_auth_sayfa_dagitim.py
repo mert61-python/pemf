@@ -18,6 +18,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parent.parent
@@ -71,7 +72,7 @@ console.log(JSON.stringify({ dustu, betik: betikler.length, dugmeBagli: typeof (
 """
 
 
-@pytest.mark.skipif(not _NODE, reason="node yok — çalışma zamanı denetimi atlandı")
+@pytest.mark.skipif((not _NODE) and not capraz.ZORUNLU, reason="node yok — çalışma zamanı denetimi atlandı")
 @pytest.mark.parametrize("sayfa", SAYFALAR)
 def test_katalog_YUKLENMEDIYSE_betik_dusmez(sayfa):
     r = json.loads(

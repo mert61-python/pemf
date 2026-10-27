@@ -28,6 +28,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
@@ -42,7 +43,7 @@ def _script_govdesi() -> str:
     return m.group(1)
 
 
-@pytest.mark.skipif(not _NODE, reason="node yok")
+@pytest.mark.skipif((not _NODE) and not capraz.ZORUNLU, reason="node yok")
 def test_KRITIK_UI_JAVASCRIPTI_AYRISTIRILABILIYOR(tmp_path):
     """Tüm script bloğu geçerli JS olmalı.
 
@@ -58,7 +59,7 @@ def test_KRITIK_UI_JAVASCRIPTI_AYRISTIRILABILIYOR(tmp_path):
     )
 
 
-@pytest.mark.skipif(not _NODE, reason="node yok")
+@pytest.mark.skipif((not _NODE) and not capraz.ZORUNLU, reason="node yok")
 def test_KRITIK_dil_metinlerinde_KAPANMAMIS_dize_yok(tmp_path):
     """Dize sabitleri satır sonunda kapanmadan bırakılmamalı (asıl arızanın biçimi).
 
@@ -93,7 +94,7 @@ def test_KRITIK_cok_satirli_metinler_KACIS_kullaniyor():
         assert "\\n" in m.group(1), f"'{anahtar}' paragraf ayrımı için `\\n` kaçışı kullanmıyor"
 
 
-@pytest.mark.skipif(not _NODE, reason="node yok")
+@pytest.mark.skipif((not _NODE) and not capraz.ZORUNLU, reason="node yok")
 def test_KRITIK_UI_KATALOG_JAVASCRIPTI_AYRISTIRILABILIYOR():
     """I18N-P1 · 11a: tüm arayüz metni `i18n_katalog.js`te — o dosya ayrıştırılamazsa arayüz METİNSİZ açılır (asıl arızanın katalog biçimi)."""
     f = _KOK / "launcher" / "app" / "ui" / "i18n_katalog.js"
@@ -101,7 +102,7 @@ def test_KRITIK_UI_KATALOG_JAVASCRIPTI_AYRISTIRILABILIYOR():
     assert r.returncode == 0, f"i18n_katalog.js AYRIŞTIRILAMIYOR:\n{r.stderr[:1200]}"
 
 
-@pytest.mark.skipif(not _NODE, reason="node yok")
+@pytest.mark.skipif((not _NODE) and not capraz.ZORUNLU, reason="node yok")
 def test_KARSIT_KANIT_kapi_gercekten_kirmizi_olabiliyor(tmp_path):
     """Kapının boş çalışmadığının kanıtı: bozuk bir dize `node --check`i düşürmeli.
 

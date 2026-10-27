@@ -15,6 +15,7 @@ import shutil
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parent.parent
@@ -56,7 +57,8 @@ def test_K2_tamam_dosyalarda_sabit_metin_yok_python_rust_html_nsis():
 
 
 @pytest.mark.skipif(
-    not _TS_VAR, reason="node / TypeScript yok (npm ci) — jest tarafı sabitMetinYasagi.test.ts aynı denetimi yapar"
+    (not _TS_VAR) and not capraz.ZORUNLU,
+    reason="node / TypeScript yok (npm ci) — jest tarafı sabitMetinYasagi.test.ts aynı denetimi yapar",
 )
 def test_K2_tamam_dosyalarda_sabit_metin_yok_ts_tsx():
     sorun = _ihlaller(_tamam(ts=True))

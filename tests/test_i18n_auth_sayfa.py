@@ -22,6 +22,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parent.parent
@@ -166,7 +167,7 @@ def _kos(bayrak: str, tarayici: str, sorgu: str = "") -> dict:
     return json.loads(cikti)
 
 
-@pytest.mark.skipif(not _NODE, reason="node yok — çalışma zamanı denetimi atlandı")
+@pytest.mark.skipif((not _NODE) and not capraz.ZORUNLU, reason="node yok — çalışma zamanı denetimi atlandı")
 def test_bayrak_kapaliyken_sayfa_her_zaman_turkce():
     for tarayici, sorgu in (("en-US", ""), ("en-US", "?dil=en"), ("de-DE", ""), ("tr-TR", "")):
         r = _kos("false", tarayici, sorgu)
@@ -177,7 +178,7 @@ def test_bayrak_kapaliyken_sayfa_her_zaman_turkce():
         assert r["yok"] == "authSayfa.yok.anahtar"  # eksik anahtar çökmez, anahtarı gösterir
 
 
-@pytest.mark.skipif(not _NODE, reason="node yok — çalışma zamanı denetimi atlandı")
+@pytest.mark.skipif((not _NODE) and not capraz.ZORUNLU, reason="node yok — çalışma zamanı denetimi atlandı")
 def test_bayrak_acikken_dil_secimi():
     assert _kos("true", "en-US")["baslik"] == "Set a New Password"
     assert _kos("true", "de-DE")["dil"] == "en"

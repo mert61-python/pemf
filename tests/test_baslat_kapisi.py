@@ -22,6 +22,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 from i18n_yardimci import launcher_ui as katalog_ui
 
@@ -185,7 +186,7 @@ def _kapi_senaryosu(senaryo: str, tmp_path: Path) -> dict:
     return json.loads(r.stdout.strip().splitlines()[-1])
 
 
-@pytest.mark.skipif(_NODE is None, reason="node yok")
+@pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
 def test_DAVRANIS_kapat_kilitler_ac_serbest_birakir(tmp_path):
     s = _kapi_senaryosu(
         """
@@ -204,7 +205,7 @@ def test_DAVRANIS_kapat_kilitler_ac_serbest_birakir(tmp_path):
     assert s["acik"]["etiket"] == "Başlat", "etiket geri gelmiyor"
 
 
-@pytest.mark.skipif(_NODE is None, reason="node yok")
+@pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
 def test_DAVRANIS_zaman_asimi_kapiyi_ACAR(tmp_path):
     """🔴 Ağ adımı asılırsa düğme sonsuza dek kilitli kalamaz."""
     s = _kapi_senaryosu(
@@ -226,7 +227,7 @@ def test_DAVRANIS_zaman_asimi_kapiyi_ACAR(tmp_path):
     assert s["sonra"]["kilitli"] is False, "zaman aşımı düğmeyi AÇMIYOR → kalıcı kilit"
 
 
-@pytest.mark.skipif(_NODE is None, reason="node yok")
+@pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
 def test_DAVRANIS_cift_ac_cagrisi_zararsiz(tmp_path):
     """`show('s-ready')` her çağrıda açmayı dener; kapı kapalı değilken bozmamalı."""
     s = _kapi_senaryosu(

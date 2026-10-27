@@ -24,6 +24,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -283,7 +284,7 @@ def test_KRITIK_D276_arayuz_konumu_launcher_KOMUTUNDAN_alir():
 _NODE = shutil.which("node")
 
 
-@pytest.mark.skipif(_NODE is None, reason="node yok — yukarıdaki yapısal kapılar yine koşar")
+@pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok — yukarıdaki yapısal kapılar yine koşar")
 @pytest.mark.parametrize("dil", ["tr", "en"])
 def test_KRITIK_D233_arayuz_metni_GERCEKTE_konumu_ve_digerini_yazar(dil, tmp_path):
     """index.html'deki `tf` + `uninMetni` GERÇEK kaynaktan dilimlenip node'da değerlendirilir (sahte `t()` = katalog)."""

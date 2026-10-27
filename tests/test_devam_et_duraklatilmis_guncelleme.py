@@ -25,13 +25,14 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 _KOK = Path(__file__).resolve().parent.parent
 _UI = _KOK / "launcher" / "app" / "ui" / "index.html"
 _NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node yok")
+pytestmark = pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
 
 
 def _fonksiyon(ham: str, imza: str) -> str:

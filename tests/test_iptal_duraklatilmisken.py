@@ -25,6 +25,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 _KOK = Path(__file__).resolve().parent.parent
@@ -74,7 +75,7 @@ def test_KARSIT_5_10_discard_pending_korumasi_AYNEN():
 
 # ─────────────────────────── [5.6] davranışsal (Node-harness) ───────────────────────────
 
-pytestmark_node = pytest.mark.skipif(_NODE is None, reason="node yok")
+pytestmark_node = pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
 
 
 def _fonksiyon(ham: str, imza: str) -> str:

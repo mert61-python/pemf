@@ -21,6 +21,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 from i18n_yardimci import launcher_ui as ui
 
@@ -28,7 +29,7 @@ _KOK = Path(__file__).resolve().parent.parent
 _UI = _KOK / "launcher" / "app" / "ui" / "index.html"
 _NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node yok")
+pytestmark = pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
 
 GiB = 1073741824
 BASE_APP, BASE_DEPS = 81133442, 1487710488  # canlı manifest 1.9.42 (app + deps katmanı)

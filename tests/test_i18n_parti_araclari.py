@@ -22,6 +22,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parent.parent
@@ -32,7 +33,8 @@ from scripts.i18n import auth_uret, bayrak, kapsam, katalog, launcher_uret, orta
 _NODE = shutil.which("node")
 _TS_VAR = any((KOK / a / "node_modules" / "typescript" / "package.json").is_file() for a in ("apps/ui", "apps/web"))
 ts_gerekli = pytest.mark.skipif(
-    not (_NODE and _TS_VAR), reason="node ya da apps/ui|apps/web node_modules/typescript yok (npm ci)"
+    (not (_NODE and _TS_VAR)) and not capraz.ZORUNLU,
+    reason="node ya da apps/ui|apps/web node_modules/typescript yok (npm ci)",
 )
 
 
