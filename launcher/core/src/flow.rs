@@ -530,30 +530,26 @@ pub fn install_profiles(
             zipler.push(ensure_package(pkg, &cache, etiket, on, control)?);
         }
         on(Progress::Extracting { what: (*name).clone() });
-        // ⚠️ DENETİM 2026-08-23 (C12): SHA KAYDI AÇILIMDAN ÖNCE GEÇERSİZ KILINIR.
-        // `repair()` doğrudan buraya düşer ve onarım senaryosunda kayıt ZATEN doğru sha'yı taşır.
-        // Açılım yarıda kesilirse (elektrik/iptal) diskte YARIM bir model ağacı kalır ama kayıt
-        // manifest sha'sıyla EŞLEŞMEYE devam eder → `pending_updates` o profili "güncel" sayar ve
-        // bir daha ASLA yenilemez; `kurulum_saglam_mi` yalnız runtime ağacına baktığı için client
-        // "Hazır!" der. Sonuç: AI analizi anlaşılmaz bir hatayla düşer ve kullanıcı sebebini
-        // hiçbir yerde göremez. Kardeş yol (`profilleri_yenile`) bunu zaten doğru yapıyordu.
-        install::record_model_sha(install_root, name, "");
-        // `is_profile = true`: profil paketi doğrulanmış `runtime/` ağacını ve launcher durum
-        // dosyalarını EZEMEZ (bkz. extract::PROFILE_FORBIDDEN_TOP, #104).
-        for model_zip in &zipler {
-            extract::extract_zip_cancellable(model_zip, install_root, &mut extract_budget, true, &|| {
-                control() == net::Control::Cancel
-            })?;
-        }
-        // Bu profil TAM indi + açıldı → HEMEN "kurulu" işaretle (mevcutlarla birleşir).
-        // ÖNEMLİ: işaretlemeyi döngü SONUNA bırakma. Çoklu-profil kurulumunda kullanıcı
-        // sonraki profili İPTAL ederse (ör. Ev Sahibi bitti, Veteriner yarıda iptal),
-        // erken-return burayı atlar → tamamlanan profil KAYBOLURDU. Her profili kendi
-        // extract'ından hemen sonra kaydederek, iptal-sonrası kullanıcı tamamlanmış
-        // profil(ler)le uygulamayı kurup başlatabilir.
-        install::add_installed_profiles(install_root, std::slice::from_ref(*name));
         let pkgs: Vec<&crate::Package> = ciftler.iter().map(|(p, _)| *p).collect();
-        install::record_model_sha(install_root, name, &birlesik_model_sha(&pkgs));
+        // SHA kaydı açılımdan ÖNCE geçersiz kılınır, gerçek sha YALNIZ tüm açılım başarılıysa yazılır (bkz. profil_modelini_ac).
+        // `is_profile = true`: profil paketi doğrulanmış `runtime/` ağacını ve launcher durum dosyalarını EZEMEZ
+        // (bkz. extract::PROFILE_FORBIDDEN_TOP, #104).
+        // Bu profil TAM indi + açıldı → HEMEN "kurulu" işaretle (mevcutlarla birleşir). ÖNEMLİ: işaretlemeyi döngü SONUNA
+        // bırakma. Çoklu-profil kurulumunda kullanıcı sonraki profili İPTAL ederse (ör. Ev Sahibi bitti, Veteriner yarıda
+        // iptal), erken-return burayı atlar → tamamlanan profil KAYBOLURDU.
+        profil_modelini_ac(
+            install_root,
+            name.as_str(),
+            &zipler,
+            &birlesik_model_sha(&pkgs),
+            &mut |model_zip| {
+                extract::extract_zip_cancellable(model_zip, install_root, &mut extract_budget, true, &|| {
+                    control() == net::Control::Cancel
+                })?;
+                Ok(())
+            },
+            &mut || install::add_installed_profiles(install_root, std::slice::from_ref(*name)),
+        )?;
     }
     // Denetim Masası boyutunu GERÇEK kullanımla güncelle: NSIS onu kurulum anında hesaplar ve
     // o an dizinde yalnız launcher vardır (~11 MB); runtime + profil modelleri SONRA iner.
@@ -1658,6 +1654,31 @@ pub fn update_installed(
     Ok(geri)
 }
 
+/// Bir profilin model zip'lerini AÇ — iki model döngüsünün (`install_profiles`, `profilleri_yenile`) TEK sıra kuralı.
+///
+/// ⚠️ DENETİM 2026-08-23 (C12): SHA KAYDI AÇILIMDAN ÖNCE GEÇERSİZ KILINIR. `repair()` doğrudan `install_profiles`e düşer ve
+/// onarım senaryosunda kayıt ZATEN doğru sha'yı taşır. Açılım yarıda kesilirse (elektrik / iptal / bozuk zip) diskte YARIM bir
+/// model ağacı kalır ama kayıt manifest sha'sıyla EŞLEŞMEYE devam eder → `pending_updates` o profili "güncel" sayar ve bir daha
+/// ASLA yenilemez; AI analizi anlaşılmaz bir hatayla düşer. Gerçek sha YALNIZ tüm parçalar açıldıktan sonra yazılır.
+/// D5.52 (B-10.144): kural eskiden iki döngüde kopya duruyor ve yalnız METİNLE kapılıydı (`if false { … }` mutantı YEŞİL); artık
+/// tek yerde ve açılım ENJEKTE edildiği için birim testleri gerçek `installed_packages.json` ile davranışı ölçer.
+fn profil_modelini_ac(
+    install_root: &Path,
+    name: &str,
+    zipler: &[PathBuf],
+    gercek_sha: &str,
+    ac: &mut dyn FnMut(&Path) -> Result<(), FlowError>,
+    acildi: &mut dyn FnMut(),
+) -> Result<(), FlowError> {
+    install::record_model_sha(install_root, name, "");
+    for model_zip in zipler {
+        ac(model_zip)?;
+    }
+    acildi();
+    install::record_model_sha(install_root, name, gercek_sha);
+    Ok(())
+}
+
 /// Profil (model) paketlerini yenile.
 ///
 /// ⚠️ AYRI FONKSİYON OLMASI KASITLI: `?` ile erken çıkışın çağıran taraftaki GERİ ALMA'yı
@@ -1680,14 +1701,20 @@ fn profilleri_yenile(
             zipler.push(ensure_package(pkg, cache, etiket, on, control)?);
         }
         on(Progress::Extracting { what: name.clone() });
-        install::record_model_sha(install_root, name, "");
-        for model_zip in &zipler {
-            extract::extract_zip_cancellable(model_zip, install_root, butce, true, &|| {
-                control() == net::Control::Cancel
-            })?;
-        }
         let pkgs: Vec<&crate::Package> = ciftler.iter().map(|(p, _)| *p).collect();
-        install::record_model_sha(install_root, name, &birlesik_model_sha(&pkgs));
+        profil_modelini_ac(
+            install_root,
+            name,
+            &zipler,
+            &birlesik_model_sha(&pkgs),
+            &mut |model_zip| {
+                extract::extract_zip_cancellable(model_zip, install_root, butce, true, &|| {
+                    control() == net::Control::Cancel
+                })?;
+                Ok(())
+            },
+            &mut || {},
+        )?;
     }
     Ok(())
 }
@@ -1816,6 +1843,54 @@ pub fn install_and_launch(
 mod tests {
     use super::*;
     use std::io::Write;
+
+    /// D5.52 (b) · C12: açılım (parçalardan biri) DÜŞERSE profilin model sha kaydı BOŞ kalır (onarımdaki eski doğru sha
+    /// "güncel" diye kalmaz) ve profil "kurulu" İŞARETLENMEZ. Açılım enjekte — gerçek `installed_packages.json`.
+    fn model_acilimi_kos(dusen_parca: Option<usize>) -> (bool, Option<String>, bool, usize) {
+        let d = tempfile::tempdir().unwrap();
+        install::record_model_sha(d.path(), "vet", "ESKI_DOGRU_SHA");
+        let zipler = vec![d.path().join("vet.zip"), d.path().join("vet-2.zip")];
+        let mut acilan = 0usize;
+        let mut isaretlendi = false;
+        let r = profil_modelini_ac(
+            d.path(),
+            "vet",
+            &zipler,
+            "YENI_SHA",
+            &mut |_z| {
+                acilan += 1;
+                if Some(acilan) == dusen_parca {
+                    Err(FlowError::from(std::io::Error::other("sahte açılım hatası")))
+                } else {
+                    Ok(())
+                }
+            },
+            &mut || isaretlendi = true,
+        );
+        let sha = install::read_installed_packages(d.path()).models.get("vet").cloned();
+        (r.is_ok(), sha, isaretlendi, acilan)
+    }
+
+    #[test]
+    fn D5_52_model_acilimi_DUSERSE_sha_kaydi_BOS_kalir_ve_kurulu_ISARETLENMEZ() {
+        for dusen in [1usize, 2] {
+            let (ok, sha, isaret, _) = model_acilimi_kos(Some(dusen));
+            assert!(!ok, "{dusen}. parçanın açılımı düştü ama profil açılımı BAŞARILI döndü");
+            assert_eq!(
+                sha.as_deref(),
+                Some(""),
+                "{dusen}. parça açılamadı ama kayıt BOŞ değil ({sha:?}) — yarım model 'güncel' sayılır, bir daha yenilenmez (C12)"
+            );
+            assert!(!isaret, "yarım açılan profil 'kurulu' işaretlendi");
+        }
+    }
+
+    #[test]
+    fn D5_52_tum_parcalar_acilinca_GERCEK_sha_yazilir_ve_isaretlenir() {
+        let (ok, sha, isaret, acilan) = model_acilimi_kos(None);
+        assert!(ok && isaret && acilan == 2, "başarılı açılım: ok={ok} isaret={isaret} acilan={acilan}");
+        assert_eq!(sha.as_deref(), Some("yeni_sha"), "gerçek sha (küçük harf) yazılmadı");
+    }
 
     fn pkg(url: &str, sha: &str) -> crate::Package {
         crate::Package {

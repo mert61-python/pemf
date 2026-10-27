@@ -165,12 +165,41 @@ def test_KRITIK_yazma_kapilari_YERINDE(kapi, mesaj):
     assert kapi in m.group(0), f"{mesaj} kaldirilmis"
 
 
+def _blok(s: str, ac: int) -> tuple[int, int]:
+    """`s[ac] == "{"` olan bloğun (başlangıç, bitiş+1) dizinleri — süslü parantez dengesiyle (yorum-soyulmuş kaynakta)."""
+    derinlik = 0
+    for j in range(ac, len(s)):
+        if s[j] == "{":
+            derinlik += 1
+        elif s[j] == "}":
+            derinlik -= 1
+            if derinlik == 0:
+                return ac, j + 1
+    raise AssertionError("blok kapanmadi")
+
+
 def test_KARSIT_KANIT_senkron_backend_olunce_BITER():
-    """Sonsuz thread sizintisi olmamali: backend kapandiginda gorev kendiliginden bitmeli."""
-    s = _oku(_MAIN)
+    """Sonsuz thread sizintisi olmamali: backend kapandiginda gorev kendiliginden bitmeli.
+
+    ⚠️ D5.52 (B-10.145): eskiden yalnız gövdede `"return"` ALT DİZESİ aranıyordu (guard'ın erken dönüşü yetiyordu) → döngüden
+    çıkan `if cik { break; }` `continue` yapılınca (sonsuz thread) ya da guard bayrağını bırakan `aktif.store(false, …)` silinince
+    (rotasyon kalıcı durur) YEŞİL kalıyordu. Artık YORUM-SOYULMUŞ kaynakta YAPI: `loop` bloğunun İÇİNDE `if cik { break; }`,
+    döngü bloğu BİTTİKTEN SONRA `aktif.store(false, Ordering::Release)`."""
+    from kaynak_soyucu import rust_soy
+
+    s = rust_soy(_oku(_MAIN))
     m = re.search(r"fn oturum_rotasyon_senkronu_baslat\(.*?\n\}\n", s, re.S)
     assert m, "senkron gorevi bulunamadi"
-    assert "return" in m.group(0), "gorev hicbir kosulda bitmiyor — thread sizar"
+    g = m.group(0)
+    d = re.search(r"\bloop\s*\{", g)
+    assert d, "rotasyon dongusu (loop) bulunamadi"
+    bas, son = _blok(g, d.end() - 1)
+    assert re.search(r"\bif\s+cik\s*\{\s*break\s*;\s*\}", g[bas:son]), (
+        "rotasyon dongusunden backend olunce CIKILMIYOR (`if cik { break; }` yok/degismis) — thread sonsuza dek sizar"
+    )
+    assert re.search(r"\baktif\.store\(\s*false\s*,\s*Ordering::Release\s*\)", g[son:]), (
+        "dongu bittikten sonra guard bayragi birakilmiyor — sonraki backend icin rotasyon BIR DAHA baslamaz"
+    )
 
 
 def test_KRITIK_duzeltme_YAYINLANAN_pakete_giriyor():

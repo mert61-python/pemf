@@ -26,6 +26,7 @@ from pathlib import Path
 
 import pytest
 from i18n_yardimci import katalog
+from kaynak_soyucu import rust_soy
 
 _KOK = Path(__file__).resolve().parent.parent
 _MAIN_RS = _KOK / "launcher" / "app" / "src" / "main.rs"
@@ -33,7 +34,8 @@ _MAIN_RS = _KOK / "launcher" / "app" / "src" / "main.rs"
 
 @pytest.fixture(scope="module")
 def rs() -> str:
-    return _MAIN_RS.read_text(encoding="utf-8")
+    # D5.52 (B-10.127): YORUM-SOYULMUŞ kaynak — `// let _kilit = …` yorumu kilidi "alınmış" göstermesin (dizge-farkında soyucu).
+    return rust_soy(_MAIN_RS.read_text(encoding="utf-8"))
 
 
 def _govde(rs: str, ad: str) -> str:
@@ -93,7 +95,12 @@ def test_prefetch_atlanmasi_HATA_gibi_gorunmez(rs):
 @pytest.mark.parametrize("komut", ["install_and_launch", "repair", "uninstall", "apply_runtime_update"])
 def test_AGACI_DEGISTIREN_tum_yollar_kilitli(rs, komut):
     """Ağaca yazan her yol kilitli olmalı — biri unutulursa yarış geri gelir."""
-    assert "kurulum_kilidi_al" in _govde(rs, komut), f"{komut} kurulum kilidi almıyor"
+    g = _govde(rs, komut)
+    assert "kurulum_kilidi_al" in g, f"{komut} kurulum kilidi almıyor"
+    # D5.52: kilit ADI OLAN bir bağla tutulmalı — adsız deyim (`install::kurulum_kilidi_al(&root)?;`) ve `let _ =` değeri ANINDA düşürür.
+    assert re.search(r"let\s+(?:mut\s+)?(?!_\s*[=:])[A-Za-z_]\w*\s*=\s*install::kurulum_kilidi_al\(", g), (
+        f"{komut} kilidi ADLI bir bağla tutmuyor — kilit anında bırakılır, akış kilitsiz sürer"
+    )
 
 
 def test_kilit_mesaji_kullaniciya_NE_YAPACAGINI_soyler():

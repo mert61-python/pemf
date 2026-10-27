@@ -13,11 +13,11 @@ kesilir / kullanici iptal ederse diskte YARIM (kesik .onnx) bir model agaci kali
 manifest sha'siyla ESLESIR → `pending_updates` o profili "guncel" sayar ve oto-guncelleme onu bir
 daha ASLA yenilemez. `kurulum_saglam_mi` yalniz runtime agacina baktigi icin client "Hazir!" der.
 
-Kullanici acisindan sonuc: AI analizi anlasilmaz bir hatayla duser, hicbir yerde "model bozuk"
-denmez ve tek care kullanicinin kendiliginden tekrar "Onar"a basmasidir.
-
-⚠️ BU BIR SIRA KURALIDIR, VARLIK KURALI DEGIL. `record_model_sha(..., "")` cagrisinin dosyada
-BULUNMASI yetmez; extract'tan ONCE gelmesi gerekir. Test ikisini de olcer.
+⚠️ D5.52 (B-10.144, 2026-10-27): bu dosya eskiden HAM METINDE sira ariyordu — `if false { record_model_sha(…, "") }`
+mutanti metni yerinde biraktigi icin YESIL kaliyordu. Kural artik TEK yerde (`flow.rs::profil_modelini_ac`) ve DAVRANISI
+Rust birim testleri olcer (`flow::tests::D5_52_*`: acilim duserse kayit BOS kalir, profil kurulu isaretlenmez; basarida gercek
+sha yazilir). Bu dosya YAPIYI kilitler (yorum-soyulmus kaynakta): iki model dongusu de o tek yardimciyi kullanir, kendi kopya
+`record_model_sha` / acilim satirini tasimaz; yardimcinin sirasi gecersiz-kil → ac → gercek-sha.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ import re
 from pathlib import Path
 
 import pytest
+from kaynak_soyucu import rust_soy
 
 _KOK = Path(__file__).resolve().parents[1]
 _FLOW = _KOK / "launcher" / "core" / "src" / "flow.rs"
@@ -33,53 +34,32 @@ _FLOW = _KOK / "launcher" / "core" / "src" / "flow.rs"
 
 @pytest.fixture(scope="module")
 def kaynak() -> str:
-    return _FLOW.read_text(encoding="utf-8", errors="replace")
+    return rust_soy(_FLOW.read_text(encoding="utf-8", errors="replace"))
 
 
-def _model_dongusu(kaynak: str, fonksiyon: str) -> str:
-    """Verilen fonksiyonun govdesinden model dongusunu cikarir."""
-    m = re.search(rf"fn {re.escape(fonksiyon)}\s*\(", kaynak)
+def _govde(kaynak: str, fonksiyon: str) -> str:
+    m = re.search(rf"\bfn {re.escape(fonksiyon)}\s*\(", kaynak)
     assert m, f"`{fonksiyon}` bulunamadi — flow.rs bicimi degismis olabilir"
-    sonraki = re.search(r"\n(?:pub\s+)?fn\s+\w+\s*\(", kaynak[m.end() :])
-    govde = kaynak[m.end() : m.end() + (sonraki.start() if sonraki else len(kaynak))]
-    assert "record_model_sha" in govde, f"`{fonksiyon}` model sha kaydi yapmiyor — akis degismis"
-    return govde
+    sonraki = re.search(r"\n(?:pub(?:\(crate\))?\s+)?fn\s+\w+\s*\(", kaynak[m.end() :])
+    return kaynak[m.end() : m.end() + (sonraki.start() if sonraki else len(kaynak))]
 
 
 @pytest.mark.parametrize("fonksiyon", ["install_profiles", "profilleri_yenile"])
-def test_KRITIK_sha_EXTRACTTAN_ONCE_gecersiz_kilinir(kaynak, fonksiyon):
-    """🔴 ASIL KURAL: yarida kesilen acilim 'guncel' kaydi BIRAKAMAZ."""
-    g = _model_dongusu(kaynak, fonksiyon)
-    # Gecersiz kilma: bos dize ile record_model_sha.
-    m_gecersiz = re.search(r'record_model_sha\([^)]*,\s*""\s*\)', g)
-    assert m_gecersiz, (
-        f"`{fonksiyon}` model acilmadan ONCE sha kaydini GECERSIZ KILMIYOR — yarida kesilen "
-        "onarim/kurulum, diskte YARIM bir model birakip kaydi 'guncel' halde tutar; o profil bir "
-        "daha ASLA yenilenmez ve AI analizi anlasilmaz bir hatayla duser (bulgu C12)"
+def test_KRITIK_iki_model_dongusu_TEK_sira_yardimcisini_kullanir(kaynak, fonksiyon):
+    """🔴 'Ayni kural iki yerde, biri unutulmus' (bu deponun 1 numarali deseni) — kopya kural geri gelmesin."""
+    g = _govde(kaynak, fonksiyon)
+    assert re.search(r"\bprofil_modelini_ac\s*\(", g), (
+        f"`{fonksiyon}` model zip'lerini `profil_modelini_ac` DISINDA aciyor — gecersiz kilma sirasi (C12) bu yolda olculmez"
     )
-    # ⚠️ MODEL acilimini bul, fonksiyondaki ILK acilimi DEGIL: `install_profiles` once base.zip'i
-    # aciyor, yani ilk `extract` cagrisi model dongusunden ONCE gelir. Ilk yazimda bu dusunulmemis
-    # ve test dogru kodu yanlis-KIRMIZI gostermisti. Dogru olcum: gecersiz kilmadan SONRA gelen
-    # ilk acilim, gercek sha yazimindan ONCE olmali.
-    i_extract = g.find("extract::extract_zip_cancellable", m_gecersiz.end())
-    assert i_extract > 0, (
-        f"`{fonksiyon}` gecersiz kilmadan SONRA model acilimi yok — gecersiz kilma anlamsiz "
-        "(kayit hemen gercek sha ile yeniden yaziliyorsa koruma olusmaz)"
+    assert "record_model_sha" not in g, (
+        f"`{fonksiyon}` model sha'sini yardimci DISINDA yaziyor — yarida kesilen acilim 'guncel' kaydi birakabilir (C12)"
     )
-    m_gercek = re.search(r'record_model_sha\((?![^)]*,\s*""\s*\))[^)]*\)', g[i_extract:])
-    assert m_gercek, f"`{fonksiyon}` acilimdan sonra gercek sha'yi yazmiyor — profil hep bayat kalir"
 
 
-@pytest.mark.parametrize("fonksiyon", ["install_profiles", "profilleri_yenile"])
-def test_KRITIK_gercek_sha_EXTRACTTAN_SONRA_yazilir(kaynak, fonksiyon):
-    """Karsi-kanit: gercek sha acilim BASARILI olduktan sonra yazilmali.
-
-    Once yazilsaydi gecersiz kilma anlamsizlasirdi (kayit yine 'guncel' kalirdi).
-    """
-    g = _model_dongusu(kaynak, fonksiyon)
-    i_extract = g.find("extract::extract_zip_cancellable")
-    gercekler = [m.start() for m in re.finditer(r'record_model_sha\((?![^)]*,\s*""\s*\))[^)]*\)', g)]
-    assert gercekler, f"`{fonksiyon}` gercek sha'yi hic yazmiyor"
-    assert all(p > i_extract for p in gercekler), (
-        f"`{fonksiyon}` gercek sha'yi acilimdan ONCE yaziyor — yarim acilim 'guncel' gorunur"
-    )
+def test_KRITIK_yardimci_GECERSIZ_KIL_AC_GERCEK_SHA_sirasinda(kaynak):
+    g = _govde(kaynak, "profil_modelini_ac")
+    i_gecersiz = g.find('record_model_sha(install_root, name, "")')
+    i_ac = g.find("ac(model_zip)?")
+    i_gercek = g.find("record_model_sha(install_root, name, gercek_sha)")
+    assert -1 not in (i_gecersiz, i_ac, i_gercek), f"yardimcinin uc adimi yerinde degil: {(i_gecersiz, i_ac, i_gercek)}"
+    assert i_gecersiz < i_ac < i_gercek, "sira bozuk: once gecersiz kil, sonra ac, EN SON gercek sha"

@@ -24,6 +24,7 @@ import re
 from pathlib import Path
 
 import pytest
+from kaynak_soyucu import rust_soy
 
 _KOK = Path(__file__).resolve().parents[1]
 _MAIN = _KOK / "launcher" / "app" / "src" / "main.rs"
@@ -40,7 +41,8 @@ _YIKICI_AKISLAR = [
 
 @pytest.fixture(scope="module")
 def kaynak() -> str:
-    return _MAIN.read_text(encoding="utf-8", errors="replace")
+    # D5.52 (B-10.127): YORUM-SOYULMUŞ kaynak (dizge-farkında) — yorumdaki `let _kilit = …` kilit SAYILMAZ.
+    return rust_soy(_MAIN.read_text(encoding="utf-8", errors="replace"))
 
 
 def _govde(kaynak: str, ad: str) -> str:
@@ -54,7 +56,8 @@ def _govde(kaynak: str, ad: str) -> str:
 @pytest.mark.parametrize("akis", _YIKICI_AKISLAR)
 def test_KRITIK_yikici_akis_kurulum_kilidini_ALIR(kaynak, akis):
     g = _govde(kaynak, akis)
-    assert "kurulum_kilidi_al" in g, (
+    # D5.52: ADLI bağ şart — adsız deyim `install::kurulum_kilidi_al(&root)?;` değeri ANINDA düşürür (kilit fiilen YOK).
+    assert re.search(r"let\s+(?:mut\s+)?(?!_\s*[=:])[A-Za-z_]\w*\s*=\s*install::kurulum_kilidi_al\(", g), (
         f"`{akis}` kurulum agacini degistiriyor ama `install::kurulum_kilidi_al` CAGIRMIYOR — "
         "iki pencere ayni anda kurulum yapabilir; biri otekinin backend'ini oldurur "
         "(2026-08-16 Bulgu 3'un ayni sinifi, bkz. dosya basligi)"

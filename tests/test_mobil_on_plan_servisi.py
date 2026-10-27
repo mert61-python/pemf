@@ -52,29 +52,14 @@ def _yorumsuz(kaynak: str) -> str:
     kaynağının gerekçe yorumları `startForeground()` sözcüğünü içeriyor, dolayısıyla
     `find("startForeground(")` gerçek ÇAĞRIYI değil YORUMU buluyor ve indeks daima en başa
     düşüyordu. Kapı, gerekçesini anlattığı hatayı yakalayamıyordu.
+
+    ⚠️ D5.52 (B-10.150): eski soyucu DİZGE-FARKINDA değildi — `"http://…"` içindeki `//`yi yorum başı sanıp satırın KALANINI
+    siliyordu; aynı satıra konan erken `return` (ör. `if (url == "http://x") return START_NOT_STICKY`) kapıdan GİZLENİYORDU
+    (ölçüldü). Artık ortak dizge-farkında soyucu (`tests/kaynak_soyucu.py`: ham dizge, şablon, iç içe blok yorum).
     """
-    out: list[str] = []
-    i, n, blok = 0, len(kaynak), False
-    while i < n:
-        if blok:
-            if kaynak.startswith("*/", i):
-                blok, i = False, i + 2
-                out.append("  ")
-                continue
-            out.append("\n" if kaynak[i] == "\n" else " ")
-            i += 1
-        elif kaynak.startswith("/*", i):
-            blok, i = True, i + 2
-            out.append("  ")
-        elif kaynak.startswith("//", i):
-            j = kaynak.find("\n", i)
-            j = n if j == -1 else j
-            out.append(" " * (j - i))
-            i = j
-        else:
-            out.append(kaynak[i])
-            i += 1
-    return "".join(out)
+    from kaynak_soyucu import kotlin_soy
+
+    return kotlin_soy(kaynak)
 
 
 def _govde(kaynak: str, imza: str) -> str:
