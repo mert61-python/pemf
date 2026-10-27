@@ -22,11 +22,15 @@
  * `stmStopped:true, confirmed:false` · porta yazılamadı → `stmStopped:false`) ve `test_TD3_estop_kartin_STOP_NACKi_teyit_DEGILDIR.py`
  * (kart yanıtsız → `stmKartYaniti:"yanitsiz"`, kart reddi → `"red"`).
  * Yedek gönderimler (A-63) her sırada aynı kalır (Ö.4-Y8) — bu dosya yalnız TEYİT / RED birikimini ölçer.
+ * D5.E1 TUR 3 (çürütme 2 e1n1): köprü ARIZASI (2xx ama gövde JSON değil / okunurken iptal / JSON null · HTTP 500 · erişilemez) ×
+ * yedek {3 partial, teyitli, kart reddi, erişilemez} × iki sıra → sonuç YALNIZ yedeğin gövdesinden (HTTP başarısı teyit sayılmaz);
+ * simetriği: yedek arızası (erişilemez / `null`) × köprü {3 partial, teyitli, kart reddi} × iki sıra → sonuç köprünün gövdesinden.
  *
  * ⚠️ MUTASYON: 2. adımda `teyitli = r?.confirmed === true` → "teyit köprüde, köprü önce" KIRMIZI; 1. adımda `teyitli = d1?.confirmed
  * === true` → "teyit yedekte, yedek önce" KIRMIZI; `kartReddetti: kartRed` → "teyit + red" KIRMIZI; `kartRed = r?.… === "red"` →
  * "red köprüde, köprü önce" KIRMIZI; `kartRed = d1?.… === "red"` → "red yedekte, yedek önce" KIRMIZI; teyidi / reddi 2. adımdan
- * ÖNCE okumak → "… yedekte, köprü önce" KIRMIZI.
+ * ÖNCE okumak → "… yedekte, köprü önce" KIRMIZI; okunamayan köprü gövdesinde `{ confirmed: response.ok }` → "köprü: 2xx, gövde …"
+ * KIRMIZI (SAHTE teyit).
  */
 jest.mock("@/services/apiClient", () => ({
   apiPost: jest.fn(),
@@ -78,7 +82,16 @@ function ertele<T>() {
   return { p, coz };
 }
 const bosalt = () => new Promise((r) => setTimeout(r, 0));
-const kopruYaniti = (g: unknown) => ({ ok: true, status: 200, json: async () => g });
+
+/** D5.E1 TUR 3: köprü yanıtı GÖVDESİZ / HATALI (gövde okunamaz, HTTP hata, erişilemez) — `yanit()` fetch'in çözdüğü değeri
+ *  ya da (Error ise) fetch'in reddini üretir. */
+class KopruArizasi {
+  constructor(readonly ad: string, readonly yanit: () => unknown) {}
+}
+const kopruYaniti = (g: unknown) =>
+  g instanceof KopruArizasi ? g.yanit() : { ok: true, status: 200, json: async () => g };
+/** Ertelenmiş değer Error ise ret (erişilemeyen yol), değilse çözüm. */
+const cozVeyaReddet = (p: Promise<unknown>) => p.then((r) => (r instanceof Error ? Promise.reject(r) : r));
 
 beforeEach(() => {
   mockApiPost.mockReset();
@@ -89,9 +102,9 @@ beforeEach(() => {
 async function sirayla(ilk: Yol, kopru: unknown, yedek: unknown) {
   const k = ertele<unknown>();
   const y = ertele<unknown>();
-  fetchMock().mockImplementation(() => k.p);
+  fetchMock().mockImplementation(() => cozVeyaReddet(k.p));
   mockApiPost.mockImplementation((p: string) =>
-    p === "/hardware/emergency_stop" ? y.p : Promise.resolve({ status: "success" }));
+    p === "/hardware/emergency_stop" ? cozVeyaReddet(y.p) : Promise.resolve({ status: "success" }));
   const sonuc = performEmergencyStop();
   await bosalt();
   if (ilk === "kopru") {
@@ -132,5 +145,57 @@ describe.each(Object.keys(PARTIAL))("D5.E1 (İG-6.29) VEYA sırası — gerçek 
 describe.each(SIRALAR)("D5.E1 teyit + red — teyit veren yol: %s", (veren) => {
   it.each(SIRALAR)("KRİTİK: öteki yol KART REDDİ; %s ÖNCE gelir → teyitli ve kartReddetti FALSE (teyit varken red metni yok)", async (ilk) => {
     await expect(yollaGore(ilk, veren, TEYITLI, KART_RED)).resolves.toEqual({ confirmed: true, kartReddetti: false });
+  });
+});
+
+// ── D5.E1 TUR 3 (çürütme 2 e1n1): TEYİT = backend'in 2xx GÖVDESİNDEKİ `confirmed:true`; HTTP durumu / gövdesizlik teyit DEĞİLDİR ──
+// `response.json().catch(() => ({ confirmed: response.ok }))` (köprü 2xx ama gövde okunamazsa HTTP başarısı teyit sayılır) yukarıdaki
+// matriste ve 6.29 kümesinde (38 dosya / 248 test) YEŞİLDİ: aparat köprü gövdesini HEP okunur veriyordu. Oysa tam bu yol gerçek: gövde
+// okuması zaman aşımının İÇİNDE (2026-08-17) — abort'ta `json()` reddeder. Sonuç SAHTE TEYİT olurdu (ekran "durduruldu" der, ESP bobini
+// çalışıyor olabilir — `emergencyStop.ts`'in kendi yorumundaki "en ağır hata sınıfı"). Köprü arızasında sonuç YALNIZ yedeğin gövdesinden.
+const iptalHatasi = () => Object.assign(new Error("The operation was aborted."), { name: "AbortError" });
+const KOPRU_ARIZALARI = [
+  new KopruArizasi("2xx, gövde JSON değil", () => ({
+    ok: true, status: 200, json: () => Promise.reject(new SyntaxError("Unexpected token < in JSON at position 0")),
+  })),
+  new KopruArizasi("2xx, gövde okunurken iptal (zaman aşımı)", () => ({
+    ok: true, status: 200, json: () => Promise.reject(iptalHatasi()),
+  })),
+  new KopruArizasi("2xx, gövde JSON null", () => ({ ok: true, status: 200, json: async () => null })),
+  new KopruArizasi("HTTP 500, gövde teyit İDDİA etse de", () => ({ ok: false, status: 500, json: async () => TEYITLI })),
+  new KopruArizasi("köprü erişilemez (ağ hatası)", () => new TypeError("Network request failed")),
+];
+const YEDEK_SONUCLARI: [string, unknown, { confirmed: boolean; kartReddetti: boolean }][] = [
+  ...Object.keys(PARTIAL).map(
+    (ad): [string, unknown, { confirmed: boolean; kartReddetti: boolean }] => [
+      `partial (${ad})`, PARTIAL[ad], { confirmed: false, kartReddetti: false },
+    ]),
+  ["TEYİTLİ", TEYITLI, { confirmed: true, kartReddetti: false }],
+  ["KART REDDİ", KART_RED, { confirmed: false, kartReddetti: true }],
+  ["erişilemez", new Error("apiPost zaman aşımı"), { confirmed: false, kartReddetti: false }],
+];
+
+describe.each(KOPRU_ARIZALARI.map((a) => [a.ad, a] as const))("D5.E1 TUR 3 — köprü: %s", (_ad, ariza) => {
+  describe.each(YEDEK_SONUCLARI)("yedek: %s", (_y, yedek, beklenen) => {
+    it.each(SIRALAR)("KRİTİK: köprünün HTTP durumu teyit DEĞİL — sonuç yalnız yedeğin gövdesinden; %s ÖNCE gelir", async (ilk) => {
+      await expect(sirayla(ilk, ariza, yedek)).resolves.toEqual(beklenen);
+      expect(yollar()).toEqual(YEDEK_YOLLAR);
+    });
+  });
+});
+
+// Simetrik: YEDEK arızası (erişilemez / gövdesiz `null`) köprünün teyidini ya da kart reddini SİLMEZ, uydurmaz (TUR 3 kendi mutantı
+// "yedek erişilemezse `kartRed = false`" bu kol olmadan YEŞİLDİ).
+const KOPRU_SONUCLARI = YEDEK_SONUCLARI.filter(([ad]) => ad !== "erişilemez");
+const YEDEK_ARIZALARI: [string, unknown][] = [
+  ["erişilemez", new Error("apiPost zaman aşımı")],
+  ["gövdesiz (null)", null],
+];
+describe.each(YEDEK_ARIZALARI)("D5.E1 TUR 3 — yedek: %s", (_y, yedekAriza) => {
+  describe.each(KOPRU_SONUCLARI)("köprü: %s", (_k, kopru, beklenen) => {
+    it.each(SIRALAR)("KRİTİK: yedek arızası köprünün sonucunu DEĞİŞTİRMEZ; %s ÖNCE gelir", async (ilk) => {
+      await expect(sirayla(ilk, kopru, yedekAriza)).resolves.toEqual(beklenen);
+      expect(yollar()).toEqual(YEDEK_YOLLAR);
+    });
   });
 });
