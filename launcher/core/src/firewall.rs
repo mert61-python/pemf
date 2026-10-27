@@ -208,25 +208,40 @@ fn durum_betigi(backend_exe: Option<&Path>, api_port: u16) -> String {
 /// `api_port`: launcher çocuğunun GERÇEK portu (`api_portu`) — kural o portu kapsamalı (D5 I-1).
 #[cfg(windows)]
 pub fn durum_icin(backend_exe: Option<&Path>, api_port: u16) -> Durum {
+    durum_kos("powershell", backend_exe, api_port)
+}
+
+/// `durum_icin`in gövdesi; PowerShell programı parametre — testler fail-open kolunu GERÇEK güvenlik duvarını okumadan,
+/// başlatılamayan bir program adıyla ölçer (D5: eskiden `durum_asla_PANIKLEMEZ` her `cargo test`te gerçek
+/// `Get-NetFirewallRule`ı okuyordu).
+#[cfg(windows)]
+fn durum_kos(program: &str, backend_exe: Option<&Path>, api_port: u16) -> Durum {
     let betik = durum_betigi(backend_exe, api_port);
     // Konsol penceresi AÇMADAN (bkz. platform::gizli_komut): bu denetim launcher AÇILIŞINDA
     // koşar; çıplak `Command` kullanıcıya siyah pencere gösteriyordu.
-    let cikti = crate::platform::gizli_komut("powershell")
+    let cikti = crate::platform::gizli_komut(program)
         .args(["-NoProfile", "-NonInteractive", "-Command", &betik])
         .output();
     match cikti {
-        Ok(o) if o.status.success() => {
-            let s = String::from_utf8_lossy(&o.stdout);
-            if s.contains("ENGEL") {
-                Durum::Engelli
-            } else if s.contains("YOKSA") {
-                Durum::KuralYok
-            } else {
-                Durum::Acik
-            }
-        }
+        Ok(o) => durum_yorumla(o.status.success(), &o.stdout),
         // Okunamadı → ENGELLEME. Yanlış uyarı, uyarı körlüğü yaratır.
-        _ => Durum::Acik,
+        Err(_) => Durum::Acik,
+    }
+}
+
+/// Durum betiğinin çıktısı → `Durum`. Betik başarısız bittiyse `Acik` (fail-open — bkz. modül notu).
+#[cfg_attr(not(windows), allow(dead_code))]
+fn durum_yorumla(basarili: bool, stdout: &[u8]) -> Durum {
+    if !basarili {
+        return Durum::Acik;
+    }
+    let s = String::from_utf8_lossy(stdout);
+    if s.contains("ENGEL") {
+        Durum::Engelli
+    } else if s.contains("YOKSA") {
+        Durum::KuralYok
+    } else {
+        Durum::Acik
     }
 }
 
@@ -361,11 +376,32 @@ mod tests {
         // ⚠️ 2026-08-11: `Durum`a DÖRDÜNCÜ varyant (`KuralYok`) eklendi ve bu liste
         // güncellenmedi → CI'da (kuralları olmayan temiz runner) kırıldı. Yeni varyant
         // eklenirse burası da güncellenmeli; `matches!` sessizce eskimez, patlar.
-        let d = durum();
-        assert!(matches!(
-            d,
-            Durum::Acik | Durum::KuralYok | Durum::Engelli | Durum::Gereksiz
-        ));
+        //
+        // ⚠️ D5: bu test eskiden GERÇEK `durum()`u çağırıyordu → her `cargo test` (CI dahil) gerçek PowerShell ile gerçek
+        // `Get-NetFirewallRule`ı okuyordu ve makinenin kural tablosu sonucu belirliyordu. Artık yorumlayıcı ve başlatılamayan
+        // program kolu ölçülür; betiğin kendisi yalnız `mod golge`de GÖLGE NetSecurity ile koşar
+        // (kapı: tests/test_launcher_firewall_testleri_GERCEK_guvenlik_duvarini_OKUMAZ_D5.py).
+        for (basarili, cikti, beklenen) in [
+            (true, "ENGEL", Durum::Engelli),
+            (true, "YOKSA", Durum::KuralYok),
+            (true, "VAR", Durum::Acik),
+            (true, "", Durum::Acik),
+            (false, "YOKSA", Durum::Acik),
+            (false, "ENGEL", Durum::Acik),
+        ] {
+            let d = durum_yorumla(basarili, cikti.as_bytes());
+            assert!(matches!(
+                d,
+                Durum::Acik | Durum::KuralYok | Durum::Engelli | Durum::Gereksiz
+            ));
+            assert_eq!(d, beklenen, "betik çıktısı {cikti:?} (başarılı={basarili}) yanlış yorumlandı — fail-open sözleşmesi");
+        }
+        #[cfg(windows)]
+        assert_eq!(
+            durum_kos("pemf-k5-olmayan-powershell", None, crate::install::DEFAULT_PORT),
+            Durum::Acik,
+            "PowerShell başlatılamayınca durum fail-open (Acik) dönmedi — yanlış 'bağlantı engelli' uyarısı gereksiz UAC'ye iter"
+        );
     }
 
     #[cfg(not(windows))]
