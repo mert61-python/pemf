@@ -15,6 +15,7 @@ PetriPredictor'ı çalıştırıp E_cancer/D/P üretiyordu. `apps/backend/utils/
 import os
 from pathlib import Path
 
+import capraz
 import cv2
 import numpy as np
 import pytest
@@ -171,9 +172,21 @@ def _yolo_yolu():
 
 
 _MODEL = _yolo_yolu()
-entegrasyon = pytest.mark.skipif(
-    _MODEL is None or not PETRI.exists(), reason="YOLO petri modeli veya test girdileri yok"
-)
+
+
+@pytest.fixture(scope="module")
+def _yolo_ve_petri_girdisi():
+    """D5-F (K5-F P4): gerçek YOLO ağırlığı (çözümlenir) ve petri girdisi İZLENMEZ — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de
+    DÜŞ. Eskiden düz `skipif(_MODEL is None or not PETRI.exists())`: zorunlu kipte de sessizce atlıyordu. Modül kapsamlı:
+    `usefixtures` adları modül kapsamlı `boru_hatti`dan ÖNCE kurulur (model yokken boru hattı hiç kurulmaz)."""
+    if _MODEL is None:
+        capraz.atla(
+            "YOLO petri modeli (yolo11m-seg) bulunamadı — PEMF_AI_MODELS_DIR / release_assets/ai_models / ai_hub"
+        )
+    capraz.atla_yoksa("ai_hub/PEMF_AI_Test_Girdileri/06_PetriKuyu.jpg")
+
+
+entegrasyon = pytest.mark.usefixtures("_yolo_ve_petri_girdisi")
 
 
 @pytest.fixture(scope="module")
@@ -204,8 +217,7 @@ def iki_kip(request):
 @pytest.mark.parametrize("yol", [PETRI, PETRI_ARUCO])
 def test_gercek_petri_GECER(boru_hatti, yol):
     """YANLIŞ-POZİTİF OLMAMALI — meşru görüntüyü bloklamak da bir başarısızlıktır."""
-    if not yol.exists():
-        pytest.skip(f"girdi yok: {yol.name}")
+    capraz.atla_yoksa(yol.relative_to(capraz.KOK).as_posix())  # D5-F: eski düz pytest.skip — ZORUNLU kipte DÜŞER
     r, _ = boru_hatti.process_image(cv2.imread(str(yol)))
     assert r.error != pl.PETRI_REJECT, f"gerçek petri reddedildi: {r.plausibility}"
     assert r.success, r.error
@@ -224,8 +236,7 @@ def _reddetti(kip, r):
 @pytest.mark.parametrize("yol", [FANTOM, KEDI_SEG])
 def test_capraz_yukleme_REDDEDILIR(iki_kip, yol):
     """ASIL BULGU: fantom/kedi fotoğrafı sessizce 'kuyucuk' üretmemeli — AI-2: iki kipte de."""
-    if not yol.exists():
-        pytest.skip(f"girdi yok: {yol.name}")
+    capraz.atla_yoksa(yol.relative_to(capraz.KOK).as_posix())  # D5-F: eski düz pytest.skip — ZORUNLU kipte DÜŞER
     kip, boru_hatti = iki_kip
     r, _ = boru_hatti.process_image(cv2.imread(str(yol)))
     assert _reddetti(kip, r), f"{kip}: reddedilmedi: success={r.success} hata={r.error} {r.plausibility}"
@@ -241,8 +252,7 @@ def test_bobrek_CT_kesiti_REDDEDILIR(iki_kip, yol):
     07b/07c'yi GEÇİRİYORDU (HTTP 200, success=True, n_wells=1, PetriPredictor çalıştı).
     Böbrek CT'sinden "petri kuyucuğu" raporlamak, düzeltilmeye çalışılan sessiz-yanlış-sonucun
     kendisidir. İki katman da yerinde olmalı: modalite {COLOR,GRAYSCALE} ise alan VETO'su ŞART."""
-    if not yol.exists():
-        pytest.skip(f"girdi yok: {yol.name}")
+    capraz.atla_yoksa(yol.relative_to(capraz.KOK).as_posix())  # D5-F: eski düz pytest.skip — ZORUNLU kipte DÜŞER
     kip, boru_hatti = iki_kip
     r, _ = boru_hatti.process_image(cv2.imread(str(yol)))
     assert _reddetti(kip, r), f"{kip}: CT kabul edildi: success={r.success} {r.plausibility}"
@@ -251,8 +261,7 @@ def test_bobrek_CT_kesiti_REDDEDILIR(iki_kip, yol):
 
 @entegrasyon
 def test_kacis_kapagi_boru_hattinda_da_calisir(boru_hatti, monkeypatch):
-    if not FANTOM.exists():
-        pytest.skip("girdi yok")
+    capraz.atla_yoksa("ai_hub/PEMF_AI_Test_Girdileri/05_FantomTumor.jpeg")  # D5-F: eski düz pytest.skip
     monkeypatch.setenv("PEMF_AI_PLAUSIBILITY_GUARD", "0")
     r, _ = boru_hatti.process_image(cv2.imread(str(FANTOM)))
     assert r.error != pl.PETRI_REJECT, "kaçış kapağı açıkken boru hattı yine de reddetti"
@@ -284,8 +293,7 @@ def test_uc_bobrek_CT_sine_422_doner():
     from fastapi.testclient import TestClient
     from servers import api_server
 
-    if not CT_KIST.exists():
-        pytest.skip("girdi yok")
+    capraz.atla_yoksa("ai_hub/PEMF_AI_Test_Girdileri/07b_BobrekCT_kist.jpg")  # D5-F: eski düz pytest.skip
     c = TestClient(api_server.app)
     with open(CT_KIST, "rb") as f:
         r = c.post("/api/ai/vision/em_petri", files={"file": ("ct.jpg", f, "image/jpeg")}, data={"plate_type": "0"})

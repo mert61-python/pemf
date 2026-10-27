@@ -17,6 +17,7 @@ import importlib
 import json
 from pathlib import Path
 
+import capraz
 import cv2
 import numpy as np
 import pytest
@@ -147,8 +148,7 @@ def test_KARSIT_izlenen_gercek_kesit_ve_cekim_varyantlari_GECER(varyant):
 @pytest.mark.parametrize("z", [1, 2, 3])
 def test_KARSIT_gercek_12a_12b_ve_buyutmeleri_GECER(ad, z):
     p = GIRDI / ad
-    if not p.is_file():
-        pytest.skip("test girdisi yok (izlenmez; ai_hub/PEMF_AI_Test_Girdileri)")
+    capraz.atla_yoksa(p.relative_to(capraz.KOK).as_posix())  # D5-F: girdi İZLENMEZ — eski düz pytest.skip
     dom = _dom()
     img = _oku(p) if z == 1 else _buyut(_oku(p), z)
     durum, m = dom.scratch_analizi(img)
@@ -230,8 +230,7 @@ def test_KRITIK_izlenen_nesne_fantom_petri_kedi_CT_termal_REDDEDILIR(yol):
 )
 def test_KRITIK_HE_patoloji_scratch_e_GECMEZ(ad):
     p = GIRDI / ad
-    if not p.is_file():
-        pytest.skip("test girdisi yok (izlenmez)")
+    capraz.atla_yoksa(p.relative_to(capraz.KOK).as_posix())  # D5-F: girdi İZLENMEZ — eski düz pytest.skip
     _reddedilir(_oku(p), ad)
 
 
@@ -319,8 +318,8 @@ def test_KRITIK_gercek_mikroskopi_GECER_ve_analize_DEGISMEDEN_gider(uc, kaynak):
     """Kapı salt okur: CPN'e giden kayıpsız PNG = gönderilen görüntü (piksel piksel) → kâhin (`test_scratch_gercek_model`)
     sonuçları bu uçta da BİREBİR."""
     p = {"kesit": KESIT, "12a": GIRDI / "12a_YaraKapanma_0H.tif", "12b": GIRDI / "12b_YaraKapanma_24H.tif"}[kaynak]
-    if not p.is_file():
-        pytest.skip("test girdisi yok (izlenmez)")
+    # D5-F: eski düz pytest.skip — `kesit` tests/xai_veri'de İZLENİR, 12a/12b AI test girdisi İZLENMEZ; ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa(p.relative_to(capraz.KOK).as_posix(), izlenen=kaynak == "kesit")
     client, cagri, _ = uc
     r = _gonder(client, p.read_bytes(), ad=p.name)
     assert r.status_code == 200, r.text[:200]

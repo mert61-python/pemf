@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import capraz
 import cv2
 import numpy as np
 import pytest
@@ -162,8 +163,7 @@ def test_KARSIT_sentetik_HE_GECER_histopath_kabul():
 @pytest.mark.parametrize("ad", PATOLOJI)
 def test_KARSIT_gercek_patoloji_GECER(ad):
     p = GIRDI / ad
-    if not p.is_file():
-        pytest.skip("test girdisi yok (izlenmez; ai_hub/PEMF_AI_Test_Girdileri)")
+    capraz.atla_yoksa(p.relative_to(capraz.KOK).as_posix())  # D5-F: girdi İZLENMEZ — eski düz pytest.skip
     dom = _dom()
     img = cv2.imdecode(np.fromfile(str(p), np.uint8), cv2.IMREAD_COLOR)
     kip, m = dom.analyze(img)

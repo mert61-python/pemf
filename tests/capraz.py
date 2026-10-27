@@ -20,6 +20,7 @@ haber veremez hâle gelir — herkes kırmızıyı görmezden gelmeye alışır.
 (çalışmadığını SÖYLER); zorunlu kip de bu dürüstlüğün yayında kaçamağa dönüşmesini engeller.
 """
 
+import importlib
 import os
 from pathlib import Path
 
@@ -62,3 +63,45 @@ def oku(gorece: str) -> str:
     """Kardeş kaynağı metin olarak okur; yoksa testi atlar (zorunlu kipte düşürür)."""
     atla_yoksa(gorece)
     return kaynak_yolu(gorece).read_text(encoding="utf-8")
+
+
+def atla(sebep: str) -> None:
+    """Yol DIŞI eser yokluğu (çözümlenen ağırlık, araç ikilisi …): atla — ZORUNLU kipte DÜŞ (D5-F, 2026-10-27).
+
+    Depo köküne göre bir yolun yokluğunda `atla_yoksa` tercih edilir (izlenen / kardeş ayrımını o yapar). Bu ikiz, varlığı
+    bir yol değil bir ÇÖZÜMLEME sonucu olan eserler içindir (ör. ürünün model köklerinden bulunan ağırlık). Düz
+    `pytest.skip` ZORUNLU=1'de de atlıyordu; meta kapı (`test_atlama_ZORUNLU_kipte_DUSER_D5.py`) onu yasaklar.
+
+    Modül düzeyinde de çağrılabilir (`importorskip` gibi): varsayılan kipte modülü atlar, ZORUNLU kipte toplama HATASI (kırmızı).
+    """
+    if ZORUNLU:
+        pytest.fail(f"PEMF_CAPRAZ_KAYNAK_ZORUNLU=1 ama {sebep}")
+    pytest.skip(sebep, allow_module_level=True)
+
+
+#: Depo içi üst düzey paketler (`tests/golden/eser.py` `_DEPO_PAKETLERI` ile AYNI ilke): bunlardan birinin eksikliği "isteğe
+#: bağlı paket yok" DEĞİL, ürün / taşıma hatasıdır — atlamaya gizlenmez.
+_DEPO_PAKETLERI = frozenset(
+    {"ai_hub", "utils", "servers", "database", "services", "controllers", "golden", "ai", "capraz"}
+)
+
+
+def paket_yoksa_atla(ad: str, *, sebep: str = ""):
+    """`pytest.importorskip`in ZORUNLU'ya bağlı ikizi: paket YOKSA atla (zorunlu kipte DÜŞ), varsa modülü döndür.
+
+    Varsayılan kipte `importorskip` ile AYNI sonuç (CI davranışı değişmez): paketin kendisi ya da içe aktarırken istediği 3. taraf
+    bağımlılık yoksa ATLAR. Tek fark (ve ZORUNLU dışındaki tek sıkılaştırma): eksik modül DEPO paketindense (`servers.…`,
+    `ai_hub.…`) bu bir ürün / taşıma hatasıdır — atlamaya GİZLENMEZ, `ImportError` olduğu gibi yükselir. Atlama nedeni paket adını
+    taşır (`sqlcipher3` → A-46 yerel kapısı da görür).
+    """
+    try:
+        return importlib.import_module(ad)
+    except ImportError as e:
+        eksik = getattr(e, "name", None) or ""
+        if eksik.split(".")[0] in _DEPO_PAKETLERI:
+            raise
+        atla(
+            f"isteğe bağlı paket yok: {ad}"
+            + (f" ({eksik})" if eksik and eksik != ad else "")
+            + (f" — {sebep}" if sebep else "")
+        )

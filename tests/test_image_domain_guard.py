@@ -73,8 +73,7 @@ def test_ct_goruntusu_patoloji_modulunde_reddedilir():
 # Sahibin bildirdiği CT vakasıyla AYNI sınıf hata. Bu testler o boşluğu kilitler.
 @pytest.mark.parametrize("yol", [KEDI, PETRI, FANTOM, PETRI_ARUCO])
 def test_patoloji_OLMAYAN_goruntuler_histopath_te_reddedilir(yol):
-    if not yol.exists():
-        pytest.skip(f"girdi yok: {yol.name}")
+    capraz.atla_yoksa(yol.relative_to(capraz.KOK).as_posix())  # D5-F: eski düz pytest.skip — ZORUNLU kipte DÜŞER
     with pytest.raises(dom.DomainMismatch):
         dom.check(oku(yol), "histopath")
 
@@ -129,8 +128,7 @@ def test_patoloji_goruntusu_ct_modulunde_reddedilir():
     ],
 )
 def test_dogru_goruntu_gecer(yol, etiket):
-    if not yol.exists():
-        pytest.skip(f"girdi yok: {yol.name}")
+    capraz.atla_yoksa(yol.relative_to(capraz.KOK).as_posix())  # D5-F: eski düz pytest.skip — ZORUNLU kipte DÜŞER
     dom.check(oku(yol), etiket)  # fırlatmamalı
 
 

@@ -33,6 +33,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import capraz
 import pytest
 from fastapi.staticfiles import StaticFiles
 from fastapi.testclient import TestClient
@@ -40,7 +41,14 @@ from fastapi.testclient import TestClient
 KOK = Path(__file__).resolve().parents[1]
 DIST = KOK / "frontend" / "dist"
 
-pytestmark = pytest.mark.skipif(not (DIST / "index.html").exists(), reason="frontend/dist yok (yalniz backend agaci)")
+
+def _dist_kaynagi():
+    """D5-F (K5-F P4): `frontend/dist` derleme çıktısıdır (izlenmez) — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden modül düzeyi düz `skipif` idi: zorunlu kipte de sessizce ATLIYORDU ve dist'e muhtaç OLMAYAN saf politika
+    testlerini (`_onbellek_politikasi` sınıflandırması) de atlatıyordu. Artık yalnız dist'i sunan yolda çağrılır.
+    """
+    capraz.atla_yoksa("frontend/dist/index.html")
 
 
 @pytest.fixture(scope="module")
@@ -52,6 +60,7 @@ def api():
 
 @pytest.fixture(scope="module")
 def client(api):
+    _dist_kaynagi()
     return TestClient(api.app, client=("127.0.0.1", 51247))
 
 
@@ -163,6 +172,7 @@ def test_KRITIK_MOUNTLAR_politikali_sinifi_kullanir(api):
 
     Bu yüzden kapı sınıfın VARLIĞINA değil, mount edilmiş uygulama NESNESİNİN tipine bakar.
     """
+    _dist_kaynagi()  # mount'lar yalnız dist varken kurulur
     statik_mountlar = [(r.name, r.app) for r in api.app.routes if isinstance(getattr(r, "app", None), StaticFiles)]
     assert statik_mountlar, "hic StaticFiles mount'u bulunamadi -> kapi BAYAT"
     ciplak = [ad for ad, uygulama in statik_mountlar if not isinstance(uygulama, api.OnbellekPolitikaliStatik)]
