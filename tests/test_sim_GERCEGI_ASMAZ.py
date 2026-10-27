@@ -205,6 +205,31 @@ def izole_sim(monkeypatch):
             api._live_state.update(yedek)
 
 
+def _yayin_kaydedicisini_bagla(monkeypatch, kaydet) -> list[str]:
+    """Asıl WS yayın işlevini (`live_state._ws_broadcast_sync`) taşıyan HER modül özniteliğini `kaydet`e bağla; bağlananları döndür.
+
+    ⚠️ D5.58 TUR 3b (çürütme 3 b8): kaydedici yalnız `api._ws_broadcast_sync` TAKMA ADINA yamanıyordu — sim STM sıcaklığını asıl işlevle
+    (`live_state._ws_broadcast_sync(...)`, üretimde arayüze GİDER) yayınlasa bütün D5.58 kolları YEŞİLDİ (127 passed; ölçüldü). Artık
+    `sys.modules`'taki her modülün `__dict__`'inde asıl işleve bağlı ad (ör. `servers.live_state`, `servers.api_server`, işlev içi
+    `from servers.api_server import _ws_broadcast_sync` çağrı anında buradan çözülür) kaydediciye bağlanır — sahte EN ALT katta.
+    Modül `__getattr__`'ı tetiklenmez (`__dict__` okunur). Öncül: en az `servers.live_state` + `servers.api_server` bağlandı."""
+    import sys
+
+    from servers import live_state
+
+    asil = live_state._ws_broadcast_sync
+    baglanan: list[str] = []
+    for ad, mod in list(sys.modules.items()):
+        sozluk = getattr(mod, "__dict__", None)
+        if isinstance(sozluk, dict) and sozluk.get("_ws_broadcast_sync") is asil:
+            monkeypatch.setattr(mod, "_ws_broadcast_sync", kaydet)
+            baglanan.append(ad)
+    assert {"servers.live_state", "servers.api_server"} <= set(baglanan), (
+        f"aparat: yayın kaydedicisi asıl işlevin takma adlarına bağlanamadı: {baglanan}"
+    )
+    return baglanan
+
+
 def _tek_tur(api, monkeypatch, yayin_kancasi=None) -> list[dict]:
     """Sim döngüsünü BİR TUR koştur, yayınları döndür.
 
@@ -231,7 +256,7 @@ def _tek_tur(api, monkeypatch, yayin_kancasi=None) -> list[dict]:
         if yayin_kancasi:
             yayin_kancasi()
 
-    monkeypatch.setattr(api, "_ws_broadcast_sync", _yayin)
+    _yayin_kaydedicisini_bagla(monkeypatch, _yayin)
     monkeypatch.setattr(_gercek_time, "sleep", _uyku)
     try:
         api._hardware_simulation_loop()
@@ -347,7 +372,7 @@ def _cok_tur(api, monkeypatch, saat_adimlari=(0.0, 1800.0, 36000.0), tur_sonu=No
         kayma["sn"] = adimlar[len(turlar)]
         turlar.append([])
 
-    monkeypatch.setattr(api, "_ws_broadcast_sync", lambda m: turlar[-1].append(m))
+    _yayin_kaydedicisini_bagla(monkeypatch, lambda m: turlar[-1].append(m))
     monkeypatch.setattr(_gercek_time, "sleep", _uyku)
     monkeypatch.setattr(_gercek_time, "time", _saat)
     try:
@@ -363,7 +388,8 @@ def _cok_tur(api, monkeypatch, saat_adimlari=(0.0, 1800.0, 36000.0), tur_sonu=No
 def _stm_sicakliklari(m, stm: set, sahip=None, yol: str = "") -> list[str]:
     """Yayının / anlık görüntünün İÇ İÇE her sözlüğünde sıcaklık anahtarı (adında `temp` geçen: objectTemp / ambientTemp /
     object_temp / temperature …) → sahibi: sözlüğün kendi `coilId` / `coil_id` / `id`'si, yoksa en yakın atanınki. STM bobininde
-    None OLMAYAN değer ya da sahibi BELİRSİZ (kimliksiz) None olmayan sıcaklık → ihlal (fail-closed; tip adına bakılmaz)."""
+    None OLMAYAN değer ya da sahibi BELİRSİZ (kimliksiz) None olmayan sıcaklık → ihlal (fail-closed; tip adına bakılmaz).
+    Küme parametresi geneldir: D5.58 TUR 3b'den beri ESP KAPALIYKEN ESP bobinleri için de çağrılır (ölçen sensör yok)."""
     out: list[str] = []
     if isinstance(m, dict):
         for k in ("coilId", "coil_id", "id"):
@@ -400,13 +426,17 @@ def test_KRITIK_DAVRANIS_sim_STM_sicaklik_VERMEZ_seans_x_ESP_x_TUR_D5_58(izole_s
     ESP açıkken HER bobine sıcaklık (`(cid in _esp) or esp_acik`) · ilk turda None, sonraki turlarda 24 °C (`or el > 0.25`).
     Artık {boşta, tüm bobinlerde aktif seans} × {ESP kapalı, açık} × 3 tur (t = 0 sn, 30 dk, 10 sa): her turda `coil_status` VE
     `sensor_data` yayınında STM bobinlerinin `objectTemp` / `ambientTemp` None. Öncüller (vakum karşıtı): her tur topolojinin
-    tamamını yayınlar; seansta STM bobinleri `running`; ESP açıkken ESP bobini sıcaklık BİLDİRİR (ölçen yol gerçekten koştu)."""
+    tamamını yayınlar; seansta STM bobinleri `running`; ESP açıkken ESP bobini sıcaklık BİLDİRİR (ölçen yol gerçekten koştu).
+    D5.58 TUR 3b (çürütme 3): b8 — yayınlar asıl işlevin HER takma adından kaydedilir (`_yayin_kaydedicisini_bagla`); b10 — ESP
+    KAPALIYKEN (saha varsayılanı) ESP bobini de yayınlarda ve tur sonu anlık görüntülerinde sıcaklıksız (`(cid in _esp) and esp_acik`
+    koruyucusu düşerse sim KPI "ort. sıcaklık" ve bobin kartı uydurma değer gösterir)."""
     api, live_state = izole_sim
     monkeypatch.setattr(live_state, "esp_etkin", lambda: esp_acik)
     monkeypatch.setattr(api.live_state, "esp_etkin", lambda: esp_acik, raising=False)
     stm = set(live_state.STM_COIL_IDS)
     esp = set(live_state.ESP_COIL_IDS)
     assert stm, "öncül: topolojide STM bobini yok (VAKUM)"
+    assert esp, "öncül: topolojide ESP bobini yok — ESP kapalı / açık kolları VAKUM"
     oturum = {"is_active": True, "frequency": 40.0, "duty": 30.0, "coil_ids": sorted(stm | esp)} if seans else {}
     # Paylaşılan seans sözlüğüne DOKUNULMAZ (D1.41 nöbeti): yalnız modül bağlaması bu tur için değişir, finally'de geri gelir.
     gercek_oturum = api._active_session
@@ -441,6 +471,12 @@ def test_KRITIK_DAVRANIS_sim_STM_sicaklik_VERMEZ_seans_x_ESP_x_TUR_D5_58(izole_s
                 f"tur {no} ({kosul}): sim {m.get('type')!r} yayınında STM bobinine sıcaklık uydurdu: {ihlal} — STM protokolünde "
                 "sıcaklık alanı YOK"
             )
+            if not esp_acik:
+                ihlal = _stm_sicakliklari(m, esp)
+                assert not ihlal, (
+                    f"tur {no} ({kosul}): ESP KAPALIYKEN sim {m.get('type')!r} yayınında ESP bobinine sıcaklık verdi: {ihlal} — ESP alt "
+                    "sistemi kapalıyken o bobinde sıcaklık ÖLÇEN sensör yok (uydurma)"
+                )
         for ad, anlik in yuzeyler.items():
             bobinler = anlik.get("coils") or []
             assert {b.get("id") for b in bobinler} >= (stm | esp), (
@@ -451,6 +487,11 @@ def test_KRITIK_DAVRANIS_sim_STM_sicaklik_VERMEZ_seans_x_ESP_x_TUR_D5_58(izole_s
                 f"tur {no} ({kosul}): {ad} CANLI DURUMDA STM bobinine sıcaklık uydurdu: {ihlal} — sim yayın temiz olsa da "
                 "dashboard / WS anlık görüntüsü uydurma sıcaklık gösterir"
             )
+            if not esp_acik:
+                ihlal = _stm_sicakliklari(bobinler, esp)
+                assert not ihlal, (
+                    f"tur {no} ({kosul}): ESP KAPALIYKEN {ad} ESP bobininde sıcaklık gösteriyor: {ihlal} — ölçen sensör yok (uydurma)"
+                )
             for b in bobinler:
                 if b.get("id") in stm and seans:
                     assert b.get("running") is True, f"öncül: {ad} seansta STM bobini {b.get('id')} çalışmıyor"

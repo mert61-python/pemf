@@ -23,6 +23,9 @@
  * D5.E2 TUR 3 (çürütme 2): ACİL DURDUR montaj başına TEK atış (e2d1) → tablo "ikinciBasis" + "geçiş + basış" KIRMIZI; üçüncü bir ekran
  * düğmesiz işaret takar (e2d2) → "kapalı dünya" KIRMIZI; bobin listesi boşken Kontrol düğmesi çizilmez (e2d3) → "… × bobin listesi bos"
  * KIRMIZI.
+ * D5.E2 TUR 3b (çürütme 3 f1 / g1): uçuştaki durdurma bitmeden gelen basışı yutan "çift istek koruması" (`useSessionControl.emergencyStop`
+ * içinde `if (acilUcustaRef.current) return;`) → "panik çift dokunuş" KIRMIZI; izinli ekran modülü işareti taşıyan bir ALT bileşeni dışa
+ * aktarır ve üçüncü bir ekran onu takar → "kapalı dünya" KIRMIZI (işaret yalnız ekran bileşeninin KENDİ gövdesinde).
  */
 jest.mock("@/services/config", () => ({
   serviceConfig: { apiBaseUrl: "http://127.0.0.1:8000/api", bridgeBaseUrl: "http://127.0.0.1:8000/api", apiToken: "" },
@@ -78,11 +81,17 @@ type Durum = "seans_aktif" | "seanssiz_bobin_calisiyor" | "bosta";
 type Bobin = "dolu" | "bos" | "yok";
 /** Tablonun ölçtüğü ekranların MODÜLLERİ — kapalı-dünya kolu işaret takan modül kümesinin TAM bu olduğunu doğrular (e2d2). */
 const EKRAN_MODULU: Record<Ekran, string> = { dashboard: "screens/DashboardScreen.tsx", control: "screens/ControlScreen.tsx" };
+/** D5.E2 TUR 3b (çürütme 3 g1): izinli modülde işaret YALNIZ bu üst düzey bileşenin gövdesinde (alt bileşenle dışa taşınamaz). */
+const EKRAN_BILESENI: Record<Ekran, string> = { dashboard: "DashboardScreen", control: "ControlScreen" };
 
 const cagrilar: string[] = [];
 let seansAktif = false;
-const yanit = (o: unknown) =>
-  Promise.resolve({ ok: true, status: 200, json: async () => o, text: async () => JSON.stringify(o) });
+const govde = (o: unknown) => ({ ok: true, status: 200, json: async () => o, text: async () => JSON.stringify(o) });
+const yanit = (o: unknown) => Promise.resolve(govde(o));
+/** D5.E2 TUR 3b (f1): `true` iken `/hardware/emergency_stop` yanıtı BEKLETİLİR (durdurma uçuşta kalır); test sonunda topluca çözülür. */
+let beklet = false;
+const bekleyenler: Array<() => void> = [];
+const durdurmaSayisi = () => cagrilar.filter((y) => y === "/hardware/emergency_stop").length;
 
 const SEANS = { isActive: true, mode: "Manuel", frequencyHz: 50, intensityMt: 1, remainingMin: 29, elapsedSec: 10, durationSec: 1800 };
 const HAZIR = { isActive: false, mode: "Sistem Hazır", frequencyHz: 0, intensityMt: 0, remainingMin: 0, elapsedSec: 0, durationSec: 0 };
@@ -151,6 +160,8 @@ async function olc(ekran: Ekran, stm: Stm, durum: Durum, bobin: Bobin = "dolu") 
 beforeEach(() => {
   cagrilar.length = 0;
   seansAktif = false;
+  beklet = false;
+  bekleyenler.length = 0;
   jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
   jest.spyOn(console, "error").mockImplementation(() => {});
   (global as { fetch: unknown }).fetch = jest.fn((url: string) => {
@@ -158,7 +169,11 @@ beforeEach(() => {
     cagrilar.push(yol);
     if (yol === "/session/active")
       return yanit(seansAktif ? { is_active: true, mode: "Manuel", frequency: 50, intensity: 1, duration_minutes: 30, elapsed_sec: 10 } : { is_active: false });
-    if (yol === "/hardware/emergency_stop") return yanit({ confirmed: true, status: "success", stmStopped: true, stmKartYaniti: "kabul" });
+    if (yol === "/hardware/emergency_stop") {
+      const o = { confirmed: true, status: "success", stmStopped: true, stmKartYaniti: "kabul" };
+      if (beklet) return new Promise((coz) => bekleyenler.push(() => coz(govde(o))));
+      return yanit(o);
+    }
     return yanit({ status: "success" });
   });
 });
@@ -227,6 +242,42 @@ describe("D5.E2 (İG-6.30 · A-51) — işaret takılıysa ekranın KENDİ ACİL
     expect(adimlar).toEqual(adimlar.map((a) => ({ ...a, ihlal: false })));
   });
 
+  // D5.E2 TUR 3b (çürütme 3 f1): yukarıdaki kollar ikinci basışı ancak ilki TAMAMLANINCA yapıyordu — uçuştaki durdurma bitmeden gelen
+  // basışı yutan bir "çift istek düzeltmesi" (`useSessionControl.emergencyStop`'ta `if (acilUcustaRef.current) return;`) 64 dosya / 1290 test
+  // YEŞİL geçti (ölçüldü). Ürünün kendi kuralı (DashboardScreen: "Çift-tık koruması BİLEREK YOK — panik çift-dokunuş yutulmamalı"); en kötü
+  // durumda ~21 sn süren durdurma boyunca işaret kayan ACİL DURDUR'u gizlediği için o ekranda TEK durdurma yolu bu düğmedir. Burada ilk
+  // basışın yanıtı BEKLETİLİR (uçuşta) ve aynı düğmeye art arda üç kez basılır: her basış YENİ `/hardware/emergency_stop` göndermeli.
+  const UCUSTA = EKRANLAR.flatMap((e) => STMLER.map((s) => [e, s] as [Ekran, Stm]));
+  it.each(UCUSTA)("KRİTİK panik çift dokunuş: %s × STM %s — ilk durdurmanın yanıtı beklenirken (uçuşta) HER yeni basış durdurma gönderir", async (ekran, stm) => {
+    kur(stm, "seans_aktif");
+    const u = render(<Kabuk ekran={ekran} />);
+    await act(async () => {});
+    const takili = u.getByTestId("d5e2-isaret").props.children === "takili";
+    const dugme = u.queryAllByLabelText(ETIKET).length;
+    beklet = true;
+    cagrilar.length = 0;
+    const sayac: number[] = [];
+    for (let i = 0; i < 3 && dugme > 0; i += 1) {
+      await act(async () => {
+        fireEvent.press(u.queryAllByLabelText(ETIKET)[0]);
+      });
+      sayac.push(durdurmaSayisi());
+    }
+    const uctaBekleyen = bekleyenler.length;
+    beklet = false;
+    await act(async () => {
+      while (bekleyenler.length) bekleyenler.shift()!();
+    });
+    await act(async () => {});
+    u.unmount();
+    // vakum: işaret takılı, ekranın kendi düğmesi var, ilk basış durdurma gönderdi ve yanıtı GERÇEKTEN bekletildi (sonraki basışlar uçuşta)
+    expect({ takili, dugmeVar: dugme > 0, ilkGonderdi: (sayac[0] ?? 0) > 0, uctaBekleyen: uctaBekleyen > 0 }).toEqual({
+      takili: true, dugmeVar: true, ilkGonderdi: true, uctaBekleyen: true,
+    });
+    const herBasisGonderdi = sayac.length === 3 && sayac.every((n, i) => n > (i === 0 ? 0 : sayac[i - 1]));
+    expect({ ekran, stm, sayac, herBasisGonderdi }).toEqual({ ekran, stm, sayac, herBasisGonderdi: true });
+  });
+
   // D5.E2 TUR 3 (çürütme 2 e2d2): KAPALI DÜNYA — işaret takan YENİ bir ekran (kendi düğmesi olmadan) tabloya girmeden hiçbir kapıya
   // görünmüyordu (SensorMonitorScreen işaret takınca 64 dosya YEŞİLDİ). Kaynak TypeScript AST ile okunur (yorum / dize kandıramaz):
   // `KendiDurdurmaKontrolu`'ndan `KendiDurdurmaIsareti` alan üretim modülü kümesi == tablonun ölçtüğü ekran modülleri; `useKendiDurdurmaKaydi`
@@ -253,6 +304,8 @@ describe("D5.E2 (İG-6.30 · A-51) — işaret takılıysa ekranın KENDİ ACİL
     const takan = new Set<string>();
     const kaydeden = new Set<string>();
     const ihlal: string[] = [];
+    const bilesen = new Map<string, string>(EKRANLAR.map((e) => [EKRAN_MODULU[e], EKRAN_BILESENI[e]]));
+    let etiketSayisi = 0;
     for (const tam of dosyalar) {
       if (path.resolve(tam) === path.resolve(tanimDosyasi)) continue;
       const sf = ts.createSourceFile(tam, fs.readFileSync(tam, "utf8"), ts.ScriptTarget.Latest, true,
@@ -290,11 +343,28 @@ describe("D5.E2 (İG-6.30 · A-51) — işaret takılıysa ekranın KENDİ ACİL
           const etiket = (ts.isJsxSelfClosingElement(ust) || ts.isJsxOpeningElement(ust) || ts.isJsxClosingElement(ust)) && ust.tagName === n;
           const iceAktarim = ts.isImportSpecifier(ust);
           if (!etiket && !iceAktarim) ihlal.push(`${rel(tam)}: işaret JSX etiketi dışında kullanılıyor (satır ${sf.getLineAndCharacterOfPosition(n.getStart()).line + 1})`);
+          // D5.E2 TUR 3b (çürütme 3 g1): etiket YALNIZ izinli modülün ekran bileşeninin KENDİ gövdesinde — modülün başka bir üst düzey
+          // bildirimi (dışa aktarılan alt bileşen `export function DurdurmaIsaretBasligi() { return <KendiDurdurmaIsareti />; }`) işareti
+          // üçüncü bir ekrana taşır: takan modül kümesi değişmez, tablo o ekranı çizmez, kayan ACİL DURDUR orada gizlenir (ölçüldü: YEŞİLDİ).
+          if (etiket && !ts.isJsxClosingElement(ust)) {
+            etiketSayisi += 1;
+            let ata: ts.Node = ust;
+            while (ata.parent && ata.parent !== sf) ata = ata.parent;
+            const ad = ts.isFunctionDeclaration(ata) || ts.isClassDeclaration(ata)
+              ? ata.name?.text
+              : ts.isVariableStatement(ata)
+                ? ata.declarationList.declarations.map((v) => (ts.isIdentifier(v.name) ? v.name.text : "?")).join(",")
+                : ts.SyntaxKind[ata.kind];
+            const beklenen = bilesen.get(rel(tam));
+            if (ad !== beklenen)
+              ihlal.push(`${rel(tam)}: işaret '${ad}' içinde (satır ${sf.getLineAndCharacterOfPosition(n.getStart()).line + 1}) — yalnız ekran bileşeni ${beklenen ?? "(izinli modül değil)"}`);
+          }
         }
         ts.forEachChild(n, kullanim);
       };
       if (yerelAdlar.size) kullanim(sf);
     }
+    expect(etiketSayisi).toBeGreaterThanOrEqual(2); // vakum: iki ekranın işaret etiketi bulundu ve konumu ölçüldü
     expect({ ihlal, takan: [...takan].sort(), kaydeden: [...kaydeden].sort() }).toEqual({
       ihlal: [],
       takan: Object.values(EKRAN_MODULU).sort(),

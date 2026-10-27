@@ -25,6 +25,8 @@
  * D5.E1 TUR 3 (çürütme 2 e1n1): köprü ARIZASI (2xx ama gövde JSON değil / okunurken iptal / JSON null · HTTP 500 · erişilemez) ×
  * yedek {3 partial, teyitli, kart reddi, erişilemez} × iki sıra → sonuç YALNIZ yedeğin gövdesinden (HTTP başarısı teyit sayılmaz);
  * simetriği: yedek arızası (erişilemez / `null`) × köprü {3 partial, teyitli, kart reddi} × iki sıra → sonuç köprünün gövdesinden.
+ * D5.E1 TUR 3b (çürütme 3 e5): 2xx gövdede `confirmed` ALANI YOK (`{}` ya da başarı diyen ama alansız gövde) → teyit DEĞİL; köprüde de
+ * yedekte de (`d1 && d1.confirmed !== false` / `r && r.confirmed !== false` → KIRMIZI).
  *
  * ⚠️ MUTASYON: 2. adımda `teyitli = r?.confirmed === true` → "teyit köprüde, köprü önce" KIRMIZI; 1. adımda `teyitli = d1?.confirmed
  * === true` → "teyit yedekte, yedek önce" KIRMIZI; `kartReddetti: kartRed` → "teyit + red" KIRMIZI; `kartRed = r?.… === "red"` →
@@ -154,6 +156,8 @@ describe.each(SIRALAR)("D5.E1 teyit + red — teyit veren yol: %s", (veren) => {
 // okuması zaman aşımının İÇİNDE (2026-08-17) — abort'ta `json()` reddeder. Sonuç SAHTE TEYİT olurdu (ekran "durduruldu" der, ESP bobini
 // çalışıyor olabilir — `emergencyStop.ts`'in kendi yorumundaki "en ağır hata sınıfı"). Köprü arızasında sonuç YALNIZ yedeğin gövdesinden.
 const iptalHatasi = () => Object.assign(new Error("The operation was aborted."), { name: "AbortError" });
+/** D5.E1 TUR 3b (e5): eski / bozuk backend biçimi — başarı ve STM onayı der, `confirmed` alanı TAŞIMAZ. */
+const ALANSIZ_BASARI = { status: "success", stmStopped: true, stmKartYaniti: "kabul" };
 const KOPRU_ARIZALARI = [
   new KopruArizasi("2xx, gövde JSON değil", () => ({
     ok: true, status: 200, json: () => Promise.reject(new SyntaxError("Unexpected token < in JSON at position 0")),
@@ -162,6 +166,9 @@ const KOPRU_ARIZALARI = [
     ok: true, status: 200, json: () => Promise.reject(iptalHatasi()),
   })),
   new KopruArizasi("2xx, gövde JSON null", () => ({ ok: true, status: 200, json: async () => null })),
+  // D5.E1 TUR 3b (çürütme 3 e5): gövde OKUNUR ama `confirmed` alanı YOK — eksik alan teyit sayılmaz (`!== false` yüklemi SAHTE teyit üretir).
+  new KopruArizasi("2xx, gövde {} (confirmed ALANI yok)", () => ({ ok: true, status: 200, json: async () => ({}) })),
+  new KopruArizasi("2xx, gövde başarı der ama confirmed ALANI yok", () => ({ ok: true, status: 200, json: async () => ALANSIZ_BASARI })),
   new KopruArizasi("HTTP 500, gövde teyit İDDİA etse de", () => ({ ok: false, status: 500, json: async () => TEYITLI })),
   new KopruArizasi("köprü erişilemez (ağ hatası)", () => new TypeError("Network request failed")),
 ];
@@ -190,6 +197,9 @@ const KOPRU_SONUCLARI = YEDEK_SONUCLARI.filter(([ad]) => ad !== "erişilemez");
 const YEDEK_ARIZALARI: [string, unknown][] = [
   ["erişilemez", new Error("apiPost zaman aşımı")],
   ["gövdesiz (null)", null],
+  // D5.E1 TUR 3b (e5): yedeğin 2xx gövdesinde `confirmed` alanı YOK → teyit sayılmaz, sonuç yine köprünün gövdesinden.
+  ["gövde {} (confirmed ALANI yok)", {}],
+  ["başarı der ama confirmed ALANI yok", ALANSIZ_BASARI],
 ];
 describe.each(YEDEK_ARIZALARI)("D5.E1 TUR 3 — yedek: %s", (_y, yedekAriza) => {
   describe.each(KOPRU_SONUCLARI)("köprü: %s", (_k, kopru, beklenen) => {

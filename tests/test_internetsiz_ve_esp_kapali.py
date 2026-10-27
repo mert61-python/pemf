@@ -546,6 +546,132 @@ def test_KRITIK_DAVRANIS_lifespan_PEMF_SIMULATE_YAZMAZ_sim_BASLATMAZ_D5_58(monke
     assert not sim, f"lifespan bağlantılar kopukken sanal donanım BAŞLATTI: {sim}"
 
 
+#: D5.58 TUR 3b (çürütme 3 a5 / a5b): AST kolu yalnız `apps/backend/**`'u tarıyordu — backend'in ÇALIŞMA ANINDA içe aktardığı depo
+#: kökü modülleri (`pemf_gui/config.py`: `database/patient_database.py` onu modül düzeyinde içe aktarır; `ai_hub`, `ai_service`,
+#: `build_tools` PyInstaller kancaları …) kapsam DIŞIYDI. Geliştirme ağaçları hariç: çalışma anında backend'e GİRMEZLER; sim'i
+#: kendi başlattıkları backend alt sürecine env ile verirler (`tools/e2e_ortam.py`, `scripts/urun_senaryolari.py`).
+_GELISTIRME_AGACLARI = ("tests/", "tools/", "scripts/", "training_archive/")
+
+
+def _izlenen_calisma_agaci_py() -> list[Path]:
+    """İzlenen (`git ls-files`) çalışma ağacı .py dosyaları, geliştirme ağaçları hariç. İzlenmeyen derleme çıktısı (`PEMF_BUILD/dist`
+    — ürün kaynağının KOPYALARI) ve yerel dosyalar bilerek dışarıda: kapı temiz ağacı ölçer. git yoksa / düşerse KIRMIZI (atlama yok)."""
+    import subprocess
+
+    r = subprocess.run(
+        ["git", "-c", "core.quotepath=off", "ls-files", "-z", "--", "*.py"], cwd=KOK, capture_output=True, timeout=120
+    )
+    assert r.returncode == 0, f"aparat: git ls-files başarısız (rc={r.returncode}): {r.stderr[-500:]!r}"
+    adlar = [a for a in r.stdout.decode("utf-8").split("\0") if a and not a.startswith(_GELISTIRME_AGACLARI)]
+    return [KOK / a for a in adlar if (KOK / a).is_file()]
+
+
+def test_KRITIK_PEMF_SIMULATE_KAPALI_DUNYA_tum_calisma_agacinda_D5_58():
+    """D5.58 TUR 3b (çürütme 3 a5b): `pemf_gui/config.py`'de (apps/backend DIŞI, ama backend'in içe aktardığı) çağrılmayan
+    `def _gelistirici_sim_ac(): os.environ.setdefault("PEMF_SIMULATE", "1")` D5.58 kapı listesinde YEŞİLDİ (34 passed; ölçüldü) —
+    işlev bir istek / iş parçacığı yolundan çağrılırsa canlı. Artık KAPALI DÜNYA çalışma ağacının tamamında (izlenen .py, geliştirme
+    ağaçları hariç; vakum ≥150 dosya + çapalar): `"PEMF_SIMULATE"` dizge sabiti / `PEMF_SIMULATE=` anahtar sözcüğü YALNIZ
+    `apps/backend/servers/api_server.py`'de, TEK yerde (sim karar okuması — biçimini `test_KRITIK_PEMF_SIMULATE_urun_kodunda_YAZILMAZ_D5_58`
+    pinler); anahtarın ≥5 karakterlik PARÇASI olan sabit yok (birleştirme / f-dizge). Ayrıştırılamayan dosya da KIRMIZI (taranamayan
+    dosya kapıyı kör eder).
+
+    MUTASYON: `pemf_gui/config.py`'ye çağrılmayan işlevde `setdefault` (a5b) → KIRMIZI; aynı yere içe aktarma anında yazım (a5) →
+    KIRMIZI (davranış kolu: `test_KRITIK_DAVRANIS_api_server_ICE_AKTARILINCA_PEMF_SIMULATE_YAZILMAZ_D5_58`)."""
+    import ast
+
+    dosyalar = _izlenen_calisma_agaci_py()
+    taranan = {p.relative_to(KOK).as_posix() for p in dosyalar}
+    assert len(dosyalar) >= 150, f"VAKUM: çalışma ağacında yalnız {len(dosyalar)} izlenen .py tarandı"
+    capalar = {"apps/backend/servers/api_server.py", "apps/backend/database/patient_database.py", "pemf_gui/config.py"}
+    assert capalar <= taranan, f"VAKUM: çapa dosyaları taranmadı: {sorted(capalar - taranan)}"
+    yerler: list[str] = []
+    parcalar: list[str] = []
+    ayrismayan: list[str] = []
+    for p in dosyalar:
+        yol = p.relative_to(KOK).as_posix()
+        try:
+            agac = ast.parse(p.read_text(encoding="utf-8", errors="replace"))
+        except SyntaxError as e:
+            ayrismayan.append(f"{yol}: {e.msg} (satır {e.lineno})")
+            continue
+        for d in ast.walk(agac):
+            if isinstance(d, ast.Constant) and isinstance(d.value, str):
+                if d.value == _SIM_ANAHTARI:
+                    yerler.append(f"{yol}:{d.lineno}")
+                elif len(d.value) >= 5 and d.value in _SIM_ANAHTARI:
+                    parcalar.append(f"{yol}:{d.lineno} {d.value!r}")
+            elif isinstance(d, ast.keyword) and d.arg == _SIM_ANAHTARI:
+                yerler.append(f"{yol}:{d.value.lineno} (`{_SIM_ANAHTARI}=` anahtar sözcüğü)")
+    assert not ayrismayan, f"çalışma ağacında AYRIŞTIRILAMAYAN .py (taranamadı — kapı kör): {ayrismayan}"
+    assert not parcalar, (
+        f"PEMF_SIMULATE anahtarının PARÇASI dizge sabiti: {parcalar} -> birleştirilmiş anahtarla dolaylı yazım taranamaz"
+    )
+    disarida = [y for y in yerler if not y.startswith("apps/backend/servers/api_server.py:")]
+    assert not disarida and len(yerler) == 1, (
+        f"PEMF_SIMULATE sabiti sim kararı DIŞINDA da geçiyor: {yerler} — backend'in içe aktardığı bir modül (apps/backend dışı "
+        "dahil) sim kararını yazabilir / türetebilir (STM kopukken sanal donanım = SAHTE telemetri)"
+    )
+
+
+def test_KRITIK_DAVRANIS_api_server_ICE_AKTARILINCA_PEMF_SIMULATE_YAZILMAZ_D5_58():
+    """D5.58 TUR 3b (çürütme 3 a5): `pemf_gui/config.py` modül gövdesinde `os.environ.setdefault("PEMF_SIMULATE", "1")` (backend onu
+    içe aktarma ANINDA yükler) D5.58 kollarında YEŞİLDİ — AST kolu `apps/backend/**` dışını görmüyordu, lifespan kolu env'i lifespan'den
+    ÖNCE siler; yalnız conftest hijyen bekçisi YANLIŞ teşhisle ("toplama / fixture bıraktı") kırmızı veriyordu. TAZE alt süreçte (env'de
+    anahtar YOK) `servers.api_server` içe aktarılır → sonrasında anahtar hâlâ YOK. Hesaplanan anahtar / `chr()` hilesi gibi AST'nin
+    göremediği içe aktarma anı yazımlarını da yakalar.
+    Aparat: yalnız İÇE AKTARMA (lifespan / ağ / port YOK). Alt süreç pytest sürecinin İZOLE env'ini miras alır (conftest: veri kökü /
+    APPDATA / makine kimliği oturum temp'inde, python-keyring null) — koşmadan ÖNCE doğrulanır; alt süreç de aynı APPDATA'yı görmeli.
+
+    MUTASYON: `pemf_gui/config.py` modül gövdesine `setdefault` (a5) → KIRMIZI."""
+    import ast
+    import os
+    import subprocess
+
+    c = sys.modules.get("conftest")
+    assert c is not None and Path(c.__file__).resolve() == (Path(__file__).parent / "conftest.py").resolve()
+    veri = os.environ.get("PEMF_DATA_DIR", "")
+    gercek = getattr(c, "_ORIJINAL_APPDATA", None)
+    assert (
+        veri
+        # conftest'in iki yalıtım biçimi: test başına `<tmp_path>/_izole_appdata`, oturum tabanı `pemf_test_veri_*` (temp)
+        and (Path(veri).name == "_izole_appdata" or Path(veri).name.startswith("pemf_test_veri_"))
+        and not (gercek and Path(gercek).resolve() in (Path(veri).resolve(), *Path(veri).resolve().parents))
+        and os.environ.get("APPDATA") == veri
+        and Path(os.environ.get("PEMF_DEVICE_IDENTITY_DIR", "")).parent == Path(veri)
+        and os.environ.get("PYTHON_KEYRING_BACKEND") == "keyring.backends.null.Keyring"
+    ), "aparat: alt süreç İZOLE env miras almıyor (conftest veri kökü / makine kimliği / kasa yalıtımı yok) — koşulmadı"
+    kod = (
+        "import os, sys\n"
+        f"sys.path[:0] = [{str(KOK / 'apps' / 'backend')!r}, {str(KOK)!r}]\n"
+        f"once = os.environ.get({_SIM_ANAHTARI!r})\n"
+        "import servers.api_server\n"
+        f"print('SONUC=' + repr((once, os.environ.get({_SIM_ANAHTARI!r}), os.environ.get('APPDATA'))))\n"
+    )
+    env = {k: v for k, v in os.environ.items() if k != _SIM_ANAHTARI}
+    env["PYTHONIOENCODING"] = "utf-8"
+    r = subprocess.run(
+        [sys.executable, "-c", kod],
+        cwd=str(KOK),
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=180,
+    )
+    satir = [s for s in r.stdout.splitlines() if s.startswith("SONUC=")]
+    assert r.returncode == 0 and satir, (
+        f"aparat: alt süreç servers.api_server'ı içe aktaramadı (rc={r.returncode}): {r.stderr[-1500:]}"
+    )
+    once, sonra, appdata = ast.literal_eval(satir[-1][len("SONUC=") :])
+    assert appdata == veri, f"aparat: alt süreç izole APPDATA'yı görmedi ({appdata!r} ≠ {veri!r})"
+    assert once is None, f"aparat: alt süreç PEMF_SIMULATE={once!r} ile başladı (env süzülmedi)"
+    assert sonra is None, (
+        f"servers.api_server İÇE AKTARILINCA PEMF_SIMULATE yazıldı ({sonra!r}) — sim kararı lifespan'den ÖNCE, içe aktarılan bir "
+        "modülde kuruluyor (üretimde STM kopukken / koşulsuz sanal donanım = SAHTE telemetri)"
+    )
+
+
 def test_KRITIK_ESP_kapaliyken_MQTT_PUBLISH_hic_denenmez(monkeypatch):
     """⚠️ TEK BOĞAZ NOKTASI: bütün ESP komutları `_mqtt_publish`ten geçer.
 
