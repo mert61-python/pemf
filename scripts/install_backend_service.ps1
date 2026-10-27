@@ -109,9 +109,13 @@ function Get-PemfProfilEnvDosyasi([string]$AppDir, [string]$Mode, [string]$Betik
     ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 }
 
+# D5 M-4 (ürün kararı): profil UTF-8 okunur — Windows PowerShell 5.1 `Get-Content` kodlamasız ANSI (Türkçe Windows'ta cp1254) varsayar;
+# BOM'suz UTF-8 profilde ASCII dışı her değer bozulurdu (Arap-Hint rakamlı geçerli port Y44'te kurulumu durdururdu, Türkçe karakterli
+# yol / ad servise bozuk giderdi). PS 7 zaten UTF-8 okur; BOM'lu UTF-8 de aynı okunur. Profili YAZAN kod yolu yok: deploy\*.env depodan
+# AYNEN (UTF-8, BOM'suz) paketlenir. İki betikte BİREBİR. Kapı: tests/test_profil_env_UTF8_okunur_PS51_PS7_AYNI_karar_D5M4.py
 function Read-PemfProfilEnv([string]$Dosya) {
     $d = [ordered]@{}
-    foreach ($ln in (Get-Content $Dosya)) {
+    foreach ($ln in (Get-Content $Dosya -Encoding UTF8)) {
         $t = $ln.Trim()
         if ($t -and -not $t.StartsWith("#") -and $t.Contains("=")) {
             $k, $v = $t.Split("=", 2); $d[$k.Trim()] = $v.Trim()
