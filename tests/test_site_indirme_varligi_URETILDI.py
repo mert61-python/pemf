@@ -208,7 +208,55 @@ def test_YUKLEME_dogrulamasi_YAYIN_AKISINDA_zorunlu():
         "yerel testler yalnizca 'uretildi mi?'yi olcer"
     )
     build = (_KOK / "BUILD.md").read_text(encoding="utf-8", errors="replace")
-    assert "site_indirme_dogrula.py" in build, (
-        "yayin runbook'u (BUILD.md) indirme dogrulamasini CAGIRMIYOR — betik var ama akista "
-        "kosulmuyorsa 404 yine fark edilmez"
+    # D5.60 (B-10.258): dosyada ADININ GECMESI yetmiyordu — adim `#` ile yoruma alininca (komut KOSULMAZ) kapi yesil kaliyordu.
+    # Runbook'taki komut satiri YORUM OLMAYAN bir satirda betigi CAGIRMALI.
+    assert re.search(r"^[ \t]*[^#\s][^\n#]*site_indirme_dogrula\.py", build, re.M), (
+        "yayin runbook'u (BUILD.md) indirme dogrulamasini CAGIRMIYOR (yalniz yorumda geciyor ya da hic yok) — betik var ama "
+        "akista kosulmuyorsa 404 yine fark edilmez"
+    )
+
+
+def _dogrulayici(monkeypatch, kod: int):
+    """`scripts/site_indirme_dogrula.py` — `urllib.request.urlopen` SAHTE (ağ YOK): her adres `kod` döner."""
+    import importlib.util
+    import io
+    import urllib.error
+
+    spec = importlib.util.spec_from_file_location(
+        "site_indirme_dogrula_d560", _KOK / "scripts" / "site_indirme_dogrula.py"
+    )
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    istenen: list[str] = []
+
+    class _Yanit:
+        status = kod
+        headers = {"Content-Range": "bytes 0-0/123"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def _urlopen(istek, timeout=None):
+        istenen.append(istek.full_url)
+        if kod >= 400:
+            raise urllib.error.HTTPError(istek.full_url, kod, "sahte", {}, io.BytesIO(b""))
+        return _Yanit()
+
+    monkeypatch.setattr(m.urllib.request, "urlopen", _urlopen)
+    return m, istenen
+
+
+@pytest.mark.parametrize("kod,beklenen", [(404, 1), (403, 1), (206, 0), (200, 0)])
+def test_KRITIK_indirme_dogrulayicisi_KIRIK_baglantida_SIFIR_DISI_D5_60(monkeypatch, capsys, kod, beklenen):
+    """D5.60 (B-10.258): runbook adımının ASIL işi — sahte HTTP 404'te çıkış 1 (eskiden yalnız betiğin VARLIĞI ölçülüyordu;
+    404 dalı etkisizleştirilse kapı yeşil kalırdı). Ağ YOK: `urlopen` sahte; GERÇEK `main()` + `kontrol()` + `config.ts` ayrıştırması."""
+    m, istenen = _dogrulayici(monkeypatch, kod)
+    assert m.main() == beklenen, (
+        f"HTTP {kod} dönen indirme bağlantısında doğrulayıcı {beklenen} yerine farklı çıkış verdi — kırık buton yayında fark edilmez (D5.60)"
+    )
+    assert len(istenen) == 2 and all(u.startswith("https://github.com/") for u in istenen), (
+        f"aparat: doğrulayıcı sitenin iki indirme adresini sormadı: {istenen}"
     )

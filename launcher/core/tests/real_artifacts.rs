@@ -115,6 +115,9 @@ fn uretilen_manifest_launcher_tarafindan_okunur() {
     for key in [platform::LINUX_X64, platform::MAC_ARM64] {
         assert!(!m.runtimes.contains_key(key),
             "{key} manifest'e geri girdi — o platformda rollout freni ve self-update YOK");
+        // D5.60 (B-10.242): `layers` kanalı da kilitli (yalnız `runtimes` kilitliyken `layers.linux-x64` yeşil geçiyordu).
+        assert!(!m.layers.contains_key(key),
+            "{key} manifest'e `layers` kanalindan geri girdi — o platformda self-update YOK");
     }
     for p in ["home", "vet", "research"] {
         assert!(m.models.contains_key(p), "{p} profili eksik");

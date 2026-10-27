@@ -511,6 +511,12 @@ mod tests {
             "linux-x64 manifest'e geri girdi — o platformda rollout freni ve self-update YOK");
         assert!(!m.runtimes.contains_key(platform::MAC_ARM64),
             "mac-arm64 manifest'e geri girdi — o platformda rollout freni ve self-update YOK");
+        // D5.60 (B-10.242): karar YALNIZ `runtimes` kanalında kilitliydi — `layers.linux-x64` eklenince kapı yeşil kalıyordu.
+        // Kurulabilirliğin İKİ kanalı da (`runtimes` YA DA `layers`) kilitli; geri alma yolu yukarıda (iddialar layers ile birlikte).
+        for key in [platform::LINUX_X64, platform::MAC_ARM64] {
+            assert!(!m.layers.contains_key(key),
+                "{key} manifest'e `layers` kanalindan geri girdi — o platformda self-update YOK, kurulan cihaz eski surumde kilitlenir");
+        }
         for p in ["home", "vet", "research"] {
             assert!(m.models.contains_key(p), "{p} profili eksik");
         }

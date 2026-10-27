@@ -103,12 +103,18 @@ def test_KARSIT_KANIT_win_x64_HALA_kurulabilir():
 
 def test_KARSIT_KANIT_yerel_manifest_KARARLA_tutarli():
     """Belge ve kod bir sey der, uretilen manifest baska bir sey yaparsa kapi bos guvence olur."""
-    if not _YEREL_MANIFEST.exists():
-        return  # paket agaci yoksa (temiz checkout) olculecek sey yok
+    # D5.60: manifest git'te IZLENIYOR (manifest.rs::depodaki_gercek_manifest_ayristirilir yoklugunu HATA sayar) — sessiz donus kapiyi
+    # kor yapardi.
+    assert _YEREL_MANIFEST.exists(), f"izlenen manifest yok: {_YEREL_MANIFEST}"
     d = json.loads(_YEREL_MANIFEST.read_text(encoding="utf-8"))
     rt = d.get("runtimes", {}) or {}
-    assert "linux-x64" not in rt, "yerel manifest linux-x64 DUYURUYOR -> sahip kararina aykiri"
     ly = d.get("layers", {}) or {}
+    # D5.60 (B-10.242): karar yalniz `runtimes` kanalinda kilitliydi — `layers.linux-x64` eklenince YESIL kaliyordu.
+    for platf in ("linux-x64", "mac-arm64"):
+        assert platf not in rt and platf not in ly, (
+            f"yerel manifest {platf} DUYURUYOR ({'runtimes' if platf in rt else 'layers'}) -> sahip kararina aykiri "
+            "(o platformda self-update yok; kurulan cihaz eski surumde kilitlenir)"
+        )
     assert "win-x64" in ly or "win-x64" in rt, (
         "manifest Windows icin NE layers NE runtimes tasiyor -> kurulum yapilamaz"
     )

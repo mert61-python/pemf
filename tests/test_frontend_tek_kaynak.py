@@ -93,6 +93,24 @@ def test_build_yollari_TEK_kaynagi_gosterir(yol, desen, aciklama):
     )
 
 
+def test_KRITIK_build_backend_exe_PfDir_TEK_kaynagi_gosterir_D5_60():
+    """D5.60 (B-10.238): CANLI yayın yolu (`build_backend_exe.ps1` → web export → `frontend/dist` → EXE) kapı dışıydı — `$PfDir`
+    `frontend` yapılınca betiği anan 46 test dosyası YEŞİL kalıyordu (paket eski arayüzü taşırdı). Satır başına çıpalı (yorum
+    satırı sayılmaz) ve HER atama aynı kaynağı göstermeli (ikinci bir `$PfDir = …` ataması ilkini gölgeleyemez)."""
+    metin = (_KOK / "scripts" / "build_backend_exe.ps1").read_text(encoding="utf-8-sig")
+    atamalar = re.findall(r'^[ \t]*\$PfDir\s*=\s*Join-Path\s+\$GuiRoot\s+"([^"]+)"', metin, re.M)
+    assert atamalar, (
+        "build_backend_exe.ps1'de `$PfDir = Join-Path $GuiRoot \"…\"` ataması yok — web export kaynağı ölçülemiyor"
+    )
+    assert all(a == _KAYNAK_YOL for a in atamalar), (
+        f"build_backend_exe.ps1 web export'u {atamalar} kaynağından yapıyor ama tek kaynak '{_KAYNAK_YOL}/' — "
+        "canlı yayın paketi eski arayüzü taşır (D5.60)"
+    )
+    assert not re.search(r"^[ \t]*\$PfDir\s*=(?!\s*Join-Path\s+\$GuiRoot\s+\")", metin, re.M), (
+        "`$PfDir` başka bir biçimde (ölçülemeyen) yeniden atanıyor"
+    )
+
+
 def test_ci_export_adimi_da_TEK_kaynaktan_alir():
     """CI'daki web export de aynı ağaçtan olmalı; yoksa Linux paketi eski arayüz taşır."""
     ci = _KOK / ".github" / "workflows" / "linux-backend.yml"
